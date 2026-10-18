@@ -73,12 +73,14 @@ class Checks:
     @staticmethod
     def snapshot(session: audit.Session, t: int) -> bytes:
         """What `_check` reads of window t, pickled: the session's parameters, tiles, registration, payload domain and
-        appends so far, the window's challenge, plans and roots, and the window before's last root."""
+        appends so far with their coins, the window's challenge, plans, roots and the appends' head at each, and the
+        window before's last root."""
         w = session.windows[t]
         view = object.__new__(type(session))
         view.params, view.tiles, view.registration = session.params, session.tiles, session.registration
         view._payload_domain, view._appends = session._payload_domain, list(session._appends)
-        view.windows = {t: SimpleNamespace(challenge=w.challenge, plans=list(w.plans), roots=list(w.roots))}
+        view.windows = {t: SimpleNamespace(challenge=w.challenge, plans=list(w.plans), roots=list(w.roots),
+                                           heads=list(w.heads))}
         if t > 0:
             view.windows[t - 1] = SimpleNamespace(roots=[session.windows[t - 1].roots[-1]])
         return pickle.dumps(view)

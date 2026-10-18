@@ -28,7 +28,7 @@ TOKEN = "dummy-verity-bot"
 BOT = "B0VERITY"
 COORD, ALERTS = "CCOORD", "CALERTS"
 HANDLES = ["infra", "proofs", "circuits", "compute-accounting", "memory-accounting", "network-accounting", "console",
-           "ci", "lean", "comms", "top", "vllm", "benchmarks", "old-accounting", "old-circuits-and-proofs"]
+           "ci", "lean", "comms", "top", "vllm", "benchmarks"]
 
 
 class FakeSlack:
@@ -188,7 +188,7 @@ def test_the_repository_registry_loads_and_seeds_every_handle_and_channel():
     reg = slack.load_registry(REAL_REGISTRY)
     assert [h["handle"] for h in reg["handles"]] == HANDLES
     assert set(reg["channels"]) == {"agent-coordination", "agent-alerts", "ask-daniel"}
-    assert slack.subscribers(reg, "agent-coordination") == ["old-accounting", "old-circuits-and-proofs"]
+    assert slack.subscribers(reg, "agent-coordination") == []
     assert slack.subscribers(reg, "agent-alerts") == slack.subscribers(reg, "ask-daniel") == ["infra"]
     assert reg["channels"]["ask-daniel"]["id"] == "C0C5UCA0S0Z" and slack.resolve_key(reg, "approvals") == "ask-daniel"
 
@@ -218,8 +218,6 @@ def test_handles_and_subscriptions(registry, capsys):
     assert rc == 0 and f'channelId="{ALERTS}", topLevelOnly=true' in out and COORD not in out
     assert 'subscribe_linear_issue(options={"scope": "team", "teamId": "INF"}' in out        # a human's filing rings no inbox
     assert "subscribe_linear_comment" not in out and "no comment subscription on INF" in out  # nearly all are its own echoes
-    rc, out, _ = run(capsys, "subscriptions", "--as", "old-accounting")
-    assert rc == 0 and f'channelId="{COORD}", topLevelOnly=true' in out and ALERTS not in out
 
 
 def test_owners_pick_the_longest_prefix(registry, capsys, monkeypatch):
@@ -244,9 +242,9 @@ def test_registry_refuses_a_path_two_handles_own(registry, capsys):
 
 def test_subscriptions_fail_visibly_without_channel_ids(registry, capsys):
     reg = json.loads(registry.read_text())
-    reg["channels"]["agent-coordination"]["id"] = None
+    reg["channels"]["agent-alerts"]["id"] = None
     registry.write_text(json.dumps(reg))
-    rc, out, _ = run(capsys, "subscriptions", "--as", "old-accounting")
+    rc, out, _ = run(capsys, "subscriptions", "--as", "infra")
     assert rc == 2 and "id not recorded" in out
 
 
@@ -1014,6 +1012,25 @@ def test_status_reads_the_decision_and_exits_0_only_once_decided(route, registry
     assert run(capsys, "ask-daniel", "status")[0] == 2
 
 
+def test_a_decided_card_rings_tops_inbox_once_with_its_question_outcome_and_asker(route, fake, registry, routes_dirs, capsys, monkeypatch):
+    """Leads filed TOP issues only to get Daniel's decisions logged (eight on 17 Oct; COMM-34)."""
+    monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(1700000100, timezone.utc))
+    top = inbox(fake, routes_dirs, "top")
+    card = fake.add(ASK, text="No objection by the deadline, so the default applies.", username="Verity", bot_id=BOT, blocks=[
+        {"type": "section", "text": {"type": "mrkdwn", "text": "`DEFAULT` *Move the nightly check to 02:00 PT?*"}},
+        {"type": "context", "elements": [{"type": "mrkdwn", "text": "asked by <https://cursor.com/agents/bc-x|infra> (agent `bc-x`)"}]}])
+    route.statuses = [{"status": "decided", "choice": "yes", "source": "default", "decided_at": "2026-09-30T22:00:05Z",
+                       "ts": card["ts"], "channel": ASK}]
+    rc, _, err = run(capsys, "ask-daniel", "status", "42")
+    assert rc == 0 and "route @top: rang with the decision" in err
+    (bell,) = bells(fake, top)
+    assert bell["text"].startswith("from ask-daniel, card `42` decided: `yes` (default, 2026-09-30T22:00:05Z)")
+    assert "on: Move the nightly check to 02:00 PT?; asked by infra" in bell["text"]
+    assert run(capsys, "ask-daniel", "status", "42")[0] == 0 and len(bells(fake, top)) == 1          # once per card
+    route.statuses = [{"status": "pending"}]
+    assert run(capsys, "ask-daniel", "status", "43")[0] == 1 and len(bells(fake, top)) == 1          # pending rings no one
+
+
 def test_status_404_says_no_card_has_that_id(route, registry, capsys):
     route.answer = (404, {"error": "not_found"})
     rc, _, err = run(capsys, "ask-daniel", "status", "1790800000.000100")
@@ -1231,7 +1248,7 @@ def test_as_takes_only_a_name_this_agent_holds(fake, registry, routes_dirs, caps
     assert rc == 2 and f"@ci is held by {', '.join(held['ci'])}, and this agent is {held['infra'][0]}" in err
     rc, _, err = run(capsys, "close", "--as", "ci", "--thread", fake.messages[COORD][0]["ts"])
     assert rc == 2 and "post as your own handle" in err and len(fake.messages[COORD]) == before
-    lander = next(a for a in held["old-circuits-and-proofs"] if len(a) > 11)
+    lander = "bc-8ece7cde-78d8-5ed9-84b0-a0a81b19f628"                                # the research coordinator, under a short id
     monkeypatch.setenv("RESEARCH_AGENT_URL", f"https://cursor.com/agents/{lander}")
     assert "bc-8ece7cde" in held["proofs"] and run(capsys, "send", "--as", "proofs", "--text", "the train is up")[0] == 0
     add_route(routes_dirs[0], "circuits", "1700000900.000200", holder="bc-11111111-2222-3333-4444-555555555555")
@@ -1272,12 +1289,12 @@ def argparse_ns(**kw):
 def test_a_handle_without_an_inbox_is_reached_through_linear_or_top_level_and_an_unknown_name_is_refused(fake, registry, routes_dirs, capsys):
     rc, _, err = run(capsys, "ask", "--as", "infra", "--to", "@proofs", "--text", "x")
     assert rc == 0 and "route @proofs: no Slack inbox; reach it through its Linear team PRF" in err
+    rc, _, err = run(capsys, "ask", "--as", "infra", "--to", "@console", "--text", "x")             # no team, no inbox yet
+    assert rc == 0 and "route @console: no inbox; its holder opens one with `research msg names open --as console`" in err
     box = inbox(fake, routes_dirs, "console")
     rc, _, err = run(capsys, "ask", "--as", "infra", "--to", "@console", "--text", "the whole brief")
     assert rc == 0 and "route @console: rang" in err and "Linear" not in err
     assert bells(fake, box)[0]["text"].endswith("@console the whole brief")
-    rc, _, err = run(capsys, "ask", "--as", "infra", "--to", "@old-accounting", "--text", "x")
-    assert rc == 0 and "route @old-accounting: no inbox (top-level forwards it)" in err
     rc, _, err = run(capsys, "ask", "--as", "infra", "--to", "@nobody-here", "--text", "x")
     assert rc == 2 and "neither a registry handle nor a name with an inbox" in err and "names open --as nobody-here" in err
 

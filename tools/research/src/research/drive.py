@@ -76,6 +76,9 @@ CHECK_STEPS = ("preflight-lock", "preflight-lints", "preflight-fixtures", "lean-
 DEFERRED = "every step but the deferred ones passed"
 #: a run stopped by SIGTERM (128 + 15): a cancel, or a twin whose sibling won the slot
 SIGTERM_RC = 143
+#: pre-warms running at once: each is a whole check in a slot, and a train waits behind every one (18 Oct 00:43Z: four took the
+#: room drive counts, and no train started)
+PREWARM_MAX = 1
 #: what decides how a check runs and what it passes: a `main` that changed any of it re-checks the queue rather than land on it
 CHECK_TOOLING = ("tools/verity/check/", "tools/verity/lean/", "tools/verity/circuit_check/")
 RUN_RE = re.compile(r"^RUN ((?:r20\d{6}-\d{6}-[0-9a-f]{4} ?)+)$", re.M)
@@ -670,7 +673,10 @@ class Driver:
             for st in failed_steps(d):
                 step = st.get("step") or ""
                 if step.startswith("lean") and step != "lean-suites":
-                    rules.append(("Lean sources", lambda f: f.endswith(LEAN_INPUTS)))
+                    if pkgs := self._failed_packages(d, st, tip):
+                        rules.append((f"Lean package {', '.join(sorted(pkgs))}", lambda f, pkgs=pkgs: under(f, sorted(pkgs))))
+                    else:
+                        rules.append(("Lean sources", lambda f: f.endswith(LEAN_INPUTS)))
                 elif step == "circuit-check":
                     rules.append(("circuit-check's inputs", lambda f: forces_cold([f])))
         out, why = [], set()
@@ -679,6 +685,24 @@ class Driver:
                 out.append(x)
                 why |= t
         return out, ", ".join(sorted(why))
+
+    def _failed_packages(self, run_dir: Path, step: dict, tip: str) -> set[str]:
+        """The Lake packages a failed Lean step's log reports `FAIL` for, with each package its manifest requires by path, at
+        ``tip``; empty when the log names none (18 Oct: a stale record in verity/core/primitives/requirement, #2386's, failed two
+        trains, and the fallback on every Lean source ejected #2341, #2370 and #2371 with it)."""
+        try:
+            log = (run_dir / Path(step.get("log") or "").name).read_text(errors="replace") if step.get("log") else ""
+        except OSError:
+            return set()
+        out = set()
+        for pkg in set(LEAN_AUDIT_RE.findall(log)):
+            out.add(pkg)
+            r = _git(self.repo, "show", f"{tip}:{pkg}/lake-manifest.json", check=False)
+            with contextlib.suppress(ValueError, AttributeError):
+                for dep in json.loads(r.stdout).get("packages", []) if not r.returncode else []:
+                    if dep.get("type") == "path":
+                        out.add(os.path.normpath(os.path.join(pkg, dep.get("dir", ""))))
+        return {p for p in out if not p.startswith("..")}
 
     def failed(self, drive: dict, m: Member, members: list[Member], v: Verdict) -> None:
         """Act on a failed train with no lander (16 Oct, Daniel through top): eject every member whose change touches what the
@@ -692,6 +716,16 @@ class Driver:
         if what in (KILLED, UNTOUCHED) and m.commit not in drive.setdefault("resent", {}):
             self.resend(drive, m, prs, v)
             return
+        # a member a lower train's running or passed check covers is left to that check: ejecting it would cancel that train,
+        # and were it the cause, that check fails too
+        main = _out(self.repo, "rev-parse", "origin/main")
+        floor = max((k + 1 for k, x in enumerate(members[:-1]) if x.commit in drive["launched"]
+                     and self.verdict(x.commit, main, drive).state in ("running", "passed")), default=0)
+        if hit and all(members.index(x) < floor for x in hit):
+            self.q.log(f"research queue drive: {m.commit[:12]} failed on {what}, which only members the check of "
+                       f"{members[floor - 1].commit[:12]} covers change: waiting on that check")
+            return
+        hit = [x for x in hit if members.index(x) >= floor]
         ejected, why = [], what
         for x in hit:
             reason = f"train {m.commit[:12]} ({prs}), check {v.attempt}: the failure is in {what}, which #{x.pr} changes"
@@ -752,7 +786,7 @@ class Driver:
 
     def prewarm(self, drive: dict, running: int) -> int:
         """Launch and follow each pre-warm `warming` asked for (one `train.sh` check of the PR's head, in a check slot, while fewer
-        than `max_running` checks run) and mark it done once it ends, passed or not: the train's check is the gate.  Returns
+        than `max_running` checks run, and `PREWARM_MAX` at a time) and mark it done once it ends, passed or not: the train's check is the gate.  Returns
         how many run now, for the running count."""
         q = self.q
         heads = {f"{p.number}@{p.head}" for p in q.github.open_prs()}
@@ -776,7 +810,7 @@ class Driver:
                     q.log(f"research queue drive: #{rec['pr']}'s pre-warm {' '.join(rec['ids'])} ended; it joins `{q.branch}`")
                     continue
                 rec.pop("ids")
-            if running + active >= self.max_running or self.dry_run or q.shadow:
+            if running + active >= self.max_running or active >= PREWARM_MAX or self.dry_run or q.shadow:
                 continue
             ids, tail = self.launch(self.repo, rec["head"], self.on, False)
             if not ids:

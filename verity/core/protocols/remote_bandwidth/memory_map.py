@@ -14,23 +14,49 @@ slot         4,096 bytes of the node's memory, named by the registered block it 
 j            the store index the writer gave the block: the store's next fresh one, N plus every block written before
               in the session, in record order
 d_j          codec.digest(payload_j), the sha512/row/v2 digest of the block's 4,096-byte payload, 64 bytes: the device
-              encodes the payload under its bound key (codec.binding(d_j, j, key)) at index j
+              encodes the payload under its bound key (codec.binding(d_j, j, key, c_a)) at index j, once the verifier
+              has sent its append's coin c_a
 ~~~
 
 A write puts block j in its slot and releases the block the slot held, if it was live: the write overwrote it.  A
-free releases the slot's block and leaves the slot not live, its memory out of the store, until a write; a slot whose
-bytes stay as they were (vLLM's `kv_free`, which returns pages to filler with their last record) is not freed, and its
-block stays live until a write overwrites it.  A step's frees apply before its writes; a step frees a slot at most
-once, only a live one, and writes a slot at most once.  A block is written once, complete: a KV block the step's tokens
-are still filling is not in the record until the step that completes it (the prover-side registry's dirty blocks).
+free releases the slot's block and leaves the slot not live, its memory out of the store, until a write.  vLLM's
+`kv_free` is a free, though the pages' bytes stay as they were: a block left live after its values' last read would be
+credited past the circuit's use of it and past the lifetime cap, so the writer records the free, and the store's
+filler plan leaves the released blocks out.  A free of a slot below N releases its registered block, and the writer
+records one at the step that reads the block's values for the last time (weights only some steps read), so no
+registered block stays credited past its last read; that every free, of a registered block or a written one, is at
+its values' last read is the memory-map unit's to prove (I4, `PROTOCOL.md` §8 "The requirement's link").  A step's
+frees apply before its writes; a step frees a slot at most once,
+only a live one, and writes a slot at most once.  A block is written once, complete: a KV block the step's tokens are
+still filling is not in the record until the step that completes it (the prover-side registry's dirty blocks).
+
+Lifetime.  No plan holds a written block L windows or more after the window its append joined (`audit.Params.lifetime`,
+an hour at the stated window), so every block written leaves the credited store within L.  A block the writer keeps
+longer (a prefix cache's) is re-keyed: written again in its own slot with the same `d_j` at the store's next fresh
+index, which releases its old index and gives it a fresh bound key under a fresh coin, so the device encodes it anew.
 
 The record is the prover's: `d_j` is a hash of user data, a witness, never public (AGENTS.md's zero-knowledge rule).
 The prover's audit side (`Replay`) commits each step's digests in an append tree (`audit.append_tree`, under fresh
 salts) and sends its root and size (`Session.append`), and the released blocks' indices as runs (`Session.release`); the
-verifier sees those and the plans, never the record.  The appends of a step are sent before the root of any pass
-whose plan holds them; `Replay.take` is the plan's change since the last pass (`Plan.changed`, the root's
-`Session.receive(..., change=...)`), the blocks appended and released between them, of which a block appended and
-released in between is in neither.
+verifier sees those and the plans, never the record.  The verifier replies to each append with its coin, and the
+device encodes the step's blocks under it after it arrives and before the next step's reads.  The appends of a step
+are sent before the root of any pass whose plan holds them, and that pass's seed binds them (`audit.chained`), so it
+is computed after they are sent.
+That the session's appends, re-keys and frees are this record's, in its order and at its steps, is the memory-map
+unit's to prove against the record's append chain (`audit.Record.appends`, `RequirementLink.mapped`, `PROTOCOL.md` §8
+"The memory map's choices"): frees, re-keys and append order chosen after the seed would otherwise be advice.
+
+Passes and steps.  Each pass of the audit covers one step `s`, which it names with its root (`Session.receive(...,
+step=s)`, public), and the steps of a session's passes strictly increase.  Its plan is the blocks the circuit reads at
+`s`: with every resident block read, the blocks resident at `s`, registered or written at a step before `s` and not
+freed or overwritten at one (A1's `Store.resident` and `PlanMatches`, in the Lean module
+`Definitions.Accounting.Requirement`).
+A step's record takes effect after the step's reads: its writes are of values the step produced, and its frees are of
+blocks whose values the step read last.  `Replay.take(s)` is the plan's change for the pass at `s` since the last pass
+(`Plan.changed`, the root's `Session.receive(..., change=...)`), the blocks appended and released between them, of
+which a block appended and released in between is in neither; it refuses a step at or before one already applied or
+taken.  That a pass's plan is the blocks the circuit reads at its step is the plan's proof unit's to check, against
+this record and the circuit's requirement, inside zero knowledge.
 """
 
 from __future__ import annotations
@@ -118,7 +144,7 @@ def header(doc: object) -> Header:
 def step(doc: object) -> Step:
     if type(doc) is not dict or set(doc) != {"freed", "step", "written"}:
         raise MemoryMapError("a step's line is {step, freed, written}")
-    s = _int(doc["step"], "a step", 1 << 64)
+    s = _int(doc["step"], "a step", audit.STEP_LIMIT)
     if type(doc["freed"]) is not list or type(doc["written"]) is not list:
         raise MemoryMapError(f"step {s}'s freed and written are lists")
     freed = tuple(_int(x, f"step {s}'s freed slot", SLOT_LIMIT) for x in doc["freed"])
@@ -179,15 +205,16 @@ class Change:
 
 class Replay:
     """The prover's audit side of a memory map: the block each slot holds, each step's `Change` (`apply`), and the
-    plan's change since the last pass (`take`).  Refuses (`MemoryMapError`) a map that breaks memory-map/v1's rules
-    across lines: steps out of order, a freed slot not live, an index that is not the store's next fresh one, or a
-    header of another registration; a refused step changes nothing."""
+    plan's change for the pass at a step since the last pass (`take`).  Refuses (`MemoryMapError`) a map that breaks
+    memory-map/v1's rules across lines: steps out of order, a freed slot not live, an index that is not the store's
+    next fresh one, or a header of another registration; a refused step changes nothing.  And refuses a pass whose
+    step is not after every step applied and every pass's step taken."""
 
     def __init__(self, head: Header, registration: audit.Registration | None = None) -> None:
         if registration is not None and (head.registration != registration.digest or head.blocks != registration.blocks):
             raise MemoryMapError("the memory map is beside another registration: its header names "
                                  f"{head.registration.hex()[:16]}… of {head.blocks} blocks")
-        self.header, self.extent, self.last = head, head.blocks, -1
+        self.header, self.extent, self.last, self.taken = head, head.blocks, -1, -1
         self.moved: dict[int, int | None] = {}
         self._added: set[int] = set()
         self._removed: set[int] = set()
@@ -199,6 +226,10 @@ class Replay:
     def apply(self, s: Step) -> Change:
         if s.step <= self.last:
             raise MemoryMapError(f"step {s.step} follows step {self.last}: steps strictly increase")
+        if s.step < self.taken:
+            raise MemoryMapError(f"step {s.step} comes after the pass at step {self.taken} was taken: a pass reads "
+                                 "the blocks the steps before it left, so apply each step's record before the pass "
+                                 "after it")
         if len(set(s.freed)) != len(s.freed):
             raise MemoryMapError(f"step {s.step} frees a slot twice")
         for slot in s.freed:
@@ -226,9 +257,15 @@ class Replay:
         self._added.update(range(first, self.extent))
         return Change(s.step, first, tuple(w.digest for w in s.written), _runs(gone))
 
-    def take(self) -> tuple[tuple[tuple[int, int], ...], tuple[tuple[int, int], ...]]:
-        """The plan's change since the last `take`, for a prover whose plans hold every live block: (added, removed)
-        runs of store indices, the blocks appended since and those released since that the last plan held."""
+    def take(self, step: int) -> tuple[tuple[tuple[int, int], ...], tuple[tuple[int, int], ...]]:
+        """The plan's change for the pass that covers `step`, since the last `take`, for a prover whose plans hold
+        every resident block: (added, removed) runs of store indices, the blocks appended since and those released
+        since that the last plan held.  The pass names `step` with its root.  Its plan is the blocks resident at
+        `step`, so every step applied is before it, and it follows the last pass's."""
+        if type(step) is not int or not max(self.last, self.taken) < step < audit.STEP_LIMIT:
+            raise MemoryMapError(f"a pass at step {step!r} follows the steps applied (to {self.last}) and the last "
+                                 f"pass's (at {self.taken}): a pass reads the blocks resident at its step, those of "
+                                 "the steps before it, so take it before applying its own step's record")
         out = _runs(self._added), _runs(self._removed)
-        self._added, self._removed = set(), set()
+        self._added, self._removed, self.taken = set(), set(), step
         return out

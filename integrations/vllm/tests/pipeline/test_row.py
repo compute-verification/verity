@@ -572,6 +572,25 @@ def test_a_manifest_of_other_policies_is_rebuilt_either_way(tmp_path):
                                                                                                 "guarded_max"]
 
 
+def test_a_passing_commit_verifies_the_manifest_it_ran_over(tmp_path, monkeypatch):
+    """`commit` read `commit_prepare`'s local manifest once the two were split: every passing single-GPU Commit raised NameError
+    before its manifest check and verdict (r20261017-204707-7b27, Llama-3.2-1B B1)."""
+    r, man, verified = _row(tmp_path), _tap_manifest(tmp_path / "manifest.json"), []
+    (tmp_path / "tap.so").write_bytes(b"")
+    r.hidden_so, r.B, r.I, r.O = str(tmp_path / "tap.so"), 1, 256, 32
+
+    def verify(m: str) -> None:
+        verified.append(m)
+        raise Stop(0)
+    monkeypatch.setattr(r, "manifest_of_record", lambda stage="commit": man)
+    monkeypatch.setattr(r, "gpu_exclusive", lambda what: None)
+    monkeypatch.setattr(r, "run_gpu", lambda *a: 0)
+    monkeypatch.setattr(r, "manifest_verify", verify)
+    with pytest.raises(Stop):
+        r.commit()
+    assert verified == [man]
+
+
 PD = "p" * 64
 
 
@@ -680,6 +699,25 @@ def test_a_single_and_a_tp_rows_commit_carry_the_serving_rows_request(tmp_path):
         req = json.loads(Path(cmd[cmd.index("--serving-rows") + 1]).read_text())
         assert req == {"dir": f"{r.d}/serving-rows", "partition": pf, "run": r.row, "committer": {"source": r.env.environ.get("RESEARCH_SOURCE_SHA")}}
     assert "--replay-deferred" in tp.commit_cmd([]) and "--serving-rows" not in _tp_row(tmp_path, TP_DENSE).commit_cmd([])
+
+
+def test_remote_verifier_reaches_the_single_gpu_commit_which_refuses_it_without_a_store(tmp_path):
+    """REMOTE_VERIFIER reaches the single-GPU Commit as ``--remote-verifier``, and a TP row refuses it; the Commit
+    refuses it, before anything runs, until it puts the store binder on its engine (`store.remote.unwired`)."""
+    from verity_vllm.pipeline import commit
+
+    single = _row(tmp_path, environ={"REMOTE_VERIFIER": "10.0.0.7:7781"})
+    single.hidden_so, single.B = "/x/verity_fa2_matReqG.so", 1
+    cmd = single.commit_cmd([])
+    assert cmd[cmd.index("--remote-verifier") + 1] == "10.0.0.7:7781"
+    assert "--remote-verifier" not in _tp_row(tmp_path, TP_DENSE).commit_cmd([])
+    with pytest.raises(SystemExit, match="REMOTE_VERIFIER"):
+        _tp_row(tmp_path, TP_DENSE, environ={"REMOTE_VERIFIER": "10.0.0.7:7781"}).commit_cmd([])
+    args = cli.parse("commit", cmd[cmd.index("commit") + 1:], {})
+    with pytest.raises(SystemExit, match="no store binder"):
+        commit.main(args)
+    with pytest.raises(ValueError, match="HOST:PORT"):
+        commit.main(dataclasses.replace(args, remote_verifier="7781"))
 
 
 @pytest.mark.parametrize("row, p2p", [

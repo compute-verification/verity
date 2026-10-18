@@ -32,6 +32,8 @@ ROOT = Path(str(resources.files("verity_vllm"))).resolve().parent
 MANIFESTS = ROOT / "manifests"
 WORKLOADS = ROOT / "workloads"
 CHECKPOINTS = MANIFESTS / "checkpoints.json"
+#: The remote bandwidth session's processes (not a package), whose prover runs in the Commit's (`store.remote`).
+REMOTE_SESSION = ROOT.parent.parent / "benchmarks" / "remote_session"
 
 
 def checkpoints_hf_home() -> str | None:
@@ -205,8 +207,22 @@ def parse_protocols(value: str | Mapping[str, str] | Any | None) -> tuple[str, .
     return tuple(f"{n}:{got[n]}" for n in PROTOCOLS if n in got)
 
 
+#: pins kept beside a checkpoint manifest in `<stem>-<name>.json`, same schema and append-only too (the int8 recipe pins: the
+#: manifest itself sits at the repository's 256 KiB file cap); `checkpoint_entries` reads them after the manifest's own pins
+SIBLING_MANIFESTS = ("int8",)
+
+
+def sibling_manifests(checkpoints: str | Path = CHECKPOINTS) -> list[Path]:
+    p = Path(checkpoints)
+    return [q for n in SIBLING_MANIFESTS if (q := p.with_name(f"{p.stem}-{n}.json")).is_file()]
+
+
 def checkpoint_entries(checkpoints: str | Path = CHECKPOINTS) -> list[dict[str, Any]]:
-    return list(json.loads(Path(checkpoints).read_text())["checkpoints"])
+    """Every pin of the manifest `checkpoints` and of its sibling manifests (`SIBLING_MANIFESTS`)."""
+    out = list(json.loads(Path(checkpoints).read_text())["checkpoints"])
+    for q in sibling_manifests(checkpoints):
+        out += json.loads(q.read_text())["checkpoints"]
+    return out
 
 
 @dataclass(frozen=True)
@@ -365,6 +381,9 @@ class CommitConfig:
                                            "in M0's serving row format (verity_vllm.pipeline.serving_rows), fixed before serving; a "
                                            "deferred Commit's come from its bundle (verity-vllm serving-rows); a TP row's, one window per "
                                            "rank, from tp-commit itself (verity_vllm.pipeline.tp.serving_rows; needs REPLAY_DEFERRED=1)")
+    remote_verifier: str | None = option("--remote-verifier", env="REMOTE_VERIFIER", default=None, metavar="HOST:PORT",
+                                         help="the remote bandwidth session's verifier: the Commit proves its store to it while "
+                                              "serving (verity_vllm.store.remote; single-GPU rows)")
     norm_tap: str = option("--norm-tap", env="NORM_TAP", default="1",
                            help="0 opts out, for A/B only: by default the row commits one scale per norm Call row (verity_vllm.query."
                                 "norm_scales) through the norm-scale tap (acquire.sources.norm_scale_source) when its manifest names norm scales")
