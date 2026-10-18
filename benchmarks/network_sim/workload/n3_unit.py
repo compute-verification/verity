@@ -8,10 +8,10 @@ which a proof unit of the proof service runs; its one output is the ok bit.
          frames: Array<N, Array<B, Byte>>,
          descriptors: Array<n, Array<LW>>, descriptor_salts: Array<n, Salt>,
          descriptor_paths: Array<n, Array<DL, Digest>>,
-         rows: Array<n, G, 2, Row>, row_salts: Array<n, G, 2, Salt>, row_paths: Array<n, G, 2, Array<DB, Digest>>,
+         rows: Array<n, G, Row>, row_salts: Array<n, G, Salt>, row_paths: Array<n, G, Array<DB, Digest>>,
          head: Array<HL, Byte>, record_salt: Salt, record_path: Array<2, Digest>, [slot: Array<SB>]) -> Value<1>
         Digest = Array<8, Array<64, Value<1>>> (SHA-512 words, `sha512.words_be`),
-        Salt = Array<24, Array<64, Value<1>>>, Byte = Array<8, Value<1>>, Row = Array<B, Byte> (an outbox row),
+        Salt = Array<24, Array<64, Value<1>>>, Byte = Array<8, Value<1>>, Row = Array<2B, Byte> (an outbox row),
         n = N - SALTED, SB = max(1, bitlen(N - 1)), HL = 93 + L + 4T
 
 **Statics: the size class.** `FMT` (`Format`) is the run's descriptor format: the frame size B, the widest prefix P
@@ -30,13 +30,13 @@ and `domains` are the units' outbox commitments and domain ids, `salt` the windo
 revealed salt commitment.
 
 **Witness.** The frames, the n descriptors (the layout's rows at at, at + 1, ...) with their hiding salts and paths, for
-each descriptor's segment g < G the two outbox rows it reads with their salts and paths, the record head's bytes before
-its frames root (`RecordHead.encode`) with its leaf's salt and two siblings in N2's tree, and the salt frame's slot.
+each descriptor's segment g < G the outbox row it reads with its salt and path, the record head's bytes before its
+frames root (`RecordHead.encode`) with its leaf's salt and two siblings in N2's tree, and the salt frame's slot.
 
 **What 1 means.** (1) Each descriptor opens at its position in the layout (`N3HidingRead`: its sha512/row/v2 digest,
-hm96's hiding leaf, the frame-v3-sha512 read). (2) Each segment g < G of each descriptor reads two rows: of kind 1,
-rows q and q + 1 of unit u's outbox, which open there in its commitment (q + 1 < 2^DB); of kind 0, two zero rows
-(`N3OutboxPair`). Every segment from G on is of kind 0. (3) Frame i (the salt frame's slot skipped) is what descriptor
+hm96's hiding leaf, the frame-v3-sha512 read). (2) Each segment g < G of each descriptor reads one row: of kind 1, row q
+of unit u's outbox, which opens there in its commitment; of kind 0, a zero row (`N3RowRead`). Every segment from G on is
+of kind 0. (3) Frame i (the salt frame's slot skipped) is what descriptor
 i puts on its segments' rows (`N3Frame`, `assemble`). (4) The salt frame, when SALTED, is `salt_frame` at the slot. (5)
 The head's bytes and N2's frames root of the N frames (`certificate.frames_root`, depth D = bitlen(T r - 1)) are a
 head whose status byte is 0 (complete), and that head opens at leaf 2 + direction of N2's commitment (`N3HidingRead`,
@@ -46,25 +46,26 @@ check: N2's accepted outcome on the same root says that leaf holds the certified
 **A descriptor** (`Descriptor`, LW bits, `encode`): a mode (RAW 1, BASE64 2; 0 and 3 are invalid, and `NONE` pads the
 tree), the text's byte offset p, its data length r, the suffix offset s, the prefix (P bytes) and suffix (Q bytes), and
 per segment an identity (kind, unit u, row q), a source offset o < 2^OB, a length n and a destination d. Segment g puts
-bytes o ... o + n - 1 of rows q and q + 1 (2B bytes) at bytes d ... d + n - 1 of a B-byte stream (`N3Seg`), and the
+bytes o ... o + n - 1 of row q (2B bytes) at bytes d ... d + n - 1 of a B-byte stream (`N3Seg`), and the
 stream is the segments' XOR. The frame is prefix XOR text << 8p XOR suffix << 8s over B bytes, the data the stream's
 first min(r, B) bytes, and the text the data (RAW) or its base64 (BASE64; `assemble`).
 
 **The outbox** (`outbox_rows`): a unit's outgoing messages in φ's send order (`Phi.send_order`), back to back, each
-message the bytes `framing.encode` packs its crossing values into; cut into rows of B bytes, the last zero-filled, and
-zero rows after them up to a power of two, at least one, so a segment that starts in the last data row has a next row.
-A message is then one contiguous range of its source's outbox, so a frame reads a run of it as one segment, two rows.
+message the bytes `framing.encode` packs its crossing values into. Its rows overlap: row q holds bytes
+qB ... qB + 2B - 1 (zero past the end) for q < k = max(1, ceil(bytes / B)), and zero rows follow up to a power of two.
+A message is then one contiguous range of its source's outbox, and any run of at most B of its bytes lies in one row,
+the row of the run's first byte, so a frame reads it as one segment, one row.
 
 **Commitments and who registers them.** Each producing unit registers its outbox (`register_outbox`), beside its values,
 under the binding SHA-512(`OUTBOX_LABEL` || program || unit). Its domain id makes its row count public, 2^depth with
-depth = bitlen(ceil(bytes / B)): that is all it discloses of the unit's crossing bytes. That the outbox holds the bytes
-of the unit's committed values is not proved here; it needs a proof unit of its own. The prover registers the layout
-before the run (`register_layout`): one advice tree of the descriptors, one per (port, frame index) at port * CAP +
-index, under the binding SHA-512(`LAYOUT_LABEL` || program || placement root). The record commitment is N2's, which
-the firewall registers (`LinkWindows.commit`, `registration`): its root alone is public, and the heads, certificates
-and salts stay behind the firewall. Here `Certifier` stands in for the certifier and the firewall: a small LMS key
-signs each head in one certifier session, and the four salts come from a seed. The network_sim README ("N3 in zero
-knowledge") has the sizes and the open questions.
+depth = bitlen(k - 1): that is all it discloses of the unit's crossing bytes. That the outbox holds the bytes of the
+unit's committed values, each byte the same in every row that holds it, is not proved here; it needs a proof unit of
+its own. The prover registers the layout before the run (`register_layout`): one advice tree of the descriptors, one
+per (port, frame index) at port * CAP + index, under the binding SHA-512(`LAYOUT_LABEL` || program || placement
+root). The record commitment is N2's, which the firewall registers (`LinkWindows.commit`, `registration`): its root
+alone is public, and the heads, certificates and salts stay behind the firewall. Here `Certifier` stands in for the
+certifier and the firewall: a small LMS key signs each head in one certifier session, and the four salts come from a
+seed. The network_sim README ("N3 in zero knowledge") has the sizes and the open questions.
 
     python -m workload.n3_unit sim --out FILE [--tamper UNIT:MODE] [--buckets K] [--frame-bytes B]
     python -m workload.n3_unit lab RUN_DIR --out FILE     every window a lab run's certifiers recorded (lab_run --out)
@@ -348,8 +349,8 @@ def _shape(rec) -> Shape:
 
 
 class Segment(NamedTuple):
-    """A run of n bytes of a unit's outbox: kind 1 reads unit u's rows q and q + 1 (kind 0, two zero rows), and bytes
-    o ... o + n - 1 of the two go to bytes d ... d + n - 1 of the frame's stream."""
+    """A run of n bytes of a unit's outbox: kind 1 reads unit u's row q (kind 0, a zero row), and bytes o ... o + n - 1
+    of it go to bytes d ... d + n - 1 of the frame's stream."""
 
     kind: int = 0
     u: int = 0
@@ -429,25 +430,24 @@ def decode(f: Format, row: bytes) -> Descriptor:
                       x.suffix.to_bytes(f.Q, "little").rstrip(b"\0"), tuple(segs))
 
 
-def segment(B: int, seg: Sequence[int], r0: bytes, r1: bytes) -> bytes:
-    """The B-byte stream one segment puts its rows on: `N3Seg`'s reference."""
+def segment(B: int, seg: Sequence[int], row: bytes) -> bytes:
+    """The B-byte stream one segment puts its 2B-byte row on: `N3Seg`'s reference."""
     _, _, _, o, n, d = seg
-    src, out = r0 + r1, bytearray(B)
+    out = bytearray(B)
     for j in range(d, min(B, d + n)):
         if o + j - d < 2 * B:
-            out[j] = src[o + j - d]
+            out[j] = row[o + j - d]
     return bytes(out)
 
 
-def assemble(f: Format, row: bytes, rows: Sequence[Sequence[bytes]], G: int | None = None) -> bytes:
-    """The frame the layout row puts on `rows` (each of its first G segments' two rows, zero past those given):
-    `N3Frame`'s reference, less its check that the segments from G on are of kind 0."""
+def assemble(f: Format, row: bytes, rows: Sequence[bytes], G: int | None = None) -> bytes:
+    """The frame the layout row puts on `rows` (each of its first G segments' row, zero past those given): `N3Frame`'s
+    reference, less its check that the segments from G on are of kind 0."""
     x = fields(f, row)
-    zero = bytes(f.B)
     stream = 0
     for g in range(f.G if G is None else G):
-        r0, r1 = rows[g] if g < len(rows) else (zero, zero)
-        stream ^= int.from_bytes(segment(f.B, x.segs[g], r0, r1), "little")
+        src = rows[g] if g < len(rows) else bytes(2 * f.B)
+        stream ^= int.from_bytes(segment(f.B, x.segs[g], src), "little")
     data = (stream & ((1 << 8 * min(x.r, f.B)) - 1)).to_bytes(f.B, "little")
     if x.mode == RAW:
         text = data
@@ -643,17 +643,17 @@ def _seg_widths(B: int) -> tuple[int, int]:
 
 def _sig_seg(S):
     ob, lb = _seg_widths(S.B)
-    return ((("rows", Array(2, Array(8 * S.B, BIT))), ("o", Array(ob, BIT)), ("n", Array(lb, BIT)),
-             ("d", Array(lb, BIT))), Array(8 * S.B, BIT))
+    return ((("row", Array(16 * S.B, BIT)), ("o", Array(ob, BIT)), ("n", Array(lb, BIT)), ("d", Array(lb, BIT))),
+            Array(8 * S.B, BIT))
 
 
-def _build_seg(C, S, r0, r1, o, n, d):
+def _build_seg(C, S, row, o, n, d):
     ob, lb = _seg_widths(S.B)
     K, ew = 1 << ob, max(ob, lb) + 1
-    # Byte j of the window [K, K + B) of the rows shifted left by e = K + d - o bytes is byte o + j - d of the rows;
+    # Byte j of the window [K, K + B) of the row shifted left by e = K + d - o bytes is byte o + j - d of the row;
     # K >= B > o keeps e nonnegative.
     e = sub(C, add(C, const_bits(K, ew), list(d), width=ew), list(o), ew)[0]
-    moved = shl_window(C, list(r0) + list(r1), [ZERO] * 3 + e, 8 * K, 8 * K + 8 * S.B)
+    moved = shl_window(C, list(row), [ZERO] * 3 + e, 8 * K, 8 * K + 8 * S.B)
     ge_d, ge_end = _thresholds(C, d), _thresholds(C, add(C, list(d), list(n), width=lb + 1))
     out = []
     for j in range(S.B):
@@ -663,22 +663,8 @@ def _build_seg(C, S, r0, r1, o, n, d):
 
 
 N3Seg = _part("N3Seg", ("B",), _sig_seg, _build_seg,
-              "the B-byte stream of one segment: bytes o ... o + n - 1 of its two rows at bytes d ... d + n - 1, every "
-              "other byte zero")
-
-
-def _sig_next(S):
-    return (("id", Array(S.IDW, BIT)),), Array(S.IDW + 1, BIT)
-
-
-def _build_next(C, S, idb):
-    q = list(idb[1 + S.UB:])
-    q1 = add(C, q, [ONE], width=len(q), carry_out=True)
-    return list(idb[:1 + S.UB]) + q1[:len(q)] + [q1[len(q)].inv()]
-
-
-N3Next = _part("N3Next", ("IDW", "UB"), _sig_next, _build_next,
-               "a segment's identity with row q + 1, then whether q + 1 fits the identity's row bits")
+              "the B-byte stream of one segment: bytes o ... o + n - 1 of its 2B-byte row at bytes d ... d + n - 1, "
+              "every other byte zero")
 
 
 def _sig_mux(S):
@@ -943,32 +929,11 @@ N3RowRead = CompositeDefinition(
         "u's tree (depth DEPTHS[u]); kind 0, the row is zero")
 
 
-def _sig_pair(S):
-    U, DB, _, idw = _idw(S.DEPTHS)
-    return (("id", Array(idw, BIT)), ("rows", Array(2, Array(S.N_BITS, BIT))), ("salts", Array(2, SALT_T)),
-            ("paths", Array(2, Array(DB, DIGEST))), ("roots", Array(U, DIGEST)), ("domains", Array(U, DIGEST))), BIT
-
-
-def _body_pair(B, S, idb, rows, salts, paths, roots, domains):
-    _, _, ub, idw = _idw(S.DEPTHS)
-    nxt = B.call(bind(N3Next, IDW=idw, UB=ub), idb)
-    ids = _cat(Array(2, Array(idw, BIT)), idb, nxt[0:idw])
-    reads = B.batch(bind(N3RowRead, DEPTHS=S.DEPTHS, N_BITS=S.N_BITS), ids, rows, salts, paths, roots, domains,
-                    axes=(0, 0, 0, 0, None, None))
-    return B.call(BL.and_gate(3), _cat(Array(3, BIT), reads, nxt[idw]))
-
-
-N3OutboxPair = CompositeDefinition(
-    "N3OutboxPair", 1, ("DEPTHS", "N_BITS"), _sig_pair, _body_pair, conformance="exact-model-tested", register=False,
-    doc="1 iff a segment's two rows are what its identity names: kind 1, rows q and q + 1 of unit u's outbox, q + 1 "
-        "within the identity's row bits; kind 0, two zero rows")
-
-
 def _sig_frame(S):
     f = _format(S.FMT)
     if not isinstance(S.G, int) or not 1 <= S.G <= f.G:
         raise ValueError(f"G is 1 ... the format's {f.G} segments, not {S.G!r}")
-    return (("descriptor", Array(f.LW, BIT)), ("rows", Array(S.G, Array(2, Array(8 * f.B, BIT)))),
+    return (("descriptor", Array(f.LW, BIT)), ("rows", Array(S.G, Array(16 * f.B, BIT))),
             ("frame", Array(f.B, BYTE))), BIT
 
 
@@ -992,8 +957,8 @@ def _body_frame(B, S, desc, rows, frame):
 
 N3Frame = CompositeDefinition(
     "N3Frame", 1, ("FMT", "G"), _sig_frame, _body_frame, conformance="exact-model-tested", register=False,
-    doc="1 iff the frame is what the descriptor puts on its first G segments' rows: the segments' streams (N3Seg) "
-        "XORed, placed by N3Place; and every segment from G on is of kind 0")
+    doc="1 iff the frame is what the descriptor puts on its first G segments' rows, one each: the segments' streams "
+        "(N3Seg) XORed, placed by N3Place; and every segment from G on is of kind 0")
 
 
 # --- the window -------------------------------------------------------------------------------------------------------
@@ -1017,10 +982,10 @@ def _window_params(S) -> list[tuple[str, object]]:
     params.append(("frames", Array(S.N, Array(f.B, BYTE))))
     if n:
         def each(t):
-            return Array(n, Array(S.G, Array(2, t)))
+            return Array(n, Array(S.G, t))
 
         params += [("descriptors", Array(n, Array(f.LW, BIT))), ("descriptor_salts", Array(n, SALT_T)),
-                   ("descriptor_paths", Array(n, Array(f.DL, DIGEST))), ("rows", each(Array(8 * f.B, BIT))),
+                   ("descriptor_paths", Array(n, Array(f.DL, DIGEST))), ("rows", each(Array(16 * f.B, BIT))),
                    ("row_salts", each(SALT_T)), ("row_paths", each(Array(f.DB, DIGEST)))]
     params += [("head", Array(rec.HL, BYTE)), ("record_salt", SALT_T), ("record_path", Array(2, DIGEST))]
     if S.SALTED:
@@ -1057,10 +1022,10 @@ def _body_window(B, S, *args):
         ids = Coll(Array(n * G, Array(f.IDW, BIT)),
                    concat([d.refs.slice(i * f.LW + f.HW + g * f.SW, i * f.LW + f.HW + g * f.SW + f.IDW)
                            for i in range(n) for g in range(G)]))
-        rows = a["rows"].reshape(Array(n * G, Array(2, Array(8 * f.B, BIT))))
-        salts = a["row_salts"].reshape(Array(n * G, Array(2, SALT_T)))
-        paths = a["row_paths"].reshape(Array(n * G, Array(2, Array(f.DB, DIGEST))))
-        oks.append(B.batch(bind(N3OutboxPair, DEPTHS=f.DEPTHS, N_BITS=8 * f.B), ids, rows, salts, paths, a["roots"],
+        rows = a["rows"].reshape(Array(n * G, Array(16 * f.B, BIT)))
+        salts = a["row_salts"].reshape(Array(n * G, SALT_T))
+        paths = a["row_paths"].reshape(Array(n * G, Array(f.DB, DIGEST)))
+        oks.append(B.batch(bind(N3RowRead, DEPTHS=f.DEPTHS, N_BITS=16 * f.B), ids, rows, salts, paths, a["roots"],
                            a["domains"], axes=(0, 0, 0, 0, None, None)))
         oks.append(B.batch(bind(N3Frame, FMT=S.FMT, G=G), d, a["rows"], data, axes=(0, 0, 0)))
     rec = _shape(S.REC)
@@ -1080,8 +1045,8 @@ def _body_window(B, S, *args):
 N3Window = CompositeDefinition(
     "N3Window", 3, ("FMT", "N", "G", "SALTED", "REC"), _sig_window, _body_window, conformance="exact-model-tested",
     register=False,
-    doc="1 iff the descriptors open at at, at + 1, ... in the layout, each of their first G segments' two rows opens "
-        "in its unit's outbox (or is zero), every frame (the salt frame's slot skipped) is its descriptor's over "
+    doc="1 iff the descriptors open at at, at + 1, ... in the layout, each of their first G segments' row opens in "
+        "its unit's outbox (or is zero), every frame (the salt frame's slot skipped) is its descriptor's over "
         "those rows, the salt frame is the salt's, and the head over the frames' root is complete and opens at leaf "
         "2 + direction of N2's commitment")
 
@@ -1112,19 +1077,15 @@ class Instance:
         return (tuple(self.fmt), self.N, self.G, self.salted, tuple(self.rec))
 
 
-def pair_ok(f: Format, seg: Sequence[int], rows: Sequence[bytes], salts: Sequence[bytes], paths: Sequence[Sequence],
-            roots: Sequence[bytes], domains: Sequence[bytes]) -> bool:
-    """`N3OutboxPair`'s reference: kind 1, rows q and q + 1 open in unit u's outbox (q + 1 < 2^DB); kind 0, both are
-    zero."""
+def read_ok(f: Format, seg: Sequence[int], row: bytes, salt: bytes, path: Sequence[bytes], roots: Sequence[bytes],
+            domains: Sequence[bytes]) -> bool:
+    """`N3RowRead`'s reference: kind 1, the row opens at q in unit u's outbox; kind 0, it is zero."""
     kind, u, q = seg[:3]
-    if q + 1 >= 1 << f.DB:
-        return False
     if kind == 0:
-        return not any(rows[0]) and not any(rows[1])
+        return not any(row)
     if u >= f.U:
         return False
-    return all(root_ref(domains[u], SCHEMA, hiding_value(rows[k], 8 * f.B, salts[k]), q + k,
-                        paths[k][:f.DEPTHS[u]]) == roots[u] for k in (0, 1))
+    return root_ref(domains[u], SCHEMA, hiding_value(row, 16 * f.B, salt), q, path[:f.DEPTHS[u]]) == roots[u]
 
 
 def reference(inst: Instance) -> bool:
@@ -1146,7 +1107,7 @@ def reference(inst: Instance) -> bool:
             return False
     for i, x in enumerate(fields(f, d) for d in descs):
         rows = a["rows"][i]
-        if not all(pair_ok(f, x.segs[g], rows[g], a["row_salts"][i][g], a["row_paths"][i][g], a["roots"],
+        if not all(read_ok(f, x.segs[g], rows[g], a["row_salts"][i][g], a["row_paths"][i][g], a["roots"],
                            a["domains"]) for g in range(G)):
             return False
         if any(s.kind for s in x.segs[G:]) or x.mode not in (RAW, B64) or assemble(f, descs[i], rows, G) != frames[i]:
@@ -1192,9 +1153,9 @@ def arguments(inst: Instance) -> list[np.ndarray]:
         flat["descriptors"] = [b for x in a["descriptors"] for b in _bytes_bits(x, f.LW)]
         flat["descriptor_salts"] = [b for s in a["descriptor_salts"] for b in _digest_bits(s)]
         flat["descriptor_paths"] = [b for p in a["descriptor_paths"] for s in p for b in _digest_bits(s)]
-        flat["rows"] = [b for per in a["rows"] for two in per for r in two for b in _bytes_bits(r, 8 * f.B)]
-        flat["row_salts"] = [b for per in a["row_salts"] for two in per for s in two for b in _digest_bits(s)]
-        flat["row_paths"] = [b for per in a["row_paths"] for two in per for p in two
+        flat["rows"] = [b for per in a["rows"] for r in per for b in _bytes_bits(r, 16 * f.B)]
+        flat["row_salts"] = [b for per in a["row_salts"] for s in per for b in _digest_bits(s)]
+        flat["row_paths"] = [b for per in a["row_paths"] for p in per
                              for s in list(p) + [zero_digest] * (f.DB - len(p)) for b in _digest_bits(s)]
     params, _ = inst.unit.signature()
     out = []
@@ -1213,7 +1174,7 @@ def evaluate(*insts: Instance) -> list[int]:
     return [int(b) for b in np.asarray(evaluate_bits(insts[0].unit, *args)).reshape(-1)]
 
 
-_GROUPS = {"N3OutboxPair": "row_reads", "N3Frame": "frames", "N3FramesRoot": "frames_root",
+_GROUPS = {"N3RowRead": "row_reads", "N3Frame": "frames", "N3FramesRoot": "frames_root",
            "N3IsZero": "record_opening"}
 
 
@@ -1301,14 +1262,15 @@ def outbox_binding(program: bytes, unit: str) -> bytes:
 
 
 def outbox_rows(data: bytes, B: int) -> list[bytes]:
-    """The outbox's rows: its bytes in rows of B, the last zero-filled, then zero rows up to a power of two, at least
-    one."""
-    rows = [data[i:i + B].ljust(B, b"\0") for i in range(0, len(data), B)]
-    return rows + [bytes(B)] * ((1 << len(rows).bit_length()) - len(rows))
+    """The outbox's rows of 2B bytes: row q holds bytes qB ... qB + 2B - 1, zero past the end, for q < max(1,
+    ceil(len / B)); then zero rows up to a power of two."""
+    k = max(1, -(-len(data) // B))
+    rows = [data[q * B:(q + 2) * B].ljust(2 * B, b"\0") for q in range(k)]
+    return rows + [bytes(2 * B)] * ((1 << (k - 1).bit_length()) - k)
 
 
 def register_outbox(program: bytes, unit: str, data: bytes, B: int, seed: bytes) -> Tree:
-    return register(outbox_rows(data, B), 8 * B, outbox_binding(program, unit), seed + b"/outbox/" + unit.encode())
+    return register(outbox_rows(data, B), 16 * B, outbox_binding(program, unit), seed + b"/outbox/" + unit.encode())
 
 
 @dataclass
@@ -1407,14 +1369,13 @@ class UnitTable:
     def outbox(self, key: tuple) -> bytes:
         return self.data[key[0]]
 
-    def pair(self, seg: Sequence[int], B: int) -> tuple[list[bytes], list[bytes], list[list[bytes]]]:
-        """The two rows a segment reads, their salts and their paths: zero rows and salts for a segment of kind 0."""
+    def read(self, seg: Sequence[int], B: int) -> tuple[bytes, bytes, list[bytes]]:
+        """The row a segment reads, its salt and its path: a zero row and salt for a segment of kind 0."""
         kind, u, q = seg[:3]
         if not kind:
-            return [bytes(B)] * 2, [bytes(hm96.SHA512.salt_bytes)] * 2, [[], []]
+            return bytes(2 * B), bytes(hm96.SHA512.salt_bytes), []
         t = self.trees[self.names[u]]
-        return ([t.reg.rows[q + k] for k in (0, 1)], [t.reg.salts[q + k] for k in (0, 1)],
-                [t.path(q + k) for k in (0, 1)])
+        return t.reg.rows[q], t.reg.salts[q], t.path(q)
 
 
 @dataclass
@@ -1449,7 +1410,7 @@ def register_layout(declared: dict[str, list[list[tuple]]], ports: list[str], B:
     fmt = fit([d for v in descs.values() for d in v], B, units.depths, max(1, merkle_depth(len(ports) * cap)))
     for p in ports:
         for pieces, d in zip(declared.get(p, []), descs[p]):
-            rows = [units.pair(s, B)[0] for s in d.segs]
+            rows = [units.read(s, B)[0] for s in d.segs]
             if assemble(fmt, encode(fmt, d), rows) != expand(pieces, B, units.outbox):
                 raise AssertionError(f"{p}: a descriptor doesn't put its declared frame on its outbox rows")
     rows = [encode(fmt, descs[p][j] if j < len(descs[p]) else NONE) for p in ports for j in range(cap)]
@@ -1716,7 +1677,7 @@ class Setup:
         G = L.segments(w.port)
         positions = [L.position(w.port, a + i) for i in range(n)]
         descs = [L.descriptor(w.port, a + i) for i in range(n)]
-        reads = [[U.pair(d.segs[g] if g < len(d.segs) else Segment(), f.B) for g in range(G)] for d in descs]
+        reads = [[U.read(d.segs[g] if g < len(d.segs) else Segment(), f.B) for g in range(G)] for d in descs]
         args = {"layout": L.tree.root, "layout_domain": L.tree.domain_id, "at": positions[0] if n else
                 L.position(w.port, min(a, L.cap - 1)), "record": record.root, "record_domain": record.domain_id,
                 "direction": direction, "roots": U.roots, "domains": U.domains, "frames": w.frames,
@@ -1830,7 +1791,7 @@ class Demo:
 
 
 def demo(seed: bytes = b"n3-demo") -> Demo:
-    """A small run of two units (an outbox of 40 bytes, four rows of depth 2; one of 10 bytes, two rows of depth 1) and
+    """A small run of two units (an outbox of 40 bytes, four rows of depth 2; one of 10 bytes, one row of depth 0) and
     two ports, the two ends of link "demo", and p0's window of DEMO_FRAMES: N = 4 in two buckets of two slots, G = 2."""
     B = 16
     outboxes = {u: hashlib.shake_256(seed + u.encode()).digest(k) for u, k in (("u0", 40), ("u1", 10))}
@@ -1925,8 +1886,7 @@ def _circuit_check(args) -> dict:
     f, inst = d.layout.fmt, d.window.instance
     opts = CK.Options()
     entries = []
-    targets = [(bind(N3Frame, FMT=tuple(f), G=inst.G), True), (bind(N3Seg, B=f.B), True),
-               (bind(N3Next, IDW=f.IDW, UB=f.UB), True)]
+    targets = [(bind(N3Frame, FMT=tuple(f), G=inst.G), True), (bind(N3Seg, B=f.B), True)]
     for target, whole in targets + ([] if args.parts else [(inst.unit, False)]):
         t0 = time.time()
         try:

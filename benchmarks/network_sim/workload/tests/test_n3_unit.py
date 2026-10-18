@@ -1,7 +1,8 @@
 """N3's proof unit for one port-window (`n3_unit`): a descriptor puts its declared frame on its outbox rows, an outbox
 holds its unit's messages' bytes, every opening the unit makes is its tree's, N2's frames root in gates is N2's, and the
 circuit equals its Python reference. An honest window gives ok; a flipped bit, an extra frame, written fill, a wrong
-outbox row (first or second of a segment, or a nonzero row for an empty segment), descriptor salt, position or record
+outbox row (in a byte its segment reads or one it doesn't, or a nonzero row for an empty segment), descriptor salt,
+position or record
 salt, a head whose status isn't complete, or a wrong salt frame gives not-ok, on the demo's, the simulator's and the
 lab's windows."""
 import base64
@@ -79,7 +80,7 @@ def test_a_descriptor_puts_its_declared_frame_on_its_outbox_rows(demo):
     for pieces, d in zip(U.DEMO_FRAMES, demo.layout.descriptors["p0"]):
         row = U.encode(f, d)
         assert U.decode(f, row) == d and len(row) == -(-f.LW // 8)
-        rows = [demo.units.pair(s, f.B)[0] for s in d.segs]
+        rows = [demo.units.read(s, f.B)[0] for s in d.segs]
         assert U.assemble(f, row, rows) == U.expand(pieces, f.B, demo.units.outbox)
     assert [len(d.segs) for d in demo.layout.descriptors["p0"]] == [0, 1, 2, 2]
     assert demo.layout.descriptor("p1", 0) == U.NONE and U.fields(f, U.encode(f, U.NONE)).mode == 0
@@ -96,16 +97,16 @@ def test_a_frame_a_segment_cant_hold_has_no_descriptor(pieces, error):
         U.describe(pieces, 16, lambda k: 0)
 
 
-def test_an_outbox_is_its_bytes_in_rows_up_to_a_power_of_two_with_a_row_after_them():
+def test_an_outbox_is_its_bytes_in_rows_of_2b_starting_every_b_up_to_a_power_of_two():
     data = bytes(range(1, 40))
-    assert U.outbox_rows(b"", 16) == [bytes(16)]
-    assert U.outbox_rows(data[:16], 16) == [data[:16], bytes(16)]
-    assert U.outbox_rows(data[:17], 16) == [data[:16], data[16:17].ljust(16, b"\0")] + [bytes(16)] * 2
-    assert U.outbox_rows(data, 16) == [data[:16], data[16:32], data[32:].ljust(16, b"\0"), bytes(16)]
+    assert U.outbox_rows(b"", 16) == [bytes(32)]
+    assert U.outbox_rows(data[:16], 16) == [data[:16].ljust(32, b"\0")]
+    assert U.outbox_rows(data[:17], 16) == [data[:17].ljust(32, b"\0"), data[16:17].ljust(32, b"\0")]
+    assert U.outbox_rows(data, 16) == [data[:32], data[16:].ljust(32, b"\0"), data[32:].ljust(32, b"\0"), bytes(32)]
 
 
 def frame_cases(inst: U.Instance):
-    """Each descriptor of the window with its G segments' two rows, and its frame (the salt frame skipped)."""
+    """Each descriptor of the window with its G segments' rows, and its frame (the salt frame skipped)."""
     a = inst.args
     frames = list(a["frames"])
     if inst.salted:
@@ -117,7 +118,7 @@ def n3frame(f: U.Format, G: int, cases) -> list[int]:
     """`N3Frame{G}`'s output on each (descriptor, rows, frame)."""
     descs, rows, frames = zip(*cases)
     args = [[bits(x, f.LW) for x in descs],
-            [[b for two in rr[:G] for r in two for b in bits(r, 8 * f.B)] for rr in rows],
+            [[b for r in rr[:G] for b in bits(r, 16 * f.B)] for rr in rows],
             [bits(x, 8 * f.B) for x in frames]]
     out = evaluate_bits(bind(U.N3Frame, FMT=tuple(f), G=G), *(np.asarray(a, dtype=np.uint8) for a in args))
     return np.asarray(out).reshape(-1).tolist()
@@ -149,7 +150,7 @@ def test_n3frame_is_assemble_on_valid_modes_and_refuses_the_others(demo, G):
             for g in range(G, f.G):
                 x[(f.HW + g * f.SW) // 8] &= ~(1 << (f.HW + g * f.SW) % 8)
         x = bytes(x)
-        rows = [(rng.randbytes(f.B), rng.randbytes(f.B)) for _ in range(G)]
+        rows = [rng.randbytes(2 * f.B) for _ in range(G)]
         frame = U.assemble(f, x, rows, G)
         cases += [(x, rows, frame), (x, rows, flip(frame, rng.randrange(f.B), 1 << rng.randrange(8)))]
     want = assembled(f, G, cases)
@@ -161,21 +162,21 @@ def test_n3frame_is_assemble_on_valid_modes_and_refuses_the_others(demo, G):
 def test_n3seg_is_segment():
     B, rng = 16, random.Random(0)
     ob, lb = U._seg_widths(B)
-    cases = [(rng.randbytes(B), rng.randbytes(B), rng.randrange(1 << ob), rng.randrange(1 << lb),
-              rng.randrange(1 << lb)) for _ in range(200)]
-    cases += [(b"\xff" * B, b"\xfe" * B, 15, 16, 0), (b"\xff" * B, b"\xfe" * B, 0, 31, 0),
-              (b"\xff" * B, b"\xfe" * B, 15, 31, 20)]
-    args = [[bits(r0 + r1, 16 * B) for r0, r1, *_ in cases], [bits(bytes([c[2]]), ob) for c in cases],
-            [bits(bytes([c[3]]), lb) for c in cases], [bits(bytes([c[4]]), lb) for c in cases]]
+    cases = [(rng.randbytes(2 * B), rng.randrange(1 << ob), rng.randrange(1 << lb), rng.randrange(1 << lb))
+             for _ in range(200)]
+    edge = b"\xff" * B + b"\xfe" * B
+    cases += [(edge, 15, 16, 0), (edge, 0, 31, 0), (edge, 15, 31, 20)]
+    args = [[bits(c[0], 16 * B) for c in cases], [bits(bytes([c[1]]), ob) for c in cases],
+            [bits(bytes([c[2]]), lb) for c in cases], [bits(bytes([c[3]]), lb) for c in cases]]
     out = np.asarray(evaluate_bits(bind(U.N3Seg, B=B), *(np.asarray(a, dtype=np.uint8) for a in args)))
-    want = [bits(U.segment(B, (1, 0, 0, o, n, d), r0, r1), 8 * B) for r0, r1, o, n, d in cases]
+    want = [bits(U.segment(B, (1, 0, 0, o, n, d), row), 8 * B) for row, o, n, d in cases]
     assert out.reshape(len(cases), -1).tolist() == want
 
 
 # --- openings and the demo window ------------------------------------------------------------------------------------
 
 def test_every_row_opens_in_its_tree_at_its_position(demo):
-    trees = [(t, 8 * demo.layout.fmt.B) for t in demo.units.trees.values()]
+    trees = [(t, 16 * demo.layout.fmt.B) for t in demo.units.trees.values()]
     trees += [(demo.layout.tree, demo.layout.fmt.LW)]
     for t, n_bits in trees:
         for i, (row, salt) in enumerate(zip(t.reg.rows, t.reg.salts)):
@@ -216,9 +217,9 @@ def demo_cases(demo):
         x.args.update(kw)
         return x
 
-    def row(i, g, k, at):
+    def row(i, g, at):
         rows = copy.deepcopy(a["rows"])
-        rows[i][g][k] = flip(rows[i][g][k], at)
+        rows[i][g] = flip(rows[i][g], at)
         return edit(rows=rows)
 
     fr = a["frames"]
@@ -230,9 +231,9 @@ def demo_cases(demo):
         "honest": inst,
         "frame-bit": edit(frames=[fr[0], flip(fr[1], 9), fr[2], fr[3]]),
         "suffix-bit": edit(frames=[fr[0], fr[1], flip(fr[2], 14), fr[3]]),
-        "outbox-row": row(1, 0, 0, 14),
-        "second-row": row(1, 0, 1, 2),
-        "zero-row": row(0, 1, 0, 0),
+        "outbox-row": row(1, 0, 14),
+        "row-tail": row(1, 0, 20),
+        "zero-row": row(0, 1, 0),
         "descriptor-salt": edit(descriptor_salts=[flip(a["descriptor_salts"][0], 0)] + a["descriptor_salts"][1:]),
         "at": edit(at=a["at"] + 1),
         "record-salt": edit(record_salt=flip(a["record_salt"], 3)),
@@ -261,38 +262,40 @@ def test_an_incomplete_head_opens_and_only_its_status_refuses_it(demo_cases):
 def test_the_demo_window_is_its_reference(demo_cases):
     """The whole window at its smallest format (B = 16, four frames of two segments), on one honest and twelve broken
     instances. It is the one test of the window's wiring, which the cheaper tests can't catch: the descriptors' reads at
-    at, at + 1, ..., the segments' identities cut from them, both outbox rows of each segment (zero rows among them),
-    N2's frames root, the head's status and its opening at leaf 2 + direction. About two minutes, nearly all of it
-    tracing and evaluating the openings' SHA-512 compressions."""
+    at, at + 1, ..., the segments' identities cut from them, each segment's outbox row (zero rows among them), N2's
+    frames root, the head's status and its opening at leaf 2 + direction. About 90 s, nearly all of it tracing the
+    openings' SHA-512 compressions."""
     assert U.evaluate(*demo_cases.values()) == [int(U.reference(x)) for x in demo_cases.values()]
     size = U.size(demo_cases["honest"])
     assert size["ands"] == sum(v for k, v in size.items() if k != "ands") and size["row_reads"] > size["frames"]
 
 
 @pytest.mark.slow
-def test_n3outboxpair_is_its_reference(demo):
-    """Both rows of a segment opened, on the demo's outboxes: honest of either unit, a second row past the identity's
-    row bits (q = 3, where q + 1 wraps to row 0 and both rows open), another unit's rows, and kind 0 with zero and with
-    nonzero rows. It is the one test that reaches the q + 1 carry, which no honest layout sets; about a minute."""
+def test_n3rowread_is_its_reference(demo):
+    """A segment's row opened, on the demo's outboxes: honest of either unit and a zero row past u0's data, a row past
+    u1's depth (q = 1 in a one-row tree, whose position bits the identity still carries), another unit's row, and kind
+    0 with a zero and a nonzero row. It is the one test of a row position past its unit's depth and of another unit's
+    row, which no honest layout sets. About a second after the demo's window, whose traced openings it shares in the
+    suite's one process; 85 s alone."""
     f, units = demo.layout.fmt, demo.units
-    u0 = units.trees["u0"]
-    wrap = ([u0.reg.rows[3], u0.reg.rows[0]], [u0.reg.salts[3], u0.reg.salts[0]], [u0.path(3), u0.path(0)])
-    zero = units.pair(U.Segment(), f.B)
-    cases = [(U.Segment(1, 0, 1), units.pair(U.Segment(1, 0, 1), f.B)),
-             (U.Segment(1, 1, 0), units.pair(U.Segment(1, 1, 0), f.B)),
-             (U.Segment(1, 0, 3), wrap), (U.Segment(1, 1, 1), units.pair(U.Segment(1, 0, 1), f.B)),
-             (U.Segment(), zero), (U.Segment(), ([zero[0][0], flip(zero[0][1], 5)], zero[1], zero[2]))]
-    want = [int(U.pair_ok(f, s, *r, units.roots, units.domains)) for s, r in cases]
-    assert want == [1, 1, 0, 0, 1, 0]
+    assert f.DEPTHS == (2, 0)
+    zero = units.read(U.Segment(), f.B)
+    cases = [(U.Segment(1, 0, 1), units.read(U.Segment(1, 0, 1), f.B)),
+             (U.Segment(1, 1, 0), units.read(U.Segment(1, 1, 0), f.B)),
+             (U.Segment(1, 0, 3), units.read(U.Segment(1, 0, 3), f.B)),
+             (U.Segment(1, 1, 1), units.read(U.Segment(1, 1, 0), f.B)),
+             (U.Segment(1, 1, 0), units.read(U.Segment(1, 0, 0), f.B)),
+             (U.Segment(), zero), (U.Segment(), (flip(zero[0], 5), *zero[1:]))]
+    want = [int(U.read_ok(f, s, *r, units.roots, units.domains)) for s, r in cases]
+    assert want == [1, 1, 1, 0, 0, 1, 0]
     ident = [bits((s.kind | s.u << 1 | s.q << (1 + f.UB)).to_bytes(2, "little"), f.IDW) for s, _ in cases]
-    rows = [[b for r in rr[0] for b in bits(r, 8 * f.B)] for _, rr in cases]
-    salts = [[b for s in rr[1] for b in U._digest_bits(s)] for _, rr in cases]
-    paths = [[b for p in rr[2] for s in list(p) + [bytes(64)] * (f.DB - len(p)) for b in U._digest_bits(s)]
-             for _, rr in cases]
+    rows = [bits(r[0], 16 * f.B) for _, r in cases]
+    salts = [U._digest_bits(r[1]) for _, r in cases]
+    paths = [[b for s in list(r[2]) + [bytes(64)] * (f.DB - len(r[2])) for b in U._digest_bits(s)] for _, r in cases]
     roots = [[b for r in units.roots for b in U._digest_bits(r)]] * len(cases)
     domains = [[b for r in units.domains for b in U._digest_bits(r)]] * len(cases)
     args = [np.asarray(x, dtype=np.uint8) for x in (ident, rows, salts, paths, roots, domains)]
-    out = evaluate_bits(bind(U.N3OutboxPair, DEPTHS=f.DEPTHS, N_BITS=8 * f.B), *args)
+    out = evaluate_bits(bind(U.N3RowRead, DEPTHS=f.DEPTHS, N_BITS=16 * f.B), *args)
     assert np.asarray(out).reshape(-1).tolist() == want
 
 
