@@ -9,6 +9,8 @@ of 2, 4 and 8 CTAs an SM, `kv_bench.chain`):
     fold        the reduction mod p alone (`what` 4)
     encode      at each k of --ks, words/s, as squarings/s (k root chains of `root_squarings` a word: 98,016 a block at
                 k = 3) and as blocks/s (TLW words a 4 KiB block)
+    held        the encode held to 3 CTAs an SM (`what` 5, ptxas fitting its registers to 3 warps a sub-partition), its
+                checksum against the encode's first
     decode      likewise, k squarings a word
 
 each over the reference (`kv.cu` before FOLD 6, 1.499e10) and the stated ceiling's GPU part, `timing.GPU_SQUARINGS_PER_S`
@@ -18,7 +20,8 @@ low-priority stream beside a bf16 GEMM loop (--gemm M,K,N) on a high-priority on
 a word a thread (CTAs that end after one word each, so the GEMM's take the SMs as they free): the encode's rate under a
 GEMM loop queued to outlast it, and the GEMM's time a call over the GEMMs done while the encode ran. Writes
 OUT/encode-rate.json.
-`--ncu` instead launches each timed chain once (square, encode at the largest k, products, fold), for Nsight Compute.
+`--ncu` instead launches each timed chain once (square, encode and held encode at the largest k, products, fold), for
+Nsight Compute.
 
     python encode_rate.py --lib p1024=kv.so --out OUT [--ks 2,3 --blocks 65536 --gemm 2048,4096,14336] [--ncu]
 """
@@ -85,10 +88,10 @@ def main() -> int:
         xr = torch.zeros(1, dtype=torch.int64, device="cuda")
         k = max(res["ks"])
         KB.set_key(lib, KB.lib_key(lib, k))
-        for what, steps in ((0, 20_000), (2, 8), (3, 20_000), (4, 20_000)):
-            lib.call("kv_chain", what, k, 1, steps, 2 * sms, xr.data_ptr(), KB.stream(torch))
+        for what, steps, per_sm in ((0, 20_000, 3), (2, 8, 2), (5, 8, 3), (3, 20_000, 3), (4, 20_000, 3)):
+            lib.call("kv_chain", what, k, 1, steps, per_sm * sms, xr.data_ptr(), KB.stream(torch))
         torch.cuda.synchronize()
-        log(f"ncu: one launch each of chain 0, 2 (k = {k}), 3 and 4 at {2 * sms} CTAs")
+        log(f"ncu: one launch each of chain 0, 2 and 5 (k = {k}), 3 and 4, at the CTAs an SM each holds (2 for 2, else 3)")
         return 0
     KB.set_key(lib, KB.lib_key(lib, lib.kmax))
     sq = {ilp: KB.chain(lib, torch, 0, 1, ilp, sms, a.reps) for ilp in (1, 2)}
@@ -116,10 +119,31 @@ def main() -> int:
         log(f"k={k}: encode {e['per_s']:.4g} words/s = {es:.4g} squarings/s ({es / best:.1%} of the squaring, "
             f"{res['encode'][k]['over_reference']}x the reference, {res['encode'][k]['over_stated_gpu_part']}x the "
             f"stated GPU part) = {e['per_s'] / W:.4g} blocks/s; decode {d['per_s'] / W:.4g} blocks/s")
+        same = held_agrees(lib, torch, k, sms)
+        hd = KB.chain(lib, torch, 5, k, 1, sms, a.reps)
+        hs = hd["per_s"] * k * f.root_squarings
+        res["encode"][k]["held"] = {**hd, "agrees": same, "squarings_s": hs, "blocks_s": hd["per_s"] / W,
+                                    "over_encode": round(hd["per_s"] / e["per_s"], 4), **over(hs)}
+        log(f"k={k}: the encode held to 3 CTAs an SM (what 5; its checksum {'equals' if same else 'DIFFERS FROM'} "
+            f"what 2's) {hs:.4g} squarings/s = {hd['per_s'] / W:.4g} blocks/s, {hd['per_s'] / e['per_s']:.3f}x the "
+            f"encode, {res['encode'][k]['held']['over_stated_gpu_part']}x the stated GPU part")
+        if hs > gpu_part:
+            log(f"the held encode beats the stated ceiling's GPU part ({hs:.4g} > {gpu_part:.4g})")
     res["memory"] = memory(lib, torch, a, sms, W, log)
     (out_dir / "encode-rate.json").write_text(json.dumps(res, indent=1, default=str))
     log("done")
     return 0
+
+
+def held_agrees(lib, torch, k: int, sms: int) -> bool:
+    """what 5's checksum (the XOR of every thread's words after 2 encodes) equals what 2's."""
+    out = []
+    for what in (2, 5):
+        xr = torch.zeros(1, dtype=torch.int64, device="cuda")
+        lib.call("kv_chain", what, k, 1, 2, sms, xr.data_ptr(), KB.stream(torch))
+        torch.cuda.synchronize()
+        out.append(int(xr.item()))
+    return out[0] == out[1] and out[0] != 0
 
 
 def memory(lib, torch, a, sms: int, W: int, log) -> dict:

@@ -826,6 +826,27 @@ __global__ void __launch_bounds__(WPB) chain_kernel(int k, u64 steps, unsigned l
   xor_out(acc, xr);
 }
 
+// Timing only: what 2's encodes held to MINB CTAs an SM (what 5: 3), so ptxas fits the root's registers to 3 warps a
+// sub-partition and spills what the squarings don't read (the root's base and its saved power, read at its multiplies).
+template <int MINB>
+__global__ void __launch_bounds__(WPB, MINB) encode_held_kernel(int k, u64 steps, unsigned long long *xr) {
+  const u64 gid = (u64)blockIdx.x * WPB + threadIdx.x;
+  u32 x[NL];
+  u32 h = (u32)(gid * 2654435761u) ^ 0x9e3779b9u;
+#pragma unroll
+  for (int l = 0; l < NL; ++l) {
+    h = h * 1664525u + 1013904223u;
+    x[l] = h;
+  }
+  x[NL - 1] &= 0x7fffffffu;
+#pragma unroll 1
+  for (u64 s = 0; s < steps; ++s) encode_word(x, gid + s, k);
+  u32 acc = 0;
+#pragma unroll
+  for (int l = 0; l < NL; ++l) acc ^= x[l];
+  xor_out(acc, xr);
+}
+
 __global__ void spin_kernel(long long cycles) {
   const long long t0 = clock64();
   while (clock64() - t0 < cycles) {
@@ -2319,7 +2340,12 @@ int kv_read(const void *store, uint64_t bytes, unsigned long long *xr, int grid,
 }
 
 int kv_chain(int what, int k, int ilp, uint64_t steps, int grid, unsigned long long *xr, cudaStream_t s) {
-  if (what < 0 || what > 4 || ((what == 1 || what == 2) && (k < 1 || k > kv::KMAX))) return -1;
+  if (what < 0 || what > 5 || ((what == 1 || what == 2 || what == 5) && (k < 1 || k > kv::KMAX))) return -1;
+  if (what == 5) {
+    if (ilp != 1) return -1;
+    kv::encode_held_kernel<3><<<grid, kv::WPB, 0, s>>>(k, steps, xr);
+    return launched();
+  }
   if (what > 2) {
     if constexpr (kv::FOLD6) {
       if (ilp != 1) return -1;
