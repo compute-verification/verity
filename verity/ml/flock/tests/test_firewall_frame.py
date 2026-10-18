@@ -14,7 +14,9 @@ pads `h + v`, and the rounds, their lengths and their order are the same: before
 failed. The frame decides the rep's refusals from the coins the stream answered each round it released (`coins`): a
 zerocheck outer coin `r_j = 1`; at the opening's label, a mask slot short of full rank on the claim points of the table's
 reps (`prior`'s and the rep's own); level 0's `ρ_0, ρ_1` dependent over F128; and `β = 0` in the inner proof, whose four
-rounds leave through the frame too. Each answers `stop` at once, nothing of the round leaving. `flock-circuit` holds its
+rounds leave through the frame too. Each answers `stop` at once, nothing of the round leaving. The frame fixes the inner
+proof's rounds: `(ρ, σ)` and `Y` are its own, from its draws and the coins (computed here with `gmul`), and of the other two
+only `final_c'` and `τ`'s commitment are the firewall's. `flock-circuit` holds its
 own masking challenger to this release byte for byte on every round it sends (`firewall::Gate`), its pads tree over the
 frame's draws to the frame's root, and its own refusals to the frame's (`live/src/coin_stop_vectors.json` holds Rust's
 `ρ` and `β` checks to the frame's). The prover's every other OS read is `flock-firewall tap`'s: a line `N` answered with
@@ -106,11 +108,39 @@ class Frame:
         if start is None:
             start = json.dumps({"layout": lay} | ({"mask": mask} if mask else {}))
         self.rng = random.Random(1)
+        self.lay, self.eps, self.beta, self.last, self.sent = lay, 0, 0, None, {}
         self.start = self.ask(start)
         if isinstance(self.start, tuple):
-            b = self.start[1]
-            self.h = [int.from_bytes(b[16 * i:16 * i + 16], "little") for i in range(slots(**lay)["len"])]
+            b, n = self.start[1], slots(**lay)["len"]
+
+            def words(o: int, k: int) -> list[int]:
+                return [int.from_bytes(b[o + 16 * i:o + 16 * i + 16], "little") for i in range(k)]
+
+            self.h, self.mu = words(0, n), words(16 * n, n)
+            self.pad_h, self.pad_mu = words(32 * n, K_PAD), words(32 * n + 16 * K_PAD, K_PAD)
             self.root = b[-64:]
+
+    def rho_sigma(self) -> list[int]:
+        """`(ρ, σ) = (ε h_fa + h_tx, h_fb + h_ty)` (`zk_veil::prove_inner`) at the `ε` answered."""
+        s = slots(**self.lay)
+        return [gmul(self.eps, self.h[s["fa"]]) ^ self.h[s["tx"]], self.h[s["fb"]] ^ self.h[s["ty"]]]
+
+    def y(self, beta: int | None = None) -> list[int]:
+        """`Y = (h ‖ pad_h) + β (μ ‖ pad_μ)` (`zk_veil::prove_inner`) at `β`, by default the one answered."""
+        beta = self.beta if beta is None else beta
+        return [a ^ gmul(beta, m) for a, m in zip(self.h + self.pad_h, self.mu + self.pad_mu)]
+
+    def own(self, content: bytes) -> bytes:
+        """The inner proof's round that the placeholder `content` stands for, from this rep's draws and coins; any other
+        round as it is."""
+        if content not in (RHO_SIGMA, Y):
+            return content
+        self.sent[content] = obs(self.rho_sigma() if content == RHO_SIGMA else self.y()) + squeeze(2, dict(INNER)[content])
+        return self.sent[content]
+
+    def inner(self) -> list[bytes]:
+        """The inner proof's rounds as this rep sends them."""
+        return [self.sent.get(r, r) for r, _ in INNER]
 
     def ask(self, line: str, body: bytes = b""):
         try:
@@ -122,18 +152,26 @@ class Frame:
         return (r, self.p.stdout.read(int(r.split(" ")[1]))) if r.startswith("ok ") else r
 
     def coins(self, coins: list[int]):
+        if self.last == INNER[0][0]:
+            self.eps = coins[0]
+        if self.last == INNER[2][0]:
+            self.beta = coins[0]
         return self.ask(f"coins {len(coins)}", wire(coins))
 
-    def round(self, content: bytes, n: int, fail: bool = False, coins: list[int] | None = None, sched: bytes | None = None):
+    def round(self, content: bytes, n: int, fail: bool = False, coins: list[int] | None = None, sched: bytes | None = None,
+              answer: bool = True):
         """The round's answer; a released round's coins (seeded, never 0 or 1, unless `coins`) are answered back, as the
-        firewall does. A device round comes with the scheduled round in its place (`sched`, else the round itself, which
-        then passes); the inner proof's rounds, the firewall's own, and a `fail` round come alone."""
-        if fail or any(content == r for r, _ in INNER):
+        firewall does, unless not `answer`. A device round comes with the scheduled round in its place (`sched`, else the
+        round itself, which then passes); the inner proof's rounds, the firewall's own (`own`), and a `fail` round come
+        alone."""
+        inner = any(content == r for r, _ in INNER)
+        self.last, content = content, self.own(content)
+        if fail or inner:
             r = self.ask(f"round {n} {len(content)}" + (" fail" if fail else ""), content)
         else:
             ref = content if sched is None else sched
             r = self.ask(f"round {n} {len(content)} {len(ref)}", content + ref)
-        if isinstance(r, tuple):
+        if isinstance(r, tuple) and answer:
             assert self.coins([self.rng.getrandbits(128) | 2 for _ in range(n)] if coins is None else coins) == "ok"
         return r
 
@@ -160,10 +198,12 @@ ALG = list(range(1, 2 * SKIP + 1)) + [11, 12, 13, 14, 21, 22, 31, 32] + list(ran
 LG = [41, 42, 43, 44, 45, 46, 47, 48, 49]
 
 
+#: placeholders for the inner proof's rounds that are the frame's own values, which `Frame.own` fills in for the rep
+RHO_SIGMA, Y = b"(rho, sigma)", b"Y"
 #: the inner proof's four rounds (`zk_veil::prove_inner`), which leave as they are: `final_c'` then `ε`, `(ρ, σ)` then the
 #: batching coins, `τ`'s commitment then `β`, `Y` then the queries
-INNER = [(label("verity-flock-zk-inner-v0") + obs([8], 1) + squeeze(1, 1), 1), (obs([9, 10]) + squeeze(2, 5), 5),
-         (msg(b"\2" * 64) + squeeze(1, 1), 1), (obs([11, 12, 13]) + squeeze(2, 4), 4)]
+INNER = [(label("verity-flock-zk-inner-v0") + obs([8], 1) + squeeze(1, 1), 1), (RHO_SIGMA, 5),
+         (msg(b"\2" * 64) + squeeze(1, 1), 1), (Y, 4)]
 
 
 def rep_rounds(alg: list[int]) -> list[tuple[bytes, int]]:
@@ -184,10 +224,10 @@ def rep_rounds(alg: list[int]) -> list[tuple[bytes, int]]:
     return [(r0, 6), (r1, 1), (r2, 2), (r3, 2), (squeeze(2, 2), 2), (r4, 3), (r5, 1), *INNER]
 
 
-def release(h: list[int], root: bytes, alg: list[int]) -> list[bytes]:
-    """The hand-made rep's rounds as they leave under pads `h` and root `root`, with algebraic values `alg`: the domain frame
-    gone, the pads' label and root after the zerocheck's label, each masked phase's value `v` as `v + h_i` in the absorbed
-    order, the rest as the device framed it."""
+def release(h: list[int], root: bytes, alg: list[int], inner: list[bytes]) -> list[bytes]:
+    """The hand-made rep's rounds as they leave under pads `h` and root `root`, with algebraic values `alg` and the inner
+    proof's rounds `inner`: the domain frame gone, the pads' label and root after the zerocheck's label, each masked phase's
+    value `v` as `v + h_i` in the absorbed order, the rest as the device framed it."""
     o = order(**LAY)
     a, at, n = alg, 2 * SKIP, len(ALG)
 
@@ -205,7 +245,7 @@ def release(h: list[int], root: bytes, alg: list[int]) -> list[bytes]:
             squeeze(2, 2),
             label("verity-flock-zk-l0-close-v0") + obs([6]) + squeeze(2, 3),
             label("flock-zerocheck-v0") + obs([7]) + squeeze(1, 1),
-            *(r for r, _ in INNER)]
+            *inner]
 
 
 def released(f: Frame, rounds, fail_at: int | None = None) -> list:
@@ -234,7 +274,7 @@ def test_the_frame_draws_the_reps_randomness_and_commits_it_and_refuses_a_start_
 def test_a_rep_leaves_masked_in_the_layouts_order():
     f = Frame()
     out = released(f, rep_rounds(ALG))
-    assert [r[1] for r in out[:-1]] == release(f.h, f.root, ALG)
+    assert [r[1] for r in out[:-1]] == release(f.h, f.root, ALG, f.inner())
     assert out[-1] == "ok" and f.close() == 0
 
 
@@ -242,14 +282,15 @@ def test_a_failed_round_stops_the_rep_whose_algebraic_values_then_leave_as_their
     f = Frame()
     garbage = [(7 * i + 3) * 0x1_0000_0001 for i in range(len(ALG))]
     out = released(f, rep_rounds(garbage), fail_at=1)
-    assert [r[1] for r in out[:-1]] == release(f.h, f.root, [0] * len(ALG)), \
+    assert [r[1] for r in out[:-1]] == release(f.h, f.root, [0] * len(ALG), f.inner()), \
         "a stopped rep stays stopped, and level 0's values are the firewall's own, masked as an honest rep's"
     assert out[-1] == "stop" and f.close() == 0
 
 
 def test_a_stopped_rep_releases_under_pads_h_what_the_honest_rep_releases_under_h_plus_v():
     """`h ↦ h + v` is a bijection of the uniform pads, so before `Finish` a stopped rep's release is distributed as an honest
-    rep's, whatever the device sent and wherever its check failed; only `finish` differs."""
+    rep's, whatever the device sent and wherever its check failed; only `finish` differs. The inner proof's rounds, which
+    carry no device value, are compared as the frame's own from its draws."""
     o = order(**LAY)
     garbage = [(5 * i + 1) << 70 for i in range(len(ALG))]
     #: each round's first absorbed position: the device's honest values before the failed round, anything from it on
@@ -260,7 +301,7 @@ def test_a_stopped_rep_releases_under_pads_h_what_the_honest_rep_releases_under_
         shifted = list(f.h)
         for i in range(s, len(ALG)):
             shifted[o[i]] ^= ALG[i]
-        assert [r[1] for r in stopped[:-1]] == release(shifted, f.root, ALG) and stopped[-1] == "stop", fail_at
+        assert [r[1] for r in stopped[:-1]] == release(shifted, f.root, ALG, f.inner()) and stopped[-1] == "stop", fail_at
         assert f.close() == 0
 
 
@@ -290,7 +331,7 @@ def test_an_honest_device_round_passes_against_the_scheduled_one_and_leaves_with
     rounds, sched = rep_rounds(ALG), rep_rounds([0] * len(ALG))
     out = [f.round(r, n, sched=s) for (r, n), (s, _) in zip(rounds, sched)]
     assert all(o[0].endswith(" pass") for o, (r, _) in zip(out, rounds) if (r, _) not in INNER)
-    assert [o[1] for o in out] == release(f.h, f.root, ALG) and f.ask("finish") == "ok" and f.close() == 0
+    assert [o[1] for o in out] == release(f.h, f.root, ALG, f.inner()) and f.ask("finish") == "ok" and f.close() == 0
 
 
 def test_the_frames_pass_decision_is_rusts_on_the_shared_vectors_and_a_failed_round_leaves_as_the_scheduled_one():
@@ -312,7 +353,7 @@ def test_the_frames_pass_decision_is_rusts_on_the_shared_vectors_and_a_failed_ro
         assert word[2] == ("pass" if c["pass"] else "fail"), c["case"]
         if not c["pass"]:
             assert " ".join(word[3:]).startswith("the device's round "), c["case"]
-        assert got[1] == release(f.h, f.root, ALG if c["pass"] and device != sched else zero)[c["at"]], c["case"]
+        assert got[1] == release(f.h, f.root, ALG if c["pass"] and device != sched else zero, f.inner())[c["at"]], c["case"]
         assert f.close() == 0
 
 
@@ -321,7 +362,7 @@ def test_a_round_with_no_scheduled_round_in_its_place_is_refused_outside_the_inn
     r, n = rep_rounds(ALG)[0]
     assert f.ask(f"round {n} {len(r)}", r) == "err a round with no scheduled round in its place, outside the inner proof"
     out = released(f, rep_rounds(ALG))
-    assert [o[1] for o in out[:-1]] == release(f.h, f.root, [0] * len(ALG)) and out[-1] == "stop" and f.close() == 0
+    assert [o[1] for o in out[:-1]] == release(f.h, f.root, [0] * len(ALG), f.inner()) and out[-1] == "stop" and f.close() == 0
 
 
 def test_a_stopped_rep_releases_the_scheduled_round_whatever_device_round_comes_with_it():
@@ -330,7 +371,7 @@ def test_a_stopped_rep_releases_the_scheduled_round_whatever_device_round_comes_
     first = f.round(*sched[0], fail=True)
     rest = [f.round(r, n, sched=s) for (r, n), (s, _) in zip(rounds[1:], sched[1:])]
     assert all(o[0].endswith(" fail the rep is stopped") for o, x in zip(rest, rounds[1:]) if x not in INNER)
-    assert [first[1]] + [o[1] for o in rest] == release(f.h, f.root, [0] * len(ALG))
+    assert [first[1]] + [o[1] for o in rest] == release(f.h, f.root, [0] * len(ALG), f.inner())
     assert f.ask("finish") == "stop" and f.close() == 0
 
 
@@ -441,7 +482,7 @@ def test_beta_zero_in_the_inner_proof_stops_the_rep_at_once_and_no_other_inner_c
         f = Frame()
         for r, n in rounds[:k]:
             assert f.round(r, n, coins=[0] * n if r in (x for x, _ in INNER) else None)[0].startswith("ok ")
-        assert f.ask(f"round 1 {len(rounds[k][0])}", rounds[k][0])[0].startswith("ok ")
+        assert f.round(*rounds[k], answer=False)[0].startswith("ok ")
         if v["stop"]:
             assert f.coins([int(v["coin"], 16)]) == "stop PROVER-STOPPED: degenerate coin β = 0" and f.close() == 0
         else:
@@ -467,6 +508,40 @@ def test_the_inner_proof_comes_once_after_the_opening_and_the_rep_ends_only_afte
     for r, n in rounds:
         assert f.round(r, n)[0].startswith("ok ")
     assert f.round(squeeze(1, 1), 1) == "err a round after the inner proof's 4" and f.close() == 0
+
+
+INNER_WHY = ["the inner proof's round 0 is not its label, final_c' and ε's squeeze",
+             "the inner proof's round 1 is not the rep's (ρ, σ) = (ε h_fa + h_tx, h_fb + h_ty) and the batching coins",
+             "the inner proof's round 2 is not τ's 64-byte commitment and β's squeeze",
+             "the inner proof's round 3 is not the rep's Y = (h ‖ pad_h) + β (μ ‖ pad_μ) and the queries"]
+
+
+@pytest.mark.parametrize("k, bad", [
+    (0, lambda f: label("verity-flock-zk-inner-v0") + obs([8], 1) + obs([9], 1) + squeeze(1, 1)),
+    (0, lambda f: label("verity-flock-zk-inner-v0") + obs([8, 9]) + squeeze(1, 1)),
+    (0, lambda f: label("verity-flock-zk-inner-v0") + msg(b"w") + obs([8], 1) + squeeze(1, 1)),
+    (1, lambda f: obs([f.rho_sigma()[0] ^ 1, f.rho_sigma()[1]]) + squeeze(2, 5)),
+    (1, lambda f: obs(f.rho_sigma()[::-1]) + squeeze(2, 5)),
+    (1, lambda f: obs(f.rho_sigma()) + msg(b"w") + squeeze(2, 5)),
+    (2, lambda f: msg(b"\2" * 63) + squeeze(1, 1)),
+    (2, lambda f: msg(b"\2" * 64) + obs([1], 1) + squeeze(1, 1)),
+    (3, lambda f: obs(f.y()[:-1] + [f.y()[-1] ^ 1]) + squeeze(2, 4)),
+    (3, lambda f: obs(f.y(f.beta ^ 1)) + squeeze(2, 4)),
+    (3, lambda f: obs(f.y()[:-1]) + squeeze(2, 4)),
+])
+def test_the_frame_fixes_the_inner_proofs_rounds_and_computes_rho_sigma_and_y_itself(k, bad):
+    """`innerOwn`: of the inner proof's four rounds only `final_c'` and `τ`'s commitment are the firewall's, and `(ρ, σ)`
+    and `Y` are the frame's, from its draws and the coins (`zk_veil::prove_inner`'s formulas, here with `gmul`). A round
+    with a frame more, a value changed or one short is refused and releases nothing; the rep stays stopped, its own
+    round then goes, and its `finish` is `stop`."""
+    rounds = rep_rounds(ALG)
+    at = len(rounds) - len(INNER) + k
+    f = Frame()
+    for r, n in rounds[:at]:
+        assert f.round(r, n)[0].startswith("ok ")
+    b, n = bad(f), INNER[k][1]
+    assert f.ask(f"round {n} {len(b)}", b) == f"err {INNER_WHY[k]}"
+    assert all(f.round(r, n)[0].startswith("ok ") for r, n in rounds[at:]) and f.ask("finish") == "stop" and f.close() == 0
 
 
 #: a layout with three outer coins and no masked level 0, whose claim points have nine word coordinates (512 words)
