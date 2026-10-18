@@ -27,8 +27,9 @@ answered its sample by the deadline, and none when the prover could rebuild the 
 advice, timing advice, inputs, every refused port-window charged at its link's full capacity, so it fails closed, and
 everything a block out for maintenance held), and the failure probability (the sum of the claims' deltas).
 
-Every claim's credit is also a `Credit` on a unit: compute in block-ticks, PoUW's proved bound (`Profile.ticks`, the
-least time over every route) as `compute` on the whole block where the scheme gives one, else the honest routing's
+Every claim's credit is also a `Credit` on a unit: compute in block-ticks, PoUW's proved bound (`Profile.ticks`, (1 − ε)
+of the floor program's block-ticks, which no accepted window undercuts over any route) as `compute` on the whole block
+where the scheme gives one, else the honest routing's
 time on each facet (kinds on one facet add up, kinds on different facets run at once) as `compute:<facet>`, on the block as far as attribution places it there and graded by its anchor,
 the rest on the whole datacenter, since PoUW credits the prover system (decision 111); a store's device the bits read from it and the
 bit-ticks it held over the interval the claim proves (a snapshot proves an instant, and carries none). `capacity` gives each unit's resources a tick by the
@@ -349,8 +350,8 @@ class Credit:
     work: float
     #: what places it on the unit, for a block's compute (its attribution anchor)
     grade: str | None = None
-    #: for compute, what the time rests on: "proved" (PoUW's bound over every route) or "honest-routing" (each kind on
-    #: its named facet at the declared rates, which no audit proves)
+    #: for compute, what the time rests on: "proved" (PoUW's bound, (1 − ε) of the floor program's time, over every
+    #: route) or "honest-routing" (each kind on its named facet at the declared rates, which no audit proves)
     basis: str | None = None
 
 

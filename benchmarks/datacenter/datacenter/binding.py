@@ -99,8 +99,9 @@ class Placement:
 
     def public(self, plan: Plan, ticks: dict[str, float] | None = None, weights: dict[str, float] | None = None,
                record: Mapping[str, Any] | None = None, query: Mapping[str, Any] | None = None) -> Profile:
-        """The placement's public properties for the epoch `plan` audits. `ticks` is PoUW's proved bound per block: the
-        least block-ticks the block's declared work takes over every route at the data sheet's rates. `weights` is what an
+        """The placement's public properties for the epoch `plan` audits. `ticks` is PoUW's proved bound per block
+        (`benchmarks/pouw/proved_ticks.py`): (1 − ε) of the block-ticks the floor program ♭ takes for the block's census
+        at the data sheet's rates, which outside δ no accepted window undercuts over any route. `weights` is what an
         audit credits for one unit of each kind of work (PoUW's W_ref, a public constant of its scheme), 1 for a kind it
         doesn't list. `record` is the sampled proofs' one-stage registration of the Program and `query` the verifier's
         copy of its partition query: each block's proof units are the units of that partition whose gates run there, and
