@@ -72,7 +72,8 @@ def _value(o: D.Outcome) -> Any:
 def core_params(params: Mapping[str, Any], check: Mapping[str, Any], query: str) -> dict:
     """`core_check`'s parameters of a served window: the check item and query digest, and the window's own numbers."""
     return {"check": dict(check), "context": params["context"], "delta": params["delta"], "eps": params["eps"],
-            "grid_bits": params["grid_bits"], "query": query, "range": list(params["range"])}
+            "grid_bits": params["grid_bits"], "query": query, "range": list(params["range"]),
+            "registration_deadline": params["registration_deadline"]}
 
 
 def registration_params(program: Any, query: Mapping[str, Any], law: Mapping[str, Any], scheme: str,

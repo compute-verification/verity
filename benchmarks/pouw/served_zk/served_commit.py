@@ -2,7 +2,8 @@
 judged through the proof service (`sampled_proofs.service`, P1: a `Stream`'s `register`, `select`, `deliver` and
 `outcome`), and the check that a hidden tile proof's committed rows are the drawn tile's.
 
-  python served_commit.py params PASS_DIR OUT [--eps E --delta D --entries P]   the verifier's own parameters of the window
+  python served_commit.py params PASS_DIR OUT [--eps E --delta D --entries P --registration-deadline T]
+                                                                              the verifier's own parameters of the window
   python served_commit.py commit PASS_DIR PARAMS OUT [--calls N | --call I ...]   the committer: the window, salted and committed
   python served_commit.py register COMMIT_DIR PARAMS OUT [--extra ITEM=JSON]  the committer: the record, the public items only
   python served_commit.py edit REGISTRATION OUT KEY=JSON ...                  a control's registration, a field changed
@@ -121,6 +122,9 @@ BUDGET = 1
 #: the window's proof deadline (`Check.proof_deadline`), seconds on the challenger's clock from the draw, unless the
 #: parameters give ``proof_deadline``: a day
 PROOF_DEADLINE = 86400.0
+#: the window's registration deadline (`Check.registration_deadline`) that `params` writes unless given one, seconds on
+#: the challenger's clock from the epoch's salt coin's release as a ratio string: a day
+REGISTRATION_DEADLINE = "86400"
 #: the frame's owner, as C-Flock's statement domains have it (`verity_flock.ir_frame.OWNER`)
 OWNER = -1
 SALT_BYTES = 192
@@ -194,17 +198,25 @@ def law_of(params: dict, ell: int) -> dict:
     return items_of(params, ell, None)["sampling"]["law"]
 
 
+def registration_deadline(params: dict) -> float:
+    """The window's registration deadline, seconds: `params`' ``registration_deadline``, a ratio string, which a PoUW
+    window can't omit.  Raises `ValueError` (`core_check.DEADLINE_MISSING`, the fix) without one."""
+    if "registration_deadline" not in params:
+        raise ValueError(CC.DEADLINE_MISSING)
+    return float(Fraction(params["registration_deadline"]))
+
+
 def spec_of(params: dict, ell: int) -> S.Spec:
     """P1's Spec of a window at level `ell`: the entries and W committed, subset:K′ of the level, the tile template's
-    Program and query as the check, and `LAYOUT` declared.  With ``registration_deadline`` in `params` (seconds on the
-    challenger's clock from the epoch's salt coin's release), the check carries it: `Pouw.AcceptsBy`'s td.  Its proof
-    deadline is ``proof_deadline`` in `params`, else `PROOF_DEADLINE`."""
+    Program and query as the check, and `LAYOUT` declared.  The check carries the window's registration deadline
+    (`registration_deadline`, seconds on the challenger's clock from the epoch's salt coin's release): `Pouw.AcceptsBy`'s
+    td.  Its proof deadline is ``proof_deadline`` in `params`, else `PROOF_DEADLINE`."""
     d = template(params["k"])
     return S.Spec(values=(S.Value(PORT, ENTRY_SCHEMA, "serve"), S.Value("W", W_SCHEMA, "epoch")),
                   selection=S.Law(f"subset:{law_of(params, ell)['k']}"),
                   check=S.Check(PT.program_sha512(Program(d)), PT.template_instance_query(d),
                                 proof_deadline=params.get("proof_deadline", PROOF_DEADLINE),
-                                registration_deadline=params.get("registration_deadline")),
+                                registration_deadline=registration_deadline(params)),
                   public=tuple(S.Public(i, k, r) for i, k, r in LAYOUT), context=params["context"].encode())
 
 
@@ -473,7 +485,9 @@ def opening(advice: dict, priv: dict, params: dict, unit: int) -> dict:
 
 
 def core_params(params: dict) -> dict:
-    """`core_check`'s parameters of the verifier's own window: its check item and its check's query."""
+    """`core_check`'s parameters of the verifier's own window: its check item, its check's query and its registration
+    deadline.  Raises `ValueError` (`registration_deadline`) without one."""
+    registration_deadline(params)
     return OR.core_params(params, check_item(params), R.query_digest(PT.template_instance_query(template(params["k"]))))
 
 
@@ -638,12 +652,13 @@ class Challenger:
     `Recorded` in a replay); the window's draw coin keys `sampler` (Lean's draw, or its twin `python_sampler`).  A Spec
     fixes one law and K′ is a function of the registered level, so it holds one Stream per (stream name, level); each
     registration it accepted is held by name.  A control stream `replay`s an earlier draw and opens no coin, so a
-    control's verdicts are judged on the honest draw's units.  The window's Check has a proof deadline (`spec_of`): a
-    drawn window whose proof isn't delivered by it is `late`.  Under a
-    ``registration_deadline`` the salt coin's opening reads the clock (its release), and each stream records the epoch's
-    salt at that release (`Stream.salt_released`) before its first registration, so a window received later than the
-    deadline, or before the salt is open, is refused (`late-registration`) and earns no credit.  Without one the clock
-    decides only the proof deadline; it counts the challenger's reads of it unless `clock` is given."""
+    control's verdicts are judged on the honest draw's units.  The window's Check has a proof deadline and a registration
+    deadline (`spec_of`): a drawn window whose proof isn't delivered by the first is `late`.  The salt coin's opening
+    reads the clock (its release), and each stream records the epoch's salt at that release (`Stream.salt_released`)
+    before its first registration, so a window received later than the registration deadline, or before the challenger
+    opened the salt, is refused (`late-registration`) and earns no credit.  `params` without a registration deadline is
+    refused (`ValueError`, `registration_deadline`).  The clock counts the challenger's reads of it unless `clock` is
+    given."""
 
     def __init__(self, params: dict, coins: Any, sampler: Sampler = python_sampler, budget: int = BUDGET,
                  clock: Callable[[], float] | None = None, record: OR.Record | None = None) -> None:
@@ -675,7 +690,7 @@ class Challenger:
         if why is not None:
             raise _refused("coin", f"the {label}'s {why}")
         self.openings[label] = o
-        if label == "salt" and self.params.get("registration_deadline") is not None:
+        if label == "salt":
             self.salt_released_at = self.clock()
         return o
 
@@ -758,8 +773,7 @@ class Challenger:
         ell = level_of(rec)
         sampler = self._keyed if replay is None else (lambda law, n, d=self._drawn(replay): d.units)
         st = self.stream(stream, ell, sampler)
-        if (self.params.get("registration_deadline") is not None and self.salt_released_at is not None
-                and (stream, ell) not in self._salted):
+        if self.salt_released_at is not None and (stream, ell) not in self._salted:
             st.salt_released(self.openings["salt"].coin, self.salt_released_at)
             self._salted.add((stream, ell))
         own = ports(self.params, ell)
@@ -947,7 +961,9 @@ def cmd_params(a) -> int:
     rows = sum(next(u["n"] for u in calls if int(u["weight"]) == w) for w in _weights(man, calls))
     deployment = f"served-zk/{man.get('run')}"
     params = {"context": f"{deployment}/{sha}", "deployment": deployment, "k": K, "eps": a.eps, "delta": a.delta,
-              "grid_bits": Wd.GRID_BITS, "range": list(RANGE), "entries": a.entries, "w_rows": rows}
+              "grid_bits": Wd.GRID_BITS, "range": list(RANGE), "entries": a.entries, "w_rows": rows,
+              "registration_deadline": a.registration_deadline}
+    registration_deadline(params)
     Path(a.out).write_text(json.dumps(params, sort_keys=True))
     print(json.dumps(params), flush=True)
     return 0
@@ -1263,6 +1279,9 @@ def main(argv=None) -> int:
     p.add_argument("--eps", default=EPS)
     p.add_argument("--delta", default=DELTA)
     p.add_argument("--entries", type=int, default=ENTRIES)
+    p.add_argument("--registration-deadline", default=REGISTRATION_DEADLINE,
+                   help="seconds on the challenger's clock from the epoch's salt coin's release within which the window is "
+                        f"received, a positive ratio string (default {REGISTRATION_DEADLINE}, a day)")
     p = sub.add_parser("commit")
     for x in ("pass_dir", "params", "out"):
         p.add_argument(x)

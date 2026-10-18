@@ -4,6 +4,7 @@ grid level, registered with exactly PoUW's public items, received by a `Stream`,
 opened against the window root, delivered once, and the final outcome publishing exactly the public items."""
 from __future__ import annotations
 
+import copy
 import hashlib
 import io
 import json
@@ -55,7 +56,9 @@ def _coins(seed: int = 7) -> Coins:
 
 def _manifest(run: str, coins: Coins | None) -> dict:
     """A served pass's manifest as the challenger reads it: its calls, its weights' roots and its salt, the salt coin of
-    `coins` opened after the weights' root, or (None) a beacon's, as a pass recorded before epoch coins carries."""
+    `coins` opened after the weights' root, or (None) a beacon's, as a pass recorded before epoch coins carries.  The
+    serving controller opens the coin on its own copy of the epoch's coins, so `coins`, the challenger's, opens it
+    again before any window (`_challenger`), as ``challenger --state`` does."""
     roots = {2: hashlib.sha512(run.encode()).digest()}
     work = Workload((Matmul(5, Shape(16, K, N), 2),))
     man = {"run": run, "matmuls": [{"index": 5, "m": 16, "k": K, "n": N, "weight": 2}], "weights": {"2": {"root": roots[2].hex()}},
@@ -64,7 +67,7 @@ def _manifest(run: str, coins: Coins | None) -> dict:
         beacon = bytes(32)
         return {**man, "schema": PD.MANIFEST_SCHEMA_RECORDED, "beacon": beacon.hex(),
                 "salt": Epoch.unverified(work, roots, beacon).salt.hex()}
-    opening = coins.open("salt", weights_root(roots))
+    opening = copy.deepcopy(coins).open("salt", weights_root(roots))
     return {**man, "schema": PD.MANIFEST_SCHEMA, "coins": coins.commitment.to_json(), "salt_opening": opening.to_json(),
             "salt": Epoch.start(work, roots, coins.commitment, opening).salt.hex()}
 
@@ -75,7 +78,8 @@ def _raw(man: dict) -> bytes:
 
 def _params(run: str, raw: bytes) -> dict:
     return {"context": f"served-zk/{run}/{hashlib.sha512(raw).hexdigest()}", "deployment": f"served-zk/{run}",
-            "k": K, "eps": "1/2", "delta": "1/10", "grid_bits": Wd.GRID_BITS, "range": [1, 1 << 40], "entries": 4, "w_rows": N}
+            "k": K, "eps": "1/2", "delta": "1/10", "grid_bits": Wd.GRID_BITS, "range": [1, 1 << 40], "entries": 4, "w_rows": N,
+            "registration_deadline": SC.REGISTRATION_DEADLINE}
 
 
 #: each window's pass by its parameters' context: (the epoch's coins, the manifest's bytes, the manifest)
@@ -220,10 +224,20 @@ def test_register_makes_exactly_the_public_items_public(served):
         SC.work_at({**params, "range": [100, 1 << 40]}, public["level"])
 
 
+def _salted(ch: SC.Challenger) -> SC.Challenger:
+    """`ch` with the epoch's salt coin open after its pass's weights' root, as the job's challenger opens it (``op
+    salt``) before any window: a window it receives before is refused (`late-registration`)."""
+    man = PASSES[ch.params["context"]][2]
+    ch.open("salt", weights_root({int(w): bytes.fromhex(v["root"]) for w, v in man["weights"].items()}))
+    return ch
+
+
 def _challenger(params, units=None, coins=None) -> SC.Challenger:
-    """The challenger holding the epoch's coins that salted the window's pass; `units` a stand-in for Lean's draw."""
+    """A challenger holding (its own copy of) the epoch's coins that salted the window's pass, its salt coin open;
+    `units` a stand-in for Lean's draw."""
     sampler = SC.python_sampler if units is None else (lambda law, n, src: list(units)[:law["k"]])
-    return SC.Challenger(params, coins or PASSES[params["context"]][0], sampler, clock=lambda: 0.0)
+    coins = coins or copy.deepcopy(PASSES[params["context"]][0])
+    return _salted(SC.Challenger(params, coins, sampler, clock=lambda: 0.0))
 
 
 def _held(ch, name, rec, **kw):
@@ -314,11 +328,12 @@ def test_select_draws_once_over_the_draw_coin_opened_after_the_registration(serv
         ch.select("honest")
     assert _codes(e) == {"drawn"}
 
-    again = SC.Challenger(params, SC.Recorded(ch.coins.commitment, [o]), clock=lambda: 0.0)
+    salt = ch.openings["salt"]
+    again = _salted(SC.Challenger(params, SC.Recorded(ch.coins.commitment, [salt, o]), clock=lambda: 0.0))
     _held(again, "honest", rec)
     assert again.select("honest").draw == d.draw
     forged = CoinOpening(o.epoch, o.label, o.after, bytes([o.coin[0] ^ 1]) + o.coin[1:], o.salt, o.path)
-    tampered = SC.Challenger(params, SC.Recorded(ch.coins.commitment, [forged]), clock=lambda: 0.0)
+    tampered = _salted(SC.Challenger(params, SC.Recorded(ch.coins.commitment, [salt, forged]), clock=lambda: 0.0))
     _held(tampered, "honest", rec)
     with pytest.raises(S.Refused) as e:
         tampered.select("honest")
@@ -326,7 +341,8 @@ def test_select_draws_once_over_the_draw_coin_opened_after_the_registration(serv
 
     params, public, _, _ = _window(words)
     rec = _register(params, public)
-    bad = SC.Challenger(params, PASSES[params["context"]][0], lambda law, n, src: list(range(law["k"] + 1)), clock=lambda: 0.0)
+    bad = _salted(SC.Challenger(params, PASSES[params["context"]][0], lambda law, n, src: list(range(law["k"] + 1)),
+                                clock=lambda: 0.0))
     _held(bad, "honest", rec)
     with pytest.raises(S.Refused):
         bad.select("honest")
@@ -340,14 +356,15 @@ def test_a_window_received_past_the_deadline_from_the_salt_coins_release_earns_n
     """Under ``registration_deadline`` (`Pouw.AcceptsBy`'s td, seconds on the challenger's clock), the salt coin's opening
     reads its release, and each stream records the epoch's salt at that release before its first registration.  A window
     received within the deadline registers with both readings.  One received later, or before the salt is open, is
-    refused (`late-registration`) and ends the epoch: the stream takes nothing after it.  Without the parameter nothing is
-    timed."""
+    refused (`late-registration`) and ends the epoch: the stream takes nothing after it.  Parameters without a deadline
+    fail closed, with the fix: the challenger, its Spec and its core parameters refuse them, and so does PoUW's check
+    of record, Lean's and Python's alike."""
     *_, words = served
     params, public, _, _ = _window(words)
     rec = _register(params, public)
     coins, _, man = PASSES[params["context"]]
     salt = CoinOpening.from_json(man["salt_opening"])
-    timed = {**params, "registration_deadline": 5.0}
+    timed = {**params, "registration_deadline": "5"}
 
     def challenger():
         t = [0.0]
@@ -376,8 +393,15 @@ def test_a_window_received_past_the_deadline_from_the_salt_coins_release_earns_n
         _held(unsalted, "early", rec)
     assert _codes(e) == {"late-registration"}
 
-    untimed = SC.Challenger(params, SC.Recorded(coins.commitment, [salt]), clock=lambda: 1e9)
-    assert _held(untimed, "honest", rec).received_at is None and untimed.salt_released_at is None
+    bare = {k: v for k, v in params.items() if k != "registration_deadline"}
+    for refuses in (lambda: SC.Challenger(bare, SC.Recorded(coins.commitment, [salt]), clock=lambda: 0.0),
+                    lambda: SC.spec_of(bare, public["level"]), lambda: SC.core_params(bare)):
+        with pytest.raises(ValueError) as e:
+            refuses()
+        assert str(e.value) == CC.DEADLINE_MISSING
+    core = {k: v for k, v in ch.core.items() if k != "registration_deadline"}
+    assert ch.core["registration_deadline"] == "5"
+    assert ch.record.registered({"params": core, "commitment": OR.hexed(rec)}) == {"refused": CC.DEADLINE_MISSING}
 
 
 @LEAN
@@ -387,7 +411,7 @@ def test_a_window_whose_pass_coin_is_foreign_early_mislabelled_or_tampered_is_re
     pass whose commitment is not the epoch's, whose salt is not its coin's, which carries no coin or names no pass, or
     which is not the pass the window's parameters name.  A pass recorded before epoch coins (a v1 manifest, a beacon's
     salt) is received only as a recorded replay, and a manifest of any other schema not at all.  Nothing refused opens a
-    coin."""
+    coin past the salt the challenger opened before it."""
     *_, words = served
     params, public, _, _ = _window(words)
     rec = _register(params, public)
@@ -398,7 +422,7 @@ def test_a_window_whose_pass_coin_is_foreign_early_mislabelled_or_tampered_is_re
         ch = _challenger(params)
         with pytest.raises(S.Refused) as e:
             ch.register("x", rec, manifest=None if m is None else _raw(m), recorded=recorded)
-        assert _codes(e) == {code} and not ch.openings and "x" not in ch.regs
+        assert _codes(e) == {code} and list(ch.openings) == ["salt"] and "x" not in ch.regs
         return e.value.verdict.detail[code]
 
     for case, why in (("foreign", "coin does not open against the epoch's coin commitment"),
@@ -556,7 +580,7 @@ def test_lean_is_of_record_and_python_its_witness(served, tmp_path):
     answer = w[-1]["lean"]
     assert o.accepted and answer["verdict"] == "accept" and pub == answer["public"]
     record = OR.Record(lean=False)
-    py = SC.Challenger(params, _coins(), SC.python_sampler, clock=lambda: 0.0, record=record)
+    py = _salted(SC.Challenger(params, _coins(), SC.python_sampler, clock=lambda: 0.0, record=record))
     o2, pub2, _ = _through(py, rec)
     assert o2.accepted and pub2 == pub and all(e["lean"] is None and e["of_record"] == "python" for e in py.witness["honest"])
     t = ch.draws["honest"].units[0]

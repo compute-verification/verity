@@ -65,6 +65,14 @@ NO_OUTCOME = {"protocol": CC.ONE_STAGE, "verdict": "reject", "reason": "no outco
               "profile": None}
 CONTROLS = {"receive-foreign": "other/registration.json", "receive-extra": "registration-extra.json",
             "receive-raised": "registration-raised.json", "register-extra": None}
+#: the registration deadline of a window recorded before PoUW's parameters required one (its ``params.json`` has none,
+#: and its challenger timed no registration): its replay states `served_commit.REGISTRATION_DEADLINE`'s day, which
+#: PoUW's check reads only as present and positive
+RECORDED_DEADLINE = "86400"
+
+
+def deadline_of(p: dict) -> str:
+    return p.get("registration_deadline", RECORDED_DEADLINE)
 
 
 def research(*args: str) -> str:
@@ -111,7 +119,7 @@ def answer_of(outcome_dir: Path, delta: str) -> dict:
 def params_of(out: Path, reg: dict) -> dict:
     p = load(out / "request/params.json")
     return {"check": reg["window"]["public"]["check"], "context": p["context"], "delta": p["delta"], "eps": p["eps"],
-            "grid_bits": p["grid_bits"], "query": reg["query"], "range": p["range"]}
+            "grid_bits": p["grid_bits"], "query": reg["query"], "range": p["range"], "registration_deadline": deadline_of(p)}
 
 
 def current(reg: Any) -> bool:
@@ -161,7 +169,8 @@ def opening_inputs(out: Path, checks: dict, summary: dict) -> list[tuple[str, di
         reg = regs[side]
         got.append((name, {"params": {"check": {**reg["window"]["public"]["check"], "entries": p["entries"]},
                                       "context": p["context"], "delta": p["delta"], "eps": p["eps"],
-                                      "grid_bits": p["grid_bits"], "query": reg["query"], "range": p["range"]},
+                                      "grid_bits": p["grid_bits"], "query": reg["query"], "range": p["range"],
+                                      "registration_deadline": deadline_of(p)},
                            "commitment": hexed(reg), "units": drawn if is_drawn else None, "unit": unit,
                            "pub": (out / pub / "pub.bin").read_bytes().hex(), "opening": load(out / op / "opening.json")}))
     return got
@@ -353,7 +362,7 @@ def replay_v2(sides: Sides, root: Path) -> list[dict]:
         reg = load(p)
         case = {"params": {"check": {"entries": 2, "scheme": CC.SCHEME, "template": "v2", "tile_work": 1},
                            "context": "v2", "delta": "1/10", "eps": "1/2", "grid_bits": 3, "query": reg["query"],
-                           "range": [1, 1 << 40]},
+                           "range": [1, 1 << 40], "registration_deadline": RECORDED_DEADLINE},
                 "commitment": hexed(reg), "evidence": hexed({"protocol": CC.ONE_STAGE, "verdict": "reject",
                                                             "reason": "v2", "commitment": None, "public": None,
                                                             "profile": None})}
