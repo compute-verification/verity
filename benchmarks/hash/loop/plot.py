@@ -1,7 +1,7 @@
 """The hash loop's plot: iteration (x) against each measure (y), one line per (GPU, arm), read from the evidence store
 (`research data select --label campaign=hash-loop --kind bench-result/v1`: each run's result, its measures per arm in its
-measurements, its iteration and GPU in its labels). Results whose gates passed are plotted (a failed run stays in the JSON); several at one (iteration, GPU) are averaged, each also drawn
-as a dot.
+measurements, its iteration and GPU in its labels). Results whose gates passed are plotted (a failed run stays in the
+JSON); several at one (iteration, GPU) are averaged, each also drawn as a dot.
 
     python3 benchmarks/hash/loop/plot.py [--out DIR] [--measures a,b,...] [--table] [--no-refresh]
 
