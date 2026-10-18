@@ -22,9 +22,14 @@ One connection serves one registration and then `--sessions` sessions over it, e
    (`Session.close`) as soon as its roots are final and its draws sent; the prover's openings
    checked as their frames arrive, by `--check-workers` processes (`checks.py`, the driver's own check of an opening,
    verdict as `Session.verify`'s) or by `Session.verify` on a thread of the verifier's, so a window's checks run while
-   the next window's passes arrive; once every window is accepted the record (`Session.record`), its γ terms
-   (`audit.ledger`) and the node's HBM it shows held (`memory`: the credited share and the residual, at ε), and with
+   the next window's passes arrive; once every window is accepted the record (`Session.record`), its declared outputs
+   (`ledger.declared`'s: γ at both R and the memory line, snapshot and, paced, time-held and link-charged), and as
+   diagnostics the node's HBM it shows held by kind (`memory`: the credited share and the residual, at ε), and with
    `--host-bytes` the same by kind against the node's HBM and host DRAM (`node_line`).
+
+With `--pace K` each session is paced (`audit.Pace`): a coin every K passes, each boundary message at
+`Session.next_boundary_ns`, the windows `--windows` stretches of about `--window-ms` each and a closing window, so the
+record has a time-held memory line.
 
 A node has one live registration (`audit.Registry`), this process's own or kept across processes in `--registry`: a
 hello for a node with a live registration is answered `bye` with the reason and draws nothing. The process closes its
@@ -35,7 +40,7 @@ the one in flight unended.
 Openings are checked in the clear: zero-knowledge proof units are not in this harness (PROTOCOL.md §8).
 
     python verifier.py --port 7781 --out OUT [--windows 7 --window-ms 1000 --samples 2773 --sessions 1]
-                       [--registry REGISTRY.json]
+                       [--registry REGISTRY.json] [--pace K]
     python verifier.py --registry REGISTRY.json --close NODE_HEX
 """
 from __future__ import annotations
@@ -55,7 +60,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1]))
 
-from verity.core.protocols.remote_bandwidth import audit, timing  # noqa: E402
+from verity.core.protocols.remote_bandwidth import audit, ledger, timing  # noqa: E402
 
 import wire  # noqa: E402
 from checks import Checks  # noqa: E402
@@ -228,9 +233,11 @@ class RealClock:
 class Verifier:
     def __init__(self, conn: wire.Conn, *, source: bytes, windows: int, window_ns: int, samples: int, delta: float,
                  jitter_ns: int, clock=None, log=print, checks=None, lifetime: int = audit.LIFETIME,
-                 registry: audit.Registry | None = None, hbm_bytes: int = HBM_BYTES, host_bytes: int = 0) -> None:
+                 registry: audit.Registry | None = None, hbm_bytes: int = HBM_BYTES, host_bytes: int = 0,
+                 pace: audit.Pace | None = None, disk_bytes_per_s: float = 0.0, link_bytes_per_s: float = 0.0) -> None:
         self.conn, self.source, self.W, self.T, self.lifetime = conn, source, windows, window_ns, lifetime
         self.hbm_bytes, self.host_bytes, self.regions, self.deferred = hbm_bytes, host_bytes, None, False
+        self.pace, self.disk_bytes_per_s, self.link_bytes_per_s = pace, disk_bytes_per_s, link_bytes_per_s
         self.checks = checks
         self.registry = audit.Registry() if registry is None else registry
         self.samples, self.delta, self.jitter_ns = samples, delta, jitter_ns
@@ -323,13 +330,19 @@ class Verifier:
                                jitter_ns=self.jitter_ns)
 
     def session(self, k: int, allowance_ns: int, not_before_ns: int | None) -> dict:
-        W, reg = self.W, self.registration
-        params = audit.Params(reg.blocks, allowance_ns, W, self.samples, self.delta, window_ns=self.T, codec=reg.codec,
-                              receipt=reg.receipt, rows=reg.rows, lifetime=self.lifetime, deferred=self.deferred)
+        """One session.  Paced (`self.pace`, `audit.Pace`), its windows are `--windows` stretches of `groups` windows
+        of at most k passes each and the closing window, each drawing its share of `--samples`, so a stretch draws as
+        an unpaced window would; each boundary message leaves at `Session.next_boundary_ns`."""
+        reg, pace = self.registration, self.pace
+        W = self.W if pace is None else pace.groups * self.W + 1
+        samples, window_ns = (self.samples, self.T) if pace is None else (math.ceil(self.samples / pace.groups), 1)
+        params = audit.Params(reg.blocks, allowance_ns, W, samples, self.delta, window_ns=window_ns, codec=reg.codec,
+                              receipt=reg.receipt, rows=reg.rows, lifetime=self.lifetime, deferred=self.deferred,
+                              pace=pace)
         not_before_ns = self.registered_ns if not_before_ns is None else not_before_ns
         session = self.registry.session(params, reg, None, clock=self._now, not_before_ns=not_before_ns, index=k)
         self.conn.send({"type": "session", "k": k, "windows": W, "lifetime": params.lifetime,
-                        "commitment": session.commitment.to_json()})
+                        "commitment": session.commitment.to_json(), "pace": None if pace is None else pace.k})
         self.expect("armed")
         while self.clock.now() < not_before_ns:
             item = self.clock.wait(self.inbox, not_before_ns)
@@ -367,7 +380,7 @@ class Verifier:
 
         while failure is None and len(verdicts) < W:
             if sent < W:
-                until = session.windows[sent].released_ns + self.T
+                until = session.next_boundary_ns()
             elif drawn < W:
                 until = session.deadline(W - 1) + 1
             else:
@@ -481,7 +494,8 @@ class Verifier:
             if head["k"] == k:
                 break
         out = {"k": k, "accepted": accepted, "failure": failure, "allowance_ns": allowance_ns,
-               "samples": self.samples, "delta": self.delta, "window_ns": self.T, "windows": W,
+               "samples": samples, "delta": self.delta, "window_ns": window_ns, "windows": W,
+               "pace": None if pace is None else pace.to_json(),
                "registration": reg.digest.hex(), "coins": session.commitment.root.hex(),
                "appended": session.extent - reg.blocks, "released": session.released,
                "verify_cpu_ns": {t: v["cpu_ns"] for t, v in sorted(verdicts.items())},
@@ -533,28 +547,33 @@ class Verifier:
         return session.receive(head["t"], head["i"], bytes.fromhex(head["root"]), change=change, step=head.get("step"))
 
     def ledgers(self, record: audit.Record, arrivals: list[list[int]] = (), plans=None) -> dict:
-        """γ against the node's R at spec and measured (`timing.SPEC_BYTES_PER_S`, `timing.READ_BYTES_PER_S`: every
-        GPU's HBM and the host's DRAM), with the node's S_chip and squaring ceiling, whatever share of the node the
-        store is on.  Both R are the verifier's, which the prover's calibration can only raise: a prover reporting a
-        slower read would shrink every term but the timing (MEM-24).  R cancels in the certified bytes,
-        `(1 − γ)·R·Σ`, the same in both readings: they are what a session over part of the node establishes, whose γ
-        is the node's only once its store spans the node.  Each reading carries its timing term's parts
+        """The session's declared outputs (`declared`), the protocol's (`ledger`: γ against the node's R at spec and
+        measured, per window as declared, and the memory line's forms), on the verifier's node (`ledger.Node.stated`:
+        every GPU's HBM and the host's DRAM, the node's S_chip and squaring ceiling, and `--disk-bytes-per-s` and
+        `--link-bytes-per-s`), whatever share of the node the store is on.  Both R are the verifier's, which the
+        prover's calibration can only raise: a prover reporting a slower read would shrink every term but the timing
+        (MEM-24).  Each reading (`spec`, `measured`) also carries the session's terms (`audit.Ledger`) and its
+        certified bytes, `(1 − γ)·R·Σ`, the same in both readings: they are what a session over part of the node
+        establishes, whose γ is the node's only once its store spans the node; and its timing term's parts
         (`timing_parts`) when the calibration has a bare read of each tier covering the registered store and a window
-        had two roots.  With the session's plans, `memory` is the node's HBM it shows held (`memory`), KV credited
-        on no verdict yet.  Each window's bound on wrong receipts is computed once for both readings, exactly, in the
-        check workers when there are some (`checks.Checks.bounds`)."""
+        had two roots.  A reading the ledger refuses carries why, and the session then declares nothing.  With the
+        session's plans, `memory` is the node's HBM it shows held by kind (`memory`), KV credited on no verdict yet.
+        Each window's bound on wrong receipts is computed once for both readings, exactly, in the check workers when
+        there are some (`checks.Checks.bounds`)."""
         cal = self.calibration
         reported = float(cal["read_bytes_per_s"])
-        measured = max(timing.READ_BYTES_PER_S, reported)
-        spec = max(timing.SPEC_BYTES_PER_S, measured)
-        rebuild = audit.Rebuild(record.codec, timing.SQUARINGS_PER_S[record.codec.field.name])
+        stated = ledger.Node.stated(reported_read_bytes_per_s=reported, disk_bytes_per_s=self.disk_bytes_per_s,
+                                    link_bytes_per_s=self.link_bytes_per_s)
+        spec, measured = stated.spec_bytes_per_s, stated.read_bytes_per_s
+        rebuild = stated.rebuild(record.codec)
         node = {"gpus": timing.GPUS, "gpu_spec_bytes_per_s": timing.GPU_SPEC_BYTES_PER_S,
                 "gpu_read_bytes_per_s": timing.GPU_READ_BYTES_PER_S, "host_spec_bytes_per_s": timing.HOST_SPEC_BYTES_PER_S,
                 "host_read_bytes_per_s": timing.HOST_READ_BYTES_PER_S, "gpu_chip_bytes": timing.GPU_CHIP_BYTES,
                 "host_chip_bytes": timing.HOST_CHIP_BYTES}
         out = {"inputs": {"spec_bytes_per_s": spec, "measured_read_bytes_per_s": measured,
                           "reported_read_bytes_per_s": reported, "node": node,
-                          "chip_bytes": timing.CHIP_BYTES, "encode_bytes_per_s": cal["encode_bytes_per_s"],
+                          "disk_bytes_per_s": stated.disk_bytes_per_s, "link_bytes_per_s": stated.link_bytes_per_s,
+                          "chip_bytes": stated.chip_bytes, "encode_bytes_per_s": cal["encode_bytes_per_s"],
                           "squarings_per_s": rebuild.squarings_per_s, "rows": record.rows,
                           "span_ns": record.span_ns, "receipts": record.receipts, "passes": record.passes,
                           "reads_bytes": record.receipts * record.block_bytes,
@@ -573,17 +592,22 @@ class Verifier:
         profiles = [w.profile for w in record.windows]
         bounds = self.checks.bounds(profiles) if self.checks else [p.bound() for p in profiles]
         by = {id(p): x for p, x in zip(profiles, bounds)}
+        readings: dict[str, ledger.Gamma] = {}
         for name, r in (("spec", spec), ("measured", measured)):
             try:
-                lg = audit.ledger(record, capacity_bytes_per_s=r, chip_bytes=timing.CHIP_BYTES, rebuild=rebuild,
-                                  wrong=lambda p: by[id(p)])
-                whole = r * record.span_ns / 1e9
-                out[name] = {"capacity_bytes_per_s": r, **lg.to_json(), "certified_bytes": (1 - lg.gamma) * whole,
-                             "certified_bytes_horizon": (1 - lg.gamma_horizon) * whole}
-                if parts:
-                    out[name]["timing_parts"] = timing_parts(capacity_bytes_per_s=r, **parts)
+                g = readings[name] = ledger.gamma(record, stated, r, wrong=lambda p: by[id(p)])
             except ValueError as e:
                 out[name] = {"capacity_bytes_per_s": r, "refused": str(e)}
+                continue
+            whole = r * record.span_ns / 1e9
+            out[name] = {"capacity_bytes_per_s": r, **g.ledger.to_json(), "certified_bytes": (1 - g.gamma) * whole,
+                         "certified_bytes_horizon": (1 - g.gamma_horizon) * whole}
+            if parts:
+                out[name]["timing_parts"] = timing_parts(capacity_bytes_per_s=r, **parts)
+        out["declared"] = (ledger.Declared(len(record.windows), readings["spec"], readings["measured"],
+                                           ledger.memory(record, stated)).to_json()
+                           if len(readings) == 2 else {"refused": next(out[n]["refused"] for n in ("spec", "measured")
+                                                                       if n not in readings)})
         # RateAuditSketch's term: every compression the node's GPUs could make over the span a guess or a key.
         compressions = math.ceil(timing.SHA512_PER_S * record.span_ns / 1e9)
         out["sketch_failure"] = {"compressions": compressions,
@@ -635,6 +659,15 @@ def main() -> int:
     ap.add_argument("--host-bytes", type=int, default=0,
                     help="the node's host DRAM: with it the memory line is also by kind against HBM and DRAM "
                          "(`node_line`)")
+    ap.add_argument("--pace", type=int, metavar="K",
+                    help="pace each session (`audit.Pace`): a coin every K passes, `--windows` stretches of about "
+                         "`--window-ms` each at the calibration's median pass (or --pace-pass-ms), and a closing window")
+    ap.add_argument("--pace-pass-ms", type=float, default=0.0,
+                    help="the pass time a paced stretch is sized by (0: the calibration's median pass)")
+    ap.add_argument("--disk-bytes-per-s", type=float, default=0.0,
+                    help="the node's disks' read ceiling, charged in the memory line (`ledger.Node`)")
+    ap.add_argument("--link-bytes-per-s", type=float, default=0.0,
+                    help="the node's boundary links' read ceiling, charged in the link-charged memory line")
     ap.add_argument("--close", metavar="NODE_HEX",
                     help="close the node's live registration in --registry, its sessions counted as they stood, "
                          "and exit")
@@ -661,7 +694,8 @@ def main() -> int:
     v = Verifier(conn, source=os.urandom(32), windows=a.windows, window_ns=round(a.window_ms * 1e6), samples=a.samples,
                  delta=2.0 ** a.delta_log2, jitter_ns=round(a.jitter_ms * 1e6),
                  log=lambda m: print(m, flush=True), checks=checks, lifetime=a.lifetime, registry=registry,
-                 hbm_bytes=a.hbm_bytes, host_bytes=a.host_bytes)
+                 hbm_bytes=a.hbm_bytes, host_bytes=a.host_bytes, disk_bytes_per_s=a.disk_bytes_per_s,
+                 link_bytes_per_s=a.link_bytes_per_s)
     c0 = time.process_time_ns()
     try:
         reg, cal = v.register()
@@ -677,6 +711,10 @@ def main() -> int:
     save_registry(a.registry, registry)
     print(f"verifier: registered {reg.blocks} blocks, digest {reg.digest.hex()[:16]}, calibration {json.dumps(cal)}",
           flush=True)
+    if a.pace is not None:
+        pass_ns = a.pace_pass_ms * 1e6 or (cal["pass_ns"]["p50"] if "pass_ns" in cal else cal["pass_ns_max"])
+        v.pace = audit.Pace(a.pace, max(1, round(a.window_ms * 1e6 / (a.pace * pass_ns))))
+        print(f"verifier: paced, {json.dumps(v.pace.to_json())}", flush=True)
     rtt = v.ping(a.pings)
     allowance = v.allowance(rtt, a.quantile)
     print(f"verifier: rtt {json.dumps(rtt)}, allowance A = {allowance / 1e6:.3f} ms", flush=True)
@@ -698,11 +736,14 @@ def main() -> int:
             not_before = r.get("end_ns", v.clock.now())
             lg, pub = r.get("ledger", {}).get("spec", {}), r.get("record", {}).get("public", {})
             mem = r.get("ledger", {}).get("memory", {})
+            lines = r.get("ledger", {}).get("declared", {}).get("memory", {})
             print(f"verifier: session {k}: accepted={r['accepted']} failure={r['failure']} "
                   f"passes={[w['passes'] for w in r['windows_seen']]} gamma={lg.get('gamma')} "
                   f"appended={r['appended']} released={r['released']} post_seed={pub.get('post_seed')} "
                   f"memory share={mem.get('share')} residual={mem.get('residual')} epsilon={mem.get('epsilon')} "
-                  f"node={json.dumps(mem['node']['share']) if 'node' in mem else None}", flush=True)
+                  f"node={json.dumps(mem['node']['share']) if 'node' in mem else None} "
+                  f"declared={json.dumps({f: x.get('epsilon', x.get('refused')) for f, x in lines.items()})}",
+                  flush=True)
             record()
     finally:
         save_registry(a.registry, registry)
