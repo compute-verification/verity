@@ -35,7 +35,8 @@ LAST = "work.pair0.instrumented"
 
 
 class _T:
-    """A tensor of ``n`` two-byte elements on the device until its ``.data`` is set to its host copy, as `torch.Tensor.data` moves it."""
+    """A tensor of ``n`` two-byte elements on the device until its ``.data`` is set to a host tensor (its copy, or an empty one), as
+    `torch.Tensor.data` moves it."""
 
     def __init__(self, n: int, device: str = "cuda") -> None:
         self.n, self.device = n, device
@@ -50,10 +51,13 @@ class _T:
 
     @data.setter
     def data(self, v: _T) -> None:
-        self.device = v.device
+        self.n, self.device = v.n, v.device
 
     def cpu(self) -> _T:
         return _T(self.n, "cpu")
+
+    def new_empty(self, n: int, device: str) -> _T:
+        return _T(n, device)
 
     def numel(self) -> int:
         return self.n
@@ -74,6 +78,12 @@ class _Model:
 
     def buffers(self):
         return iter(self.b)
+
+    def named_parameters(self):
+        return zip(("w", "v", "w_tied"), self.p)
+
+    def named_buffers(self):
+        return zip(("b", "h"), self.b)
 
 
 class _Com:
@@ -279,6 +289,21 @@ def test_the_last_runs_finalize_fixes_every_root_then_gives_every_gpu_back_at_on
     assert note["released_at"] == LAST and "kept" not in note and note["shutdown_error"] is None and {"shutdown_s", "reset_s", "holder_s"} <= set(note)
     assert [(r["rank"], r["moved_bytes"], r["why"], r["teardown_error"]) for r in note["ranks"]] == [(0, (3 << 20) + 16, None, None),
                                                                                                    (1, (3 << 20) + 16, None, None)]
+
+
+def test_what_a_ranks_weights_view_holds_on_the_host_is_emptied_not_moved(lease):
+    """`acquire.as_loaded`: a TP rank's MXFP4 Marlin experts are on the host as loaded, and every reader after the release reads them
+    through the rank's weights view, so the release empties their served copies instead of moving a second one to the host
+    (DeepSeek-V4-Pro: 103 of a rank's 110 GB, eight ranks on one node's host memory)."""
+    from verity_vllm.protocol_options import WeightsView
+
+    lease.cuda.looks = [[], [], [0]]
+    for r in lease.ranks:
+        r._tp2_commit["weights"] = WeightsView(r._tp2_commit["eng"].model, {"v": object()})
+    _last_run(lease)
+    m = lease.ranks[0]._tp2_commit["eng"].model
+    assert [(t.n, t.device) for t in [*m.p, *m.b]] == [(1 << 20, "cpu"), (0, "cpu"), (1 << 20, "cpu"), (8, "cpu"), (4, "cpu")]
+    assert [(r["moved_bytes"], r["dropped_bytes"]) for r in lease.note()["ranks"]] == [((2 << 20) + 16, 1 << 20)] * 2
 
 
 def _pinned(com: _Com) -> None:
