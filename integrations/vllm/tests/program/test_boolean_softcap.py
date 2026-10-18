@@ -72,15 +72,15 @@ def _attention(**kw):
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {
     "AttnBlockSoftcap_v3{D=16,NVIS=5,FIRST=True,BN=16,CAP=50.0,DOT=HopperBF16WgmmaDot16_v2,CHECK=True,TANH=MufuTanh_v2,"
-    "EX2=MufuEx2Ftz_v2}": (216995, 438108, 19465, "6f2847e732be67644cfa4edce44537abc6979d3f5d59795a935acd4af1c0e7f204e08b154d2b33ef9eb9e4d99bf80d0735cbdde3268e49cc89b53724e199d60b"),
+    "EX2=MufuEx2Ftz_v2}": (216995, 438108, 19465, "e7ef99b5b322a635ac12b9132cc9f4ce0aaa6489d6249f7c7df842bc9943f43ea33e911887cd9127ddef65a273d9f92777ffc167d888e62bab5337ec57e4a209"),
     "AttnBlockSoftcap_v3{D=16,NVIS=16,FIRST=False,BN=16,CAP=50.0,DOT=HopperBF16WgmmaDot16_v2,CHECK=True,TANH=MufuTanh_v2,"
     "EX2=MufuEx2Ftz_v2}": (480332, 987971, 39245, "84dbc72f3f9b264731c36109e8eef7c199197b0592da4127e8e93d5592d2a075477ced7e4b8e85afdb7bc0c41f25452e5d78bbe3d426bbb179b29e29432c234a"),
     "AttentionHeadSoftcap_v3{T=20,D=16,BN=16,CAP=50.0,DOT=HopperBF16WgmmaDot16_v2,INV=Fa2InvSum_v2,MASKED_FROM=1,"
     "TANH=MufuTanh_v2,EX2=MufuEx2Ftz_v2}": (724703, 1473314, 59765,
-                                           "74781601637f97ffb5c13e429032ae65d804c743a2c83e24c9a0c9a75d45cfedd4dcb80c51c99e7dae48d946e86f27788d85402303beb5934618c5cb79c52e72"),
+                                           "d2b8db7b228434d16c2ffa1018b2c711ed70cf9c848e05a6ec4e92292cbee849b03d147717456391aa44e37d1f0d4ca144200afd67e24bf495877c779ea11f91"),
     "AttentionSoftcap_v3{T=20,NH=4,KVH=2,D=16,BN=16,CAP=50.0,DOT=HopperBF16WgmmaDot16_v2,INV=Fa2InvSum_v2,MASKED_FROM=1,"
     "TANH=MufuTanh_v2,EX2=MufuEx2Ftz_v2}": (2898812, 5893256, 239060,
-                                           "c13d0649e3db71d63de1a218ea208ecc6f0531625ae14614c234614ee86d7aeb7c7b355c53ba15c5ab8cfb0fb502ebbd4d8437cab1f95b64fa0c0b8e4d3c0376"),
+                                           "d8e3d8a30626f6ae8463390c33cae99b33a3ae5b5d3cf75eca64d141f172ed40fc88acb6b8140a4a087bcb1d54e4e3cbfe6f9ac4e3ee973ec848d9726f384960"),
 }
 
 PINNED = [_block(NVIS=5, FIRST=True, BN=16, CHECK=True), _block(NVIS=16, FIRST=False, BN=16, CHECK=True),
