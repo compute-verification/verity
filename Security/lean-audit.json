@@ -2458,7 +2458,7 @@
     "  Exists fun H => Exists fun V => Not (Claims.Complete H V P R Scope δc)"
    ],
    "assumptions": [],
-   "type_hash": "da863c78e48aaca44e3a208e5e7b0f1bbb16381ed10e86cbd748228d32e9a200"
+   "type_hash": "e86b6a5c8d782b36c2d267a21922072d48ac66e3c6d0bf33243e0c456d4f4f7c"
   },
   "Claims.Flock.Bits_fails": {
    "owner": "@proofs",
@@ -2467,17 +2467,13 @@
     "  Exists fun D => Not (Claims.Flock.Bits H D)"
    ],
    "assumptions": [],
-   "type_hash": "7baa5b9d74590d849b8bff625081fecdc6ffbf5fc59aff2f918ec08c8ef8459d"
+   "type_hash": "012c8a125ac3146270e721bc1229dd39de9a20f4e1c431d4b02bbd01851ce57f"
   },
   "Claims.Flock.Complete_fails": {
    "owner": "@proofs",
-   "signature": [
-    "Claims.Flock.Complete_fails {Coin Ω : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [Nonempty Ω]",
-    "  (P : Claims.Flock.Wit → Claims.Prover Ω) (δc : Claims.Msg → Real) (x : Claims.Msg) (hδ : Real.instLT.lt (δc x) 1) :",
-    "  Exists fun H => Exists fun D => Not (Claims.Flock.Complete H D P δc)"
-   ],
+   "signature": ["Claims.Flock.Complete_fails : Exists fun H => Exists fun D => Not (Claims.Flock.Complete H D)"],
    "assumptions": [],
-   "type_hash": "41fcaae98a2e881638f9bc77b3fb5e519b60ef00794e55aba46f62460aee62c8"
+   "type_hash": "cac2abd82728bbf257c1ca34c9b6940c777f68a5a3da26a1d3c14efc5f240524"
   },
   "Claims.Flock.Efficient_fails": {
    "owner": "@proofs",
@@ -2486,7 +2482,7 @@
     "  (H : Claims.Msg → Claims.Msg) : Exists fun z => Exists fun D => Not (Claims.Flock.Efficient H D 0)"
    ],
    "assumptions": [],
-   "type_hash": "772074801c726993c19b182871793d43f25eb5b1abcc37aec5bd7b4616804af4"
+   "type_hash": "0759a70bbd6545c1088cb7165cd6e06810ba0fa9758373812e93f22b1a2dc804"
   },
   "Claims.Flock.KS_fails": {
    "owner": "@proofs",
@@ -2495,7 +2491,7 @@
     "  Exists fun D => Not (Claims.Flock.KS H D)"
    ],
    "assumptions": [],
-   "type_hash": "484af4a47096122fbcefaa7b4fc4a4a94e4bb0a2a1da497fbb429efdb2b642e1"
+   "type_hash": "8b2ee850371fb6b46618c3186f3041eedac0c161f16fd80f4b9bcb07dcc13bc2"
   },
   "Claims.Flock.Nontrivial_fails": {
    "owner": "@proofs",
@@ -2504,23 +2500,22 @@
     "  (H : Claims.Msg → Claims.Msg) : Exists fun D => Exists fun recs => Not (Claims.Flock.Nontrivial H D recs)"
    ],
    "assumptions": [],
-   "type_hash": "5771063b99cb35d1908cfd8470ac2e1035dd2efacb2da659dfb6263f7118b8ef"
+   "type_hash": "b50449e44d8157319c1b4812541b65217e413e512c563fb96162750832b0c1ba"
   },
   "Claims.Flock.ScopeMatches_fails": {
    "owner": "@proofs",
    "signature": ["Claims.Flock.ScopeMatches_fails {Coin : Type} : Exists fun D => Not (Claims.Flock.ScopeMatches D)"],
    "assumptions": [],
-   "type_hash": "32747c6f2e45b685e5c82535e07e7f241cbb4538b2396e1ab3888da2b558993a"
+   "type_hash": "962da82e7cd55a8f2a3785ef7825a0278b34d2f7b642699a747d6e429c11f91d"
   },
   "Claims.Flock.ZK_fails": {
    "owner": "@proofs",
    "signature": [
-    "Claims.Flock.ZK_fails {N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] (H : Claims.Msg → Claims.Msg)",
-    "  (εzk γ : Claims.Msg → Real) (x : Claims.Msg) (hε : Real.instLT.lt (εzk x) 1) :",
-    "  Exists fun D => Exists fun P => Exists fun S => Not (Claims.Flock.ZK H D P S εzk γ)"
+    "Claims.Flock.ZK_fails (H : Claims.Msg → Claims.Msg) (εzk γ : Claims.Msg → Real) (x : Claims.Msg)",
+    "  (hε : Real.instLT.lt (εzk x) 1) : Exists fun D => Not (Claims.Flock.ZK H D εzk γ)"
    ],
    "assumptions": [],
-   "type_hash": "be054d0e89d219cdd66d91bdf7852c9104c9af1c64e90f0bf495ddbbb9ab3072"
+   "type_hash": "095e09bfe4cdd32d47e7d27afae083c51eb3a2a6b12a16555dfeaa8d06db8a54"
   },
   "Claims.Flock.decoder_meets_plain": {
    "owner": "@proofs",
@@ -2606,7 +2601,7 @@
     "  Exists fun D => Not (Claims.Sampling.Binding D)"
    ],
    "assumptions": [],
-   "type_hash": "a0af16afd13fdb6a80be4748a99693cd056ee1f3912bfa7d12db858ea48ee06d"
+   "type_hash": "9de3756acca2c0371ebe858dbef4fb09986590604299e770146481c5a28666f3"
   },
   "Claims.Sampling.Binding_meets": {
    "owner": "@proofs",
@@ -2681,17 +2676,13 @@
     "  Exists fun D => Not (Claims.Sampling.Bits H D)"
    ],
    "assumptions": [],
-   "type_hash": "5a484969c254f12c7e57350d1fc893154c78287185b46ecf3ab11b63e5df1cea"
+   "type_hash": "d088654d81287a19e9e0bee30810f5cbe1ffd5eb3d0dc5772070391cf73d65e2"
   },
   "Claims.Sampling.Complete_fails": {
    "owner": "@proofs",
-   "signature": [
-    "Claims.Sampling.Complete_fails {Coin Ω : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [Nonempty Ω]",
-    "  (P : Claims.Sampling.Wit → Claims.Prover Ω) (δc : Claims.Msg → Real) (x : Claims.Msg) (hδ : Real.instLT.lt (δc x) 1) :",
-    "  Exists fun H => Exists fun D => Not (Claims.Sampling.Complete H D P δc)"
-   ],
+   "signature": ["Claims.Sampling.Complete_fails : Exists fun H => Exists fun D => Not (Claims.Sampling.Complete H D)"],
    "assumptions": [],
-   "type_hash": "b97a4439dd19cc817fbd3dc80a91c08e6fab0670e940a4123dbc5ec1970b855f"
+   "type_hash": "51f15575e138606bb751aa5659ed0f9d16761c596d011a5035a2df9bcf6d4be4"
   },
   "Claims.Sampling.Efficient_fails": {
    "owner": "@proofs",
@@ -2700,7 +2691,7 @@
     "  (H : Claims.Msg → Claims.Msg) : Exists fun z => Exists fun D => Not (Claims.Sampling.Efficient H D 0)"
    ],
    "assumptions": [],
-   "type_hash": "e6fee080a0a0fdd851f04b5bc8f495b6adadfaf2c8da896e19119409f50b879c"
+   "type_hash": "4198130083bf4a4c93fa88d9a4f9a93a5c3b3259d18d82ed0453302fa0f3e6f4"
   },
   "Claims.Sampling.KSCount_fails": {
    "owner": "@proofs",
@@ -2709,7 +2700,7 @@
     "  (H : Claims.Msg → Claims.Msg) : Exists fun D => Not (Claims.Sampling.KSCount H D)"
    ],
    "assumptions": [],
-   "type_hash": "0a1d567b0f5f769748e539b68a476ffb10390532c09210c21a31b6e8ab090bb4"
+   "type_hash": "00bed36c39eaf751988e2f5c811ddd0388920d22c4ec06ce5259e93d25247341"
   },
   "Claims.Sampling.KSLinOn_fails": {
    "owner": "@proofs",
@@ -2733,7 +2724,7 @@
     "  Exists fun D => Not (Claims.Sampling.KS H D)"
    ],
    "assumptions": [],
-   "type_hash": "258f4c779d989e5863d431b04195b080e48d24114ed77dd994a20f063820be98"
+   "type_hash": "0c24d825666e50b5dfec654647c28f4cb69de8c85fda043d2c001ec550de95a1"
   },
   "Claims.Sampling.Nontrivial_fails": {
    "owner": "@proofs",
@@ -2742,7 +2733,7 @@
     "  (H : Claims.Msg → Claims.Msg) : Exists fun D => Exists fun recs => Not (Claims.Sampling.Nontrivial H D recs)"
    ],
    "assumptions": [],
-   "type_hash": "74f4375bcaab2b1a82a8e3df9bd89bc188e292ffb5b14e85acc8732557798d2c"
+   "type_hash": "97071868b1432de09da8c5b407436a59513e769039c961a0aa361e0c64fa838e"
   },
   "Claims.Sampling.ScopeMatches_fails": {
    "owner": "@proofs",
@@ -2751,7 +2742,7 @@
     "  Exists fun z => Exists fun D => Not (Claims.Sampling.ScopeMatches D)"
    ],
    "assumptions": [],
-   "type_hash": "5a97d2eb7088febc4bde6c6877022207d5e4e30052537ae1254eaa255c5819f4"
+   "type_hash": "d5433326f8a18aaa16be952daab90237cfc77bd2c8683f0c4e6c8c3f6325f31b"
   },
   "Claims.Sampling.Universal_fails": {
    "owner": "@proofs",
@@ -2760,18 +2751,17 @@
     "  Exists fun D => Not (Claims.Sampling.Universal D)"
    ],
    "assumptions": [],
-   "type_hash": "b183fd073df66b479bba7eeb3703198469a5b049c28f7a2fa4a9157ba4e5fcd4"
+   "type_hash": "b3c99531f78b0450021ffd3f9f0418e9afdb2e466df76ac3217c99c4b1d453de"
   },
   "Claims.Sampling.ZK_fails": {
    "owner": "@proofs",
    "signature": [
-    "Claims.Sampling.ZK_fails {Coin N Ω : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [Fintype N] [Nonempty N]",
-    "  [Fintype Ω] [Nonempty Ω] (H : Claims.Msg → Claims.Msg) (εzk γ : Claims.Msg → Real) (x : Claims.Msg)",
-    "  (hε : Real.instLT.lt (εzk x) 1) :",
-    "  Exists fun D => Exists fun P => Exists fun S => Not (Claims.Sampling.ZK H D P S εzk γ)"
+    "Claims.Sampling.ZK_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Claims.Msg → Claims.Msg)",
+    "  (εzk γ : Claims.Msg → Real) (x : Claims.Msg) (hε : Real.instLT.lt (εzk x) 1) :",
+    "  Exists fun D => Not (Claims.Sampling.ZK H D εzk γ)"
    ],
    "assumptions": [],
-   "type_hash": "c9d43b7a56001b14ce7531f53eca6ebae0b44431738191689e103087ecde311a"
+   "type_hash": "7e486479b31d0cb8c8a2441bf3b7130dc9945d9a0bf4e5ae34a772da377e4760"
   },
   "Claims.Sampling.decoder_meets_plain": {
    "owner": "@proofs",
@@ -2782,7 +2772,7 @@
     "  Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ D.flock.decode"
    ],
    "assumptions": [],
-   "type_hash": "3b6d24bdc5b41e2c9ad39f6bd2e33b8759ec3fbf14f72bc788b216400d48a182"
+   "type_hash": "f4117b5686527685337236d77e5184df521a9340a171678a3aa7075372b07619"
   },
   "Claims.Sampling.decoder_meets_zk": {
    "owner": "@proofs",
@@ -2793,7 +2783,7 @@
     "  Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ D.flock.decode"
    ],
    "assumptions": [],
-   "type_hash": "cf166287f891663417f8cf853af3518f2019b166d57cfd37ebe81a5864d89c61"
+   "type_hash": "beeee44eec92c2982d3cf77ea7dbb118e9922acfbc3fde4dccf2dba41d7ebf70"
   },
   "Claims.Sampling.masked_meets_zk": {
    "owner": "@proofs",
@@ -2803,7 +2793,7 @@
     "  (hD : Eq D.flock (FlockDeploy.deployZk rel)) : Eq D.flock.zk Bool.true"
    ],
    "assumptions": [],
-   "type_hash": "bd502b58f795b48c8708eb50525eec087e6cdb98c6d89927dab5439b91f88a61"
+   "type_hash": "5e3957ad3c7dce3c188ac4f7a831d7aef0195778f3dec5f99fcc85db62bee6a3"
   },
   "Claims.Sampling.scope_meets": {
    "owner": "@proofs",
@@ -9860,13 +9850,13 @@
    "guarantees": ["Flock.SecurityProofs.ClaimsStated"]
   },
   "Definitions.Claims.Recursion": {
-   "digest": "304d28cf48723f8d7ef17c45eb5dc401c01d8c017f447e64ffab02a12f1cf737",
+   "digest": "34f9780ac9aba67a14b02bbff8104577e1c19ecbadcb31bc016e62355b64bd21",
    "definitions": {
     "Claims.Recursion.BAbort": "cc6d1eae158f7e9353eed3e76a1d0be441485fa6b07023915a3bfb5b17d469a6",
     "Claims.Recursion.Be": "144f16201ad772e1f10447efc6a7622c61aa6d25922226b932a9556d5f11051b",
     "Claims.Recursion.Bits": "8a8dd1e63c47b45cbb5c955be2e52c2582b083746395eb3d806a8d5b53b4b21e",
     "Claims.Recursion.BitsFlock": "10b5e68b72d96c35d7caec8c60b0459ae053a8b0a70dce72e0dae151207ee88c",
-    "Claims.Recursion.Complete": "1330750bf535c846ceae4f269dbacde56221735e894593c8d043b91e122aec7b",
+    "Claims.Recursion.Complete": "8ac5d00673e7cc369356ba41d9d6da8965f9bd86255bcd68c696d96fa3748bef",
     "Claims.Recursion.Deploy": "f2836b45e8a781fc806f3cd8499ffcff8c4318273243a8ade5fddbe1779cd10a",
     "Claims.Recursion.Deploy.P": "170da8974ffcd6b587bea595e3799efa15e888d869784a2a9228d5d8f0df9e89",
     "Claims.Recursion.Deploy.Tape": "3b4469b6ad350204891f50849e6f273728046cf619fcb5a3f15ef60cc3dbb0bc",
@@ -20761,16 +20751,16 @@
    "guarantees": ["Flock.SecurityProofs.ClaimsStated"]
   },
   "Models.Flock.Guarantees.RecursionClaims": {
-   "digest": "f9c9a8b3e7216b3250360433d3c87f7d47618061af670274116c318eae87ea7e",
+   "digest": "7dd241481c7da222f37859037bc8bf5d5650a3c24c8f263fa5270a1e65dee836",
    "definitions": {
-    "Flock.Guarantees.RecursionClaimsStated": "4761214cc9fdd9436ddc6bc3a2f36785428ebb5073bbfb7b11943afc027f3a80"
+    "Flock.Guarantees.RecursionClaimsStated": "41e88ade9314257ddd324810866bea465d217b9788b15a4941ab8ad2a6e874c0"
    },
    "guarantees": ["Flock.SecurityProofs.RecursionClaimsStated"]
   },
   "Models.Flock.Guarantees.SamplingClaims": {
-   "digest": "0cb2dd5650d2bc8b8d6ba9ae34d2ad88ca908bc8a21c235114c5babed82c1e9f",
+   "digest": "1c387c5dcb907e59f7d40374998b22ccb9f8db4972aaec68d25b6276c5fd869d",
    "definitions": {
-    "Flock.Guarantees.SamplingClaimsStated": "6ca630249e2063f4f8a390134bfead1c17f0c898ce9cc43ed32c2781a940c89c"
+    "Flock.Guarantees.SamplingClaimsStated": "0ae4ae43f4661b771203af63bb676492d17b74af002d3a57e12ebca352f2a68c"
    },
    "guarantees": ["Flock.SecurityProofs.SamplingClaimsStated"]
   },
