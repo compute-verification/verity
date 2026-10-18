@@ -48,7 +48,7 @@ export SO="$W/native_rows.so"
 # The forms behind the bench's candidate arms (a check costs 18 process starts, 20-70 s on vy-nebius-2): 0 sharaw_v1, 2
 # v3_salt_s2, 7 v3s_s2, 11 v3s_cg, 14 v1_cg, 15 v1n, 17 lf0_cg, 22 v1_cg8, 23 v4_128, 24 v1_t128, 25 v1n_t128. Every
 # arm's levels are also compared with commit_gpu's on the device before it is timed.
-export CHECK_FORMS=${CHECK_FORMS:-0 2 7 11 14 15 17 22 23 24 25} CHECK_FORMS_INL=${CHECK_FORMS_INL:-0 2 14 15 17 22 23}
+export CHECK_FORMS=${CHECK_FORMS:-0 2 7 11 14 15 17 22 23 24 25 26 27} CHECK_FORMS_INL=${CHECK_FORMS_INL:-0 2 14 15 17 22 23 26 27}
 export REPS=${REPS:-7} PROF_BIN=${PROF_BIN:-sharaw} PROF_ARMS=${PROF_ARMS:-commit_gpu native_rows v3s_cg v4_128}
 # shellcheck disable=SC2016,SC2086
 gpu-lease 1 --wait --max-min 14 ${LEASE_ARGS:-} -- bash -c '

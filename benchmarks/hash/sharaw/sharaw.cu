@@ -782,6 +782,65 @@ __global__ void __launch_bounds__(TPB, 512 / TPB)
   fold_climb<UF>(o, pos, 0, width, depth, levels, ctr, cnt);
 }
 
+// v6: v4 with one salt thread per K leaves (TPB = R + R / K). v4's salt threads hold half the register file to the end,
+// so at decode H200 runs 132 x 256 = 33,792 row threads at once, fewer than the 34,737 rows, and 8 row CTAs wait for a
+// second wave. K leaves of salt (K x ~6.5 compressions) stay shorter than a row's 36.
+template <int R, int K, int UF>
+__global__ void __launch_bounds__(R + R / K, 512 / (R + R / K))
+    sr_leaf6(const uint8_t* __restrict__ rows, const uint4* __restrict__ Tn, u64 n, u64 width, int depth, u64* levels, u32* ctr,
+             u64* __restrict__ bc) {
+  __shared__ uint4 T[512];
+  __shared__ u64 SF[R * 24];
+  const u32 t = threadIdx.x, cnt = (u32)min<u64>(width, R), ns = blockDim.x - cnt;
+  for (int i = t; i < 512; i += blockDim.x) T[i] = Tn[i];
+  __syncthreads();
+  const bool rower = t < cnt;
+  u64 x[8];
+  if (rower) {
+    const u64 pos = (u64)blockIdx.x * cnt + t;
+    if (pos < n) row3(rows + pos * LB, x);
+  } else {
+#pragma unroll 1
+    for (u32 j = t - cnt; j < cnt; j += ns) {
+      const u64 pos = (u64)blockIdx.x * cnt + j;
+      u64* s = SF + 24 * j;
+      if (pos < n) {
+        u64 my[8], c[8], f[8];
+        salt3(pos, T, my, c);
+        f_first3(pos, f);
+        cpy8(s, my); cpy8(s + 8, c); cpy8(s + 16, f);
+      } else {
+        u64 o[8];
+        pad3(pos, o);
+        cpy8(s + 16, o);
+      }
+    }
+  }
+  __syncthreads();
+  if (!rower) return;
+  const u64 pos = (u64)blockIdx.x * cnt + t;
+  const u64* s = SF + 24 * t;
+  u64 o[8];
+  if (pos < n) {
+    u64 B[16], h[8];
+#pragma unroll
+    for (int k = 0; k < 8; ++k) { B[k] = x[k] ^ s[k]; B[8 + k] = s[8 + k]; }
+    if (bc) {
+      st8(bc + 16 * pos, B);
+      st8(bc + 16 * pos + 8, B + 8);
+    }
+    cpy8(h, C.mid_leaf);
+    cmp(h, B);
+    cmp_kw(h, C.kw_leafpad);
+    cpy8(o, s + 16);
+    f_second3(pos, h, o);
+  } else {
+    cpy8(o, s + 16);
+  }
+  st8(levels + 8 * pos, o);
+  fold_climb<UF>(o, pos, 0, width, depth, levels, ctr, cnt);
+}
+
 // v5: v4's CTA (row warps beside salt warps) with v1's tree: the R leaves fold in shared memory (SF, once read, holds the
 // fold), then thread 0 climbs. Every thread stays to the end, so each __syncthreads counts the whole CTA.
 template <int TPB, int NU>
@@ -993,6 +1052,11 @@ struct Mine {
     const u32 cnt = (u32)std::min<u64>(width, TPB / 2);
     sr_leaf5<TPB, NU><<<(unsigned)(width / cnt), 2 * cnt, 0, st>>>(rows, Tn, n, width, depth, levels, ctr, bc);
   }
+  template <int R, int K, int UF>
+  void v6(const uint8_t* rows, cudaStream_t st, u64* bc = nullptr) {
+    const u32 cnt = (u32)std::min<u64>(width, R), ns = (cnt + K - 1) / K;
+    sr_leaf6<R, K, UF><<<(unsigned)(width / cnt), cnt + ns, 0, st>>>(rows, Tn, n, width, depth, levels, ctr, bc);
+  }
   // v3's fused leaf (no fold), then commit_gpu's tree schedule
   template <int ORDER>
   void leaf_cg(const uint8_t* rows, cudaStream_t st, u64* bc = nullptr) {
@@ -1168,6 +1232,8 @@ static int check(int argc, char** argv) {
       case 23: me.v4<256>(d, 0, bc); break;
       case 24: me.salts(0); me.data<128, 4, false>(d, 0, bc); break;
       case 25: me.salts(0); me.data<128, 4, false, sr::FULL, 2>(d, 0, bc); break;
+      case 26: me.v6<128, 4, 1>(d, 0, bc); break;
+      case 27: me.v6<64, 2, 1>(d, 0, bc); break;
       case 12: {
         static cudaStream_t s2;
         static cudaEvent_t e2[2];
@@ -1279,6 +1345,8 @@ static int bench(int argc, char** argv, bool nsys_mode) {
   arms.push_back({"v5_128", true, [&](cudaStream_t s) { me.v5<256, 0>(src, s); }, comps});
   arms.push_back({"v5n_128", true, [&](cudaStream_t s) { me.v5<256, 2>(src, s); }, comps});
   arms.push_back({"v5_64", true, [&](cudaStream_t s) { me.v5<128, 0>(src, s); }, comps});
+  arms.push_back({"v6_128x4", true, [&](cudaStream_t s) { me.v6<128, 4, 1>(src, s); }, comps});
+  arms.push_back({"v6_64x2", true, [&](cudaStream_t s) { me.v6<64, 2, 1>(src, s); }, comps});
 #undef V2
   u64* io;
   const int rt = 256, rb = prop.multiProcessorCount * 8, chain = 256;
