@@ -964,11 +964,19 @@ and each window's, from it plus the node's capacities.
   payload roots committed before the passes that read them, fresh store indices, each page encoded under its bound
   key and its append's coin with \(d_j\) kept beside it, an opening of one carrying \(d_j\), which check 3 decodes
   under with the coin, and releases that keep a block out of every later plan. Open:
-  - *The verdict's binding.* `ledger` takes the verdict as given (`PostSeedVerdict`: whether it holds, and its carrier
-    bytes for a window's certified reads). That it is of the circuits that wrote this session's appends, and that
-    their payloads are those circuits' values (sampled proofs), are I2's and I4's to check. That no appended block is
-    credited past \(L\) the session checks itself (§4, `lifetime`); that the verdict was computed at the record's
-    \(L\) is the verdict's to say.
+  - *The verdict's binding.* `ledger` reads the verdict as `PostSeedVerdict`: whether it holds, and its carrier bytes
+    for a window's certified reads. The verifier computes it (`post_seed`, Cut 1 of
+    note:proofs/20261018T0530Z-draft-post-seed-verdict-cut). Everything property/v1 reads is public while W is
+    (the writers' Program, its census, the windows and the parameters), so the verifier runs `stacking.check` itself,
+    with no unit, and binds the result to the session by equalities between public things, each refused by name:
+    W's digest is the one-stage audit's `program` and the census is W's (1); each memory-map unit's `val{k}` row is
+    W's value leaf at `pos[k]` (`map_value_leaves`, 2); the session's appends are the map units' payloads
+    (`RequirementLink.mapped`, 3). The verdict carries W's digest, its \(L\) and its windows, and `ledger` refuses a
+    `PostSeed` whose \(L\) and windows aren't the record's (4, `property_reading`); a verdict of any other kind is
+    taken as given. Open: how the record's lifetime cap, in windows, converts to property/v1's \(L\), in census
+    steps, and how each pass's one step converts to a window's contiguous range of census steps. Until that is
+    settled, `property_reading` and a `PostSeed`'s carrier bytes raise. That no appended block is credited past
+    \(L\) the session checks itself (§4, `lifetime`).
   - *Appends across sessions.* A session's appends end with it, and the next session starts again from \(N\), so a
     page that outlives its session is appended again in the next, its encoding recomputed under its new index.
     Carrying appends over needs the next session to take the previous one's append roots and releases as its
