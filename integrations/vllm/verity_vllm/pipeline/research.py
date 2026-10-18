@@ -5,7 +5,7 @@
   Build artifact (the run's ``job.json`` ``store.inputs``) stops by name (PRECHECK_FAIL_BUILD_INPUT_*, exit 3).  On exit,
   whatever the rc: the stage's typed outputs (``research-outputs write``) and the run id on the pod guard's durability
   list, so the pod is not terminated before the outputs are preserved.
-* ``chain ROW ROLE REPO REV [--stages ...] [--campaign C] [--project P] [--ref REF] [--by LANE] [--tier T] [flags]``: one
+* ``chain ROW ROLE REPO REV [--stages ...] [--build-run RUN] [--campaign C] [--project P] [--ref REF] [--by LANE] [--tier T] [flags]``: one
   nested ``research run`` per stage in order, each citing the earlier stages' artifacts; stops at the first stage that exits
   non-zero or publishes no account artifact.  Prints ``<stage> <run-id> <artifact-id> rc=<rc>``; ``row.json`` beside the row
   keeps them.  A chain whose Build, Match and Commit (``OF_RECORD``) all passed publishes the row's record in the circuit
@@ -13,7 +13,8 @@
   record) and prints ``publish - <artifact-id> rc=<rc>``; a refusal exits 21, and ``--no-publish`` skips it.  The record's tree
   is ``--ref`` (else the branch EXPORT.json or git names) at the Commit Attempt's source commit; its tier ``--tier``, else the
   index's; both, and ``--by``, are checked before any stage runs.  A pod's job tree keeps the index entry it wrote; ``records pull
-  ART`` brings it to a checkout.
+  ART`` brings it to a checkout.  ``--build-run RUN`` cites a passing Build Attempt in place of the build stage (``--stages``
+  without it), whose row dir the chain's must be: the Match's precheck holds that dir's Build to the cited Program digest.
 * ``shed [--force]``: the teardown -- the pod terminates (the pod guard's gate) only when every registered Attempt is
   preserved.
 
@@ -188,7 +189,7 @@ def _row_json(d: str, path: tuple[str, ...], value: Any) -> None:
 def publishing(o: Any) -> dict[str, str | None] | None:
     """What the chain publishes its row's record with (``ref``, ``by``, ``tier``), None when it publishes none (``--no-publish``,
     or stages without a Build, Match and Commit); refused before any stage runs when one is missing."""
-    if not o.publish or not set(OF_RECORD) <= set(o.stages.split(",")):
+    if not o.publish or not set(OF_RECORD) <= {*o.stages.split(","), *(["build"] if o.build_run else [])}:
         return None
     ref = o.ref
     if not ref:
@@ -227,19 +228,33 @@ def publish(o: Any, d: str, runs: dict[str, dict[str, Any]], research: tuple[lis
     return 0 if art else PUBLISH_REFUSED
 
 
+def cited_build(research: tuple[list[str], dict[str, str]], run_id: str) -> dict[str, Any]:
+    """The chain's Build when it cites one (``--build-run``): a ``vllm.build`` Attempt that exited 0 with its build artifact."""
+    att = _attempt(research, run_id)
+    tool, status, art = (att.get("tool") or {}).get("name"), att.get("status") or {}, (att.get("outputs") or {}).get(ACCOUNT["build"])
+    if tool != "vllm.build" or status.get("rc") != 0 or not art:
+        raise UsageError(f"--build-run {run_id}: not a passing Build Attempt (tool {tool}, rc {status.get('rc')}, build artifact {art})")
+    return {"run_id": run_id, "artifact": art, "rc": 0}
+
+
 def chain(o: Any, sweep_dir: str) -> int:
     """One nested ``research run --tool vllm.<stage>`` per stage, each citing the earlier stages' artifacts (``sweep_dir``:
     the stages' own, from their flags), then the row's record when its Build, Match and Commit passed (`publish`)."""
     env = o.env
     d = f"{sweep_dir}/{o.row}"
+    if o.build_run and "build" in o.stages.split(","):
+        raise UsageError(f"--build-run {o.build_run} is the chain's Build: --stages without build")
     how = publishing(o)
     os.makedirs(d, exist_ok=True)
     child = abs_store_env(dict(env.environ))
     child["PYTHONPATH"] = str(ROOT) + (":" + child["PYTHONPATH"] if child.get("PYTHONPATH") else "")
     research = research_argv(o.research_bin, o.research_py, child)
     project = o.project or "verity"
-    build_art = match_art = ""
     runs: dict[str, dict[str, Any]] = {}
+    if o.build_run:
+        runs["build"] = cited_build(research, o.build_run)
+        _row_json(d, ("stages", "build"), runs["build"])
+    build_art, match_art = runs["build"]["artifact"] if runs else "", ""
     for st in o.stages.split(","):
         run_id = f"r{time.strftime('%Y%m%d-%H%M%S', time.gmtime())}-{secrets.token_hex(2)}"
         args = ["run", "--id", run_id, "--tool", f"vllm.{st}", "--project", project, "--cwd", REPO_ROOT]

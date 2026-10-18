@@ -169,7 +169,7 @@ def run_hooks_variant(workload: str, out_dir: str, checkpoints: str, *, max_toke
     prof.apply_env()
     import torch
 
-    from verity_vllm.engine import vllm_adapter as va
+    from verity_vllm.engine import arrivals as AR, vllm_adapter as va
 
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
@@ -213,7 +213,7 @@ def run_hooks_variant(workload: str, out_dir: str, checkpoints: str, *, max_toke
     arrivals = sorted(wl["requests"], key=lambda r: int(r.get("arrive_step") or 0))
     steps: list[dict] = []
     tokens: dict[str, list[int]] = {}
-    k = 0
+    k, forwards = 0, AR.ForwardCounter(engine, AR.scheduler_of(eng.llm))
     t_run0 = time.perf_counter()
 
     def _admit(r: dict) -> None:
@@ -221,13 +221,13 @@ def run_hooks_variant(workload: str, out_dir: str, checkpoints: str, *, max_toke
                            params=va.sampling_params(r, wl["sampling"]))
 
     while arrivals or engine.has_unfinished_requests():
-        while arrivals and int(arrivals[0].get("arrive_step") or 0) <= k:
+        while arrivals and int(arrivals[0].get("arrive_step") or 0) <= forwards.n:
             _admit(arrivals.pop(0))
         if not engine.has_unfinished_requests():
             _admit(arrivals.pop(0))
             continue
         t0 = time.perf_counter()
-        outs = engine.step()
+        forwards.stepped(outs := engine.step())
         torch.cuda.synchronize()
         wall = time.perf_counter() - t0
         recs = []

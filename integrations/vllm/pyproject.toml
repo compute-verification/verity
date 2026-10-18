@@ -54,9 +54,10 @@ markers = [
 inputs_only = true
 inputs = ["verity", "verity/README.md", "tools/config/verity_config", "benchmarks/specs", "fixtures/artifacts.json", ".gitignore", "archive/sp1/python/verity_sp1",
           "benchmarks/ppl/steps.py", "benchmarks/ppl/matmul.py", "benchmarks/ppl/gates.py", "benchmarks/ppl/spec.py", "benchmarks/ppl/methodology.py", "benchmarks/ppl/model.py",
-          "tools/research/src/research/__init__.py", "tools/research/src/research/__main__.py", "tools/research/src/research/cli.py", "tools/research/src/research/clone.py",
+          "tools/research/src/research/__init__.py", "tools/research/src/research/cli.py", "tools/research/src/research/clone.py",
           "tools/research/src/research/compare.py", "tools/research/src/research/env.py", "tools/research/src/research/pythonpath.py",
           "tools/research/src/research/record.py", "tools/research/src/research/remote.py", "tools/research/src/research/result.py",
           "tools/research/src/research/runs.py", "tools/research/src/research/secret_hint.py", "tools/research/src/research/timefmt.py",
-          "tools/research/src/research/store", "tools/research/src/research/telemetry", "tools/research/tests/fixtures/run_v0.2"]
+          "tools/research/src/research/store", "tools/research/src/research/telemetry", "tools/research/tests/fixtures/run_v0.2",
+          "tools/research/src/research/__main__.py"]
 parallel = true

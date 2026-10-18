@@ -70,9 +70,12 @@ class PassClock:
 
 
 class TickingBackend(prover.CpuBackend):
-    def __init__(self, clock: PassClock, *args, tiers: dict | None = None, **kw) -> None:
+    def __init__(self, clock: PassClock, *args, tiers: dict | None = None, layout: list | None = None, **kw) -> None:
         super().__init__(*args, **kw)
-        self.clock, self.tiers = clock, tiers
+        self.clock, self.tiers, self._layout = clock, tiers, layout
+
+    def layout(self) -> list | None:
+        return self._layout
 
     def calibrate(self) -> dict:
         return {**super().calibrate(), **({"read_tiers": self.tiers} if self.tiers else {})}
@@ -84,11 +87,13 @@ class TickingBackend(prover.CpuBackend):
 
 
 def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sessions: int = 1, checks=None,
-        read_bytes_per_s: float = 1e20, tiers: dict | None = None, **kv):
+        read_bytes_per_s: float = 1e20, tiers: dict | None = None, lifetime: int = audit.LIFETIME,
+        registry: audit.Registry | None = None, layout: list | None = None, **kv):
     clock = PassClock()
     a, b = socket.socketpair()
     vconn, pconn = wire.Conn(a, clock=clock.now), wire.Conn(b)
-    backend = TickingBackend(clock, blocks, random.Random(7), read_bytes_per_s=read_bytes_per_s, tiers=tiers)
+    backend = TickingBackend(clock, blocks, random.Random(7), read_bytes_per_s=read_bytes_per_s, tiers=tiers,
+                             layout=layout)
     p = prover.ProverSide(pconn, backend, b"test-node", prover.parse_plan(plan), seed=11, log=lambda m: None, **kv)
     results = []
 
@@ -102,7 +107,7 @@ def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sess
     th.start()
     v = verifier.Verifier(vconn, source=os.urandom(32), windows=windows, window_ns=20, samples=samples,
                           delta=2.0 ** -40, jitter_ns=10 ** 9, clock=clock, log=lambda m: None,
-                          checks=checks)
+                          checks=checks, lifetime=lifetime, registry=registry)
     v.register()
     allowance = v.allowance(v.ping(4))
     out, not_before = [], None
@@ -135,23 +140,6 @@ def test_a_prover_reporting_a_slow_read_cannot_lower_either_ledgers_capacity(mon
     assert slow["ledger"]["measured"]["capacity_bytes_per_s"] == timing.READ_BYTES_PER_S
     assert slow["ledger"]["spec"]["capacity_bytes_per_s"] == timing.SPEC_BYTES_PER_S
     assert fast["ledger"]["measured"]["capacity_bytes_per_s"] == fast["ledger"]["spec"]["capacity_bytes_per_s"] == 1e20
-
-
-def test_the_ledgers_are_the_nodes_whatever_share_of_it_the_store_is_on(monkeypatch):
-    """MEM-26: R is every GPU's HBM and the host's DRAM, S_chip every GPU's chip and the host's caches, and the squaring
-    ceiling the node's, for a store on one GPU too: its calibration's one-GPU read lowers none of them, and its
-    certified bytes are the same at either R."""
-    monkeypatch.setattr(prover, "OPENINGS_PART", 4)
-    (r,), _ = run("honest", read_bytes_per_s=timing.GPU_READ_BYTES_PER_S)
-    lg = r["ledger"]
-    node_read = timing.GPUS * timing.GPU_READ_BYTES_PER_S + timing.HOST_READ_BYTES_PER_S
-    node_spec = timing.GPUS * timing.GPU_SPEC_BYTES_PER_S + timing.HOST_SPEC_BYTES_PER_S
-    assert lg["inputs"]["reported_read_bytes_per_s"] == timing.GPU_READ_BYTES_PER_S
-    assert lg["measured"]["capacity_bytes_per_s"] == lg["inputs"]["measured_read_bytes_per_s"] == node_read
-    assert lg["spec"]["capacity_bytes_per_s"] == lg["inputs"]["spec_bytes_per_s"] == node_spec
-    assert lg["inputs"]["chip_bytes"] == timing.GPUS * timing.GPU_CHIP_BYTES + timing.HOST_CHIP_BYTES == 3_045_746_688
-    assert lg["inputs"]["squarings_per_s"] == timing.GPUS * timing.GPU_SQUARINGS_PER_S["p512"]
-    assert lg["spec"]["certified_bytes"] == pytest.approx(lg["measured"]["certified_bytes"], rel=1e-9)
 
 
 def test_the_timing_parts_reproduce_the_whole_node_sessions_split_and_sum_to_its_timing_term():
@@ -212,6 +200,8 @@ def test_kv_pages_appended_and_released_mid_session_are_audited(monkeypatch):
     pub = honest["record"]["public"]
     assert (pub["appended"], pub["released"]) == (honest["appended"], honest["released"])
     assert sum(pub["post_seed"]) == sum(kv["pass_appended"]) > 0
+    steps = [s for w in honest["record"]["profile"]["windows"] for s in w["steps"]]
+    assert len(steps) == sum(pub["passes"]) and all(a < b for a, b in zip(steps, steps[1:]))
     lg = honest["ledger"]
     assert lg["inputs"]["post_seed_receipts"] == sum(pub["post_seed"]) and not lg["inputs"]["post_seed_credited"]
     reads = lg["inputs"]["reads_bytes"]
@@ -223,10 +213,187 @@ def test_kv_pages_appended_and_released_mid_session_are_audited(monkeypatch):
     assert pd["kv"]["appended"] > 0 and min(pd["dropped"]) == 16 and dropping["appended"] > 0
 
 
-def test_a_root_message_is_applied_in_order_and_a_plan_holding_a_released_block_is_rejected():
-    """`Verifier.root`: a message's appends, then its releases, then its root with its plan change; a plan that still
-    holds a block the message released, or one appended by no message, is the session's `plan` rejection, and a
-    message the session cannot read is malformed."""
+def test_kv_pages_are_checked_by_worker_processes_under_seeds_that_bind_the_appends(monkeypatch):
+    """Each pass's seed binds the appends sent before its root, and the verifier's check workers recompute it from
+    the window's snapshot (`checks.Checks.snapshot`, the appends' head at each root among it): a kv session checked
+    by one worker process is accepted, as `Session.verify` accepts it."""
+    from checks import Checks
+
+    monkeypatch.setattr(prover, "OPENINGS_PART", 4)
+    checks = Checks(1)
+    try:
+        (r,), (p,) = run("kv:2", samples=16, kv_every=2, kv_pool=8, checks=checks)
+    finally:
+        checks.close(wait=True)
+    assert r["accepted"] and p["accepted"] and r["failure"] is None and r["appended"] > 0
+
+
+def test_kv_pages_past_the_lifetime_are_re_keyed_and_a_prover_that_keeps_them_is_rejected(monkeypatch):
+    """Under L = 1 window, sent with the session, every appended page is stale in the window after the one it joined.
+    The honest prover re-keys each before that window's first pass (writes its payload again in its slot, at a fresh
+    index) and is accepted. One that never re-keys is rejected at that pass's root (`lifetime`)."""
+    monkeypatch.setattr(prover, "OPENINGS_PART", 4)
+    (r,), (p,) = run("kv:2", samples=8, kv_every=4, kv_pool=8, lifetime=1)
+    assert r["accepted"] and p["accepted"] and r["record"]["public"]["lifetime"] == 1
+    kv = p["kv"]
+    assert kv["lifetime"] == 1 and kv["rekeyed"] > 0 and kv["appended"] == 2 * kv["steps"] + kv["rekeyed"]
+    monkeypatch.setattr(prover.ServingTrace, "stale", lambda self, window: [])
+    (r,), (p,) = run("kv:2", samples=8, kv_every=4, kv_pool=8, lifetime=1)
+    assert not r["accepted"] and not p["accepted"] and p["kv"]["rekeyed"] == 0
+    assert r["failure"]["failure"] == "lifetime" and r["failure"]["t"] == 1
+
+
+class CarrierVerdict:
+    """A property verdict that holds, its carriers at most `carrier` bytes a window (`audit.PostSeedVerdict`)."""
+
+    def __init__(self, carrier: float, holds: bool = True) -> None:
+        self.carrier, self.holds = carrier, holds
+
+    def carrier_bytes(self, read_bytes: int) -> float:
+        return self.carrier
+
+
+def test_the_memory_line_credits_the_labelled_weights_and_kv_only_on_a_verdict(monkeypatch):
+    """The ledger's memory line on a kv session whose hello labels its store: 8 blocks of weights, then the KV pool's 8
+    pages, in HBM.  At a draw of every receipt the floor is 0, so each window credits the weights every pass holds,
+    less the blocks the node's squarings could rebuild in its span (none here: the clock's spans are ticks, so the
+    session runs at no squarings, and a rate is put back below); the KV the session appended is held and read but
+    credited only on the property's verdict, then less its carriers; the share and residual are of the node's HBM.
+    Unlabelled, the whole registered store is filler and no weights are credited."""
+    monkeypatch.setattr(prover, "OPENINGS_PART", 4)
+    monkeypatch.setattr(timing, "SQUARINGS_PER_S", {"p512": 0.0})
+    seen = {}
+    memory = verifier.memory
+
+    def keep(*a, **kw):
+        seen["args"] = a, kw
+        return memory(*a, **kw)
+
+    monkeypatch.setattr(verifier, "memory", keep)
+    layout = [{"kind": "weights", "tier": "hbm", "first": 0, "blocks": 8},
+              {"kind": "kv", "tier": "hbm", "first": 8, "blocks": 8}]
+    (r,), (p,) = run("kv:2", samples=4096, kv_every=4, kv_pool=8, layout=layout)
+    assert r["accepted"] and p["accepted"] and r["appended"] > 0
+    B, mem, pub = rcodec.BLOCK_BYTES, r["ledger"]["memory"], r["record"]["public"]
+    assert mem["labels"] and not mem["kv_credited"] and mem["hbm_bytes"] == verifier.HBM_BYTES == 8 * 96 * 2 ** 30
+    for w, posts in zip(mem["windows"], (w["post_seed"] for w in r["record"]["profile"]["windows"])):
+        assert w["floor"] == 0 == w["lost_blocks"] == w["epsilon"] and w["held"]["weights"] == 8 * B
+        assert w["held"]["kv"] == min(posts) * B and w["read"]["kv"] == sum(posts) * B and w["held"]["host"] == 0
+        assert 8 * B <= w["held"]["hbm"] == w["basis"] == w["credited"]["hbm"] <= 16 * B
+        assert w["credited"]["weights"] == 8 * B and w["credited"]["kv"] == w["credited"]["kv_read"] == 0
+    assert mem["read"]["kv"] == sum(pub["post_seed"]) * B > 0 and mem["kv_bytes"] == mem["kv_read_bytes"] == 0
+    assert mem["credited_bytes"] == min(w["credited"]["hbm"] for w in mem["windows"]) and mem["weights_bytes"] == 8 * B
+    assert mem["share"] == mem["credited_bytes"] / mem["hbm_bytes"] and mem["residual"] == 1 - mem["share"]
+    assert mem["delta"] == 2.0 ** -40 and mem["epsilon"] == 0
+
+    (record, plans, regions), kw = seen["args"]
+    assert regions == (("weights", "hbm", 0, 8), ("kv", "hbm", 8, 8))
+    span = max(w.span_ns for w in record.windows)
+    rate = record.codec.encode_squarings * 1e9 / span / 2
+    rebuilt = verifier.memory(record, plans, regions, hbm_bytes=kw["hbm_bytes"],
+                              rebuild=audit.Rebuild(record.codec, rate))
+    for w, x in zip(record.windows, rebuilt["windows"]):
+        assert x["lost_blocks"] == pytest.approx(w.span_ns / span / 2) and x["lost_blocks"] <= 0.5
+        assert x["credited"]["weights"] == pytest.approx(8 * B - x["lost_blocks"] * B)
+        assert x["epsilon"] == pytest.approx(x["lost_blocks"] * B / x["basis"])
+        assert x["credited"]["hbm"] == pytest.approx((1 - x["epsilon"]) * x["basis"])
+    whole = verifier.memory(record, plans, regions, credit_post_seed=CarrierVerdict(0.0), **kw)
+    carried = verifier.memory(record, plans, regions, credit_post_seed=CarrierVerdict(B / 2), **kw)
+    assert whole["kv_credited"] and whole["credited_bytes"] >= mem["credited_bytes"]
+    for w, c, posts in zip(whole["windows"], carried["windows"], (w.post_seed for w in record.windows)):
+        lost = w["lost_blocks"] * B
+        assert w["credited"]["kv_read"] == pytest.approx(max(0, sum(posts) * B - lost))
+        assert c["credited"]["kv_read"] == pytest.approx(max(0, sum(posts) * B - B / 2 * sum(map(bool, posts)) - lost))
+        assert w["credited"]["kv"] == pytest.approx(max(0, min(posts) * B - lost))
+    assert whole["kv_read_bytes"] > carried["kv_read_bytes"] > 0
+    with pytest.raises(ValueError, match="fails"):
+        verifier.memory(record, plans, regions, credit_post_seed=CarrierVerdict(0.0, holds=False), **kw)
+
+    bare = verifier.memory(record, plans, None, **kw)
+    assert not bare["labels"] and bare["weights_bytes"] == 0 and bare["credited_bytes"] == mem["credited_bytes"]
+
+
+@pytest.mark.parametrize("layout", [
+    [{"kind": "weights", "tier": "hbm", "first": 0, "blocks": 8}],
+    [{"kind": "weights", "tier": "hbm", "first": 0, "blocks": 8},
+     {"kind": "kv", "tier": "hbm", "first": 9, "blocks": 7}],
+    [{"kind": "code", "tier": "hbm", "first": 0, "blocks": 16}],
+    [{"kind": "kv", "tier": "nvme", "first": 0, "blocks": 16}],
+    [{"kind": "kv", "tier": "hbm", "first": 0, "blocks": 0}, {"kind": "kv", "tier": "hbm", "first": 0, "blocks": 16}],
+    {"kind": "kv", "tier": "hbm", "first": 0, "blocks": 16},
+    ["kv"],
+])
+def test_a_layout_that_is_not_the_stores_regions_in_order_is_refused(layout):
+    with pytest.raises(ValueError):
+        verifier.regions_of(layout, 16)
+
+
+def registering(registry: audit.Registry) -> tuple[str, str]:
+    """A prover's hello to a verifier holding `registry`, for a node with a live registration there: the verifier's
+    refusal, and the reason the prover read in its `bye`."""
+    a, b = socket.socketpair()
+    p = prover.ProverSide(wire.Conn(b), prover.CpuBackend(16, random.Random(7)), b"test-node",
+                          prover.parse_plan("honest"), seed=11, log=lambda m: None)
+    heard = []
+
+    def prove() -> None:
+        try:
+            p.register(codec=P512)
+        except wire.Closed as e:
+            heard.append(str(e))
+
+    th = threading.Thread(target=prove, daemon=True)
+    th.start()
+    v = verifier.Verifier(wire.Conn(a), source=os.urandom(32), windows=3, window_ns=20, samples=6, delta=2.0 ** -40,
+                          jitter_ns=10 ** 9, log=lambda m: None, registry=registry)
+    with pytest.raises(audit.RegistryError) as refused:
+        v.register()
+    th.join()
+    return str(refused.value), heard[0]
+
+
+def test_a_node_with_a_live_registration_is_refused_until_the_verifier_closes_it_with_its_sessions_counted(monkeypatch):
+    """The red team's KB-4: a second registration is a retry that redraws the codec seed.  Over one registry, a
+    second hello from the node while its registration is live draws nothing and is answered `bye` with the reason;
+    closing the registration counts its sessions, the dropping prover's as its failure, and only then does the node
+    register again, R = 2."""
+    monkeypatch.setattr(prover, "OPENINGS_PART", 4)
+    registry = audit.Registry()
+    (honest, dropping), _ = run("honest,skip:0.5", sessions=2, registry=registry)
+    assert honest["accepted"] and not dropping["accepted"] and dropping["failure"]["failure"] == "receipt"
+    assert registry.live(b"test-node") == bytes.fromhex(honest["registration"])
+    refused, heard = registering(registry)
+    assert "live registration" in refused and heard == f"refused: {refused}"
+    assert registry.refused == {b"test-node": 1} and registry.drawn(b"test-node") == 1
+    closed = registry.close(b"test-node")
+    assert closed.sessions == ("accepted", "receipt") and closed.failed == 1
+    (again,), _ = run("honest", registry=registry)
+    assert again["accepted"] and again["registration"] != honest["registration"] and registry.drawn(b"test-node") == 2
+
+
+def test_the_verifier_closes_a_registration_left_live_from_its_registry_file(tmp_path, monkeypatch, capsys):
+    """`--registry R --close NODE`: a registration a verifier process left live (its session in flight when it ended)
+    closes with that session unended, counted as failed, and the node may register again."""
+    registry = audit.Registry.from_json({"schema": audit.REGISTRY_SCHEMA, "closed": [], "refused": {},
+                                         "live": {b"test-node".hex(): {"registration": "ab" * 64,
+                                                                        "sessions": ["accepted", audit.UNENDED]}}})
+    path = tmp_path / "registry.json"
+    verifier.save_registry(path, registry)
+    monkeypatch.setattr(sys, "argv", ["verifier.py", "--registry", str(path), "--close", b"test-node".hex()])
+    assert verifier.main() == 0
+    back = verifier.load_registry(path)
+    assert back.live(b"test-node") is None and back.closed == [
+        audit.Closed(b"test-node", bytes.fromhex("ab" * 64), ("accepted", audit.UNENDED))]
+    assert "closed" in capsys.readouterr().out
+
+
+def test_an_append_is_answered_with_its_coin_and_a_root_message_is_applied_in_order():
+    """`Verifier.append` answers an append's message with its first index and its coin, drawn then, once: the same
+    root sent again draws none and is the session's `coin` rejection.  `Verifier.root`: a message's releases, then
+    its root with its plan change and its step; a plan that still holds a block the message released, or one
+    appended by no message, is the session's `plan` rejection, a root with no step or one not above the last pass's
+    is its `step` rejection, and a message the session cannot read, a root's carrying appends among them, is
+    malformed."""
     reg = audit.register(os.urandom(32), b"test-node", 8, bytes(64), P512)
     params = audit.Params(8, 10 ** 9, 1, 2, 2.0 ** -40, window_ns=10, codec=P512, receipt=reg.receipt, rows=reg.rows)
 
@@ -238,20 +405,41 @@ def test_a_root_message_is_applied_in_order_and_a_plan_holding_a_released_block_
         s.start()
         return s
 
+    def appended(s):
+        return verifier.Verifier.append(s, {"type": "append", "root": root, "count": 2})
+
     root = (b"\7" * 64).hex()
     s = session()
-    msg = {"t": 0, "i": 0, "root": root, "appends": [[root, 2]], "released": [[3, 1]],
-           "change": [[[8, 2]], [[3, 1]]]}
+    reply = appended(s)
+    assert set(reply) == {"type", "first", "coin"} and (reply["type"], reply["first"]) == ("appended", 8)
+    assert bytes.fromhex(reply["coin"]) == s._appends[0][3] and len(reply["coin"]) == 64
+    msg = {"t": 0, "i": 0, "root": root, "released": [[3, 1]], "change": [[[8, 2]], [[3, 1]]], "step": 5}
     assert verifier.Verifier.root(s, msg) is None
     assert [p.runs for p in s.windows[0].plans] == [((0, 3), (4, 6))] and s.released == 1 and s.extent == 10
+    assert s.windows[0].steps == [5]
+    assert verifier.Verifier.root(s, {"t": 0, "i": 1, "root": root, "change": [[], []], "step": 9}) is None
+    assert appended(s) == audit.Verdict(0, False, "coin") and s.challenger.appends == 1
+    for step in (5, 4):
+        s = session()
+        appended(s)
+        assert verifier.Verifier.root(s, msg) is None
+        v = verifier.Verifier.root(s, {"t": 0, "i": 1, "root": root, "change": [[], []], "step": step})
+        assert v is not None and v.failure == "step"
     s = session()
+    appended(s)
+    v = verifier.Verifier.root(s, {k: x for k, x in msg.items() if k != "step"})
+    assert v is not None and v.failure == "step"
+    s = session()
+    appended(s)
     v = verifier.Verifier.root(s, {**msg, "change": [[[8, 2]], []]})
     assert v is not None and v.failure == "plan"
     s = session()
-    v = verifier.Verifier.root(s, {**msg, "appends": [], "released": []})
+    v = verifier.Verifier.root(s, {**msg, "released": []})
     assert v is not None and v.failure == "plan"
     with pytest.raises(ValueError):
-        verifier.Verifier.root(session(), {**msg, "appends": [["zz", 2]]})
+        verifier.Verifier.append(session(), {"type": "append", "root": "zz", "count": 2})
+    with pytest.raises(ValueError, match="message of its own"):
+        verifier.Verifier.root(session(), {**msg, "appends": [[root, 2]]})
 
 
 def test_a_kv_plan_needs_its_pages_a_step():

@@ -15,6 +15,9 @@
   "BlackwellNvf4OmmaDot64_v2": {
    "and": 6864
   },
+  "BlackwellS8ImmaDot32_v2": {
+   "and": 4190
+  },
   "DotBf16_v3{K=16,DOT=AmpereBF16TcDot16_v3}": {
    "and": 7968
   },
@@ -29,6 +32,9 @@
   },
   "F2fpBf16_v2": {
    "and": 66
+  },
+  "GemmAccumulatorS8_v2{K=64,DOT=BlackwellS8ImmaDot32_v2}": {
+   "and": 8326
   },
   "GemmCoordinateE4m3_v2{K=64,DOT=BlackwellE4m3QmmaDot32_v2}": {
    "and": 18002
@@ -71,6 +77,12 @@
   },
   "HopperE4m3QgmmaDot32_v2": {
    "and": 6799
+  },
+  "S32ToF32Rn_v2": {
+   "and": 368
+  },
+  "ScaledMmS8Coordinate_v2{K=64,DOT=BlackwellS8ImmaDot32_v2}": {
+   "and": 13556
   }
  }
 }

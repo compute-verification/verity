@@ -56,6 +56,19 @@ def test_an_execution_label_sets_batch_invariance_and_an_unknown_one_is_refused(
         SV.execution_env("fp4")
 
 
+def test_a_compiled_row_declares_only_vllms_serving_defaults():
+    """`compiled` is vLLM's serving defaults: whatever CUDA-graph mode vLLM resolves passes, and batch invariance is off."""
+    d = SV.declared({"execution": "compiled"})
+    assert {k: v["value"] for k, v in d.items() if v["source"] == "execution compiled"} == {"enforce_eager": False}
+    served = {**{k: v for k, v in SV.DEFAULTS.items() if v != SV.RESOLVED}, "VLLM_USE_V2_MODEL_RUNNER": True,
+              "VLLM_USE_FLASHINFER_SAMPLER": False, "VLLM_DISABLE_SHARED_EXPERTS_STREAM": True,
+              "compilation_mode": "VLLM_COMPILE", "cudagraph_mode": "FULL_AND_PIECEWISE"}
+    assert SV.judge(served, d) == []
+    assert SV.judge({**served, "VLLM_BATCH_INVARIANT": True}, d) == [
+        "VLLM_BATCH_INVARIANT=True is not vLLM's default False and nothing declares it"]
+    assert SV.judge({**served, "enforce_eager": True}, d) == ["enforce_eager=True where execution compiled declares False"]
+
+
 def test_the_engine_profile_sets_no_switch_but_with_its_reason():
     assert "VLLM_BATCH_INVARIANT" not in engine_env.ENGINE, "batch invariance is the row's execution label's"
     assert "VLLM_BATCH_INVARIANT" not in engine_env.EXPORT, "a Build's batch invariance is its target's"

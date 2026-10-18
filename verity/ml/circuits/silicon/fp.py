@@ -339,6 +339,13 @@ def f32_to_bf16(C, u, nan_word: int):
     return mux(C, nan, const_bits(nan_word, 16), r)
 
 
+def s32_to_f32(C, x):
+    """``cvt.rn.f32.s32`` (`cast.s32_to_f32_rn_word`): the 32-bit two's-complement word ``x`` as the nearest f32, ties to even;
+    zero is +0. The magnitude ``|x| <= 2^31`` is M with E = 158, so no shift ever reaches the subnormal range."""
+    assert len(x) == 32
+    return round_f32(C, x[31], const_bits(158, 9), 0, neg_if(C, x, x[31]), ZERO, underflow=False)
+
+
 # --- lookups -------------------------------------------------------------------------------------------------------------
 
 # --- the tensor-core k-step ------------------------------------------------------------------------------------------------

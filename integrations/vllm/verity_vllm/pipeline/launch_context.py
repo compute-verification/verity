@@ -6,8 +6,8 @@ the varlen launch's `max_seqlen_q` = the most query rows any ONE sequence of the
 cp-h100 (Llama-3.2-1B B8 mixed 1024/128): the 8-token prompt's standalone Program said kBlockN 192 (64 x 192 tile, `8 * 4 <= 64`), the batched
 prefill launch ran 128 (192 x 128 tile, `max_seqlen_q` 1024) -- X-09 batch_decomp FAIL on that one request.
 
-For request r (arrive_step a_r, prompt_len L_r, max_tokens c_r, C_r prompt rows served from the prefix cache) at its request step s
-(engine step e = a_r + s, s in 0..c_r-1):
+For request r (realized arrival a_r: its arrive_step under the engine's idle-gap rule, `engine.arrivals.realized_arrive_steps`;
+prompt_len L_r, max_tokens c_r, C_r prompt rows served from the prefix cache) at its request step s (engine step e = a_r + s, s in 0..c_r-1):
     rows_q(e) = L_q - C_q if a_q == e (q prefills its uncached suffix at e) ; 1 if a_q < e <= a_q + c_q - 1 (q decodes at e) ; 0 otherwise
     launch_max_seqlen_q(r, s) = max_q rows_q(a_r + s)          (>= rows_r, since r is in the launch)
 C_r is 0 unless the row serves with the prefix cache; then the arrival chronology and the prompts decide it (`program.prefix_plan`).
@@ -31,6 +31,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from verity_vllm.config import option
+from verity_vllm.engine.arrivals import realized_arrive_steps
 from verity_vllm.program.prefix_plan import cached_of, shape, shape_name
 
 
@@ -102,14 +103,18 @@ def shape_contexts(workload: dict[str, Any]) -> dict[tuple[int, ...], list | str
 
 
 def _requests(workload: dict[str, Any]) -> list[dict[str, Any]]:
+    """The workload's requests at their realized arrivals (`arrivals.realized_arrive_steps`: an arrival the idle engine brings
+    forward is prefilled alone, not with the requests declared at its step)."""
     reqs = workload.get("requests")
     if isinstance(reqs, list) and reqs and all(isinstance(r, dict) and "prompt_len" in r for r in reqs):
-        return [{"arrive_step": int(r.get("arrive_step", 0) or 0), "prompt_len": int(r["prompt_len"]), "max_tokens": int(r["max_tokens"]),
-                 "cached": c} for r, c in zip(reqs, cached_of(workload))]
-    s = workload["sweep"]
-    ils, caps = s["input_lengths"], s["output_caps"]
-    arr = s.get("arrive_steps") or [0] * len(ils)
-    return [{"arrive_step": int(a), "prompt_len": int(lp), "max_tokens": int(c), "cached": 0} for lp, c, a in zip(ils, caps, arr)]
+        out = [{"arrive_step": int(r.get("arrive_step", 0) or 0), "prompt_len": int(r["prompt_len"]), "max_tokens": int(r["max_tokens"]),
+                "cached": c} for r, c in zip(reqs, cached_of(workload))]
+    else:
+        s = workload["sweep"]
+        ils, caps = s["input_lengths"], s["output_caps"]
+        arr = s.get("arrive_steps") or [0] * len(ils)
+        out = [{"arrive_step": int(a), "prompt_len": int(lp), "max_tokens": int(c), "cached": 0} for lp, c, a in zip(ils, caps, arr)]
+    return [{**r, "arrive_step": a} for r, a in zip(out, realized_arrive_steps(out))]
 
 
 def spec_for(workload: dict[str, Any], LP: int, T: int, C: int = 0) -> str:

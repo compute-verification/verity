@@ -545,12 +545,12 @@ class SingleRow(Row):
         if self.protocols:
             cmd += self.tgt_args                      # the declared target with the row's protocols; unset, the Commit reads the workload's
         # the windowed collector (ring of window_slots x window_mb MiB, raw copies retained on host, openings verified after release)
-        # is the default; window_mb=0 is per-step blocks, retain=device the device-resident footprint
-        if int(ck.window_mb) > 0:
-            cmd += ["--window-mb", str(ck.window_mb), "--window-slots", str(ck.window_slots)]
-        cmd += ["--retain", ck.retain]
-        if ck.open_after_release != "0":
-            cmd.append("--open-after-release")
+        # is the default; window_mb=0 is per-step blocks, retain=device the device-resident footprint.  Bounded staging is the config
+        # run's (the Commit's own default is bounded whenever windowed)
+        cmd += ["--window-mb", str(ck.window_mb), "--window-slots", str(ck.window_slots), "--retain", ck.retain]
+        if not self.config_run:
+            cmd.append("--no-bounded-staging")
+        cmd.append("--open-after-release" if ck.open_after_release != "0" else "--no-open-after-release")
         cmd += ["--tap-cap-mb", str(ck.tap_cap_mb)]
         for ea in (ck.extra_engine_args or "").split():
             cmd += ["--engine-arg", ea]
