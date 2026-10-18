@@ -81,6 +81,6 @@ theorem DuoPairAtStateNotInjective : Pouw.Guarantees.Receipt.DuoPairAtStateNotIn
     (hinj (a₁ := (0x40156b95#32, 0x0#32)) (a₂ := (0xb4d85e5c#32, 0x375f7285#32)) (by decide))
 
 theorem DuoRunAtStateNotInjective : Pouw.Guarantees.Receipt.DuoRunAtStateNotInjective :=
-  fun _ _ k a r s hn hL => Pouw.ReceiptProofs.duoRun_atState_not_injective k a r s hn hL
+  fun n L k a r s => Pouw.ReceiptProofs.duoRun_atState_not_injective k a r s (Nat.succ_pos n) (by omega : 2 < L + 3)
 
 end Pouw.SecurityProofs.Receipt

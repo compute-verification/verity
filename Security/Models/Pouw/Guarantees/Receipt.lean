@@ -214,10 +214,10 @@ def DuoPairAtStateNotInjective : Prop :=
   ¬ Function.Injective (fun d : BitVec 32 × BitVec 32 =>
     duoPair (0x6d403793#32) (0x9e43d96b#32) 6 (0x5cc85cac#32) (0x5e95a543#32) 20 d (0x247a23f6#32, 0xc48c9971#32))
 
-/-- **No whole state binds three duo words at a state.** For every width `n > 0`, every run of `L > 2` words with any
-keys and every start state, two different runs reach one final state: `2^(nL)` runs, `2^(2n)` states. -/
+/-- **No whole state binds three duo words at a state.** For every width `n + 1`, every run of `L + 3` words with any
+keys and every start state, two different runs reach one final state: `2^((n+1)(L+3))` runs, `2^(2(n+1))` states. -/
 def DuoRunAtStateNotInjective : Prop :=
-  ∀ (n L : ℕ) (k a : Fin L → BitVec n) (r : Fin L → ℕ) (s : BitVec n × BitVec n), 0 < n → 2 < L →
-    ¬ Function.Injective (fun w : Fin L → BitVec n => duoRun k a r w s)
+  ∀ (n L : ℕ) (k a : Fin (L + 3) → BitVec (n + 1)) (r : Fin (L + 3) → ℕ) (s : BitVec (n + 1) × BitVec (n + 1)),
+    ¬ Function.Injective (fun w : Fin (L + 3) → BitVec (n + 1) => duoRun k a r w s)
 
 end Pouw.Guarantees.Receipt
