@@ -21,7 +21,6 @@ from typing import Any, Callable, Sequence
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
 from verity.ml.circuits.evaluate import ExecutionTranscript, MissingValue, evaluate_call, evaluate_region
 from verity.ml.circuits.layout import FunctionCall
-from verity.ml.circuits.ports import forward, harness
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Affine
 from verity.ml.circuits.types import Type, Value
@@ -147,10 +146,9 @@ def signature_of(target: Target) -> tuple[tuple[Type, ...], Type]:
     return tuple(pt for _, pt in params), ret
 
 
-_STANDALONE = harness(CompositeDefinition("EvaluationStandalone", 1, ("FN",), lambda S: S.FN.signature(),
-                                          lambda B, S, *args: B.call(S.FN, *args),
-                                          doc="root wrapper: one call of FN over Input gates", register=False,
-                                          ports=lambda S: forward(S.FN)))
+_STANDALONE = CompositeDefinition("EvaluationStandalone", 1, ("FN",), lambda S: S.FN.signature(),
+                                  lambda B, S, *args: B.call(S.FN, *args),
+                                  doc="root wrapper: one call of FN over Input gates", register=False)
 _CALLS: dict[SpecializedDefinition, tuple[Program, FunctionCall]] = {}
 
 
