@@ -465,13 +465,15 @@ def diff_records(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
             "equal_fields": len(set(fa) & set(fb)) - len(differ), "reroot": [ra, rb], "same_weights_of_record": same and ra == rb}
 
 
-def weights_of_record(program: dict[str, Any], ck: CheckpointIndex, *, prefix: str | None = None, kv_cache_dtype: str = "auto") -> dict[str, Any]:
-    """The record: per Program weight field the digest of the checkpoint-composed served tensor; root over the ordered list."""
+def weights_of_record(program: dict[str, Any], ck: CheckpointIndex, *, prefix: str | None = None, kv_cache_dtype: str = "auto",
+                      fields: list[tuple[str, list[int], int]] | None = None) -> dict[str, Any]:
+    """The record: per Program weight field the digest of the checkpoint-composed served tensor; root over the ordered list.
+    `fields` (field, shape, bits) replaces the Program's `weights` struct parameter (`served_record`)."""
     t0 = time.perf_counter()
     inst, res = program["instances"], program.get("result") or {}
     tp = res.get("tp") if isinstance(res.get("tp"), dict) else {}
     world, rank = int(tp.get("world") or 1), int(tp.get("rank") or 0)
-    fields = program_weight_fields(inst)
+    fields = program_weight_fields(inst) if fields is None else fields
     if prefix is None:
         from verity_vllm.query.manifest import format as MF
         named = MF.wrapper_prefix_of(inst.get("rows", []), res.get("attention_impls_observed") or [])
@@ -761,6 +763,33 @@ def build_record(program_dir: str, checkpoint_dir: str, *, checkpoints_manifest:
     ck = CheckpointIndex(checkpoint_dir, checkpoints_manifest=checkpoints_manifest or _default_manifest(), model=model, revision=revision,
                          verify_shards=verify_shards, pin=shard_pin)
     return weights_of_record(prog, ck, kv_cache_dtype=kv_cache_dtype)
+
+
+def served_weight_fields(program: dict[str, Any]) -> list[tuple[str, list[int], int]]:
+    """(field, shape, 16) for every weight a served Build's Program reads (`acquire.served`: a served parameter or buffer by name, read
+    as bf16 words by the Definition bound to it), in first-read order.  A weight read at two shapes is refused."""
+    seen: dict[str, list[int]] = {}
+
+    def walk(x: Any) -> None:
+        if isinstance(x, dict):
+            if "weight" in x and seen.setdefault(x["weight"], list(x["shape"])) != list(x["shape"]):
+                raise ValueError(f"{x['weight']} is read at {seen[x['weight']]} and at {list(x['shape'])}")
+            for v in x.values():
+                walk(v)
+        elif isinstance(x, list):
+            for v in x:
+                walk(v)
+    walk(program)
+    return [(n, s, 16) for n, s in seen.items()]
+
+
+def served_record(build: dict[str, Any], checkpoint_dir: str, *, checkpoints_manifest: str | None = None, model: str | None = None,
+                  revision: str | None = None, kv_cache_dtype: str = "auto") -> dict[str, Any]:
+    """The record of a served Build: its Program's weight reads (`served_weight_fields`, by the served names: no wrapper prefix),
+    bound to the Build's program digest."""
+    ck = CheckpointIndex(checkpoint_dir, checkpoints_manifest=checkpoints_manifest or _default_manifest(), model=model, revision=revision)
+    return weights_of_record({"instances": {}, "result": {"program_digest": build["program_digest"]}, "dir": None}, ck, prefix="",
+                             kv_cache_dtype=kv_cache_dtype, fields=served_weight_fields(build["program"]))
 
 
 def weights_struct(program: dict[str, Any]) -> list[list[Any]]:

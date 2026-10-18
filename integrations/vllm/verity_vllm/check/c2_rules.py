@@ -391,7 +391,7 @@ def _replay_scope(sr: dict | None) -> dict[str, Any]:
             "positions": positions, "requests": len(picks) if picks else (len(pop.get("requests") or []) if isinstance(pop.get("requests"), (list, dict)) else None),
             "strata": len(sr.get("strata") or []) or sr.get("strata_n") or pop.get("strata_n"), "strata_unevaluated": len(sr.get("strata_unevaluated") or []),
             "population_vus": pop.get("vus"), "population_by_family": pop.get("by_family"), "not_evaluable": pop.get("not_evaluable") or None,
-            "query_total": qt.get("total") if qt else None, "query_id": qt.get("query_id") if qt else None, "query_checks_ok": _d(pop.get("query_checks")).get("ok")}
+            "query_total": qt.get("identities") if qt else None, "query_id": qt.get("query_id") if qt else None, "query_checks_ok": _d(pop.get("query_checks")).get("ok")}
 
 
 def _replay_inputs(sr: dict | None, ctx: dict) -> dict[str, Any]:

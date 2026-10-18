@@ -1057,7 +1057,11 @@ class Options:
     tensor_digests: bool = option("--tensor-digests", default=False, action="store_true", help="diagnostic: per-tensor digests of the retained host bytes per instrumented run, diffed across pairs")
     padded_finalize: bool = option("--padded-finalize", default=False, action="store_true", help="[LIFTING-SPEC v0.7 B9.1; PADDED-TABLE #3/#4, lane pad] the padded Commit: at finalize, every identity the required manifest names " "for a request OUTSIDE its executed prefix of record (declared LAG + declared EOS + served tokens; never inferred) is MATERIALISED as the " "canonical bot of its lifted width -- a step nobody executed becomes a padding step, a mixed step (B>1) is refolded from the retained leaf " "digests + the padding leaves -- so the ONE run root is over S = cap steps and the map (padded-binding-map/1) binds the full cap " "population (activity active / bot-by-enablement).  Requires --required-manifest.  Off = today's executed-steps-only Commit")
     moe_source: str = option("--moe-source", choices=["auto", "on", "off"], default="auto", help="[R13 MOE-03] attach the fused-MoE block source (router_w/ids, up, act, down, sum per MoE layer per step; class moe_block_stream, " "added to the required classes): auto = when the model has MoE-runner modules (the default), on = refuse if it has none, off = never")
-    compiled_taps: str = option("--compiled-taps", choices=["off", "on", "kernels"], default="off", help="[R15 compiled] kernels = P_compiled (DECISIONS-2 §7 S3): acquire every non-weight buffer of every Inductor kernel launch through Inductor's " "wrapper-level hook seam (kernels/fusion untouched; captured pieces copy into preallocated slots at graph capture, drained per step; " "verity_vllm/acquire/sources/compiled_kernel_source.py); requires --required-manifest from compiled_manifest.py. " "on = [WITHDRAWN as the row's path, M-0389] record ops compiled INTO the graphs (graph-replay-safe " "staging ring; verity_vllm/acquire/sources/compiled_source.py) for Execution=compiled rows (enforce_eager=false). " "The op nodes live in the graphs for the whole process, so the paired control must be a separate process with " "`--compiled-taps off --only-arm control` and the same engine args (verity_vllm/ops/compiled_commit.sh)")
+    compiled_taps: str = option("--compiled-taps", choices=["off", "on", "kernels", "served"], default="off", help="[circuits 21:10Z] served = the "
+                                "served-compiled row: every value of every engine step at vLLM's defaults (ServedCompiledSource), the served Build "
+                                "(--required-manifest, verity-vllm served-match) checked word for word on the committed values (served_check) with a "
+                                "seed drawn after commitment, the Build rederived in this process (build_rebuilt.json); control: --compiled-taps off "
+                                "--only-arm control (verity_vllm/ops/served_commit.sh).  [R15 compiled] kernels = P_compiled (DECISIONS-2 §7 S3): acquire every non-weight buffer of every Inductor kernel launch through Inductor's " "wrapper-level hook seam (kernels/fusion untouched; captured pieces copy into preallocated slots at graph capture, drained per step; " "verity_vllm/acquire/sources/compiled_kernel_source.py); requires --required-manifest from compiled_manifest.py. " "on = [WITHDRAWN as the row's path, M-0389] record ops compiled INTO the graphs (graph-replay-safe " "staging ring; verity_vllm/acquire/sources/compiled_source.py) for Execution=compiled rows (enforce_eager=false). " "The op nodes live in the graphs for the whole process, so the paired control must be a separate process with " "`--compiled-taps off --only-arm control` and the same engine args (verity_vllm/ops/compiled_commit.sh)")
     compiled_ring_rows: int = option("--compiled-ring-rows", type=int, default=0, help="[R15 compiled] rows per staging slot; 0 = auto: the engine's largest CUDA graph capture size (larger, uncaptured steps use the direct path)")
     only_arm: str | None = option("--only-arm", choices=["control", "instrumented"], default=None, help="[R15 compiled] run only this arm (`--pairs` runs of it); the paired summary is produced by compiled_commit.sh from both processes")
 
@@ -1133,6 +1137,15 @@ def main(args: Options, argv: list[str] | None = None) -> None:
         compiled_src.prepare()
         print(f"[delta] COMPILED TAPS: record ops will be compiled into the graphs (ring rows {args.compiled_ring_rows}, fault {compiled_src.fault!r}, "
               f"runner patches {compiled_src.stats.get('patched_runners')}); vLLM compile cache disabled", flush=True)
+    served = None
+    if args.compiled_taps == "served":
+        if args.only_arm == "control" or args.arms or not args.required_manifest:
+            raise SystemExit("--compiled-taps served is the treatment process (one committer) and needs --required-manifest, the served Build "
+                             "of record (verity-vllm served-match); the control runs with --compiled-taps off --only-arm control")
+        from verity_vllm.pipeline.served_match import ServedCommit
+
+        served = ServedCommit(json.load(open(args.required_manifest)), fault if fault.startswith("compiled_") else None)   # hooks before vLLM compiles
+        print(f"[delta] SERVED TAPS: every value of every engine step at vLLM's defaults; fault {served.src.fault!r}", flush=True)
     required_classes = tuple(c for c in (args.required_classes.split(",") if args.required_classes is not None else REQUIRED_CLASSES_DEFAULT) if c)
     required_classes_cli = args.required_classes is not None
     moe_attached = False
@@ -1237,7 +1250,12 @@ def main(args: Options, argv: list[str] | None = None) -> None:
             _HOT.update(eng=eng, t_built=time.time(), base0=baseline_state(eng), cuda0=cuda_census())   # pristine baseline BEFORE any committer of any job
     # R13 hopper: the attention implementation the engine executes (FA2 / FA3) -- selects the hidden class the verdict requires and the tap class
     fa_version = va.observed_flash_attn_version(eng.model)
-    if not required_classes_cli:
+    if not required_classes_cli and served is not None:
+        # the served values: the step's ids, the sampled ids, the logits and every other value of the pieces (compiled_kernel_buffers);
+        # FA3's outputs are values of the pieces, not a tap's hidden stream
+        required_classes, hidden_family = HS.with_hidden_class(required_classes_default(fa_version), None) + ("compiled_kernel_buffers",), None
+        print(f"[delta] required classes (served): {required_classes}", flush=True)
+    elif not required_classes_cli:
         required_classes = HS.with_hidden_class(required_classes_default(fa_version), hidden_family := HS.attention_hidden(required_manifest, eng.model)["family"])
         if compiled_kernels is not None:
             # [R15 compiled S3] the execution's leaf class is P_compiled's kernel buffers, not the eager module outputs (never fired: not wrapped)
@@ -1296,6 +1314,10 @@ def main(args: Options, argv: list[str] | None = None) -> None:
               f"unknown-kernel args {compiled_kernels.stats['unknown_kernel_args']}, errors {compiled_kernels.errors}", flush=True)
         if compiled_kernels.errors or not compiled_kernels.slots:
             raise SystemExit(f"--compiled-taps kernels: no captured slots / errors {compiled_kernels.errors}")
+    if served is not None:
+        versions.update(served.engine(eng))
+        print(f"[delta] served source: slots {len(served.src.slots)} plans {len(served.src.plans)} written at graph capture, "
+              f"{len(served.src.modules)} identities every step", flush=True)
     if compiled_src is not None:
         if compiled_src.model is None:
             raise SystemExit(f"--compiled-taps on: the model was not wrapped before compilation (runner patch missed; errors {compiled_src.errors})")
@@ -1333,6 +1355,9 @@ def main(args: Options, argv: list[str] | None = None) -> None:
             compiled_kernels.attach(com, required_manifest)
             com.program_digest = SCH.program_field(required_manifest["program_digest"])   # P_compiled's digest binds the roots (manifest = P_compiled x query)
             print(f"[delta] compiled kernel source attached -> committer {com.name}; program digest (P_compiled) {required_manifest['program_digest'][:16]}", flush=True)
+        if served is not None:
+            served.attach(com)                               # the committer wraps nothing: the source acquires every value of the Build
+            com.program_digest = SCH.program_field(required_manifest["program_digest"])   # the served Build's digest binds the roots
         if compiled_src is not None:
             if not hasattr(com, "_nc") or not hasattr(com, "attach_source"):
                 raise SystemExit(f"--compiled-taps on needs the native_collect committer (got {kind})")
@@ -1433,24 +1458,28 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                       f"--program-dir/--programs-root ({getattr(args, 'program_dir', None)!r}, {getattr(args, 'programs_root', None)!r}); "
                       f"the R13 uniformity rule runs (a Program with two attention classes fails X-03 closed)", flush=True)
         # [v2 acquire, Phase 4a] the committer's hook sets come from the ACQUISITION PLAN (required-value manifest x the built engine's
-        # runtime tree): the plan is written into the attempt dir first; an UNSUPPORTED Value refuses by name.
-        if required_manifest is None or not hasattr(com, "_modules") or getattr(com, "model", None) is None:
-            print(f"[delta] REFUSE: the acquisition plan needs --required-manifest and a hooking committer (got {kind})", flush=True)
-            sys.exit(3)
-        from verity_vllm.acquire.install import IncompletePlan as _IncompletePlan, apply_plan_to_committer as _apply_plan
-        from verity_vllm.acquire.stage import plan_at_stage as _plan_at_stage
+        # runtime tree): the plan is written into the attempt dir first; an UNSUPPORTED Value refuses by name.  An external source (the
+        # served values) acquires every value itself: the committer wraps nothing.
+        if served is not None:
+            print(f"[delta] committer {com.name}: no acquisition plan (the served source acquires every value of the Build)", flush=True)
+        else:
+            if required_manifest is None or not hasattr(com, "_modules") or getattr(com, "model", None) is None:
+                print(f"[delta] REFUSE: the acquisition plan needs --required-manifest and a hooking committer (got {kind})", flush=True)
+                sys.exit(3)
+            from verity_vllm.acquire.install import IncompletePlan as _IncompletePlan, apply_plan_to_committer as _apply_plan
+            from verity_vllm.acquire.stage import plan_at_stage as _plan_at_stage
 
-        try:
-            _docs = _plan_at_stage(com.model, getattr(eng, "runner", None), required_manifest, out, source=f"commit_delta {kind}")
-            for _ln in _docs.log_lines("delta"):
-                print(_ln, flush=True)
-            _rec = _apply_plan(com, _docs.plan)
-        except _IncompletePlan as e:
-            print(f"[delta] REFUSE: acquisition plan: {e}", flush=True)
-            sys.exit(3)
-        (out / "acquisition_engine.json").write_text(json.dumps({"engine": "v2", "plan_digest": _docs.plan.digest, **_rec}, indent=1) + "\n")
-        print(f"[delta] committer {com.name}: {len(_rec['modules_after'])} module output hooks from the plan, "
-              f"consumer inputs {_rec['plan_inputs']}, deferred sites {len(_rec['deferred_sites'])}", flush=True)
+            try:
+                _docs = _plan_at_stage(com.model, getattr(eng, "runner", None), required_manifest, out, source=f"commit_delta {kind}")
+                for _ln in _docs.log_lines("delta"):
+                    print(_ln, flush=True)
+                _rec = _apply_plan(com, _docs.plan)
+            except _IncompletePlan as e:
+                print(f"[delta] REFUSE: acquisition plan: {e}", flush=True)
+                sys.exit(3)
+            (out / "acquisition_engine.json").write_text(json.dumps({"engine": "v2", "plan_digest": _docs.plan.digest, **_rec}, indent=1) + "\n")
+            print(f"[delta] committer {com.name}: {len(_rec['modules_after'])} module output hooks from the plan, "
+                  f"consumer inputs {_rec['plan_inputs']}, deferred sites {len(_rec['deferred_sites'])}", flush=True)
         if hasattr(com, "size_arena") and getattr(com, "arena", None) is not None and not (args.arena_unchecked and args.arena_mb):
             # X-02: size the device staging block from the workload envelope (refuses here, with needed vs available bytes, if it cannot fit)
             envelope = {"batch": args.max_num_seqs, "max_prompt": max(len(r["prompt_token_ids"]) for r in reqs),
@@ -1726,6 +1755,11 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 if getattr(args, "weights_of_record", None):
                     _wor_rec = json.loads(Path(args.weights_of_record).read_text())
                     _wor_rec["source"] = str(args.weights_of_record)
+                elif served is not None:
+                    _wor_rec = WR.served_record(required_manifest, args.checkpoint_dir, checkpoints_manifest=args.checkpoints,
+                                                kv_cache_dtype=str(engine_args.get("kv_cache_dtype") or "auto"))
+                    _wor_rec["source"] = f"derived in-process from the served Build's weight reads x {args.checkpoint_dir}"
+                    (Path(args.out) / "weights_of_record.json").write_text(json.dumps(_wor_rec, indent=1) + "\n")
                 else:
                     _pd = args.program_dir
                     if not _pd and getattr(args, "programs_root", None):
@@ -1785,6 +1819,10 @@ def main(args: Options, argv: list[str] | None = None) -> None:
               f"errors {rc.extra.get('errors')}", flush=True)
         coms[kind] = com
     com = coms[kinds[0]] if kinds else None
+    if served is not None:
+        _rb = served.rebuild(json.loads(Path(args.workload).read_text()), str(out))   # every kernel has launched in the warm-ups
+        print(f"[delta] served Build of this process: program {str(_rb['program_digest'])[:16]} complete {_rb['complete']}, equal to the Build "
+              f"of record {_rb['program_digest'] == required_manifest['program_digest']}", flush=True)
     protocols = PO.at_commit(_ekw["target"], eng.model, versions, _settings)   # after every committer registered the weights
     if args.value_check and com is not None and hasattr(com, "_layouts"):
         # VALUE-CORRECTNESS (VALUE-FIRST §5): one extra instrumented run with reference taps + re-execution of the registered relation
@@ -1835,6 +1873,8 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 com.reset()
                 if compiled_src is not None:
                     compiled_src.stats_reset_step_counters()
+                if served is not None:
+                    served.src.begin_run()
                 com.install()
             t_run0 = time.perf_counter()
             r = run_workload(eng, reqs, sampling)
@@ -2164,6 +2204,15 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                           f"{(lk.get('attribution') or {}).get('steps_checked')}/{(lk.get('attribution') or {}).get('population_steps')} steps complete={(lk.get('attribution') or {}).get('complete')} "
                           f"coincident {(lk.get('attribution') or {}).get('coincident_pairs')} (tokens-only {(lk.get('attribution') or {}).get('coincident_pairs_tokens')}) "
                           f"steps {ckc.get('sampled_steps')} {ckc.get('mismatch', [])[:2]} {ckc.get('missing', [])[:2]} {ckc.get('errors', [])[:1]} {ckc.get('error', '')}", flush=True)
+                if served is not None:
+                    import secrets
+
+                    row["commit"]["compiled_source"], row["commit"]["compilation"] = served.src.summary(), versions["compilation"]
+                    _sc2 = served.c2(com, rc, reqs, args.replay_challenge or secrets.token_hex(16), args.replay_seed)   # the challenge drawn after the run root
+                    components.update(_sc2["components"])
+                    vc_methods.insert(0, "sampled-exact-replay (the served Build's Program on the committed values; served_check.py) + boundary linkage")
+                    vc_result = _sc2["ok"] if vc_result is None else (vc_result and _sc2["ok"])
+                    print(f"[delta] SERVED C2 (pair {pair}): {_sc2['line']}", flush=True)
                 if compiled_src is not None:
                     # [R15 compiled] C2 under graph replay: no Python tap can observe a value inside a replayed graph, so correspondence is
                     # checked from the committed bytes alone (Linear re-execution from committed inputs, lm_head(norm) == logits, greedy
@@ -2193,6 +2242,8 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                                                          "note": "coverage + openings cannot see a late read or a relabel (brief §4); live evidence = the Match oracle of this attempt / an independent pinned root / replay"}
                 if compiled_kernels is not None:
                     row["commit"]["value_correspondence"].update(_compiled_vc_extra)          # [R15 compiled S3] the C2-of-record fields (compiled_check = the full report)
+                if served is not None:
+                    row["commit"]["value_correspondence"].update(_sc2["value_correspondence"])
                 if getattr(args, "match_dir", None):
                     # [R15 COORD M-0111 (2), manbind] LIVE C2 = oracle-compare: every bound identity's committed bytes against the Match stage's
                     # value record of the SAME attempt (separate process + acquisition path); any mismatch fails the verdict naming the identity.
@@ -2319,6 +2370,11 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                     if not ckc.get("ok"):
                         row["commit"]["commit_pass"], row["commit"]["commit_fail_reason"] = False, (f"compiled C2 FAIL: {ckc.get('launches_exact')}/{ckc.get('launches_checked')} launches exact, "
                                                                                                     f"missing {ckc.get('launches_missing')}, linkage {ckc.get('linkage')} {ckc.get('error', '')}")
+                if served is not None and row["commit"]["commit_pass"]:
+                    scc = row["commit"]["value_correspondence"]["compiled_check"]
+                    if not scc.get("ok"):
+                        row["commit"]["commit_pass"], row["commit"]["commit_fail_reason"] = False, (f"served C2 FAIL: {scc.get('equal')}/{scc.get('checked')} values exact, "
+                                                                                                    f"steps unrun {scc.get('steps_unrun')} {scc.get('error') or ''}")
                 if compiled_src is not None and row["commit"]["commit_pass"]:
                     # the compiled boundary's own fail-closed conditions (C2 value relations; no refused/mis-shaped in-graph acquisition)
                     cvc = row["commit"]["value_correspondence"]["compiled_check"]

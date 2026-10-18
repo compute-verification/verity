@@ -277,6 +277,74 @@ def test_extra_step_bytes_reads_the_captured_slots(monkeypatch):
     assert got == {"per_token_bytes": row, "per_step_bytes": 3 * WIDTH * 4, "tensors_per_step": 2 + 3 * 2 + 2}
 
 
+def test_the_builds_modules_are_the_expected_identities():
+    src = S.ServedCompiledSource()
+    assert src.expected_modules() == []
+    src.use_build({"program": {"values": {"c00.input/ids": {}, "c00.input/positions": {}, "c00.mm/buf2": {}, "c00.mm/buf3": {},
+                                          "c01.attention/layers.0.attn": {}},
+                               "logits": {"name": "logits_processor"}, "sampled": {"name": "runner.sampler/sampled_token_ids"}}})
+    assert src.expected_modules() == ["c00.input", "c00.mm", "c01.attention", "logits_processor", "runner.sampler"]
+
+
+def _tuner(path, compiled: list[int], launched: list[int], cached: int | None = None):
+    from torch._inductor.runtime.triton_heuristics import CachingAutotuner
+
+    def cfg(r0):
+        return SimpleNamespace(kwargs={"XBLOCK": 2, "R0_BLOCK": r0}, num_warps=2, num_stages=1)
+
+    t = object.__new__(CachingAutotuner)
+    t.filename, t.compile_results = str(path), [SimpleNamespace(config=cfg(r)) for r in compiled]
+    t.launchers = [SimpleNamespace(config=cfg(r)) for r in launched]
+    t._cached_launcher = None if cached is None else SimpleNamespace(config=cfg(cached))
+    return t
+
+
+def test_launch_configs_are_the_configs_steps_and_captures_launched(tmp_path, monkeypatch):
+    """A live autotuner's state is no record of a launch (Qwen3-8B's combo kernels each had one live autotuner, never run): `executed`
+    is what served steps and captures launched, once per autotuner; a compile-time run launches outside both and does not count; two
+    autotuners of one kernel text launched with two configs are both recorded (the Build refuses the kernel).  A launch through
+    `run`'s fast path runs the launcher it cached, though the autotuner holds two since (Qwen3-8B's reductions after an rblock rescale:
+    r20261018-045838-4e9c).  Every live autotuner gives its candidates, the heap frozen or not, and it is frozen again afterwards."""
+    import gc
+    import hashlib
+
+    from torch._inductor.runtime.triton_heuristics import CachingAutotuner
+
+    monkeypatch.setattr(CachingAutotuner, "run", lambda self, *a, **kw: None)
+    src = S.ServedCompiledSource()
+    src._install_launch_record(src._hooks)
+    one, two, three = tmp_path / "one.py", tmp_path / "two.py", tmp_path / "three.py"
+    one.write_text("def KERNEL(): pass\n")
+    two.write_text("def OTHER(): pass\n")
+    three.write_text("def REDUCTION(): pass\n")
+    idle, compile_time, served = _tuner(one, [128, 64], [128, 64]), _tuner(one, [128, 64], [64]), _tuner(one, [128], [128])
+    first, second = _tuner(two, [128], [128]), _tuner(two, [64], [64])
+    rescaled = _tuner(three, [128, 64], [128, 64], cached=128)
+    compile_time.run(stream=0)
+    src.capturing = ("FULL", 8)
+    served.run(stream=0)
+    first.run(stream=0)
+    src.capturing, src.c = None, SimpleNamespace(_cur=object())
+    served.run(stream=0)
+    second.run(stream=0)
+    rescaled.run(stream=0)
+    gc.freeze()
+    try:
+        got = src.launch_configs()
+        assert gc.get_freeze_count() > 0
+    finally:
+        gc.unfreeze()
+        src.remove_hooks()
+    a, b, c = (got[hashlib.sha256(p.read_bytes()).hexdigest()] for p in (one, two, three))
+    r128 = {"kwargs": {"XBLOCK": 2, "R0_BLOCK": 128}, "num_warps": 2, "num_stages": 1}
+    r64 = {**r128, "kwargs": {"XBLOCK": 2, "R0_BLOCK": 64}}
+    assert a == {"candidates": [r128, r64], "executed": [r128], "autotuners": 3, "launched": 1}
+    assert b == {"candidates": [r128, r64], "executed": [r128, r64], "autotuners": 2, "launched": 2}
+    assert c == {"candidates": [r128, r64], "executed": [r128], "autotuners": 1, "launched": 1}
+    assert src.errors == []
+    del idle, compile_time, served, first, second, rescaled
+
+
 class _Meta(SimpleNamespace):
     pass
 

@@ -82,6 +82,20 @@ def apply_compile_fresh() -> dict[str, str]:
     return apply_target(COMPILE_FRESH)
 
 
+def own_compile_dirs(root: str) -> dict[str, str]:
+    """This process's own Inductor output code and vLLM compile dir under ``root``, with ``COMPILE_FRESH``, before vLLM and torch read
+    them: a served Build reads the compile artifact of the process that serves (``pipeline.served_match``)."""
+    return apply_target({"TORCHINDUCTOR_CACHE_DIR": f"{root}/inductor", "VLLM_CACHE_ROOT": f"{root}/vllm_cache", INDUCTOR_DIR_MARK: "1",
+                         **COMPILE_FRESH})
+
+
+def compile_dirs() -> dict[str, str] | None:
+    """The Inductor output-code dir and vLLM cache root this process was given as its own (``own_compile_dirs``, or exported with
+    ``INDUCTOR_DIR_MARK`` by ``ops/served_commit.sh``), else None."""
+    ind, root = os.environ.get("TORCHINDUCTOR_CACHE_DIR"), os.environ.get("VLLM_CACHE_ROOT")
+    return {"inductor": ind, "vllm_cache": root} if os.environ.get(INDUCTOR_DIR_MARK) == "1" and ind and root else None
+
+
 def hide_devices() -> None:
     """No CUDA device is visible to this process (a meta-device build on a GPU host), whatever it inherited.  Takes effect
     only before torch initialises CUDA."""
