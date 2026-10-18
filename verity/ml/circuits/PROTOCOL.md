@@ -593,16 +593,20 @@ as declared, so a composite over exact steps declares the intervals its operands
   `"kind": "coin"`. So a noise derivation whose ports are coins and statics reads live verifier coins, passed through
   untouched, and constants only. (A one-Call harness that evaluates a Definition on arbitrary operands, `ports.harness`,
   builds a static port's operand from an input, and is never decoded.)
-- **`E_PORT_WORD`**: a port with `word` `t` reads a leaf of origin `gate` whose word type is not `t`; a composite's declared
-  `word` is not the word type its body returns there; or a composite other than the root returns a leaf with a word type it
-  does not declare, or a mixed one. So a runtime word is read only as the type its producer fixed. Only inputs, constants and
-  registered (pre-seed) words are reinterpreted, and a limb split of a runtime word is a Definition of its own that reads the
-  word as its producer's type.
+- **`E_PORT_WORD`**: a port with `word` `t` reads a leaf whose word type is not `t` when that leaf has one or its origin
+  includes `gate`; a composite's declared `word` is not the word type its body returns there; or a composite other than the
+  root returns a leaf with a word type it does not declare, or a mixed one. So every committed word has one type and none is
+  reinterpreted implicitly: a runtime word is read only as the type its producer fixed, a typed input only as its port's, and
+  only an untyped input or constant takes the type its reader's port declares. A limb split of a runtime word is a
+  registered `LimbSplit` Definition of its own, which reads the word as its producer's type and computes the limbs and the
+  carry into each limb past the first (the stacking property budgets those carries at its nodes). Below word types, a leaf
+  read at another width is the Builder's refusal (`E_REINTERPRET`, §4.4).
 - **`E_PORT_DECL`**: the `ports` are malformed or not canonical, or a transfer gives no interval of its return's width.
 
 `ports.facts(root)` gives every leaf's fact to the census and the stacking property. A Program in which no Definition declares
 ports is refused by none of the rules, and nothing is computed for it (`ports.check` returns None).
 
 Vectors: `verity/ml/circuits/tests/test_ports.py`: each rule's acceptance and refusals, built and decoded; a chain of exact
-steps declaring its words' intervals and a limb split's bound on them; tampered descriptors; the canonical form; and a pinned
+steps declaring its words' intervals and a limb split's bound on them; an explicit limb split with its carries; a word read at
+another width (`E_REINTERPRET`), built and in a tampered descriptor; tampered descriptors; the canonical form; and a pinned
 digest of one typed descriptor.

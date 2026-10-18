@@ -435,16 +435,56 @@ def test_a_harness_evaluates_a_definition_with_coin_and_static_ports():
 def test_a_runtime_word_is_read_only_as_its_producers_type():
     pun = comp("PortsTestPun", [("x", V32)], V8, lambda B, S, x: B.call(Limbs, B.call(Acc, x)))
     refused("E_PORT_WORD", lambda: Program(pun), "reads a s8x4 word, but its value is a runtime s32 word",
-            "split a runtime word into limbs with a registered Definition")
+            "Split a runtime word into limbs with a registered LimbSplit Definition")
     untyped = comp("PortsTestPunUntyped", [("x", V32)], V8, lambda B, S, x: B.call(Limbs, B.call(Add32, x, x)))
     refused("E_PORT_WORD", lambda: Program(untyped), "runtime untyped word")
     Program(comp("PortsTestSplit", [("x", V32)], V8, lambda B, S, x: B.call(LimbSplit, B.call(Acc, x))))
 
 
-def test_inputs_constants_and_registered_words_may_be_reinterpreted():
+def test_an_untyped_input_or_constant_takes_its_readers_type_and_a_typed_input_keeps_its_own():
     for reg in ((), ("x",)):
         prog = Program(comp("PortsTestReinterp", [("x", V32)], V8, lambda B, S, x: B.call(Limbs, x)), registered=reg)
         roundtrip(prog)
+    typed = Ports(params={"x": In(word="s32")})
+    for reg in ((), ("x",)):
+        roundtrip(Program(comp("PortsTestTypedIn", [("x", V32)], V8, lambda B, S, x: B.call(LimbSplit, x), ports=typed), registered=reg))
+        refused("E_PORT_WORD", lambda: Program(comp("PortsTestTypedPun", [("x", V32)], V8, lambda B, S, x: B.call(Limbs, x), ports=typed),
+                                               registered=reg),
+                "reads a s8x4 word, but its value is a s32 word", "a typed input's at its port")
+
+
+def _limbs(w: int) -> tuple[list[int], list[int]]:
+    """The balanced s8 limbs of a word read as s32 (low first, each in [-128, 127], the top one modulo 256), and the carry into
+    each limb past the first: 1 when the limb below it is negative."""
+    v, limbs = _s(w, 32), []
+    for _ in range(4):
+        limbs.append(((v + 128) & 0xFF) - 128)
+        v = (v - limbs[-1]) >> 8
+    return limbs, [int(x < 0) for x in limbs[:3]]
+
+
+LIMB_INDEX = [primitive(f"PortsTestLimbIndex{k}", 1, (), V8)(lambda k=k: k) for k in range(4)]
+SPLIT_PORTS = Ports(params={"w": In(word="s32"), "k": In(kind="static")})
+
+
+@primitive("PortsTestLimbAt", 1, (("w", V32), ("k", V8)), V8, ports=SPLIT_PORTS)
+def LimbAt(w, k):
+    """Limb k of an s32 word's balanced s8 decomposition."""
+    return _limbs(w)[0][k] & 0xFF
+
+
+@primitive("PortsTestCarryAt", 1, (("w", V32), ("k", V8)), Value(1), ports=SPLIT_PORTS)
+def CarryAt(w, k):
+    """The carry into limb k (k >= 1) of an s32 word's balanced s8 decomposition."""
+    return _limbs(w)[1][k - 1]
+
+
+#: an explicit limb split: it reads the word as its producer's type and computes four s8 limbs and the carry into each past the
+#: first (the stacking property budgets those carries at this node)
+LIMB_SPLIT = comp("PortsTestLimbSplitS32", [("w", V32)], TupleT(Array(4, V8), Array(3, Value(1))),
+                  lambda B, S, w: tuple_of(array_of([B.call(LimbAt, w, B.call(LIMB_INDEX[k])) for k in range(4)]),
+                                           array_of([B.call(CarryAt, w, B.call(LIMB_INDEX[k])) for k in range(1, 4)])),
+                  ports=Ports(params={"w": In(word="s32")}))
 
 
 @primitive("PortsTestId8", 1, (("x", V8),), V8)
@@ -461,6 +501,20 @@ def Lo8(w):
 def lanes(c: Coll, n: int = 32) -> Coll:
     """`n` references to the one leaf of `c`, typed as `n` 8-bit lanes."""
     return Coll(Array(n, V8), concat([c.refs] * n))
+
+
+def test_a_limb_split_is_a_definition_that_computes_the_limbs_and_their_carries():
+    use = comp("PortsTestLimbSplitUse", [("x", V32)], TupleT(Array(4, V8), Array(3, Value(1))),
+               lambda B, S, x: B.call(LIMB_SPLIT, B.call(Acc, x)))
+    roundtrip(Program(use))
+    for w in (0, 0x7F80FF01, 0x80000000, 0xFFFFFFFF, 0x12345678):
+        out = evaluate(bind(use), w)
+        limbs, carries = _limbs(w)
+        assert out == tuple(x & 0xFF for x in limbs) + tuple(carries)
+        assert sum(_s(x, 8) << (8 * k) for k, x in enumerate(out[:4])) % (1 << 32) == w
+    with pytest.raises(TypeError, match="E_REINTERPRET.*a runtime word is split into limbs only by a registered LimbSplit "
+                                        "Definition, which computes the limbs and their carries"):
+        Program(comp("PortsTestLimbPun", [("x", V32)], Array(4, V8), lambda B, S, x: lanes(B.call(Acc, x), 4)))
 
 
 # --- E_REINTERPRET: a leaf is read at the width it was committed with ---------------------------------------------------------

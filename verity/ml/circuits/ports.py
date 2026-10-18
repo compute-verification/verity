@@ -25,10 +25,12 @@ declares one, so an undeclared Definition's entry, id and digests are what they 
   else is refused (`E_PORT_KIND`), so a noise derivation whose parameters are coins reads coins and its statics only. A coin is
   never a registered input.
 * **Words.** `Out(word="s32")` fixes the type of each word its producer writes; `In(word="s8x4")` reads each word as that type.
-  A word computed at run time is read only as the type its producer fixed, and only inputs, constants and registered
-  (pre-seed) words may be read as another (`E_PORT_WORD`). Splitting a runtime word into limbs is a Definition of its own,
-  which reads the word as its producer's type. A composite keeps the type of each word it returns (it declares it) and never
-  fixes one.
+  A word has one type: a word computed at run time is read only as the type its producer fixed, a typed input (one whose port
+  declares a word) only as its port's, and only an untyped input or constant takes the type its reader declares
+  (`E_PORT_WORD`). Splitting a runtime word into limbs is a registered `LimbSplit` Definition of its own, which reads the word
+  as its producer's type and computes the limbs and their carries. A composite keeps the type of each word it returns (it
+  declares it) and never fixes one. Below the word types, every leaf is read at the width it was committed with
+  (`defs.Builder.finish`, `E_REINTERPRET`).
 
 Facts flow down every call and up through declarations. A parameter's facts, in a Definition's body, are the join over all its
 instances of its operands' facts, so a bound sees its operand's producer through any number of calls. A Definition's output
@@ -739,12 +741,13 @@ def _check_operand(at: Callable[[], str], pname: str, runs: Sequence[Run], F: Ru
             if p.kind == "static" and f.origin != _STATIC:
                 raise PortError("E_PORT_KIND", f"{at()} parameter {pname!r} leaf {a}: takes kind=static, a constant, but "
                                 f"reads {_origin(f)}")
-            if p.word is not None and f.word != p.word and "gate" in f.origin:
+            if p.word is not None and f.word != p.word and ("gate" in f.origin or f.word is not None):
                 got = "untyped" if f.word is None else "mixed-type" if f.word == MIXED else f"{f.word}"
                 raise PortError("E_PORT_WORD", f"{at()} parameter {pname!r} leaf {a}: reads a {p.word} word, but its value "
-                                f"is a runtime {got} word. A runtime word's type is fixed at its producer, and only inputs, "
-                                f"constants and registered (pre-seed) words are read as another; split a runtime word into "
-                                f"limbs with a registered Definition that reads it as its producer's type")
+                                f"is a {'runtime ' if 'gate' in f.origin else ''}{got} word. A word has one type: a runtime "
+                                f"word's is fixed at its producer and a typed input's at its port, and only an untyped input "
+                                f"or constant takes its reader's. Split a runtime word into limbs with a registered LimbSplit "
+                                f"Definition, which reads it as its producer's type and computes the limbs and their carries")
 
 
 def _check_ret(sp: Any, pt: PortTypes | None, R: Runs, root: bool) -> None:
