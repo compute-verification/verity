@@ -1,5 +1,5 @@
-"""The pieces of the remote audit's verifier in Lean (`remote-audit-difftest`) against the Python they port, each on drawn
-inputs that include what both sides must refuse: the codec's decode (`codec.decode`, under the seed's key, a bound key
+"""The Python of the remote audit's verifier held to the Lean's pieces (`remote-audit-difftest`, the definition), each on
+drawn inputs that include what both sides must refuse: the codec's decode (`codec.decode`, under the seed's key, a bound key
 and an append's coin), a plan (`receipts.Plan`: its length, digest and blocks) and its change (`Plan.changed`), a receipt
 (`receipts.receipter`, both kinds and both row counts), a frame-v3-sha512 opening (`verity.ml.commitments.verify_opening`
 over a range domain), a leaf's receipt (`receipts.leaf_receipt`), a window's draws (`Session.close`'s), and a

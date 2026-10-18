@@ -4,7 +4,7 @@ import RemoteAudit.Session
 /-!
 # The difftest's Lean half
 
-The functions `tests/` holds to `audit.py`, `receipts.py` and `codec.py` through `verity_difftest.Port`, over JSON (byte
+The functions `tests/` holds `audit.py`, `receipts.py` and `codec.py` to through `verity_difftest.Port`, over JSON (byte
 strings lowercase hex, indices integers): a whole session's events (`session`: every event's result, the outcome and
 the record), and the pieces a mismatch there would point to (the codec's decode, a plan, a receipt, a frame-v3-sha512
 opening, a leaf's receipt, a window's draws and a registration's digest). `remote-audit-difftest` serves them.
