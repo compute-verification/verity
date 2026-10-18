@@ -2,6 +2,7 @@
 word for word on the CPU, and its primitives at their edges."""
 from __future__ import annotations
 
+import json
 import math
 import struct
 from types import SimpleNamespace
@@ -77,6 +78,125 @@ def test_the_replay_row_quantizer_is_the_definition_and_the_served_quantizer(K):
     for i in (0, 5, 15, 16, 17, 18) if K == 4096 else range(x.shape[0]):
         assert list(evaluate(defn, _bf16(x[i]))) == codes[i].tolist() + [int(s[i])], i
     assert rows.ROWS[Q.FAMILY].returns == ("0", "1") and Q.FAMILY in rows.EVALUATORS
+
+
+def _u8(t: torch.Tensor) -> np.ndarray:
+    return np.asarray(_s8(t), dtype=np.uint8)
+
+
+def _w32(t: torch.Tensor) -> np.ndarray:
+    return np.asarray(_f32(t), dtype=np.uint32)
+
+
+def _w16(t: torch.Tensor) -> np.ndarray:
+    return np.asarray(_bf16(t), dtype=np.uint16)
+
+
+@pytest.mark.parametrize("K,N,seed", [(64, 8, 0), (32, 3, 1), (4096, 40, 2)])
+def test_the_replay_linear_is_the_definition_and_the_served_linear(K, N, seed):
+    """`kernels.int8_rows.scaled_mm` (the replay of `ScaledMmS8_v1`) word for word against `engine.int8_exact.plain_linear` on
+    quantized rows (a zero row among them) and against the Definition, there and on codes the quantizer never makes (-128),
+    with DOT spelt as the spec text, a bare id and the bound primitive; another DOT is declined by name."""
+    from verity.ml.circuits.ops import gemm
+    from verity_vllm.program.kernels import int8_rows as Q
+    from verity_vllm.program.kernels import rows
+    from verity_vllm.program.kernels.kernel_registry import Declined
+
+    g = torch.Generator().manual_seed(seed)
+    x = _rows(g, 3, K)
+    x[0, :] = 0
+    w = torch.randint(-127, 128, (N, K), generator=g, dtype=torch.int8)
+    sw = (torch.rand(N, generator=g) * 0.01 + 1e-4).float()
+    xq, sa = E.quantize_rows(x)
+    y = E.plain_linear(x, w, sw)
+    defn = bind(gemm.ScaledMmS8, K=K, N=N, **gemm.GEMM_SM120_S8)
+    spellings = ['{"fn":"BlackwellS8ImmaDot32_v1"}', "BlackwellS8ImmaDot32_v1", gemm.GEMM_SM120_S8["DOT"]]
+    wild = torch.randint(-128, 128, (K,), generator=g, dtype=torch.int8)
+    for i, dot in zip(range(3), spellings):
+        st = {"K": K, "N": N, "DOT": dot}
+        got = Q.scaled_mm(st, [_u8(xq[i]), _w32(sa[i:i + 1]), _u8(w), _w32(sw)])["0"]
+        assert got.tolist() == _bf16(y[i]), i
+        if K <= 64:
+            assert list(evaluate(defn, _s8(xq[i]), _f32(sa[i:i + 1])[0], _s8(w), _f32(sw))) == got.tolist()
+            wg = Q.scaled_mm(st, [_u8(wild), _w32(sa[i:i + 1]), _u8(w), _w32(sw)])["0"]
+            assert list(evaluate(defn, _s8(wild), _f32(sa[i:i + 1])[0], _s8(w), _f32(sw))) == wg.tolist()
+    with pytest.raises(Declined, match="BlackwellU8S8ImmaDot32_v1"):
+        Q.scaled_mm({"K": K, "N": N, "DOT": "BlackwellU8S8ImmaDot32_v1"}, [_u8(xq[0]), _w32(sa[:1]), _u8(w), _w32(sw)])
+    assert rows.ROWS[Q.SCALED_MM].returns == ("0",) and Q.SCALED_MM in rows.EVALUATORS
+
+
+@pytest.mark.parametrize("Y,sx,sw", [(2925, 0x3D3C0A61, 0x3B6EC803), (1868, 0x3D1C2BBD, 0x3C23183A), (130, 0x3D249B95, 0x3B464D31),
+                                     (3501, 0x3CF55E64, 0x3C1A1B2E)])
+def test_the_replay_linear_scales_by_the_token_first(Y, sx, sw):
+    """Rows whose bf16 word tells the epilogue's order apart (searched: about 4 in 10^6 random ones do): the replay's word is the
+    Definition's, (Y sx) sw, and not (Y sw) sx."""
+    from verity.ml.circuits.ops import gemm
+    from verity_vllm.program.kernels import derived_rows as D
+    from verity_vllm.program.kernels import int8_rows as Q
+
+    x, w = [1] * 32, [127] * (Y // 127) + [Y % 127] + [0] * (31 - Y // 127)
+    got = Q.scaled_mm({"K": 32, "N": 1, "DOT": "BlackwellS8ImmaDot32_v1"}, [np.asarray(x, np.uint8), np.asarray([sx], np.uint32),
+                                                                             np.asarray(w, np.uint8), np.asarray([sw], np.uint32)])["0"]
+    y = np.asarray([Y], np.float32).view(np.uint32)
+    other = D.f2fp_bf16(D.mul_rn(D.mul_rn(y, np.asarray([sw], np.uint32)), np.asarray([sx], np.uint32)))
+    assert got.tolist() != other.tolist()
+    assert list(evaluate(bind(gemm.ScaledMmS8, K=32, N=1, **gemm.GEMM_SM120_S8), x, sx, w, [sw])) == got.tolist()
+
+
+def test_the_replay_s8_chain_clamps_each_step():
+    """`s8_chain` is the `BlackwellS8ImmaDot32_v1` chain step for step where a step clamps: 4,097 steps of 32 x (-128)^2 past
+    2^31 - 1, then 64 of -(128 x 127) back down, one long row against its negation."""
+    from verity.ml.circuits.ops import prims as CP
+    from verity_vllm.program.kernels import int8_rows as Q
+
+    K = (4097 + 64) * 32
+    a = np.full(K, -128, dtype=np.int64)
+    b = np.concatenate([np.full(4097 * 32, -128), np.full(64 * 32, 127)]).astype(np.int64)
+    got = Q.s8_chain(a, np.stack([b, -b.clip(-127)]))
+    for row, want in zip((b, -b.clip(-127)), got):
+        acc = 0
+        for s in range(K // 32):
+            acc = CP.BlackwellS8ImmaDot32.evaluate(acc, *(a[32 * s:32 * s + 32] & 0xFF).tolist(), *(row[32 * s:32 * s + 32] & 0xFF).tolist())
+        assert (acc - (1 << 32) if acc >> 31 else acc) == int(want)
+    assert int(got[0]) == Q.S32_MAX - 64 * 32 * 128 * 127
+
+
+@pytest.mark.parametrize("n,s,h,g_heads,spread,ks_scale", [(5, 5, 2, 1, 4.0, 1.0), (1, 40, 4, 2, 4.0, 1.0),
+                                                           (3, 33, 2, 2, 8.0, 0.25), (2, 6, 2, 1, 1.0, 40.0)])
+def test_the_replay_attention_is_the_definition_and_the_served_attention(n, s, h, g_heads, spread, ks_scale):
+    """`kernels.int8_rows.kv_quant` and `lut_attention_row` (the replay of `Int8KvQuant_v1` and `Int8LutAttentionRow_v1`) word for
+    word against `engine.int8_attention.kv_quant` / `window_attention` on every KV head and (row, head), and against the Definitions
+    on one KV head and the last row's heads: prefill and decode rows, a window past one k step, K clamped by a small scale and A
+    saturated by a large one, SCALE spelt as a float, the spec text's f64 literal and a decimal string."""
+    from verity_vllm.program.kernels import int8_rows as Q
+    from verity_vllm.program.kernels import rows
+
+    g = torch.Generator().manual_seed(n * 1000 + s)
+    d, scale = 32, 32 ** -0.5
+    q, k, v = _rows(g, n, h, d, spread=spread), _rows(g, s, g_heads, d, spread=spread), _rows(g, s, g_heads, d, spread=spread)
+    ks = (k.float().abs().amax(dim=(0, 2)) / 127 * ks_scale).float()
+    kq, vq, sv, v0 = IA.kv_quant(k, v, ks)
+    want = IA.window_attention(q, k, v, ks, scale)
+    for gi in range(g_heads):
+        got = Q.kv_quant({"S": s, "D": d}, [_w16(k[:, gi]), _w16(v[:, gi]), _w32(ks[gi:gi + 1])])
+        assert [got[m].tolist() for m in "0123"] == [_s8(kq[gi]), _s8(vq[gi]), _f32(sv[gi]), _f32(v0[gi])], gi
+    flat = Q.kv_quant({"S": s, "D": d}, [_w16(k[:, 0]), _w16(v[:, 0]), _w32(ks[:1])])
+    assert list(evaluate(bind(X.Int8KvQuant, S=s, D=d), _bf16(k[:, 0]), _bf16(v[:, 0]), _f32(ks[:1])[0])) == \
+        np.concatenate([flat[m].astype(np.uint64) for m in "0123"]).tolist()
+    rep = h // g_heads
+    spellings = (scale, json.dumps({"f64": scale.hex()}), repr(scale))
+    for i in range(n):
+        p = s - n + i + 1
+        for hd in range(h):
+            gi = hd // rep
+            ops = [_w16(q[i, hd]), _u8(kq[gi, :p]), _w32(ks[gi:gi + 1]), _u8(vq[gi, :p]), _w32(sv[gi]), _w32(v0[gi])]
+            got = Q.lut_attention_row({"D": d, "S": p, "SCALE": spellings[(i + hd) % 3]}, ops)["0"]
+            assert got.tolist() == _bf16(want[i, hd]), (i, hd)
+            if i == n - 1:
+                row = bind(X.Int8LutAttentionRow, D=d, S=p, SCALE=scale)
+                assert list(evaluate(row, *(o.tolist() if o.size > 1 else int(o[0]) for o in ops))) == got.tolist(), (i, hd)
+    assert {f: rows.ROWS[f].returns for f in (Q.KV_QUANT, Q.ATTENTION_ROW)} == {Q.KV_QUANT: ("0", "1", "2", "3"), Q.ATTENTION_ROW: ("0",)}
+    assert {Q.KV_QUANT, Q.ATTENTION_ROW} <= set(rows.EVALUATORS)
 
 
 @pytest.mark.parametrize("n,s,h,g_heads,spread,ks_scale", [(5, 5, 2, 1, 4.0, 1.0), (1, 40, 4, 2, 4.0, 1.0),
