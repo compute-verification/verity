@@ -1,3 +1,4 @@
+import Proofs.Flock.Claims.KS.ZkDecJ
 import Proofs.Flock.Claims.Recursion.DeployPremises
 import Proofs.Flock.Claims.Scope.Tables
 
@@ -25,16 +26,16 @@ named `Prop`:
   at the deployed `Readable.relation` (`relS_relation`).
 
 `LinksHonest` is the interface to the checks that bind `rec-top-L<l>` rows and the link points to the inner transcript
-(`RecVStar.checkLinkRounds`, `RecVStar.checkTopRows`, `RecCoins.checkLink` at `RecVStar.innerLink`, on
-`cursor/flock-vstar-bind-link-c7a9`), passed in as `linkOk`: they pass at the coin server's transcript of the honest
-inner rounds and the record the honest prover staged. A staged statement holds exactly that transcript
-(`transcript_honest`), so the checks pass at the statement's own inputs.
+(`RecVStar.checkLinkRounds`, `RecVStar.checkTopRows`, `RecCoins.checkLink` at `RecVStar.innerLink`), passed in as
+`linkOk`: they pass at the coin server's transcript of the honest inner rounds and the record the honest prover staged.
+A staged statement holds exactly that transcript (`transcript_honest`), so the checks pass at the statement's own
+inputs.
 
 The inner verifier is arbitrary here. At the deployed plain inner verifier, at SHA-512, `InnerAccepts` holds only at an
-inner statement that verifier admits (`InnerAdmitted`, `innerAdmitted_of_accepts`). A recursive session's inner
-statement has plain SHA-512 leaves, which `verify` admits without `--zk` on `cursor/flock-plain-leaves-sound-c7a9`
-(`ProvedScope.leafOk`); before that change its scope check refuses them, so `InnerAccepts` never holds there and the
-theorem says nothing about such a statement.
+inner statement that verifier admits (`InnerAdmitted`, `innerAdmitted_of_accepts`): its scope check passes and it
+carries a unit draw. A recursive session's inner statement has plain SHA-512 leaves, which the scope check admits
+without `--zk` only with `ProvedScope.leafOk` in its rules; where the scope check or the draw fails, `InnerAccepts`
+never holds and the theorem says nothing about the statement.
 `InnerAccepts` is a hypothesis about the coins, not a consequence of the relation: at coins in the inner completeness
 error the honest inner proof is refused, and the V\* statements staged there need not have a witness.
 -/
@@ -112,20 +113,22 @@ def LinksHonest (linkOk : RecIns → ByteArray → ByteArray → Array Stmt → 
 
 /-! ## The inner statement an honest inner run is accepted at -/
 
-/-- **The deployed plain verifier admits the inner statement**: it sets up, and `verify`'s scope check
-(`ProvedScope.check`) passes on it. At a recursive session's inner statement, whose leaves are plain SHA-512, this needs
-`ProvedScope.leafOk` in `statementRules`; without it, the check's rules put `hm96-sha512/v1` leaves on every statement
+/-- **The deployed plain verifier admits the inner statement**: it sets up, `verify`'s scope check
+(`ProvedScope.check`) passes on it, and it carries a unit draw (`ProvedScope.drawLaw` refuses a session without one).
+At a recursive session's inner statement, whose leaves are plain SHA-512, the scope check needs `ProvedScope.leafOk` in
+`statementRules`; without it, the check's rules put `hm96-sha512/v1` leaves on every statement
 (`Readable.check_ok_iff`, `Readable.Rules`). -/
 def InnerAdmitted (x : Msg) : Prop :=
-  ∃ ins spec sts, FlockDeploy.setupOf false (xIOf x) = some (ins, spec, sts) ∧ ins.read.check = .ok ()
+  ∃ ins spec sts, FlockDeploy.setupOf false (xIOf x) = some (ins, spec, sts) ∧ ins.read.check = .ok () ∧
+    ∃ d, ins.read.draw = some d
 
-/-- **An honest inner run the deployed plain verifier accepts is of a statement it admits** (`acc_check`), at
-SHA-512: `InnerAccepts` there holds only where `InnerAdmitted` does. -/
+/-- **An honest inner run the deployed plain verifier accepts is of a statement it admits** (`acc_check`,
+`acc_draw`), at SHA-512: `InnerAccepts` there holds only where `InnerAdmitted` does. -/
 theorem innerAdmitted_of_accepts {x : Msg} {cs : List Coin} {v : List (Msg × Msg)}
     (h : InnerAccepts FlockDeploy.sha512 (FlockDeploy.V false) x cs v) : InnerAdmitted x := by
   have hacc : ¬ Claims.Flock.NoAcc FlockDeploy.sha512 (FlockDeploy.V false) (xIOf x) := fun hn => hn _ _ _ _ h
   obtain ⟨ins, spec, sts, -, -, hs, -, hc⟩ := FlockDeploy.KS.acc_check hacc
-  exact ⟨ins, spec, sts, hs, hc⟩
+  exact ⟨ins, spec, sts, hs, hc, FlockDeploy.KS.acc_draw hacc hs⟩
 
 /-! ## The code's side -/
 
