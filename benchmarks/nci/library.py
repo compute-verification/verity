@@ -60,6 +60,9 @@ FAMILIES = frozenset({"reference", "architecture", "optimizer", "data", "objecti
 #: ``attacker``: state at the cheapest rate an attacker could use (weights at the retained-quality rate, no optimizer
 #: state); ``as-published``: state at the precision the method is published with (weights and optimizer moments).
 CONVENTIONS = frozenset({"attacker", "as-published"})
+#: the full-parameter recipe a strategy must beat: ``multiplier_needed`` is the multiplier at which the strategy's
+#: construction is as efficient as this one's
+REFERENCE = "backprop"
 
 
 def load_json(name: str) -> list[dict]:
@@ -146,8 +149,10 @@ def query(alg_id: str, model_id: str, policy_id: str, data: str = "novel", conve
     lo, why = lower(alg, model, policy, data, convention)
     total = sum(c["reads"].values())
     m = (alg.get("multiplier") or {}).get("value")
+    ref = construct(profile(by_id("algorithms")[REFERENCE], model, policy, data, convention), policy["K"], policy["Gamma"])
     return {"algorithm": alg_id, "model": model_id, "policy": policy_id, "data": data, "convention": convention,
-            "multiplier": m, "efficiency_achievable": m / c["rho"] if m else None,
+            "multiplier": m, "multiplier_needed": c["rho"] / ref["rho"],
+            "efficiency_achievable": m / c["rho"] if m else None,
             "efficiency_ceiling": m / lo if m else None, "lower": lo, "lower_basis": why,
             "upper": c["rho"], "slices": 1 / c["phi"], "tokens_per_block": c["tokens"],
             "read_shares": {k: v / total for k, v in c["reads"].items()}, "reads": c["reads"], "work": c["work"]}
@@ -229,10 +234,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "query":
         print(json.dumps(query(args.algorithm, args.model, args.policy, args.data, args.convention), indent=1))
     elif args.cmd == "table":
-        print("m: measured multiplier over the reference recipe; efficiency = m / slowdown (achievable at the "
+        print("m: measured multiplier over the reference recipe; m need: the multiplier at which the algorithm's "
+              "construction matches full-parameter backprop's; efficiency = m / slowdown (achievable at the "
               "construction, ceiling at the lower bound)")
-        print(f"{'algorithm':32} {'conv':>4} {'m':>6} {'lower':>8} {'upper':>9} {'eff. achv':>10} {'eff. ceil':>10}  "
-              "reads: state / activations / data")
+        print(f"{'algorithm':32} {'conv':>4} {'m':>6} {'m need':>8} {'lower':>8} {'upper':>9} {'eff. achv':>10} "
+              f"{'eff. ceil':>10}  reads: state / activations / data")
         for a in load_json("algorithms"):
             try:
                 r = query(a["id"], args.model, args.policy, args.data, args.convention)
@@ -242,7 +248,8 @@ def main(argv: list[str] | None = None) -> int:
             s = r["read_shares"]
             m = r["multiplier"]
             eff = (lambda x: _fmt(x) if x else "-")
-            print(f"{a['id']:32} {a['convention'][:4]:>4} {(_fmt(m) if m else '-'):>6} {_fmt(r['lower']):>8} "
+            print(f"{a['id']:32} {a['convention'][:4]:>4} {(_fmt(m) if m else '-'):>6} {_fmt(r['multiplier_needed']):>8} "
+                  f"{_fmt(r['lower']):>8} "
                   f"{_fmt(r['upper']):>9} {eff(r['efficiency_achievable']):>10} {eff(r['efficiency_ceiling']):>10}  "
                   f"{s['state']:6.1%} / {s['activations']:6.1%} / {s['data']:6.1%}")
     else:

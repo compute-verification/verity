@@ -46,3 +46,13 @@ def test_training_data_is_everything_when_the_model_fits_in_a_block():
 def test_committed_data_silences_the_theorem():
     assert L.query("backprop", "kimi-k2", "kimi-k2-1m-raw", "committed")["lower"] == 1.0
     assert L.query("backprop", "kimi-k2", "kimi-k2-1m-raw", "novel")["lower"] > 1e4
+
+
+def test_multiplier_needed_is_one_for_the_reference_and_positive_for_all():
+    q = L.query(L.REFERENCE, "kimi-k2", "kimi-k2-1m-raw")
+    assert q["multiplier_needed"] == pytest.approx(1.0)
+    for a in L.load_json("algorithms"):
+        try:
+            assert L.query(a["id"], "kimi-k2", "kimi-k2-1m-raw")["multiplier_needed"] > 0
+        except ValueError:
+            pass
