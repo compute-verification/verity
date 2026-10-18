@@ -327,7 +327,10 @@ def test_noise_cancelling_program_is_refused():
                    ports=Ports(params={"coin": In(kind="coin")}))
     with pytest.raises(PortError) as e:
         Program(cancel)
-    assert e.value.code == "E_PORT_KIND" and "reads a computed value" in str(e.value)
+    # COIN-RULES' own check raises E_COIN_FLOW before the port-kind rule once it lands; the cancelled coin is refused either way.
+    assert e.value.code in ("E_PORT_KIND", "E_COIN_FLOW")
+    if e.value.code == "E_PORT_KIND":
+        assert "reads a computed value" in str(e.value)
 
 
 def test_reused_receipt_sink_is_refused():
