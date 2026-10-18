@@ -615,6 +615,9 @@ lemma units_of_budget_none (C : Dag ι) (i : ℕ) (g : Gate ι) (hg : C[i]? = so
   simp only [units, hg]
   split <;> simp_all [Op.budget]
 
+/-- A gather's outcomes, its column's `V` words and the `0` outside it, fit its index bits. -/
+lemma indexBits_outcomes (g : Gate ι) : g.args.length ≤ 2 ^ g.indexBits := Nat.le_pow_clog (by norm_num) _
+
 /-- Summing the census's units over the windows and classes: each gate's units are in its window's census, under its
 class. -/
 lemma budgeted_eq (C : Dag ι) (A : Audit) (h : ∀ g ∈ C, A.win g.step < A.windows) :
