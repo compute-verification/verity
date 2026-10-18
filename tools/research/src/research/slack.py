@@ -29,7 +29,7 @@ Notes are records, never messages.
                           --default V --deadline '3:00 PM'|ISO --link URL [--wait]     # a card in #ask-daniel; prints `<id> <ts> <permalink>`
   research msg ask-daniel status ID [--wait] [--json] | resolve ID --choice V [--note T]
 
-`ask`, `announce`, `reply`, `done` and `decline` are the older spellings of `send` and `close`, kept while callers move.
+`ask`, `announce` and `reply` are the older spellings of `send`, kept while callers move.
 
 #ask-daniel's cards go through the site's route (ASK_DANIEL, Cursor OIDC with the route as audience), not the Slack API; a route
 that refuses the card's fields (HTTP 400) gets the old Approve/Deny shape `{title, text, link, requested_by}` instead.
