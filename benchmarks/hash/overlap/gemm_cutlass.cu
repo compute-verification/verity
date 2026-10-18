@@ -107,7 +107,7 @@ std::vector<ExtGemm> make(int m, int n, int k) {
          (int)Kernel::MaxThreadsPerBlock, a.numRegs, (int)Kernel::SharedStorageSize, a.localSizeBytes);
   if (Kernel::SharedStorageSize >= (48 << 10))
     cudaFuncSetAttribute(cutlass::device_kernel<Kernel>, cudaFuncAttributeMaxDynamicSharedMemorySize, (int)Kernel::SharedStorageSize);
-  return {ExtGemm{OV_NAME, new St{m, n, k, {}}, run}};
+  return {ExtGemm{OV_NAME, new St{m, n, k, {}}, run, (int)Kernel::MaxThreadsPerBlock, a.numRegs, (int)Kernel::SharedStorageSize}};
 }
 const ExtReg reg(make);
 }  // namespace OV_ID

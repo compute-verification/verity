@@ -12,6 +12,7 @@ struct ExtGemm {
   void* state;
   // 0 on success
   int (*run)(void* state, const __nv_bfloat16* X, const __nv_bfloat16* W, const __nv_bfloat16* R, __nv_bfloat16* Y, cudaStream_t st);
+  int threads = 0, regs = 0, smem = 0;   // its kernel's CTA: threads, registers a thread, shared memory bytes
 };
 using ExtFactory = std::vector<ExtGemm> (*)(int m, int n, int k);
 std::vector<ExtFactory>& ext_registry();

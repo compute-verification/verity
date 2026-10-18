@@ -59,7 +59,7 @@ gpu-lease 1 --wait --max-min 10 ${LEASE_ARGS:-} -- bash -c '
     compute-sanitizer --tool memcheck --show-backtrace device "$W/overlap" dump "$W/p" "$W/dumps-san" > "$O/sanitizer.log" 2>&1
     echo "sanitizer rc $?" >> "$O/rc.txt"
   fi'
-python3 benchmarks/pouw/commit_gpu/reference.py verify "$W"/dumps/*-d* > "$O/verify.jsonl" 2> "$O/verify.err"
+python3 benchmarks/pouw/commit_gpu/reference.py verify "$W"/dumps/*-* > "$O/verify.jsonl" 2> "$O/verify.err"
 v=$?
 echo "verify rc $v" >> "$O/rc.txt"
 tail -1 "$O/verify.jsonl"

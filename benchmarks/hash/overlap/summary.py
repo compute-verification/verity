@@ -64,6 +64,23 @@ def main(o: str) -> int:
             print(f"| {r['chain_summary']} | {r['variant']} | {r['lt_ms']:.4f} | {r['gemm_ms']:.4f} | {r['h1_ms']:.4f} | {r['hN_ms']:.4f} | "
                   f"{r['seq_ms']:.4f} | {r['par1_ms']:.4f} | {r['parN_ms']:.4f} | {100 * r['hidden_vs_own_gemm']:.1f}% | "
                   f"{100 * r['hidden_vs_lt']:.1f}% | {r['net_vs_lt_plus_hash']:.3f} | {gbps:,.0f} |")
+    for r in b:
+        if "server_fits" in r:
+            print(f"server ({r['server_regs']} regs) fits beside {r['server_fits']}: {r['fits']}")
+        if "server_gate" in r:
+            print(f"server gate {r['server_gate']}: {r['jobs']} jobs, {r['bad_words']} bad words, ok {r['ok']}")
+    sv = [r for r in b if "srv_summary" in r]
+    if sv:
+        print("\nThe hash server (a persistent CTA an SM) beside the chain's GEMMs, per layer; hidden and net against cuBLASLt alone plus "
+              "the better separate pass:\n")
+        print("| GEMM | cuBLASLt ms | GEMM ms | server alone ms | separate pass ms | GEMM + server ms | hidden (own GEMM) | hidden (vs cuBLASLt) | "
+              "par / (cuBLASLt + separate) | exposed GB/s |\n|---|---|---|---|---|---|---|---|---|---|")
+        for r in sv:
+            exp = r["exposed_hash_ms"]
+            gbps = r["bytes_per_layer"] / (exp * 1e-3) / 1e9 if exp > 0 else float("inf")
+            print(f"| {r['srv_summary']} | {r['lt_ms']:.4f} | {r['gemm_ms']:.4f} | {r['srv_alone_ms']:.4f} | {r['sep_ms']:.4f} ({r['sep']}) | "
+                  f"{r['par_ms']:.4f} | {100 * r['hidden_vs_own_gemm']:.1f}% | {100 * r['hidden_vs_lt']:.1f}% | "
+                  f"{r['net_vs_lt_plus_hash']:.3f} | {gbps:,.0f} |")
     ng = [r for r in b if "nongemm" in r]
     if ng:
         print("\nNon-GEMM stand-in (R layers of 3 fused_add_rms_norm + 1 silu(g) u on A) beside the separate pass hN:\n")
