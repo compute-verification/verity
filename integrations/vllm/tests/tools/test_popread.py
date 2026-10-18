@@ -105,8 +105,9 @@ def test_the_chronology_marks_steps_from_one_past_the_lag_as_eos_keyed(tmp_path)
     keyed = {f["family"]: f["eos_keyed"]["calls"] for f in r["families"]}
     assert keyed == {"I32Add_v1": 0, "GatherBf16x4_v1": 0, "Bf16Add_v1": 1}
     assert r["eos"] == {"lag": 1, "keyed_from_step": 2, "counted": True, "applied": True, "why_not": None}
+    one = {"calls": 1, "gates": 1, "units": 0}
     assert [(b["s"], b["calls"], b["families"]) for b in r["by_step"]] == [
-        (0, 1, {"I32Add_v1": 1}), (1, 1, {"GatherBf16x4_v1": 1}), (2, 1, {"Bf16Add_v1": 1})]
+        (0, 1, {"I32Add_v1": one}), (1, 1, {"GatherBf16x4_v1": one}), (2, 1, {"Bf16Add_v1": one})]
 
     ignored = PR.analyze_descriptor(desc, workload_program={"lag": {"value": 1}, "chronology": chrono,
                                                             "stop_rule": {"ignore_eos": True}})
