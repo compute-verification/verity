@@ -14,7 +14,9 @@ from typing import Any
 
 PACKAGE = Path(__file__).resolve().parent / "lean"
 EXE = "remote-audit-verdict"
-BUILD_LOCK = PACKAGE / ".lake" / "verdict-build.lock"
+#: the difftest harness's (`verity_difftest.BUILD_LOCK`): Lake builds the path requires this package shares with every port
+#: in place, so a build here and a port's build in another suite must not run at once
+BUILD_LOCK = Path(__file__).resolve().parents[2] / "difftest" / "lean" / ".lake" / "harness-build.lock"
 
 
 class LeanError(RuntimeError):

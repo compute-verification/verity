@@ -5,14 +5,23 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # The references: the audit, its codec, receipts and coins, on the commitments, the randomness and the profile, and the
-# plan's numpy checks in the kernels; the difftest's Python half; and what `lake` builds: this package and, through its
-# path requires, C-Flock's verifier's Lean, core's randomness and the difftest server.
+# plan's numpy checks in the kernels; the post-seed verdict's mirror (`ml.circuits.post_seed` on `stacking`) and the
+# Programs it is held to the Lean on: `test_stacking.py`'s (in `verity/ml/circuits`) and the property red team's cases, on
+# PoUW's words and vLLM's program registry (as `benchmarks/property_redteam` reads them); the recorded session of
+# `test_appends.py`; the difftest's Python half; and what `lake` builds: this package and, through its path requires,
+# C-Flock's verifier's Lean, core's randomness and the difftest server.
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
           "verity/core/protocols/profile.py", "verity/core/protocols/remote_bandwidth/__init__.py",
           "verity/core/protocols/remote_bandwidth/audit.py", "verity/core/protocols/remote_bandwidth/codec.py",
           "verity/core/protocols/remote_bandwidth/coins.py", "verity/core/protocols/remote_bandwidth/receipts.py",
+          "verity/core/protocols/remote_bandwidth/lean_verdict.py",
+          "verity/core/protocols/remote_bandwidth/tests/test_appends.py",
           "verity/ml/__init__.py", "verity/ml/circuits", "verity/ml/commitments", "verity/ml/crypto", "verity/ml/kernels",
           "verity/ml/randomness", "verity/core/difftest/python",
+          "verity/core/protocols/pouw/__init__.py", "verity/core/protocols/pouw/circuit",
+          "integrations/vllm/verity_vllm/__init__.py", "integrations/vllm/verity_vllm/program/__init__.py",
+          "integrations/vllm/verity_vllm/program/registry", "integrations/vllm/verity_vllm/program/kernels",
+          "benchmarks/property_redteam/cases.py",
           "verity/core/service/flock/Flock", "verity/core/service/flock/lakefile.toml",
           "verity/core/service/flock/lake-manifest.json", "verity/core/service/flock/lean-toolchain",
           "verity/core/primitives/randomness", "verity/core/difftest/lean"]
