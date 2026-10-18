@@ -23,7 +23,8 @@ Staging is the collector's default: a ring of 256 MiB device windows, bounded (a
 ``VERITY_LEARN_HOST_BUDGET_MB`` to host to re-hash), and tree levels only when values are kept. The harness's gate and warm-up
 runs are learn-only passes: a new-plan step over that budget is discarded, which leaves the run without a root. The custom gate
 accepts such a run only as a declared warm-up, named by its phase and sweep point in the verdict's ``warmups``; a measured run
-without a root fails it.
+without a root fails it. The harness reads the gate before timing (``arm``) and again after the warm-up and timed runs
+(``arm-closing``), so the warm-ups and measured runs are in the verdict too.
 """
 from __future__ import annotations
 

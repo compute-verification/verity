@@ -33,8 +33,8 @@ from verity_bench.vllm.table import render
 
 
 class FakeEngine:
-    def __init__(self, arm, events, *, gate_ok=True, bad_tokens=False, kv_tokens=None):
-        self.arm, self.events, self.gate_ok, self.bad_tokens = arm, events, gate_ok, bad_tokens
+    def __init__(self, arm, events, *, gate_ok=True, bad_tokens=False, kv_tokens=None, timed_ok=True):
+        self.arm, self.events, self.gate_ok, self.bad_tokens, self.timed_ok = arm, events, gate_ok, bad_tokens, timed_ok
         self.identity = {
             "vllm_version": "0.fake+gd9105ea80",
             "kernel_digest": f"digest-{arm.id}",
@@ -49,7 +49,8 @@ class FakeEngine:
 
     def custom_gate(self):
         self.events.append(("custom-gate", self.arm.id))
-        return {"passed": self.gate_ok, "provided": True}
+        timed = any(e[:2] == ("measure", self.arm.id) for e in self.events)
+        return {"passed": self.gate_ok and (self.timed_ok or not timed), "provided": True}
 
     def warmup(self, point):
         self.events.append(("warmup", self.arm.id, point.id))
@@ -74,13 +75,14 @@ class FakeEngine:
 
 
 class FakeFactory:
-    def __init__(self, *, resident_failure=None, gate_ok=True, bad_tokens=None, kv_tokens=None):
+    def __init__(self, *, resident_failure=None, gate_ok=True, bad_tokens=None, kv_tokens=None, timed_ok=True):
         self.events = []
         self.resident_failure = resident_failure
         self.failed = False
         self.gate_ok = gate_ok
         self.bad_tokens = bad_tokens
         self.kv_tokens = kv_tokens or {}
+        self.timed_ok = timed_ok
 
     def create(self, arm, preset, *, resident):
         self.events.append(("create", arm.id, resident))
@@ -89,7 +91,7 @@ class FakeFactory:
             raise ResidentCapacityError(f"{arm.id} does not fit")
         return FakeEngine(arm, self.events, gate_ok=self.gate_ok,
                           bad_tokens=arm.id == self.bad_tokens,
-                          kv_tokens=self.kv_tokens.get(arm.id))
+                          kv_tokens=self.kv_tokens.get(arm.id), timed_ok=self.timed_ok)
 
 
 def inputs():
@@ -335,6 +337,28 @@ def test_a_failed_gate_records_the_failure_and_stops_before_timing(factory):
     assert any(not g["passed"] for g in doc["gates"])
     assert doc["points"] == []
     assert not any(e[0] == "measure" for e in factory.events)
+    validate(doc)
+
+
+@pytest.mark.parametrize("resident_failure", [None, "candidate"])
+def test_an_arm_gate_is_read_again_after_its_timed_runs_and_its_failure_drops_the_points(resident_failure):
+    """An arm judges its warm-up and timed runs only once they have run: served_commit's gate names a rootless warm-up
+    in its ``warmups`` and fails a measured run without a root, so the verdict must hold what the gate says after them."""
+
+    preset, points, arms = inputs()
+    doc = run_benchmark(preset, arms, points, sweep="quick", reps=2, factory=FakeFactory(), git_commit="abc")
+    closing = [g for g in doc["gates"] if g["kind"] == "arm-closing"]
+    assert all(g["passed"] for g in closing) and doc["points"]
+    assert [g["arm"] for g in closing] == ["stock-fp8", "candidate"]
+
+    factory = FakeFactory(timed_ok=False, resident_failure=resident_failure)
+    doc = run_benchmark(preset, arms, points, sweep="quick", reps=2, factory=factory, git_commit="abc")
+    assert all(g["passed"] for g in doc["gates"] if g["kind"] == "arm")
+    closing = [g for g in doc["gates"] if g["kind"] == "arm-closing"]
+    assert closing and not any(g["passed"] for g in closing)
+    if resident_failure:
+        assert sorted((g["arm"], g["cycle"]) for g in closing) == [(a.id, c) for a in sorted(arms, key=lambda a: a.id) for c in (0, 1)]
+    assert doc["points"] == []
     validate(doc)
 
 

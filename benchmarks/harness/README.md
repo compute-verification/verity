@@ -41,7 +41,10 @@ graph engine replays decode-only CUDA graphs at `capture_sizes`.
      `resident_kv_cache_memory_bytes` and `block_kv_cache_memory_bytes`.
    - `arm`: the arm's own gate, when it provides one.
 
-   One failed gate times nothing: the result keeps its gates and has no points.
+   One failed gate times nothing: the result keeps its gates and has no points. After an engine's warm-up and timed runs,
+   before it closes, the runner reads the arm's own gate again (`arm-closing`; in `blocks`, one per engine lifetime, with
+   its `cycle`), so an arm that judges every run it saw judges those too. A failure there keeps the gates and drops the
+   points.
 2. **Resident interleaving, else alternating blocks.** When every arm's engine fits on the GPU at once (`resident`), each
    point is warmed once per arm (discarded), then each rep runs every arm once. The baseline alternates between the first
    and last slot (`interleave_order`). An arm that needs its own engine lifetime makes the whole run `blocks`: each arm

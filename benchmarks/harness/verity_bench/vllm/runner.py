@@ -188,6 +188,16 @@ def _collect_gates(
     return tokens, custom
 
 
+def _closing_gate(arm: Arm, engine: BenchEngine, **where: Any) -> list[dict[str, Any]]:
+    """The arm's own gate read again after its warm-up and timed runs, before its engine closes, so an arm that judges
+    every run it saw judges those too; nothing for an arm without a gate."""
+
+    c = engine.custom_gate()
+    if c.get("provided") is False:
+        return []
+    return [{"arm": arm.id, "kind": "arm-closing", **where, "passed": _gate_passed(c), "detail": dict(c)}]
+
+
 def _close_all(engines: Mapping[str, BenchEngine]) -> None:
     first: BaseException | None = None
     for engine in reversed(list(engines.values())):
@@ -340,7 +350,8 @@ def run_benchmark(
     git_commit: str | None = None,
     config_identity: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Run every gate before any timing, then use resident interleaving or alternating blocks."""
+    """Run every gate before any timing, then use resident interleaving or alternating blocks; an arm's own gate is read
+    again after its timed runs (`arm-closing`), and a failure there leaves the result without points."""
 
     if reps < 1 or not arms or not points:
         raise ValueError("benchmark needs at least one arm, point, and repetition")
@@ -373,6 +384,7 @@ def run_benchmark(
                     for rep in range(reps):
                         for arm_id in interleave_order(arms, baseline, rep):
                             _record(samples, schedule, arm_id, point, rep, engines[arm_id], "resident")
+                gates += [g for arm in arms for g in _closing_gate(arm, engines[arm.id])]
         finally:
             _close_all(engines)
         mode = "resident"
@@ -404,6 +416,7 @@ def run_benchmark(
                                              "arm": arm.id, "point": point.id})
                             for rep in indices:
                                 _record(samples, schedule, arm.id, point, rep, engine, "blocks")
+                        gates += _closing_gate(arm, engine, cycle=cycle)
                     finally:
                         engine.close()
         mode = "blocks"
