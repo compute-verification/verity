@@ -13,8 +13,10 @@ guarantee's own record holds the text from then on.
 namespace Flock.Guarantees
 
 /-- **The recursion's claims are stated**: the tuple of the compiled verifier's claims (`KS`, `Bits`, `Efficient`,
-`Complete`, `ScopeMatches`, `ZK`, `Nontrivial`), the private variant's (`KSPriv`, `ZKPriv`), the claims at Flock as the
-inner protocol (`KSFlock`, `BitsFlock`), the inner protocol's KS and its KS against provers that may abort
+`Complete`, `ScopeMatches`, `ZK`, `Nontrivial`), the private variant's (`KSPriv`, `ZKPriv`), zero knowledge with the
+reference prover's public stop and the pieces it reads (`ZKStop`, `ZKPrivStop`, `StopDeploy`, `StopDeploy.halted`,
+`SimStop`), the claims at Flock as the inner protocol (`KSFlock`, `BitsFlock`), the inner protocol's KS and its KS
+against provers that may abort
 (`Inner.KS`, `Inner.KSAbort`), which the proof reads, the readable scope (`Scope`, `InScope`) and the decoders the
 claims quantify over (`decOK`); the shared claims they instantiate (`Claims.KS`, `ZKmalR`, `Flock.ListWithin`,
 `Complete`, `ScopeMatches`, `ExtractRunsLe`, `ExtractRunsExpLe`, `Nontrivial`), the named assumptions
@@ -22,7 +24,9 @@ claims quantify over (`decOK`); the shared claims they instantiate (`Claims.KS`,
 def RecursionClaimsStated : Prop :=
   let claims := (@Claims.Recursion.KS, @Claims.Recursion.Bits, @Claims.Recursion.Efficient,
     @Claims.Recursion.Complete, @Claims.Recursion.ScopeMatches, @Claims.Recursion.ZK, @Claims.Recursion.Nontrivial,
-    @Claims.Recursion.KSPriv, @Claims.Recursion.ZKPriv, @Claims.Recursion.KSFlock, @Claims.Recursion.BitsFlock,
+    @Claims.Recursion.KSPriv, @Claims.Recursion.ZKPriv, @Claims.Recursion.ZKStop, @Claims.Recursion.ZKPrivStop,
+    @Claims.Recursion.StopDeploy, @Claims.Recursion.StopDeploy.halted, @Claims.Recursion.SimStop,
+    @Claims.Recursion.KSFlock, @Claims.Recursion.BitsFlock,
     @Claims.Recursion.Inner.KS, @Claims.Recursion.Inner.KSAbort,
     @Claims.Recursion.Scope, Claims.Recursion.InScope, @Claims.Recursion.decOK,
     @Claims.KS, @Claims.ZKmalR, @Claims.Flock.ListWithin, @Claims.Complete, @Claims.ScopeMatches,
