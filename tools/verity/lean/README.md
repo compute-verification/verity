@@ -96,6 +96,11 @@ Every declaration of the package's audited modules (not a list of theorems), fro
 and PID namespaces, everything read-only but the build's `.lake` directories, no network, and nothing outliving the build.
 The audit says when it had to build without one; the `compile-time` check then stands in for the sandbox.
 
+A package that pins ArkLib (`Security/Proofs`, and `Security`, which audits it beside itself) is refused, exit 2, on a
+machine with less than `MEM_FLOOR_GIB` (24 GiB, memory and swap within the cgroup), by `check.py` and the fast path
+alike; the refusal prints the fast path's `research run --on vy-nebius-1 …` line. `VERITY_LEAN_MEM_FLOOR_GIB` sets
+another floor (0: none).
+
 `--fresh` also runs `leanchecker --fresh` on each root: the root's whole import closure, Mathlib and core included,
 through the kernel into an empty environment. It needs one module per root and a lot of memory, so it is not part of
 every run: the steward runs `check.py --all --build --fresh` nightly on `main`, and `upstream.py --fetch` against
