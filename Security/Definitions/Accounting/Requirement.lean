@@ -6,8 +6,9 @@ import Definitions.Accounting.Device
 
 What a declared circuit `W` needs of a device's memory, read from its wiring and its schedule (the IR, never a kernel):
 the values its execution keeps live when each step begins (`live`) and the values each step reads (`reads`), in bits,
-in all, by block of the store and over a window; and when the audit's store and plans are `W`'s, block for block
-(`StoreMatches`, `PlanMatches`), so that what the audit credits counts toward this requirement. Placed on devices
+in all, by block of the store and over a window; the live values in complete blocks, which the audit credits
+(`credited`); and when the audit's store and plans are `W`'s, block for block (`StoreMatches`, `PlanMatches`), so that
+what the audit credits counts toward this requirement. Placed on devices
 (`Placement`), the execution's gates are also what PoUW credits and the bits they read from other devices
 (`region`, `ingress`, `work`; `Definitions/Accounting/Requirement/Placed.lean` makes it an actual run).
 
@@ -45,6 +46,13 @@ never a device tick. The ticks a step spans on each device are the placement's (
   wrote and those it freed, and each block's payload. A block is written once and complete, so its payload is a
   function of its index. Step `s`'s record takes effect after step `s`'s reads: a block is freed in the record of the
   step of its last read and written in the record of the step that completes it, readable from `s + 1`.
+* **Credited.** A block is complete when step `s` begins once every value the layout places in it was produced before
+  `s` (`incomplete`); a block of registered values is complete from the start. A partly written block is in no record,
+  so a live value in an incomplete block (a sequence's KV page that later steps fill) is in no resident block, and the
+  audit credits only the live values in complete blocks (`credited`). For the registered values the link is an
+  equality, and for KV it is `⊆`: every resident block holds live values of `W`, but not every live value is in one.
+  The share it leaves out is a block per sequence, layer and plane when the layout fills each one's pages in turn
+  (`OneBlockEach`).
 
 Bits, as `Device.lean` counts them: a value's bytes are its bits / 8, and the deployed store's block is `B = 32768` bits
 (4,096 bytes).
@@ -201,7 +209,37 @@ def Packs (B : ℕ) (S : Finset G) : Prop :=
     ∀ v ∈ S, u ≠ v → ℓ.block u = ℓ.block v →
       ℓ.offset u + W.width u ≤ ℓ.offset v ∨ ℓ.offset v + W.width v ≤ ℓ.offset u
 
+/-- **One block per group**: the values of `S` in each group `k` of `g` lie in one block at most. With `g` a KV value's
+sequence, layer and plane (K or V) and `S` the live values in incomplete blocks, it is a KV pool's page structure: a
+sequence fills its pages of each layer and plane one at a time, so only the block it is filling is incomplete. -/
+def OneBlockEach {K : Type} [DecidableEq K] (g : G → K) (S : Finset G) : Prop :=
+  ∀ k, ((S.filter fun v => g v = k).image ℓ.block).card ≤ 1
+
 end Blocks
+
+section Credited
+
+variable (W : Wiring G) (e : Execution G) (ℓ : Layout G)
+
+/-- **The blocks incomplete when step `s` begins**: those the layout places a value in that the execution produces at
+step `s` or later. A block is complete once every value in it is produced, so a block of registered values is complete
+from the start, and memory-map/v1 writes a block in the record of the step that completes it. -/
+def incomplete (s : ℕ) : Finset ℕ := (e.ran.filter fun v => v ∉ W.registered ∧ s ≤ e.step v).image ℓ.block
+
+/-- **The live values the audit credits when step `s` begins**: those in complete blocks. A live value in a block that
+later steps fill is in no record yet, so no audit credits it. -/
+def credited (s : ℕ) : Finset G := (live W e s).filter fun v => ℓ.block v ∉ incomplete W e ℓ s
+
+/-- The values step `s` reads from complete blocks. -/
+def creditedReads (s : ℕ) : Finset G := (reads W e s).filter fun v => ℓ.block v ∉ incomplete W e ℓ s
+
+/-- The live bits the audit credits when step `s` begins. -/
+def creditedBits (s : ℕ) : ℕ := bits W (credited W e ℓ s)
+
+/-- The bits step `s` reads from complete blocks. -/
+def creditedReadBits (s : ℕ) : ℕ := bits W (creditedReads W e ℓ s)
+
+end Credited
 
 /-- The audit's store: the registered store and the memory map beside it (I3). -/
 structure Store where
@@ -228,17 +266,19 @@ variable (W : Wiring G) (e : Execution G) (ℓ : Layout G)
 def Carries (σ : Store) (S : Finset G) : Prop :=
   ∀ v ∈ S, σ.payload (ℓ.block v) / 2 ^ ℓ.offset v % 2 ^ W.width v = e.value v
 
-/-- **The store is `W`'s when step `s` begins**: its resident blocks are `W`'s live blocks, block for block (no block
-`W` doesn't keep live is resident, and every block holding a live value is), the layout packs the live values into
-blocks of `B` bits, and each live value is in its block's payload. -/
+/-- **The store is `W`'s when step `s` begins**: its resident blocks are the blocks of the live values the audit
+credits, block for block (no block holding none of them is resident, and every complete block holding a live value
+is), the layout packs the live values into blocks of `B` bits, and each credited value is in its block's payload. A
+registered block is resident exactly while it holds a live value; a live value in an incomplete block is in no
+resident block. -/
 def StoreMatches (σ : Store) (B s : ℕ) : Prop :=
-  σ.resident s = liveBlocks W e ℓ s ∧ Packs W ℓ B (live W e s) ∧ Carries W e ℓ σ (live W e s)
+  σ.resident s = blocks ℓ (credited W e ℓ s) ∧ Packs W ℓ B (live W e s) ∧ Carries W e ℓ σ (credited W e ℓ s)
 
-/-- **Step `s`'s plan is `W`'s reads**: the blocks the audit's pass bound to step `s` reads are the blocks `W` reads at
-step `s` (each receipted block is one `W` reads then, and every block `W` reads then is receipted), and the layout packs
-the values read into blocks of `B` bits. -/
+/-- **Step `s`'s plan is `W`'s reads**: the blocks the audit's pass bound to step `s` reads are the complete blocks `W`
+reads at step `s` (each receipted block is one `W` reads then, and every complete block `W` reads then is receipted),
+and the layout packs the values read into blocks of `B` bits. -/
 def PlanMatches (plan : Finset ℕ) (B s : ℕ) : Prop :=
-  plan = readBlocks W e ℓ s ∧ Packs W ℓ B (reads W e s)
+  plan = blocks ℓ (creditedReads W e ℓ s) ∧ Packs W ℓ B (reads W e s)
 
 end Link
 
