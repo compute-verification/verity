@@ -138,7 +138,7 @@ def drive(store, p: Params, schedule: timing.Schedule, *, tiles=None, verifier_t
     events = sorted([(0, 0, -1)] + [(b, 0, t) for t, b in enumerate(schedule.boundaries)]
                     + [(a, 1, (t, i)) for t, i, a in schedule.arrivals])
     challenges, passes, previous = {}, {}, store.registration.digest
-    for at, kind, x in events:
+    for step, (at, kind, x) in enumerate(events):
         clock.now = at
         if kind == 0:
             coin = s.start() if x < 0 else s.boundary()
@@ -148,7 +148,7 @@ def drive(store, p: Params, schedule: timing.Schedule, *, tiles=None, verifier_t
         t, i = x
         ps = run(prover, t, i, challenges, previous, plan and plan(t, i))
         passes[t, i], previous = ps, ps.root
-        if s.receive(t, i, ps.root, (sent or (lambda q: q.plan.runs))(ps)) is not None:
+        if s.receive(t, i, ps.root, (sent or (lambda q: q.plan.runs))(ps), step=step) is not None:
             break
     return s, prover, passes, clock
 
@@ -181,6 +181,7 @@ def test_an_honest_session_is_accepted_and_recorded(store) -> None:
     assert r.codec == store.registration.codec == codec.FALLBACK
     w1 = r.profile()["windows"][1]
     assert w1["lengths"] == [N] * 3 and w1["released_ns"] == 1000 and w1["deadline_ns"] == 2000 + A
+    assert all(a < b for w in r.windows for a, b in zip(w.steps, w.steps[1:])) and len(w1["steps"]) == 3
     assert w1["opened_ns"] == 3000 + A + 1
     assert w1["profile"]["levels"] == [{"name": "receipt", "query": None, "size": 3 * N, "draw": {"subset": 7}}]
     assert r.end_ns == SCHEDULE.span_ns and A == timing.deadline(300, gap_ns=10, down_ns=20, up_ns=30, jitter_ns=5)
@@ -291,7 +292,7 @@ def test_a_receipt_depends_on_its_block_not_its_position(stores, bind) -> None:
 def test_a_plan_that_repeats_a_block_or_is_not_canonical_rejects(store, runs) -> None:
     s = Session(params(), store.registration, None, challenger(store, params()), not_before_ns=0, clock=Clock())
     s.start()
-    assert s.receive(0, 0, bytes(64), runs) == audit.Verdict(0, False, "plan")
+    assert s.receive(0, 0, bytes(64), runs, step=0) == audit.Verdict(0, False, "plan")
 
 
 def test_receipts_committed_under_another_plan_reject(store) -> None:
@@ -779,28 +780,59 @@ def test_roots_out_of_order_reject(store) -> None:
         return Session(params(), store.registration, None, challenger(store, params()), not_before_ns=0, clock=Clock())
     s = session()
     with pytest.raises(SessionError, match="not started"):
-        s.receive(0, 0, bytes(64))
+        s.receive(0, 0, bytes(64), step=0)
     s.start()
-    assert s.receive(0, 1, bytes(64)) == audit.Verdict(0, False, "order")
+    assert s.receive(0, 1, bytes(64), step=0) == audit.Verdict(0, False, "order")
     s = session()
     s.start()
-    assert s.receive(0, 0, bytes(64)) is None and s.receive(0, 0, bytes(64)) == audit.Verdict(0, False, "order")
+    assert s.receive(0, 0, bytes(64), step=0) is None
+    assert s.receive(0, 0, bytes(64), step=1) == audit.Verdict(0, False, "order")
     s = session()
     s.start()
-    assert s.receive(1, 0, bytes(64)) == audit.Verdict(0, False, "order")         # window 1's challenge isn't out
+    assert s.receive(1, 0, bytes(64), step=0) == audit.Verdict(0, False, "order")  # window 1's challenge isn't out
     clock = Clock()
     s = Session(params(), store.registration, None, challenger(store, params()), not_before_ns=0, clock=clock)
     s.start()
     clock.now = 1000
     s.boundary()
-    assert s.receive(1, 0, bytes(64)) is None and s.receive(0, 0, bytes(64)) == audit.Verdict(1, False, "order")
+    assert s.receive(1, 0, bytes(64), step=0) is None
+    assert s.receive(0, 0, bytes(64), step=1) == audit.Verdict(1, False, "order")
     s = session()
     s.start()
-    assert s.receive(0, 0, bytes(63)) == audit.Verdict(0, False, "malformed")
+    assert s.receive(0, 0, bytes(63), step=0) == audit.Verdict(0, False, "malformed")
     s = session()
     s.start()
     with pytest.raises(SessionError, match="starts once"):
         s.start()
+
+
+@pytest.mark.parametrize("steps, failure", [
+    ((0, 5, 9), None),
+    ((None,), "step"),
+    ((3, 3), "step"),
+    ((4, 2), "step"),
+    ((-1,), "step"),
+    ((True,), "step"),
+    ((audit.STEP_LIMIT,), "step"),
+    ((0, 1, "2"), "step"),
+], ids=["increasing", "none", "repeated", "decreasing", "negative", "bool", "limit", "str"])
+def test_each_pass_names_a_step_above_the_previous_passs(store, steps, failure) -> None:
+    """A pass covers one step of the served circuit, named with its root: a root with no step, or one not above the
+    previous pass's, across windows too, rejects the session (`step`), and an accepted window records them."""
+    clock = Clock()
+    s = Session(params(), store.registration, None, challenger(store, params()), not_before_ns=0, clock=clock)
+    s.start()
+    out = None
+    for k, step in enumerate(steps):
+        if k == 2:
+            clock.now = 1000
+            s.boundary()
+        out = s.receive(0 if k < 2 else 1, k if k < 2 else 0, bytes(64), step=step)
+        if out is not None:
+            break
+    assert out == (None if failure is None else audit.Verdict(0 if k < 2 else 1, False, failure))
+    if failure is None:
+        assert [w.steps for w in s.windows] == [[0, 5], [9]]
 
 
 def test_a_window_of_too_few_passes_is_rejected(store) -> None:
@@ -812,7 +844,7 @@ def test_draws_wait_for_the_windows_roots(store) -> None:
     clock = Clock()
     s = Session(params(), store.registration, None, challenger(store, params()), not_before_ns=0, clock=clock)
     s.start()
-    assert s.receive(0, 0, bytes(64)) is None
+    assert s.receive(0, 0, bytes(64), step=0) is None
     with pytest.raises(SessionError, match="not final"):
         s.close(0)
     clock.now = 1000
@@ -820,7 +852,7 @@ def test_draws_wait_for_the_windows_roots(store) -> None:
     clock.now = 1000 + A
     with pytest.raises(SessionError, match="not final"):
         s.close(0)
-    assert s.receive(1, 0, bytes(64)) is None                  # window 1's first root makes window 0's final
+    assert s.receive(1, 0, bytes(64), step=1) is None          # window 1's first root makes window 0's final
     with pytest.raises(SessionError, match="in order"):
         s.close(1)
     assert isinstance(s.close(0), tuple)

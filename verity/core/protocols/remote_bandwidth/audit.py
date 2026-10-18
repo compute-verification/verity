@@ -20,7 +20,9 @@ many reads of a node's registered blocks the node made in each window, from rece
    default) and computes their receipts under `seed_(t,i) = H(σ_t, i, root_(t,i−1))` (`receipts.seed`), each of its
    block alone, or under a registration that binds z also of PoUW's tile output `z` before the read (`Tiles`); it
    commits them in a tree bound to the plan and sends the root and the plan, whole or as its change from the previous
-   pass's (`Plan.changed`), as soon as the pass ends (`Session.receive`).  The chain runs across the session's windows: a window's first
+   pass's (`Plan.changed`), with the step it covers, as soon as the pass ends (`Session.receive`).  A pass covers one
+   step `s` of the served circuit's execution (the engine step), and its plan is the blocks the circuit reads at `s`:
+   the steps are public, and strictly increase over the session's passes.  The chain runs across the session's windows: a window's first
    pass follows the root of the previous window's last.  On a boundary message the prover finishes the pass in flight,
    which is its window's last, and starts the next window's chain.  Blocks written after the codec seed (KV pages)
    join the store mid-session: their payloads committed (`append_tree`, `Session.append`) before any pass whose plan
@@ -28,8 +30,9 @@ many reads of a node's registered blocks the node made in each window, from rece
    and a block released (`Session.release`) is in no later plan.
 5. Deadline.  Window t's roots must all arrive by `D_t = b_t + A`, where `b_t` is the verifier's clock when it sent the
    boundary message and `A` the allowance (`Params.deadline_ns`: the message's trip down, the pass in flight, its root's
-   reduction and its trip up, `timing.deadline`).  A late root, one out of order, or a plan that repeats a block rejects
-   the session.  A window with fewer than `min_passes` roots is rejected.
+   reduction and its trip up, `timing.deadline`).  A late root, one out of order, one with no step or a step not above
+   the previous pass's, or a plan that repeats a block rejects the session.  A window with fewer than `min_passes` roots
+   is rejected.
 6. Openings.  Once window t's roots are final (the next window's first root has arrived, or `D_t` has passed), the
    challenger releases the window's openings coin, and the verifier draws `s = samples` distinct receipts uniformly from
    the window's `U_t = Σ_i L_i` with it (`Session.close`).  The prover opens each (`Prover.open`): the block, its receipt
@@ -42,7 +45,7 @@ many reads of a node's registered blocks the node made in each window, from rece
    PoUW's tile check (`Tiles.recompute`); the receipt recomputed from the block (and `z`) under the registration's
    kind (under sketch-sha512, the block's sketch from the pass's signs first).  A window is accepted only if every opening checks,
    and a rejected window ends its session.
-8. The record (`Session.record`): per window each pass's length, its challenge's release and its deadline on the
+8. The record (`Session.record`): per window each pass's length and step, its challenge's release and its deadline on the
    verifier's clock, its openings coin's release, and an `IntegrityProfile` over its receipts with `Subset(s)` drawn;
    `ledger` turns it, with the node's measured capacities and a squaring ceiling at its codec's width (`Rebuild`), into
    each γ term over the session's span and over each window's own (`WindowLedger`), μ_sample read per window and
@@ -93,8 +96,10 @@ WINDOW_NS = 60 * 10**9
 SAMPLES = 33_273
 DELTA = 2.0 ** -40
 
-FAILURES = ("late", "order", "plan", "append", "release", "few", "malformed", "receipt-path", "codec", "payload-path",
-            "tile", "receipt")
+FAILURES = ("late", "order", "step", "plan", "append", "release", "few", "malformed", "receipt-path", "codec",
+            "payload-path", "tile", "receipt")
+STEP_LIMIT = 1 << 64
+"""A step is an integer below this, memory-map/v1's."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -455,8 +460,9 @@ class Verdict:
 class WindowRecord:
     """What an accepted window established: chained passes of `lengths` reads of distinct registered blocks each, made
     after its challenge left at `released_ns` and committed by `deadline_ns` on the verifier's clock; its openings coin
-    released at `opened_ns`; the openings' law (`profile`); and of each pass's reads, `post_seed` of blocks appended
-    after the codec seed (none if empty), which the ledger credits only on the property's verdict."""
+    released at `opened_ns`; the openings' law (`profile`); of each pass's reads, `post_seed` of blocks appended
+    after the codec seed (none if empty), which the ledger credits only on the property's verdict; and the step each
+    pass covers, `steps`, strictly increasing (empty in a record no session made, such as `timing.stated`'s model)."""
 
     window: int
     lengths: tuple[int, ...]
@@ -465,6 +471,7 @@ class WindowRecord:
     opened_ns: int
     profile: IntegrityProfile
     post_seed: tuple[int, ...] = ()
+    steps: tuple[int, ...] = ()
 
     def __post_init__(self) -> None:
         if self.post_seed == ():
@@ -472,6 +479,11 @@ class WindowRecord:
         if len(self.post_seed) != len(self.lengths) or any(
                 type(a) is not int or not 0 <= a <= n for a, n in zip(self.post_seed, self.lengths)):
             raise ValueError("a window's post-seed reads are a count of each pass's, at most its length")
+        if self.steps != () and (
+                len(self.steps) != len(self.lengths)
+                or any(type(s) is not int or not 0 <= s < STEP_LIMIT for s in self.steps)
+                or any(a >= b for a, b in zip(self.steps, self.steps[1:]))):
+            raise ValueError("a window's steps are each pass's, strictly increasing integers from 0 below 2^64")
 
     @property
     def passes(self) -> int:
@@ -495,7 +507,7 @@ class WindowRecord:
     def to_json(self) -> dict:
         return {"deadline_ns": self.deadline_ns, "lengths": list(self.lengths), "opened_ns": self.opened_ns,
                 "post_seed": list(self.post_seed), "profile": self.profile.to_json(), "released_ns": self.released_ns,
-                "span_ns": self.span_ns, "window": self.window}
+                "span_ns": self.span_ns, "steps": list(self.steps), "window": self.window}
 
 
 @dataclass(frozen=True, slots=True)
@@ -567,6 +579,7 @@ class _Window:
     roots: list[bytes] = field(default_factory=list)
     plans: list[Plan] = field(default_factory=list)
     post: list[int] = field(default_factory=list)
+    steps: list[int] = field(default_factory=list)
     boundary_ns: int | None = None
     final: bool = False
     draws: tuple[tuple[int, int], ...] | None = None
@@ -608,6 +621,7 @@ class Session:
         self._appends: list[tuple[int, CommitmentDomain, Commitment]] = []
         self._gone: list[tuple[int, int]] = []
         self._plan = Plan.whole(registration.blocks)
+        self._step = -1
 
     @property
     def commitment(self) -> coins.CoinCommitment:
@@ -696,12 +710,16 @@ class Session:
         return (r > 0 and self._gone[r - 1][1] > first) or (r < len(self._gone) and self._gone[r][0] < first + count)
 
     def receive(self, t: int, i: int, root: bytes, runs: Sequence[tuple[int, int]] | None = None, *,
-                change: tuple[Sequence[tuple[int, int]], Sequence[tuple[int, int]]] | None = None) -> Verdict | None:
-        """Root `i` of window `t` and its pass's plan as the prover sends it, as they arrive: `runs` (None: the
-        registered store in order; a numpy array of rows (first, count): `Plan.from_array`), or `change`, the blocks
-        (added, removed) from the session's previous pass's plan (`Plan.changed`; before its first pass, the registered
-        store).  A plan is over the store's blocks so far, registered and appended, and holds none released.  Returns
-        the rejection they cause, if any."""
+                change: tuple[Sequence[tuple[int, int]], Sequence[tuple[int, int]]] | None = None,
+                step: int | None = None) -> Verdict | None:
+        """Root `i` of window `t`, its pass's plan as the prover sends it, and the step it covers, as they arrive: `runs`
+        (None: the registered store in order; a numpy array of rows (first, count): `Plan.from_array`), or `change`,
+        the blocks (added, removed) from the session's previous pass's plan (`Plan.changed`; before its first pass, the
+        registered store).  A plan is over the store's blocks so far, registered and appended, and holds none released.
+        `step` is the step of the served circuit whose reads the pass covers, above the previous pass's: the plan is to
+        be the blocks the circuit reads at it, which the plan's proof unit checks against the prover's memory map
+        (`PROTOCOL.md` §8); its rejection, `step`, if it is missing or not above.  Returns the rejection they cause, if
+        any."""
         self._live()
         if not self.windows:
             raise SessionError("the session has not started")
@@ -716,6 +734,8 @@ class Session:
         d = self.deadline(t)
         if d is not None and now > d:
             return self._fail(t, "late")
+        if type(step) is not int or not self._step < step < STEP_LIMIT:
+            return self._fail(t, "step")
         N, extent = self.params.blocks, self.extent
         try:
             if change is not None:
@@ -733,7 +753,8 @@ class Session:
         self.windows[t].roots.append(root)
         self.windows[t].plans.append(plan)
         self.windows[t].post.append(0 if extent == N else sum(max(0, f + c - max(f, N)) for f, c in plan.runs))
-        self._plan = plan
+        self.windows[t].steps.append(step)
+        self._plan, self._step = plan, step
         return None
 
     def close(self, t: int) -> tuple[tuple[int, int], ...] | Verdict:
@@ -835,7 +856,8 @@ class Session:
             lengths = tuple(plan.length for plan in w.plans)
             profile = IntegrityProfile(("receipt",), (sum(lengths),), {"receipt": Subset(len(w.draws))},
                                        self.params.delta, drawn={"receipt": len(w.draws)})
-            out.append(WindowRecord(t, lengths, w.released_ns, self.deadline(t), w.opened_ns, profile, tuple(w.post)))
+            out.append(WindowRecord(t, lengths, w.released_ns, self.deadline(t), w.opened_ns, profile, tuple(w.post),
+                                    tuple(w.steps)))
         return Record(self.registration.digest, self.commitment.root, self.params.blocks, BLOCK_BYTES, tuple(out),
                       self.registration.receipt, self.registration.bind, self.registration.codec,
                       self.registration.layout, self.registration.rows, self.extent - self.params.blocks, self.released)
