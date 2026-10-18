@@ -40,6 +40,9 @@ The container, so the bytes are the rule's and not a library's:
 
 The pinned revision is the first 40 hex digits of the sha256 of the recipe id, the base pin and the made files' sha256s, so
 the checkpoint resolves like a hub snapshot (``<hf_home>/hub/models--<org>--<name>/snapshots/<revision>/``).
+
+The container and the pins take the per-tensor rule as a `Recipe` (``FP8`` here by default); ``engine.int8_checkpoint`` is
+the other recipe, on the same container.
 """
 from __future__ import annotations
 
@@ -50,6 +53,7 @@ import os
 import shutil
 import struct
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -120,6 +124,30 @@ def quantize(w: np.ndarray, s: np.ndarray, block: int = BLOCK) -> np.ndarray:
     return e4m3fn(np.clip(x, np.float32(-E4M3_MAX), np.float32(E4M3_MAX))).reshape(n, k)
 
 
+@dataclass(frozen=True)
+class Recipe:
+    """What a data-free weight recipe changes in the container: the made weight's dtype, its scale tensor and quantization_config.
+    `scales(w)` maps float32 rows of W to their scale rows (`rows_per_scale` weight rows each), `quantize(w, s)` to the stored
+    bytes; `refusal(n, k)` names a shape the recipe cannot make (None = makes it).  `of` is the pin's key naming its BF16 base."""
+
+    id: str
+    weight_dtype: str
+    scale_suffix: str
+    rows_per_scale: int
+    scale_shape: Callable[[int, int], list[int]]
+    refusal: Callable[[int, int], str | None]
+    scales: Callable[[np.ndarray], np.ndarray]
+    quantize: Callable[[np.ndarray, np.ndarray], np.ndarray]
+    quantization: dict[str, Any]
+    of: str
+
+
+FP8 = Recipe(id=RECIPE, weight_dtype="F8_E4M3", scale_suffix="weight_scale_inv", rows_per_scale=BLOCK,
+             scale_shape=lambda n, k: [n // BLOCK, k // BLOCK],
+             refusal=lambda n, k: f"not a multiple of the FP8 block {BLOCK} on both axes" if n % BLOCK or k % BLOCK else None,
+             scales=block_scales, quantize=quantize, quantization=QUANTIZATION, of="fp8_of")
+
+
 # ---------------------------------------------------------------------------------------------------------------- container
 
 def read_header(path: Path) -> tuple[int, dict[str, Any]]:
@@ -134,15 +162,15 @@ def is_linear(info: dict[str, Any], vocab: int) -> bool:
     return len(info["shape"]) == 2 and vocab not in [int(d) for d in info["shape"]]
 
 
-def scale_name(name: str) -> str:
-    return name[: -len("weight")] + "weight_scale_inv"
+def scale_name(name: str, recipe: Recipe = FP8) -> str:
+    return name[: -len("weight")] + recipe.scale_suffix
 
 
 def _nbytes(dtype: str, shape: list[int]) -> int:
     return _ELEM[dtype] * int(np.prod(shape, dtype=np.int64))
 
 
-def shard_layout(header: dict[str, Any], vocab: int) -> list[tuple[str, str, list[int], str, str]]:
+def shard_layout(header: dict[str, Any], vocab: int, recipe: Recipe = FP8) -> list[tuple[str, str, list[int], str, str]]:
     """The made shard's tensors in file order: (name, dtype, shape, kind, source), kind "copy" | "weight" | "scale"."""
     out = []
     for name, info in header.items():
@@ -155,10 +183,10 @@ def shard_layout(header: dict[str, Any], vocab: int) -> list[tuple[str, str, lis
             if info["dtype"] not in _WIDEN or not name.endswith(".weight"):
                 raise ValueError(f"{name}: a 2-D {info['dtype']} tensor that is not a float `.weight`")
             n, k = shape
-            if n % BLOCK or k % BLOCK:
-                raise ValueError(f"{name}: [{n}][{k}] is not a multiple of the FP8 block {BLOCK} on both axes")
-            out.append((name, "F8_E4M3", shape, "weight", name))
-            out.append((scale_name(name), "F32", [n // BLOCK, k // BLOCK], "scale", name))
+            if why := recipe.refusal(n, k):
+                raise ValueError(f"{name}: [{n}][{k}] is {why}")
+            out.append((name, recipe.weight_dtype, shape, "weight", name))
+            out.append((scale_name(name, recipe), "F32", recipe.scale_shape(n, k), "scale", name))
         else:
             if info["dtype"] not in _ELEM:
                 raise ValueError(f"{name}: unknown safetensors dtype {info['dtype']}")
@@ -206,10 +234,11 @@ def _read(f, start: int, end: int) -> bytes:
     return b
 
 
-def make_shard(src: Path, dst: Path, vocab: int) -> tuple[dict[str, Any], dict[str, str], int, int]:
-    """Write the FP8 shard of `src` to `dst`: (file digest, tensor -> shard name, vocabulary-sized tensors, data bytes)."""
+def make_shard(src: Path, dst: Path, vocab: int, recipe: Recipe = FP8) -> tuple[dict[str, Any], dict[str, str], int, int]:
+    """Write the recipe's shard of `src` to `dst`: (file digest, tensor -> shard name, vocabulary-sized tensors, data bytes)."""
     base, header = read_header(src)
-    layout = shard_layout(header, vocab)
+    layout = shard_layout(header, vocab, recipe)
+    r = recipe.rows_per_scale
     head, offsets = encode_header(layout)
     scales: dict[str, np.ndarray] = {}
     with open(src, "rb") as f:
@@ -224,7 +253,7 @@ def make_shard(src: Path, dst: Path, vocab: int) -> tuple[dict[str, Any], dict[s
         for name, _, _, kind, source in layout:
             if kind == "scale":
                 n = int(header[source]["shape"][0])
-                scales[source] = np.concatenate([block_scales(weight(source, lo, min(lo + STRIPE, n)))
+                scales[source] = np.concatenate([recipe.scales(weight(source, lo, min(lo + STRIPE, n)))
                                                  for lo in range(0, n, STRIPE)])
         sink = _Sink(dst)
         sink.write(head)
@@ -235,7 +264,7 @@ def make_shard(src: Path, dst: Path, vocab: int) -> tuple[dict[str, Any], dict[s
                 n = int(header[source]["shape"][0])
                 for lo in range(0, n, STRIPE):
                     hi = min(lo + STRIPE, n)
-                    sink.write(quantize(weight(source, lo, hi), scales[source][lo // BLOCK: hi // BLOCK]).tobytes())
+                    sink.write(recipe.quantize(weight(source, lo, hi), scales[source][lo // r: hi // r]).tobytes())
             else:
                 a, b = header[source]["data_offsets"]
                 for at in range(a, b, _CHUNK):
@@ -257,19 +286,19 @@ def dense_vocab(cfg: dict[str, Any]) -> int:
     return cfg["vocab_size"]
 
 
-def fp8_config(base_config: bytes) -> bytes:
+def fp8_config(base_config: bytes, recipe: Recipe = FP8) -> bytes:
     cfg = json.loads(base_config)
     dense_vocab(cfg)
-    cfg["quantization_config"] = dict(sorted(dict(QUANTIZATION, modules_to_not_convert=["lm_head"]).items()))
+    cfg["quantization_config"] = dict(sorted(dict(recipe.quantization, modules_to_not_convert=["lm_head"]).items()))
     return (json.dumps(cfg, indent=2, ensure_ascii=False) + "\n").encode()
 
 
-def pin_revision(base_repo: str, base_revision: str, made: dict[str, str]) -> str:
-    doc = {"base": {"repo": base_repo, "revision": base_revision}, "files": dict(sorted(made.items())), "recipe": RECIPE}
+def pin_revision(base_repo: str, base_revision: str, made: dict[str, str], recipe: Recipe = FP8) -> str:
+    doc = {"base": {"repo": base_repo, "revision": base_revision}, "files": dict(sorted(made.items())), "recipe": recipe.id}
     return hashlib.sha256(json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()).hexdigest()[:40]
 
 
-def make(base_dir: Path, out_dir: Path, shards: list[str], *, base_repo: str, base_revision: str) -> dict[str, Any]:
+def make(base_dir: Path, out_dir: Path, shards: list[str], *, base_repo: str, base_revision: str, recipe: Recipe = FP8) -> dict[str, Any]:
     """Write the recipe's checkpoint of the base shards `shards` in `base_dir` into `out_dir` (created; must not exist).
     Returns {"revision", "files": {name: {sha256, size, digest_source}}, "config_sha256", "safetensors_sha256"}."""
     base_dir, out_dir = Path(base_dir), Path(out_dir)
@@ -283,14 +312,14 @@ def make(base_dir: Path, out_dir: Path, shards: list[str], *, base_repo: str, ba
     weight_map: dict[str, str] = {}
     n_vocab = total = 0
     for fn in shards:
-        digest, names, v, n = make_shard(base_dir / fn, out_dir / fn, vocab)
+        digest, names, v, n = make_shard(base_dir / fn, out_dir / fn, vocab, recipe)
         files[fn] = dict(digest, digest_source="recipe")
         weight_map.update(names)
         n_vocab += v
         total += n
     if not n_vocab:
         raise ValueError(f"no tensor has the config's vocab_size {vocab} as a dimension: the embedding is not where the recipe looks")
-    cfg = fp8_config(base_config)
+    cfg = fp8_config(base_config, recipe)
     (out_dir / CONFIG).write_bytes(cfg)
     files[CONFIG] = {"sha256": hashlib.sha256(cfg).hexdigest(), "size": len(cfg), "digest_source": "recipe"}
     if (base_dir / INDEX).exists():
@@ -305,7 +334,7 @@ def make(base_dir: Path, out_dir: Path, shards: list[str], *, base_repo: str, ba
             (out_dir / rel).parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(p, out_dir / rel)
             files[rel] = {"sha256": _sha256(out_dir / rel), "size": (out_dir / rel).stat().st_size, "digest_source": "base"}
-    return {"revision": pin_revision(base_repo, base_revision, made), "files": dict(sorted(files.items())),
+    return {"revision": pin_revision(base_repo, base_revision, made, recipe), "files": dict(sorted(files.items())),
             "config_sha256": files[CONFIG]["sha256"], "safetensors_sha256": {fn: files[fn]["sha256"] for fn in shards}}
 
 
@@ -323,11 +352,11 @@ def snapshot_dir(hf_home: str, repo: str, revision: str) -> Path:
     return Path(hf_home) / "hub" / f"models--{repo.replace('/', '--')}" / "snapshots" / revision
 
 
-def base_entry(entry: dict[str, Any], entries: list[dict[str, Any]]) -> dict[str, Any]:
+def base_entry(entry: dict[str, Any], entries: list[dict[str, Any]], recipe: Recipe = FP8) -> dict[str, Any]:
     """The BF16 pin a recipe entry was made from (its `recipe.base_repo` at `recipe.base_revision`, with shard sha256s)."""
     r = entry.get("recipe") or {}
-    if r.get("id") != RECIPE:
-        raise UsageError(f"{entry.get('role')}: recipe {r.get('id')!r} is not {RECIPE!r}")
+    if r.get("id") != recipe.id:
+        raise UsageError(f"{entry.get('role')}: recipe {r.get('id')!r} is not {recipe.id!r}")
     hits = [c for c in entries if c.get("repo") == r.get("base_repo") and c.get("revision") == r.get("base_revision")
             and c.get("safetensors_sha256")]
     if not hits:
@@ -348,24 +377,25 @@ def verified_base(base: dict[str, Any], hf_home: str | None) -> Path:
     return d
 
 
-def _make_into(snapshots: Path, base_dir: Path, base: dict[str, Any]) -> dict[str, Any]:
+def _make_into(snapshots: Path, base_dir: Path, base: dict[str, Any], recipe: Recipe = FP8) -> dict[str, Any]:
     """Make into `snapshots/<revision>` (written beside it, then renamed into place)."""
     snapshots.mkdir(parents=True, exist_ok=True)
     tmp = snapshots / f".tmp{os.getpid()}"
     shutil.rmtree(tmp, ignore_errors=True)
-    pin = make(base_dir, tmp, list(base["safetensors_sha256"]), base_repo=base["repo"], base_revision=base["revision"])
+    pin = make(base_dir, tmp, list(base["safetensors_sha256"]), base_repo=base["repo"], base_revision=base["revision"], recipe=recipe)
     final = snapshots / pin["revision"]
     shutil.rmtree(final, ignore_errors=True)
     os.replace(tmp, final)
     return dict(pin, local_path=str(final))
 
 
-def remake(entry: dict[str, Any], entries: list[dict[str, Any]], hf_home: str | None = None) -> tuple[dict[str, Any], list[str]]:
+def remake(entry: dict[str, Any], entries: list[dict[str, Any]], hf_home: str | None = None,
+           recipe: Recipe = FP8) -> tuple[dict[str, Any], list[str]]:
     """Re-make a recipe pin on this host from its BF16 pin (checked first): (the made pin, what differs from `entry`).  The
     snapshot goes to `entry["local_path"]`, or beside the base under `hf_home`."""
-    base = base_entry(entry, entries)
+    base = base_entry(entry, entries, recipe)
     final = snapshot_dir(hf_home, entry["repo"], entry["revision"]) if hf_home else Path(entry["local_path"])
-    pin = _make_into(final.parent, verified_base(base, hf_home), base)
+    pin = _make_into(final.parent, verified_base(base, hf_home), base, recipe)
     bad = [fn for fn, d in sorted(entry["files"].items()) if d.get("sha256") and pin["files"].get(fn, {}).get("sha256") != d["sha256"]]
     bad += sorted(set(pin["files"]) - set(entry["files"]))
     if pin["revision"] != entry["revision"]:
@@ -400,13 +430,18 @@ COMMANDS = {"make": MakeOptions, "pin": PinOptions}
 
 
 def main(a: MakeOptions | PinOptions) -> int:
+    return run(a, FP8, "fp8-checkpoint")
+
+
+def run(a: Any, recipe: Recipe, command: str) -> int:
+    """`make` (a `MakeOptions`-shaped `a`: role, checkpoints, hf_home) or `pin` (`PinOptions`-shaped) under `recipe`."""
     entries = C.checkpoint_entries(a.checkpoints)
     home = a.hf_home or C.checkpoints_hf_home() or ""
-    if isinstance(a, MakeOptions):
+    if not hasattr(a, "base_role"):
         entry = next((c for c in entries if c.get("role") == a.role), None)
         if entry is None:
             raise UsageError(f"no checkpoints.json entry with role {a.role!r}")
-        pin, bad = remake(entry, entries, a.hf_home)
+        pin, bad = remake(entry, entries, a.hf_home, recipe)
         print(json.dumps({"role": a.role, "local_path": pin["local_path"], "ok": not bad, "mismatch": bad}))
         return 1 if bad else 0
     base = next((c for c in entries if c.get("role") == a.base_role and c.get("safetensors_sha256")), None) \
@@ -415,12 +450,12 @@ def main(a: MakeOptions | PinOptions) -> int:
         raise UsageError(f"no BF16 pin with role or repo {a.base_role!r} and shard sha256s")
     if any(c.get("role") == a.role for c in entries):
         raise UsageError(f"role {a.role!r} is already pinned")
-    pin = _make_into(snapshot_dir(home, a.repo, "_").parent, verified_base(base, a.hf_home), base)
+    pin = _make_into(snapshot_dir(home, a.repo, "_").parent, verified_base(base, a.hf_home), base, recipe)
     local = snapshot_dir(C.checkpoints_hf_home() or home, a.repo, pin["revision"])
-    entry = {"config_sha256": pin["config_sha256"], "downloaded": False, "files": pin["files"], "fp8_of": base["repo"], "gated": False,
+    entry = {"config_sha256": pin["config_sha256"], "downloaded": False, "files": pin["files"], recipe.of: base["repo"], "gated": False,
              "local_path": str(local),
-             "note": f"made offline by `verity-vllm fp8-checkpoint` ({RECIPE}) from the {base['repo']} pin; no hub repo holds it",
-             "recipe": {"base_repo": base["repo"], "base_revision": base["revision"], "id": RECIPE}, "repo": a.repo,
+             "note": f"made offline by `verity-vllm {command}` ({recipe.id}) from the {base['repo']} pin; no hub repo holds it",
+             "recipe": {"base_repo": base["repo"], "base_revision": base["revision"], "id": recipe.id}, "repo": a.repo,
              "resolved_at": a.at, "resolved_by": a.by, "revision": pin["revision"], "role": a.role,
              "safetensors_sha256": pin["safetensors_sha256"]}
     print(json.dumps(entry, indent=1))

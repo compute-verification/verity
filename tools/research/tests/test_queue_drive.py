@@ -915,3 +915,17 @@ def test_drive_sweeps_the_repositorys_branches_once_a_day(world, monkeypatch):
     h.clock += BRANCH_SWEEP_S + 1
     h.tick()
     assert len(calls) == 2
+
+
+def test_pre_warms_run_one_at_a_time_and_count_against_the_running_checks(world, monkeypatch):
+    """18 Oct 00:43Z: with circuit-check back in the gate, drive launched four pre-warms in one tick (16 runs) beside four train
+    checks, against six check slots, and no new train could start."""
+    h = Harness(world, monkeypatch)
+    h.d.train_size, h.d.max_running = 6, 4
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.tick()
+    assert len(h.launched) == 1                                           # #1's train
+    for n in (2, 3, 4, 5):
+        world.gh.put(n, world.change({f"verity/ml/circuits/x{n}.py": f"{n}\n"}))
+    h.tick()
+    assert len(h.launched) == 2 and sum("pre-warming #" in x for x in world.logs) == 1, world.logs

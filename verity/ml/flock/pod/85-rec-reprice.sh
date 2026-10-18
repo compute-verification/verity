@@ -28,8 +28,8 @@
 #   STEP=oreplay (CPU) upstream's replay --zk of each statement's session oprove kept
 #   STEP=lean    (CPU) Lean's flock-verify verify --zk on each statement's last session, with V*'s own inputs (the inner
 #                shape, the statement's index and bindings, the shared rows, the inner transcript) (INNER_LEAN=1: also the inner's,
-#                --coins os, on verity/flock-circuit+plain-leaves, which Lean's verify refuses (exit 2) until a soundness
-#                headline covers plain leaves; ZK_LEAN=1: also today's --zk session; LEVELS=none: neither of V*'s), and
+#                --coins os, on verity/flock-circuit+plain-leaves, which Lean's verify checks without --zk
+#                (ProvedScope.leafOk); ZK_LEAN=1: also today's --zk session; LEVELS=none: neither of V*'s), and
 #                flock-verify statement on the inner statement with the partition object and program vstage wrote. The job
 #                fails unless each statement (staged or proved) and ZK_LEAN's session exited 0 with every VERDICT accepted,
 #                a forgery's refused, and the inner statement's units were derived from the program (lean_verdicts.py; the
