@@ -18,6 +18,10 @@ them.  Instead:
   The units' count, S·U, is fixed by the public parameters.
 * **Receipts**: `h1tile`'s unit on the GPU (`receipts.call_receipts`), on every unit of every call, empty rows included.
   Seeds come from the salt, the position and the call's (root(A), root(B)).  There is one receipt tree per call.
+* **Coins** (``--coins``): seeded, the option's one salt, opened at install before serving; or live, a round a step from
+  the proof service's challenger (`pouw.window.live_challenger`, `sampled_proofs.challenger.LiveRecord`).  Step s's round
+  root, over its A-table roots, is recorded before round s's coin opens, and the step's receipts take the round's salt
+  (`window.round_key`), so every candidate a round's noise reads is committed before that noise's coin.
 * **Credit**: static (coordinator, 21:38Z): every unit of the S·U is credited as compute, a count fixed by the public
   parameters, so no selection decides credit.  H1's dither makes an empty row's unit real work (X = wrap8(0 + b)).  The
   served rows (the slots whose committed scale is nonzero) are usefulness, reported beside the credit and never part of it.
@@ -282,8 +286,45 @@ def run(a: argparse.Namespace) -> dict:
         if dev.type == "cuda":
             torch.cuda.synchronize()
 
+    live = a.coins == "live"
+    pending: list[tuple] = []
+    round_log: list[dict] = []
+    if live:
+        from verity.core.protocols.pouw import window as Wd
+        from verity.core.protocols.sampled_proofs import challenger as Ch
+        lch = Wd.live_challenger(a.epoch, s_max)
+        live_salt = lch.open(Wd.SALT, 0, bytes.fromhex(h1.commits["weights_root"]))
+        rounds = Ch.LiveRecord(lch, Wd.ROUND)
+
+    def receipts(i: int, slots, salt: bytes) -> None:
+        c = calls[i]
+        sync()
+        t = time.perf_counter()
+        rc = RC.call_receipts(RC.Call(slots, layers[c["linear"]].weight), salt, c["base"], bytes.fromhex(c["root_a"]),
+                              bytes.fromhex(c["root_b"]), cubin, chunk=chunk_of(c["k"]))
+        sync()
+        c.update(units=int(rc.shape[0]), receipt_words=int(rc.shape[1]), receipts_s=round(time.perf_counter() - t, 3),
+                 salt=salt.hex())
+        data[i]["receipts"] = rc
+
+    def round_root(s: int, roots_a: list[bytes]) -> tuple[dict, bytes]:
+        fields = {"window": window, "step": s, "linears": len(roots_a)}
+        return fields, CM.levels(CM.domain(fields, len(roots_a), "round"), roots_a)[-1][0]
+
+    def close_round(s: int) -> None:
+        """Round s (step s) under live coins: its root over the step's A-table roots, recorded before its coin opens; then
+        the step's receipts under the round's 64-byte salt, `round_key`'s stream."""
+        fields, root = round_root(s, [bytes.fromhex(calls[i]["root_a"]) for i, _ in pending])
+        opening = rounds.record(root)
+        salt = Wd.round_key(lch.commitment, opening.coin, s, root).stream(0, 64)
+        round_log.append({"round": s, "root": root.hex(), "fields": fields, "opening": opening.to_json()})
+        for i, slots in pending:
+            receipts(i, slots, salt)
+        pending.clear()
+
     def table(s: int, w: int, xq, sa: np.ndarray) -> None:
-        """Call (s, w): its T-slot A table from the step's m real rows `xq` [m, K] (on the device) and scales, its receipts."""
+        """Call (s, w): its T-slot A table from the step's m real rows `xq` [m, K] (on the device) and scales; its receipts
+        now (seeded) or once the step's round closes (live)."""
         m, k = int(xq.shape[0]), int(layers[w].weight.shape[1])
         n = int(layers[w].weight.shape[0])
         name = names[w]
@@ -296,17 +337,16 @@ def run(a: argparse.Namespace) -> dict:
         dom = CM.domain(fields, t_max, "a-table")
         rows = CM.s8_rows(slots.cpu().numpy(), scales)
         lv = CM.levels(dom, [CM.leaf(dom, key, f"a/{s}/{w}", r, bytes(row))[0] for r, row in enumerate(rows)])
-        root_a, root_b = lv[-1][0], h1.weight_roots[w]
-        base = s * u_step + offs[w]
-        sync()
-        t = time.perf_counter()
-        rc = RC.call_receipts(RC.Call(slots, layers[w].weight), h1.salt, base, root_a, root_b, cubin, chunk=chunk_of(k))
-        sync()
         calls.append({"step": s, "linear": w, "module": name, "layer": layer, "site": site, "k": k, "n": n, "slots": t_max,
-                      "base": base, "units": int(rc.shape[0]), "root_a": root_a.hex(), "root_b": root_b.hex(),
-                      "a_domain": dom.domain_id.hex(), "a_fields": fields, "receipt_words": int(rc.shape[1]),
-                      "receipts_s": round(time.perf_counter() - t, 3)})
-        data.append({"m": m, "xq": slots[:m].cpu().numpy(), "sa": scales[:m].copy(), "receipts": rc})
+                      "base": s * u_step + offs[w], "units": (t_max // 32) * (n // 32), "root_a": lv[-1][0].hex(),
+                      "root_b": h1.weight_roots[w].hex(), "a_domain": dom.domain_id.hex(), "a_fields": fields})
+        data.append({"m": m, "xq": slots[:m].cpu().numpy(), "sa": scales[:m].copy(), "receipts": None})
+        if not live:
+            receipts(len(calls) - 1, slots, h1.salt)
+            return
+        pending.append((len(calls) - 1, slots))
+        if w == len(layers) - 1:
+            close_round(s)
 
     def tap(x2, w, s_w):
         xq, s_a, y = orig_linear(x2, w, s_w)
@@ -348,6 +388,8 @@ def run(a: argparse.Namespace) -> dict:
     done = st["step"] + 1
     complete = st["last"] == len(layers) - 1
     t0 = time.perf_counter()
+    if pending:
+        close_round(calls[pending[0][0]]["step"])
     for s in range(done, s_max):
         for w in range(len(layers)):
             table(s, w, torch.zeros(0, int(layers[w].weight.shape[1]), dtype=torch.int8, device=dev), np.zeros(0, np.float32))
@@ -388,12 +430,37 @@ def run(a: argparse.Namespace) -> dict:
                                "s": round(time.perf_counter() - t0, 1)})
     comp.close()
 
+    coins = {"mode": a.coins, "ok": True}
+    if live:
+        roots = [bytes.fromhex(r["root"]) for r in round_log]
+        openings = [Ch.LiveOpening.from_json(r["opening"]) for r in round_log]
+        commitment = Ch.LiveCommitment.from_json(lch.commitment.to_json())
+        by_step: dict[int, list[dict]] = {}
+        for c in calls:
+            by_step.setdefault(c["step"], []).append(c)
+        recomputed = [round_root(r["round"], [bytes.fromhex(c["root_a"]) for c in by_step[r["round"]]])[1] == root
+                      and {c["salt"] for c in by_step[r["round"]]}
+                      == {Wd.round_key(commitment, o.coin, r["round"], root).stream(0, 64).hex()}
+                      for r, root, o in zip(round_log, roots, openings)]
+        coins.update(scheme=Wd.LIVE_SCHEME, commitment=lch.commitment.to_json(), salt_coin=live_salt.to_json(),
+                     rounds=round_log, rounds_reason=Wd.rounds_reason(commitment, roots, openings),
+                     rounds_cover_steps=[r["round"] for r in round_log] == list(range(s_max)),
+                     roots_and_keys_recomputed=all(recomputed),
+                     rule="round s = step s: its root is the frame-v3-sha512 tree over the step's A-table roots in linear "
+                          "order (domain identity_digest_sha512('verity/pouw/served-h1/round/v0', {window, step, linears})), "
+                          "recorded through sampled_proofs.challenger.LiveRecord before round s's pouw/round coin opens; "
+                          "the step's 64-byte H1 salt is window.round_key(commitment, coin_s, s, root_s).stream(0, 64)")
+        coins["ok"] = bool(coins["rounds_reason"] is None and coins["rounds_cover_steps"] and all(recomputed))
+        rec.step("coins", {k: v for k, v in coins.items() if k != "rounds"})
+
     manifest = {"schema": SCHEMA, "scheme": SCHEME, "tile": [RC.R, RC.C_], "framing": FRAMING, "not_covered": NOT_COVERED,
                 "window": window, "public": public, "epoch": a.epoch, "option": option, "commitment": h1.commits,
-                "salt": h1.salt.hex(),
-                "salt_rule": "pouw_h1.program_salt: SHA-512(b'verity/pouw/h1/program-salt/v1\\0' || the epoch's 32-byte salt), "
-                             "the epoch's salt audit.Epoch.start's from the challenger's salt coin opened after the weights' "
-                             "root (pouw.weights_root over every layer's pouw_h1.weight_root)",
+                "coins": coins, "salt": h1.salt.hex(),
+                "salt_rule": ("live: each call's salt is its round's (coins.rule); manifest.salt is the option's, unused"
+                              if live else
+                              "pouw_h1.program_salt: SHA-512(b'verity/pouw/h1/program-salt/v1\\0' || the epoch's 32-byte "
+                              "salt), the epoch's salt audit.Epoch.start's from the challenger's salt coin opened after the "
+                              "weights' root (pouw.weights_root over every layer's pouw_h1.weight_root)"),
                 "roots": {"a": "the call's a-table root (this window's, T slot rows; not yet the Commit's Int8RowQuant_v1 tap)",
                           "b": "the option's pouw_h1.weight_root of the layer (a stand-in, pouw_h1.ROOTS)"},
                 "positions": "call (s, w) at base s U + off(w), U = sum_w (T / 32)(N_w / 32), off(w) the sum over linears "
@@ -419,7 +486,8 @@ def run(a: argparse.Namespace) -> dict:
         rec.step("gate", {"ok": False, "error": f"{type(e).__name__}: {e}"[:4000]})
     s = rec.doc["steps"]["serve"]
     rec.doc["ok"] = bool(all(equal) and calls and not a_check["mismatch"] and not a_check["untapped"] and not s["refused"]
-                         and s["order_ok"] and s["last_step_complete"] and s["static"] and rec.doc["steps"]["gate"]["ok"])
+                         and s["order_ok"] and s["last_step_complete"] and s["static"] and rec.doc["steps"]["gate"]["ok"]
+                         and coins["ok"])
     rec.save()
     pool.close()
     print(f"SERVED-H1 {'OK' if rec.doc['ok'] else 'FAIL'} calls={len(calls)} units={s['units']} steps={done}/{s_max} "
@@ -452,12 +520,13 @@ def gate(a, calls: list[dict], data: list[dict], levels: list, layers: list, h1,
         scales[:d["m"]] = d["sa"]
         call = RC.Call(slots, weight.cpu())
         root_a, root_b = bytes.fromhex(c["root_a"]), bytes.fromhex(c["root_b"])
-        z, want = RC.reference(call, h1.salt, c["base"], root_a, root_b, u)
+        salt = bytes.fromhex(c["salt"])
+        z, want = RC.reference(call, salt, c["base"], root_a, root_b, u)
         got = [int(v) for v in d["receipts"][u]]
         ri, cj = call.units[u]
         y = E.int_mm(slots[32 * ri:32 * ri + 32].to(weight.device), weight[32 * cj:32 * cj + 32]).cpu().to(torch.int64)
         z_ok = [v & 0xFFFFFFFF for v in y.flatten().tolist()] == z
-        nxt = RC.reference(call, h1.salt, c["base"] + 1, root_a, root_b, u)[1]
+        nxt = RC.reference(call, salt, c["base"] + 1, root_a, root_b, u)[1]
         dom = CM.domain(c["receipt_fields"], c["units"])
         root_r = bytes.fromhex(c["receipt_root"])
         rows = CM.receipt_rows(d["receipts"][u:u + 1])[0]
@@ -541,6 +610,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--gate-per-site", type=int, default=2)
     ap.add_argument("--workers", type=int, default=0)
     ap.add_argument("--skip-timing", action="store_true")
+    ap.add_argument("--coins", default="seeded", choices=["seeded", "live"],
+                    help="live: a round a step, its coin opened after its A tables' root (the proof service's challenger)")
     return 0 if run(ap.parse_args(argv))["ok"] else 1
 
 
