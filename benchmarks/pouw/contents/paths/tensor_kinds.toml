@@ -1,0 +1,4 @@
+order = 50
+path = "`tensor_kinds/`"
+runs_on = "RTX PRO 6000"
+what = "Every native MMA form's joint issue coefficient (fitted beside an IADD3+FFMA lane, which issues at 1 a SMSP-cycle alone, and beside IADD3 alone, in the warp-specialized and interleaved schedules), its issue price an output slot against IMMA s8 m16n8k32's (whether the issue form of the tensor theorem is tight), and each form's worst load on VF3e's joint rows JI3e_0/1/2 (`run.sh` under `gpu-lease 1`, `tensor_kinds.py` the fit); `tensor_kinds.py refit OUT...` prints the machine model's JI3n rows (VF3n-16) from the runs; `search.sh` (M1c) times the forms that set them over schedules (lane op, register layout, warps a SMSP, placement), and `refit OUT... --search S...` prints JI3o (VF3o-16) with the schedule margin measured"

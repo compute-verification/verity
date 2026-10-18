@@ -436,29 +436,31 @@ theorem abortRun_eq {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO :
   simp only [abortRun, innerF, keepA, extendDraw, innerCoins_extend D I x hn]
   rfl
 
-/-- `P_I`'s aborting run records only calls that `E_O`'s witnesses there record. -/
+/-- `P_I`'s aborting run records only calls that `E_O`'s witnesses there record, or those witnesses' calls collide
+(`CallsLogColl`). -/
 theorem innerF_vLog_sub {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
     {decO : List (ℕ × Col) → List T} {Ω : Type} {P : Prover Ω} {x : Msg} {decC : Msg → Msg → Coin}
-    (hC : CallsRecord H D I DO) (hpc : PublicCoin H I decC) (ω : Ω)
+    (hL : CallsLogColl H D I DO) (hpc : PublicCoin H I decC) (ω : Ω)
     (d : (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x) :
-    ∀ e ∈ (innerF H D I DO decO P x decC ω d).vLog, e ∈ D.calls x ((eoOut H D I DO decO P x ω d).getD []) := by
-  intro e he
+    (∀ e ∈ (innerF H D I DO decO P x decC ω d).vLog, e ∈ D.calls x ((eoOut H D I DO decO P x ω d).getD [])) ∨
+      ∃ u v, findColl (D.calls x ((eoOut H D I DO decO P x ω d).getD [])) = some (u, v) ∧ Collision H u v := by
   by_cases hk : keepD H D I DO decO P x ω d = true
   · have hk' : (eoOut H D I DO decO P x ω d).isSome = true ∧ Agrees H D I DO decO P x ω d := by
       simpa only [keepD, decide_eq_true_eq] using hk
     obtain ⟨ws, hws⟩ := Option.isSome_iff_exists.1 hk'.1
-    rw [innerF_eq_innerRun hpc hws hk'.2] at he
-    rw [hws]
-    exact (hC decO x Ω P ω d.1 d.2 ws (eoGives_of_some hws)).1 e he
-  · simp [innerF, hk, abortTrace] at he
+    rw [innerF_eq_innerRun hpc hws hk'.2, hws]
+    exact hL decO x Ω P ω d.1 d.2 ws (eoGives_of_some hws)
+  · exact Or.inl fun e he => by simp [innerF, hk, abortTrace] at he
 
+/-- The calls `Be` reads at a draw are true evaluations: `E_O`'s witnesses' where it gives them (`CallsTrue`), none's
+where it gives up (`CallsNil`). -/
 theorem calls_true {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
-    {decO : List (ℕ × Col) → List T} {Ω : Type} {P : Prover Ω} {x : Msg} (hC : CallsRecord H D I DO)
+    {decO : List (ℕ × Col) → List T} {Ω : Type} {P : Prover Ω} {x : Msg} (hT : CallsTrue H D I DO)
     (hN0 : CallsNil H D) (ω : Ω) (d : (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x) :
     ∀ e ∈ D.calls x ((eoOut H D I DO decO P x ω d).getD []), H e.1 = e.2 := by
   rcases hws : eoOut H D I DO decO P x ω d with _ | ws
   · exact hN0 x
-  · exact (hC decO x Ω P ω d.1 d.2 ws (eoGives_of_some hws)).2
+  · exact hT decO x Ω P ω d.1 d.2 ws (eoGives_of_some hws)
 
 /-! ## The inner stage's failure -/
 
@@ -563,9 +565,10 @@ theorem PrBadGood_le_abort {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W
 /-- **A draw is bad at most as `√(k_I·k(x)·Pr[Be])`**: it misses `P_I` at some inner round `j`, at most
 `√(Pr[two extractions forked at j open round j differently])` (`Pr_plur_fork`), which is a collision `Be` finds; the
 rounds' roots sum under one (Cauchy–Schwarz) to at most `√(k_I·Σ_j Pr[…])`, and `Σ_j ≤ k(x)·Pr[Be]`
-(`sum_opensDiffer_le`). -/
+(`sum_opensDiffer_le`, from the played rounds' openings). -/
 theorem Pr_bad_le {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
-    {opening : Opening} (hO : CallsOpen H D I DO opening) (hC : CallsRecord H D I DO) (hR : InnerRounds D I)
+    {opening : Opening} (hV : InnerViewRun H D I DO) (hO : CallsOpenPlayed H D I DO opening)
+    (hT : CallsTrue H D I DO) (hR : InnerRounds D I)
     (decO : List (ℕ × Col) → List T) (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) :
     Pr (fun t : Ω × (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x => Bad H D I DO decO P x t.1 t.2) ≤
       Real.sqrt (I.V.k (xI D x) * D.V.k x * PrBe H D I DO decO P x) := by
@@ -595,7 +598,7 @@ theorem Pr_bad_le {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : F
     (g := fun j => Pr (OpensDiffer H D I DO decO P x j)) (fun _ => zero_le_one) (fun j => Pr_nonneg _)
   simp only [Real.sqrt_one, one_mul, Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul,
     mul_one] at hcs
-  have h4 := sum_opensDiffer_le hO hC hR decO x P
+  have h4 := sum_opensDiffer_le hV hO hT hR decO x P
   calc Pr (fun t : Ω × (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x => Bad H D I DO decO P x t.1 t.2)
       ≤ ∑ j : Fin (I.V.k (xI D x)), Real.sqrt (Pr (OpensDiffer H D I DO decO P x j)) :=
         h1.trans (Finset.sum_le_sum fun j _ => h2 j)
@@ -608,12 +611,13 @@ theorem Pr_bad_le {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : F
     _ = Real.sqrt (I.V.k (xI D x) * D.V.k x * PrBe H D I DO decO P x) := by rw [mul_assoc]
 
 /-- **`B` at `P_I`'s aborting runs finds only collisions `B_I` finds**: each kept run's calls are recorded by `E_O`'s
-witnesses at the draw it extends to (`CallsRecord`), an aborted run makes none, and `B`'s fork of the inner coins
-extends to `B_I`'s fork of the compiled verifier's (`extend_forkCoins`, `unifMap_bAbort`). -/
+witnesses at the draw it extends to, or those recorded calls collide (`CallsLogColl`), which `B_I` finds as well; an
+aborted run makes none, and `B`'s fork of the inner coins extends to `B_I`'s fork of the compiled verifier's
+(`extend_forkCoins`, `unifMap_bAbort`). -/
 theorem PrBAbort_le_PrBI {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
-    {decC : Msg → Msg → Coin} (hC : CallsRecord H D I DO) (hN0 : CallsNil H D) (hpc : PublicCoin H I decC)
-    (hR : InnerRounds D I) (decO : List (ℕ × Col) → List T) (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω]
-    (P : Prover Ω) :
+    {decC : Msg → Msg → Coin} (hL : CallsLogColl H D I DO) (hT : CallsTrue H D I DO) (hN0 : CallsNil H D)
+    (hpc : PublicCoin H I decC) (hR : InnerRounds D I) (decO : List (ℕ × Col) → List T) (x : Msg) {Ω : Type}
+    [Fintype Ω] [Nonempty Ω] (P : Prover Ω) :
     PrBAbort H I.V (innerP H D I DO decO P x decC) (xI D x) (keepA H D I DO decO P x) ≤
       PrBI H D I DO decO P x := by
   have hcoll : ∀ (j : Fin (I.V.k (xI D x))) (ω : Ω) (ρ ρ' : Fin (I.V.k (xI D x)) → Coin)
@@ -629,15 +633,19 @@ theorem PrBAbort_le_PrBI {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} 
     rw [extend_forkCoins]
     have htrue : ∀ p ∈ D.calls x ((eoOut H D I DO decO P x ω (extend ρ a.1, a.2)).getD []) ++
         D.calls x ((eoOut H D I DO decO P x ω (extend (forkCoins j ρ ρ') a'.1, a'.2)).getD []), H p.1 = p.2 :=
-      fun p hp => (List.mem_append.1 hp).elim (calls_true hC hN0 ω _ p) (calls_true hC hN0 ω _ p)
-    have hsub : ∀ p ∈ (innerF H D I DO decO P x decC ω (extendDraw (ρ, a))).vLog ++
-        (innerF H D I DO decO P x decC ω (extendDraw (forkCoins j ρ ρ', a'))).vLog,
-        p ∈ D.calls x ((eoOut H D I DO decO P x ω (extend ρ a.1, a.2)).getD []) ++
-          D.calls x ((eoOut H D I DO decO P x ω (extend (forkCoins j ρ ρ') a'.1, a'.2)).getD []) :=
-      fun p hp => (List.mem_append.1 hp).elim
-        (fun hp => List.mem_append_left _ (innerF_vLog_sub hC hpc ω _ p hp))
-        (fun hp => List.mem_append_right _ (innerF_vLog_sub hC hpc ω _ p hp))
-    obtain ⟨⟨u, v⟩, huv⟩ := Option.isSome_iff_exists.1 (findColl_isSome_of_sub H htrue hsub h)
+      fun p hp => (List.mem_append.1 hp).elim (calls_true hT hN0 ω _ p) (calls_true hT hN0 ω _ p)
+    have hsome : (findColl (D.calls x ((eoOut H D I DO decO P x ω (extend ρ a.1, a.2)).getD []) ++
+        D.calls x ((eoOut H D I DO decO P x ω (extend (forkCoins j ρ ρ') a'.1, a'.2)).getD []))).isSome := by
+      rcases innerF_vLog_sub (decC := decC) hL hpc ω (extendDraw (ρ, a)) with h1 | ⟨u, v, huv, -⟩
+      · rcases innerF_vLog_sub (decC := decC) hL hpc ω (extendDraw (forkCoins j ρ ρ', a')) with
+          h2 | ⟨u, v, huv, -⟩
+        · exact findColl_isSome_of_sub H htrue (fun p hp => (List.mem_append.1 hp).elim
+            (fun hp => List.mem_append_left _ (h1 p hp)) fun hp => List.mem_append_right _ (h2 p hp)) h
+        · exact findColl_isSome_of_sub H htrue (fun p hp => List.mem_append_right _ hp)
+            (Option.isSome_iff_exists.2 ⟨_, huv⟩)
+      · exact findColl_isSome_of_sub H htrue (fun p hp => List.mem_append_left _ hp)
+          (Option.isSome_iff_exists.2 ⟨_, huv⟩)
+    obtain ⟨⟨u, v⟩, huv⟩ := Option.isSome_iff_exists.1 hsome
     exact ⟨u, v, huv, findColl_spec H _ htrue u v huv⟩
   unfold PrBAbort PrBI
   by_cases hk : 0 < I.V.k (xI D x)
@@ -655,14 +663,15 @@ stage fails where `E^rep` fails against `P_I`'s aborting runs, at most `κ_I + �
 `N_I·√(k_I·k(x)·Pr[Be])`. -/
 theorem innerKS_of_KSAbort [DecidableEq Col] [Zero Col] {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W}
     {DO : Flock.Deploy Coin Col T} {opening : Opening} {decC : Msg → Msg → Coin} (hKS : I.KSAbort H)
-    (hR : InnerRounds D I) (hV : InnerViewRun H D I DO) (hC : CallsRecord H D I DO) (hO : CallsOpen H D I DO opening)
-    (hAcc : InnerAccepts H D I DO) (hpc : PublicCoin H I decC) (hN0 : CallsNil H D) : InnerKS H D I DO := by
+    (hR : InnerRounds D I) (hV : InnerViewRun H D I DO) (hT : CallsTrue H D I DO) (hL : CallsLogColl H D I DO)
+    (hO : CallsOpenPlayed H D I DO opening) (hAcc : InnerAccepts H D I DO) (hpc : PublicCoin H I decC)
+    (hN0 : CallsNil H D) : InnerKS H D I DO := by
   intro decO _ x Ω _ _ P
   have h1 := PrBadGood_le_abort hV hAcc hpc hR decO x P
   have h2 := hKS (xI D x) Ω (innerP H D I DO decO P x decC) ((Fin (D.V.k x) → Coin) × (EO D I DO decO).C x)
     (keepA H D I DO decO P x)
-  have h3 := PrBAbort_le_PrBI hC hN0 hpc hR decO x P
-  have h4 := Pr_bad_le hO hC hR decO x P
+  have h3 := PrBAbort_le_PrBI hL hT hN0 hpc hR decO x P
+  have h4 := Pr_bad_le hV hO hT hR decO x P
   have hBA0 : 0 ≤ PrBAbort H I.V (innerP H D I DO decO P x decC) (xI D x) (keepA H D I DO decO P x) := by
     unfold PrBAbort; split
     · exact Pr_nonneg _
@@ -698,10 +707,10 @@ theorem KS_of_flockKS [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner 
     (opening : Opening) (decC : Msg → Msg → Coin) (hF : Flock.KS H DO) (hKS : I.KSAbort H)
     (hRef : Refuses H D) (hRounds : InnerRounds D I) (hN : SessionNums D DO) (hε : TableErrNonneg D)
     (hRd : SessionRounds D I DO) (hS : SessionAccepts D) (hR : SessionRuns H D I DO) (hV : InnerViewRun H D I DO)
-    (hC : CallsRecord H D I DO) (hO : CallsOpen H D I DO opening) (hAcc : InnerAccepts H D I DO)
-    (hpc : PublicCoin H I decC) (hN0 : CallsNil H D) : KSA H D I DO :=
+    (hT : CallsTrue H D I DO) (hL : CallsLogColl H D I DO) (hO : CallsOpenPlayed H D I DO opening)
+    (hAcc : InnerAccepts H D I DO) (hpc : PublicCoin H I decC) (hN0 : CallsNil H D) : KSA H D I DO :=
   KS_of H D I DO hRef hRounds (outerKS_of_flockKS hF hN hε hRd hS hR)
-    (innerKS_of_KSAbort hKS hRounds hV hC hO hAcc hpc hN0)
+    (innerKS_of_KSAbort hKS hRounds hV hT hL hO hAcc hpc hN0)
 
 end RecursionKS
 
