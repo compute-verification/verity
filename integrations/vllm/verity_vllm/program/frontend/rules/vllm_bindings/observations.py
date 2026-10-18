@@ -116,6 +116,12 @@ def traced_launch_tokens(own: int) -> int:
     return T.launch_tokens(own, step, active_launch_context(), sampled=rows == "sampled")
 
 
+def traced_launch_step() -> int | None:
+    """The request step being traced (`launch_region`), None outside one."""
+    region = _OBSERVED["launch_region"]
+    return None if region is None else region[0]
+
+
 def _launch_of(node, read):
     """`read(step, sampled)` at the node's `launch_region` tag.  A node without a tag, or a declaration that does not hold this
     request, is refused: the launch its kernel choice reads is unknown."""
