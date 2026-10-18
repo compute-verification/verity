@@ -82,7 +82,10 @@ TARGETS: dict[str, dict[str, Any]] = {
                                           "step (silicon.instructions, r20260922-185339-e337); cc 9.0, 132 SMs, vLLM d9105ea80, served defaults: "
                                           "the compiled Match r20261018-084657-c7f6 equals MoeExpertGemm_v2 / MoeExpertGemmW_v2{DOT=HopperBF16WgmmaDot16_v1} "
                                           "on 672 of 672 rows each at the tuned tiles of 1 to 303 rows, where the _v1 binding matched 27 of 1,344 "
-                                          "(r20261018-062333-f1a7)",
+                                          "(r20261018-062333-f1a7); eager under batch invariance, whose launches take the same tuned tiles: the "
+                                          "Match r20261018-101214-aa8f folds every expert row of 32 steps to these Definitions, and tier A on its "
+                                          "rerun's capture (r20261018-103507-288c, replayed by r20261018-122240-8e2d) evaluates 1,536 of 1,536 rows "
+                                          "exactly at the gates, each launch's 384 rows of decode step 1 and 384 of the prefill",
                             "attention_fa3": "lane HP CONF-b1-hopper (D=128, BN=128, 39 leaves exact, positions 0..526); R13 hopper: D=64 (BN 128 prefill / "
                                              "192 decode) — the native FA3 row's Match replay"}},
     "blackwell_consumer": {"dot_id": "HopperBF16WgmmaDot16_v1",
