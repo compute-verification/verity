@@ -7,7 +7,8 @@ comes from, who owns it (a Slack handle), and the patterns (`managed`) under whi
   research deploy install NODE --by WHO [--ref REF] [PATH ...] [--apply] [--no-fetch]
   research deploy attic NODE --by WHO [PATH ...] [--backups] [--ref REF] [--apply] [--no-fetch]
 
-`drift` reads each node over ssh, as `research run --on` reaches it, and gives each entry one state:
+`drift` reads each node over ssh, as `research run --on` reaches it (a node whose `staged` says why its machine doesn't exist
+yet only when named with --on; `install` takes it as any other), and gives each entry one state:
   ok        the installed file is REF's
   ahead     a commit on an origin branch REF lacks has it (the node's record names the commit, or recent history finds it):
             a PR's head or a hotfix, fine until it lands; then `install` from REF
@@ -242,11 +243,13 @@ class Node:
     managed: list[str]
     entries: list[Entry]
     quiet: str | None = None           # a shell test on the node: install restarts services only while it succeeds
+    staged: str | None = None          # why the machine doesn't exist yet: `drift` of every node passes it by
 
 
 def load(manifest: Path = MANIFEST, text: str | None = None) -> dict[str, Node]:
     m = tomllib.loads(manifest.read_text() if text is None else text)
-    nodes = {n: Node(n, c["record"], list(c.get("managed", [])), [], c.get("quiet")) for n, c in m.get("nodes", {}).items()}
+    nodes = {n: Node(n, c["record"], list(c.get("managed", [])), [], c.get("quiet"), c.get("staged"))
+             for n, c in m.get("nodes", {}).items()}
     for kind in ("file", "tree"):
         for e in m.get(kind, []):
             if bool(e.get("src")) == bool(e.get("by")) or (kind == "tree" and not e.get("src")):
@@ -652,6 +655,9 @@ def main(argv: list[str] | None = None, run: Runner | None = None, manifest: Pat
             if name not in nodes:
                 print(f"research deploy: no node {name!r} in {manifest}", file=sys.stderr)
                 return 2
+            if nodes[name].staged and not ns.node:
+                print(f"research deploy: {name} is staged ({nodes[name].staged}): `drift --on {name}` reads it", file=sys.stderr)
+                continue
             try:
                 reps[name] = drift(nodes[name], ns.ref, run, repo)
             except (RuntimeError, subprocess.CalledProcessError, ValueError) as e:
