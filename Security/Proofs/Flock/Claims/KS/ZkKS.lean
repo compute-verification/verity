@@ -10,8 +10,8 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictStatements
 relation, from two premises:
 
 * `ZkOne`: every statement some run accepts parses with one table (`zk_KS_of_table`'s `hone`). The masked scope admits
-  several tables (`InScope`'s `zk ∨ tables ≤ 1`), so this holds of a masked deployment only where no run accepts a
-  statement of several;
+  several tables (`InScope`'s `tables ≤ if zk then zkTableCap else 1`), so this holds of a masked deployment only
+  where no run accepts a statement of several;
 * `ZkLive x` at every statement some run accepts: at C-Flock ZK's padded table there (`zkTab`), every prover has
   escapes at injective fork rounds and, at each tape and each table of full-width columns, live strategies whose verdict
   bounds the deployed runs accepting on the table, a decoder right for that verdict, and escapes' events bounding their
@@ -223,8 +223,8 @@ theorem zk_tableBoundθAt_live {x : Claims.Msg} {s : Claims.Flock.Stmt}
     (hl spec _ ht L sch tPad hz hk hlay)
 
 /-- **One table at every statement some masked run accepts** (`zk_KS_of_table`'s `hone`). The masked scope admits
-several tables (`InScope`'s `zk ∨ tables ≤ 1`), so this is a premise on which statements a run accepts, which a
-deployment that serves statements of several tables does not meet. -/
+several tables (`InScope`'s `tables ≤ if zk then zkTableCap else 1`), so this is a premise on which statements a run
+accepts, which a deployment that serves statements of several tables does not meet. -/
 def ZkOne : Prop :=
   ∀ x, (∃ s, (deployZk Readable.relation).parse x = some s ∧ s.tables = 1) ∨
     Claims.Flock.NoAcc sha512 (deployZk Readable.relation).V x

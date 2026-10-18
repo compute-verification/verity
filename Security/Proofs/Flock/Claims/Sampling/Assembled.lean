@@ -85,7 +85,9 @@ theorem sampling_assembled (rel : _root_.Flock.Readable.Parsed → _root_.Flock.
   have hdec : Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ D.flock.decode ∧
       ∀ os, (D.flock.dec os).2 ≤ FlockDeploy.zkStepPoly.eval (Claims.Flock.wordLen os) := by
     rw [hflock]
-    exact ⟨(FlockDeploy.efficient_zk H rel).2.1, (FlockDeploy.efficient_zk H rel).2.2.1⟩
+    refine ⟨?_, (FlockDeploy.efficient_zk H rel).2.2.1⟩
+    rw [show (FlockDeploy.deployZk rel).decode = Claims.GS.zkDecodeRD from FlockDeploy.decode_zk rel]
+    exact FlockDeploy.listWithin_zk rel
   exact ⟨hscope, hbind, Universal_of huniv, faultyBoundary, hks, KSCount_of_KS hks,
     Bits_of_KS hks (E_runs_exp H D hfixed) (E_own_le hopen) hε,
     ⟨E_runs_le H D _, E_runs_exp H D hfixed _, E_own_le hopen _, hdec.1, hdec.2⟩, hComplete, hZK⟩

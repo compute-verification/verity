@@ -99,7 +99,7 @@ def parseOf (decode : Claims.Msg → Option Read) (x : Claims.Msg) : Option Clai
 (`ProvedScope.drawLaw` refuses a session without one), and `RecSetup.fullDraw` takes it, as `verify` calls it. -/
 def fullDrawOk (i : RecVStar.Inner) (record : String) : Bool :=
   match Witness.recordDraw record with
-  | some d => (RecSetup.fullDraw (some i) (some d) record).isOk
+  | some d => (RecSetup.fullDraw (some i) true (some d) record).isOk
   | none => false
 
 /-- **The deployed scope check**: the parser accepts, the inner scope check `ivScope` takes the inner statement, and
@@ -224,6 +224,7 @@ theorem checkAtC3_ok {i : RecVStar.Inner} {src : Option RecCoins.Source} {sp : R
 theorem fullDrawOk_iff (i : RecVStar.Inner) (record : String) :
     fullDrawOk i record = true ↔ ∃ e, recordDrawOf record = some e ∧ e.Full := by
   unfold fullDrawOk recordDrawOf RecSetup.fullDraw
+  simp only [Option.isNone_some, Bool.and_false, Bool.false_eq_true, ↓reduceIte]
   rcases hd : Witness.recordDraw record with _ | d
   · simp
   rcases hD : Draw.UnitDraw.ofJson d with e | D

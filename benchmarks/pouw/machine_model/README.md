@@ -95,7 +95,9 @@ microbenchmark that knows nothing about any algorithm (`../opcode_probe/`, on `.
   - `measured`: a gated run of its own;
   - `joint`: a facet of a measured frontier;
   - `provisional`: in use before its gate, or closed;
-  - `ASSUMED`: no run measures it.
+  - `ASSUMED`: no run measures it;
+  - `datasheet`: a vendor document states it (a data sheet's peak, the Programming Guide's throughput table, Nsight
+    Compute's pipe assignment), at its exact value: a device's `DS_*` rows and its vector `DS-NN` ("Devices").
 
   A row a re-measurement violates closes, whatever its status ("Adopt a probe's census").
 
@@ -358,6 +360,12 @@ follows these rules:
     is bound by its slots alone.
 
   `data/adapt.toml` holds for every device. A census with no uniform-datapath line (`UNI`) closes the uniform route.
+
+Each device also has a data-sheet vector, `DS-NN` (note:20261017T1818Z-draft-axioms): its `DS_*` rows, which a vendor
+document states, at their exact values, and no measured or joint row. They are `DS_issue` (every kind 1 SMSP-cycle,
+uniform included), `DS_tensor` (each MMA form's MACs over the data sheet's dense peak for its type), the pipe rows of
+the Programming Guide's throughput table on Nsight Compute's pipes, and `DS_smem` (128 B a SM-clock). `eps --vector
+DS-NN` prices a design on the axioms alone. The current vector is the measured one, and every row is some vector's.
 
 The L40S (`data/devices/sm_89/`, note:20261017T0605Z-draft-eps1-ada) prices Dither-1S, Dither-2S and Dither-C at L = 16
 (IMMA.16816, where T1 is tight) and at L = 32 (IMMA.16832, half the tensor pipe's words), on ADA's measured honest step:
