@@ -175,22 +175,35 @@ class Part:
     source: str
 
 
+PINNED = ("Accounting.Guarantees.FillerLuck.PinnedFillBlocksDeficit (and PinnedFillLuckAt): the check recomputes the "
+          "drawn tile's receipt from committed data and the round's coins and compares it with the committed one, so a "
+          "wrong receipt fails whenever its tile is drawn and nothing is left to guess; what a right receipt cost is "
+          "FILL-OPT's")
+PFILL = ("Accounting.Guarantees.FillerLuck.FillerBlocksDeficit (and FillerLuckAt): pfill's cell check, a short cell "
+         "right with probability at most ½ + 2^(−3/2)")
+
+
 @dataclass(frozen=True)
 class Filler:
     """Verified proof-of-work filler: `per_word` lane instructions a committed word in the class mix `mix`, run by
-    honest on `route`; a deficient block of it passes its check with probability ≤ `p` (SPEC §5: 0.854 for both
-    fillers, any K)."""
+    honest on `route`; a deficient block of it passes its check with probability ≤ `p`, as the theorem `luck` names
+    proves. Without one p is 1, no luck credit: the cheater leaves the filler undone at no cost to Theorem S's budget,
+    even with every block checked. A receipt the check recomputes and compares with the committed one has p = 0
+    (`PINNED`), pfill's cells 0.854 (`PFILL`)."""
     per_word: float = 0.0
     mix: dict[str, float] | None = None
     route: str = "lanes"         # lanes or uniform
     source: str = ""
-    p: float = 0.854
+    p: float = 1.0
+    luck: str = ""               # the theorem that proves p < 1
 
 
 def lane_fill(x: float) -> Filler:
-    """x lane instructions a word of verified filler on lanes, LOP3 and IMAD alternating (FILL-OPT)."""
+    """x lane instructions a word of verified filler on lanes, LOP3 and IMAD alternating (FILL-OPT), its receipts
+    recomputed by the check (p = 0, `PINNED`)."""
     return Filler(per_word=x, mix={"ALU": 1.0, "IMAD": 1.0}, route="lanes",
-                  source="CALC: a lane chain of LOP3 and IMAD, receipts checked like the fold's (candidate)")
+                  source="CALC: a lane chain of LOP3 and IMAD, receipts checked like the fold's (candidate)",
+                  p=0.0, luck=PINNED)
 
 
 @dataclass(frozen=True)
@@ -315,10 +328,14 @@ def design(name: str, data: Path = DATA) -> Design:
     ops = t.get("operands", {"floor": h.floor, "source": h.floor_source})
     f = t.get("filler", {})
     filler = Filler(per_word=f.get("per_word", 0.0), mix=f.get("mix"), route=f.get("route", "lanes"),
-                    source=f.get("source", ""), p=f.get("p", Filler.p))
+                    source=f.get("source", ""), p=f.get("p", Filler.p), luck=f.get("luck", ""))
     if filler.route != "lanes" or (filler.per_word and not filler.mix):
         raise SystemExit(f"{name}: honest runs a filler on lanes, with its class mix (decision 73: a uniform "
                          "instruction takes an issue slot, so no design fills the uniform datapath)")
+    if filler.per_word and ("p" not in f or not 0 <= filler.p <= 1 or (filler.p < 1 and not filler.luck)):
+        raise SystemExit(f"{name}: [filler] p is the probability a deficient block passes its check, and `luck` the "
+                         f"theorem that proves it: 0 for a receipt the check recomputes ({PINNED.split(' ')[0]}), "
+                         f"0.854 for pfill's cells ({PFILL.split(' ')[0]}), or p = 1 with no `luck` (no luck credit)")
     noise = dict(t.get("noise", {}))
     if set(noise) != set(PRODUCTS) or set(noise.values()) - set(NOISE):
         raise SystemExit(f"{name}: [noise] names a leaf of NOISE ({', '.join(NOISE)}) for each of {', '.join(PRODUCTS)}")

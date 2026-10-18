@@ -19,20 +19,41 @@ All words are uint32 and arithmetic wraps. An MMA gives a lane four words (d0, d
 
 | fold | step | key rule | soundness |
 |---|---|---|---|
-| duo | per word: u = y ^ d ^ k, y ← u·a + z, z ← rotl(u, r) + y | pfill: key_ok; served: fixed odd keys | proved: no all-state kernel, binds every word |
+| duo | per word: u = y ^ d ^ k, y ← u·a + z, z ← rotl(u, r) + y | pfill: key_ok; served: fixed odd keys | needs (D) past four words; one, two and three proved, four at both schedules' keys |
 | xin13 | y ← (rotl(y, 13) ^ d0)·a0 + d1, then (rotl(y, 19) ^ d2)·a1 + d3 | key_ok_r9; key_ok_r11 for r11's Theorem 1 | needs (RT) and (G₃) |
-| li | y ← (y ^ d0 ^ k0)·a0 + d1, then (y ^ d2 ^ k1)·a1 + d3 | key_ok_r9 | needs (RT), (G₃) and (HO) |
+| li | y ← (y ^ d0 ^ k0)·a0 + d1, then (y ^ d2 ^ k1)·a1 + d3 | key_ok_r9 | needs (RT), (G₃) and (HO); with pinned openings and a checkpoint a segment, nothing beyond odd multipliers (proved) |
 | ram | y ← (rotl(y, 7) + d0)·a0 + d1, then (rotl(y, 19) + d2)·a1 + d3 | key_ok | binds pairs only, through Q = a0·d0 + d1 |
 | xin7 | xin13 with rotations (7, 19) | key_ok | retired: ±128 is an int8 ratio at its step boundary |
 
 `FOLDS` in `receipt_folds.py` carries each status with its source:
 
+- **(D), duo's premise.** Two different runs of a chain's words leave different final states on some start state
+  (pfill commits the whole state; a served chain's receipt y ^ rotl(z, 16) needs the same up to one constant). It is
+  proved at every width for one, two and three words, for odd multipliers and rotations 0 < r < n (Lean:
+  `Pouw.SecurityProofs.Receipt.DuoWordInjective`, `Pouw.SecurityProofs.Receipt.DuoPairNoKernel`,
+  `Pouw.SecurityProofs.Receipt.DuoTripleNoKernel`). At four words it is false for odd keys with r1 + r3 ≡ 0 (mod 32),
+  a2 ≡ −1 (mod 2^r1) and a3 ≡ ±1 (mod 2^(33 − r1)): flipping the top bit of all four words changes no final state.
+  key_ok rejects such keys, and neither schedule has r_t + r_(t+2) ≡ 0 (mod 32). At four words, any kernel needs
+  a2 ≡ −1 (mod 2^r1), for odd a1, a2, a3, rotations 0 < r2, r3 < n and 0 < r1 ≤ n − 3 (Lean:
+  `Pouw.SecurityProofs.Receipt.DuoQuadNoKernel`). key_ok rejects a ≡ −1 (mod 32) and pfill's rotations are 5 to 29,
+  and no served position t has SERVED_KA[(t + 2) mod 8] ≡ −1 (mod 2^SERVED_ROT[t]), whose rotations are 4 to 27. So
+  both schedules bind every four-word run of the whole state. `benchmarks/pouw/theory/duo_kernel.c` finds every
+  four-word kernel at width 4 to be the top-bit family, and every kernel it has found at widths 6 and 8 is too.
+  Still open: five or more words, and the served receipt's form (equal up to one constant) at any length.
 - **(RT) and (G₃).** RS-E-REF Part IX (note:20261015T1931Z-draft-theorem-e-referee) says (RT) is open and that no lemma
   removes it, and that (G₃) suffices for (G₄).
 - **r11's results.** P2-FF r11 (note:20261016T1549Z-draft-fullfloor-s-r11) finds that pricing can't replace (RT). It
   proves (G₃) at one MMA under key_ok_r11 (its Theorem 1), and for chains apart from runs of two or more non-XOR δ.
 - **(HO), li's extra premise.** No hand-off joins two words whose rows or columns are equal or complementary
   (note:20261016T1117Z-draft-fullfloor-s-r9 §2).
+- **li with pinned openings and a checkpoint a segment.** When every absorbed word is recomputed from committed operands
+  and a pinned start, and each segment commits the XOR of the chains' states, li needs none of (RT), (G₃), (HO) or a key
+  rule beyond odd multipliers. A half step is a bijection of the state, a checkpoint is injective in each word any chain
+  absorbed, and changing one word by XOR with x changes the checkpoint at x's lowest set bit and at no bit below it, at
+  every width (Lean: `Pouw.SecurityProofs.Receipt.LiHalfBijective`, `Pouw.SecurityProofs.Receipt.LiCheckpointWordInjective`,
+  `Pouw.SecurityProofs.Receipt.LiCheckpointLowBit`). So a skipped value that lands on one word of a segment is always
+  caught. One receipt word a window is not enough: li is a T-function, so a persistent skip's copies all differ first at
+  the same bit, and an even number of them can cancel there (note:20261017T1848Z-draft-li-alt).
 
 The key rules:
 
