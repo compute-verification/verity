@@ -12,7 +12,10 @@ reaches that node after exactly `j` coins on every path, or forks to nothing on 
   a fresh slot and keeps the entry;
 * `SlotAt`, `forkE_le_forkC`: the alignment, and the bound it gives;
 * `Aligned.mono_self`, `forkE_mapL`, `SlotAt.mono`, `SlotAt.mapL`: weakening the leaf relation and relabelling the
-  oracle side keep the fork and the alignment.
+  oracle side keep the fork and the alignment;
+* `answerWith_send`, `expect_answerWith`, `expect₂_answerWith`, `forkE_answerWith`: against a strategy answering every
+  message of one type with `nul` (a dead branch's), the fork is `0` at any chooser where `Φ` is `0` at every two
+  outcomes reached with those messages `nul`, so such a branch meets `SlotAt` by `nul`.
 -/
 
 namespace FlockSoundness.Game.Lock
@@ -154,5 +157,63 @@ theorem SlotAt.mapL {T D I α α₂ β : Type} {get : I → ℕ → Option (T ×
   | other s hne _ ih => exact .other s hne ih
   | here σ' => exact .here σ'
   | nul h0 => exact .nul ((forkE_mapL _ _ _ f h _ _).trans h0)
+
+/-- `answerWith nul` at a message node sends a message every equation of types takes to `nul`, and plays
+`answerWith nul` below it. -/
+theorem answerWith_send {β Op M : Type} (nul : Op) {k : M → Game β} (hg : AllInh (.send M k))
+    (σ : Strategy (.send M k)) : ∃ (m : M) (τ : Strategy (k m)), (∀ e : Op = M, m = cast e nul) ∧
+      Claims.Bridge.answerWith nul (.send M k) σ = ⟨m, Claims.Bridge.answerWith nul (k m) τ⟩ := by
+  by_cases hc : ∃ e : Op = M, Nonempty (Strategy (k (cast e nul)))
+  · refine ⟨cast hc.fst nul, Classical.choice hc.snd, fun _ => rfl, ?_⟩
+    rw [Claims.Bridge.answerWith, dite_eq_left_of_eq_true (eq_true hc)]
+  · refine ⟨σ.1, σ.2, fun e => absurd ⟨e, (hg.send_k _).strategy⟩ hc, ?_⟩
+    rw [Claims.Bridge.answerWith, dite_eq_right_of_eq_false (eq_false hc)]
+
+/-- **Against `answerWith nul` an expectation is `0`** where its function is `0` at every outcome reached with every
+message of `nul`'s type `nul` (`Claims.Bridge.OutN`). -/
+theorem expect_answerWith {α Op : Type} (nul : Op) {f : α → ℝ} :
+    ∀ {g : Game α}, AllInh g → (∀ a, Claims.Bridge.OutN nul g a → f a = 0) → ∀ σ : Strategy g,
+      expect f g (Claims.Bridge.answerWith nul g σ) = 0
+  | .ret a, _, h, _ => h a (.ret a)
+  | .send M k, hg, h, σ => by
+      obtain ⟨m, τ, hm, he⟩ := answerWith_send nul hg σ
+      rw [he]
+      exact expect_answerWith nul (hg.send_k m) (fun a ha => h a (.send m hm ha)) τ
+  | @Game.coin _ C _ _ k, hg, h, σ => by
+      simp only [Claims.Bridge.answerWith, expect]
+      rw [Finset.sum_eq_zero fun c _ =>
+        expect_answerWith nul (hg.coin_k c) (fun a ha => h a (.coin c ha)) (σ c), zero_div]
+
+theorem expect₂_answerWith {α Op : Type} (nul : Op) {F : α → α → ℝ} {g : Game α} (hg : AllInh g)
+    (h : ∀ a a', Claims.Bridge.OutN nul g a → Claims.Bridge.OutN nul g a' → F a a' = 0) (σ : Strategy g) :
+    expect₂ F g (Claims.Bridge.answerWith nul g σ) = 0 :=
+  expect_answerWith nul hg (fun a ha => expect_answerWith nul hg (fun a' ha' => h a a' ha ha') σ) σ
+
+/-- **Against `answerWith nul` the fork is `0`**, at any chooser, where `Φ` is `0` at every two outcomes reached with
+every message of `nul`'s type `nul`. -/
+theorem forkE_answerWith {T D I α β Op : Type} {get : I → ℕ → Option (T × D)} {R : I → α → β → Prop}
+    (plur : Chooser T D β) (slot : ℕ) {Φ : D → β → β → ℝ} (nul : Op) :
+    ∀ {i : I} {g : Game α} {g' : Game β} (L : Lock T D get R i g g'), AllInh g' →
+      (∀ d b b', Claims.Bridge.OutN nul g' b → Claims.Bridge.OutN nul g' b' → Φ d b b' = 0) →
+      ∀ σ : Strategy g', forkE plur slot Φ L (Claims.Bridge.answerWith nul g' σ) = 0
+  | _, _, _, .ret _, _, _, _ => rfl
+  | _, _, _, @Lock.coin _ _ _ _ _ _ _ _ C _ _ _ _ L, hg, hΦ, σ => by
+      simp only [Claims.Bridge.answerWith, forkE]
+      rw [Finset.sum_eq_zero fun c _ => forkE_answerWith plur slot nul (L c) (hg.coin_k c)
+        (fun d b b' hb hb' => hΦ d b b' (.coin c hb) (.coin c hb')) (σ c), zero_div]
+  | _, _, _, .send M L, hg, hΦ, σ => by
+      obtain ⟨m, τ, hm, he⟩ := answerWith_send nul hg σ
+      rw [he]
+      exact forkE_answerWith plur slot nul (L m) (hg.send_k m)
+        (fun d b b' hb hb' => hΦ d b b' (.send m hm hb) (.send m hm hb')) τ
+  | _, _, _, .table s _ _ _ _ L, hg, hΦ, σ => by
+      obtain ⟨m, τ, hm, he⟩ := answerWith_send nul hg σ
+      rw [he]
+      simp only [forkE]
+      split_ifs
+      · exact expect₂_answerWith nul (hg.send_k m)
+          (fun b b' hb hb' => hΦ m b b' (.send m hm hb) (.send m hm hb')) τ
+      · exact forkE_answerWith plur slot nul _ (hg.send_k m)
+          (fun d b b' hb hb' => hΦ d b b' (.send m hm hb) (.send m hm hb')) τ
 
 end FlockSoundness.Game.Lock
