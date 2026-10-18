@@ -66,6 +66,34 @@
    "owner": "@compute-accounting",
    "digest": "414a164b2927884959719a19f4157ef08125017896884da53459996b1212b5bd"
   },
+  "Accounting.Assumptions.TS.SheetClock": {
+   "owner": "@compute-accounting",
+   "digest": "c27bc92a531574e652f708a8b56724dee41b9f5ac2ddf6a99041454ba111f4ad"
+  },
+  "Accounting.Assumptions.TS.SheetDispatch": {
+   "owner": "@compute-accounting",
+   "digest": "f9634f4244e50365a3d6e8b7819892b9e6b1078e1d48153821f641e7086e5dc8"
+  },
+  "Accounting.Assumptions.TS.SheetPipe": {
+   "owner": "@compute-accounting",
+   "digest": "37651d89ede633ff5ef4bf579cbb463627ca2653e8dcd615665c09a04cf948a3"
+  },
+  "Accounting.Assumptions.TS.SheetSemantics": {
+   "owner": "@compute-accounting",
+   "digest": "3b3d03419951bbb4b2a714f059b4e4edd8420ca7bfb145c8ac4f6dd49f72f425"
+  },
+  "Accounting.Assumptions.TS.SheetSmem": {
+   "owner": "@compute-accounting",
+   "digest": "7fd5d664da6fd8bbe5347c3767cf9a22f3c9cbbd05e7010c0076abf6e89d76ac"
+  },
+  "Accounting.Assumptions.TS.SheetTensor": {
+   "owner": "@compute-accounting",
+   "digest": "f6ecb9bffb0d12d13ecc2daeabcc41ef4cdff64ba928a8485b973207955e01cb"
+  },
+  "Accounting.Assumptions.TS.SheetWords": {
+   "owner": "@compute-accounting",
+   "digest": "318d32c829f132eecfda9d7e485bf9b6051ca679d424dca3f8787d33e605e8e1"
+  },
   "Accounting.Assumptions.TS.SideUnits": {
    "owner": "@compute-accounting",
    "digest": "36404ba2e20a614ee48738159240c66e7f023670dba8cf261be8b3b73921e179"
@@ -1506,6 +1534,24 @@
    "signature": ["Accounting.SecurityProofs.TS.SeesOfInjective : Accounting.Guarantees.TS.SeesOfInjective"],
    "assumptions": [],
    "type_hash": "c937ea1687f1688063a1c90c1b8da809f1a119c468d6fd44e050ed5cc450bd27"
+  },
+  "Accounting.SecurityProofs.TS.SheetDIdealFloor": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.SheetDIdealFloor : Accounting.Guarantees.TS.SheetDIdealFloor"],
+   "assumptions": [],
+   "type_hash": "d29cef4e0069f10471c37f5b26c752d5c38ac5d170bd76911d94e0f497fb1dc3"
+  },
+  "Accounting.SecurityProofs.TS.SheetFacetCeilings": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.SheetFacetCeilings : Accounting.Guarantees.TS.SheetFacetCeilings"],
+   "assumptions": [],
+   "type_hash": "908b00b3111acd08a19e35369360c096e6d4b6067dd3933a4a0d6d0e12ef8ea2"
+  },
+  "Accounting.SecurityProofs.TS.SheetScalarRouteHalf": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.SheetScalarRouteHalf : Accounting.Guarantees.TS.SheetScalarRouteHalf"],
+   "assumptions": [],
+   "type_hash": "cac0d5f86541bd5206eb1febfe2492aedfd31678311825bd6371970062c982f2"
   },
   "Accounting.SecurityProofs.TS.TensorSlotCount": {
    "owner": "@compute-accounting",
@@ -5678,7 +5724,10 @@
    "Accounting.SecurityProofs.TS.ReceiptLuckCaseA": "lemma: Lemma B of LEDGER 1.3 in case (a), the receipt luck 0 over every game whose rounds are committed duo or fx1 units (a definition), from DuoRunWordInjective and Fx1RunWordInjective; not a property of a Lean function.",
    "Accounting.SecurityProofs.TS.LuckCaseA": "lemma: LuckOfReceipt at the receipt luck ReceiptLuckCaseA gives, (L) at the operand luck in case (a); not a property of a Lean function.",
    "Accounting.SecurityProofs.TS.OperandLuckCube": "lemma: the operand luck at 3/4 over every game whose rounds draw uniform cube bits against a degree-2 operand error (a definition), luck_quad as a probability; not a property of a Lean function.",
-   "Accounting.SecurityProofs.TS.LuckCaseACube": "lemma: LuckCaseA at OperandLuckCube's 3/4, (L) at 3/4 in case (a) with degree-2 operands and no luck hypothesis; not a property of a Lean function."
+   "Accounting.SecurityProofs.TS.LuckCaseACube": "lemma: LuckCaseA at OperandLuckCube's 3/4, (L) at 3/4 in case (a) with degree-2 operands and no luck hypothesis; not a property of a Lean function.",
+   "Accounting.SecurityProofs.TS.SheetFacetCeilings": "lemma: (I1) FacetCeilings on the data-sheet machine from A1-A5 (Models.Accounting.Assumptions.Sheet), over any sheet and run with counts >= 0; arithmetic over the machine's rows, not a Lean function.",
+   "Accounting.SecurityProofs.TS.SheetScalarRouteHalf": "lemma: (I3) ScalarRoute at q, q_T <= 1/2 and b_T <= 0 from A6 (two words a lane) and the labelling's split; arithmetic, not a Lean function.",
+   "Accounting.SecurityProofs.TS.SheetDIdealFloor": "frozen (no-function,world-unlisted): Theorem D-ideal (2.7-flat) of EPS1-SPEC on the data-sheet machine, DIdealFloor with (I1)-(I5) replaced by A1-A7 at the 1/2 floor, over every full-checking play and labelled program, not a Lean function; A1-A7 and (I6)-(I8) are not on the premises list."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
@@ -6970,6 +7019,9 @@
     "Accounting.SecurityProofs.TS.FloorCreditD3",
     "Accounting.SecurityProofs.TS.FoldOptOfFanIn",
     "Accounting.SecurityProofs.TS.RoutesOffD2",
+    "Accounting.SecurityProofs.TS.SheetDIdealFloor",
+    "Accounting.SecurityProofs.TS.SheetFacetCeilings",
+    "Accounting.SecurityProofs.TS.SheetScalarRouteHalf",
     "Accounting.SecurityProofs.TS.TimeBound",
     "Accounting.SecurityProofs.TS.VectorThresholdD1"
    ]
@@ -6990,7 +7042,8 @@
     "Accounting.SecurityProofs.TS.DIdealFloor",
     "Accounting.SecurityProofs.TS.LuckCaseA",
     "Accounting.SecurityProofs.TS.LuckCaseACube",
-    "Accounting.SecurityProofs.TS.LuckOfReceipt"
+    "Accounting.SecurityProofs.TS.LuckOfReceipt",
+    "Accounting.SecurityProofs.TS.SheetDIdealFloor"
    ]
   },
   "Definitions.Accounting.TS.Receipt": {
@@ -7114,8 +7167,35 @@
     "Accounting.SecurityProofs.TS.FillOptOfFanIn",
     "Accounting.SecurityProofs.TS.FloorCreditD3",
     "Accounting.SecurityProofs.TS.FoldOptOfFanIn",
+    "Accounting.SecurityProofs.TS.SheetDIdealFloor",
+    "Accounting.SecurityProofs.TS.SheetScalarRouteHalf",
     "Accounting.SecurityProofs.TS.VectorThresholdD1"
    ]
+  },
+  "Definitions.Accounting.TS.Sheet": {
+   "digest": "64cb041605a930b7b485d8894c2f1026a845b847e28357ebc57b5d9f4a5db67a",
+   "definitions": {
+    "Accounting.TS.Sheet": "e4ac34c1d3a252753762139ebcb218e7f59cb8b7f98b57e34b1be60342fe8bbb",
+    "Accounting.TS.Sheet.fmax": "96206b791af38cbd657f608e98fbb2325a372b4965ead42e95b62dfeb421a758",
+    "Accounting.TS.Sheet.machine": "b9c8ddec6ba9df8d81dc7e59b11dd3233cc35c5e4269e2afa0168c8607fe9167",
+    "Accounting.TS.Sheet.macs": "163c97b08b2add7dd923911d67c1eee6790634e362b1cd2a05dfc015b27ba069",
+    "Accounting.TS.Sheet.peak": "c914cfb2a966b32c4bcad3e23f7f75bf0160b1cf2605d5397f29efa5bfbe6d5f",
+    "Accounting.TS.Sheet.pipe": "3c5b8e9a91567d4c197014f4fd1f6674a8cd4613a4ae82863d85a7d35517b5a0",
+    "Accounting.TS.Sheet.smem": "cfebc3588b873b8ee1393dd1f352680ca11d60c422e589ce588f2a2fdb6872ca",
+    "Accounting.TS.Sheet.width": "190f3ddbbd5e58b38fae4f0b3e654c3bd41e973f9b9dade35615106ccfbf33eb",
+    "Accounting.TS.SheetRow": "63a57f01f0937de08170bd92e2d36e1365cbafdb20828a0595d2f787e1db6d32",
+    "Accounting.TS.SheetRow.casesOn": "6d5ae7e7676550f851432c989a210d0e01c04b8c1c78a3ba4a6208a6bfd69a3b",
+    "Accounting.TS.SheetRow.issue": "d34f0e27b245e34f3f5a8362f839b1d8537e61b2036081d85138395c0783d6c4",
+    "Accounting.TS.SheetRow.pipe": "b6b800e5a547b04d83ca67abf5561ae7ae94a6b0bc54639a5326fa4db59779e2",
+    "Accounting.TS.SheetRow.proxyTypeEquiv": "aeb5d2e7ae32146d663e416573e5fc5232694a52b2f9e3d885b9513fb1d039de",
+    "Accounting.TS.SheetRow.rec": "0f00eb7ee0bf9b1faa0d522f91dc2ecfb6a145886ec24bdbced2985a57b73d82",
+    "Accounting.TS.SheetRow.smem": "366015ce7d4e265e5ce79298d3698590413049c0c4b3ff01c8cb284328f6ee6b",
+    "Accounting.TS.SheetRow.tensor": "48c50f19eac83ff47bac7949c3c94a426790827f1dec8012b7e03c44aa57f26f",
+    "Accounting.TS.instFintypeSheetRow": "3da30af8c579da1302161a47f364b102f812db3a1412a36006a57983085fecfe",
+    "Accounting.TS.instFintypeSheetRow.match_3": "9afbb3d57117ea303b093c1babded32ccfa2876821e4730474ffc427877c80f0",
+    "Accounting.TS.instFintypeSheetRow.match_5": "9d7e13656b63f7e674f8703098a4843c3053a146b71b18edc3ddfe2ae7689ab6"
+   },
+   "guarantees": ["Accounting.SecurityProofs.TS.SheetDIdealFloor", "Accounting.SecurityProofs.TS.SheetFacetCeilings"]
   },
   "Definitions.Accounting.TS.Slots": {
    "digest": "ec7c1aceab4c7e2b3e0ec0184fd98d52326c0b112fac7326ee4cfe94328e51b3",
@@ -12295,6 +12375,7 @@
     "Accounting.SecurityProofs.TS.LuckOfReceipt",
     "Accounting.SecurityProofs.TS.OperandLuckCube",
     "Accounting.SecurityProofs.TS.ReceiptLuckCaseA",
+    "Accounting.SecurityProofs.TS.SheetDIdealFloor",
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorK",
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSided",
     "Pouw.SecurityProofs.RelativeSecurity.StagedFloorK",
@@ -17162,6 +17243,23 @@
     "Accounting.SecurityProofs.RemoteWindowRunConservationRelay"
    ]
   },
+  "Models.Accounting.Assumptions.Sheet": {
+   "digest": "e430a97d67e112236beeb55fd27d9e1630ec47ff36f07038c3cb2278412a320b",
+   "definitions": {
+    "Accounting.Assumptions.TS.SheetClock": "c27bc92a531574e652f708a8b56724dee41b9f5ac2ddf6a99041454ba111f4ad",
+    "Accounting.Assumptions.TS.SheetDispatch": "f9634f4244e50365a3d6e8b7819892b9e6b1078e1d48153821f641e7086e5dc8",
+    "Accounting.Assumptions.TS.SheetPipe": "37651d89ede633ff5ef4bf579cbb463627ca2653e8dcd615665c09a04cf948a3",
+    "Accounting.Assumptions.TS.SheetSemantics": "3b3d03419951bbb4b2a714f059b4e4edd8420ca7bfb145c8ac4f6dd49f72f425",
+    "Accounting.Assumptions.TS.SheetSmem": "7fd5d664da6fd8bbe5347c3767cf9a22f3c9cbbd05e7010c0076abf6e89d76ac",
+    "Accounting.Assumptions.TS.SheetTensor": "f6ecb9bffb0d12d13ecc2daeabcc41ef4cdff64ba928a8485b973207955e01cb",
+    "Accounting.Assumptions.TS.SheetWords": "318d32c829f132eecfda9d7e485bf9b6051ca679d424dca3f8787d33e605e8e1"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.TS.SheetDIdealFloor",
+    "Accounting.SecurityProofs.TS.SheetFacetCeilings",
+    "Accounting.SecurityProofs.TS.SheetScalarRouteHalf"
+   ]
+  },
   "Models.Accounting.Assumptions.TS": {
    "digest": "74ed71873e628be3044e550f2ffaf25438ab059a5344a04ba66d71004660dc8c",
    "definitions": {
@@ -17187,6 +17285,9 @@
     "Accounting.SecurityProofs.TS.LuckCaseA",
     "Accounting.SecurityProofs.TS.LuckCaseACube",
     "Accounting.SecurityProofs.TS.LuckOfReceipt",
+    "Accounting.SecurityProofs.TS.SheetDIdealFloor",
+    "Accounting.SecurityProofs.TS.SheetFacetCeilings",
+    "Accounting.SecurityProofs.TS.SheetScalarRouteHalf",
     "Accounting.SecurityProofs.TS.TimeBound"
    ]
   },
@@ -17595,6 +17696,19 @@
     "Accounting.SecurityProofs.B2WindowP2Ring",
     "Accounting.SecurityProofs.LengthCode",
     "Accounting.SecurityProofs.TimelyTicks"
+   ]
+  },
+  "Models.Accounting.Guarantees.Sheet": {
+   "digest": "58e46b2c2e135fe61b791f31d973eddf337907405f23f2f564a283152cc1f7fc",
+   "definitions": {
+    "Accounting.Guarantees.TS.SheetDIdealFloor": "bbb6d4905523d82982bc355b456a8c2f98fb1b6f81652c6e78e15ac4d70b137e",
+    "Accounting.Guarantees.TS.SheetFacetCeilings": "704461e1cd2845f76fe760c1990e73fac6b7788b528abab6c32b6277e18b24b9",
+    "Accounting.Guarantees.TS.SheetScalarRouteHalf": "d7f04f6876faae85d815c5819970bf581a0964eb63c5976ae8098320c039f506"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.TS.SheetDIdealFloor",
+    "Accounting.SecurityProofs.TS.SheetFacetCeilings",
+    "Accounting.SecurityProofs.TS.SheetScalarRouteHalf"
    ]
   },
   "Models.Accounting.Guarantees.Sketch": {

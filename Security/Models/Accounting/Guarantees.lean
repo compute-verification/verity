@@ -26,6 +26,7 @@ import Models.Accounting.Guarantees.Requirement
 import Models.Accounting.Guarantees.Sketch
 import Models.Accounting.Guarantees.Tag
 import Models.Accounting.Guarantees.TS
+import Models.Accounting.Guarantees.Sheet
 import Models.Accounting.Guarantees.TS.Receipt
 
 /-! Resource accounting's guarantee statements: the joint guarantee and its covert residual, PoUW's and the bandwidth
