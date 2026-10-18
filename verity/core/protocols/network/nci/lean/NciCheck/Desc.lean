@@ -86,13 +86,37 @@ def Piece.at (q : Piece) (t : Nat) : Int := q.base + t * q.stride
 /-- Elements `[a, b)` of `q`. -/
 def Piece.sub (q : Piece) (a b : Nat) : Piece := { q with base := q.at a, len := b - a }
 
-/-- The piece's elements as intervals of naturals (an order-free view). -/
-def Piece.ivs (q : Piece) : Array (Nat × Nat) :=
-  if q.len == 0 then #[]
-  else if q.stride == 0 then #[(q.base.toNat, q.base.toNat + 1)]
-  else if q.stride == 1 then #[(q.base.toNat, (q.at (q.len - 1)).toNat + 1)]
-  else if q.stride == -1 then #[((q.at (q.len - 1)).toNat, q.base.toNat + 1)]
-  else (Array.range q.len).map fun t => ((q.at t).toNat, (q.at t).toNat + 1)
+/-- The pieces' elements as intervals of naturals (an order-free view), not necessarily disjoint. Pieces of one stride
+`s > 1` and one length `n` whose bases run `b, b + 1, …, b + k − 1` (the rows of a transposed strided part) are `n`
+intervals `[b + t·s, b + t·s + k)`, one when `k ≥ s`; any other piece of stride `s > 1` is its `n` elements. -/
+def ivsOf (qs : Array Piece) : Array (Nat × Nat) := Id.run do
+  let mut out := #[]
+  let mut strided : Array (Nat × Nat × Nat) := #[]
+  for q in qs do
+    if q.len == 0 then continue
+    if q.stride == 0 || q.len == 1 then out := out.push (q.base.toNat, q.base.toNat + 1)
+    else if q.stride == 1 then out := out.push (q.base.toNat, (q.at (q.len - 1)).toNat + 1)
+    else if q.stride == -1 then out := out.push ((q.at (q.len - 1)).toNat, q.base.toNat + 1)
+    else
+      let lo := if q.stride > 0 then q.base else q.at (q.len - 1)
+      strided := strided.push (q.stride.natAbs, q.len, lo.toNat)
+  let s := strided.qsort fun x y => x.1 < y.1 || (x.1 == y.1 && (x.2.1 < y.2.1 || (x.2.1 == y.2.1 && x.2.2 < y.2.2)))
+  let mut i := 0
+  for _ in [0:s.size] do
+    if i ≥ s.size then break
+    let (st, n, b) := s[i]!
+    let mut k := 1
+    let mut j := i + 1
+    for _ in [i + 1:s.size] do
+      let (st', n', b') := s[j]!
+      if st' != st || n' != n then break
+      if b' + 1 == b + k then j := j + 1
+      else if b' == b + k then k := k + 1; j := j + 1
+      else break
+    if k ≥ st then out := out.push (b, b + (n - 1) * st + k)
+    else for t in [0:n] do out := out.push (b + t * st, b + t * st + k)
+    i := j
+  return out
 
 /-- A sequence of pieces with each one's first position. -/
 structure PS where
@@ -361,12 +385,12 @@ def summarize (P : Prog) (memo : Array Summary) (d : Nat) : Except String Summar
   let c : Ctx := { P, memo, d, args := body.nodes.map fun n => n.args.map (ofSeq ·.seq) }
   let mut ret := #[]
   for q in (ofSeq body.ret).ps do ret := ret ++ (← down c Flock.Steps.FUEL q)
-  let mut acc : Array (Array (Nat × Nat)) := Array.replicate body.params.size #[]
+  let mut acc : Array (Array Piece) := Array.replicate body.params.size #[]
   for k in [0:body.nodes.size] do
     for q in ← nodeReads c k do
       if let .ref true i := q.tgt then
-        acc := acc.modify i (· ++ q.ivs)
-  return { ret := PS.of ret, used := acc.map Ivs.norm }
+        acc := acc.modify i (·.push q)
+  return { ret := PS.of ret, used := acc.map fun qs => Ivs.norm (ivsOf qs) }
 
 /-- The Definitions the root reaches, each once. -/
 def reached (P : Prog) : Array Bool := Id.run do
@@ -452,17 +476,21 @@ def evaluate (j : Json) : Except String Json := do
   let used := usedOf own
   if !(List.range n).all used.contains then throw "empty-iu"
   let mut size := Array.replicate n 0
-  let mut into : Array (Array (Nat × Nat × Nat)) := Array.replicate n #[]
+  let mut into : Array (Array (Nat × Piece)) := Array.replicate n #[]
   for k in [0:K] do
     let some u := own[k]! | continue
     size := size.modify u (· + gatesOf k)
     for q in reads[k]! do
       let .gate w := q.tgt | continue
-      for (lo, hi) in q.ivs do
-        let k' := nodeOf offs lo
-        if own[k']! == some u || theta[k']! then continue
-        into := into.modify u (·.push (lo, hi, w))
-  let r := (Array.range n).map fun u => (size[u]!, distinctWidth into[u]!)
+      if q.len == 0 then continue
+      let k' := nodeOf offs q.base.toNat
+      if own[k']! == some u || theta[k']! then continue
+      into := into.modify u (·.push (w, q))
+  let novel (qs : Array (Nat × Piece)) : Nat :=
+    let ws := (qs.map (·.1)).qsort (· < ·) |>.toList.eraseDups
+    distinctWidth (ws.toArray.flatMap fun w => (ivsOf (qs.filterMap fun (w', q) => if w' == w then some q else none)).map
+      fun (lo, hi) => (lo, hi, w))
+  let r := (Array.range n).map fun u => (size[u]!, novel into[u]!)
   return verdict (P.defs[P.root]!).gates r (failure i.gamma i.num i.den r)
 
 /-- `evaluate`, with a refusal as `{"error": code}`. -/

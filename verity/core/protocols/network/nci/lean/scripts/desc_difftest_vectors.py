@@ -10,7 +10,10 @@ gate as `NciCheck.check` reads it (`nci_reference.expand`), or `null` where `Nci
 `lean-audit.json`), which fails unless `NciCheck.Desc.check` gives Python's result on every line and `NciCheck.check`'s on
 every expansion: the description-sized check against the unrolled one, on the same declarations.
 
-Instance `seed`'s program is `difftest_vectors.instance(seed)`'s. θ is no input node, every one, the registered ones or a
+Instance `seed`'s program, for the first `COUNT`, is one of `difftest_vectors.program`'s or (a quarter of them) one read
+across its arrays' rows (`transposed`), then each distinct descriptor
+the circuits fixtures hold (`verity/ml/circuits/tests/*_vectors.json`: pass-throughs, scans with carries, batches of
+composites, root batches and scans) for `PER_FIXTURE` instances each. θ is no input node, every one, the registered ones or a
 random set. A division puts every Call in one IU, each in its own, runs of consecutive Calls or a random assignment, and
 a Call without gates in any IU or none. `Γ` and `α` are set as `difftest_vectors` sets them, at, below or above the
 division's largest IU and NCI. About a third of the instances are malformed, each in one way `NciCheck.Desc` refuses.
@@ -18,6 +21,7 @@ division's largest IU and NCI. About a third of the instances are malformed, eac
 from __future__ import annotations
 
 import argparse
+import functools
 import importlib.util
 import json
 import random
@@ -25,6 +29,11 @@ from fractions import Fraction
 from pathlib import Path
 
 import verity.ml.circuits
+from verity.ml.circuits import codec
+from verity.ml.circuits.defs import Builder, CompositeDefinition, bind
+from verity.ml.circuits.program import Program
+from verity.ml.circuits.refs import Affine, Coll, Strided, tuple_of
+from verity.ml.circuits.types import Array, Tuple, Value
 
 HERE = Path(__file__).resolve().parent
 
@@ -40,6 +49,9 @@ vectors = _load("difftest_vectors")
 reference = vectors.reference
 
 COUNT = 3000
+PER_FIXTURE = 24
+TRANSPOSED = 0.25
+FIXTURES = Path(verity.ml.circuits.__file__).resolve().parent / "tests"
 MALFORMED = ["instance", "params", "program", "not-topological", "theta-unknown", "theta-not-input", "theta-duplicate",
              "owner-length", "owner-entry", "input-in-iu", "gate-in-no-iu", "empty-iu"]
 
@@ -55,10 +67,114 @@ def division(rng, calls: list[int]) -> tuple[str, list[int]]:
     return vectors.division(rng, calls)
 
 
+def _descriptors(x):
+    """The descriptor texts in a fixture's JSON, in document order."""
+    if isinstance(x, str) and x.startswith("{") and '"definitions"' in x:
+        d = json.loads(x)
+        if isinstance(d, dict) and {"definitions", "root", "callees"} <= d.keys():
+            yield x
+    elif isinstance(x, dict):
+        if {"definitions", "root", "callees"} <= x.keys():
+            yield json.dumps(x, separators=(",", ":"))
+            return
+        for v in x.values():
+            yield from _descriptors(v)
+    elif isinstance(x, list):
+        for v in x:
+            yield from _descriptors(v)
+
+
+@functools.cache
+def fixtures() -> list[tuple[str, str]]:
+    """Every distinct descriptor the circuits fixtures hold that the decoder reads: (file stem, text)."""
+    out: dict[str, str] = {}
+    for f in sorted(FIXTURES.glob("*_vectors.json")):
+        for text in _descriptors(json.loads(f.read_text())):
+            try:
+                reference.root_nodes(text)
+            except Exception:
+                continue
+            out.setdefault(text, f.stem)
+    return [(name, text) for text, name in out.items()]
+
+
+def _strided(c: Coll, t, inner: int, outer: int, stride: int) -> Coll:
+    """Leaves of `c` (one run of a parameter's or a node's leaves) as `t`, leaf j at `(j // inner)·outer +
+    (j % inner)·stride` of `c`."""
+    r = c.refs
+    return Coll(t, Strided(r.space, r.idx, r.base, inner, outer, stride, t.leaves))
+
+
+def transposed(rng, seed: int) -> str:
+    """A declaration read across its arrays' rows, as served models read weights (`Embedding_v1`'s table): batches mapped
+    over a transposed parameter and a transposed batch output, a primitive reading a transposed block whole or in part,
+    and a column Definition that reads part of its column and passes leaves of it through, called in a batch and stepped
+    in a scan whose carry is such a pass-through."""
+    R, C = rng.randint(2, 5), rng.randint(2, 5)
+    w, r = rng.choice(vectors.WIDTHS), rng.choice(vectors.WIDTHS)
+    lo = rng.randint(0, R - 1)
+    hi = rng.randint(lo + 1, R)
+    j = rng.randrange(R)
+    op, mix = vectors.prim((w, w), w), vectors.prim((w, w), r)
+    col_t = Array(R, Value(w))
+    k = hi - lo
+    col_ret = Tuple(Array(k, Value(r)), Value(w))
+
+    def col(B, S, a, s):
+        b = B.batch(mix, a[lo:hi], s, axes=(0, None))
+        return tuple_of(b, a[j])
+    Col = bind(CompositeDefinition(f"NciT{seed}Col", 1, (), lambda S: ((("a", col_t), ("s", Value(w))), col_ret), col,
+                                   register=False))
+
+    def step(B, S, carry, a):
+        nxt = a[j] if rng_step else B.call(op, carry, a[lo])
+        return tuple_of(nxt, B.call(mix, carry, a[j]))
+    rng_step = rng.random() < 0.5
+    Step = bind(CompositeDefinition(f"NciT{seed}Step", 1, (), lambda S: ((("c", Value(w)), ("a", col_t)),
+                                                                        Tuple(Value(w), Value(r))), step, register=False))
+    uses = [u for u in ("batch", "scan", "block", "back") if rng.random() < 0.7] or ["batch"]
+    sub = rng.randint(1, C)
+    params = (("x", Array(R, Array(C, Value(w)))), ("y", Value(w)))
+
+    def body(B, S, x, y):
+        xt = _strided(x, Array(C, col_t), R, 1, C)
+        outs = []
+        if "batch" in uses or "back" in uses:
+            n0 = B.batch(Col, xt, y, axes=(0, None))
+            outs.append(n0)
+            if "back" in uses:
+                view = _strided(n0, Array(k, Array(C, Value(r))), C, 1, k + 1)
+                outs.append(B.batch(vectors.summing(C, r, r), view, axes=(0,)))
+        if "scan" in uses:
+            outs.append(B.scan(Step, y, xs=[xt]))
+        if "block" in uses:
+            block = _strided(x, Array(R * sub, Value(w)), R, 1, C)
+            outs.append(B.call(vectors.summing(R * sub, w, r), block))
+        return outs[0] if len(outs) == 1 else tuple_of(*outs)
+    out_t = _probe_type(params, body)
+    fn = bind(CompositeDefinition(f"NciDecl{seed}", 1, (), lambda S: (params, out_t), body, register=False))
+    registered = tuple(n for n, _ in params if rng.random() < 0.3)
+    return codec.canonical_json(codec.encode_program(Program(fn, registered=registered))).decode()
+
+
+def _probe_type(params, body) -> "Type":
+    """The type `body` returns, by building it once."""
+    B = Builder(params, Tuple())
+    colls = [Coll(t, Affine("p", i, 0, t.leaves)) for i, (_, t) in enumerate(params)]
+    return body(B, None, *colls).type
+
+
 def instance(seed: int) -> dict:
-    """Instance `seed`, with what it was made from (`shape`, `theta_kind`, `division`, `malformed`)."""
+    """Instance `seed`, with what it was made from (`shape`, `theta_kind`, `division`, `malformed`): below `COUNT` a random
+    declaration, then `PER_FIXTURE` instances on each of `fixtures()`."""
     rng = random.Random(seed)
-    text, kind, _ = vectors.program(rng, seed)
+    if seed < COUNT and rng.random() < TRANSPOSED:
+        text, kind = transposed(rng, seed), "transposed"
+    elif seed < COUNT:
+        text, kind, _ = vectors.program(rng, seed)
+    else:
+        name, text = fixtures()[(seed - COUNT) // PER_FIXTURE]
+        kind = f"fixture:{name}"
     inp, spans = reference.root_nodes(text)
     K = len(inp)
     inputs = [k for k in range(K) if inp[k]]
@@ -134,8 +250,14 @@ def line(obj) -> str:
 NAMES = ("instances", "expanded", "python")
 
 
-def write(out: Path, count: int = COUNT) -> dict[str, Path]:
-    """The three files for instances 0 … count − 1 under ``out/desc_difftest``."""
+def total() -> int:
+    """How many instances the audit's data has: the random ones and every fixture's."""
+    return COUNT + PER_FIXTURE * len(fixtures())
+
+
+def write(out: Path, count: int | None = None) -> dict[str, Path]:
+    """The three files for instances 0 … count − 1 (all of them, `total()`, by default) under ``out/desc_difftest``."""
+    count = total() if count is None else count
     d = out / "desc_difftest"
     d.mkdir(parents=True, exist_ok=True)
     paths = {f"desc_difftest/{n}.jsonl": d / f"{n}.jsonl" for n in NAMES}
@@ -156,7 +278,7 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("verity", type=Path, help="the checkout whose verity.ml.circuits reads the programs")
     ap.add_argument("--out", type=Path, required=True)
-    ap.add_argument("--count", type=int, default=COUNT)
+    ap.add_argument("--count", type=int, default=None, help="the first N instances (default: all, `total()`)")
     a = ap.parse_args()
     here = Path(verity.ml.circuits.__file__).resolve()
     if not here.is_relative_to(a.verity.resolve()):
