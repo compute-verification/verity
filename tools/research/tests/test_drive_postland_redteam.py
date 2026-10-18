@@ -3,13 +3,11 @@ conflict or were made by hand, a pass that skipped a deferred step, the old `dri
 landings, the gate, and a drive restarted mid-run."""
 from __future__ import annotations
 
-import subprocess
-
 import pytest
 
 from research import merge
 from research.cli import main as research_main
-from research.drive import CHECK_STEPS, Driver
+from research.drive import CHECK_STEPS
 from test_drive_postland import DEFER, Postland, _registry, _tree
 from test_merge_gate import CHECKED
 from test_queue import World, _git
@@ -224,12 +222,12 @@ def test_6_a_landing_the_old_rule_still_follows_is_not_taken_as_verified_by_the_
 # -- 7. `--regenerate-locks` landings
 
 
-def _land_with_locks(h: Postland, monkeypatch, tmp_path) -> str:
-    """Check `next`'s tip and land it deferred, its check having regenerated pkg's lock: `main`, the lock commit on top."""
+def _land_with_locks(h: Postland, monkeypatch, tmp_path, pkg: str = "pkg") -> str:
+    """Check `next`'s tip and land it deferred, its check having regenerated ``pkg``'s lock: `main`, the lock commit on top."""
     h.d.regenerate_locks = True
     rec = tmp_path / "regen.json"
     rec.write_text('{"records": 2}\n')
-    monkeypatch.setattr(merge, "regenerated_records", lambda store, rid, dest=None: {"pkg": ("sha", rec)})
+    monkeypatch.setattr(merge, "regenerated_records", lambda store, rid, dest=None: {pkg: ("sha", rec)})
     before = set(h.run_state)
     h.tick()
     (rid,) = [r for r in h.run_state if r not in before and not r.startswith("r-post-")]
@@ -266,6 +264,21 @@ def test_7b_reverting_every_landing_reverts_their_lock_commits_too(world, monkey
     h.evidence = [_failed_run(tmp_path, "tests/test_x.py::test_y", 'File "/workspace/research/src/abc/pkg/helpers.py", line 1')]
     h.tick()
     assert _tree(world, "main") == _tree(world, base), "a lock commit of a reverted landing stayed on `main`"
+
+
+def test_7c_a_culprit_that_touches_no_regenerated_package_leaves_its_trains_lock_commit(world, monkeypatch, tmp_path):
+    """The lock commit holds #1's records, which reverting #2 doesn't change."""
+    h = Postland(world, monkeypatch, tmp_path)
+    h.d.train_size = 2
+    world.gh.put(1, world.change({"lean/A.lean": "theorem a : True := trivial\n"}))
+    world.gh.put(2, world.change(FAILING))
+    locked = _land_with_locks(h, monkeypatch, tmp_path, "lean")
+    _fails_in_pkg(h, "r-post-0")
+    h.tick()
+    main = _git(world.origin, "rev-parse", "main")
+    assert _git(world.origin, "rev-parse", f"{main}^") == locked and _reverts(world, locked) == 1
+    assert _git(world.origin, "show", f"{main}:lean/lean-audit.json") == '{"records": 2}'
+    assert "pkg/tests/test_x.py" not in _git(world.origin, "ls-tree", "-r", "--name-only", main)
 
 
 # -- 8. the post-landing run is never a check

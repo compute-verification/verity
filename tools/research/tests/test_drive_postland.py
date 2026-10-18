@@ -49,6 +49,11 @@ class Postland(Harness):
     def postland(self) -> dict:
         return self.d.q.load_state()["drive"].get("postland")
 
+    def passed(self, rid: str) -> None:
+        """``rid``, a post-landing run, ended with every deferred step passed in its steps.jsonl."""
+        self.run_state[rid] = ("done", 0, None)
+        self.evidence = [_steps_run(self.tmp, rid, {s: "passed" for s in DEFER})]
+
 
 def _registry(world: World, *handles: str) -> None:
     reg = {"handles": [{"handle": h, "holder": f"the {h} lane"} for h in handles]}
@@ -78,11 +83,11 @@ def test_one_post_landing_run_at_a_time_and_a_pass_verifies_its_tip_then_the_nex
     rid2, two = h.land_deferred()
     assert h.posted == [(one, "circuit-check,flock-rust-tests")] and rid2 in h.cancelled   # the first run still runs
     assert h.postland()["pending"] == [one, two]
-    h.run_state["r-post-0"] = ("done", 0, None)
+    h.passed("r-post-0")
     h.tick()
     pl = h.postland()
     assert pl["verified"] == one and pl["pending"] == [two] and h.posted[-1][0] == two == pl["run"]["tip"]
-    h.run_state["r-post-1"] = ("done", 0, None)
+    h.passed("r-post-1")
     h.tick()
     h.tick()
     pl = h.postland()
@@ -109,7 +114,7 @@ def test_a_failed_post_landing_run_reverts_only_the_pr_it_implicates_and_tells_i
     assert post.startswith("@ci @lane-2 queue: #2 reverted on `main`") and "#1 #2 #3" in post, post
     assert "#1 #3 stay on `main`" in post, post
     assert h.posted[-1][0] == main and len(h.posted) == 2                                # the next run checks the new tip
-    h.run_state["r-post-1"] = ("done", 0, None)
+    h.passed("r-post-1")
     h.tick()
     assert h.postland()["verified"] == main and h.postland()["pending"] == []
 
@@ -119,7 +124,8 @@ def _tree(world: World, ref: str) -> str:
 
 
 def test_a_post_landing_failure_no_pr_is_implicated_in_reverts_every_landing_since_verified(world, monkeypatch, tmp_path):
-    """Daniel, 11 Oct: a failure there reverts the landing at once, so `main` doesn't stay red when no single PR is to blame."""
+    """Daniel, 11 Oct: a failure there reverts the landing at once, so `main` doesn't stay red when no single PR is to blame.
+    One that no PR touches reverts nothing (`test_drive_postland_redteam`)."""
     _registry(world, "lane-1", "lane-2")
     h = Postland(world, monkeypatch, tmp_path)
     h.d.train_size = 2
@@ -128,7 +134,7 @@ def test_a_post_landing_failure_no_pr_is_implicated_in_reverts_every_landing_sin
     world.gh.put(2, world.change({"b.txt": "2\n"}))
     _, tip = h.land_deferred()
     h.run_state["r-post-0"] = ("done", 1, None)
-    h.evidence = [_failed_run(tmp_path, "tests/test_x.py::test_y", "tests/test_x.py:2")]     # in pkg, which neither touches
+    h.evidence = []                                                         # no failed suite's report reached drive
     h.tick()
     main = _git(world.origin, "rev-parse", "main")
     assert _tree(world, main) == _tree(world, base) and _git(world.origin, "rev-list", "--count", f"{tip}..{main}") == "2"
@@ -149,7 +155,7 @@ def test_reverting_every_landing_reverts_only_the_queues_merges_and_a_lander_com
     h.tick()
     assert h.posted[-1][0] == moved
     h.run_state["r-post-1"] = ("done", 1, None)
-    h.evidence = [_failed_run(tmp_path, "tests/test_x.py::test_y", "tests/test_x.py:2")]
+    h.evidence = []                                                                    # no failed suite's report reached drive
     h.tick()
     main = _git(world.origin, "rev-parse", "main")
     assert _git(world.origin, "rev-parse", f"{main}^") == moved                          # one revert, of #1's merge alone
@@ -171,7 +177,7 @@ def test_reverting_every_landing_reaches_a_train_landed_onto_a_moved_main(world,
     landed = _git(world.origin, "rev-parse", "main")
     assert _git(world.origin, "rev-parse", f"{landed}^1") == other and h.posted[-1][0] == landed
     h.run_state["r-post-0"] = ("done", 1, None)
-    h.evidence = [_failed_run(tmp_path, "tests/test_x.py::test_y", "tests/test_x.py:2")]
+    h.evidence = []                                                                    # no failed suite's report reached drive
     h.tick()
     main = _git(world.origin, "rev-parse", "main")
     assert _tree(world, main) == _tree(world, other) and _git(world.origin, "rev-parse", f"{main}^") == landed
