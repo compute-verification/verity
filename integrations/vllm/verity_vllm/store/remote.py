@@ -12,8 +12,12 @@ session       the store records its memory map against `Registration.digest` und
               (`Store.record_memory_map`), one session a store: the map's indices are one session's
 pass          before each pass `Serving.advance` runs the engine's next step against the store (its frees, allocs and
               `kv_append`, which closes the step before's memory-map line with its re-keys for the pass's window), turns
-              each closed line into the audit's append (each written block's payload encoded under its bound key) and
-              releases (`memory_map.Replay`, the map's), and the pass reads every live block in store order; its
+              each closed line into the audit's append (committed by its digests alone, `audit.Store.append`) and
+              releases (`memory_map.Replay`, the map's).  `ProverSide` sends each append after the root before the
+              pass, checks the reply's ``first`` against the append's j and hands its coin c_a to `encode_append`,
+              which encodes the blocks under b_j = codec.binding(d_j, j, key, c_a) (`audit.Store.encode`, the CPU
+              reference of kv.cu's and paged.cu's per-block offset); then the pass reads every live block in store
+              order; its
               ticket carries the step (`step_of`), which the root's message names, and the head of the appends so
               far, which its seed chains (`audit.chained`: unchanged in a session without appends)
 openings      as the driver's reference: the block, its receipt leaf, and its payload's salt, path and d_j
@@ -71,8 +75,8 @@ def session_module(name: str, directory: str | Path = config.REMOTE_SESSION) -> 
 
 class Serving:
     """The serving node's steps as a session sees them, `ProverSide`'s serving trace in its ``serve`` modes: the
-    memory map's closed lines as the audit's appends (`appends`, (root, count) each, and `appended`, their indices) and
-    releases (`released`), and `plan`, every live block, registered and appended."""
+    memory map's closed lines as the audit's appends (`appends`, each an `audit.Append`, and `appended`, their
+    indices) and releases (`released`), and `plan`, every live block, registered and appended."""
 
     def __init__(self, backend: StoreBackend, registration: audit.Registration, lifetime: int) -> None:
         self.backend, self.store, self.lifetime = backend, backend.store, lifetime
@@ -81,7 +85,7 @@ class Serving:
                                                 lambda change, payloads: self._lines.append((change, payloads)))
         self.step = -1
         self.live = set(range(registration.blocks))
-        self.appends: list[tuple[bytes, int]] = []
+        self.appends: list[audit.Append] = []
         self.released: list[int] = []
         self.appended: list[int] = []
 
@@ -108,7 +112,7 @@ class Serving:
                 if a.first != change.first or a.digests != change.digests:
                     raise AssertionError("the store's append is not its memory map's: a written block's bytes changed "
                                          "between its digest and its line's close")
-                self.appends.append((a.root, a.count))
+                self.appends.append(a)
                 self.appended.extend(range(a.first, a.first + a.count))
             gone = [j for f, c in change.released for j in range(f, f + c)]
             self.released.extend(gone)
@@ -164,6 +168,9 @@ class StoreBackend:
 
     def append(self, payloads, salts) -> audit.Append:
         return self.audit.append(payloads, salts)
+
+    def encode_append(self, first: int, coin: bytes) -> None:
+        self.audit.encode(first, coin)
 
     def calibrate(self) -> dict:
         return {"pass_ns_max": 0, "gap_ns_max": 0, "read_bytes_per_s": self.read_bytes_per_s}

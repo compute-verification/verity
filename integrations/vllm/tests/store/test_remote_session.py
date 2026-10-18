@@ -3,7 +3,8 @@ Commit's hook) connects over localhost TCP to `benchmarks/remote_session`'s veri
 memory map against the registration, and runs each pass after an engine step of a serving-like trace (pages written
 over two steps, held, freed and reused, and one long-lived page re-keyed under L = 1 window).  The honest session is
 accepted with the appends, releases, re-keys and steps the verifier saw, each pass's seed chaining the appends sent
-before its root; one whose prover seeds without them, or withholds a block it appended, is rejected; a second
+before its root, each append encoded under its own coin; one whose prover seeds without them, encodes under a zero
+or stale coin, re-sends an append, appends after the last close or withholds a block it appended is rejected; a second
 registration of a node the verifier holds live is refused with its reason.  The verifier's clock is the prover's
 passes, a tick each (`PassClock`)."""
 from __future__ import annotations
@@ -84,7 +85,11 @@ def store() -> Store:
 class TickingBackend(remote.StoreBackend):
     def __init__(self, clock: PassClock, *args, **kw) -> None:
         super().__init__(*args, **kw)
-        self.clock, self.heads = clock, []
+        self.clock, self.heads, self.coins = clock, [], []
+
+    def encode_append(self, first: int, coin: bytes) -> None:
+        self.coins.append((first, coin))
+        super().encode_append(first, coin)
 
     def wait(self, ticket: dict):
         self.heads.append(ticket["head"])
@@ -102,6 +107,39 @@ class HeadlessBackend(TickingBackend):
 
     def launch(self, i: int, after, plan=None) -> dict:
         return {**super().launch(i, after, plan), "head": None}
+
+
+class ZeroCoinBackend(TickingBackend):
+    """A prover that encodes each append under a zero coin, not the verifier's."""
+
+    def encode_append(self, first: int, coin: bytes) -> None:
+        super().encode_append(first, bytes(32))
+
+
+class StaleCoinBackend(TickingBackend):
+    """A prover that encodes each append under the coin of the append before it (the first under its own)."""
+
+    def encode_append(self, first: int, coin: bytes) -> None:
+        super().encode_append(first, self.coins[-1][1] if self.coins else coin)
+
+
+class Tampering:
+    """The prover's connection, each message it sends replaced by ``tamper(head)``'s list."""
+
+    def __init__(self, conn, tamper) -> None:
+        self.conn, self.tamper = conn, tamper
+
+    def send(self, head: dict, body: bytes = b"") -> None:
+        for h in self.tamper(head):
+            self.conn.send(h, body)
+
+    def __getattr__(self, name: str):
+        return getattr(self.conn, name)
+
+
+def tampering(monkeypatch, tamper) -> None:
+    connect = wire.connect
+    monkeypatch.setattr(wire, "connect", lambda host, port: Tampering(connect(host, port), tamper))
 
 
 def engine(s: Store):
@@ -154,6 +192,10 @@ def test_an_honest_store_session_is_accepted_with_its_frees_re_keys_and_steps():
     # later pass's seed chains the head of the appends sent before its root (`audit.chained`)
     assert backend.heads[0] is None and len(backend.heads) > 2 and all(h is not None for h in backend.heads[1:])
     kv, pub = p["kv"], r["record"]["public"]
+    # each append sent was answered with its first index and a coin of its own, under which its blocks were encoded
+    sent = backend.trace.appends[:len(backend.coins)]
+    assert [f for f, _ in backend.coins] == [a.first for a in sent] and len({c for _, c in backend.coins}) == len(sent)
+    assert sum(a.count for a in sent) == kv["sent_appended"]
     assert kv["lifetime"] == pub["lifetime"] == 1 and kv["rekeyed"] > 0
     assert kv["sent_appended"] == pub["appended"] > 0 and kv["sent_released"] == pub["released"] > 0
     assert sum(pub["post_seed"]) == sum(kv["pass_appended"]) > 0
@@ -175,6 +217,41 @@ def test_a_store_session_whose_prover_seeds_without_the_appends_head_is_rejected
     r, p, _, backend = run("serve", backend=HeadlessBackend)
     assert not r["accepted"] and not p["accepted"] and all(h is None for h in backend.heads)
     assert r["failure"]["failure"] == "receipt-path"
+
+
+@pytest.mark.parametrize("backend", [ZeroCoinBackend, StaleCoinBackend])
+def test_a_store_session_whose_prover_encodes_its_appends_under_another_coin_is_rejected(backend):
+    r, p, _, b = run("serve", backend=backend)
+    assert not r["accepted"] and not p["accepted"] and len(b.coins) > 1
+    assert r["failure"]["failure"] == "codec"
+
+
+def test_a_store_session_whose_prover_re_sends_an_append_is_rejected_with_coin(monkeypatch):
+    sent = []
+
+    def resend(head: dict) -> list[dict]:
+        if head["type"] != "append" or sent:
+            return [head]
+        sent.append(head)
+        return [head, head]
+
+    tampering(monkeypatch, resend)
+    r, p, _, _ = run("serve")
+    assert sent and not r["accepted"] and not p["accepted"] and r["failure"]["failure"] == "coin"
+
+
+def test_a_store_session_whose_prover_appends_after_the_last_close_is_rejected_with_coin(monkeypatch):
+    """An append sent after the verifier's last `close`, before the prover's `closed`: no root follows its coin."""
+
+    def late(head: dict) -> list[dict]:
+        if head["type"] != "closed":
+            return [head]
+        return [{"type": "append", "root": os.urandom(64).hex(), "count": 1}, head]
+
+    tampering(monkeypatch, late)
+    r, p, _, _ = run("serve")
+    assert not r["accepted"] and not p["accepted"] and r["failure"]["failure"] == "coin"
+    assert r["failure"]["t"] == 1
 
 
 def test_a_store_session_whose_prover_withholds_an_appended_block_is_rejected():
