@@ -84,6 +84,18 @@ def derived_ok(d: str) -> bool:
         return False
 
 
+def composed_ok(rank_dir: str) -> bool:
+    """A TP rank's GP-01 workload Program on disk that a rerun keeps, as `derived_ok` keeps a derive: composed (it has a workload
+    digest) after every request Program under the rank was derived, so a request derived again is composed again."""
+    p = f"{rank_dir}/build_workload/workload_program.json"
+    try:
+        t = os.path.getmtime(p)
+        return (bool(_field(p, lambda d: d.get("workload_digest") or ""))
+                and all(os.path.getmtime(f) < t for f in glob.glob(f"{rank_dir}/build_request_LP*_T*/result.json")))
+    except OSError:
+        return False
+
+
 #: a request derive's peak host memory: a base, a term per Call and attention's term per layer x tokens^2 (every attention Call
 #: lists each earlier key and value row), fit over the 89 request derives of the 2026-09-29 epoch's stored Builds (#11, #57, #67,
 #: #68, #74, #75: within 5% on the large ones), with Calls bounded by the most Calls per (token, layer) measured (54: Qwen3-4B-FP8,

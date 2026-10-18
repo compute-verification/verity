@@ -296,7 +296,10 @@ class TpRow(Row):
         for r in range(self.W):
             for f in sorted(glob.glob(f"{self.rank(r)}/*.rc")):
                 self.log(f"derive {os.path.basename(f[:-3])} rank{r} rc={open(f).read().strip()} {_tail_bytes(f[:-3] + '.log')}")
-        self.compose_all([r for r in range(self.W) if R.derived_ok(f"{self.rank(r)}/build_step")])
+        kept = [r for r in range(self.W) if R.composed_ok(self.rank(r))]
+        if kept:
+            self.log(f"compose: ranks {kept} keep their workload Programs on disk (composed after their request Programs)")
+        self.compose_all([r for r in range(self.W) if R.derived_ok(f"{self.rank(r)}/build_step") and r not in kept])
         ok, rc, programs_only = self.guarded_summary(), None, self.cb.build_programs_only == "1"
         if ok == "PASS" and not programs_only:   # the Build's manifest, as SingleRow's: an incomplete one (rc 4) fails the Build its Commit would refuse
             rc = self.manifest_global("build.required_manifest", self.to_b)

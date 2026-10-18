@@ -562,6 +562,33 @@ def test_a_programs_only_tp_build_ends_at_its_programs(tmp_path, monkeypatch):
     assert build[:2] == ["build", "PASS"] and "manifest_rc=None" in build[3]
 
 
+def test_a_tp_build_rerun_composes_only_the_ranks_whose_workload_program_is_not_newer_than_their_requests(tmp_path, monkeypatch):
+    """GLM-5.3 B32: ranks 4 and 5's composes were OOM-killed after six ranks composed; the rerun composes those two."""
+    t = _tp_row(tmp_path, TP_DENSE, "--build-programs-only", "1")
+    t.W, t.shapes = 4, []
+
+    def put(path: str, doc: dict, at: int) -> None:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        Path(path).write_text(json.dumps(doc))
+        os.utime(path, (at, at))
+
+    for r, workload in enumerate([{"workload_digest": "w0"}, None, {"workload_digest": "w2"}, {"workload_digest": "w3"}]):
+        put(f"{t.rank(r)}/build_step/result.json", {"ok": True}, 100)
+        put(f"{t.rank(r)}/build_request_LP8_T3/result.json", {"ok": True}, 300 if r == 2 else 100)
+        if workload is not None:
+            put(f"{t.rank(r)}/build_workload/workload_program.json", workload, 200)
+    Path(f"{t.rank(3)}/build_workload/workload_program.json").write_text('{"workload_digest": "w')
+    os.utime(f"{t.rank(3)}/build_workload/workload_program.json", (200, 200))
+    assert [R.composed_ok(t.rank(r)) for r in range(4)] == [True, False, False, False]
+    composed: list[list[int]] = []
+    for name, fn in (("derive_jobs", lambda shapes, derives: 1), ("derive_all", lambda todo, jobs: None), ("compose_all", composed.append),
+                     ("guarded_summary", lambda: "PASS")):
+        monkeypatch.setattr(t, name, fn)
+    monkeypatch.setattr(R, "tp_build_digests", lambda d: ("d" * 16, []))
+    t.build()
+    assert composed == [[1, 2, 3]]
+
+
 # ---------------------------------------------------------------------------------------------------------------- taps
 
 TP_MOE = "qwen3-30b-a3b__bf16__l40s__tp2__b2__i1024__o128__mixed__greedy__bi-eager"
