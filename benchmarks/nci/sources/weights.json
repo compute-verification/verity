@@ -1255,6 +1255,37 @@
     "grade": "measured-small",
     "bears_on": "Ternary forward weights cost little at about 4B parameters.",
     "from_review": "scaling-corpus"
+   },
+   {
+    "id": "kaushal-2024-spectra/2",
+    "claim": "Fitted scaling laws put the ternary-vs-float validation loss gap at about 7% at 15.6B and 6% at 330B parameters.",
+    "quote": "We observe that at 330B and 15.6B parameters, the validation losses for TriLMs are within 6% and 7% of FloatLMs’ validation losses, respectively.",
+    "location": "Section 4.3 (Training Dynamics and Scaling Laws), Figure 10",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 6,
+      "unit": "%",
+      "condition": "extrapolated validation-loss gap TriLM vs FloatLM at 330B params, from power-law-with-offset fits to models up to 3.9B trained on 300B tokens"
+     },
+     {
+      "param": "other",
+      "value": 7,
+      "unit": "%",
+      "condition": "same fit, at 15.6B params"
+     }
+    ],
+    "grade": "extrapolated",
+    "bears_on": "Ternary weights (1.58 bits) keep a loss gap of about 6% at frontier size by the authors' own fit; it closes only slowly with scale."
+   },
+   {
+    "id": "kaushal-2024-spectra/3",
+    "claim": "At 3.9B the ternary model matches the float model on Penn Treebank and Lambada but keeps a perplexity gap on web corpora, in and out of domain.",
+    "quote": "While TriLM 3.9B and FloatLM 3.9B show similar validation perplexity on some datasets, such as Penn Tree Bank and Lambada, a gap persists at this scale on web corpora, both in-domain (i.e., on a test subset of SlimPajama, the same domain used to train the models) and out-of-domain (e.g., on Dolma, C4 and RefinedWeb datasets).",
+    "location": "Section 1 (Introduction)",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Benchmark parity at 1.58 bits (kaushal-2024-spectra/1) hides a loss gap on the training distribution, which is what a reference training circuit must reproduce."
    }
   ]
  },
@@ -1914,6 +1945,22 @@
     "grade": "measured-at-scale",
     "bears_on": "The residual loss gap of 4-bit training, mostly from the forward pass.",
     "from_review": "scaling-corpus"
+   },
+   {
+    "id": "nvidia-2025-nvfp4/8",
+    "claim": "NVFP4 training scales weights over 2D 16x16 blocks (one E4M3 scale per 256 values) and activations and gradients over 1x16 blocks.",
+    "quote": "Use two-dimensional (2D) scaling over 16 × 16 blocks for weights, and one-dimensional scaling over 1 × 16 blocks for activations and gradients.",
+    "location": "Section 4 (Training Methodology)",
+    "quantities": [
+     {
+      "param": "b_w.pretrained",
+      "value": 4.03,
+      "unit": "bits/weight",
+      "condition": "derived: 4-bit E2M1 plus one 8-bit E4M3 scale per 16x16 block = 4 + 8/256 bits, plus a per-tensor FP32 scale; replaces the 4.5 of nvidia-2025-nvfp4/1, which is the 1x16 rate of activations and gradients"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "The weight entries an NVFP4 matmul reads carry 4.03 bits, not 4.5; b_a for activations and gradients stays at 4.5."
    }
   ]
  },
@@ -2433,6 +2480,605 @@
     "grade": "measured-at-scale",
     "bears_on": "Even at frontier scale, lossless BF16 weights need about 10.9 bits; b_w.lossless barely depends on model size.",
     "from_review": "weights"
+   }
+  ]
+ },
+ {
+  "id": "nvidia-2026-nemotron3-ultra",
+  "title": "Nemotron 3 Ultra: Open, Efficient Mixture-of-Experts Hybrid Mamba-Transformer Model for Agentic Reasoning",
+  "authors": "NVIDIA",
+  "year": 2026,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2606.15007",
+  "topics": [
+   "weights",
+   "activations"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "nvidia-2026-nemotron3-ultra/1",
+    "claim": "A 550B-total, 55B-active hybrid Mamba-attention MoE was pretrained from scratch with NVFP4 matmuls (forward, data-gradient and weight-gradient GEMMs) on 20T tokens.",
+    "quote": "We pretrained our base model in NVFP4 with 20 trillion text tokens using a Warmup-Stable-Decay learning rate schedule.",
+    "location": "Section 1 (Introduction); Section 2.2",
+    "quantities": [
+     {
+      "param": "b_w.pretrained",
+      "value": 4.03,
+      "unit": "bits/weight",
+      "condition": "derived: NVFP4 weights use 2D 16x16 block scaling (nvidia-2025-nvfp4/8), 4-bit E2M1 plus one 8-bit E4M3 scale per 256 values = 4 + 8/256 bits, plus a per-tensor FP32 scale; 550B total / 55B active params, 20T tokens; applies to the layers run in NVFP4 (exceptions in nemotron3-ultra/3)"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "The largest published from-scratch run whose weight matmuls read about 4 bits per weight entry; the at-scale anchor for a low-bit b_w in pretraining."
+   },
+   {
+    "id": "nvidia-2026-nemotron3-ultra/2",
+    "claim": "Against BF16 branches restarted from its 5T, 10T and 16T checkpoints, the NVFP4 run's relative train loss gap stays below 0.4% on average, smaller than NVIDIA's gap on smaller models.",
+    "quote": "These three ablation studies on Nemotron 3 Ultra showed a relative train loss gap against the BF16 segments below 0.4% on average (Figure 3, top), which is lower than NVFP4 vs. BF16 train loss gaps observed on smaller model variants NVIDIA (2025d).",
+    "location": "Section 2.2, Figure 3",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.4,
+      "unit": "%",
+      "condition": "relative train loss gap NVFP4 vs BF16 branches (all tensors BF16 for 74B tokens) from the 5T/10T/16T checkpoints; per-branch averages 0.27/0.28/0.25% over the first 5B tokens, 0.33/0.34/0.03% over the last 5B"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "The penalty of 4-bit weight matmuls at 55B active and 20T tokens is under half a percent of loss and falls with scale. The baseline is a BF16 continuation of an NVFP4 checkpoint, not an independent BF16 run, so it can understate the gap."
+   },
+   {
+    "id": "nvidia-2026-nemotron3-ultra/3",
+    "claim": "Ultra keeps the final 15% of the network (16 layers), the Mamba output, latent, QKV and attention projections, the MTP layers and the embeddings in higher precision.",
+    "quote": "We kept the final 15% of the network (16 layers), Mamba output projections, latent projections, QKV and attention projections, MTP layers, and embedding layers in higher precision following NVIDIA (2025d); NVIDIA (2026). To our knowledge, this is the largest-scale demonstration of stable and accurate NVFP4 training to date.",
+    "location": "Section 2.2",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.15,
+      "unit": "fraction",
+      "condition": "fraction of the network (final 16 layers) kept in higher precision"
+     },
+     {
+      "param": "b_w.pretrained",
+      "value": 5.8,
+      "unit": "bits/weight",
+      "condition": "derived: 0.85 x 4.03 + 0.15 x 16, if the high-precision share of weights equals the 15% layer share; the attention, latent and Mamba-output projections and embeddings add to it"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Counting the high-precision exceptions, the weight-averaged rate the matmuls read is nearer 5-6 bits than 4.03; no published at-scale run has every matmul in 4 bits."
+   }
+  ]
+ },
+ {
+  "id": "nvidia-2026-nemotron3-super",
+  "title": "Nemotron 3 Super: Open, Efficient Mixture-of-Experts Hybrid Mamba-Transformer Model for Agentic Reasoning",
+  "authors": "NVIDIA",
+  "year": 2026,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2604.12374",
+  "topics": [
+   "weights"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "nvidia-2026-nemotron3-super/1",
+    "claim": "A 120.6B-total, 12.7B-active hybrid MoE was pretrained with NVFP4 weights, activations and gradients for 25T tokens, the longest published 4-bit run.",
+    "quote": "Nemotron 3 Super showcases large-scale stable training in NVFP4 up to 25T tokens.",
+    "location": "Section 2.2 (NVFP4 Pretraining)",
+    "quantities": [
+     {
+      "param": "b_w.pretrained",
+      "value": 4.03,
+      "unit": "bits/weight",
+      "condition": "derived: NVFP4 weights use 2D 16x16 block scaling (nvidia-2025-nvfp4/8), 4-bit E2M1 plus one 8-bit E4M3 scale per 256 values = 4 + 8/256 bits, plus a per-tensor FP32 scale; 120.6B total / 12.7B active, 25T tokens (about 2000 tokens per active parameter); final 15% of layers, attention and embeddings in BF16, Mamba output projection in MXFP8 (Table 3)"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "4-bit weight matmuls hold at about 2000 tokens per active parameter, the regime where QAT error is expected to grow (chen-2025-qat-scaling-law/1)."
+   },
+   {
+    "id": "nvidia-2026-nemotron3-super/2",
+    "claim": "Promoting all tensors to MXFP8 for the last 1.6T tokens before annealing improved the loss but not downstream accuracy, so the released model stayed NVFP4.",
+    "quote": "We promoted all tensors to MXFP8 at 19T tokens (1T tokens before annealing) and continued training through 20.6T tokens. While this improved the loss trajectory, it yielded no gains in downstream task accuracy (Fig 9).",
+    "location": "Section 2.2, Figure 9",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "At 120B scale the residual loss gap of 4-bit weight matmuls does not show downstream; going from about 4 to 8 bits per weight late in training bought nothing measurable."
+   }
+  ]
+ },
+ {
+  "id": "nvidia-2025-nemotron3-whitepaper",
+  "title": "NVIDIA Nemotron 3: Efficient and Open Intelligence",
+  "authors": "NVIDIA",
+  "year": 2025,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2512.20856",
+  "topics": [
+   "weights"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "nvidia-2025-nemotron3-whitepaper/1",
+    "claim": "The NVFP4-vs-BF16 relative loss gap falls from under 1% at 3B active parameters (Nemotron 3 Nano 30B-A3B) to under 0.6% at 8B active (trained to 1T tokens).",
+    "quote": "On Nano, we achieve a < 1% relative difference in loss between NVFP4 vs BF16 (green). The loss gap decreases to < 0.6% between NVFP4 vs BF16 when trained on a larger MoE model with 8B active parameters (dark blue). Prior art further reinforces these findings that loss gaps induced from quantization decrease as model size increase (Chen et al., 2025).",
+    "location": "Section 2.4 (NVFP4 Training), Figures 4-5",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 1,
+      "unit": "%",
+      "condition": "relative loss gap NVFP4 vs BF16, upper bound; Nemotron 3 Nano 30B-A3B"
+     },
+     {
+      "param": "other",
+      "value": 0.6,
+      "unit": "%",
+      "condition": "relative loss gap NVFP4 vs BF16, upper bound; MoE with 8B active, 1T tokens"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "With nemotron3-ultra/2 (<0.4% at 55B active) the 4-bit weight-matmul penalty shrinks with size: about 1%, 0.6% and 0.4% at 3B, 8B and 55B active."
+   }
+  ]
+ },
+ {
+  "id": "wang-2023-bitnet",
+  "title": "BitNet: Scaling 1-bit Transformers for Large Language Models",
+  "authors": "Hongyu Wang, Shuming Ma, Li Dong, Shaohan Huang, Huaijie Wang, Lingxiao Ma, et al.",
+  "year": 2023,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2310.11453",
+  "topics": [
+   "weights"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "wang-2023-bitnet/1",
+    "claim": "Binary-weight (W1A8) transformers trained from scratch at 125M-30B follow a power law fitted up to 6.7B, and their loss gap to FP16 shrinks with size.",
+    "quote": "To evaluate whether the scaling law can accurately predict the loss, we choose the models from 125M to 6.7B to fit the parameters in the power-law and use the law to predict the loss of 13B and 30B. It shows that the fitted scaling law predicted BitNet’s loss with high accuracy. Besides, the gap between BitNet and FP16 Transformer becomes smaller as the model size grows.",
+    "location": "Section 3.2 (Inference-Optimal Scaling Law), Figure 3",
+    "quantities": [
+     {
+      "param": "b_w.pretrained",
+      "value": 1,
+      "unit": "bits/weight",
+      "condition": "binary weights with a per-tensor scale, 8-bit activations; 125M-30B params on about 10.5B tokens (derived: 40K updates x 256K tokens per batch, Table 5)"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "1 bit per weight entry in the matmuls trains from scratch up to 30B parameters, but only over about 10B tokens, far below compute-optimal; the gap at long horizons is not measured."
+   },
+   {
+    "id": "wang-2023-bitnet/2",
+    "claim": "BitNet keeps a high-precision latent weight that accumulates the updates and binarizes it on the fly for the forward pass.",
+    "quote": "Following the previous work [20], we maintain a latent weight in a high-precision format for the learnable parameters to accumulate the parameter updates. The latent weights are binarized on the fly during the forward pass and never used for the inference process.",
+    "location": "Section 2.2 (Model Training)",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "In 1-bit training the matmul reads 1 bit per weight but the update reads and writes a high-precision latent weight; a block holding only the binarized weights cannot apply the update."
+   }
+  ]
+ },
+ {
+  "id": "vaidhya-2025-spectra-1-1",
+  "title": "Spectra 1.1: Scaling Laws and Efficient Inference for Ternary Language Models",
+  "authors": "Tejas Vaidhya, Ayush Kaushal, Vineet Jain, Francis Couture Harpin, Prashant Shishodia, Majid Behbahani, et al.",
+  "year": 2025,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2506.23025",
+  "topics": [
+   "weights"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "vaidhya-2025-spectra-1-1/1",
+    "claim": "Fitted scaling laws give ternary LMs a smaller parameter exponent than 16-bit LMs (0.32 vs 0.56) and a larger data exponent (0.81 vs 0.53): ternary models gain more from tokens than from parameters.",
+    "quote": "We first analyze the scalability of TriLMs by conducting a scaling law analysis, revealing that TriLMs benefit more from increasing training data than from scaling model parameters.",
+    "location": "abstract; Section 2.2, Equation 2; Appendix C, Equation 3",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.32,
+      "unit": "exponent of N",
+      "condition": "TriLM fit L = 2.19 + 4.73/N^0.32 + 5.18/D^0.81 (N in millions of params, D in billions of tokens)"
+     },
+     {
+      "param": "other",
+      "value": 0.56,
+      "unit": "exponent of N",
+      "condition": "FloatLM fit L = 2.17 + 7.86/N^0.56 + 3.42/D^0.53, fit on 990M-11B params and 20B-150B tokens"
+     },
+     {
+      "param": "other",
+      "value": 5.4,
+      "unit": "%",
+      "condition": "derived: the two fits at N = 70B params, D = 15T tokens give 2.325 (ternary) vs 2.206 (16-bit); extrapolated far outside both fit ranges"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Ternary matmul weights lose ground as parameters grow at fixed tokens; at frontier shapes the fitted gap is about 5% of loss, consistent with kaushal-2024-spectra/2."
+   },
+   {
+    "id": "vaidhya-2025-spectra-1-1/2",
+    "claim": "A 3B ternary model keeps improving up to 1.2T tokens (about 400 tokens per parameter).",
+    "quote": "Our results show that the 3B model continues to improve with up to 1.2T tokens, suggesting that TriLM remains effective even at higher token-to-parameter ratios.",
+    "location": "Section 1 (Introduction)",
+    "quantities": [
+     {
+      "param": "b_w.pretrained",
+      "value": 1.58,
+      "unit": "bits/weight",
+      "condition": "ternary latent-weight QAT from scratch; 3B params, 1.2T tokens"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Ternary matmuls do not saturate at high tokens per parameter at 3B, against the trend in chen-2025-qat-scaling-law/1."
+   }
+  ]
+ },
+ {
+  "id": "panferov-2025-quest",
+  "title": "QuEST: Stable Training of LLMs with 1-Bit Weights and Activations",
+  "authors": "Andrei Panferov, Jiale Chen, Soroush Tabesh, Roberto L. Castro, Mahdi Nikdan, Dan Alistarh",
+  "year": 2025,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2502.05003",
+  "topics": [
+   "weights",
+   "activations"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "panferov-2025-quest/1",
+    "claim": "With Hadamard normalization and trust-based gradient estimation, W4A4 training from scratch is Pareto-dominant over BF16 in loss versus model size in bits, and W1A1 trains stably (Llama models up to 1.6B on up to 160B C4 tokens).",
+    "quote": "QuEST allows for stable training at 1-bit weights and activations (W1A1), and the QuEST W4A4 model is Pareto-dominant relative to BF16, with lower loss at lower size.",
+    "location": "Section 1 (contributions)",
+    "quantities": [
+     {
+      "param": "b_w.pretrained",
+      "value": 4,
+      "unit": "bits/weight",
+      "condition": "W4A4 QAT from scratch with Hadamard transform; Llama up to 1.6B params, up to 160B tokens (C4)"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "At fixed memory, 4-bit weight matmuls beat 16-bit; per parameter they still cost loss, so the bound should count parameters at their trained size."
+   },
+   {
+    "id": "panferov-2025-quest/2",
+    "claim": "For weight-only quantization (activations at full precision), 2-bit weights are Pareto-optimal in QuEST's scaling laws.",
+    "quote": "(b, middle) shows the scaling laws for weight-only quantization, where 2-bit appears to be Pareto-dominant",
+    "location": "Figure 4 caption",
+    "quantities": [
+     {
+      "param": "b_w.pretrained",
+      "value": 2,
+      "unit": "bits/weight",
+      "condition": "weight-only QAT from scratch; Pareto-optimal width at fixed model memory; Llama up to 1.6B"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Under a memory budget the best trade is 2-bit weights in more parameters: a low-end b_w for matmuls in small-scale pretraining."
+   }
+  ]
+ },
+ {
+  "id": "wang-2025-fp4-training",
+  "title": "Optimizing Large Language Model Training Using FP4 Quantization",
+  "authors": "Ruizhe Wang, Yeyun Gong, Xiao Liu, Guoshuai Zhao, Ziyue Yang, Baining Guo, et al.",
+  "year": 2025,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2501.17116",
+  "topics": [
+   "weights",
+   "activations"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "wang-2025-fp4-training/1",
+    "claim": "Emulated FP4 (W4A4) training on 100B tokens ends 2.4% above BF16 loss at 1.3B and about 4.8% above at 7B and 13B, with zero-shot accuracy on par.",
+    "quote": "Specifically, after training on 100B tokens, the training losses are as follows: 2.55 (FP4) vs. 2.49 (BF16) for the 1.3B model, 2.17 (FP4) vs. 2.07 (BF16) for the 7B model, and 1.97 (FP4) vs. 1.88 (BF16) for the 13B model.",
+    "location": "Section 4.2, Figure 5",
+    "quantities": [
+     {
+      "param": "b_w.pretrained",
+      "value": 4,
+      "unit": "bits/weight",
+      "condition": "FP4 E2M1 weights with absmax scaling, emulated on FP8 tensor cores; 1.3B/7B/13B, 100B tokens"
+     },
+     {
+      "param": "other",
+      "value": 4.8,
+      "unit": "%",
+      "condition": "derived: (1.97 - 1.88)/1.88 train-loss gap at 13B; 2.4% at 1.3B and 4.8% at 7B"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Without NVFP4's fine block scales and layer exceptions, 4-bit matmuls cost about 5% of loss, and the gap does not shrink from 7B to 13B."
+   },
+   {
+    "id": "wang-2025-fp4-training/2",
+    "claim": "In the ablation, quantizing only the weights to 4 bits (W4A8) costs little loss; activations are the hard part.",
+    "quote": "Notably, direct quantizing weight into 4-bit doesn’t introduce a substantial training loss gap, suggesting that weights are easier to quantize than activations.",
+    "location": "Section 4.3 (ablation), Figure 6(b)",
+    "quantities": [
+     {
+      "param": "b_w.pretrained",
+      "value": 4,
+      "unit": "bits/weight",
+      "condition": "W4A8; LLaMA 1.3B, 10B tokens"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "b_w can sit below b_a at equal loss: the 4-bit penalty is mostly in activations."
+   }
+  ]
+ },
+ {
+  "id": "chen-2025-qat-scaling-law",
+  "title": "Scaling Law for Quantization-Aware Training",
+  "authors": "Mengzhao Chen, Chaoyi Zhang, Jing Liu, Yutao Zeng, Zeyue Xue, Zhiheng Liu, et al.",
+  "year": 2025,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2505.14302",
+  "topics": [
+   "weights",
+   "activations"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "chen-2025-qat-scaling-law/1",
+    "claim": "Across 268 W4A4 QAT runs (74M-594M parameters, up to 100B tokens), quantization error falls with model size and rises with training tokens and coarser granularity.",
+    "quote": "Through 268 QAT experiments, we show that quantization error decreases as model size increases, but rises with more training tokens and coarser quantization granularity.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "The penalty of low-bit weight matmuls shrinks with parameters but grows with tokens per parameter, so heavily trained small models are the hardest case."
+   },
+   {
+    "id": "chen-2025-qat-scaling-law/2",
+    "claim": "Weight quantization error grows faster with tokens than activation error and eventually exceeds it.",
+    "quote": "Additionally, with more training data, weight quantization error eventually exceeds activation quantization error, suggesting that reducing weight quantization error is also important in such scenarios.",
+    "location": "abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "At high tokens per parameter b_w, not b_a, becomes the binding precision in low-bit training."
+   }
+  ]
+ },
+ {
+  "id": "dremov-2025-compute-optimal-qat",
+  "title": "Compute-Optimal Quantization-Aware Training",
+  "authors": "Aleksandr Dremov, David Grangier, Angelos Katharopoulos, Awni Hannun",
+  "year": 2025,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2509.22935",
+  "topics": [
+   "weights"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "dremov-2025-compute-optimal-qat/1",
+    "claim": "With full-precision training followed by QAT, the compute-optimal QAT share of training grows with the total compute budget (86M-2.2B models).",
+    "quote": "we demonstrate that the optimal fraction of QAT compared to the total training length increases with the total compute budget.",
+    "location": "Section 1 (Introduction)",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "The cheapest way to reach a low-bit model reads full-precision weights for part of training; that part shrinks as compute grows."
+   }
+  ]
+ },
+ {
+  "id": "janson-2026-spectron",
+  "title": "Stabilizing Native Low-Rank LLM Pretraining",
+  "authors": "Paul Janson, Edouard Oyallon, Eugene Belilovsky",
+  "year": 2026,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2602.12429",
+  "topics": [
+   "weights",
+   "updates"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "janson-2026-spectron/1",
+    "claim": "A fully factorized (native low-rank) 454M transformer reaches the validation loss of a 780M dense transformer at equal training FLOPs; isoFLOP scaling laws span 47M-1.5B parameters and up to 90B tokens.",
+    "quote": "Figure 1 and 5 shows that when trained for equal FLOPs, Factorized Transformer-L (454M) converges to the same validation loss as Dense Transformer-L (780M), demonstrating that low-rank capacity limitations can be overcome through extended training under stable optimization (Sardana et al., 2024).",
+    "location": "Section 5.2 (Comparison to Dense Model Training), Figures 1 and 5",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.58,
+      "unit": "fraction of parameters",
+      "condition": "derived: 454M / 780M at equal training FLOPs and equal loss"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Pretrained weights can be built from about 58% as many free parameters at no loss, given more tokens; the information in dense weights is below one full parameter per entry."
+   }
+  ]
+ },
+ {
+  "id": "wang-2023-zeropp",
+  "title": "ZeRO++: Extremely Efficient Collective Communication for Giant Model Training",
+  "authors": "Guanhua Wang, Heyang Qin, Sam Ade Jacobs, Connor Holmes, Samyam Rajbhandari, Olatunji Ruwase, et al.",
+  "year": 2023,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2306.10209",
+  "topics": [
+   "weights",
+   "gradients"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "wang-2023-zeropp/1",
+    "claim": "ZeRO++ all-gathers block-quantized INT8 weights for the forward pass; with hierarchical partitioning and quantized weights alone, GPT-350M on 30B tokens ends at the baseline loss.",
+    "quote": "For a more extended case, we also evaluate hierarchical partitioning and quantized weights alone. The results suggest our convergence is identical to the baseline in this case.",
+    "location": "Section 5.4, Table 5",
+    "quantities": [
+     {
+      "param": "b_w.pretrained",
+      "value": 8,
+      "unit": "bits/weight",
+      "condition": "block-based INT8 weight all-gather (qwZ) with hpZ; GPT-350M, 30B tokens; final eval loss 2.121653 vs 2.121762 ZeRO-3 baseline (Table 5)"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Sharded training already sends weights to the devices that run the matmuls at 8 bits, at no loss."
+   },
+   {
+    "id": "wang-2023-zeropp/2",
+    "claim": "Without block-wise scaling, INT8 weight quantization diverges at the start of training.",
+    "quote": "The training with basic (non-blocked) quantization diverged at the beginning so there is no visible data, on the contrary, ZeRO++ is closely aligned with the baseline, and also confirms our previous analysis of better quantization accuracy by using block based quantization.",
+    "location": "Section 5.4, Figure 14",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Low-bit weight reads need per-block scales; their overhead belongs in b_w."
+   }
+  ]
+ },
+ {
+  "id": "markov-2023-qsdp",
+  "title": "Quantized Distributed Training of Large Models with Convergence Guarantees",
+  "authors": "Ilia Markov, Adrian Vladu, Qi Guo, Dan Alistarh",
+  "year": 2023,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2302.02390",
+  "topics": [
+   "weights",
+   "gradients"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "markov-2023-qsdp/1",
+    "claim": "Quantized FSDP with 8-bit weights and gradients (bucket size 1024) trains GPT-1.3B on C4 to essentially baseline perplexity.",
+    "quote": "For example, QSDP can train GPT-1.3B to essentially the same perplexity up to 2.2x faster than standard FSDP on a 10Gbps network.",
+    "location": "Section 1; Section 6, Table 1",
+    "quantities": [
+     {
+      "param": "b_w.pretrained",
+      "value": 8,
+      "unit": "bits/weight",
+      "condition": "W8G8, bucket size 1024; GPT-1.3B on C4, 14,000 steps at global batch 512 (Appendix A)"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "An 8-bit weight all-gather is lossless in sharded pretraining at about 1B scale."
+   }
+  ]
+ },
+ {
+  "id": "jia-2024-sdp4bit",
+  "title": "SDP4Bit: Toward 4-bit Communication Quantization in Sharded Data Parallelism for LLM Training",
+  "authors": "Jinda Jia, Cong Xie, Hanlin Lu, Daoce Wang, Hao Feng, Chengming Zhang, et al.",
+  "year": 2024,
+  "venue": "NeurIPS 2024",
+  "url": "https://arxiv.org/abs/2410.15526",
+  "topics": [
+   "weights",
+   "gradients"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "jia-2024-sdp4bit/1",
+    "claim": "Quantizing the all-gathered weights directly to 4 bits raises validation loss by up to 12% (6.1% at GPT-1.3B over 40B tokens).",
+    "quote": "1) For weight communication reduction, as shown in Table 1, directly quantizing weights (qW) to 4 bits results in a validation loss that increase of up to 12% compared to the baseline.",
+    "location": "Section 5.2, Table 1",
+    "quantities": [
+     {
+      "param": "b_w.pretrained",
+      "value": 4,
+      "unit": "bits/weight",
+      "condition": "direct group-wise 4-bit weight quantization before the all-gather (qW); GPT up to 6.7B, 80,000 iterations, over 40B tokens"
+     },
+     {
+      "param": "other",
+      "value": 6.1,
+      "unit": "%",
+      "condition": "derived: (2.04608 - 1.92774)/1.92774, GPT-1.3B validation loss (Table 1)"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Naive 4-bit weight reads in pretraining (no QAT, no latent-weight correction) cost 6-12% of loss; a 4-bit b_w needs training-aware quantization."
+   },
+   {
+    "id": "jia-2024-sdp4bit/2",
+    "claim": "Quantizing instead the difference between the current and previous iteration's weights to 4 bits keeps validation loss at baseline (GPT-1.3B 1.92881 vs 1.92774) and tracks full precision at 6.7B.",
+    "quote": "Instead of directly quantizing weights, we apply 4-bit quantization to compress the weight differences between current and previous iterations",
+    "location": "Section 1 (contributions); Section 5.2, Table 1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 4,
+      "unit": "bits/param/step",
+      "condition": "4-bit group-wise quantized weight difference per iteration (qWD); GPT-1.3B and 6.7B over 40B tokens; 1.3B validation loss +0.06% (derived from Table 1)"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "A device holding the previous weights needs at most about 4 bits per entry per step to track the new ones: an upper bound on per-step weight novelty in pretraining."
+   }
+  ]
+ },
+ {
+  "id": "pytorch-2024-float8-fsdp2",
+  "title": "Supercharging Training using float8 and FSDP2",
+  "authors": "Tuan Hoang Trong, Alexei Karve, Yan Koyfman, Linsong Chu, Divya Kumari, Shweta Salaria, et al. (IBM); Less Wright, Wei Feng, Vasiliy Kuznetsov, Driss Guesseous (Meta)",
+  "year": 2024,
+  "venue": "PyTorch blog",
+  "url": "https://pytorch.org/blog/training-using-float8-fsdp2/",
+  "topics": [
+   "weights",
+   "activations"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "pytorch-2024-float8-fsdp2/1",
+    "claim": "FSDP2 with float8 matmuls and float8 weight all-gathers (tensorwise scaling) matches bf16 loss for Llama3 8B over 2k steps and 70B over 1k steps.",
+    "quote": "We observe that across these different models and in different environments, we obtain loss parity for the small scale of tokens.",
+    "location": "Experiments, Figure 1",
+    "quantities": [
+     {
+      "param": "b_w.pretrained",
+      "value": 8,
+      "unit": "bits/weight",
+      "condition": "float8 with one per-tensor scale for weights in the matmuls and in the FSDP2 all-gather; Llama3 8B (2k steps) and 70B (1k steps)"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "8-bit weight reads, in the matmul and in sharded communication, are standard practice with no loss over short horizons at 8B-70B."
+   },
+   {
+    "id": "pytorch-2024-float8-fsdp2/2",
+    "claim": "A 3B Llama3 trained to 1T tokens in float8 scores about 1% below the bf16 run on lm-eval benchmarks.",
+    "quote": "We observe that the bf16 performance is marginally better than the float8 scores (about one percent).",
+    "location": "Experiments, Table 2",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 1,
+      "unit": "%",
+      "condition": "benchmark gap bf16 minus float8; Llama3-architecture 3B, 1T tokens of FineWeb-edu"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Even 8-bit tensorwise-scaled weight matmuls carry a small measurable penalty at about 330 tokens per parameter."
    }
   ]
  }

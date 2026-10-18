@@ -435,6 +435,28 @@
     "grade": "measured-small",
     "bears_on": "Low-rank methods have m_A at or below 1 against tuned full-rank training.",
     "from_review": "scaling-corpus"
+   },
+   {
+    "id": "glentis-2025-param-efficient-survey/2",
+    "claim": "Plain low-rank factorized pretraining (W = BA, rank 512 of width 2048) reaches perplexity 18.22 at 1B against 13.97 for well-tuned full-rank training; it works at 60M-130M and falls behind at 350M-1B.",
+    "quote": "Plain low-rank model works particularly well for small models (60M, 130M), while the performance becomes less significant compared to other methods for larger models (350M, 1B).",
+    "location": "Section 3.2 (Benchmarking Results), Table 3",
+    "quantities": [
+     {
+      "param": "update.rank",
+      "value": 0.25,
+      "unit": "fraction of full rank",
+      "condition": "rank 512 of width 2048; 1B params, 13.1B tokens"
+     },
+     {
+      "param": "other",
+      "value": 18.22,
+      "unit": "perplexity",
+      "condition": "plain low-rank at 1B (Table 3), vs 13.97 full-rank Stable-SPAM, 16.52 full-rank Adam, 15.57 GaLore, 15.01 low-rank with restarts"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Rank-d/4 weights or updates cost 10-30% in perplexity at 1B; the change from init in pretraining is not captured by a low-rank factorization."
    }
   ]
  },
@@ -2178,6 +2200,133 @@
     "grade": "measured-at-scale",
     "bears_on": "Do not set fraction_changed far below 1 for RL; small RL updates are dense below bf16 resolution, so sparsity is not a robust compression lever.",
     "from_review": "updates"
+   }
+  ]
+ },
+ {
+  "id": "cai-2025-alpharl",
+  "title": "On Predictability of Reinforcement Learning Dynamics for Large Language Models",
+  "authors": "Yuchen Cai, Ding Cao, Xin Xu, Zijun Yao, Yuqing Huang, Zhenyu Tan, et al.",
+  "year": 2025,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2510.00553",
+  "topics": [
+   "updates"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "cai-2025-alpharl/1",
+    "claim": "Across 13 LLMs (7B-32B) and 10 RL algorithms, the rank-1 truncation of each matrix's RL update recovers on average 99.17% of the reasoning gain.",
+    "quote": "Our analysis shows that, for Property 1, the Rank-1 Subspace alone recovers an average of 99.17% of the reasoning capability.",
+    "location": "Section 1; Sections 2-3",
+    "quantities": [
+     {
+      "param": "update.rank",
+      "value": 1,
+      "unit": "rank",
+      "condition": "per weight matrix; post-hoc SVD truncation of the RL delta; 7B-32B models"
+     },
+     {
+      "param": "b_w.delta",
+      "value": 0.005,
+      "unit": "bits per base weight",
+      "condition": "derived: rank 1 costs (m+n) bf16 values per m x n matrix: 0.005 for 4096x14336, 0.0078 for 4096x4096, 0.0038 for 5120x25600"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "RL deltas at 7B-32B compress post hoc to about 0.005 bits per base weight while keeping 99% of the gain, in line with the b_w.delta/rl central of 0.006."
+   },
+   {
+    "id": "cai-2025-alpharl/2",
+    "claim": "SFT and distillation deltas on the same models show neither rank-1 dominance nor predictable evolution; both properties are specific to RL.",
+    "quote": "Crucially, control experiments with alternative training paradigms like supervised fine-tuning and distillation on the same models yielded neither property, demonstrating that these phenomena are distinctive characteristics of the RL process for LLMs.",
+    "location": "Section 1",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "Keep separate delta rates for RL (rank 1, about 0.005) and SFT or distillation (no rank-1 structure; b_w.delta/sft about 0.1)."
+   }
+  ]
+ },
+ {
+  "id": "mindlab-2026-peft-scaling",
+  "title": "On the Scaling of PEFT: Towards Million Personal Models of Trillion Parameters",
+  "authors": "Mind Lab, Vin Bo, Song Cao, Vic Cao, Andrew Chen, et al.",
+  "year": 2026,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2606.02437",
+  "topics": [
+   "updates"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "mindlab-2026-peft-scaling/1",
+    "claim": "LoRA RL on dense and expert layers of a 1.04T-parameter MoE (Kimi K2, 32.6B active) runs at about 10% of the compute and communication of full-parameter RL.",
+    "quote": "In the Kimi K2 system, this design reduces the compute and communication footprint to approximately 10% of conventional full-parameter RL while preserving the ability to adapt a trillion-scale prior.",
+    "location": "Section 3.3 (Operationalizing Trillion-Scale LoRA RL)",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.1,
+      "unit": "fraction of full-parameter RL compute and communication",
+      "condition": "LoRA on selected dense and expert layers, GRPO-style on-policy RL; 1.04T total / 32.6B active"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Low-rank RL deltas are run at trillion-parameter scale; no matched full-RL baseline is reported, so the capability cost of the low-rank restriction is not measured there."
+   },
+   {
+    "id": "mindlab-2026-peft-scaling/2",
+    "claim": "In 216 PPO runs on Qwen3-8B, the best rank-1 LoRA run matches the best rank-16 and rank-32 runs; low rank fails on reliability across seeds, not on the ceiling.",
+    "quote": "The best run at rank 1 already matches the best runs at ranks 16 and 32; what collapses at low rank is reliability across seeds, not the height of the attainable ceiling.",
+    "location": "Section 4.1.1, Figures 8-10",
+    "quantities": [
+     {
+      "param": "update.rank",
+      "value": 1,
+      "unit": "rank",
+      "condition": "LoRA rank; Qwen3-8B PPO, 500 steps on mathematics with verifiable rewards; best of six seeds"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "A rank-1 RL delta (about 0.005-0.008 bits per base weight) reaches the best-case gain of rank 32; the attacker needs a few seeds, not more bits."
+   }
+  ]
+ },
+ {
+  "id": "wang-2025-ultradelta",
+  "title": "Breaking the Compression Ceiling: Data-Free Pipeline for Ultra-Efficient Delta Compression",
+  "authors": "Xiaohui Wang, Peng Ye, Chenyu Huang, Shenghe Zheng, Bo Zhang, Lei Bai, et al.",
+  "year": 2025,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2505.13563",
+  "topics": [
+   "updates"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "wang-2025-ultradelta/1",
+    "claim": "Data-free delta compression takes LLaMA-2 7B and 13B fine-tune deltas to 32x and 50x without losing average task performance.",
+    "quote": "UltraDelta compresses LLaMA-2 series models [78, 56, 57] to 32× compression for 7B and 50× for 13B, consistently outperforming all baselines and even surpassing the average performance of fine-tuned models.",
+    "location": "Section 1 (contributions); Section 4",
+    "quantities": [
+     {
+      "param": "b_w.delta",
+      "value": 0.5,
+      "unit": "bits per base weight",
+      "condition": "derived: 16/32; LLaMA-2-7B fine-tunes"
+     },
+     {
+      "param": "b_w.delta",
+      "value": 0.32,
+      "unit": "bits per base weight",
+      "condition": "derived: 16/50; LLaMA-2-13B fine-tunes"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "SFT deltas at 7B-13B compress post hoc and data-free to about 0.3-0.5 bits per base weight; data-aware methods (jiang-2024-deltadq) go lower."
    }
   ]
  }

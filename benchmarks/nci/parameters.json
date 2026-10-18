@@ -12,7 +12,7 @@
     "central": 2.5,
     "high": 4.5,
     "confidence": "medium",
-    "merge": "High is the strict within-1%-perplexity standard (4-bit GPTQ/AWQ, SpQR, NVFP4 training at about 4.5 bits with scales). Central sits between where zero-shot holds (2 bits, QTIP on Llama 3.1 405B) and where perplexity holds (3 bits); size-optimal fine-tuned rates are 2.0-2.5. Low is QMoE's 0.807 bits/param on an older MoE; a frontier MoE needs about 1.6. Rates that need fine-tuning to decompress are excluded: decompression is itself training.",
+    "merge": "High is the strict within-1%-perplexity standard (4-bit GPTQ/AWQ, SpQR, NVFP4 at 4.03 bits per weight with its 16x16 block scales). Central sits between where zero-shot holds (2 bits, QTIP on Llama 3.1 405B) and where perplexity holds (3 bits); size-optimal fine-tuned rates are 2.0-2.5. Low is QMoE's 0.807 bits/param on an older MoE; a frontier MoE needs about 1.6. Rates that need fine-tuning to decompress are excluded: decompression is itself training.",
     "evidence": [
      "frantar-2022-gptq/1",
      "nvidia-2025-nvfp4/1",
@@ -21,7 +21,35 @@
      "tseng-2024-qtip/1",
      "unsloth-2025-deepseek-r1-dynamic/1",
      "frantar-2023-qmoe/1",
-     "frantar-2023-qmoe/3"
+     "frantar-2023-qmoe/3",
+     "nvidia-2025-nvfp4/8"
+    ]
+   },
+   {
+    "id": "b_w.pretrained/low-bit-from-scratch",
+    "context": "weights as read by the forward and backward matmuls of a model trained from scratch in low precision; master weights stay FP32/BF16",
+    "low": 1.58,
+    "central": 4.0,
+    "high": 8,
+    "confidence": "medium",
+    "merge": "Central: NVFP4 weights (16x16 block scales, 4.03 bits) in the largest low-bit runs, Nemotron 3 Ultra (550B total, 55B active, 20T tokens) and Super (120B, 12.7B active, 25T tokens). The loss gap against BF16 is below 0.4% and falls with scale: about 1%, 0.6% and 0.4% at 3B, 8B and 55B active. The final 15% of layers plus attention, latent and embedding projections stay in high precision, which lifts the weight-averaged read to about 5.8. Low: ternary from scratch (BitNet b1.58 2B4T at 4T tokens, Spectra 3.9B, Spectra 1.1 3B at 1.2T), with a fitted loss gap of 5-7% at 15B-330B. 1-bit BitNet reaches 30B but trains on only about 10B tokens. High: FP8 practice (DeepSeek-V3 within 0.25%; FSDP2 float8 weight all-gather). Naive 4-bit weight reads without training-aware quantization cost 5-12%. These are rates of a different training computation, not compressions of a BF16 one: the bound applies to the low-bit run as its own reference circuit, and its master-weight update is extra work the bound does not count.",
+    "evidence": [
+     "nvidia-2026-nemotron3-ultra/1",
+     "nvidia-2026-nemotron3-ultra/2",
+     "nvidia-2026-nemotron3-ultra/3",
+     "nvidia-2026-nemotron3-super/1",
+     "nvidia-2026-nemotron3-super/2",
+     "nvidia-2025-nemotron3-whitepaper/1",
+     "nvidia-2025-nvfp4/8",
+     "nvidia-2025-nvfp4/7",
+     "ma-2025-bitnet-2b4t/1",
+     "kaushal-2024-spectra/2",
+     "vaidhya-2025-spectra-1-1/1",
+     "wang-2023-bitnet/1",
+     "deepseekai-2024-deepseek-v3/1",
+     "pytorch-2024-float8-fsdp2/1",
+     "wang-2025-fp4-training/1",
+     "jia-2024-sdp4bit/1"
     ]
    }
   ]
@@ -67,6 +95,25 @@
      "allenzhu-2024-knowledge-capacity/1",
      "allenzhu-2024-knowledge-capacity/3"
     ]
+   },
+   {
+    "id": "b_w.capacity/pretrained-vs-init",
+    "context": "information a pretrained model's weights carry beyond its registered (seeded) init, per weight",
+    "low": 1.2,
+    "central": 2.0,
+    "high": 3.6,
+    "confidence": "low",
+    "merge": "The registered init saves almost nothing. Restricting pretraining's weights, or their change from init, to rank d/4 costs 7-30% in perplexity at 1B (15.01 with restarts and 18.22 plain, against 13.97 full rank). So the rate relative to init is the model's own information. Central: 2 bits per parameter of extractable knowledge, matching the 2-2.5-bit lossy rates of frontier models. High: the 3.6 bits per parameter memorization ceiling. Low: 0.58 x 2, because a factorized model with 58% of the parameters matches dense loss at equal FLOPs (Spectron, up to 1.5B). Per step, 4-bit weight differences track full-precision training at 6.7B, so per-step novelty is at most 4 bits per parameter, and the cumulative total is capped by capacity rather than by step count.",
+    "evidence": [
+     "morris-2025-memorize/1",
+     "allenzhu-2024-knowledge-capacity/1",
+     "glentis-2025-param-efficient-survey/1",
+     "glentis-2025-param-efficient-survey/2",
+     "janson-2026-spectron/1",
+     "jia-2024-sdp4bit/2",
+     "li-2024-excp/1",
+     "tseng-2024-qtip/1"
+    ]
    }
   ]
  },
@@ -83,14 +130,16 @@
     "central": 0.1,
     "high": 1.0,
     "confidence": "medium",
-    "merge": "High: post-hoc 1-bit codes are near-lossless on chat up to 70B (BitDelta), though they degrade math and code. Central: a random 99% drop at 70B (DARE, about 0.16) and DeltaDQ at 128x (0.125). Low: constrained adapters (VeRA at 13B, 0.003).",
+    "merge": "Values unchanged. Data-free post-hoc codes reach 0.32-0.5 bits per base weight at 7-13B without loss (UltraDelta), between DeltaDQ's data-aware 0.03-0.125 and BitDelta's 1 bit. SFT and distillation deltas lack the rank-1 structure of RL deltas (AlphaRL's controls), so RL rates must not be applied to SFT. High: post-hoc 1-bit codes are near-lossless on chat up to 70B (BitDelta), though they degrade math and code. Central: a random 99% drop at 70B (DARE, about 0.16) and DeltaDQ at 128x (0.125). Low: constrained adapters (VeRA at 13B, 0.003).",
     "evidence": [
      "liu-2024-bitdelta/1",
      "ping-2024-delta-come/1",
      "yu-2024-dare/1",
      "jiang-2024-deltadq/1",
      "dettmers-2023-qlora/1",
-     "kopiczko-2024-vera/1"
+     "kopiczko-2024-vera/1",
+     "wang-2025-ultradelta/1",
+     "cai-2025-alpharl/2"
     ]
    },
    {
@@ -100,13 +149,16 @@
     "central": 0.006,
     "high": 1.0,
     "confidence": "low",
-    "merge": "High: natural RL deltas are dense and full rank, so take the post-hoc 1-bit code. Central: rank-1 LoRA matches full RL on Llama-3.1-8B (3M params, as a rate per base weight). Low: TinyLoRA's 10k parameters on Qwen-7B (13 parameters is the extreme, Qwen-specific). RL sparsity (68-96% unchanged) is treated as a precision artifact that does not lower b_w.",
+    "merge": "The central now has two independent supports. Rank-1 LoRA matches full RL on Llama-3.1-8B, and truncating natural RL deltas to rank 1 after training keeps 99.17% of the reasoning gain across 13 models (7B-32B) and 10 algorithms, which is 0.004-0.008 bits per base weight depending on matrix shape. On Qwen3-8B, the best rank-1 LoRA seed matches ranks 16 and 32 but is unreliable across seeds. LoRA RL runs on a 1.04T MoE (Kimi K2) at about 10% of full-RL compute, with no matched full-RL baseline. High: natural RL deltas are dense and full rank, so take the post-hoc 1-bit code. Central: rank-1 LoRA matches full RL on Llama-3.1-8B (3M params, as a rate per base weight). Low: TinyLoRA's 10k parameters on Qwen-7B (13 parameters is the extreme, Qwen-specific). RL sparsity (68-96% unchanged) is treated as a precision artifact that does not lower b_w.",
     "evidence": [
      "shenfeld-2025-rls-razor/1",
      "schulman-2025-lora-without-regret/1",
      "morris-2026-tinylora/1",
      "mukherjee-2025-rl-subnetworks/1",
-     "zhu-2025-path-not-taken/1"
+     "zhu-2025-path-not-taken/1",
+     "cai-2025-alpharl/1",
+     "mindlab-2026-peft-scaling/1",
+     "mindlab-2026-peft-scaling/2"
     ]
    }
   ]
