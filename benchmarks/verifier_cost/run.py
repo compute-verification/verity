@@ -268,7 +268,7 @@ def store(args) -> int:
         return 1
     res = json.loads(found[0].read_text())
     meta = {"benchmark": "verifier_cost", "schema": res["schema"], "verifier": res["verifier"], "run": args.run,
-            "commit": json.loads((run / "remote.json").read_text())["source_sha"]}
+            "commit": json.loads((run / "job.json").read_text())["run"]["remote"]["source_sha"]}
     p = subprocess.run(["research", "data", "put", "--kind", "evidence/v1", "--file", str(found[0]),
                         "--preserve", "--meta", json.dumps(meta)], check=True, capture_output=True, text=True)
     print(p.stdout.strip().splitlines()[-1])
