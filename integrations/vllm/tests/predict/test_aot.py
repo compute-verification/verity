@@ -15,6 +15,7 @@ from verity.ml.circuits.types import Record
 from verity_vllm.config import UsageError
 from verity_vllm.correspondence.runtime import SCHEMA as CORRESPONDENCE, correspondence_digest
 from verity_vllm.predict import aot as A
+from verity_vllm.predict import score as S
 from verity_vllm.predict.build import build_program
 
 from tests.predict.test_predict import TINY, _phi
@@ -89,7 +90,7 @@ def test_compare_names_each_program_and_is_equal_only_when_every_one_is(tmp_path
                      "workload": {"workload_digest": f"w{r}"}} for r in range(2)}}))
     got = {0: {"step": "s0", "requests": {"build_request_LP9_T2": "q0"}, "workload": "w0", "errors": {}, "secs": {"step": 1.0}},
            1: {"step": "s1", "requests": {}, "workload": None, "errors": {"build_request_LP9_T2": "Unexpressible: x"}, "secs": {}}}
-    monkeypatch.setattr(A, "ProcessPoolExecutor", concurrent.futures.ThreadPoolExecutor)
+    monkeypatch.setattr(A, "ProcessPoolExecutor", lambda max_workers, **_: concurrent.futures.ThreadPoolExecutor(max_workers))
     monkeypatch.setattr(A, "_predict_rank", lambda task: got[task[1]])
     doc = A.compare(str(d), "row", "config.json")
     assert doc["equal"] is False and doc["schema"] == A.SCHEMA
@@ -100,3 +101,15 @@ def test_compare_names_each_program_and_is_equal_only_when_every_one_is(tmp_path
     assert doc["ranks"]["1"]["errors"] == {"build_request_LP9_T2": "Unexpressible: x"}
     got[1] = {**got[0], "step": "s1", "requests": {"build_request_LP9_T2": "q1"}, "workload": "w1"}
     assert A.compare(str(d), "row", "config.json")["equal"] is True
+
+
+def test_a_rank_composes_its_workload_from_each_requests_component_as_predicted(tmp_path, monkeypatch):
+    phi = _phi(TINY, [{"request_id": f"u{i}", "index": i, "prompt_len": lp, "max_tokens": cap, "arrive_step": i}
+                      for i, (lp, cap) in enumerate([(5, 3), (7, 2), (5, 3)])])
+    monkeypatch.setattr(A, "phi_at", lambda row, rank, config: phi)
+    (tmp_path / "result.json").write_text(json.dumps({"M": 1, "pos0": 8}))
+    names = [f"build_request_LP{lp}_T{t}" for lp, t in phi.request_shapes()]
+    got = A._predict_rank(("row", 0, "config.json", str(tmp_path), names))
+    assert got["errors"] == {} and set(got["secs"]) == {"step", "workload", *names}
+    assert got["requests"] == {n: build_program(phi, "request", LP=lp, T=t).digest for n, (lp, t) in zip(names, phi.request_shapes())}
+    assert got["workload"] == S.predict_workload(phi)["digest"]

@@ -26,6 +26,7 @@ import gzip
 import hashlib
 import json
 import math
+import multiprocessing
 import os
 import re
 import shutil
@@ -111,7 +112,8 @@ def emit(phi: Phi, wrapper: str, trace: str, out: str, *, M: int = 1, pos0: int 
 
 
 def _predict_rank(task: tuple[str, int, str, str, list[str]]) -> dict[str, Any]:
-    """One rank's Programs of the traced Build: its step at the trace's (M, pos0), each request shape, GP-01's workload over them."""
+    """One rank's Programs of the traced Build: its step at the trace's (M, pos0), each request shape, GP-01's workload over them.
+    A request's Program goes once its component is built: the composition holds the components, never every request Program."""
     row, rank, config, step_dir, requests = task
     out: dict[str, Any] = {"requests": {}, "errors": {}, "secs": {}}
 
@@ -122,23 +124,26 @@ def _predict_rank(task: tuple[str, int, str, str, list[str]]) -> dict[str, Any]:
         except Exception as e:  # noqa: BLE001 -- an unexpressible unit or a predictor bug is a compared outcome, named
             out["errors"][part] = f"{type(e).__name__}: {e}"[:800]
         finally:
-            out["secs"][part] = round(time.time() - t0, 1)
+            out["secs"][part] = round(out["secs"].get(part, 0) + time.time() - t0, 1)
 
     phi = phi_at(row, rank, config)
     st = json.loads(Path(step_dir, "result.json").read_text())
     out["step"] = getattr(timed("step", lambda: predict(phi, "step", M=int(st["M"]), pos0=int(st["pos0"]))), "digest", None)
-    built = {}
+    canon, comps = {}, {}
     for name in requests:
         LP, T = (int(x) for x in REQUEST.fullmatch(name).groups())
         if (r := timed(name, lambda: predict(phi, "request", LP=LP, T=T))) is not None:
-            built[(LP, T)], out["requests"][name] = r, r.digest
-    out["workload"] = (timed("workload", lambda: S.predict_workload(phi, built)) or {}).get("digest")
+            out["requests"][name] = r.digest
+            if (c := timed("workload", lambda: S.request_component(r, canon))) is not None:
+                comps[(LP, T)] = c
+    out["workload"] = (timed("workload", lambda: S.predict_workload(phi, comps, canon)) or {}).get("digest")
     return out
 
 
 def compare(row_dir: str, row: str, config: str, workers: int = 0) -> dict[str, Any]:
-    """Every Program the traced Build under `row_dir` holds (`epoch.build_programs`), predicted at its rank and shape, one process a
-    rank (`workers` at once; 0 = every rank), and compared digest by digest."""
+    """Every Program the traced Build under `row_dir` holds (`epoch.build_programs`), predicted at its rank and shape, a fresh
+    process a rank (`workers` at once; 0 = every rank: a reused one keeps the decode caches of the ranks before), and compared
+    digest by digest."""
     from verity_vllm.pipeline import epoch
     traced = epoch.build_programs(Path(row_dir))
     if not traced:
@@ -146,7 +151,7 @@ def compare(row_dir: str, row: str, config: str, workers: int = 0) -> dict[str, 
     tp = len(traced) > 1 or os.path.isdir(os.path.join(row_dir, "build", "rank0"))
     step_dir = lambda r: os.path.join(row_dir, "build", *([f"rank{r}"] if tp else []), "build_step")   # noqa: E731
     tasks = [(row, int(r), config, step_dir(r), sorted(p["requests"])) for r, p in traced.items()]
-    with ProcessPoolExecutor(max_workers=workers or len(tasks)) as pool:
+    with ProcessPoolExecutor(max_workers=workers or len(tasks), mp_context=multiprocessing.get_context("spawn"), max_tasks_per_child=1) as pool:
         got = dict(zip(traced, pool.map(_predict_rank, tasks)))
     ranks = {}
     for r, p in traced.items():
