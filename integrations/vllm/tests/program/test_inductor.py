@@ -1,7 +1,8 @@
 """`registry.inductor` (Inductor's fused Triton kernels and FA3's split decode, as vLLM serves them compiled) and its numpy twins
 `kernels.inductor_rows`: each twin is its Definition word for word on random rows and the edge words (NaN, infinities, signed
-zeros, subnormals, squares that overflow), at small statics, at Llama-3.2-1B's and at Qwen3's q/k head norm; a launch layout the
-PTX was not read for is refused; the split head is softmax attention within bf16 rounding, and one split is `AttentionHead_v4`."""
+zeros, subnormals, squares that overflow), at small statics (rows of one or more warps, and of fewer lanes), at Llama-3.2-1B's
+and at Qwen3's q/k head norm (cc 9.0's and cc 12.0's launches); a launch layout the PTX was not read for is refused; the split
+head is softmax attention within bf16 rounding, and one split is `AttentionHead_v4`."""
 from __future__ import annotations
 
 __models__ = ("unsloth/Llama-3.2-1B",)
@@ -49,12 +50,15 @@ LAYOUTS = [
     {"N": 1024, "EPS": 1e-6, "XBLOCK": 1, "R0_BLOCK": 512, "NUM_WARPS": 2},    # two warps a row, two chunks
     {"N": 1024, "EPS": 1e-6, "XBLOCK": 1, "R0_BLOCK": 512, "NUM_WARPS": 4},    # four columns a thread, four warps, two chunks
     {"N": 192, "EPS": 1e-6, "XBLOCK": 2, "R0_BLOCK": 64, "NUM_WARPS": 2},      # two columns a thread, three chunks
+    {"N": 320, "EPS": 1e-5, "XBLOCK": 4, "R0_BLOCK": 128, "NUM_WARPS": 2},     # sixteen lanes a row, a partial third chunk
     LLAMA,
 ]
-#: Qwen3's per-head q/k norm (D = 128) at its combo kernel's two autotune candidates: one chunk of four columns a thread (the
-#: winner it served), two chunks of two
+#: Qwen3's per-head q/k norm (D = 128) at its combo kernel's autotune candidates: one chunk of four columns a thread (the winner
+#: it served at cc 9.0), two chunks of two, and cc 12.0's winner: two chunks of eight columns over eight lanes a row (four rows a
+#: warp)
 QK_HEAD = [{"D": 128, "EPS": 1e-6, "XBLOCK": 2, "R0_BLOCK": 128, "NUM_WARPS": 2},
-           {"D": 128, "EPS": 1e-6, "XBLOCK": 2, "R0_BLOCK": 64, "NUM_WARPS": 2}]
+           {"D": 128, "EPS": 1e-6, "XBLOCK": 2, "R0_BLOCK": 64, "NUM_WARPS": 2},
+           {"D": 128, "EPS": 1e-6, "XBLOCK": 64, "R0_BLOCK": 64, "NUM_WARPS": 16}]
 
 
 @pytest.mark.parametrize("S", LAYOUTS, ids=lambda S: f"N{S['N']}-R{S['R0_BLOCK']}-W{S['NUM_WARPS']}")
@@ -87,16 +91,16 @@ def test_the_norm_is_an_rms_norm() -> None:
     assert np.all(np.abs(got - want) <= 2 * 2.0 ** -7 * np.abs(want) + 1e-30)
 
 
-@pytest.mark.parametrize("bad", [{"XBLOCK": 3}, {"R0_BLOCK": 4096}, {"R0_BLOCK": 256}, {"R0_BLOCK": 128}, {"R0_BLOCK": 1536},
-                                 {"NUM_WARPS": 12}, {"N": 2044}, {"EPS": 0.0}, {"EPS": 1e-45}])
+@pytest.mark.parametrize("bad", [{"XBLOCK": 3}, {"XBLOCK": 64}, {"R0_BLOCK": 4096}, {"R0_BLOCK": 256}, {"R0_BLOCK": 128},
+                                 {"R0_BLOCK": 1536}, {"NUM_WARPS": 12}, {"N": 2044}, {"EPS": 0.0}, {"EPS": 1e-45}])
 def test_a_layout_not_read_from_ptx_is_refused(bad: dict) -> None:
     with pytest.raises(ValueError):
         I.norm_layout(**{**LLAMA, **bad})
 
 
-@pytest.mark.parametrize("S", QK_HEAD, ids=lambda S: f"R{S['R0_BLOCK']}")
+@pytest.mark.parametrize("S", QK_HEAD, ids=lambda S: f"X{S['XBLOCK']}-R{S['R0_BLOCK']}")
 def test_the_qk_norm_rope_twin_is_the_definition(S: dict) -> None:
-    rng = np.random.default_rng(S["R0_BLOCK"])
+    rng = np.random.default_rng([S["XBLOCK"], S["R0_BLOCK"]])
     D = S["D"]
     x = _rows(rng, D)[:6].reshape(3, 2, D)
     w, cs = _bf16(rng, D), _bf16(rng, (3, D))
