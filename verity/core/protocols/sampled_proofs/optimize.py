@@ -426,10 +426,45 @@ def frontier(candidates: Sequence[Candidate], costs: CostModel, objective: Objec
     return _pareto(plans, lambda p: _harm(p, by))
 
 
-def for_budget(plans: Sequence[Plan], budget: float) -> Plan | None:
-    """The frontier's least-harm plan within `budget`: its costliest affordable plan."""
+def for_budget(plans: Sequence[Plan], budget: float, *, candidates: Sequence[Candidate] = (),
+               costs: CostModel | None = None, objective: Objective | None = None, by: str = "harm",
+               exact: bool = True) -> Plan | None:
+    """The frontier's least-harm plan within `budget`: its costliest affordable plan.  Given the candidates, costs and
+    objective, the plans either side of the budget are moved to it by bisection on the density, each holding its cuts,
+    floor-only and full templates, and the one certifying less is taken, so the answer doesn't hang on the sweep's grid."""
     affordable = [p for p in plans if p.cost["total"] <= budget]
-    return affordable[-1] if affordable else None
+    if not affordable:
+        return None
+    if costs is None or objective is None:
+        return affordable[-1]
+
+    def at(p: Plan, lam: float) -> Plan:
+        return _plan([c for c in candidates if c.template in p.sizes], costs, objective, lam, p.floor_only, p.full)
+
+    def fits_at(p: Plan, lam: float) -> bool:
+        return at(p, lam).cost["total"] <= budget
+
+    found = []
+    low = affordable[-1]
+    lo, hi = low.lam, low.lam * 2
+    while fits_at(low, hi) and hi < low.lam * 2.0 ** 64:
+        lo, hi = hi, hi * 2
+    found.append((low, lo, hi))
+    high = next((p for p in plans if p.cost["total"] > budget), None)
+    if high is not None:
+        lo, hi = high.lam / 2, high.lam
+        while not fits_at(high, lo) and lo > high.lam * 2.0 ** -64:
+            lo, hi = lo / 2, lo
+        if fits_at(high, lo):
+            found.append((high, lo, hi))
+    out = []
+    for p, lo, hi in found:
+        for _ in range(60):
+            mid = (lo * hi) ** 0.5
+            lo, hi = (mid, hi) if fits_at(p, mid) else (lo, mid)
+        q = at(p, lo)
+        out.append(replace(q, certificate=certify(q.sizes, candidates, objective, exact=exact)))
+    return min(out, key=lambda p: (_harm(p, by), p.cost["total"]))
 
 
 def for_target(candidates: Sequence[Candidate], costs: CostModel, objective: Objective, target: float, *,
@@ -509,11 +544,15 @@ def sensitivity(candidates: Sequence[Candidate], costs: CostModel, objective: Ob
                                                   for v in costs.templates.values()),
                   "commit": costs.commit_per_bit or costs.commit_per_row, "replay": bool(costs.replay)}
         factors = {g: (0.5, 2.0) for g, on in groups.items() if on}
-    base = for_budget(frontier(candidates, costs, objective, by=by, **kw), budget)
+    def at(model: CostModel) -> Plan | None:
+        return for_budget(frontier(candidates, model, objective, by=by, **kw), budget, candidates=candidates,
+                          costs=model, objective=objective, by=by, exact=kw.get("exact", True))
+
+    base = at(costs)
     rows = []
     for what, fs in factors.items():
         for f in fs:
-            p = for_budget(frontier(candidates, perturb(costs, what, f, candidates), objective, by=by, **kw), budget)
+            p = at(perturb(costs, what, f, candidates))
             rows.append({"what": what, "factor": f, "harm": None if p is None else _harm(p, by),
                          "cost": None if p is None else p.cost["total"],
                          "same": p is not None and base is not None and structure(p) == structure(base)})
