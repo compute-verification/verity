@@ -787,14 +787,37 @@ and each window's, from it plus the node's capacities.
 ## 8. What deployment changes, and what is open
 
 - **Zero knowledge.** Every protocol is zero-knowledge, with no clear mode, and an opened block decodes to a KV page,
-  which is user data. Deployed, each opening is a proof unit the proof service proves in zero knowledge, and the
-  verifier sees only its result. The unit's statement is §6's checks 2, 3 and 5 (and 4 under a registration that binds
-  \(z\)), with the opening's fields as witness and
-  public inputs the pass's root, its seed, its plan's digest, \(p\), \(j\), the payload root and the registration (and,
-  for an appended block, its append's root and coin \(c_a\), a verifier's coin). The
-  clear checks here are the specification of what each unit proves. The formats already hide: payload blocks and
-  receipt leaves are `hm96-sha512/row/v2` leaves under fresh salts, and the coins are hm96 leaves until released, so the
-  formats don't change when the openings move into proofs.
+  which is user data. §6's openings reveal it, so the clear checks are only the specification of what each unit
+  proves. Deployed, each drawn receipt is one proof unit that the proof service proves in zero knowledge, and the
+  verifier sees only its verdict. The unit is §6's checks 1–3 and 5 on one opening (and 4 under a registration that
+  binds \(z\)), plus the link from the block's payload to the circuit's committed values:
+  - *Public*, each of the four kinds the rules allow (protocol structure, outputs, the verifier's coins and draws,
+    hiding commitments): the registration (its digest, \(N\), \(b\), the codec and the receipt kind); the draw
+    (window \(t\), pass \(i\), the position in the pass, and \(L_{t,i}\)); the pass's root \(\text{root}_{(t,i)}\)
+    and the root received before it; the pass's seed \(\text{seed}_{(t,i)}\), from \(\sigma_t\), \(i\) and that
+    root; the plan's commitment (v0's plan digest); the payload root; for an appended block, its append's root and
+    coin \(c_a\); and the roots of the circuit's value commitments.
+  - *Witness*: the block \(E_j\), its payload \(\text{payload}_j\) and digest \(d_j\), the index \(j\), the receipt
+    leaf's receipts, and every salt and path: the receipt leaf's, the payload leaf's, the plan's at the position, and
+    the value leaves'.
+  - *What it proves.* Check 1 is the unit's shape: each witness fills its port's fixed size, and the position is the
+    draw's. Check 2: the receipt leaf, under the seed, the plan and the leaf's salt, has its path to the pass's root,
+    and \(j\) is the plan's entry at the position. Check 3: every word of \(E_j\) is below \(p\), and \(E_j\) decodes
+    to \(\text{payload}_j\), under the seed's key for a registered block and under \(b_j(c_a)\) for an appended one,
+    with \(d_j = \text{sha512/row/v2}(\text{payload}_j)\) and the payload leaf on its path, at \(j\), to the payload
+    root or to the append's root. Check 5: the receipt at the position, recomputed from \(j\) and \(E_j\) (and \(z\)
+    if bound) under the registration's kind, is the leaf's. And for an appended block, \(\text{payload}_j\) is the
+    committed KV values the circuit wrote to block \(j\), under the layout: each of those values opens under its
+    value commitment's root (the vLLM Commit's hiding leaves). So the receipted block is the circuit's KV, not bytes
+    the prover chose.
+  - *Output*: the unit's verdict, accepted or §6's failure name, within the 16-bit output limit. The record and
+    `ledger` read only verdicts, and nothing an opening carries leaves the unit.
+
+  The formats already hide: payload blocks and receipt leaves are `hm96-sha512/row/v2` leaves under fresh salts, and
+  the coins are hm96 leaves until released, so the formats don't change when the openings move into proofs. A public
+  \(c_a\) and append root say which append the drawn block belongs to, but not its index or its contents. Open: the
+  units' circuits; the plan's commitment in place of v0's clear plan ("What the plan shows", below); and the layout
+  of the value commitments, which says which value leaves a block's payload bytes are.
 - **Where \(z\) comes from,** under a registration that binds it. \(z\) comes from Pearl-C's k-slice accumulators,
   inside Pearl-C's domain, with Pearl-C's noise for the pass derived from the pass's seed. That gives \(|z|/|E| = 4m/k_s\), at least 1 for batch
   \(\ge k_s/4\), where the tile's final output would give \(4m/k\) (1/16 at batch 64). All-zero weights needn't be
@@ -848,7 +871,14 @@ and each window's, from it plus the node's capacities.
   session's appends (`mapped`, below). On it, a pass's credit is its credited
   receipts at \(D\) bits each, at most the circuit's read bits at the pass's step, and the ledger says it is linked
   (`Ledger.linked`); without it, the credit is the store's, flagged as such. The checks behind the link belong to the
-  units named below, and the ledger takes them as given.
+  units named below, and the ledger takes them as given. Those units are sampled, so the link carries what their draw
+  established: \(\varepsilon\), the most share of the linked credit the units it leaves unproved can carry (the
+  passes whose plan unit is wrong and those holding a block a wrong memory-map unit wrote), except with
+  probability \(\delta\). The session is credited \((1 - \varepsilon)\sum_\text{passes} \min(nD, r_s)\), a window
+  its own sum less \(\varepsilon\) of the session's (the unproved share may all be one window's), and \(\delta\) adds
+  to the ledger's error (`Ledger.error`, `error_horizon`). That \(\varepsilon\) bounds the unproved credit, not only
+  the share of units drawn wrong, is the link's to establish: a wrong unit at a heavy step carries more than its
+  share.
   - *Reads the circuit doesn't make.* The plan is the resident set, and the circuit's reads at a step can be fewer: a
     gather's unselected rows, requests absent from the step's batch, unrouted experts. Their receipts are capped at
     the circuit's reads at the pass's step (`read_bits`, `requirement.Requirement.read_bits`). That each receipted

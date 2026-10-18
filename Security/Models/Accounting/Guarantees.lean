@@ -7,6 +7,8 @@ import Models.Accounting.Guarantees.BoundSketch
 import Models.Accounting.Guarantees.Bridges
 import Models.Accounting.Guarantees.Capacity
 import Models.Accounting.Guarantees.Confidence
+import Models.Accounting.Guarantees.FillerLuck
+import Models.Accounting.Guarantees.HMu
 import Models.Accounting.Guarantees.Gates
 import Models.Accounting.Guarantees.Joint
 import Models.Accounting.Guarantees.Localization
@@ -27,17 +29,19 @@ import Models.Accounting.Guarantees.Requirement
 import Models.Accounting.Guarantees.Sketch
 import Models.Accounting.Guarantees.Tag
 import Models.Accounting.Guarantees.TS
+import Models.Accounting.Guarantees.Sheet
 import Models.Accounting.Guarantees.TS.Receipt
 import Models.Accounting.Guarantees.TS.FoldFanIn
 
 /-! Resource accounting's guarantee statements: the joint guarantee and its covert residual, PoUW's and the bandwidth
-audit's guarantees as a joint run's compute and bandwidth guarantees, a state-bounded game's soundness as its capacity
+audit's guarantees as a joint run's compute and bandwidth guarantees, the filler's per-check luck, a state-bounded
+game's soundness as its capacity
 guarantee, derived state's share of the capacity residual, the rate audit's residency and bandwidth with the rebuild
 charged as compute, with partial completion and with a sketch-then-hash tag, the remote rate audit's conservation over
 tiers and chained passes, the causal horizon bound on its samples and its conservation with named words, the one
 composed guarantee for the remote bandwidth audit as deployed and its deployed instance, the remote
 bandwidth audit's conservation and node-level guarantees on the actual-circuit model, the actual circuit's capacity
 theorem, runtime corollary, localization, composition and fit, the obligations B1, B2 and B4, the tag and sketch
-guarantees, co-location and the link relay for receipts bound to the matmul, what a relay of the deployed bound
+guarantees, Lemma B with (H-μ⁺) derived from fresh coins and Lemma B′ for a persistent pattern, co-location and the link relay for receipts bound to the matmul, what a relay of the deployed bound
 receipt's sketch must exchange, the bandwidth audit's guarantee, their per-run forms, PoUW's work lower bound on an isolated node,
 and a declared circuit's live and read bits from the blocks the audit credits. -/
