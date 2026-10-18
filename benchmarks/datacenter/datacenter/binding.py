@@ -1,122 +1,183 @@
-"""The bridge between the layers: a placement of a circuit onto a datacenter, what it implies, and what of it is public.
+"""The bridge between the layers: a placement of a Program onto a datacenter, what it implies, and what of it is public.
 
-A `Placement` mirrors Lean's `Accounting.Placed` (and `Accounting.Requirement.Placement`, in #2399): each value has the
-device it is produced on (`leaf`), the engine step it is produced at (`step`) and a cell of that device (`cell`, one
-value a cell a step), and each device maps its steps onto ticks of the trusted clock (`ticks`, strictly increasing).
-The placement is private and committed. A crossing is a value produced in one block and read in another; crossings are
-derived, never declared, since moving a value doesn't change it.
+A `Placement` puts each root node of the Program on a device at an engine step: each Call where it runs, each run input
+where it enters (the outside world, a block's own device, a trusted device), and each device maps its steps onto ticks of
+the trusted clock (`ticks`, strictly increasing). A registered input needs no device: registration loaded it where its
+first reader runs, so it is there before the epoch. Every gate of a node is placed with it, so this is Lean's
+`Accounting.Placed` (and `Accounting.Requirement.Placement`, in #2399) at the census's grain: a gate's leaf and step are
+its node's. The placement is private and committed. A crossing is a census value produced in one block and read in
+another; crossings are derived, never declared, since moving a value doesn't change it.
 
 What is public is the placement's `Profile`: the occupancy each certifier port must show, the work each block is to be
-credited with, the trusted data each block consumes, and the registered stores. `audit` and `account` read the profile;
-only `audit`, which runs inside the proof, reads the placement itself.
+credited with, the trusted data each block consumes, the registered stores and the registration's root. `audit` and
+`account` read the profile; only `audit`, which runs inside the proof, reads the placement itself.
 """
 from __future__ import annotations
 
 from collections import deque
 from dataclasses import dataclass, field
+from functools import cached_property
 
-from .logical import Circuit, Value
+from verity.ml.circuits.program import Program
+
+from . import logical as L
+from .logical import Registration, Value
 from .memory import Store
 from .physical import Datacenter, Link, Port
 from .plan import Plan
-from .time import Interval
+
+#: where a node's bits come from: registration, a trusted device's fresh data (part of the verifier's coins), a device in a
+#: block (telemetry, a clock reading), or anywhere else (the outside world: a request)
+SOURCES = ("registered", "trusted", "inside", "outside")
 
 
 @dataclass
 class Placement:
-    """Where and when each value is produced."""
+    """Where and when each root node runs."""
 
-    circuit: Circuit
+    program: Program
     datacenter: Datacenter
-    leaf: dict[int, str]
+    device: dict[int, str]
     step: dict[int, int]
     ticks: dict[str, list[int]] = field(default_factory=dict)
-    cell: dict[int, int] = field(default_factory=dict)
-    #: the device the circuit's outputs are delivered to (usually the outside world), or None
+    #: the device the Program's outputs are delivered to (usually the outside world), or None
     deliver: str | None = None
     #: registered state, each on the device the registration says holds it
     stores: tuple[Store, ...] = ()
+    #: the registration of the Program's registered inputs
+    registration: Registration | None = None
 
-    def tick(self, v: Value | int) -> int:
-        i = v.id if isinstance(v, Value) else v
-        return self.ticks[self.leaf[i]][self.step[i]]
+    @cached_property
+    def values(self) -> list[Value]:
+        return L.values(self.program)
+
+    @cached_property
+    def names(self) -> list[str]:
+        return L.names(self.program)
+
+    def home(self, v: Value) -> str | None:
+        """The device value `v` is produced on, or stored on before the epoch (a registered value, at its first reader)."""
+        if v.node in self.device:
+            return self.device[v.node]
+        return self.device[min(v.reads)] if v.reads else None
+
+    def tick(self, k: int) -> int:
+        return self.ticks[self.device[k]][self.step[k]]
 
     def paced(self) -> bool:
         return all(all(a < b for a, b in zip(t, t[1:])) for t in self.ticks.values())
 
-    def block(self, v: Value | int) -> str | None:
-        i = v.id if isinstance(v, Value) else v
-        b = self.datacenter.block_of(self.leaf[i])
+    def block(self, device: str | None) -> str | None:
+        b = self.datacenter.block_of(device) if device is not None else None
         return b.name if b else None
 
-    def public(self, plan: Plan, ticks: dict[str, float] | None = None) -> Profile:
+    def source(self, k: int) -> str | None:
+        """Where input node `k`'s bits come from (`SOURCES`); None for a Call."""
+        when = L.binding(self.program, k)
+        if when is None:
+            return None
+        if when == L.REGISTRATION:
+            return "registered"
+        d = self.device[k]
+        return "trusted" if self.datacenter.devices[d].trusted else "inside" if self.block(d) else "outside"
+
+    def gates(self, v: Value) -> list[int]:
+        return self._gates.setdefault(v.id, L.gates(self.program, v))
+
+    @cached_property
+    def _gates(self) -> dict[int, list[int]]:
+        return {}
+
+    def public(self, plan: Plan, ticks: dict[str, float] | None = None, weights: dict[str, float] | None = None) -> Profile:
         """The placement's public properties for the epoch `plan` audits. `ticks` is PoUW's proved bound per block: the
-        least block-ticks the block's declared work takes over every route at the data sheet's rates."""
-        c = self.circuit
-        work: dict[str, dict[str, float]] = {b.name: {} for b in self.datacenter.blocks}
-        forced: dict[str, float] = {b.name: 0.0 for b in self.datacenter.blocks}
-        trusted = {i for i, g in enumerate(c.gates) if g.op == "input" and g.input.source == "trusted"}
-        consumed: set[tuple[int, str]] = set()
-        for i, g in enumerate(c.gates):
-            if (b := self.block(i)) is not None:
-                if g.work:
-                    work[b][c.unit_of(g)] = work[b].get(c.unit_of(g), 0.0) + g.work
-                consumed.update((j, b) for j in trusted.intersection(g.operands))
-        for j, b in consumed:
-            forced[b] += c.gates[j].bits
+        least block-ticks the block's declared work takes over every route at the data sheet's rates. `weights` is what an
+        audit credits for one unit of each kind of work (PoUW's W_ref, a public constant of its scheme), 1 for a kind it
+        doesn't list."""
+        dc = self.datacenter
+        work: dict[str, dict[str, float]] = {b.name: {} for b in dc.blocks}
+        for k, w in L.work(self.program).items():
+            if (b := self.block(self.device[k])) is not None:
+                for kind, n in w.items():
+                    work[b][kind] = work[b].get(kind, 0.0) + n
+        forced: dict[str, float] = {b.name: 0.0 for b in dc.blocks}
+        for v in self.values:
+            if self.source(v.node) == "trusted":
+                for b in {self.block(self.device[r]) for r in v.reads} - {None}:
+                    forced[b] += v.bits
         stores = {s.name: s for s in self.stores}
         stores.update({w.store.name: w.store for w in plan.wipes})
-        salt, salt_out, pinned = self._custody(trusted, plan.registration)
-        return Profile(self.datacenter, plan, occupancy(self), work, forced, stores, dict(c.weights), salt, salt_out,
-                       pinned, dict(ticks or {}))
+        salt, salt_out, pinned = self._custody(plan.registration, weights or {})
+        return Profile(dc, plan, occupancy(self), work, forced, stores, dict(weights or {}), salt, salt_out, pinned,
+                       dict(ticks or {}), self.registration.root if self.registration else None)
 
-    def _custody(self, trusted: set[int], registration: int) -> tuple[dict[str, float], ...]:
+    def _custody(self, registration: int, weights: dict[str, float]) -> tuple[dict[str, float], ...]:
         """For each block whose own certifier releases a salt into it: the salt's bits, the bits other than timing that
-        could carry it out before registration (the salt's cone crossing out, and the block's inside inputs that reach
-        anything crossing out), and the credit of the block's work in the salt's cone."""
-        c, dc = self.circuit, self.datacenter
-        readers: dict[int, list[int]] = {}
-        for i, g in enumerate(c.gates):
-            for j in g.operands:
-                readers.setdefault(j, []).append(i)
+        could carry it out before registration (the values the salt reaches that cross out, and the block's inside inputs
+        that reach anything crossing out, both at the census's grain, which can only over-count), and the credit of the
+        block's work that depends on it, gate by gate (none for a Program too large to expand)."""
+        dc, program = self.datacenter, self.program
+        readers: dict[int, set[int]] = {}
+        for v in self.values:
+            readers.setdefault(v.node, set()).update(v.reads)
 
         def cone(roots: set[int]) -> set[int]:
             seen, todo = set(roots), list(roots)
             while todo:
-                for r in readers.get(todo.pop(), []):
+                for r in readers.get(todo.pop(), ()):
                     if r not in seen:
                         seen.add(r)
                         todo.append(r)
             return seen
 
-        out = [x for x in crossings(self) if x.at < registration and dc.block_of(x.src) is not dc.block_of(x.dst)]
+        out = [x for x in crossings(self) if x.at < registration and self.block(x.src) != self.block(x.dst)]
         salt, salt_out, pinned = ({b.name: 0.0 for b in dc.blocks} for _ in range(3))
         salts: dict[str, set[int]] = {}
-        for i in trusted:
-            if dc.devices[self.leaf[i]].kind == "certifier":
-                salts.setdefault(dc.watched(Port(self.leaf[i], "ingress")).name, set()).add(i)
+        for k in self.device:
+            if self.source(k) == "trusted" and dc.devices[self.device[k]].kind == "certifier":
+                salts.setdefault(dc.watched(Port(self.device[k], "ingress")).name, set()).add(k)
         for b, roots in salts.items():
-            salt[b] = sum(c.gates[i].bits for i in roots)
+            salt[b] = sum(v.bits for v in self.values if v.node in roots)
             reach = cone(roots)
-            pinned[b] = sum(c.weights.get(c.unit_of(c.gates[i]), 1.0) * c.gates[i].work for i in reach if self.block(i) == b)
-            salt_out[b] = sum(x.value.bits for x in out if x.value.id in reach and self.block(x.value) == b)
-            for v in c.inputs:
-                if v.source == "inside" and self.block(v) == b:
-                    reach_v = cone({v.id})
-                    salt_out[b] += v.bits * any(x.value.id in reach_v and self.block(x.value) == b for x in out)
+            salt_out[b] = sum(x.value.bits for x in out if x.value.node in reach and self.block(x.src) == b)
+            for k in self.device:
+                if self.source(k) == "inside" and self.block(self.device[k]) == b:
+                    reach_k = cone({k})
+                    if any(x.value.node in reach_k and self.block(x.src) == b for x in out):
+                        salt_out[b] += sum(v.bits for v in self.values if v.node == k)
+            pinned[b] = self._pinned(roots, b, weights)
         return salt, salt_out, pinned
+
+    def _pinned(self, roots: set[int], block: str, weights: dict[str, float]) -> float:
+        """The credit of `block`'s work on gates the input nodes `roots` reach, gate by gate."""
+        c = self.program.circuit
+        if c.size > c.explicit_limit:
+            return 0.0
+        body = self.program.root.body
+        readers: dict[int, list[int]] = {}
+        for g in range(c.size):
+            for o in set(c.gate(g).operands):
+                readers.setdefault(o, []).append(g)
+        todo = [g for k in roots for g in range(body.offsets[k], body.offsets[k + 1])]
+        seen = set(todo)
+        while todo:
+            for r in readers.get(todo.pop(), ()):
+                if r not in seen:
+                    seen.add(r)
+                    todo.append(r)
+        return sum(weights.get(kind, 1.0) * n for g in seen if self.block(self.device.get(body.node_at(g))) == block
+                   for kind, n in L.gate_work(c, g).items())
 
 
 @dataclass(frozen=True)
 class Profile:
     """A placement's public properties, with the declaration and the verifier's plan they are read against: the frames
     each certifier port shows in each bucket (`occupancy`), the work each block is to be credited with, by kind
-    (`work`; per-kind counts, as PoUW's census gives them), what one unit of each kind is credited (`weights`, W_ref),
-    the trusted data each block consumes (`forced`, in bits), and the registered stores. For a block whose certifier
-    holds a salt for it: the salt's bits (`salt`), what besides timing could carry it out before registration
-    (`salt_out`, in bits), and the credit of the block's work that depends on it (`pinned`). For a block whose work
-    PoUW timed: its proved bound (`ticks`, in block-ticks), which the account credits in place of the per-facet loads,
-    since a prover may route work to another facet than the honest design does."""
+    (`work`; per-kind counts, as the census gives them), what one unit of each kind is credited (`weights`, W_ref),
+    the trusted data each block consumes (`forced`, in bits), the registered stores and the registration's root
+    (`registered`). For a block whose certifier holds a salt for it: the salt's bits (`salt`), what besides timing could
+    carry it out before registration (`salt_out`, in bits), and the credit of the block's work that depends on it
+    (`pinned`). For a block whose work PoUW timed: its proved bound (`ticks`, in block-ticks), which the account credits
+    in place of the per-facet loads, since a prover may route work to another facet than the honest design does."""
 
     datacenter: Datacenter
     plan: Plan
@@ -129,6 +190,7 @@ class Profile:
     salt_out: dict[str, float] = field(default_factory=dict)
     pinned: dict[str, float] = field(default_factory=dict)
     ticks: dict[str, float] = field(default_factory=dict)
+    registered: bytes | None = None
 
     def credit(self, block: str) -> float:
         """The work `block` is to be credited with: each kind's units at its weight."""
@@ -141,46 +203,54 @@ class Profile:
         return range(e.start // per, -(-e.end // per))
 
 
-def place(c: Circuit, dc: Datacenter, default: str, *, deliver: str | None = None, stores: tuple[Store, ...] = (),
-          start: int = 0, ticks_per_step: int = 1, transfer_steps: int = 2, **where: str) -> Placement:
-    """Place `c` on `dc`: each keyword names a value and the device it is produced on; an unnamed value is computed
-    where it is needed, on the device of its first reader that sits in a block, else on `default`. A value's step is one
-    past its operands' (plus `transfer_steps` when an operand crosses a block), and each device's step s begins at tick
-    start + s·ticks_per_step. The outputs are delivered to `deliver`."""
-    devices = dc.devices
-    unknown = [n for n in where if n not in c.names.values()] + [d for d in [default, deliver, *where.values()]
-                                                                 if d is not None and d not in devices]
+def place(program: Program, dc: Datacenter, default: str, *, deliver: str | None = None, stores: tuple[Store, ...] = (),
+          registration: Registration | None = None, start: int = 0, ticks_per_step: int = 1, transfer_steps: int = 2,
+          **where: str) -> Placement:
+    """Place `program` on `dc`: each keyword names a root node (a parameter or a named Call) and the device it runs or
+    enters on; any other Call or run input goes where its first reader runs, if that is in a block, else on `default`.
+    A registered input goes nowhere unless named: registration loaded it where its first reader runs. A node's step is one
+    past those of the nodes it reads (plus `transfer_steps` when a value crosses a block), and each device's step s begins
+    at tick start + s·ticks_per_step. The outputs are delivered to `deliver`. A Program with registered inputs is placed
+    with their `registration`."""
+    devices, ns = dc.devices, L.names(program)
+    named: dict[int, str] = {}
+    unknown = [d for d in [default, deliver, *where.values()] if d is not None and d not in devices]
+    for name, d in where.items():
+        ks = L.nodes(program, name)
+        unknown += [] if ks else [name]
+        named.update((k, d) for k in ks)
     if unknown:
         raise ValueError(f"place names what isn't there: {unknown}")
-    for v in c.inputs:
-        if v.source == "trusted" and not devices[where.get(v.name, default)].trusted:
-            raise ValueError(f"trusted input {v.name!r} must come from a trusted device, not {where.get(v.name, default)!r}")
-    readers: dict[int, list[int]] = {}
-    for i, g in enumerate(c.gates):
-        for j in g.operands:
-            readers.setdefault(j, []).append(i)
-    leaf: dict[int, str] = {}
-    for i in reversed(range(len(c.gates))):
-        name = c.names.get(i)
-        inside = [leaf[r] for r in readers.get(i, []) if dc.block_of(leaf[r]) is not None]
-        leaf[i] = where[name] if name in where else inside[0] if inside else default
-    step: dict[int, int] = {}
-    for i, g in enumerate(c.gates):
-        here = dc.block_of(leaf[i])
-        step[i] = 1 + max((step[j] + (transfer_steps if dc.block_of(leaf[j]) is not here else 0) for j in g.operands),
-                          default=-1)
-    horizon = max(step.values(), default=0) + 1 + transfer_steps
-    ticks = {d: [start + s * ticks_per_step for s in range(horizon)]
-             for d in set(leaf.values()) | ({deliver} if deliver else set())}
-    cell: dict[int, int] = {}
-    used: dict[tuple[str, int], int] = {}
-    for i in range(len(c.gates)):
-        cell[i] = used.get((leaf[i], step[i]), 0)
-        used[leaf[i], step[i]] = cell[i] + 1
+    regd = [n for n, b in L.parameters(program) if b == L.REGISTRATION]
+    if regd and (registration is None or set(registration.values) != set(regd)):
+        raise ValueError(f"a Program with registered inputs {regd} is placed with their registration")
+    vals = L.values(program)
+    readers: dict[int, set[int]] = {}
+    for v in vals:
+        readers.setdefault(v.node, set()).update(v.reads)
+    device: dict[int, str] = {}
+    for k in reversed(range(len(ns))):
+        if k in named:
+            device[k] = named[k]
+        elif L.binding(program, k) != L.REGISTRATION:
+            inside = [device[r] for r in sorted(readers.get(k, ())) if dc.block_of(device[r]) is not None]
+            device[k] = inside[0] if inside else default
+    p = Placement(program, dc, device, {}, {}, deliver, tuple(stores), registration)
+    read: dict[int, list[Value]] = {}
+    for v in vals:
+        for r in v.reads:
+            read.setdefault(r, []).append(v)
+    for k in sorted(device):
+        here = dc.block_of(device[k])
+        p.step[k] = 1 + max((p.step.get(v.node, 0) + (transfer_steps if dc.block_of(p.home(v)) is not here else 0)
+                             for v in read.get(k, ())), default=-1)
+    horizon = max(p.step.values(), default=0) + 1 + transfer_steps
+    used = set(device.values()) | {p.home(v) for v in vals} | ({deliver} if deliver else set())
+    p.ticks = {d: [start + s * ticks_per_step for s in range(horizon)] for d in used - {None}}
     for s in stores:
         if s.device not in devices:
             raise ValueError(f"store {s.name!r} is registered on an unknown device {s.device!r}")
-    return Placement(c, dc, leaf, step, ticks, cell, deliver, tuple(stores))
+    return p
 
 
 @dataclass(frozen=True)
@@ -232,21 +302,21 @@ def hops(path: tuple[Link, ...], src: str) -> list[tuple[str, str]]:
 
 def crossings(p: Placement) -> list[Crossing]:
     """Every (value, reader device) pair where a value is read in a block other than its own, once each, at its first
-    read."""
+    read; and each output the Program returns, at the delivery device the step after it is produced."""
     first: dict[tuple[int, str], int] = {}
-    for i, g in enumerate(p.circuit.gates):
-        for j in g.operands:
-            key = (j, p.leaf[i])
-            first[key] = min(first.get(key, p.tick(i)), p.tick(i))
-    if p.deliver:
-        for j in p.circuit.outputs:
+    for v in p.values:
+        for r in v.reads:
+            key = (v.id, p.device[r])
+            first[key] = min(first.get(key, p.tick(r)), p.tick(r))
+        if v.output and p.deliver:
             ticks = p.ticks[p.deliver]
-            first.setdefault((j, p.deliver), ticks[min(p.step[j] + 1, len(ticks) - 1)])
+            first.setdefault((v.id, p.deliver), ticks[min(p.step.get(v.node, 0) + 1, len(ticks) - 1)])
     out = []
-    for (j, dst), at in first.items():
-        src = p.leaf[j]
-        if p.datacenter.block_of(src) is not p.datacenter.block_of(dst):
-            out.append(Crossing(p.circuit.value(j), src, dst, route(p.datacenter, src, dst), at))
+    for (i, dst), at in first.items():
+        v = p.values[i]
+        src = p.home(v)
+        if src is not None and p.datacenter.block_of(src) is not p.datacenter.block_of(dst):
+            out.append(Crossing(v, src, dst, route(p.datacenter, src, dst), at))
     return out
 
 

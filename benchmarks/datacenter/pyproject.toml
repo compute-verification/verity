@@ -1,9 +1,10 @@
 [project]
 name = "verity-datacenter"
 version = "0.1.0"
-description = "A datacenter as Verity accounts for it: a circuit, the hardware it runs on, the binding between them, and what the audits let us conclude."
+description = "A datacenter as Verity accounts for it: a Program, the hardware it runs on, the binding between them, and what the audits let us conclude."
 requires-python = ">=3.12"
-dependencies = []
+# The logical layer is verity.ml.circuits' Program, and the commitments are verity.ml.commitments'.
+dependencies = ["verity"]
 
 [build-system]
 requires = ["hatchling"]

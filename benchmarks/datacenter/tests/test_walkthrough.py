@@ -5,49 +5,64 @@ in order, and `python tests/test_walkthrough.py` prints what the guide prints.
 """
 from __future__ import annotations
 
+from verity.ml.circuits.defs import CompositeDefinition, bind
+from verity.ml.circuits.ops.gemm import GEMM_AMPERE, Gemm
+from verity.ml.circuits.program import Program
+from verity.ml.circuits.refs import tuple_of
+from verity.ml.circuits.types import Array, Tuple, Value
+
 from datacenter import (FLEET_CLOSED, Append, Assumption, Block, Cadence, Carried, Challenge, Credit, Datacenter,
-                        Deviation, Device, Fleet, Input, Interval, Ledger, Link, Maintenance, Plan, Port, ReadWindow,
-                        Refused, Release, Store, Wipe, account, audit, commit, crossings, digest, double_credit,
-                        occupancy, place, run, trace)
+                        Deviation, Device, Fleet, Interval, Ledger, Link, Maintenance, Plan, Port, ReadWindow, Refused,
+                        Release, Store, Wipe, account, audit, commit, crossings, double_credit, evaluate, names,
+                        occupancy, place, register, run, values, work)
 from datacenter.examples import GB
+from datacenter.models import WEIGHTS, X, words
 
-INPUTS = {"x": 7, "w1": 3, "w2": 5}
-IMAGE = 0xC0DE
+# §1 A computation is a Program
+BF16 = Value(16)
+VEC, MAT = Array(32, BF16), Array(32, Array(32, BF16))
+LINEAR = bind(Gemm, K=32, N=32, **GEMM_AMPERE)          # x[32] @ W[32, 32]^T on the BF16 tensor-core step
 
 
-# §1 A computation is a circuit
-def layer(x, w1, w2):
-    h = ((x * w1) ^ 0x5A).named("h")
-    return (h * w2 + x).named("y")
+def layer(B, S, x, w1, w2):
+    h = B.call(LINEAR, x, w1, name="h")
+    return B.call(LINEAR, h, w2, name="y")
+
+
+LAYER = CompositeDefinition("Layer", 1, (), lambda S: ((("x", VEC), ("w1", MAT), ("w2", MAT)), VEC), layer,
+                            register=False)
 
 
 def section_1():
-    c = trace(layer, x=Input(16), w1=Input(16), w2=Input(16))
-    print(c)
-    print(c.evaluate({"x": 7, "w1": 3, "w2": 5})[c.outputs[0]])
+    program = Program(LAYER, registered=("w1", "w2"))
+    print(program.gates, "gates:", ", ".join(f"{n} ({nd.gates})" for n, nd in zip(names(program), program.root.body.nodes)))
+    for v in values(program):
+        print(v, "read by", [names(program)[r] for r in v.reads], *(["and returned"] if v.output else []))
+    print(work(program))
+    print(hex(evaluate(program, {"x": X} | WEIGHTS)[program.circuit.root_outputs()[0]]))
+    return program
 
 
-# §2 Inputs are everything the circuit doesn't determine
-def section_2():
-    c = trace(layer, x=Input(16, "outside"),
-              w1=Input(16, "registered", digest(3, 16)),
-              w2=Input(16, "registered", digest(5, 16)))
-    for v in c.inputs:
-        print(v, v.source)
-    return c
+# §2 Inputs are everything the Program doesn't determine
+def section_2(program):
+    print(list(zip(names(program), program.bindings)))
+    registration = register(program, WEIGHTS)
+    print(len(registration.root), "bytes of registration root")
+    return registration
 
 
 # §3 Values live under commitments
-def section_3(c):
-    values = c.evaluate({"x": 7, "w1": 3, "w2": 5})
-    commitment, salt = commit(c, values)
-    print(commitment.count, len(commitment.digest), len(salt))
+def section_3(program):
+    values_ = evaluate(program, {"x": X} | WEIGHTS)
+    commitment = commit(program, values_)
+    print(len(commitment.rows), "rows,", len(commitment.root), "bytes of root,", len(commitment.salts[0]), "bytes of salt each")
 
 
 # §4 Hardware is a declaration
 def gpu(name):
     return Device(name, "gpu",
-                  rate={"gate": Assumption(f"{name}.gates", 1e6, "gate/s")},
+                  rate={"mac:bf16": Assumption(f"{name}.bf16", 1e9, "MAC/s"),
+                        "cuda:op": Assumption(f"{name}.ops", 1e8, "op/s")},
                   memory=Assumption(f"{name}.hbm", 96 * GB, "bits"),
                   residual=Assumption(f"{name}.residual", 8e6, "bits", "measured"))
 
@@ -72,9 +87,9 @@ def section_4():
     return dc
 
 
-# §5 Placing the circuit
-def section_5(c, dc):
-    p = place(c, dc, "a.gpu", deliver="world", x="world", h="a.gpu", w2="b.gpu", y="b.gpu")
+# §5 Placing the Program
+def section_5(program, registration, dc):
+    p = place(program, dc, "a.gpu", registration=registration, deliver="world", x="world", h="a.gpu", y="b.gpu")
     for x in crossings(p):
         print(x.value, x.src, "->", x.dst, "read at tick", x.at)
     return p
@@ -96,7 +111,7 @@ def section_7(p):
 
 # §8 A run, and what the trusted devices record
 def section_8(p, plan):
-    t = run(p, INPUTS, plan)
+    t = run(p, {"x": X}, plan)
     for r in t.records:
         if any(r.counts):
             print(r.port, r.window, r.counts)
@@ -112,7 +127,7 @@ def section_9(p, plan, profile, t):
     for x in claims:
         if not isinstance(x, Carried):
             print(x)
-    cheat = run(p, INPUTS, plan, Deviation(extra={(Port("a.cert", "egress"), 2): 1}))
+    cheat = run(p, {"x": X}, plan, Deviation(extra={(Port("a.cert", "egress"), 2): 1}))
     for x in audit(cheat, profile):
         if isinstance(x, Refused):
             print(x)
@@ -128,7 +143,7 @@ def section_10(claims, profile):
 
 
 # §11 Where are the bits?
-def section_11():
+def section_11(program, registration):
     us = Assumption("hop", 1e-6, "s", "measured")
     net = Assumption("uplink", 400e9, "bit/s", "declared")
     hbm = Device("a.gpu", "gpu", memory=Assumption("a.gpu.hbm", 96 * GB, "bits"),
@@ -143,38 +158,44 @@ def section_11():
                        Link("challenger", "leaf", net, us), Link("world", "leaf", net, us)],
                       Cadence(buckets=4, tick=Assumption("tick", 1e-4, "s", "declared")))
     kv = Store("kv", 1 * GB, "a.gpu")
-    q = place(trace(lambda x: x ^ 1, x=Input(8)), node, "a.gpu", deliver="world", stores=(kv,), x="world")
+    q = place(program, node, "a.gpu", registration=registration, deliver="world", stores=(kv,), x="world")
     for deadline in (8, 300):
         plan = Plan(Interval(0, 1000), challenges=[Challenge("kv", at=0, deadline=deadline)])
-        print(deadline, account(audit(run(q, {"x": 3}, plan), q.public(plan)), q.public(plan)).located)
+        print(deadline, account(audit(run(q, {"x": X}, plan), q.public(plan)), q.public(plan)).located)
     plan = Plan(Interval(0, 1000), challenges=[Challenge("kv", at=0, deadline=8)])
-    late = run(q, {"x": 3}, plan, Deviation(moved={"kv": "a.dram"}))
+    late = run(q, {"x": X}, plan, Deviation(moved={"kv": "a.dram"}))
     print([x for x in audit(late, q.public(plan)) if isinstance(x, Refused)])
     reads = Plan(Interval(0, 16), reads=[ReadWindow("kv", start=0, boundary=10, deadline=12)])
-    a = account(audit(run(q, {"x": 3}, reads), q.public(reads)), q.public(reads)).blocks[0]
+    a = account(audit(run(q, {"x": X}, reads), q.public(reads)), q.public(reads)).blocks[0]
     print(a.reads, a.reads_local_at_least)
     sampled = Plan(Interval(0, 1000), challenges=[Challenge("kv", at=0, deadline=1, sample=4096 * 8)])
-    print(account(audit(run(q, {"x": 3}, sampled), q.public(sampled)), q.public(sampled)).located)
+    print(account(audit(run(q, {"x": X}, sampled), q.public(sampled)), q.public(sampled)).located)
     changes = [Append("kv", at=0, first=0, count=1000, coin_at=1, resident_at=4), Release("kv", first=0, count=1000, at=12)]
     grows = Plan(Interval(0, 16), changes=changes, lifetime=3, deferred=True)
     print(grows.bits(kv, 2), grows.bits(kv, 6), grows.held(kv, Interval(0, 16)))
 
 
 # §12 Telemetry and container images
-def served(x, w1, w2, image, temperature):
-    h = ((x * w1) ^ image).named("h")
-    return (h * w2 + x).named("y"), temperature
+def served(B, S, x, w1, w2, image, temperature):
+    h = B.call(LINEAR, x, w1, name="h")
+    return tuple_of(B.call(LINEAR, h, w2, name="y"), temperature)
+
+
+SERVED = CompositeDefinition("Served", 1, (), lambda S: ((("x", VEC), ("w1", MAT), ("w2", MAT), ("image", VEC),
+                                                         ("temperature", Value(16))), Tuple(VEC, Value(16))), served,
+                             register=False)
 
 
 def section_12(dc):
-    c2 = trace(served, x=Input(16), w1=Input(16, "registered", digest(3, 16)), w2=Input(16, "registered", digest(5, 16)),
-               image=Input(16, "registered", digest(IMAGE, 16)), temperature=Input(16, "inside"))
-    p2 = place(c2, dc, "a.gpu", deliver="world", x="world", image="world", temperature="b.gpu",
-               h="a.gpu", w2="b.gpu", y="b.gpu")
+    program = Program(SERVED, registered=("w1", "w2", "image"))
+    registration = register(program, WEIGHTS | {"image": words("image", 32)})
+    p = place(program, dc, "a.gpu", registration=registration, deliver="world", x="world", image="a.gpu",
+              temperature="b.gpu", h="a.gpu", y="b.gpu")
     plan = Plan(Interval(0, 16))
-    acc = account(audit(run(p2, INPUTS | {"image": IMAGE, "temperature": 45}, plan), p2.public(plan)), p2.public(plan))
+    acc = account(audit(run(p, {"x": X, "temperature": 45}, plan), p.public(plan)), p.public(plan))
     print(acc.input_bits, acc.covert_bits)
-    swapped = audit(run(p2, INPUTS | {"image": 0xBAD0, "temperature": 45}, plan), p2.public(plan))
+    swapped = audit(run(p, {"x": X, "temperature": 45}, plan, Deviation(swapped={"image": words("other", 32)})),
+                    p.public(plan))
     print([x for x in swapped if isinstance(x, Refused)])
     return acc
 
@@ -188,29 +209,31 @@ def section_13():
 
 
 # §14 Many nights
-def section_14(c, dc, p):
+def section_14(program, registration, dc, p):
     ledger = Ledger()
     for night in range(3):
         start = 16 * night
-        tonight = place(c, dc, "a.gpu", deliver="world", x="world", h="a.gpu", w2="b.gpu", y="b.gpu", start=start)
+        tonight = place(program, dc, "a.gpu", registration=registration, deliver="world", x="world", h="a.gpu",
+                        y="b.gpu", start=start)
         wipes = [Wipe(d, 96 * GB - 8e6, Interval(start, start + 2)) for d in ("a.gpu", "b.gpu")] if night else []
         plan = Plan(Interval(start, start + 16), wipes=wipes)
-        ledger.add(account(audit(run(tonight, INPUTS, plan), tonight.public(plan)), tonight.public(plan)))
+        ledger.add(account(audit(run(tonight, {"x": X}, plan), tonight.public(plan)), tonight.public(plan)))
     print(ledger)
     print(Ledger([ledger.epochs[1], ledger.epochs[1]]).joint())
     serviced = Plan(Interval(0, 16), maintenance=[Maintenance("b", Interval(12, 16))])
     off = Deviation(down={(Port("b.cert", "egress"), 3), (Port("b.cert", "ingress"), 3)})
-    acc = account(audit(run(p, INPUTS, serviced, off), p.public(serviced)), p.public(serviced))
+    acc = account(audit(run(p, {"x": X}, serviced, off), p.public(serviced)), p.public(serviced))
     print(acc.sound, acc.serviced, acc.blocks[1].carried)
     return ledger
 
 
 # §15 Many datacenters
-def section_15(c, dc):
+def section_15(program, registration, dc):
     wan = Link("east.leaf", "west.leaf", Assumption("wan", 100e9, "bit/s", "declared"), kind="wan")
     fleet = Fleet([dc.prefixed("east"), dc.prefixed("west")], [wan])
     print(fleet.validate())
-    p = place(c, fleet.merged(), "west.a.gpu", deliver="world", x="world", h="west.a.gpu", w2="east.b.gpu", y="east.b.gpu")
+    p = place(program, fleet.merged(), "west.a.gpu", registration=registration, deliver="world", x="world",
+              h="west.a.gpu", y="east.b.gpu")
     print(", ".join(f"{l.a}-{l.b}" for x in crossings(p) if x.value.name == "h" for l in x.path))
 
 
@@ -221,33 +244,34 @@ def section_16():
 
 
 def walkthrough(between=lambda n: None):
-    between(1); section_1()
-    between(2); c = section_2()
-    between(3); section_3(c)
+    between(1); program = section_1()
+    between(2); registration = section_2(program)
+    between(3); section_3(program)
     between(4); dc = section_4()
-    between(5); p = section_5(c, dc)
+    between(5); p = section_5(program, registration, dc)
     between(6); section_6(p)
     between(7); plan, profile = section_7(p)
     between(8); t = section_8(p, plan)
     between(9); claims = section_9(p, plan, profile, t)
     between(10); acc = section_10(claims, profile)
-    between(11); section_11()
+    between(11); section_11(program, registration)
     between(12); acc12 = section_12(dc)
     between(13); section_13()
-    between(14); ledger = section_14(c, dc, p)
-    between(15); section_15(c, dc)
+    between(14); ledger = section_14(program, registration, dc, p)
+    between(15); section_15(program, registration, dc)
     between(16); section_16()
-    return c, acc, acc12, ledger
+    return program, acc, acc12, ledger
 
 
 def test_the_walkthrough_runs_as_shown(capsys):
-    c, acc, acc12, ledger = walkthrough()
-    assert acc.sound and sum(b.credited for b in acc.blocks) == c.work
+    program, acc, acc12, ledger = walkthrough()
+    assert acc.sound and sum(b.credited for b in acc.blocks) == sum(n for w in work(program).values() for n in w.values())
     assert all(b.credited > 0 for b in acc.blocks)        # each stage is credited to the block it ran on
-    assert acc12.sound and acc12.input_bits == {"x": 16, "temperature": 16}
+    assert acc12.sound and acc12.input_bits == {"x": 512, "temperature": 16}
     assert ledger.sound and len(ledger.epochs) == 3
     out = capsys.readouterr().out
-    for shown in ("passes no certifier", "occupancy differs", "past its deadline", "registered digest", "REFUSED"):
+    for shown in ("passes no certifier", "occupancy differs", "past its deadline", "differ from the registration",
+                  "REFUSED"):
         assert shown in out, shown
 
 

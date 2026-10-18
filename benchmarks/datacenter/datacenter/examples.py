@@ -4,11 +4,12 @@
 two sockets, each an Intel Xeon 6776P with its host DRAM and a PCIe root complex (a switch); eight RTX PRO 6000 GPUs,
 GPUs 0–3 on socket 0 and 4–7 on socket 1, each on a root port of its own; one NIC, on socket 1. Its capacities are the
 ones memory accounting reads, at the values `verity.core.protocols.remote_bandwidth.timing` states
-(`benchmarks/network_sim/tests/test_graph.py` pins them, since this package doesn't import `verity`): each GPU's memory,
-read bandwidth and on-chip state (S_chip), its rate per unit of work (tensor-core multiply-adds by precision, `mac:fp8`
-and the like, at the dense datasheet peaks that `benchmarks/census/hardware.json` gives under the same names; CUDA cores;
-the SHA-512 oracle; the codec's squarings at each width; and, for the walkthrough's unit of work, Boolean gates at its
-integer rate times 32 lanes), each socket's host DRAM (half the node's online memory), its read bandwidth and caches, and each PCIe link's
+(`benchmarks/network_sim/tests/test_graph.py` pins them, so that a declaration needs nothing imported): each GPU's memory,
+read bandwidth and on-chip state (S_chip), its rate for each kind of work a Program's gates are (`logical.work`:
+tensor-core multiply-adds by precision, `mac:fp8` and the like, at the dense datasheet peaks that
+`benchmarks/census/hardware.json` gives under the same names; on the CUDA cores, word operations, `cuda:op`, and Boolean
+gates, `cuda:gate`, at its integer rate times 32 lanes; the SHA-512 oracle; the codec's squarings at each width), each
+socket's host DRAM (half the node's online memory), its read bandwidth and caches, and each PCIe link's
 bandwidth (a GPU's and the NIC's at PCIe 5.0 x16's link rate, until memory accounting measures them). A capacity not
 measured yet is `math.inf`: every reading of a capacity takes it as an upper bound, and infinity is the bound that
 claims nothing. The residuals of a GPU and of a socket's host DRAM are declared, not measured.
@@ -37,11 +38,11 @@ GPU_RATE = {
     "mac:bf16": Assumption("rtx-pro-6000-server/bf16", 250_000_000_000_000, "multiply-adds/s", "datasheet"),
     "mac:fp8": Assumption("rtx-pro-6000-server/e4m3", 500_000_000_000_000, "multiply-adds/s", "datasheet"),
     "mac:fp4": Assumption("rtx-pro-6000-server/e2m1", 1_000_000_000_000_000, "multiply-adds/s", "datasheet"),
-    "cuda": Assumption("rtx-pro-6000/cuda-ops", INF, "ops/s", "measured"),
+    "cuda:op": Assumption("rtx-pro-6000/cuda-ops", INF, "ops/s", "measured"),
+    "cuda:gate": Assumption("rtx-pro-6000/gates", 2.6e13 * 32, "gate/s", "datasheet"),
     "oracle": Assumption("rtx-pro-6000/sha512", 7_000_000_000, "compressions/s", "measured"),
     "square-1024": Assumption("rtx-pro-6000/squarings-p1024", 14_990_000_000, "squarings/s", "measured"),
     "square-512": Assumption("rtx-pro-6000/squarings-p512", 51_300_000_000, "squarings/s", "measured"),
-    "gate": Assumption("rtx-pro-6000/gates", 2.6e13 * 32, "gate/s", "datasheet"),
 }
 HOST_CHIP = Assumption("xeon-6776p/caches", 940_435_456 // 2 * 8, "bits", "declared")
 HOST_DRAM = Assumption("host-dram/socket-capacity", 1_872_605_741_056 // 2 * 8, "bits", "measured")
