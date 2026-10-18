@@ -33,10 +33,9 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
-import struct
 import sys
 from collections import defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from functools import cached_property
 
 from verity.core.protocols.certifier.active import DATA, HEADER, LAST, decode_frame, encode_frame
@@ -147,16 +146,12 @@ class Sink:
 
     def feed(self, frame: bytes) -> None:
         if self.src is None:
-            kind, stream, payload = decode_frame(frame)
-            names = self.inbox.ctx.units()
-            tag = F.HELLO_TAG
-            if kind == LAST and stream == F.HELLO_STREAM and payload[:len(tag)] == tag and len(payload) == len(tag) + 4:
-                s, d = struct.unpack(">HH", payload[len(tag):])
-                if s < len(names) and d < len(names) and names[d] == self.inbox.unit:
-                    self.src = names[s]
-                    self.inbox.hellos[self.src] = frame
-                    return
-            raise ConnectionError(f"a connection into {self.inbox.unit} didn't open with its HELLO")
+            ends = F.read_hello(self.inbox.ctx.hw, frame)
+            if ends is None or ends[1] != self.inbox.unit:
+                raise ConnectionError(f"a connection into {self.inbox.unit} didn't open with its HELLO")
+            self.src = ends[0]
+            self.inbox.hellos[self.src] = frame
+            return
         self.inbox.add(self.src, frame)
 
     def eof(self) -> None:
@@ -251,12 +246,14 @@ class Block:
             await w.close()
         await self.inbox.closed.wait()
         self._leftovers()
-        committed = V.commit(self.unit, self.held, self.transcript)
         out = {"unit": self.unit,
                "records": {k: [[b, f.hex()] for b, f in fs] for k, fs in sorted(self.records.items())},
-               "values": {"root": committed.root.hex(), "count": len(committed.gates),
-                          "rows": [r.hex() for r in committed.registration.rows],
-                          "salts": [s.hex() for s in committed.registration.salts]}}
+               "values": None}
+        if self.held:
+            c = V.commit(self.unit, self.held, self.transcript)
+            out["values"] = {"root": c.root.hex(), "count": len(c.gates),
+                             "rows": [r.hex() for r in c.registration.rows],
+                             "salts": [s.hex() for s in c.registration.salts]}
         if self.unit == OUTSIDE:
             out["answers"] = self.ctx.model.output_words(self.transcript)
         return out

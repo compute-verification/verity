@@ -34,12 +34,13 @@ HERE = Path(__file__).resolve().parent
 def statement(ctx: Context, results: dict[str, dict]) -> tuple[dict, dict]:
     """The public statement and the witness of a run: the placement committed once, each unit's committed values."""
     reg = ctx.placement.commit()
+    held = {u: r["values"] for u, r in sorted(results.items()) if r["values"] is not None}
     public = {"program": program_digest(ctx.model.program), "spec": ctx.spec.to_json(), "hardware": ctx.hw.to_json(),
               "frame_bytes": ctx.phi.frame_bytes, "placement": reg.root.hex(),
-              "values": {u: {"root": r["values"]["root"], "count": r["values"]["count"]} for u, r in sorted(results.items())},
+              "values": {u: {"root": v["root"], "count": v["count"]} for u, v in held.items()},
               "occupancy": ctx.phi.occupancy()}
     witness = {"placement": {"rows": [r.hex() for r in reg.rows], "salts": [s.hex() for s in reg.salts]},
-               "values": {u: {"rows": r["values"]["rows"], "salts": r["values"]["salts"]} for u, r in sorted(results.items())}}
+               "values": {u: {"rows": v["rows"], "salts": v["salts"]} for u, v in held.items()}}
     return public, witness
 
 

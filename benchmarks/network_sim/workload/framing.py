@@ -11,8 +11,8 @@ B − 9 payload bytes, then one `LAST` frame with the rest. Each frame is `verit
 a header (kind u8, stream u32, length u32), the payload, and zero fill to B bytes.
 
 **Declared traffic D.** Each connection (source unit, destination unit) opens with one `HELLO` frame on stream 0, a `LAST`
-frame whose payload is `HELLO_TAG` and the two units' indices (u16 each, big-endian) in `Hardware.unit_names` order: a
-function of public data, so it carries nothing.
+frame whose payload is the two units' indices (u16 each, big-endian) in `Hardware.unit_names` order: a function of public
+data, so it carries nothing. A frame therefore has room for at least `HELLO.size` payload bytes.
 
 **Links and buckets.** A message crosses the certified unit boundaries on the route from its first edge's source leaf to its
 destination leaf (`Hardware.watched`), and on each its frames are counted in the bucket of the message's read tick, at the
@@ -28,13 +28,13 @@ import struct
 from collections import defaultdict
 from dataclasses import dataclass
 
-from verity.core.protocols.certifier.active import DATA, HEADER, LAST, encode_frame
+from verity.core.protocols.certifier.active import DATA, HEADER, LAST, decode_frame, encode_frame
 
 from .hardware import Hardware
 from .placement import Edge
 
 HELLO_STREAM = 0
-HELLO_TAG = b"verity/netsim/hello/v1"
+HELLO = struct.Struct(">HH")
 
 
 @dataclass(frozen=True)
@@ -102,7 +102,17 @@ def frame_count(m: Message, frame_bytes: int) -> int:
 
 def hello(hw: Hardware, src: str, dst: str, frame_bytes: int) -> bytes:
     names = hw.unit_names()
-    return encode_frame(LAST, HELLO_STREAM, HELLO_TAG + struct.pack(">HH", names.index(src), names.index(dst)), frame_bytes)
+    return encode_frame(LAST, HELLO_STREAM, HELLO.pack(names.index(src), names.index(dst)), frame_bytes)
+
+
+def read_hello(hw: Hardware, frame: bytes) -> tuple[str, str] | None:
+    """(source unit, destination unit) of a `HELLO` frame, or None."""
+    kind, stream, payload = decode_frame(frame)
+    names = hw.unit_names()
+    if kind != LAST or stream != HELLO_STREAM or len(payload) != HELLO.size:
+        return None
+    s, d = HELLO.unpack(payload)
+    return (names[s], names[d]) if s < len(names) and d < len(names) else None
 
 
 @dataclass(frozen=True)
@@ -168,4 +178,6 @@ class Phi:
 
 
 def phi(hw: Hardware, edges: list[Edge], frame_bytes: int) -> Phi:
+    if frame_bytes < HEADER.size + HELLO.size:
+        raise ValueError(f"a frame is at least {HEADER.size + HELLO.size} bytes, to hold a HELLO; not {frame_bytes}")
     return Phi(hw, frame_bytes, tuple(messages(edges)))
