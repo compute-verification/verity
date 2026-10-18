@@ -6,6 +6,7 @@ Three kinds of matmul, all written y = x w^T but for P V: `linear` (x the layer'
 from __future__ import annotations
 
 import zlib
+from dataclasses import dataclass, field
 from typing import Callable
 
 import torch
@@ -48,6 +49,14 @@ def exact_mm(a: torch.Tensor, b: torch.Tensor, term: int) -> torch.Tensor:
         part = (a[..., i:i + c] @ b[..., i:i + c, :]).double()
         out = part if out is None else out + part
     return out
+
+
+@dataclass
+class Softmaxed:
+    """What a qk chain returns when its quantizer computes the softmax itself (an integer softmax): `p`, the
+    probabilities, takes the float softmax's place as P V's x, and `extra` joins P V's `mm.extra`."""
+    p: torch.Tensor
+    extra: dict = field(default_factory=dict)
 
 
 class Run:

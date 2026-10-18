@@ -8,7 +8,7 @@ block j = 4 qt + w with b_l = j, and M = [1 <= key <= q] (key 0 is its own P blo
 (P = P_prob - 64, the queries' rows; V the keys x channels, key 0's row of V and b zeroed: the block is keys 1 .. q):
     (T, [], O) = pv_words(P, V, U, 0, b, -, 32, 32, 1, M),  (O, S, -) = pv_served(O, [], X, M)
 and the device's bytes must equal: P~ = M (P_prob - 64 + U), X = V + b, U - 64, P_A = [-U | -U | -U M_d | 64 M_d] (M_d the
-diagonal block's mask), DG's [Y0 | Y1 | X_diag | 0] and Sq for each warp row's b_l (Ycum = Y0 + 256 Y1), X(0), the served
+diagonal block's mask), DG's [Y0 | Y1 | X_diag | Y2] and Sq for each warp row's b_l (Ycum = Y0 + 256 Y1 + 65536 Y2), X(0), the served
 O (apv_l7qs_i), f = float32((float32(O + 64 S) s_q + z_q float32(X(0))) s_ch) (apv_l7qs) and the warp row's receipts
 (derive.py's tile_receipts over T_0 .. T_{b_l}, O). One JSON line a gate directory; exit 1 on any difference, on a device
 mismatch or on a control the device didn't reject.
@@ -74,7 +74,10 @@ def check(d: Path) -> dict:
             Y = Xz[:, :32 * j].reshape(128, j, 32).sum(1).T if j else np.zeros((32, 128), np.int64)
             Y0 = ((Y & 0xFF) ^ 0x80) - 0x80
             DG[w, :, :32] = Y0.T
-            DG[w, :, 32:64] = ((Y - Y0) // 256).T
+            R1 = (Y - Y0) // 256
+            Y1 = ((R1 & 0xFF) ^ 0x80) - 0x80
+            DG[w, :, 32:64] = Y1.T
+            DG[w, :, 96:128] = ((R1 - Y1) // 256).T
             DG[w, :, 64:96] = X[:, 32 * j:32 * j + 32]
             Sq[w] = Xz[:, :32 * j].sum(1)
         sp, sz, sv = rd("sp", np.float32), rd("sz", np.float32), rd("sv", np.float32)

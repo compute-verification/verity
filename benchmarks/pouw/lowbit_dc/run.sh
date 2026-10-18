@@ -8,7 +8,7 @@
 #                exact, egemm bench and dgemm bench on the same shapes (gemm/bench.jsonl, gemm/dgemm-bench.jsonl);
 #                analyze.py gemm's ratios (gemm/summary.json, gemm/summary.md).
 #   run.sh pgemm pgemm (B200 only): build pgemm.cu with cuBLASLt and dump its SASS and registers; pgemm selftest; under
-#                one gpu-lease: pgemm gate on three shapes x two distributions (pgemm/gate.jsonl), then, only if every
+#                one gpu-lease: pgemm gate on three shapes x three distributions (pgemm/gate.jsonl), then, only if every
 #                gate is exact, pgemm bench (pgemm/bench.jsonl) and, when the run was sent DC's pipelined int8 kernel
 #                (dc/pgemm.cu and its dc.cuh from cursor/eps1-dc-pipe-ea24, sent as dc-pgemm.cu and dc.cuh), its
 #                `rate 7 2048`
@@ -73,7 +73,7 @@ if [ "$MODE" = pgemm ]; then
   "${lease[@]}" bash -c "$GPU_CSV"' >"$2/gpu.csv" 2>&1
     exact=1
     for s in "128 128 128 7" "256 256 1024 11" "384 512 2048 13"; do
-      for d in uniform edge; do "$1/pgemm" gate $s $d | tee -a "$2/gate.jsonl" || exact=0; done
+      for d in uniform edge max; do "$1/pgemm" gate $s $d | tee -a "$2/gate.jsonl" || exact=0; done
     done
     [ $exact = 1 ] || { echo "run.sh: a pgemm gate is not exact; no bench" >&2; exit 4; }
     for s in "4096 4096 4096" "8192 8192 8192" "4096 14336 4096" "4096 4096 14336"; do

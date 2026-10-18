@@ -2,8 +2,9 @@
 foldable variant under `kv_shared`), `rotate` (one orthogonal Q per k on x and W), `int8` (activations one scale per
 token, rounded or dithered; weights one scale per output row or per group of inputs, capped at `weight_top`, rounded or
 by GPTQ). Attention (from `attention.py`): `rotate` (one random Hadamard R of the head dimension on Q, K, V and R^T on
-the output), `center_keys` (K minus its per-channel mean), `int8` (one limb: Q, K per (head, token), P per query row or
-per key block, `p_sink` putting key 0 alone, V per channel; K and V rounded or dithered) and `peel` (a low-rank noise
+the output), `center_keys` (K minus its per-channel mean), `int8` (one limb: Q, K per (head, token) or K per (layer, KV
+head), P per query row or per key block, `p_sink` putting key 0 alone, V per channel; K and V rounded or dithered; the
+float softmax or fattn.cu's integer LUT softmax, `lut_softmax`) and `peel` (a low-rank noise
 E the server adds and peels exactly, on Q or on P, with P served as P - offset + E). Low-bit grids (`GRIDS`): `grid`
 on linears and on attention puts both operands of every matmul on FP4's or FP8's integers, each rounded or dithered.
 FP formats and the int8 compilers: `fp` (a format's own plain quantization), `native` (Dither's coins on a format's
@@ -19,6 +20,7 @@ import zlib
 import torch
 
 import gates as G
+from matmul import Softmaxed
 from spec import attention_step, linear_step
 
 GROUP = {"self_attn.q_proj": "qkv", "self_attn.k_proj": "qkv", "self_attn.v_proj": "qkv", "self_attn.o_proj": "o",
@@ -359,12 +361,135 @@ def center_keys(mm, nxt):
     return nxt(mm.replace(w=lambda k: k - k.mean(dim=0, keepdim=True)))
 
 
+K_SCALES = ("token", "head", "calib")
+SOFTMAXES = ("float", "lut")
+LUT_TOP = 127
+#: the sink's weight against the max over keys 1..pos is at most LUT_TOP 2^LUT_SINK_OCTAVES (within int32)
+LUT_SINK_OCTAVES = 23
+
+
+def lut_table(res: int, size: int, device=None) -> torch.Tensor:
+    """LUT[t] = rint(127 2^(-t / res)) for t in 0..size-1 (fattn.cu's at res 16, size 256), as int64."""
+    return torch.round(LUT_TOP * torch.exp2(-torch.arange(size, dtype=torch.float64) / res)).long().to(device)
+
+
+def lut_up(res: int, device=None) -> torch.Tensor:
+    """H[r] = rint(127 2^(r / res)) for r in 0..res-1: the sink's weight above the max is H[u mod res] 2^(u div res)."""
+    return torch.round(LUT_TOP * torch.exp2(torch.arange(res, dtype=torch.float64) / res)).long().to(device)
+
+
+def key_quant(kg: torch.Tensor, mode: str, top: int, bits: int, scale: str, sink: bool,
+              cal: tuple | None) -> tuple[torch.Tensor, torch.Tensor]:
+    """K's integers and its scales, one per key (s x 1): per token (`floor_quant` or `quant`, as before), or one scale
+    for the KV head, from the window's keys (`head`) or the calibration windows' (`calib`, `cal` = (max, max of -K),
+    the window's keys clamped into it). `sink`: key 0 on its own per-token scale, the head's scale from keys 1..s-1."""
+    if scale == "token":
+        return floor_quant(kg, -1, top, bits) if mode == "dither" else quant(kg, top, -1)
+    rest = kg[1:] if sink else kg
+    hi, lo = (rest.amax(), (-rest).amax()) if scale == "head" else cal
+    m = dither_shift(bits)
+
+    def on(x, hi, lo):
+        if mode == "dither":
+            s = torch.maximum(hi / (top - m), lo / (top + 1 - m)).clamp(min=1e-30) * (1 + 2 ** -20)
+            return torch.floor(x / s).clamp(-top - 1 + m, top - m - 1) - m, s
+        s = torch.maximum(hi, lo).clamp(min=1e-30) / top
+        return torch.round(x / s).clamp(-top, top), s
+
+    q, s = on(kg, hi, lo)
+    sk = s.reshape(1, 1).expand(kg.shape[0], 1).clone()
+    if sink:
+        q0, s0 = on(kg[:1], kg[0].amax(), (-kg[0]).amax())
+        q, sk = torch.cat([q0, q[1:]]), torch.cat([s0.reshape(1, 1), sk[1:]])
+    return q, sk
+
+
+def calibrated_keys(mm, sink: bool) -> tuple:
+    """(max K, max -K) for this KV head over the calibration windows' keys (the bf16 stream's, after RoPE), each window
+    through this chain's maps of K (the rotation, centred keys), key 0 left out under `sink`."""
+    def go():
+        cal = mm.run.calib["keys"][:, mm.extra["group"]]
+        hi = lo = None
+        for w in range(cal.shape[0]):
+            k = cal[w].float()
+            for f in mm.maps:
+                k = f(k)
+            k = k[1:] if sink else k
+            hi = k.amax() if hi is None else torch.maximum(hi, k.amax())
+            lo = (-k).amax() if lo is None else torch.maximum(lo, (-k).amax())
+        return hi, lo
+    key = ("kcal", mm.layer, mm.extra["group"], mm.seed, tuple(s.key for s in mm.prefix[:-1]), sink, str(mm.device))
+    return mm.shared(key, go)
+
+
+def lut_softmax(mm, S: torch.Tensor, sq: torch.Tensor, sk: torch.Tensor, *, res: int, size: int, sink: bool):
+    """fattn.cu's integer softmax (fattn_ref.py) on the exact S = Q K^T (rep x rows x s): per query row the fixed-point
+    A = rint(s_q s_k log2(e) res / sqrt(d) 2^32) (key 0's own A_0 from its own s_k when K's key 0 has one), the logits
+    lam = S A (key 0: S A_0), m their max over keys 0..pos (1..pos under `sink`), t = floor((m - lam) / 2^32),
+    e = LUT[min(t, size - 1)] (`lut_table`), L = sum of e over keys 0..pos, s_q = float32(1) / float32(L) and z_q =
+    float32(e(0)) / float32(L). Under `sink`, key 0's t may be negative, u = -t (at most res LUT_SINK_OCTAVES): its
+    weight is H[u mod res] 2^(u div res) (`lut_up`). Returns P = e s_q (z_q at key 0) for P V, which reads e, s_q and
+    z_q from `extra["lut"]`. Gated on every call: A within uint32 and m - S within 32 bits."""
+    causal = mm.extra["causal"]
+    c = math.log2(math.e) * res * mm.extra["d"] ** -0.5 * 2.0 ** 32
+    A = torch.round(sq.double() * sk[-1, 0].double() * c).long()
+    A0 = torch.round(sq.double() * sk[0, 0].double() * c).long()
+    Si = S.long()
+    lam = Si * A
+    lam[..., 0] = Si[..., 0] * A0[..., 0]
+    floor = torch.iinfo(torch.int64).min // 4
+    lam = lam.masked_fill(~causal, floor)
+    if sink:
+        m = lam[..., 1:].amax(-1, keepdim=True) if lam.shape[-1] > 1 else lam[..., :1]
+        m = torch.where(m == floor, lam[..., :1], m)
+    else:
+        m = lam.amax(-1, keepdim=True)
+    span = (m - lam).masked_fill(~causal, 0)
+    a_max = int(torch.maximum(A, A0).max())
+    d = span[..., 1:] // A.clamp(min=1)
+    d_max = int(d.max()) if d.numel() else 0
+    del d
+    mm.gate("lut", a_max < 2 ** 32 and d_max < 2 ** 32, {"A_max": a_max, "m_minus_S_max": d_max})
+    t = span >> 32
+    del span, lam
+    lut = lut_table(res, size, S.device)
+    e = lut[t.clamp(0, size - 1)]
+    if sink:
+        u = (-t[..., 0]).clamp(0, res * LUT_SINK_OCTAVES)
+        e[..., 0] = torch.where(t[..., 0] >= 0, e[..., 0], lut_up(res, S.device)[u % res] << (u // res))
+    e = e * causal
+    L = e.sum(-1, keepdim=True)
+    Lf = L.float().double()
+    s_q = (1.0 / Lf).float()
+    z_q = (e[..., :1].float().double() / Lf).float()
+    p = e.float() * s_q
+    p[..., :1] = z_q
+    return Softmaxed(p, {"lut": (e, s_q, z_q)})
+
+
 def _check_int8_attention(p):
     for x in ("q", "k", "p", "v"):
         if p[x] not in ("round", "dither"):
             raise ValueError(f"int8.{x} is round or dither")
     if p["v_scale"] not in ("channel", "head"):
         raise ValueError("int8.v_scale is channel or head")
+    if p["k_scale"] not in K_SCALES:
+        raise ValueError(f"int8.k_scale is one of {K_SCALES}")
+    if p["k_sink"] and p["k_scale"] == "token":
+        raise ValueError("int8.k_sink gives key 0 its own scale beside the KV head's: k_scale = head or calib")
+    if p["softmax"] not in SOFTMAXES:
+        raise ValueError(f"int8.softmax is one of {SOFTMAXES}")
+    if p["softmax"] == "lut":
+        if p["k_scale"] == "token":
+            raise ValueError("int8.softmax = lut puts every key's S in one unit: k_scale = head or calib")
+        if p["p"] != "round" or p["p_block"] or p["p_top"] != LUT_TOP:
+            raise ValueError("int8.softmax = lut serves P = e on [0, 127]: p = round, p_block = 0, p_top = 127")
+        if not 1 <= p["lut_res"] <= 64 or not 2 <= p["lut_size"] <= 4096:
+            raise ValueError("int8.lut_res in 1..64, lut_size in 2..4096")
+        if int(lut_table(p["lut_res"], p["lut_size"])[-1]) != 0:
+            raise ValueError("int8: the LUT's last entry (where t saturates) must be 0: raise lut_size")
+    elif p["lut_sink"]:
+        raise ValueError("int8.lut_sink is the integer softmax's: softmax = lut")
     if p["p_block"] and (p["p_block"] % PEEL_L or p["p_block"] > 2 ** 16):
         raise ValueError(f"int8.p_block is a multiple of {PEEL_L} keys, at most 2^16")
     if not all(1 <= p[t] <= 127 for t in ("q_top", "k_top", "p_top", "v_top")):
@@ -373,13 +498,19 @@ def _check_int8_attention(p):
 
 
 @attention_step("int8", phase="quantize", seeded=lambda p: "dither" in (p["q"], p["k"], p["p"], p["v"]),
-                check=_check_int8_attention)
+                calib=lambda p: p["k_scale"] == "calib", check=_check_int8_attention)
 def int8_attention(mm, nxt, *, q: str = "round", q_top: int = 127, k: str = "round", k_top: int = 127,
-                   p: str = "round", p_top: int = 127, p_block: int = 0, p_sink: bool = False, v: str = "round",
-                   v_top: int = 127, v_scale: str = "channel", qk_bits: int = 1):
+                   k_scale: str = "token", k_sink: bool = False, p: str = "round", p_top: int = 127, p_block: int = 0,
+                   p_sink: bool = False, v: str = "round", v_top: int = 127, v_scale: str = "channel", qk_bits: int = 1,
+                   softmax: str = "float", lut_res: int = 16, lut_size: int = 256, lut_sink: bool = False):
     """Both attention matmuls on one int8 limb. Q, K: one scale per (head, token), Q rounded to [-q_top, q_top] or
     dithered, K rounded or dithered (`dither`: floor(x / s) + b, s the smallest scale with x / s in [-top - 1, top), b
-    a fresh bit (for K, one for every query head), so the served operand is within [-top - 1, top]). P: after the
+    a fresh bit (for K, one for every query head), so the served operand is within [-top - 1, top]). `k_scale`: K's
+    scale per token, or one per (layer, KV head) from the window's keys (`head`) or the calibration windows' (`calib`,
+    the window's keys clamped into it); `k_sink` gives key 0 its own per-token scale beside it (`key_quant`).
+    `softmax = "lut"`: fattn.cu's integer softmax (`lut_softmax`, LUT[t] = rint(127 2^(-t / lut_res)), `lut_size`
+    entries; `lut_sink`: key 0 out of the max) in place of the float one, P = e on keys 1..pos and key 0 as z_q V(0),
+    the block of keys 1..pos scaled by s_q (p_sink's two blocks, whatever `p_sink` says). P: after the
     softmax, one scale per query row, or per (row, block of `p_block` keys), `p_sink` putting key 0 in a block of its
     own, rounded to [0, p_top], or (`dither`) rounded to [0, p_top - 1] plus a fresh bit where key <= query (so a
     dithered P serves no future key), the bits' mean, half the causal sum of V, taken off the product in the epilogue:
@@ -399,13 +530,17 @@ def int8_attention(mm, nxt, *, q: str = "round", q_top: int = 127, k: str = "rou
 
         def keys():
             kg = mm.weight()
-            kq, sk = floor_quant(kg, -1, k_top, qk_bits) if k == "dither" else quant(kg, k_top, -1)
+            cal = calibrated_keys(mm, k_sink) if k_scale == "calib" else None
+            kq, sk = key_quant(kg, k, k_top, qk_bits, k_scale, k_sink, cal)
             kq = kq.expand(rep, *kq.shape)
             if k == "dither":
                 kq = kq + mm.coins(kq.shape, levels)
             return kq, sk
         ki, sk = mm.cached("k", keys)
-        return nxt(mm.integer(qi, ki)).float() * (sq * sk.T[None])
+        prod = nxt(mm.integer(qi, ki))
+        if softmax == "lut":
+            return lut_softmax(mm, prod, sq, sk, res=lut_res, size=lut_size, sink=lut_sink)
+        return prod.float() * (sq * sk.T[None])
     pr = mm.x
     s = pr.shape[-1]
 
@@ -418,13 +553,20 @@ def int8_attention(mm, nxt, *, q: str = "round", q_top: int = 127, k: str = "rou
             vq = vq + mm.coins(vq.shape)
         return vq, sv
     vi, sv = mm.cached("v", values)
-    edges = p_edges(s, p_block, p_sink)
+    lut = mm.extra.get("lut")
+    if softmax == "lut" and lut is None:
+        raise ValueError(f"{mm.where}: softmax = lut on P V without the integer softmax's e (int8 on Q K^T)")
+    edges = p_edges(s, 0, True) if lut is not None else p_edges(s, p_block, p_sink)
     num = None
     for a, b in zip(edges, edges[1:]):
         blk = pr[..., a:b]
         top = p_top - 1 if p == "dither" else p_top
-        sb = blk.amax(-1, keepdim=True).clamp(min=1e-30) / top
-        pi = torch.round(blk / sb).clamp(0, top)
+        if lut is not None:
+            e, s_q, z_q = lut
+            pi, sb = (torch.ones_like(blk), z_q) if a == 0 else (e[..., a:b].float(), s_q)
+        else:
+            sb = blk.amax(-1, keepdim=True).clamp(min=1e-30) / top
+            pi = torch.round(blk / sb).clamp(0, top)
         if p == "dither":
             causal = mm.extra["causal"][:, a:b]
             pi = pi + mm.coins(pi.shape) * causal
