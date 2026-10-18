@@ -24,7 +24,8 @@ sessions.
 * **Fit.** Weighted least squares in relative error, with standard errors from the residuals: per K, the cold process
   `a + a_c c + a_k k` (GPU-s), the in-process session `g + g_c c + g_k k`, the process's setup (its wall less its session),
   staging `s + s_c c` and verification `v + v_c c + v_k k` (CPU-s); and across K, `costfit`'s features (one, ands,
-  ands*staged, ands*drawn). `observations.json` holds `costfit.Observation`s: prove is a cold process's wall.
+  ands*staged, ands*drawn). `observations.json` holds `costfit.Observation`s: prove is a cold process's wall, verify the
+  single-threaded verifier's CPU time (its wall stretches on a loaded node).
 """
 from __future__ import annotations
 
@@ -309,17 +310,17 @@ def fit(a) -> int:
                 f"K{K}-c{c}-k{k}": {key: float(np.median([x["firewall"].get(key, 0.0) for r, x in fw if (r["K"], r["c"], r["k"]) == (K, c, k)]))
                                     for key in sorted({key for _, x in fw for key in x["firewall"]})}
                 for K, c, k in sorted({(r["K"], r["c"], r["k"]) for r, _ in fw})}
-    put("verify/joint", [(features(r["K"], r["c"], r["k"]), r["wall_s"]) for r in verifies], joint)
+    put("verify/joint", [(features(r["K"], r["c"], r["k"]), r["user_s"] + r["sys_s"]) for r in verifies], joint)
     put("stage/joint", [(features(K, c, 1)[:3], r["stage_s"]) for (K, c), r in stages.items()], joint[:3])
 
-    # costfit.Observations of the design's path (arm fw): a point's cold processes' mean wall, the mean wall of Lean's
+    # costfit.Observations of the design's path (arm fw): a point's cold processes' mean wall, the mean CPU time of Lean's
     # verification of its sessions (either arm's: the firewall doesn't change what the verifier checks) and its statement's
     # staging
     obs = []
     arm = "fw" if "fw" in arms else (arms[0] if arms else None)
     for K, c, k in sorted({(r["K"], r["c"], r["k"]) for r in proves if r["arm"] == arm and r["mode"] == "cold"}):
         cold = [r["wall_s"] for r in proves if (r["K"], r["c"], r["k"], r["arm"], r["mode"]) == (K, c, k, arm, "cold")]
-        ver = [r["wall_s"] for r in verifies if (r["K"], r["c"], r["k"]) == (K, c, k)]
+        ver = [r["user_s"] + r["sys_s"] for r in verifies if (r["K"], r["c"], r["k"]) == (K, c, k)]
         obs.append({"source": a.run or "zk_cost", "template": f"ScaledMmS8Coordinate_v1{{K={K}}}", "ands": unit_ands(K),
                     "staged": c, "drawn": k, "prove": float(np.mean(cold)),
                     "verify": float(np.mean(ver)) if ver else None, "stage": stages[(K, c)]["stage_s"]})
