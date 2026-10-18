@@ -1,8 +1,12 @@
 {
- "schema": "verity-vllm/workload/v1",
+ "schema": "verity-vllm/workload/v2",
  "model": "HuggingFaceTB/SmolLM2-135M",
  "case": "B0",
- "tokenizer_revision": "93efa2f097d58c2a74874c7e644dbc9b0cee75a2",
+ "engine": {
+  "revision": "93efa2f097d58c2a74874c7e644dbc9b0cee75a2",
+  "vllm": "d9105ea80",
+  "args": {}
+ },
  "variants": {
   "greedy": {
    "temperature": 0.0,
