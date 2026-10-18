@@ -38,13 +38,13 @@ theorem coinsK_foldShape (F K : Type) : ∀ k, Lock.coinsK (foldShape F K k) = k
   | k + 1 => by simp only [foldShape, Lock.coinsK, coinsK_foldShape F K k]
 
 theorem coinsK_zcShape (F : Type) (m : ℕ) : Lock.coinsK (zcShape F m) = m - 6 + 3 := by
-  simp only [zcShape, Lock.coinsK, Lock.coinsK_append, coinsK_pairRounds] <;> omega
+  simp only [zcShape, Lock.coinsK, Lock.coinsK_append, coinsK_pairRounds]
 
 theorem coinsK_lcShape (F : Type) (kLog : ℕ) : Lock.coinsK (lcShape F kLog) = kLog - 6 + 3 := by
-  simp only [lcShape, Lock.coinsK, Lock.coinsK_append, coinsK_pairRounds] <;> omega
+  simp only [lcShape, Lock.coinsK, Lock.coinsK_append, coinsK_pairRounds]
 
 theorem coinsK_opShape (F : Type) (n : ℕ) : Lock.coinsK (opShape F n) = n + 1 := by
-  simp only [opShape, Lock.coinsK_append, coinsK_switches, Lock.coinsK] <;> omega
+  simp only [opShape, Lock.coinsK_append, coinsK_switches, Lock.coinsK]
 
 theorem coinsK_oodShape (F K : Type) (dim : ℕ) : Lock.coinsK (oodShape F K dim) = 4 := rfl
 
@@ -56,11 +56,13 @@ end Shapes
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
 variable {D : Type}
 
-theorem getRep_slotOf_ne {r r' : ℕ} (hr : r < 2) (hr' : r' < 2) (hne : r' ≠ r) (i : IRep F D) (ℓ : ℕ) :
+omit [Field F] [Fintype F] [DecidableEq F] in
+theorem getRep_slotOf_ne {r r' : ℕ} (hr : r < 2) (hne : r' ≠ r) (i : IRep F D) (ℓ : ℕ) :
     getRep r' i (slotOf r ℓ) = none := by
   unfold getRep slotOf
-  exact if_neg (by omega)
+  exact ite_eq_right (by omega)
 
+omit [DecidableEq F] [Fintype K] [DecidableEq K] in
 theorem noSlot_lockFold (A : Arith F K) (r slot : ℕ) (i : IRep F D) (P : Opens F D → Prop) :
     ∀ (k : ℕ) (s : K) (q : Quad K) (sF : Opens F D → K) (qF : Opens F D → Quad K)
       (h : ∀ o, P o → sF o = s ∧ qF o = q), Lock.NoSlot slot (lockFold A r i P k s q sF qF h)
@@ -75,6 +77,7 @@ theorem noSlot_lockFold (A : Arith F K) (r slot : ℕ) (i : IRep F D) (P : Opens
       obtain ⟨_, _, _, _⟩ := hxy
       exact .ret _
 
+omit [DecidableEq F] [Fintype K] [DecidableEq K] in
 theorem noSlot_lockTwoOod (A : Arith F K) (r slot : ℕ) (i : IRep F D) (P : Opens F D → Prop)
     (dim split split' : ℕ) (hsplit : split = split') (s : K) (q : Quad K) (sF : Opens F D → K)
     (qF : Opens F D → Quad K) (h : ∀ o, P o → sF o = s ∧ qF o = q) :
@@ -132,7 +135,7 @@ theorem dist_lockRec (A : Arith F K) (r : ℕ) (hr : r < 2) (n : ℕ) (b : ℕ �
   | lv :: lv' :: rest, i, st, stC, h, 0 => by
       refine Lock.Dist.slot_eq (slot := slotOf r (stC.level + 1)) rfl ?_
       refine Lock.Dist.bind_eq (j := 0) ?_ (noSlot_lockFold A r _ i _ lv.lanes _ _ _ _ _)
-        (foldRoundsC_exact A _ _ _) (by simp only [recSlotDist, coinsK_foldShape] <;> omega)
+        (foldRoundsC_exact A _ _ _) (by simp only [recSlotDist, coinsK_foldShape]; omega)
       intro i' x y hxy
       rcases x with ⟨ch, x₂⟩
       rcases x₂ with ⟨s, q⟩
@@ -145,7 +148,7 @@ theorem dist_lockRec (A : Arith F K) (r : ℕ) (hr : r < 2) (n : ℕ) (b : ℕ �
   | lv :: lv' :: rest, i, st, stC, h, p + 1 => by
       refine Lock.Dist.bind_eq (j := recSlotDist (lv' :: rest) p + 3 + 4) ?_
         (noSlot_lockFold A r _ i _ lv.lanes _ _ _ _ _) (foldRoundsC_exact A _ _ _)
-        (by simp only [recSlotDist, coinsK_foldShape] <;> omega)
+        (by simp only [recSlotDist, coinsK_foldShape]; omega)
       intro i' x y hxy
       rcases x with ⟨ch, x₂⟩
       rcases x₂ with ⟨s, q⟩
@@ -205,7 +208,7 @@ theorem dist_lockLig (A : Arith F K) (r : ℕ) (hr : r < 2) (m k0 : ℕ) (l₀ l
     refine .other _ (by unfold slotOf; omega) fun C₁ cap₁ => ?_
     refine Lock.Dist.bind_eq (j := recSlotDist (l₁ :: rest) p + 3) ?_
       (noSlot_lockTwoOod A r _ _ _ _ _ _ _ _ _ _ _ _) (twoOodC_exact A _ _ _ _)
-      (by simp only [coinsK_oodShape, ligSlotDist] <;> omega)
+      (by simp only [coinsK_oodShape, ligSlotDist]; omega)
     intro i₂ x y hxy
     rcases x with ⟨s2, x₂⟩
     rcases x₂ with ⟨q2, oods⟩
@@ -276,7 +279,7 @@ theorem noSlot_lockRec_ge (A : Arith F K) (r : ℕ) (hr : r < 2) (n : ℕ) (b : 
   | [], _, _, _, _, _, _ => .ret _
   | [lv], i, st, stC, h, _, _ => noSlot_lockRec_single A r hr n b initial ext C₀ sch _ lv i st stC h
   | lv :: lv' :: rest, i, st, stC, h, 0, hp => by
-      simp only [List.length_cons] at hp <;> omega
+      simp only [List.length_cons] at hp; omega
   | lv :: lv' :: rest, i, st, stC, h, p + 1, hp => by
       refine Lock.NoSlot.bind ?_ (noSlot_lockFold A r _ i _ lv.lanes _ _ _ _ _)
       intro i' x y hxy
@@ -306,7 +309,7 @@ theorem noSlot_lockRec_ge (A : Arith F K) (r : ℕ) (hr : r < 2) (n : ℕ) (b : 
       · show slotOf r (stC3.level + 1 + 1 + p) = slotOf r (stC.level + 1 + (p + 1))
         unfold slotOf
         omega
-      · simp only [List.length_cons] at hp ⊢ <;> omega
+      · simp only [List.length_cons] at hp ⊢; omega
 
 /-- **No cap past Ligerito's last level.** -/
 theorem noSlot_lockLig_ge (A : Arith F K) (r : ℕ) (hr : r < 2) (m k0 : ℕ) (l₀ l₁ : Level)
@@ -343,7 +346,7 @@ theorem noSlot_lockLig_ge (A : Arith F K) (r : ℕ) (hr : r < 2) (m k0 : ℕ) (l
   · show slotOf r (1 + 1 + p) = slotOf r (p + 1 + 1)
     unfold slotOf
     omega
-  · simp only [List.length_cons] <;> omega
+  · simp only [List.length_cons]; omega
 
 /-- **No cap past a rep's last level.** -/
 theorem noSlot_lockRep_ge (A : Arith F K) (r : ℕ) (hr : r < 2) (S : Statement) (m k0 : ℕ) (l₀ l₁ : Level)
@@ -375,16 +378,16 @@ theorem noSlot_lockRep_ge (A : Arith F K) (r : ℕ) (hr : r < 2) (S : Statement)
 /-- With four lanes at every level, the recursion's level caps are `11` coins apart. -/
 theorem recSlotDist_eq : ∀ (levs : List Level) (p : ℕ), (∀ lv ∈ levs, lv.lanes = 4) → p + 1 < levs.length →
     recSlotDist levs p = 4 + 11 * p
-  | [], _, _, hp => by simp only [List.length_nil] at hp <;> omega
-  | [_], _, _, hp => by simp only [List.length_cons, List.length_nil] at hp <;> omega
+  | [], _, _, hp => by simp only [List.length_nil] at hp; omega
+  | [_], _, _, hp => by simp only [List.length_cons, List.length_nil] at hp; omega
   | lv :: lv' :: rest, 0, hl, _ => by
       have h1 := hl lv (by simp)
-      simp only [recSlotDist] <;> omega
+      simp only [recSlotDist]; omega
   | lv :: lv' :: rest, p + 1, hl, hp => by
       have h1 := hl lv (by simp)
       have h2 := recSlotDist_eq (lv' :: rest) p (fun x hx => hl x (List.mem_cons_of_mem _ hx))
-        (by simp only [List.length_cons] at hp ⊢ <;> omega)
-      simp only [recSlotDist] <;> omega
+        (by simp only [List.length_cons] at hp ⊢; omega)
+      simp only [recSlotDist]; omega
 
 /-- **`fast100` folds four lanes at every level after level 0.** -/
 theorem fast100_lanes {m : ℕ} {s : Schedule} (hs : fast100 m = some s) : ∀ lv ∈ s.levels.tail, lv.lanes = 4 := by

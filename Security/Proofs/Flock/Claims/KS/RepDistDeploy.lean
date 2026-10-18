@@ -26,11 +26,11 @@ theorem ligSlotDist_capRound (k0 : ℕ) (levs : List Accounting.Level) (hl : ∀
   cases ℓ with
   | zero =>
     have h0 : ligSlotDist levs 0 = 0 := rfl
-    have h1 : capRound k0 (0 + 1) = k0 + 2 := if_pos (by omega)
+    have h1 : capRound k0 (0 + 1) = k0 + 2 := ite_eq_left (by omega)
     omega
   | succ p =>
     have h0 : ligSlotDist levs (p + 1) = 7 + recSlotDist levs p := rfl
-    have h1 : capRound k0 (p + 1 + 1) = k0 + 13 + 11 * (p + 1 + 1 - 2) := if_neg (by omega)
+    have h1 : capRound k0 (p + 1 + 1) = k0 + 13 + 11 * (p + 1 + 1 - 2) := ite_eq_right (by omega)
     have h2 := recSlotDist_eq levs p hl hℓ
     omega
 
@@ -49,6 +49,6 @@ theorem dist_lockRep_capRound (A : Model.Arith F K) (r : ℕ) (hr : r < 2) (S : 
     rw [← ligSlotDist_capRound k0 (l₁ :: rest) hl ℓ hlt]
     exact h
   · exact .noSlot (noSlot_lockRep_ge A r hr S m k0 l₀ l₁ rest ext hk0 hm C₀ extra ℓ
-      (by simp only [List.length_cons] at hlt ⊢ <;> omega))
+      (by simp only [List.length_cons] at hlt ⊢; omega))
 
 end FlockDeploy.KS
