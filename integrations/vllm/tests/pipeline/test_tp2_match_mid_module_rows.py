@@ -44,7 +44,7 @@ def _recs(*, mid_rows: int | None = None, logits_rows: int | None = None, rows: 
     return out
 
 
-def _run(tmp: Path, name: str, recs, first_steps: list[int] | None = None) -> dict:
+def _run(tmp: Path, name: str, recs, first_steps: list[int] | None = None, workload: dict | None = None) -> dict:
     run = tmp / name
     cap = run / "capture"
     cap.mkdir(parents=True)
@@ -57,7 +57,11 @@ def _run(tmp: Path, name: str, recs, first_steps: list[int] | None = None) -> di
     if first_steps:
         tok["timing"] = {"requests": {f"r{i}": {"first_step": s} for i, s in enumerate(first_steps)}}
     (cap / "tokens.json").write_text(json.dumps(tok))
-    M._check_main(types.SimpleNamespace(out=str(run), build_rank0=str(run / "b0"), build_rank1=str(run / "b1")))
+    wl = None
+    if workload is not None:
+        wl = run / "workload.json"
+        wl.write_text(json.dumps(workload))
+    M._check_main(types.SimpleNamespace(out=str(run), build_rank0=str(run / "b0"), build_rank1=str(run / "b1"), workload=wl and str(wl)))
     return json.load(open(run / "tp2_match.json"))["structure"]
 
 
@@ -85,3 +89,14 @@ def test_rows_follow_the_realized_arrivals(tmp_path):
     assert s["pass"] is True and s["step_rows"] == {"0": [3, 1], "1": [6, 2], "2": [1, 1]}
     s = _run(tmp_path, "together", _recs(rows=arrived))
     assert s["pass"] is False and [b["step"] for b in s["per_rank"]["0"]["steps_rows_mismatching"]] == [0, 1, 2]
+
+
+def test_a_warm_prefill_carries_its_uncached_rows(tmp_path):
+    # r1's prompt starts with r0's first 2-token block, cached when r0 prefilled: r1's prefill at step 1 computes 5 - 2 rows
+    workload = {"engine": {"args": {"enable_prefix_caching": True, "block_size": 2}},
+                "requests": [{"request_id": f"r{i}", "prompt_token_ids": [1] * n, "arrive_step": i} for i, n in enumerate(PROMPTS)]}
+    warm = [(3, 1), (1 + 3, 2), (1, 1)]
+    s = _run(tmp_path, "warm", _recs(rows=warm), first_steps=[0, 1], workload=workload)
+    assert s["pass"] is True and s["step_rows"] == {"0": [3, 1], "1": [4, 2], "2": [1, 1]}
+    s = _run(tmp_path, "cold", _recs(rows=warm), first_steps=[0, 1])
+    assert s["pass"] is False and [b["step"] for b in s["per_rank"]["0"]["steps_rows_mismatching"]] == [1]

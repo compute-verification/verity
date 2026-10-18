@@ -282,6 +282,12 @@ def test_tp_rank_components_share_weights_at_shifting_positions_and_tp1_digests_
                              [("prompt", "Array<3,Value<16>>")] + [(f"aux_{k}", "Array<1,Value<16>>") for k in range(3)] + [("weights", "Array<4,Value<16>>")])
     with pytest.raises(ValueError, match="different parameter positions .* non-request-local groups \\['aux_0'"):
         W.WorkloadProgram([W.WorkloadRequest("r0", 0, 3, 3, 0, cx, T=2), W.WorkloadRequest("r1", 1, 5, 1, 0, cb, T=0)], lag=0)
+    # a warm request's cached MLA prefix (`cached_request.CachedMlaGreedyRequest`: latent, index_k, index_k_scale) is its own, like its peers
+    cw = W.request_component(encode_program(Program(d.bind(LP=3, T=2))), REGISTRY,
+                             [("prompt", "Array<3,Value<16>>"), ("latent", "Array<1,Value<16>>"), ("index_k", "Array<1,Value<16>>"),
+                              ("index_k_scale", "Array<1,Value<16>>"), ("weights", "Array<4,Value<16>>")])
+    ww = W.WorkloadProgram([W.WorkloadRequest("r0", 0, 3, 3, 0, cw, T=2), W.WorkloadRequest("r1", 1, 5, 1, 0, cb, T=0)], lag=0)
+    assert ww.shared_by_request == ((4,), (2,)) and ww.shared_positions_uniform is False
     # TP1 (uniform positions): the static keeps its one-tuple form -> the digest of the historical composition is unchanged
     u = _wl([(3, 2), (5, 0)])
     assert u.shared_positions_uniform is True and u.fn.statics["shared"] == (1,)

@@ -324,8 +324,9 @@ class WorkloadRequest:
 
 # request-LOCAL wrapper parameter groups: a component's own inputs, positions may differ per component (TP rank Programs carry
 # `peers_<k>` = the received collective values, one per site x step, so K differs per (LP, T) shape -- tp M-0314 (B)); a stochastic
-# wrapper's `seed` and `splits` are its request's own, like the prompt, and so is a warm request's cached `prefix`
-_REQUEST_LOCAL_GROUPS = ("prompt", "seed", "splits", "prefix")
+# wrapper's `seed` and `splits` are its request's own, like the prompt, and so is a warm request's cached `prefix` (an MLA model's
+# `latent`, `index_k` and `index_k_scale`: `frontend.cached_request`)
+_REQUEST_LOCAL_GROUPS = ("prompt", "seed", "splits", "prefix", "latent", "index_k", "index_k_scale")
 _REQUEST_LOCAL_PREFIXES = ("peers",)
 
 

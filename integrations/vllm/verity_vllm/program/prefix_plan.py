@@ -78,6 +78,11 @@ def cached_of(workload: dict[str, Any]) -> list[int]:
     return [p["cached"] for p in plan(workload)]
 
 
+def cached_by_id(workload: dict[str, Any]) -> dict[str, int]:
+    """C per request id of `workload["requests"]`."""
+    return {str(r.get("request_id")): c for r, c in zip(workload.get("requests") or [], cached_of(workload))}
+
+
 def with_cached(workload: dict[str, Any]) -> list[dict[str, Any]]:
     """`workload["requests"]`, each with its `cached` rows: what a request's Program lookup (`request_shape`) reads."""
     return [dict(r, cached=c) for r, c in zip(workload.get("requests") or [], cached_of(workload))]

@@ -26,8 +26,9 @@ METHOD = "sampled-exact-replay per rank (manbind sampled_replay on the rank's ma
 
 def request_program_dirs(root: str, reqs: list[dict], rank: int) -> dict[str, str]:
     """[TP-13 / moe] This rank's request Program DIR per declared request, by the manifest's lookup of record
-    (`required_manifest._program_dirs_for`): a single request Program at `<root>` (B1: `<root>/instances.json.gz`), else under `<root>`
-    a `*LP<prompt_len>_T<max_tokens-1>` dir, else any `build_request*/result.json` declaring EXACTLY (LP, T) -- row_pod names the row's
+    (`manifest.format.program_dirs_for`): a single request Program at `<root>` (B1: `<root>/instances.json.gz`), else under `<root>`
+    a `*LP<prompt_len>_T<max_tokens-1>[_C<cached>]` dir, else any `build_request*/result.json` declaring EXACTLY (LP, T, C) (a warm
+    request's `cached` rows, `program.prefix_plan`; never a cold Program for a warm request) -- row_pod names the row's
     nominal shape `build_request` and every other shape `build_request_LP<lp>_T<t>`, so a B>=2 mixed row's nominal-shape request has no
     `*LP_T` dir and a bare glob refused it ("no request Program for r0 at <root>/*LP1024_T127": the Qwen3-30B-A3B TP2 B2 and OLMoE TP2 B8
     rows on r16-int-4 537a9362d, sampled replay not run on both ranks and TP-12's unreplayable_sites never set).  Never a near shape;
@@ -62,7 +63,7 @@ class Loaded:
 
 
 def load(cfg: dict[str, Any], rank: int, world: Any) -> Loaded:
-    """The rank's request Programs (B1: the request Program at the rank's Build dir; B>=2: one component per (LP, T) under it, by the
+    """The rank's request Programs (B1: the request Program at the rank's Build dir; B>=2: one component per (LP, T[, C]) under it, by the
     manifest's lookup of record), REFUSED by name unless every loaded digest is of record for the rank (`cfg["of_record"]`) and every
     Program's TP context (result.json `tp`) is this rank's of this world."""
     from verity_vllm.check.replay import driver as SR

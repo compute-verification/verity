@@ -569,7 +569,8 @@ def _field(path: str, fn: Any) -> str:
 
 
 def tp_shape(wl: str, checkpoints: str, hf_home: str) -> dict[str, Any]:
-    """A tensor-parallel row's batch, envelope, declared request shapes (LP, cap - 1), engine lengths and checkpoint dir.
+    """A tensor-parallel row's batch, envelope, declared request shapes (LP, cap - 1[, C]: `request_shapes`), engine lengths and
+    checkpoint dir.
 
     ``MNBT`` is at most ``B * MML``: no step can schedule more tokens than ``max_num_seqs`` requests of ``max_model_len``, so the cap
     changes no schedule, but vLLM's warm-up forward (`kernel_warmup.flashinfer_autotune`'s dummy run) packs the full budget into
@@ -581,8 +582,7 @@ def tp_shape(wl: str, checkpoints: str, hf_home: str) -> dict[str, Any]:
     req = cfg.engine.args
     mml = req.get("max_model_len") or int(s["max_input"]) + int(s["max_output"])
     batch = int(s["batch"])
-    return {"B": batch, "I": int(s["max_input"]), "O": int(s["max_output"]),
-            "shapes": sorted({(int(a), int(b) - 1) for a, b in zip(s["input_lengths"], s["output_caps"])}),
+    return {"B": batch, "I": int(s["max_input"]), "O": int(s["max_output"]), "shapes": sorted(request_shapes(wl)),
             "MML": mml, "MNBT": min(int(req.get("max_num_batched_tokens") or mml), batch * int(mml)),
             "ck": checkpoint_dir(cfg.model, cfg.engine.revision, hf_home, checkpoints) or ""}
 
@@ -663,10 +663,15 @@ def tp_passed(path: str) -> bool:
     return _field(path, lambda d: d["pass"]) == "True"
 
 
-def tp_served_shapes(m: str) -> list[str]:
-    """``LP,T`` of every captured request (prompt length, generated - 1)."""
-    s = _field(f"{m}/capture/tokens.json", lambda d: " ".join(f"{len(q['prompt_token_ids'])},{len(q['generated_token_ids']) - 1}" for q in d["requests"]))
-    return s.split()
+def tp_served_shapes(m: str, wl: str) -> list[tuple[int, ...]]:
+    """The shape every captured request was served at: (prompt length, generated - 1[, C]), C the cached rows the workload's plan
+    declares for it (`program.prefix_plan`; GM-01 holds the engine's to it)."""
+    try:
+        tok, w = json.load(open(f"{m}/capture/tokens.json")), json.load(open(wl))
+    except _READ:
+        return []
+    cached = PP.cached_by_id(w)
+    return [PP.shape(len(q["prompt_token_ids"]), len(q["generated_token_ids"]) - 1, cached.get(str(q["request_id"]), 0)) for q in tok["requests"]]
 
 
 def tp_fold_line(m: str) -> str:
