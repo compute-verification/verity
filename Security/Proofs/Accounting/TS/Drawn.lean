@@ -3,10 +3,11 @@ import Proofs.Accounting.TS.Fork
 /-!
 # (I8) for a sampled window
 
-Stated after RT-I8 (note:20261018T0728Z-draft-rt-i8, decisions 114 and 119). `ProofsSoundOfDrawn` is a `sorry` stub
-until E1(c) per unit (`UnitFixed`) has its card; `DrawnRightOff` and `DrawnBindingOfFork` don't read it and are proved,
-and so is `DrawnLayer.covers_of_cone`, the share's side of `Covers`: a share that charges each unit that isn't held and
-right its late cone's weight covers every unit that isn't good.
+Stated after RT-I8 (note:20261018T0728Z-draft-rt-i8, decisions 114 and 119) and RT-COMPOSE r2's R2-B1
+(note:20261018T1200Z-draft-rt-compose-r2: good reads the run's modes). `ProofsSoundOfDrawn` is a `sorry` stub until
+E1(c) per unit (`UnitFixed`) has its card; `DrawnRightOff` and `DrawnBindingOfFork` don't read it and are proved, and so
+is `DrawnLayer.covers_of_cone`, the share's side of `Covers`: a share that charges each unit the run didn't pay for its
+late cone's weight covers every unit that isn't good.
 
 `DrawnRightOff`: the event is "in some round, binding fails (`MovedIn`) or some drawn unit's proof is unsound", which
 the union bound puts at `S·(δ_bind + δ_ks)`. Off it, an accepted proof opens its unit's committed values (not
@@ -224,43 +225,45 @@ theorem moved_of_movedIn {x : Paths (Paths C m × B) S} {w : Fin S} (h : pf.Move
   obtain ⟨k, hk⟩ := Function.ne_iff.mp hne
   exact ⟨i, k, pf.opened x w i k, ⟨w, i, k, rfl, hacc, rfl⟩, hk⟩
 
+omit [Fintype C] [Fintype B] [Nonempty V] in
 open Classical in
-/-- **A share that charges each unit that isn't held and right its late cone's weight covers**: a unit that isn't good
-has a unit of its late cone that isn't held and right, whose cone weight counts it. RT-I8 r2's `covers_of_cone`. -/
-theorem covers_of_cone [Fintype J] {K T L U : Type} (P : Play (Paths C m × B) S K T L U) (wt : Fin S → J → ℝ)
-    (Nw : ℝ) (hw : ∀ w j, 0 ≤ wt w j)
+/-- **A share that charges each unit the run didn't pay for its late cone's weight covers**: a unit that isn't good has
+a unit of its late cone the run didn't pay for, whose cone weight counts it. RT-I8 r2's `covers_of_cone`, at the run's
+modes (RT-COMPOSE r2's R2-B1). -/
+theorem covers_of_cone [Fintype J] {K T L U : Type} (P : Play (Paths C m × B) S K T L U)
+    (mode : Paths (Paths C m × B) S → Fin S × J → Mode) (wt : Fin S → J → ℝ) (Nw : ℝ) (hw : ∀ w j, 0 ≤ wt w j)
     (h : ∀ x, P.accepts x →
-      (∑ u : Fin S × J, if pf.HeldRight x u then 0 else pf.coneWt wt u) ≤ P.game.deficiency x * Nw) :
-    pf.Covers P wt Nw := by
+      (∑ u : Fin S × J, if mode x u = .paid then 0 else pf.coneWt wt u) ≤ P.game.deficiency x * Nw) :
+    pf.Covers P mode wt Nw := by
   intro x hx
   refine le_trans ?_ (h x hx)
-  rw [← Fintype.sum_prod_type' (fun w j => if pf.Good x w j then 0 else wt w j)]
-  have key : ∀ v : Fin S × J, (if pf.Good x v.1 v.2 then 0 else wt v.1 v.2) ≤
-      ∑ u : Fin S × J, if pf.HeldRight x u then 0 else
+  rw [← Fintype.sum_prod_type' (fun w j => if pf.Good mode x w j then 0 else wt w j)]
+  have key : ∀ v : Fin S × J, (if pf.Good mode x v.1 v.2 then 0 else wt v.1 v.2) ≤
+      ∑ u : Fin S × J, if mode x u = .paid then 0 else
         (if Relation.ReflTransGen pf.Late u v then wt v.1 v.2 else 0) := by
     intro v
-    by_cases hg : pf.Good x v.1 v.2
+    by_cases hg : pf.Good mode x v.1 v.2
     · rw [ite_eq_left hg]
       exact Finset.sum_nonneg fun u _ => by split_ifs <;> simp [hw v.1 v.2]
     · rw [ite_eq_right hg]
-      obtain ⟨u, hu, hb⟩ : ∃ u, Relation.ReflTransGen pf.Late u v ∧ ¬ pf.HeldRight x u :=
+      obtain ⟨u, hu, hb⟩ : ∃ u, Relation.ReflTransGen pf.Late u v ∧ ¬ mode x u = .paid :=
         Classical.byContradiction fun hno =>
           hg fun u hr => Classical.byContradiction fun hb => hno ⟨u, hr, hb⟩
-      calc wt v.1 v.2 = (if pf.HeldRight x u then 0 else
+      calc wt v.1 v.2 = (if mode x u = .paid then 0 else
             (if Relation.ReflTransGen pf.Late u v then wt v.1 v.2 else 0)) := by
             rw [ite_eq_right hb, ite_eq_left hu]
-        _ ≤ _ := Finset.single_le_sum (f := fun u => if pf.HeldRight x u then 0 else
+        _ ≤ _ := Finset.single_le_sum (f := fun u => if mode x u = .paid then 0 else
               (if Relation.ReflTransGen pf.Late u v then wt v.1 v.2 else 0))
             (fun u _ => by split_ifs <;> simp [hw v.1 v.2]) (Finset.mem_univ u)
-  calc (∑ v : Fin S × J, if pf.Good x v.1 v.2 then 0 else wt v.1 v.2)
-      ≤ ∑ v : Fin S × J, ∑ u : Fin S × J, (if pf.HeldRight x u then 0 else
+  calc (∑ v : Fin S × J, if pf.Good mode x v.1 v.2 then 0 else wt v.1 v.2)
+      ≤ ∑ v : Fin S × J, ∑ u : Fin S × J, (if mode x u = .paid then 0 else
           (if Relation.ReflTransGen pf.Late u v then wt v.1 v.2 else 0)) :=
         Finset.sum_le_sum fun v _ => key v
-    _ = ∑ u : Fin S × J, ∑ v : Fin S × J, (if pf.HeldRight x u then 0 else
+    _ = ∑ u : Fin S × J, ∑ v : Fin S × J, (if mode x u = .paid then 0 else
           (if Relation.ReflTransGen pf.Late u v then wt v.1 v.2 else 0)) := Finset.sum_comm
-    _ = ∑ u : Fin S × J, if pf.HeldRight x u then 0 else pf.coneWt wt u := by
+    _ = ∑ u : Fin S × J, if mode x u = .paid then 0 else pf.coneWt wt u := by
         refine Finset.sum_congr rfl fun u _ => ?_
-        by_cases hb : pf.HeldRight x u
+        by_cases hb : mode x u = .paid
         · simp [hb]
         · simp [hb, Accounting.TS.DrawnLayer.coneWt]
 
