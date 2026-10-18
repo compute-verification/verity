@@ -19,6 +19,7 @@ from verity_bench.vllm.arms import Arm, resolve_arms
 from verity_bench.vllm.presets import (
     GPUS,
     SPEC_ROOT,
+    Sweep,
     SweepPoint,
     expand_sweep,
     load_spec,
@@ -125,7 +126,9 @@ def test_every_toml_spec_strictly_loads():
     for path in sorted(SPEC_ROOT.glob("*.toml")):
         first = path.read_text().splitlines()[0]
         loaded.append(load_sweep(path.stem) if "vllm-sweep/v0" in first else load_spec(path))
-    assert len(loaded) == 5
+    sweeps = {d.id for d in loaded if isinstance(d, Sweep)}
+    specs = [d for d in loaded if not isinstance(d, Sweep)]
+    assert specs and {d.sweep for d in specs} <= sweeps
 
 
 def test_plan_identity_binds_resolved_spec_commit_lock_pin_and_point_but_not_admission():
