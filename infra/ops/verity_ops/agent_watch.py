@@ -34,7 +34,8 @@ A run among an agent's newest left in CREATING for 10 min by the API's own `upda
 cancelled on arrival) and no run followed (a run queued behind a followed one waits its turn, and that one is judged), or a followed background wait with nothing at all streamed for 2 h, is recorded once as **stuck**: on 18 Oct proofs' and circuits' runs sat in CREATING behind a
 held one while every later one was cancelled on arrival, network-accounting's behind a goal run from 18:27Z, and the API refuses
 to cancel a CREATING run. A goal run (`run-goal-...`) can't be read or streamed on its own (400), so it is never followed; an
-agent whose latest run the API won't read is recorded once as unreadable.
+agent whose latest run the API won't read is recorded once as unreadable, and again, with `since`, once it has been for
+`UNREADABLE_S`.
 
 A coordinator holds a handle of `--registry` (the Slack registry): the holder of the handle's open inbox in `--routes` (the notes'
 `routes.d`, which a handover moves first; on 18 Oct the registry still named vllm's predecessor), else the first agent id in the
@@ -89,6 +90,7 @@ RECANCEL_S = 3600
 CONTINUE_RETRY_S = 30 * 60  # how long a refused continue run is tried again before it is left for a person
 REFUSED_S = 5 * 60          # a run whose cancel got 409 still read as going this long after is left for a person
 MAX_RESTARTS = 3            # ERROR runs in a row the watch restarts before leaving the agent for a person
+UNREADABLE_S = 3600         # a latest run the API won't read this long is recorded again, for a person
 IDLE_RECENT_S = 6 * 3600    # an IDLE agent is read only if it changed this recently (an ERROR leaves an agent IDLE)
 RUNS_PAGE = 50              # an ACTIVE agent's runs are read a page at a time, back to the newest that started
 RUNS_PAGES = 10             # (memory-accounting had 52 runs cancelled on arrival in 50 min, 18 Oct), at most this many pages
@@ -509,8 +511,11 @@ class Watch:
         try:
             info = {"id": run, **self.api.get(f"/v1/agents/{a['id']}/runs/{run}")}
         except urllib.error.HTTPError as e:         # a goal run's id (run-goal-...) isn't one the runs endpoint takes
-            if self.once(run, self.clock()):
-                self.record("unreadable", Run(a["id"], run, a.get("name") or ""), status=f"HTTP {e.code}")
+            t, first, r = self.clock(), self.done.get(run), Run(a["id"], run, a.get("name") or "")
+            if self.once(run, t):
+                self.record("unreadable", r, status=f"HTTP {e.code}")
+            elif first is not None and t - first >= UNREADABLE_S and self.once(run + "#unreadable", t):
+                self.record("unreadable", r, status=f"HTTP {e.code}", since=iso(first), minutes=int((t - first) // 60))
             return None
         if info.get("status") in TERMINAL:
             self.final[run] = info

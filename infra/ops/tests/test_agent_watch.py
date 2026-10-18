@@ -159,6 +159,19 @@ def test_an_unreadable_run_is_recorded_once_and_the_sweep_goes_on(tmp_path):
     assert st["bc-a"]["watch_state"] == "followed"
 
 
+def test_a_run_unreadable_for_an_hour_is_recorded_again_once_for_a_person(tmp_path):
+    """The first unreadable line is posted nowhere (a goal run is often brief); one still the latest an hour on is the relay's
+    to ring @top with."""
+    api, clock = FakeApi([{"id": "bc-g", "status": "ACTIVE", "latestRunId": "run-goal-x"}], {}), Clock()
+    w, first = W.Watch(api, tmp_path / "events.jsonl", clock), clock.t
+    for _ in range(3 * 60):
+        w.sweep(lambda r: None)
+        clock.t += 60
+    assert [(r["kind"], r.get("since"), r.get("minutes")) for r in records(tmp_path)] == [
+        ("unreadable", None, None), ("unreadable", W.iso(first), 60)]
+    assert status(tmp_path)["bc-g"]["since"] == W.iso(first)
+
+
 def test_a_run_stuck_in_creating_or_background_work_is_recorded_once_never_cancelled(tmp_path):
     """18 Oct: circuits' latest runs sat in CREATING and WAITING_FOR_BACKGROUND_WORK from 09:49Z."""
     clock = Clock(W.epoch("2026-10-18T18:10:00Z"))
