@@ -1991,3 +1991,17 @@ def test_a_doorbell_shaped_reply_the_router_didnt_post_neither_stops_a_doorbell_
     assert rc == 0 and json.loads(out)["asks"] == []
     assert run(capsys, "deliver", "--ts", post["ts"])[0] == 0
     assert sum(m.get("username") == "router" and m.get("bot_id") == BOT for m in bells(fake, box)) == 1
+
+
+def test_deliver_reads_all_of_the_inboxs_last_hour_so_a_busy_inbox_is_not_rung_twice(fake, registry, routes_dirs, capsys, monkeypatch):
+    """`deliver` read one page of the inbox's last hour: past it, the post's own earlier doorbell went unseen (rung again
+    on each `deliver`), and so did an author's earlier doorbells (the loop cap never tripped)."""
+    monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(1700000100, timezone.utc))
+    box = inbox(fake, routes_dirs, "circuits")
+    for i in range(4):
+        fake.add(COORD, text=f"from lean, thread 1700000000.00009{i}: older", username="router", bot_id=BOT, thread_ts=box)
+    post = fake.add(COORD, text="@circuits is node 2 free?", user="UDANIEL")
+    fake.page = 3
+    for _ in range(3):
+        assert run(capsys, "deliver", "--ts", post["ts"])[0] == 0
+    assert sum(post["ts"] in m["text"] for m in bells(fake, box)) == 1

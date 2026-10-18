@@ -1122,7 +1122,7 @@ def deliver(api: Slack, reg: dict, routes: Routes, ch: str, msg: dict, link: str
         if to == author:
             continue
         try:
-            rung = api.call("conversations.replies", channel=ch, ts=r["inbox_ts"], oldest=f"{now - 3600:.6f}", limit=PAGE).get("messages", [])
+            rung = api.paged("conversations.replies", "messages", channel=ch, ts=r["inbox_ts"], oldest=f"{now - 3600:.6f}")
             rung = [m for m in rung if m.get("ts") != r["inbox_ts"] and is_doorbell(m, reg)]
             if any(_rang(m.get("text") or "", msg.get("ts") or "", link) for m in rung):
                 continue
