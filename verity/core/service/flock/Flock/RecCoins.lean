@@ -129,13 +129,44 @@ def Files.stmt (unit : String) (f : Files) : V (SessionSpec × Stmt) := do
   let some st := sts[0]? | throw s!"rec-coins: {unit}: the inner statement has no table"
   return (spec, st)
 
+/-- A session record's `unit_draw`, when it is a draw (not absent, not null), as `verify` reads it (`Main.recordDraw`). -/
+def recordDraw (record : String) : Option Json :=
+  match Json.parse record with
+  | .ok j => match j.getObjVal? "unit_draw" with
+    | .ok Json.null => none
+    | .ok d => some d
+    | .error _ => none
+  | .error _ => none
+
+/-- The spec a recursive inner session's record decodes against, `spec` and `st` the inner statement's without a draw and
+`setupAt d` the statement at draw `d`: `spec` for a record without a draw, and for a record whose draw proves every one of
+`st`'s units, in order, the drawn statement's spec (the coin server's full draw, `rec_live.full_draw`, which `verify`
+holds to its own law with `--stratified`, `--program` and `--partition`). The drawn statement has `st`'s units, `m` and
+regions; its header carries the draw, so its Σ and Hello are its own. A draw that leaves a unit out is refused: V*
+recurses on an inner session that proves every unit. -/
+def drawnSpec (setupAt : Json → V Stmt) (spec : SessionSpec) (st : Stmt) (record : String) : V SessionSpec := do
+  let some d := recordDraw record | return spec
+  let D ← Draw.UnitDraw.ofJson d
+  if D.proved != Array.range st.n then
+    throw s!"the session's draw proves {D.proved.size} units, not every one of the statement's {st.n} in order"
+  return (← setupAt d).spec
+
+/-- `drawnSpec` at the inner files: the inner statement set up at the record's draw as `Files.stmt` sets it up without one. -/
+def Files.drawnSpec (f : Files) (spec : SessionSpec) (st : Stmt) : V SessionSpec :=
+  RecCoins.drawnSpec (fun d => Stmt.setupHidden innerTags f.circuit f.pub Coins.os [] (some d) (some f.partition) none)
+    spec st f.record
+
 /-- The inner statement as the recursive audit's event reads it (`AcceptsStmt`): set up from its circuit and public files
-on the coin server's coins, with an `m` that `Zk.schedule` accepts, and its session's record decoded. -/
+on the coin server's coins, with an `m` that `Zk.schedule` accepts, and its session's record decoded (at the record's full
+draw when it has one, `Files.drawnSpec`). -/
 def Inner.load (unit : String) (f : Files) : V Inner := do
   let (spec, st) ← f.stmt unit
   if let some i := f.inner then
     if let .error e := RecVStar.checkInnerStmt i st then throw s!"rec-coins: {unit}: {e}"
   if let .error e := Zk.schedule st.m then throw s!"rec-coins: {unit}: the inner statement's schedule: {e}"
+  let spec ← match f.drawnSpec spec st with
+    | .ok s => pure s
+    | .error e => throw s!"rec-coins: {unit}: the inner session's draw: {e}"
   let sess ← match Record.decode spec f.record with
     | .ok s => pure s
     | .error e => throw s!"rec-coins: {unit}: the inner session's record: {e}"
