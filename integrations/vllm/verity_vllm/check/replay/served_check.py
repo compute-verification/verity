@@ -6,6 +6,9 @@ reads and the served weights, by the twin of the Definition the Build bound (`ke
 
   * a call of a piece (`program.calls`): the Embedding, Inductor's norms, SiLU-and-mul, RoPE and q/k norm-RoPE on every row; a GEMM (``mm``) is
     the Definition the step's plan names at (K, N) for the step's M, on `ROWS` sampled rows of each request;
+  * a fused-MoE block's Calls (`acquire.served_moe`): its gate a GEMM as above, its router (`moe_router_rows`) and expert GEMMs (the
+    Definition the step's plan names, by the k16 chain of its step, each (token, slot) pair against its routed expert's weight) on
+    the sampled rows, its SiLU-and-mul and slot sum on every row;
   * an attention op: FA3 over the request's cached keys and values, the committed k and v rows of every step it ran so far, by the
     Definition the plan names for each sampled query row (`Attention_v4`, or `Fa3AttentionSplit_v1` with the split count);
   * the logits: the plan's GEMM on each request's last row of the backbone's output; the sampled id: `TokenSelect_v1` on the
@@ -15,7 +18,7 @@ reads and the served weights, by the twin of the Definition the Build bound (`ke
 
 The step's batch must be the plan's (its requests with their token counts), its committed names exactly the Build's, each value
 of its width.  A check that cannot evaluate a value (no twin for its Definition, an operand missing) fails by name; a FA3 row
-whose dot read a non-finite operand is never claimed exact.
+or an expert pair whose dot read a non-finite operand is never claimed exact.
 
 With a seed (the Commit's, drawn after the values are committed) a request's sampled rows at each step are a uniform draw of
 `ROWS` from that seed's generator, one draw a request a step shared by its GEMMs and its attention ops, and the report carries
@@ -32,14 +35,19 @@ from typing import Any, Callable, Iterable, Mapping
 
 import numpy as np
 
+from verity.ml.circuits.ops.prims import AmpereBF16TcDot16
 from verity_vllm.commit import challenge as CH
+from verity_vllm.program.kernels import dense_rows as DRW
 from verity_vllm.program.kernels import derived_rows as DR
 from verity_vllm.program.kernels import inductor_rows as TW
+from verity_vllm.program.kernels.act_rows import silu_mul_expf_rows
+from verity_vllm.program.kernels.moe_router_rows import moe_router_topk
 from verity_vllm.program.kernels.rows import token_select_first_max
-from verity_vllm.program.registry import b1, cublas_bf16
+from verity_vllm.program.registry import act, b1, cublas_bf16
 from verity_vllm.program.registry import bf16_gemm_check as BC
 from verity_vllm.program.registry import fa3_check_inf as F3
 from verity_vllm.program.registry import inductor as IR
+from verity_vllm.program.registry import moe as MOE
 from verity_vllm.query.manifest.bind import split_name
 from verity_vllm.query.manifest.format import SERVED_FAMILY, SERVED_IDS as IDS, SERVED_LOGITS as LOGITS
 from verity_vllm.query.manifest.format import SERVED_POSITIONS as POSITIONS, SERVED_SAMPLED as SAMPLED
@@ -72,6 +80,15 @@ def _add2(S, x, r1, r2, w):
     return [DR.f2fp_bf16(r), TW.norm_rows(r, w, **S)]
 
 
+def _moe_sum(S, y):
+    """`MoeSum_v1{TOPK,H}` on rows of TOPK x H bf16 words: the slots added in ascending order from +0 in f32, one RNE at the end."""
+    y = y.reshape(len(y), S["TOPK"], S["H"])
+    acc = np.zeros((len(y), S["H"]), np.uint32)
+    for k in range(S["TOPK"]):
+        acc = DR.add_rn(acc, DR.bf16_to_f32_words(y[:, k]))
+    return [DR.f2fp_bf16(acc).astype(np.uint16)]
+
+
 #: each call Definition's twin by family: twin(statics, *operands) -> the values it writes, rows first
 TWINS: dict[str, Callable[..., list[np.ndarray]]] = {
     b1.Embedding.id: lambda S, ids, table: [table[ids.astype(np.int64)]],
@@ -83,7 +100,14 @@ TWINS: dict[str, Callable[..., list[np.ndarray]]] = {
     IR.InductorRoPE.id: lambda S, x, cs: [TW.rope_rows(x.reshape(len(x), S["NHEADS"], S["D"]), cs).reshape(len(x), -1)],
     IR.InductorQKNormRoPE.id: lambda S, x, w, cs: [TW.qk_norm_rope_rows(x.reshape(len(x), S["NHEADS"], S["D"]), w, cs, **S)
                                                    .reshape(len(x), -1)],
+    act.SiluMul.id: lambda S, gu: [silu_mul_expf_rows(gu.reshape(-1, 2 * S["I"]))["out"].reshape(len(gu), -1)],
+    MOE.MoeSum.id: _moe_sum,
 }
+#: each fused-MoE router Definition's `renormalize` (its twin `moe_router_topk`, one row at a time: on the sampled rows)
+ROUTERS: dict[str, bool] = {MOE.MoeRouterTopK.id: False, MOE.MoeRouterTopKNorm.id: True}
+#: each expert GEMM Definition's MUL_ROUTED_WEIGHT (the w2 launch's: its routed weight into the f32 accumulator)
+EXPERTS: dict[str, bool] = {MOE.MoeExpertGemm.id: False, MOE.MoeExpertGemmV2.id: False, MOE.MoeExpertGemmW.id: True,
+                            MOE.MoeExpertGemmWV2.id: True}
 #: each GEMM Definition's twin by family: twin(statics, x (M, K), w (N, K)) -> (M, N)
 GEMMS: dict[str, Callable[..., np.ndarray]] = {
     b1.GemmV2.id: lambda S, x, w: BC.linear_rows(x, w),
@@ -166,6 +190,12 @@ class ServedCheck:
                     v = _verdict(GEMMS[d["base"]](d["statics"], x, w), V[name][some], definition=d["definition"], rows=len(some))
                     self._note(out, name, v, d["base"])
                     continue
+                if "moe" in c:
+                    self._experts(out, c, plan, V, some)
+                    continue
+                if c["base"] in ROUTERS:
+                    self._router(out, c, V, some)
+                    continue
                 twin = TWINS.get(c["base"])
                 if twin is None:
                     raise _Unresolved(f"no twin of {c['definition']}")
@@ -174,7 +204,7 @@ class ServedCheck:
                     self._note(out, w_, _verdict(g, V[w_][every]), c["base"])
             except (_Unresolved, KeyError) as e:
                 for w_ in c["writes"]:
-                    self._note(out, w_, {"ok": False, "why": f"{type(e).__name__}: {e}"}, c.get("base") or "mm")
+                    self._note(out, w_, {"ok": False, "why": f"{type(e).__name__}: {e}"}, c.get("base") or c["op"])
         for a in self.program["attention"]:
             self._attention(out, a, V, spans, req, local)
         self._logits(out, plan, V, spans)
@@ -212,6 +242,45 @@ class ServedCheck:
                 return w[self._operand(ref["row_of"], V, rows).astype(np.int64)]
             return w
         raise _Unresolved(f"operand {ref}")
+
+    def _router(self, out: dict[str, Any], c: dict[str, Any], V: dict[str, np.ndarray], rows: np.ndarray) -> None:
+        S = c["statics"]
+        got = [moe_router_topk(r, E=S["E"], TOPK=S["TOPK"], VPT=S["VPT"], renormalize=ROUTERS[c["base"]])
+               for r in self._operand(c["reads"][0], V, rows)]
+        for k, w_ in enumerate(c["writes"]):
+            want = np.array([g[k] for g in got], np.uint32).reshape(len(rows), S["TOPK"])
+            self._note(out, w_, _verdict(want, V[w_][rows].view(np.uint32), definition=c["definition"], rows=len(rows)), c["base"])
+
+    def _experts(self, out: dict[str, Any], c: dict[str, Any], plan: dict[str, Any], V: dict[str, np.ndarray], rows: np.ndarray) -> None:
+        """A fused_moe_kernel launch on `rows`, the expert GEMM the step's plan names under the call's key: each (token, slot) pair's
+        row (the token's hidden states for w13, its slot's `act` for w2) against its routed expert's weight, by the k16 chain of the
+        Definition's step, the w2 launch's routed weight multiplied into the f32 accumulator before the one bf16 conversion."""
+        d = plan["moe"][c["moe"]]
+        if d["base"] not in EXPERTS:
+            raise _Unresolved(f"no twin of {d['definition']}")
+        E, K, N, routed = d["statics"]["E"], d["statics"]["K"], d["statics"]["N"], EXPERTS[d["base"]]
+        name, wref = c["writes"][0], c["reads"][-1]
+        x = self._operand(c["reads"][0], V, rows)
+        ids = self._operand(c["reads"][1], V, rows).astype(np.int64).reshape(len(rows), -1)
+        w = self.weight(wref["weight"])
+        if list(w.shape) != list(wref["shape"]):
+            raise _Unresolved(f"{wref['weight']} {list(w.shape)}, the Program's {wref['shape']}")
+        e = ids.reshape(-1)
+        if ((e < 0) | (e >= E)).any():
+            raise _Unresolved(f"router ids {sorted(set(e[(e < 0) | (e >= E)].tolist()))[:4]} outside the {E} experts")
+        X = x.reshape(len(rows), -1, K)
+        X = np.repeat(X, ids.shape[1], axis=1).reshape(-1, K) if X.shape[1] == 1 else X.reshape(-1, K)
+        g = self._operand(c["reads"][2], V, rows).reshape(-1).astype(np.uint32) if routed else None
+        dot = d["statics"].get("DOT", AmpereBF16TcDot16.id)
+        want, nonfin = np.empty((len(e), N), np.uint16), np.zeros(len(e), bool)
+        for ex in np.unique(e):
+            at = np.flatnonzero(e == ex)
+            acc, nf = DRW.chain_rows(X[at], w[ex], dot)
+            if g is not None:
+                acc = DR.mul_rn(acc, np.repeat(g[at, None], N, axis=1))
+            want[at], nonfin[at] = DR.f2fp_bf16(acc).astype(np.uint16), nf.any(axis=1)
+        v = _verdict(want, V[name][rows].reshape(-1, N), definition=d["definition"], rows=len(rows), pairs=len(e))
+        self._note(out, name, {**v, "ok": v["ok"] and not nonfin.any(), "nonfinite": int(nonfin.sum())}, d["base"])
 
     def _inputs(self, out: dict[str, Any], V: dict[str, np.ndarray], spans, req) -> None:
         """Positions are each request's token positions; a request's first step reads its prompt (when the check has the
@@ -363,10 +432,11 @@ def population(build: dict[str, Any], rep: dict[str, Any], *, ranks: list[int], 
               "unstated_families": sorted(set(fam) - {SERVED_FAMILY})}
     checks["ok"] = not (outside or without or disagree or checks["unstated_families"]) and checks["ranks"]["equal"] and checks["accounted"]
     qid = build["kind"]
+    sampled = "GEMM, fused-MoE router and expert GEMM" if any("moe" in c for c in prog["calls"]) else "GEMM"
     scope = (f"{qid}(P) = {total} identities ({', '.join(f'{k} {v}' for k, v in sorted(fam.items()))}): one per (engine step, request, "
              f"value) of the served Program; the exact replay reaches {n_reached} ({100.0 * n_reached / max(total, 1):.1f}%): every call "
-             f"on every row, each GEMM and attention op on up to {rep.get('rows_per_request')} drawn rows of each request a step, the "
-             "logits and the sampled id of every request")
+             f"on every row, each {sampled} and attention op on up to {rep.get('rows_per_request')} drawn rows of each request a step, "
+             "the logits and the sampled id of every request")
     return {"query_total": {"source": "the served Build of record (acquire.served)", "query_id": qid, "identities": total,
                             "by_family": dict(sorted(fam.items())), "manifest_digest": build["manifest_digest"],
                             "program_digest": build["program_digest"]},

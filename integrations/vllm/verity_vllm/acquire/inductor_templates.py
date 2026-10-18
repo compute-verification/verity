@@ -43,6 +43,12 @@ class Unmodelled(ValueError):
     """A generated kernel no template models, or one whose decorator or launch config the Definitions were not read for."""
 
 
+def bound(defn: Any, **statics: Any) -> dict[str, Any]:
+    """A Definition at its statics as a step plan names it: its id, its family's id and the statics (a Definition static by id)."""
+    fn = bind(defn, **statics)
+    return {"definition": fn.id, "base": defn.id, "statics": {k: getattr(v, "id", v) for k, v in statics.items()}}
+
+
 @dataclass(frozen=True)
 class Read:
     param: str

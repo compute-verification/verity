@@ -66,7 +66,8 @@ def schedule_of(wl: dict[str, Any]) -> tuple[list[dict[str, Any]], int]:
 
 
 def facts_of(eng: Any) -> dict[str, Any]:
-    """The serving engine's dispatch facts the Build reads (capture sizes, max_num_seqs, the GPU's multiprocessor count)."""
+    """The serving engine's dispatch facts the Build reads (capture sizes, max_num_seqs, the GPU's multiprocessor count, the fused-MoE
+    layers)."""
     import torch
 
     vc = eng.llm.llm_engine.vllm_config
@@ -75,12 +76,58 @@ def facts_of(eng: Any) -> dict[str, Any]:
             "max_num_seqs": vc.scheduler_config.max_num_seqs, "max_num_batched_tokens": vc.scheduler_config.max_num_batched_tokens,
             "max_model_len": vc.model_config.max_model_len, "cache_dir": cc.cache_dir, "device": torch.cuda.get_device_name(),
             "sms": torch.cuda.get_device_properties(0).multi_processor_count,
-            "versions": {"torch": torch.__version__, "cuda": torch.version.cuda}}
+            "versions": {"torch": torch.__version__, "cuda": torch.version.cuda}, "moe": moe_facts(eng.model)}
+
+
+def moe_facts(model: Any) -> dict[str, dict[str, Any]]:
+    """Each fused-MoE layer by its layer name, which is all the opaque `vllm.moe_forward` op the compiled graph calls names: the served
+    names and shapes of its gate, w13 and w2 weights, its router's top_k, renormalize and values per thread, and what the expansion of
+    the op into Calls (`acquire.served_moe`) requires of the block, each a flag: the runner holds the gate and does not fuse it with a
+    shared-expert gate, no shared experts and no routed scaling, the softmax top-k router, modular Triton experts without bias or
+    clamp, SiLU, bf16 weights.  A flag it cannot read is None (refused)."""
+    import torch
+    from vllm.model_executor.layers.fused_moe.runner.moe_runner import MoERunner
+
+    runners = [m for _n, m in model.named_modules() if isinstance(m, MoERunner)]
+    if not runners:
+        return {}
+    from vllm.model_executor.layers.fused_moe.activation import MoEActivation
+    from vllm.model_executor.layers.fused_moe.experts.triton_moe import TritonExperts
+    from vllm.model_executor.layers.fused_moe.router.fused_topk_router import FusedTopKRouter
+
+    from verity_vllm.engine.profiles.generic import router_vpt_bf16
+
+    def flag(test: Callable[[], Any]) -> bool | None:
+        try:
+            return bool(test())
+        except AttributeError:
+            return None
+
+    named = {id(p): n for n, p in model.named_parameters(remove_duplicate=False)}
+    out: dict[str, dict[str, Any]] = {}
+    for m in runners:
+        ex, r, gate = m.routed_experts, m.router, getattr(m, "gate", None)
+        experts = getattr(getattr(ex.quant_method, "moe_kernel", None), "fused_experts", None)
+        w = {"gate": getattr(gate, "weight", None), "w13": ex.w13_weight, "w2": ex.w2_weight}
+        E = int(ex.w13_weight.shape[0])
+        out[str(m.layer_name)] = {
+            **{k: {"weight": named.get(id(t)), "shape": list(t.shape)} if t is not None else None for k, t in w.items()},
+            "E": E, "top_k": int(r.top_k), "renormalize": flag(lambda: r.renormalize), "VPT": router_vpt_bf16(E),
+            "gate_held": gate is not None, "fused_gate": flag(lambda: m._fse_fuse_gate),
+            "shared_experts": flag(lambda: m.shared_experts is not None), "routed_scaling": flag(lambda: m.routed_scaling_factor != 1.0),
+            "softmax_router": flag(lambda: type(r) is FusedTopKRouter and r.scoring_func == "softmax"),
+            "triton_experts": flag(lambda: type(experts) is TritonExperts and not ex.quant_method.is_monolithic),
+            "bias": flag(lambda: experts.w1_bias is not None or experts.w2_bias is not None),
+            "clamp": flag(lambda: experts.activation_config.clamp_limit is not None),
+            "silu": flag(lambda: m.activation == MoEActivation.SILU),
+            "bf16": all(t is not None and t.dtype == torch.bfloat16 for t in w.values())}
+    return out
 
 
 def build_here(src: Any, facts: dict[str, Any], schedule: list[dict[str, Any]], steps: int, out: str) -> dict[str, Any]:
-    """The served Build of this process's compile artifact, its GEMMs' cuBLAS routes probed on this GPU; launch_configs.json and
-    routes.json go to `out`.  Raises `Unmodelled` when the Build refuses the artifact."""
+    """The served Build of this process's compile artifact, its GEMMs' cuBLAS routes probed on this GPU; launch_configs.json,
+    routes.json and, with fused-MoE layers, moe.json (the process's MoE record, `served_moe.expand`) go to `out`.  Raises
+    `Unmodelled` when the Build refuses the artifact."""
     from verity_vllm.acquire import served as SV
 
     configs = src.launch_configs()
@@ -93,18 +140,38 @@ def build_here(src: Any, facts: dict[str, Any], schedule: list[dict[str, Any]], 
         raise UsageError("this process was not given its own compile dirs (engine.env.own_compile_dirs, ops/served_commit.sh)")
     kw = dict(split_graph=graphs[0], launch_configs=configs, schedule=schedule, steps=steps, capture_sizes=facts["cudagraph_capture_sizes"],
               max_num_seqs=facts["max_num_seqs"], sms=facts["sms"])
+    if facts.get("moe"):
+        import torch
+
+        kw["moe"] = {"layers": facts["moe"], "pieces": dict(src.moe_pieces), "configs": src.moe_configs,
+                     "cc": list(torch.cuda.get_device_capability())}
+        json.dump(kw["moe"], open(f"{out}/moe.json", "w"), indent=1)
     build = SV.build(dirs["inductor"], routes={}, **kw)
     routes = SV.probe_routes(build["routes_missing"])
     json.dump(routes, open(f"{out}/routes.json", "w"), indent=1)
     return SV.build(dirs["inductor"], routes=routes, **kw)
 
 
+class _Experts:
+    """A stacked expert weight [E, N, K] whose words are read one expert at a time (`slab[e]`): the whole stack of every layer is
+    more than the host holds."""
+
+    def __init__(self, t: Any) -> None:
+        self.t, self.shape = t, tuple(t.shape)
+
+    def __getitem__(self, e: int) -> Any:
+        return _words(self.t[int(e)])
+
+
 def served_weights(model: Any) -> Callable[[str], Any]:
-    """A served weight's words by its served name (buffers and parameters, tied ones under each name), read once."""
+    """A served weight's words by its served name (buffers and parameters, tied ones under each name), read once; a stacked expert
+    weight (3-d) per expert on each use (`_Experts`)."""
     named = {**dict(model.named_buffers(remove_duplicate=False)), **dict(model.named_parameters(remove_duplicate=False))}
     cache: dict[str, Any] = {}
 
     def weight(name: str) -> Any:
+        if named[name].dim() == 3:
+            return _Experts(named[name])
         if name not in cache:
             cache[name] = _words(named[name])
         return cache[name]

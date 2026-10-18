@@ -9,6 +9,7 @@ What one engine step commits, in one canonical order (piece, sub, index):
     freed, mutation-only, tuple and non-CUDA outputs are not values of the wrapper), so Triton, extern (cuBLAS `out=`), template,
     combo and fallback kernels are all covered -> `c<piece>.<op>/<buf>`;
   * each attention layer's output between pieces (sub 1), from its impl's `forward` -> `c<piece>.attention/<layer>`;
+  * the fused-MoE block's values inside the opaque `vllm.moe_forward` op (sub 2), from its launch sites -> `c<piece>.moe/<plane>`;
   * the logits, outside the compiled model, under the LogitsProcessor's module name (the committer adds the sampled ids).
 
 Three execution paths give the committer the same sequence of (name, bytes):
@@ -175,6 +176,9 @@ class ServedCompiledSource:
         self.inputs: dict[int, list[tuple[int, str]]] = {}
         self.logits_name = "logits_processor"
         self.modules: list[str] = []
+        self.moe_configs: dict[str, dict[str, dict[str, Any]]] = {}     # token rows -> w13 ("False") / w2 ("True") -> Triton config
+        self.moe_pieces: dict[str, str] = {}                            # piece -> the MoE layer its op ran
+        self._moe_rows: int | None = None                               # the token rows of the running MoE block's router
         self.launched: dict[int, tuple[Any, Any]] = {}                  # id -> (autotuner, the config it launched in a step or a capture)
         self.errors: list[str] = []
         self.stats: dict[str, Any] = {}
@@ -270,6 +274,7 @@ class ServedCompiledSource:
         into.wrap(attn.Attention, "__init__", attention_init)
         into.wrap(LogitsProcessor, "forward", logits)
         self._install_launch_record(into)
+        self._install_moe(into)
 
     def _install_launch_record(self, into: hooks.Hooks) -> None:
         """The config each Inductor autotuner launches with in a served step or a capture (`launch_configs`), once per autotuner: the
@@ -297,6 +302,68 @@ class ServedCompiledSource:
             return run
 
         into.wrap(th.CachingAutotuner, "run", tuner_run)
+
+    def _install_moe(self, into: hooks.Hooks) -> None:
+        """The fused-MoE block's values, which the opaque `vllm.moe_forward` op computes out of Inductor's sight: its launch sites
+        (`MoeBlockSource`'s) tap their outputs as `c<piece>.moe/<plane>` (sub 2), token rows: the router's input logits (the gate's
+        output inside the op), weights and ids at `topk_softmax`, `up` at the w13 launch, `act` (its A) and `down` at the w2 launch.
+        `moe_sum` writes the op's return, which the wrapper's own hook commits.  Also recorded for the Build: the MoE layer each
+        piece's op ran (`moe_pieces`, at the runner's `_forward_impl`: the compiled op takes its layer as an opaque argument) and the
+        Triton config of each launch by its token rows and MUL_ROUTED_WEIGHT (`moe_configs`: the expert GEMMs' tensor-core step
+        follows it).  A launch of other rows than its router's (a chunked block) is an error."""
+        import vllm._custom_ops as ops
+        from vllm.model_executor.layers.fused_moe import fused_moe as fm
+        from vllm.model_executor.layers.fused_moe.experts import triton_moe
+        from vllm.model_executor.layers.fused_moe.runner.moe_runner import MoERunner
+
+        src = self
+
+        def forward_impl(orig):
+            def run(self_r, *a, **kw):
+                name = str(self_r.layer_name)
+                if (was := src.moe_pieces.setdefault(str(src.piece), name)) != name:
+                    src.errors.append(f"c{src.piece:02d}: fused-MoE layers {was} and {name}")
+                src._moe_rows = None
+                return orig(self_r, *a, **kw)
+            return run
+
+        def router(orig):
+            def topk_softmax(topk_weights, topk_ids, token_expert_indices, gating_output, *a, **kw):
+                out = orig(topk_weights, topk_ids, token_expert_indices, gating_output, *a, **kw)
+                src._moe_rows = rows = int(gating_output.shape[0])
+                for plane, t in (("logits", gating_output), ("router_w", topk_weights), ("router_ids", topk_ids)):
+                    src._moe_tap(plane, t, rows)
+                return out
+            return topk_softmax
+
+        def expert(orig):
+            def launch(A, B, C, *a, **kw):
+                out = orig(A, B, C, *a, **kw)
+                routed = kw["mul_routed_weight"] if "mul_routed_weight" in kw else (a[6] if len(a) > 6 else None)
+                config = kw["config"] if "config" in kw else (a[8] if len(a) > 8 else None)
+                rows = int(C.shape[0])
+                if rows != src._moe_rows or routed not in (False, True) or not isinstance(config, dict):
+                    src.errors.append(f"c{src.piece:02d}: a fused-MoE launch of {rows} rows (its router's {src._moe_rows}), "
+                                      f"MUL_ROUTED_WEIGHT {routed!r}, config {config!r}")
+                    return out
+                cfg = dict(sorted(config.items()))
+                if src.moe_configs.setdefault(str(rows), {}).setdefault(str(routed), cfg) != cfg:
+                    src.errors.append(f"c{src.piece:02d}: two fused-MoE configs at {rows} rows, MUL_ROUTED_WEIGHT {routed}")
+                if routed:
+                    src._moe_tap("act", A, rows)
+                    src._moe_tap("down", C, rows)
+                else:
+                    src._moe_tap("up", C, rows)
+                return out
+            return launch
+
+        into.wrap(MoERunner, "_forward_impl", forward_impl)
+        into.wrap(ops, "topk_softmax", router)
+        for mod in (fm, triton_moe):
+            into.wrap(mod, "invoke_fused_moe_triton_kernel", expert)
+
+    def _moe_tap(self, plane: str, val: torch.Tensor, rows: int) -> None:
+        self._tap(2, f"c{self.piece:02d}.moe/{plane}", val.reshape(rows, -1))
 
     def remove_hooks(self) -> None:
         """Undo `install_hooks`.  Code Inductor generated while they were installed keeps its hook lines."""
@@ -574,7 +641,8 @@ class ServedCompiledSource:
         return {"short_name": self.short_name, "fault": self.fault, "max_rows": self.max_rows, "slots": len(self.slots),
                 "plans": {f"{m}:{n}": len(p) for (m, n), p in sorted(self.plans.items())}, "codegen": dict(self.codegen),
                 "fixed_shape": {"count": len(fixed), "sample": [f"{n}{list(s)}" for n, s in fixed[:12]]},
-                "stats": dict(self.stats), "errors": list(self.errors)[:20]}
+                "stats": dict(self.stats), "errors": list(self.errors)[:20],
+                **({"moe": {"pieces": dict(self.moe_pieces), "configs": self.moe_configs}} if self.moe_pieces else {})}
 
 
 # ---------------------------------------------------------------------- the linkage check over committed bytes

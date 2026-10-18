@@ -4,7 +4,8 @@ Inductor, FULL_AND_PIECEWISE CUDA graphs, no batch invariance), read from the se
 Each compiled piece is its Inductor wrapper's `call()`, read line by line: a line is one of the forms `_parse_piece` names or the
 Build refuses it.  A Triton launch binds through `acquire.inductor_templates` (its generated source is a template, its launch
 config the one config the process ran, an autotune's winner included); an `extern_kernels.mm` is a cuBLAS GEMM of an activation
-against a served weight; the buffer each writes is a committed value, `run_intermediate_hooks('verity|<op>|<buf>')`
+against a served weight; vLLM's opaque `moe_forward` op is the fused-MoE block, expanded into the Calls it runs (`served_moe`, its
+values committed from inside the op); the buffer each writes is a committed value, `run_intermediate_hooks('verity|<op>|<buf>')`
 (`ServedCompiledSource`), named `c<piece>.<op>/<buf>`, and a write no hook names is refused.  vLLM's split graph
 (`computation_graph.py`) wires the pieces: a piece argument is another piece's return, an attention op's output, a served weight
 (its placeholder's module path under the backbone), the token ids or the positions (`c00.input/ids`, `c00.input/positions`).
@@ -47,11 +48,11 @@ from typing import Any
 
 import numpy as np
 
-from verity.ml.circuits.defs import bind
 from verity.ml.circuits.ops.prims import HopperBF16WgmmaDot16
 from verity_vllm.acquire import compiled as C
 from verity_vllm.acquire import inductor_templates as T
-from verity_vllm.acquire.inductor_templates import Unmodelled
+from verity_vllm.acquire import served_moe as SM
+from verity_vllm.acquire.inductor_templates import Unmodelled, bound
 from verity_vllm.config import UsageError, option
 from verity_vllm.program.kernels import derived_rows as DR
 from verity_vllm.program.kernels import fa3_model as FA3
@@ -76,10 +77,12 @@ ROPES = (IR.InductorRoPE.id, IR.InductorQKNormRoPE.id)
 # ------------------------------------------------------------------------------------------------------------- one wrapper
 _SKIP = [re.compile(p) for p in (r"^#", r"^del \w+(?:, \w+)*$", r"^args\.clear\(\)$", r"^with torch\.cuda\._DeviceGuard\(\d+\):$",
                                  r"^torch\.cuda\.set_device\(\d+\)$", r"^raw_stream\d+ = get_raw_stream\(\d+\)$",
-                                 r"^(\w+) = copy_if_misaligned\(\1\)$")]
+                                 r"^(\w+) = copy_if_misaligned\(\1\)$", r"^assert_alignment\(\w+, \d+, '[^']*'\)$")]
 _ARGS = re.compile(r"^(\w+(?:, \w+)*),? = args$")
 _SYM = re.compile(r"^(s\d+) = (\w+)$")
 _ASSERT = re.compile(r"^assert_size_stride\((\w+), \(([^()]*)\), \(([^()]*)\), 'input'\)$")
+_META = re.compile(r"^assert_(?:size_stride|tensor_metadata)\((\w+), \(([^()]*)\), \(([^()]*)\)(?:, torch\.(\w+))?, '([^']*)'\)$")
+_MOE = re.compile(r"^(\w+) = (torch\.ops\.\w+\.moe_forward\.default)\((.*)\)$")
 _ALLOC = re.compile(r"^(\w+) = empty_strided_cuda\(\(([^()]*)\), \(([^()]*)\), torch\.(\w+)\)$")
 _MM = re.compile(r"^extern_kernels\.mm\((.*), out=(\w+)\)$")
 _HOOK = re.compile(r"^run_intermediate_hooks\('verity\|(\w+)\|(\w+)', (\w+)\)$")
@@ -128,6 +131,7 @@ class _Piece:
         self.values: list[dict[str, Any]] = []
         self.calls: list[dict[str, Any]] = []
         self.kernel_records: dict[str, dict[str, Any]] = {}
+        self.extern: dict[str, str] = {}                    # a buffer an extern op returned -> the op's qualified name
         self.returns: list[dict[str, Any]] | None = None
         body = call_body(src)
         if body is None:
@@ -216,6 +220,12 @@ class _Piece:
         elif m := _ASSERT.match(line):
             self._register(m.group(1), C._dims(m.group(2)), C._dims(m.group(3)))
             self.cur[m.group(1)] = self._base(m.group(1), self.cur[m.group(1)])
+        elif m := _META.match(line):
+            buf, dims, strides, dtype, op = m.group(1), C._dims(m.group(2)), C._dims(m.group(3)), m.group(4), m.group(5)
+            if self.extern.get(buf) != op or self.shape.get(buf) != (dims, strides) or dtype not in (None, "bfloat16"):
+                raise self.fail(f"{line!r}: not the {self.shape.get(buf)} bf16 buffer {self.extern.get(buf)} returned")
+        elif m := _MOE.match(line):
+            self._moe(m.group(1), m.group(2), C._split_args(m.group(3)))
         elif m := _ALLOC.match(line):
             if m.group(4) != "bfloat16":
                 raise self.fail(f"{line!r}: a {m.group(4)} buffer")
@@ -267,6 +277,23 @@ class _Piece:
         if y["width"] != N:
             raise self.fail(f"mm writes {out} of width {y['width']}, the weight has {N} rows")
         self.calls.append({"op": "mm", "gemm": [K, N], "reads": [x, w], "writes": [y["value"]]})
+
+    def _moe(self, out: str, op: str, args: list[str]) -> None:
+        """`out = moe_forward(x, x, None, None, layer, 0)`: the fused-MoE block on x's rows, its gate inside the op (the router logits
+        argument is x), no shared-expert input or token ids, no unpadded width; `layer` an argument (vLLM's opaque layer name) or a
+        string.  The op returns a new buffer of x's shape and mutates x, which no later line may read."""
+        if len(args) != 6 or args[1] != args[0] or args[2:4] != ["None", "None"] or args[5] != "0" or args[0] not in self.shape:
+            raise self.fail(f"{op}({', '.join(args)}): x, x, None, None, a layer, 0 on a buffer of token rows is modelled")
+        x = self.ref(args[0])
+        lit = re.fullmatch(r"'([^']*)'", args[4])
+        layer = {"name": lit.group(1)} if lit else self.ref(args[4])
+        if "width" not in x or "cols" in x or not ("name" in layer or set(layer) == {"arg"}):
+            raise self.fail(f"{op}: hidden states {x}, layer {args[4]}: whole token rows and a layer argument are modelled")
+        self._register(out, *self.shape[args[0]])
+        y = self._new_value(out, "moe_forward")
+        self.extern[out] = op
+        self.calls.append({"op": "moe_forward", "layer": layer, "reads": [x], "writes": [y["value"]]})
+        self.cur[args[0]] = self._base(args[0], {"empty": args[0]})
 
     def _launch(self, name: str, args: list[str]) -> None:
         src = self.kernels.get(name)
@@ -389,6 +416,8 @@ def wire(programs: list[dict[str, Any]], graph: dict[str, Any], *, backbone: str
                 env.append({"weight": served_weight(raw, backbone)})
             elif kind == "sym":
                 env.append({"sym": True})
+            elif kind == "layer_name":
+                env.append({"layer_name": True})
             else:
                 raise Unmodelled(f"piece {p} argument {k} ({raw}): a {kind} argument")
         names = [f"c{p:02d}.{v['name']}" for v in prog["values"]]
@@ -412,8 +441,12 @@ def wire(programs: list[dict[str, Any]], graph: dict[str, Any], *, backbone: str
             values[name] = {"width": v["width"], "piece": p}
         for c in prog["calls"]:
             gc = {**c, "piece": p, "reads": [g(r) for r in c["reads"]], "writes": [names[i] for i in c["writes"]]}
-            if any("empty" in r or "sym" in r for r in gc["reads"]):
+            if any("empty" in r or "sym" in r or "layer_name" in r for r in gc["reads"]):
                 raise Unmodelled(f"piece {p} {c['op']} reads storage no launch wrote")
+            if "layer" in c:
+                gc["layer"] = g(c["layer"])
+                if not ("name" in gc["layer"] or gc["layer"] == {"layer_name": True}):
+                    raise Unmodelled(f"piece {p} {c['op']}: its layer argument is {gc['layer']}, not a layer name")
             calls.append(gc)
             for w in gc["writes"]:
                 producer[w] = gc
@@ -461,12 +494,6 @@ def _layer_of(value: str, producer: dict[str, dict[str, Any]]) -> str:
 
 
 # ------------------------------------------------------------------------------------------------------------- the steps
-def bound(defn: Any, **statics: Any) -> dict[str, Any]:
-    """A Definition at its statics as a step plan names it: its id, its family's id and the statics (a Definition static by id)."""
-    fn = bind(defn, **statics)
-    return {"definition": fn.id, "base": defn.id, "statics": {k: getattr(v, "id", v) for k, v in statics.items()}}
-
-
 def gemm_definition(route: dict[str, Any], K: int, N: int) -> dict[str, Any]:
     if route["kernel"] == "nosplit":
         return bound(b1.GemmV2, K=K, N=N, DOT=DOT)
@@ -523,8 +550,10 @@ def attention_rows(qlen: int, klen: int, NS: int, *, NH: int, KVH: int, D: int, 
 
 
 def step_plans(schedule: list[dict[str, Any]], steps: int, gemms: list[tuple[int, int]], logits_kn: tuple[int, int], heads: tuple[int, int, int],
-               routes: dict[str, Any], *, capture_sizes: list[int], max_num_seqs: int, split_cap: int, sms: int) -> tuple[list[dict[str, Any]], list[list[int]]]:
-    """Each engine step's batch, CUDA-graph mode and the Definitions it selects; and the (M, K, N) GEMM routes `routes` lacks."""
+               routes: dict[str, Any], *, capture_sizes: list[int], max_num_seqs: int, split_cap: int, sms: int,
+               moe: Any = None) -> tuple[list[dict[str, Any]], list[list[int]]]:
+    """Each engine step's batch, CUDA-graph mode and the Definitions it selects (`moe`(M): the fused-MoE expert GEMMs' at M rows,
+    `served_moe.expert_plans`); and the (M, K, N) GEMM routes `routes` lacks."""
     NH, KVH, D = heads
     arrive = {r["request_id"]: r["arrive"] for r in schedule}
     prompt = {r["request_id"]: r["prompt_tokens"] for r in schedule}
@@ -553,7 +582,7 @@ def step_plans(schedule: list[dict[str, Any]], steps: int, gemms: list[tuple[int
                                    for (r, t), k, ns in zip(reqs, klens, sp["NS"])],
                       "fa3": {"BM": sp["BM"], "BN": sp["BN"], "static_splits": sp["static"]},
                       "gemms": {f"{K},{N}": route(M, K, N) for K, N in gemms},
-                      "logits": route(len(reqs), *logits_kn)})
+                      "logits": route(len(reqs), *logits_kn), **({"moe": moe(M)} if moe else {})})
     return plans, sorted(map(list, missing))
 
 
@@ -583,7 +612,9 @@ def identities_of(plans: list[dict[str, Any]], values: dict[str, dict[str, Any]]
 
 def build(inductor_dir: str, *, split_graph: str, launch_configs: dict[str, Any], routes: dict[str, Any], schedule: list[dict[str, Any]],
           steps: int, capture_sizes: list[int], max_num_seqs: int, sms: int, split_cap: int = SPLIT_CAP, backbone: str = "model",
-          lm_head: str = "lm_head.weight", rank: int = 0) -> dict[str, Any]:
+          lm_head: str = "lm_head.weight", rank: int = 0, moe: dict[str, Any] | None = None) -> dict[str, Any]:
+    """The served Build (module docstring); `moe` the serving process's fused-MoE record (`served_moe.expand`), required when a piece
+    calls the fused-MoE op."""
     graph = C.split_graph_wiring(split_graph)
     wrappers = []
     for path in sorted(glob.glob(os.path.join(inductor_dir, "*", "*.py"))):
@@ -602,7 +633,7 @@ def build(inductor_dir: str, *, split_graph: str, launch_configs: dict[str, Any]
                         parse_piece(other["path"], launch_configs) != parsed[w["path"]]:
                     raise Unmodelled(f"{os.path.basename(other['path'])} and {os.path.basename(w['path'])}: one launch signature, two programs")
     programs = [parsed[w["path"]] for w in chosen]
-    wired = wire(programs, graph, backbone=backbone)
+    wired, moe_plans = SM.expand(wire(programs, graph, backbone=backbone), moe)
     final = _final_value(split_graph, graph, wired)
     if not wired["attention"]:
         raise Unmodelled("the split graph has no attention op")
@@ -616,7 +647,7 @@ def build(inductor_dir: str, *, split_graph: str, launch_configs: dict[str, Any]
     V, H = embed["statics"]["V"], wired["values"][final["value"]]["width"]
     gemms = sorted({tuple(c["gemm"]) for c in wired["calls"] if c["op"] == "mm"})
     plans, missing = step_plans(schedule, steps, gemms, (H, V), heads, routes.get("routes") or {}, capture_sizes=capture_sizes,
-                                max_num_seqs=max_num_seqs, split_cap=split_cap, sms=sms)
+                                max_num_seqs=max_num_seqs, split_cap=split_cap, sms=sms, moe=moe_plans)
     kernels = {}
     for prog in programs:
         for rec in prog["kernels"].values():
@@ -706,6 +737,7 @@ class BuildOptions:
     split_cap: int = option("--split-cap", type=int, default=SPLIT_CAP, help="FA3's static split count under a full graph")
     backbone: str = option("--backbone", default="model", help="the compiled backbone's module path (the served weights' prefix)")
     lm_head: str = option("--lm-head", default="lm_head.weight")
+    moe: str | None = option("--moe", default=None, help="the serving process's fused-MoE record (served-match's moe.json)")
     out: str = option("--out")
     cmd: str = field(default="build", init=False)
 
@@ -735,7 +767,7 @@ def main(a: BuildOptions | RoutesOptions) -> int:
         m = build(a.inductor_dir, split_graph=a.split_graph, launch_configs=json.load(open(a.launch_configs)),
                   routes=json.load(open(a.routes)) if a.routes else {}, schedule=C.schedule_of_workload(wl), steps=steps,
                   capture_sizes=_ints(a.capture_sizes), max_num_seqs=a.max_num_seqs, sms=a.sms, split_cap=a.split_cap,
-                  backbone=a.backbone, lm_head=a.lm_head)
+                  backbone=a.backbone, lm_head=a.lm_head, moe=json.load(open(a.moe)) if a.moe else None)
     except Unmodelled as e:
         print(f"[served build] refused: {e}")
         return 3
