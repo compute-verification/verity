@@ -47,7 +47,7 @@ gpu-lease 1 --wait --max-min 14 ${LEASE_ARGS:-} -- bash -c '
   nvidia-smi --query-gpu=index,uuid,name,driver_version,clocks.sm,clocks.max.sm,power.limit,memory.used --format=csv -i "$GPU_LEASE_UUID" > "$O/gpu.txt" 2>&1
   "$W/sharaw" selftest > "$O/selftest.jsonl"; s=$?
   ok=$s
-  for f in 0 1 2 3 4 5; do
+  for f in 0 1 2 3 4 5 6 7 8; do
     SHARAW_FORM=$f python3 $D/check.py check "$W/sharaw" "$W/cases" form$f > "$O/check-form$f.jsonl" 2> "$O/check-form$f.err"; c=$?
     echo "check form$f rc $c" >> "$O/rc.txt"
     [ $c = 0 ] || ok=1
@@ -66,14 +66,14 @@ if [ "${PROF:-1}" = 1 ]; then
   # shellcheck disable=SC2016,SC2086
   gpu-lease 1 --wait --max-min 12 ${LEASE_ARGS:-} -- bash -c '
     for n in $DECODE_N $PREFILL_N; do
-      for a in commit_gpu native_rows v2_par_s2 v2_par_fold; do
+      for a in commit_gpu native_rows v3_salt_s2 v3s_fold; do
         [ $a = native_rows ] && [ -z "$SO" ] && continue
         nsys profile -t cuda -o "$W/t-$a-$n" --force-overwrite true "$W/sharaw" nsys "$W/p-$n.bin" $n $a $SO > /dev/null 2>> "$O/nsys.err"
         nsys stats -r cuda_gpu_trace -f csv -o "$O/nsys-$a-$n" "$W/t-$a-$n.nsys-rep" >> "$O/nsys.err" 2>&1
         echo "nsys $a $n rc $?" >> "$O/rc.txt"
       done
     done
-    for a in commit_gpu native_rows v2_par_s2 v2_par_fold; do
+    for a in commit_gpu native_rows v3_salt_s2 v3s_fold; do
       [ $a = native_rows ] && [ -z "$SO" ] && continue
       ncu --set basic --section WarpStateStats --section SchedulerStats --section Occupancy --section ComputeWorkloadAnalysis \
         --section MemoryWorkloadAnalysis -k regex:"salt|leaf|level|node|sr_" --launch-count 6 --csv --page details \

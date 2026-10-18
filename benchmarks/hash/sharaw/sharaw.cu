@@ -206,6 +206,122 @@ __global__ void __launch_bounds__(TPB, MINB)
   }
 }
 
+// --- v3: v2 with every compression through one of two non-inlined bodies --------------------------------------------------
+// commit_gpu's helpers inline a compression at each call, and those that switch on a length (frame leaf, pad, node) one per
+// length: a leaf kernel built from them holds some 25 copies, so warps in different phases fetch different code. Here a
+// block whose words the host fixed (compress_from's prefix) is hashed whole instead, which costs a few rounds a leaf.
+__device__ __noinline__ void cmp(u64* st, u64* w) { sha::compress(st, w); }
+__device__ __noinline__ void cmp_kw(u64* st, const u64* kw) { sha::compress_kw(st, kw); }
+
+template <int NB>
+DEV void f_first_nb(u64 pos, u64* out) {
+  u64 W[16];
+#pragma unroll
+  for (int i = 0; i < 16; ++i) W[i] = CD[0].fl_tpl[NB][i];
+  or_be<121, NB>(W, pos);
+  sha::iv(out);
+  cmp(out, W);
+}
+template <int NB>
+DEV void f_second_nb(u64 pos, const u64* h, u64* out) {
+  u64 W[32];
+#pragma unroll
+  for (int i = 16; i < 32; ++i) W[i] = CD[0].fl_tpl[NB][i];
+  or_be<129 + NB, NB>(W, pos);
+  or_digest<163 + 2 * NB>(W, h);
+  cmp(out, W + 16);
+}
+template <int NB>
+DEV void pad_nb3(u64 rank, u64* out) {
+  u64 W[16];
+#pragma unroll
+  for (int i = 0; i < 16; ++i) W[i] = CD[0].pad_tpl[NB][i];
+  or_be<120, NB>(W, rank);
+  sha::iv(out);
+  cmp(out, W);
+#pragma unroll
+  for (int i = 0; i < 15; ++i) W[i] = 0;
+  W[15] = (120 + NB) * 8;
+  cmp(out, W);
+}
+template <int NI>
+DEV void node_ni3(int level, u64 index, const u64* L, const u64* R, u64* out) {
+  u64 W[32];
+#pragma unroll
+  for (int i = 0; i < 32; ++i) W[i] = CD[0].node_tpl[NI][i];
+  or_be<2, NI>(W, index);
+  or_digest<10 + NI>(W, L);
+  or_digest<82 + NI>(W, R);
+  cpy8(out, CD[0].node_mid[level]);
+  cmp(out, W);
+  cmp(out, W + 16);
+}
+#define SR_BY_LEN(v, F, ...)                     \
+  switch (nbytes(v)) {                           \
+    case 1: F<1>(__VA_ARGS__); break;            \
+    case 2: F<2>(__VA_ARGS__); break;            \
+    case 3: F<3>(__VA_ARGS__); break;            \
+    default: F<4>(__VA_ARGS__); break;           \
+  }
+DEV void f_first3(u64 pos, u64* out) { SR_BY_LEN(pos, f_first_nb, pos, out) }
+DEV void f_second3(u64 pos, const u64* h, u64* out) { SR_BY_LEN(pos, f_second_nb, pos, h, out) }
+DEV void pad3(u64 rank, u64* out) { SR_BY_LEN(rank, pad_nb3, rank, out) }
+DEV void node3(int level, u64 index, const u64* L, const u64* R, u64* out) { SR_BY_LEN(index, node_ni3, level, index, L, R, out) }
+
+DEV void salt3(u64 pos, const uint4* T, u64* my, u64* c) {
+  u64 Y[24];
+  u32 m[16];
+#pragma unroll 1
+  for (int r = 0; r < 3; ++r) {
+    u64 w[16], s[8];
+#pragma unroll
+    for (int i = 0; i < 8; ++i) w[i] = C.ks[i];
+    w[8] = pos; w[9] = r; w[10] = 0x8000000000000000ull;
+    w[11] = w[12] = w[13] = w[14] = 0;
+    w[15] = 80 * 8;
+    sha::iv(s);
+    cmp(s, w);
+#pragma unroll
+    for (int i = 0; i < 8; ++i) Y[8 * r + i] = s[i];
+  }
+  mask_smem(T, Y, m);
+  u64 w[16];
+  cpy8(c, C.mid_salt);
+#pragma unroll
+  for (int i = 0; i < 16; ++i) w[i] = Y[i];
+  cmp(c, w);
+#pragma unroll
+  for (int i = 0; i < 8; ++i) w[i] = Y[16 + i];
+  w[8] = 0x8000000000000000ull;
+#pragma unroll
+  for (int i = 9; i < 15; ++i) w[i] = 0;
+  w[15] = (128 + 192) * 8;
+  cmp(c, w);
+#pragma unroll
+  for (int i = 0; i < 8; ++i) my[i] = (u64)bswap32(m[2 * i]) << 32 | bswap32(m[2 * i + 1]);
+}
+DEV void row3(const uint8_t* __restrict__ p, u64* x) {
+  cpy8(x, C.mid_P);
+#pragma unroll 1
+  for (int b = 0; b < NBLK; ++b) {
+    u64 W[16];
+#pragma unroll
+    for (int c = 0; c < 8; ++c) {
+      const uint4 v = ldg16(p + 128 * b + 16 * c);
+      W[2 * c] = be64(v.x, v.y);
+      W[2 * c + 1] = be64(v.z, v.w);
+    }
+    cmp(x, W);
+  }
+  cmp_kw(x, C.kw_xpad);
+}
+
+template <bool U>
+DEV void node_any(int level, u64 index, const u64* L, const u64* R, u64* out) {
+  if constexpr (U) node3(level, index, L, R, out);
+  else node(0, level, index, L, R, out);
+}
+
 // --- v2: the salt fused into the leaf, the tree as wide multi-level launches and one fold-and-climb launch ----------------
 
 // y_r (3 compressions from round 8), M_key y (the nibble table in shared memory) and c = SHA-512(salt_prefix || y)
@@ -222,6 +338,7 @@ DEV void salt_regs(u64 pos, const uint4* T, u64* my, u64* c) {
 // Nodes at levels d0 + 1 .. depth above `o`, node i of level d0 (blockDim.x = min(width >> d0, TPB) threads a CTA, one a
 // node): the warp folds its own aligned subtree through shuffles, then lane 0 climbs; at each level above, the second of
 // two sibling subtrees to finish (an atomic count a parent) folds the parent and goes on.
+template <bool U>
 DEV void fold_climb(u64* o, u64 i, int d0, u64 width, int depth, u64* levels, u32* ctr) {
   const u32 lane = threadIdx.x & 31, wsz = blockDim.x < 32 ? blockDim.x : 32;
   const unsigned mask = wsz == 32 ? 0xFFFFFFFFu : (1u << wsz) - 1;
@@ -233,7 +350,7 @@ DEV void fold_climb(u64* o, u64 i, int d0, u64 width, int depth, u64* levels, u3
     for (int k = 0; k < 8; ++k) p[k] = __shfl_xor_sync(mask, o[k], 1 << (l - 1));
     if ((lane & ((1u << l) - 1)) == 0) {
       u64 r[8];
-      node(0, d0 + l - 1, i >> l, o, p, r);
+      node_any<U>(d0 + l - 1, i >> l, o, p, r);
       cpy8(o, r);
       st8(level_at(levels, width, d0 + l) + 8 * (i >> l), o);
     }
@@ -251,8 +368,8 @@ DEV void fold_climb(u64* o, u64 i, int d0, u64 width, int depth, u64* levels, u3
     __threadfence();
     u64 sib[8], r[8];
     ld8cg(level_at(levels, width, l) + 8 * (idx ^ 1), sib);
-    if (idx & 1) node(0, l, p, sib, o, r);
-    else node(0, l, p, o, sib, r);
+    if (idx & 1) node_any<U>(l, p, sib, o, r);
+    else node_any<U>(l, p, o, sib, r);
     st8(level_at(levels, width, l + 1) + 8 * p, r);
     cpy8(o, r);
     idx = p;
@@ -297,34 +414,104 @@ __global__ void __launch_bounds__(TPB, MINB)
     pad(0, pos, o);
   }
   st8(levels + 8 * pos, o);
-  if constexpr (FOLD) fold_climb(o, pos, 0, width, depth, levels, ctr);
+  if constexpr (FOLD) fold_climb<false>(o, pos, 0, width, depth, levels, ctr);
 }
 
 // node idx of level d + K from level d's nodes, every node between stored
-template <int K>
+template <int K, bool U>
 DEV void sub_rec(u64* levels, u64 width, int d, u64 idx, u64* out) {
   if constexpr (K == 0) {
     ld8(level_at(levels, width, d) + 8 * idx, out);
   } else {
     u64 a[8], b[8];
-    sub_rec<K - 1>(levels, width, d, 2 * idx, a);
-    sub_rec<K - 1>(levels, width, d, 2 * idx + 1, b);
-    node(0, d + K - 1, idx, a, b, out);
+    sub_rec<K - 1, U>(levels, width, d, 2 * idx, a);
+    sub_rec<K - 1, U>(levels, width, d, 2 * idx + 1, b);
+    node_any<U>(d + K - 1, idx, a, b, out);
     st8(level_at(levels, width, d + K) + 8 * idx, out);
   }
 }
-template <int K>
+template <int K, bool U>
 __global__ void __launch_bounds__(256) sr_sub(u64* levels, u64 width, int d) {
   const u64 i = (u64)blockIdx.x * blockDim.x + threadIdx.x;
   if (i >= width >> (d + K)) return;
   u64 o[8];
-  sub_rec<K>(levels, width, d, i, o);
+  sub_rec<K, U>(levels, width, d, i, o);
 }
+template <bool U>
 __global__ void __launch_bounds__(256) sr_tree(u64* levels, u64 width, int depth, int d0, u32* ctr) {
   const u64 i = (u64)blockIdx.x * blockDim.x + threadIdx.x;
   u64 o[8];
   ld8(level_at(levels, width, d0) + 8 * i, o);
-  fold_climb(o, i, d0, width, depth, levels, ctr);
+  fold_climb<U>(o, i, d0, width, depth, levels, ctr);
+}
+
+template <int TPB, int MINB, int ORDER, bool FOLD>
+__global__ void __launch_bounds__(TPB, MINB)
+    sr_leaf3(const uint8_t* __restrict__ rows, const uint4* __restrict__ Tn, u64 n, u64 width, int depth, u64* levels, u32* ctr,
+             u64* __restrict__ bc) {
+  __shared__ uint4 T[512];
+  for (int i = threadIdx.x; i < 512; i += blockDim.x) T[i] = Tn[i];
+  __syncthreads();
+  const u64 pos = (u64)blockIdx.x * blockDim.x + threadIdx.x;
+  u64 o[8];
+  if (pos < n) {
+    const bool salt_first = ORDER == 0 || (ORDER == 2 && !((threadIdx.x >> 5) & 1));
+    u64 x[8], my[8], c[8];
+    if (salt_first) {
+      salt3(pos, T, my, c);
+      row3(rows + pos * LB, x);
+    } else {
+      row3(rows + pos * LB, x);
+      salt3(pos, T, my, c);
+    }
+    u64 B[16], h[8];
+#pragma unroll
+    for (int k = 0; k < 8; ++k) { B[k] = x[k] ^ my[k]; B[8 + k] = c[k]; }
+    if (bc) {
+      st8(bc + 16 * pos, B);
+      st8(bc + 16 * pos + 8, B + 8);
+    }
+    cpy8(h, C.mid_leaf);
+    cmp(h, B);
+    cmp_kw(h, C.kw_leafpad);
+    f_first3(pos, o);
+    f_second3(pos, h, o);
+  } else {
+    pad3(pos, o);
+  }
+  st8(levels + 8 * pos, o);
+  if constexpr (FOLD) fold_climb<true>(o, pos, 0, width, depth, levels, ctr);
+}
+
+// v3s: v1's split (sr_salt ahead, nothing of it on the data's path) with v3's data kernel: S[pos] and F[pos] from the salt
+// kernel, the pads already in level 0
+template <bool FOLD>
+__global__ void __launch_bounds__(256, 2)
+    sr_data3(const uint8_t* __restrict__ rows, u64 n, u64 width, int depth, const u64* __restrict__ S, const u64* __restrict__ F,
+             u64* levels, u32* ctr, u64* __restrict__ bc) {
+  const u64 pos = (u64)blockIdx.x * blockDim.x + threadIdx.x;
+  u64 o[8];
+  if (pos < n) {
+    u64 x[8], B[16], h[8];
+    row3(rows + pos * LB, x);
+    ld8(S + 16 * pos, B);
+    ld8(S + 16 * pos + 8, B + 8);
+#pragma unroll
+    for (int k = 0; k < 8; ++k) B[k] ^= x[k];
+    if (bc) {
+      st8(bc + 16 * pos, B);
+      st8(bc + 16 * pos + 8, B + 8);
+    }
+    cpy8(h, C.mid_leaf);
+    cmp(h, B);
+    cmp_kw(h, C.kw_leafpad);
+    ld8(F + 8 * pos, o);
+    f_second3(pos, h, o);
+    st8(levels + 8 * pos, o);
+  } else {
+    ld8(levels + 8 * pos, o);
+  }
+  if constexpr (FOLD) fold_climb<true>(o, pos, 0, width, depth, levels, ctr);
 }
 
 struct Mine {
@@ -335,7 +522,7 @@ struct Mine {
   uint4* Tn = nullptr;
   // v2 launches: the leaf kernel; K = 3 launches from level d while (width >> (d + 3)) >= minw, at most `subs` of them;
   // then sr_tree from there. ev: an event after each launch.
-  template <int ORDER, bool FOLD>
+  template <int ORDER, bool FOLD, bool U = false>
   void v2(const uint8_t* rows, cudaStream_t st, int subs, u64 minw, std::vector<cudaEvent_t>* ev = nullptr,
           std::vector<std::string>* names = nullptr, u64* bc = nullptr) {
     auto mark = [&](std::string nm) {
@@ -343,19 +530,23 @@ struct Mine {
       if (names) names->push_back(nm);
     };
     const u32 cnt = (u32)std::min<u64>(width, 256);
-    sr_leaf<256, 2, ORDER, FOLD><<<(unsigned)(width / cnt), cnt, 0, st>>>(rows, Tn, n, width, depth, levels, ctr, bc);
+    if constexpr (ORDER == 3) {   // v3s: the salt kernel, then the data kernel
+      salts(st);
+      sr_data3<FOLD><<<(unsigned)(width / cnt), cnt, 0, st>>>(rows, n, width, depth, S, F, levels, ctr, bc);
+    } else if constexpr (U) sr_leaf3<256, 2, ORDER, FOLD><<<(unsigned)(width / cnt), cnt, 0, st>>>(rows, Tn, n, width, depth, levels, ctr, bc);
+    else sr_leaf<256, 2, ORDER, FOLD><<<(unsigned)(width / cnt), cnt, 0, st>>>(rows, Tn, n, width, depth, levels, ctr, bc);
     mark("leaf");
     if (FOLD) return;
     int d = 0;
     for (int s = 0; s < subs && d + 3 <= depth && (width >> (d + 3)) >= minw; ++s, d += 3) {
       const u64 m = width >> (d + 3);
-      sr_sub<3><<<(unsigned)((m + 255) / 256), 256, 0, st>>>(levels, width, d);
+      sr_sub<3, U><<<(unsigned)((m + 255) / 256), 256, 0, st>>>(levels, width, d);
       mark("sub3_from_" + std::to_string(d));
     }
     if (d < depth) {
       const u64 m = width >> d;
       const u32 c = (u32)std::min<u64>(m, 256);
-      sr_tree<<<(unsigned)(m / c), c, 0, st>>>(levels, width, depth, d, ctr);
+      sr_tree<U><<<(unsigned)(m / c), c, 0, st>>>(levels, width, depth, d, ctr);
       mark("tree_from_" + std::to_string(d));
     }
   }
@@ -512,11 +703,14 @@ static int check(int argc, char** argv) {
   const u64 minw = mw ? strtoull(mw, nullptr, 10) : 1;   // 1: the K = 3 launches run even on the small cases
   for (int rep = 0; rep < 2; ++rep) {   // twice: the climb's counts must come back to zero
     switch (f) {
-      case 1: me.v2<2, false>(d, 0, 2, minw, nullptr, nullptr, bc); break;
-      case 2: me.v2<0, true>(d, 0, 0, minw, nullptr, nullptr, bc); break;
-      case 3: me.v2<1, false>(d, 0, 1, minw, nullptr, nullptr, bc); break;
-      case 4: me.v2<2, true>(d, 0, 0, minw, nullptr, nullptr, bc); break;
-      case 5: me.v2<2, false>(d, 0, 0, minw, nullptr, nullptr, bc); break;
+      case 1: me.v2<0, false>(d, 0, 2, minw, nullptr, nullptr, bc); break;
+      case 2: me.v2<0, false, true>(d, 0, 2, minw, nullptr, nullptr, bc); break;
+      case 3: me.v2<2, false, true>(d, 0, 1, minw, nullptr, nullptr, bc); break;
+      case 4: me.v2<1, true, true>(d, 0, 0, minw, nullptr, nullptr, bc); break;
+      case 5: me.v2<2, true, true>(d, 0, 0, minw, nullptr, nullptr, bc); break;
+      case 6: me.v2<0, false, true>(d, 0, 0, minw, nullptr, nullptr, bc); break;
+      case 7: me.v2<3, false, true>(d, 0, 2, minw, nullptr, nullptr, bc); break;
+      case 8: me.v2<3, true, true>(d, 0, 0, minw, nullptr, nullptr, bc); break;
       default: me.salts(0); me.data<256, 2, false>(d, 0, bc); break;
     }
   }
@@ -585,16 +779,17 @@ static int bench(int argc, char** argv, bool nsys_mode) {
   if (have_nat) arms.push_back({"native_rows", true, [&](cudaStream_t s) { nat.run(src, s); }, comps});
   arms.push_back({"sharaw_v1", true, [&](cudaStream_t s) { me.salts(s); me.data<256, 2, false>(src, s); }, comps});
   const u64 MINW = 4096;   // a K = 3 launch only while it has at least this many threads
-#define V2(NAME, ORDER, FOLD, SUBS) \
-  arms.push_back({NAME, true, [&](cudaStream_t s) { me.v2<ORDER, FOLD>(src, s, SUBS, MINW); }, comps})
-  V2("v2_par_s2", 2, false, 2);
-  V2("v2_salt_s2", 0, false, 2);
-  V2("v2_row_s2", 1, false, 2);
-  V2("v2_par_s1", 2, false, 1);
-  V2("v2_par_s0", 2, false, 0);
-  V2("v2_par_fold", 2, true, 0);
-  V2("v2_salt_fold", 0, true, 0);
-  V2("v2_row_fold", 1, true, 0);
+#define V2(NAME, ORDER, FOLD, SUBS, U) \
+  arms.push_back({NAME, true, [&](cudaStream_t s) { me.v2<ORDER, FOLD, U>(src, s, SUBS, MINW); }, comps})
+  V2("v2_salt_s2", 0, false, 2, false);
+  V2("v3_salt_s2", 0, false, 2, true);
+  V2("v3_par_s2", 2, false, 2, true);
+  V2("v3_row_s2", 1, false, 2, true);
+  V2("v3_salt_s1", 0, false, 1, true);
+  V2("v3_salt_fold", 0, true, 0, true);
+  V2("v3_par_fold", 2, true, 0, true);
+  V2("v3s_s2", 3, false, 2, true);
+  V2("v3s_fold", 3, true, 0, true);
 #undef V2
   u64* io;
   const int rt = 256, rb = prop.multiProcessorCount * 8, chain = 256;
@@ -757,12 +952,12 @@ static int bench(int argc, char** argv, bool nsys_mode) {
         spin<<<1, 1, 0, st>>>(SPIN);
         CK(cudaEventRecord(e0, st));
         nm.clear();
-        me.v2<2, false>(src, st, 2, MINW, &ev, &nm);
+        me.v2<0, false, true>(src, st, 2, MINW, &ev, &nm);
         CK(cudaEventSynchronize(ev[nm.size() - 1]));
         seg[0].push_back(ms(e0, ev[0]));
         for (size_t j = 1; j < nm.size(); ++j) seg[j].push_back(ms(ev[j - 1], ev[j]));
       }
-      printf("{\"split\": \"v2_par_s2\", \"parts\": {");
+      printf("{\"split\": \"v3_salt_s2\", \"parts\": {");
       for (size_t j = 0; j < nm.size(); ++j) printf("%s\"%s\": %.4f", j ? ", " : "", nm[j].c_str(), median(seg[j]));
       printf("}}\n");
     }
