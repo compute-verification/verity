@@ -242,7 +242,7 @@ class RowsW64Arm(RowsArm):
 
 class RowsCapArm(RowsArm):
     """The rows arm hashing each window in launches of at most PROF_ROWS_CAP (default 32) blocks while two ring slots are free (the
-    committer's VERITY_ROWS_CAP_BLOCKS policy): the same bytes, with the other SMs left to serving."""
+    committer's rows_cap_blocks policy): the same bytes, with the other SMs left to serving."""
 
     def ready(self, target: Any) -> None:
         import os

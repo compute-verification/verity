@@ -428,7 +428,8 @@ class NativeCollectCommitter(NativeHostCommitter):
 
     def __init__(self, engine: Any, *, wrap: bool = True, profile: bool = False, build_dir: str | None = None, check_sizes: bool = True,
                  gather: bool = False, native_hooks: bool = False, auto_blocks: bool = False, native_worker: bool = False,
-                 layout: str = "chunk-leaf-v1", retain_levels: bool | None = None, commit_scheme: str | None = None, **kw: Any) -> None:
+                 layout: str = "chunk-leaf-v1", retain_levels: bool | None = None, commit_scheme: str | None = None,
+                 rows_cap_blocks: int = 0, rows_cap_free: int = 2, **kw: Any) -> None:
         kw.setdefault("fast_copy", True)
         kw.setdefault("gpu_tree", True)
         super().__init__(engine, **kw)
@@ -451,10 +452,10 @@ class NativeCollectCommitter(NativeHostCommitter):
         win_mb = os.environ.get("VERITY_WINDOW_MB", "").strip() or window_mb_default(self.native_worker and self.gather, self.retain)
         self.win_bytes = int(float(win_mb) * (1 << 20)) // 256 * 256
         self.win_slots_req = int(os.environ.get("VERITY_WINDOW_SLOTS", WINDOW_SLOTS))
-        # rows-sha512: VERITY_ROWS_CAP_BLOCKS=<n> (0 = off) hashes a window in launches of at most n blocks while at least
-        # VERITY_ROWS_CAP_FREE ring slots are free (the serving thread is not waiting for one), leaving the other SMs to serving
-        self.rows_cap_blocks = int(os.environ.get("VERITY_ROWS_CAP_BLOCKS", 0))
-        self.rows_cap_free = int(os.environ.get("VERITY_ROWS_CAP_FREE", 2))
+        # rows-sha512: rows_cap_blocks=<n> (0 = off) hashes a window in launches of at most n blocks while at least rows_cap_free ring
+        # slots are free (the serving thread is not waiting for one), leaving the other SMs to serving
+        self.rows_cap_blocks = int(rows_cap_blocks)
+        self.rows_cap_free = int(rows_cap_free)
         self.windowed = self.win_bytes > 0 and self.native_worker and self.gather
         if self.win_bytes > 0 and not self.windowed:
             raise ValueError("windowed staging needs native_collect_v2b (native worker + gather)")

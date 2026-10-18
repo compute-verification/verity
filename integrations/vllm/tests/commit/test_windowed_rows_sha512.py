@@ -81,7 +81,7 @@ def test_learning_and_hit_runs_commit_step_rows_roots(monkeypatch, retain_levels
 
 
 def test_capped_runs_commit_step_rows_roots(monkeypatch):
-    """VERITY_ROWS_CAP_BLOCKS's policy on the worker (each window capped while the ring has room; test_rows_cuda splits launches)."""
+    """rows_cap_blocks's policy on the worker (each window capped while the ring has room; test_rows_cuda splits launches)."""
     com = committer(monkeypatch)
     com.rows_cap_blocks, com.rows_cap_free = 1, 0
     try:
