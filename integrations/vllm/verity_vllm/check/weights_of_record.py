@@ -798,6 +798,18 @@ def component_program_dirs(programs_root: str) -> list[str]:
     return out
 
 
+def post_load_tensors(builds: dict[int, str]) -> dict[str, list[str]]:
+    """Per rank, the names its Build registered as Parameters from the loader's post-load hook (`result.json` `post_load_tensors`, over
+    every component Program of the rank's Build): what `tp2_commit_make` registers on the served model before reading its weights."""
+    out = {}
+    for r, b in builds.items():
+        names: set[str] = set()
+        for d in component_program_dirs(str(b)):
+            names |= set((json.loads((Path(d) / "result.json").read_text()).get("post_load_tensors") or {}).get("parameters") or {})
+        out[str(r)] = sorted(names)
+    return out
+
+
 def stamp_of_record_set(record: dict[str, Any], programs_root: str, *, manifest: str | None = None) -> dict[str, Any]:
     """[rev-cb M-0733 hardening of hopper M-0723] Stamp the WHOLE of-record set on the record instead of one arbitrary component's digest:
     every component Program under `programs_root` (build_request_LP*_T* + build_request) + the workload digest (build_workload/

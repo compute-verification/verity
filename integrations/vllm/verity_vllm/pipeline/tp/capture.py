@@ -114,7 +114,7 @@ def main(args: Options) -> None:
 
     from verity_vllm.pipeline.tp import lease as TPL
 
-    from verity_vllm.pipeline.tp.commit import post_load_tensors
+    from verity_vllm.check.weights_of_record import post_load_tensors
 
     if args.build_rank and len(args.build_rank) != args.tp:
         raise SystemExit(f"--build-rank given {len(args.build_rank)} time(s) for a world of {args.tp}: one Build dir per rank, in rank order")

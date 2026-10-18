@@ -98,18 +98,6 @@ def weights_as_loaded(pin: dict | None) -> partial | None:
                                                     checkpoints_manifest=pin["checkpoints_manifest"], model=pin["model"]))
 
 
-def post_load_tensors(builds: dict[int, str]) -> dict[str, list[str]]:
-    """Per rank, the names its Build registered as Parameters from the loader's post-load hook (`result.json` `post_load_tensors`, over
-    every component Program of the rank's Build): what `tp2_commit_make` registers on the served model before reading its weights."""
-    out = {}
-    for r, b in builds.items():
-        names: set[str] = set()
-        for d in WR.component_program_dirs(str(b)):
-            names |= set((json.loads((Path(d) / "result.json").read_text()).get("post_load_tensors") or {}).get("parameters") or {})
-        out[str(r)] = sorted(names)
-    return out
-
-
 def parse_serve_shard_from(specs: list[str] | None, world: int) -> dict[str, list[dict]] | None:
     """NEGATIVE (R16 tp TP-10): `<rank>:<served param name>:<from_rank>` specs -> {rank: [{"param", "from_rank"}]}; `0:X:1 1:X:0` = the two
     ranks swap their shards of X.  from_rank must be ANOTHER rank of the world (a rank serving its own shard is the positive, refused here)."""
@@ -396,7 +384,7 @@ def main(args: Options) -> int:
                                           "tp_relabel": relabel, "tp_partials_omit_rank": args.omit_rank_partials,
                                           "match_tokens": match_tokens, "tp_swap_requests": swap_requests, "match_capture_dir": match_capture_dir, "replay": replay_cfg,
                                           "weights_pin": weights_pin_cfg, "flip_weight": flip_weight, "serve_shard_from": serve_shard_from, "tap_sources": TAPS.for_ranks(args.tap_sources),
-                                          "weights_as_loaded": weights_as_loaded(weights_pin_cfg), "post_load_tensors": post_load_tensors(builds),
+                                          "weights_as_loaded": weights_as_loaded(weights_pin_cfg), "post_load_tensors": WR.post_load_tensors(builds),
                                           "tp_partials_flip_site": ({args.flip_partial.split(":", 1)[0]: args.flip_partial.split(":", 1)[1]} if args.flip_partial else None),
                                           "tp_partials_omit_site": ({args.omit_partial_site.split(":", 1)[0]: args.omit_partial_site.split(":", 1)[1]} if args.omit_partial_site else None),
                                           "engine_kwargs": {k: v for k, v in kw.items() if k not in ("model", "tokenizer", "worker_extension_cls")}})
