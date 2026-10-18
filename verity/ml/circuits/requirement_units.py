@@ -35,7 +35,8 @@ append leaf's (`hm96-sha512/row/v2` of the same 4,096 bytes under the same salt:
 is a function of its instance's payload rows' ``b || c`` and its public ``first`` and ``count``. The chain over the steps'
 appends is then the record's (remote_bandwidth's `Record.appends`): no dummy append, none out of the map's order, no re-key the
 map doesn't write. That is checked on the commitments, outside the circuit, with no gate. An append's coin ``c_a`` isn't read
-here: it keys the block's encoding, which the opening's decode checks against the same leaf.
+here: it keys the block's encoding, which the opening's decode checks against the same leaf (under zero knowledge, the
+block-decode unit's payload-against-digest check, with ``c_a`` a public input beside the append's root and count).
 
 **PlanMatch**, at step t: the blocks t reads are the registered ones its structural reads hold (``regmask``, bit j block j
 for j < NR), the block of each gathered table row (``gmask``'s bit g for each of the G gathers: the table's row ``tok[g]``,
