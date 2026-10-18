@@ -21,23 +21,31 @@ declares one, so an undeclared Definition's entry, id and digests are what they 
   outputs. A primitive reading a sink at any other port is refused (`E_PORT_SINK`). A sink passed to a composite is a sink in
   its body, and a composite that returns one declares it. A Definition with a receipt port returns only sinks.
 * **Kinds.** `In(kind="coin")` takes only a live verifier coin: a run input of a program-function parameter declared kind coin,
-  passed through untouched. `In(kind="static")` takes only a constant (the output of a primitive without operands). Anything
-  else is refused (`E_PORT_KIND`), so a noise derivation whose parameters are coins reads coins and its statics only. A coin is
-  never a registered input.
+  passed through untouched. `In(kind="static")` takes only a constant (the output of a primitive without operands).
+  `In(kind="position")` takes only a unit's position: a run input declared kind position, passed through untouched. Anything
+  else is refused (`E_PORT_KIND`), so a noise derivation whose parameters are coins reads coins and its statics only, and no
+  unit computes its position. A coin is never a registered input.
 * **Words.** `Out(word="s32")` fixes the type of each word its producer writes; `In(word="s8x4")` reads each word as that type.
   A word computed at run time is read only as the type its producer fixed, and only inputs, constants and registered
   (pre-seed) words may be read as another (`E_PORT_WORD`). Splitting a runtime word into limbs is a Definition of its own,
   which reads the word as its producer's type. A composite keeps the type of each word it returns (it declares it) and never
   fixes one.
 * **Coin flow.** A primitive with a coin port is a noise primitive when its return isn't all sinks (it derives noise, or
-  adds it to an operand it takes) and a receipt fold when it is (the coin is its key). A coin reaches only such a coin
-  port: a primitive reading a coin at any other port is refused, and so is a Definition returning one, the root included
-  (`E_COIN_FLOW`), since past a return it would be a computed value that no rule follows.
+  adds it to an operand it takes) and a receipt fold when it is (the coin is its key). A Definition, primitive or composite,
+  with a coin port and a position port whose return holds no sink is a seed: it derives a unit's seed from the coin and the
+  unit's position, and no rule follows the coin into its body. A coin reaches only such a coin port: a primitive reading a
+  coin at any other port is refused, and so is a Definition returning one, the root included (`E_COIN_FLOW`), since past a
+  return it would be a computed value that no rule follows.
 * **One use.** A coin a noise primitive reads is read once in the flattened Program, by that instance alone: no second
   noise and no receipt key from it. Each leaf a noise primitive returns, its noise, is read at most once (by one operand
   of one instance, or once by the outputs): no two copies, and no noise shared across rows, matmuls, batch members or
   scan steps (`E_COIN_REUSE`). A coin only receipt folds read may key any number of them. With coin flow, each noise's
-  coins reach nothing but its one reader's forward cone (`Accounting.Guarantees.CoinFlow` in `Security/`).
+  coins reach nothing but its one reader's forward cone (`Accounting.Guarantees.CoinFlow` in `Security/`). A coin seeds read
+  is read by seeds alone, any number of them, and no position leaf is read by two seeds, so each (coin, position) seeds
+  one unit (`E_COIN_REUSE`).
+* **Seeds.** A seed's output, and every value computed from it (the unit's noise), reaches only the sinks of the Definition
+  that calls the seed (the unit's receipt), never a return leaf not declared `Out(sink=True)` (its z), the root's outputs
+  included (`E_COIN_FLOW`). Inside the unit they may be read any number of times.
 
 Facts flow down every call and up through declarations. A parameter's facts, in a Definition's body, are the join over all its
 instances of its operands' facts, so a bound sees its operand's producer through any number of calls. A Definition's output
@@ -57,13 +65,13 @@ from typing import Any, Callable, Iterator, Mapping, Sequence
 from .refs import Affine, Coll, Concat, Explicit, Refs, runs as ref_runs
 from .types import Array, Record, Tuple as TupleT, Type, Value, remove_axis
 
-KINDS = ("value", "coin", "static")
+KINDS = ("value", "coin", "static", "position")
 WORD = re.compile(r"[a-z][a-z0-9_]*")
 MAX_SAFE_INT = 2**53 - 1  # the descriptor's integers (`codec.MAX_SAFE_INT`)
 
 #: where a leaf's value comes from: a gate that computes it, a constant (a primitive without operands), a run input, a coin
-#: (a run input of kind coin) or a registered input (a pre-seed word)
-ORIGINS = ("gate", "static", "input", "coin", "registered")
+#: (a run input of kind coin), a registered input (a pre-seed word) or a position (a run input of kind position)
+ORIGINS = ("gate", "static", "input", "coin", "registered", "position")
 MIXED = "*"  # the word type of a leaf whose instances carry different ones
 
 
@@ -97,7 +105,8 @@ def _word(w: Any) -> None:
 @dataclass(frozen=True)
 class In:
     """A parameter's port. `bound`: the interval the Definition assumes of every operand leaf. `kind`: ``value``, ``coin`` (a
-    live verifier coin) or ``static`` (a constant). `receipt`: the port takes sinks. `word`: the type it reads each word as."""
+    live verifier coin), ``static`` (a constant) or ``position`` (a unit's position, a run input). `receipt`: the port takes
+    sinks. `word`: the type it reads each word as."""
 
     bound: tuple[int, int] | None = None
     kind: str = "value"
@@ -517,8 +526,10 @@ class Fact:
 
     @property
     def kind(self) -> str:
-        """``coin`` for a coin passed through untouched, ``static`` for a constant, else ``value``."""
-        return "coin" if self.origin == _COIN else "static" if self.origin == _STATIC else "value"
+        """``coin`` for a coin passed through untouched, ``static`` for a constant, ``position`` for a position passed through
+        untouched, else ``value``."""
+        return ("coin" if self.origin == _COIN else "static" if self.origin == _STATIC else
+                "position" if self.origin == _POSITION else "value")
 
     def to_json(self) -> dict:
         return {"interval": None if self.interval is None else list(self.interval), "origin": sorted(self.origin),
@@ -539,7 +550,7 @@ def fact(interval: tuple[int, int] | None = None, origin: Any = ("gate",), sink:
 
 
 GATE = fact()
-_COIN, _STATIC = frozenset({"coin"}), frozenset({"static"})
+_COIN, _STATIC, _POSITION = frozenset({"coin"}), frozenset({"static"}), frozenset({"position"})
 
 
 def join(a: Fact, b: Fact) -> Fact:
@@ -745,7 +756,7 @@ def _producer(f: Fact, w: int | None) -> str:
 
 def _origin(f: Fact) -> str:
     names = {"gate": "a computed value", "static": "a constant", "input": "a run input", "coin": "a coin",
-             "registered": "a registered input"}
+             "registered": "a registered input", "position": "a position"}
     return " or ".join(names[o] for o in ORIGINS if o in f.origin)
 
 
@@ -784,6 +795,10 @@ def _check_operand(at: Callable[[], str], pname: str, runs: Sequence[Run], F: Ru
             if p.kind == "static" and f.origin != _STATIC:
                 raise PortError("E_PORT_KIND", f"{at()} parameter {pname!r} leaf {a}: takes kind=static, a constant, but "
                                 f"reads {_origin(f)}")
+            if p.kind == "position" and f.origin != _POSITION:
+                raise PortError("E_PORT_KIND", f"{at()} parameter {pname!r} leaf {a}: takes kind=position, a unit's "
+                                f"position (a program input declared In(kind='position')) passed through untouched, but "
+                                f"reads {_origin(f)}: a unit never computes its position")
             if p.word is not None and f.word != p.word and "gate" in f.origin:
                 got = "untyped" if f.word is None else "mixed-type" if f.word == MIXED else f"{f.word}"
                 raise PortError("E_PORT_WORD", f"{at()} parameter {pname!r} leaf {a}: reads a {p.word} word, but its value "
@@ -944,16 +959,21 @@ def _transferred(fn: Any, pt: PortTypes, params: Sequence[tuple[str, Type]], ret
     return B.done()
 
 
-def _receive(r: Runs, runs: Sequence[Run]) -> Runs:
-    """A body's view of a parameter: a receipt port's leaves are no sinks inside (what the Definition returns is)."""
-    rec = [(lo, hi) for lo, hi, p, _w in runs if p.receipt]
-    if not rec or not r.has_sink:
+def _receive(r: Runs, runs: Sequence[Run], seed: bool = False) -> Runs:
+    """A body's view of a parameter: a receipt port's leaves are no sinks inside (what the Definition returns is), and a seed's
+    coin port's are values its gates read, which no coin rule follows."""
+    rec = [(lo, hi, p) for lo, hi, p, _w in runs if p.receipt or (seed and p.kind == "coin")]
+    if not rec or not (r.has_sink or _has_coin(r)):
         return r
     B, pos = _Build(), 0
-    for lo, hi in rec:
+    for lo, hi, p in rec:
         B.extend(r, pos, lo)
         for a, b, f in r.segments(lo, hi):
-            B.add(b - a, fact(f.interval, f.origin, False, f.word) if f.sink else f)
+            if p.receipt and f.sink:
+                f = fact(f.interval, f.origin, False, f.word)
+            if seed and p.kind == "coin" and "coin" in f.origin:
+                f = fact(f.interval, (f.origin - _COIN) | {"gate"}, f.sink, f.word)
+            B.add(b - a, f)
         pos = hi
     B.extend(r, pos, len(r))
     return B.done()
@@ -1000,13 +1020,14 @@ def _analyse(root: Any, order: list, typed: bool) -> Facts:
     for sp in order:
         body = sp.body
         pt = port_types(sp)
+        seed = _coin_role(sp) == _SEED
         got = joined.pop(id(sp), None)
         env: dict[tuple[str, int], Runs] = {}
         exposed = []
         for i, (_name, t) in enumerate(body.params):
             r = got[i] if got is not None and got[i] is not None else Runs.uniform(t.leaves, GATE)
             exposed.append(r)
-            env[("p", i)] = _receive(r, pt.params[i]) if pt is not None else r
+            env[("p", i)] = _receive(r, pt.params[i], seed) if pt is not None else r
         params_out[id(sp)] = (sp, tuple(exposed))
         sinks = any(r.has_sink for r in env.values())
         coins = any(_has_coin(r) for r in env.values())
@@ -1067,19 +1088,29 @@ def _analyse(root: Any, order: list, typed: bool) -> Facts:
     return Facts(root, typed, root_env, root_ret, params_out)
 
 
-# --- one use -------------------------------------------------------------------------------------------------------------------
+# --- one use and seeds ---------------------------------------------------------------------------------------------------------
 
-_NOISE, _FOLD, _OTHER = 0, 1, 2
+_NOISE, _FOLD, _SEED, _OTHER = 0, 1, 2, 3
+_ROLES = (_NOISE, _FOLD, _SEED, _OTHER)
 
 
 def _coin_role(fn: Any) -> int | None:
-    """`_NOISE` for a noise primitive (a coin port, a return not all sinks), `_FOLD` for a receipt fold (a coin port, a
-    return of sinks), None for a primitive without a coin port."""
+    """`_SEED` for a seed (a primitive or a composite with a coin port and a position port, a return without sinks), `_NOISE`
+    for a noise primitive (a coin port, a return not all sinks), `_FOLD` for a receipt fold (a coin port, a return of sinks),
+    None for anything else."""
+    from .defs import PrimitiveDefinition
+
     pt = port_types(fn)
-    if pt is None or not any(p.kind == "coin" for rs in pt.params for _lo, _hi, p, _w in rs):
+    kinds = {p.kind for rs in pt.params for _lo, _hi, p, _w in rs} if pt is not None else ()
+    if "coin" not in kinds:
+        return None
+    sinks = [(lo, hi) for lo, hi, o, _w in pt.ret if o.sink]
+    if "position" in kinds and not sinks:
+        return _SEED
+    if not isinstance(fn, PrimitiveDefinition):
         return None
     _, ret = fn.signature()
-    return _FOLD if _covered([(lo, hi) for lo, hi, o, _w in pt.ret if o.sink], 0, ret.leaves) is None else _NOISE
+    return _FOLD if _covered(sinks, 0, ret.leaves) is None else _NOISE
 
 
 def _spaces(r: Refs, out: set) -> None:
@@ -1094,9 +1125,9 @@ def _spaces(r: Refs, out: set) -> None:
 
 class _Summary:
     """One activation of a composite whose parameters' tracked leaves are `pattern`: `reads[(i, leaf)]`, how often parameter
-    i's leaf is read by a noise primitive, a receipt fold and any other primitive, with the first readers; `ret[j]`, what
-    return leaf j is: ("p", i, leaf), that parameter leaf, or ("c", inst, leaf, count, readers), noise made inside and read
-    there `count` times."""
+    i's leaf is read by a noise primitive, a receipt fold, a seed and any other primitive, with the first readers; `ret[j]`,
+    what return leaf j is: ("p", i, leaf), that parameter leaf; ("s",), a value computed from a seeded parameter leaf; or
+    ("c", inst, leaf, count, readers), noise made inside and read there `count` times."""
 
     __slots__ = ("reads", "ret")
 
@@ -1105,10 +1136,12 @@ class _Summary:
 
 
 class _Uses:
-    """The one-use rule over the flattened Program: each tracked leaf (a root coin, ("coin", node, leaf), or a noise
-    primitive instance's output, ("c", inst, leaf)) is counted at every primitive operand that reads it, once per member,
-    step and instance, through every call. A composite's activation is summarized once per pattern of tracked parameter
-    leaves, so a batch or scan of one body costs one simulation and a count per tracked leaf per member."""
+    """The one-use and seed rules over the flattened Program: each tracked leaf (a root coin, ("coin", node, leaf); a root
+    position, ("pos", node, leaf); or a noise primitive instance's output, ("c", inst, leaf)) is counted at every primitive or
+    seed operand that reads it, once per member, step and instance, through every call. A seed instance's output, and every
+    value a primitive or a composite computes from it, is ("s", inst) (("s", None) in a callee it is passed to), followed to
+    the return of the Definition that called the seed. A composite's activation is summarized once per pattern of tracked
+    parameter leaves, so a batch or scan of one body costs one simulation and a count per tracked leaf per member."""
 
     def __init__(self, root: Any, rpt: PortTypes) -> None:
         self.root, self.rpt = root, rpt
@@ -1117,6 +1150,13 @@ class _Uses:
         self.made: dict[tuple, list] = {}
         self.labels: list[str] = []
         self.keys: dict[int, tuple[dict, list]] = {}
+        self.roles: dict[int, tuple[Any, int | None]] = {}
+
+    def _role(self, fn: Any) -> int | None:
+        hit = self.roles.get(id(fn))
+        if hit is None or hit[0] is not fn:
+            hit = self.roles[id(fn)] = (fn, _coin_role(fn))
+        return hit[1]
 
     def check(self) -> None:
         self._simulate(self.root, ())
@@ -1147,59 +1187,88 @@ class _Uses:
         return out
 
     def _read(self, s: tuple, role: int, n: int, at: list, reads: dict) -> None:
+        if s[0] == "s" or (s[0] == "pos" and role != _SEED):
+            return
         if s[0] == "p":
-            e = reads.setdefault((s[1], s[2]), [0, 0, 0, []])
-        elif s[0] == "coin":
-            e = self.coins.setdefault(s, [0, 0, 0, []])
+            e = reads.setdefault((s[1], s[2]), [0, 0, 0, 0, []])
+        elif s[0] in ("coin", "pos"):
+            e = self.coins.setdefault(s, [0, 0, 0, 0, []])
         else:
             e = self.made[(s[1], s[2])]
         e[role] += n
-        e[3].extend(at[:2 - len(e[3])])
-        if s[0] == "coin" and (e[_NOISE] or e[_OTHER]) and sum(e[:3]) > 1:
+        e[4].extend(at[:2 - len(e[4])])
+        total = sum(e[:4])
+        if s[0] == "coin" and (e[_NOISE] or e[_OTHER]) and total > 1:
             raise PortError("E_COIN_REUSE", f"{self.root.id} input node {s[1]} leaf {s[2]}: a coin that a noise primitive "
-                            f"reads is read once, by that instance alone, but it is read {sum(e[:3])} times (first by "
-                            f"{'; then by '.join(e[3])}): a second noise or a receipt key from a noise bit's coin puts the "
+                            f"reads is read once, by that instance alone, but it is read {total} times (first by "
+                            f"{e[4][0]}; then by {at[0]}): a second noise or a receipt key from a noise bit's coin puts the "
                             f"bit in the cheater's view. Draw a coin of its own for each noise and for the receipt keys")
-        if s[0] == "c" and e[0] + e[1] + e[2] > 1:
+        if s[0] == "coin" and e[_SEED] and e[_FOLD]:
+            raise PortError("E_COIN_REUSE", f"{self.root.id} input node {s[1]} leaf {s[2]}: a coin that a seed reads is read "
+                            f"by seeds alone, but a receipt fold reads it too (first by {e[4][0]}; then by {at[0]}): only a "
+                            f"seed binds the coin to a unit's position, so a fold keyed by it computes a value no position "
+                            f"separates. Key the folds from the unit's seed, or from a coin of their own")
+        if s[0] == "pos" and e[_SEED] > 1:
+            raise PortError("E_COIN_REUSE", f"{self.root.id} input node {s[1]} leaf {s[2]}: a position seeds one unit, but "
+                            f"{e[_SEED]} seeds read it (first by {'; then by '.join(e[4])}): two seeds of one coin at one "
+                            f"position are one seed, so the noise they derive is common to both. Give each seed a position "
+                            f"of its own")
+        if s[0] == "c" and total > 1:
             raise PortError("E_COIN_REUSE", f"{self.labels[s[1]]} return leaf {s[2]}: noise is the noise of one operand of one "
-                            f"instance and is read at most once, but it is read {sum(e[:3])} times (first by "
-                            f"{'; then by '.join(e[3])}): two copies of one noise cancel, and noise shared across rows, "
+                            f"instance and is read at most once, but it is read {total} times (first by "
+                            f"{'; then by '.join(e[4])}): two copies of one noise cancel, and noise shared across rows, "
                             f"matmuls, batch members or scan steps is fresh for none of them. Draw fresh coins for each use")
+
+    @staticmethod
+    def _seeded(args: list) -> tuple | None:
+        """A seeded source among `args`' tracked leaves, one of this activation's seeds first."""
+        got = None
+        for d in args:
+            for s in d.values():
+                if s[0] == "s" and (got is None or (got[1] is None and s[1] is not None)):
+                    got = s
+        return got
 
     def _apply(self, fn: Any, args: list, at: str, reads: dict) -> dict:
         """One instance of `fn` (a primitive or a composite) on arguments whose tracked leaves are `args` ({leaf: source}
         per parameter): count its reads, and give its return's tracked leaves."""
         from .defs import PrimitiveDefinition
 
-        if isinstance(fn, PrimitiveDefinition):
-            role = _coin_role(fn)
+        role = self._role(fn)
+        if role == _SEED or isinstance(fn, PrimitiveDefinition):
             for d in args:
                 for s in d.values():
                     self._read(s, _OTHER if role is None else role, 1, [at], reads)
+            leaves = fn.signature()[1].leaves
+            seeded = ("s", self._new(at)) if role == _SEED else self._seeded(args)
+            if seeded is not None:
+                return dict.fromkeys(range(leaves), seeded)
             if role != _NOISE:
                 return {}
             inst = self._new(at)
-            leaves = fn.signature()[1].leaves
             for j in range(leaves):
-                self.made[(inst, j)] = [0, 0, 0, []]
+                self.made[(inst, j)] = [0, 0, 0, 0, []]
             return {j: ("c", inst, j) for j in range(leaves)}
-        pattern = tuple(tuple(sorted(d)) for d in args)
+        pattern = tuple(tuple(sorted((leaf, s[0] == "s") for leaf, s in d.items())) for d in args)
         S = self.memo.get((id(fn), pattern))
         if S is None:
             S = self.memo[(id(fn), pattern)] = self._simulate(fn, pattern)
         for (i, leaf), e in S.reads.items():
-            for role in (_NOISE, _FOLD, _OTHER):
+            for role in _ROLES:
                 if e[role]:
-                    self._read(args[i][leaf], role, e[role], [f"{at}: {w}" for w in e[3]], reads)
+                    self._read(args[i][leaf], role, e[role], [f"{at}: {w}" for w in e[4]], reads)
         out, fresh = {}, {}
         for j, r in S.ret.items():
             if r[0] == "p":
                 out[j] = args[r[1]][r[2]]
                 continue
+            if r[0] == "s":
+                out[j] = self._seeded(args)
+                continue
             inst = fresh.get(r[1])
             if inst is None:
                 inst = fresh[r[1]] = self._new(f"{at}: {self.labels[r[1]]}")
-            self.made[(inst, r[2])] = [r[3], 0, 0, [f"{at}: {w}" for w in r[4]]]
+            self.made[(inst, r[2])] = [r[3], 0, 0, 0, [f"{at}: {w}" for w in r[4]]]
             out[j] = ("c", inst, r[2])
         return out
 
@@ -1226,11 +1295,13 @@ class _Uses:
         from .program import is_input
 
         root = sp is self.root
-        env: dict[tuple[str, int], dict] = {("p", i): {leaf: ("p", i, leaf) for leaf in leaves} for i, leaves in enumerate(pattern)}
+        env: dict[tuple[str, int], dict] = {("p", i): {leaf: ("s", None) if seeded else ("p", i, leaf) for leaf, seeded in leaves}
+                                            for i, leaves in enumerate(pattern)}
         if root:
             for k, lo, hi, p, _w in self.rpt.inputs:
-                if p.kind == "coin":
-                    env.setdefault(("n", k), {}).update({leaf: ("coin", k, leaf) for leaf in range(lo, hi)})
+                if p.kind in ("coin", "position"):
+                    tag = "coin" if p.kind == "coin" else "pos"
+                    env.setdefault(("n", k), {}).update({leaf: (tag, k, leaf) for leaf in range(lo, hi)})
         reads: dict = {}
         for k, node in enumerate(sp.body.nodes):
             fn = node.fn
@@ -1268,15 +1339,26 @@ class _Uses:
                 out = self._apply(fn, tracked, at, reads)
             env[("n", k)] = out
         R = self._gather(sp.body.ret, env)
+        pt = self.rpt if root else port_types(sp)
+        sinks = [(lo, hi) for lo, hi, o, _w in (pt.ret if pt is not None else ()) if o.sink]
         ret: dict = {}
         for j, s in R.items():
-            if root:
+            if s[0] == "s":
+                if s[1] is None:
+                    ret[j] = ("s",)
+                elif _covered(sinks, j, j + 1) is not None:
+                    where = "the program's outputs" if root else "its other returns"
+                    raise PortError("E_COIN_FLOW", f"{sp.id} return leaf {j}: returns the seed of {self.labels[s[1]]}, or a "
+                                    f"value computed from it (its noise), at a leaf it doesn't declare Out(sink=True). A "
+                                    f"seed and its noise are internal to the Definition that calls the seed, the unit: they "
+                                    f"reach only its receipt (its sinks), never {where} (its z)")
+            elif root:
                 self._read(s, _OTHER, 1, [f"{sp.id}'s outputs"], reads)
             elif s[0] == "p":
                 ret[j] = s
             else:
                 e = self.made[(s[1], s[2])]
-                ret[j] = ("c", s[1], s[2], sum(e[:3]), tuple(e[3]))
+                ret[j] = ("c", s[1], s[2], sum(e[:4]), tuple(e[4]))
         return _Summary(reads, ret)
 
 
