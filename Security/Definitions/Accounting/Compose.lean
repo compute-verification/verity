@@ -196,9 +196,9 @@ are committed, and its noised products are computed after it:
 * any other value (a product's served output, glue, the KV cache) is committed with its writing gate's round, before
   that round's coin, or after it when it depends on it (`coinMark`: a noised word, a receipt, glue fed by one). -/
 def Declared.cutOf {ι : Type} (Cd : Declared ι) (i : ℕ) : ℕ :=
-  match (Cd.dag[i]?).map (·.op) with
-  | some (.input .registered _) => 0
-  | some (.input .run _) => Cd.firstRead i
+  match ((Cd.dag[i]?).map Gates.Gate.op : Option (Gates.Op ι)) with
+  | some (Gates.Op.input Gates.Binding.registered _) => 0
+  | some (Gates.Op.input Gates.Binding.run _) => Cd.firstRead i
   | _ => max (Cd.round (Cd.call i)) ((coinMark Cd).getD i 0)
 
 /-- **Gate `j` reads gate `i` after its own coin**: `i` is one of `j`'s operands, and `i`'s cut is past the coin of
