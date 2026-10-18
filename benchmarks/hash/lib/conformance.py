@@ -305,7 +305,7 @@ def case_hm96_rows(d: Dev, rng: random.Random, quick: bool) -> None:
 
 def case_fold_wide(d: Dev, rng: random.Random, quick: bool) -> None:
     """The commit over trees of many CTAs (the fold's climb over up to 10 levels above its 256-leaf subtrees, siblings racing;
-    node indices of 3 bytes at width 2^18; AUTO on both sides of its width), short rows to keep the reference cheap, from levels
+    node indices of 3 bytes at width 2^18; AUTO on both sides of its switch), short rows to keep the reference cheap, from levels
     and scratch full of 0xFF, twice in a row."""
     n_bits, schema = 1024, "hm96-sha512/row/v2"
     for n in ((5000, 70000) if quick else (20000, 32768, 140000)):

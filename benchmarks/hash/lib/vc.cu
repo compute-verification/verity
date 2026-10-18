@@ -839,9 +839,9 @@ __global__ void __launch_bounds__(THREADS, VC_LEAF_MIN_BLOCKS)
   }
 }
 u64 fold_ctrs(u64 width) { return width > THREADS ? width / THREADS - 1 : 0; }
-// AUTO's FOLD up to this width, SPLIT above: past it the CTAs' idle warps in their subtree fold cost more than SPLIT's level
-// launches (B200 at 2^16 leaves FOLD is the faster, at 2^18 SPLIT by 15%).
-constexpr u64 FOLD_MAX_WIDTH = 1ull << 16;
+// AUTO's FOLD up to this many rows, SPLIT above. FOLD saves SPLIT's tree launches, a fixed cost, but its CTAs idle through
+// their subtree's barriers, a cost a row: B200 crosses over near 44,000 rows (FOLD 5% faster at 34,737, SPLIT 8% at 65,536).
+constexpr u64 FOLD_MAX_ROWS = 40000;
 
 // Both phases a thread (native_rows' rows_leaf_kernel): the mask from the nibble table through L1.
 template <int SX, bool ROWS>
@@ -1460,7 +1460,7 @@ int vc_commit_rows_launch(const void* plan, const void* tables, const uint8_t* r
   if (form < VC_FORM_AUTO || form > VC_FORM_FOLD) return -1;
   if (!n) return vc_tree_launch(plan, levels, 0, st);
   const u64 width = vc_tree_width(n);
-  if (form == VC_FORM_AUTO) form = width <= FOLD_MAX_WIDTH ? VC_FORM_FOLD : VC_FORM_SPLIT;
+  if (form == VC_FORM_AUTO) form = n <= FOLD_MAX_ROWS ? VC_FORM_FOLD : VC_FORM_SPLIT;
   if (form == VC_FORM_FOLD) {
     if (!tables || !scratch) return -1;
     const auto t = static_cast<const uint8_t*>(tables);

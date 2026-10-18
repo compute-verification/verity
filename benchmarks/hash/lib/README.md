@@ -77,8 +77,9 @@ from), `vc_plan_build`, `cudaMalloc` the tables and `vc_tables_launch`, then `vc
 - Forms (`vc_commit_rows_launch`): `SPLIT` runs the salt phase, the data phase, then the tree; `FUSED` one kernel a leaf, then
   the tree; `FOLD` the salt phase (which also zeroes the climb's counters in `scratch`) then one data kernel that folds the tree
   too: each block hashes its 256 leaves' subtree in shared memory, and of two sibling blocks the one that finishes second climbs
-  on (sharaw's `sr_data` scheme), so a commit is two launches. `AUTO` picks by device and size (today always `FOLD`). Every
-  form writes the same bytes. The salt phase reads no operand, so a committer may also call `vc_salts_launch` early on a side
+  on (sharaw's `sr_data` scheme), so a commit is two launches. `AUTO` takes `FOLD` up to 40,000 rows and `SPLIT` above:
+  FOLD saves the tree's launches, a fixed cost, while its blocks idle through their subtree's barriers, a cost per row (B200
+  crosses over near 44,000 rows). Every form writes the same bytes. The salt phase reads no operand, so a committer may also call `vc_salts_launch` early on a side
   stream and `vc_leaves_rows_launch` when the rows exist, then `vc_tree_launch`.
 - Pass `bc` to keep every leaf's b || c (128 bytes a leaf) when the step will be opened; pass NULL otherwise.
 
