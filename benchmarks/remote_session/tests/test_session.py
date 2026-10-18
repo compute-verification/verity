@@ -333,6 +333,78 @@ def test_kv_pages_past_the_lifetime_are_re_keyed_and_a_prover_that_keeps_them_is
     assert r["failure"]["failure"] == "lifetime" and r["failure"]["t"] == 1
 
 
+def test_serving_runs_at_most_k_steps_past_the_pass_in_flight_and_reuses_a_freed_block_once_no_pass_needs_it():
+    """`Ahead` at k = 2, serving scripted: it runs steps 0..2 and waits on the bound, so the first pass takes step 3
+    with their records; serving then runs on to the bound past it, 5, but its step 4 reuses a block freed at step 3,
+    which the pass at 3 holds, so it waits until that pass has read.  Then serving runs to 6, the next pass takes 7
+    with the records of 3..6, and serving runs to 9.  Once the session ends serving runs free, and a serving error
+    reaches the next take."""
+    a, ran = prover.Ahead(2, fill=True), []
+
+    def serving() -> None:
+        s = 0
+        while a.begin(s):
+            if s == 4:
+                a.reuse(3)
+            ran.append(s)
+            a.hand(s, f"record {s}")
+            s += 1
+
+    th = threading.Thread(target=serving, daemon=True)
+    th.start()
+    assert a.take() == (3, ["record 0", "record 1", "record 2"])
+    assert ran == [0, 1, 2, 3] and a.waits == {"bound": 1, "fence": 1}
+    a.passed(3)
+    assert a.take() == (7, ["record 3", "record 4", "record 5", "record 6"])
+    assert ran == list(range(10)) and a.waits == {"bound": 3, "fence": 1}
+    a.end()
+    th.join()
+    assert ran == list(range(10)) and a.leads == [1] and a.stats()["steps"] == 10
+    b = prover.Ahead(0)
+    b.fail(ValueError("the engine raised"))
+    with pytest.raises(RuntimeError, match="serving raised"):
+        b.take()
+    with pytest.raises(ValueError):
+        prover.Ahead(-1)
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("k", [0, 2])
+def test_a_pipelined_session_with_serving_up_to_k_steps_past_its_passes_is_accepted(monkeypatch, k):
+    """Serving on its own thread (`Ahead`, its furthest schedule) writes a page a step into a slot freed k + 1 steps
+    before, each pass covers the newest step serving has handed and reads every block in its slot, and pages stale
+    under L = 1 are re-keyed at each window's first pass: the session is accepted, no pass read a block serving had
+    overwritten, serving ran more steps than there were passes, every pass read with serving at most k steps past its
+    own and some at exactly k, and the fence held serving once: at the first step, whose write overwrites the pool's
+    filler in place and waits on its own step's pass (the filler the next k + 1 steps write is freed there)."""
+    monkeypatch.setattr(prover, "OPENINGS_PART", 4)
+    (r,), (p,) = run("kv:1", windows=2, samples=16, kv_every=1, kv_pool=8, lifetime=1, ahead=k, fill=True,
+                     kv_headroom=k + 1)
+    assert r["accepted"] and p["accepted"] and r["failure"] is None and p["misread"] == []
+    a, kv = p["ahead"], p["kv"]
+    assert all(0 <= lead <= k for lead in a["leads"]) and max(a["leads"]) == k and a["fence_waits"] == 1
+    assert len(a["leads"]) == sum(p["passes"]) + p["discarded"] < a["steps"]
+    assert kv["rekeyed"] > 0 and kv["appended"] == kv["steps"] + kv["rekeyed"]
+    assert r["appended"] == kv["sent_appended"] > 0 and r["released"] == kv["sent_released"] > 0
+
+
+@pytest.mark.slow
+def test_a_pipelined_prover_that_overwrites_a_freed_block_before_its_pass_reads_it_is_rejected_at_that_receipt(
+        monkeypatch):
+    """Serving up to 2 steps past the pass in flight, each write into a slot freed the step before: an honest
+    session's fence holds serving's writes until no pass to come holds the block, and it is accepted; one whose writes
+    skip the fence (`kvoverwrite`) lands pages over blocks the pass in flight still has to read, and is rejected at a
+    receipt of one of them.  Each of its passes but the second (whose steps write the pool's empty slots) misreads 2
+    of its at most 17 blocks, so at 96 draws a window its chance of drawing none in either window is below 2^-30."""
+    monkeypatch.setattr(prover, "OPENINGS_PART", 4)
+    (honest, over), (ph, po) = run("kv:1,kvoverwrite:1", sessions=2, windows=2, samples=96, kv_every=1, kv_pool=8,
+                                   ahead=2, fill=True, kv_headroom=1)
+    assert honest["accepted"] and ph["accepted"] and ph["misread"] == []
+    assert ph["ahead"]["fence_waits"] > 0 and all(0 <= lead <= 2 for lead in ph["ahead"]["leads"])
+    assert not over["accepted"] and not po["accepted"] and po["misread"]
+    assert over["failure"]["failure"] == "receipt" and po["failure_on_misread"] is True
+
+
 class CarrierVerdict:
     """A property verdict that holds, its carriers at most `carrier` bytes a window (`audit.PostSeedVerdict`)."""
 
@@ -606,9 +678,9 @@ def test_a_root_message_names_the_withdrawn_blocks_among_its_releases():
 
 
 def test_a_kv_plan_needs_its_pages_a_step():
-    assert prover.parse_plan("honest,kv:4,kvdrop:2,skip:0.5") == [("honest", 0.0), ("kv", 4.0), ("kvdrop", 2.0),
-                                                                  ("skip", 0.5)]
-    for bad in ("kv", "kv:0", "kv:1.5", "kvdrop:", "evict:2"):
+    assert prover.parse_plan("honest,kv:4,kvdrop:2,skip:0.5,kvoverwrite:2") == [
+        ("honest", 0.0), ("kv", 4.0), ("kvdrop", 2.0), ("skip", 0.5), ("kvoverwrite", 2.0)]
+    for bad in ("kv", "kv:0", "kv:1.5", "kvdrop:", "evict:2", "kvoverwrite"):
         with pytest.raises(ValueError):
             prover.parse_plan(bad)
 
