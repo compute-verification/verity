@@ -398,6 +398,59 @@ def test_a_lagged_prover_in_front_of_a_live_shim_is_accepted(setup, tmp_path):
     assert json.load(gzip.open(tmp_path / "proxy.json.gz", "rt"))["prover"]["unready"] == []
 
 
+class _Stop(Exception):
+    pass
+
+
+class _Parent:
+    """A role's parent that runs `check` on the one value the role sends once it listens or is connected, then stops
+    the role at its first `recv`, before any origin."""
+
+    def __init__(self, check) -> None:
+        self.check = check
+
+    def send(self, value) -> None:
+        self.check(value)
+
+    def recv(self):
+        raise _Stop
+
+
+def test_the_server_proxy_and_peer_listen_on_or_connect_to_the_host_they_are_given(setup, tmp_path):
+    """`mockdc.py` runs them on its namespaces' addresses; here, on a loopback address that isn't the default."""
+    import asyncio
+    import socket
+
+    doc, report, s = setup
+    plan, params, host = ar.plan_configuration(doc["configurations"][0], s), ar.wire_params(s), "127.0.0.2"
+    listening = []
+
+    def reached(port: int) -> None:
+        socket.create_connection((host, port)).close()
+        with pytest.raises(ConnectionRefusedError):
+            socket.create_connection(("127.0.0.1", port))
+        listening.append(port)
+
+    with pytest.raises(_Stop):
+        asyncio.run(ar._server(plan, params, _Parent(reached), tmp_path, host=host))
+    with pytest.raises(_Stop):
+        asyncio.run(ar._proxy(plan, s, (host, 1), _Parent(reached), tmp_path, host=host))
+    assert len(listening) == 2
+
+    link = socket.create_server((host, 0))
+
+    def connected(said: str) -> None:
+        accepted, _ = link.accept()
+        assert said == "connected" and accepted.getsockname() == link.getsockname()
+        accepted.close()
+        listening.append(said)
+
+    with pytest.raises(_Stop):
+        asyncio.run(ar._peer(plan, params, link.getsockname()[1], _Parent(connected), tmp_path, host=host))
+    link.close()
+    assert len(listening) == 3
+
+
 def test_a_live_request_asks_for_no_token_ids():
     # vLLM puts the prompt's token ids in the first event with `return_token_ids`, longer than a frame
     body = ar.live_body(None, "served")

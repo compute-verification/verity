@@ -40,7 +40,10 @@ rows (`extra_indices_in_kvcache`, `extra_topk_length`).  Both caches are `fp8_ds
    oacc[s] from +0): `FlashMlaCombine_v1`.  The kernel's MAX_SPLITS instance (32 to 160, by num_sm_parts) changes no word.
 5. The schedule (`get_mla_metadata_kernel`, get_decoding_sched_meta.cu:12-104; num_sm_parts = max(132 / s_q / (h_q / 64), 1)
    = 132, 5 fixed-overhead blocks, block 64, api/sparse_decode.h:62-68): each request's blocks are cut into contiguous splits,
-   SPLITS (their boundaries); `kernels.flashmla_twin.sched_meta` is the planner, `request_splits` a request's SPLITS.
+   SPLITS (their boundaries); `kernels.flashmla_twin.sched_meta` is the planner, `request_splits` a request's SPLITS.  The
+   planner reads only the step's lengths (num_sm_parts is 132 at any batch), so the batch selects each request's SPLITS and
+   nothing else: at DeepSeek-V4-Pro's at most 130 blocks a request, at most 127 splits (one token of 127 blocks alone in its
+   batch, a block to each split).
 
 The CUDA libm pieces, as the SASS has them (non-fast-math; a NaN operand gives 0x7FFFFFFF throughout):
     exp2f(x)           c = setp.geu(x, -126); e = MUFU.EX2(c ? x : x * 0.5); c ? e : e * e            `NvExp2f_v1`
@@ -329,6 +332,7 @@ def FlashMlaBlock(B, S, q, k, nm_prev=None, l_prev=None, o_prev=None):
     wgmmas, :253-258 and :398-404): the module docstring's step 2.  The first block of a split (FIRST) starts from the constant
     state m = -1e30, l = 0, o = 0 and takes no state.  The state carries the running max negated, -m (the -m' every exponent
     of the block reads), so the split's sink term reads its last block's -m' rather than negating m again."""
+    check_block_statics(S.D, S.BN)
     return block(word_ops(B), S, bind(DotBf16V2, K=S.D, DOT=S.DOT), q, k, nm_prev, l_prev, o_prev)
 
 

@@ -81,7 +81,7 @@ def test_the_decoders_requirement(run):
     assert req.to_json() == {"steps": 3, "live_bits": [320, 384, 416], "read_bits": [128, 192, 224], "registered_bits": 320}
     assert sorted(req.live(2) - req.registered) == [14, 19, 21]  # k_0, k_1 and tok_2
     assert sorted(req.reads(1)) == [3, 7, 9, 10, 14, 15]  # emb[0][2], emb[1][2], wk, k_0, tok_1
-    assert R.requirement(program, schedule).to_json()["read_bits"] == [320, 384, 416]
+    assert R.upper_bound(program, schedule).to_json()["read_bits"] == [320, 384, 416]
     assert (req.held(0, 3), req.read(0, 3)) == (1120, 544)
 
 
@@ -91,10 +91,10 @@ def _part(program: Program, nodes) -> Part:
 
 
 def test_live_and_reads_are_the_boundary(run):
-    """live(t) = out(S_<t) ∩ in(S_≥t) with the inputs there before t, and the structural reads(t) = in(S_t) less the run
+    """live(t) = out(S_<t) ∩ in(S_≥t) with the inputs there before t, and the upper bound's reads(t) = in(S_t) less the run
     inputs that arrive at t, by `boundary.out_gates` and `boundary.in_gates` over the steps' root Calls."""
     program, starts, schedule, _ = run
-    req = R.requirement(program, schedule)
+    req = R.upper_bound(program, schedule)
     calls = [k for k, nd in enumerate(program.root.body.nodes) if not is_input(nd.fn)]
     by_step = [calls[a:b] for a, b in zip(starts, starts[1:] + [len(calls)])]
     inputs = range(program.input_gates)
@@ -112,8 +112,8 @@ def _subsets(xs):
 
 @pytest.mark.parametrize("B", [64, 128, R.BLOCK_BITS])
 def test_the_honest_store_matches_and_the_transfer_bounds_hold(run, B):
-    """`pack` gives a store and plans that are W's at every step, and on them RequirementHeld, RequirementDense and
-    RequirementMoved hold for every held and moved set of blocks."""
+    """`pack` gives a store and plans that are W's at every step, and on them RequirementHeld, RequirementHeldLive,
+    RequirementDense and RequirementMoved hold for every held and moved set of blocks."""
     _, _, _, req = run
     layout, store = R.pack(req, B)
     for t in range(req.steps):
@@ -122,6 +122,8 @@ def test_the_honest_store_matches_and_the_transfer_bounds_hold(run, B):
         assert R.store_matches(req, layout, store, B, t) and R.plan_matches(req, layout, plan, B, t)
         for H in _subsets(resident):
             assert req.live_bits(t) <= layout.bits_at(req, live, set(H)) + len(resident - set(H)) * B
+            missing = sum(layout.bits_in(req, live, j) for j in resident - set(H))
+            assert req.live_bits(t) == layout.bits_at(req, live, set(H)) + missing
         dense = min(layout.bits_in(req, live, j) for j in resident)
         assert len(resident) * dense <= req.live_bits(t)
         for M in _subsets(plan):
@@ -164,3 +166,27 @@ def test_past_the_executed_prefix_nothing_runs(run):
     assert req.to_json() == {"steps": 2, "live_bits": [320, 384], "read_bits": [128, 192], "registered_bits": 320}
     assert req.last[19] == req.born[19] == 1 and 21 not in req.last
     assert not {19, 21} & (req.live(1) | req.live(2))
+
+
+def test_a_gather_needs_the_runs_inputs(run):
+    """Without the run's inputs the gathers' selected words are unknown: `requirement` refuses them, and `upper_bound`
+    counts each gather's whole column, more reads than any run makes."""
+    program, _, schedule, req = run
+    with pytest.raises(ValueError, match="gather"):
+        R.requirement(program, schedule)
+    bound = R.upper_bound(program, schedule)
+    assert bound.live(1) == req.live(1) and req.reads(1) < bound.reads(1)
+
+
+def test_an_execution_that_does_not_follow_its_wiring_is_refused(run):
+    """`Requirement.of` takes only an execution that follows its wiring (`Execution.Follows`): a gate whose operand is
+    produced at a later step, or that uses a value that isn't its operand, is refused."""
+    program, _, schedule, _ = run
+    ex = R.execution(program, schedule, _inputs())
+    assert ex.follows() and R.Requirement.of(ex) == R.requirement(program, schedule, _inputs())
+    late = R.Execution(ex.width, ex.registered, {**ex.step, 14: 2}, ex.ops, ex.uses, ex.values)
+    foreign = R.Execution(ex.width, ex.registered, ex.step, ex.ops, {**ex.uses, 14: ex.uses[14] | {21}}, ex.values)
+    for bad in (late, foreign):
+        assert not bad.follows()
+        with pytest.raises(ValueError, match="Follows"):
+            R.Requirement.of(bad)

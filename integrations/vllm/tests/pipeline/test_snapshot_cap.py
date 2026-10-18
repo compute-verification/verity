@@ -24,7 +24,7 @@ OLMOE = {"H": 2048, "I": 1024, "GU": 2048, "QKV": 4096, "V": 50304, "TOPK": 8, "
 def _wl(prompt_lens, max_tokens=128, mnbt=None):
     doc = {"requests": [{"request_id": f"r{i}", "prompt_len": n, "prompt_token_ids": [7] * n, "max_tokens": max_tokens} for i, n in enumerate(prompt_lens)]}
     if mnbt is not None:
-        doc["engine_args_required"] = {"max_num_batched_tokens": mnbt, "max_model_len": 1152}
+        doc["engine"] = {"args": {"max_num_batched_tokens": mnbt, "max_model_len": 1152}}
     return doc
 
 
@@ -61,7 +61,7 @@ def test_rows_and_widths_fall_back_by_name_and_the_cli_engine_arg_wins():
     cap, why = RC.snapshot_cap_bytes(_wl([1024, 700, 10]), None)
     assert why["rows"] == 1024 + 3 and why["row_bytes"] == RC.SNAPSHOT_ROW_BYTES_FALLBACK and why["row_bytes_source"].startswith("no HF config")
     assert cap == 1027 * 65536
-    # an explicit CLI engine arg overrides the workload's engine_args_required (run_config's merge order)
+    # an explicit CLI engine arg overrides the workload's engine.args (run_config's merge order)
     cap2, why2 = RC.snapshot_cap_bytes(_wl([1024], mnbt=2048), LLAMA_1B, {"max_num_batched_tokens": 1025})
     assert why2["rows"] == 1025 and cap2 == 1025 * 32768
     # empty / missing workload: floor
