@@ -10,8 +10,9 @@ The statements over the circuit model (`Definitions/Accounting/Gates`) that the 
 on, from the most general to the one 6a's carrier lemma takes as its `q`:
 
 * `ProvenWindow`: the property's interval analysis is sound. A circuit whose window is proven (`Proven`) is in its
-  window on every input on which its inputs and budgeted gates hold their declared intervals (`DeclaredHold`): the
-  window is a fact of the operand bounds, not a run-time hypothesis.
+  window on every input on which its inputs and budgeted gates but gathers hold their declared intervals
+  (`DeclaredHold`; a gather's interval is derived from its column's): the window is a fact of the operand bounds, not
+  a run-time hypothesis.
 * `ClampOrWrap`, its corollary: in the window, an s8-family step's clamp and wrap give the same values, so the census
   keys the s8·s8 (`.satfinite`) and u8·s8 (wrapped) steps to one class.
 * `Fooling`: a 2-adic fooling bound. Free gates (affine maps and s8-family steps in their window) see only the low `j`
@@ -48,13 +49,13 @@ namespace Accounting.Guarantees.Gates
 open Accounting.Gates Accounting.Assumptions
 
 /-- **The window, proven, holds.** A circuit whose window is proven (`Proven C`: property/v1's interval analysis) is in
-its window on every input `x` on which its inputs and budgeted gates hold their declared intervals. -/
+its window on every input `x` on which its inputs and budgeted gates but gathers hold their declared intervals. -/
 def ProvenWindow : Prop :=
   ∀ {ι : Type} (C : Dag ι) (x : ι → ℤ), Proven C → DeclaredHold C x → InWindow C x
 
 /-- **Clamp or wrap, in the window.** For a circuit `C` whose window is proven, on an input on which its inputs and
-budgeted gates hold their declared intervals: a circuit `C'` gate for gate like `C` but for its s8-family steps' clamp
-or wrap (`Gate.Reclamped`) has `C`'s values. -/
+budgeted gates but gathers hold their declared intervals: a circuit `C'` gate for gate like `C` but for its s8-family
+steps' clamp or wrap (`Gate.Reclamped`) has `C`'s values. -/
 def ClampOrWrap : Prop :=
   ∀ {ι : Type} (C C' : Dag ι) (x : ι → ℤ), Proven C → DeclaredHold C x → C'.length = C.length →
     (∀ i (h : i < C.length) (h' : i < C'.length), C[i].Reclamped C'[i]) → values C' x = values C x
@@ -125,8 +126,9 @@ def RhoPairs : Prop :=
 /-- **The encode budget: what the stacking property bounds.** For a declared circuit `W` in the restricted class
 (`Restricted B`) whose census satisfies the stacking property `P` (`Property caps A W`), whose registered and coin
 inputs are the codec's (`CodecInputs`), and whose values hold, byte for byte less parity, the encodings of the `q`
-distinct words `words` on more than `ε` of the fresh draws, its inputs and budgeted gates there in their declared
-intervals (its window is then `ProvenWindow`'s, never a hypothesis): under `EncodeChainHardness F k B E ε`,
+distinct words `words` on more than `ε` of the fresh draws, its inputs and budgeted gates but gathers there in
+their declared intervals (its window is then `ProvenWindow`'s, never a hypothesis): under
+`EncodeChainHardness F k B E ε`,
 
   `q · E · (n − 1) ≤ (c · Σ_w reads_w) · (n − 1) + 8 · R_in · windows · E`,
 
