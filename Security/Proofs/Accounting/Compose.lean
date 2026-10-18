@@ -1,6 +1,7 @@
 import Models.Accounting.Guarantees.Compose
 import Proofs.Accounting.TS
 import Proofs.Accounting.Compose.ServiceBudget
+import Proofs.Accounting.Compose.SplitRateMerged
 import Proofs.Pouw.RelativeSecurity
 
 /-!
@@ -210,13 +211,13 @@ theorem tileMode_eq {ι C B : Type} {Np : ℕ} (Cd : Declared ι) (W : SplitStag
 /-! ## The guarantees -/
 
 theorem SplitRateClosed : Accounting.Guarantees.Compose.SplitRateClosed := by
-  sorry
+  exact Rates.splitRateClosed
 
 theorem SplitRateExp : Accounting.Guarantees.Compose.SplitRateExp := by
-  sorry
+  exact Rates.splitRateExp
 
 theorem SplitRateMerged : Accounting.Guarantees.Compose.SplitRateMerged := by
-  sorry
+  exact Rates.splitRateMerged
 
 theorem ServiceBudget : Accounting.Guarantees.Compose.ServiceBudget := by
   exact Budget.serviceBudget
