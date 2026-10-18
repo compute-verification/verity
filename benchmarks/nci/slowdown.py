@@ -172,6 +172,21 @@ def bracket(row: dict, calibration: dict, parameters: list[dict]) -> dict:
             "chain": chain, "chain_basis": CHAIN_THEOREM, "inputs": i}
 
 
+def sweep(row: dict, calibration: dict, parameters: list[dict], b_ws: list[float], b_as: list[float]) -> list[dict]:
+    """The bracket at each weight and activation rate: how the guarantee and the construction move with how
+    compressible training is. The state's size scales with ``b_w`` and the boundary's width with ``b_a``."""
+    base = {name: catalog.resolve(ref, parameters) for name, ref in row["inputs"].items()}
+    out = []
+    for b_w in b_ws:
+        for b_a in b_as:
+            w, a = b_w / base["b_w"], b_a / base["b_a"]
+            inputs = base | {"b_w": b_w, "b_a": b_a, "U_bits": base["U_bits"] * w,
+                             "U_token_bits": base["U_token_bits"] * w, "w_cut": base["w_cut"] * a}
+            b = bracket(row | {"inputs": inputs}, calibration, parameters)
+            out.append({"b_w": b_w, "b_a": b_a, "thread": b["lower"], "chain": b["chain"], "upper": b["upper"]})
+    return out
+
+
 def brackets(rows: list[dict], calibrations: list[dict], parameters: list[dict]) -> list[dict]:
     """Every row under every calibration of its model."""
     return [bracket(r, c, parameters) for c in calibrations for r in rows if r["model"] == c["model"]]
@@ -181,10 +196,25 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--calibration", help="a calibrations.json id (default: every calibration)")
     ap.add_argument("--row", action="append", help="a rows.json id (repeatable; default: every row)")
+    ap.add_argument("--sweep", action="store_true", help="the proven bounds over a grid of b_w and b_a, per row")
     args = ap.parse_args(argv)
     parameters, rows = catalog.load("parameters"), catalog.load("rows")
     cals = [c for c in catalog.load("calibrations") if args.calibration in (None, c["id"])]
     rows = [r for r in rows if not args.row or r["id"] in args.row]
+    if args.sweep:
+        b_ws, b_as = [16, 8, 4, 2.5, 1.58, 1, 0.5], [16, 8, 4, 2, 1, 0.5]
+        for c in cals:
+            for r in rows:
+                if r["model"] != c["model"]:
+                    continue
+                print(f"{r['id']} under {c['id']}: thread / chain (proven) / construction")
+                print(f"{'b_w \\ b_a':>10}" + "".join(f"{a:>25}" for a in b_as))
+                cells = sweep(r, c, parameters, b_ws, b_as)
+                for b_w in b_ws:
+                    print(f"{b_w:>10}" + "".join(
+                        f"{x['thread']:>9.2g}/{x['chain'] if x['chain'] is not None else float('nan'):<7.2g}/"
+                        f"{x['upper']:<7.2g}" for x in cells if x["b_w"] == b_w))
+        return 0
     print(f"{'row':44} {'calibration':22} {'thread':>9} {'chain':>9} {'upper':>9} {'basis':>14}")
     for b in brackets(rows, cals, parameters):
         chain = f"{b['chain']:9.3g}" if b["chain"] is not None else f"{'-':>9}"

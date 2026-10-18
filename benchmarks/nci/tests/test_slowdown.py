@@ -88,6 +88,15 @@ def test_chain_bound_is_kappa_f():
         0.1 * S.read_factor(K, 4.0, 1.0, 1536) / (2 * K / Gamma))
 
 
+def test_sweep_at_a_rows_own_rates_is_its_bracket():
+    rows, cals, params = catalog.load("rows"), catalog.load("calibrations"), catalog.load("parameters")
+    row = next(r for r in rows if r["id"] == "pretrain-full")
+    cal = next(c for c in cals if c["id"] == "kimi-k2-1m-raw")
+    b = S.bracket(row, cal, params)
+    cell = S.sweep(row, cal, params, [b["inputs"]["b_w"]], [b["inputs"]["b_a"]])[0]
+    assert (cell["thread"], cell["chain"], cell["upper"]) == pytest.approx((b["lower"], b["chain"], b["upper"]))
+
+
 def test_every_bracket_is_consistent():
     """A proven lower bound above an explicit construction's cost means a row's inputs break the theorem's
     assumptions; the caps in `rates` exist because two rows did."""
