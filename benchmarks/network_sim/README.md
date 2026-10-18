@@ -117,76 +117,177 @@ request, against δ's 1.2 s, and each bucket reached the client a median 5.4 ms 
 
 ## N3 in zero knowledge
 
-`workload/n3_unit.py` prototypes N3's proof unit for one port-window: a Boolean Definition, `N3Window_v1{LAYOUT}`,
-evaluated in the clear; nothing proves it yet. Its witness is the frames a certifier recorded on one link direction in
-one window and the committed rows of the units whose values they carry. Its public input is the certifier's record of
-the window, its frames per bucket (occupancy) and its digest (`records.py`'s format), and its static is the window's
-layout. It outputs one bit: 1 if and only if the counts are the layout's, the digest is the frames', and each frame bit
-is the layout's constant or the bit of a committed row the layout names.
+`workload/n3_unit.py` prototypes N3's proof unit for one port-window: a Boolean Definition, `N3Window_v2{FMT, N, M,
+SALTED}`, evaluated in the clear; nothing proves it yet. Its witness is the frames a certifier recorded on one link
+direction in one window, the descriptors of the committed layout that frame them, the committed rows whose values they
+carry, and the opening of the record commitment. It outputs one bit: 1 if and only if every descriptor and every row
+opens in its commitment, every frame is what its descriptor puts on its rows, and the record commitment holds the
+frames' digest. The module's docstring states each check.
+
+What is public, each with its reason:
+
+- The size class (protocol structure), which is the unit's statics. `FMT` is the run's descriptor format: the frame size
+  B, the widest prefix P and suffix Q, the most rows a frame reads MF, each unit's value-tree depth, and the layout
+  tree's depth. N is the window's recorded frame count, M its pool of rows rounded up to a power of two, and SALTED
+  whether the window holds the certifier's salt frame. P, Q and MF are maxima over the run's frames, so they are
+  properties of the layout, not the layout.
+- The occupancy (protocol structure): the record's frames per bucket, and `at`, where the window's first descriptor sits
+  in the layout. `at` is the port's index times the port's capacity, plus the frames the port recorded in earlier
+  windows, less their salt frames.
+- Hiding commitments: the layout's root, the record commitment's root and the units' value roots, each with its domain
+  id. A salted window also has its window number and its revealed salt commitment, which NET-18 makes public once the
+  salt is revealed.
+- The output, the ok bit.
 
 What is committed, by whom and when:
 
 - Each unit commits the values it holds as hm96 rows (hm96-sha512/row/v2, 256 bits a row, under hiding leaves in a
   frame-v3-sha512 tree, `workload/values.py`) and publishes the root and the count. Here it does so when the run ends;
   in the service it must do so before the coins that select windows are drawn.
-- Each certifier publishes its record as each window closes. It keeps the frames, which go to the proof service behind
-  the firewall as witness and never reach the auditor.
+- The prover registers the layout before the run (`register_layout`), in the same form: one tree of hiding rows, under
+  the binding SHA-512(`verity/netsim/n3-layout/v1/` ‖ program ‖ placement root), so the layout names the committed
+  placement. Each row is a descriptor, which says how one frame is made from at most MF committed rows: raw bytes or
+  base64, the text's offset and length, a constant prefix and suffix, and for each slot the row's unit and position (or
+  a zero row) and a mask of the 256 bits it keeps. Each port has CAP positions, CAP being the power of two above the most
+  frames any port declares. Position port × CAP + j holds the descriptor of the port's frame j, and the positions past
+  its last frame hold an invalid one. The salts go to the proof service behind the firewall, with the frames.
+- The record commitment is a tree of two hiding 512-bit rows per link and window: the link's egress and ingress record
+  digests (`record_digest`, SHA-512 of the record's status and frames, which equals `records.py`'s digest on the lab's
+  records), under the binding SHA-512(`verity/netsim/n3-record/v1/` ‖ program ‖ link ‖ window). Only its root is
+  public, and the salts go to the service. Here `register_record` stands in for its registrant, which the next
+  paragraphs name.
 - With NET-18, the ingress certifier also puts its own SALT frame (kind 3 on stream 0xFFFFFFFF; the window and the
-  salt's 64-byte commitment) ahead of the arrivals in each window's first bucket, behind any queue carried from the
-  window before. It is not a crossing, so the layout holds it as a constant made from the window's salt commitment,
-  public once revealed (`lab_windows(..., salts=...)`). `workload/lab.py` and `workload/n3.py` still refuse it as
-  malformed.
-- The layout is derived from the public statement alone (the Program, the hardware, φ, the placement and the units' row
-  offsets): which frame each slot holds, and where each crossing value's bits sit in its source unit's rows.
+  salt's 64-byte commitment) ahead of the arrivals in each window's first bucket. It is not a crossing, so it has no
+  descriptor. The unit takes the frame's slot as witness and checks the frame against the revealed commitment.
+  `workload/lab.py` and `workload/n3.py` still refuse it as malformed.
+
+The outcome asked for per-window layouts under one commitment. But the buckets frames arrive in decide which frames
+fall in which window, at run time, so a layout committed before the run can't be cut by window. The layout is therefore
+per frame, in each port's send order. A window reads the descriptors at at, at + 1, and so on, and `at` is public
+occupancy. It is still one hiding commitment, registered before the run and opened inside the unit.
+
+**The record commitment needs nothing new from the certifier.** On `main`, N2 (`LinkWindows` in
+`verity/core/protocols/certifier/service.py`) already registers each link-window's two certified records under one
+salted root through the proof service. Each leaf is hm96-sha512/row/v2 over the record head and the certificate, in a
+frame-v3-sha512 tree under one-stage's served domain for the run, the link and the window. The firewall keeps the
+records and salts, and the challenger receives the root, never a digest or a certificate. That is the commitment this
+unit should open, with N2's root and domain as its `record` inputs and the direction as the leaf. Three things differ
+from the stand-in:
+
+1. N2's leaf holds the certificate after the head, and its LMS signature is 34,756 bytes. Opening the leaf therefore
+   hashes about 272 more compressions, 15.8M ANDs a window. A leaf of the head alone would cost the head's two or
+   three compressions. That is a change to `LinkWindows.leaves`, in `verity/`, which is the certifier owner's call.
+2. The head carries the Merkle root of the frames (`certificate.frames_root`), not a digest over them. The unit would
+   recompute that tree over its N frames: B/128 + 1 compressions for each frame's leaf, about what the digest spends on
+   the frame, plus two compressions for each of about N + D nodes, where D = ⌈log2(T·r)⌉ is the tree's depth.
+3. N3's unit and N2's unit would then read one registered value. The service must open one commitment in two units
+   and hold both to the same root, which is the cross-unit question asked of circuits.
+
+NET-18's commitment in a slot doesn't make a record hiding. Its salt commitment sits in the signed record and is public
+once the salt is revealed, so a digest over frames that include it can be inverted as easily as one without. What
+hides the record is the salt of N2's leaf, which only the firewall holds.
 
 What the proof service does per window:
 
-1. It decides from public data what needs no unit. A window with nothing declared or recorded passes. One whose record
-   holds more frames than the Program declares, or that carries a value of a unit that committed none, is refused
-   (`Window.why`).
-2. For each other window the draw selects, it runs one `N3Window_v1{layout}` on the certifier's frames and the units'
-   rows against the record's digest and counts, and records the ok bit.
-3. It binds each row the unit reads to its unit's public root with its hm96 commitment port, as for any unit that reads
-   committed values. Opening the rows inside the unit would cost about 28 SHA-512 compressions more per row.
+1. It decides from public data what needs no unit. A window with nothing recorded passes. A window is refused if its
+   record's status isn't complete, frames or none, or if its frames run past the port's capacity (`Window.why`).
+2. For every other window the draw selects, it runs the `N3Window_v2` of the window's size class and records the ok
+   bit. A frame past the port's declared frames meets an invalid descriptor, so it gives not-ok. So does a frame that
+   carries a value of a unit that committed none, since that unit's root is zero.
 
-The unit is the match, one AND per compared bit and 22 per base64 character, plus SHA-512 over the record's prefix and
-the frames, 57,947 ANDs per compression. `DEMO` (3 frames of 16 bytes, 2 rows) is 58,944 ANDs: 485 for the match, one
-compression, 511 to compare the digest and the final AND. The simulator's windows (64-byte frames) take at most 3
-compressions. The lab's (4,096-byte frames) take 33 for a window of one frame (2.0M ANDs) and up to 193 for one of six
-(11.5M ANDs over 426 rows, 0.35M of them the match); about four fifths of the bytes they hash are the frames' zero fill.
+Sizes in ANDs. v1 is `N3Window_v1` on the same windows. The record column is the digest's SHA-512 (57,947 ANDs a
+compression) plus the commitment's opening (550,655). The rest of each window is the gather and the offsets.
 
-The tests (`workload/tests/test_n3_unit.py`) check the circuit against its Python reference on `DEMO`, the simulator's
-windows and synthetic lab windows: an honest window gives ok, and a flipped bit, an extra frame, written fill or a wrong
-salt gives not-ok, exactly where N3 in the clear refuses. On run `r20261018-084303-dae6`'s records the circuit agrees
-with the reference on every window: honest, 15 of 15 ok; `flip-bit`, not-ok at b1's responses and b2's requests in
-window 0; `late`, 4 windows refused without a unit, for values b0 and b1 never committed.
-`python -m workload.n3_unit circuit-check --out FILE` runs circuit-check's checks on `DEMO`'s binding and its match,
-`N3Match`, in about 30 s. It finds no failures and warns twice: N3Match's 485 ANDs are unpinned, and two `Not` gates
-inside `Sha512Compress` are recomputed. Its gaps:
+| Window | v1 | v2 | Row reads | Descriptor reads | Frames | Record |
+|---|---|---|---|---|---|---|
+| `demo()`: 4 frames of 16 bytes, pool of 8 | 58,944 (3 frames) | 11,233,195 | 5,751,384 | 4,432,108 | 416,044 | 608,602 |
+| Simulator, 64-byte frames, the smallest: 1 frame, pool of 2 | about 0.06M | 4,998,983 | 2,773,758 | 1,549,505 | 65,520 | 608,602 |
+| Simulator, the largest: 4 frames, pool of 4 | about 0.18M | 12,743,854 | 5,547,516 | 6,198,020 | 262,080 | 724,496 |
+| Lab, 4,096-byte frames: b3's responses, window 1 (1 frame, pool of 1) | 1,957,754 | 31,074,876 | 2,558,637 | 5,323,426 | 20,663,826 | 2,462,906 |
+| Lab: b1's responses, window 0 (1 frame, pool of 256) | about 2.0M | 684,160,828 | 655,011,072 | 5,323,426 | 20,663,826 | 2,462,906 |
+| Lab: b0's responses, window 0 (6 frames, pool of 512) | 11,534,760 | 1,483,550,450 | 1,310,022,144 | 31,940,556 | 123,982,956 | 11,734,426 |
+
+v2 is 16 to 340 times v1, nearly all of it openings v1 didn't make. v1 read the layout as a static, and it left the
+rows to the service's commitment port. A descriptor read hashes the descriptor's LW bits (69,920 at the lab's format)
+before its own hm96 leaf and path, about 92 compressions. A frame at 4,096 bytes is 20.7M ANDs, mostly the shifts that
+compact up to 255 rows' kept bits into one stream.
+
+The tests (`workload/tests/test_n3_unit.py`, 31 quick and 2 slow, about 100 s) check the following:
+
+- `N3Frame` against `assemble` on every descriptor of the demo's, the simulator's and the lab's windows, honest and
+  tampered, and on random descriptors;
+- every opening against its tree;
+- the window's reference on the demo, the simulator (whose not-ok ports are exactly N3 in the clear's) and synthetic
+  lab windows, with flipped bits, an extra frame, written fill, a status without frames, and right, missing and wrong
+  salts;
+- the whole circuit against the reference on the demo (nine instances) and on a salted lab window (three).
+
+The evaluations, `python -m workload.n3_unit sim` and `lab`:
+
+- Simulator, 3 blocks, 3 requests, windows of 4 buckets. The circuit equals the reference on all 10 windows of each
+  run. The honest run is 10 of 10 ok. `flip-bit` and `fill` on b0 are not-ok at b0's certifier uplink and b1's gpu0
+  uplink in window 0. `extra-frame` on b1 is not-ok at b1's certifier uplink in windows 0 and 1, and at b2's gpu0
+  uplink in window 1. In every run, those are exactly the ports N3 in the clear refuses.
+- Run `r20261018-084303-dae6`'s records, reference only (the circuit at 4,096-byte frames is too large for an agent
+  VM). The honest run is 15 of 15 ok. `flip-bit` is not-ok at b1's responses and b2's requests in window 0. `late` is
+  not-ok at the four windows that carry values b0 and b1 never committed, and refuses b2's responses on their status.
+  Each run takes about 150 s and 4.4 GB, most of it tracing the parts at 4,096 bytes to count their ANDs.
+
+`python -m workload.n3_unit circuit-check --out FILE` runs circuit-check's checks on the demo's window and on its
+SHA-free parts, `N3Frame`, `N3Gather` and `N3Scatter`. It finds no failures. It takes 42 minutes and 6.8 GB, nearly
+all of it circuit-check's reference evaluator running the window's 67.4M gates on four vectors. It warns three ways:
+
+- 23,040 dead gates in the window: 5,760 in each frame's compaction, `N3Step` and `N3Stay` cells whose carried shift
+  bits nothing reads, about 3% of `N3Frame`'s gates;
+- 84 XORs in `N3AddBase` that recompute a value;
+- no pinned counts for `N3Gather` (6,146 ANDs) and `N3Scatter` (110).
+
+Its gaps:
 
 - The `circuit-check` command can't find these Definitions. It discovers sidecars only under its `PACKAGES`, and
   `workload` is not an installed package, so there is no sidecar and no pin.
 - The window isn't lowered to C-Flock whole. A whole lowering would carry the SHA-512 compression that circuit-check
   records as not fitting in 64 GiB (`checks.UNLOWERED`), which it doesn't apply to a Definition that calls the
-  compression. The driver lowers N3Match whole, and the compression and `LmsEqual` have their own entries.
-- Only `DEMO` is checked. The simulator's and the lab's layouts are checked only against the reference, by the tests.
+  compression. The driver lowers `N3Gather` and `N3Scatter` whole. `N3Frame` isn't lowered at all: at about 104,000
+  ANDs, it is over the whole-Definition budget of 60,000.
+- The window isn't partitioned: at 67.4M gates, it is over the partition budget of 4M.
+- Only the demo's format is checked. The simulator's and the lab's formats are checked only against the reference, by
+  the tests and the evaluations.
 
-Open questions:
+v1's three gaps against the design rules are closed: the layout is witness, the record digest enters only under a
+hiding commitment, and the salt frame's slot is witness, so it no longer shows how many frames were carried from the
+window before. Open questions:
 
+- **Row reads, the cost lever (needs a ruling).** Which rows a frame reads is private now, so each pool row opens inside
+  the unit. That is hm96's leaf and the frame-v3 path, about 44 compressions (2.56M ANDs) at the lab's value-tree depth
+  of 13, for each of up to 512 pool rows. v1 left the rows to the service's commitment port, which opens public
+  positions. There are three levers:
+  - The service opens rows from several units' commitments at private positions into one unit's input (asked of
+    circuits).
+  - Each unit commits its outgoing crossing values in send order, so a 4,096-byte frame reads about 96 contiguous rows
+    instead of up to 255 scattered ones. That needs a proof that those rows are the value rows.
+  - A finer pool size than a power of two. Up to half the pool is zero rows, each costing a full read.
+- **The layout's binding to the placement (needs a ruling: it is what the guarantee rests on).** The binding names the
+  program and the placement root, so the prover can't swap layouts after the run. But nothing checks that the
+  descriptors are φ's over the committed placement. A prover could register a layout that frames other bits, and the
+  unit would hold the frames to it. One unit per run that derives each descriptor from the opened placement would close
+  this; until then, it is an assumption.
+- **The record commitment** is the stand-in described above, not N2's leaf. Opening N2's leaf needs the leaf's layout
+  changed in `verity/` (item 1 above) and the service's cross-unit opening (item 3).
 - **hm96 or vllm-v1.** The unit reads hm96 rows. Served traffic's values are committed under verity_vllm's vllm-v1
   roots (SHA-256, not hiding), whose link to hm96 rows is the committer's opening, not a proof
   (`verity/core/protocols/sampled_proofs/README.md`). N3 on served traffic needs the crossings bound to the same
-  commitment the compute proofs read: serving's record in hm96 itself, or a unit that opens the vllm-v1 leaves.
-- **Placement registration.** The layout names each crossing value's source unit, row and offset, and every stream and
-  frame position, so it discloses the placement's crossings and the traffic's shape, which the design rules keep
-  private. A registered placement would make the layout a committed input. Otherwise only the occupancy stays public
-  and the layout becomes witness, in a universal unit per size class (`verity/ml/private_circuits/`).
-- **The record digest isn't hiding.** It is a plain SHA-512 of frames whose only unknowns are value bits, so a window
-  with few value bits can be inverted by search. It needs a salt only the certifier and the service hold, or the
-  certifier's own hm96 rows.
+  commitment the compute proofs read: serving's record in hm96 itself, or a unit that opens the vllm-v1 leaves (asked
+  of circuits).
+- **Trailing frames.** A port that stops short of its declared frames passes. Each window it recorded matches its
+  descriptors, and the windows after it record nothing, which passes from public data. In the late run, b2's responses
+  are refused only because their record's status says coverage was never established. The declared count is private
+  now, so the closing check needs a unit: one per port that opens the layout at the position after the port's last
+  recorded frame and shows that the descriptor there is the invalid one.
+- **What the size class discloses.** FMT gives the run's widest prefix and suffix and the most rows any frame reads.
+  M gives each window's rows read, to within a factor of two. A fixed M per run would hide the second at the cost of
+  the largest unit for every window.
 - **The order of frames from several sources.** The lab's order is fixed by the Program (events by position, requests
   by session). Traffic whose interleaving the prover chooses needs that order as witness, checked in the unit.
-- **The SALT frame's slot.** The layout takes it from the record, so it discloses how many frames were carried from the
-  window before. A fixed slot would not.
-- **Zero fill.** A digest over each frame's used bytes, or the certifier's hm96 rows, would cut a lab window's 33 to
-  193 compressions to a few.
+- **Zero fill.** The record digest still hashes each frame's zero fill, about four fifths of a lab window's 33 to 193
+  compressions. The digest is now between 0.3% and 6% of a window's ANDs.
