@@ -366,6 +366,10 @@ class MemoryModel:
         a.live = True
         a.nbytes, a.device, a.origin = ev.nbytes, ev.device, ev.origin
 
+    def device(self, alloc_id: int) -> str:
+        a = self._allocs.get(alloc_id)
+        return a.device if a is not None else ""
+
     def free(self, alloc_id: int) -> None:
         a = self._allocs.get(alloc_id)
         if a is None:

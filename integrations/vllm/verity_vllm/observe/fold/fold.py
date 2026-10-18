@@ -140,6 +140,7 @@ from verity_vllm.observe.fold.resolver import (
     Supplied,
     Transparent,
     Unsupported,
+    external_buffers,
     parts_of,
     resolve_step,
     spec_label,
@@ -290,6 +291,7 @@ class _Fold:
         self.notes: list[str] = []
         self.errors: list[dict] = []
         self.roots_by_alloc: dict[int, list[Root]] = {}
+        self.buffers: dict[str, ViewDesc] = {}
         self.instances: list[dict] = []
         self.accesses: list[dict] = []
         self.steps: list[dict] = []
@@ -359,6 +361,7 @@ class _Fold:
             self._root(ev)
         elif isinstance(ev, Note):
             self.notes.append(f"log note: {ev.text}")
+            self.buffers.update(external_buffers(ev, self.mem.device))
         elif isinstance(ev, RunEnd):
             self.ended = True
         elif isinstance(ev, (DispatchEnter, DispatchExit, TritonLaunch)):
@@ -525,7 +528,7 @@ class _Fold:
                 self._root(ev)
             elif isinstance(ev, Note):
                 self.notes.append(f"step {start.step} note: {ev.text}")
-        ctx = StepContext(self.header, start, se.sample, se.links, self.roots_by_alloc, self.config, self.profile)
+        ctx = StepContext(self.header, start, se.sample, se.links, self.roots_by_alloc, self.config, self.profile, buffers=self.buffers)
         self._write_tokens(start, se.links)
         resolutions = resolve_step(se, ctx)
         x01 = ctx.scratch.get(X01_SCRATCH_KEY)

@@ -22,9 +22,9 @@ resolution's `consumed` set (no silent, unaccounted children) and that no id is 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Callable, Protocol, runtime_checkable
 
-from verity_vllm.observe.events import Root, RunHeader, SampleEnd, StepLink, StepStart, ViewDesc
+from verity_vllm.observe.events import Note, Root, RunHeader, SampleEnd, StepLink, StepStart, ViewDesc
 from verity_vllm.observe.fold.tree import StepEvents, TreeNode
 
 # ---------------------------------------------------------------------------------------------------------
@@ -249,6 +249,7 @@ class StepContext:
     config: dict                               # the model's static configuration C (H, NH, KVH, D, I, V, NL, EPS, ...)
     profile: Profile
     scratch: dict = field(default_factory=dict)  # pattern-private per-step memory (e.g. pending KV scatter)
+    buffers: dict[str, ViewDesc] = field(default_factory=dict)  # the capture's external buffers by name (`external_buffers`)
 
     def root_named(self, name: str) -> Root | None:
         for rs in self.roots.values():
@@ -259,6 +260,13 @@ class StepContext:
 
     def roots_of(self, view: ViewDesc) -> list[Root]:
         return self.roots.get(view.alloc, [])
+
+
+def external_buffers(note: Note, device: Callable[[int], str]) -> dict[str, ViewDesc]:
+    """The views the capture's external-buffers Note (`engine.capture`) records with an offset and strides, the KV caches as
+    `kv_cache[<module>]`, on the device of their allocation."""
+    return {name: ViewDesc(int(b["alloc"]), int(b["offset"]), tuple(b["shape"]), tuple(b["strides"]), b["dtype"], device(int(b["alloc"])))
+            for name, b in ((note.data or {}).get("buffers") or {}).items() if "offset" in b and "strides" in b}
 
 
 @runtime_checkable

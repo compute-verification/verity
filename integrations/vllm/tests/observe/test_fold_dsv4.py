@@ -17,7 +17,11 @@
 * DeepGEMM's wo_a einsum leaves only z's allocation after it, which is the Build's `ScaledMmFp8BlockGrouped_v1` per token over the
   quant's rows and wo_a's roots;
 * the indexer's compress is `Dsv4IndexerCompress_v1` at each window end over its 8 state rows (the masked rows below position 0 the
-  kernel's constants) into the compressed entry's key-cache slot.
+  kernel's constants) into the compressed entry's key-cache slot;
+* a head-512 compressor's compress, which leaves no event, is the attention's: at each window end its state rows' `Dsv4MlaCompressC128_v1`
+  or `Dsv4MlaCompressC4_v1{ROWS}` into the layer's compressed cache, then the decode's `FlashMlaDecode_v1` over the window rows and the
+  compressed rows at FlashMLA's planned splits, or the prefill's `FlashMlaGatherRow_v1` of each workspace row and `FlashMlaPrefill_v1` per
+  run of tokens with one NP.
 """
 from __future__ import annotations
 
@@ -30,8 +34,9 @@ import pytest
 
 from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHeader, StepStart, TritonLaunch, ViewDesc
 from verity_vllm.observe.fold.patterns.dsv4 import (INDEXER_COMPRESS_KERNEL, INDEXER_COMPRESS_SRC_SHA, INV_ROPE_KERNEL, INV_ROPE_SRC_SHA,
-                                                    SAVE_STATES_KERNEL, SAVE_STATES_SRC_SHA, Fp8Einsum, IndexerCompress, InvRopeQuant, Mhc,
-                                                    QKvRmsNorm, QNormRopeKvInsert, SavePartialStates)
+                                                    SAVE_STATES_KERNEL, SAVE_STATES_SRC_SHA, SPARSE_DECODE_OP, SPARSE_PREFILL_OP, Fp8Einsum,
+                                                    IndexerCompress, InvRopeQuant, Mhc, QKvRmsNorm, QNormRopeKvInsert, SavePartialStates,
+                                                    SparseDecode, SparsePrefill)
 from verity_vllm.observe.fold.patterns.target import target_of_header
 from verity_vllm.observe.fold.resolver import Group, PerRow, Shared, StepContext, Unsupported, spec_label
 from verity_vllm.observe.fold.tree import build_trees
@@ -216,7 +221,8 @@ def _insert(T, cache_bytes=BLOCK_BYTES):
 
 def test_the_insert_is_the_builds_call_per_token_writing_each_blocks_window_rows():
     slots = [27 * 64 + 62, 27 * 64 + 63, 5 * 64]
-    g = QNormRopeKvInsert().match(_insert(3), _insert_ctx(3, slots))
+    g = QNormRopeKvInsert().match(_insert(3), ctx := _insert_ctx(3, slots))
+    assert ctx.scratch["dsv4_cos_sin"] == {"model.layers.0.attn": (CS_ROOT.view, CS_ROOT.name)}, "the layer's compress reads its rotary table"
     assert [spec_label(c.spec) for c in g.parts] == ["Dsv4QNormRopeKvInsert_v1{NH=16,NHP=64,DN=448,DR=64,QB=64,EPS=1e-06}"] * 2
     first, second = g.parts
     assert (first.rows, second.rows) == (2, 1) and first.roots[2] == CS_ROOT.name
@@ -263,9 +269,18 @@ def test_save_partial_states_moves_each_kv_row_and_is_the_builds_score_call_per_
     assert kv2.src.view.offset == 2 * 1024 and score2.outputs[0].view.offset == 5 * STATE_STRIDE + 512 and score2.outputs[0].indices == (0,)
     ix = Root(view(982, (4, 256), "float32"), "weight", "model.layers.2.attn.indexer.compressor.ape")
     g = SavePartialStates().match(_save_states(1, W=256, R=4, bs=4, module="model.layers.2.attn.indexer.compressor", ape=ix.view),
-                                  _insert_ctx(1, [9], "model.layers.2.attn.indexer.compressor.state_cache", (ix,), bs=4))
+                                  ctx := _insert_ctx(1, [9], "model.layers.2.attn.indexer.compressor.state_cache", (ix,), bs=4))
     assert spec_label(g.parts[1].spec) == "Dsv4CompressorScore_v1{W=256}" and g.parts[1].operands[1].indices == (0,)
     assert g.parts[1].outputs[0].view.offset == 2 * STATE_STRIDE + 256 and g.parts[1].outputs[0].indices == (1,)
+    assert "dsv4_compress" not in ctx.scratch, "the indexer's compress is its own launch"
+
+
+def test_save_partial_states_records_a_head_512_compressors_window_ends_for_the_layers_attention():
+    ape = Root(view(983, (4, 1024), "float32"), "weight", "model.layers.2.attn.compressor.ape")
+    ctx = _insert_ctx(8, [16 + p for p in range(8)], "model.layers.2.attn.compressor.state_cache", (ape,), bs=4)
+    SavePartialStates().match(_save_states(8, W=1024, R=4, bs=4, module="model.layers.2.attn.compressor", ape=ape.view), ctx)
+    cache, W, R, ends = ctx.scratch["dsv4_compress"]["model.layers.2.attn"]
+    assert (cache.shape, W, R, ends) == ((40, 4, 2048), 1024, 4, ((("r0", 3), 3), (("r0", 7), 7)))
 
 
 def test_save_partial_states_off_its_state_layout_or_kv_group_or_without_the_ape_root_is_refused():
@@ -394,6 +409,119 @@ def test_an_indexer_compress_off_its_pin_or_key_cache_group_or_without_its_weigh
     assert isinstance(IndexerCompress().match(_indexer(8, src="0" * 64), _indexer_ctx(8)), Unsupported)
     assert isinstance(IndexerCompress().match(_indexer(8), _indexer_ctx(8, key_layer="other")), Unsupported)
     assert isinstance(IndexerCompress().match(_indexer(8), _indexer_ctx(8, roots=(CS_ROOT,))), Unsupported)
+
+
+L0, L2, SCALE = "model.layers.0.attn", "model.layers.2.attn", 0.04419417382415922
+SWA_BT, KV_BT, STATE_BT, KV_OFFSET, NEG1 = [21, 22, 23, 24, 25], [11, 12], list(range(39, -1, -1)), 37440, 0xFFFFFFFF
+ATTN_ROOTS = {L: (Root(view(1010 + i, (64,), "float32"), "weight", f"{L}.attn_sink"),
+                  Root(view(1012 + i, (512,)), "weight", f"{L}.compressor.norm.weight")) for i, L in enumerate((L0, L2))}
+DOT = "DOT=HopperBF16WgmmaDot16_v1,SCALE=0.04419417382415922"
+
+
+def _cache(offset, rows):
+    return ViewDesc(1020, offset, (40, rows, 1, 584), (CACHE_STRIDE, 584, 584, 1), "uint8", CUDA)
+
+
+def _attn_ctx(layer, positions, ends=(), R=128, W=512, bs=8, roots=None, buffers=True):
+    """A step of request r0's tokens at `positions` in `layer`: its compressed, window and state KV groups, the capture's compressed and
+    window caches, and what the layer's insert and state write leave its attention (the rotary table, the window ends)."""
+    ctx = _ctx(len(positions), ROOTS + [CS_ROOT, *(ATTN_ROOTS[layer] if roots is None else roots)])
+    groups = [{"layers": [layer], "block_size": 256, "block_tables": {"r0": KV_BT}},
+              {"layers": [f"{layer}.swa_cache"], "block_size": 64, "block_tables": {"r0": SWA_BT}},
+              {"layers": [f"{layer}.compressor.state_cache"], "block_size": bs, "block_tables": {"r0": STATE_BT}}]
+    start = dataclasses.replace(ctx.start, rows=[("r0", p) for p in positions], positions=list(positions), kv_groups=groups)
+    caches = {f"kv_cache[{layer}.swa_cache_layer]": _cache(0, 64), f"kv_cache[{layer}]": _cache(KV_OFFSET, 256 // R)}
+    ctx = dataclasses.replace(ctx, start=start, buffers=caches if buffers else {})
+    state = ViewDesc(1021, 0, (40, bs, 2 * W), (STATE_STRIDE, 2 * W, 1), "float32", CUDA)
+    ctx.scratch.update(dsv4_cos_sin={layer: (CS_ROOT.view, CS_ROOT.name)}, dsv4_compress={layer: (state, W, R, tuple((("r0", p), p) for p in ends))})
+    return ctx
+
+
+def _dispatch(op, kw, outs, module):
+    return build_trees([DispatchEnter(1, None, 0, "forward", op, "", [], kw, 7, module), DispatchExit(1, outs)])[0][0]
+
+
+def _decode(layer, T=1, R=128):
+    q, out = (ViewDesc(a, 0, (T, 1, 64, 512), (32768, 32768, 512, 1), "bfloat16", CUDA) for a in (1030, 1031))
+    kw = {"q": q, "kv": _cache(0, 64), "attn_sink": ATTN_ROOTS[layer][0].view, "extra_kv": _cache(KV_OFFSET, 256 // R), "d_v": 512,
+          "sm_scale": SCALE, "out_": out}
+    return _dispatch(f"{SPARSE_DECODE_OP}.default", kw, [out, view(1032, (T, 64, 1), "float32")], layer)
+
+
+def _prefill(layer, T, ws_rows):
+    q, out = (ViewDesc(a, 0, (T, 64, 512), (32768, 512, 1), "bfloat16", CUDA) for a in (1040, 1041))
+    kw = {"q": q, "kv": view(1042, (ws_rows, 1, 512)), "sm_scale": SCALE, "d_v": 512, "attn_sink": ATTN_ROOTS[layer][0].view, "out_": out}
+    return _dispatch(f"{SPARSE_PREFILL_OP}.default", kw, [out, view(1043, (T, 64), "float32")], layer)
+
+
+def _window_row(s, block_table=SWA_BT):
+    return block_table[s // 64] * CACHE_STRIDE + s % 64 * 576
+
+
+def test_the_decode_at_a_window_end_is_the_layers_compress_then_the_builds_flashmla_decode_over_its_window_and_compressed_rows():
+    g = SparseDecode().match(node := _decode(L0), _attn_ctx(L0, [255], ends=(255,)))
+    compress, attn = g.parts
+    assert spec_label(compress.spec) == "Dsv4MlaCompressC128_v1{W=8,R=16,D=512,QB=64,EPS=1e-06}" and compress.rows == 1
+    kv, score, w, cs = compress.operands
+    state = [STATE_BT[s // 8] * STATE_STRIDE + s % 8 * 1024 for s in range(128, 256)]
+    assert [p.offset for p in kv.rows[0]] == state and [p.offset for p in score.rows[0]] == [o + 512 for o in state]
+    assert w.view == ATTN_ROOTS[L0][1].view and cs.indices == (128,) and compress.roots[2:] == (ATTN_ROOTS[L0][1].name, CS_ROOT.name)
+    nope, rope, sc = compress.outputs
+    base = KV_OFFSET + KV_BT[0] * CACHE_STRIDE
+    assert (nope.view.offset, nope.view.shape, nope.indices) == (base, (2, 448), (1,)) and (sc.view.offset, sc.indices) == (base + 2 * 576, (1,))
+    assert spec_label(attn.spec) == f"FlashMlaDecode_v1{{NH=16,SPLITS=(0,1,2,3),NW=128,DN=448,DR=64,QT=64,BN=64,{DOT}}}"
+    q, nopes, scales, ropes, idx, swa, nc, sink = attn.operands
+    assert (q.view.shape, q.view.strides) == ((1, 16, 512), (32768, 512, 1)) and attn.consumed == (node.id,)
+    comp = [base, base + 576]
+    assert [p.offset for p in nopes.rows[0]] == [_window_row(s) for s in range(128, 256)] + comp + comp[:1] * 62
+    assert scales.rows[0][0].offset == SWA_BT[2] * CACHE_STRIDE + 64 * 576 and scales.rows[0][0].shape == (7,)
+    assert ropes.rows[0][-1].offset == (base + 448) // 2 and ropes.rows[0][-1].shape == (64,)
+    assert [(c.bits, c.count) for c in idx.rows[0]] == [(0, 128), (0, 2), (NEG1, 62)] and (swa.bits, nc.bits) == (128, 2)
+    assert sink.view.shape == (16,) and attn.roots[-1] == ATTN_ROOTS[L0][0].name
+
+
+def test_a_ratio_4_compress_reads_the_state_rows_at_and_past_position_0_from_each_halfs_second_head():
+    g = SparseDecode().match(_decode(L2, R=4), _attn_ctx(L2, [3], ends=(3,), R=4, W=1024, bs=4))
+    compress, attn = g.parts
+    assert spec_label(compress.spec) == "Dsv4MlaCompressC4_v1{ROWS=4,D=512,QB=64,EPS=1e-06}" and compress.operands[3].indices == (0,)
+    state = [STATE_BT[0] * STATE_STRIDE + s * 2048 + 512 for s in range(4)]
+    assert [p.offset for p in compress.operands[0].rows[0]] == state and [p.offset for p in compress.operands[1].rows[0]] == [o + 1024 for o in state]
+    assert compress.outputs[0].view.offset == KV_OFFSET + KV_BT[0] * CACHE_STRIDE and compress.outputs[0].indices == (0,)
+    assert spec_label(attn.spec).startswith("FlashMlaDecode_v1{NH=16,") and ",NW=64," in spec_label(attn.spec)
+    assert [(c.bits, c.count) for c in attn.operands[4].rows[0]] == [(0, 4), (NEG1, 60), (0, 1), (NEG1, 63)]
+
+
+def test_the_prefill_is_the_layers_compress_the_builds_gather_of_each_workspace_row_and_its_prefill_per_run_of_one_np():
+    g = SparsePrefill().match(node := _prefill(L0, 130, 131), _attn_ctx(L0, range(130), ends=(127,)))
+    compress, gather, short, long = g.parts
+    assert spec_label(compress.spec) == "Dsv4MlaCompressC128_v1{W=8,R=16,D=512,QB=64,EPS=1e-06}" and compress.operands[3].indices == (0,)
+    assert len(compress.operands[0].rows[0]) == 128 and compress.outputs[0].indices == (0,)
+    assert spec_label(gather.spec) == "FlashMlaGatherRow_v1{DN=448,DR=64,QT=64}" and gather.rows == 131
+    assert [r[0].offset for r in gather.operands[0].rows] == [KV_OFFSET + KV_BT[0] * CACHE_STRIDE] + [_window_row(s) for s in range(130)]
+    assert (gather.outputs[0].view.shape, gather.outputs[0].view.strides) == ((131, 512), (512, 1))
+    assert gather.attribution[:2] == (("r0", 127), ("r0", 0)) and gather.consumed == ()
+    assert spec_label(short.spec) == f"FlashMlaPrefill_v1{{NH=16,NP=1,D=512,BN=64,{DOT}}}" and short.rows == 127
+    assert spec_label(long.spec) == f"FlashMlaPrefill_v1{{NH=16,NP=2,D=512,BN=64,{DOT}}}" and long.rows == 3
+    q, kv, idx, n, skv, sink = long.operands
+    assert (q.view.offset, q.view.shape) == (127 * 32768, (3, 16, 512)) and (short.consumed, long.consumed) == ((node.id,), ())
+    assert [p.offset for p in kv.rows[0]] == [0] + [512 * (1 + s) for s in range(128)] + [0] * 127, "compressed row 0, then the window"
+    assert [p.offset for p in kv.rows[2]] == [0] + [512 * (1 + s) for s in range(2, 130)] + [0] * 127
+    assert [(c.bits, c.count) for c in idx.rows[0]] == [(0, 129), (NEG1, 127)] and n.rows[0][0].bits == 129 and skv.bits == 1
+    assert [p.offset for p in short.operands[1].rows[0]] == [512] * 128 and short.operands[3].rows[0][0].bits == 1
+
+
+def test_a_sparse_attention_over_a_batch_or_without_its_compress_caches_or_sink_root_is_refused():
+    assert isinstance(SparseDecode().match(_decode(L0, T=2), _attn_ctx(L0, [5, 9])), Unsupported), "the batch's schedule is not folded"
+    ctx = _attn_ctx(L0, [255], ends=(255,))
+    ctx.scratch["dsv4_compress"].clear()
+    assert isinstance(SparseDecode().match(_decode(L0), ctx), Unsupported), "a compress whose state write did not resolve"
+    assert isinstance(SparseDecode().match(_decode(L0), _attn_ctx(L0, [5], roots=ATTN_ROOTS[L0][1:])), Unsupported)
+    assert isinstance(SparseDecode().match(_decode(L2, R=4), _attn_ctx(L2, [4099], R=4, W=1024, bs=4)), Unsupported), \
+        "more compressed rows than the indexer's top-k"
+    assert isinstance(SparsePrefill().match(_prefill(L0, 130, 131), _attn_ctx(L0, range(130), ends=(127,), buffers=False)), Unsupported)
+    ctx = _attn_ctx(L0, range(2))
+    ctx = dataclasses.replace(ctx, start=dataclasses.replace(ctx.start, rows=[("r0", 0), ("r1", 0)]))
+    assert isinstance(SparsePrefill().match(_prefill(L0, 2, 2), ctx), Unsupported), "the chunk plan's workspace is folded at one request"
 
 
 def test_a_split_buffer_other_than_the_dispatchs_or_a_weight_without_a_root_is_refused():
