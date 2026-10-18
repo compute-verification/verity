@@ -94,6 +94,11 @@ QWEN_FUSED = {"prefill": 26.656692032e9 / 4, "decode": 4.674396352e9 / 64}
 UNITS_QWEN = {"call": 1.0, "block": _frac(36_864, QWEN_TODAY), "layer": _frac(20_480, QWEN_TODAY),
               "layer-folded": _frac(12_288, QWEN_TODAY), "fused": QWEN_FUSED}
 
+
+def set_fused_bytes(prefill: float, decode: float) -> None:
+    """Price another Commit at the fused units: bytes a prefill and a decode step, logits included, in QWEN_FUSED's place."""
+    UNITS_QWEN["fused"] = {"prefill": prefill, "decode": decode}
+
 WORKLOADS = (
     Workload(
         "Llama-3.2-1B B32 compiled", "H200",
@@ -403,6 +408,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--hm96", action="append", default=[], metavar="GPU/COLUMN/MODE=PREFILL[,DECODE]",
                     help="replace a fused row's rate, GB/s: one number the prefill rate, two prefill and decode, e.g. "
                          "'H200/SHA-512 sharaw/step=480' (repeatable)")
+    ap.add_argument("--fused-bytes", metavar="PREFILL,DECODE",
+                    help="the fused rows' bytes a prefill and a decode step, logits included (default QWEN_FUSED, 31.33 GB a run)")
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--check", action="store_true")
     a = ap.parse_args(argv)
@@ -411,6 +418,11 @@ def main(argv: list[str] | None = None) -> int:
         bad = check()
         print("\n".join(bad) if bad else f"ok: {len(CHECKS)} cells of circuits' table, leaf counts and run bytes reproduce")
         return 1 if bad else 0
+    if a.fused_bytes:
+        try:
+            set_fused_bytes(*(float(x) for x in a.fused_bytes.split(",")))
+        except (TypeError, ValueError):
+            ap.error(f"--fused-bytes {a.fused_bytes!r}: want PREFILL,DECODE bytes a step")
     try:
         ov = parse_overrides(a.hm96)
     except ValueError as e:
