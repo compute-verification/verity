@@ -1,22 +1,67 @@
 {
  "definitions": {
+  "BlockOpeningCheck_v1{N=32,C=5,K=2,MASKED=1,BYTES=64,ROWS=2,LEAF=3,P=4,DR=1,DP=2,DV=1}": {
+   "and": 2579999
+  },
+  "BlockVerdict_v1{W=16}": {
+   "and": 21
+  },
+  "BlockVerdict_v1{W=64}": {
+   "and": 69
+  },
   "CodecBinding_v1{N=512,C=569}": {
    "and": 158365
+  },
+  "CodecLess_v1{N=32,C=5}": {
+   "and": 38
   },
   "CodecLess_v1{N=512,C=569}": {
    "and": 638
   },
+  "CodecMatch_v1{N=32}": {
+   "and": 32
+  },
   "CodecMatch_v1{N=512}": {
    "and": 512
+  },
+  "CodecModAdd_v1{N=32,C=5}": {
+   "and": 141
   },
   "CodecModAdd_v1{N=512,C=569}": {
    "and": 2301
   },
+  "CodecRound_v1{N=1024,C=105,MASK=1}": {
+   "and": 473154
+  },
+  "CodecRound_v1{N=32,C=5,MASK=0}": {
+   "and": 1963
+  },
+  "CodecRound_v1{N=32,C=5,MASK=1}": {
+   "and": 2066
+  },
   "CodecRound_v1{N=512,C=569,MASK=0}": {
    "and": 158233
   },
+  "CodecWord_v1{N=32,C=5,K=2,MASKED=1}": {
+   "and": 4099
+  },
+  "CodecWord_v1{N=512,C=569,K=2,MASKED=0}": {
+   "and": 317616
+  },
+  "LeafMatch_v1{LEAF=16,P=48}": {
+   "and": 9798
+  },
+  "LeafMatch_v1{LEAF=3,P=4}": {
+   "and": 2231
+  },
+  "RowCompress_v1": {
+   "and": 81402
+  },
   "SketchRow_v1{BYTES=4096}": {
    "and": 56605
+  },
+  "SketchRow_v1{BYTES=64}": {
+   "and": 904
   }
  }
 }
