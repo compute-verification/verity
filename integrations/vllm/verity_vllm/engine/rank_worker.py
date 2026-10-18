@@ -544,7 +544,7 @@ class TP2CaptureWorkerExtension:
                 st["hooks"].wrap(mod, attr, lambda orig, kind=kind: coll_wrap(orig, kind))
         for mod, attr in FN.targets(model):      # [VLLM-12] DeepSeek-V3.2's layers reduce in the norm after them (collectives.fused_norm)
             st["hooks"].wrap(mod, attr, lambda orig: FN.recording(orig, model, st, coll_wrap, lambda: FN.silenced(observer_rec())))
-        # the MoE align schedule each MoE layer ran under, the witness the match oracle conditions on (`moe_align_source.CaptureWitness`)
+        # each MoE layer's align members, which the match oracle pairs with the committed ones (`moe_align_source.CaptureWitness`)
         from verity_vllm.acquire.sources.moe_align_source import capture_witness
         st["witness"] = capture_witness(model, rank, lambda: st["k"], lambda: FN.silenced(observer_rec()))
 

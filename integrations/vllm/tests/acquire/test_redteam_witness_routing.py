@@ -1,13 +1,13 @@
-"""Red-team repro (circuits W6, claim 2): the witness-conditioned match oracle reads a routing change as a schedule difference.
+"""Red-team repro (circuits W6, claim 2), kept as a regression test: the match oracle must not read a routing change as a schedule
+difference.
 
-The oracle (`oracle_witness`, on cursor/dsv4-build-21f3) exempts every tensor in the cone of an align call whose committed witness
-(rank, start, blk, par) differs from the capture's.  Those four members are functions of the router's top-k ids as well as of
-atomicAdd's order, so a committed routing that is not the capture's also makes the witness differ, and exempts the MoE output it
-changed and everything after it.  At a B1 decode (6 pairs on 6 distinct experts) the schedule has no freedom at all: rank is 0, start 1
-and par 6 for every routing, and blk differs exactly when the ids do.  DeepSeek-V4-Pro's Commit r20261018-023527-3dc1 shows it on rank 0:
-928 decode-step witnesses differ in align.blk alone, and 52 of step 0's in align.par, which only the per-expert counts decide.
-
-Skipped where the oracle module is absent (main before the DSV4 branch lands)."""
+The witness-conditioned oracle exempted every tensor in the cone of an align call whose committed witness (rank, start, blk, par)
+differed from the capture's.  Those four members are functions of the router's top-k ids as well as of atomicAdd's order, so a
+committed routing that is not the capture's also made the witness differ, and exempted the MoE output it changed and everything after
+it.  At a B1 decode (6 pairs on 6 distinct experts) the schedule has no freedom at all: rank is 0, start 1 and par 6 for every routing,
+and blk differs exactly when the ids do.  DeepSeek-V4-Pro's Commit r20261018-023527-3dc1 showed it on rank 0: 928 decode-step
+witnesses differ in align.blk alone, and 52 of step 0's in align.par, which only the per-expert counts decide.  The oracle now exempts
+nothing and fails a differing witness by name with what it implies (`oracle_witness.implied`)."""
 from __future__ import annotations
 
 import json
@@ -17,9 +17,9 @@ from pathlib import Path
 import pytest
 
 torch = pytest.importorskip("torch")
-OW = pytest.importorskip("verity_vllm.acquire.sources.oracle_witness")
-MA = pytest.importorskip("verity_vllm.acquire.sources.moe_align_source")
 from tests.check.opened import commit_steps  # noqa: E402
+from verity_vllm.acquire.sources import moe_align_source as MA  # noqa: E402
+from verity_vllm.acquire.sources import oracle_witness as OW  # noqa: E402
 from verity_vllm.acquire.sources import partial_source as tps  # noqa: E402
 from verity_vllm.check import oracle_compare as OC  # noqa: E402
 
@@ -96,14 +96,10 @@ def test_a_decode_routing_change_differs_in_blk_alone():
     assert dict(zip(OW.MEMBERS, same)) == {"align.rank": True, "align.start": True, "align.blk": False, "align.par": True}
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError,
-                   reason="claim 2 BROKEN: a committed routing that is not the capture's differs from it in align.blk, the oracle reads that as "
-                          "a schedule difference and exempts the changed MoE output; fix: compare the align call's ids (the router's output) "
-                          "as a tensor under the cone rule, and take only the per-expert order as the witness")
 def test_a_routing_change_under_an_equal_upstream_is_a_mismatch_not_an_exemption(tmp_path):
     """Step 0 is equal in both runs, schedule included.  At step 1 the Commit routed the token to another expert and committed the MoE
     partial and received output that routing gives; o_proj's partial before the align call is equal.  Nothing upstream differs, so the
-    changed MoE output has no schedule to blame and should be a mismatch."""
+    changed MoE output has no schedule to blame: it is a mismatch, and the witness FAILS by name as a routing difference."""
     p0, p1, o0, o1 = _tensors(7)
     q0, q1, u0, u1 = _tensors(8)
     r1, v1 = _tensors(9)[:2]
@@ -115,4 +111,5 @@ def test_a_routing_change_under_an_equal_upstream_is_a_mismatch_not_an_exemption
     r = src.compare_match_oracle(str(tmp_path), OC.OpenedReader(com, run))
     assert r["witness_counts"] == {"equal": 1, "differs": 1, "unpaired": 0}
     assert r["witnesses"]["differs"][0]["members"] == ["align.blk"]
-    assert r["verdict"] == "FAIL" and r["mismatch_n"] >= 1, (r["verdict"], r["compared"], r["exempt"], r.get("exempt_by"))
+    assert r["verdict"] == "FAIL" and r["mismatch_n"] >= 1, (r["verdict"], r.get("compared"), r.get("exempt"), r.get("exempt_by"))
+    assert r["witnesses"]["differs"][0]["implies"] == OW.ROUTING and "implying a routing difference" in r["why"]

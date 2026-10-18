@@ -17,9 +17,8 @@ the layer.  The rank Program's `schedule` input, the key `MoeAlignRanks_v1` read
 GPU did.  An `expert_map` (expert parallelism) is refused.  Each value is committed as the 32-bit words of its i32 tensor, a float32
 view (`call_boundary_plan.WORD_DTYPES` "f32").
 
-The same members are the schedule witness of the Match capture (`CaptureWitness`, `align.rank<r>.jsonl`): the match oracle compares a
-committed collective with the capture's only where every witness in its dependency cone is equal in both runs
-(`oracle_witness`).
+The Match capture records the same members (`CaptureWitness`, `align.rank<r>.jsonl`), and the match oracle pairs them with the
+committed ones: one that differs fails the match by name, with the routing difference it implies (`oracle_witness`).
 """
 from __future__ import annotations
 

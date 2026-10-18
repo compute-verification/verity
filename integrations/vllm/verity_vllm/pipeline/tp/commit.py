@@ -244,7 +244,7 @@ def main(args: Options) -> int:
     from verity_vllm.commit.challenge import challenge_positions
     from verity_vllm.commit.partition import require_partition
     from verity_vllm import protocol_options as PO
-    from verity_vllm.acquire.sources.oracle_witness import SUMMARY_KEYS as TPS_SUMMARY_KEYS, condition_on_witnesses
+    from verity_vllm.acquire.sources.oracle_witness import SUMMARY_KEYS as TPS_SUMMARY_KEYS
     if args.world is not None:
         args.tp = int(args.world)
     if args.replay_deferred and (not args.required_manifest or args.no_sampled_replay):
@@ -476,11 +476,12 @@ def main(args: Options) -> int:
                         bundles_of[pair] = {int(f["rank"]): (f.get("sampled_replay") or {}).pop("bundle", None) for f in fin}
             if arm != "control":
                 if match_capture_dir is not None:
-                    differs = condition_on_witnesses({int(f["rank"]): f.get("match_oracle") for f in fin})
+                    differs = sorted((w for f in fin for w in (((f.get("match_oracle") or {}).get("witnesses") or {}).get("differs") or [])),
+                                     key=lambda w: (int(w["step"]), int(w["k"]), int(w["rank"])))
                     print(f"[tp2commit] match oracle (tp partials vs capture), {len(differs)} differing MoE align witness(es)"
-                          + (f", first rank {differs[0]['rank']} step {differs[0]['step']} k {differs[0]['k']} {differs[0]['module']}" if differs else "") + ": " + "; ".join(
-                        f"rank {f['rank']} {mo.get('verdict')} steps {mo.get('steps_compared')} tensors {mo.get('tensors')} compared {mo.get('compared')} "
-                        f"equal {mo.get('equal')} exempt {mo.get('exempt')} mismatch {mo.get('mismatch_n')} missing {mo.get('missing_n')} "
+                          + (f", first rank {differs[0]['rank']} step {differs[0]['step']} k {differs[0]['k']} {differs[0]['module']} implies {differs[0]['implies']}" if differs else "") + ": " + "; ".join(
+                        f"rank {f['rank']} {mo.get('verdict')} steps {mo.get('steps_compared')} tensors {mo.get('tensors')} "
+                        f"equal {mo.get('equal')} mismatch {mo.get('mismatch_n')} missing {mo.get('missing_n')} "
                         f"not_in_oracle {mo.get('not_in_oracle_n')} witnesses equal {(mo.get('witnesses') or {}).get('equal')} unpaired {(mo.get('witnesses') or {}).get('unpaired_n')} "
                         f"{mo.get('by_member')} {mo.get('error') or ''}"
                         for f in sorted(fin, key=lambda f: f["rank"]) for mo in [f.get("match_oracle") or {}]), flush=True)
