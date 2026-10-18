@@ -261,7 +261,7 @@ These are Daniel's rulings, newest first.
 - 2026-10-03 (6:46 PM PDT): a change to what a guarantee says needs no reviewer and no approval: when it lands on `main`,
   Daniel gets a DM showing it. "Pin" is retired: say guarantee. (Since 8 Oct no change waits on a per-head grant at all.)
 - 2026-10-01: a pinned theorem is called a **guarantee** (security guarantee): a proved `Prop`, assumptions implying a
-  conclusion, where an assumption is a named `Prop` (README "Glossary").
+  conclusion, where an assumption is a named `Prop` (DESIGN.md "Glossary").
 - 2026-10-01: a guarantee that only moved, renamed or restated as a `Guarantees` definition, needs no statement reviewer
   when `--update --moved` prints it as the same statement under its old names, with every definition it reads the same.
   Since 2026-10-03 no change needs one; `--moved` now decides only whether Daniel's DM lists it.
