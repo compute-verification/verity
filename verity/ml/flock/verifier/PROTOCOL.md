@@ -1602,8 +1602,9 @@ reason, and one whose verdict is `refused: <why>: a statement form the soundness
 
 1. an hm96-sha512 row statement (§16.10 on): `<name>, a statement before hm96-sha512 rows`;
 2. untyped (§16.11): `<name>, a typed statement`;
-3. retained rounds (§6.2) and `hm96-sha512/v1` leaves (`<name>, a statement without retained rounds`, `... with <leaf>
-   leaves`);
+3. retained rounds (§6.2) and `hm96-sha512/v1` leaves, or, at a statement with hidden outputs without `--zk`, plain
+   SHA-512 leaves (§16.16, `ProvedScope.leafOk`): `<name>, a statement without retained rounds`, `... with <leaf>
+   leaves`, `... with <leaf> leaves under --zk`;
 4. at most one table without `--zk` (§16.12): `<J> tables in a session without --zk`; and at most
    `ProvedScope.zkTableCap` (2^16) with it, the bound ZK's tape premise holds over: `<J> tables in a --zk session, more
    than 65536`;
@@ -1694,10 +1695,15 @@ needs none. `Tags.withPlainLeaves` changes three things.
   (`Setup.openedSalts`, set on every hm96-row statement); `631567f7`'s unsalted openings carry none. Every level's leaf and
   node are SHA-512 (`merkle_hash` 2).
 
-The verifier identifies the statement (`statement` prints its identity and digest), but `verify` refuses any
-statement whose leaf scheme is that object (`Tags.plainLeaves`), with or without `--zk`, until a soundness headline
-covers it: every hidden-output headline needs `merkleLeaf = "hm96-sha512/v1"`. The statement is ZK off, and upstream's
-`--zk` refuses it too.
+The verifier identifies the statement (`statement` prints its identity and digest), and `verify` without `--zk` checks
+its sessions as §16.13's: §16.15's rule 3 admits plain SHA-512 leaves at a statement with hidden outputs
+(`ProvedScope.leafOk`). The hidden-output headlines cover it, each stated at the model leaf of the statement's leaf
+scheme (`Refine.leafOfId`: `leafPlain`, `leaf c _ = SHA-512(enc(c))`, for these leaves). A leaf enters the soundness
+proof only through its binding, and two columns with one plain leaf are a SHA-512 collision of their encodings, charged
+to the same collision finder (`cr/sha-512`, `ecr/sha-512`) as an `hm96-sha512/v1` leaf's; nothing in the proof reads the
+salt. `verify --zk` refuses the statement (`Tags.plainLeaves`): `--zk`'s hiding needs `hm96-sha512/v1` leaves, the
+statement is ZK off, and upstream's `--zk` refuses it too. A statement with public outputs and plain leaves stays refused
+under rule 3.
 
 **A registered description.** When the inner statement is a private circuit's (its description, the circuit's `op`,
 `src` and `out` bits, one row port every instance reads), the developer registers the description's rows once (§16.10's

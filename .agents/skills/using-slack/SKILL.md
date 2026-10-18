@@ -2,8 +2,8 @@
 name: using-slack
 description: >
   The coordination API: how Verity's coordinators and service agents talk on Slack (computeverification.slack.com). Handles
-  (user groups @infra, @proofs, @circuits, @compute-accounting, @memory-accounting, @network-accounting, @console, and the
-  advisors @old-accounting and @old-circuits-and-proofs) are roles; everything between them happens in #agent-coordination,
+  (user groups @infra, @proofs, @circuits, @compute-accounting, @memory-accounting, @network-accounting, @lean, @ci, @comms,
+  @vllm, @benchmarks, @console and @top) are roles; everything between them happens in #agent-coordination,
   #agent-alerts is machines to @infra, and #ask-daniel holds everything that needs Daniel, one question per card (`research
   msg ask-daniel`: blocking or default, options with a recommendation, a Pacific deadline). Covers the three interactions
   (ask one handle, announce to some, announce to all), asking Daniel, the
@@ -20,8 +20,8 @@ The coordination API has one place, three interactions and one lifecycle.
 
 - **Handles** are roles, one per coordinator: `@infra`, `@proofs`, `@circuits`, `@compute-accounting` (proof of useful work),
   `@memory-accounting` (proof of useful space), `@network-accounting` (the network certifier), `@lean`, `@ci`, `@comms`,
-  `@vllm`, `@benchmarks`, `@console` and `@top` (the admin, Daniel's coordinator), plus two advisors,
-  `@old-accounting` and `@old-circuits-and-proofs`, who advise their successors and relay their old workers' results. Since
+  `@vllm`, `@benchmarks`, `@console` and `@top` (the admin, Daniel's coordinator). The old advisors' handles
+  (`@old-accounting`, `@old-circuits-and-proofs`) and `@pr-captain` retired on 17 Oct (COMM-14). Since
   14 Oct each coordinator but `@console` is a plain cloud agent that owns a vertical slice and runs its own subagents.
   `@console` is Daniel's desktop agent on his laptop, beside the console's dev server. Nothing wakes it: its inbox holds
   your ask until Daniel opens it, and then it reads every unread doorbell (`names read --as console`) and answers in your
@@ -96,8 +96,7 @@ research msg subscriptions --as <your handle>    # prints the subscribe calls to
 ~~~
 
 - **A holder subscribes to its own inbox thread, not to `#agent-coordination`'s top level.** The sender rings the inbox of
-  each handle a post addresses (`routes.d`); no agent forwards. The registry's `subscribers` lists the holders
-  that still take the channel top level as well (the `old-*` advisors). A doorbell for a
+  each handle a post addresses (`routes.d`); no agent forwards, and no holder takes the channel's top level. A doorbell for a
   post that turns out not to be for you ends the turn silently. **Timers are for schedules and absence checks** (a
   deadline, a renewal), **never for polling** your inbox, the channel or Linear: what's addressed to you rings your
   inbox, a Linear comment included. comms' daily review replays every post against the doorbells rung and chases what
@@ -120,7 +119,6 @@ research msg subscriptions --as <your handle>    # prints the subscribe calls to
 - Ask for 30 days (`expiresInSeconds: 2592000`); "On every wake" below says when to renew.
 
 ~~~text
-subscribe_slack_channel(channelId=<#agent-coordination id>, topLevelOnly=true, expiresInSeconds=2592000)  # the old-* holders only
 subscribe_slack_channel(channelId=<#agent-alerts id>, topLevelOnly=true, expiresInSeconds=2592000)       # @infra only
 subscribe_slack_channel(channelId=<#ask-daniel id>, topLevelOnly=true, expiresInSeconds=2592000)         # @infra only
 subscribe_slack_thread(channelId=<channel id>, threadTs=<the root's ts>, expiresInSeconds=2592000)          # a thread a human may answer in
