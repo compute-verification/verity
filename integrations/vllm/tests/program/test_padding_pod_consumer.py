@@ -277,10 +277,15 @@ def _shared_rows(requests: list[str], *, geometry: dict | None = None, members_g
     return out
 
 
-def _executed_with_planes(present: dict[int, list[str]]) -> list[list[tuple[str, bytes]]]:
+def _executed_with_planes(present: dict[int, list[str]], *, heads: int | None = None) -> list[list[tuple[str, bytes]]]:
+    """`heads`: the launch is a real decode one (`heads` slabs a sequence, one row each, NB 1 at the FA2 legacy tile), named and sized by
+    its geometry over the step's present sequences; else the toy plane `m1` of PLANE_WORDS."""
+    from verity_vllm.query.manifest.format import mat_total_words
     steps = _executed(present)
     for s, ts in zip(sorted(present), steps):
-        ts.extend((f"fa2.m1/L{L}/m1", bytes((3 + i + s + L) % 251 for i in range(PLANE_WORDS * 4))) for L in range(LAYERS))   # the launch plane, whole
+        hb = (heads or 0) * len(present[s])
+        name, words = (f"g{hb}x1x1", mat_total_words(hb, 1, 1, 128, 64)) if heads else ("m1", PLANE_WORDS)
+        ts.extend((f"fa2.m1/L{L}/{name}", bytes((3 + i + s + L) % 251 for i in range(words * 4))) for L in range(LAYERS))   # the launch plane, whole
     return steps
 
 
@@ -289,33 +294,41 @@ def test_f_r17b_64_rule_a_an_inactive_listed_member_of_a_shared_launch_plane_get
     steps 3, 4 IDLE.  Rule (a): the plane of a listed member the executed prefix places outside the step is ⊥ by enablement -- one
     per-sequence ⊥ plane per (inactive member, layer): r0 at step 2 (2), both at steps 3 and 4 (4 + 4) = 10.  The pod's full-cap
     population (load_required_manifest as commit_delta loads it) is then COVERED on the shared class: 20 / 20, 0 missing, and the
-    executed launch bindings are what they were (bound whole to the members the launch ran over)."""
+    executed launch bindings are what they were (bound whole to the members the launch ran over).  The launch is a real decode one
+    (4 heads a sequence): coverage holds it to its geometry over the members executing at the step."""
     import json
-    ids = _identities(["r0", "r1"]) + _shared_rows(["r0", "r1"])
     from verity_vllm.query.manifest import format as RM
-    manifest = {"schema": RM.SCHEMA, "program_digest": PD, "identities": ids, "manifest_digest": RM.manifest_digest(ids)}
+    words = RM.mat_total_words(4, 1, 1, 128, 64)                            # one member's share of the launch: its bot plane
+    geo = {"HB": 8, "M": 1, "NB": 1, "BN": 128, "D": 64, "seqlen_k": CAP, "rows": 2, "n_seq": 2}
+    ids = _identities(["r0", "r1"]) + [dict(r, output_member="g8x1x1", element_range=[0, RM.mat_total_words(8, 1, 1, 128, 64)])
+                                       for r in _shared_rows(["r0", "r1"], geometry=geo)]
+    manifest = {"schema": RM.SCHEMA, "program_digest": PD, "identities": ids, "manifest_digest": RM.manifest_digest(ids),
+                "engine_steps": [{"engine_step": e, "rows": 2, "n_seq": 2, "members": [{"request_id": r, "step": e, "rows": 1} for r in ("r0", "r1")]}
+                                 for e in range(CAP)]}
     requests = [{"request_id": "req-a", "index": 0, "max_tokens": CAP, "arrive_step": 0}, {"request_id": "req-b", "index": 1, "max_tokens": CAP, "arrive_step": 0}]
     served = {"req-a-1a2b": [17, 0], "req-b-5e6f": [5, 6, 0]}
     executed = {0: ["r0", "r1"], 1: ["r0", "r1"], 2: ["r1"]}
     com = _committer()
     com.padding_hook = lambda c: PS.padding_for_committer(c, manifest=manifest, requests=requests, sampling={"max_tokens": CAP}, served_tokens=served,
                                                           stop={"eos": [0], "lag": 0})
-    run = com.commit_offline(_executed_with_planes(executed))
+    run = com.commit_offline(_executed_with_planes(executed, heads=4))
     assert len(run.steps) == CAP and sorted(com._padding) == [2, 3, 4]
     planes = {s: sorted(m.name for m in ps.metas if m.name.startswith("fa2.m1/")) for s, ps in com._padding.items()}
-    assert planes[2] == ["fa2.m1/L0/r0/m1/bot", "fa2.m1/L1/r0/m1/bot"], "the MIXED step: only the inactive member's plane is bot"
-    assert planes[3] == planes[4] == ["fa2.m1/L0/r0/m1/bot", "fa2.m1/L0/r1/m1/bot", "fa2.m1/L1/r0/m1/bot", "fa2.m1/L1/r1/m1/bot"], "IDLE steps: every member's"
+    assert planes[2] == ["fa2.m1/L0/r0/g4x1x1/bot", "fa2.m1/L1/r0/g4x1x1/bot"], "the MIXED step: only the inactive member's plane is bot"
+    assert planes[3] == planes[4] == ["fa2.m1/L0/r0/g4x1x1/bot", "fa2.m1/L0/r1/g4x1x1/bot", "fa2.m1/L1/r0/g4x1x1/bot", "fa2.m1/L1/r1/g4x1x1/bot"], \
+        "IDLE steps: every member's"
     assert sum(len(v) for v in planes.values()) == 10
     # the bot plane is the plane's committed dtype in ITS lifted container (u32 -> lifted33/u64), canonical bot on every word
     for ps in com._padding.values():
         for m in ps.metas:
             if m.name.startswith("fa2.m1/"):
-                assert m.dtype == "lifted33/u64" and m.committed_dtype == "u32" and m.elements == PLANE_WORDS and m.nbytes == PLANE_WORDS * 8
+                assert m.dtype == "lifted33/u64" and m.committed_dtype == "u32" and m.elements == words and m.nbytes == words * 8
                 body = bytes(ps.stream[m.stream_off - ps.stream_base:m.stream_off - ps.stream_base + m.nbytes])
-                assert body == PS.bot_word("u32") * PLANE_WORDS
+                assert body == PS.bot_word("u32") * words
     rr = {0: [("r0", 0, 1), ("r1", 1, 2)], 1: [("r0", 0, 1), ("r1", 1, 2)], 2: [("r1", 0, 1)]}
     pm = PS.padded_binding_map_of_committer(com, run, PD, chunk=CHUNK, request_id="r0", request_rows=rr)
-    # the pod's population under --padded-finalize: request_steps = arrival .. arrival + cap; the shared rows expand per listed member, op-level
+    # the pod's population under --padded-finalize: request_steps = arrival .. arrival + cap; the shared rows expand per listed member
+    # (member `*`, held to the launch executing at the step; an inactive member to its bot plane)
     path = tmp_path / "manifest.json"
     path.write_text(json.dumps(manifest))
     pop, hdr = B.load_required_manifest(str(path), PD, requests=["r0", "r1"], steps=CAP, ranks=[0], arrivals={"r0": 0, "r1": 0},
@@ -330,7 +343,7 @@ def test_f_r17b_64_rule_a_an_inactive_listed_member_of_a_shared_launch_plane_get
     assert cov_all["ok"] and cov_all["missing_n"] == 0, cov_all.get("missing")
     # the map says which are which: the bot planes carry activity / shared_of / geometry_source; the launch planes bind to the members they ran over
     bot_planes = [e for e in pm["entries"] if e.get("activity") == "bot-by-enablement" and str(e["name"]).startswith("fa2.m1/")]
-    assert len(bot_planes) == 10 and all(e["shared_of"]["requests"] == ["r0", "r1"] and e["geometry_source"] == "row-width" for e in bot_planes)
+    assert len(bot_planes) == 10 and all(e["shared_of"]["requests"] == ["r0", "r1"] and e["geometry_source"] == "launch-share" for e in bot_planes)
     assert sorted((e["identity"]["request_id"], e["identity"]["step"]) for e in bot_planes) == sorted([("r0", 2)] * 2 + [("r0", 3), ("r1", 3)] * 2 + [("r0", 4), ("r1", 4)] * 2)
     launch = [e for e in pm["entries"] if e.get("activity") != "bot-by-enablement" and str(e["name"]).startswith("fa2.m1/")]
     assert sorted({(e["identity"]["request_id"], e["identity"]["step"]) for e in launch}) == [("r0", 0), ("r0", 1), ("r1", 0), ("r1", 1), ("r1", 2)]
@@ -347,7 +360,7 @@ def test_f_r17b_64_rule_a_an_inactive_listed_member_of_a_shared_launch_plane_get
     # step 2: r0's 5 per-request rows + its 2 planes; steps 3, 4: both members' 10 rows + 4 planes each
     assert sum(len(ps.metas) for ps in com._padding.values()) == (5 + 2) + 2 * (10 + 4) == 35
     if getattr(com, "padding_stats", None) is not None:                # the union branch's committer measures the overhead (A14.3 (g))
-        assert com.padding_stats["padding_tensors"] == 35 and com.padding_stats["padding_bytes"] >= 10 * PLANE_WORDS * 8
+        assert com.padding_stats["padding_tensors"] == 35 and com.padding_stats["padding_bytes"] >= 10 * words * 8
 
 
 def test_f_r17b_64_the_bot_plane_is_sized_by_the_members_own_geometry_declared_first_else_the_launch_share():

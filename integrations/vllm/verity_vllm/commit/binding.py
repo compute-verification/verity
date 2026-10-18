@@ -33,7 +33,7 @@ from typing import Any, Iterable, Iterator
 
 from verity_vllm.commit import challenge as CH
 from verity_vllm.query.manifest.bind import HIDDEN_FAMILIES, split_name
-from verity_vllm.query.manifest.format import MOE_PLANES
+from verity_vllm.query.manifest.format import MOE_PLANES, batch_launch_shortfall
 from verity_vllm.query.manifest.format import PROMOTED_DTYPE_BYTES  # noqa: F401  -- re-exported (R19 int-20)
 from verity_vllm.query.manifest.format import PROMOTED_OBSERVATION_RULE as PROMOTED_INPUT_RULE  # noqa: F401  -- re-exported
 from verity_vllm.query.manifest.format import promoted_observation as promoted_input_acquisition  # noqa: F401  -- re-exported
@@ -79,6 +79,20 @@ def identity(program_digest: str, request_id: str, step: int, invocation: int, o
     return (program_digest, request_id, int(step), int(invocation), op_path, member, (int(lo), int(hi)), int(rank))
 
 
+class LaunchIdentity(tuple):
+    """A batch-level hidden identity (member `*`: one per request a B>1 launch row lists, at its engine step) and the launch the op's
+    committed stream must carry there: `launch` = {"geometry": the row's launch geometry, "rows": {r<i>: token rows} of the step's declared
+    composition} (`format.batch_launch_shortfall`).  It equals its identity tuple: the population's digest and record read the identity only."""
+
+    def __new__(cls, ident: tuple, launch: dict[str, Any]) -> "LaunchIdentity":
+        self = super().__new__(cls, ident)
+        self.launch = launch
+        return self
+
+    def __reduce__(self):
+        return (LaunchIdentity, (tuple(self), self.launch))
+
+
 def identity_dict(ident: tuple) -> dict[str, Any]:
     d = dict(zip(IDENTITY_KEY, ident, strict=True))
     d["element_range"] = list(d["element_range"])
@@ -102,6 +116,8 @@ def build_binding_map(layouts: dict[int, list], steps: list, run_root: bytes, pr
 
     `request_rows[step]` = [(request_id, row_lo, row_hi)] splits the leading (token/row) dimension of a batched member between the
     requests of that step (the scheduler's row order, recorded by the engine wrapper); without it the whole member binds `request_id`.
+    A MoE block plane whose rows are not a multiple of the step's tokens is bound to no request: its entry is request `*` with `refused`
+    (the reason), which `coverage_check` names.
     Entries are compact (one per tensor x request); `digest` is over the canonical JSON of the entries -- recorded in the Commit record and
     mixed into the challenge, so the map cannot be chosen after the openings.
     `binder` (`verity_vllm.query.manifest.bind.Binder`, from the required manifest): the identity each committed tensor binds; an entry bound
@@ -124,6 +140,7 @@ def build_binding_map(layouts: dict[int, list], steps: list, run_root: bytes, pr
             off = m.stream_off if m.stream_off is not None and m.stream_off >= 0 else m.first_leaf * m.chunk
             rr = (request_rows or {}).get(step)
             splits: list[tuple[str, int, int, int]] = []            # (request, request-local lo, request-local hi, global element offset)
+            refused = None
             if rr and m.shape and numel > 0 and not op.startswith(HIDDEN_FAMILIES):
                 rows = int(m.shape[0])
                 per_row = numel // max(rows, 1)
@@ -147,8 +164,9 @@ def build_binding_map(layouts: dict[int, list], steps: list, run_root: bytes, pr
                     f = rows // tokens                                                # 1 for token planes, TOPK for the act plane
                     per_row = numel // rows
                     splits = [(rid, 0, (hi - lo) * f * per_row, lo * f * per_row) for rid, lo, hi in rr]
-                else:                                                                 # not a token multiple: bind whole, reported as an extra shape
-                    splits = [(rid, 0, numel, 0) for rid, _lo, _hi in rr]
+                else:                                                                 # not a token multiple: no request's rows can be read off it
+                    refused = f"{m.name}: {rows} rows, not a multiple of the step's {tokens} token rows: bound to no request"
+                    splits = [("*", 0, numel, 0)]
             elif rr and op.startswith(HIDDEN_FAMILIES):
                 splits = [(rid, 0, numel, 0) for rid, _lo, _hi in rr]
             if not splits:
@@ -161,6 +179,7 @@ def build_binding_map(layouts: dict[int, list], steps: list, run_root: bytes, pr
                     "stream_offset": int(off), "width_bytes": int(m.nbytes), "encoding": {"dtype": m.dtype, "shape": list(m.shape)}, "element_offset": int(goff),
                     "tensor_ordinal": int(m.ordinal), "name": m.name,
                     **({"observation": how} if how not in ("label", "slot") else {}),
+                    **({"refused": refused} if refused else {}),
                 })
     if weight_registration:
         entries.append({"identity": identity_dict(identity(program_digest, "*", -1, 0, "weights", "registered", 0, 0, rank)), "kind": "registered-input",
@@ -364,6 +383,7 @@ def load_required_manifest(path: str, program_digest: str, *, requests: list[str
     else:
         hdr["engine_steps"] = []
         hdr["engine_step_numbers"] = []
+    rows_at = {es["engine_step"]: {str(m["request_id"]): int(m["rows"]) for m in es["members"]} for es in hdr["engine_steps"]}
     hdr["composition_reference"] = doc.get("composition_reference") or {}
     hdr["addressing"] = doc.get("addressing", "global" if hdr["global"] else "request-local")
     hdr["program_digest_kind"] = doc.get("program_digest_kind")
@@ -399,12 +419,15 @@ def load_required_manifest(path: str, program_digest: str, *, requests: list[str
             er[1] = -1
         req_field = ident.get("request_id")
         member = str(ident.get("output_member", "out"))
+        launch_row, geometry = False, None
         if req_field == "*" and isinstance(r.get("requests"), list) and r["requests"]:
             req_field = list(r["requests"])                                # batch-level member: the requests it is bound to, explicitly
             if op.startswith(HIDDEN_FAMILIES):
-                # a batch-level hidden row names the padded whole-step launch geometry; the tap commits per-sequence planes
-                # (`s<i>/g<HB>x<M>x<NB>/<plane>`), so the requirement is op-level per request: >= 1 plane of that op/step bound to it
+                # a batch-level hidden row names the padded whole-step launch geometry; the tap stages the launch whole or per sequence
+                # (`s<i>/g<h>x<rows_i>x<NB>/<class>`) under other spellings, so the member is `*` and the requirement is the op's whole stream
+                # at the step, sized by the row's geometry and the step's rows (`LaunchIdentity`, coverage_check)
                 member = "*"
+                launch_row, geometry = True, ident.get("geometry", r.get("geometry"))
                 hdr["hidden_batch_rows_op_level"] = hdr.get("hidden_batch_rows_op_level", 0) + 1
         engine_step = ident.get("engine_step", r.get("engine_step"))       # absolute engine step (batch-level rows) beats request-relative `step` ...
         # [R16 compiled, H100 B8] ... unless the caller passes the request schedule of record (`arrivals`) and the row carries a request-
@@ -428,7 +451,8 @@ def load_required_manifest(path: str, program_digest: str, *, requests: list[str
                     continue
                 for inv in expand(ident.get("invocation"), [0], 0):
                     for rk in expand(ident.get("rank"), all_ranks, 0):
-                        out.append(identity(program_digest, str(rid), int(st), int(inv), op, member, int(er[0]), int(er[1]), int(rk)))
+                        i = identity(program_digest, str(rid), int(st), int(inv), op, member, int(er[0]), int(er[1]), int(rk))
+                        out.append(LaunchIdentity(i, {"geometry": geometry, "rows": rows_at.get(int(st), {})}) if launch_row else i)
     return out, hdr
 
 
@@ -449,6 +473,39 @@ def _entry_where(e: dict[str, Any]) -> str:
     return f"{e.get('name')}@{e.get('stream_offset')}[{e.get('leaf_lo')},{e.get('leaf_hi')})"
 
 
+def _launch_shortfalls(population: list[tuple], idx: dict[tuple, list[dict[str, Any]]], op_keys: dict[tuple, list[tuple]]) -> dict[tuple, str]:
+    """{LaunchIdentity: what its launch's committed stream lacks}, for every batch-level hidden identity that is not covered: the
+    identities of one (step, invocation, op, rank) are one launch.  Its executing requests are those bound to an executed tensor of the op
+    (a ⊥ plane, `.../bot`, aside); each must be bound to every such tensor, and together the tensors must be the launch's whole stream."""
+    launches: dict[tuple, list[LaunchIdentity]] = {}
+    for ident in population:
+        if isinstance(ident, LaunchIdentity):
+            launches.setdefault((ident[2], ident[3], ident[4], ident[7]), []).append(ident)
+    out: dict[tuple, str] = {}
+    for (st, inv, op, rk), idents in launches.items():
+        bound: dict[LaunchIdentity, dict[tuple, tuple[str, int]]] = {}
+        for ident in idents:
+            tensors = {}
+            for k in op_keys.get((ident[1], st, inv, op, rk), []):
+                if k[4].rsplit("/", 1)[-1] != "bot":
+                    for e in idx[k]:
+                        lo, hi = e["identity"]["element_range"]
+                        tensors[(e.get("name"), e.get("stream_offset"))] = (k[4], int(hi) - int(lo))
+            if tensors:
+                bound[ident] = tensors
+        if not bound:
+            continue
+        union = {t: v for tensors in bound.values() for t, v in tensors.items()}
+        rows = idents[0].launch.get("rows") or {}
+        undeclared = sorted(ident[1] for ident in bound if ident[1] not in rows)
+        why = (f"requests {undeclared[:3]} have no declared rows at engine step {st}" if undeclared else
+               batch_launch_shortfall(idents[0].launch.get("geometry"), [int(rows[ident[1]]) for ident in bound], union.values()))
+        for ident, tensors in bound.items():
+            if why or len(tensors) != len(union):
+                out[ident] = why or f"bound to {len(tensors)} of the {len(union)} tensors the launch's executing requests are bound to"
+    return out
+
+
 def coverage_check(population: Iterable[tuple], bmap: dict[str, Any], *, max_report: int = 12) -> dict[str, Any]:
     """Every required identity has EXACTLY ONE map entry with the same (request, step, invocation, op_path, member, rank) whose element_range
     contains the required one (member `*` = any member of that op_path/invocation).  Duplicated copies of ANOTHER identity do not count;
@@ -456,12 +513,20 @@ def coverage_check(population: Iterable[tuple], bmap: dict[str, Any], *, max_rep
     reported, allowed.  [R16 rev F-r16-08 / M-0077; BRIEF §3 C1 'one UNAMBIGUOUS binding'] a required identity bound by MORE THAN ONE leaf
     entry (two names / two stream ranges under one identity key, both covering the required range) is AMBIGUOUS: the replay would read
     one copy and the other would carry an unchecked value under a required identity -- `ok` requires `ambiguous_n == 0`; the first
-    `max_report` are named with where each copy lives.  `physical_copies_n` (every duplicate in the map, required or not) stays reported."""
+    `max_report` are named with where each copy lives.  `physical_copies_n` (every duplicate in the map, required or not) stays reported.
+    [red-team claim 3] A batch-level hidden identity (`LaunchIdentity`) is covered when its request is bound to every tensor of the op at
+    the step and those tensors carry the whole stream of the requests executing there, sized by their names' geometry
+    (`format.batch_launch_shortfall`, with the launch's rows); a request bound only to its ⊥ plane (a padded map) is inactive there and
+    covered by it.  A map entry `build_binding_map` refused (`refused`) is named, and `ok` requires none."""
+    population = list(population)
     idx = map_index(bmap)
     by_op: dict[tuple, int] = Counter()
     for (rid, st, inv, op, mem, rk), es in idx.items():
         by_op[(rid, st, inv, op, rk)] += len(es)
     op_keys = _op_key_index(idx)
+    launch_short = _launch_shortfalls(population, idx, op_keys)
+    refused = [e for e in bmap["entries"] if e.get("refused")]
+    refused_why = {tuple(e["identity"][k] for k in ("step", "invocation", "op_path", "output_member", "rank")): e["refused"] for e in refused}
     missing: list[dict[str, Any]] = []
     ambiguous: list[dict[str, Any]] = []
     expected_n = bound_n = ambiguous_n = 0
@@ -472,6 +537,7 @@ def coverage_check(population: Iterable[tuple], bmap: dict[str, Any], *, max_rep
         pd, rid, st, inv, op, mem, (lo, hi), rk = ident
         es = []
         covering: list[dict[str, Any]] = []
+        why = None
         if mem == "*":
             ok = by_op.get((rid, st, inv, op, rk), 0) > 0
             if ok:
@@ -479,6 +545,8 @@ def coverage_check(population: Iterable[tuple], bmap: dict[str, Any], *, max_rep
                 used.update(keys)
                 # any member of that op bound twice = two bindings of one value: ambiguous
                 covering = next((idx[k] for k in keys if len(idx[k]) > 1), [])
+                why = launch_short.get(ident) if isinstance(ident, LaunchIdentity) else None
+                ok = why is None
         else:
             es = idx.get((rid, st, inv, op, mem, rk), [])
             key_used = (rid, st, inv, op, mem, rk)
@@ -513,11 +581,15 @@ def coverage_check(population: Iterable[tuple], bmap: dict[str, Any], *, max_rep
                 d = identity_dict(ident)
                 if es:
                     d["bound_at"] = [[e["identity"]["element_range"], int(e.get("element_offset", 0) or 0)] for e in es[:2]]
+                if why or (st, inv, op, mem, rk) in refused_why:
+                    d["why"] = why or refused_why[(st, inv, op, mem, rk)]
                 missing.append(d)
     extra = [k for k in idx if k not in used]
     copies = sum(len(es) - 1 for es in idx.values() if len(es) > 1)
-    return {"ok": expected_n > 0 and bound_n == expected_n and ambiguous_n == 0, "rules_version": RULES_VERSION, "expected_n": expected_n, "bound_n": bound_n,
+    return {"ok": expected_n > 0 and bound_n == expected_n and ambiguous_n == 0 and not refused, "rules_version": RULES_VERSION,
+            "expected_n": expected_n, "bound_n": bound_n,
             "missing_n": expected_n - bound_n, "address_mismatch_n": address_mismatch, "missing": missing, "extra_n": len(extra),
+            "refused_n": len(refused), "refused": [e["refused"] for e in refused[:max_report]],
             "extra": [list(k) for k in extra[:max_report]], "physical_copies_n": copies,
             "ambiguous_n": ambiguous_n, "unambiguous": ambiguous_n == 0, "ambiguous": ambiguous,       # [F-r16-08] C1 'one unambiguous binding'
             "map_digest": bmap["digest"], "map_entries_n": bmap["entries_n"]}

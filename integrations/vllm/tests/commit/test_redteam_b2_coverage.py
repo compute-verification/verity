@@ -1,17 +1,16 @@
-"""Red-team (claim 3, the Commit's coverage contract): at B >= 2 two families can lose committed words while both coverage checks of record
--- `binding.coverage_check` over `load_required_manifest`'s population (runs.jsonl `commit.binding.coverage`) and the layouts-level
-`manifest.format.coverage_check` (`commit.coverage`, what `tests/regression/checks/coverage.py` recomputes) -- report 0 missing.
+"""Red-team (claim 3, the Commit's coverage contract): at B >= 2 two families could lose committed words while both coverage checks of
+record -- `binding.coverage_check` over `load_required_manifest`'s population (runs.jsonl `commit.binding.coverage`) and the layouts-level
+`manifest.bind.coverage_check` (`commit.coverage`, what `tests/regression/checks/coverage.py` recomputes) -- reported 0 missing.
 
-* The hidden attention stream (`fa2.m1/L<k>`, `fa3.m1/L<k>`).  A batch-level hidden row is required op-level: the loader rewrites its
-  member to `*` (binding.py `load_required_manifest`, "member = '*'") and `coverage_check` accepts any member of the op with no range
-  (the `mem == "*"` branch); the layouts check accepts ">= n_seq distinct `s<i>` prefixes or any unsegmented member" and drops the range
-  (`got, hi = numels, None`).  X-03 (`fa2_plane_classes.check_step`, a Commit rule) holds the plane NAMES to the declared class but never
-  reads a tensor's size.  The replay leaves the stream value-unchecked (check/replay/coverage.py `QUERY_FAMILY_MECHANISM`: "C1 / C3"),
-  so coverage is the one check that the stream was committed in full.  At B=1 the same truncation is missing in both checks.
-* The MoE block-stream planes (`moe/L<k>/<plane>`).  A plane whose rows are not a multiple of the step's tokens is bound WHOLE to every
-  request ("not a token multiple: bind whole, reported as an extra shape" -- nothing reports it), so a plane that carries only the first
-  request's rows covers the second request's request-local range by containment; the layouts check compares a request-local range with
-  the batched plane's size.
+* The hidden attention stream (`fa2.m1/L<k>`, `fa3.m1/L<k>`).  A batch-level hidden row was required op-level: any member of the op, no
+  size.  X-03 (`fa2_plane_classes.check_step`, a Commit rule) holds the plane NAMES to the declared class but never reads a tensor's
+  size, and the replay leaves the stream value-unchecked (check/replay/coverage.py `QUERY_FAMILY_MECHANISM`: "C1 / C3"), so coverage is
+  the one check that the stream was committed in full.  Both checks now hold the op's tensors at the step to the launch's whole stream:
+  each tensor at least the words its name's geometry declares, one plane set per executing sequence with its declared rows
+  (`format.batch_launch_shortfall`).
+* The MoE block-stream planes (`moe/L<k>/<plane>`).  A plane whose rows are not a multiple of the step's tokens was bound WHOLE to every
+  request, so a plane carrying only the first request's rows covered the second request's request-local range by containment.  The
+  binding map now binds it to no request (`refused`, named by both checks).
 """
 from __future__ import annotations
 
@@ -24,6 +23,7 @@ import pytest
 from verity_vllm.acquire import fa2_plane_classes as FP
 from verity_vllm.commit import binding as B
 from verity_vllm.commit.committer.native_host import NativeHostCommitter
+from verity_vllm.query.manifest import bind as MB
 from verity_vllm.query.manifest import format as MF
 
 CHUNK = 64
@@ -86,7 +86,8 @@ def _manifest(tmp_path, lp: dict[str, int], *, hidden: bool = True, moe: bool = 
         row = {"family": "fa2_hidden_m1_stream", "program_digest": PD, "invocation": 0, "op_path": "fa2.m1/L0", "output_member": gname,
                "element_range": [0, MF.mat_total_words(HB, M, NB, BN, D)], "rank": 0, "dtype": "u32"}
         if len(lp) > 1:
-            row |= {"request_id": "*", "requests": list(lp), "step": "*", "engine_step": 0}
+            row |= {"request_id": "*", "requests": list(lp), "step": "*", "engine_step": 0,
+                    "geometry": {"HB": HB, "M": M, "NB": NB, "BN": BN, "D": D, "seqlen_k": max(lp.values()), "rows": M * len(lp), "n_seq": len(lp)}}
         else:
             row |= {"request_id": next(iter(lp)), "step": 0, "engine_step": 0}
         ids.append(row)
@@ -114,7 +115,7 @@ def _check(tmp_path, lp: dict[str, int], step: list[tuple], **man_kw) -> dict:
     layouts = {s: [{"name": m.name, "shape": list(m.shape)} for m in ms] for s, ms in c._layouts.items()}
     names = [m.name for m in c._layouts[0]]
     x03 = FP.check_step([FP.AttnLayerDecl(0, NH, KVH, D)], FP.StepSequences(tuple(lp.values())), names, FP.LayoutPolicy("fa2", compact=True))
-    return {"binding": B.coverage_check(pop, bmap), "layouts": MF.coverage_check(doc, layouts), "composition": B.composition_check(hdr, bmap),
+    return {"binding": B.coverage_check(pop, bmap), "layouts": MB.coverage_check(doc, layouts), "composition": B.composition_check(hdr, bmap),
             "x03": x03, "bmap": bmap}
 
 
@@ -143,27 +144,46 @@ def test_b2_hidden_planes_committed_short_keep_their_names_so_x03_passes(tmp_pat
     assert staged * NH == honest
 
 
-def test_b2_moe_plane_committed_short_is_bound_whole_to_every_request(tmp_path):
+def test_b2_moe_plane_not_a_token_multiple_is_bound_to_no_request(tmp_path):
     r = _check(tmp_path, LP, _step(LP, [(n, NH) for n in _seq_planes(LP)], moe_rows=LP["r0"]), moe=True)
+    sums = [e for e in r["bmap"]["entries"] if e["name"] == "moe/L0/sum"]
+    assert [e["identity"]["request_id"] for e in sums] == ["*"] and "not a multiple of the step's 8 token rows" in sums[0]["refused"]
+    assert r["binding"]["refused_n"] == 1 and not r["binding"]["ok"]
+
+
+def test_b2_moe_planes_of_whole_token_rows_are_split_by_request(tmp_path):
+    r = _check(tmp_path, LP, _step(LP, [(n, NH) for n in _seq_planes(LP)], moe_rows=sum(LP.values())), moe=True)
+    assert r["binding"]["ok"] and r["binding"]["refused_n"] == 0, r["binding"]["missing"]
+    assert r["layouts"]["ok"], r["layouts"]["missing"]
     r1 = next(e for e in r["bmap"]["entries"] if e["name"] == "moe/L0/sum" and e["identity"]["request_id"] == "r1")
-    assert r1["identity"]["element_range"] == [0, LP["r0"] * MOE_H] and r1["element_offset"] == 0   # r1's identity points at r0's rows
+    assert r1["identity"]["element_range"] == [0, LP["r1"] * MOE_H] and r1["element_offset"] == LP["r0"] * MOE_H
 
 
-@pytest.mark.xfail(strict=True, reason="B>=2 coverage accepts a hidden launch op-level with no size, and binds a short MoE plane whole to every "
-                                       "request: a short commit reports 0 missing in both coverage checks")
-@pytest.mark.parametrize("mutation", ["hidden_planes_short", "hidden_one_word_whole", "moe_plane_short"])
-def test_b2_short_commit_is_missing_in_coverage(tmp_path, mutation):
+@pytest.mark.parametrize("mutation, binding_why, layouts_why", [
+    ("hidden_planes_short", "words committed, g4x5x1 declares", "words committed, g4x5x1 declares"),
+    ("hidden_one_word_whole", "whole launch g1x1x1 committed", "whole launch g1x1x1 committed"),
+    ("hidden_sequence_dropped", "the planes of sequences ['s0'] committed, 2 sequence(s) executing",
+     "the planes of sequences ['s0'] committed, 2 sequence(s) executing"),
+    ("hidden_rows_swapped", "sequence rows [5, 5] committed, [3, 5] scheduled", "sequence rows [5, 5] committed, [3, 5] scheduled"),
+    ("moe_plane_short", "not a multiple of the step's 8 token rows", "not a multiple of the step's 8 token rows")])
+def test_b2_short_commit_is_missing_in_both_coverage_checks(tmp_path, mutation, binding_why, layouts_why):
     planes = [(n, NH) for n in _seq_planes(LP)]
+    kw: dict = {}
     if mutation == "hidden_planes_short":
-        step, kw = _step(LP, [(n, 1) for n in _seq_planes(LP)]), {}
+        step = _step(LP, [(n, 1) for n in _seq_planes(LP)])
     elif mutation == "hidden_one_word_whole":
-        step, kw = _step(LP, [("fa2.m1/L0/g1x1x1", 1)]), {}
+        step = _step(LP, [("fa2.m1/L0/g1x1x1", 1)])
         step[-1] = (step[-1][0], step[-1][1][:4], "uint32", (1,))
+    elif mutation == "hidden_sequence_dropped":                                 # s1's planes never committed
+        step = _step(LP, [(n, NH) for n in _seq_planes(LP) if "/s1/" not in n])
+    elif mutation == "hidden_rows_swapped":                                     # s1 staged under s0's rows: as many planes, wrong size
+        step = _step(LP, [(n, NH) for n in _seq_planes({"r0": 5, "r1": 5})])
     else:
         step, kw = _step(LP, planes, moe_rows=LP["r0"]), {"moe": True}
     r = _check(tmp_path, LP, step, **kw)
     assert r["composition"]["ok"], r["composition"]
-    assert not r["binding"]["ok"] or not r["layouts"]["ok"], (r["binding"]["missing_n"], r["layouts"]["missing_n"])
+    assert not r["binding"]["ok"] and any(binding_why in m.get("why", "") for m in r["binding"]["missing"]), r["binding"]["missing"][:2]
+    assert not r["layouts"]["ok"] and any(layouts_why in m.get("why", "") for m in r["layouts"]["missing"]), r["layouts"]["missing"][:2]
 
 
 def test_b2_one_word_whole_member_is_caught_only_by_x03_declarations(tmp_path):

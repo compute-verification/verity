@@ -120,7 +120,8 @@ def padding_tensor_name(op_path: str, member: str, request_id: str) -> str:
 def member_plane_identity(shared: dict[str, Any], rid: str, engine_step: int, arrival: int) -> dict[str, Any]:
     """[B9.1 (1) rule (a); revb F-r17b-64] The ⊥ per-sequence plane of a listed member INACTIVE at a B>1 shared hidden launch row.
     The launch row (`request_id "*"`, `requests` listed, `engine_step` e) is the manifest's PACKING of the members' own attention rows at
-    e; the tap commits per-sequence planes and the requirement is op-level per member (>= 1 plane of that op at e bound to it).  A member
+    e; the tap commits per-sequence planes.  An executing member requires the launch's whole stream at e (binding.coverage_check,
+    `LaunchIdentity`), an inactive one a plane of that op at e bound to it (op-level, this ⊥ plane).  A member
     the executed prefix of record places OUTSIDE e has that call disabled for its sequence (R17-43): its plane is a required value, ⊥ of
     the plane's committed dtype, SIZED BY THE MEMBER'S OWN single-sequence geometry (the Program's Attention row for that request alone),
     never by the executed launch (whose shape is the other members' business):
@@ -837,8 +838,9 @@ def coverage_over_manifest(identities: list[dict[str, Any]], bmap: dict[str, Any
         for rid in (d.get("requests") or []):
             members_n += 1
             hit = None
-            # op-level, as the pod's loader reads a shared hidden row (`load_required_manifest`: member `*` -- the row names the PACKED
-            # launch geometry `g<HB*n_seq>x..`, the tap commits per-sequence planes `s<i>/g<HB>x..`, a member alone launches `g<HB>x..`)
+            # presence per member (the row names the PACKED launch geometry `g<HB*n_seq>x..`, the tap commits per-sequence planes
+            # `s<i>/g<HB>x..`, a member alone launches `g<HB>x..`); the executed launch's size is the record's binding.coverage_check's
+            # (`LaunchIdentity`)
             for k in keys:
                 if k[0] == rid and k[1] == es and k[2] == int(d.get("invocation", 0)) and k[3] == d["op_path"] and k[5] == int(d.get("rank", 0)):
                     hit = idx[k][0]
