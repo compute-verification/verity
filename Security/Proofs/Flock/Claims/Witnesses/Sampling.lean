@@ -555,7 +555,7 @@ theorem Nontrivial_fails (H : Msg → Msg) :
 reference prover is quiet, at every `ε_zk < 1` and every `γ`. -/
 theorem ZK_fails (H : Msg → Msg) (u v : Msg) (εzk γ : Msg → ℝ) (x : Msg) (hε : εzk x < 1) :
     ¬ Claims.Sampling.ZK H (ZKMal.quietZD (compSD Coin) u v) εzk γ :=
-  ZKMal.not_samplingZK_collSim H _ u v εzk γ x toyWit rfl rfl
+  ZKMal.not_samplingZK_collSim H _ u v εzk γ x toyWit (fun _ => rfl) rfl
     ⟨toyStmt, toyPart, rfl, rfl, by show faulty constH accCm toyStmt toyPart toyWit = ∅; rw [toy_faulty, toyWit_val]; rfl⟩ Nat.one_pos hε
 
 /-- `compSD` with a masked inner Flock (`ZKMal.toyD`, so one coin). -/

@@ -11,7 +11,8 @@ statements of every table count has no such tape (`not_tapeOK`).
 
 The masked scope bounds no table count: `Claims.Flock.InScope true` asks `tables ≤ 1` only when `zk` is false. A
 reference session of the whole `--zk` scope needs a tape read per statement, which `Claims.ZKmalR`'s one finite tape
-type for every statement does not give.
+type for every statement, the one `Claims.Flock.ZK` reads, does not give, and `Claims.ZKmalRx`'s statement-indexed
+tapes do.
 -/
 
 namespace Claims.ZKMal.RefSession
