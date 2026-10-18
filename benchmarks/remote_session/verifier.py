@@ -403,6 +403,19 @@ def paced_line(mem: dict, seen: list[dict], *, groups: int, wrong: float, blocks
             "snapshot": line(AVERAGE), "time": line(TIME_HELD)}
 
 
+def recorded_paced(session: dict, registration: dict, *, host_bytes: int, ingress_bytes_per_s: float = 0.0) -> dict:
+    """An accepted paced session's line (`paced_line`) from its record in `verifier.json`, against its HBM and
+    `host_bytes`, with `ingress_bytes_per_s` of other routes into node memory charged; the pooled wrong receipts are
+    the recorded line's."""
+    lg, mem = session["ledger"], session["ledger"]["memory"]
+    b, codec = mem["block_bytes"], wire.codec_named(registration["codec"])
+    return paced_line(mem, session["windows_seen"], groups=session["pace"]["groups"], wrong=lg["paced"]["wrong"],
+                      blocks=registration["blocks"],
+                      rebuild_per_ns=lg["inputs"]["squarings_per_s"] / codec.encode_squarings / 1e9,
+                      chip_bytes=mem["chip_bytes"], block_bytes=b, node_bytes=mem["hbm_bytes"] + host_bytes,
+                      ingress_per_ns=ingress_bytes_per_s / b / 1e9)
+
+
 class RealClock:
     def now(self) -> int:
         return time.monotonic_ns()
@@ -881,14 +894,17 @@ def main() -> int:
                     help="the pass the paced sessions' groups a stretch are counted at")
     ap.add_argument("--ingress-bytes-per-s", type=float, default=0.0,
                     help="the read ceiling of every route into node memory but a rebuild, which the paced line "
-                         "charges (`paced_line`): the node's disks, and its boundary links to drop Identity"),
+                         "charges (`paced_line`): the node's disks, and its boundary links to drop Identity")
     ap.add_argument("--memory-of", type=Path, metavar="VERIFIER_JSON",
                     help="print each accepted session's memory line in both forms from a verifier.json written "
-                         "before the average form (`recorded_memory`, with --host-bytes the node line), and exit")
+                         "before the average form (`recorded_memory`, with --host-bytes the node line), and a paced "
+                         "session's paced line with --ingress-bytes-per-s (`recorded_paced`), and exit")
     a = ap.parse_args()
     if a.memory_of is not None:
         v = json.loads(a.memory_of.read_text())
-        print(json.dumps([{"k": s["k"], "memory": recorded_memory(s, host_bytes=a.host_bytes)}
+        print(json.dumps([{"k": s["k"], "memory": recorded_memory(s, host_bytes=a.host_bytes)} | (
+            {"paced": recorded_paced(s, v["registration"], host_bytes=a.host_bytes,
+                                     ingress_bytes_per_s=a.ingress_bytes_per_s)} if s.get("pace") else {})
                           for s in v["sessions"] if s["accepted"]], indent=1))
         return 0
     registry = load_registry(a.registry)
