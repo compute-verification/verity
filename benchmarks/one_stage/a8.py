@@ -7,6 +7,9 @@ is a template, its units staged from the step's own values, sampled by the strat
       python benchmarks/one_stage/a8.py --values DIR --kinds kinds.json --roles derive-report.json --bin flock-circuit \\
       --lean flock-verify --out DIR [--per-kind 8] [--steps 1,0] [--layers 0,3] [--k K]
 
+``--save-values DIR`` stops after the values, writing each kind's rows and its unit Definitions (a few MB); ``--load-values
+DIR`` stages from them without the fold, which is most of a run's time on a shared CPU node.
+
 * **Values.** ``--values`` is `a8_slice.py`'s tar extracted: rank 0's observation log, the capture's snapshots of a few
   layers' events (activations, copied right after each call) and ``ckpt/``, the checkpoint of record's tensors of those
   layers. The log is folded into the request Program's root Calls (`observe.fold`, the integration's derived profile). A
@@ -517,9 +520,42 @@ def stage_tampered(st, rows: dict, out_dir: Path, salt_key: bytes, indices, set_
     return {"meta": json.loads(st._meta), "tampered": "o0", "word": 0, "bit": 0}
 
 
+def save_values(d: Path, staged: dict, rows_of_kind: dict, weights_notes, a) -> None:
+    """Each staged kind's rows and outputs (``<kind>.npz``), its unit Definitions as one encoded Program, and the staging notes."""
+    d.mkdir(parents=True, exist_ok=True)
+    units = {kv["unit"].id: kv["unit"] for kv in rows_of_kind.values()}
+    (d / "units.json").write_bytes(canonical_json(encode_program(P.mixed_population_program([(u, 1) for u in units.values()]))))
+    for f, kv in rows_of_kind.items():
+        np.savez(d / f"{f}.npz", **{f"i.{r}": np.asarray(v, dtype=np.uint16) for r, v in kv["rows"].items()},
+                 **{f"o.{o}": np.asarray(v, dtype=np.uint16) for o, v in kv["outs"].items()})
+    (d / "values.json").write_text(json.dumps({"staged": staged, "weights": weights_notes, "values": a.values, "steps": a.steps,
+                                               "layers": a.layers, "per_kind": a.per_kind}, indent=1, sort_keys=True, default=str))
+
+
+def load_values(d: Path, lowers: list[str]) -> tuple[dict, dict, dict]:
+    """`save_values`' directory read back: the staged kinds among ``lowers``, each unit decoded from ``units.json``."""
+    from verity.ml.circuits.codec import decode_program
+    from verity_vllm.program.registry.catalog import load as load_registry
+    doc = json.loads((d / "values.json").read_text())
+    defs = {x.id: x for x in decode_program(json.loads((d / "units.json").read_text()), load_registry()[0]).defs.values()}
+    staged = {f: s for f, s in doc["staged"].items() if f in lowers}
+    rows_of_kind = {}
+    for f, s in staged.items():
+        if not s.get("staged"):
+            continue
+        unit = defs[s["unit"]]
+        z = np.load(d / f"{f}.npz")
+        rows_of_kind[f] = {**s, "unit": unit, "rows_spec": K.rows_of(unit),
+                           "rows": {k[2:]: z[k] for k in z.files if k.startswith("i.")},
+                           "outs": {k[2:]: z[k] for k in z.files if k.startswith("o.")}}
+    return staged, rows_of_kind, {"from": {x: doc.get(x) for x in ("values", "steps", "layers", "per_kind")}, "weights": doc["weights"]}
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--values", required=True, help="a8_slice.py's tar, extracted")
+    ap.add_argument("--values", default=None, help="a8_slice.py's tar, extracted")
+    ap.add_argument("--save-values", default=None, help="write each kind's staged rows and its unit's Definition here and stop")
+    ap.add_argument("--load-values", default=None, help="a --save-values directory: stage from it instead of folding --values")
     ap.add_argument("--kinds", required=True, help="a8_kinds.py's table")
     ap.add_argument("--roles", default=None, help="the Build's derive-report.json (weight_roles: the ue8m0 rewrite)")
     ap.add_argument("--profile", default="derived_GLM53_tp8")
@@ -542,27 +578,44 @@ def main() -> int:
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     summary: dict = {"row": ROW, "rank": 0, "steps": a.steps, "layers": a.layers, "per_kind": a.per_kind}
+    # M0 lowers a word primitive by the Boolean Definition registered for it (`ir_lower._boolean_build`), some of which only
+    # the integration's registry modules register (U32And_v1's); a8_kinds' decode loads them all the same way
+    from verity_vllm.program.registry.catalog import load as load_registry
+    summary["registry_errors"] = load_registry()[1]
 
     table = json.loads(Path(a.kinds).read_text())
     kinds = {f: r for f, r in table["kinds"].items() if r.get("gates", 0) > 0 and not f.startswith("Const")}
     lowers = [f for f, r in kinds.items() if r.get("outcome") == "lowers" and (not a.only or f in a.only.split(","))]
-    res, store, weights, vals, fold_s = fold_values(Path(a.values), a.profile, Path(a.roles) if a.roles else None)
-    print(f"A8 fold: {len(res.instances)} Calls, {len(store.entries)} snapshots, {len(weights.served)} weight fields mapped, {fold_s} s",
-          flush=True)
-    staged, rows_of_kind = {}, {}
-    for f in lowers:
-        t = time.time()
-        try:
-            kv = kind_values(res, store, vals, {"kind": f, **kinds[f]}, a)
-        except Exception as e:  # noqa: BLE001
-            kv = {"staged": False, "why": f"{type(e).__name__}: {str(e)[:400]}", "trace": traceback.format_exc()[-1500:]}
-        kv["seconds"] = round(time.time() - t, 1)
-        staged[f] = {x: (y.id if x == "unit" else y) for x, y in kv.items() if x not in ("rows", "outs", "rows_spec")}
-        if kv["staged"]:
-            rows_of_kind[f] = kv
-        print(f"A8 values {f}: " + json.dumps(staged[f], default=str)[:700], flush=True)
+    if a.load_values:
+        staged, rows_of_kind, notes = load_values(Path(a.load_values), lowers)
+        summary["values_from"] = {"dir": a.load_values, **notes["from"]}
+        weights_notes = notes["weights"]
+        print(f"A8 values loaded: {sorted(rows_of_kind)}", flush=True)
+    else:
+        if not a.values:
+            raise SystemExit("--values (a8_slice.py's tar, extracted) or --load-values")
+        res, store, weights, vals, fold_s = fold_values(Path(a.values), a.profile, Path(a.roles) if a.roles else None)
+        print(f"A8 fold: {len(res.instances)} Calls, {len(store.entries)} snapshots, {len(weights.served)} weight fields mapped, "
+              f"{fold_s} s", flush=True)
+        staged, rows_of_kind = {}, {}
+        for f in lowers:
+            t = time.time()
+            try:
+                kv = kind_values(res, store, vals, {"kind": f, **kinds[f]}, a)
+            except Exception as e:  # noqa: BLE001
+                kv = {"staged": False, "why": f"{type(e).__name__}: {str(e)[:400]}", "trace": traceback.format_exc()[-1500:]}
+            kv["seconds"] = round(time.time() - t, 1)
+            staged[f] = {x: (y.id if x == "unit" else y) for x, y in kv.items() if x not in ("rows", "outs", "rows_spec")}
+            if kv["staged"]:
+                rows_of_kind[f] = kv
+            print(f"A8 values {f}: " + json.dumps(staged[f], default=str)[:700], flush=True)
+        weights_notes = weights.notes
+        if a.save_values:
+            save_values(Path(a.save_values), staged, rows_of_kind, weights_notes, a)
+            print(f"A8 values saved to {a.save_values}: {sorted(rows_of_kind)}", flush=True)
+            return 0 if rows_of_kind else 1
     summary["values"] = staged
-    summary["weights"] = weights.notes
+    summary["weights"] = weights_notes
     if a.values_only or not rows_of_kind:
         (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
         return 0 if rows_of_kind else 1
