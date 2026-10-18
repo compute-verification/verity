@@ -10,7 +10,7 @@ accounting layer's declarations, `datacenter.Datacenter` (`benchmarks/datacenter
   `Datacenter` that validates: the netns plan `mockdc.py` stands up, and Shadow's GML. `python graph.py --blocks 2
   --netns` prints a plan.
 - `records.py`: the certifier's published records as `datacenter.observe.Record`s (port, window, counts, digest), the
-  records an honest run declares by port and window, and the certifiers' parameters as the declaration's `Grid`;
+  records an honest run declares by port and window, and the certifiers' parameters as the declaration's `Cadence`;
   `datacenter.check_records` audits them.
 - `mockdc.py`: a declaration's netns plan stood up on one host, the certifier's proxy on each block's uplink, and both
   audits.
@@ -60,9 +60,9 @@ Program doesn't have. Each block is audited twice. The certifier's audit is `aud
 `check_ingress_link` on its raw and committed records. The datacenter record check is `datacenter.check_records` on its
 records as `datacenter.observe.Record`s against the ones an honest run of the Program publishes: each port (`b0.cert:out`
 for what leaves the block, `b0.cert:in` for what enters it) needs a record for each window, with the declared counts
-and digest, and each carried window leaves log2 of the sync set's size bits of timing advice. The declaration's grid is
-the certifiers' calibrated parameters: frames of 4,096 bytes, buckets of 100 ticks of 1 ms, windows of 60 buckets and
-16 syncs. Each block's wire is also compared with the honest block's. `DIR/summary.json` has the verdicts and the
+and digest, and each carried window leaves log2 of the sync set's size bits of timing advice. The declaration's cadence
+is the certifiers' calibrated parameters: frames of 4,096 bytes, buckets of 100 ticks of 1 ms, windows of 60 buckets and
+16 jitter classes (syncs). Each block's wire is also compared with the honest block's. `DIR/summary.json` has the verdicts and the
 timing, and `DIR/b0/` a block's records (`records.json` as `Record`s), logs and audit.
 
 Run `r20261018-073637-e25f`, on vy-nebius-cpu-2 at a load of about 120:
@@ -86,5 +86,6 @@ certifier verdicts: `r20261018-065536-38c4`, before the declarations, and `r2026
   need their clocks synchronized to within the slack.
 - `mockdc.py` has its own server, proxy and peer coroutines because `active_replay`'s bind `127.0.0.1`. A host parameter
   there would let it reuse them.
-- `datacenter.Grid` holds one grid for both directions. The lab's egress and ingress agree on frame size, bucket and
-  window, which `records.grid` checks, but not on the frames per bucket (2 out, 1 in), which `Grid` doesn't hold.
+- `datacenter.Cadence` holds one cadence for both directions. The lab's egress and ingress agree on frame size, bucket
+  and window, which `records.cadence` checks, but not on the frames per bucket (2 out, 1 in), which `Cadence` doesn't
+  hold.

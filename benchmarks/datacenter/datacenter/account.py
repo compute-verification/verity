@@ -118,7 +118,7 @@ def account(claims: list[Claim], profile: Profile, assume: tuple[Assumption, ...
     """Read `claims` against `profile`, crediting work in the profile's unit (Boolean gates for a traced circuit; PoUW's
     are MACs) at the devices' declared rates in it, under the named premises in `assume`."""
     dc, epoch, unit = profile.datacenter, profile.plan.epoch, profile.unit
-    seconds = dc.grid.seconds(epoch.length)
+    seconds = dc.cadence.seconds(epoch.length)
     inside = lambda c: getattr(c, "during", epoch) in epoch  # noqa: E731
     refused = [c for c in claims if isinstance(c, Refused)]
     refused_parts = {r.on.name for r in refused if r.on.kind == "part"}
@@ -138,7 +138,7 @@ def account(claims: list[Claim], profile: Profile, assume: tuple[Assumption, ...
         if isinstance(c, Held) and inside(c) and c.store not in refused_stores and c.store not in located:
             s = profile.stores[c.store]
             located[c.store] = [d.name for d in dc.devices.values() if d.memory is not None and float(d.memory) >= s.bits
-                                and answer_time(dc, c.by, s.device, d.name, s.bits) <= dc.grid.seconds(c.during.length)]
+                                and answer_time(dc, c.by, s.device, d.name, s.bits) <= dc.cadence.seconds(c.during.length)]
             rejoined = c.during.start >= back.get(getattr(dc.block_of(s.device), "name", None), epoch.start)
             if s.content == "labels" and located[c.store] == [s.device] and rejoined:
                 filled[s.device] = max(filled[s.device], s.bits)
@@ -149,7 +149,7 @@ def account(claims: list[Claim], profile: Profile, assume: tuple[Assumption, ...
             b = dc.block_of(profile.stores[c.store].device)
             if b is not None:
                 reads[b.name] += c.bits
-                read_ingress[b.name] += _boundary_rate(dc, b.name) * dc.grid.seconds(c.during.length)
+                read_ingress[b.name] += _boundary_rate(dc, b.name) * dc.cadence.seconds(c.during.length)
 
     premises = {a.name for a in assume}
     blocks = []
@@ -170,7 +170,7 @@ def account(claims: list[Claim], profile: Profile, assume: tuple[Assumption, ...
                                    read_ingress[b.name], profile.forced[b.name], names))
 
     links = {repr(port): dc.uplink(port.certifier) for port in dc.ports}
-    window_seconds = dc.grid.seconds(dc.grid.bucket * dc.grid.window)
+    window_seconds = dc.cadence.seconds(dc.cadence.window_ticks)
     voided = {(r.on.name, r.on.during) for r in refused if r.on.kind == "port"}
     refused_bits = sum(float(links[name].capacity) * window_seconds for name, _ in voided if name in links)
     return Account(blocks,

@@ -6,9 +6,9 @@ and `account` read the MLP and verity_vllm's serving Program as they read a trac
   registered for the weights, and a constant a `const`. The MLP is Boolean: `And2`, `Xor2` and `Not` are `and`, `xor`
   and `not`, and its work is counted in Boolean gates. The served Program's gates are word Definitions (bf16, f32 and
   i32 words): each is a gate carrying its Definition's semantics, and its work is counted in word operations (`op`).
-- `datacenter(hw, grid, unit, rate)`: a block for each unit; a compute leaf is a `gpu` with a declared rate in the
+- `datacenter(hw, cadence, unit, rate)`: a block for each unit; a compute leaf is a `gpu` with a declared rate in the
   circuit's unit, a certifier a `certifier` (trusted by its kind), the client `outside`, and any other leaf a `switch`,
-  which only carries frames. A link's capacity is its β a tick over the grid's tick.
+  which only carries frames. A link's capacity is its β a tick over the cadence's tick.
 - `placement(circuit, hw, p, dc)`: the same leaf, step and ticks as `placement.Placement`, each device's values in
   canonical order as its cells, and the outputs delivered to the client.
 
@@ -78,7 +78,7 @@ def inputs(model, seed: int) -> dict[str, int]:
     return {names[g]: word for g, word in model.inputs(seed).items()}
 
 
-def datacenter(hw: Hardware, grid: D.Grid, unit: str = "gate", rate: float = 1e9) -> D.Datacenter:
+def datacenter(hw: Hardware, cadence: D.Cadence, unit: str = "gate", rate: float = 1e9) -> D.Datacenter:
     def device(x: int) -> D.Device:
         name = hw.leaves[x]
         if x in hw.cert:
@@ -95,8 +95,8 @@ def datacenter(hw: Hardware, grid: D.Grid, unit: str = "gate", rate: float = 1e9
         [D.Block(u, [device(x) for x in sorted(hw.units[u])]) for u in sorted(hw.units)],
         [device(x) for x in range(len(hw.leaves)) if hw.unit(x) == OUTSIDE],
         [D.Link(hw.leaves[k.ends[0]], hw.leaves[k.ends[1]],
-                D.Assumption(f"{k.name}.beta", k.beta / float(grid.tick), "bit/s", "declared")) for k in hw.links],
-        grid)
+                D.Assumption(f"{k.name}.beta", k.beta / float(cadence.tick), "bit/s", "declared")) for k in hw.links],
+        cadence)
 
 
 def placement(c: D.Circuit, hw: Hardware, p: P.Placement, dc: D.Datacenter) -> D.Placement:
@@ -135,8 +135,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--plan", choices=sorted(P.PLANS), default="pipeline")
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--frame-bits", type=int, default=32)
-    ap.add_argument("--window", type=int, default=4, help="buckets a certifier's record covers")
-    ap.add_argument("--syncs", type=int, default=128, help="the sync set's size, a window's timing advice")
+    ap.add_argument("--buckets", type=int, default=4, help="buckets a certifier's record covers (a window)")
+    ap.add_argument("--jitter-classes", type=int, default=128, help="the sync set's size: log2 of it is a window's timing advice")
     ap.add_argument("--tick", type=float, default=1e-3, help="seconds a tick")
     ap.add_argument("--rate", type=float, default=1e9, help="each GPU's declared rate in the circuit's unit of work")
     ap.add_argument("--extra-frame", action="store_true", help="add one covert frame on b0's uplink")
@@ -148,10 +148,10 @@ def main(argv: list[str] | None = None) -> int:
             if args.workload == "mlp" else {"layers": args.layers, "prompt": args.prompt, "steps": args.steps})
     ctx = Context({"workload": args.workload, "spec": spec, "blocks": args.blocks, "devices": args.devices,
                    "plan": args.plan, "frame_bytes": 64 if args.workload == "mlp" else 1024, "seed": args.seed})
-    grid = D.Grid(args.frame_bits, ctx.hw.bucket_ticks, args.window, args.syncs,
-                  D.Assumption("tick", args.tick, "s", "declared"))
+    cadence = D.Cadence(args.frame_bits, ctx.hw.bucket_ticks, args.buckets, args.jitter_classes,
+                        D.Assumption("tick", args.tick, "s", "declared"))
     c = circuit(ctx.model)
-    dc = datacenter(ctx.hw, grid, c.unit, args.rate)
+    dc = datacenter(ctx.hw, cadence, c.unit, args.rate)
     dp = placement(c, ctx.hw, ctx.placement, dc)
     mine = {(e.value, e.dst) for e in ctx.edges}
     print(f"{ctx.model.n} gates as a datacenter.Circuit of {c.work:g} {'Boolean gates' if c.unit == 'gate' else c.unit}; "

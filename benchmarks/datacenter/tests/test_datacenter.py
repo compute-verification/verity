@@ -7,7 +7,7 @@ from dataclasses import replace
 import pytest
 
 from datacenter import (FLEET_CLOSED, Assumption, Block, Carried, Computed, Credit, Datacenter, Deviation, Device,
-                        Entered, Fleet, Grid, Held, Input, Interval, Ledger, Link, Maintenance, On, Plan, Port, Record,
+                        Entered, Fleet, Cadence, Held, Input, Interval, Ledger, Link, Maintenance, On, Plan, Port, Record,
                         Refused, Wipe,
                         account, audit, check_records, crossings, digest, double_credit, place, run, trace, traffic)
 from datacenter.binding import hops
@@ -35,8 +35,9 @@ def datacenter(tick: float = 1e-3) -> Datacenter:
               Device("challenger", "challenger"), Device("world", "outside")]
     links = [Link("a.gpu", "a.cert", up), Link("a.cert", "leaf", up), Link("leaf", "b.cert", up),
              Link("b.cert", "b.gpu", up), Link("challenger", "leaf", up), Link("world", "leaf", up)]
-    grid = Grid(frame_bits=32, bucket=1, window=4, syncs=128, tick=Assumption("tick", tick, "s", "declared"))
-    return Datacenter("dc0", [node("a"), node("b")], fabric, links, grid)
+    cadence = Cadence(frame_bits=32, bucket_ticks=1, buckets=4, jitter_classes=128,
+                      tick=Assumption("tick", tick, "s", "declared"))
+    return Datacenter("dc0", [node("a"), node("b")], fabric, links, cadence)
 
 
 def refusals(claims) -> list[Refused]:
@@ -161,11 +162,11 @@ def test_a_frame_that_is_not_a_committed_crossing_is_refused_even_at_the_declare
 def test_records_are_checked_against_the_declared_ones_whatever_the_certifier_signs():
     """The mock datacenter's records carry the real certifier's digest, not `observe.digest`: `check_records` compares
     whatever the certifier signs with what an honest run would have it sign."""
-    grid, port = datacenter().grid, Port("a.cert", "egress")
+    cadence, port = datacenter().cadence, Port("a.cert", "egress")
     declared = {(port, 0): Record(port, 0, (1, 0, 0, 0), b"one frame"), (port, 1): Record(port, 1, (0, 0, 0, 0), b"none")}
-    assert [type(x) for x in check_records(list(declared.values()), declared, grid)] == [Carried, Carried]
+    assert [type(x) for x in check_records(list(declared.values()), declared, cadence)] == [Carried, Carried]
     late = [Record(port, 0, (0, 1, 0, 0), b"one frame"), Record(port, 5, (0, 0, 0, 0), b"another epoch's")]
-    assert [x.why for x in check_records(late, declared, grid)] == [
+    assert [x.why for x in check_records(late, declared, cadence)] == [
         "occupancy differs from the declared profile", "no record: the certifier was down or its record was withheld"]
 
 

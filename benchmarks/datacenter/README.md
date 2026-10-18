@@ -7,7 +7,7 @@ The accounting layer has two layers. The **logical layer** is where the cryptogr
 traced from Python, its inputs and where their bits come from, the commitment to its values) and `claims` (`audit`: what
 the trusted devices' records and the commitment establish about the prover system, with no device premise). The
 **physical layer** interprets those claims with declared hardware, named assumptions and trusted devices: `physical`
-(devices, blocks, links, certifier ports, the certifiers' grid and trusted clock, datacenters and fleets, every number
+(devices, blocks, links, certifier ports, the certifiers' cadence and trusted clock, datacenters and fleets, every number
 an `Assumption`), `memory` (registered stores, challenges, read audits, wipes and the times to serve them) and `account`
 (credit, attribution, where each store was, what could be carried in, the covert budget, the `Ledger` across epochs,
 and `double_credit`, the joint rule for credit from several audits). `binding` places a circuit on a datacenter,
@@ -32,5 +32,6 @@ print(account(audit(run(p, {"x": 7, "w": 3}, plan), profile), profile))
 up") section by section.
 
 The objects mirror the Lean physical model: `Datacenter` is `Accounting.Hardware`, `Block` is `Hardware.SpatialUnit`
-with `Covered`, and `Placement` is `Accounting.Placed` and `Accounting.Requirement.Placement` (#2386). Design:
+with `Covered`, `Placement` is `Accounting.Placed` (and `Accounting.Requirement.Placement`, in #2399), a `Store` is
+`Accounting.Requirement.Store`, and an `Interval` is `Accounting.Window`. Design:
 `note:network-accounting/20261018T0615Z-draft-datacenter-network-simulation`.
