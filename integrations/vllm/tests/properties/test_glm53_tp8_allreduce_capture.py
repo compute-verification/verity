@@ -10,8 +10,6 @@ GLM-5.3's 6144, so the two contractions of the norm differ on some tokens (at a 
 is 2 CTAs."""
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3", "deepseek-ai/DeepSeek-V4-Pro")
-
 import copy
 import json
 from pathlib import Path

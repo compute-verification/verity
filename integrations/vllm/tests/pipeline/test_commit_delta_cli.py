@@ -50,8 +50,6 @@ def test_commit_delta_parser_builds_and_declares_every_option_once():
                 kw[k.arg] = k.value.value
         if kw.get("action") in ("store_true", "store_false", "count"):
             kw.pop("nargs", None)
-        if kw.get("action") == "boolean_optional":
-            kw["action"] = argparse.BooleanOptionalAction
         # the option strings and their multiplicity are what is under test; argparse raises ArgumentError on a duplicate right here
         ap.add_argument(*opts, **kw)
     dups = sorted(o for o, n in seen.items() if n > 1)

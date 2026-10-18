@@ -59,7 +59,7 @@ def _program(bias: bool = False, rope: bool = False, attn: bool = False, scale: 
     """One request Program: per token row Embedding -> RMSNormTriton -> Gemm(gate_up) -> SiluMul -> Gemm(down) -> RMSNormFused(norm) ;
     per step Gemm(logits, tied embed) -> TokenSelect.  Names / args in the Build's instance-sequence schema.
     `bias`: the gate_up linear is BIASED (Qwen2.5 qkv_proj shape, MAN-07): Gemm -> BiasAdd_v1 under the one module, the module returns post-bias.
-    `rope`: [R17 dense, ruling R17-9] the token row also runs Gemm(qkv) -> RoPE_v1 query[k] (member `query`, NHEADS=NH) / key[k] (member `key`,
+    `rope`: [R17 dense, ruling R17-9] the token row also runs Gemm(qkv) -> RoPE_v1 query[k] (member `0`, NHEADS=NH) / key[k] (member `1`,
     NHEADS=KVH) exactly as the real Programs name them (`rotary_emb/rotary_embedding_{s}/query[k]`), arg 1 = ONE row of the `weights`
     field `...rotary_emb.cos_sin_cache` at the token's position (the Program's slice names the position); the rotated heads are leaves
     here (the real consumer is the state-linked Attention row).
@@ -199,8 +199,6 @@ class Honest:
                 inputs.append(words)
                 wsl.append(w)
             got = EV.evaluate(fam, d["statics"], inputs, wsl)
-            if len(got) > 1:                                            # the relation's ports under their committed members, as the replay reads them
-                got = EV.by_member(got, pi.member_of_port(r["i"]))
             if d.get("plane") and d["plane"] not in got and len(got) == 1:  # [MAN-06f v3] the act SiluMul's `out` IS its plane
                 got = {d["plane"]: next(iter(got.values()))}
             if not d["members"]:                                        # interior row (pre-bias Gemm): value flows on, nothing is committed
@@ -381,7 +379,7 @@ def test_a_population_prepared_before_the_seed_draws_and_reads_the_same(world):
 
 def test_flipped_committed_output_byte_fails_named_at_the_request_and_row(world):
     def mutate(store, entries):
-        k = (0, "model.layers.0.mlp.gate_up_proj/out")
+        k = (0, "model.layers.0.mlp.gate_up_proj/0")
         b = bytearray(store[k])
         e = next(x for x in entries if x["identity"]["request_id"] == "r1" and x["name"] == k[1] and x["identity"]["step"] == 0)
         pos = (e["element_offset"] + 1 * 2 * I + 5) * 2      # r1, prompt row 1, element 5
@@ -648,7 +646,7 @@ def test_module_strata_cap_floor_and_targets(world):
     assert rep["timing"]["wall_s"] >= 0 and set(rep["timing"]["per_family_n"]) == set(rep["population"]["by_family"])
     # a flipped decode-row of the down_proj at r0's FIRST decode step (a one-VU stratum) is sampled deterministically under the module key
     def mutate(store, entries):
-        k = (1, "model.layers.0.mlp.down_proj/out")
+        k = (1, "model.layers.0.mlp.down_proj/0")
         b = bytearray(store[k])
         e = next(x for x in entries if x["identity"]["request_id"] == "r0" and x["name"] == k[1] and x["identity"]["step"] == 1)
         b[e["element_offset"] * 2 + 3] ^= 0x40
@@ -693,13 +691,13 @@ def test_biased_linear_member_is_the_post_bias_tensor_produced_by_biasadd(world,
     ba = next(r for r in pi0.rows if r["spec"].startswith("BiasAdd_v1"))
     one = EV.replay_vu(pi0, OP.CommittedStore(bmap, committed), _weights(biased_world), {"i": ba["i"], "phase": "prefill"} | {"request_id": "r0"}, arrive=0)
     assert one["result"] is True and any(i["kind"] == "interior" and i["family"] == "Gemm_v1" for i in one["inputs"])
-    # (3) the M-0528 shape in reverse: pre-bias bytes committed as member out -> mismatch named at the module with the producer spec
+    # (3) the M-0528 shape in reverse: pre-bias bytes committed as member 0 -> mismatch named at the module with the producer spec
     def mutate(store, entries):
         pi2 = IX.ProgramIndex(biased_world.inst)
         gem = [r for r in pi2.rows if r["spec"].startswith("Gemm_v1") and "gate_up_proj" in r["name"] and pi2.step_of(r["i"]) == 0]
         pre = np.concatenate([biased_world.values[("r0", r["i"])] for r in gem])
         post = np.concatenate([biased_world.values[("r1", r["i"] + 1)] for r in gem])
-        store[(0, "model.layers.0.mlp.gate_up_proj/out")] = np.concatenate([pre, post]).tobytes()
+        store[(0, "model.layers.0.mlp.gate_up_proj/0")] = np.concatenate([pre, post]).tobytes()
     bmap2, committed2 = biased_world.bmap_and_reader(mutate=mutate)
     rep2 = SR.sampled_replay(_programs(biased_world), bmap2, committed2, _weights(biased_world), per_stratum=8, seed=1, workers=0)
     assert rep2["result"] is False and rep2["sample"]["mismatch_n"] >= 1
@@ -995,7 +993,7 @@ def test_rope_v1_is_registered_and_the_rows_are_in_the_population_not_named_away
     # the manifest names the member by the row's hint: query -> `0`, key -> `1`; both carry NHEADS*D bf16 words
     q = next(r for r in pi.rows if r["spec"].startswith("RoPE_v1") and "/query" in r["name"])
     k = next(r for r in pi.rows if r["spec"].startswith("RoPE_v1") and "/key" in r["name"])
-    assert pi.describe(q)["members"] == [("query", NH * DH, "bf16")] and pi.describe(k)["members"] == [("key", KVH * DH, "bf16")]
+    assert pi.describe(q)["members"] == [("0", NH * DH, "bf16")] and pi.describe(k)["members"] == [("1", KVH * DH, "bf16")]
 
 
 def test_rope_v1_honest_program_replays_bit_exactly_with_the_cache_row_read_from_weights(rope_world):
@@ -1012,7 +1010,7 @@ def test_rope_v1_honest_program_replays_bit_exactly_with_the_cache_row_read_from
 
 def test_rope_v1_flipped_committed_output_word_fails_named_at_the_rope_row(rope_world):
     def mutate(store, entries):
-        k = (0, "model.layers.0.self_attn.rotary_emb/key")                     # the KEY member of step 0
+        k = (0, "model.layers.0.self_attn.rotary_emb/1")                       # the KEY member of step 0
         b = bytearray(store[k])
         e = next(x for x in entries if x["identity"]["request_id"] == "r1" and x["name"] == k[1] and x["identity"]["step"] == 0)
         b[(e["element_offset"] + 1 * KVH * DH + 3) * 2 + 1] ^= 0x01               # r1, prompt row 1, word 3: one exponent/mantissa bit
@@ -1191,7 +1189,7 @@ def test_attention_v3_flipped_key_word_of_an_earlier_step_is_named_at_the_rows_t
     """The state-linked negative: a fault in the committed KEY history (step 0, prompt row 1) is a RoPE_v1 mismatch at step 0 AND an
     Attention_v3 mismatch at every later row that reads that key (step 1, step 2) -- the history is read by ref, never trusted."""
     def mutate(store, entries):
-        k = (0, "model.layers.0.self_attn.rotary_emb/key")
+        k = (0, "model.layers.0.self_attn.rotary_emb/1")
         b = bytearray(store[k])
         e = next(x for x in entries if x["identity"]["request_id"] == "r0" and x["name"] == k[1] and x["identity"]["step"] == 0)
         b[(e["element_offset"] + 1 * KVH * DH + 2) * 2] ^= 0x40                    # r0, prompt row 1, word 2: a mantissa bit
@@ -1212,7 +1210,7 @@ def test_attention_v3_flipped_value_word_of_the_prefill_is_named_at_every_row_th
     """[rev M-0136 sign condition] a flipped committed V word (the qkv member of step 0, prompt row 0, the V slice) propagates: named at the
     qkv Gemm row itself (F(x, W) != committed) AND at every attention row of the request that reads position 0's V (all four)."""
     def mutate(store, entries):
-        k = (0, "model.layers.0.self_attn.qkv_proj/out")
+        k = (0, "model.layers.0.self_attn.qkv_proj/0")
         b = bytearray(store[k])
         e = next(x for x in entries if x["identity"]["request_id"] == "r1" and x["name"] == k[1] and x["identity"]["step"] == 0)
         b[(e["element_offset"] + 0 * (NH + 2 * KVH) * DH + (NH + KVH) * DH + 4) * 2 + 1] ^= 0x01   # r1, prompt row 0, V word 4

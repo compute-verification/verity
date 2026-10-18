@@ -3,8 +3,6 @@ twin, `dsa_rmsnorm_rows`: the registry body over rows, each step `derived_rows`'
 registers from `rows` (kernel "rows")."""
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 from typing import Any, Sequence
 
 import numpy as np

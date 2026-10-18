@@ -117,7 +117,7 @@ def main(args: Options) -> None:
     wl = va.load_workload(args.workload, args.max_tokens)
     TPL.acquire()        # a leased row's Match leg: every GPU of the task from here to the exit (`row_tp.TpRow.match`); nothing reads the device before
     target = va.target_of_workload(wl)
-    target_env, target_kw = TT.apply(target, wl["execution"])       # its env knobs before vLLM reads them; its engine args under the CLI's
+    target_env, target_kw = TT.apply(target)       # its env knobs before vLLM reads them; its engine args under the CLI's
     case = va.case_of(wl, args.case)
     revision = args.adapter_revision
     if revision is None:

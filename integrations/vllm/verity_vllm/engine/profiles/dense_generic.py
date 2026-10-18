@@ -89,13 +89,6 @@ def _sha256(p: Path) -> str:
     return hashlib.sha256(p.read_bytes()).hexdigest()
 
 
-def hf_snapshot(repo: str, revision: str) -> Path:
-    """The hub cache's snapshot of `repo` at `revision`: `$HF_HOME/hub/models--<repo>/snapshots/<revision>`, where vLLM's config
-    load reads it (HF_HUB_OFFLINE)."""
-    hf_home = os.environ.get("HF_HOME") or str(Path.home() / ".cache" / "huggingface")
-    return Path(hf_home) / "hub" / f"models--{repo.replace('/', '--')}" / "snapshots" / revision
-
-
 def find_hf_config(role: str) -> tuple[Path, str, dict[str, Any] | None] | None:
     """`(config_path, source, manifest_entry)` for a role, or None when no source has it (docstring order)."""
     entry = checkpoint_entry(role)
@@ -110,9 +103,10 @@ def find_hf_config(role: str) -> tuple[Path, str, dict[str, Any] | None] | None:
         lp = Path(entry.get("local_path") or "") / "config.json"
         if entry.get("local_path") and lp.exists():
             return lp, "manifest:local_path", entry
+        hf_home = os.environ.get("HF_HOME") or str(Path.home() / ".cache" / "huggingface")
         repo, rev = entry.get("repo"), entry.get("revision")
         if repo and rev:
-            snap = hf_snapshot(repo, rev) / "config.json"
+            snap = Path(hf_home) / "hub" / f"models--{repo.replace('/', '--')}" / "snapshots" / rev / "config.json"
             if snap.exists():
                 return snap, "hf_home:snapshot", entry
     return None

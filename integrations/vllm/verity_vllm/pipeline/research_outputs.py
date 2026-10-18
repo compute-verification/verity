@@ -238,7 +238,7 @@ def build_outputs(d: Path, row: str, stage: str, run_dir: Path, inputs: dict[str
     elif stage == "match":
         present, skipped = _collect(d, MATCH_FILES)
         gm = _read_json(d / "global_match.json") or {}
-        meta = {**base_meta, "global_match_ok": gm.get("verdict") == "PASS" if isinstance(gm, dict) and "verdict" in gm else None,
+        meta = {**base_meta, "global_match_ok": gm.get("ok") if isinstance(gm, dict) else None,
                 "within_step": gm.get("within_step") if isinstance(gm, dict) else None}
         if tp:
             tm = _read_json(d / "match" / "tp2_match.json") or {}

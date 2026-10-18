@@ -66,8 +66,6 @@ the stack, mufu, probe, sources and bind checks, and no errors.
 """
 from __future__ import annotations
 
-__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
-
 import argparse
 import hashlib
 import json

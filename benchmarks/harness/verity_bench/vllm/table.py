@@ -10,8 +10,6 @@ METRIC_LABELS = {
     "tokens_per_s": "output tokens / second",
     "peak_gpu_memory_bytes": "peak GPU memory",
     "decode_time_per_token_s": "decode time / token",
-    "inter_token_latency_p50_s": "per-token latency p50",
-    "inter_token_latency_p99_s": "per-token latency p99",
 }
 
 

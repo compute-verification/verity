@@ -68,8 +68,6 @@ probe settled (one candidate form each for the even and the odd outputs of k_pe 
 """
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import argparse
 import glob
 import hashlib

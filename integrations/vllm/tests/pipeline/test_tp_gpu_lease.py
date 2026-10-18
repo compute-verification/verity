@@ -25,7 +25,6 @@ import pytest
 
 from tests.pipeline.test_gpu_lease import fake_lease, released
 from tests.pipeline.test_row import TP_DENSE, _tp_row
-from verity_vllm.acquire.committer_api import StepCommitment
 from verity_vllm.engine import hooks
 from verity_vllm.engine.rank_worker import TP2CaptureWorkerExtension as _cls
 from verity_vllm.pipeline import gpu_lease as GL
@@ -104,7 +103,7 @@ class _Com:
 
     def finalize(self):
         self.ev.append((self.rank, "root"))
-        return SimpleNamespace(steps=[StepCommitment(0, b"", b"", 3, 12, 2, b"", 1.0, 1.5, 0)], run_root=bytes([self.rank + 1]) * 32,
+        return SimpleNamespace(steps=[SimpleNamespace(n_leaves=3, n_bytes=12, n_tensors=2)], run_root=bytes([self.rank + 1]) * 32,
                                root_ready_delay_s=0.0, t_finalize_s=0.0, spans={"total_s": 0.0}, weight_registration=None, persistent_bytes=0,
                                temporary_bytes_peak=0, extra={"errors": []})
 

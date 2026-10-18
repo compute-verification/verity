@@ -29,7 +29,7 @@ from collections.abc import Callable, Sequence
 from typing import Any
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SOURCES = ("native_collect.cpp", "native_gather.cu", "native_tree.cu", "native_rows.cu")
+SOURCES = ("native_collect.cpp", "native_gather.cu", "native_tree.cu")
 CFLAGS = ("-O3",)
 CUDA_CFLAGS = ("-O3", "--use_fast_math")
 

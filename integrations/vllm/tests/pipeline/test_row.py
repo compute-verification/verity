@@ -121,14 +121,6 @@ def test_a_foreign_verity_tree_is_refused_by_name(tmp_path, capsys):
     assert e.value.rc == 3 and "PRECHECK_FAIL_SOURCE_IDENTITY" in capsys.readouterr().err
 
 
-@pytest.mark.parametrize("row, execution, bi", [(ROW, "bi-eager", "1"), ("glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager", "eager", "0")])
-def test_a_rows_stages_run_batch_invariant_exactly_when_its_execution_is(tmp_path, monkeypatch, row, execution, bi):
-    monkeypatch.delenv("TRITON_CACHE_DIR", raising=False)
-    r = _row(tmp_path, row=row)
-    r.setup({})
-    assert (r.execution(), r.child_env["VLLM_BATCH_INVARIANT"], r.bi_eager()) == (execution, bi, execution == "bi-eager")
-
-
 # ---------------------------------------------------------------------------------------------------------------- cancel
 
 # the stage: a python parent that forks a grandchild; both write their pids (and the stage its `timeout`'s), close their end of the

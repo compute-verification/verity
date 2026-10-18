@@ -13,8 +13,6 @@
 """
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import math
 from fractions import Fraction
 from pathlib import Path

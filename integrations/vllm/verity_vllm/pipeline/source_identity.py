@@ -51,7 +51,6 @@ ROOT_MARKERS = ("pyproject.toml", "uv.lock", "integrations/vllm/verity_vllm/__in
 
 FAIL_CLASS = _sid.FAIL_CLASS
 SourceIdentityError = _sid.SourceIdentityError
-tree_identity = _sid.tree_identity
 
 # hidden_gpu is imported by native_host._gpu_ext_load from <integration>/out/gen/r9/cmt-hidden/src (materialised by pod_hidden_gpu.sh from
 # the shipped copy verity_vllm/commit/committer/hidden_gpu_src); both are candidates, the r9 path first because that is what native_host inserts

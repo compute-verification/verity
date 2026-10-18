@@ -6,12 +6,11 @@ shapes.
 
 One GPU process writes `<out>/glm53_block_fp8_capture.json`, the property record `glm53_block_fp8_capture` (`properties.record`), and
 prints one line per case and then `GLM53-BLOCK-FP8 GO` or `NO-GO`.  `ok` (GO) = every check below.  The device gate runs first and
-nothing else runs when it fails (exit 3).  vLLM runs with `VLLM_USE_DEEP_GEMM=0` (TargetProfile `fp8_block_gemm="cutlass"`,
-target_profile.py), so the dense linears take CUTLASS; GLM-5.3's engine declares no `fp8_block_gemm` and serves them through DeepGEMM
-(deepgemm_capture_gpu.py), while its experts take Triton either way.  Custom ops are on (the eager engine's `QuantFP8.forward_cuda`),
-and it is not batch invariant (the engine refuses `VLLM_BATCH_INVARIANT` on sm_90: no sparse-MLA backend supports it), so the experts
-launch with vLLM's tuned H200 configs and each launch's Program is bound at the statics it used; `--batch-invariant` runs the fixed
-tile of `get_default_config` instead.  A phase that raises records its error and fails the verdict without stopping the others.
+nothing else runs when it fails (exit 3).  vLLM runs as GLM-5.3's engine does on sm_90: `VLLM_USE_DEEP_GEMM=0` (TargetProfile
+`fp8_block_gemm="cutlass"`, target_profile.py), custom ops on (the eager engine's `QuantFP8.forward_cuda`), and not batch invariant (the
+engine refuses `VLLM_BATCH_INVARIANT` on sm_90: no sparse-MLA backend supports it), so the experts launch with vLLM's tuned H200
+configs and each launch's Program is bound at the statics it used; `--batch-invariant` runs the fixed tile of `get_default_config`
+instead.  A phase that raises records its error and fails the verdict without stopping the others.
 
   gate       `fa2_target_capture_gpu.gate`: driver, cc 9.0, 132 SMs (an H200).
   selection  `init_fp8_linear_kernel` with Fp8LinearMethod's keys for 128x128 blocks (fp8.py:281-288) selects CutlassFp8BlockScaledMMKernel
@@ -64,8 +63,6 @@ counts the expert launches by DOT.
     $PY tests/properties/glm53_block_fp8_capture_gpu.py --out DIR [--scratch DIR] [--quick] [--wgmma-configs] [--batch-invariant]
 """
 from __future__ import annotations
-
-__models__ = ("zai-org/GLM-5.3",)
 
 import argparse
 import glob

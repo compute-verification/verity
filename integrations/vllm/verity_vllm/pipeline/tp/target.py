@@ -8,16 +8,15 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import Any
 
-from verity_vllm.engine import env as engine_env, served
+from verity_vllm.engine import env as engine_env
 
 
-def apply(target: Any, execution: str | None) -> tuple[dict[str, str], dict[str, Any]]:
-    """The environment the row's ``execution`` label (`engine.served.apply`) and then ``target`` declare, applied, and the engine
-    arguments ``target`` declares (none without a declared target)."""
-    env = served.apply(execution)
+def apply(target: Any) -> tuple[dict[str, str], dict[str, Any]]:
+    """The environment knobs ``target`` declares, applied (`engine.env.apply_target`), and the engine arguments it declares; nothing
+    without a declared target."""
     if target is None:
-        return env, {}
-    return {**env, **engine_env.apply_target(target.env())}, target.engine_args()
+        return {}, {}
+    return engine_env.apply_target(target.env()), target.engine_args()
 
 
 def as_json(target: Any) -> dict | None:

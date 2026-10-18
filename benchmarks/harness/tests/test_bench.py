@@ -33,8 +33,8 @@ from verity_bench.vllm.table import render
 
 
 class FakeEngine:
-    def __init__(self, arm, events, *, gate_ok=True, bad_tokens=False, kv_tokens=None, timed_ok=True):
-        self.arm, self.events, self.gate_ok, self.bad_tokens, self.timed_ok = arm, events, gate_ok, bad_tokens, timed_ok
+    def __init__(self, arm, events, *, gate_ok=True, bad_tokens=False, kv_tokens=None):
+        self.arm, self.events, self.gate_ok, self.bad_tokens = arm, events, gate_ok, bad_tokens
         self.identity = {
             "vllm_version": "0.fake+gd9105ea80",
             "kernel_digest": f"digest-{arm.id}",
@@ -49,8 +49,7 @@ class FakeEngine:
 
     def custom_gate(self):
         self.events.append(("custom-gate", self.arm.id))
-        timed = any(e[:2] == ("measure", self.arm.id) for e in self.events)
-        return {"passed": self.gate_ok and (self.timed_ok or not timed), "provided": True}
+        return {"passed": self.gate_ok, "provided": True}
 
     def warmup(self, point):
         self.events.append(("warmup", self.arm.id, point.id))
@@ -75,14 +74,13 @@ class FakeEngine:
 
 
 class FakeFactory:
-    def __init__(self, *, resident_failure=None, gate_ok=True, bad_tokens=None, kv_tokens=None, timed_ok=True):
+    def __init__(self, *, resident_failure=None, gate_ok=True, bad_tokens=None, kv_tokens=None):
         self.events = []
         self.resident_failure = resident_failure
         self.failed = False
         self.gate_ok = gate_ok
         self.bad_tokens = bad_tokens
         self.kv_tokens = kv_tokens or {}
-        self.timed_ok = timed_ok
 
     def create(self, arm, preset, *, resident):
         self.events.append(("create", arm.id, resident))
@@ -91,7 +89,7 @@ class FakeFactory:
             raise ResidentCapacityError(f"{arm.id} does not fit")
         return FakeEngine(arm, self.events, gate_ok=self.gate_ok,
                           bad_tokens=arm.id == self.bad_tokens,
-                          kv_tokens=self.kv_tokens.get(arm.id), timed_ok=self.timed_ok)
+                          kv_tokens=self.kv_tokens.get(arm.id))
 
 
 def inputs():
@@ -127,7 +125,7 @@ def test_every_toml_spec_strictly_loads():
     for path in sorted(SPEC_ROOT.glob("*.toml")):
         first = path.read_text().splitlines()[0]
         loaded.append(load_sweep(path.stem) if "vllm-sweep/v0" in first else load_spec(path))
-    assert len(loaded) == 11
+    assert len(loaded) == 5
 
 
 def test_plan_identity_binds_resolved_spec_commit_lock_pin_and_point_but_not_admission():
@@ -340,33 +338,11 @@ def test_a_failed_gate_records_the_failure_and_stops_before_timing(factory):
     validate(doc)
 
 
-@pytest.mark.parametrize("resident_failure", [None, "candidate"])
-def test_an_arm_gate_is_read_again_after_its_timed_runs_and_its_failure_drops_the_points(resident_failure):
-    """An arm judges its warm-up and timed runs only once they have run: served_commit's gate names a rootless warm-up
-    in its ``warmups`` and fails a measured run without a root, so the verdict must hold what the gate says after them."""
-
-    preset, points, arms = inputs()
-    doc = run_benchmark(preset, arms, points, sweep="quick", reps=2, factory=FakeFactory(), git_commit="abc")
-    closing = [g for g in doc["gates"] if g["kind"] == "arm-closing"]
-    assert all(g["passed"] for g in closing) and doc["points"]
-    assert [g["arm"] for g in closing] == ["stock-fp8", "candidate"]
-
-    factory = FakeFactory(timed_ok=False, resident_failure=resident_failure)
-    doc = run_benchmark(preset, arms, points, sweep="quick", reps=2, factory=factory, git_commit="abc")
-    assert all(g["passed"] for g in doc["gates"] if g["kind"] == "arm")
-    closing = [g for g in doc["gates"] if g["kind"] == "arm-closing"]
-    assert closing and not any(g["passed"] for g in closing)
-    if resident_failure:
-        assert sorted((g["arm"], g["cycle"]) for g in closing) == [(a.id, c) for a in sorted(arms, key=lambda a: a.id) for c in (0, 1)]
-    assert doc["points"] == []
-    validate(doc)
-
-
-def test_a_failed_token_gate_records_the_first_divergent_token():
+def test_a_failed_greedy_gate_records_the_first_divergent_token():
     preset, points, arms = inputs()
     doc = run_benchmark(preset, arms, points, sweep="quick", reps=2,
                         factory=FakeFactory(bad_tokens="candidate"), git_commit="abc")
-    failed, = [g for g in doc["gates"] if g["kind"] == "tokens" and not g["passed"]]
+    failed, = [g for g in doc["gates"] if g["kind"] == "greedy-tokens" and not g["passed"]]
     assert failed["first_divergence"] == {
         "request": "b32-p512-mixed-0", "position": 0, "token": 8, "control_token": 7,
     }
@@ -385,7 +361,7 @@ def test_unequal_kv_pools_fail_the_gate_and_name_the_pin():
     gate, = [g for g in doc["gates"] if g["kind"] == "kv-pool"]
     assert not gate["passed"]
     assert (gate["tokens"], gate["control_tokens"]) == (491_376, 494_064)
-    assert "resident_kv_cache_memory_bytes" in gate["detail"] and "block_kv_cache_memory_bytes" in gate["detail"]
+    assert "block_kv_cache_memory_bytes" in gate["detail"]
     assert doc["points"] == []
     assert not any(e[0] == "measure" for e in factory.events)
     validate(doc)
@@ -406,94 +382,6 @@ def test_block_mode_pins_one_kv_pool_for_every_arm_of_the_llama_preset():
     settings = load_spec("llama31-8b-fp8-1gpu").preset.engine_settings
     assert settings["block_kv_cache_memory_bytes"] == 56 * 2**30
     assert "block_kv_cache_memory_bytes" not in load_spec("glm53-fp8-8gpu").preset.engine_settings
-
-
-def test_engine_args_pin_the_pool_in_either_mode_and_serving_defaults_leave_compilation_to_vllm():
-    from verity_bench.vllm.runner import engine_args
-
-    served_preset = load_spec("qwen3-8b-bf16-h200-served").preset
-    for resident in (True, False):
-        args = engine_args(served_preset, "bfloat16", resident=resident, eager=False)
-        assert args["kv_cache_memory_bytes"] == 10 * 2**30
-        assert "compilation_config" not in args and args["enforce_eager"] is False and args["execution"] == "compiled"
-    assert engine_args(served_preset, "bfloat16", resident=True, eager=True)["execution"] == "eager"
-    pinned = load_spec("llama31-8b-fp8-1gpu").preset
-    resident = engine_args(pinned, "fp8", resident=True, eager=False)
-    assert "kv_cache_memory_bytes" not in resident and resident["quantization"] == "fp8"
-    assert resident["compilation_config"] == {"mode": 0, "cudagraph_mode": "FULL_DECODE_ONLY",
-                                              "cudagraph_capture_sizes": [1, 8, 32, 128]}
-    assert engine_args(pinned, "fp8", resident=False, eager=False)["kv_cache_memory_bytes"] == 56 * 2**30
-    assert "compilation_config" not in engine_args(pinned, "fp8", resident=False, eager=True)
-
-
-def test_serving_defaults_give_every_arm_process_one_inductor_cache(monkeypatch):
-    from verity_bench.vllm import runner
-
-    spawned = []
-
-    class Context:
-        def Pipe(self):
-            class End:
-                def recv(self):
-                    return {"ready": {}}
-
-                def close(self):
-                    pass
-            return End(), End()
-
-        def Process(self, target, args):
-            spawned.append(dict(runner.os.environ))
-            return SimpleNamespace(start=lambda: None, join=lambda: None)
-
-    monkeypatch.setenv(runner.INDUCTOR_DIR_MARK, "")
-    monkeypatch.setenv("TORCHINDUCTOR_CACHE_DIR", "/elsewhere")
-    monkeypatch.setattr(runner.tempfile, "mkdtemp", lambda prefix: f"/tmp/{prefix}x")
-    factory = runner.ProcessEngineFactory()
-    factory.context = Context()
-    preset = load_spec("qwen3-8b-bf16-h200-served").preset
-    for arm in resolve_arms("stock"):
-        factory.create(arm, preset, resident=True)
-        factory.create(arm, preset, resident=True)
-    assert [e["TORCHINDUCTOR_CACHE_DIR"] for e in spawned] == ["/tmp/verity_bench_inductor_x"] * 2
-    assert all(e[runner.INDUCTOR_DIR_MARK] == "1" for e in spawned)
-
-
-def test_a_sweep_crosses_samplings_and_greedy_points_keep_their_ids():
-    served_points = expand_sweep("served")
-    assert [(p.batch, p.sampling) for p in served_points] == [
-        (b, s) for b in (1, 8, 32, 64) for s in ("greedy", "stochastic")
-    ]
-    assert [p.id for p in served_points[4:6]] == ["b32-p512-mixed", "b32-p512-mixed-stochastic"]
-    assert [p.headline for p in served_points[4:6]] == [True, False]
-    assert served_points[5].to_json()["sampling"] == "stochastic"
-    assert {p.sampling for p in expand_sweep("quick")} == {"greedy"}
-
-
-def test_an_unknown_sampling_refuses(tmp_path, monkeypatch):
-    from verity_bench.vllm import presets
-
-    (tmp_path / "odd.toml").write_text(
-        (SPEC_ROOT / "served.toml").read_text().replace('id = "served"', 'id = "odd"').replace('"stochastic"', '"beam"'))
-    monkeypatch.setattr(presets, "SPEC_ROOT", tmp_path)
-    with pytest.raises(presets.ConfigError, match="unknown sampling"):
-        presets.load_sweep("odd")
-
-
-def test_inter_token_latency_is_per_token_after_the_first_and_shares_a_multi_token_return():
-    from verity_bench.vllm.runner import inter_token_latencies, percentile
-
-    returns = [
-        (1.0, {"a": 1}),
-        (1.5, {"a": 2, "b": 1}),
-        (2.0, {}),
-        (2.5, {"a": 4, "b": 2}),
-        (3.0, {"a": 4}),
-    ]
-    assert inter_token_latencies(returns) == [0.5, 0.5, 0.5, 1.0]
-    assert inter_token_latencies([(1.0, {"a": 1})]) == []
-    assert percentile([0.5, 0.5, 0.5, 1.0], 50) == 0.5
-    assert percentile([0.5, 0.5, 0.5, 1.0], 99) == pytest.approx(0.985)
-    assert percentile([2.0], 99) == 2.0 and percentile([], 50) is None
 
 
 def test_result_schema_and_identity_strict_judge():

@@ -34,8 +34,8 @@ from verity_vllm.check import oracle_compare as OC
 from verity_vllm.check.replay import opening as OP
 
 CANON = "model.layers.0.self_attn.rotary_emb"
-MEMBERS = ("query", "key")                              # the shared RotaryEmbedding's two outputs (q, k)
-HINT = {"query": "rope.q", "key": "rope.k"}             # the fold's per-member hint suffix (oracle_compare._ROPE_MEMBER, the record's shape)
+MEMBERS = ("0", "1")                                    # the shared RotaryEmbedding's two outputs (q, k)
+HINT = {"0": "rope.q", "1": "rope.k"}                   # the fold's per-member hint suffix (oracle_compare._ROPE_MEMBER, the record's shape)
 W = 8                                                   # words per request row
 U0 = "aaaaaaaa-0000-0000-0000-000000000000"
 
@@ -61,7 +61,7 @@ def expected_identities(n_layers: int, steps: list[int], requests: list[str]) ->
 
 
 def expected_ordinal(k: int, member: str) -> int:
-    """Acquisition order per step: for each layer k in forward order -> q_norm/out, then rotary member 'query', then 'key'."""
+    """Acquisition order per step: for each layer k in forward order -> q_norm/out, then rotary member '0', then '1'."""
     return 3 * k + 1 + MEMBERS.index(member)
 
 
@@ -69,7 +69,7 @@ def expected_words(step: int, k: int, member: str, r: int, *, coincide: bool = F
     """The words layer k's invocation holds for request r at `step` (distinct per (step, layer, member, request)); `coincide`: every layer
     holds LAYER 0's words (the bits/offsets-coincide negative)."""
     kk = 0 if coincide else k
-    return (np.arange(W, dtype=np.uint16) + 1000 * kk + 100 * step + 10 * r + (500 if member == "key" else 0)).astype("<u2")
+    return (np.arange(W, dtype=np.uint16) + 1000 * kk + 100 * step + 10 * r + (500 if member == "1" else 0)).astype("<u2")
 
 
 # ------------------------------------------------------------------------------------------------------------ the committed record
@@ -83,7 +83,7 @@ def make_record(n_layers: int, steps: list[int], n_requests: int, *, coincide: b
     for s in steps:
         ts: list[tuple] = []
         for k in range(n_layers):
-            for name in (f"{norm_path(k)}/out", *(f"{CANON}/{m}" for m in MEMBERS)):
+            for name in (f"{norm_path(k)}/out", f"{CANON}/0", f"{CANON}/1"):
                 member = name.rsplit("/", 1)[1]
                 if "q_norm" in name:
                     rows = np.stack([np.arange(W, dtype=np.uint16) + 5000 + 1000 * k + 100 * s + 10 * r for r in range(n_requests)]).astype("<u2")
@@ -115,7 +115,7 @@ def make_match(tmp: str, n_layers: int, *, words=expected_words) -> str:
             sha = hashlib.sha256(data).hexdigest()
             fn = f"values/0/{sha[:16]}_{k}_{member}.bin"
             open(os.path.join(d, "capture", fn), "wb").write(data)
-            alloc = 10 + 2 * k + MEMBERS.index(member)
+            alloc = 10 + 2 * k + int(member)
             entries.append({"event": ev, "path": "outs", "view": {"$v": [alloc, 0, [1, W], [W, 1], "bfloat16", "cuda:0"]}, "dtype": "bfloat16",
                             "shape": [1, W], "strides": [W, 1], "byte_offset": 0, "nbytes": len(data), "layout": "spanned-storage-bytes",
                             "sha256": sha, "file": fn, "step": 0})
@@ -163,7 +163,7 @@ def test_1_the_binding_maps_invocation_numbering_is_the_enumerators_layer_order_
     assert {e["identity"]["op_path"] for e in norms} == {norm_path(k) for k in range(N)} and {e["identity"]["invocation"] for e in norms} == {0}
     sni = OC.same_name_invocations(bmap)
     for s in STEPS:
-        assert sni[(s, f"{CANON}/query")] == N and sni[(s, f"{CANON}/key")] == N and sni[(s, f"{norm_path(1)}/out")] == 1
+        assert sni[(s, f"{CANON}/0")] == N and sni[(s, f"{CANON}/1")] == N and sni[(s, f"{norm_path(1)}/out")] == 1
 
 
 def test_2_the_reader_returns_layer_ks_own_words_for_every_step_request_layer_member_of_the_enumeration():

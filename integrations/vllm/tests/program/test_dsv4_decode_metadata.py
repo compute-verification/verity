@@ -5,8 +5,6 @@ int32 and int64 ends, a block number whose product wraps, lanes past the row), t
 each Boolean Definition against its word."""
 from __future__ import annotations
 
-__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
-
 import numpy as np
 import pytest
 

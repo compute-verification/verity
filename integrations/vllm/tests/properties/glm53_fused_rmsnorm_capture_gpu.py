@@ -29,8 +29,6 @@ the twin on every sampled row, every alternative refuted on at least PER_ALT wor
 """
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import argparse
 import glob
 import hashlib

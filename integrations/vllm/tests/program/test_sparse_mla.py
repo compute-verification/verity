@@ -4,8 +4,6 @@ served statics as well; at GLM-5.3's scale it is softmax attention within bf16 r
 versions agree with their word views and the switch maps each word Definition to its Boolean one."""
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import numpy as np
 import pytest
 

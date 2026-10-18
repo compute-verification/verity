@@ -153,7 +153,7 @@ def test_a_vu_whose_identity_the_query_does_not_require_is_outside_the_query_nev
     rep = SR.sampled_replay(_programs(world), bmap, committed, _weights(world), per_stratum=1, seed=3, workers=0, manifest=narrowed)["population"]
     chk = rep["query_checks"]
     assert chk["ok"] is False and chk["vus_outside_query"]["n"] == 1
-    assert chk["vus_outside_query"]["first"][0] == {"request_id": "r1", "step": 1, "op_path": drop["op_path"], "member": drop["output_member"], "spec": chk["vus_outside_query"]["first"][0]["spec"], "class": "vu"}
+    assert chk["vus_outside_query"]["first"][0] == {"request_id": "r1", "step": 1, "op_path": drop["op_path"], "member": "0", "spec": chk["vus_outside_query"]["first"][0]["spec"], "class": "vu"}
     assert rep["sampled_strata"]["identities_reached"] == full["sampled_strata"]["identities_reached"] - 1
     assert rep["query_total"]["identities"] == full["query_total"]["identities"] - 1 and chk["accounted"] is True
 

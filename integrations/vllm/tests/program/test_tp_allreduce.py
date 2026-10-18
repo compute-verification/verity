@@ -5,8 +5,6 @@ kernels vLLM d9105ea80 and FlashInfer 0.6.18 launch at GLM-5.3's H; the Boolean 
 pinned by gate count and program digest, and pass `Q_word_v1{X=16, W=32}`'s cut check."""
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import itertools
 import json
 

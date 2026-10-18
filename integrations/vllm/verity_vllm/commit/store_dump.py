@@ -147,14 +147,10 @@ def _as_bytes(t: Any) -> memoryview:
 def _refusal(com: Any) -> str | None:
     if getattr(com, "hiding", None) is not None:
         return f"{com.leaf_scheme} leaves (salted): not dumped"
-    if getattr(com, "commit_scheme", "vllm-v1") != "vllm-v1":
-        return f"{com.commit_scheme} steps: not dumped"
     if getattr(com, "_padding", None):
         return "padding steps: not dumped"
     if getattr(com, "_streams", None):
         return "host-path step streams: not dumped (GPU-tree committers only)"
-    if not getattr(com, "retain_levels", True):
-        return "no tree levels kept (retain_levels=False): not dumped"
     missing = sorted(s for s in com._layouts if s not in com._gpu_blocks)
     if missing:
         return f"steps {missing[:8]} are not packed GPU-tree blocks: not dumped"

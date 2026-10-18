@@ -5,8 +5,6 @@ reads the code before the file table; a job takes the twin's words and finds a f
 refutation; and `main` end to end (the GPU run is `tests/properties/glm53_fused_rmsnorm_capture_gpu.py --out ...` on an H200)."""
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import json
 from pathlib import Path
 

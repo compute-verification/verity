@@ -112,20 +112,6 @@ def test_installs_exactly_the_sites_and_observes_them():
     assert sink.counts[("logits", "producer_output", "out")] == 2          # nothing fires after remove()
 
 
-def test_a_whole_return_site_of_a_module_returning_several_records_each_tensor():
-    model, runner = Tiny(), Runner()
-    rows = [r for r in base_rows() if r["op_path"] != "blocks.0.norm"] + [row("instance_outputs", "blocks.0.norm", "out")]
-    plan, _ = make(rows, model, runner)
-    sink = OccurrenceSink()
-    inst = install_from_plan(plan, model, runner, sink=sink)
-    model(torch.tensor([[1, 2]]))
-    key = ("blocks.0.norm", "producer_output", "out")
-    assert sink.counts[key] == 1 and sink.shapes[key] == [[1, 2, 4]] and key not in sink.non_tensor
-    sink(("linear", "producer_output", "out"), (torch.zeros(3, 2, dtype=torch.bfloat16), None))
-    assert sink.shapes[("linear", "producer_output", "out")] == [[3, 2]] and sink.dtypes[("linear", "producer_output", "out")] == {"bfloat16"}
-    inst.remove()
-
-
 def test_install_from_the_serialised_document(tmp_path):
     model, runner = Tiny(), Runner()
     plan, _ = make(base_rows(), model, runner)

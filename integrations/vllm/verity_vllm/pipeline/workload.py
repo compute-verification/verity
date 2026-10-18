@@ -38,8 +38,7 @@ from pathlib import Path
 import numpy as np
 from dataclasses import dataclass
 
-from verity_vllm.config import CHECKPOINTS, VLLM, WORKLOAD_SCHEMA, WORKLOADS, RowConfig, option, row_execution, row_world
-from verity_vllm.engine import served
+from verity_vllm.config import CHECKPOINTS, VLLM, WORKLOAD_SCHEMA, WORKLOADS, RowConfig, option, row_world
 from verity_vllm.engine.profiles.transport import row_custom_all_reduce_off, row_p2p_env
 
 CORPUS = resources.files("verity_vllm") / "engine" / "profiles" / "corpus_coverage.json"
@@ -336,12 +335,12 @@ def workload_doc(p: dict, *, hf_repo: str, revision: str, case: str | None, tok:
     }
     doc["sweep"]["lengths_only"] = tok is None
     # [lane vllm-tp-n] a tensor-parallel row (`__tp<N>__` in the row id, N >= 2): the engine's world, the manifests' TP flags of record
-    # (#70 / #75: the execution label's VLLM_BATCH_INVARIANT, or what a `--target` declares; on a SYS target, where P2P hangs,
-    # disable_custom_all_reduce and NCCL_P2P_DISABLE=1) and `sweep.tp`
+    # (#70 / #75: VLLM_BATCH_INVARIANT=1, or what a `--target` declares; on a SYS target, where P2P hangs, disable_custom_all_reduce and
+    # NCCL_P2P_DISABLE=1) and `sweep.tp`
     world = row_world(p["row_id"])
     if world > 1:
         doc["engine"]["args"].update({"tensor_parallel_size": int(world), "disable_custom_all_reduce": row_custom_all_reduce_off(p["row_id"])})
-        doc["engine"]["env"] = {**row_p2p_env(p["row_id"]), **served.execution_env(row_execution(p["row_id"]))}
+        doc["engine"]["env"] = {**row_p2p_env(p["row_id"]), "VLLM_BATCH_INVARIANT": "1"}
         doc["sweep"]["tp"] = int(world)
     return doc
 
@@ -391,9 +390,6 @@ class Options:
                                 help="[R13 hopper] TargetProfile overrides of the row as JSON (e.g. '{\"flash_attn_version\": 2}' for an `…__bi-eager-fa2` row): written "
                                 "to the row's `engine.target` (every GPU stage builds its engine for it; `TargetProfile.engine_args()` is merged into "
                                 "`engine.args`, a TP row's `engine.env` takes `TargetProfile.env()`) and `sweep.execution` = the profile's execution label")
-    reason: list[str] = option("--reason", action="append", default=[], metavar="SWITCH=TEXT",
-                               help="why the row sets a served switch (`engine.served.DEFAULTS`) away from vLLM's default, written to "
-                                    "`engine.reasons`; repeatable.  A served Commit refuses a switch away from the default without one")
 
 
 def main(a: Options) -> int:
@@ -429,12 +425,6 @@ def main(a: Options) -> int:
         if exec_suffix != tp.execution_label:
             print(f"[error] row id execution suffix {exec_suffix!r} != the target's execution label {tp.execution_label!r}", file=sys.stderr)
             return 3
-    reasons = dict(r.partition("=")[::2] for r in a.reason)
-    if unknown := sorted(set(reasons) - set(served.DEFAULTS)) or [k for k, v in reasons.items() if not v]:
-        print(f"[error] --reason {unknown}: a reason is SWITCH=TEXT for a switch of {sorted(served.DEFAULTS)}", file=sys.stderr)
-        return 2
-    if reasons:
-        doc["engine"]["reasons"] = reasons
     if tok is not None:
         for r in doc["requests"]:
             assert len(r["prompt_token_ids"]) == r["prompt_len"], (r["index"], len(r["prompt_token_ids"]), r["prompt_len"])

@@ -1,11 +1,8 @@
 """Where a rank Program's carried collectives are spelt: the collectives whose rank-local operand another module body produced
-(`required.Population.carries`).  Two identity encodings:
+(`required.Population.carries`).  Two encodings, both listed in `required.NAMED_RESIDUALS`:
 
-* `<norm site>` (`norm_sites`): vLLM's `fused_allreduce_rms_norm(hidden_states, residual, norm)` all-reduces a row-parallel output
-  inside the norm after it, so the collective is spelt under that norm, at invocation 0: the fused route keeps its ports (`0`, `1`),
-  the unfused path's one all-reduced tensor is `NORM_SITE_MEMBER`, and the partial is `part_rank<r>`
-  (`acquire.sources.allreduce_norm` commits each under those labels).  The collective is that norm's: the fused route reads
-  `<norm>.weight`, and the all-reduce of the unfused path is read by the Calls of `<norm>`, which read `<norm>.weight`;
+* `<norm site>` (`norm_sites`): a collective that vLLM's `fused_allreduce_rms_norm(hidden_states, residual, norm)` issues for a norm
+  is spelt under that norm, at invocation 0;
 * `<collective site>` (`collective_sites`): every other carried collective lives at its enclosing module, invocation k.
 """
 from __future__ import annotations
@@ -17,8 +14,13 @@ from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.query.program_view import ProgramView, param_reads, reads_any_of
 from verity_vllm.query.units import ValueRef
 
-__all__ = ["NORM_SITE_MEMBER", "norm_sites", "collective_sites"]
+__all__ = ["NORM_SITE_WHY", "NORM_SITE_MEMBER", "norm_sites", "collective_sites"]
 
+NORM_SITE_WHY = ("vLLM's `fused_allreduce_rms_norm(hidden_states, residual, norm)` all-reduces a row-parallel output inside the norm "
+                 "after it; `acquire.sources.allreduce_norm` binds every call's partial as `<norm>/part_rank<r>` and, on the fused path, its "
+                 "returns as `<norm>/0` / `<norm>/1`.  The collective is that norm's: the fused route reads `<norm>.weight`, and the "
+                 "all-reduce of the unfused path is read by the Calls of `<norm>`, which read `<norm>.weight`.  The unfused path's "
+                 "all-reduced tensor is `<norm>/all_reduce`")
 #: the member of a norm site's one output (the unfused path's all-reduce); a fused route keeps its ports `0` / `1`
 NORM_SITE_MEMBER = "all_reduce"
 

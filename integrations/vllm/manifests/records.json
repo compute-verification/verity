@@ -70,34 +70,15 @@
     }
    }
   },
-  "llama32-1b__bf16__h200__tp1__b1__i256__o32__mixed__greedy__bi-eager": {
-   "record": "art:686315c20aaa5e1c7479f34c0308a74c0b5974bfc59ba694f30cdcd086b7ffe2",
-   "tier": "fast",
-   "pinned_from": {
-    "record": "art:686315c20aaa5e1c7479f34c0308a74c0b5974bfc59ba694f30cdcd086b7ffe2",
-    "build": "art:e66f34aae0a5a245973757cadf79c25c51c041b3cdb3bfdbbfd91d09797b2494",
-    "tree": "cursor/rails-db-21f3@aa5b38c323f89f5b156529619349a396eec7b931"
-   },
-   "manifest_digest": "05a993b9ce177d73b3bdbd89833e96dcfd0cfdfebce01ce12b15c8fb8325a154",
-   "programs": {
-    "0": {
-     "step": "806aac0cd8b088d695e0139f715f65c7c2de94eed3d3787ba7e3dee72c6fb16b1bf9a18eec8f237f647088407a6b67ecb95031a751f3c5d116ad275112033b6e",
-     "workload": "6c81939f7d5d916f0445df4afdcec3c88613bee41fcf882199c8c7c53a2d49b48f8be163471aa55d6ae3f06556e4d5d1819c84f5e894b3da8cb50f93f6815f0f",
-     "requests": {
-      "request": "785988f3ebd47ddf06be9627006353b612fa2ca5f1df7e3ad002982073dcfbf290fec1b1d95c4f074d937f442d70ffcf27c3aa8e88a9489c6675f7f9b0b06062"
-     }
-    }
-   }
-  },
   "qwen3-06b__bf16__rtxpro6000__tp1__b1__i256__o32__mixed__greedy__bi-eager": {
    "record": null,
    "tier": "fast",
    "pinned_from": {
-    "build": "/workspace/research/scratch/neutrality.7GoNQ2/n/qwen3-06b__bf16__rtxpro6000__tp1__b1__i256__o32__mixed__greedy__bi-eager",
-    "run": "r20261018-023244-bcd4",
-    "tree": "513dad92fd392bb1bcc35546b46f3c3316979088"
+    "build": "vy-nebius-cpu-2:/workspace/research/scratch/neutrality.eBwPIb/n/qwen3-06b__bf16__rtxpro6000__tp1__b1__i256__o32__mixed__greedy__bi-eager",
+    "run": "r20261017-020834-e5c2",
+    "tree": "76ac776cd6ca8c4a5deb327faaa0646801861391"
    },
-   "manifest_digest": "0441c1faedf9abcc9fa401fc610a28391752a27ed89663ce76815bc013cf0c1b",
+   "manifest_digest": "a9011961775062ac073317d15982e2d1fcef5f2f587ede22fd65a1bacddaecdb",
    "programs": {
     "0": {
      "step": "63fe1cc38ef550226454d9c7bb8f41c89e7aeed6c9c121f086f00f8d373b28d51402bd6fa252e333f7c13adefdbb99fd5c70f82796ae3ae3ee8454bab4d5100c",
@@ -112,11 +93,11 @@
    "record": null,
    "tier": "fast",
    "pinned_from": {
-    "build": "/workspace/research/scratch/neutrality.7GoNQ2/n/qwen3-14b__bf16__rtxpro6000__tp2__b1__i256__o32__mixed__greedy__bi-eager",
-    "run": "r20261018-023244-bcd4",
-    "tree": "513dad92fd392bb1bcc35546b46f3c3316979088"
+    "build": "vy-nebius-cpu-2:/workspace/research/scratch/neutrality.eBwPIb/n/qwen3-14b__bf16__rtxpro6000__tp2__b1__i256__o32__mixed__greedy__bi-eager",
+    "run": "r20261017-020834-e5c2",
+    "tree": "76ac776cd6ca8c4a5deb327faaa0646801861391"
    },
-   "manifest_digest": "c3c3bc4c787966325c34bec45643f9e890f63d6a68f171fa9898acf5cd01d933",
+   "manifest_digest": "179821ab7d619a7424edbb4de81cd2848c8c3e0115d3c0c792b6023afab7745d",
    "programs": {
     "0": {
      "step": "396862cc6f547486e6750b20985b803d26f6047d04ba9ea15dee4bc4694513176a48b70c590501a48ce9a9e44d127902914e2f19883b1575c10aa0d3e4ecdd0a",

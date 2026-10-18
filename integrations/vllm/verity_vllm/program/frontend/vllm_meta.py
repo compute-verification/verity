@@ -4,9 +4,8 @@ wrap one engine step (forward -> compute_logits -> greedy argmax) as an ordinary
 Everything here is model-agnostic structural scaffolding (counted in the REPORT): no layer order, no op sequence, no
 family flags. The architecture comes from whatever `vllm_config.model_config.architectures` resolves to.
 
-Environment knobs of the pinned vLLM that the construction sets (declared, not hidden; `engine.env.EXPORT`; batch invariance
-is not among them: `pipeline/build.derive_step` applies the target's `VLLM_BATCH_INVARIANT`, the row's execution label's, before
-this module is imported):
+Environment knobs of the pinned vLLM that the construction sets (declared, not hidden; `engine.env.EXPORT`):
+  VLLM_BATCH_INVARIANT=1     the admitted profile (selects the BI code paths: fused_add_rms_norm / Triton rms_norm / BI GEMM)
   VLLM_USE_LAYERNAME=0       layer names as plain `str` op arguments (torch>=2.11 default wraps them in an opaque `LayerName`
                              object, which export would lift as a custom object); the vLLM source documents this switch.
   VLLM_DISABLE_SHARED_EXPERTS_STREAM=1  a shared expert runs on the main stream: `SharedExperts.__init__` would otherwise make a CUDA
@@ -497,7 +496,7 @@ def make_wrapper(kind: str, model: nn.Module, *, pos0: int = 8, M: int = 1, LP: 
     raise ValueError(kind)
 
 
-#: environment variables this construction SETS (module top, or the target's `env()`) — recorded as consulted only if the pinned vLLM's `envs` defines them
+#: environment variables this construction SETS (module top) — recorded as consulted only if the pinned vLLM's `envs` defines them
 _ENV_SET_BY_BUILDER = ("VLLM_BATCH_INVARIANT", "VLLM_USE_LAYERNAME", "HF_HUB_OFFLINE", "VLLM_LOGGING_LEVEL", "TOKENIZERS_PARALLELISM", "VLLM_ATTENTION_BACKEND",
                        "VLLM_USE_DEEP_GEMM")   # [R15 fp8] the block-scaled FP8 kernel knob `TargetProfile.fp8_block_gemm` applies
 

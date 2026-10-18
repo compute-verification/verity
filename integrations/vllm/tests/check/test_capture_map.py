@@ -6,8 +6,6 @@ the shape the inventory gives a rank; each rank built for the target's profile a
 cites are pinned."""
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import copy
 import hashlib
 import json

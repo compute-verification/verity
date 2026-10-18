@@ -27,9 +27,6 @@ A TP Commit (`pipeline.tp.lease`) takes all its GPUs with one ``acquire`` and gi
 finalize, its ranks off their devices first (``keep`` and ``let_go`` are the two ends either release comes to). A TP Match's capture
 and its control (`row_tp.TpRow.match`) each take all their GPUs the same way, right before their engine, and hold them to their exit
 (their record in ``match/lease/<leg>/``); the Match's check, its served-shape derives and its fold Match see no device and hold no lease.
-A single-GPU Match (`row_stages.SingleRow.match`) runs as its two phases: the GPU phase (``match --phase gpu``: the capture, the
-control and the rest of `match.GPU_STAGES`) takes the lease the same way and holds it to its exit (its record in ``match/lease/``),
-and the CPU phase over that record runs after it with no device and no lease.
 
 ``gpu_lease.json`` beside the row records the lease: requested and started (written by the Commit and the holder), released and the
 stage it was released after (``released_at``: the Commit's last run, or ``process.end`` with ``kept``, the reason), and the minutes
@@ -52,7 +49,6 @@ import traceback
 from typing import Any, Callable, MutableMapping
 
 RECORD = "gpu_lease.json"
-MATCH_LEG_KEPT = "a Match leg holds its GPUs to its exit: its engine is its last work"
 HEARTBEAT_S = 60
 WATCH_S = 0.2                      # after the release, how often the Commit checks that no CUDA context reappeared
 STARTED = "VERITY_LEASE_STARTED"   # set by the row for its Commit: the marker the holder writes; the Commit takes its own lease

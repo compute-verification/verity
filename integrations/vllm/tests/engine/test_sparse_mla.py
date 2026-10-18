@@ -2,8 +2,6 @@
 split, through that module's own global, armed before the module is imported or installed on it; any other value is refused."""
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import sys
 import types
 

@@ -31,8 +31,7 @@ PROTOCOL SUMMARY (Commit stage entry: the instrumented runs + the fail-closed X-
     -- and Δ_commit (the overhead) is measured beside it.
   Inputs: --workload wl.json --case ROLE; --required-manifest manifest.json (the required-value manifest) + --program-digest (the Build's); --program-dir |
     --programs-root (the Build Programs); --match-dir (this attempt's Match record); --weights-of-record | --checkpoint-dir;
-    --retain none|host|device (default none: openings by replay, --open-after-release on), --openings, --pairs,
-    --window-mb/--window-slots and --bounded-staging (the collector's defaults: `resolve_staging`).
+    --retain device|host, --openings, --pairs, --window-mb/--window-slots, --bounded-staging.
   Outputs (--out DIR): runs.jsonl, steps.jsonl, summary.json/.md, verdict.json, versions.json, source_identity.json,
     binding_map_p<k>.json, sampled_replay_p<k>.json, host_admission_<kind>.json, weights_of_record.json, declaration_<committer>.json, protocols.json.
   Invariants: the Program/source identity precheck (`identity`) runs before any engine (exit 3 PRECHECK_FAIL_SOURCE_IDENTITY); a
@@ -70,7 +69,7 @@ prof.apply_env()
 
 import torch  # noqa: E402
 
-from verity_vllm.engine import served as SV, vllm_adapter as va  # noqa: E402
+from verity_vllm.engine import vllm_adapter as va  # noqa: E402
 from verity_vllm.pipeline.timeline import Timeline  # noqa: E402  (torch-free; VERITY_TIMELINE -> append-only JSONL, else a no-op sink)
 from verity_vllm.commit import challenge as CH, opened as OV, scheme as SCH  # noqa: E402
 from verity_vllm.pipeline import admission_planner as AP, boundary_plan as BP, c2_replay as C2, commit_plan as CP, gpu_lease as GL, group_reuse as GR, replay_bundle as RB  # noqa: E402
@@ -588,6 +587,18 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
 
     request_rows = {int(s): [(_logical(rid), lo, hi) for rid, lo, hi in rows] for s, rows in step_rows.items()} if n_req > 1 else None
     padded = bool(getattr(com, "_padding", None))                                   # [B9.1] finalize materialised padding steps (--padded-finalize)
+    # [R19 int-20] the manifest's promoted members observed at their consumers' inputs: `<consumer>/in` binds the producer's identity
+    name_bindings = dict(getattr(com, "promoted_input_bindings", None) or {})
+    if name_bindings:
+        collector = dict(collector, promoted_inputs={"names": name_bindings, "rule": "binding.PROMOTED_INPUT_RULE"})
+    if padded:
+        from verity_vllm.commit import padding_steps as PS
+        bmap = PS.padded_binding_map_of_committer(com, rc, pd, request_id="r0", rank=0, layout_version=collector["layout"], chunk=com.chunk,
+                                                  weight_registration=rc.weight_registration, collector=collector, request_rows=request_rows,
+                                                  name_bindings=name_bindings or None)
+    else:
+        bmap = B.build_binding_map(com._layouts, rc.steps, rc.run_root, pd, request_id="r0", rank=0, layout_version=collector["layout"], chunk=com.chunk,
+                                   weight_registration=rc.weight_registration, collector=collector, request_rows=request_rows, name_bindings=name_bindings or None)
     caps = {f"r{int(r.get('index', i))}": int(r.get("max_tokens") or sampling.get("max_tokens") or 1) for i, r in enumerate(reqs)}
     # [R17-1 / F-moe-r17-03 (moe M-0283)] the EXECUTED PREFIX OF RECORD of every request: cap on a length stop; served + LAG on an EOS stop
     # (the driver's served tokens of THIS run; the Program's declared EOS set and LAG -- stop_rule_of_record; nothing from the trace).
@@ -612,21 +623,6 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
     if not schedule["all_equal_declared"]:
         print(f"[delta] engine schedule of record: arrivals observed {schedule['observed_arrive_steps']} vs declared {schedule['declared_arrive_steps']} "
               f"-> population placed by the {schedule['use'].upper()} schedule{'' if not schedule['why'] else ' (' + schedule['why'] + ')'}", flush=True)
-    # the manifest's identities, placed by the same schedule, bind the committed tensors (`verity_vllm.query.manifest.bind`)
-    binder = None
-    if getattr(args, "required_manifest", None):
-        from verity_vllm.query.manifest.bind import Binder, source_ports
-        binder = Binder.of_manifest(_hdr, rank=0, ports=source_ports(getattr(com, "sources", []) or []), arrivals=arrivals)
-        if binder.rebind:
-            collector = dict(collector, promoted_inputs={"names": {k: list(v) for k, v in binder.rebind.items()}, "rule": "binding.PROMOTED_INPUT_RULE"})
-    if padded:
-        from verity_vllm.commit import padding_steps as PS
-        bmap = PS.padded_binding_map_of_committer(com, rc, pd, request_id="r0", rank=0, layout_version=collector["layout"], chunk=com.chunk,
-                                                  weight_registration=rc.weight_registration, collector=collector, request_rows=request_rows,
-                                                  binder=binder)
-    else:
-        bmap = B.build_binding_map(com._layouts, rc.steps, rc.run_root, pd, request_id="r0", rank=0, layout_version=collector["layout"], chunk=com.chunk,
-                                   weight_registration=rc.weight_registration, collector=collector, request_rows=request_rows, binder=binder)
     horizon = max(arrivals[k] + n_exec[k] for k in caps)
     request_steps = EP.request_steps_of_record(epr, arrivals)
     executed_steps = request_steps
@@ -636,13 +632,16 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
         request_steps = {k: list(range(int(arrivals[k]), int(arrivals[k]) + int(caps[k]))) for k in caps}
         horizon = max(arrivals[k] + caps[k] for k in caps)
     workload = {"program_digest": pd, "requests": sorted(caps, key=lambda k: int(k[1:])), "steps": horizon, "ranks": [0], "request_steps": request_steps}
+    pop_struct = list(B.expected_population(structure, workload))
     man_hdr = None
     comp = None
     if getattr(args, "required_manifest", None):
-        # lane manifest's Program x query manifest is the population of record
+        # lane manifest's Program x query manifest is the population of record; the structural population is recorded beside it
         pop, man_hdr = B.load_required_manifest(args.required_manifest, pd, requests=workload["requests"], steps=horizon, ranks=[0], arrivals=arrivals,
                                                 request_steps=request_steps)
+        man_hdr["structural_population_digest"], man_hdr["structural_population_n"] = B.population_digest(pop_struct)
         man_hdr["schedule"] = schedule
+        man_hdr["structural_coverage_ok"] = B.coverage_check(pop_struct, bmap)["ok"]
         man_hdr["root_program_digest"] = root_pd
         man_hdr["build_program_digest"] = getattr(args, "program_digest", None)
         # [R15 B8] declared per-step composition vs the map's partition.  The EXECUTED steps of record go in (not the padded population's
@@ -650,7 +649,7 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
         # inside the prefix / an executed block past the stop (B9.1 / F-r17b-66); on a plain map they are the same dict
         comp = B.composition_check(man_hdr, bmap, request_steps=executed_steps)
     else:
-        pop = list(B.expected_population(structure, workload))
+        pop = pop_struct
     pop_digest, pop_n = B.population_digest(pop)
     cov = B.coverage_check(pop, bmap)
     cov["schedule"] = schedule
@@ -801,8 +800,6 @@ def openings_after_release(com, rc, eng, reqs, sampling, base, args, pair: int, 
     replay_wall_s, replay_errors_n, replay_bounded = None, None, None
     if need_replay:
         saved = com.retain
-        saved_levels = getattr(com, "retain_levels", True)
-        com.retain_levels = True                # the replay's levels are the authentication paths of a run that kept none
         if hasattr(com, "learn_only"):
             com.learn_only = False              # a replay is a record run: a learning step over budget fails by name, never a placeholder
         if getattr(com, "windowed", False) and getattr(com, "win_bytes", 0):
@@ -832,7 +829,6 @@ def openings_after_release(com, rc, eng, reqs, sampling, base, args, pair: int, 
             assert_pristine(eng, base)
         finally:
             com.retain = saved
-            com.retain_levels = saved_levels
             com.retain_windows = set()
             if hasattr(com, "retain_chunks"):
                 com.retain_chunks = set()
@@ -966,23 +962,6 @@ def hot_unsafe_reasons(args: Options) -> list[str]:
     return why
 
 
-def resolve_staging(args: Options) -> Options:
-    """The collector's staging defaults made explicit before anything reads them (the replay planner, the collector record, the
-    replay's ring): an omitted --window-mb is `native_collect.window_mb_default` when every committer kind is the windowed worker
-    (per-step blocks otherwise), an omitted --window-slots the collector's ring, an omitted --bounded-staging is on whenever staging is
-    windowed."""
-    from verity_vllm.commit.committer.native_collect import WINDOW_SLOTS, window_mb_default
-
-    window, slots = args.window_mb, args.window_slots
-    if window is None:
-        kinds = args.arms.split(",") if args.arms else [args.committer]
-        window = window_mb_default(all(k == "native_collect_v2b" for k in kinds), args.retain)
-    if slots is None and window > 0:
-        slots = WINDOW_SLOTS
-    bounded = args.bounded_staging if args.bounded_staging is not None else window > 0
-    return dataclasses.replace(args, window_mb=window, window_slots=slots, bounded_staging=bounded)
-
-
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class Options:
     workload: str = option("--workload", default="workloads/workload_cov_b0_b1_c256.json")
@@ -1018,17 +997,17 @@ class Options:
     expect_root: str | None = option("--expect-root", default=None, help="fail if the instrumented run root (hex) differs from this reference root (R10 arm2/arm3 equality gate)")
     late_read: str | None = option("--late-read", default=None, help="NEGATIVE TEST (R11 collector-meas): drop this leaf (e.g. qkv_proj) from the gather arm's flush points so the " "staged values are read after the in-place overwriter -> the run root MUST differ from arm 2 (roots_equal_across_arms=false)")
     flip_weight: str | None = option("--flip-weight", default=None, help="NEGATIVE TEST ONLY (MAN-09 / rev-cb M-0610 flipweight; BRIEF R16 4A substituted weight input): " "<served param name>:<flat index>[:<value>] -- ONE element of that live parameter is changed in the instrumented process BEFORE " "register_weights, so the committer serves a model that is not the checkpoint the Program names; the weights pin MUST FAIL naming " "that field (served weight(s) differ from the checkpoint of record) and the Commit is FAIL rc 3.  Needs the pin armed " "(--weights-of-record / --checkpoint-dir + the Program).  Recorded in verdict.json negatives.flip_weight; never a row-procedure flag")
-    window_mb: int | None = option("--window-mb", type=int, default=None, help="P0 (R13): windowed staging -- lay the packed step stream over a ring of device windows of this size " "(MiB, multiple of 1) and absorb/release each window as soon as it is filled (sets VERITY_WINDOW_MB); omitted = the collector's " "(native_collect.window_mb_default: 256 on native_collect_v2b unless --retain device, else per-step blocks); 0 = per-step blocks")
+    window_mb: int | None = option("--window-mb", type=int, default=None, help="P0 (R13): windowed staging -- lay the packed step stream over a ring of device windows of this size " "(MiB, multiple of 1) and absorb/release each window as soon as it is filled (sets VERITY_WINDOW_MB); 0/omitted = per-step blocks")
     window_slots: int | None = option("--window-slots", type=int, default=None, help="P0: number of ring slots (default 8; raised automatically so the largest tensor fits)")
     layout: str = option("--layout", default="chunk-leaf-v1", choices=["chunk-leaf-v1", "chunk-leaf-v2"], help="L1 leaf-header layout of the executed and padding " "leaves, recorded in the binding map; v2 = header M := 0 (coordinator decision; roots differ from v1; windowed native_collect_v2b only)")
-    retain: str = option("--retain", default="none", choices=["device", "host", "none"], help="R13 P0 retention policy for absorbed raw staging (sets VERITY_RETAIN): device = R9..R12 compact device copy per step " "(the collector footprint that OOMs Llama 1024/128 at B=2); host = copy to host memory, arena block recycled; none (default) = " "keep only the authentication state, openings by deterministic replay (--open-after-release)")
+    retain: str | None = option("--retain", default=None, choices=["device", "host", "none"], help="R13 P0 retention policy for absorbed raw staging (sets VERITY_RETAIN): device = R9..R12 compact device copy per step " "(the collector footprint that OOMs Llama 1024/128 at B=2); host = copy to host memory, arena block recycled; none = keep " "only the authentication state (levels), openings by deterministic replay")
     footprint: str | None = option("--footprint", default=None, help="R13 P0: write the per-step device-memory timeline (JSONL) to this path (sets VERITY_FOOTPRINT)")
-    bounded_staging: bool | None = option("--bounded-staging", default=None, action="boolean_optional", help="[R17 fp8, F-fp8-B8MEM] bounded host staging (sets VERITY_STAGING_BOUNDED; windowed path only; omitted = on whenever " "staging is windowed): a learning step's transient " "host copies are capped by --learn-budget-mb and returned right after the re-hash (over budget: the warm-up pass learns the " "plan and DISCARDS the windows, a record run FAILS by name); hit-plan steps take no hedge copy (a plan mismatch is a named " "FAIL); roots identical to the unbounded path (same headers, leaf order, padding). --no-bounded-staging: the hedge copies")
+    bounded_staging: bool = option("--bounded-staging", default=False, action="store_true", help="[R17 fp8, F-fp8-B8MEM] bounded host staging (sets VERITY_STAGING_BOUNDED=1; windowed path only): a learning step's transient " "host copies are capped by --learn-budget-mb and returned right after the re-hash (over budget: the warm-up pass learns the " "plan and DISCARDS the windows, a record run FAILS by name); hit-plan steps take no hedge copy (a plan mismatch is a named " "FAIL); roots identical to the unbounded path (same headers, leaf order, padding). Flag until root parity is on record.")
     learn_budget_mb: int = option("--learn-budget-mb", type=int, default=4096, help="bounded staging: transient pinned-host budget for a learning step (MiB; default 4096)")
     retain_exclude: str | None = option("--retain-exclude", default=None, help="[R17 fp8, R17-5] with --bounded-staging --retain host: comma-separated value families (e.g. fa3_hidden_m1) whose chunk-aligned " "interior is NOT copied to host (sets VERITY_RETAIN_EXCLUDE): those leaves open by REPLAY against the original root in " "openings_after_release (needs --open-after-release); everything else opens from host as before")
     host_admit: float | None = option("--host-admit", type=float, default=None, metavar="MARGIN", help="[R17-7.3] with --bounded-staging: REFUSE (rc 3, named) before any run when the host peak bound exceeds (1 - MARGIN) x the " "cgroup memory limit (e.g. 0.15); without it the bound is only printed / recorded (host_admission_<kind>.json)")
     replay_openings: str = option("--replay-openings", default="auto", choices=["auto", "always"], help="openings-after-release: 'auto' replays only when a pick is not retained on host; 'always' replays every time and opens " "EVERY pick from the replay (regenerated values + regenerated authentication paths vs the ORIGINAL roots: R17-5 parity)")
-    open_after_release: bool = option("--open-after-release", default=True, action="boolean_optional", help="R13 P0 acceptance (default on): after each instrumented run, release every raw device copy, then open the 64 challenge positions " "(+ forced picks from the prefill step and the FA2 hidden rows) from the host copy or from a REPLAY run, and verify them " "against the ORIGINAL run's roots (recorded as commit.openings_after_release; a failure is a Commit FAIL); " "--no-open-after-release opens in the run only (not under --retain none)")
+    open_after_release: bool = option("--open-after-release", default=False, action="store_true", help="R13 P0 acceptance: after each instrumented run, release every raw device copy, then open the 64 challenge positions " "(+ forced picks from the prefill step and the FA2 hidden rows) from the host copy or from a REPLAY run, and verify them " "against the ORIGINAL run's roots (recorded as commit.openings_after_release; a failure is a Commit FAIL)")
     required_classes: str | None = option("--required-classes", default=None, help="REL-02 (R-14 interim): comma-separated class ids that MUST be declared with tensors > 0 by every " f"instrumented run (default {','.join(REQUIRED_CLASSES_DEFAULT)}; the FA2 hidden class is required because the harness has no other " "evidence the attention producer fired). Override only when the model's producers genuinely differ; the set is recorded in verdict.json")
     match_dir: str | None = option("--match-dir", "--oracle", default=None, help="[R15 COORD M-0111 (2)] the Match stage's run dir of THIS attempt (<row>/match: capture/snapshots.json + values/, instances.jsonl, " "capture/log.jsonl.gz): live C2 -- every bound identity's committed bytes are compared with the Match record's value for that " "identity (oracle-compare); any mismatch = COMMIT FAIL naming the identity; steps the Match did not snapshot are reported partial")
     program_dir: str | None = option("--program-dir", default=None, help="[DECISIONS-2 §4 C2 / M-0356 (1)] B=1: the Build's request Program dir (instances.json.gz + result.json) -- enables the C2 OF RECORD: " "sampled exact VU replay of the committed bytes through the registered relation evaluators (commit.sampled_replay) and the " "exhaustive ordered boundary linkage (commit.boundary_linkage); a mismatch / unlinked boundary = COMMIT FAIL naming the VU")
@@ -1101,7 +1080,6 @@ def main(args: Options, argv: list[str] | None = None) -> None:
         if _unsafe:
             # the worker records this as the restart reason and the client re-runs the job in a fresh process; the engine stays untouched
             raise SystemExit("HOT-UNSAFE: " + "; ".join(_unsafe))
-    args = resolve_staging(args)
     _planner = RB.prepare(args)
     compiled_src = None
     fault = os.environ.get("VERITY_FAULT", "").strip()
@@ -1142,7 +1120,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     if args.required_manifest:
         from verity_vllm.commit.binding import require_build_program_digest
         require_build_program_digest(args.required_manifest, args.program_digest)          # [COORD M-0205 (C1)] named refusal, before any engine
-        from verity_vllm.query.manifest.bind import coverage_check as manifest_coverage_check, source_ports
+        from verity_vllm.query.manifest.format import coverage_check as manifest_coverage_check
         from verity_vllm.commit.partition import require_partition
         required_manifest = require_partition(json.load(open(args.required_manifest)), args.programs_root, args.program_dir)
         print(f"[delta] required-value manifest {args.required_manifest}: {required_manifest['populations']['identities']} identities {required_manifest['populations']['by_family']} digest {required_manifest['manifest_digest'][:16]} (Program {str(required_manifest['program_digest'])[:16]})", flush=True)
@@ -1150,15 +1128,17 @@ def main(args: Options, argv: list[str] | None = None) -> None:
             compiled_kernels.set_role_maps(required_manifest)          # BEFORE the engine compiles: capture-time copies + eager acquisitions bind the manifest's roles
             print(f"[delta] compiled kernel taps: argument roles from the manifest's role_maps {compiled_kernels.hooks_info.get('role_maps')} "
                   f"({'signature-resolved per launch site' if compiled_kernels.role_maps else 'ABSENT -> name-keyed table'})", flush=True)
-    os.environ["VERITY_RETAIN"] = args.retain
-    os.environ["VERITY_WINDOW_MB"] = str(args.window_mb)
+    if args.retain:
+        os.environ["VERITY_RETAIN"] = args.retain
+    if args.window_mb is not None:
+        os.environ["VERITY_WINDOW_MB"] = str(args.window_mb)
     if args.window_slots is not None:
         os.environ["VERITY_WINDOW_SLOTS"] = str(args.window_slots)
-    os.environ["VERITY_STAGING_BOUNDED"] = "1" if args.bounded_staging else "0"
     if args.bounded_staging:
+        os.environ["VERITY_STAGING_BOUNDED"] = "1"
         os.environ["VERITY_LEARN_HOST_BUDGET_MB"] = str(int(args.learn_budget_mb))
     if args.retain_exclude:
-        if not args.bounded_staging or args.retain != "host" or not args.open_after_release:
+        if not args.bounded_staging or (args.retain or os.environ.get("VERITY_RETAIN")) != "host" or not args.open_after_release:
             raise SystemExit("--retain-exclude needs --bounded-staging --retain host --open-after-release (the excluded families open by replay)")
         os.environ["VERITY_RETAIN_EXCLUDE"] = args.retain_exclude
     if args.footprint:
@@ -1247,7 +1227,6 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     print(f"[delta] engine {'REUSED (hot; originally built' if _live is not None else 'built'} in {eng.build_s:.1f}s{')' if _live is not None else ''} "
           f"(case {eng.case}, {eng.cp['repo']}), env {eng.env_flags}", flush=True)
     versions = va.versions_doc(eng)
-    versions["served"] = SV.require(eng.llm, wl, _ekw["target"], out)
     flip_weight_rec: dict | None = None                    # --flip-weight NEGATIVE TEST record (set once, before register_weights)
     versions["git_head"] = git_head()
     versions["source_identity"] = source_identity_doc      # [R18 infra, F-r17-tp-06] resolved_path / repo_root / git_sha per package + sys.path[0]
@@ -1405,6 +1384,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 _mods = dict(com.model.named_modules())
                 _absent = sorted(c for c in _pia["consumers"] if c not in _mods)
                 com.acquire_inputs = dict(_pia["consumers"])
+                com.promoted_input_bindings = dict(_pia["names"])       # read by the binding-map build (name -> the producer identity it binds)
                 print(f"[delta] acquisition extended by the manifest (promoted members): {len(_pia['names'])} consumer input(s) "
                       f"{sorted(_pia['names'])} bind {sorted(v[0] + '/' + v[1] for v in _pia['names'].values())} "
                       f"({sum(p['rows_n'] for p in _pia['producers'].values())} promoted manifest rows; "
@@ -2035,7 +2015,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                                   f"(by family {_ne_class['by_family']}; manifest of record untouched: {_ids_all_n} identities, digest {str(required_manifest.get('manifest_digest'))[:16]}), "
                                   f"composition members dropped {_es_r['members_dropped']} over {_es_r['steps_changed']} steps, steps not executed {_es_r['steps_dropped']}", flush=True)
                     try:
-                        cov = manifest_coverage_check(_man_cov, lay, request_id=None, rank=0, ports=source_ports(getattr(com, "sources", []) or []))
+                        cov = manifest_coverage_check(_man_cov, lay, request_id=None, rank=0)
                     except Exception as e:  # noqa: BLE001  -- fail closed, keep the bind record (e.g. B>1 global manifests with `step: "*"` rows)
                         cov = {"ok": False, "error": repr(e)[:300], "checked": 0, "missing_n": -1, "missing_by_family": {}, "families_missing_entirely": [],
                                "committed_unmatched_n": -1, "manifest_source": str(args.required_manifest)}

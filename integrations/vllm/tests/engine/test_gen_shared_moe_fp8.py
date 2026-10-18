@@ -13,8 +13,6 @@ attests the cuteDSL gate tier only when a gate is eligible for it.
 """
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import dataclasses
 import importlib
 import math

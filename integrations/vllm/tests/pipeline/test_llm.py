@@ -123,17 +123,6 @@ def test_the_engine_is_built_from_the_pin_with_only_the_options_set(built):
     }
 
 
-def test_an_execution_label_sets_enforce_eager_and_a_contradicting_one_raises(built):
-    L.LLM(LLAMA[0], revision=LLAMA[1], execution="compiled")
-    assert built["execution"] == "compiled"
-    assert L.resolve_options({"execution": "compiled"})["enforce_eager"] is False
-    assert L.resolve_options({"execution": "eager", "enforce_eager": True})["enforce_eager"] is True
-    with pytest.raises(ValueError, match="builds with enforce_eager=False"):
-        L.resolve_options({"execution": "compiled", "enforce_eager": True})
-    with pytest.raises(ValueError, match="not modelled"):
-        L.resolve_options({"execution": "fp4"})
-
-
 def test_generate_returns_the_outputs_and_records_the_call(built):
     llm = L.LLM(LLAMA[0], revision=LLAMA[1])
     outs = llm.generate(["a", "b"], "SP", use_tqdm=False)
