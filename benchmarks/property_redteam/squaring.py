@@ -43,7 +43,8 @@ theorem). The carries: `group_plan` searches every one-pass plan of byte gates a
 operands are columns or adjacent pairs `f_p + 256·f_{p+1}` within s32, the carry merged into the first, in u8 or s8
 (balanced) digits and from any seam limb, under `OperandBits 128`: none uses fewer than 32 groups (u8 columns are 30 bits
 at limb 0 down to 23 at limb 127, s8 a bit narrower, and five columns fit only near the top, where merges are too
-few to save a group). Lazy reduction can't skip bytes, since each product's operands must be bytes. Nothing beats
+few to save a group). The margin is small but real: a 31-group plan first appears at `OperandBits 130` (s8, merged) to
+136 (u8, unmerged) (run r20261018-060115-4966), so the 128-bit rule is what holds 160. Lazy reduction can't skip bytes, since each product's operands must be bytes. Nothing beats
 `e = 119` (121 at 2^−20): the 128 bytes alone exceed it, and the conjecture survives by 41 units a squaring. Numbers are
 *measured* by building and running the circuits here unless marked modeled.
 """
