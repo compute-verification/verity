@@ -3,14 +3,17 @@ import Definitions.Hash.RowSeg
 import Definitions.Hash.Hm96
 
 /-!
-# The served row leaf: `hm96-sha512/row-seg/v1` in a frame-v3-sha512 tree (trusted)
+# The row-seg row leaf: `hm96-sha512/row-seg/v1` in a frame-v3-sha512 tree (trusted)
 
-A row as PoUW commits it (`PouwCommit.RowsDomain.leaf` under `hm96-sha512`; `frame_v3/PROTOCOL.md` §6, `hm96/PROTOCOL.md`
-§1): its `sha512/row-seg/v1` digest `x` under `G` (`RowSeg.digest`), wrapped in the hm96-sha512 leaf under `H` with the
+A row as PoUW commits its row-seg rows (`PouwCommit.RowsDomain.leaf` under `hm96-sha512`; `frame_v3/PROTOCOL.md` §6,
+`hm96/PROTOCOL.md` §1): its `sha512/row-seg/v1` digest `x` under `G` (`RowSeg.digest`), wrapped in the hm96-sha512 leaf under `H` with the
 row's salt and the verifier's key (`Hm96.leaf`), whose 64 bytes are the value of the frame leaf at the row's rank, under
 the schema `hm96-sha512/row-seg/v1`, in the verifier's domain (`Tree.leafMsg`), opened by a path to the root
-(`Tree.accepts`). The instance of record is `H = G = SHA-512`; `G` is separate so that the same statement reads at
-another inner digest.
+(`Tree.accepts`). The instance of record is `H = G = SHA-512`. `G` is separate so that each break names the hash it
+came from.
+
+Leaves under `hm96-sha512/row/v2` and `row/v1` are not this leaf. Nothing ties this text to the code yet: a `Properties`
+lemma or a difftest from `PouwCommit.RowsDomain.verify` to `accepts` is a proof's first step.
 
 What the verifier holds (`Verifier`): its domain and the hm96 key, both from its own statement. An opening (`Opening`):
 the row's bits, its salt and the path's siblings. The verifier accepts it at `rank` against `root` (`accepts`) when the
