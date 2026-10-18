@@ -21,6 +21,8 @@ trace is a population with public wiring, and the construction that makes it one
   `h`.
 * `downAt σ B`: the units downstream of `B` in the dataflow of the assignment `σ`, the cone the run `σ` itself draws.
 * `SkipsLucky`: work accounting's per-unit premise for a trace.
+* `downOver C B`, `coneEgressOver C O B`: the cone of `B` in the dataflow of some assignment of `C`, and the egress
+  written in it. Over the honest runs, the cones the damage theorems need.
 -/
 
 namespace Population
@@ -67,6 +69,18 @@ def downAt (σ : S → V) (B : Finset U) : Set U := {v | ∃ u ∈ B, Relation.R
 `K`), if it reads in `σ` the honest values at its honest read set and is correct, is in the lucky set `L`. -/
 def SkipsLucky (honest σ : S → V) (K L : Finset U) : Prop :=
   ∀ u, u ∉ K → (∀ r ∈ D.reads u honest, σ r = honest r) → D.Correct σ u → u ∈ L
+
+open Classical in
+/-- **The cone over the assignments `C`**: the units downstream of `B` in the dataflow of some assignment of `C`. With
+`C` the honest runs it is a property of the program alone, and it can be smaller than the padding's cone, whose paths
+may mix the read sets of different runs. -/
+noncomputable def downOver [Fintype U] (C : Set (S → V)) (B : Finset U) : Finset U :=
+  univ.filter fun v => ∃ h ∈ C, v ∈ D.downAt h B
+
+open Classical in
+/-- The egress slots `O` written in the cone over `C` of `B`. -/
+noncomputable def coneEgressOver [Fintype U] (C : Set (S → V)) (O : Finset S) (B : Finset U) : Finset S :=
+  O ∩ D.writesOf (D.downOver C B)
 
 end DynPopulation
 
