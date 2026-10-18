@@ -93,7 +93,8 @@ def declared(plan: dict, setup: ar.Setup, dc: Datacenter, block: str,
              salts: dict[int, bytes] | None = None, verifier: Plan | None = None) -> dict[tuple[Port, int], Record]:
     """The records an honest run of `plan` publishes, from the plan alone, by port and window. With `salts`, the ones
     the certifier's salt was on for, each window's salt as `Proxy.reveal` gives it: the ingress certifier enqueues the
-    salt's frame at each window's first bucket, ahead of that bucket's arrivals. With `verifier`, the verifier's plan
+    salt's frame at each window's first bucket, ahead of that bucket's arrivals, in every window it served, so not in
+    a maintenance outage, which has no salt. With `verifier`, the verifier's plan
     for the epoch, a window the block is out for maintenance in (`Plan.out`) is left out, as `datacenter.audit`
     leaves it: its ports owe no record then."""
     records = _declared(plan, setup, dc, block, salts)
@@ -117,8 +118,7 @@ def _declared(plan: dict, setup: ar.Setup, dc: Datacenter, block: str,
         arrivals[q["enqueue"]] += [data[k : k + peer.B] for k in range(0, len(data), peer.B)]
     bucketer = cgrid.Certifier(setup.ingress_link, i)
     for t in range(plan["windows"] * i.buckets):
-        if salts is not None and t % i.buckets == 0:
-            w = t // i.buckets
+        if salts is not None and t % i.buckets == 0 and (w := t // i.buckets) in salts:
             bucketer.enqueue(active.salt_frame(w, active.salt_commitment(salts[w]), i.frame_bytes))
         for f in arrivals.get(t, []):
             bucketer.enqueue(f)

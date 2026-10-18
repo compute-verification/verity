@@ -181,3 +181,23 @@ def test_a_salted_block_publishes_the_records_declared_with_its_revealed_salts(m
     assert entry["salt"] == {"accepted": True, "violations": [], "ingress_salt_frames": [1, 1, 1],
                              "egress_salt_frames": 0, "egress_holds_salt": False, "block_received": True}
     assert "salt frames ingress [1, 1, 1] egress 0, commitments ACCEPTED, block received True" in capsys.readouterr().out
+
+
+def test_a_salted_block_down_for_maintenance_owes_no_salt_in_its_outage(m, setup, tmp_path):
+    """A salted block down for window 1 reveals the salts of windows 0 and 2 only. Its records declared with them are
+    what it published, so the record check under the verifier's plan carries them; the certifier's salt check finds
+    no record and no salt for window 1, as its audit has no verdict there."""
+    report, s = setup
+    honest = m.ar.plan_configuration(m.trace()["configurations"][0], s)
+    dc = m.leaf_spine(1, cadence=m.records.cadence(s))
+    plan = m.strategy_plan(honest, s, "maintenance")
+    assert m.ar.run_virtual(plan, report, tmp_path / "b0", salt=True) == {"server": 0, "proxy": 0, "peer": 0}
+    assert sorted(m.json.loads((tmp_path / "b0" / "salts.json").read_text())) == ["0", "2"]
+
+    summary = m.audit(tmp_path, dc, honest, {"b0": plan}, report, {"b0": "maintenance"}, salt=True)
+    entry = summary["blocks"]["b0"]
+    assert entry["datacenter"]["accepted"] and entry["datacenter"]["carried"] == 4
+    assert [x.split(": ", 1)[1] for x in entry["datacenter"]["unplanned"]["refused"]] == \
+        ["no record: the certifier was down or its record was withheld"] * 2
+    assert entry["salt"] == {"accepted": False, "violations": [[1, "salt"]], "ingress_salt_frames": [1, 1],
+                             "egress_salt_frames": 0, "egress_holds_salt": False, "block_received": True}

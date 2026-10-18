@@ -45,7 +45,8 @@ declared from its own drained plan, the Program its prover registers. The record
 verifier's plan with `Maintenance(block, window 1)` (`verifier_plan`), which leaves that window out of the declared
 records, and without it, which refuses both its port-windows "no record". Each comes with the account's charge for the
 block (`charge`, `datacenter.account` on a profile that credits no work): without the plan, the refused port-windows
-at the uplink's full capacity; with it, everything the block's devices hold.
+at the uplink's full capacity; with it, everything the block's devices hold. With `--salt` its proxy reveals the salts
+of the windows it served, so the certifier's salt check, like its audit, finds nothing for window 1.
 
     python mockdc.py up | status | down
     python mockdc.py run --out DIR [--salt] [--block b0=honest --block b1=late ...]
