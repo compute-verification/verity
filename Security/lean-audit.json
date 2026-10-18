@@ -1583,6 +1583,12 @@
    "assumptions": [],
    "type_hash": "eb1d71eefdaee8934a9bf238b893b3128bacc151ddc6273bd93b97fa553311ba"
   },
+  "Accounting.SecurityProofs.RequirementHeldLive": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.RequirementHeldLive : Accounting.Guarantees.RequirementHeldLive"],
+   "assumptions": [],
+   "type_hash": "ac5fbd7cb074161194e931f4f16b51f8cb6dc8b6067cdd77cf71c31ebf8edad6"
+  },
   "Accounting.SecurityProofs.RequirementMoved": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.RequirementMoved : Accounting.Guarantees.RequirementMoved"],
@@ -6040,6 +6046,7 @@
    "Accounting.SecurityProofs.RemoteSessionConservationSketch": "frozen (no-function,hash): It composes the verbatim-sector tensor-sketch rank bound at every candidate pass with a causal session's pooled draws; the one shared store and every device read, link sector, rebuild and correct receipt are explicit, but the random-oracle game is not the rate audit's code.",
    "Accounting.SecurityProofs.RemoteSessionConservationSketchDeployed": "frozen (no-function,hash): It is Accounting.SecurityProofs.RemoteSessionConservationSketchSum at the deployed 16-row, 4 KiB-tile and draw parameters, with the two draw terms bounded by 2^-40 and each pass's grinding candidates' queries priced once by the named per-pass hash budget (Accounting.Assumptions.SketchHashBudget): its query term (n P) qtot/2^96 stays explicit, non-vacuous at the measured caps where the product form's was 2^14.",
    "Flock.SecurityProofs.ClaimsStated": "frozen (no-function): It states no property of the verifier: it reads each claim of Security/Definitions/Claims.lean, so the lock records their text, and a claim leaves it when a guarantee states that claim at the deployed verifier.",
+   "Flock.SecurityProofs.RecursionClaimsStated": "frozen (no-function): It states no property of the compiled verifier: it reads each claim of Security/Definitions/Claims/Recursion.lean, so the lock records their text, and a claim leaves it when a guarantee states that claim at the deployed compiled verifier.",
    "Accounting.SecurityProofs.PouwLocalOff": "frozen (conjecture,no-function,world-unlisted): It is stated over arbitrary strategies (maps from the verifier's coins to Accounting.Actual.Run) and an abstract verdict (Accounting.PouwWork.Verdict, its acceptance a field) rather than a function's acceptance, and it rests on the named open conjecture A3 (Accounting.Assumptions.PouwFloorOff, Security/Models/Accounting/Assumptions/PouwFloor.lean: on paper at L = 32 given a merge price, conjectured at served eta, claimed only at removable markings), a hypothesis that is not on the premises list until shape.conjectures lists it with a falsification test; its other premises, A2, A2b and A5 at 0 (PouwDetection, PouwLuck, PouwHelpBound), are.",
    "Pouw.SecurityProofs.RelativeSecurity.TheoremSStaged": "frozen (no-function): It is a theorem about every staged spot-check play (StagedPlay, its game's acceptance and deficiency) over any finite cells and bits and any ring, not about a Lean function: the service's staged check has no Lean code yet, and once it has, this is restated as that check's property.",
    "Pouw.SecurityProofs.RelativeSecurity.StagedFloorK": "frozen (no-function,world-unlisted,scope): It is stated over an arbitrary Machine and Service and an analysis map (RunMap), not the service's code, and takes three premises about that map: ServiceSoundStaged (live coins, and the proof layer's binding and zero knowledge, with the seed identified with the staged window's coins), KScopeAffine (Theorem K's proved affine scope: products of bit-affine operands, mixed included, row-pure, and E3, which no check of the service refuses a run outside of) and ChargeVF3j16 (the active vector VF3j-16's prices with B_theta complete, for stages that don't overlap). It is a sibling of StagedFloorKOneSided, a floor of record (Daniel, decision 53), proved on its own scope at the luck 3/4: the affine scope isn't inside the one-sided one; K1 is not claimed outside the two proved scopes.",
@@ -6060,10 +6067,13 @@
    "Accounting.SecurityProofs.TS.TensorSlotCount": "frozen (no-function): T1 of EPS1-TENSOR over any tensor run's slot writes, injective by freshness (a hypothesis), not a Lean function.",
    "Accounting.SecurityProofs.TS.TensorSlotTight": "lemma: T1's tightness criterion (epsilon_tensor = 0 iff L = d_H and rho_H = rho_T), arithmetic.",
    "Accounting.SecurityProofs.TS.OutputCount": "frozen (no-function): Lemma 2's count over any straight-line program's head writes, the copy tracing given as the head map, not a Lean function.",
+   "Pouw.Guarantees.Eps1.ClassPPacked": "unstated: Theorem C of EPS1-QSTAR at the zero instance; its theorem Pouw.SecurityProofs.Eps1.ClassPPacked is not proved yet (gap list in note:20261017T0801Z-draft-lean-stmt).",
+   "Accounting.SecurityProofs.RequirementHeld": "frozen (no-function): A counting bound over a declared circuit's wiring, its execution and the audit's store (Security/Definitions/Accounting/Requirement.lean): once the store is W's block for block (StoreMatches), held blocks hold all of W's live bits but B per resident block not held; about no function of the code.",
+   "Accounting.SecurityProofs.RequirementHeldLive": "frozen (no-function): A counting identity over a declared circuit's wiring, its execution and the audit's store (Security/Definitions/Accounting/Requirement.lean): once the store is W's block for block (StoreMatches), W's live bits are those in the held blocks plus the live bits of each resident block not held; about no function of the code.",
+   "Accounting.SecurityProofs.RequirementDense": "frozen (no-function): A counting bound over a declared circuit's wiring, its execution and the audit's store (Security/Definitions/Accounting/Requirement.lean): once the store is W's (StoreMatches), resident blocks holding at least D live bits each number at most liveBits / D; about no function of the code.",
+   "Accounting.SecurityProofs.RequirementMoved": "frozen (no-function): A counting bound over a declared circuit's wiring, its execution and a pass's plan (Security/Definitions/Accounting/Requirement.lean): once the plan is the blocks W reads at the step (PlanMatches), moved blocks carry all of W's read bits but B per planned block not moved; about no function of the code.",
    "Pouw.SecurityProofs.Eps1.WordLocalZero": "frozen (no-function): Theorem B of EPS1-QSTAR at the zero instance, over every word-local M3 program (Pouw.Eps1.Prog), not a Lean function.",
    "Pouw.SecurityProofs.Eps1.WordLocalGeneral": "frozen (no-function): Theorem B of EPS1-QSTAR at a general int8 instance, over every word-local M3 program, not a Lean function.",
-   "Pouw.Guarantees.Eps1.ClassPPacked": "unstated: Theorem C of EPS1-QSTAR at the zero instance; its theorem Pouw.SecurityProofs.Eps1.ClassPPacked is not proved yet (gap list in note:20261017T0801Z-draft-lean-stmt).",
-   "Flock.SecurityProofs.RecursionClaimsStated": "frozen (no-function): It states no property of the compiled verifier: it reads each claim of Security/Definitions/Claims/Recursion.lean, so the lock records their text, and a claim leaves it when a guarantee states that claim at the deployed compiled verifier.",
    "Accounting.SecurityProofs.TS.LuckOfReceipt": "lemma: the bridge of LEDGER 1.3-1.5 over every ideal game split at the receipt, the operand and receipt lucks (definitions, not named assumptions) giving (L) at p + (1 - p) pr; not a property of a Lean function.",
    "Accounting.SecurityProofs.TS.ReceiptLuckCaseA": "lemma: Lemma B of LEDGER 1.3 in case (a), the receipt luck 0 over every game whose rounds are committed duo, fx1 or li units or duo or fx1 checkpoint units (a definition), from DuoRunWordInjective, Fx1RunWordInjective, LiSegmentsBind, DuoSegmentsBind and Fx1SegmentsBind; not a property of a Lean function.",
    "Accounting.SecurityProofs.TS.LuckCaseA": "lemma: LuckOfReceipt at the receipt luck ReceiptLuckCaseA gives, (L) at the operand luck in case (a); not a property of a Lean function.",
@@ -6077,9 +6087,6 @@
    "Accounting.SecurityProofs.TS.ThinFoldInjective": "lemma: the thin fold's state is injective in each absorbed word and in its start, BitVec arithmetic.",
    "Accounting.SecurityProofs.TS.FoldOptOfFanIn": "frozen (no-function): FOLD-OPT from FanIn for any fold given as a straight-line dataflow over the committed words, not a Lean function.",
    "Accounting.SecurityProofs.TS.FillOptOfFanIn": "frozen (no-function): FILL-OPT from FanIn for any filler given as a straight-line dataflow over its fresh inputs, not a Lean function.",
-   "Accounting.SecurityProofs.RequirementHeld": "frozen (no-function): A counting bound over a declared circuit's wiring, its execution and the audit's store (Security/Definitions/Accounting/Requirement.lean): once the store is W's block for block (StoreMatches), held blocks hold all of W's live bits but B per resident block not held; about no function of the code.",
-   "Accounting.SecurityProofs.RequirementDense": "frozen (no-function): A counting bound over a declared circuit's wiring, its execution and the audit's store (Security/Definitions/Accounting/Requirement.lean): once the store is W's (StoreMatches), resident blocks holding at least D live bits each number at most liveBits / D; about no function of the code.",
-   "Accounting.SecurityProofs.RequirementMoved": "frozen (no-function): A counting bound over a declared circuit's wiring, its execution and a pass's plan (Security/Definitions/Accounting/Requirement.lean): once the plan is the blocks W reads at the step (PlanMatches), moved blocks carry all of W's read bits but B per planned block not moved; about no function of the code.",
    "Accounting.SecurityProofs.Gates.Fooling": "frozen (no-function): A counting bound over every circuit of the gate model (Security/Definitions/Accounting/Gates/Model.lean) and every set of inputs, not a property of a Lean function: the property's census check has no Lean code yet.",
    "Accounting.SecurityProofs.Gates.SquaringCarry": "frozen (no-function): The carry bound over every circuit of the gate model that squares on the sparse family (Accounting.Gates.sparse), a counting bound from Fooling, not a property of a Lean function.",
    "Accounting.SecurityProofs.Gates.EncodeBudget": "frozen (conjecture,no-function): It is a consequence of the named open conjecture EncodeChainHardness, over every declared circuit of the gate model that satisfies the stacking property, not a property of a Lean function: the property's check has no Lean code yet.",
@@ -7653,6 +7660,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.RequirementDense",
     "Accounting.SecurityProofs.RequirementHeld",
+    "Accounting.SecurityProofs.RequirementHeldLive",
     "Accounting.SecurityProofs.RequirementMoved"
    ]
   },
@@ -18723,15 +18731,17 @@
    ]
   },
   "Models.Accounting.Guarantees.Requirement": {
-   "digest": "73bfe8651ce6f040a85e8f5f7315c5801333cee4ca7f244503245f0162d1dcb8",
+   "digest": "7b87a0a8bc18b2a1df4cb48285506fa195fdb3503865e3aa8b09cb2f39d851cf",
    "definitions": {
     "Accounting.Guarantees.RequirementDense": "bc0c260f0105455699aef511a58389d289b3ffa932aa16305994e4dbac4f51cd",
     "Accounting.Guarantees.RequirementHeld": "fb24a81856c506c3b2d41c062cd0cfb59c0b4de8d77562979377d2c41f26d4b8",
+    "Accounting.Guarantees.RequirementHeldLive": "28b605bf891e6ec7436f10a9600ba7b61dc69f47ca66f2f93311156f21c4789b",
     "Accounting.Guarantees.RequirementMoved": "4a10e3a792090f532ddcfa01a0e221a20f815cdd43ba694aea268337fe3cbdaf"
    },
    "guarantees": [
     "Accounting.SecurityProofs.RequirementDense",
     "Accounting.SecurityProofs.RequirementHeld",
+    "Accounting.SecurityProofs.RequirementHeldLive",
     "Accounting.SecurityProofs.RequirementMoved"
    ]
   },
