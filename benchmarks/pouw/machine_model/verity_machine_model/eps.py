@@ -26,7 +26,9 @@ of the proof unit and its selection rule, 0 at 100% sampling. Each term is a fra
   operand delivery is priced 0 (`free`, SPEC's conservative default), at the noise's floor φ_del (`floor`: the
   design's `[operands]`, else the profile's), or at honest's own (`honest`). The LP's duals are the certificate π*, at
   which ε_machine splits exactly into ε_cert (1 − π*·n(H)/B(H)) and ε_route. With the scalar routes closed it is
-  ε_machine's floor, which no q* lowers; the threshold is the least q* at which ε_machine reaches it.
+  ε_machine's floor, which no q* lowers; the threshold is the least q* at which ε_machine reaches it. q* is (I3)
+  ScalarRoute's floor: ½ is Lean's (SheetScalarRouteHalf, from A6), and 1.22, decision 89's reading, is the 1.22-slot
+  issue floor (Theorem C, unproved in Lean).
 - **The credit** is honest's kernel (`H`, the master inequality), its model bound B(H)/f_max (`model`, PROFILE's
   reading: ε_sched and ε_clock leave ε for γ), or the floor program ♭ (`floor`, SPEC §0.7a's Corollary D3): the same LP
   restricted to honest's routes with the tensor route at φ_del and no overhead. Under ♭, ε_sched, ε_clock and honest's

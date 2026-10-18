@@ -2,9 +2,11 @@
 reading, operands free and credit ♭ (decision 89), with every number computed from the design files and the vectors.
 
 A reading is a vector per family and a q*: `sheet`, the data sheet's vectors at q* = ½, and `measured`, decision 89's
-q* = 1.22 on the measured vectors, the -ri ones where they exist (decision 98). A row is ε_skip at that vector (the
-design's `[skip.served]` there, which must be recorded: ♭ moves with Π), ε_mand, ε_machine and ε_luck, their sum (the
-core ε, Corollary D3's with ε_sched = ε_clock = 0 under ♭) and γ. Beside them are the conditions it is stated under:
+q* = 1.22 (the 1.22-slot issue floor, Theorem C, unproved in Lean) on the measured vectors, the -ri ones where they
+exist (decision 98). ε is relative to the declared capacity, the reading's Π (decision 100). A row is ε_skip at that
+vector (the design's `[skip.served]` there, which must be recorded: ♭ moves with Π), ε_mand, ε_machine and ε_luck,
+their sum (the core ε, Corollary D3's with ε_sched = ε_clock = 0 under ♭) and γ. Beside them are the conditions it is
+stated under:
 
 - the floor it needs: the ½-slot floor where ε_machine is at its floor by q* = ½, else the 1.22-slot issue floor;
 - each filler's credit, the theorem its check meets (decision 99), and the family's p = 1 sibling's ε where it has one;
