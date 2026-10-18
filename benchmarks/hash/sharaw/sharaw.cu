@@ -35,6 +35,11 @@ namespace sr {
 constexpr u32 LB = 4096;          // row bytes: sha512/row/v2 at 32768 bits
 constexpr int NBLK = LB / 128;    // its whole data blocks; the padding block is C.kw_xpad
 
+template <int U>
+DEV void node_any(int level, u64 index, const u64* L, const u64* R, u64* out);
+template <int U>
+DEV void node_lr(int level, u64 index, bool right, const u64* mine, const u64* sib, u64* out);
+
 // Diagnostic forms (timing only, never verified): what a part of the leaf costs, by leaving it out. NOFOLD is the whole
 // leaf without the fold, which v1_cg's tree launches complete.
 enum Diag : int { FULL = 0, NOLOAD = 1, ROWONLY = 2, NOFOLD = 3 };
@@ -146,7 +151,7 @@ __global__ void __launch_bounds__(TPB) sr_salt(const uint4* __restrict__ Tn, u64
 }
 
 // blockDim.x = cnt = min(width, TPB) leaves a CTA, a power of two; gridDim.x = width / cnt.
-template <int TPB, int MINB, bool PF, int DG>
+template <int TPB, int MINB, bool PF, int DG, int NU = 0>
 __global__ void __launch_bounds__(TPB, MINB)
     sr_data(const uint8_t* __restrict__ rows, u64 n, u64 width, int depth, const u64* __restrict__ S, const u64* __restrict__ F,
             u64* levels, u64* __restrict__ bc, u32* ctr) {
@@ -178,7 +183,7 @@ __global__ void __launch_bounds__(TPB, MINB)
       u64 a[8], b[8];
       cpy8(a, sm + 16 * t);
       cpy8(b, sm + 16 * t + 8);
-      node(0, l - 1, (u64)blockIdx.x * m + t, a, b, r);
+      node_any<NU>(l - 1, (u64)blockIdx.x * m + t, a, b, r);
     }
     __syncthreads();
     if (t < m) {
@@ -200,8 +205,13 @@ __global__ void __launch_bounds__(TPB, MINB)
     __threadfence();
     u64 sib[8], r[8];
     ld8cg(level_at(levels, width, l) + 8 * (idx ^ 1), sib);
-    if (idx & 1) node(0, l, p, sib, cur, r);
-    else node(0, l, p, cur, sib, r);
+    if constexpr (NU == 2) {
+      node_lr<NU>(l, p, idx & 1, cur, sib, r);
+    } else if (idx & 1) {
+      node_any<NU>(l, p, sib, cur, r);
+    } else {
+      node_any<NU>(l, p, cur, sib, r);
+    }
     st8(level_at(levels, width, l + 1) + 8 * p, r);
     cpy8(cur, r);
     idx = p;
@@ -363,10 +373,69 @@ DEV void row3(const uint8_t* __restrict__ p, u64* x) {
   cmp_kw(x, C.kw_xpad);
 }
 
-template <bool U>
+// One 16-round body for all 80 rounds (rounds 0..15 take the message word where later rounds take the schedule's), half
+// of SHA_ROLL=1's code: a lone warp (a tree's top) waits on instruction fetch less.
+DEV void compress_compact(u64* st, const u64* m) {
+  u64 w[16];
+#pragma unroll
+  for (int i = 0; i < 16; ++i) w[i] = m[i];
+  u64 a = st[0], b = st[1], c = st[2], d = st[3], e = st[4], f = st[5], g = st[6], h = st[7];
+#pragma unroll 1
+  for (int j = 0; j < 80; j += 16) {
+#pragma unroll
+    for (int i = 0; i < 16; ++i) {
+      const u64 sch = sha::add3(sha::add(sha::s1(w[(i - 2) & 15]), w[(i - 7) & 15]), sha::s0(w[(i - 15) & 15]), w[i]);
+      const u64 wi = j ? sch : w[i];
+      w[i] = wi;
+      const u64 t1 = sha::add3(h, sha::S1(e), sha::ch(e, f, g));
+      const u64 t1b = sha::add3(t1, sha::SHA_K_TABLE[j + i], wi);
+      const u64 mj = sha::maj(a, b, c);
+      h = g; g = f; f = e; e = sha::add(d, t1b);
+      d = c; c = b; b = a; a = sha::add3(t1b, sha::S0(b), mj);
+    }
+  }
+  st[0] = sha::add(st[0], a); st[1] = sha::add(st[1], b); st[2] = sha::add(st[2], c); st[3] = sha::add(st[3], d);
+  st[4] = sha::add(st[4], e); st[5] = sha::add(st[5], f); st[6] = sha::add(st[6], g); st[7] = sha::add(st[7], h);
+}
+
+// node_ni for ni = len(uint(index)) at run time: for ni <= 4 the index and both children land in the same words (or_be<2,
+// ni> in word 0, or_digest<10 + ni> from word 1 and <82 + ni> from word 10) and only the shifts depend on ni, so one copy
+// of one compression body serves every length and both blocks.
+DEV void node_rt(int level, u64 index, const u64* L, const u64* R, u64* out) {
+  const int ni = min(nbytes(index), MAX_NI), S = 8 * (2 + ni);
+  u64 W[32];
+#pragma unroll
+  for (int i = 0; i < 32; ++i) W[i] = CD[0].node_tpl[ni][i];
+  W[0] |= index << (8 * (6 - ni));
+#pragma unroll
+  for (int i = 0; i < 8; ++i) {
+    W[1 + i] |= L[i] >> S; W[2 + i] |= L[i] << (64 - S);
+    W[10 + i] |= R[i] >> S; W[11 + i] |= R[i] << (64 - S);
+  }
+  cpy8(out, CD[0].node_mid[level]);
+#pragma unroll 1
+  for (int k = 0; k < 2; ++k) {
+    u64 w[16];
+#pragma unroll
+    for (int i = 0; i < 16; ++i) w[i] = k ? W[16 + i] : W[i];
+    compress_compact(out, w);
+  }
+}
+
+// U: 0 commit_gpu's node, 1 node3 (the non-inlined body), 2 node_rt
+template <int U>
 DEV void node_any(int level, u64 index, const u64* L, const u64* R, u64* out) {
-  if constexpr (U) node3(level, index, L, R, out);
+  if constexpr (U == 1) node3(level, index, L, R, out);
+  else if constexpr (U == 2) node_rt(level, index, L, R, out);
   else node(0, level, index, L, R, out);
+}
+// the parent of `mine` and `sib` from one call site: mine is the right child when right
+template <int U>
+DEV void node_lr(int level, u64 index, bool right, const u64* mine, const u64* sib, u64* out) {
+  u64 a[8], b[8];
+#pragma unroll
+  for (int k = 0; k < 8; ++k) { a[k] = right ? sib[k] : mine[k]; b[k] = right ? mine[k] : sib[k]; }
+  node_any<U>(level, index, a, b, out);
 }
 
 // --- v2: the salt fused into the leaf, the tree as wide multi-level launches and one fold-and-climb launch ----------------
@@ -385,7 +454,7 @@ DEV void salt_regs(u64 pos, const uint4* T, u64* my, u64* c) {
 // Nodes at levels d0 + 1 .. depth above `o`, node i of level d0 (blockDim.x = min(width >> d0, TPB) threads a CTA, one a
 // node): the warp folds its own aligned subtree through shuffles, then lane 0 climbs; at each level above, the second of
 // two sibling subtrees to finish (an atomic count a parent) folds the parent and goes on.
-template <bool U>
+template <int U>
 DEV void fold_climb(u64* o, u64 i, int d0, u64 width, int depth, u64* levels, u32* ctr, u32 cnt = 0) {
   if (!cnt) cnt = blockDim.x;
   const u32 lane = threadIdx.x & 31, wsz = cnt < 32 ? cnt : 32;
@@ -416,8 +485,13 @@ DEV void fold_climb(u64* o, u64 i, int d0, u64 width, int depth, u64* levels, u3
     __threadfence();
     u64 sib[8], r[8];
     ld8cg(level_at(levels, width, l) + 8 * (idx ^ 1), sib);
-    if (idx & 1) node_any<U>(l, p, sib, o, r);
-    else node_any<U>(l, p, o, sib, r);
+    if constexpr (U == 2) {
+      node_lr<U>(l, p, idx & 1, o, sib, r);
+    } else if (idx & 1) {
+      node_any<U>(l, p, sib, o, r);
+    } else {
+      node_any<U>(l, p, o, sib, r);
+    }
     st8(level_at(levels, width, l + 1) + 8 * p, r);
     cpy8(o, r);
     idx = p;
@@ -589,7 +663,7 @@ __global__ void __launch_bounds__(256, 2)
 // compute, for the same leaves and at the same time, y, M_key y, c and the frame leaf's first block (or the pad) into
 // shared memory, so none of it is on the rows' path and no launch runs before the data. Then the row warps finish their
 // leaves and fold and climb to the root. R = cnt = min(width, TPB / 2).
-template <int TPB, bool UF = true>
+template <int TPB, int UF = 1>
 __global__ void __launch_bounds__(TPB, 512 / TPB)
     sr_leaf4(const uint8_t* __restrict__ rows, const uint4* __restrict__ Tn, u64 n, u64 width, int depth, u64* levels, u32* ctr,
              u64* __restrict__ bc) {
@@ -693,7 +767,7 @@ struct Mine {
     CK(cudaMemcpy(Tn, tn.data(), tn.size(), cudaMemcpyHostToDevice));
   }
   // UF = false: the fold and climb (one thread's latency, not the GPU's throughput) with commit_gpu's inlined node
-  template <int TPB, bool UF = true>
+  template <int TPB, int UF = 1>
   void v4(const uint8_t* rows, cudaStream_t st, u64* bc = nullptr) {
     const u32 cnt = (u32)std::min<u64>(width, TPB / 2);
     sr_leaf4<TPB, UF><<<(unsigned)(width / cnt), 2 * cnt, 0, st>>>(rows, Tn, n, width, depth, levels, ctr, bc);
@@ -750,10 +824,10 @@ struct Mine {
     constexpr int T = 128;
     sr_salt<T, MASK><<<(unsigned)((width + T - 1) / T), T, 0, st>>>(Tn, n, width, S, F, levels);
   }
-  template <int TPB, int MINB, bool PF, int DG = FULL>
+  template <int TPB, int MINB, bool PF, int DG = FULL, int NU = 0>
   void data(const uint8_t* rows, cudaStream_t st, u64* bc = nullptr) {
     const u32 cnt = (u32)std::min<u64>(width, TPB);
-    sr_data<TPB, MINB, PF, DG><<<(unsigned)(width / cnt), cnt, 0, st>>>(rows, n, width, depth, S, F, levels, bc, ctr);
+    sr_data<TPB, MINB, PF, DG, NU><<<(unsigned)(width / cnt), cnt, 0, st>>>(rows, n, width, depth, S, F, levels, bc, ctr);
   }
   // v1's salt and leaf kernels (every compression inlined), the leaves unfolded, then commit_gpu's tree schedule
   void v1_cg(const uint8_t* rows, cudaStream_t st, u64* bc = nullptr) {
@@ -903,6 +977,8 @@ static int check(int argc, char** argv) {
       case 11: me.v3s_cg(d, 0, 1, nullptr, nullptr, bc); break;
       case 13: me.v4<128, false>(d, 0, bc); break;
       case 14: me.v1_cg(d, 0, bc); break;
+      case 15: me.salts(0); me.data<256, 2, false, sr::FULL, 2>(d, 0, bc); break;
+      case 16: me.v4<256, 2>(d, 0, bc); break;
       case 12: {
         static cudaStream_t s2;
         static cudaEvent_t e2[2];
@@ -1001,9 +1077,9 @@ static int bench(int argc, char** argv, bool nsys_mode) {
   arms.push_back({"v3s_cg", true, [&](cudaStream_t s) { me.v3s_cg(src, s); }, comps});
   arms.push_back({"v3s_cg_ov", true, [&](cudaStream_t s) { me.v3s_cg(src, s, 2, st2, ovev); }, comps});
   arms.push_back({"v4_64", true, [&](cudaStream_t s) { me.v4<128>(src, s); }, comps});
-  arms.push_back({"v4i_64", true, [&](cudaStream_t s) { me.v4<128, false>(src, s); }, comps});
-  arms.push_back({"v4i_128", true, [&](cudaStream_t s) { me.v4<256, false>(src, s); }, comps});
   arms.push_back({"v4_128", true, [&](cudaStream_t s) { me.v4<256>(src, s); }, comps});
+  arms.push_back({"v1n", true, [&](cudaStream_t s) { me.salts(s); me.data<256, 2, false, sr::FULL, 2>(src, s); }, comps});
+  arms.push_back({"v4n_128", true, [&](cudaStream_t s) { me.v4<256, 2>(src, s); }, comps});
 #undef V2
   u64* io;
   const int rt = 256, rb = prop.multiProcessorCount * 8, chain = 256;
