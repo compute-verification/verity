@@ -43,6 +43,8 @@ class FakeLinear:
         if "teams(filter" in q:
             team = next((t for t in self.teams if v["n"] in (t, t[:3].upper())), None)
             return {"data": {"teams": {"nodes": [{"id": f"T-{team}", "key": team[:3].upper(), "name": team}] if team else []}}}
+        if "state { type }" in q:
+            return {"data": {"issue": {"state": {"type": self.state_type}, "comments": {"nodes": self.comments}}}}
         if "botActor" in q:
             return {"data": {"issue": {**self.authors["I1"], "comments": {"nodes": self.comments}}}}
         if "issueLabels" in q:
@@ -74,8 +76,6 @@ class FakeLinear:
             return {"data": {"issues": {"nodes": [
                 {"identifier": "INF-2", "title": "later", "createdAt": "2026-10-14T02:00Z", "state": {"name": "In Progress"}},
                 {"identifier": "INF-1", "title": "first", "createdAt": "2026-10-14T01:00Z", "state": {"name": "Backlog"}}]}}}
-        if "state { type }" in q:
-            return {"data": {"issue": {"state": {"type": self.state_type}}}}
         if "team { key }" in q:
             return {"data": {"issue": {"id": "I1", "identifier": "INF-1", "url": "https://linear.app/x/issue/INF-1", "team": {"key": "INF"}}}}
         if "issue(id: $id) { id }" in q:
@@ -262,6 +262,11 @@ def test_traffic_counts_an_ask_taken_up_on_linear_as_answered(fake, registry, ro
     ask = fake.add(COORD, text="@infra 4 GPUs" + LINKED, username="compute-accounting", bot_id=slack_bot(registry), ts="1600000000.000001")
     rc, out, _ = run(capsys, "traffic", "--hours", "1e6", "--now", "1700100000", "--json")
     assert rc == 0 and ask["ts"] in [s["ts"] for s in json.loads(out)["unanswered"]]       # still in Backlog
+    lin.comments = [FakeLinear._author("x", {"createAsUser": "compute-accounting"}, "user")]   # the asker's own comment
+    assert ask["ts"] in [s["ts"] for s in json.loads(run(capsys, "traffic", "--hours", "1e6", "--now", "1700100000", "--json")[1])["unanswered"]]
+    lin.comments.append(FakeLinear._author("x", {"createAsUser": "infra"}, "user"))            # its owner's reply
+    assert ask["ts"] not in [s["ts"] for s in json.loads(run(capsys, "traffic", "--hours", "1e6", "--now", "1700100000", "--json")[1])["unanswered"]]
+    lin.comments = []
     lin.state_type = "started"
     rc, out, _ = run(capsys, "traffic", "--hours", "1e6", "--now", "1700100000", "--json")
     assert rc == 0 and ask["ts"] not in [s["ts"] for s in json.loads(out)["unanswered"]]

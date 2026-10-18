@@ -13,10 +13,13 @@ adopted = "U±64, F±1"
 # Each epoch is a state of the census and the attacks, named after the vector that introduced it, in order. A census line
 # or an attack holds from its `since` epoch (empty: the first) through its `until` epoch (empty: the last); a line a later
 # epoch refitted or dropped closes at the last epoch it held. VF3j-8 put the plain LDSM/STSM forms on the joint issue
-# rows (the register-load variants VF3j-8 and VF3j-16 read), and every epoch after it keeps them.
-epochs = ["VF", "VF2", "VF3", "VF3c", "VF3d", "VF3e", "VF3f", "VF3g", "VF3h", "VF3i", "VF3i-strict-r8", "VF3i-strict",
+# rows (the register-load variants VF3j-8 and VF3j-16 read), and every epoch after it keeps them. DS-120, the data-sheet
+# vector (note:20261017T1818Z-draft-axioms), sits after VF with lines that close where they open, so it moves no other
+# epoch's census or attacks; `eps --vector DS-120` reads its DS_* lines alone, and its solve reads VF's attacks.
+epochs = ["VF", "DS-120", "VF2", "VF3", "VF3c", "VF3d", "VF3e", "VF3f", "VF3g", "VF3h", "VF3i", "VF3i-strict-r8",
+          "VF3i-strict",
           "VF3j", "VF3j-8", "VF3k-16", "VF3l-16", "VF3m-16", "VF3n-16", "VF3o-16",
-          "VF3p-16", "VF3q-16", "VF3r-16"]
+          "VF3p-16", "VF3q-16", "VF3r-16", "VF3s-16"]
 
 # The CUDA lane kinds (i) binds, in constraint order.
 cuda = ["FFMA", "VIMNMX", "HFMA2", "IMAD", "ALU", "F2FS", "XU", "SHFL", "NOROW", "SEL"]

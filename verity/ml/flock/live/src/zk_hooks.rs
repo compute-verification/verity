@@ -96,9 +96,9 @@ pub const OS_PIECE: usize = 1 << 16;
 #[derive(Default)]
 struct Kept {
     level0: Option<std::sync::Arc<Vec<u8>>>,
-    /// a fork was taken: each tree's first draw waits here for the other side's
+    /// a fork was taken: each tree's first draw waits here for the other side's, by tree id and leaf count
     paired: bool,
-    waiting: std::collections::BTreeMap<u64, ZeroOnDrop>,
+    waiting: std::collections::BTreeMap<(u64, usize), ZeroOnDrop>,
 }
 
 /// The coin-tree nonce the prover sends in `Hello` (docs/coin-tree-v2.md §3): 32 fresh bytes from the OS, once per session,
@@ -167,19 +167,20 @@ impl LeafSalts {
     }
 
     /// Tree `id`'s salts, `leaves` × 192 bytes (level 0's: [`Self::level0`]'s). Under a fork, the first of the two draws of a
-    /// tree reads them and the second takes the same bytes; otherwise every call reads a tree's salts afresh.
+    /// tree reads them and the second takes the same bytes; otherwise every call reads a tree's salts afresh. The two draws pair
+    /// by id and size: a device that draws a tree at another size than the shadow's gets salts of its own, its tree is not the
+    /// shadow's and its opening fails the firewall's check, and neither side panics.
     pub fn expand(&self, id: u64, leaves: usize) -> Vec<u8> {
         if id == self.level0 {
             return self.level0(leaves).to_vec();
         }
         let mut k = self.kept.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        if let Some(mut w) = k.waiting.remove(&id) {
-            assert_eq!(w.0.len(), leaves * SALT_BYTES, "tree {id}'s two draws are of one size");
+        if let Some(mut w) = k.waiting.remove(&(id, leaves)) {
             return std::mem::take(&mut w.0);
         }
         let b = self.draw(id, leaves);
         if k.paired {
-            k.waiting.insert(id, ZeroOnDrop(b.clone()));
+            k.waiting.insert((id, leaves), ZeroOnDrop(b.clone()));
         }
         b
     }
@@ -451,6 +452,12 @@ mod tests {
         let first = f.expand(shadow, 9);
         assert_eq!(a.expand(dev, 9), first, "the shadow and the device commit one set of salts");
         assert_ne!(a.expand(dev, 9), first, "a third draw of the tree reads afresh");
+        let (dev, shadow) = (a.next_id(), f.next_id());
+        let other = a.expand(dev, 10);
+        let own = f.expand(shadow, 9);
+        assert_eq!(own.len(), 9 * SALT_BYTES);
+        assert!(own.chunks(SALT_BYTES).all(|c| !other.chunks(SALT_BYTES).any(|o| o == c)), "a tree drawn at another size shares no salt");
+        assert_eq!(a.expand(dev, 9), own, "the device's draw at the shadow's size is the shadow's tree");
     }
 
     /// An injected seed's salts are its ChaCha20 tape: leaf `i` of tree `id` is blocks `3i..3i+2` under the `STREAM_SALT` key with
