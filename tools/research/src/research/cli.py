@@ -71,6 +71,8 @@
   research notes bind LANE --branch B --worktree DIR --pod NAME   # where the lane works (successors naming a predecessor's)
   research notes status [--pods] [--stale-min 30] [--json]  # per lane: freshest of report/checkpoint/commit/uncommitted edit/pod; STALE (exit 1)
   research notes watch [--every 10] [--pods]     # a line each time a lane goes STALE or comes back
+  research agents quiet [--hours 2] [--repo DIR] [--branch NAME ...] [--json]   # a coordinator's workers: each worktree (or branch)
+                                                 # with no commit, change or live process for --hours is QUIET (exit 1)
   research launch-request <request.json>         # machine side: claim the run dir, start the detached runner (idempotent per id)
   research mem [--ramlock DIR] [--json]           # machine side: cgroup limit, in use, live reservations, available (research.mem)
   research msg send|close|read|names|traffic|ask-daniel|... [--dry-run]
@@ -1649,6 +1651,10 @@ def main(argv: list[str] | None = None) -> int:
         return slack_main(rest, prog="research msg")
     if cmd == "usage":
         return cmd_usage(rest)
+    if cmd == "agents":
+        from .agents import main as agents_main
+
+        return agents_main(rest)
     age = checkout_age()
     print(f"research: unknown command {cmd!r}" + (f". {age} If {cmd!r} is newer than that, update the checkout "
                                                   "(`git pull`) and retry." if age else "") + f"\n\n{__doc__.strip()}",

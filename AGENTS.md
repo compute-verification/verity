@@ -55,7 +55,7 @@ Top-level directories (a grouping, not an import name, except `verity/`):
     `circuit_check/` (the property checks every circuit passes) and `lean/` (the Lean check, `check.py`).
   - `research`: the run recorder and the run-store client: runs, the evidence store, Slack, pods and deploys. It imports
     nothing from Verity.
-  - `agent-guard`: the VM's secret guard.
+  - `agent-guard`: the VM's secret guard, its OOM recorder, and the hook that keeps heavy work off a VM short of memory.
   - `move`: layout moves.
 - `infra/`: our machines.
   - `cluster/` (`cluster`): the shared machines' policy, planner and ledger. Stdlib only.
