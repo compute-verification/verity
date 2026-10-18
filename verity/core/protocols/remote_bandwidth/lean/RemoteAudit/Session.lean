@@ -10,7 +10,9 @@ its openings coin at W + t, and the append coins in the order drawn). Each event
 * `start`, `boundary`: the coin released (`none` at the close after the last window);
 * `append(root, count)`: the first index and its coin `c_a`; rejected `append` if malformed or past the codec's
   `max_blocks`, `coin` if its root was sent before or the last window's roots are final;
-* `release(runs)`: rejected `release` unless the runs are a canonical plan of the store with none released before;
+* `release(runs, withdrawn)`: rejected `release` unless the runs are a canonical plan of the store with none released
+  before, and `withdrawn` is empty or a canonical plan of appended blocks inside the runs that no plan received before
+  held (memory-map/v1's withdrawn blocks, released before their encode landed);
 * `receive(t, i, root, plan, step)`: rejected `malformed` (a root not 64 bytes), `order` (not the next root, or a window
   already final), `late` (past `D_t = b_t + A`), `step` (missing, not above the previous pass's, or 2^64 or more), `plan`
   (not a canonical plan of the store so far, whole, as runs or as a change of the previous pass's, or one holding a
@@ -73,6 +75,7 @@ structure State where
   head : Option ByteArray := none
   joined : Array Nat := #[]
   gone : Array (Nat × Nat) := #[]
+  planned : Array (Nat × Nat) := #[]
   plan : Plan
   step : Int := -1
 
@@ -80,7 +83,7 @@ inductive Event
   | start (now : Nat)
   | boundary (now : Nat)
   | append (root : ByteArray) (count : Int)
-  | release (runs : Array (Int × Int))
+  | release (runs withdrawn : Array (Int × Int))
   | receive (t i : Int) (root : ByteArray) (runs : Option (Array (Int × Int)))
       (change : Option (Array (Int × Int) × Array (Int × Int))) (step : Option Int) (now : Nat)
   | close (t : Int) (now : Nat)
@@ -165,10 +168,30 @@ private def merge (xs : Array (Nat × Nat)) : Array (Nat × Nat) :=
     | some (oa, ob) => if ob == a then out.pop.push (oa, b) else out.push (a, b)
     | none => out.push (a, b)) #[]
 
-def release (s : State) (runs : Array (Int × Int)) : Result × State := Id.run do
+/-- `_merged`: half-open spans `[a, b)`, overlapping or not, as the fewest disjoint ones covering the same blocks, in
+order. -/
+private def cover (xs : Array (Nat × Nat)) : Array (Nat × Nat) :=
+  (xs.qsort fun a b => a.1 < b.1 || (a.1 == b.1 && a.2 < b.2)).foldl (fun out (a, b) =>
+    match out.back? with
+    | some (oa, ob) => if a ≤ ob then out.pop.push (oa, max ob b) else out.push (a, b)
+    | none => out.push (a, b)) #[]
+
+/-- Whether a release of `pl` may name `withdrawn`: none, or a canonical plan of the store whose blocks are appended
+ones inside `pl` that no plan received before held (`planned`). -/
+def State.withdrawable (s : State) (pl : Plan) (withdrawn : Array (Int × Int)) : Bool :=
+  withdrawn.isEmpty ||
+    match Plan.make? withdrawn s.extent with
+    | none => false
+    | some w =>
+      let spans := cover (pl.runs.map fun (f, c) => (f, f + c))
+      w.runs.all fun (f, c) => s.reg.blocks ≤ f && spans.any (fun (a, b) => a ≤ f && f + c ≤ b) &&
+        !s.planned.any fun (a, b) => a < f + c && f < b
+
+def release (s : State) (runs withdrawn : Array (Int × Int)) : Result × State := Id.run do
   if let some r := live s then return (r, s)
   let some pl := Plan.make? runs s.extent | return s.fail s.filling .release
   if pl.runs.any fun (f, c) => s.isReleased f c then return s.fail s.filling .release
+  if !s.withdrawable pl withdrawn then return s.fail s.filling .release
   return (.ok,
     { s with
       gone := merge (s.gone ++ pl.runs.map fun (f, c) => (f, f + c))
@@ -210,7 +233,9 @@ def receive (s : State) (t i : Int) (root : ByteArray) (runs : Option (Array (In
       post := w.post.push post
       steps := w.steps.push st.toNat
       heads := w.heads.push head }
-  s := { s with windows := s.windows.modify t add, plan, step := st }
+  s := { s with windows := s.windows.modify t add, plan, step := st,
+                planned := cover (s.planned ++ plan.runs.filterMap fun (f, c) =>
+                  if f + c > N then some (max f N, f + c) else none) }
   return (.ok, s)
 
 def close (s : State) (t : Int) (now : Nat) : Except String (Result × State) := do
@@ -245,7 +270,7 @@ def step (s : State) : Event → Except String (Result × State)
   | .start now => pure (start s now)
   | .boundary now => pure (boundary s now)
   | .append root count => append s root count
-  | .release runs => pure (release s runs)
+  | .release runs withdrawn => pure (release s runs withdrawn)
   | .receive t i root runs change st now => pure (receive s t i root runs change st now)
   | .close t now => close s t now
   | .verify t openings => pure (verify s t openings)
