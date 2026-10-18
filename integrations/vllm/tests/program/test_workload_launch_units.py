@@ -3,16 +3,19 @@ workload root, and each member request's `schedule` argument takes its pairs' bl
 request Programs stand in for the TP rank Programs: `schedule` is a request-local parameter whose linked words they read like any
 other, so the workload's outputs show which words each request got."""
 
+import gzip
+import json
 from dataclasses import replace
 
 import numpy as np
 import pytest
 
-from verity.ml.circuits.codec import encode_program, program_digest
+from verity.ml.circuits.codec import canonical_json, encode_program, program_digest
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, REGISTRY
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import coll_concat
 from verity.ml.circuits.types import Array, Value
+from verity_vllm.pipeline import components as C
 from verity_vllm.program import workload as W
 from verity_vllm.program.kernels.moe_align_rows import moe_align_blocks, moe_align_ranks
 from verity_vllm.program.kernels.serve3_reference import materialize
@@ -105,6 +108,19 @@ def test_a_launch_its_members_do_not_fill_or_disagree_on_is_refused():
     r1 = _component(1, 3, [_linked(0, 1, 0, 0, BM=16)])
     with pytest.raises(ValueError, match="disagree on the launch"):
         W.WorkloadProgram([W.WorkloadRequest("r0", 0, 2, 2, 0, r0), W.WorkloadRequest("r1", 1, 1, 1, 1, r1)], manifest_digest="m" * 8, lag=0)
+
+
+def test_a_component_loads_with_the_align_calls_its_build_recorded(tmp_path):
+    desc = encode_program(Program(_toy(1, 3)))
+    with gzip.open(tmp_path / "descriptor.json.gz", "wb") as f:
+        f.write(canonical_json(desc))
+    with gzip.open(tmp_path / "instances.json.gz", "wt") as f:
+        json.dump({"params": [["prompt", "Array<1,Value<32>>"], ["schedule", "Array<3,Value<32>>"], ["weights", "Array<4,Value<32>>"]],
+                   "rows": []}, f)
+    rec = [_linked(0, 1, 0, 0)]
+    (tmp_path / "result.json").write_text(json.dumps({"ok": True, "program": {"digest": program_digest(desc)},
+                                                      "tp": {"schedule": {"calls": 1, "pairs": 2, "record": rec}}}))
+    assert C.load_component(str(tmp_path), {})["comp"].schedule == tuple(rec)
 
 
 def test_a_workload_without_linked_calls_stays_workload_v1():
