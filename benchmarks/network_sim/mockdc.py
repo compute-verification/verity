@@ -1,15 +1,16 @@
 """The mock datacenter: the device graph's netns plan stood up on one Linux host, with the real network certifier on each
 block's uplink, then the audit of what each certifier published.
 
-`up` creates the namespaces of `graph.netns_plan(graph.leaf_spine(...))`, all named `na-*`: two blocks (each standing in
-for a node of 8 GPUs), a certifier on each block's uplink, one leaf switch and one host outside every block, with netem on
-the fabric links. `down` stops every process in an `na-` namespace and deletes the namespaces, and their veths with them;
-the root namespace never holds a veth. `status` lists them and checks what can reach what. All three run `ip` through
-`sudo -n`.
+`up` creates the namespaces of `graph.netns_plan(graph.leaf_spine(...))`, all named `na-*`: by default four blocks (each
+standing in for a node of 8 GPUs), a certifier on each block's uplink, two leaf switches joined by a spine, and one host
+outside every block, with netem on the fabric links. `down` stops every process in an `na-` namespace and deletes the
+namespaces, and their veths with them; the root namespace never holds a veth. `status` lists them and checks what can
+reach what. All three run `ip` through `sudo -n`.
 
-`run` runs one configuration on every block at once, each block with its own strategy (`--block b1=late`). For each
-block, three processes of `benchmarks/network_traces/active_replay.py`'s, unmodified, each in its own namespace as the
-invoking user (`sudo ip netns exec NS setpriv ...`), on the host's monotonic clock from one origin:
+`run` runs one configuration on every block at once, each block with its own strategy (by default b0 `honest`, b1 `bits`,
+b2 `late`, b3 `extra`; `--block b1=late` sets one). For each block, three processes, each in its own namespace as the
+invoking user (`sudo ip netns exec NS setpriv ...`), on the host's monotonic clock from one origin, built from
+`benchmarks/network_traces/active_replay.py`'s classes and the certifier's own, unmodified:
 - **the server** (`active_replay.Server`) inside the block, on its uplink's address;
 - **the proxy** (`verity.core.protocols.certifier.active.Proxy`) in the block's certifier namespace, its link on the
   certifier's fabric address and its upstream the block's server;
@@ -23,7 +24,7 @@ by a random bit (`active_replay.adversary_writes`); `late`, which holds a sessio
 non-honest block's wire is compared with an honest block's of the same run (`active_replay.against_honest`).
 
     python mockdc.py up | status | down
-    python mockdc.py run --out DIR [--block b0=honest --block b1=late]
+    python mockdc.py run --out DIR [--block b0=honest --block b1=late ...]
 """
 
 from __future__ import annotations
@@ -53,10 +54,11 @@ T = 60
 SERVER_PORT, LINK_PORT = 8000, 9000
 STARTUP_S = 3.0
 STRATEGIES = ("honest", "bits", "late", "extra")
+RESHAPE = "bring the lab up in this shape (`mockdc.py down`, then `up` with the same --blocks, --leaves and --spines)"
 
 
 def lab(args) -> graph.Hardware:
-    return graph.leaf_spine(args.blocks, fabric_ell_ns=args.fabric_ell_us * 1000,
+    return graph.leaf_spine(args.blocks, leaves=args.leaves, spines=args.spines, fabric_ell_ns=args.fabric_ell_us * 1000,
                             fabric_jitter_ns=args.fabric_jitter_us * 1000).check()
 
 
@@ -70,6 +72,20 @@ def sudo(cmd: list[str], check: bool = True) -> subprocess.CompletedProcess:
 def namespaces() -> list[str]:
     out = subprocess.run(["ip", "netns", "list"], capture_output=True, text=True, check=True).stdout
     return [line.split()[0] for line in out.splitlines() if line.startswith(graph.NETNS_PREFIX)]
+
+
+def differences(plan: graph.NetnsPlan) -> list[str]:
+    """How the namespaces that are up differ from the plan's: one missing or not in it, or an interface without the
+    plan's address (a lab brought up in another shape numbers its links differently)."""
+    present, planned = set(namespaces()), {n.name for n in plan.namespaces}
+    out = [f"{ns} missing" for ns in sorted(planned - present)]
+    out += [f"{ns} not in the plan" for ns in sorted(present - planned)]
+    for n in plan.namespaces:
+        if n.name in present:
+            have = {(f[1].split("@")[0], f[3]) for line in sudo(["ip", "-n", n.name, "-o", "-4", "addr", "show"]).stdout
+                    .splitlines() if len(f := line.split()) > 3}
+            out += [f"{n.name} {i.name} lacks {i.address}" for i in n.interfaces if (i.name, i.address) not in have]
+    return out
 
 
 def up(args) -> None:
@@ -99,24 +115,26 @@ def down(args) -> None:
 
 def status(args) -> None:
     """Each namespace's interfaces and netem, then reachability: the outside host reaches each certifier and no block,
-    and a block reaches its certifier and nothing past it."""
+    a certifier reaches its block, and a block reaches nothing, its certifier included, since the certifier's guard
+    drops whatever the block opens."""
     plan = graph.netns_plan(lab(args))
-    present = set(namespaces())
     for n in plan.namespaces:
-        mark = "up" if n.name in present else "MISSING"
         ifs = ", ".join(f"{i.name} {i.address} -> {i.peer[0]}" + (f" [netem {' '.join(i.netem)}]" if i.netem else "")
                         for i in n.interfaces)
-        print(f"{n.name:12} {n.role:9} {mark:7} forward={int(n.forward)}  {ifs}")
+        print(f"{n.name:12} {n.role:9} forward={int(n.forward)}  {ifs}")
+    if diff := differences(plan):
+        raise SystemExit(f"{'; '.join(diff)}: {RESHAPE}")
     checks = []
     for b in sorted(lab(args).blocks()):
         cert = f"{b}.cert"
         checks += [("ext0", plan.address(cert, f"{cert}.fabric"), True), ("ext0", plan.address(b, f"{b}.uplink"), False),
-                   (b, plan.address(cert, f"{b}.uplink"), True), (b, plan.address("ext0", "ext0.fabric"), False)]
+                   (cert, plan.address(b, f"{b}.uplink"), True), (b, plan.address(cert, f"{b}.uplink"), False),
+                   (b, plan.address("ext0", "ext0.fabric"), False)]
     bad = 0
     for src, dst, want in checks:
         got = sudo(["ip", "netns", "exec", graph.netns_name(src), "ping", "-c1", "-W1", dst], check=False).returncode == 0
         bad += got != want
-        print(f"ping {src:5} -> {dst:12} {'reaches' if got else 'dropped'}{'' if got == want else '  (WRONG)'}")
+        print(f"ping {src:7} -> {dst:12} {'reaches' if got else 'dropped'}{'' if got == want else '  (WRONG)'}")
     if bad:
         raise SystemExit(f"{bad} reachability check(s) wrong")
 
@@ -265,10 +283,10 @@ class Process:
 def run(args) -> None:
     hw = lab(args)
     plan_ns = graph.netns_plan(hw)
-    missing = {n.name for n in plan_ns.namespaces} - set(namespaces())
-    if missing:
-        raise SystemExit(f"{' '.join(sorted(missing))} missing: run `mockdc.py up` first")
-    strategies = dict(b.split("=") for b in args.block) if args.block else {"b0": "honest", "b1": "late"}
+    if diff := differences(plan_ns):
+        raise SystemExit(f"{'; '.join(diff)}: {RESHAPE}")
+    strategies = ({b.split("=")[0]: b.split("=")[1] for b in args.block} if args.block else
+                  {b: STRATEGIES[int(b[1:]) % len(STRATEGIES)] for b in hw.blocks()})
     if bad := {b: s for b, s in strategies.items() if b not in hw.blocks() or s not in STRATEGIES}:
         raise SystemExit(f"{bad}: a block of {sorted(hw.blocks())} and a strategy of {STRATEGIES}")
     out = Path(args.out).resolve()
@@ -344,13 +362,15 @@ def main(argv: list[str] | None = None) -> int:
     for name, fn in (("up", up), ("down", down), ("status", status), ("run", run)):
         p = sub.add_parser(name)
         p.set_defaults(fn=fn)
-        p.add_argument("--blocks", type=int, default=2)
+        p.add_argument("--blocks", type=int, default=4)
+        p.add_argument("--leaves", type=int, default=2)
+        p.add_argument("--spines", type=int, default=1)
         p.add_argument("--fabric-ell-us", type=int, default=2_000, help="each fabric hop's latency")
         p.add_argument("--fabric-jitter-us", type=int, default=500, help="each fabric hop's delay jitter")
         if name == "run":
             p.add_argument("--out", required=True)
             p.add_argument("--block", action="append", default=[], metavar="BLOCK=STRATEGY",
-                           help=f"a block's server strategy, one of {STRATEGIES} (default b0=honest b1=late)")
+                           help=f"a block's server strategy, one of {STRATEGIES} (default: block i runs the i-th)")
     r = sub.add_parser("role")
     r.set_defaults(fn=role)
     r.add_argument("name", choices=sorted(ROLES))
