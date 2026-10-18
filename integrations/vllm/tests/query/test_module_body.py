@@ -66,6 +66,9 @@ def test_implementation_prefix_is_the_common_suffix_map():
     assert implementation_prefix(mods, ["model.model.layers.0.self_attn.attn"]) == ""
     assert implementation_prefix(mods, []) == ""
     assert implementation_prefix(mods, ["not.in.the.program"]) == ""
+    # GLM-5.3: MLA attention is a custom op inside `self_attn`, which is the Program's module; the observed `.attn` is its child
+    glm = ["inner.model.model.layers.0.self_attn", "inner.model.model.layers.1.self_attn", "inner.model.model.embed_tokens"]
+    assert implementation_prefix(glm, ["model.layers.0.self_attn.attn", "model.layers.1.self_attn.attn"]) == "inner.model."
 
 
 def test_module_bodies_and_boundary():

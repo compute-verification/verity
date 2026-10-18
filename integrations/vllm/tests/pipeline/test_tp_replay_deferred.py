@@ -30,6 +30,7 @@ SEED = 7
 REPLAY_CFG = {"programs": {"0": "/b/rank0", "1": "/b/rank1"}, "of_record": {"0": ["a" * 64], "1": ["b" * 64]}, "requests": [],
               "per_stratum": 2, "max_evaluate": 2000, "seed": SEED, "workers": None, "challenge": None, "targets": [], "ring_slots": None}
 VERSIONS = {"sampled_replay": {"of_record": REPLAY_CFG["of_record"], "seed": SEED}}
+XRANK = {"result": True, "by_family": {}}
 
 
 def _sr(result=True, grade="complete", *, rank=0, qp_ok=True, mismatch=0):
@@ -174,6 +175,7 @@ def _cblock(rank, root, bmap):
 def _in_process(fins):
     """The Commit's rows, components and summary fields as the in-process path derives them from the ranks' finalize records."""
     per_rank, reasons = {}, []
+    C2.annotate_unreplayable([(f.get("sampled_replay") or {}).get("sampled_replay") or {} for f in fins], XRANK, 0, [])
     for f in fins:
         cb = _cblock(f["rank"], "r", {"digest": "d"})
         ok, why = C2.c2_and_pin_gates(cb, f, True, None, rank=f["rank"], replay_on=True, required=True, bundle="b")
@@ -229,7 +231,7 @@ def deferred(tmp_path):
             "boundary_linkage": lk_comp, "query_population": qp_comp, "pass": True, "only_arm": "instrumented", "runs": 1}
     summ.update(commit_pass=False)          # `only_arm_summary` over a None row
     C2.seal(out, summ, rows, bundles_of, replay_cfg=REPLAY_CFG, required_manifest=str(man), world=WORLD, versions={"git_head": "c0de"},
-             all_pass=True, vc_base=None, comps=comps, xrank_pairs=[{"result": True, "by_family": {}}], xrank_families=[], label="t")
+             all_pass=True, vc_base=None, comps=comps, xrank_pairs=[XRANK], xrank_families=[], label="t")
     assert summ["pass"] is None and summ["commit_pass"] is None and len(summ["replay_deferred"]["bundles"]) == WORLD
     (out / "runs.jsonl").write_text("".join(json.dumps(r, default=str) + "\n" for r in rows))
     (out / "summary.json").write_text(json.dumps(summ, default=str))

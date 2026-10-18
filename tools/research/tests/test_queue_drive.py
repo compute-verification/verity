@@ -915,3 +915,110 @@ def test_drive_sweeps_the_repositorys_branches_once_a_day(world, monkeypatch):
     h.clock += BRANCH_SWEEP_S + 1
     h.tick()
     assert len(calls) == 2
+
+
+def test_a_failure_ejects_no_pr_that_a_running_train_below_it_still_checks(world, monkeypatch, tmp_path):
+    """18 Oct 01:55Z: 2671bd's test_dc failure fell back to the suite's inputs and ejected 13 PRs, #2348 and others among them
+    from the 15-PR train below it, which was 11 steps in and lands only if none of its PRs leaves: its check was cancelled.  A
+    PR the lower train covers is left to that train's own check."""
+    h = Harness(world, monkeypatch)
+    h.d.train_size, h.d.max_running = 1, 2
+    world.gh.put(1, world.change({"pkg/data.json": "1\n"}))
+    world.gh.put(2, world.change({"pkg/other.py": "2\n"}))
+    h.tick()
+    low, tip = h.q.chain()[0].commit, _tip(world)
+    assert [c for c, *_ in h.launched] == [low, tip]
+    _check(world, monkeypatch, tip, ("false",))
+    h.evidence = [_failed_run(tmp_path, "tests/test_x.py::test_y", "tests/test_x.py:2")]
+    h.tick()
+    assert len(h.posts) == 1 and "Ejected #2" in h.posts[0] and "#1" not in h.posts[0].split("Ejected")[1], h.posts
+    h.tick()
+    (kept,) = h.d.q.load_state()["drive"]["launched"][low]["ids"]
+    assert [m.pr for m in h.q.chain()] == [1] and h.q.chain()[0].commit == low and kept not in h.cancelled
+
+
+def test_pre_warms_run_one_at_a_time_and_count_against_the_running_checks(world, monkeypatch):
+    """18 Oct 00:43Z: with circuit-check back in the gate, drive launched four pre-warms in one tick (16 runs) beside four train
+    checks, against six check slots, and no new train could start."""
+    h = Harness(world, monkeypatch)
+    h.d.train_size, h.d.max_running = 6, 4
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.tick()
+    assert len(h.launched) == 1                                           # #1's train
+    for n in (2, 3, 4, 5):
+        world.gh.put(n, world.change({f"verity/ml/circuits/x{n}.py": f"{n}\n"}))
+    h.tick()
+    assert len(h.launched) == 2 and sum("pre-warming #" in x for x in world.logs) == 1, world.logs
+
+
+def test_a_lean_audit_record_failure_ejects_only_the_prs_that_touch_the_failing_package(world, monkeypatch, tmp_path):
+    """18 Oct 03:30Z: two trains failed lean-audit on verity/core/primitives/requirement's stale record (#2386's); no error line
+    names a file, and the fallback on every Lean source ejected #2341, #2370 and #2371 too, whose changes are in other packages."""
+    h = Harness(world, monkeypatch)
+    h.d.train_size = 2
+    world.gh.put(1, world.change({"pkgA/A.lean": "theorem a : True := trivial\n"}))
+    world.gh.put(2, world.change({"pkgB/B.lean": "theorem b : True := trivial\n"}))
+    h.tick()
+    _check(world, monkeypatch, _tip(world), ("false",))
+    h.evidence = [_lean_run(tmp_path, "AUDIT /w/lean-audit-scratch-1-x/pkgA: FAIL\n  dependencies: the .olean files of the "
+                                      "modules the package imports from toolchain differ from the record\n"
+                                      "AUDIT /w/lean-audit-scratch-1-x/pkgB: PASS\n")]
+    h.tick()
+    assert len(h.posts) == 1 and "Ejected #1:" in h.posts[0] and "Lean package pkgA" in h.posts[0], h.posts
+
+
+def test_a_train_that_passed_by_regenerating_locks_lands_with_them_committed_on_top(world, monkeypatch, tmp_path):
+    """CI-64 (Daniel through top, 18 Oct): lean-audit failed 9 trains in 36 h on lock records each PR had regenerated on its
+    own base.  A train's Lean check now passes by regenerating them, and drive commits those locks onto the train it lands,
+    naming them in a `Regenerated:` trailer that `research merge`'s gate reads (`regenerated_parent`)."""
+    h = Harness(world, monkeypatch)
+    h.d.regenerate_locks = True
+    world.gh.put(1, world.change({"pkg/A.lean": "theorem a : True := trivial\n", "pkg/lean-audit.json": '{"records": 1}\n'}))
+    h.tick()
+    tip = _tip(world)
+    _check(world, monkeypatch, tip)
+    rec = tmp_path / "regen.json"
+    rec.write_text('{"records": 2}\n')
+    monkeypatch.setattr(merge, "regenerated_records", lambda store, rid, dest=None: {"pkg": ("sha", rec)})
+    assert h.tick().startswith("landed #1")
+    main = _git(world.origin, "rev-parse", "main")
+    assert _git(world.origin, "rev-parse", f"{main}^") == tip                       # the checked train, then its locks
+    assert _git(world.origin, "show", f"{main}:pkg/lean-audit.json") == '{"records": 2}'
+    assert "Regenerated: pkg/lean-audit.json" in _git(world.origin, "log", "-1", "--format=%B", main)
+    assert any("with the locks it regenerated for pkg" in x for x in world.logs)
+
+
+def test_a_train_that_regenerated_locks_waits_for_a_new_check_when_main_moved(world, monkeypatch, tmp_path):
+    h = Harness(world, monkeypatch)
+    h.d.regenerate_locks = True
+    world.gh.put(1, world.change({"pkg/A.lean": "theorem a : True := trivial\n"}))
+    h.tick()
+    _check(world, monkeypatch, _tip(world))
+    _git(world.dev, "push", "-q", "origin", f"{world.change({'c.txt': 'outside the queue\n'})}:refs/heads/main")
+    rec = tmp_path / "regen.json"
+    rec.write_text('{"records": 2}\n')
+    monkeypatch.setattr(merge, "regenerated_records", lambda store, rid, dest=None: {"pkg": ("sha", rec)})
+    assert not h.tick().startswith("landed")
+    assert any("by regenerating pkg's locks" in x for x in world.logs)
+
+
+def test_of_several_failed_trains_drive_acts_on_the_lowest_only(world, monkeypatch, tmp_path):
+    """18 Oct 10:30Z: c93469 (#2478 #2479 #2480 #2484) failed lean-audit on #2484's Security change, and 5c00b3 above it failed
+    too. In one tick drive ejected #2484 for the lower and, for the upper, whose lower train was by then failed rather than
+    running, #2478 and #2486 as well. A train above a failed one holds its failure; its own check runs again once `next` is
+    rebuilt."""
+    h = Harness(world, monkeypatch)
+    h.d.train_size, h.d.max_running = 1, 2
+    world.gh.put(1, world.change({"pkgA/A.lean": "theorem a : True := trivial\n"}))
+    world.gh.put(2, world.change({"pkgB/B.lean": "theorem b : True := trivial\n"}))
+    h.tick()
+    low, tip = h.q.chain()[0].commit, _tip(world)
+    _check(world, monkeypatch, low, ("false",))
+    _check(world, monkeypatch, tip, ("false",))
+    lower = [_lean_run(tmp_path / "low", "AUDIT /w/lean-audit-scratch-1-x/pkgA: FAIL\n  dependencies: differ\n")]
+    upper = [_lean_run(tmp_path / "up", "AUDIT /w/lean-audit-scratch-1-x/pkgA: FAIL\nAUDIT /w/lean-audit-scratch-1-x/pkgB: FAIL\n")]
+    ids = {c: v["ids"] for c, v in h.d.q.load_state()["drive"]["launched"].items()}
+    h.d.evidence = lambda repo, rids: lower if rids == ids[low] else upper
+    h.tick()
+    assert len(h.posts) == 1 and "Ejected #1:" in h.posts[0], h.posts
+    assert [m.pr for m in h.q.chain()] == [2]

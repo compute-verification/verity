@@ -14,6 +14,7 @@ from typing import Any
 
 import numpy as np
 
+from verity_vllm.config import RowEngine
 from verity_vllm.engine.arrivals import run_requests_arrivals  # [coverage D87] step-indexed arrivals (torch-free module, unit-tested)
 from verity_vllm.observe import chunks as _chunks  # [chunked 2026-09-17] prefill-chunk / token-step attribution (torch-free, unit-tested)
 from verity_vllm.engine.build import (CASE, EXECUTION_ENFORCE_EAGER, Engine, build_engine, case_of, compilation_facts,  # noqa: F401
@@ -35,6 +36,7 @@ def load_workload(path: str | Path, max_tokens: int | None = None) -> dict:
     {"requests": [...], "sampling": {...}, "case": <checkpoint role or None>, "accepted": {request_id: accepted token ids}}.
     The accepted tokens come from the file's `accepted_token_ids` per request (M6) or `ACCEPTED_TOKENS` of the case."""
     doc = json.loads(Path(path).read_text())
+    eng = RowEngine.of(doc)
     # [GEN sampling] an optional top-level `sampling` block selects the variant and the request seeds / fan-out:
     # {"variant": "greedy", "seed": null, "n": 1} (defaults = the greedy runs); a request may override `seed` / `n`.
     samp = dict(doc.get("sampling") or {})
@@ -79,22 +81,22 @@ def load_workload(path: str | Path, max_tokens: int | None = None) -> dict:
                 "greedy": temperature == 0.0 and all(p["temperature"] == 0.0 for p in per_request)}
     if per_request:
         sampling["per_request"] = per_request
-    return {"requests": reqs, "sampling": sampling, "source": str(path), "model": doc.get("model"), "case": doc.get("case"),
+    return {"requests": reqs, "sampling": sampling, "source": str(path), "model": doc.get("model"), "revision": eng.revision, "case": doc.get("case"),
             "accepted": accepted,
-            # [coverage D87] declared scheduler knobs the workload cannot run without (e.g. max_num_batched_tokens for an
+            # [coverage D87] declared scheduler knobs the workload cannot run without (`engine.args`, e.g. max_num_batched_tokens for an
             # unchunked 8-request prefill); run_config passes them as --engine-arg, an explicit CLI value wins
-            "engine_args_required": dict(doc.get("engine_args_required") or {}),
+            "engine_args_required": dict(eng.args),
             "serving_profile": doc.get("serving_profile"), "context_class": doc.get("context_class"),
             "expected_engine_steps": doc.get("expected_engine_steps"),
             # [R15 EXEC-02] the sweep row this workload belongs to and the execution it declares (row-id suffix / explicit field): the
             # GPU stages hand `execution` to build_engine so enforce_eager is the row's, never the harness's literal (COORD M-0063 (2))
             "row_id": (doc.get("sweep") or {}).get("row_id") if isinstance(doc.get("sweep"), dict) else doc.get("row_id"),
             "execution": execution_of_workload(doc),
-            # [R15 fp8] the row's declared TargetProfile overrides (`target` block, written by sweep/workload.py --target): the channel
-            # `target_of_workload` documents ("else the workload manifest's target block") -- rc3 dropped it here, so every GPU stage
-            # built its engine with target=None (engine ARGS still travelled through engine_args_required; environment knobs such as
-            # VLLM_USE_DEEP_GEMM have no other channel, and the header carried no `profile.target`).  None when the row declares none.
-            "target": dict(doc["target"]) if isinstance(doc.get("target"), dict) and doc.get("target") else None,
+            # [R15 fp8] the row's declared TargetProfile overrides (`engine.target`, written by pipeline/workload.py --target): the channel
+            # `target_of_workload` documents -- rc3 dropped it here, so every GPU stage built its engine with target=None (engine ARGS
+            # still travelled through `engine.args`; environment knobs such as VLLM_USE_DEEP_GEMM have no other channel, and the header
+            # carried no `profile.target`).  None when the row declares none.
+            "target": dict(eng.target) if eng.target else None,
             # each enabled protocol's settings (`protocol_options.load_settings`), never hashed: the capture and the Commit install from it
             "protocols_config": dict(doc["protocols_config"]) if isinstance(doc.get("protocols_config"), dict) else None,
             "sha256": hashlib.sha256(json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()).hexdigest()}

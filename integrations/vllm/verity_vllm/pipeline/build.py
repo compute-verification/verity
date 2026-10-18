@@ -23,9 +23,8 @@ import time
 import traceback
 from dataclasses import dataclass
 
-from verity_vllm.config import option
+from verity_vllm.config import RowConfig, option
 from verity_vllm.engine import env as engine_env, hooks
-from verity_vllm.engine.profiles.transport import workload_custom_all_reduce_off
 from verity_vllm.program.boolean import derived
 from verity_vllm.program.frontend.inputs_trace import InputsTrace
 from verity_vllm.pipeline.tp.links import module_in_model_vocabulary, read_tp_links, same_module_path, write_tp_links  # noqa: F401 (read through here)
@@ -45,11 +44,14 @@ def _spec_histogram(program) -> dict[str, int]:
 
 
 def _instance_rows(program):
-    """The flat body as (spec, argument runs) rows — the comparator's unit (compare.py), one at a time."""
+    """The flat body as (spec, argument items) rows — the comparator's unit (compare.py), one at a time.  An argument is stored in the
+    progressions form (instances v2, `compact.file_items_from_refs`, the fold writer's): O(rows) for a scattered Strided where `runs()`
+    is O(leaves) — the GLM-5.3 MLA-absorb transposed-weight read is ~1e6 leaves per operand.  Every reader expands back to the
+    per-leaf run lists, bit-identically (`compact.expanded_file_args` at `program_view.iter_instance_rows` and the raw doc loaders)."""
     from verity.ml.circuits.codec import descriptor_id
-    from verity.ml.circuits.refs import runs
+    from verity_vllm.program.compact import file_items_from_refs
     for k, n in enumerate(program.fn.body.nodes):
-        yield {"i": k, "spec": descriptor_id(n.fn), "form": n.form, "name": n.name, "args": [runs(a.refs) for a in n.args]}  # json writes a run tuple as the list it was
+        yield {"i": k, "spec": descriptor_id(n.fn), "form": n.form, "name": n.name, "args": [file_items_from_refs(a.refs) for a in n.args]}
 
 
 def _instance_sequence(program) -> list[dict]:
@@ -107,7 +109,8 @@ _CONSTRUCTION_SOURCES = ("verity_vllm/program/frontend/export_compat.py", "verit
                          "verity_vllm/program/frontend/export_ops.py", "verity_vllm/program/registry/b1_tp2.py",
                          # [R15 stoch] the stochastic token-select rule (the sampler Definitions are registry digests in the descriptor); the fused-MoE rules
                          "verity_vllm/program/frontend/rules/vllm_sampling.py", "verity_vllm/program/frontend/rules/vllm_moe.py",
-                         "verity_vllm/program/frontend/rules/vllm_moe_fp8.py",
+                         "verity_vllm/program/frontend/rules/vllm_moe_fp8.py", "verity_vllm/program/frontend/rules/vllm_moe_router.py",
+                         "verity_vllm/program/frontend/rules/vllm_dsa.py",
                          # `TargetProfile.ir == "boolean"`: the derived Program on bits (the Boolean Definitions are digests in the descriptor)
                          "verity_vllm/program/boolean.py",
                          # the vLLM switches the meta instantiation pins (engine.env.EXPORT)
@@ -246,11 +249,11 @@ def sampler_geometry(sampling: dict, target, LP: int | None = None, T: int | Non
 
 
 def workload_engine_args(workload: str | None, tp: int) -> dict:
-    """The engine arguments a TP row's Build takes from its workload: ``disable_custom_all_reduce`` as the row's engines run it
-    (`engine.profiles.transport.workload_custom_all_reduce_off`).  None at TP1 or without a workload: `vllm_meta`'s default then."""
+    """The engine arguments a TP row's Build takes from its workload: ``disable_custom_all_reduce`` as the row's engines run it (its
+    ``engine.args``).  None at TP1 or without a workload: `vllm_meta`'s default then."""
     if tp < 2 or workload is None:
         return {}
-    return {"disable_custom_all_reduce": workload_custom_all_reduce_off(json.load(open(workload)))}
+    return {"disable_custom_all_reduce": bool(RowConfig.load(workload).engine.args["disable_custom_all_reduce"])}
 
 
 def sampling_policy(arg: str | None, workload: str | None) -> dict:
@@ -373,9 +376,10 @@ def _cuda_available() -> bool:
 
 def run(out: str, M: int, pos0: int, profile: str, backend: str, intercept: bool = True, wrapper: str = "step", LP: int = 8, T: int = 4, eos: int = 0, model_id: str | None = None, revision: str | None = None, max_model_len: int = 2048,
         target=None, sampling: dict | None = None, tp: int = 1, rank: int = 0, launch: dict | None = None, emit=None,
-        engine_args: dict | None = None) -> dict:
+        engine_args: dict | None = None, device_name: str | None = None) -> dict:
     """`emit`: an `emit_ranks.Emit` (`--emit-ranks`): the other ranks' files are written from this rank's derivation.  `engine_args`:
-    the row's engine arguments the meta config takes (`workload_engine_args`)."""
+    the row's engine arguments the meta config takes (`workload_engine_args`).  `device_name`: the name the declared target's GPU
+    reports, answered on a GPU-free host (`engine.profiles.devices`, `export_compat.select_cuda_platform`)."""
     from verity_vllm.program.frontend.target_profile import TargetProfile
     os.makedirs(out, exist_ok=True)
     t_start = time.time()
@@ -429,7 +433,7 @@ def run(out: str, M: int, pos0: int, profile: str, backend: str, intercept: bool
         res["sampling"] = sampling
         if res_target_source == "declared":   # the declared target decides the platform, not the host's NVML (a GPU-free Build host has none)
             from verity_vllm.program.frontend.export_compat import select_cuda_platform
-            print(f"[derive_step] declared target {target.sm_arch} x{tp}: vLLM platform {select_cuda_platform(tp)}", file=sys.stderr)
+            print(f"[derive_step] declared target {target.sm_arch} x{tp}: vLLM platform {select_cuda_platform(tp, device_name)}", file=sys.stderr)
         _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, LP, T, eos, model_id, revision, max_model_len, t_start, sampling,
                    tp=tp, rank=rank, launch=launch, emit=emit, engine_args=engine_args)
     except _Refused:
@@ -459,7 +463,7 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
         from verity_vllm.program.frontend.derive import derive_report
         from verity_vllm.program.frontend.rules.vllm_bindings import (VLLM_BINDING_RULES, vllm_ruleset, observe_attention_impls, observe_export_facts,
                                                             observe_target_profile, declared_derived_accounting, clear_observations,
-                                                            observe_launch_context)
+                                                            observe_allreduce_settings, observe_launch_context)
         clear_observations()
         observe_target_profile(target)
         observe_launch_context(launch)
@@ -478,19 +482,27 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             if tp > 1:
                 # [R13 tp] rank `rank` of `tp`: vLLM's TP group := TPStub (shard sizes + collectives -> CollectiveBus) for instantiation, export and derive
                 from verity_vllm.program.frontend.export_ops import CollectiveBus, bind_vocab_parallel_embeddings, tp_group_override
-                bus = CollectiveBus(rank=rank, world=tp)
+                from verity_vllm.program.registry.tp_allreduce import settings_of
+                env_now = engine_env.snapshot()
+                allreduce_settings = settings_of(cfg.parallel_config.disable_custom_all_reduce, env_now)
+                observe_allreduce_settings(allreduce_settings)
+                bus = CollectiveBus(rank=rank, world=tp, settings=allreduce_settings)
                 tp_stack.enter_context(tp_group_override(rank, tp, bus))
                 car_off = bool(cfg.parallel_config.disable_custom_all_reduce)
                 res["tp"]["engine_args_required"] = {"tensor_parallel_size": tp, "disable_custom_all_reduce": car_off}
                 # the workload's transport as the row set it (`row_tp.TpRow.p2p_env`) -- recorded, not consulted here
-                res["tp"]["env_required"] = {k: v for k, v in engine_env.snapshot().items() if k == "NCCL_P2P_DISABLE"}
+                res["tp"]["env_required"] = {k: v for k, v in env_now.items() if k == "NCCL_P2P_DISABLE"}
+                res["tp"]["allreduce_settings"] = allreduce_settings
                 res["tp"]["collective_backend"] = ("pynccl (custom all-reduce disabled; BI pins NCCL tree/Simple/1 channel)" if car_off else
                                                    "vLLM's custom all-reduce where it admits the tensor, else pynccl")
+            from verity_vllm.engine import sparse_mla
+            sparse_mla.arm()   # FA3's sparse-MLA split pin, armed as a serving process arms it before vLLM builds the model
             model = vm.instantiate_meta(cfg)
             # [R15 fp8] loader parity: a checkpoint that ships a redundant `lm_head.weight` under `tie_word_embeddings` is untied by
             # vLLM for loading and RE-TIED after it iff the two tensors are equal (Qwen3-4B-Instruct-2507-FP8); the same decision from the
             # pinned checkpoint's bytes, so the Program has the served model's one shared root (see `vm.retie_lm_head_as_the_loader_does`)
             res["lm_head_tying"] = vm.retie_lm_head_as_the_loader_does(model, cfg)
+            res["mla_absorbed_weights"] = vm.mla_absorbed_weights_as_the_loader_does(model, cfg)
             if tp > 1:
                 res["tp"]["embedding_shards"] = bind_vocab_parallel_embeddings(model, tp_stack.enter_context(hooks.Hooks()))
                 res["tp"]["sharded_params"] = _sharded_param_summary(model)
@@ -511,7 +523,7 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             res["attention_impls_observed"] = vm.attention_impls(model)
             # [R13 hopper] READ BACK the FA version the selector gave the layers (one value over all layers, else None = mismatch): the
             # declared `flash_attn_version` (or the selector's default for the declared capability) must be what was instantiated
-            favs = {v.get("vllm_flash_attn_version") for v in res["attention_impls_observed"].values()}
+            favs = {v.get("vllm_flash_attn_version") for v in res["attention_impls_observed"].values() if v.get("kind") != "mla"}
             fav_ints = {int(x) for x in favs if isinstance(x, int) and not isinstance(x, bool)}
             if fav_ints or len(favs) > 1:        # FlashAttention layers (or a mixed tree): judged here.  A backend that carries no FA
                 applied["flash_attn_version"] = fav_ints.pop() if (len(fav_ints) == 1 and len(favs) == 1) else None
@@ -619,7 +631,7 @@ def _write_program(out: str, res: dict, rep, *, target, applied: dict, sampling:
     res["kv_rewrites"] = len(rep.provenance.get("kv_rewrites") or []) if isinstance(rep.provenance, dict) else None
     json.dump(rep.to_json(), open(os.path.join(out, "derive-report.json"), "w"), indent=1, default=str)
     _write_instances_file(os.path.join(out, "instances.json.gz"),
-                          {"schema": "cb-a/instance-sequence/v1", "digest": digest, "correspondence_digest": corr_digest,
+                          {"schema": "cb-a/instance-sequence/v2", "digest": digest, "correspondence_digest": corr_digest,
                            "params": [[n, str(t)] for n, t in program.fn.body.params] if hasattr(program.fn.body, "params") else None, **supplied},
                           _instance_rows(program))
     # the artifact wrapper: identity = H(construction version || target profile || applicability || Program digest); digest unchanged
@@ -716,7 +728,7 @@ def _write_manifest(out: str, res: dict) -> None:
                           "site_packages_by_package": tr.get("site_packages_by_package"),
                           "non_site_packages_paths": [p for p in tr.get("non_site_packages_paths", []) if not p.startswith("/usr/lib/python")]},
          "program": res.get("program"), "spec_histogram": res.get("spec_histogram"), "ok": res.get("ok"), "unsupported": res.get("unsupported"),
-         "files": ["descriptor.json.gz (verity.ml.circuits descriptor v1)", "instances.json.gz (instance sequence: spec + operand runs)", "derive-report.json", "inputs.json", "result.json",
+         "files": ["descriptor.json.gz (verity.ml.circuits descriptor v1)", "instances.json.gz (instance sequence: spec + operand run progressions)", "derive-report.json", "inputs.json", "result.json",
                    "artifact.json (verity/aot-artifact/v1: identity + construction_version + target_profile + applicability + program_digest)"]}
     if res.get("relabeled_from"):
         m["relabeled_from"] = res["relabeled_from"]
@@ -764,11 +776,12 @@ def main(a: Options) -> int:
         from verity_vllm.program.frontend.target_profile import parse_target_arg
         from verity_vllm.program.frontend.targets import parse_launch_context
         from verity_vllm.pipeline.tp.emit_ranks import parse_ranks
+        from verity_vllm.engine.profiles.devices import device_name
         emit = parse_ranks(a.emit_ranks, a.tp, a.rank, a.emit_root) if a.emit_ranks else None
         res = run(a.out, a.M, a.pos0, a.profile, a.backend, wrapper=a.wrapper, LP=a.LP, T=a.T, eos=a.eos, model_id=a.model, revision=a.revision,
                   max_model_len=a.max_model_len, target=parse_target_arg(a.target) if a.target else None, sampling=sampling_policy(a.sampling, a.workload),
                   tp=a.tp, rank=a.rank, launch=parse_launch_context(a.launch_max_seqlen_q), emit=emit,
-                  engine_args=workload_engine_args(a.workload, a.tp))
+                  engine_args=workload_engine_args(a.workload, a.tp), device_name=device_name(a.workload))
     except BaseException as e:  # noqa: BLE001
         tb = traceback.format_exc()
         os.makedirs(a.out, exist_ok=True)

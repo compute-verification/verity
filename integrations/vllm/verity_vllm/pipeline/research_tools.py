@@ -92,6 +92,7 @@ STAGE_KEY_FLAGS: dict[str, dict[str, Any]] = {
 
 # Output-changing flags keyed only when set (off, they leave the derivation of every run without them as it was).
 KEY_FLAGS_WHEN_SET: dict[str, tuple[str, ...]] = {
+    "build": ("build_programs_only",),   # a TP Build without its manifest
     "commit": ("replay_deferred",),   # the Commit seals a replay bundle and leaves its verdict pending
 }
 

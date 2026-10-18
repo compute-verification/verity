@@ -38,6 +38,7 @@ __all__ = [
     "S32_MAX",
     "S32_MIN",
     "decode_int8",
+    "exact_k_limit",
     "s32_value",
     "s32_word",
     "step_s8_bits",
@@ -54,6 +55,21 @@ def decode_int8(fmt: str, code: int) -> int:
     if fmt == "u8":
         return code
     raise InvalidArtifact(f"no integer format {fmt!r}")
+
+
+def exact_k_limit(dtype: str, b_dtype: str) -> int:
+    """The least K at which a sum of K products of ``dtype`` x ``b_dtype`` codes can leave s32.
+
+    With ``lo <= 0 <= hi`` the extreme products, every partial sum of at most K products from a zero accumulator, in any k
+    order and any grouping into steps, lies in ``[K * lo, K * hi]``. Below this K no step clamps or wraps, so the s32 word
+    is the exact sum whatever order the k steps run in; at it, K extreme products leave s32. For s8 x s8, ``hi`` =
+    (-128)^2 = 2^14 binds (``lo`` = -128 * 127 would allow K up to 132,104): the limit is 2^17 exactly, where K codes -128
+    sum to 2^31 and ``.satfinite`` clamps it to 2^31 - 1."""
+    ends = [[decode_int8(f, c) for c in (0, 127, 128, 255)] for f in (dtype, b_dtype)]
+    products = [x * y for x in ends[0] for y in ends[1]]
+    lo, hi = min(products), max(products)
+    limit = S32_MAX // hi + 1
+    return min(limit, -S32_MIN // -lo + 1) if lo < 0 else limit
 
 
 def s32_value(word: int) -> int:
