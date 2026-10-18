@@ -210,7 +210,8 @@ def test_the_first_window_chains_from_the_registration_the_map_names():
 
 
 def test_a_dirty_block_is_in_no_step_until_a_write_completes_it():
-    """A dirty block is freed when a write first reaches it, so a `kv_free` of its page frees only the rest."""
+    """A dirty block is freed when a write first reaches it, so a `kv_free` of its page frees only its appended
+    blocks; its untouched ones stay resident."""
     s, _ = store()
     m = s.record_memory_map(registration=registration(s).digest)
     s.kv_alloc([0, 1])
@@ -226,7 +227,9 @@ def test_a_dirty_block_is_in_no_step_until_a_write_completes_it():
     assert (first.freed, first.written) == ((3, 5, 19, 21), ())
     assert first.step == 0 and [w.slot for w in second.written] == [3, 5, 19, 21] and second.freed == ()
     assert (third.step, third.written) == (2, ())
-    assert third.freed == (3, 4, 5, 6, 7, 8, 9, 10, 19, 20, 21, 22, 23, 24, 25, 26)
+    # page 0's K0 V0 (appended at step 1), page 1's K0 V0 (reached at step 2); both pages' K1 V1 are untouched filler
+    assert third.freed == (3, 5, 7, 9, 19, 21, 23, 25)
+    assert all(m.replay.holds(x) == x for x in (4, 6, 8, 10, 20, 22, 24, 26))
 
 
 def test_digests_are_taken_once_the_steps_bytes_are_in_place():
@@ -282,10 +285,38 @@ def test_a_block_written_and_freed_in_one_step_is_no_write():
     s.kv_write_reference([Append(0, 3, 1)], kv_payload, 1)
     s.kv_free([0])
     m.flush()
-    first, second = memory_map.parse(m.text().splitlines())[1]
-    assert (first.freed, first.written) == ((3, 5, 19, 21), ())
-    assert (second.step, second.freed, second.written) == (1, (4, 6, 20, 22), ())
-    assert all(m.replay.holds(x) is None for x in range(3, 7)) and m.joined == {}
+    (first,) = memory_map.parse(m.text().splitlines())[1]
+    assert (first.step, first.freed, first.written) == (0, (3, 5, 19, 21), ()) and m.last == 1
+    # step 1's line is empty: K0 V0's write is dropped, and K1 V1, which no write reached, stay resident filler
+    assert all(m.replay.holds(x) is None for x in (3, 5)) and all(m.replay.holds(x) == x for x in (4, 6))
+    assert m.joined == {} and not s.pool.dirty[0, [1, 3]].any()
+
+
+def test_a_freed_pages_untouched_blocks_stay_resident_until_a_write_reaches_them():
+    """`kv_free` frees only a page's appended blocks: its untouched filler (registered before the seed, never written
+    since) stays resident, in the filler a plan may read, until a write first reaches it (freed there, if the write
+    leaves it part written) or completes it (released by that write, as the slot's previous block)."""
+    s, _ = store()
+    m = s.record_memory_map(registration=registration(s).digest)
+    s.kv_alloc([1])
+    s.kv_write_reference([Append(1, 0, 4)], kv_payload, 0)          # page 1's K0 V0 whole
+    s.kv_append([], 1)
+    s.kv_free([1])
+    s.kv_append([], 2)
+    k1v1 = [8, 10, 24, 26]
+    assert all(m.replay.holds(x) == x for x in k1v1) and {5, 7} <= set(s.idle_blocks("kv/0").tolist())
+    assert not {4, 6} & set(s.idle_blocks("kv/0").tolist())
+    s.kv_alloc([1])
+    s.kv_write_reference([Append(1, 0, 6)], kv_payload, 3)          # K0 V0 again; K1 V1 reached, left part written
+    s.kv_write_reference([Append(1, 6, 2)], kv_payload, 4)          # K1 V1 completed
+    m.flush()
+    steps = list(memory_map.parse(m.text().splitlines())[1])
+    assert [(x.step, x.freed, tuple(w.slot for w in x.written)) for x in steps] == [
+        (0, (), (7, 9, 23, 25)), (1, (7, 9, 23, 25), ()), (3, tuple(k1v1), (7, 9, 23, 25)), (4, (), tuple(k1v1))]
+    replay = Replay(memory_map.parse(m.text().splitlines())[0])
+    changes = [replay.apply(x) for x in steps]
+    assert changes[0].released == ((7, 1), (9, 1), (23, 1), (25, 1)) and changes[2].released == ((8, 1), (10, 1),
+                                                                                                    (24, 1), (26, 1))
 
 
 def test_each_pass_names_the_step_kv_append_opened_last():
