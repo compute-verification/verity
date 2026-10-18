@@ -374,8 +374,10 @@ class ProverSide:
 
     def register(self, codec: rcodec.Codec = rcodec.DEFAULT, receipt: str = rb.DEFAULT, rows: int | None = None) -> dict:
         root = self.backend.payload_root(self.node)
+        layout = self.backend.layout() if hasattr(self.backend, "layout") else None
         self.conn.send({"type": "hello", "node": self.node.hex(), "blocks": self.backend.blocks,
-                        "payload_root": root.hex(), "codec": codec.name, "receipt": receipt, "rows": rows})
+                        "payload_root": root.hex(), "codec": codec.name, "receipt": receipt, "rows": rows,
+                        "layout": layout})
         head, _, _ = self.expect("registration")
         self.registration = wire.registration_of(head["registration"])
         if self.registration.payload_root != root or self.registration.blocks != self.backend.blocks:
