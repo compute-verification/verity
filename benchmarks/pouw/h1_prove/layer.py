@@ -75,11 +75,11 @@ def fetch(repo: str, root: Path, layer: int, calls: list[str]) -> None:
     def get(name: str) -> Path:
         f = root / name
         if not f.exists():
-            tmp = f.with_suffix(f.suffix + ".part")
+            tmp = f.with_suffix(f"{f.suffix}.{os.getpid()}.part")
             with urllib.request.urlopen(f"https://huggingface.co/{repo}/resolve/main/{name}") as r, open(tmp, "wb") as out:
                 while chunk := r.read(1 << 24):
                     out.write(chunk)
-            tmp.rename(f)
+            os.replace(tmp, f)
         return f
 
     where = json.loads(get("model.safetensors.index.json").read_text())["weight_map"]
