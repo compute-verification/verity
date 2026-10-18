@@ -49,14 +49,6 @@ RECV_MEMBERS = ("out", "0", "")       # the received collective output as the co
 MAX_ROWS = 16
 
 
-def strip_rank(name: str) -> str:
-    """`<site>/part_rank1` -> `<site>/part_rank*` (the stratum key shared by every rank)."""
-    head, _, mem = name.rpartition("/")
-    if mem.startswith(("part_rank", "shard_rank")):
-        mem = mem.split("_rank")[0] + "_rank*"
-    return f"{head}/{mem}"
-
-
 def family_of(site: str, kind: str, world: int = 2) -> str:
     """The received-output family of a site (the all-reduce at the embedding site is an AllReduce2 output too; the EmbeddingShard_v1 leg --
     the rank's PARTIAL == masked gather from its pinned vocab shard -- is evaluated on the rank and carried in the pick as `emb`)."""
