@@ -25,7 +25,8 @@ What a checker can confirm from the dataflow alone (`Checked`):
 `Determinate` is the semantic property: for every choice of unit functions, every input has exactly one assignment in
 which every unit is correct. `down B` is the downstream cone of a set of units, `up O` the slots upstream of a set of
 slots. `egress f a X O B` is what the assignments that hold the inputs `a` (off the secret slots `X`) and whose wrong
-units lie in `B` show on the egress slots `O`; `egressAt` is the same with at most `m` wrong units.
+units lie in `B` show on the egress slots `O`; `egressAt` is the same with at most `m` wrong units. `SkipsLucky` is
+work accounting's per-unit premise: a unit the prover skipped is right on honest inputs only by luck.
 
 `DynPopulation` is the object a machine trace is: its read sets depend on values, as a VM step reads memory at an
 address it holds. It is here so that the counterexamples can be stated against it.
@@ -111,6 +112,13 @@ open Classical in
 noncomputable def egressAt [Fintype U] [Fintype S] {V : Type} [Fintype V] (f : P.Fns V) (a : S → V) (X O : Finset S)
     (m : ℕ) : Finset (O → V) :=
   (univ.filter fun σ : S → V => P.Holds a X σ ∧ (P.wrong f σ).card ≤ m).image fun σ o => σ o
+
+/-- **The per-unit hardness premise of work accounting**, for a run that committed `σ` while computing only the units
+`K`: a unit it skipped, if it reads the honest values `honest` and is correct, is in the lucky set `L`. Whether a
+skipped unit can be right without its work is a fact about the unit (its floor and its luck), not about the
+population. -/
+def SkipsLucky {V : Type} (f : P.Fns V) (honest σ : S → V) (K L : Finset U) : Prop :=
+  ∀ u, u ∉ K → (∀ r ∈ P.reads u, σ r = honest r) → P.Correct f σ u → u ∈ L
 
 end Dataflow
 

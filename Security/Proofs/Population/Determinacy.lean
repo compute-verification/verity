@@ -178,13 +178,13 @@ theorem exists_correct [Finite U] (h : P.Checked) {V : Type} (f : P.Fns V) (a : 
     ∃ σ : S → V, (∀ s ∈ P.input, σ s = a s) ∧ ∀ u, P.Correct f σ u :=
   ⟨eval h.1 h.2 f a, fun _ hs => eval_input h.1 h.2 f a hs, eval_correct h.1 h.2 f a⟩
 
-/-- **Integrity against the honest evaluation**: in a checked population, an assignment that holds the inputs agrees
-with the honest evaluation on every slot written by a unit outside its wrong units' downstream cone. -/
-theorem eq_honest_off_down [Fintype U] (h : P.Checked) {V : Type} (f : P.Fns V) (a : S → V) {σ : S → V}
-    (hσ : ∀ s ∈ P.input, σ s = a s) :
-    ∀ v, v ∉ P.down (P.wrong f σ) → ∀ s ∈ P.writes v, σ s = eval h.1 h.2 f a s :=
-  P.eq_off_down (P.covered_of_singleAssignment h.1) h.2 f
-    (fun s hs => (hσ s hs).trans (eval_input h.1 h.2 f a hs).symm) le_rfl
-    (by simp [P.wrong_eq_empty (eval_correct h.1 h.2 f a)])
+/-- **Integrity against the honest run**: in a checked population, an assignment that holds the inputs agrees with
+the honest one (every unit correct, the same inputs) on every slot written by a unit outside its wrong units'
+downstream cone. -/
+theorem eq_honest_off_down [Fintype U] (h : P.Checked) {V : Type} (f : P.Fns V) (a : S → V) {honest σ : S → V}
+    (hh : ∀ s ∈ P.input, honest s = a s) (hc : ∀ u, P.Correct f honest u) (hσ : ∀ s ∈ P.input, σ s = a s) :
+    ∀ v, v ∉ P.down (P.wrong f σ) → ∀ s ∈ P.writes v, σ s = honest s :=
+  P.eq_off_down (P.covered_of_singleAssignment h.1) h.2 f (fun s hs => (hσ s hs).trans (hh s hs).symm) le_rfl
+    (by simp [P.wrong_eq_empty hc])
 
 end Population.Dataflow
