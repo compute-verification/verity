@@ -134,6 +134,9 @@ class Datacenter:
     def block_of(self, device: str) -> Block | None:
         return next((b for b in self.blocks if device in b), None)
 
+    def block(self, name: str) -> Block:
+        return next(b for b in self.blocks if b.name == name)
+
     @property
     def boundary(self) -> list[Link]:
         """The links with exactly one end in a block, or with ends in two blocks."""
@@ -161,6 +164,16 @@ class Datacenter:
 
     def link(self, a: str, b: str) -> Link:
         return next(l for l in self.links if {l.a, l.b} == {a, b})
+
+    def uplink(self, certifier: str) -> Link:
+        """The link between a certifier and the block it watches."""
+        return next(l for l in self.links if certifier in (l.a, l.b)
+                    and self.block_of(l.b if l.a == certifier else l.a) is not None)
+
+    def watched(self, port: Port) -> Block:
+        """The block whose boundary `port` watches."""
+        l = self.uplink(port.certifier)
+        return self.block_of(l.b if l.a == port.certifier else l.a)
 
     def validate(self) -> list[str]:
         """Every way the declaration falls short of the model; empty when it is an instance of it."""

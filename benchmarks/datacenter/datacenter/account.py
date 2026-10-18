@@ -16,11 +16,11 @@ concludes:
 - `reads` and `reads_local_at_least`: the reads the bandwidth audits certify for stores on the block's devices, and the
   part its boundary can't have carried in;
 - `carried`: the bits that could have been carried into the epoch: each device's memory, less what a wipe's labels
-  filled, and never less than its residual.
+  filled, and never less than its residual. For a block out for maintenance, only a wipe after it counts.
 
 For the whole datacenter it gives where each held store could have been (`located`), the covert budget (the profile's
-advice, timing advice, inputs, and every refused port-window charged at its link's full capacity: fail-closed), and the
-failure probability (the sum of the claims' deltas).
+advice, timing advice, inputs, every refused port-window charged at its link's full capacity, so it fails closed, and
+everything a block out for maintenance held), and the failure probability (the sum of the claims' deltas).
 """
 from __future__ import annotations
 
@@ -74,6 +74,8 @@ class Account:
     advice_bits: float = 0.0
     refused_bits: float = 0.0
     delta: float = 0.0
+    #: each block out for maintenance: the bits its devices hold, which may leave with whoever services it
+    serviced: dict[str, float] = field(default_factory=dict)
 
     @property
     def sound(self) -> bool:
@@ -82,7 +84,8 @@ class Account:
     @property
     def covert_bits(self) -> float:
         """Every bit the run could have carried beyond the committed computation."""
-        return self.advice_bits + self.timing_bits + sum(self.input_bits.values()) + self.refused_bits
+        return (self.advice_bits + self.timing_bits + sum(self.input_bits.values()) + self.refused_bits
+                + sum(self.serviced.values()))
 
     def __repr__(self) -> str:
         lines = [f"{'block':8} {'credited':>9} {'local ≥':>9} {'capacity':>9} {'headroom':>9} {'outsource':>9} "
@@ -94,7 +97,8 @@ class Account:
             f"{len(self.input_bits)} inputs"
         lines.append(f"covert budget: {self.covert_bits:g} bits = {self.advice_bits:g} profile advice + "
                      f"{self.timing_bits:g} timing advice + {sum(self.input_bits.values())} inputs ({inputs or 'none'})"
-                     + (f" + {self.refused_bits:.3g} on refused windows" if self.refused_bits else ""))
+                     + (f" + {self.refused_bits:.3g} on refused windows" if self.refused_bits else "")
+                     + "".join(f" + {v:.3g} held by {b} in maintenance" for b, v in self.serviced.items()))
         for s, where in self.located.items():
             lines.append(f"store {s}: held on {where[0]}" if len(where) == 1 else
                          f"store {s}: held on one of {', '.join(where)}" if where else f"store {s}: on no declared device")
@@ -125,6 +129,9 @@ def account(claims: list[Claim], profile: Profile, assume: tuple[Assumption, ...
         if isinstance(c, Computed) and inside(c) and c.part not in refused_parts:
             credited[c.part] += c.work
 
+    serviced = [m for m in profile.plan.maintenance if m.during.start < epoch.end and epoch.start < m.during.end]
+    back = {m.block: max(n.during.end for n in serviced if n.block == m.block) for m in serviced}
+
     located: dict[str, list[str]] = {}
     filled: dict[str, float] = defaultdict(float)
     for c in claims:
@@ -132,7 +139,8 @@ def account(claims: list[Claim], profile: Profile, assume: tuple[Assumption, ...
             s = profile.stores[c.store]
             located[c.store] = [d.name for d in dc.devices.values() if d.memory is not None and float(d.memory) >= s.bits
                                 and answer_time(dc, c.by, s.device, d.name, s.bits) <= dc.grid.seconds(c.during.length)]
-            if s.content == "labels" and located[c.store] == [s.device]:
+            rejoined = c.during.start >= back.get(getattr(dc.block_of(s.device), "name", None), epoch.start)
+            if s.content == "labels" and located[c.store] == [s.device] and rejoined:
                 filled[s.device] = max(filled[s.device], s.bits)
 
     reads, read_ingress = defaultdict(float), defaultdict(float)
@@ -161,7 +169,7 @@ def account(claims: list[Claim], profile: Profile, assume: tuple[Assumption, ...
         blocks.append(BlockAccount(b.name, credited[b.name], cap, outsourceable, carried, reads[b.name],
                                    read_ingress[b.name], profile.forced[b.name], names))
 
-    links = {repr(port): dc.link(*_ends(dc, port.certifier, port.direction)) for port in dc.ports}
+    links = {repr(port): dc.uplink(port.certifier) for port in dc.ports}
     window_seconds = dc.grid.seconds(dc.grid.bucket * dc.grid.window)
     voided = {(r.on.name, r.on.during) for r in refused if r.on.kind == "port"}
     refused_bits = sum(float(links[name].capacity) * window_seconds for name, _ in voided if name in links)
@@ -171,13 +179,8 @@ def account(claims: list[Claim], profile: Profile, assume: tuple[Assumption, ...
                    refused, located,
                    sum(c.bits for c in claims if isinstance(c, Scheduled)),
                    refused_bits,
-                   sum(c.delta for c in claims if isinstance(c, (Computed, Held, Read))))
-
-
-def _ends(dc: Datacenter, certifier: str, direction: str) -> tuple[str, str]:
-    """The link between a certifier and the block side of its port."""
-    l = next(l for l in dc.links if certifier in (l.a, l.b) and dc.block_of(l.b if l.a == certifier else l.a) is not None)
-    return l.a, l.b
+                   sum(c.delta for c in claims if isinstance(c, (Computed, Held, Read))),
+                   {b: sum(float(d.memory) for d in dc.block(b).devices if d.memory is not None) for b in back})
 
 
 @dataclass

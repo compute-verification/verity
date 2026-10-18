@@ -59,6 +59,7 @@ def test_a_covert_frame_is_refused():
     assert refused and {repr(k.on) for k in refused} == {"port b0.cert:out [0, 4)"}
 
 
+@pytest.mark.slow
 def test_the_served_program_is_audited_and_credited_stage_by_stage():
     """verity_vllm's `Serve_v1` for a truncated SmolLM2, a pipeline stage a block: the accounting layer re-executes its
     word Definitions, gets the tokens the Program does, and credits each stage's word operations to its block."""

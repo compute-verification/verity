@@ -32,5 +32,5 @@ print(account(audit(run(p, {"x": 7, "w": 3}, plan), profile), profile))
 up") section by section.
 
 The objects mirror the Lean physical model: `Datacenter` is `Accounting.Hardware`, `Block` is `Hardware.SpatialUnit`
-with `Covered`, and `Placement` is `Accounting.Placed` and `Accounting.Requirement.Placement` (#2399). Design:
+with `Covered`, and `Placement` is `Accounting.Placed` and `Accounting.Requirement.Placement` (#2386). Design:
 `note:network-accounting/20261018T0615Z-draft-datacenter-network-simulation`.

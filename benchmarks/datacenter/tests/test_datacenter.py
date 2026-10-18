@@ -7,7 +7,8 @@ from dataclasses import replace
 import pytest
 
 from datacenter import (FLEET_CLOSED, Assumption, Block, Carried, Computed, Credit, Datacenter, Deviation, Device,
-                        Entered, Fleet, Grid, Held, Input, Interval, Ledger, Link, On, Plan, Port, Record, Refused, Wipe,
+                        Entered, Fleet, Grid, Held, Input, Interval, Ledger, Link, Maintenance, On, Plan, Port, Record,
+                        Refused, Wipe,
                         account, audit, check_records, crossings, digest, double_credit, place, run, trace, traffic)
 from datacenter.binding import hops
 from datacenter.observe import digest as frames_digest
@@ -175,6 +176,22 @@ def test_a_refused_window_is_charged_at_its_links_full_capacity(setup):
     plan = Plan(EPOCH)
     acc = account(audit(run(p, INPUTS, plan, Deviation(down={(Port("a.cert", "egress"), 0)})), p.public(plan)), p.public(plan))
     assert not acc.sound and acc.refused_bits == pytest.approx(1e8 * 4e-3)
+
+
+def test_a_block_out_for_maintenance_owes_no_records_but_what_it_held_is_charged(setup):
+    """Maintenance: someone the auditor doesn't control has the block in hand. Its certifiers owe no records then, so the
+    epoch stays sound, but everything it held may leave (charged to the covert budget), anything may come back in, and
+    only a wipe after the maintenance bounds what it holds when it rejoins."""
+    c, dc, p = setup
+    off = Deviation(down={(Port("b.cert", "egress"), 2), (Port("b.cert", "ingress"), 2)})
+    serviced = Maintenance("b", Interval(8, 12))                      # b's traffic is all in window 1
+    for wipe, carried in ((Interval(0, 2), HBM), (Interval(12, 14), RESIDUAL)):
+        plan = Plan(EPOCH, wipes=[Wipe("b.gpu", HBM - RESIDUAL, wipe)], maintenance=[serviced])
+        acc = account(audit(run(p, INPUTS, plan, off), p.public(plan)), p.public(plan))
+        assert acc.sound and acc.serviced == {"b": HBM} and acc.blocks[1].carried == carried
+        assert acc.covert_bits == 14 * 7 + 16 + HBM
+    unplanned = Plan(EPOCH)
+    assert not account(audit(run(p, INPUTS, unplanned, off), p.public(unplanned)), p.public(unplanned)).sound
 
 
 def test_work_is_pinned_to_a_block_only_by_data_it_must_consume_there_or_a_named_premise(setup):
