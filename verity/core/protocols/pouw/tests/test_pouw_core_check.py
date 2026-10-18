@@ -54,6 +54,7 @@ EXPECT = {
     "params-template-other": "public-value: check",
     "params-template-unpinned": "params: check.template is not a tile template the verifier pins",
     "params-query-other": "params: query is not its pinned template's query digest", "params-range-low": "level:",
+    "params-coins": "params: check.coins is not live or seeded", "record-coins": "public-value: check",
     "params-range-high": "level:", "record-format": "commitment: format", "record-program": "commitment: program",
     "record-partition": "commitment: partition", "record-population-type": "commitment: population",
     "record-law-missing": "commitment: law is missing", "record-roots": "commitment: roots",
@@ -367,13 +368,13 @@ ROUNDS_EXPECT = {
     "openings-list": ("rounds", "the round coins are not a list"), "openings-form": ("coin", ": a live coin opening is"),
     "twice": ("coin", "is opened twice: a retry never redraws"), "early": ("coin", "was opened before its root was recorded"),
     "early-root": ("coin", "was opened before its root was recorded"), "never": ("coin", "was never opened"),
-    "swapped": ("coin", ": coin is the epoch's 'round' coin 1, not its 'round' coin 0"),
+    "swapped": ("coin", ": coin is the epoch's pouw/round coin 1, not its pouw/round coin 0"),
     "after": ("coin", ": coin was not opened after what the verifier recorded"),
     "root": ("coin", ": coin was not opened after what the verifier recorded"),
     "foreign-epoch": ("coin", ": coin is epoch "), "foreign": ("coin", ": coin does not open against"),
     "tampered": ("coin", ": coin does not open against"), "malformed": ("coin", ": coin opening is malformed"),
     "too-many": ("coin", "roots recorded, more than the epoch's"),
-    "label": ("coin", "'round' coin 0: coin is the epoch's 'salt' coin 0, not its 'round' coin 0"),
+    "label": ("coin", "pouw/round coin 0: coin is the epoch's pouw/salt coin 0, not its pouw/round coin 0"),
 }
 
 

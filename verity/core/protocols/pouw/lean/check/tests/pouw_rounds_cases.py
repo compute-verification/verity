@@ -1,7 +1,7 @@
 """The rounds difftest's cases: `core_check.rounds`'s arguments, ``{"coins", "roots", "openings"}``.
 
-A case is an honest live window (a live epoch's coins, `coins.live_challenger`, its round roots recorded in order and each
-round's coin opened after its root, `coins.LiveRecord`), then one mutation (`ROUNDS_NAMES`) aimed at one refusal of
+A case is an honest live window (a live epoch's coins, `window.live_challenger`, its round roots recorded in order and
+each round's coin opened after its root, the challenger's `LiveRecord`), then one mutation (`ROUNDS_NAMES`) aimed at one refusal of
 `rounds`. `tests/test_difftest.py` draws them for the harness, and `verity/core/protocols/pouw/tests/test_pouw_core_check.py`
 holds each mutation to the refusal it aims at.
 """
@@ -10,6 +10,8 @@ from __future__ import annotations
 import random
 
 from verity.core.protocols.pouw import coins as Co
+from verity.core.protocols.pouw import window as Wd
+from verity.core.protocols.sampled_proofs import challenger as Ch
 
 #: the mutations that need at least one recorded round, and those that need one round left unrecorded
 _RECORDED = {"twice", "early-root", "never", "after", "root", "foreign-epoch", "foreign", "tampered", "malformed", "label",
@@ -23,22 +25,22 @@ def _flip(h: str) -> str:
     return b.hex()
 
 
-def _record(ch: Co.LiveChallenger, roots: list[bytes]) -> list[dict]:
-    rec = Co.LiveRecord(ch, Co.ROUND)
+def _record(ch: Ch.LiveChallenger, roots: list[bytes]) -> list[dict]:
+    rec = Ch.LiveRecord(ch, Wd.ROUND)
     return [rec.record(r).to_json() for r in roots]
 
 
-def honest_rounds(rng: random.Random, name: str = "honest") -> tuple[dict, Co.LiveChallenger]:
+def honest_rounds(rng: random.Random, name: str = "honest") -> tuple[dict, Ch.LiveChallenger]:
     """An honest live window: its epoch's coins and the round coins it opened, after each recorded round root."""
     rounds = rng.choice([1, 2, 3, 4, 8]) if name != "swapped" else rng.choice([2, 3, 4, 8])
-    ch = Co.live_challenger(rng.randrange(4), rounds, rng.randbytes)
+    ch = Wd.live_challenger(rng.randrange(4), rounds, rng.randbytes)
     lo = 2 if name == "swapped" else 1 if name in _RECORDED else 0
     k = rng.randint(lo, rounds - 1 if name in _LEFT else rounds)
     roots = [rng.randbytes(64) for _ in range(k)]
     return {"coins": ch.commitment.to_json(), "roots": [r.hex() for r in roots], "openings": _record(ch, roots)}, ch
 
 
-def _mutate(d: dict, ch: Co.LiveChallenger, name: str, rng: random.Random) -> None:
+def _mutate(d: dict, ch: Ch.LiveChallenger, name: str, rng: random.Random) -> None:
     c, roots, ops = ch.commitment, d["roots"], d["openings"]
     j = rng.randrange(len(ops)) if ops else 0
     match name:
@@ -50,11 +52,11 @@ def _mutate(d: dict, ch: Co.LiveChallenger, name: str, rng: random.Random) -> No
             d["coins"] = Co.Challenger(c.epoch, rng.randbytes).commitment.to_json()
         case "not-live":
             scheme, layout = rng.choice([
-                ("verity/vllm/commit-coins/v1", Co.live_families(len(roots) + 1)),
-                (Co.LIVE_SCHEME, (("draw", 1), ("salt", 1), (Co.ROUND, len(roots) + 1))),
-                (Co.LIVE_SCHEME, (("salt", 1), (Co.ROUND, len(roots) + 1))),
-                (Co.LIVE_SCHEME, (("salt", 1), ("draw", 1), ("rounds", len(roots) + 1)))])
-            d["coins"] = Co.LiveChallenger(scheme, c.epoch, layout, rng.randbytes).commitment.to_json()
+                ("verity/vllm/commit-coins/v1", Wd.live_families(len(roots) + 1)),
+                (Wd.LIVE_SCHEME, ((Wd.DRAW, 1), (Wd.SALT, 1), (Wd.ROUND, len(roots) + 1))),
+                (Wd.LIVE_SCHEME, ((Wd.SALT, 1), (Wd.ROUND, len(roots) + 1))),
+                (Wd.LIVE_SCHEME, ((Wd.SALT, 1), (Wd.DRAW, 1), ("pouw/rounds", len(roots) + 1)))])
+            d["coins"] = Ch.LiveChallenger(scheme, c.epoch, layout, rng.randbytes).commitment.to_json()
         case "roots-form":
             d["roots"] = rng.choice([None, "x", roots + ["zz"], roots + [rng.randbytes(32).hex()], [5], {"0": roots}])
         case "openings-list":
@@ -68,7 +70,7 @@ def _mutate(d: dict, ch: Co.LiveChallenger, name: str, rng: random.Random) -> No
             d["openings"] = ops[:j + 1] + [ops[j]] + ops[j + 1:]
         case "early":
             after = bytes.fromhex(roots[-1]) if roots else rng.randbytes(64)
-            d["openings"] = ops + [ch.open(Co.ROUND, len(roots), after).to_json()]
+            d["openings"] = ops + [ch.open(Wd.ROUND, len(roots), after).to_json()]
         case "early-root":
             d["roots"] = roots[:-1]
         case "never":
@@ -80,19 +82,19 @@ def _mutate(d: dict, ch: Co.LiveChallenger, name: str, rng: random.Random) -> No
         case "root":
             d["roots"] = roots[:j] + [_flip(roots[j])] + roots[j + 1:]
         case "foreign-epoch":
-            d["openings"] = _record(Co.live_challenger(c.epoch + 1, c.family(Co.ROUND), rng.randbytes),
+            d["openings"] = _record(Wd.live_challenger(c.epoch + 1, c.family(Wd.ROUND), rng.randbytes),
                                     [bytes.fromhex(r) for r in roots])
         case "foreign":
-            d["openings"] = _record(Co.live_challenger(c.epoch, c.family(Co.ROUND), rng.randbytes),
+            d["openings"] = _record(Wd.live_challenger(c.epoch, c.family(Wd.ROUND), rng.randbytes),
                                     [bytes.fromhex(r) for r in roots])
         case "tampered":
             d["openings"] = ops[:j] + [{**ops[j], "salt": _flip(ops[j]["salt"])}] + ops[j + 1:]
         case "malformed":
             d["openings"] = ops[:j] + [{**ops[j], "coin": ops[j]["coin"][:-2]}] + ops[j + 1:]
         case "too-many":
-            d["roots"] = roots + [rng.randbytes(64).hex() for _ in range(c.family(Co.ROUND) + 1 - len(roots))]
+            d["roots"] = roots + [rng.randbytes(64).hex() for _ in range(c.family(Wd.ROUND) + 1 - len(roots))]
         case "label":
-            d["openings"] = [ch.open("salt", 0, bytes.fromhex(roots[0])).to_json()] + ops[1:]
+            d["openings"] = [ch.open(Wd.SALT, 0, bytes.fromhex(roots[0])).to_json()] + ops[1:]
         case _:
             raise ValueError(name)
 

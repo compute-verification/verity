@@ -6,8 +6,9 @@ The proof service registers the window, draws, proves and verifies; PoUW states 
 must show, and publishes `window.PUBLIC` from it.  This is that composition in one function, the parts of
 `benchmarks/pouw/served_zk/served_commit.py` (`public_problem`, `register` and `Challenger.outcome`) that are PoUW's.
 
-* **Params**, canonical JSON: the check item (`check`: the tile template, its work per tile w, the commitment scheme and
-  the public bound on entries), ε and δ as ratio strings, the grid's bits, the declared range of tile counts, the
+* **Params**, canonical JSON: the check item (`check`: the tile template, its work per tile w, the commitment scheme,
+  the public bound on entries and optionally its coin mode, ``coins``, live or seeded: `window.mode`), ε and δ as ratio
+  strings, the grid's bits, the declared range of tile counts, the
   window's context and the check query's SHA-512 (one-stage's `query_digest` of the tile template's instance query).  The
   template is one the verifier pins (`TILES`, Lean's `PouwCheck.tiles`), with that template's tile work and query.
 * **Commitment**: the window's registration, one-stage's record (`registration.record`) as canonical JSON, its window
@@ -31,8 +32,8 @@ its manifest re-starts its epoch under the challenger's own coin commitment, and
 `draw` is the rule on the window's draw (`Challenger.select`'s): the epoch's draw coin opens after the registration,
 and the drawn units are Lean's ``Draw.subset`` of the key it derives.  Both read the coin versions in `COIN_VERSIONS`,
 and a replay of a recorded draw `COIN_EARLY` too.  `rounds` is the rule on a live window's round coins
-(`coins.rounds_reason`): under the challenger's live coin commitment, round r's coin opened once, after the r-th round
-root the verifier recorded.
+(`window.rounds_reason`, over the proof service's challenger `sampled_proofs.challenger`): under the challenger's live
+coin commitment, round r's coin opened once, after the r-th round root the verifier recorded.
 
 Every refusal has one reason, the first rule it breaks in the order below; the Lean port writes the same strings.
 """
@@ -47,6 +48,7 @@ from typing import Any, NamedTuple
 
 from verity.core.protocols.pouw import coins as Co
 from verity.core.protocols.pouw import window as Wd
+from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.pouw.audit import EPOCH_SALT_DOMAIN, SALT_DOMAIN
 from verity.core.protocols.pouw.protocol import U64, tagged
 from verity.ml.commitments import Commitment, Opening, VerificationLimits, verify_opening
@@ -176,8 +178,10 @@ def params(j: Any) -> dict:
     if not isinstance(j, dict) or sorted(j) != list(PARAMS_KEYS):
         raise Refused(f"keys are not {', '.join(PARAMS_KEYS)}")
     c = j["check"]
-    if not isinstance(c, dict) or sorted(c) != list(CHECK_KEYS):
-        raise Refused(f"check's keys are not {', '.join(CHECK_KEYS)}")
+    if not isinstance(c, dict) or sorted(set(c) - {Wd.COINS}) != list(CHECK_KEYS):
+        raise Refused(f"check's keys are not {', '.join(CHECK_KEYS)}, and optionally {Wd.COINS}")
+    if Wd.COINS in c and c[Wd.COINS] not in Wd.MODES:
+        raise Refused(f"check.{Wd.COINS} is not {' or '.join(Wd.MODES)}")
     if not (_nat(c["entries"]) and c["entries"] >= 2):
         raise Refused("check.entries is not a natural number of at least 2")
     if c["scheme"] != SCHEME:
@@ -954,57 +958,26 @@ def draw(coins: Any, recorded: bool, opening: Any, stream: Any, registration: An
 
 # ---- a live window's round coins ---------------------------------------------------------------------------------------
 
-_LIVE = "a live coin commitment is {epoch, families, root, scheme}: a list of [label, count] and a hex root"
-_LIVE_OPENING = ("a live coin opening is {after, coin, epoch, index, label, path, salt}: integers, a string, hex, and SHA-512 "
-                 "digests")
-
-
-def live_coins_of(j: Any) -> Co.LiveCommitment:
-    """A live coin commitment ``{"epoch", "families", "root", "scheme"}`` (`LiveCommitment.from_json`)."""
-    families = j.get("families") if isinstance(j, dict) else None
-    root = _hex(j.get("root")) if isinstance(j, dict) else None
-    if not (isinstance(families, list) and all(isinstance(f, list) for f in families)) or root is None:
-        raise Refused(_LIVE)
-    layout = tuple(tuple(f) for f in families)
-    why = Co.layout_problem(j.get("scheme"), j.get("epoch"), layout)
-    if why is not None:
-        raise Refused(why)
-    if len(root) != 64:
-        raise Refused("a coin commitment's root is 64 bytes")
-    return Co.LiveCommitment(j["scheme"], j["epoch"], layout, root)
-
-
-def live_opening_of(j: Any) -> Co.LiveOpening:
-    """A live coin's opening (`LiveOpening.from_json`), its path of SHA-512 digests."""
-    if not isinstance(j, dict) or not _int(j.get("epoch")) or not _int(j.get("index")) or not _str(j.get("label")):
-        raise Refused(_LIVE_OPENING)
-    hexes = [_hex(j.get(k)) for k in ("after", "coin", "salt")]
-    path = [_hex(p) for p in j["path"]] if isinstance(j.get("path"), list) else None
-    if None in hexes or path is None or any(p is None or len(p) != 64 for p in path):
-        raise Refused(_LIVE_OPENING)
-    return Co.LiveOpening(j["epoch"], j["label"], j["index"], *hexes, tuple(path))
-
-
 def rounds(coins: Any, roots: Any, openings: Any) -> tuple[str, str] | None:
-    """None when `openings` are a live window's round coins (`coins.rounds_reason`): under `coins`, the challenger's live
-    coin commitment (its JSON), round r's coin opened once, after `roots[r]`, the r-th round root the verifier recorded
-    (hex), and every recorded round's coin opened; else the refusal (``coin`` or ``rounds``, and why)."""
+    """None when `openings` are a live window's round coins (`window.rounds_reason`): under `coins`, the challenger's live
+    coin commitment (its JSON, `challenger.LiveCommitment`), round r's coin opened once, after `roots[r]`, the r-th round
+    root the verifier recorded (hex), and every recorded round's coin opened; else the refusal (``coin`` or ``rounds``,
+    and why)."""
     try:
-        c = live_coins_of(coins)
-    except Refused as e:
+        c = Ch.LiveCommitment.from_json(coins)
+    except Ch.CoinError as e:
         return "coin", f"the verifier's coins are malformed: {e}"
-    rs = [_hex(r) for r in roots] if isinstance(roots, list) else None
-    if rs is None or any(r is None or len(r) != 64 for r in rs):
+    if not (isinstance(roots, list) and all(_str(r) and _DIGEST.fullmatch(r) for r in roots)):
         return "rounds", "the round roots are not a list of SHA-512 digests"
     if not isinstance(openings, list):
         return "rounds", "the round coins are not a list"
     os_ = []
     for i, o in enumerate(openings):
         try:
-            os_.append(live_opening_of(o))
-        except Refused as e:
+            os_.append(Ch.LiveOpening.from_json(o))
+        except Ch.CoinError as e:
             return "coin", f"round coin {i}: {e}"
-    why = Co.rounds_reason(c, rs, os_)
+    why = Wd.rounds_reason(c, [bytes.fromhex(r) for r in roots], os_)
     return None if why is None else ("coin", why)
 
 
