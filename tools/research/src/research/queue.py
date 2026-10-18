@@ -569,18 +569,14 @@ class Queue:
         return None, f"conflicts with `{self.branch}` in {', '.join(files)}" + (f" (touched by {', '.join(by)})" if by else "")
 
     def handle(self, pr: PR) -> str | None:
-        """The Slack handle of the lane that owns ``pr``, from main's registry (`.agents/skills/using-slack/registry.json`)
-        and each handle's inbox route, which names its holder: the lane its body names, the agent id it carries, the ready
-        mark's author, else the agent whose id ends in its branch's suffix (`cursor/<name>-4292`); None when none of them
-        is a handle."""
+        """The Slack handle of the lane that owns ``pr``, from main's registry (`.agents/skills/using-slack/registry.json`): the
+        lane its body names, the agent id it carries, the ready mark's author, else the agent whose id ends in its branch's
+        suffix (`cursor/<name>-4292`); None when none of them is a handle."""
         r = _git(self.workdir, "show", f"origin/main:{REGISTRY}", check=False)
         try:
             reg = json.loads(r.stdout).get("handles", []) if r.returncode == 0 else []
         except (ValueError, AttributeError):
             return None
-        from .slack import Routes, with_routes                       # holders are the inbox routes' (`research msg names open`)
-
-        reg = with_routes({"handles": [h for h in reg if isinstance(h, dict) and "handle" in h]}, Routes())["handles"]
         names = {h.get("handle") for h in reg if isinstance(h, dict)}
         holders = {a: h["handle"] for h in reg if isinstance(h, dict) and "handle" in h
                    for a in AGENT_RE.findall(str(h.get("holder", "")))}

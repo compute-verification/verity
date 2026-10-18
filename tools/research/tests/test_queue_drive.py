@@ -700,25 +700,6 @@ def test_a_conflict_is_told_to_ci_and_the_lane_that_owns_the_pr(world, monkeypat
         assert q.handle(pr) == want
 
 
-def test_a_prs_owner_is_the_handle_whose_inbox_route_names_its_agent(world, monkeypatch, tmp_path):
-    """Since 18 Oct the registry names no holder: a handle's inbox route (`research msg names open`) does."""
-    import dataclasses
-    import json
-
-    agent = "bc-b8aaadaa-aefd-503e-9863-5eabb3a28c79"
-    (tmp_path / "notes" / "routes.d").mkdir(parents=True)
-    (tmp_path / "notes" / "routes.d" / "circuits.json").write_text(json.dumps(
-        {"schema": "verity/slack-route/v1", "name": "circuits", "holder": agent, "inbox_ts": "1.0", "closed": None}))
-    monkeypatch.setenv("RESEARCH_NOTES", str(tmp_path / "notes"))
-    main = world.change({".agents/skills/using-slack/registry.json": json.dumps({"handles": [{"handle": "circuits"}]})})
-    _git(world.dev, "push", "-q", "origin", f"{main}:refs/heads/main")
-    h = Harness(world, monkeypatch)
-    world.gh.put(1, world.change({"a.txt": "one\n"}))
-    h.tick()
-    for body, branch, want in ((f"[agent]({agent})", "", "circuits"), ("", "cursor/x-8c79", "circuits"), ("", "cursor/x-0000", None)):
-        assert h.q.handle(dataclasses.replace(world.gh.prs[1], body=body, branch=branch)) == want
-
-
 def test_a_notice_reaches_the_merge_thread_without_naming_its_sender_and_a_refused_post_is_retried(world, monkeypatch):
     """13 Oct: `research msg send` refuses a `--to` naming the sender, and drive posted as ci to @ci, so from 05:07Z no notice
     was posted. The sender is also selectable (`queue eject --by lean`), so its handle, not always @ci, must be dropped."""
