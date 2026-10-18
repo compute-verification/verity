@@ -3,8 +3,9 @@
 predicate). What a recorded honest session meets is asserted; what none meets yet is asserted refused by name, so the
 change that closes it has to say so here. Two recorded sets, both fetched fixtures:
 
-* `rec-coins/16-16-8-n64` (`r20261009-111638-6720`'s inner statement and honest inner session, and level 3's `pub.bin`,
-  `registered.json` and outer session, proved again at the current leaf scheme by `r20261010-040650-84a9`), with level
+* `rec-coins-own/16-16-8-n64` (the inner statement and honest inner session restaged with own rows and the full stratified
+  draw, so `innerScope` admits the plain-leaf inner; level 3's `pub.bin`, `registered.json`, and its outer session reused
+  from the old shared-row fixture, 6720's proved again at the current leaf scheme by `r20261010-040650-84a9`), with level
   3's statement restaged by `rec_vstage.stage` as `test_lean_rec_coins` restages it, and checked as
   `verity/flock-circuit`; its outer session was proved before #1677 (art:225370f8… is the level proved again with
   #1677's OS masks, by `r20261010-212517-4f68`, and accepted by today's verifier). The inner description is not
@@ -56,7 +57,7 @@ from verity_flock import rec_vstage as S
 HERE = Path(__file__).resolve().parent
 LEAN = HERE.parents[2] / "core" / "service" / "flock"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-witness"
-SET = HERE / "fixtures" / "rec-coins" / "16-16-8-n64"
+SET = HERE / "fixtures" / "rec-coins-own" / "16-16-8-n64"
 LEVEL = 3
 STATEMENT = "verity/flock-circuit"
 #: the statement rec-coins' level-3 session was proved as: `verity/flock-circuit` before #1677 put the OS's masks in its
@@ -107,7 +108,7 @@ def _kept(once, name: str, run) -> dict[str, dict]:
 @pytest.fixture(scope="module")
 def inner(once) -> dict[str, dict]:
     assert (SET / "u" / "stage" / "circuit.txt").is_file(), (
-        f"{SET} is not fetched: `uv run research data fetch-fixtures verity/ml/flock/tests/fixtures/rec-coins`")
+        f"{SET} is not fetched: `uv run research data fetch-fixtures verity/ml/flock/tests/fixtures/rec-coins-own`")
     _build()
     u = SET / "u" / "stage"
     return _kept(once, "witness-inner", functools.partial(

@@ -1,10 +1,11 @@
 """V*'s verifier-registered values against the verifier's own coins (`Flock/RecCoins.lean`, `verify --rec-inner-*`): the
 smallest level of a recorded recursive session (`r20261009-111638-6720`, class (16,16,8) at 64 instances: level 3,
-`rec-open/l16-h4`, 106 openings), restaged by `rec_vstage.stage` from the fetched fixture `rec-coins/16-16-8-n64`: the inner
-statement, the inner session's public record and the prover's, V*'s fold, points and running-sum salts, the level's
-recorded `pub.bin` and `registered.json`, and its recorded outer session. The level and its outer session were proved
-again at the current leaf scheme (`r20261010-040650-84a9`: the inner statement's leaves are unsalted, so the rest of the
-session is 6720's), before #1677's OS masks, as `verity/flock-circuit@cec3e347`. `verify` sets V*'s statements up only
+`rec-open/l16-h4`, 106 openings), restaged by `rec_vstage.stage` from the fetched fixture `rec-coins-own/16-16-8-n64`,
+whose inner session is staged with own rows (no shared-row header) and the full stratified draw, so `innerScope` admits its
+plain-leaf statement: the inner statement, the inner session's public record and the prover's, V*'s fold, points and
+running-sum salts, the level's recorded `pub.bin` and `registered.json`, and its recorded outer session. The level's outer
+session is the old shared-row fixture's (reused verbatim; its leaves are unsalted, so the rest of the session is 6720's),
+proved before #1677's OS masks, as `verity/flock-circuit@cec3e347`. `verify` sets V*'s statements up only
 as `verity/flock-circuit`, so the recorded outer session is refused at the record's first check (S2/R7) once every V*
 check has passed at setup. The honest level passes setup at the honest inner session and the coin server's transcript of
 it (`--rec-inner-transcript`), and is refused without either, at a transcript whose level-3 tops or link points are not
@@ -43,7 +44,7 @@ from verity_flock import rec_vstage as S
 HERE = Path(__file__).resolve().parent
 LEAN = HERE.parents[2] / "core" / "service" / "flock"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
-SET = HERE / "fixtures" / "rec-coins" / "16-16-8-n64"
+SET = HERE / "fixtures" / "rec-coins-own" / "16-16-8-n64"
 LEVEL = 3
 UNIT = "rec-open/l16-h4"
 #: the recorded level's circuit (`v/L3/circuit.txt`), which its outer session proves
@@ -62,7 +63,7 @@ pytestmark = [pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean t
 @pytest.fixture(scope="module")
 def built() -> None:
     assert (SET / "u" / "stage" / "circuit.txt").is_file(), (
-        f"{SET} is not fetched: `uv run research data fetch-fixtures verity/ml/flock/tests/fixtures/rec-coins`")
+        f"{SET} is not fetched: `uv run research data fetch-fixtures verity/ml/flock/tests/fixtures/rec-coins-own`")
     subprocess.run(["lake", "build", "flock-verify"], cwd=LEAN, check=True, capture_output=True)
 
 
@@ -744,9 +745,9 @@ def test_check_5_reads_the_verifiers_coins_record_as_the_inner_statement(forged,
     assert p.returncode == 2 and "--rec-inner-coins stands in for" in p.stderr, p.stderr
 
 
-#: the inner statement's unit range (META's `ranges`, the unit net's: 2 slots of 2^12 rows at 516) at k_log 22, so 16 inner
-#: point coordinates and a block of 2^(16 − (12 − 6)) = 1024 slots: the one RecSparse shape here at ELL 12 and S_LOG 1
-C3_SPARSE = (1, 12, 1, 0)
+#: the inner statement's unit range (META's `ranges`, the unit net's: 64 slots of 2^13 rows at 256) at k_log 22, so 16 inner
+#: point coordinates and a block of 2^(16 − (13 − 6)) = 512 slots: the one RecSparse shape here at ELL 13 and S_LOG 6
+C3_SPARSE = (1, 13, 6, 0)
 
 
 def _c3(tmp_path: Path, sparse: tuple | None, m: int = 27, circuit: Path | None = None, files: bool = True,
@@ -781,16 +782,16 @@ def _c3(tmp_path: Path, sparse: tuple | None, m: int = 27, circuit: Path | None 
 
 
 NOT_A_CIRCUIT = "setup: circuit: not a flock-circuit file"
-UNIT_RANGE = "rec-inner: the inner circuit's unit range (slot_log 12, pos0 516, count 2) is not at most {} slots of 2^{} rows inside the block"
+UNIT_RANGE = "rec-inner: the inner circuit's unit range (slot_log 13, pos0 256, count 64) is not at most {} slots of 2^{} rows inside the block"
 
 
 @pytest.mark.parametrize("m,sparse,why", [
     (27, C3_SPARSE, None),
     (26, C3_SPARSE, "rec-inner: the verifier's inner shape (m 26, k_log 22, regions 3) is not the inner statement's (m 27, "
      "k_log 22, regions 3)"),
-    (27, (0, 12, 1, 0), "rec-inner: rec-sparse/n0-e12-s1-t0: rec-sparse's NU is at least 1, ELL at least 6 and T_LOG at most 16"),
+    (27, (0, 13, 6, 0), "rec-inner: rec-sparse/n0-e13-s6-t0: rec-sparse's NU is at least 1, ELL at least 6 and T_LOG at most 16"),
     (27, (1, 23, 1, 0), "rec-inner: the inner points are short of rec-sparse/n1-e23-s1-t0's"),
-    (27, (1, 12, 0, 0), UNIT_RANGE.format(1, 12)),
+    (27, (1, 13, 5, 0), UNIT_RANGE.format(32, 13)),
 ], ids=["honest", "shape", "invalid", "short", "slots"])
 def test_candidate_3s_session_checks_the_sparse_range_on_the_inner_statement(built, tmp_path, m, sparse, why):
     """`RecCoins.checkAtC3`, first in every candidate-3 session's setup: the inner statement set up from its files is the
@@ -809,8 +810,8 @@ def test_candidate_3s_session_needs_the_inner_statements_files(built, tmp_path):
     assert _c3(tmp_path, C3_SPARSE, files=False) == need
     assert _c3(tmp_path, C3_SPARSE, coins=True) == need
     assert _c3(tmp_path, C3_SPARSE, files=False, verify=True) == need
-    assert _c3(tmp_path, (0, 12, 1, 0), verify=True) == (
-        "setup: rec-inner: rec-sparse/n0-e12-s1-t0: rec-sparse's NU is at least 1, ELL at least 6 and T_LOG at most 16")
+    assert _c3(tmp_path, (0, 13, 6, 0), verify=True) == (
+        "setup: rec-inner: rec-sparse/n0-e13-s6-t0: rec-sparse's NU is at least 1, ELL at least 6 and T_LOG at most 16")
     assert _c3(tmp_path, None, files=False) == NOT_A_CIRCUIT
     head, meta, rest = (SET / "u" / "stage" / "circuit.txt").read_bytes().split(b"\n", 2)
     m = json.loads(meta[5:])

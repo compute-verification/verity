@@ -31,7 +31,7 @@ from test_rec_outer import BIN
 
 HERE = Path(__file__).resolve().parent
 C3 = HERE / "fixtures" / "rec-c3-inner"
-PLAIN = HERE / "fixtures" / "rec-coins" / "16-16-8-n64" / "inner-honest"
+PLAIN = HERE / "fixtures" / "rec-coins-own" / "16-16-8-n64" / "inner-honest"
 
 pytestmark = pytest.mark.skipif(not BIN.exists(), reason="the Lean verifier is not built")
 
@@ -741,7 +741,7 @@ STAGE = PLAIN.parent / "u" / "stage"
 
 #: candidate 3's inner shape at `STAGE` (m 27, k_log 22, claims 8 over 3 regions), with a RecSparse shape whose sparse
 #: range check 5 passes on it (`RecCoins.checkAtC3`), and R's
-AT_STAGE = {"format": "verity/rec-inner/v1", "m": 27, "k_log": 22, "claims": 8, "regions": 3, "sparse": [1, 12, 1, 0],
+AT_STAGE = {"format": "verity/rec-inner/v1", "m": 27, "k_log": 22, "claims": 8, "regions": 3, "sparse": [1, 13, 6, 0],
             "stacked": R_SHAPE}
 
 
