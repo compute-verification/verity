@@ -272,9 +272,9 @@ struct World {
       CK(cudaMalloc(&out[b], (size_t)M * 2 * I * 2));
       fill_bf16<<<4096, 256>>>(out[b], (size_t)M * 2 * I, 100 + b);
       for (const auto& [t, cd] : TENSORS) {
-        const size_t e_ = (size_t)M * cd.first;
-        CK(cudaMalloc(&T[b][t], e_ * 2));
-        fill_bf16<<<4096, 256>>>(T[b][t], e_, 200 + 10 * b + cd.second);
+        const size_t elems = (size_t)M * cd.first;
+        CK(cudaMalloc(&T[b][t], elems * 2));
+        fill_bf16<<<4096, 256>>>(T[b][t], elems, 200 + 10 * b + cd.second);
         const u64 n = leaves(t);
         if (!params.count(t)) params[t] = read_params(pdir + "/p-" + std::to_string(n) + ".bin");
         sync("tensor " + t);
