@@ -81,6 +81,7 @@
         "benchmarks/private_circuit/",
         "benchmarks/proof_throughput/",
         "benchmarks/sampling_plan/",
+        "benchmarks/verifier_cost/",
         "integrations/vllm/verity_vllm/protocol_options/sampled_proofs.py"
       ],
       "branch_suffixes": [

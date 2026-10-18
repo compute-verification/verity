@@ -27,6 +27,9 @@ The rules are in `AGENTS.md` ("Lean"); the Lean check's reference is `tools/veri
   `Proofs/Flock/Level3/` and `Proofs/Flock/Soundness/`. A property of code, stated against its Lean functions, is
   `Properties.<Protocol>`, proved in `Properties.Proofs.<Protocol>` (package `security_properties`, which may require
   `security` and the code, never `security_proofs`). No new package: an area is a directory in each tree.
+- **Code the verifier runs costs O(description)** (AGENTS.md "Design rules"): summarize per Definition and multiply
+  through batch members and scan iterations, never walk the unrolled circuit; `tests/test_verifier_cost.py` refuses the
+  walk, and its failure says the fix.
 - **Own a subdirectory and namespace** (`Proofs/Flock/Soundness/Knowledge/`, namespace `FlockSoundness.Knowledge`), with
   one aggregator module that imports its files. The area's root imports the aggregator once, when the area is created,
   so parallel lanes don't edit the same root file.
@@ -211,6 +214,12 @@ simp with that.
 
 These are Daniel's rulings, newest first.
 
+- 2026-10-18 (18:11Z): "I'm fine with verifier doing O(circuit description length) stuff, but not O(unrolled circuit
+  length) stuff." Lean the verifier runs reads the descriptor once per specialized Definition, and never lays out the
+  canonical circuit gate by gate (`Prog.gate`, a loop to a Definition's `gates`). On bits the unrolled circuit is about
+  1,000× the word-level one, so a gate-by-gate walk that passes at word level fails there. A gate-by-gate version may stay
+  as the reference the description-sized one is difftested against, as `NciCheck.check` is for `NciCheck.Desc`
+  (AGENTS.md "Design rules"; `tests/test_verifier_cost.py`).
 - 2026-10-17 (6:28 PM PDT): a guarantee goes statement first, then red team, then a card to Daniel for each new premise,
   then the proof, in that order. Memory accounting's stacking guarantee was restated four times, and its cards updated
   three times, because the red team read it after its proofs. Freeze the statement (above), have a red team attack it
