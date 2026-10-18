@@ -31,13 +31,18 @@
    "except": [],
    "why": "the program is code: Lean core, PoUW's commitments (`pouw_commit`) and what they read (C-Flock's verifier, core's tagged identity), no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
   },
+  "PouwWindow.Shape": {
+   "imports": ["PouwWindow.Entry", "PouwWindow.Json"],
+   "except": [],
+   "why": "the program is code: Lean core, PoUW's commitments (`pouw_commit`) and what they read (C-Flock's verifier, core's tagged identity), no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+  },
   "PouwWindow.Side": {
    "imports": ["PouwWindow.Entry", "Identity.Tagged", "PouwCommit.Py"],
    "except": [],
    "why": "the program is code: Lean core, PoUW's commitments (`pouw_commit`) and what they read (C-Flock's verifier, core's tagged identity), no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
   },
   "PouwWindow.Statement": {
-   "imports": ["PouwWindow.Record"],
+   "imports": ["PouwWindow.Record", "PouwWindow.Shape", "PouwWindow.Side"],
    "except": [],
    "why": "the program is code: Lean core, PoUW's commitments (`pouw_commit`) and what they read (C-Flock's verifier, core's tagged identity), no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
   },
