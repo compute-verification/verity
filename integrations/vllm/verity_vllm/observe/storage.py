@@ -138,9 +138,6 @@ class StorageAdapter:
     def live_count(self) -> int:
         return sum(len(t) for t in self._live.values())
 
-    def alloc_ids(self) -> list[int]:
-        return sorted(e.alloc for t in self._live.values() for e in t.values())
-
     # ------------------------------------------------------------------ internals
 
     def _null_alloc(self, device: str) -> int:
