@@ -6,11 +6,16 @@
 * `rules/vllm_dsa.py` derives an indexer layer and an IndexShare layer over a prefill and a decode step: per token the norms and
   RoPEs, `DsaIndexerKRow_v1` and `DsaIndexerQ_v1`, per row `DsaMqaLogits_v3{N}` and `DsaTopKShortRow_v1`, and either the explicitly
   pinned `SparseMla_v1{T=n}` or default `SparseMlaSplit_v1{T=n,NS}` over the layer's first n history rows;
+* a layer with a dense-MHA prefill backend serves a prefill (above the decode threshold, at most TOPK keys) by dense MHA: the shim
+  exports `forward_mha`'s body and `vllm_iface.dsa_dense_mha`, and the rule derives per row `Attention_v4{T=i+1,...,MASKED_FROM}`
+  over the call's own k and v, opening the history the decode step after it reads;
 * each precondition refuses by name.
 
 The tiny fixture substitutes the old norm because `DsaRMSNorm_v1` is pinned to the real 128-thread widths (512/2048); a direct
 vocabulary assertion below checks its binding.  Its MLA absorbs use the registered default cuBLAS `BatchedGemm_v1`.
-FA3's sparse geometry is registered at rope 16, latent 16."""
+FA3's sparse geometry is registered at rope 16, latent 16 (and the dense layer's latent `LD`).  The dense layer's `kv_b_proj` is the
+identity on its latent (`LD = NH * (P + VD)`), so its k_nope and v are the normed latent's halves: the FP8 linear it is on the H200
+is `DynamicDeepGemmFp8Linear[vllm-default]`'s, tested with it."""
 from __future__ import annotations
 
 import sys
@@ -23,6 +28,7 @@ import torch.nn as nn
 
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate
+from verity_vllm.program.frontend import targets as TG
 from verity_vllm.program.frontend.derive import derive_report
 from verity_vllm.program.frontend.export_compat import dsa_leaves
 from verity_vllm.program.frontend.rules import vllm_bindings as VB
@@ -31,15 +37,18 @@ from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
 from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3, PROFILES, Vocabulary
 from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity_vllm.program.kernels.serve3_reference import materialize
-from verity_vllm.program.registry import b1, cublas_bf16, dsa, dsa_norm, hopper, sparse_mla, sparse_mla_split
+from verity_vllm.program.registry import b1, cublas_bf16, dsa, dsa_norm, fa3_check_inf, hopper, sparse_mla, sparse_mla_split
 from verity_vllm.program.registry.boolean_rope import RoPEHeadGptJV2
 from verity_vllm.program.registry.sparse_mla_split import launch_num_splits
 
 H200 = TargetProfile(compute_capability=(9, 0), num_sms=132, batch_invariant=False, moe_backend="triton")
 NH, P, R, L, V, NQ = 2, 16, 16, 16, 16, 16   # heads, nope, rope, latent, value, q_lora
 H, D, ROPE = 8, 32, 16                       # the indexer's heads, head dim, rope
+VD = P + R                                   # the dense layer's v head: Attention_v4's one head dim
+LD = NH * (P + VD)                           # the dense layer's latent, kv_b_proj's identity width
 TOPK, MAXPOS, EPS, BN = 4, 8, 1e-6, 16
 SCALE = (P + R) ** -0.5
+PREFILL, DENSE_SPLITS = vllm_dsa.PREFILL_BACKEND, vllm_dsa._dense_splits
 STEPS = ((0, 2), (2, 1))                     # (first position, tokens): a prefill of two, one decode step
 NAMES = ("layers.0.self_attn.attn", "layers.1.self_attn.attn")
 DOT = hopper.HopperBF16WgmmaDot16
@@ -93,24 +102,35 @@ class _Indexer(nn.Module):
         self.softmax_scale, self.n_head, self.head_dim = D ** -0.5, H, D
 
 
+class _KvBProj(nn.Module):
+    """`kv_b_proj` as the identity on the latent, with a linear's `(output, bias)` return."""
+
+    def forward(self, x):
+        return x, None
+
+
 class _Layer(nn.Module):
     """`DeepseekV32Attention.forward` (vLLM d9105ea80 deepseek_v32/attention.py:297-408) from its projections' outputs on, which are
-    the inputs: q_c, kv_c, k_pe, q (q_b_proj's), and on an indexer layer index K, the index weights and the index query (wq_b's)."""
+    the inputs: q_c, kv_c, k_pe, q (q_b_proj's), and on an indexer layer index K, the index weights and the index query (wq_b's).
+    `dense`: the layer has a dense-MHA prefill backend, latent `LD`, v head `VD` and the identity `kv_b_proj`."""
 
-    def __init__(self, name: str, indexer: bool, seed: int, topk: int = TOPK) -> None:
+    def __init__(self, name: str, indexer: bool, seed: int, topk: int = TOPK, dense: bool = False) -> None:
         super().__init__()
         rng = np.random.default_rng(seed)
-        self.layer_name, self.num_heads, self.kv_lora_rank, self.v_head_dim, self.qk_nope_head_dim = name, NH, L, V, P
+        lat, v = (LD, VD) if dense else (L, V)
+        self.layer_name, self.num_heads, self.kv_lora_rank, self.v_head_dim, self.qk_nope_head_dim = name, NH, lat, v, P
         self.scale, self.kv_cache_dtype, self._index_rope_interleave = SCALE, "auto", True
         self.use_pcp, self._fp8_query, self._fp8_kv_needs_view = False, False, False
         self.impl = types.SimpleNamespace(dcp_world_size=1)
+        self.prefill_backend = types.SimpleNamespace() if dense else None
+        self.kv_b_proj = _KvBProj()
         self.fused_qkv_a_proj = nn.Identity()
-        self.q_a_layernorm, self.kv_a_layernorm = _Norm(NQ, rng), _Norm(L, rng)
+        self.q_a_layernorm, self.kv_a_layernorm = _Norm(NQ, rng), _Norm(lat, rng)
         self.rotary_emb = _Rope(R)
         self.indexer = _Indexer(rng) if indexer else None
         self.indexer_rope_emb = _Rope(ROPE) if indexer else None
-        self.W_UK_T = nn.Parameter(_bf16(rng, NH, P, L, sd=0.25), requires_grad=False)
-        self.W_UV = nn.Parameter(_bf16(rng, NH, L, V, sd=0.25), requires_grad=False)
+        self.W_UK_T = nn.Parameter(_bf16(rng, NH, P, lat, sd=0.25), requires_grad=False)
+        self.W_UV = nn.Parameter(_bf16(rng, NH, lat, v, sd=0.25), requires_grad=False)
         self.topk_indices_buffer = torch.empty(1, topk, dtype=torch.int32)
         self._q_scale = torch.ones(1)
         self.n_inputs = 7 if indexer else 4
@@ -119,7 +139,7 @@ class _Layer(nn.Module):
         raise AssertionError("the attention kernels read a KV cache the meta export does not have")
 
     def forward(self, positions, q_c, kv_c, k_pe, q, index_k=None, index_weights=None, index_q=None):
-        output = torch.empty((q_c.shape[0], NH * V), dtype=q_c.dtype, device=q_c.device)
+        output = torch.empty((q_c.shape[0], NH * self.v_head_dim), dtype=q_c.dtype, device=q_c.device)
         if self.indexer is not None:
             has_indexer, k_w, k_b, k_eps = True, self.indexer.k_norm.weight, self.indexer.k_norm.bias, self.indexer.k_norm.eps
             ics, ss, hs = self.indexer_rope_emb.cos_sin_cache, self.indexer.softmax_scale, self.indexer.n_head ** -0.5
@@ -160,8 +180,8 @@ class _Model(nn.Module):
         return tuple(outs)
 
 
-def _model(order=(True, False), topk: int = TOPK, steps=STEPS) -> _Model:
-    return _Model([_Layer(NAMES[i], indexer, seed=10 + i, topk=topk) for i, indexer in enumerate(order)], steps)
+def _model(order=(True, False), topk: int = TOPK, steps=STEPS, dense: bool = False) -> _Model:
+    return _Model([_Layer(NAMES[i], indexer, seed=10 + i, topk=topk, dense=dense) for i, indexer in enumerate(order)], steps)
 
 
 def _inputs(model: _Model, seed: int = 1) -> tuple:
@@ -169,7 +189,7 @@ def _inputs(model: _Model, seed: int = 1) -> tuple:
     xs = []
     for _, T in model.steps:
         for layer in model.layers:
-            xs += [_bf16(rng, T, NQ), _bf16(rng, T, L), _bf16(rng, T, R), _bf16(rng, T, NH * (P + R))]
+            xs += [_bf16(rng, T, NQ), _bf16(rng, T, layer.kv_lora_rank), _bf16(rng, T, R), _bf16(rng, T, NH * (P + R))]
             if layer.indexer is not None:
                 xs += [_bf16(rng, T, D), _bf16(rng, T, H), _bf16(rng, T, H * D)]
     return tuple(xs)
@@ -178,7 +198,14 @@ def _inputs(model: _Model, seed: int = 1) -> tuple:
 def _observation(**over) -> dict:
     return {"kind": "mla", "impl": IMPL, "backend": "FLASH_ATTN_MLA_SPARSE", "kv_cache_dtype": "auto", "layer_kv_cache_dtype": "auto",
             "num_heads": NH, "scale": SCALE, "kv_lora_rank": L, "qk_rope_head_dim": R, "dcp_world_size": 1, "use_pcp": False,
-            "use_sparse": True, "prefill_backend": None, "num_splits": 1, "q_heads_per_rank": NH, "sparse_mla_force_mqa": False, **over}
+            "use_sparse": True, "prefill_backend": None, "num_splits": 1, "q_heads_per_rank": NH, "sparse_mla_force_mqa": False,
+            "prefill_fa_version": None, "prefill_requires_v_padding": None, "prefill_scale": None, **over}
+
+
+def _dense_observation(**over) -> dict:
+    """The dense layer's: FlashAttnPrefillBackend on FA3, v unpadded, at the layer's scale."""
+    return _observation(**{"kv_lora_rank": LD, "prefill_backend": PREFILL, "prefill_fa_version": 3, "prefill_requires_v_padding": False,
+                           "prefill_scale": SCALE, **over})
 
 
 @pytest.fixture
@@ -221,32 +248,55 @@ def _run(rep, model: _Model, inputs) -> list[int]:
     return [int(t[g]) for g in rep.program.circuit.root_outputs()]
 
 
+def _dense(layer: _Layer, P0: int, T: int) -> bool:
+    """vLLM's route for a call of T rows after P0 (`export_compat._takes_dense_mha`): dense MHA for a prefill of at most TOPK keys."""
+    return (layer.prefill_backend is not None and T > vllm_dsa.DECODE_THRESHOLD.get(NH, vllm_dsa.DECODE_THRESHOLD_DEFAULT)
+            and P0 + T <= layer.topk_indices_buffer.shape[-1])
+
+
+def _attention_v4(T: int, row: int, seqlen_q: int):
+    return bind(fa3_check_inf.AttentionV4, T=T, NH=NH, KVH=NH, D=P + R, BN=TG.fa3_kblock_n(P + R, seqlen_q, 1), DOT=DOT,
+                INV=hopper.Fa3InvSum, MASKED_FROM=TG.fa3_masked_from(H200, T, NH, NH, P + R, seqlen_q, row))
+
+
 def _reference(model: _Model, inputs) -> list[int]:
     """The module's outputs as the Definitions compose them: per token the norms, the RoPEs and the absorptions, and per row
-    `SparseMla_v1{T=n}` over the layer's rows 0..n-1 ([kv_c normed | k_pe roped])."""
-    qn, kn = bind(b1.RMSNormTriton, N=NQ, EPS=EPS), bind(b1.RMSNormTriton, N=L, EPS=EPS)
-    rope1 = ropeh = bind(RoPEHeadGptJV2, D=R)
-    up = bind(cublas_bf16.BatchedGemmWord, B=NH, K=P, N=L, DOT=DOT)
-    down = bind(cublas_bf16.BatchedGemmWord, B=NH, K=L, N=V, DOT=DOT)
+    `SparseMla_v1{T=n}` over the layer's rows 0..n-1 ([kv_c normed | k_pe roped]) and `W_UV`; or on the dense route
+    `Attention_v4{T=i+1}` over [q_nope | q_pe roped] and the call's rows 0..i of k = [k_nope | k_pe roped] and v, k_nope and v each
+    head's halves of the normed latent (the identity `kv_b_proj`)."""
+    qn, rope = bind(b1.RMSNormTriton, N=NQ, EPS=EPS), bind(RoPEHeadGptJV2, D=R)
     hist = {n: [] for n in NAMES}
     out, k = [], 0
     for p0, T in model.steps:
         for layer in model.layers:
+            lat, vd = layer.kv_lora_rank, layer.v_head_dim
+            kn = bind(b1.RMSNormTriton, N=lat, EPS=EPS)
+            up = bind(cublas_bf16.BatchedGemmWord, B=NH, K=P, N=lat, DOT=DOT)
+            down = bind(cublas_bf16.BatchedGemmWord, B=NH, K=lat, N=vd, DOT=DOT)
             q_c, kv_c, k_pe, q = inputs[k:k + 4]
             k += layer.n_inputs
             cs, qv = layer.rotary_emb.cos_sin_cache, q.view(T, NH, P + R)
             wuk, wuv = _words(layer.W_UK_T.permute(0, 2, 1)), _words(layer.W_UV.permute(0, 2, 1))
-            rows, qcs = [], []
+            h = hist[layer.layer_name]
+            dense = _dense(layer, len(h), T)
+            rows, qcs, ks, vs = [], [], [], []
             for i in range(T):
                 p = p0 + i
                 qcs += list(evaluate(qn, _words(q_c[i]), _words(layer.q_a_layernorm.weight)))
                 kv = list(evaluate(kn, _words(kv_c[i]), _words(layer.kv_a_layernorm.weight)))
-                hist[layer.layer_name].append(kv + list(evaluate(rope1, _words(k_pe[i]), _words(cs[p]))))
-                n = len(hist[layer.layer_name])
+                kr = list(evaluate(rope, _words(k_pe[i]), _words(cs[p])))
+                h.append(kv + kr)
+                qr = [list(evaluate(rope, _words(head), _words(cs[p]))) for head in qv[i, :, P:]]
+                if dense:
+                    heads = [kv[j * (P + vd):(j + 1) * (P + vd)] for j in range(NH)]
+                    ks += [w for hd in heads for w in hd[:P] + kr]
+                    vs += [w for hd in heads for w in hd[P:]]
+                    qrow = [w for j in range(NH) for w in _words(qv[i, j, :P]) + qr[j]]
+                    rows += list(evaluate(_attention_v4(i + 1, i, T), qrow, ks, vs))
+                    continue
                 ql = list(evaluate(up, _words(qv[i, :, :P]), wuk))
-                qr = [w for head in qv[i, :, P:] for w in evaluate(ropeh, _words(head), _words(cs[p]))]
-                fn = bind(sparse_mla.SparseMla, T=n, NH=NH, DR=R, DV=L, BN=BN, DOT=DOT, INV=hopper.Fa3InvSum, SCALE=SCALE)
-                a = list(evaluate(fn, ql, qr, [w for r in hist[layer.layer_name] for w in r]))
+                fn = bind(sparse_mla.SparseMla, T=len(h), NH=NH, DR=R, DV=lat, BN=BN, DOT=DOT, INV=hopper.Fa3InvSum, SCALE=SCALE)
+                a = list(evaluate(fn, ql, [w for r in qr for w in r], [w for r in h for w in r]))
                 rows += list(evaluate(down, a, wuv))
             out += rows + qcs
     return [int(w) for w in out]
@@ -516,8 +566,8 @@ def test_the_served_vocabulary_binds_the_norm_and_gptj_rope_roles():
 @pytest.mark.parametrize("case,needle", [
     ("topk", "'layers.0.self_attn.attn': position 2 has 3 keys > TOPK 2"),
     ("shared-first", "IndexShare layer 'layers.0.self_attn.attn' reads a top-k no indexer layer selected for positions 0..1"),
-    ("prefill-backend", "a call of 2 query rows is a prefill (decode threshold 1 at 2 query heads per rank), which its dense-MHA "
-                        "prefill backend 'FlashAttnMLAPrefill' serves"),
+    ("prefill-backend", "a call of 2 query rows is a prefill (decode threshold 1 at 2 query heads per rank) that reached the top-k MQA "
+                        "op; vLLM serves a prefill by its prefill backend 'FlashAttnMLAPrefill'"),
     ("heads", "no observed query heads per rank for 'layers.0.self_attn.attn', the decode threshold its prefill backend"),
     ("impl", "runs 'FlashMLASparseImpl'; SparseMla_v1 states FLASH_ATTN_MLA_SPARSE"),
     ("target", "SparseMla_v1 is FA3 at compute capability 9.0; the target is"),
@@ -550,3 +600,93 @@ def test_a_layer_with_a_prefill_backend_derives_where_every_call_takes_the_mqa_p
     assert rep.program is not None, rep.unsupported
     assert _ids(rep) == plain and _run(rep, model, xs) == _reference(model, xs)
     assert vllm_dsa.DECODE_THRESHOLD_DEFAULT == 256 and vllm_dsa.DECODE_THRESHOLD.get(8, vllm_dsa.DECODE_THRESHOLD_DEFAULT) == 256
+
+
+# -- the dense-MHA prefill --------------------------------------------------------------------------------------------------------
+
+
+@pytest.fixture
+def dense(served, monkeypatch):
+    """The served layers with FlashAttnPrefillBackend, a decode threshold of 1 (the fixture's 2-token prefill is a prefill) and FA3's
+    sparse geometry at the dense layer's latent, which the decode step after the prefill reads.  `fa3_model.split_plan` models head
+    dims 64, 128 and 256, so the fixture's head P + R runs one split by fiat; the served head's count is checked below."""
+    monkeypatch.setitem(vllm_dsa.DECODE_THRESHOLD, NH, 1)
+    monkeypatch.setattr(vllm_dsa, "_dense_splits", lambda tp, T, NH, D: 1)
+    monkeypatch.setitem(vllm_dsa.FA3_SPARSE_GEOMETRY, (R, LD), {"BN": BN, "DOT": DOT, "INV": hopper.Fa3InvSum})
+    VB.observe_attention_impls({n: _dense_observation() for n in NAMES})
+
+
+def test_a_prefill_of_at_most_topk_keys_derives_by_dense_mha_and_the_decode_after_it_reads_its_rows(dense):
+    """vLLM d9105ea80 `_sparse_indexer_and_attn` -> `forward_impl` -> `forward_mha` on the prefill: per row `Attention_v4{T=i+1}` at
+    FA3's tile for head P + R, the indexer's logits and top-k not run; the decode step's sparse MQA then reads the prefill's latent and
+    index-K rows."""
+    model = _model(dense=True)
+    xs = _inputs(model)
+    rep = _derive(model, xs)
+    assert rep.program is not None, rep.unsupported
+    norm_q, norm_kv = bind(b1.RMSNormTriton, N=NQ, EPS=EPS).id, bind(b1.RMSNormTriton, N=LD, EPS=EPS).id
+    kr = qr = bind(RoPEHeadGptJV2, D=R).id
+    up = bind(cublas_bf16.BatchedGemmWord, B=NH, K=P, N=LD, DOT=DOT).id
+    down = bind(cublas_bf16.BatchedGemmWord, B=NH, K=LD, N=VD, DOT=DOT).id
+    krow, iq = bind(dsa.DsaIndexerKRow, D=D, ROPE=ROPE, EPS=EPS).id, bind(dsa.DsaIndexerQ, H=H, D=D, ROPE=ROPE).id
+    sel = bind(dsa.DsaTopKShortRow, TOPK=TOPK).id
+    want = []
+    for p0, T in STEPS:
+        pos = range(p0, p0 + T)
+        for indexer in (True, False):
+            want += [norm_q] * T + [norm_kv] * T + [kr] * T + ([krow] * T if indexer else []) + [up] * T + [qr] * (T * NH)
+            want += [iq] * T if indexer else []
+            if T > 1:
+                want += [_attention_v4(i + 1, i, T).id for i in range(T)]
+                continue
+            for p in pos if indexer else ():
+                want += [bind(dsa.DsaMqaLogitsV3, N=p + 1, H=H, D=D).id, f"Const32[0x{p + 1:08x}]_v1", sel]
+            want += [bind(sparse_mla.SparseMla, T=p + 1, NH=NH, DR=R, DV=LD, BN=BN, DOT=DOT, INV=hopper.Fa3InvSum, SCALE=SCALE).id
+                     for p in pos] + [down] * T
+    assert _ids(rep) == want
+    assert _run(rep, model, xs) == _reference(model, xs)
+    apps = [a["preconditions_checked"] for a in rep.provenance["applications"] if a["rule"] == "DsaDenseMha[vllm-dsa]_v1"]
+    assert [(a["layer_name"], a["indexer"], a["BN"], a["BM"], a["splits"], a["history_rows_after"]) for a in apps] == [
+        (NAMES[0], True, 128, 192, 1, 2), (NAMES[1], False, 128, 192, 1, 2)]
+
+
+def test_the_served_dense_prefill_binds_attention_v4_at_the_128_x_80_tile():
+    """GLM-5.3 TP8's dense prefill: qk and v head 256 at 8 heads per rank on the H200, `glm53_fa3_prefill_capture`'s geometry."""
+    geom = TG.attention_geometry(H200, 256, 2048, 8, 8)
+    assert (geom["BN"], geom["fa_version"], TG.fa3_tile_m(256, 2048, 1), TG.fa3_check_inf(H200)) == (80, 3, 128, True)
+    assert vllm_dsa._dense_splits(H200, 2048, 8, 256) == 1
+    row = PROFILE_B1_EAGER_V3.kind("attention_dot", T=2048, NH=8, KVH=8, D=256, BN=80, DOT=DOT, INV=hopper.Fa3InvSum,
+                                   MASKED_FROM=TG.fa3_masked_from(H200, 2048, 8, 8, 256, 2048, 2047))
+    assert row.id.startswith("Attention_v4{")
+
+
+@pytest.mark.parametrize("case,needle", [
+    ("backend", "dense-MHA prefill backend is 'FlashInferPrefillBackend'; Attention_v4 states"),
+    ("force-mqa", "observes sparse_mla_force_mqa=True, which serves every call by sparse MQA"),
+    ("fa-version", "prefill backend runs FA version 2; Attention_v4 is FA3"),
+    ("v-padding", "prefill backend pads v to the qk head dim (requires_v_padding)"),
+    ("prefill-scale", "prefill backend scale 0.5 is not the call's"),
+    ("scale", "scale 0.5 is not f32(D^-0.5) at D=32, the word Attention_v4 folds in"),
+    ("splits", "as 2 splits (fa3_model.split_plan) combined by FlashAttnFwdCombine, which no Definition states"),
+    ("head", "FA3's split count of a 2-row prefill: FA3 head dim 32: not modelled"),
+    ("target", "Attention_v4 is FA3 at compute capability 9.0 under check-inf-per-iteration; the target is"),
+    ("chunked", "a dense-MHA prefill of 2 rows after 1 history rows runs over a chunked context"),
+    ("past-topk", "a call of 2 query rows is a prefill (decode threshold 1 at 2 query heads per rank) that reached the top-k MQA op"),
+])
+def test_each_dense_prefill_precondition_refuses_by_name(case, needle, dense, monkeypatch):
+    model = _model(dense=True, topk=1 if case == "past-topk" else TOPK, steps=((0, 1), (1, 2)) if case == "chunked" else STEPS)
+    over = {"backend": {"prefill_backend": "FlashInferPrefillBackend"}, "force-mqa": {"sparse_mla_force_mqa": True},
+            "fa-version": {"prefill_fa_version": 2}, "v-padding": {"prefill_requires_v_padding": True},
+            "prefill-scale": {"prefill_scale": 0.5}, "scale": {"prefill_scale": 0.5}}.get(case)
+    if over:
+        VB.observe_attention_impls({n: _dense_observation(**over) for n in NAMES})
+    if case == "scale":
+        for layer in model.layers:
+            layer.scale = 0.5
+    if case in ("splits", "head"):
+        monkeypatch.setattr(vllm_dsa, "_dense_splits", (lambda tp, T, NH, D: 2) if case == "splits" else DENSE_SPLITS)
+    if case == "target":
+        VB.observe_target_profile(TargetProfile(compute_capability=(8, 0), num_sms=108, batch_invariant=False))
+    hint = _hint(_derive(model, _inputs(model)))
+    rule = "DsaIndexerAttn[vllm-dsa]_v1" if case == "past-topk" else "DsaDenseMha[vllm-dsa]_v1"
+    assert needle in hint and (case == "chunked" or rule in hint), hint

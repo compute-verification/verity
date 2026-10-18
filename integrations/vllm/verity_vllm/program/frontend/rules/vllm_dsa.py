@@ -14,6 +14,10 @@ over the three leaves `export_compat.dsa_leaves` exports in place of its kernels
         keys, on an indexer layer `DsaMqaLogits_v3{N=n,H,D}` and `DsaTopKShortRow_v1{TOPK}` (n <= TOPK: the kernels' short-row
         shortcut, slot i = i), on an IndexShare layer the top-k the last indexer layer wrote for the same positions; then
         explicitly pinned `SparseMla_v1{T=n,...}` or default `SparseMlaSplit_v1{T=n,NS,...}` over the history's first n rows
+    dsa_dense_mha(positions, q, k, v, kv_c, k_pe, index_k?, index_k_scale?, layer_name, topk, scale) -> attention rows [T, NH, DV]
+        in dsa_indexer_attn's place on a prefill vLLM serves by dense MHA (above the decode threshold, at most TOPK keys): the call's
+        cache rows open the history, and per query row i `Attention_v4{T=i+1,NH,KVH=NH,D,BN,DOT,INV,MASKED_FROM}` (FA3's causal
+        varlen prefill, `FlashAttnPrefillBackend`) over the call's own k, v rows 0..i; no logits or top-k
 
 and two ops around them: the latent absorptions `bmm(q_nope^T, W_UK_T)` and `bmm(attn^T, W_UV)` (`batched_gemm{B,K,N,DOT}` per token)
 and `output.copy_(rows)` (an allocation written whole).  A role the vocabulary lacks refuses by name.
@@ -57,6 +61,7 @@ ROLE_KERNELS = {"dsa_rmsnorm": "q_a_layernorm / kv_a_layernorm in _fused_norm_ro
                 "dsa_topk_short_row": "the top-k of a row of at most TOPK keys (DsaTopKShortRow_v1)",
                 "sparse_mla": "FA3's sparse MLA (SparseMla_v1)",
                 "sparse_mla_split": "FA3's sparse MLA at vLLM's default split count (SparseMlaSplit_v1)",
+                "attention_dot": "FA3's dense causal prefill attention, FlashAttnPrefillBackend's (Attention_v4)",
                 "batched_gemm": "the latent absorption bmm, cuBLAS's batched bf16 GEMM (BatchedGemm_v1{B,K,N,DOT})",
                 "const": "a constant word"}
 
@@ -364,21 +369,62 @@ def _observed_sparse_mla(layer_name: str) -> str | None:
     return None
 
 
-def _prefill_by_dense_mha(layer_name: str, T: int) -> str | None:
-    """None when a call of T query rows takes the top-k MQA path (`MLAAttention.forward_impl`): the layer has no dense-MHA prefill
-    backend, or `sparse_mla_force_mqa`, or the call is at most the decode threshold, so the builder counts it a decode.  A longer
-    call is a prefill, which the prefill backend serves by dense MHA while its rows have at most TOPK keys."""
-    obs = _OBSERVED["attention_impls"][layer_name]
-    pb, heads = obs.get("prefill_backend"), obs.get("q_heads_per_rank")
-    if pb is None or obs.get("sparse_mla_force_mqa") is True:
-        return None
+def _decode_threshold(layer_name: str) -> int | str:
+    """The metadata builder's decode threshold at the layer's observed query heads per rank: a call of more query rows is a prefill."""
+    heads = _OBSERVED["attention_impls"][layer_name].get("q_heads_per_rank")
     if not isinstance(heads, int):
-        return f"no observed query heads per rank for {layer_name!r}, the decode threshold its prefill backend {pb!r} is behind"
-    limit = DECODE_THRESHOLD.get(heads, DECODE_THRESHOLD_DEFAULT)
-    if T <= limit:
+        return (f"no observed query heads per rank for {layer_name!r}, the decode threshold its prefill backend "
+                f"{_OBSERVED['attention_impls'][layer_name].get('prefill_backend')!r} is behind")
+    return DECODE_THRESHOLD.get(heads, DECODE_THRESHOLD_DEFAULT)
+
+
+def _prefill_by_dense_mha(layer_name: str, T: int) -> str | None:
+    """None when a call of T query rows takes the top-k MQA path (`MLAAttention.forward_impl`) as a decode: the layer has no dense-MHA
+    prefill backend, or `sparse_mla_force_mqa`, or the call is at most the decode threshold.  A longer call is a prefill, which the
+    prefill backend serves by dense MHA while its rows have at most TOPK keys (`vllm_iface.dsa_dense_mha`, `DsaDenseMha[vllm-dsa]`);
+    one that reaches this op has rows past TOPK, which vLLM serves by sparse MQA over the indexer's prefill top-k."""
+    obs = _OBSERVED["attention_impls"][layer_name]
+    if obs.get("prefill_backend") is None or obs.get("sparse_mla_force_mqa") is True:
         return None
-    return (f"numerics_unregistered: {layer_name!r}: a call of {T} query rows is a prefill (decode threshold {limit} at {heads} query "
-            f"heads per rank), which its dense-MHA prefill backend {pb!r} serves, and no Definition states it")
+    limit = _decode_threshold(layer_name)
+    if isinstance(limit, str) or T <= limit:
+        return limit if isinstance(limit, str) else None
+    return (f"numerics_unregistered: {layer_name!r}: a call of {T} query rows is a prefill (decode threshold {limit} at "
+            f"{obs.get('q_heads_per_rank')} query heads per rank) that reached the top-k MQA op; vLLM serves a prefill by its prefill "
+            f"backend {obs.get('prefill_backend')!r}'s dense MHA while its rows have at most TOPK keys (vllm_iface.dsa_dense_mha) and by "
+            f"sparse MQA over the indexer's prefill top-k past them, which no Definition states")
+
+
+def _open_history(ctx, node, layer: str, pos: list[int], has: bool) -> tuple[dict, int]:
+    """The layer's history (rows [kv_c | k_pe], index-K slots and scales) and its length before this call, once the call passes what
+    every call of the layer must: one module writes the layer's caches, the positions continue the history, and the layer has an
+    index-K cache at every step or at none."""
+    mp = ctx.module_path(node)
+    owner = ctx.state.setdefault("dsa_owner", {})
+    if owner.setdefault(layer, mp) != mp:
+        refuse("side_input", node, mp, f"the caches of {layer!r} are written from two modules ({owner[layer]} and {mp})")
+    hist = ctx.state.setdefault("dsa_history", {}).setdefault(layer, {"latent": [], "ik": [], "iks": [], "next": None})
+    P0 = len(hist["latent"])
+    if pos != list(range(pos[0], pos[0] + len(pos))) or (P0 and pos[0] != hist["next"]):
+        refuse("shape", node, mp, f"positions {pos[0]}..{pos[-1]} do not continue {layer!r}'s history"
+                                  + (f" of {P0} rows (next position {hist['next']})" if P0 else " (not consecutive)"))
+    if has != bool(hist["ik"]) and P0:
+        refuse("side_input", node, mp, f"{layer!r} has an index-K cache at some steps only")
+    hist["next"] = pos[-1] + 1
+    return hist, P0
+
+
+def _append_rows(ctx, hist: dict, a: dict, has: bool) -> None:
+    """Append the call's cache rows to the layer's history: [kv_c | k_pe] per row, and on an indexer layer its index-K slot and scale."""
+    kvc, kpe = _rows(ctx, a["kv_c"], 16), _rows(ctx, a["k_pe"], 16)
+    T, L, R = kvc.type.n, shape(ctx, a["kv_c"])[1], shape(ctx, a["k_pe"])[1]
+    for i in range(T):
+        hist["latent"].append(Coll(Array(L + R, Value(16)), concat([kvc[i].refs, kpe[i].refs])))
+    if has:
+        ik, iks = _rows(ctx, a["index_k"], 8), _rows(ctx, a["index_k_scale"], 32)
+        for i in range(T):
+            hist["ik"].append(ik[i])
+            hist["iks"].append(iks[i])
 
 
 class DsaIndexerAttnRule(StateRule):
@@ -392,8 +438,9 @@ class DsaIndexerAttnRule(StateRule):
     info = RuleInfo("DsaIndexerAttn[vllm-dsa]", 1, "state", applies_to="vllm_iface.dsa_indexer_attn(...) (" + ", ".join(_ATTN) + ")",
                     preconditions=("the layer's OBSERVED implementation is FlashAttnMLASparseImpl on a bf16 cache, without context parallelism; "
                                    "the workload either declares the one-split pin or leaves FA3's split heuristic at its default",
-                                   "the call takes the top-k MQA path: no dense-MHA prefill backend, sparse_mla_force_mqa, or T at most the "
-                                   "metadata builder's decode threshold at the observed query heads per rank (DECODE_THRESHOLD)",
+                                   "the call takes the top-k MQA path as a decode: no dense-MHA prefill backend, sparse_mla_force_mqa, or T "
+                                   "at most the metadata builder's decode threshold at the observed query heads per rank (DECODE_THRESHOLD); "
+                                   "a prefill of at most TOPK keys is DsaDenseMha[vllm-dsa]'s",
                                    "the target's compute capability is 9.0 (FA3)",
                                    "positions are T consecutive rows continuing the layer's history; ql_nope [T, NH, L], q_pe [T, NH, R], kv_c [T, L], k_pe [T, R] bf16",
                                    "the index operands all given (index_q [T, H, D] e4m3, index_weights [T, H] f32, index_k [T, D] e4m3, "
@@ -461,21 +508,9 @@ class DsaIndexerAttnRule(StateRule):
         T = len(pos)
         _, NH, L = shape(ctx, a["ql_nope"])
         R = shape(ctx, a["k_pe"])[1]
-        owner = ctx.state.setdefault("dsa_owner", {})
-        if owner.setdefault(layer, mp) != mp:
-            refuse("side_input", node, mp, f"the caches of {layer!r} are written from two modules ({owner[layer]} and {mp})")
-        hist = ctx.state.setdefault("dsa_history", {}).setdefault(layer, {"latent": [], "ik": [], "iks": [], "next": None})
-        P0 = len(hist["latent"])
-        if pos != list(range(pos[0], pos[0] + T)) or (P0 and pos[0] != hist["next"]):
-            refuse("shape", node, mp, f"positions {pos[0]}..{pos[-1]} do not continue {layer!r}'s history"
-                                      + (f" of {P0} rows (next position {hist['next']})" if P0 else " (not consecutive)"))
-        if has != bool(hist["ik"]) and P0:
-            refuse("side_input", node, mp, f"{layer!r} has an index-K cache at some steps only")
-        hist["next"] = pos[-1] + 1
+        hist, P0 = _open_history(ctx, node, layer, pos, has)
         keys = [P0 + i + 1 for i in range(T)]
-        kvc, kpe = _rows(ctx, a["kv_c"], 16), _rows(ctx, a["k_pe"], 16)
-        for i in range(T):
-            hist["latent"].append(Coll(Array(L + R, Value(16)), concat([kvc[i].refs, kpe[i].refs])))
+        _append_rows(ctx, hist, a, has)
         latent = _log(ctx, (layer, "latent"), hist["latent"])
         G = FA3_SPARSE_GEOMETRY[(R, L)]
         obs = (_OBSERVED["attention_impls"] or {}).get(layer) or {}
@@ -489,10 +524,6 @@ class DsaIndexerAttnRule(StateRule):
         if has:
             H, D = shape(ctx, a["index_q"])[1:3]
             iq, iw = _rows(ctx, a["index_q"], 8), _rows(ctx, a["index_weights"], 32)
-            ik, iks = _rows(ctx, a["index_k"], 8), _rows(ctx, a["index_k_scale"], 32)
-            for i in range(T):
-                hist["ik"].append(ik[i])
-                hist["iks"].append(iks[i])
             klog, slog = _log(ctx, (layer, "ik"), hist["ik"]), _log(ctx, (layer, "iks"), hist["iks"])
             sel_fn = ctx.kind("dsa_topk_short_row", node, TOPK=TOPK)
             selected = {}
@@ -527,6 +558,168 @@ class DsaIndexerAttnRule(StateRule):
                                 "attention_impl_observed": (_OBSERVED["attention_impls"] or {}).get(layer)},
                    emitted=f"{attn.id} x{T} (splits {splits})" +
                            (f" + DsaMqaLogits_v3, DsaTopKShortRow_v1 x{T}" if has else f" (top-k of {source})"))
+
+
+_DENSE = ("positions", "q", "k", "v", "kv_c", "k_pe", "index_k", "index_k_scale", "layer_name", "topk", "scale")
+PREFILL_BACKEND = "vllm.v1.attention.backends.mla.prefill.flash_attn.FlashAttnPrefillBackend"
+
+
+def _observed_prefill_backend(layer_name: str, scale: float) -> str | None:
+    """None when the layer's observed dense-MHA prefill backend is `FlashAttnPrefillBackend` running FA3 with v unpadded at the
+    call's scale, and `sparse_mla_force_mqa` is off."""
+    obs = _OBSERVED["attention_impls"][layer_name]
+    if obs.get("prefill_backend") != PREFILL_BACKEND:
+        return (f"numerics_unregistered: {layer_name!r}'s dense-MHA prefill backend is {obs.get('prefill_backend')!r}; Attention_v4 "
+                f"states {PREFILL_BACKEND}'s FA3")
+    if obs.get("sparse_mla_force_mqa") is not False:
+        return f"{layer_name!r} observes sparse_mla_force_mqa={obs.get('sparse_mla_force_mqa')!r}, which serves every call by sparse MQA"
+    if obs.get("prefill_fa_version") != 3:
+        return f"numerics_unregistered: {layer_name!r}'s prefill backend runs FA version {obs.get('prefill_fa_version')!r}; Attention_v4 is FA3"
+    if obs.get("prefill_requires_v_padding") is not False:
+        return f"numerics_unregistered: {layer_name!r}'s prefill backend pads v to the qk head dim (requires_v_padding)"
+    ps = obs.get("prefill_scale")
+    if not _static_float(ps) or _f32(ps) != _f32(scale):
+        return f"{layer_name!r}'s prefill backend scale {ps!r} is not the call's {scale!r}"
+    return None
+
+
+class DsaDenseMhaRule(StateRule):
+    """`vllm_iface.dsa_dense_mha` (`SparseMLACommonImpl.forward_mha` -> `FlashAttnPrefillBackend.run_prefill_new_tokens`): a prefill the
+    layer serves by dense MHA, FA3's causal varlen self-attention over the call's own rows (`flash_attn_varlen_func`, `FlashAttnFwdSm90`
+    at the 128 x 80 tile of head 256), per query row i `Attention_v4{T=i+1, NH, KVH=NH, D, BN, DOT, INV, MASKED_FROM}` over q[i] and the
+    call's k, v rows 0..i, the tile's `MASKED_FROM` of row i (`targets.fa3_masked_from`).  The indexer selects nothing (vLLM's
+    `sparse_attn_indexer` returns before its logits when the batch has no decode token); the call's cache rows open the layer's history
+    as `DsaIndexerAttn[vllm-dsa]`'s do, for the decode steps after it."""
+    modes = frozenset({"profile"})
+    info = RuleInfo("DsaDenseMha[vllm-dsa]", 1, "state", applies_to="vllm_iface.dsa_dense_mha(...) (" + ", ".join(_DENSE) + ")",
+                    preconditions=("the layer's OBSERVED implementation is FlashAttnMLASparseImpl on a bf16 cache, without context parallelism; "
+                                   "its prefill backend FlashAttnPrefillBackend on FA3 with v unpadded at the call's scale; sparse_mla_force_mqa off",
+                                   "the target is compute capability 9.0 under FA3's check-inf-per-iteration construction (Attention_v4)",
+                                   "the call is a prefill: T above the decode threshold at the observed query heads per rank (DECODE_THRESHOLD), "
+                                   "T <= TOPK, and it opens the layer's history (no chunked context)",
+                                   "q, k [T, NH, D] and v [T, NH, D] bf16 (one head dim, D registered by targets.fa3_kblock_n); "
+                                   "kv_c [T, L], k_pe [T, R] bf16; scale == f32(D^-0.5), the word Attention_v4 folds in",
+                                   "FA3 runs the sequence as one split (`fa3_model.split_plan` at the target's SMs, or batch invariance's "
+                                   "num_splits = 1): FlashAttnFwdCombine has no Definition",
+                                   "no declared launch context other than the call's own rows (a varlen launch's split plan reads every "
+                                   "sequence's length)",
+                                   "the index operands both given (index_k [T, Dk] e4m3, index_k_scale [T] f32) or both None",
+                                   "layer_name static and written from one module; not under registered_values"),
+                    evidence_domain="structural; numerics: Attention_v4 (glm53_fa3_prefill_capture on the H200)")
+
+    def targets(self):
+        return {iface.dsa_dense_mha.default}
+
+    def applies(self, node, ctx):
+        from verity_vllm.program.frontend import targets as TG
+        from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_launch_context
+        a = _args(node, _DENSE)
+        layer, topk, scale = a["layer_name"], a["topk"], a["scale"]
+        if not isinstance(layer, str) or not isinstance(topk, int) or topk < 1 or not _static_float(scale):
+            return "layer_name, topk, scale are not static"
+        if (r := _missing(ctx, ["attention_dot"])):
+            return r
+        if ctx.registered_values:
+            return "numerics_unregistered: Attention_v4 folds its scale; the registered-values twin is not bound here"
+        if (r := _observed_sparse_mla(layer)) or (r := _observed_prefill_backend(layer, float(scale))):
+            return r
+        tp = active_target_profile()
+        if tp.compute_capability != (9, 0) or not TG.fa3_check_inf(tp):
+            return (f"numerics_unregistered: Attention_v4 is FA3 at compute capability 9.0 under check-inf-per-iteration; the target is "
+                    f"{tp.capability_str} at FA{tp.effective_flash_attn_version()}")
+        pos = _positions(ctx, a["positions"])
+        if isinstance(pos, str):
+            return pos
+        T = len(pos)
+        limit = _decode_threshold(layer)
+        if isinstance(limit, str):
+            return limit
+        if T <= limit:
+            return f"a call of {T} query rows is a decode (decode threshold {limit}), which takes the top-k MQA path"
+        if T > topk:
+            return f"a prefill of {T} rows reaches past TOPK {topk} keys, which vLLM serves by sparse MQA, not dense MHA"
+        NH, D = (shape(ctx, a["q"]) or (0, 0, 0))[1:3]
+        DV = (shape(ctx, a["v"]) or (0,))[-1]
+        L = (shape(ctx, a["kv_c"]) or (0, 0))[-1]
+        R = (shape(ctx, a["k_pe"]) or (0, 0))[-1]
+        for r in (_value(ctx, a["q"], BF16, (T, NH, D), "q"), _value(ctx, a["k"], BF16, (T, NH, D), "k"),
+                  _value(ctx, a["v"], BF16, (T, NH, DV), "v"), _value(ctx, a["kv_c"], BF16, (T, L), "kv_c"),
+                  _value(ctx, a["k_pe"], BF16, (T, R), "k_pe")):
+            if r:
+                return r
+        if DV != D:
+            return f"numerics_unregistered: Attention_v4 states one head dim for q, k and v; v head {DV} vs qk head {D}"
+        if _f32(scale) != _f32(D ** -0.5):
+            return f"numerics_unregistered: scale {scale!r} is not f32(D^-0.5) at D={D}, the word Attention_v4 folds in"
+        try:
+            TG.attention_geometry(tp, D, T, NH, NH)
+            launch_sq, _ = TG.launch_seqlen_q(T, 0, active_launch_context())
+        except (TG.UnregisteredTarget, TG.LaunchContextConflict, TG.LaunchContextInvalid) as e:
+            return f"numerics_unregistered: {e}"
+        if launch_sq != T:
+            return (f"numerics_unregistered: a declared launch context of max_seqlen_q {launch_sq} at a {T}-row prefill: FA3's split "
+                    f"plan of a varlen launch reads every sequence's length, which the context does not declare")
+        try:
+            ns = _dense_splits(tp, T, NH, D)
+        except ValueError as e:
+            return f"numerics_unregistered: FA3's split count of a {T}-row prefill: {e}"
+        if ns > 1:
+            return (f"numerics_unregistered: FA3 runs a {T}-row prefill at {NH} heads, head {D} on {tp.num_sms} SMs as {ns} splits "
+                    f"(fa3_model.split_plan) combined by FlashAttnFwdCombine, which no Definition states")
+        ix = (a.get("index_k"), a.get("index_k_scale"))
+        if (ix[0] is None) != (ix[1] is None):
+            return "the index operands are neither both given nor both None"
+        if ix[0] is not None:
+            for r in (_value(ctx, ix[0], E4M3, (T, None), "index_k"), _value(ctx, ix[1], F32, (T,), "index_k_scale")):
+                if r:
+                    return r
+        return True
+
+    def emit(self, node, ctx):
+        from verity_vllm.program.frontend import targets as TG
+        a = _args(node, _DENSE)
+        has = a.get("index_k") is not None
+        layer, TOPK, scale = a["layer_name"], a["topk"], float(a["scale"])
+        mp, h = ctx.module_path(node), ctx.hint_name(node)
+        pos = ctx.static_index(a["positions"]).flat()
+        T = len(pos)
+        _, NH, D = shape(ctx, a["q"])
+        hist, P0 = _open_history(ctx, node, layer, pos, has)
+        if P0:
+            refuse("numerics_unregistered", node, mp, f"{layer!r}: a dense-MHA prefill of {T} rows after {P0} history rows runs over a "
+                                                     f"chunked context (`_compute_prefill_context`, `merge_attn_states`), which no "
+                                                     f"Definition states")
+        _append_rows(ctx, hist, a, has)
+        tp = active_target_profile()
+        geom = TG.attention_geometry(tp, D, T, NH, NH)
+        q, k, v = _rows(ctx, a["q"], 16), _rows(ctx, a["k"], 16), _rows(ctx, a["v"], 16)
+        klog, vlog = PartLog(), PartLog()
+        outs, masked = [], []
+        for i in range(T):
+            klog.append(k[i].refs)
+            vlog.append(v[i].refs)
+            masked.append(TG.fa3_masked_from(tp, i + 1, NH, NH, D, T, i))
+            fn = ctx.kind("attention_dot", node, T=i + 1, NH=NH, KVH=NH, D=D, BN=geom["BN"], DOT=geom["DOT"], INV=geom["INV"],
+                          MASKED_FROM=masked[-1])
+            rows = Array(i + 1, Array(NH, Array(D, Value(16))))
+            outs.append(ctx.call(fn, q[i], Coll(rows, klog.cut(i + 1)), Coll(rows, vlog.cut(i + 1)), node=node, rule=self,
+                                 name=f"{h}[t={pos[i]}]"))
+        ctx.define(node, array_of(outs))
+        ctx.record(self, node, {"layer_name": layer, "positions": [pos[0], pos[-1]], "history_rows_after": T, "NH": NH, "D": D,
+                                "BN": geom["BN"], "BM": TG.fa3_tile_m(D, T, 1), "DOT": geom["DOT"].name, "INV": geom["INV"].name,
+                                "fa_version": geom["fa_version"], "masked_from": [min(masked), max(masked)], "splits": 1, "scale": scale,
+                                "TOPK": TOPK, "indexer": has, "selection": "none (dense MHA reads every row; the indexer returns early)",
+                                "attention_impl_observed": (_OBSERVED["attention_impls"] or {}).get(layer)},
+                   emitted=f"Attention_v4 x{T} (T=1..{T})")
+
+
+def _dense_splits(tp, T: int, NH: int, D: int) -> int:
+    """The split count FA3 runs a B1 causal self-attention prefill of T rows at: 1 under batch invariance (`num_splits = 1`), else
+    `fa3_model.split_plan`'s count for the sequence (vLLM passes `num_splits = 0`)."""
+    if tp.batch_invariant:
+        return 1
+    from verity_vllm.program.kernels import fa3_model
+    return fa3_model.split_plan([T], NH, NH, D, num_sms=int(tp.num_sms), Dv=D)[1][0]
 
 
 class MlaAbsorbBmmRule(OpRule):
@@ -683,7 +876,7 @@ class MlaAbsorbTransposePatternRule(OpRule):
 
 
 VLLM_DSA_PATTERN_RULES = [MlaAbsorbTransposePatternRule()]
-VLLM_DSA_RULES = [CopyIntoAllocRule(), DsaNormRopeRule(), DsaQRule(), DsaIndexerAttnRule(), MlaAbsorbBmmRule()]
+VLLM_DSA_RULES = [CopyIntoAllocRule(), DsaNormRopeRule(), DsaQRule(), DsaIndexerAttnRule(), DsaDenseMhaRule(), MlaAbsorbBmmRule()]
 
-__all__ = ["CopyIntoAllocRule", "DsaIndexerAttnRule", "DsaNormRopeRule", "DsaQRule", "FA3_SPARSE_GEOMETRY", "MlaAbsorbBmmRule",
-           "MlaAbsorbTransposePatternRule", "VLLM_DSA_PATTERN_RULES", "VLLM_DSA_RULES"]
+__all__ = ["CopyIntoAllocRule", "DsaDenseMhaRule", "DsaIndexerAttnRule", "DsaNormRopeRule", "DsaQRule", "FA3_SPARSE_GEOMETRY",
+           "MlaAbsorbBmmRule", "MlaAbsorbTransposePatternRule", "PREFILL_BACKEND", "VLLM_DSA_PATTERN_RULES", "VLLM_DSA_RULES"]
