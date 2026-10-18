@@ -32,15 +32,19 @@ appeal to V*'s circuits, at every shape.
   passing on it (`InnerAccSha` at SHA-512). So `Decomp` holds at a shape exactly where the parts' inner checks together
   give that (`InnerCut`), a fact about how the compiled statement cuts the inner verifier into V*'s parts.
 * **`Decomp` refuses out-of-scope inner statements** (`innerAcc_public`, `decomp_public`): the inner checks run the
-  inner statement's scope check and refuse it without a draw, and neither `readX` nor V*'s setup does. So at a compiled
-  statement whose inner statement fails either, `Decomp` holds only where no coins and inner messages pass all the
-  parts' checks.
-* **Every parsed statement's inner statement fails Flock's statement check** (`inner_check_refused`): `readX` sets the
-  inner circuit file up at the inner tags (`RecVStar.innerOf`), whose leaves are plain (§16.16), and
-  `ProvedScope.check` passes only `hm96-sha512/v1` leaves, read off the same META line (`InnerLeaf.lean`). So Flock's
-  deployed verifier accepts no inner replay at a parsed statement (`inner_run_refused`), `Decomp` holds exactly where no
-  coins and inner messages pass every part's check (`decomp_deployed_unsat`), and no statement is in the recursion's
-  scope (`scope_empty`). A reader that required the check would refuse every statement it reads now.
+  inner statement's scope check and refuse it without a draw. `readX` runs the scope check (`innerOk`), and neither it
+  nor V*'s setup asks for the draw. So at a compiled statement whose inner statement holds no draw, `Decomp` holds only
+  where no coins and inner messages pass all the parts' checks.
+* **Today, every inner statement the inner setup accepts fails Flock's statement check** (`check_refused_of_decode`,
+  `inner_check_refused`): `RecVStar.innerOf` reads plain leaves off the circuit file (§16.16), and `ProvedScope.check`
+  passes only `hm96-sha512/v1` leaves, read off the same META line (`InnerLeaf.lean`). These are facts about the reader
+  before it required `innerOk` and about Flock's check before it admits plain leaves: that reader read only such
+  statements, so Flock's deployed verifier accepted no inner replay at one (`inner_run_refused`), `Decomp` held exactly
+  where no coins and inner messages pass every part's check (`decomp_deployed_unsat`), and no statement was in the
+  recursion's scope (`scope_empty`). The checked reader refuses all of them, so today it parses nothing
+  (`DeployChecked.parse_none_today`) and these hold of it vacuously. Once Flock's check admits plain leaves
+  (`cursor/flock-plain-leaves-sound-c7a9`), `check_refused_of_innerOf` fails, and these go with it; what holds then is
+  `DeployChecked`'s.
 * **`LogDecomp` over Flock's deployed verifier asks the parts for its setup's calls** (`logDecomp_setup`,
   `logDecomp_deployed_setup`): every decision runs the inner statement's setup over `OC` first, on public data (the
   inner circuit file's bytes, its sigma's), so with `PartLogs` some part's SHA-512 gadgets would have to record each of
@@ -890,13 +894,18 @@ theorem setupLog_nil_layoutOf {Col T : Type} {H : Msg → Msg} {D : Claims.Recur
     exact List.not_mem_nil hep
   · exact hcoll ⟨p, hp, xO, h⟩
 
-/-! ## The inner statement fails Flock's statement check -/
+/-! ## Before Flock admits plain leaves, the inner statement fails its statement check
 
-/-- What `readX` read of the inner statement: its decoding, and its circuit file set up at the inner tags
-(`RecVStar.innerOf`). -/
+The lemmas from `check_refused_of_decode` on rest on `InnerLeaf.check_refused_of_innerOf`, Flock's statement check
+refusing plain leaves: they describe the reader without `innerOk`, and hold of the checked reader only because it parses
+nothing today (`DeployChecked.parse_none_today`). They go when Flock's check admits plain leaves. -/
+
+/-- What `readX` read of the inner statement: its decoding, its circuit file set up at the inner tags
+(`RecVStar.innerOf`), and Flock's own setup and statement check on it (`innerOk`). -/
 theorem readX_inner {x : Msg} {r : XR} (h : readX x = some r) :
     FlockDeploy.decode r.w.inner = some r.innerRaw ∧
-      Flock.RecVStar.innerOf r.innerRaw.circuit r.innerRaw.publicFile r.partition r.innerRaw.program = .ok r.dims := by
+      Flock.RecVStar.innerOf r.innerRaw.circuit r.innerRaw.publicFile r.partition r.innerRaw.program = .ok r.dims ∧
+      innerOk r.w.inner = .ok () := by
   unfold readX at h
   simp only [Option.bind_eq_bind, Option.bind_eq_some_iff] at h
   obtain ⟨w, -, ri, hri, sh, -, pa, -, dims, hdims, vs, -, h⟩ := h
@@ -904,7 +913,10 @@ theorem readX_inner {x : Msg} {r : XR} (h : readX x = some r) :
   · simp at h
   have h' : (⟨w, ri, pa, sh, dims⟩ : XR) = r := by simpa using h
   subst h'
-  exact ⟨hri, toOption_eq_some hdims⟩
+  obtain ⟨d, hd, hrest⟩ := FlockSoundness.Refine.ebind_ok (toOption_eq_some hdims)
+  obtain ⟨u, hu, hp⟩ := FlockSoundness.Refine.ebind_ok hrest
+  cases hp
+  exact ⟨hri, hd, hu⟩
 
 /-- A statement `parse` accepts is read by `readX`, and its inner bytes are the reading's. -/
 theorem readX_of_parse {x : Msg} {st : Claims.Recursion.Stmt} (hst : parse x = some st) :
@@ -922,26 +934,34 @@ theorem ins_circuitFile {w : FlockDeploy.Raw} {s : FlockDeploy.Ins} (h : w.ins =
   repeat' split at h
   all_goals first | (cases h; done) | (cases h; rfl)
 
-/-- **The inner statement of every statement the reader parses fails Flock's statement check**: `readX` sets the inner
-circuit file up at the inner tags (`RecVStar.innerOf`), whose leaves are plain, and `ProvedScope.check` passes only
+/-- **An inner statement whose circuit file the inner setup accepts fails Flock's statement check**, read by Flock's
+plain verifier: `RecVStar.innerOf` reads plain leaves off the file, and `ProvedScope.check` passes only
 `hm96-sha512/v1` leaves (`InnerLeaf.check_refused_of_innerOf`), whatever `--statement` the inner statement names. -/
-theorem inner_check_refused {x : Msg} {st : Claims.Recursion.Stmt} (hst : parse x = some st) {s : FlockDeploy.Ins}
-    (hs : FlockDeploy.insOf false (xIOf x) = some s) : s.read.check ≠ .ok () := by
-  obtain ⟨r, hr, hx⟩ := readX_of_parse hst
-  obtain ⟨hri, hdims⟩ := readX_inner hr
-  rw [hx] at hs
+theorem check_refused_of_decode {inner : Msg} {ri : FlockDeploy.Raw} (hri : FlockDeploy.decode inner = some ri)
+    {partition : Option Lean.Json} {dims : Flock.RecVStar.Inner}
+    (hdims : Flock.RecVStar.innerOf ri.circuit ri.publicFile partition ri.program = .ok dims) {s : FlockDeploy.Ins}
+    (hs : FlockDeploy.insOf false inner = some s) : s.read.check ≠ .ok () := by
   unfold FlockDeploy.insOf at hs
   obtain ⟨w, hw, hs⟩ := Option.bind_eq_some_iff.1 hs
   rw [hri] at hw
   obtain rfl := Option.some.inj hw
   split_ifs at hs with hz
   · cases hs
-  change r.innerRaw.ins.toOption = some s at hs
+  change ri.ins.toOption = some s at hs
   have hcf := ins_circuitFile (toOption_eq_some hs)
   intro hc
   unfold Flock.Readable.Read.check at hc
   rw [hcf] at hc
   exact FlockSoundness.Discharge.InnerLeaf.check_refused_of_innerOf hdims hc
+
+/-- **The inner statement of every statement the reader parses fails Flock's statement check**: `readX` sets the inner
+circuit file up at the inner tags (`check_refused_of_decode`). -/
+theorem inner_check_refused {x : Msg} {st : Claims.Recursion.Stmt} (hst : parse x = some st) {s : FlockDeploy.Ins}
+    (hs : FlockDeploy.insOf false (xIOf x) = some s) : s.read.check ≠ .ok () := by
+  obtain ⟨r, hr, hx⟩ := readX_of_parse hst
+  obtain ⟨hri, hdims, -⟩ := readX_inner hr
+  rw [hx] at hs
+  exact check_refused_of_decode hri hdims hs
 
 /-- **`InnerAcc`'s public checks fail at every parsed statement** (`innerAcc_public`'s conclusion): the inner statement
 fails Flock's statement check (`inner_check_refused`). -/
@@ -957,10 +977,11 @@ theorem inner_run_refused (H : Msg → Msg) {x : Msg} {st : Claims.Recursion.Stm
     (run H (replay ms) (FlockDeploy.V false) (xIOf x) () fun i => c i.val).out ≠ .acc :=
   fun h => inner_out hst (innerAcc_public (innerAcc_of_run H _ c ms h))
 
-/-- **`Decomp` at the deployed recursion holds exactly where the parts' inner checks never all pass**, at every shape:
-at every compiled statement of the shape, Flock's deployed verifier accepts no inner replay (`inner_run_refused`), so
-`Decomp` asks that no coins and inner messages pass every part's check (`decomp_public`), and that suffices
-(`decomp_deployed_iff`). -/
+/-- **`Decomp` at the deployed recursion holds exactly where the parts' inner checks never all pass**, at every shape,
+while Flock's check refuses plain leaves: at every compiled statement of the shape, Flock's deployed verifier accepts no
+inner replay (`inner_run_refused`), so `Decomp` asks that no coins and inner messages pass every part's check
+(`decomp_public`), and that suffices (`decomp_deployed_iff`). The reader without `innerOk` parsed statements here; the
+checked reader parses none (`DeployChecked.parse_none_today`). -/
 theorem decomp_deployed_unsat (rel : Flock.Readable.Parsed → Flock.Readable.Relation)
     (decI : List (ℕ × List FlockLevel3.GF128) → List Claims.Flock.PlainTrace) (ivScope : Msg → Bool) (b : Brings)
     (shape : Claims.Recursion.Form → Prop) (chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop) :
@@ -972,10 +993,11 @@ theorem decomp_deployed_unsat (rel : Flock.Readable.Parsed → Flock.Readable.Re
     fun h => (decomp_deployed_iff rel decI ivScope b shape chk).2 fun x st hst hf c ms hall =>
       absurd hall (h x st hst hf c ms)⟩
 
-/-- **No statement is in the deployed recursion's scope**: its scope asks the inner statement to be in the inner Flock's
-(`Claims.Flock.Scope`), which is the parsed statement passing `Parsed.scope` (`Readable.scope_iff`), whose first check is
-Flock's statement check, and that fails at the inner statement of every statement the reader parses
-(`inner_check_refused`). -/
+/-- **No statement is in the deployed recursion's scope** while Flock's check refuses plain leaves: its scope asks the
+inner statement to be in the inner Flock's (`Claims.Flock.Scope`), which is the parsed statement passing `Parsed.scope`
+(`Readable.scope_iff`), whose first check is Flock's statement check, and that fails at the inner statement of every
+statement the reader parses (`inner_check_refused`). The reader without `innerOk` parsed statements here; the checked
+reader parses none (`DeployChecked.parse_none_today`). -/
 theorem scope_empty (rel : Flock.Readable.Parsed → Flock.Readable.Relation)
     (decI : List (ℕ × List FlockLevel3.GF128) → List Claims.Flock.PlainTrace) (ivScope : Msg → Bool) (b : Brings)
     (x : Msg) :
