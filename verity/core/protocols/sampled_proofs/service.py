@@ -84,7 +84,7 @@ from verity.ml.circuits.defs import SpecializedDefinition
 from verity.ml.circuits.program import Program
 from verity.core.protocols.profile import IntegrityProfile
 
-from .one_stage import audit as A, draw as D, partition as P, registration as R, verifier as V
+from .one_stage import audit as A, draw as D, partition as P, registered as G, registration as R, verifier as V
 from .one_stage.verdict import Verdict, _Collect
 from .two_stage import OwnRandomness, closure_of, draw_first
 
@@ -525,6 +525,14 @@ def _window_key(window: Any) -> bytes | None:
         return None
 
 
+def _reads_positions(supplied: Mapping[str, Any] | None) -> bool:
+    """Whether a supplied value reads a position (`{"position": K}`); a form `registration.check` refuses reads none."""
+    try:
+        return any(k == "position" for rows in G.sources(supplied or {}).values() for row in rows for k, _ in row)
+    except ValueError:
+        return False
+
+
 def selection_law(rule: Selection, n: int) -> dict[str, Any]:
     """The law a selection rule names over `n` proof units, before `draw.derive` expands it over the check's program and
     query: `subset:n` for `All`, a `Law`'s own, and a two-stage rule's `replay` (over its RUs)."""
@@ -772,7 +780,7 @@ class Stream:
             raise _refuse("population", n)
         program = P.population_program(self.unit, n)
         law = selection_law(self.spec.selection, n)
-        earlier = self._earlier(record)
+        earlier = self._earlier(record, supplied)
         v = V.check(record, program, self.spec.check.query, law, SCHEME, ports, leaf_layer, anchors, earlier, None,
                     work_table, registered, supplied, pinned)
         if not v.ok:
@@ -818,14 +826,15 @@ class Stream:
             self._first.setdefault(e["value"], at)
         return reg
 
-    def _earlier(self, record: Mapping[str, Any]) -> list[dict[str, Any]]:
+    def _earlier(self, record: Mapping[str, Any], supplied: Mapping[str, Any] | None = None) -> list[dict[str, Any]]:
         """The records of the log that one-stage's R6 and R7 read for `record`, in log order: the last (R6's `previous`),
         every one whose window may equal `record`'s (R6's window: the same `_window_key`, or none), and each registered
         value's first registration (R7's held roots, `registration.held_roots`). Both verifiers of record give the same
         verdict on them as on the whole log. A record whose window has no key, or that has no window, gets the whole
-        log."""
+        log, and so does one whose `supplied` values read a position, which follows every record of the log
+        (`registered.log_base`)."""
         key = _window_key(record["window"]) if isinstance(record, Mapping) and "window" in record else None
-        if key is None:
+        if key is None or _reads_positions(supplied):
             return self._log
         at = {*self._first.values(), *self._irregular, *self._windows.get(key, ())}
         if self._log:

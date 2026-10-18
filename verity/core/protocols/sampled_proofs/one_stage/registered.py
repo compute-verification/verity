@@ -298,9 +298,9 @@ def supplied_salts(program: str, value: str, n: int) -> list[bytes]:
 
 
 def sources(supplied: Any) -> dict[str, list[list[tuple[str, str]]]]:
-    """The verifier's supplied values, `{value: [[source, ...], ...]}` (a row a list of sources, each `{"port": P}`,
-    `{"value": V}` or `{"bytes": hex}` naming a string), as `{value: [[(kind, name), ...], ...]}`; ValueError on any other
-    form, which the Lean verifier refuses too (`OneStage.paramsOfJson`)."""
+    """The verifier's supplied values, `{value: [[source, ...], ...]}` (a row a list of sources, each one of `SOURCES`
+    naming a string), as `{value: [[(kind, name), ...], ...]}`; ValueError on any other form, which the Lean verifier
+    refuses too (`OneStage.paramsOfJson`)."""
     if not isinstance(supplied, Mapping):
         raise ValueError(f"supplied values are an object of rows, not {supplied!r}")
     out: dict[str, list[list[tuple[str, str]]]] = {}
