@@ -882,12 +882,17 @@ class NativeCollectCommitter(NativeHostCommitter):
             nid = self._intern(name)
         self._nc.note_expected(1)                                  # X-03: attempted acquisition (committed is counted by put)
         fn = self._nc.stage if self.gather else self._nc.collect
-        if self.profile:
-            t0 = time.perf_counter()
-            fn(nid, t)
-            self._prof_s += time.perf_counter() - t0
-        else:
-            fn(nid, t)
+        try:
+            if self.profile:
+                t0 = time.perf_counter()
+                fn(nid, t)
+                self._prof_s += time.perf_counter() - t0
+            else:
+                fn(nid, t)
+        except RuntimeError:
+            if not getattr(self._nc, "failure", ""):
+                raise
+            return                       # the run failed by name (abandon_step): refused and not committed, never raised into the forward
         self._py_committed += 1
 
     def slot_plan(self, names: list[str], slots: list[Any], kinds: list[int]) -> int:
@@ -897,7 +902,12 @@ class NativeCollectCommitter(NativeHostCommitter):
         return int(self._nc.add_slot_plan([self._intern(nm) for nm in names], list(slots), [int(k) for k in kinds]))
 
     def stage_slot_plan(self, handle: int, n: int, pad: int) -> int:
-        return int(self._nc.stage_slot_plan(int(handle), int(n), int(pad)))
+        try:
+            return int(self._nc.stage_slot_plan(int(handle), int(n), int(pad)))
+        except RuntimeError:
+            if not getattr(self._nc, "failure", ""):
+                raise
+            return 0                     # refused after the run failed by name, as `_acquire`
 
     def clear_slot_plans(self) -> None:
         self._nc.clear_slot_plans()
@@ -1091,8 +1101,13 @@ class NativeCollectCommitter(NativeHostCommitter):
             try:
                 return self._commit_step_windowed(job)
             except Exception as e:  # noqa: BLE001
-                self._nc.abandon_step(job.step)            # free the step's slots: the serving thread must not wait forever for this step
-                print(f"[collector] worker failed on windowed step {job.step}: {e!r}"[:400], file=sys.stderr, flush=True)
+                why = f"worker failed on windowed step {job.step}: {e!r}"[:400]
+                first = not self._nc.failure
+                # the run fails by this name (the first stands), and the step's slots go back after the side stream's reads of them: the
+                # serving thread must neither wait forever for this step nor stage into its windows
+                self._nc.abandon_step(job.step, why, self._side.cuda_stream if self._side is not None else 0)
+                if first:
+                    print(f"[collector] {why}", file=sys.stderr, flush=True)
                 raise
             finally:
                 if getattr(self._nc, "win_dead", False):
@@ -1300,6 +1315,10 @@ class NativeCollectCommitter(NativeHostCommitter):
             # [R15 capacity] the serving thread's slot wait timed out earlier in this run: every stage() since was refused by name, so this step
             # has nothing staged -- fail it by the SAME name instead of tripping over an empty tree ("cudaMemcpyAsync(root): invalid argument").
             raise RuntimeError("windowed staging: collector dead after a slot-wait timeout earlier in this run (step not committed)")
+        if nc.failure:
+            # an earlier step was abandoned and the serving thread's acquisitions since are refused: fail this step by the run's name rather
+            # than commit whatever it staged before the refusal
+            raise RuntimeError(f"windowed staging: the collector failed earlier in this run ({nc.failure[:200]}) -- step {job.step} not committed")
         t0 = time.perf_counter()
         plan_used = int(getattr(job, "plan_used", -1))
         inplace = self.layout_v2 or plan_used >= 0
@@ -1830,6 +1849,11 @@ class NativeCollectCommitter(NativeHostCommitter):
             self.replay_row_keys = None
         if dead:
             self._nc.ack_dead()
+        failure = getattr(self._nc, "failure", "")      # read after the worker drained: a step it abandoned failed the run by this name
+        if failure:
+            self.errors.insert(0, f"collector failed: {failure}"[:300])
+            rc.extra["errors"], rc.extra["errors_n"] = self.errors[:10], len(self.errors)
+            rc.extra["collector_failure"] = failure
         st = dict(self._nc.stats())
         # X-03 reference integrity: what the manifest attempted vs what was bound (the Python `_acquire` path puts through stage/collect
         # directly, so its successes are added here); commit_delta refuses PASS unless they are equal and no error was recorded
