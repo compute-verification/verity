@@ -6,8 +6,13 @@ datacenter (named assumptions) and an epoch on the trusted clock. For each block
 - `credited`: the work the claims prove was spent on the declared circuit there;
 - `capacity` and `headroom`: what the block's devices could do in the epoch, by their declared rates, and what the
   audit leaves unaccounted;
-- `outsourceable` and `local_at_least`: the work a helper off the block could have computed and shipped in through
-  its certified ingress (ingress × arithmetic intensity), and so the credited work that must have run on the block;
+- `outsourceable` and `local_at_least`: the work a helper off the block could have done for it, and so the credited
+  work that must have run on the block. A helper holding the registered weights needs only small inputs and outputs, so
+  crossing bytes bound nothing by themselves (compute accounting, review 1). Work is pinned to the block only by data it
+  must consume that only the block receives: a trusted device's fresh bulk data (`Input(source="trusted")`), which a
+  helper could get only through the block's certified egress, so outsourceable ≤ egress × work per forced bit. Or by a
+  named premise, `assume={"fleet-closed"}`: no undeclared compute is reachable from the block. With neither, it is
+  unbounded and nothing is attributed;
 - `reads` and `reads_local_at_least`: the reads the bandwidth audits certify for stores on the block's devices, and
   the part that can't have come in over its boundary;
 - `state`: the bits that could survive the epoch: each device's memory less what a store it held filled (a verified
@@ -39,6 +44,7 @@ class BlockAccount:
     reads: float = 0.0
     read_ingress: float = 0.0
     assumptions: list[str] = field(default_factory=list)
+    forced: float = 0.0
 
     @property
     def headroom(self) -> float:
@@ -68,6 +74,8 @@ class Account:
     located: dict[str, list[str]] = field(default_factory=dict)
     #: bits of advice in the choice of occupancy profile (NET-5's declared scheduler), once per audit
     advice_bits: float = 0.0
+    #: the probability that some claim the account relies on fails: the sum of their deltas
+    delta: float = 0.0
 
     @property
     def sound(self) -> bool:
@@ -91,6 +99,8 @@ class Account:
         for s, where in self.located.items():
             lines.append(f"store {s}: held on {where[0]}" if len(where) == 1 else
                          f"store {s}: held on one of {', '.join(where)} (not located to one device)")
+        if self.delta:
+            lines.append(f"fails with probability at most {self.delta:.3g} (the sum of the claims' deltas)")
         lines += [f"REFUSED {r.what}: {r.why}" for r in self.refused]
         return "\n".join(lines)
 
@@ -102,13 +112,16 @@ def _store(dc: Datacenter, p: Placement, name: str) -> Store:
 
 
 def _ingress(dc: Datacenter, block: str, seconds: float) -> float:
-    """Bits the block's certified boundary links can carry in over `seconds`."""
+    """Bits the block's certified boundary links can carry over `seconds`, in either direction (each link is full duplex
+    at its capacity)."""
     return sum(float(l.capacity) * seconds for l in dc.boundary
                if block in {getattr(dc.block_of(l.a), "name", None), getattr(dc.block_of(l.b), "name", None)})
 
 
-def account(claims: list[Claim], p: Placement, clock: Clock, epoch: Interval, op: str = "scalar") -> Account:
-    """Read `claims` against `p`'s datacenter over `epoch`, crediting work priced in op class `op`."""
+def account(claims: list[Claim], p: Placement, clock: Clock, epoch: Interval, op: str = "scalar",
+            assume: frozenset[str] | set[str] = frozenset()) -> Account:
+    """Read `claims` against `p`'s datacenter over `epoch`, crediting work priced in op class `op`, under the named
+    premises in `assume` (so far only "fleet-closed")."""
     dc = p.datacenter
     seconds = clock.seconds(epoch.length)
     refused = [c for c in claims if isinstance(c, Refused)]
@@ -116,7 +129,12 @@ def account(claims: list[Claim], p: Placement, clock: Clock, epoch: Interval, op
     if any(isinstance(c, Computed) for c in claims):
         for i, g in enumerate(p.circuit.gates):
             work[p.block(i)] += g.boolean_size
-    intensity = p.circuit.boolean_size / (sum(g.bits for g in p.circuit.gates) or 1)
+    forced = defaultdict(float)
+    for i, g in enumerate(p.circuit.gates):
+        if g.op == "input" and g.input.source == "trusted":
+            readers = {p.block(j) for j, h in enumerate(p.circuit.gates) if i in h.operands} - {None}
+            for b in readers:
+                forced[b] += g.bits
 
     challengers = [d.name for d in dc.devices.values() if d.kind == "challenger"]
     located: dict[str, list[str]] = {}
@@ -152,8 +170,15 @@ def account(claims: list[Claim], p: Placement, clock: Clock, epoch: Interval, op
                 state += max(floor, float(d.memory) - filled[d.name])
         names = [a.name for d in b.devices for a in [*d.rate.values(), d.memory, d.residual, d.bandwidth, d.on_chip]
                  if a is not None]
-        blocks.append(BlockAccount(b.name, work[b.name], cap, _ingress(dc, b.name, seconds) * intensity, state,
-                                   reads[b.name], read_ingress[b.name], names))
+        if "fleet-closed" in assume:
+            outsourceable = 0.0
+            names.append("fleet-closed")
+        elif forced[b.name]:
+            outsourceable = min(work[b.name], _ingress(dc, b.name, seconds) * work[b.name] / forced[b.name])
+        else:
+            outsourceable = float("inf")
+        blocks.append(BlockAccount(b.name, work[b.name], cap, outsourceable, state, reads[b.name], read_ingress[b.name],
+                                   names, forced[b.name]))
 
     per_window: dict[tuple[str, int], int] = {}
     for c in claims:
@@ -165,7 +190,8 @@ def account(claims: list[Claim], p: Placement, clock: Clock, epoch: Interval, op
     timing = sum(c.bits for c in claims if isinstance(c, Carried))
     inputs = {c.input: c.bits for c in claims if isinstance(c, Entered)}
     advice = sum(c.bits for c in claims if isinstance(c, Scheduled))
-    return Account(blocks, timing, inputs, refused, dict(offramp), located, advice)
+    delta = sum(c.delta for c in claims if isinstance(c, (Computed, Held, Read)))
+    return Account(blocks, timing, inputs, refused, dict(offramp), located, advice, delta)
 
 
 @dataclass(frozen=True)

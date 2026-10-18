@@ -118,16 +118,31 @@ def test_a_frame_that_is_not_a_committed_crossing_is_refused_even_at_the_declare
     assert refused and "not a committed crossing" in refused[0].why
 
 
-def test_work_a_helper_could_ship_in_is_bounded_by_the_certified_ingress(setup):
-    """Compute's scenario 1: a helper off the block computes the products and ships them in. What the claims credit to
-    the block, less its certified ingress times the circuit's intensity, must have run on the block itself."""
+def test_work_is_pinned_to_a_block_only_by_data_it_must_consume_there_or_a_named_premise(setup):
+    """Compute's review 1: a helper holding the registered weights needs only small inputs and outputs, so crossing bytes
+    alone attribute nothing. Fresh bulk data from a trusted device that only the block receives pins the work there: a
+    helper could get it only through the block's certified egress. So does the named premise that the fleet is closed."""
     c, dc, p = setup
     claims = audit(run(p, INPUTS, window=4), occupancy(p, 32, 1))
-    narrow = account(claims, p, Clock(1e-9), Interval(0, 16))       # 16 ns: almost nothing can come in
-    wide = account(claims, p, Clock(1e-3), Interval(0, 16))         # 16 ms at 100 Mbit/s: plenty can
-    a_narrow, a_wide = narrow.blocks[0], wide.blocks[0]
-    assert a_narrow.credited == a_wide.credited > 0
-    assert a_narrow.local_at_least > 0.9 * a_narrow.credited and a_wide.local_at_least == 0
+    a = account(claims, p, Clock(1e-9), Interval(0, 16)).blocks[0]
+    assert a.credited > 0 and a.local_at_least == 0                 # no anchor: nothing is attributed
+
+    closed = account(claims, p, Clock(1e-9), Interval(0, 16), assume={"fleet-closed"}).blocks[0]
+    assert closed.local_at_least == closed.credited and "fleet-closed" in closed.assumptions
+
+    def noised(x, w1, w2, z):
+        h = ((x * w1) ^ z).named("h")                              # the challenger's noise z enters stage h
+        return (h * w2 + x).named("y")
+    dc.fabric.append(Device("challenger", "challenger", trusted=True))
+    dc.links.append(Link("challenger", "leaf", Assumption("uplink", 1e8, "bit/s", "declared")))
+    c2 = trace(noised, x=Input(16), w1=Input(16, source="registered"), w2=Input(16, source="registered"),
+               z=Input(16, source="trusted"))
+    p2 = place(c2, dc, {"*": "a.gpu", "x": "world", "z": "challenger", "w2": "b.gpu"}, deliver="world")
+    claims2 = audit(run(p2, INPUTS | {"z": 9}, window=4), occupancy(p2, 32, 1))
+    assert not any(isinstance(x, Entered) and x.input == "z" for x in claims2)     # the verifier's coins aren't charged
+    narrow = account(claims2, p2, Clock(1e-9), Interval(0, 16)).blocks[0]          # 16 ns of egress: almost nothing out
+    wide = account(claims2, p2, Clock(1e-3), Interval(0, 16)).blocks[0]            # 16 ms: the noise can leave
+    assert narrow.forced == 16 and narrow.local_at_least > 0.85 * narrow.credited and wide.local_at_least == 0
 
 
 def test_credit_from_two_audits_on_one_device_must_fit_every_interval_per_resource():

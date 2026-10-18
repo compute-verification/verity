@@ -5,7 +5,8 @@ declarations (the circuit, the occupancy profile, the sync set, each challenge's
 capacity or names a device as the place something happened: that is the physical layer's job. Its output is a list of
 claims about the prover *system*, each a fact a proof would establish:
 
-- `Computed`: the committed values are the circuit's evaluation (here by re-execution; in Verity, sampled proofs at ε).
+- `Computed`: the committed values are the circuit's evaluation (here by re-execution; in Verity, sampled proofs at ε
+  and δ).
 - `Carried`: a boundary link-window carried the committed crossings and nothing else, so its only freedom was timing
   advice, at most `bits`.
 - `Entered`: an input's bits entered the computation.
@@ -29,8 +30,13 @@ from .time import Interval
 
 @dataclass(frozen=True)
 class Computed:
-    gates: int
+    """The committed values are the circuit's evaluation: `work` units of it (here Boolean gates; PoUW's are MACs at
+    window.py's grid), all but a share `epsilon` of it right, except with probability `delta`, within `window`."""
+
+    work: float
     epsilon: float = 0.0
+    delta: float = 0.0
+    window: Interval | None = None
 
 
 @dataclass(frozen=True)
@@ -75,6 +81,7 @@ class Held:
     bits: float
     at: Interval
     epsilon: float = 0.0
+    delta: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -86,6 +93,8 @@ class Read:
     window: Interval
     bits: float
     credited: float
+    epsilon: float = 0.0
+    delta: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -143,7 +152,7 @@ def audit(trace: Trace, profile: dict[tuple[str, str], dict[int, int]], syncs: i
                 for name, n, _ in r.streams if not declared_streams[name].registered]
     for v in c.inputs:
         spec = c.gates[v.id].input
-        if spec.source != "registered":
+        if spec.source not in ("registered", "trusted"):
             out.append(Entered(v.name, spec.bits, spec.source))
     stores = {s.name: s for s in trace.stores}
     for r in trace.challenges:
