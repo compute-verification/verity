@@ -494,16 +494,24 @@ def _residues(stride: int, count: int, L: int, cap: int = 4096) -> set[int] | No
 
 class _Widths:
     """The leaf widths a body's references name, for `Builder.finish`'s reinterpretation check (`E_REINTERPRET`). A reference
-    that names no leaf is not this check's: the decoder and the checkers refuse it."""
+    that names no leaf is not this check's: the decoder and the checkers refuse it. Nor is one to node `below` or later, which
+    node `below`'s arguments cannot read in dataflow order: such a descriptor decodes, and the checkers name the defect
+    (PROTOCOL.md §4.4)."""
 
     def __init__(self, params: tuple[tuple[str, Type], ...], nodes: list["Node"]) -> None:
         self.params, self.nodes = params, nodes
+        self.below = len(nodes)
+        self.forward = False  # a reference to node `below` or later was passed over: the `PartLog` memo is off from then on
         self.token = object()  # this check's entry in a `PartLog`'s memo
         self._src: dict[tuple[str, int], tuple[Type | None, int | None, int]] = {}
         self._same: dict[tuple[int, int], bool] = {}
 
     def src(self, s: str, i: int) -> tuple[Type | None, int | None, int]:
-        """(type, homogeneous width, leaves) of parameter or node `i`; (None, None, 0) when there is none."""
+        """(type, homogeneous width, leaves) of parameter or node `i`; (None, None, 0) when there is none, or when `i` is node
+        `below` or later."""
+        if s == "n" and i >= self.below:
+            self.forward = True
+            return (None, None, 0)
         hit = self._src.get((s, i))
         if hit is None:
             T = (self.params[i][1] if s == "p" and 0 <= i < len(self.params) else
@@ -615,7 +623,7 @@ class _Widths:
                 k = self.misread(t, pos, r)
                 return None if k is None else (pos + k, r[k])
             first = 0
-            if r.prefix is not None:
+            if r.prefix is not None and not self.forward:
                 log, j = r.prefix
                 ws = range_widths(t, pos, pos + log.starts[j])
                 if len(ws) == 1:
@@ -628,7 +636,8 @@ class _Widths:
                         hit = walk(log.parts[k], pos + log.starts[k])
                         if hit is not None:
                             return hit
-                    done[w] = max(done.get(w, 0), j)
+                    if not self.forward:
+                        done[w] = max(done.get(w, 0), j)
                     first = j
             for k in range(first, len(r.parts)):
                 hit = walk(r.parts[k], pos + r.starts[k])
@@ -766,10 +775,12 @@ class Builder:
             raise TypeError(f"body returns {out.type!r}, declared {self.ret_type!r}")
         W = _Widths(self.params, self.nodes)
         for k, node in enumerate(self.nodes):
+            W.below = k
             for i, a in enumerate(node.args):
                 hit = W.first(a)
                 if hit is not None:
                     raise W.refuse(f"node {k} ({node.form} {node.fn.id}) argument {node.fn.signature()[0][i][0]!r}", a.type, hit)
+        W.below = len(self.nodes)
         hit = W.first(out)
         if hit is not None:
             raise W.refuse("the body's return", out.type, hit)

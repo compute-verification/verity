@@ -625,6 +625,21 @@ def test_the_decoder_refuses_a_tampered_word_typed_as_s8_lanes():
             decode_program(tampered, REGISTRY)
 
 
+def test_a_node_naming_itself_or_a_later_node_at_another_width_decodes_for_its_checkers():
+    """A node that names itself or a later node is an order violation, which decodes so that its checkers name it (PROTOCOL.md
+    §4.4): the width check reads only the parameters and earlier nodes, so it doesn't preempt them whatever the widths."""
+    from verity.ml.circuits.partition_object import order_violation
+    f = comp("PortsTestLanesOk", [("x", V32)], TupleT(Array(32, V8), Array(32, V8)),
+             lambda B, S, x: (lambda y, lo: tuple_of(B.batch(Id8, lanes(lo), axes=(0,)), lanes(lo)))(B.call(Pair, x), B.call(Lo8, x)))
+    desc, _ = roundtrip(Program(used(f)))
+    for node, target in ((1, 1), (0, 2)):
+        tampered = copy.deepcopy(desc)
+        tampered["definitions"]["PortsTestLanesOk_v1"]["body"]["nodes"][node]["args"][0]["refs"] = {"affine": ["n", target, 0, 1]}
+        bad = order_violation(decode_program(tampered, REGISTRY))
+        assert bad == {"definition": "PortsTestLanesOk_v1", "node": node, "arg": 0, "reference": ["n", target],
+                       "why": "not topological"}
+
+
 @primitive("PortsTestPair", 1, (("x", V32),), V32)
 def Pair(x):
     """A 32-bit word no port types."""

@@ -173,7 +173,9 @@ every partition query refuses it (`partition_object.order_violation`, §8). The 
 Every leaf a node's argument or the body's `ret` names has the width its type gives that position: a word is read only at the
 width it was committed with. A sequence typed `Array<32, Value<8>>` whose references name an s32 word (a `Value<32>`) is a
 silent reinterpretation, a limb split no gate computes, and is refused (`E_REINTERPRET`, `defs.Builder.finish`). A runtime
-word becomes limbs only through a registered `LimbSplit` Definition that computes them and their carries (§12).
+word becomes limbs only through a registered `LimbSplit` Definition that computes them and their carries (§12). The check
+reads the leaves of the parameters and of the nodes before the reading node (for `ret`, every node): a node that names itself
+or a later node is the order violation above, which decodes whatever the widths, so that its checkers name it.
 
 ### 4.5 Flat concatenation and the alias
 
