@@ -191,6 +191,7 @@
         "benchmarks/link_pricing/",
         "benchmarks/overhead_frontier/",
         "benchmarks/pous/",
+        "benchmarks/property_redteam/",
         "benchmarks/rate_redteam/",
         "benchmarks/rate_squaring/",
         "benchmarks/remote_session/",
