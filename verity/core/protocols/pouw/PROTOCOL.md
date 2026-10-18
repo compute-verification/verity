@@ -75,11 +75,12 @@ and `frame-b3s` that -h1, -h2 and BLAKE3 -h3 named are in `archive/pouw-blake3/`
 in `.agents/skills/friction/SKILL.md`.
 
 **Randomness.** The protocol owns the outer coins, the salt and the draw, and both are the challenger's epoch coins, never
-a public beacon and never Fiat-Shamir over the prover's roots. An epoch's coin commitment says its coin mode (`coins.mode`,
-Compose's `CoinMode`). In a seeded epoch (`coins.SCHEME`, Pearl-C's served path) a scheme's noise is its own derivation
-from the salt and the prover's roots, Fiat-Shamir inside the scheme, whose grinding is inside the conjecture's error
-term. In a live epoch (`coins.LIVE_SCHEME`, "Live epochs" below) round r's noise is keyed by round r's coin, opened only
-after the verifier recorded round r's root (decision 36).
+a public beacon and never Fiat-Shamir over the prover's roots. A window's check item says its coin mode, its optional
+`coins`, `live` or `seeded` (`window.mode`, Compose's `CoinMode`; an item that names none is seeded). In a seeded window
+(`coins.SCHEME`, Pearl-C's served path) a scheme's noise is its own derivation from the salt and the prover's roots,
+Fiat-Shamir inside the scheme, whose grinding is inside the conjecture's error term. In a live window
+(`window.LIVE_SCHEME`, "Live epochs" below) round r's noise is keyed by round r's coin, opened only after the verifier
+recorded round r's root (decision 36).
 
 ## Epoch coins (`coins`)
 
@@ -106,15 +107,16 @@ asked for, that is malformed, that does not open against the epoch's root, or wh
 verifier's: an outcome convinces the auditor, who trusts its own challenger, and no third party (claim `live-verifier`).
 Vectors: `tests/vectors/epoch_coins_v1.json`.
 
-**Live coins** (`LiveChallenger`, `live_reason`, `order_reason`; Lean `PouwCommit.Live`). The challenger's live coins are
-indexed by label and index and named by no protocol, so any client of the proof service uses the same form: a layout is
-a scheme and its families `(label, count)` in order, coin `(label, i)` at its family's offset plus i, at most 2^20 coins.
-Before the epoch the challenger draws every coin and publishes
+**Live coins** come from the proof service's one challenger (`verity.core.protocols.sampled_proofs.challenger`, Lean of
+record `SampledProofs.Challenger`), whose coins are indexed by label and index and named by no protocol, so every client
+uses the same form: a layout is a scheme, an epoch and its families `(label, count)` in order, coin `(label, i)` at its
+family's offset plus i, at most 2^20 coins. Before the epoch the challenger draws every coin and publishes
 
 ~~~text
 x_p     = SHA-512(scheme || 0x00 || coin_p)
 value_p = hm96-sha512 tree_leaf(key, commit_string(key, x_p, salt_p))     salt_p: 192 fresh bytes, key the pinned default
-root    = MerkleTree over value_0 … value_(K−1) at positions 0 … K−1, binding tagged(scheme, e, label_0, count_0, …), owner -1
+root    = frame-v3-sha512 tree over value_0 … value_(K−1) at positions 0 … K−1, leaf schema the scheme, domain binding
+          identity_digest_sha512("verity/challenger/coins/v1", {epoch, families, scheme}), owner -1
 ~~~
 
 and opens coin `(label, i)` once, after the root the verifier recorded for it. `live_reason` checks one opening (its epoch,
@@ -123,15 +125,15 @@ roots the verifier recorded, in order: coin i opened after root i, none twice ("
 root is recorded, and every recorded root's coin opened. `LiveRecord` is the verifier's side: it records a root and only
 then asks the challenger for that root's coin.
 
-**Live epochs** (`live_challenger`, `rounds_reason`, `round_key`). A live PoUW epoch's coins are the layout
-`live_families(R)` under `LIVE_SCHEME` (`"verity/pouw/epoch-coins/live/v1"`): its salt coin, its draw coin and R round coins
-(`"round"`, rounds numbered from 0 as Compose's `Declared.round` numbers them), R the most rounds a window of the epoch
-takes, fixed when the challenger commits. Round r's coin opens after the verifier recorded round r's root, the root of
-the values round r commits, and round r's noise key is
-`derive(coin_r, "verity/pouw/round-noise/v1", {coins: root, epoch: e, root: root_r, round: r})`: the deferred noised
-products, keyed by a coin the prover could not see when it committed. `core_check.rounds` (Lean `PouwCheck.roundsCheck`)
-is the rule on a window's round coins. A seeded epoch's commitment is unchanged (`SCHEME`, salt and draw only), and the
-commitment's scheme is the epoch's mode.
+**Live epochs** (`window.live_challenger`, `rounds_reason`, `round_key`; Lean `PouwWindow.Rounds`). A live PoUW epoch's
+coins are the layout `live_families(R)` under `LIVE_SCHEME` (`"verity/pouw/epoch-coins/live/v1"`): its salt coin
+(`"pouw/salt"`), its draw coin (`"pouw/draw"`) and R round coins (`"pouw/round"`, rounds numbered from 0 as Compose's
+`Declared.round` numbers them), R the most rounds a window of the epoch takes, fixed when the challenger commits. Round
+r's coin opens after the verifier recorded round r's root, the root of the values round r commits, and round r's noise
+key is `derive(coin_r, "verity/pouw/round-noise/v1", {coins: root, epoch: e, root: root_r, round: r})`: the deferred
+noised products, keyed by a coin the prover could not see when it committed. `core_check.rounds` (Lean
+`PouwCheck.roundsCheck`) is the rule on a window's round coins. A seeded epoch's commitment is unchanged (`SCHEME`, salt
+and draw only).
 
 ## Registered weights (`registration`)
 

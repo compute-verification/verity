@@ -109,6 +109,12 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   (`Claims.Sampling.Partition`, `Deploy.checked`): the partition as two classes, the population's strata and then the
   root's input gates (drawn `all`: the input unit is always checked), each replay unit one proof unit, and the draw's
   checked proof units as `(slot, index)` in class, stratum and replay-unit order.
+- **The challenger's live coins**, the one live-coin source of every protocol: `challenger` (`LiveChallenger`,
+  `LiveCommitment`, `LiveOpening`, `live_reason`, `order_reason`, `LiveRecord`), with its Lean of record
+  `SampledProofs/Challenger.lean`, which `verity/core/service/sampled_proofs/tests/test_challenger_difftest.py` holds
+  it to. Coins are indexed by label and index under a client's scheme, epoch and layout, committed before the epoch
+  as hm96 leaves of one frame-v3-sha512 tree, and each opened once, after the root the verifier recorded for it. Its
+  first client is PoUW's live window (`verity/core/protocols/pouw/window.py`, "Live windows").
 - **The Python.** `verity.core.protocols.sampled_proofs.one_stage` is the one-stage audit's reference: `registration`,
   `draw` (the draw's checks, not a sampler), `partition`, `audit` and `verdict`. `consumers` reads its profile. `service` is the proof service over it, whose `Stream`
   draws from the challenger's own randomness as `two_stage.draw_first` does. `two_stage` is two-stage sampling and the
