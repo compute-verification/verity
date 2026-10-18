@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """pd.cuh on the host (pd_host.cpp's build), held byte for byte to Pearl-C's own kernels built beside it (s512_row_segs and
 s512_folds, hm_leaves, s512_frame_leaves, s512_pads, s512_tree_small, s512_seeds, s512_tile_segs) and to the Python
-references (refs.py), at row counts with and without pads and segment counts odd and even, every pd_fold variant and
-both pd_commit modes; every pd output starts poisoned.  pd_probe's forms are held to each other.  Exit 1 on any difference.
+references (refs.py), at row counts with and without pads and segment counts odd and even, in every variant (pd.cuh's
+PD_VARIANT_LIST) and both pd_commit modes; every pd output starts poisoned.  pd_probe's variants are held to each other.
+Exit 1 on any difference.
 
   python3 host_test.py [SO]   (default: builds pd_host.so with g++ into a temporary directory)
 """
@@ -11,6 +12,7 @@ from __future__ import annotations
 import ctypes as C
 import hashlib
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -23,7 +25,9 @@ import refs  # noqa: E402
 from verity.core.protocols.pouw.audit import hm96_kernel_constants  # noqa: E402
 
 RS_MAX_SEGS, POISON, INDEX = 128, 0xA5, 5
-VARIANTS = (0, 1, 2, 3)   # pd.cuh's PD_VARIANTS: bit 0 the rounds-only fold, bit 1 the fr_* forms
+#: pd.cuh's PD_VARIANT_LIST, a launch each
+VARIANTS = tuple(int(x) for x in re.findall(r"X\((\d+)\)", re.search(r"#define PD_VARIANT_LIST\(X\)(.*)",
+                                                                       open(os.path.join(HERE, "pd.cuh")).read()).group(1)))
 
 
 class Args(C.Structure):
@@ -100,9 +104,9 @@ def pd_commit(h: Host, x, m16: int, k: int, kb, dom, hm, mode: int, variant: int
     unit, sk = h.buf(kb["unit"]), h.buf(kb["salt_key"])
     b = out
     p = (x, b["rowdig_a"], b["tree_a"], b["seeds_a"], b["lkeys_a"], unit, dom, sk, hm, scratch, b["seed_a"], b["line_a"])
-    h.run("pd_commit", m16, 32 * (-(-s // 32) + 2), p=p, i=(m16, k, mode, variant))
+    h.run(f"pd_commit_{variant}", m16, 32 * (-(-s // 32) + 2), p=p, i=(m16, k, mode))
     if mode == 1:
-        h.run("pd_tree", 1, 128, p=(0, 0, b["tree_a"], 0, 0, unit, dom, 0, 0, 0, b["seed_a"], b["line_a"]), i=(m16, 0, 0, variant))
+        h.run(f"pd_tree_{variant}", 1, 128, p=(0, 0, b["tree_a"], 0, 0, unit, dom, 0, 0, 0, b["seed_a"], b["line_a"]), i=(m16,))
     if int.from_bytes(scratch[:4].tobytes(), "little"):
         raise RuntimeError("pd_commit left its counter set")
     return {name: v.tobytes()[:len(v) if name not in ("seed_a", "line_a") else 32] for name, v in out.items()}
@@ -151,21 +155,21 @@ def main(argv: list[str]) -> int:
             fails.append(e)
         for variant in VARIANTS:
             out = h.buf(64 * tiles, POISON)
-            h.run("pd_tiles", tiles, 32, p=(cb, ub, out), i=(rows_, cols, 0, variant))
+            h.run(f"pd_tiles_{variant}", tiles, 32, p=(cb, ub, out), i=(rows_, cols))
             cases += 1
             if (e := diff(f"tiles {rows_}x{cols} variant {variant}", out.tobytes(), want)):
                 fails.append(e)
         print(f"tiles {rows_}x{cols}: done, {len(fails)} failures so far", flush=True)
     for n in (1, 3):
-        st = {}
-        for v in VARIANTS:
-            out = h.buf(9 * 8, POISON)
-            h.run("pd_probe", 1, 32, p=(out,), i=(n, v))
-            st[v] = out.tobytes()[8:72]
-        cases += 1
-        for a, b, what in ((0, 2, "fr_compress vs rs_compress"), (1, 3, "fr_rounds vs rs_rounds")):
-            if st[a] != st[b] or st[a] == bytes([POISON]) * 64:
-                fails.append(f"probe n={n}: {what}")
+        for form, what in ((0, "compression"), (1, "rounds alone")):
+            st = {}
+            for v in VARIANTS:
+                out = h.buf(9 * 8, POISON)
+                h.run(f"pd_probe_{v}", 1, 32, p=(out,), i=(n, form))
+                st[v] = out.tobytes()[8:72]
+            cases += 1
+            if len(set(st.values())) != 1 or bytes([POISON]) * 64 in st.values():
+                fails.append(f"probe n={n} {what}: the variants' final states differ or stayed poisoned")
     print(f"probe: done, {len(fails)} failures so far", flush=True)
     for f in fails:
         print("FAIL", f)

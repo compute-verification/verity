@@ -17,6 +17,7 @@ using std::min;
 #define PD_HOST
 #define __device__
 #define __forceinline__ inline
+#define __noinline__ __attribute__((noinline))
 #define __global__
 #define __constant__ static const
 #define __launch_bounds__(...)
@@ -52,13 +53,14 @@ static uint4 make_uint4(uint32_t x, uint32_t y, uint32_t z, uint32_t w) { return
 
 namespace {
 struct Kernel { const char* name; void (*fn)(const Args); };
+#define PD_KERNELS(V) {"pd_commit_" #V, pd_commit_##V}, {"pd_tree_" #V, pd_tree_##V}, {"pd_tiles_" #V, pd_tiles_##V}, \
+                      {"pd_probe_" #V, pd_probe_##V},
 const Kernel KERNELS[] = {
-    {"s512_heads", s512_heads},   {"pd_heads", pd_heads},     {"pd_commit", pd_commit},
-    {"pd_tree", pd_tree},         {"pd_tiles", pd_tiles},     {"s512_row_segs", s512_row_segs},
+    {"s512_heads", s512_heads},   {"pd_heads", pd_heads},     {"s512_row_segs", s512_row_segs},
     {"s512_folds", s512_folds},   {"hm_leaves", hm_leaves},   {"s512_frame_leaves", s512_frame_leaves},
     {"s512_pads", s512_pads},     {"s512_nodes", s512_nodes}, {"s512_tree_small", s512_tree_small},
     {"s512_seeds", s512_seeds},   {"s512_tile_segs", s512_tile_segs}, {"s512_tile_leaves", s512_tile_leaves},
-    {"s512_rows", s512_rows},     {"pd_probe", pd_probe}};
+    {"s512_rows", s512_rows},     PD_VARIANT_LIST(PD_KERNELS)};
 }  // namespace
 
 extern "C" int pd_run(const char* name, int grid, int block, const Args* a) {

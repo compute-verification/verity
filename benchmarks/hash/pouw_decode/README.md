@@ -12,10 +12,14 @@ served: pd is a candidate for compute accounting, whose code (`benchmarks/pouw/p
     levels (kept in shared memory), seed_A and line_a.
   - `pd_tree` is mode 0's tail as a launch of its own, for a side lane.
   - `pd_tiles` makes the tile leaves, one CTA per tile.
-  - `pd_probe` measures one warp's cycles per compression in each form.
-  - A launch's variant (`PD_VARIANTS`) has two bits. Bit 0 is the rounds-only fold: the folding warp's lanes compute
-    every block's schedule first. Bit 1 is the `fr_*` compressions, whose 64-bit adds issue on the FMA pipe instead of
-    the integer pipe, which bounds a lone warp's SHA-512.
+  - `pd_probe` measures one warp's cycles per compression, warm and on its code's first fetch.
+  - Every launch is built once per variant (`PD_VARIANT_LIST`: `pd_commit_V` and so on), each with its own code and
+    registers. The bits: `PD_ROUNDS` (1), the rounds-only fold, where the folding warp's lanes compute every block's
+    schedule first; `PD_ROLLED` (2), compressions with one 16-round body run five times, a fifth of the code;
+    `PD_CALL` (4), one copy of each compression per kernel, called from every site instead of inlined at each;
+    `PD_PREFETCH` (8), each segment's lines prefetched into L1 before its first block. Pearl-C's unrolled compression
+    is about 3,500 instructions (56 KB), and a call's serial compressions are each at a site of their own, so inlined
+    they are each fetched cold.
 - `pd_host.cpp`: the same source run on the CPU (`pd_run`), with Pearl-C's own hash kernels, for `host_test.py`.
 - `refs.py`: the Python references (`pearl_c.row_digest`, `row_seed`, `unit_seed_a`, `line_key` and `leaf`, and
   `audit.HM96`'s tree).
@@ -39,8 +43,8 @@ research run --on vy-nebius-2 --project verity --campaign hash-loop --source . -
 ~~~
 
 Schedules (`bench.Shape.schedules`): `ref_serial` is the served call, `ref_nohash` the call without hashing, and
-`ref_deferred` the served launches with the tile leaves on a side lane. `pd_serial` is pd's call on one stream, and
-`pd_serial_int` the same with the integer-pipe compressions. `pd_deferred` puts pd's tile leaves on a side lane.
-`pd_side_tree` also puts A's tree and seed_A on a side lane; its bytes are unchanged only when m16 is a multiple of 64.
-`pd_side_tree_proposal` is the same schedule at other m16, where filler rows read line_a, so it is timed but its E_A
-lines are not served bytes.
+`ref_deferred` the served launches with the tile leaves on a side lane. `pd_serial_V` is pd's call on one stream in
+variant V, for every variant. For the variants in `PD_SIDE` (default 7 and 15), `pd_deferred_V` puts pd's tile leaves on a
+side lane, and `pd_side_tree_V` also puts A's tree and seed_A on a side lane; its bytes are unchanged only when m16 is a
+multiple of 64. `pd_side_tree_V_proposal` is the same schedule at other m16, where filler rows read line_a, so it is
+timed but its E_A lines are not served bytes.

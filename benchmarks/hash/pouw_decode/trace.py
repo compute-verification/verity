@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sqlite3
 import statistics
 import sys
@@ -67,8 +68,8 @@ def summarize(ks: list[dict], depth: dict[str, int]) -> dict:
             if j != i and k2["s"] < e and k2["e"] > s:
                 over = max(over, min(e, k2["e"]) - max(s, k2["s"]))
         p = per.setdefault(k["label"], {"n": 0, "ns": 0, "gap_ns": 0, "overlap_ns": 0, "grid": k["grid"], "block": k["block"],
-                                        "depth": depth.get(k["label"]), "hashing": k["kernel"].startswith(HASHING),
-                                        "lane": k["lane"]})
+                                        "depth": depth.get(re.sub(r"_\d+$", "", k["label"])),   # pd_commit_V: pd_commit's
+                                        "hashing": k["kernel"].startswith(HASHING), "lane": k["lane"]})
         p["n"] += 1
         p["ns"] += e - s
         p["gap_ns"] += gap
@@ -94,7 +95,7 @@ def median_of(runs: list[dict]) -> dict:
 
 def depth_of(sh: dict, key: str) -> dict[str, int]:
     out = {name if step == "pd" else f"{step}:{name}": v for step, rows in sh["depths"].items() for name, v in rows}
-    if key in ("pd_side_tree", "pd_side_tree_proposal"):
+    if key.startswith("pd_side_tree"):
         out["pd_commit"] = out["pd_commit/rows"]
     return out
 

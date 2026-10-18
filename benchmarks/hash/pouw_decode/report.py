@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 
 STEP_SHARE = 0.51
@@ -26,7 +27,7 @@ def records(d: str) -> list[dict]:
 def lane(key: str, name: str, p: dict) -> str:
     if p.get("lane"):
         return p["lane"]
-    return "main" if "serial" in key else SIDE.get(name, "main")
+    return "main" if "serial" in key else SIDE.get(re.sub(r"_\d+$", "", name), "main")
 
 
 def best(hashing: dict) -> tuple[str, float]:
@@ -45,19 +46,24 @@ def report(d: str) -> None:
     mhz = [c for r in timing for c in r["sm_mhz"] if c]
     env = next(r for r in recs if r["kind"] == "env")
     print(f"## {run}  pd cubin {str(env.get('pd_cubin_sha256'))[:12]}  SM {min(mhz)}-{max(mhz)} MHz over the timed reps")
-    for r in recs:
-        if r["kind"] == "probe" and r["compressions"] == 256:
-            print(f"   probe {r.get('form', r['variant'])}: {r['cycles_per_compression']} cycles a compression")
-        if r["kind"] == "probe_states":
-            print(f"   probe states agree ({r['compressions']}): "
-                  + ", ".join(f"{k} {v}" for k, v in r.items() if k not in ("kind", "compressions")))
+    probes = [r for r in recs if r["kind"] == "probe"]
+    for r in probes:
+        if r["compressions"] == 256:
+            cold = next((x.get("cycles_first") for x in probes if x["compressions"] == 1 and x["variant"] == r["variant"]
+                         and x.get("form") == r.get("form")), None)
+            print(f"   probe {r.get('form', '')} v{r['variant']}: {r['cycles_per_compression']} cycles a compression warm"
+                  + ("" if cold is None else f", {cold} for one compression on its code's first fetch"))
+    agree = [r.get("agree", all(v for k, v in r.items() if k not in ("kind", "compressions", "form")))
+             for r in recs if r["kind"] == "probe_states"]
+    if agree:
+        print(f"   probe states agree across variants: {all(agree)} ({len(agree)} checks)")
     print("\n| shape | m16 | checks | served µs | ref_deferred µs | pd µs (schedule) | change | proposal µs |")
     print("|---|---|---|---|---|---|---|---|")
     sums: dict[int, list[float]] = {}
     for r in timing:
         h, key = r["hashing_us_per_call"], (r["shape"], r["m16"])
         k, v = best(h)
-        prop = next((h[x] for x in h if x.endswith("_proposal")), None)
+        prop = min((h[x] for x in h if x.endswith("_proposal")), default=None)
         ok = "ok" if checks.get(key) and graphs.get(key) else "FAIL"
         print(f"| {r['shape']} | {r['m16']} | {ok} | {h[SERVED]:.1f} | {h['ref_deferred']:.1f} | {v:.1f} ({k}) | "
               f"{100 * (v / h[SERVED] - 1):+.0f}% | {'' if prop is None else f'{prop:.1f}'} |")
@@ -70,6 +76,15 @@ def report(d: str) -> None:
         step = (1 + STEP_SHARE * rr) / (1 + STEP_SHARE)
         print(f"m16 = {m16}: a layer's hashing {before:.0f} -> {after:.0f} µs (r = {rr:.3f}); decode step x{step:.3f} "
               f"({100 * (step - 1):+.1f}%) with the served hashing at {STEP_SHARE} of a stock step")
+    serial = sorted({k for r in timing for k in r["hashing_us_per_call"] if re.fullmatch(r"pd_serial_\d+", k)},
+                    key=lambda k: int(k.rsplit("_", 1)[1]))
+    if serial:
+        print("\npd's variants, serial (hashing µs per call):\n")
+        print("| shape | m16 | " + " | ".join(serial) + " |")
+        print("|---|---|" + "---|" * len(serial))
+        for r in timing:
+            h = r["hashing_us_per_call"]
+            print(f"| {r['shape']} | {r['m16']} | " + " | ".join(f"{h[k]:.1f}" for k in serial) + " |")
     tp = os.path.join(d, "trace.json")
     if not os.path.exists(tp):
         return

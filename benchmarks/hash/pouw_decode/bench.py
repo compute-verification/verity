@@ -293,30 +293,34 @@ class Shape:
         out = {"ref_serial": serial(hashing), "ref_nohash": serial(plain),
                "ref_deferred": deferred(lambda j: self.ref(j, commit + main_rest), lambda j: self.ref(j, ["hash_leaf"]))}
         if self.pd is not None:
+            from pd_host import SIDE, VARIANTS
             P_ = self.pdc
-            out["pd_serial"] = serial(None, lambda j: P_[j].commit() + self.ref(j, main_rest) + P_[j].tiles())
-            from pd_host import INT_VARIANT
-            out["pd_serial_int"] = serial(None, lambda j: P_[j].commit(INT_VARIANT) + self.ref(j, main_rest)
-                                          + P_[j].tiles(INT_VARIANT))
-            out["pd_deferred"] = deferred(lambda j: P_[j].commit() + self.ref(j, main_rest), lambda j: P_[j].tiles())
 
-            def side_tree(j, done):
+            def side_tree(v):
                 # A's tree and seed_A on the tree lane beside forming and the GEMM: no byte changes when every row of the
                 # call is real (m16 = mp); at m16 < mp the filler rows' lines read line_a, so there this is the
                 # filler-keying proposal's schedule, timed only (`lines_ea` reads the ring's earlier line_a)
-                lanes.wait(lanes.main, done)
-                lanes.on(lanes.main, P_[j].rows())
-                e = lanes.mark(lanes.main)
-                lanes.wait(lanes.tree, e)
-                lanes.on(lanes.tree, P_[j].tree())
-                t = lanes.mark(lanes.tree)
-                lanes.on(lanes.main, self.ref(j, main_rest))
-                e = lanes.mark(lanes.main)
-                lanes.wait(lanes.tile, e)
-                lanes.on(lanes.tile, P_[j].tiles())
-                lanes.wait(lanes.tile, t)
-                return lanes.mark(lanes.tile)
-            out["pd_side_tree" if self.mp == self.m16 else "pd_side_tree_proposal"] = chain(side_tree)
+                def call(j, done):
+                    lanes.wait(lanes.main, done)
+                    lanes.on(lanes.main, P_[j].rows(v))
+                    e = lanes.mark(lanes.main)
+                    lanes.wait(lanes.tree, e)
+                    lanes.on(lanes.tree, P_[j].tree(v))
+                    t = lanes.mark(lanes.tree)
+                    lanes.on(lanes.main, self.ref(j, main_rest))
+                    e = lanes.mark(lanes.main)
+                    lanes.wait(lanes.tile, e)
+                    lanes.on(lanes.tile, P_[j].tiles(v))
+                    lanes.wait(lanes.tile, t)
+                    return lanes.mark(lanes.tile)
+                return chain(call)
+
+            for v in VARIANTS:
+                out[f"pd_serial_{v}"] = serial(None, lambda j, v=v: P_[j].commit(v) + self.ref(j, main_rest) + P_[j].tiles(v))
+            for v in SIDE:
+                out[f"pd_deferred_{v}"] = deferred(lambda j, v=v: P_[j].commit(v) + self.ref(j, main_rest),
+                                                   lambda j, v=v: P_[j].tiles(v))
+                out[f"pd_side_tree_{v}" if self.mp == self.m16 else f"pd_side_tree_{v}_proposal"] = side_tree(v)
         return out
 
 
@@ -375,25 +379,29 @@ def run_shape(dev, pd, lanes, nv, out, name, m16, n, k, reps, trace):
         dev.free(p_)
 
 
-PROBE = {0: "rs_compress", 1: "rs_rounds", 2: "fr_compress", 3: "fr_rounds"}
+#: pd_probe's forms (i1), and the variants probed (the prefetch bit changes no compression)
+PROBE_FORMS, PROBE_VARIANTS = {0: "compress", 1: "rounds"}, (1, 3, 5, 7)
 
 
 def probe(pd, nv, out) -> None:
-    """One warp's cycles per chained compression (pd_probe) in each form (PROBE), each run twice and the second kept, and
-    whether the FMA-pipe forms' final states equal the integer pipe's."""
+    """One warp's cycles per chained compression (pd_probe_V) in each probed variant and form, at 1, 16 and 256 chained
+    compressions, each launched twice: the first launch's cycles (at n = 1 the code's first fetch since the module loaded)
+    and the second's; and whether every variant's final state is the same."""
     buf = pd.alloc(9 * 8)
-    for n in (16, 256):
-        st = {}
-        for v, form in PROBE.items():
-            for _ in range(2):
-                pd.launch("pd_probe", 1, 32, p=(buf,), i=(n, v))
-                pd.sync()
-            raw = pd.read(buf, 9 * 8)
-            st[v] = raw[8:72]
-            cycles = int.from_bytes(raw[:8], "little")
-            emit(out, {"kind": "probe", "variant": v, "form": form, "compressions": n, "cycles": cycles,
-                       "cycles_per_compression": round(cycles / n, 1), "clk": nv.read()})
-        emit(out, {"kind": "probe_states", "compressions": n, "fr_compress": st[2] == st[0], "fr_rounds": st[3] == st[1]})
+    for n in (1, 16, 256):
+        for form, fname in PROBE_FORMS.items():
+            st = {}
+            for v in PROBE_VARIANTS:
+                cyc = []
+                for _ in range(2):
+                    pd.launch(f"pd_probe_{v}", 1, 32, p=(buf,), i=(n, form))
+                    pd.sync()
+                    raw = pd.read(buf, 9 * 8)
+                    cyc.append(int.from_bytes(raw[:8], "little"))
+                st[v] = raw[8:72]
+                emit(out, {"kind": "probe", "variant": v, "form": fname, "compressions": n, "cycles_first": cyc[0],
+                           "cycles": cyc[1], "cycles_per_compression": round(cyc[1] / n, 1), "clk": nv.read()})
+            emit(out, {"kind": "probe_states", "form": fname, "compressions": n, "agree": len(set(st.values())) == 1})
     pd.free(buf)
 
 

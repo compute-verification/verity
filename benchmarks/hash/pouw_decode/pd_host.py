@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 
 import numpy as np
 
@@ -12,10 +13,19 @@ import refs
 import run as R
 
 POISON = 0xA5
-#: pd's variants (pd.cuh's PD_VARIANTS): bit 0 the rounds-only fold, bit 1 the FMA-pipe compressions (fr_*)
-VARIANTS = {"rs_fold": 0, "rounds_only": 1, "fr_fold": 2, "fr_rounds_only": 3}
-#: the variant of the timed schedules, and of the integer-pipe one beside it (`pd_serial_int`)
-VARIANT, INT_VARIANT = int(os.environ.get("PD_VARIANT", "3")), 1
+HERE = os.path.dirname(os.path.abspath(__file__))
+
+
+def variants() -> tuple[int, ...]:
+    """pd.cuh's PD_VARIANT_LIST: the variants built, a launch each (bits PD_ROUNDS 1, PD_ROLLED 2, PD_CALL 4, PD_PREFETCH 8)."""
+    src = open(os.path.join(HERE, "pd.cuh")).read()
+    return tuple(int(x) for x in re.findall(r"X\((\d+)\)", re.search(r"#define PD_VARIANT_LIST\(X\)(.*)", src).group(1)))
+
+
+VARIANTS = variants()
+#: the variants of the schedules with side lanes (pd_deferred_V, pd_side_tree_V); every variant gets pd_serial_V
+SIDE = tuple(int(x) for x in os.environ.get("PD_SIDE", "7,15").split(","))
+assert set(SIDE) <= set(VARIANTS), (SIDE, VARIANTS)
 COMMIT = ("pad_a", "rowdig_a", "hash_rows_a", "tree_a", "seed_a", "seeds_a")
 #: what a call's hashing writes, and what the check also compares downstream of it (the call's products)
 OUTPUTS = ("rowdig_a", "tree_a", "seed_a", "line_a", "seeds_a", "lkeys_a", "ea_codes", "leaves")
@@ -45,20 +55,20 @@ class PdCall:
         return (b["xa"], b["rowdig_a"], b["tree_a"], b["seeds_a"], b["lkeys_a"], kk["unit"], kk["dom_a"], kk["salt_key"], kk["hm"],
                 self.scratch, b["seed_a"], b["line_a"])
 
-    def commit(self, variant: int = VARIANT) -> list:
-        return [lambda: self.pd.launch("pd_commit", self.m, self.block, p=self._p(), i=(self.m, self.k, 0, variant))]
+    def commit(self, v: int) -> list:
+        return [lambda: self.pd.launch(f"pd_commit_{v}", self.m, self.block, p=self._p(), i=(self.m, self.k, 0))]
 
-    def rows(self, variant: int = VARIANT) -> list:
-        return [lambda: self.pd.launch("pd_commit", self.m, self.block, p=self._p(), i=(self.m, self.k, 1, variant))]
+    def rows(self, v: int) -> list:
+        return [lambda: self.pd.launch(f"pd_commit_{v}", self.m, self.block, p=self._p(), i=(self.m, self.k, 1))]
 
-    def tree(self, variant: int = VARIANT) -> list:
+    def tree(self, v: int) -> list:
         b, kk = self.p.b, self.keys
-        return [lambda: self.pd.launch("pd_tree", 1, 128, p=(0, 0, b["tree_a"], 0, 0, kk["unit"], kk["dom_a"], 0, 0, 0, b["seed_a"],
-                                                            b["line_a"]), i=(self.m, 0, 0, variant))]
+        return [lambda: self.pd.launch(f"pd_tree_{v}", 1, 128, p=(0, 0, b["tree_a"], 0, 0, kk["unit"], kk["dom_a"], 0, 0, 0,
+                                                                 b["seed_a"], b["line_a"]), i=(self.m,))]
 
-    def tiles(self, variant: int = VARIANT) -> list:
+    def tiles(self, v: int) -> list:
         b = self.p.b
-        return [lambda: self.pd.launch("pd_tiles", self.p.tiles, 32, p=(b["c"], b["u"], b["leaves"]), i=(self.m, self.n, 0, variant))]
+        return [lambda: self.pd.launch(f"pd_tiles_{v}", self.p.tiles, 32, p=(b["c"], b["u"], b["leaves"]), i=(self.m, self.n))]
 
     def free(self) -> None:
         self.pd.free(self.scratch)
@@ -74,8 +84,8 @@ def _poison(dev, pipe, names) -> None:
 
 
 def check(sh, python: bool = True) -> dict:
-    """pd's call on each ring set against Pearl-C's on the same set, in each of pd's variants and the split rows + tree (in
-    every variant's forms), every hashing output poisoned before each; then the Python references on set 0."""
+    """pd's call on each ring set against Pearl-C's on the same set, in each of pd's variants, whole and split (rows, then
+    pd_tree), every hashing output poisoned before each; then the Python references on set 0."""
     dev, failed, compared, controls = sh.dev, [], 0, {}
     hashing = sh.call_names(True)
     rest = [x for x in hashing if x not in COMMIT and x != "hash_leaf"]
@@ -94,9 +104,8 @@ def check(sh, python: bool = True) -> dict:
         before = {x: hashlib.sha256(_read(dev, other, x)).hexdigest() for x in OUTPUTS}
         inputs = {x: hashlib.sha256(dev.read(sh.keys[x], len(sh.kb[x]))).hexdigest() for x in ("unit", "dom_a", "salt_key")}
         inputs["xa"] = hashlib.sha256(dev.read(pipe.b["xa"], sh.mp * 4 * sh.k)).hexdigest()
-        forms = {name: pdc.commit(v) + sh.ref(j, rest) + pdc.tiles(v) for name, v in VARIANTS.items()}
-        forms.update({f"split_{name}": pdc.rows(v) + pdc.tree(v) + sh.ref(j, rest) + pdc.tiles(v)
-                      for name, v in VARIANTS.items() if v & 1})
+        forms = {f"v{v}": pdc.commit(v) + sh.ref(j, rest) + pdc.tiles(v) for v in VARIANTS}
+        forms.update({f"split_v{v}": pdc.rows(v) + pdc.tree(v) + sh.ref(j, rest) + pdc.tiles(v) for v in VARIANTS})
         for form, fns in forms.items():
             _poison(dev, pipe, OUTPUTS)
             for f in fns:

@@ -8,8 +8,8 @@
 # Launch:
 #   research run --on vy-nebius-2 --project verity --campaign hash-loop --source . --cwd source \
 #     --env GPU_LEASE_WHO=kernels-pouw-decode -- bash benchmarks/hash/pouw_decode/run.sh
-# REPS (default 30), ROWS (default 32,128), SHAPES (default qkv,o,gate_up,down), PD_VARIANT (pd's timed variant, pd.cuh's
-# PD_VARIANTS, default 3) pass through.
+# REPS (default 30), ROWS (default 32,128), SHAPES (default qkv,o,gate_up,down), PD_SIDE (the variants of the schedules with
+# side lanes, pd_host.SIDE, default 7,15) pass through.
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd); ROOT=$(cd "$HERE/../../.." && pwd)
 CUDA=${CUDA:-/usr/local/cuda}
@@ -24,7 +24,7 @@ FLAGS=(-O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -fmad=false -Xptxa
 "$CUDA/bin/nvcc" "${FLAGS[@]}" -o "$SCR/pd.cubin" "$HERE/pd.cu" 2> "$OUT/ptxas_pd.txt"
 (cd "$SCR" && sha256sum ./*.cubin) > "$OUT/cubins.sha256"
 "$CUDA/bin/cuobjdump" -sass "$SCR/pd.cubin" > "$SCR/pd.sass"
-"$CUDA/bin/cuobjdump" -sass -fun pd_probe "$SCR/pd.cubin" > "$OUT/pd_probe.sass"
+"$CUDA/bin/cuobjdump" -sass -fun pd_probe_3 "$SCR/pd.cubin" > "$OUT/pd_probe_3.sass"   # the rolled body, inlined
 python3 - "$SCR/pd.sass" > "$OUT/sass_ops.txt" <<'EOF'
 import collections, re, sys
 fn, ops = None, {}
@@ -38,13 +38,13 @@ for fn, c in ops.items():
     print(fn, sum(c.values()), " ".join(f"{k}:{v}" for k, v in c.most_common(14)))
 EOF
 cat "$OUT/sass_ops.txt"
-grep -E "pd_(commit|tree|tiles|probe)|spill|stack" "$OUT/ptxas_pd.txt" | head -40 || true
+grep -E "pd_|spill|stack" "$OUT/ptxas_pd.txt" | head -80 || true
 
 g++ -O2 -std=c++20 -pthread -shared -fPIC -Wno-unknown-pragmas -o "$SCR/pd_host.so" "$HERE/pd_host.cpp"
 PYTHONPATH="$ROOT" python3 "$HERE/host_test.py" "$SCR/pd_host.so" > "$OUT/host_test.txt" 2>&1
 tail -3 "$OUT/host_test.txt"
 
-export PD_VARIANT=${PD_VARIANT:-3}
+export PD_SIDE=${PD_SIDE:-7,15}
 B=(python3 "$HERE/bench.py" "$SCR/pearl_c_sm120.cubin" "$SCR/pd.cubin" --out "$OUT" --reps "$REPS" --rows "$ROWS" --shapes "$SHAPES")
 gpu-lease 1 --wait --preemptible --max-min 25 -- bash -c '
   set -euo pipefail

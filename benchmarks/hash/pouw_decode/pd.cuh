@@ -13,10 +13,14 @@
 //   in the call reads line_a.
 // * pd_tiles, one launch for the tile leaves: a warp a tile, a lane a segment, then the fold (`pd_fold`).
 //
-// A launch's variant (i3, PD_VARIANTS) has two bits.  Bit 0 is pd_fold's rounds-only form: the fold's message is all there
-// before it starts, so the lanes of the folding warp compute every block's schedule with its round constants (K + W) into
-// shared memory at once, and the folding lane runs the 80 rounds alone (rs_rounds).  Bit 1 runs every compression on the
-// launch's chains in the fr_* forms, whose 64-bit adds issue on the FMA pipe.  Variant 0 is Pearl-C's own compressions.
+// Every launch is built once per variant (PD_VARIANT_LIST: pd_commit_V, pd_tree_V, pd_tiles_V, pd_probe_V), each with its
+// own code and registers.  A variant's bits: PD_ROUNDS, pd_fold's rounds-only form (the fold's message is all there before
+// it starts, so the folding warp's lanes compute every block's round inputs K + W into shared memory at once and the folding
+// lane runs the 80 rounds alone); PD_ROLLED, the rl_* compressions (one 16-round body run five times, about a fifth of
+// rs_compress's 3,500 instructions); PD_CALL, one copy of each compression a kernel, called from every site rather than
+// inlined at each (a call's serial compressions are each at a site of their own, and an unrolled site's 56 KB of code
+// fetched cold costs about as much again as the compression); PD_PREFETCH, a segment's 8 lines prefetched into L1 before its
+// first block.
 //
 // The builder (WMsg) writes `merkle._message`'s bytes as big-endian words, the data's 64-byte parts left zero and filled
 // later (wm_put64, at any byte offset).  pd_host.cpp builds this file for the host tests.
@@ -30,13 +34,12 @@
 #define PD_LDCG(p) (*(p))
 #endif
 
-constexpr int PD_VARIANTS = 4;   // a launch's i3 is below it; others trap
+constexpr int PD_ROUNDS = 1, PD_ROLLED = 2, PD_CALL = 4, PD_PREFETCH = 8;
+#define PD_VARIANT_LIST(X) X(1) X(3) X(5) X(7) X(13) X(15)
 
 // ---------------------------------------------------------------- tables, once per module (pd_heads)
 enum { PD_SEED_A = 0, PD_NOISE_LINE = 1 };
 __device__ uint64_t PD_LABELS[2][8];   // the states after the seed-A and noise-line label blocks
-__device__ uint32_t PD_ONE;            // 1: fr_add's multiplier, a value no compiler sees
-DEV uint32_t pd_one(int variant) { return variant & 2 ? PD_ONE : 0; }   // a launch's `one` (pd_cmp)
 
 // ---------------------------------------------------------------- the message builder
 struct WMsg {
@@ -102,10 +105,32 @@ DEV void load_be64x8(uint64_t p, uint64_t* v) {   // 64 bytes at device address 
 #pragma unroll
   for (int t = 0; t < 8; t++) v[t] = rs_be64(PD_LDCG(q + 2 * t), PD_LDCG(q + 2 * t + 1));
 }
+DEV void pd_prefetch(const void* p) {   // the 128-byte line at p into L1
+#ifndef PD_HOST
+  asm volatile("prefetch.global.L1 [%0];" ::"l"(p));
+#else
+  (void)p;
+#endif
+}
 
-// ---------------------------------------------------------------- the rounds-only compression
-// one block's 80 round inputs K_i + W_i from its 16 message words
-DEV void rs_sched(const uint64_t* m16, uint64_t* kw) {
+// ---------------------------------------------------------------- the compressions
+// rs_compress (sha512.cuh) is Pearl-C's.  rl_compress is the same function with one 16-round body run five times, the
+// schedule's next 16 words computed in place after each.  rs_rounds / rl_rounds run a block's rounds alone over its 80 round
+// inputs K_i + W_i (rs_sched / rl_sched).
+DEV void rs_round(uint64_t& a, uint64_t& b, uint64_t& c, uint64_t& d, uint64_t& e, uint64_t& f, uint64_t& g, uint64_t& h,
+                  uint64_t kwi) {
+  const uint64_t t1 = h + (rs_rotr(e, 14) ^ rs_rotr(e, 18) ^ rs_rotr(e, 41)) + ((e & f) ^ (~e & g)) + kwi;
+  const uint64_t t2 = (rs_rotr(a, 28) ^ rs_rotr(a, 34) ^ rs_rotr(a, 39)) + ((a & b) ^ (a & c) ^ (b & c));
+  h = g; g = f; f = e; e = d + t1; d = c; c = b; b = a; a = t1 + t2;
+}
+DEV void rs_next16(uint64_t* w) {   // W_{t+16} for the ring's 16 words W_t, in place, in order
+#pragma unroll
+  for (int i = 0; i < 16; i++) {
+    const uint64_t w15 = w[(i + 1) & 15], w2 = w[(i + 14) & 15];
+    w[i] += (rs_rotr(w2, 19) ^ rs_rotr(w2, 61) ^ (w2 >> 6)) + w[(i + 9) & 15] + (rs_rotr(w15, 1) ^ rs_rotr(w15, 8) ^ (w15 >> 7));
+  }
+}
+DEV void rs_sched(const uint64_t* m16, uint64_t* kw) {   // one block's 80 round inputs from its 16 message words
   uint64_t w[16];
 #pragma unroll
   for (int i = 0; i < 16; i++) w[i] = m16[i];
@@ -123,89 +148,88 @@ DEV void rs_sched(const uint64_t* m16, uint64_t* kw) {
     kw[i] = RS_K[i] + wi;
   }
 }
+DEV void rl_sched(const uint64_t* m16, uint64_t* kw) {
+  uint64_t w[16];
+#pragma unroll
+  for (int i = 0; i < 16; i++) w[i] = m16[i];
+#pragma unroll 1
+  for (int r = 0;; r += 16) {
+#pragma unroll
+    for (int i = 0; i < 16; i++) kw[r + i] = RS_K[r + i] + w[i];
+    if (r == 64) break;
+    rs_next16(w);
+  }
+}
 DEV void rs_rounds(uint64_t* st, const uint64_t* kw) {
   uint64_t a = st[0], b = st[1], c = st[2], d = st[3], e = st[4], f = st[5], g = st[6], h = st[7];
 #pragma unroll
-  for (int i = 0; i < 80; ++i) {
-    const uint64_t t1 = h + (rs_rotr(e, 14) ^ rs_rotr(e, 18) ^ rs_rotr(e, 41)) + ((e & f) ^ (~e & g)) + kw[i];
-    const uint64_t t2 = (rs_rotr(a, 28) ^ rs_rotr(a, 34) ^ rs_rotr(a, 39)) + ((a & b) ^ (a & c) ^ (b & c));
-    h = g; g = f; f = e; e = d + t1; d = c; c = b; b = a; a = t1 + t2;
+  for (int i = 0; i < 80; ++i) rs_round(a, b, c, d, e, f, g, h, kw[i]);
+  st[0] += a; st[1] += b; st[2] += c; st[3] += d; st[4] += e; st[5] += f; st[6] += g; st[7] += h;
+}
+DEV void rl_rounds(uint64_t* st, const uint64_t* kw) {
+  uint64_t a = st[0], b = st[1], c = st[2], d = st[3], e = st[4], f = st[5], g = st[6], h = st[7];
+#pragma unroll 1
+  for (int r = 0; r < 80; r += 16) {
+#pragma unroll
+    for (int i = 0; i < 16; i++) rs_round(a, b, c, d, e, f, g, h, kw[r + i]);
   }
   st[0] += a; st[1] += b; st[2] += c; st[3] += d; st[4] += e; st[5] += f; st[6] += g; st[7] += h;
 }
-// ---------------------------------------------------------------- the FMA-pipe compression (fr_*)
-// A lone warp's rounds are bound by the integer pipe's issue rate (SHF, LOP3 and IADD.64 all issue there, one every two
-// cycles), while the FMA pipe idles.  fr_add moves a 64-bit add onto the FMA pipe: IMAD.WIDE.U32 (a's low word times
-// `one`, plus c) and IMAD for the high word.  `one` is PD_ONE: a multiplier the compiler can prove to be 1 it folds back
-// into IADD.64.
-DEV uint64_t fr_add(uint64_t a, uint64_t c, uint32_t one) {
-#ifdef PD_HOST
-  (void)one;
-  return a + c;
-#else
-  uint64_t r;
-  asm("{\n\t.reg .u32 al, ah, rl, rh;\n\t"
-      "mov.b64 {al, ah}, %1;\n\t"
-      "mad.wide.u32 %0, al, %3, %2;\n\t"
-      "mov.b64 {rl, rh}, %0;\n\t"
-      "mad.lo.u32 rh, ah, %3, rh;\n\t"
-      "mov.b64 %0, {rl, rh};\n\t}"
-      : "=&l"(r) : "l"(a), "l"(c), "r"(one));
-  return r;
-#endif
-}
-// a round with every add through fr_add, the e-independent terms summed first: hk = h + K_i + W_i and dk = d + hk are
-// ready a round ahead, so two adds lie between e and the next e (e' = dk + (Σ1(e) + Ch)), and two between a and the next a
-DEV void fr_round(uint64_t& a, uint64_t& b, uint64_t& c, uint64_t& d, uint64_t& e, uint64_t& f, uint64_t& g, uint64_t& h,
-                  uint64_t kwi, uint32_t one) {
-  const uint64_t hk = fr_add(h, kwi, one), dk = fr_add(d, hk, one);
-  const uint64_t x = fr_add(rs_rotr(e, 14) ^ rs_rotr(e, 18) ^ rs_rotr(e, 41), (e & f) ^ (~e & g), one);
-  const uint64_t y = fr_add(rs_rotr(a, 28) ^ rs_rotr(a, 34) ^ rs_rotr(a, 39), (a & b) ^ (a & c) ^ (b & c), one);
-  h = g; g = f; f = e; e = fr_add(dk, x, one); d = c; c = b; b = a; a = fr_add(fr_add(hk, x, one), y, one);
-}
-DEV void fr_rounds(uint64_t* st, const uint64_t* kw, uint32_t one) {   // rs_rounds
-  uint64_t a = st[0], b = st[1], c = st[2], d = st[3], e = st[4], f = st[5], g = st[6], h = st[7];
+DEV void rl_compress(uint64_t* st, const uint64_t* m16) {   // the ring in registers: m16 may be shared memory
+  uint64_t a = st[0], b = st[1], c = st[2], d = st[3], e = st[4], f = st[5], g = st[6], h = st[7], w[16];
 #pragma unroll
-  for (int i = 0; i < 80; ++i) fr_round(a, b, c, d, e, f, g, h, kw[i], one);
-  st[0] += a; st[1] += b; st[2] += c; st[3] += d; st[4] += e; st[5] += f; st[6] += g; st[7] += h;
-}
-DEV void fr_compress(uint64_t* st, uint64_t* w, uint32_t one) {   // rs_compress
-  uint64_t a = st[0], b = st[1], c = st[2], d = st[3], e = st[4], f = st[5], g = st[6], h = st[7];
+  for (int i = 0; i < 16; i++) w[i] = m16[i];
+#pragma unroll 1
+  for (int r = 0;; r += 16) {
 #pragma unroll
-  for (int i = 0; i < 80; ++i) {
-    uint64_t wi;
-    if (i < 16) {
-      wi = w[i];
-    } else {
-      const uint64_t w15 = w[(i - 15) & 15], w2 = w[(i - 2) & 15];
-      wi = fr_add(fr_add(rs_rotr(w2, 19) ^ rs_rotr(w2, 61) ^ (w2 >> 6), w[(i - 7) & 15], one),
-                  fr_add(rs_rotr(w15, 1) ^ rs_rotr(w15, 8) ^ (w15 >> 7), w[i & 15], one), one);
-      w[i & 15] = wi;
-    }
-    fr_round(a, b, c, d, e, f, g, h, fr_add(RS_K[i], wi, one), one);
+    for (int i = 0; i < 16; i++) rs_round(a, b, c, d, e, f, g, h, RS_K[r + i] + w[i]);
+    if (r == 64) break;
+    rs_next16(w);
   }
   st[0] += a; st[1] += b; st[2] += c; st[3] += d; st[4] += e; st[5] += f; st[6] += g; st[7] += h;
 }
-// the forms a launch runs: `one` 0 Pearl-C's (rs_*), 1 the FMA pipe's (fr_*)
-DEV void pd_cmp(uint64_t* st, uint64_t* w, uint32_t one) {
-  if (one) fr_compress(st, w, one); else rs_compress(st, w);
+// a variant's forms (R: PD_ROLLED's bit), inlined, or (PD_CALL) one copy a kernel; the called compression takes a copy of
+// the message, so the caller's words stay as they were
+template <int R> DEV void pd_compress_in(uint64_t* st, uint64_t* w) {
+  if constexpr (R != 0) rl_compress(st, w); else rs_compress(st, w);
 }
-DEV void pd_rnd(uint64_t* st, const uint64_t* kw, uint32_t one) {
-  if (one) fr_rounds(st, kw, one); else rs_rounds(st, kw);
+template <int R> DEV void pd_rounds_in(uint64_t* st, const uint64_t* kw) {
+  if constexpr (R != 0) rl_rounds(st, kw); else rs_rounds(st, kw);
 }
-DEV void pd_padc(uint64_t* st, uint64_t bytes, uint32_t one) {   // rs_pad
+template <int R> DEV void pd_sched_in(const uint64_t* m16, uint64_t* kw) {
+  if constexpr (R != 0) rl_sched(m16, kw); else rs_sched(m16, kw);
+}
+template <int R> __device__ __noinline__ void pd_compress_call(uint64_t* st, const uint64_t* w) {
+  uint64_t x[16];
+#pragma unroll
+  for (int i = 0; i < 16; i++) x[i] = w[i];
+  pd_compress_in<R>(st, x);
+}
+template <int R> __device__ __noinline__ void pd_rounds_call(uint64_t* st, const uint64_t* kw) { pd_rounds_in<R>(st, kw); }
+template <int R> __device__ __noinline__ void pd_sched_call(const uint64_t* m16, uint64_t* kw) { pd_sched_in<R>(m16, kw); }
+template <int V> DEV void pd_cmp(uint64_t* st, uint64_t* w) {
+  if constexpr ((V & PD_CALL) != 0) pd_compress_call<V & PD_ROLLED>(st, w); else pd_compress_in<V & PD_ROLLED>(st, w);
+}
+template <int V> DEV void pd_rnd(uint64_t* st, const uint64_t* kw) {
+  if constexpr ((V & PD_CALL) != 0) pd_rounds_call<V & PD_ROLLED>(st, kw); else pd_rounds_in<V & PD_ROLLED>(st, kw);
+}
+template <int V> DEV void pd_sch(const uint64_t* m16, uint64_t* kw) {
+  if constexpr ((V & PD_CALL) != 0) pd_sched_call<V & PD_ROLLED>(m16, kw); else pd_sched_in<V & PD_ROLLED>(m16, kw);
+}
+template <int V> DEV void pd_padc(uint64_t* st, uint64_t bytes) {   // rs_pad
   uint64_t w[16];
 #pragma unroll
   for (int i = 0; i < 16; i++) w[i] = 0;
   w[0] = 0x8000000000000000ull;
   w[15] = 8 * bytes;
-  pd_cmp(st, w, one);
+  pd_cmp<V>(st, w);
 }
 DEV void pd_words(uint64_t* w, const uint4* v) {   // a 128-byte block of little-endian u32 words as 16 message words
 #pragma unroll
   for (int q = 0; q < 8; q++) {
-    w[2 * q] = rs_be64(v[q].x, v[q].y);
-    w[2 * q + 1] = rs_be64(v[q].z, v[q].w);
+    const uint4 x = v[q];
+    w[2 * q] = rs_be64(x.x, x.y);
+    w[2 * q + 1] = rs_be64(x.z, x.w);
   }
 }
 
@@ -227,17 +251,16 @@ DEV void pd_fold_block(const uint64_t* dig, int s, int b, uint64_t* w) {
     w[15] = 8ull * (128 + 64 * s);
   }
 }
-// rs_fold's digest state over s digests (dig, shared), by a whole warp, lane `lane`: with variant bit 0 its lanes compute
-// the s / 2 + 1 blocks' schedules into kw, 80 words each, and lane 0 runs the rounds alone (rounds-only); without it lane 0
-// compresses in the thread.  `one` picks the forms (pd_cmp).  st out on lane 0
-DEV void pd_fold(const uint64_t* qst, const uint64_t* dig, int s, uint64_t* st, int variant, uint32_t one, int lane,
-                 uint64_t* kw) {
+// rs_fold's digest state over s digests (dig, shared), by a whole warp, lane `lane`: with PD_ROUNDS its lanes compute the
+// s / 2 + 1 blocks' round inputs into kw, 80 words each, and lane 0 runs the rounds alone; without it lane 0 compresses in
+// the thread.  st out on lane 0
+template <int V> DEV void pd_fold(const uint64_t* qst, const uint64_t* dig, int s, uint64_t* st, int lane, uint64_t* kw) {
   const int nb = s / 2 + 1;
   uint64_t w[16];
-  if (variant & 1) {
+  if constexpr ((V & PD_ROUNDS) != 0) {
     for (int b = lane; b < nb; b += 32) {
       pd_fold_block(dig, s, b, w);
-      rs_sched(w, kw + 80 * b);
+      pd_sch<V>(w, kw + 80 * b);
     }
     __syncwarp();
   }
@@ -246,11 +269,11 @@ DEV void pd_fold(const uint64_t* qst, const uint64_t* dig, int s, uint64_t* st, 
   for (int t = 0; t < 8; t++) st[t] = qst[t];
 #pragma unroll 1
   for (int b = 0; b < nb; b++) {
-    if (variant & 1) {
-      pd_rnd(st, kw + 80 * b, one);
+    if constexpr ((V & PD_ROUNDS) != 0) {
+      pd_rnd<V>(st, kw + 80 * b);
     } else {
       pd_fold_block(dig, s, b, w);
-      pd_cmp(st, w, one);
+      pd_cmp<V>(st, w);
     }
   }
 }
@@ -258,8 +281,9 @@ DEV void pd_fold(const uint64_t* qst, const uint64_t* dig, int s, uint64_t* st, 
 // (into shared ys), each lane 6 of the mask's 192 byte-table rows (4 q + r for y[q]'s byte r, an L2 or DRAM load each: one
 // lane alone waits on 192 of them in turn), XORed across the warp, then lane 0 c's state.  Out on lane 0: the mask M·y (8
 // little-endian limbs) and c's state
-DEV void pd_hm_salt(uint64_t salt_key, uint64_t nonce, uint64_t i, uint64_t hm, uint32_t* ys, int lane, uint32_t one,
-                    uint64_t* mk, uint64_t* c) {
+template <int V>
+DEV void pd_hm_salt(uint64_t salt_key, uint64_t nonce, uint64_t i, uint64_t hm, uint32_t* ys, int lane, uint64_t* mk,
+                    uint64_t* c) {
   const uint64_t* mid = reinterpret_cast<const uint64_t*>(hm);
   const uint64_t* tables = reinterpret_cast<const uint64_t*>(hm + 128);
   if (lane < 3) {
@@ -294,30 +318,30 @@ DEV void pd_hm_salt(uint64_t salt_key, uint64_t nonce, uint64_t i, uint64_t hm, 
   for (int j = 0; j < 8; j++) st[j] = mid[j];
 #pragma unroll
   for (int j = 0; j < 16; j++) w[j] = rs_be64(ys[2 * j], ys[2 * j + 1]);
-  pd_cmp(st, w, one);
+  pd_cmp<V>(st, w);
 #pragma unroll
   for (int j = 0; j < 16; j++) w[j] = j < 8 ? rs_be64(ys[32 + 2 * j], ys[33 + 2 * j]) : 0;
   w[8] = 0x8000000000000000ull;
   w[15] = 8 * (128 + 192);
-  pd_cmp(st, w, one);
+  pd_cmp<V>(st, w);
 #pragma unroll
   for (int j = 0; j < 8; j++) c[j] = st[j];
 }
 // H_seed-A(salt ‖ x ‖ root_B ‖ u64 LE iota) from the label's midstate, and its line key (s512_seeds' bytes); x as 8 words
-DEV void pd_seed(const uint32_t* unit, const uint64_t* x, uint64_t iota, uint32_t one, uint32_t* seed, uint32_t* key) {
+template <int V> DEV void pd_seed(const uint32_t* unit, const uint64_t* x, uint64_t iota, uint32_t* seed, uint32_t* key) {
   uint64_t st[8], w[16];
 #pragma unroll
   for (int t = 0; t < 8; t++) st[t] = PD_LABELS[PD_SEED_A][t];
 #pragma unroll
   for (int i = 0; i < 16; i++) w[i] = i < 4 ? rs_be64(unit[2 * i], unit[2 * i + 1]) : i < 12 ? x[i - 4]
                                             : rs_be64(unit[8 + 2 * (i - 12)], unit[9 + 2 * (i - 12)]);
-  pd_cmp(st, w, one);
+  pd_cmp<V>(st, w);
 #pragma unroll
   for (int i = 0; i < 16; i++) w[i] = i < 4 ? rs_be64(unit[16 + 2 * i], unit[17 + 2 * i]) : 0;
   w[4] = rs_be64((uint32_t)iota, (uint32_t)(iota >> 32));
   w[5] = 0x8000000000000000ull;
   w[15] = 8 * (128 + 168);
-  pd_cmp(st, w, one);
+  pd_cmp<V>(st, w);
   s512_out32(st, seed);
 #pragma unroll
   for (int t = 0; t < 8; t++) st[t] = PD_LABELS[PD_NOISE_LINE][t];
@@ -325,7 +349,7 @@ DEV void pd_seed(const uint32_t* unit, const uint64_t* x, uint64_t iota, uint32_
   for (int i = 0; i < 16; i++) w[i] = i < 4 ? rs_be64(seed[2 * i], seed[2 * i + 1]) : 0;
   w[4] = 0x8000000000000000ull;
   w[15] = 8 * (128 + 32);
-  pd_cmp(st, w, one);
+  pd_cmp<V>(st, w);
   s512_out32(st, key);
 }
 
@@ -347,19 +371,19 @@ DEV void pd_node_msg(uint64_t dom, int level, int i, uint64_t* buf) {
 // level l's node template (PD_TM words): the state after its first block (8 words), then blocks 1 and 2 at index 0 (32
 // words).  Below 256 a node's first block holds the frame, dom_a, the level and its index's length prefix alone, and its
 // index is byte 130: block 1's word 0, bits 40-47.  Both are checked here against the builder at index 1.  buf: 96 words
-DEV void pd_level_template(uint64_t dom, int level, uint64_t* tm, uint64_t* buf) {
+template <int V> DEV void pd_level_template(uint64_t dom, int level, uint64_t* tm, uint64_t* buf) {
   pd_node_msg(dom, level, 0, buf);
   pd_node_msg(dom, level, 1, buf + 48);
   for (int t = 0; t < 48; t++)
     if ((buf[t] ^ buf[48 + t]) != (t == 16 ? 1ull << 40 : 0ull)) __trap();
+  for (int t = 0; t < 32; t++) tm[8 + t] = buf[16 + t];
   uint64_t st[8];
   rs_iv(st);
-  rs_compress(st, buf);
+  pd_cmp<V>(st, buf);
 #pragma unroll
   for (int t = 0; t < 8; t++) tm[t] = st[t];
-  for (int t = 0; t < 32; t++) tm[8 + t] = buf[16 + t];
 }
-DEV void pd_pad(uint64_t dom, uint64_t rank, uint64_t tree, uint64_t* buf /*48 words*/) {   // as s512_pads
+template <int V> DEV void pd_pad(uint64_t dom, uint64_t rank, uint64_t tree, uint64_t* buf /*48 words*/) {   // as s512_pads
   for (int t = 0; t < 48; t++) buf[t] = 0;
   WMsg m{buf, 0};
   wm_frame(m, "pad", 3, dom);
@@ -367,11 +391,11 @@ DEV void pd_pad(uint64_t dom, uint64_t rank, uint64_t tree, uint64_t* buf /*48 w
   const int blocks = wm_finish(m);
   uint64_t st[8];
   rs_iv(st);
-  for (int b = 0; b < blocks; b++) rs_compress(st, buf + 16 * b);
+  for (int b = 0; b < blocks; b++) pd_cmp<V>(st, buf + 16 * b);
   s512_store(tree + 64 * rank, st, 8);
 }
 // node i of a level from its children's states l and r and the level's template tm; out its state
-DEV void pd_node(const uint64_t* tm, int i, const uint64_t* l, const uint64_t* r, uint32_t one, uint64_t* st) {
+template <int V> DEV void pd_node(const uint64_t* tm, int i, const uint64_t* l, const uint64_t* r, uint64_t* st) {
   uint64_t w[32];
 #pragma unroll
   for (int t = 0; t < 32; t++) w[t] = tm[8 + t];
@@ -380,13 +404,13 @@ DEV void pd_node(const uint64_t* tm, int i, const uint64_t* l, const uint64_t* r
   wm_put64<PD_RIGHT_AT>(w, r);
 #pragma unroll
   for (int t = 0; t < 8; t++) st[t] = tm[t];
-  pd_cmp(st, w, one);
-  pd_cmp(st, w + 16, one);
+  pd_cmp<V>(st, w);
+  pd_cmp<V>(st, w + 16);
 }
 // the levels above level 0 of a tree of `width` leaves at `tree` (level 0 written, by any CTA), by the CTA's threads: level l
 // from the templates tm (shared, PD_TM words a level), each level's states kept in shared `nodes` (PD_NODES words) for the
 // next, and stored; out the root's state on thread 0
-DEV void pd_levels(const uint64_t* tm, uint64_t tree, int width, uint32_t one, uint64_t* nodes, uint64_t* root) {
+template <int V> DEV void pd_levels(const uint64_t* tm, uint64_t tree, int width, uint64_t* nodes, uint64_t* root) {
   uint64_t base = tree, l[8], r[8], st[8];
   const uint64_t* below = nullptr;
   uint64_t* out = nodes;
@@ -400,7 +424,7 @@ DEV void pd_levels(const uint64_t* tm, uint64_t tree, int width, uint32_t one, u
 #pragma unroll
         for (int t = 0; t < 8; t++) { l[t] = below[16 * i + t]; r[t] = below[16 * i + 8 + t]; }
       }
-      pd_node(tm + PD_TM * level, i, l, r, one, st);
+      pd_node<V>(tm + PD_TM * level, i, l, r, st);
       s512_store(above + 64ull * i, st, 8);
 #pragma unroll
       for (int t = 0; t < 8; t++) out[8 * i + t] = st[t];
@@ -419,20 +443,19 @@ DEV void pd_levels(const uint64_t* tm, uint64_t tree, int width, uint32_t one, u
     }
   }
 }
-DEV void pd_seed_a(uint64_t unit, const uint64_t* root, uint32_t one, uint64_t seed_a, uint64_t line_a) {
+template <int V> DEV void pd_seed_a(uint64_t unit, const uint64_t* root, uint64_t seed_a, uint64_t line_a) {
   const uint32_t* u = reinterpret_cast<const uint32_t*>(unit);
   const uint64_t index = (uint64_t)u[24] | (uint64_t)u[25] << 32;
   uint32_t seed[8], key[8];
-  pd_seed(u, root, index, one, seed, key);
+  pd_seed<V>(u, root, index, seed, key);
   store_cv(seed_a, seed);
   store_cv(line_a, key);
 }
 
 // ---------------------------------------------------------------- the launches
-// pd_heads: the label midstates and PD_ONE (once per module, after s512_heads)
+// pd_heads: the label midstates (once per module, after s512_heads)
 extern "C" __global__ void __launch_bounds__(32) pd_heads(const Args) {
   const int t = threadIdx.x;
-  if (t == 0) PD_ONE = 1;
   if (t < 2) {
     uint64_t st[8];
     s512_label(st, t == 0 ? S512_SEED_A : S512_NOISE_LINE);
@@ -441,51 +464,47 @@ extern "C" __global__ void __launch_bounds__(32) pd_heads(const Args) {
   }
 }
 
-// pd_commit: a CTA a row r < i0, 32 (ceil(s / 32) + 2) threads (s = k / 256).  p0 A's rows (FP32, k words each), p1 row
+// pd_commit_V: a CTA a row r < i0, 32 (ceil(s / 32) + 2) threads (s = k / 256).  p0 A's rows (FP32, k words each), p1 row
 // digests out (64 B a row), p2 A's tree (level 0, then each level above), p3 row seeds out (32 B a row), p4 their line keys
 // out, p5 the unit block (salt ‖ root_B ‖ u64 LE index), p6 dom_a (64 B), p7 the prover's salt key, p8 the hm96 constants,
 // p9 scratch (a u32 counter, zero before the first launch and left zero), p10 seed_A out, p11 line_a out; i0 rows (at most
-// PD_MAX_ROWS), i1 k, i2 mode (0: the tree and seed_A too, 1: level 0 only), i3 the variant (PD_VARIANTS)
-extern "C" __global__ void __launch_bounds__(192) pd_commit(const Args a) {
+// PD_MAX_ROWS), i1 k, i2 mode (0: the tree and seed_A too, 1: level 0 only)
+template <int V> DEV void pd_commit_t(const Args a) {
   __shared__ uint64_t dig[RS_MAX_SEGS * 8], xr[8], mk[8], cc[8], ftm[8], ftw[32], hbuf[48], root[8];
   __shared__ uint64_t tm[PD_MAX_LEVELS * PD_TM];
   __shared__ uint64_t kw[PD_KW_BLOCKS * 80];   // the fold's schedules; before it the templates' builders, after it the levels
   __shared__ uint32_t ys[48];
   __shared__ int last;
   static_assert(PD_KW_BLOCKS * 80 >= PD_NODES && PD_KW_BLOCKS * 80 >= 96 * PD_MAX_LEVELS, "kw holds the builders and the levels");
-  const int count = a.i[0], k = a.i[1], s = k / 256, cw = (s + 31) / 32, variant = a.i[3];
-  const uint32_t one = pd_one(variant);
+  const int count = a.i[0], k = a.i[1], s = k / 256, cw = (s + 31) / 32;
   const int r = blockIdx.x, tid = threadIdx.x, warp = tid / 32, lane = tid % 32;
   const int width = count <= 1 ? 1 : 1 << (32 - __clz(count - 1)), levels = 31 - __clz(width);
-  if (count > PD_MAX_ROWS || (unsigned)variant >= PD_VARIANTS || ((variant & 1) && s / 2 + 1 > PD_KW_BLOCKS)) __trap();
+  if (count > PD_MAX_ROWS || ((V & PD_ROUNDS) && s / 2 + 1 > PD_KW_BLOCKS)) __trap();
   const uint64_t dom = a.p[6], scratch = a.p[9], tree = a.p[2];
   const uint32_t* unit = reinterpret_cast<const uint32_t*>(a.p[5]);
   const uint64_t index = (uint64_t)unit[24] | (uint64_t)unit[25] << 32;
-  if (warp < cw) {                                  // the row's segments, each block's loads issued a compression ahead
+  if (warp < cw) {                                  // the row's segments
     if (tid < s) {
       uint64_t st[8], w[16];
-      uint4 v[8];
       rs_seg_head(st, tid, s);
       const uint4* seg = reinterpret_cast<const uint4*>(a.p[0] + 4ull * k * r + (uint64_t)RS_SEG * tid);
+      if constexpr ((V & PD_PREFETCH) != 0) {
 #pragma unroll
-      for (int q = 0; q < 8; q++) v[q] = seg[q];
+        for (int c = 0; c < RS_SEG / 128; c++) pd_prefetch(seg + 8 * c);
+      }
 #pragma unroll 1
       for (int c = 0; c < RS_SEG / 128; c++) {
-        pd_words(w, v);
-        if (c + 1 < RS_SEG / 128) {
-#pragma unroll
-          for (int q = 0; q < 8; q++) v[q] = seg[8 * (c + 1) + q];
-        }
-        pd_cmp(st, w, one);
+        pd_words(w, seg + 8 * c);
+        pd_cmp<V>(st, w);
       }
-      pd_padc(st, 128 + RS_SEG, one);
+      pd_padc<V>(st, 128 + RS_SEG);
 #pragma unroll
       for (int q = 0; q < 8; q++) dig[8 * tid + q] = st[q];
     }
   } else if (warp == cw) {                          // the row's hm96 salt
-    pd_hm_salt(a.p[7], index, (uint64_t)r, a.p[8], ys, lane, one, mk, cc);
+    pd_hm_salt<V>(a.p[7], index, (uint64_t)r, a.p[8], ys, lane, mk, cc);
   } else if (lane > 0) {                            // the levels' node templates, a lane a level
-    if (a.i[2] == 0 && lane <= levels) pd_level_template(dom, lane - 1, tm + PD_TM * (lane - 1), kw + 96 * (lane - 1));
+    if (a.i[2] == 0 && lane <= levels) pd_level_template<V>(dom, lane - 1, tm + PD_TM * (lane - 1), kw + 96 * (lane - 1));
   } else {                                          // the frame leaf's first block and this CTA's pads
     for (int t = 0; t < 32; t++) ftw[t] = 0;
     WMsg m{ftw, 0};
@@ -496,17 +515,19 @@ extern "C" __global__ void __launch_bounds__(192) pd_commit(const Args a) {
     for (int j = 0; j < 22; j++) wm_byte(m, HM96_SCHEMA[j]);
     const int at = wm_slot64(m);
     if (wm_finish(m) != 2 || at - 128 != PD_LEAF_AT) __trap();
-    uint64_t st[8];
+    uint64_t st[8], w[16];
+#pragma unroll
+    for (int q = 0; q < 16; q++) w[q] = ftw[q];
     rs_iv(st);
-    rs_compress(st, ftw);
+    pd_cmp<V>(st, w);
 #pragma unroll
     for (int q = 0; q < 8; q++) ftm[q] = st[q];
-    for (int p = count + r; p < width; p += count) pd_pad(dom, (uint64_t)p, tree, hbuf);
+    for (int p = count + r; p < width; p += count) pd_pad<V>(dom, (uint64_t)p, tree, hbuf);
   }
   __syncthreads();
   if (warp == 0) {                                  // the row digest
     uint64_t st[8];
-    pd_fold(RS_Q_HEADS + 8 * s, dig, s, st, variant, one, lane, kw);
+    pd_fold<V>(RS_Q_HEADS + 8 * s, dig, s, st, lane, kw);
     if (lane == 0) {
       s512_store(a.p[1] + 64ull * r, st, 8);
 #pragma unroll
@@ -519,22 +540,22 @@ extern "C" __global__ void __launch_bounds__(192) pd_commit(const Args a) {
     uint64_t lt[8], w[17];
 #pragma unroll
     for (int q = 0; q < 8; q++) { lt[q] = mid[8 + q]; w[q] = rs_bswap64(rs_bswap64(xr[q]) ^ mk[q]); w[8 + q] = cc[q]; }
-    pd_cmp(lt, w, one);
-    pd_padc(lt, 256, one);
+    pd_cmp<V>(lt, w);
+    pd_padc<V>(lt, 256);
 #pragma unroll
     for (int q = 0; q < 16; q++) w[q] = ftw[16 + q];
     w[16] = 0;
     wm_put64<PD_LEAF_AT>(w, lt);
 #pragma unroll
     for (int q = 0; q < 8; q++) lt[q] = ftm[q];
-    pd_cmp(lt, w, one);
+    pd_cmp<V>(lt, w);
     s512_store(tree + 64ull * r, lt, 8);
   } else if (tid == 32 * cw) {                      // the row's seed and line key
     uint64_t x[8];
     uint32_t seed[8], key[8];
 #pragma unroll
     for (int q = 0; q < 8; q++) x[q] = xr[q];
-    pd_seed(unit, x, index << 32 | (uint64_t)r, one, seed, key);
+    pd_seed<V>(unit, x, index << 32 | (uint64_t)r, seed, key);
     store_cv(a.p[3] + 32ull * r, seed);
     store_cv(a.p[4] + 32ull * r, key);
   }
@@ -545,99 +566,90 @@ extern "C" __global__ void __launch_bounds__(192) pd_commit(const Args a) {
   __syncthreads();
   if (!last) return;
   __threadfence();
-  pd_levels(tm, tree, width, one, kw, root);
+  pd_levels<V>(tm, tree, width, kw, root);
   if (tid == 0) {
     uint64_t rt[8];
 #pragma unroll
     for (int q = 0; q < 8; q++) rt[q] = root[q];
-    pd_seed_a(a.p[5], rt, one, a.p[10], a.p[11]);
+    pd_seed_a<V>(a.p[5], rt, a.p[10], a.p[11]);
     *reinterpret_cast<unsigned*>(scratch) = 0;
   }
 }
 
-// pd_tree: pd_commit's mode 0 tail after its mode 1, one CTA of 128 threads: the levels' templates (a thread a level), the
+// pd_tree_V: pd_commit's mode 0 tail after its mode 1, one CTA of 128 threads: the levels' templates (a thread a level), the
 // levels above level 0, then seed_A and line_a.  p2 the tree, p5 the unit block, p6 dom_a, p10 seed_A out, p11 line_a out;
-// i0 rows, i3 the variant (its forms bit)
-extern "C" __global__ void __launch_bounds__(128) pd_tree(const Args a) {
+// i0 rows
+template <int V> DEV void pd_tree_t(const Args a) {
   __shared__ uint64_t tm[PD_MAX_LEVELS * PD_TM], nodes[PD_NODES], root[8];
-  const int count = a.i[0], variant = a.i[3];
-  const uint32_t one = pd_one(variant);
+  const int count = a.i[0];
   const int width = count <= 1 ? 1 : 1 << (32 - __clz(count - 1)), levels = 31 - __clz(width);
-  if (count > PD_MAX_ROWS || (unsigned)variant >= PD_VARIANTS) __trap();
-  if ((int)threadIdx.x < levels) pd_level_template(a.p[6], threadIdx.x, tm + PD_TM * threadIdx.x, nodes + 96 * threadIdx.x);
+  if (count > PD_MAX_ROWS) __trap();
+  if ((int)threadIdx.x < levels) pd_level_template<V>(a.p[6], threadIdx.x, tm + PD_TM * threadIdx.x, nodes + 96 * threadIdx.x);
   __syncthreads();
-  pd_levels(tm, a.p[2], width, one, nodes, root);
+  pd_levels<V>(tm, a.p[2], width, nodes, root);
   if (threadIdx.x == 0) {
     uint64_t rt[8];
 #pragma unroll
     for (int q = 0; q < 8; q++) rt[q] = root[q];
-    pd_seed_a(a.p[5], rt, one, a.p[10], a.p[11]);
+    pd_seed_a<V>(a.p[5], rt, a.p[10], a.p[11]);
   }
 }
 
-// pd_tiles: the tile leaves (s512_tile_leaves' bytes), a CTA of 32 threads a tile (row-major; a last row block of R = 16, 32
-// or 48 rows partial), lane j < s = R / 2 its segment j from the header table, each block's loads issued a compression
-// ahead, then pd_fold.  p0 C~ (rows x cols), p1 U, p2 out (64 B a tile); i0 rows (a multiple of 16), i1 cols (a multiple
-// of 64), i3 the variant (PD_VARIANTS)
-extern "C" __global__ void __launch_bounds__(32) pd_tiles(const Args a) {
+// pd_tiles_V: the tile leaves (s512_tile_leaves' bytes), a CTA of 32 threads a tile (row-major; a last row block of R = 16,
+// 32 or 48 rows partial), lane j < s = R / 2 its segment j from the header table, then pd_fold.  p0 C~ (rows x cols), p1 U,
+// p2 out (64 B a tile); i0 rows (a multiple of 16), i1 cols (a multiple of 64)
+template <int V> DEV void pd_tiles_t(const Args a) {
   __shared__ uint64_t dig[32 * 8], kw[17 * 80];
-  const int cols = a.i[1], tn = cols / 64, t = blockIdx.x, j = threadIdx.x, variant = a.i[3];
-  const uint32_t one = pd_one(variant);
+  const int cols = a.i[1], tn = cols / 64, t = blockIdx.x, j = threadIdx.x;
   const int ti = t / tn, tj = t % tn, R = min(64, a.i[0] - 64 * ti), s = R / 2;
-  if ((unsigned)variant >= PD_VARIANTS) __trap();
   if (j < s) {
     uint64_t st[8], w[16];
-    uint4 v[8];
     rs_seg_head(st, j, s);
     const auto blk = [&](int c) {
       const size_t row = 64 * (size_t)ti + 2 * j + c / 4;
       return reinterpret_cast<const uint4*>(a.p[c & 1]) + (row * cols + 64 * tj + 32 * (c >> 1 & 1)) / 4;
     };
+    if constexpr ((V & PD_PREFETCH) != 0) {
 #pragma unroll
-    for (int q = 0; q < 8; q++) v[q] = blk(0)[q];
+      for (int c = 0; c < RS_SEG / 128; c++) pd_prefetch(blk(c));
+    }
 #pragma unroll 1
     for (int c = 0; c < RS_SEG / 128; c++) {
-      pd_words(w, v);
-      if (c + 1 < RS_SEG / 128) {
-        const uint4* p = blk(c + 1);
-#pragma unroll
-        for (int q = 0; q < 8; q++) v[q] = p[q];
-      }
-      pd_cmp(st, w, one);
+      pd_words(w, blk(c));
+      pd_cmp<V>(st, w);
     }
-    pd_padc(st, 128 + RS_SEG, one);
+    pd_padc<V>(st, 128 + RS_SEG);
 #pragma unroll
     for (int q = 0; q < 8; q++) dig[8 * j + q] = st[q];
   }
   __syncthreads();
   uint64_t st[8];
-  pd_fold(RS_Q_HEADS + 8 * s, dig, s, st, variant, one, j, kw);
+  pd_fold<V>(RS_Q_HEADS + 8 * s, dig, s, st, j, kw);
   if (j == 0) s512_store(a.p[2] + 64ull * t, st, 8);
 }
 
-// pd_probe: a compression's cost on one warp, alone on its SM: i0 compressions chained, each fed the last one's state.
-// i1: 0 rs_compress, 1 rs_rounds over a schedule computed beforehand, 2 fr_compress, 3 fr_rounds (i1 as a variant).
-// p0 out: the clock64 cycles (u64), then the final state (8 u64)
-extern "C" __global__ void __launch_bounds__(32) pd_probe(const Args a) {
+// pd_probe_V: a compression's cost on one warp, alone on its SM: i0 compressions chained, each fed the last one's state; i1
+// 0 the compression (pd_cmp), 1 the rounds alone over a schedule computed beforehand (pd_rnd).  p0 out: the clock64 cycles
+// (u64), then the final state (8 u64)
+template <int V> DEV void pd_probe_t(const Args a) {
   __shared__ uint64_t kw[80];
   uint64_t st[8], w[16];
   rs_iv(st);
   for (int t = 0; t < 16; t++) w[t] = 0x0123456789abcdefull * (t + 1 + threadIdx.x);
-  if (threadIdx.x == 0) rs_sched(w, kw);
+  if (threadIdx.x == 0) pd_sch<V>(w, kw);
   __syncwarp();
-  const int n = a.i[0], v = a.i[1];
-  const uint32_t one = pd_one(v);
-  if ((unsigned)v >= PD_VARIANTS) __trap();
+  const int n = a.i[0], form = a.i[1];
   const long long t0 = clock64();
-  if (v & 1) {
+  if (form) {
 #pragma unroll 1
-    for (int i = 0; i < n; i++) pd_rnd(st, kw, one);
+    for (int i = 0; i < n; i++) pd_rnd<V>(st, kw);
   } else {
 #pragma unroll 1
     for (int i = 0; i < n; i++) {
+      uint64_t x[16];
 #pragma unroll
-      for (int t = 0; t < 16; t++) w[t] ^= st[t & 7];
-      pd_cmp(st, w, one);
+      for (int t = 0; t < 16; t++) x[t] = w[t] ^ st[t & 7];
+      pd_cmp<V>(st, x);
     }
   }
   const long long t1 = clock64();
@@ -647,3 +659,10 @@ extern "C" __global__ void __launch_bounds__(32) pd_probe(const Args a) {
     for (int t = 0; t < 8; t++) out[1 + t] = st[t];
   }
 }
+
+#define PD_INSTANCE(V)                                                                                                    \
+  extern "C" __global__ void __launch_bounds__(192) pd_commit_##V(const Args a) { pd_commit_t<V>(a); }                  \
+  extern "C" __global__ void __launch_bounds__(128) pd_tree_##V(const Args a) { pd_tree_t<V>(a); }                      \
+  extern "C" __global__ void __launch_bounds__(32) pd_tiles_##V(const Args a) { pd_tiles_t<V>(a); }                     \
+  extern "C" __global__ void __launch_bounds__(32) pd_probe_##V(const Args a) { pd_probe_t<V>(a); }
+PD_VARIANT_LIST(PD_INSTANCE)
