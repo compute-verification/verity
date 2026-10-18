@@ -74,7 +74,7 @@ struct PSha {
   using W = u64;
   static constexpr int NB = 64, BLOCK = 128, WB = 8;
   static constexpr bool BE = true;
-  static constexpr int nblk(int len) { return (len + 17 + 127) / 128; }
+  __host__ __device__ static constexpr int nblk(int len) { return (len + 17 + 127) / 128; }
   template <int LEN>
   static DEV void comp(W* cv, W* m, int) {
     if constexpr (R == 80) sha::compress(cv, m);
@@ -112,7 +112,7 @@ struct PB3 {
   using W = u32;
   static constexpr int NB = 32, BLOCK = 64, WB = 4;
   static constexpr bool BE = false;
-  static constexpr int nblk(int len) { return len <= 64 ? 1 : (len + 63) / 64; }
+  __host__ __device__ static constexpr int nblk(int len) { return len <= 64 ? 1 : (len + 63) / 64; }
   template <int LEN>
   static DEV void comp(W* cv, W* m, int b) {
     static_assert(LEN <= 1024, "one chunk");
