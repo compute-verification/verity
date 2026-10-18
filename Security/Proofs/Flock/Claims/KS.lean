@@ -89,6 +89,7 @@ import Proofs.Flock.Claims.KS.ZkLevelsAll
 import Proofs.Flock.Claims.KS.ZkLevels
 import Proofs.Flock.Claims.KS.ZkClashL
 import Proofs.Flock.Claims.KS.ZkFork0
+import Proofs.Flock.Claims.KS.TrimBridge
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -442,4 +443,8 @@ decoding to a level-0 clash (`FlockDeploy.KS.adv₀SZ_simAtJZ_le`, through the s
 which are two accepting runs of `P` whose rows at one position differ and collide in their logs
 (`FlockDeploy.KS.zkPair₀`). So masked KS and the recursion's premise rest on the cap/`τ` and pads fork bounds and the
 pads clash (`FlockDeploy.KS.zk_KS_of_kinds`, `FlockDeploy.KS.zk_tableBoundJOnAccR_of_kinds`,
-`FlockDeploy.KS.zk_KSFlock_of_kinds`). -/
+`FlockDeploy.KS.zk_KSFlock_of_kinds`). KS at an untrimmed instance gives it at its trimmed record
+(`Flock.TrimBridge.KS_mapCols_of_KS`), but not conversely: an unopened position reads `[]`, the trim of every zero
+column and equal to no full-width one (`Flock.TrimBridge.hole_agree`). Both follow from the one full-width table bound,
+the untrimmed with `ExtendJ` (`Flock.TrimBridge.KS_both_of_tableBoundJR`), so from `zk_KS_of_kinds`'s premises
+(`FlockDeploy.KS.TrimBridge.zk_KS_both_of_kinds`). -/
