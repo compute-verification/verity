@@ -1308,19 +1308,25 @@ class Driver:
                because: str = "no PR's change touches what failed, so no PR is ejected") -> None:
         """Check ``m``'s train again on ``on``'s machines, once: its failure was a kill and names no file, so no PR is at fault, or
         it is one run's word (``because``).  Its failed attempts stop counting (`verdict` passes over `resent`), so the new run's
-        verdict is the train's; a failed run still going (`--keep-going`) is cancelled, its slot the resend's."""
+        verdict is the train's, and with pytest deferred its touched suites run again beside it (`_launch`).  What the resend
+        replaces is cancelled once it registers: a failed attempt still running under `--keep-going` (18 Oct: one held a check
+        slot 4 h after its resend, until the OOM killer took it) and the old touched-suites run, of the ids drive's own launch
+        record of the train holds, never another's."""
         main = _out(self.repo, "rev-parse", "origin/main")
         if self.q.shadow or self.dry_run:
             self.q.log(f"research queue drive: would resend {m.commit[:12]} ({prs}): {v.why}")
             return
         old = drive["launched"].get(m.commit) or {}
-        if old.get("failing") and (live := [r for r, (st, *_) in self._states([*old["ids"], *(old.get("touched") or [])]).items()
-                                            if st in ACTIVE and st != "unknown"]):
-            self.cancel(self.repo, live, f"drive: {m.commit[:12]} has failed and is checked again")
+        ours = [rid for rid in v.attempt.split() if rid in old.get("ids", ())] + list(old.get("touched") or ())
         ids, tail = self._launch(drive, m, main)
         if not ids:
             self.refuse(drive, f"launch:{m.commit}", f"train.sh {m.commit[:12]} {self.on} registered no run on a resend: {tail}")
             return
+        new = {*ids, *(drive["launched"][m.commit].get("touched") or ())}
+        if live := [rid for rid, (st, *_) in self._states([r for r in ours if r not in new]).items()
+                    if st in ACTIVE and st != "unknown"]:
+            self.cancel(self.repo, live, f"drive: {m.commit[:12]} was resent as {' '.join(ids)}; this run has already failed, "
+                                         "or the resend runs its touched suites again")
         drive.setdefault("resent", {})[m.commit] = v.attempt.split()
         self.q.log(f"research queue drive: resent {m.commit[:12]} ({prs}) as {' '.join(ids)}: {v.attempt} failed ({v.why}); "
                    f"{because}")

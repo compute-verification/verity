@@ -316,6 +316,32 @@ def test_a_failure_nothing_in_the_train_reaches_is_resent_as_a_machines_fault(wo
     assert not h.posts and len(h.launched) == launched + 1 and any("resent" in x for x in world.logs)
 
 
+def test_a_resent_check_cancels_its_failed_attempt_and_keeps_its_touched_suites(world, monkeypatch, tmp_path):
+    """18 Oct: 37cda23's check failed under `--keep-going` at 16:07Z and was resent; the failed attempt kept slot b on cpu-1
+    for 4 h, until the OOM killer took it, and the resend's record lost the train's touched-suites run, the gate a deferred
+    pytest lands on.  The resend runs the touched suites again beside its check, and the run it replaces is cancelled."""
+    h = Harness(world, monkeypatch)
+    h.d.defer, h.d.train_size = frozenset({"pytest"}), 2
+    touched = itertools.count(1)
+
+    def launch_touched(repo, commit, machine, base):
+        h.run_state[rid := f"r-touched-{next(touched)}"] = ("running", None, None)
+        return [rid], ""
+
+    h.d.launch_touched = launch_touched
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    world.gh.put(2, world.change({"b.txt": "2\n"}))
+    h.tick()
+    tip = _tip(world)
+    (rid,) = [r for r in h.run_state if not r.startswith("r-touched")]
+    h.run_state[rid] = ("running", None, None, "suite pkg (tests/test_x.py::test_y)")
+    h.evidence = [_failed_run(tmp_path, "tests/test_x.py::test_y", "tests/test_x.py:2")]
+    h.tick()
+    assert not h.posts and any("resent" in x for x in world.logs) and h.cancelled == [rid, "r-touched-1"]
+    rec = h.d.q.load_state()["drive"]["launched"][tip]
+    assert rid not in rec["ids"] and rec["touched"] == ["r-touched-2"]
+
+
 def _killed_run(tmp_path, name: str):
     d = tmp_path / name
     d.mkdir(parents=True)
