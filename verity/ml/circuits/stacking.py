@@ -475,15 +475,26 @@ def _seg_union(segs: Segs, lo: int = 0, hi: int | None = None) -> Range:
     return out
 
 
-def _read(refs: Refs, params: Sequence[Range], segs: Sequence[Segs]) -> Range:
+def _intervals(refs: Refs, cache: dict | None = None) -> tuple[tuple[str, int, tuple[tuple[int, int], ...]], ...]:
+    """The leaf intervals `refs` reads, by collection and normalized (none for a parameter, which is read whole); `cache`
+    as `_colls`'s."""
+    if cache is not None and (hit := cache.get(id(refs))) is not None:
+        return hit[1]
     ivs: dict[tuple[str, int], list] = {}
     ref_intervals(refs, ivs)
+    out = tuple((s, i, () if s == "p" else tuple(norm(iv))) for (s, i), iv in ivs.items())
+    if cache is not None:
+        cache[id(refs)] = (refs, out)
+    return out
+
+
+def _read(refs: Refs, params: Sequence[Range], segs: Sequence[Segs], cache: dict | None = None) -> Range:
     out: Range = _EMPTY
-    for (s, i), iv in ivs.items():
+    for s, i, ivs in _intervals(refs, cache):
         if s == "p":
             out = _union(out, params[i])
             continue
-        for lo, hi in norm(iv):
+        for lo, hi in ivs:
             out = _union(out, _seg_union(segs[i], lo, hi))
     return out
 
@@ -590,6 +601,7 @@ class _Pass:
         self.widths: dict[int, frozenset[int | None]] = {}
         self.shapes: dict[str, tuple[str | None, int]] = {}  # each primitive's class and operand bits
         self.colls: dict[int, tuple[Refs, frozenset[tuple[str, int]]]] = {}
+        self.ivs: dict[int, tuple[Refs, tuple]] = {}
 
     def prim(self, fn: PrimitiveDefinition, dyn: Sequence[bool], rng: Sequence[Range], where: tuple[str, int]) -> tuple[Range, Tally]:
         t = Tally()
@@ -679,7 +691,7 @@ class _Pass:
                 dyns.append(when == RUN)
                 continue
             ad = [_dyn(a.refs, pdyn, dyns, self.colls) for a in nd.args]
-            ar = [_read(a.refs, prng, segs) for a in nd.args]
+            ar = [_read(a.refs, prng, segs, self.ivs) for a in nd.args]
             if nd.form == "scan":
                 s, od, t = self.scan(nd, ad, ar, def_id, k)
             else:
