@@ -191,8 +191,8 @@ theorem vm_honest_wiring_fails (N : ℕ) (hN : 2 ≤ N) :
   have hw : ((vm N).writesOf {none}).card = 1 := by
     simp [DynPopulation.writesOf, vm]
   rw [hw, Fintype.card_bool]
-  calc 2 ^ 1 < 2 ^ 2 := by norm_num
-    _ ≤ 2 ^ N := Nat.pow_le_pow_right (by norm_num) hN
+  calc 2 ^ 1 < 2 ^ 2 := by decide
+    _ ≤ 2 ^ N := Nat.pow_le_pow_right (by decide) hN
     _ ≤ _ := vm_leak N
 
 end Population

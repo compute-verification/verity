@@ -115,8 +115,11 @@ inside the padding's. -/
 theorem downAt_sub_padDown [Fintype U] [Fintype S] {C : Set (S → V)} {h : S → V} (hhC : h ∈ C) (B : Finset U)
     {v : U} (hv : v ∈ D.downAt h B) : v ∈ (D.padOver C).down B := by
   obtain ⟨u, hu, huv⟩ := hv
-  refine (D.padOver C).mem_down.2 ⟨u, hu, Relation.ReflTransGen.mono (fun x y hxy => ?_) huv⟩
-  obtain ⟨s, hs, hr⟩ := hxy
-  exact ⟨s, hs, D.reads_subset_padOver hhC y hr⟩
+  refine (D.padOver C).mem_down.2 ⟨u, hu, ?_⟩
+  induction huv with
+  | refl => exact .refl
+  | tail _ hbc ih =>
+    obtain ⟨s, hs, hr⟩ := hbc
+    exact ih.tail ⟨s, hs, D.reads_subset_padOver hhC _ hr⟩
 
 end Population.DynPopulation
