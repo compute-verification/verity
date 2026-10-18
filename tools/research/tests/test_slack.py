@@ -1626,6 +1626,8 @@ def test_send_starts_a_thread_or_replies_and_its_footer_carries_the_kind(fake, r
                        (["--kind", "announce", "--thread", root["ts"]], "starts its own thread")):
         rc, _, err = run(capsys, "send", "--as", "infra", *argv, "--text", "x")
         assert rc == 2 and says in err, argv
+    rc, out, _ = run(capsys, "send", "--as", "infra", "--channel", "agent-alerts", "--kind", "alert", "--text", "OOM kill on agent VM x")
+    assert rc == 0 and fake.messages[ALERTS][-1]["text"].startswith("OOM kill on agent VM x"), "--channel puts a top-level post there"
 
 
 def test_close_posts_a_status_line_and_reacts(fake, registry, routes_dirs, capsys, monkeypatch):
