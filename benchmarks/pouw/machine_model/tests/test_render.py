@@ -1,5 +1,5 @@
-"""`machine-model render` prints every table of a data directory, and the README holds none: a table there is a line every
-new vector, design or census row edits, and two lane PRs that each add one conflict on it."""
+"""`machine-model render` prints every table of a data directory, and the README holds none: a table there is a line
+every new vector, design or census row edits, and two lane PRs that each add one conflict on it."""
 from __future__ import annotations
 
 import re
@@ -20,8 +20,8 @@ CELL = re.compile(r"(?<!\\)\|")
 def test_the_readme_holds_no_table():
     text = README.read_text()
     found = [f"README.md:{i}: {line}" for i, line in enumerate(text.splitlines(), 1) if TABLE_ROW.match(line)]
-    assert not found, ("a table of the data belongs in `machine-model render` (verity_machine_model/commands/render.py, "
-                       "one section a table, read from data/), and the README says which section prints it:\n"
+    assert not found, ("a table of the data belongs in `machine-model render` (verity_machine_model/commands/"
+                       "render.py, one section a table, read from data/), and the README names the section:\n"
                        + "\n".join(found))
     assert "machine-model render" in text
 

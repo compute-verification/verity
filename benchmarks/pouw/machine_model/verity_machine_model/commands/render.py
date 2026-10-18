@@ -1,6 +1,6 @@
-"""machine-model render [SECTION ...]       every table of the data directory as Markdown on stdout, read from data/ alone
-                                          (no solve): vectors, epochs, rows, floors, designs, honest, units, forms,
-                                          table, attacks, devices (default: all of them); the README holds none"""
+"""machine-model render [SECTION ...]       every table of the data directory as Markdown, read from data/ alone (no
+                                          solve): vectors, epochs, rows, floors, designs, honest, units, forms, table,
+                                          attacks, devices (default: all of them); the README holds none"""
 from __future__ import annotations
 
 import tomllib
@@ -58,8 +58,8 @@ def _epochs(data: Path) -> str | None:
         ls = lines.get(e, [])
         body.append([f"`{e}`", "yes" if e in named else "", len(ls), len({d["kind"] for d in ls}),
                      len({d["row"] for d in ls}), closed[m.epochs[i - 1]] if i else 0, since[e]])
-    return _table(["epoch", "vector", "census lines from it", "kinds", "rows", "lines it closes (until the epoch before)",
-                   "attacks from it"], body)
+    return _table(["epoch", "vector", "census lines from it", "kinds", "rows",
+                   "lines it closes (until the epoch before)", "attacks from it"], body)
 
 
 def _rows(data: Path) -> str | None:
@@ -130,9 +130,9 @@ def _route(data: Path) -> str | None:
     if not (data / "table.toml").is_file():
         return None
     t = tomllib.loads((data / "table.toml").read_text())
+    l2 = f"{t['l2']:.4g}" if "l2" in t else "unmeasured"
     return _table(["q (lane instructions a word)", "L2 bytes a word", "L2 bytes a second", "SMs", "MHz", "status",
-                   "source"], [[t["q"], t["bytes"], f"{t['l2']:.4g}" if "l2" in t else "unmeasured", t["sms"], t["mhz"], t.get("status"),
-                                t["source"]]])
+                   "source"], [[t["q"], t["bytes"], l2, t["sms"], t["mhz"], t.get("status"), t["source"]]])
 
 
 def _attacks(data: Path) -> str | None:
