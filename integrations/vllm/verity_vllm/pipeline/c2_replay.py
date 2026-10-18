@@ -365,7 +365,8 @@ def evaluate(s: Site, held: dict[str, Any], *, plan: bool = False, planner: Any 
         from verity_vllm.check.oracle_compare import OpenedReader
         from verity_vllm.pipeline import memory_map as MMP
         MMP.after_commit(args.memory_map, loaded=_loaded, bmap=_bm, committed=OpenedReader(s.com, rc), manifest=s.manifest, arrivals=_arr,
-                         caches=next((x.caches for x in getattr(s.com, "sources", ()) if getattr(x, "short_name", "") == "kv_slots"), None))
+                         caches=next((x.caches for x in getattr(s.com, "sources", ()) if getattr(x, "short_name", "") == "kv_slots"), None),
+                         session=s.out / MMP.SESSION)
     _rd = held["rd"]
     _wc = None if plan else s.weights_check()
     _seed, _seed_src, _seed_form, _seed_chal = seed_of(args, rc)

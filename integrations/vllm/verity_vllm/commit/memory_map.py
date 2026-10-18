@@ -14,15 +14,27 @@ page      `block_size` slots in each layer as the engine lays them out (`page_of
           being page 0
 block     4,096 bytes of a plane (`store.registry._page_blocks`), at slot `firsts[layer] + ids[page, c]` (the `Store`'s
           numbering: a KV pool of one region per layer)
-written   a block whose rows are all born, at the step of the last, if a later step reads it: a step's record, its frees
-          then its writes, takes effect after the step's reads (remote_bandwidth's convention, #2378), so a block whose
-          last read is the step that completes it is never read while resident and is in no record; nor is a block with a
-          row no step writes (it stays dirty)
-freed     a written block in the record of its rows' last read's step.  And a slot's registered block (a KV page's filler,
-          registered before the seed) at the step a write first reaches it, unless that step's record writes the slot: its
-          bytes are no longer that block's, and a block not yet written is uncredited (the `Store`'s dirty).  A page's
-          untouched blocks stay held, counting against capacity, until then: a request's end frees only the blocks it wrote
-j         N plus every block written before it, a step's blocks by slot
+appended  a block whose rows are all born, at the step of the last (its completion), if a later step reads it: a step's
+          record, its frees then its writes, takes effect after the step's reads (remote_bandwidth's convention, #2378),
+          so a block whose last read is the step that completes it is never read while resident and is in no record; nor
+          is a block with a row no step writes (it stays dirty).  A step's blocks are one append, by slot
+written   an appended block, in the record of the step its append's encode landed in (deferred residency, remote_bandwidth's
+          ``PROTOCOL.md`` §4: the session's `Deferral`; without one, at its completion), uncredited until then.  A line
+          writes the appends landed by then in order, and one that would write a slot an earlier one there writes waits a
+          line, with every append after it
+freed     a written block in the record of its rows' last read's step, or of the step after its write's if that is no
+          earlier (its page was freed before its encode landed: memory accounting ruled such a block withdrawn, no write, no
+          free and no credit, in thread 1792308789, and memory-map/v1 is to gain a step's ``withdrawn``; until then the
+          block is written and freed a line later).  And a slot's registered block (a KV page's filler, registered before
+          the seed) at the step a write first reaches it, even the one completing it: its bytes are no longer that block's,
+          and a block not yet written is uncredited (the `Store`'s dirty).  A page's untouched blocks stay held, counting
+          against capacity, until then: a request's end frees only the blocks it wrote.  A line frees no slot it writes
+          (the write releases its block)
+re-key    a live written block as old as the session's lifetime cap, appended again with its d_j at a fresh j: its old j
+          freed in the record of the step before its append's, its new one written where that encode lands, uncredited
+          in between.  Which appends are re-keys is the session's (`Deferral`); the blocks they take are the live written
+          ones of the oldest appends (a window is a prefix of them), not freed at that step
+j         N plus every block appended before it, in append order
 d_j       `codec.digest` of the block's payload: its rows' served words in slot order, each word little-endian
 step      the engine's: request r's step s is `arrive[r] + s`
 ~~~
@@ -90,6 +102,28 @@ class Layout:
     pages: int | None = None
     firsts: tuple[int, ...] | None = None
     blocks: int | None = None
+
+
+@dataclass(frozen=True)
+class Deferral:
+    """A remote session's deferred residency (`store.remote.Serving.deferral`, its record's ``memory_map.deferral``): each
+    append's ``(step made, step landed, first, count)`` in append order, landed None while its encode is out, on the
+    session's steps, whose first is the engine's step 0 (``first_step``), under the session's lifetime cap ``lifetime``.
+    An append is made at its completion step, a re-key at the step after the one whose record frees its old indices."""
+
+    encodes: tuple[tuple[int, int | None, int, int], ...]
+    first_step: int
+    lifetime: int
+
+
+@dataclass
+class _Append:
+    made: int
+    landed: int | None
+    first: int
+    count: int
+    rekey: bool
+    blocks: list[tuple[int, bytes, int]]
 
 
 @dataclass(frozen=True)
@@ -282,14 +316,18 @@ def _pool(requests: Mapping[str, Rows], layout: Layout, tables: Mapping[str, Seq
 
 
 def record(requests: Mapping[str, Rows], arrive: Mapping[str, int], payload: Callable[[str, Row], bytes], registration: bytes,
-           layout: Layout, tables: Mapping[str, Sequence[int]]) -> tuple[Header, list[Step]]:
+           layout: Layout, tables: Mapping[str, Sequence[int]], deferral: Deferral | None = None) -> tuple[Header, list[Step]]:
     """The session's memory map beside the registered store `registration` digests: each request's rows from its arrival step,
-    a row's served bytes `payload(request, row)`, its pages `tables[request]` (`tables`).  A slot written while another
-    request's rows in it are still read is refused."""
+    a row's served bytes `payload(request, row)`, its pages `tables[request]` (`tables`), its writes where `deferral` has
+    their encodes land.  A slot written while another request's rows in it are still read is refused, and so is a deferral
+    under lifetime cap 1 or one whose appends aren't the circuit's."""
+    if deferral is not None and deferral.lifetime < 2:
+        raise ValueError(f"a session deferring residency under lifetime cap {deferral.lifetime} is refused (memory accounting): "
+                         "a block whose encode lands in the window after its append's would be credited at the cap")
     pool = _pool(requests, layout, tables)
     ids, lo, hi, sb, pages, bs = pool.ids, pool.lo, pool.hi, pool.row_bytes, pool.pages, layout.block_size
-    freed: dict[int, list[int]] = {}
-    written: dict[int, list[tuple[int, bytes]]] = {}
+    filler: dict[int, list[int]] = {}
+    done: dict[int, list[tuple[int, bytes, int]]] = {}
     #: each slot's blocks: the step a write first reaches it, the step completing it (None: it stays dirty), its rows' last
     #: read's step and its digest
     uses: dict[int, list[tuple[int, int | None, int, bytes]]] = {}
@@ -319,22 +357,84 @@ def record(requests: Mapping[str, Rows], arrive: Mapping[str, int], payload: Cal
         for n, (reach, w, last, d) in enumerate(sorted(us, key=lambda u: u[0])):
             if reach <= held:
                 raise ValueError(f"slot {slot} is written at step {reach} while a request's rows in it are read to step {held}")
-            kept = w is not None and w < last
-            if n == 0 and not (kept and reach == w):
-                freed.setdefault(reach, []).append(slot)
+            if n == 0:
+                filler.setdefault(reach, []).append(slot)
             held = last
-            if kept:
-                written.setdefault(w, []).append((slot, d))
-                freed.setdefault(last, []).append(slot)
-    steps, j = [], layout.blocks if layout.blocks is not None else len(pool.firsts) * pool.region
-    head = Header(registration, j)
-    for s in sorted(set(freed) | set(written)):
-        ws = sorted(written.get(s, ()))
-        steps.append(Step(s, tuple(sorted(freed.get(s, ()))), tuple(Written(x, j + u, d) for u, (x, d) in enumerate(ws))))
-        j += len(ws)
+            if w is not None and w < last:
+                done.setdefault(w, []).append((slot, d, last))
+    head = Header(registration, layout.blocks if layout.blocks is not None else len(pool.firsts) * pool.region)
+    steps = _lines(filler, _appends(done, deferral, head.blocks))
     if any(x >= SLOT_LIMIT for st in steps for x in (*st.freed, *(w.slot for w in st.written))):
         raise ValueError(f"a slot past memory-map/v1's {SLOT_LIMIT}")
     return head, steps
+
+
+def _appends(done: Mapping[int, list[tuple[int, bytes, int]]], deferral: Deferral | None, n: int) -> list[_Append]:
+    """The session's appends, each step's completed blocks `done[step]` by slot: without `deferral` landing at once, else
+    as its encodes have them, which must be the circuit's in order from index `n` up to the last made (the circuit's after
+    it the session never made); a re-key's blocks are taken when its line closes (`_lines`)."""
+    if deferral is None:
+        out, j = [], n
+        for w in sorted(done):
+            out.append(_Append(w, w, j, len(done[w]), False, sorted(done[w])))
+            j += len(done[w])
+        return out
+    es = [(m - deferral.first_step, None if r is None else r - deferral.first_step, f, c) for m, r, f, c in deferral.encodes]
+    out, j, last = [], n, -1
+    for u, (m, r, f, c) in enumerate(es):
+        whole = m in done and (u + 1 == len(es) or es[u + 1][0] != m)
+        prev = out[-1].landed if out else 0
+        if f != j or c < 1 or m < max(last, 0 if whole else 1) or (r is not None and (prev is None or r < max(prev, m))):
+            raise ValueError(f"the session's append {u}, {list(deferral.encodes[u])}, is no append of the store's next blocks from {j}, "
+                             "made at a step of the session in step order (a re-key after its first) and landing in append order, "
+                             "none before it is made")
+        if whole and c != len(done[m]):
+            raise ValueError(f"the session's append at step {m} is of {c} blocks, and the circuit completed {len(done[m])} there")
+        out.append(_Append(m, r, f, c, not whole, sorted(done[m]) if whole else []))
+        j, last = j + c, m
+    missed = [w for w in done if w <= last and not any(a.made == w and not a.rekey for a in out)]
+    if missed:
+        raise ValueError(f"the session made no append of the blocks the circuit completed at steps {sorted(missed)[:8]}")
+    return out
+
+
+def _lines(filler: Mapping[int, list[int]], appends: list[_Append]) -> list[Step]:
+    """The record's lines from the slots whose filler a write first reaches at each step and the session's `appends`, step by
+    step: each step's frees, its re-key (of the next step's append), the appends it makes, then its writes."""
+    #: each slot's written block: its index, the step writing it, the slot, its digest and its rows' last read's step
+    live: dict[int, tuple[int, int, int, bytes, int]] = {}
+    frees: dict[int, set[int]] = {}
+    queue: list[_Append] = []
+    out, k, t, end = [], 0, 0, max(filler, default=-1)
+    while t <= end or k < len(appends) or queue or frees:
+        freed = set(filler.get(t, ())) | frees.pop(t, set())
+        while k < len(appends) and appends[k].made == (t + 1 if appends[k].rekey else t):
+            a, k = appends[k], k + 1
+            if a.rekey:
+                old = sorted(v for v in live.values() if v[1] < t < v[4])[:a.count]
+                if len(old) < a.count:
+                    raise ValueError(f"the session re-keys {a.count} blocks at step {t}, and the circuit holds {len(old)} live")
+                for _, _, x, _, last in old:
+                    frees[last].discard(x)
+                    freed.add(x)
+                    del live[x]
+                a.blocks = sorted((x, d, last) for _, _, x, d, last in old)
+            if a.landed is not None:
+                queue.append(a)
+        seen: set[int] = set()
+        written = []
+        while queue and queue[0].landed <= t and not seen & {x for x, _, _ in queue[0].blocks}:
+            a = queue.pop(0)
+            for u, (x, d, last) in enumerate(a.blocks):
+                live[x] = (a.first + u, t, x, d, last)
+                frees.setdefault(last if last > t else t + 1, set()).add(x)
+                written.append(Written(x, a.first + u, d))
+                seen.add(x)
+        freed -= seen
+        if freed or written:
+            out.append(Step(t, tuple(sorted(freed)), tuple(written)))
+        t += 1
+    return out
 
 
 def engine_agrees(requests: Mapping[str, Rows], layout: Layout, tables: Mapping[str, Sequence[int]], steps: Sequence[Step],
