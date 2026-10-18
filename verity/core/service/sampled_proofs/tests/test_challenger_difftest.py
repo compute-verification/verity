@@ -212,7 +212,7 @@ def reason_case(rng: random.Random, name: str) -> Any:
             else:
                 d["opening"] = {**o, "index": index + 1}
         case "coin-short":
-            d["opening"] = {**o, "coin": o["coin"][:-2]}
+            d["opening"] = {**o, "coin": o["coin"][:rng.choice([-2, 64])]}
         case "salt-short":
             d["opening"] = {**o, "salt": o["salt"] + "00"}
         case "salt" | "coin":

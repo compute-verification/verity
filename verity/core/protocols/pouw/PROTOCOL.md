@@ -110,10 +110,11 @@ Vectors: `tests/vectors/epoch_coins_v1.json`.
 **Live coins** come from the proof service's one challenger (`verity.core.protocols.sampled_proofs.challenger`, Lean of
 record `SampledProofs.Challenger`), whose coins are indexed by label and index and named by no protocol, so every client
 uses the same form: a layout is a scheme, an epoch and its families `(label, count)` in order, coin `(label, i)` at its
-family's offset plus i, at most 2^20 coins. Before the epoch the challenger draws every coin and publishes
+family's offset plus i, at most 2^20 coins. Before the epoch the challenger draws every coin, 64 bytes, SHA-512's whole
+width (the seeded coins above stay 32 bytes, so a recorded seeded registration reads as it did), and publishes
 
 ~~~text
-x_p     = SHA-512(scheme || 0x00 || coin_p)
+x_p     = SHA-512(scheme || 0x00 || coin_p)                               coin_p: 64 fresh bytes (`COIN_BYTES`)
 value_p = hm96-sha512 tree_leaf(key, commit_string(key, x_p, salt_p))     salt_p: 192 fresh bytes, key the pinned default
 root    = frame-v3-sha512 tree over value_0 … value_(K−1) at positions 0 … K−1, leaf schema the scheme, domain binding
           identity_digest_sha512("verity/challenger/coins/v1", {epoch, families, scheme}), owner -1

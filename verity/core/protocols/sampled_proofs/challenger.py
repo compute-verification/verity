@@ -6,7 +6,7 @@ coins are for) and its families ``(label, count)`` in order: coin ``(label, i)``
 most `MAX_COINS` coins.  Before the epoch the challenger draws every coin and its hm96 salt from its own generator and
 publishes the coin commitment:
 
-    x_p     = SHA-512(scheme || 0x00 || coin_p)
+    x_p     = SHA-512(scheme || 0x00 || coin_p)                                     coin_p: 64 fresh bytes (`COIN_BYTES`)
     value_p = hm96-sha512 tree_leaf(key, commit_string(key, x_p, salt_p))           salt_p: 192 fresh bytes, key pinned
     root    = frame-v3-sha512 tree over value_0 … value_(K−1) at positions 0 … K−1, leaf schema the scheme, domain
               binding identity_digest_sha512("verity/challenger/coins/v1", {epoch, families, scheme}), owner -1
@@ -42,7 +42,7 @@ from verity.ml.commitments import hm96
 from verity.ml.commitments.identity import identity_digest_sha512
 
 BINDING = "verity/challenger/coins/v1"
-COIN_BYTES = 32
+COIN_BYTES = 64
 HM96 = hm96.SHA512
 KEY = HM96.default_key
 #: the most coins one commitment holds

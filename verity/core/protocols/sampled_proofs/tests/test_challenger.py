@@ -82,8 +82,9 @@ def test_every_recorded_root_has_its_coin_and_each_coin_its_place():
         "commit coin 0: coin is the epoch's other coin 0, not its commit coin 0"
     assert C.order_reason(ch.commitment, LABEL, roots, ops[:1] + [dataclasses.replace(ops[1], salt=bytes(192))] + ops[2:]) \
         == "commit coin 1: coin does not open against the epoch's coin commitment"
-    assert C.order_reason(ch.commitment, LABEL, roots, ops[:1] + [dataclasses.replace(ops[1], coin=ops[1].coin[:31])]
-                          + ops[2:]) == "commit coin 1: coin opening is malformed"
+    for short in (ops[1].coin[:32], ops[1].coin[:-1]):
+        assert C.order_reason(ch.commitment, LABEL, roots, ops[:1] + [dataclasses.replace(ops[1], coin=short)]
+                              + ops[2:]) == "commit coin 1: coin opening is malformed"
     with pytest.raises(C.CoinError, match="no noise family"):
         C.order_reason(ch.commitment, "noise", [], [])
     with pytest.raises(C.CoinError, match="no commit coin 4"):
