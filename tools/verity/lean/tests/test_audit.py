@@ -657,6 +657,68 @@ def test_a_package_pinning_arklib_is_refused_below_the_memory_floor(tmp_path):
     assert A.memory_refusal([heavy], 16, env={"VERITY_LEAN_MEM_FLOOR_GIB": "0"}) is None
 
 
+PLUGGED = '''name = "Dep"
+defaultTargets = ["Dep"]
+
+[[lean_lib]]
+name = "Plug"
+srcDir = "scripts"
+roots = ["Plug"]
+
+[[lean_lib]]
+name = "Dep"
+plugins = ["Plug:shared"]
+requiresModuleSystem = true
+
+[[lean_lib]]
+name = "DepTest"
+plugins = ["Plug:shared"]
+'''
+
+
+def test_the_dependencies_plugins_are_named_once_each():
+    """`plugin_targets`: each plugin a fetched dependency's libraries load, once, under the dependency's name."""
+    import tempfile
+    pkg = Path(tempfile.mkdtemp())
+    for name, text in (("Dep", PLUGGED), ("doc", 'name = "«doc-gen4»"\n[[lean_lib]]\nname = "D"\nplugins = ["P:shared"]\n'),
+                       ("plain", 'name = "plain"\n[[lean_lib]]\nname = "Plain"\n'), ("broken", "name = \n")):
+        (pkg / ".lake" / "packages" / name).mkdir(parents=True)
+        (pkg / ".lake" / "packages" / name / "lakefile.toml").write_text(text)
+    assert A.plugin_targets(pkg) == ["@Dep/Plug:shared", "@doc-gen4/P:shared"]
+    assert A.plugin_targets(pkg / "none") == []
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_plugin_two_libraries_load_is_linked_alone_first_so_the_build_links_it_no_more(tmp_path):
+    """INF-62: Lake 4.34 links a plugin twice when a module-system library and a classic one load it, as ArkLib's `ArkLib` and
+    `ArkLibTest` load `ArkLibLintPlugin:shared`, and the two links of one file race (three proofs builds failed so on 18 Oct).
+    Linked alone first (`plugin_targets`), the build finds it up to date and links nothing."""
+    dep, root = tmp_path / "dep", tmp_path / "root"
+    (dep / "scripts").mkdir(parents=True)
+    root.mkdir()
+    toolchain = (A.FIXTURES / "control" / "lean-toolchain").read_text()
+    (dep / "lakefile.toml").write_text(PLUGGED)
+    (dep / "scripts" / "Plug.lean").write_text("def plug : Nat := 1\n")
+    (dep / "Dep.lean").write_text("module\npublic def dep : Nat := 2\n")
+    (dep / "DepTest.lean").write_text("def depTest : Nat := 3\n")
+    (root / "lakefile.toml").write_text('name = "root"\ndefaultTargets = ["Root"]\n\n[[require]]\nname = "Dep"\n'
+                                        'path = "../dep"\n\n[[lean_lib]]\nname = "Root"\n')
+    (root / "Root.lean").write_text("import Dep\nimport DepTest\ndef root : Nat := dep + depTest\n")
+    for d in (dep, root):
+        (d / "lean-toolchain").write_text(toolchain)
+    lake = lambda *a: subprocess.run(["lake", *a], cwd=root, capture_output=True, text=True, env=A.lake_env())
+    twice = tmp_path / "twice"
+    shutil.copytree(tmp_path, twice, ignore=lambda d, n: ["twice"] if Path(d) == tmp_path else [])
+    plain = subprocess.run(["lake", "build"], cwd=twice / "root", capture_output=True, text=True, env=A.lake_env())
+    assert plain.stdout.count("Built Plug:shared") == 2, "the double link this guards against"
+    (root / ".lake" / "packages").mkdir(parents=True)
+    (root / ".lake" / "packages" / "Dep").symlink_to(dep)
+    assert A.plugin_targets(root) == ["@Dep/Plug:shared"]
+    assert lake("build", *A.plugin_targets(root)).returncode == 0
+    out = lake("build")
+    assert out.returncode == 0 and "Plug:shared" not in out.stdout, out.stdout
+
+
 def test_update_refuses_a_shared_shipped_tree(tmp_path, capsys):
     pkg = tmp_path / "Security"
     pkg.mkdir()

@@ -1,7 +1,7 @@
 {
  "definitions": {
-  "MemoryMapStep_v1{K=2,C=1,V=16,M=4,N=16,SLOTS=8}": {
-   "and": 100069
+  "MemoryMapStep_v2{K=2,C=1,V=16,M=4,N=16,SLOTS=8}": {
+   "and": 100341
   },
   "PlanMatch_v1{P=4,NR=16,V=16,G=2,TB=8,RPB=2}": {
    "and": 2159
