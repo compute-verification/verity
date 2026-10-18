@@ -1,16 +1,17 @@
 """`core_requirement` against `verity.ml.circuits.requirement`, through the core difftest harness (`verity/core/difftest`).
 
 `requirement-difftest` (`CircuitRequirement.Difftest.table`) serves `requirement`: an instance's live and read values at
-each step, their bits, by value and by block, the resident blocks, and whether the store and the step's plan are W's
-(`StoreMatches`, `PlanMatches`), with `held` and `read` over its steps; and, the execution placed on devices, PoUW's
-windows over it: each window's region at its ticks and at its engine steps, its ingress and its credits. The reference is
-`requirement.py`'s: `Requirement.of` on the instance's `Execution`, its `live`, `reads` and bits, `Layout.blocks` and
-`bits_in`, `Store.resident`, `store_matches`, `plan_matches` and `Placement`'s `region`, `step_region`, `ingress` and
-`credits`.
+each step, their bits, by value and by block, those in complete blocks (the credited ones) and their bits, the resident
+blocks, and whether the store and the step's plan are W's (`StoreMatches`, `PlanMatches`), with `held` and `read` over
+its steps; and, the execution placed on devices, PoUW's windows over it: each window's region at its ticks and at its
+engine steps, its ingress and its credits. The reference is `requirement.py`'s: `Requirement.of` on the instance's
+`Execution`, its `live`, `reads` and bits, `Layout.blocks` and `bits_in`, `credited`, `credited_reads`,
+`Store.resident`, `store_matches`, `plan_matches` and `Placement`'s `region`, `step_region`, `ingress` and `credits`.
 
 Drawn instances are small wirings with executions that follow them and some that don't, under `pack`'s layout and store,
-a mutation of them or a random one, placed on a few devices (sometimes in lockstep, with windows of whole steps), and
-malformed instances, which both refuse. Then Programs end to end, each through `requirement.execution`, `pack` and
+`paged`'s (a KV pool's, whose blocks fill over several steps), a mutation of `pack`'s or a random one, placed on a few
+devices (sometimes in lockstep, with windows of whole steps), and malformed instances, which both refuse. Then Programs
+end to end, each through `requirement.execution`, `pack` and
 `placed`, where Lean must find the honest store and plans W's at every step: the toy decoder of
 `verity/ml/circuits/tests/test_requirement.py`, and two rows of the vLLM registry, `b1.Serve` at the vLLM tests' tiny
 configuration (a two-layer model's prefill of three tokens and two decode steps, 37,172 gates) and
@@ -23,7 +24,7 @@ import json
 import random
 import re
 import shutil
-from itertools import accumulate
+from itertools import accumulate, chain
 from pathlib import Path
 
 import numpy as np
@@ -121,8 +122,11 @@ def requirement(i) -> dict:
 
     def at(t: int) -> dict:
         live, reads = req.live(t), req.reads(t)
+        credited, credited_reads = R.credited(req, layout, t), R.credited_reads(req, layout, t)
         return {"live": sorted(live), "live_bits": req.live_bits(t), "live_blocks": by_block(live),
                 "reads": sorted(reads), "read_bits": req.read_bits(t), "read_blocks": by_block(reads),
+                "credited": sorted(credited), "credited_bits": req.bits(credited),
+                "credited_reads": sorted(credited_reads), "credited_read_bits": req.bits(credited_reads),
                 "resident": sorted(store.resident(t)), "store_matches": R.store_matches(req, layout, store, B, t),
                 "plan_matches": R.plan_matches(req, layout, plans[t], B, t)}
 
@@ -143,16 +147,20 @@ Window = tuple[frozenset[int], frozenset[int], int, int, int, int]
 def encode(ex: R.Execution, layout: R.Layout, store: R.Store, plans, block_bits: int, steps: int,
            placement: R.Placement = R.Placement({}, {}), price=None, windows: list[Window] = ()) -> dict:
     """The instance `requirement` takes: `ex`'s values `0 … n - 1` (a value it has no width for is 0 bits, one with no
-    block is in block 0, one with no device on device 0, one with no price priced 0), the store's steps and blocks up to
+    device on device 0, one with no price priced 0, and those `layout` doesn't place share a block past every one the
+    layout and the store name, so that no block they name is incomplete for them), the store's steps and blocks up to
     the last it names, and the placement's devices up to the last it gives ticks for."""
     n = 1 + max([*ex.width, *ex.ops, *ex.registered, *ex.step], default=-1)
     top = 1 + max([*store.written, *store.freed], default=-1)
     blocks = 1 + max(store.payload, default=-1)
+    spare = 1 + max([store.registered - 1, *layout.block.values(), *store.payload,
+                     *chain(*store.written.values(), *store.freed.values())], default=-1)
     price = price or {}
     return {"width": [ex.width.get(v, 0) for v in range(n)], "registered": sorted(ex.registered),
             "ops": [list(ex.ops.get(v, ())) for v in range(n)], "uses": [sorted(ex.uses.get(v, ())) for v in range(n)],
             "step": [ex.step.get(v) for v in range(n)], "value": [ex.values.get(v, 0) for v in range(n)],
-            "block": [layout.block.get(v, 0) for v in range(n)], "offset": [layout.offset.get(v, 0) for v in range(n)],
+            "block": [layout.block.get(v, spare) for v in range(n)],
+            "offset": [layout.offset.get(v, 0) for v in range(n)],
             "store": {"registered": store.registered,
                       "written": [sorted(store.written.get(t, ())) for t in range(top)],
                       "freed": [sorted(store.freed.get(t, ())) for t in range(top)],
@@ -204,6 +212,34 @@ def _random_layout(rng: random.Random, n: int, B: int) -> tuple[R.Layout, R.Stor
                     {t: frozenset(rng.sample(range(6), rng.randrange(3))) for t in range(T)},
                     {j: rng.randrange(1 << B) for j in range(rng.randrange(6))})
     return layout, store
+
+
+def paged(req: R.Requirement, B: int) -> tuple[R.Layout, R.Store]:
+    """A KV pool's honest layout and store, one sequence's: the registered values as `pack` places them, then every
+    other value that is ever live in order of birth, filling blocks of `B` bits in turn, so that a block later steps
+    fill credits nothing until it is complete; each block written in the record of its last value's step, the one that
+    completes it, and freed in that of its values' last read."""
+    layout, store = R.pack(req, B)
+    block = {v: j for v, j in layout.block.items() if v in req.registered}
+    offset = {v: layout.offset[v] for v in block}
+    payload = {j: p for j, p in store.payload.items() if j < store.registered}
+    freed: dict[int, set[int]] = {s: {j for j in js if j < store.registered} for s, js in store.freed.items()}
+    written: dict[int, set[int]] = {}
+    j, off = store.registered - 1, 0
+    for v in sorted((v for v, b in req.born.items() if v not in req.registered and req.last.get(v, -1) > b),
+                    key=lambda v: (req.born[v], v)):
+        if j < store.registered or off + req.width[v] > B:
+            j, off = j + 1, 0
+        block[v], offset[v] = j, off
+        off += req.width[v]
+        if req.values:
+            payload[j] = payload.get(j, 0) | req.values[v] << offset[v]
+    for k in set(block.values()) - set(range(store.registered)):
+        vs = [v for v, i in block.items() if i == k]
+        written.setdefault(max(req.born[v] for v in vs), set()).add(k)
+        freed.setdefault(max(req.last[v] for v in vs), set()).add(k)
+    return R.Layout(block, offset), R.Store(store.registered, {s: frozenset(js) for s, js in written.items()},
+                                           {s: frozenset(js) for s, js in freed.items()}, payload)
 
 
 def _mutated(rng: random.Random, layout: R.Layout, store: R.Store, B: int) -> tuple[R.Layout, R.Store]:
@@ -296,12 +332,12 @@ def drawn(seed: int) -> object:
     n, T, B = rng.randrange(13), rng.randrange(5), rng.choice([8, 16, 32, 64, 128])
     ex = _execution(rng, n, T)
     req = R.Requirement.of(ex) if ex.follows() else None
-    mode = rng.choice(["honest", "honest", "honest", "mutated", "random"])
+    mode = rng.choice(["honest", "honest", "paged", "mutated", "random"])
     if req is not None and mode != "random" and all(w <= B for w in ex.width.values()):
-        layout, store = R.pack(req, B)
+        layout, store = (paged if mode == "paged" else R.pack)(req, B)
         if mode == "mutated":
             layout, store = _mutated(rng, layout, store, B)
-        plans = [set(R.read_blocks(req, layout, t)) for t in range(T)]
+        plans = [set(layout.blocks(R.credited_reads(req, layout, t))) for t in range(T)]
         if mode == "mutated" and plans and rng.random() < 0.5:
             t = rng.randrange(T)
             plans[t] ^= {rng.randrange(8)}
@@ -332,6 +368,28 @@ def test_the_drawn_links_both_hold_and_fail(server):
     outs = [out for seed in range(300) if (out := _lean(drawn(seed), server)) is not None]
     seen = {(k, s[k]) for out in outs for s in out["steps"] for k in ("store_matches", "plan_matches")}
     assert seen == {(k, b) for k in ("store_matches", "plan_matches") for b in (True, False)}
+
+
+def test_a_paged_store_credits_all_but_the_block_being_filled(server):
+    """`paged`'s store and plans are W's at every step, and what they don't credit, the live values and the reads in the
+    one block being filled, is at most its `B` bits (`RequirementUncredited`, `RequirementUnplanned` with one group);
+    often it is some."""
+    short = 0
+    for seed in range(200):
+        rng = random.Random(seed)
+        n, T, B = 1 + rng.randrange(12), 1 + rng.randrange(4), rng.choice([16, 32, 64])
+        ex = _execution(rng, n, T)
+        if not ex.follows() or any(w > B for w in ex.width.values()):
+            continue
+        req = R.Requirement.of(ex)
+        layout, store = paged(req, B)
+        plans = [layout.blocks(R.credited_reads(req, layout, t)) for t in range(T)]
+        out = _lean(encode(ex, layout, store, plans, B, T), server)
+        assert out is not None and all(s["store_matches"] and s["plan_matches"] for s in out["steps"])
+        for s in out["steps"]:
+            assert 0 <= s["live_bits"] - s["credited_bits"] <= B and 0 <= s["read_bits"] - s["credited_read_bits"] <= B
+            short += s["live_bits"] > s["credited_bits"]
+    assert short > 20, short
 
 
 def _whole_steps(value: dict) -> set[int]:
@@ -390,11 +448,13 @@ def case(program: Program, schedule: R.Schedule, inputs: dict[int, int], block_b
 
 
 def honest(value: dict, server) -> dict:
-    """Lean's output on `value`, which Python's equals, with the store and every plan W's at every step; each step's
-    window on device 1 the region of that engine step (`RequirementSteps`), taking in bits from the other devices; and
-    the whole run's window every computed gate, its credits their price."""
+    """Lean's output on `value`, which Python's equals, with the store and every plan W's at every step, crediting every
+    live value and every read (`pack`'s blocks are complete at their values' step); each step's window on device 1 the
+    region of that engine step (`RequirementSteps`), taking in bits from the other devices; and the whole run's window
+    every computed gate, its credits their price."""
     out = _lean(value, server)
     assert out is not None and all(s["store_matches"] and s["plan_matches"] for s in out["steps"])
+    assert all(s["credited"] == s["live"] and s["credited_reads"] == s["reads"] for s in out["steps"])
     T, windows = value["steps"], out["windows"]
     assert all(w["region"] == w["step_region"] and w["ingress"] > 0 for w in windows[:T])
     computed = [v for v, s in enumerate(value["step"]) if s is not None and value["leaf"][v]]

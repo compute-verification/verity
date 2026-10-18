@@ -117,13 +117,15 @@ def _subsets(xs):
 
 @pytest.mark.parametrize("B", [64, 128, R.BLOCK_BITS])
 def test_the_honest_store_matches_and_the_transfer_bounds_hold(run, B):
-    """`pack` gives a store and plans that are W's at every step, and on them RequirementHeld, RequirementHeldLive,
-    RequirementDense and RequirementMoved hold for every held and moved set of blocks."""
+    """`pack` gives a store and plans that are W's at every step, crediting every live value, and on them
+    RequirementHeld, RequirementHeldLive, RequirementDense and RequirementMoved hold for every held and moved set of
+    blocks."""
     _, _, _, req = run
     layout, store = R.pack(req, B)
     for t in range(req.steps):
         live, reads, resident = req.live(t), req.reads(t), store.resident(t)
         plan = R.read_blocks(req, layout, t)
+        assert R.credited(req, layout, t) == live and R.credited_reads(req, layout, t) == reads
         assert R.store_matches(req, layout, store, B, t) and R.plan_matches(req, layout, plan, B, t)
         for H in _subsets(resident):
             assert req.live_bits(t) <= layout.bits_at(req, live, set(H)) + len(resident - set(H)) * B
@@ -160,6 +162,24 @@ def test_a_block_or_a_read_w_does_not_have_fails_the_link(run):
     assert not R.plan_matches(req, layout, R.read_blocks(req, layout, 1) - {5}, 64, 1)
     forged = R.Store(store.registered, store.written, store.freed, {**store.payload, 6: store.payload[6] ^ 1})
     assert not R.store_matches(req, layout, forged, 64, 2)
+
+
+def test_a_block_a_later_step_fills_is_credited_once_complete(run):
+    """With k_1 (born at step 1) beside k_0 and tok_1 in step 0's append, as a KV pool fills a page, that block is
+    incomplete at step 1: its live k_0 and tok_1 aren't credited then, 64 of the live bits, and the store is W's with
+    the block written in step 1's record, the one that completes it, but not with it written in step 0's."""
+    _, _, _, req = run
+    layout, store = R.pack(req, 128)
+    assert (store.registered, layout.block[14], layout.block[15], layout.block[19], layout.offset[15]) == (3, 3, 3, 4, 32)
+    paged = R.Layout({**layout.block, 19: 3}, {**layout.offset, 19: 64})
+    filled = R.Store(3, {0: frozenset(), 1: frozenset({3, 4})}, store.freed,
+                     {**store.payload, 3: store.payload[3] | req.values[19] << 64})
+    assert R.incomplete(req, paged, 1) == {3, 4} and not R.incomplete(req, paged, 2)
+    assert R.credited(req, paged, 1) == req.live(1) - {14, 15} and R.credited(req, paged, 2) == req.live(2)
+    assert R.credited_reads(req, paged, 1) == req.reads(1) - {14, 15}
+    assert req.live_bits(1) - req.bits(R.credited(req, paged, 1)) == 64
+    assert all(R.store_matches(req, paged, filled, 128, t) for t in range(req.steps))
+    assert not R.store_matches(req, paged, store, 128, 1)
 
 
 def test_past_the_executed_prefix_nothing_runs(run):
