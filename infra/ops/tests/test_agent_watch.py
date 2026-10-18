@@ -146,7 +146,7 @@ def test_a_run_stuck_in_creating_or_background_work_is_recorded_once_never_cance
 def test_a_background_wait_is_held_only_after_an_hour(tmp_path):
     """top, 18:07Z: a held agent can read WAITING_FOR_BACKGROUND_WORK. Cancelling one may take its local workers, so it waits 1 h."""
     api, clock, w, started = setup(tmp_path, status="WAITING_FOR_BACKGROUND_WORK")
-    assert [(r.run, r.held_s) for r in started] == [("run-1", W.HELD_BG_S)]
+    assert [(r.run, W.FOLLOW[r.status]) for r in started] == [("run-1", W.HELD_BG_S)]
     w.on_event("run-1", "tool_call", {"callId": "c1", "status": "completed"})
     clock.t += W.HELD_S
     w.sweep(started.append)
@@ -296,7 +296,9 @@ def test_a_background_wait_with_working_subagents_is_left_alone_and_a_silent_one
     with nothing at all streamed for 2 h is recorded as stuck, once, and never cancelled."""
     api, clock, w, started = setup(tmp_path, status="WAITING_FOR_BACKGROUND_WORK")
     w.on_event("run-1", "tool_call", {"callId": "t1", "name": "task", "status": "running"})
+    w.on_event("run-1", "interaction_update", {"type": "step-started", "stepId": "s2"})
     held_tool_call(w, cid="c2")
+    w.on_event("run-1", "interaction_update", {"type": "turn-ended"})
     for _ in range(3 * 6):
         clock.t += 10 * 60
         w.on_event("run-1", "interaction_update", {"type": "tool-call-delta", "callId": "t1", "taskUpdate": {}})
@@ -307,6 +309,20 @@ def test_a_background_wait_with_working_subagents_is_left_alone_and_a_silent_one
     w.sweep(started.append)
     assert [(r["kind"], r["status"], r["minutes"]) for r in records(tmp_path)] == [("stuck", "WAITING_FOR_BACKGROUND_WORK", 120)]
     assert api.posts == []
+
+
+def test_a_worker_finishing_is_not_the_parent_finishing_a_tool_call(tmp_path):
+    """One of a waiting coordinator's workers finishes, its `task` call completing, while another goes on quietly."""
+    api, clock, w, started = setup(tmp_path, status="WAITING_FOR_BACKGROUND_WORK")
+    for cid in ("t1", "t2"):
+        w.on_event("run-1", "tool_call", {"callId": cid, "name": "task", "status": "running"})
+    w.on_event("run-1", "assistant", {"text": "two workers are off; I'll wait"})
+    clock.t += 30 * 60
+    w.on_event("run-1", "tool_call", {"callId": "t1", "name": "task", "status": "completed"})
+    w.on_event("run-1", "interaction_update", {"type": "tool-call-completed", "callId": "t1"})
+    clock.t += W.HELD_BG_S
+    w.sweep(started.append)
+    assert api.posts == [] and records(tmp_path) == []
 
 
 def test_a_run_behind_one_cancelled_on_arrival_is_followed_and_freed(tmp_path):
