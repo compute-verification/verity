@@ -50,3 +50,34 @@ def test_the_table_charges_a_longer_life_a_larger_stock():
     assert m[0]["f_live[conjectured]"] == pytest.approx(rows[0]["f_live[conjectured]"] / 2.5)
     assert m[0]["append_gpu_share"] == pytest.approx(rows[0]["append_gpu_share"] * 2.5 / 8)
     assert m[0]["law[conjectured]"] == pytest.approx(1 - rows[0]["stock_GB[conjectured]"] * 1e9 / 6e11)
+
+
+def test_a_run_too_light_to_batch_a_big_prefill_reads_its_block_clock_and_takes_the_origin_clocks_rate_outright(
+        tmp_path, monkeypatch):
+    import json
+
+    grid = {f"T={T:g},L={L}": {p: {"by_stock": {"0.0": 1.0, "1000000000000.0": 0.0}, "rekey_bytes_per_s": 1e6,
+                                   "credited_before_stock": 1.0, "held_bytes_mean": 4e10}
+                               for p in ("rekey", "held", "expire")}
+            for T, Ls in F.GRID for L in Ls}
+    win = {k: [1.0, 2.0] for k in ("T", "X", "Q", "K", "n", "n0")}
+    phase = {"frontier": grid, "frontier_origin": grid, "busy_s": 50.0, "interval_s": [0.0, 100.0],
+             "written_bytes_per_s": 5e8, "delayed": {}, "occupancy": {"held_bytes_mean": 4e10},
+             "model_windows_1s": win, "model_totals": {k: 3.0 for k in win}, "prefill_rows_per_s": None}
+    (tmp_path / "a.json").write_text(json.dumps({"serve": {"pool_bytes": 1e12, "kv_bytes_per_token": 131072},
+                                                 "phases": [phase]}))
+    model = {"token": {"r": 1.0}, "sample": {}, "coefficients": {}, "calls": 0}
+    (tmp_path / "m.json").write_text(json.dumps({"models": {"m": {"l": model}}}))
+    base = ["frontier.py", str(tmp_path / "a.json"), "--models", str(tmp_path / "m.json"), "--model-name", "m",
+            "--lever", "l", "--engines", "1"]
+
+    def run(*extra):
+        out = tmp_path / "out.json"
+        monkeypatch.setattr(sys, "argv", [*base, *extra, "--json", str(out)])
+        assert F.main() == 0
+        return json.loads(out.read_text())
+
+    assert run()["recompute_Bps"] is None
+    with pytest.raises(SystemExit, match="prefill-rows-per-s"):
+        run("--clock", "origin")
+    assert run("--clock", "origin", "--prefill-rows-per-s", "1e4")["recompute_Bps"] == pytest.approx(1e4 * 131072)
