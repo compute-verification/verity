@@ -855,20 +855,26 @@ theorem EncodeBudget : Accounting.Guarantees.Gates.EncodeBudget := by
   intro F k B E εnum εden ι W caps A m x words out H hP hR hci hnd hlt hcw
   have h := H W m x words out hR hci hnd hlt hcw
   obtain ⟨hwin, hcap, -⟩ := hP
-  have hb : budgeted W ≤ caps.total * ∑ v ∈ Finset.range A.windows, A.reads v := by
-    rw [budgeted_eq W A hwin, Finset.mul_sum]
+  have hb : (budgeted W : ℚ) ≤ caps.total * (∑ v ∈ Finset.range A.windows, A.reads v : ℕ) := by
+    rw [budgeted_eq W A hwin]
+    push_cast
+    rw [Finset.mul_sum]
     apply Finset.sum_le_sum
     intro v hv
     obtain ⟨h1, h2, h3, h4, h5, -⟩ := hcap v (Finset.mem_range.mp hv)
-    simp only [Census.budgeted, Caps.total, add_mul]
-    omega
+    simp only [Census.budgeted, Caps.total, h5]
+    push_cast
+    linarith
   have hr : runBits W ≤ 8 * caps.runBytes * A.windows := by
     rw [runBits, ← sum_countAt W A.win A.windows _ hwin]
     calc _ ≤ ∑ v ∈ Finset.range A.windows, 8 * caps.runBytes :=
           Finset.sum_le_sum fun v hv => (hcap v (Finset.mem_range.mp hv)).2.2.2.2.2
       _ = 8 * caps.runBytes * A.windows := by simp [mul_comm]
-  calc words.length * E * (F.n - 1) ≤ budgeted W * (F.n - 1) + runBits W * E := h
-    _ ≤ _ := add_le_add (Nat.mul_le_mul_right _ hb) (Nat.mul_le_mul_right _ hr)
+  have h' : ((words.length * E * (F.n - 1) : ℕ) : ℚ) ≤ (budgeted W : ℚ) * (F.n - 1 : ℕ) + (runBits W * E : ℕ) := by
+    exact_mod_cast h
+  have hr' : ((runBits W * E : ℕ) : ℚ) ≤ (8 * caps.runBytes * A.windows * E : ℕ) := by
+    exact_mod_cast Nat.mul_le_mul_right E hr
+  exact h'.trans (add_le_add (mul_le_mul_of_nonneg_right hb (Nat.cast_nonneg _)) hr')
 
 theorem EncodeCost : Accounting.Guarantees.Gates.EncodeCost := by
   intro F k B E εnum εden q H hn

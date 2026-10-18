@@ -1,5 +1,6 @@
 import Mathlib.Algebra.BigOperators.Group.List.Basic
 import Mathlib.Algebra.BigOperators.Group.Finset.Basic
+import Mathlib.Algebra.Order.Field.Rat
 import Mathlib.Data.Nat.Log
 import Mathlib.Data.Finset.Card
 
@@ -60,9 +61,9 @@ floor. It follows the IR (`verity/ml/circuits/PROTOCOL.md`) gate for gate, so th
   apart), the limb splits' carries, the committed outputs and the inputs' bits. The counting bounds charge each
   budgeted gate and each run input the size of its declared interval (`volume`, `chargedBits`).
 * **The property.** `Property caps A W`: the stacking property `P(c, R_in, L)` of property/v1 as a predicate on `W`'s
-  census and the audit's certified reads: per window, each budgeted class's units within its cap per certified byte
-  read, no neutral unit and the run inputs within `R_in`, every gate in a window, and no value read more than `L`
-  engine steps after it is produced.
+  census and the audit's certified reads: per window, each budgeted class's units within its cap (a rational) per
+  certified byte read, no neutral unit and the run inputs within `R_in`, every gate in a window, and no value read
+  more than `L` engine steps after it is produced.
 * **The chain's restriction.** Every budgeted gate reads at most `B` operand bits, the declared bits of its operands
   (`OperandBits`): one gate that reads a word's bits computes a byte of its root.
 * **Fan-in.** MULT-LB's lane programs (`ofLane`: inputs, then instructions that each apply an arbitrary function to at
@@ -552,19 +553,20 @@ def budgeted (C : Dag ι) : ℕ := ∑ i ∈ Finset.range C.length, units C i
 /-- The run inputs' declared bits. -/
 def runBits (C : Dag ι) : ℕ := (C.map (Gate.inputBits .run)).sum
 
-/-- The property's parameters: each budgeted class's cap in units per certified byte read, `R_in` and `L`. -/
+/-- The property's parameters: each budgeted class's cap in units per certified byte read, a rational as property/v1's
+`c` is (an honest circuit's rate is a small fraction of a unit a byte), `R_in` and `L`. -/
 structure Caps where
-  rounding : ℕ
-  compareSelect : ℕ
-  gather : ℕ
-  fold : ℕ
+  rounding : ℚ
+  compareSelect : ℚ
+  gather : ℚ
+  fold : ℚ
   /-- `R_in`: run-input bytes a window -/
   runBytes : ℕ
   /-- `L`: the engine steps a value may be read after the step that produced it -/
   life : ℕ
 
 /-- The budgeted units the caps allow per certified byte read. -/
-def Caps.total (k : Caps) : ℕ := k.rounding + k.compareSelect + k.gather + k.fold
+def Caps.total (k : Caps) : ℚ := k.rounding + k.compareSelect + k.gather + k.fold
 
 /-- The audit's windows: `windows` of them, the window `win t` of each engine step `t`, and the bytes the audit
 certified `W` read in each (`reads w`). -/
@@ -581,8 +583,8 @@ def Property (k : Caps) (A : Audit) (W : Dag ι) : Prop :=
   (∀ g ∈ W, A.win g.step < A.windows) ∧
     (∀ w < A.windows,
       let c := census W (fun t => A.win t = w)
-      c.rounding ≤ k.rounding * A.reads w ∧ c.compareSelect ≤ k.compareSelect * A.reads w ∧
-        c.gather ≤ k.gather * A.reads w ∧ c.fold ≤ k.fold * A.reads w ∧
+      (c.rounding : ℚ) ≤ k.rounding * A.reads w ∧ (c.compareSelect : ℚ) ≤ k.compareSelect * A.reads w ∧
+        (c.gather : ℚ) ≤ k.gather * A.reads w ∧ (c.fold : ℚ) ≤ k.fold * A.reads w ∧
           c.neutral = 0 ∧ c.runBits ≤ 8 * k.runBytes) ∧
     ∀ i (h : i < W.length), ∀ j ∈ W[i].args, ∀ g ∈ W[j]?, W[i].step ≤ g.step + k.life
 

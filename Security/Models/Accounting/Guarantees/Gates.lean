@@ -46,8 +46,9 @@ on, from the most general to the one 6a's carrier lemma takes as its `q`:
   drops, is the Legendre symbol of `x`.
 * `EncodeBudget`: the connection. For a declared circuit `W` that satisfies the stacking property `P` and is in the
   restricted class, the words of fresh encodings `W`'s values hold on more than `ε` of the draws number at most
-  `(budget)/E + (run-input bits)/(n − 1)`, under `EncodeChainHardness` at `E`: the budget is the caps times the
-  audit's certified reads, summed over the windows, and the run inputs are `R_in` a window.
+  `(budget)/E + (run-input bits)/(n − 1)`, under `EncodeChainHardness` at `E`: the budget is the caps (rational
+  units per certified byte) times the audit's certified reads, summed over the windows, and the run inputs are `R_in`
+  a window.
 * `EncodeCost`: under `EncodeChainHardness` at `E`, the encode cost (`encodeCost`) of `q` words is at least `q · E`
   (`⊤` when no circuit computes them): the cost 6a's `encodeBitsCost` reads.
 * `FmaxfRange`, `FminfRange`, `RzByteRange`: property/v1's interval rules for P's producers hold their evaluators'
@@ -196,16 +197,17 @@ their declared intervals (its window is then `ProvenWindow`'s, never a hypothesi
 
   `q · E · (n − 1) ≤ (c · Σ_w reads_w) · (n − 1) + 8 · R_in · windows · E`,
 
-with `c` the caps' budgeted units per certified byte read (property/v1's units: gathers by fresh index bits):
-`q ≤ c · reads / E + 8 · R_in · windows / (n − 1)`. -/
+with `c` the caps' budgeted units per certified byte read, a rational (property/v1's units: gathers by fresh index
+bits): `q ≤ c · reads / E + 8 · R_in · windows / (n − 1)`. -/
 def EncodeBudget : Prop :=
   ∀ (F : Field) (k B E εnum εden : ℕ) {ι : Type} (W : Dag ι) (caps : Caps) (A : Audit) (m : ℕ → ℕ)
     (x : Draw k → ι → ℤ) (words : List ℕ) (out : ℕ → ℕ → ℕ),
     EncodeChainHardness F k B E εnum εden →
     Property caps A W → Restricted B W → CodecInputs F W (draws F k) m x → words.Nodup →
     (∀ i ∈ words, i < F.p) → ComputesWords F k W x m words out εnum εden →
-    words.length * E * (F.n - 1) ≤
-      (caps.total * ∑ v ∈ Finset.range A.windows, A.reads v) * (F.n - 1) + 8 * caps.runBytes * A.windows * E
+    ((words.length * E * (F.n - 1) : ℕ) : ℚ) ≤
+      caps.total * (∑ v ∈ Finset.range A.windows, A.reads v : ℕ) * (F.n - 1 : ℕ) +
+        (8 * caps.runBytes * A.windows * E : ℕ)
 
 /-- **The encode cost, bounded.** Under `EncodeChainHardness F k B E ε`, with `n ≥ 2`, `q` distinct words cost at
 least `q · E` budgeted units: `q · E ≤ encodeCost F k B ε q`, which is `⊤` when no restricted circuit with no run input
