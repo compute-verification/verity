@@ -3,9 +3,9 @@ compiled Program's served outputs are the served Program's.
 
 The scheme here (`compile-test`, tile 2 × 2; `compile-test-16`, 16 × 16) is a stand-in with a real scheme's shape,
 ``(a: r rows of A, b: c rows of B, salt, position, roots) -> {z, receipt}`` (decisions 105 and 106): the unit derives its seed
-from the salt, its position and its roots (`seeds.PouwSeed`), and from the seed one noise block a row of A; it adds the
-noise to its rows, folds each cell's noised arm into the receipt (the s8 family's prefix arm, or for a Boolean family its own
-Definition on the noised row) and returns its cells' exact products as z. #2365's layer is `TemplatePopulations` over
+from the salt, its position and its seed group's roots (`seeds.PouwSeed`), and from the seed one noise block a row of A; it
+adds the noise to its rows, folds each cell's noised arm into the receipt (the s8 family's prefix arm, or for another kind its
+own Definition on the noised row) and returns its cells' exact products as z. #2365's layer is `TemplatePopulations` over
 `ScaledMmS8Coordinate_v1` at K = 2048 and 8192, as `benchmarks/one_stage/a6.py` builds it."""
 from __future__ import annotations
 
@@ -20,13 +20,14 @@ import pytest
 from verity.ml.circuits.codec import encode_program
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.evaluation import evaluate
+from verity.ml.circuits.ops import fp32 as FP
 from verity.ml.circuits.ops import gemm as G
 from verity.ml.circuits.ops import prims as P
 from verity.ml.circuits.ops import s8 as S8
 from verity.ml.circuits.ops.boolean import gemm as BG
 from verity.ml.circuits.ops.boolean import s8 as BS8
 from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import Coll, concat
+from verity.ml.circuits.refs import Coll, array_of, concat
 from verity.ml.circuits.types import Array, Record, Tuple, Value
 from verity.core.protocols.pouw.circuit import compile as C
 from verity.core.protocols.pouw.circuit import hashes as H
@@ -34,7 +35,7 @@ from verity.core.protocols.pouw.circuit import seeds as SD
 from verity.core.protocols.pouw.protocol import DomainError
 from verity.core.protocols.sampled_proofs.one_stage import partition as OP
 
-V1, V8, V32 = Value(1), Value(8), Value(32)
+V1, V8, V16, V32 = Value(1), Value(8), Value(16), Value(32)
 M32 = (1 << 32) - 1
 LAYER = ((2048, 21504), (8192, 2048))
 REDUCED = ((2048, 3), (8192, 2))
@@ -67,9 +68,13 @@ COIN = {"params": lambda p: {"e": p.In(kind="coin")}}
 FOLD = {"params": lambda p: {"r": p.In(receipt=True)}, "ret": lambda p: p.Out(sink=True)}
 UNIT_PORTS = {"params": lambda p: {"salt": p.In(kind="coin")}, "ret": lambda p: {"receipt": p.Out(sink=True)}}
 
-ADD8 = _prim("CompileTestAdd8", (("x", V8), ("e", V8)), V8, lambda x, e: (x + e) & 0xFF)
+ADD = {w: _prim(f"CompileTestAdd{w}", (("x", Value(w)), ("e", Value(w))), Value(w), lambda x, e, w=w: (x + e) % (1 << w))
+       for w in (8, 16)}
 XOR1 = _prim("CompileTestXor1", (("x", V1), ("e", V1)), V1, lambda x, e: x ^ e)
-BYTES = tuple(_prim(f"CompileTestByte{s}", (("w", V32),), V8, lambda w, s=s: (w >> 8 * s) & 0xFF) for s in range(4))
+#: a noise word's w-bit pieces, least significant first
+PIECES = {w: tuple(_prim(f"CompileTestPiece{w}x{s}", (("x", V32),), Value(w), lambda x, s=s, w=w: (x >> w * s) % (1 << w))
+                   for s in range(32 // w)) for w in (8, 16)}
+ADD8 = ADD[8]
 FOLD32 = _prim("CompileTestFold32", (("r", V32), ("t", V32)), V32, lambda r, t: (r * 0x9E3779B1 + t) & M32, ports=FOLD)
 FOLD1 = _prim("CompileTestFold1", (("r", V1), ("t", V1)), V1, lambda r, t: r ^ t, ports=FOLD)
 NEG8 = _prim("CompileTestNeg8", (("x", V8),), V8, lambda x: -x & 0xFF)
@@ -98,34 +103,32 @@ def _unit_signature(S):
 
 
 def _noised(B, S, a, seed):
-    """A's rows plus the seed's noise: on bits the stream's first bits, on words a noise block's 64 bytes a row, repeated
-    along k."""
+    """A's rows plus the seed's noise: on bits the stream's first bits, on words of w bits a noise block's 512 / w pieces a
+    row, repeated along k."""
     row = a.type.elem
-    flat = Array(a.type.leaves, V1 if _boolean(S) else V8)
     if _boolean(S):
+        flat = Array(a.type.leaves, V1)
         e = SD.stream_bits(B, seed, a.type.leaves)
         return Coll(a.type, B.batch(XOR1, Coll(flat, a.refs), e, axes=(0, 0)).refs)
+    w = row.homogeneous_width()
+    flat = Array(a.type.leaves, Value(w))
     parts = []
     for blk in SD.noise_blocks(B, seed, S.R, False):
-        by = concat([B.batch(BYTES[s], blk, axes=(0,)).refs for s in range(4)])
-        parts.append(concat([by] * -(-row.leaves // by.count)).slice(0, row.leaves))
-    return Coll(a.type, B.batch(ADD8, Coll(flat, a.refs), Coll(flat, concat(parts)), axes=(0, 0)).refs)
+        piece = concat([B.batch(f, blk, axes=(0,)).refs for f in PIECES[w]])
+        parts.append(concat([piece] * -(-row.leaves // piece.count)).slice(0, row.leaves))
+    return Coll(a.type, B.batch(ADD[w], Coll(flat, a.refs), Coll(flat, concat(parts)), axes=(0, 0)).refs)
 
 
 def _fold(B, S, noised, b):
-    if _boolean(S):
-        r = None
-        for i, j in S.PAIRS:
-            y = B.call(S.EXACT, noised[i], b[j])
-            for t in range(y.type.leaves):
-                bit = Coll(V1, y.refs.slice(t, t + 1))
-                r = bit if r is None else B.call(FOLD1, r, bit)
-        return r
-    r = B.call(P.ZERO32)
+    """The receipt: each cell's noised arm folded, the s8 prefix words (`NOISED`) or the leaves of the kind's own Definition
+    on the noised row."""
+    fold, width = (FOLD1, V1) if _boolean(S) else (FOLD32, V32)
+    r = None
     for i, j in S.PAIRS:
-        T = B.call(S.NOISED, noised[i], b[j])
-        for t in range(T.type.leaves):
-            r = B.call(FOLD32, r, Coll(V32, T.refs.slice(t, t + 1)))
+        y = B.call(S.EXACT if S.NOISED is None else S.NOISED, noised[i], b[j])
+        for t in range(y.type.leaves):
+            leaf = Coll(width, y.refs.slice(t, t + 1))
+            r = leaf if r is None else B.call(fold, r, leaf)
     return r
 
 
@@ -145,7 +148,7 @@ UNIT = _def("CompileTestUnit", TILE, _unit_signature, _unit_body, ports=UNIT_POR
 
 def _statics(dot, tile):
     noised = None
-    if not dot.boolean:
+    if dot.a == Array(dot.k, V8):
         noised = bind(S8.S8Dot, K=dot.k, L=32, T0="zero", C=None, DOT=dot.step, A=(-128, 127), B=dot.b_bound or (-128, 127),
                       TAIL=(), TDOT=None, NOISE="P", LIMBS="none", COMMIT="prefix")
     return {"EXACT": dot.exact, "NOISED": noised, "R": tile.r, "C": tile.c, "PAIRS": tile.pairs}
@@ -155,8 +158,8 @@ def _unit(defn):
     return lambda dot, tile: bind(defn, **_statics(dot, tile))
 
 
-SCHEME = C.register(C.Scheme("compile-test", (2, 2), _unit(UNIT))).name
-SCHEME16 = C.register(C.Scheme("compile-test-16", (16, 16), _unit(UNIT))).name
+SCHEME = C.register(C.Scheme("compile-test", (2, 2), {C.ANY: _unit(UNIT)})).name
+SCHEME16 = C.register(C.Scheme("compile-test-16", (16, 16), {C.ANY: _unit(UNIT)})).name
 
 
 def _recompute_body(B, S, a, b, salt, position, roots):
@@ -166,9 +169,9 @@ def _recompute_body(B, S, a, b, salt, position, roots):
     return Coll(_unit_signature(S)[1], concat(z + [r.refs]))
 
 
-RECOMPUTING = C.register(C.Scheme("compile-test-recompute", (1, 1), _unit(_def("CompileTestRecompute", TILE, _unit_signature,
-                                                                               _recompute_body, ports=UNIT_PORTS)))).name
-WRONG = C.register(C.Scheme("compile-test-wrong", (1, 1), lambda d, t: d.exact)).name
+RECOMPUTING = C.register(C.Scheme("compile-test-recompute", (1, 1), {C.ANY: _unit(
+    _def("CompileTestRecompute", TILE, _unit_signature, _recompute_body, ports=UNIT_PORTS))})).name
+WRONG = C.register(C.Scheme("compile-test-wrong", (1, 1), {C.ANY: lambda d, t: d.exact})).name
 
 
 def _no_seed(B, S, a, b, salt, position, roots):
@@ -208,7 +211,7 @@ def _bad(name, body):
         return Coll(_unit_signature(S)[1], concat(z + [r.refs]))
 
     defn = _def("CompileTest" + name.title().replace("-", ""), TILE, _unit_signature, build, ports=UNIT_PORTS)
-    return C.register(C.Scheme(f"compile-test-{name}", (1, 1), _unit(defn))).name
+    return C.register(C.Scheme(f"compile-test-{name}", (1, 1), {C.ANY: _unit(defn)})).name
 
 
 UNIT_REFUSED = [
@@ -297,7 +300,8 @@ def _args(fn, rng):
 
 
 def _roots(c):
-    return [(hashlib.sha512(b"A%d" % s.index).digest(), hashlib.sha512(b"B%d" % s.index).digest()) for s in c.sites]
+    """A (root(A), root(B)) per seed group."""
+    return [(hashlib.sha512(b"A%d" % g).digest(), hashlib.sha512(b"B%d" % g).digest()) for g in range(len(c.groups))]
 
 
 def _run(c, args, salt=SALT, roots=None, base=0):
@@ -519,7 +523,125 @@ def test_scheme_refused():
     _refused("scheme", Program(bind(TWICE)), "no-such-scheme")
     _refused("scheme", Program(bind(TWICE)), WRONG)
     with pytest.raises(ValueError):
-        C.register(C.Scheme("compile-test-empty", (0, 2), _unit(UNIT)))
+        C.register(C.Scheme("compile-test-empty", (0, 2), {C.ANY: _unit(UNIT)}))
+    with pytest.raises(ValueError):
+        C.register(C.Scheme("compile-test-uncovering", (2, 2), {C.ANY: _unit(UNIT)}, cover=0))
+
+
+# -- kinds and seed groups (decisions 109 and 112) ---------------------------------------------------------------------------
+
+BF = P.BF16
+QK = bind(G.DotBf16, K=64, **G.GEMM_AMPERE)
+
+
+def _scores_body(B, S, q, k):
+    s = B.batch(QK, q, k, axes=(None, 0))
+    m = s[0]
+    for j in range(1, S.N):
+        m = B.call(FP.F32Max, m, s[j])
+    return m
+
+
+SCORES = _def("CompileTestScores", ("N",), lambda S: ((("q", Array(64, BF)), ("k", Array(S.N, Array(64, BF)))), P.F32),
+              _scores_body)
+HEADS = _def("CompileTestHeads", ("H", "N"),
+             lambda S: ((("q", Array(S.H, Array(64, BF))), ("k", Array(S.H, Array(S.N, Array(64, BF))))), Array(S.H, P.F32)),
+             lambda B, S, q, k: B.batch(bind(SCORES, N=S.N), q, k, axes=(0, 0)))
+
+
+def _attn_body(B, S, q, k, v):
+    p = B.batch(P.F2fpBf16, B.batch(QK, q, k, axes=(None, 0)), axes=(0,))
+    return B.call(P.AmpereBF16TcDot16, B.call(P.ZERO32), p, v)
+
+
+ATTN = _def("CompileTestAttn", (), lambda S: ((("q", Array(64, BF)), ("k", Array(16, Array(64, BF))), ("v", P.A16)), P.F32),
+            _attn_body)
+ATTN_HEADS = _def("CompileTestAttnHeads", ("H",),
+                  lambda S: ((("q", Array(S.H, Array(64, BF))), ("k", Array(S.H, Array(16, Array(64, BF)))),
+                              ("v", Array(S.H, P.A16))), Array(S.H, P.F32)),
+                  lambda B, S, q, k, v: B.batch(ATTN, q, k, v, axes=(0, 0, 0)))
+KINDS = C.register(C.Scheme("compile-test-kinds", (2, 2), {"GemmAccumulatorS8_v1": _unit(UNIT)}))
+COVER2 = C.register(C.Scheme("compile-test-cover", (2, 2), {C.ANY: _unit(UNIT)}, cover=2)).name
+
+
+@compiles
+def test_qk_heads_compile():
+    """Attention's QKᵀ is credited (decision 109): each head's scores, `DotBf16` of its query on its keys, are a site's dots,
+    its query meeting only its own keys (a 1 × 2 tile a head), and the softmax max chain is the rest."""
+    served = Program(bind(HEADS, H=4, N=2))
+    c = C.compile(served, SCHEME)
+    (s,) = c.sites
+    assert (s.dot.family, s.shape, s.count) == ("DotBf16_v2", (4, 64, 8), 8)
+    assert {u.tile for u in c.units} == {C.Tile(1, 2, ((0, 0), (0, 1)))}
+    assert [(u.rows, u.cols) for u in c.units] == [((h,), (2 * h, 2 * h + 1)) for h in range(4)]
+    assert [nd.fn.base_id for nd in c.program.fn.body.nodes] == ["CompileTestUnit_v1", "PouwRest_v1"]
+    assert not _outside_units(c)
+    args = _args(served.fn, random.Random(11))
+    assert _run(c, args)[:4] == evaluate(served.fn, *args)
+
+
+@compiles
+def test_pv_inside_attention_is_uncovered():
+    """P·V as attention serves it today, tensor-core steps on a P the block computes, is no Call of a registered family, so its
+    dots can't be units: the pass refuses it rather than leave attention's second product uncredited."""
+    e = _refused("uncovered", Program(bind(ATTN_HEADS, H=2)))
+    assert "AmpereBF16TcDot16" in str(e)
+
+
+@compiles
+def test_kind_is_pluggable():
+    """A scheme's unit, and so its noise form, is per kind: a kind it has none for is refused, and `plug` adds one."""
+    served = Program(bind(S8.S8Dot, **S8.SMOKE_PLAIN))
+    e = _refused("scheme", served, KINDS.name)
+    assert "S8Dot_v1" in str(e)
+    plugged = C.register(KINDS.plug("S8Dot_v1", _unit(UNIT), "compile-test-kinds-s8dot"))
+    c = C.compile(served, plugged.name)
+    assert [u.defn.base_id for u in c.units] == ["CompileTestUnit_v1"]
+    assert set(plugged.units) == {"GemmAccumulatorS8_v1", "S8Dot_v1"} and set(KINDS.units) == {"GemmAccumulatorS8_v1"}
+    _refused("scheme", Program(bind(HEADS, H=2, N=2)), plugged.name)
+
+
+@compiles
+def test_seed_group_covers_calls_committed_together():
+    """Two calls committed together are one seed group (decision 112): one slot of `pouw.roots` both units' seeds read, at
+    their own positions, so their seeds still differ; keys are canonical, and a compiled Program is rebuilt only under its own
+    groups."""
+    served = Program(bind(TWICE))
+    c = C.compile(served, SCHEME, groups=[0, 0])
+    assert (c.group_of, c.groups, c.cover) == ((0, 0), ((0, 1),), (2,))
+    assert c.program.fn.signature()[0][-1][1] == Array(1, Array(2, SD.DIGEST))
+    root = (hashlib.sha512(b"a").digest(), hashlib.sha512(b"b").digest())
+    s0, s1 = c.seeds(SALT, [root])
+    assert s0 != s1
+    with pytest.raises(ValueError):
+        c.inputs(SALT, [root, root])
+    args = _args(served.fn, random.Random(5))
+    out = _run(c, args, roots=[root])
+    assert out[:2] == evaluate(served.fn, *args) and out[2] != out[3]
+    default = C.compile(served, SCHEME)
+    assert (default.groups, default.cover) == (((0,), (1,)), (1, 1))
+    assert C.compile(served, SCHEME, groups=["qk", "qk"]).digest == c.digest
+    assert C.compile(served, SCHEME, groups=lambda s: s.dot.family).digest == c.digest
+    assert C.rebuild(served, SCHEME, encode_program(c.program), groups=[0, 0]).digest == c.digest
+    with pytest.raises(DomainError):
+        C.rebuild(served, SCHEME, encode_program(c.program))
+    with pytest.raises(ValueError):
+        C.compile(served, SCHEME, groups=[0])
+
+
+@compiles
+def test_cover_is_the_least_seed_group():
+    """A scheme's `cover` is the fewest units one seed group may cover: a call of one unit alone is refused, and committed
+    with another it compiles. A grouped layer's units still compute no gate twice."""
+    served = Program(bind(TWICE))
+    e = _refused("cover", served, COVER2)
+    assert "covers 1 units" in str(e)
+    assert C.compile(served, COVER2, groups=lambda s: 0).cover == (2,)
+    assert C.compile(Program(bind(SHARED_X, K=64, N=3)), COVER2).cover == (2,)
+    layer = C.compile(_layer(REDUCED), SCHEME, groups=lambda s: 0)
+    assert layer.cover == (3,)
+    gc = layer.check_gates()
+    assert gc.ok, gc
 
 
 @compiles

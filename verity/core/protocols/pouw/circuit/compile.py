@@ -1,33 +1,40 @@
-"""PoUW as one pass over a served Program (decisions 102, 105 and 106, `PROTOCOL.md` §`compile`): `compile(program, scheme)`.
+"""PoUW as one pass over a served Program (decisions 102, 105, 106, 109 and 112, `PROTOCOL.md` §`compile`):
+`compile(program, scheme, groups)`.
 
 * **Find.** Every Call of a registered matmul family (`MATMULS`: each family's A and B ports, its (m, k, n) and the arm it is
-  registered at) is one dot product, or N of them (`S8Matmul_v1`'s rows). A Call nested in a Definition, at any depth, is
-  found through it when its operands are that Definition's parameters (`ScaledMmS8Coordinate_v1`'s `GemmAccumulatorS8_v1`).
-  A Program whose root is the matmul itself is served as one Call of it (`PouwCall_v1{FN}`). A served Program with an edited
-  arm, a scan over a matmul or a matmul step outside every registered family is refused.
+  registered at) is one dot product, or N of them (`S8Matmul_v1`'s rows). Attention's QKᵀ is `DotBf16`'s, a kind like any
+  other (decision 109). A Call nested in a Definition, at any depth, is found through it when its operands are that
+  Definition's parameters (`ScaledMmS8Coordinate_v1`'s `GemmAccumulatorS8_v1`). A Program whose root is the matmul itself is
+  served as one Call of it (`PouwCall_v1{FN}`). A served Program with an edited arm, a scan over a matmul or a matmul step
+  outside every registered family (P·V as `AttnBlock_v3` serves it, tensor-core steps on a P computed in the block) is
+  refused.
 * **Tile.** A site is a root node's dots of one kind; its distinct A rows and B rows, first use first, are its operands. Its
   A rows go in blocks of the scheme's r, each block's B rows (first use within the block) in chunks of c, and a tile is the
   site's dots inside one block and chunk (`Tile`: its rows, columns and cells, in z order). A grid site's tiles are full r × c
   grids; a site whose dots pair rows one to one (a population of coordinates) has diagonal ones.
-* **Replace.** Each tile is one unit of the scheme (`Scheme.unit(dot, tile)`), self-contained (decision 106):
-  ``(a: its A rows, b: its B rows, salt, position, roots) -> {z: its cells' exact products, receipt}``. The unit derives its
-  seed in its own proof from the salt, its position and the site's roots (`seeds.PouwSeed`, decision 105), and its noise from
-  the seed; nothing else reads the salt. The salt `pouw.salt` is the Program's one coin (`In(kind="coin")` where ports.py is
-  on the tree); `pouw.positions` and `pouw.roots` are inputs bound before the draw, unit u reading position slot u
-  (`Compiled.positions`) and its site's (root(A), root(B)). The receipt is a sink (`Out(sink=True)`) only the Program's
+* **Replace.** Each tile is one unit of the scheme, its dot kind's (`Scheme.unit(dot, tile)`: per kind a factory, which
+  carries that kind's noise form; `Scheme.plug` sets one), self-contained (decision 106): ``(a: its A rows, b: its B rows,
+  salt, position, roots) -> {z: its cells' exact products, receipt}``. The unit derives its seed in its own proof from the
+  salt, its position and its seed group's roots (`seeds.PouwSeed`, decision 105), and its noise from the seed; nothing else
+  reads the salt. The salt `pouw.salt` is the Program's one coin (`In(kind="coin")` where ports.py is on the tree);
+  `pouw.positions` and `pouw.roots` are inputs bound before the draw, unit u reading position slot u (`Compiled.positions`)
+  and its seed group's (root(A), root(B)). A seed group is the calls committed together (`groups`; by default a site): one
+  commitment fixes the noise of every unit it covers, so the units a group covers are the grinding premium's divisor
+  (decision 112), at least the scheme's `cover`. The receipt is a sink (`Out(sink=True)`) only the Program's
   outputs read, and z feeds the Call's consumers in place of the Call's output, so served values don't change. The units sit
   at the root, one batch per site and tile shape, ahead of the node that read the Call's output; that node's Definition F
   becomes `PouwRest_v1{FN=F}`, F without its dots, reading their z (`pouw.z`). A rest of no gate is inlined.
-* **Check** (`CompileError` with the rule's code): no registered Call or matmul step is left outside a unit (``uncovered``);
+* **Check** (`CompileError` with the rule's code): every seed group covers at least the scheme's `cover` units (``cover``);
+  no registered Call or matmul step is left outside a unit (``uncovered``);
   the salt reaches only the seed, through the units' salt port (``salt-flow``); each unit's seed reads the unit's own position
   and roots parameters whole, and at the root each unit batch reads its own slots of `pouw.positions` and its site's of
-  `pouw.roots`, so no unit chooses its position and no two units share one (``position``); a unit derives one seed
+  `pouw.roots` (its group's), so no unit chooses its position and no two units share one (``position``); a unit derives one seed
   (``seed``) and its z reads none of it (``noise-in-z``); served values reach a unit only through its z (``separator``);
   every node outside the units meets `cut.WIDTH_RULE` (``width``). `Compiled.check_gates` adds the gate-level cut (no value
   computed in two units), the separator and the width rule by reachability, for a Program small enough to flatten.
 
-The Program is the verifier's, rebuilt from (served Program, scheme): `rebuild`, `Compiled.check_descriptor` (`traced_as` at
-Program level).
+The Program is the verifier's, rebuilt from (served Program, scheme, groups): `rebuild`, `Compiled.check_descriptor`
+(`traced_as` at Program level).
 """
 from __future__ import annotations
 
@@ -107,6 +114,9 @@ MATMULS: dict[str, Matmul] = {m.family: m for m in (
     Matmul("S8Matmul_v1", "a", "b", rows=True, arm=_plain_arm),
     Matmul("GemmAccumulatorS8_v1", "x", "wrow"),
     Matmul("GemmAccumulatorS8_v2", "x", "wrow"),
+    Matmul("DotBf16_v1", "x", "w"),
+    Matmul("DotBf16_v2", "x", "w"),
+    Matmul("DotBf16_v3", "x", "w"),
 )}
 
 
@@ -153,7 +163,7 @@ def _dot(fn: Any) -> Dot:
         b, z, exact = b.elem, ret.elem, fn.body.nodes[0].fn
     s = fn.bindings
     bounds = (tuple(s["A"]), tuple(s["B"])) if "A" in s else (None, None)
-    return Dot(fn.base_id, s["K"], types[e.a], b, z, exact, s["DOT"], *bounds)
+    return Dot(fn.base_id, s["K"], types[e.a], b, z, exact, s.get("DOT"), *bounds)
 
 
 def _per_call(fn: Any) -> int:
@@ -177,18 +187,38 @@ class Tile:
         return len(self.pairs) == self.r * self.c == len(set(self.pairs))
 
 
+ANY = "*"
+
+
 @dataclass(frozen=True)
 class Scheme:
-    """A PoUW scheme as the pass takes it: its tile size (r, c), a scheme parameter, and `unit(dot, tile)`, the Definition of
-    one tile's unit, ``(a: Array(tile.r, dot.a), b: Array(tile.c, dot.b), salt, position, roots: Array(2, digest)) ->
-    Record(z: Array(len(tile.pairs), dot.z), receipt: R)``, the digest and position types `seeds.types(dot.boolean)`'s. The
-    unit calls `seeds.PouwSeed` once on its salt, position and roots (`seeds.seed_call`), derives its noise from the seed
-    (`seeds.noise_blocks`), holds the noised arm, the receipt fold and the spot check, and returns its cells' exact products
-    as z. It may raise `CompileError` ("scheme") for a dot or tile it doesn't take."""
+    """A PoUW scheme as the pass takes it: its tile size (r, c), a scheme parameter; per kind of dot (a family's id, or `ANY`
+    for every kind without its own), the factory of one tile's unit, which carries that kind's noise form (decision 109:
+    attention's QKᵀ and P·V are kinds like any other, and `plug` sets a kind's form); and `cover`, the fewest units one seed
+    group may cover (decision 112: the grinding premium is a constant number of units per seed group, so GRIND/BUDGET sets
+    the least coverage).
+
+    A unit, ``units[kind](dot, tile)``, is ``(a: Array(tile.r, dot.a), b: Array(tile.c, dot.b), salt, position, roots:
+    Array(2, digest)) -> Record(z: Array(len(tile.pairs), dot.z), receipt: R)``, the digest and position types
+    `seeds.types(dot.boolean)`'s. It calls `seeds.PouwSeed` once on its salt, position and roots (`seeds.seed_call`), derives
+    its noise from the seed (`seeds.noise_blocks`), holds the noised arm, the receipt fold and the spot check, and returns its
+    cells' exact products as z. A factory may raise `CompileError` ("scheme") for a dot or tile it doesn't take."""
 
     name: str
     tile: tuple[int, int]
-    unit: Callable[[Dot, Tile], Any]
+    units: Mapping[str, Callable[[Dot, Tile], Any]]
+    cover: int = 1
+
+    def unit(self, dot: Dot, tile: Tile) -> Any:
+        f = self.units.get(dot.family, self.units.get(ANY))
+        if f is None:
+            raise CompileError("scheme", f"{self.name} has no unit (noise form) for kind {dot.family}: "
+                                         f"it covers {', '.join(sorted(self.units))}")
+        return f(dot, tile)
+
+    def plug(self, kind: str, unit: Callable[[Dot, Tile], Any], name: str) -> "Scheme":
+        """This scheme with `unit` as kind's factory (its noise form), under its own name (register it)."""
+        return Scheme(name, self.tile, {**self.units, kind: unit}, self.cover)
 
 
 #: the schemes the pass compiles to, by name (protocol structure, keyed by silicon target in the registration). Separate from
@@ -203,6 +233,8 @@ def register(scheme: Scheme) -> Scheme:
     r, c = scheme.tile
     if min(r, c) < 1:
         raise ValueError(f"{scheme.name}: a tile is at least 1 × 1, not {r} × {c}")
+    if scheme.cover < 1 or not scheme.units:
+        raise ValueError(f"{scheme.name}: a seed group covers at least one unit, and a scheme has a unit for some kind")
     SCHEMES[scheme.name] = scheme
     return scheme
 
@@ -655,8 +687,9 @@ def _gather(locs: Sequence[tuple[int, int, int]]) -> Refs:
 class _Units:
     """The root's z source: each node's tiles as unit batches, one per site and tile shape, ahead of the node."""
 
-    def __init__(self, B: Any, served: Any, plan: _Plan, salt: Coll, positions: Coll, roots: Coll) -> None:
-        self.B, self.served, self.plan = B, served, plan
+    def __init__(self, B: Any, served: Any, plan: _Plan, group_of: tuple[int, ...], salt: Coll, positions: Coll,
+                 roots: Coll) -> None:
+        self.B, self.served, self.plan, self.group_of = B, served, plan, group_of
         self.salt, self.positions, self.roots = salt, positions, roots
         self.at = 0
         self.receipts: list[Refs] = []
@@ -678,7 +711,8 @@ class _Units:
             a = Coll(Array(n, Array(g.tile.r, sp.dot.a)), _pack([a_rows[i] for t in us for i in t.rows]))
             b = Coll(Array(n, Array(g.tile.c, sp.dot.b)), _pack([b_rows[j] for t in us for j in t.cols]))
             pos = Coll(Array(n, self.positions.type.elem), self.positions.refs.slice(g.first * PL, (g.first + n) * PL))
-            out = self.B.batch(g.unit, a, b, self.salt, pos, self.roots[g.site], axes=(0, 0, None, 0, None), name=f"pouw[{gi}]")
+            out = self.B.batch(g.unit, a, b, self.salt, pos, self.roots[self.group_of[g.site]], axes=(0, 0, None, 0, None),
+                               name=f"pouw[{gi}]")
             kk, per = out.refs.idx, out.type.elem.leaves
             lz = per - g.receipt.leaves
             self.receipts.append(_gather([(kk, m * per + lz, g.receipt.leaves) for m in range(n)]))
@@ -699,14 +733,14 @@ def _compiled_signature(S: Any) -> tuple:
     plan = _plan(S.SERVED, S.SCHEME)
     params, ret = S.SERVED.signature()
     D, P = SD.types(plan.boolean)
-    return (tuple(params) + ((SALT, D), (POSITIONS, Array(plan.units, P)), (ROOTS, Array(len(plan.sites), Array(2, D)))),
+    return (tuple(params) + ((SALT, D), (POSITIONS, Array(plan.units, P)), (ROOTS, Array(max(S.GROUPS) + 1, Array(2, D)))),
             Record(("served", ret), ("receipts", TupleT(*[Array(len(g.members), g.receipt) for g in plan.groups]))))
 
 
 def _compiled_body(B: Any, S: Any, *args: Coll) -> Coll:
     plan = _plan(S.SERVED, S.SCHEME)
     n = len(args) - 3
-    units = _Units(B, S.SERVED, plan, *args[n:])
+    units = _Units(B, S.SERVED, plan, S.GROUPS, *args[n:])
     out = _replay(B, S.SERVED, {("p", i): a.refs for i, a in enumerate(args[:n])}, units)
     assert units.at == len(plan.nodes)
     return Coll(_compiled_signature(S)[1], concat([out] + units.receipts))
@@ -717,10 +751,10 @@ def _compiled_ports(S: Any) -> Any:
 
 
 PouwCompiled = _composite(
-    "PouwCompiled", ("SERVED", "SCHEME"), _compiled_signature, _compiled_body, _compiled_ports,
+    "PouwCompiled", ("SERVED", "SCHEME", "GROUPS"), _compiled_signature, _compiled_body, _compiled_ports,
     "SERVED with every registered matmul's dots in SCHEME's tile units: SERVED's parameters, `pouw.salt` (the coin), "
-    "`pouw.positions` (a position per unit) and `pouw.roots` (per site, root(A) and root(B)) to {served: SERVED's return, "
-    "receipts: per unit batch an Array over its units' receipts (sinks)}.")
+    "`pouw.positions` (a position per unit) and `pouw.roots` (per seed group, GROUPS[site] the site's, root(A) and root(B)) "
+    "to {served: SERVED's return, receipts: per unit batch an Array over its units' receipts (sinks)}.")
 
 
 # -- the compiled Program ----------------------------------------------------------------------------------------------------
@@ -729,7 +763,7 @@ PouwCompiled = _composite(
 class Site:
     """A node of the served function and a kind of dot. `a_rows`, `b_rows`: A's and B's distinct rows, as references into the
     served function's body (parameters ``p``, nodes ``n``), first use first; dot d multiplies A row ``pairs[d][0]`` by B row
-    ``pairs[d][1]``. Its index is its slot of `pouw.roots`."""
+    ``pairs[d][1]``. Its seed group (`Compiled.group_of`) is its slot of `pouw.roots`."""
 
     index: int
     node: int
@@ -796,7 +830,27 @@ def _ret_gate(fn: Any, j: int) -> int | None:
 
 def _check_roots(roots: Sequence[tuple[bytes, bytes]], n: int) -> None:
     if len(roots) != n:
-        raise ValueError(f"one (root_a, root_b) per site: {n}, not {len(roots)}")
+        raise ValueError(f"one (root_a, root_b) per seed group: {n}, not {len(roots)}")
+
+
+def _sites(plan: _Plan) -> tuple[Site, ...]:
+    return tuple(Site(s, sp.node, sp.dot, sp.a_rows, sp.b_rows, sp.pairs) for s, sp in enumerate(plan.sites))
+
+
+def _group_of(plan: _Plan, groups: Callable[[Site], Any] | Sequence[Any] | None) -> tuple[int, ...]:
+    """Each site's seed group, numbered in first appearance: `groups` is a key per site (sites of one key are committed
+    together and share `pouw.roots`' slot), a function of the site to its key, or None for a group per site."""
+    sites = _sites(plan)
+    if groups is None:
+        keys: Sequence[Any] = range(len(sites))
+    elif callable(groups):
+        keys = [groups(s) for s in sites]
+    else:
+        keys = list(groups)
+        if len(keys) != len(sites):
+            raise ValueError(f"a seed group key per site: {len(sites)} sites, not {len(keys)} keys")
+    index: dict[Any, int] = {}
+    return tuple(index.setdefault(k, len(index)) for k in keys)
 
 
 @dataclass(frozen=True, eq=False)
@@ -805,6 +859,7 @@ class Compiled:
     served: Program
     scheme: Scheme
     plan: _Plan
+    group_of: tuple[int, ...]                 # each site's seed group (its slot of `pouw.roots`)
 
     @cached_property
     def digest(self) -> str:
@@ -816,7 +871,20 @@ class Compiled:
 
     @cached_property
     def sites(self) -> tuple[Site, ...]:
-        return tuple(Site(s, sp.node, sp.dot, sp.a_rows, sp.b_rows, sp.pairs) for s, sp in enumerate(self.plan.sites))
+        return _sites(self.plan)
+
+    @cached_property
+    def groups(self) -> tuple[tuple[int, ...], ...]:
+        """Each seed group's sites: the calls committed together under one (root(A), root(B))."""
+        return tuple(tuple(s for s, g in enumerate(self.group_of) if g == k) for k in range(max(self.group_of) + 1))
+
+    @cached_property
+    def cover(self) -> tuple[int, ...]:
+        """The units each seed group covers (decision 112's coverage)."""
+        n = [0] * len(self.groups)
+        for u in self.units:
+            n[self.group_of[u.site]] += 1
+        return tuple(n)
 
     @cached_property
     def units(self) -> tuple[Unit, ...]:
@@ -851,13 +919,14 @@ class Compiled:
         return [base + u.slot for u in self.units]
 
     def seeds(self, salt: bytes, roots: Sequence[tuple[bytes, bytes]], base: int = 0) -> list[bytes]:
-        """Each unit's seed_j, as its proof derives it (`seeds.seed`), from its site's operand roots ``roots[site]``."""
-        _check_roots(roots, len(self.sites))
-        return [SD.seed(salt, p, *roots[u.site]) for u, p in zip(self.units, self.positions(base))]
+        """Each unit's seed_j, as its proof derives it (`seeds.seed`), from its seed group's operand roots ``roots[group]``."""
+        _check_roots(roots, len(self.groups))
+        return [SD.seed(salt, p, *roots[self.group_of[u.site]]) for u, p in zip(self.units, self.positions(base))]
 
     def inputs(self, salt: bytes, roots: Sequence[tuple[bytes, bytes]], base: int = 0) -> list[list[int]]:
-        """The leaves of `pouw.salt`, `pouw.positions` and `pouw.roots`, the arguments after the served ones."""
-        _check_roots(roots, len(self.sites))
+        """The leaves of `pouw.salt`, `pouw.positions` and `pouw.roots` (a pair per seed group), the arguments after the
+        served ones."""
+        _check_roots(roots, len(self.groups))
         b = self.boolean
         return [SD.leaves(salt, b), [v for p in self.positions(base) for v in SD.position_leaves(p, b)],
                 [v for ra, rb in roots for v in SD.leaves(bytes(ra) + bytes(rb), b)]]
@@ -1042,7 +1111,7 @@ def _check(c: Compiled) -> None:
         m = len(g.members)
         want[(k, 2)] = (Affine("p", n, 0, D.leaves), None)
         want[(k, 3)] = (Affine("p", n + 1, g.first * P.leaves, m * P.leaves), 0)
-        want[(k, 4)] = (Affine("p", n + 2, g.site * 2 * D.leaves, 2 * D.leaves), None)
+        want[(k, 4)] = (Affine("p", n + 2, c.group_of[g.site] * 2 * D.leaves, 2 * D.leaves), None)
         ret = g.unit.signature()[1]
         period[k] = (ret.fields[0][1].leaves, ret.leaves)
     slots = sorted((g.first, len(g.members)) for g in plan.groups)
@@ -1095,8 +1164,10 @@ def _check(c: Compiled) -> None:
 
 # -- the pass ----------------------------------------------------------------------------------------------------------------
 
-def compile(program: Program, scheme: str) -> Compiled:
-    """`program` with every registered matmul's dots in `scheme`'s tile units (the module docstring), checked."""
+def compile(program: Program, scheme: str, groups: Callable[[Site], Any] | Sequence[Any] | None = None) -> Compiled:
+    """`program` with every registered matmul's dots in `scheme`'s tile units (the module docstring), checked. `groups` names
+    the calls committed together, each group one seed group (one slot of `pouw.roots`): a key per site, or a function of the
+    `Site` to its key; None is a group per site."""
     if scheme not in SCHEMES:
         raise CompileError("scheme", f"no scheme {scheme!r} is registered ({', '.join(SCHEMES) or 'none'})")
     why = _reads_coin(program)
@@ -1109,25 +1180,35 @@ def compile(program: Program, scheme: str) -> Compiled:
     registered = tuple(n for n, b in zip(names, program.bindings) if b == REGISTRATION)
     served = _served_fn(program.fn)
     plan = _plan(served, scheme)
-    fn = bind(PouwCompiled, SERVED=served, SCHEME=scheme)
+    group_of = _group_of(plan, groups)
+    cover = [0] * (max(group_of) + 1)
+    for sp, g in zip(plan.sites, group_of):
+        cover[g] += len(sp.units)
+    least = SCHEMES[scheme].cover
+    if min(cover) < least:
+        g = cover.index(min(cover))
+        raise CompileError("cover", f"seed group {g} (sites {[s for s, k in enumerate(group_of) if k == g]}) covers "
+                                    f"{cover[g]} units, fewer than {scheme}'s {least}: commit more calls together (`groups`)")
+    fn = bind(PouwCompiled, SERVED=served, SCHEME=scheme, GROUPS=group_of)
     try:
         compiled = Program(fn, registered=registered)
     except ValueError as e:
         if _ports is not None and isinstance(e, _ports.PortError):
             raise CompileError(e.code, str(e).removeprefix(f"{e.code}: ")) from e
         raise
-    c = Compiled(compiled, program, SCHEMES[scheme], plan)
+    c = Compiled(compiled, program, SCHEMES[scheme], plan, group_of)
     _check(c)
     return c
 
 
-def rebuild(served: Program, scheme: str, descriptor: dict) -> Compiled:
-    """The verifier's compiled Program, from (served, scheme), held to an offered descriptor."""
-    c = compile(served, scheme)
+def rebuild(served: Program, scheme: str, descriptor: dict,
+            groups: Callable[[Site], Any] | Sequence[Any] | None = None) -> Compiled:
+    """The verifier's compiled Program, from (served, scheme, groups), held to an offered descriptor."""
+    c = compile(served, scheme, groups)
     c.check_descriptor(descriptor)
     return c
 
 
-__all__ = ["CompileError", "Compiled", "Dot", "GateCheck", "MATMULS", "Matmul", "POSITIONS", "PouwCall", "PouwCompiled",
+__all__ = ["ANY", "CompileError", "Compiled", "Dot", "GateCheck", "MATMULS", "Matmul", "POSITIONS", "PouwCall", "PouwCompiled",
            "PouwRest", "ROOTS", "SALT", "SCHEMES", "STEP", "Scheme", "Site", "Tile", "Unit", "Z", "compile", "rebuild",
            "register", "seed"]
