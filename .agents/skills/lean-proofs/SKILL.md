@@ -56,7 +56,9 @@ python tools/verity/lean/check.py PKG  once, before pushing (the kernel replay o
 
 Build on a CPU machine; `Security/Proofs` (package `security_proofs`, on ArkLib) is the long one. Never `lake
 update`, and never change a `require`, a revision or `lean-toolchain` in a feature PR. Its build of C-Flock's soundness
-proofs peaks at 15–24 GB of memory: on a machine with less than 24 GB, add a swapfile first, and give a queued job
+proofs peaks at 15–24 GB of memory, so `check.py` and the fast path refuse a package that pins ArkLib on a machine with
+less than 24 GiB (memory and swap, within its cgroup) and print the fast path's line on a node; a 16 GB agent VM runs
+it there. `VERITY_LEAN_MEM_FLOOR_GIB` sets another floor (0: none, say after adding a swapfile). Give a queued job
 `--mem-gb 32`.
 
 To check your records, or get the `--update` printout of what changed (what Daniel's DM carries), without a build of
@@ -209,6 +211,10 @@ simp with that.
 
 These are Daniel's rulings, newest first.
 
+- 2026-10-17 (6:28 PM PDT): a guarantee goes statement first, then red team, then a card to Daniel for each new premise,
+  then the proof, in that order. Memory accounting's stacking guarantee was restated four times, and its cards updated
+  three times, because the red team read it after its proofs. Freeze the statement (above), have a red team attack it
+  and its premises, card what it rests on, and only then prove it, so a finding costs a restatement and not a reproof.
 - 2026-10-08 (5:59 PM PDT): a named conjecture can be a premise, in a section of the list of its own, and a claim that
   rests on one is listed as conditional, apart from the rest. Sort first: a statement that models how a specific device
   computes, such as `TTOutPearlC` (falsified by what the hardware does, and dependent on G), is an assumption about the

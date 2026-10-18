@@ -183,7 +183,7 @@ def test_an_ask_files_in_its_owners_team_and_still_goes_out_when_linear_fails(fa
     assert rc == 0 and "not filed on Linear (no Linear team named 'INF')" in err
     assert fake.messages[COORD][-1]["text"].endswith("again")
     n = len(lin.calls)
-    assert run(capsys, "ask", "--as", "infra", "--to", "@old-accounting", "--text", "no team")[0] == 0
+    assert run(capsys, "ask", "--as", "infra", "--to", "@console", "--text", "no team")[0] == 0
     assert len(lin.calls) == n and fake.messages[COORD][-1]["text"].endswith("no team")
 
 
@@ -272,7 +272,7 @@ def test_subscriptions_name_the_leads_linear_team_and_the_registry_refuses_a_sha
     rc, out, _ = run(capsys, "subscriptions", "--as", "comms")
     assert rc == 0 and 'subscribe_linear_issue(options={"scope": "team", "teamId": "COMM"}' in out
     assert "subscribe_linear_comment" not in out
-    assert "subscribe_linear" not in run(capsys, "subscriptions", "--as", "old-accounting")[1]
+    assert "subscribe_linear" not in run(capsys, "subscriptions", "--as", "console")[1]
     reg = json.loads(registry.read_text())
     next(h for h in reg["handles"] if h["handle"] == "ci")["linear"] = "COMM"
     registry.write_text(json.dumps(reg))

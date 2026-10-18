@@ -14,7 +14,8 @@ openings, single coins, no final messages and `capOfRoot` at the values the deco
 * `flock_headline_exec_dec`: #828's `flock_headline_exec` with #862's `decodesOn_exec` at `wOP`, `wLIG`: `hdec` becomes
   `c.outNet = c.unitNet`, `TagsOk`, `RecordsLive` and `DrawOk` at the law's draws;
 * `flock_headline_exec_hidden_dec`: #869's `flock_headline_exec_hidden` with #875's `decodesOn_execH`: `hdec` becomes
-  `c.outNet = c.unitNet`, `TagsOkH`, `RecordsLive` and `DrawOkH` at the law's draws;
+  `c.outNet = c.unitNet`, `TagsOkHL`, `RecordsLive` and `DrawOkH` at the law's draws, and the session's leaf is the
+  model's leaf of the tags' leaf scheme (`leafOfId`: `hm96-sha512/v1` or plain SHA-512 leaves);
 * `headline_tables_subset_dec`: `headline_tables_subset` at the tables flock-verify sets up (`planJ`) with #867's
   `decodesOnJ_exec`: `hdec` becomes `TagsOkJ`, `RecordsLiveJ` and `DrawOkJ` at the law's draws. The decoder at `J`
   tables reads no circuit, so there is no `c.outNet = c.unitNet` here.
@@ -111,8 +112,9 @@ variable {n : ℕ} {I : Inputs} {mPts : ℕ} (ht : I.tags.typed = false) {c : Fl
   (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀)) (hU : Built c.unit)
   {pub : Public} (hpub : HmOut.loadPublic I.tags c I.publicFile = .ok pub) (hpt : pub.tables = none) {Reg : Type}
 
-/-- **`flock_headline_exec_hidden` with `hdec` discharged** by `decodesOn_execH`. -/
-theorem flock_headline_exec_hidden_dec (ho : c.outNet = c.unitNet) (hT : TagsOkH I)
+/-- **`flock_headline_exec_hidden` with `hdec` discharged** by `decodesOn_execH`, at the model's leaf of the tags'
+leaf scheme (`leafOfId I.tags.merkleLeaf`). -/
+theorem flock_headline_exec_hidden_dec (ho : c.outNet = c.unitNet) (hT : TagsOkHL I)
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
     (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
@@ -123,41 +125,41 @@ theorem flock_headline_exec_hidden_dec (ho : c.outNet = c.unitNet) (hT : TagsOkH
     (hwr : RecordsLive I dj wr)
     (hdraw : ∀ ω, DrawOkH I dj mPts ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω))
     (τ : Strategy (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)))
-    (hCR : LinkCRL ((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)) H512 enc512 leaf512
+    (hCR : LinkCRL ((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)) H512 enc512 (leafOfId I.tags.merkleLeaf)
       (planAtH dj x₀) (tabAtH dj x₀) ((rsAtH ht hc hscope dj x₀ hU hpub hpt (Reg := Reg)).binding
         (rsAtH_computes ht hc hscope dj x₀ hU hpub hpt))
-      (reg (simAuditOn H512 enc512 leaf512 (tablesAtH dj x₀) I wr (opnAtH (tablesAtH dj x₀) I dj) dg
+      (reg (simAuditOn H512 enc512 (leafOfId I.tags.merkleLeaf) (tablesAtH dj x₀) I wr (opnAtH (tablesAtH dj x₀) I dj) dg
         (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
         (decodesOn_execH ht hc ho dj x₀ _ wr hT hwr hdraw) τ))
-      (cont (simAuditOn H512 enc512 leaf512 (tablesAtH dj x₀) I wr (opnAtH (tablesAtH dj x₀) I dj) dg
+      (cont (simAuditOn H512 enc512 (leafOfId I.tags.merkleLeaf) (tablesAtH dj x₀) I wr (opnAtH (tablesAtH dj x₀) I dj) dg
         (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
         (decodesOn_execH ht hc ho dj x₀ _ wr hT hwr hdraw) τ)) k Rw M t')
-    {qF qS : ℝ} (hKS : ∀ ω j, TableCRL execArith H512 enc512 leaf512
+    {qF qS : ℝ} (hKS : ∀ ω j, TableCRL execArith H512 enc512 (leafOfId I.tags.merkleLeaf)
       (planAtH dj x₀ ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω)
-        (reg (simAuditOn H512 enc512 leaf512 (tablesAtH dj x₀) I wr (opnAtH (tablesAtH dj x₀) I dj) dg
+        (reg (simAuditOn H512 enc512 (leafOfId I.tags.merkleLeaf) (tablesAtH dj x₀) I wr (opnAtH (tablesAtH dj x₀) I dj) dg
           (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
           (decodesOn_execH ht hc ho dj x₀ _ wr hT hwr hdraw) τ))) j
-      (batchStratL H512 enc512 leaf512 (planAtH dj x₀)
-        (cont (simAuditOn H512 enc512 leaf512 (tablesAtH dj x₀) I wr (opnAtH (tablesAtH dj x₀) I dj) dg
+      (batchStratL H512 enc512 (leafOfId I.tags.merkleLeaf) (planAtH dj x₀)
+        (cont (simAuditOn H512 enc512 (leafOfId I.tags.merkleLeaf) (tablesAtH dj x₀) I wr (opnAtH (tablesAtH dj x₀) I dj) dg
           (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
           (decodesOn_execH ht hc ho dj x₀ _ wr hT hwr hdraw) τ) ω)) qF qS) :
     prob (fun o => LiveAccepts I o ∧
         K ≤ (((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)).wrong
           (Xpub {Layout.oneG} {Layout.zeroG}
-            (XplurL ((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)) H512 enc512 leaf512 (planAtH dj x₀)
+            (XplurL ((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)) H512 enc512 (leafOfId I.tags.merkleLeaf) (planAtH dj x₀)
               (tabAtH dj x₀) ((rsAtH ht hc hscope dj x₀ hU hpub hpt (Reg := Reg)).binding
                 (rsAtH_computes ht hc hscope dj x₀ hU hpub hpt))
-              (reg (simAuditOn H512 enc512 leaf512 (tablesAtH dj x₀) I wr (opnAtH (tablesAtH dj x₀) I dj) dg
+              (reg (simAuditOn H512 enc512 (leafOfId I.tags.merkleLeaf) (tablesAtH dj x₀) I wr (opnAtH (tablesAtH dj x₀) I dj) dg
                 (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => [])
                 (fun _ _ b _ => capOfRoot b) N (decodesOn_execH ht hc ho dj x₀ _ wr hT hwr hdraw) τ))
-              (cont (simAuditOn H512 enc512 leaf512 (tablesAtH dj x₀) I wr (opnAtH (tablesAtH dj x₀) I dj) dg
+              (cont (simAuditOn H512 enc512 (leafOfId I.tags.merkleLeaf) (tablesAtH dj x₀) I wr (opnAtH (tablesAtH dj x₀) I dj) dg
                 (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => [])
                 (fun _ _ b _ => capOfRoot b) N (decodesOn_execH ht hc ho dj x₀ _ wr hT hwr hdraw) τ))
               k Rw))).card)
         (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)) τ ≤
       (Law.stratified σs ks hks).miss K +
         StrictCR.ksAvgStrict (planAtH dj x₀) (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS
-          (reg (simAuditOn H512 enc512 leaf512 (tablesAtH dj x₀) I wr (opnAtH (tablesAtH dj x₀) I dj) dg
+          (reg (simAuditOn H512 enc512 (leafOfId I.tags.merkleLeaf) (tablesAtH dj x₀) I wr (opnAtH (tablesAtH dj x₀) I dj) dg
             (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
             (decodesOn_execH ht hc ho dj x₀ _ wr hT hwr hdraw) τ)) +
         ((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)).linkBoundE
