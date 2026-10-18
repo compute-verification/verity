@@ -27,8 +27,8 @@ Top-level directories (a grouping, not an import name, except `verity/`):
     - `service/flock/`: C-Flock's executable verifier of record (no dependencies).
   - `verity/ml/` (`verity.ml`): Python and CUDA: the provers, and Python that mirrors the Lean for the prover's speed.
     Until each protocol's verifier of record is Lean, these units are on the soundness path, because its Python verifier
-    reads them: `ml.circuits`, `ml.circuits.ops`, `ml.circuits.silicon`, `ml.circuits.targets`, `ml.kernels`,
-    `ml.commitments`, `ml.crypto` and `ml.randomness` (`SOUNDNESS_PATH` in `tests/test_boundaries.py`, all that
+    reads them: `ml.circuits`, `ml.circuits.ops`, `ml.circuits.silicon`, `ml.kernels`, `ml.commitments`,
+    `ml.crypto` and `ml.randomness` (`SOUNDNESS_PATH` in `tests/test_boundaries.py`, all that
     `ALLOWED` lets core reach; it only shrinks). The rest, C-Flock's prover and the private circuits, can't affect
     soundness.
     - `circuits` (format in `circuits/PROTOCOL.md`): circuits and their evaluator (`evaluation`), the Boolean profile
@@ -86,7 +86,7 @@ Dependencies point inward, and `tests/test_boundaries.py` enforces them:
   `core.claims` import no other unit.
 - A protocol imports the parts of `verity.ml` it's allowed, the profile, itself, and the protocols `ALLOWED` lists for it
   (PoUW and the network certifier import sampled proofs). PoUW is the one protocol that reads the primitive circuits'
-  Definitions and silicon semantics (`ml.circuits.ops`, `silicon`, `targets`).
+  Definitions and silicon semantics (`ml.circuits.ops`, `silicon`).
 - Nothing outside `infra/` imports `infra/`, apart from the files `INFRA_IMPORTERS` names.
 
 `verity` is the repository's one command (`tools/verity/cli/`): `verity check` runs every part of the check a merge
