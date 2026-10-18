@@ -15,18 +15,24 @@ from dataclasses import dataclass
 
 from verity_vllm.observe.events import Root, ViewDesc
 from verity_vllm.observe.fold.patterns.collectives import ALL_REDUCE_OP
+from verity_vllm.observe.fold.patterns.geometry import GeometryError, is_int, sub_rows
+from verity_vllm.observe.fold.patterns.kv_cache import kv_group_of
 from verity_vllm.observe.fold.patterns.ops import as_float, base_op, bound_args, op_name, triton_name
 from verity_vllm.observe.fold.patterns.resolutions import attribution_for, unsupported
+from verity_vllm.observe.fold.patterns.rotary import step_positions
 from verity_vllm.observe.fold.patterns.target import target_of, vocab_kind
-from verity_vllm.observe.fold.resolver import Compute, Group, PerRow, Resolution, Shared, StepContext, Unsupported
+from verity_vllm.observe.fold.resolver import Compute, Gather, Group, PerRow, Resolution, Shared, StepContext, Unsupported
 from verity_vllm.observe.fold.tree import TreeNode
+from verity_vllm.program.frontend.dsv4_leaves import FP8_DS_MLA_QB
 from verity_vllm.program.frontend.rules.vllm_bindings.pins import QKV_RMS_PINS
 from verity_vllm.program.frontend.rules.vllm_bindings.triton_launches import QKV_ARGS, TRITON_DIVISIBILITY, qkv_rms_launch
 from verity_vllm.program.frontend.rules.vllm_mhc import MHC_GEOMETRY, post_pre_path
 from verity_vllm.program.kernels.mhc_twin import tf32_num_split
+from verity_vllm.program.registry import dsv4_qnorm_insert as Q
 from verity_vllm.program.registry.dsa_norm import check_block
 
 LAYER = re.compile(r"model\.layers\.(\d+)")
+QNORM_INSERT_OP = "_C.fused_deepseek_v4_qnorm_rope_kv_rope_quant_insert"
 
 
 def _module(node: TreeNode) -> str:
@@ -208,9 +214,102 @@ class QKvRmsNorm:
         return Group(tuple(parts), tuple(sorted(node.ids())), hint=mod, pattern=self.name)
 
 
+def swa_block(cache: ViewDesc, block: int, bs: int, DN: int, DR: int, QB: int) -> tuple[ViewDesc, ViewDesc, ViewDesc]:
+    """Block `block` of a layer's window cache (uint8 [blocks, block bytes]) as its bs tokens' NoPE [bs, DN] e4m3, scale bytes
+    [bs, DN/QB + 1] and RoPE [bs, DR] bf16: the tokens' DN + 2 DR data bytes each, then their scale bytes each
+    (`cache_utils.quantize_and_insert_k_cache`)."""
+    row, ns = DN + 2 * DR, DN // QB + 1
+    if cache.dtype != "uint8" or cache.rank != 2 or cache.strides[1] != 1 or cache.shape[1] != bs * (row + ns) or not 0 <= block < cache.shape[0]:
+        raise GeometryError(f"block {block} of a window cache of {bs} rows of {row} + {ns} bytes: {cache!r}")
+    base = cache.offset + block * cache.strides[0]
+    if (base + DN) % 2:
+        raise GeometryError(f"block {block}'s RoPE bytes are not bf16-aligned: {cache!r}")
+    return (ViewDesc(cache.alloc, base, (bs, DN), (row, 1), "float8_e4m3fn", cache.device),
+            ViewDesc(cache.alloc, base + bs * row, (bs, ns), (ns, 1), "uint8", cache.device),
+            ViewDesc(cache.alloc, (base + DN) // 2, (bs, DR), (row // 2, 1), "bfloat16", cache.device))
+
+
+def block_runs(slots: tuple[int, ...], bs: int) -> list[tuple[int, int, int]]:
+    """(block, first row, end row) of each run of consecutive rows whose slots are in one block."""
+    runs: list[list[int]] = []
+    for i, s in enumerate(slots):
+        if runs and runs[-1][0] == s // bs:
+            runs[-1][2] = i + 1
+        else:
+            runs.append([s // bs, i, i + 1])
+    return [(b, lo, hi) for b, lo, hi in runs]
+
+
+@dataclass
+class QNormRopeKvInsert:
+    """`_C.fused_deepseek_v4_qnorm_rope_kv_rope_quant_insert(q, kv, k_cache!, slot_mapping, positions, cos_sin, q_head_padded, eps,
+    cache_block_size)` -> per token `Dsv4QNormRopeKvInsert_v1{NH,NHP,DN,DR,QB,EPS}` of q[t], kv[t] and cos_sin[positions[t]]: the
+    Build's `Dsv4QNormRopeKvInsertRule`, QB fp8_ds_mla's (`dsv4_leaves.FP8_DS_MLA_QB`).  The padded q is the op's output; the kv
+    row's NoPE, scale bytes and RoPE go to the token's slot of the layer's window cache, addressed by `<layer>.swa_cache`'s KV group,
+    so the tokens of one cache block are one Compute (`swa_block`)."""
+
+    name = "dsv4.qnorm_rope_kv_insert"
+
+    def match(self, node: TreeNode, ctx: StepContext) -> Resolution | None:
+        if node.is_triton or base_op(node.op) != QNORM_INSERT_OP:
+            return None
+        a, outs = bound_args(node), node.output_views()
+        q, kv, cache, sm, cs = (a.get(k) for k in ("q_in", "kv", "k_cache", "slot_mapping", "cos_sin_cache"))
+        NHP, bs, eps = a.get("q_head_padded"), a.get("cache_block_size"), as_float(a.get("eps"))
+        if not all(isinstance(v, ViewDesc) for v in (q, kv, cache, sm, cs)) or len(outs) != 1 or not isinstance(NHP, int) \
+                or not isinstance(bs, int) or eps is None:
+            return unsupported(node, "the insert's arguments are not bound as (q, kv, cache, slots, positions, cos_sin, padded heads, eps, block size)")
+        qo, rows = outs[0], tuple(ctx.start.rows)
+        T = len(rows)
+        if q.rank != 3 or q.shape[0] != T or cs.rank != 2:
+            return unsupported(node, "q is not [T,NH,D] over the step's tokens or cos_sin is not a table", q=repr(q), cs=repr(cs), T=T)
+        _, NH, D = q.shape
+        DR, QB = cs.shape[1], FP8_DS_MLA_QB
+        S = {"NH": NH, "NHP": NHP, "DN": D - DR, "DR": DR, "QB": QB, "EPS": eps}
+        try:
+            Q.check_insert_statics(NH, NHP)
+            Q.check_q_statics(D, DR)
+            Q.check_kv_statics(D - DR, DR, QB)
+        except ValueError as e:
+            return unsupported(node, str(e))
+        if not (_is(q, (T, NH, D), "bfloat16") and _is(kv, (T, D), "bfloat16") and _is(qo, (T, NHP, D), "bfloat16") and cs.dtype == "float32") \
+                or not all(v.strides[-1] == 1 for v in (q, kv, qo, cs)):
+            return unsupported(node, "q, kv and the padded q are not bf16 [T,NH,D], [T,D], [T,NHP,D] rows, or cos_sin not an f32 table",
+                               q=repr(q), kv=repr(kv), out=repr(qo), cs=repr(cs))
+        pos = step_positions(node, ctx, a.get("position_ids"), T)
+        if isinstance(pos, Unsupported):
+            return pos
+        layer = f"{_module(node)}.swa_cache"
+        try:
+            g = kv_group_of(ctx, layer)
+        except GeometryError as e:
+            return unsupported(node, str(e))
+        slots = tuple(int(s) for s in ((g or {}).get("slot_mapping") or ())[:T])
+        if g is None or int(g["block_size"]) != bs or len(slots) != T or not is_int(sm) or sm.numel < T or any(s < 0 for s in slots):
+            return unsupported(node, "the window cache's KV group does not give every token a slot in blocks of the launch's size",
+                               layer=layer, block_size=bs, slots=slots[:8])
+        if any(p < 0 or p >= cs.shape[0] for p in pos):
+            return unsupported(node, "a position is outside the rotary table", positions=pos[:8], table_rows=cs.shape[0])
+        croots = ctx.roots_of(cs)
+        if not croots:
+            return unsupported(node, "the rotary table is no root of the capture", cs=repr(cs))
+        spec, parts = vocab_kind(ctx, "dsv4_qnorm_rope_kv_insert", **S), []
+        for b, lo, hi in block_runs(slots, bs):
+            try:
+                nope, scale, rope = swa_block(cache, b, bs, D - DR, DR, QB)
+            except GeometryError as e:
+                return unsupported(node, str(e))
+            idx = tuple(s % bs for s in slots[lo:hi])
+            parts.append(Compute(spec, hi - lo, (PerRow(sub_rows(q, lo, hi)), PerRow(sub_rows(kv, lo, hi)), Gather(cs, pos[lo:hi])),
+                                 (PerRow(sub_rows(qo, lo, hi)), Gather(nope, idx), Gather(scale, idx), Gather(rope, idx)),
+                                 () if parts else (node.id,), hint=f"{_module(node)}/qnorm_rope_kv_insert", attribution=rows[lo:hi],
+                                 pattern=self.name, roots=(None, None, croots[0].name)))
+        return Group(tuple(parts), tuple(sorted(node.ids())), hint=_module(node), pattern=self.name)
+
+
 def dsv4_patterns() -> list:
     """The DeepSeek-V4 patterns, ahead of the rank's collectives (`Mhc` records the all-reduces they resolve)."""
-    return [Mhc(), QKvRmsNorm()]
+    return [Mhc(), QKvRmsNorm(), QNormRopeKvInsert()]
 
 
-__all__ = ["Mhc", "QKvRmsNorm", "dsv4_patterns"]
+__all__ = ["Mhc", "QKvRmsNorm", "QNormRopeKvInsert", "block_runs", "dsv4_patterns", "swa_block"]

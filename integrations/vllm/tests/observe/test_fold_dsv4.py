@@ -7,7 +7,9 @@
 * a call whose split buffer disagrees with the dispatch's NS, or whose weights the capture has no root for, is refused;
 * the KV compressors' `aten.mm.dtype` is the Build's f32-output cuBLAS GEMM on its captured route;
 * the fused q / kv RMSNorm launch is a `TritonBlockRMSNorm_v1` of each token's q row and of its kv row, refused off the wrapper's
-  launch or the PTX's 16-divisible specialization.
+  launch or the PTX's 16-divisible specialization;
+* the q norm / RoPE / window insert is the Build's `Dsv4QNormRopeKvInsert_v1` per token, its kv row's NoPE, scale bytes and RoPE
+  written to the token's slot of the layer's KV group in fp8_ds_mla's block layout, one Compute per cache block.
 """
 from __future__ import annotations
 
@@ -19,7 +21,7 @@ import importlib
 import pytest
 
 from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHeader, StepStart, TritonLaunch, ViewDesc
-from verity_vllm.observe.fold.patterns.dsv4 import Mhc, QKvRmsNorm
+from verity_vllm.observe.fold.patterns.dsv4 import Mhc, QKvRmsNorm, QNormRopeKvInsert
 from verity_vllm.observe.fold.patterns.target import target_of_header
 from verity_vllm.observe.fold.resolver import Group, PerRow, Shared, StepContext, Unsupported, spec_label
 from verity_vllm.observe.fold.tree import build_trees
@@ -180,6 +182,48 @@ def test_a_fused_q_kv_rmsnorm_off_the_wrappers_launch_or_ptx_specialization_or_w
     assert isinstance(QKvRmsNorm().match(_qkv_norm(1, block=4096), _ctx(1, QKV_ROOTS)), Unsupported)
     assert isinstance(QKvRmsNorm().match(_qkv_norm(1, q_offset=4), _ctx(1, QKV_ROOTS)), Unsupported), "a pointer 8 bytes off 16"
     assert isinstance(QKvRmsNorm().match(_qkv_norm(1), _ctx(1)), Unsupported)
+
+
+BLOCK_BYTES, POS, CACHE_STRIDE = 64 * (576 + 8), 970, 1435968
+CS_ROOT = Root(view(971, (4096, 64), "float32"), "weight", "model.layers.0.attn.rotary_emb.cos_sin_cache")
+
+
+def _insert_ctx(T, slots, layer="model.layers.0.attn.swa_cache", roots=(CS_ROOT,)):
+    ctx = _ctx(T, ROOTS + list(roots))
+    group = {"layers": [layer], "block_size": 64, "block_tables": {}, "slot_mapping": list(slots)}
+    start = dataclasses.replace(ctx.start, positions_view=view(POS, (T,), "int64"), kv_groups=[group, {"layers": ["other"]}])
+    return dataclasses.replace(ctx, start=start)
+
+
+def _insert(T, cache_bytes=BLOCK_BYTES):
+    kw = {"q_in": ViewDesc(972, 0, (T, 16, 512), (8192, 512, 1), "bfloat16", CUDA), "kv": view(973, (T, 512)),
+          "k_cache": ViewDesc(974, 0, (40, cache_bytes), (CACHE_STRIDE, 1), "uint8", CUDA), "slot_mapping": view(975, (T,), "int64"),
+          "position_ids": view(POS, (T,), "int64"), "cos_sin_cache": CS_ROOT.view, "q_head_padded": 64, "eps": 1e-6, "cache_block_size": 64}
+    ev = [DispatchEnter(1, None, 0, "forward", "_C.fused_deepseek_v4_qnorm_rope_kv_rope_quant_insert.default", "", [], kw, 7, "model.layers.0.attn"),
+          DispatchExit(1, view(976, (T, 64, 512)))]
+    return build_trees(ev)[0][0]
+
+
+def test_the_insert_is_the_builds_call_per_token_writing_each_blocks_window_rows():
+    slots = [27 * 64 + 62, 27 * 64 + 63, 5 * 64]
+    g = QNormRopeKvInsert().match(_insert(3), _insert_ctx(3, slots))
+    assert [spec_label(c.spec) for c in g.parts] == ["Dsv4QNormRopeKvInsert_v1{NH=16,NHP=64,DN=448,DR=64,QB=64,EPS=1e-06}"] * 2
+    first, second = g.parts
+    assert (first.rows, second.rows) == (2, 1) and first.roots[2] == CS_ROOT.name
+    assert first.operands[2].indices == (0, 1) and second.operands[0].view.offset == 2 * 8192
+    nope, scale, rope = first.outputs[1:]
+    base = 27 * CACHE_STRIDE
+    assert (nope.view.offset, nope.view.strides, nope.view.dtype, nope.indices) == (base, (576, 1), "float8_e4m3fn", (62, 63))
+    assert (scale.view.offset, scale.view.shape) == (base + 64 * 576, (64, 8))
+    assert (rope.view.offset, rope.view.strides, rope.view.dtype) == ((base + 448) // 2, (288, 1), "bfloat16")
+    assert second.outputs[1].view.offset == 5 * CACHE_STRIDE and second.outputs[1].indices == (0,)
+    assert second.outputs[0].view.offset == 2 * 64 * 512
+
+
+def test_an_insert_off_the_fp8_ds_mla_block_or_its_layers_kv_group_or_without_the_rotary_root_is_refused():
+    assert isinstance(QNormRopeKvInsert().match(_insert(1, cache_bytes=64 * 576), _insert_ctx(1, [64])), Unsupported)
+    assert isinstance(QNormRopeKvInsert().match(_insert(1), _insert_ctx(1, [64], layer="model.layers.1.attn.swa_cache")), Unsupported)
+    assert isinstance(QNormRopeKvInsert().match(_insert(1), _insert_ctx(1, [64], roots=())), Unsupported)
 
 
 def test_a_split_buffer_other_than_the_dispatchs_or_a_weight_without_a_root_is_refused():
