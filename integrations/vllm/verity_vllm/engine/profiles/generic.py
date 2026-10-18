@@ -624,13 +624,14 @@ def _dsa_patterns(C: dict[str, Any], patterns: list) -> list:
 
 
 def _mhc_patterns(C: dict[str, Any]) -> list:
-    """The mHC MoE's: the block-FP8 linear, the cuBLAS GEMM, the final `_C.rms_norm` and the `shared + routed` add GLM-5.3's folds
-    state (vLLM's shape-generic Hopper routes), the embedding, the sampler and the transparent handlers of the base list."""
-    from verity_vllm.observe.fold.patterns.cublas import CublasLinear
+    """The mHC MoE's: the block-FP8 linear, the cuBLAS GEMMs (the f32-output one is the KV compressors'), the final `_C.rms_norm` and
+    the `shared + routed` add GLM-5.3's folds state (vLLM's shape-generic Hopper routes), the embedding, the sampler and the transparent
+    handlers of the base list."""
+    from verity_vllm.observe.fold.patterns.cublas import CublasLinear, CublasMmF32Out
     from verity_vllm.observe.fold.patterns.fp8 import DynamicDeepGemmFp8Linear
     from verity_vllm.observe.fold.patterns.norms import CudaRmsNorm
     V = int(C["V"])
-    return [DynamicDeepGemmFp8Linear(), CublasLinear(), CudaRmsNorm(), ResidualAddPattern(), Embedding(),
+    return [DynamicDeepGemmFp8Linear(), CublasLinear(), CublasMmF32Out(), CudaRmsNorm(), ResidualAddPattern(), Embedding(),
             TokenSelectGumbelTopP(vocab=V, block_size=base.SAMPLER_BLOCK_SIZE),
             TokenSelectGumbelTwoStage(vocab=V, block_size=base.SAMPLER_BLOCK_SIZE), TokenSelectArgmax(vocab=V), LogitsGather(),
             TransparentAten(), TransparentTritonMetadata()]

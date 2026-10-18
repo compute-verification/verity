@@ -1,7 +1,8 @@
 """DeepSeek-V4-Pro's H200 observer folds (vLLM d9105ea80).
 
 Each pattern states one of the Build's DeepSeek-V4 rules (`rules/vllm_mhc.py`, `rules/vllm_dsv4.py`) over the observer log, and binds
-its Definitions through the record target's vocabulary as the Build binds them (`_kind`), so each Compute is the Build's Call.
+its Definitions through the record target's vocabulary as the Build binds them (`target.vocab_kind`), so each Compute is the Build's
+Call.
 """
 
 from __future__ import annotations
@@ -10,17 +11,15 @@ __models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
 
 import re
 from dataclasses import dataclass
-from typing import Any
 
 from verity_vllm.observe.events import Root, ViewDesc
 from verity_vllm.observe.fold.patterns.collectives import ALL_REDUCE_OP
 from verity_vllm.observe.fold.patterns.ops import base_op, op_name
 from verity_vllm.observe.fold.patterns.resolutions import unsupported
-from verity_vllm.observe.fold.patterns.target import target_of
+from verity_vllm.observe.fold.patterns.target import target_of, vocab_kind
 from verity_vllm.observe.fold.resolver import Compute, Group, PerRow, Resolution, Shared, StepContext, Unsupported
 from verity_vllm.observe.fold.tree import TreeNode
 from verity_vllm.program.frontend.rules.vllm_mhc import MHC_GEOMETRY, post_pre_path
-from verity_vllm.program.frontend.rules.vocab import vocabulary_for
 from verity_vllm.program.kernels.mhc_twin import tf32_num_split
 
 LAYER = re.compile(r"model\.layers\.(\d+)")
@@ -28,14 +27,6 @@ LAYER = re.compile(r"model\.layers\.(\d+)")
 
 def _module(node: TreeNode) -> str:
     return getattr(node.enter, "module", None) or ""
-
-
-def _kind(ctx: StepContext, role: str, **statics: Any) -> Any:
-    """The Definition the record target's vocabulary binds the Build's `role` to at `statics`."""
-    spec = vocabulary_for("profile", target_of(ctx)[0].numerics_profile).kind(role, **statics)
-    if spec is None:
-        raise ValueError(f"the record target's vocabulary binds no {role!r}")
-    return spec
 
 
 def _roots(ctx: StepContext) -> dict[str, Root]:
@@ -121,9 +112,9 @@ class Mhc:
         if L == 0 and k == 1:
             streams, post, comb, inp, ys, rs = views
             NS = tf32_num_split(T, H, sms)
-            parts = [Compute(_kind(ctx, "mhc_pre_broadcast", NS=NS, **S), T, (PerRow(x), *ws), (PerRow(inp), PerRow(post), PerRow(comb)),
+            parts = [Compute(vocab_kind(ctx, "mhc_pre_broadcast", NS=NS, **S), T, (PerRow(x), *ws), (PerRow(inp), PerRow(post), PerRow(comb)),
                              (node.id,), hint=f"{mod}/pre", attribution=rows, pattern=self.name, roots=(None, *names)),
-                     Compute(_kind(ctx, "mhc_residual_broadcast", HC=HC, H=H), T, (PerRow(x),), (PerRow(streams),), (),
+                     Compute(vocab_kind(ctx, "mhc_residual_broadcast", HC=HC, H=H), T, (PerRow(x),), (PerRow(streams),), (),
                              hint=f"{mod}/streams", attribution=rows, pattern=self.name)]
         else:
             if st["prev"] is None:
@@ -131,7 +122,7 @@ class Mhc:
             ys, rs, streams, post, comb, inp = views
             role, NS = post_pre_path(T, HC, H, sms)
             res, post0, comb0 = st["prev"]
-            spec = _kind(ctx, role, NS=NS, **S, **({"TH": g["TH"]} if role == "mhc_fused_post_pre" else {}))
+            spec = vocab_kind(ctx, role, NS=NS, **S, **({"TH": g["TH"]} if role == "mhc_fused_post_pre" else {}))
             parts = [Compute(spec, T, (PerRow(x), PerRow(res), PerRow(post0), PerRow(comb0), *ws),
                              (PerRow(streams), PerRow(inp), PerRow(post), PerRow(comb)), (node.id,), hint=f"{mod}/{side}.post_pre",
                              attribution=rows, pattern=self.name, roots=(None, None, None, None, *names))]
@@ -153,8 +144,8 @@ class Mhc:
         if isinstance(ws, Unsupported):
             return ws
         res, post, comb = st["prev"]
-        head_spec = _kind(ctx, "hc_head", HC=HC, H=H, TH=g["TH_HEAD"], EPS=S["EPS"], HC_EPS=S["HC_EPS"])
-        parts = (Compute(_kind(ctx, "mhc_post", HC=HC, N=H), len(rows), (PerRow(x), PerRow(res), PerRow(post), PerRow(comb)),
+        head_spec = vocab_kind(ctx, "hc_head", HC=HC, H=H, TH=g["TH_HEAD"], EPS=S["EPS"], HC_EPS=S["HC_EPS"])
+        parts = (Compute(vocab_kind(ctx, "mhc_post", HC=HC, N=H), len(rows), (PerRow(x), PerRow(res), PerRow(post), PerRow(comb)),
                          (PerRow(streams),), (node.id,), hint="model/post", attribution=rows, pattern=self.name),
                  Compute(head_spec, len(rows), (PerRow(streams), *ws), (PerRow(head),), (), hint="model/hc_head", attribution=rows,
                          pattern=self.name, roots=(None, *names)))

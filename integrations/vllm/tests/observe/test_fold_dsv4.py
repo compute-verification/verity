@@ -129,6 +129,24 @@ def test_the_final_call_is_the_post_then_the_head():
     assert [o.view.alloc for o in head.outputs] == [701]
 
 
+def _mm(T, N, w_alloc):
+    w = view(w_alloc, (N, H))
+    wt = ViewDesc(w.alloc, 0, (H, N), (1, H), "bfloat16", CUDA)
+    return _node("aten.mm.dtype", view(900, (T, N), "float32"), "model.layers.0.attn", [view(901, (T, H)), wt])
+
+
+@pytest.mark.parametrize("T, N, label", [
+    (256, 1024, "CublasSplitKGemmF32Out_v1{K=7168,N=1024,SPLIT_K=2,DOT=HopperBF16WgmmaDot16_v1}"),
+    (256, 2048, "GemmF32Out_v1{K=7168,N=2048,DOT=HopperBF16WgmmaDot16_v1}")])
+def test_a_compressor_mm_is_the_builds_f32_output_cublas_gemm_over_its_weight(T, N, label):
+    from verity_vllm.observe.fold.patterns.cublas import CublasMmF32Out
+    w = Root(view(950, (N, H)), "weight", "model.layers.0.attn.compressor.wkv_gate.weight")
+    c = CublasMmF32Out().match(_mm(T, N, 950), _ctx(T, ROOTS + [w]))
+    assert spec_label(c.spec) == label and c.rows == T and c.roots[1] == w.name
+    assert [o.view.alloc for o in c.operands] == [901, 950] and c.operands[1].view.shape == (N, H) and c.outputs[0].view.alloc == 900
+    assert isinstance(CublasMmF32Out().match(_mm(T, N, 950), _ctx(T)), Unsupported), "a weight with no root is refused"
+
+
 def test_a_split_buffer_other_than_the_dispatchs_or_a_weight_without_a_root_is_refused():
     ctx = _ctx(1)
     _run(_pre_broadcast(1), ctx)
