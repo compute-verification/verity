@@ -276,11 +276,12 @@ def test_the_hyper_connected_rank_profile_states_the_builds_weights_record():
     assert mod.root_class("model.layers.5.ffn.experts.routed_experts.w2_weight_scale") == "marlin-served"
     assert mod.root_class("model.layers.5.attn.wq_b.weight") == "weight" and mod.root_class("model.layers.5.attn.k_scale") == "unknown"
     assert weights_type_of(prof, C) is W and weights_type_of(BASE.PROFILE, BASE.C) == analytic.weights_type(BASE.C)
-    from verity_vllm.observe.fold.patterns.dsv4 import dsv4_patterns
+    from verity_vllm.observe.fold.patterns import dsv4_patterns
     names, own = [p.name for p in prof.patterns], [p.name for p in dsv4_patterns()]
-    assert names[:len(own)] == own and names[len(own):len(own) + 7] == [
-        "tp.embedding_shard_cuda", "tp.collective", "fp8.dynamic_deepgemm_linear", "gemm.cublas_linear_default", "gemm.cublas_mm_f32out",
-        "norm.rms_norm_cuda", "residual_add.aten_add"]
+    assert own[-4:] == ["fp8.dynamic_deepgemm_linear", "gemm.cublas_linear_default", "gemm.cublas_mm_f32out", "norm.rms_norm_cuda"]
+    assert names[:len(own)] == own and names[len(own):len(own) + 4] == [
+        "tp.embedding_shard_cuda", "tp.collective", "moe.marlin_shared_experts.mxfp4", "residual_add.aten_add"]
+    assert prof.witnesses == ("schedule",)
     h = RunHeader("verity-capture/log/v1", "2026-10-18T00:00:00Z", "pid", {}, {"repo": mod.REPO_ID, "config": mod.HF_CONFIG, "tp": 8},
                   {"requests": []})
     assert mod.check_header(h) == []

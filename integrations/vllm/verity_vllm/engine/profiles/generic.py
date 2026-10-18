@@ -45,7 +45,7 @@ from verity.ml.circuits.types import Array, Record, Type, Value
 from verity_vllm.program import model as analytic
 from verity_vllm.observe.events import RunHeader
 from verity_vllm.observe.fold.patterns import (Embedding, LogitsGather, TokenSelectArgmax, TokenSelectGumbelTopP, TokenSelectGumbelTwoStage,
-                                               TransparentAten, TransparentTritonMetadata, dsa_patterns)
+                                               TransparentAten, TransparentTritonMetadata, dsa_patterns, dsv4_patterns)
 from verity_vllm.observe.fold.resolver import Profile
 from verity_vllm.observe.fold.patterns.collectives import TpCollective
 from verity_vllm.collectives.embedding_shard import EmbeddingShardCuda
@@ -59,6 +59,7 @@ from verity_vllm.engine.profiles.gen_llama_patterns import ADA_TUNED_GEMM, with_
 from verity_vllm.engine.profiles.gen_ln_patterns import ResidualAddPattern, with_ln_patterns
 from verity_vllm.engine.profiles.gen_ov_moe_patterns import (FUSED_MOE_NUM_STAGES, FUSED_MOE_NUM_WARPS, FUSED_MOE_PINS, MOE_CONSTRUCTION_PATTERNS,
                                   MOE_FP8_CONSTRUCTION_PATTERNS, ROUTER_VPT_BY_E, MoEFusedExperts, MoEFusedExpertsFp8)
+from verity_vllm.engine.profiles.gen_marlin_moe_patterns import SCHEDULE, MoEMarlinSharedExperts
 from verity_vllm.engine.profiles.gen_shared_moe_patterns import MoEFusedSharedExpertsFp8
 from verity_vllm.program.frontend.target_profile import TargetProfile
 
@@ -624,14 +625,10 @@ def _dsa_patterns(C: dict[str, Any], patterns: list) -> list:
 
 
 def _mhc_patterns(C: dict[str, Any]) -> list:
-    """The mHC MoE's: the block-FP8 linear, the cuBLAS GEMMs (the f32-output one is the KV compressors'), the final `_C.rms_norm` and
-    the `shared + routed` add GLM-5.3's folds state (vLLM's shape-generic Hopper routes), the embedding, the sampler and the transparent
-    handlers of the base list."""
-    from verity_vllm.observe.fold.patterns.cublas import CublasLinear, CublasMmF32Out
-    from verity_vllm.observe.fold.patterns.fp8 import DynamicDeepGemmFp8Linear
-    from verity_vllm.observe.fold.patterns.norms import CudaRmsNorm
+    """The mHC MoE's: the MXFP4 Marlin shared-expert scope, the `shared + routed` add GLM-5.3's folds state, the embedding, the sampler
+    and the transparent handlers of the base list."""
     V = int(C["V"])
-    return [DynamicDeepGemmFp8Linear(), CublasLinear(), CublasMmF32Out(), CudaRmsNorm(), ResidualAddPattern(), Embedding(),
+    return [MoEMarlinSharedExperts(C), ResidualAddPattern(), Embedding(),
             TokenSelectGumbelTopP(vocab=V, block_size=base.SAMPLER_BLOCK_SIZE),
             TokenSelectGumbelTwoStage(vocab=V, block_size=base.SAMPLER_BLOCK_SIZE), TokenSelectArgmax(vocab=V), LogitsGather(),
             TransparentAten(), TransparentTritonMetadata()]
@@ -651,7 +648,6 @@ def _tp_rank_patterns(patterns: list, cfg: dict[str, Any], world: int) -> list:
 
 def _mhc_profile(role: str, cfg: dict[str, Any], src: dict[str, Any], C: dict[str, Any], prov: dict[str, str], world: int,
                  repo: str | None, revision: str | None) -> Profile:
-    from verity_vllm.observe.fold.patterns.dsv4 import dsv4_patterns
     fam = FF.facts_for(cfg)
     wtype = mhc_weights_type(cfg, C)
     patterns = dsv4_patterns() + _tp_rank_patterns(_mhc_patterns(C), cfg, world)
@@ -670,7 +666,7 @@ def _mhc_profile(role: str, cfg: dict[str, Any], src: dict[str, Any], C: dict[st
                            "marlin_served": _MARLIN_SERVED.pattern},
     }
     return Profile(id=profile_id(role, C, world), patterns=patterns, config=C, weight_field=make_weight_field(cfg, C), accepted=False,
-                   kernel_allowlist=base.KERNEL_ALLOWLIST, notes=notes, weights_type=wtype)
+                   kernel_allowlist=base.KERNEL_ALLOWLIST, notes=notes, weights_type=wtype, witnesses=(SCHEDULE,) if world > 1 else ())
 
 
 def build_profile(role: str, world: int = 1, *, moe_construction: str | None = None, fused_moe_pins: dict[str, Any] | None = None,
