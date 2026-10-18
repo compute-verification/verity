@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -280,6 +281,35 @@ def test_a_tool_package_that_predates_the_queue_is_told_apart(tmp_path):
     assert remote.knows_queue(None) and remote.knows_queue(Path(remote.__file__).parent)
     assert not remote.knows_queue(pkg) and not remote.knows_queue(tmp_path / "nope")
     assert remote.knows_gpus(None) and remote.knows_gpus(Path(remote.__file__).parent) and not remote.knows_gpus(pkg)
+
+
+def test_on_auto_is_the_queue_from_this_checkout_with_a_test_shape(tmp_path, monkeypatch, capsys):
+    """`research run --on auto` (18 Oct, remote by default): --queue from the checkout it runs in, project verity, 4 CPUs, 16 GB
+    and 60 min where the run declares none of its own."""
+    from research import remote
+
+    specs, sources = [], []
+
+    def place(src, run_id, spec):
+        specs.append(spec)
+        sources.append(src)
+        raise remote.Refused("placement reached")
+
+    monkeypatch.setattr(remote, "queue_placement", place)
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+    monkeypatch.chdir(repo)
+    runs = ["run", "--runs-dir", str(tmp_path / "runs"), "--on", "auto"]
+    assert main([*runs, "--", "pytest", "-q"]) == 3
+    assert main([*runs, "--cpus", "8", "--mem-gb", "32", "--timeout", "2h", "--", "pytest"]) == 3
+    assert [(s["project"], s["cpus"], s["mem-gb"], s["max-s"], s["node"]) for s in specs] == [
+        ("verity", 4, 16, 3600, None), ("verity", 8, 32, 7200, None)]
+    assert sources[0].resolve() == repo.resolve()
+    assert "the queue places it from" in capsys.readouterr().err
+    assert main([*runs, "--queue", "--", "true"]) == 2 and "is --queue already" in capsys.readouterr().err
+    monkeypatch.chdir(tmp_path)
+    assert main([*runs, "--", "true"]) == 2 and "no git checkout here" in capsys.readouterr().err
 
 
 def test_gpus_with_on_reaches_the_machine_and_without_on_or_queue_means_nothing(tmp_path, monkeypatch, capsys):
