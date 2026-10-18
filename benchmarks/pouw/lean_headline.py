@@ -40,7 +40,7 @@ OUT_M = OUT.with_name("Sm120Measured.lean")
 
 Q = Fraction(1, 2)                 # A6's floors: two words a lane, so q = q_T = ½ and b_T = 0 (SheetScalarRouteHalf)
 LN2 = Fraction(6931471808, 10**10)  # Mathlib's Real.log_two_lt_d9
-P_OPERAND = Fraction(3, 4)         # the operand luck (OperandLuckCube, luck_quad's ¾): eps_budget's p
+P_OPERAND = Fraction(3, 4)         # the operand luck (OperandHMu at ¾, through Lemma B): eps_budget's p
 P = P_OPERAND + (1 - P_OPERAND) / 2  # (I7): the receipt luck ½ on the rest (ReceiptLuckAt, LuckOfReceipt), 7/8
 LN_P = 1 - P                       # 1 − p ≤ ln(1/p) (Real.one_sub_inv_le_log_of_pos)
 TENSOR = re.compile(r"([HIBDQO])MMA(?:SP|SF)?(16|8)8(\d+)")   # a census MMA class: its type letter and m (n = 8), k

@@ -1,0 +1,4 @@
+order = 20
+tool = "SHA-512 counter-mode noise, as one generator and as separate passes"
+files = "`masked_gemm/sha_noise.cuh`, `sha_pass.cuh`"
+includes = "`pearl_c/sha512.cuh`"

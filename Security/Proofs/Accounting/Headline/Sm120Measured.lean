@@ -282,16 +282,16 @@ open Accounting.TS Accounting.TS.Headline Accounting.Assumptions.TS Pouw.Relativ
 receipt split (`luck_of_receipt_half`), (I8) from its pieces (`ProofsSoundOfPinned`), (I5) `SideUnits` and FILL-OPT
 from the data, and the terms bounded by `sm120m_eps_le`. -/
 theorem Sm120MeasuredHeadline : Accounting.Guarantees.TS.Sm120MeasuredHeadline := by
-  intro α ι _ _ _ R _ Pl G V nπ pf δbind δzk hδ hSplit h1 hW hSR hN hF hG hPinG hCube hRL hOf hB hZK hPin hRF
-  have hL := luck_of_receipt_half R Pl.game G hG hPinG hCube hRL
-  have hPS := ProofsSoundOfPinned (α × Finset ι) Sm120.checks nπ Pl pf Sm120Measured.model.Nw δbind δzk hOf hB hZK
+  intro Ω _ Pl G V nπ pf δbind δzk hδ hSplit h1 hW hSR hN hF hG hPinG hOp hRL hOf hB hZK hPin hRF
+  have hL := luck_of_receipt_half Pl.game G hG hPinG hOp hRL
+  have hPS := ProofsSoundOfPinned Ω Sm120.checks nπ Pl pf Sm120Measured.model.Nw δbind δzk hOf hB hZK
     hPin hRF
   have hδlo : (1 / 2 : ℝ) ^ 41 ≤ (1 / 2) ^ 40 - (Sm120.checks : ℝ) * (δbind + nπ * δzk) := by
     have e : ((1 : ℝ) / 2) ^ 40 = 2 * (1 / 2) ^ 41 := by norm_num
     linarith
   have hδpos : 0 < (1 / 2 : ℝ) ^ 40 - (Sm120.checks : ℝ) * (δbind + nπ * δzk) :=
     lt_of_lt_of_le (by positivity) hδlo
-  have hmain := DIdealFloor Sm120Measured.model Sm120Measured.flat (α × Finset ι) Sm120.checks Pl
+  have hmain := DIdealFloor Sm120Measured.model Sm120Measured.flat Ω Sm120.checks Pl
     (onFacet Sm120Measured.piStar) (7 / 8) ((1 / 2) ^ 40) δbind δzk nπ (isCert_onFacet _) sm120m_wf (by decide)
     (by norm_num) (by norm_num) hδpos hSplit h1 hW hSR (fun _ u => u.elim) hN hF (sm120m_fillOpt Pl hSplit) hL hPS
   refine le_trans (prob_mono ?_) hmain

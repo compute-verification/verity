@@ -6,8 +6,9 @@
                                                                             (job.sh), the datasets sent with it
     run.py report RESULTS.json...                                           the tables
     run.py baseline [RESULTS.json...]                                       the locked baseline (against new results)
-    run.py baseline --lock RESULTS.json...                                  lock those points (baseline.json, README)
+    run.py baseline --lock RESULTS.json...                                  lock those points in baseline.json
     run.py steps | specs                                                    the registered steps; the arms in specs/
+    run.py tables [steps|arms|windows|models|baseline]...                   the README's tables, as Markdown
     run.py windows --model M [--data DIR] [--write]                         every window list's digest (and the lock)
     run.py setup --data DIR                                                 stage the datasets (datasets.json) there
     run.py selftest                                                         the engine on a tiny model, CPU or GPU
@@ -34,6 +35,7 @@ import methodology  # noqa: E402
 import models  # noqa: E402
 import report  # noqa: E402
 import spec  # noqa: E402
+import tables  # noqa: E402
 import windows  # noqa: E402
 
 ROOT = HERE.parents[1]
@@ -289,14 +291,8 @@ def cmd_report(a) -> int:
     return 0
 
 
-BASELINE = HERE / "baseline.json"
+BASELINE = tables.BASELINE
 README = HERE / "README.md"
-MARK = ("<!-- baseline -->", "<!-- /baseline -->")
-
-
-def readme_with(table: str, text: str) -> str:
-    head, rest = text.split(MARK[0])
-    return head + MARK[0] + "\n" + table + "\n" + MARK[1] + rest.split(MARK[1])[1]
 
 
 def cmd_baseline(a) -> int:
@@ -304,7 +300,6 @@ def cmd_baseline(a) -> int:
     if a.lock:
         lk = report.lock(lk, report.load(a.results))
         BASELINE.write_text(json.dumps(lk, indent=1) + "\n")
-        README.write_text(readme_with(report.baseline_table(lk), README.read_text()))
         print(report.baseline_table(lk))
         return 0
     if not a.results:
@@ -327,6 +322,11 @@ def cmd_specs(_a) -> int:
     for p in sorted(spec.SPECS.glob("*.toml")):
         arm = spec.load(str(p))
         print(f"{arm.name:24} {arm.scope:9} {'seeded' if arm.seeded else 'deterministic':13} {arm.description}")
+    return 0
+
+
+def cmd_tables(a) -> int:
+    print(tables.render(a.sections), end="")
     return 0
 
 
@@ -364,9 +364,11 @@ def main(argv: list[str]) -> int:
     q.add_argument("results", nargs="+")
     q = sub.add_parser("baseline")
     q.add_argument("results", nargs="*")
-    q.add_argument("--lock", action="store_true", help="lock these results' points (baseline.json and the README)")
+    q.add_argument("--lock", action="store_true", help="lock these results' points in baseline.json")
     sub.add_parser("steps")
     sub.add_parser("specs")
+    q = sub.add_parser("tables")
+    q.add_argument("sections", nargs="*", metavar="SECTION", help=f"of {', '.join(tables.SECTIONS)} (default: all)")
     q = sub.add_parser("windows")
     q.add_argument("--model", required=True, choices=sorted(models.MODELS))
     q.add_argument("--data", default=str(DATA))
@@ -378,7 +380,8 @@ def main(argv: list[str]) -> int:
     sub.add_parser("selftest")
     a = p.parse_args(argv)
     return {"eval": cmd_eval, "submit": cmd_submit, "report": cmd_report, "baseline": cmd_baseline, "steps": cmd_steps,
-            "specs": cmd_specs, "windows": cmd_windows, "setup": cmd_setup, "selftest": cmd_selftest}[a.cmd](a)
+            "specs": cmd_specs, "tables": cmd_tables, "windows": cmd_windows, "setup": cmd_setup,
+            "selftest": cmd_selftest}[a.cmd](a)
 
 
 if __name__ == "__main__":

@@ -184,16 +184,16 @@ open Accounting.TS Accounting.TS.Headline Accounting.Assumptions.TS Pouw.Relativ
 from the receipt split (`luck_of_receipt_half`), (I8) from its pieces (`ProofsSoundOfPinned`), FILL-OPT from the data,
 and the terms bounded by `sm80_eps_le`. -/
 theorem Sm80SheetHeadline : Accounting.Guarantees.TS.Sm80SheetHeadline := by
-  intro α ι _ _ _ R _ Pl G V nπ pf δbind δzk hδ hSplit h1 h2 h3 h4 h5 h6 h7 hF hG hPinG hCube hRL hOf hB hZK hPin hRF
-  have hL := luck_of_receipt_half R Pl.game G hG hPinG hCube hRL
+  intro Ω _ Pl G V nπ pf δbind δzk hδ hSplit h1 h2 h3 h4 h5 h6 h7 hF hG hPinG hOp hRL hOf hB hZK hPin hRF
+  have hL := luck_of_receipt_half Pl.game G hG hPinG hOp hRL
   have hPS :=
-    ProofsSoundOfPinned (α × Finset ι) Sm80.checks nπ Pl pf Sm80.model.Nw δbind δzk hOf hB hZK hPin hRF
+    ProofsSoundOfPinned Ω Sm80.checks nπ Pl pf Sm80.model.Nw δbind δzk hOf hB hZK hPin hRF
   have hδlo : (1 / 2 : ℝ) ^ 41 ≤ (1 / 2) ^ 40 - (Sm80.checks : ℝ) * (δbind + nπ * δzk) := by
     have e : ((1 : ℝ) / 2) ^ 40 = 2 * (1 / 2) ^ 41 := by norm_num
     linarith
   have hδpos : 0 < (1 / 2 : ℝ) ^ 40 - (Sm80.checks : ℝ) * (δbind + nπ * δzk) :=
     lt_of_lt_of_le (by positivity) hδlo
-  have hmain := SheetDIdealFloor Sm80.sheet Sm80.model Sm80.flat (α × Finset ι) Sm80.checks Pl (onFacet Sm80.piStar)
+  have hmain := SheetDIdealFloor Sm80.sheet Sm80.model Sm80.flat Ω Sm80.checks Pl (onFacet Sm80.piStar)
     (7 / 8) ((1 / 2) ^ 40) δbind δzk nπ rfl (isCert_onFacet _) sm80_wf (by decide) (by norm_num) (by norm_num)
     hδpos hSplit (le_of_eq sm80_q) (le_of_eq sm80_qT) le_rfl h1 h2 h3 h4 h5 h6 h7 hF (sm80_fillOpt Pl hSplit) hL
     hPS

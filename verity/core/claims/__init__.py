@@ -245,7 +245,8 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "that its online cost is at most T and the honest work of its correct units exceeds T / (1 − γ) is at most "
           "η(q, N)", "PoUW γ-gap per coin", "conjectured"),
     # EPS1's tensor–scalar model (Security/Models/Accounting/Assumptions/TS.lean, note:20261017T0324Z-draft-eps1-spec):
-    # the named assumptions Theorem D-ideal (I1)–(I8) and the compiler lemma rest on
+    # the named assumptions Theorem D-ideal (I1)–(I8) and the compiler lemma rest on, and the compiler's per-stage form
+    # (Security/Models/Accounting/Assumptions/Stages.lean)
     Entry("accounting-ts-facet-ceilings", "assumption",
           "Measured facets are ceilings for the stated device (sm_120 RTX PRO 6000, VF3p-16 on VF3o-16): every program "
           "path, on every data value, launch configuration and SM clock up to f_max, loads each SM-clocked facet by at "
@@ -305,12 +306,17 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     Entry("accounting-ts-luck", "assumption",
           "(L) at p with freshness (F1)–(F2): given the past, a round with a deficient block passes with probability at "
           "most p", "TS luck at p", "proven"),
+    Entry("accounting-ts-stage-luck", "assumption",
+          "(L) at p under per-stage coins: in every round, at every stage, whatever the past, a unit of the stage that "
+          "the cheater skips passes its proof with probability at most p over the stage's coin",
+          "TS stage luck at p", "proven"),
     Entry("accounting-ts-proofs-sound", "assumption",
           "Outside binding and proof-soundness failures (S·(δ_bind + n_π·δ_ZK)), an accepted window's committed values "
           "are right for their derivations from what was committed before σ, and every word that isn't fixed is in its "
           "round's share", "TS proofs sound", "standard"),
     Entry("accounting-ts-lin-steer", "assumption",
-          "LIN-STEER: zeroing a fraction φ of a row's noise-active coordinates saves at most φ of the consumer's work",
+          "LIN-STEER, false for a segmented consumer whose noise-active segments carry unequal counts: zeroing a "
+          "fraction φ of a row's noise-active coordinates saves at most φ of the consumer's work",
           "LIN-STEER", "conjectured"),
     Entry("accounting-ts-right-fixed", "assumption",
           "Lemma E1(c) with the rounds' equal shares: on an accepted window whose committed values are right for their "
@@ -319,6 +325,10 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "The receipt luck at pr: given the past, a deficient round whose deficient words are not all right keeps the "
           "honest committed value with probability at most pr (½ at LEDGER case (b), two or more wrong places a set)",
           "TS receipt luck at pr", "conjectured"),
+    Entry("accounting-ts-operand-h-mu", "assumption",
+          "(H-μ) at the receipt's operands: given the past, a round's deficient words take any one value with "
+          "probability at most μ given a view of the cheater that decides the round's share (¾ in the headlines)",
+          "TS operand H-μ at μ", "conjectured"),
 )}
 
 
