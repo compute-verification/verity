@@ -32,8 +32,9 @@ import numpy as np
 E_WORD = {"conjectured": 364_497.0, "best found": 490_080.0}
 COEFFICIENTS = ("r0", "b_q", "b_kv", "w0", "w_start")
 GRID = ((60.0, (1, 2, 5, 10, 60)), (20.0, (1, 3)))
-# kv.cu at p1024, k = 3, masked: 98,016 squarings a 4 KiB block at 1.499e10 squarings a second on an RTX PRO 6000
-ENCODE_BPS = 1.499e10 / 98_016 * 4096
+# kv.cu at p1024, k = 3, masked: the bound encode (an append under b_j(c_a)), 1.609e5 blocks of 4 KiB a second on an
+# RTX PRO 6000 (encode_rate.py)
+ENCODE_BPS = 1.609e5 * 4096
 
 
 def units(model: dict, w: dict[str, np.ndarray]) -> np.ndarray:
