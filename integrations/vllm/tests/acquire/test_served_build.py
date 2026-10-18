@@ -70,6 +70,7 @@ def test_the_build_is_the_served_computation(art: Path) -> None:
     assert len(m["identities"]) == 6697
     assert m["program_digest"] == ("1f2df5e1029f878debf647a562314108b4e15159e90c5a852adefe9ade198707"
                                    "7c2b4cbf5621209148cdafbdc1113f15cbafd7a9c3f38d11a70659c291062a6b")
+    assert m["artifact"]["kernels"] == {sha: k["config"] for sha, k in p["kernels"].items()} and len(m["artifact"]["digest"]) == 128
 
 
 def test_the_gemm_route_follows_the_step(art: Path) -> None:

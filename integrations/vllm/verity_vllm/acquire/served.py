@@ -30,6 +30,7 @@ uncaptured.  Each step names the Definitions its batch selects:
 The manifest's identities are compiled.build's: one per (step, request, committed value), the request's rows of the value
 (element_range [0, tokens x width); the logits and the sampled id one row per request), `step` request-relative.  program_digest
 is over the Program (every piece's calls with their Definitions and operands, the attention ops, the logits) and the step plans.
+The Build carries the compile artifact it read (`artifact`, `served_artifact.record`), the row's pin.
 
     verity-vllm served build --inductor-dir DIR --split-graph computation_graph.py --launch-configs launch_configs.json \\
         --routes routes.json --workload workload.json --capture-sizes 1,2,4,8,16 --max-num-seqs 8 --sms 132 --out manifest.json
@@ -51,6 +52,7 @@ import numpy as np
 from verity.ml.circuits.ops.prims import HopperBF16WgmmaDot16
 from verity_vllm.acquire import compiled as C
 from verity_vllm.acquire import inductor_templates as T
+from verity_vllm.acquire import served_artifact as SA
 from verity_vllm.acquire import served_moe as SM
 from verity_vllm.acquire.inductor_templates import Unmodelled, bound
 from verity_vllm.config import UsageError, option
@@ -670,7 +672,7 @@ def build(inductor_dir: str, *, split_graph: str, launch_configs: dict[str, Any]
             "populations": {"identities": len(identities), "by_family": {FAMILY: len(identities)}, "steps": steps,
                             "values_per_request_step": len(names) + 2},
             "complete": not missing, "unmodelled": {"routes_missing": len(missing)} if missing else {},
-            "manifest_digest": manifest_digest(identities), "identities": identities}
+            "artifact": SA.record(inductor_dir, program["kernels"]), "manifest_digest": manifest_digest(identities), "identities": identities}
 
 
 def _final_value(split_graph: str, graph: dict[str, Any], wired: dict[str, Any]) -> dict[str, Any]:

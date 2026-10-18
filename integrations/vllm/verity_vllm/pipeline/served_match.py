@@ -8,21 +8,24 @@ committed values (`check.replay.served_check`), with the weights the engine serv
 
     verity-vllm served-match --case LLAMA32_1B --workload W.json --out DIR [--build-of-record BUILD.json] [--max-num-seqs 8]
 
-DIR gets match.json (the verdict), build.json (the Build), launch_configs.json, routes.json and facts.json.  With
---build-of-record, the Build derived here must carry its program digest.  Exit 0 when the Match passes, 1 when it fails, 3 when
-the Build refuses the artifact.
+DIR gets match.json (the verdict), build.json (the Build, its compile artifact pinned: `acquire.served_artifact`),
+launch_configs.json, routes.json and facts.json.  With --build-of-record, the process's fresh Inductor dir is seeded with that
+Build's autotune winners and the Build derived here must carry its program digest.  Exit 0 when the Match passes, 1 when it fails,
+3 when the Build refuses the artifact.
 
 The process's own compile dirs are under DIR (`engine.env.own_compile_dirs`); the committer retains on the host
 (``VERITY_RETAIN=host``, which the run exports).
 
 The Commit's served mode (`pipeline.commit --compiled-taps served`, `ops/served_commit.sh`) runs the same derivation and check in
-its treatment process through `ServedCommit`.
+its treatment process through `ServedCommit`, on the Build of record's pinned artifact: its Inductor dir seeded with the Build's
+winners, and its own Build's artifact the Build of record's or the Commit refuses (rc 3) before it serves a measured run.
 """
 from __future__ import annotations
 
 import glob
 import json
 import os
+import sys
 import time
 import traceback
 from dataclasses import dataclass
@@ -39,7 +42,8 @@ class Options:
     case: str = option("--case", help="the checkpoint role (verity_vllm.config.CHECKPOINTS)")
     workload: str = option("--workload", help="sweep workload json: requests with prompt_token_ids, max_tokens, arrive_step")
     out: str = option("--out", help="the output directory")
-    build_of_record: str | None = option("--build-of-record", default=None, help="a served Build whose program digest this one must equal")
+    build_of_record: str | None = option("--build-of-record", default=None, help="a served Build whose autotune winners seed this process "
+                                         "and whose program digest and compile artifact this one must equal")
     max_num_seqs: int = option("--max-num-seqs", type=int, default=8)
     gpu_memory_utilization: float = option("--gpu-memory-utilization", type=float, default=0.3)
     kv_cache_gib: int = option("--kv-cache-gib", type=int, default=4, help="the KV cache's size (kv_cache_memory_bytes), GiB")
@@ -204,9 +208,12 @@ class ServedCommit:
     def __init__(self, build: dict[str, Any], fault: str | None) -> None:
         from verity_vllm.acquire.sources.served_compiled_source import ServedCompiledSource
 
+        from verity_vllm.acquire import served_artifact as SA
+
         if engine_env.compile_dirs() is None:
             raise UsageError("--compiled-taps served: the Build reads this process's own compile artifact; export its own "
                              f"TORCHINDUCTOR_CACHE_DIR and VLLM_CACHE_ROOT with {engine_env.INDUCTOR_DIR_MARK}=1 (ops/served_commit.sh)")
+        self.pin = SA.pinned(build)
         engine_env.apply_compile_fresh()
         self.build, self.facts, self.weight = build, {}, None
         self.src = ServedCompiledSource(fault=fault)
@@ -227,6 +234,10 @@ class ServedCommit:
         self.src.attach(com)
 
     def rebuild(self, workload: dict[str, Any], out: str) -> dict[str, Any]:
+        """This process's own Build (build_rebuilt.json); exits 3 (`[delta] REFUSE`) when the compile artifact it read is not the
+        Build of record's (artifact_check.json names each kernel and winner that differs; a refused Build read no kernels, and
+        its process's winners are checked)."""
+        from verity_vllm.acquire import served_artifact as SA
         from verity_vllm.acquire.inductor_templates import Unmodelled
 
         schedule, steps = schedule_of(workload)
@@ -236,6 +247,15 @@ class ServedCommit:
             b = {"program_digest": None, "manifest_digest": None, "complete": False, "unmodelled": {"build_refused": str(e)},
                  "populations": {"identities": 0}, "identities": []}
         json.dump(b, open(f"{out}/build_rebuilt.json", "w"), indent=1)
+        loaded = b.get("artifact") or {"winners": SA.winners(engine_env.compile_dirs()["inductor"])}
+        diff = SA.differences(self.pin, loaded, SA.PARTS if "artifact" in b else ("winners",))
+        json.dump({"pinned": self.pin["digest"], "loaded": loaded.get("digest"), "equal": not diff, "differences": diff},
+                  open(f"{out}/artifact_check.json", "w"), indent=1)
+        if diff:
+            print(f"[delta] REFUSE: this process loaded compile artifact {str(loaded.get('digest', 'of a refused Build'))[:16]}, not the Build of record's "
+                  f"{self.pin['digest'][:16]} ({len(diff)} differences: {diff[:3]})", flush=True)
+            sys.exit(3)
+        print(f"[delta] compile artifact {self.pin['digest'][:16]}: this process's is the Build of record's", flush=True)
         return b
 
     def c2(self, com: Any, rc: Any, reqs: list[dict[str, Any]], challenge: str, replay_seed: int | None) -> dict[str, Any]:
@@ -298,7 +318,12 @@ class ServedCommit:
 def main(a: Options) -> int:
     os.makedirs(a.out, exist_ok=True)
     out = os.path.abspath(a.out)
-    engine_env.own_compile_dirs(out)
+    dirs = engine_env.own_compile_dirs(out)
+    from verity_vllm.acquire import served_artifact as SA
+
+    of_record = json.load(open(a.build_of_record)) if a.build_of_record else None
+    if of_record is not None:
+        SA.seed(SA.pinned(of_record), dirs["TORCHINDUCTOR_CACHE_DIR"])
 
     from vllm import SamplingParams
 
@@ -358,12 +383,13 @@ def main(a: Options) -> int:
 
     rep = check_committed(build, com, served_weights(eng.model), prompts, {r.request_id: r.request_id for r in reqs}, seed=None, rows=a.rows, log=log)
     com.uninstall()
-    of_record = None
-    if a.build_of_record:
-        want = json.load(open(a.build_of_record))["program_digest"]
-        of_record = {"program_digest": want, "equal": want == build["program_digest"]}
+    if of_record is not None:
+        diff = SA.differences(SA.pinned(of_record), build["artifact"])
+        of_record = {"program_digest": of_record["program_digest"], "artifact": of_record["artifact"]["digest"], "artifact_differences": diff[:20],
+                     "equal": of_record["program_digest"] == build["program_digest"] and not diff}
     ok = bool(rep["ok"] and build["complete"] and not facts["errors"] and (of_record is None or of_record["equal"]))
-    json.dump({"ok": ok, "build": {k: build[k] for k in ("program_digest", "manifest_digest", "complete")}, "build_of_record": of_record,
+    json.dump({"ok": ok, "build": {**{k: build[k] for k in ("program_digest", "manifest_digest", "complete")}, "artifact": build["artifact"]["digest"]},
+               "build_of_record": of_record,
                "check": rep, "facts": facts}, open(f"{out}/match.json", "w"), indent=1, default=str)
     log(f"Match {'PASS' if ok else 'FAIL'}: tally {json.dumps(rep['tally'])}")
     return 0 if ok else 1
