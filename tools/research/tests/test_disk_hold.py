@@ -29,14 +29,14 @@ class Node:
     the pids that are alive."""
 
     def __init__(self, tmp_path: Path, used_tb: float):
-        self.path, self.used_tb, self.now, self.live = tmp_path, used_tb, 1000 * S, set()
+        self.path, self.used_tb, self.now, self.live, self.runs = tmp_path, used_tb, 1000 * S, set(), []
 
     def usage(self, path):
         return int(10 * TB), int(self.used_tb * TB), 0
 
     def run(self, pid: int, gb: float = 100) -> Run:
         self.live.add(pid)
-        r = Run(self, pid, gb)
+        self.runs.append(r := Run(self, pid, gb))
         self.now += S
         return r
 
@@ -44,11 +44,25 @@ class Node:
         return sorted(p.name for p in (self.path / disk.QUEUE_DIR).iterdir() if disk.TICKET.fullmatch(p.name))
 
 
+class Stopped(Exception):
+    pass
+
+
+@pytest.fixture
+def new_node(tmp_path):
+    """Node(tmp_path, used_tb); at teardown each run still held is stopped, so no thread outlives its test."""
+    made = []
+    yield lambda used_tb: made.append(Node(tmp_path, used_tb)) or made[-1]
+    for r in (r for n in made for r in n.runs if r.state[0] == "held"):
+        r.stopping = True
+        assert r.step() == "raised" and isinstance(r.state[1], Stopped)
+
+
 class Run:
     """A `disk.hold` in a thread whose sleep blocks until the test steps it, so only one run acts at a time."""
 
     def __init__(self, node: Node, pid: int, gb: float):
-        self.go, self.at, self.lines = threading.Semaphore(0), queue.Queue(), []
+        self.go, self.at, self.lines, self.stopping = threading.Semaphore(0), queue.Queue(), [], False
 
         def body():
             try:
@@ -63,6 +77,8 @@ class Run:
     def _sleep(self, s):
         self.at.put(("held", s))
         self.go.acquire()
+        if self.stopping:
+            raise Stopped
 
     def step(self) -> str:
         self.go.release()
@@ -88,8 +104,8 @@ def test_a_held_run_is_released_at_80_percent_with_no_lower_mark(tmp_path):
     assert not [p for p in (tmp_path / disk.QUEUE_DIR).iterdir() if disk.TICKET.fullmatch(p.name)], "the ticket goes with the release"
 
 
-def test_a_new_run_waits_behind_an_older_held_one_even_when_it_fits(tmp_path):
-    node = Node(tmp_path, 7.95)
+def test_a_new_run_waits_behind_an_older_held_one_even_when_it_fits(new_node):
+    node = new_node(7.95)
     a = node.run(101)
     assert a.state[0] == "held"
     node.used_tb = 7.0
@@ -101,8 +117,8 @@ def test_a_new_run_waits_behind_an_older_held_one_even_when_it_fits(tmp_path):
     assert node.tickets() == []
 
 
-def test_held_runs_go_in_first_come_first_served_one_per_window(tmp_path):
-    node = Node(tmp_path, 7.95)
+def test_held_runs_go_in_first_come_first_served_one_per_window(new_node):
+    node = new_node(7.95)
     a, b, c = node.run(103), node.run(102), node.run(101)
     assert [r.state[0] for r in (a, b, c)] == ["held"] * 3
     node.used_tb = 6.0
@@ -115,8 +131,8 @@ def test_held_runs_go_in_first_come_first_served_one_per_window(tmp_path):
     assert order == ["a", "b", "c"], "by ticket age, not pid or poll order"
 
 
-def test_two_eligible_held_runs_are_not_released_in_one_window(tmp_path):
-    node = Node(tmp_path, 7.95)
+def test_two_eligible_held_runs_are_not_released_in_one_window(new_node):
+    node = new_node(7.95)
     a, b = node.run(101), node.run(102)
     node.used_tb = 6.0
     assert a.step() == "released"
@@ -126,8 +142,8 @@ def test_two_eligible_held_runs_are_not_released_in_one_window(tmp_path):
     assert b.step() == "released"
 
 
-def test_a_clock_stepped_back_does_not_stall_the_queue(tmp_path):
-    node = Node(tmp_path, 7.95)
+def test_a_clock_stepped_back_does_not_stall_the_queue(new_node):
+    node = new_node(7.95)
     a, b = node.run(101), node.run(102)
     node.used_tb = 6.0
     assert a.step() == "released"
@@ -135,8 +151,8 @@ def test_a_clock_stepped_back_does_not_stall_the_queue(tmp_path):
     assert b.step() == "released", "a's release reads as an hour ahead: not a window to wait out"
 
 
-def test_the_head_waits_for_its_own_gb_to_fit(tmp_path):
-    node = Node(tmp_path, 7.95)
+def test_the_head_waits_for_its_own_gb_to_fit(new_node):
+    node = new_node(7.95)
     a = node.run(101, gb=1000)
     b = node.run(102)
     node.used_tb = 7.5
@@ -145,8 +161,8 @@ def test_the_head_waits_for_its_own_gb_to_fit(tmp_path):
     assert a.step() == "released"
 
 
-def test_a_dead_runs_ticket_is_ignored_and_removed(tmp_path):
-    node = Node(tmp_path, 7.0)
+def test_a_dead_runs_ticket_is_ignored_and_removed(new_node):
+    node = new_node(7.0)
     a = node.run(101)
     a2 = node.run(102)
     assert a.state[0] == "released" and a2.state[0] == "released", "an empty queue admits at once"
