@@ -9,9 +9,11 @@ cell is its index, so the placed circuit's `x`, `t` and `cell` are `leaf`, `tick
 share a cell.
 
 `place` builds one from a plan that puts each root Call on a device at an engine step; the Call's gates go with it.
-Registered inputs (the weights) are stored at the device of their first reader, and run inputs (the requests) at the
-client's leaf, outside every block. Step 0 is the inputs'; request r's layer l runs at step 1 + r + l, on one of the
-block's `Hardware.devices`, and every device begins step s at tick s · `step_ticks`.
+Registered inputs (the weights) are stored at the device of their first reader (one no gate reads, such as a rotary-table
+row of a position the request never reaches, beside the registered input before it), and run inputs (the requests) at the
+client's leaf, outside every block. Step 0 is the inputs'; a Call runs at its model's step (`Model.step`: the MLP's
+request r's layer l at 1 + r + l), on one of the block's `Hardware.devices`, and every device begins step s at tick
+s · `step_ticks`.
 
 **Crossing edges** (`crossings`): a value v read by a gate whose leaf is in another unit, one edge per (v, reading unit),
 read at the earliest tick of a reader in that unit. A root output is also an edge, to `OUTSIDE`, read by the client at
@@ -23,6 +25,7 @@ tree) under `BINDING`, the SHA-512 of its label; the root is public, the rows an
 """
 from __future__ import annotations
 
+import bisect
 import hashlib
 import struct
 from dataclasses import dataclass
@@ -106,24 +109,24 @@ Plan = Callable[[CallInfo], tuple[int, int]]
 
 
 def pipeline(model: Model, hw: Hardware) -> Plan:
-    """Layer l on block ⌊l·k/L⌋ of k blocks, its groups spread over the block's devices; request r's layer at step 1 + r + l."""
+    """Layer l on block ⌊l·k/L⌋ of k blocks, its groups spread over the block's devices, at the model's step for the Call."""
     blocks = sorted(hw.units)
     layers = model.spec.layers
 
     def plan(c: CallInfo) -> tuple[int, int]:
         devices = hw.devices(blocks[c.layer * len(blocks) // layers])
-        return devices[c.group % len(devices)], 1 + c.request + c.layer
+        return devices[c.group % len(devices)], model.step(c)
 
     return plan
 
 
 def tensor(model: Model, hw: Hardware) -> Plan:
-    """Group g of every layer on block g mod k, on the block's device l mod its device count; step 1 + r + l."""
+    """Group g of every layer on block g mod k, on the block's device l mod its device count."""
     blocks = sorted(hw.units)
 
     def plan(c: CallInfo) -> tuple[int, int]:
         devices = hw.devices(blocks[c.group % len(blocks)])
-        return devices[c.layer % len(devices)], 1 + c.request + c.layer
+        return devices[c.layer % len(devices)], model.step(c)
 
     return plan
 
@@ -152,6 +155,10 @@ def place(model: Model, hw: Hardware, plan: Plan, step_ticks: int = 1) -> Placem
         for a in ops[g]:
             if leaf[a] < 0:
                 leaf[a] = leaf[g]
+    stored = [g for g in range(n) if kind[g] == "registered" and leaf[g] >= 0]
+    for g in range(n):
+        if kind[g] == "registered" and leaf[g] < 0 and stored:
+            leaf[g] = leaf[stored[max(bisect.bisect_left(stored, g) - 1, 0)]]
     unplaced = [g for g in range(n) if leaf[g] < 0]
     if unplaced:
         raise ValueError(f"{len(unplaced)} values have no device, the first gate {unplaced[0]} ({kind[unplaced[0]]})")

@@ -1,14 +1,15 @@
 """A block's process: evaluate the gates placed in the block tick by tick, and send and receive crossing values as framed
 streams. The client is the same process for `OUTSIDE`: it holds the requests and reads the answers.
 
-**What a block derives** (`Context`, from the run's config, so every process of one run derives the same): the Program, the
-hardware (`config["hardware"]`, a device graph `config["graph"]` read by `Hardware.from_graph`, or `mock`), the placement
-(one engine step every `step_ticks` ticks, one bucket by default) and φ. The prover runs every block, so the private placement is shared among them. A block holds the
-values the placement puts at its leaves: the registered inputs from the weights' seed, the client the run inputs from the
-requests' seed.
+**What a block derives** (`Context`, from the run's config, so every process of one run derives the same): the Program
+(`config["workload"]`: the MLP, or verity_vllm's serving Program, `served`), the hardware (`config["hardware"]`, a device
+graph `config["graph"]` read by `Hardware.from_graph`, or `mock`), the placement (one engine step every `step_ticks`
+ticks, one bucket by default) and φ. The prover runs every block, so the private placement is shared among them. A block
+holds the values the placement puts at its leaves: the registered inputs from the weights' seed, the client the run inputs
+from the requests' seed. Every block has every constant, an operation's own bits.
 
 **The loop.** At each tick, in order: take every message read at this tick (waiting for its frames), evaluate this tick's
-gates with `verity.ml.circuits.evaluate.evaluate_region`, then send every message whose last value this tick produced. A
+gates with the model's evaluator (verity's), then send every message whose last value this tick produced. A
 read is always at a later tick than the value's (`placement.causal`), so the blocks never wait on each other in a cycle.
 After its last tick a block closes its connections, waits until every connection into it is closed, and commits its values
 (`values.commit`).
@@ -66,8 +67,9 @@ class Context:
 
     def __init__(self, config: dict) -> None:
         self.config = config
-        self.spec = M.Spec(**config["spec"])
-        self.model = M.Model(self.spec)
+        self.workload = config.get("workload", "mlp")
+        self.model = M.build(self.workload, config["spec"])
+        self.spec = self.model.spec
         if "hardware" in config:
             self.hw = Hardware.from_json(config["hardware"])
         elif "graph" in config:
@@ -87,7 +89,11 @@ class Context:
 
     @cached_property
     def inputs(self) -> dict[int, int]:
-        return self.model.bind_inputs(M.requests(self.spec, self.seed), M.weights(self.spec, self.seed))
+        return self.model.inputs(self.seed)
+
+    @cached_property
+    def constants(self) -> dict[int, int]:
+        return self.model.constants()
 
     def held(self, unit: str) -> list[int]:
         return self.placement.at(self.hw.leaves_of(unit))
@@ -180,6 +186,7 @@ class Block:
         self.held = ctx.held(unit)
         held = set(self.held)
         self.transcript = {g: v for g, v in ctx.inputs.items() if g in held}
+        self.transcript.update(ctx.constants)
         self.compute: dict[int, list[int]] = defaultdict(list)
         ticks, kind = ctx.placement.tick_of, ctx.model.kind
         for g in self.held:
@@ -256,7 +263,7 @@ class Block:
                "records": {k: [[b, f.hex()] for b, f in fs] for k, fs in sorted(self.records.items())},
                "values": None}
         if self.held:
-            c = V.commit(self.unit, self.held, self.transcript)
+            c = V.commit(self.unit, self.held, self.transcript, self.ctx.model.value_bits)
             out["values"] = {"root": c.root.hex(), "count": len(c.gates),
                              "rows": [r.hex() for r in c.registration.rows],
                              "salts": [s.hex() for s in c.registration.salts]}
