@@ -21,6 +21,7 @@ import importlib
 import time
 from typing import Any
 
+from verity_vllm.acquire.sources import oracle_witness as OW
 from verity_vllm.acquire.sources.allreduce_norm import AllReduceNorm
 from verity_vllm.commit.opened import OpenedReader, OpeningNotVerified
 from verity_vllm.engine import hooks
@@ -478,7 +479,12 @@ class TPPartialSource:
         process and a different run (batch-invariant execution promises bit-identity); a committed member the oracle does not name is
         `committed_not_in_oracle`, an oracle collective the committer did not bind is `missing_in_commit`, a step without a stored
         oracle is `steps_without_oracle` -- each of them FAILS (exhaustive over the family or not a record).  Covers the manifest's
-        `tp_rank_partials` family only (this Match is collective-level; instance outputs have no TP Match oracle)."""
+        `tp_rank_partials` family only (this Match is collective-level; instance outputs have no TP Match oracle).
+
+        Witness-conditioned (`oracle_witness.judge`): each MoE align call's committed schedule witness (`<experts>/align.*`,
+        `moe_align_source`) is paired with the capture's (`align.rank<r>.jsonl`) by (step, module), exhaustively, and a tensor with a differing witness in its
+        dependency cone (`oracle_witness.in_cone`) is exempt from the value compare; this rank's own witnesses here, every rank's at
+        the driver (`oracle_witness.condition_on_witnesses`)."""
         import json
         from pathlib import Path
 
@@ -489,15 +495,17 @@ class TPPartialSource:
         t0 = time.perf_counter()
         cap = Path(capture_dir)
         res: dict[str, Any] = {"rank": self.rank, "oracle": str(cap), "steps_compared": 0, "steps_without_oracle": [], "oracle_steps_not_committed": [],
-                               "duplicate_module_steps": [], "oracle_inconsistent": [], "tensors": 0, "equal": 0,
-                               "mismatches": [], "missing_in_commit": [], "not_verified": [], "committed_not_in_oracle": [], "by_member": {},
+                               "duplicate_module_steps": [], "oracle_inconsistent": [], "per_tensor": [],
+                               "missing_in_commit": [], "not_verified": [], "committed_not_in_oracle": [],
+                               "witnesses": {"equal": 0, "differs": [], "unpaired": []},
                                "families_covered": ["tp_rank_partials"], "families_not_covered": ["instance_outputs", "fa2_hidden_m1_stream", "input_token_ids", "weights"],
                                # [rev-pm M-0585 TIP3] the pairing key is (step, MODULE): the committed member is named by its issuing module (one partial per
                                # site per step is what identity_check requires), the oracle record by (step, k, module); a module recorded twice in one
                                # step is refused (a second oracle collective would be compared against the same committed member)
                                "rule": ("committed bytes == tp2_match capture recorder's stored collective input (part_rank/shard_rank) / output (MoE /out), "
                                         "paired by (step, module) with k recorded, same rank; exhaustive in BOTH directions (every committed step has an oracle "
-                                        "step and every oracle step a committed step); a module recorded twice in a step or a truncated .pt is a named FAIL")}
+                                        "step and every oracle step a committed step); a module recorded twice in a step or a truncated .pt is a named FAIL; "
+                                        "where a MoE align witness in the tensor's cone differs between the runs, exempt (witness_rule)")}
         recp = cap / f"coll.rank{self.rank}.jsonl"
         if not recp.exists():
             res["verdict"], res["why"] = "FAIL", f"no oracle records {recp}"
@@ -507,6 +515,13 @@ class TPPartialSource:
             if l.strip():
                 x = json.loads(l)
                 by_step.setdefault(int(x["step"]), []).append(x)
+        recorded: dict[int, dict[str, dict]] = {}
+        if (wp := cap / OW.witness_file(self.rank)).exists():
+            for l in wp.open():
+                if l.strip():
+                    x = json.loads(l)
+                    w = recorded.setdefault(int(x["step"]), {}).setdefault(x["module"], {"k": int(x["k"]), "sha256": {}})
+                    w["sha256"][x["member"]] = x["sha256"]
         received = set(self.received_site_names())
         # [rev-pm M-0585 TIP1] exhaustive in both directions: an oracle step the committer never reached (a Commit that stopped early) FAILs
         res["oracle_steps_not_committed"] = sorted(s for s in by_step if s not in self.c._layouts)
@@ -553,8 +568,7 @@ class TPPartialSource:
                     pairs = [(pname, part_t, "partial", _nth(by_name, pname, j))]
                 if mod in received:
                     pairs.append((f"{mod}/out", v["out"][k], "out", _nth(by_name, f"{mod}/out", j)))
-                for member, oracle_t, what, meta in pairs:
-                    bm = res["by_member"].setdefault(what, {"tensors": 0, "equal": 0})
+                for member, oracle_t, _what, meta in pairs:
                     try:
                         committed = _committed(reader, step, meta)
                     except OpeningNotVerified as e:
@@ -566,48 +580,61 @@ class TPPartialSource:
                         continue
                     seen.add(member)
                     ob = _bytes(oracle_t)
-                    res["tensors"] += 1
-                    bm["tensors"] += 1
-                    if committed == ob:
-                        res["equal"] += 1
-                        bm["equal"] += 1
-                    else:
+                    n_diff = 0
+                    if committed != ob:
                         n_diff = None
                         if len(committed) == len(ob):
                             a = torch.frombuffer(bytearray(committed), dtype=torch.uint8)
                             b = torch.frombuffer(bytearray(ob), dtype=torch.uint8)
                             n_diff = int((a != b).sum())
-                        res["mismatches"].append({"step": step, "k": k, "member": member, "kind": x["kind"], "committed_nbytes": len(committed),
-                                                  "oracle_nbytes": len(ob), "n_diff_bytes": n_diff})
+                    res["per_tensor"].append([step, k, member, x["kind"], n_diff, len(committed), len(ob)])
             for n in sorted(fam - seen):
                 res["committed_not_in_oracle"].append((step, n))
+            self._pair_witnesses(step, by_name, recorded.pop(step, {}), reader, res)
             res["steps_compared"] += 1
-        res["mismatch_n"], res["missing_n"], res["not_in_oracle_n"] = len(res["mismatches"]), len(res["missing_in_commit"]), len(res["committed_not_in_oracle"])
-        res["not_verified_n"] = len(res["not_verified"])
-        res["mismatches"], res["missing_in_commit"], res["committed_not_in_oracle"] = res["mismatches"][:20], res["missing_in_commit"][:20], res["committed_not_in_oracle"][:20]
-        res["not_verified"] = res["not_verified"][:20]
+        for step, mods in sorted(recorded.items()):
+            res["witnesses"]["unpaired"] += [{"step": step, "module": m, "in_commit": False, "in_capture": True} for m in sorted(mods)]
+        wit = res["witnesses"]
+        res["missing_n"], res["not_in_oracle_n"] = len(res["missing_in_commit"]), len(res["committed_not_in_oracle"])
+        res["not_verified_n"], wit["unpaired_n"] = len(res["not_verified"]), len(wit["unpaired"])
+        res["missing_in_commit"], res["committed_not_in_oracle"] = res["missing_in_commit"][:20], res["committed_not_in_oracle"][:20]
+        res["not_verified"], wit["unpaired"] = res["not_verified"][:20], wit["unpaired"][:20]
+        res["witness_counts"] = {"equal": wit["equal"], "differs": len(wit["differs"]), "unpaired": wit["unpaired_n"]}
+        res["steps_committed"] = len(self.c._layouts)
         res["value_source"] = reader.record()
         res["wall_s"] = time.perf_counter() - t0
-        res["verdict"] = "PASS" if (res["tensors"] > 0 and res["mismatch_n"] == 0 and res["missing_n"] == 0 and res["not_in_oracle_n"] == 0
-                                    and res["not_verified_n"] == 0
-                                    and not res["steps_without_oracle"] and not res["oracle_steps_not_committed"] and not res["oracle_inconsistent"]
-                                    and not res["duplicate_module_steps"] and res["steps_compared"] == len(self.c._layouts)) else "FAIL"
-        if res["verdict"] == "FAIL" and "why" not in res:
-            if res["not_verified_n"]:
-                res["why"] = f"{res['not_verified_n']} committed member(s) whose opening does not verify against the run root (first {res['not_verified'][0][:3]})"
-            elif res["oracle_steps_not_committed"]:
-                res["why"] = f"oracle stored {len(res['oracle_steps_not_committed'])} step(s) the committer never committed (first {res['oracle_steps_not_committed'][0]}): the Commit stopped early or the runs differ"
-            elif res["oracle_inconsistent"]:
-                oi = res["oracle_inconsistent"][0]
-                res["why"] = f"oracle step {oi['step']}: jsonl names {oi['jsonl_names']} collectives, .pt holds part {oi['pt_part']} / out {oi['pt_out']} -- truncated or inconsistent oracle"
-            elif res["duplicate_module_steps"]:
-                dm = res["duplicate_module_steps"][0]
-                res["why"] = f"oracle step {dm['step']}: module(s) {dm['modules']} recorded more than once -- (step, module) pairing refused"
-            elif res["steps_without_oracle"]:
-                res["why"] = f"{len(res['steps_without_oracle'])} committed step(s) without a stored oracle (first {res['steps_without_oracle'][0]})"
-            elif res["tensors"] == 0:
-                res["why"] = "no tensor compared"
-        return res
+        return OW.judge(res, wit["differs"])
+
+    def _pair_witnesses(self, step: int, by_name: dict[str, list], recorded: dict[str, dict], reader: Any, res: dict[str, Any]) -> None:
+        """This rank's committed MoE align witnesses of ``step`` against the capture's (``recorded``: module -> {k, sha256 per member}),
+        by module: equal, differing (its members named, at the capture's position k) or unpaired (on one side only)."""
+        wit = res["witnesses"]
+        committed = {n.rsplit("/", 1)[0] for n in by_name if n.rsplit("/", 1)[-1] in OW.MEMBERS}
+        for mod in sorted(committed | set(recorded)):
+            rec = recorded.get(mod)
+            if mod not in committed or rec is None:
+                wit["unpaired"].append({"step": step, "module": mod, "in_commit": mod in committed, "in_capture": rec is not None})
+                continue
+            differs: list[str] = []
+            for m in OW.MEMBERS:
+                name = f"{mod}/{m}"
+                try:
+                    b = _committed(reader, step, _nth(by_name, name, 0))
+                except OpeningNotVerified as e:
+                    res["not_verified"].append((step, rec["k"], name, str(e)[:200]))
+                    differs = []
+                    break
+                if b is None or m not in rec["sha256"]:
+                    wit["unpaired"].append({"step": step, "module": mod, "member": m, "in_commit": b is not None, "in_capture": m in rec["sha256"]})
+                    differs = []
+                    break
+                if OW.digest(b) != rec["sha256"][m]:
+                    differs.append(m)
+            else:
+                if differs:
+                    wit["differs"].append({"rank": self.rank, "step": step, "k": rec["k"], "module": mod, "members": differs})
+                else:
+                    wit["equal"] += 1
 
     # -- declaration -------------------------------------------------------------------------------------------------------
     def declaration_classes(self) -> list[dict]:
