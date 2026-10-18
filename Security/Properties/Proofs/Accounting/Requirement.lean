@@ -25,9 +25,8 @@ theorem not_contains_iff {l : List ℕ} {a : ℕ} : (!(Std.HashSet.ofList l).con
 theorem mem_distinct {l : List ℕ} {a : ℕ} : a ∈ distinct l ↔ a ∈ l := by
   simp [distinct, List.mem_mergeSort, Std.HashSet.mem_toList, Std.HashSet.mem_ofList]
 
-theorem sameSet_iff {a b : List ℕ} : sameSet a b = true ↔ a.toFinset = b.toFinset := by
-  simp only [sameSet, Bool.and_eq_true, List.all_eq_true, contains_iff, Finset.ext_iff, List.mem_toFinset]
-  exact ⟨fun h x => ⟨h.1 x, h.2 x⟩, fun h => ⟨fun x => (h x).1, fun x => (h x).2⟩⟩
+theorem subsetOf_iff {a b : List ℕ} : subsetOf a b = true ↔ a.toFinset ⊆ b.toFinset := by
+  simp only [subsetOf, List.all_eq_true, contains_iff, Finset.subset_iff, List.mem_toFinset]
 
 /-- A window's sum over a list of its steps is the sum over its steps' `Finset`. -/
 theorem sum_range' (f : ℕ → ℕ) (start len : ℕ) :
@@ -257,13 +256,13 @@ theorem creditedReadBits_eq (t : ℕ) :
 theorem storeMatches_iff (s : CircuitRequirement.Store) (b t : ℕ) :
     i.storeMatches s b t = true ↔
       Accounting.Requirement.StoreMatches (wiring i) (execution i) (layout i) (store s) b t := by
-  simp only [Instance.storeMatches, Bool.and_eq_true, sameSet_iff, resident_eq, blocks_eq, packs_iff i (live_nodup i t),
+  simp only [Instance.storeMatches, Bool.and_eq_true, subsetOf_iff, resident_eq, blocks_eq, packs_iff i (live_nodup i t),
     carries_iff, live_eq, credited_eq, Accounting.Requirement.StoreMatches, and_assoc]
 
 theorem planMatches_iff (plan : List ℕ) (b t : ℕ) :
     i.planMatches plan b t = true ↔
       Accounting.Requirement.PlanMatches (wiring i) (execution i) (layout i) plan.toFinset b t := by
-  simp only [Instance.planMatches, Bool.and_eq_true, sameSet_iff, blocks_eq, packs_iff i (reads_nodup i t), reads_eq,
+  simp only [Instance.planMatches, Bool.and_eq_true, subsetOf_iff, blocks_eq, packs_iff i (reads_nodup i t), reads_eq,
     creditedReads_eq, Accounting.Requirement.PlanMatches]
 
 /-! ## Placement -/

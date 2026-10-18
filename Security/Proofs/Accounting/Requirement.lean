@@ -11,9 +11,10 @@ disjoint intervals of `[0, b)`. So the values of a set `S`, each in a block of `
 (`bits_le_groups`). `Accounting.SecurityProofs.RequirementHeld` applies the first to the credited values and the
 resident blocks, `Accounting.SecurityProofs.RequirementMoved` to the credited reads and the plan, and
 `Accounting.SecurityProofs.RequirementUncredited` and `Accounting.SecurityProofs.RequirementUnplanned` the second to
-the values in incomplete blocks. A resident block is complete, so its live values are all credited (`liveIn_resident`),
-and `Accounting.SecurityProofs.RequirementDense` sums the credited bits block by block. An execution that follows its
-wiring reads only live values (`reads_subset_live`).
+the values in incomplete blocks. Each uses only that every credited block is resident, or planned: other resident or
+planned blocks hold none of `W`'s credited values. `Accounting.SecurityProofs.RequirementHeldLive` and
+`Accounting.SecurityProofs.RequirementDense` sum the credited bits block by block. An execution that follows its wiring
+reads only live values (`reads_subset_live`).
 -/
 
 namespace Accounting.Requirement
@@ -95,21 +96,6 @@ theorem bits_le_groups {K : Type} [DecidableEq K] {b : ℕ} {S T : Finset G} (hT
     _ ≤ ∑ _k ∈ T.image g, b := Finset.sum_le_sum fun k _ => hk k
     _ = (T.image g).card * b := Finset.sum_const_nat fun _ _ => rfl
 
-variable {W ℓ}
-
-/-- A resident block is complete, so its live values are all credited. -/
-theorem liveIn_resident {e : Execution G} {σ : Store} {t j : ℕ}
-    (hres : σ.resident t = blocks ℓ (credited W e ℓ t)) (hj : j ∈ σ.resident t) :
-    liveIn W e ℓ t j = bits W ((credited W e ℓ t).filter fun v => ℓ.block v = j) := by
-  rw [hres] at hj
-  obtain ⟨u, hu, rfl⟩ := Finset.mem_image.mp hj
-  have hc : ℓ.block u ∉ incomplete W e ℓ t := (Finset.mem_filter.mp hu).2
-  rw [liveIn, bitsIn]
-  congr 1
-  ext v
-  simp only [Finset.mem_filter, credited]
-  exact ⟨fun ⟨hv, hb⟩ => ⟨⟨hv, by rw [hb]; exact hc⟩, hb⟩, fun ⟨⟨hv, _⟩, hb⟩ => ⟨hv, hb⟩⟩
-
 end Accounting.Requirement
 
 namespace Accounting.SecurityProofs
@@ -118,33 +104,31 @@ open Accounting.Requirement
 
 theorem RequirementHeld : Accounting.Guarantees.RequirementHeld := by
   intro G _ W e ℓ σ b t H ⟨hres, hpack, _⟩
-  exact bits_le_bitsAt_add W ℓ H (fun v hv => hres ▸ Finset.mem_image_of_mem _ hv)
+  exact bits_le_bitsAt_add W ℓ H (fun v hv => hres (Finset.mem_image_of_mem _ hv))
     (packs_mono W ℓ hpack (Finset.filter_subset _ _))
 
 theorem RequirementHeldLive : Accounting.Guarantees.RequirementHeldLive := by
   intro G _ W e ℓ σ b t H ⟨hres, _, _⟩
   have hmaps : ∀ v ∈ (credited W e ℓ t).filter (fun v => ℓ.block v ∉ H), ℓ.block v ∈ σ.resident t \ H :=
     fun v hv => Finset.mem_sdiff.mpr
-      ⟨hres ▸ Finset.mem_image_of_mem _ (Finset.mem_filter.mp hv).1, (Finset.mem_filter.mp hv).2⟩
+      ⟨hres (Finset.mem_image_of_mem _ (Finset.mem_filter.mp hv).1), (Finset.mem_filter.mp hv).2⟩
   rw [creditedBits, bits, ← Finset.sum_filter_add_sum_filter_not (credited W e ℓ t) (fun v => ℓ.block v ∈ H),
     ← Finset.sum_fiberwise_of_maps_to hmaps]
   refine congrArg _ (Finset.sum_congr rfl fun j hj => ?_)
   have hjH : j ∉ H := (Finset.mem_sdiff.mp hj).2
-  rw [liveIn_resident hres (Finset.mem_sdiff.mp hj).1, bits, Finset.filter_filter]
+  rw [bitsIn, bits, Finset.filter_filter]
   exact Finset.sum_congr (Finset.filter_congr fun v _ => ⟨fun h => h.2, fun h => ⟨h ▸ hjH, h⟩⟩) fun _ _ => rfl
 
 theorem RequirementDense : Accounting.Guarantees.RequirementDense := by
   intro G _ W e ℓ σ b t D ⟨hres, _, _⟩ hD
-  have hmaps : ∀ v ∈ credited W e ℓ t, ℓ.block v ∈ σ.resident t := fun v hv => hres ▸ Finset.mem_image_of_mem _ hv
+  have hmaps : ∀ v ∈ credited W e ℓ t, ℓ.block v ∈ σ.resident t := fun v hv => hres (Finset.mem_image_of_mem _ hv)
   calc (σ.resident t).card * D = ∑ _j ∈ σ.resident t, D := (Finset.sum_const_nat fun _ _ => rfl).symm
-    _ ≤ ∑ j ∈ σ.resident t, liveIn W e ℓ t j := Finset.sum_le_sum hD
-    _ = ∑ j ∈ σ.resident t, bits W ((credited W e ℓ t).filter fun v => ℓ.block v = j) :=
-        Finset.sum_congr rfl fun j hj => liveIn_resident hres hj
+    _ ≤ ∑ j ∈ σ.resident t, bitsIn W ℓ (credited W e ℓ t) j := Finset.sum_le_sum hD
     _ = creditedBits W e ℓ t := Finset.sum_fiberwise_of_maps_to hmaps _
 
 theorem RequirementMoved : Accounting.Guarantees.RequirementMoved := by
   intro G _ W e ℓ plan b t M ⟨hplan, hpack⟩
-  exact bits_le_bitsAt_add W ℓ M (fun v hv => hplan ▸ Finset.mem_image_of_mem _ hv)
+  exact bits_le_bitsAt_add W ℓ M (fun v hv => hplan (Finset.mem_image_of_mem _ hv))
     (packs_mono W ℓ hpack (Finset.filter_subset _ _))
 
 theorem RequirementUncredited : Accounting.Guarantees.RequirementUncredited := by

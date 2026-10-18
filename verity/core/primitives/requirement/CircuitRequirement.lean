@@ -24,11 +24,10 @@ namespace CircuitRequirement
 /-- The members of `l`, each once, ascending. -/
 def distinct (l : List Nat) : List Nat := (Std.HashSet.ofList l).toList.mergeSort
 
-/-- The same members, either way round. -/
-def sameSet (a b : List Nat) : Bool :=
-  let ha := Std.HashSet.ofList a
+/-- Every member of `a` is one of `b`. -/
+def subsetOf (a b : List Nat) : Bool :=
   let hb := Std.HashSet.ofList b
-  a.all hb.contains && b.all ha.contains
+  a.all hb.contains
 
 /-- A declared circuit's wiring, one scheduled execution of it and a layout of its values, value by value. -/
 structure Instance where
@@ -190,14 +189,14 @@ def creditedReads (t : Nat) : List Nat := i.complete (i.reads t) t
 def creditedBits (t : Nat) : Nat := i.bits (i.credited t)
 def creditedReadBits (t : Nat) : Nat := i.bits (i.creditedReads t)
 
-/-- `StoreMatches s b t`. -/
+/-- `StoreMatches s b t`: the credited blocks are resident, and other blocks may be. -/
 def storeMatches (s : Store) (b t : Nat) : Bool :=
   let C := i.credited t
-  sameSet (s.resident t) (i.blocks C) && i.packs b (i.live t) && i.carries s C
+  subsetOf (i.blocks C) (s.resident t) && i.packs b (i.live t) && i.carries s C
 
-/-- `PlanMatches plan b t`. -/
+/-- `PlanMatches plan b t`: the plan holds the complete blocks step `t` reads, and may hold others. -/
 def planMatches (plan : List Nat) (b t : Nat) : Bool :=
-  sameSet plan (i.blocks (i.creditedReads t)) && i.packs b (i.reads t)
+  subsetOf (i.blocks (i.creditedReads t)) plan && i.packs b (i.reads t)
 
 /-- `Placement.tick`: the tick at which a value's device begins its engine step. -/
 def tick (p : Placement) (v : Nat) : Nat := p.ticksOf (p.leafOf v) (i.stepOf v)

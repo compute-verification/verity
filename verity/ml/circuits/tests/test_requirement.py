@@ -149,16 +149,18 @@ def test_the_honest_store_at_64_bit_blocks(run):
     assert [sorted(R.read_blocks(req, layout, t)) for t in range(3)] == [[0, 2, 4], [1, 3, 4, 5], [0, 2, 4, 5, 6]]
 
 
-def test_a_block_or_a_read_w_does_not_have_fails_the_link(run):
-    """A registered block W doesn't keep live, a live block freed early, a planned block W doesn't read at that step and a
-    payload that isn't W's values each break the link."""
+def test_a_credited_block_missing_or_forged_fails_the_link(run):
+    """A live block freed early, a block W reads left out of the plan and a payload that isn't W's values each break the
+    link. Filler keeps it: a registered block W doesn't keep live (index 5, before step 0's append writes it there) and a
+    planned block W doesn't read at that step hold none of W's credited values."""
     _, _, _, req = run
     layout, store = R.pack(req, 64)
-    extra = R.Store(store.registered + 1, store.written, store.freed, {**store.payload, 5: 0})
-    assert not R.store_matches(req, layout, extra, 64, 0)
+    extra = R.Store(store.registered + 1, store.written, store.freed, store.payload)
+    assert all(R.store_matches(req, layout, extra, 64, t) for t in range(req.steps))
+    assert 5 in extra.resident(0) and layout.bits_in(req, R.credited(req, layout, 0), 5) == 0
     early = R.Store(store.registered, store.written, {**store.freed, 1: frozenset({5})}, store.payload)
     assert R.store_matches(req, layout, early, 64, 1) and not R.store_matches(req, layout, early, 64, 2)
-    assert not R.plan_matches(req, layout, R.read_blocks(req, layout, 1) | {6}, 64, 1)
+    assert R.plan_matches(req, layout, R.read_blocks(req, layout, 1) | {6}, 64, 1)
     assert not R.plan_matches(req, layout, R.read_blocks(req, layout, 1) - {5}, 64, 1)
     forged = R.Store(store.registered, store.written, store.freed, {**store.payload, 6: store.payload[6] ^ 1})
     assert not R.store_matches(req, layout, forged, 64, 2)
@@ -167,7 +169,8 @@ def test_a_block_or_a_read_w_does_not_have_fails_the_link(run):
 def test_a_block_a_later_step_fills_is_credited_once_complete(run):
     """With k_1 (born at step 1) beside k_0 and tok_1 in step 0's append, as a KV pool fills a page, that block is
     incomplete at step 1: its live k_0 and tok_1 aren't credited then, 64 of the live bits, and the store is W's with
-    the block written in step 1's record, the one that completes it, but not with it written in step 0's."""
+    the block written in step 1's record, the one that completes it. Written in step 0's record, without k_1, it is
+    resident at step 1 crediting nothing, but at step 2 its payload lacks k_1."""
     _, _, _, req = run
     layout, store = R.pack(req, 128)
     assert (store.registered, layout.block[14], layout.block[15], layout.block[19], layout.offset[15]) == (3, 3, 3, 4, 32)
@@ -179,7 +182,7 @@ def test_a_block_a_later_step_fills_is_credited_once_complete(run):
     assert R.credited_reads(req, paged, 1) == req.reads(1) - {14, 15}
     assert req.live_bits(1) - req.bits(R.credited(req, paged, 1)) == 64
     assert all(R.store_matches(req, paged, filled, 128, t) for t in range(req.steps))
-    assert not R.store_matches(req, paged, store, 128, 1)
+    assert R.store_matches(req, paged, store, 128, 1) and not R.store_matches(req, paged, store, 128, 2)
 
 
 def test_past_the_executed_prefix_nothing_runs(run):

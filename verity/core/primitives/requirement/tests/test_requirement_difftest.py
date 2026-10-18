@@ -255,8 +255,8 @@ def paged(req: R.Requirement, B: int) -> tuple[R.Layout, R.Store]:
 
 
 def _mutated(rng: random.Random, layout: R.Layout, store: R.Store, B: int) -> tuple[R.Layout, R.Store]:
-    """One change a dishonest store or layout makes: a payload bit, an extra resident block, a block freed or written
-    early or late, a value moved."""
+    """One change a dishonest store or layout makes: a payload bit, an extra resident block (filler, which keeps the
+    link), a block freed or written early or late, a value moved."""
     kind = rng.randrange(5)
     if kind == 0 and store.payload:
         j = rng.choice(sorted(store.payload))
@@ -575,9 +575,10 @@ def test_an_unplaced_execution_is_refused(server):
 
 
 def test_the_toy_decoders_dishonest_stores_and_plans(server):
-    """`test_requirement.py`'s breaks of the link at 64-bit blocks, each found by Lean as by Python: a registered block W
-    doesn't keep live (index 5, before step 0's append writes it there), a live block freed early, a planned block W
-    doesn't read then, one it reads left out, and a payload bit that isn't W's value."""
+    """`test_requirement.py`'s breaks of the link at 64-bit blocks, each found by Lean as by Python: a live block freed
+    early, a block W reads left out of the plan, and a payload bit that isn't W's value. Filler keeps the link: a
+    registered block W doesn't keep live (index 5, before step 0's append writes it there) and a planned block W doesn't
+    read then hold none of W's credited values."""
     value = case(*toy_decoder(), 64)
     s = value["store"]
     extra = {**value, "store": {**s, "registered": s["registered"] + 1}}
@@ -589,9 +590,9 @@ def test_the_toy_decoders_dishonest_stores_and_plans(server):
     payload[6] = format(int(payload[6], 16) ^ 1, "x")
     forged = {**value, "store": {**s, "payload": payload}}
     verdict = lambda v, k: [st[k] for st in _lean(v, server)["steps"]]
-    assert verdict(extra, "store_matches") == [False, True, True]
+    assert verdict(extra, "store_matches") == [True, True, True]
     assert verdict(early, "store_matches") == [True, True, False]
-    assert verdict(more, "plan_matches") == [True, False, True]
+    assert verdict(more, "plan_matches") == [True, True, True]
     assert verdict(fewer, "plan_matches") == [True, False, True]
     assert verdict(forged, "store_matches") == [True, True, False]
 

@@ -5,7 +5,8 @@
 scheduled execution of it and a layout of its values) and the audit's store, it computes each step's live and read values,
 their bits by value and by block, those in complete blocks, which the audit credits (`credited`, `creditedReads`), the
 resident blocks, `held` and `read` over a window, and whether the store and a step's plan are W's (`StoreMatches`,
-`PlanMatches`: the credited values' blocks, block for block); and, the execution placed on devices (each value's device and the tick at
+`PlanMatches`: the credited values' blocks are resident, and planned for the steps that read them, and other blocks, filler
+among them, may be too, earning W nothing); and, the execution placed on devices (each value's device and the tick at
 which each device begins each engine step), PoUW's regions, ingress and credits over it when the node runs it as placed
 (`RequirementCredits`, `RequirementHelpBound`, and `RequirementHelp` when the wiring is `topological`), a run input an
 input gate wherever it is placed. A step is always an engine step. It is code, so it requires nothing of `Security/`: the Lean check's
@@ -44,4 +45,4 @@ blocks it wrote under the free convention of 21:52Z (step s's record takes effec
 credits the live rows in complete blocks, and those it doesn't, a page's first rows until its last is born, lie in one
 block per request, layer and plane (`OneBlockEach`). The builder frees each block in the record of its rows' last read
 and leaves out a block no step reads while it is resident (one whose last read is the step that completes it), and the
-link holds at every step with no block held dead.
+link holds at every step. The link allows a dead block resident, so the tests check separately that the map holds none.

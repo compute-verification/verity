@@ -20,10 +20,11 @@ decode step) from step 1 or 3.
 
 memory-map/v1 writes a block once complete, so a page's first rows are live but in no block until its last is born: the
 audit credits only the live rows in complete blocks, and `StoreMatches` and `PlanMatches` hold exactly at the steps where
-every credited row is in a block the map holds and every block it holds has a credited row. A row's group is its request,
-layer and plane, and the rows the audit doesn't credit lie in one block per group (`OneBlockEach`). The builder frees each
-block in the record of its rows' last read, and the link holds at every step, but for a block whose last read is the step
-that completes it, which the builder frees a record later (`test_a_block_its_last_read_completes_is_in_no_record`).
+every credited row is in a block the map holds; a block with no credited row may be held too, and earns W nothing. A
+row's group is its request, layer and plane, and the rows the audit doesn't credit lie in one block per group
+(`OneBlockEach`). The builder frees each block in the record of its rows' last read and leaves out a block no step reads
+while it is resident (`test_a_block_its_last_read_completes_is_in_no_record`): the link holds at every step, and the
+map holds no block with every row dead, which the tests check beside the link.
 """
 
 from __future__ import annotations
@@ -279,8 +280,8 @@ def map_case(requests: dict[str, Program], arrive: dict[str, int]) -> tuple[dict
 def _verdicts(out: dict, session: dict) -> tuple[dict[int, set[int]], dict[int, set[int]]]:
     """Read off `MM.rows` and the replayed map beside Lean: the live rows, those in complete blocks (every row of the
     block born before the step), which are Lean's credited ones, and the verdict `StoreMatches` and `PlanMatches` both
-    give, that every block the map holds has a credited row and every credited row is in one. Returns the live rows in
-    incomplete blocks and the blocks held with no credited row, by step."""
+    give, that every credited row is in a block the map holds (a block with none may be held too, and earns W nothing).
+    Returns the live rows in incomplete blocks and the blocks held with no credited row, by step."""
     rows, block, held, arrive = session["rows"], session["block"], session["held"], session["arrive"]
     born = lambda v: arrive[rows[v][0]] + rows[v][3].born  # noqa: E731
     live = lambda t: {v for v, (r, _, _, x) in rows.items() if born(v) < t <= arrive[r] + x.last}  # noqa: E731
@@ -294,7 +295,7 @@ def _verdicts(out: dict, session: dict) -> tuple[dict[int, set[int]], dict[int, 
         uncredited[t] = live(t) - credited
         dead[t] = {j for j in held[t] if not any(block[v] == j for v in credited)}
         missing = {v for v in credited if block[v] not in held[t]}
-        assert s["store_matches"] == s["plan_matches"] == (not missing and not dead[t])
+        assert s["store_matches"] == s["plan_matches"] == (not missing)
     return uncredited, dead
 
 

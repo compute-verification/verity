@@ -37,7 +37,8 @@ gates read it.
 A block is complete when step `t` begins once every value a layout places in it was produced before `t` (`incomplete`),
 and the audit credits the live values in complete blocks (`credited`, `credited_reads`): memory-map/v1 writes a block
 once, complete, so a KV block later steps fill is in no record yet. `store_matches` asks for the blocks of the credited
-values resident, block for block, which is an equality for the registered store and `⊆` for KV.
+values resident, and `plan_matches` for the complete blocks a step reads planned. Other blocks may be resident or
+planned (filler, dead or another workload's): they hold none of the credited values.
 
 `pack` places the values that are ever live in blocks of `block_bits`: the registered ones in canonical order from store
 index 0 (the registered store), then each step's newly live values in fresh blocks after them (the memory map's appends),
@@ -495,14 +496,15 @@ def credited_reads(req: Requirement, layout: Layout, t: int) -> frozenset[int]:
 
 
 def store_matches(req: Requirement, layout: Layout, store: Store, block_bits: int, t: int) -> bool:
-    """`StoreMatches`: the resident blocks are the credited values' blocks, the live values are packed, and each
-    credited value is in its block's payload (checked where the values are known)."""
+    """`StoreMatches`: the credited values' blocks are resident (other blocks may be: filler, dead, another workload's),
+    the live values are packed, and each credited value is in its block's payload (checked where the values are known)."""
     live, cred = req.live(t), credited(req, layout, t)
-    return (store.resident(t) == layout.blocks(cred) and layout.packs(req, block_bits, live)
+    return (layout.blocks(cred) <= store.resident(t) and layout.packs(req, block_bits, live)
             and (not req.values or layout.carries(req, store, cred)))
 
 
 def plan_matches(req: Requirement, layout: Layout, plan, block_bits: int, t: int) -> bool:
-    """`PlanMatches`: the plan is the complete blocks step `t` reads, and the values read are packed."""
-    return (frozenset(plan) == layout.blocks(credited_reads(req, layout, t))
+    """`PlanMatches`: the plan holds the complete blocks step `t` reads (and may hold filler), and the values read are
+    packed."""
+    return (layout.blocks(credited_reads(req, layout, t)) <= frozenset(plan)
             and layout.packs(req, block_bits, req.reads(t)))
