@@ -72,7 +72,7 @@ def probe_eps() -> None:
     print("== 2. ε at δ: EndToEndWindow's first term (1 − W/(1000·N·w_max))^K′ against the code's draw ==")
     for eps, delta, lo, hi in ((Fraction(1, 1000), Fraction(1, 2 ** 40), 87, 143),
                                (Fraction(1, 100), Fraction(1, 2 ** 128), 87, 143)):
-        full, worst_bin, worst_hyp, worst_stmt, worst_stmt_rest = [], -1e9, -1e9, -1e9, -1e9
+        full, worst_bin, worst_hyp, worst_stmt, worst_stmt_rest, worst_prod = [], -1e9, -1e9, -1e9, -1e9, -1e9
         for ell in range(lo, hi + 1):
             w = W.Work.at(ell)
             k = W.k_prime(eps, delta, w.credited, w.n, 1)
@@ -83,6 +83,7 @@ def probe_eps() -> None:
             worst_stmt = max(worst_stmt, stmt)
             if k == w.n:
                 full.append(ell)
+                worst_prod = max(worst_prod, log2_miss(1 - Fraction(b, w.n), k))
             else:
                 worst_bin = max(worst_bin, log2_miss(1 - eps * share, k))
                 worst_stmt_rest = max(worst_stmt_rest, stmt)
@@ -91,6 +92,9 @@ def probe_eps() -> None:
               f"2^{worst_bin:.1f}; the true miss of an ε-set <= 2^{worst_hyp:.1f} over all levels")
         print(f"    the statement's first term at ε = 1/1000: <= 2^{worst_stmt_rest:.1f} where K′ < N, up to "
               f"2^{worst_stmt:.1f} where K′ = N (its docstring says it is at most k_prime's δ)")
+        if full:
+            print(f"    WindowEps's first term where K′ = N, the sessions' product law at served_zk's one unit a session "
+                  f"((1 − b/N)^K′, b = ⌈ε·credited⌉): up to 2^{worst_prod:.1f}, where the service's draw misses nothing")
     print("  so at ε = 1% the statement bounds Pr[accept ∧ T < (1 − γ_u)(0.999)W] by about 2^-13, not the claimed "
           "(1 − γ_u)(0.99)W at 2^-128; and where K′ = N its binomial term exceeds δ though the draw misses nothing")
 
