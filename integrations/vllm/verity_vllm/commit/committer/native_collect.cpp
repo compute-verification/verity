@@ -23,6 +23,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstdio>
+#include <cstdlib>
 #include <limits>
 #include <thread>
 #include <unistd.h>
@@ -723,12 +724,13 @@ struct Collector {
     d["plans_dropped"] = plans.dropped(); d["plans_pending_emptied_step"] = plans.pending_emptied_step();
     d["strided_2d"] = tot_strided; d["contiguous_fallback"] = tot_fallback; d["flushes"] = tot_flushes; d["staged"] = tot_staged;
     d["gather_blocks"] = tot_blocks; d["auto_blocks"] = auto_blocks;
+    d["gather_ce_flushes"] = tot_ce_flushes; d["gather_ce_calls"] = tot_ce_calls; d["gather_ce_min_bytes"] = ce_min_bytes;
     d["expected"] = tot_expected; d["committed"] = tot_committed;
     d["window_waits"] = win_waits; d["window_wait_s"] = win_wait_s; d["windowed"] = windowed;
     return d;
   }
 
-  void reset_stats() { tot_copies = tot_bytes = tot_memsets = tot_misses = tot_learn_steps = tot_strided = tot_fallback = 0; tot_issue_s = 0.0; tot_flushes = 0; tot_staged = 0; tot_blocks = 0; tot_expected = tot_committed = 0; }
+  void reset_stats() { tot_copies = tot_bytes = tot_memsets = tot_misses = tot_learn_steps = tot_strided = tot_fallback = 0; tot_issue_s = 0.0; tot_flushes = 0; tot_staged = 0; tot_blocks = 0; tot_ce_flushes = tot_ce_calls = 0; tot_expected = tot_committed = 0; }
   void clear_plans() { plans.clear(); plan = nullptr; }
   void end_run() {             // the committer's reset between runs: the run totals, and the plans the run that ended did not use (freed by
     reset_stats();             // the next run's steps, native_plans.h)
@@ -760,6 +762,7 @@ struct Collector {
     ring_dev = reinterpret_cast<GatherDesc*>(d);
     ring_cap = capacity;
     ring_pos = staged_from = 0;
+    if (const char* e = std::getenv("VERITY_GATHER_CE_MIN_MB")) ce_min_bytes = static_cast<int64_t>(std::atof(e) * (1 << 20));
   }
 
   inline void push_one(const char* src, char* dst, int64_t nb, int64_t width, int64_t pitch, int64_t skip) {
@@ -866,16 +869,63 @@ struct Collector {
     return off;
   }
 
+  // A flush of at least `ce_min_bytes` (prefill's) is copied by the copy engines, one cudaMemcpy(2D)Async or memset a descriptor: the
+  // gather kernel needs SMs, and beside the worker's leaf kernels, which hold the register file, it waits for them (~30x its time
+  // alone). Small flushes (decode's) keep the one kernel launch. VERITY_GATHER_CE_MIN_MB, read at enable_gather; 0 never.
+  int64_t ce_min_bytes = int64_t{16} << 20;
+  int64_t tot_ce_flushes = 0, tot_ce_calls = 0;
+
+  static cudaError_t ce_copy(const GatherDesc& g, cudaStream_t s, int64_t& calls) {
+    ++calls;
+    if (g.src == nullptr) return cudaMemsetAsync(g.dst, 0, static_cast<size_t>(g.nbytes), s);
+    if (g.pitch == g.width) return cudaMemcpyAsync(g.dst, g.src, static_cast<size_t>(g.nbytes), cudaMemcpyDeviceToDevice, s);
+    // logical byte j (from skip) is row j / width, column j % width: a partial first row, whole rows in one 2-D copy, a partial last row
+    int64_t done = 0, j = g.skip;
+    cudaError_t rc = cudaSuccess;
+    while (done < g.nbytes && rc == cudaSuccess) {
+      const int64_t row = j / g.width, col = j - row * g.width;
+      if (col != 0 || g.nbytes - done < g.width) {
+        const int64_t k = std::min(g.width - col, g.nbytes - done);
+        rc = cudaMemcpyAsync(g.dst + done, g.src + row * g.pitch + col, static_cast<size_t>(k), cudaMemcpyDeviceToDevice, s);
+        done += k; j += k;
+      } else {
+        const int64_t rows = (g.nbytes - done) / g.width;
+        rc = cudaMemcpy2DAsync(g.dst + done, static_cast<size_t>(g.width), g.src + row * g.pitch, static_cast<size_t>(g.pitch),
+                               static_cast<size_t>(g.width), static_cast<size_t>(rows), cudaMemcpyDeviceToDevice, s);
+        done += rows * g.width; j += rows * g.width;
+      }
+      if (rc == cudaSuccess && done < g.nbytes) ++calls;
+    }
+    return rc;
+  }
+
   void flush() {
     const int64_t n = ring_pos - staged_from;
     if (n <= 0) return;
     if (!ring) throw std::runtime_error("gather not enabled");
     cudaStream_t s = c10::cuda::getCurrentCUDAStream().stream();
     double t0 = now_s();
+    const int64_t start = staged_from % ring_cap;
+    int64_t flush_bytes = 0;
+    if (ce_min_bytes > 0)
+      for (int64_t i = 0; i < n && flush_bytes < ce_min_bytes; ++i) flush_bytes += ring[(start + i) % ring_cap].nbytes;
+    if (ce_min_bytes > 0 && flush_bytes >= ce_min_bytes) {
+      win_max_nb = 0;
+      for (int64_t i = 0; i < n; ++i) {
+        const cudaError_t rc = ce_copy(ring[(start + i) % ring_cap], s, tot_ce_calls);
+        if (rc != cudaSuccess) throw std::runtime_error(std::string("gather copy: ") + cudaGetErrorString(rc));
+      }
+      ++tot_ce_flushes;
+      step_issue_s += now_s() - t0;
+      staged_from = ring_pos;
+      held.clear();
+      ++step_flushes; ++tot_flushes;
+      if (windowed) mark_windows(pushed_end);
+      return;
+    }
     const int bpd = blocks_for_window();
     win_max_nb = 0;
     tot_blocks += static_cast<int64_t>(bpd) * n;
-    const int64_t start = staged_from % ring_cap;
     if (start + n <= ring_cap) {
       int rc = verity_gather_launch(ring_dev + start, static_cast<int>(n), bpd, s);
       if (rc != 0) throw std::runtime_error(std::string("gather launch: ") + cudaGetErrorString(static_cast<cudaError_t>(rc)));
@@ -2057,6 +2107,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
       .def_readwrite("slot_fast", &Collector::slot_fast)
       .def_readwrite("auto_blocks", &Collector::auto_blocks)
       .def_readwrite("auto_bytes_per_block", &Collector::auto_bytes_per_block)
+      .def_readwrite("gather_ce_min_bytes", &Collector::ce_min_bytes)
       .def("drain_errors", &Collector::drain_errors)
       .def_readonly("active", &Collector::active)
       .def_readonly("learning", &Collector::learning);
