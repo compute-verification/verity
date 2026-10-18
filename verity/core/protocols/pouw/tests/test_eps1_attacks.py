@@ -4,7 +4,7 @@ window's credit without doing its work, as a test on the scheme's spot check and
 The scheme serves `O = (W + c) Xᵀ` exactly on sm_120's H1 (co32c-u16, decision 82) with the fx1 fold (decision 83), commits
 a thread's receipt (its eight chain words), and draws the thread's whole call as a unit.  The drawn unit's proof is PIN's
 `PouwCallCheck_v1{KS, FOLD "fx1", OUT "chains"}` (`circuit.segment`, #2417), which recomputes every absorbed word from the
-committed operand leaves and the public noise, from `T_{-1} = 0`; the noise is `eps1.noise` of the per-call seed
+committed operand leaves and the public noise, from `T_{-1} = 0`; the noise is `eps1_reference.noise` of the per-call seed
 `seed_j = SHA-512(TAG ‖ salt ‖ forward ‖ position ‖ root(A_j) ‖ root(B_j))` (decision 101).  Each attack below leaves one
 honest call and alters one thing; the scheme's check (or the port rules the compile pass relies on) refuses it.
 
@@ -22,7 +22,7 @@ import random
 import numpy as np
 import pytest
 
-from verity.core.protocols.pouw.circuit import eps1 as EPS
+from verity.core.protocols.pouw.circuit import eps1_reference as EPS
 from verity.core.protocols.pouw.circuit import segment as SG
 from verity.ml.circuits.defs import bind, primitive
 from verity.ml.circuits.ports import In, Out, PortError, Ports
@@ -76,7 +76,7 @@ def _fold_words(args, sets) -> list[int]:
 # --- the honest baseline ------------------------------------------------------------------------------------------------------
 
 def test_honest_call_is_accepted():
-    """The scheme accepts an honest thread's call: `call_check` is 1 on `eps1.vector`'s receipt, and the Definition agrees."""
+    """The scheme accepts an honest thread's call: `call_check` is 1 on `eps1_reference.vector`'s receipt, and the Definition agrees."""
     _v, args = _honest()
     assert _ok(args) == 1
 

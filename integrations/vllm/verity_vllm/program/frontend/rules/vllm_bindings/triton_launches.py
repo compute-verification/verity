@@ -232,7 +232,7 @@ def _pouw_scheme(node) -> str | None:
 
     entries = dict(e.split(":", 1) for e in (active_target_profile().protocols or ()))
     scheme = entries.get("pouw")
-    if scheme not in circuit.SCHEMES or scheme in circuit.COMPILE_PASS:
+    if scheme not in circuit.SCHEMES:
         return None
     stack = node.meta.get("nn_module_stack") or {}
     cls = module_type(list(stack.values())[-1][1]) if stack else None

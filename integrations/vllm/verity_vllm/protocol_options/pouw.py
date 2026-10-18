@@ -21,9 +21,8 @@ commitment and its salt coin's opening and, once closed,
 the transcript root with its unit and tile counts.  Pearl-C's also says what it claims of the weights (``registration``,
 `weights_claim`): the executor applies no keyed rotation and reads no curated list, so it claims nothing about which
 weights were served.  The audit (drawing tiles, opening them) is `verity.core.protocols.pouw.audit`'s,
-after the run.  Beside sampled proofs the composition asks `verity.core.protocols.pouw.circuit` (`protocol_options.CIRCUITS`); ``ncp-v2`` and
-the EPS1 scheme ``eps1-sm120-h1fx1`` have a circuit there, and this adapter executes ``ncp-v2`` natively (the EPS1 compile pass
-over the served Program is POUW-SPEC §4 step-4 work, refused here until it is wired).  Under ``ncp-v2`` each weight's side (its Y strips and c₀) is instead bound to its own
+after the run.  Beside sampled proofs the composition asks `verity.core.protocols.pouw.circuit` (`protocol_options.CIRCUITS`), and only
+``ncp-v2`` has a circuit.  Under ``ncp-v2`` each weight's side (its Y strips and c₀) is instead bound to its own
 `NcpWeight_v1` Program call, once per run, and each call to its own `NcpLinear_v1` Program call reading it, their units
 computed natively and committed a leaf per unit (`pouw_native`, `pouw_circuit`); the replay draws each call's units under
 its window's key, regenerates them and checks each against its template (`check.replay.pouw_circuit`).
@@ -176,10 +175,7 @@ class Settings:
 
 def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
     out = []
-    if scheme in pouw_circuit.COMPILE_PASS:
-        out.append(f"{scheme}: a PoUW compile-pass scheme (verity.core.protocols.pouw.circuit); its executor is the compile "
-                   "pass over the served Program, which this adapter does not wire yet (POUW-SPEC §4 step 4)")
-    elif scheme not in EXECUTED:
+    if scheme not in EXECUTED:
         out.append(f"{scheme}: this adapter's executor runs {', '.join(EXECUTED)} only")
     if not ctx.enforce_eager:
         out.append("compiled execution: the wrapper around each linear layer's apply is not graph-capturable")
@@ -205,24 +201,18 @@ def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
     return tuple(out)
 
 
-def _native_circuit(scheme: str) -> bool:
-    """A circuit scheme this adapter executes natively in gates (ncp-v2), not a compile-pass scheme (eps1), whose serving is
-    the compile pass over the served Program (POUW-SPEC §4 step 4) and is not wired in this adapter."""
-    return scheme in pouw_circuit.SCHEMES and scheme not in pouw_circuit.COMPILE_PASS
-
-
 def requires_build(scheme: str, ctx: Context) -> bool:
-    """The native circuit-backed executor is lowered into the row's Build."""
+    """The circuit-backed executor is lowered into the row's Build."""
 
-    return _native_circuit(scheme)
+    return scheme in pouw_circuit.SCHEMES
 
 
 def keeps_weight_copy(scheme: str, ctx: Context) -> bool:
     """True where the executor keeps a weight-derived copy across forwards, so its GEMMs would not read what POUS decodes:
     Pearl-C's B̃, formed once per install (`pouw_pearl_c_device.PearlCDeviceRun`), and ncp-v2's weight sides, committed at
     each weight's first call and reused (`_CircuitRun.sides`).  ncp-v1 forms its operands per call from the weight it is
-    handed, and a compile-pass scheme (eps1) is not served here."""
-    return scheme in PPD.SCHEMES or _native_circuit(scheme)
+    handed."""
+    return scheme in PPD.SCHEMES or scheme in pouw_circuit.SCHEMES
 
 
 def linear_types() -> tuple[type, ...]:
@@ -563,7 +553,7 @@ def _layers(scheme: str, target: Target) -> tuple[Any, list[Any], dict[int, tupl
     """The scheme and the executed sites, the linear layers by type in module order (a layer's ordinal is its weight id),
     with their (n, k); ValueError names every layer outside the scheme's domain, sharing a quant method or quantized."""
     entry = f"{NAME}:{scheme}"
-    s = (None if _native_circuit(scheme) else PPD.scheme_of(scheme) if scheme in PPD.SCHEMES
+    s = (None if scheme in pouw_circuit.SCHEMES else PPD.scheme_of(scheme) if scheme in PPD.SCHEMES
          else pouw_schemes.get(scheme))
     types = linear_types()
     layers = [m for m in target.model.modules() if isinstance(m, types)]
