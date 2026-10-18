@@ -1,0 +1,3 @@
+order = 20
+tool = "pfill, the proved filler: tiles `-DPFILL_BITS`, `-DPFILL_BU`, `-DPFILL_E2M1`; folds ram (NC 4), duo (NC 2), `-DPFILL_LI`, `-DPFILL_XIN13`"
+files = "`pfill.cuh`, its host build `pfill_host.cpp` and Python twin `pfill_ref.py`, `pfill_probe.sh`, `tile_probe.sh`"

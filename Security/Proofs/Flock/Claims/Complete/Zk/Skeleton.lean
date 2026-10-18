@@ -339,15 +339,41 @@ section Proved
 
 variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
 
-/-- `readyZk` at the case's setup: one table, the session draws a unit, the statement is under `2^56` bytes, the
-setup against `H` is the case's, and the session's coins are the keyed coin tree. -/
-theorem CaseZk.ready_parts (c : CaseZk H rel) :
-    c.sts.size = 1 ∧ c.s.read.draw.isSome = true ∧ c.x.length < 2 ^ 56 ∧
-      setupWith (Claims.hOf H) c.s.read = .ok (c.spec, c.sts) ∧ c.spec.coinTree.isSome = true := by
+/-- `readyZk` at the case's setup: one table, the session draws a unit, the statement is under `2^64` bytes, the
+table's regions fit, the setup against `H` is the case's, the session's coins are the keyed coin tree, and the honest
+masked record fits. -/
+theorem CaseZk.ready_all (c : CaseZk H rel) :
+    c.sts.size = 1 ∧ c.s.read.draw.isSome = true ∧ c.x.length < 2 ^ 64 ∧ (∀ st ∈ c.sts, JsonRT.RegionsFit st) ∧
+      setupWith (Claims.hOf H) c.s.read = .ok (c.spec, c.sts) ∧ c.spec.coinTree.isSome = true ∧
+      RecordFitsZkAt H c.x c.spec c.sts := by
   have h := c.ready
   unfold readyZk at h
   rw [c.setup] at h
   simpa [and_assoc] using h
+
+/-- `readyZk` at the case's setup: one table, the session draws a unit, the statement is under `2^64` bytes, the
+setup against `H` is the case's, and the session's coins are the keyed coin tree. -/
+theorem CaseZk.ready_parts (c : CaseZk H rel) :
+    c.sts.size = 1 ∧ c.s.read.draw.isSome = true ∧ c.x.length < 2 ^ 64 ∧
+      setupWith (Claims.hOf H) c.s.read = .ok (c.spec, c.sts) ∧ c.spec.coinTree.isSome = true :=
+  have h := c.ready_all
+  ⟨h.1, h.2.1, h.2.2.1, h.2.2.2.2.1, h.2.2.2.2.2.1⟩
+
+/-- `readyZk` at the case's setup: the table's regions fit, and the honest masked record fits its length word. -/
+theorem CaseZk.ready_fits (c : CaseZk H rel) :
+    (∀ st ∈ c.sts, JsonRT.RegionsFit st) ∧ RecordFitsZkAt H c.x c.spec c.sts :=
+  ⟨c.ready_all.2.2.2.1, c.ready_all.2.2.2.2.2.2⟩
+
+/-- **The printed honest masked record is under `2^64` bytes**: `readyZk` asks it of every honest masked session, which
+the pure session's run is (`sessionPZk_sim`). -/
+theorem RunZk.recordFits (o : RunZk H rel) : o.record.toUTF8.size < 2 ^ 64 := by
+  refine o.ready_fits.2 o.w o.ω o.r o.record o.proofs ?_
+  obtain ⟨bs, h1, -⟩ := sessionPZk_sim H (fun j => (Claims.coinSeq o.r j).bytes) o.spec (tabsOf o.sts)
+    (tracesOf o.sts o.w) o.ω #[]
+  have hran := o.ran
+  unfold sessionSZk at hran
+  rw [hran] at h1
+  simpa using congrArg Prod.snd h1
 
 /-- **The session's coins are the keyed coin tree**: the goal `CoinTree`, from `readyZk`. -/
 theorem coinTree_goal : CoinTree H rel := fun o => by
@@ -396,7 +422,7 @@ theorem RunZk.link_ok (hL : LinkFirstZk H rel) (o : RunZk H rel) : linkOf (o.sen
 /-- **The last message reads back.** -/
 theorem RunZk.final_ok (hF : FinalFitsZk H rel) (o : RunZk H rel) : finalOf o.final.encode = some o.final := by
   obtain ⟨h1, h2, h3⟩ := hF o
-  exact finalOf_encode (o.ready_parts.2.2.1.trans (by norm_num)) h1 h2 h3
+  exact finalOf_encode o.ready_parts.2.2.1 h1 h2 h3
 
 /-! ## The composition -/
 

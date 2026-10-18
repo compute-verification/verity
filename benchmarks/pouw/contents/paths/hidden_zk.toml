@@ -1,0 +1,4 @@
+order = 150
+path = "`hidden_zk/`"
+runs_on = "CPU"
+what = "Pearl-C4's hidden-check units under C-Flock `--zk`, proved in Rust and verified by the Lean verifier (`job.sh`)"
