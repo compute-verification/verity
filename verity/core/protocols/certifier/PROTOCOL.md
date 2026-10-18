@@ -134,10 +134,13 @@ on the signature's unforgeability, and on an honest certifier; not on `cr/sha-25
 
 One link-window's certificates are registered through the proof service (`verity.core.protocols.sampled_proofs.service`)
 as a `Spec` of its own (`service.LinkWindows`, one per link):
-- **Committed:** one value, `certificates`: the link-window's egress and ingress certified records, leaves 0 and 1, each
-  `hm96-sha512/row/v2` over `service.encode` (the head, then the certificate) with a fresh salt, in one `frame-v3-sha512`
-  tree under one-stage's served domain for the run, the link and the window. The firewall keeps the records and salts
-  (`Opening`). The challenger receives one salted root and never a certificate.
+- **Committed:** one value, `certificates`, of four leaves: the link-window's egress and ingress certified records,
+  leaves 0 and 1, each `hm96-sha512/row/v2` over `service.encode` (the head, then the certificate), and their heads,
+  leaves 2 and 3, each over the head alone (`RecordHead.encode`). Every leaf has its own fresh salt, in one
+  `frame-v3-sha512` tree under one-stage's served domain for the run, the link and the window. A proof that reads only a
+  head (N3's, which holds the window's frames to the head's root) opens its head leaf in two or three SHA-512
+  compressions, where the record leaf would cost the certificate's 272 more. The firewall keeps the records and salts
+  (`Opening`). The challenger receives one salted root and never a certificate or a head.
 - **Selection:** `All`. A registration is one link-window, one proof unit, so an accepted outcome is the exhaustive fact.
   The record's `window` provenance is exactly `{"kind": "served", "window": w}`, and the challenger holds w to the
   registration's order (`LinkWindows.register`): the receipt keeps the order, and the order is the link-window.
@@ -146,10 +149,11 @@ as a `Spec` of its own (`service.LinkWindows`, one per link):
   the certifier's key id and its session id (`certifier_session`), and the check's outputs `verdict` and `deadline`. A rejected link-window shows only the
   service's `reject`; the violation's kind stays in the verifier. A registration with any other field, a second root,
   a root entry with another key, or anything more in `window` is refused.
-- **The check** is `service.UNIT`, `NetworkLinkWindow` v0: one opaque primitive from the two leaves' committed digests to
+- **The check** is `service.UNIT`, `NetworkLinkWindow` v1: one opaque primitive from the four leaves' committed digests to
   the verdict bit. It has no gates. Its Program's digest is the check's, so the spec, the stream and each registration
   bind to it, but nothing proves it in a circuit. Its verifier of record is a host-side stand-in, `LinkWindows.verify`,
-  that reads the opening: it accepts when the opening reproduces the registered root and the audit accepts both
+  that reads the opening: it accepts when the opening reproduces the registered root (so each head leaf holds its
+  record's head) and the audit accepts both
   records under the certifier's key in its session (`LinkWindows.certifier_session`; `check_link` against the Program's grid under the declared syncs,
   `check_ingress_link` on the status and parameters). The outcome passes the opening's root as the session's, which
   one-stage's audit holds to the registered one. An unset deadline bit is a `no-verdict` there, so a reject; a proof
