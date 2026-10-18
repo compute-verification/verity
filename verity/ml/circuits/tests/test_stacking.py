@@ -6,6 +6,8 @@ from __future__ import annotations
 
 import json
 import random
+import re
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -380,20 +382,45 @@ def test_the_red_teams_primitives_are_never_free():
     assert P.class_of("BlackwellS8ImmaDot32_v1") == "family" and P.class_of("NoSuchPrimitive_v1") is None
 
 
+LEAN_REGISTRY = Path(__file__).resolve().parents[4] / "Security/Definitions/Accounting/Gates/Registry.lean"
+#: the ids the table lists that Lean's registry doesn't yet: the exact-int8 profile's casts, f64 products and LUT index
+NOT_IN_LEAN = {"F32MulWide_v1", "F32Rint_v1", "F32ToS8Rzi_v1", "F64Mul_v1", "F64ToU32RniSat_v1", "LutIndex_v1", "S32ToF32Rn_v1",
+               "S8ToF32_v1"}
+#: the ids a ruling classes otherwise than Lean's registry still does: (here, Lean)
+RULED = {"Bf16ToF32_v1": ("affine", "roundings")}
+
+
+def lean_class_of() -> tuple[dict[str, str], dict[str, str]]:
+    """Lean's `registry` and `families` (`Registry.lean`), each id or prefix with its class in this module's names."""
+    src = LEAN_REGISTRY.read_text()
+    entry = re.compile(r'\("([^"]+)",\s*\.(\w+)(?:\s+\.(\w+))?')
+    budgeted = {"rounding": "roundings", "compareSelect": "compare_select", "fold": "folds"}
+    cut = src.index("def families")
+    return tuple({i: budgeted[sub] if k == "budgeted" else {"gather": "gathers"}.get(k, k) for i, k, sub in entry.findall(part)}
+                 for part in (src[:cut], src[cut:]))
+
+
 def test_the_table_is_leans_class_of():
-    """Spot checks against Lean's `Accounting.Gates.classOf`, which 6b difftests id for id: the FP dots are roundings (refused
-    for their operand bits, not their class), and so are the integer products reduced mod 2^w (the integer dots outside the
-    family and I32Mul); PoUW's wrapping dots are family steps, the receipt fold a fold, and the families by id. The
-    field extractions BitAtx and PouwWindowWord are roundings (red team round 2: at a constant position a gather would be
-    free); 6b reclasses them in Lean. The BF16-to-FP32 widening is affine (the 18 Oct ruling: x 2^16 on the encoding, never
-    a wrap), where Lean's registry still has a rounding."""
+    """Lean's `Accounting.Gates.classOf` id for id: each of the registry's ids is in its class here, a family's instances in
+    the family's (run and registered inputs are read by their node, not the table), but `RULED`; and each id the table lists
+    that Lean doesn't is in `NOT_IN_LEAN`. Then the FP dots are roundings (refused for their operand bits, not their class),
+    and so are the integer products reduced mod 2^w and the field extractions; the clamps and the 1-bit logic ops are
+    compare_selects; PoUW's wrapping dots are family steps, and the receipt fold a fold."""
+    ids, families = lean_class_of()
+    assert len(ids) > 200 and {i: (P.class_of(i), c) for i, c in ids.items() if P.class_of(i) != c} == RULED
+    assert set(P.CLASSES) - set(ids) <= NOT_IN_LEAN, set(P.CLASSES) - set(ids) - NOT_IN_LEAN
+    instance = {"GatherBf16x": "GatherBf16x16_v1", "GatherF32x": "GatherF32x128_v1", "TableRead": "TableRead16x4_v1",
+                "BitAtx": "BitAtx32_v1", "TopPMaskWordx": "TopPMaskWordx151936_v1"}
+    assert {f: P.class_of(instance[f]) for f in instance} == {f: families[f] for f in instance}
+    assert set(families) - set(instance) == {"Input", "RegisteredInput"}
     assert {P.class_of(f) for f in ("HopperBF16WgmmaDot16_v1", "BlackwellNvf4OmmaDot64_v1", "DivFullScaleA_v2", "F32Fabs_v1",
-                                    "F32Sat_v1", "I64ToI32_v1", "BitAtx32_v1", "PouwWindowWord_v1", "I32Mul_v1",
-                                    "NcpDot16I7_v1", "PouwSqAcc_v1")} == {"roundings"}
+                                    "I64ToI32_v1", "BitAtx32_v1", "PouwWindowWord_v1", "I32Mul_v1", "NcpDot16I7_v1",
+                                    "PouwSqAcc_v1", "U32And_v1", "S32ClampRest_v1")} == {"roundings"}
+    assert {P.class_of(f) for f in ("F32Sat_v1", "S32ClampS8_v1", "S32ClampS8_v2", "And2_v1", "Xor2_v1", "BitNot_v1", "Not_v1",
+                                    "PouwSel32_v1")} == {"compare_select"}
     assert P.class_of("Bf16ToF32_v1") == "affine" and P.class_of("Lifted[Bf16ToF32_v1]_v2") == "roundings"
     assert {P.class_of(f) for f in ("PouwSegDot_v1", "PouwDot16U8S8_v1", "BlackwellS8ImmaDot32_v2")} == {"family"}
-    assert (P.class_of("PouwDuoAbsorb_v1"), P.class_of("S32ClampS8_v1"), P.class_of("PouwSel32_v1")) == (
-        "folds", "roundings", "compare_select")
+    assert P.class_of("PouwDuoAbsorb_v1") == "folds"
     family = ("GatherBf16x128256_v1", "TableRead16x4_v1", "TopPMaskWordx151936_v1", "Const8[0x7f]_v1",
               "BlackwellU8S8ImmaDot32_v1", "Zero_v1", "GatherBf16x16_v2")
     assert [P.class_of(f) for f in family] == ["gathers"] * 2 + ["compare_select", "const", "family", None, None]
@@ -405,13 +432,13 @@ def test_the_families_built_on_demand_and_lifts_are_budgeted():
     the lifting's gates are budgeted, ⊥ is a constant, and a lift takes its primitive's class, a free one's budgeted."""
     cases = {
         "GatherI32x64_v1": "gathers", "LGatherRow16x5_v1": "gathers", "LGatherRow32x8o7fc00000_v1": "gathers",
-        "And3_v1": "roundings", "Xor17_v1": "roundings", "LiveCount8_v1": "roundings", "SplitsForSMS4_v1": "roundings",
+        "And3_v1": "compare_select", "Xor17_v1": "compare_select", "LiveCount8_v1": "roundings", "SplitsForSMS4_v1": "roundings",
         "LSelect32_v1": "compare_select", "LFixedSelect3x32_v1": "compare_select", "LIsEOS2_v1": "compare_select",
         "LEnable_v1": "compare_select", "LEmitNext[H=4]_v1": "compare_select", "LBot32_v1": "const",
         "Lifted[F32Add_v1]_v2": "roundings", "Lifted[I32Add_v1]_v2": "roundings", "Lifted[Const32[0x00000000]_v1]_v2":
         "compare_select", "Lifted[BlackwellS8ImmaDot32_v1]_v2": "roundings", "Lifted[LEmitNext[H=4]_v1]_v2{ORD=1}":
         "compare_select", "Lifted[LGatherRow16x5_v1]_v2": "gathers", "S32LowByte_v1": "roundings", "S32ClampS8_v1":
-        "roundings", "Lifted[NoSuchPrimitive_v1]_v2": None, "And1_v1": None, "LSelect_v1": None,
+        "compare_select", "Lifted[NoSuchPrimitive_v1]_v2": None, "And1_v1": None, "LSelect_v1": None,
     }
     assert {f: P.class_of(f) for f in cases} == cases
     assert P.gather("LGatherRow16x5_v1") == P.gather("Lifted[LGatherRow16x5_v1]_v2") == (0, 3, "lifted", True)
@@ -695,5 +722,5 @@ def test_the_table_is_pinned():
     assert P.digest() == PINNED, P.digest()
 
 
-PINNED = ("68ee6613b160206ac8f943d4dbd9a54f02244a1e208acc157633bc0cc9cfe0a5"
-          "3c58e213f064fe0e560dc866b837224dc4d95f33254594003ed75c030776c2f7")
+PINNED = ("de40c0fc9cc7613b448d590d3376a3bdd0e77d3536f33374028398be8d1c49e9"
+          "e8643b74d7de0c058ea63bc316bea2b67a1251ea1934b2038135ebf4fae7153f")
