@@ -60,7 +60,7 @@ theorem recursiveZK_os_le {Ωa Ωp Ωos Ωo Ωs V : Type} [Fintype Ωa] [Nonempt
     (fun (w : (Ωa × Ωp) × Ωo) (y : Fin nh → ZkView.Salt) =>
       E (w.1.1, (fun i => Flock.Guarantees.firewallLeaf (msgs w.1.1 w.1.2 i) (y i)),
         view w.1.1 (fun i => Flock.Guarantees.firewallLeaf (msgs w.1.1 w.1.2 i) (y i)) w.1.2 y w.2)) hA3).1
-  refine (((prCoin_congr_equiv (swapLast (Ωa × Ωp) Ωos Ωo)
+  refine ((prCoin_congr_equiv (swapLast (Ωa × Ωp) Ωos Ωo)
     (fun w : ((Ωa × Ωp) × Ωos) × Ωo =>
       E (w.1.1.1, (fun i => Flock.Guarantees.firewallLeaf (msgs w.1.1.1 w.1.1.2 i) (ZkView.saltOfBytes (t w.1.2 i))),
         view w.1.1.1 (fun i => Flock.Guarantees.firewallLeaf (msgs w.1.1.1 w.1.1.2 i) (ZkView.saltOfBytes (t w.1.2 i)))
