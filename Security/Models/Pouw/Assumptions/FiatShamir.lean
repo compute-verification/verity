@@ -14,8 +14,9 @@ drawn unit's own proof (decision 105). The live coins are each round's check.
   `FiatShamirFloor` takes it.
 * `SteerMoment`: a try's gain has moment at most `M` at rate `θ`, GRIND's per-query hypothesis
   (`Accounting.Guarantees.TS.GrindPremium`), which gives `SteerBound` at `τ = M·e^{−θπ}` (`SteerBoundOfMoment`).
-* `ServiceSoundStagedFS`: `ServiceSoundStaged` with its stage draws from the oracle, the staged service sound up to its
-  proof layer at every oracle, its binding and zero-knowledge breaks bounded by `κ + g(state)`. It is the premise from
+* `ServiceSoundStagedFS`: `ServiceSoundStagedPerProver` with its stage draws from the oracle, the staged service sound
+  up to its proof layer at every oracle, its binding and zero-knowledge breaks bounded by a constant `κ` plus weights
+  times the success of the analysis's collision finders for that adversary (`FindersFS`). It is the premise from
   which the staged service's live statement at unsteered draws (`LiveFloorUnsteered`) is to be derived with K's scope
   and the machine's charge; no guarantee reads it yet.
 -/
@@ -92,15 +93,24 @@ commitment, which the stage's seed input hashes (`root(A_j)`, `root(B_j)`), so b
 `StagedPlay`; a re-rolled root is a new input and a new draw, which `SteerBound` prices). Every run accepted at the
 oracle's draws is accepted by the play's game at its realized coins (`stagedCoins`), or breaks binding or zero
 knowledge in some round (N1, X-RO commitments; F1 and F2, C-Flock's binding and zero knowledge). Some round breaks with
-probability at most `κ + g(M, r, H)` over the live coins: `κ` the rounds' constants, `g` the collision terms the run's
-state holds, since no constant bounds a break for an adversary holding a collision. -/
+probability at most `κ + βb · Σ_w Pr[fb M r H w finds a collision of sha] + βz · Σ_w Pr[fz M r H w …]` over the live
+coins: `κ` the rounds' constants, which read no prover, and the analysis's binding and zero-knowledge finders for that
+adversary at their weights, since no constant bounds a break for an adversary holding a collision.
+
+A free state term in place of the finders (`κ + g(M, r, H)`) would carry no number: `g = 1` satisfies the premise, and
+the floor's bound is then at least 1. Through the finders, the floor reads `ecr/sha-512` at each adversary's own
+finders (`breakBoundFS`, `Claims.ecrBound`, the record the live floors per prover read), a machine that hard-codes a
+collision gets about 1, and every other adversary keeps its finders' expected calls over `2^256` at its weights. The
+instances are `ServiceSoundStagedPerProver`'s, round by round: the fork finder for binding (cost about `2T`, its
+square root folded in by AM–GM, `δ' + |L|² x/(4δ')`), and C-Flock's knowledge bound for zero knowledge. -/
 def ServiceSoundStagedFS (Mc : Machine) (S : StagedFS R St n L np B n') (T : ℕ) (run : RunMapFS Mc S Ar)
-    (κ : ℝ) (g : StateTerm Mc S) : Prop :=
+    (κ : ℝ) (sha : Claims.Msg → Claims.Msg) (fb fz : FindersFS Mc S R) (βb βz : ℝ) : Prop :=
   ∀ (Ω : Type) [Fintype Ω] (M : FSAdv Mc S Ω), FSWithin Mc S M T →
     ∀ (r : Ω) (H : S.Q → Finset (DBits n L np B n')),
       prob (fun l : Fin R → Fin St × DCells n n' B => ∃ w,
         (run Ω M r H).Bind w (stagedCoins (S.draws H (Mc.eval M ((H, l), r)).1) l) ∨
-          (run Ω M r H).ZK w (stagedCoins (S.draws H (Mc.eval M ((H, l), r)).1) l)) ≤ κ + g Ω M r H ∧
+          (run Ω M r H).ZK w (stagedCoins (S.draws H (Mc.eval M ((H, l), r)).1) l)) ≤
+        κ + βb * ∑ w, (fb Ω M r H w).Pr sha + βz * ∑ w, (fz Ω M r H w).Pr sha ∧
       ∀ l, S.verify (Mc.eval M ((H, l), r)).1 (S.draws H (Mc.eval M ((H, l), r)).1) l (Mc.eval M ((H, l), r)).2 = true →
         (run Ω M r H).play.game.accepts (stagedCoins (S.draws H (Mc.eval M ((H, l), r)).1) l) ∨
           ∃ w, (run Ω M r H).Bind w (stagedCoins (S.draws H (Mc.eval M ((H, l), r)).1) l) ∨

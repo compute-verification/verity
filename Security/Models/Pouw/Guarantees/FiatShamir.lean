@@ -14,50 +14,63 @@ in `F`; the tries reaching it go into the probability, `T·τ`. With GRIND's per
 Pouw.Guarantees.FiatShamir.FiatShamirFloor` and `Pouw.SecurityProofs.FiatShamir.SteerBoundOfMoment`.
 
 **Composition.**
-* Gap (6)'s `Pouw.Guarantees.Window.WindowEps` (branch `cursor/pouw-window-eps-stmt-c7a9`) bounds the window audit's
-  failure by `κ + coll(R, τ)` at the window's state, with no grinding term. It is the shape of the fixed-oracle premises
-  here (`LiveFloorUnsteered`, `ServiceSoundStagedFS`: `κ + g(M, r, H)`), and their `g` is its `coll` at the oracle `H`.
-  The Fiat–Shamir terms compose after it.
+* The live floors per prover (`Models.Pouw.Guarantees.RelativeSecurity`, `StagedFloorKPerProver` and its siblings)
+  bound each adversary's error by `breakBound`: constants plus weights times its collision finders, read through
+  `ecr/sha-512` (`Claims.ecrBound`). The fixed-oracle premises here (`LiveFloorUnsteered`, `ServiceSoundStagedFS`) have
+  that form at each oracle (`FindersFS`), and the floor reads them through the same `Claims.ecrBound`
+  (`breakBoundFS`): one break term, two statements. Gap (6)'s `Pouw.Guarantees.Window.WindowEps` (branch
+  `cursor/pouw-window-eps-stmt-c7a9`) bounds the window audit's failure by `κ + coll(R, τ)` at the window's state; its
+  `coll` is to be read the same way. The Fiat–Shamir terms compose after it.
 * Gap (4)'s `Pouw.Guarantees.EndToEndWindow` (branch `cursor/pouw-work-bound-stmt-c7a9`) reads one oracle `H`, SHA-512
   domain-separated for the commitments and the noise. `SeedExtraction` is its `StraightLineExtraction` at the seed's
   domain, on the same random-oracle card, and its `T` is gap (4)'s `q`. The premium enters gap (4) through the work
   step: `TileWork(γ_u)`'s EPS1 instance is gap (3)'s bridge from compute accounting's tensor–scalar model
   (`CircuitCredit`, not on main), whose sampled proofs rest on `StageLuck`. Under these draws
   `ε_FS = ε_live + (κₓ − 3)/4·ε_luck + π*/(units a group)` (`κₓ` GRIND's exchange rate) replaces the live `ε` in
-  `γ_u`, and `coll + ε_id + δ` goes into `TileWork`'s `η(q, N)`. Neither bridge is stated: from this
-  `Machine`/`QTree` game to `Pouw.Game`'s `CostModel` (RT4's change 4), and from the staged service to the TS model.
+  `γ_u`, and the break term (`breakBoundFS`) plus `ε_id + δ` goes into `TileWork`'s `η(q, N)`. Neither bridge is
+  stated: from this `Machine`/`QTree` game to `Pouw.Game`'s `CostModel` (RT4's change 4), and from the staged service
+  to the TS model.
 -/
 
 namespace Pouw.Guarantees.FiatShamir
 
 open Pouw.RelativeSecurity Pouw.Assumptions
 
-/-- **Fiat–Shamir draws cost `κ + coll + ε_id + T·τ`, the premium priced into the floor** (proofs' gap (7), restated
-after note:proofs/20261018T0532Z-report-redteam-fiatshamir). Take a service whose drawn units' proofs derive their
-seeds in-circuit at the inputs its commitment names, read as a uniform oracle's answers there (`SeedExtraction`, the
+/-- **Fiat–Shamir draws cost the live break term plus `ε_id + T·τ`, the premium priced into the floor** (proofs' gap
+(7), restated after note:proofs/20261018T0532Z-report-redteam-fiatshamir, and per prover after RT-DELTA r2,
+note:compute-accounting/20261018T1625Z-draft-rt-delta). Take a service whose drawn units' proofs derive their seeds
+in-circuit at the inputs its commitment names, read as a uniform oracle's answers there (`SeedExtraction`, the
 random-oracle premise, failing with probability at most `ε_id(T, |J|)`), and whose other coins are live and drawn
-after the commitment. Take an analysis's gain map `gain`, premium `π` and state term `g`. Suppose a try reaches the
-premium with probability at most `τ` (`SteerBound`). Suppose too that at every oracle the live coins alone bound
-accepted runs charged below `F` whose every committed seed realizes less than `π` by `κ + g(M, r, H)`
-(`LiveFloorUnsteered`, the live statement with the premium priced into `F`). Then every adversary `M` within `T` oracle
-calls, the inputs its commitment names counted, has its accepted runs charged below `F` with probability at most
+after the commitment. Take an analysis's gain map `gain`, premium `π`, and collision finders `fb`, `fz` for `K` breaks
+at weights `βb`, `βz` (`FindersFS`). Suppose a try reaches the premium with probability at most `τ` (`SteerBound`).
+Suppose too that at every oracle the live coins alone bound accepted runs charged below `F` whose every committed seed
+realizes less than `π` by `κ + βb · Σ_k Pr[fb finds] + βz · Σ_k Pr[fz finds]` (`LiveFloorUnsteered`, the live
+statement with the premium priced into `F`). Then every adversary `M` within `T` oracle calls, the inputs its
+commitment names counted, has its accepted runs charged below `F` with probability at most
 
-  `κ + coll(M) + ε_id(T, |J|) + T·τ`
+  `𝔼_{H,r}[min(1, κ + βb · Σ_k ecr(fb M r H k) + βz · Σ_k ecr(fz M r H k))] + ε_id(T, |J|) + T·τ`
 
-over the oracle, the live coins and its own coins (`ServiceFloorFS`), where `coll(M)` is its state term's mean.
+over the oracle, the live coins and its own coins (`ServiceFloorFS`), `ecr(F)` the finder's expected SHA-512 calls over
+`2^256` where it meets `ecr/sha-512` and `⊤` where it doesn't (`breakBoundFS`, `Claims.ecrBound`, the break term of the
+live floors per prover). With a free state term `g` in the finders' place the statement said nothing, since `g = 1`
+satisfies the premise; through the finders, a machine that hard-codes a collision gets about 1 and every other
+adversary its own finders' bound.
 
 At GRIND's instance (`SteerBoundOfMoment`: `τ = M·e^{−θπ}`) and the premium `π* = ln(T·M/δ)/θ`, the tries cost
 `T·τ = δ`, and the grind sits in `F`, at `π*` a seed group. The live floor's accumulation over stages is kept in the
 gain, whose moment multiplies over a seed group's units (`PrivateMoment`), not in the union over tries. A steer event
 at the live floor itself (`π` at zero: any lucky saving) prices the grind into the probability alone, and RT4's C2
 bounds that from below for every analysis: at `T = |J|`, one try a stage, the bound is at least `|J|/Σ_j p_j⁻¹`, one
-stage's luck `p_j` rather than their product, which forces it to about 1. -/
+stage's luck `p_j` rather than their product, which forces it to about 1. At `T = |J|`, one try a stage, there is
+nothing to grind and every draw is as fresh as a live coin, so the break term is the live floors' at the oracle and the
+statement's own terms are `ε_id(|J|, |J|) + |J|·τ`. -/
 def FiatShamirFloor : Prop :=
-  ∀ (J N Live : Type) [Fintype J] [Fintype N] [Fintype Live] (Mc : Machine) (S : FSService J N Live) (T : ℕ)
-    (εid : ℕ → ℕ → ℝ) (gain : GainMap Mc S) (g : StateTerm Mc S) (π τ F κ : ℝ),
-    SeedExtraction Mc S T εid → SteerBound Mc S T gain π τ → LiveFloorUnsteered Mc S T gain π F κ g →
+  ∀ (J N Live : Type) [Fintype J] [Fintype N] [Fintype Live] (K : ℕ) (Mc : Machine) (S : FSService J N Live)
+    (T : ℕ) (εid : ℕ → ℕ → ℝ) (gain : GainMap Mc S) (sha : Claims.Msg → Claims.Msg) (fb fz : FindersFS Mc S K)
+    (π τ F κ βb βz : ℝ),
+    SeedExtraction Mc S T εid → SteerBound Mc S T gain π τ → LiveFloorUnsteered Mc S T gain π F κ sha fb fz βb βz →
       ServiceFloorFS Mc S T F (fun (Ω : Type) [Fintype Ω] (M : FSAdv Mc S Ω) =>
-        κ + coll g Ω M + εid T (Fintype.card J) + T * τ)
+        breakBoundFS sha fb fz κ βb βz Ω M + ENNReal.ofReal (εid T (Fintype.card J) + T * τ))
 
 /-- **GRIND's moment is `SteerBound`'s instance** (`Accounting.Guarantees.TS.ExchangeTail` at each try): if a try's
 gain has moment at most `M ≥ 0` at rate `θ ≥ 0` (`SteerMoment`), a try reaches every premium `π` with probability at

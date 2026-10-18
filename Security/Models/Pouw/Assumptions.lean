@@ -24,6 +24,7 @@ import Models.Pouw.Assumptions.Dimension.PipeModel
 import Models.Pouw.Assumptions.Dimension.RouteU
 import Models.Pouw.Assumptions.Dimension.RouteUPipe
 import Models.Pouw.Assumptions.Dimension.RouteUPipeAssumptions
+import Models.Pouw.Assumptions.FiatShamir
 import Models.Pouw.Assumptions.Fp8Atom.H1TAssumptions
 import Models.Pouw.Assumptions.Fp8Atom.H1TGamma
 import Models.Pouw.Assumptions.Fp8Atom.H1TRunningAssumptions

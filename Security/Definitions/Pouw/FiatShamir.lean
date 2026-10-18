@@ -1,3 +1,4 @@
+import Definitions.Claims
 import Definitions.Pouw.RelativeSecurity
 import Definitions.Pouw.Basic.QTree
 
@@ -13,17 +14,21 @@ vocabulary (`Models.Pouw.Guarantees.FiatShamir`, `Models.Pouw.Assumptions.FiatSh
 oracle, gap (4)'s `H` (`Pouw.WindowWork.StraightLineExtraction`) at the seed's domain: a uniform function `H : Q → N`
 from the seed's inputs to a stage's draws, which the prover reaches only through counted queries (`QTree`, as PoUW's
 game does). The named premise `Pouw.Assumptions.SeedExtraction` ties it to the seeds the proofs derive. Every other
-coin stays live.
+coin stays live. The breaks of the commitments read SHA-512 as the live floors per prover do, as a function `sha` on
+messages whose collisions the analysis's finders look for, through `ecr/sha-512` (`Claims.ecrBound`): `H` is the seed
+oracle only.
 
 * `FSService`: a service whose drawn units' proofs derive their seeds in-circuit (`seed`), at the inputs its commitment
   names (`pre`), and whose other coins (`Live`: each round's check of a stage and a cell-block) are drawn after the
   commitment; it accepts at the derived seeds (`accepts`), and the analysis reads it at the oracle's (`draws`);
 * `FSWithin`: an adversary whose commitment is the result of one oracle program of at most `T` calls, the committed
   inputs counted;
-* `StateTerm`, `coll`: an analysis's state term `g` (per adversary, its own coins and the oracle) and its mean, the one
-  collision term of the statements (gap (6)'s `κ + g(state)` and `coll`, gap (4)'s `β(H, s)` averaged);
+* `FindersFS`, `finderTermFS`, `breakBoundFS`: the analysis's collision finders, adversary by adversary, at each value
+  of its coins and each oracle, their `ecr/sha-512` bounds (`Claims.ecrBound`, the break term the live floors per
+  prover read, `breakBound`), and an adversary's error, capped at 1 at each oracle and value of its coins, then
+  averaged. They replace a free state term `g`, which `g = 1` satisfies, so that a statement over it said nothing;
 * `ServiceFloorFS`: `ServiceFloor` over such adversaries, over the oracle, the live coins and the adversary's coins, its
-  bound a function of the adversary;
+  bound a function of the adversary in `ℝ≥0∞`, as `ServiceFloorPerProver`'s;
 * `GainMap`, `LiveFloorUnsteered`: an analysis's gain through each try (relative to the stage's savings, GRIND's `R q`),
   and the live statement at draws whose every committed seed realizes less than the premium `π`, where the draws are
   fixed and the live coins alone bound the floor's event;
@@ -79,27 +84,45 @@ def FSWithin [Fintype J] (Mc : Machine) (S : FSService J N Live) {Ω : Type} (M 
   ∀ r : Ω, ∃ t : QTree S.Q N S.Com, ∀ (H : S.Q → N) (l : Live),
     (Mc.eval M ((H, l), r)).1 = t.eval H ∧ t.calls H + Fintype.card J ≤ T
 
-/-- **An analysis's state term** (gap (6)'s `g`, gap (4)'s `β(H, s)`): per adversary, value of its own coins and
-oracle `H`, what the analysis charges to the state the run holds, such as a collision among its hash inputs or a proof
-layer's failure at that state. No constant bounds a fixed-oracle event for every adversary: one that holds a collision
-of SHA-512 in its commitment tree equivocates an opening at every live coin. So the statements' fixed-oracle premises
-bound their events by a constant plus this term, and their conclusion carries its mean (`coll`). -/
-abbrev StateTerm (Mc : Machine) (S : FSService J N Live) : Type 1 :=
-  ∀ (Ω : Type) [Fintype Ω], FSAdv Mc S Ω → Ω → (S.Q → N) → ℝ
+/-- **The analysis's collision finders under Fiat–Shamir draws, adversary by adversary** (`Finders` at each oracle):
+for each adversary `M` against `S`, each value `r` of its own coins, each oracle `H` and each of `K` breaks (a round's
+binding or zero-knowledge break), the finder the analysis builds from `M` at `r` and `H` to turn that break into a
+collision of the commitments' hash (`Claims.Finder`: its coins, its output, and its SHA-512 calls on each coin). Its
+cost counts everything it computes, the runs of `M` it plays and whatever else it reads off them, such as the error
+table the analysis fixes from a commitment. No constant bounds a fixed-oracle break for every adversary: one that holds
+a collision of SHA-512 in its commitment tree equivocates an opening at every live coin. So the statements'
+fixed-oracle premises bound their breaks by a constant plus weights times these finders' success, and their conclusion
+reads the finders through `ecr/sha-512` (`finderTermFS`). -/
+abbrev FindersFS (Mc : Machine) (S : FSService J N Live) (K : ℕ) : Type 1 :=
+  ∀ (Ω : Type) [Fintype Ω], FSAdv Mc S Ω → Ω → (S.Q → N) → Fin K → Claims.Finder
 
-/-- **The collision term** of an adversary `M`: its state term's mean over the oracle and its own coins. -/
-noncomputable def coll [Fintype N] {Mc : Machine} {S : FSService J N Live} (g : StateTerm Mc S) (Ω : Type)
-    [Fintype Ω] (M : FSAdv Mc S Ω) : ℝ :=
-  (∑ x : (S.Q → N) × Ω, g Ω M x.2 x.1) / (Fintype.card ((S.Q → N) × Ω) : ℝ)
+/-- **An adversary's finder term at one value of its coins and one oracle**: the `ecr/sha-512` bounds of its finders
+for every break (`Claims.ecrBound` at the commitments' hash `sha`), summed; `⊤` when one of them fails the assumption.
+`finderTerm` at the oracle `H`. -/
+noncomputable def finderTermFS {Mc : Machine} {S : FSService J N Live} {K : ℕ} (sha : Claims.Msg → Claims.Msg)
+    (fd : FindersFS Mc S K) (Ω : Type) [Fintype Ω] (M : FSAdv Mc S Ω) (r : Ω) (H : S.Q → N) : ENNReal :=
+  ∑ k, Claims.ecrBound sha (fd Ω M r H k)
+
+/-- **An adversary's error under Fiat–Shamir draws**: at each oracle `H` and value `r` of its coins, the constant `κ`
+and its binding and zero-knowledge finder terms at `(r, H)` (`finderTermFS`) at the weights `βb` and `βz`, capped at
+1, a probability; then averaged over the oracle and its coins. `breakBound`'s form at the oracle, with `Claims.ecrBound`
+the one break term both read: a machine that hard-codes a collision gets about 1 under either draw, and an adversary
+whose finders meet `ecr/sha-512` keeps their expected calls over `2^256` at its weights. -/
+noncomputable def breakBoundFS [Fintype N] {Mc : Machine} {S : FSService J N Live} {K : ℕ}
+    (sha : Claims.Msg → Claims.Msg) (fb fz : FindersFS Mc S K) (κ βb βz : ℝ) (Ω : Type) [Fintype Ω]
+    (M : FSAdv Mc S Ω) : ENNReal :=
+  ∑ x : (S.Q → N) × Ω, (Fintype.card ((S.Q → N) × Ω) : ENNReal)⁻¹ *
+    min 1 (ENNReal.ofReal κ + ENNReal.ofReal βb * finderTermFS sha fb Ω M x.2 x.1 +
+      ENNReal.ofReal βz * finderTermFS sha fz Ω M x.2 x.1)
 
 /-- **The service's adversary floor under Fiat–Shamir draws**: every adversary `M` within `T` oracle calls has its
-accepted runs charged (`max(|M|, cost)`) below `F` with probability at most `b M`, over a uniform oracle (the
-random-oracle model), the live coins and its own coins. `ServiceFloor` with the stage draws taken from the oracle and
-a bound that depends on the adversary. -/
+accepted runs charged (`max(|M|, cost)`) below `F` with probability at most `b Ω M`, a bound of its own in `ℝ≥0∞`, `⊤`
+where there is none, over a uniform oracle (the random-oracle model), the live coins and its own coins.
+`ServiceFloorPerProver` with the stage draws taken from the oracle. -/
 def ServiceFloorFS [Fintype J] [Fintype N] [Fintype Live] (Mc : Machine) (S : FSService J N Live) (T : ℕ) (F : ℝ)
-    (b : ∀ (Ω : Type) [Fintype Ω], FSAdv Mc S Ω → ℝ) : Prop :=
+    (b : ∀ (Ω : Type) [Fintype Ω], FSAdv Mc S Ω → ENNReal) : Prop :=
   ∀ (Ω : Type) [Fintype Ω] (M : FSAdv Mc S Ω), FSWithin Mc S M T →
-    prob (fun ω : ((S.Q → N) × Live) × Ω =>
+    ENNReal.ofReal (prob fun ω : ((S.Q → N) × Live) × Ω =>
       S.accepts (Mc.eval M ω).1 ω.1.2 (Mc.eval M ω).2 = true ∧ Mc.charge M ω < F) ≤ b Ω M
 
 /-- **An analysis's gain map** (GRIND's `R q`, note:compute-accounting/20261018T0700Z-draft-grind): per adversary,
@@ -116,21 +139,25 @@ abbrev GainMap (Mc : Machine) (S : FSService J N Live) : Type 1 :=
 /-- **The live statement at unsteered draws, the premium priced into the floor**: for every adversary within `T`
 oracle calls, every oracle `H` and every value `r` of its own coins, the live coins alone make its run accepted at the
 oracle's draws, charged below `F`, with every committed input's gain below the premium `π`, with probability at most
-`κ + g(M, r, H)`. The oracle is fixed here, and with it the commitment and its draws, so only the live coins (each
-round's check) are random: this is the live analysis at draws chosen by the adversary among those whose every seed
-realizes less than `π`.
+`κ + βb · Σ_k Pr[fb M r H k finds a collision of sha] + βz · Σ_k Pr[fz M r H k …]`: a constant that reads no prover,
+plus the analysis's collision finders for that adversary at their weights (`FindersFS`). The oracle is fixed here, and
+with it the commitment and its draws, so only the live coins (each round's check) are random: this is the live
+analysis at draws chosen by the adversary among those whose every seed realizes less than `π`. It assumes nothing of
+SHA-512; `ecr/sha-512` enters only the floor's bound (`breakBoundFS`).
 
 `F` is where the premium goes. At such draws a run's savings are at most `(1 + κₓ)·U` plus `π` a seed group, `U`
 its unlucky savings, which the checks catch at the zero-luck rate, so the staged instance's `F` is the live floor less
 the premium: `(1 − ε_FS)·W` with `ε_FS = ε_live + (κₓ − 3)/4·ε_luck + π/(units a group)` (GRIND's composition; the
 live analysis charges `κₓ = 3`, its luck `3/4`). -/
-def LiveFloorUnsteered [Fintype J] [Fintype Live] (Mc : Machine) (S : FSService J N Live) (T : ℕ)
-    (gain : GainMap Mc S) (π F κ : ℝ) (g : StateTerm Mc S) : Prop :=
+def LiveFloorUnsteered [Fintype J] [Fintype Live] {K : ℕ} (Mc : Machine) (S : FSService J N Live) (T : ℕ)
+    (gain : GainMap Mc S) (π F κ : ℝ) (sha : Claims.Msg → Claims.Msg) (fb fz : FindersFS Mc S K) (βb βz : ℝ) :
+    Prop :=
   ∀ (Ω : Type) [Fintype Ω] (M : FSAdv Mc S Ω), FSWithin Mc S M T → ∀ (H : S.Q → N) (r : Ω),
     prob (fun l : Live =>
       (∀ j, gain Ω M r H (S.pre (Mc.eval M ((H, l), r)).1 j) < π) ∧
         S.verify (Mc.eval M ((H, l), r)).1 (S.draws H (Mc.eval M ((H, l), r)).1) l (Mc.eval M ((H, l), r)).2 = true ∧
-          Mc.charge M ((H, l), r) < F) ≤ κ + g Ω M r H
+          Mc.charge M ((H, l), r) < F) ≤
+      κ + βb * ∑ k, (fb Ω M r H k).Pr sha + βz * ∑ k, (fz Ω M r H k).Pr sha
 
 end FiatShamir
 
