@@ -457,11 +457,17 @@ def _layer_of(value: str, producer: dict[str, dict[str, Any]]) -> str:
 
 
 # ------------------------------------------------------------------------------------------------------------- the steps
-def gemm_definition(route: dict[str, Any], K: int, N: int) -> str:
+def bound(defn: Any, **statics: Any) -> dict[str, Any]:
+    """A Definition at its statics as a step plan names it: its id, its family's id and the statics (a Definition static by id)."""
+    fn = bind(defn, **statics)
+    return {"definition": fn.id, "base": defn.id, "statics": {k: getattr(v, "id", v) for k, v in statics.items()}}
+
+
+def gemm_definition(route: dict[str, Any], K: int, N: int) -> dict[str, Any]:
     if route["kernel"] == "nosplit":
-        return bind(b1.GemmV2, K=K, N=N, DOT=DOT).id
+        return bound(b1.GemmV2, K=K, N=N, DOT=DOT)
     if route["kernel"] == "splitk":
-        return bind(cublas_bf16.CublasSplitKGemmWord, K=K, N=N, SPLIT_K=int(route["SPLIT_K"]), DOT=DOT).id
+        return bound(cublas_bf16.CublasSplitKGemmWord, K=K, N=N, SPLIT_K=int(route["SPLIT_K"]), DOT=DOT)
     raise Unmodelled(f"cuBLAS route {route}")
 
 
@@ -499,17 +505,17 @@ def fa3_splits(qlens: list[int], klens: list[int], *, NH: int, KVH: int, D: int,
     return {"BM": BM, "BN": BN, "static": static, "NS": [max(min(-(-n // bps), static), 1) for n in nnb]}
 
 
-def attention_rows(qlen: int, klen: int, NS: int, *, NH: int, KVH: int, D: int, BM: int, BN: int) -> list[str]:
+def attention_rows(qlen: int, klen: int, NS: int, *, NH: int, KVH: int, D: int, BM: int, BN: int) -> list[dict[str, Any]]:
     """The Definition of each of a request's query rows in one launch."""
     g = NH // KVH
     if NS == 1:
-        return [bind(F3.AttentionV4, T=T_, NH=NH, KVH=KVH, D=D, BN=BN, DOT=DOT, INV=Fa3InvSum,
-                     MASKED_FROM=attention_vocab.fa3_masked_from(T_, BN, i, BM, g)).id
+        return [bound(F3.AttentionV4, T=T_, NH=NH, KVH=KVH, D=D, BN=BN, DOT=DOT, INV=Fa3InvSum,
+                      MASKED_FROM=attention_vocab.fa3_masked_from(T_, BN, i, BM, g))
                 for i, T_ in enumerate(range(klen - qlen + 1, klen + 1))]
     if qlen != 1:
         raise Unmodelled(f"FA3 splits a prefill chunk of {qlen} rows {NS} ways: a split prefill is not modelled")
-    return [bind(IR.Fa3AttentionSplit, T=klen, NS=NS, NH=NH, KVH=KVH, D=D, BN=BN, DOT=DOT, INV=Fa3InvSum,
-                 MASKED_FROM=attention_vocab.fa3_masked_from(klen, BN, 0, BM, g)).id]
+    return [bound(IR.Fa3AttentionSplit, T=klen, NS=NS, NH=NH, KVH=KVH, D=D, BN=BN, DOT=DOT, INV=Fa3InvSum,
+                  MASKED_FROM=attention_vocab.fa3_masked_from(klen, BN, 0, BM, g))]
 
 
 def step_plans(schedule: list[dict[str, Any]], steps: int, gemms: list[tuple[int, int]], logits_kn: tuple[int, int], heads: tuple[int, int, int],
@@ -520,7 +526,7 @@ def step_plans(schedule: list[dict[str, Any]], steps: int, gemms: list[tuple[int
     prompt = {r["request_id"]: r["prompt_tokens"] for r in schedule}
     plans, missing = [], set()
 
-    def route(M: int, K: int, N: int) -> str | None:
+    def route(M: int, K: int, N: int) -> dict[str, Any] | None:
         r = routes.get(f"{M},{K},{N}")
         if r is None:
             missing.add((M, K, N))
@@ -590,7 +596,7 @@ def build(inductor_dir: str, *, split_graph: str, launch_configs: dict[str, Any]
             kernels[rec["source_sha256"]] = rec
     program = {"calls": wired["calls"], "attention": wired["attention"], "final": final,
                "logits": {"name": LOGITS, "x": final, "w": {"weight": lm_head, "shape": [V, H]}, "gemm": [H, V]},
-               "sampled": {"name": SAMPLED, "definition": bind(b1.TokenSelect, V=V).id},
+               "sampled": {"name": SAMPLED, **bound(b1.TokenSelect, V=V)},
                "kernels": dict(sorted(kernels.items())), "values": wired["values"],
                "dispatch": {"capture_sizes": capture_sizes, "max_num_seqs": max_num_seqs, "split_cap": split_cap, "sms": sms}}
     pdig = hashlib.sha256(json.dumps({"program": program, "steps": plans}, sort_keys=True).encode()).hexdigest()

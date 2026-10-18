@@ -475,6 +475,38 @@ class ServedCompiledSource:
 
     begin_run = stats_reset_step_counters
 
+    @staticmethod
+    def launch_configs() -> dict[str, Any]:
+        """Each Triton kernel module this process loaded, by the sha256 of its text (`inductor_templates.source_sha256`, the
+        wrapper's `async_compile.triton` block): the configs its autotuner compiled (``candidates``) and launched (``executed``).
+        The served Build binds each launch to its one candidate (`acquire.served`)."""
+        import hashlib
+
+        from torch._inductor.codecache import PyCodeCache
+        from torch._inductor.runtime.triton_heuristics import CachingAutotuner
+
+        def cfg(c: Any) -> dict[str, Any]:
+            return {"kwargs": {str(k): v for k, v in (getattr(c, "kwargs", None) or {}).items()},
+                    "num_warps": getattr(c, "num_warps", None), "num_stages": getattr(c, "num_stages", None)}
+
+        out: dict[str, Any] = {}
+        mods = [m for name in ("modules", "modules_no_attr", "cache") for coll in [getattr(PyCodeCache, name, None) or {}]
+                for m in (coll.values() if isinstance(coll, dict) else coll)]
+        for m in {id(m): m for m in mods}.values():
+            path = getattr(m, "__file__", None)
+            tuners = [o for o in vars(m).values() if isinstance(o, CachingAutotuner)]
+            if not path or not tuners:
+                continue
+            with open(path) as f:
+                text = f.read()
+            if "    def call(self, args):" in text:            # a wrapper module: its kernels' own modules carry them
+                continue
+            for t in tuners:
+                out[hashlib.sha256(text.encode()).hexdigest()] = {
+                    "candidates": [cfg(r.config) for r in getattr(t, "compile_results", None) or []],
+                    "executed": [cfg(launcher.config) for launcher in getattr(t, "launchers", None) or []]}
+        return dict(sorted(out.items()))
+
     def summary(self) -> dict[str, Any]:
         fixed = sorted({(k[1], k[2]) for k in self.slots if len(k) == 3})
         return {"short_name": self.short_name, "fault": self.fault, "max_rows": self.max_rows, "slots": len(self.slots),
