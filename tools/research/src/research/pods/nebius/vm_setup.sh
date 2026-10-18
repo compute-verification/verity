@@ -60,6 +60,7 @@ systemd-tmpfiles --create /etc/tmpfiles.d/gpu-lease.conf
 install -d -m 755 /etc/vy
 if nvidia-smi -L 2> /dev/null | grep -q '^GPU ' && [ ! -e /etc/vy/direct-gpus ]; then
   touch /etc/vy/gpu-lease-host
+  install -D -o "$U" -g "$U" -m 755 /usr/local/share/vy/gpu_adopt.py /workspace/verity-guest/bin/gpu_adopt.py
   cat > /etc/systemd/system/vy-gpu-adopt.service <<EOF
 [Unit]
 Description=hold the gpu-lease lease of a GPU a process uses without one, until it exits (gpu_adopt.py)
@@ -67,8 +68,8 @@ After=local-fs.target
 
 [Service]
 User=$U
-ExecStart=/usr/bin/python3 /usr/local/share/vy/gpu_adopt.py loop
-Restart=always
+ExecStart=/usr/bin/python3 /workspace/verity-guest/bin/gpu_adopt.py loop
+Restart=on-failure
 RestartSec=30
 
 [Install]

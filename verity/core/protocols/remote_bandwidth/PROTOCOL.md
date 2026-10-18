@@ -400,10 +400,17 @@ failure in the record. A coin is used once a root follows its append, the append
 drawn), an append after the last window's roots are final (no root can follow it; no coin is drawn), and, at the last
 window's close, an append no root followed (`Session.close`). A block the prover stops holding is released
 (`Session.release`, runs of the store), and a plan received after its release that holds it rejects with `plan`; its
-receipts from earlier passes can still be drawn, so the prover keeps it until its windows are drawn. An append that is
+receipts from earlier passes can still be drawn, so the prover keeps it until its windows are drawn. A block freed
+before its encode lands is *withdrawn*: its values' last read is at or before the step its write would be recorded
+at, so it gets no write, no free and no credit. It was never resident encoded, and a block no step reads while it's
+resident is in no record, so the line its write would be in lists its index in `withdrawn` instead (memory-map/v1's
+per-step list, optional and empty by default, so a map without withdrawals reads as before). A line's writes and
+withdrawals take the store's next fresh indices together, and a withdrawn index is never written. The prover's
+release covers the index and names it withdrawn (`Session.release(runs, withdrawn)`), and the verifier checks it was
+never written: an appended block, inside the release's runs, that no plan received before held. An append that is
 malformed or would take the store past its codec's `max_blocks` rejects with `append`, and a release of a block
-outside the store or released already with `release`. Appends are a session's: the next session over the store starts
-again from \(N\) (§8).
+outside the store or released already, or one naming withdrawn a block that is registered, outside its runs or held
+by a plan, with `release`. Appends are a session's: the next session over the store starts again from \(N\) (§8).
 
 **No block appended after a pass's seed is in that pass's plan.** A pass's seed binds every append received before
 its root (`prev_(t,i)` above), so every block its plan can hold, which must be appended before its root, was
@@ -424,9 +431,18 @@ after that one may hold it (`Params.lifetime`, `LIFETIME`: 60 windows, an hour a
 rejects with `lifetime`. So every post-seed block leaves the credited store within \(L\) windows, and the stacked
 stock the carrier term charges is the input rate times \(L\) (§1, §8). A block the prover keeps longer, a prefix
 cache's for instance, is re-keyed: released, and its payload appended again at the store's next fresh index, which
-draws a fresh coin and so gives it a fresh bound key (§3), so its encoding is computed anew. A re-key is only at the
-cap (§8, "The memory map's choices"), so its time is the map's, not a choice made after the coin. The record names
-\(L\) (`lifetime`), and the remote session sends it with the session, so the prover re-keys in time.
+draws a fresh coin and so gives it a fresh bound key (§3), so its encoding is computed anew. A re-key's free is the
+one exception to a free at its values' last read (§8, "The pass and its step"). The re-key's step frees the old
+index, and the new index is written when its encode lands (deferred residency, above), so the value is uncredited in
+between, and withdrawn if its last read comes first. A re-key is only at the cap (§8, "The memory map's choices"),
+so its time is the map's, not a choice made after the coin. Under deferred residency a block appended in window
+\(w\), the one its append joined, is resident from \(w\) or \(w + 1\). Its re-key, recorded at a step before the
+first pass of window \(w + L\), therefore falls at age \(L - 1\) at the latest. At \(L = 1\) that is the window it was
+appended in, before it may be resident, and a block whose encode lands after the boundary is never credited. So a
+session that defers residency has \(L \ge 2\) (`Params.deferred`; the verifier refuses one at \(L = 1\)). Counting
+the lifetime from residency instead of from the append would allow \(L = 1\); that is a later decision, and it would
+change the Lean port's lifetime check and the property `LifetimeCapped`. The record names \(L\) (`lifetime`), and
+the remote session sends it with the session, so the prover re-keys in time.
 
 **Fiat–Shamir, and what grinding buys.** A seed after the first depends on the prover's own root, so the prover can
 grind: re-salting a leaf gives a new root and a new next seed, at the cost of a leaf and its path and no read. A
@@ -866,7 +882,15 @@ and each window's, from it plus the node's capacities.
     verifier here checks only that each pass names a step above the last.
   - *The timing.* The step says which reads a pass stands for, not when serving made them: nothing yet shows that the
     pass at \(s\) ran while serving executed \(s\). A certifier that stamps each step's record and each pass's root
-    on one clock would.
+    on one clock would. A prover may run serving ahead of its passes (`Ahead` in `benchmarks/remote_session/prover.py`),
+    at most \(k\) steps past the pass in flight, \(k\) its own choice: each pass covers the newest step serving has
+    handed, the steps serving ran past in between have no pass and are credited nothing, and the pass at \(s\) reads
+    the store resident at \(s\) while serving executes later steps. That store must still be in place as the pass
+    reads it, so serving writes into memory whose block was released at step \(r\) only once no pass yet to read is
+    at a step up to \(r\) (the free fence). A write that skips the fence lands over a block a pass has yet to read,
+    and a drawn receipt of it, of other bytes than the opening's block, rejects (§6). The record is memory-map/v1's
+    as before, each pass still starts after the root before it and sends its root once its receipts are made (§5),
+    and the verifier sees the same messages, so what it accepts is unchanged.
 - **The requirement's link.** What the audit credits is the node's reads of its store. Counting them as the served
   circuit's reads needs A1's link (`StoreMatches`, `PlanMatches`, note:20261017T1847Z-draft-a1-requirement), and three
   of its gaps are on the audit's side. `ledger` takes the link as `requirement`, a `RequirementLink`: whether its
@@ -915,10 +939,13 @@ and each window's, from it plus the node's capacities.
        residency records the write at the step before the block's first encoded read), appended once complete and
        before any plan holds it (§4 checks the latter);
     2. the appends are in the map's order, each at the index the verifier gave it (the store's next fresh one), and
-       the map has no write the session doesn't append and no append it doesn't write, so there are no dummy appends;
+       the map has no write the session doesn't append and no appended block it neither writes nor withdraws, a
+       withdrawn one being a block it completed whose values' last read came at or before its encode landed (§4), so
+       there are no dummy appends;
     3. a re-key (a release and the payload appended again, §4's lifetime cap) is the map's, at the cap, of the same
-       payload, so \(d_j\) is unchanged and only its index, its coin and its key are fresh (KB-6);
-    4. every free is at its values' last read, of a registered block or a written one (above);
+       payload, so \(d_j\) is unchanged and only its index, its coin and its key are fresh (KB-6), its free at the
+       re-key's step and its new index's write when that encode lands;
+    4. every free but a re-key's is at its values' last read, of a registered block or a written one (above);
     5. the map is the one the plan unit's plans are of (`PlanMatches` reads the same map).
 
     The unit's public input is the record's `appends`, the chain \(a\) over the session's appends (§4, §7), together
@@ -948,7 +975,8 @@ and each window's, from it plus the node's capacities.
     starting store.
   - *The device side.* A KV page's index is the store's next fresh one, not \(\text{slot} \cdot \text{LAYERS} +
     \text{layer}\): serving records each block it completes, once the device has encoded it (§4's deferred
-    residency), with its slot, the index it gave it and its \(d_j\), and each slot it frees, step by step
+    residency), with its slot, the index it gave it and its \(d_j\), each slot it frees, and each appended block it
+    withdrew, freed before its encode landed, step by step
     (memory-map/v1, the program's I3, `memory_map.py`; a write releases the block its slot held, and vLLM's `kv_free`
     is a free, recorded at its values' last read, so the store's filler plan leaves the released blocks out), and the
     prover's audit side turns the record into appends, releases and plan changes (`Replay`; deferred, a step's
