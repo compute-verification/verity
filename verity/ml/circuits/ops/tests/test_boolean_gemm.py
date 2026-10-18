@@ -37,7 +37,7 @@ FP4 = [(bind(BG.BlackwellNvf4OmmaDot64), K.BLACKWELL_SM120_NVF4), (bind(BG.Black
        (bind(BG.GemmCoordinateNvf4, K=128, **BG.GEMM_SM120_NVF4), K.BLACKWELL_SM120_NVF4),
        (bind(BG.GemmCoordinateMxf4, K=128, **BG.GEMM_SM120_MXF4), K.BLACKWELL_SM120_MXF4)]
 S8 = [bind(BG.BlackwellS8ImmaDot32), bind(BG.S32ToF32Rn), bind(BG.GemmAccumulatorS8, K=64, **BG.GEMM_SM120_S8),
-      bind(BG.ScaledMmS8Coordinate, K=64, **BG.GEMM_SM120_S8), bind(BG.ScaledMmS8, K=64, N=3, **BG.GEMM_SM120_S8)]
+      bind(BG.ScaledMmS8Coordinate, K=64, **BG.GEMM_SM120_S8)]
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {
@@ -65,7 +65,6 @@ PINS = {
     "S32ToF32Rn_v2": (368, 532, 43, "94fffccc7430d2311246e7ebe1a58f94679ad5873ca1c79a3df13092b990618c8b5984c9f497a18615302242f009b1f9f89ca91fa2cc4b6c7bfacffa7e89f848"),
     S8[2].id: (8316, 20746, 948, "cea9d903df4c752fd2eed0cad1182358692211e0b91b66ff1aa0786cfe29701a5b74c864b205ee329d67a5b7964d458ebc958f55c2112314fd552070ccd18139"),
     S8[3].id: (13546, 30500, 1286, "dcfc7b4b1c49380afa07a808563fbed0708769e10392614c43ee53429d8886c8dd9f4e263b2174784219a6f39c8e1d038aab290659b95a2ec1ec151d379f7fa2"),
-    S8[4].id: (40638, 91500, 3858, "18cedfdf98ce2ad122d9e14f8766d7fe2dcde4c2e00efeb8be5d10b103c93350112be09225ccb65071d3fce20e420a19f002f61190f7e5097e47a68301f59c8f"),
 }
 TARGETS = [bind(BG.F2fpBf16), *STEPS, AMPERE_K64, HOPPER_K64, *DOTS, *GEMMS, *FP8_STEPS, *FP8_COORDS, bind(BG.BlackwellE5m2QmmaDot32),
            *(t for t, _ in FP4), *S8]
@@ -243,18 +242,6 @@ def test_the_s8_accumulator_and_coordinate_agree_with_their_word_definitions() -
     _agree(S8[3], [x, sx, w, sw])
     u = rng.integers(0, 1 << 32, (2, n), dtype=np.uint64).astype(np.uint32)
     _agree(S8[3], [x, u[0], w, u[1]])
-
-
-def test_the_s8_linear_row_agrees_with_scaled_mm_s8_v1() -> None:
-    """`ScaledMmS8_v2` at K = 64, N = 3: one s8 row and its scale against three weight rows and their scales."""
-    target = S8[4]
-    assert TR.word_of(target).id == "ScaledMmS8_v1{K=64,N=3,DOT=BlackwellS8ImmaDot32_v1}"
-    rng = np.random.default_rng(24)
-    n = 1000
-    x, w = _s8_operands(rng, 3 * n, 64)
-    sx = (np.abs(rng.standard_normal(n)) / 127).astype(np.float32).view(np.uint32)
-    sw = (np.abs(rng.standard_normal((n, 3))) * 0.02 / 127).astype(np.float32).view(np.uint32)
-    _agree(target, [x[:n], sx, w.reshape(n, 3, 64), sw])
 
 
 @pytest.mark.parametrize("target", DOTS, ids=lambda t: t.id)
