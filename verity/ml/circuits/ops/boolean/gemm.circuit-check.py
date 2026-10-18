@@ -7,7 +7,8 @@ from typing import Any
 
 def _boolean_roots() -> list[Any]:
     """The Boolean BF16 coordinate and dot on both steps at K = 64, the GEMM at K = 32, N = 3, the E4M3 coordinate on the three
-    FP8 steps at K = 64, the NVFP4 and MXFP4 coordinates at K = 128, and the s8 accumulator and scaled coordinate at K = 64."""
+    FP8 steps at K = 64, the NVFP4 and MXFP4 coordinates at K = 128, the s8 accumulator and scaled coordinate at K = 64, and the
+    s8 linear row at K = 64, N = 3."""
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.ops.boolean import gemm as BG
 
@@ -25,4 +26,5 @@ def _boolean_roots() -> list[Any]:
         bind(BG.GemmCoordinateMxf4, K=128, **BG.GEMM_SM120_MXF4),
         bind(BG.GemmAccumulatorS8, K=64, **BG.GEMM_SM120_S8),
         bind(BG.ScaledMmS8Coordinate, K=64, **BG.GEMM_SM120_S8),
+        bind(BG.ScaledMmS8, K=64, N=3, **BG.GEMM_SM120_S8),
     ]
