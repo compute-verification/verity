@@ -5944,6 +5944,31 @@
     "Properties.Pouw.Window.kPrimeServed"
    ]
   },
+  "PouwWindow.Entry": {
+   "digest": "01bfd3ae71f502bafc65b71f68ad948c63811f760e23455e27e8778d3737d802",
+   "definitions": {
+    "PouwWindow.Side": "b8ccd1aee33d23eb94997c793205854007dccf6fa59518f40ccb90f5c6ac9ab0",
+    "PouwWindow.Side.a": "70b53b96fa3ae6fdf412a593b7cf0b618caf9ac5817ce02a276d45099fda2346",
+    "PouwWindow.Side.b": "cbf82ba64e59444f00b119b94710558113f6b343d4078c21bad7308d6d96ca6d",
+    "PouwWindow.Side.casesOn": "6d18fcf2cff9303b3508beace52816f1f4afd13dc7b32a7a2c92261cda561f7b",
+    "PouwWindow.Side.depth": "f370913d3d11fecc9be181ed65c44ef73e9d3added0b5acf42d8bda09f182027",
+    "PouwWindow.Side.rec": "ee36f194ab3560e9fe44c4ac3bae48edf78df92d384bba19c4e42a3e0d5e6bbf",
+    "PouwWindow.instReprSide.repr.match_1": "b6018b91f3311d231eb57594db5c814e3385528fbb85b6d5cf8b12bb31f84637",
+    "PouwWindow.rowStep": "06d84a8e805f91005dd40f3931b8998c6ea06b367980e680f979bc911f9e7768",
+    "PouwWindow.tBits": "df3187c8e81bf66eaf9fc5824054c992a4fc3aaec5d1cf0913455527bfb634aa",
+    "PouwWindow.tile": "5c0cded335ed1e1d2c01fd2b5ba4dc734bda433fc990171d92bc982881c7e508"
+   },
+   "guarantees": [
+    "Properties.Pouw.Check.acceptMeans",
+    "Properties.Pouw.Check.acceptedDraw",
+    "Properties.Pouw.Check.acceptedInRange",
+    "Properties.Pouw.Check.acceptedIsTheService's",
+    "Properties.Pouw.Check.commitmentKeepsBytes",
+    "Properties.Pouw.Check.digestIsOneStage's",
+    "Properties.Pouw.Check.neverNull",
+    "Properties.Pouw.Check.undecidedOnlyFromService"
+   ]
+  },
   "PouwWindow.Grid": {
    "digest": "fc2523eb0a52db22ee2a906a1ec21bdc496a46176786722506ccbda039e5d090",
    "definitions": {
