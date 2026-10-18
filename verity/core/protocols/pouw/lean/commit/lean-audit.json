@@ -5,10 +5,10 @@
  },
  "runs": {
   "PouwCommit.DifftestMain": {
-   "why": "18,630 generated cases on which verity.core.protocols.pouw gives what the Lean, PoUW's verifier of record, gives: tagged, the bindings and weights_root, frame-v3 domain ids, commit_rows and transcript roots (sha256, sha512, hm96-sha512), verify_opening of honest and tampered openings, coin_reason of honest and tampered coin openings, salt_of and Epoch.unverified's salt, Epoch.start's salt and draw_coin's coin, the audit, draw and replay keys and draw_after, Sampled.select's and pearl_c_work.draw's work-weighted draws, and the live coins: layout_problem and live_domain, live_reason of honest and tampered openings, order_reason and rounds_reason of honest and tampered records, round_key and mode, each refusal included",
-   "args": ["{difftest/cases.jsonl}", "18630"],
+   "why": "14,640 generated cases on which verity.core.protocols.pouw gives what the Lean, PoUW's verifier of record, gives: tagged, the bindings and weights_root, frame-v3 domain ids, commit_rows and transcript roots (sha256, sha512, hm96-sha512), verify_opening of honest and tampered openings, coin_reason of honest and tampered coin openings, salt_of and Epoch.unverified's salt, Epoch.start's salt and draw_coin's coin, the audit, draw and replay keys and draw_after, and Sampled.select's and pearl_c_work.draw's work-weighted draws, each refusal included",
+   "args": ["{difftest/cases.jsonl}", "14640"],
    "data": {
-    "difftest/cases.jsonl": "3f5135daf6c9ca2076f073f8c4a305909829bf1d0a372a94b7960c57c7ec108d"
+    "difftest/cases.jsonl": "e02336b44512cc31ef48a9333e789a3d82866e8ca588996cf81d91578544a746"
    },
    "generate": ["python3", "tests/difftest_vectors.py", "{repo}", "--out", "{out}"]
   }

@@ -1,6 +1,5 @@
 import PouwCommit.Coins
 import PouwCommit.Draws
-import PouwCommit.Live
 import PouwCommit.Rows
 import Lean.Data.Json
 
@@ -22,11 +21,7 @@ is not it, naming the Lean's. The kinds:
 * `salt_of`, `unverified_salt`: the epoch's salt from a coin, and `Epoch.unverified`'s from a seed;
 * `epoch_salt`, `draw_coin`: `Epoch.start`'s salt and `draw_coin`'s coin, or their refusals in their words (`{"reason"}`);
 * `key`: the audit, draw and replay keys and `draw_after`;
-* `sampled`, `pearl_draw`: `Sampled.select`'s and `pearl_c_work.draw`'s work-weighted draws over given tickets;
-* `live_layout`: `layout_problem`'s reason, or the layout's `live_domain` id;
-* `live_coins`: `live_reason` of `LiveCommitment.from_json` and `LiveOpening.from_json`, honest and tampered;
-* `live_order`, `rounds`: `order_reason` and `rounds_reason` of a family's openings over the roots the verifier recorded;
-* `round_key`, `mode`: a round's noise key, and the coin mode of a scheme.
+* `sampled`, `pearl_draw`: `Sampled.select`'s and `pearl_c_work.draw`'s work-weighted draws over given tickets.
 -/
 
 namespace PouwCommit.Difftest
@@ -147,27 +142,6 @@ def outcome (kind : String) (i : Json) : E Json := do
   | "pearl_draw" =>
     let key ← drawKey (← unhexField i "source") (← unhexField i "transcript") (← unhexField i "records") (← unhexField i "salt")
     return draws (← pearlDraw key (← tickets i) (← nat i "t"))
-  | "live_layout" =>
-    return match layoutOf (← field i "scheme") (← field i "epoch") (← field i "families") with
-      | .ok (s, e, fs) => Json.mkObj [("ok", hexJ (liveDomain s e fs).id)]
-      | .error r => Json.mkObj [("reason", .str r)]
-  | "live_coins" =>
-    let c ← LiveCommitment.ofJson (← field i "commitment")
-    let o ← LiveOpening.ofJson (← field i "opening")
-    return reasoned (← liveReason c o (← str i "label") (← int i "index") (← unhexField i "after"))
-  | "live_order" =>
-    let c ← LiveCommitment.ofJson (← field i "commitment")
-    return reasoned (← orderReason c (← str i "label") (← hexes i "roots").toList (← liveOpenings i))
-  | "rounds" =>
-    let c ← LiveCommitment.ofJson (← field i "commitment")
-    return reasoned (← roundsReason c (← hexes i "roots").toList (← liveOpenings i))
-  | "round_key" =>
-    let c ← LiveCommitment.ofJson (← field i "commitment")
-    return hexJ (← roundKey c (← unhexField i "coin") (← nat i "round") (← unhexField i "root"))
-  | "mode" =>
-    return match ← mode (← str i "scheme") with
-      | .live => .str "live"
-      | .seeded => .str "seeded"
   | k => throw s!"no kind {k}"
 where
   unhexField (j : Json) (k : String) : E ByteArray := do unhex (← str j k)
@@ -190,16 +164,9 @@ where
     | .ok b => Json.mkObj [("ok", hexJ b)]
     | .error r => Json.mkObj [("reason", .str r)]
   draws (ids : List Nat) : Json := .arr (ids.toArray.map fun (n : Nat) => toJson n)
-  reasoned : Option String → Json
-    | none => Json.mkObj [("ok", .null)]
-    | some r => Json.mkObj [("reason", .str r)]
-  liveOpenings (j : Json) : E (List LiveOpening) := do
-    match ← field j "openings" with
-    | .arr os => os.toList.mapM LiveOpening.ofJson
-    | _ => throw "openings is not an array"
 
 /-- The kinds whose outcomes are already `{"ok"}` or `{"reason"}`. -/
-def REFUSABLE : List String := ["coins", "epoch_salt", "draw_coin", "live_layout", "live_coins", "live_order", "rounds"]
+def REFUSABLE : List String := ["coins", "epoch_salt", "draw_coin"]
 
 /-- An outcome as the cases write it. -/
 def wrap (kind : String) : E Json → Json

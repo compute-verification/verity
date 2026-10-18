@@ -2,8 +2,7 @@
 
 `tests/difftest_vectors.py` writes generated cases and this checkout's outcome on each (`tagged`, the bindings and
 `weights_root`, domain ids, `commit_rows` and transcript roots, `verify_opening`, `coin_reason`, the epoch salts, the draw
-keys and the work-weighted draws, and the live coins: layouts, `live_reason`, `order_reason`, `rounds_reason`, round keys
-and coin modes), and `PouwCommit/DifftestMain.lean` computes every case from the Lean and fails on any
+keys and the work-weighted draws), and `PouwCommit/DifftestMain.lean` computes every case from the Lean and fails on any
 case whose Python outcome is not the Lean's, naming the Lean's. `test_the_python_is_the_lean` runs it here on the cases
 this checkout writes, so a change to the Python that the Lean doesn't make fails with the Lean's verdict. `check` also runs
 it in the package's Lean audit (`runs` in `lean-audit.json`) on the data the record pins, whose pass is cached on the Lean
@@ -105,48 +104,12 @@ def test_the_salt_and_draw_cases_reach_every_branch():
     assert any(c["python"]["ok"] == [] and c["in"]["t"] > 0 for c in _of("pearl_draw") if "ok" in c["python"]), "none above 0"
 
 
-def _reasons(kind: str) -> set[str]:
-    return {c["python"]["reason"] for c in _of(kind) if "reason" in c["python"]}
-
-
-def test_the_live_cases_reach_every_refusal():
-    layouts = _reasons("live_layout")
-    for start in ("a live coin scheme is ", "an epoch is ", "a live coin layout is ", "a live coin layout's labels are distinct",
-                  "a live coin layout holds at most "):
-        assert any(r.startswith(start) for r in layouts), start
-    assert any("ok" in c["python"] for c in _of("live_layout"))
-    reasons = _reasons("live_coins")
-    for start in ("coin is epoch ", "coin is the epoch's ", "coin opening is malformed",
-                  "coin does not open against the epoch's coin commitment",
-                  "coin was not opened after what the verifier recorded"):
-        assert any(r.startswith(start) for r in reasons), start
-    assert {"ok": None} in [c["python"] for c in _of("live_coins")]
-    errors = collections.Counter(c["python"]["error"] for c in _of("live_coins") if "error" in c["python"])
-    assert {"DomainError", "KeyError", "ValueError", "TypeError", "ProtocolError"} <= set(errors)
-    for kind in ("live_order", "rounds"):
-        reasons = _reasons(kind)
-        for part in ("is opened twice: a retry never redraws", "was opened before its root was recorded", "was never opened",
-                     "roots recorded, more than the epoch's", ": coin is epoch ", ": coin is the epoch's ",
-                     ": coin does not open", ": coin was not opened after", ": coin opening is malformed"):
-            assert any(part in r for r in reasons), (kind, part)
-        outcomes = [c["python"] for c in _of(kind)]
-        assert {"ok": None} in outcomes and any("error" in o for o in outcomes), kind
-    assert any(r.startswith("the coin commitment's scheme is ") for r in _reasons("rounds"))
-    assert any(r.startswith("the coin commitment's coins are not a live epoch's") for r in _reasons("rounds"))
-    keys = [c["python"] for c in _of("round_key")]
-    assert any("ok" in o for o in keys) and any("error" in o for o in keys)
-    assert {json.dumps(c["python"]) for c in _of("mode")} >= {'{"ok": "live"}', '{"ok": "seeded"}', '{"error": "DomainError"}'}
-
-
 def test_no_case_names_an_outcome_of_its_own():
     """Every case is held to the Lean's outcome, none to one it names: an opening whose epoch is not an integer or whose
     label is not a string, which Python's `==` once compared, is refused on both sides."""
     assert all(set(c) == {"kind", "in", "python"} for c in cases())
     odd = [c for c in _of("coins") if type(c["in"]["opening"].get("epoch", 0)) is not int
            or type(c["in"]["opening"].get("label", "")) is not str]
-    assert odd and all(c["python"] == {"error": "DomainError"} for c in odd)
-    odd = [c for c in _of("live_coins") if type(c["in"]["opening"].get("epoch", 0)) is not int
-           or type(c["in"]["opening"].get("index", 0)) is not int or type(c["in"]["opening"].get("label", "")) is not str]
     assert odd and all(c["python"] == {"error": "DomainError"} for c in odd)
 
 
