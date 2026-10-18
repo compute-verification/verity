@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# commit_gpu on one leased sm_120 GPU (cwd = the source tree's root). Outside the lease: builds (by default the fastest
-# measured form; BUILDS names others, a nomask tag a timing-only build without M_key y, a merged tag one without h's
+# commit_gpu on one leased GPU, sm_120 unless GENCODE names another (cwd = the source tree's root). Outside the lease:
+# builds (by default the fastest measured form; BUILDS names others, a nomask tag a timing-only build without M_key y, a merged tag one without h's
 # two compressions, the timing of a one-hash leaf format, and a quad tag one with a 4-ary tree) and reference.py's cases on
 # the CPU. Under one lease: the selftest, each build's bit-exactness check against the reference (a build is timed only if
 # its check passed), the raw
@@ -14,11 +14,12 @@
 #     -- bash benchmarks/pouw/commit_gpu/gpu.sh
 # CHECK=quick|full (default full); REPS (default 9); BUILDS (default a0r0l; tags a<SHA_ADD>r<SHA_ROT>[l][nomask][merged][quad], l for
 # SHA_ROLL=1);
-# SWEEP and SEG_SWEEP (int8 values a leaf); TILE_M, TILE_R, TILESEG_R.
+# SWEEP and SEG_SWEEP (int8 values a leaf); TILE_M, TILE_R, TILESEG_R; GENCODE (default arch=compute_120a,code=sm_120a; H200:
+# arch=compute_90,code=sm_90); PY, the Python that runs reference.py (default python3).
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
-export D=benchmarks/pouw/commit_gpu PY=python3 PYTHONPATH=.
+export D=benchmarks/pouw/commit_gpu PY=${PY:-python3} PYTHONPATH=. GENCODE=${GENCODE:-arch=compute_120a,code=sm_120a}
 W=$(mktemp -d /dev/shm/commit-gpu.XXXXXX)
 export W
 trap 'rm -rf "$W"' EXIT
@@ -32,7 +33,7 @@ build() {   # build TAG: a<SHA_ADD>r<SHA_ROT>[l][nomask][merged][quad] (l: SHA_R
   case $t in *nomask*) flags="$flags -DCOMMIT_GPU_DIAG_NOMASK" ;; esac
   case $t in *merged*) flags="$flags -DCOMMIT_GPU_DIAG_MERGED" ;; esac
   case $t in *quad*) flags="$flags -DCOMMIT_GPU_DIAG_QUAD" ;; esac
-  nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -Xptxas -v -DSHA_ADD="$add" -DSHA_ROT="$rot" $flags \
+  nvcc -O3 -std=c++17 -gencode "$GENCODE" -Xptxas -v -DSHA_ADD="$add" -DSHA_ROT="$rot" $flags \
     -o "$W/commit_gpu_$t" $D/commit_gpu.cu -lcublasLt -lnvidia-ml > "$O/build-$t.log" 2>&1
   echo "build $t rc $?" >> "$O/rc.txt"
 }
