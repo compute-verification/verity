@@ -914,7 +914,10 @@ class Driver:
             checked.append(i)
             v = self.verdict(m.commit, main, drive)
             if v.state == "failed":
-                self.failed(drive, m, chain[: i + 1], v)
+                # a train above a failed one holds its failure, and runs again once `next` is rebuilt (18 Oct 10:30Z: acting
+                # on 5c00b3 too ejected #2478 and #2486 beside c93469's #2484)
+                if not failed_at:
+                    self.failed(drive, m, chain[: i + 1], v)
                 failed_at.add(i)
             elif v.state == "running":
                 q.hold = i + 1

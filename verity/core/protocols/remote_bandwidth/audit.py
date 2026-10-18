@@ -33,9 +33,11 @@ many reads of a node's registered blocks the node made in each window, from rece
    append's coin `c_a`, which the verifier draws and sends in reply to the append (`codec.encode(..., bound=True,
    coin=c_a)`, `Store.encode`), so no choice the prover made before committing them depends on their encodings;
    every coin is drawn once, and an append no root follows, or one sent again, rejects the session (`coin`);
-   a block released (`Session.release`) is in no later plan; and an appended block is in no plan of a window L or more
-   after the window it joined (`Params.lifetime`): one kept longer is released and appended again, under a fresh index
-   and a fresh coin, so a fresh bound key.
+   a block released (`Session.release`) is in no later plan, and one the release names withdrawn (released before its
+   encode landed, so never written) was in no earlier plan either; and an appended block is in no plan of a window L
+   or more after the window it joined (`Params.lifetime`): one kept longer is released and appended again, under a
+   fresh index and a fresh coin, so a fresh bound key, and a session that defers residency to the encode
+   (`Params.deferred`) has L ≥ 2.
 5. Deadline.  Window t's roots must all arrive by `D_t = b_t + A`, where `b_t` is the verifier's clock when it sent the
    boundary message and `A` the allowance (`Params.deadline_ns`: the message's trip down, the pass in flight, its root's
    reduction and its trip up, `timing.deadline`).  A late root, one out of order, one with no step or a step not above
@@ -130,7 +132,10 @@ class Params:
     stated window), the fewest passes a window may certify, the stated window `T` (`window_ns`, 60 s by default: no
     boundary message leaves sooner after its window's challenge), the store's codec, receipt kind, whether its
     receipts bind z, its block layout and its sketch rows (None for the kind's default, `receipts.sketch_rows`), the
-    registration's, and the lifetime cap L on an appended block, in windows (`LIFETIME`)."""
+    registration's, the lifetime cap L on an appended block, in windows (`LIFETIME`), and whether the prover defers an
+    appended block's residency to its encode (`deferred`, memory-map/v1's deferred residency), which needs L ≥ 2: a
+    block appended in window w is resident from w or w + 1, so its re-key falls at age L − 1, and at L = 1 that is
+    before it may be resident."""
 
     blocks: int
     deadline_ns: int
@@ -145,11 +150,18 @@ class Params:
     layout: str = receipts.LAYOUT
     rows: int | None = None
     lifetime: int = LIFETIME
+    deferred: bool = False
 
     def __post_init__(self) -> None:
         for name in ("blocks", "deadline_ns", "windows", "samples", "min_passes", "window_ns", "lifetime"):
             if type(getattr(self, name)) is not int or getattr(self, name) < 1:
                 raise ValueError(f"{name} is a positive integer")
+        if type(self.deferred) is not bool:
+            raise ValueError("deferred is a bool")
+        if self.deferred and self.lifetime < 2:
+            raise ValueError(f"a session that defers residency has a lifetime of at least 2 windows, not "
+                             f"{self.lifetime}: a block appended in window w is resident from w or w + 1, so its "
+                             "re-key falls at age L − 1, which at L = 1 is before it may be resident")
         if not 0 < self.delta < 1:
             raise ValueError("0 < delta < 1")
         if type(self.codec) is not Codec:
@@ -670,6 +682,29 @@ class _Window:
     verdict: Verdict | None = None
 
 
+def _merged(spans: Sequence[tuple[int, int]]) -> list[tuple[int, int]]:
+    """Half-open spans `[a, b)` as the fewest disjoint ones covering the same blocks, in order."""
+    out: list[tuple[int, int]] = []
+    for a, b in sorted(spans):
+        if out and a <= out[-1][1]:
+            out[-1] = (out[-1][0], max(out[-1][1], b))
+        else:
+            out.append((a, b))
+    return out
+
+
+def _hits(spans: list[tuple[int, int]], first: int, count: int) -> bool:
+    """Whether merged `spans` hold a block of `first … first + count − 1`."""
+    r = bisect.bisect_right(spans, (first, math.inf))
+    return (r > 0 and spans[r - 1][1] > first) or (r < len(spans) and spans[r][0] < first + count)
+
+
+def _within(spans: list[tuple[int, int]], first: int, count: int) -> bool:
+    """Whether merged `spans` hold every block of `first … first + count − 1`."""
+    r = bisect.bisect_right(spans, (first, math.inf))
+    return r > 0 and spans[r - 1][1] >= first + count
+
+
 class Session:
     """The verifier's side of one session, driven by the coins it releases and the roots it receives, on its own clock.
     `challenger` holds the session's coins (`coins.Challenger`), committed before the session.  `not_before_ns`, which
@@ -706,6 +741,7 @@ class Session:
         self._head: bytes | None = None
         self._joined: list[int] = []
         self._gone: list[tuple[int, int]] = []
+        self._planned: list[tuple[int, int]] = []
         self._plan = Plan.whole(registration.blocks)
         self._step = -1
 
@@ -781,29 +817,29 @@ class Session:
         self.extent += count
         return first, coin
 
-    def release(self, runs: Sequence[tuple[int, int]]) -> Verdict | None:
+    def release(self, runs: Sequence[tuple[int, int]], withdrawn: Sequence[tuple[int, int]] = ()) -> Verdict | None:
         """Blocks the prover stops holding, `runs` (first, count) of the store in a plan's canonical form, none
-        released before: no plan received after this holds one.  Its rejection, `release`, otherwise."""
+        released before: no plan received after this holds one.  `withdrawn`, empty or in the same form, names the
+        appended blocks among them that the prover withdrew (memory-map/v1's `withdrawn`: released before their encode
+        landed, so never written), none of which a plan received before this held.  Its rejection, `release`,
+        otherwise."""
         self._live()
         try:
             gone = Plan(tuple(runs), self.extent).runs
+            out = Plan(tuple(withdrawn), self.extent).runs if len(withdrawn) else ()
         except (TypeError, ValueError):
             return self._fail(self.filling, "release")
         if any(self._released(f, c) for f, c in gone):
             return self._fail(self.filling, "release")
-        merged: list[tuple[int, int]] = []
-        for a, b in sorted(self._gone + [(f, f + c) for f, c in gone]):
-            if merged and merged[-1][1] == a:
-                merged[-1] = (merged[-1][0], b)
-            else:
-                merged.append((a, b))
-        self._gone = merged
+        spans = _merged([(f, f + c) for f, c in gone])
+        if any(f < self.params.blocks or not _within(spans, f, c) or _hits(self._planned, f, c) for f, c in out):
+            return self._fail(self.filling, "release")
+        self._gone = _merged(self._gone + spans)
         self.released += sum(c for _, c in gone)
         return None
 
     def _released(self, first: int, count: int) -> bool:
-        r = bisect.bisect_right(self._gone, (first, math.inf))
-        return (r > 0 and self._gone[r - 1][1] > first) or (r < len(self._gone) and self._gone[r][0] < first + count)
+        return _hits(self._gone, first, count)
 
     def _stale_below(self, t: int) -> int:
         """The store index below which every appended block joined a window `Params.lifetime` or more before `t`:
@@ -856,6 +892,10 @@ class Session:
         self._joined.extend([t] * (len(self._appends) - len(self._joined)))
         if (below := self._stale_below(t)) > N and any(f < below and f + c > N for f, c in plan.runs):
             return self._fail(t, "lifetime")
+        if extent > N:
+            held = [(max(f, N), f + c) for f, c in (change[0] if change is not None else plan.runs) if f + c > N]
+            if held:
+                self._planned = _merged(self._planned + held)
         self.windows[t].roots.append(root)
         self.windows[t].plans.append(plan)
         self.windows[t].post.append(0 if extent == N else sum(max(0, f + c - max(f, N)) for f, c in plan.runs))

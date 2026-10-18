@@ -49,6 +49,25 @@ def test_research_run_pool_wraps_the_command_in_a_named_pool_that_the_launcher_a
     assert "--pool" not in capsys.readouterr().err
 
 
+def test_a_pool_run_takes_no_launch_time_memory_reservation_beside_its_slots(tmp_path, monkeypatch, capsys):
+    """INF-61 (cpu-3, 18 Oct): a `--pool` run's --mem-gb reserved at launch and held that through its wait in the slot line, beside
+    the slot's own reservation once it ran; two waiting runs held 128 GB and admission sat at -89 GB. The slot's mem= admits it."""
+    from research import remote
+    from research.cli import main
+
+    seen = []
+
+    def launch(**kw):
+        seen.append(kw["mem_gb"])
+        return {"phase": "launched", "pod_id": "p1", "remote_run_dir": "/r", "launch": {"runner_pid": 1}}
+
+    monkeypatch.setattr(remote, "launch", launch)
+    argv = ["run", "--runs-dir", str(tmp_path / "runs"), "--on", "m", "--project", "p", "--no-custody-r2", "--source", ".",
+            "--pool", "proofs", "--as", "proofs"]
+    assert main([*argv, "--mem-gb", "96", "--", "true"]) == 0 and main([*argv, "--", "true"]) == 0
+    assert seen == [None, None] and "--mem-gb 96 is dropped" in capsys.readouterr().err
+
+
 def _run(runs, rid, state, command, *, pgid=None, runner=None):
     d = runs / rid
     d.mkdir(parents=True)

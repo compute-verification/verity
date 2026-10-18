@@ -1,6 +1,7 @@
 import Mathlib.Data.Int.ModEq
 import Mathlib.Data.Nat.Prime.Defs
 import Definitions.Accounting.Gates
+import Definitions.Core.Prims
 import Models.Accounting.Assumptions.EncodeChain
 
 /-!
@@ -33,7 +34,8 @@ on, from the most general to the one 6a's carrier lemma takes as its `q`:
 * `UnitsFooling`: `Fooling` in units. With registered inputs fixed and each budgeted gate but a gather declaring at
   most `2^w` values, `|F| ≤ 2^(runBits C + w · budgeted C)`: a gate that reads only registered values is one value on
   all of `F`, a budgeted one that reads a run or coin value is a unit of `w` bits, and a gather's value is fixed by its
-  index's class among its column's words and the `0` outside it, which its index's fresh bits count.
+  index's class among its column's words and its fill outside it (a table read's, by its index's low bits), which
+  its index's fresh bits of that kind count.
 * `SquaringUnits`: the two together. A circuit that squares the nibble family, its registered inputs fixed and its
   coin inputs `a`'s bytes, has `4s ≤ runBits C + w · budgeted C`: at p1024 with no run input, 8 units at `w = 33` (or
   `w = 32`, s32's window), 32 were each budgeted gate a byte (`w = 8`).
@@ -45,8 +47,9 @@ on, from the most general to the one 6a's carrier lemma takes as its `q`:
   drops, is the Legendre symbol of `x`.
 * `EncodeBudget`: the connection. For a declared circuit `W` that satisfies the stacking property `P` and is in the
   restricted class, the words of fresh encodings `W`'s values hold on more than `ε` of the draws number at most
-  `(budget)/E + (run-input bits)/(n − 1)`, under `EncodeChainHardness` at `E`: the budget is the caps times the
-  audit's certified reads, summed over the windows, and the run inputs are `R_in` a window.
+  `(budget)/E + (run-input bits)/(n − 1)`, under `EncodeChainHardness` at `E`: the budget is the caps (rational
+  units per certified byte) times the audit's certified reads, summed over the windows, and the run inputs are each
+  window's `R_in` bound, summed over the windows.
 * `EncodeCost`: under `EncodeChainHardness` at `E`, the encode cost (`encodeCost`) of `q` words is at least `q · E`
   (`⊤` when no circuit computes them): the cost 6a's `encodeBitsCost` reads.
 * `FmaxfRange`, `FminfRange`, `RzByteRange`: property/v1's interval rules for P's producers hold their evaluators'
@@ -54,6 +57,17 @@ on, from the most general to the one 6a's carrier lemma takes as its `q`:
 * `QuantRange`, `DitherRange`, `LutSoftmaxRange`: the quantizers', the dither's and the LUT softmax's values lie in
   their own intervals: `[lo, lo + w]` for a clamp, `[lo − m, lo + w + m + 1]` for a dither, and the hull of the table
   and 0 for the LUT.
+* `Bf16ToF32Affine`: the registry's `Bf16ToF32_v1` is free-affine, and on every bf16 word its evaluator is that map,
+  `×2^16` from the s16 reading to the s32 reading, which never wraps.
+* `F32ToS8RziRange`, `Int8ClampRange`, `LutIndexRange`, `Exp2Lut127Range`, `S32LowByteRange`: the exact-int8
+  profile's primitives' intervals: the cast's `[−128, 127]`, the quantizer's clamp chain's `[−127, 127]`, the LUT
+  index's `[0, 255]`, the table's 256 values in `[0, 127]`, and a low byte's `[−128, 127]`, the identity on `[0, 127]`.
+* `DeclaredWindow`: `ProvenWindow` with no hypothesis on a run input's value but its type (`Typed`). A circuit whose
+  declarations are earned (`Declared`: an input declared at its type, a budgeted gate at an interval its evaluator
+  provably keeps) holds them (`DeclaredHold`), and so is in its window.
+* `Int8LinearWindow`, `LutPvWindow`: vLLM's served int8 linear (row quantizer into a satfinite s8·s8 IMMA chain, `K ≤
+  131,040`) and P·V (LUT index, table gather, low byte into the same chain, `32·S ≤ 132,096`) are proven and declared,
+  so they're in their window on every typed input.
 -/
 
 namespace Accounting.Guarantees.Gates
@@ -110,7 +124,7 @@ values (`w ≥ 1`), and a set `F` of inputs on each of which `C` is in its windo
 agree pairwise mod `2^j` in every coin input, and pairwise differ mod `2^j` in some output gate of `out`:
 `|F| ≤ 2^(runBits C + w · budgeted C)`. A budgeted gate that reads a run or coin value carries its value's `w` bits
 for its unit; a gather's units carry its index's outcomes, the fresh index bits of `Gate.indexBits`, shared by the
-gathers of one index; every other gate is free or reads only registered values. -/
+gathers of one index and kind; every other gate is free or reads only registered values. -/
 def UnitsFooling : Prop :=
   ∀ {ι κ : Type} (C : Dag ι) (F : Finset κ) (x : κ → ι → ℤ) (j w : ℕ) (out : List ℕ),
     1 ≤ w → (∀ g ∈ C, ∀ cls f, g.op = .budgeted cls f → g.size ≤ 2 ^ w) →
@@ -184,18 +198,19 @@ distinct words `words` on more than `ε` of the fresh draws, its inputs and budg
 their declared intervals (its window is then `ProvenWindow`'s, never a hypothesis): under
 `EncodeChainHardness F k B E ε`,
 
-  `q · E · (n − 1) ≤ (c · Σ_w reads_w) · (n − 1) + 8 · R_in · windows · E`,
+  `q · E · (n − 1) ≤ (c · Σ_w reads_w) · (n − 1) + 8 · (Σ_w R_in,w) · E`,
 
-with `c` the caps' budgeted units per certified byte read (property/v1's units: gathers by fresh index bits):
-`q ≤ c · reads / E + 8 · R_in · windows / (n − 1)`. -/
+with `c` the caps' budgeted units per certified byte read, a rational (property/v1's units: gathers by fresh index
+bits), and `R_in,w` window `w`'s run-input bytes: `q ≤ c · reads / E + 8 · Σ_w R_in,w / (n − 1)`. -/
 def EncodeBudget : Prop :=
   ∀ (F : Field) (k B E εnum εden : ℕ) {ι : Type} (W : Dag ι) (caps : Caps) (A : Audit) (m : ℕ → ℕ)
     (x : Draw k → ι → ℤ) (words : List ℕ) (out : ℕ → ℕ → ℕ),
     EncodeChainHardness F k B E εnum εden →
     Property caps A W → Restricted B W → CodecInputs F W (draws F k) m x → words.Nodup →
     (∀ i ∈ words, i < F.p) → ComputesWords F k W x m words out εnum εden →
-    words.length * E * (F.n - 1) ≤
-      (caps.total * ∑ v ∈ Finset.range A.windows, A.reads v) * (F.n - 1) + 8 * caps.runBytes * A.windows * E
+    ((words.length * E * (F.n - 1) : ℕ) : ℚ) ≤
+      caps.total * (∑ v ∈ Finset.range A.windows, A.reads v : ℕ) * (F.n - 1 : ℕ) +
+        (8 * (∑ v ∈ Finset.range A.windows, caps.runBytes v) * E : ℕ)
 
 /-- **The encode cost, bounded.** Under `EncodeChainHardness F k B E ε`, with `n ≥ 2`, `q` distinct words cost at
 least `q · E` budgeted units: `q · E ≤ encodeCost F k B ε q`, which is `⊤` when no restricted circuit with no run input
@@ -236,9 +251,75 @@ def QuantRange : Prop :=
 def DitherRange : Prop :=
   ∀ (lo : ℤ) (w m : ℕ) (v : ℚ) (R : Fin (2 * m + 2)), Iv.Mem (lo - m, lo + w + m + 1) (dither lo w m v R)
 
-/-- **The LUT softmax's interval.** Its element lies in the hull of its table and 0 (a gather's value outside its
-column): in `[0, 127]` for a table of values in `[0, 127]`. -/
+/-- **The LUT softmax's interval.** Its element lies in the hull of its table and 0 (its gather's fill, the value
+outside its column): in `[0, 127]` for a table of values in `[0, 127]`. -/
 def LutSoftmaxRange : Prop :=
   ∀ (T : List ℤ) (d : ℚ), (hull0 T).Mem (lutSoftmax T d)
+
+/-- **`Bf16ToF32` is free-affine.** The registry classes `Bf16ToF32_v1` affine, and on every bf16 word `u` its
+evaluator's f32 word (`Verity.Prims.bf16ToF32`), read as s32, is `bf16ToF32Op` on `u` read as s16: `×2^16` with no
+wrap, its image `[−2^31, 2^31 − 2^16]` within s32. So a `Bf16ToF32_v1` gate is the free affine map property/v1 counts
+it, and `Proven` proves its window. -/
+def Bf16ToF32Affine : Prop :=
+  classOf "Bf16ToF32_v1" = some .affine ∧
+    ∀ u : Fin (2 ^ 16),
+      signed 32 (Verity.Prims.bf16ToF32 u.val) = (bf16ToF32Op : Op Unit).raw (fun _ => 0) [signed 16 u.val]
+
+/-- **`F32ToS8Rzi`'s interval.** Its code, read as s8, lies in `[−128, 127]`: its type, by saturation. -/
+def F32ToS8RziRange : Prop :=
+  ∀ a, Iv.Mem (-128, 127) (f32ToS8Rzi a)
+
+/-- **The int8 quantizer's clamp.** `Int8QuantElement`'s `s8(clamp(r, −127, 127))` (`F32Fmaxf` against `−127.0`,
+`F32Fminf` against `127.0`, `F32ToS8Rzi`) of any s32 reading (`wrapS32 z`, which is every s32 word for some `z`), a
+NaN included, lies in `[−127, 127]`: the s8 family's static `A = (−127, 127)`. The interval analysis over s32
+readings can't carry it from the clamp to the cast (a float in `[−127.0, 127.0]` reads as two s32 intervals), so a
+gate-by-gate window takes the cast's type, `[−128, 127]`, as property/v1 does. -/
+def Int8ClampRange : Prop :=
+  ∀ z, Iv.Mem (-127, 127) (int8Clamp (wrapS32 z))
+
+/-- **`LutIndex`'s interval.** `[0, 255]`, whatever its operands. -/
+def LutIndexRange : Prop :=
+  ∀ d a, Iv.Mem (0, 255) (lutIndex d a)
+
+/-- **`Exp2Lut127`'s table.** 256 entries, and a read at any index lies in `[0, 127]` (past the table, 0). -/
+def Exp2Lut127Range : Prop :=
+  exp2Lut127.length = 256 ∧ ∀ t : ℕ, Iv.Mem (0, 127) (exp2Lut127.getD t 0)
+
+/-- **`S32LowByte`'s interval.** `[−128, 127]`, its type; and a word in `[0, 127]` is its own low byte, so P's codes
+keep the LUT's `[0, 127]`. -/
+def S32LowByteRange : Prop :=
+  (∀ z, Iv.Mem (-128, 127) (s32LowByte z)) ∧ ∀ t : Fin 128, s32LowByte (t.val : ℤ) = t.val
+
+/-! ## Declared bounds, earned
+
+The window from nothing declared on trust: every input at its type's whole range, every budgeted gate's interval a
+theorem over its evaluator on its operands' derived intervals (`Definitions/Accounting/Gates/Declared`). -/
+
+/-- **Declared bounds, earned, hold.** A circuit whose window is proven and whose every declared bound is earned
+(`Declared`: an input's is its type's whole range, a budgeted gate's holds its evaluator's value on its operands'
+derived intervals) holds its declared intervals and is in its window on every input that gives each slot a word of
+its type (`Typed`): no hypothesis that a run input lies within a narrower bound. -/
+def DeclaredWindow : Prop :=
+  ∀ {ι : Type} (C : Dag ι) (x : ι → ℤ), Proven C → Declared C → Typed C x → DeclaredHold C x ∧ InWindow C x
+
+/-- **The int8 linear's window, by theorem.** For `K = 32·S ≤ 131,040` (`S ≤ 4095`; gemm's `S8_K_LIMIT`, `K < 2^17`),
+the int8 linear's coordinate (`int8Linear`: `Int8RowQuant`'s codes, then `ScaledMmS8_v1`'s s8·s8 dot) is proven and
+earns every declared bound, whatever its row scale and rounding compute: its codes and weights are s8 by type
+(`F32ToS8Rzi`'s saturation, the weights' width), so each product is in `[−16256, 16384]` and the accumulator stays in
+s32. So it is in its window on every input that gives each slot a word of its type. -/
+def Int8LinearWindow : Prop :=
+  ∀ (S : ℕ) (fs fr : List ℤ → ℤ), S ≤ 4095 →
+    Proven (int8Linear S fs fr) ∧ Declared (int8Linear S fs fr) ∧
+      ∀ x, Typed (int8Linear S fs fr) x → InWindow (int8Linear S fs fr) x
+
+/-- **The LUT attention's `P V'` window, by theorem.** For `32·S ≤ 132,096` padded keys (`S ≤ 4128`), any number `n` of
+them real, and a table of values in `[0, 127]` (`Exp2Lut127Range`'s), the `P V'` channel (`lutPv`) is proven and earns
+every declared bound: P's codes are `S32LowByte` of a gather's value, which lies in the hull of the table and 0
+(`[0, 127]`, derived), V's are s8 by type, so each product is in `[−16256, 16129]`. So it is in its window on every
+input that gives each slot a word of its type. property/v1 reads `S32LowByte` at its type, `[−128, 127]`, and so
+refuses past `K = 131,040` (the row's `row_refusal`). -/
+def LutPvWindow : Prop :=
+  ∀ (S n : ℕ) (T : List ℤ), S ≤ 4128 → (∀ t ∈ T, 0 ≤ t ∧ t ≤ 127) →
+    Proven (lutPv S n T) ∧ Declared (lutPv S n T) ∧ ∀ x, Typed (lutPv S n T) x → InWindow (lutPv S n T) x
 
 end Accounting.Guarantees.Gates

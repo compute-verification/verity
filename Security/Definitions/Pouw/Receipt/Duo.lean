@@ -104,4 +104,11 @@ def duoReceipt {n : ℕ} (h : ℕ) (s : BitVec n × BitVec n) : BitVec n := s.1 
 def duoWordSpread {n : ℕ} (k a : BitVec n) (r h : ℕ) (d : BitVec n) (s s' : BitVec n × BitVec n) : BitVec n :=
   duoReceipt h (duoWord k a r s d) ^^^ duoReceipt h (duoWord k a r s' d)
 
+/-- How a run's final state `F s` varies with the start state: its XOR between the start states `s` and `s'`, `y` and
+`z` apart. A warp's checkpoint XORs its chains' states, so two runs have equal spreads exactly when their final states
+differ by one XOR constant on every start state, which two chains' wrong runs can cancel. -/
+def stateSpread {n : ℕ} (F : BitVec n × BitVec n → BitVec n × BitVec n) (s s' : BitVec n × BitVec n) :
+    BitVec n × BitVec n :=
+  ((F s).1 ^^^ (F s').1, (F s).2 ^^^ (F s').2)
+
 end Pouw.Receipt
