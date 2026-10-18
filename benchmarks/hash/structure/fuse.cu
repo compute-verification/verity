@@ -667,7 +667,8 @@ static int bench(int argc, char** argv) {
 // The fused kernel taken apart (timing only; the _nohash and _nomma arms' levels are wrong by design): the GEMM alone, the
 // separate leaves alone (and with the L2 prefetch), and the fused kernel at 4 and 8 hash warps: whole, with the prefetch,
 // with its hash warps exiting at once, and with its MMA warps skipping the k-loop (the hash warps' own rate in the CTA);
-// the handoff at GPU scope, or none; and p4 / p8, the plain GEMM beside the persistent hash_kernel.
+// the handoff at GPU scope, or none; p4 / p8, the plain GEMM beside the persistent hash_kernel; and cuBLASLt's GEMM (lt)
+// alone and at once with the separate leaves on a second stream (lt_par_sep; g_par_sep with this GEMM).
 static int diag(int argc, char** argv) {
   if (argc < 8) { fprintf(stderr, "diag PARAMS M N K R REPS\n"); return 2; }
   const Params p = read_params(argv[2]);
@@ -679,8 +680,25 @@ static int diag(int argc, char** argv) {
   cudaEvent_t e0, e1;
   CK(cudaEventCreate(&e0)); CK(cudaEventCreate(&e1));
   const char* names[] = {"g", "sep", "seppf", "f4", "f4pf", "f4_nohash", "f4_nomma", "f8", "f8pf", "f8_nohash", "f8_nomma",
-                         "f4gf", "f4gf_nohash", "f4_nohash_nosig", "f8gf", "p4", "p8"};
-  constexpr int NA = 17;
+                         "f4gf", "f4gf_nohash", "f4_nohash_nosig", "f8gf", "p4", "p8", "lt", "lt_par_sep", "g_par_sep"};
+  constexpr int NA = 20;
+  Lt lt;
+  lt.init(s.A, s.B, s.M, s.N, s.K, st);
+  cudaStream_t st2;
+  CK(cudaStreamCreateWithFlags(&st2, cudaStreamNonBlocking));
+  cudaEvent_t fk, jn;
+  CK(cudaEventCreateWithFlags(&fk, cudaEventDisableTiming));
+  CK(cudaEventCreateWithFlags(&jn, cudaEventDisableTiming));
+  // a GEMM on st and the separate leaves (of the previous GEMM's output: the same work) on st2, at once
+  auto par = [&](bool vendor) {
+    CK(cudaEventRecord(fk, st));
+    if (vendor) CL(lt.run(st));
+    else s.gemm(0, st);
+    CK(cudaStreamWaitEvent(st2, fk));
+    sep_leaves<<<(unsigned)((s.n + 255) / 256), 256, 0, st2>>>(s.g, s.n);
+    CK(cudaEventRecord(jn, st2));
+    CK(cudaStreamWaitEvent(st, jn));
+  };
   auto body = [&](int a) {
     if (a == 0) s.gemm(0, st);
     if (a == 1) s.sep(st);
@@ -695,6 +713,9 @@ static int diag(int argc, char** argv) {
     if (a == 14) s.gemm(8, st, false, 0, true);
     if (a == 15) s.persist(4, st);
     if (a == 16) s.persist(8, st);
+    if (a == 17) CL(lt.run(st));
+    if (a == 18) par(true);
+    if (a == 19) par(false);
   };
   std::vector<double> t[NA], mz;
   Nv nv;
