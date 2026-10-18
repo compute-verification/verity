@@ -272,6 +272,8 @@ class Profile:
     # the program's values (eps, the attention scale) and the request's sampling values are inputs (`Supplied` operands of the
     # Definitions that read them as parameters), not constants; off: the legacy Definitions with the values as constants
     registered_values: bool = False
+    # the `weights` Record `weight_field` paths index, when the profile states it (else `analytic.weights_type` over `config`)
+    weights_type: Any = None
 
 
 class ResolutionError(Exception):

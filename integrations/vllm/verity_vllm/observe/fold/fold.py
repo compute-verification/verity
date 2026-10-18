@@ -240,6 +240,13 @@ def config_for_weights(config: dict) -> dict:
     return C
 
 
+def weights_type_of(profile: Any, config: dict) -> Record:
+    """The fold's `weights` Record: the profile's own when it states one (`Profile.weights_type`), else `analytic.weights_type`
+    over the configuration (`b1.weights_type(C)`, + `lm_head` when untied; b1.py is frozen)."""
+    own = getattr(profile, "weights_type", None)
+    return own if own is not None else analytic.weights_type(config_for_weights(config))
+
+
 _LAYER_RE = re.compile(r"layers\.(\d+)")
 
 
@@ -369,8 +376,7 @@ class _Fold:
         if not cfg:
             cfg = dict((h.model or {}).get("config") or {})
         self.config = cfg
-        C = config_for_weights(cfg)
-        self.weights_type = analytic.weights_type(C)      # b1.weights_type(C) (+ `lm_head` when untied; b1.py is frozen)
+        self.weights_type = weights_type_of(self.profile, cfg)
         reqs = list((h.workload or {}).get("requests") or [])
         if not reqs:
             raise FoldError("RunHeader.workload has no requests")
