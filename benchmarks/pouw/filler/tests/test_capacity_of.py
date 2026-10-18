@@ -11,7 +11,7 @@ HERE = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(HERE))
 import capacity_of as CO  # noqa: E402
 
-PI = CO.E.machine("VF3q-16")  # the vector the leader's readings below were taken on
+PI = CO.E.machine("VF3r-16")  # the vector of record the readings below are taken on
 GHZ = 2.092e9
 
 
@@ -31,10 +31,10 @@ def rows(r):
 
 
 def test_pump_alone_matches_the_leaders_reading():
-    # the leader's decode B 1 entry (filler share 0.435 of the GPU at 2,092 MHz) reads σ 0.396 at f_max
+    # the leader's decode B 1 entry (filler share 0.435 of the GPU at 2,092 MHz) reads σ 0.371 at f_max
     got = rows(rec())
     assert got["pump"]["sigma"] == pytest.approx(got["lane"]["sigma"])
-    assert 0.38 < got["pump"]["sigma"] < 0.42
+    assert 0.35 < got["pump"]["sigma"] < 0.39
     assert got["pump"]["sigma_run_clock"] > got["pump"]["sigma"]
 
 
@@ -59,7 +59,7 @@ def dfill(place="co", pump_share=0.58, fill_ms=7.0):
 def test_dfill_reads_split_and_co_alike():
     co, split = CO.dfill_rows(PI, [dfill("co"), dfill("split")])
     assert co["sigma"] == pytest.approx(split["sigma"])
-    assert 0.5 < co["sigma"] < co["sigma_run_clock"] < 0.65
+    assert 0.47 < co["sigma"] < co["sigma_run_clock"] < 0.60
     slow = CO.dfill_rows(PI, [dfill("co", fill_ms=70.0)])[0]
     assert slow["sigma"] < co["sigma"]
 

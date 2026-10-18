@@ -15,6 +15,12 @@
   "BlackwellNvf4OmmaDot64_v1": {
    "and": 7002
   },
+  "BlackwellS8ImmaDot32_v1": {
+   "and": 4190
+  },
+  "BlackwellU8S8ImmaDot32_v1": {
+   "and": 4157
+  },
   "E4m3ToF32_v1": {
    "and": 15
   },
@@ -38,6 +44,9 @@
   },
   "HopperE4m3QgmmaDot32_v1": {
    "and": 7377
+  },
+  "S32ToF32Rn_v1": {
+   "and": 368
   }
  }
 }
