@@ -4,7 +4,12 @@
 // and times three committers on one die, rep by rep: commit_gpu's own path (salt_kernel, leaf_kernel, a launch a level),
 // circuits' rows-sha512 kernels (native_rows.cu, dlopen'd, rows_floor's schedule) and this file's.
 //
-// This file's committer is two kernels:
+// v2 (Mine::v2): sr_leaf does the whole leaf a thread, the salt included, so the mask's shared-memory traffic runs beside
+// other warps' compressions; then either (FOLD) its warps fold and climb to the root in the same launch, which suits a step
+// too small to fill the GPU, or sr_sub launches of three levels a thread over the wide levels and one sr_tree launch that
+// folds and climbs the rest.
+//
+// v1 is two kernels:
 //   sr_salt  a thread a position: y (3 compressions from round 8), M_key y from the 8 KB nibble table in shared memory,
 //            c (2), and the frame leaf's first block (from round 15), to S[pos] (128 B) and F[pos] (64 B); a pad for
 //            n <= pos < width straight into level 0. Nothing here reads the operand.
@@ -201,12 +206,159 @@ __global__ void __launch_bounds__(TPB, MINB)
   }
 }
 
+// --- v2: the salt fused into the leaf, the tree as wide multi-level launches and one fold-and-climb launch ----------------
+
+// y_r (3 compressions from round 8), M_key y (the nibble table in shared memory) and c = SHA-512(salt_prefix || y)
+DEV void salt_regs(u64 pos, const uint4* T, u64* my, u64* c) {
+  u64 Y[24];
+  u32 m[16];
+  salt_prf(pos, Y);
+  mask_smem(T, Y, m);
+  salt_digest(Y, c);
+#pragma unroll
+  for (int i = 0; i < 8; ++i) my[i] = (u64)bswap32(m[2 * i]) << 32 | bswap32(m[2 * i + 1]);
+}
+
+// Nodes at levels d0 + 1 .. depth above `o`, node i of level d0 (blockDim.x = min(width >> d0, TPB) threads a CTA, one a
+// node): the warp folds its own aligned subtree through shuffles, then lane 0 climbs; at each level above, the second of
+// two sibling subtrees to finish (an atomic count a parent) folds the parent and goes on.
+DEV void fold_climb(u64* o, u64 i, int d0, u64 width, int depth, u64* levels, u32* ctr) {
+  const u32 lane = threadIdx.x & 31, wsz = blockDim.x < 32 ? blockDim.x : 32;
+  const unsigned mask = wsz == 32 ? 0xFFFFFFFFu : (1u << wsz) - 1;
+  int L = 0;
+  while ((1u << L) < wsz) ++L;
+  for (int l = 1; l <= L; ++l) {
+    u64 p[8];
+#pragma unroll
+    for (int k = 0; k < 8; ++k) p[k] = __shfl_xor_sync(mask, o[k], 1 << (l - 1));
+    if ((lane & ((1u << l) - 1)) == 0) {
+      u64 r[8];
+      node(0, d0 + l - 1, i >> l, o, p, r);
+      cpy8(o, r);
+      st8(level_at(levels, width, d0 + l) + 8 * (i >> l), o);
+    }
+  }
+  if (lane != 0 || d0 + L >= depth) return;
+  // ctr: one count a node above level d0 + L, level l+1's at (width >> (d0 + L)) - (width >> l)
+  const u64 nL = width >> (d0 + L);
+  u64 idx = i >> L;
+  for (int l = d0 + L; l < depth; ++l) {
+    const u64 p = idx >> 1;
+    u32* c = ctr + (nL - (width >> l)) + p;
+    __threadfence();
+    if (atomicAdd(c, 1u) == 0) return;
+    *c = 0;
+    __threadfence();
+    u64 sib[8], r[8];
+    ld8cg(level_at(levels, width, l) + 8 * (idx ^ 1), sib);
+    if (idx & 1) node(0, l, p, sib, o, r);
+    else node(0, l, p, o, sib, r);
+    st8(level_at(levels, width, l + 1) + 8 * p, r);
+    cpy8(o, r);
+    idx = p;
+  }
+}
+
+// The whole leaf a thread (blockDim.x = min(width, TPB)): salt, x over the 4 KiB row, h, both frame-leaf blocks; a pad
+// for n <= pos < width. ORDER: 0 salt then row, 1 row then salt, 2 by warp parity (the mask's shared-memory traffic
+// beside the other warps' compressions). FOLD: then fold_climb to the root (one launch for the whole commitment).
+template <int TPB, int MINB, int ORDER, bool FOLD>
+__global__ void __launch_bounds__(TPB, MINB)
+    sr_leaf(const uint8_t* __restrict__ rows, const uint4* __restrict__ Tn, u64 n, u64 width, int depth, u64* levels, u32* ctr,
+            u64* __restrict__ bc) {
+  __shared__ uint4 T[512];
+  for (int i = threadIdx.x; i < 512; i += blockDim.x) T[i] = Tn[i];
+  __syncthreads();
+  const u64 pos = (u64)blockIdx.x * blockDim.x + threadIdx.x;
+  u64 o[8];
+  if (pos < n) {
+    const bool salt_first = ORDER == 0 || (ORDER == 2 && !((threadIdx.x >> 5) & 1));
+    u64 x[8], my[8], c[8];
+    if (salt_first) {
+      salt_regs(pos, T, my, c);
+      row4k<false, FULL>(rows + pos * LB, x);
+    } else {
+      row4k<false, FULL>(rows + pos * LB, x);
+      salt_regs(pos, T, my, c);
+    }
+    u64 B[16], h[8];
+#pragma unroll
+    for (int k = 0; k < 8; ++k) { B[k] = x[k] ^ my[k]; B[8 + k] = c[k]; }
+    if (bc) {
+      st8(bc + 16 * pos, B);
+      st8(bc + 16 * pos + 8, B + 8);
+    }
+    cpy8(h, C.mid_leaf);
+    sha::compress(h, B);
+    sha::compress_kw(h, C.kw_leafpad);
+    frame_first(0, pos, o);
+    frame_second<0>(0, pos, h, o);
+  } else {
+    pad(0, pos, o);
+  }
+  st8(levels + 8 * pos, o);
+  if constexpr (FOLD) fold_climb(o, pos, 0, width, depth, levels, ctr);
+}
+
+// node idx of level d + K from level d's nodes, every node between stored
+template <int K>
+DEV void sub_rec(u64* levels, u64 width, int d, u64 idx, u64* out) {
+  if constexpr (K == 0) {
+    ld8(level_at(levels, width, d) + 8 * idx, out);
+  } else {
+    u64 a[8], b[8];
+    sub_rec<K - 1>(levels, width, d, 2 * idx, a);
+    sub_rec<K - 1>(levels, width, d, 2 * idx + 1, b);
+    node(0, d + K - 1, idx, a, b, out);
+    st8(level_at(levels, width, d + K) + 8 * idx, out);
+  }
+}
+template <int K>
+__global__ void __launch_bounds__(256) sr_sub(u64* levels, u64 width, int d) {
+  const u64 i = (u64)blockIdx.x * blockDim.x + threadIdx.x;
+  if (i >= width >> (d + K)) return;
+  u64 o[8];
+  sub_rec<K>(levels, width, d, i, o);
+}
+__global__ void __launch_bounds__(256) sr_tree(u64* levels, u64 width, int depth, int d0, u32* ctr) {
+  const u64 i = (u64)blockIdx.x * blockDim.x + threadIdx.x;
+  u64 o[8];
+  ld8(level_at(levels, width, d0) + 8 * i, o);
+  fold_climb(o, i, d0, width, depth, levels, ctr);
+}
+
 struct Mine {
   u64 n = 0, width = 0;
   int depth = 0;
   u64 *levels = nullptr, *S = nullptr, *F = nullptr;
   u32* ctr = nullptr;
   uint4* Tn = nullptr;
+  // v2 launches: the leaf kernel; K = 3 launches from level d while (width >> (d + 3)) >= minw, at most `subs` of them;
+  // then sr_tree from there. ev: an event after each launch.
+  template <int ORDER, bool FOLD>
+  void v2(const uint8_t* rows, cudaStream_t st, int subs, u64 minw, std::vector<cudaEvent_t>* ev = nullptr,
+          std::vector<std::string>* names = nullptr, u64* bc = nullptr) {
+    auto mark = [&](std::string nm) {
+      if (ev) CK(cudaEventRecord((*ev)[names->size()], st));
+      if (names) names->push_back(nm);
+    };
+    const u32 cnt = (u32)std::min<u64>(width, 256);
+    sr_leaf<256, 2, ORDER, FOLD><<<(unsigned)(width / cnt), cnt, 0, st>>>(rows, Tn, n, width, depth, levels, ctr, bc);
+    mark("leaf");
+    if (FOLD) return;
+    int d = 0;
+    for (int s = 0; s < subs && d + 3 <= depth && (width >> (d + 3)) >= minw; ++s, d += 3) {
+      const u64 m = width >> (d + 3);
+      sr_sub<3><<<(unsigned)((m + 255) / 256), 256, 0, st>>>(levels, width, d);
+      mark("sub3_from_" + std::to_string(d));
+    }
+    if (d < depth) {
+      const u64 m = width >> d;
+      const u32 c = (u32)std::min<u64>(m, 256);
+      sr_tree<<<(unsigned)(m / c), c, 0, st>>>(levels, width, depth, d, ctr);
+      mark("tree_from_" + std::to_string(d));
+    }
+  }
   void init(const Params& p, u64 n_) {
     n = n_; depth = depth_of(n); width = 1ull << depth;
     CK(cudaMalloc(&levels, 2 * width * 64));
@@ -356,13 +508,16 @@ static int check(int argc, char** argv) {
   CK(cudaMalloc(&bc, n * 128));
   const char* form = getenv("SHARAW_FORM");
   const int f = form ? atoi(form) : 0;
+  const char* mw = getenv("SHARAW_MINW");
+  const u64 minw = mw ? strtoull(mw, nullptr, 10) : 1;   // 1: the K = 3 launches run even on the small cases
   for (int rep = 0; rep < 2; ++rep) {   // twice: the climb's counts must come back to zero
-    me.salts(0);
     switch (f) {
-      case 1: me.data<256, 2, true>(d, 0, bc); break;
-      case 2: me.data<128, 4, false>(d, 0, bc); break;
-      case 3: me.data<128, 4, true>(d, 0, bc); break;
-      default: me.data<256, 2, false>(d, 0, bc); break;
+      case 1: me.v2<2, false>(d, 0, 2, minw, nullptr, nullptr, bc); break;
+      case 2: me.v2<0, true>(d, 0, 0, minw, nullptr, nullptr, bc); break;
+      case 3: me.v2<1, false>(d, 0, 1, minw, nullptr, nullptr, bc); break;
+      case 4: me.v2<2, true>(d, 0, 0, minw, nullptr, nullptr, bc); break;
+      case 5: me.v2<2, false>(d, 0, 0, minw, nullptr, nullptr, bc); break;
+      default: me.salts(0); me.data<256, 2, false>(d, 0, bc); break;
     }
   }
   CK(cudaDeviceSynchronize());
@@ -428,14 +583,19 @@ static int bench(int argc, char** argv, bool nsys_mode) {
   std::vector<Arm> arms;
   arms.push_back({"commit_gpu", true, cg, comps});
   if (have_nat) arms.push_back({"native_rows", true, [&](cudaStream_t s) { nat.run(src, s); }, comps});
-#define MINE(NAME, TPB, MINB, PF) \
-  arms.push_back({NAME, true, [&](cudaStream_t s) { me.salts(s); me.data<TPB, MINB, PF>(src, s); }, comps})
-  MINE("sharaw_256x2", 256, 2, false);
-  MINE("sharaw_256x2_pf", 256, 2, true);
-  MINE("sharaw_128x4", 128, 4, false);
-  MINE("sharaw_128x4_pf", 128, 4, true);
-  MINE("sharaw_256x3", 256, 3, false);
-#undef MINE
+  arms.push_back({"sharaw_v1", true, [&](cudaStream_t s) { me.salts(s); me.data<256, 2, false>(src, s); }, comps});
+  const u64 MINW = 4096;   // a K = 3 launch only while it has at least this many threads
+#define V2(NAME, ORDER, FOLD, SUBS) \
+  arms.push_back({NAME, true, [&](cudaStream_t s) { me.v2<ORDER, FOLD>(src, s, SUBS, MINW); }, comps})
+  V2("v2_par_s2", 2, false, 2);
+  V2("v2_salt_s2", 0, false, 2);
+  V2("v2_row_s2", 1, false, 2);
+  V2("v2_par_s1", 2, false, 1);
+  V2("v2_par_s0", 2, false, 0);
+  V2("v2_par_fold", 2, true, 0);
+  V2("v2_salt_fold", 0, true, 0);
+  V2("v2_row_fold", 1, true, 0);
+#undef V2
   u64* io;
   const int rt = 256, rb = prop.multiProcessorCount * 8, chain = 256;
   CK(cudaMalloc(&io, (size_t)rt * rb * 8));
@@ -590,9 +750,25 @@ static int bench(int argc, char** argv, bool nsys_mode) {
       for (int l = 1; l <= depth; ++l) printf(", \"level_%d\": %.4f", l, median(seg[l]));
       printf("}}\n");
     }
+    {
+      std::vector<std::string> nm;
+      for (auto& x : seg) x.clear();
+      for (int r = 0; r < reps; ++r) {
+        spin<<<1, 1, 0, st>>>(SPIN);
+        CK(cudaEventRecord(e0, st));
+        nm.clear();
+        me.v2<2, false>(src, st, 2, MINW, &ev, &nm);
+        CK(cudaEventSynchronize(ev[nm.size() - 1]));
+        seg[0].push_back(ms(e0, ev[0]));
+        for (size_t j = 1; j < nm.size(); ++j) seg[j].push_back(ms(ev[j - 1], ev[j]));
+      }
+      printf("{\"split\": \"v2_par_s2\", \"parts\": {");
+      for (size_t j = 0; j < nm.size(); ++j) printf("%s\"%s\": %.4f", j ? ", " : "", nm[j].c_str(), median(seg[j]));
+      printf("}}\n");
+    }
     std::vector<Arm> sp = diags;
     sp.insert(sp.begin(), arms[0]);
-    for (auto& a : arms) if (a.name == "sharaw_256x2") sp.push_back(a);
+    for (auto& a : arms) if (a.name == "sharaw_v1") sp.push_back(a);
     std::vector<std::vector<double>> td(sp.size()), md(sp.size());
     for (auto& a : sp) { unsigned m; timed(a, m); }
     for (int r = 0; r < reps; ++r)
