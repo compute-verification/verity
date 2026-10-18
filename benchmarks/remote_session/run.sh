@@ -48,6 +48,19 @@
 # GPU, no lease, no build, and kv:P and kvdrop:P sessions (KV pages appended and released mid-session, `prover.py`)
 # with PROVER_ARGS such as --kv-every and --kv-pool. Its passes take the CPU's time, so JITTER_MS must cover one.
 # LIFETIME (windows) sets the verifier's cap L on an appended block, after which the prover re-keys it.
+#
+# SERVE makes the prover vLLM serving under the audit, on one leased GPU in vLLM's venv (VLLM_PY, default
+# /workspace/jobs/venv312/bin/python, its `verity-vllm` launcher beside it), this tree's verity_vllm first on its path,
+# against ROLE=verifier with SESSIONS=1 (one session a store). SERVE=tiny runs `serve.py --connect` (the vLLM tests'
+# tiny Llama, PLAN serve or servedrop:K). SERVE=row runs row ROW, `verity-vllm row run ROW CHECKPOINT REPO REV` with
+# the checkpoint `verity-vllm epoch resolve ROW` names, ROW_ARGS (such as --stages commit) and REMOTE_VERIFIER at the
+# tunnel; its Commit refuses --remote-verifier until it puts the store binder on its engine. Milestone 3's thin slice,
+# int8 Llama-3.1-8B:
+#
+#   research run --on vy-nebius-1 --phase cpu ... --env ROLE=verifier --env PEER=vy-nebius-2 --env PORT=7797 \
+#     --env SESSIONS=1 --env WINDOWS=7 --env WINDOW_MS=100 --env LIFETIME=4 -- bash benchmarks/remote_session/run.sh
+#   research run --on vy-nebius-2 --preemptible --gpus 1 ... --env ROLE=prover --env PORT=7797 --env SERVE=row \
+#     --env ROW=<the int8 Llama-3.1-8B row> -- bash benchmarks/remote_session/run.sh
 set -uxo pipefail
 export O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"
 ENV_DIR=${ENV_DIR:-/workspace/pouw/fill-out/pous/work/pous-bench}
@@ -107,6 +120,23 @@ fi
 LEASE=(gpu-lease "${GPUS:-1}" --wait ${GPU:+--on "$GPU"} ${TIMED:+--timed} --max-min "${MAXMIN:-30}" --)
 [ -n "${GPU_LEASE_UUID:-}" ] || [ -n "${CPU:-}" ] && LEASE=()
 export CPU=${CPU:-} CODEC=${CODEC:-p512/k2}
+if [ -n "${SERVE:-}" ]; then
+  VPY=${VLLM_PY:-/workspace/jobs/venv312/bin/python}
+  export HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 HF_HOME=${HF_HOME:-/workspace/hf} PATH=$(dirname "$VPY"):$PATH
+  export PYTHONPATH=$PWD/integrations/vllm:$PWD${PYTHONPATH:+:$PYTHONPATH}
+  case $SERVE in
+    tiny) RUN=("$VPY" $RS/serve.py --connect "127.0.0.1:$PORT" --out "$O" --plan "$PLAN" --codec "$CODEC") ;;
+    row)
+      VV=$(dirname "$VPY")/verity-vllm
+      read -r CK REPO REV _ < <("$VV" epoch resolve "${ROW:?}")
+      # shellcheck disable=SC2086
+      RUN=(env "REMOTE_VERIFIER=127.0.0.1:$PORT" "$VV" row run "$ROW" "${CK:?}" "$REPO" "$REV" ${ROW_ARGS:-}) ;;
+    *) echo "SERVE is tiny or row, not $SERVE"; exit 3 ;;
+  esac
+  "${LEASE[@]}" "${RUN[@]}" > "$O/prover.log" 2>&1; P=$?
+  tail -20 "$O/prover.log"
+  exit $P
+fi
 # shellcheck disable=SC2016
 "${LEASE[@]}" bash -c '
   if [ -n "$CPU" ]; then
