@@ -92,15 +92,17 @@ def word_check(P: Any, corr: Correspondence, required: Any, word: str, *, strict
                                 acquired=acquired, max_gates=max_gates)
     if log:
         log(f"  {r['query']}: {r['calls']} calls -> {r['units']} units over {r['gates']} gates, {r['committed_interior_words']} committed interior words"
-            + (f" ({r['acquired_interior_words']} acquired by a tap)" if acquired is not None else ""))
+            + (f" ({r['acquired_interior_words']} acquired by a tap)" if acquired is not None else "")
+            + (f"; the Boolean Program: {r['boolean_gates']} Boolean gates" if "boolean_gates" in r else ""))
     return r
 
 
 def word_record(r: dict[str, Any], *, strict: bool, max_gates: str | None = None) -> dict[str, Any]:
-    """The header's record of a word check (`query.word_check`): its query, whether it was strict and passed, its totals and the gate
-    limits it ran under; the per-Definition groups stay in the Build's manifest.log."""
+    """The header's record of a word check (`query.word_check`): its query, whether it was strict and passed, its totals (a Boolean
+    Program's in Boolean gates too, `boolean_gates`) and the gate limits it ran under; the per-Definition groups stay in the Build's
+    manifest.log."""
     return {"query": r["query"], "strict": bool(strict), "ok": bool(r["ok"]), "violations": len(r["violations"]),
-            **{k: r[k] for k in ("calls", "units", "gates", "committed_interior_words", "acquired_interior_words") if k in r},
+            **{k: r[k] for k in ("calls", "units", "gates", "committed_interior_words", "acquired_interior_words", "boolean_gates") if k in r},
             "max_gates": word_query.gate_limits(max_gates)}
 
 

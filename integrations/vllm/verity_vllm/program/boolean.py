@@ -434,7 +434,9 @@ def boolean_function(fn: SpecializedDefinition) -> SpecializedDefinition:
 
 def derived(rep, *, check_registry: bool = True):
     """A word derivation's report (`frontend.derive.DeriveReport`) with its Program on bits (`boolean_function`), the word root and
-    digest in its provenance (``ir``); a refusal (``numerics_unregistered``) names every Call with no Boolean version."""
+    digest in its provenance (``ir``); a refusal (``numerics_unregistered``) names every Call with no Boolean version.  A lifted
+    Program (σ-checked node by node) names the word Program it computes as its ``word``, as a Boolean Definition names its word:
+    the Build writes its instance sequence through that link (`pipeline.build_instances`)."""
     from dataclasses import replace
 
     from verity.ml.circuits.codec import encode_program, program_digest
@@ -458,6 +460,8 @@ def derived(rep, *, check_registry: bool = True):
             return DeriveReport(None, u, prov | {"unsupported": u.to_json()})
         prov["ir"]["sigma_check"] = {k: sc[k] for k in ("nodes", "definitions", "ok")}
     program = Program(fn, annotations=dict(rep.program.annotations))
+    if "sigma_check" in prov["ir"]:
+        program.word = rep.program  # type: ignore[attr-defined]
     check_identity(program, check_registry=check_registry)
     desc = encode_program(program)
     digest, root, dead = program_digest(desc), descriptor_id(program.fn), dead_gates(program, limit=32)

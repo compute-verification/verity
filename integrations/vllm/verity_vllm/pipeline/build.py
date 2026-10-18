@@ -586,7 +586,10 @@ def _write_program(out: str, res: dict, rep, *, target, applied: dict, sampling:
                       "correspondence_digest": corr_digest,
                       "correspondence": {"schema": corr_doc.get("schema"), "namespace": CORR_NS, "calls": len(corr_doc.get("calls") or ()),
                                          "occurrences": len(corr_doc.get("occurrences") or ()), "rank": corr_doc.get("rank")} if corr_doc else None, **supplied}
-    res["spec_histogram"] = _spec_histogram(program)
+    # a Boolean Program written through its word link (`build_instances`): the histogram of the rows' Definitions, and its own beside
+    res["spec_histogram"] = _spec_histogram(getattr(program, "word", None) or program)
+    if getattr(program, "word", None) is not None:
+        res["boolean_spec_histogram"] = _spec_histogram(program)
     res["rules_applied"] = rep.provenance["rules_applied"]
     res["n_applications"] = len(rep.provenance["applications"])
     res["weights"] = {"n_fields": len(rep.provenance["weights"]), "roles": rep.provenance.get("weight_roles")}

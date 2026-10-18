@@ -66,6 +66,7 @@ class CallView:
     name: str                        # the recorded naming hint (`<module>/<fx node>[/<member>][row]`), "" if none
     port_table: tuple[Port, ...]
     reads: Sequence[ValueRef]        # a tuple, or the lazy `_Reads` of a columnar body (materialized only while iterated)
+    bits: str | None = None          # a Boolean Program's Call (its rows' `bits`): the spec id of the Boolean Definition it is of
 
     @property
     def ports(self) -> tuple[str, ...]:
@@ -157,13 +158,14 @@ class _Columns:
     the port-name index (`array('H')` into `port_names`) -- in operand order, each Value once; and the same for the reads of
     prescribed inputs alone (`pread_*`), so a pass over the weights a body reads never touches the Call reads."""
 
-    __slots__ = ("n", "specs", "families", "port_tables", "spec_idx", "forms", "form_idx", "names", "port_names",
+    __slots__ = ("n", "specs", "families", "bits", "port_tables", "spec_idx", "forms", "form_idx", "names", "port_names",
                  "read_off", "read_call", "read_port", "pread_off", "pread_call", "pread_port", "views")
 
     def __init__(self) -> None:
         self.n = 0
         self.specs: list[str] = []
         self.families: list[str] = []
+        self.bits: list[str | None] = []
         self.port_tables: list[tuple[Port, ...]] = []
         self.spec_idx = array("i")
         self.forms: list[str] = []
@@ -186,7 +188,7 @@ class _Columns:
         if v is None:
             s = self.spec_idx[k]
             v = views[k] = CallView(k, self.specs[s], self.families[s], self.forms[self.form_idx[k]], self.names[k], self.port_tables[s],
-                                    _Reads(self, k))
+                                    _Reads(self, k), self.bits[s])
         return v
 
     def family_of(self, k: int) -> str:
@@ -323,7 +325,8 @@ class _Builder:
                 raise ValueError("more than 65535 distinct port names")
         return k
 
-    def add(self, i: int, spec: str, form: str, name: str, port_table: tuple[Port, ...], args: Iterable[Iterable[Sequence[Any]]]) -> None:
+    def add(self, i: int, spec: str, form: str, name: str, port_table: tuple[Port, ...], args: Iterable[Iterable[Sequence[Any]]],
+            bits: str | None = None) -> None:
         c = self.c
         if i != c.n:
             raise _OutOfOrder(f"row {i} at body position {c.n}")
@@ -332,6 +335,7 @@ class _Builder:
             s = self._spec_of[spec] = len(c.specs)
             c.specs.append(spec)
             c.families.append(spec_base(spec))
+            c.bits.append(bits)
             c.port_tables.append(port_table)
             self._spec_pidx.append(tuple(self._port_index(p.name) for p in port_table))
         fi = self._form_of.get(form)
@@ -725,14 +729,17 @@ def _instances_columns(params: tuple[InputView, ...], rows: Iterable[dict[str, A
     b = _Builder(params)
     for r in rows:
         spec = r["spec"]
-        b.add(int(r["i"]), spec, str(r.get("form") or "call"), str(r.get("name") or ""), definition_ports(spec), r.get("args") or ())
+        b.add(int(r["i"]), spec, str(r.get("form") or "call"), str(r.get("name") or ""), definition_ports(spec), r.get("args") or (),
+              r.get("bits"))
     return b
 
 
 def from_instances(path_or_doc: str | dict[str, Any]) -> ProgramView:
     """`instances.json.gz` (or its loaded document) -> ProgramView.  Rows are body positions; the Definition's ports come from the
     registry (`definition_ports`, once per distinct spec); a row of a `batch` form carries no `n`, so its output is read as the
-    single-instance signature (the reference request Programs are `call` rows throughout).
+    single-instance signature (the reference request Programs are `call` rows throughout).  A Boolean Program's rows are its word
+    view (`pipeline.build_instances`): each Call is the word Definition its Boolean Definition computes, with that Boolean spec as
+    `CallView.bits`, so its families, ports and reads are the word Program's.
 
     A path is STREAMED: the rows are decoded one at a time into the columnar body (`iter_instance_rows`), the file read once.  A file
     whose rows are not in body order (never written by `derive_step`) is read again as a document; a document's rows are sorted."""
