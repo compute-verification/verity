@@ -43,7 +43,7 @@ from typing import Any
 
 import ra_cases as M
 import verity_difftest as D
-from verity.core.protocols.remote_bandwidth import audit
+from verity.core.protocols.remote_bandwidth import audit, receipts
 
 SESSION = D.Port(M.EXE, "session", M.session, None, package=M.PACKAGE)
 #: The failures whose cause a `verifier.json` keeps: a window's passes.
