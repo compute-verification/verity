@@ -162,8 +162,10 @@ def table(args: list[str]) -> None:
             small, sr = leaf.get((c, g, 65536), ({}, ""))
             big, br = leaf.get((c, g, 262144), ({}, ""))
             runs = " ".join(sorted({rr, sr, br} - {""}))
-            print(f"| {c} | {g.replace('NVIDIA ', '').replace(' Blackwell Server Edition', '')} | {r['gcomp_per_s']:.2f} "
-                  f"| {r['gb_per_s']:.0f} ({r['ratio_to_base']:.2f}) | {100 * r.get('fraction_of_ceiling', float('nan')):.0f} "
+            rawc = ("— | — | —" if c == "xor" else   # the control's raw rate is a few XORs a block: no ceiling to read
+                    f"{r['gcomp_per_s']:.2f} | {r['gb_per_s']:.0f} ({r['ratio_to_base']:.2f}) "
+                    f"| {100 * r.get('fraction_of_ceiling', float('nan')):.0f}")
+            print(f"| {c} | {g.replace('NVIDIA ', '').replace(' Blackwell Server Edition', '')} | {rawc} "
                   f"| {small.get('gb_per_s', float('nan')):.0f} / {big.get('gb_per_s', float('nan')):.0f} "
                   f"({big.get('ratio_to_base', float('nan')):.2f}) | {big.get('fetch', '')} "
                   f"| {r['ands_per_byte']:.0f} / {big.get('ands_per_byte', float('nan')):.0f} "
