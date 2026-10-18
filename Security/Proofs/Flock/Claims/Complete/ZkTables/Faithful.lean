@@ -4,7 +4,7 @@ import Proofs.Flock.Claims.Complete.Ready
 # The masked prover as `flock-circuit --zk` runs it
 
 `honestP` runs the masked session on each table's share of the witness as given. `flock-circuit --zk` differs from it in
-two places, and agrees with it in a third; `honestPR` is `honestP` with the two differences made.
+two places, and agrees with it in its other refusals; `honestPR` is `honestP` with the two differences made.
 
 * **The mask slot's words are the tape's** (`verity/ml/flock/live/src/bin/flock-circuit.rs:2738`–`2747`): table `i`'s
   block `b`'s mask words are `h.rng.f128s(STREAM_MASK, b·mask_words, mask_words)` (`STREAM_MASK`,
@@ -16,7 +16,9 @@ two places, and agrees with it in a third; `honestPR` is `honestP` with the two 
   every coin as it is sampled, `zk_veil.rs:393`, `403`): the zerocheck's outer coins (`outerSlotsZk`) read from the
   verifier's replies so far (`outerHit`); at one equal to `1` the prover sends nothing more of the session (`[]`).
 * **A degenerate mask rank stops the prover** (`mask_rank_ok`, `zk_veil.rs:1087`, at the opening's label,
-  `flock-circuit.rs:1026`): already `honestP`'s, in its session (`MaskRank.rankCheckP`, in `sessionPZk`).
+  `flock-circuit.rs:1026`): already `honestP`'s, in its session (`MaskRank.rankCheckP`, in `sessionPZk`). So are the
+  other refused coins: `ρ₀, ρ₁` dependent over F128 (`ligeritoPZk`) and an inner `β = 0` (`innerP`), each a throw
+  that ends `sessionPZk` with the empty message.
 
 `honestPR w` is `honestP (maskWOf x w ω.mask)` at every history no outer coin of which is `1` (`honestPR_next`).
 -/
