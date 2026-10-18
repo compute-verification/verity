@@ -22,16 +22,18 @@ the way down (`ir="boolean"` can't derive Serve_v1; `lift.py`'s docstring says w
 verity bench verifier_cost measure --out DIR [--config NAME ...] [--ir word|boolean ...] [--unrolled-max GATES]
 verity bench verifier_cost partition --out DIR [--config NAME ...] [--ir word|boolean ...] [--unrolled-max GATES]
 research run --as proofs --project verity --on vy-nebius-cpu-2 --source . --pool proofs --cwd clone -- \
-  bash benchmarks/verifier_cost/job.sh measure --unrolled-max 40000000    # every config; results.json to the store
-verity bench verifier_cost plot ART --to PNG                              # from the store
+  bash benchmarks/verifier_cost/job.sh measure|partition --unrolled-max 40000000   # every config, on a node
+verity bench verifier_cost store RUN                     # its results.json or partition.json to the store; prints the art: id
+verity bench verifier_cost plot ART --to PNG             # from the store
 ~~~
 
 `results.json` (`verity/verifier-cost/v1`) has one row per config and IR: the description's bytes, Definitions and body
 nodes, the unrolled circuit's gates, and per check its wall seconds (the best of `--repeat`), peak RSS and the verdict.
 `partition.json` (`verity/verifier-cost-partition/v1`) has one row per config, IR, shape and query: the description's
 bytes, the unrolled gates, the gates of the Calls' distinct Definitions (what `Q_word` and `Q_call` lay out), the wall
-seconds, peak RSS and the population (null where the verifier refuses the query). `job.sh COMMAND` stores either as an
-`evidence/v1` record and writes its `art:` id to `$OUT/art.txt`.
+seconds, peak RSS and the population (null where the verifier refuses the query). `store` puts either in the store as
+an `evidence/v1` record naming the run and its commit; it runs where the store's keys are (a VM), since a node's shell
+has none.
 
 Nothing here is a served Program: `on_bits`'s output is this benchmark's construction, and nothing outside this directory
 reads it.

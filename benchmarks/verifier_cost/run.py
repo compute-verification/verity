@@ -10,6 +10,9 @@ the size of the circuit that description unrolls to (README.md).
       and the digest) on Serve_v1 under the template query of its Calls, and under `Q_word` v1 and `Q_call` v1 at X = 16
       where its Calls' distinct Definitions have at most GATES gates in all; and on the served shape, the population
       program of Serve_v1's largest Definition at N instances (`Q_template_instance`); DIR/partition.json.
+  store RUN [--runs-dir DIR]
+      a `job.sh` run's results.json or partition.json (`research fetch RUN --all`) as one evidence/v1 record, naming
+      the run and its commit; prints its art: id. From a VM with the store's keys: a node's shell has none.
   plot ART --to PNG
       the results of `art:ART` (a results.json or partition.json in the store), time against description bytes and
       against unrolled gates.
@@ -255,6 +258,23 @@ def partition(args) -> int:
     return 0
 
 
+def store(args) -> int:
+    subprocess.run(["research", "fetch", args.run, "--all"], check=True, capture_output=True)
+    run = args.runs_dir / args.run
+    found = [f for f in (run / "out/results.json", run / "out/partition.json") if f.is_file()]
+    if len(found) != 1:
+        print(f"{run}/out holds {len(found)} of results.json and partition.json; store takes a run that wrote one",
+              file=sys.stderr)
+        return 1
+    res = json.loads(found[0].read_text())
+    meta = {"benchmark": "verifier_cost", "schema": res["schema"], "verifier": res["verifier"], "run": args.run,
+            "commit": json.loads((run / "remote.json").read_text())["source_sha"]}
+    p = subprocess.run(["research", "data", "put", "--kind", "evidence/v1", "--file", str(found[0]),
+                        "--preserve", "--meta", json.dumps(meta)], check=True, capture_output=True, text=True)
+    print(p.stdout.strip().splitlines()[-1])
+    return 0
+
+
 def plot(args) -> int:
     import matplotlib
 
@@ -312,11 +332,14 @@ def main(argv: list[str] | None = None) -> int:
     q.add_argument("--unrolled-max", type=int, default=5_000_000)
     q.add_argument("--repeat", type=int, default=3)
     q.add_argument("--exe", type=Path, default=PIECES)
+    s = sub.add_parser("store")
+    s.add_argument("run")
+    s.add_argument("--runs-dir", type=Path, default=Path.home() / ".research/runs")
     p = sub.add_parser("plot")
     p.add_argument("art")
     p.add_argument("--to", required=True)
     args = ap.parse_args(argv)
-    return {"measure": measure, "partition": partition, "plot": plot}[args.cmd](args)
+    return {"measure": measure, "partition": partition, "store": store, "plot": plot}[args.cmd](args)
 
 
 if __name__ == "__main__":
