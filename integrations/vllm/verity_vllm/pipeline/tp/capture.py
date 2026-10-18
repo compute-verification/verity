@@ -4,8 +4,9 @@
         --workload workloads/workload_qwen15_32x16_1req.json --case B1 --tp 2 --out /vol/cp/tp2/runs/<name>/capture \
         [--snapshot-steps all|0,1,2,3] [--no-observer] [--census] [--verify-weights] [--engine-arg key=value ...]
 
-Same κ as `bench/m1_capture.py` (`profile.apply_env()`, `engine_kwargs(cp, enforce_eager=True)`, `enable_prefix_caching=False`,
-uninstrumented throwaway warm-up, our request ids) with two differences forced by the process topology:
+Same κ as `bench/m1_capture.py` (`profile.apply_env()`, `engine_kwargs(cp, enforce_eager=True)`, `enable_prefix_caching=False`
+unless the row's `engine.args` turn it on, uninstrumented throwaway warm-up, our request ids) with two differences forced by the
+process topology:
 
   * `tensor_parallel_size` (and any `--engine-arg`) is passed to `LLM(...)` directly — `vllm_adapter.build_engine` exposes no
     engine-argument passthrough and ends in `get_model_runner(llm)`, which has no in-process runner to find under the
@@ -17,7 +18,9 @@ uninstrumented throwaway warm-up, our request ids) with two differences forced b
 
 The workload's declared target (`target_of_workload`) is applied as `build_engine` applies it (its environment knobs, then its engine
 arguments under the CLI's), every rank's engine is checked against it before anything runs, and each rank's header attests it
-(`pipeline.tp.target`).
+(`pipeline.tp.target`).  The row's `engine.args` (`engine_args_required`) go over the target's and under the CLI's, as `tp-commit`
+applies them, so a row declaring prefix caching and its block size captures with them; every workload run starts from an empty
+prefix cache (`vllm_adapter.run_requests`).
 
 `--inventory-out PATH`: every rank's module inventory of the loaded engine, before the warm-up, as one document
 (`meta_inventory.live_document` of `rank_inventory`), what `capture-map check --inventory` reads, so a capture-map check on the
@@ -60,6 +63,17 @@ def parse_engine_args(items: list[str]) -> dict[str, Any]:
         except json.JSONDecodeError:
             out[k] = v
     return out
+
+
+def stage_engine_kwargs(cp: dict, tp: int, max_num_seqs: int, wl: dict, engine_arg: list[str], target_kw: dict | None = None) -> dict[str, Any]:
+    """The `LLM(**kw)` of a TP stage's engine (tp-capture's capture and control, tp-match's arms, tp-commit): the eager profile at `tp`
+    with prefix caching off, then the target's engine args, the row's `engine.args` (`engine_args_required`, but its world) and the
+    CLI's `--engine-arg`s, each over the one before."""
+    kw = prof.engine_kwargs(cp, replay=False, enforce_eager=True, tensor_parallel_size=tp)
+    kw.update({"enable_prefix_caching": False, "max_num_seqs": int(max_num_seqs), **(target_kw or {})})
+    kw.update({k: v for k, v in (wl.get("engine_args_required") or {}).items() if k != "tensor_parallel_size"})
+    kw.update(parse_engine_args(engine_arg))
+    return kw
 
 
 def parse_steps(s: str | None, max_tokens: int | None) -> list[int]:
@@ -130,11 +144,7 @@ def main(args: Options) -> None:
     cp = prof.checkpoint_for(case, args.checkpoints)
     if args.verify_weights:
         prof.verify_local_weights(cp)
-    kw = prof.engine_kwargs(cp, replay=False, enforce_eager=True, tensor_parallel_size=args.tp)
-    kw["enable_prefix_caching"] = False
-    kw["max_num_seqs"] = int(args.max_num_seqs)
-    kw.update(target_kw)
-    kw.update(parse_engine_args(args.engine_arg))
+    kw = stage_engine_kwargs(cp, args.tp, args.max_num_seqs, wl, args.engine_arg, target_kw)
     observer = not (args.no_observer or args.census)
     with_extension = observer or args.census
     if with_extension:

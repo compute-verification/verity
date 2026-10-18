@@ -170,15 +170,6 @@ class Row:
         """The row's config, its file in the tree that runs."""
         return RowConfig.load(self.path(self.wl))
 
-    def refuse_unserved_engine(self) -> None:
-        """Refuse a tensor-parallel row whose file declares prefix caching: its capture, Match and Commit engines run with it off and a
-        rank Program (`vllm_meta.with_peers`) takes no cached prefix, so the row's record would name a serve it never ran.  A
-        single-GPU row serves it: a warm request's Program reads its cached rows as its `prefix` input (`program.prefix_plan`)."""
-        if self.config().engine.args.get("enable_prefix_caching") is True:
-            self.verdict("precheck", "FAIL", "engine.args.enable_prefix_caching is true on a tensor-parallel row: its stages serve with prefix "
-                                             "caching off and a rank Program takes no cached prefix, so the record would name a serve it never ran")
-            raise Stop(3)
-
     def execution(self) -> str | None:
         """The row's execution label: its workload's ``execution`` (or ``sweep.execution``), else its id's last token; None without
         a workload file."""

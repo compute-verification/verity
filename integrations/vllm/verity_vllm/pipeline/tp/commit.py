@@ -228,7 +228,7 @@ def main(args: Options) -> int:
     from verity_vllm.engine import vllm_adapter as va
     from verity_vllm.pipeline.commit import git_head, run_workload
     from verity_vllm.check.verdict import REQUIRED_CLASSES_DEFAULT, commit_verdict
-    from verity_vllm.pipeline.tp.capture import parse_engine_args
+    from verity_vllm.pipeline.tp.capture import stage_engine_kwargs
     from verity_vllm.engine.rank_worker import EXTENSION
     from verity_vllm.commit.challenge import challenge_positions
     from verity_vllm.commit.partition import require_partition
@@ -263,10 +263,8 @@ def main(args: Options) -> int:
     env_flags = {**prof.apply_env(), **target_env}
     engine_env.step_timeout(args.rpc_timeout)
     cp = prof.checkpoint_for(case, args.checkpoints)
-    kw = prof.engine_kwargs(cp, replay=False, enforce_eager=True, tensor_parallel_size=args.tp)
-    kw.update({"enable_prefix_caching": False, "max_num_seqs": int(args.max_num_seqs), **target_kw})
-    kw.update({k: v for k, v in (wl.get("engine_args_required") or {}).items() if k not in ("tensor_parallel_size",)})
-    kw.update(parse_engine_args(args.engine_arg), worker_extension_cls=EXTENSION)
+    kw = stage_engine_kwargs(cp, args.tp, args.max_num_seqs, wl, args.engine_arg, target_kw)
+    kw["worker_extension_cls"] = EXTENSION
     print(f"[tp2commit] tp={args.tp} case={case} committer={args.committer} kwargs={ {k: v for k, v in kw.items() if k not in ('model', 'tokenizer')} }", flush=True)
     llm, build_s, topo = PH.engine(lambda: LLM(**kw), args.tp, args.rpc_timeout, model=cp["repo"], enforce_eager=kw.get("enforce_eager"), case=case, max_num_seqs=args.max_num_seqs)
     TT.require_ranks(llm, target, args.rpc_timeout)

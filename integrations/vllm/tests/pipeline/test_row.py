@@ -918,24 +918,19 @@ def test_a_single_and_a_tp_rows_folds_store_the_instances_form_of_record(tmp_pat
             assert r.child_env["VERITY_INSTANCES_FORM"] == form
 
 
-def test_a_tensor_parallel_row_declaring_prefix_caching_is_refused_before_any_stage(tmp_path, monkeypatch):
-    """A TP row's stages serve with prefix caching off and its rank Programs take no cached prefix, so a TP row whose file declares it is
-    refused at its precheck; a single-GPU prefix row passes it (its warm requests' Programs read their cached rows as an input)."""
-    tp = _tp_row(tmp_path, "glm53__fp8__h200__tp8__b8__i256__o32__prefix-arrivals__greedy__eager")
-    monkeypatch.setattr(tp, "hidden_build", lambda: "/x/verity_fa2_matReqG.so")
-    monkeypatch.setattr(tp, "release_line", lambda *a: pytest.fail("a stage after the precheck"))
-    with pytest.raises(Stop) as e:
-        tp.prepare()
-    last = open(f"{tp.d}/stages.txt").read().splitlines()[-1].split(" ", 3)
-    assert e.value.rc == 3 and last[:2] == ["precheck", "FAIL"] and "enable_prefix_caching" in last[3]
-    single = _row(tmp_path, row="llama32-1b__bf16__h200__tp1__b2__i168__o10__prefix__greedy__bi-eager")
-
+def test_a_row_declaring_prefix_caching_passes_its_precheck_at_any_world(tmp_path, monkeypatch):
+    """Every stage of a single-GPU or a tensor-parallel row serves the prefix cache its file declares, and a warm request's Program (each
+    rank's, under TP) reads its cached rows as inputs, so neither row is refused before its stages."""
     def past_precheck(*a):
         raise Stop(99)
-    monkeypatch.setattr(single, "release_line", past_precheck)
-    with pytest.raises(Stop) as e:
-        single.prepare()
-    assert e.value.rc == 99
+    tp = _tp_row(tmp_path, "glm53__fp8__h200__tp8__b8__i256__o32__prefix-arrivals__greedy__eager")
+    monkeypatch.setattr(tp, "hidden_build", lambda: "/x/verity_fa2_matReqG.so")
+    single = _row(tmp_path, row="llama32-1b__bf16__h200__tp1__b2__i168__o10__prefix__greedy__bi-eager")
+    for r in (tp, single):
+        monkeypatch.setattr(r, "release_line", past_precheck)
+        with pytest.raises(Stop) as e:
+            r.prepare()
+        assert e.value.rc == 99
 
 
 @pytest.mark.parametrize("row, off", [

@@ -129,6 +129,32 @@ def test_a_cli_engine_arg_still_overrides_the_targets(tmp_path, stand_ins):
 
 
 @pytest.mark.parametrize("driver", ["tp-capture", "tp-commit"])
+def test_both_drivers_serve_the_rows_engine_args_over_the_targets_and_under_the_cli(tmp_path, stand_ins, monkeypatch, driver):
+    """A prefix-caching row's capture, control and Commit engines all serve with its prefix cache and block size (its world is the
+    CLI's `--tp`), as each serves its target's knobs; a row declaring neither keeps prefix caching off."""
+    args = {"max_model_len": 288, "tensor_parallel_size": 8, "enable_prefix_caching": True, "block_size": 64, "moe_backend": "cutlass",
+            "max_num_batched_tokens": 512}
+    monkeypatch.setitem(WORKLOAD, "engine_args_required", args)
+    llm = _LLM(stop="tp2_commit_make")
+    if driver == "tp-capture":
+        _capture(tmp_path, llm, H200, stand_ins)
+        assert llm.rpcs[2][1]["engine_kwargs"]["enable_prefix_caching"] is True
+    else:
+        with pytest.raises(RuntimeError, match="stopped at tp2_commit_make"):
+            _commit(tmp_path, llm, H200, stand_ins)
+    assert (llm.kw["enable_prefix_caching"], llm.kw["block_size"], llm.kw["moe_backend"], llm.kw["max_num_batched_tokens"]) == (True, 64, "cutlass", 2048)
+    assert llm.kw["tensor_parallel_size"] == 2
+    monkeypatch.setitem(WORKLOAD, "engine_args_required", {"max_model_len": 288})
+    llm = _LLM(stop="tp2_commit_make")
+    if driver == "tp-capture":
+        _capture(tmp_path, llm, H200, stand_ins)
+    else:
+        with pytest.raises(RuntimeError, match="stopped at tp2_commit_make"):
+            _commit(tmp_path, llm, H200, stand_ins)
+    assert llm.kw["enable_prefix_caching"] is False and "block_size" not in llm.kw
+
+
+@pytest.mark.parametrize("driver", ["tp-capture", "tp-commit"])
 def test_a_rank_that_does_not_realise_the_declared_target_fails_closed_before_anything_runs(tmp_path, stand_ins, driver):
     llm = _LLM(mismatches={1: ["moe_backend declared 'triton' (TritonExperts), layers report 'CutlassExperts'"]})
     with pytest.raises(SystemExit, match="fail-closed: the engine does not realise the declared TargetProfile: rank 1: moe_backend declared 'triton'"):

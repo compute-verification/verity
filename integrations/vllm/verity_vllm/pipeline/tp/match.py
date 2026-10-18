@@ -56,7 +56,7 @@ def _engine_main(args) -> None:
     from vllm import LLM
 
     from verity_vllm.engine import served, vllm_adapter as va
-    from verity_vllm.pipeline.tp.capture import parse_engine_args
+    from verity_vllm.pipeline.tp.capture import stage_engine_kwargs
     from verity_vllm.engine.rank_worker import EXTENSION
 
     out = Path(args.out)
@@ -66,10 +66,7 @@ def _engine_main(args) -> None:
     env_flags = {**prof.apply_env(), **served.apply(wl["execution"])}
     engine_env.step_timeout(args.rpc_timeout)
     cp = prof.checkpoint_for(case, args.checkpoints)
-    kw = prof.engine_kwargs(cp, replay=False, enforce_eager=True, tensor_parallel_size=args.tp)
-    kw["enable_prefix_caching"] = False
-    kw["max_num_seqs"] = int(args.max_num_seqs)
-    kw.update(parse_engine_args(args.engine_arg))
+    kw = stage_engine_kwargs(cp, args.tp, args.max_num_seqs, wl, args.engine_arg)
     instrumented = args.arm == "capture"
     if instrumented:
         kw["worker_extension_cls"] = EXTENSION
