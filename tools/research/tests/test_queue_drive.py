@@ -929,3 +929,19 @@ def test_pre_warms_run_one_at_a_time_and_count_against_the_running_checks(world,
         world.gh.put(n, world.change({f"verity/ml/circuits/x{n}.py": f"{n}\n"}))
     h.tick()
     assert len(h.launched) == 2 and sum("pre-warming #" in x for x in world.logs) == 1, world.logs
+
+
+def test_a_lean_audit_record_failure_ejects_only_the_prs_that_touch_the_failing_package(world, monkeypatch, tmp_path):
+    """18 Oct 03:30Z: two trains failed lean-audit on verity/core/primitives/requirement's stale record (#2386's); no error line
+    names a file, and the fallback on every Lean source ejected #2341, #2370 and #2371 too, whose changes are in other packages."""
+    h = Harness(world, monkeypatch)
+    h.d.train_size = 2
+    world.gh.put(1, world.change({"pkgA/A.lean": "theorem a : True := trivial\n"}))
+    world.gh.put(2, world.change({"pkgB/B.lean": "theorem b : True := trivial\n"}))
+    h.tick()
+    _check(world, monkeypatch, _tip(world), ("false",))
+    h.evidence = [_lean_run(tmp_path, "AUDIT /w/lean-audit-scratch-1-x/pkgA: FAIL\n  dependencies: the .olean files of the "
+                                      "modules the package imports from toolchain differ from the record\n"
+                                      "AUDIT /w/lean-audit-scratch-1-x/pkgB: PASS\n")]
+    h.tick()
+    assert len(h.posts) == 1 and "Ejected #1:" in h.posts[0] and "Lean package pkgA" in h.posts[0], h.posts
