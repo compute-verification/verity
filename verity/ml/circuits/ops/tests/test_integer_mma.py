@@ -13,6 +13,8 @@ from verity.ml.circuits.silicon.integer import (
     BLACKWELL_SM120_S8_M16N8K32_WRAP,
     S32_MAX,
     S32_MIN,
+    decode_int8,
+    exact_k_limit,
     s32_value,
     s32_word,
 )
@@ -86,6 +88,30 @@ def test_the_device_clamps_once_at_d() -> None:
     for (a_dtype, a, c), word in DEVICE_CLAMP.items():
         model = replace(SAT, dtype=a_dtype)
         assert s32_value(model.step(s32_word(c), list(a), [P] * 32)) == word
+
+
+@pytest.mark.parametrize("formats", [("s8", "s8"), ("s8", "u8"), ("u8", "s8"), ("u8", "u8")])
+def test_the_exact_k_limit_is_the_least_k_whose_sum_can_leave_s32(formats) -> None:
+    """Against every pair of codes: K - 1 of the extreme product stay in s32 and K of one of them leave it."""
+    products = [decode_int8(formats[0], a) * decode_int8(formats[1], b) for a in range(256) for b in range(256)]
+    lo, hi = min(products), max(products)
+    k = exact_k_limit(*formats)
+    assert S32_MIN <= (k - 1) * lo and (k - 1) * hi <= S32_MAX
+    assert k * lo < S32_MIN or k * hi > S32_MAX
+
+
+def test_the_s8_limit_is_2_17_and_tight() -> None:
+    """2^17 - 32 codes -128 sum exactly and 2^17 clamp, in a chain of k/32 steps. At 2^17 only the last step can clamp, so
+    the word is still the same in every k order; at 2^17 + 32 it is not: a clamp after 2^17 products of 2^14 and then 32
+    of -128 * 127 gives one less than the reverse order, which never leaves s32."""
+    k = exact_k_limit("s8", "s8")
+    assert k == 1 << 17
+    m = code(-128)
+    assert s32_value(tc_dot_chain(SAT, 0, [m] * (k - 32), [m] * (k - 32))) == (k - 32) << 14
+    assert s32_value(tc_dot_chain(SAT, 0, [m] * k, [m] * k)) == S32_MAX != k << 14
+    a, b = [m] * (k + 32), [m] * k + [code(127)] * 32
+    up, down = tc_dot_chain(SAT, 0, a, b), tc_dot_chain(SAT, 0, a[::-1], b[::-1])
+    assert s32_value(down) == (k << 14) - 32 * 128 * 127 == s32_value(up) + 1
 
 
 def test_registry_entry() -> None:

@@ -56,7 +56,9 @@ python tools/verity/lean/check.py PKG  once, before pushing (the kernel replay o
 
 Build on a CPU machine; `Security/Proofs` (package `security_proofs`, on ArkLib) is the long one. Never `lake
 update`, and never change a `require`, a revision or `lean-toolchain` in a feature PR. Its build of C-Flock's soundness
-proofs peaks at 15–24 GB of memory: on a machine with less than 24 GB, add a swapfile first, and give a queued job
+proofs peaks at 15–24 GB of memory, so `check.py` and the fast path refuse a package that pins ArkLib on a machine with
+less than 24 GiB (memory and swap, within its cgroup) and print the fast path's line on a node; a 16 GB agent VM runs
+it there. `VERITY_LEAN_MEM_FLOOR_GIB` sets another floor (0: none, say after adding a swapfile). Give a queued job
 `--mem-gb 32`.
 
 To check your records, or get the `--update` printout of what changed (what Daniel's DM carries), without a build of

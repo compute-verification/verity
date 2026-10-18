@@ -7,12 +7,16 @@ same bf16 word on all 30, f32 accumulators differ on 26/30) are pinned as in the
 from __future__ import annotations
 
 import json
+import re
 import struct
 from array import array
 from pathlib import Path
 
+import pytest
 
+from verity.ml.circuits import codec
 from verity.ml.circuits.defs import CompositeDefinition, bind
+from verity.ml.circuits.evaluation.reference import standalone_call
 from verity.ml.circuits.evaluate import evaluate_call
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.ops import gemm as G
@@ -196,3 +200,102 @@ def test_nvfp4_coordinate_replays_every_recorded_rtx5090_vector() -> None:
     for c in cases[::40]:
         ops = ([int(ch, 16) for ch in c["a"]], [int(ch, 16) for ch in c["b"]], list(bytes.fromhex(c["sa"])), list(bytes.fromhex(c["sb"])))
         assert _ev(bind(G.GemmCoordinateNvf4, K=len(c["a"]), **G.GEMM_SM120_NVF4), *ops) == (f32_to_bf16_hw_word(int(c["d"], 16)),)
+
+
+def test_the_s8_coordinate_scales_as_steps_int8_linear_and_the_row_is_its_coordinates() -> None:
+    """`ScaledMmS8Coordinate_v1` is bf16_rn((f32_rn(acc) * sx) * sw) on the exact integer sum, `benchmarks/ppl/steps.py`'s
+    `int8_linear` order (numpy's float32 products), and `ScaledMmS8_v1` is the coordinates over W's rows. Some rows' scales
+    are searched for so that `sw` first (CUTLASS c2x's order) rounds to another bf16 word: random scales almost never tell
+    the two orders apart."""
+    import numpy as np
+
+    from verity.ml.circuits import evaluation as E
+
+    def bf16_rn(v):
+        u = v.view(np.uint32).astype(np.uint64)
+        return (u + 0x7FFF + ((u >> 16) & 1)) >> 16
+
+    rng = np.random.default_rng(31)
+    n, K, N = 300, 128, 3
+    x = rng.integers(-128, 128, (n, K)).astype(np.int8)
+    w = rng.integers(-128, 128, (n, N, K)).astype(np.int8)
+    sx = (np.abs(rng.standard_normal(n)) / 127).astype(np.float32)
+    sw = (np.abs(rng.standard_normal((n, N))) * 0.02 / 127).astype(np.float32)
+    acc = (x[:, None, :].astype(np.int64) * w).sum(-1).astype(np.int32)
+    f = acc[:64, :1].astype(np.float32)
+    cx = (np.abs(rng.standard_normal((64, 1 << 16))) / 127).astype(np.float32)
+    cw = (np.abs(rng.standard_normal((64, 1 << 16))) * 0.02 / 127).astype(np.float32)
+    apart = bf16_rn((f * cx) * cw) != bf16_rn(cx * (cw * f))
+    rows = np.flatnonzero(apart.any(1))
+    assert len(rows) >= 8
+    sx[rows], sw[rows, 0] = cx[rows, apart[rows].argmax(1)], cw[rows, apart[rows].argmax(1)]
+    y = (acc.astype(np.float32) * sx[:, None]) * sw
+    want = np.vectorize(f32_to_bf16_hw_word, otypes=[np.uint64])(y.view(np.uint32))
+    c2x = sx[rows, None] * (sw[rows] * acc[rows].astype(np.float32))
+    assert (np.vectorize(f32_to_bf16_hw_word, otypes=[np.uint64])(c2x.view(np.uint32))[:, 0] != want[rows, 0]).all()
+    u8, u32 = (lambda a: a.view(np.uint8)), (lambda a: a.view(np.uint32))
+    coord = bind(G.ScaledMmS8Coordinate, K=K, **G.GEMM_SM120_S8)
+    got = E.evaluate_batch(coord, u8(x), u32(sx), u8(w[:, 0]), u32(sw[:, 0]), kernel="reference")
+    assert np.array_equal(got.astype(np.uint64), want[:, 0])
+    row = E.evaluate_batch(bind(G.ScaledMmS8, K=K, N=N, **G.GEMM_SM120_S8), u8(x), u32(sx), u8(w), u32(sw), kernel="reference")
+    assert np.array_equal(row.astype(np.uint64), want)
+    accw = E.evaluate_batch(bind(G.GemmAccumulatorS8, K=K, **G.GEMM_SM120_S8), u8(x), u8(w[:, 0]), kernel="reference")
+    assert np.array_equal(accw.astype(np.uint32).view(np.int32), acc[:, 0])
+
+
+# ---- the K a Definition binds ---------------------------------------------------------------------------------------------
+
+#: each GEMM Definition, its step width k and the rest of a binding
+FAMILIES = [(G.DotBf16, 16, G.GEMM_HOPPER), (G.GemmCoordinate, 16, G.GEMM_AMPERE), (G.Gemm, 16, {"N": 3, **G.GEMM_AMPERE}),
+            (G.GemmCoordinateE4m3, 32, G.GEMM_SM120_E4M3), (G.GemmCoordinateNvf4, 64, G.GEMM_SM120_NVF4),
+            (G.GemmCoordinateMxf4, 64, G.GEMM_SM120_MXF4), (G.GemmAccumulatorS8, 32, G.GEMM_SM120_S8),
+            (G.ScaledMmS8Coordinate, 32, G.GEMM_SM120_S8), (G.ScaledMmS8, 32, {"N": 2, **G.GEMM_SM120_S8})]
+S8_FAMILIES = FAMILIES[6:]
+
+
+@pytest.mark.parametrize("defn,k,rest", FAMILIES, ids=[d.name for d, *_ in FAMILIES])
+def test_bind_refuses_a_k_that_is_not_a_multiple_of_the_step(defn, k, rest) -> None:
+    """K = k + 1 (33 for the s8 Definitions) and K = 3k/2 would lose their last products to `range(K // k)`. The refusal says
+    the multiple to pad to, whether K is bound with the step or after it."""
+    for K in (k + 1, 3 * k // 2):
+        why = (f"{defn.id} refuses this binding: K={K} is not a multiple of the {k}-wide step, so K // {k} steps would drop "
+               f"the last {K % k} of its {K} products: pad every operand with zero codes to K={2 * k} ")
+        with pytest.raises(ValueError, match=re.escape(why)):
+            bind(defn, K=K, **rest)
+        with pytest.raises(ValueError, match=re.escape(why)):
+            bind(defn, **rest).bind(K=K)
+
+
+@pytest.mark.parametrize("defn,k,rest", S8_FAMILIES, ids=[d.name for d, *_ in S8_FAMILIES])
+def test_the_s8_definitions_refuse_k_from_2_17(defn, k, rest) -> None:
+    """From `S8_K_LIMIT` = 2^17 an s8 sum can leave s32 (`test_integer_mma`), and K = 2^17 - 32 is the largest K that binds.
+    The limit is the s8 Definitions' alone."""
+    assert G.S8_K_LIMIT == 1 << 17
+    for K in (1 << 17, (1 << 17) + 32, 1 << 20):
+        with pytest.raises(ValueError, match=re.escape(f"K={K} is at or past 131072, the least K whose sum can leave the s32 "
+                                                       f"accumulator")) as e:
+            bind(defn, K=K, **rest)
+        assert str(e.value).endswith("Split the k range into accumulators of at most K=131040 each")
+    assert bind(defn, K=(1 << 17) - 32, **rest).complete
+    assert bind(G.GemmCoordinateE4m3, K=1 << 20, **G.GEMM_SM120_E4M3).complete
+
+
+#: (gates, standalone program digest) at valid K, recorded before `bind` refused any K: the refusals change no gate of a K
+#: they admit. The s8 Definitions at K = 2^17 - 32, the largest they admit.
+VALID = {
+    bind(G.DotBf16, K=48, **G.GEMM_HOPPER): (4, "0ff626e0396e9b12f29c519e092261491771bc1403e63195431b9592220c17c64a3853633c2ca9a0f00e7783444b6fe17e8159f79d0a349c55551e7fc352730a"),
+    bind(G.GemmCoordinate, K=8960, **G.GEMM_AMPERE): (562, "239bc2a3c130cb7496b07bb590c4a2bf55957b6214b17a9ff629abd5b9c83211eb4e484d7440a2815407528ff5c64e623b9470dba081874f8e2df9c8792d9b3e"),
+    bind(G.Gemm, K=1536, N=3, **G.GEMM_AMPERE): (294, "588acc04cbf29bd700425da767dba4c3a5f7aa8fc9a6407c30de4251895151378c86d2f08db89302ba661656780b2e416c92db938bffd458b95e4a59aaac6c55"),
+    bind(G.GemmCoordinateE4m3, K=8192, **G.GEMM_SM120_E4M3): (258, "b9a41ad5ff51169a596a3b73d5e64bc2ee29dce9562ea7c318c8c7f42459a8621bbf5573b9afc0354a38b4efd2bb8bfc309c29d62083f211d6ba9d88dd6a938b"),
+    bind(G.GemmCoordinateNvf4, K=2048, **G.GEMM_SM120_NVF4): (34, "546196109f4e09acc4b44308a38098cf5295f3c359df7cf364b45af67c95b005ff95d02cdc73e7a9724c93b7c3e712a706a27dfc1406c0992463015ceca6bfcc"),
+    bind(G.GemmCoordinateMxf4, K=2048, **G.GEMM_SM120_MXF4): (34, "26e9e86cb631488f8531c90d6f5e60eaa90ca3e488d43633fdfbe80a884cca7d7198984bb5573fbe4d24e49c9110e40c2748f0300e8ac4ebbd171a6399f92bbc"),
+    bind(G.GemmAccumulatorS8, K=131040, **G.GEMM_SM120_S8): (4096, "6c58a4fdb90b9e4029279a9a762e9370f102143753eaa4d262be60a456a8abb3c1a941ab01051f71eb8b5f089d1f3a5f996c67c9ea2b8e6eeb1746d54f662991"),
+    bind(G.ScaledMmS8Coordinate, K=131040, **G.GEMM_SM120_S8): (4100, "dfa0738a72365f7920185ffdb6da23d8d17ffd6fb4ba384c5c5cb1f0833cf16e1ca1c14cd78c75c8e3199d531cb438ecaa1cba5b0a1e328fed08ed29314fcabd"),
+    bind(G.ScaledMmS8, K=131040, N=2, **G.GEMM_SM120_S8): (8200, "5eaef04a9fbb5fea1e993d98afb123c640c232b2b7ff44536f4966cff6aa481c3898b0210fc1e4e9c710aaddbf2411f7fa29c084bf4c27d07931959ac25bdc90"),
+}
+
+
+@pytest.mark.parametrize("spec", VALID, ids=[s.id for s in VALID])
+def test_a_valid_k_binds_to_its_recorded_digest(spec) -> None:
+    prog, _ = standalone_call(spec)
+    assert (spec.gates, codec.program_digest(codec.encode_program(prog))) == VALID[spec]
