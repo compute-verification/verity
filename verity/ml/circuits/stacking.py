@@ -27,7 +27,9 @@ field extractions below, and the red team's closed table (round 2) for the famil
 A gather's index bits are those that tell its outcomes apart (`GATHERS`): ceil(log2(V + 1)) for an entry of V or the family's
 out-of-range constant, n for the entry at the index's low n bits, and ceil(log2(V + 3)) for a lifted row of V (or ⊥, an invalid
 index, or out of range). Each distinct index a body reads counts once per kind, so one routing index read by many gathers counts
-once; a constant index is wiring. A field extraction (`BitAtx{W}`, `PouwWindowWord_v1`) is a rounding, not a gather: at a
+once; a constant index is wiring. A gather whose index and column both depend on a run input pays one ``gathers`` unit more, as
+Lean's `Gates.units` does: it is a V-way select among run-time values, and without that unit a tree of gathers sharing indices
+would compute any function of b index bits for b units. A field extraction (`BitAtx{W}`, `PouwWindowWord_v1`) is a rounding, not a gather: at a
 constant position it still computes. A lift (`Lifted[P]_v1`, `Lifted[P]_v2`, ``P{ORD=k}``) is P's class with a tag test, so a
 free P's lift is budgeted (a constant's a select on the enable, the rest roundings). A lifted gather also scans every operand's
 tag (any invalid row gives INV), so it pays one ``compare_select`` unit beside its index bits, and it isn't exempt from fan-in.
@@ -542,6 +544,8 @@ class _Pass:
         g = gather(fn.id) if cls == "gathers" else None
         if any(dyn) and (g is None or g[3]):
             t.units["compare_select" if g else cls] += 1
+        if g and dyn[g[0]] and any(d for j, d in enumerate(dyn) if j != g[0]):
+            t.units["gathers"] += 1
         rule = RANGES.get(fn.id)
         return (rule(*rng) if rule else None), t
 

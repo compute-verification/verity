@@ -56,7 +56,7 @@ def test_the_quantizers_range_rule_holds_on_its_evaluator():
 def test_a_bf16_program_is_refused_for_its_tensor_core_steps(model, wrapper, kw, digest, steps, units, lifetime):
     """Roundings: each tensor-core step is one, beside the FP elementwise ops. Gathers: 17 index bits a token row's embedding
     (V = 128256, or out of range) in Llama, five rows in the request; Qwen's 18 (V = 151936) and 48 layers x 8 routed experts x 8
-    bits (one of 128, or out of range). The request's run input is its 3 prompt tokens, first read in step 0, and its longest-held value lives 2 steps."""
+    bits (one of 128, or out of range); each reads a registered column, so none pays the selection unit. The request's run input is its 3 prompt tokens, first read in step 0, and its longest-held value lives 2 steps."""
     r, c, a = _analysis(model, wrapper, **kw)
     assert r.digest.startswith(digest)
     g = a.gates[WGMMA]

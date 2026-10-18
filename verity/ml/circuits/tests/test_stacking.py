@@ -404,6 +404,26 @@ def test_index_bits_of_two_kinds_from_one_index_add():
     assert P.analyze(program, census(program, [len(program.root.body.nodes)])).steps[0]["units"] == {**FREE, "gathers": 9}
 
 
+@pytest.mark.parametrize("registered,units", [((), 6), (("col",), 5), (("i",), 0)])
+def test_a_gather_among_run_time_values_pays_one_unit_more(registered, units):
+    """Lean's `Gates.units`: a run index pays its index bits, and one more when the column holds run-time values too (a
+    16-way select among them); at a registered index the gather is wiring, whatever its column holds."""
+    program, ends = _one_gate_program(GATHER, registered)
+    assert P.analyze(program, census(program, ends)).steps[0]["units"] == {**FREE, "gathers": units}
+
+
+def test_a_tree_of_gathers_pays_for_each_select_among_run_time_values():
+    """Sixteen gathers by i over constant tables, then one by j over their outputs: a table of any function of (i, j). Without
+    the selection unit it would cost j's and i's bits alone; the second level selects among run-time words."""
+    def body(B, _S, i, j):
+        leaves = [B.call(GATHER, i, array_of([B.call(prims.const(16, (k * 31 + r * 7) % 65521)) for r in range(16)]))
+                  for k in range(16)]
+        return B.call(GATHER, j, array_of(leaves))
+
+    program = Program(comp("TestGatherTree", (("i", S32), ("j", S32)), S16, body))
+    assert P.analyze(program, census(program, [len(program.root.body.nodes)])).steps[0]["units"] == {**FREE, "gathers": 11}
+
+
 def test_a_field_extraction_is_a_rounding_at_any_position():
     """`BitAtx32` reads bit i of a word: a rounding whenever either operand is a run input, so a bit at a constant position
     (red team round 2's soundness item) is budgeted, not free wiring."""
