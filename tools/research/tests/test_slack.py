@@ -1625,6 +1625,49 @@ def test_origin_groups_reads_the_registry_as_origin_main_has_it(tmp_path):
     assert slack.origin_groups(tmp_path / "nowhere" / "registry.json") == set()
 
 
+def test_stale_routing_counts_origin_mains_routing_commits_the_checkout_lacks(tmp_path, monkeypatch):
+    """Only commits to the registry or slack.py count, the stamp holds the next look off for FRESH_EVERY_S, and where git
+    can't answer it says nothing."""
+    import subprocess
+    monkeypatch.delenv("RESEARCH_SLACK_FRESH_CHECK")
+    monkeypatch.setenv("RESEARCH_SLACK_SEEN", str(tmp_path / "seen"))
+    git = lambda cwd, *a: subprocess.run(["git", *a], cwd=cwd, check=True, capture_output=True)  # noqa: E731
+
+    def commit(path: str, text: str):
+        (upstream / path).parent.mkdir(parents=True, exist_ok=True)
+        (upstream / path).write_text(text)
+        git(upstream, "add", "-A")
+        git(upstream, "commit", "-qm", path)
+
+    upstream = tmp_path / "upstream"
+    upstream.mkdir()
+    git(upstream, "init", "-q", "-b", "main")
+    commit(str(slack.REGISTRY_REL), "{}")
+    clone = tmp_path / "clone"
+    git(tmp_path, "clone", "-q", str(upstream), str(clone))
+    assert slack.stale_routing(clone, now=1e9) is None
+    commit("README.md", "unrelated")
+    assert slack.stale_routing(clone, now=2e9) is None
+    commit(str(slack.REGISTRY_REL), '{"handles": []}')
+    commit("tools/research/src/research/slack.py", "# routing")
+    assert slack.stale_routing(clone, now=2e9 + 1) is None                      # within FRESH_EVERY_S of the last look
+    why = slack.stale_routing(clone, now=3e9)
+    assert why and "lacks 2 commits" in why and f"`git merge origin/main` in {clone}" in why
+    git(clone, "merge", "-q", "--ff-only", "origin/main")
+    assert slack.stale_routing(clone, now=4e9) is None
+    assert slack.stale_routing(tmp_path / "not-a-repo", now=5e9) is None
+    monkeypatch.setenv("RESEARCH_SLACK_FRESH_CHECK", "0")
+    commit(str(slack.REGISTRY_REL), "[]")
+    assert slack.stale_routing(clone, now=6e9) is None
+
+
+def test_a_routed_post_warns_when_the_checkouts_routing_is_stale(fake, registry, routes_dirs, capsys, monkeypatch):
+    inbox(fake, routes_dirs, "circuits")
+    monkeypatch.setattr(slack, "stale_routing", lambda: "this checkout lacks 3 commits")
+    rc, _, err = run(capsys, "send", "--as", "infra", "--to", "@circuits", "--text", "node 2 is free")
+    assert rc == 0 and "research msg: this checkout lacks 3 commits" in err and "route @circuits: rang" in err
+
+
 def test_verify_author_accepts_a_routed_workers_name_and_the_router(fake, registry, routes_dirs, capsys):
     inbox(fake, routes_dirs, "vllm-epoch-run")
     for who in ("vllm-epoch-run", "router"):

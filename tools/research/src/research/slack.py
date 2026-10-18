@@ -186,6 +186,37 @@ def origin_groups(path: Path) -> set[str]:
         return set()
 
 
+FRESH_FILES = (REGISTRY_REL, Path("tools/research/src/research/slack.py"))   # what routing reads from the checkout
+FRESH_EVERY_S = 1800
+
+
+def stale_routing(repo: Path | None = None, now: float | None = None) -> str | None:
+    """Why this checkout's routing may be stale, or None: at most once per FRESH_EVERY_S (a stamp file), fetch origin/main
+    and count its commits to the registry and slack.py that HEAD lacks.  A sender on an old checkout rings no one for a
+    handle added or an inbox reopened since.  Best effort: no git, no remote or no network says nothing, and
+    RESEARCH_SLACK_FRESH_CHECK=0 turns it off."""
+    if os.environ.get("RESEARCH_SLACK_FRESH_CHECK") == "0":
+        return None
+    stamp = Path(os.environ.get("RESEARCH_SLACK_SEEN") or Path.home() / ".research" / "slack-seen") / ".fresh-check"
+    now = time.time() if now is None else now
+    try:
+        if stamp.is_file() and now - stamp.stat().st_mtime < FRESH_EVERY_S:
+            return None
+        stamp.parent.mkdir(parents=True, exist_ok=True)
+        stamp.touch()
+        os.utime(stamp, (now, now))
+        repo = repo or Path(__file__).resolve().parents[4]
+        git = lambda *a: subprocess.run(["git", "-C", str(repo), *a], capture_output=True, text=True, timeout=15,
+                                        env={**os.environ, "GIT_TERMINAL_PROMPT": "0"})
+        git("fetch", "-q", "origin", "main")
+        missing = git("rev-list", "--count", "HEAD..origin/main", "--", *map(str, FRESH_FILES))
+    except (OSError, subprocess.SubprocessError):
+        return None
+    n = int(missing.stdout.strip() or 0) if missing.returncode == 0 else 0
+    return (f"this checkout lacks {n} commit{'s' if n != 1 else ''} of origin/main to the registry or slack.py, so routing "
+            f"may miss handles added or inboxes reopened since: `git merge origin/main` in {repo}") if n else None
+
+
 def load_registry(path: Path) -> dict:
     try:
         reg = json.loads(path.read_text())
@@ -555,6 +586,8 @@ def _post(api: Slack, ch: str, handle: str, text: str, thread: str | None = None
         link = "-"
     print(f"{ts} {link}")
     if route and route[1] is not None and not api.dry_run:
+        if why := stale_routing():
+            print(f"research msg: {why}", file=sys.stderr)
         msg = {"text": text, "ts": ts, "thread_ts": thread, "bot_id": "self", "username": handle}
         try:
             deliver(api, route[0], route[1], ch, msg, link)
