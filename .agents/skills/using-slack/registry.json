@@ -91,7 +91,7 @@
     },
     {
       "handle": "circuits",
-      "holder": "the circuits coordinator (bc-b67ee4b3-1d5f-5181-9159-70d24f80cfa8, generation 4, succeeding bc-21f3d3de on 18 Oct)",
+      "holder": "the circuits coordinator (bc-21f3d3de-28db-5e5d-964b-d357187449aa)",
       "remit": "Circuits of real workloads: the vLLM integration, the epoch run, sm_120 GEMM, TP2.",
       "charter": "/cursor/stores/bc-36415049-30db-4fff-a34b-81f0afc0124d/docs/restructure/ (circuit)",
       "usergroup": "S0C5U3LHMFT",
@@ -125,8 +125,7 @@
       "branch_suffixes": [
         "8c79",
         "c491",
-        "6f04",
-        "cfa8"
+        "6f04"
       ]
     },
     {
