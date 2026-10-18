@@ -15,6 +15,8 @@ bench arm's own id. Measures (stock's step times are stock-prof's, the same engi
   {prefill,decode}_step_ms     mean engine-step span (nsys exec range to the next), over the timed runs
   {prefill,decode}_serve_ms    GPU time of the model's own kernels per step
   {prefill,decode}_hash_gpu_ms GPU time of the hash kernels (leaves + tree) launched per step
+  {prefill,decode}_gather_ms   GPU time of the gather into the staging windows per step (the gather kernel, or the copy engines'
+                               device-to-device copies; stock's are its own few)
   {prefill,decode}_serve_rise_pct  100 (serve_arm / serve_stock - 1): the model's kernels slowed by sharing the GPU
   noise_tpot_cv_pct        (stock only) the coefficient of variation of stock's TPOT over its interleaved reps
   first_run_ms             wall time of the arm's first profiled run (the gate run, the same steps): no plan is learned yet, so every
@@ -85,6 +87,7 @@ def step_means(summary: list[dict], reps: int) -> dict[str, float]:
         out[f"{phase}_step_ms"] = mean(lambda r: r.get("step_ms", 0.0))
         out[f"{phase}_serve_ms"] = mean(lambda r: r.get("serve", 0.0))
         out[f"{phase}_hash_gpu_ms"] = mean(lambda r: r.get("hash.leaves", 0.0) + r.get("hash.tree", 0.0))
+        out[f"{phase}_gather_ms"] = mean(lambda r: r.get("collect.gather", 0.0) + r.get("memcpy.DtoD", 0.0))
     for key, name in (("gpu_busy_serve_ms", "serve_run_ms"), ("gpu_busy_hash_ms", "hash_run_ms"), ("hash_overlap_serve_ms", "hash_corun_ms")):
         if all(key in r for r in runs):
             out[name] = round(statistics.fmean(r[key] for r in runs), 3)

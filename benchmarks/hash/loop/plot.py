@@ -24,7 +24,7 @@ from pathlib import Path
 
 MEASURES = ("tpot_overhead_pct", "throughput_overhead_pct", "prefill_step_ms", "decode_step_ms", "prefill_hash_gpu_ms",
             "decode_hash_gpu_ms", "prefill_serve_rise_pct", "decode_serve_rise_pct", "first_run_rise_pct", "first_run_copy_gb",
-            "serve_lost_per_corun_ms")
+            "serve_lost_per_corun_ms", "prefill_gather_ms")
 WORKLOAD = "qwen3-8b"
 ARMS = ("stock", "sha512", "blake3", "sha512-layer")   # their order in the table; plot.py draws every arm it finds
 HEADLINE = ("tpot_overhead_pct", "throughput_overhead_pct")
