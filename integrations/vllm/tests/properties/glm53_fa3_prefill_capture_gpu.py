@@ -6,21 +6,25 @@ One GPU process writes `<out>/glm53_fa3_prefill_capture.json`, the property reco
 The device gate runs first and nothing else runs when it fails (exit 3):
 
   gate     `fa2_target_capture_gpu.gate`: driver, compute capability 9.0, 132 SMs.
-  select   vLLM's `get_flash_attn_version(head_size=256)` on this GPU is 3.
+  select   vLLM's `get_flash_attn_version(head_size=256, head_size_v=256)` on this GPU is 3, and vLLM's own `FlashAttnPrefillBackend`
+           at GLM-5.3's MLA dims runs FA3 with v unpadded at scale 256^-0.5 (what `DsaDenseMha[vllm-dsa]` reads from the layer).
   mufu     `fa2_target_capture_gpu.mufu`: the ex2 / rcp tables (FA3's `--use_fast_math` exp2f and 1/x) on all 2^32 inputs.
   launch   every launch's kernels (torch.profiler): one `FlashAttnFwdSm90` instantiation at TileShape 128x80x256, kHeadDimV 256,
-           causal, varlen, not paged, MmaPV_is_RS, IntraWGOverlap, Split exactly when `fa3_model.split_plan` says the launch splits,
-           and `FlashAttnFwdCombine` with it; each launch run twice, the words equal.
+           causal (not at max_seqlen_q 1, where FA3's `mha_fwd` drops it above head 128: the two agree there), varlen, not paged,
+           MmaPV_is_RS, IntraWGOverlap, Split exactly when `fa3_model.split_plan` says the launch splits, and `FlashAttnFwdCombine`
+           with it; each launch run twice, the words equal.
   rows     each case (one sequence at each of `LENGTHS`, the `VARLEN` batches, a `wide` batch with every operand word scaled by
            2^U(-8, 8)) at `num_splits = 1` (pinned) and at the served `num_splits = 0`.  q and k are contiguous [tokens, 8, 256] (k =
            k_nope ++ k_pe broadcast over heads), v the strided view of kv_b_proj's [tokens, 8, 192 + 256] output, as vLLM passes them.
+           Each case also runs through the backend itself (`run_prefill_new_tokens`, the call `forward_mha` makes): its own launch
+           (`backend`), whose words equal the served launch's.
            Every output row against the C++ twin (`fa3_model.attention_call`, kBlockN 80); on `SAMPLE` rows also the vectorised twin
            (`derived_rows.attention_rows`), the reference evaluator on one head (`AttentionHead_v4`) and the target's binding; a head
            the twin flags non-finite takes the reference evaluator's words.
 
-GO = the gate, the selection, MUFU, every launch, and every row of the pinned launches and of the served sequences the plan runs as
-one split equal to the twin, with every sampled check.  Served sequences the plan splits run `FlashAttnFwdCombine`, which no Program
-models: they are reported apart (`classes.served_split`) and do not count.
+GO = the gate, the selection, MUFU, every launch, every backend launch's words the served launch's, and every row of the pinned
+launches and of the served sequences the plan runs as one split equal to the twin, with every sampled check.  Served sequences the
+plan splits run `FlashAttnFwdCombine`, which no Program models: they are reported apart (`classes.served_split`) and do not count.
 
     cd integrations/vllm; PY=/workspace/venv312/bin/python     # PYTHONPATH as pod_bootstrap.sh sets it
     $PY tests/properties/glm53_fa3_prefill_capture_gpu.py --out DIR --scratch /tmp --want-cc 9.0 --want-sms 132 --min-driver 575
@@ -45,9 +49,9 @@ from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
 from verity_vllm.properties.record import seal as seal_record
 
-SCHEMA = "verity-vllm/glm53-fa3-prefill-capture/v1"
+SCHEMA = "verity-vllm/glm53-fa3-prefill-capture/v2"
 RECORD = "glm53_fa3_prefill_capture.json"
-NH, NOPE, ROPE, DV = 8, 192, 64, 256
+NH, NOPE, ROPE, DV, KV_LORA_RANK = 8, 192, 64, 256, 512
 D = NOPE + ROPE
 SCALE = D ** -0.5
 BM, BN, NUM_SMS = 128, 80, 132
@@ -93,13 +97,14 @@ def plan(seqlens: list[int], num_splits: int) -> dict[str, Any]:
     return {"static": static, "dynamic": dyn}
 
 
-def launch_geometry(names: list[str], static: int) -> dict[str, Any]:
+def launch_geometry(names: list[str], static: int, max_seqlen_q: int) -> dict[str, Any]:
     """The `FlashAttnFwdSm90` instantiations among a launch's kernel names, against the 128 x 80 x 256 tile and the flags vLLM's call
-    sets, with `Split` and `FlashAttnFwdCombine` where the plan splits the launch."""
+    sets, as FA3's `mha_fwd` (flash_api.cpp:640-646) keeps them: no `Is_causal` at max_seqlen_q 1, with `Split` and
+    `FlashAttnFwdCombine` where the plan splits the launch."""
     fwd = sorted({(int(m[0]), (int(m[4]), int(m[5]), int(m[6])), int(m[7]), tuple(x.strip() == "true" for x in m[8].split(",")))
                   for n in names for m in _FWD.findall(n)})
     combine = any("FlashAttnFwdCombine" in n for n in names)
-    want = dict(WANT_FLAGS, Split=static > 1)
+    want = dict(WANT_FLAGS, Is_causal=max_seqlen_q > 1, Split=static > 1)
     rec: dict[str, Any] = {"instantiations": [{"stages": s, "tile": list(t), "headdim_v": dv, "flags": dict(zip(FLAGS, f))}
                                               for s, t, dv, f in fwd],
                            "combine": combine, "want": {"tile": [BM, BN, D], "headdim_v": DV, "flags": want, "combine": static > 1},
@@ -111,12 +116,23 @@ def launch_geometry(names: list[str], static: int) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------------------------------------------------------- gpu
-def selection() -> dict[str, Any]:
+def backend():
+    """vLLM's `FlashAttnPrefillBackend` at GLM-5.3's MLA dims on a TP8 rank, as `SparseMLACommonImpl` builds it (no VllmConfig: on
+    this path the backend reads none)."""
+    from vllm.v1.attention.backends.mla.prefill.flash_attn import FlashAttnPrefillBackend
+
+    return FlashAttnPrefillBackend(num_heads=NH, scale=SCALE, kv_lora_rank=KV_LORA_RANK, qk_nope_head_dim=NOPE, qk_rope_head_dim=ROPE,
+                                   v_head_dim=DV, vllm_config=None)
+
+
+def selection(be) -> dict[str, Any]:
     from vllm.v1.attention.backends.fa_utils import get_flash_attn_version
     from vllm.vllm_flash_attn.flash_attn_interface import is_fa_version_supported
 
-    v = get_flash_attn_version(head_size=D)
-    return {"fa_version": v, "fa3_supported": bool(is_fa_version_supported(3)), "ok": v == 3}
+    v = get_flash_attn_version(head_size=D, head_size_v=DV)
+    got = {"fa_version": be.vllm_flash_attn_version, "requires_v_padding": be.requires_v_padding, "scale": be.scale}
+    return {"fa_version": v, "fa3_supported": bool(is_fa_version_supported(3)), "backend": got,
+            "ok": v == 3 and got == {"fa_version": 3, "requires_v_padding": False, "scale": SCALE}}
 
 
 def operands(c: dict[str, Any], seed: int) -> dict[str, Any]:
@@ -147,13 +163,25 @@ def fa3_call(t: dict[str, Any], seqlens: list[int], num_splits: int):
                                   softmax_scale=SCALE, causal=True, return_softmax_lse=False, num_splits=num_splits, fa_version=3)
 
 
+def backend_call(be, t: dict[str, Any], seqlens: list[int]):
+    """`forward_mha`'s call of a prefill without context: the step's query_start_loc and longest query, no lse, no `out`."""
+    import types
+
+    import torch
+
+    cu = torch.tensor([0, *np.cumsum(seqlens).tolist()], dtype=torch.int32, device="cuda")
+    be.prepare_metadata(types.SimpleNamespace(query_start_loc=cu, max_query_len=max(seqlens)))
+    return be.run_prefill_new_tokens(q=t["q"], k=t["k"], v=t["v"], return_softmax_lse=False)
+
+
 def gpu(work: Path, outdir: Path, quick: bool, only: list[str] | None, doc: dict[str, Any]) -> list[dict[str, Any]]:
     """Selection, MUFU and every launch (doc["selection"], doc["mufu"], doc["launches"]); the comparison jobs, their words saved
     under ``work``."""
     import torch
     from torch.profiler import ProfilerActivity, profile, record_function
 
-    doc["selection"] = selection()
+    be = backend()
+    doc["selection"] = selection(be)
     print(f"[glm53-fa3] selection {json.dumps(doc['selection'])}", flush=True)
     p = torch.cuda.get_device_properties(0)
     doc["mufu"] = C.mufu(work, f"sm_{p.major}{p.minor}")
@@ -185,10 +213,17 @@ def gpu(work: Path, outdir: Path, quick: bool, only: list[str] | None, doc: dict
                 out = str(d / f"out_{mode}.npy")
                 np.save(out, G._words(out1))
                 jobs += jobs_for(c, mode, pl, {**words, "out": out})
-            del t, out1, out2
+                served = out1
+            with record_function(f"{C.LABEL}{len(doc['launches'])}"):
+                b1 = backend_call(be, t, c["seqlens"])
+                b2 = backend_call(be, t, c["seqlens"])
+                torch.cuda.synchronize()
+            doc["launches"].append({"case": c["name"], "mode": "backend", "seqlens": c["seqlens"], "num_splits_arg": None,
+                                    "plan": plan(c["seqlens"], 0), "deterministic": G._same(b1, b2), "same_as_served": G._same(b1, served)})
+            del t, out1, out2, served, b1, b2
     names = C.kernels_by_launch(prof)
     for i, launch in enumerate(doc["launches"]):
-        launch.update(launch_geometry(names.get(i, []), launch["plan"]["static"]))
+        launch.update(launch_geometry(names.get(i, []), launch["plan"]["static"], max(launch["seqlens"])))
         print(f"[glm53-fa3] launch {launch['case']:18s} {launch['mode']:6s} plan={launch['plan']['static']}/{launch['plan']['dynamic']} "
               f"ok={launch['ok']} det={launch['deterministic']} tiles={[x['tile'] for x in launch['instantiations']]} "
               f"combine={launch['combine']}", flush=True)
@@ -297,8 +332,10 @@ def _class_ok(t: dict[str, Any]) -> bool:
 
 def _verdict(doc: dict[str, Any]) -> bool:
     cl = doc["classes"]
+    via_backend = [x for x in doc["launches"] if x.get("mode") == "backend"]
     return bool(doc["gate"]["ok"] and not doc["errors"] and doc["selection"].get("ok") is True and doc["mufu"].get("ok") is True
                 and doc["launches"] and all(x["ok"] and x["deterministic"] for x in doc["launches"])
+                and via_backend and all(x["same_as_served"] is True for x in via_backend)
                 and _class_ok(cl["pinned"]) and _class_ok(cl["served"]) and cl["pinned"]["reference"] > 0)
 
 
@@ -342,9 +379,11 @@ def run(out: str, scratch: str | None, min_driver: int, want_cc: str, want_sms: 
     tmp.cleanup()
     cl, ls = doc["classes"], doc["launches"]
     sp = cl["served_split"]
+    bk = [x for x in ls if x.get("mode") == "backend"]
     print(f"GLM53-FA3-PREFILL {'GO' if doc['ok'] else 'NO-GO'} {doc['digest']} pinned={json.dumps({k: cl['pinned'][k] for k in TOTALS})} "
           f"served={json.dumps({k: cl['served'][k] for k in TOTALS})} launches_ok={sum(bool(x['ok']) for x in ls)}/{len(ls)} "
-          f"deterministic={sum(bool(x['deterministic']) for x in ls)}/{len(ls)} selection={doc['selection'].get('ok')} "
+          f"deterministic={sum(bool(x['deterministic']) for x in ls)}/{len(ls)} "
+          f"backend_same_as_served={sum(x.get('same_as_served') is True for x in bk)}/{len(bk)} selection={doc['selection'].get('ok')} "
           f"mufu={doc['mufu'].get('ok')} errors={sorted(doc['errors'])}", flush=True)
     print(f"GLM53-FA3-PREFILL served-split (outside the Program) sequences={sp['sequences']} rows={sp['rows']} "
           f"heads_differing={sp['mismatch']} of {sp['heads']}", flush=True)

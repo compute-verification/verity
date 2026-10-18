@@ -398,6 +398,18 @@ def _dsa_layers(model) -> list:
             if hasattr(m, "_sparse_indexer_and_attn") and hasattr(m, "fused_qkv_a_proj")]
 
 
+def _takes_dense_mha(layer, T: int, rows: int, topk: int) -> bool:
+    """Whether vLLM serves a sparse attention call of T query rows, its layer's history then `rows` rows long, by dense MHA
+    (`DeepseekV32Attention._use_sparse_mha`, `use_dense_mha`): the layer has a prefill backend, `sparse_mla_force_mqa` is off, the
+    metadata builder counts the call a prefill (T above its decode threshold at the layer's heads) and the prefill's rows have at
+    most TOPK keys.  Masked MHA, the route past TOPK, is FA4's and not the H200's."""
+    from verity_vllm.program.frontend.rules.vllm_dsa import DECODE_THRESHOLD, DECODE_THRESHOLD_DEFAULT
+    cfg = getattr(getattr(layer, "_vllm_config", None), "attention_config", None)
+    if getattr(layer, "prefill_backend", None) is None or getattr(cfg, "sparse_mla_force_mqa", False):
+        return False
+    return T > DECODE_THRESHOLD.get(int(layer.num_heads), DECODE_THRESHOLD_DEFAULT) and rows <= topk
+
+
 @contextmanager
 def dsa_ops_leaf(model=None):
     """4. DeepSeek sparse attention (`DeepseekV32Attention.forward`, GLM-5.3, DeepSeek-V3.2) as three leaf ops.  Its two Triton kernels
@@ -420,14 +432,18 @@ def dsa_leaves(site, model=None):
     """For the duration, ``site`` (the module `DeepseekV32Attention.forward` reads its kernels from) calls `vllm_iface.dsa_norm_rope`
     for `fused_norm_rope` and `vllm_iface.dsa_q` for `fused_q`, and every module of ``model`` with a `_sparse_indexer_and_attn` gets
     one that calls `vllm_iface.dsa_indexer_attn` and then the absorbed value projection its body ends with, `bmm(attn, W_UV)` into
-    `output`.  The cache rows the kernels write are the first op's outputs (`kv_c_out`, `k_pe_out`, the index K and its scale) and
-    the third op's operands, so each layer's cache is the derive's state (`rules/vllm_dsa.py`).  What the shim does not model is
-    refused at export: prefill context parallelism, decode context parallelism, an fp8 query or KV cache, a caller-supplied `q_c_out`
-    or `index_k_out`.  `W_UK_T` and `W_UV` are Parameters the engine registers after loading; a meta model gets them from
+    `output`.  A call vLLM serves by dense MHA instead (`_takes_dense_mha`) runs `forward_mha`'s body: `kv_b_proj` up projects the
+    latent to k_nope and v, then `vllm_iface.dsa_dense_mha` over q's and k's parts (q = [q_nope | q_pe roped], k = [k_nope | k_pe],
+    `_concat_k_nope_k_pe`'s copies, which its rule assembles) for the prefill backend's attention, its rows flattened into `output`.
+    The cache rows the kernels write are the first op's outputs (`kv_c_out`, `k_pe_out`, the index K and its scale) and the attention
+    op's operands, so each layer's cache is the derive's state (`rules/vllm_dsa.py`).  What the shim does not model is refused at
+    export: prefill context parallelism, decode context parallelism, an fp8 query or KV cache, a caller-supplied `q_c_out` or
+    `index_k_out`.  `W_UK_T` and `W_UV` are Parameters the engine registers after loading; a meta model gets them from
     `vllm_meta.mla_absorbed_weights_as_the_loader_does`."""
     from verity_vllm.program.frontend.rules import vllm_iface  # noqa: F401  (registers the ops)
     iface = torch.ops.vllm_iface
     pending: dict[int, tuple] = {}
+    seen: dict[str, int] = {}
     h = hooks.Hooks()
 
     def fused_norm_rope(positions, q_c, q_w, q_eps, kv_c, kv_w, kv_eps, k_pe, k_cs, index_k, index_k_w, index_k_b, index_k_eps, index_cs,
@@ -459,9 +475,17 @@ def dsa_leaves(site, model=None):
                 raise NotImplementedError(f"dsa_leaves: {layer.layer_name} under context parallelism or an fp8 KV cache")
             ik, iks = pending.pop(id(kv_c))
             has = ik is not None
+            n, topk = output.shape[0], int(layer.topk_indices_buffer.shape[-1])
+            rows = seen[layer.layer_name] = seen.get(layer.layer_name, 0) + n
+            if _takes_dense_mha(layer, n, rows, topk):
+                nh, dn, dv = layer.num_heads, layer.qk_nope_head_dim, layer.v_head_dim
+                k_nope, v = layer.kv_b_proj(kv_c)[0].view(-1, nh, dn + dv).split([dn, dv], dim=-1)
+                o = iface.dsa_dense_mha(positions, q_nope, mqa_q, k_nope, v, kv_c, k_pe, ik, iks, layer.layer_name, topk, float(layer.scale))
+                output.copy_(o.flatten(start_dim=-2))
+                return
             a = iface.dsa_indexer_attn(positions, ql_nope, mqa_q, kv_c, k_pe, index_q_fp8 if has else None, index_weights_out if has else None,
-                                       ik, iks, layer.layer_name, int(layer.topk_indices_buffer.shape[-1]), float(layer.scale))
-            n, nh, lat, v = output.shape[0], layer.num_heads, layer.kv_lora_rank, layer.v_head_dim
+                                       ik, iks, layer.layer_name, topk, float(layer.scale))
+            nh, lat, v = layer.num_heads, layer.kv_lora_rank, layer.v_head_dim
             y = torch.bmm(a.view(n, nh, lat).transpose(0, 1), layer.W_UV)
             output.copy_(y.transpose(0, 1).reshape(n, nh * v))
         return run

@@ -597,7 +597,7 @@ def attention_impls(model: nn.Module) -> dict:
     in batch-invariant mode (single-split combine). Keyed by `layer_name` — what the exported `unified_attention_with_output`
     node carries — so the attention rule can select the Definition from the layer that will run, not from an env string.  Each
     `MLAAttention` layer has an entry with `"kind": "mla"`: its impl, backend name, kv dtype, heads, scale, context-parallel sizes,
-    dense-MHA prefill backend, the FA3 split count its impl's module calls `flash_attn_varlen_func` with (`num_splits`: the one
+    dense-MHA prefill backend (with its FA version, whether it pads v to the qk head and its scale), the FA3 split count its impl's module calls `flash_attn_varlen_func` with (`num_splits`: the one
     `engine.sparse_mla`'s pin marks, None for vLLM's heuristic), and from the layer's vLLM config the query heads per rank its
     metadata builder keys the decode threshold on and `sparse_mla_force_mqa`, what `rules/vllm_dsa.py` reads."""
     from vllm.model_executor.layers.attention import Attention, MLAAttention
@@ -627,6 +627,8 @@ def attention_impls(model: nn.Module) -> dict:
         vc = mod._vllm_config
         out[getattr(mod, "layer_name", name)] = {
             "prefill_backend": None if pb is None else f"{type(pb).__module__}.{type(pb).__qualname__}",
+            "prefill_fa_version": getattr(pb, "vllm_flash_attn_version", None),
+            "prefill_requires_v_padding": getattr(pb, "requires_v_padding", None), "prefill_scale": getattr(pb, "scale", None),
             "kind": "mla", "impl": f"{type(impl).__module__}.{type(impl).__qualname__}",
             "backend": backend.get_name() if hasattr(backend, "get_name") else str(backend),
             "kv_cache_dtype": getattr(impl, "kv_cache_dtype", None), "layer_kv_cache_dtype": getattr(mod, "kv_cache_dtype", None),

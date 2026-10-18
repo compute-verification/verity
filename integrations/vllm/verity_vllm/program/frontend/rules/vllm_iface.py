@@ -106,6 +106,11 @@ _define_once("dynamic_flashinfer_deepgemm_blockscale_gemm(Tensor input, Tensor w
 #   dsa_norm_rope -> (q_c normed, index K e4m3 [T, Dk], index K scale f32 [T]); kv_c_out / k_pe_out written (the MLA cache row)
 #   dsa_q         -> (q_pe roped bf16, index q e4m3 [T, H, Dk], index weights f32 [T, H])
 #   dsa_indexer_attn -> the attention rows [T, NH, kv_lora] bf16 (before the W_UV bmm)
+#   dsa_dense_mha    -> in its place on a prefill the layer serves by dense MHA (`SparseMLACommonImpl.forward_mha`: the prefill
+#                       backend's causal varlen attention over the call's own rows), the attention rows [T, NH, v_head] bf16 of
+#                       q = [q_nope | q_pe roped], k = [k_nope | k_pe] and v (k_nope and v kv_b_proj's up projection, outside the
+#                       op); q and k go in as their parts, since k_pe broadcast over the heads is no view of a T-row prefill's rows;
+#                       kv_c, k_pe and the index K rows are the call's cache rows, as the third op's
 # On a layer without an indexer the index outputs are empty ([T, 0], [T, 0, 0]) and the third op's index operands are None.
 def _dsa_norm_rope_fake(positions, q_c, q_w, q_eps, kv_c, kv_w, kv_eps, k_pe, cos_sin, index_k, index_k_w, index_k_b, index_k_eps,
                         index_cos_sin, index_rope_interleave, kv_c_out, k_pe_out):
@@ -130,6 +135,10 @@ _define_once("dsa_indexer_attn(Tensor positions, Tensor ql_nope, Tensor q_pe, Te
              "Tensor? index_weights, Tensor? index_k, Tensor? index_k_scale, str layer_name, int topk, float scale) -> Tensor",
              "dsa_indexer_attn", lambda positions, ql_nope, q_pe, kv_c, k_pe, index_q, index_weights, index_k, index_k_scale, layer_name,
              topk, scale: ql_nope.new_empty(ql_nope.shape))
+_define_once("dsa_dense_mha(Tensor positions, Tensor q_nope, Tensor q_pe, Tensor k_nope, Tensor v, Tensor kv_c, Tensor k_pe, "
+             "Tensor? index_k, Tensor? index_k_scale, str layer_name, int topk, float scale) -> Tensor",
+             "dsa_dense_mha", lambda positions, q_nope, q_pe, k_nope, v, kv_c, k_pe, index_k, index_k_scale, layer_name, topk, scale:
+                 v.new_empty((q_nope.shape[0], q_nope.shape[1], v.shape[-1])))
 # [GLM-5.3] vLLM's cuteDSL router GEMM `ll_bf16_gemm(x [M, K] bf16, w [N, K] bf16) -> [M, N] f32` (`GateLinear` tier 1, M <= 16 on
 # sm_90+), the leaf `export_compat.moe_gate_leaf` puts in its place while exporting: a CUTLASS DSL kernel that is no dispatcher op
 _define_once("ll_bf16_gemm(Tensor x, Tensor w) -> Tensor", "ll_bf16_gemm",
