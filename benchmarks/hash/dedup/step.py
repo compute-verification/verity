@@ -27,7 +27,8 @@ in a frame-v3-sha512 tree under a Commit-style domain (`commit_domain`), one ali
 Before anything is timed (`check`), at each m, eagerly, from poisoned outputs: ``pre`` against ``inline`` (each call's A
 words, y, seed_A, row seeds, E_A's lines, A root, row digests and tile leaves, and the pass's transcript and A roots), the
 same for the o/down arms, a poisoned-Commit control that must differ, the Python references (`audit`'s hm96 tree,
-`pearl_c`'s row digests, seeds and lines) on the first and last layer's calls in every arm, y against x·Wᵀ, and at decode
+`pearl_c`'s row digests, seeds and lines) in the h3, inline and tree arms on the first and last layer's calls at the first
+decode m and on the first two calls at every other m, y against x·Wᵀ, and at decode
 each arm's whole-graph replay against its eager pass, bit for bit.  Then the arms are timed interleaved, rep by rep, with
 the SM clock read each rep.  Writes OUT/dedup.json and, under ``research run``, its result.
 """
@@ -140,14 +141,15 @@ def run_class():
                                                size=size["tree_a"], nonce=COMMIT_NONCE + w)
             return self.cm[key]
 
-        def poison_commit(self, value: int = 0xA5) -> None:
-            """The Commit-style trees and row digests filled with `value`, under inference mode as `poison` (they are made
-            in a call)."""
+        def poison_commit(self, m16: int, value: int = 0xA5) -> None:
+            """The Commit-style trees and row digests at m16 filled with `value`, under inference mode as `poison` (they are
+            made in a call).  Other m16's are left as their last inline pass wrote them, which their ``pre`` passes read."""
             import torch
             with torch.inference_mode():
-                for c in self.cm.values():
-                    c.tree.fill_(value)
-                    c.rowdig.fill_(value)
+                for (_, c_m16, _), c in self.cm.items():
+                    if c_m16 == m16:
+                        c.tree.fill_(value)
+                        c.rowdig.fill_(value)
 
         def _gemm(self, w, x, weight, bias):
             omit, on = self.omit, self.hashing and self.mode is not None and self.role[w] in self.arm_roles
@@ -342,9 +344,11 @@ def same_calls(a: dict, b: dict) -> dict:
 def check(run, forward, x0, W: dict, fixture, m: int, keep: frozenset) -> dict:
     """The check at m, before any timing (module docstring)."""
     import torch
+    from verity_vllm.protocol_options.pouw_pearl_c_device import ROW_ALIGN
     out: dict = {"m": m}
+    m16 = -(-m // ROW_ALIGN) * ROW_ALIGN
     passes = {}
-    run.poison_commit()
+    run.poison_commit(m16)
     for arm in ("inline", "pre", "inline-od", "pre-od", "h3", "tree"):
         run.keep = keep if arm in ("inline", "h3", "tree") else frozenset()
         passes[arm] = eager_pass(run, forward, x0, arm)
@@ -352,7 +356,7 @@ def check(run, forward, x0, W: dict, fixture, m: int, keep: frozenset) -> dict:
             run.keep = frozenset()
             passes["inline-again"] = eager_pass(run, forward, x0, "inline")
     run.keep = frozenset()
-    run.poison_commit()
+    run.poison_commit(m16)
     passes["pre-poisoned"] = eager_pass(run, forward, x0, "pre")
     passes["inline-restore"] = eager_pass(run, forward, x0, "inline")
     passes["inline-od-restore"] = eager_pass(run, forward, x0, "inline-od")
@@ -512,7 +516,7 @@ def main() -> int:
     xs = {m: torch.randn(m, 4096, device=dev, generator=gen).to(torch.bfloat16) for m in decode + prefill}
     for m in decode + prefill:
         t0 = time.perf_counter()
-        kept = keep if m in decode[:1] else frozenset({0, 1}) if m in prefill[:1] else frozenset()
+        kept = keep if m in decode[:1] else frozenset({0, 1})
         doc["checks"][str(m)] = c = check(run, forward, xs[m], W, kernel.fixture, m, kept)
         c["s"] = time.perf_counter() - t0
         print(f"dedup: check m={m}: {'ok' if c['ok'] else 'FAIL'} ({c['s']:.0f} s)", flush=True)
