@@ -110,10 +110,10 @@ def _boundary_rate(dc: Datacenter, block: str) -> float:
                {getattr(dc.block_of(l.a), "name", None), getattr(dc.block_of(l.b), "name", None)})
 
 
-def account(claims: list[Claim], profile: Profile, unit: str = "gate", assume: tuple[Assumption, ...] = ()) -> Account:
-    """Read `claims` against `profile`, crediting work in `unit` (Boolean gates here; PoUW's are MACs), under the named
-    premises in `assume`."""
-    dc, epoch = profile.datacenter, profile.plan.epoch
+def account(claims: list[Claim], profile: Profile, assume: tuple[Assumption, ...] = ()) -> Account:
+    """Read `claims` against `profile`, crediting work in the profile's unit (Boolean gates for a traced circuit; PoUW's
+    are MACs) at the devices' declared rates in it, under the named premises in `assume`."""
+    dc, epoch, unit = profile.datacenter, profile.plan.epoch, profile.unit
     seconds = dc.grid.seconds(epoch.length)
     inside = lambda c: getattr(c, "during", epoch) in epoch  # noqa: E731
     refused = [c for c in claims if isinstance(c, Refused)]
