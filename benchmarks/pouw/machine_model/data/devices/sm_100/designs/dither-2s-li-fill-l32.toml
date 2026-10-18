@@ -31,6 +31,8 @@ per_word = 0.75
 mix = { ALU = 1, IMAD = 1 }
 route = "lanes"
 source = "EPS1 DC r6: with the operands free, ε_machine is the 8 tcgen05.ld.x128 a MMA over ♭'s issue at any q* (no route but the tensor's writes a word), and ε_skip is over the same B_♭, so lane work a word dilutes both; core < 1% from 0.62 a word (γ 3.64), ¾ leaves 0.07% of margin. LOP3 and IMAD alternating, receipts checked like the fold's; FILL-OPT is its named assumption"
+p = 0.0
+luck = "Accounting.Guarantees.FillerLuck.PinnedFillBlocksDeficit: the ¾ lane chain's inputs (LOP3 and IMAD alternating) are public functions of the round's coins and its tile, as lane_fill's and lfill's are, and the check recomputes the drawn tile's receipt and compares it with the committed one, so a wrong receipt fails whenever its tile is drawn and nothing is left to guess; what a right receipt costs is FILL-OPT's"
 
 [skip.served]
 eps = 0.00483
