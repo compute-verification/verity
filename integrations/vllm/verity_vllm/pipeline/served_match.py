@@ -85,7 +85,7 @@ def facts_of(eng: Any) -> dict[str, Any]:
 
 def moe_facts(model: Any) -> dict[str, dict[str, Any]]:
     """Each fused-MoE layer by its layer name, which is all the opaque `vllm.moe_forward` op the compiled graph calls names: the served
-    names and shapes of its gate, w13 and w2 weights, its router's top_k, renormalize and values per thread, and what the expansion of
+    names (the checkpoint's, the weights of record's) and shapes of its gate, w13 and w2 weights, its router's top_k, renormalize and values per thread, and what the expansion of
     the op into Calls (`acquire.served_moe`) requires of the block, each a flag: the runner holds the gate and does not fuse it with a
     shared-expert gate, no shared experts and no routed scaling, the softmax top-k router, modular Triton experts without bias or
     clamp, SiLU, bf16 weights.  A flag it cannot read is None (refused)."""
@@ -107,7 +107,9 @@ def moe_facts(model: Any) -> dict[str, dict[str, Any]]:
         except AttributeError:
             return None
 
-    named = {id(p): n for n, p in model.named_parameters(remove_duplicate=False)}
+    # each tensor under its first registration, the name the loader fills from the checkpoint: the runner re-registers the block's
+    # gate as its own `gate` ([R15 moe GATE-PATH])
+    named = {id(p): n for n, p in model.named_parameters()}
     out: dict[str, dict[str, Any]] = {}
     for m in runners:
         ex, r, gate = m.routed_experts, m.router, getattr(m, "gate", None)
