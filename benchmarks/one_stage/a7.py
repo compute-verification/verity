@@ -36,10 +36,19 @@ each registered block freed at its values' last read), one instance of each per 
   verifier recomputes the session's chain of appends (`audit.append_head`) from the map member's public file and each
   step's public first and count (`units_appends`): `UnitsLink.mapped` holds of the record's chain when it is that one
   and every map unit is drawn and proved. The chain fixes each append's blocks, order and indices, not the pass it
-  precedes: v0's bridge opens the canonical plan and map rows against the session's own plans, write steps and
-  releases; binding the plans and the write steps without opening them is the remote audit's zero-knowledge units'.
-  The ledger then credits each pass min(n D, read_bits(s)) on `RequirementLink` (`UnitsLink`), D = 16,384 bits (a
-  written block holds at least one value).
+  precedes; the bridge (`bridge`) binds the rest on public data, opening no canonical row: each pass's plan length is its
+  step's plan unit's public count, each pass's seed binds the units' chain of the steps before it (`units_heads`), and
+  the registered blocks released after each step are its map unit's public frees. The ledger then credits each pass
+  min(n D, read_bits(s)) on `RequirementLink` (`UnitsLink`), D = 16,384 bits (a written block holds at least one value).
+* **Check 3.** The session draws ``--samples`` receipts a window, and no block is opened: each draw goes through the
+  check-3 units (`a7_check3`, `verity.ml.commitments.gates.block_check`), a receipt unit (the block's sketch receipt is
+  its entry of the pass's hidden receipt leaf, and the step's certified plan row holds the block at the drawn position)
+  and the decode unit's slices (the block decodes to its payload under b_j(c_a)), proved as a second statement
+  (`check3_audit`: every unit drawn, --zk, Lean). The verifier sees the units' roots, its own public rows, the coins and
+  the verdicts, and holds the witness rows by ``b || c``: the block across the units, the receipt leaf to the pass's root,
+  the payload to its append's root (the registration's payload root for a registered block) and to the canonical payload
+  row, the plan to the canonical plan row. The negatives' sessions decide check 3 by the units' references
+  (`a7_check3.reference`).
 """
 from __future__ import annotations
 
@@ -48,6 +57,7 @@ import hashlib
 import json
 import os
 import random
+import struct
 import sys
 import time
 from dataclasses import dataclass, replace
@@ -60,12 +70,14 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import a0  # noqa: E402
+import a7_check3 as C3  # noqa: E402
 from verity.core.protocols.remote_bandwidth import audit, codec, coins, memory_map as MM, receipts  # noqa: E402
 from verity.core.protocols.remote_bandwidth.receipts import Plan  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
 from verity.ml.circuits import requirement as RQ, requirement_units as RU  # noqa: E402
 from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.ml.circuits.defs import bind  # noqa: E402
+from verity.ml.commitments.gates import block_check as BC  # noqa: E402
 from verity.ml.commitments.identity import identity_digest_sha512  # noqa: E402
 from verity.ml.commitments.indexed import RangeIndexedDomain  # noqa: E402
 from verity.ml.commitments.merkle import CommitmentDomain, MerkleTree  # noqa: E402
@@ -79,6 +91,9 @@ NR = TB + TABLE_ROWS // RPB
 VW = RU.value_bits(SLOTS)
 REQUESTS, ACTIVE, PAUSE = 10, 4, 0.15
 WINDOWS = 4
+#: the remote session's draws a window, each proved by check 3's units (a7_check3); at 2 the seeded run draws registered
+#: blocks as well as appended ones
+SAMPLES = 2
 NODE, SOURCE = b"a7-node", b"a7 verifier's secret"
 P512 = codec.Codec(codec.P512, 2, False)
 WINDOW_OF = ("a stand-in decoder's requirement (8 weight blocks, a 48-row gathered table, 10 requests of 2,048-byte KV "
@@ -250,9 +265,19 @@ def _runs(blocks) -> tuple[tuple[int, int], ...]:
     return MM._runs(blocks)
 
 
+def check3_inputs(canons: dict, sp, samples: int = SAMPLES) -> SimpleNamespace:
+    """What check 3 reads of the canonical commitments: each step's certified plan row (its words, salt and ``b || c``),
+    each written block's payload row's ``b || c``, the plan unit's P and the decode unit's statics at A7's codec; and the
+    draws a window it proves (``samples``), which every session of the run draws."""
+    c = canons["plan"]
+    return SimpleNamespace(plan_rows=c["words"], plan_salts=c["salts"], plan_bcs=c["bc"], payload_bcs=canons["payload"]["bc"],
+                           P=sp.P, D=C3.decode_statics(P512), samples=samples)
+
+
 def remote_session(req, layout, store, plans: dict[int, list[int]], salts: dict[int, bytes],
                    extra: dict[int, list[int]] | None = None, late: dict[int, int] | None = None, alter=None,
-                   early: int | None = None, dummy: int | None = None, rekey: tuple[int, int] | None = None):
+                   early: int | None = None, dummy: int | None = None, rekey: tuple[int, int] | None = None, *,
+                   c3: SimpleNamespace, defer: bool = False):
     """The v0 session over the registered store: a pass a step, its plan sent as a change from the last (``plans[s]``, and
     ``extra[s]``'s blocks too: a prover that receipts more than the certified plan), then step s's memory-map record
     (`memory_map.Replay`): its releases (``late``: a block released at another step) and its append, written block j
@@ -260,17 +285,20 @@ def remote_session(req, layout, store, plans: dict[int, list[int]], salts: dict[
     from the map: ``alter`` ({step: f}, f(payloads, salts) the append it sends in place of the step's), ``early`` (step
     t's append sent before t's pass, after step t − 1's), ``dummy`` (a step whose append adds a block holding no value),
     ``rekey`` ((step, j): block j appended again at that step, in its own slot, of the same payload at a fresh index,
-    the later plans and its free naming that index). Returns the session, its record and the verifier's v0 view: each
-    pass's plan and step, each appended index's write step and each block's release step."""
+    the later plans and its free naming that index). Each window draws ``c3.samples`` receipts, and check 3 decides them
+    (``c3``, `check3_inputs`) in place of their openings: by its units' references on the prover's witness
+    (`a7_check3.reference`), or, ``defer``, not yet: the caller proves them (`check3_audit`) and decides each window.
+    Returns the session, the prover's store and passes, its record and the verifier's v0 view: each pass's plan and step,
+    each appended index's write step and each block's release step."""
     steps = req.steps
     payloads = [store.payload.get(j, 0).to_bytes(RQ.BLOCK_BITS // 8, "little") for j in range(NR)]
     ys = [Entropy(b"a7 payload salts %d" % j)(receipts.SALT_BYTES) for j in range(NR)]
     root = audit.payload_tree(NODE, payloads, ys).commitment.root
-    rs = audit.Store(audit.register(SOURCE, NODE, NR, root, P512, nonce=bytes(32)), payloads, ys)
-    p = audit.Params(blocks=NR, deadline_ns=10**6, windows=WINDOWS, samples=10**6, delta=1e-6, window_ns=10, codec=P512)
+    rs = C3.Store(audit.register(SOURCE, NODE, NR, root, P512, nonce=bytes(32)), payloads, ys)
+    p = audit.Params(blocks=NR, deadline_ns=10**6, windows=WINDOWS, samples=c3.samples, delta=1e-6, window_ns=10, codec=P512)
     clock = Clock()
-    s = audit.Session(p, rs.registration, None, coins.Challenger(rs.registration.digest, 0, p.coins, entropy=Entropy(b"a7 coins")),
-                      not_before_ns=0, clock=clock)
+    s = C3.Session(p, rs.registration, None, coins.Challenger(rs.registration.digest, 0, p.coins, entropy=Entropy(b"a7 coins")),
+                   not_before_ns=0, clock=clock)
     prover = audit.Prover(rs, None, s.commitment, entropy=Entropy(b"a7 receipt salts"))
     head = MM.Header(rs.registration.digest, NR)
     replay = MM.Replay(head, rs.registration)
@@ -365,13 +393,19 @@ def remote_session(req, layout, store, plans: dict[int, list[int]], salts: dict[
         s.boundary()
         clock.now = s.deadline(len(s.windows) - 1) + 1
         for w in range(len(s.windows)):
-            draws = s.close(w)
-            verdicts.append(s.verify(w, [prover.open(passes[w, k], q) for k, q in draws]))
-            if not verdicts[-1].accepted:
+            got = s.close(w)
+            if isinstance(got, audit.Verdict):
+                out = got
                 break
+    by_check3 = None
+    if out is None and not defer:
+        verdicts = C3.reference(s, rs, passes, c3.plan_rows, c3.plan_salts, c3.plan_bcs, c3.payload_bcs, c3.P, c3.D,
+                                Entropy(b"a7 check-3 block salts"))
+        out = by_check3 = next((v for v in verdicts if not v.accepted), None)
     accepted = out is None and len(verdicts) == WINDOWS and all(v.accepted for v in verdicts)
-    return SimpleNamespace(session=s, verdicts=verdicts, refused=out, accepted=accepted, view=view, record=record,
-                           header=head, codec=P512, map_text=MM.dumps(head, record), registration=rs.registration.digest)
+    return SimpleNamespace(session=s, store=rs, passes=passes, verdicts=verdicts, refused=out, by_check3=by_check3,
+                           accepted=accepted, view=view, record=record, header=head, codec=P512,
+                           map_text=MM.dumps(head, record), registration=rs.registration.digest)
 
 
 def payloads_of(store, j: int) -> bytes:
@@ -381,8 +415,8 @@ def payloads_of(store, j: int) -> bytes:
 @dataclass(frozen=True)
 class UnitsLink:
     """`audit.RequirementLink` on A7's units: it holds when the units' audit is accepted, every drawn unit's public and ok
-    rows open, every witness row is bound to its canonical commitment, and v0's bridge holds the canonical plans and map
-    to the session's own. `mapped` holds of the chain `appends` the map units' writes make (`units_appends`), once every
+    rows open, every witness row is bound to its canonical commitment, the session's check 3 is proved, and the bridge
+    holds the session to the units' public data. `mapped` holds of the chain `appends` the map units' writes make (`units_appends`), once every
     map unit is drawn and proved (`proved`)."""
     holds: bool
     density_bits: int
@@ -397,20 +431,26 @@ class UnitsLink:
         return self.holds and self.proved and appends == self.appends
 
 
-def units_appends(m: dict, pub_args: list[dict], registration: bytes) -> bytes | None:
-    """The chain over the appends member m's writes make (`audit.append_head`), from its public file and each step's
-    public first and count: step t's append is blocks first .. first + count − 1, its leaves its payload rows' ``b || c``
-    as hm96-sha512 tree leaves (a payload row's commit string is its append leaf's), in `audit.append_domain`; the
-    steps in order, a step that writes nothing making none."""
+def units_heads(m: dict, pub_args: list[dict], registration: bytes) -> list[bytes | None]:
+    """The chain over the appends member m's writes make (`audit.append_head`) before each step, and after the last, from
+    its public file and each step's public first and count: step t's append is blocks first .. first + count − 1, its
+    leaves its payload rows' ``b || c`` as hm96-sha512 tree leaves (a payload row's commit string is its append leaf's),
+    in `audit.append_domain`; the steps in order, a step that writes nothing making none."""
     bcs = public_bcs(m["dir"] / f"pub-{m['n']}.bin", m["ports"])
-    head = None
+    head, out = None, []
     for i, a in enumerate(pub_args):
+        out.append(head)
         if not a["count"]:
             continue
         leaves = {a["first"] + c: receipts.HM96.tree_leaf(receipts.KEY, bcs[i][f"pay{c}"]) for c in range(a["count"])}
         tree = MerkleTree(audit.append_domain(registration, a["first"], a["count"]), leaves, lambda _j: audit.PAYLOAD_SCHEMA)
         head = audit.append_head(head, a["first"], a["count"], tree.commitment.root)
-    return head
+    return out + [head]
+
+
+def units_appends(m: dict, pub_args: list[dict], registration: bytes) -> bytes | None:
+    """The chain over every append member m's writes make (`units_heads` after the last step)."""
+    return units_heads(m, pub_args, registration)[-1]
 
 
 @dataclass(frozen=True)
@@ -452,9 +492,10 @@ def public_words(args: dict, rows) -> list[int]:
     return [w for p in rows[0][2] for w in (args[p] if isinstance(args[p], list) else [args[p]])]
 
 
-def stage(defn, S, rows, args: list[dict], name: str, out: Path, base: int, bound: dict, canons: dict, key: bytes) -> dict:
-    """One template's member: all its steps in one statement (checked against flock-circuit's shape), the bound rows under
-    their canonical salts."""
+def stage(defn, S, rows, args: list[dict], name: str, out: Path, base: int, bound: dict, canons: dict | None, key: bytes | None,
+          salt_of=None) -> dict:
+    """One template's member: all its instances in one statement (checked against flock-circuit's shape), the bound rows
+    under their canonical salts, or, ``salt_of``, row r of instance i under ``salt_of(r, i)`` (None: a fresh salt)."""
     t0 = time.time()
     in_rows = [(r, V2, b, ps) for r, b, ps in rows]
     st = CS.UnitStager(defn, f"unit/a7-{name}", in_rows, [(V2, (0,))], circuit=out / "circuit.txt", bind=bound)
@@ -471,6 +512,10 @@ def stage(defn, S, rows, args: list[dict], name: str, out: Path, base: int, boun
     salts = FC.stage_salts(iset, 0, n, st.ports, salt_key)
     for i, a in enumerate(args):
         for r, b, ps in rows:
+            if salt_of is not None:
+                if (x := salt_of(r, i)) is not None:
+                    salts[r][i] = x
+                continue
             c = bound_row(name, r, i, a, S)
             if c is not None:
                 kind, idx = c
@@ -561,6 +606,236 @@ def statement_checks(m: dict, rec: dict, want: dict) -> dict:
     return {"ok": all(ok.values()), "codes": [c for c, v in ok.items() if not v], "detail": {}}
 
 
+# --- check 3 ----------------------------------------------------------------------------------------------------------------
+
+def check3_audit(a, out: Path, rs, c3, port: int) -> dict:
+    """The remote session's check 3 by proofs: each draw's receipt unit and decode slices (`a7_check3.witness`), one member
+    a template (a receipt member per leaf size, one decode member), staged under the draws' salts, registered, every unit
+    drawn by the verifier's Lean and each member proved --zk and held by Lean `verify --zk --partition --program`. The
+    verifier opens each drawn unit's public rows to its own copy (`a7_check3.public`) and its ok row to 1, holds every
+    other row by ``b || c`` (`a7_check3.links`), and decides each window of the session on its draws."""
+    out.mkdir(parents=True, exist_ok=True)
+    sess, st_ = rs.session, rs.store
+    draws = [d for t in range(len(sess.windows)) for d in sess.drawn(t)]
+    salt = Entropy(b"a7 check-3 block salts")
+    wits = [C3.witness(d, rs.passes[d.window, d.index], st_, c3.plan_rows[d.step], c3.plan_salts[d.step],
+                       salt(receipts.SALT_BYTES), c3.P, c3.D) for d in draws]
+    seed, ns = st_.registration.codec_seed, C3.slices(c3.D)
+    kvs = [C3.kv(c3.payload_bcs, NR, d.block) for d in draws]
+    prover = [C3.check(d, w, seed, c3.P, c3.D, c3.plan_bcs[d.step], k) for d, w, k in zip(draws, wits, kvs)]
+    if any(prover):
+        raise SystemExit(f"the honest prover's check-3 units are refused by their references: {prover}")
+    specs = []
+    for leaf in sorted({d.leaf_size for d in draws}):
+        RS = C3.receipt_statics(leaf, c3.P)
+        at = [u for u, d in enumerate(draws) if d.leaf_size == leaf]
+        specs.append({"template": f"receipt{leaf}", "defn": bind(BC.BlockReceiptCheck, **vars(RS)), "S": RS,
+                      "rows": BC.receipt_rows(RS), "args": [wits[u].receipt for u in at], "draw": at})
+    specs.append({"template": "decode", "defn": bind(BC.BlockDecodeCheck, **vars(c3.D)), "S": c3.D, "rows": BC.decode_rows(c3.D),
+                  "args": [x for w in wits for x in w.decode], "draw": [u for u in range(len(draws)) for _q in range(ns)]})
+    program = P.mixed_population_program([(s["defn"], len(s["args"])) for s in specs])
+    query = P.template_instances_query([s["defn"] for s in specs])
+    part = P.partition(program, query)
+    n_all, ranges = P.units(program, query), P.ranges(program, query)
+    (out / "partition.json").write_text(json.dumps(part, sort_keys=True))
+    (out / "program.json").write_bytes(canonical_json(encode_program(program)))
+    law = D.parse_law(f"stratified:{n_all}")
+    bound = {"partition": P.digest(part), "program": part["program"]}
+    members = []
+    for s, (tid, base, cnt) in zip(specs, ranges, strict=True):
+        assert tid == P.template_id(s["defn"]) and cnt == len(s["args"])
+
+        def salt_of(r, i, s=s):
+            return wits[s["draw"][i]].salts[r] if r in C3.WITNESS_ROWS else None
+
+        m = stage(s["defn"], s["S"], s["rows"], s["args"], f"c3-{s['template']}", out / f"stage-{s['template']}", base, bound,
+                  None, None, salt_of=salt_of)
+        m.update(partition_file=out / "partition.json", program_file=out / "program.json", template=s["template"],
+                 name=m["tag"], base=base, defn=s["defn"], S=s["S"], rows=s["rows"], args=s["args"], draw=s["draw"],
+                 header=a0.public_header(m["dir"], m["n"]))
+        members.append(m)
+        print(f"A7 check 3 staged {m['tag']}: {m['n']} units from {base}, {m['ands']} ANDs, k_log {m['meta']['k_log']}, "
+              f"ok {sum(m['oks'])}/{m['n']}, {m['seconds']}", flush=True)
+
+    want, roots, publics = {}, [], {}
+    for m in members:
+        fv = m["header"]["frame_v3"]
+        for p_, w in frame_ports(m["set"], m["meta"], m["n"]).items():
+            want[f"{m['name']}/{p_}"] = w
+            roots.append({"port": f"{m['name']}/{p_}", "root": fv["roots"][p_], "leaves": w["leaves"], "domain": fv["domain_ids"][p_]})
+        publics[m["name"]] = a0.sha512_file(m["dir"] / f"pub-{m['n']}.bin")
+    leaf_layer = hashlib.sha512(canonical_json(publics)).hexdigest()
+    window = {"kind": "check 3", "of": "the remote session's drawn receipts (a7.py, check3_audit)",
+              "members": {m["name"]: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + m["n"]]} for m in members},
+              "link": "a7_check3.links: every witness row by its b || c"}
+    rec = R.record(program, query, law, a0.SCHEME, roots, window, leaf_layer=leaf_layer)
+    (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
+    checks = {"registration": V.check(rec, program, query, law, a0.SCHEME, want, leaf_layer=leaf_layer).to_json()}
+    for m in members:
+        checks[f"statement/{m['name']}"] = statement_checks(m, rec, want)
+    receipt = R.receipt(rec, "one-stage-e2e verifier (a7.py, check 3)")
+    summary = {"draws": [{"window": d.window, "pass": d.index, "position": d.position, "block": d.block, "step": d.step,
+                          "appended": d.coin is not None, "leaf": d.leaf_size} for d in draws],
+               "members": [{"name": m["name"], "n": m["n"], "ands": m["ands"], "unit_nnz": m["unit_nnz"], "k_log": m["meta"]["k_log"],
+                            "pin": m["pin"], "oks": sum(m["oks"]), "stage_s": m["seconds"]} for m in members],
+               "population": n_all, "checks_before_draw": {c: v["ok"] for c, v in checks.items()}}
+
+    verdicts, proved, n_inst, statement, sessions, served, session_roots = {}, [], 0, {}, [], [], {}
+    lean_draw = {"units": []}
+    if all(v["ok"] for v in checks.values()):
+        p = a0.run([a.lean, "draw", "--program", str(out / "program.json"), "--partition", str(out / "partition.json"),
+                    "--stratified", str(n_all)], out / "draw.log")
+        lean_draw = json.loads(next(x for x in p.stdout.splitlines() if x.startswith("DRAW ")).split(" ", 1)[1])
+        for j, m in enumerate(members):
+            local = sorted(u - m["base"] for u in lean_draw["units"] if m["base"] <= u < m["base"] + m["n"])
+            m["drawn"] = local
+            if not local:
+                continue
+            sdir = out / f"session-{m['name']}"
+            sdir.mkdir(parents=True, exist_ok=True)
+            (sdir / "draw.json").write_text(json.dumps({"law": "subset", "population": m["n"], "k": len(local), "units": local}, sort_keys=True))
+            t = time.time()
+            record, live = a0.session(a.bin, m, m["n"], f"subset:{len(local)}", port + j, sdir, draw_file=sdir / "draw.json", zk=True)
+            draw_t = (record or {}).get("unit_draw") or {}
+            v = V.check_draw(draw_t, {"population": m["n"]}, {"law": "subset", "k": len(local)})
+            served += [m["base"] + u for u in draw_t.get("units", [])]
+            session_roots.update({f"{m['name']}/{p_}": r for p_, r in ((live or {}).get("roots") or {}).items()})
+            proved += a0.proved_units(m["header"], live or {})
+            n_inst += (live or {}).get("instances", 0)
+            verdicts[f"m0-verifier/{m['name']}"] = {"accepted": ((record or {}).get("verdict") or {}).get("accepted") is True
+                                                    and (live or {}).get("roots") == m["header"]["frame_v3"]["roots"] and v.ok,
+                                                    "why": ((record or {}).get("verdict") or {}).get("why"), "draw_check": v.to_json()}
+            verdicts[f"lean-verify/{m['name']}"] = {**a0.lean_verify(a.lean, m, m["n"], sdir, zk=True),
+                                                    "tool": "flock-verify verify --zk --archive --partition --program"}
+            statement[m["name"]] = {"session_s": round(time.time() - t, 1),
+                                    **{x: (live or {}).get(x) for x in ("circuit_sha512", "statement_digest", "sigma")},
+                                    "timing": {x: (live or {}).get(x) for x in ("e2e_s", "witness_s", "prove_total_s", "k_log", "units", "proof_bytes")},
+                                    "lean_verify_s": verdicts[f"lean-verify/{m['name']}"].get("verify_s")}
+            sessions += [a0.sha512_file(f) for f in sorted((sdir / "sessions").glob("*/session.json"))]
+            lv = verdicts[f"lean-verify/{m['name']}"]
+            print(f"A7 check 3 session {m['name']}: {len(local)} units, Lean {lv['accepted']} {lv.get('why') or ''}, "
+                  f"{statement[m['name']]['session_s']} s", flush=True)
+    result = V.audit_record(rec, receipt, lean_draw, rec["law"], sorted(proved), n_inst, statement, verdicts, a.delta,
+                            sessions=sessions, served=sorted(served), session_roots=session_roots)
+    (out / "audit.json").write_text(json.dumps(result, indent=1, sort_keys=True, default=str))
+
+    # the verifier: each draw's units proved and opened, then its links; each window decided on its draws
+    held = set(proved) if result.get("accepted") else set()
+    failures = []
+    for u, d in enumerate(draws):
+        pub = C3.public(d, seed, c3.P, c3.D)
+        units = [(m, i) for m in members for i, x in enumerate(m["draw"]) if x == u]
+        mine = {}
+        opened = True
+        for m, i in units:
+            bcs = public_bcs(m["dir"] / f"pub-{m['n']}.bin", m["ports"])[i]
+            port_ = {p_.name: p_ for p_ in m["ports"]}
+            q = len([1 for m2, i2 in units if m2 is m and i2 < i])
+            want_pub = pub.receipt if m["template"] != "decode" else pub.decode[q]
+            opened &= (m["base"] + i) in held and opens(port_["pub"], public_words(want_pub, m["rows"]), m["salts"]["pub"][i], bcs["pub"])
+            opened &= opens(port_["o0"], [1], m["salts"]["o0"][i], bcs["o0"])
+            if m["template"] != "decode":
+                opened &= opens(port_["signs"], want_pub["signs"], m["salts"]["signs"][i], bcs["signs"])
+            mine.setdefault(m["template"] == "decode", []).append(bcs)
+        failures.append("malformed" if not opened else C3.links(d, mine[False][0], mine[True], wits[u].leaf_path,
+                                                                wits[u].payload_path, c3.plan_bcs[d.step], kvs[u]))
+    decided = []
+    for t in range(len(sess.windows)):
+        decided.append(sess.decide(t, [f for d, f in zip(draws, failures) if d.window == t]))
+        if not decided[-1].accepted:
+            break
+    rs.verdicts = decided
+    rs.refused = next((v for v in decided if not v.accepted), None)
+    rs.accepted = rs.refused is None and len(decided) == WINDOWS
+    summary.update(failures=failures, accepted=rs.accepted, audit={x: result.get(x) for x in ("accepted", "complete", "wrong_units")},
+                   verdicts={x: y.get("accepted") for x, y in verdicts.items()}, timing=statement, session_verdicts=[
+                       {"window": v.window, "accepted": v.accepted, "failure": v.failure} for v in decided])
+    (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
+    return {**summary, "members_": members, "draws_": draws, "witnesses_": wits, "kvs_": kvs}
+
+
+def check3_negatives(c3a: dict, rs, c3) -> dict[str, dict]:
+    """Check 3's negatives, each on one drawn unit of the run with one witness or public input altered: the unit's ok output
+    on it (the lowering's own evaluation, `_forged`), or, for a prover whose units hold on consistent forged rows, the
+    verifier's links on those rows' ``b || c`` (`a7_check3.links`)."""
+    neg: dict[str, dict] = {}
+    members, draws, wits, kvs = c3a["members_"], c3a["draws_"], c3a["witnesses_"], c3a["kvs_"]
+    dec = next(m for m in members if m["template"] == "decode")
+    ns = C3.slices(c3.D)
+
+    def receipt_member(u):
+        m = next(m for m in members if m["template"] != "decode" and u in m["draw"])
+        return m, m["draw"].index(u)
+
+    def forged_links(u, receipt_rows=None, payload=None):
+        d, w = draws[u], wits[u]
+        m, i = receipt_member(u)
+        r = C3.witness_bcs(m["rows"], {**w.receipt, **(receipt_rows or {})}, w.salts)
+        ds = [C3.witness_bcs(dec["rows"], {**x, **({"payload": payload} if payload else {})}, w.salts) for x in w.decode]
+        return C3.links(d, r, ds, w.leaf_path, w.payload_path, c3.plan_bcs[d.step], kvs[u])
+
+    u0 = 0
+    a_dec, a_rec = dec["args"][u0 * ns], None
+    m_r, i_r = receipt_member(u0)
+    a_rec = m_r["args"][i_r]
+    w0 = c3.D.N // 16
+    block = list(a_dec["block"])
+    block[0] ^= 1
+    f = _forged(dec, u0 * ns, dict(a_dec, block=block))
+    g = _forged(m_r, i_r, dict(a_rec, block=block))
+    neg["tampered-block (decode and receipt units)"] = {"refused": f["ok_output"] == 0 and not f["opens_to_1"]
+                                                        and g["ok_output"] == 0 and not g["opens_to_1"], "decode": f, "receipt": g}
+
+    payload = list(a_dec["payload"])
+    payload[w0 - 1] ^= 1 << 3
+    f = _forged(dec, u0 * ns, dict(a_dec, payload=payload))
+    why = forged_links(u0, payload=payload)
+    neg["payload-not-the-committed-KV (decode unit, payload row)"] = {
+        "refused": f["ok_output"] == 0 and not f["opens_to_1"] and why == "payload-path", "decode": f, "links": why}
+
+    ua = next((u for u, d in enumerate(draws) if d.coin is not None), None)
+    other = next((c for (_f, _d, _c, c) in rs.session._appends if ua is not None and c != draws[ua].coin), None)
+    if ua is None or other is None:
+        neg["wrong-append-coin (decode unit)"] = {"refused": False, "why": "no draw of an appended block, or one append only"}
+    else:
+        a_x = dec["args"][ua * ns]
+        x = dict(a_x, coin=list(struct.unpack("<16H", other)))
+        f = _forged(dec, ua * ns, x)
+        port = {p_.name: p_ for p_ in dec["ports"]}["pub"]
+        bcs = public_bcs(dec["dir"] / f"pub-{dec['n']}.bin", dec["ports"])[ua * ns]
+        neg["wrong-append-coin (decode unit)"] = {
+            "refused": f["ok_output"] == 0 and not f["opens_to_1"]
+            and not opens(port, public_words(x, dec["rows"]), dec["salts"]["pub"][ua * ns], bcs["pub"]),
+            "block": draws[ua].block, "decode": f}
+
+    k = a_rec["k"][0]
+    leaf = list(a_rec["leaf"])
+    leaf[32 * k] ^= 1
+    g = _forged(m_r, i_r, dict(a_rec, leaf=leaf))
+    neg["wrong-receipt-leaf (receipt unit)"] = {"refused": g["ok_output"] == 0 and not g["opens_to_1"], "receipt": g}
+    if len(leaf) > 32:
+        other_k = list(a_rec["leaf"])
+        at = 32 * ((k + 1) % (len(other_k) // 32))
+        other_k[at] ^= 1
+        g = _forged(m_r, i_r, dict(a_rec, leaf=other_k))
+        why = forged_links(u0, receipt_rows={"leaf": other_k})
+        neg["receipt-leaf-not-the-pass's (receipt path)"] = {"refused": g["ok_output"] == 1 and why == "receipt-path",
+                                                             "receipt": g, "links": why}
+
+    plan = list(a_rec["plan"])
+    pos = a_rec["pos"][0]
+    plan[pos] = (plan[pos] + 1) % (1 << 16)
+    g = _forged(m_r, i_r, dict(a_rec, plan=plan))
+    neg["plan-entry-not-the-certified-one (receipt unit)"] = {"refused": g["ok_output"] == 0 and not g["opens_to_1"], "receipt": g}
+    plan = list(a_rec["plan"])
+    at = next(x for x in range(len(plan)) if x != pos)
+    plan[at] ^= 1
+    g = _forged(m_r, i_r, dict(a_rec, plan=plan))
+    why = forged_links(u0, receipt_rows={"plan": plan})
+    neg["plan-row-not-the-step's (plan row)"] = {"refused": g["ok_output"] == 1 and why == "plan", "receipt": g, "links": why}
+    return neg
+
+
 # --- the run ----------------------------------------------------------------------------------------------------------------
 
 def main() -> int:
@@ -572,6 +847,7 @@ def main() -> int:
     ap.add_argument("--seed", type=int, default=7)
     ap.add_argument("--k", type=int, default=None, help="the stratified rule's k over both templates' units (default: all)")
     ap.add_argument("--delta", type=float, default=2.0 ** -20)
+    ap.add_argument("--samples", type=int, default=SAMPLES, help="the remote session's draws a window, each proved by check 3")
     ap.add_argument("--port", type=int, default=7571)
     a = ap.parse_args()
     out = Path(a.out)
@@ -734,14 +1010,20 @@ def main() -> int:
     (out / "audit.json").write_text(json.dumps(result, indent=1, sort_keys=True, default=str))
     units_ok = bool(result.get("accepted")) and all(o["ok"] for o in opened.values())
 
-    # the link: the v0 session, the bridge, the ledger
-    rs = remote_session(req, layout, store, plans, salts)
+    # the link: the v0 session, its check 3 proved, the bridge, the ledger
+    c3 = check3_inputs(canons, sp, a.samples)
+    rs = remote_session(req, layout, store, plans, salts, c3=c3, defer=True)
     (out / "memory-map.jsonl").write_text(rs.map_text)
-    bridge = v0_bridge(rs.view, canons, sp, sm, req.steps)
+    if rs.refused is not None:
+        raise SystemExit(f"the honest remote session was refused before check 3: {rs.refused}")
+    check3 = check3_audit(a, out / "check3", rs, c3, a.port + len(members))
+    summary["check3"] = {x: check3[x] for x in ("draws", "members", "failures", "accepted", "audit", "verdicts")}
+    print("A7 check 3 " + json.dumps(summary["check3"], default=str)[:3000], flush=True)
+    br = bridge(rs, members[0], members[1], req.steps)
     session_ok = rs.accepted
     map_m = members[1]
     proved = units_ok and map_m.get("drawn") == list(range(map_m["n"]))
-    link = UnitsLink(holds=units_ok and session_ok and bridge["ok"] and all(v["ok"] for v in checks.values()), density_bits=VW,
+    link = UnitsLink(holds=units_ok and session_ok and br["ok"] and all(v["ok"] for v in checks.values()), density_bits=VW,
                      req=req, appends=units_appends(map_m, map_m["args"], rs.registration), proved=proved)
     rrec = rs.session.record()
     mapped = link.mapped(rrec.appends)
@@ -756,7 +1038,7 @@ def main() -> int:
     summary["link"] = {"holds": link.holds, "mapped": mapped, "every_map_unit_proved": proved,
                        "appends": None if rrec.appends is None else rrec.appends.hex(),
                        "units_appends": None if link.appends is None else link.appends.hex(),
-                       "units": units_ok, "session": session_ok, "bridge": bridge,
+                       "units": units_ok, "session": session_ok, "check3": check3["accepted"], "bridge": br,
                        "density_bits": VW, "verdicts": [v.accepted for v in rs.verdicts], "uncertified": uncert,
                        "circuit_read_bytes": sum(req.read_bits(s) for s in range(req.steps)) // 8,
                        "ledgers": {k: {"gamma": v["gamma"], "timing": v["terms"]["timing"], "linked": v.get("linked"),
@@ -764,7 +1046,8 @@ def main() -> int:
     (out / "ledger.json").write_text(json.dumps(ledgers, indent=1, sort_keys=True, default=str))
 
     neg = negatives(a, out, rec, receipt, result, members, canons, sd, layout, store, plans, sp, sm, req, lean_draw, law,
-                    program, query, want, leaf_layer, publics, session_roots, served, n_all, common, salts, link, rrec)
+                    program, query, want, leaf_layer, publics, session_roots, served, n_all, common, salts, link, rrec, c3)
+    neg.update(check3_negatives(check3, rs, c3))
     (out / "negatives.json").write_text(json.dumps(neg, indent=1, sort_keys=True, default=str))
     summary["audit"] = {x: result.get(x) for x in ("accepted", "complete", "wrong_units", "profile")}
     summary["audit"]["verdicts"] = {x: y.get("accepted") for x, y in verdicts.items()}
@@ -772,32 +1055,33 @@ def main() -> int:
     summary.update(draw=lean_draw["units"], draw_counts=counts, served_is_lean_draw=sorted(served) == sorted(lean_draw["units"]),
                    timing=statement, negatives={x: y["refused"] for x, y in neg.items()})
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
-    ok = units_ok and link.holds and mapped and all(summary["negatives"].values())
+    ok = units_ok and check3["accepted"] and link.holds and mapped and all(summary["negatives"].values())
     print("A7 " + json.dumps({x: summary[x] for x in ("population", "draw_counts", "audit", "link", "negatives")}, sort_keys=True,
                              default=str)[:6000])
     return 0 if ok else 1
 
 
-def v0_bridge(view: dict, canons: dict, sp, sm, steps: int) -> dict:
-    """v0's bridge: the session's plans and its appends and releases are public on v0's wire, so the prover opens the
-    canonical plan rows and the map row (their salts) and the verifier holds them to its own record of the session: each
-    pass's plan, each registered block's release step, each written block's write step (the pass its append follows)
-    and release step (`RU.WORD - 1` for a block the session never released)."""
+def bridge(rs, plan_m: dict, map_m: dict, steps: int) -> dict:
+    """The bridge from the session to the units, on public data alone (no canonical row is opened): each pass's plan is as
+    long as its step's plan unit's public count, and check 3's receipt unit holds each drawn entry to the step's certified
+    plan row; each pass's seed binds the chain over the map units' appends of the steps before it (`units_heads`), so
+    each append follows its step's pass and precedes the next; and the registered blocks the session releases after each
+    step are those that step's map unit frees (its public ``rfree``). A written block's release step is the map row's,
+    private, and isn't bound: a release only narrows the plans the session admits, which are the certified ones, so it
+    moves no credit."""
     bad = []
+    heads = units_heads(map_m, map_m["args"], rs.registration)
+    for w in rs.session.windows:
+        for plan, s, head in zip(w.plans, w.steps, w.heads, strict=True):
+            if plan.length != plan_m["args"][s]["count"]:
+                bad.append({"plan": s, "length": plan.length, "count": plan_m["args"][s]["count"]})
+            if head != heads[s]:
+                bad.append({"head": s})
     for s in range(steps):
-        plan = view["plans"].get(s)
-        words = (sorted(plan) + [0] * (sp.P - len(plan))) if plan is not None and len(plan) <= sp.P else None
-        if words is None or not opens(canons["plan"]["port"], words, canons["plan"]["salts"][s], canons["plan"]["bc"][s]):
-            bad.append({"plan": s})
-    phi = [view["released"].get(j, RU.WORD - 1) for j in range(sm.N)] + [0] * (2 * sm.M)
-    for j, w in view["written"].items():
-        if not sm.N <= j < sm.N + sm.M:
-            bad.append({"written": j})
-            continue
-        b = sm.N + 2 * (j - sm.N)
-        phi[b], phi[b + 1] = w, view["released"].get(j, RU.WORD - 1)
-    if not opens(canons["map"]["port"], phi, canons["map"]["salts"][0], canons["map"]["bc"][0]):
-        bad.append({"map": 0})
+        got = sorted(j for j, at in rs.view["released"].items() if at == s and j < NR)
+        want = [j for j, b in enumerate(RU._bits(map_m["args"][s]["rfree"], NR)) if b]
+        if got != want:
+            bad.append({"released": s, "session": got, "map": want})
     return {"ok": not bad, "detail": bad[:8]}
 
 
@@ -839,11 +1123,12 @@ def _forged(m: dict, i: int, args: dict) -> dict:
 
 
 def negatives(a, out, rec, receipt, result, members, canons, sd, layout, store, plans, sp, sm, req, lean_draw, law, program, query,
-              want, leaf_layer, publics, session_roots, served, n_all, common, salts, link, rrec) -> dict[str, dict]:
+              want, leaf_layer, publics, session_roots, served, n_all, common, salts, link, rrec, c3) -> dict[str, dict]:
     """Each re-decides one input altered. The clause negatives are a cheating prover consistent everywhere (its canonical
     commitments and its session agree with the altered witness), so only the unit can refuse it: its ok row commits 0.
     The appends negatives are a session the remote audit accepts whose appends aren't the map units' writes: the
-    record's chain isn't the units' (`mapped`), and the ledger refuses the link."""
+    record's chain isn't the units' (`mapped`), and the ledger refuses the link. Their sessions' check 3 is decided by
+    its units' references (`a7_check3.reference`), the run's own by proofs."""
     neg: dict[str, dict] = {}
     plan_m, map_m = members
     req_steps = req.steps
@@ -858,10 +1143,10 @@ def negatives(a, out, rec, receipt, result, members, canons, sd, layout, store, 
             assert not RQ.plan_matches(req, layout, bad, RQ.BLOCK_BITS, s)
             args = dict(plan_m["args"][s], count=len(bad), plan=bad + [0] * (sp.P - len(bad)))
             f = _forged(plan_m, s, args)
-            rs = remote_session(req, layout, store, plans, salts, extra={s: [extra]})
-            br = v0_bridge(rs.view, canons, sp, sm, req_steps)
+            rs = remote_session(req, layout, store, plans, salts, extra={s: [extra]}, c3=c3)
+            br = bridge(rs, plan_m, map_m, req_steps)
             neg[name] = {"refused": f["ok_output"] == 0 and f["satisfied"] and not f["opens_to_1"], "step": s, "block": extra,
-                         "unit": f, "plan_matches": False, "honest_canon_bridge_refuses": not br["ok"]}
+                         "unit": f, "plan_matches": False, "bridge_refuses": not br["ok"]}
             return
         neg[name] = {"refused": False, "why": "no step has such a block"}
 
@@ -946,9 +1231,10 @@ def negatives(a, out, rec, receipt, result, members, canons, sd, layout, store, 
 
     # the appends: sessions the remote audit accepts whose appends aren't the map units' writes
     def unmapped(name: str, **kw) -> None:
-        rs = remote_session(req, layout, store, plans, salts, **kw)
+        rs = remote_session(req, layout, store, plans, salts, c3=c3, **kw)
         if not rs.accepted:
-            neg[name] = {"refused": False, "why": f"the session itself refused it: {rs.refused}"}
+            neg[name] = {"refused": rs.by_check3 is not None, "by": "check 3" if rs.by_check3 else None,
+                         "why": f"the session refused it: {rs.refused}"}
             return
         r = rs.session.record()
         try:
@@ -969,13 +1255,13 @@ def negatives(a, out, rec, receipt, result, members, canons, sd, layout, store, 
     unmapped("dummy-append (mapped)", dummy=t_last)
     unmapped("re-key-not-the-map's (mapped)", rekey=(t_last, j_live))
     t_early = next(s for s in steps_w if s >= 1)
-    rs = remote_session(req, layout, store, plans, salts, early=t_early)
-    br = v0_bridge(rs.view, canons, sp, sm, req_steps)
+    rs = remote_session(req, layout, store, plans, salts, early=t_early, c3=c3)
+    br = bridge(rs, plan_m, map_m, req_steps)
     same = rs.accepted and rs.session.record().appends == link.appends
-    neg["append-before-its-production-step (v0 bridge)"] = {
+    neg["append-before-its-production-step (bridge: heads)"] = {
         "refused": rs.accepted and not br["ok"], "step": t_early, "detail": br["detail"],
-        "chain_is_the_units'": same, "note": "the chain fixes the appends, not the passes between them: the record "
-        "carries no per-pass head, so under zero knowledge this needs the remote audit's record to carry each pass's"}
+        "chain_is_the_units'": same, "note": "the chain fixes the appends, not the passes between them: the bridge reads "
+        "each pass's head from the verifier's session (its windows' heads), which the record doesn't carry"}
     try:
         audit.ledger(rrec, **common, requirement=replace(link, appends=hashlib.sha512(b"another chain").digest()))
         neg["ledger-on-a-link-whose-units-make-other-appends"] = {"refused": False}
@@ -1003,18 +1289,16 @@ def negatives(a, out, rec, receipt, result, members, canons, sd, layout, store, 
     neg["payload-row-of-another-block (binding)"] = rebound(map_m, t2, "pay0", RU._words(a_2["pay"][1], RU.BLOCK_WORDS))
     neg["value-row-of-another-value (binding)"] = rebound(map_m, t2, "val0", RU._words(a_2["val"][1], VW // 16))
 
-    # the v0 bridge and the link: a session plan larger than the certified one, a release later than the map's
-    rs = remote_session(req, layout, store, plans, salts, extra={s0: [unselected_table_block(s0)]})
-    br = v0_bridge(rs.view, canons, sp, sm, req_steps)
-    neg["session-plan-not-the-certified-one (v0 bridge)"] = {"refused": not br["ok"], "detail": br["detail"]}
-    j_late = next(iter(sorted(b for b in store.freed.get(t + 1, ()) if b >= NR)), None) or next(
-        b for s, bs in sorted(store.freed.items()) for b in bs if b >= NR and s < req_steps - 1)
-    f_at = next(s for s, bs in store.freed.items() if j_late in bs)
-    rs = remote_session(req, layout, store, plans, salts, late={j_late: f_at + 1})
-    br = v0_bridge(rs.view, canons, sp, sm, req_steps)
-    neg["session-release-later-than-the-map (v0 bridge)"] = {"refused": not br["ok"], "block": j_late, "detail": br["detail"]}
+    # the bridge and the link: a session plan larger than the certified one, a registered block released at another step
+    rs = remote_session(req, layout, store, plans, salts, extra={s0: [unselected_table_block(s0)]}, c3=c3)
+    br = bridge(rs, plan_m, map_m, req_steps)
+    neg["session-plan-not-the-certified-one (bridge: count)"] = {"refused": not br["ok"], "detail": br["detail"]}
+    jx, lx = layout.block[EXPERT], req.last[EXPERT]
+    rs = remote_session(req, layout, store, plans, salts, late={jx: lx + 1}, c3=c3)
+    br = bridge(rs, plan_m, map_m, req_steps)
+    neg["session-registered-release-not-the-map's (bridge: rfree)"] = {"refused": not br["ok"], "block": jx, "detail": br["detail"]}
     try:
-        audit.ledger(rs.session.record(), **common, requirement=UnitsLink(False, VW, req))
+        audit.ledger(rrec, **common, requirement=UnitsLink(False, VW, req))
         neg["ledger-on-a-link-that-does-not-hold"] = {"refused": False}
     except ValueError as e:
         neg["ledger-on-a-link-that-does-not-hold"] = {"refused": "don't hold" in str(e), "why": str(e)}
