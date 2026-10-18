@@ -1,12 +1,13 @@
 import Models.Accounting.Guarantees.Compose
-import Proofs.Accounting.TS.Price
+import Proofs.Accounting.TS
 import Proofs.Pouw.RelativeSecurity
 
 /-!
 # PoUW's credit on an arbitrary declared circuit: proofs (open)
 
-Every guarantee's proof here is open but the two credits' (steps 8 and 10, proved as compositions, so open only
-through the steps they apply; note:compute-accounting/20261018T1758Z-draft-compose-r6 gives the order), and this file
+Every guarantee's proof here is open but `CreditOfWork`'s (step 7) and the two credits' (steps 8 and 10, proved as
+compositions, so open only through steps 6 and 9; note:compute-accounting/20261018T1758Z-draft-compose-r6 gives the
+order), and this file
 doesn't land until none is a `sorry`. What the window's proofs' layer meets is proved: its static half is
 defined from the IR (`Declared.layer`), so `StageCuts` (under `LayerCommitted`, which `Declared.atIR` meets),
 `StageCoins` (under `Declared.Wf`), `StageSlots`, `WriterReads` and `StageComplete` (under `Declared.Wf` and
@@ -56,10 +57,12 @@ defined from the IR (`Declared.layer`), so `StageCuts` (under `LayerCommitted`, 
    `d_F = c_F + c₀ − S_0`, which keeps `d_F + d₀ = c_F + c₀`, `d₀ ≤ c₀` and `a·d_F + b·d₀ ≤ a·S_F + b·S_0 + a·D₀`; for
    `b < a`, `d_F = S_F` and `d₀ = c_F + c₀ − S_F`, at `b·D₀`. So `WorkAt` at
    `a·d_F + b·d₀ < Λ·ln(1/δ_s) + min(a, b)·D₀`.
-7. `CreditOfWork`: `SheetDIdealFloor`'s reduction of (I1)–(I5) to A1–A7 on the one run, then `floor_of_price`'s
-   identity with FOLD-OPT at the folded words (`FoldOptFolded`), which prices the deficit at `a·d_F + b·d₀ < r`, and
-   `T_cred > 0` (`Model.Wf`) to clear the division.
-8. `CircuitCredit` (proved, open through steps 6 and 7): step 6 at `a = aOf`, `b = bOf` (`≥ 0` by `costs_nonneg`,
+7. `CreditOfWork` (proved): `SheetDIdealFloor`'s reduction of (I1)–(I5) to A1–A7 on the one run
+   (`facetCeilings_of_sheet`, `scalarRoute_half`), `price_of_parts` with FOLD-OPT at the folded words
+   (`price_of_parts_folded`, from `FoldOptFolded`), `price_le_time`, and `identity` at `d̄ = ā = 0`; the deficit,
+   `(d_F + d₀)·N_w·w* + d₀·(1 − μ_f)·N_w·φ*`, is `(a·d_F + b·d₀)·B_♭ < r·B_♭`, and `f_max > 0` (`Model.Wf`) clears
+   the division.
+8. `CircuitCredit` (proved, open through step 6): step 6 at `a = aOf`, `b = bOf` (`≥ 0` by `costs_nonneg`,
    from `stars_nonneg` and `Model.Wf`), and step 7 on each run off its event at `r = rOf`; the certificate is issued at
    `.live`.
 9. `CircuitWorkSeeded`: `SeedExtractedAt` gives one event `Off` of probability at most `ε_id(T, |J|)` off which
@@ -82,7 +85,7 @@ defined from the IR (`Declared.layer`), so `StageCuts` (under `LayerCommitted`, 
    `a·S_F + b·S_0 ≤ max(5a, (1 + κ₀)·b)·U + a·Π_F + b·Π_0`, strictly below `rOfSeeded`'s first three terms
    (`a > 0`), with `D₀` as in step 6. `SeedNamed` (in `ScopeSeeded`) is read by no step: it is the protocol fact under
    which the `UnitFixed` premise on `Declared.atIR`'s layer can hold, as `LayerCommitted` is for the live pair.
-10. `CircuitCreditSeeded` (proved, open through steps 7 and 9): step 9 at `a = aOf`, `b = bOf`, and step 7 on each
+10. `CircuitCreditSeeded` (proved, open through step 9): step 9 at `a = aOf`, `b = bOf`, and step 7 on each
    run off its event at `r = rOfSeeded`; the certificate is issued at `.seeded`.
 11. `BindingOfECR`: `Accounting.SecurityProofs.TS.DrawnBindingOfFork` gives `Pr[MovedIn] ≤ |L|·√Pr[fork]`; AM–GM,
    `|L|·√x ≤ δ' + |L|²·x/(4δ')`; then `Pr[fork] ≤ F.Pr H + κ` and, where `Claims.ExpectedCR H F` holds,
@@ -229,8 +232,102 @@ theorem WholeLuckOfEntropy : Accounting.Guarantees.Compose.WholeLuckOfEntropy :=
 theorem CircuitWork : Accounting.Guarantees.Compose.CircuitWork := by
   sorry
 
+section Credit
+
+open Accounting.TS Accounting.Assumptions.TS Accounting.Assumptions.Compose
+
+set_option linter.unusedSectionVars false
+
+variable {K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype T] [Fintype L] [Fintype U] [Fintype F]
+  [Fintype X]
+
+private theorem price_add (G : Machine K R) (lam : R → ℝ) (f g : K → ℝ) :
+    G.price lam (fun k => f k + g k) = G.price lam f + G.price lam g := by
+  simp only [Machine.price, Machine.load, mul_add, Finset.sum_add_distrib]
+
+private theorem price_sum {ι : Type} (G : Machine K R) (lam : R → ℝ) (s : Finset ι) (f : ι → K → ℝ) :
+    G.price lam (fun k => ∑ i ∈ s, f i k) = ∑ i ∈ s, G.price lam (f i) := by
+  induction s using Finset.cons_induction with
+  | empty => simp [Machine.price, Machine.load]
+  | cons a s ha ih => simp only [Finset.sum_cons]; rw [price_add, ih]
+
+private theorem price_mono (G : Machine K R) (lam : R → ℝ) {f g : K → ℝ} (ha : ∀ r k, 0 ≤ G.a r k)
+    (hlam : ∀ r, 0 ≤ lam r) (hfg : ∀ k, f k ≤ g k) : G.price lam f ≤ G.price lam g :=
+  Finset.sum_le_sum fun r _ => mul_le_mul_of_nonneg_left
+    (Finset.sum_le_sum fun k _ => mul_le_mul_of_nonneg_left (hfg k) (ha r k)) (hlam r)
+
+/-- `Accounting.SecurityProofs.TS.price_of_parts` with the fold priced at the words folded (`FoldOptFolded`):
+`fixed·w* + (1 − μ_f)·folded·φ* + (1 − μ_x)χ* ≤ π·n(M)` at every certificate. -/
+theorem price_of_parts_folded [Nonempty F] [Nonempty X] (Z : Model K R T L U F X) (P : Labelled K)
+    (A : Anatomy K T L U) (folded : ℝ) (lam : R → ℝ) (h : IsCert lam) (hZ : Z.Wf P) (hA : A.Split)
+    (hW : WordsWritten Z A) (hS : ScalarRoute Z A) (hU : SideUnits Z A) (hN : NoSum A)
+    (hF : FoldOptFolded Z A folded) (hX : FillOpt Z A) :
+    A.fixed * Z.wStar lam + (1 - Z.muF) * folded * Z.phiStar lam + (1 - Z.muX) * Z.chiStar lam ≤
+      Z.G.price lam A.run.n := by
+  obtain ⟨-, hw0, -, -⟩ := Accounting.SecurityProofs.TS.stars_nonneg Z P lam hZ h
+  have hdom := Accounting.SecurityProofs.TS.head_dominates Z P A hZ hA hW hS hU
+  have hfold := hF lam h
+  have hfill := hX lam h
+  obtain ⟨ha, -⟩ := hZ
+  obtain ⟨hlam, -⟩ := h
+  obtain ⟨-, -, -, hwd, hsplit⟩ := hA
+  have hword : ∀ hd, A.words hd * Z.wStar lam ≤ Z.G.price lam (A.nword hd) := by
+    intro hd
+    calc A.words hd * Z.wStar lam ≤ A.words hd * demandPrice lam (Z.demand hd) :=
+          mul_le_mul_of_nonneg_left
+            (ciInf_le (Set.finite_range fun hd => demandPrice lam (Z.demand hd)).bddBelow hd) (hwd hd)
+      _ = ∑ r, lam r * (A.words hd * Z.demand hd r) := by
+          simp only [demandPrice, Finset.mul_sum]
+          exact Finset.sum_congr rfl fun _ _ => by ring
+      _ ≤ ∑ r, lam r * Z.G.load (A.nword hd) r :=
+          Finset.sum_le_sum fun r _ => mul_le_mul_of_nonneg_left (hdom hd r) (hlam r)
+      _ = Z.G.price lam (A.nword hd) := rfl
+  calc A.fixed * Z.wStar lam + (1 - Z.muF) * folded * Z.phiStar lam + (1 - Z.muX) * Z.chiStar lam
+      ≤ (∑ hd, A.words hd) * Z.wStar lam + Z.G.price lam A.nfold + Z.G.price lam A.nfill :=
+        add_le_add (add_le_add (mul_le_mul_of_nonneg_right hN hw0) hfold) hfill
+    _ = ∑ hd, A.words hd * Z.wStar lam + Z.G.price lam A.nfold + Z.G.price lam A.nfill := by
+        rw [Finset.sum_mul]
+    _ ≤ ∑ hd, Z.G.price lam (A.nword hd) + Z.G.price lam A.nfold + Z.G.price lam A.nfill :=
+        add_le_add (add_le_add (Finset.sum_le_sum fun hd _ => hword hd) le_rfl) le_rfl
+    _ = Z.G.price lam (fun k => ∑ hd, A.nword hd k + A.nfold k + A.nfill k) := by
+        rw [price_add, price_add, price_sum]
+    _ ≤ Z.G.price lam A.run.n := price_mono Z.G lam ha hlam hsplit
+
+end Credit
+
 theorem CreditOfWork : Accounting.Guarantees.Compose.CreditOfWork := by
-  sorry
+  intro ι K P T L U F X _ _ _ _ _ _ _ _ _ _ Sc Cd Sh Z A folded lam r hFits hMS hA hClock hDisp hTen hPipe hSmem
+    hWords hSem hFold hFill hwork
+  obtain ⟨h, hZ, hq, hqT, hb⟩ := hMS
+  obtain ⟨-, hf, -, hB, -, -, -, -, -, -, -, -, hmu1, -⟩ := id hZ
+  obtain ⟨-, hw0, hphi0, -⟩ := Accounting.SecurityProofs.TS.stars_nonneg Z (floorOf Sc Cd) lam hZ h
+  obtain ⟨dF, d0, -, -, hfix, hfold, hlt⟩ := hwork
+  rw [← hFits.2] at hfix hfold
+  have hM : Accounting.Assumptions.TS.FacetCeilings Z.G A.run := by
+    rw [hFits.1]
+    exact Accounting.SecurityProofs.TS.facetCeilings_of_sheet Sh _
+      (Accounting.SecurityProofs.TS.run_nonneg_of_split hA) hClock hDisp hTen hPipe hSmem
+  have hΦ := (price_of_parts_folded Z (floorOf Sc Cd) A folded lam h hZ hA hWords.1
+    (Accounting.SecurityProofs.TS.scalarRoute_half Z A hA hWords hq hqT hb) hSem.2 hSem.1 hFold hFill).trans
+    (Accounting.SecurityProofs.TS.price_le_time Z.G lam A.run h hf hM)
+  have hid := (div_eq_iff hB.ne').mp (Accounting.SecurityProofs.TS.identity Z (floorOf Sc Cd) lam 0 0 hZ)
+  simp only [Accounting.TS.Model.epsLuck, Accounting.TS.Model.epsAdapt, zero_mul, sub_zero] at hid
+  have h1 := mul_le_mul_of_nonneg_right hfix hw0
+  have h2 := mul_le_mul_of_nonneg_right (mul_le_mul_of_nonneg_left hfold (sub_nonneg.mpr hmu1)) hphi0
+  have hNW : Z.Nw * Z.wStar lam / Z.bnd (floorOf Sc Cd) * Z.bnd (floorOf Sc Cd) = Z.Nw * Z.wStar lam :=
+    div_mul_cancel₀ _ hB.ne'
+  have hc : (1 - Z.muF) * Z.Nw * Z.phiStar lam / Z.bnd (floorOf Sc Cd) * Z.bnd (floorOf Sc Cd) =
+      (1 - Z.muF) * Z.Nw * Z.phiStar lam := div_mul_cancel₀ _ hB.ne'
+  have hab : (aOf Sc Cd Z lam * dF + bOf Sc Cd Z lam * d0) * Z.bnd (floorOf Sc Cd) =
+      (dF + d0) * (Z.Nw * Z.wStar lam) + d0 * ((1 - Z.muF) * Z.Nw * Z.phiStar lam) := by
+    show (Z.Nw * Z.wStar lam / Z.bnd (floorOf Sc Cd) * dF + (Z.Nw * Z.wStar lam / Z.bnd (floorOf Sc Cd) +
+      (1 - Z.muF) * Z.Nw * Z.phiStar lam / Z.bnd (floorOf Sc Cd)) * d0) * Z.bnd (floorOf Sc Cd) = _
+    linear_combination (dF + d0) * hNW + d0 * hc
+  have hrB := mul_lt_mul_of_pos_right hlt hB
+  show (1 - (Z.epsSkip (floorOf Sc Cd) lam + Z.epsCert (floorOf Sc Cd) lam + Z.epsRoute (floorOf Sc Cd) lam +
+    Z.epsMand (floorOf Sc Cd) lam + r)) * (Z.bnd (floorOf Sc Cd) / Z.G.fmax) ≤ A.run.time
+  rw [← mul_div_assoc, div_le_iff₀ hf]
+  linarith
 
 /-- The circuit's costs `aOf` and `bOf` are `≥ 0` in the model's ranges. -/
 theorem costs_nonneg {ι K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype T] [Fintype L] [Fintype U]
