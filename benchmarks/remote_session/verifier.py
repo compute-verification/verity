@@ -21,7 +21,7 @@ One connection serves one registration and then `--sessions` sessions over it, e
    `Verifier.root`), each window closed
    (`Session.close`) as soon as its roots are final and its draws sent; the prover's openings
    checked as their frames arrive, by `--check-workers` processes (`checks.py`, the driver's own check of an opening,
-   verdict as `Session.verify`'s) or by `Session.verify` on a thread of the verifier's, so a window's checks run while
+   verdict as `Session.verify`'s) or by the same check on a thread of the verifier's, so a window's checks run while
    the next window's passes arrive; once every window is accepted the record (`Session.record`), its γ terms
    (`audit.ledger`) and the node's HBM it shows held (`memory`: the credited share and the residual, at ε), and with
    `--host-bytes` the same by kind against the node's HBM and host DRAM (`node_line`).
@@ -32,11 +32,20 @@ registration after its last session, counting each session (a failed one by its 
 process that ended early stays live, refusing the node, until `--close NODE` closes it with its sessions as they stood,
 the one in flight unended.
 
+The verdicts are the verifier of record's, the Lean process `remote-audit-verifier` (`lean_verifier.py`), under
+`--verdict lean` or `both` (the default, `VERDICT`): it holds the registry and every session, and each registration,
+session, event and window goes to it and to `audit.Session` at one reading of the clock (`Pair`). `audit.Session`
+keeps the driver's books (its coins, its plans, the record the ledger reads), and an event, a window's verdict or a
+record on which the two differ refuses the session at that window as `disagreement`. Under `both` `audit.Session`
+checks every window's openings too, beside the Lean, and a window's two verdicts are set on the two sessions at once;
+under `lean` it checks none and takes the Lean's verdict. Under `python` there is no Lean process and `audit.Session`
+decides. `--close` closes a registration in both registries alike.
+
 Openings are checked in the clear: zero-knowledge proof units are not in this harness (PROTOCOL.md §8).
 
     python verifier.py --port 7781 --out OUT [--windows 7 --window-ms 1000 --samples 2773 --sessions 1]
-                       [--registry REGISTRY.json]
-    python verifier.py --registry REGISTRY.json --close NODE_HEX
+                       [--registry REGISTRY.json] [--verdict both|lean|python] [--lean-exe PATH]
+    python verifier.py --registry REGISTRY.json --close NODE_HEX [--verdict both|lean|python]
 """
 from __future__ import annotations
 
@@ -46,6 +55,7 @@ import math
 import os
 import queue
 import resource
+import secrets
 import sys
 import threading
 import time
@@ -57,11 +67,15 @@ sys.path.insert(0, str(HERE.parents[1]))
 
 from verity.core.protocols.remote_bandwidth import audit, timing  # noqa: E402
 
+import lean_verifier as lv  # noqa: E402
 import wire  # noqa: E402
-from checks import Checks  # noqa: E402
+from checks import Checks, check  # noqa: E402
 
+VERDICT = "both"
+"""Who decides the verdicts (module docstring): `lean`, `both` or `python`."""
+VERDICTS = ("lean", "both", "python")
 CHECK_BATCH = 1024
-"""Openings a worker checks at once (`checks.Checks`)."""
+"""Openings a worker checks at once (`checks.Checks`), and a Lean thread (`checkWindowChunked`)."""
 GPU_HBM_BYTES = 96 * 2 ** 30
 """One RTX PRO 6000's memory, 96 GiB (`benchmarks/census/hardware.json`)."""
 HBM_BYTES = timing.GPUS * GPU_HBM_BYTES
@@ -225,13 +239,192 @@ class RealClock:
         """A session's passes have started."""
 
 
+def start_lean(source: bytes, registry: audit.Registry, exe: Path | None, done) -> lv.Lean:
+    """The Lean verifier's process, with the verifier's secret and `registry` (which it must read back as
+    `audit.Registry` writes it), `done` called with each window's check as it ends."""
+    lean = lv.Lean(exe or lv.build(), done)
+    read = lean.call({"op": "init", "source": source.hex(), "registry": registry.to_json(), "chunk": CHECK_BATCH})
+    if read["registry"] != registry.to_json():
+        lean.close()
+        raise ValueError(f"the Lean verifier reads the registry as {read['registry']}, not as audit.Registry does: "
+                         f"{registry.to_json()}")
+    return lean
+
+
+class Pair:
+    """Session k through the verifiers, with `audit.Session`'s interface: each event goes to `s`, the driver's books,
+    and, given `lean`, to the Lean process's session k, at one reading of the verifier's clock. The result is the one
+    they agree on; where they differ, the session is refused at the event's window as `disagreement` (in both
+    verifiers), returned as that rejection, or raised as `audit.SessionError` where `audit.Session` returns no verdict.
+    Everything else is read from `s`."""
+
+    def __init__(self, v: Verifier, s: audit.Session, k: int, tape: lv.Tape) -> None:
+        self.v, self.s, self.k, self.lean = v, s, k, v.lean
+        self.node, self.disagreement = s.registration.node.hex(), None
+        if self.lean is not None:
+            got = self._lean({"op": "session", "node": self.node, "params": lv.params_json(s.params),
+                              "coins": [c.hex() for c in tape.coins], "append_coins": [],
+                              "not_before_ns": s.not_before_ns, "index": k})
+            if got != {"session": k}:
+                self._disagree(0, "session", got, {"session": k})
+
+    def __getattr__(self, name: str):
+        return getattr(self.s, name)
+
+    def _lean(self, request: dict) -> dict:
+        try:
+            return self.lean.call(request)
+        except lv.LeanError as e:
+            return {"error": str(e)}
+
+    def _disagree(self, t: int, event: str, lean: dict, python: dict) -> audit.Verdict:
+        self.disagreement = {"t": t, "event": event, "lean": lean, "python": python}
+        v = self.s._fail(t, "disagreement")
+        if self.lean is not None:
+            self._lean({"op": "abort", "node": self.node, "session": self.k, "outcome": "disagreement"})
+        self.v.log(f"verifier: session {self.k} refused at window {t}: the verifiers disagree on {event}: "
+                   f"Lean {lean}, Python {python}")
+        return v
+
+    def _step(self, t: int, event, python, as_json, *, clocked: bool = False, coin=None):
+        """`python()` on the books and `event()` through the Lean: `python()`'s return, or the disagreement's
+        rejection (None as the second value)."""
+        if self.disagreement is not None:
+            raise audit.SessionError("the session ended: the verifiers disagree")
+        ev = event() if self.lean is not None else None
+        held = self.v._stamp
+        now = self.v._stamp = self.v._now()
+        try:
+            try:
+                out = python()
+                got = as_json(out)
+            except audit.SessionError:
+                if self.lean is None:
+                    raise
+                out, got = None, lv.REFUSED
+        finally:
+            self.v._stamp = held
+        if self.lean is None:
+            return out, True
+        if clocked:
+            ev["now"] = now
+        c = coin(out) if coin is not None else None
+        lean = self._lean({"op": "event", "node": self.node, "session": self.k, "event": ev,
+                           "coin": None if c is None else c.hex()})
+        if lean != got:
+            return self._disagree(t if type(t) is int and t >= 0 else self.s.filling, ev["kind"], lean, got), False
+        if got == lv.REFUSED:
+            raise audit.SessionError("refused by both verifiers")
+        return out, True
+
+    def start(self):
+        out, agreed = self._step(0, lambda: {"kind": "start"}, self.s.start, lv.released_json, clocked=True)
+        if not agreed:
+            raise audit.SessionError("the verifiers disagree on the session's start")
+        return out
+
+    def boundary(self):
+        t = next((t for t, w in enumerate(self.s.windows) if w.boundary_ns is None), len(self.s.windows))
+        out, agreed = self._step(t, lambda: {"kind": "boundary"}, self.s.boundary, lv.released_json, clocked=True)
+        if not agreed:
+            raise audit.SessionError(f"the verifiers disagree on window {t}'s boundary")
+        return out
+
+    def append(self, root: bytes, count: int):
+        return self._step(self.s.filling, lambda: {"kind": "append", "root": root.hex(), "count": count},
+                          lambda: self.s.append(root, count), lv.appended_json,
+                          coin=lambda out: out[1] if isinstance(out, tuple) else None)[0]
+
+    def release(self, runs, withdrawn=()):
+        return self._step(self.s.filling, lambda: lv.release_event(runs, withdrawn),
+                          lambda: self.s.release(runs, withdrawn), lv.done_json)[0]
+
+    def receive(self, t: int, i: int, root: bytes, runs=None, *, change=None, step=None):
+        if runs is not None:
+            raise ValueError("the driver sends a plan as a change")
+        return self._step(t, lambda: lv.receive_event(t, i, root, change, step),
+                          lambda: self.s.receive(t, i, root, change=change, step=step), lv.done_json, clocked=True)[0]
+
+    def close(self, t: int):
+        return self._step(t, lambda: {"kind": "close", "t": t}, lambda: self.s.close(t), lv.drew_json,
+                          clocked=True)[0]
+
+    def openings(self, t: int, body: bytes) -> None:
+        """One frame of window t's openings to the Lean, kept there until the window is verified."""
+        try:
+            self.lean.call({"op": "openings", "node": self.node, "session": self.k, "t": t, "bytes": len(body)}, body)
+        except lv.LeanError as e:
+            self.v.log(f"verifier: the Lean refused window {t}'s openings frame: {e}")
+
+    def verify(self, t: int, check: int) -> bool:
+        """Window t's frames checked on the Lean's threads as check `check`: False where it refuses to."""
+        got = self._lean({"op": "verify", "node": self.node, "session": self.k, "t": t, "id": check})
+        return got == {"spawned": True}
+
+    def settle(self, check: int) -> dict:
+        """Check `check`'s verdict applied to the Lean's session: its result, the openings it read and its ns."""
+        return self._lean({"op": "settle", "id": check})
+
+    def judge(self, t: int, lean: dict, python: dict | None) -> dict:
+        """Window t's verdict, `{"accepted", "failure", "at"}`, from the Lean's settled result and the books' verdict
+        (`python`, as `verdicts` holds it): under `lean` the Lean's verdict set on the books (`Checks.settle`), under
+        `both` the books' own check's; where the two differ, `disagreement`."""
+        mine = {k: x for k, x in lean.items() if k not in ("openings", "ns")}
+        if python is None:
+            try:
+                n = len(self.s.windows[t].draws)
+                v = Checks.settle(self.s, t, [{"failure": mine.get("failure"),
+                                               "at": tuple(mine["at"]) if mine.get("at") else None}], n)
+                theirs = lv.verdict_json(v)
+            except audit.SessionError:
+                theirs = lv.REFUSED
+        elif python["failure"] is not None and python["failure"].startswith("refused"):
+            theirs = lv.REFUSED
+        else:
+            theirs = lv.verdict_json(audit.Verdict(t, python["accepted"], python["failure"],
+                                                   tuple(python["at"]) if python["at"] else None))
+        if self.disagreement is None and mine != theirs:
+            self._disagree(t, "verify", mine, theirs)
+        if self.disagreement is not None:
+            return {"accepted": False, "failure": "disagreement", "at": None}
+        return {"accepted": "accepted" in mine, "failure": mine.get("failure", "refused" if mine == lv.REFUSED else None),
+                "at": mine.get("at")}
+
+    def end(self, failure: dict | None) -> None:
+        """The session ended with the driver's `failure` where neither verifier gives it one (a message it couldn't
+        read): set on both. And an accepted session's record held to the Lean's: one that differs is `disagreement`."""
+        if self.lean is None:
+            if failure is not None and self.s.outcome is None:
+                self._fail_books(failure)
+            return
+        got = self._lean({"op": "outcome", "node": self.node, "session": self.k})
+        if failure is not None:
+            if self.s.outcome is None:
+                self._fail_books(failure)
+            if got.get("outcome") is None and self.disagreement is None:
+                self._lean({"op": "abort", "node": self.node, "session": self.k, "outcome": str(failure["failure"])})
+            return
+        mine = {"outcome": self.s.outcome, "record": lv.summary_json(self.s.record()) if self.s.outcome == "accepted"
+                else None}
+        if got != mine and self.disagreement is None:
+            self._disagree(len(self.s.windows) - 1, "record", got, mine)
+
+    def _fail_books(self, failure: dict) -> None:
+        t = failure["t"]
+        self.s._fail(t if type(t) is int and 0 <= t < len(self.s.windows) else len(self.s.windows),
+                     str(failure["failure"]))
+
+
 class Verifier:
     def __init__(self, conn: wire.Conn, *, source: bytes, windows: int, window_ns: int, samples: int, delta: float,
                  jitter_ns: int, clock=None, log=print, checks=None, lifetime: int = audit.LIFETIME,
-                 registry: audit.Registry | None = None, hbm_bytes: int = HBM_BYTES, host_bytes: int = 0) -> None:
+                 registry: audit.Registry | None = None, hbm_bytes: int = HBM_BYTES, host_bytes: int = 0,
+                 verdict: str = VERDICT, lean_exe: Path | None = None) -> None:
+        if verdict not in VERDICTS:
+            raise ValueError(f"the verdict is one of {VERDICTS}")
         self.conn, self.source, self.W, self.T, self.lifetime = conn, source, windows, window_ns, lifetime
         self.hbm_bytes, self.host_bytes, self.regions, self.deferred = hbm_bytes, host_bytes, None, False
-        self.checks = checks
+        self.verdict, self.checks = verdict, checks
         self.registry = audit.Registry() if registry is None else registry
         self.samples, self.delta, self.jitter_ns = samples, delta, jitter_ns
         self.clock = clock or RealClock()
@@ -239,11 +432,50 @@ class Verifier:
         self.inbox: queue.Queue = queue.Queue()
         self.jobs: queue.Queue = queue.Queue()
         self._stamp: int | None = None
+        self._check = 0
+        self.lean = None if verdict == "python" else start_lean(source, self.registry, lean_exe, self._lean_done)
         threading.Thread(target=self._read, daemon=True).start()
         threading.Thread(target=self._verify, daemon=True).start()
 
     def _now(self) -> int:
         return self._stamp if self._stamp is not None else self.clock.now()
+
+    def _lean_done(self, msg: dict) -> None:
+        self.inbox.put(({"type": "lean-done", "id": msg["done"], "accepted": msg["accepted"]}, b"", self.clock.now()))
+
+    def registry_json(self) -> dict:
+        """The verifier's registry, `registry/v0`: the Lean's, but under `python` or once its process has ended (when
+        every session it was in is refused as `disagreement`)."""
+        if self.lean is not None:
+            try:
+                return self.lean.call({"op": "registry"})
+            except lv.LeanError as e:
+                self.log(f"verifier: the Lean's registry is gone ({e}): keeping audit.Registry's")
+        return self.registry.to_json()
+
+    def close_registration(self, node: bytes) -> dict:
+        """The node's live registration closed in both registries (`audit.RegistryError` where it has none), as
+        the registry of record counts it; the books' count beside it where the two differ (`python`)."""
+        try:
+            mine = self.registry.close(node).to_json()
+        except audit.RegistryError as e:
+            mine, why = lv.REFUSED, e
+        if self.lean is None:
+            if mine == lv.REFUSED:
+                raise why
+            return mine
+        try:
+            got = self.lean.call({"op": "close", "node": node.hex()})
+        except lv.LeanError as e:
+            got = {"error": str(e)}
+        if got == lv.REFUSED or "error" in got:
+            raise audit.RegistryError(f"node {node.hex()} has no live registration to close in the Lean's registry"
+                                      + ("" if mine == lv.REFUSED else f" (audit.Registry closed it: {mine})"))
+        return got if got == mine else {**got, "python": mine}
+
+    def stop(self) -> None:
+        if self.lean is not None:
+            self.lean.close()
 
     def _read(self) -> None:
         try:
@@ -254,15 +486,11 @@ class Verifier:
 
     def _verify(self) -> None:
         while True:
-            session, t, openings = self.jobs.get()
+            k, snap, t, draws, bodies = self.jobs.get()
             c0 = time.thread_time_ns()
-            try:
-                v = session.verify(t, openings if openings is not None else [])
-            except audit.SessionError as e:
-                v = audit.Verdict(t, False, f"refused: {e}")
-            self.inbox.put(({"type": "verdict", "t": t, "accepted": v.accepted, "failure": v.failure,
-                             "at": v.at, "cpu_ns": time.thread_time_ns() - c0, "openings": len(openings or [])},
-                            b"", self.clock.now()))
+            r = check(snap, t, draws, bodies)
+            self.inbox.put(({"type": "checks", "k": k, "t": t, "results": [r], "count": r["n"],
+                             "cpu_ns": time.thread_time_ns() - c0}, b"", self.clock.now()))
             self.jobs.task_done()
 
     def expect(self, kind: str):
@@ -272,13 +500,15 @@ class Verifier:
                 return head, body, stamp
             if head["type"] == "lost":
                 raise wire.Closed(head["why"])
-            if head["type"] not in ("root", "append", "openings", "closed", "verdict"):
+            if head["type"] not in ("root", "append", "openings", "closed", "checks", "checked", "lean-done"):
                 self.log(f"verifier: skipped a {head['type']} while waiting for {kind}")
 
     def register(self) -> tuple[audit.Registration, dict]:
         """The hello's registration, drawn through the registry: refused, with `bye` and the reason, for a node with a
         live registration (`audit.RegistryError`, raised), with a malformed layout (`regions_of`'s ValueError), or
-        deferring residency under a lifetime of one window (`audit.Params`'s ValueError)."""
+        deferring residency under a lifetime of one window (`audit.Params`'s ValueError). Both registries draw it
+        under one nonce: one on which they differ is refused as `disagreement` (`audit.RegistryError`), and closed
+        where it went live."""
         hello, _, _ = self.expect("hello")
         try:
             self.regions = regions_of(hello.get("layout"), hello["blocks"])
@@ -286,14 +516,30 @@ class Verifier:
         except ValueError as e:
             self.conn.send({"type": "bye", "why": f"refused: {e}"})
             raise
+        node, blocks, root = bytes.fromhex(hello["node"]), hello["blocks"], bytes.fromhex(hello["payload_root"])
+        c, receipt, rows = wire.codec_named(hello["codec"]), hello["receipt"], hello.get("rows")
+        nonce = secrets.token_bytes(audit.NONCE_BYTES)
         try:
-            self.registration = self.registry.register(self.source, bytes.fromhex(hello["node"]), hello["blocks"],
-                                                       bytes.fromhex(hello["payload_root"]),
-                                                       wire.codec_named(hello["codec"]), hello["receipt"],
-                                                       rows=hello.get("rows"))
-        except audit.RegistryError as e:
-            self.conn.send({"type": "bye", "why": f"refused: {e}"})
-            raise
+            self.registration = self.registry.register(self.source, node, blocks, root, c, receipt, rows=rows,
+                                                       nonce=nonce)
+            mine, why = {"codec_seed": self.registration.codec_seed.hex(), "digest": self.registration.digest.hex()}, None
+        except (audit.RegistryError, ValueError) as e:
+            mine, why = (lv.REFUSED if isinstance(e, audit.RegistryError) else {"error": True}), e
+        if self.lean is not None:
+            try:
+                got = self.lean.call(lv.register_request(node, blocks, root, c, receipt, rows, nonce))
+            except (lv.LeanError, ValueError):
+                got = {"error": True}
+            if got != mine:
+                if "digest" in mine:
+                    self.registry.close(node)
+                if "digest" in got:
+                    self.lean.call({"op": "close", "node": node.hex()})
+                mine, why = got, audit.RegistryError(f"disagreement: the Lean verifier's registration is {got}, "
+                                                     f"audit.Registry's {mine}")
+        if why is not None:
+            self.conn.send({"type": "bye", "why": f"refused: {why}"})
+            raise why
         self.registered_ns = self.clock.now()
         self.conn.send({"type": "registration", "registration": wire.registration_json(self.registration)})
         ready, _, _ = self.expect("ready")
@@ -327,7 +573,10 @@ class Verifier:
         params = audit.Params(reg.blocks, allowance_ns, W, self.samples, self.delta, window_ns=self.T, codec=reg.codec,
                               receipt=reg.receipt, rows=reg.rows, lifetime=self.lifetime, deferred=self.deferred)
         not_before_ns = self.registered_ns if not_before_ns is None else not_before_ns
-        session = self.registry.session(params, reg, None, clock=self._now, not_before_ns=not_before_ns, index=k)
+        tape = lv.Tape(params.coins, os.urandom)
+        books = self.registry.session(params, reg, None, clock=self._now, not_before_ns=not_before_ns, index=k,
+                                      entropy=tape)
+        session = Pair(self, books, k, tape)
         self.conn.send({"type": "session", "k": k, "windows": W, "lifetime": params.lifetime,
                         "commitment": session.commitment.to_json()})
         self.expect("armed")
@@ -335,29 +584,72 @@ class Verifier:
             item = self.clock.wait(self.inbox, not_before_ns)
             if item is not None:
                 self.log(f"verifier: skipped a {item[0]['type']} before the session's first coin")
-        self.conn.send({"type": "coin", "coin": wire.coin_json(session.start())})
-        self.clock.busy()
         sent = drawn = 0
         arrivals: list[list[int]] = [[] for _ in range(W)]
         verdicts: dict[int, dict] = {}
+        checked: dict[int, dict] = {}
+        lean_ready: dict[int, tuple[int | dict, int]] = {}
+        lean_checks: dict[int, int] = {}
+        frames: dict[int, int] = {}
         draws_at: dict[int, int] = {}
         parts: dict[int, list] = {}
         checking: dict[int, dict] = {}
         failure = None
         cpu0 = time.process_time_ns()
 
-        def failed() -> dict:
+        def failed(t: int) -> dict:
             v = session.failed
             if v is None:
-                raise
+                return {"t": t, "failure": "refused", "at": None}
             return {"t": v.window, "failure": v.failure, "at": v.at}
+
+        def decide(t: int) -> None:
+            """Window t's verdict once each verifier it waits on has checked the window: the Python's result
+            (`checked`) set on the books and the Lean's (`lean_ready`) settled on its session at one moment, so
+            neither session moves on a verdict the other hasn't had (`Pair.judge`). Nothing once the session has a
+            failure."""
+            nonlocal failure
+            py, ln = checked.get(t), lean_ready.get(t)
+            if (failure is not None or t in verdicts or (self.verdict != "lean" and py is None)
+                    or (self.lean is not None and ln is None)):
+                return
+            mine = None
+            if py is not None:
+                try:
+                    v = Checks.settle(books, t, py["results"], py["count"])
+                except audit.SessionError as e:
+                    v = audit.Verdict(t, False, f"refused: {e}")
+                mine = {"accepted": v.accepted, "failure": v.failure, "at": v.at}
+            if self.lean is None:
+                verdicts[t] = {"t": t, **mine, "cpu_ns": py["cpu_ns"], "openings": py["count"],
+                               "checked_ns": py["checked_ns"]}
+            else:
+                check_id, latency = lean_ready.pop(t)
+                res = session.settle(check_id) if type(check_id) is int else check_id
+                verdicts[t] = {"t": t, **session.judge(t, res, mine), "cpu_ns": py["cpu_ns"] if py else 0,
+                               "openings": py["count"] if py else res.get("openings"),
+                               "checked_ns": max(latency, py["checked_ns"]) if py else latency,
+                               "python_checked_ns": py["checked_ns"] if py else None,
+                               "lean_ns": res.get("ns"), "lean_checked_ns": latency}
+            if not verdicts[t]["accepted"]:
+                failure = {"t": t, "failure": verdicts[t]["failure"], "at": verdicts[t]["at"]}
+
+        def lean_done(head: dict, stamp: int) -> None:
+            """A Lean check that ended, ready to settle (`decide`); a process that ended leaves every check running
+            an error."""
+            ids = [head["id"]] if head["id"] in lean_checks else list(lean_checks) if head["id"] is None else []
+            for check_id in ids:
+                t = lean_checks.pop(check_id)
+                lean_ready[t] = (check_id if head["id"] is not None else {"error": "the process ended"},
+                                 stamp - draws_at[t])
+                decide(t)
 
         def close(t: int) -> None:
             nonlocal failure
             try:
                 out = session.close(t)
             except audit.SessionError:
-                failure = failed()
+                failure = failed(t)
                 return
             if isinstance(out, audit.Verdict):
                 failure = {"t": t, "failure": out.failure, "at": None}
@@ -365,6 +657,11 @@ class Verifier:
             draws_at[t] = self.clock.now()
             self.conn.send({"type": "draws", "t": t, "draws": [list(d) for d in out]})
 
+        try:
+            self.conn.send({"type": "coin", "coin": wire.coin_json(session.start())})
+            self.clock.busy()
+        except audit.SessionError:
+            failure = failed(0)
         while failure is None and len(verdicts) < W:
             if sent < W:
                 until = session.windows[sent].released_ns + self.T
@@ -375,7 +672,11 @@ class Verifier:
             item = self.clock.wait(self.inbox, until)
             if item is None:
                 if sent < W:
-                    coin = session.boundary()
+                    try:
+                        coin = session.boundary()
+                    except audit.SessionError:
+                        failure = failed(sent)
+                        break
                     sent += 1
                     self.conn.send({"type": "coin", "coin": wire.coin_json(coin)} if coin else {"type": "close"})
                 else:
@@ -390,7 +691,7 @@ class Verifier:
                 try:
                     v = self.root(session, head)
                 except audit.SessionError:
-                    failure = failed()
+                    failure = failed(t)
                     break
                 except (TypeError, ValueError, KeyError):
                     failure = {"t": t, "failure": "malformed", "at": None}
@@ -408,7 +709,7 @@ class Verifier:
                 try:
                     got = self.append(session, head)
                 except audit.SessionError:
-                    failure = failed()
+                    failure = failed(session.filling)
                     break
                 except (TypeError, ValueError, KeyError):
                     failure = {"t": session.filling, "failure": "malformed", "at": None}
@@ -417,13 +718,32 @@ class Verifier:
                     failure = {"t": got.window, "failure": got.failure, "at": got.at}
                     break
                 self.conn.send(got)
-            elif kind == "openings" and self.checks is not None:
-                c = checking.get(t := head["t"])
+            elif kind == "openings":
+                t = head["t"]
+                if not (type(t) is int and 0 <= t < len(session.windows)) or session.windows[t].draws is None:
+                    failure = {"t": t, "failure": "malformed", "at": None}
+                    break
+                if self.lean is not None:
+                    session.openings(t, body)
+                    frames[t] = frames.get(t, 0) + 1
+                    if frames[t] == head["parts"]:
+                        self._check += 1
+                        if session.verify(t, self._check):
+                            lean_checks[self._check] = t
+                        else:
+                            lean_ready[t] = (lv.REFUSED, stamp - draws_at[t])
+                            decide(t)
+                if self.verdict == "lean":
+                    continue
+                if self.checks is None:
+                    have = parts.setdefault(t, [])
+                    have.append(body)
+                    if len(have) == head["parts"]:
+                        self.jobs.put((k, Checks.snapshot(books, t), t, list(session.windows[t].draws), have))
+                    continue
+                c = checking.get(t)
                 if c is None:
-                    if not 0 <= t < len(session.windows) or session.windows[t].draws is None:
-                        failure = {"t": t, "failure": "malformed", "at": None}
-                        break
-                    c = checking[t] = {"snap": self.checks.snapshot(session, t), "at": 0, "bodies": [], "n": 0,
+                    c = checking[t] = {"snap": self.checks.snapshot(books, t), "at": 0, "bodies": [], "n": 0,
                                        "parts": 0, "futures": []}
                 c["bodies"].append(body)
                 c["n"] += max(0, int(head.get("n", 0)))
@@ -431,50 +751,47 @@ class Verifier:
                 if c["n"] >= CHECK_BATCH or c["parts"] == head["parts"]:
                     draws = list(session.windows[t].draws[c["at"]:c["at"] + c["n"]])
                     f = self.checks.submit(c["snap"], t, draws, c["bodies"])
-                    f.add_done_callback(lambda _, t=t: self.inbox.put(({"type": "checked", "t": t}, b"",
+                    f.add_done_callback(lambda _, t=t: self.inbox.put(({"type": "checked", "k": k, "t": t}, b"",
                                                                        self.clock.now())))
                     c["futures"].append(f)
                     c["at"], c["bodies"], c["n"] = c["at"] + c["n"], [], 0
                 c["whole"] = c["parts"] == head["parts"]
-            elif kind == "checked":
+            elif kind == "checked" and head["k"] == k:
                 c = checking[head["t"]]
-                if c.get("whole") and all(f.done() for f in c["futures"]) and head["t"] not in verdicts:
-                    t, results = head["t"], [f.result() for f in c["futures"]]
-                    cpu = sum(r["cpu_ns"] for r in results)
-                    count = sum(r["n"] for r in results)
-                    try:
-                        v = self.checks.settle(session, t, results, count)
-                    except audit.SessionError as e:
-                        v = audit.Verdict(t, False, f"refused: {e}")
-                    verdicts[t] = {"t": t, "accepted": v.accepted, "failure": v.failure, "at": v.at, "cpu_ns": cpu,
-                                   "openings": count, "checked_ns": stamp - draws_at[t]}
-                    if not v.accepted:
-                        failure = {"t": t, "failure": v.failure, "at": v.at}
-            elif kind == "openings":
-                t, got = head["t"], wire.decode_openings(body)
-                have = parts.setdefault(t, [])
-                have.append(got)
-                if len(have) == head["parts"]:
-                    whole = None if any(x is None for x in have) else [o for x in have for o in x]
-                    self.jobs.put((session, t, whole))
-            elif kind == "verdict":
-                verdicts[head["t"]] = head
-                if not head["accepted"]:
-                    failure = {"t": head["t"], "failure": head["failure"], "at": head["at"]}
+                if c.get("whole") and all(f.done() for f in c["futures"]) and head["t"] not in checked:
+                    results = [f.result() for f in c["futures"]]
+                    checked[head["t"]] = {"results": results, "count": sum(r["n"] for r in results),
+                                          "cpu_ns": sum(r["cpu_ns"] for r in results),
+                                          "checked_ns": stamp - draws_at[head["t"]]}
+                    decide(head["t"])
+            elif kind == "checks" and head["k"] == k:
+                checked[head["t"]] = {"results": head["results"], "count": head["count"], "cpu_ns": head["cpu_ns"],
+                                      "checked_ns": stamp - draws_at[head["t"]]}
+                decide(head["t"])
+            elif kind == "lean-done":
+                lean_done(head, stamp)
             elif kind == "closed":
                 self.clock.idle()
             elif kind == "lost":
                 raise wire.Closed(head["why"])
         self.jobs.join()
-        while not self.inbox.empty():
-            head, _, _ = self.inbox.get()
-            if head["type"] == "verdict":
-                verdicts[head["t"]] = head
+        lost = None
+        while lean_checks:
+            item = self.inbox.get()
+            head, _, stamp = item
+            if head["type"] == "lean-done":
+                lean_done(head, stamp)
+            elif head["type"] == "lost":
+                lost = item
+        if lost is not None:
+            self.inbox.put(lost)
+        session.end(failure)
+        for check_id, _ in lean_ready.values():
+            if type(check_id) is int:
+                session.settle(check_id)
+        if failure is None and session.disagreement is not None:
+            failure = {"t": session.disagreement["t"], "failure": "disagreement", "at": None}
         accepted = failure is None and len(verdicts) == W and all(v["accepted"] for v in verdicts.values())
-        if failure is not None and session.outcome is None:
-            t = failure["t"]
-            session._fail(t if type(t) is int and 0 <= t < len(session.windows) else len(session.windows),
-                          str(failure["failure"]))
         self.conn.send({"type": "end", "k": k, "accepted": accepted, "failure": failure})
         while True:
             head, _, _ = self.expect("ended")
@@ -484,8 +801,13 @@ class Verifier:
                "samples": self.samples, "delta": self.delta, "window_ns": self.T, "windows": W,
                "registration": reg.digest.hex(), "coins": session.commitment.root.hex(),
                "appended": session.extent - reg.blocks, "released": session.released,
+               "verdict": self.verdict, "disagreement": session.disagreement,
                "verify_cpu_ns": {t: v["cpu_ns"] for t, v in sorted(verdicts.items())},
                "verify_latency_ns": {t: v.get("checked_ns") for t, v in sorted(verdicts.items())},
+               "lean_check_ns": {t: v.get("lean_ns") for t, v in sorted(verdicts.items())},
+               "lean_latency_ns": {t: v.get("lean_checked_ns") for t, v in sorted(verdicts.items())},
+               "python_latency_ns": {t: v.get("python_checked_ns", v.get("checked_ns"))
+                                     for t, v in sorted(verdicts.items())},
                "check_workers": self.checks.workers if self.checks else 0,
                "session_process_cpu_ns": time.process_time_ns() - cpu0,
                "draws": {t: [list(d) for d in w.draws] for t, w in enumerate(session.windows) if w.draws},
@@ -602,10 +924,11 @@ def load_registry(path: Path | None) -> audit.Registry:
     return audit.Registry.from_json(json.loads(path.read_text()))
 
 
-def save_registry(path: Path | None, registry: audit.Registry) -> None:
+def save_registry(path: Path | None, registry: audit.Registry | dict) -> None:
+    """`registry`, or its `registry/v0` JSON (`Verifier.registry_json`), kept at `path`."""
     if path is not None:
         tmp = path.with_name(path.name + ".tmp")
-        tmp.write_text(json.dumps(registry.to_json(), indent=1))
+        tmp.write_text(json.dumps(registry if isinstance(registry, dict) else registry.to_json(), indent=1))
         tmp.replace(path)
 
 
@@ -638,14 +961,29 @@ def main() -> int:
     ap.add_argument("--close", metavar="NODE_HEX",
                     help="close the node's live registration in --registry, its sessions counted as they stood, "
                          "and exit")
+    ap.add_argument("--verdict", default=VERDICT, choices=VERDICTS,
+                    help="who decides: the Lean verifier (lean), the Lean with audit.Session checking beside it and "
+                         "a mismatch refused as `disagreement` (both), or audit.Session alone (python)")
+    ap.add_argument("--lean-exe", type=Path,
+                    help="a built remote-audit-verifier (default: `lake build` it in its package)")
     a = ap.parse_args()
     registry = load_registry(a.registry)
     if a.close is not None:
         if a.registry is None:
             ap.error("--close needs --registry")
-        closed = registry.close(bytes.fromhex(a.close))
-        save_registry(a.registry, registry)
-        print(f"verifier: closed {json.dumps(closed.to_json())}", flush=True)
+        node = bytes.fromhex(a.close)
+        lean = None if a.verdict == "python" else start_lean(os.urandom(32), registry, a.lean_exe, lambda m: None)
+        closed = registry.close(node).to_json()
+        kept = registry.to_json()
+        if lean is not None:
+            got, kept = lean.call({"op": "close", "node": node.hex()}), lean.call({"op": "registry"})
+            lean.close()
+            if got != closed:
+                print(f"verifier: the verifiers disagree on closing {node.hex()}: Lean {json.dumps(got)}, "
+                      f"audit.Registry {json.dumps(closed)}; {a.registry} is unchanged", flush=True)
+                return 3
+        save_registry(a.registry, kept)
+        print(f"verifier: closed {json.dumps(closed)}", flush=True)
         return 0
     if a.out is None:
         ap.error("--out is required")
@@ -661,20 +999,22 @@ def main() -> int:
     v = Verifier(conn, source=os.urandom(32), windows=a.windows, window_ns=round(a.window_ms * 1e6), samples=a.samples,
                  delta=2.0 ** a.delta_log2, jitter_ns=round(a.jitter_ms * 1e6),
                  log=lambda m: print(m, flush=True), checks=checks, lifetime=a.lifetime, registry=registry,
-                 hbm_bytes=a.hbm_bytes, host_bytes=a.host_bytes)
+                 hbm_bytes=a.hbm_bytes, host_bytes=a.host_bytes, verdict=a.verdict, lean_exe=a.lean_exe)
     c0 = time.process_time_ns()
     try:
         reg, cal = v.register()
     except (audit.RegistryError, ValueError) as e:
         print(f"verifier: refused the registration: {e}", flush=True)
-        save_registry(a.registry, registry)
+        kept = v.registry_json()
+        save_registry(a.registry, kept)
         (a.out / "verifier.json").write_text(json.dumps(
-            {"schema": "verity/remote-session/verifier/v0", "peer": list(peer), "refused": str(e),
-             "registry": registry.to_json()}, indent=1))
+            {"schema": "verity/remote-session/verifier/v0", "peer": list(peer), "verdict": a.verdict,
+             "refused": str(e), "registry": kept}, indent=1))
         if checks:
             checks.close(wait=True)
+        v.stop()
         return 3
-    save_registry(a.registry, registry)
+    save_registry(a.registry, v.registry_json())
     print(f"verifier: registered {reg.blocks} blocks, digest {reg.digest.hex()[:16]}, calibration {json.dumps(cal)}",
           flush=True)
     rtt = v.ping(a.pings)
@@ -683,12 +1023,12 @@ def main() -> int:
     results, not_before = [], None
 
     def record() -> None:
+        kept = v.registry_json()
         (a.out / "verifier.json").write_text(json.dumps(
             {"schema": "verity/remote-session/verifier/v0", "peer": list(peer), "registration": wire.registration_json(reg),
-             "calibration": cal, "rtt": rtt, "allowance_ns": allowance, "sessions": results,
-             "process_cpu_ns": time.process_time_ns() - c0, "wire": conn.totals(), "registry": registry.to_json()},
-            indent=1))
-        save_registry(a.registry, registry)
+             "verdict": a.verdict, "calibration": cal, "rtt": rtt, "allowance_ns": allowance, "sessions": results,
+             "process_cpu_ns": time.process_time_ns() - c0, "wire": conn.totals(), "registry": kept}, indent=1))
+        save_registry(a.registry, kept)
 
     record()
     try:
@@ -705,13 +1045,14 @@ def main() -> int:
                   f"node={json.dumps(mem['node']['share']) if 'node' in mem else None}", flush=True)
             record()
     finally:
-        save_registry(a.registry, registry)
-    closed = registry.close(reg.node)
-    print(f"verifier: closed the registration: {json.dumps(closed.to_json())}", flush=True)
+        save_registry(a.registry, v.registry_json())
+    closed = v.close_registration(reg.node)
+    print(f"verifier: closed the registration: {json.dumps(closed)}", flush=True)
     record()
     conn.send({"type": "bye"})
     if checks:
         checks.close(wait=True)
+    v.stop()
     me, kids = resource.getrusage(resource.RUSAGE_SELF), resource.getrusage(resource.RUSAGE_CHILDREN)
     out = json.loads((a.out / "verifier.json").read_text()) if (a.out / "verifier.json").exists() else {}
     out["cpu"] = {"self_s": me.ru_utime + me.ru_stime, "workers_s": kids.ru_utime + kids.ru_stime,

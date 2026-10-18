@@ -2,7 +2,8 @@
 a clock that advances by one tick per pass with both sides settled around each tick, so a session runs one schedule:
 an honest session is accepted and its γ terms computed, a prover that dropped blocks is rejected at its openings, a
 second session waits out the first's deadline, and KV pages appended and released mid-session (a memory map's steps)
-are audited, accepted when held and rejected when dropped."""
+are audited, accepted when held and rejected when dropped. Sessions run under the verifier's default verdict, `both`:
+the Lean verifier decides, `audit.Session` runs beside it, and the two must agree at every event and window."""
 from __future__ import annotations
 
 import os
@@ -148,7 +149,9 @@ class TickingBackend(prover.CpuBackend):
 
 def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sessions: int = 1, checks=None,
         read_bytes_per_s: float = 1e20, tiers: dict | None = None, lifetime: int = audit.LIFETIME,
-        registry: audit.Registry | None = None, layout: list | None = None, host_bytes: int = 0, **kv):
+        registry: audit.Registry | None = None, layout: list | None = None, host_bytes: int = 0,
+        verdict: str = verifier.VERDICT, then=None, **kv):
+    """The verifier's sessions and the prover's over one registration, under `verdict`; `then(v)` once they end."""
     clock = PassClock()
     vconn, pconn = clock.conns()
     backend = TickingBackend(clock, blocks, random.Random(7), read_bytes_per_s=read_bytes_per_s, tiers=tiers,
@@ -166,15 +169,20 @@ def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sess
     th.start()
     v = verifier.Verifier(vconn, source=os.urandom(32), windows=windows, window_ns=20, samples=samples,
                           delta=2.0 ** -40, jitter_ns=10 ** 9, clock=clock, log=lambda m: None,
-                          checks=checks, lifetime=lifetime, registry=registry, host_bytes=host_bytes)
-    v.register()
-    allowance = v.allowance(v.ping(4))
-    out, not_before = [], None
-    for k in range(sessions):
-        r = v.session(k, allowance, not_before)
-        out.append(r)
-        not_before = r.get("end_ns", clock.now())
-    th.join()
+                          checks=checks, lifetime=lifetime, registry=registry, host_bytes=host_bytes, verdict=verdict)
+    try:
+        v.register()
+        allowance = v.allowance(v.ping(4))
+        out, not_before = [], None
+        for k in range(sessions):
+            r = v.session(k, allowance, not_before)
+            out.append(r)
+            not_before = r.get("end_ns", clock.now())
+        th.join()
+        if then is not None:
+            then(v)
+    finally:
+        v.stop()
     return out, results
 
 
@@ -581,6 +589,7 @@ def registering(registry: audit.Registry) -> tuple[str, str]:
     with pytest.raises(audit.RegistryError) as refused:
         v.register()
     th.join()
+    v.stop()
     return str(refused.value), heard[0]
 
 
@@ -609,6 +618,7 @@ def greeted(lifetime: int, deferred: bool) -> tuple[verifier.Verifier, ValueErro
     except ValueError as e:
         refused = e
     th.join()
+    v.stop()
     return v, refused, heard
 
 
@@ -657,6 +667,70 @@ def test_the_verifier_closes_a_registration_left_live_from_its_registry_file(tmp
     assert back.live(b"test-node") is None and back.closed == [
         audit.Closed(b"test-node", bytes.fromhex("ab" * 64), ("accepted", audit.UNENDED))]
     assert "closed" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("verdict", verifier.VERDICTS)
+def test_each_verdict_accepts_an_honest_session_and_rejects_a_dropping_one(monkeypatch, verdict):
+    """`--verdict`: the Lean verifier decides under `lean` and `both` (its check's time is each window's
+    `lean_check_ns`), with `audit.Session` checking beside it under `both`, and `audit.Session` alone under `python`,
+    with no Lean process. Each accepts the honest session, rejects the prover that dropped half its blocks at a receipt,
+    and closes the registration with the two sessions counted so in both registries."""
+    monkeypatch.setattr(prover, "OPENINGS_PART", 4)
+    closed, lean = [], []
+
+    def then(v):
+        lean.append(v.lean)
+        closed.append(v.close_registration(b"test-node"))
+
+    (honest, dropping), _ = run("honest,skip:0.5", sessions=2, verdict=verdict, then=then)
+    assert honest["accepted"] and not dropping["accepted"] and dropping["failure"]["failure"] == "receipt"
+    assert honest["verdict"] == verdict and honest["disagreement"] is None and dropping["disagreement"] is None
+    ns = list(honest["lean_check_ns"].values())
+    if verdict == "python":
+        assert lean == [None] and ns == [None] * 3
+    else:
+        assert lean[0] is not None and len(ns) == 3 and all(type(x) is int and x > 0 for x in ns)
+    assert closed[0]["sessions"] == ["accepted", "receipt"] and "python" not in closed[0]
+
+
+def test_a_window_the_verifiers_judge_differently_is_refused_as_disagreement(monkeypatch):
+    """Under `both`, a Lean verdict that differs from `audit.Session`'s (the Lean's accepting window 1 read as a
+    rejection at a draw) refuses the session at that window as `disagreement`, which both registries count."""
+    monkeypatch.setattr(prover, "OPENINGS_PART", 4)
+    settle = verifier.Pair.settle
+
+    def wrong(self, check):
+        res = settle(self, check)
+        if res.get("accepted") != 1:
+            return res
+        return {"failure": "receipt", "window": 1, "at": [0, 0], "openings": res["openings"], "ns": res["ns"]}
+
+    monkeypatch.setattr(verifier.Pair, "settle", wrong)
+    closed = []
+    (r,), (p,) = run("honest", verdict="both", then=lambda v: closed.append(v.close_registration(b"test-node")))
+    assert not r["accepted"] and not p["accepted"] and r["failure"] == {"t": 1, "failure": "disagreement", "at": None}
+    assert r["disagreement"]["event"] == "verify" and r["disagreement"]["python"] == {"accepted": 1}
+    assert closed[0]["sessions"] == ["disagreement"] and "python" not in closed[0]
+
+
+def test_an_event_the_verifiers_answer_differently_is_refused_as_disagreement(monkeypatch):
+    """Each event goes to both verifiers at one reading of the clock, and their results are compared: a root the Lean
+    reads without its step is its `step` rejection where `audit.Session` takes the root, and the session is refused
+    at that window as `disagreement`."""
+    monkeypatch.setattr(prover, "OPENINGS_PART", 4)
+    event = verifier.lv.receive_event
+
+    def stepless(t, i, root, change, step):
+        e = event(t, i, root, change, step)
+        return {**e, "step": None} if (t, i) == (1, 3) else e
+
+    monkeypatch.setattr(verifier.lv, "receive_event", stepless)
+    closed = []
+    (r,), _ = run("honest", verdict="both", then=lambda v: closed.append(v.close_registration(b"test-node")))
+    assert not r["accepted"] and r["failure"] == {"t": 1, "failure": "disagreement", "at": None}
+    d = r["disagreement"]
+    assert d["event"] == "receive" and d["lean"]["failure"] == "step" and d["python"] == {"ok": True}
+    assert closed[0]["sessions"] == ["disagreement"] and "python" not in closed[0]
 
 
 def test_an_append_is_answered_with_its_coin_and_a_root_message_is_applied_in_order():
