@@ -16,7 +16,10 @@ squares' column sums don't carry, the column sums (s8-family steps, folded mod `
 team's families (note:20261017T1859Z-report-property-redteam R4.1) and a sampled one at p1024 are kept here as
 regressions the stated form must survive: each refutes the form with no floor, and sits below the floor `2^−64`.
 
-`Accounting.Guarantees.Gates.RhoPairs`, stated for every prime `p ≡ 3 mod 4`, is sampled on `codec.rho` at p1024.
+The model's codec is held to this one: `codecRows` (Security/Proofs/Accounting/Gates.lean) are `codec.encode_word`'s
+words at toy fields, which the Lean check evaluates `Accounting.Gates.encodeWord` on in the kernel
+(`encodeWord_codecRows`), and `test_encode_word_agrees_with_lean` recomputes each here. `RhoPairs`, proved there for
+every prime `p ≡ 3 mod 4`, is sampled on `codec.rho` at p1024.
 """
 
 from __future__ import annotations
@@ -24,8 +27,13 @@ from __future__ import annotations
 import itertools
 import math
 import random
+import re
+from pathlib import Path
 
 from verity.core.protocols.remote_bandwidth import codec
+
+LEAN_GATES = Path(__file__).resolve().parents[5] / "Security" / "Proofs" / "Accounting" / "Gates.lean"
+ROW = re.compile(r"\((\d+), (\d+), \[(\d+(?:, \d+)*)\], (\d+), (\d+), (\d+), (\d+), (\d+)\)")
 
 F = codec.P1024
 P = F.p
@@ -253,3 +261,37 @@ def test_rho_pairs_at_p1024() -> None:
         r = codec.rho(x, F)
         assert codec.rho(P - x, F) == P - r
         assert r % 2 == (pow(x, (P - 1) // 2, P) != 1)
+
+
+def lean_codec_rows() -> list[tuple[int, int, list[int], int, int, int, int, int]]:
+    block = LEAN_GATES.read_text().split("def codecRows", 1)[1]
+    lines = block[:block.index(")]") + 1].splitlines()[1:]
+    found = [ROW.search(line) for line in lines]
+    assert found and all(found), "a row of codecRows this test doesn't read"
+    return [(int(n), int(c), [int(v) for v in cs.split(", ")], int(mask), int(tau), int(i), int(m), int(y))
+            for n, c, cs, mask, tau, i, m, y in (r.groups() for r in found)]
+
+
+def toy_key(n: int, c: int, cs: list[int], mask: int, tau: int) -> codec.Key:
+    """A masked key at the toy field `p = 2^n − c`, which `codec.Codec` refuses (it takes p1024 and p512 only)."""
+    toy = object.__new__(codec.Codec)
+    for name, v in (("field", codec.Field(f"toy{n}", n, c)), ("rounds", len(cs)), ("masked", True)):
+        object.__setattr__(toy, name, v)
+    return codec.Key(toy, tuple(cs), tau, mask)
+
+
+def test_encode_word_agrees_with_lean() -> None:
+    rows = lean_codec_rows()
+    arms = set()
+    for n, c, cs, mask, tau, i, m, y in rows:
+        k = toy_key(n, c, cs, mask, tau)
+        assert codec.encode_word(m, i, k) == y, (n, c, cs, mask, tau, i, m)
+        p, x = k.codec.field.p, m
+        for r, cr in enumerate(cs):
+            if r:
+                arms.add("σ xor" if x ^ mask < p else "σ keep")
+                x = k.sigma(x)
+            a = (x + cr + tau * i) % p
+            arms.add("ρ zero" if a == 0 else "ρ square" if pow(a, (p + 1) // 4, p) ** 2 % p == a else "ρ non-square")
+            x = codec.rho(a, k.codec.field)
+    assert arms == {"σ xor", "σ keep", "ρ zero", "ρ square", "ρ non-square"}, arms
