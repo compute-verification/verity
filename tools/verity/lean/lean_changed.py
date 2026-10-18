@@ -340,6 +340,11 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
         log(f"lean-records: {name!r} matches {len(match)} packages: {', '.join(match or pkgs)}")
         return 2
     pkg = match[0]
+    here = ROOT / pkg
+    audited = [here, *(q for _, q in AUDIT.provers(here, AUDIT.load(here)))] if (here / AUDIT.POLICY).is_file() else [here]
+    if why := AUDIT.memory_refusal(audited, AUDIT.memory_gib()):
+        log(f"lean-records: {why}")
+        return 2
     os.environ.pop(LEAN_SLOT.HELD, None)
     try:
         slot = LEAN_SLOT.hold(FAST_POOL, or_any=False)

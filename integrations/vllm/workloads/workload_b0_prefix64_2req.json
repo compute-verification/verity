@@ -1,8 +1,14 @@
 {
- "schema": "verity-vllm/workload/v1",
+ "schema": "verity-vllm/workload/v2",
  "model": "HuggingFaceTB/SmolLM2-135M",
- "tokenizer_revision": "93efa2f097d58c2a74874c7e644dbc9b0cee75a2",
  "case": "B0",
+ "engine": {
+  "revision": "93efa2f097d58c2a74874c7e644dbc9b0cee75a2",
+  "vllm": "d9105ea80",
+  "args": {
+   "enable_prefix_caching": true
+  }
+ },
  "seed": 0,
  "variants": {
   "greedy": {
@@ -221,8 +227,5 @@
    "shared_prefix_len": 64
   }
  ],
- "engine_args_required": {
-  "enable_prefix_caching": true
- },
- "note": "GEN batch: prefix caching.  Requires engine arg enable_prefix_caching=True.  Two 88-token prompts share their first 64 tokens (4 full KV blocks of 16); request 1 is expected to be admitted with num_computed_tokens=64 (its prefix KV comes from request 0's blocks) \u2014 the cross-request-state mechanism question (RULES \u00a72 / \u00a76).  max_tokens 8 each."
+ "note": "GEN batch: prefix caching.  Requires engine arg enable_prefix_caching=True.  Two 88-token prompts share their first 64 tokens (4 full KV blocks of 16); request 1 is expected to be admitted with num_computed_tokens=64 (its prefix KV comes from request 0's blocks) — the cross-request-state mechanism question (RULES §2 / §6).  max_tokens 8 each."
 }

@@ -5,7 +5,8 @@ commits them.
 Z(x)          x zero-padded to whole 128-byte blocks (one SHA-512 block here)
 seed_(t,i)    SHA512(SEED_DOMAIN ‖ σ_t ‖ u32be i ‖ root_(t,i−1)),  SEED_DOMAIN = "verity/remote-bandwidth/seed/v0\0",
               σ_t window t's challenge (its live coin, `coins.py`), root_(t,−1) = root_(t−1,last) in a session and the
-              registration's digest for its first window
+              registration's digest for its first window; in a session with appends, the root chained to them
+              (`audit.chained`)
 plan_(t,i)    R runs (first, count) in read order: count ≥ 1, inside the store, pairwise disjoint, and no run starting
               where the one before it ends (it would be the same run).  Position p is the p-th block of the runs
               concatenated, L_i positions in all.
@@ -104,7 +105,8 @@ def _digest(value: bytes, name: str) -> bytes:
 
 
 def seed(challenge: bytes, i: int, previous: bytes) -> bytes:
-    """`seed_(t,i)`: pass `i`'s seed under the window's challenge, after the root before it."""
+    """`seed_(t,i)`: pass `i`'s seed under the window's challenge, after the root before it (`previous`, chained to
+    the session's appends by `audit.chained`)."""
     if type(challenge) is not bytes or len(challenge) != CHALLENGE_BYTES:
         raise ValueError(f"a window's challenge is {CHALLENGE_BYTES} bytes")
     if type(i) is not int or not 0 <= i < 1 << 32:

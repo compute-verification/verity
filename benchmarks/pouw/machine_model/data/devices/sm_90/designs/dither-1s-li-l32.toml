@@ -1,13 +1,14 @@
 # Dither-1S with the LI fold at L = 32 on the H200 (sm_90): one-sided dither and the linears' peel, LI receipts on every
-# committed word and 0.02 verified FFMA a word. The noise and ε_skip are dither-1s-l32's; the fold, honest and ε_mand
-# are DC-DESIGN's (note:20261017T0805Z-draft-dc-design §3, §4): LI binds honest on the H200's lane facet, so output
-# counting closes the lane route.
+# committed word and 0.02 verified FFMA a word. The noise is dither-1s-l32's, and ε_skip is this design's own at its ♭
+# (eps_budget's `design_skip`); the fold, honest and ε_mand are DC-DESIGN's (note:20261017T0805Z-draft-dc-design §3,
+# §4): LI binds honest on the H200's lane facet, so output counting closes the lane route.
 name = "dither-1s-li-l32"
 title = "Dither-1S, LI, L = 32"
 summary = "Dither-1S on the H200 at L = 32: one-sided dither, LI receipts on every committed word, the linears' peel"
 honest = "dc90-li-l32"
 L = 32
 work = 1.0
+sums = "vfold"
 
 [noise]
 linears = "one-sided"
@@ -29,10 +30,12 @@ per_word = 0.02
 mix = { FFMA = 1 }
 route = "lanes"
 source = "DC-DESIGN (note:20261017T0805Z-draft-dc-design §3): LI's ALU ½ + IMAD ½ leaves the ALU pipe 1.5% short of half issue on the H200, so 0.02 verified FFMA a word puts honest on JI90_0, whose lane threshold is 0.4999 at L = 32; FILL-OPT is its named assumption"
+p = 0.0
+luck = "Accounting.Guarantees.FillerLuck.PinnedFillBlocksDeficit, once the filler's receipt is recomputed bit for bit: FFMA is IEEE 754 binary32 fused multiply-add, rounded once (round to nearest even), so with its FTZ mode and NaN's encoding pinned the verifier reproduces every word exactly and a wrong receipt fails whenever its tile is drawn. No FFMA filler kernel or check exists yet; FILL-OPT is where an FFMA chain is weak (with fixed operands it reaches a fixed point or overflows, after which its receipt costs nothing), so the kernel must feed each step fresh operands"
 
-[skip.peel]
-eps = 0.0063
-source = "the linears' peel L/k, MAC-weighted over Llama-3.1-8B's linears (k = 4096 and 14336): 0.63% at L = 32 (note:20261017T0310Z-report-eps1-program §3, note:20261017T0031Z-draft-eps-budget)"
+[skip.served]
+eps = 0.124
+source = "eps_budget.py (benchmarks/pouw, `design_skip`, `floor_skip`): Corollary D3's ε_skip, the skippable work at its issue-model price over the floor program's bound B_♭ (SPEC §2.9), ♭ 5.961 SMSP-cycles a 4096-MAC MMA on DC-90; the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode (decode's ♭ its compute alone), every served output free. At 8B 32K decode: the linears' one-sided strip 0.480%; QKᵀ's one-sided strip 11.7%; P·V's peel 0.198%: its tail 0.0916%, the sums DG, S and X(0) 0.0891%, the served epilogue 0.0169%. With P·V's served output checked it is 12.4% (8B) / 9.12% (70B) there. Skip terms: the peel's tail at the larger of 1.57 of ♭'s MACs a strip product and Π's price of BC-KERNEL r2's tail instructions (4 mma.sync m16n8k32, 4 IMAD, 11.5 other), its sums by vfold (#2300, decision 91) and served epilogue at one an issue cycle; a one-sided strip's 2L executed products at ♭'s price a MAC, on sm_120's instruction counts for the same kernel source, on this device's Π; the clean lm_head skips nothing, its words are ♭'s (note:20261017T0320Z-draft-eps1-calc Round 10)"
 
 [mand.fold]
 eps = 0.0
