@@ -314,8 +314,8 @@ alignment alone (`PlainForkClash`: `FlockDeploy.KS.plain_liveOpening`, `FlockDep
 `FlockDeploy.KS.plainForkQ_of`, `FlockDeploy.KS.plainForkClash`, `FlockDeploy.KS.plain_KS_of_forkAlign`).
 A fork at a table node is at most the fork after `j` coins where the strategy reaches that node after `j` coins on every
 path, or forks to nothing on the paths that don't, and the fork event at the node's cap implies the other on the
-outcomes its leaves relate (`ForkAlign`: `FlockSoundness.Game.Lock.SlotAt`, `FlockSoundness.Game.Lock.forkE_le_forkC`). The
-session's leaves record the cap of the entry they hold wherever they open a position at it, so the simulated fork's
+outcomes its leaves relate (`ForkAlign`: `FlockSoundness.Game.Lock.SlotAt`,
+`FlockSoundness.Game.Lock.forkE_le_forkC`). The session's leaves record the cap of the entry they hold wherever they open a position at it, so the simulated fork's
 alignment is the coin count alone, and KS at the deployed plain verifier's trimmed record holds where the simulated
 strategy reaches each plain fork slot after `plainJ r ℓ` coins (`PlainAlign`: `FlockDeploy.KS.capAtL_of_sessRelL`,
 `FlockDeploy.KS.advRSL_le_forkC`, `FlockDeploy.KS.PlainSlotAlign`, `FlockDeploy.KS.plain_KS_of_slot`).
