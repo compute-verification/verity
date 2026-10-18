@@ -23,11 +23,16 @@ served: pd is a candidate for compute accounting, whose code (`benchmarks/pouw/p
     compression on the critical path paired, a producer warp computing its message schedule's round inputs a chunk ahead
     while the consumer warp runs the rounds (named barriers, 48 KB of dynamic shared memory); `PD_STAMP` (32; variant
     51 is 19 with it), the global timer and the SM clock at each phase's end of `pd_commit` and `pd_tree`, written to
-    p13; `PD_WHOLE` (64, a launch setting alone: variants 83 and 211 are 19 and 147 with it), the paired `pd_commit`
+    p13; `PD_WHOLE` (64, a launch setting alone: variant 83 is 19 with it), the paired `pd_commit`
     and `pd_tree` launched with all the dynamic shared memory a CTA may take, so that no other CTA (a side lane's tile
     leaves) shares their SMs and slows their one-warp chains; `PD_GROUP` (128, with
-    `PD_PAIR`), `pd_tiles` with four tiles a CTA, their folds together on one warp's lanes, paired, so a fold's lone
-    lane no longer holds a warp's issue slots for its 9 or 17 compressions. Pearl-C's unrolled
+    `PD_PAIR`; variant 211 is 83 with it), `pd_tiles` with four tiles a CTA, their folds together on one warp's lanes,
+    paired, so a fold's lone lane no longer holds a warp's issue slots for its 9 or 17 compressions; `PD_LOOP` (256,
+    with `PD_PAIR`; variants 307, 339 and 467 are 51, 83 and 211 with it), the hm96 leaf and frame leaf, a seed and its
+    line key, and a node's two blocks each through one paired site in a rolled loop, and the producer warp's loop one
+    called copy, so the last CTA's tail fetches 5 paired sites cold on its SM instead of 10 (an inlined paired site is
+    about 7 KB, the producer's 23 KB). The counter's fences are acquire-release (`pd_fence`), not `__threadfence`'s
+    sequentially consistent one. Pearl-C's unrolled
     compression is about 3,500 instructions (56 KB), and a call's serial compressions are each at a site of their own,
     so inlined they are each fetched cold. On its thread the schedule is a third of a compression's cycles.
 - `pd_host.cpp`: the same source run on the CPU (`pd_run`), with Pearl-C's own hash kernels, for `host_test.py`.
@@ -57,7 +62,7 @@ research run --on vy-nebius-2 --project verity --campaign hash-loop --source . -
 
 Schedules (`bench.Shape.schedules`): `ref_serial` is the served call, `ref_nohash` the call without hashing, and
 `ref_deferred` the served launches with the tile leaves on a side lane. `pd_serial_V` is pd's call on one stream in
-variant V, for every variant. For the variants in `PD_SIDE` (default 19, 83, 147 and 211), `pd_deferred_V` puts pd's tile leaves on a
+variant V, for every variant. For the variants in `PD_SIDE` (default 19, 83, 211, 339 and 467), `pd_deferred_V` puts pd's tile leaves on a
 side lane, and `pd_side_tree_V` also puts A's tree and seed_A on a side lane; its bytes are unchanged only when m16 is a
 multiple of 64. `pd_side_tree_V_proposal` is the same schedule at other m16, where filler rows read line_a, so it is
 timed but its E_A lines are not served bytes.

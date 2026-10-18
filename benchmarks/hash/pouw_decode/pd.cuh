@@ -27,7 +27,10 @@
 // timer and the SM's clock at each phase's end of pd_commit and pd_tree into p13 (`pd_stamp`); PD_WHOLE (the launch's
 // alone, the code unchanged), pd_commit and pd_tree launched with all the dynamic shared memory a CTA may take, so no other
 // CTA (a side lane's tile leaves) shares their SMs, whose single-warp chains an ALU-bound warp beside them would halve;
-// PD_GROUP, pd_tiles with PD_G tiles a CTA and their folds paired together on one warp.
+// PD_GROUP, pd_tiles with PD_G tiles a CTA and their folds paired together on one warp; PD_LOOP (with PD_PAIR), the
+// hm96 leaf and frame leaf, a seed and its line key, and a node's two blocks each one paired site in a rolled loop, and
+// the producer one called copy (`pd_serve`), since each inlined paired site is about 7 KB (the producer's 23 KB) fetched
+// cold on the CTA's SM, and the last CTA's tail runs each of its sites once.
 //
 // The builder (WMsg) writes `merkle._message`'s bytes as big-endian words, the data's 64-byte parts left zero and filled
 // later (wm_put64, at any byte offset).  pd_host.cpp builds this file for the host tests.
@@ -58,8 +61,8 @@ inline uint32_t pd_smid() { return 0; }
 #endif
 
 constexpr int PD_ROUNDS = 1, PD_ROLLED = 2, PD_CALL = 4, PD_PREFETCH = 8, PD_PAIR = 16, PD_STAMP = 32, PD_WHOLE = 64,
-              PD_GROUP = 128;
-#define PD_VARIANT_LIST(X) X(1) X(3) X(19) X(51) X(83) X(147) X(211)
+              PD_GROUP = 128, PD_LOOP = 256;
+#define PD_VARIANT_LIST(X) X(19) X(51) X(83) X(211) X(307) X(339) X(467)
 
 // ---------------------------------------------------------------- tables, once per module (pd_heads)
 enum { PD_SEED_A = 0, PD_NOISE_LINE = 1, PD_LINE = 2 };
@@ -254,12 +257,16 @@ DEV uint32_t pd_dyn_bytes() {
 }
 DEV void pd_bar_sync(int id, int n) { asm volatile("barrier.sync %0, %1;" ::"r"(id), "r"(n) : "memory"); }
 DEV void pd_bar_arrive(int id, int n) { asm volatile("barrier.arrive %0, %1;" ::"r"(id), "r"(n) : "memory"); }
+// the counter's fences, each CTA's before its increment and the last CTA's after it: acquire-release suffices, and
+// __threadfence's sequentially consistent fence (MEMBAR.SC.GPU) is the slower
+DEV void pd_fence() { asm volatile("fence.acq_rel.gpu;" ::: "memory"); }
 #else
 inline uint64_t* pd_dyn() {
   static uint64_t m[2 * PD_PAIR_WORDS];
   return m;
 }
 inline uint32_t pd_dyn_bytes() { return PD_PAIR_SMEM; }
+inline void pd_fence() { __threadfence(); }
 #endif
 DEV void pd_pcmp_in(uint64_t* st, const uint64_t* w) {
   const int lane = threadIdx.x & 31, pi = threadIdx.x >= 32, bar = 1 + 5 * pi;
@@ -304,6 +311,10 @@ DEV void pd_pserve(int pi) {
       pd_bar_arrive(bar + q, 64);
     }
   }
+}
+__device__ __noinline__ void pd_pserve_call(int pi) { pd_pserve(pi); }
+template <int V> DEV void pd_serve(int pi) {
+  if constexpr ((V & PD_LOOP) != 0) pd_pserve_call(pi); else pd_pserve(pi);
 }
 DEV void pd_pstop() {   // the consumer warp: its producer returns
   const int pi = threadIdx.x >= 32;
@@ -445,6 +456,35 @@ DEV void pd_hm_salt(uint64_t salt_key, uint64_t nonce, uint64_t i, uint64_t hm, 
 template <int V, int P = 0>
 DEV void pd_seed(const uint32_t* unit, const uint64_t* x, uint64_t iota, uint32_t* seed, uint32_t* key) {
   uint64_t st[8], w[16];
+  if constexpr ((V & PD_LOOP) != 0) {
+#pragma unroll 1
+    for (int b = 0; b < 3; b++) {
+      if (b == 0) {
+#pragma unroll
+        for (int t = 0; t < 8; t++) st[t] = PD_LABELS[PD_SEED_A][t];
+#pragma unroll
+        for (int i = 0; i < 16; i++) w[i] = i < 4 ? rs_be64(unit[2 * i], unit[2 * i + 1]) : i < 12 ? x[i - 4]
+                                                  : rs_be64(unit[8 + 2 * (i - 12)], unit[9 + 2 * (i - 12)]);
+      } else if (b == 1) {
+#pragma unroll
+        for (int i = 0; i < 16; i++) w[i] = i < 4 ? rs_be64(unit[16 + 2 * i], unit[17 + 2 * i]) : 0;
+        w[4] = rs_be64((uint32_t)iota, (uint32_t)(iota >> 32));
+        w[5] = 0x8000000000000000ull;
+        w[15] = 8 * (128 + 168);
+      } else {
+        s512_out32(st, seed);
+#pragma unroll
+        for (int t = 0; t < 8; t++) st[t] = PD_LABELS[PD_NOISE_LINE][t];
+#pragma unroll
+        for (int i = 0; i < 16; i++) w[i] = i < 4 ? rs_be64(seed[2 * i], seed[2 * i + 1]) : 0;
+        w[4] = 0x8000000000000000ull;
+        w[15] = 8 * (128 + 32);
+      }
+      pd_cmp<V, P>(st, w);
+    }
+    s512_out32(st, key);
+    return;
+  }
 #pragma unroll
   for (int t = 0; t < 8; t++) st[t] = PD_LABELS[PD_SEED_A][t];
 #pragma unroll
@@ -602,6 +642,16 @@ template <int V, int P = 0> DEV void pd_node(const uint64_t* tm, int i, const ui
   wm_put64<PD_RIGHT_AT>(w, r);
 #pragma unroll
   for (int t = 0; t < 8; t++) st[t] = tm[t];
+  if constexpr ((V & PD_LOOP) != 0) {
+#pragma unroll 1
+    for (int b = 0; b < 2; b++) {
+      uint64_t m[16];
+#pragma unroll
+      for (int t = 0; t < 16; t++) m[t] = b ? w[16 + t] : w[t];
+      pd_cmp<V, P>(st, m);
+    }
+    return;
+  }
   pd_cmp<V, P>(st, w);
   pd_cmp<V, P>(st, w + 16);
 }
@@ -673,6 +723,28 @@ DEV void pd_row_leaf(uint64_t hm, const uint64_t* xr, const uint64_t* mk, const 
                      const uint64_t* ftm, uint64_t* lt) {
   const uint64_t* mid = reinterpret_cast<const uint64_t*>(hm);
   uint64_t w[17];
+  if constexpr ((V & PD_LOOP) != 0) {
+#pragma unroll
+    for (int q = 0; q < 8; q++) lt[q] = mid[8 + q];
+#pragma unroll 1
+    for (int b = 0; b < 3; b++) {
+      if (b == 0) {
+#pragma unroll
+        for (int q = 0; q < 8; q++) { w[q] = rs_bswap64(rs_bswap64(xr[q]) ^ mk[q]); w[8 + q] = cc[q]; }
+      } else if (b == 1) {
+        pd_padw(w, 256);
+      } else {
+#pragma unroll
+        for (int q = 0; q < 16; q++) w[q] = ftw[16 + q];
+        w[16] = 0;
+        wm_put64<PD_LEAF_AT>(w, lt);
+#pragma unroll
+        for (int q = 0; q < 8; q++) lt[q] = ftm[q];
+      }
+      pd_cmp<V, P>(lt, w);
+    }
+    return;
+  }
 #pragma unroll
   for (int q = 0; q < 8; q++) { lt[q] = mid[8 + q]; w[q] = rs_bswap64(rs_bswap64(xr[q]) ^ mk[q]); w[8 + q] = cc[q]; }
   pd_cmp<V, P>(lt, w);
@@ -710,7 +782,7 @@ DEV void pd_tail(const Args& a, const uint64_t* tm, int count, int width, uint64
   if (threadIdx.x == 0) pd_stamp<V>(sb, count, PT_START);
   if constexpr ((V & PD_PAIR) != 0) {
     if (warp == pw0 || warp == p1) {
-      pd_pserve(warp == p1);
+      pd_serve<V>(warp == p1);
       return;
     }
     if (warp != 0 && warp != c1) return;
@@ -821,7 +893,7 @@ template <int V> DEV void pd_commit_t(const Args a) {
       if (tid == 0) pd_stamp<V>(sb, r, PS_SEGS);
       pd_pstop();
     } else {
-      pd_pserve(warp - cw);
+      pd_serve<V>(warp - cw);
     }
   } else if (warp < sw) {                           // the row's segments
     if (tid < s) {
@@ -891,7 +963,7 @@ template <int V> DEV void pd_commit_t(const Args a) {
       if (lane == 0) {
         s512_store(tree + 64ull * r, lt, 8);
         if (!rows) {
-          __threadfence();
+          pd_fence();
           last = atomicAdd(reinterpret_cast<unsigned*>(scratch), 1u) == (unsigned)count - 1;
         }
         pd_stamp<V>(sb, r, PS_LEAF);
@@ -909,16 +981,16 @@ template <int V> DEV void pd_commit_t(const Args a) {
         if (lane == 0) pd_stamp<V>(sb, r, PS_SEED);
         pd_pstop();
       } else {
-        pd_pserve(1);
+        pd_serve<V>(1);
       }
       if (rows) return;
       pd_bar_sync(PD_LAST, 96);
       if (!last) return;
     } else {
-      if (warp == cw) pd_pserve(0);                 // pair 0's producer serves the leaf and, in the last CTA, the tail
+      if (warp == cw) pd_serve<V>(0);               // pair 0's producer serves the leaf and, in the last CTA, the tail
       return;
     }
-    __threadfence();
+    pd_fence();
     if (tid == 0) pd_stamp_at<V>(sb, count, PT_ROW, (uint64_t)r, pd_smid());
     pd_tail<V>(a, tm, count, width, kw, root, lk, cw, c1, p1, scratch);
     return;
@@ -932,12 +1004,12 @@ template <int V> DEV void pd_commit_t(const Args a) {
     pd_stamp<V>(sb, r, PS_SEED);
   }
   if (a.i[2] == 1) return;
-  __threadfence();
+  pd_fence();
   __syncthreads();
   if (tid == 0) last = atomicAdd(reinterpret_cast<unsigned*>(scratch), 1u) == (unsigned)count - 1;
   __syncthreads();
   if (!last) return;
-  __threadfence();
+  pd_fence();
   if (tid == 0) pd_stamp_at<V>(sb, count, PT_ROW, (uint64_t)r, pd_smid());
   pd_tail<V>(a, tm, count, width, kw, root, lk, cw, c1, p1, scratch);
 }
@@ -997,7 +1069,7 @@ template <int V> DEV void pd_tiles_t(const Args a) {
     if (tid < gs * s) pd_tile_seg<V>(a, cols, ti, tj0 + tid / s, tid % s, s, dig + PD_GDIG * (tid / s));
     __syncthreads();
     if (tid / 32 == 1) {
-      pd_pserve(0);
+      pd_serve<V>(0);
       return;
     }
     if (tid >= 32) return;
@@ -1039,7 +1111,7 @@ template <int V> DEV void pd_probe_t(const Args a) {
   const int n = a.i[0], form = a.i[1];
   if (form == 2 && (blockDim.x != 64 || pd_dyn_bytes() < (uint32_t)PD_PAIR_SMEM)) __trap();
   if (form == 2 && threadIdx.x >= 32) {
-    pd_pserve(0);
+    pd_serve<V>(0);
     return;
   }
   const long long t0 = clock64();
