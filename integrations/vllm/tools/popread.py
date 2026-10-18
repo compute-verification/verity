@@ -28,6 +28,7 @@ a stop rule with ignore_eos no request stops early, and the counts say what an E
 from __future__ import annotations
 
 import argparse
+import gc
 import gzip
 import importlib.util
 import json
@@ -296,12 +297,14 @@ class LeanGraph:
         _GATES[:] = [c, call, n, WIRING if wiring is None else wiring]
         try:
             if jobs > 1 and len(spans) > 1:
+                gc.freeze()                                         # else a collection in each worker copies the shared heap
                 with ProcessPoolExecutor(min(jobs, len(spans)), mp_context=multiprocessing.get_context("fork")) as ex:
                     chunks = list(ex.map(_gate_chunk, *zip(*spans)))
             else:
                 chunks = [_gate_chunk(a, b) for a, b in spans]
         finally:
             _GATES.clear()
+            gc.unfreeze()
         free, const = bytearray(n), bytearray(n)
         idx = array("q", [-1]) * n
         srcs: dict[int, tuple[int, ...]] = {}
@@ -468,11 +471,13 @@ class Units:
                 for i in range(len(small)):
                     yield _cut_pending(i, self.verify_below)
                 return
+            gc.freeze()                                             # else a collection in each worker copies the shared heap
             with ProcessPoolExecutor(min(self.jobs, len(small)), mp_context=multiprocessing.get_context("fork")) as ex:
                 for f in as_completed([ex.submit(_cut_pending, i, self.verify_below) for i in range(len(small))]):
                     yield f.result()
         finally:
             _PENDING.clear()
+            gc.unfreeze()
 
     def summary(self) -> dict[str, Any]:
         return {"cached": self.counts["cached"], "cut": self.counts["cut"], "recut_cached": self.counts["recut_cached"],
