@@ -95,7 +95,7 @@ def main() -> int:
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--sharegpt", type=Path, required=True)
     ap.add_argument("--model", default="unsloth/Meta-Llama-3.1-8B-Instruct")
-    ap.add_argument("--quantization", default=None, help="vLLM's quantization (default: the checkpoint's own)")
+    ap.add_argument("--quantization", default=None, help="vLLM's quantization (default: the checkpoint's own; verity_int8 is registered first)")
     ap.add_argument("--workload", choices=("single", "multi"), default="single")
     ap.add_argument("--phases", required=True, help="RATE:SECONDS,... (requests or sessions a second)")
     ap.add_argument("--prefix-caching", choices=("on", "off"), default="off")
@@ -126,6 +126,10 @@ def main() -> int:
           "gpu_memory_utilization": a.mem, "tensor_parallel_size": a.tp, "async_scheduling": False}
     if a.quantization:
         kw["quantization"] = a.quantization
+    qc = json.loads((Path(a.model) / "config.json").read_text()).get("quantization_config") or {}
+    if (a.quantization or qc.get("quant_method")) == "verity_int8":
+        from verity_vllm.engine.int8_vllm import register
+        register()
     t = time.perf_counter()
     llm = LLM(**kw)
     log(f"engine up in {time.perf_counter() - t:.1f} s")
