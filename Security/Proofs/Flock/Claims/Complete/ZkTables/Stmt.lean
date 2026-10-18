@@ -455,15 +455,16 @@ theorem completeJS (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Re
     (S : JsonRT.JsonSpec) (h64 : JsonRT.Out64 H) (hS : JsonRT.StmtOkZk H rel) (hR : JsonRT.RepShapedZk H rel)
     (hPR : JsonRT.ProverRunsZk H rel) (hRS : FlockComplete.RingSwitchZk H rel) (hLg : FlockComplete.LigeritoZk H rel)
     (hIn : FlockComplete.Inner H rel) (hPRJ : ProverRunsJ H rel) (hRJ : RepShapedJ H rel)
-    (hCJ : RepChecksJ H rel) : Claims.Flock.Complete H (deployZk rel) :=
-  completeJO H rel S h64 hS hR hPR hRS hLg hIn (stmtOkJ S) hPRJ hRJ hCJ
+    (hCJ : RepChecksJ H rel) (hMR : MaskRank.MaskRankBound) : Claims.Flock.Complete H (deployZk rel) :=
+  completeJO H rel S h64 hS hR hPR hRS hLg hIn (stmtOkJ S) hPRJ hRJ hCJ hMR
 
 /-- **Flock's masked verifier is complete** for the honest masked prover on each table's share, with error `δc H`, at
 any number of tables: `completeAll` with the statement's premise `StmtOkZk`'s at one table and proved at several. -/
 theorem completeAllS (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
     (S : JsonRT.JsonSpec) (h64 : JsonRT.Out64 H) (hS : JsonRT.StmtOkZk H rel)
     (hPR : ∀ c : Case H rel, ProverRunsAt c) (hR : ∀ c : Case H rel, RepShapedAt c)
-    (hC : ∀ o : Run H rel, RepChecksAt H rel o) : Claims.Flock.Complete H (deployZk rel) :=
-  completeAll H rel S h64 (stmtAt_of S hS) hPR hR hC
+    (hC : ∀ o : Run H rel, RepChecksAt H rel o) (hMR : MaskRank.MaskRankBound) :
+    Claims.Flock.Complete H (deployZk rel) :=
+  completeAll H rel S h64 (stmtAt_of S hS) hPR hR hC hMR
 
 end FlockComplete.ZkTables

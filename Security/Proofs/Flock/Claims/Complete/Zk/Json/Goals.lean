@@ -44,10 +44,11 @@ def ProverOkZk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readab
     (∀ v, Zk.schedule (Setup.ofCircuit st).m = .ok v → ∀ g extra lanePad salt cm,
       commitPZk (Hashes.ofSha512 (Claims.hOf H) : Hashes V) (Setup.ofCircuit st).merkle (v.1.levels.getD 0 default)
         v.2 g extra lanePad salt = .ok cm → 0 < (flat cm.cap).size ∧ (flat cm.cap).size < 2 ^ 64) ∧
-    ∀ v, Zk.schedule (Setup.ofCircuit st).m = .ok v → ∀ rep dom tr tb cm₀ extras pads ic extra lanePad salt nonce,
+    ∀ v, Zk.schedule (Setup.ofCircuit st).m = .ok v →
+      ∀ rep dom tr tb cm₀ extras pads ic extra lanePad salt nonce prior ws,
       (Setup.ofCircuit st).extra (ptsOf c.spec (coinOf (c.resp 0))) = .ok extras →
       Ret ((repPZk (asksS c.resp) (Hashes.ofSha512 (Claims.hOf H)) (Setup.ofCircuit st) v.1 v.2 rep dom tr tb cm₀
-        extras pads ic extra lanePad salt nonce).run (Transcript.init #[] dom)) fun pt => RepOk pt.2.rounds
+        extras pads ic extra lanePad salt nonce prior ws).run (Transcript.init #[] dom)) fun pt => RepOk pt.2.rounds
 
 variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
 
@@ -82,8 +83,9 @@ theorem RunZk.json (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 
   unfold sessionSZk at hrun
   rw [hst, htabs] at hrun
   obtain ⟨rb, streams, hrec, hrb, hrb64, hss, hrs, hex, bs, hbs, hrecs⟩ :=
-    sessionPZk_facts H _ ht hct hown hc (Setup.ofCircuit st) _ _ hC hR hrun
-  have hpf := sessionPZk_proofs (Claims.hOf H) _ o.spec (tabsOf o.sts) (tracesOf o.sts o.w) o.ω #[] _ _ o.ran
+    sessionPZk_facts H _ ht hct hown hc (Setup.ofCircuit st) _ _ _ hC hR hrun
+  have hpf := sessionPZk_proofs (Claims.hOf H) _ o.spec (tabsOf o.sts) (MaskRank.masksOf o.sts) (tracesOf o.sts o.w)
+    o.ω #[] _ _ o.ran
   rw [show o.resp 0 = (Claims.coinSeq o.r 0).bytes from rfl, ptsOf_coin] at hrec hex
   have hpts : (pointsOf o.spec (Claims.coinSeq o.r 0)).size = o.spec.points := by simp [pointsOf]
   have hpm : ∀ p ∈ pointsOf o.spec (Claims.coinSeq o.r 0), p.size = o.spec.mPts := by

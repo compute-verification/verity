@@ -90,7 +90,8 @@ theorem run_acc_of (H : Claims.Msg → Claims.Msg) (w : Claims.Flock.Wit) (x : C
 record and the proof files) and its sends' bodies. -/
 def sessionS (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Msg) (spec : SessionSpec) (sts : Array Flock.Stmt)
     (w : Claims.Flock.Wit) (ω : TapeZk) : Except String (String × Array ByteArray) × Array Claims.Msg :=
-  (sessionPZk (asksS resp) (Hashes.ofSha512 (Claims.hOf H)) spec (tabsOf sts) (traces sts w) ω).go #[]
+  (sessionPZk (asksS resp) (Hashes.ofSha512 (Claims.hOf H)) spec (tabsOf sts) (MaskRank.masksOf sts) (traces sts w)
+    ω).go #[]
 
 /-- **The honest masked run is the pure masked session's**: its sends are the session's bodies, each of tag `0`, and its
 last message the session's record and proof files after the statement. -/
@@ -99,15 +100,16 @@ theorem honestRun_eq (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (w : Claim
     (hs : setupOf true x = some (s, spec, sts)) {rec : String} {pfs : Array ByteArray} {bs : Array Claims.Msg}
     (hS : sessionS H (fun j => (Claims.coinSeq r j).bytes) spec sts w ω = (.ok (rec, pfs), bs)) :
     honestRun H x w ω r = (bs.toList.map (List.cons 0), Final.encode ⟨x, rec, pfs⟩) := by
-  obtain ⟨bs', h1, h2⟩ := sessionPZk_sim H (fun j => (Claims.coinSeq r j).bytes) spec (tabsOf sts) (traces sts w) ω
-    #[]
+  obtain ⟨bs', h1, h2⟩ := sessionPZk_sim H (fun j => (Claims.coinSeq r j).bytes) spec (tabsOf sts)
+    (MaskRank.masksOf sts) (traces sts w) ω #[]
   unfold sessionS at hS
   rw [hS] at h1 h2
   dsimp only at h1 h2
   unfold honestRun prog
   rw [hs]
   dsimp only
-  change (PI.bind (sessionPZk asks Hashes.pi spec (tabsOf sts) (traces sts w) ω).run _).sim _ _ 0 = _
+  change (PI.bind (sessionPZk asks Hashes.pi spec (tabsOf sts) (MaskRank.masksOf sts) (traces sts w) ω).run _).sim
+    _ _ 0 = _
   rw [PI.sim_bind]
   have h1' := h1
   simp only [Array.size_empty] at h1'

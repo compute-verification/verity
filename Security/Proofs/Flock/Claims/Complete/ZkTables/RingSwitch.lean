@@ -45,7 +45,7 @@ theorem ringSwitchJ (S : JsonSpec) (h64 : Out64 H) (o : Run H rel) (hS : StmtAt 
   have hi' := Run.lt_sts hi
   obtain ⟨schs, cms, streams, hss, hbytes, -, -, hrep⟩ := Run.walkJ S h64 o hS hR
   obtain ⟨htabi, -, -, hreps⟩ := hrep i hi'
-  obtain ⟨hstream, p, ic, l, t', l', -, hzp, hst', -, -, hrun⟩ := hreps r hr
+  obtain ⟨hstream, p, ic, l, t', l', prior, ws, -, hzp, hst', -, -, hrun⟩ := hreps r hr
   have h25 := (o.toCase.tables.2.2.2 i hi').1
   have hm : 14 ≤ (Setup.ofCircuit o.sts[i]!).m := by
     show 14 ≤ o.sts[i]!.m
@@ -167,9 +167,8 @@ extra claims' algebra (`RsExtrasAt`), and per rep the masked Ligerito and the in
 theorem completeR (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) (S : JsonRT.JsonSpec)
     (h64 : JsonRT.Out64 H) (hS : ∀ c : Case H rel, StmtAt c) (hPR : ∀ c : Case H rel, ProverRunsAt c)
     (hR : ∀ c : Case H rel, RepShapedAt c) (hX : ∀ o : Run H rel, RsExtrasAt o)
-    (hC : ∀ o : Run H rel, LgInnerAt H rel o) : Claims.Flock.Complete H (deployZk rel) :=
-  completeAll H rel S h64 hS hPR hR fun o =>
-    repChecksAt_of S h64 o (hS o.toCase) (hR o.toCase) (hX o) (hC o)
+    (hC : ∀ o : Run H rel, LgInnerAt H rel o) (hMR : MaskRank.MaskRankBound) : Claims.Flock.Complete H (deployZk rel) :=
+  completeAll H rel S h64 hS hPR hR (fun o => repChecksAt_of S h64 o (hS o.toCase) (hR o.toCase) (hX o) (hC o)) hMR
 
 /-- **Flock's masked verifier is complete at the deployed relation** for the honest masked prover on each table's
 share, with error `δc H`, at any number of tables: the statement's premise at one table (`StmtOkZk`), the prover's
@@ -177,9 +176,9 @@ pieces and the rep proofs' shapes per table (`ProverRunsAt`, `RepShapedAt`), and
 inner proof (`LgInnerAt`). -/
 theorem completeRel (H : Claims.Msg → Claims.Msg) (S : JsonRT.JsonSpec) (h64 : JsonRT.Out64 H)
     (hS : JsonRT.StmtOkZk H Readable.relation) (hPR : ∀ c : Case H Readable.relation, ProverRunsAt c)
-    (hR : ∀ c : Case H Readable.relation, RepShapedAt c) (hC : ∀ o : Run H Readable.relation, LgInnerAt H _ o) :
-    Claims.Flock.Complete H (deployZk Readable.relation) :=
-  completeR H Readable.relation S h64 (stmtAt_of S hS) hPR hR Run.rsExtras hC
+    (hR : ∀ c : Case H Readable.relation, RepShapedAt c) (hC : ∀ o : Run H Readable.relation, LgInnerAt H _ o)
+    (hMR : MaskRank.MaskRankBound) : Claims.Flock.Complete H (deployZk Readable.relation) :=
+  completeR H Readable.relation S h64 (stmtAt_of S hS) hPR hR Run.rsExtras hC hMR
 
 variable (H rel) in
 /-- **The rep's checks but the ring switch, at every run of several tables.** -/
@@ -193,11 +192,11 @@ theorem completeJRel (H : Claims.Msg → Claims.Msg) (S : JsonRT.JsonSpec) (h64 
     (hS : JsonRT.StmtOkZk H Readable.relation) (hR : JsonRT.RepShapedZk H Readable.relation)
     (hPR : JsonRT.ProverRunsZk H Readable.relation) (hLg : FlockComplete.LigeritoZk H Readable.relation)
     (hIn : FlockComplete.Inner H Readable.relation) (hPRJ : ProverRunsJ H Readable.relation)
-    (hRJ : RepShapedJ H Readable.relation) (hCJ : LgInnerJ H Readable.relation) :
+    (hRJ : RepShapedJ H Readable.relation) (hCJ : LgInnerJ H Readable.relation) (hMR : MaskRank.MaskRankBound) :
     Claims.Flock.Complete H (deployZk Readable.relation) :=
   have hP : JsonRT.ProverOkZk H Readable.relation :=
     JsonRT.proverOkZk h64 (JsonRT.repRoundsZk_goal H Readable.relation)
   completeJS H Readable.relation S h64 hS hR hPR (ringSwitchZk_goal S h64 hS hP hR (rsExtrasZk H)) hLg hIn hPRJ hRJ
-    fun o hc => repChecksAt_of S h64 o (stmtOkJ S o.toCase hc) (hRJ o.toCase hc) o.rsExtras (hCJ o hc)
+    (fun o hc => repChecksAt_of S h64 o (stmtOkJ S o.toCase hc) (hRJ o.toCase hc) o.rsExtras (hCJ o hc)) hMR
 
 end FlockComplete.ZkTables

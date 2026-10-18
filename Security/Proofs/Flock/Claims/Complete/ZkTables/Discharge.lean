@@ -39,7 +39,7 @@ theorem proofCount_goal (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed �
     ProofCountZk H rel := by
   intro o
   have := sessionPZk_proofs (Claims.hOf H) (fun j => (Claims.coinSeq o.r j).bytes) o.spec (tabsOf o.sts)
-    (traces o.sts o.w) o.ω #[] _ _ o.ran
+    (MaskRank.masksOf o.sts) (traces o.sts o.w) o.ω #[] _ _ o.ran
   simp [this]
 
 end FlockComplete.ZkTables
