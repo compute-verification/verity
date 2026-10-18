@@ -391,13 +391,17 @@ RULED = {"Bf16ToF32_v1": ("affine", "roundings")}
 
 
 def lean_class_of() -> tuple[dict[str, str], dict[str, str]]:
-    """Lean's `registry` and `families` (`Registry.lean`), each id or prefix with its class in this module's names."""
+    """Lean's `registry` and `families` (`Registry.lean`), each id or prefix with its class in this module's names; the
+    table reads are the family `TableRead` whether Lean lists them as one or classes them by their bits (`tableReadBits`)."""
     src = LEAN_REGISTRY.read_text()
     entry = re.compile(r'\("([^"]+)",\s*\.(\w+)(?:\s+\.(\w+))?')
     budgeted = {"rounding": "roundings", "compareSelect": "compare_select", "fold": "folds"}
     cut = src.index("def families")
-    return tuple({i: budgeted[sub] if k == "budgeted" else {"gather": "gathers"}.get(k, k) for i, k, sub in entry.findall(part)}
-                 for part in (src[:cut], src[cut:]))
+    ids, families = ({i: budgeted[sub] if k == "budgeted" else {"gather": "gathers"}.get(k, k) for i, k, sub in entry.findall(part)}
+                     for part in (src[:cut], src[cut:]))
+    if "def tableReadBits" in src:
+        families.setdefault("TableRead", "gathers")
+    return ids, families
 
 
 def test_the_table_is_leans_class_of():
@@ -409,9 +413,11 @@ def test_the_table_is_leans_class_of():
     ids, families = lean_class_of()
     assert len(ids) > 200 and {i: (P.class_of(i), c) for i, c in ids.items() if P.class_of(i) != c} == RULED
     assert set(P.CLASSES) - set(ids) <= NOT_IN_LEAN, set(P.CLASSES) - set(ids) - NOT_IN_LEAN
-    instance = {"GatherBf16x": "GatherBf16x16_v1", "GatherF32x": "GatherF32x128_v1", "TableRead": "TableRead16x4_v1",
-                "BitAtx": "BitAtx32_v1", "TopPMaskWordx": "TopPMaskWordx151936_v1"}
-    assert {f: P.class_of(instance[f]) for f in instance} == {f: families[f] for f in instance}
+    instance = {"GatherBf16x": "GatherBf16x16_v1", "GatherF32x": "GatherF32x128_v1", "GatherI32x": "GatherI32x64_v1",
+                "GatherE4m3x": "GatherE4m3x16_v1", "GatherE2m1x": "GatherE2m1x16_v1", "GatherE8m0x": "GatherE8m0x16_v1",
+                "TableRead": "TableRead16x4_v1", "BitAtx": "BitAtx32_v1", "TopPMaskWordx": "TopPMaskWordx151936_v1"}
+    listed = families.keys() & instance
+    assert {f: P.class_of(instance[f]) for f in listed} == {f: families[f] for f in listed}
     assert set(families) - set(instance) == {"Input", "RegisteredInput"}
     assert {P.class_of(f) for f in ("HopperBF16WgmmaDot16_v1", "BlackwellNvf4OmmaDot64_v1", "DivFullScaleA_v2", "F32Fabs_v1",
                                     "I64ToI32_v1", "BitAtx32_v1", "PouwWindowWord_v1", "I32Mul_v1", "NcpDot16I7_v1",
