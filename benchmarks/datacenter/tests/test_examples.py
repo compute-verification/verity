@@ -27,10 +27,6 @@ def test_a_node_is_one_block_of_eight_gpus_on_two_sockets_with_the_measured_pcie
     gpu = dc.devices["n.gpu0"]
     assert set(gpu.rate) == {"mac:bf16", "mac:fp8", "mac:fp4", "cuda", "oracle", "square-1024", "square-512", "gate"}
     assert gpu.rate["gate"].value == 2.6e13 * 32
-    named = [a for d in dc.devices.values() for a in [*d.rate.values(), d.memory, d.bandwidth, d.on_chip, d.residual]
-             if a] + [e.capacity for e in dc.links]
-    assert all(a.name and a.source in ("datasheet", "measured", "declared") for a in named)
-    assert all(a == b for a in named for b in named if a.name == b.name)  # one name, one record
 
 
 def test_a_dpu_sits_between_the_nic_and_the_way_out_with_its_bmc_behind_it():
@@ -79,4 +75,8 @@ def test_the_rack_is_nodes_with_dpus_on_one_leaf_with_a_challenger_and_the_world
     assert world.kind == "wan" and world.delay == 1e-3 and dc.link("challenger", "leaf0").delay == 1e-6
     c = dc.cadence
     assert (c.frame_bits, c.bucket_ticks, c.buckets, c.jitter_classes, c.tick.value) == (32, 1, 4, 128, 1e-4)
+    named = [a for d in dc.devices.values() for a in [*d.rate.values(), d.memory, d.bandwidth, d.on_chip, d.residual]
+             if a] + [a for e in dc.links for a in (e.capacity, e.latency) if a] + [c.tick]
+    assert all(a.name and a.source in ("datasheet", "measured", "declared") for a in named)
+    assert all(a == b for a in named for b in named if a.name == b.name)  # one name, one record
     assert [b.name for b in rack(nodes=1, dpus=False).blocks] == ["n0"] and "n0.dpu" not in rack(1, False).devices

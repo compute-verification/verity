@@ -1,21 +1,21 @@
 # Network simulation
 
 The device graph, and a mock datacenter of Linux network namespaces that runs the real network certifier. Both read the
-accounting layer's declarations, `datacenter.Datacenter` (`benchmarks/datacenter`).
+accounting layer's declarations, `datacenter.Datacenter`, which `datacenter.examples` (`benchmarks/datacenter`) declares:
+`rtx_node` is the measured node (8 GPUs on two sockets, each GPU on a PCIe root port of its own, one NIC on socket 1) as
+one block, and `leaf_spine` puts such nodes behind a leaf-spine fabric, each through its block's certifier, with hosts
+outside every block.
 
-- `graph.py`: declarations and exports. `rtx_node` is the measured node (8 GPUs on two sockets, each GPU on a PCIe root
-  port of its own, one NIC on socket 1) as one block, with memory accounting's capacities as named assumptions; a
-  capacity not measured yet is `math.inf`, the bound that claims nothing. `leaf_spine` puts such nodes behind a
-  leaf-spine fabric, each through its block's certifier, with one host outside every block. The exports read any
-  `Datacenter` that validates: the netns plan `mockdc.py` stands up, and Shadow's GML. `python graph.py --blocks 2
-  --netns` prints a plan.
+- `graph.py`: the exports, which read any `Datacenter` that validates: the netns plan `mockdc.py` stands up, and
+  Shadow's GML. `python graph.py --blocks 2 --netns` prints `leaf_spine(2)`'s plan.
 - `records.py`: the certifier's published records as `datacenter.observe.Record`s (port, window, counts, digest), the
   records an honest run declares by port and window, and the certifiers' parameters as the declaration's `Cadence`;
   `datacenter.check_records` audits them.
 - `mockdc.py`: a declaration's netns plan stood up on one host, the certifier's proxy on each block's uplink, and both
   audits.
-- `tests/`: the graph's tests, and the records adapter's on an injected clock
-  (`uv run tools/verity/check/suites.py network_sim`). The mock datacenter is a script, not a test: it runs in real time.
+- `tests/`: the exports' tests, the declarations' values pinned against memory accounting's constants
+  (`verity.core.protocols.remote_bandwidth.timing`) and the census, and the records adapter's tests on an injected clock
+  (`uv run tools/verity/check/suites.py verity-network-sim`). The mock datacenter is a script, not a test: it runs in real time.
 
 ## The mock datacenter
 
@@ -27,7 +27,7 @@ accepts, and an iptables rule in the certifier's namespace drops whatever the bl
 2 ms ± 0.5 ms per hop at 400 Gbit/s by default. Nothing in the root namespace changes: each veth is created inside its
 namespaces, and deleting the namespaces deletes them.
 
-That layout is `graph.leaf_spine(4, leaves=2, spines=1)`'s. Any other declaration works whose blocks each have one
+That layout is `datacenter.examples.leaf_spine(4, leaves=2, spines=1)`'s. Any other declaration works whose blocks each have one
 boundary link, to a certifier, and which has a device of kind `outside`: `--declaration FILE.py:NAME` names a
 `Datacenter`, or a function returning one.
 
