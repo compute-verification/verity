@@ -21,7 +21,7 @@ from verity_vllm.observe.fold.patterns.ops import as_float, base_op, bound_args,
 from verity_vllm.observe.fold.patterns.resolutions import attribution_for, unsupported
 from verity_vllm.observe.fold.patterns.rotary import step_positions
 from verity_vllm.observe.fold.patterns.target import target_of, vocab_kind
-from verity_vllm.observe.fold.resolver import Compute, Gather, Group, PerRow, Resolution, Shared, StepContext, Unsupported
+from verity_vllm.observe.fold.resolver import Compute, Gather, Group, PerRow, Resolution, Shared, StepContext, Transparent, Unsupported
 from verity_vllm.observe.fold.tree import TreeNode
 from verity_vllm.program.frontend.dsv4_leaves import FP8_DS_MLA_QB
 from verity_vllm.program.frontend.rules.vllm_bindings.pins import QKV_RMS_PINS
@@ -33,6 +33,8 @@ from verity_vllm.program.registry.dsa_norm import check_block
 
 LAYER = re.compile(r"model\.layers\.(\d+)")
 QNORM_INSERT_OP = "_C.fused_deepseek_v4_qnorm_rope_kv_rope_quant_insert"
+SAVE_STATES_KERNEL = "vllm.models.deepseek_v4.common.ops.save_partial_states._save_partial_states_kernel"
+SAVE_STATES_SRC_SHA = "11230c3682661cfe7eb4f04edc099b0e19fb3efba7ac4e0c5738bcc49d9d19e8"
 
 
 def _module(node: TreeNode) -> str:
@@ -55,6 +57,19 @@ def _weights(node: TreeNode, ctx: StepContext, names: tuple[str, ...]) -> tuple[
 
 def _is(v: ViewDesc, shape: tuple[int, ...], dtype: str) -> bool:
     return v.shape == shape and v.dtype == dtype
+
+
+def _slots(node: TreeNode, ctx: StepContext, layer: str, bs: object, sm: ViewDesc, T: int) -> tuple[int, ...] | Unsupported:
+    """The T tokens' slots in `layer`'s KV group, once the group's blocks are the launch's `bs` and the slot buffer covers the tokens."""
+    try:
+        g = kv_group_of(ctx, layer)
+    except GeometryError as e:
+        return unsupported(node, str(e))
+    slots = tuple(int(s) for s in ((g or {}).get("slot_mapping") or ())[:T])
+    if g is None or int(g["block_size"]) != bs or len(slots) != T or not is_int(sm) or sm.numel < T or any(s < 0 for s in slots):
+        return unsupported(node, "the cache's KV group does not give every token a slot in blocks of the launch's size", layer=layer,
+                           block_size=bs, slots=slots[:8])
+    return slots
 
 
 @dataclass
@@ -279,15 +294,9 @@ class QNormRopeKvInsert:
         pos = step_positions(node, ctx, a.get("position_ids"), T)
         if isinstance(pos, Unsupported):
             return pos
-        layer = f"{_module(node)}.swa_cache"
-        try:
-            g = kv_group_of(ctx, layer)
-        except GeometryError as e:
-            return unsupported(node, str(e))
-        slots = tuple(int(s) for s in ((g or {}).get("slot_mapping") or ())[:T])
-        if g is None or int(g["block_size"]) != bs or len(slots) != T or not is_int(sm) or sm.numel < T or any(s < 0 for s in slots):
-            return unsupported(node, "the window cache's KV group does not give every token a slot in blocks of the launch's size",
-                               layer=layer, block_size=bs, slots=slots[:8])
+        slots = _slots(node, ctx, f"{_module(node)}.swa_cache", bs, sm, T)
+        if isinstance(slots, Unsupported):
+            return slots
         if any(p < 0 or p >= cs.shape[0] for p in pos):
             return unsupported(node, "a position is outside the rotary table", positions=pos[:8], table_rows=cs.shape[0])
         croots = ctx.roots_of(cs)
@@ -307,9 +316,73 @@ class QNormRopeKvInsert:
         return Group(tuple(parts), tuple(sorted(node.ids())), hint=_module(node), pattern=self.name)
 
 
+def state_block(cache: ViewDesc, block: int, W: int) -> tuple[ViewDesc, ViewDesc]:
+    """Block `block` of a compressor's state cache (f32 [blocks, bs, 2W]) as its bs slots' kv words [bs, W] and score words [bs, W]."""
+    if cache.dtype != "float32" or cache.rank != 3 or cache.shape[2] != 2 * W or cache.strides[2] != 1 or not 0 <= block < cache.shape[0]:
+        raise GeometryError(f"block {block} of a state cache of rows of 2 x {W} f32 words: {cache!r}")
+    base, bs = cache.offset + block * cache.strides[0], cache.shape[1]
+    return tuple(ViewDesc(cache.alloc, base + k * W, (bs, W), (cache.strides[1], 1), "float32", cache.device) for k in (0, 1))
+
+
+@dataclass
+class SavePartialStates:
+    """`_save_partial_states_kernel[(T,)]` (`save_partial_states`, a compressor's state rows) -> per token kv[t] moved to the first W
+    words of its slot of the state cache, and `Dsv4CompressorScore_v1{W}` of score[t] and ape[positions[t] % R] in the next W: the
+    Build's `Dsv4CompressorStateRule`.  The slot is the token's in `<compressor>.state_cache`'s KV group, so the tokens of one cache
+    block are one move and one Compute (`state_block`).  A ratio-4 layer's indexer runs the kernel on its own compressor's state, a
+    cache only the indexer's long path reads."""
+
+    name = "dsv4.save_partial_states"
+
+    def match(self, node: TreeNode, ctx: StepContext) -> Resolution | None:
+        if not node.is_triton or node.enter.fn != SAVE_STATES_KERNEL:
+            return None
+        if node.enter.src_sha != SAVE_STATES_SRC_SHA or node.enter.num_warps != 4:
+            return unsupported(node, "the kernel's source or warps differ from the pin", src_sha=node.enter.src_sha, num_warps=node.enter.num_warps)
+        a = bound_args(node)
+        kv, score, ape, cache, sm = (a.get(k) for k in ("kv_ptr", "score_ptr", "ape_ptr", "state_cache_ptr", "slot_mapping_ptr"))
+        W, R, bs = a.get("HEAD_SIZE"), a.get("COMPRESS_RATIO"), a.get("block_size")
+        rows = tuple(ctx.start.rows)
+        T = len(rows)
+        if not all(isinstance(v, ViewDesc) for v in (kv, score, ape, cache, sm)) or not all(isinstance(n, int) and n > 0 for n in (W, R, bs)):
+            return unsupported(node, "the arguments are not bound as (kv, score, ape, positions, state cache, slots, block size) with static sizes")
+        if a.get("STATE_WIDTH") != W or a.get("TRITON_BLOCK_SIZE") != W or node.enter.grid != [T]:
+            return unsupported(node, "the launch is not one program per token over state rows of two HEAD_SIZE halves", grid=node.enter.grid,
+                               T=T, constexprs=node.enter.constexprs)
+        if not (_is(kv, (T, W), "float32") and _is(score, (T, W), "float32") and _is(ape, (R, W), "float32")) \
+                or any(v.strides[-1] != 1 for v in (kv, score, ape)) \
+                or (a.get("kv_stride"), a.get("score_stride"), a.get("ape_stride")) != (kv.strides[0], score.strides[0], ape.strides[0]):
+            return unsupported(node, "kv and score are not f32 [T,W] rows and ape an f32 [R,W] table at the launch's strides",
+                               kv=repr(kv), score=repr(score), ape=repr(ape))
+        if cache.rank != 3 or cache.shape[1] != bs or (a.get("state_cache_stride0"), a.get("state_cache_stride1")) != cache.strides[:2]:
+            return unsupported(node, "the state cache is not [blocks, block size, .] at the launch's strides", cache=repr(cache), block_size=bs)
+        pos = step_positions(node, ctx, a.get("positions_ptr"), T)
+        if isinstance(pos, Unsupported):
+            return pos
+        slots = _slots(node, ctx, f"{_module(node)}.state_cache", bs, sm, T)
+        if isinstance(slots, Unsupported):
+            return slots
+        aroots = ctx.roots_of(ape)
+        if not aroots:
+            return unsupported(node, "ape is no root of the capture", ape=repr(ape))
+        spec, hint, parts = vocab_kind(ctx, "dsv4_compressor_score", W=W), f"{_module(node)}/state", []
+        for b, lo, hi in block_runs(slots, bs):
+            try:
+                kv_rows, score_rows = state_block(cache, b, W)
+            except GeometryError as e:
+                return unsupported(node, str(e))
+            idx = tuple(s % bs for s in slots[lo:hi])
+            parts += [Transparent("move", () if parts else (node.id,), src=PerRow(sub_rows(kv, lo, hi)), dst=Gather(kv_rows, idx), rows=hi - lo,
+                                  hint=f"{hint}.kv", pattern=self.name),
+                      Compute(spec, hi - lo, (PerRow(sub_rows(score, lo, hi)), Gather(ape, tuple(p % R for p in pos[lo:hi]))),
+                              (Gather(score_rows, idx),), (), hint=f"{hint}.score", kernels=(triton_name(node),), attribution=rows[lo:hi],
+                              pattern=self.name, roots=(None, aroots[0].name))]
+        return Group(tuple(parts), tuple(sorted(node.ids())), hint=_module(node), pattern=self.name)
+
+
 def dsv4_patterns() -> list:
     """The DeepSeek-V4 patterns, ahead of the rank's collectives (`Mhc` records the all-reduces they resolve)."""
-    return [Mhc(), QKvRmsNorm(), QNormRopeKvInsert()]
+    return [Mhc(), QKvRmsNorm(), QNormRopeKvInsert(), SavePartialStates()]
 
 
-__all__ = ["Mhc", "QKvRmsNorm", "QNormRopeKvInsert", "block_runs", "dsv4_patterns", "swa_block"]
+__all__ = ["Mhc", "QKvRmsNorm", "QNormRopeKvInsert", "SavePartialStates", "block_runs", "dsv4_patterns", "state_block", "swa_block"]

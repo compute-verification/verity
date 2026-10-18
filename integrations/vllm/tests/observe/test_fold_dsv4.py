@@ -9,7 +9,9 @@
 * the fused q / kv RMSNorm launch is a `TritonBlockRMSNorm_v1` of each token's q row and of its kv row, refused off the wrapper's
   launch or the PTX's 16-divisible specialization;
 * the q norm / RoPE / window insert is the Build's `Dsv4QNormRopeKvInsert_v1` per token, its kv row's NoPE, scale bytes and RoPE
-  written to the token's slot of the layer's KV group in fp8_ds_mla's block layout, one Compute per cache block.
+  written to the token's slot of the layer's KV group in fp8_ds_mla's block layout, one Compute per cache block;
+* save_partial_states moves each token's kv row to its compressor state slot and writes the Build's `Dsv4CompressorScore_v1{W}`
+  of its score row and ape[pos % R] beside it, per cache block, the indexer's compressor at its own width.
 """
 from __future__ import annotations
 
@@ -21,7 +23,8 @@ import importlib
 import pytest
 
 from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHeader, StepStart, TritonLaunch, ViewDesc
-from verity_vllm.observe.fold.patterns.dsv4 import Mhc, QKvRmsNorm, QNormRopeKvInsert
+from verity_vllm.observe.fold.patterns.dsv4 import (SAVE_STATES_KERNEL, SAVE_STATES_SRC_SHA, Mhc, QKvRmsNorm, QNormRopeKvInsert,
+                                                    SavePartialStates)
 from verity_vllm.observe.fold.patterns.target import target_of_header
 from verity_vllm.observe.fold.resolver import Group, PerRow, Shared, StepContext, Unsupported, spec_label
 from verity_vllm.observe.fold.tree import build_trees
@@ -188,9 +191,9 @@ BLOCK_BYTES, POS, CACHE_STRIDE = 64 * (576 + 8), 970, 1435968
 CS_ROOT = Root(view(971, (4096, 64), "float32"), "weight", "model.layers.0.attn.rotary_emb.cos_sin_cache")
 
 
-def _insert_ctx(T, slots, layer="model.layers.0.attn.swa_cache", roots=(CS_ROOT,)):
+def _insert_ctx(T, slots, layer="model.layers.0.attn.swa_cache", roots=(CS_ROOT,), bs=64):
     ctx = _ctx(T, ROOTS + list(roots))
-    group = {"layers": [layer], "block_size": 64, "block_tables": {}, "slot_mapping": list(slots)}
+    group = {"layers": [layer], "block_size": bs, "block_tables": {}, "slot_mapping": list(slots)}
     start = dataclasses.replace(ctx.start, positions_view=view(POS, (T,), "int64"), kv_groups=[group, {"layers": ["other"]}])
     return dataclasses.replace(ctx, start=start)
 
@@ -224,6 +227,45 @@ def test_an_insert_off_the_fp8_ds_mla_block_or_its_layers_kv_group_or_without_th
     assert isinstance(QNormRopeKvInsert().match(_insert(1, cache_bytes=64 * 576), _insert_ctx(1, [64])), Unsupported)
     assert isinstance(QNormRopeKvInsert().match(_insert(1), _insert_ctx(1, [64], layer="model.layers.1.attn.swa_cache")), Unsupported)
     assert isinstance(QNormRopeKvInsert().match(_insert(1), _insert_ctx(1, [64], roots=())), Unsupported)
+
+
+STATE_STRIDE = CACHE_STRIDE // 4
+APE_ROOT = Root(view(980, (128, 512), "float32"), "weight", "model.layers.0.attn.compressor.ape")
+
+
+def _save_states(T, W=512, R=128, bs=8, module="model.layers.0.attn.compressor", ape=APE_ROOT.view, width=None):
+    args = {"kv_ptr": ViewDesc(981, 0, (T, W), (2 * W, 1), "float32", CUDA), "kv_stride": 2 * W,
+            "score_ptr": ViewDesc(981, W, (T, W), (2 * W, 1), "float32", CUDA), "score_stride": 2 * W, "ape_ptr": ape, "ape_stride": W,
+            "positions_ptr": view(POS, (T,), "int64"),
+            "state_cache_ptr": ViewDesc(974, 0, (40, bs, width or 2 * W), (STATE_STRIDE, width or 2 * W, 1), "float32", CUDA),
+            "state_cache_stride0": STATE_STRIDE, "state_cache_stride1": width or 2 * W, "slot_mapping_ptr": view(975, (T,), "int64"),
+            "block_size": bs}
+    consts = {"HEAD_SIZE": W, "TRITON_BLOCK_SIZE": W, "STATE_WIDTH": W, "COMPRESS_RATIO": R}
+    ev = TritonLaunch(1, None, 0, "forward", SAVE_STATES_KERNEL, SAVE_STATES_SRC_SHA, {**args, **consts}, consts, [T], 4, 3, 7, module)
+    return build_trees([ev])[0][0]
+
+
+def test_save_partial_states_moves_each_kv_row_and_is_the_builds_score_call_per_token_into_its_state_slot():
+    layer = "model.layers.0.attn.compressor.state_cache"
+    g = SavePartialStates().match(_save_states(3), _insert_ctx(3, [27 * 8 + 6, 27 * 8 + 7, 5 * 8], layer, (APE_ROOT,), bs=8))
+    kv1, score1, kv2, score2 = g.parts
+    assert [p.effect for p in (kv1, kv2)] == ["move"] * 2 and [spec_label(c.spec) for c in (score1, score2)] == ["Dsv4CompressorScore_v1{W=512}"] * 2
+    assert (kv1.rows, score1.rows, kv2.rows) == (2, 2, 1) and score1.roots[1] == APE_ROOT.name and score1.operands[1].indices == (0, 1)
+    assert (kv1.src.view.offset, kv1.dst.view.offset, kv1.dst.view.strides, kv1.dst.indices) == (0, 27 * STATE_STRIDE, (1024, 1), (6, 7))
+    assert (score1.operands[0].view.offset, score1.outputs[0].view.offset, score1.outputs[0].view.shape) == (512, 27 * STATE_STRIDE + 512, (8, 512))
+    assert kv2.src.view.offset == 2 * 1024 and score2.outputs[0].view.offset == 5 * STATE_STRIDE + 512 and score2.outputs[0].indices == (0,)
+    ix = Root(view(982, (4, 256), "float32"), "weight", "model.layers.2.attn.indexer.compressor.ape")
+    g = SavePartialStates().match(_save_states(1, W=256, R=4, bs=4, module="model.layers.2.attn.indexer.compressor", ape=ix.view),
+                                  _insert_ctx(1, [9], "model.layers.2.attn.indexer.compressor.state_cache", (ix,), bs=4))
+    assert spec_label(g.parts[1].spec) == "Dsv4CompressorScore_v1{W=256}" and g.parts[1].operands[1].indices == (0,)
+    assert g.parts[1].outputs[0].view.offset == 2 * STATE_STRIDE + 256 and g.parts[1].outputs[0].indices == (1,)
+
+
+def test_save_partial_states_off_its_state_layout_or_kv_group_or_without_the_ape_root_is_refused():
+    layer = "model.layers.0.attn.compressor.state_cache"
+    assert isinstance(SavePartialStates().match(_save_states(1, width=2048), _insert_ctx(1, [8], layer, (APE_ROOT,), bs=8)), Unsupported)
+    assert isinstance(SavePartialStates().match(_save_states(1), _insert_ctx(1, [8], layer, (APE_ROOT,), bs=4)), Unsupported)
+    assert isinstance(SavePartialStates().match(_save_states(1), _insert_ctx(1, [8], layer, (), bs=8)), Unsupported)
 
 
 def test_a_split_buffer_other_than_the_dispatchs_or_a_weight_without_a_root_is_refused():
