@@ -325,6 +325,72 @@ DEV void mask_roll(const uint4* T, const u64* Y, u32* m) {
   }
 }
 
+// M_key y from a byte table: T8[17 b + c] is chunk c of T_b = T_(b & 15) ^ T_(16 (b >> 4)) (the stride of 17 spreads the
+// lanes' random b over the banks), so a byte costs 5 loads and 20 XORs where the nibble table's costs 10 and 40. The mask
+// is issue-bound (beside the leaf's compressions, fusing it hides nothing), so this halves it.
+constexpr int T8_BYTES = 256 * 17 * 16;
+DEV void mask8(const uint4* T8, const u64* Y, u32* m) {
+#pragma unroll
+  for (int w = 0; w < 16; ++w) m[w] = 0;
+#pragma unroll 1
+  for (int r = 0; r < 16; ++r) {
+    u32 A[20];
+#pragma unroll
+    for (int i = 0; i < 20; ++i) A[i] = 0;
+    const int sh = 56 - 8 * (r & 7);
+#pragma unroll
+    for (int q = 0; q < 12; ++q) {
+      const u64 wq = r < 8 ? Y[2 * q] : Y[2 * q + 1];
+      const uint4* p = T8 + 17 * ((u32)(wq >> sh) & 0xFFu) + q;
+#pragma unroll
+      for (int i = 0; i < 5; ++i) {
+        const uint4 u = p[i];
+        A[4 * i] ^= u.x; A[4 * i + 1] ^= u.y; A[4 * i + 2] ^= u.z; A[4 * i + 3] ^= u.w;
+      }
+    }
+    if (r & 4) {
+#pragma unroll
+      for (int k = 0; k < 19; ++k) A[k] = A[k + 1];
+    }
+    if (r & 8) {
+#pragma unroll
+      for (int k = 0; k < 18; ++k) A[k] = A[k + 2];
+    }
+    const u32 s = 8 * (r & 3);
+#pragma unroll
+    for (int w = 0; w < 16; ++w) m[w] ^= __funnelshift_r(A[w], A[w + 1], s);
+  }
+}
+// sr_salt with mask8 (T8_BYTES of dynamic shared memory, built from the nibble table by each CTA)
+__global__ void __launch_bounds__(256, 2) sr_salt8(const uint4* __restrict__ Tn, u64 n, u64 width, u64* __restrict__ S,
+                                                   u64* __restrict__ F, u64* __restrict__ lv0) {
+  extern __shared__ uint4 T8[];
+  for (int k = threadIdx.x; k < 256 * 16; k += blockDim.x) {
+    const int b = k >> 4, c = k & 15;
+    const uint4 lo = Tn[16 * c + (b & 15)], hi = Tn[256 + 16 * c + (b >> 4)];
+    T8[17 * b + c] = make_uint4(lo.x ^ hi.x, lo.y ^ hi.y, lo.z ^ hi.z, lo.w ^ hi.w);
+  }
+  __syncthreads();
+  const u64 pos = (u64)blockIdx.x * blockDim.x + threadIdx.x;
+  if (pos < n) {
+    u64 Y[24], c[8], my[8], f[8];
+    u32 m[16];
+    salt_prf(pos, Y);
+    mask8(T8, Y, m);
+    salt_digest(Y, c);
+#pragma unroll
+    for (int i = 0; i < 8; ++i) my[i] = (u64)bswap32(m[2 * i]) << 32 | bswap32(m[2 * i + 1]);
+    st8(S + 16 * pos, my);
+    st8(S + 16 * pos + 8, c);
+    frame_first(0, pos, f);
+    st8(F + 8 * pos, f);
+  } else if (pos < width) {
+    u64 o[8];
+    pad(0, pos, o);
+    st8(lv0 + 8 * pos, o);
+  }
+}
+
 DEV void salt3(u64 pos, const uint4* T, u64* my, u64* c) {
   u64 Y[24];
   u32 m[16];
@@ -856,6 +922,7 @@ struct Mine {
       for (int c = 0; c < 16; ++c)
         for (int u = 0; u < 16; ++u) memcpy(&tn[4096 * h + 256 * c + 16 * u], &p.T[256 * (h ? 16 * u : u) + 16 * c], 16);
     CK(cudaMalloc(&Tn, tn.size()));
+    CK(cudaFuncSetAttribute(sr_salt8, cudaFuncAttributeMaxDynamicSharedMemorySize, T8_BYTES));
     CK(cudaMemcpy(Tn, tn.data(), tn.size(), cudaMemcpyHostToDevice));
   }
   // UF = false: the fold and climb (one thread's latency, not the GPU's throughput) with commit_gpu's inlined node
@@ -931,6 +998,15 @@ struct Mine {
   void leaf_cg(const uint8_t* rows, cudaStream_t st, u64* bc = nullptr) {
     const u32 cnt = (u32)std::min<u64>(width, 256);
     sr_leaf3<256, 2, ORDER, false><<<(unsigned)(width / cnt), cnt, 0, st>>>(rows, Tn, n, width, depth, levels, ctr, bc);
+    nodes_cg(st);
+  }
+  void salts8(cudaStream_t st) {
+    sr_salt8<<<(unsigned)((width + 255) / 256), 256, T8_BYTES, st>>>(Tn, n, width, S, F, levels);
+  }
+  // v1_cg with the byte-table salt kernel
+  void v1_cg8(const uint8_t* rows, cudaStream_t st, u64* bc = nullptr) {
+    salts8(st);
+    data<256, 2, false, NOFOLD>(rows, st, bc);
     nodes_cg(st);
   }
   // v1's salt and leaf kernels (every compression inlined), the leaves unfolded, then commit_gpu's tree schedule
@@ -1088,6 +1164,7 @@ static int check(int argc, char** argv) {
       case 19: me.v5<256, 0>(d, 0, bc); break;
       case 20: me.v5<256, 2>(d, 0, bc); break;
       case 21: me.v5<128, 0>(d, 0, bc); break;
+      case 22: me.v1_cg8(d, 0, bc); break;
       case 12: {
         static cudaStream_t s2;
         static cudaEvent_t e2[2];
@@ -1184,6 +1261,7 @@ static int bench(int argc, char** argv, bool nsys_mode) {
   CK(cudaEventCreateWithFlags(&ovev[1], cudaEventDisableTiming));
   arms.push_back({"lf0_cg", true, [&](cudaStream_t s) { me.leaf_cg<0>(src, s); }, comps});
   arms.push_back({"lf2_cg", true, [&](cudaStream_t s) { me.leaf_cg<2>(src, s); }, comps});
+  arms.push_back({"v1_cg8", true, [&](cudaStream_t s) { me.v1_cg8(src, s); }, comps});
   arms.push_back({"v1_cg", true, [&](cudaStream_t s) { me.v1_cg(src, s); }, comps});
   arms.push_back({"v3s_cg", true, [&](cudaStream_t s) { me.v3s_cg(src, s); }, comps});
   arms.push_back({"v3s_cg_ov", true, [&](cudaStream_t s) { me.v3s_cg(src, s, 2, st2, ovev); }, comps});
@@ -1203,6 +1281,7 @@ static int bench(int argc, char** argv, bool nsys_mode) {
   std::vector<Arm> diags = {
       {"salt_only", false, [&](cudaStream_t s) { me.salts<true>(s); }, c_salt},
       {"salt3_only", false, [&](cudaStream_t s) { sr::sr_salt3<<<(unsigned)((width + 127) / 128), 128, 0, s>>>(me.Tn, n, width, me.S, me.F, me.levels, 0, width); }, c_salt},
+      {"salt8_only", false, [&](cudaStream_t s) { me.salts8(s); }, c_salt},
       {"salt_nomask", false, [&](cudaStream_t s) { me.salts<false>(s); }, c_salt},
       {"data_only", false, [&](cudaStream_t s) { me.data<256, 2, false>(src, s); }, comps - c_salt},
       {"data_noload", false, [&](cudaStream_t s) { me.data<256, 2, false, sr::NOLOAD>(src, s); }, comps - c_salt},
