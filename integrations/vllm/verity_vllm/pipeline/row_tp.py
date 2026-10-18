@@ -147,7 +147,7 @@ class TpRow(Row):
             raise Stop(3)
         self.tl("precheck", "end", ("rc", 0))
         self.verdict("precheck", "PASS", f"source identity == {self.tree}{' @ ' + sha if sha else ''} (verity verity_vllm hidden_gpu research)", quiet=True)
-        rc, line = self.target_family(out=f"{self.d}/target_family.json")
+        rc, line = self.target_family(*([] if self.reads_device() else ["--no-device"]), out=f"{self.d}/target_family.json")
         if rc != 0:
             self.verdict("precheck-target", "FAIL", line)
             raise Stop(3)
@@ -170,6 +170,13 @@ class TpRow(Row):
         if not os.path.isdir(self.ck):
             self.verdict("build", "FAIL", f"no local checkpoint dir for {self.repo} @ {self.rev} (checkpoints.json local_path / HF snapshot absent; HF_HUB_OFFLINE=1)")
             raise Stop(10)
+
+    def reads_device(self) -> bool:
+        """Whether a stage of this run reads this host's GPU, so the target-family precheck reads it too: the Commit, the Match's GPU
+        legs, a Build whose target is the device.  ``--match-phase cpu`` reads only legs whose device the GPU half's precheck read, and a
+        declared-target Build derives for its declaration, so a CPU host runs those stages."""
+        return (stage_on(self.stages, "commit") or (stage_on(self.stages, "match") and self.cm.match_phase != "cpu")
+                or (stage_on(self.stages, "build") and not R.declared_target(self.path(self.wl), row=self.row)))
 
     def p2p_env(self) -> str | None:
         """The stages' NCCL_P2P_DISABLE: the row's ``engine.env`` value, else unset (one the caller's environment has is dropped)."""

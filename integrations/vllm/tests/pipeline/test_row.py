@@ -899,6 +899,27 @@ def test_a_row_declaring_prefix_caching_is_refused_before_any_stage(tmp_path, mo
         assert e.value.rc == 3 and last[:2] == ["precheck", "FAIL"] and "enable_prefix_caching" in last[3]
 
 
+@pytest.mark.parametrize("argv, reads", [
+    (("--stages", "build,match", "--match-phase", "cpu"), False),   # a declared-target Build and the CPU half: vy-glm53-cpu-2 runs them
+    (("--stages", "match", "--match-phase", "gpu"), True),
+    (("--stages", "match"), True),                                  # the GPU legs and the CPU half in one run
+    (("--stages", "commit"), True),
+])
+def test_a_tp_rows_target_precheck_reads_the_device_only_when_a_stage_runs_on_it(tmp_path, monkeypatch, argv, reads):
+    t = _tp_row(tmp_path, GLM53, *argv)
+    seen: list[tuple[str, ...]] = []
+
+    def target_family(*extra, out):
+        seen.append(extra)
+        raise Stop(99)
+    for name, fn in (("hidden_build", lambda: "/x/verity_fa2_matReqG.so"), ("release_line", lambda arg: ("PASS|x", None)),
+                     ("export_commit", lambda: ""), ("source_identity", lambda pys, out: False), ("target_family", target_family)):
+        monkeypatch.setattr(t, name, fn)
+    with pytest.raises(Stop) as e:
+        t.prepare()
+    assert e.value.rc == 99 and seen == [() if reads else ("--no-device",)]
+
+
 @pytest.mark.parametrize("row, off", [
     (GLM53, False),                                  # an H box: vLLM's default, the custom all-reduce on
     (TP_DENSE, True),
