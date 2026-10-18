@@ -49,12 +49,12 @@ from verity_vllm.pipeline.serving_rows import _operand
 def after_commit(request: str | None, *, loaded: Mapping[str, Mapping[str, Any]], bmap: dict[str, Any], committed: Callable,
                  manifest: Any, arrivals: Mapping[str, int], caches: Mapping[str, Any] | None,
                  session: str | Path | None = None, tp: Mapping[str, int] | None = None,
-                 attention_paths: Sequence[str] = ()) -> dict[str, Any] | None:
+                 attention_paths: Sequence[str] = (), prefixes: Mapping[str, Mapping[str, Any]] | None = None) -> dict[str, Any] | None:
     """Write the run's memory map as ``request`` asks, from the requests' loaded Programs of record (`c2_replay.programs_of_record`)
     at their engine arrival steps and the KV-slots source's `caches`, under the deferral of the remote session whose record is at
     ``session`` if there is one; on TP rank ``tp`` (``{"rank", "world"}``) its rank's map (`at_rank`), the rank Programs read
-    with the implementation paths the Build observed (``attention_paths``).  None without a request.  A failure is written
-    beside the map and returned, never raised."""
+    with the implementation paths the Build observed (``attention_paths``); the warm requests' ``prefixes`` (`write`).  None
+    without a request.  A failure is written beside the map and returned, never raised."""
     if not request:
         return None
     req = json.loads(Path(request).read_text())
@@ -65,7 +65,7 @@ def after_commit(request: str | None, *, loaded: Mapping[str, Mapping[str, Any]]
     try:
         return write(out, req, loaded=loaded, store=CommittedStore.of_record(bmap, committed, manifest if isinstance(manifest, dict) else None),
                      arrivals=arrivals, caches=caches, deferral=deferral(session) if session is not None else None, tp=tp,
-                     attention_paths=attention_paths)
+                     attention_paths=attention_paths, prefixes=prefixes)
     except Exception as e:  # noqa: BLE001
         out.with_name(out.name + ".error.txt").write_text(traceback.format_exc())
         print(f"[memory-map] FAILED (no verdict changes): {e!r}"[:400], flush=True)
@@ -100,9 +100,10 @@ def deferral(path: str | Path) -> MM.Deferral | None:
 
 
 #: beside a request Build's ``descriptor.json.gz``: its Program's census (`MM.census_of`) and KV rows (`MM.rows_doc`), each naming
-#: the Program by digest; KV rows of another schema are recomputed (v1 refused MLA's latent rows)
+#: the Program by digest; KV rows of another schema are recomputed (v1 refused MLA's latent rows), but v2's of a cold Program
+#: (`COLD_KV_ROWS`: v2 refused a warm one's cached rows), the rows v3 has
 CENSUS, KV_ROWS = "census.json.gz", "kv_rows.json.gz"
-KV_ROWS_SCHEMA = "verity-vllm/kv-rows/v2"
+KV_ROWS_SCHEMA, COLD_KV_ROWS = "verity-vllm/kv-rows/v3", "verity-vllm/kv-rows/v2"
 
 
 def _read(path: Path, digest: str, schema: str | None = None) -> dict[str, Any] | None:
@@ -154,7 +155,9 @@ def of_build(d: str | Path, digest: str, at: str | Path | None = None) -> MM.Row
 
     d = Path(d)
     at = d if at is None else Path(at)
-    doc = _read(at / KV_ROWS, digest, KV_ROWS_SCHEMA)
+    doc = _read(at / KV_ROWS, digest)
+    if doc is not None and doc.get("schema") != KV_ROWS_SCHEMA and (doc.get("schema") != COLD_KV_ROWS or "refused" in doc):
+        doc = None
     if doc is None:
         program, got = load_program(d / "descriptor.json.gz")
         if got != digest:
@@ -176,9 +179,10 @@ def _layer(name: str) -> int:
 
 def write(out: Path, req: Mapping[str, Any], *, loaded: Mapping[str, Mapping[str, Any]], store: Any, arrivals: Mapping[str, int],
           caches: Mapping[str, Any] | None, deferral: MM.Deferral | None = None, tp: Mapping[str, int] | None = None,
-          attention_paths: Sequence[str] = ()) -> dict[str, Any]:
+          attention_paths: Sequence[str] = (), prefixes: Mapping[str, Mapping[str, Any]] | None = None) -> dict[str, Any]:
     """The map of ``req`` into ``out`` and its layout beside it: each request's slots and KV words read from ``store`` (a
-    `CommittedStore`), its pages laid out as ``caches`` (KV layer name -> the engine's cache tensor) lay them out, its writes
+    `CommittedStore`), its pages laid out as ``caches`` (KV layer name -> the engine's cache tensor) lay them out, a warm
+    request's cached pages its producers' (``prefixes``, the replay's ``{request: {"cached", "producers"}}``), its writes
     where ``deferral`` has their encodes land; the Programs a TP rank's (``tp``) when given, their members spelt as the
     ProgramIndex spells them with ``attention_paths``."""
     if not caches:
@@ -218,7 +222,8 @@ def write(out: Path, req: Mapping[str, Any], *, loaded: Mapping[str, Mapping[str
             raise ValueError(f"request {rid}'s KV layers wrote step {step}'s rows to different slots: memory-map/v1 lays out one table a request")
         return got[0]
 
-    tables = MM.tables(rows, arrivals, slots, page.block_size)
+    producers = {r: [str(q) for q in p["producers"]] for r, p in (prefixes or {}).items()}
+    tables = MM.tables(rows, arrivals, slots, page.block_size, producers)
     kv = {r: MM.packed(rs) for r, rs in rows.items()} if page.form == "packed" else rows
 
     def payload(rid: str, row: MM.Row) -> bytes:
@@ -227,14 +232,16 @@ def write(out: Path, req: Mapping[str, Any], *, loaded: Mapping[str, Mapping[str
 
     layout = MM.Layout(page.block_size, page.pages, tuple(req["firsts"]) if req.get("firsts") is not None else None,
                        int(req["blocks"]) if req.get("blocks") is not None else None)
-    head, steps = MM.record(kv, {r: int(arrivals[r]) for r in rows}, payload, bytes.fromhex(req["registration"]), layout, tables, deferral)
+    head, steps = MM.record(kv, {r: int(arrivals[r]) for r in rows}, payload, bytes.fromhex(req["registration"]), layout, tables, deferral,
+                            producers)
     out.write_text(dumps(head, steps))
     t_d = time.perf_counter()
     engine = MM.engine_agrees(kv, layout, tables, steps, _engine_blocks([caches[n] for n in layers], tables))
     doc = {"schema": "verity-vllm/memory-map-layout/v1", "map": out.name, "tp": dict(tp) if tp else None, "blocks": head.blocks,
            "page": {"form": page.form, "pages": page.pages, "block_size": page.block_size, "head_words": page.head_words},
-           "requests": {r: {"arrive": int(arrivals[r]), "steps": rs.steps, "positions": rs.positions, "layers": len(rs.layers),
-                            "row_bytes": rs.row_bytes, "pages": tables[r], "program_digest": by_dir[str(loaded[r]["dir"])][2]}
+           "requests": {r: {"arrive": int(arrivals[r]), "steps": rs.steps, "positions": rs.positions, "cached": rs.cached,
+                            "layers": len(rs.layers), "row_bytes": rs.row_bytes, "pages": tables[r],
+                            "program_digest": by_dir[str(loaded[r]["dir"])][2]}
                         for r, rs in rows.items()},
            "deferral": None if deferral is None else {"first_step": deferral.first_step, "appends": len(deferral.encodes),
                                                       "lifetime": deferral.lifetime},

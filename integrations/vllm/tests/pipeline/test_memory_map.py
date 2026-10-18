@@ -3,7 +3,8 @@
 request's slots at pages out of first-need order, and the engine's caches in vLLM 0.28's packed page layout.  The map written is
 `commit.memory_map.record`'s over the rows' committed words at those pages, the engine holds its blocks, the Program's census and
 KV rows are cached beside its descriptor and read back without it, and a run without committed slots, without the engine's caches
-or with a descriptor of another Program is refused beside the map, never raised.  GLM-5.3 at TP2 in small: each rank's replay
+or with a descriptor of another Program is refused beside the map, never raised.  A warm request's cached pages are the ones its
+producer committed, held to its own last read.  GLM-5.3 at TP2 in small: each rank's replay
 writes the map of its MLA latent rows from its own Build dir, committed words and caches, at its own path and registration."""
 from __future__ import annotations
 
@@ -74,31 +75,33 @@ def _store(rows: MM.Rows, pages=PAGES, bs=4, salt=None) -> Committed:
                      salt)
 
 
-def _words(pi, store):
+def _words(pi, store, arrive=ARRIVE):
     """A row's committed words as the map reads them (`serving_rows._operand`): each slice's member words at its step and row."""
     def words(rid, row):
         out = []
         for _, j, lo, hi in row.group:
             pd, member, mlo, mhi, _ = pi.member_at(j, lo, hi)
             w = dict((m, n) for m, n, _ in pd["members"])[member]
-            out.append(store.words(rid, ARRIVE + pd["step"], pd["op_path"], member, pd["row"] * w + mlo, pd["row"] * w + mhi)[0])
+            out.append(store.words(rid, arrive + pd["step"], pd["op_path"], member, pd["row"] * w + mlo, pd["row"] * w + mhi)[0])
         return np.concatenate(out)
     return words
 
 
-def _payload(pi, rows):
-    words = _words(pi, Committed({}))
+def _payload(pi, rows, arrive=ARRIVE):
+    words = _words(pi, Committed({}), arrive)
     return lambda rid, row: words(rid, row).reshape(2, 4, 128).transpose(1, 0, 2).tobytes()
 
 
-def _caches(rows: MM.Rows, payload) -> dict[str, torch.Tensor]:
+def _caches(rows: MM.Rows, payload, held: dict[str, tuple[MM.Rows, list[int]]] | None = None) -> dict[str, torch.Tensor]:
     """Each layer's cache `[8 pages, 4 heads, 4 slots, 2 * 128]` laid out slot-major (vLLM 0.28's FlashAttention), holding the
-    request's packed rows at its pages."""
+    request's packed rows at its pages (`held`: each request's rows and pages, a warm one's past its cached positions)."""
     out = {}
     for layer, name in enumerate(LAYERS):
         phys = torch.zeros((8, 4, 4, 256), dtype=torch.bfloat16)
-        for q, (row,) in enumerate(zip(*rows.layers[layer])):
-            phys.view(torch.int16)[PAGES[q // 4], q % 4] = torch.from_numpy(np.frombuffer(payload("r0", row), np.int16).reshape(4, 256).copy())
+        for rid, (rs, pages) in (held or {"r0": (rows, PAGES)}).items():
+            for q, (row,) in enumerate(zip(*rs.layers[layer])):
+                if q >= rs.cached:
+                    phys.view(torch.int16)[pages[q // 4], q % 4] = torch.from_numpy(np.frombuffer(payload(rid, row), np.int16).reshape(4, 256).copy())
         out[name] = phys.permute(0, 2, 1, 3)
     return out
 
@@ -149,6 +152,32 @@ def test_a_remote_sessions_map_is_written_where_its_encodes_land(tmp_path):
     assert PMM.deferral(tmp_path / PMM.SESSION) is None and PMM.deferral(tmp_path / "none.json") is None
 
 
+def test_a_warm_requests_cached_pages_are_its_producers(tmp_path):
+    # r0 (a 4-row prefill, then 1 decode step) from step 2 and w from step 4, whose first 4 prompt rows the prefix cache serves
+    # from r0's first page (the replay's prefixes): w's pages open with r0's page 6, it commits slots from position 4, and page
+    # 6 (slots 12, 13, 28, 29) is freed at w's last read, 7, not r0's, 3
+    r0, lp0 = _build_dir(tmp_path, 4, 1)
+    warm = build_program(_phi(WIDE), "request", LP=8, T=3, cached=4).program
+    lpw = _build(tmp_path / "build_request_LP8_T3_C4", warm)
+    rows, arrive, pages = {"r0": MM.rows(r0), "w": MM.rows(warm)}, {"r0": 2, "w": 4}, {"r0": [6, 2], "w": [6, 4, 5]}
+    store = Committed({arrive[r] + s: [pages[r][q // 4] * 4 + q % 4 for q, x in enumerate(rs.layers[0][0]) if q >= rs.cached and x.born == s]
+                       for r, rs in rows.items() for s in range(rs.steps)})
+    by = {"r0": _payload(ProgramIndex(lp0["instances"]), rows["r0"], 2), "w": _payload(ProgramIndex(lpw["instances"]), rows["w"], 4)}
+    kv, out, prefixes = {r: MM.packed(rs) for r, rs in rows.items()}, tmp_path / "memory_map.jsonl", {"w": {"cached": 4, "producers": ["r0"]}}
+    caches = _caches(None, lambda rid, row: by[rid](rid, row), {r: (kv[r], pages[r]) for r in kv})
+    kw = {"loaded": {"r0": lp0, "w": lpw}, "store": store, "arrivals": arrive, "caches": caches}
+    doc = PMM.write(out, {"path": str(out), "registration": "ab" * 64}, prefixes=prefixes, **kw)
+    head, steps = MM.record(kv, arrive, lambda rid, row: by[rid](rid, row), bytes.fromhex("ab" * 64), MM.Layout(block_size=4, pages=8), pages,
+                            producers={"w": ["r0"]})
+    assert out.read_text() == dumps(head, steps)
+    assert [(s.step, sorted(s.freed), sorted(x.slot for x in s.written)) for s in steps] == [
+        (2, [], [12, 13, 28, 29]), (3, [4, 20], []), (4, [], [8, 9, 24, 25]), (5, [10, 26], []), (6, [], [10, 26]),
+        (7, [8, 9, 10, 11, 12, 13, 24, 25, 26, 27, 28, 29], [])]
+    assert (doc["requests"]["w"]["pages"], doc["requests"]["w"]["cached"], doc["engine"]) == ([6, 4, 5], 4, {"compared": 10, "equal": 10})
+    with pytest.raises(ValueError, match="request w's 4 cached positions aren't the 0 pages of 4 its producers name"):
+        PMM.write(out, {"path": str(out), "registration": "ab" * 64}, **kw)
+
+
 def test_no_page_is_assumed(tmp_path):
     program, lp = _build_dir(tmp_path, 4, 5)
     rows, out = MM.rows(program), tmp_path / "memory_map.jsonl"
@@ -188,6 +217,20 @@ def test_a_requests_cache_dir_leaves_the_build_dir_untouched(tmp_path):
     assert sorted(p.name for p in d.iterdir()) == before and {p.name for p in (side / digest).iterdir()} == {PMM.CENSUS, PMM.KV_ROWS}
     (d / "descriptor.json.gz").unlink()
     assert PMM.of_build(d, digest, side / digest) == rows
+
+
+def test_kv_rows_v2_are_read_for_a_cold_program_and_recomputed_where_they_refused(tmp_path):
+    program, lp = _build_dir(tmp_path, 4, 5)
+    d, digest, rows = tmp_path / "build_request_LP4_T5", lp["instances"]["digest"], MM.rows(program)
+    v2 = {"schema": PMM.COLD_KV_ROWS, "program": digest, "census": "c"}
+    with gzip.open(d / PMM.KV_ROWS, "wt") as f:
+        json.dump(v2 | {"refused": "root node 9's kc reads an input of the Program"}, f)
+    assert PMM.of_build(d, digest) == rows
+    assert json.loads(gzip.decompress((d / PMM.KV_ROWS).read_bytes()))["schema"] == PMM.KV_ROWS_SCHEMA
+    (d / "descriptor.json.gz").unlink()
+    with gzip.open(d / PMM.KV_ROWS, "wt") as f:
+        json.dump(v2 | {k: v for k, v in MM.rows_doc(rows).items() if k != "cached"}, f)
+    assert PMM.of_build(d, digest) == rows
 
 
 def test_a_descriptor_of_another_program_is_refused_beside_the_map(tmp_path):

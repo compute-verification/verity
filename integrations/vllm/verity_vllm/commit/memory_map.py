@@ -8,13 +8,18 @@ row       one position's K (or V) in a layer: a row of an attention Call's `kc` 
           rows its Calls share, in the order its Calls first read them (its positions), K and V paired by position.  DSA's
           indexer keys are no rows: their 132-byte rows pack across blocks, and memory accounting ruled them uncredited
           until the map packs them
+cached    a warm request's first C positions, the rows vLLM's prefix cache serves it: its Program takes them as an input
+          (the predict and derive `prefix`), each layer's rows opening with that input's.  They are whole pages that the
+          requests computing them wrote (C a multiple of `block_size`, `program.prefix_plan`'s producers), the warm request
+          writes none of them, and its reads keep them resident
 born      a row's step, and `last` its last reader's: the circuit's requirement (`requirement.from_census`) over the
           Program's census at its sampling events (`query.required.SAMPLING_EVENTS`)
 page      `block_size` slots in each layer as the engine lays them out (`page_of`, from its cache tensor): a K plane then a
           V plane, a slot one row ("planes"), one plane whose slot holds a position's K and V head by head ("packed",
           `packed`), or one plane of latent rows ("latent"); a request's position q sits at slot
           `tables[request][q // block_size] * block_size + q % block_size`, its pages the ones the engine wrote its KV to
-          (`tables`, from the slots the Commit committed), vLLM's null block being page 0
+          (`tables`, from the slots the Commit committed, and a warm request's cached pages its producers'), vLLM's null
+          block being page 0
 block     4,096 bytes of a plane (`store.registry._page_blocks`), at slot `firsts[layer] + ids[page, c]` (the `Store`'s
           numbering: a KV pool of one region per layer)
 appended  a block whose rows are all born, at the step of the last (its completion), if a later step reads it: a step's
@@ -25,7 +30,9 @@ written   an appended block, in the record of the step its append's encode lande
           ``PROTOCOL.md`` §4: the session's `Deferral`; without one, at its completion), uncredited until then.  A line
           writes the appends landed by then in order, and one that would write a slot an earlier one there writes waits a
           line, with every append after it
-freed     a written block in the record of its rows' last read's step, or of the step after its write's if that is no
+freed     a written block in the record of its rows' last read's step (a cached block's: the latest of its producer's and
+          every warm request's that reads it, which is written then even if its producer never read it resident), or of
+          the step after its write's if that is no
           earlier (its page was freed before its encode landed: memory accounting ruled such a block withdrawn, no write, no
           free and no credit, in thread 1792308789, and memory-map/v1 is to gain a step's ``withdrawn``; until then the
           block is written and freed a line later).  And a slot's registered block (a KV page's filler, registered before
@@ -69,7 +76,8 @@ LATENT = {"SparseMla": ("kv",), "SparseMlaSplit": ("kv",)}
 #: vLLM's null block, no request's page
 NULL_PAGE = 0
 
-#: leaves `[lo, hi)` of the output of node `j` of the Program's function (the Commit's instance rows' `['n', j, lo, hi]`)
+#: leaves `[lo, hi)` of the output of node `j` of the Program's function (the Commit's instance rows' `['n', j, lo, hi]`), or of
+#: its input `j` (`('i', j, lo, hi)`: a cached row)
 Slice = tuple[str, int, int, int]
 
 
@@ -85,12 +93,14 @@ class Row:
 @dataclass(frozen=True)
 class Rows:
     """A request Program's KV rows, ``layers[l][plane][position]`` (from `rows`, plane 0 K and 1 V, or one plane of latent rows;
-    after `packed`, one plane), each `row_bytes` bytes of `word_bytes`-byte words, over its `steps` steps."""
+    after `packed`, one plane), each `row_bytes` bytes of `word_bytes`-byte words, over its `steps` steps, its first `cached`
+    positions the prefix cache's."""
 
     layers: tuple[tuple[tuple[Row, ...], ...], ...]
     row_bytes: int
     word_bytes: int
     steps: int
+    cached: int = 0
 
     @property
     def positions(self) -> int:
@@ -176,16 +186,19 @@ def packed(rs: Rows) -> Rows:
 
 
 def _cut(refs, width: int, inputs: int, what: str) -> list[tuple[Slice, ...]]:
-    """A cached argument's (`kc`, `vc` or `kv`) rows of `width` leaves, each as the function's slices it is."""
+    """A cached argument's (`kc`, `vc` or `kv`) rows of `width` leaves, each as the function's slices it is: a computed row's
+    of node outputs, a cached row's of an input of the Program."""
     out, cur, need = [], [], width
     for space, k, lo, hi in runs(refs):
-        if space != "n" or k < inputs:
-            raise ValueError(f"{what} reads an input of the Program: memory-map/v1 records the KV a step computes")
+        if space != "n":
+            raise ValueError(f"{what} reads leaves of space {space!r}: memory-map/v1 records the KV a step computes or the prefix cache serves")
         while lo < hi:
             take = min(need, hi - lo)
-            cur.append(("n", k - inputs, lo, lo + take))
+            cur.append(("i", k, lo, lo + take) if k < inputs else ("n", k - inputs, lo, lo + take))
             lo, need = lo + take, need - take
             if not need:
+                if len({s for s, *_ in cur}) > 1:
+                    raise ValueError(f"{what} has a row of an input's leaves and computed ones")
                 out.append(tuple(cur))
                 cur, need = [], width
     return out
@@ -198,7 +211,7 @@ def census_of(program: Program, digest: str | None = None) -> dict:
 
 def rows(program: Program, c: Mapping | None = None) -> Rows:
     """The KV rows of a request Program, born and last read as its requirement over its census `c` (`census_of`, computed when
-    not given) has them."""
+    not given) has them; a warm request's cached rows (its input's) open every layer's, as many in each, else it is refused."""
     body = program.root.body
     inputs = sum(1 for nd in body.nodes if is_input(nd.fn))
     c = census_of(program) if c is None else c
@@ -210,10 +223,11 @@ def rows(program: Program, c: Mapping | None = None) -> Rows:
 
     def row(group: tuple[Slice, ...]) -> Row:
         vs = []
-        for _, j, lo, hi in group:
-            got = [(a, b, v) for a, b, v in by_node.get(j + inputs, ()) if a < hi and b > lo]
+        for space, j, lo, hi in group:
+            got = [(a, b, v) for a, b, v in by_node.get(j if space == "i" else j + inputs, ()) if a < hi and b > lo]
             if sum(min(b, hi) - max(a, lo) for a, b, _ in got) != hi - lo:
-                raise ValueError(f"leaves [{lo}, {hi}) of node {j} are no census value's: a KV row must be its producer's output")
+                raise ValueError(f"leaves [{lo}, {hi}) of {'input' if space == 'i' else 'node'} {j} are no census value's: a KV row "
+                                 "must be its producer's output")
             vs += [v for _, _, v in got]
         born = max(req.born[v] for v in vs)
         return Row(group, born, max(req.last.get(v, born) for v in vs))
@@ -255,33 +269,48 @@ def rows(program: Program, c: Mapping | None = None) -> Rows:
     planes, leaves, bits = kind
     if bits % 8:
         raise ValueError(f"a KV word of {bits} bits is no whole bytes")
-    return Rows(tuple((tuple(row(g) for g in ks), *(tuple(row(pair[g][i]) for g in ks) for i in range(planes - 1))) for ks in layers),
-                leaves * bits // 8, bits // 8, req.steps)
+    groups = [(ks, *(tuple(pair[g][i] for g in ks) for i in range(planes - 1))) for ks in layers]
+    cached = {sum(g[0][0] == "i" for g in plane) for kv in groups for plane in kv}
+    if len(cached) != 1 or any(g[0][0] == "i" for kv in groups for plane in kv for g in plane[min(cached):]):
+        raise ValueError(f"the Program's cached rows (its input's) don't open every layer's KV, as many in each: {sorted(cached)}")
+    return Rows(tuple(tuple(tuple(row(g) for g in plane) for plane in kv) for kv in groups), leaves * bits // 8, bits // 8, req.steps,
+                cached.pop())
 
 
 def rows_doc(rs: Rows) -> dict[str, Any]:
-    """`rs` as JSON: a row as ``[born, last, [[node, lo, hi], ...]]``."""
-    return {"row_bytes": rs.row_bytes, "word_bytes": rs.word_bytes, "steps": rs.steps,
+    """`rs` as JSON: a row as ``[born, last, [[node, lo, hi], ...]]``, the first `cached` of a plane's of an input in place of a
+    node."""
+    return {"row_bytes": rs.row_bytes, "word_bytes": rs.word_bytes, "steps": rs.steps, "cached": rs.cached,
             "layers": [[[[x.born, x.last, [[j, lo, hi] for _, j, lo, hi in x.group]] for x in plane] for plane in kv] for kv in rs.layers]}
 
 
 def rows_of(doc: Mapping[str, Any]) -> Rows:
     """The `Rows` `rows_doc` wrote."""
-    return Rows(tuple(tuple(tuple(Row(tuple(("n", j, lo, hi) for j, lo, hi in g), b, l) for b, l, g in plane) for plane in kv)
-                      for kv in doc["layers"]), int(doc["row_bytes"]), int(doc["word_bytes"]), int(doc["steps"]))
+    c = int(doc.get("cached", 0))
+    return Rows(tuple(tuple(tuple(Row(tuple(("i" if q < c else "n", j, lo, hi) for j, lo, hi in g), b, l) for q, (b, l, g) in enumerate(plane))
+                            for plane in kv) for kv in doc["layers"]), int(doc["row_bytes"]), int(doc["word_bytes"]), int(doc["steps"]), c)
 
 
 def tables(requests: Mapping[str, Rows], arrive: Mapping[str, int], slots: Callable[[str, int], Sequence[int]],
-           block_size: int) -> dict[str, list[int]]:
+           block_size: int, producers: Mapping[str, Sequence[str]] | None = None) -> dict[str, list[int]]:
     """Each request's pages as the engine wrote its KV: `slots(request, step)` the slot of each row it computed at that engine
-    step, in position order (vLLM's slot mapping, position q at ``page * block_size + q % block_size``).  The rows a step wrote
-    are the ones its Program writes there, else it is refused (a prefix-cache hit writes fewer: another request wrote them, and
-    GP-01 models no prefix caching), and so is a page that isn't one page throughout or a request holding a page twice."""
+    step, in position order (vLLM's slot mapping, position q at ``page * block_size + q % block_size``).  A warm request's first
+    `cached` positions are whole pages that `producers[request]` name the request writing each of (`program.prefix_plan`'s
+    producers: scheduled before it, by arrival step, then in `requests`' order), its pages there theirs, and it writes from
+    position `cached`.  The rows a step wrote are the ones its Program writes there, else it is refused, and so is a page that
+    isn't one page throughout or a request holding a page twice."""
     out: dict[str, list[int]] = {}
-    for r, rs in requests.items():
-        born, pages, q = [x.born for x in rs.layers[0][0]], [NULL_PAGE] * -(-rs.positions // block_size), 0
+    for r in sorted(requests, key=lambda r: arrive[r]):
+        rs, ps = requests[r], list((producers or {}).get(r, ()))
+        if rs.cached % block_size or len(ps) != rs.cached // block_size:
+            raise ValueError(f"request {r}'s {rs.cached} cached positions aren't the {len(ps)} pages of {block_size} its producers name")
+        born, pages, q = [x.born for x in rs.layers[0][0]], [NULL_PAGE] * -(-rs.positions // block_size), rs.cached
+        for b, p in enumerate(ps):
+            if p not in out or len(out[p]) <= b:
+                raise ValueError(f"request {r}'s cached page {b} is request {p}'s, which is scheduled after it or holds no page {b}")
+            pages[b] = out[p][b]
         for s in range(rs.steps):
-            got, n = [int(v) for v in slots(r, arrive[r] + s)], born.count(s)
+            got, n = [int(v) for v in slots(r, arrive[r] + s)], born[rs.cached:].count(s)
             if len(got) != n or born[q:q + n] != [s] * n:
                 raise ValueError(f"request {r} wrote {len(got)} KV rows at step {arrive[r] + s}, where its Program writes {n} from position {q}")
             for p, slot in enumerate(got, start=q):
@@ -294,7 +323,7 @@ def tables(requests: Mapping[str, Rows], arrive: Mapping[str, int], slots: Calla
         if q != rs.positions or len(set(pages)) != len(pages):
             raise ValueError(f"request {r}'s {rs.positions} positions took pages {pages[:8]}{'...' if len(pages) > 8 else ''} over {q} rows")
         out[r] = pages
-    return out
+    return {r: out[r] for r in requests}
 
 
 @dataclass(frozen=True)
@@ -330,11 +359,13 @@ def _pool(requests: Mapping[str, Rows], layout: Layout, tables: Mapping[str, Seq
 
 
 def record(requests: Mapping[str, Rows], arrive: Mapping[str, int], payload: Callable[[str, Row], bytes], registration: bytes,
-           layout: Layout, tables: Mapping[str, Sequence[int]], deferral: Deferral | None = None) -> tuple[Header, list[Step]]:
+           layout: Layout, tables: Mapping[str, Sequence[int]], deferral: Deferral | None = None,
+           producers: Mapping[str, Sequence[str]] | None = None) -> tuple[Header, list[Step]]:
     """The session's memory map beside the registered store `registration` digests: each request's rows from its arrival step,
-    a row's served bytes `payload(request, row)`, its pages `tables[request]` (`tables`), its writes where `deferral` has
-    their encodes land.  A slot written while another request's rows in it are still read is refused, and so is a deferral
-    under lifetime cap 1 or one whose appends aren't the circuit's."""
+    a row's served bytes `payload(request, row)`, its pages `tables[request]` (`tables`, a warm request's cached ones those of
+    its `producers`), its writes where `deferral` has their encodes land.  A slot written while another request's rows in it are
+    still read is refused, and so is a cached block its producer hadn't completed by the warm request's first read of it, a
+    deferral under lifetime cap 1 or one whose appends aren't the circuit's."""
     if deferral is not None and deferral.lifetime < 2:
         raise ValueError(f"a session deferring residency under lifetime cap {deferral.lifetime} is refused (memory accounting): "
                          "a block whose encode lands in the window after its append's would be credited at the cap")
@@ -343,11 +374,16 @@ def record(requests: Mapping[str, Rows], arrive: Mapping[str, int], payload: Cal
     filler: dict[int, list[int]] = {}
     done: dict[int, list[tuple[int, bytes, int]]] = {}
     #: each slot's blocks: the step a write first reaches it, the step completing it (None: it stays dirty), its rows' last
-    #: read's step and its digest
-    uses: dict[int, list[tuple[int, int | None, int, bytes]]] = {}
+    #: read's step, its digest, and the request and page index writing it
+    uses: dict[int, list[tuple[int, int | None, int, bytes, str, int]]] = {}
+    #: each warm request's cached blocks: the slot, its producer, the page index, the request and its first and last read's steps
+    cached: list[tuple[int, str, int, str, int, int]] = []
     for r, rs in requests.items():
         if len(tables[r]) * bs < rs.positions or any(not NULL_PAGE < p < pages for p in tables[r]):
             raise ValueError(f"request {r}'s pages {list(tables[r])[:8]} don't hold its {rs.positions} positions in pages 1 to {pages - 1}")
+        ps = list((producers or {}).get(r, ()))
+        if rs.cached % bs or len(ps) != rs.cached // bs:
+            raise ValueError(f"request {r}'s {rs.cached} cached positions aren't the {len(ps)} pages of {bs} its producers name")
         for q, page in enumerate(tables[r]):
             for c in range(ids.shape[1]):
                 plane, i = divmod(c, pool.per_plane)
@@ -358,17 +394,26 @@ def record(requests: Mapping[str, Rows], arrive: Mapping[str, int], payload: Cal
                 for layer, kv in enumerate(rs.layers):
                     got = kv[plane][p0:p1]
                     reach, last = arrive[r] + min(x.born for x in got), arrive[r] + max(x.last for x in got)
+                    if p1 <= rs.cached:
+                        cached.append((pool.slot(layer, page, c), ps[q], q, r, reach, last))
+                        continue
                     if p1 > rs.positions:
-                        uses.setdefault(pool.slot(layer, page, c), []).append((reach, None, last, b""))
+                        uses.setdefault(pool.slot(layer, page, c), []).append((reach, None, last, b"", r, q))
                         continue
                     data = b"".join(payload(r, x) for x in got)
                     if len(data) != len(got) * sb:
                         raise ValueError(f"request {r}'s rows are {sb} bytes, and its payload gave {len(data)} for {len(got)}")
                     uses.setdefault(pool.slot(layer, page, c), []).append(
-                        (reach, arrive[r] + max(x.born for x in got), last, codec.digest(data[off:off + codec.BLOCK_BYTES])))
+                        (reach, arrive[r] + max(x.born for x in got), last, codec.digest(data[off:off + codec.BLOCK_BYTES]), r, q))
+    for slot, p, q, r, reach, last in cached:
+        us = uses.get(slot, [])
+        n = next((n for n, u in enumerate(us) if u[4:] == (p, q)), None)
+        if n is None or us[n][1] is None or us[n][1] > reach:
+            raise ValueError(f"request {r}'s cached page {q} reads slot {slot} from step {reach}, where request {p} completed no block")
+        us[n] = (us[n][0], us[n][1], max(us[n][2], last), *us[n][3:])
     for slot, us in uses.items():
         held = -1
-        for n, (reach, w, last, d) in enumerate(sorted(us, key=lambda u: u[0])):
+        for n, (reach, w, last, d, *_) in enumerate(sorted(us, key=lambda u: u[0])):
             if reach <= held:
                 raise ValueError(f"slot {slot} is written at step {reach} while a request's rows in it are read to step {held}")
             if n == 0:

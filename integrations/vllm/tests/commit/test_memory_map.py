@@ -2,8 +2,10 @@
 of 128 bf16) in pages of 4 slots, so a plane of a page is one 4 KiB block; request r0 (a 4-row prefill, then 5 decode steps) from
 step 0, and r1 (a 4-row prefill, then 1 decode step) from step 1, which ends while r0 runs.  The record is one
 `remote_bandwidth.memory_map.Replay` accepts, a complete block is in it exactly while the requirement has its rows live, and the
-pages are the ones the engine's slots name.  GLM-5.3's MLA: the DSA stand-in's rows are its latent rows, one plane a layer, in
-MLA's latent page, and 1152-byte latent rows lay out 18 blocks a page of 64 slots, rows straddling blocks.
+pages are the ones the engine's slots name.  A warm request, whose first page the prefix cache serves from its producer's: its
+cached rows are its `prefix` input's, it writes none of that page, and the page is held until its own last read.  GLM-5.3's MLA:
+the DSA stand-in's rows are its latent rows, one plane a layer, in MLA's latent page, and 1152-byte latent rows lay out 18 blocks
+a page of 64 slots, rows straddling blocks.
 """
 from __future__ import annotations
 
@@ -46,14 +48,15 @@ def _slot(layer: int, page: int, plane: int) -> int:
     return layer * 12 + page * 2 + plane
 
 
-def _slots(reqs, tables):
-    """vLLM's slot mapping of each request's rows at an engine step, for pages `tables`."""
-    return lambda r, step: [tables[r][q // 4] * 4 + q % 4 for q, x in enumerate(reqs[r].layers[0][0]) if ARRIVE[r] + x.born == step]
+def _slots(reqs, tables, arrive=ARRIVE, bs=4):
+    """vLLM's slot mapping of each request's rows at an engine step (past its cached positions), for pages `tables`."""
+    return lambda r, step: [tables[r][q // bs] * bs + q % bs for q, x in enumerate(reqs[r].layers[0][0])
+                            if q >= reqs[r].cached and arrive[r] + x.born == step]
 
 
 def _engine(reqs, tables, bs=4, payload=_payload):
     """`block(layer, page, c)` of an engine whose caches hold each request's rows at its pages of `bs` slots (unwritten slots
-    zero), a page's planes in order."""
+    zero, a warm request's cached ones its producer's), a page's planes in order."""
     pages: dict[tuple[int, int], bytearray] = {}
     for r, rs in reqs.items():
         plane = bs * rs.row_bytes
@@ -61,7 +64,7 @@ def _engine(reqs, tables, bs=4, payload=_payload):
             for q, page in enumerate(tables[r]):
                 buf = pages.setdefault((layer, page), bytearray(len(kv) * plane))
                 for k, rows in enumerate(kv):
-                    for p in range(bs * q, min(bs * q + bs, rs.positions)):
+                    for p in range(max(bs * q, rs.cached), min(bs * q + bs, rs.positions)):
                         row = payload(r, rows[p])
                         at = k * plane + (p % bs) * len(row)
                         buf[at:at + len(row)] = row
@@ -293,6 +296,63 @@ def test_refusals(reqs):
     with pytest.raises(ValueError, match="KV differs"):
         MM.record({"r0": reqs["r0"], "t": MM.rows(build_program(_phi(TINY), "request", LP=4, T=1).program)}, {"r0": 0, "t": 0},
                   _payload, REGISTRATION, LAYOUT, {"r0": [1, 2, 3], "t": [4, 5]})
+
+
+# -- a warm request: its first page the prefix cache's ------------------------------------------------------------------------
+
+WARM_ARRIVE, PRODUCERS, WARM_TABLES = {"r0": 0, "w": 1}, {"w": ["r0"]}, {"r0": [1, 2], "w": [1, 3, 4]}
+
+
+@pytest.fixture(scope="module")
+def warm() -> dict[str, MM.Rows]:
+    """r0 (a 4-row prefill, then 1 decode step) from step 0, and w from step 1, whose first 4 prompt rows the prefix cache serves
+    from r0's first page: it prefills 4 rows of its own and decodes 3 steps, outliving r0."""
+    return {"r0": MM.rows(build_program(_phi(WIDE), "request", LP=4, T=1).program),
+            "w": MM.rows(build_program(_phi(WIDE), "request", LP=8, T=3, cached=4).program)}
+
+
+def test_a_warm_requests_cached_rows_open_its_layers(warm):
+    rs = warm["w"]
+    assert (rs.cached, rs.positions, rs.steps) == (4, 11, 4)
+    for kv in rs.layers:
+        for plane in kv:
+            # the cached rows are its `prefix` input's, read from its first step to its last
+            assert [x.group[0][0] for x in plane] == ["i"] * 4 + ["n"] * 7
+            assert [x.born for x in plane] == [0] * 8 + [1, 2, 3] and {x.last for x in plane} == {3}
+    assert MM.rows_of(MM.rows_doc(rs)) == rs and warm["r0"].cached == 0
+
+
+def test_a_cached_block_is_its_producers_held_to_the_warm_requests_last_read(warm):
+    assert MM.tables(warm, WARM_ARRIVE, _slots(warm, WARM_TABLES, WARM_ARRIVE), 4, PRODUCERS) == WARM_TABLES
+    layout = MM.Layout(block_size=4, pages=6)
+    head, steps = MM.record(warm, WARM_ARRIVE, _payload, REGISTRATION, layout, WARM_TABLES, producers=PRODUCERS)
+    # r0's first page, complete at step 0, is read by r0 to step 1 and by w to 4: written at 0 and freed at 4 (r0 alone frees it
+    # at 1); w writes none of it, its own first page (positions 4-7) at 1, and leaves its second (8-10) dirty
+    assert _lines(steps) == [(0, [], [(s, 24 + u) for u, s in enumerate(_page(1))]), (1, _page(2), [(s, 28 + u) for u, s in enumerate(_page(3))]),
+                             (2, _page(4), []), (4, sorted(_page(1) + _page(3)), [])]
+    assert _replayed(head, steps[:3]).holds(_slot(0, 1, 0)) == 24
+    assert MM.engine_agrees(warm, layout, WARM_TABLES, steps, _engine(warm, WARM_TABLES)) == {"compared": 8, "equal": 8}
+    # a request arriving in its producer's step reads the block that step completes (`program.prefix_plan`: it hits)
+    same = {"r0": 1, "w": 1}
+    _, steps = MM.record(warm, same, _payload, REGISTRATION, layout, MM.tables(warm, same, _slots(warm, WARM_TABLES, same), 4, PRODUCERS),
+                         producers=PRODUCERS)
+    assert [s.step for s in steps if _slot(0, 1, 0) in s.freed] == [4]
+
+
+def test_a_cached_block_its_producer_did_not_hold_is_refused(warm):
+    layout, slots = MM.Layout(block_size=4, pages=6), _slots(warm, WARM_TABLES, WARM_ARRIVE)
+    with pytest.raises(ValueError, match="request w's 4 cached positions aren't the 0 pages of 4 its producers name"):
+        MM.tables(warm, WARM_ARRIVE, slots, 4)
+    with pytest.raises(ValueError, match="request w's cached page 0 is request r1's, which is scheduled after it or holds no page 0"):
+        MM.tables(warm, WARM_ARRIVE, slots, 4, {"w": ["r1"]})
+    with pytest.raises(ValueError, match="request w's 4 cached positions aren't the 0 pages"):
+        MM.record(warm, WARM_ARRIVE, _payload, REGISTRATION, layout, WARM_TABLES)
+    with pytest.raises(ValueError, match="request w's cached page 0 reads slot 2 from step 1, where request r0 completed no block"):
+        MM.record(warm, {"r0": 2, "w": 1}, _payload, REGISTRATION, layout, WARM_TABLES, producers=PRODUCERS)
+    # a request taking r0's page after r0's last read and before w's
+    with pytest.raises(ValueError, match="written at step 2 while a request's rows in it are read to step 4"):
+        MM.record(warm | {"x": warm["r0"]}, WARM_ARRIVE | {"x": 2}, _payload, REGISTRATION, layout, WARM_TABLES | {"x": [1, 5]},
+                  producers=PRODUCERS)
 
 
 # -- GLM-5.3's MLA: one plane of latent rows --------------------------------------------------------------------------------
