@@ -30,8 +30,7 @@ knowledge's, not soundness's: a model claim about the honest prover. The develop
 |---|---|---|---|
 | `Assumptions.SHA512CRStrict` | `cr/sha-512` | `q²/2^513`, for at most `q` evaluations on every outcome | the compiled and knowledge terms' collision finders, `δ_tree`, and the registered reads' `δ_reg`, and, in `CROnly`, the link finders stopped at `q` |
 | `Assumptions.SHA512CRExpected` (A2) | `ecr/sha-512` | `T/2^256`, for `T` evaluations in expectation | the link finders (`LinkCR`, `hCR`) |
-| `Assumptions.UniformRandomBytes` (A3) | `uniform/io-getrandombytes` | every event has its probability for uniform bytes, the CSPRNG idealized as exactly uniform | the unit draw (`ht`; `hA3` in the headline) |
-| `Assumptions.UniformRandomBytesTest` (A3 per test) | `uniform/io-getrandombytes` | the theorem's one event has its probability for uniform bytes within `η`, either way, `η` the CSPRNG's distinguishing advantage against it; `η` enters the bound | zero knowledge: the commitments' salts (`Discharge.ZkView.OsSalts`, `recursiveZK_os_gap`) and the ZK server's tape, the frames' draws and the tap's reads (`Claims.ZKServer.OsTape`, `zkServerLeanOs`) |
+| `Assumptions.UniformRandomBytes` (A3); per test, `UniformRandomBytesTest` | `uniform/io-getrandombytes` | every event has its probability for uniform bytes, the CSPRNG idealized; per test, one event, within `η` | the unit draw (`ht`; `hA3` in the headline); per test, zero knowledge's salts (`Discharge.ZkView.OsSalts`, `recursiveZK_os_gap`) and the ZK server's tape (`Claims.ZKServer.OsTape`) |
 | none: the model's coins (A6) | `uniform/flock-coin-server` | each round's coins uniform, drawn after the prover's message; under `--zk`, committed at `Hello` and opened after it, at a cost of `N·2^-256` (A6, tree coins) | the round coins |
 | `Assumptions.Zk.RecordCustodyZK` | `live-verifier` | none: the record `verify --zk` reads is the one the verifier's coin server wrote for the live session (`RecordsLiveZK`), and its draw file the one `flock-verify draw` printed for the verifier's own draw (`DrawFileZK`) | `--zk`'s `hRec` and `hDraw` (`zk_session_sound_custody`, `hCust`; `hDraw` at each draw of `Law.execOS` is `drawOkZK_of_exec`); at `J` tables `Assumptions.Zk.RecordCustodyZKJ`, the same at `RecordsLiveZKJ` and the subset sampling design (`zk_session_soundJ_custody`; `hDraw` is `drawOkZKJ_of_file`), and under hidden outputs (`zk_session_soundHJ_custody`; `hDraw` is `drawOkZKHJ_of_file`) |
 | none: the model's Ligerito prover (`LigProver`) | none: a model claim, as A6's | the honest Ligerito prover's level-≥ 1 bytes are a function of the table, the statement, the public coins, the restart and fresh salts; nothing proves it (`LigProver`'s docstring, `Discharge/Composed/Inner.lean`) | zero knowledge's view, not soundness: `Composed.zk_session_view`, `zk_session_composed` and `ZkEveryCoin.zk_session_view_all` hold for every such prover `P`, as do `ZkHidden.zk_session_viewH`, `zk_session_viewHJ` and `zk_session_composedHJ` |
@@ -98,39 +97,15 @@ verifier's unit draw and, per test, for zero knowledge: the commitments' salts a
 
 - **Statement.** A byte source is a finite probability space and, on each outcome, the first `L i` bytes of each stream
   `i`. `UniformRandomBytes L t` says every event about those bytes has the probability it has for independent uniform
-  bytes; the unit draw takes it. `UniformRandomBytesTest L t E η`, A3 per test, says the one event `E` has that
-  probability within `η`, either way, as A4 is stated; zero knowledge takes it at the event each theorem bounds, and `η`
-  enters the bound. What A3 assumes of the operating system is that these reads are such a source, each call's bytes
-  independent of every earlier call's: the verifier's calls to `IO.getRandomBytes` while it draws its units, the
-  firewall's frame's and tap's while they serve a session, and the prover's and a registrant's reads of their salts.
-- **Why per test.** The every-event form is refutable at the deployed source. Linux's CRNG (5.18 and later,
-  `drivers/char/random.c`) answers one read past 32 bytes with a ChaCha20 stream under a 256-bit key derived for that
-  call, so the event that the bytes are among the source's outputs has probability 1 there and at most `2^(256 - 8n)` at
-  `n` uniform bytes: any source with fewer outcomes than byte strings fails it
-  (note:proofs/20261018T1925Z-report-redteam-zk-server-os, P4). Its zero is an idealization, the CSPRNG taken as exactly
-  uniform; the true bound carries the CSPRNG's distinguishing advantage against the theorem's test, which is the per-test
-  form's `η`. A salt is 192 bytes and a rep's draws are `drawBytes` bytes, so zero knowledge takes the per-test form.
-  The unit draw still takes the every-event form, under the same idealization, since its reads are past 32 bytes too.
-- **Why it is not stated about `IO.getRandomBytes`.** To Lean's logic an `IO` action is a function of the world and
-  `IO.getRandomBytes` an opaque constant, so a `Prop` saying its bytes are random would be refutable, and every theorem
-  taking it vacuous. At run time, Lean v4.34.0's runtime implements it as `lean_io_get_random_bytes`
-  (`src/runtime/io.cpp`), which reads `/dev/urandom` on Unix and calls `BCryptGenRandom` on Windows. Re-read it at every
-  toolchain bump. What ties the statement to the verifier: `assumption-notes/a3-uniform-bytes.md`.
-- **Its scope, the masks included.** Each rep's frame reads its draws in one call at its start (`flock-firewall frame`:
-  `Frame.cmd` is `Frame.cmdWith IO.getRandomBytes`, and `Frame.drawsWith` refuses a read of any other length): the pads
-  `h`, the dot-product mask `μ`, the inner rows' padding, `τ`'s salt and the pads tree's salts. The tap
-  (`flock-firewall tap`) serves the prover's every other read: the mask slot's words, level 0's hiding, the other trees'
-  salts and the coin tree's nonce. So the prover's masks and Reed–Solomon padding are inside A3's scope, as the salts
-  are, and no premise on a stream generator is left on any of them (`live/src/zk_hooks.rs`).
-- **What is outside it.** A VM snapshot restored more than once repeats the kernel's CSPRNG state unless the kernel
-  reseeds on a VM generation change (vmgenid, Linux 5.18 and later, with hypervisor support) or mixes in a hardware RNG.
-  For one-time pads a repeated state is total: two sessions under one pad reveal the XOR of their values. A
-  `seed-injection` build (the selftest's) expands the prover's values from an injected `ProverSeed` with ChaCha20: no
-  record from such a build is evidence for a theorem that takes A3.
-- **Falsification.** No test runs: A3 is an assumption about the world, scoped by platform (8 Oct ruling), and the
-  lock's `shape.conjectures`, the one place a falsification test is recorded, holds mathematical conjectures only. What
-  checks it is the citation of `io.cpp` and `random.c`, re-read at every toolchain bump and on any platform but Linux.
-- **Where it is used, and the salts** (Daniel, 9 Oct, decisions 4(a) and 4(c)): `assumption-notes/a3-uniform-bytes.md`.
+  bytes; the unit draw takes it. `UniformRandomBytesTest L t E η` (A3 per test, stated as A4 is) says one event `E`
+  has it within `η`; zero knowledge takes it at the event each theorem bounds, and `η` enters the bound. A3 assumes
+  the operating system's reads are such a source, each call independent of every earlier one: the verifier's
+  `IO.getRandomBytes` for its units, the firewall's frame and tap, and the prover's and a registrant's salts.
+- **Why per test, and the rest.** Any source with fewer outcomes than byte strings refutes the every-event form, as
+  Linux's CRNG does past 32 bytes: its zero idealizes the CSPRNG, and `η` is the CSPRNG's advantage against the
+  theorem's test. `assumption-notes/a3-uniform-bytes.md` has the argument, why A3 isn't stated about
+  `IO.getRandomBytes`, what ties it to the verifier, its scope (the masks included), what is outside it, why no
+  falsification test runs, and where it is used, the salts among them (Daniel, 9 Oct, decisions 4(a) and 4(c)).
 - **Upstream:** watch entry `A3-uniform-bytes`.
 
 **A6. The coin server's round coins are independent uniform** (`uniform/flock-coin-server`), for the session's
