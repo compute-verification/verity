@@ -797,10 +797,18 @@ class _ProcessEngine:
         self.closed = True
         try:
             if self.process.is_alive():
-                self._ask("close")
+                try:
+                    self.conn.send(("close", None))
+                    self.conn.recv()
+                except (EOFError, ConnectionResetError, BrokenPipeError):
+                    # A worker that sent its error has left its loop and is closing its engine on its own; raising here
+                    # would replace that error, which the caller is propagating, with this one.
+                    pass
         finally:
             self.process.join()
             self.conn.close()
+        if self.process.exitcode:
+            raise RuntimeError(f"benchmark engine process exited with code {self.process.exitcode} while closing")
 
 
 class ProcessEngineFactory:

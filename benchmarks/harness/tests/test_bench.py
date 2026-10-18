@@ -447,6 +447,37 @@ def test_a_dead_engine_process_reports_its_own_error_not_a_connection_reset():
         silent.gate(point)
 
 
+def test_closing_an_engine_whose_worker_already_sent_its_error_keeps_that_error():
+    """A gate that fails in the worker (an arm's refusal) ends the worker's loop; the runner's cleanup then closes the
+    engine, and that close must not replace the gate's error with a connection error (r20261018-205649-abfc)."""
+
+    from verity_bench.vllm.runner import _ProcessEngine
+
+    class ExitingConn:
+        def send(self, _):
+            pass
+
+        def recv(self):
+            raise EOFError
+
+        def close(self):
+            pass
+
+    class ExitingProcess:
+        def __init__(self, code):
+            self.exitcode = code
+
+        def is_alive(self):
+            return True
+
+        def join(self):
+            pass
+
+    _ProcessEngine(ExitingProcess(0), ExitingConn(), {}).close()
+    with pytest.raises(RuntimeError, match="exited with code 1 while closing"):
+        _ProcessEngine(ExitingProcess(1), ExitingConn(), {}).close()
+
+
 def test_local_checkpoint_is_content_bound(tmp_path):
     (tmp_path / "config.json").write_bytes(b"config")
     (tmp_path / "weights.safetensors").write_bytes(b"weights")
