@@ -98,6 +98,10 @@ def Piece.at (q : Piece) (t : Nat) : Int := q.base + t * q.stride
 
 def Piece.count (q : Piece) : Nat := q.rows * q.len
 
+/-- `q`'s elements `e` as gates `A + e * F` of width `w`: a batch's output read where its members' returns make one run. -/
+def Piece.affine (q : Piece) (w : Nat) (A F : Int) : Piece :=
+  { q with tgt := .gate w, base := A + q.base * F, stride := q.stride * F, rowStride := q.rowStride * F }
+
 /-- Row `r` of `q`. -/
 def Piece.row (q : Piece) (r : Nat) : Piece := { q with base := q.base + r * q.rowStride, rows := 1, rowStride := 0 }
 
@@ -349,10 +353,7 @@ def down (c : Ctx) : Nat → Piece → Except String (Array Seg)
           let g := r.segs[0]!.ps[0]!
           if let .gate w := g.tgt then
             if g.rows ≤ 1 && g.len == L && (L == 1 || G == L * g.stride) then
-              let F : Int := if L == 1 then G else g.stride
-              let A : Int := o + g.base
-              return #[.one { q with tgt := .gate w, base := A + q.base * F, stride := q.stride * F,
-                                     rowStride := q.rowStride * F }]
+              return #[.one (q.affine w (o + g.base) (if L == 1 then G else g.stride))]
         if q.rows > 1 then byRow ()
         else if q.stride == 1 then
           let a := q.base.toNat
@@ -643,6 +644,13 @@ def novelWidth (segs : Array Seg) : Nat := Id.run do
 
 def isInputNode (P : Prog) (n : Node) : Bool := isInputId (P.defs[n.fn]!).key
 
+/-- Per IU `u < n`, its number of gates: those of its root nodes, root node `k` (in IU `own[k]`) holding gates
+`[offs[k], offs[k + 1])`. -/
+def sizes (offs : Array Nat) (own : Array (Option Nat)) (n : Nat) : Array Nat :=
+  (List.range own.size).foldl (fun s k => match own[k]! with
+    | some u => s.modify u (· + (offs[k + 1]! - offs[k]!))
+    | none => s) (Array.replicate n 0)
+
 def evaluate (j : Json) : Except String Json := do
   let i ← parse j
   let P ← match decode i.program.toUTF8 with
@@ -679,11 +687,10 @@ def evaluate (j : Json) : Except String Json := do
   if n > K then throw "empty-iu"
   let used := usedOf own
   if !(List.range n).all used.contains then throw "empty-iu"
-  let mut size := Array.replicate n 0
+  let size := sizes offs own n
   let mut into : Array (Array Seg) := Array.replicate n #[]
   for k in [0:K] do
     let some u := own[k]! | continue
-    size := size.modify u (· + gatesOf k)
     for s in reads[k]! do
       let some q := s.ps[0]? | continue
       if s.count == 0 then continue
