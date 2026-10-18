@@ -5,6 +5,9 @@ the size of the circuit that description unrolls to (README.md).
       Serve_v1 at each config, word-level and on bits (`lift.on_bits`), as an NCI instance (θ its registered inputs, one
       IU per Call), checked by `nci-check` (`NciCheck.Desc`) and, where the unrolled circuit has at most GATES gates, by
       `nci-check --unrolled` (`NciCheck.check`) on the instance expanded gate by gate; DIR/results.json.
+  store RUN [--runs-dir DIR]
+      a `job.sh` run's results.json (`research fetch RUN --all`) as one evidence/v1 record, naming the run and its
+      commit; prints its art: id. From a VM with the store's keys: a node's shell has none.
   plot ART --to PNG
       the results of `art:ART` (a results.json in the store), time against description bytes and against unrolled gates.
 """
@@ -157,6 +160,18 @@ def measure(args) -> int:
     return 0
 
 
+def store(args) -> int:
+    subprocess.run(["research", "fetch", args.run, "--all"], check=True, capture_output=True)
+    run = args.runs_dir / args.run
+    res = json.loads((run / "out/results.json").read_text())
+    meta = {"benchmark": "verifier_cost", "schema": res["schema"], "verifier": res["verifier"], "run": args.run,
+            "commit": json.loads((run / "remote.json").read_text())["source_sha"]}
+    p = subprocess.run(["research", "data", "put", "--kind", "evidence/v1", "--file", str(run / "out/results.json"),
+                        "--preserve", "--meta", json.dumps(meta)], check=True, capture_output=True, text=True)
+    print(p.stdout.strip().splitlines()[-1])
+    return 0
+
+
 def plot(args) -> int:
     import matplotlib
 
@@ -197,11 +212,14 @@ def main(argv: list[str] | None = None) -> int:
     m.add_argument("--unrolled-max", type=int, default=5_000_000)
     m.add_argument("--repeat", type=int, default=3)
     m.add_argument("--exe", type=Path, default=EXE)
+    s = sub.add_parser("store")
+    s.add_argument("run")
+    s.add_argument("--runs-dir", type=Path, default=Path.home() / ".research/runs")
     p = sub.add_parser("plot")
     p.add_argument("art")
     p.add_argument("--to", required=True)
     args = ap.parse_args(argv)
-    return measure(args) if args.cmd == "measure" else plot(args)
+    return {"measure": measure, "store": store, "plot": plot}[args.cmd](args)
 
 
 if __name__ == "__main__":
