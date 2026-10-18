@@ -9,10 +9,12 @@ them.  Instead:
 
 * **Public parameters**: the model, the batch slots (vLLM's ``max_num_seqs``), ``T`` rows a step (``max_num_batched_tokens``:
   the scheduler never puts more of a step's tokens in a linear), ``S`` steps and the max tokens.
-* **A side**: each (step s, linear w) call's A table holds all T slot rows (`commit`'s a-table: K s8 bytes, then the f32
-  scale).  The step's real rows fill slots 0 .. m - 1, and every other slot is an empty row, committed like the rest: zero
-  bytes with scale 0.  Since a served row's scale is never 0, "empty" is read from the committed row.  Steps past the last
-  served one are all empty.  A row count never comes from the step's tokens, its batch or EOS.
+* **A side**: each (step s, linear w) call's A table holds all T slot rows, as AROW's row table (`commit.a_table`,
+  `verity.ml.commitments.row_table`: K s8 bytes, then the f32 scale).  The step's real rows fill slots 0 .. m - 1, and every
+  other slot is an empty row, committed like the rest: zero bytes with scale 0.  Since a served row's scale is never 0,
+  "empty" is read from the committed row.  Steps past the last served one are all empty.  A row count never comes from the
+  step's tokens, its batch or EOS.  Step s's A root is the tree over its A tables' roots (`step_roots`); AROW's step root
+  replaces it once AROW computes it at serve time.  The window's A table is the tree over the steps' A roots.
 * **Units and positions**: the call's units are its T/32 row blocks by N/32 column blocks, at positions
   s·U + off(w) + u.  Here U = Σ_w (T/32)(N_w/32), off(w) is the sum over the linears before w, and u runs row block by row block.
   The units' count, S·U, is fixed by the public parameters.
@@ -25,7 +27,7 @@ them.  Instead:
   There is one receipt tree per call.
 * **Coins** (``--coins``): seeded, the option's one salt, opened at install before serving; or live, a round a step from
   the proof service's challenger (`pouw.window.live_challenger`, `sampled_proofs.challenger.LiveRecord`).  Step s's round
-  root, over its A-table and admit roots, is recorded before round s's coin opens, and the step's units take the round's
+  root, over its A root and its admit root, is recorded before round s's coin opens, and the step's units take the round's
   salt (`h1tile.live_salt`: `window.round_key(...).stream(0, 64)`), so every candidate and every selection a round's noise
   reads is committed before that noise's coin.
 * **Credit**: only the admitted slots (`credit.tally`, in 16-bit limbs, every tally unit always proved): Cr = Σ admitted
@@ -49,7 +51,9 @@ In order, into OUT (`record.json` throughout, `manifest.json` at the end, the op
             OUT, which the run's custody uploads
   gate      drawn units, live and dead, of real and empty steps, against the gated `h1tile.reference` (receipt) and the
             served integer product (z); controls: the unit at the next position, a flipped receipt bit, root(A) rebuilt (and
-            a tampered row, real or empty), root(B) rebuilt (and a tampered row), the admit root rebuilt from the rows, a
+            a tampered row, real or empty), the tile's 32 A rows opened against root(A) and the step's A root and A' = -b
+            (the tile's B rows negated) refused there, its re-commitment moving both roots (CMP-38), root(B) rebuilt (and a
+            tampered row), the admit root rebuilt from the rows, a
             dead unit's rows empty and its skipped noise real work, a tampered empty row admitted, a live unit not empty
 
     cd integrations/vllm; PYTHONPATH=.:../..:../../tools/research/src:../../benchmarks/pouw/served_h1
@@ -216,6 +220,18 @@ def chunk_of(k: int) -> int:
     return max(16, (1 << 22) // k)
 
 
+def step_roots(window: str, s: int, cs: list[dict]) -> dict:
+    """Step s's roots from its calls (in linear order): `a_step`, the tree over its A tables' roots (`CM.step_root`, domain
+    'a-step'), which AROW's step root replaces once AROW computes it at serve time; `admit_step`, over its admit roots
+    ('admit-step'); and `root`, the round root over the two ('round'), which `LiveRecord` records before round s's coin."""
+    fields = {"window": window, "step": s, "linears": len(cs)}
+    a_step = CM.step_root(CM.domain(fields, len(cs), "a-step"), [bytes.fromhex(c["root_a"]) for c in cs])
+    admit_step = CM.step_root(CM.domain(fields, len(cs), "admit-step"), [bytes.fromhex(c["root_admit"]) for c in cs])
+    r_fields = {"window": window, "step": s, "leaves": "a-step root, admit-step root"}
+    root = CM.step_root(CM.domain(r_fields, 2, "round"), [a_step, admit_step])
+    return {"fields": r_fields, "a_step": a_step, "admit_step": admit_step, "root": root}
+
+
 def run(a: argparse.Namespace) -> dict:
     import multiprocessing as mp
     import torch
@@ -318,20 +334,14 @@ def run(a: argparse.Namespace) -> dict:
                  receipts_s=round(time.perf_counter() - t, 3), salt=salt.hex())
         data[i]["receipts"], data[i]["live"] = rc, lu
 
-    def round_root(s: int, roots: list[bytes]) -> tuple[dict, bytes]:
-        fields = {"window": window, "step": s, "linears": len(roots) // 2, "leaves": "a-table, admit per linear"}
-        return fields, CM.levels(CM.domain(fields, len(roots), "round"), roots)[-1][0]
-
-    def round_roots(cs: list[dict]) -> list[bytes]:
-        return [bytes.fromhex(c[k]) for c in cs for k in ("root_a", "root_admit")]
-
     def close_round(s: int) -> None:
-        """Round s (step s) under live coins: its root over the step's A-table and admit roots, recorded before its coin
+        """Round s (step s) under live coins: its root over the step's A root and admit root, recorded before its coin
         opens; then the step's receipts under the round's 64-byte salt (`h1tile.live_salt`)."""
-        fields, root = round_root(s, round_roots([calls[i] for i, _ in pending]))
-        opening = rounds.record(root)
-        salt = HT.live_salt(lch.commitment, opening.coin, s, root)
-        round_log.append({"round": s, "root": root.hex(), "fields": fields, "opening": opening.to_json()})
+        st = step_roots(window, s, [calls[i] for i, _ in pending])
+        opening = rounds.record(st["root"])
+        salt = HT.live_salt(lch.commitment, opening.coin, s, st["root"])
+        round_log.append({"round": s, "root": st["root"].hex(), "fields": st["fields"], "a_step": st["a_step"].hex(),
+                          "admit_step": st["admit_step"].hex(), "opening": opening.to_json()})
         for i, slots in pending:
             receipts(i, slots, salt)
         pending.clear()
@@ -349,15 +359,16 @@ def run(a: argparse.Namespace) -> dict:
         scales[:m] = sa
         fields = {"window": window, "step": s, "linear": w, "module": name, "slots": t_max, "k": k, "schema": CM.SCHEMA}
         dom = CM.domain(fields, t_max, "a-table")
-        rows = CM.s8_rows(slots.cpu().numpy(), scales)
-        lv = CM.levels(dom, [CM.leaf(dom, key, f"a/{s}/{w}", r, bytes(row))[0] for r, row in enumerate(rows)])
+        q = slots.cpu().numpy()
+        rows = CM.s8_rows(q, scales)
+        root_a = CM.a_table(dom, key, f"a/{s}/{w}", q, scales).root
         bits = CR.admit(rows)
         ws = CR.words(bits)
         s_fields = {"window": window, "step": s, "linear": w, "module": name, "slots": t_max, "schema": CM.SCHEMA}
         s_dom = CM.domain(s_fields, len(ws), "admit")
         s_lv = CM.levels(s_dom, [CM.leaf(s_dom, key, f"s/{s}/{w}", q, x)[0] for q, x in enumerate(CR.word_rows(ws))])
         calls.append({"step": s, "linear": w, "module": name, "layer": layer, "site": site, "k": k, "n": n, "slots": t_max,
-                      "base": s * u_step + offs[w], "units": (t_max // 32) * (n // 32), "root_a": lv[-1][0].hex(),
+                      "base": s * u_step + offs[w], "units": (t_max // 32) * (n // 32), "root_a": root_a.hex(),
                       "root_b": h1.weight_roots[w].hex(), "a_domain": dom.domain_id.hex(), "a_fields": fields,
                       "root_admit": s_lv[-1][0].hex(), "admit_fields": s_fields, "selected": int(bits.sum()),
                       "scale_only": len(CR.scale_only(rows))})
@@ -489,15 +500,20 @@ def run(a: argparse.Namespace) -> dict:
     credit["proof_plan"] = CR.proof_plan(len(calls), t_max, s_max, SITES, s_max * u_step)
     rec.step("credit", credit)
 
+    by_step: dict[int, list[dict]] = {}
+    for c in calls:
+        by_step.setdefault(c["step"], []).append(c)
+    steps = [step_roots(window, s, by_step[s]) for s in sorted(by_step)]
+    w_fields = {"window": window, "steps": len(steps)}
+    a_window = CM.step_root(CM.domain(w_fields, len(steps), "a-window"), [st["a_step"] for st in steps])
+    a_roots = {"a_step": [st["a_step"].hex() for st in steps], "admit_step": [st["admit_step"].hex() for st in steps],
+               "a_window": a_window.hex(), "a_window_fields": w_fields}
     coins = {"mode": a.coins, "ok": True}
     if live:
         roots = [bytes.fromhex(r["root"]) for r in round_log]
         openings = [Ch.LiveOpening.from_json(r["opening"]) for r in round_log]
         commitment = Ch.LiveCommitment.from_json(lch.commitment.to_json())
-        by_step: dict[int, list[dict]] = {}
-        for c in calls:
-            by_step.setdefault(c["step"], []).append(c)
-        recomputed = [round_root(r["round"], round_roots(by_step[r["round"]]))[1] == root
+        recomputed = [steps[r["round"]]["root"] == root and r["a_step"] == steps[r["round"]]["a_step"].hex()
                       and {c["salt"] for c in by_step[r["round"]]}
                       == {Wd.round_key(commitment, o.coin, r["round"], root).stream(0, 64).hex()}
                       for r, root, o in zip(round_log, roots, openings)]
@@ -506,10 +522,12 @@ def run(a: argparse.Namespace) -> dict:
                      rounds_cover_steps=[r["round"] for r in round_log] == list(range(s_max)),
                      roots_and_keys_recomputed=all(recomputed), coin_bytes=len(openings[0].coin) if openings else None,
                      release_log=list(getattr(rounds, "log", ())),
-                     rule="round s = step s: its root is the frame-v3-sha512 tree over the step's (A-table root, admit "
-                          "root) pairs in linear order (domain identity_digest_sha512('verity/pouw/served-h1/round/v0', "
-                          "{window, step, linears, leaves})), recorded through sampled_proofs.challenger.LiveRecord before "
-                          "round s's pouw/round coin opens; the step's 64-byte H1 salt is h1tile.live_salt = "
+                     rule="round s = step s: its root is the frame-v3-sha512 tree over [the step's A root, its admit "
+                          "root] (domain identity_digest_sha512('verity/pouw/served-h1/round/v0', {window, step, leaves})); "
+                          "the A root (roots.a_step) is the tree over the step's A-table roots, AROW's row tables, in "
+                          "linear order ('a-step', {window, step, linears}), the admit root likewise ('admit-step'); it "
+                          "is recorded through sampled_proofs.challenger.LiveRecord before round s's pouw/round coin "
+                          "opens; the step's 64-byte H1 salt is h1tile.live_salt = "
                           "window.round_key(commitment, coin_s, s, root_s).stream(0, 64), the tile's coin port; each "
                           "tile derives its own noise from it, its public position and its roots, inside the tile")
         coins["ok"] = bool(coins["rounds_reason"] is None and coins["rounds_cover_steps"] and all(recomputed))
@@ -523,7 +541,13 @@ def run(a: argparse.Namespace) -> dict:
                               "pouw_h1.program_salt: SHA-512(b'verity/pouw/h1/program-salt/v1\\0' || the epoch's 32-byte "
                               "salt), the epoch's salt audit.Epoch.start's from the challenger's salt coin opened after the "
                               "weights' root (pouw.weights_root over every layer's pouw_h1.weight_root)"),
-                "roots": {"a": "the call's a-table root (this window's, T slot rows; not yet the Commit's Int8RowQuant_v1 tap)",
+                "roots": {"a": "the call's a-table root: AROW's row table (verity.ml.commitments.row_table) over its T slot "
+                               "rows, under this window's per-call domain and salts",
+                          "a_step_rule": "per step, the tree over its calls' a-table roots in linear order (domain "
+                                         "'a-step'), committed before the step's coin; AROW's step root replaces it once "
+                                         "AROW computes it at serve time",
+                          "a_window_rule": "the window's A table: the tree over the steps' A roots (domain 'a-window')",
+                          **a_roots,
                           "b": "the option's pouw_h1.weight_root of the layer (a stand-in, pouw_h1.ROOTS)"},
                 "positions": "call (s, w) at base s U + off(w), U = sum_w (T / 32)(N_w / 32), off(w) the sum over linears "
                              "before w; unit u = slot rows 32 (u // (N_w / 32)) .., weight rows 32 (u % (N_w / 32)) ..",
@@ -536,7 +560,8 @@ def run(a: argparse.Namespace) -> dict:
                            "t": "tally limb i: u16 LE, the per (step, site) limbs in step-major order, the per-site limbs, "
                                 "the level",
                            "schema": CM.SCHEMA, "tree": "frame-v3-sha512, one per call and kind (one tally tree)",
-                           "domain": "identity_digest_sha512('verity/pouw/served-h1/<a-table|admit|receipts|tally>/v0', "
+                           "domain": "identity_digest_sha512('verity/pouw/served-h1/<a-table|admit|receipts|tally|a-step|"
+                                     "admit-step|round|a-window>/v0', "
                                      "fields), owner -1, ranks 0 .. count - 1",
                            "salts": "SHA-512(SALT_TAG || key || u32be len(label) || label || u64be i || u8 c), c = 0..2, "
                                     "labels a/<s>/<w>, s/<s>/<w>, r/<s>/<w> and t; the key is the prover's"},
@@ -638,7 +663,29 @@ def gate(a, calls: list[dict], data: list[dict], levels: list, layers: list, h1,
         leaf_f = CM.leaf(dom, key, label, u, bytes(flipped))[0]
         a_dom = CM.domain(c["a_fields"], t_max, "a-table")
         a_label = f"a/{c['step']}/{c['linear']}"
-        a_root = CM.levels(a_dom, [CM.leaf(a_dom, key, a_label, r, bytes(x))[0] for r, x in enumerate(a_rows)])[-1][0]
+        q = slots.numpy()
+        a_tab = CM.a_table(a_dom, key, a_label, q, scales)
+        a_root = a_tab.root
+        ranks = range(32 * ri, 32 * ri + 32)
+        opening = a_tab.open(ranks)
+        neg_b = (-weight.cpu()[32 * cj:32 * cj + 32].to(torch.int16)).clamp(-128, 127).to(torch.int8).numpy()
+        q_forged = q.copy()
+        q_forged[32 * ri:32 * ri + 32] = neg_b
+        forged_rows = CM.s8_rows(q_forged, scales)
+
+        def witness(rows_) -> dict:
+            return {r_: (bytes(rows_[r_]), 8 * rows_.shape[1], CM.salt(key, a_label, r_)) for r_ in ranks}
+
+        step_cs = [cc for cc in calls if cc["step"] == c["step"]]
+        at = step_cs.index(c)
+        s_dom = CM.domain({"window": c["a_fields"]["window"], "step": c["step"], "linears": len(step_cs)}, len(step_cs), "a-step")
+        s_lv = CM.levels(s_dom, [bytes.fromhex(cc["root_a"]) for cc in step_cs])
+        forged_root = CM.a_table(a_dom, key, a_label, q_forged, scales).root
+        forged_step = CM.step_root(s_dom, [forged_root if cc is c else bytes.fromhex(cc["root_a"]) for cc in step_cs])
+        cmp38 = {"a_opens_against_step_root": CM.RT.verify_rows(root_a, a_dom.domain_id, t_max, opening, witness(a_rows))
+                 and CM.verify(s_dom, s_lv[-1][0], at, root_a, CM.path(s_lv, at)),
+                 "a_neg_b_refused": not CM.RT.verify_rows(root_a, a_dom.domain_id, t_max, opening, witness(forged_rows)),
+                 "a_neg_b_moves_roots": forged_root != root_a and forged_step != s_lv[-1][0]}
         row = 32 * ri + rng.randrange(32)
         t_rows = a_rows.copy()
         t_rows[row, rng.randrange(t_rows.shape[1])] ^= 1
@@ -656,7 +703,7 @@ def gate(a, calls: list[dict], data: list[dict], levels: list, layers: list, h1,
              "z_equal_served_product": z_ok, **sel,
              "receipt_opens": CM.verify(dom, root_r, u, leaf, sibs),
              "flipped_receipt_refused": not CM.verify(dom, root_r, u, leaf_f, sibs),
-             "a_root_rebuilt": a_root == root_a, "tampered_a_row_changes_root": a_tampered != root_a,
+             "a_root_rebuilt": a_root == root_a, **cmp38, "tampered_a_row_changes_root": a_tampered != root_a,
              "tampered_row_was_empty": row >= d["m"], "served_rows_from_scales": useful == d["m"],
              "b_root_rebuilt": b_roots[c["linear"]][0] == root_b,
              "tampered_b_row_changes_root": b_roots[c["linear"]][1] != root_b}

@@ -3,7 +3,8 @@ K = 64 and 128 (a partial row block left uncovered), and saturated operands at K
 position, salt and roots and every operand byte of its tile.  A call's receipt tree (`served_h1/commit.py`) is the same built in
 pool tasks or leaf by leaf, opens a unit's leaf, and refuses a flipped bit or another call's salt label.  Under a call's admit
 bits (`served_h1/credit.py`) a dead unit's receipt is the canonical empty receipt and a live unit's the reference's, and the
-tally's limbs are 16-bit."""
+tally's limbs are 16-bit.  A call's A table is AROW's row table, a tile's rows open against it and the step's A root, and
+A' = -b is refused (CMP-38)."""
 from __future__ import annotations
 
 import importlib.util
@@ -101,6 +102,41 @@ def test_dead_units_skip_noise_and_receipt():
         assert want == RC.reference(call, SALT, 9, RA, RB, u)[1]
         ungated = RC.reference(call, SALT, 9, RA, RB, u, gated=False)[1]
         assert (want == ungated) if u in live else (not any(want) and any(ungated))
+
+
+def test_a_opens_against_the_step_root_and_refuses_neg_b():
+    """CMP-38 on PoUW's side: a call's A table is AROW's row table (`row_table.commit` over `s8_row`s gives the root `leaf` and
+    `levels` give), a tile's 32 A rows open against it and the step's A root, A' = -b (the tile's B rows negated) is refused
+    against the committed root, and re-committing A' moves both roots."""
+    from verity.ml.commitments import row_table as RT
+
+    t, k, key = 64, 64, bytes(range(64))
+    calls = [_padded_call(5, t, 64, k, 20 + w) for w in range(3)]
+    scales = np.zeros(t, dtype=np.float32)
+    scales[:5] = 0.25
+    doms = [CM.domain({"window": "w", "step": 0, "linear": w, "slots": t, "k": k}, t, "a-table") for w in range(3)]
+    tabs = [CM.a_table(doms[w], key, f"a/0/{w}", calls[w].a.numpy(), scales) for w in range(3)]
+    rows = [CM.s8_rows(c.a.numpy(), scales) for c in calls]
+    for w in range(3):
+        leaves = [CM.leaf(doms[w], key, f"a/0/{w}", r, bytes(x))[0] for r, x in enumerate(rows[w])]
+        assert tabs[w].root == CM.levels(doms[w], leaves)[-1][0]
+    s_dom = CM.domain({"window": "w", "step": 0, "linears": 3}, 3, "a-step")
+    s_lv = CM.levels(s_dom, [tb.root for tb in tabs])
+    w, ri, cj = 1, 0, 1
+    ranks = range(32 * ri, 32 * ri + 32)
+    opening = tabs[w].open(ranks)
+
+    def witness(rs) -> dict:
+        return {r: (bytes(rs[r]), 8 * rs.shape[1], CM.salt(key, f"a/0/{w}", r)) for r in ranks}
+
+    assert RT.verify_rows(tabs[w].root, doms[w].domain_id, t, opening, witness(rows[w]))
+    assert CM.verify(s_dom, s_lv[-1][0], w, tabs[w].root, CM.path(s_lv, w))
+    q = calls[w].a.numpy().copy()
+    q[32 * ri:32 * ri + 32] = (-calls[w].b[32 * cj:32 * cj + 32].to(torch.int16)).clamp(-128, 127).to(torch.int8).numpy()
+    assert not RT.verify_rows(tabs[w].root, doms[w].domain_id, t, opening, witness(CM.s8_rows(q, scales)))
+    forged = CM.a_table(doms[w], key, f"a/0/{w}", q, scales).root
+    assert forged != tabs[w].root
+    assert CM.step_root(s_dom, [tabs[0].root, forged, tabs[2].root]) != s_lv[-1][0]
 
 
 def test_admit_words_and_tally():
