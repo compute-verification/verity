@@ -923,10 +923,11 @@ def test_a_row_declaring_prefix_caching_passes_its_precheck_at_any_world(tmp_pat
     rank's, under TP) reads its cached rows as inputs, so neither row is refused before its stages."""
     def past_precheck(*a):
         raise Stop(99)
-    tp = _tp_row(tmp_path, "glm53__fp8__h200__tp8__b8__i256__o32__prefix-arrivals__greedy__eager")
-    monkeypatch.setattr(tp, "hidden_build", lambda: "/x/verity_fa2_matReqG.so")
+    tps = [_tp_row(tmp_path, f"glm53__fp8__h200__tp8__{c}__greedy__eager") for c in ("b8__i256__o32__prefix-arrivals", "b1__i256__o16__prefix")]
+    for tp in tps:
+        monkeypatch.setattr(tp, "hidden_build", lambda: "/x/verity_fa2_matReqG.so")
     single = _row(tmp_path, row="llama32-1b__bf16__h200__tp1__b2__i168__o10__prefix__greedy__bi-eager")
-    for r in (tp, single):
+    for r in (*tps, single):
         monkeypatch.setattr(r, "release_line", past_precheck)
         with pytest.raises(Stop) as e:
             r.prepare()
