@@ -249,7 +249,7 @@ def test_a_coordinator_with_no_run_for_30_min_is_recorded_ready_to_wake_once_an_
     w.sweep(lambda r: None)
     (rec,) = records(tmp_path)
     assert (rec["kind"], rec["agent"], rec["handle"], rec["run"]) == ("ready_to_wake", CO, "circuits", "run-f")
-    assert rec["reason"] == "no run for 40 min since its last went FINISHED at 2026-10-18T19:20:00Z"
+    assert rec["reason"] == "nothing has run for 40 min since its latest run went FINISHED at 2026-10-18T19:20:00Z"
     assert rec["action"] == "recorded (--wake is off)" and api.posts == [], "the flag is off: recorded, never a POST"
     assert json.loads((tmp_path / "status.json").read_text())["coordinators"] == 2
     clock.t += 60
@@ -302,7 +302,18 @@ def test_a_coordinator_left_in_background_work_is_ready_to_wake(tmp_path):
     w.sweep(started.append)
     (rec,) = records(tmp_path)
     assert (rec["handle"], rec["agent"], rec["run"]) == ("vllm", NEW, "run-b")
-    assert rec["reason"] == "no run for 30 min since its last went WAITING_FOR_BACKGROUND_WORK at 2026-10-18T20:05:00Z"
+    assert rec["reason"] == "nothing has run for 30 min since its latest run went WAITING_FOR_BACKGROUND_WORK at 2026-10-18T20:05:00Z"
+
+
+def test_a_background_run_a_wake_resumed_is_not_ready(tmp_path):
+    """A wake may resume a background-waiting run rather than start one: its updatedAt moves, though its stream says nothing."""
+    run = {"status": "WAITING_FOR_BACKGROUND_WORK", "createdAt": "2026-10-18T17:00:00Z", "updatedAt": "2026-10-18T19:40:00Z"}
+    api, clock, w = coordinators(tmp_path, [{"id": NEW, "status": "ACTIVE", "latestRunId": "run-b"}], {"run-b": run})
+    for _ in range(4):
+        clock.t += 15 * 60
+        run["updatedAt"] = W.iso(clock.t - 60)
+        w.sweep(lambda r: None)
+    assert records(tmp_path) == []
 
 
 def test_a_pending_doorbell_marks_an_idle_coordinator_ready_to_wake(tmp_path):
@@ -320,7 +331,7 @@ def test_a_pending_doorbell_marks_an_idle_coordinator_ready_to_wake(tmp_path):
     clock.t += 1
     w.sweep(lambda r: None)
     assert [(r["handle"], r["reason"]) for r in records(tmp_path)] == [
-        ("vllm", "a doorbell rang at 2026-10-18T19:45:00Z and no run has started since")], "circuits has had no doorbell"
+        ("vllm", "a doorbell rang at 2026-10-18T19:45:00Z and nothing has run since")], "circuits has had no doorbell"
     assert json.loads((tmp_path / "status.json").read_text())["doorbells"] == "fresh"
 
 
@@ -330,6 +341,10 @@ def test_a_doorbell_before_the_run_or_a_stale_file_marks_nothing(tmp_path):
     api, clock, w = coordinators(tmp_path, [{"id": NEW, "status": "IDLE", "latestRunId": "run-v"}], {"run-v": run}, bells=before)
     w.sweep(lambda r: None)
     assert records(tmp_path) == [], "the run that started at 19:50Z answered the 19:45Z doorbell"
+    during = {"t": W.iso(T0), "inboxes": {"vllm": {"agent": NEW, "last": str(W.epoch("2026-10-18T19:50:30Z"))}}}
+    (tmp_path / "doorbells.json").write_text(json.dumps(during))
+    w.sweep(lambda r: None)
+    assert records(tmp_path) == [], "one rung during the turn may have been read in it (the timer rule catches one that wasn't)"
     after = {"t": W.iso(T0 - W.BELLS_STALE_S), "inboxes": {"vllm": {"agent": NEW, "last": str(W.epoch("2026-10-18T19:50:30Z"))}}}
     (tmp_path / "doorbells.json").write_text(json.dumps(after))
     w.sweep(lambda r: None)

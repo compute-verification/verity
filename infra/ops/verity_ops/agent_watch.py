@@ -27,9 +27,11 @@ arrival, and the API refuses to cancel a CREATING run. An agent whose latest run
 A coordinator holds a handle of `--registry` (the Slack registry): the holder of the handle's open inbox in `--routes` (the notes'
 `routes.d`, which a handover moves first; on 18 Oct the registry still named vllm's predecessor), else the first agent id in the
 handle's `holder`. It runs a 15-minute duty timer, and its inbox thread rings it for each doorbell. One whose latest run's turn is
-over (FINISHED, EXPIRED, or WAITING_FOR_BACKGROUND_WORK, where coordinators mostly sit between wakes) is **ready to wake** when no
-run has started for `WAKE_S` since (its timer didn't fire), or when a doorbell for its handle rang after that run started and
-`DOORBELL_S` has passed with no new run (its subscription didn't). The doorbells come from `doorbells.json` beside `--log`
+over (FINISHED, EXPIRED, or WAITING_FOR_BACKGROUND_WORK, where coordinators mostly sit between wakes) is **ready to wake** when
+nothing has run for `WAKE_S` since its last activity (its timer didn't fire), or when a doorbell for its handle rang after that
+and `DOORBELL_S` has passed with nothing run (its subscription didn't). Its last activity is the later of the run's `updatedAt`
+(read each sweep) and its last stream event: whether a wake starts a new run or resumes a background-waiting one, it moves. The
+doorbells come from `doorbells.json` beside `--log`
 (`{"t", "inboxes": {handle: {"agent", "last"}}}`, each inbox's latest doorbell as a Slack ts), which infra's relay writes, since
 only it reads Slack; one older than `BELLS_STALE_S` is not read. The watch records it at most once per agent an hour, and with
 `--wake` starts a run that says so (a 409 agent_busy isn't counted: a run of its own just started). `--wake` stays off until a red
@@ -212,9 +214,6 @@ class Run:
     told: set[str] = field(default_factory=set)
     ended: str | None = None
     held_s: float = HELD_S
-    status: str = "RUNNING"
-    created: float | None = None        # the run's createdAt and updatedAt when the watch began to follow it
-    updated: float | None = None
 
 
 class Watch:
@@ -259,14 +258,15 @@ class Watch:
             self.record("crashed", r, status="ERROR", action=f"restart failed: {type(e).__name__}: {e}")
 
     @staticmethod
-    def ready(status: str | None, created: float | None, ended: float | None, bell: float | None, t: float) -> str | None:
-        """Why a coordinator whose latest run is in `status`, created then and done with its turn at `ended`, is ready to wake."""
-        if status not in IDLE_DONE or ended is None:
+    def ready(status: str | None, last: float | None, bell: float | None, t: float) -> str | None:
+        """Why a coordinator whose latest run is in `status`, last active at `last`, is ready to wake. Only a doorbell after
+        `last` counts: one rung during the turn may have been read in it, and the timer rule catches one that wasn't."""
+        if status not in IDLE_DONE or last is None:
             return None
-        if bell is not None and bell > (created or ended) and t - max(bell, ended) >= DOORBELL_S:
-            return f"a doorbell rang at {iso(bell)} and no run has started since"
-        if t - ended >= WAKE_S:
-            return f"no run for {int((t - ended) // 60)} min since its last went {status} at {iso(ended)}"
+        if bell is not None and bell > last and t - bell >= DOORBELL_S:
+            return f"a doorbell rang at {iso(bell)} and nothing has run since"
+        if t - last >= WAKE_S:
+            return f"nothing has run for {int((t - last) // 60)} min since its latest run went {status} at {iso(last)}"
         return None
 
     def wake_up(self, a: dict, handle: str, run: str, why: str, t: float) -> None:
@@ -330,8 +330,6 @@ class Watch:
                 r.last_kind = "text"
             elif event in ("status", "result") and str(data.get("status")) in TERMINAL:
                 r.ended = str(data.get("status"))
-            elif event == "status" and str(data.get("status")) in FOLLOW:
-                r.status = str(data.get("status"))
             r.last_t = t
 
     def classify(self, r: Run, t: float) -> str | None:
@@ -388,8 +386,7 @@ class Watch:
             if status in FOLLOW:
                 self.errors.pop(a["id"], None)
                 self.left.discard(a["id"])
-                r = Run(a["id"], run, a.get("name") or "", last_t=t, held_s=FOLLOW[status], status=status,
-                        created=epoch(info.get("createdAt")), updated=epoch(info.get("updatedAt") or info.get("createdAt")))
+                r = Run(a["id"], run, a.get("name") or "", last_t=t, held_s=FOLLOW[status])
                 with self.lock:
                     self.runs[run] = r
                 start_stream(r)
@@ -403,12 +400,13 @@ class Watch:
             run, handle = a.get("latestRunId"), coords.get(a["id"])
             if not handle or not run or a.get("status") == "ARCHIVED":
                 continue
+            if not (info := self.run_info(a, run)):
+                continue
             with self.lock:
                 r = self.runs.get(run)
-                seen = r and (r.status, r.created, r.last_t if r.last_kind != "start" else r.updated)
-            if not seen and (info := self.run_info(a, run)):
-                seen = (info.get("status"), epoch(info.get("createdAt")), epoch(info.get("updatedAt") or info.get("createdAt")))
-            if seen and (why := self.ready(*seen, bells.get(handle), t)):
+                heard = r.last_t if r and r.last_kind != "start" else None
+            last = max((x for x in (epoch(info.get("updatedAt") or info.get("createdAt")), heard) if x is not None), default=None)
+            if why := self.ready(info.get("status"), last, bells.get(handle), t):
                 self.wake_up(a, handle, run, why, t)
         with self.lock:
             runs = list(self.runs.values())
