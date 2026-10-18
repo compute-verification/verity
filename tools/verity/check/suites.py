@@ -1682,6 +1682,8 @@ def on_agent_vm() -> bool:
 
 #: how an agent VM's suites run instead: an `agent-test` job on a node from this checkout's commit (`research run --on auto`)
 REMOTE = ("research", "run", "--on", "auto", "--wait", "--cwd", "source", "--cpus", "16", "--mem-gb", "64", "--max-min", "180")
+#: the lines of a node's report `remote` prints here
+REMOTE_TAIL = 60
 #: what stays here on an agent VM: reading the cache, and output a caller reads from this machine's disk
 LOCAL_ONLY = ("--list", "--explain", "--json", "--logs", "-h", "--help")
 
@@ -1697,7 +1699,19 @@ def remote(argv: list[str]) -> int:
     cmd = ["uv", "run", "-q", *REMOTE, "--", "uv", "run", "--locked", "--all-packages", "--extra", "torch-cpu", "python",
            "tools/verity/check/suites.py", "--local", *argv]
     print(f"suites: this is an agent VM, so on a node: {shlex.join(cmd[3:])} (`--local` runs it here)", file=sys.stderr, flush=True)
-    return subprocess.run(cmd, cwd=ROOT).returncode
+    rid = None
+    with subprocess.Popen(cmd, cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True) as p:
+        for line in p.stdout:
+            sys.stderr.write(line)
+            if rid is None and (m := re.search(r"\brun (r\d{8}-\d{6}-[0-9a-f]{4}) launched", line)):
+                rid = m[1]
+    if rid:                                                              # its own report, which `--wait` doesn't fetch
+        r = subprocess.run(["uv", "run", "-q", "research", "status", rid, "--json", "--also", "stdout.log"], cwd=ROOT,
+                           capture_output=True, text=True)
+        with contextlib.suppress(ValueError, KeyError, IndexError, OSError):
+            log = Path(json.loads(r.stdout)["runs"][0]["dir"]) / "stdout.log"
+            print("".join(log.read_text(errors="replace").splitlines(keepends=True)[-REMOTE_TAIL:]), end="")
+    return p.returncode
 
 
 def main(argv: list[str] | None = None) -> int:

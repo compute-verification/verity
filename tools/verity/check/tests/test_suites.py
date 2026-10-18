@@ -1586,10 +1586,24 @@ def test_on_an_agent_vm_the_suites_run_on_a_node_from_the_commit(monkeypatch, tm
         calls.append(cmd)
         return subprocess.CompletedProcess(cmd, 0, stdout=status["out"], stderr="")
 
+    class Popen:
+        def __init__(self, cmd, **kw):
+            calls.append(cmd)
+            self.stdout, self.returncode = iter(["research: run r20261018-065342-8931 launched on vy-nebius-2\n"]), 0
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
     monkeypatch.setattr(S.subprocess, "run", run)
+    monkeypatch.setattr(S.subprocess, "Popen", Popen)
     monkeypatch.setenv("CURSOR_AGENT", "1")
     assert S.on_agent_vm()
     assert S.main(["research", "--quick"]) == 0
+    assert calls[-1][:7] == ["uv", "run", "-q", "research", "status", "r20261018-065342-8931", "--json"]
+    calls.pop()
     assert calls[-1][3:10] == ["research", "run", "--on", "auto", "--wait", "--cwd", "source"] and calls[-1][-3:] == ["--local", "research", "--quick"]
     status["out"] = " M tools/x.py\n"
     assert S.main(["research"]) == 2 and "uncommitted changes" in capsys.readouterr().err
