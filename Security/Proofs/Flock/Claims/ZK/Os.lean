@@ -34,7 +34,7 @@ open FlockSoundness.Discharge
 
 /-- **The server's tape as the operating system's bytes**: `m` streams, stream `i` its first `Ls i` bytes, read one for
 one as the tape (`e`). Rep `i`'s frame reads stream `frame i` at its start; every other stream is a read of the Lean
-tap. -/
+tap, or one no process reads. -/
 structure OsTape (R : Type) where
   m : ℕ
   Ls : Fin m → ℕ
@@ -49,7 +49,6 @@ def frameBytes {R : Type} (O : OsTape R) (ρ : R) (i : ℕ) : ByteArray :=
 
 end OsTape
 
-open FlockSoundness.Game FlockSoundness.ZK in
 /-- **A3's bytes, decoded one for one, beside independent randomness, are a uniform tape**: in an experiment on `Ω × A`
 whose `Ω` is a byte source that meets A3, an event of the tape `e` decodes from it and of the rest has the probability it
 has at a uniform tape. -/
@@ -59,11 +58,12 @@ theorem Pr_os_prod {Ω Y A : Type} [Fintype Ω] [Fintype Y] [Fintype A] {m : ℕ
     Pr (fun ω : Ω × A => E (e (src ω.1), ω.2)) = Pr E := by
   rw [Sampling.Pr_eq_toReal_prCoin, Sampling.Pr_eq_toReal_prCoin]
   congr 1
-  calc prCoin (fun ω : Ω × A => E (e (src ω.1), ω.2))
-      = prCoin (fun p : A × Ω => E (e (src p.2), p.1)) :=
-        (prCoin_congr_equiv (Equiv.prodComm A Ω) fun ω : Ω × A => E (e (src ω.1), ω.2)).symm
-    _ = prCoin (fun p : A × Y => E (p.2, p.1)) := ZkView.prCoin_os_prod hA3 e fun a y => E (y, a)
-    _ = prCoin E := prCoin_congr_equiv (Equiv.prodComm A Y) E
+  calc FlockSoundness.Game.prCoin (fun ω : Ω × A => E (e (src ω.1), ω.2))
+      = FlockSoundness.Game.prCoin (fun p : A × Ω => E (e (src p.2), p.1)) :=
+        (FlockSoundness.ZK.prCoin_congr_equiv (Equiv.prodComm A Ω) fun ω : Ω × A => E (e (src ω.1), ω.2)).symm
+    _ = FlockSoundness.Game.prCoin (fun p : A × Y => E (p.2, p.1)) :=
+        ZkView.prCoin_os_prod hA3 e fun a y => E (y, a)
+    _ = FlockSoundness.Game.prCoin E := FlockSoundness.ZK.prCoin_congr_equiv (Equiv.prodComm A Y) E
 
 /-- **`ZkServer.zk_deferred` at the operating system's bytes**: the server's tape the bytes of a source that meets A3,
 read one for one (`O.e`), the bound unchanged. -/
