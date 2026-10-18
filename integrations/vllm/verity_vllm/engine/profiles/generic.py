@@ -16,7 +16,7 @@ One constructor per ARCHITECTURE class, selected by the family facts table (`fam
                    `gen_shared_moe_patterns.MoEFusedSharedExpertsFp8`.
   * `mhc-moe`   -- DeepSeek-V4's hyper-connected compressed-attention MoE: `C` is the family's facts over the rank's config.json
                    (`analytic.config_of` states the Llama vocabulary, which this architecture does not have), the weights Record is the
-                   family's `params` in their order at the shapes the model allocates (the Build's weights struct, `mhc_weights_type`),
+                   family's `params` in their order at the shapes the model allocates (the Build's weights struct, `gen_mhc_moe.mhc_weights_type`),
                    and the patterns are the block-FP8 linear and cuBLAS GEMM it shares with GLM-5.3 ahead of the base list.
 `world > 1` is a generic branch of every class (the rank-local shard configuration: heads, kv heads, the MLP / expert width and the vocabulary
 divided by the world; `tp.embedding_shard.EmbeddingShardCuda` and `tp.collective_pattern.TpCollective(world)` registered first; the sampler over the
@@ -41,7 +41,6 @@ import re
 import types
 from typing import Any, Callable
 
-from verity.ml.circuits.types import Array, Record, Type, Value
 from verity_vllm.program import model as analytic
 from verity_vllm.observe.events import RunHeader
 from verity_vllm.observe.fold.patterns import (Embedding, LogitsGather, TokenSelectArgmax, TokenSelectGumbelTopP, TokenSelectGumbelTwoStage,
@@ -52,6 +51,7 @@ from verity_vllm.collectives.embedding_shard import EmbeddingShardCuda
 from verity_vllm.engine.profiles import dense_generic as _dg
 from verity_vllm.engine.profiles import family_facts as FF
 from verity_vllm.engine.profiles import vllm_d9105ea80_sm89_eager as base
+from verity_vllm.engine.profiles import gen_mhc_moe as MHC
 from verity_vllm.engine.profiles.gen_dense2_patterns import with_dense2_patterns
 from verity_vllm.engine.profiles.gen_dense_gemma2_patterns import with_gemma2_patterns
 from verity_vllm.engine.profiles.gen_dense_softcap_patterns import with_softcap_patterns
@@ -222,7 +222,7 @@ def derive_config(cfg: dict[str, Any], *, repo: str | None, revision: str | None
         raise ValueError(why)
     fam = FF.facts_for(cfg)
     if fam["arch"] == _MHC:
-        return _mhc_config(cfg, world)
+        return MHC.mhc_config(cfg, rank_hf_config(cfg, world), world)
     rcfg = rank_hf_config(cfg, world)
     analytic_cfg = dict(rcfg)
     analytic_cfg["quantization_config"] = _quant_config_for_profile(rcfg, fam["arch"])
@@ -270,87 +270,6 @@ def derive_config(cfg: dict[str, Any], *, repo: str | None, revision: str | None
     if world > 1:
         C["WORLD"], prov["WORLD"] = int(world), "hand"
     return C, prov
-
-
-#: (config.json key, C key) of the sizes `_mhc_config` reads off the rank's config.json; the header check compares the recorded ones
-_MHC_HF_KEYS = (("hidden_size", "H"), ("rms_norm_eps", "EPS"), ("num_hidden_layers", "NL"), ("num_attention_heads", "NH"),
-                ("vocab_size", "V"), ("intermediate_size", "I"), ("max_position_embeddings", "MAX_POS"),
-                ("tie_word_embeddings", "tie_word_embeddings"))
-
-
-def _mhc_config(cfg: dict[str, Any], world: int) -> tuple[dict[str, Any], dict[str, str]]:
-    """The mHC MoE's `C`: the family's facts over the rank-local config.json, the sizes `_MHC_HF_KEYS` names (heads, vocabulary and
-    expert width divided by the world: `rank_hf_config`), the full vocabulary (the hash router's table) and the block-FP8 group."""
-    rcfg = rank_hf_config(cfg, world)
-    C, prov = FF.resolve_facts(rcfg, {})
-    for hf, key in _MHC_HF_KEYS:
-        C[key], prov[key] = rcfg[hf], "hf-config"
-    C["VOCAB"], prov["VOCAB"] = int(cfg["vocab_size"]), "hf-config"
-    C["FP8_BLOCK"], prov["FP8_BLOCK"] = int(cfg["quantization_config"]["weight_block_size"][0]), "hf-config"
-    if world > 1:
-        C["WORLD"], prov["WORLD"] = int(world), "hand"
-    return C, prov
-
-
-def mhc_weight_shapes(C: dict[str, Any]) -> dict[str, tuple[tuple[int, ...], int]]:
-    """Every parameter and buffer of one rank of the mHC MoE by name, as (shape, bit width) at the shape the model allocates: the
-    head's mixes, embedding, final norm and lm_head; per layer the mHC mixes (layer 0's broadcast pre and the one rope cache too), the
-    attention (an indexer at ratio 4, a compressor of the D-wide rows at every ratio, overlapping two windows at ratio 4), the router
-    (its token table below HASH_LAYERS, else its correction bias), the shared expert and the MXFP4 routed experts in the checkpoint's
-    [E][N][K/2] e2m1 bytes and [E][N][K/32] e8m0 scales (`program.frontend.marlin_moe_leaf`)."""
-    from verity_vllm.program.registry import marlin_moe as MM
-    H, HC, V, D, DR, QL, NH, NHP, E, I, SI, IH, ID, OL, TOPK, G = (int(C[k]) for k in (
-        "H", "HC_MULT", "V", "HEAD_DIM", "QK_ROPE", "Q_LORA", "NH", "PADDED_HEADS", "NUM_EXPERTS", "I", "SHARED_I", "INDEX_HEADS",
-        "INDEX_HEAD_DIM", "O_LORA", "TOPK", "FP8_BLOCK"))
-    OUT, OG = HC * (2 + HC), int(C["O_GROUPS"]) // int(C.get("WORLD", 1))
-
-    def fp8(name: str, N: int, K: int) -> dict[str, tuple[tuple[int, ...], int]]:
-        return {f"{name}.weight": ((N, K), 8), f"{name}.weight_scale_inv": ((-(-N // G), -(-K // G)), 32)}
-
-    def compressor(prefix: str, width: int, r: int) -> dict[str, tuple[tuple[int, ...], int]]:
-        cw = width * (2 if r == 4 else 1)
-        return {f"{prefix}.ape": ((r, cw), 32), f"{prefix}.fused_wkv_wgate.weight": ((2 * cw, H), 16), f"{prefix}.norm.weight": ((width,), 16)}
-
-    out = {"model.hc_head_fn": ((HC, HC * H), 32), "model.hc_head_base": ((HC,), 32), "model.hc_head_scale": ((1,), 32),
-           "model.embed_tokens.weight": ((V, H), 16), "model.norm.weight": ((H,), 16), "lm_head.weight": ((V, H), 16)}
-    for L, r in enumerate(max(1, int(r)) for r in C["COMPRESS_RATIOS"][:int(C["NL"])]):
-        lay: dict[str, tuple[tuple[int, ...], int]] = {f"hc_{s}_{k}": v for s in ("attn", "ffn")
-                                                       for k, v in (("fn", ((OUT, HC * H), 32)), ("base", ((OUT,), 32)), ("scale", ((3,), 32)))}
-        if L == 0:
-            lay |= {"hc_attn_fn_broadcast": ((OUT, H), 32), "attn.rotary_emb.cos_sin_cache": ((int(C["MAX_POS"]), DR), 32)}
-        lay |= {"attn.attn_sink": ((NHP,), 32), "attn.q_norm.weight": ((QL,), 16), "attn.kv_norm.weight": ((D,), 16)}
-        lay |= fp8("attn.fused_wqa_wkv", QL + D, H) | fp8("attn.wq_b", NH * D, QL) | fp8("attn.wo_a", OG * OL, NH * D // OG) | fp8("attn.wo_b", H, OG * OL)
-        if r == 4:
-            lay |= fp8("attn.indexer.wq_b", IH * ID, QL) | compressor("attn.indexer.compressor", ID, r)
-            lay["attn.indexer.weights_proj.weight"] = ((IH, H), 16)
-        lay |= compressor("attn.compressor", D, r)
-        lay["ffn.gate.weight"] = ((E, H), 16)
-        lay |= {"ffn.gate.tid2eid": ((int(C["VOCAB"]), TOPK), 32)} if L < int(C["HASH_LAYERS"]) else {"ffn.gate.e_score_correction_bias": ((E,), 32)}
-        lay |= fp8("ffn.shared_experts.gate_up_proj", 2 * SI, H) | fp8("ffn.shared_experts.down_proj", H, SI)
-        for k, N, K in (("w13", 2 * I, H), ("w2", H, I)):
-            lay |= {f"ffn.experts.routed_experts.{k}_weight": ((E, N, K // 2), 8), f"ffn.experts.routed_experts.{k}_weight_scale": ((E, N, K // MM.GROUP), 8)}
-        lay |= {"attn_norm.weight": ((H,), 16), "ffn_norm.weight": ((H,), 16)}
-        out |= {f"model.layers.{L}.{n}": s for n, s in lay.items()}
-    return out
-
-
-def mhc_weights_type(cfg: dict[str, Any], C: dict[str, Any]) -> Record:
-    """The rank's weights Record: one field per parameter and buffer, named as vLLM names it, in the family's `params` order (`top`,
-    each layer's `order`, `tail`, each layer's `buffers`: the order `named_parameters` then `named_buffers` give, the Build's weights
-    struct), at `mhc_weight_shapes`; a layer's name the order does not list refuses."""
-    P, shapes = FF.facts_for(cfg)["params"], mhc_weight_shapes(C)
-    layers = [f"model.layers.{L}." for L in range(int(C["NL"]))]
-    names = [*P["top"], *(p + n for p in layers for n in P["order"]), *P["tail"], *(p + n for p in layers for n in P["buffers"])]
-    if (stray := sorted(set(shapes) - set(names))):
-        raise ValueError(f"the family's params do not order {stray[:4]}")
-
-    def arr(shape: tuple[int, ...], w: int) -> Type:
-        t: Type = Value(w)
-        for n in reversed(shape):
-            t = Array(n, t)
-        return t
-
-    return Record(*((n, arr(*shapes[n])) for n in names if n in shapes))
 
 
 # ------------------------------------------------------------------------------------------------------------------------------ weights
@@ -404,10 +323,10 @@ def make_weight_field(cfg: dict[str, Any], C: dict[str, Any]) -> Callable[[str],
     if fam["arch"] == "dsa-moe":
         return _mla_weight_field(cfg, C)
     if fam["arch"] == _MHC:
-        fields = frozenset(n for n, _ in mhc_weights_type(cfg, C).fields)
+        fields = frozenset(n for n, _ in MHC.mhc_weights_type(cfg, C).fields)
 
         def mhc_weight_field(name: str) -> tuple[str, ...] | None:
-            return (name,) if name in fields and not _MARLIN_SERVED.match(name) else None
+            return (name,) if name in fields and not MHC.MARLIN_SERVED.match(name) else None
 
         return mhc_weight_field
     params = fam.get("params") or {}
@@ -461,10 +380,6 @@ def make_weight_field(cfg: dict[str, Any], C: dict[str, Any]) -> Callable[[str],
     return weight_field
 
 
-#: the mHC MoE's routed experts as served: `process_weights_after_loading` repacks the Record's checkpoint-layout e2m1 codes into
-#: Marlin's tile layout and permutes their scales, so no served word is a leaf of its field (`program.frontend.marlin_moe_leaf`)
-_MARLIN_SERVED = re.compile(r"^model\.layers\.\d+\.ffn\.experts\.routed_experts\.w(13|2)_weight(_scale)?$")
-
 #: parameters of MoE variants the constructive block does not state (shared experts, expert-parallel maps, router bias)
 _UNMODELLED_MOE = re.compile(r"^model\.layers\.\d+\.mlp\.(shared_expert|shared_experts|shared_expert_gate|gate\.e_score_correction_bias|experts\.expert_map)")
 
@@ -489,7 +404,7 @@ def make_root_class(cfg: dict[str, Any], weight_field: Callable[[str], Any]) -> 
         def mhc_root_class(name: str) -> str:
             if weight_field(name) is not None:
                 return "weight"
-            return "marlin-served" if _MARLIN_SERVED.match(name) else "unknown"
+            return "marlin-served" if MHC.MARLIN_SERVED.match(name) else "unknown"
         return mhc_root_class
     params = fam.get("params") or {}
     prefix = params.get("layer_prefix")
@@ -538,7 +453,7 @@ def make_check_header(cfg: dict[str, Any], C: dict[str, Any], world: int) -> Cal
                 rk = rank_hf_config(hcfg, world)
             except (KeyError, ValueError) as e:
                 return [f"recorded config cannot be sharded by {world}: {e}"]
-            out += [f"{hf}={rk[hf]!r} != C[{key}]={C[key]!r}" for hf, key in _MHC_HF_KEYS if hf in rk and rk[hf] != C[key]]
+            out += [f"{hf}={rk[hf]!r} != C[{key}]={C[key]!r}" for hf, key in MHC.MHC_HF_KEYS if hf in rk and rk[hf] != C[key]]
             out += FF.header_checks(cfg, C, rk)
         elif hcfg:
             try:
@@ -649,7 +564,7 @@ def _tp_rank_patterns(patterns: list, cfg: dict[str, Any], world: int) -> list:
 def _mhc_profile(role: str, cfg: dict[str, Any], src: dict[str, Any], C: dict[str, Any], prov: dict[str, str], world: int,
                  repo: str | None, revision: str | None) -> Profile:
     fam = FF.facts_for(cfg)
-    wtype = mhc_weights_type(cfg, C)
+    wtype = MHC.mhc_weights_type(cfg, C)
     patterns = dsv4_patterns() + _tp_rank_patterns(_mhc_patterns(C), cfg, world)
     hand = {**({"model": repo} if repo else {}), **({"revision": revision} if revision else {}), **{k: C[k] for k in fam["facts"] if k in C}}
     notes = {
@@ -663,7 +578,7 @@ def _mhc_profile(role: str, cfg: dict[str, Any], src: dict[str, Any], C: dict[st
         "hf_config": {"source": src["source"], "path": src["path"], "sha256": src["sha256"], "revision": revision},
         "root_class": "profiles.generic.make_root_class(cfg, profile.weight_field)(name)", "pattern_names": [p.name for p in patterns],
         "weights_record": {"fields": len(wtype.fields), "leaves": wtype.leaves, "order": "family_facts params: top, layers' order, tail, layers' buffers",
-                           "marlin_served": _MARLIN_SERVED.pattern},
+                           "marlin_served": MHC.MARLIN_SERVED.pattern},
     }
     return Profile(id=profile_id(role, C, world), patterns=patterns, config=C, weight_field=make_weight_field(cfg, C), accepted=False,
                    kernel_allowlist=base.KERNEL_ALLOWLIST, notes=notes, weights_type=wtype, witnesses=(SCHEDULE,) if world > 1 else (),
