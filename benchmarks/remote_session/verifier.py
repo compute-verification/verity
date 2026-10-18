@@ -891,7 +891,8 @@ def main() -> int:
                     help="pace each session's passes, one spec a session (`pace_of`; replaces --sessions, --windows, "
                          "--window-ms and --samples): groups of K passes under a live coin each")
     ap.add_argument("--pace-pass-ms", type=float, default=17.0,
-                    help="the pass the paced sessions' groups a stretch are counted at")
+                    help="the pass the paced sessions' groups a stretch are counted at (0: the calibration's median "
+                         "pass interval)")
     ap.add_argument("--ingress-bytes-per-s", type=float, default=0.0,
                     help="the read ceiling of every route into node memory but a rebuild, which the paced line "
                          "charges (`paced_line`): the node's disks, and its boundary links to drop Identity")
@@ -962,7 +963,8 @@ def main() -> int:
         save_registry(a.registry, registry)
 
     record()
-    paces = [pace_of(x, a.pace_pass_ms) for x in a.paced] if a.paced else None
+    pass_ms = a.pace_pass_ms or cal["pass_ns"]["p50"] / 1e6
+    paces = [pace_of(x, pass_ms) for x in a.paced] if a.paced else None
     try:
         for k in range(len(paces) if paces else a.sessions):
             r = v.session(k, allowance, not_before, paces[k] if paces else None)
