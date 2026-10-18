@@ -54,6 +54,7 @@
   "PouwWindow.Grid",
   "PouwWindow.Draw",
   "PouwWindow.Public",
+  "PouwWindow.Shape",
   "Properties.Pouw.Check",
   "PouwWindow.Json",
   "PouwCheck.Json",
@@ -1131,33 +1132,33 @@
    "assumptions": [],
    "type_hash": "a0793f07a8d7ded1d610bb98d1a056f90c8ee3d67d01be6f20c199627b1f395e"
   },
-  "Properties.Pouw.Window.bucket8192": {
+  "Properties.Pouw.Window.credit8192": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Window.bucket8192 : Properties.Pouw.Window.Bucket8192"],
+   "signature": ["Properties.Pouw.Window.credit8192 : Properties.Pouw.Window.Credit8192"],
    "assumptions": [],
    "type_hash": "a971ebacf2a6b71e55ab2a526e26476b22f0308d3ca9236f97a374fc4e807c84"
   },
-  "Properties.Pouw.Window.bucketCost": {
+  "Properties.Pouw.Window.creditCost": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Window.bucketCost : Properties.Pouw.Window.BucketCost"],
+   "signature": ["Properties.Pouw.Window.creditCost : Properties.Pouw.Window.CreditCost"],
    "assumptions": [],
    "type_hash": "d8d24f0d8121d7c9d0c53aaa3197391b2491522ee3c3498598ba7f64330b6be4"
   },
-  "Properties.Pouw.Window.bucketCost3": {
+  "Properties.Pouw.Window.creditCost3": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Window.bucketCost3 : Properties.Pouw.Window.BucketCost3"],
+   "signature": ["Properties.Pouw.Window.creditCost3 : Properties.Pouw.Window.CreditCost3"],
    "assumptions": [],
    "type_hash": "d576553bc5479500276cb0a46dc9f2c1e7b7df255d7222456baa0fc54834001a"
   },
-  "Properties.Pouw.Window.bucketCredits": {
+  "Properties.Pouw.Window.creditCredits": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Window.bucketCredits : Properties.Pouw.Window.BucketCredits"],
+   "signature": ["Properties.Pouw.Window.creditCredits : Properties.Pouw.Window.CreditCredits"],
    "assumptions": [],
    "type_hash": "f661477ccd5d7cc8baf3429ebfd11e5c76655d735a5de73a3f28dad2e631aa7f"
   },
-  "Properties.Pouw.Window.bucketRefuses": {
+  "Properties.Pouw.Window.creditRefuses": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Window.bucketRefuses : Properties.Pouw.Window.BucketRefuses"],
+   "signature": ["Properties.Pouw.Window.creditRefuses : Properties.Pouw.Window.CreditRefuses"],
    "assumptions": [],
    "type_hash": "baaa8304c869d70386cf7d64a46ddc411d7472889b13de6cad574939ad9976dd"
   },
@@ -2034,24 +2035,24 @@
     "function": "PouwCommit.tagged",
     "outcome": "none"
    },
-   "Properties.Pouw.Window.bucket8192": {
-    "function": "PouwWindow.bucket",
+   "Properties.Pouw.Window.credit8192": {
+    "function": "PouwWindow.credit",
     "outcome": "none"
    },
-   "Properties.Pouw.Window.bucketCost": {
-    "function": "PouwWindow.bucket?",
+   "Properties.Pouw.Window.creditCost": {
+    "function": "PouwWindow.credit?",
     "outcome": "accept"
    },
-   "Properties.Pouw.Window.bucketCost3": {
-    "function": "PouwWindow.bucket?",
+   "Properties.Pouw.Window.creditCost3": {
+    "function": "PouwWindow.credit?",
     "outcome": "accept"
    },
-   "Properties.Pouw.Window.bucketCredits": {
-    "function": "PouwWindow.bucket?",
+   "Properties.Pouw.Window.creditCredits": {
+    "function": "PouwWindow.credit?",
     "outcome": "accept"
    },
-   "Properties.Pouw.Window.bucketRefuses": {
-    "function": "PouwWindow.bucket?",
+   "Properties.Pouw.Window.creditRefuses": {
+    "function": "PouwWindow.credit?",
     "outcome": "accept"
    },
    "Properties.Pouw.Window.drawMisses": {
@@ -5949,8 +5950,8 @@
     "PouwWindow.Work.level": "6a8257d6e043abc439b73cfb3c1273cb917ec08ce3a11c24b6d583c1f24be926",
     "PouwWindow.Work.n": "685d3b27713be2cfed24f8c72e38af678287ec3f5b68eec444941dd8de077962",
     "PouwWindow.bitLength": "ac4c3703a38b122830f9dac46293b43fcc3ed991201304955d9a63dda4021014",
-    "PouwWindow.bucket": "5dd9db56e6ced2a4b605d6109bda296e1202cdcea66f935f4ebc806323b0f28b",
-    "PouwWindow.bucket?": "7e39eaf10674448bddc8c9ec3a657fb64358925e5959711660895497e44d081f",
+    "PouwWindow.credit": "5dd9db56e6ced2a4b605d6109bda296e1202cdcea66f935f4ebc806323b0f28b",
+    "PouwWindow.credit?": "7e39eaf10674448bddc8c9ec3a657fb64358925e5959711660895497e44d081f",
     "PouwWindow.floorPoint": "a84e299da0f33151d6efbdd4a1a479390ab2f44f550af903d23cb72b0387b069",
     "PouwWindow.floorPoint?": "a9824427cebc2456477c93c35643e098c3342c0537d471cdd1d7228ef0273d03",
     "PouwWindow.gridBits": "ed35576219c9dfaca9f47106b8394957b734fe87f8307356bc9999c136d4d908",
@@ -5976,11 +5977,11 @@
     "Properties.Pouw.Check.neverNull",
     "Properties.Pouw.Check.publishesPublic",
     "Properties.Pouw.Check.undecidedOnlyFromService",
-    "Properties.Pouw.Window.bucket8192",
-    "Properties.Pouw.Window.bucketCost",
-    "Properties.Pouw.Window.bucketCost3",
-    "Properties.Pouw.Window.bucketCredits",
-    "Properties.Pouw.Window.bucketRefuses",
+    "Properties.Pouw.Window.credit8192",
+    "Properties.Pouw.Window.creditCost",
+    "Properties.Pouw.Window.creditCost3",
+    "Properties.Pouw.Window.creditCredits",
+    "Properties.Pouw.Window.creditRefuses",
     "Properties.Pouw.Window.drawMisses",
     "Properties.Pouw.Window.floorPointGreatest",
     "Properties.Pouw.Window.floorPointRefuses",
@@ -6631,11 +6632,11 @@
   "Properties.Pouw": {
    "digest": "124b30e2721d0e7e04b319bf792b44e1b8dcb3110678b80c0f7aa95b5e04c291",
    "definitions": {
-    "Properties.Pouw.Window.Bucket8192": "9aac1513ee70353110ade95c2e0504d9d58db79736857b521af5d9ad2919a822",
-    "Properties.Pouw.Window.BucketCost": "ef0d49364a07c1f1c1b5f69c8b1bf9b65a5b57b6ad2366ad5eeb9c2e596d92ae",
-    "Properties.Pouw.Window.BucketCost3": "2045bd9aa1b0f67b180fadf0368ad40f2f71ae02a62ed2f7266bbefed3dd2c5b",
-    "Properties.Pouw.Window.BucketCredits": "f996cfbfe514bfcb8e7d7f1288d9191f785d283ff0f02f061862343fd346926d",
-    "Properties.Pouw.Window.BucketRefuses": "9df3a498a53184d189288ce7a4b16a0ad684a7169b2747c95a08e161d629bb78",
+    "Properties.Pouw.Window.Credit8192": "9aac1513ee70353110ade95c2e0504d9d58db79736857b521af5d9ad2919a822",
+    "Properties.Pouw.Window.CreditCost": "ef0d49364a07c1f1c1b5f69c8b1bf9b65a5b57b6ad2366ad5eeb9c2e596d92ae",
+    "Properties.Pouw.Window.CreditCost3": "2045bd9aa1b0f67b180fadf0368ad40f2f71ae02a62ed2f7266bbefed3dd2c5b",
+    "Properties.Pouw.Window.CreditCredits": "f996cfbfe514bfcb8e7d7f1288d9191f785d283ff0f02f061862343fd346926d",
+    "Properties.Pouw.Window.CreditRefuses": "9df3a498a53184d189288ce7a4b16a0ad684a7169b2747c95a08e161d629bb78",
     "Properties.Pouw.Window.CostBounded": "113cbc9cfb5229f8be8247eb10d1a72ff194da04e3ea7b2b58887bde6f4bea11",
     "Properties.Pouw.Window.CostBounded3": "a223ac589240aaffa0645c8910b0b621d9a1dc65331e07e1a9247cb9d1d932a7",
     "Properties.Pouw.Window.DrawMisses": "06d8fc21f74b6fef11bc595ddbf12f6621e4de9b0fa315a5023cf058c0a56709",
@@ -6663,11 +6664,11 @@
     "Properties.Pouw.Window.servedK": "f180a0127ece52b30dea9c01733b3421eabdba5e8805040f54e44e4eb43e1d1e"
    },
    "guarantees": [
-    "Properties.Pouw.Window.bucket8192",
-    "Properties.Pouw.Window.bucketCost",
-    "Properties.Pouw.Window.bucketCost3",
-    "Properties.Pouw.Window.bucketCredits",
-    "Properties.Pouw.Window.bucketRefuses",
+    "Properties.Pouw.Window.credit8192",
+    "Properties.Pouw.Window.creditCost",
+    "Properties.Pouw.Window.creditCost3",
+    "Properties.Pouw.Window.creditCredits",
+    "Properties.Pouw.Window.creditRefuses",
     "Properties.Pouw.Window.drawMisses",
     "Properties.Pouw.Window.floorPointGreatest",
     "Properties.Pouw.Window.floorPointRefuses",
