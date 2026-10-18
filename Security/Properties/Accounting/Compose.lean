@@ -14,8 +14,11 @@ root gate `i`, and a `Q_word` unit's span may hold another unit's gates (`Partit
 inside its own unit's span, not the span inside the unit.
 
 It is stated, not proved: nothing builds a `Declared` from a compiled Program yet, which is the composed statement's
-faithfulness gap (note:compute-accounting/20261018T1430Z-draft-theorem-compose-r4, Open). The extractor that builds
-one, with this property proved of it, closes it.
+faithfulness gap (note:compute-accounting/20261018T1600Z-draft-theorem-compose-r5, Open). The extractor that builds
+one, with this property proved of it, closes it. It covers units only: a proved version must also cover each value's
+commit coin (`Declared.commitRound`, the code's root for it fixed before that coin, and no later than its IR cut by
+`Assumptions.Compose.LayerCommitted`) and the draw (the code's drawn tiles are `Accounting.Compose.drawOf`'s), as
+RT-COMPOSE r4's check 1 asks.
 -/
 
 open Lean (Json)

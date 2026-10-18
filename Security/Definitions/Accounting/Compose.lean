@@ -7,17 +7,18 @@ import Definitions.Pouw.Window
 # PoUW as a compile pass over an arbitrary declared circuit (trusted)
 
 The vocabulary of `Models.Accounting.Guarantees.Compose`
-(note:compute-accounting/20261018T1430Z-draft-theorem-compose-r4), restated after RT-COMPOSE r3
-(note:compute-accounting/20261018T1355Z-draft-rt-compose-r3) under decisions 107, 109–114, 117, 119 and 122. The
+(note:compute-accounting/20261018T1600Z-draft-theorem-compose-r5), restated after RT-COMPOSE r4
+(note:compute-accounting/20261018T1522Z-draft-rt-compose-r4) under decisions 107, 109–114, 117, 119 and 122. The
 compile pass `C → C′` replaces each credited product of a declared circuit by its kind's template, with its noise drawn
 after its operands are committed, one coin a round (decision 122). The service then draws one uniform subset of the
 window's grid-padded tiles, one a proof unit, and proves each drawn tile with the generation of its own noise.
 
 Each round's coin is `live` (the verifier's, released after the round's served values are committed) or `seeded`
-(derived from the window's salt and commitments, Fiat–Shamir). The live statement (`CircuitWork`, `CircuitCredit`)
-describes the designed protocol: PoUW's code today has one salt a window and derives the noise in the scheme
-(`verity/core/protocols/pouw/coins.py`'s `LABELS`, `PROTOCOL.md`), so every deployed window is seeded, and its credit
-is `CircuitCreditFS`'s, at its grinding premium.
+(a seed: SHA-512 of the window's salt, the unit's position and its operands' roots, Fiat–Shamir). The live statements
+(`CircuitWork`, `CircuitCredit`) describe the designed protocol: PoUW's code today has one salt a window and derives
+the noise in the scheme (`verity/core/protocols/pouw/coins.py`'s `LABELS`, `PROTOCOL.md`), so every deployed window is
+seeded, and its credit is the seeded statements' (`CircuitWorkSeeded`, `CircuitCreditSeeded`), at a grinding premium
+per seed group (GRIND, decision 122's one seed a call).
 
 Decision 113 splits it in two layers. The logical layer, from `Declared` to `WorkAt`, is the circuit, its rounds, its
 proof units, the templates' luck, the service's draw and what an accepted window establishes about the run's committed
@@ -28,8 +29,9 @@ The logical layer:
 
 * `CoinMode`, `Declared`: the circuit as the IR gives it, a `Accounting.Gates.Dag` (memory accounting's form, with its
   wiring), each gate's Definition call site, each call site's round (the coin its noise reads: one coin a round,
-  decision 122), each round's coin mode (live or seeded), the round whose served values each run input is committed
-  with (`Assumptions.Compose.RunInputsCommitted` ties it to the cut), and each gate's proof unit (decision 107: an
+  decision 122), each round's coin mode (live or seeded), the coin before which the service commits each value under
+  a root (`Declared.commitRound`, where the proofs' layer cuts it, and `Assumptions.Compose.LayerCommitted` holds it
+  to the IR's cut), and each gate's proof unit (decision 107: an
   output coordinate, a K-chunk committing its running sum, which no served kind is cut into (decision 106), or a unit
   of glue). `Declared.Wf`: the call sites, rounds and units in range, one unit's gates in
   one round, each coin input read only in its own round, and one unit's words of one kind.
@@ -43,16 +45,18 @@ The logical layer:
   round, its stage counted from the last round (as `SplitStages` counts) and its words' kind (none for glue).
 * `coinMark`, `Declared.firstRead`, `Declared.cutOf`, `Declared.Late`, `Declared.UnitLate`, `Declared.Reaches`: each
   value's cut, computed from the IR (W1): a registered input before the first coin, a run input (decode feedback among
-  them) before its first reader's round's coin (where `RunInputsCommitted` says the protocol commits it), and every
+  them) before its first reader's round's coin (where `LayerCommitted` says the service commits it), and every
   other value (glue, the KV cache) with its writing gate's round, before that round's coin or, when it depends on it,
   after; a read is late when its operand's cut is past the reader's coin; a unit writes another late when one of its
   gates is read late by one of the other's, and its late cone is closed under that per unit, as #2466's
   `DrawnLayer.Late` is.
-* `LuckForm`, `Scheme`, `Scheme.LuckProved`, `Scheme.foldLuck`: per kind, the floor its template's noise proves at the
-  worst operands (decision 109: `0` where its noise proves none), whether it is credited, its skip pattern's span, the
-  form of its template's proved operand luck, and the three lucks the window is held to: (H-μ)'s point mass `μ`, the
-  receipt's B′ luck `r_B` and the whole-unit guess bound. A folded unit's luck is `μ + (1 − μ)·r_B` (`7/8` at
-  `μ = ¾`, `r_B = ½`, `Accounting.Guarantees.TS.LuckOfReceipt`).
+* `LuckForm`, `Scheme`, `Scheme.LuckProved`, `Scheme.SeedPriced`, `Scheme.foldLuck`: per kind, the floor its
+  template's noise proves at the worst operands (decision 109: `0` where its noise proves none), whether it is
+  credited, its skip pattern's span, the form of its template's proved operand luck, the three lucks a live window is
+  held to: (H-μ)'s point mass `μ`, the receipt's B′ luck `r_B` and the whole-unit guess bound, and the rate its
+  template's seeded gain is proved at (GRIND); no credited kind reading two activations (H1's attention) under seeded
+  coins. A folded unit's luck is `μ + (1 − μ)·r_B` (`7/8` at `μ = ¾`, `r_B = ½`,
+  `Accounting.Guarantees.TS.LuckOfReceipt`).
 * `creditedWords`, `wordsOf`, `floorOf`, `kindCount`: the circuit's credited words, `N_w` (W3: from the IR, not a
   parameter), its floor `♭ = Σ_words ♭_{kind}` and its words per kind.
 * `tileWords`, `tileWeight`, `tileStage`, `tileKind`, `tileLuck`, `tileLuck0`: the service's `N_p` grid-padded tiles
@@ -75,18 +79,26 @@ The logical layer:
   checked value is honest.
 * `Declared.slots`, `ProofRun`, `Declared.layer`: the window's proofs as an `Accounting.TS.DrawnLayer` over the IR's
   gates as positions, its static half defined from the IR (each tile's slots its unit's gates and their operands, each
-  position's writer the unit of its gate, each position's cut its IR cut, each tile's coin its round's, the draw the
+  position's writer the unit of its gate, each position's cut its IR cut or the service's commit coin, whichever is
+  later, each tile's coin its round's, the draw the
   service's) and only its run-dependent half (`ProofRun`: what was accepted and opened, each unit's relation and
   rightness) abstract.
 * `StageCuts`, `StageCoins`, `StageSlots`, `StageComplete`: what the derived layer meets (`Declared.layer`'s lemmas in
-  `Proofs.Accounting.Compose`): each position bound at its IR cut, each tile's noise at its round's coin (W2), its
-  slots and writers inside the IR, and every one of the IR's there (every operand a slot, every written position a
-  writer), so the layer's late cones are the IR's.
-* `SplitRate`: the per-stage condition from which a rate `Λ` bounds the window's saving per unit of detection.
+  `Proofs.Accounting.Compose`): each value the prover writes bound at its IR cut (where the service commits it no
+  later, `LayerCommitted`), each tile's noise at its round's coin (W2), its slots and writers inside the IR, and every
+  one of the IR's there (every operand a slot, every written position a writer), so the layer's late cones are the
+  IR's.
+* `SplitRateAt`, `SplitRate`: the per-stage condition at given `ν, ν₀`, and for some, from which a rate `Λ` bounds the
+  window's saving per unit of detection.
 * `Declared.Live`, `Scope`, `rOf`, `WorkAt`: every round holding a credited tile live, the logical parameters' ranges,
   the logical layer's bound `Λ·ln(1/δ_s) + min(a, b)·D₀` with `D₀` the cone weight on tiles of no words, and its
   conclusion on an accepted run: all but a share `d` of the committed words fixed right and all but `d₀ ≤ d` folded,
   with `a·(d − d₀) + b·d₀ < r`.
+* `Declared.Seeded`, `ScopeSeeded`, `stageGain`, `roundWords`, `roundRate`, `roundCone`, `seedTheta`, `roundPremium`,
+  `premiumOf`, `rOfSeeded`: the seeded statements' scope (every round holding a credited tile seeded, one call site
+  a round, so a round is a seed group, decision 122), a stage's gain at an exchange rate (GRIND's `L − κ·U`), each seed
+  group's words, rate, weight and grinding premium `π* = ln(T_q/δ_g)/θ` from the IR, and the seeded logical bound
+  `max(5a, (1 + κ₀)·b)·ln(1/δ_s)/(ρ·K) + (a + b)·Π + min(a, b)·D₀`.
 
 The physical layer:
 
@@ -94,11 +106,12 @@ The physical layer:
   circuit's floor, the time a folded and a whole share of `1` cost (`κ`, and `κ + (1 − μ_f)·N_w·φ*/B_♭`), and
   `ε = ε_♭ + ε_μ + r` at the logical layer's bound `r`.
 * `Fits`, `ModelScope`: the model is the circuit's on the data sheet; the model's ranges.
-* `Declared.windowMode`, `Certificate`, `Certificate.Holds`, `certOf`: decision 111's interface, which the physical
-  layer's ledger consumes: work of each kind in a device window (`Accounting.Window`, its ticks), its credit, `ε`, `δ`,
-  `γ_♭ = T(H)/T_cred` (W1: `♭` reported, not pinned) and the coin mode `ε` is for, so a verifier refuses the live `ε`
-  for a seeded window. The ledger, not this statement, decides how much of a device's time the certificates it admits
-  may claim.
+* `Certificate`, `Certificate.Holds`, `certOf`: decision 111's interface, which the physical layer's ledger consumes:
+  work of each kind in a device window (`Accounting.Window`, its ticks), its credit, `ε`, `δ`, `γ_♭ = T(H)/T_cred`
+  (W1: `♭` reported, not pinned) and the coin mode `ε` is for (`live` from `CircuitCredit`, `seeded` from
+  `CircuitCreditSeeded`), so the issuer of composed certificates, which doesn't exist yet, can refuse the live `ε`
+  for a seeded window. The ledger, not this statement, decides how much of a device's time the certificates it
+  admits may claim.
 -/
 
 namespace Accounting.Compose
@@ -120,11 +133,14 @@ operands, interval, primitive, site and whether it is committed), and as the IR 
 * `call i`: the Definition call site, of `calls`, that made gate `i`, numbered in the circuit's order;
 * `round c`: call site `c`'s round, of `rounds`: its noise reads that round's coin, released after the round's operands
   are committed (one coin a round, decision 122; one salt for the window, COMPILE);
-* `coinMode r`: round `r`'s coin's mode, live or seeded (`CoinMode`). The live statement needs every round that holds a
-  credited tile live (`Declared.Live`, in `Scope`); a window with a seeded one is `CircuitCreditFS`'s;
-* `runCommit i`: for a run input `i`, the round whose served values the protocol commits it with, before that round's
-  coin. `Assumptions.Compose.RunInputsCommitted` is the premise that this is no later than its first reader's round,
-  where `Declared.cutOf` places its cut;
+* `coinMode r`: round `r`'s coin's mode, live or seeded (`CoinMode`). The live statements need every round that holds a
+  credited tile live (`Declared.Live`, in `Scope`); the seeded statements need every one seeded, one call site a round
+  (`Declared.Seeded`, in `ScopeSeeded`);
+* `commitRound ℓ`: the coin, of the window's `rounds` (`rounds`: the service's draw), before which the service commits
+  value `ℓ` under a root that every opening of it is checked against (live: a round's root, before that round's coin;
+  seeded: a root its reader's seed preimage names). The proofs' layer cuts `ℓ` there or at its IR cut, whichever is
+  later (`Declared.layer`), and `Assumptions.Compose.LayerCommitted` is the premise that it is no later than the IR
+  cut (`Declared.cutOf`);
 * `unit i`: gate `i`'s proof unit, of `units`, the unit the service draws and proves alone (decision 107: an output
   coordinate, or a K-chunk committing its running sum, which no served kind is cut into (decision 106); glue between
   products is in units of its own). -/
@@ -135,7 +151,7 @@ structure Declared (ι : Type) where
   rounds : ℕ
   round : ℕ → ℕ
   coinMode : ℕ → CoinMode
-  runCommit : ℕ → ℕ
+  commitRound : ℕ → ℕ
   units : ℕ
   unit : ℕ → ℕ
 
@@ -251,8 +267,8 @@ def Declared.firstRead {ι : Type} (Cd : Declared ι) (i : ℕ) : ℕ :=
 are committed, and its noised products are computed after it:
 * a registered input (a weight, a codec's parameters) is bound before the first coin, `0`;
 * a run input (a request's tokens, decode feedback) is bound after the coins it follows, so it may be any function of
-  the coins released before its cut, which is the coin of the first round that reads it: the protocol commits it with
-  that round's served values (`Assumptions.Compose.RunInputsCommitted`, at `Declared.runCommit`);
+  the coins released before its cut, which is the coin of the first round that reads it: the service commits it under
+  that round's root, before its coin (`Assumptions.Compose.LayerCommitted`, at `Declared.commitRound`);
 * any other value (a product's served output, glue, the KV cache) is committed with its writing gate's round, before
   that round's coin, or after it when it depends on it (`coinMark`: a noised word, a receipt, glue fed by one). -/
 def Declared.cutOf {ι : Type} (Cd : Declared ι) (i : ℕ) : ℕ :=
@@ -310,11 +326,16 @@ checkpoint (W6), the form of the operand luck its template proves, and the three
 * `rB`: the receipt's luck when they are not all right (#2482's `ReceiptLuckAt`, HMU's B′, card 8b00536a, `½`);
 * `guess`: a unit skipped whole keeps its honest checked value only by a guess of its fold state
   (`Assumptions.Compose.GuessLuckAt`, a condition at this value; `2^-64` for a 64-bit state is proposed on card
-  8b00536a, not decided).
-H1's attention matmuls are credited at their floors with no special case (decision 117, ATTN-NOISE r2): `QKᵀ` draws a
+  8b00536a, not decided);
+* `seedRate`: the rate `θ_k`, per committed word of the circuit, at which a seed group of kind `k`'s template gain at
+  `κ = 4` has moment at most `1` over its seed (GRIND's `Accounting.Guarantees.TS.TemplateMoment`: `1/(256·r)` per
+  product, times a word's products), and `0` where none is proved, which charges a group its whole weight.
+Under live coins H1's attention matmuls are credited at their floors (decision 117, ATTN-NOISE r2): `QKᵀ` draws a
 coin per entry on both operands; `P·V`'s `P` carries only the period-32 word `U` and `V` a coin `b` per entry, and its
 floor is `U·b`'s, a cell per `k`, which holds under any salt-independent advice while the kernel commits a prefix word at
-most every 32 keys (at one every `C` keys it is `32·k/C`). -/
+most every 32 keys (at one every `C` keys it is `32·k/C`). Under seeded coins they are uncredited (`Scheme.SeedPriced`,
+in `ScopeSeeded`): GRIND prices no premium for a kind reading two activations, and at a head's seed group it would be
+37.5% of `QKᵀ` and 75% of `P·V` (RT-COMPOSE r4). -/
 structure Scheme (K : Type) where
   floor : Kind → Labelled K
   credited : Kind → Bool
@@ -323,12 +344,19 @@ structure Scheme (K : Type) where
   mu : Kind → ℝ
   rB : Kind → ℝ
   guess : Kind → ℝ
+  seedRate : Kind → ℝ
 
 /-- **The luck is at least what each template proves, and in range**: per kind, (H-μ)'s point mass is at least its
 form's value at the kind's span, so `OperandHMu` asks no more of the cheater's view than the template's own coins give,
 the receipt's luck lies in `[0, 1]` (`LuckOfReceipt` needs `r_B ≤ 1`) and the guess bound is `≥ 0`. -/
 def Scheme.LuckProved {K : Type} (Sc : Scheme K) : Prop :=
   ∀ k, (Sc.form k).value (Sc.span k) ≤ Sc.mu k ∧ 0 ≤ Sc.rB k ∧ Sc.rB k ≤ 1 ∧ 0 ≤ Sc.guess k
+
+/-- **Every credited kind's seeded premium is priced**: no credited kind reads two activations (`Kind.actA` and
+`Kind.actB`), so H1's `QKᵀ` and `P·V` are uncredited under seeded coins, where GRIND prices no premium for them. The
+seeded statements take it (`ScopeSeeded`); a scheme for a seeded window sets `credited` false on those kinds. -/
+def Scheme.SeedPriced {K : Type} (Sc : Scheme K) : Prop :=
+  ∀ k, Sc.credited k = true → ¬(k.actA = true ∧ k.actB = true)
 
 /-- **A folded unit's luck**: `μ + (1 − μ)·r_B`, its deficient words right at `μ` or, when not, its receipt kept at
 `r_B` (`Accounting.Guarantees.TS.LuckOfReceipt`): `7/8` at `μ = ¾`, `r_B = ½`. -/
@@ -523,7 +551,8 @@ circuit's gates and slots are numbered, and
 * `pos t k`: tile `t`'s `k`-th slot (`Declared.slots`), its first slot past the list (no position for a tile of no
   gates: `Cd.dag.length`, which no unit writes);
 * `coin t`: its unit's round (`Declared.roundOf`, in range under `Declared.Wf`);
-* `cut ℓ`: gate `ℓ`'s IR cut (`Declared.cutOf`), the draw past the last round;
+* `cut ℓ`: gate `ℓ`'s IR cut (`Declared.cutOf`) or the coin the service commits it before (`Declared.commitRound`),
+  whichever is later, the draw past the last round: the layer binds a value no earlier than the service does;
 * `src ℓ`: the unit of gate `ℓ` for a value the prover writes (`Declared.Writes`), none for a coin input or past the
   circuit;
 and the run-dependent rest is `pr`'s. A cheater can't change any static field: they are the IR's, fixed before the
@@ -535,7 +564,8 @@ def Declared.layer {ι C Ξ V : Type} (Cd : Declared ι) {Np Kd : ℕ} (hr : 0 <
   pos := fun _ t k => (Cd.slots t.val)[k]?.getD ((Cd.slots t.val).headD Cd.dag.length)
   coin := fun _ t => ⟨min (Cd.roundOf t.val) (Cd.rounds - 1),
     Nat.lt_of_le_of_lt (Nat.min_le_right _ _) (Nat.sub_lt hr Nat.one_pos)⟩
-  cut := fun ℓ => (0, ⟨min (Cd.cutOf ℓ) Cd.rounds, Nat.lt_succ_of_le (Nat.min_le_right _ _)⟩)
+  cut := fun ℓ => (0, ⟨min (max (Cd.cutOf ℓ) (Cd.commitRound ℓ)) Cd.rounds,
+    Nat.lt_succ_of_le (Nat.min_le_right _ _)⟩)
   src := fun ℓ => if h : ℓ < Cd.dag.length ∧ Cd.binding ℓ ≠ some .coin ∧ Cd.unit ℓ < Np then
     some (0, ⟨Cd.unit ℓ, h.2.2⟩) else none
   accepted := pr.accepted
@@ -544,12 +574,13 @@ def Declared.layer {ι C Ξ V : Type} (Cd : Declared ι) {Np Kd : ℕ} (hr : 0 <
   right := pr.right
 
 /-- **Each position is bound at its IR cut** (RT-I8's B1 for the window, decision 114, at the writing gate's round,
-W1): gate `ℓ`'s value is bound before coin `Declared.cutOf ℓ` of the window's `rounds` (the draw past the last). A
-value opened one way for one drawn tile and another for a tile that reads it, after the reader's coin, is then a
-binding failure (`DrawnLayer.MovedIn`). `Declared.layer` meets it by definition. -/
+W1): each value `ℓ` the prover writes is bound before coin `Declared.cutOf ℓ` of the window's `rounds` (the draw past
+the last). A value opened one way for one drawn tile and another for a tile that reads it, after the reader's coin, is
+then a binding failure (`DrawnLayer.MovedIn`). `Declared.layer` meets it under `Assumptions.Compose.LayerCommitted`:
+the service commits each such value no later than its IR cut. -/
 def StageCuts {ι C B Q V : Type} {s N : ℕ} (Cd : Declared ι) (pf : DrawnLayer C B 1 Cd.rounds s (Fin N) Q ℕ V) :
     Prop :=
-  ∀ ℓ, ((pf.cut ℓ).2 : ℕ) = min (Cd.cutOf ℓ) Cd.rounds
+  ∀ ℓ, Cd.Writes ℓ → ((pf.cut ℓ).2 : ℕ) = min (Cd.cutOf ℓ) Cd.rounds
 
 /-- **Each tile's noise reads its round's coin** (W2: one coin a round, decision 122): the layer's coin for tile `t` is
 its unit's round, the coin `Declared.Late` reads. `Declared.layer` meets it under `Declared.Wf`. -/
@@ -576,35 +607,51 @@ def StageComplete {ι C B V : Type} {s N : ℕ} (Cd : Declared ι) (pf : DrawnLa
   (∀ ℓ, Cd.Writes ℓ → ∃ u, pf.src ℓ = some u ∧ u.2.val = Cd.unit ℓ) ∧
     ∀ (t : Fin N) (ℓ : ℕ), ℓ ∈ Cd.slots t.val → ∃ k, pf.pos 0 t k = ℓ
 
-/-- **The per-stage rate condition** for `K` draws at weight bound `ρ` (each tile is at least `ρ` times its work share
-of the `N` tiles), luck `p` folded and `p0` whole, costs `a` and `b` per unit of share and stage shares at most
-`w_max`: there are `ν, ν₀ ≥ 0` such that for every stage's folded work `W_F`, whole work `W_0` and their lucky parts
-`L_F`, `L_0`,
-`exp((a·W_F + b·W_0)/Λ)·(1 − ρ·((W_F − L_F) + (W_0 − L_0)))^K ≤ 1 + ν·(L_F − p·W_F) + ν₀·(L_0 − p0·W_0)`. -/
-def SplitRate (K : ℕ) (ρ p p0 a b wmax Λ : ℝ) : Prop :=
-  ∃ ν ν0 : ℝ, 0 ≤ ν ∧ 0 ≤ ν0 ∧ ∀ WF W0 LF L0 : ℝ, 0 ≤ LF → LF ≤ WF → 0 ≤ L0 → L0 ≤ W0 → WF + W0 ≤ wmax →
+/-- **The per-stage rate condition at `ν, ν₀`** for `K` draws at weight bound `ρ` (each tile is at least `ρ` times its
+work share of the `N` tiles), luck `p` folded and `p0` whole, costs `a` and `b` per unit of share and stage shares at
+most `w_max`: `ν, ν₀ ≥ 0`, and for every stage's folded work `W_F`, whole work `W_0` and their lucky parts `L_F`, `L_0`,
+`exp((a·W_F + b·W_0)/Λ)·(1 − ρ·((W_F − L_F) + (W_0 − L_0)))^K ≤ 1 + ν·(L_F − p·W_F) + ν₀·(L_0 − p0·W_0)`. A rate
+quoted at a `Λ` is proved only with its `ν, ν₀` as terms (`SplitRateExp`), not as floats: at the sharp `Λ` the
+condition is tight to rounding. -/
+def SplitRateAt (K : ℕ) (ρ p p0 a b wmax Λ ν ν0 : ℝ) : Prop :=
+  0 ≤ ν ∧ 0 ≤ ν0 ∧ ∀ WF W0 LF L0 : ℝ, 0 ≤ LF → LF ≤ WF → 0 ≤ L0 → L0 ≤ W0 → WF + W0 ≤ wmax →
     Real.exp ((a * WF + b * W0) / Λ) * (1 - ρ * ((WF - LF) + (W0 - L0))) ^ K ≤
       1 + ν * (LF - p * WF) + ν0 * (L0 - p0 * W0)
+
+/-- **The per-stage rate condition**: `SplitRateAt` for some `ν, ν₀`. -/
+def SplitRate (K : ℕ) (ρ p p0 a b wmax Λ : ℝ) : Prop := ∃ ν ν0 : ℝ, SplitRateAt K ρ p p0 a b wmax Λ ν ν0
 
 /-! ## The logical layer's conclusion -/
 
 /-- **Every round that holds a credited tile is live**: each unit with a credited word has its round's coin `live`
-(`Declared.coinMode`). The live statement needs it: a seeded round's noise is a hash of what the prover committed, so
-the cheater can try seeds, which only `CircuitCreditFS` prices (its premium `w`). -/
+(`Declared.coinMode`). The live statements need it: a seeded round's noise is a hash of what the prover committed, so
+the cheater can try seeds, which the seeded statements price (`premiumOf`). -/
 def Declared.Live {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) : Prop :=
   ∀ u, u < Cd.units → (unitWords Cd u).any (fun i => Sc.credited (kindAt Cd i)) = true →
     Cd.coinMode (Cd.roundOf u) = .live
 
-open Classical in
-/-- **The window's coin mode**: `live` when every round holding a credited tile is (`Declared.Live`), else `seeded`. -/
-noncomputable def Declared.windowMode {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) : CoinMode :=
-  if Cd.Live Sc then .live else .seeded
-
 /-- **The logical parameters' ranges**: the circuit well formed, every round holding a credited tile live
-(`Declared.Live`: a window with a seeded one is `CircuitCreditFS`'s, at its `w`), `δ_s > 0`, and every kind's luck at
-least its template's proved value and in range. -/
+(`Declared.Live`: a window with a seeded one is the seeded statements', `ScopeSeeded`), `δ_s > 0`, and every kind's
+luck at least its template's proved value and in range. -/
 def Scope {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) (δs : ℝ) : Prop :=
   Cd.Wf ∧ Cd.Live Sc ∧ 0 < δs ∧ Sc.LuckProved
+
+/-- **Every round that holds a credited tile is seeded, and a seeded round is one call site** (decision 122: one seed
+a call): each unit with a credited word has its round's coin `seeded`, and two gates of a seeded round are of one
+call site, so a seeded round is one seed group, whose coin is the oracle's answer at that call's preimage and whose
+grinding premium `roundPremium` prices. The mirror of `Declared.Live`. -/
+def Declared.Seeded {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) : Prop :=
+  (∀ u, u < Cd.units → (unitWords Cd u).any (fun i => Sc.credited (kindAt Cd i)) = true →
+    Cd.coinMode (Cd.roundOf u) = .seeded) ∧
+  ∀ i j, i < Cd.dag.length → j < Cd.dag.length → Cd.round (Cd.call i) = Cd.round (Cd.call j) →
+    Cd.coinMode (Cd.round (Cd.call i)) = .seeded → Cd.call i = Cd.call j
+
+/-- **The seeded statements' ranges**: the circuit well formed, every round holding a credited tile seeded and each
+seeded round one call site (`Declared.Seeded`), no credited kind whose premium GRIND hasn't priced
+(`Scheme.SeedPriced`: H1's attention uncredited), and `δ_s > 0`. The seeded statements read the templates' luck
+through GRIND's premise (`Assumptions.Compose.SeedLuckAt`), not through `Scheme.LuckProved`'s `μ`. -/
+def ScopeSeeded {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) (δs : ℝ) : Prop :=
+  Cd.Wf ∧ Cd.Seeded Sc ∧ Sc.SeedPriced ∧ 0 < δs
 
 /-- **The logical layer's bound** `r = Λ·ln(1/δ_s) + min(a, b)·D₀`: the service's budget at `δ_s`, and the cone weight
 on tiles of no words (`zeroCone`, W4, `0` for every Program COMPILE accepts), which no draw detects, at the smaller
@@ -612,6 +659,62 @@ cost: `WorkAt` takes the skipped share split any way into folded and whole, so t
 share costs less. -/
 noncomputable def rOf {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) (Np : ℕ) (a b Λ δs : ℝ) : ℝ :=
   Λ * Real.log (1 / δs) + min a b * zeroCone Sc Cd Np
+
+/-! ## The seeded statements' premium, per seed group from the IR -/
+
+open Classical in
+/-- **A stage's gain at exchange rate `κ`** (GRIND's `L − κ·U`, on one stage's coin `c`): the stage's tiles in mode
+`s`, each `w v` when its checked values are honest (`same`, lucky) and `−κ·w v` when not. GRIND bounds it per seed
+group by the premium `π*` except with probability `δ_g + δ_b` (`Assumptions.Compose.SeedLuckAt`). -/
+noncomputable def stageGain {C V : Type} [Fintype V] (stg : V → ℕ) (j : ℕ) (mode : C → V → Mode)
+    (same : C → V → Prop) (w : V → ℝ) (s : Mode) (κ : ℝ) (c : C) : ℝ :=
+  ∑ v, if stg v = j ∧ mode c v = s then w v * ((1 + κ) * (if same c v then 1 else 0) - κ) else 0
+
+/-- Round `r`'s credited words: the circuit's credited words whose call site is in round `r` (one seed group under
+`Declared.Seeded`). -/
+def roundWords {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) (r : ℕ) : List ℕ :=
+  (creditedWords Sc Cd).filter fun i => Cd.round (Cd.call i) == r
+
+/-- **Round `r`'s seeded rate per committed word**: the least `Scheme.seedRate` of its credited words' kinds (one kind
+for a seed group of one call site), and `0` for a round of no credited words. -/
+noncomputable def roundRate {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) (r : ℕ) : ℝ :=
+  match roundWords Sc Cd r with
+  | [] => 0
+  | i :: l => l.foldl (fun m j => min m (Sc.seedRate (kindAt Cd j))) (Sc.seedRate (kindAt Cd i))
+
+/-- **Round `r`'s detected weight**: the `shareCone` of its tiles, the most of the window's share its seed group can
+leave lucky. -/
+noncomputable def roundCone {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) (Np : ℕ) (r : ℕ) : ℝ :=
+  ∑ t : Fin Np, if Cd.roundOf t.val = r then shareCone Sc Cd Np t else 0
+
+/-- **Stage `j`'s seeded rate per unit of share**: `N_w` times its round's rate per word (stage `j` is round
+`rounds − 1 − j`, as `Declared.stageOf` counts), the `θ` at which `SeedLuckAt` takes GRIND's moment. -/
+noncomputable def seedTheta {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) (j : ℕ) : ℝ :=
+  (wordsOf Sc Cd : ℝ) * roundRate Sc Cd (Cd.rounds - 1 - j)
+
+/-- **Round `r`'s grinding premium** (decision 122; GRIND's `π* = ln(T·M/δ)/θ` at `M = 1`), per unit of share:
+`ln(T_q/δ_g)/θ_r` for `T_q` oracle calls at the round's rate `θ_r = N_w·roundRate`, at most the round's own weight
+(`roundCone`), and the whole weight where no rate is proved (`θ_r = 0`). Computed from the IR per seed group, so a
+small site pays what it costs and no cover is assumed. -/
+noncomputable def roundPremium {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) (Np Tq : ℕ) (δg : ℝ) (r : ℕ) : ℝ :=
+  if 0 < (wordsOf Sc Cd : ℝ) * roundRate Sc Cd r then
+    min (Real.log (Tq / δg) / ((wordsOf Sc Cd : ℝ) * roundRate Sc Cd r)) (roundCone Sc Cd Np r)
+  else roundCone Sc Cd Np r
+
+/-- **The window's grinding premium** `Π = Σ_r π*_r`, over its rounds (its seed groups under `Declared.Seeded`). -/
+noncomputable def premiumOf {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) (Np Tq : ℕ) (δg : ℝ) : ℝ :=
+  ((List.range Cd.rounds).map (roundPremium Sc Cd Np Tq δg)).sum
+
+/-- **The seeded logical layer's bound** `r = max(5a, (1 + κ₀)·b)·ln(1/δ_s)/(ρ·K_d) + (a + b)·Π + min(a, b)·D₀`. Per
+stage, GRIND's premise (`Assumptions.Compose.SeedLuckAt`) at the template's `κ = 4` (`TemplateMoment`'s point) for
+folded tiles and at `κ₀` (the guess bound's) for whole ones gives, except with probability `δ_g + δ_b` each, lucky
+folded share `L_F < 4·U_F + π*` and lucky whole share `L_0 < κ₀·U_0 + π*`, `U` the share whose checked values aren't
+honest. An accepted draw of `K_d` tiles then has `ρ·K_d·(U_F + U_0) < ln(1/δ_s)` except with probability `δ_s`, so
+`a·(L_F + U_F) + b·(L_0 + U_0)` is below `r`, with `D₀` (`zeroCone`) as in `rOf`. No `SplitRate` is read: the live
+draw prices only the unlucky share, and the premium the lucky excess. -/
+noncomputable def rOfSeeded {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) (Np Kd Tq : ℕ) (a b κ0 ρ δs δg : ℝ) : ℝ :=
+  max (a * (1 + 4)) (b * (1 + κ0)) * Real.log (1 / δs) / (ρ * Kd) + (a + b) * premiumOf Sc Cd Np Tq δg +
+    min a b * zeroCone Sc Cd Np
 
 /-- **What an accepted window establishes about its run** (decision 113's logical layer): of its `N_w` committed words,
 all but a share `d_F + d₀` are fixed right (`fixed`) and all but `d₀` are folded (`folded`), the skipped share split
@@ -668,8 +771,9 @@ end Credit
 did work `units k` of each kind `k` in the device window `window` (`Accounting.Window`: `len` ticks from `start`),
 worth `credit` seconds on the declared machine, short by at most `eps` of it except with probability `delta`; `gamma` is
 honest's time over the credit, `γ_♭ = T(H)/T_cred`, which says what the floor `♭` is against the honest kernel (W1);
-`coins` is the coin mode `eps` is for: `live` only when every round holding a credited tile is live (`CircuitCredit`),
-and a verifier refuses a live `eps` for a `seeded` window, whose `eps` is `CircuitCreditFS`'s, with its premium.
+`coins` is the coin mode `eps` is for: `live` from `CircuitCredit`, every round holding a credited tile live, and
+`seeded` from `CircuitCreditSeeded`, with its grinding premium. The issuer of composed certificates, which doesn't exist
+yet, refuses a live `eps` for a seeded window.
 It is what the physical layer's ledger consumes, never a credit by itself: the ledger admits a set of certificates on
 one device only if the credit inside every interval of its ticks fits in it, so one device's time is credited once. -/
 structure Certificate where
@@ -688,16 +792,17 @@ def Certificate.Holds {Ω : Type} [Fintype Ω] {S : ℕ} {K T L U : Type} (c : C
   prob (fun x => P.accepts x ∧ (P.run x).run.time < (1 - c.eps) * c.credit) ≤ c.delta
 
 /-- **The circuit's certificate** in device window `win`: its words per kind, `T_cred`, `ε` at the logical layer's
-bound `r`, the given `δ`, `γ_♭` against honest kernel `H`, and the window's coin mode (`Declared.windowMode`). -/
+bound `r`, the given `δ`, `γ_♭` against honest kernel `H`, and the coin mode it is issued for (`.live` in
+`CircuitCredit`, `.seeded` in `CircuitCreditSeeded`). -/
 noncomputable def certOf {ι K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype T] [Fintype L] [Fintype U]
     [Fintype F] [Fintype X] (Sc : Scheme K) (Cd : Declared ι) (Z : Model K R T L U F X) (H : Honest K)
-    (lam : R → ℝ) (r δ : ℝ) (win : Accounting.Window) : Certificate where
+    (lam : R → ℝ) (r δ : ℝ) (win : Accounting.Window) (coins : CoinMode) : Certificate where
   window := win
   units := kindCount Cd
   credit := creditOf Sc Cd Z
   eps := epsOf Sc Cd Z lam r
   delta := δ
   gamma := Z.gammaFloor H (floorOf Sc Cd)
-  coins := Cd.windowMode Sc
+  coins := coins
 
 end Accounting.Compose
