@@ -803,6 +803,43 @@ as the core protocol interface provides for a protocol whose acceptance isn't on
 profile is its own: each window's `IntegrityProfile` with its schedule. `ledger` computes every γ term, the session's
 and each window's, from it plus the node's capacities.
 
+### Declared outputs
+
+A session's outputs are these, and only these (decided 18 Oct, 17:10Z, under proofs' rule that a protocol publishes
+its structure, its outputs, the verifier's coins and draws, and hiding commitments):
+
+- **The verdict**, per window and for the session: accepted, or the failure that ended it (one of `FAILURES`, at the
+  window it ended in).
+- **γ**, per window (\(\gamma_t\)) and over the session, each against both \(R\): the node's specified read bandwidth,
+  the headline, and its measured one (§1, "Which \(R\) is the headline"). The session's is read both ways, per window at
+  \(W\delta\) and over the horizon at \(\delta\) (§10), each with its failure probability. γ is over the registered
+  store only: a receipt of a block appended after the codec seed is drawn and opened like any other but not credited
+  (`credit_post_seed` is None, so \(\mu_{\text{carrier}}\) is 0), and γ doesn't depend on what the workload appends.
+  A paced session's windows, for γ, are its stretches. A paced session is one whose windows are each a group of at
+  most \(k\) passes under a live coin of its own, every pass reading every registered block, with the groups taken a
+  stretch of about \(T\) at a time and the last stretch closing the session: its reads back the credited span's end,
+  and it is not credited.
+- **The memory line**, a session total only, in three forms, each with its ε and δ: the registered bytes the session
+  shows held in node memory are at least \((1 - \varepsilon) N b\), except with probability δ.
+  - *Snapshot*: the registered blocks in node memory at the start of each credited pass, averaged over those passes.
+  - *Time-held*: the registered blocks in node memory at each instant of the credited span, averaged over the span.
+    Only a paced session has one.
+  - *Link-charged*: the time-held line with the node's boundary links charged as carrying blocks back into node
+    memory at their ceiling, which drops Identity.
+
+  Every form charges the blocks the node could re-encode from their payloads (its squaring ceiling at the record's
+  codec) and read from its own disks (their measured read ceiling), and its on-chip storage \(S_{\text{chip}}\). δ is
+  the horizon's error plus the sketch's (`timing.sketch_failure`).
+
+\(R\), \(S_{\text{chip}}\), the squaring ceiling and the disks' and links' ceilings are the verifier's: the node's
+stated or measured capacities, protocol structure, never the prover's report (§1).
+
+Everything else that follows the workload is a value, not public: the blocks the session appended and released and
+the chain over its appends, each pass's plan, its post-seed reads \(a_{t,i}\), its step and its root's arrival, and any
+memory line per window or by kind (weights, KV, host). Each window's receipts \(U_t\) stay public, since its draws are
+over them. Until `public()` is trimmed to match (after #2519, which keeps `stale` out of it), it still carries
+`appended`, `released` and each window's `post_seed`.
+
 ## 8. What deployment changes, and what is open
 
 - **Zero knowledge.** Every protocol is zero-knowledge, with no clear mode, and an opened block decodes to a KV page,
