@@ -89,6 +89,7 @@ import Proofs.Flock.Claims.KS.ZkLevelsAll
 import Proofs.Flock.Claims.KS.ZkLevels
 import Proofs.Flock.Claims.KS.ZkClashL
 import Proofs.Flock.Claims.KS.ZkFork0
+import Proofs.Flock.Claims.KS.ZkFork
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -445,4 +446,9 @@ decoding to a level-0 clash (`FlockDeploy.KS.adv₀SZ_simAtJZ_le`, through the s
 which are two accepting runs of `P` whose rows at one position differ and collide in their logs
 (`FlockDeploy.KS.zkPair₀`). So masked KS and the recursion's premise rest on the cap/`τ` and pads fork bounds and the
 pads clash (`FlockDeploy.KS.zk_KS_of_kinds`, `FlockDeploy.KS.zk_tableBoundJOnAccR_of_kinds`,
-`FlockDeploy.KS.zk_KSFlock_of_kinds`). -/
+`FlockDeploy.KS.zk_KSFlock_of_kinds`). At the caps the fork bound splits as plain's does (`ZkFork`): against the
+simulated strategy after `Commit`, the fork at a cap's table node is at most the fork after `zkRd j i` coins of two
+runs recording one cap and opening a position of it to different rows (`FlockDeploy.KS.ZkForkAlign`), and two
+accepting runs whose live outcomes decode to that collide in their logs (`FlockDeploy.KS.ZkForkClash`;
+`FlockDeploy.KS.zkSimForkLeCap_of`, `FlockDeploy.KS.zk_KS_of_align`). `τ` has no such split: the dead
+branches' `τ` opening `(0, default)` opens under some commitments. -/
