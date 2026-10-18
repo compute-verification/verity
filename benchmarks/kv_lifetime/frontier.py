@@ -11,9 +11,9 @@ interpolated here. Everything is one engine's: R_cap and R_in a node's over its 
 
 R_cap is a step model's units (a JSON of `token`, `sample`, attention `coefficients` and `calls` by class, as
 `--models` gives them under `--model-name` and `--lever`) over the run's own steps, the largest over 1 s windows
-(`trace`), or a node peak given outright (`--r-cap-node`). The encode cost is bytes a second over `--encode-Bps`, one
-GPU's encode rate: the re-keys' (`rekey`), every written block's append (`write`), and the append of only the blocks
-older than tau (`delayed`, with the credit it loses). `--clock origin` reads the frontier with caps from each block's
+(`trace`), or a node peak given outright (`--r-cap-node`). The encode cost is bytes a second over one GPU's rate:
+every written block's append (`write`) and the append of only the blocks older than tau (`delayed`, with the credit it
+loses) at `--encode-Bps`, the re-keys (`rekey`) at the in-place re-key's `--rekey-Bps`. `--clock origin` reads the frontier with caps from each block's
 content origin (`lifetimes.policy`), where a re-key is a recompute: the re-prefill at the run's own prefill rate, then
 the encode. A model the run didn't serve (70B TP8 from an 8B run) is modeled on the run's schedule with
 `--kv-scale` (its KV bytes a token over the run's), `--gpus-per-engine` and `--m-dyn-engine`, `--engines 1`.
@@ -35,6 +35,9 @@ GRID = ((60.0, (1, 2, 5, 10, 60)), (20.0, (1, 3)))
 # kv.cu at p1024, k = 3, masked: the bound encode (an append under b_j(c_a)), 1.609e5 blocks of 4 KiB a second on an
 # RTX PRO 6000 (encode_rate.py)
 ENCODE_BPS = 1.609e5 * 4096
+# its in-place re-key of scattered 16-block pages, one call a page over 64 CUDA streams: 8.478e4 blocks a second (a
+# page's call alone is latency-bound, and kv.cu has no page-list launch)
+REKEY_BPS = 8.478e4 * 4096
 
 
 def units(model: dict, w: dict[str, np.ndarray]) -> np.ndarray:
@@ -67,9 +70,10 @@ def share_at(by_stock: dict[str, float], pool: float, C: float) -> float:
 
 def table(phase: dict, pool: float, r_cap_engine: float, r_in_engine: float, encode_bps: float,
           clock: str = "block", recompute_bps: float | None = None, tau: float = 0.0, kv_scale: float = 1.0,
-          gpus: int = 1, law_pool: float | None = None) -> list[dict]:
+          gpus: int = 1, law_pool: float | None = None, rekey_bps: float | None = None) -> list[dict]:
     """Rows of the frontier under `clock`'s caps, blocks appended `tau` seconds after their allocation; under
-    "origin" a cap is a recompute, re-prefilled at `recompute_bps` (KV bytes a second) and then encoded.
+    "origin" a cap is a recompute, re-prefilled at `recompute_bps` (KV bytes a second) and then encoded. A re-key
+    encodes at `rekey_bps` (default `encode_bps`).
 
     A model the run didn't serve is modeled from it: its engine holds and writes `kv_scale` times the run's KV bytes
     on the run's schedule, spread over `gpus` GPUs that each encode their share, and the law's pool is `law_pool`."""
@@ -95,7 +99,7 @@ def table(phase: dict, pool: float, r_cap_engine: float, r_in_engine: float, enc
             row["append_gpu_share"] = append * per_gpu / encode_bps
             for p in ("rekey", "held"):
                 row[f"{p}_gpu_share"] = fr[p]["rekey_bytes_per_s"] * per_gpu * (
-                    1 / encode_bps + (1 / recompute_bps if clock == "origin" else 0.0))
+                    1 / (rekey_bps or encode_bps) + (1 / recompute_bps if clock == "origin" else 0.0))
                 row[f"{p}_step_share"] = row[f"{p}_gpu_share"] / max(1e-12, busy_share)
                 row[f"{p}_total_gpu_share"] = row["append_gpu_share"] + row[f"{p}_gpu_share"]
             row["expire_uncapped"] = fr["expire"]["credited_before_stock"]
@@ -114,6 +118,7 @@ def main() -> int:
     ap.add_argument("--r-cap-node", type=float, default=None, help="a node peak R_cap instead of the run's own")
     ap.add_argument("--r-in-node", type=float, default=1e5)
     ap.add_argument("--encode-Bps", type=float, default=ENCODE_BPS)
+    ap.add_argument("--rekey-Bps", type=float, default=REKEY_BPS)
     ap.add_argument("--clock", choices=("block", "origin"), default="block",
                     help="caps from each block's append, or from its content's origin (a cap is then a recompute)")
     ap.add_argument("--tau", type=float, default=0.0, help="the append delay (s), one analyze.py computed")
@@ -137,13 +142,13 @@ def main() -> int:
     if a.clock == "origin" and not (ph.get("frontier_origin") and recompute):
         raise SystemExit(f"{a.analysis} has no origin-clock frontier or prefill rate: rerun serve.py and analyze.py")
     rows = table(ph, pool, r_engine, a.r_in_node / a.engines, a.encode_Bps, a.clock, recompute or None, a.tau,
-                 a.kv_scale, a.gpus_per_engine, a.m_dyn_engine)
+                 a.kv_scale, a.gpus_per_engine, a.m_dyn_engine, a.rekey_Bps)
     write = ph["written_bytes_per_s"] * a.kv_scale / a.gpus_per_engine / a.encode_Bps
     out = {"analysis": str(a.analysis), "phase": a.phase, "lever": a.lever, "engines": a.engines, "pool_bytes": pool,
            "clock": a.clock, "tau": a.tau, "recompute_Bps": recompute or None, "kv_scale": a.kv_scale,
            "gpus_per_engine": a.gpus_per_engine, "m_dyn_engine": a.m_dyn_engine,
            "r_cap_trace_engine": rc, "r_cap_node_used": r_engine * a.engines, "r_in_node": a.r_in_node,
-           "encode_Bps": a.encode_Bps, "write_gpu_share": write,
+           "encode_Bps": a.encode_Bps, "rekey_Bps": a.rekey_Bps, "write_gpu_share": write,
            "delayed": {tau: {"gpu_share": d["append_bytes_per_s"] * a.kv_scale / a.gpus_per_engine / a.encode_Bps,
                              "credit_lost": d["credit_lost"]} for tau, d in ph["delayed"].items()}, "rows": rows}
     print(f"R_cap: trace peak {rc['peak']:.3e} units/s an engine ({rc['peak'] * a.engines:.3e} a node of "
