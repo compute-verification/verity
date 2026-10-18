@@ -18,6 +18,8 @@ Scratch for the red team of #2466 (never lands). Run from `Security/Proofs` with
   every unit is right at its committed values, and `RightFixedDrawn` fails.
 -/
 
+set_option linter.unusedSectionVars false
+
 namespace RTI8
 
 open Accounting.TS Accounting.Assumptions.TS Pouw.RelativeSecurity
@@ -247,8 +249,7 @@ theorem toy2_not_rfd (Nw : ℝ) (hNw : 0 < Nw) : ¬ RightFixedDrawn (P1 0 (Nw / 
   intro h
   have hb := h (((), true), ()) rfl (fun w i => by
     show pf1.committed _ w (pf1.drawnAt _ w i) = true
-    rw [pf1_committed, pf1_drawnAt]
-    all_goals rfl)
+    rw [pf1_committed, pf1_drawnAt])
   change (1 - ((0 : ℝ) + 0) / ((1 : ℕ) : ℝ)) * Nw ≤ Nw / 2 at hb
   norm_num at hb
   linarith
@@ -272,7 +273,7 @@ def pf6 : DrawnLayer Bool (Fin 2) 1 1 (Fin 2) (Bool × Bool) where
   right _ _ v := v.2 = v.1
 
 /-- No share; fixed words `1` when the consumer reads the producer's output, `½` when its words are adaptive. -/
-def P6 : Play (Bool × Fin 2) 1 Unit Unit Unit Unit where
+noncomputable def P6 : Play (Bool × Fin 2) 1 Unit Unit Unit Unit where
   game := .round (fun _ => 0) (fun _ => True) (fun _ => .done)
   accepts _ := True
   run x := anat (if sig x 0 then 1 / 2 else 1)
