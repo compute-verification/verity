@@ -1,8 +1,9 @@
 """Circuits for the primitives a template's units leave outside: attention's softmax (MUFU.EX2, FA2's inverse sum, and the FTZ
 f32 ops, ``F32Max`` and ``GuardNegInfZero`` from `verity.ml.circuits.ops.boolean.softmax`; PTX max / min, the E4M3 cast, the E4M3 widening
 and the E2M1 cast from `verity.ml.circuits.ops.boolean.scalar`), the norms' row scalars (MUFU.RSQ and SQRT, ``div.full``'s reciprocal and
-numerator scaling) and the sampler lane's compare, selects, bit AND and integer add. Each is its IR primitive bit for bit
-(``ir_lower.PIECES``; the piece test and circuit-check compare them).
+numerator scaling), the sampler lane's compare, selects, bit AND and integer add, and the int8 row's LUT softmax (its index
+and its 256-entry table, read one-hot in the circuit). Each is its IR primitive bit for bit (``ir_lower.PIECES``; the piece
+test and circuit-check compare them).
 
 A MUFU operation is a table lookup inside exponent and special-case logic (the C++ models ``fa2_model.cpp`` and
 ``rms_triton_model.cpp``, and ``live/src/ir_tail.rs``): the piece computes the table index, reads the pinned table
@@ -11,6 +12,8 @@ finishes the result. The RSQ, SQRT and RCP circuits around the read are M0's (``
 FA2's inverse sum follow ``fa2_model.cpp``.
 """
 from __future__ import annotations
+
+from functools import lru_cache
 
 from verity.ml.circuits.ops.boolean.scalar import e4m3_to_f32, f32_to_e2m1_sat, f32_to_e4m3_sat, fmaxmin as _fmaxmin
 from verity.ml.circuits.ops.boolean.softmax import (_eq_const, _is_nan, f32_add_ftz, f32_fma_ftz, f32_fma_sub_ftz, f32_gt, f32_max, f32_mul_ftz,
@@ -524,6 +527,44 @@ def gelu_tanh_mul_bf16(C, g, u):
     return fp.f32_to_bf16(C, fp.f32_mul(C, fp.bf16_to_f32(act), uf, ir_nan=True), 0x7FFF)
 
 
+# --- the int8 row's LUT softmax (`verity_vllm.program.registry.int8_exact`: fattn's integer softmax) ----------------------------
+
+#: `Exp2Lut127_v1`'s table, rint(127 2^(-t/16)) for t in 0..255 (``benchmarks/pouw/edited_gemm/fattn_ref.py``'s): the sha256 of its
+#: 256 little-endian u32 words
+EXP2_LUT127_SHA256 = "6eb8e9b3478db58b4e5a711f31968394f7e93fa4e1df2e0d801eab92a5f66f84"
+#: every entry is in [0, 127]
+EXP2_LUT127_BITS = 7
+
+
+@lru_cache(maxsize=None)
+def exp2_lut127_table() -> tuple[int, ...]:
+    """`Exp2Lut127_v1`'s 256 entries, from its own evaluator, checked against :data:`EXP2_LUT127_SHA256`."""
+    import hashlib
+
+    import numpy as np
+    from verity_vllm.program.registry import int8_exact as X
+
+    words = tuple(X.Exp2Lut127.evaluate(t) for t in range(1 << 8))
+    if hashlib.sha256(np.asarray(words, dtype="<u4").tobytes()).hexdigest() != EXP2_LUT127_SHA256:
+        raise ValueError(f"Exp2Lut127_v1's table is not the pinned one ({EXP2_LUT127_SHA256})")
+    return words
+
+
+def exp2_lut127(C, t):
+    """``Exp2Lut127_v1``: the table (:func:`exp2_lut127_table`) at the byte t, as a 32-bit word: a one-hot read (`fp.lookup`) of
+    the entries' 7 bits, the table in the read's linear forms; bits 7..31 are zero."""
+    return fp.lookup(C, list(t), exp2_lut127_table(), EXP2_LUT127_BITS) + [ZERO] * (32 - EXP2_LUT127_BITS)
+
+
+def lut_index(C, d, a):
+    """``LutIndex_v1``: ``min(max(d, 0) a >> 32, 255)`` for a signed d and an unsigned a, as a byte: the product of d's low 31 bits
+    and a (63 bits), its bits 32..39, or 255 once a bit from 40 is set; 0 for a negative d."""
+    p = gf2.multiply(C, list(d[:31]), list(a))
+    below = and_reduce(C, [NOT(b) for b in p[40:63]])
+    keep = NOT(d[31])
+    return [C.AND(keep, NOT(C.AND(below, NOT(b)))) for b in p[32:40]]
+
+
 def topp_numkeep(C, nd, q):
     """``TopPNumkeep_v1``: ``min(max(nd - qi, 1), nd)`` on u32 counts, qi the f32 q truncated to a u32 (0 unless q is finite and
     > 0, all ones from 2^32 on); 0 when nd is 0."""
@@ -607,6 +648,8 @@ PIECES = {
     "MufuTanh_v1": mufu_tanh,
     "TanhF32Rn_v1": tanh_rn,
     "GeluTanhMulBf16_v1": gelu_tanh_mul_bf16,
+    "Exp2Lut127_v1": exp2_lut127,
+    "LutIndex_v1": lut_index,
 }
 #: primitive families whose id carries a width: pattern -> piece
 FAMILIES = {r"BitAtx\d+_v1": bit_at, r"GatherBf16x\d+_v1": gather_bf16, r"GatherF32x\d+_v1": gather_f32}
