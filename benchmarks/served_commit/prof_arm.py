@@ -240,6 +240,74 @@ class RowsW64Arm(RowsArm):
     window = (64, 32)
 
 
+class Rows4kArm(RowsArm):
+    """The rows arm at 4 KiB rows: one leaf per 4 KiB of a step's stream (the window's chunks 4 KiB), each the hm96 leaf over its
+    row's SHA-512 as at 256 B. Set for the life of the arm's engine process (one process per arm). Measurement only: no scheme pins
+    4 KiB rows, and the domain still names 256-byte rows, so its roots are no scheme's."""
+
+    row_bytes = 4096
+
+    def ready(self, target: Any) -> None:
+        from verity_vllm.commit import step_rows
+        from verity_vllm.commit.committer import host_retention, native_collect, native_host
+
+        step_rows.ROW_BYTES = native_host.GPU_CHUNK_BYTES = native_collect.GPU_CHUNK_BYTES = host_retention.GPU_CHUNK_BYTES = self.row_bytes
+        super().ready(target)
+
+
+def _layer_source(**kw: Any) -> Any:
+    """A served compiled source acquiring only what a per-layer unit commits: per compiled piece its first convert_element_type (the
+    fused add-norm's residual, one hidden vector per token: the layer-folded unit's) and the embedding's first output, the keys and
+    values each attention layer is given (post-RoPE K, and V), the token inputs and the logits. Measurement only: not the step's
+    values, so not a Commit of the step."""
+    from verity_vllm.acquire.sources.served_compiled_source import ServedCompiledSource
+
+    class LayerSource(ServedCompiledSource):
+        def __init__(self, **kw: Any) -> None:
+            super().__init__(**kw)
+            self.firsts: set[str] = set()
+
+        def _enter_piece(self, backend: Any, args: tuple) -> None:
+            self.firsts = set()
+            super()._enter_piece(backend, args)
+
+        def _tap(self, sub: int, name: str, val: torch.Tensor) -> None:
+            op = name.split(".", 1)[1].split("/", 1)[0]
+            if op in ("convert_element_type", "embedding"):
+                if op in self.firsts:
+                    return
+                self.firsts.add(op)
+            elif op not in ("input", "kv"):
+                return
+            super()._tap(sub, name, val)
+
+        def _attention_forward(self, orig: Any, layer: str) -> Any:
+            src = self
+
+            def forward(*a: Any, **kw: Any) -> Any:
+                for part, i in (("k", 2), ("v", 3)):
+                    t = a[i] if len(a) > i else kw.get("key" if part == "k" else "value")
+                    if isinstance(t, torch.Tensor):
+                        src._tap(1, f"c{src.piece:02d}.kv/{layer}.{part}", t)
+                return orig(*a, **kw)
+            return forward
+
+    return LayerSource(**kw)
+
+
+class RowsLayerArm(RowsArm):
+    """The rows arm acquiring only the per-layer unit's values (`_layer_source`)."""
+
+    def install(self, target: Any) -> RowsLayerArm:
+        self.source = _layer_source(into=target.hooks, batch_copies=self.batch_copies)
+        self.source.install_hooks()
+        return self
+
+
+class RowsLayer4kArm(RowsLayerArm, Rows4kArm):
+    """The per-layer rows arm at 4 KiB rows."""
+
+
 class HiPrioArm(NativeDrainArm):
     """The nativedrain arm with each engine step on a high-priority stream (the committer's VERITY_HI_PRIO): the worker's hashing,
     on its side stream at the default priority (CUDA's lowest), gets a block slot only when no serving block waits for one."""
@@ -329,6 +397,9 @@ SERVED_COMMIT_ROWS_BATCH = RowsBatchArm("served-commit-rows-batch", retain="none
 SERVED_COMMIT_NATIVEDRAIN_RING8 = NativeDrainRing8Arm("served-commit-nativedrain-ring8", retain="none")
 SERVED_COMMIT_ROWS_RING8 = RowsRing8Arm("served-commit-rows-ring8", retain="none")
 SERVED_COMMIT_ROWS_W64 = RowsW64Arm("served-commit-rows-w64", retain="none")
+SERVED_COMMIT_ROWS_4K = Rows4kArm("served-commit-rows-4k", retain="none")
+SERVED_COMMIT_ROWS_LAYER = RowsLayerArm("served-commit-rows-layer", retain="none")
+SERVED_COMMIT_ROWS_LAYER_4K = RowsLayer4kArm("served-commit-rows-layer-4k", retain="none")
 SERVED_COMMIT_HIPRIO = HiPrioArm("served-commit-hiprio", retain="none")
 SERVED_COMMIT_ROWS_HIPRIO = RowsHiPrioArm("served-commit-rows-hiprio", retain="none")
 SERVED_COMMIT_FPROF = FinalizeProfArm("served-commit-fprof", retain="none")
