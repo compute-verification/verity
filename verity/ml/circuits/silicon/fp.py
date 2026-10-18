@@ -6,12 +6,12 @@ for general f32 operands and specializes itself when called on bf16-widened word
 program constants.
 
 Every piece that produces an f32 ends in :func:`round_f32`, the one rounding routine (round to nearest even, subnormals
-kept, overflow to infinity); :func:`round_fp` and :func:`unpack_fp` are it and :func:`unpack` at any IEEE binary format, for
-the f64 pieces of `verity.ml.circuits.ops.boolean.int8`. A NaN result is the canonical 0x7FC00000 inside composite pieces, whose final bf16 casts
-canonicalize; ``f32_add`` / ``f32_mul`` with ``ir_nan`` return the IR primitives' NaN bit for bit (``F32Add_v1`` /
-``F32Mul_v1`` are numpy float32 on x86-64: an operand's NaN, quieted, else the default NaN of an invalid operation), and
-``f32_fma_bits``' NaN is 0x7FC00000. The ``_v2`` primitives' pieces pass ``nan_word=F32_NAN_PTX``: every NaN result the GPU's
-0x7FFFFFFF, no operand's payload or sign kept.
+kept, overflow to infinity); :func:`round_fp` and :func:`unpack_fp` are it and :func:`unpack` at any IEEE binary format,
+for the f64 pieces of `verity.ml.circuits.ops.boolean.int8`. A NaN result is the canonical 0x7FC00000 inside composite
+pieces, whose final bf16 casts canonicalize; ``f32_add`` / ``f32_mul`` with ``ir_nan`` return the IR primitives' NaN bit
+for bit (``F32Add_v1`` / ``F32Mul_v1`` are numpy float32 on x86-64: an operand's NaN, quieted, else the default NaN of an
+invalid operation), and ``f32_fma_bits``' NaN is 0x7FC00000. The ``_v2`` primitives' pieces pass
+``nan_word=F32_NAN_PTX``: every NaN result the GPU's 0x7FFFFFFF, no operand's payload or sign kept.
 """
 from __future__ import annotations
 
