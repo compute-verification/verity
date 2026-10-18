@@ -7,6 +7,7 @@ import Definitions.Accounting.BoundSketch
 import Definitions.Accounting.Bridge
 import Definitions.Accounting.Capacity
 import Definitions.Accounting.CoinFlow
+import Definitions.Accounting.Compose
 import Definitions.Accounting.Confidence
 import Definitions.Accounting.CostModel
 import Definitions.Accounting.Device
