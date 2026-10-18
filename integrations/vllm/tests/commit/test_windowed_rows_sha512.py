@@ -111,20 +111,25 @@ def test_side_stream_drain_commits_step_rows_roots(monkeypatch):
     """A replayed step's slots gathered on the side stream (VERITY_DRAIN_SIDE, on by default), the serving stream joining it before its
     next flush, window mark and step end, and the next step rewriting the slots on the serving stream: the same roots as one
     acquisition per tensor in the same order; with VERITY_DRAIN_SIDE=0, the same roots with every flush on the serving stream."""
-    for side in (True, False):
+    for side in (False, True):
         monkeypatch.setenv("VERITY_DRAIN_SIDE", "1" if side else "0")
         com = committer(monkeypatch, retain_levels=False)
         runner = _SlotRunner()
         runner.committer, com.runner = com, runner
         try:
-            for rc in (WR.run(com, SCHED), WR.run(com, SCHED)):
+            for run in ("learn", "hit"):
+                rc = WR.run(com, SCHED)
                 keys, roots = com.row_keys, [s.root for s in rc.steps]
+                want, plain = [], []
                 for i, kv in enumerate(SCHED):
                     ts = WR.step_tensors(kv)
                     first = [(nm, t) for nm, t in ts if t.is_contiguous() and t.shape[0] == len(kv) and not nm.startswith(("logits", "runner."))]
-                    order = first + [(nm, t) for nm, t in ts if all(nm != p for p, _t in first)]
-                    assert roots[i] == rows_root(i, order, keys[i]), (side, i)
-                assert rc.extra["native_collect"]["gather_side_flushes"] == (len(SCHED) if side else 0)
+                    want.append(rows_root(i, first + [(nm, t) for nm, t in ts if all(nm != p for p, _t in first)], keys[i]))
+                    plain.append(rows_root(i, ts, keys[i]))
+                st = rc.extra["native_collect"]
+                assert roots == want, (side, run, [i for i in range(len(SCHED)) if roots[i] != want[i]],
+                                       [i for i in range(len(SCHED)) if roots[i] == plain[i]], st)
+                assert st["gather_side_flushes"] == (len(SCHED) if side else 0), st
         finally:
             com.close()
 
