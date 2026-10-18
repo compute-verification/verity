@@ -20,12 +20,16 @@ window    once a layer: `pg_window` of the layer's cache into the buffers at wor
 ~~~
 
 The windows are the cache's plaintext K and V, so `int8_ops.window_attention`, reading each request's rows where
-`int8_ops.paged_attention` gathers them from the pages, gives the same bits.  Its KV quantization is its own op
-(``verity_int8::kv_quant_window``), which the int8 fold does not pair with the pages it read (the Match / Build side of a
-credited read is not mapped yet).
+`int8_ops.paged_attention` gathers them from the pages, gives the same bits.  `int8_ops.credited_attention` runs the read as
+two named ops, ``verity_int8::credited_step`` (the offsets and buffers) and ``verity_int8::credited_window`` (a layer's
+flags and window), so a capture records the cache, block table and buffers each window read, and the int8 fold
+(`observe.fold.patterns.int8`) binds each request's ``verity_int8::kv_quant_window`` to its KV slots as it binds
+``verity_int8::kv_quant``.  The ops find their read by its ``handle``.
 """
 from __future__ import annotations
 
+import itertools
+import weakref
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -34,6 +38,9 @@ import torch
 
 #: the codec's word order in a token-layer that pg_window reads: each head's K ‖ V, the cache's physical order
 WORD_ORDER = 1
+
+_READS: weakref.WeakValueDictionary[int, CreditedRead] = weakref.WeakValueDictionary()
+_HANDLES = itertools.count(1)
 
 
 @dataclass(frozen=True)
@@ -61,6 +68,14 @@ class Step:
     v: torch.Tensor
 
 
+def read_of(handle: int) -> CreditedRead:
+    """The live read of ``handle`` (`CreditedRead.handle`)."""
+    read = _READS.get(handle)
+    if read is None:
+        raise LookupError(f"no credited read {handle} in this process")
+    return read
+
+
 class CreditedRead:
     """The int8 attention's cache read through ``paged``'s `window_offsets` and `window` on ``lib`` (a `paged.PagedLib`
     at the store's codec, its key set), each layer's store state from ``keys(layer index)``; ``encoded`` False copies
@@ -69,41 +84,33 @@ class CreditedRead:
     def __init__(self, paged: Any, lib: Any, keys: Callable[[int], LayerKeys], *, encoded: bool = True,
                  rounds: int = 3) -> None:
         self.paged, self.lib, self.keys, self.encoded, self.rounds = paged, lib, keys, encoded, rounds
-        self._step: Step | None = None
+        self.current: Step | None = None
         self.steps = 0
         self.windows = 0
+        self.handle = next(_HANDLES)
+        _READS[self.handle] = self
 
-    def step(self, meta: Any, query_start_loc: torch.Tensor, seq_lens: torch.Tensor, kv_heads: int,
-             head_dim: int) -> Step:
-        """The step of attention metadata ``meta``: computed at its first layer, the same object at the others."""
-        st = self._step
-        if st is not None and st.meta is meta:
-            return st
-        self._step = None
-        batch = query_start_loc.numel() - 1
-        lens = seq_lens[:batch].to(torch.int32).contiguous()
+    def buffers(self, seq_lens: torch.Tensor, batch: int, kv_heads: int,
+                head_dim: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        """A step's (lens int32 [batch], window offsets int32 [batch + 1], K, V bf16 [rows][kv_heads][head_dim]), fresh."""
+        lens = seq_lens[:batch].to(torch.int32, copy=True).contiguous()
         wo = torch.empty(batch + 1, dtype=torch.int32, device=lens.device)
         self.paged.window_offsets(self.lib, torch, lens, batch, wo)
-        host = [0]
-        for n in lens.tolist():
-            host.append(host[-1] + max(int(n), 0))
-        shape = (host[-1], kv_heads, head_dim)
-        self._step = st = Step(meta, batch, lens, wo, host, torch.empty(shape, dtype=torch.bfloat16, device=lens.device),
-                               torch.empty(shape, dtype=torch.bfloat16, device=lens.device))
+        rows = int(lens.clamp(min=0).sum())
+        k = torch.empty((rows, kv_heads, head_dim), dtype=torch.bfloat16, device=lens.device)
         self.steps += 1
-        return st
+        return lens, wo, k, torch.empty_like(k)
 
-    def window(self, st: Step, kv_cache: torch.Tensor, layer: int, block_table: torch.Tensor,
-               slot_mapping: torch.Tensor | None) -> None:
-        """Layer ``layer``'s windows of step ``st`` into its buffers, from ``kv_cache`` (vLLM's view [pages, KV heads,
-        slots, 2 head_dim]) under the step's block table, after flagging the slots ``slot_mapping`` wrote."""
+    def read(self, kv_cache: torch.Tensor, layer: int, block_table: torch.Tensor, slot_mapping: torch.Tensor | None,
+             lens: torch.Tensor, wo: torch.Tensor, k: torch.Tensor, v: torch.Tensor) -> None:
+        """Layer ``layer``'s windows into ``k`` and ``v`` from ``kv_cache`` (vLLM's view [pages, KV heads, slots, 2 head_dim])
+        under the step's block table, after flagging the slots ``slot_mapping`` wrote."""
         keys = self.keys(layer)
         plain = keys.plain if self.encoded else None
         if plain is not None and slot_mapping is not None:
-            written = slot_mapping[slot_mapping >= 0].long()
-            plain[written] = 1
+            plain[slot_mapping[slot_mapping >= 0].long()] = 1
         lay = self.paged.layout(kv_cache, kv_cache.shape[1], self.lib.shape["wb"], (0, 1, 2))
         self.paged.window(self.lib, torch, kv_cache, lay, keys.store_base, 1, 0, int(self.encoded), self.rounds,
-                          st.lens, block_table, st.wo, st.batch, st.k, st.v, order=WORD_ORDER,
+                          lens, block_table, wo, int(lens.numel()), k, v, order=WORD_ORDER,
                           bj=keys.bj if self.encoded else None, plain=plain)
         self.windows += 1

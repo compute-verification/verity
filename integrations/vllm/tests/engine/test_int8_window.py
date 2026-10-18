@@ -1,15 +1,18 @@
 """The int8 attention's credited read (`engine.int8_window`) on the CPU over a stand-in for paged.cu's `window_offsets` and
 `window` (a torch gather with a fake codec): the windows read once a step and once a layer give `paged_attention`'s bits, the
-step's KV writes are flagged plaintext, and a slot read without its flag decodes to garbage."""
+step's KV writes are flagged plaintext, a slot read without its flag decodes to garbage, and the read is the named ops the int8
+fold binds (`verity_int8::credited_step` once a step, `verity_int8::credited_window` once a layer)."""
 from __future__ import annotations
 
 import types
+from collections import Counter
 
 import torch
+from torch.utils._python_dispatch import TorchDispatchMode
 
 from tests.engine.test_int8_attention import _window
 from verity_vllm.engine import int8_ops
-from verity_vllm.engine.int8_window import CreditedRead, LayerKeys
+from verity_vllm.engine.int8_window import CreditedRead, LayerKeys, read_of
 
 PAGES, SLOTS, G, D, H = 12, 16, 2, 32, 4
 MASK = 0x5A5A
@@ -76,9 +79,8 @@ def _plain(cache, query, meta, ks):
 
 def _credited(read, cache, query, meta, ks, layer=0, slot_mapping=None):
     out = torch.full_like(query, float("nan"))
-    st = read.step(meta, meta.query_start_loc, meta.seq_lens, G, D)
-    read.window(st, cache, layer, meta.block_table, slot_mapping)
-    int8_ops.window_attention(query, st.k, st.v, st.offsets, meta.query_start_loc, meta.seq_lens, ks, D ** -0.5, out)
+    meta.slot_mapping = slot_mapping
+    int8_ops.credited_attention(read, query, cache, layer, meta, G, ks, D ** -0.5, out)
     return out
 
 
@@ -123,3 +125,27 @@ def test_encoded_slots_decode_and_flagged_slots_read_as_they_are():
 
     unflagged = CreditedRead(FakePaged(), types.SimpleNamespace(shape={"wb": 128}), lambda layer: LayerKeys(0))
     assert not torch.equal(_credited(unflagged, enc, query, meta, ks).view(torch.int16), want.view(torch.int16))
+
+
+class _Ops(TorchDispatchMode):
+    def __init__(self) -> None:
+        super().__init__()
+        self.seen: Counter = Counter()
+
+    def __torch_dispatch__(self, func, types_, args=(), kwargs=None):
+        self.seen[str(func.overloadpacket)] += 1
+        return func(*args, **(kwargs or {}))
+
+
+def test_the_read_is_one_step_op_a_step_and_one_window_op_a_layer():
+    lens, rows = [7, 20], [7, 1]
+    cache, query, meta = _step(lens, rows, seed=5)
+    ks = torch.tensor([0.02, 0.03])
+    read = CreditedRead(FakePaged(), types.SimpleNamespace(shape={"wb": 128}), lambda layer: LayerKeys(0), encoded=False)
+    assert read_of(read.handle) is read
+    with _Ops() as ops:
+        for layer in range(2):
+            _credited(read, cache, query, meta, ks, layer)
+    seen = {k: n for k, n in ops.seen.items() if k.startswith("verity_int8.")}
+    assert seen == {"verity_int8.credited_step": 1, "verity_int8.credited_window": 2, "verity_int8.kv_quant_window": 4,
+                    "verity_int8.window_rows": 4}, seen

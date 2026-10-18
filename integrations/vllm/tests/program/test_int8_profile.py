@@ -1,5 +1,6 @@
 """The exact-int8 Llama-3.1-8B role's capture profile: its shipped config, its weights record and weight map, and the two fold patterns
-(`observe.fold.patterns.int8`) over synthetic launches of the named ops (`engine.int8_ops`)."""
+(`observe.fold.patterns.int8`) over synthetic launches of the named ops (`engine.int8_ops`), the attention's under the plain read and
+under a credited read (`engine.int8_window`)."""
 from __future__ import annotations
 
 import hashlib
@@ -207,6 +208,85 @@ def test_int8_attention_refuses_without_the_headers_k_scales_or_a_wrong_window()
     other = (view(900, (G, 3, D), "int8"), view(901, (G, 3, D), "int8"), view(902, (G, D), "float32"), view(903, (G, D), "float32"))
     r = Int8AttentionScope().match(_attention(3, [(0, 3, 3, A_T0)], rows_reads=other), _ctx(rows, {"r0": 3}, {"r0": [2]}))
     assert isinstance(r, Unsupported) and "does not read its kv_quant" in r.reason
+
+
+KVW_SCHEMA = "verity_int8::kv_quant_window(Tensor k, Tensor v, Tensor k_scales) -> (Tensor, Tensor, Tensor, Tensor)"
+CS_SCHEMA = ("verity_int8::credited_step(Tensor seq_lens, SymInt batch, SymInt kv_heads, SymInt head_dim, SymInt read) "
+             "-> (Tensor, Tensor, Tensor, Tensor)")
+CW_SCHEMA = ("verity_int8::credited_window(Tensor kv_cache, Tensor block_table, Tensor? slot_mapping, Tensor lens, Tensor wo, "
+             "Tensor(a1!) k, Tensor(a2!) v, SymInt layer, SymInt read) -> ()")
+A_WK, A_WV = 610, 611
+
+
+def _credited_attention(T, wins, first_layer=True, k_rows=None):
+    """`_attention` under a credited read: the step's credited_step (at its first layer), the layer's credited_window over the
+    LBNHC cache [NB, G, BS, 2D] into K and V [rows, G, D], and per window kv_quant_window over its rows (`k_rows` overrides each
+    window's first row)."""
+    rows = sum(s for _, _, s, _ in wins)
+    q, out = view(A_Q, (T, H, D), "bfloat16"), view(A_OUT, (T, H, D), "bfloat16")
+    kbuf, vbuf = view(A_WK, (rows, G, D), "bfloat16"), view(A_WV, (rows, G, D), "bfloat16")
+    kv = view(A_KV, (NB, G, BS, 2 * D), "bfloat16", strides=(BS * G * 2 * D, 2 * D, G * 2 * D, 1))
+    ev = [DispatchEnter(1, None, 0, "forward", "vllm.unified_attention_with_output.default", UA_SCHEMA,
+                        [q, view(700, (T, G, D), "bfloat16"), view(701, (T, G, D), "bfloat16"), out, LAYER], {}, 7, LAYER)]
+    if first_layer:
+        ev += [DispatchEnter(2, 1, 0, "forward", "verity_int8.credited_step.default", CS_SCHEMA,
+                             [view(620, (len(wins),), "int32"), len(wins), G, D, 1], {}, 7, LAYER),
+               DispatchExit(2, (view(621, (len(wins),), "int32"), view(622, (len(wins) + 1,), "int32"), kbuf, vbuf))]
+    ev += [DispatchEnter(3, 1, 0, "forward", "verity_int8.credited_window.default", CW_SCHEMA,
+                         [kv, view(A_BT, (len(wins), 4), "int32"), None, view(621, (len(wins),), "int32"),
+                          view(622, (len(wins) + 1,), "int32"), kbuf, vbuf, 0, 1], {}, 7, LAYER), DispatchExit(3, None)]
+    ks, i, row0 = view(A_KS, (G,), "float32"), 4, 0
+    for j, (q0, n, s, res) in enumerate(wins):
+        r0 = row0 if k_rows is None else k_rows[j]
+        res4 = (view(res + 10, (G, s, D), "int8"), view(res + 11, (G, s, D), "int8"), view(res + 12, (G, D), "float32"),
+                view(res + 13, (G, D), "float32"))
+        args = [view(A_Q, (n, H, D), "bfloat16", strides=(H * D, D, 1), offset=q0 * H * D), *res4, ks, D ** -0.5]
+        ev += [DispatchEnter(i, 1, 0, "forward", "verity_int8.kv_quant_window.default", KVW_SCHEMA,
+                             [view(A_WK, (s, G, D), "bfloat16", offset=r0 * G * D), view(A_WV, (s, G, D), "bfloat16", offset=r0 * G * D), ks],
+                             {}, 7, LAYER),
+               DispatchExit(i, res4),
+               DispatchEnter(i + 1, 1, 0, "forward", "verity_int8.window_rows.default", ROWS_SCHEMA, args, {}, 7, LAYER),
+               DispatchExit(i + 1, view(res, (n, H, D), "bfloat16")),
+               DispatchEnter(i + 2, 1, 0, "forward", "aten.copy_.default", COPY_SCHEMA,
+                             [view(A_OUT, (n, H, D), "bfloat16", strides=(H * D, D, 1), offset=q0 * H * D), view(res, (n, H, D), "bfloat16")], {}, 7, LAYER),
+               DispatchExit(i + 2, None)]
+        i, row0 = i + 3, row0 + s
+    return _tree(ev + [DispatchExit(1, None)])
+
+
+def _bindings(group):
+    return [(spec_label(c.spec), [(type(o).__name__, getattr(o, "indices", None), getattr(getattr(o, "view", None), "offset", None),
+                                   getattr(getattr(o, "view", None), "shape", None), getattr(getattr(o, "view", None), "strides", None))
+                                  for o in c.operands], c.outputs) for c in group.parts]
+
+
+@pytest.mark.parametrize("first_layer", [True, False])
+def test_a_credited_read_folds_to_the_plain_reads_computes(first_layer):
+    # the same step as the plain test: kv_quant_window over the credited window's rows binds the same slots of the same cache
+    rows = [("r0", 0), ("r0", 1), ("r0", 2), ("r1", 5)]
+    ctx = _ctx(rows, {"r0": 3, "r1": 6}, {"r0": [2], "r1": [5]})
+    wins = [(0, 3, 3, A_T0), (3, 1, 6, A_T1)]
+    plain = Int8AttentionScope().match(_attention(4, wins), ctx)
+    cred = Int8AttentionScope().match(_credited_attention(4, wins, first_layer=first_layer), ctx)
+    assert isinstance(plain, Group) and isinstance(cred, Group), cred
+    assert _bindings(cred) == _bindings(plain)
+    kvq = [c for c in cred.parts if spec_label(c.spec).startswith("Int8KvQuant")]
+    assert [c.consumed for c in kvq] == [(4,)] * G + [(7,)] * G
+    assert set(cred.consumed) == set(range(1, 10)) - ({2} if not first_layer else set())
+
+
+def test_a_credited_read_refuses_rows_other_than_its_requests_window():
+    rows = [("r0", 0), ("r0", 1), ("r0", 2), ("r1", 5)]
+    ctx = _ctx(rows, {"r0": 3, "r1": 6}, {"r0": [2], "r1": [5]})
+    wins = [(0, 3, 3, A_T0), (3, 1, 6, A_T1)]
+    r = Int8AttentionScope().match(_credited_attention(4, wins, k_rows=[0, 2]), ctx)
+    assert isinstance(r, Unsupported) and "rows of the credited window" in r.reason
+    r = Int8AttentionScope().match(_credited_attention(4, wins, k_rows=[3, 0]), ctx)
+    assert isinstance(r, Unsupported) and "rows of the credited window" in r.reason
+    tree = _credited_attention(4, wins)
+    tree.children = [c for c in tree.children if "credited_window" not in str(c.op)]
+    r = Int8AttentionScope().match(tree, ctx)
+    assert isinstance(r, Unsupported) and "exactly one credited_window" in r.reason
 
 
 @pytest.mark.parametrize("T", [1])

@@ -20,6 +20,14 @@ values the linear's two Calls exchange (`call_boundaries`), never as a second re
         pos+1,scale}` per (row, head))
     verity_int8::kv_quant_window(Tensor k, Tensor v, Tensor k_scales) -> (Tensor kq, Tensor vq, Tensor sv, Tensor v0)
         kv_quant of one request's window already read, k and v bf16 [s, G, d] (a credited read's rows, `engine.int8_window`)
+    verity_int8::credited_step(Tensor seq_lens, int batch, int kv_heads, int head_dim, int read) -> (Tensor lens, Tensor wo,
+            Tensor k, Tensor v)
+        a credited read's step (`int8_window.CreditedRead.buffers`): request r's window at rows wo[r] .. wo[r + 1] - 1 of the
+        fresh K and V [rows, G, d] bf16, rows the sum of the lengths
+    verity_int8::credited_window(Tensor kv_cache, Tensor block_table, Tensor? slot_mapping, Tensor lens, Tensor wo, Tensor(a!) k,
+            Tensor(b!) v, int layer, int read) -> ()
+        a layer's windows into the step's K and V (`int8_window.CreditedRead.read`), kv_cache vLLM's view [pages, G, slots, 2d];
+        it also sets the plaintext flags of the slots slot_mapping wrote (the store's, not an argument)
 
 Importing this module defines them (once per process).
 """
@@ -29,6 +37,7 @@ import torch
 
 from verity_vllm.engine import int8_attention as A
 from verity_vllm.engine import int8_exact as E
+from verity_vllm.engine import int8_window as W
 
 LIBRARY = "verity_int8"
 
@@ -125,3 +134,39 @@ def window_attention(query: torch.Tensor, keys: torch.Tensor, values: torch.Tens
     _requests(query, query_start_loc, seq_lens,
               lambda r, s: kv_quant_window(keys[offsets[r]:offsets[r] + s], values[offsets[r]:offsets[r] + s], k_scales), k_scales,
               scale, output)
+
+
+@torch.library.custom_op(f"{LIBRARY}::credited_step", mutates_args=())
+def credited_step(seq_lens: torch.Tensor, batch: int, kv_heads: int, head_dim: int,
+                  read: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    return W.read_of(read).buffers(seq_lens, batch, kv_heads, head_dim)
+
+
+@credited_step.register_fake
+def _credited_step_fake(seq_lens, batch, kv_heads, head_dim, read):
+    rows = torch.library.get_ctx().new_dynamic_size()
+    k = seq_lens.new_empty((rows, kv_heads, head_dim), dtype=torch.bfloat16)
+    return (seq_lens.new_empty(batch, dtype=torch.int32), seq_lens.new_empty(batch + 1, dtype=torch.int32), k, torch.empty_like(k))
+
+
+@torch.library.custom_op(f"{LIBRARY}::credited_window", mutates_args=("k", "v"))
+def credited_window(kv_cache: torch.Tensor, block_table: torch.Tensor, slot_mapping: torch.Tensor | None, lens: torch.Tensor,
+                    wo: torch.Tensor, k: torch.Tensor, v: torch.Tensor, layer: int, read: int) -> None:
+    W.read_of(read).read(kv_cache, layer, block_table, slot_mapping, lens, wo, k, v)
+
+
+def credited_attention(read: W.CreditedRead, query: torch.Tensor, kv_cache: torch.Tensor, layer: int, meta, kv_heads: int,
+                       k_scales: torch.Tensor, scale: float, output: torch.Tensor) -> None:
+    """`paged_attention` through ``read``: one ``verity_int8::credited_step`` at the step's first layer (``meta``, vLLM's
+    attention metadata, is one object a step), one ``verity_int8::credited_window`` a layer, then `window_attention`."""
+    st = read.current
+    if st is None or st.meta is not meta:
+        batch = meta.query_start_loc.numel() - 1
+        read.current = None
+        lens, wo, k, v = credited_step(meta.seq_lens, batch, kv_heads, query.shape[-1], read.handle)
+        host = [0]
+        for n in meta.seq_lens.tolist()[:batch]:
+            host.append(host[-1] + max(int(n), 0))
+        read.current = st = W.Step(meta, batch, lens, wo, host, k, v)
+    credited_window(kv_cache, meta.block_table, meta.slot_mapping, st.lens, st.wo, st.k, st.v, layer, read.handle)
+    window_attention(query, st.k, st.v, st.offsets, meta.query_start_loc, meta.seq_lens, k_scales, scale, output)
