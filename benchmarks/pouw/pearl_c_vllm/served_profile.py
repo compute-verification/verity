@@ -153,7 +153,7 @@ CATEGORIES = (
     ("pearlc:setup", r"^s512_heads$"),
     ("pearlc:tile_hash", r"^s512_tile_leaves$|^s512_tile_segs$"),
     ("pearlc:folds", r"^s512_folds$"),
-    ("pearlc:screen", r"^kernel$|screen|^scatter$"),
+    ("pearlc:screen", r"screen|^scatter$"),
     ("fp8:quant", r"fp8_quant|scaled_fp8|segmented_max|dynamic_scaled|per_token_group_quant|quant"),
     ("attention", r"flash|fmha|attention|attn|FlashAttn|paged"),
     ("gemm", r"cutlass|nvjet|gemm|Gemm|sm90_|sm100_|sm120_|xmma|cublas|Kernel2|splitK|^device_kernel$"),
