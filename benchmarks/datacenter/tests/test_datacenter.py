@@ -296,6 +296,16 @@ def test_the_joint_ledger_credits_each_units_time_and_memory_once(setup):
         ("dc0", "compute:gate", None), ("b.gpu", "held", None)}        # PoUW credits the prover system: the datacenter
     closed = account(audit(run(p, INPUTS, night), p.public(night)), p.public(night), assume=(FLEET_CLOSED,))
     assert {(x.unit, x.grade) for x in closed.credits if x.resource.startswith("compute")} == {("a", "fleet-closed")}
+    # PoUW's proved bound, when the scheme gives it, is the block's compute credit (compute's review 3, 15:12Z): one
+    # number per block per window, at 1 block-tick a tick, in place of the honest routing's per-facet loads
+    timed = p.public(night, ticks={"a": 2.0})
+    pouw = account(audit(run(p, INPUTS, night), timed), timed, assume=(FLEET_CLOSED,))
+    a = pouw.blocks[0]
+    assert pouw.sound and a.busy == 2.0 / 16
+    assert [(x.unit, x.resource, x.work, x.grade) for x in pouw.credits if x.resource.startswith("compute")] == [
+        ("a", "compute", 2.0, "fleet-closed")]
+    overlap = Ledger([pouw, pouw]).joint()                      # 4 block-ticks fit in 16, but the windows overlap
+    assert ("a", "compute", EPOCH, 4.0, 0.0) in overlap and not any(r == "compute" and v > 0 for _, r, _, _, v in overlap)
     twice = Ledger().add(honest).add(honest)
     assert not twice.sound and [(u, r, i) for u, r, i, _, _ in twice.joint()] == [("b.gpu", "held", Interval(0, 2))]
 

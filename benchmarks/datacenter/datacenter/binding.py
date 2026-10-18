@@ -49,8 +49,9 @@ class Placement:
         b = self.datacenter.block_of(self.leaf[i])
         return b.name if b else None
 
-    def public(self, plan: Plan) -> Profile:
-        """The placement's public properties for the epoch `plan` audits."""
+    def public(self, plan: Plan, ticks: dict[str, float] | None = None) -> Profile:
+        """The placement's public properties for the epoch `plan` audits. `ticks` is PoUW's proved bound per block: the
+        least block-ticks the block's declared work takes over every route at the data sheet's rates."""
         c = self.circuit
         work: dict[str, dict[str, float]] = {b.name: {} for b in self.datacenter.blocks}
         forced: dict[str, float] = {b.name: 0.0 for b in self.datacenter.blocks}
@@ -67,7 +68,7 @@ class Placement:
         stores.update({w.store.name: w.store for w in plan.wipes})
         salt, salt_out, pinned = self._custody(trusted, plan.registration)
         return Profile(self.datacenter, plan, occupancy(self), work, forced, stores, dict(c.weights), salt, salt_out,
-                       pinned)
+                       pinned, dict(ticks or {}))
 
     def _custody(self, trusted: set[int], registration: int) -> tuple[dict[str, float], ...]:
         """For each block whose own certifier releases a salt into it: the salt's bits, the bits other than timing that
@@ -113,7 +114,9 @@ class Profile:
     (`work`; per-kind counts, as PoUW's census gives them), what one unit of each kind is credited (`weights`, W_ref),
     the trusted data each block consumes (`forced`, in bits), and the registered stores. For a block whose certifier
     holds a salt for it: the salt's bits (`salt`), what besides timing could carry it out before registration
-    (`salt_out`, in bits), and the credit of the block's work that depends on it (`pinned`)."""
+    (`salt_out`, in bits), and the credit of the block's work that depends on it (`pinned`). For a block whose work
+    PoUW timed: its proved bound (`ticks`, in block-ticks), which the account credits in place of the per-facet loads,
+    since a prover may route work to another facet than the honest design does."""
 
     datacenter: Datacenter
     plan: Plan
@@ -125,6 +128,7 @@ class Profile:
     salt: dict[str, float] = field(default_factory=dict)
     salt_out: dict[str, float] = field(default_factory=dict)
     pinned: dict[str, float] = field(default_factory=dict)
+    ticks: dict[str, float] = field(default_factory=dict)
 
     def credit(self, block: str) -> float:
         """The work `block` is to be credited with: each kind's units at its weight."""
