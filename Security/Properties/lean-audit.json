@@ -34,7 +34,8 @@
   "Properties.Pous.EndToEnd",
   "Properties.Proofs.Pous.Run",
   "Properties.Accounting.Requirement",
-  "Properties.Proofs.Accounting.Requirement"
+  "Properties.Proofs.Accounting.Requirement",
+  "Properties.Accounting.Compose"
  ],
  "proved_in": ["../Proofs"],
  "assumptions": {
@@ -190,8 +191,13 @@
   },
   "Properties.Accounting": {
    "imports": ["Definitions.Accounting", "CircuitRequirement"],
-   "except": [],
+   "except": ["Properties.Accounting.Compose"],
    "why": "the requirement code's equalities are stated against its functions and the `Definitions.Accounting.Requirement` definitions they copy, never a proof"
+  },
+  "Properties.Accounting.Compose": {
+   "imports": ["Definitions.Accounting", "SampledProofs"],
+   "except": [],
+   "why": "a declared circuit's proof units (`Definitions.Accounting.Compose`) are stated against the verifier's own partition of its program (`SampledProofs.Slots.layout`), never a proof"
   }
  },
  "reads_exempt": {
