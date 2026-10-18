@@ -43,18 +43,18 @@
   {
    "id": "c3-policy-throttles-pretraining",
    "rung": 3,
-   "statement": "Under the policy, across all declarations, pretraining a new frontier model is slowed by about the same factor.",
-   "status": "contested",
+   "statement": "Under the policy, with one registration phase up front, pretraining a new model is slowed by the one-declaration factor across any number of declarations, and the model it produces can't be served without paying about the same factor again (it was never registered).",
+   "status": "conditional",
    "premises": [
     "c2-one-declaration",
-    "p-sticky-novelty",
+    "p-one-registration",
     "p-theta-budgets"
    ],
    "attacks": [
     "a-recommitment",
     "a-committed-corpus"
    ],
-   "next": "Adopt sticky novelty: values computed under monitoring stay novel in every later theta; trained models enter theta only at a slow, priced graduation cadence. Prove the composition lemma."
+   "next": "Prove the composition lemma; fix the registered set's budgets; decide whether any re-registration channel exists, since every such channel is a recommitment route and must be slow and priced."
   },
   {
    "id": "c4-known-methods",
@@ -237,10 +237,10 @@
    }
   },
   {
-   "id": "p-sticky-novelty",
+   "id": "p-one-registration",
    "kind": "policy-rule",
-   "status": "missing",
-   "statement": "Values computed under monitoring stay novel in every later theta; only outputs of a registered model's forward function may become free; trained models graduate into theta at a slow, priced cadence. With a composition lemma (about 200-400 Lean lines) the one-declaration theorem covers a run.",
+   "status": "proposed",
+   "statement": "Everything committed is registered once, before monitoring, and reused by every declaration; nothing computed under monitoring ever enters theta. So a value one declaration passes to another is novel, and a run split across declarations is charged like one declaration whose theta is the registered set. A short composition lemma (the union of declarations over one registered theta is a declaration) states this in Lean.",
    "refs": {}
   },
   {
@@ -288,7 +288,7 @@
   {
    "id": "a-recommitment",
    "severity": "fatal",
-   "status": "repair-proposed",
+   "status": "answered",
    "targets": [
     "c3-policy-throttles-pretraining"
    ],
@@ -301,8 +301,8 @@
    ],
    "title": "Recommitting theta makes the throttle per declaration",
    "mechanism": "Theta has no provenance or cadence rule. Commit a checkpoint, train a block's worth reading only theta, emit a gradient, recommit. Even daily release lets blocks take hundreds of local steps (DiLoCo-style) from committed weights.",
-   "effect": "efficiency 0.3-1 when free; 2e-5 to 8e-4 under an alpha-priced ledger",
-   "repair": "p-sticky-novelty",
+   "effect": "efficiency 0.3-1 if theta could be refreshed; closed by one registration phase, except through any re-registration channel the policy later allows",
+   "repair": "p-one-registration",
    "refs": {
     "findings": [
      "douillard-2023-diloco/1",

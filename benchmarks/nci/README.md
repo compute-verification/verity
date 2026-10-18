@@ -99,7 +99,7 @@ one is a research target.
 | --- | --- | --- |
 | 1 | inference complies as declared | established |
 | 2 | within one declaration with θ frozen, contained dense pretraining runs at about 1e-7 to 3e-7 efficiency | conditional |
-| 3 | the policy throttles pretraining across declarations | contested |
+| 3 | the policy throttles pretraining across declarations | conditional |
 | 4 | every known method is throttled or weak | open |
 | 5 | translated into capability and time | contested |
 | 6 | robust to unknown algorithms | open |
@@ -111,10 +111,11 @@ Each claim lists:
 - **what attacks it:** the red teams' findings, by severity, each with its repair;
 - **what comes next.**
 
-The decisive gap is at rung 3. Recommitting θ makes the throttle apply per declaration, so the policy needs sticky
-novelty: values computed under monitoring stay novel in every later θ. A composition lemma would then let the
-one-declaration theorem cover a whole run. The proposed evidence carries the round-2 red team's verdicts. Render the
-index for the full map.
+The red teams' top attack was recommitting θ between declarations. One registration phase up front closes it:
+nothing computed under monitoring ever enters θ, so values passed between declarations are novel. A composition lemma
+then lets the one-declaration theorem cover a whole run. Any later re-registration channel would reopen the attack, so
+it would have to be slow and priced. The proposed evidence carries the round-2 red team's verdicts. Render the index
+for the full map.
 
 ## What the literature says now
 
