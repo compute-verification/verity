@@ -92,6 +92,7 @@ def test_the_window_fit_is_exact_and_refuses_another_form():
     assert co["roundings"] == {"r0": 2, "b_q": 1, "b_kv": 0, "w0": 0, "w_start": -1}
     assert co["compare_select"] == {"r0": 0, "b_q": 0, "b_kv": 1, "w0": 0, "w_start": 0}
     assert U.evaluate(co, 7, 30) == {"roundings": 2 * 7 + U.rows_keys(7, 30), "compare_select": 30}
+    assert U.by_primitive(bind(w, N=3, S=7), [True]) == {"F32Add_v1|roundings": 3 * 2 + 5 + 6 + 7, "F32Fmaxf_v1|compare_select": 7}
     sq = window(lambda N, S, n: n * n, "TestStackedSquare")
     with pytest.raises(AssertionError, match="the fit misses"):
         U.fit(lambda N, S: U.count(bind(sq, N=N, S=S), [True]), POINTS, CHECKS)

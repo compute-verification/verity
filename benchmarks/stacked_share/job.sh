@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # The exact-int8 Llama-3.1-8B request Program (LP=256, T=31, the row's shape) built on one GPU, then units.py on it, as served
 # and modeled at 70B TP8 (llama31-70b-tp8.json). Keeps the descriptor, the Build's result and both units documents in $OUT.
+# DESCRIPTOR=PATH skips the Build (no GPU) and reads that one.
 #
 #   research run --queue --on vy-nebius-1 --gpus 1 --cpus 16 --mem-gb 96 --max-min 90 --source . --project verity \
 #     --cwd clone/integrations/vllm -- bash ../../benchmarks/stacked_share/job.sh
@@ -12,6 +13,7 @@ REPO=verity-int8/Llama-3.1-8B-INT8
 REV=723d342ac443b040931242c768df342b0f6f15a7
 TARGET='{"int8_exact": "all", "compute_capability": [12, 0], "num_sms": 188}'
 HERE=../../benchmarks/stacked_share
+if [ -z "${DESCRIPTOR:-}" ]; then
 d=$(mktemp -d)
 trap 'rm -rf "$d"' EXIT
 "$PY" -m verity_vllm.pipeline.cli workload --row-id "$ROW" --hf-repo "$REPO" --revision "$REV" --batch 1 --max-input 256 \
@@ -20,5 +22,7 @@ trap 'rm -rf "$d"' EXIT
   --workload "workloads/$ROW.json" --out "$d/build_request" --target "$TARGET" > "$OUT/build_request.log" 2>&1 \
   || { tail -50 "$OUT/build_request.log"; exit 10; }
 cp "$d/build_request/descriptor.json.gz" "$d/build_request/result.json" "$OUT/"
-/usr/bin/time -v "$PY" "$HERE/units.py" "$OUT/descriptor.json.gz" --out "$OUT/units-8b.json" \
+DESCRIPTOR=$OUT/descriptor.json.gz
+fi
+/usr/bin/time -v "$PY" "$HERE/units.py" "$DESCRIPTOR" --out "$OUT/units-8b.json" \
   --as "$HERE/llama31-70b-tp8.json" --as-out "$OUT/units-70b.json" 2> >(tee "$OUT/units.time" >&2)

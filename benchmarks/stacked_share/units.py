@@ -58,11 +58,12 @@ def charged(t: P.Tally) -> tuple[Counter, Counter]:
     return u, refused
 
 
-def units(fn: Any, ends: Sequence[int] | None = None, dyn: Sequence[bool] | None = None) -> dict:
+def units(fn: Any, ends: Sequence[int] | None = None, dyn: Sequence[bool] | None = None, rng: Sequence[Any] | None = None) -> dict:
     """``callees``: each callee of `fn`'s body by id, with its family, instances, units and refused gates; ``total``. On a Program
     (anything with a ``root``: its run inputs are its dynamic values) also ``steps``, the units of each census/v1 step at `ends`
     (default: one step), checked against `stacking.analyze`. A Definition's parameters depend on a run input as `dyn` says
-    (default: all); gather index bits its parameters carry go under ``(parameters)``."""
+    (default: all) and take the value ranges `rng` (default: any word); gather index bits its parameters carry go under
+    ``(parameters)``, and ``arg_rng`` holds each call's argument ranges."""
     program = fn if hasattr(fn, "root") else None
     if program is not None:
         body, pdyn, fid = program.root.body, (), program.root.id
@@ -80,7 +81,9 @@ def units(fn: Any, ends: Sequence[int] | None = None, dyn: Sequence[bool] | None
     steps = [Counter() for _ in ends]
     up: dict = {}
     dyns: list[bool] = []
-    for k, t in P._Pass().walk(body, pdyn, (None,) * len(pdyn), fid, [], dyns, up):
+    segs: list = []
+    prng = tuple(rng) if rng is not None else (None,) * len(pdyn)
+    for k, t in P._Pass().walk(body, pdyn, prng, fid, segs, dyns, up):
         u, refused = charged(t)
         r = rows[body.nodes[k].fn.id]
         r["units"].update(u)
@@ -99,12 +102,14 @@ def units(fn: Any, ends: Sequence[int] | None = None, dyn: Sequence[bool] | None
                 raise AssertionError(f"step {s}: the callees' units {listed} are not stacking.analyze's {theirs['units']}")
         out["steps"] = [dict(s) for s in steps]
     out["arg_dyn"] = {k: [P._dyn(a.refs, pdyn, dyns) for a in nd.args] for k, nd in enumerate(body.nodes) if not is_input(nd.fn)}
+    if program is None:
+        out["arg_rng"] = {k: [P._read(a.refs, prng, segs) for a in nd.args] for k, nd in enumerate(body.nodes) if not is_input(nd.fn)}
     return out
 
 
-def count(fn: Any, dyn: Sequence[bool]) -> dict[str, int]:
+def count(fn: Any, dyn: Sequence[bool], rng: Sequence[Any] | None = None) -> dict[str, int]:
     """One call's units by `KEYS` (refused gates other than the provisional ones raise: their cost isn't known)."""
-    u, refused = charged(P.count(bind(fn) if isinstance(fn, CompositeDefinition) else fn, dyn))
+    u, refused = charged(P.count(bind(fn) if isinstance(fn, CompositeDefinition) else fn, dyn, rng))
     if refused:
         raise ValueError(f"{fn.id}: property/v1 refuses {dict(refused)}")
     return dict(u)
@@ -249,9 +254,13 @@ def bind_body(fn: Any) -> Any:
     return (bind(fn) if isinstance(fn, CompositeDefinition) else fn).body
 
 
-def by_family(fn: Any, dyn: Sequence[bool], expand: Sequence[str] = ()) -> dict[str, dict[str, int]]:
-    """One call of `fn`'s units by the family of each callee of its body, a callee of an `expand` family by its own callees'."""
-    u = units(fn, dyn=dyn)
+def by_family(fn: Any, dyn: Sequence[bool], expand: Sequence[str] = (), every: bool = False,
+              rng: Sequence[Any] | None = None) -> dict[str, dict[str, int]]:
+    """One call of `fn`'s units by the family of each callee of its body, a callee of an `expand` family (`every`: any composite)
+    by its own callees' at the ranges its call gives it."""
+    if isinstance(fn, PrimitiveDefinition):
+        return {family(fn): count(fn, dyn, rng)}
+    u = units(fn, dyn=dyn, rng=rng)
     first: dict[str, int] = {}
     for k, nd in enumerate(bind_body(fn).nodes):
         if not is_input(nd.fn):
@@ -259,13 +268,25 @@ def by_family(fn: Any, dyn: Sequence[bool], expand: Sequence[str] = ()) -> dict[
     out: dict[str, Counter] = {}
     body = bind_body(fn)
     for cid, r in u["callees"].items():
-        if r["family"] in expand:
-            k = first[cid]
-            for f, v in by_family(body.nodes[k].fn, u["arg_dyn"][k], expand).items():
+        k = first.get(cid)
+        if k is not None and (r["family"] in expand or (every and not isinstance(body.nodes[k].fn, PrimitiveDefinition))):
+            for f, v in by_family(body.nodes[k].fn, u["arg_dyn"][k], expand, every, u["arg_rng"][k]).items():
                 out.setdefault(f, Counter()).update({c: n * r["instances"] for c, n in v.items()})
         else:
             out.setdefault(r["family"], Counter()).update(r["units"])
     return {f: dict(v) for f, v in out.items() if v}
+
+
+def by_primitive(fn: Any, dyn: Sequence[bool]) -> dict[str, int]:
+    """One call of `fn`'s units by ``primitive|class``, every composite expanded; refused when they don't sum to `count`'s (a
+    callee whose units depend on the ranges its caller gives it)."""
+    out = {f"{p}|{c}": n for p, u in by_family(fn, dyn, every=True).items() for c, n in u.items()}
+    whole, parts = count(fn, dyn), Counter()
+    for k, n in out.items():
+        parts[k.split("|")[1]] += n
+    if dict(parts) != whole:
+        raise AssertionError(f"{fn.id}: its primitives' units {dict(parts)} are not its own {whole}")
+    return out
 
 
 def per_key(fn: Any, dyn: Sequence[bool], S0: int = 128) -> dict[str, dict[str, Fraction]]:
@@ -343,17 +364,22 @@ LINEAR = ("Int8Linear_v1", "Int8RowQuant_v1")
 LINEAR_INNER = ("Int8RowQuant_v1",)
 
 
-def levers(program: Any, rows: Mapping[str, dict], arg_dyn: Mapping[int, list[bool]], *, attention: str,
-           spec: Mapping[str, Any] | None = None) -> dict:
+def levers(program: Any, rows: Mapping[str, dict], arg_dyn: Mapping[int, list[bool]], *, token: str, sample: Sequence[str],
+           attention: str, spec: Mapping[str, Any] | None = None) -> dict:
     """What the levers act on, from the Program's own Definitions at `rows`' statics (a modeled variant's rows, with `spec`'s
     attention statics): the attention window's units a key by inner family (a K' quantized once at the KV write removes
     ``Int8StaticQuant``'s; a V' stored once, with a static scale, removes ``Int8ColumnQuant``'s), each int8 linear's activation
-    quantizer's units a call by inner family (a static activation scale removes ``Int8RowScale``'s), and the LM head as an int8
-    linear (``Int8Linear_v1`` at the BF16 ``Gemm_v2``'s K and N)."""
+    quantizer's units a call by inner family (a static activation scale removes ``Int8RowScale``'s), the LM head as an int8
+    linear (``Int8Linear_v1`` at the BF16 ``Gemm_v2``'s K and N), and ``primitives``: the units a token row and a sampled row
+    spend by ``primitive|class``, and the attention window's coefficients by the same keys (`fit`, exact)."""
     fns = first_calls(program, arg_dyn)
     fn, dyn = fns[attention]
     att = (spec or {}).get("attention") or {}
-    out: dict[str, Any] = {"attention_per_key": per_key(rebound(fn, **att) if att else fn, dyn), "linear": {}}
+    win = rebound(fn, **att) if att else fn
+    out: dict[str, Any] = {"attention_per_key": per_key(win, dyn), "linear": {}}
+    tokens = sum(r["instances"] for r in rows.values() if r["family"] == token)
+    samples = sum(r["instances"] for r in rows.values() if r["family"] == sample[-1])
+    prims: dict[str, Counter] = {"token": Counter(), "sample": Counter()}
     for cid, r in rows.items():
         if r["family"] in LINEAR:
             f, d = fns[r["family"]]
@@ -361,6 +387,15 @@ def levers(program: Any, rows: Mapping[str, dict], arg_dyn: Mapping[int, list[bo
         elif r["family"] == "Gemm_v2":
             K, N = r["statics"]["K"], r["statics"]["N"]
             out["lm_head_int8"] = {"K": K, "N": N, "units": count(bind(REGISTRY.defs["Int8Linear_v1"], K=K, N=N), [True, False, False])}
+        if r["family"] in (attention, "(parameters)"):
+            continue
+        f, d = fns.get(cid) or fns[r["family"]]
+        g = f if r["statics"] == dict(getattr(f, "bindings", {})) else rebound(f, **r["statics"])
+        part, n = ("sample", samples) if r["family"] in sample else ("token", tokens)
+        prims[part].update({p: Fraction(v * r["instances"] * r.get("ranks", 1), n) for p, v in by_primitive(g, d).items()})
+    out["primitives"] = {k: dict(v) for k, v in prims.items()}
+    out["primitives"]["attention"] = fit(lambda N, S: by_primitive(rebound(win, N=N, S=S), dyn), FIT_POINTS,
+                                         [(N, S, None) for N, S in FIT_CHECKS])
     return out
 
 
@@ -377,6 +412,30 @@ def describe(program: Any, rows: Mapping[str, dict], *, token: str, sample: Sequ
             "extra": dict(extra or {}),
             "callees": {k: dict(r) for k, r in rows.items()},
             "total": dict(sum((Counter(r["units"]) for r in rows.values()), Counter()))}
+
+
+def check_primitives(doc: Mapping[str, Any]) -> None:
+    """The primitives' units sum to the document's by class: a token row's (but the spec's extra), a sampled row's, and each
+    attention coefficient."""
+    def classes(d: Mapping[str, Any]) -> dict:
+        out: Counter = Counter()
+        for k, v in d.items():
+            out[k.split("|")[1]] += v
+        return {k: v for k, v in out.items() if v}
+    pr = doc["levers"]["primitives"]
+    tok = Counter(doc["token"])
+    tok.subtract({k: Fraction(v) for k, v in ((doc.get("extra") or {}).get("token") or {}).items()})
+    att = {c: {k: v for k, v in co.items() if v} for c, co in doc["attention"]["coefficients"].items()}
+    mine = {}
+    for k, co in pr["attention"].items():
+        for name, v in co.items():
+            if v:
+                mine.setdefault(k.split("|")[1], Counter())[name] += v
+    for what, a, b in (("token", classes(pr["token"]), {k: v for k, v in tok.items() if v}),
+                       ("sample", classes(pr["sample"]), {k: v for k, v in doc["sample"].items() if v}),
+                       ("attention", {c: dict(v) for c, v in mine.items()}, att)):
+        if a != b:
+            raise AssertionError(f"the primitives' {what} units {_ints(a) if what != 'attention' else a} are not the document's {b}")
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -402,7 +461,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     doc = describe(program, u["callees"], token=a.token, sample=sample, attention=a.attention, att=att, layers=calls.pop())
     doc["program"]["descriptor"] = str(a.descriptor)
     doc["steps"] = u["steps"]
-    doc["levers"] = levers(program, u["callees"], dyn, attention=a.attention)
+    doc["levers"] = levers(program, u["callees"], dyn, token=a.token, sample=sample, attention=a.attention)
+    check_primitives(doc)
     a.out.write_text(json.dumps(jsonable(doc), indent=1, default=str))
     print(json.dumps(jsonable({k: doc[k] for k in ("tokens", "samples", "token", "sample", "attention", "total")}), indent=1,
                      default=str))
@@ -413,7 +473,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         m = describe(program, rows, token=a.token, sample=sample, attention=a.attention, att=att2,
                      layers=spec["layers"][1] * spec["ranks"], extra=spec.get("extra"))
         m["program"]["modeled"] = {k: spec[k] for k in ("label", "layers", "ranks", "once", "statics", "attention") if k in spec}
-        m["levers"] = levers(program, rows, dyn, attention=a.attention, spec=spec)
+        m["levers"] = levers(program, rows, dyn, token=a.token, sample=sample, attention=a.attention, spec=spec)
+        check_primitives(m)
         a.as_out.write_text(json.dumps(jsonable(m), indent=1, default=str))
         print(json.dumps(jsonable({k: m[k] for k in ("tokens", "samples", "token", "sample", "attention", "total")}), indent=1,
                          default=str))
