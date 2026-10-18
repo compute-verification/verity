@@ -50,11 +50,27 @@ decision 101's keyed draw) is retired.
 * `LinkSoundIn … σ (δlink σ)`: C-Flock's link finder at the window's state, over the window's run.
 * The harm family's first term: `k_prime`'s `K′`.
 
-**The tie to what's served.** `WindowEps` bounds the committed transcript's wrong units. What PoUW credits reads two
-more ties, which the record corollary must carry: the transcript's inputs agree with the anchors (C-Flock's
-`AnchorsSound`, its `δ_in`, `Proofs/Flock/Soundness/Audit/OneStage.lean`), and its outputs are the served `-h3` leaves
-each unit reads (`tile_read` under the pass's `-h3` root, which the window's entries hold). The corollary also needs a
-bridge from this game (`Pouw.Window`) to `FlockSoundness.Audit`'s.
+**PoUW's reading: three links.** `WindowEps` bounds the committed transcript's wrong units. PoUW's reading of it needs
+three more links, each stated:
+* **The deployed wrong sets are copy-closed** (`WrongCopyClosed`), so `ServiceEscapes`'s `η = 0` applies to them. The
+  service's units' statements are the tiles' read in every session (`UnitStmts.copies`: an instance's public inputs are
+  its tile and the window's common words, never the session), and their wrong sets are copy-closed, proved
+  (`Pouw.Window.wrongCopyClosed_copies`). On them `𝓑 = harmSets Wref ε ∧ CopyClosed` holds of a wrong set exactly when
+  `harmSets` does (`Pouw.Window.harmSets_copyClosed_iff`).
+* **The tie to what's served** (`ServedTie`, premise `δ_in`): the window accepts while its committed transcript's inputs
+  aren't the anchors' (C-Flock's `AnchorsSound`, its `δ_in`, `Proofs/Flock/Soundness/Audit/OneStage.lean`) or its outputs
+  aren't the served `-h3` leaves each unit reads (`tile_read` under the pass's `-h3` root, which the window's entries
+  hold) with probability at most `δ_in(R, τ)`. The units' statements are the verifier's own (`Check.program`), not a
+  copy the prover chose. Stated as a premise, since its discharge is those binding terms. PoUW's event, the window
+  accepting while its committed transcript isn't anchored, served and outside `𝓑`, is then at most `WindowEps`'s bound
+  plus `δ_in` (`Pouw.Window.window_served_le`, proved).
+* **The bridge to C-Flock** (`Proofs/Pouw/Window/FlockBridge.lean`): C-Flock's sessions read in this game
+  (`Pouw.Window.ofFlock`) win with the same probabilities (`prob_ofFlock`, proved), a C-Flock `ExtractionAnalysis` of a
+  session is a `CallAnalysis` of its call (`CallAnalysis.ofFlock`), and C-Flock's pointwise knowledge bound
+  (`FlockKnowledgeSound`, premise) is the call's `KnowledgeSound` (`ofFlock_knowledgeSound`, proved). The bound reads
+  the session's own table coins and the extractor's `Kr` reruns, at the state the registration, the draw and the earlier
+  sessions left, never the draw's coin. At the compiled tables it is `ksJoint_le`, which identifies `κ_c = 2^logLen/(e·Kr)`
+  and `g_c = ε_c⁻ + Kr·adv₀`; `δlink_c` is C-Flock's link finder at the window's state.
 
 Each unit's statement carries its position: its seed inputs (tag, salt, position, root(A_j), root(B_j)) are
 `UnitStmts.seedIn X v`, the tag and salt public, and the position and roots functions of the place `v` and `X`, bound

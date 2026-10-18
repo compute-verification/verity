@@ -40,10 +40,13 @@ guarantee `audit_window_split_of_record` is stated over), on its own so that a g
   window's state);
 * `coll`: the window's collision term, the calls' state terms `g_c` summed along the window's run, in expectation over
   the draw;
+* `ServedTie` (premise `δ_in`): the window accepts while its committed transcript isn't anchored and served with
+  probability at most a term of the window's state;
 * the deployed draw, sampled proofs' service (`verity/core/protocols/pouw/window.py`): `subsetDraw`, one uniform `K`-of-`N`
   tile subset; `sessions`, `chunk` and `serviceLaw`, its rank-ordered sessions, each a call of the window whose units are
   the `N` tiles; `share` and `sessionLaw`, each session's own uniform law; `CopyClosed`, the unit sets that hold a tile
-  in every session or in none.
+  in every session or in none; `UnitStmts.copies`, the tiles' statements read in every session, and `WrongCopyClosed`,
+  statements whose wrong sets are copy-closed.
 -/
 
 namespace Pouw.Window
@@ -355,6 +358,23 @@ def EscapesWithin {Reg : Type} (Lw : Reg → Law (WUnit n)) (L : Reg → (c : Fi
     (𝓑 : Finset (WUnit n) → Prop) (η : ℝ≥0∞) : Prop :=
   ∀ R B, 𝓑 B → (Lw R).escape B ≤ (Law.prod (L R)).escape B + η
 
+/-- **The tie to what's served** (premise `δ_in`, PoUW's reading of `WindowEps`): for the window's committed transcript
+`committed`, the predicates `anchored` (the transcript's values at the units' input wires are the anchors', what the
+served pass committed for its activations and weights) and `served` (its outputs at each unit are the served `-h3` leaf
+words that unit reads, `tile_read` under the pass's `-h3` root, which the window's entries hold), every prover's window
+accepts while its committed transcript isn't anchored and served with probability at most `δin(R, τ)`, a function of
+the window's state. `WindowEps` bounds the wrong units of whatever transcript the analysis commits; this is what makes
+that transcript the served computation's, not a self-consistent copy the prover chose. The units' statements `U` are the
+verifier's own (`Check.program`, protocol structure), so the prover can't pick them either. Its discharge is C-Flock's
+`AnchorsSound` (`δ_in`, `Proofs/Flock/Soundness/Audit/OneStage.lean`) for the inputs and the window statement's opening
+of the `-h3` root for the outputs (`window_problem`, not yet a Program), each a binding term at the window's state. -/
+def ServedTie {Reg Tr : Type} (Lw : Reg → Law (WUnit n)) (sess : (c : Fin C) → Finset (Fin (n c)) → Reg → Game Bool)
+    (committed : (R : Reg) → Cont Lw (windowSession sess) R → Tr) (anchored served : Tr → Prop)
+    (δin : (R : Reg) → Cont Lw (windowSession sess) R → ℝ≥0∞) : Prop :=
+  ∀ σ : Strategy (auditReg Lw (windowSession sess)),
+    prob (fun o => o.1 = true ∧ ¬ (anchored (committed (reg σ) (cont σ)) ∧ served (committed (reg σ) (cont σ))))
+      (auditReg Lw (windowSession sess)) σ ≤ δin (reg σ) (cont σ)
+
 end Window
 
 /-! ## The deployed draw: sampled proofs' service
@@ -396,8 +416,33 @@ def sessionLaw (N K cap σ : ℕ) : Law (Fin N) where
   draw π := subsetDraw (share K cap σ) π
 
 /-- **Copy-closed unit sets**: a set that holds tile `t` in one session holds it in every session. The service's units'
-statements read the tile and not the session that proves it, so a transcript's wrong units are copy-closed. -/
+statements read the tile and not the session that proves it, so a transcript's wrong units are copy-closed
+(`WrongCopyClosed`). -/
 def CopyClosed {S N : ℕ} (B : Finset (WUnit fun _ : Fin S => N)) : Prop :=
   ∀ (σ σ' : Fin S) (t : Fin N), (⟨σ, t⟩ : WUnit fun _ : Fin S => N) ∈ B → ⟨σ', t⟩ ∈ B
+
+/-- **The service's units' statements**: the tiles' statements `V` (a window of one call whose units are the `N`
+tiles) read in every one of `S` sessions. Unit `⟨σ, t⟩` is tile `t` proved in session `σ`; its instance's public
+inputs are `t` and the window's common words (`public_inputs` in `window.py`: the window root, its domain, the sides'
+domains and `domain_h3`), never `σ`, so its seed inputs and what it computes are tile `t`'s. -/
+def UnitStmts.copies {Tr : Type} {N : ℕ} (V : UnitStmts Tr fun _ : Fin 1 => N) (S : ℕ) :
+    UnitStmts Tr fun _ : Fin S => N where
+  Tag := V.Tag
+  Salt := V.Salt
+  Pos := V.Pos
+  Root := V.Root
+  tag := V.tag
+  salt := V.salt
+  pos X v := V.pos X ⟨0, v.2⟩
+  rootA X v := V.rootA X ⟨0, v.2⟩
+  rootB X v := V.rootB X ⟨0, v.2⟩
+  computes v si X := V.computes ⟨0, v.2⟩ si X
+
+/-- **The deployed wrong sets are copy-closed** (PoUW's reading of `WindowEps`, which it reads at
+`𝓑 = harmSets W_ref ε ∧ CopyClosed`, and `ServiceEscapes`'s family): at every transcript, the wrong units hold a tile
+in every session or in none. It holds for the service's statements (`Pouw.Window.wrongCopyClosed_copies`), and there
+`𝓑`'s copy-closed conjunct is automatic (`Pouw.Window.harmSets_copyClosed_iff`). -/
+def WrongCopyClosed {Tr : Type} {S N : ℕ} (U : UnitStmts Tr fun _ : Fin S => N) : Prop :=
+  ∀ X, CopyClosed (U.wrong X)
 
 end Pouw.Window

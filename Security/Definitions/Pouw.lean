@@ -170,8 +170,10 @@ One draw that depends on the registration (C1), then the calls' sessions in orde
 audit: the game, the laws and their product (M1), the units' statements (self-contained tiles whose seed's position and
 roots are read at their place in the committed transcript, decision 106) and PoUW's harm family (`harmSets`), each
 call's analysis, the premises of the window's composition in the compiled tables' shape (a constant plus a term of the
-prover's state) and the window's collision term (`coll`), and the deployed draw, sampled proofs' service's uniform
-subset in rank-ordered sessions (`serviceLaw`, `sessionLaw`, `CopyClosed`).
+prover's state) and the window's collision term (`coll`), the tie to what's served (`ServedTie`), and the deployed draw,
+sampled proofs' service's uniform subset in rank-ordered sessions (`serviceLaw`, `sessionLaw`, `CopyClosed`) with its
+units' statements, the tiles' read in every session (`UnitStmts.copies`, `WrongCopyClosed`).
 The window's ε from its calls' (M2) and the service's draw at `η = 0` are `Models.Pouw.Guarantees.Window`, stated and
-not yet proved.
+not yet proved. `Proofs.Pouw.Window`: the deployed wrong sets are copy-closed, PoUW's reading with the served tie, and
+the bridge from the window's game to C-Flock's.
 -/
