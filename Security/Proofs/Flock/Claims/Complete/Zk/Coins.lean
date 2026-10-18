@@ -21,7 +21,7 @@ fail.
   prover alike.
 * **The mask slot's rank** (`rankSlotsZk`, `MaskRank.MaskRankAt`): the prover refuses coins at which the mask slot's
   weights at its claim points so far are rank-deficient (`rankCheckP`), one event per table, at its rep `1`'s four
-  points. At most `4·m·2^-128` per table: the open premise `MaskRank.MaskRankBound`.
+  points. At most `4·m·2^-128` per table: the premise `MaskRank.MaskRankBound`, proved (`MaskRank.maskRankBound`).
 
 `εZk` is their count, each pair coin twice and each table's rank checks `4·m` times, over `2^128` (`Complete.Ready`,
 with the slots and `δcZk`); `pr_badZk_le` is the union bound. The slots read the statement's `m`, `k_log`, regions and
