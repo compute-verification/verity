@@ -53,10 +53,17 @@ def actO (x : Claims.Msg) (as : List Claims.Msg) (cs : List Coin) : Act :=
 /-- The verifier's own inner shape (`--rec-inner`) at the statement, where it reads. -/
 def innerOfO (x : Claims.Msg) : Option RecVStar.Inner := (insO x).bind (·.inner)
 
-/-- **The verdict's last refusal** (`RecSetup.fullDraw`, as `verifyCmd` calls it at the record's draw): under the
-verifier's inner shape, a V* session whose record's draw is not every unit of its population. -/
+/-- Whether the statement is a recursive session (`--rec-part`, `--rec-bindings` or `--rec-rows`), where it reads. -/
+def recO (x : Claims.Msg) : Bool :=
+  match insO x with
+  | some s => s.part.isSome || s.bindings.isSome || s.rows.isSome
+  | none => false
+
+/-- **The verdict's last refusal** (`RecSetup.fullDraw`, as `verifyCmd` calls it at the record's draw): a recursive
+session without the verifier's inner shape, and under that shape a V* session whose record's draw is not every unit of
+its population. -/
 def fullDrawO (x : Claims.Msg) (f : Final) : Bool :=
-  (RecSetup.fullDraw (innerOfO x) (Witness.recordDraw f.record) f.record).isOk
+  (RecSetup.fullDraw (innerOfO x) (recO x) (Witness.recordDraw f.record) f.record).isOk
 
 /-- The outer verifier's next message: at a decision, the decision, then the verdict's full-draw refusal, which makes no
 SHA-512 call. -/
