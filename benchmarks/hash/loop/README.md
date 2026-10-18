@@ -31,6 +31,8 @@ arm's measures, each measurement naming its `arm` (stock, sha512, blake3). The v
   intervals (the headline), prefill and decode step time, the model's own GPU time per step and its rise over stock, hash GPU time
   per step, the noise (stock's TPOT spread over its interleaved reps), and the first profiled run's wall-time rise and bytes
   copied: the timed runs replay its requests and hit its plans, so only that run takes the learning path every live step takes.
+- `overlap.py`: from a run's `served.nsys-rep`, each of the model's kernels (and the gather) timed alone and beside the hash
+  kernels: the contention, kernel by kernel.
 - `label.py`: the labels, idempotent; rerun it on runs whose launching VM stopped waiting.
 - `plot.py`: iteration against each measure, one line per (GPU, arm), from the evidence store only
   (`research data select --label campaign=hash-loop --kind bench-result/v1`, after `research data refresh`, since each run
