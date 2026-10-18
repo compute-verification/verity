@@ -581,7 +581,8 @@ def _thermometer(C, bits):
     """``[value > j]`` for j < 2^len(bits), the unsigned value of ``bits`` (LSB first)."""
     t = [ZERO]
     for b in bits:
-        t = [OR(C, b, x) for x in t] + [C.AND(b, x) for x in t]
+        both = [C.AND(b, x) for x in t]
+        t = [b ^ x ^ a for x, a in zip(t, both)] + both                 # b OR x, its AND the one above it
     return t
 
 
@@ -592,29 +593,39 @@ def _xor_all(bits):
     return acc
 
 
+def _or_and(C, bits):
+    """(OR, AND) of ``bits``, the first level's pairs ANDed once for both (two bits' OR is their XOR and their AND)."""
+    a, b, odd = bits[0::2], bits[1::2], list(bits[len(bits) & ~1:])
+    pairs = [C.AND(x, y) for x, y in zip(a, b)]
+    return or_reduce(C, [x ^ y ^ p for x, y, p in zip(a, b, pairs)] + odd), and_reduce(C, pairs + odd)
+
+
 def f32_rint(C, x):
     """``F32Rint_v1`` (numpy's rint): x to the nearest integer, ties to even, as f32.  From 2^23 on, x is itself (a NaN quieted);
     below 1 it is a signed 0, or ±1 when 0.5 < |x|; between, its d = 150 - e fractional mantissa bits (a thermometer on d) are
     cleared and 2^d is added to the encoding when they round up, a significand that overflows carrying into the exponent."""
     s, e, m = x[31], list(x[23:31]), list(x[:23])
     sig = m + [ONE]
-    T = _thermometer(C, add(C, [NOT(b) for b in e[:5]], const_bits(23, 5), width=5))
+    d1, big_e = sub(C, const_bits(149, 8), e, 8)                  # d - 1 = 149 - e, and e >= 150 (its borrow)
+    T = [ONE] + _thermometer(C, d1[:5])[:31]                      # [d > j]: d >= 1 wherever mid is selected
     hot = [T[j] ^ T[j + 1] for j in range(23)]                    # hot[j]: j = d - 1 (T is a thermometer, so the XOR is the AND)
     guard = _xor_all(C.AND(hot[j], sig[j]) for j in range(23))
-    lsb = _xor_all(C.AND(hot[j - 1], sig[j]) for j in range(1, 24))
+    at_lsb = [C.AND(hot[j - 1], sig[j]) for j in range(1, 24)]
+    lsb = _xor_all(at_lsb)
     Z = [sig[0]]
     for b in sig[1:22]:
         Z.append(OR(C, Z[-1], b))
     sticky = _xor_all(C.AND(hot[j + 1], Z[j]) for j in range(22))
     up = C.AND(guard, OR(C, sticky, lsb))
-    cleared = [C.AND(NOT(T[j]), m[j]) for j in range(23)] + e
+    cleared = [ZERO, at_lsb[0]] + [C.AND(NOT(T[j]), m[j]) for j in range(2, 23)] + e     # NOT(T[1]) is hot[0]
     mid = add(C, cleared, [ZERO] + [C.AND(up, hot[j - 1]) for j in range(1, 24)], width=31) + [s]
     m_nz = OR(C, Z[21], m[22])
-    up126 = C.AND(_eq_const(C, e, 126), m_nz)
+    e16, e07 = and_reduce(C, e[1:7]), C.AND(e[0], e[7])           # 126 and 255 share exponent bits 1 .. 6
+    up126 = C.AND(C.AND(e16, NOT(e[0] ^ e[7] ^ e07)), m_nz)
     low = [ZERO] * 23 + [up126] * 7 + [ZERO, s]
-    nan = C.AND(_eq_const(C, e, 0xFF), m_nz)
+    nan = C.AND(C.AND(e16, e07), m_nz)
     big = list(x[:22]) + [OR(C, x[22], nan)] + list(x[23:])
-    return mux(C, NOT(_ult_const(C, e, 150)), big, mux(C, _ult_const(C, e, 127), low, mid))
+    return mux(C, big_e, big, mux(C, _ult_const(C, e, 127), low, mid))
 
 
 def f32_to_s8_rzi(C, x):
@@ -636,7 +647,7 @@ def s8_to_f32(C, c):
 def _unpack64(C, w):
     """An f64 word's (sign, 53-bit significand, effective exponent field (1 for zero and subnormals), nan, inf, zero)."""
     m, e, s = list(w[:52]), list(w[52:63]), w[63]
-    e_nz, e_max, m_nz = or_reduce(C, e), and_reduce(C, e), or_reduce(C, m)
+    (e_nz, e_max), m_nz = _or_and(C, e), or_reduce(C, m)
     nan = C.AND(e_max, m_nz)
     return s, m + [e_nz], [e[0] ^ NOT(e_nz)] + e[1:], nan, e_max ^ nan, NOT(OR(C, e_nz, m_nz))
 
@@ -708,12 +719,14 @@ def f64_to_u32_rni_sat(C, x):
     part; the bits below are the sticky.  The rounding's carry out of 32 bits, x >= 2^32 and +inf saturate."""
     s, e, m = x[63], list(x[52:63]), list(x[:52])
     sig = m + [ONE]
-    q, st = fp.shr_sticky(C, sig[20:], sub(C, const_bits(1054, 11), e, 11)[0][:6])
+    amt, past = sub(C, const_bits(1054, 11), e, 11)               # the shift, and e >= 1055 (its borrow)
+    q, st = fp.shr_sticky(C, sig[20:], amt[:6])
     n = q[1:33]
-    up = C.AND(q[0], OR(C, OR(C, or_reduce(C, sig[:20]), st), n[0]))
+    lo = or_reduce(C, m[:20])
+    up = C.AND(q[0], OR(C, OR(C, lo, st), n[0]))
     r = add(C, n, [up], width=32, carry_out=True)
-    sat = OR(C, NOT(_ult_const(C, e, 1055)), r[32])
-    zero = OR(C, OR(C, s, _ult_const(C, e, 1022)), C.AND(and_reduce(C, e), or_reduce(C, m)))
+    sat = OR(C, past, r[32])
+    zero = OR(C, OR(C, s, _ult_const(C, e, 1022)), C.AND(and_reduce(C, e), OR(C, lo, or_reduce(C, m[20:]))))
     return [C.AND(NOT(zero), OR(C, sat, b)) for b in r[:32]]
 
 

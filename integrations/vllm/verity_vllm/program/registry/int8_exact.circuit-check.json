@@ -7,16 +7,16 @@
    "and": 1924
   },
   "F32Rint_v1": {
-   "and": 306
+   "and": 275
   },
   "F32ToS8Rzi_v1": {
    "and": 89
   },
   "F64Mul_v1": {
-   "and": 8451
+   "and": 8441
   },
   "F64ToU32RniSat_v1": {
-   "and": 471
+   "and": 448
   },
   "LutIndex_v1": {
    "and": 1989
