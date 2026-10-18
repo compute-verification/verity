@@ -50,6 +50,14 @@ def duoQuad {n : ℕ} (k₁ a₁ : BitVec n) (r₁ : ℕ) (k₂ a₂ : BitVec n)
     BitVec n × BitVec n :=
   duoTriple k₂ a₂ r₂ k₃ a₃ r₃ k₄ a₄ r₄ d.2 (duoWord k₁ a₁ r₁ s d.1)
 
+/-- A run of `L` words `w` from the state `s`, word `i` with keys `(k i, a i, r i)`: the first word, then the rest
+(`duoPair`, `duoTriple` and `duoQuad` at `L = 2, 3, 4`). -/
+def duoRun {n : ℕ} : {L : ℕ} → (k a : Fin L → BitVec n) → (r : Fin L → ℕ) → (w : Fin L → BitVec n) →
+    BitVec n × BitVec n → BitVec n × BitVec n
+  | 0, _, _, _, _, s => s
+  | _ + 1, k, a, r, w, s =>
+      duoRun (Fin.tail k) (Fin.tail a) (Fin.tail r) (Fin.tail w) (duoWord (k 0) (a 0) (r 0) s (w 0))
+
 /-- The served receipt of a final state `s = (y, z)`: `y ⊕ rotl(z, h)`, with `h = 16` at `n = 32`. A thread commits
 the XOR of its 8 chains' receipts, and the four chains of a parity group absorb with the same keys. -/
 def duoReceipt {n : ℕ} (h : ℕ) (s : BitVec n × BitVec n) : BitVec n := s.1 ^^^ s.2.rotateLeft h
@@ -58,10 +66,5 @@ def duoReceipt {n : ℕ} (h : ℕ) (s : BitVec n × BitVec n) : BitVec n := s.1 
 `s'`. Two words have equal spreads exactly when their receipts differ by one XOR constant on every start state. -/
 def duoWordSpread {n : ℕ} (k a : BitVec n) (r h : ℕ) (d : BitVec n) (s s' : BitVec n × BitVec n) : BitVec n :=
   duoReceipt h (duoWord k a r s d) ^^^ duoReceipt h (duoWord k a r s' d)
-
-/-- `duoWordSpread` for the word pair `d = (d₁, d₂)`. -/
-def duoPairSpread {n : ℕ} (k₁ a₁ : BitVec n) (r₁ : ℕ) (k₂ a₂ : BitVec n) (r₂ h : ℕ) (d : BitVec n × BitVec n)
-    (s s' : BitVec n × BitVec n) : BitVec n :=
-  duoReceipt h (duoPair k₁ a₁ r₁ k₂ a₂ r₂ d s) ^^^ duoReceipt h (duoPair k₁ a₁ r₁ k₂ a₂ r₂ d s')
 
 end Pouw.Receipt

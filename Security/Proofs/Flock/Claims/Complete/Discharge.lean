@@ -41,10 +41,7 @@ theorem Case.table {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Re
     simp only [Except.ok.injEq, Prod.mk.injEq] at this
     exact this.2
   rw [hpe] at hsz htab
-  have hcount : p.I.count ≤ 1 := by
-    rcases hR.2.2.2.2.1 with h | h
-    · rw [hzk] at h; cases h
-    · exact h
+  have hcount : p.I.count ≤ 1 := by simpa [hzk] using hR.2.2.2.2.1
   obtain ⟨st0, h0, -, -, -, -, -, hm35, -⟩ := Readable.table0 htab hR.2.1 hpi
   have hset2 := hset
   rw [← ht] at hset2
