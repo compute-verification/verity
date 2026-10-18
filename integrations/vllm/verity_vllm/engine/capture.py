@@ -15,7 +15,7 @@ gathered block table) and the sampled ids are copied D2H *asynchronously* into p
 forward / after `sample`, behind a CUDA event, and the step is written out at the start of the next step (or at
 close), when the runner itself has long synchronised on its own output copy.  The observer therefore adds no
 synchronisation of its own, except `torch.cuda.synchronize()` at the end of a step for which snapshots were
-requested.
+requested, and inside one each time its copies fill the pinned arena (the arena's are written out, and it is reused).
 
 Roots: every `named_parameters()` / `named_buffers()` entry (`Root(role=weight|buffer)`, incl. the rotary
 `cos_sin_cache`); the runner's KV caches and input buffers are registered as `StorageAlloc(origin="external")`
@@ -702,6 +702,8 @@ class Capture:
                                      "skipped": why})
             return
         src = storage_bytes_view(t, off, nbytes)
+        if self._snap_pending and not self._arena.fits(nbytes):
+            self._drain_snapshots()
         host = self._arena.take(nbytes)
         host.copy_(src, non_blocking=True)
         entry = {"event": eid, "path": path, "view": view.to_json(), "dtype": view.dtype, "shape": list(view.shape),
@@ -737,6 +739,15 @@ class Capture:
             self.errors.append({"where": "blocks_in_use", "error": repr(e)[:300]})
             self._kv_blocks_in_step = []
         return self._kv_blocks_in_step
+
+    def _drain_snapshots(self) -> None:
+        """The arena is full mid-step: wait for its copies and write them, so the rest of the step reuses it.  A fresh pinned
+        buffer per copy would stay in torch's host allocator to the step's end: a GLM-5.3 TP8 rank pinned 117 GB at a 256-token
+        prefill, and the eight ranks beside a fold were killed for memory."""
+        t0 = time.perf_counter()
+        torch.cuda.synchronize()
+        self.timing["sync_s"] += time.perf_counter() - t0
+        self._flush_snapshots(self._cur)
 
     def _flush_snapshots(self, st: _Step) -> None:
         t0 = time.perf_counter()
