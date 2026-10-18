@@ -27,7 +27,7 @@ each segment's; every part length-framed or fixed-width), carry the same row, or
 in the two checks have one digest, or two different messages that `G` hashed in the two row digests have one digest.
 
 The instance of record is `H = G = SHA-512`, where the last two disjuncts together are a SHA-512 collision among the
-inputs the two openings hashed. The statement holds for any 64-byte `H` and `G`. -/
+inputs the two openings hashed. It is stated for any 64-byte `H` and `G`. -/
 def RowBinding : Prop :=
   ∀ (H G : Msg → Digest) (V : RowLeaf.Verifier) (root : Digest) (rank : ℕ) (o₁ o₂ : RowLeaf.Opening),
     RowLeaf.accepts H G V root rank o₁ → RowLeaf.accepts H G V root rank o₂ →
