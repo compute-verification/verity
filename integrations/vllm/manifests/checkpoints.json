@@ -196,6 +196,14 @@
    "repos": [
     "zai-org/GLM-5.3"
    ]
+  },
+  {
+   "at": "2026-10-18T19:31:07Z",
+   "by": "vllm-int8-70b",
+   "note": "new entry only (role LLAMA31_70B, the BF16 base of the int8 70B TP4 row, VLLM-29); frozen entries unchanged",
+   "repos": [
+    "unsloth/Meta-Llama-3.1-70B"
+   ]
   }
  ],
  "checkpoints": [
@@ -6255,6 +6263,240 @@
     "model-00139-of-00141.safetensors": "996571ec96e0ec74222fbc587c0d9562d5e21a29842116a2e9bd8d89f26ade72",
     "model-00140-of-00141.safetensors": "0aed808a4aa4d0540bd1e6b91add70665380b6f21d777ad8f5eb23c9dafcfc02",
     "model-00141-of-00141.safetensors": "83b5ab7fb7f77d016ddf957562f92aa961761c2a23f84cccc55e16abb2cc1e0c"
+   }
+  },
+  {
+   "config_sha256": "eb24f00e437ef9e63e2650d107e03131c5ea0b8a26d609330e5c3259129f9f33",
+   "downloaded": true,
+   "files": {
+    ".gitattributes": {
+     "digest_source": "hub",
+     "size": 1519
+    },
+    "README.md": {
+     "digest_source": "hub",
+     "size": 3579
+    },
+    "config.json": {
+     "digest_source": "downloaded",
+     "sha256": "eb24f00e437ef9e63e2650d107e03131c5ea0b8a26d609330e5c3259129f9f33",
+     "size": 927
+    },
+    "generation_config.json": {
+     "digest_source": "downloaded",
+     "sha256": "6bf2223b86de3e55da1ba174aa055661ff060a32eca374abe9983f30f5ed31fe",
+     "size": 230
+    },
+    "model-00001-of-00030.safetensors": {
+     "digest_source": "downloaded",
+     "sha256": "92e6aaec8ce635dd03df1279fd60bdfd8bd2025be61ff63961c8dfcc467108fb",
+     "size": 4584408808
+    },
+    "model-00002-of-00030.safetensors": {
+     "digest_source": "downloaded",
+     "sha256": "345cb6c5bef645f46f7985c3c4bd12919effd25e9c8cdcec087313ab3a999c13",
+     "size": 4664167376
+    },
+    "model-00003-of-00030.safetensors": {
+     "digest_source": "downloaded",
+     "sha256": "61352e0a18541a6340a88ee566ec86db9d0807259fb64a49cf7c7d99dcb27dc3",
+     "size": 4999711704
+    },
+    "model-00004-of-00030.safetensors": {
+     "digest_source": "downloaded",
+     "sha256": "2707a2a6405682d919135edd490e886867df1135a95451a30abce31ff85fde41",
+     "size": 4966157032
+    },
+    "model-00005-of-00030.safetensors": {
+     "digest_source": "downloaded",
+     "sha256": "0cc53ccd267b22f05deb44191db531056c06b79620526eada298b106d321a69d",
+     "size": 4664134408
+    },
+    "model-00006-of-00030.safetensors": {
+     "digest_source": "downloaded",
+     "sha256": "8508c8cb3786d0b25f4c1ca6d0510205b10cab5e75874fe353ad159d27d3834d",
+     "size": 4664167408
+    },
+    "model-00007-of-00030.safetensors": {
+     "digest_source": "downloaded",
+     "sha256": "c4dca9d5b629d0199a319fb2f73d4d36a699897939bbad2a2fa02fece27b580e",
+     "size": 4664167408
+    },
+    "model-00008-of-00030.safetensors": {
+     "digest_source": "downloaded",
+     "sha256": "20919fc8228b7e2e1afaeffd487c4e8ed76defd0ac37c79ea32c2b01176a37e1",
+     "size": 4999711728
+    },
+    "model-00009-of-00030.safetensors": {
+     "digest_source": "downloaded",
+     "sha256": "a177efddcb7b4941f63423c38322dddf4641c58b5d4dbc50db18743588828599",
+     "size": 4966157056
+    },
+    "model-00010-of-00030.safetensors": {
+     "digest_source": "downloaded",
+     "sha256": "5ca82dbeef1fd7334ac17d91e000e1dea4217de8fe85ae1d1ad7b78162e03589",
+     "size": 4664134408
+    },
+    "model-00011-of-00030.safetensors": {
+     "digest_source": "downloaded",
+     "sha256": "9e90fe58002e48b84926c59c4652d3b6f2f01d4541dd8873aaa4f2c98c83e160",
+     "size": 4664167408
+    },
+    "model-00012-of-00030.safetensors": {
+     "digest_source": "downloaded",
+     "sha256": "5c253a87b5fe4fc5073dfb6ff3899bdf7b674445223c654fbbf70d8e9b117b49",
+     "size": 4664167408
+    },
+    "model-00013-of-00030.safetensors": {
+     "digest_source": "downloaded",
+     "sha256": "ead19b1798cffa162bedbce63d216143309130976c71f8eeb270b70e71a9e561",
+     "size": 4999711728
+    },
+    "model-00014-of-00030.safetensors": {
+     "digest_source": "downloaded",
+     "sha256": "14b3e5516872acc6284ac15df4bb16bf7dd7743aec79189107170f53a5d665ca",
+     "size": 4966157056
+    },
+    "model-00015-of-00030.safetensors": {
+     "digest_source": "downloaded",
+     "sha256": "67bbd36439ea28228db60f74a1155fbcd2efaeb96d93bfd7311c788d9183d7d3",
+     "size": 4664134408
+    },
+    "model-00016-of-00030.safetensors": {
+     "digest_source": "downloaded",
+     "sha256": "1e16de26a09ba34c1ee1ffec1cda347214d991e6f110dcb18e2d0baf515d6e03",
+     "size": 4664167408
+    },
+    "model-00017-of-00030.safetensors": {
+     "digest_source": "downloaded",
+     "sha256": "2791a04ee6df7391e48158f887ac3a4f212f7b390a23d5239ef950a5931c5b83",
+     "size": 4664167408
+    },
+    "model-00018-of-00030.safetensors": {
+     "digest_source": "downloaded",
+     "sha256": "526210964cbbf3882bcc2b99a4f1f79bd900b9cd56e5acb0fdb8682def9821b6",
+     "size": 4999711728
+    },
+    "model-00019-of-00030.safetensors": {
+     "digest_source": "downloaded",
+     "sha256": "5ba3905737bbe6227df495acf75b2654f3dd263144632384e009f0cba3b3ebc5",
+     "size": 4966157056
+    },
+    "model-00020-of-00030.safetensors": {
+     "digest_source": "downloaded",
+     "sha256": "5f603a8d676f3295fe554808c648e798c987b3347cfd9757a2ea25c7743dcd44",
+     "size": 4664134408
+    },
+    "model-00021-of-00030.safetensors": {
+     "digest_source": "downloaded",
+     "sha256": "ba3a32378ade3c8175898c2860cee2b505ecadc3d5ae71f97ffc984c0a9f1578",
+     "size": 4664167408
+    },
+    "model-00022-of-00030.safetensors": {
+     "digest_source": "downloaded",
+     "sha256": "adf7f0389cd38b6a43218f28807f321de39cbc829edcb187950a0cabe056826f",
+     "size": 4664167408
+    },
+    "model-00023-of-00030.safetensors": {
+     "digest_source": "downloaded",
+     "sha256": "6c4e76572aa71b8628c71678600a851f96a95127615f02c54b7f9af23a9a17bb",
+     "size": 4999711728
+    },
+    "model-00024-of-00030.safetensors": {
+     "digest_source": "downloaded",
+     "sha256": "c47d3278921e77e328707dfbfa1e341478dd34153c9eec0ae323e87811ae7da1",
+     "size": 4966157056
+    },
+    "model-00025-of-00030.safetensors": {
+     "digest_source": "downloaded",
+     "sha256": "46cf88b8ebf78b5a57e3bf032ece63b70eed11713a9525ee391e1d2e26dc0b59",
+     "size": 4664134408
+    },
+    "model-00026-of-00030.safetensors": {
+     "digest_source": "downloaded",
+     "sha256": "8022b86c9c5e68882883531c53681f47f4704b85756d7334245d9918a043bff5",
+     "size": 4664167408
+    },
+    "model-00027-of-00030.safetensors": {
+     "digest_source": "downloaded",
+     "sha256": "149ba114b76db73441e34267f67342de8bafe16d270b3e92ed3b18dae1dfac72",
+     "size": 4664167408
+    },
+    "model-00028-of-00030.safetensors": {
+     "digest_source": "downloaded",
+     "sha256": "7d525808e30bb2da3e349b741e182ed969efa5e938ea0c8e724ee9ec2d214765",
+     "size": 4999711728
+    },
+    "model-00029-of-00030.safetensors": {
+     "digest_source": "downloaded",
+     "sha256": "d9fdbc30b42b80f37ff85c93adf92c2176c46877fe020d02c61e69eed4d469bf",
+     "size": 4966173536
+    },
+    "model-00030-of-00030.safetensors": {
+     "digest_source": "downloaded",
+     "sha256": "d7ab65186aa6cb9123672ef9612033688a5156e7823fbea2ffefc1144d96c152",
+     "size": 2101346432
+    },
+    "model.safetensors.index.json": {
+     "digest_source": "downloaded",
+     "sha256": "2abe0910e23770a30ccf9b1b91804c64831c47f9c98defaa5293aa999433fc2b",
+     "size": 59615
+    },
+    "special_tokens_map.json": {
+     "digest_source": "downloaded",
+     "sha256": "4b0200893961d974cb9d1ccdeb57dbe55b4299287e7ca1896642e261d8aa5f6c",
+     "size": 345
+    },
+    "tokenizer.json": {
+     "digest_source": "downloaded",
+     "sha256": "79e3e522635f3171300913bb421464a87de6222182a0570b9b2ccba2a964b2b4",
+     "size": 9085657
+    },
+    "tokenizer_config.json": {
+     "digest_source": "downloaded",
+     "sha256": "3b9d1b8227e92eec55037d483e1de4c7cf0f5642204c161cff00176384e59ca6",
+     "size": 50570
+    }
+   },
+   "gated": false,
+   "local_path": "/workspace/hf/hub/models--unsloth--Meta-Llama-3.1-70B/snapshots/1b7306651142d0cc65d993076a250a6a82cf046c",
+   "note": "VLLM-29 (int8 70B TP4): ungated BF16, already in vy-nebius-1's HF cache (benchmarks/ppl/models.py pins the same revision); every local file sha256'd from its bytes by run r20261018-193107-11a2 (the hub tree's lfs_sha256 agree for all 30 shards)",
+   "repo": "unsloth/Meta-Llama-3.1-70B",
+   "resolved_at": "2026-10-18T19:31:07Z",
+   "resolved_by": "vllm-int8-70b",
+   "revision": "1b7306651142d0cc65d993076a250a6a82cf046c",
+   "role": "LLAMA31_70B",
+   "safetensors_sha256": {
+    "model-00001-of-00030.safetensors": "92e6aaec8ce635dd03df1279fd60bdfd8bd2025be61ff63961c8dfcc467108fb",
+    "model-00002-of-00030.safetensors": "345cb6c5bef645f46f7985c3c4bd12919effd25e9c8cdcec087313ab3a999c13",
+    "model-00003-of-00030.safetensors": "61352e0a18541a6340a88ee566ec86db9d0807259fb64a49cf7c7d99dcb27dc3",
+    "model-00004-of-00030.safetensors": "2707a2a6405682d919135edd490e886867df1135a95451a30abce31ff85fde41",
+    "model-00005-of-00030.safetensors": "0cc53ccd267b22f05deb44191db531056c06b79620526eada298b106d321a69d",
+    "model-00006-of-00030.safetensors": "8508c8cb3786d0b25f4c1ca6d0510205b10cab5e75874fe353ad159d27d3834d",
+    "model-00007-of-00030.safetensors": "c4dca9d5b629d0199a319fb2f73d4d36a699897939bbad2a2fa02fece27b580e",
+    "model-00008-of-00030.safetensors": "20919fc8228b7e2e1afaeffd487c4e8ed76defd0ac37c79ea32c2b01176a37e1",
+    "model-00009-of-00030.safetensors": "a177efddcb7b4941f63423c38322dddf4641c58b5d4dbc50db18743588828599",
+    "model-00010-of-00030.safetensors": "5ca82dbeef1fd7334ac17d91e000e1dea4217de8fe85ae1d1ad7b78162e03589",
+    "model-00011-of-00030.safetensors": "9e90fe58002e48b84926c59c4652d3b6f2f01d4541dd8873aaa4f2c98c83e160",
+    "model-00012-of-00030.safetensors": "5c253a87b5fe4fc5073dfb6ff3899bdf7b674445223c654fbbf70d8e9b117b49",
+    "model-00013-of-00030.safetensors": "ead19b1798cffa162bedbce63d216143309130976c71f8eeb270b70e71a9e561",
+    "model-00014-of-00030.safetensors": "14b3e5516872acc6284ac15df4bb16bf7dd7743aec79189107170f53a5d665ca",
+    "model-00015-of-00030.safetensors": "67bbd36439ea28228db60f74a1155fbcd2efaeb96d93bfd7311c788d9183d7d3",
+    "model-00016-of-00030.safetensors": "1e16de26a09ba34c1ee1ffec1cda347214d991e6f110dcb18e2d0baf515d6e03",
+    "model-00017-of-00030.safetensors": "2791a04ee6df7391e48158f887ac3a4f212f7b390a23d5239ef950a5931c5b83",
+    "model-00018-of-00030.safetensors": "526210964cbbf3882bcc2b99a4f1f79bd900b9cd56e5acb0fdb8682def9821b6",
+    "model-00019-of-00030.safetensors": "5ba3905737bbe6227df495acf75b2654f3dd263144632384e009f0cba3b3ebc5",
+    "model-00020-of-00030.safetensors": "5f603a8d676f3295fe554808c648e798c987b3347cfd9757a2ea25c7743dcd44",
+    "model-00021-of-00030.safetensors": "ba3a32378ade3c8175898c2860cee2b505ecadc3d5ae71f97ffc984c0a9f1578",
+    "model-00022-of-00030.safetensors": "adf7f0389cd38b6a43218f28807f321de39cbc829edcb187950a0cabe056826f",
+    "model-00023-of-00030.safetensors": "6c4e76572aa71b8628c71678600a851f96a95127615f02c54b7f9af23a9a17bb",
+    "model-00024-of-00030.safetensors": "c47d3278921e77e328707dfbfa1e341478dd34153c9eec0ae323e87811ae7da1",
+    "model-00025-of-00030.safetensors": "46cf88b8ebf78b5a57e3bf032ece63b70eed11713a9525ee391e1d2e26dc0b59",
+    "model-00026-of-00030.safetensors": "8022b86c9c5e68882883531c53681f47f4704b85756d7334245d9918a043bff5",
+    "model-00027-of-00030.safetensors": "149ba114b76db73441e34267f67342de8bafe16d270b3e92ed3b18dae1dfac72",
+    "model-00028-of-00030.safetensors": "7d525808e30bb2da3e349b741e182ed969efa5e938ea0c8e724ee9ec2d214765",
+    "model-00029-of-00030.safetensors": "d9fdbc30b42b80f37ff85c93adf92c2176c46877fe020d02c61e69eed4d469bf",
+    "model-00030-of-00030.safetensors": "d7ab65186aa6cb9123672ef9612033688a5156e7823fbea2ffefc1144d96c152"
    }
   }
  ],
