@@ -35,7 +35,7 @@ theorem rules_of_inScope {rel : Parsed → Relation} {p : Parsed}
     Rules p.tags p.zk p.I.count p.publicInputs.isSome := by
   obtain ⟨-, -, -, -, h1, h2, h3, h4, h5, h6, -⟩ := h
   simp only [toReadable, Read.form, Bool.not_eq_true] at h1 h2 h3 h4 h5 h6
-  exact ⟨h1, h2, h3, h4, h5, h6⟩
+  exact ⟨h1, h2, h3, by simpa only [LeafOk] using h4, h5, h6⟩
 
 theorem sharedRowsOk_iff (t : Tags) (zk reg : Bool) :
     ProvedScope.sharedRowsOk t zk reg = true ↔ zk = true ∧ t.hiddenOutputs = true ∧ reg = true := by
@@ -117,7 +117,8 @@ theorem inScope_iff (rel : Parsed → Relation) {p : Parsed} (hp : Parses p) :
       split
       · exact hzk (by assumption)
       · exact hlo
-    refine ⟨hlo', hm35, hk6, by omega, h1, by simp [h2], h3, h4, h5, by simp [h6], hsh, hu, hl, hpr, ?_⟩
+    refine ⟨hlo', hm35, hk6, by omega, h1, by simp [h2], h3, by simpa only [LeafOk, Bool.not_eq_true] using h4, h5,
+      by simp [h6], hsh, hu, hl, hpr, ?_⟩
     cases hh : p.tags.hiddenOutputs
     · simp only [hh, Bool.false_eq_true, ↓reduceIte] at hrows
       exact Or.inl hrows
