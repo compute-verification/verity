@@ -597,8 +597,12 @@ unsafe def main (args : List String) : IO UInt32 := do
     | some new, some old => m.insert new old
     | _, _ => m
   let rn := renameName back
+  let t0 ← IO.monoMsNow
+  let lap (what : String) (n : Nat) : IO Unit := do
+    IO.eprintln s!"facts: {what} ({n}) at {(← IO.monoMsNow) - t0} ms"
   let env ← importModules (roots.map fun r => { module := r }) {} (loadExts := false)
   let mnames := env.header.moduleNames
+  lap "import" mnames.size
   let mut modules := #[]
   let mut imports := #[]
   let mut spans := #[]
@@ -617,7 +621,9 @@ unsafe def main (args : List String) : IO UInt32 := do
       #[r.range.pos.line, r.range.endPos.line]))
     audited := audited.push (m, data)
   let decls := audited.foldl (fun acc (_, data) => acc ++ data.constNames) #[]
+  lap "modules" decls.size
   let axioms := axiomsOf env (decls ++ pins)
+  lap "axioms" axioms.size
   let mut counts : Std.HashMap String Nat := {}
   let mut used : NameSet := {}
   let mut offenders := #[]
@@ -655,6 +661,7 @@ unsafe def main (args : List String) : IO UInt32 := do
         (if impl.contains n then #["implemented_by"] else #[]) ++ (if ext.contains n then #["extern"] else #[])
       if !why.isEmpty then
         escapes := escapes.push <| Json.mkObj [("name", toJson n.toString), ("module", toJson m.toString), ("why", toJson why)]
+  lap "declarations" offenders.size
   let opts : Options := (({} : Options).set `pp.proofs false).set `format.width (100 : Nat)
   let ctx : Core.Context := { fileName := "<audit>", fileMap := default, maxHeartbeats := 0, options := opts }
   let readsOf : Std.HashMap Name (Array (Name × Name × ConstantInfo) × Array (Name × Name)) := Id.run do
@@ -666,8 +673,10 @@ unsafe def main (args : List String) : IO UInt32 := do
         memo := memo'
         acc := acc.insert p rs
     return acc
+  lap "reads" readsOf.size
   let (pinned, _) ← (MetaM.run' (pins.mapM fun p => do
     return (p.toString, ← pinInfo env meaning axioms ranges (readsOf.getD p (#[], #[])) p))).toIO ctx { env }
+  lap "pins" pinned.size
   let mut conflicts := #[]
   if let some path := (cfg.getObjValD "canon").getStr?.toOption then
     let h ← IO.FS.Handle.mk path .write
@@ -704,6 +713,7 @@ unsafe def main (args : List String) : IO UInt32 := do
           ("with", toJson d.toString)]
       else
         took := took.insert (rn c) c
+  lap "canon" conflicts.size
   let mut oleans := #[]
   let mut graph := #[]
   for h : i in [0:mnames.size] do
@@ -722,5 +732,9 @@ unsafe def main (args : List String) : IO UInt32 := do
   let doc := if (names vcfg "entries").isEmpty then doc else
     doc.setObjVal! "verifier" (verifierInfo env (names vcfg "entries") (names vcfg "stop")
       (((vcfg.getObjValD "hash").getStr?.toOption.getD "").toName))
-  IO.FS.writeFile out doc.compress
+  lap "graph" oleans.size
+  let text := doc.compress
+  lap "render" text.length
+  IO.FS.writeFile out text
+  lap "write" 0
   return 0
