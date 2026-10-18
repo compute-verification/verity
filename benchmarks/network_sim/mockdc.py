@@ -4,10 +4,13 @@ real network certifier on each block's uplink, then the audit of what each certi
 The declaration is `datacenter.examples.leaf_spine`'s by default: four blocks (each a measured node of 8 GPUs, `rtx_node`), a
 certifier on each block's uplink, two leaf switches joined by a spine, and one host outside every block. Any other
 declaration whose blocks each have one uplink, to a certifier, and which has a device of kind `outside`, works too
-(`--declaration FILE.py:NAME`, a `Datacenter` or a function returning one). `up` creates the namespaces of its netns
-plan (`graph.netns_plan`), all named `na-*`, with netem on the fabric links. `down` stops every process in an `na-`
-namespace and deletes the namespaces, and their veths with them; the root namespace never holds a veth. `status` lists
-them and checks what can reach what. All three run `ip` through `sudo -n`.
+(`--declaration FILE.py:NAME`, a `Datacenter` or a `Fleet`, or a function returning one; a fleet is validated and stood
+up merged, `Fleet.merged`). `--fleet` is `datacenter.examples.two_sites`: two leaf-spines, `east` and `west`, joined by
+a WAN between a certifier on each, `--wan-latency-us` one way, with the outside host on the west site, so the east
+blocks' links cross the WAN. `up` creates the namespaces of its netns plan (`graph.netns_plan`), all named `na-*`, with
+netem on the fabric links (`--wan-jitter-us` of jitter on a WAN link). `down` stops every process in an `na-` namespace
+and deletes the namespaces, and their veths with them; the root namespace never holds a veth. `status` lists them and
+checks what can reach what, with each ping's round trip. All three run `ip` through `sudo -n`.
 
 `run` runs one configuration on every block at once, each block with its own strategy (by default the blocks take
 `honest`, `bits`, `late`, `extra` and `maintenance` in turn, so the default four blocks take the first four;
@@ -27,9 +30,10 @@ by a random bit (`active_replay.adversary_writes`); `late`, which holds a sessio
 whose certifier is down for window 1. Each block is audited twice: by the
 certifier's reference verifier, `audit.Audit`, on the raw and committed records (`active_replay.audit_configuration`),
 and by the accounting layer's record check, `datacenter.check_records`, on the records as `datacenter.observe.Record`s
-against the ones the Program declares (`records`). For that check the declaration's cadence is the certifiers' calibrated parameters (`records.cadence`),
-whatever it declared. A non-honest block's wire is compared with an honest block's of the same run
-(`active_replay.against_honest`).
+against the ones the Program declares (`records`). For that check the declaration's cadence is the certifiers'
+calibrated parameters (`records.cadence`), whatever it declared. The record check also runs once on every block's
+records together, over the declaration's ports (a fleet's merged ones), with the account's charge for the whole run. A
+non-honest block's wire is compared with an honest block's of the same run (`active_replay.against_honest`).
 
 With `--salt`, each certifier's per-window salt is on (`Proxy(salt=active.fresh_salt)`): its ingress side puts one salt
 frame a window in the block's ingress record and sends the salt to the block's server on a connection of its own. Once
@@ -48,7 +52,7 @@ block (`charge`, `datacenter.account` on a profile that credits no work): withou
 at the uplink's full capacity; with it, everything the block's devices hold. With `--salt` its proxy reveals the salts
 of the windows it served, so the certifier's salt check, like its audit, finds nothing for window 1.
 
-    python mockdc.py up | status | down
+    python mockdc.py up | status | down [--fleet --blocks 2]
     python mockdc.py run --out DIR [--salt] [--block b0=honest --block b1=late ...]
 """
 
@@ -60,6 +64,7 @@ import dataclasses
 import importlib.util
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -74,9 +79,9 @@ sys.path[:0] = PATHS
 import active_replay as ar  # noqa: E402
 import graph  # noqa: E402
 import records  # noqa: E402
-from datacenter import (Carried, Datacenter, Interval, Maintenance, Plan, Profile, Refused, account,  # noqa: E402
-                        check_records)
-from datacenter.examples import leaf_spine  # noqa: E402
+from datacenter import (Carried, Datacenter, Fleet, Interval, Maintenance, Plan, Profile, Refused,  # noqa: E402
+                        account, check_records)
+from datacenter.examples import leaf_spine, two_sites  # noqa: E402
 from verity.core.protocols.certifier import calibration  # noqa: E402
 from verity.core.protocols.certifier.audit import Audit  # noqa: E402
 
@@ -97,8 +102,15 @@ def lab(args) -> Datacenter:
         spec.loader.exec_module(module)
         dc = getattr(module, name)
         dc = dc() if callable(dc) else dc
+    elif args.fleet:
+        dc = two_sites(args.blocks, leaves=args.leaves, spines=args.spines, fabric_latency=args.fabric_latency_us / 1e6,
+                       wan_latency=args.wan_latency_us / 1e6)
     else:
         dc = leaf_spine(args.blocks, leaves=args.leaves, spines=args.spines, fabric_latency=args.fabric_latency_us / 1e6)
+    if isinstance(dc, Fleet):
+        if problems := dc.validate():
+            raise SystemExit("the fleet falls short of the model: " + "; ".join(problems))
+        dc = dc.merged()
     graph.check(dc)
     if not any(d.kind == "outside" for d in dc.fabric):
         raise SystemExit(f"{dc.name} has no device of kind `outside` to run the peer on")
@@ -106,7 +118,7 @@ def lab(args) -> Datacenter:
 
 
 def plan_of(args, dc: Datacenter) -> graph.NetnsPlan:
-    return graph.netns_plan(dc, jitter=args.fabric_jitter_us / 1e6)
+    return graph.netns_plan(dc, jitter=args.fabric_jitter_us / 1e6, wan_jitter=args.wan_jitter_us / 1e6)
 
 
 def outside(dc: Datacenter) -> str:
@@ -165,15 +177,16 @@ def down(args) -> None:
 
 
 def status(args) -> None:
-    """Each namespace's interfaces and netem, then reachability: the outside host reaches each certifier and no block,
-    a certifier reaches its block, and a block reaches nothing, its certifier included, since the certifier's guard
-    drops whatever the block opens."""
+    """Each namespace's interfaces and netem, then reachability, with each ping's round trip: the outside host reaches
+    each certifier (across the WAN, in a fleet, for the far site's) and no block, a certifier reaches its block, and a
+    block reaches nothing, its certifier included, since the certifier's guard drops whatever the block opens."""
     dc = lab(args)
     plan = plan_of(args, dc)
+    width = max(len(n.name) for n in plan.namespaces)
     for n in plan.namespaces:
         ifs = ", ".join(f"{i.name} {i.address} -> {i.peer[0]}" + (f" [netem {' '.join(i.netem)}]" if i.netem else "")
                         for i in n.interfaces)
-        print(f"{n.name:12} {n.role:9} forward={int(n.forward)}  {ifs}")
+        print(f"{n.name:{width}} {n.role:9} forward={int(n.forward)}  {ifs}")
     if diff := differences(plan):
         raise SystemExit(f"{'; '.join(diff)}: {RESHAPE}")
     ext = outside(dc)
@@ -183,11 +196,13 @@ def status(args) -> None:
         _, cert = records.uplink(dc, b)
         checks += [(ext, plan.fabric_address(cert), True), (ext, plan.address(b, cert), False),
                    (cert, plan.address(b, cert), True), (b, plan.address(cert, b), False), (b, ext_address, False)]
-    bad = 0
+    bad, width = 0, max(len(src) for src, _, _ in checks)
     for src, dst, want in checks:
-        got = sudo(["ip", "netns", "exec", graph.netns_name(src), "ping", "-c1", "-W1", dst], check=False).returncode == 0
+        r = sudo(["ip", "netns", "exec", graph.netns_name(src), "ping", "-c1", "-W1", dst], check=False)
+        got, rtt = r.returncode == 0, re.search(r"time=([\d.]+) ms", r.stdout)
         bad += got != want
-        print(f"ping {src:7} -> {dst:12} {'reaches' if got else 'dropped'}{'' if got == want else '  (WRONG)'}")
+        print(f"ping {src:{width}} -> {dst:12} {'reaches' if got else 'dropped'}"
+              + (f" in {rtt[1]} ms" if got and rtt else "") + ("" if got == want else "  (WRONG)"))
     if bad:
         raise SystemExit(f"{bad} reachability check(s) wrong")
 
@@ -243,16 +258,18 @@ def verifier_plan(dc: Datacenter, plans: dict) -> Plan:
         for b, p in plans.items() if "outage" in p])
 
 
-def charge(dc: Datacenter, plan: Plan, claims: list, block: str) -> dict:
-    """The account of one block's claims under the verifier's plan for that block (`datacenter.account`, which charges
-    every block its plan has out), on a profile that credits no work and registers no store: whether it is sound, and
-    its covert budget, which is the carried windows' timing advice, every refused port-window at its uplink's full
-    capacity, and everything the block holds if it is out for maintenance."""
-    mine = Plan(plan.epoch, maintenance=[m for m in plan.maintenance if m.block == block])
+def charge(dc: Datacenter, plan: Plan, claims: list, block: str | None = None) -> dict:
+    """The account of one block's claims under the verifier's plan for that block, or of every block's under the whole
+    plan (`datacenter.account`, which charges every block its plan has out), on a profile that credits no work and
+    registers no store: whether it is sound, and its covert budget, which is the carried windows' timing advice, every
+    refused port-window at its uplink's full capacity, and everything a block holds if it is out for maintenance."""
+    mine = plan if block is None else Plan(plan.epoch, maintenance=[m for m in plan.maintenance if m.block == block])
     acc = account(claims, Profile(dc, mine, {}, {}, {b.name: 0.0 for b in dc.blocks}, {}))
+    ours = [x for x in acc.blocks if block is None or x.block == block]
     return {"sound": acc.sound, "covert_bits": acc.covert_bits, "timing_bits": acc.timing_bits,
-            "refused_bits": acc.refused_bits, "serviced_bits": acc.serviced.get(block, 0.0),
-            "carried_bits": next(x.carried for x in acc.blocks if x.block == block)}
+            "refused_bits": acc.refused_bits, "serviced_bits": sum(v for b, v in acc.serviced.items() if b in
+                                                                   {x.block for x in ours}),
+            "carried_bits": sum(x.carried for x in ours)}
 
 
 def describe(charged: dict) -> str:
@@ -404,11 +421,13 @@ def audit(out: Path, dc: Datacenter, honest_plan: dict, plans: dict, report: dic
     verifier = verifier_plan(dc, plans)
     unplanned_plan = Plan(verifier.epoch)
     summary = {"declaration": dc.name, "cadence": {k: v for k, v in vars(dc.cadence).items() if k != "tick"},
+               "wan": [[f"{e.a}-{e.b}", repr(e.capacity), repr(e.latency)] for e in dc.links if e.kind == "wan"],
                "plan": {"epoch": [verifier.epoch.start, verifier.epoch.end],
                         "maintenance": [[m.block, [m.during.start, m.during.end]] for m in verifier.maintenance]},
                "blocks": {}}
     honest = next((b for b, s in strategies.items() if s == "honest"), None)
     width = max(map(len, strategies.values()))
+    every_published, every_declared = [], {}
     for b, strategy in strategies.items():
         a = ar.audit_configuration(plans[b], report, out / b, audit=Audit)
         (out / b / "audit.json").write_text(json.dumps(a))
@@ -418,7 +437,10 @@ def audit(out: Path, dc: Datacenter, honest_plan: dict, plans: dict, report: dic
         salts = {int(w): bytes.fromhex(s) for w, s in json.loads(path.read_text()).items()} if salt and path.exists() \
             else None
         mine = plans[b] if "outage" in plans[b] else honest_plan
-        claims = check_records(published, records.declared(mine, setup, dc, b, salts, verifier), dc.cadence)
+        declared = records.declared(mine, setup, dc, b, salts, verifier)
+        every_published += published
+        every_declared |= declared
+        claims = check_records(published, declared, dc.cadence)
         (out / b / "records.json").write_text(json.dumps([records.to_json(r) for r in published]))
         refused = [f"{c.on}: {c.why}" for c in claims if isinstance(c, Refused)]
         c = a["comparisons"]
@@ -464,6 +486,15 @@ def audit(out: Path, dc: Datacenter, honest_plan: dict, plans: dict, report: dic
                 f"; salt frames ingress {s['ingress_salt_frames']} egress {s['egress_salt_frames']}, commitments "
                 f"{'ACCEPTED' if s['accepted'] else 'REFUSED'}, block received {s['block_received']}")
         print(line)
+    claims = check_records(every_published, every_declared, dc.cadence)
+    refused = [f"{c.on}: {c.why}" for c in claims if isinstance(c, Refused)]
+    ports = sorted({repr(p) for p, _ in every_declared})
+    summary["records"] = {"ports": ports, "of": len(dc.ports), "carried": sum(isinstance(x, Carried) for x in claims),
+                          "refused": refused, "account": charge(dc, verifier, claims)}
+    where = sorted({str(c.on) for c in claims if isinstance(c, Refused)})
+    print(f"{dc.name}: datacenter records on {len(ports)} of its {len(dc.ports)} ports "
+          + ("ACCEPTED" if not refused else f"REFUSED ({', '.join(where)})")
+          + f", {describe(summary['records']['account'])}")
     return summary
 
 
@@ -473,13 +504,18 @@ def main(argv: list[str] | None = None) -> int:
     for name, fn in (("up", up), ("down", down), ("status", status), ("run", run)):
         p = sub.add_parser(name)
         p.set_defaults(fn=fn)
-        p.add_argument("--declaration", metavar="FILE.py:NAME", help="a Datacenter, or a function returning one, "
-                       "instead of datacenter.examples.leaf_spine's (which --blocks, --leaves, --spines and --fabric-latency-us shape)")
+        p.add_argument("--declaration", metavar="FILE.py:NAME", help="a Datacenter or Fleet, or a function returning "
+                       "one, instead of datacenter.examples.leaf_spine's (which --blocks, --leaves, --spines and "
+                       "--fabric-latency-us shape)")
+        p.add_argument("--fleet", action="store_true", help="datacenter.examples.two_sites' fleet instead, with "
+                       "--blocks, --leaves and --spines a site's, and --wan-latency-us its WAN's")
         p.add_argument("--blocks", type=int, default=4)
         p.add_argument("--leaves", type=int, default=2)
         p.add_argument("--spines", type=int, default=1)
         p.add_argument("--fabric-latency-us", type=int, default=2_000, help="each fabric hop's latency")
         p.add_argument("--fabric-jitter-us", type=int, default=500, help="each fabric hop's delay jitter")
+        p.add_argument("--wan-latency-us", type=int, default=20_000, help="the WAN's one-way latency, with --fleet")
+        p.add_argument("--wan-jitter-us", type=int, default=2_000, help="a WAN link's delay jitter")
         if name == "run":
             p.add_argument("--out", required=True)
             p.add_argument("--block", action="append", default=[], metavar="BLOCK=STRATEGY",

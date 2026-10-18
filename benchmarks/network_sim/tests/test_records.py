@@ -150,6 +150,62 @@ def test_a_block_down_for_maintenance_is_refused_without_the_plan_and_charged_wh
     assert "datacenter records without the plan REFUSED" in line and "with Maintenance(b0, [6000, 12000)) ACCEPTED" in line
 
 
+def test_a_fleet_is_validated_and_stood_up_merged(m, tmp_path):
+    """`--fleet` is `two_sites`' fleet merged, its WAN as long as `--wan-latency-us`; a fleet declaration is merged
+    too, and one whose inter-site link doesn't end at a certifier is refused."""
+    import argparse
+
+    shape = dict(declaration=None, fleet=True, blocks=1, leaves=1, spines=0, fabric_latency_us=2000,
+                 wan_latency_us=30_000)
+    dc = m.lab(argparse.Namespace(**shape))
+    assert dc.name == "east+west" and [b.name for b in dc.blocks] == ["east.b0", "west.b0"]
+    assert [(e.a, e.b, e.delay) for e in dc.links if e.kind == "wan"] == [("east.wan.cert", "west.wan.cert", 0.03)]
+    path = tmp_path / "fleets.py"
+    path.write_text("from datacenter import Fleet, Link\n"
+                    "from datacenter.examples import two_sites\n"
+                    "def bad():\n"
+                    "    f = two_sites(1)\n"
+                    "    return Fleet(f.datacenters, [Link('east.leaf0', 'west.wan.cert', f.links[0].capacity)])\n")
+    assert m.lab(argparse.Namespace(**shape | {"declaration": f"{path}:two_sites"})).name == "east+west"
+    with pytest.raises(SystemExit, match="ends at 'east.leaf0', not a certifier"):
+        m.lab(argparse.Namespace(**shape | {"declaration": f"{path}:bad"}))
+
+
+def test_a_fleets_blocks_are_each_audited_and_its_records_checked_on_every_port_of_the_merged_fleet(m, setup, tmp_path,
+                                                                                                   capsys):
+    """On the merged `two_sites` fleet, a late block on the east site and an honest one on the west each get both
+    audits, and one record check on every block's records together covers the fleet's four ports, the WAN's
+    certifiers having none: it refuses what the late block's own check refuses and carries the rest, and the account
+    charges the refused window at the east block's uplink capacity."""
+    report, s = setup
+    honest = m.ar.plan_configuration(m.trace()["configurations"][0], s)
+    dc = m.two_sites(1, cadence=m.records.cadence(s)).merged()
+    plans = {"east.b0": m.strategy_plan(honest, s, "late"), "west.b0": honest}
+    for b, plan in plans.items():
+        assert m.ar.run_virtual(plan, report, tmp_path / b) == {"server": 0, "proxy": 0, "peer": 0}
+    summary = m.audit(tmp_path, dc, honest, plans, report, {"east.b0": "late", "west.b0": "honest"})
+    assert summary["declaration"] == "east+west"
+    assert summary["wan"] == [["east.wan.cert-west.wan.cert", "wan/east-west=1e+11 bit/s (declared)",
+                               "wan/east-west-latency=0.02 s (declared)"]]
+    east, west = summary["blocks"]["east.b0"], summary["blocks"]["west.b0"]
+    both = ["occupancy differs from the declared profile", "a frame is not a committed crossing"]
+    refused = [f"port east.b0.cert:out [0, 6000): {why}" for why in both]
+    assert not east["accepted"] and east["datacenter"]["refused"] == refused
+    assert east["against_honest"]["wire_is_honests"] is False
+    assert west["accepted"] and west["datacenter"]["accepted"] and west["datacenter"]["carried"] == 6
+    fleet = summary["records"]
+    assert fleet["ports"] == ["east.b0.cert:in", "east.b0.cert:out", "west.b0.cert:in", "west.b0.cert:out"]
+    assert fleet["of"] == len(dc.ports) == 4 and fleet["refused"] == refused and fleet["carried"] == 11
+    line_rate = float(dc.uplink("east.b0.cert").capacity) * 6.0
+    held = sum(x["datacenter"]["account"]["carried_bits"] for x in (east, west))
+    assert fleet["account"] == {"sound": False, "covert_bits": 44.0 + line_rate, "timing_bits": 44.0,
+                                "refused_bits": line_rate, "serviced_bits": 0.0, "carried_bits": held}
+    out = capsys.readouterr().out.splitlines()
+    assert out[-1] == (f"east+west: datacenter records on 4 of its 4 ports REFUSED (port east.b0.cert:out [0, 6000)), "
+                       f"account NOT sound, covert budget {44.0 + line_rate:.3g} bits ({line_rate:.3g} on refused "
+                       f"windows)")
+
+
 def test_a_salted_block_publishes_the_records_declared_with_its_revealed_salts(m, setup, tmp_path, capsys):
     """With the certifier's salt on, each ingress window holds one more frame, its first bucket's, and egress is the
     unsalted declaration's. The records declared with the salts the proxy revealed are what it published, and
