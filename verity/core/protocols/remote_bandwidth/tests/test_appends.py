@@ -486,6 +486,72 @@ def test_an_appended_block_leaves_every_plan_within_the_lifetime_unless_re_keyed
             Params(blocks=N, deadline_ns=1, windows=1, lifetime=bad)
 
 
+def test_a_session_that_defers_residency_has_a_lifetime_of_at_least_two() -> None:
+    """Deferred, a block appended in window w is resident from w or w + 1, so its re-key falls at age L − 1: at L = 1,
+    before it may be resident.  The verifier refuses the session's parameters, not only its passes."""
+    assert Params(blocks=N, deadline_ns=1, windows=1).deferred is False
+    assert Params(blocks=N, deadline_ns=1, windows=1, lifetime=1).lifetime == 1
+    assert Params(blocks=N, deadline_ns=1, windows=1, lifetime=2, deferred=True).deferred is True
+    with pytest.raises(ValueError, match="defers residency has a lifetime of at least 2 windows, not 1"):
+        Params(blocks=N, deadline_ns=1, windows=1, lifetime=1, deferred=True)
+    for bad in (1, "yes", None):
+        with pytest.raises(ValueError, match="deferred is a bool"):
+            Params(blocks=N, deadline_ns=1, windows=1, deferred=bad)
+
+
+def withdrawing() -> Run:
+    """Pages 8, 9 and 10 appended; a pass holds 8 and 10, whose encodes landed, and not 9."""
+    r = Run(store())
+    r.append(3)
+    assert r.run(change=(((N, 1), (N + 2, 1)), ())) is None
+    return r
+
+
+def test_a_withdrawn_block_is_released_and_was_in_no_plan() -> None:
+    """A release names the appended blocks among its runs that were freed before their encode landed (memory-map/v1's
+    `withdrawn`): they leave the store like any released block, and the session is accepted, counting them released."""
+    r = withdrawing()
+    assert r.s.release(((N + 1, 1),), ((N + 1, 1),)) is None
+    assert r.run(change=((), ())) is None
+    r.boundary()
+    assert r.run() is None
+    r.boundary()
+    assert [v.accepted for v in r.finish()] == [True, True]
+    assert (r.s.record().appended, r.s.record().released) == (3, 1)
+
+    r = Run(store())
+    r.append(3)
+    assert r.s.release(((N + 1, 2), (N, 1)), ((N, 3),)) is None
+
+
+@pytest.mark.parametrize("runs, withdrawn", [
+    (((N, 1),), ((N, 1),)),
+    (((2, 1),), ((2, 1),)),
+    (((2, 1),), ((N + 1, 1),)),
+    (((N + 1, 1),), ((N + 1, 0),)),
+    (((N + 1, 1),), "x"),
+], ids=["planned", "registered", "outside-the-release", "zero-count", "malformed"])
+def test_a_withdrawal_of_a_block_a_plan_held_or_outside_its_release_rejects_the_session(runs, withdrawn) -> None:
+    """The verifier checks a withdrawn block was never written: appended (at N or above), among the release's own
+    runs, and in no plan received before, however the plan came."""
+    r = withdrawing()
+    assert r.s.release(runs, withdrawn).failure == "release"
+
+
+def test_a_block_any_earlier_plan_held_cannot_be_withdrawn() -> None:
+    """Page 9 was in the first pass's plan (sent whole) and left it at the next (a change): it was written, and its
+    withdrawal is refused."""
+    r = Run(store())
+    r.append(3)
+    assert r.run(Plan(((0, N + 2),), r.store.extent)) is None
+    assert r.run(change=((), ((N, 2),))) is None
+    assert r.s.release(((N + 1, 1),), ((N + 1, 1),)).failure == "release"
+    r = Run(store())
+    r.append(3)
+    assert r.run(Plan(((0, N + 2),), r.store.extent)) is None
+    assert r.s.release(((N + 2, 1),), ((N + 2, 1),)) is None
+
+
 def test_a_malformed_append_or_release_rejects_the_session() -> None:
     for bad in ((bytes(63), 1), (bytes(64), 0), (bytes(64), "1"), (bytes(64), P512.max_blocks)):
         assert Run(store()).s.append(*bad).failure == "append"
