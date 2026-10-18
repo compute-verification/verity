@@ -422,6 +422,8 @@ class DumpedRun:
     run_root: bytes
     steps: list[DumpedStep]
     record: R.RunRecord | None = None
+    #: what the run's commit record carries beside it that a draw reads (``challenge``: `challenge.draw_live`'s), set by the reader
+    extra: dict[str, Any] = field(default_factory=dict)
 
 
 class DumpedStore(NativeRangeOpenings, hiding.LeafSchemeRule):

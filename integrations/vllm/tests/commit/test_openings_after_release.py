@@ -451,3 +451,31 @@ def test_verdict_rules_for_host_plus_replay_and_bounded_records():
     assert not ok and "learned-only" in why
     rec["extra"]["bounded_staging"] = {"enabled": True, "learn_only": True, "learned_only_steps": []}
     assert not commit_verdict(rec, True)[0]
+
+
+def test_a_run_of_record_opens_by_replay_under_its_frozen_record():
+    """What `openings_after_release` does over a run of record (`commit.record`): the frozen view keeps the record; the live committer
+    replays with the record off, so the replay's root is compared with the run's committer root (`record.committer_root`), and every
+    replayed value opens with the frozen record's path and salt and verifies against the SHA-512 root of record."""
+    from verity_vllm.commit import challenge as CH, record as REC
+
+    com = _committer("host")
+    com.of_record = True
+    rc = _run(com)
+    assert len(rc.run_root) == 64 and REC.committer_root(rc) != rc.run_root
+    CH.draw_live(rc, "ab" * 16)
+    frozen = copy.copy(com)
+    frozen.installed = True
+    frozen.release_staging()
+    com.reset()
+    com.of_record = False
+    rc2 = _run(com)
+    assert len(rc2.run_root) == 32 and rc2.run_root == REC.committer_root(rc)
+    picks = CH.positions_of(rc, 32, salt=b"after-release/0") + [(2, rc.steps[2].n_leaves - 1)]
+    ops = frozen.open(picks, values_from=com, paths_from_replay=True)
+    assert len(ops) == len(picks) and all(frozen.verify(rc, o) for o in ops)
+    assert all(len(o.salt) == REC.SALT_BYTES and all(len(p) == 64 for p in o.path) for o in ops)
+    blk, _u = com._gpu_blocks[1]
+    blk[5] ^= 0x01
+    bad = frozen.open([(1, 0), (1, 1)], values_from=com, paths_from_replay=True)
+    assert [frozen.verify(rc, o) for o in bad] == [False, True]

@@ -71,7 +71,7 @@ import torch  # noqa: E402
 
 from verity_vllm.engine import vllm_adapter as va  # noqa: E402
 from verity_vllm.pipeline.timeline import Timeline  # noqa: E402  (torch-free; VERITY_TIMELINE -> append-only JSONL, else a no-op sink)
-from verity_vllm.commit import challenge as CH, opened as OV, scheme as SCH  # noqa: E402
+from verity_vllm.commit import challenge as CH, opened as OV, record as REC, scheme as SCH  # noqa: E402
 from verity_vllm.pipeline import admission_planner as AP, boundary_plan as BP, c2_replay as C2, commit_plan as CP, gpu_lease as GL, group_reuse as GR, replay_bundle as RB  # noqa: E402
 from verity_vllm.pipeline.c2_replay import rss_kb  # noqa: E402
 
@@ -240,6 +240,8 @@ def run_workload(engine: va.Engine, requests: list[dict], sampling: dict) -> dic
 # [coord ruling 41 / rev F-r16-23] the compiled check's sampled steps are drawn from the run root AFTER commitment: seed = int(run_root.hex()[:8], 16)
 # (first 4 bytes).  Recorded on value_correspondence.compiled_check.seed_source so the finalizer recomputes it from the same runs.jsonl as a fact.
 COMPILED_REPLAY_SEED_SOURCE = "run root (first 4 bytes, after commitment): int(run_root.hex()[:8], 16)"
+#: over a root of record (commit.record) the steps are drawn from the live key the run drew after it (challenge.draw_live)
+COMPILED_RECORD_SEED_SOURCE = "live key drawn after the root of record: challenge.record_kernel_check_seed(run_root, source=extra.challenge.key)"
 
 
 def admission_lag(wl: dict) -> int:
@@ -694,7 +696,7 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
     elif comp is not None and not comp.get("ok"):                                  # [R15 B8] an omitted / relabelled / duplicated request, named
         cov = dict(cov, ok=False, missing=list(cov.get("missing") or []), error=comp.get("error") or "composition check failed")
     ctx_ok, ctx_why = B.map_context_check(bmap, rc)
-    picks = B.challenge_identities(pop, bmap, rc.run_root, args.openings, salt=b"population/" + str(pair).encode())
+    picks = B.challenge_identities(pop, bmap, rc.run_root, args.openings, salt=b"population/" + str(pair).encode(), **CH.identities_kw(rc))
     bound = [(i, e, leaf) for i, e, leaf in picks if e is not None]
     unbound = [B.identity_dict(i) for i, e, _ in picks if e is None]
     ops, ok = [], []
@@ -752,7 +754,6 @@ def openings_after_release(com, rc, eng, reqs, sampling, base, args, pair: int, 
     makes the replay byte-identical, which the ORIGINAL roots check (a differing byte fails to open).  Nothing here changes what was bound."""
     import copy
 
-    from verity_vllm.commit.challenge import challenge_positions
     from verity_vllm.commit.committer.native_host import value_family
 
     frozen = copy.copy(com)                     # shallow: keeps THIS run's per-step dicts (reset() rebinds the live committer's, never mutates them)
@@ -760,7 +761,7 @@ def openings_after_release(com, rc, eng, reqs, sampling, base, args, pair: int, 
     freed = frozen.release_staging(levels_to_host=True)
     retained_after = frozen._retained_device_bytes()
     has_host = all(b is not None and not b.is_cuda for b, _u in frozen._gpu_blocks.values()) and bool(frozen._gpu_blocks)
-    sample = list(challenge_positions(rc.run_root, [s.n_leaves for s in rc.steps], args.openings, salt=b"after-release/" + str(pair).encode()))
+    sample = list(CH.positions_of(rc, args.openings, salt=b"after-release/" + str(pair).encode()))
     forced: list[tuple[int, int]] = []
     steps_sorted = sorted(frozen._layouts)
     forced_why: dict[tuple[int, int], str] = {}
@@ -820,6 +821,8 @@ def openings_after_release(com, rc, eng, reqs, sampling, base, args, pair: int, 
             replay_retain = "host"
         com.pool = com.pool.fresh()             # the frozen view owns the original pinned blocks (its levels live there); the replay gets a fresh pool
         t_r = time.perf_counter()
+        # the replay is compared on the committer's root (a record's hiding root never repeats); its values open under the frozen record
+        of_record, com.of_record = getattr(com, "of_record", False), False
         try:
             com.reset()
             com.install()
@@ -828,6 +831,7 @@ def openings_after_release(com, rc, eng, reqs, sampling, base, args, pair: int, 
             com.uninstall()
             assert_pristine(eng, base)
         finally:
+            com.of_record = of_record
             com.retain = saved
             com.retain_windows = set()
             if hasattr(com, "retain_chunks"):
@@ -884,7 +888,7 @@ def openings_after_release(com, rc, eng, reqs, sampling, base, args, pair: int, 
            # in-run stages' deferred positions with these, not the counts
            "deferred_received_positions": [list(p) for p in handed], "deferred_received_digest": _positions_digest(handed),
            "steps_opened": steps_opened, "source": source, "freed": freed, "retained_device_after": retained_after,
-           "replay_run_root": replay_root, "replay_root_equal": (replay_root == rc.run_root.hex()) if replay_root else None,
+           "replay_run_root": replay_root, "replay_root_equal": (replay_root == REC.committer_root(rc).hex()) if replay_root else None,
            "replay_tokens_equal": replay_tokens_equal,
            # [rev F-r17b-11, R17-5 bullet 2] what the replay depends on, named on the record: the same engine process (weights of record
            # in-process, pinned by weights_pin), the same fixture requests + sampling, BI=1; the release before it; its equality with the
@@ -893,7 +897,8 @@ def openings_after_release(com, rc, eng, reqs, sampling, base, args, pair: int, 
                                     "requests": len(reqs), "sampling": dict(sampling) if isinstance(sampling, dict) else str(sampling),
                                     "batch_invariant": os.environ.get("VLLM_BATCH_INVARIANT"), "release_before_replay": freed,
                                     "committed_weights_root": (rc.weight_registration or {}).get("root") if isinstance(rc.weight_registration, dict) else None,
-                                    "original_run_root": rc.run_root.hex(), "checked_by": ["replay_run_root == original", "replay_tokens_equal",
+                                    "original_run_root": rc.run_root.hex(), "original_committer_root": REC.committer_root(rc).hex(),
+                                    "checked_by": ["replay_run_root == the original's committer root", "replay_tokens_equal",
                                                                                             "every opening verified against the ORIGINAL root"]}
                                    if need_replay else None),
            "generate_s": t_open, "verify_s": t_ver, "retain_mode": com.retain, "replay_retain": replay_retain,
@@ -994,7 +999,9 @@ class Options:
     value_check: bool = option("--value-check", default=False, action="store_true", help="one extra instrumented run with reference taps + re-execution (value_check.json)")
     arms: str | None = option("--arms", default=None, help="R10: comma-separated committer kinds run as separate treatment arms in one process, interleaved with the control (order rotates per round)")
     profile_hooks: bool = option("--profile-hooks", default=False, action="store_true", help="native_collect: time the hook bodies (perf_counter per call) -- profiling run, not a headline timing")
-    expect_root: str | None = option("--expect-root", default=None, help="fail if the instrumented run root (hex) differs from this reference root (R10 arm2/arm3 equality gate)")
+    expect_root: str | None = option("--expect-root", default=None, help="fail if the instrumented run's committer root (hex; the vllm-v1 root, extra.committer_root of a run of record) differs from this reference root (R10 arm2/arm3 equality gate)")
+    root_of_record: str = option("--root-of-record", default="sha512", choices=["sha512", "vllm-v1"], help="sha512 (default): the run root of record is the record's (commit.record: frame-v3-sha512 trees of hm96-sha512 rows, one per committer leaf), hashed on the host after the run, and every challenge is drawn from a live key after it (--challenge-key).  vllm-v1: the committer's own SHA-256 root, NOT of record -- a measurement mode for the retentions the host record cannot serve (--retain none, --retain-exclude) until the committer hashes the record on the GPU")
+    challenge_key: str | None = option("--challenge-key", default=None, help="a key (hex, at least 16 bytes; else env VERITY_CHALLENGE_KEY) every draw over a run of record derives from once its root is fixed (challenge.draw_live, origin 'unattested'); without one this process draws its own 32 bytes (origin 'own').  Either draws a measurement sample: only the proof service's challenger's challenge is of record (challenge.attested_reason)")
     late_read: str | None = option("--late-read", default=None, help="NEGATIVE TEST (R11 collector-meas): drop this leaf (e.g. qkv_proj) from the gather arm's flush points so the " "staged values are read after the in-place overwriter -> the run root MUST differ from arm 2 (roots_equal_across_arms=false)")
     flip_weight: str | None = option("--flip-weight", default=None, help="NEGATIVE TEST ONLY (MAN-09 / rev-cb M-0610 flipweight; BRIEF R16 4A substituted weight input): " "<served param name>:<flat index>[:<value>] -- ONE element of that live parameter is changed in the instrumented process BEFORE " "register_weights, so the committer serves a model that is not the checkpoint the Program names; the weights pin MUST FAIL naming " "that field (served weight(s) differ from the checkpoint of record) and the Commit is FAIL rc 3.  Needs the pin armed " "(--weights-of-record / --checkpoint-dir + the Program).  Recorded in verdict.json negatives.flip_weight; never a row-procedure flag")
     window_mb: int | None = option("--window-mb", type=int, default=None, help="P0 (R13): windowed staging -- lay the packed step stream over a ring of device windows of this size " "(MiB, multiple of 1) and absorb/release each window as soon as it is filled (sets VERITY_WINDOW_MB); 0/omitted = per-step blocks")
@@ -1141,6 +1148,10 @@ def main(args: Options, argv: list[str] | None = None) -> None:
         if not args.bounded_staging or (args.retain or os.environ.get("VERITY_RETAIN")) != "host" or not args.open_after_release:
             raise SystemExit("--retain-exclude needs --bounded-staging --retain host --open-after-release (the excluded families open by replay)")
         os.environ["VERITY_RETAIN_EXCLUDE"] = args.retain_exclude
+    if args.root_of_record == "sha512" and ((args.retain or os.environ.get("VERITY_RETAIN")) == "none" or args.retain_exclude):
+        raise SystemExit("--retain none / --retain-exclude keep only part of the committed bytes, and the root of record (commit.record) is hashed "
+                         "on the host from all of them before any challenge: run with --retain device|host, or --root-of-record vllm-v1 (not of "
+                         "record) until the committer hashes the record on the GPU")
     if args.footprint:
         os.environ["VERITY_FOOTPRINT"] = args.footprint
         Path(args.footprint).parent.mkdir(parents=True, exist_ok=True)
@@ -1304,6 +1315,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     for kind in kinds:
         TL.start("prep.committer_setup", kind=kind)
         com = make_committer(kind, eng, args, run_id)
+        com.of_record = args.root_of_record == "sha512" and hasattr(com, "_record_finalize") and kind != "hooks_only"
         if _HOT is not None:
             _HOT.setdefault("coms", []).append(GR.adopt(_HOT, com))          # closed after the job (hot worker, grouped Commit: on the group's pinned pool)
         if compiled_kernels is not None:
@@ -1745,7 +1757,11 @@ def main(args: Options, argv: list[str] | None = None) -> None:
         TAPS.warmup(com, True)
         com.install()
         r = run_workload(eng, va.throwaway_requests(eng, reqs, seed=200), sampling)
-        rc = com.finalize()
+        _of_record, com.of_record = getattr(com, "of_record", False), False        # the warm-up is never a record: no record is hashed
+        try:
+            rc = com.finalize()
+        finally:
+            com.of_record = _of_record
         com.uninstall()
         TAPS.warmup(com, False)
         if getattr(com, "bounded", False):
@@ -1828,6 +1844,9 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                                                served_tokens=r["tokens"], stop=stop_of_record)
                 rc = com.finalize()
                 t_ready = time.perf_counter()
+                CH.draw_live(rc, args.challenge_key or os.environ.get("VERITY_CHALLENGE_KEY"))      # a run of record: its live source, after its root
+                if args.root_of_record == "vllm-v1":
+                    rc.extra["root_of_record"] = "vllm-v1"                                          # a measurement run: no draw of record
                 com.uninstall()
                 assert_pristine(eng, base)
             else:
@@ -1856,10 +1875,9 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 if fault.startswith("retained_flip"):
                     row["fault_retained_flip"] = com.fault_retained_flip(fault)
                     print(f"[delta] VERITY_FAULT retained_flip (negative test): {row['fault_retained_flip']}", flush=True)
-                # challenge derived from the PRECHALLENGE run root (the root is fixed before the positions exist)
-                from verity_vllm.commit.challenge import challenge_positions
-
-                sample = challenge_positions(rc.run_root, [s.n_leaves for s in rc.steps], args.openings, salt=str(pair).encode())
+                # challenge drawn after the run root is fixed: from the live source over a root of record (draw_live), from the recorded
+                # vllm-v1 root otherwise (--root-of-record vllm-v1)
+                sample = CH.positions_of(rc, args.openings, salt=str(pair).encode())
                 TL.start("validate.openings", pair=pair)
                 t_o = time.perf_counter()
                 skipped = None
@@ -1901,7 +1919,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                                  "deferred_replay_n": deferred_n, "challenge_n": len(sample),
                                  # [R17-5, rev F-r17b-13] the deferred POSITIONS (step, leaf) on record: openings_after_release must receive them all
                                  "deferred_positions": [list(p) for p in deferred_pos], "deferred_digest": _positions_digest(deferred_pos),
-                                 "bytes_mean": statistics.fmean(len(o.value) + 32 * sum(1 for p in o.path if p is not None) for o in ops) if ops else None,
+                                 "bytes_mean": statistics.fmean(len(o.value) + sum(len(p) for p in o.path if p is not None) + len(o.salt or b"") for o in ops) if ops else None,
                                  # fail-closed diagnostics: WHICH positions failed (step, leaf index, identity) -- a failed opening is a Commit FAIL
                                  "failed": [{"step": o.step, "index": o.index, "identity": {k: (v if isinstance(v, (int, str, bool)) else str(v)) for k, v in (o.identity or {}).items()}}
                                             for o, k_ok in zip(ops, ok) if not k_ok][:16]},
@@ -2062,7 +2080,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 vc_result = None
                 if args.expect_root:
                     vc_methods.append("root-compare-vs-independent-run (--expect-root)")
-                    vc_result = rc.run_root.hex() == args.expect_root
+                    vc_result = REC.committer_root(rc).hex() == args.expect_root
                 row["commit"]["value_correspondence"] = {"method": " + ".join(vc_methods), "result": vc_result,
                                                          "note": "coverage + openings cannot see a late read or a relabel (brief §4); live evidence = root equality vs an independent run / replay"}
                 if compiled_kernels is not None:
@@ -2083,8 +2101,8 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                     if _sched["use"] == "observed":
                         _arr = {**_arr, **{k: int(v) for k, v in _sched["observed_arrive_steps"].items() if k in _arr}}
                     try:
-                        ckc = CompiledKernelCheck(com, eng.model, _toks, seed=CH.kernel_check_seed(rc.run_root), request_rows=_rows, arrivals=_arr,
-                                                  prompts=_prompts, seed_source=COMPILED_REPLAY_SEED_SOURCE).run(required_manifest)
+                        ckc = CompiledKernelCheck(com, eng.model, _toks, seed=CH.kernel_seed_of(rc), request_rows=_rows, arrivals=_arr,
+                                                  prompts=_prompts, seed_source=COMPILED_RECORD_SEED_SOURCE if CH.of_record(rc.run_root) else COMPILED_REPLAY_SEED_SOURCE).run(required_manifest)
                     except Exception as e:  # noqa: BLE001
                         import traceback as _tb
 
@@ -2166,9 +2184,9 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                           f"VALUE CHECK {'OK' if cvc.get('ok') else 'FAIL'}: reexec {cvc.get('reexec_equal')}/{cvc.get('reexec_checked')} logits {cvc.get('logits_equal')}/{cvc.get('logits_checked')} "
                           f"argmax {cvc.get('argmax_equal')}/{cvc.get('argmax_checked')} chain {cvc.get('chain_equal')}/{cvc.get('chain_checked')} "
                           f"mismatch {cvc.get('reexec_mismatch', [])[:2]} {cvc.get('chain_mismatch', [])[:2]} {cvc.get('error', '')}", flush=True)
-                    components["root_compare"] = {"result": vc_result, "run_root": rc.run_root.hex(), "expect_root": args.expect_root,
+                    components["root_compare"] = {"result": vc_result, "run_root": rc.run_root.hex(), "committer_root": REC.committer_root(rc).hex(), "expect_root": args.expect_root,
                                                   "reference": "--expect-root (caller-pinned root; independent only if produced by another tree/pod, COORD M-0286)",
-                                                  "why": None if vc_result else f"run root {rc.run_root.hex()[:16]} != expected root {str(args.expect_root)[:16]} (--expect-root)"}
+                                                  "why": None if vc_result else f"committer root {REC.committer_root(rc).hex()[:16]} != expected root {str(args.expect_root)[:16]} (--expect-root)"}
                 row["commit"]["value_correspondence"] = {"method": " + ".join(vc_methods), "result": vc_result, "components": components, "why": None,
                                                          "note": "coverage + openings cannot see a late read or a relabel (brief §4); live evidence = the Match oracle of this attempt / an independent pinned root / replay"}
                 if compiled_kernels is not None:
@@ -2310,9 +2328,9 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                                                                                                     f"shape_mismatch {cs['shape_mismatch']} oversize_in_capture {cs['oversize_in_capture']}")
                 if not row["commit"]["commit_pass"]:
                     print(f"[delta] COMMIT {'FAIL' if row['commit']['commit_pass'] is False else 'PENDING'} (pair {pair}, {arm}): {row['commit']['commit_fail_reason']}", flush=True)
-                row["root_equal_expected"] = (rc.run_root.hex() == args.expect_root) if args.expect_root else None
-                if args.expect_root and rc.run_root.hex() != args.expect_root:
-                    print(f"[delta] ROOT MISMATCH: run root {rc.run_root.hex()} != expected {args.expect_root}", flush=True)
+                row["root_equal_expected"] = (REC.committer_root(rc).hex() == args.expect_root) if args.expect_root else None
+                if args.expect_root and REC.committer_root(rc).hex() != args.expect_root:
+                    print(f"[delta] ROOT MISMATCH: committer root {REC.committer_root(rc).hex()} != expected {args.expect_root}", flush=True)
                 if arm not in decls:
                     (out / f"declaration_{com.name}.json").write_text(json.dumps(d, indent=1) + "\n")
                     decls[arm] = d
@@ -2390,7 +2408,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
         roots_by_round: dict[int, dict[str, str]] = {}
         for r in rows:
             if r["arm"] != "control":
-                roots_by_round.setdefault(r["pair"], {})[r["arm"]] = r["commit"]["run_root"]
+                roots_by_round.setdefault(r["pair"], {})[r["arm"]] = REC.committer_root(r["commit"]).hex()
         roots_equal_across_arms = all(len(set(v.values())) == 1 for v in roots_by_round.values()) and bool(roots_by_round)
         md.append(f"\nrun roots identical across treatment arms in every round: **{roots_equal_across_arms}** "
                   f"({len(roots_by_round)} rounds; arms {kinds}); tokens identical across all arms: **{all(r['tokens_equal_ref'] for r in rows)}**")

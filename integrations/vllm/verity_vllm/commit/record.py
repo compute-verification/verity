@@ -425,6 +425,18 @@ def of_record(run: Any) -> bool:
     return getattr(run, "record", None) is not None or len(getattr(run, "run_root", b"") or b"") == NODE
 
 
+def committer_root(run: Any) -> bytes:
+    """The committer's ``vllm-v1`` root of ``run`` (a `RunCommitment` or a row's ``commit`` record): what two runs over equal bytes share
+    (``--expect-root``, roots across arms, a replay's root), the run root itself for a run recorded before the record."""
+    extra = run.extra if hasattr(run, "extra") else (run.get("extra") or {})
+    root = bytes(run.run_root) if hasattr(run, "run_root") else bytes.fromhex(str(run.get("run_root")))
+    if len(root) != NODE:
+        return root
+    if not (extra or {}).get("committer_root"):
+        raise ValueError(f"run of record {root.hex()[:16]}: no committer root on its record (extra.committer_root)")
+    return bytes.fromhex(extra["committer_root"])
+
+
 class RecordRule:
     """The committer's root of record (a mixin of ``NativeHostCommitter`` and the dumped store, beside ``hiding.LeafSchemeRule``).
     ``of_record`` on: `finalize` builds the record over the finalized steps and its root is the run root; openings carry the record's
