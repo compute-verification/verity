@@ -16,6 +16,10 @@ reads and the served weights, by the twin of the Definition the Build bound (`ke
 The step's batch must be the plan's (its requests with their token counts), its committed names exactly the Build's, each value
 of its width.  A check that cannot evaluate a value (no twin for its Definition, an operand missing) fails by name; a FA3 row
 whose dot read a non-finite operand is never claimed exact.
+
+With a seed (the Commit's, drawn after the values are committed) a request's sampled rows at each step are a uniform draw of
+`ROWS` from that seed's generator, one draw a request a step shared by its GEMMs and its attention ops, and the report carries
+the seed and every draw; without one they are the fixed spread `sample`.
 """
 from __future__ import annotations
 
@@ -25,6 +29,7 @@ from typing import Any, Callable, Iterable, Mapping
 import numpy as np
 
 from verity_vllm.acquire import served as SV
+from verity_vllm.commit import challenge as CH
 from verity_vllm.program.kernels import derived_rows as DR
 from verity_vllm.program.kernels import inductor_rows as TW
 from verity_vllm.program.kernels.rows import token_select_first_max
@@ -97,8 +102,11 @@ class ServedCheck:
     before)."""
 
     def __init__(self, build: dict[str, Any], weight: Callable[[str], np.ndarray], *, rows: int = ROWS,
-                 prompts: Mapping[str, list[int]] | None = None, log: Callable[[str], None] | None = None) -> None:
+                 prompts: Mapping[str, list[int]] | None = None, log: Callable[[str], None] | None = None,
+                 seed: int | None = None) -> None:
         self.build, self.weight, self.k, self.prompts, self.log = build, weight, rows, prompts or {}, log
+        self.seed, self.rng = seed, (None if seed is None else CH.generator(seed))
+        self.picks: dict[int, dict[str, list[int]]] = {}
         self.program = build["program"]
         self.plans = {p["step"]: p for p in build["steps_plan"]}
         self.names = set(self.program["values"]) | {SV.LOGITS, SV.SAMPLED}
@@ -138,7 +146,9 @@ class ServedCheck:
         req = {r["request_id"]: r for r in plan["requests"]}
         spans = [(r, lo, hi) for r, lo, hi in st.rows]
         every = np.arange(n)
-        some = np.concatenate([lo + sample(hi - lo, self.k) for _r, lo, hi in spans]) if spans else every
+        local = {r: self._draw(hi - lo) for r, lo, hi in spans}
+        self.picks[st.step] = {r: [int(i) for i in v] for r, v in local.items()}
+        some = np.concatenate([lo + local[r] for r, lo, _hi in spans]) if spans else every
         self._inputs(out, V, spans, req)
         for c in self.program["calls"]:
             name = c["writes"][0]
@@ -159,13 +169,18 @@ class ServedCheck:
                 for w_ in c["writes"]:
                     self._note(out, w_, {"ok": False, "why": f"{type(e).__name__}: {e}"}, c.get("base") or "mm")
         for a in self.program["attention"]:
-            self._attention(out, a, V, spans, req)
+            self._attention(out, a, V, spans, req, local)
         self._logits(out, plan, V, spans)
         self.seen.add(st.step)
         if self.log:
             bad = [k for k, v in out.items() if not v.get("ok")]
             self.log(f"step {st.step} {plan['mode']} n={n}: {len(out) - len(bad)}/{len(out)} exact" + (f", FAIL {bad[:6]}" if bad else ""))
         return out
+
+    def _draw(self, n: int) -> np.ndarray:
+        if self.rng is None or n <= self.k:
+            return sample(n, self.k)
+        return np.sort(self.rng.choice(n, self.k, replace=False))
 
     def _note(self, out: dict[str, Any], name: str, v: dict[str, Any], kind: str | None = None) -> dict[str, Any]:
         out[name] = v
@@ -216,7 +231,8 @@ class ServedCheck:
             v = _verdict(np.array(want, np.int64), ids[rows], rows=len(rows))
             self._note(out, SV.IDS, {**v, "ok": v["ok"] and not why, **({"why": why[:4]} if why else {})})
 
-    def _attention(self, out: dict[str, Any], a: dict[str, Any], V: dict[str, np.ndarray], spans, req) -> None:
+    def _attention(self, out: dict[str, Any], a: dict[str, Any], V: dict[str, np.ndarray], spans, req,
+                   local: Mapping[str, np.ndarray]) -> None:
         name, NH, KVH, D = a["name"], a["NH"], a["KVH"], a["D"]
         try:
             q = self._operand(a["q"], V, np.arange(sum(hi - lo for _r, lo, hi in spans)))
@@ -237,7 +253,7 @@ class ServedCheck:
             if len(kc) != plan["klen"]:
                 why.append(f"{r}: {len(kc)} cached keys, the plan's klen {plan['klen']}")
                 continue
-            for i in sample(hi - lo, self.k):
+            for i in local[r]:
                 d = plan["attention"][i]
                 S = d["statics"]
                 ns = SPLITS.get(d["base"])
@@ -278,15 +294,17 @@ class ServedCheck:
         unrun = sorted(set(self.plans) - self.seen)
         ok = bool(self.steps) and not unrun and all(v.get("ok") for s in self.steps.values() for v in s.values())
         return {"ok": ok, "program_digest": self.build["program_digest"], "steps_checked": sorted(self.seen), "steps_unrun": unrun,
-                "rows_per_request": self.k, "tally": dict(sorted(self.tally.items())),
+                "rows_per_request": self.k, "seed": self.seed, "picks": {str(s): p for s, p in sorted(self.picks.items())},
+                "tally": dict(sorted(self.tally.items())),
                 "failures": [{"step": s, "value": k, **v} for s, vs in sorted(self.steps.items()) for k, v in vs.items() if not v.get("ok")][:50],
                 "steps": {str(s): v for s, v in sorted(self.steps.items())}}
 
 
 def check(build: dict[str, Any], steps: Iterable[Step], weight: Callable[[str], np.ndarray], *, rows: int = ROWS,
-          prompts: Mapping[str, list[int]] | None = None, log: Callable[[str], None] | None = None) -> dict[str, Any]:
+          prompts: Mapping[str, list[int]] | None = None, log: Callable[[str], None] | None = None,
+          seed: int | None = None) -> dict[str, Any]:
     """The check over every step of the run, given in engine-step order."""
-    c = ServedCheck(build, weight, rows=rows, prompts=prompts, log=log)
+    c = ServedCheck(build, weight, rows=rows, prompts=prompts, log=log, seed=seed)
     for st in steps:
         c.step(st)
     return c.report()

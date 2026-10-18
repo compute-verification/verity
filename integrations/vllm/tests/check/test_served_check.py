@@ -299,6 +299,28 @@ def test_a_weight_of_another_shape_is_refused(served):
     assert all((s, DOWN) in _failed(rep) for s in range(STEPS))
 
 
+def test_a_seed_draws_the_sampled_rows(served):
+    build, W, steps, prompts = served
+    rep = SC.check(build, steps, W.__getitem__, rows=8, prompts=prompts, seed=5)
+    assert rep["ok"], rep["failures"]
+    assert rep["seed"] == 5
+    drawn = rep["picks"]["2"]["r2"]
+    assert drawn == SC.check(build, steps, W.__getitem__, rows=8, prompts=prompts, seed=5)["picks"]["2"]["r2"]
+    assert drawn != SC.check(build, steps, W.__getitem__, rows=8, prompts=prompts, seed=6)["picks"]["2"]["r2"]
+    assert len(drawn) == 8 and drawn != list(SC.sample(200, 8))
+    assert rep["picks"]["2"]["r0"] == [0] and rep["steps"]["2"][ATT]["rows"] == 8 + 2
+    lo = next(a for r, a, _b in steps[2].rows if r == "r2")
+    undrawn = next(i for i in range(200) if i not in drawn)
+
+    def flip(i):
+        def f(a):
+            a[lo + i, 5] ^= 1
+            return a
+        return _with(steps, 2, DOWN, f)
+    assert (2, DOWN) in _failed(SC.check(build, flip(drawn[3]), W.__getitem__, rows=8, prompts=prompts, seed=5))
+    assert (2, DOWN) not in _failed(SC.check(build, flip(undrawn), W.__getitem__, rows=8, prompts=prompts, seed=5))
+
+
 def test_steps_are_checked_in_order(served):
     c = SC.ServedCheck(served[0], served[1].__getitem__)
     c.step(served[2][1])
