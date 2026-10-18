@@ -72,7 +72,7 @@
   },
   "Accounting.Assumptions.TS.UnitFixed": {
    "owner": "@compute-accounting",
-   "digest": "f1493bc3b3f412f436efc378e2f55de618cc05342f0aaba720f699a18893dd2b"
+   "digest": "61adf5931691beff6fc2262a15fbc3222265629e661c621c463c73d1d9857ad2"
   },
   "Accounting.Assumptions.TS.WordsWritten": {
    "owner": "@compute-accounting",
@@ -6713,15 +6713,13 @@
    ]
   },
   "Definitions.Accounting.TS.Drawn": {
-   "digest": "4a35909f732c987e8ac9490ec7e89f3b79ca1ec510becd261662e2dbc7c73f20",
+   "digest": "afeedeb01c5564e0aaae571be35792c0e91a38642c8dcf9fefc85b3d1eace6d3",
    "definitions": {
     "Accounting.TS.Alone": "11cf7106ffd6e0c97929698cbe594cb1950083fde2928d2b49a941f25934dd85",
     "Accounting.TS.DrawnLayer": "be941232e2f55f8d1c876d87dcf7e073e466b9dec2c206200119de2a589133e5",
-    "Accounting.TS.DrawnLayer.Covers": "a803d9fb6ef97c077c1d501ec14d418858d59169580d5d3fad03d0426371e0c4",
+    "Accounting.TS.DrawnLayer.Covers": "43db6a27629272d9b8d8382a9896119b1cc1b60864f6a3e3c73f00647f8e20e2",
     "Accounting.TS.DrawnLayer.Forked": "bf1981b2a188d84d5803195f7b2f48074dd62bd6d2825298398d6507165d0c72",
-    "Accounting.TS.DrawnLayer.Good": "543985a2c1de76a7b3a79591498f041e0f3208ce544c56551c816088062101f0",
-    "Accounting.TS.DrawnLayer.Held": "688967bd7de21c2da64cbd71e027f610ddd7df7bf726b99a036426388b80df29",
-    "Accounting.TS.DrawnLayer.HeldRight": "804ff06d3a2d0766cbb751b716b06371493b980e6a0a5f97385ef3b70ba7d44d",
+    "Accounting.TS.DrawnLayer.Good": "50149916eb90951405a393bdfafcb86783eead759590d628007e8b458718a6fa",
     "Accounting.TS.DrawnLayer.JointSound": "f6fafef55ebb4b4a0200d3344dd14d00193896bef295065fe1ca6bf0dd7568b7",
     "Accounting.TS.DrawnLayer.Late": "c5101abecc898822b5aad5ca96423bfb3f7ed7a894afbdd1a5b47b3ea0c71c70",
     "Accounting.TS.DrawnLayer.MovedIn": "653d733aa6585ff6281d26629d03e68a82e42a7244104cf5f300bde46c40dd8f",
@@ -6743,7 +6741,15 @@
     "Accounting.TS.DrawnLayer.right": "e54a253fdc191ac728c1aeab66ef34702a9e066b5b6d8bc9805562874fb82d39",
     "Accounting.TS.DrawnLayer.src": "584158762f225d519d0aa2876b29e4569ece5fc1bd955e2b216f592b9498f3a6",
     "Accounting.TS.DrawnLayer.view": "5ee0f875f98b86abfb3e4df0514f32a026f6e3a3a759367994588846f80eb03f",
+    "Accounting.TS.Mode": "c5bc8ba7cce80c09504dacbacbefce5800d2bc067eabedc30580c8d3659c86f3",
+    "Accounting.TS.Mode.casesOn": "6c535e5ebcb3afcc5b1e62b913f315179bef01efd548fc5c306be2ced6e890fd",
+    "Accounting.TS.Mode.ctorIdx": "7be8b7f1a4861922ea20d1595c76d4524d20f9249edff887b960bd9d9521ddb9",
+    "Accounting.TS.Mode.folded": "6c09dca2907d3e36de65ff1817bfe3d0f4cd2b374179b31d2964b34fe5edfa3c",
+    "Accounting.TS.Mode.paid": "cbe4dd5363fdd69555deeb4985d4fad60187bac3c636d6a6168908b94343112b",
+    "Accounting.TS.Mode.rec": "e6db5516a56c75b6550bf0d78e094658c5e7ae4951f6a3385660f64f6ccb44c9",
+    "Accounting.TS.Mode.whole": "5cbda0effeeb7f70691c3cd5ddd22dc898925583c92457fc754198dd0b99d102",
     "Accounting.TS.coinAt": "b41ad868208b5f995752824028db432378e460223bcd01dbb545dfb615576b59",
+    "Accounting.TS.instDecidableEqMode": "c93435b5db1c79da01d49638bcffd1b2931ce7beb48d887383f6f96d98cb52db",
     "Accounting.TS.plural": "d332c76c4cccaac520294c1395ae4a826fe37948d400f2e1ebf434fb1d4e2271",
     "Accounting.TS.spliceAt": "7125e1eb3682884515cd6512c0ce95991b7a0d4a4a9bb87157cf3c96b84f2eb4",
     "Accounting.TS.tally": "88d51b96769b547b6475d6dc1e52da49166b7810207df8e56ae9340bd77b26de"
@@ -16902,7 +16908,7 @@
    ]
   },
   "Models.Accounting.Assumptions.TS": {
-   "digest": "0c07bc1369a5649ef5de3ae070339f6a8dc02a4926b29b394287d20a9abee74e",
+   "digest": "3b75d4f101c98e0e1686ab98309715e0c668cd85a0b9370865ced4c0e28971a2",
    "definitions": {
     "Accounting.Assumptions.TS.FacetCeilings": "fa76dfe63e705d955b2dec4c6d8e3b6826c2bf36058b476ef8f1b7a8bb7c0d3b",
     "Accounting.Assumptions.TS.FillOpt": "32e6f1ad9b1cd5704affa13c87dae03fad67a20aa3acd62efdde326a1702a503",
@@ -16913,7 +16919,7 @@
     "Accounting.Assumptions.TS.RightFixed": "d17ab6dafa91dbbf183e5a1221cd1f8fc26fb93ebb1b21e83117ef2337a454f2",
     "Accounting.Assumptions.TS.ScalarRoute": "414a164b2927884959719a19f4157ef08125017896884da53459996b1212b5bd",
     "Accounting.Assumptions.TS.SideUnits": "36404ba2e20a614ee48738159240c66e7f023670dba8cf261be8b3b73921e179",
-    "Accounting.Assumptions.TS.UnitFixed": "f1493bc3b3f412f436efc378e2f55de618cc05342f0aaba720f699a18893dd2b",
+    "Accounting.Assumptions.TS.UnitFixed": "61adf5931691beff6fc2262a15fbc3222265629e661c621c463c73d1d9857ad2",
     "Accounting.Assumptions.TS.WordsWritten": "f25002293156695a436d17dbd4ddccf594544b7187a569385947d7dc90dcecf7"
    },
    "guarantees": [
@@ -17341,7 +17347,7 @@
    ]
   },
   "Models.Accounting.Guarantees.TS": {
-   "digest": "1ff8f8b4cd17d2dfa691bf275d64190c76a55f1d8091825a62ad98732a0638bf",
+   "digest": "ddd86a65ff74fec1cea868fb877d6870013db82bd4666dfc7c2c1be11ad9a160",
    "definitions": {
     "Accounting.Guarantees.TS.BindingFacetD1": "a17c578d0bc020c50567b3b8f50848237bddadf7d54aab6ce18ef007d4af1c6e",
     "Accounting.Guarantees.TS.BindingOfFork": "3eccd9186cd22f86da6fbc02ad9f003aad9cd0f43259388a0dbbd1485039a911",
@@ -17353,7 +17359,7 @@
     "Accounting.Guarantees.TS.DrawnRightOff": "86f5aba37a4db8a51dcfab17e2309350f66a4be53a623a117c4c9f1ce8011a54",
     "Accounting.Guarantees.TS.FloorCreditD3": "012916939463cfd453565042c4696d6cc8fbad47c52bd373d88d9258b3893e54",
     "Accounting.Guarantees.TS.OutputCount": "aec5f1a001e3ac62af705b8bcbf3a64f9664f671f3b2d0595814c9143f03e3e9",
-    "Accounting.Guarantees.TS.ProofsSoundOfDrawn": "07ce21d7c319eec143b52ce494a9f2f51d07b5aeda52d2ac6848efc7eaec75fc",
+    "Accounting.Guarantees.TS.ProofsSoundOfDrawn": "48ff95d4de5aad84453e5587a2de4195cc3aad7a65661049558678be1effcc7b",
     "Accounting.Guarantees.TS.ProofsSoundOfPinned": "bedb754d00b353977e5c40c7e79201a5adae5b170216bf47d9a2c0fc9e8ba1db",
     "Accounting.Guarantees.TS.RoutesOffD2": "8b5d8b812b583f648a13c6890d2c0b70eb09e092f01708ef3945f7f1a0f0b4e7",
     "Accounting.Guarantees.TS.TensorSlotCount": "749efbc6ec8a01cb4f02f3f2e68d33a67489e518b471a5d8873bbe3d85209045",
