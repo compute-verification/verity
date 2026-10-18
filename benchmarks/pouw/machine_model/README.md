@@ -185,8 +185,12 @@ The noise leaves are `NOISE` in `eps.py`, and `designs` prints them as a legend:
 Beside its names, a design file has these keys:
 
 - `[noise]`: a leaf for each of `linears`, `lm_head`, `qk` and `pv`.
+- `sums`: the kernel that forms a peel's sums, `vsum` (the default) or `vfold` (`SUMS` in `eps.py`).
 - `honest`, `L`, `work` and `plain`.
-- `[fold]` and `[filler]`: lane instructions a word by class. A filler runs on lanes (decision 73).
+- `[fold]` and `[filler]`: lane instructions a word by class. A filler runs on lanes (decision 73). A filler states
+  `p`, the probability a deficient block of it passes its check, and `luck`, the theorem that proves it: 0 for a
+  receipt the check recomputes (`Accounting.Guarantees.FillerLuck.PinnedFillBlocksDeficit`), 0.854 for pfill's cells
+  (`FillerBlocksDeficit`), or `p = 1` with no `luck`, no luck credit.
 - `[operands]`: the noise's floor φ_del.
 - `unit`: a table of `data/adapt.toml`. It is whole dot products (decision 72).
 - `[coins]`: `bits`, the width of a noised entry's coin, one σ a request.
@@ -194,8 +198,8 @@ Beside its names, a design file has these keys:
 - `ppl`: a spec in `benchmarks/ppl/specs/`, or `""` while the design's arm isn't on main.
 - The ε terms' accounting: `[skip.served]` and `[mand.PART]`, each with its `eps` and `source`, and `[clock]`, `[luck]`,
   `[baseline]` and `[routes]`. `[skip.served]` is the number SKIP's calculator, `../eps_budget.py`, gives the design's
-  `[noise]` (`design_skip`: the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode, every served
-  output free), and the pouw suite's `test_eps_budget` fails, printing the number to write, when they differ.
+  `[noise]` and `sums` (`design_skip`: the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode, every
+  served output free), and the pouw suite's `test_eps_budget` fails, printing the number to write, when they differ.
 
 A new design is a file with its own name, title and summary, and a `base` if it varies one. The tests refuse:
 
@@ -256,8 +260,8 @@ The cheater is every route at q*. Its operand delivery is free by default (SPEC'
 `--operands floor` prices it at the noise's floor φ_del, the design's `[operands]`: 1/39 a MMA where B̃ stays resident
 at the zero instance, 0.20 where both operands are fresh (SPEC §3.4). `--operands honest` prices it at honest's.
 The LP's duals are the certificate π*. ε_luck is the same LP with Theorem S's budget spent on unwritten words (still
-folded) and undone filler, each deficient block weighted by 1 − p (¾ a word, 0.854 a filler block; SPEC §5), so the
-terms add up to its time exactly.
+folded) and undone filler, each deficient block weighted by 1 − p (¾ a word, the filler's own `p` a filler block), so
+the terms add up to its time exactly. At `p = 1` the cheater leaves the filler undone even with every block checked.
 
 Under `--credit model` or `--credit floor`, honest's time above the credit leaves ε for γ, which is printed beside it.
 `floor` is the floor program ♭ of SPEC §0.7a (Corollary D3): the tensor route at φ_del, the fold, the fillers and the

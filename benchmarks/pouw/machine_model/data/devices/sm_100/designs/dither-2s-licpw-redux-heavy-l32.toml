@@ -1,0 +1,54 @@
+# LI-CP-W with the checkpoint reduced across the warp by ONE redux.sync.xor.b32 a segment (DC EPS1 r9's measurement),
+# in place of dither-2s-licpw-heavy-l32's 5-shuffle fallback: measured +7.1% honest cycles against the bare LI loop,
+# where the 5-shuffle costs +40.6%. One 4-byte word a warp a segment still leaves the SM. Dither-2S at L = 32 on the
+# B200 with dither-2s-licp-fill-l32's 3/4 lane instruction a word of filler moved into the fold as extra keyed rounds
+# (3/8 of a round a word); the cheater's shortfall is still folded, so ε_luck is 0 and FILL-OPT is not read.
+name = "dither-2s-licpw-redux-heavy-l32"
+title = "Dither-2S, LI-CP-W redux heavy fold, L = 32"
+summary = "Dither-2S on the B200 at L = 32: two-sided dither, LI-CP-W receipts with a warp's checkpoint reduced by one redux.sync.xor a segment, 3/8 of an extra keyed round a word and no filler, P·V's peel with vfold's sums"
+honest = "dc100-licpw-redux-l32"
+L = 32
+work = 1.0
+sums = "vfold"
+
+[noise]
+linears = "two-sided"
+lm_head = "two-sided"
+qk = "two-sided"
+pv = "peel"
+
+[operands]          # the noise's operand-delivery floor φ_del a MMA (`--operands floor`, and the floor program's)
+floor = { LDTM_32X32B_X128 = 8 }
+source = "tcgen05.mma reads both operands from shared memory by descriptor (TMA fills it), so delivery costs no warp instruction a MMA; the accumulator's 32768 words leave TMEM by 8 tcgen05.ld.32x32b.x128 a MMA at L = 32 (4096 words each), which every tensor-route word pays to be folded on lanes"
+
+[fold]
+name = "li"          # LI-CP-W redux (0.53125 ALU, 0.5 IMAD, one redux.sync.xor and the store on SHFL) and 3/8 of an extra keyed round a word
+ALU = 0.90625
+IMAD = 0.875
+SHFL = 0.0234375
+
+[skip.served]
+eps = 0.00469
+source = "0.00469 is eps_budget.py's design_skip on this device's floor program; DC r9's method gave 0.004532. eps_budget.py (benchmarks/pouw, `design_skip`, `floor_skip`): Corollary D3's ε_skip, the skippable work at its issue-model price over the floor program's bound B_♭ (SPEC §2.9), ♭ 7.191 SMSP-cycles a 4096-MAC MMA on DC-100 (the LDTM and the LI-CP fold with its extra rounds); the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode (decode's ♭ its compute alone), every served output free. At 8B 2K prefill: P·V's peel 0.483%: its tail 0.257%, the sums DG, S and X(0) at vfold's 0.7265 warp instructions an entry 0.190%, the served epilogue 0.036%. With P·V's served output checked it is 0.383% (8B) / 0.150% (70B) there. Skip terms: the peel's tail at the larger of 1.57 of ♭'s MACs a strip product and Π's price of BC-KERNEL r2's tail instructions (4 mma.sync m16n8k32, 4 IMAD, 11.5 other), its sums and served epilogue at one an issue cycle, on sm_120's instruction counts for the same kernel source, on this device's Π (note:20261017T0320Z-draft-eps1-calc Round 9, EPS1 DC r6)"
+
+[mand.fold]
+eps = 0.0
+source = "named assumption: LI-CP with its extra keyed rounds, at its lane instructions a word, is the cheapest implementation of the fold (FOLD-OPT); there is no filler, so FILL-OPT is not read. With every absorbed word pinned (PIN), the receipt's luck is 0 for a skip that lands on one word of a segment: a checkpoint is injective in each word it absorbed (Lean Pouw.SecurityProofs.Receipt.LiCheckpointWordInjective, odd multipliers only); KLI₂₄, (RT), (G₃) and (HO_U) are not read (note:LI-ALT)"
+
+[clock]
+eps = 0.0
+source = "f_H unmeasured on the B200 (EPS1 DC measured f_max = 1965 MHz at default clocks, 06:01Z): 0 here, so γ with the clock gap is γ, a lower bound"
+
+[luck]
+delta = 4.547473508864641e-13
+p = 0.75
+checks = 48000
+source = "SPEC §5 (note:20261017T0324Z-draft-eps1-spec): Theorem S at p = 3/4 over one week of 12.6 s rounds, δ′ = 2^-41 (note:20261016T0005Z-draft-luck-loss-round4 §1)"
+
+[baseline]          # honest's own lane program: its words belong to the baseline, not to ε (the brief §2)
+name = "dp4a"
+program = { IMAD = 8 }
+source = "dp4a at 8 IDP4A a word at L = 32, on IMAD's class as sm_120 prices it (no IDP4A kind in EPS1 DC's census); no LDS kind either, so its loads are unpriced"
+
+[routes]
+lanes = true
