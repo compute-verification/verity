@@ -1301,6 +1301,9 @@
   },
   "Properties.RemoteAudit.releasedStayOut": {
    "owner": "@memory-accounting"
+  },
+  "Properties.RemoteAudit.lifetimeCapped": {
+   "owner": "@memory-accounting"
   }
  },
  "shape": {
@@ -2051,6 +2054,10 @@
    },
    "Properties.RemoteAudit.releasedStayOut": {
     "function": ["RemoteAudit.Session.run", "RemoteAudit.Session.step"],
+    "outcome": "accept"
+   },
+   "Properties.RemoteAudit.lifetimeCapped": {
+    "function": "RemoteAudit.Session.run",
     "outcome": "accept"
    }
   },

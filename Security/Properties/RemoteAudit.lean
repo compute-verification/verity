@@ -42,7 +42,8 @@ The session (`Session.run` from `State.init`, every event's result `.ok`; the re
 * `AppendsInOrder`: the appends are the store's next indices in order, append `k` answered with append coin `k`;
 * `PassesChained`: the session's head is the chain over its appends, and each pass's head the chain over a prefix of
   them, so its seed binds the appends received before it;
-* `ReleasedStayOut`: a block released by an accepted release is read by no pass received after it.
+* `ReleasedStayOut`: a block released by an accepted release is read by no pass received after it;
+* `LifetimeCapped`: each append's blocks are read within `lifetime` consecutive windows.
 -/
 
 open RemoteAudit
@@ -219,5 +220,19 @@ def ReleasedStayOut : Prop :=
         (s₁.windows.size ≤ t ∨ s₁.windows[t]!.plans.size ≤ i) →
         ∀ p, p < s.windows[t].plans[i].length →
           ¬ (r.1 ≤ (s.windows[t].plans[i].block p : Int) ∧ (s.windows[t].plans[i].block p : Int) < r.1 + r.2)
+
+/-- Each append's blocks are read within `lifetime` consecutive windows: for append `k` there is a window `j` (the one
+it joined, being filled at the first pass received after it) such that every pass reading one of its blocks is in a
+window `j ≤ t < j + L` (`receive` refuses with `lifetime` a plan holding a block of an append that joined a window `L`
+or more before). The registered blocks, below `N`, carry no such bound. -/
+def LifetimeCapped : Prop :=
+  ∀ (params : Session.Params) (reg : Registration) (coins appendCoins : Array ByteArray) (notBeforeNs : Nat)
+    (events : Array Session.Event) (rs : Array Session.Result) (s : Session.State),
+    Session.run (Session.State.init params reg coins appendCoins notBeforeNs) events = .ok (rs, s) →
+      ∀ k (hk : k < s.appends.size), ∃ j, ∀ t (ht : t < s.windows.size) i (hi : i < s.windows[t].plans.size) p,
+        p < s.windows[t].plans[i].length →
+        s.appends[k].first ≤ s.windows[t].plans[i].block p →
+        s.windows[t].plans[i].block p < s.appends[k].first + s.appends[k].count →
+          j ≤ t ∧ t < j + params.lifetime
 
 end Properties.RemoteAudit
