@@ -73,6 +73,13 @@ def test_step_rows_b3_is_hm96_ref_at_the_committers_step():
         assert B.node(f.did, 7, pos, row[:32], row[32:64]) == f.node(7, pos, row[:32], row[32:64])
 
 
+def test_step_root_takes_the_kernels_root_slot():
+    """The committer hands step_root the tree's root as the kernels store it (a 64-byte slot); the step root is SHA-512 over that slot."""
+    d, args = os.urandom(B.DIGEST_BYTES), (os.urandom(32), os.urandom(32), os.urandom(32), os.urandom(32), 5)
+    root = B.step_root(*args, B.slot(d))
+    assert len(root) == 64 and root == B.step_root(*args, d) == R.step_root(*args, B.slot(d))
+
+
 @pytest.fixture(scope="module")
 def ext():
     from verity_vllm.commit.committer import native_collect as NC

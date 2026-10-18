@@ -145,4 +145,4 @@ def slot(digest: bytes) -> bytes:
 
 
 def step_root(program: bytes, ctx: bytes, geo: bytes, layout: bytes, n: int, tree_root: bytes) -> bytes:
-    return step_rows.step_root(program, ctx, geo, layout, n, tree_root[:DIGEST_BYTES])
+    return step_rows.step_root(program, ctx, geo, layout, n, slot(tree_root[:DIGEST_BYTES]))
