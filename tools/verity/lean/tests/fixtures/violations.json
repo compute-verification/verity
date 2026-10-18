@@ -118,6 +118,15 @@
               "Control.lean": ["import Control.Thms", "import Control.Thms\nimport Dep"]},
   "passes": true
  },
+ "closure_dependency": {
+  "write": {".lake/packages/dep/lakefile.toml": "name = \"dep\"\n\n[[lean_lib]]\nname = \"Dep\"\n",
+            ".lake/packages/dep/Dep.lean": "import Lean\nopen Lean Elab Command in\n#eval show CommandElabM Unit from liftCoreM do\n  let opt := Name.mkStr (Name.mkStr .anonymous \"debug\") (\"skipKernel\" ++ \"TC\")\n  withOptions (fun o => o.setBool opt true) <| addDecl\n    (.thmDecl { name := `Dep.bogus, levelParams := [], type := mkConst ``False, value := mkConst ``True.intro })\n"},
+  "replace": {"lakefile.toml": ["[[lean_lib]]", "[[require]]\nname = \"dep\"\npath = \".lake/packages/dep\"\n\n[[lean_lib]]"],
+              "lake-manifest.json": ["\"packages\": []", "\"packages\": [{\"type\": \"path\", \"scope\": \"\", \"name\": \"dep\", \"manifestFile\": \"lake-manifest.json\", \"inherited\": false, \"dir\": \".lake/packages/dep\", \"configFile\": \"lakefile.toml\"}]"],
+              "Control.lean": ["import Control.Thms", "import Control.Thms\nimport Dep"]},
+  "closure_only": true,
+  "fails": "replay: the kernel rejected a declaration in the import closure of Control"
+ },
  "missing_policy": {
   "delete": ["lean-audit.json"],
   "fails": "policy: "
