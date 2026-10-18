@@ -280,8 +280,8 @@ def test_a_bisect_waiting_hours_on_a_full_max_running_reads_the_failure_once_a_t
 # -- 7. `--defer`
 
 def test_a_midpoint_that_passed_but_deferred_clears_nobody_of_a_failure_in_a_deferred_step(world, monkeypatch, tmp_path):
-    """With circuit-check deferred, the tip failed circuit-check (#1's), and its midpoint #1 passed every other step and landed
-    with circuit-check still running: bisection took `main` for good and ejected #2, and #1's landing was reverted after."""
+    """With circuit-check deferred, the tip failed circuit-check (#1's), and its midpoint #1 passed every other step and landed,
+    its circuit-check left to the post-landing run: bisection took `main` for good and ejected #2, and #1 was reverted after."""
     h = Harness(world, monkeypatch)
     h.d.defer, h.d.train_size = frozenset({"circuit-check", "flock-rust-tests"}), 2
     for n in (1, 2):
@@ -306,19 +306,21 @@ def test_a_midpoint_that_passed_but_deferred_clears_nobody_of_a_failure_in_a_def
     ev[mid_rid] = others
     for _ in range(2):
         h.tick()
-    assert _main(world) == members[0].commit                                     # #1 landed, its circuit-check running on
-    (again,) = h.d.q.load_state()["drive"]["launched"][tip]["ids"]
+    assert _main(world) == members[0].commit                                     # #1 landed, its circuit-check unverified
+    drive = h.d.q.load_state()["drive"]
+    (post_rid,) = drive["postland"]["run"]["ids"]                                # the post-landing run of `main` checks it
+    (again,) = drive["launched"][tip]["ids"]
     assert again != tip_rid                                                      # the tip runs again on bisection alone
     h.run_state[again] = ("running", None, None, "step circuit-check")
     ev[again] = cc
     for _ in range(2):
         h.tick()
-    assert not h.posts and not _ejected(h)                                       # #1's own circuit-check hasn't ended
-    assert any("waiting on the deferred steps of `main`" in x for x in world.logs)
-    h.run_state[mid_rid] = ("done", 1, None)
-    ev[mid_rid] = cc
+    assert not h.posts and not _ejected(h)                                       # `main`'s circuit-check hasn't ended
+    assert any("waiting on the post-landing run of `main`" in x for x in world.logs)
+    h.run_state[post_rid] = ("done", 1, None)
+    ev[post_rid] = cc
     h.tick()
-    assert any("reverted on `main`" in p for p in h.posts), h.posts
+    assert any("#1 reverted on `main`" in p for p in h.posts), h.posts
     assert not any("Ejected" in p for p in h.posts) and not _ejected(h), h.posts
 
 
@@ -343,7 +345,7 @@ def test_a_failure_in_a_step_not_deferred_does_not_wait_on_a_deferred_landing_be
     ev[mid_rid] = others
     for _ in range(2):
         h.tick()
-    assert _main(world) == members[0].commit and _main(world) in h.d.q.load_state()["drive"]["deferred"]
+    assert _main(world) == members[0].commit and _main(world) in h.d.q.load_state()["drive"]["postland"]["pending"]
     _record(world, monkeypatch, tip, False)
     h.tick()
     assert len(h.posts) == 1 and "Ejected #2" in h.posts[0], h.posts

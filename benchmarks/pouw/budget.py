@@ -165,8 +165,8 @@ FAMILIES = (
 def sweep(out: Path = FILL_DATA) -> dict:
     """Regenerate `budget_fill.json` from the machine model (on a tree whose machine model has every family's design and
     vector; VF3r-16 is on next since 9c9567c396). Each point is one `eps` LP, ≈ 0.3 s."""
-    from verity_machine_model import cli
     from verity_machine_model import eps as E
+    from verity_machine_model.commands import eps as cmd
     from verity_machine_model.model import DATA, device
 
     fams = {}
@@ -174,7 +174,7 @@ def sweep(out: Path = FILL_DATA) -> dict:
         data = DATA if f.device == "sm_120" else device(f.device)
         pi = E.machine(f.vector, data)
         base = E.design(f.design_name, data)
-        flat0 = cli._eps_record(base, pi, 1.22, data, "free", "floor", None, None, "full")["baseline"]["cycles_per_mma"]
+        flat0 = cmd._eps_record(base, pi, 1.22, data, "free", "floor", None, None, "full")["baseline"]["cycles_per_mma"]
         d0 = base
         for x, mix in f.pre_fill:
             d0 = d0.with_fill(x, dict(mix))
@@ -182,7 +182,7 @@ def sweep(out: Path = FILL_DATA) -> dict:
         for name, mix in FILL_MIXES.items():
             pts = []
             for y in FILL_GRID:
-                r = cli._eps_record(d0.with_fill(y, mix) if y else d0, pi, 1.22, data, "free", "floor", None, None,
+                r = cmd._eps_record(d0.with_fill(y, mix) if y else d0, pi, 1.22, data, "free", "floor", None, None,
                                     "full")
                 flat = r["baseline"]["cycles_per_mma"]
                 pts.append([y, round(r["gamma"], 5), round(r["terms"]["skip"] * flat0 / flat, 7),

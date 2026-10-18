@@ -8,6 +8,10 @@
 //   exact   R_e = R_e'
 //   xor     R_e ^ R_e' is one constant kappa (the served receipt XORs 8 chains, so equal constants in two chains cancel)
 //   add     R_e - R_e' is one constant kappa
+// With -F the compared value is the full state, R = (y << n) | z, and a kernel element under xor is a pair of runs
+// whose states differ by one constant (kappa_y, kappa_z) on every start state: what two chains need to cancel in a
+// checkpoint that XORs every chain's y and every chain's z (start states independent per chain); kappa prints as
+// (kappa_y << n) | kappa_z.
 // Since F_e T_x = F_(e ^ x e_1) for T_x: y ^= x, and T_x permutes the start states, the first run's first word is taken
 // as 0 and the second's as e'_1 != 0; a pair with equal first words is a shorter run's (one step permutes the states).
 //
@@ -32,9 +36,9 @@
 #define MAXL 10
 #define MAXP 13
 
-static int n, L, mode = 1, h = -1, sweep = 0, verbose = 0, curve = 0;  // mode 0 exact, 1 xor, 2 add
+static int n, L, mode = 1, h = -1, sweep = 0, verbose = 0, curve = 0, full = 0;  // mode 0 exact, 1 xor, 2 add
 static uint32_t M, T;
-static int P, Q;  // probes, packed values
+static int P, Q, W;  // probes, packed values, value width
 static uint32_t py[MAXP], pz[MAXP];
 
 typedef struct { uint32_t a[MAXL + 1]; int r[MAXL + 1]; } Keys;
@@ -45,7 +49,7 @@ static inline void step(const Keys *k, int t, uint32_t e, uint32_t *y, uint32_t 
   *y = (u * k->a[t] + *z) & M;
   *z = (rotl(u, k->r[t]) + *y) & M;
 }
-static inline uint32_t receipt(uint32_t y, uint32_t z) { return y ^ rotl(z, h); }
+static inline uint32_t receipt(uint32_t y, uint32_t z) { return full ? (y << n) | z : y ^ rotl(z, h); }
 static inline uint32_t diff(uint32_t r, uint32_t s) { return mode == 2 ? (r - s) & M : r ^ s; }
 static inline uint32_t curve_z(uint32_t y) {
   uint32_t x = y;
@@ -59,10 +63,10 @@ static inline uint32_t curve_z(uint32_t y) {
 static inline uint64_t fingerprint(const uint32_t *y, const uint32_t *z) {
   uint64_t f = 0;
   if (mode == 0) {
-    for (int i = 0; i < Q; i++) f = (f << n) | receipt(y[i], z[i]);
+    for (int i = 0; i < Q; i++) f = (f << W) | receipt(y[i], z[i]);
   } else {
     uint32_t r0 = receipt(y[0], z[0]);
-    for (int i = 1; i <= Q; i++) f = (f << n) | diff(receipt(y[i], z[i]), r0);
+    for (int i = 1; i <= Q; i++) f = (f << W) | diff(receipt(y[i], z[i]), r0);
   }
   return f;
 }
@@ -215,7 +219,7 @@ static int parse_list(const char *s, uint32_t *out) {
 
 int main(int argc, char **argv) {
   if (argc < 4) {
-    fprintf(stderr, "usage: duo_proj n L exact|xor|add [-h H] [-a a,..] [-r r,..] [-s] [-C] [-v N]\n");
+    fprintf(stderr, "usage: duo_proj n L exact|xor|add [-h H] [-a a,..] [-r r,..] [-s] [-C] [-F] [-v N]\n");
     return 2;
   }
   n = atoi(argv[1]);
@@ -229,6 +233,7 @@ int main(int argc, char **argv) {
   for (int i = 4; i < argc; i++) {
     if (!strcmp(argv[i], "-s")) sweep = 1;
     else if (!strcmp(argv[i], "-C")) curve = 1;
+    else if (!strcmp(argv[i], "-F")) full = 1;
     else if (!strcmp(argv[i], "-v")) verbose = atoi(argv[++i]);
     else if (!strcmp(argv[i], "-h")) h = atoi(argv[++i]);
     else if (!strcmp(argv[i], "-a")) na = parse_list(argv[++i], a);
@@ -238,7 +243,9 @@ int main(int argc, char **argv) {
   if (h < 0) h = n / 2;
   if (nr != L || (!sweep && na != L)) { fprintf(stderr, "need L rotations (-r) and L multipliers (-a) or -s\n"); return 2; }
   if ((uint64_t)n * (L - (curve ? 0 : 1)) > 40) { fprintf(stderr, "n (L - 1) > 40: too large\n"); return 2; }
-  Q = 64 / n < MAXP - 1 ? 64 / n : MAXP - 1;
+  if (full && mode == 2) { fprintf(stderr, "-F compares states under exact or xor\n"); return 2; }
+  W = full ? 2 * n : n;
+  Q = 64 / W < MAXP - 1 ? 64 / W : MAXP - 1;
   P = mode == 0 ? Q : Q + 1;
   uint64_t seed = 0x9E3779B97F4A7C15ull;
   for (int i = 0; i < P; i++) {
@@ -287,8 +294,8 @@ int main(int argc, char **argv) {
       }
     }
   }
-  printf("n %d L %d %s%s h %d configs %llu hit_configs %llu hits %llu toponly %llu kappas %d", n, L, argv[3],
-         curve ? "-curve" : "", h, (unsigned long long)configs, (unsigned long long)hit_configs,
+  printf("n %d L %d %s%s%s h %d configs %llu hit_configs %llu hits %llu toponly %llu kappas %d", n, L, argv[3],
+         curve ? "-curve" : "", full ? "-full" : "", h, (unsigned long long)configs, (unsigned long long)hit_configs,
          (unsigned long long)hits, (unsigned long long)toponly, nkappa);
   for (int i = 0; i < nkappa; i++) printf(" %u", kappas[i]);
   printf("\n");

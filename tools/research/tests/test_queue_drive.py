@@ -772,27 +772,6 @@ def _steps_run(tmp_path, name: str, steps: dict[str, str]):
     return d
 
 
-def test_defer_lands_a_train_whose_other_steps_passed_and_reverts_it_when_a_deferred_step_fails(world, monkeypatch, tmp_path):
-    """17 Oct (CI-30's interim, Daniel through top): a train lands on the Lean check and the fast steps, with circuit-check
-    running on after landing; a deferred step that fails reverts the landing."""
-    from research.drive import CHECK_STEPS
-
-    h = Harness(world, monkeypatch)
-    h.d.defer = frozenset({"circuit-check"})
-    base = _git(world.origin, "rev-parse", "main")
-    world.gh.put(1, world.change({"a.txt": "1\n"}))
-    h.tick()
-    tip = _tip(world)
-    (rid,) = h.run_state
-    h.evidence = [_steps_run(tmp_path, rid, {x: "passed" for x in CHECK_STEPS if x != "circuit-check"})]
-    h.tick()
-    assert _git(world.origin, "rev-parse", "main") == tip and h.cancelled == []      # landed; its check runs on
-    h.run_state[rid] = ("done", 1, None)
-    h.evidence = [_steps_run(tmp_path, rid + "-end", {"circuit-check": "failed"})]
-    h.tick()
-    assert _git(world.origin, "diff", "--stat", base, "main") == "" and any("reverted on `main`" in x for x in h.posts), h.posts
-
-
 def test_the_lean_check_is_never_deferred(world, monkeypatch):
     h = Harness(world, monkeypatch)
     from research.drive import Driver

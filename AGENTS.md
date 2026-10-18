@@ -210,8 +210,9 @@ refuses, and the lander handles what it refuses.
 Daniel moved one class of part out (11 Oct, 8:53 PM PDT): a part whose cold run takes more than about 10 minutes may run
 right after its train lands, on every landing that changed its inputs, and a failure there reverts the landing at once.
 A reused verdict stays in the gate, and the Lean check always runs before landing. Citations and tables read only commits
-whose trailing parts passed. ci and infra build this post-landing tier; until it exists, the whole `check` stays before
-landing.
+whose trailing parts passed. Deferred steps run in one post-landing run on `main`'s tip at a time. A failure there reverts
+the one PR it implicates, else every landing since the last verified tip; one that no landing since touches reverts nothing
+and goes to ci.
 
 PRs land through ci's `research queue drive` (#1826), live since 12 Oct 06:00Z:
 

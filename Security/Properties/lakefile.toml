@@ -58,6 +58,10 @@ name = "verity_evaluate"
 path = "../../verity/core/primitives/evaluate"
 
 [[require]]
+name = "remote_audit"
+path = "../../verity/core/protocols/remote_bandwidth/lean"
+
+[[require]]
 name = "core_requirement"
 path = "../../verity/core/primitives/requirement"
 
@@ -73,4 +77,4 @@ roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "
   "Properties.SampledProofs", "Properties.Proofs.SampledProofs", "Properties.SampledProofs.Draw",
   "Properties.Evaluate", "Properties.Proofs.Evaluate",
   "Properties.NetworkRecords", "Properties.Proofs.NetworkRecords", "Properties.Accounting.Requirement",
-  "Properties.Proofs.Accounting.Requirement"]
+  "Properties.Proofs.Accounting.Requirement", "Properties.RemoteAudit", "Properties.Proofs.RemoteAudit"]

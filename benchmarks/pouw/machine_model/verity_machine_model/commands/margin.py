@@ -1,4 +1,5 @@
 """machine-model margin [DESIGN ...] [--device sm_NN] [--m M] [--least [--mix FFMA]] [--q Q] [--operands O] [--credit C]
+                     [--vector V]
                                           decision 76's margin (redteam.margin_audit): each design's core as built,
                                           its worst core with every near measured facet's lane coefficient moved M
                                           in the cheater's favour at once (default 2%), the single facet that drives
@@ -27,19 +28,21 @@ def add(sub) -> None:
                     help="the cheater's operand delivery on the tensor route (default %(default)s)")
     mg.add_argument("--credit", choices=E.CREDITS, default="floor",
                     help="what ε is a fraction of (default %(default)s: the floor program ♭)")
+    mg.add_argument("--vector", help="the vector whose rows are Π (default: model.toml's current)")
 
 
 def run(args) -> int:
     mix = {c: 1.0 for c in args.mix.split(",")} if args.mix else None
     for name in args.designs or E.designs(args.data):
-        mg = RT.margin_audit(name, args.data, m=args.m, q=args.q, operands=args.operands, credit=args.credit)
+        mg = RT.margin_audit(name, args.data, m=args.m, q=args.q, operands=args.operands, credit=args.credit,
+                             vector=args.vector or "")
         drive = f"driven by {mg.driver}" if mg.driver else "no near facet drives it"
         print(f"{mg.design} on {mg.device}: core {pct(mg.base)}  worst at {mg.m*100:g}% {pct(mg.worst)}  ({drive})")
         for r, s in mg.rows:
             print(f"    {r:12s} alone → {pct(s)}")
         if args.least:
             lf = RT.least_filler(name, args.data, mix=mix, m=args.m, q=args.q, operands=args.operands,
-                                 credit=args.credit)
+                                 credit=args.credit, vector=args.vector or "")
             how = (f"{lf.per_word:g} a word (worst {pct(lf.core)}, γ {lf.gamma:.3f})" if lf.per_word is not None
                    else f"none ≤ cap holds it (worst {pct(lf.core)})")
             print(f"    least {'+'.join(lf.mix)} filler that holds {mg.m*100:g}%: {how}")

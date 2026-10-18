@@ -1,4 +1,4 @@
-"""machine-model redteam [DESIGN ...] [--device sm_NN] [--q Q] [--operands O] [--credit C]
+"""machine-model redteam [DESIGN ...] [--device sm_NN] [--q Q] [--operands O] [--credit C] [--vector V]
                                           the red-team audit (redteam.py): each design's binding and near-binding
                                           facets, the decision-76 move in the cheater's favour at which the core
                                           first rises (per row), and, where Π prices no uniform datapath, the ε a
@@ -21,12 +21,13 @@ def add(sub) -> None:
                     help="the cheater's operand delivery on the tensor route (default %(default)s)")
     rt.add_argument("--credit", choices=E.CREDITS, default="floor",
                     help="what ε is a fraction of (default %(default)s: the floor program ♭)")
+    rt.add_argument("--vector", help="the vector whose rows are Π (default: model.toml's current)")
 
 
 def run(args) -> int:
     names = args.designs or E.designs(args.data)
     for name in names:
-        a = RT.audit(name, args.data, q=args.q, operands=args.operands, credit=args.credit)
+        a = RT.audit(name, args.data, q=args.q, operands=args.operands, credit=args.credit, vector=args.vector or "")
         print(f"{a.design} on {a.device}: core {pct(a.core)}  ε_machine {pct(a.machine_eps)}  floor {pct(a.floor)}  "
               f"γ {a.gamma:.3f}  binds {', '.join(a.binding)}" + ("" if a.uniform_route else "  [Π has no uniform route]"))
         for r in a.near:
@@ -38,7 +39,8 @@ def run(args) -> int:
                 how = f"flips at {r.flip_pct}% → {pct(r.core_at_flip)} (at 2%: {pct(r.core_at_2pct)})"
             print(f"    {r.name:12s} load {r.load:.3f}  dual {r.dual:.3f}: {how}")
         if not a.uniform_route:
-            base, opened, binding = RT.uniform_gap(name, args.data, q=args.q, operands=args.operands, credit=args.credit)
+            base, opened, binding = RT.uniform_gap(name, args.data, q=args.q, operands=args.operands, credit=args.credit,
+                                                   vector=args.vector or "")
             print(f"    uniform-datapath gap: core {pct(base)} → {pct(opened)} with a sibling-rate uniform route "
                   f"(binds {', '.join(binding) or 'none'})")
     return 0
