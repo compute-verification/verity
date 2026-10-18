@@ -49,15 +49,23 @@ constexpr uint32_t C_TAG = 8, Z_TAG = 9, BETA_TAG = 10;
 DEV uint32_t bits01(uint32_t nib) { return (nib * 0x00204081u) & 0x01010101u; }
 // U from a digest byte: -64 + sum_p w_p beta_p, w = (1, 2, 4, 8, 16, 32, 65)
 __host__ __device__ inline int u_beta(uint32_t v) { return -64 + (int)(v & 63u) + ((v & 64u) ? 65 : 0); }
+// H1's narrow U (co32c-u16, decision 82): -16 + sum_p w_p beta_p, w = (1, 2, 4, 8, 17), five planes (narrow_u.planes(16),
+// offset 16), U in {-16..-1, 1..16}, so W' = W + c + U stays s8 at W in [-110, 110]
+__host__ __device__ inline int u_beta16(uint32_t v) { return -16 + (int)(v & 15u) + ((v & 16u) ? 17 : 0); }
 __host__ __device__ inline int n_dig(int k) { return k <= 4096 ? 2 : 3; }
 
 // egemm.cu's quant_blk<true> (X and S as there), with P_A's rows S's digits under the carry coins z. DIG 1: that; the
 // cost-split stand-ins (wrong P_A): DIG 0 neither z nor digits (P_A row 0 = S's low byte), DIG 2 the digits over a z
 // that is zeroed, not hashed. z's digest rides on lane np of the last round's patch hashes when that round leaves a lane
 // idle (k / 128 not a multiple of 32: down's k = 14,336), else it is lane 0's own hash first
-template <int DIG>
+// H1 (co32c-u16, decision 82): the per-token amax `amax_row[r]` (crow_s) gives the scale s = amax_row[r] / tq (tq = 126),
+// and X divides by it, X = floor(clamp(x / s, lo, 126)) + b, as steps.act_quant does (s = amax / 126, v = (x / s).clamp,
+// two roundings, not one reciprocal), clamped on [`lo`, 126] (lo = -126 for H1, -127 for Dither-C's one-scale x * inv_s
+// form). Both the per-row s = amax_row / tq and the per-entry x / s divide here, so ptxas shares one generic div.rn slow
+// path (the pinned body), not the specialized copy it builds for a function whose only division it can fold.
+template <int DIG, bool H1 = false>
 DEV void cquant_blk(int blk, uint32_t* dgs, int* sps, uint32_t* zss, const uint16_t* __restrict__ x, int8_t* __restrict__ X,
-                    int8_t* __restrict__ PA, int rows, int k, float inv_s, const Sig& sg) {
+                    int8_t* __restrict__ PA, int rows, int k, float inv_s, const float* __restrict__ amax_row, float tq, int lo, const Sig& sg) {
   const int warp = threadIdx.x / 32, lane = threadIdx.x % 32, grp = blk * 8 + warp;
   if (grp * 4 >= rows) return;
   const int kb = k / 128, m = n_dig(k);
@@ -95,6 +103,7 @@ DEV void cquant_blk(int blk, uint32_t* dgs, int* sps, uint32_t* zss, const uint1
 #pragma unroll 1
     for (int rr = 0; rr < 4; rr++) {
       const size_t r = (size_t)grp * 4 + rr;
+      const float sc = H1 ? amax_row[r] / tq : inv_s;   // H1: the per-token scale s = amax / 126 to divide by; else inv_s to multiply by
       const uint4* src = reinterpret_cast<const uint4*>(x + r * k) + 16 * p0;
       uint2* dst = reinterpret_cast<uint2*>(X + r * k) + 16 * p0;
       int v[8] = {0, 0, 0, 0, 0, 0, 0, 0};
@@ -107,9 +116,11 @@ DEV void cquant_blk(int blk, uint32_t* dgs, int* sps, uint32_t* zss, const uint1
         int qv[8];
 #pragma unroll
         for (int h = 0; h < 4; h++) {
-          const float f0 = __uint_as_float(ww[h] << 16) * inv_s, f1 = __uint_as_float(ww[h] & 0xFFFF0000u) * inv_s;
-          qv[2 * h] = min(max(__float2int_rd(f0), -127), 126) + (int)((bits >> (2 * h)) & 1u);
-          qv[2 * h + 1] = min(max(__float2int_rd(f1), -127), 126) + (int)((bits >> (2 * h + 1)) & 1u);
+          const float xa = __uint_as_float(ww[h] << 16), xb = __uint_as_float(ww[h] & 0xFFFF0000u);
+          float f0, f1;
+          if constexpr (H1) { f0 = xa / sc; f1 = xb / sc; } else { f0 = xa * sc; f1 = xb * sc; }
+          qv[2 * h] = min(max(__float2int_rd(f0), lo), 126) + (int)((bits >> (2 * h)) & 1u);
+          qv[2 * h + 1] = min(max(__float2int_rd(f1), lo), 126) + (int)((bits >> (2 * h + 1)) & 1u);
         }
 #pragma unroll
         for (int i = 0; i < 8; i++) v[i] += qv[i];
@@ -169,15 +180,38 @@ DEV void cquant_blk(int blk, uint32_t* dgs, int* sps, uint32_t* zss, const uint1
     __shared__ uint32_t dg[8 * 512];                                                                                         \
     __shared__ int sp[8 * 128];                                                                                              \
     __shared__ uint32_t zs[8 * 16];                                                                                          \
-    cquant_blk<DIG>(blockIdx.x, dg, sp, zs, x, X, PA, rows, k, inv_s, sg);                                                   \
+    cquant_blk<DIG>(blockIdx.x, dg, sp, zs, x, X, PA, rows, k, inv_s, nullptr, 126.f, -127, sg);                             \
   }
 CQUANT(cquant, 1)
 CQUANT(cquant_s, 0)
 CQUANT(cquant_d, 2)
 
+// H1's per-token amax: amax_row(row) = max(|x_row|, 1e-30) (steps.act_quant at act_top 127, one bit, t = 126). crow_s only
+// reduces (no division), so it has no div.rn slow path to pin; cquant_h1 forms s = amax_row / 126 and divides x by s there,
+// among its per-entry divides, so every division shares the one pinned generic slow path.
+__global__ void __launch_bounds__(256) crow_s(const uint16_t* __restrict__ x, float* __restrict__ amax_row, int rows, int k) {
+  const int w = (blockIdx.x * blockDim.x + threadIdx.x) / 32, lane = threadIdx.x % 32;
+  if (w >= rows) return;
+  const uint16_t* xr = x + (size_t)w * k;
+  float a = 0.f;
+  for (int i = lane; i < k; i += 32) a = fmaxf(a, fabsf(__uint_as_float((uint32_t)xr[i] << 16)));
+#pragma unroll
+  for (int o = 16; o; o >>= 1) a = fmaxf(a, __shfl_xor_sync(~0u, a, o));
+  if (lane == 0) amax_row[w] = fmaxf(a, 1e-30f);
+}
+// H1's dithered activation quantizer: cquant's digits (DIG 1) dividing x by s = amax_row / 126 and clamping on [-126, 126]
+__global__ void __launch_bounds__(256) cquant_h1(const uint16_t* __restrict__ x, int8_t* __restrict__ X, int8_t* __restrict__ PA,
+                                                 int rows, int k, const float* __restrict__ amax_row, const __grid_constant__ Sig sg) {
+  __shared__ uint32_t dg[8 * 512];
+  __shared__ int sp[8 * 128];
+  __shared__ uint32_t zs[8 * 16];
+  cquant_blk<1, true>(blockIdx.x, dg, sp, zs, x, X, PA, rows, k, 0.f, amax_row, 126.f, -126, sg);
+}
+
 // W' = W + c + U and P_B's rows [-U | U | U | 0]: a block 8 rows, its threads loading W's first 16-byte chunks while
 // threads 0 .. 2 k / 128 - 1 hash c's patches (two row groups of 4) and the next 4 hash beta's blocks (rows 2j, 2j + 1).
-// cs: k bytes of c's digests; us: 64 words of U
+// cs: k bytes of c's digests; us: 64 words of U. H1: the narrow U (u_beta16) over W in [-110, 110].
+template <bool H1 = false>
 DEV void cwedit_blk(int blk, uint8_t* cs, uint32_t* us, const uint8_t* __restrict__ W, uint8_t* __restrict__ Wp,
                     uint8_t* __restrict__ PB, int k, const Sig& sg) {
   const int r0 = blk * 8, t = threadIdx.x, cpr = k / 16, total = 8 * cpr, kb = k / 128;
@@ -208,7 +242,8 @@ DEV void cwedit_blk(int blk, uint8_t* cs, uint32_t* us, const uint8_t* __restric
 #pragma unroll
         for (int b = 0; b < 4; b++) {
           const int e = 32 * rr + 4 * q + b;
-          v |= ((uint32_t)u_beta((uint32_t)(st[e / 8] >> (56 - 8 * (e % 8))) & 0xFFu) & 0xFFu) << (8 * b);
+          const uint32_t db = (uint32_t)(st[e / 8] >> (56 - 8 * (e % 8))) & 0xFFu;
+          v |= ((uint32_t)(H1 ? u_beta16(db) : u_beta(db)) & 0xFFu) << (8 * b);
         }
         us[8 * (2 * j + rr) + q] = v;
       }
@@ -249,7 +284,14 @@ __global__ void __launch_bounds__(256) cwedit(const uint8_t* __restrict__ W, uin
                                               const __grid_constant__ Sig sg) {
   __shared__ __align__(16) uint8_t cs[CW_MAXK];
   __shared__ uint32_t us[64];
-  cwedit_blk(blockIdx.x, cs, us, W, Wp, PB, k, sg);
+  cwedit_blk<false>(blockIdx.x, cs, us, W, Wp, PB, k, sg);
+}
+// H1's weight edit: W' = W + c + U with the narrow U (u_beta16); W in [-110, 110], so W' stays s8
+__global__ void __launch_bounds__(256) cwedit_h1(const uint8_t* __restrict__ W, uint8_t* __restrict__ Wp, uint8_t* __restrict__ PB, int k,
+                                                 const __grid_constant__ Sig sg) {
+  __shared__ __align__(16) uint8_t cs[CW_MAXK];
+  __shared__ uint32_t us[64];
+  cwedit_blk<true>(blockIdx.x, cs, us, W, Wp, PB, k, sg);
 }
 // W^ = W' - U, the served weights, for the gate's cuBLASLt reference (HALF: cohalf's P_B, -U at byte k % 64)
 template <bool HALF> __global__ void phat(const int8_t* __restrict__ Wp, const int8_t* __restrict__ PB, int8_t* __restrict__ Wh, size_t n, int k) {
@@ -302,13 +344,95 @@ __global__ void __launch_bounds__(256) hquant(const uint16_t* __restrict__ x, in
     }
   }
 }
+// H1's per (head, token) activation extremes for cohalf's QK^T: amax = max(x), namax = max(-x) over the 128 head-dim
+// (steps.floor_quant's x.amax and (-x).amax at top 111), packed as (amax, namax). A separate reduction (no division), so
+// hquant_h1's divides share the one pinned generic div.rn slow path, as crow_s does for cquant_h1 (an inline reduction
+// interleaves warp barriers that make ptxas emit an unpinned div slow-path body, probe r20261017-215903-5a44).
+__global__ void __launch_bounds__(256) hrow_s(const uint16_t* __restrict__ x, float2* __restrict__ an, int rows) {
+  const int w = (blockIdx.x * blockDim.x + threadIdx.x) / 32, lane = threadIdx.x % 32;
+  if (w >= rows) return;
+  const uint2 v = __ldg(reinterpret_cast<const uint2*>(x + (size_t)w * 128) + lane);
+  const uint32_t vv[2] = {v.x, v.y};
+  float pa = __uint_as_float(0xff800000u), na = pa;   // -inf
+#pragma unroll
+  for (int h = 0; h < 2; h++) {
+    const float a = __uint_as_float(vv[h] << 16), b = __uint_as_float(vv[h] & 0xFFFF0000u);
+    pa = fmaxf(fmaxf(pa, a), b);
+    na = fmaxf(fmaxf(na, -a), -b);
+  }
+#pragma unroll
+  for (int o = 16; o; o >>= 1) { pa = fmaxf(pa, __shfl_xor_sync(~0u, pa, o)); na = fmaxf(na, __shfl_xor_sync(~0u, na, o)); }
+  if (lane == 0) an[w] = make_float2(pa, na);
+}
+// H1's served side (K): per (head, token) asymmetric floor at top 111 (steps.floor_quant at top 111, one bit): with (amax,
+// namax) = hrow_s(x), s = max(amax / 111, namax / 112) clamped to 1e-30 then * (1 + 2^-20), X = floor(x / s) + b in
+// [-112, 111] (the margin keeps floor(x / s) in [-112, 110], no clamp). Y(r) = X(r) + X(r + 64) in [-224, 222] leaves s8,
+// so the digit split Y = Y0 + 128 Y1 (Y0 = ((Y + 64) & 127) - 64 in [-64, 63], Y1 = (Y - Y0) >> 7 in [-2, 2]) and
+// P_A = [Y0_lo | Y0_hi | Y1_lo | Y1_hi]. The scale read from memory keeps every divide (amax / 111, namax / 112, x / s)
+// on the one pinned generic div.rn slow path.
+__global__ void __launch_bounds__(256) hquant_h1(const uint16_t* __restrict__ x, int8_t* __restrict__ X, int8_t* __restrict__ PA,
+                                                 int rows, const float2* __restrict__ an, const __grid_constant__ Sig sg) {
+  __shared__ uint32_t dgs[HQ_G * 16];
+  const int warp = threadIdx.x / 32, lane = threadIdx.x % 32, g0 = blockIdx.x * HQ_G;
+  if (threadIdx.x < HQ_G && (g0 + (int)threadIdx.x) * 4 < rows) {
+    uint64_t st[8];
+    sha_block(sg.w, (uint64_t)DITHER_TAG << 56 | (uint64_t)(g0 + threadIdx.x), st);
+    uint32_t* dg = dgs + 16 * threadIdx.x;
+#pragma unroll
+    for (int i = 0; i < 8; i++) {
+      dg[2 * i] = __byte_perm((uint32_t)(st[i] >> 32), 0, 0x0123);
+      dg[2 * i + 1] = __byte_perm((uint32_t)st[i], 0, 0x0123);
+    }
+  }
+  __syncthreads();
+#pragma unroll 1
+  for (int gi = warp; gi < HQ_G && (g0 + gi) * 4 < rows; gi += 8) {
+    const uint8_t* bytes = reinterpret_cast<const uint8_t*>(dgs + 16 * gi);
+#pragma unroll 1
+    for (int rr = 0; rr < 4; rr++) {
+      const size_t r = (size_t)(g0 + gi) * 4 + rr;
+      const uint2 w = __ldg(reinterpret_cast<const uint2*>(x + r * 128) + lane);
+      const uint32_t ww[2] = {w.x, w.y};
+      float xf[4];
+#pragma unroll
+      for (int h = 0; h < 2; h++) {
+        xf[2 * h] = __uint_as_float(ww[h] << 16);
+        xf[2 * h + 1] = __uint_as_float(ww[h] & 0xFFFF0000u);
+      }
+      const float2 pn = __ldg(an + r);
+      const float s = fmaxf(fmaxf(pn.x / 111.f, pn.y / 112.f), 1e-30f) * (1.f + 0x1p-20f);
+      const uint32_t bits = (bytes[16 * rr + lane / 2] >> (4 * (lane & 1))) & 0xFu;
+      int qv[4];
+#pragma unroll
+      for (int j = 0; j < 4; j++) qv[j] = __float2int_rd(xf[j] / s) + (int)((bits >> j) & 1u);
+      const uint32_t xw = __byte_perm(__byte_perm(qv[0], qv[1], 0x0040), __byte_perm(qv[2], qv[3], 0x0040), 0x5410);
+      reinterpret_cast<uint32_t*>(X + r * 128)[lane] = xw;
+      const uint32_t hi = __shfl_down_sync(~0u, xw, 16);
+      uint32_t y0w = 0, y1w = 0;
+#pragma unroll
+      for (int b = 0; b < 4; b++) {
+        const int Y = (int)(int8_t)(xw >> (8 * b)) + (int)(int8_t)(hi >> (8 * b));
+        const int Y0 = ((Y + 64) & 127) - 64, Y1 = (Y - Y0) >> 7;
+        y0w |= ((uint32_t)(uint8_t)(int8_t)Y0) << (8 * b);
+        y1w |= ((uint32_t)(uint8_t)(int8_t)Y1) << (8 * b);
+      }
+      // P_A row = [Y0 (cols 0..63) | Y1 (cols 0..63)]: lanes 0..15 hold Y0/Y1, a uniform store (lane l writes word l, Y1
+      // pulled from lane l - 16) in place of a lane < 16 branch. The shuffle runs on every lane (a mask that any lane skips
+      // deadlocks); lanes < 16 take their Y0 and drop the shuffled word
+      const uint32_t y1from = __shfl_sync(~0u, y1w, lane - 16);
+      reinterpret_cast<uint32_t*>(PA + r * 128)[lane] = lane < 16 ? y0w : y1from;
+    }
+  }
+}
 // the peeled side (Q in [-64, 62]): Q' = Q + c + U(i, k mod 64) (c as cwedit's, tag 8; U(i, r) from digest byte r of
 // row i's tag-11 block, r < 64, as cwedit's beta) and P_B = [-U_lo | -U_hi | 0 | 0]. A block HW_G row groups of 4:
 // thread t < HW_G hashes group t's c, thread HW_G + j row j's U (5 HW_G digests on 5 full warps at HW_G = 32), then a
 // warp 4 rows at a time. WH: also W^ = Q + c (phat<true>'s bytes) to Wh
 constexpr int HW_G = 32;
 inline int hw_blocks(int rows) { return (rows + 4 * HW_G - 1) / (4 * HW_G); }
-template <bool WH = false>
+// H1 (co32c-u16): the narrow U (u_beta16) over Q in [-112, 110] (floor top 111), so Q' = Q + c + U stays s8 at Q + c in
+// [-112, 111]; P_B = [-U_lo | -U_hi | -U_lo | -U_hi] (the repeat for the digit split's Y1 atoms, htail_h1)
+template <bool WH = false, bool H1 = false>
 __global__ void __launch_bounds__(256) hwedit(const uint8_t* __restrict__ W, uint8_t* __restrict__ Wp, uint8_t* __restrict__ PB, int rows,
                                               const __grid_constant__ Sig sg, uint8_t* __restrict__ Wh = nullptr) {
   __shared__ uint32_t cds[HW_G * 16];
@@ -332,7 +456,8 @@ __global__ void __launch_bounds__(256) hwedit(const uint8_t* __restrict__ W, uin
 #pragma unroll
         for (int b = 0; b < 4; b++) {
           const int e = 4 * q + b;
-          v |= ((uint32_t)u_beta((uint32_t)(st[e / 8] >> (56 - 8 * (e % 8))) & 0xFFu) & 0xFFu) << (8 * b);
+          const uint32_t db = (uint32_t)(st[e / 8] >> (56 - 8 * (e % 8))) & 0xFFu;
+          v |= ((uint32_t)(H1 ? u_beta16(db) : u_beta(db)) & 0xFFu) << (8 * b);
         }
         ud[q] = v;
       }
@@ -351,7 +476,7 @@ __global__ void __launch_bounds__(256) hwedit(const uint8_t* __restrict__ W, uin
       const uint32_t wc = add_noise<false>(w, bits01(nib));
       reinterpret_cast<uint32_t*>(Wp + r * 128)[lane] = add_noise<false>(wc, u);
       if constexpr (WH) reinterpret_cast<uint32_t*>(Wh + r * 128)[lane] = wc;
-      reinterpret_cast<uint32_t*>(PB + r * 128)[lane] = lane < 16 ? add_noise<false>(~u, 0x01010101u) : 0u;
+      reinterpret_cast<uint32_t*>(PB + r * 128)[lane] = (H1 || lane < 16) ? add_noise<false>(~u, 0x01010101u) : 0u;
     }
   }
 }
@@ -374,13 +499,14 @@ __global__ void ebfill(uint8_t* eb, int M, int N, uint32_t seed) {
     else s[i - M] = __uint_as_float(0x3A800000u | (h & 0x7FFFFFu));
   }
 }
-// W in [-64, 62]; the gate's rows 0 and 1 at 62 and -64
-__global__ void wfill(int8_t* W, size_t count, uint32_t seed, size_t k, int ends) {
+// W in [lo, hi] (co32c: [-64, 62]; H1: [-110, 110]); the gate's rows 0 and 1 at hi and lo
+__global__ void wfill(int8_t* W, size_t count, uint32_t seed, size_t k, int ends, int lo, int hi) {
+  const uint32_t span = (uint32_t)(hi - lo + 1);
   for (size_t i = (size_t)blockIdx.x * blockDim.x + threadIdx.x; i < count; i += (size_t)gridDim.x * blockDim.x) {
     const uint32_t h = mix32(seed ^ mix32((uint32_t)i) ^ mix32((uint32_t)(i >> 32) + 0x55u));
-    int v = (int)(h % 127u) - 64;
-    if (ends && i < k) v = 62;
-    else if (ends && i < 2 * k) v = -64;
+    int v = (int)(h % span) + lo;
+    if (ends && i < k) v = hi;
+    else if (ends && i < 2 * k) v = lo;
     W[i] = (int8_t)v;
   }
 }
@@ -470,8 +596,53 @@ template <class L> DEV void htail(L& ml, int (&acc)[L::MI][L::NI][4], St (&ch)[8
   ml.release(ml.empty(ml.s));
   ml.advance();
 }
+// cohalf H1's tail stage P_A = [Y0_lo | Y0_hi | Y1_lo | Y1_hi], P_B = [-U_lo | -U_hi | -U_lo | -U_hi]: Y = X_lo + X_hi in
+// [-224, 222] = Y0 + 128 Y1, so O = T_last + Y (-U) = T_last + Y0 (-U) + 128 (Y1 (-U)). Atoms 0 and 1 (Y0) accumulate onto
+// T_last; atoms 2 and 3 (Y1) accumulate into a fresh d1, folded in at base 128 (as cdstep's << 7, but added not subtracted)
+template <class L> DEV void htail_h1(L& ml, int (&acc)[L::MI][L::NI][4], St (&ch)[8]) {
+  constexpr int MI = L::MI, NI = L::NI;
+  ml.wait_full();
+  const uint32_t tb = ml.stage(ml.s);
+  uint32_t fa[MI][4], fb[NI][2];
+#pragma unroll
+  for (int kk = 0; kk < 2; kk++) {
+    ml.load_b(fb, tb, kk);
+#pragma unroll
+    for (int mi = 0; mi < MI; mi++) {
+      ml.load_a(fa[mi], tb, kk, mi);
+#pragma unroll
+      for (int ni = 0; ni < NI; ni++) imma(acc[mi][ni], fa[mi], fb[ni]);
+    }
+  }
+  int d1[MI][NI][4];
+#pragma unroll
+  for (int mi = 0; mi < MI; mi++)
+#pragma unroll
+    for (int ni = 0; ni < NI; ni++)
+#pragma unroll
+      for (int e = 0; e < 4; e++) d1[mi][ni][e] = 0;
+#pragma unroll
+  for (int kk = 2; kk < 4; kk++) {
+    ml.load_b(fb, tb, kk);
+#pragma unroll
+    for (int mi = 0; mi < MI; mi++) {
+      ml.load_a(fa[mi], tb, kk, mi);
+#pragma unroll
+      for (int ni = 0; ni < NI; ni++) imma(d1[mi][ni], fa[mi], fb[ni]);
+    }
+  }
+#pragma unroll
+  for (int mi = 0; mi < MI; mi++)
+#pragma unroll
+    for (int ni = 0; ni < NI; ni++)
+#pragma unroll
+      for (int e = 0; e < 4; e++) acc[mi][ni][e] += d1[mi][ni][e] * 128;
+  cabs_all<L>(ch, acc);
+  ml.release(ml.empty(ml.s));
+  ml.advance();
+}
 
-// TAIL 0: co32c's (ctail), 1: cohalf's (htail). SERVE 0: O' to U; 1: O; 2: P.V's served value as float, f = float(2 O + 127 S_row) (s_row s_col) with eb = [S (M ints) |
+// TAIL 0: co32c's (ctail), 1: cohalf's (htail), 2: cohalf H1's (htail_h1). SERVE 0: O' to U; 1: O; 2: P.V's served value as float, f = float(2 O + 127 S_row) (s_row s_col) with eb = [S (M ints) |
 // s_row (M floats) | s_col (N floats)] (pv's epilogue on a full key block, S per channel: the epilogue's cost a cell).
 // RK: the fold, DUO or (co32c) an fx kind on every absorbed word, the mainloop's (EL's) and the tail's
 template <int LAG, int TIE, bool SLEEP, bool THREE, int SERVE, int TAIL = 0, int RK = DUO> DEV void c_body(const Args& a) {
@@ -493,7 +664,7 @@ template <int LAG, int TIE, bool SLEEP, bool THREE, int SERVE, int TAIL = 0, int
   for (int t = blockIdx.x; t < tiles_m * tiles_n; t += gridDim.x) {
     int tm, tn;
     ml.place_step(pl, t == (int)blockIdx.x ? t : (int)gridDim.x);
-    L::place_tile(pl, tm, tn);
+    L::place_tile(pl, tiles_m, tm, tn);
     const uint32_t tile_id = tm * tiles_n + tn;
     St ch[8];
 #pragma unroll
@@ -504,6 +675,7 @@ template <int LAG, int TIE, bool SLEEP, bool THREE, int SERVE, int TAIL = 0, int
     int acc[MI][NI][4];
     ml.tile_il(a.K, acc, ch, kr, zero);
     if constexpr (TAIL == 1) htail<L>(ml, acc, ch);
+    else if constexpr (TAIL == 2) htail_h1<L>(ml, acc, ch);
     else ctail<L, THREE, SERVE != 0, RK>(ml, acc, ch);
     const int row0 = tm * 128 + wm * 32 + g, col0 = tn * 128 + wn * 32 + 2 * q;
     if constexpr (SERVE == 2) {
@@ -563,12 +735,16 @@ __global__ void __launch_bounds__(MLW::NT, 1) c_fx1_k3(const __grid_constant__ A
 // cohalf (k = 128)
 __global__ void __launch_bounds__(MLW::NT, 1) h_l7qs(const __grid_constant__ Args a) { c_body<7, 4, true, false, 1, 1>(a); }
 __global__ void __launch_bounds__(MLW::NT, 1) h_l2q(const __grid_constant__ Args a) { c_body<2, 4, false, false, 1, 1>(a); }
+// cohalf H1 (co32c-u16, decision 82): Q/K floored at top 111, the digit-split tail (htail_h1, TAIL 2)
+__global__ void __launch_bounds__(MLW::NT, 1) h_l7qs_h1(const __grid_constant__ Args a) { c_body<7, 4, true, false, 1, 2>(a); }
+__global__ void __launch_bounds__(MLW::NT, 1) h_l2q_h1(const __grid_constant__ Args a) { c_body<2, 4, false, false, 1, 2>(a); }
 
 // ---------------------------------------------------------------- host
 struct CKn { const char* name; Kern k, k3; };
 static const CKn CKERN[] = {{"c_l7qs", c_l7qs, c_l7qs_k3}, {"c_l7qs_o", c_l7qs_o, c_l7qs_o_k3}, {"c_l2q", c_l2q, c_l2q_k3},
                           {"c_l2q_o", c_l2q_o, c_l2q_o_k3}, {"c_l7qs_v", c_l7qs_v, c_l7qs_v_k3}, {"c_fx1", c_fx1, c_fx1_k3},
-                          {"h_l7qs", h_l7qs, h_l7qs}, {"h_l2q", h_l2q, h_l2q}};
+                          {"h_l7qs", h_l7qs, h_l7qs}, {"h_l2q", h_l2q, h_l2q},
+                          {"h_l7qs_h1", h_l7qs_h1, h_l7qs_h1}, {"h_l2q_h1", h_l2q_h1, h_l2q_h1}};
 static const CKn* ckern(const std::string& n) {
   for (auto& e : CKERN) if (n == e.name) return &e;
   return nullptr;
@@ -586,26 +762,40 @@ struct CP {
   LtG ref;
   uint32_t inst = 0;
   bool half = false;
+  bool h1 = false;    // H1's numerics (co32c-u16, decision 82): per-token scales, +-110 weights, the narrow U
   float inv7 = 0;
+  float* amax_row = nullptr;   // H1's per-token activation amax (max|x|, clamped), filled by crow_s; cquant_h1 forms amax/126
+  float2* hqa = nullptr;       // cohalf H1's per (head, token) (max(x), max(-x)), filled by hrow_s; hquant_h1 forms amax/111, namax/112
 };
 using CqK = void (*)(const uint16_t*, int8_t*, int8_t*, int, int, float, Sig);
 static void cq(CP& C, const Sig& s, CqK f = cquant) {
   EP& P = C.E;
   if (C.half) {
-    hquant<<<hq_blocks(P.m), 256, 0, P.st>>>(P.x, C.X, C.PA, P.m, C.inv7, s);
+    if (C.h1) {
+      hrow_s<<<(P.m + 7) / 8, 256, 0, P.st>>>(P.x, C.hqa, P.m);
+      hquant_h1<<<hq_blocks(P.m), 256, 0, P.st>>>(P.x, C.X, C.PA, P.m, C.hqa, s);
+    } else hquant<<<hq_blocks(P.m), 256, 0, P.st>>>(P.x, C.X, C.PA, P.m, C.inv7, s);
+    return;
+  }
+  if (C.h1) {
+    crow_s<<<(P.m + 7) / 8, 256, 0, P.st>>>(P.x, C.amax_row, P.m, P.k);
+    cquant_h1<<<(P.m + QROWS - 1) / QROWS, 256, 0, P.st>>>(P.x, C.X, C.PA, P.m, P.k, C.amax_row, s);
     return;
   }
   f<<<(P.m + QROWS - 1) / QROWS, 256, 0, P.st>>>(P.x, C.X, C.PA, P.m, P.k, P.inv_s, s);
 }
 static void cw(CP& C, const Sig& s) {
   EP& P = C.E;
+  const uint8_t* W = reinterpret_cast<const uint8_t*>(C.W7);
+  uint8_t* Wp = reinterpret_cast<uint8_t*>(C.Wp);
+  uint8_t* PB = reinterpret_cast<uint8_t*>(C.PB);
   if (C.half) {
-    hwedit<<<hw_blocks(P.n), 256, 0, P.st>>>(reinterpret_cast<const uint8_t*>(C.W7), reinterpret_cast<uint8_t*>(C.Wp),
-                                               reinterpret_cast<uint8_t*>(C.PB), P.n, s);
+    if (C.h1) hwedit<false, true><<<hw_blocks(P.n), 256, 0, P.st>>>(W, Wp, PB, P.n, s);
+    else hwedit<<<hw_blocks(P.n), 256, 0, P.st>>>(W, Wp, PB, P.n, s);
     return;
   }
-  cwedit<<<P.n / 8, 256, 0, P.st>>>(reinterpret_cast<const uint8_t*>(C.W7), reinterpret_cast<uint8_t*>(C.Wp), reinterpret_cast<uint8_t*>(C.PB),
-                                     P.k, s);
+  if (C.h1) cwedit_h1<<<P.n / 8, 256, 0, P.st>>>(W, Wp, PB, P.k, s);
+  else cwedit<<<P.n / 8, 256, 0, P.st>>>(W, Wp, PB, P.k, s);
 }
 static Kern cpick(const CP& C, const CKn* e) { return n_dig(C.E.k) == 3 ? e->k3 : e->k; }
 static void cgemm_run(CP& C, Kern kern, int* Y, uint32_t* R) {
@@ -617,14 +807,20 @@ static void csetup(CP& C, int m, int n, int k, uint32_t seed, bool gate) {
   EP& P = C.E;
   esetup(P, m, n, k, seed, gate);
   C.half = k == 128;
+  const char* num = getenv("CG_NUMERICS");
+  C.h1 = num && !strcmp(num, "h1");   // H1's numerics: the linears (k > 128) and cohalf's QK^T (k = 128)
   C.inv7 = P.inv_s * 0.5f;
   CK(cudaMalloc(&C.W7, (size_t)n * k)); CK(cudaMalloc(&C.X, (size_t)m * k)); CK(cudaMalloc(&C.PA, (size_t)m * 128));
   CK(cudaMalloc(&C.Wp, (size_t)n * k)); CK(cudaMalloc(&C.PB, (size_t)n * 128)); CK(cudaMalloc(&C.Wh, (size_t)n * k));
   CK(cudaMalloc(&C.Y, P.ny * 4)); CK(cudaMalloc(&C.Yr, P.ny * 4));
   CK(cudaMalloc(&C.R, P.nr * 4)); CK(cudaMalloc(&C.R2, P.nr * 4));
   CK(cudaMalloc(&C.eb, (size_t)(2 * m + n) * 4));
+  if (C.h1 && !C.half) CK(cudaMalloc(&C.amax_row, (size_t)m * 4));
+  if (C.h1 && C.half) CK(cudaMalloc(&C.hqa, (size_t)m * sizeof(float2)));
   ebfill<<<256, 256, 0, P.st>>>(C.eb, m, n, mix32(seed ^ 0x7777u));
-  wfill<<<4096, 256, 0, P.st>>>(C.W7, (size_t)n * k, mix32(seed ^ 0x6666u), k, gate);
+  // H1: the linears' W in [-110, 110]; cohalf's pre-bit query in [-112, 110] (floor top 111). co32c: [-64, 62]
+  const int wlo = C.h1 ? (C.half ? -112 : -110) : -64, whi = C.h1 ? 110 : 62;
+  wfill<<<4096, 256, 0, P.st>>>(C.W7, (size_t)n * k, mix32(seed ^ 0x6666u), k, gate, wlo, whi);
   const Sig s0 = sigma(seed, 0xFFFFFFFFu);
   cq(C, s0);
   cw(C, s0);
@@ -638,7 +834,7 @@ static void csetup(CP& C, int m, int n, int k, uint32_t seed, bool gate) {
 static void cfree(CP& C) {
   CK(cudaDeviceSynchronize());
   for (void* p : {(void*)C.W7, (void*)C.X, (void*)C.PA, (void*)C.Wp, (void*)C.PB, (void*)C.Wh, (void*)C.Y, (void*)C.Yr, (void*)C.R,
-                  (void*)C.R2, (void*)C.eb, (void*)C.mC})
+                  (void*)C.R2, (void*)C.eb, (void*)C.mC, (void*)C.amax_row, (void*)C.hqa})
     CK(cudaFree(p));
   efree(C.E);
 }
@@ -699,7 +895,7 @@ static int cgate(const std::string& dir, int m, int n, int k, uint32_t seed) {
   };
   // the main kernel (c_l7qs, cohalf's h_l7qs): O against cuBLASLt's X W^T; its receipts are the reference for the
   // other schedule (c_l2q, h_l2q) and the other outputs (c_*_o: O', c_l7qs_v: pv's served epilogue against vref's)
-  const std::string km = C.half ? "h_l7qs" : "c_l7qs";
+  const std::string km = C.half ? (C.h1 ? "h_l7qs_h1" : "h_l7qs") : "c_l7qs";
   CK(cudaMemsetAsync(C.Y, 0xA5, P.ny * 4, P.st));
   cgemm_run(C, cpick(C, ckern(km)), C.Y, C.R2);
   CK(cudaStreamSynchronize(P.st));
@@ -716,7 +912,7 @@ static int cgate(const std::string& dir, int m, int n, int k, uint32_t seed) {
     vref<<<dim3((n + 255) / 256, m), 256, 0, P.st>>>(C.Yr, C.eb, F, m, n);
   }
   const std::vector<std::string> others =
-      C.half ? std::vector<std::string>{"h_l2q"} : std::vector<std::string>{"c_l2q", "c_l7qs_o", "c_l2q_o", "c_l7qs_v"};
+      C.half ? std::vector<std::string>{C.h1 ? "h_l2q_h1" : "h_l2q"} : std::vector<std::string>{"c_l2q", "c_l7qs_o", "c_l2q_o", "c_l7qs_v"};
   for (const std::string& name : others) {
     const bool o = name.find("_o") != std::string::npos, v = name.find("_v") != std::string::npos;
     CK(cudaMemsetAsync(C.Y, 0xA5, P.ny * 4, P.st)); CK(cudaMemsetAsync(C.R, 0xA5, P.nr * 4, P.st));
@@ -758,10 +954,10 @@ static int cgate(const std::string& dir, int m, int n, int k, uint32_t seed) {
     tj += std::string(i ? ", " : "") + "[" + std::to_string(tm) + ", " + std::to_string(tn) + "]";
   }
   FILE* fp = fopen((dir + "/meta.json").c_str(), "w");
-  fprintf(fp, "{\"m\": %d, \"n\": %d, \"k\": %d, \"seed\": %u, \"inv_s\": %.9g, \"grid\": %d, \"key\": [\"%016llx\", \"%016llx\", "
+  fprintf(fp, "{\"m\": %d, \"n\": %d, \"k\": %d, \"seed\": %u, \"inv_s\": %.9g, \"grid\": %d, \"numerics\": \"%s\", \"key\": [\"%016llx\", \"%016llx\", "
               "\"%016llx\", \"%016llx\"], \"tiles\": [%s], \"kinds\": {\"%s\": \"%s\"}, \"device\": {%s}, \"device_ok\": %s, "
               "\"control_rejected\": %s}\n",
-          m, n, k, seed, C.half ? C.inv7 : P.inv_s, P.grid, (unsigned long long)s.w[0], (unsigned long long)s.w[1],
+          m, n, k, seed, C.half ? C.inv7 : P.inv_s, P.grid, C.h1 ? "h1" : "co32c", (unsigned long long)s.w[0], (unsigned long long)s.w[1],
           (unsigned long long)s.w[2], (unsigned long long)s.w[3], tj.c_str(), km.c_str(), C.half ? "cohalf" : "co32c", res.c_str(),
           ok ? "true" : "false", control_rejected ? "true" : "false");
   fclose(fp);
