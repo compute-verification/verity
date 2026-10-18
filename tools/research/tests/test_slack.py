@@ -1869,6 +1869,14 @@ def test_routing_reads_origin_mains_registry_fetched_at_most_every_30_minutes(re
     assert slack.routing_registry(mine, path) is mine
 
 
+def test_owners_answers_as_origin_main_does_from_a_stale_checkout(registry, tmp_path, monkeypatch, capsys):
+    monkeypatch.delenv("RESEARCH_SLACK_FRESH_CHECK")
+    path, change = stale_checkout(tmp_path, registry)
+    monkeypatch.setenv("RESEARCH_SLACK_REGISTRY", str(path))
+    change(lambda reg: next(h for h in reg["handles"] if h["handle"] == "benchmarks")["owns"].append("moved/here/"))
+    assert run(capsys, "owners", "moved/here/x.py")[1].split() == ["@benchmarks", "moved/here/x.py"]
+
+
 def test_a_stale_checkout_and_clone_ring_a_handle_added_and_an_inbox_reopened_since(fake, registry, routes_dirs, tmp_path, capsys, monkeypatch):
     """18 Oct: senders on old checkouts rang nobody for handles added since; 17 Oct: old notes clones rang nobody for an
     inbox reopened since.  An announcement to every handle from a checkout without @newbie and a clone without its route,

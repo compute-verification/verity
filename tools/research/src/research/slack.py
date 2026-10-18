@@ -2664,7 +2664,7 @@ def main(argv: list[str], prog: str = "research msg") -> int:
         reg = load_registry(path)
         if ns.cmd == "groups":
             return cmd_groups_sync(ns, reg, path)
-        if ns.cmd in ROUTED:
+        if ns.cmd in ROUTED or ns.cmd == "owners":                # who owns a path now is main's answer too
             reg = routing_registry(reg, path)
         return {"handles": cmd_handles, "owners": cmd_owners, "subscriptions": cmd_subscriptions, "ask": cmd_ask, "announce": cmd_announce, "reply": cmd_reply,
                 "pickup": cmd_pickup, "roster": cmd_roster, "match": cmd_match,
