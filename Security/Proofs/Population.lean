@@ -6,6 +6,8 @@ import Proofs.Population.Leakage
 import Proofs.Population.Work
 import Proofs.Population.Instance
 import Proofs.Population.Oblivious
+import Proofs.Population.Transfer
+import Proofs.Population.Converse
 
 /-!
 # Populations: which object each policy needs of sampled proofs' guarantee
@@ -16,9 +18,10 @@ evaluation. `Necessity`: determinacy for every choice of unit functions holds ex
 at most `(∑_{j ≤ m} C(n, j)) · |V| ^ (m w)` values; the location term and acyclicity are each needed. `Pointer`: a
 time-ordered machine trace keeps the count, but with value-dependent reads one wrong one-bit unit makes the egress
 copy `N` secret words its honest run never reads; declared statically, the checker sees them upstream of the egress.
-`Leakage`: the egress over any set of secrets takes at most `K · α` values, the control count `K` times a bound `α` on
-what the rest of the population amplifies the wrong units' writes into; `α = 1` when no secret is upstream of the
-egress, and fixed arithmetic at fixed indices amplifies one wrong bit into `N` secret bits.
+`Leakage`: beyond the honest egress, the egress takes at most `C(|U|, m) · |V| ^ (m E_max)` values, `E(u)` the egress
+slots in `u`'s downstream cone, read off the wiring; the bound is attained, and a machine's step has `E_max = |E|`.
+Equivalently, control times amplification: at most `K · α` values, `α = 1` when no secret is upstream of the egress, and
+fixed arithmetic at fixed indices amplifies one wrong bit into `N` secret bits.
 `Work`: every skipped unit is downstream of a wrong unit or lucky, so the skipped work is at most `m F` plus the lucky
 work, `F` bounding a unit's downstream cone, or `F · wt(B)` plus the lucky work with each cone at most `F` times its
 root's weight; a copied unit is correct work never done, so luck needs distinct units.
@@ -30,4 +33,8 @@ sets independent of every value, or of all but the public inputs) is that popula
 the skipped-work cone hold in the honest run's own dataflow with no obliviousness, but that cone is not public, and the
 pointer machine is oblivious in the classical sense yet leaks. With the address slots honest, a run is an assignment of
 the honest run's frozen dataflow.
+`Transfer`: every theorem above holds for a time-ordered program with the cones and upstreams of its padding, which
+are public when the padded assignments are those holding the public values; that cone holds every honest run's.
+`Converse`: the padding is the least wiring that expresses every program with a given address map, and the pointer
+machine's honest wiring, which never has a secret upstream of the egress, does not bound its egress.
 -/
