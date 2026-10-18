@@ -2,11 +2,12 @@
 (`Security/Models/Accounting/Assumptions/PouwFloor.lean`), compute attribution's floor at a block whose outside holds
 advice about the salt.
 
-The conjecture frees all help that is the same at every salt (TT) and is scoped to the schemes whose noise is full-rank
-and per-entry: the window's noise lies in no salt-independent affine subspace of lower dimension than its noise space,
-so nothing a helper precomputes shortens the block's salt-dependent work. With low-rank noise
-`F = Σ_{t < r} c_t(salt) · G_t`, the helper ships the `r` products `A · G_t` and the block finishes `A · F` in `r`
-multiply-adds an output instead of `k`, and the conjecture is false. So:
+The conjecture frees all help that is the same at every salt (TT) and is scoped to the noise whose floor is the committed
+words' coin × coin products, both factors depending on the salt (`note:20261018T1026Z-finding-pv-advice`): advice is a
+constant to the coins, so it lowers no such product, and a product that reads one side's coins only floors nothing.
+Noise of rank `r` along the contraction on one side is out of scope where `r` is below the keys `C` between committed
+words: with `F = Σ_{t < r} c_t(salt) · G_t`, the helper ships the `r` products `A · G_t` and the block finishes each
+committed word of `A · F` in `r` multiply-adds instead of `C`, `k · r / C` a cell. So:
 
 * `test_full_rank_schemes_fill_their_noise_space`: each in-scope scheme's noise for one tile (`E₁`'s rows and `F₁`'s
   columns, read off the scheme's own `encode` at zero operands) spans its whole noise space over sampled salts: the
@@ -17,16 +18,22 @@ multiply-adds an output instead of `k`, and the conjecture is false. So:
 * `test_every_compile_scheme_is_scoped`: the same for the compile pass's registry (`circuit.compile.SCHEMES`, with its
   built-in schemes imported), where the compile pass is on the tree, so an unclassified EPS1 scheme fails it;
 * `test_compile_schemes_fill_their_noise_space`: H1 (`eps1-sm120-h1fx1`, `circuit.h1tile`) is in scope through its
-  per-entry coins, the dither bit `b` on each entry of `X = A + b` and the coin bit `c` on each entry of
+  coin × coin blocks, the dither bit `b` on each entry of `X = A + b` against the coin bit `c` and the keyed word `U` of
   `W' = B + c + U`; read off `h1tile.noise`, its noise fills its noise space, where the scheme is registered;
+* `test_h1_commits_a_word_every_32_keys`: H1's scope condition, read off the scheme where it is registered: a lane
+  absorbs `k / 32` prefix sets (`h1tile.Layout`), the receipt `h1tile.reference` emits carries two words of each, and
+  the prefix sets `segment.call_words` builds are the products' prefix sums at every 32 keys, so `C = 32`, `U`'s period;
 * `test_low_rank_noise_is_refused`: the counterexample, rank-`r` noise, fails the same rank check, and the helper's
   shortcut reproduces `A · F` exactly at `r` multiply-adds an output;
-* `test_period_32_keyed_word_alone_is_refused`: H1's keyed word `U` alone (32 values a row, repeated along K) fails the
-  rank check, and `A · U` comes from `A`'s residue sums at 32 multiply-adds an output, so `U` is outside the scope: so
-  is adopted `P · V`'s `P` side, whose only noise is `U`. The per-entry coin on top fills the space.
+* `test_period_32_keyed_word_floors_32_k_over_c`: H1's keyed word `U` (32 values a row, repeated along K) spans 32
+  dimensions, so alone it fails the rank check. That is true of the noise's span, and it doesn't make `U · b` free:
+  `b` is per entry, so its residue sums depend on the salt and the block forms them itself, and each committed word of
+  `U · b` then costs 32 products, `32 · k / C` a cell. That is `k` at a word every 32 keys (adopted `P · V`'s floor,
+  whose `P` carries only `U`) and less at any sparser cadence. The per-entry coin on top fills the space.
 
-Not checked here, outside the scope: the peel's clean side (the served `O = Σ P · V`), which is bit-affine in the coins
-and floors nothing (`note:20261018T0634Z-draft-attn-noise`).
+Not checked here: the floor's lower bound itself (Lean's `chainBound_gProd`, and the ATTN-NOISE exact checks), and
+the peel's clean side (the served `O = Σ P · V`), which is bit-affine in the coins and floors nothing
+(`note:20261018T0634Z-draft-attn-noise`).
 
 The rank is checked at `k = 64`, where the noise's derivation is the same as at served `k` (one hash output an
 entry)."""
@@ -51,6 +58,10 @@ DIM = (len(TILE.rows) + len(TILE.cols)) * K
 #: the compile pass's package (#2451), and the operand roots its seeds read
 CIRCUIT = "verity.core.protocols.pouw.circuit"
 ROOTS = (hashlib.sha512(b"A0").digest(), hashlib.sha512(b"B0").digest())
+H1 = "eps1-sm120-h1fx1"
+#: H1's keyed word's period along the contraction: the most keys between committed words its floor allows
+U_PERIOD = 32
+M32 = (1 << 32) - 1
 
 #: the schemes whose noise is full-rank and per-entry: each entry of `E₁` and `F₁` its own SHAKE256 output
 FULL_RANK = ("ncp-v1", "ncp-v1-shift24")
@@ -132,8 +143,8 @@ def h1_noise(salt: bytes) -> list[int]:
             [c + signed8(u[t % 32]) for bits, u in cols[:2] for t, c in enumerate(bits)])
 
 
-#: the compile pass's schemes in scope, each with what reads its per-entry noise for two rows and two columns
-COMPILE_FULL_RANK = {"eps1-sm120-h1fx1": h1_noise}
+#: the compile pass's schemes in scope, each with what reads its noise for two rows and two columns
+COMPILE_FULL_RANK = {H1: h1_noise}
 #: the compile pass's schemes outside the conjecture, each with its reason
 COMPILE_OUT_OF_SCOPE: dict[str, str] = {}
 
@@ -158,7 +169,7 @@ def test_every_scheme_is_scoped() -> None:
     unscoped = set(SCHEMES) - set(FULL_RANK) - set(OUT_OF_SCOPE)
     assert not unscoped, (
         f"{sorted(unscoped)} registered with no PouwFloorAdvice scope: add each to FULL_RANK (and the docstring's "
-        f"scope) if its noise is full-rank and per-entry, else to OUT_OF_SCOPE with the reason")
+        f"scope) if its floor is its committed words' coin × coin products, else to OUT_OF_SCOPE with the reason")
     assert not (set(FULL_RANK) | set(OUT_OF_SCOPE)) - set(SCHEMES), "a scoped scheme is no longer registered"
 
 
@@ -170,8 +181,8 @@ def test_every_compile_scheme_is_scoped() -> None:
     unscoped = set(registry) - set(COMPILE_FULL_RANK) - set(COMPILE_OUT_OF_SCOPE)
     assert not unscoped, (
         f"{sorted(unscoped)} registered in circuit.compile.SCHEMES with no PouwFloorAdvice scope: add each to "
-        f"COMPILE_FULL_RANK with its noise reader (and the docstring's scope) if its noise is full-rank and per-entry, "
-        f"else to COMPILE_OUT_OF_SCOPE with the reason")
+        f"COMPILE_FULL_RANK with its noise reader (and the docstring's scope) if its floor is its committed words' "
+        f"coin × coin products, at a cadence its structured noise allows, else to COMPILE_OUT_OF_SCOPE with the reason")
 
 
 @pytest.mark.parametrize("name", sorted(COMPILE_FULL_RANK))
@@ -184,6 +195,36 @@ def test_compile_schemes_fill_their_noise_space(name: str) -> None:
     assert fills_noise_space(noise), (
         f"{name}'s noise lies in a salt-independent subspace of dimension < {DIM}: PouwFloorAdvice is false for it, so "
         f"move it to COMPILE_OUT_OF_SCOPE with the reason and drop it from the conjecture's scope in its docstring")
+
+
+def test_h1_commits_a_word_every_32_keys() -> None:
+    registry = compile_registry()
+    if registry is None or H1 not in registry:
+        pytest.skip(f"{H1} is not registered on this tree (h1tile registers it where circuit.segment, E2E-120, is)")
+    H = importlib.import_module(f"{CIRCUIT}.h1tile")
+    SG = H.SG
+    rng = np.random.default_rng(2026101803)
+    for k in (64, 128):
+        lay = H.Layout(4, 8, k)
+        assert lay.sets - lay.m == k // U_PERIOD, (
+            f"{H1} absorbs {lay.sets - lay.m} prefix sets at k = {k}, a word every {k // (lay.sets - lay.m)} keys: "
+            f"U · b then floors only 32 · k / C, so move {H1} to COMPILE_OUT_OF_SCOPE or commit a word every 32 keys")
+        a, b = rng.integers(0, 256, size=(4, k)).tolist(), rng.integers(0, 256, size=(8, k)).tolist()
+        assert len(H.reference(a, b, hashlib.sha512(b"cadence").digest(), 0, ROOTS)[1]) == 2 * lay.sets
+        segs = [range(32 * s, 32 * s + 32) for s in range(lay.ks)]
+        dither = rng.integers(0, 2, size=(lay.ks, 4, 32)).tolist()
+        coins = rng.integers(0, 2, size=(lay.ks, 8, 32)).tolist()
+        u = rng.integers(0, 256, size=(8, 32)).tolist()
+        z = rng.integers(0, 2, size=(lay.m - 1, 4, 32)).tolist()
+        words = SG.call_words([[[a[i][t] for t in ts] for i in range(4)] for ts in segs], dither,
+                              [[[b[j][t] for t in ts] for j in range(8)] for ts in segs], coins, u, z)
+        x = [[signed8((a[i][t] + dither[t // 32][i][t % 32]) & 0xFF) for t in range(k)] for i in range(4)]
+        w = [[signed8((b[j][t] + coins[t // 32][j][t % 32] + u[j][t % 32]) & 0xFF) for t in range(k)] for j in range(8)]
+        for s in range(lay.ks):
+            for q in range(32):
+                i, j = SG.row_slot(q), SG.col_slot(q)
+                assert words[s][q] == sum(x[i][t] * w[j][t] for t in range(32 * (s + 1))) & M32, (
+                    f"{H1}'s set {s} isn't the prefix word at {32 * (s + 1)} keys")
 
 
 def test_low_rank_noise_is_refused() -> None:
@@ -213,18 +254,23 @@ def coin_bits(salt: bytes) -> list[int]:
     return [(x >> j) & 1 for x in hashlib.shake_256(b"coin\0" + salt).digest(K // 8) for j in range(8)]
 
 
-def test_period_32_keyed_word_alone_is_refused() -> None:
+def test_period_32_keyed_word_floors_32_k_over_c() -> None:
     ss = salts(K + 9, b"keyed-word")
-    alone = [[keyed_word(s)[t % 32] for t in range(K)] for s in ss]
-    assert rank_mod_p(np.asarray(alone[1:]) - np.asarray(alone[0])) <= 32
+    alone = [[keyed_word(s)[t % U_PERIOD] for t in range(K)] for s in ss]
+    assert rank_mod_p(np.asarray(alone[1:]) - np.asarray(alone[0])) <= U_PERIOD
     assert not fills_noise_space(alone)
-    with_coin = [[c + keyed_word(s)[t % 32] for t, c in enumerate(coin_bits(s))] for s in ss]
+    with_coin = [[c + keyed_word(s)[t % U_PERIOD] for t, c in enumerate(coin_bits(s))] for s in ss]
     assert fills_noise_space(with_coin)
 
     rng = np.random.default_rng(2026101802)
-    m, n = 4, 4
-    a = rng.integers(-128, 128, size=(m, K))
-    u = rng.integers(-64, 65, size=(32, n))
-    residues = a.reshape(m, K // 32, 32).sum(axis=1)
-    assert np.array_equal(residues @ u, a @ np.tile(u, (K // 32, 1)))
-    assert 32 * m * n < K * m * n
+    k = 128
+    u, b = rng.integers(-64, 65, size=U_PERIOD), rng.integers(0, 2, size=k)
+    for cadence, products in ((32, k), (64, k // 2), (128, 32)):
+        words = [int(np.tile(u, k // U_PERIOD)[:cadence * (t + 1)] @ b[:cadence * (t + 1)]) for t in range(k // cadence)]
+        residues, got, used = np.zeros(U_PERIOD, dtype=np.int64), [], 0
+        for t in range(k // cadence):
+            residues += b[cadence * t:cadence * (t + 1)].reshape(-1, U_PERIOD).sum(axis=0)
+            got.append(int(u @ residues))
+            used += U_PERIOD
+        assert got == words
+        assert used == products == U_PERIOD * k // cadence
