@@ -250,20 +250,31 @@ def producer_words(m: dict | None, store, lo: int, hi: int, idx: int) -> np.ndar
     return w
 
 
-def operands(res, store, vals, m: dict) -> list[np.ndarray]:
-    """Each operand's words: its view's snapshot before the Call ran, else by provenance (weights, prompt, producers' outputs)."""
+def operands(res, store, vals, m: dict, first: str = "snapshot") -> list[np.ndarray]:
+    """Each operand's words from one of two sources, ``first`` and the other as fallback: the operand view's snapshot the
+    capture took at the Call (the latest before it, for an in-place Call), or provenance (weights, prompt, the producing Call's
+    output snapshot). Neither is right everywhere: the router reads its logits after a reduction the fold's producer (the
+    split-K gate) does not show, so only the snapshot holds them; a view's latest snapshot can predate its producer's write."""
     from verity_vllm.check.fold_compare import _in_place
     node = res.body.nodes[m["node"]]
     out = []
     for k, a in enumerate(node.args):
-        rr = runs(a.refs)
         view = m["operand_views"][k] if k < len(m["operand_views"]) else None
-        w = None
-        if not all(s == "p" for s, *_ in rr) and view is not None and view.numel == a.refs.count:
+
+        def snap():
+            if all(s == "p" for s, *_ in runs(a.refs)) or view is None or view.numel != a.refs.count:
+                raise LookupError(f"operand {k}: no snapshot view")
             s = store.find(view, before=m["event"] if _in_place(m) else m["event"] + 1)
-            if s is not None:
-                w = store.extract(s, view).astype(np.uint64)
-        out.append(w if w is not None else vals.of_refs(a.refs).astype(np.uint64))
+            if s is None:
+                raise LookupError(f"operand {k}: no snapshot of {view!r} before event {m['event']}")
+            return store.extract(s, view)
+
+        a_, b_ = (snap, lambda: vals.of_refs(a.refs)) if first == "snapshot" else (lambda: vals.of_refs(a.refs), snap)
+        try:
+            w = a_()
+        except LookupError:
+            w = b_()
+        out.append(np.asarray(w).astype(np.uint64))
     return out
 
 
@@ -443,13 +454,28 @@ def kind_values(res, store, vals, rec: dict, a) -> dict:
         except LookupError as e:
             why.append(f"{m['name']}: {e}")
             continue
+        rows_spec = K.rows_of(unit)
+        if rows_spec is None:
+            return {"staged": False, "why": f"{unit.id}: the parameters' bits are not whole u16 words"}
+        n_want = a.per_kind - (len(acc["in"]) if acc else 0)
+        ev = evaluate_units(spec, unit, args, n_want, a.full_gates)
+        twin = {**call_twin(store, m, ev.pop("call_out")), "operands": "snapshot"}
+        if twin["agree"] is False:
+            try:
+                alt = operands(res, store, vals, m, first="provenance")
+            except LookupError:
+                alt = args
+            if any(not np.array_equal(x, y) for x, y in zip(alt, args)):
+                ev2 = evaluate_units(spec, unit, alt, n_want, a.full_gates)
+                twin2 = {**call_twin(store, m, ev2.pop("call_out")), "operands": "provenance"}
+                if twin2["agree"] is not False:
+                    ev, twin = ev2, twin2
+        if twin["agree"] is False:
+            why.append(f"{m['name']}: the Call evaluated on the capture's operands disagrees with its output snapshot "
+                       f"({json.dumps({x: twin.get(x) for x in ('compared', 'first_diff', 'why')})})")
+            continue
         if acc is None:
-            rows_spec = K.rows_of(unit)
-            if rows_spec is None:
-                return {"staged": False, "why": f"{unit.id}: the parameters' bits are not whole u16 words"}
             acc = {"unit": unit, "spec": spec.id, "rows_spec": rows_spec, "in": [], "out": [], "calls": [], "twins": [], "evals": []}
-        ev = evaluate_units(spec, unit, args, a.per_kind - len(acc["in"]), a.full_gates)
-        twin = call_twin(store, m, ev.pop("call_out"))
         acc["in"] += ev.pop("in")
         acc["out"] += ev.pop("out")
         acc["calls"].append({"name": m["name"], "step": m["step"], "event": m["event"], "node": m["node"]})
