@@ -9,6 +9,8 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 HOOK = ROOT / "tools/agent-guard/shell_hook.py"
+GIT_ENV = {"GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_NOSYSTEM": "1", "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
+           "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}
 
 
 def verdict(command: str, **env: str) -> str:
@@ -230,3 +232,45 @@ def test_an_unreadable_inbox_or_a_path_as_an_id_never_blocks_a_command(tmp_path)
     inbox.write_text("")
     assert hook("ls", "bc-worker", inbox) == {"permission": "allow"}
     assert hook("ls", "../etc/passwd", tmp_path) == {"permission": "allow"}
+
+
+def test_one_agent_per_checkout_switching_another_agents_worktree_or_pushing_its_branch_is_refused(tmp_path):
+    """INF-59 (compute accounting, 18 Oct): a worker ran `git checkout <its branch>` in its coordinator's /workspace, and the
+    `research` CLI installed editable from it followed the branch to an 881-commits-old version. A worktree belongs to the first
+    agent that runs git in it; another agent may read it and check out files, but not switch its branch, and may not push a
+    branch another agent created or holds, until it is handed over."""
+    env = {"AGENT_GUARD_STATE": str(tmp_path / "state"), "AGENT_GUARD_MIN_AVAIL": "0", **GIT_ENV}
+    ws, origin = tmp_path / "ws", tmp_path / "origin.git"
+    for args in (["init", "-q", "--bare", "-b", "main", str(origin)], ["clone", "-q", str(origin), str(ws)]):
+        subprocess.run(["git", *args], cwd=tmp_path, check=True, capture_output=True, env={**os.environ, **GIT_ENV})
+    for args in (["commit", "-q", "--allow-empty", "-m", "a"], ["branch", "lane"], ["checkout", "-q", "-b", "coord"]):
+        subprocess.run(["git", *args], cwd=ws, check=True, capture_output=True, env={**os.environ, **GIT_ENV})
+
+    def ask(command, agent, cwd=ws):
+        out = subprocess.run([sys.executable, HOOK], input=json.dumps({"hook_event_name": "beforeShellExecution", "command": command,
+                                                                         "conversation_id": agent, "cwd": str(cwd)}),
+                             capture_output=True, text=True, env={**os.environ, **env}, check=True).stdout
+        return json.loads(out)
+
+    assert ask("git status", "bc-coord")["permission"] == "allow"                   # the coordinator claims ws, and branch coord
+    out = ask("git checkout lane", "bc-worker")
+    assert out["permission"] == "deny" and "bc-coord's checkout" in out["agent_message"] and "worktree add" in out["agent_message"]
+    for command in ("git switch lane", "git checkout -b mine"):
+        assert ask(command, "bc-worker")["permission"] == "deny", command
+    for command in (f"cd {ws} && git checkout lane", f"git -C {ws} switch -c x"):         # from outside, naming ws
+        assert ask(command, "bc-worker", cwd=tmp_path)["permission"] == "deny", command
+    for command in ("git checkout -- README", "git checkout lane -- README", "git log -1", "git diff"):
+        assert ask(command, "bc-worker")["permission"] == "allow", command
+    assert ask("git checkout lane", "bc-coord")["permission"] == "allow"
+    out = ask("git push origin coord", "bc-worker")
+    assert out["permission"] == "deny" and "belongs to agent bc-coord" in out["agent_message"]
+    assert ask(f"git worktree add ../wt -b wbranch", "bc-worker")["permission"] == "allow"
+    subprocess.run(["git", "worktree", "add", "-q", str(tmp_path / "wt"), "-b", "wbranch"], cwd=ws, check=True, capture_output=True,
+                   env={**os.environ, **GIT_ENV})
+    assert ask("git push -u origin wbranch", "bc-worker", cwd=tmp_path / "wt")["permission"] == "allow"
+    assert ask("git push origin wbranch", "bc-coord")["permission"] == "deny"
+    assert ask("git checkout lane", "bc-coord", cwd=tmp_path / "wt")["permission"] == "deny", "wt is the worker's"
+    subprocess.run([sys.executable, str(ROOT / "tools/agent-guard/worktree_guard.py"), "hand", "coord", "bc-worker"], check=True,
+                   capture_output=True, env={**os.environ, **env})
+    assert ask("git push origin coord", "bc-worker")["permission"] == "allow"
+    assert ask("git checkout lane", "")["permission"] == "allow", "no conversation id: nothing to judge"

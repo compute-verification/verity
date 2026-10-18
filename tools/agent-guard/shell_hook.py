@@ -21,6 +21,9 @@ use when that is less) it also refuses the lighter ones: a pytest of named files
 check`. The same command through `research run`, or over ssh, runs elsewhere and passes; `AGENT_GUARD_LOCAL_OK=1` anywhere in
 the command passes it too.
 
+One agent per checkout (worktree_guard.py): it refuses an agent's branch switch in a worktree another agent owns, and its push of
+a branch registered to another agent.
+
 It also carries messages to running agents, the one channel that reaches a subagent mid-run (`inbox.py send AGENT_ID`).
 A message waits in `$AGENT_INBOX` (default `/tmp/agent-inbox`) as `<conversation_id>.md`. The agent's next allowed
 command is refused once, with the message as the refusal's text, which is what Cursor shows the agent (an `agent_message`
@@ -306,6 +309,19 @@ def local_work_reason(command: str) -> str | None:
             f"tests or a build here: on a VM other agents share, the kernel would OOM-kill some agent's processes. " + remote)
 
 
+def checkout_reason(command: str, conversation: str, cwd: str) -> str | None:
+    """One agent per checkout (worktree_guard.py): why this command's git may not run here, or None."""
+    sys.dont_write_bytecode = True                      # no __pycache__ beside the hook: boot.sh copies its directory file by file
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import worktree_guard
+
+    try:
+        commands = [unwrap(strip_redirections(words)) for words, _ in words_of(command)]
+    except ValueError:
+        return None
+    return worktree_guard.reason(commands, conversation, cwd)
+
+
 def delivery(conversation: str) -> str | None:
     """The message queued for agent `conversation` (`inbox.py send`), taken out of its inbox, or None."""
     if not conversation or "/" in conversation or conversation.startswith("."):
@@ -332,8 +348,9 @@ def main() -> int:
         event = json.loads(raw)
         command = event.get("command") or ""
         conversation = str(event.get("conversation_id") or "")
+        cwd = event.get("cwd") or next(iter(event.get("workspace_roots") or []), "") or os.getcwd()
     except (ValueError, AttributeError):
-        command, conversation = raw, ""
+        command, conversation, cwd = raw, "", os.getcwd()
     try:
         deny = refused_text(command)
     except Exception:                                   # a bug here must not allow what the fallback would refuse
@@ -342,6 +359,10 @@ def main() -> int:
         low = None if deny else local_work_reason(command)
     except Exception:                                   # a bug in the local-work gate must not stop every command
         low = None
+    try:
+        low = low or (None if deny or "git" not in command else checkout_reason(command, conversation, cwd))
+    except Exception:                                   # nor one in the checkout guard
+        pass
     if deny or low:
         reason = REASON if deny else low
         print(json.dumps({"permission": "deny",
