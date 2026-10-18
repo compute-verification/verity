@@ -1,10 +1,8 @@
-"""Verification plans and obligations over IR programs (IR §1, §D, §E), under the two-stage law.
+"""Verification plans and obligations over IR programs (IR §1, §D, §E).
 
 Moved from ``verity.verification.plan``, now ``verity_sp1.proofs`` (decision 41).  A plan selects and samples gates of a
-Program for checking; it is verification policy, not computation (README "Protocols").  Its
-per-class rates are now `Stage`s of the two-stage law (decision 43, `verity.core.protocols.sampled_proofs.two_stage`):
-a gate-level plan makes every gate its own replay unit, which is the law's Bernoulli case, and `units` hands those
-replay units to `two_stage.select_replay_units`.
+Program for checking; it is verification policy, not computation (README "Protocols").  Each gate class has a rate: the
+probability a gate of the class is checked, each gate drawn independently.
 
 Prescribed inputs are sampled gates (IR §E): `Input[k] : () -> Value<w_k>` is an ordinary one-output gate of the
 fault model.  It belongs to a proof unit under the selected plan and is sampled like any other gate.  WB's
@@ -17,14 +15,13 @@ Boundaries come from the caller or from a call's declared interface (`args`, `re
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from fractions import Fraction
 from typing import Any
 
 from verity.ml.circuits.layout import FunctionCall, Gate, GateSelection
 from verity.ml.circuits.program import Program
-from verity.core.protocols.sampled_proofs.two_stage import ReplayUnit, Stage, TwoStageLaw
 
 DEFAULT_CLASS = "default"
 
@@ -47,9 +44,8 @@ class UnconditionalObligation:
     boundary values, and the verifier checks that proof on every audit, before any sampling -- exactly as it
     checks the public inputs.  A transcript violating a covered gate is rejected with probability 1 up to
     the proof system's soundness error, so covered fault classes have survival 0 in the acceptance law.
-    This is NOT p = 1: under the two-stage draw a faulty replay unit with h > 0 faulty units survives with
-    probability 1 - q + q(1-s)^h, which s = 1 leaves at 1 - q.  `statement` names the relation the proof
-    establishes (e.g. the authenticated boundary relation of an inactive region)."""
+    This is NOT p = 1: a class's rate is a draw, and the obligation holds outside it.  `statement` names the relation
+    the proof establishes (e.g. the authenticated boundary relation of an inactive region)."""
 
     gate_class: GateClass
     statement: str = ""
@@ -61,14 +57,14 @@ class UnconditionalObligation:
 
 @dataclass
 class VerificationPlan:
-    """A `Stage` per gate class over the canonical circuit, plus unconditional proof obligations.
+    """A rate per gate class over the canonical circuit, plus unconditional proof obligations.
 
     The first matching class wins; `default` applies to gates in no class.  `Input` gates are not special: they get
-    a stage through the same mechanism.  A covered gate keeps its stage (sampling a proved gate is harmless); the
+    a rate through the same mechanism.  A covered gate keeps its rate (sampling a proved gate is harmless); the
     obligation is what removes its fault class from the admissible error sets."""
 
-    classes: list[tuple[GateClass, Stage]]
-    default: Stage
+    classes: list[tuple[GateClass, Fraction]]
+    default: Fraction
     name: str = ""
     unconditional: tuple[UnconditionalObligation, ...] = ()
 
@@ -76,6 +72,8 @@ class VerificationPlan:
         names = [c.name for c, _ in self.classes]
         if len(set(names)) != len(names) or DEFAULT_CLASS in names:
             raise ValueError(f"gate-class names are distinct and not {DEFAULT_CLASS!r}")
+        if not all(0 <= Fraction(r) <= 1 for r in [self.default, *(r for _, r in self.classes)]):
+            raise ValueError("a rate is a probability: 0 <= p <= 1")
 
     def class_of(self, gate: Gate) -> str:
         for cls, _ in self.classes:
@@ -83,24 +81,12 @@ class VerificationPlan:
                 return cls.name
         return DEFAULT_CLASS
 
-    @property
-    def law(self) -> TwoStageLaw:
-        return TwoStageLaw({**{c.name: s for c, s in self.classes}, DEFAULT_CLASS: self.default})
-
-    def stage_of(self, gate: Gate) -> Stage:
-        for cls, stage in self.classes:
-            if cls.selector(gate):
-                return stage
-        return self.default
-
     def check_probability(self, gate: Gate) -> Fraction:
-        """The probability `gate`, as its own replay unit, is checked."""
-        stage = self.stage_of(gate)
-        return Fraction(stage.p) * stage.checked(1)
-
-    def units(self, gates: Iterable[Gate]) -> list[ReplayUnit]:
-        """Each gate as its own replay unit, addressed by its gate index."""
-        return [ReplayUnit(g.index, self.class_of(g), 1) for g in gates]
+        """The probability `gate` is checked: its class's rate."""
+        for cls, rate in self.classes:
+            if cls.selector(gate):
+                return Fraction(rate)
+        return Fraction(self.default)
 
     def covered(self) -> frozenset[str]:
         """The gate classes proved on every audit: an `IntegrityProfile`'s covered families."""
@@ -116,10 +102,11 @@ class VerificationPlan:
 
     def to_json(self) -> dict:
         d: dict[str, Any] = {
-            "schema": "verity-sampled-proofs/verification-plan/v2",
+            "schema": "verity-sampled-proofs/verification-plan/v3",
             "name": self.name,
-            "classes": [{"gate_class": c.name, "stage": s.to_json(), "description": c.description} for c, s in self.classes],
-            "default": self.default.to_json(),
+            "classes": [{"gate_class": c.name, "rate": str(Fraction(r)), "description": c.description}
+                        for c, r in self.classes],
+            "default": str(Fraction(self.default)),
         }
         if self.unconditional:
             d["unconditional"] = [ob.to_json() for ob in self.unconditional]
@@ -142,11 +129,11 @@ def input_gate_class(program: Program, param_index: int, name: str, description:
 def weight_binding_plan(program: Program, weight_param_indices: Sequence[int], other_rate: Fraction,
                         weight_rate: Fraction = Fraction(1)) -> VerificationPlan:
     """WB's model binding expressed as a plan: weight `Input` gates at p = `weight_rate` (1 = every committed weight
-    leaf word is checked against the registered checkpoint), all other gates at p = `other_rate`, each gate its own
-    replay unit.  Pass a `weight_rate` below 1 to sample the weights instead."""
-    classes = [(input_gate_class(program, i, f"Input[param {i}]", "weight Input gates"), Stage(Fraction(weight_rate), 1))
+    leaf word is checked against the registered checkpoint), all other gates at p = `other_rate`.  Pass a
+    `weight_rate` below 1 to sample the weights instead."""
+    classes = [(input_gate_class(program, i, f"Input[param {i}]", "weight Input gates"), Fraction(weight_rate))
                for i in weight_param_indices]
-    return VerificationPlan(classes, Stage(Fraction(other_rate), 1),
+    return VerificationPlan(classes, Fraction(other_rate),
                             name="weight-binding" if weight_rate == 1 else "weight-sampled")
 
 

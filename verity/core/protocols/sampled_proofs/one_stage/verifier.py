@@ -290,29 +290,19 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
         closure: Mapping[int, Sequence[int]] | None, sessions: Sequence[str], verdicts: Mapping[str, Mapping[str, Any]],
         outputs: Sequence[str], statement: Mapping[str, Any], delta: float, proved_units: Sequence[int] | None = None,
         instances: int | None = None, served: Sequence[int] | None = None,
-        session_roots: Mapping[str, str] | None = None, *, interior_values: Iterable[tuple[str, bool]] = (),
-        interior: Mapping[str, Any] | None = None) -> Verdict:
+        session_roots: Mapping[str, str] | None = None) -> Verdict:
     """The stream's run of one registration, from its public check through its verdict, by the Lean (`Run.run`), held whole to
-    `python`, the stream's own (`{"receipt", "draw", "read", "interior", "symbol", "public", "audit"}`, each audit record
-    without its `verifiers`, `interior` null or the interiors' `{"receipt", "audit"}`): on `check`'s copies,
-    `check_public`'s boundary values and declared items, the receipt's challenger and place in the log, `select`'s rule,
-    the bytes of the coins the draw read and the closure map, `audit_record`'s arguments with the sessions' roots whole,
-    and under a two-stage rule the interior values and the interiors' registration (`{"program", "law", "ports",
-    "leaf_layer", "anchors", "log", "record", "received"}`, `register_interiors`' copies). A Bernoulli draw's
-    `wrong_units.bound` is Python's on both, as in `audit_record`. Where the two differ, or the Lean refuses a step, the
-    verdict fails with `DISAGREE` alone."""
+    `python`, the stream's own (`{"receipt", "draw", "read", "symbol", "public", "audit"}`, the audit record without its
+    `verifiers`): on `check`'s copies, `check_public`'s values and declared items, the receipt's challenger and place in
+    the log, `select`'s rule, the bytes of the coins the draw read and the closure map, and `audit_record`'s arguments
+    with the sessions' roots whole. A Bernoulli draw's `wrong_units.bound` is Python's on both, as in `audit_record`.
+    Where the two differ, or the Lean refuses a step, the verdict fails with `DISAGREE` alone."""
     exact = str(Fraction(delta)) if isinstance(delta, (int, float)) and math.isfinite(delta) else delta
-    inner = None if interior is None else {
-        "params": _params(interior["program"], query, interior["law"], scheme, interior["ports"], interior["leaf_layer"],
-                          interior["anchors"], interior["log"], None, None, None),
-        "record": dict(interior["record"]), "received": interior["received"]}
     got = lean("run", {"params": _params(program, query, law, scheme, ports, leaf_layer, anchors, log, None, work_table,
                                          registered),
                        "record": dict(rec), "rule": dict(rule), "values": [{"name": n, "registered": r} for n, r in values],
-                       "interior_values": [{"name": n, "registered": r} for n, r in interior_values],
                        "public": list(declared), "challenger": challenger, "received": received, "source": read.hex(),
                        "closure": None if closure is None else [[u, list(cs)] for u, cs in closure.items()],
-                       "interior": inner,
                        "sessions": list(sessions), "verdicts": {k: dict(verdicts[k]) for k in sorted(verdicts)},
                        "outputs": list(outputs), "statement": dict(statement), "delta": exact,
                        "proved_units": None if proved_units is None else list(proved_units), "instances": instances,
@@ -327,11 +317,6 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
         if got.get("draw", {}).get("law") == "bernoulli" and isinstance(wrong, dict) and wrong.get("bound") is None \
                 and mine.get("wrong_units"):
             got["audit"] = {**got["audit"], "wrong_units": {**wrong, "bound": mine["wrong_units"]["bound"]}}
-    if isinstance(got.get("interior"), dict) and isinstance(got["interior"].get("audit"), str):
-        try:
-            got = {**got, "interior": {**got["interior"], "audit": json.loads(got["interior"]["audit"])}}
-        except ValueError:
-            got = {"refused": f"{EXE} answered a run whose interiors' record is not JSON: {got['interior']['audit'][:500]}"}
     side = (lambda r: {"refused": r["refused"]} if "refused" in r else
             {"step": r["step"], "codes": r["codes"]} if "step" in r else {"symbol": r.get("symbol")})
     verifiers = {"of_record": RECORD_VERDICT, "lean": side(got), "python": side(python)}
