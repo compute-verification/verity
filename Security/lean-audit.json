@@ -5357,6 +5357,7 @@
   "premises": [
    "Definitions.Accounting.Actual",
    "Definitions.Accounting.Physical",
+   "Models.Accounting.Assumptions.Attribution",
    "Models.Accounting.Assumptions.PouwWork",
    "Proofs.Flock.Recursive.Premises"
   ],
@@ -6111,7 +6112,8 @@
    "Accounting.SecurityProofs.TS.Fx1SegmentsBind": "lemma: Lemma B for fx1 checkpoint units (a definition: duo checkpoint units on the words times odd IMAD multipliers), from DuoSegmentsBind's segment lemma and the odd multiplier's injectivity; not a property of a Lean function.",
    "Accounting.SecurityProofs.FillerLuck.PinnedFillLuckAt": "frozen (no-function): (I7) LuckAt at 0 over every full-checking window of pinned receipts (Accounting.Filler.FullPinnedFill), at any receipt function of the round's committed data and live coins, not a Lean function: the service's filler check has no Lean code yet.",
    "Accounting.SecurityProofs.FillerLuck.PinnedFillBudget": "frozen (no-function): Lemma C's BudgetAt at 1 over every spot-checked window of pinned receipts (Accounting.Filler.SpotPinnedFill), at any receipt function, not a Lean function: the service's spot check has no Lean code yet.",
-   "Accounting.SecurityProofs.FillerLuck.PinnedFillBlocksDeficit": "frozen (no-function): Theorem S with another block's one-draw check beside a pinned receipt's spot check (Accounting.Filler.PinnedFillBlocks), the filler at p = 0, not a Lean function: the service's check has no Lean code yet; the other block's pass bound is part of each round's shape."
+   "Accounting.SecurityProofs.FillerLuck.PinnedFillBlocksDeficit": "frozen (no-function): Theorem S with another block's one-draw check beside a pinned receipt's spot check (Accounting.Filler.PinnedFillBlocks), the filler at p = 0, not a Lean function: the service's check has no Lean code yet; the other block's pass bound is part of each round's shape.",
+   "Accounting.Guarantees.PouwBlockCredit": "unstated: compute attribution's per-block credit (PoUW's floor at a spatial unit under salt custody, the outsourcing term the outside's advice about the salt that B4Covered bounds from the certifiers' records); a statement for red team first, its theorem Accounting.SecurityProofs.PouwBlockCredit is not proved yet, and it rests on the open conjecture Accounting.Assumptions.PouwFloorAdvice (note:20261018T0730Z-draft-attrib)."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
