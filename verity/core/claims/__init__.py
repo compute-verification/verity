@@ -305,10 +305,6 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     Entry("accounting-ts-luck", "assumption",
           "(L) at p with freshness (F1)–(F2): given the past, a round with a deficient block passes with probability at "
           "most p", "TS luck at p", "proven"),
-    Entry("accounting-ts-receipt-luck", "assumption",
-          "The receipt luck at pr: given the past, a deficient round whose deficient words are not all right keeps the "
-          "honest committed value with probability at most pr (½ at LEDGER case (b), two or more wrong places a set)",
-          "TS receipt luck at pr", "conjectured"),
     Entry("accounting-ts-proofs-sound", "assumption",
           "Outside binding and proof-soundness failures (S·(δ_bind + n_π·δ_ZK)), an accepted window's committed values "
           "are right for their derivations from what was committed before σ, and every word that isn't fixed is in its "
@@ -319,6 +315,10 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     Entry("accounting-ts-right-fixed", "assumption",
           "Lemma E1(c) with the rounds' equal shares: on an accepted window whose committed values are right for their "
           "derivations, every word that isn't fixed is in its round's share", "TS right fixed", "proven"),
+    Entry("accounting-ts-receipt-luck", "assumption",
+          "The receipt luck at pr: given the past, a deficient round whose deficient words are not all right keeps the "
+          "honest committed value with probability at most pr (½ at LEDGER case (b), two or more wrong places a set)",
+          "TS receipt luck at pr", "conjectured"),
 )}
 
 
