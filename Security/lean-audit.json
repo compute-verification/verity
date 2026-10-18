@@ -4908,6 +4908,9 @@
    "assumptions": [],
    "type_hash": "66ead21683656113cf926808d76850f0e2838d9d8254b0aa9e5e1a4086ad9ddc"
   },
+  "Pouw.SecurityProofs.Receipt.DuoPairXorNoKernel": {
+   "owner": "@compute-accounting"
+  },
   "Pouw.SecurityProofs.Receipt.DuoQuadNoKernel": {
    "owner": "@compute-accounting",
    "signature": ["Pouw.SecurityProofs.Receipt.DuoQuadNoKernel : Pouw.Guarantees.Receipt.DuoQuadNoKernel"],
@@ -4963,6 +4966,9 @@
    "signature": ["Pouw.SecurityProofs.Receipt.Fx1PairNoKernel : Pouw.Guarantees.Receipt.Fx1PairNoKernel"],
    "assumptions": [],
    "type_hash": "34825d055a5feb43636a9aeb0fb8c67a8f3aa46853d57f4d0748c0466d022587"
+  },
+  "Pouw.SecurityProofs.Receipt.Fx1PairXorNoKernel": {
+   "owner": "@compute-accounting"
   },
   "Pouw.SecurityProofs.Receipt.Fx1QuadNoKernel": {
    "owner": "@compute-accounting",
@@ -5243,6 +5249,14 @@
    },
    "Pouw.SecurityProofs.Receipt.DuoRunAtStateNotInjective": {
     "function": "Pouw.Receipt.duoRun",
+    "outcome": "none"
+   },
+   "Pouw.SecurityProofs.Receipt.DuoPairXorNoKernel": {
+    "function": ["Pouw.Receipt.stateSpread", "Pouw.Receipt.duoPair"],
+    "outcome": "none"
+   },
+   "Pouw.SecurityProofs.Receipt.Fx1PairXorNoKernel": {
+    "function": ["Pouw.Receipt.stateSpread", "Pouw.Receipt.fx1Pair"],
     "outcome": "none"
    }
   },
