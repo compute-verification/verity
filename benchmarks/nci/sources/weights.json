@@ -824,6 +824,16 @@
     "grade": "measured-at-scale",
     "bears_on": "m_A about 1.5 at about 1.3e22 FLOP.",
     "from_review": "scaling-corpus"
+   },
+   {
+    "id": "du-2024-gstack/2",
+    "claim": "The authors extrapolate G_stack's loss improvement logarithmically to over 8T tokens, calling the law an initial estimate.",
+    "quote": "Interestingly, the loss improvement in our 750B-token experiment aligns with a logarithmic function. We further extend this logarithmic curve and determine that the improvement continues to be substantial even for the LLM trained with over 8T tokens.",
+    "location": "Section 4",
+    "quantities": [],
+    "grade": "extrapolated",
+    "bears_on": "Growth's multiplier at frontier scale is an extrapolation by the authors.",
+    "from_review": "strategy-reuse"
    }
   ]
  },
@@ -1988,6 +1998,33 @@
     "grade": "measured-at-scale",
     "bears_on": "m_A 1.8 for a family; for one student the teacher's sunk compute dominates.",
     "from_review": "scaling-corpus"
+   },
+   {
+    "id": "muralidharan-2024-minitron/2",
+    "claim": "A 4B model pruned from Nemotron-4 15B and distilled on 100B tokens beats a random-init 4B trained on 400B tokens (MMLU 37.8 vs 26.2).",
+    "quote": "4B-Random-Init 150B∗ 46.22 24.36 4B-Random-Init 400B 48.23 26.24 4B-Pruned (prune Nemotron-4 15B) 150B∗ 50.85 24.57 4B-Pruned-Distill (prune Nemotron-4 15B) 100B∗ 51.04 37.81",
+    "location": "Table 11",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 4,
+      "unit": "student-token multiplier, downstream",
+      "condition": "4B pruned-distilled at 100B tokens vs random init at 400B; teacher free"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "At least a 4x token multiplier on a downstream metric when the 15B teacher is free; the target is at or above the teacher's level.",
+    "from_review": "strategy-reuse"
+   },
+   {
+    "id": "muralidharan-2024-minitron/3",
+    "claim": "Logit-only distillation suffices when depth is not reduced much.",
+    "quote": "7. Use logit-only distillation when depth isn’t reduced significantly.",
+    "location": "Section 5 (best practices)",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "The teacher signal a student needs per token can be its output distribution alone.",
+    "from_review": "strategy-reuse"
    }
   ]
  },
@@ -2220,6 +2257,26 @@
     "grade": "measured-small",
     "bears_on": "m_A 2.2-4 excluding the small model's sunk cost.",
     "from_review": "scaling-corpus"
+   },
+   {
+    "id": "samragh-2024-hypercloning/2",
+    "claim": "A better base network helps most early; the differences shrink as training continues.",
+    "quote": "Among the cloned networks, those initialized with a more accurate base network achieve better accuracy, especially at the beginning of the training. However, as training continues, the differences between the curves become smaller.",
+    "location": "Section 4",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Warm-starting from a registered smaller model gives a head start that decays.",
+    "from_review": "strategy-reuse"
+   },
+   {
+    "id": "samragh-2024-hypercloning/3",
+    "claim": "HyperCloned models tend to forget catastrophically early in training.",
+    "quote": "One notable observation is that models initialized with HyperCloning tend to exhibit catastrophic forgetting at the beginning of training.",
+    "location": "Section 4",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "The inherited capability is partly lost before the new run builds on it.",
+    "from_review": "strategy-reuse"
    }
   ]
  },

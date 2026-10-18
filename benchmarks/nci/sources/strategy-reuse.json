@@ -1,1 +1,1116 @@
-[]
+[
+ {
+  "id": "gemma-team-2024-gemma2",
+  "title": "Gemma 2: Improving Open Language Models at a Practical Size",
+  "authors": "Gemma Team, Google DeepMind",
+  "year": 2024,
+  "venue": "arXiv",
+  "url": "https://arxiv.org/abs/2408.00118",
+  "topics": [
+   "strategy-reuse",
+   "tokens"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "gemma-team-2024-gemma2/1",
+    "claim": "At equal training tokens and a fixed 7B teacher, a distilled 400M student reaches the validation perplexity of a 1B model trained from scratch (17), and a distilled 1B beats it (15); the gain persists from 200M to 1B. Metric: validation perplexity (held-out); teacher compute not counted; token count of the ablation not stated; baseline tuning not described.",
+    "quote": "200M 400M 1B from scratch 23 19 17 distilled (7B) 21 17 15 Table 7: Perplexity measured on a validation set of models of different sizes trained with or without distillation. The teacher has 7B parameters.",
+    "location": "Section 5, Table 7",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 2.5,
+      "unit": "x parameters at equal perplexity",
+      "condition": "derived: 1B from-scratch perplexity 17 equals distilled 400M perplexity 17; equal tokens, so also student compute ratio; teacher 7B, teacher inference not counted"
+     },
+     {
+      "param": "other",
+      "value": 0.105,
+      "unit": "nats",
+      "condition": "derived: ln(17/15), distilled vs from-scratch 1B validation log-perplexity"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "pretraining-distillation m_A about 2.5 (parameter-equivalent at equal tokens) at 0.4-1B; held-out metric, but unknown token count so the compute point is unplaced.",
+    "from_review": "strategy-reuse"
+   },
+   {
+    "id": "gemma-team-2024-gemma2/2",
+    "claim": "A 2B student trained on 500B tokens (10x compute-optimal) by distillation from a 7B teacher beats the same model trained from scratch, 67.7 vs 60.3 on a 3-benchmark average. Metric: downstream accuracy, not held-out loss; about 6e21 student FLOP; teacher compute not counted.",
+    "quote": "from scratch distilled Average (3 bench.) 60.3 67.7 Table 6: Comparison between a 2B model trained over 500B tokens either from scratch or with distillation from a 7B model.",
+    "location": "Section 5, Table 6",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 7.4,
+      "unit": "points",
+      "condition": "downstream 3-benchmark average, distilled minus from scratch; 2B student, 500B tokens, 7B teacher"
+     },
+     {
+      "param": "other",
+      "value": 6e+21,
+      "unit": "FLOP",
+      "condition": "derived: 6 x 2e9 x 5e11 student training FLOP"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Distillation still helps well past compute-optimal tokens at 6e21, on a downstream metric only.",
+    "from_review": "strategy-reuse"
+   },
+   {
+    "id": "gemma-team-2024-gemma2/3",
+    "claim": "Gemma 2 distills its 2B and 9B models on more than 50x the compute-optimal number of tokens explicitly to simulate training beyond the available tokens; the 27B is trained from scratch. Production use, no matched held-out comparison.",
+    "quote": "In this work, we instead train for large quantities of tokens with distillation in order to simulate training beyond the number of available tokens. Concretely, we use a large language model as a teacher to train small models, namely 2B and 9B models, on a quantity of tokens that is more than 50 \\times the compute-optimal quantity predicted by the theory (Hoffmann et al., 2022).",
+    "location": "Section 1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 50,
+      "unit": "x compute-optimal tokens",
+      "condition": "Gemma 2 2B (2T tokens) and 9B (8T tokens) distilled students"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Practitioners use distillation as a data multiplier for over-trained small students, which is the regime where Busbridge et al. find distillation favorable; it says nothing about students at the frontier.",
+    "from_review": "strategy-reuse"
+   }
+  ]
+ },
+ {
+  "id": "gemma-team-2025-gemma3",
+  "title": "Gemma 3 Technical Report",
+  "authors": "Gemma Team, Google DeepMind",
+  "year": 2025,
+  "venue": "arXiv",
+  "url": "https://arxiv.org/abs/2503.19786",
+  "topics": [
+   "strategy-reuse",
+   "tokens"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "gemma-team-2025-gemma3/1",
+    "claim": "Every Gemma 3 model, 1B to 27B, is pretrained with knowledge distillation on 2T-14T tokens, with 256 sampled teacher logits per token. Production recipe; no from-scratch comparison is reported.",
+    "quote": "We sample 256 logits per token, weighted by teacher probabilities.",
+    "location": "Section 2.2",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 256,
+      "unit": "teacher logits per token",
+      "condition": "sparse sampled distillation target used for all Gemma 3 pretraining"
+     },
+     {
+      "param": "other",
+      "value": 2.3e+24,
+      "unit": "FLOP",
+      "condition": "derived: 6 x 27e9 x 14e12, Gemma 3 27B student training FLOP"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Distillation is the default pretraining objective up to about 2e24 student FLOP, with a teacher signal of 256 logits per token; the frontier teacher is unnamed and its compute is not counted.",
+    "from_review": "strategy-reuse"
+   },
+   {
+    "id": "gemma-team-2025-gemma3/2",
+    "claim": "In Gemma 3's teacher-size ablation, a smaller teacher is better for short training horizons and a larger one for longer training. The metric is shown only in a figure (perplexity gap vs training tokens).",
+    "quote": "In Fig. 8, we observe that for short training horizons, the smaller teacher is better, but the trend is reversed for longer training.",
+    "location": "Section 6, Figure 8",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "The capacity gap depends on student tokens: the best teacher for a given student grows with the student's training budget.",
+    "from_review": "strategy-reuse"
+   }
+  ]
+ },
+ {
+  "id": "gu-2024-miniplm",
+  "title": "MiniPLM: Knowledge Distillation for Pre-training Language Models",
+  "authors": "Yuxian Gu, Hao Zhou, Fandong Meng, Jie Zhou, Minlie Huang",
+  "year": 2024,
+  "venue": "ICLR 2025",
+  "url": "https://arxiv.org/abs/2410.17215",
+  "topics": [
+   "strategy-reuse",
+   "tokens"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "gu-2024-miniplm/1",
+    "claim": "With online teacher FLOPs counted (Qwen 1.8B teacher, 200M student), every logit-distillation method is no better than plain pretraining at equal total training FLOPs. Negative under that accounting; the policy counts no teacher FLOPs, so this bounds the teacher-inference cost, not m_A.",
+    "quote": "When the training FLOPs are controlled, all KD methods perform similar or worse than Pre-Train w/o KD.",
+    "location": "Figure 2 caption",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Counting teacher inference erases pretraining-distillation's gain at 200M; the policy's free-teacher accounting is what makes m_A > 1.",
+    "from_review": "strategy-reuse"
+   },
+   {
+    "id": "gu-2024-miniplm/2",
+    "claim": "Extrapolating DCLM test loss with a Chinchilla fit, a 1.2B student trained with MiniPLM (teacher-guided offline data resampling, student FLOPs unchanged) stays 0.06 nats below plain pretraining at 1T and 10T tokens, and vanilla KD (teacher FLOPs counted) 0.03 below. Teacher 1.8B. The test set (DCLM) differs from the training corpus (Pile), so part of the gain is a distribution shift toward the test set.",
+    "quote": "1.2B Pre-Train w/o KD 2.98 2.94 Vanilla KD 2.95 2.91 MiniPLM 2.92 2.88 Table 2: Test loss predictions using the Scaling Law (Hoffmann et al., 2022).",
+    "location": "Section 3.3, Table 2",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.06,
+      "unit": "nats",
+      "condition": "MiniPLM vs Pre-Train w/o KD, 1.2B student, predicted DCLM test loss at 10T tokens"
+     },
+     {
+      "param": "other",
+      "value": 7.2e+22,
+      "unit": "FLOP",
+      "condition": "derived: 6 x 1.2e9 x 1e13, student FLOP at the 10T-token prediction"
+     }
+    ],
+    "grade": "extrapolated",
+    "bears_on": "A constant held-out gap at fixed N is a tokens-multiplier that grows without bound near the N-limited floor (w/o KD gains only 0.04 nats from 1T to 10T), so it is not a frontier m_A.",
+    "from_review": "strategy-reuse"
+   }
+  ]
+ },
+ {
+  "id": "rawat-2024-salt",
+  "title": "A Little Help Goes a Long Way: Efficient LLM Training by Leveraging Small LMs",
+  "authors": "Ankit Singh Rawat, Veeranjaneyulu Sadhanala, Afshin Rostamizadeh, Ayan Chakrabarti, Wittawat Jitkrittum, Vladimir Feinberg et al.",
+  "year": 2024,
+  "venue": "arXiv",
+  "url": "https://arxiv.org/abs/2410.18779",
+  "topics": [
+   "strategy-reuse"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "rawat-2024-salt/1",
+    "claim": "Distilling a 2.8B student from a weaker 1.5B teacher for the first 36K of its steps (SALT) beats the 2.8B baseline's final held-out log-perplexity (1.863 vs 1.868) and reaches the baseline's few-shot performance with less than 70% of the steps. Pile, UL2 objective; baseline is the same recipe, not separately tuned; the paper charges the teacher's forward passes (1/8 of a step during KD).",
+    "quote": "SALT and \\texttt{SALT}_{\\texttt{DS}} attain Baseline performance with less than 70% of training steps",
+    "location": "Section 5, Table 1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 1.1,
+      "unit": "x",
+      "condition": "derived: held-out log-perplexity 1.863 vs 1.868 at 208K steps, local slope 0.082 nats per e-fold of steps gives m about 1.06-1.14; teacher inference not counted"
+     },
+     {
+      "param": "other",
+      "value": 1.43,
+      "unit": "x",
+      "condition": "derived: 1/0.7 steps to reach the baseline's few-shot average (downstream metric)"
+     },
+     {
+      "param": "other",
+      "value": 9e+21,
+      "unit": "FLOP",
+      "condition": "derived: 6 x 2.8e9 x about 5.45e11 tokens, baseline student FLOP"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "A smaller teacher gives m_A about 1.1 on held-out loss (1.4 on few-shot) at 9e21; the gain is front-loaded.",
+    "from_review": "strategy-reuse"
+   },
+   {
+    "id": "rawat-2024-salt/2",
+    "claim": "Continuing distillation from the weaker 1.5B teacher for the whole run hurts: RKD ends at held-out log-perplexity 2.071 vs 1.868 for the baseline, worse than the 1.5B teacher itself (1.951).",
+    "quote": "However, continuing KD from the weaker teacher eventually become detrimental. As evident in Fig. 2 and Tab. 1, RKD significantly underperforms Baseline on both training and validation set.",
+    "location": "Section 5.2",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.203,
+      "unit": "nats",
+      "condition": "RKD minus Baseline held-out log-perplexity, 2.8B student at 208K steps"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Reuse stops helping once the student passes the teacher: pure distillation caps the student near the teacher, so the reuse must be switched off to go below it.",
+    "from_review": "strategy-reuse"
+   }
+  ]
+ },
+ {
+  "id": "zhang-2023-capacity-gap",
+  "title": "Towards the Law of Capacity Gap in Distilling Language Models",
+  "authors": "Chen Zhang, Qiuchi Li, Dawei Song, Zheyu Ye, Yan Gao, Yan Hu",
+  "year": 2023,
+  "venue": "arXiv",
+  "url": "https://arxiv.org/abs/2311.07052",
+  "topics": [
+   "strategy-reuse"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "zhang-2023-capacity-gap/1",
+    "claim": "In GPT-2 and Pythia distillation below 3B, the optimal teacher size scales linearly with the student, about 2.5x the student's size; larger teachers give worse students. Metric: WikiText2 perplexity and LAMBADA accuracy; small data (OpenWebText, 3.9B tokens).",
+    "quote": "\\mathbb{T}^{\\star}\\approx 2.498\\cdot\\mathbb{S}-11.498\\approx 2.5\\cdot\\mathbb{S}",
+    "location": "Section 3, law of capacity gap",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 2.5,
+      "unit": "x student size",
+      "condition": "optimal teacher size for distillation, fitted below 3B"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "The best registered teacher for a student is not the largest one; a fixed set of frontier models is a poor teacher for small students and an insufficient one for students beyond them.",
+    "from_review": "strategy-reuse"
+   }
+  ]
+ },
+ {
+  "id": "anshumann-2025-sparse-logit",
+  "title": "Sparse Logit Sampling: Accelerating Knowledge Distillation in LLMs",
+  "authors": "Anshumann, Mohd Abbas Zaidi, Akhil Kedia, Jinwoo Ahn, Taehwak Kwon, Kangwook Lee et al.",
+  "year": 2025,
+  "venue": "ACL 2025",
+  "url": "https://arxiv.org/abs/2503.16870",
+  "topics": [
+   "strategy-reuse",
+   "tokens"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "anshumann-2025-sparse-logit/1",
+    "claim": "A 3B student distilled from Llama-3-8B on 100B FineWeb-edu tokens reaches LM loss 2.344 (full distillation) vs 2.371 for cross-entropy training. Held-out LM loss at equal student tokens; teacher inference not counted; about 1.8e21 student FLOP.",
+    "quote": "CE 2.370\\,93 0.312 71.054\\,89 55.6 54.5 Top-K 12 2.499\\,63 4.664 72.976\\,64 56.6 57.7 Top-K 50 2.3957 1.79 73.070\\,28 57.1 58.3 Ours (12) 2.350\\,05 0.195 73.189\\,93 57.5 59.4 Ours (12)+ 2.321 1.687 73.45504 57.9 59.1 FullKD 2.344\\,46 0.2 73.363\\,77 57.5 58.4 Table 8: Comparing sparse KD methods, 8 B \\rightarrow 3 B 100 B toks.",
+    "location": "Section 6.2, Table 8",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.026,
+      "unit": "nats",
+      "condition": "FullKD minus CE LM loss, 3B student, 8B teacher, 100B tokens"
+     },
+     {
+      "param": "other",
+      "value": 1.35,
+      "unit": "x",
+      "condition": "derived: tokens multiplier at fixed N for 0.026 nats, 1.2 (paper's own 300M CE slope rescaled) to 1.5 (Busbridge et al. supervised law slope at N=3e9, D=1e11)"
+     },
+     {
+      "param": "other",
+      "value": 1.8e+21,
+      "unit": "FLOP",
+      "condition": "derived: 6 x 3e9 x 1e11 student FLOP"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "pretraining-distillation m_A about 1.2-1.5 at 1.8e21 for a 3B student 2.7x below its teacher, at about 1.6x Chinchilla tokens.",
+    "from_review": "strategy-reuse"
+   },
+   {
+    "id": "anshumann-2025-sparse-logit/2",
+    "claim": "For a 300M student of a 3B teacher, full distillation is 0.060 nats better than cross-entropy at 10B tokens but 0.003 nats worse at 100B tokens (16x Chinchilla). Held-out LM loss; teacher inference not counted.",
+    "quote": "Method LM ECE Speculative 0-shot Loss \\downarrow % \\downarrow Accept % \\uparrow Score \\uparrow CE 2.480\\,29 0.662 64.558\\,76 45.0 Ours 2.476\\,58 0.3 65.674\\,73 46.2 FullKD 2.483\\,42 0.428 65.76087 46.2 Table 7: Random Sampling KD 100 B toks ( 3 B \\rightarrow 300 M)",
+    "location": "Section 6.1, Tables 1 and 7",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 1.5,
+      "unit": "x",
+      "condition": "derived: 300M student at 10B tokens, FullKD 2.747 vs CE 2.807, paper's average CE slope 0.142 nats per e-fold of tokens; teacher not counted"
+     },
+     {
+      "param": "other",
+      "value": 0.95,
+      "unit": "x",
+      "condition": "derived: 300M student at 100B tokens, FullKD 2.483 vs CE 2.480, m about 0.94-0.98"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Distillation's held-out advantage vanishes with student tokens (m from 1.5 to below 1 between 1.8e19 and 1.8e20 at 300M), as Busbridge et al.'s law predicts.",
+    "from_review": "strategy-reuse"
+   },
+   {
+    "id": "anshumann-2025-sparse-logit/3",
+    "claim": "Caching only the top-12 or top-50 teacher logits gives a biased target and a worse student than plain cross-entropy (LM loss 2.500 and 2.396 vs 2.371 at 3B, 100B tokens); 12 importance-sampled logits match full distillation.",
+    "quote": "we prove that naive approaches for sparse knowledge distillation such as caching Top-K probabilities, while intuitive, provide biased estimates of teacher probability distribution to the student, resulting in suboptimal performance and calibration.",
+    "location": "Abstract; Section 2; Table 8",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 12,
+      "unit": "sampled teacher tokens per position",
+      "condition": "enough for Random Sampling KD to match full distillation at 300M-3B"
+     },
+     {
+      "param": "other",
+      "value": -0.129,
+      "unit": "nats",
+      "condition": "CE minus Top-12 KD LM loss (Top-12 worse), 3B student, 100B tokens"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "How the teacher signal crosses a K-bit block boundary matters: a truncated top-K signal turns m_A below 1, while about 12 sampled tokens per position suffice.",
+    "from_review": "strategy-reuse"
+   }
+  ]
+ },
+ {
+  "id": "burns-2023-weak-to-strong",
+  "title": "Weak-to-Strong Generalization: Eliciting Strong Capabilities With Weak Supervision",
+  "authors": "Collin Burns, Pavel Izmailov, Jan Hendrik Kirchner, Bowen Baker, Leo Gao, Leopold Aschenbrenner et al.",
+  "year": 2023,
+  "venue": "ICML 2024",
+  "url": "https://arxiv.org/abs/2312.09390",
+  "topics": [
+   "strategy-reuse"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "burns-2023-weak-to-strong/1",
+    "claim": "Fine-tuning a strong pretrained model (GPT-4 family) on a weak model's labels recovers about half the gap to the strong model's ceiling, and nearly 80% with an auxiliary confidence loss. Fine-tuning on NLP tasks; metric is task accuracy (performance gap recovered).",
+    "quote": "For example, when supervising GPT-4 with a GPT-2-level model on NLP tasks using the auxiliary confidence loss, we typically recover nearly 80% of the performance gap between the weak and strong models.",
+    "location": "Section 1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.8,
+      "unit": "performance gap recovered",
+      "condition": "GPT-4 student, GPT-2-level supervisor, auxiliary confidence loss, NLP tasks"
+     },
+     {
+      "param": "other",
+      "value": 0.5,
+      "unit": "performance gap recovered",
+      "condition": "naive fine-tuning on weak labels"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "A student can exceed its teacher only by using capability it got elsewhere (here its own pretraining); it is no evidence that a weak teacher speeds up pretraining a stronger model.",
+    "from_review": "strategy-reuse"
+   }
+  ]
+ },
+ {
+  "id": "sreenivas-2024-minitron-practice",
+  "title": "LLM Pruning and Distillation in Practice: The Minitron Approach",
+  "authors": "Sharath Turuvekere Sreenivas, Saurav Muralidharan, Raviraj Joshi, Marcin Chochowski, Ameya Sunil Mahabaleshwarkar, Gerald Shen et al.",
+  "year": 2024,
+  "venue": "arXiv",
+  "url": "https://arxiv.org/abs/2408.11796",
+  "topics": [
+   "strategy-reuse",
+   "weights"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "sreenivas-2024-minitron-practice/1",
+    "claim": "Pruning Mistral NeMo 12B to 8B and distilling on 380B tokens gives MN-Minitron-8B, which needs up to 40x fewer tokens than training from scratch on 15T and matches or beats the teacher on MMLU (69.5 vs 69.0) but not on Winogrande (80.4 vs 82.2). Downstream metrics; the 15T comparison is to the teacher's own recipe, not a tuned same-size baseline; teacher compute not counted.",
+    "quote": "Overall, our approach requires significantly fewer training tokens (up to 40\\times ; 380B instead of 15T tokens) to produce the state-of-the-art MN-Minitron-8B model.",
+    "location": "Abstract; Table 1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 40,
+      "unit": "x tokens",
+      "condition": "380B vs 15T tokens, MN-Minitron-8B vs from-scratch, downstream metrics"
+     },
+     {
+      "param": "other",
+      "value": 1.8e+22,
+      "unit": "FLOP",
+      "condition": "derived: 6 x 8e9 x 3.8e11 student FLOP"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "prune-and-distill reaches a compressed copy of a registered model at about 1/40 of from-scratch tokens; that is a target at or above the teacher's loss, not below it.",
+    "from_review": "strategy-reuse"
+   },
+   {
+    "id": "sreenivas-2024-minitron-practice/2",
+    "claim": "Minitron first fine-tunes the teacher on about 100B tokens of the distillation corpus (teacher correction) before pruning and distilling.",
+    "quote": "we perform a lightweight ( \\sim 100B tokens) fine-tuning of the teacher model to adapt to the new distillation dataset.",
+    "location": "Section 2",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 100000000000.0,
+      "unit": "tokens",
+      "condition": "teacher correction fine-tuning of Mistral NeMo 12B"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Teacher correction is training of a registered model, so the policy throttles it; the 40x figure assumes it is free.",
+    "from_review": "strategy-reuse"
+   },
+   {
+    "id": "sreenivas-2024-minitron-practice/3",
+    "claim": "Minitron distills with forward KL on logits alone and drops the cross-entropy loss; intermediate-state losses help only when depth is pruned substantially.",
+    "quote": "We opt for logit-only distillation, minimizing the forward KL Divergence [12] loss across the teacher and student probabilities, and ignore the LM cross-entropy loss altogether.",
+    "location": "Section 2",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "Logit-only distillation suffices for width pruning, so the teacher signal is the output distribution, not hidden states.",
+    "from_review": "strategy-reuse"
+   }
+  ]
+ },
+ {
+  "id": "he-2024-upcycling-moe",
+  "title": "Upcycling Large Language Models into Mixture of Experts",
+  "authors": "Ethan He, Abhinav Khattar, Ryan Prenger, Vijay Korthikanti, Zijie Yan, Tong Liu et al.",
+  "year": 2024,
+  "venue": "arXiv",
+  "url": "https://arxiv.org/abs/2410.07524",
+  "topics": [
+   "strategy-reuse",
+   "weights"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "he-2024-upcycling-moe/1",
+    "claim": "Upcycling Nemotron-4 15B (pretrained on 8T tokens) into an MoE and training on 1T tokens beats continued dense training on the same 1T tokens, 67.6% vs 65.3% MMLU. Downstream metric; dense seed compute not counted; the MoE spends more FLOP per token than the dense model.",
+    "quote": "we upcycled Nemotron-4 15B on 1T tokens and compared it to a continuously trained version of the same model on the same 1T tokens: the continuous trained model achieved 65.3% MMLU, whereas the upcycled model achieved 67.6%.",
+    "location": "Abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 2.3,
+      "unit": "points MMLU",
+      "condition": "upcycled MoE vs continued dense, Nemotron-4 15B seed, 1T tokens"
+     },
+     {
+      "param": "other",
+      "value": 9e+22,
+      "unit": "FLOP",
+      "condition": "derived: 6 x 15e9 x 1e12, continued dense training FLOP"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "sparse-upcycling helps at about 1e23 when the new budget is 1/8 of the seed's; downstream only.",
+    "from_review": "strategy-reuse"
+   },
+   {
+    "id": "he-2024-upcycling-moe/2",
+    "claim": "The authors conclude upcycling pays only when the compute budget is much smaller than the pretraining budget.",
+    "quote": "Upcycling is an efficient method to utilize pretrained dense model weights when the compute budget is much smaller than the pretraining compute budget.",
+    "location": "Section 6",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "sparse-upcycling m_A falls toward 1 as the student budget approaches the seed's budget.",
+    "from_review": "strategy-reuse"
+   }
+  ]
+ },
+ {
+  "id": "wei-2024-skywork-moe",
+  "title": "Skywork-MoE: A Deep Dive into Training Techniques for Mixture-of-Experts Language Models",
+  "authors": "Tianwen Wei, Bo Zhu, Liang Zhao, Cheng Cheng, Biye Li, Weiwei Lü et al.",
+  "year": 2024,
+  "venue": "arXiv",
+  "url": "https://arxiv.org/abs/2406.06563",
+  "topics": [
+   "strategy-reuse",
+   "weights"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "wei-2024-skywork-moe/1",
+    "claim": "With a 0.3B dense seed trained on 300B tokens (budget C), an 8-expert MoE trained from scratch matches the upcycled one at an MoE budget of 2/3 C and beats it clearly at 2C. Metric shown in training-loss and benchmark curves; small scale.",
+    "quote": "If, however, the training budget for MoE is 2C , twice of the training budget of the dense checkpoint, then an MoE trained from scratch performs significantly better than its upcycled counterpart.",
+    "location": "Section 3",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.67,
+      "unit": "x seed budget",
+      "condition": "MoE budget at which from-scratch matches upcycled, 0.3B dense seed"
+     },
+     {
+      "param": "other",
+      "value": 5.4e+20,
+      "unit": "FLOP",
+      "condition": "derived: 6 x 3e8 x 3e11, dense seed budget C"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "sparse-upcycling m_A drops to 1 once the student budget is about 2/3 of the seed's, and below 1 at 2x.",
+    "from_review": "strategy-reuse"
+   }
+  ]
+ },
+ {
+  "id": "nakamura-2025-drop-upcycling",
+  "title": "Drop-Upcycling: Training Sparse Mixture of Experts with Partial Re-initialization",
+  "authors": "Taishi Nakamura, Takuya Akiba, Kazuki Fujii, Yusuke Oda, Rio Yokota, Jun Suzuki",
+  "year": 2025,
+  "venue": "ICLR 2025",
+  "url": "https://arxiv.org/abs/2502.19261",
+  "topics": [
+   "strategy-reuse",
+   "weights"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "nakamura-2025-drop-upcycling/1",
+    "claim": "An 8x3.7B MoE (5.9B active) upcycled from a 3.7B dense seed with half its expert weights re-initialized, trained on 500B tokens (1.98e22 FLOP), matches a 13B dense model trained with 7.43e22 FLOP (44.4 vs 44.5 average). Downstream average over Japanese and English tasks; the 1/4 excludes the seed's 2.70e22 FLOP.",
+    "quote": "our MoE model with 5.9B active parameters achieves comparable performance to a 13B dense model in the same model family, while requiring approximately 1/4 of the training FLOPs.",
+    "location": "Abstract; Table 2",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 3.75,
+      "unit": "x",
+      "condition": "derived: 7.43e22 / 1.98e22, seed excluded (policy: registered seed free); downstream average"
+     },
+     {
+      "param": "other",
+      "value": 1.59,
+      "unit": "x",
+      "condition": "derived: 7.43e22 / (1.98e22 + 2.70e22), seed included"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "sparse-upcycling with partial re-initialization: m_A about 3.75 at 2e22 with the seed free, 1.6 with it counted; downstream only.",
+    "from_review": "strategy-reuse"
+   },
+   {
+    "id": "nakamura-2025-drop-upcycling/2",
+    "claim": "Plain upcycling starts ahead but trains more slowly than from scratch and ends worse in long runs.",
+    "quote": "While upcycling leads to initial performance gains, the training progresses slower than when trained from scratch, leading to suboptimal performance in the long term.",
+    "location": "Abstract",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "Naive copying of a registered model gives a head start that decays; the multiplier is front-loaded.",
+    "from_review": "strategy-reuse"
+   }
+  ]
+ },
+ {
+  "id": "chen-2022-bert2bert",
+  "title": "bert2BERT: Towards Reusable Pretrained Language Models",
+  "authors": "Cheng Chen, Yichun Yin, Lifeng Shang, Xin Jiang, Yujia Qin, Fengyu Wang et al.",
+  "year": 2022,
+  "venue": "ACL 2022",
+  "url": "https://arxiv.org/abs/2110.07143",
+  "topics": [
+   "strategy-reuse",
+   "weights"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "chen-2022-bert2bert/1",
+    "claim": "Width-growing a pretrained model of about half the size saves about 45% (BERT-base) and 47% (GPT-base) of the target's pretraining compute; the source model's training is not counted. GLUE/SQuAD and perplexity; about 5e19 FLOP.",
+    "quote": "In particular, bert2BERT saves about 45% and 47% computational cost of pre-training BERTBASE and GPTBASE by reusing the models of almost their half sizes.",
+    "location": "Abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 1.85,
+      "unit": "x",
+      "condition": "derived: 1/(1-0.45) to 1/(1-0.47); source model free"
+     },
+     {
+      "param": "other",
+      "value": 4.9e+19,
+      "unit": "FLOP",
+      "condition": "GPT-base baseline pretraining FLOP (Table 5)"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "width-growth from a registered half-size model m_A about 1.8-1.9 at 5e19.",
+    "from_review": "strategy-reuse"
+   }
+  ]
+ },
+ {
+  "id": "yao-2024-msg",
+  "title": "Masked Structural Growth for 2x Faster Language Model Pre-training",
+  "authors": "Yiqun Yao, Zheng Zhang, Jing Li, Yequan Wang",
+  "year": 2024,
+  "venue": "ICLR 2024",
+  "url": "https://arxiv.org/abs/2305.02869",
+  "topics": [
+   "strategy-reuse",
+   "weights"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "yao-2024-msg/1",
+    "claim": "Function-preserving growth during training speeds pretraining by 2.2x for BERT and 1.4x for GPT-2 at comparable downstream quality; the small stages are trained in the same run and counted.",
+    "quote": "resulting in growth schedules with state-of-the-art speed-up ratios of 2.2x for Bert (Devlin et al., 2019) and 1.4x for GPT-2 (Radford et al., 2019) while maintaining comparable or better downstream performances.",
+    "location": "Section 1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 1.4,
+      "unit": "x",
+      "condition": "GPT-2 speed-up at comparable downstream performance, all stages counted"
+     },
+     {
+      "param": "other",
+      "value": 2.2,
+      "unit": "x",
+      "condition": "BERT speed-up at comparable downstream performance"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "In-run growth gives 1.4x for a causal LM at small scale.",
+    "from_review": "strategy-reuse"
+   }
+  ]
+ },
+ {
+  "id": "li-2023-flm-101b",
+  "title": "FLM-101B: An Open LLM and How to Train It with $100K Budget",
+  "authors": "Xiang Li, Yiqun Yao, Xin Jiang, Xuezhi Fang, Xuying Meng, Siqi Fan et al.",
+  "year": 2023,
+  "venue": "arXiv",
+  "url": "https://arxiv.org/abs/2309.03852",
+  "topics": [
+   "strategy-reuse",
+   "weights"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "li-2023-flm-101b/1",
+    "claim": "A 101B model grown in stages reaches 80% of its baselines' performance with 10% of their FLOPs. The baselines are other published models (not a matched from-scratch run), and the metric is downstream benchmark scores.",
+    "quote": "In this paper, we show that our model, namely FLM-101B, trained with our growth strategy under a budget of $100K, reaches 80% of the baselines’ performances with only 10% of their floating-point operations.",
+    "location": "Abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.8,
+      "unit": "fraction of baseline performance",
+      "condition": "at 10% of baseline FLOPs, downstream, unmatched baselines"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "The only growth result above 10B parameters gives no equal-quality multiplier; it cannot pin m_A.",
+    "from_review": "strategy-reuse"
+   }
+  ]
+ },
+ {
+  "id": "saunshi-2024-midas",
+  "title": "On the Inductive Bias of Stacking Towards Improving Reasoning",
+  "authors": "Nikunj Saunshi, Stefani Karp, Shankar Krishnan, Sobhan Miryoosefi, Sashank J. Reddi, Sanjiv Kumar",
+  "year": 2024,
+  "venue": "NeurIPS 2024",
+  "url": "https://arxiv.org/abs/2409.19044",
+  "topics": [
+   "strategy-reuse",
+   "weights"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "saunshi-2024-midas/1",
+    "claim": "Gradual middle stacking (MIDAS) on UL2 pretraining at 500B tokens is 1.24-1.26x faster at 1B, 2B and 8B with validation loss within 0.003-0.013 of the baseline (8B: 1.844 vs 1.841). Held-out loss; all stages are trained in the run and counted; the speed-up stays flat from 1B to 8B.",
+    "quote": "8B Parameters Baseline 72 1x 1.841 21.1 39.6 34.9 32.8 Midas 9 Prop-2 1.26x 1.844 21.8 40.0 43.1 36.4",
+    "location": "Section 3, Table 1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 1.24,
+      "unit": "x",
+      "condition": "derived: 1.26x speed-up with validation loss 0.003 worse, 8B, 500B tokens; slightly below 1.26 at equal loss"
+     },
+     {
+      "param": "other",
+      "value": 2.4e+22,
+      "unit": "FLOP",
+      "condition": "derived: 6 x 8e9 x 5e11 baseline FLOP"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "gstack-depth-growth m_A about 1.2 at 2.4e22 on held-out loss, flat from 1B to 8B; in-run growth, no registered model.",
+    "from_review": "strategy-reuse"
+   }
+  ]
+ },
+ {
+  "id": "akiba-2024-evolutionary-merge",
+  "title": "Evolutionary Optimization of Model Merging Recipes",
+  "authors": "Takuya Akiba, Makoto Shing, Yujin Tang, Qi Sun, David Ha",
+  "year": 2024,
+  "venue": "Nature Machine Intelligence 2025",
+  "url": "https://arxiv.org/abs/2403.13187",
+  "topics": [
+   "strategy-reuse"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "akiba-2024-evolutionary-merge/1",
+    "claim": "Evolutionary merging produces a Japanese math model (MGSM-JA 52.0) from 7B sources that score 9.6-30.0, with no gradient training; all sources are fine-tunes of one base (Mistral-7B-v0.1), and the merge inherits their limitations. Downstream accuracy.",
+    "quote": "All these models are fine-tuned from Mistral-7B-v0.1 [29].",
+    "location": "Section 4.1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 52.0,
+      "unit": "MGSM-JA accuracy",
+      "condition": "merged 7B model; best source 30.0"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Merging recombines fine-tunes of a shared pretrained base; it needs that base, so it cannot produce a new base model beyond the registered ones.",
+    "from_review": "strategy-reuse"
+   }
+  ]
+ },
+ {
+  "id": "abdin-2024-phi4",
+  "title": "Phi-4 Technical Report",
+  "authors": "Marah Abdin, Jyoti Aneja, Harkirat Behl, Sébastien Bubeck, Ronen Eldan, Suriya Gunasekar et al.",
+  "year": 2024,
+  "venue": "arXiv",
+  "url": "https://arxiv.org/abs/2412.08905",
+  "topics": [
+   "strategy-reuse",
+   "tokens"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "abdin-2024-phi4/1",
+    "claim": "phi-4 (14B), pretrained largely on GPT-4o-generated synthetic data, surpasses its teacher on STEM QA (GPQA, MATH) but is weaker on SimpleQA, DROP and IFEval. Downstream metric, includes post-training; teacher compute not counted.",
+    "quote": "While previous models in the Phi family largely distill the capabilities of a teacher model (specifically GPT-4), phi-4 substantially surpasses its teacher model on STEM-focused QA capabilities, giving evidence that our data-generation and post-training techniques go beyond distillation.",
+    "location": "Abstract",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "A student can beat a much larger teacher on narrow benchmarks via synthetic data; no held-out loss, and not across the board.",
+    "from_review": "strategy-reuse"
+   },
+   {
+    "id": "abdin-2024-phi4/2",
+    "claim": "In phi-4's phase-2 ablations at a fixed token horizon, 12 epochs over the synthetic data beat 4 epochs plus more fresh web tokens on 5-shot MMLU.",
+    "quote": "We see that despite many epochs on synthetic data, we do not see overfitting behavior and in fact the 12 epoch models perform better than those that have seen more unique web tokens.",
+    "location": "Section 3, Figure 2",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 12,
+      "unit": "epochs",
+      "condition": "synthetic data repetitions that beat fresh web tokens on MMLU"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "synthetic-rephrasing data is worth more than fresh web tokens per token on MMLU; downstream only.",
+    "from_review": "strategy-reuse"
+   }
+  ]
+ },
+ {
+  "id": "su-2024-nemotron-cc",
+  "title": "Nemotron-CC: Transforming Common Crawl into a Refined Long-Horizon Pretraining Dataset",
+  "authors": "Dan Su, Kezhi Kong, Ying Lin, Joseph Jennings, Brandon Norick, Markus Kliegl et al.",
+  "year": 2024,
+  "venue": "ACL 2025",
+  "url": "https://arxiv.org/abs/2412.02595",
+  "topics": [
+   "strategy-reuse",
+   "tokens"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "su-2024-nemotron-cc/1",
+    "claim": "Training 8B models on 1T tokens, rephrasing low-quality Common Crawl with Mistral NeMo 12B adds 1.5 points on a 10-task average, and replacing 4 of 8 epochs of high-quality data with synthetic data adds 0.9; some tasks drop. Downstream average; same hyperparameters, not tuned per blend; rephraser compute not counted.",
+    "quote": "By comparing the results between LQ-Base and LQ-Synthetic, we can see that rephrasing low-quality data leads to 1.50 absolute gains on average score.",
+    "location": "Section 3.3, Table 10",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 1.5,
+      "unit": "points",
+      "condition": "LQ-Synthetic minus LQ-Base average, 8B, 1T tokens"
+     },
+     {
+      "param": "other",
+      "value": 0.9,
+      "unit": "points",
+      "condition": "HQ-Synthetic minus HQ-Base average, 8B, 1T tokens"
+     },
+     {
+      "param": "other",
+      "value": 4.8e+22,
+      "unit": "FLOP",
+      "condition": "derived: 6 x 8e9 x 1e12"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "synthetic-rephrasing gives a small downstream gain at 5e22; its main use is adding unique tokens.",
+    "from_review": "strategy-reuse"
+   },
+   {
+    "id": "su-2024-nemotron-cc/2",
+    "claim": "Nemotron-CC's 6.3T tokens include 1.9T synthetic tokens; an 8B model trained for 15T tokens (7.2T from this set) beats Llama 3.1 8B by 5 MMLU points and 0.5 on a 10-task average. Not a matched baseline (different data and recipe).",
+    "quote": "This unlocks state-of-the-art training over a long token horizon: an 8B parameter model trained for 15T tokens, of which 7.2T came from our dataset, is better than the Llama 3.1 8B model: +5 on MMLU, +3.1 on ARC-Challenge, and +0.5 on average across ten diverse tasks.",
+    "location": "Abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 1900000000000.0,
+      "unit": "synthetic tokens",
+      "condition": "share of the 6.3T-token Nemotron-CC set"
+     },
+     {
+      "param": "other",
+      "value": 7.2e+23,
+      "unit": "FLOP",
+      "condition": "derived: 6 x 8e9 x 15e12"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "At 7e23 the measured edge from data that includes rephrasing is +0.5 points average over an equal-compute peer: no large multiplier.",
+    "from_review": "strategy-reuse"
+   }
+  ]
+ },
+ {
+  "id": "nguyen-2025-rewire",
+  "title": "Recycling the Web: A Method to Enhance Pre-training Data Quality and Quantity for Language Models",
+  "authors": "Thao Nguyen, Yang Li, Olga Golovneva, Luke Zettlemoyer, Sewoong Oh, Ludwig Schmidt, Xian Li",
+  "year": 2025,
+  "venue": "arXiv",
+  "url": "https://arxiv.org/abs/2506.04689",
+  "topics": [
+   "strategy-reuse",
+   "tokens"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "nguyen-2025-rewire/1",
+    "claim": "Where unique high-quality data is limited (repeated 4 times), mixing Llama-3.3-70B rewrites of discarded documents into the filtered web data matches or beats having 2x more raw web data, at equal training tokens, with gains of 1.0, 1.3 and 2.5 points on DCLM CORE at 1B, 3B and 7B. Downstream; rewriter compute not counted.",
+    "quote": "Training on the raw-synthetic data mix is also more effective than having access to 2 \\times web data.",
+    "location": "Abstract; Table 1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 2.5,
+      "unit": "points",
+      "condition": "CORE gain of raw+rewritten vs raw only, 7B, 138B tokens seen"
+     },
+     {
+      "param": "other",
+      "value": 2,
+      "unit": "x unique web data",
+      "condition": "raw data multiple that the raw+rewritten mix matches"
+     },
+     {
+      "param": "other",
+      "value": 5.8e+21,
+      "unit": "FLOP",
+      "condition": "derived: 6 x 7e9 x 1.38e11"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "synthetic-rephrasing is worth about 2x unique data in a data-limited regime at 6e21; at equal compute without data limits it is not a compute multiplier.",
+    "from_review": "strategy-reuse"
+   },
+   {
+    "id": "nguyen-2025-rewire/2",
+    "claim": "Training only on the rewritten high-quality data underperforms training on the raw high-quality data at every scale tested.",
+    "quote": "Across all three model and training budget scales, we observe that training only on high-quality synthetic data underperforms training on high-quality raw texts.",
+    "location": "Section 3.2, Table 1",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "Synthetic text alone is worse than real text: rephrasing adds tokens, it does not replace the corpus.",
+    "from_review": "strategy-reuse"
+   }
+  ]
+ },
+ {
+  "id": "shumailov-2023-curse-of-recursion",
+  "title": "The Curse of Recursion: Training on Generated Data Makes Models Forget",
+  "authors": "Ilia Shumailov, Zakhar Shumaylov, Yiren Zhao, Yarin Gal, Nicolas Papernot, Ross Anderson",
+  "year": 2023,
+  "venue": "arXiv (Nature 2024 as AI models collapse when trained on recursively generated data)",
+  "url": "https://arxiv.org/abs/2305.17493",
+  "topics": [
+   "strategy-reuse",
+   "tokens"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "shumailov-2023-curse-of-recursion/1",
+    "claim": "Training each generation on the previous generation's outputs makes the distribution's tails disappear irreversibly; in OPT-125m fine-tuning on wikitext2, perplexity degrades over generations, and keeping 10% of the original data leaves only minor degradation.",
+    "quote": "We find that use of model-generated content in training causes irreversible defects in the resulting models, where tails of the original content distribution disappear.",
+    "location": "Abstract; Section 5",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Recursive reuse of model outputs without real data loses information; it bounds synthetic-only pretraining, not one-step distillation with real data mixed in.",
+    "from_review": "strategy-reuse"
+   }
+  ]
+ },
+ {
+  "id": "gerstgrasser-2024-accumulate",
+  "title": "Is Model Collapse Inevitable? Breaking the Curse of Recursion by Accumulating Real and Synthetic Data",
+  "authors": "Matthias Gerstgrasser, Rylan Schaeffer, Apratim Dey, Rafael Rafailov, Dhruv Pai, Henry Sleight et al.",
+  "year": 2024,
+  "venue": "arXiv",
+  "url": "https://arxiv.org/abs/2404.01413",
+  "topics": [
+   "strategy-reuse",
+   "tokens"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "gerstgrasser-2024-accumulate/1",
+    "claim": "Pretraining 9M-125M models on TinyStories over successive generations, replacing real data with synthetic raises held-out cross-entropy, while accumulating synthetic data alongside the real data does not.",
+    "quote": "We confirm that replacing the original real data by each generation’s synthetic data does indeed tend towards model collapse, then demonstrate that accumulating the successive generations of synthetic data alongside the original real data avoids model collapse",
+    "location": "Abstract; Section 2.1",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Collapse is avoided while the real corpus stays in the mix, so it does not cap reuse that adds to real data.",
+    "from_review": "strategy-reuse"
+   }
+  ]
+ },
+ {
+  "id": "dohmatob-2024-strong-collapse",
+  "title": "Strong Model Collapse",
+  "authors": "Elvis Dohmatob, Yunzhen Feng, Arjun Subramonian, Julia Kempe",
+  "year": 2024,
+  "venue": "ICLR 2025",
+  "url": "https://arxiv.org/abs/2410.04840",
+  "topics": [
+   "strategy-reuse",
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "dohmatob-2024-strong-collapse/1",
+    "claim": "In a regression model, any fixed fraction of synthetic data from a shifted distribution (even 1%) can stop test error from improving with more data, and larger models can amplify this (below the interpolation threshold). Theory plus small experiments.",
+    "quote": "Our results show that even the smallest fraction of synthetic data (e.g., as little as 1% of the total training dataset) can still lead to model collapse: larger and larger training sets do not enhance performance.",
+    "location": "Abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.01,
+      "unit": "fraction synthetic",
+      "condition": "fraction that can already cause collapse in their regression model"
+     }
+    ],
+    "grade": "theoretical",
+    "bears_on": "Synthetic data from a model that differs from the true distribution puts a floor on the student's loss; bounds rephrasing's multiplier at large data.",
+    "from_review": "strategy-reuse"
+   }
+  ]
+ },
+ {
+  "id": "wang-2023-retro-study",
+  "title": "Shall We Pretrain Autoregressive Language Models with Retrieval? A Comprehensive Study",
+  "authors": "Boxin Wang, Wei Ping, Peng Xu, Lawrence McAfee, Zihan Liu, Mohammad Shoeybi et al.",
+  "year": 2023,
+  "venue": "EMNLP 2023",
+  "url": "https://arxiv.org/abs/2304.06762",
+  "topics": [
+   "strategy-reuse"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "wang-2023-retro-study/1",
+    "claim": "Reproducing RETRO with a 330B-token database, the retrieval model's held-out perplexity gain over a GPT of the same configuration shrinks with size: 17.76 to 12.99 at 148M, 7.86 to 6.72 at 9.5B. Same steps and tokens; validation set held out, but the database is the training corpus, so overlap is possible.",
+    "quote": "Small Medium XL XXL GPT 17.76 13.18 10.18 7.86 Retro ( k=2 ) 12.99 10.06 8.10 6.72 Table 2: Validation perplexity of pretrained GPT and Retro on the held-out dataset.",
+    "location": "Section 4, Table 2",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 5.2,
+      "unit": "x parameters at equal perplexity",
+      "condition": "derived: Retro XL (1.5B) perplexity 8.10 equals GPT at 6.7B by log-log interpolation vs GPT 1.3B; equal tokens"
+     },
+     {
+      "param": "other",
+      "value": 3.1,
+      "unit": "x parameters at equal perplexity",
+      "condition": "derived: Retro XXL (9.5B) vs GPT 8.3B, extrapolating GPT's 1.3B-8.3B slope"
+     },
+     {
+      "param": "other",
+      "value": 0.157,
+      "unit": "nats",
+      "condition": "derived: ln(7.86/6.72), gap at the largest size, down from 0.313 at the smallest"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "retrieval-augmented-lm parameter-equivalence about 3-5x, falling to about 3x at 8-9.5B; the gap in nats halves from 148M to 9.5B, so a constant 10x is too high.",
+    "from_review": "strategy-reuse"
+   },
+   {
+    "id": "wang-2023-retro-study/2",
+    "claim": "Pretrained RETRO beats GPT on knowledge-intensive tasks but is on par on the other LM Evaluation Harness tasks.",
+    "quote": "ii) On the LM Evaluation Harness benchmark, Retro largely outperforms GPT on knowledge-intensive tasks, but is on par with GPT on other tasks.",
+    "location": "Abstract",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "Retrieval's multiplier is a knowledge (memorization) effect; it does not carry to non-knowledge tasks.",
+    "from_review": "strategy-reuse"
+   }
+  ]
+ },
+ {
+  "id": "hernandez-2021-transfer",
+  "title": "Scaling Laws for Transfer",
+  "authors": "Danny Hernandez, Jared Kaplan, Tom Henighan, Sam McCandlish",
+  "year": 2021,
+  "venue": "arXiv",
+  "url": "https://arxiv.org/abs/2102.01293",
+  "topics": [
+   "strategy-reuse",
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "hernandez-2021-transfer/1",
+    "claim": "Pretraining on text transfers an effective D_T = k D_F^alpha N^beta tokens to Python fine-tuning (text to Python: k = 1.9e4, alpha = 0.18, beta = 0.38) in the low-data regime; the effective data multiplier falls as the fine-tuning set grows. Held-out Python loss; pretraining compute not counted.",
+    "quote": "Transfer from k \\alpha \\beta Text \\Longrightarrow Python 1.9e4 0.18 0.38",
+    "location": "Section 1.1, Table 1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.18,
+      "unit": "exponent alpha",
+      "condition": "D_T proportional to D_F^0.18, text to Python"
+     },
+     {
+      "param": "other",
+      "value": 0.38,
+      "unit": "exponent beta",
+      "condition": "D_T proportional to N^0.38"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Reuse multiplies data by D_T/D_F = k N^beta D_F^(alpha-1), which shrinks as D_F^-0.82: the benefit of a pretrained start vanishes with the new model's training data.",
+    "from_review": "strategy-reuse"
+   },
+   {
+    "id": "hernandez-2021-transfer/2",
+    "claim": "In the high-data regime, starting from a pretrained model can reduce effective data: small fine-tuned models never reach from-scratch performance (ossification).",
+    "quote": "We refer to this phenomenon as ‘ossification,’ to suggest that pre-training can ossify the model weights so that they don’t adapt as well to the fine-tuning distribution in the high data regime..",
+    "location": "Section 3.1",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Warm-starting from a registered model can lower m_A below 1 when the new run's data is large.",
+    "from_review": "strategy-reuse"
+   }
+  ]
+ }
+]

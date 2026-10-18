@@ -2054,17 +2054,138 @@
     "trend": "unknown",
     "exponent_change": null,
     "note": "Task-specific."
+   },
+   {
+    "evidence": [
+     "nguyen-2025-rewire/1"
+    ],
+    "metric": "unique-data-equivalent at equal tokens, downstream",
+    "compute_range_flop": [
+     6e+21,
+     6e+21
+    ],
+    "multiplier": 2,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Rewrites worth about 2x unique web data at 1-7B in a data-limited regime."
+   },
+   {
+    "evidence": [
+     "nguyen-2025-rewire/2"
+    ],
+    "metric": "downstream, synthetic only",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Synthetic-only data is worse than raw."
+   },
+   {
+    "evidence": [
+     "su-2024-nemotron-cc/1"
+    ],
+    "metric": "downstream at matched tokens",
+    "compute_range_flop": [
+     4.8e+22,
+     4.8e+22
+    ],
+    "multiplier": null,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "+1.5 points."
+   },
+   {
+    "evidence": [
+     "su-2024-nemotron-cc/2"
+    ],
+    "metric": "downstream vs Llama 3.1 8B (not matched)",
+    "compute_range_flop": [
+     7.2e+23,
+     7.2e+23
+    ],
+    "multiplier": null,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "+0.5 points average."
+   },
+   {
+    "evidence": [
+     "abdin-2024-phi4/2"
+    ],
+    "metric": "MMLU, 12 epochs of synthetic vs fresh web",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Synthetic repeated beats fresh web on MMLU."
+   },
+   {
+    "evidence": [
+     "dohmatob-2024-strong-collapse/1"
+    ],
+    "metric": "theory",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Collapse bound."
    }
   ],
   "multiplier": {
-   "value": 3,
+   "value": 2,
    "trend": "unknown",
    "evidence": [
-    "maini-2024-wrap/1"
+    "nguyen-2025-rewire/1",
+    "su-2024-nemotron-cc/1"
    ],
-   "metric": "speed-up on C4"
+   "metric": "unique-data-equivalent at equal training tokens, downstream (a data multiplier where unique data binds)"
   },
   "confidence": "medium",
+  "convention": "as-published"
+ },
+ {
+  "id": "teacher-guided-data-selection",
+  "name": "Teacher-guided data selection (MiniPLM difference sampling)",
+  "family": "data",
+  "description": "A registered teacher and a small reference model resample the corpus offline; the student trains normally on the selected data.",
+  "sources": [
+   "gu-2024-miniplm"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 96.0,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 16.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "Traits as synthetic-rephrasing: the student trains normally; only the data changes.",
+  "scaling": [
+   {
+    "evidence": [
+     "gu-2024-miniplm/2"
+    ],
+    "metric": "held-out loss at fixed size, extrapolated",
+    "compute_range_flop": [
+     7.2e+22,
+     7.2e+22
+    ],
+    "multiplier": null,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Extrapolated 0.06 nats below plain pretraining for a 1.2B student at 1T and 10T tokens; a fixed-size tokens multiplier, not a frontier multiplier."
+   }
+  ],
+  "multiplier": null,
   "convention": "as-published"
  },
  {
@@ -3485,18 +3606,88 @@
    "entry_fee_override": null,
    "fanout_override": null
   },
-  "notes": "Small m_A with a sunk teacher; about 70x more novel data bits per token. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. Top-p-k teacher logits: about 15 TB over 100B tokens, about 1,200 bits per token.",
+  "notes": "Small m_A with a sunk teacher; about 70x more novel data bits per token. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. Top-p-k teacher logits: about 15 TB over 100B tokens, about 1,200 bits per token. Twelve importance-sampled teacher tokens per position match full distillation, while top-12 or top-50 truncation is worse than plain cross-entropy (anshumann-2025-sparse-logit/3): the teacher signal is roughly 240-400 bits per token.",
   "scaling": [
    {
     "evidence": [
-     "busbridge-2025-distillation-scaling/1"
+     "busbridge-2025-distillation-scaling/1",
+     "busbridge-2025-distillation-scaling/2",
+     "busbridge-2025-distillation-scaling/4"
     ],
-    "metric": "loss vs supervised at equal student compute",
-    "compute_range_flop": null,
+    "metric": "held-out CE at equal student compute, teacher free",
+    "compute_range_flop": [
+     3e+19,
+     3e+21
+    ],
     "multiplier": null,
     "trend": "shrinks-with-scale",
     "exponent_change": null,
-    "note": "Better only below a crossover compute and only with a sunk teacher."
+    "note": "Law keeps L_S > L_T, so targets at or below the teacher are unreachable. Extrapolated m for target L_T+0.1: 1.8-2.4 (1e24 teacher), 2.7-4.2 (1e26); for L_T+0.02: 0.6-1.0."
+   },
+   {
+    "evidence": [
+     "anshumann-2025-sparse-logit/1"
+    ],
+    "metric": "held-out LM loss at equal student tokens, teacher free",
+    "compute_range_flop": [
+     1.8e+21,
+     1.8e+21
+    ],
+    "multiplier": 1.35,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "3B student, Llama-3-8B teacher, 100B tokens, 0.026 nats; m 1.2-1.5 depending on the slope used."
+   },
+   {
+    "evidence": [
+     "anshumann-2025-sparse-logit/2"
+    ],
+    "metric": "held-out LM loss at equal student tokens, teacher free",
+    "compute_range_flop": [
+     1.8e+19,
+     1.8e+20
+    ],
+    "multiplier": null,
+    "trend": "shrinks-with-scale",
+    "exponent_change": null,
+    "note": "300M student: m about 1.5 at 10B tokens, about 0.95 at 100B tokens (16x Chinchilla)."
+   },
+   {
+    "evidence": [
+     "rawat-2024-salt/1",
+     "rawat-2024-salt/2"
+    ],
+    "metric": "held-out log-perplexity at equal steps, smaller teacher",
+    "compute_range_flop": [
+     9e+21,
+     9e+21
+    ],
+    "multiplier": 1.1,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "1.5B teacher, 2.8B student, KD for the first 36K of 208K steps; KD for the whole run ends 0.2 nats worse."
+   },
+   {
+    "evidence": [
+     "gemma-team-2024-gemma2/1"
+    ],
+    "metric": "parameter-equivalent at equal tokens, validation perplexity",
+    "compute_range_flop": null,
+    "multiplier": 2.5,
+    "trend": "constant",
+    "exponent_change": null,
+    "note": "200M-1B students, 7B teacher; token count not stated."
+   },
+   {
+    "evidence": [
+     "gu-2024-miniplm/1"
+    ],
+    "metric": "downstream at equal FLOPs including online teacher",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Counting teacher inference, KD is no better than plain pretraining at 200M."
    },
    {
     "evidence": [
@@ -3510,7 +3701,16 @@
     "note": "+1.6%."
    }
   ],
-  "multiplier": null,
+  "multiplier": {
+   "value": 1.3,
+   "trend": "shrinks-with-scale",
+   "evidence": [
+    "anshumann-2025-sparse-logit/1",
+    "rawat-2024-salt/1",
+    "busbridge-2025-distillation-scaling/2"
+   ],
+   "metric": "held-out loss at equal student compute, teacher free, target above the teacher's loss (0 for targets at or below it)"
+  },
   "confidence": "medium",
   "convention": "as-published"
  },
@@ -3544,34 +3744,53 @@
   "scaling": [
    {
     "evidence": [
-     "muralidharan-2024-minitron/1"
+     "muralidharan-2024-minitron/2"
     ],
-    "metric": "family compute vs training each from scratch",
+    "metric": "downstream at equal student tokens vs random init",
+    "compute_range_flop": [
+     2.4e+21,
+     9.6e+21
+    ],
+    "multiplier": 4,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Pruned and distilled 4B at 100B tokens beats random init at 400B (MMLU 37.8 vs 26.2); 15B teacher free."
+   },
+   {
+    "evidence": [
+     "sreenivas-2024-minitron-practice/1",
+     "sreenivas-2024-minitron-practice/2"
+    ],
+    "metric": "downstream vs the teacher's own from-scratch recipe",
+    "compute_range_flop": [
+     1.8e+22,
+     1.8e+22
+    ],
+    "multiplier": 40,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Target is a copy of the teacher. Assumes the ~100B-token teacher correction is free; the policy throttles it."
+   },
+   {
+    "evidence": [
+     "muralidharan-2024-minitron/1",
+     "xia-2023-sheared-llama/1"
+    ],
+    "metric": "family cost with the teacher's training counted",
     "compute_range_flop": null,
     "multiplier": 1.8,
     "trend": "unknown",
     "exponent_change": null,
-    "note": "40x fewer tokens per derived model."
-   },
-   {
-    "evidence": [
-     "xia-2023-sheared-llama/1"
-    ],
-    "metric": "compute vs from scratch",
-    "compute_range_flop": null,
-    "multiplier": null,
-    "trend": "unknown",
-    "exponent_change": null,
-    "note": "3% of from-scratch compute, given LLaMA2-7B."
+    "note": "The earlier entry."
    }
   ],
   "multiplier": {
-   "value": 1.8,
+   "value": 4,
    "trend": "unknown",
    "evidence": [
-    "muralidharan-2024-minitron/1"
+    "muralidharan-2024-minitron/2"
    ],
-   "metric": "family compute vs training each from scratch"
+   "metric": "downstream, equal student tokens, target at or above the teacher's loss"
   },
   "confidence": "medium",
   "convention": "as-published"
@@ -3607,7 +3826,7 @@
     "evidence": [
      "du-2024-gstack/1"
     ],
-    "metric": "tokens to equal loss, 7B",
+    "metric": "training loss, base FLOPs counted",
     "compute_range_flop": [
      1.26e+22,
      1.26e+22
@@ -3615,16 +3834,31 @@
     "multiplier": 1.55,
     "trend": "unknown",
     "exponent_change": null,
-    "note": "194B vs 300B tokens."
+    "note": "Authors' log-curve extension to 8T tokens is extrapolation (du-2024-gstack/2)."
+   },
+   {
+    "evidence": [
+     "saunshi-2024-midas/1"
+    ],
+    "metric": "held-out loss, all stages counted",
+    "compute_range_flop": [
+     3e+21,
+     2.4e+22
+    ],
+    "multiplier": 1.24,
+    "trend": "constant",
+    "exponent_change": null,
+    "note": "1.24-1.26x at 1B, 2B and 8B, loss within 0.003 at 8B."
    }
   ],
   "multiplier": {
-   "value": 1.55,
-   "trend": "unknown",
+   "value": 1.3,
+   "trend": "constant",
    "evidence": [
+    "saunshi-2024-midas/1",
     "du-2024-gstack/1"
    ],
-   "metric": "tokens to equal loss, 7B"
+   "metric": "held-out or training loss at equal loss"
   },
   "confidence": "medium",
   "convention": "as-published"
@@ -3678,15 +3912,42 @@
     "trend": "unknown",
     "exponent_change": null,
     "note": "2.2-4x."
+   },
+   {
+    "evidence": [
+     "chen-2022-bert2bert/1"
+    ],
+    "metric": "steps to equal quality, source model free",
+    "compute_range_flop": [
+     5e+19,
+     5e+19
+    ],
+    "multiplier": 1.85,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "bert2BERT."
+   },
+   {
+    "evidence": [
+     "yao-2024-msg/1"
+    ],
+    "metric": "compute to equal quality, all stages counted",
+    "compute_range_flop": null,
+    "multiplier": 1.4,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "1.4 for GPT-2, 2.2 for BERT."
    }
   ],
   "multiplier": {
-   "value": 2,
-   "trend": "unknown",
+   "value": 1.8,
+   "trend": "shrinks-with-scale",
    "evidence": [
-    "wang-2023-ligo/1"
+    "wang-2023-ligo/1",
+    "chen-2022-bert2bert/1",
+    "samragh-2024-hypercloning/2"
    ],
-   "metric": "compute vs scratch"
+   "metric": "steps or FLOPs to equal quality, mostly downstream"
   },
   "confidence": "low",
   "convention": "as-published"
@@ -3721,28 +3982,71 @@
   "scaling": [
    {
     "evidence": [
-     "komatsuzaki-2022-sparse-upcycling/1"
+     "liew-2025-upcycling-scaling/1",
+     "liew-2025-upcycling-scaling/2"
     ],
-    "metric": "quality vs dense continuation",
-    "compute_range_flop": null,
-    "multiplier": null,
-    "trend": "unknown",
-    "exponent_change": null,
-    "note": "Beats dense with about 50% of the sunk cost."
-   },
-   {
-    "evidence": [
-     "liew-2025-upcycling-scaling/1"
-    ],
-    "metric": "efficiency at large budgets",
+    "metric": "held-out loss, upcycled vs MoE from scratch",
     "compute_range_flop": null,
     "multiplier": null,
     "trend": "shrinks-with-scale",
     "exponent_change": null,
-    "note": "An interaction term limits upcycling at large compute."
+    "note": "L = A D1^-a1 D2^(-a2+a3 log D1) + E. With D1 = D2, seed-free m reaches 1 at D* = 4B tokens for a 1B seed (fit); extrapolated about 1B tokens at 10B and 0.08-0.4B for 1e24-1e26-scale seeds (log base ambiguous)."
+   },
+   {
+    "evidence": [
+     "nakamura-2025-drop-upcycling/1",
+     "nakamura-2025-drop-upcycling/2"
+    ],
+    "metric": "downstream at equal MoE training FLOPs vs dense",
+    "compute_range_flop": [
+     1.98e+22,
+     7.43e+22
+    ],
+    "multiplier": 3.75,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Partial re-initialization; 1.6 with the seed counted. Plain upcycling slows later."
+   },
+   {
+    "evidence": [
+     "he-2024-upcycling-moe/1",
+     "he-2024-upcycling-moe/2"
+    ],
+    "metric": "MMLU vs continued dense on the same 1T tokens",
+    "compute_range_flop": [
+     9e+22,
+     9e+22
+    ],
+    "multiplier": null,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "+2.3 MMLU at 1/8 of the seed's budget."
+   },
+   {
+    "evidence": [
+     "wei-2024-skywork-moe/1"
+    ],
+    "metric": "vs MoE from scratch",
+    "compute_range_flop": [
+     3.6e+20,
+     1.1e+21
+    ],
+    "multiplier": 1,
+    "trend": "shrinks-with-scale",
+    "exponent_change": null,
+    "note": "Parity at 2/3 of the seed budget; scratch wins at 2x."
    }
   ],
-  "multiplier": null,
+  "multiplier": {
+   "value": 1.5,
+   "trend": "shrinks-with-scale",
+   "evidence": [
+    "liew-2025-upcycling-scaling/1",
+    "wei-2024-skywork-moe/1",
+    "nakamura-2025-drop-upcycling/1"
+   ],
+   "metric": "equal-quality student compute, seed free"
+  },
   "confidence": "medium",
   "convention": "as-published"
  },
@@ -3776,45 +4080,27 @@
   "scaling": [
    {
     "evidence": [
-     "borgeaud-2021-retro/2"
+     "wang-2023-retro-study/1"
     ],
-    "metric": "parameter-equivalent gain",
-    "compute_range_flop": null,
-    "multiplier": 10,
-    "trend": "constant",
-    "exponent_change": null,
-    "note": "Constant with model scale; a parameter (not compute) multiplier."
-   },
-   {
-    "evidence": [
-     "borgeaud-2021-retro/1"
+    "metric": "parameter-equivalent at equal tokens, held-out perplexity",
+    "compute_range_flop": [
+     2.5e+20,
+     1.6e+22
     ],
-    "metric": "Pile quality vs GPT-3",
-    "compute_range_flop": null,
-    "multiplier": null,
-    "trend": "unknown",
+    "multiplier": 3,
+    "trend": "shrinks-with-scale",
     "exponent_change": null,
-    "note": "25x fewer parameters."
-   },
-   {
-    "evidence": [
-     "shao-2024-massiveds/1"
-    ],
-    "metric": "loss at equal training compute vs datastore size",
-    "compute_range_flop": null,
-    "multiplier": null,
-    "trend": "unknown",
-    "exponent_change": null,
-    "note": "Improves without obvious saturation to 1.4T tokens."
+    "note": "Derived 3.0x, 4.0x, 5.2x, then about 3.1x (extrapolated) from 126M to 8.3B; the gain is on knowledge tasks only (wang-2023-retro-study/2), and the database is the training corpus, so validation overlap is possible."
    }
   ],
   "multiplier": {
-   "value": 10,
-   "trend": "constant",
+   "value": 3,
+   "trend": "shrinks-with-scale",
    "evidence": [
+    "wang-2023-retro-study/1",
     "borgeaud-2021-retro/2"
    ],
-   "metric": "parameter-equivalent gain"
+   "metric": "parameter-equivalent at equal tokens"
   },
   "confidence": "medium",
   "convention": "as-published"

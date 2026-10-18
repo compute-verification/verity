@@ -322,6 +322,73 @@
     "grade": "measured-small",
     "bears_on": "Distillation's m_A exceeds 1 only below a crossover compute and only when the teacher is sunk cost.",
     "from_review": "scaling-corpus"
+   },
+   {
+    "id": "busbridge-2025-distillation-scaling/2",
+    "claim": "Given enough student compute or tokens, supervised training beats distillation; distillation wins only on modest token budgets.",
+    "quote": "Supervised learning always outperforms distillation given enough student compute or tokens. For a modest token budget, distillation is favorable; however, when a large number of tokens are available, supervised learning outperforms distillation.",
+    "location": "Section 5.1",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "A free registered teacher raises a student's compute multiplier only below a crossover; at frontier-scale budgets the student is better off training on data.",
+    "from_review": "strategy-reuse"
+   },
+   {
+    "id": "busbridge-2025-distillation-scaling/3",
+    "claim": "Weak-to-strong gains appear only with finite distillation data; with enough tokens the student's loss rises back to the teacher's.",
+    "quote": "weak-to-strong generalization (Burns et al., 2024; Ildiz et al., 2024) occurs only in the finite distillation data regime, and when the number of tokens is sufficiently large, the student cross-entropy increases again, eventually matching the teacher cross-entropy.",
+    "location": "Appendix E.7",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Distillation from a registered teacher does not carry a student below the teacher's loss at scale.",
+    "from_review": "strategy-reuse"
+   },
+   {
+    "id": "busbridge-2025-distillation-scaling/4",
+    "claim": "The fitted distillation law's teacher-dependence constants (with 95% intervals), fitted on 73 supervised and 697 distillation runs on C4.",
+    "quote": "c_{0} 2.549 (2.425, 2.615) c_{1} 522.6 (522.6, 522.6) f_{1} 0.090 (0.088, 0.093) d_{1} 1.315 (1.302, 1.327)",
+    "location": "Table 6",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "Constants for solving the law for the student compute that reaches a target loss above the teacher's; the law keeps L_S > L_T, so targets at or below the teacher are unreachable.",
+    "from_review": "strategy-reuse"
+   },
+   {
+    "id": "busbridge-2025-distillation-scaling/5",
+    "claim": "When teacher training is discounted, distillation often costs less: about 3/4 the compute of supervised training for a 500M student at cross-entropy 2.4 and about 1/2 for a 10B student at 2.2.",
+    "quote": "When teacher training is discounted, distillation is often more efficient.",
+    "location": "Appendix D.5",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 2.0,
+      "unit": "compute multiplier, student-side (supervised over distillation compute)",
+      "condition": "10B student at cross-entropy 2.2, teacher discounted (Figure 33)"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Student-side multipliers of about 1.3-2 when the teacher is free, for targets above the teacher's loss. The paper's scenario labels around Figure 33 conflict, so the 3/4 and 1/2 figures are uncertain.",
+    "from_review": "strategy-reuse"
+   },
+   {
+    "id": "busbridge-2025-distillation-scaling/6",
+    "claim": "Capacity gap: a better teacher does not always make a better student, and can make it worse.",
+    "quote": "we observe the capacity gap, where improving teacher performance does not always improve student performance, and even reduces student performance eventually.",
+    "location": "Section 5",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "The strongest registered model is not automatically the best teacher; reuse gains saturate.",
+    "from_review": "strategy-reuse"
+   },
+   {
+    "id": "busbridge-2025-distillation-scaling/7",
+    "claim": "The compute at which supervised learning overtakes distillation grows with student size.",
+    "quote": "The compute transition point at which supervised learning becomes preferable to distillation increases as a function of student size.",
+    "location": "Section 5.3",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Larger students keep distillation's advantage longer, so the frontier-scale crossover is an extrapolation.",
+    "from_review": "strategy-reuse"
    }
   ]
  },
@@ -1287,6 +1354,33 @@
     "grade": "measured-small",
     "bears_on": "Upcycling's gain shrinks with C.",
     "from_review": "scaling-corpus"
+   },
+   {
+    "id": "liew-2025-upcycling-scaling/2",
+    "claim": "The fitted upcycling law: loss as a function of the dense seed's tokens D1 and the upcycled tokens D2, with an interaction term.",
+    "quote": "L=AD_{1}^{-\\alpha_{1}}D_{2}^{-\\alpha_{2}+\\alpha_{3}\\log D_{1}}+E",
+    "location": "Section 3",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "Gives the break-even upcycled budget D*, past which training the MoE from scratch is better.",
+    "from_review": "strategy-reuse"
+   },
+   {
+    "id": "liew-2025-upcycling-scaling/3",
+    "claim": "Upcycling helps only while the upcycled budget stays below a threshold that shrinks with model size (4B tokens for an 8x1B model).",
+    "quote": "Particularly, upcycling is beneficial when D_{2} remains below a certain threshold, where the pretrained dense model can still accelerate convergence. However, beyond this threshold, from-scratch training of MoE becomes more efficient.",
+    "location": "Section 4",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 4000000000.0,
+      "unit": "upcycled tokens at break-even (D*)",
+      "condition": "8x1B MoE upcycled from a 1B dense seed"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "A registered seed's head start is worth little to a frontier-scale new run.",
+    "from_review": "strategy-reuse"
    }
   ]
  },
