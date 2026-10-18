@@ -9,8 +9,8 @@ One invariant of every state a run reaches from `State.init` (`Inv`, on the fiel
 (`step_inv`): passes arrive only in the window being filled, each with its plan, step and head; a window is drawn only
 with `min_passes` passes and accepted only once drawn; the steps strictly increase in arrival order below `2^64`; every
 plan reads distinct blocks of the store; the appends are the store's next indices, each with the next append coin; and
-the session's head, and each pass's, is the chain over a prefix of the appends. A rejection only marks its window's
-verdict, so it keeps the invariant too.
+the session's head, and each pass's, is the chain over a prefix of the appends, past which the pass's plan reads
+nothing. A rejection only marks its window's verdict, so it keeps the invariant too.
 -/
 
 open RemoteAudit RemoteAudit.Session
@@ -66,7 +66,8 @@ structure InvOn (P : Params) (R : Registration) (AC : Array ByteArray) (ws : Arr
   firsts : ∀ k (hk : k < appends.size), appends[k].first = R.blocks + ((appends.toList.take k).map (·.count)).sum
   chain : head = chainOf appends
   heads : ∀ t (ht : t < ws.size) i (hi : i < ws[t].heads.size),
-    ∃ m, m ≤ appends.size ∧ ws[t].heads[i] = chainOf (appends.extract 0 m)
+    ∃ m, m ≤ appends.size ∧ ws[t].heads[i] = chainOf (appends.extract 0 m) ∧
+      ∀ p, p < ws[t].plans[i]!.length → ws[t].plans[i]!.block p < R.blocks + ((appends.toList.take m).map (·.count)).sum
 
 def Inv (s : State) : Prop :=
   InvOn s.params s.reg s.appendCoins s.windows s.filling s.step s.extent s.appends s.appendDrawn s.head
@@ -126,10 +127,10 @@ theorem invOn_same {P R AC ws filling stp extent appends drawnN head} {ws' : Arr
     have hi' : i < ws[t].plans.size := by rw [← e2]; exact hi
     have := h.reads t (by omega) i hi'
     simp only [e2]; exact this
-  · obtain ⟨-, -, -, e4, -⟩ := e t ht
+  · obtain ⟨-, e2, -, e4, -⟩ := e t ht
     have hi' : i < ws[t].heads.size := by rw [← e4]; exact hi
     have := h.heads t (by omega) i hi'
-    simp only [e4]; exact this
+    simp only [e2, e4]; exact this
 
 theorem samePasses_modify (P : Params) (ws : Array Win) (u : Nat) (f : Win → Win)
     (hf : ∀ hu : u < ws.size, Keeps P ws[u] (f ws[u])) : SamePasses P ws (ws.modify u f) := by
@@ -253,8 +254,11 @@ theorem invOn_append {P R AC ws filling stp extent appends drawnN head}
       rw [List.take_append_of_le_length (by simp), List.take_of_length_le (by simp)]
       exact h.extentSum
   · rw [chainOf_push, ← h.chain]
-  · obtain ⟨m, hm, he⟩ := h.heads t ht i hi
-    exact ⟨m, by simp; omega, by rw [extract_push_le _ _ _ hm]; exact he⟩
+  · obtain ⟨m, hm, he, hr⟩ := h.heads t ht i hi
+    refine ⟨m, by simp; omega, by rw [extract_push_le _ _ _ hm]; exact he, ?_⟩
+    simp only [Array.toList_push]
+    rw [List.take_append_of_le_length (by simp; omega)]
+    exact hr
 
 /-! ## The events -/
 
@@ -312,6 +316,9 @@ theorem drawn_of_get! (ws : Array Win) (u : Nat) (d : Array (Nat × Nat)) (h : w
   intro hu
   rw [getElem!_pos ws u hu] at h
   rw [h]; rfl
+
+theorem push_get! (xs : Array Plan) (x : Plan) (i : Nat) (hi : i < xs.size) : (xs.push x)[i]! = xs[i]! := by
+  rw [getElem!_pos (xs.push x) i (by simp; omega), getElem!_pos xs i hi, Array.getElem_push_lt]
 
 /-- A pass of window `f`: its root, plan, step and the session's head pushed. -/
 def addPass (root : ByteArray) (plan : Plan) (post : Nat) (st : Int) (head : Option ByteArray) (w : Win) : Win :=
@@ -398,14 +405,29 @@ theorem invOn_add {P R AC ws filling stp extent appends drawnN head}
       · exact h.reads t (by omega) i (by assumption)
       · exact hplan
     · intro hi; exact h.reads t (by omega) i hi
-  · revert hi
+  · have hsz₀ := h.sizes t (by omega)
+    revert hi
     rw [get t ht]
     split
     · intro hi
       simp only [addPass, Array.getElem_push]
       split
-      · exact h.heads t (by omega) i (by assumption)
-      · exact ⟨appends.size, Nat.le_refl _, by rw [h.chain, Array.extract_size]⟩
+      · rename_i hl
+        obtain ⟨m, hm, e, hr⟩ := h.heads t (by omega) i hl
+        refine ⟨m, hm, e, ?_⟩
+        rw [push_get! _ _ _ (by omega)]
+        exact hr
+      · rename_i hl
+        simp only [addPass, Array.size_push] at hi
+        have hg : (ws[t].plans.push plan)[i]! = plan := by
+          rw [getElem!_pos (ws[t].plans.push plan) i (by simp; omega), Array.getElem_push]
+          split
+          · omega
+          · rfl
+        rw [hg]
+        refine ⟨appends.size, Nat.le_refl _, by rw [h.chain, Array.extract_size], fun p hp => ?_⟩
+        rw [List.take_of_length_le (by simp), ← h.extentSum]
+        exact hplan.1 p hp
     · intro hi; exact h.heads t (by omega) i hi
 
 theorem inv_close {s : State} {t : Int} {now : Nat} {r : Result} {s' : State} (h : Inv s)
@@ -572,7 +594,10 @@ theorem appendsInOrder : AppendsInOrder := by
   rw [← ha]
   omega
 
-theorem passesChained : PassesChained :=
-  fun _ _ _ _ _ _ _ _ hrun => ⟨(inv_run hrun).1.chain, (inv_run hrun).1.heads⟩
+theorem passesChained : PassesChained := by
+  intro params reg coins appendCoins notBeforeNs events rs s hrun
+  obtain ⟨h, -, hr, -⟩ := inv_run hrun
+  rw [← hr]
+  exact ⟨h.chain, h.heads⟩
 
 end Properties.RemoteAudit

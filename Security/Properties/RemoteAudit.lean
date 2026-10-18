@@ -41,7 +41,7 @@ The session (`Session.run` from `State.init`, every event's result `.ok`; the re
 * `PassesReadDistinct`: each pass recorded reads distinct blocks of the store as it stands;
 * `AppendsInOrder`: the appends are the store's next indices in order, append `k` answered with append coin `k`;
 * `PassesChained`: the session's head is the chain over its appends, and each pass's head the chain over a prefix of
-  them, so its seed binds the appends received before it;
+  them, past which its plan reads nothing, so its seed binds every append its plan reads;
 * `ReleasedStayOut`: a block released by an accepted release is read by no pass received after it;
 * `LifetimeCapped`: each append's blocks are read within `lifetime` consecutive windows.
 -/
@@ -197,14 +197,18 @@ def AppendsInOrder : Prop :=
       s.appends.size ≤ appendCoins.size ∧ ∀ k (hk : k < s.appends.size), s.appends[k].coin = appendCoins[k]!
 
 /-- The session's head is the chain over its appends, and every pass is bound to the chain over the appends received
-before it, a prefix of them: so its seed, `seed(challenge, i, chained(previous root, head))`, binds them. -/
+before it, a prefix of them, and reads only registered blocks and theirs: so its seed,
+`seed(challenge, i, chained(previous root, head))`, binds every append its plan reads (no block appended after a
+pass's seed is in its plan). -/
 def PassesChained : Prop :=
   ∀ (params : Session.Params) (reg : Registration) (coins appendCoins : Array ByteArray) (notBeforeNs : Nat)
     (events : Array Session.Event) (rs : Array Session.Result) (s : Session.State),
     Session.run (Session.State.init params reg coins appendCoins notBeforeNs) events = .ok (rs, s) →
       s.head = chainOf s.appends ∧
       ∀ t (ht : t < s.windows.size) i (hi : i < s.windows[t].heads.size),
-        ∃ m, m ≤ s.appends.size ∧ s.windows[t].heads[i] = chainOf (s.appends.extract 0 m)
+        ∃ m, m ≤ s.appends.size ∧ s.windows[t].heads[i] = chainOf (s.appends.extract 0 m) ∧
+          ∀ p, p < s.windows[t].plans[i]!.length →
+            s.windows[t].plans[i]!.block p < reg.blocks + ((s.appends.toList.take m).map (·.count)).sum
 
 /-- A block released by an accepted release is read by no pass received after it: a run to `s₁`, a release of `runs`
 answered `.ok`, and a run on to `s`; every pass `s` records past `s₁`'s (in a later window, or later in its window)
