@@ -193,6 +193,26 @@
     "grade": "measured-small",
     "bears_on": "Gives the comparison scale for the 10-20x autoencoder result.",
     "from_review": "activations"
+   },
+   {
+    "id": "bian-2023-compressing-activations/5",
+    "claim": "In tensor parallelism, the learned linear encoder is applied before the all-reduce, so the partial sums themselves are summed in the compressed space.",
+    "quote": "For AE, we compress the activation before the all-reduce step and invoke the all-reduce function as usual.",
+    "location": "Section 3.2",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "A linear projection commutes with the sum, so a learned bottleneck compresses TP partial sums at the AE's 10-20x without a high-precision reduction step.",
+    "from_review": "activations"
+   },
+   {
+    "id": "bian-2023-compressing-activations/6",
+    "claim": "Compressing the activations of the first layers harms accuracy much more than compressing the last layers.",
+    "quote": "Compressing the activation for the initial layers harms the accuracy of the model.",
+    "location": "Section 4.5, Takeaway 7; Figure 4(b)",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "b_a is not uniform across depth: early-layer boundaries need more bits, so one b_a for every boundary is an average.",
+    "from_review": "activations"
    }
   ]
  },
@@ -460,6 +480,90 @@
   ]
  },
  {
+  "id": "gao-2024-sae-scaling",
+  "title": "Scaling and evaluating sparse autoencoders",
+  "authors": "Leo Gao, Tom Dupré la Tour, Henk Tillman, Gabriel Goh, Rajan Troll, Alec Radford, Ilya Sutskever, Jan Leike, Jeffrey Wu",
+  "year": 2024,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2406.04093",
+  "topics": [
+   "activations"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "gao-2024-sae-scaling/1",
+    "claim": "Splicing a 16M-latent, k=32 sparse autoencoder into GPT-4's residual stream gives the loss of a model trained with about 10% of GPT-4's compute.",
+    "quote": "For example, when our 16 million latent autoencoder is substituted into GPT-4, we get a language modeling loss corresponding to 10% of the pretraining compute of GPT-4.",
+    "location": "Section 4.1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.1,
+      "unit": "fraction of GPT-4 pretraining compute",
+      "condition": "loss-equivalent compute with the 16M-latent TopK SAE spliced into one residual-stream layer"
+     },
+     {
+      "param": "other",
+      "value": 1280,
+      "unit": "bits per token",
+      "condition": "derived: 32 active latents x (24-bit index into 16M + 16-bit value); the code's rate at that loss"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "A sparse code of about 1.3 kbit per token per layer loses most of GPT-4's capability, against a small d_eff for the residual stream.",
+    "from_review": "activations"
+   },
+   {
+    "id": "gao-2024-sae-scaling/2",
+    "claim": "Larger GPT-4-family models need more latents for the same reconstruction error at fixed k=32.",
+    "quote": "Larger subject models in the GPT-4 family require more latents to get to the same MSE (k=32).",
+    "location": "Section 3; Figure 4",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "The feature count needed grows with model size, against a width-independent effective dimension.",
+    "from_review": "activations"
+   }
+  ]
+ },
+ {
+  "id": "hansenpalmus-2024-tp-compression",
+  "title": "Communication Compression for Tensor Parallel LLM Inference",
+  "authors": "Jan Hansen-Palmus, Michael Truong Le, Oliver Hausdörfer, Alok Verma",
+  "year": 2024,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2411.09510",
+  "topics": [
+   "activations"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "hansenpalmus-2024-tp-compression/1",
+    "claim": "Block-scaled FP4/FP5 compression of tensor-parallel partial sums at inference costs 0.5-3.2% perplexity at 4.2-5.2 bits, with larger models more tolerant.",
+    "quote": "We leverage fine grained quantization techniques to compress selected activations by 3.5 - 4.5x.",
+    "location": "abstract; Table 2",
+    "quantities": [
+     {
+      "param": "b_a.activation",
+      "value": 5.2,
+      "unit": "bits per entry",
+      "condition": "TP partial sums before the all-reduce, FP5 E2M2 with an E5M0 scale per 32 (5.2 bits per the authors); inference; Mistral-Large 123B +0.48% Wikitext2 ppl, Llama-3.1-70B +1.68%"
+     },
+     {
+      "param": "b_a.activation",
+      "value": 4.6,
+      "unit": "bits per entry",
+      "condition": "FP4 E2M1 with a scale per 8; Llama-3.1-8B +3.22%, Mistral 22B +1.62%"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Partial sums at about 5 bits cost about 0.5-1.7% at 70-123B inference, with no error feedback.",
+    "from_review": "activations"
+   }
+  ]
+ },
+ {
   "id": "he-2025-tahquant",
   "title": "TAH-Quant: Effective Activation Quantization in Pipeline Parallelism over Slow Network",
   "authors": "Guangxin He, Yuan Cao, Yutong He, Tianyi Bai, Kai Chen, Kun Yuan, et al.",
@@ -546,6 +650,141 @@
     ],
     "grade": "measured-at-scale",
     "bears_on": "Places near-lossless KV at 3 bits.",
+    "from_review": "activations"
+   }
+  ]
+ },
+ {
+  "id": "inclusionai-2025-ling2",
+  "title": "Every Activation Boosted: Scaling General Reasoner to 1 Trillion Open Language Foundation",
+  "authors": "Ling Team (Ang Li, Ben Liu, Binbin Hu, Bing Li, et al.)",
+  "year": 2025,
+  "venue": "arXiv preprint (Ling 2.0 technical report)",
+  "url": "https://arxiv.org/abs/2510.22115",
+  "topics": [
+   "activations",
+   "weights"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "inclusionai-2025-ling2/1",
+    "claim": "Ling-1T (1T total, 51B active) trained with blockwise FP8 (activations and gradients in 1x128 blocks, E4M3 with FP32 scales) stays within 0.25% (average about 0.1%) of a BF16 baseline over 900B tokens.",
+    "quote": "Validated on the Ling-1T model, the proposed FP8 mixed-precision framework maintained numerical stability throughout 900B-token training, with a relative loss difference within 0.25% (averaging around 0.1%) compared to the BF16 baseline.",
+    "location": "Section 5.1",
+    "quantities": [
+     {
+      "param": "b_a.activation",
+      "value": 8.25,
+      "unit": "bits per entry",
+      "condition": "derived: E4M3 + one FP32 scale per 1x128 block (8 + 32/128); activations and activation-gradients in the forward and backward passes of most linear layers; weights 128x128; Ling-1T MoE, BF16 comparison over 900B of its 20T tokens"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "At 1T parameters, 8.25 bits per activation entry forward and backward costs at most 0.25% loss.",
+    "from_review": "activations"
+   }
+  ]
+ },
+ {
+  "id": "janson-2026-mapl",
+  "title": "Learned Subspace Compression for Communication-Efficient Pipeline Parallelism",
+  "authors": "Paul Janson, Edouard Oyallon, Eugene Belilovsky",
+  "year": 2026,
+  "venue": "ICML 2026 Workshop on Connecting Low-rank Representations in AI",
+  "url": "https://arxiv.org/abs/2606.05484",
+  "topics": [
+   "activations"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "janson-2026-mapl/1",
+    "claim": "Learned per-stage Stiefel projections of the inter-stage activations and gradients at 8x cost 1.4-2.0% loss at 1B on 20 tokens per parameter.",
+    "quote": "Scaling to 500M parameters under 6× compression, MAPL tracks the baseline within 1.90% (P=4) and 0.08% (P=8); at 1B under 8× compression, it holds losses of 2.72 and 2.73, degrading by only 1.38% and 2.02% respectively.",
+    "location": "Section 4.2; Table 1",
+    "quantities": [
+     {
+      "param": "b_a.activation",
+      "value": 2,
+      "unit": "bits per original 16-bit entry",
+      "condition": "derived: 16 bits / 8x; forward activations and backward gradients at every pipeline boundary through the same orthonormal projector; 1B LLaMA-style, Muon, ~20B tokens, P=4 / P=8: +1.38% / +2.02% loss"
+     },
+     {
+      "param": "activation.compression_ratio",
+      "value": 8,
+      "unit": "x",
+      "condition": "same runs"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "The best matched-token pipeline-boundary result near 1B: about 2 bits per original entry at a 1.4-2% loss, using a projector both ends hold.",
+    "from_review": "activations"
+   },
+   {
+    "id": "janson-2026-mapl/2",
+    "claim": "Adding residual vector quantization on the projected activations doubles the ratio to 16x at 2.3-3.0% loss at 1B.",
+    "quote": "At 1B parameters, MAPL+VQ achieves 16× inter-stage compression at 3.01% (P=4) and 2.30% (P=8) degradation.",
+    "location": "Section 4.2",
+    "quantities": [
+     {
+      "param": "b_a.activation",
+      "value": 1,
+      "unit": "bits per original 16-bit entry",
+      "condition": "derived: 16 bits / 16x; residual VQ with per-stage codebooks synchronized by streaming (codebook state held by both ends); 1B, ~20B tokens"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "The lowest published pipeline-boundary rate at 1B: about 1 bit per original entry at a 2-3% loss.",
+    "from_review": "activations"
+   },
+   {
+    "id": "janson-2026-mapl/3",
+    "claim": "The Pluralis subspace-network method (SSN), replicated at 8x and matched tokens, loses about 14-15% in loss at 1B (26% with AdamW) and up to 8.8 points in downstream accuracy.",
+    "quote": "SSN baselines, by contrast, suffer accuracy drops as large as 8.8 points at 1B.",
+    "location": "Section 4.2; Table 1",
+    "quantities": [
+     {
+      "param": "b_a.activation",
+      "value": 2,
+      "unit": "bits per original 16-bit entry",
+      "condition": "derived: 16 bits / 8x; SSN (Ramasinghe et al. 2025) at 1B, ~20B tokens; loss +13.93% (P=4) / +15.05% (P=8), +26.3% for the AdamW version (Table 1)"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Negative replication: the same 8x rate that costs 1.4-2% with learned per-stage projectors costs about 14% with a fixed global subspace, so the method matters as much as the rate.",
+    "from_review": "activations"
+   }
+  ]
+ },
+ {
+  "id": "jin-2025-megascale-moe",
+  "title": "MegaScale-MoE: Large-Scale Communication-Efficient Training of Mixture-of-Experts Models in Production",
+  "authors": "Chao Jin, Ziheng Jiang, Zhihao Bai, Zheng Zhong, Juncai Liu, Xiang Li, Ningxin Zheng, Xi Wang, et al.",
+  "year": 2025,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2505.11432",
+  "topics": [
+   "activations",
+   "gradients"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "jin-2025-megascale-moe/1",
+    "claim": "In production FP8 MoE training the forward TP reduce-scatter of partial sums becomes an FP8 all-to-all with FP32 reduction; plain precision reduction misaligned the loss, which per-token (forward) and per-channel, 128-grouped (backward) scales fixed.",
+    "quote": "Similar to DP reduce-scatter compression, we replace BF16 TP reduce-scatter with FP8 all-to-all in forward propagation and perform reduction in FP32 precision. In the corresponding backward propagation, we apply FP8 all-gather for gradients. Notably, simply reducing precision leads to loss misalignment with BF16 training. To mitigate this, we apply per-token activation quantization for forward communication and per-channel quantization for backward communication.",
+    "location": "Section 5",
+    "quantities": [
+     {
+      "param": "b_a.activation",
+      "value": 8,
+      "unit": "bits per entry",
+      "condition": "forward TP partial sums E4M3 with a per-token scale, sent by all-to-all and summed in FP32; backward activation-gradients E4M3 per-channel in 128-token groups; FP8 and BF16 loss consistent for a 35B MoE from scratch and a 176B MoE continued (Figure 19); gap and tokens not reported"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "8-bit TP partial sums work at production scale only when the sum is taken in high precision after transport; a naive low-precision reduction does not.",
     "from_review": "activations"
    }
   ]
@@ -688,6 +927,74 @@
     "bears_on": "Novel, incompressible information enters as easily as text through vector inputs: the adversary's channel.",
     "from_review": "tokens",
     "audit": "2026-10-17 sample audit: quote yes, claim yes, quantities yes"
+   }
+  ]
+ },
+ {
+  "id": "lee-2024-compositionality-geometry",
+  "title": "Geometric Signatures of Compositionality Across a Language Model's Lifetime",
+  "authors": "Jin Hwa Lee, Thomas Jiralerspong, Lei Yu, Yoshua Bengio, Emily Cheng",
+  "year": 2024,
+  "venue": "ACL 2025",
+  "url": "https://arxiv.org/abs/2410.01444",
+  "topics": [
+   "activations"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "lee-2024-compositionality-geometry/1",
+    "claim": "On The Pile, the linear (PCA, 99% variance) dimension of Pythia's representations grows almost one-for-one with width (slope 0.81), while the nonlinear TwoNN intrinsic dimension barely moves (slope 0.002).",
+    "quote": "Here, Figure H.1 and Table H.1 similarly show that d∝D with a highly significant linear fit; a large effect α=0.81 indicates the LM fills the ambient space such that d≈D. For The Pile, Id∝D (R=0.95, p<0.001) as well, but the tiny effect α=0.002 shows Id is stable as D grows, see Figure H.1 (left).",
+    "location": "Appendix H; Table H.1",
+    "quantities": [
+     {
+      "param": "activation.intrinsic_dim",
+      "value": 0.81,
+      "unit": "fraction of d_model (slope)",
+      "condition": "linear d: PCA at 99% variance, layer-averaged, regressed on hidden size D over Pythia 14m-6.9b on The Pile, R=0.999"
+     },
+     {
+      "param": "activation.intrinsic_dim",
+      "value": 0.002,
+      "unit": "fraction of d_model (slope)",
+      "condition": "nonlinear TwoNN Id regressed on D, same models; Id is O(10)"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Linear d_eff tracks width (d about 0.8 D), so linear compression of the residual stream does not get relatively easier as models widen; only a nonlinear code could exploit Id = O(10).",
+    "from_review": "activations"
+   }
+  ]
+ },
+ {
+  "id": "li-2024-flashcomm",
+  "title": "Flash Communication: Reducing Tensor Parallelization Bottleneck for Fast Large Language Model Inference",
+  "authors": "Qingyuan Li, Bo Zhang, Liang Ye, Yifan Zhang, Wei Wu, Yerui Sun, Lin Ma, Yuchen Xie",
+  "year": 2024,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2412.04964",
+  "topics": [
+   "activations"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "li-2024-flashcomm/1",
+    "claim": "In a two-step TP all-reduce at inference, the partial sums of the reduce step tolerate INT4 while the all-gather of the summed activations needs INT8.",
+    "quote": "Given that quantization prior to All-Gather leads to greater loss, as illustrated in Figure 5 (left), we opt for an INT8 bit-width for All-Gather operations and maintain INT4 for ReduceSum, effectively creating an INT6 solution.",
+    "location": "Section 3.2.3; Table 2",
+    "quantities": [
+     {
+      "param": "b_a.activation",
+      "value": 4,
+      "unit": "bits per entry",
+      "condition": "INT4 asymmetric with fine-grained group scales for the partial sums of the ReduceSum step, INT8 for the All-Gather; inference; LLaMA-3-70B avg accuracy 80.00 (FP16) -> 79.29 (INT6) -> 78.29 (INT4 throughout)"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Partial sums take fewer bits than the activation they sum to, which bears on whether b_a for partial sums should equal b_a for activations.",
+    "from_review": "activations"
    }
   ]
  },
@@ -879,6 +1186,54 @@
   ]
  },
  {
+  "id": "liu-2026-taco",
+  "title": "TACO: Efficient Communication Compression of Intermediate Tensors for Scalable Tensor-Parallel LLM Training",
+  "authors": "Man Liu, Xingchen Liu, Xingjian Tian, Bing Lu, Shengkay Lyu, Shengquan Yin, Wenjing Huang, Zheng Wei, Hairui Zhao, Guangming Tan, Dingwen Tao",
+  "year": 2026,
+  "venue": "HPDC 2026",
+  "url": "https://arxiv.org/abs/2604.24088",
+  "topics": [
+   "activations"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "liu-2026-taco/1",
+    "claim": "FP8 compression of tensor-parallel intermediate tensors, after a per-block RMS rescale and Hadamard rotation with two scales per 256-entry block, costs +0.70% validation loss on GPT-6.7B and +0.03% on Qwen2.5-7B.",
+    "quote": "For GPT 6.7B, TACO achieves a final validation loss of 2.570587, compared to 2.552718 for baseline, corresponding to a marginal degradation of +0.70%. Similarly, on Qwen-2.5 7B, TACO reaches a loss of 2.257332 versus 2.256751 for the baseline, resulting in an extremely small degradation of +0.03%.",
+    "location": "Section 5.2.3",
+    "quantities": [
+     {
+      "param": "b_a.activation",
+      "value": 8.25,
+      "unit": "bits per entry",
+      "condition": "derived: FP8 E4M3 + 2 scalars per 256-entry block, assumed FP32 (8 + 64/256); TP intermediate tensors (activations forward, activation-gradients backward), TP4; GPT-6.7B on the Pile +0.70%, Qwen2.5-7B +0.03%; 10,000-iteration runs, tokens not stated"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "TP boundary tensors at about 8.25 bits cost under 1% at 7B, but only after conditioning; short runs.",
+    "from_review": "activations"
+   },
+   {
+    "id": "liu-2026-taco/2",
+    "claim": "Standard per-tensor FP8 on TP intermediate tensors diverges (validation loss 5.61 vs 2.39 BF16), INT8 after the transform diverges, E5M2 costs 24.1%, and TAH-Quant costs 2.88%.",
+    "quote": "The empirical evidence reveals that naively applying standard NVFP8 compression to TP intermediate tensors leads to immediate and catastrophic divergence, with the validation loss spiking to 5.605692.",
+    "location": "Section 5.2.2; Sections 5.2.1 and 5.3.2",
+    "quantities": [
+     {
+      "param": "b_a.activation",
+      "value": 8,
+      "unit": "bits per entry",
+      "condition": "per-tensor FP8 on TP intermediate tensors, GPT-350M TP4, 10,000 iterations: val loss 5.61 vs BF16 2.39; ASH+INT8 reaches 68.1; ASH+E5M2 3.31 (+24.1%); TAH-Quant +2.88%"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Negative results: 8 bits per TP entry is not automatically safe; the format and conditioning decide it.",
+    "from_review": "activations"
+   }
+  ]
+ },
+ {
   "id": "micikevicius-2022-fp8",
   "title": "FP8 Formats for Deep Learning",
   "authors": "Paulius Micikevicius, Dusan Stosic, Neil Burgess, Marius Cornea, Pradeep Dubey, Richard Grisenthwaite et al.",
@@ -900,6 +1255,93 @@
     "grade": "measured-at-scale",
     "bears_on": "8-bit activations and weights in matmuls at m_A about 1 per FLOP.",
     "from_review": "scaling-corpus"
+   }
+  ]
+ },
+ {
+  "id": "nvidia-2025-nemotron-h",
+  "title": "Nemotron-H: A Family of Accurate and Efficient Hybrid Mamba-Transformer Models",
+  "authors": "NVIDIA (Aaron Blakeman, Aarti Basant, Abhinav Khattar, Adithya Renduchintala, et al.)",
+  "year": 2025,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2504.03624",
+  "topics": [
+   "activations",
+   "weights"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "nvidia-2025-nemotron-h/1",
+    "claim": "Nemotron-H-56B was pretrained on 20T tokens with FP8 per-tensor current scaling in the forward and backward passes of the linear layers: E4M3 for weights and activations, E5M2 for gradients, with the first and last 4 layers in BF16.",
+    "quote": "We quantized both the forward and backward passes of the linear layers. As in Micikevicius et al. (2022), we use a hybrid FP8 approach which uses E4M3 for weight and activation tensors, and E5M2 for the gradient tensors.",
+    "location": "Section 2.3",
+    "quantities": [
+     {
+      "param": "b_a.activation",
+      "value": 8,
+      "unit": "bits per entry",
+      "condition": "forward activations E4M3, one FP32 scale per tensor (negligible); first 4 and last 4 layers BF16; Nemotron-H-56B / 20T tokens; typical relative loss gap <0.1% vs BF16 (finding /2)"
+     },
+     {
+      "param": "b_a.activation",
+      "value": 8,
+      "unit": "bits per entry",
+      "condition": "backward activation-gradients E5M2, per-tensor scale; same run"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "The largest published low-precision pretraining: 8 bits per activation and activation-gradient entry with a per-tensor scale, at 56B parameters and 20T tokens.",
+    "from_review": "activations"
+   },
+   {
+    "id": "nvidia-2025-nemotron-h/2",
+    "claim": "FP8 loss runs above BF16 by typically under 0.1%, but the gap widens in the last quarter of training; downstream scores were equal or better.",
+    "quote": "We observed that the log-likelihood loss curves for FP8 pre-training experiments were almost always higher than for their BF16 counterparts, but by a surprisingly small amount, with typical relative gaps less than 0.1% on both training and validation. This loss gap tended to decrease as training progressed but then widened in the last quarter of training.",
+    "location": "Section 2.3; Figure 5",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.001,
+      "unit": "relative loss gap vs BF16",
+      "condition": "upper value of the typical gap; Figure 5 pair: 8B Transformer, 3T tokens, BF16 vs FP8"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "The 8-bit penalty is about 0.1% and not monotone in tokens; the authors add that FP8 recipes had to be validated on at least 8B parameters because smaller-model results did not generalize (Section 2.3).",
+    "from_review": "activations"
+   }
+  ]
+ },
+ {
+  "id": "obeidi-2026-heterogeneous",
+  "title": "Heterogeneous Low-Bandwidth Pre-Training of LLMs",
+  "authors": "Yazan Obeidi, Amir Sarfi, Joel Lidin, Paul Janson, Eugene Belilovsky",
+  "year": 2026,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2601.02360",
+  "topics": [
+   "activations",
+   "gradients"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "obeidi-2026-heterogeneous/1",
+    "claim": "Subspace compression of pipeline activations and activation-gradients at 87.5% (8x), combined with SparseLoCo data parallelism, costs 5.9% loss at 1B on 10B tokens.",
+    "quote": "Table 6 confirms that PP-compression remains effective at the 1B scale, with 87.5% compression yielding a loss of 2.910 compared to the baseline 2.747—a degradation consistent with smaller model scales.",
+    "location": "Appendix A (Scaling to 1B parameters); Table 6",
+    "quantities": [
+     {
+      "param": "b_a.activation",
+      "value": 2,
+      "unit": "bits per original 16-bit entry",
+      "condition": "derived: 16 bits x (1 - 0.875); SSN-style orthonormal subspace in both directions; 1B, DCLM, sequence 1024, 10B tokens with SparseLoCo; loss 2.910 vs 2.747 (derived +5.9%)"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "An independent 8x pipeline-boundary point at 1B with a larger penalty (about 6%).",
+    "from_review": "activations"
    }
   ]
  },
@@ -1057,6 +1499,44 @@
   ]
  },
  {
+  "id": "rudakov-2024-mp-compression",
+  "title": "Activations and Gradients Compression for Model-Parallel Training",
+  "authors": "Mikhail Rudakov, Aleksandr Beznosikov, Yaroslav Kholodov, Alexander Gasnikov",
+  "year": 2024,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2401.07788",
+  "topics": [
+   "activations",
+   "gradients"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "rudakov-2024-mp-compression/1",
+    "claim": "In model-parallel training, boundary activations tolerate 2-4 bit quantization but activation-gradients need at least 6 bits for uncompressed-level accuracy.",
+    "quote": "Test accuracy comparable to uncompressed scenario is achieved only when gradients are quantized to at least 6 bits, while activations may be quantized to 2 or 4 bits.",
+    "location": "Section 3.1 (Quantization); Table 1",
+    "quantities": [
+     {
+      "param": "b_a.activation",
+      "value": 4,
+      "unit": "bits per entry",
+      "condition": "forward boundary activations (2 bits also comparable); ResNet18 on CIFAR-10; compression must stay on at inference"
+     },
+     {
+      "param": "b_a.activation",
+      "value": 6,
+      "unit": "bits per entry",
+      "condition": "backward boundary activation-gradients, minimum for comparable accuracy; same setup"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Backward b_a needs more bits than forward, consistent with TAH-Quant; small-scale only.",
+    "from_review": "activations"
+   }
+  ]
+ },
+ {
   "id": "ryabinin-2023-swarm",
   "title": "SWARM Parallelism: Training Large Models Can Be Surprisingly Communication-Efficient",
   "authors": "Max Ryabinin, Tim Dettmers, Michael Diskin, Alexander Borzunov",
@@ -1188,6 +1668,55 @@
     "quantities": [],
     "grade": "measured-at-scale",
     "bears_on": "Supports encoding these few entries as constants, which lowers effective b_a.",
+    "from_review": "activations"
+   }
+  ]
+ },
+ {
+  "id": "tseng-2025-mxfp4-training",
+  "title": "Training LLMs with MXFP4",
+  "authors": "Albert Tseng, Tao Yu, Youngsuk Park",
+  "year": 2025,
+  "venue": "AISTATS 2025",
+  "url": "https://arxiv.org/abs/2502.20586",
+  "topics": [
+   "activations",
+   "gradients"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "tseng-2025-mxfp4-training/1",
+    "claim": "MXFP4 on every backward-pass GEMM input of the decoder linear layers (including the activation-gradients), made unbiased with stochastic rounding and a random Hadamard transform, matches BF16 validation loss at 1.3B on 210B tokens and at 6.7B on 21B tokens. The forward pass stays BF16.",
+    "quote": "Pretrain GPT models up to 6.7B and show that our training recipe closes the MXFP4-BF16 gap to <0.1 validation perplexity.",
+    "location": "Section 1 (contributions); Table 2",
+    "quantities": [
+     {
+      "param": "b_a.activation",
+      "value": 4.25,
+      "unit": "bits per entry",
+      "condition": "derived: FP4 E2M1 + one 8-bit scale per 32 (4 + 8/32); backward GEMM inputs (dL/dy, weights, saved activations) with RHT + stochastic rounding; forward BF16; GPT 1.3B / 210B tokens val loss 2.29 vs BF16 2.29, 6.7B / 21B tokens 2.27 vs 2.27 (Table 2); GEMM-input precision, the transmitted tensors stay BF16"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Backward-pass b_a can be about 4.25 bits at no measurable loss at 1.3B/210B, but only with unbiased rounding, and the forward pass was not quantized.",
+    "from_review": "activations"
+   },
+   {
+    "id": "tseng-2025-mxfp4-training/2",
+    "claim": "Without stochastic rounding or the Hadamard transform, MXFP4 in only the backward pass raises GPT 1.3B validation loss from 2.32 to 2.40 on 42B tokens.",
+    "quote": "As we show in Section 4, directly using MXFP4 in even only the backward pass of decoder linear layers significantly degrades model quality.",
+    "location": "Section 1; Table 2",
+    "quantities": [
+     {
+      "param": "b_a.activation",
+      "value": 4.25,
+      "unit": "bits per entry",
+      "condition": "naive round-to-nearest MXFP4 backward, forward BF16; GPT 1.3B / 42B tokens val loss 2.40 vs 2.32 (derived +3.4%); 345M / 33B 2.60 vs 2.49 (Table 2)"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Negative result: biased 4-bit backward rounding costs about 3% loss, so 4.25 bits backward needs unbiased estimators.",
     "from_review": "activations"
    }
   ]
@@ -1435,6 +1964,54 @@
     ],
     "grade": "measured-at-scale",
     "bears_on": "Confirms 8-bit activations are routine in inference at the largest scales; does not lower b_a below 8.",
+    "from_review": "activations"
+   }
+  ]
+ },
+ {
+  "id": "xie-2026-echo",
+  "title": "Echo: Error-Compensated 4-Bit Tensor-Parallel Communication for LLM Training and Inference",
+  "authors": "Xingyu Xie, Xiaoyong Xie, Zhouchen Lin, Kim-Chuan Toh",
+  "year": 2026,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2610.14277",
+  "topics": [
+   "activations"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "xie-2026-echo/1",
+    "claim": "A 4-bit tensor-parallel all-reduce with error feedback and high-precision summation, used at every forward and backward TP site, ends 10B-token Qwen3-0.6B pretraining 0.9% above 16-bit loss, with a slightly higher learning rate.",
+    "quote": "Over the last 100 steps (tail-100), the 4-bit loss averages 3.225 and the 16-bit loss 3.197, a gap of 0.027 computed before rounding, less than 0.9% of the 16-bit loss.",
+    "location": "Section 7.3; Table 7; Appendix B",
+    "quantities": [
+     {
+      "param": "b_a.activation",
+      "value": 4.25,
+      "unit": "bits per entry",
+      "condition": "derived: 68 bytes per group of 128 (4-bit values + two half-precision parameters) = 4.25 bits; TP partial sums at every forward and backward all-reduce site; two-timescale error-feedback state per site; owner sums in high precision; Qwen3-0.6B (d=1024) TP4, 10B tokens; 4-bit peak LR 3.5e-4 vs 3.0e-4; tail loss 3.225 vs 3.197"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "The only published 4-bit TP partial-sum pretraining: 4.25 bits at a 0.9% loss, small model, with error-feedback state at each site.",
+    "from_review": "activations"
+   },
+   {
+    "id": "xie-2026-echo/2",
+    "claim": "At inference the compensated 4-bit TP all-reduce raises Llama-3-8B perplexity by 0.29; uncompensated it raises it by 0.66, and 8 bits leaves it unchanged.",
+    "quote": "4-bit path raises perplexity by 0.29 on Llama-3-8B (6.07 to 6.36) and by 0.10 on Qwen3-8B (9.70 to 9.80), and the 8-bit path leaves it unchanged.",
+    "location": "Section 7.2; Table 5",
+    "quantities": [
+     {
+      "param": "b_a.activation",
+      "value": 4.25,
+      "unit": "bits per entry",
+      "condition": "TP all-reduce partial sums at inference, with compensator; Llama-3-8B WikiText ppl 6.07 -> 6.36; without compensation 6.73; Qwen3-8B 9.70 -> 9.80 (10.45 uncompensated)"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Error feedback halves the 4-bit partial-sum penalty; 8-bit partial sums are lossless at 8B inference.",
     "from_review": "activations"
    }
   ]

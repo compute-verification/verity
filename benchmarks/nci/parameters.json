@@ -302,12 +302,12 @@
   "estimates": [
    {
     "id": "b_a.activation/boundary-training",
-    "context": "residual-stream activations sent between pipeline stages in training",
-    "low": 2,
+    "context": "residual-stream activations sent between pipeline stages in training; bits per original d_model entry (activation.boundary_bits / d_model), a learned bottleneck folded in",
+    "low": 1,
     "central": 4,
     "high": 8,
-    "confidence": "medium",
-    "merge": "High: production systems send 8-bit activations across parallel links (DeepSeek-V3 FP8 dispatch at d = 7168, SWARM, Petals). Central: TAH-Quant, the one direct boundary test in training, is stable only from about 4.4 bits (80% INT4, scales included), at 3B or less; 4-bit residuals at 7B or more are untested. Low: AQ-SGD's 2-3 bits, which delta-codes against per-example buffers in fine-tuning. Backward traffic needs about 2x the forward bits.",
+    "confidence": "low",
+    "merge": "High: production systems send 8-bit activations across parallel links (DeepSeek-V3 FP8 dispatch at d = 7168, SWARM, Petals); Megatron pipelines send BF16. Central: TAH-Quant, stable from about 4.4 bits at 3B or less, the largest matched-loss boundary test. Learned per-stage Stiefel projections reach 8x (2 bits per original entry) at 1B on 20 tokens per parameter for +1.4-2.0% loss, but a fixed random subspace at 8x costs 5.9% and the Subspace Networks recipe 14-26%, so 2 bits is method-specific and lossy. Low: MAPL with residual VQ at 16x, about 1 bit per original entry, +2.3-3.0% at 1B, with projectors and codebooks held by both stages; Subspace Networks' 100x (0.16 bits) at 8B is set aside because a matched-token replication of its method loses 14-26% at only 8x. Negative: Optimus-CC's forward inter-stage compression diverged even at low rates; no sub-8-bit forward boundary result exists above 3B, so at scale 8 bits is what is defensible and 4 is a small-model figure. Backward traffic needs about 1.5-2x the forward bits under quantization (AQ-SGD, TAH-Quant, Rudakov); early-layer boundaries need more than late ones (Bian).",
     "evidence": [
      "deepseekai-2024-deepseek-v3/3",
      "ryabinin-2023-swarm/1",
@@ -315,7 +315,81 @@
      "he-2025-tahquant/1",
      "nvidia-2025-nvfp4/3",
      "wang-2024-bitnet-a48/1",
-     "wang-2022-aqsgd/1"
+     "wang-2022-aqsgd/1",
+     "janson-2026-mapl/1",
+     "janson-2026-mapl/2",
+     "janson-2026-mapl/3",
+     "obeidi-2026-heterogeneous/1",
+     "ramasinghe-2025-protocolmodels/5",
+     "rudakov-2024-mp-compression/1",
+     "bian-2023-compressing-activations/6"
+    ]
+   },
+   {
+    "id": "b_a.activation/pretraining-forward",
+    "context": "forward activations at linear-layer GEMM inputs in pretraining, scales included (not the tensors sent between blocks)",
+    "low": 4,
+    "central": 4.5,
+    "high": 8.25,
+    "confidence": "medium",
+    "merge": "Central: NVFP4 (E2M1 plus an E4M3 scale per 16) on Fprop inputs ends 1.5% above FP8 at 12B on 10T tokens and within 0.4% of BF16 branches at 550B total / 55B active on 20T, with 15-16% of layers kept in BF16 in both (derived average about 6.2 bits including them). Low: FP4 with one scale per token costs 4.8% at 7-13B on 100B tokens and needs a 0.2-6% high-precision outlier side channel; MXFP4 (4.25) is 2.5% worse than FP8 at 12B. High: FP8 practice, 8 bits per-tensor (Nemotron-H 56B / 20T, under 0.1%) to 8.25 with 1x128 scales (DeepSeek-V3 671B / 14.8T and Ling-1T / 900B, under 0.25%). Conflict: NVIDIA's 4-bit gap shrinks with scale (1% at 3B active, 0.6% at 8B, 0.4% at 55B) while QAT laws and Wang's 1.3B-13B runs find it grows with tokens per parameter; we take the at-scale runs.",
+    "evidence": [
+     "nvidia-2025-nvfp4/3",
+     "nvidia-2025-nvfp4/7",
+     "nvidia-2026-nemotron3-ultra/2",
+     "nvidia-2026-nemotron3-super/1",
+     "nvidia-2025-nemotron3-whitepaper/1",
+     "wang-2025-fp4-training/1",
+     "wang-2025-fp4-training/3",
+     "chen-2025-qat-scaling-law/1",
+     "nvidia-2025-nemotron-h/1",
+     "nvidia-2025-nemotron-h/2",
+     "inclusionai-2025-ling2/1",
+     "deepseekai-2024-deepseek-v3/1",
+     "deepseekai-2024-deepseek-v3/7"
+    ]
+   },
+   {
+    "id": "b_a.activation/pretraining-backward",
+    "context": "activation-gradients at backward GEMM inputs (Dgrad and Wgrad) in pretraining, scales included",
+    "low": 4.25,
+    "central": 4.5,
+    "high": 8,
+    "confidence": "medium",
+    "merge": "Central: NVFP4 activation-gradients with stochastic rounding (and 16x16 Hadamard transforms on Wgrad inputs) at 12B / 10T, and NVFP4 Dgrad and Wgrad in Nemotron 3 Ultra at 550B / 20T. Low: MXFP4 with a random Hadamard transform and stochastic rounding matches BF16 at 1.3B / 210B tokens, with a BF16 forward. High: E5M2 per-tensor at 56B / 20T (Nemotron-H); E4M3 with 1x128 scales is 8.25 (DeepSeek-V3, Ling-1T). The bits equal the forward pass's only with unbiased rounding: round-to-nearest MXFP4 backward costs 3.4% at 1.3B. Conflict: on links between blocks, where nothing is rounded stochastically, gradients need about 1.5-2x the forward bits (Rudakov 6 vs 2-4, TAH-Quant 6-8 vs 4.4), while Optimus-CC's low-rank code finds the reverse (forward diverged; backward 10x lossless on epilogue micro-batches at 8.3B). This estimate takes the GEMM-input runs.",
+    "evidence": [
+     "tseng-2025-mxfp4-training/1",
+     "tseng-2025-mxfp4-training/2",
+     "nvidia-2025-nvfp4/3",
+     "nvidia-2025-nvfp4/9",
+     "nvidia-2026-nemotron3-ultra/1",
+     "nvidia-2025-nemotron-h/1",
+     "inclusionai-2025-ling2/1",
+     "rudakov-2024-mp-compression/1",
+     "he-2025-tahquant/3"
+    ]
+   },
+   {
+    "id": "b_a.activation/tp-partial-sums-training",
+    "context": "tensor-parallel partial sums in reduce-scatter or all-reduce, forward and backward, in pretraining; bits per entry at full shard width, scales included, a learned bottleneck folded in",
+    "low": 1.6,
+    "central": 8.25,
+    "high": 16,
+    "confidence": "low",
+    "merge": "Central: FP8 with two scales per 256-entry block after an RMS rescale and Hadamard rotation costs +0.70% at GPT-6.7B and +0.03% at Qwen2.5-7B in 10,000-iteration runs (TACO); MegaScale-MoE sends forward partial sums as per-token FP8 and sums them in FP32 at 35B-176B MoE, gap unquantified. High: practice keeps forward partial sums in BF16 (FP8-LM's forward reduce-scatter, DeepSeek-V3's combine, NVFP4's communication). Low: a learned linear encoder before the all-reduce sums partial sums at 100 of 1024 dims (derived 1.6 bits per original entry) in BERT-Large 345M, last layers only, within about 3% on most tasks; the lowest quantizer is Echo's 4.25 bits with error feedback, high-precision summation and a raised LR, +0.9% at 0.6B / 10B tokens. Negative: per-tensor FP8 and INT8 diverge on TP tensors and E5M2 costs 24% (TACO); every working scheme dequantizes before summing (MegaScale-MoE, ZeRO++). Inference partial sums take 5.2 bits at 70-123B for +0.5-1.7% and INT4 in the reduce step (FlashComm).",
+    "evidence": [
+     "liu-2026-taco/1",
+     "liu-2026-taco/2",
+     "jin-2025-megascale-moe/1",
+     "xie-2026-echo/1",
+     "xie-2026-echo/2",
+     "bian-2023-compressing-activations/2",
+     "bian-2023-compressing-activations/5",
+     "hansenpalmus-2024-tp-compression/1",
+     "li-2024-flashcomm/1",
+     "nvidia-2025-nvfp4/5",
+     "deepseekai-2024-deepseek-v3/3",
+     "wang-2023-zeropp/3"
     ]
    }
   ]

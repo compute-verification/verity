@@ -663,6 +663,23 @@
     "grade": "measured-at-scale",
     "bears_on": "Best frontier anchor: entropy-coding against a committed 400B-class model gives b_tok ~2.1-2.2 bits/token, ~8x below raw.",
     "from_review": "tokens"
+   },
+   {
+    "id": "deepseekai-2024-deepseek-v3/7",
+    "claim": "DeepSeek-V3's FP8 training scales activations per token per 128 channels (1x128 tiles) and weights per 128x128 block, with E4M3 on all tensors, activation-gradients included.",
+    "quote": "As illustrated in Figure 7 (a), (1) for activations, we group and scale elements on a 1x128 tile basis (i.e., per token per 128 channels); and (2) for weights, we group and scale elements on a 128x128 block basis (i.e., per 128 input channels per 128 output channels).",
+    "location": "Section 3.3.2; Figure 7(a)",
+    "quantities": [
+     {
+      "param": "b_a.activation",
+      "value": 8.25,
+      "unit": "bits per entry",
+      "condition": "derived: E4M3 + one FP32 scale per 1x128 tile (8 + 32/128); activations forward and activation-gradients backward (E4M3 on all tensors, Section 3.3.2); 671B MoE, 14.8T tokens; <0.25% loss vs BF16 (finding /1)"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Fixes the rate behind deepseekai-2024-deepseek-v3/1: 8.25 bits per activation entry, forward and backward.",
+    "from_review": "activations"
    }
   ]
  },
@@ -1961,6 +1978,23 @@
     ],
     "grade": "measured-at-scale",
     "bears_on": "The weight entries an NVFP4 matmul reads carry 4.03 bits, not 4.5; b_a for activations and gradients stays at 4.5."
+   },
+   {
+    "id": "nvidia-2025-nvfp4/9",
+    "claim": "NVFP4 pretraining rounds gradients stochastically and weights and activations to nearest, and applies 16x16 random Hadamard transforms to the inputs of the weight-gradient GEMMs only.",
+    "quote": "Use stochastic rounding for gradients and round-to-nearest-even for weights and activations.",
+    "location": "Section 4 (recipe item 4; item 2 applies Random Hadamard transforms of size 16x16 to weight-gradient GEMM inputs)",
+    "quantities": [
+     {
+      "param": "b_a.activation",
+      "value": 4.5,
+      "unit": "bits per entry",
+      "condition": "derived: NVFP4 1x16 blocks (4 + 8/16) for activations (round-to-nearest) and activation-gradients (stochastic rounding); 12B, 10T tokens"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "The 4.5-bit backward rate depends on unbiased rounding, as in tseng-2025-mxfp4-training/2.",
+    "from_review": "activations"
    }
   ]
  },
@@ -2821,6 +2855,23 @@
     ],
     "grade": "measured-small",
     "bears_on": "b_w can sit below b_a at equal loss: the 4-bit penalty is mostly in activations."
+   },
+   {
+    "id": "wang-2025-fp4-training/3",
+    "claim": "Casting activations directly to FP4 diverges; training is stable only with outlier clamping plus a high-precision sparse compensation matrix holding 0.2-6% of the entries.",
+    "quote": "Figure 6(c) reveals that directly quantizing activations in FP4 results in curve divergence, where the loss values turn into NaN (Not a Number) after certain training steps. Outlier clamping and compensation effectively reduces this loss gap, ensuring a good convergence. This experiment re-emphasizes the importance of appropriate treatment of outliers in the absmax quantization framework. For the hyperparameter α in this method, a smaller α implies a stronger compensation, but at an increased computational cost. Figure 6(c) shows the model loss under three settings α=0.999,0.99,0.97, corresponding to the non-zero elements of the sparse compensation matrix of 0.2%,2% and 6%, respectively.",
+    "location": "Section 4.3 (ablation, Figure 6(c)); Section 3.2",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.02,
+      "unit": "fraction of activation entries sent in high precision",
+      "condition": "alpha = 0.99 clamping quantile, the authors' chosen setting; 0.2% at 0.999, 6% at 0.97; LLaMA 1.3B"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "The 4-bit figure needs a side channel: 2% of entries at 16 bits plus an index adds roughly 0.5-1 bit per entry (derived), so the real forward rate is nearer 5 bits.",
+    "from_review": "activations"
    }
   ]
  },
@@ -2948,6 +2999,40 @@
     "quantities": [],
     "grade": "measured-small",
     "bears_on": "Low-bit weight reads need per-block scales; their overhead belongs in b_w."
+   },
+   {
+    "id": "wang-2023-zeropp/3",
+    "claim": "Quantizing gradients inside a reduce-scatter hurts accuracy even with block scaling, because summing low-precision values accumulates the error; ZeRO++ sends INT4 blocks and dequantizes before reducing.",
+    "quote": "The main issue is, even by incorporating block-based quantization to reduce-scatter operation, it will still significantly hurt model training accuracy. The key reason behind is quantization will decrease value precision. And reduction on low-precision values will accumulate and amplify the errors. Therefore, we propose a novel and much more efficient gradient communication paradigm as a general replacement of reduce-scatter collective, where the gradients are compressed using block-based INT4 quantization during the communication to reduce the communication volume, but the full precision is recovered before the reduction operator to preserve training accuracy.",
+    "location": "Section 1 (qgZ)",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 4,
+      "unit": "bits per gradient entry in transport",
+      "condition": "block-based INT4 data-parallel gradient reduce-scatter (all-to-all), FP16 restored before each reduction; weights and gradients, not activations"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "The rule that transport can be low-precision but the reduction cannot is the same one TP partial-sum compression follows (MegaScale-MoE, Echo).",
+    "from_review": "activations"
+   },
+   {
+    "id": "wang-2023-zeropp/4",
+    "claim": "INT4 gradient transport (qgZ) raises GPT-350M final loss from 2.1218 to 2.1656; INT8 weight communication alone is lossless; non-blocked quantization diverged.",
+    "quote": "As shown in Table 5, even with all three optimizations on, the final evaluation loss is only off by 1%.",
+    "location": "Section 5; Table 5",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 4,
+      "unit": "bits per gradient entry in transport",
+      "condition": "GPT-350M / 30B tokens: all on 2.165584 vs baseline 2.121762 (derived +2.1%, not the 1% stated); qgZ for the first 50% only 2.134013 (+0.6%); qwZ INT8 weights + hpZ, qgZ off 2.121653 (lossless); basic non-blocked quantization diverged"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "4-bit reduce-scatter transport costs about 2% at small scale even with full-precision reduction.",
+    "from_review": "activations"
    }
   ]
  },
