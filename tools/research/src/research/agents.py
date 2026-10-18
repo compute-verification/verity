@@ -21,6 +21,7 @@ import time
 from pathlib import Path
 
 MAX_CHANGED = 2000
+_now = time.time
 
 
 def git(repo: Path, *args: str, timeout: float = 60) -> str:
@@ -98,7 +99,7 @@ def quiet_main(argv: list[str]) -> int:
     ap.add_argument("--branch", action="append", default=[], metavar="NAME", help="a worker's branch on origin (a worker with its own VM)")
     ap.add_argument("--json", action="store_true")
     ns = ap.parse_args(argv)
-    repo, now = Path(ns.repo).resolve(), time.time()
+    repo, now = Path(ns.repo).resolve(), _now()
     procs = cwds()
     rows = [worktree_row(wt, procs, now, ns.hours) for wt in worktrees(repo)]
     rows += [branch_row(repo, b, now, ns.hours) for b in ns.branch]

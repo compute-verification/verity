@@ -2,7 +2,6 @@
 import os
 import subprocess
 import sys
-import time
 
 from research import agents
 
@@ -18,7 +17,8 @@ def git(cwd, *a, when=None):
 def test_a_worktree_without_commit_change_or_process_for_hours_is_quiet(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(agents, "git", lambda repo, *a, timeout=60: subprocess.run(
         ["git", "-C", str(repo), *a], capture_output=True, text=True, env={**os.environ, **GIT_ENV}).stdout)
-    now = time.time()
+    now = 1_800_000_000
+    monkeypatch.setattr(agents, "_now", lambda: now)
     repo = tmp_path / "repo"
     repo.mkdir()
     git(repo, "init", "-q", "-b", "main")
@@ -30,7 +30,8 @@ def test_a_worktree_without_commit_change_or_process_for_hours_is_quiet(tmp_path
     os.utime(repo / "a", (now - 5 * 3600, now - 5 * 3600))
     for name in ("stalled", "running"):
         os.utime(tmp_path / name / "a", (now - 5 * 3600, now - 5 * 3600))
-    (tmp_path / "editing" / "a").write_text("edited\n")                        # a change minutes old
+    (tmp_path / "editing" / "a").write_text("edited\n")
+    os.utime(tmp_path / "editing" / "a", (now - 60, now - 60))                 # a change a minute old
     proc = subprocess.Popen([sys.executable, "-c", "import sys; sys.stdin.read()"], cwd=tmp_path / "running", stdin=subprocess.PIPE)
     try:
         rc = agents.main(["quiet", "--repo", str(repo), "--hours", "2"])
