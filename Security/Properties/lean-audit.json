@@ -2559,7 +2559,7 @@
    ]
   },
   "CircuitRequirement": {
-   "digest": "bc76774f94fbb2fd52649d5ab5fdff2e0fe8bd4c0bf19df7c67aee7cca4845f3",
+   "digest": "58b2e3a13ee9fce30adb3940b4c391137da2b465764ed13669c53cf7b253a540",
    "definitions": {
     "CircuitRequirement.Instance": "aa3379686c32d0669e83481d0927ad7a6ffe790afa54206ec41e1958a958bb90",
     "CircuitRequirement.Instance.apart": "74e694a52cf9ca1351045f3a9794e2809026001cb0e277fcf06a06395995b008",
@@ -2594,7 +2594,7 @@
     "CircuitRequirement.Instance.ops": "bba3fe490abea980213f28286b6848aa79d8c750d86fdf073505c824e046363a",
     "CircuitRequirement.Instance.opsOf": "e4b0bdd5c9729f9cdd58c94a335e3239a30399c7506a919634ab5b4798e09f11",
     "CircuitRequirement.Instance.packs": "afe0a1513a4dd69dfe94133e08f39160ce314bba99599fbda46f37aff49bb826",
-    "CircuitRequirement.Instance.planMatches": "8bb6c2d5da986f0cf14414468caa615c2c02efb54031b14767981ad073e36246",
+    "CircuitRequirement.Instance.planMatches": "8ebe6e48bb6f300f135d6fbfdbb05bbea8d2da982626b677eb8225f38b9e9583",
     "CircuitRequirement.Instance.ran": "f01d7bb3b7cc3e55f2242cc1133e06a925a7c19e6b1a0fee8551c5924343d803",
     "CircuitRequirement.Instance.read": "d2ff4b52636578cf76304ac753df94d0124af60f78dae731ab7e437ae00fe081",
     "CircuitRequirement.Instance.readBits": "c13accc3c4eecbaa6dea34df61bf27fdc52619135bf0ca3d92d06cf0973a93a0",
@@ -2606,7 +2606,7 @@
     "CircuitRequirement.Instance.step": "c02e863865004c9a74b9c2d5b9b52261976e94a18ec5b11a1736d964788b0e50",
     "CircuitRequirement.Instance.stepOf": "c4ea0cb6742381e78c3cd8a2ef7b94d0a7cd5a8a986d45cceaf45798b629dcd5",
     "CircuitRequirement.Instance.stepRegion": "d323e0cbbb67b7a5ad303f3e03c8dbf9344f1aa7fe4b673aff33e4b2836b742c",
-    "CircuitRequirement.Instance.storeMatches": "6231256587e4b39721903746496e01a99f1bef6abf4eaa32169b904fa03b02b8",
+    "CircuitRequirement.Instance.storeMatches": "21fa7c2e5880f93dfbc58db6f89802ffc5d5a5954def80e60ee04952303ea13e",
     "CircuitRequirement.Instance.tick": "f4cfa974d2c654a72c863789217999fa37efcc076718c231cca0df773df594c1",
     "CircuitRequirement.Instance.topological": "2ba86e4517d425b1fd35f5f9cb534b82ac2f3d4bb0c0b7f4bd774eaee18a1947",
     "CircuitRequirement.Instance.uses": "2923d8c86cb3a68d52352e4656857624b2c48cdd65ee21d3f4531e97014a4508",
@@ -2631,7 +2631,7 @@
     "CircuitRequirement.Store.written": "9d130c3a5330e464054d4ea4fb655ff648a922d50690526a134c0aba751cfa49",
     "CircuitRequirement.Store.writtenAt": "a7c95e9111eecb8d6091ee525d0e4fe4dbe9eb7d1791face32b865c7384f5437",
     "CircuitRequirement.distinct": "e6e9e8d537630a60d8eca7273f88192c057e0d256ced2e40ce4b6b590461fd1b",
-    "CircuitRequirement.sameSet": "0a659ec09c56a68b105e2cd6e3fe9bde3b4b6691dd98bfd15b931f2e9b246098"
+    "CircuitRequirement.subsetOf": "849b73cfdb8ac587e903e49a3f3ae19f01bd125bb27731f3f43c85c5b05bad33"
    },
    "guarantees": [
     "Properties.Requirement.credited",
@@ -2839,7 +2839,7 @@
    "guarantees": ["Properties.Requirement.held", "Properties.Requirement.read", "Properties.Requirement.stepRegion"]
   },
   "Definitions.Accounting.Requirement": {
-   "digest": "078b458cf3663eca0ab7cb7e53abb6e4bac09d0aca0c03531acde0fe3eee6651",
+   "digest": "8538f16c554b9fca9d25da0c42bbb77351fbfc65663d1d426b1ab0f2706aaa6d",
    "definitions": {
     "Accounting.Requirement.Carries": "93fd6dff6b04c716c5141e9212142e6ea3701b3aa0de94ca12483c0b48591a4d",
     "Accounting.Requirement.Execution": "cd70ee0536fc5bb221c299172e35f32cb7f8664fbf0924096cf40b3a3ee791ea",
@@ -2856,14 +2856,14 @@
     "Accounting.Requirement.Placement.tick": "19d3bde72fc93c41ba0c3edad711ee176bb7ec53439c601bda5d55fe6dd5696c",
     "Accounting.Requirement.Placement.ticks": "60b1a8e6957cbd44187087579e43fbaa35f67d5ff5219c9d45423a53bbb91ae7",
     "Accounting.Requirement.Placement.toExecution": "5a02271ef98321e3e31bad7c561cd43cc9a9e7cda172bb44d4bf4a3a2c574ae9",
-    "Accounting.Requirement.PlanMatches": "88edb9b71a1678e2be54eaa53202d9324631a6ca9242a9661c78261df465c2c6",
+    "Accounting.Requirement.PlanMatches": "2a41f10acaedede88cc6a84729be9a6e2d6b1ab8e171e3ba7e17a202d945187c",
     "Accounting.Requirement.Store": "1938f3251d1599270d57405be6bc6fc366ac23924f2e849c8b7b7acc6f7281ca",
     "Accounting.Requirement.Store.freed": "4e87eda5acc330bde17fdc1204a03f0f98440c589337d909921d93fec0758313",
     "Accounting.Requirement.Store.payload": "a17bee3d643705377f94199f7d34bad4c5c2d9bae5d7351647eab307cad64ad4",
     "Accounting.Requirement.Store.registered": "0be772098f8e8fb16c7419539601a60d72ebb997163fc82efb10abce4db236e5",
     "Accounting.Requirement.Store.resident": "6288862ccac1ec58bad7ae75f4bf8cbb24212257aea4a55bb31581cb649779c6",
     "Accounting.Requirement.Store.written": "d99299a8c7926bc9f52976b4d302df1f9ebe28e59e60ab696478ad75fc03791b",
-    "Accounting.Requirement.StoreMatches": "bc94eb7e36c2c3376a01b78a242889fe21fe87e971a59f4d9fae86838c8657a7",
+    "Accounting.Requirement.StoreMatches": "d382ffa2a7544e21b5e96e7ab2d8842ccd8a6859a280f543ea4754f9a22d0704",
     "Accounting.Requirement.Wiring": "ea82f2d6501a55026e9b919450495eecfe98c1fa3cb8310b5a9e821b13da71d1",
     "Accounting.Requirement.Wiring.Topological": "0c7006bd24f27b2474a54cea9fcc2dc46b2f68a9b2496a8cc5c65e61b78743bd",
     "Accounting.Requirement.Wiring.inputs": "49e1dba3c3ae03182c2a01b2e4e49be01ee8c198589708ac4e1c4d280f54e7fd",
