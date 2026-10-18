@@ -69,5 +69,4 @@ done
 python3 benchmarks/hash/loop/label.py "${runs[@]}" --row "$N" --hypothesis "$HYP" --branch "$BRANCH" --sweep "${SWEEP:-iteration}"
 echo "iteration $N at $BRANCH@$HEAD_SHA: ${runs[*]}"
 }
-main "$@"
-exit
+main "$@"; exit $?   # one line, read whole before main runs: an edit to this file while it waits cannot shift what bash reads next
