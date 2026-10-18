@@ -38,7 +38,7 @@ class GateClass:
 
 @dataclass(frozen=True)
 class UnconditionalObligation:
-    """A proof obligation required on EVERY audit, outside both sampling draws (GUIDANCE §31.3).
+    """A proof obligation required on EVERY audit, outside the sampling draw (GUIDANCE §31.3).
 
     The prover supplies a proof that every gate the class selects satisfies its relation on the committed
     boundary values, and the verifier checks that proof on every audit, before any sampling -- exactly as it
