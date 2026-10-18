@@ -1,4 +1,4 @@
-"""DeepSeek-V4-Pro's H200 folds (`observe.fold.patterns.dsv4`), each the Build's rule over the observer log:
+"""DeepSeek-V4-Pro's H200 folds (`observe.fold.patterns.dsv4`, `dsv4_flashmla`), each the Build's rule over the observer log:
 
 * the mHC's TileLang kernels leave no event, so each wrapper's allocations resolve to its Calls: layer 0's pre_broadcast to
   `MhcPreBroadcast_v1` and `MhcResidualBroadcast_v1`, each fused post_pre to the path and split count the step's tokens select, the
@@ -34,9 +34,9 @@ import pytest
 
 from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHeader, StepStart, TritonLaunch, ViewDesc
 from verity_vllm.observe.fold.patterns.dsv4 import (INDEXER_COMPRESS_KERNEL, INDEXER_COMPRESS_SRC_SHA, INV_ROPE_KERNEL, INV_ROPE_SRC_SHA,
-                                                    SAVE_STATES_KERNEL, SAVE_STATES_SRC_SHA, SPARSE_DECODE_OP, SPARSE_PREFILL_OP, Fp8Einsum,
-                                                    IndexerCompress, InvRopeQuant, Mhc, QKvRmsNorm, QNormRopeKvInsert, SavePartialStates,
-                                                    SparseDecode, SparsePrefill)
+                                                    SAVE_STATES_KERNEL, SAVE_STATES_SRC_SHA, Fp8Einsum, IndexerCompress, InvRopeQuant, Mhc,
+                                                    QKvRmsNorm, QNormRopeKvInsert, SavePartialStates)
+from verity_vllm.observe.fold.patterns.dsv4_flashmla import SPARSE_DECODE_OP, SPARSE_PREFILL_OP, SparseDecode, SparsePrefill
 from verity_vllm.observe.fold.patterns.target import target_of_header
 from verity_vllm.observe.fold.resolver import Group, PerRow, Shared, StepContext, Unsupported, spec_label
 from verity_vllm.observe.fold.tree import build_trees
