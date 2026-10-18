@@ -39,8 +39,8 @@ PARTS = {
     ("CodecRound", (1024, 105, 1)): (310507, 901490, 23798),
     ("CodecMatch", (512,)): (512, 512, 512),
     ("SketchRow", (4096,)): (36863, 214292, 4099),
-    ("LeafMatch", (16, 40)): None,
-    ("BlockVerdict", (64,)): None,
+    ("LeafMatch", (16, 40)): (9646, 9034, 561),
+    ("BlockVerdict", (64,)): (69, 2, 5),
 }
 V2 = "hm96-sha512/row/v2"
 PER_LEAF = BC.PER_LEAF
