@@ -74,9 +74,12 @@ from), `vc_plan_build`, `cudaMalloc` the tables and `vc_tables_launch`, then `vc
   (commit_gpu); `CHACHA64`, `audit.hm96_salt`'s ChaCha20 blocks 3 pos .. 3 pos + 2 with a 64-bit counter and nonce; `CHACHA_RFC`,
   RFC 8439's stream at 192 pos, `salt_nonce` the 12-byte little-endian nonce's value (verity_vllm's port index). A keyed source
   never leaves the device.
-- Forms (`vc_commit_rows_launch`): `SPLIT` runs the salt phase then the data phase, `FUSED` one kernel a leaf; `AUTO` picks by
-  device and size (today always `SPLIT`). The salt phase reads no operand, so a committer may also call `vc_salts_launch` early
-  on a side stream and `vc_leaves_rows_launch` when the rows exist; the leaves are the same bytes.
+- Forms (`vc_commit_rows_launch`): `SPLIT` runs the salt phase, the data phase, then the tree; `FUSED` one kernel a leaf, then
+  the tree; `FOLD` the salt phase (which also zeroes the climb's counters in `scratch`) then one data kernel that folds the tree
+  too: each block hashes its 256 leaves' subtree in shared memory, and of two sibling blocks the one that finishes second climbs
+  on (sharaw's `sr_data` scheme), so a commit is two launches. `AUTO` picks by device and size (today always `FOLD`). Every
+  form writes the same bytes. The salt phase reads no operand, so a committer may also call `vc_salts_launch` early on a side
+  stream and `vc_leaves_rows_launch` when the rows exist, then `vc_tree_launch`.
 - Pass `bc` to keep every leaf's b || c (128 bytes a leaf) when the step will be opened; pass NULL otherwise.
 
 ### Openings
@@ -96,26 +99,28 @@ SHA-512's compression is commit_gpu's (`benchmarks/pouw/commit_gpu/sha512.cuh`),
 `main` are vendored, minimally, into `vc.cu`, each piece re-pointed from `__constant__` memory to `__grid_constant__` kernel
 parameters; the head of `vc.cu` names what came from where:
 
-- circuits' `native_rows.cu` (`integrations/vllm/verity_vllm/commit/committer/` at `934d0bcbd`, cursor/commit-speed-21f3): the
-  leaf and node parameter blocks, the frame leaf, pad and node templates, the PRF salt, the nibble-table mask, the fused leaf
-  kernel and the level kernels;
-- hash's `sharaw.cu` (`benchmarks/hash/sharaw/` at `4369ae62`, cursor/verity-hash-15ad): the byte-table mask and the salt / data
-  split, with commit_gpu's tree schedule;
+- circuits' native_rows.cu (`934d0bcbd:integrations/vllm/verity_vllm/commit/committer/native_rows.cu`, on
+  cursor/commit-speed-21f3): the leaf and node parameter blocks, the frame leaf, pad and node templates, the PRF salt, the
+  nibble-table mask, the fused leaf kernel and the level kernels;
+- hash's sharaw.cu (`4369ae62:benchmarks/hash/sharaw/sharaw.cu`, on cursor/verity-hash-15ad): the byte-table mask, the salt /
+  data split with commit_gpu's tree schedule, and the data kernel that folds its subtree and climbs (`FOLD`);
 - `benchmarks/pouw/pearl_c_sm120/hash_fast.cuh`: row-seg's segments a thread from their header's state, then a fold a unit.
 
-hm96lat.cu (`benchmarks/hash/intpipe/`, cursor/verity-hash-15ad) was read for its arity levers; only their node format is here.
+hm96lat.cu (`4369ae62:benchmarks/hash/intpipe/`, on cursor/verity-hash-15ad) was read for its arity levers; only their node
+format is here.
 
 ## Files
 
 - `vc.h`, `vc.cu`: the library. `build.sh OUT` builds `OUT/libvc.so` (`ARCHS="90 100 120"`: sm_90a, sm_100a, sm_120a).
 - `vclib.py`: the binding, the spec builders and `parse_openings`; `Cuda`, a minimal libcudart wrapper for the tests.
 - `conformance.py`: every entry point against the references on fixed vectors and random cases, one JSON line a case and a
-  summary line; ragged leaf counts, every salt source, both forms, chunked launches, graph capture and replay, and openings
+  summary line; ragged leaf counts, every salt source, every form (wide trees too), chunked launches, graph capture and replay, and openings
   checked with `verify_opening` and `verify_multiproof`. `--quick` runs fewer cases.
 - `gpu.sh`: a node job. Outside the lease, the library for all three architectures; under one lease, the conformance; with
   `BENCH=1`, then `bench/bench.sh`.
-- `bench/`: the performance gate. `rows.cu` is sharaw's harness (fetched at its pinned commit, its `main` renamed) with libvc's
-  arms added: every arm's levels compared with commit_gpu's on the device, then commit_gpu, native_rows, sharaw's forms and
+- `bench/`: the performance gate. `rows.cu` is sharaw's harness (fetched at its pinned commit, its `main` renamed) with a loader
+  for native_rows' pinned launchers on StepHasher's level schedule and libvc's arms added: every arm's levels compared with
+  commit_gpu's on the device, then commit_gpu, native_rows, sharaw's forms and
   libvc's interleaved rep by rep with each rep's SM clock, at 142 MB (34,737 rows) and 1 GiB (262,144 rows) steps of 4 KiB rows.
   `pearl.cu` does the same for -h3's row digests and tile leaves against hash_fast and hash_h3 at Llama-3.1-8B's decode shapes
   (m 32 and 128). `bench.sh` builds both and runs them under one lease.
