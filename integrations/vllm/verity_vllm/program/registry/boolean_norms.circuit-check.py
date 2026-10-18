@@ -8,7 +8,7 @@ from typing import Any
 def _boolean_roots() -> list[Any]:
     """The served norms on bits at N = 16 with their MUFU statics at the word ids and at mufu's Boolean versions (the
     switch's binding, `verity_vllm.program.boolean`), the fused norm's lanes at two elements per thread, and the word
-    Definitions of its constant steps."""
+    Definitions of its constant steps; then the same norms and steps with eps an input."""
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.ops.boolean import mufu as BM
     from verity_vllm.program.registry import boolean_norms as BN
@@ -31,4 +31,10 @@ def _boolean_roots() -> list[Any]:
         bind(BN.RMSNormFusedCudaVector8, N=16, EPS=1e-6, BLOCK=16, RSQRT=bind(BM.RsqrtApprox)),
         bind(BN.RMSNormVectorLanesCuda, N=24, BLOCK=2, FUSED=False),
         bind(BN.RMSNormVectorLanesCuda, N=24, BLOCK=2, FUSED=True),
+        bind(BN.RMSNormFusedCudaIn, N=16, **BN.CUDA_WORD),
+        bind(BN.RMSNormTritonIn, N=16, **BN.TRITON_WORD),
+        bind(BN.RMSNormFusedCudaIn, N=16, RSQRT=bind(BM.RsqrtApprox)),
+        bind(BN.RMSNormTritonIn, N=16, SQRT=bind(BM.MufuSqrtFtz), SCALEA=bind(BM.DivFullScaleA), RCP=bind(BM.DivFullRcp)),
+        bind(BN.RMSNormVarEpsCudaInWord, N=16),
+        bind(BN.RMSNormVarEpsTritonInWord, N=16),
     ]

@@ -10,6 +10,10 @@ v6's is `AmpereBF16TcDot16_v3`), `F2fpBf16_v2`, the FTZ f32 operations, `F32Max_
 the FA3 / FA2 per-iteration `Check_inf` chains (`fa3_check_inf`, `fa2_check_inf`); v8 is v5's, whose unguarded blocks
 (`CHECK` false, below `MASKED_FROM`) rescale by the running max as it is; v9 is v4's, whose unguarded blocks read it as it
 is for `max * scale` too.
+
+v14 to v17 are v6 to v9 with the scale word `scale_log2` an input (a `registered_values` program registers it), whose words are
+`value_inputs`' `Attention_v10`, `_v12` and `_v13` and `fa2_check_inf`'s `Attention_v11`: v14 is v10's (v6 with the scale an
+input), v15 v12's (v7), v16 v13's (v9) and v17 v11's (v8), each over its own block and head.
 """
 from __future__ import annotations
 
@@ -26,8 +30,11 @@ from verity.ml.circuits.boolean.trace import definition, word_of
 from verity_vllm.program.registry import hopper
 from verity_vllm.program.registry.b1 import (AttentionHeadV2, AttentionHeadV3, AttentionV2, AttentionV3, AttnBlockV2, AttnBlockV3,
                                              _lane, _scale_log2_bits)
-from verity_vllm.program.registry.fa2_check_inf import AttentionHeadV5, AttentionV5, AttnBlockV5
+from verity_vllm.program.registry.fa2_check_inf import (AttentionHeadV5, AttentionHeadV11, AttentionV5, AttentionV11, AttnBlockV5,
+                                                        AttnBlockV11)
 from verity_vllm.program.registry.fa3_check_inf import AttentionHeadV4, AttentionV4, AttnBlockV4
+from verity_vllm.program.registry.value_inputs import (AttentionHeadV10, AttentionHeadV12, AttentionHeadV13, AttentionV10,
+                                                       AttentionV12, AttentionV13, AttnBlockV10, AttnBlockV12, AttnBlockV13)
 
 BF16 = Array(16, BL.BIT)
 F32 = Array(32, BL.BIT)
@@ -74,10 +81,11 @@ def _attention_type(S):
 
 
 def _block(B, name: str, D: int, NVIS: int, FIRST: bool, BN: int, DOT, q, k, v, m_prev, l_prev, o_prev, check: bool = True,
-           guard_max: bool = True):
+           guard_max: bool = True, scale_log2: Coll | None = None):
     """One BN-key block of FA2's online softmax for one query row, NVIS visible columns (`AttnBlock_v2` / `_v3`'s body); without
     ``check`` (`AttnBlock_v5`'s unmasked iteration) the rescale reads the running max as it is, not guarded, and without
-    ``guard_max`` (`AttnBlock_v4`'s) so does `max * scale`."""
+    ``guard_max`` (`AttnBlock_v4`'s) so does `max * scale`. ``scale_log2`` is the scale word when it is an input (v10 to v13's),
+    else the constant `_scale_log2_bits(D)`."""
     if BN % 16 or not 1 <= NVIS <= BN:
         raise ValueError(f"{name}: BN={BN} must be a multiple of 16 and 1 <= NVIS={NVIS} <= BN")
     if FIRST and not check:
@@ -90,7 +98,8 @@ def _block(B, name: str, D: int, NVIS: int, FIRST: bool, BN: int, DOT, q, k, v, 
         bmax = B.call(BA.F32Max, bmax, s[j])
     m_new = bmax if FIRST else B.call(BA.F32Max, m_prev, bmax)
     m_use = B.call(BA.GuardNegInfZero, m_new) if check or guard_max else m_new
-    scale_log2 = c.word(_scale_log2_bits(D), 32)
+    if scale_log2 is None:
+        scale_log2 = c.word(_scale_log2_bits(D), 32)
     if not FIRST:
         scores_scale = B.call(BM.MufuEx2Ftz, B.call(BA.F32MulFtz, B.call(BA.F32SubFtz, m_prev, m_use if check else m_new), scale_log2))
     max_scaled = B.call(BA.F32MulFtz, m_use if guard_max else m_new, scale_log2)
@@ -115,9 +124,10 @@ def _block(B, name: str, D: int, NVIS: int, FIRST: bool, BN: int, DOT, q, k, v, 
     return tuple_of(m_new, array_of(lanes), array_of(o))
 
 
-def _head(B, T: int, D: int, BN: int, block_of, INV, q, k, v):
+def _head(B, T: int, D: int, BN: int, block_of, INV, q, k, v, *extra):
     """Causal attention of one query at position T-1 over keys 0..T-1: ceil(T / BN) blocks (``block_of(b, nvis, first)``) visited
-    last -> first, then `bf16(o * INV((l0 + l2) + (l1 + l3)))` (`AttentionHead_v2` / `_v3` / `_v5`'s body)."""
+    last -> first, then `bf16(o * INV((l0 + l2) + (l1 + l3)))` (`AttentionHead_v2` / `_v3` / `_v5`'s body); every block also reads
+    ``extra`` (the scale word, when it is an input)."""
     c = _Bits(B)
     nb = (T + BN - 1) // BN
     m = l = o = None
@@ -136,9 +146,10 @@ def _head(B, T: int, D: int, BN: int, block_of, INV, q, k, v):
         blk = block_of(b, nvis, first)
         if first:
             z = c.word(0, 32)
-            st = B.call(blk, q, kb, vb, z, Coll(Array(4, F32), concat([z.refs] * 4)), Coll(Array(D, F32), concat([z.refs] * D)))
+            st = B.call(blk, q, kb, vb, z, Coll(Array(4, F32), concat([z.refs] * 4)), Coll(Array(D, F32), concat([z.refs] * D)),
+                        *extra)
         else:
-            st = B.call(blk, q, kb, vb, m, l, o)
+            st = B.call(blk, q, kb, vb, m, l, o, *extra)
         m, l, o = st[0], st[1], st[2]
     total = B.call(BA.F32AddFtz, B.call(BA.F32AddFtz, l[0], l[2]), B.call(BA.F32AddFtz, l[1], l[3]))
     inv = B.call(INV, total)
@@ -146,15 +157,16 @@ def _head(B, T: int, D: int, BN: int, block_of, INV, q, k, v):
     return B.batch(BG.F2fpBf16, y, axes=(0,))
 
 
-def _attention(B, T: int, NH: int, KVH: int, D: int, head, q, kc, vc):
-    """GQA over ``head``: head h reads KV head h // (NH/KVH); caches `[T][KVH][D]` (`Attention_v2` / `_v3`'s body)."""
+def _attention(B, T: int, NH: int, KVH: int, D: int, head, q, kc, vc, *extra):
+    """GQA over ``head``: head h reads KV head h // (NH/KVH); caches `[T][KVH][D]` (`Attention_v2` / `_v3`'s body); every head
+    also reads ``extra``."""
     G = NH // KVH
     W = 16 * D
     outs = []
     for g in range(KVH):
         kg = Coll(Array(T, Array(D, BF16)), strided_view(kc, g * W, W, KVH * W, 1, T * W))
         vg = Coll(Array(T, Array(D, BF16)), strided_view(vc, g * W, W, KVH * W, 1, T * W))
-        outs.append(B.batch(head, q[g * G:(g + 1) * G], kg, vg, axes=(0, None, None)))
+        outs.append(B.batch(head, q[g * G:(g + 1) * G], kg, vg, *extra, axes=(0, None, None) + (None,) * len(extra)))
     return Coll(Array(NH, Array(D, BF16)), concat([o.refs for o in outs]))
 
 
@@ -282,6 +294,139 @@ def _fa3_checked_attention(B, S, q, kc, vc):
 
 AttentionV9 = _on_bits("Attention", 9, ["T", "NH", "KVH", "D", "BN", "DOT", "INV", "MASKED_FROM"], _attention_type,
                        _fa3_checked_attention, AttentionV4)
+
+
+def _scaled(type_of: Callable) -> Callable:
+    """``type_of``'s signature with the scale word `scale_log2` a last parameter (`value_inputs`' signatures)."""
+    def sig(S):
+        params, ret = type_of(S)
+        return ((*params, ("scale_log2", F32)), ret)
+    return sig
+
+
+def _masked_from(name: str, S) -> None:
+    nb = (S.T + S.BN - 1) // S.BN
+    if not 0 <= S.MASKED_FROM <= nb - 1:
+        raise ValueError(f"{name}: MASKED_FROM {S.MASKED_FROM} outside blocks 0..{nb - 1} "
+                         "(the first block is always a Check_inf iteration)")
+
+
+def _fa2_scaled_block(B, S, q, k, v, m_prev, l_prev, o_prev, scale_log2):
+    """`AttnBlock_v10`'s body on bits: `AttnBlock_v6` with `scale_log2` an input."""
+    return _block(B, "AttnBlock_v14", S.D, S.NVIS, S.FIRST, S.BN, BG.AmpereBF16TcDot16, q, k, v, m_prev, l_prev, o_prev,
+                  scale_log2=scale_log2)
+
+
+AttnBlockV14 = _on_bits("AttnBlock", 14, ["D", "NVIS", "FIRST", "BN"], _scaled(_block_type), _fa2_scaled_block, AttnBlockV10)
+
+
+def _fa2_scaled_head(B, S, q, k, v, scale_log2):
+    """`AttentionHead_v10`'s body on bits over `AttnBlock_v14`, every block reading the one `scale_log2`."""
+    return _head(B, S.T, S.D, S.BN, lambda b, nvis, first: bind(AttnBlockV14, D=S.D, NVIS=nvis, FIRST=first, BN=S.BN),
+                 BA.Fa2InvSum, q, k, v, scale_log2)
+
+
+AttentionHeadV14 = _on_bits("AttentionHead", 14, ["T", "D", "BN"], _scaled(_head_type), _fa2_scaled_head, AttentionHeadV10)
+
+
+def _fa2_scaled_attention(B, S, q, kc, vc, scale_log2):
+    """`Attention_v10`'s body on bits over `AttentionHead_v14`, every head reading the one `scale_log2`."""
+    return _attention(B, S.T, S.NH, S.KVH, S.D, bind(AttentionHeadV14, T=S.T, D=S.D, BN=S.BN), q, kc, vc, scale_log2)
+
+
+AttentionV14 = _on_bits("Attention", 14, ["T", "NH", "KVH", "D", "BN"], _scaled(_attention_type), _fa2_scaled_attention,
+                        AttentionV10)
+
+
+def _dot_scaled_block(B, S, q, k, v, m_prev, l_prev, o_prev, scale_log2):
+    """`AttnBlock_v12`'s body on bits: `AttnBlock_v7` with `scale_log2` an input."""
+    return _block(B, "AttnBlock_v15", S.D, S.NVIS, S.FIRST, S.BN, S.DOT, q, k, v, m_prev, l_prev, o_prev, scale_log2=scale_log2)
+
+
+AttnBlockV15 = _on_bits("AttnBlock", 15, ["D", "NVIS", "FIRST", "BN", "DOT"], _scaled(_block_type), _dot_scaled_block,
+                        AttnBlockV12)
+
+
+def _dot_scaled_head(B, S, q, k, v, scale_log2):
+    """`AttentionHead_v12`'s body on bits over `AttnBlock_v15{..., DOT}`, epilogue `INV`."""
+    return _head(B, S.T, S.D, S.BN, lambda b, nvis, first: bind(AttnBlockV15, D=S.D, NVIS=nvis, FIRST=first, BN=S.BN, DOT=S.DOT),
+                 S.INV, q, k, v, scale_log2)
+
+
+AttentionHeadV15 = _on_bits("AttentionHead", 15, ["T", "D", "BN", "DOT", "INV"], _scaled(_head_type), _dot_scaled_head,
+                            AttentionHeadV12)
+
+
+def _dot_scaled_attention(B, S, q, kc, vc, scale_log2):
+    """`Attention_v12`'s body on bits over `AttentionHead_v15`."""
+    return _attention(B, S.T, S.NH, S.KVH, S.D, bind(AttentionHeadV15, T=S.T, D=S.D, BN=S.BN, DOT=S.DOT, INV=S.INV), q, kc, vc,
+                      scale_log2)
+
+
+AttentionV15 = _on_bits("Attention", 15, ["T", "NH", "KVH", "D", "BN", "DOT", "INV"], _scaled(_attention_type),
+                        _dot_scaled_attention, AttentionV12)
+
+
+def _fa3_scaled_block(B, S, q, k, v, m_prev, l_prev, o_prev, scale_log2):
+    """`AttnBlock_v13`'s body on bits: `AttnBlock_v9` with `scale_log2` an input."""
+    return _block(B, "AttnBlock_v16", S.D, S.NVIS, S.FIRST, S.BN, S.DOT, q, k, v, m_prev, l_prev, o_prev, check=S.CHECK,
+                  guard_max=S.CHECK, scale_log2=scale_log2)
+
+
+AttnBlockV16 = _on_bits("AttnBlock", 16, ["D", "NVIS", "FIRST", "BN", "DOT", "CHECK"], _scaled(_block_type), _fa3_scaled_block,
+                        AttnBlockV13)
+
+
+def _fa3_scaled_head(B, S, q, k, v, scale_log2):
+    """`AttentionHead_v13`'s body on bits over `AttnBlock_v16`: block b runs with `CHECK = b >= MASKED_FROM`."""
+    _masked_from("AttentionHead_v16", S)
+    return _head(B, S.T, S.D, S.BN, lambda b, nvis, first: bind(AttnBlockV16, D=S.D, NVIS=nvis, FIRST=first, BN=S.BN, DOT=S.DOT,
+                                                                CHECK=b >= S.MASKED_FROM), S.INV, q, k, v, scale_log2)
+
+
+AttentionHeadV16 = _on_bits("AttentionHead", 16, ["T", "D", "BN", "DOT", "INV", "MASKED_FROM"], _scaled(_head_type),
+                            _fa3_scaled_head, AttentionHeadV13)
+
+
+def _fa3_scaled_attention(B, S, q, kc, vc, scale_log2):
+    """`Attention_v13`'s body on bits over `AttentionHead_v16`."""
+    return _attention(B, S.T, S.NH, S.KVH, S.D, bind(AttentionHeadV16, T=S.T, D=S.D, BN=S.BN, DOT=S.DOT, INV=S.INV,
+                                                     MASKED_FROM=S.MASKED_FROM), q, kc, vc, scale_log2)
+
+
+AttentionV16 = _on_bits("Attention", 16, ["T", "NH", "KVH", "D", "BN", "DOT", "INV", "MASKED_FROM"], _scaled(_attention_type),
+                        _fa3_scaled_attention, AttentionV13)
+
+
+def _checked_scaled_block(B, S, q, k, v, m_prev, l_prev, o_prev, scale_log2):
+    """`AttnBlock_v11`'s body on bits: `AttnBlock_v8` with `scale_log2` an input."""
+    return _block(B, "AttnBlock_v17", S.D, S.NVIS, S.FIRST, S.BN, S.DOT, q, k, v, m_prev, l_prev, o_prev, check=S.CHECK,
+                  scale_log2=scale_log2)
+
+
+AttnBlockV17 = _on_bits("AttnBlock", 17, ["D", "NVIS", "FIRST", "BN", "DOT", "CHECK"], _scaled(_block_type),
+                        _checked_scaled_block, AttnBlockV11)
+
+
+def _checked_scaled_head(B, S, q, k, v, scale_log2):
+    """`AttentionHead_v11`'s body on bits over `AttnBlock_v17`: block b runs with `CHECK = b >= MASKED_FROM`."""
+    _masked_from("AttentionHead_v17", S)
+    return _head(B, S.T, S.D, S.BN, lambda b, nvis, first: bind(AttnBlockV17, D=S.D, NVIS=nvis, FIRST=first, BN=S.BN, DOT=S.DOT,
+                                                                CHECK=b >= S.MASKED_FROM), S.INV, q, k, v, scale_log2)
+
+
+AttentionHeadV17 = _on_bits("AttentionHead", 17, ["T", "D", "BN", "DOT", "INV", "MASKED_FROM"], _scaled(_head_type),
+                            _checked_scaled_head, AttentionHeadV11)
+
+
+def _checked_scaled_attention(B, S, q, kc, vc, scale_log2):
+    """`Attention_v11`'s body on bits over `AttentionHead_v17`."""
+    return _attention(B, S.T, S.NH, S.KVH, S.D, bind(AttentionHeadV17, T=S.T, D=S.D, BN=S.BN, DOT=S.DOT, INV=S.INV,
+                                                     MASKED_FROM=S.MASKED_FROM), q, kc, vc, scale_log2)
+
+
+AttentionV17 = _on_bits("Attention", 17, ["T", "NH", "KVH", "D", "BN", "DOT", "INV", "MASKED_FROM"], _scaled(_attention_type),
+                        _checked_scaled_attention, AttentionV11)
 
 
 #: the FA2 (Ampere mma.sync) and FA3 (Hopper wgmma) bindings of v7's DOT and INV

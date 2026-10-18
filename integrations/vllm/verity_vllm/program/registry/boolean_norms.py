@@ -3,6 +3,9 @@
     RMSNormFusedCuda_v3{N, EPS, RSQRT}   (x, res, w: Array<N, Array<16, Value<1>>>) -> (normed, res')    word view: RMSNormFusedCuda_v2{N, EPS}
     RMSNormTriton_v2{N, EPS, SQRT, SCALEA, RCP}
                                          (x, w: Array<N, Array<16, Value<1>>>) -> Array<N, Array<16, ...>>  word view: RMSNormTriton_v1{N, EPS}
+    RMSNormFusedCuda_v5{N, RSQRT}, RMSNormTriton_v4{N, SQRT, SCALEA, RCP}
+                                         the same with eps an input (f32 bits, last)  word views: `value_inputs`' RMSNormFusedCuda_v4{N},
+                                                                                       RMSNormTriton_v3{N}
 
 Each is the word body's dataflow, in the word body's operand order, over these parts (`rmsnorm_cuda_calls`, `rmsnorm_triton_calls`):
 
@@ -10,6 +13,7 @@ Each is the word body's dataflow, in the word body's operand order, over these p
                                    (`RMSNormLaneCuda_v1{J}`), partial = square of the first, then FFMA of each next square
     RMSNormWarpsCuda_v1{T}         per warp, cub's shfl_down tree 1, 2, 4, 8, 16 over the valid lanes (`RMSNormWarpCuda_v1{L}`)
     RMSNormArgCuda_v1{N, EPS, NW}  the warp sums added from warp 0, then `RMSNormVarEpsCuda_v2{N, EPS}`: `/ N` (div.rn), `+ EPS`
+                                   (eps an input: `RMSNormArgCuda_v2{N, NW}`, `RMSNormVarEpsCuda_v4{N}`)
     RSQRT                          `rsqrtf` (`RsqrtApprox_v1`'s function)
     RMSNormScaleCuda_v1            s's own gates of the output word, once
     RMSNormOutRowCuda_v1{N}        bf16_rn((f32(r_j) * s) * f32(w_j))   (`RMSNormOutCuda_v1`)
@@ -17,7 +21,8 @@ Each is the word body's dataflow, in the word body's operand order, over these p
     RMSNormThreadsTriton_v1{N}     per thread of 8 columns: x1 * x1, then FFMA x0, x2, ..., x7  (`RMSNormThreadTriton_v1`)
     RMSNormWarpsTriton_v1{N}       per warp, the xor butterfly 16, 8, 4, 2, 1, lane 0's cone (`RMSNormWarpTriton_v1{L}`)
     RMSNormMeanEpsTriton_v1{N, EPS}  per chunk of 1024 columns (w0 + w2) + (w1 + w3), chunks added in order, then
-                                   `RMSNormVarEpsTriton_v2{N, EPS}`: FFMA(rcp(N), sum, EPS)
+                                   `RMSNormVarEpsTriton_v2{N, EPS}`: FFMA(rcp(N), sum, EPS) (eps an input:
+                                   `RMSNormMeanEpsTriton_v2{N}`, `RMSNormVarEpsTriton_v4{N}`)
     SQRT, SCALEA(1.0, .), RCP      `sqrt.approx.ftz` and `div.full`'s two MUFU pieces; `F32Mul_v3` of the last two is `inv`
     RMSNormInvTriton_v1            inv's own gates of the output word, once
     RMSNormOutRowTriton_v1{N}      bf16_rn((inv * f32(x_j)) * f32(w_j))   (`RMSNormOutTriton_v1`)
@@ -68,10 +73,12 @@ from verity.ml.circuits.boolean.trace import word_of
 from verity.ml.circuits.ops.prims import const
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import prims as P
+from verity_vllm.program.registry import value_inputs as VI
 from verity_vllm.program.registry.sampling import bit_at
 
-__all__ = ["CUDA_WORD", "MUFU_WORD", "PackF32", "RMSNormCudaVector8", "RMSNormFusedCuda", "RMSNormFusedCudaVector8",
-           "RMSNormTriton", "TRITON_WORD", "UnpackF32", "rmsnorm_cuda_calls", "rmsnorm_triton_calls"]
+__all__ = ["CUDA_WORD", "MUFU_WORD", "PackF32", "RMSNormCudaVector8", "RMSNormFusedCuda", "RMSNormFusedCudaIn",
+           "RMSNormFusedCudaVector8", "RMSNormTriton", "RMSNormTritonIn", "TRITON_WORD", "UnpackF32", "rmsnorm_cuda_calls",
+           "rmsnorm_triton_calls"]
 
 BIT = BL.BIT
 F32 = Array(32, BIT)
@@ -428,6 +435,43 @@ RMSNormVarEpsTriton = _traced("RMSNormVarEpsTriton", 2, ("N", "EPS"), lambda S: 
                               word=lambda b: bind(RMSNormVarEpsTritonWord, N=b["N"], EPS=b["EPS"]))
 
 
+# --- the same steps with eps an input (a `registered_values` program registers it; `value_inputs`' norms) ---------------------
+
+def _var_eps_cuda_in_word(B, S, var, eps):
+    return B.call(P.F32Add, B.call(P.F32Div, var, B.call(const(32, _f32(float(S.N))))), eps)
+
+
+def _var_eps_triton_in_word(B, S, total, eps):
+    return B.call(P.F32Fma, B.call(const(32, _rcp_n(S.N))), total, eps)
+
+
+RMSNormVarEpsCudaInWord = CompositeDefinition("RMSNormVarEpsCuda", 3, ("N",), lambda S: ((("var", F32W), ("eps", F32W)), F32W),
+                                              _var_eps_cuda_in_word, doc="F32Add_v1(F32Div_v1(var, f32(N)), eps)",
+                                              conformance="exact-model-tested")
+RMSNormVarEpsTritonInWord = CompositeDefinition("RMSNormVarEpsTriton", 3, ("N",),
+                                                lambda S: ((("total", F32W), ("eps", F32W)), F32W), _var_eps_triton_in_word,
+                                                doc="F32Fma_v1(DivFullRcp_v1(f32(N)), total, eps), the reciprocal a constant",
+                                                conformance="exact-model-tested")
+
+
+def _var_eps_cuda_in(S):
+    n = fp.f32_const(_f32(float(S.N)))
+    return TR.trace(lambda C, v, e: fp.f32_add(C, fp.f32_div(C, v, n, ir_nan=True), e, ir_nan=True), [F32, F32], F32)
+
+
+def _var_eps_triton_in(S):
+    r = fp.f32_const(_rcp_n(S.N))
+    return TR.trace(lambda C, t, e: fp.f32_fma(C, r, t, e), [F32, F32], F32)
+
+
+RMSNormVarEpsCudaIn = _traced("RMSNormVarEpsCuda", 4, ("N",), lambda S: ((("var", F32), ("eps", F32)), F32), _var_eps_cuda_in,
+                              "var / N + eps on bits (div.rn, add.rn; N folded): RMSNormVarEpsCuda_v3",
+                              word=lambda b: bind(RMSNormVarEpsCudaInWord, N=b["N"]))
+RMSNormVarEpsTritonIn = _traced("RMSNormVarEpsTriton", 4, ("N",), lambda S: ((("total", F32), ("eps", F32)), F32),
+                                _var_eps_triton_in, "fma(rcp(N), total, eps) on bits (rcp(N) folded): RMSNormVarEpsTriton_v3",
+                                word=lambda b: bind(RMSNormVarEpsTritonInWord, N=b["N"]))
+
+
 # --- the fused CUDA norm (vLLM's generic fused_add_rms_norm_kernel) -------------------------------------------------------------
 
 def _threads_cuda(N: int, BLOCK: int) -> list[tuple[int, int, int]]:
@@ -519,10 +563,21 @@ def RMSNormWarpsCuda(B, S, p):
 def RMSNormArgCuda(B, S, s):
     """`variance / N + EPS`: cub's `ApplyWarpAggregates` (warp sums added in order from warp 0, F32Add_v3), then
     `RMSNormVarEpsCuda_v2{N, EPS}`."""
+    return B.call(bind(RMSNormVarEpsCuda, N=S.N, EPS=S.EPS), _warp_sum(B, s, S.NW))
+
+
+def _warp_sum(B, s: Coll, nw: int) -> Coll:
     var = s[0]
-    for i in range(1, S.NW):
+    for i in range(1, nw):
         var = B.call(EW.F32Add, var, s[i])
-    return B.call(bind(RMSNormVarEpsCuda, N=S.N, EPS=S.EPS), var)
+    return var
+
+
+@composite("RMSNormArgCuda", 2, ["N", "NW"], lambda S: ((("s", Array(S.NW, F32)), ("eps", F32)), F32),
+           conformance="exact-model-tested")
+def RMSNormArgCudaIn(B, S, s, eps):
+    """`RMSNormArgCuda_v1` with eps an input: the warp sums added in order from warp 0, then `RMSNormVarEpsCuda_v4{N}`."""
+    return B.call(bind(RMSNormVarEpsCudaIn, N=S.N), _warp_sum(B, s, S.NW), eps)
 
 
 @composite("RMSNormOutRowCuda", 1, ["N"],
@@ -534,12 +589,15 @@ def RMSNormOutRowCuda(B, S, r, rd, s, sd, w):
     return B.batch(RMSNormOutCuda, r, rd, s, sd, w, axes=(0, 0, None, None, 0))
 
 
-def rmsnorm_cuda_calls(B, N: int, EPS: float, RSQRT, x: Coll, res: Coll, w: Coll) -> Coll:
-    """`RMSNormFusedCuda_v3`'s Calls, written into the body ``B`` (a composite's, or a Program root's): (normed, res')."""
+def rmsnorm_cuda_calls(B, N: int, EPS: float | None, RSQRT, x: Coll, res: Coll, w: Coll, eps: Coll | None = None) -> Coll:
+    """`RMSNormFusedCuda_v3`'s Calls, written into the body ``B`` (a composite's, or a Program root's): (normed, res').  With
+    ``eps`` (its bits; ``EPS`` None) `RMSNormFusedCuda_v5`'s, which reads it as an input."""
     T = min(N, b1.FUSED_RMS_BLOCK)
     lanes = B.call(bind(RMSNormLanesCuda, N=N, BLOCK=b1.FUSED_RMS_BLOCK), x, res)
     sums = B.call(bind(RMSNormWarpsCuda, T=T), lanes[2])
-    arg = B.call(bind(RMSNormArgCuda, N=N, EPS=EPS, NW=-(-T // WARP)), sums)
+    nw = -(-T // WARP)
+    arg = (B.call(bind(RMSNormArgCuda, N=N, EPS=EPS, NW=nw), sums) if eps is None
+           else B.call(bind(RMSNormArgCudaIn, N=N, NW=nw), sums, eps))
     s = _mufu(B, RSQRT, _F32(B, bits=arg)).bits()
     out = B.call(bind(RMSNormOutRowCuda, N=N), lanes[0], lanes[1], s, B.call(RMSNormScaleCuda, s), w)
     return tuple_of(out, lanes[0])
@@ -553,6 +611,15 @@ def RMSNormFusedCuda(B, S, x, res, w):
     """`RMSNormFusedCuda_v2` on bits (`rmsnorm_cuda_calls`): vLLM's generic `fused_add_rms_norm_kernel<bf16, 0, true>`,
     `s = rsqrtf(variance / N + eps)` with ``RSQRT`` computing `RsqrtApprox_v1`. Returns (normed, res')."""
     return rmsnorm_cuda_calls(B, S.N, S.EPS, S.RSQRT, x, res, w)
+
+
+@_on_bits("RMSNormFusedCuda", 5, ["N", "RSQRT"],
+          lambda S: ((("x", Array(S.N, BF16)), ("res", Array(S.N, BF16)), ("w", Array(S.N, BF16)), ("eps", F32)),
+                     Tuple(Array(S.N, BF16), Array(S.N, BF16))),
+          _word_view(VI.RMSNormFusedCudaV4, ("N",), ("RSQRT",)), word_statics=CUDA_WORD)
+def RMSNormFusedCudaIn(B, S, x, res, w, eps):
+    """`RMSNormFusedCuda_v4` on bits: `RMSNormFusedCuda_v3` with eps an input (`RMSNormArgCuda_v2`). Returns (normed, res')."""
+    return rmsnorm_cuda_calls(B, S.N, None, S.RSQRT, x, res, w, eps=eps)
 
 
 # --- the non-batch-invariant CUDA vector-8 paths -------------------------------------------------------------------------------
@@ -722,13 +789,24 @@ def RMSNormWarpsTriton(B, S, p):
 def RMSNormMeanEpsTriton(B, S, s):
     """Per chunk of 1024 columns `(w0 + w2) + (w1 + w3)` (idle warps +0), the chunks added in order from +0 (F32Add_v3), then
     `RMSNormVarEpsTriton_v2{N, EPS}`."""
+    return B.call(bind(RMSNormVarEpsTriton, N=S.N, EPS=S.EPS), _chunk_sum(B, s))
+
+
+def _chunk_sum(B, s: Coll) -> Coll:
     nw = len(s)
     warps = TRITON_THREADS // WARP
     total = None
     for c0 in range(0, nw, warps):
         w = [s[c0 + i] if c0 + i < nw else None for i in range(warps)]
         total = _add0(B, total, _add0(B, _add0(B, w[0], w[2]), _add0(B, w[1], w[3])))
-    return B.call(bind(RMSNormVarEpsTriton, N=S.N, EPS=S.EPS), total)
+    return total
+
+
+@composite("RMSNormMeanEpsTriton", 2, ["N"],
+           lambda S: ((("s", Array(-(-S.N // (TRITON_COLS * WARP)), F32)), ("eps", F32)), F32), conformance="exact-model-tested")
+def RMSNormMeanEpsTritonIn(B, S, s, eps):
+    """`RMSNormMeanEpsTriton_v1` with eps an input: the chunk sums as there, then `RMSNormVarEpsTriton_v4{N}`."""
+    return B.call(bind(RMSNormVarEpsTritonIn, N=S.N), _chunk_sum(B, s), eps)
 
 
 @composite("RMSNormOutRowTriton", 1, ["N"],
@@ -740,11 +818,14 @@ def RMSNormOutRowTriton(B, S, inv, invd, x, xd, w):
     return B.batch(RMSNormOutTriton, inv, invd, x, xd, w, axes=(None, None, 0, 0, 0))
 
 
-def rmsnorm_triton_calls(B, N: int, EPS: float, SQRT, SCALEA, RCP, x: Coll, w: Coll) -> Coll:
-    """`RMSNormTriton_v2`'s Calls, written into the body ``B`` (a composite's, or a Program root's)."""
+def rmsnorm_triton_calls(B, N: int, EPS: float | None, SQRT, SCALEA, RCP, x: Coll, w: Coll, eps: Coll | None = None) -> Coll:
+    """`RMSNormTriton_v2`'s Calls, written into the body ``B`` (a composite's, or a Program root's).  With ``eps`` (its bits;
+    ``EPS`` None) `RMSNormTriton_v4`'s, which reads it as an input."""
     th = B.call(bind(RMSNormThreadsTriton, N=N), x)
     s = B.call(bind(RMSNormWarpsTriton, N=N), th[0])
-    rms = _mufu(B, SQRT, _F32(B, bits=B.call(bind(RMSNormMeanEpsTriton, N=N, EPS=EPS), s)))
+    mean_eps = (B.call(bind(RMSNormMeanEpsTriton, N=N, EPS=EPS), s) if eps is None
+                else B.call(bind(RMSNormMeanEpsTritonIn, N=N), s, eps))
+    rms = _mufu(B, SQRT, _F32(B, bits=mean_eps))
     inv = B.call(EW.F32Mul, _mufu(B, SCALEA, _F32(B, value=_f32(1.0)), rms).bits(), _mufu(B, RCP, rms).bits())
     return B.call(bind(RMSNormOutRowTriton, N=N), inv, B.call(RMSNormInvTriton, inv), x, th[1], w)
 
@@ -757,3 +838,11 @@ def RMSNormTriton(B, S, x, w):
     `inv = div.full(1, sqrt.approx.ftz(fma(rcp(N), sum, eps)))` with ``SQRT``, ``SCALEA`` and ``RCP`` computing `MufuSqrtFtz_v1`,
     `DivFullScaleA_v1` and `DivFullRcp_v1`."""
     return rmsnorm_triton_calls(B, S.N, S.EPS, S.SQRT, S.SCALEA, S.RCP, x, w)
+
+
+@_on_bits("RMSNormTriton", 4, ["N", "SQRT", "SCALEA", "RCP"],
+          lambda S: ((("x", Array(S.N, BF16)), ("w", Array(S.N, BF16)), ("eps", F32)), Array(S.N, BF16)),
+          _word_view(VI.RMSNormTritonV3, ("N",), ("SQRT", "SCALEA", "RCP")), word_statics=TRITON_WORD)
+def RMSNormTritonIn(B, S, x, w, eps):
+    """`RMSNormTriton_v3` on bits: `RMSNormTriton_v2` with eps an input (`RMSNormMeanEpsTriton_v2`)."""
+    return rmsnorm_triton_calls(B, S.N, None, S.SQRT, S.SCALEA, S.RCP, x, w, eps=eps)
