@@ -234,6 +234,26 @@ def test_status_names_a_ready_pr_that_conflicts_with_main_without_a_sync_here(wo
     assert got[2].state == "ready" and got[2].why.startswith("admitted")
 
 
+def test_status_names_a_ready_pr_that_merges_onto_main_but_conflicts_with_next_and_the_members_there(world):
+    """17 Oct: status called nine PRs 'admitted' while each conflicted with `next` (#2392 with #2384 there), because it tested
+    them against `main` only; the next sync left each out.  A PR whose older head is on `next` is tested against what a sync
+    keeps below it, not against its own old merge."""
+    world.gh.put(1, world.change({"a.txt": "one\n"}))
+    world.gh.put(3, world.change({"b.txt": "three\n"}))
+    world.gh.put(4, world.change({"c.txt": "four\n"}))
+    world.queue().sync()
+    world.gh.put(5, world.change({"a.txt": "five\n", "b.txt": "five\n"}))
+    world.gh.put(6, world.change({"c.txt": "six\n"}))
+    world.gh.put(7, world.change({"d.txt": "seven\n"}))
+    world.gh.put(4, world.change({"c.txt": "four, again\n"}))
+    got = world.queue().status()
+    assert got[5].state == "refused"
+    assert got[5].why == "conflicts with `next` in a.txt, b.txt (#1, #3 there): merge their branches and re-mark"
+    assert got[6].why == "conflicts with `next` in c.txt (#4 there): merge #4's branch and re-mark"
+    assert got[7].state == got[4].state == "ready" and got[7].why.startswith("admitted") and got[4].why.startswith("admitted")
+    assert [n for n, e in sorted(got.items()) if e.state == "queued"] == [1, 3]
+
+
 def test_a_pr_containing_another_goes_in_after_it_and_waits_while_it_waits(world):
     parent = world.change({"x.txt": "x = 1\n"})
     world.gh.put(5, parent, ready=False)

@@ -50,7 +50,8 @@ the queue's state.  A sync keeps the longest prefix of that chain which still ma
 order) and merges the rest on top.  So a new push moves its PR to the tip, a dropped PR takes the commits after it along (they're
 merged again), and a `main` that moved outside the queue rebuilds `next` on it.  A PR whose head contains another open PR's head
 goes in after it and waits while that one waits.  A PR that doesn't merge cleanly is left out of that sync, and its owner is told
-which files conflict and which queued PRs touched them.
+which files conflict and which queued PRs touched them.  `status`, on any VM, tests each admitted PR's head the same way against
+`main` and against the queue branch's tip (`git merge-tree`), and names the members there that touched the conflicting files.
 
 Landing.  `land` walks `next` down from its tip and fast-forwards `main` to the first commit the gate accepts: `main` gets exactly
 the tree that was checked, with no new merge commit.  A push refused because `main` moved leaves `main` alone; the next sync rebuilds
@@ -568,9 +569,13 @@ class Queue:
         _git(self.workdir, "reset", "-q", "--hard", tip)
         if not files:
             return None, f"doesn't merge onto `{self.branch}`: {(r.stderr or r.stdout).strip()[-200:]}"
-        by = [f"#{m.pr}" for m in members
-              if set(files) & set(_out(self.workdir, "diff", "--name-only", f"{m.commit}^1", m.commit).split())]
+        by = [f"#{n}" for n in self._touched_by(files, members)]
         return None, f"conflicts with `{self.branch}` in {', '.join(files)}" + (f" (touched by {', '.join(by)})" if by else "")
+
+    def _touched_by(self, files: list[str], members: list[Member]) -> list[int]:
+        """The members whose merge commits change any of ``files``."""
+        return [m.pr for m in members
+                if set(files) & set(_out(self.workdir, "diff", "--name-only", f"{m.commit}^1", m.commit).split())]
 
     def handle(self, pr: PR) -> str | None:
         """The Slack handle of the lane that owns ``pr``, from main's registry (`.agents/skills/using-slack/registry.json`): the
@@ -732,7 +737,8 @@ class Queue:
         prs, waiting = self.fetch_prs(prs)
         entries = self.entries(prs, state)
         entries.update(waiting)
-        for i, m in enumerate(self.chain(), 1):
+        chain = self.chain()
+        for i, m in enumerate(chain, 1):
             if m.pr in entries and entries[m.pr].pr.head == m.head:
                 entries[m.pr].state, entries[m.pr].position, entries[m.pr].commit = "queued", i, m.commit
         conflicts = state.get("conflicts", {})
@@ -743,9 +749,26 @@ class Queue:
             elif e.state == "ready" and (files := conflicting_files(self.workdir, main, e.pr.head)):
                 e.state, e.why = "refused", (f"conflicts with `main` in {', '.join(files)}: merge `main` into the branch and "
                                              f"re-mark it")
+            elif e.state == "ready" and (below := self._kept_below(n, chain)) and (
+                    files := conflicting_files(self.workdir, below[-1].commit, e.pr.head)):
+                e.state, e.why = "refused", self._next_conflict(files, self._touched_by(files, below))
             elif e.state == "ready":
                 e.why = f"admitted: the next sync merges it onto `{self.branch}`, and drive checks and lands it in a train"
         return entries
+
+    @staticmethod
+    def _kept_below(n: int, chain: list[Member]) -> list[Member]:
+        """The members a sync keeps under PR ``n``: all of them, or, when an older head of ``n`` is on the branch, the ones below
+        it (a sync drops that merge and re-merges what came after)."""
+        return next((chain[:i] for i, m in enumerate(chain) if m.pr == n), chain)
+
+    def _next_conflict(self, files: list[str], by: list[int]) -> str:
+        """Why `status` refuses a ready PR that merges onto `main` but not onto the tip of the queue's branch, whose members ``by``
+        changed ``files``: the next sync would leave it out."""
+        there = f" ({', '.join(f'#{n}' for n in by)} there)" if by else ""
+        fix = (f"merge #{by[0]}'s branch and re-mark" if len(by) == 1 else "merge their branches and re-mark" if by
+               else f"merge what `{self.branch}` changed in them and re-mark")
+        return f"conflicts with `{self.branch}` in {', '.join(files)}{there}: {fix}"
 
 
 #: what a change must touch to move many circuit-check targets' cache keys: the circuits package (every Definition imports its
