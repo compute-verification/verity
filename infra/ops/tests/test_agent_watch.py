@@ -440,6 +440,20 @@ def test_a_run_left_creating_with_a_newer_one_started_is_not_stuck(tmp_path):
     assert records(tmp_path) == [] and [r.run for r in started] == ["run-w"]
 
 
+def test_a_run_creating_behind_a_followed_run_is_queued_not_stuck(tmp_path):
+    """infra, 20:07Z 18 Oct: run-1fba26b9 CREATING from 19:56:42Z behind run-87bda329, RUNNING from 19:55:57Z and followed,
+    every later run cancelled on arrival. The CREATING one waits its turn; the watch judges the run ahead of it."""
+    clock = Clock(W.epoch("2026-10-18T20:14:00Z"))
+    api = FakeApi([{"id": "bc-i", "name": "verity: infra", "status": "ACTIVE", "latestRunId": "run-z"}],
+                  {"run-z": {"status": "CANCELLED"},
+                   "run-c": {"status": "CREATING", "updatedAt": "2026-10-18T19:56:42.021Z"},
+                   "run-r": {"status": "RUNNING", "updatedAt": "2026-10-18T19:55:58.419Z"}},
+                  older={"bc-i": ["run-c", "run-r"]})
+    w, started = W.Watch(api, tmp_path / "events.jsonl", clock), []
+    w.sweep(started.append)
+    assert records(tmp_path) == [] and [r.run for r in started] == ["run-r"]
+
+
 def test_a_stream_that_ends_is_followed_again(tmp_path):
     """The stream returns on 400, 404 or 410 (410 stream_expired past the retention window); the run stayed followed with
     nothing feeding it and was never judged again."""

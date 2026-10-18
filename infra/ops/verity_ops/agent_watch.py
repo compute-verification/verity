@@ -31,7 +31,7 @@ background wait any call, finishing whose start the watch didn't see (it lay bef
   Only a latest run that FINISHED ends the row: a restarted run reads RUNNING for a while before it errors again.
 
 A run among an agent's newest left in CREATING for 10 min by the API's own `updatedAt` with no newer run started (only ones
-cancelled on arrival), or a followed background wait with nothing at all streamed for 2 h, is recorded once as **stuck**: on 18 Oct proofs' and circuits' runs sat in CREATING behind a
+cancelled on arrival) and no run followed (a run queued behind a followed one waits its turn, and that one is judged), or a followed background wait with nothing at all streamed for 2 h, is recorded once as **stuck**: on 18 Oct proofs' and circuits' runs sat in CREATING behind a
 held one while every later one was cancelled on arrival, network-accounting's behind a goal run from 18:27Z, and the API refuses
 to cancel a CREATING run. A goal run (`run-goal-...`) can't be read or streamed on its own (400), so it is never followed; an
 agent whose latest run the API won't read is recorded once as unreadable.
@@ -422,15 +422,15 @@ class Watch:
             else:
                 info = self.read(a, latest)
                 runs = [info] if info else []
-            newer_started = False                       # a CREATING run with a newer one started after it blocks nothing
-            for x in runs:
+            follow = next((x for x in runs if x.get("status") in FOLLOW and not str(x.get("id")).startswith(GOAL)), None)
+            newer_started = False                       # a CREATING run with a newer one started after it blocks nothing,
+            for x in runs if follow is None else ():    # and one behind a followed run waits for it, judged in its place
                 since = epoch(x.get("updatedAt") or x.get("createdAt"))
                 if (x.get("status") == "CREATING" and not newer_started and since is not None
                         and t - since >= STUCK["CREATING"] and self.once(x["id"], t)):
                     self.record("stuck", Run(a["id"], x["id"], a.get("name") or ""), status="CREATING", since=iso(since),
                                 minutes=int((t - since) // 60))
                 newer_started |= x.get("status") not in ("CREATING", "CANCELLED") or bool(x.get("durationMs"))
-            follow = next((x for x in runs if x.get("status") in FOLLOW and not str(x.get("id")).startswith(GOAL)), None)
             last = next((x for x in runs if x.get("id") == latest), None)
             if follow:
                 current[follow["id"]] = (a, follow)
