@@ -1,5 +1,6 @@
 import Definitions.Accounting.TS
 import Definitions.Accounting.Gates.Model
+import Definitions.Accounting.Device
 import Definitions.Pouw.Window
 
 /-!
@@ -7,7 +8,8 @@ import Definitions.Pouw.Window
 
 The vocabulary of `Models.Accounting.Guarantees.Compose`
 (note:compute-accounting/20261018T0618Z-draft-theorem-compose-r2), restated after RT-COMPOSE
-(note:compute-accounting/20261018T0501Z-draft-rt-compose) under decisions 107 and 109–113. The compile pass `C → C′`
+(note:compute-accounting/20261018T0501Z-draft-rt-compose) and RT-I8 (note:compute-accounting/20261018T0728Z-draft-rt-i8)
+under decisions 107, 109–114 and 117. The compile pass `C → C′`
 replaces each credited unit of a declared circuit by its kind's template, with its noise drawn after its operands are
 committed, one seed a Definition call site (decisions 101 and 102). The service then draws one uniform subset of the
 window's grid-padded tiles and proves each drawn tile with the generation of its own noise.
@@ -34,17 +36,20 @@ The logical layer:
   form of the Lean guarantee that bounds it (B2: `Scheme.luck` is a field, at least its template's proved value).
 * `wordsOf`, `weightOf`, `floorOf`, `kindCount`: the circuit's committed words, a unit's work weight, the circuit's
   floor `♭ = Σ_u ♭_{kind u}` and its units per kind.
-* `Declared.unitAt`, `tileWeight`, `tileStage`, `tileLuck`, `tileLuck0`: the service's `Np` grid-padded tiles
-  (`verity/core/protocols/pouw/window.py`): the circuit's units first, then fillers of weight `0`, which the work
-  excludes. A unit of weight `0` has luck `1`, so no premise asks anything of it.
+* `Declared.unitAt`, `tileWords`, `tileWeight`, `tileStage`, `tileLuck`, `tileLuck0`: the service's `Np` grid-padded
+  tiles (`verity/core/protocols/pouw/window.py`): the circuit's units first, then fillers of no words and weight `0`,
+  which the work excludes. A unit of weight `0` has luck `1`, so no premise asks anything of it.
 * `Mode`, `SplitStages`, `modeAt`, `rightAt`, `SplitStages.LuckAt`, `share`, `stageShare`: a window's stages under
   per-call-site coins, with B1's split: a unit is paid, folded (its product skipped and its committed words folded, so
   a drawn one passes when its receipt is lucky) or whole (product and fold skipped, so a drawn one passes only when its
   guessed fold state is right).
 * `serviceGame`, `drawOf`: the window as one round on coins `Paths C M × (Equiv.Perm (Fin N) × Ξ)`: the call sites'
   coins, then the service's one uniform `K`-subset (`Pouw.Window.subsetDraw`, its `Equiv.Perm`) and the proofs' coins
-  `Ξ` (W4: `DrawnLayer.SoundAt` needs them). Its share is `a·(folded work) + b·(whole work)`, and it passes when every
-  drawn tile is right.
+  `Ξ` (W4: `DrawnLayer.JointSound` needs them). Its share is `a·(folded work) + b·(whole work)`, and it passes when
+  every drawn tile is right.
+* `StageCuts`, `PaidGood`: the window's proofs (`Accounting.TS.DrawnLayer`, values per committed position) bind each
+  position before the coin after the call site that wrote it (RT-I8's B1, decision 114), and the modes are the run's: a
+  paid tile is good, so the share counts every tile that isn't (`DrawnLayer.Covers`).
 * `SplitRate`: the per-stage condition from which a rate `Λ` bounds the window's saving per unit of detection.
 * `Scope`, `WorkAt`: the logical parameters' ranges, and the logical layer's conclusion on an accepted run: all but a
   share `d` of the committed words fixed right and all but `d₀ ≤ d` folded, with `a·(d − d₀) + b·d₀ < r`.
@@ -56,8 +61,9 @@ The physical layer:
   `ε = ε_♭ + ε_μ + r` at the logical layer's bound `r`.
 * `Fits`, `ModelScope`: the model is the circuit's on the data sheet; the model's ranges.
 * `Certificate`, `Certificate.Holds`, `certOf`: decision 111's interface, which the physical layer's ledger consumes:
-  work of each kind in the window `[t0, t1]`, its credit, `ε`, `δ` and `γ_♭ = T(H)/T_cred` (W1: `♭` reported, not
-  pinned).
+  work of each kind in a device window (`Accounting.Window`, its ticks), its credit, `ε`, `δ` and `γ_♭ = T(H)/T_cred`
+  (W1: `♭` reported, not pinned). The ledger, not this statement, decides how much of a device's time the certificates
+  it admits may claim.
 -/
 
 namespace Accounting.Compose
@@ -156,7 +162,8 @@ noncomputable def LuckForm.value : LuckForm → ℕ → ℝ
   | .unproved, _ => 1
 
 /-- **A scheme's templates**, per kind: one unit's floor `♭_k` over the classes `K`, proved at the worst operands
-(decision 109; `0` where the noise proves none, as for a kind whose noise a zero or sparse operand defeats), the
+(decision 109; `0` where the noise proves none, as one-sided noise proves none; decision 117: H1's attention matmuls
+draw a fresh coin per entry on both operands, so their floor reads no operand and they are credited at it), the
 committed words that floor prices (`0` with it), the span a skip pattern has before the receipt's next checkpoint
 (W6), and for each mode, folded and whole, the form of the luck its template proves and the luck the window is held to
 (`luck`, `luck0`). -/
@@ -199,6 +206,10 @@ def kindCount {ι : Type} (Cd : Declared ι) (k : Kind) : ℕ :=
 grid level with fillers, which weigh `0`). -/
 def Declared.unitAt {ι : Type} (Cd : Declared ι) {Np : ℕ} (t : Fin Np) : Option (Fin Cd.N) :=
   if h : t.val < Cd.N then some ⟨t.val, h⟩ else none
+
+/-- A tile's committed words: its unit's kind's, and `0` for a filler. -/
+def tileWords {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) (Np : ℕ) (t : Fin Np) : ℝ :=
+  (Cd.unitAt t).elim 0 fun v => (Sc.words (Cd.kindOf v) : ℝ)
 
 /-- A tile's work weight: its unit's, and `0` for a filler. -/
 noncomputable def tileWeight {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) (Np : ℕ) (t : Fin Np) : ℝ :=
@@ -280,6 +291,22 @@ noncomputable def serviceGame {C Ξ : Type} {N M : ℕ} (stg : Fin N → ℕ) (W
 def drawOf {N K : ℕ} {Ξ : Type} (hK : K ≤ N) (β : Equiv.Perm (Fin N) × Ξ) (i : Fin K) : Fin N :=
   β.1 (Fin.castLE hK i)
 
+/-- **Each position is bound before the coin after the call site that wrote it** (RT-I8's B1 for the window, decision
+114): a position of the circuit's inputs before the first call site's coin, and a tile's output before the coin of the
+call site after its own, the draw after the last. Stage `j`, counted from the last, is coin `M − 1 − j` of the window's
+`M`, so the coin after it is `M − j`. A value opened one way for the tile that wrote it and another for a tile that
+reads it, after the reader's coin, is then a binding failure (`DrawnLayer.MovedIn`). -/
+def StageCuts {C B Q Pos V : Type} {M s N : ℕ} (stg : Fin N → ℕ) (pf : DrawnLayer C B 1 M s (Fin N) Q Pos V) :
+    Prop :=
+  ∀ ℓ, ((pf.cut ℓ).2 : ℕ) = (pf.src ℓ).elim 0 fun u => M - stg u.2
+
+/-- **The modes are the run's**: a tile paid along the window's coins is good (`DrawnLayer.Good`: it and every tile
+upstream of it held and right at their committed values), so a tile that isn't good is folded or whole, and the
+service's share counts it. -/
+def PaidGood {C B Q Pos V : Type} [Fintype C] [Fintype B] [Nonempty V] {M s N : ℕ} (stg : Fin N → ℕ)
+    (W : SplitStages C (Fin N) M) (pf : DrawnLayer C B 1 M s (Fin N) Q Pos V) : Prop :=
+  ∀ x t, W.modeAt stg (coinAt x 0).1 t = .paid → pf.Good x 0 t
+
 /-- **The per-stage rate condition** for `K` draws at weight bound `ρ` (each tile is at least `ρ` times its work share
 of the `N` tiles), luck `p` folded and `p0` whole, costs `a` and `b` per unit of share and stage shares at most
 `w_max`: there are `ν, ν₀ ≥ 0` such that for every stage's folded work `W_F`, whole work `W_0` and their right parts
@@ -348,13 +375,13 @@ def ModelScope (Sc : Scheme K) (Cd : Declared ι) (Z : Model K R T L U F X) (lam
 end Credit
 
 /-- **A credit certificate** (decision 111's interface, at the physical layer under decision 113): the prover system
-did work `units k` of each kind `k` in the window `[t0, t1]`, worth `credit` seconds on the declared machine, short by
-at most `eps` of it except with probability `delta`; `gamma` is honest's time over the credit, `γ_♭ = T(H)/T_cred`,
-which says what the floor `♭` is against the honest kernel (W1). The physical layer's ledger reads it, and the window's
-times are its labels: what device time the work took, and whose, is the ledger's. -/
+did work `units k` of each kind `k` in the device window `window` (`Accounting.Window`: `len` ticks from `start`),
+worth `credit` seconds on the declared machine, short by at most `eps` of it except with probability `delta`; `gamma` is
+honest's time over the credit, `γ_♭ = T(H)/T_cred`, which says what the floor `♭` is against the honest kernel (W1).
+It is what the physical layer's ledger consumes, never a credit by itself: the ledger admits a set of certificates on
+one device only if the credit inside every interval of its ticks fits in it, so one device's time is credited once. -/
 structure Certificate where
-  t0 : ℝ
-  t1 : ℝ
+  window : Accounting.Window
   units : Kind → ℕ
   credit : ℝ
   eps : ℝ
@@ -367,13 +394,12 @@ def Certificate.Holds {Ω : Type} [Fintype Ω] {S : ℕ} {K T L U : Type} (c : C
     Prop :=
   prob (fun x => P.accepts x ∧ (P.run x).run.time < (1 - c.eps) * c.credit) ≤ c.delta
 
-/-- **The circuit's certificate**: its units per kind, `T_cred`, `ε` at `r = Λ·ln(1/δ_s)`, the given `δ`, and `γ_♭`
-against honest kernel `H`. -/
+/-- **The circuit's certificate** in device window `win`: its units per kind, `T_cred`, `ε` at `r = Λ·ln(1/δ_s)`, the
+given `δ`, and `γ_♭` against honest kernel `H`. -/
 noncomputable def certOf {ι K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype T] [Fintype L] [Fintype U]
     [Fintype F] [Fintype X] (Sc : Scheme K) (Cd : Declared ι) (Z : Model K R T L U F X) (H : Honest K)
-    (lam : R → ℝ) (Λ δs δ t0 t1 : ℝ) : Certificate where
-  t0 := t0
-  t1 := t1
+    (lam : R → ℝ) (Λ δs δ : ℝ) (win : Accounting.Window) : Certificate where
+  window := win
   units := kindCount Cd
   credit := creditOf Sc Cd Z
   eps := epsOf Sc Cd Z lam (Λ * Real.log (1 / δs))

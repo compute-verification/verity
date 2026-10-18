@@ -8,9 +8,6 @@
   "Accounting.Assumptions.Compose.HMu": {
    "owner": "@compute-accounting"
   },
-  "Accounting.Assumptions.Compose.RightFoldedDrawn": {
-   "owner": "@compute-accounting"
-  },
   "Accounting.Assumptions.EncodeChainHardness": {
    "owner": "@memory-accounting",
    "digest": "b017852df44b39b0d2fd40e91d34bb852531e4cd039425aff5c9c207edcaafd8"
@@ -425,6 +422,9 @@
   "Pouw.PearlC.pearlCTilesDevChainCap": {
    "owner": "@compute-accounting",
    "digest": "2170dd5823cfd9a6272b9ce11cf29f7de11dce337c0926e307ab60d0f8dd34b6"
+  },
+  "Accounting.Assumptions.Compose.UnitFolded": {
+   "owner": "@compute-accounting"
   }
  },
  "meaning": [
@@ -857,9 +857,6 @@
    "owner": "@compute-accounting"
   },
   "Accounting.SecurityProofs.Compose.CreditOfWork": {
-   "owner": "@compute-accounting"
-  },
-  "Accounting.SecurityProofs.Compose.DrawnJointOfSoundAt": {
    "owner": "@compute-accounting"
   },
   "Accounting.SecurityProofs.Compose.ServiceBudget": {
@@ -5411,6 +5408,9 @@
    "signature": ["Pouw.SecurityProofs.WorkWeightedSampling : Pouw.Guarantees.WorkWeightedSampling"],
    "assumptions": [],
    "type_hash": "2f6552a7668b089031af583e72b5e551727622dd8c12b1269790c9ad397ed88b"
+  },
+  "Accounting.SecurityProofs.Compose.ServiceCovers": {
+   "owner": "@compute-accounting"
   }
  },
  "shape": {
@@ -6180,13 +6180,12 @@
    "Accounting.SecurityProofs.Gates.SquaringCarryNibbles": "frozen (no-function): The carry bound over every circuit of the gate model that squares on the nibble family (Accounting.Gates.nibbles), a counting bound from Fooling at j = 4, not a property of a Lean function.",
    "Accounting.SecurityProofs.Gates.UnitsFooling": "frozen (no-function): A counting bound in budgeted units over every circuit of the gate model (Security/Definitions/Accounting/Gates/Model.lean) and every set of inputs, not a property of a Lean function: the property's census check has no Lean code yet.",
    "Accounting.SecurityProofs.Gates.SquaringUnits": "frozen (no-function): The units bound over every circuit of the gate model that squares on the nibble family (Accounting.Gates.nibbles), a counting bound from UnitsFooling, not a property of a Lean function.",
-   "Accounting.SecurityProofs.Compose.DrawnJointOfSoundAt": "lemma: the union bound over a sampled window's draws, each draw's proof soundness at delta_ZK (Accounting.TS.DrawnLayer.SoundAt, #2466) giving the joint form CircuitWork takes at s*delta_ZK, over every DrawnLayer; not a property of a Lean function.",
    "Accounting.SecurityProofs.Compose.SplitRateClosed": "lemma: Accounting.Compose.SplitRate at max(a(1 + K rho w_max)/(rho K (1 - p)), b/(rho K)) when whole units are luckless, the folded and the whole branch (RT-COMPOSE's B1); real arithmetic, not a Lean function.",
    "Accounting.SecurityProofs.Compose.SplitRateMerged": "lemma: Accounting.Compose.SplitRate at b(1 + K rho w_max)/(rho K (1 - q)) for luck at most q, every skip priced whole; real arithmetic, not a Lean function.",
    "Accounting.SecurityProofs.Compose.ServiceBudget": "lemma: the window budget RoundGame.BudgetAt Lambda of the service's one draw (Accounting.Compose.serviceGame), from per-stage luck and the stage-share bound with folded and whole shares priced apart, as StageBudget is for staged draws, over every split-stage window; not a Lean function.",
-   "Accounting.SecurityProofs.Compose.CircuitWork": "frozen (no-function,world-unlisted): decision 113's logical layer, over every declared circuit (Accounting.Compose.Declared) run as one sampled window (serviceGame, drawOf) and its drawn units' proofs (Accounting.TS.DrawnLayer): an accepted run has its committed words right but for a share at cost Lambda ln(1/delta_s) (WorkAt), except with probability delta_s + delta_bind + delta_ks; not a Lean function, an Accounting.TS.prob event that shape.events does not list, and HMu, RightFixedDrawn and RightFoldedDrawn are not on the premises list.",
+   "Accounting.SecurityProofs.Compose.CircuitWork": "frozen (no-function,world-unlisted): decision 113's logical layer, over every declared circuit (Accounting.Compose.Declared) run as one sampled window (serviceGame, drawOf) and its proofs with values per committed position (Accounting.TS.DrawnLayer, bound at each stage's coin, StageCuts): an accepted run has its committed words right but for a share at cost Lambda ln(1/delta_s) (WorkAt), except with probability delta_s + delta_bind + delta_ks; not a Lean function, an Accounting.TS.prob event that shape.events does not list, and HMu, UnitFixed and UnitFolded are not on the premises list.",
    "Accounting.SecurityProofs.Compose.CreditOfWork": "frozen (no-function,world-unlisted): decision 113's physical step, the tensor-scalar model on a data sheet: a run with WorkAt's work that meets A1-A7, FoldOptFolded and FillOpt takes at least (1 - eps) T_cred (SheetDIdealFloor's chain on one run), over every model and anatomy, not a Lean function; A1-A7, FoldOptFolded and FillOpt are not on the premises list.",
-   "Accounting.SecurityProofs.Compose.CircuitCredit": "frozen (no-function,world-unlisted): the composed credit CreditOfWork after CircuitWork (decision 113), Accounting.Compose.Certificate.Holds for every declared circuit's sampled window on a data sheet, an Accounting.TS.prob event that shape.events does not list, not a Lean function; HMu, RightFixedDrawn, RightFoldedDrawn, A1-A7, FoldOptFolded and FillOpt are not on the premises list.",
+   "Accounting.SecurityProofs.Compose.CircuitCredit": "frozen (no-function,world-unlisted): the composed credit CreditOfWork after CircuitWork (decision 113), Accounting.Compose.Certificate.Holds for every declared circuit's sampled window on a data sheet, in a device window the physical layer's ledger consumes, an Accounting.TS.prob event that shape.events does not list, not a Lean function; HMu, UnitFixed, UnitFolded, A1-A7, FoldOptFolded and FillOpt are not on the premises list.",
    "Accounting.Guarantees.Compose.CircuitCreditFS": "unstated: the composed credit's Fiat-Shamir form (decision 112) takes Pouw.Assumptions.SteerBound, a premise of gap (7)'s FiatShamirFloor (b751188eb1), which stays out of the lock until its card; its stub Accounting.SecurityProofs.Compose.CircuitCreditFS is listed then, with it.",
    "Accounting.SecurityProofs.FillerLuck.ParityLuck": "lemma: Lemma P2 of RS-E-REF r6 VI.2.2 at one cell, over any word ring read mod 2 and any column of uniform parity, at every deficit; FillerCellLuck and the window statements are what it is for.",
    "Accounting.SecurityProofs.FillerLuck.FillerCellLuck": "frozen (no-function): the filler's cell check (decision 47) at pfill-bits and pfill-bU, in the s32 word and over Z, over every run word with R two-sided products in the cell projection, not a Lean function: the filler's check has no Lean code yet.",
@@ -6201,7 +6200,8 @@
    "Accounting.SecurityProofs.FillerLuck.PinnedFillBudget": "frozen (no-function): Lemma C's BudgetAt at 1 over every spot-checked window of pinned receipts (Accounting.Filler.SpotPinnedFill), at any receipt function, not a Lean function: the service's spot check has no Lean code yet.",
    "Accounting.SecurityProofs.FillerLuck.PinnedFillBlocksDeficit": "frozen (no-function): Theorem S with another block's one-draw check beside a pinned receipt's spot check (Accounting.Filler.PinnedFillBlocks), the filler at p = 0, not a Lean function: the service's check has no Lean code yet; the other block's pass bound is part of each round's shape.",
    "Accounting.SecurityProofs.RequirementHeldLive": "frozen (no-function): A counting identity over a declared circuit's wiring, its execution and the audit's store (Security/Definitions/Accounting/Requirement.lean): once the store is W's block for block (StoreMatches), W's live bits are those in the held blocks plus the live bits of each resident block not held; about no function of the code.",
-   "Accounting.SecurityProofs.TS.DrawnRightOff": "lemma: the crypto half of (I8) for a sampled window over every window of drawn units' proofs (Accounting.TS.DrawnLayer), not a Lean function: binding of every committed position before the coin that follows its commitment at delta_bind and the proofs' soundness jointly over a round's draws at delta_ks as probability hypotheses, and each unit's pinning (DrawnLayer.Pins) as a definitional hypothesis, give the drawn units right at their committed values outside S(delta_bind + delta_ks); ProofsSoundOfDrawn and a composition's folded credit, which take the drawn units right, are what it is for."
+   "Accounting.SecurityProofs.TS.DrawnRightOff": "lemma: the crypto half of (I8) for a sampled window over every window of drawn units' proofs (Accounting.TS.DrawnLayer), not a Lean function: binding of every committed position before the coin that follows its commitment at delta_bind and the proofs' soundness jointly over a round's draws at delta_ks as probability hypotheses, and each unit's pinning (DrawnLayer.Pins) as a definitional hypothesis, give the drawn units right at their committed values outside S(delta_bind + delta_ks); ProofsSoundOfDrawn and a composition's folded credit, which take the drawn units right, are what it is for.",
+   "Accounting.SecurityProofs.Compose.ServiceCovers": "lemma: the service's share (Accounting.Compose.serviceGame at 1 1) covers every tile that isn't good (Accounting.TS.DrawnLayer.Covers, #2466's, proved for this game) once a paid tile is good (PaidGood), over every declared circuit's window and its proofs; not a property of a Lean function."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
