@@ -1390,6 +1390,12 @@
    "assumptions": [],
    "type_hash": "c5903d4298ec9341315cfb09374b37849013cb995fd078d50b0312081a60a2a3"
   },
+  "Properties.Requirement.topological": {
+   "owner": "@memory-accounting",
+   "signature": ["Properties.Requirement.topological : Properties.Requirement.Topological"],
+   "assumptions": [],
+   "type_hash": ""
+  },
   "Properties.SampledProofs.acceptMeans": {
    "owner": "@proofs",
    "signature": ["Properties.SampledProofs.acceptMeans : Properties.SampledProofs.AcceptMeans"],
@@ -2117,6 +2123,10 @@
    },
    "Properties.Requirement.follows": {
     "function": "CircuitRequirement.Instance.follows",
+    "outcome": "none"
+   },
+   "Properties.Requirement.topological": {
+    "function": "CircuitRequirement.Instance.topological",
     "outcome": "none"
    },
    "Properties.Requirement.live": {
