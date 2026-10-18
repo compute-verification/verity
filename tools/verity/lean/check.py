@@ -103,8 +103,11 @@ publishes), and prints what changed: each changed guarantee's signature before a
 guarantee reads with its source now.  A weakened definition passes every axiom check and the replay, so a person has to see
 those changes: Daniel gets a DM with them when they land on `main` (`research merge`'s `spec_alert`).  An audit without
 `--update` whose every failure is a record difference (`RECORD_DIFFERENCE`: two records each right on its side of a merge
-whose definitions changed) writes the same `lean-audit.json` and `review.txt` there, and its report's `regenerated` names
-the file, so a failed check of a train's merge carries its record.  A guarantee whose
+whose definitions changed, an owned entry with no record yet, a premise the lock doesn't list) writes the same
+`lean-audit.json` and `review.txt` there, and its report's `regenerated` names the file, so a failed check of a train's
+merge carries its record.  With `--regenerate` (a train's lean-audit step) such a package passes instead, and `audit.json`'s
+`regenerated` maps each to its record for the train to commit before it lands; the package's own lock is never written,
+and every other failure fails as before.  A guarantee whose
 statement is the same but prints differently (same type hash and named assumptions: a toolchain's printer, notation) gets
 one line, and so does a definition read in another module with the same content.  `--update` keeps each entry's `owner`
 and writes a new entry only with one, from `--owner`; an owner changed by hand gets one line, since it changes who answers
@@ -1286,12 +1289,14 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
 
 
 #: the failures `--update` settles from the build alone: a guarantee, a `reads` group or an assumption whose record differs
-#: from the build (two records, each right on its own side of a merge).  A missing record or name, an owner, and every other
-#: failure take a person
+#: from the build (two records, each right on its own side of a merge), an owned guarantee or assumption with no record yet,
+#: and a premise the lock doesn't list (the premise rule adds it with its guarantees' owner).  A missing name, an owner, and
+#: every other failure take a person
 RECORD_DIFFERENCE = re.compile(
     r"guarantees: (\S+'s (signature|assumptions|type hash) changed:|they now read definitions in |they no longer read |"
-    r"definitions in \S+ that .+? read changed \(|those that read \S+ are |the digest recorded for )|"
-    r"assumptions: \S+'s definition in \S+ changed;")
+    r"definitions in \S+ that .+? read changed \(|those that read \S+ are |the digest recorded for |\S+ has no record;)|"
+    r"assumptions: (\S+'s definition in \S+ changed;|\S+ has no record;|\S+ is a premise of .+, an assumption the lock "
+    r"doesn't list;)")
 
 
 def regenerated(policy: dict, facts: dict, files: dict[str, str], fails: list[str]) -> dict | None:
@@ -2445,6 +2450,9 @@ def main(argv: list[str]) -> int:
                     "\"into\": spec module[, \"beside\": module]}}; write each as `def G : Prop` in the spec module and "
                     "`theorem X.SecurityProofs.G : X.Guarantees.G` beside its proof, or in `beside` (`lift`), instead of "
                     "auditing, and FILE.moved.json for `--update --moved`")
+    ap.add_argument("--regenerate", action="store_true", help="a train's audit: a package whose every failure is a record "
+                    "difference (`RECORD_DIFFERENCE`) passes, and audit.json's `regenerated` names the record `--update` writes "
+                    "for it under --out, which the train commits; the package's own lock is never written")
     ap.add_argument("--no-replay", action="store_true", help="skip the kernel replay (`Replay.lean`)")
     ap.add_argument("--replay-cache", type=Path, metavar="DIR", help="reuse the replay of each module that passed it with the "
                     "same .olean files, its imports' included, on the same toolchain (`replay_keys`), and store each one "
@@ -2464,6 +2472,8 @@ def main(argv: list[str]) -> int:
     pkgs = [p.resolve() for p in (packages(a.root.resolve()) if a.all else a.package)]
     if not pkgs or (a.all and a.package) or (a.all and (a.update or a.name_instances)):
         ap.error("name package directories, or --all (which neither updates records nor names instances)")
+    if a.regenerate and (a.update or a.name_instances or a.lift):
+        ap.error("--regenerate writes no lock: not with --update, --name-instances or --lift")
     moved = None
     if a.moved:
         if not a.update:
@@ -2555,6 +2565,8 @@ def main(argv: list[str]) -> int:
                 rep["failures"] += tamper
                 if regen := rep.pop("regenerated", None):
                     Path(regen).unlink(missing_ok=True)
+            if a.regenerate and rep.get("regenerated") and rep["failures"]:
+                rep["settled"], rep["failures"] = rep["failures"], []
             reports[pkg] = rep
             n = sum(rep.get("declarations", {}).values())
             head = f"AUDIT {pkg}: {'PASS' if not rep['failures'] else 'FAIL'}"
@@ -2592,8 +2604,12 @@ def main(argv: list[str]) -> int:
         print(f"audit: guarantees, the definitions they read, or listed compile-time code changed in "
               f"{', '.join(changed)}: say so in the PR; Daniel gets a DM with the changes above when they land (review.txt in "
               f"each package's reports)", flush=True)
-    (out / "audit.json").write_text(json.dumps({"passed": not failed, "failed": failed, "packages": reports}, indent=1,
-                                               ensure_ascii=False) + "\n")
+    regen = {os.path.relpath(r["package"], a.repo.resolve()): r["regenerated"] for r in reports if r.get("settled")}
+    for p, f in regen.items():
+        print(f"audit: {p}: every failure is a record difference, settled by {f}, which the train commits over "
+              f"{p}/{POLICY}", flush=True)
+    (out / "audit.json").write_text(json.dumps({"passed": not failed, "failed": failed, "packages": reports,
+                                                "regenerated": regen}, indent=1, ensure_ascii=False) + "\n")
     print(f"AUDIT: {'PASS' if not failed else 'FAIL (' + ', '.join(failed) + ')'}; reports in {out}", flush=True)
     return 1 if failed else 0
 

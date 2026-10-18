@@ -317,6 +317,7 @@
       "owns": [
         "AGENTS.md",
         "README.md",
+        "DESIGN.md",
         ".agents/skills/",
         "tests/",
         "fixtures/",

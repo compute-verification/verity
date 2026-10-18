@@ -27,5 +27,6 @@ import Proofs.Accounting.TS
 import Proofs.Accounting.Actual
 import Proofs.Accounting.Responder
 import Proofs.Accounting.Responder.Latency
+import Proofs.Accounting.HMu
 
 /-! `Proofs.Accounting`: the proofs of resource accounting's guarantees. -/

@@ -188,22 +188,39 @@ template <int RK, int LAG, int TIE, bool SLEEP = false, int UF = 0, int USH = 0,
   using MLW::MLW;
   static constexpr int NST = (SMEM - 1024) / (STAGE + 16);   // ML's STAGES
   static_assert(NST == 3, "MLW's 3 stages");
-  // raster's tile place with group 8 (esetup checks tiles_m % 8 == 0, so every group has 8 rows) without its divisions,
-  // whose integer-division seed ptxas sometimes schedules so the SASS gate can't match it: a place keeps its group row
-  // blk and its rank r in the group, advanced by subtraction
+  // raster's tile place with group 8 (any-M: esetup needs only m % 128 == 0, so tiles_m is any count and the last group is
+  // ragged, tiles_m % 8 rows), without its divisions, whose integer-division seed ptxas sometimes schedules so the SASS
+  // gate can't match it: a place keeps its group row blk and its rank r in the group, advanced by subtraction. place_step
+  // still steps a group as 8 * tiles_n ranks, which the ragged last group's ranks stay below, so it never over-advances;
+  // place_tile maps the ragged group's rank by the row count a compile-time divisor in a switch picks, so ptxas uses a
+  // magic multiply, not the division seed
   struct Place { int blk, r; };
   DEV void place_step(Place& p, int d) const {
     p.r += d;
     while (p.r >= 8 * tiles_n) { p.r -= 8 * tiles_n; p.blk++; }
   }
-  DEV static void place_tile(const Place& p, int& tm, int& tn) { tm = 8 * p.blk + (p.r & 7); tn = p.r >> 3; }
+  DEV static void place_tile(const Place& p, int tiles_m, int& tm, int& tn) {
+    const int full = tiles_m >> 3, rem = tiles_m & 7;
+    if (rem == 0 || p.blk < full) { tm = 8 * p.blk + (p.r & 7); tn = p.r >> 3; return; }
+    int col, row;   // the ragged last group of rem rows (1 .. 7): col = r / rem, row = r % rem by a constant divisor a case
+    switch (rem) {
+      case 1: col = p.r; row = 0; break;
+      case 2: col = p.r >> 1; row = p.r & 1; break;
+      case 3: col = p.r / 3; row = p.r - col * 3; break;
+      case 4: col = p.r >> 2; row = p.r & 3; break;
+      case 5: col = p.r / 5; row = p.r - col * 5; break;
+      case 6: col = p.r / 6; row = p.r - col * 6; break;
+      default: col = p.r / 7; row = p.r - col * 7; break;
+    }
+    tm = 8 * full + row; tn = col;
+  }
   // ML::issue with the refill's tile place kept: it recomputes it (raster's divisions) at every refill, in warp 0, which
   // every warp then waits for at the next refill
   int ipt = -1, itm = 0, itn = 0, bsh = 31;
   Place ipl{0, 0};
   DEV void issue() {
     if (pt >= tiles_m * tiles_n) return;
-    if (pt != ipt) { place_step(ipl, ipt < 0 ? pt : pt - ipt); place_tile(ipl, itm, itn); ipt = pt; }
+    if (pt != ipt) { place_step(ipl, ipt < 0 ? pt : pt - ipt); place_tile(ipl, tiles_m, itm, itn); ipt = pt; }
     mbar_wait(empty(ps), pph ^ 1);
     mbar_expect_tx(full(ps), STAGE);
     if (pkt < KT) {
@@ -474,7 +491,7 @@ template <int RK, int LAG, int TIE, bool THREE, bool SLEEP = false, int UF = 0, 
   for (int t = blockIdx.x; t < tiles_m * tiles_n; t += gridDim.x) {
     int tm, tn;
     ml.place_step(pl, t == (int)blockIdx.x ? t : (int)gridDim.x);
-    L::place_tile(pl, tm, tn);
+    L::place_tile(pl, tiles_m, tm, tn);
     const uint32_t tile_id = tm * tiles_n + tn;
     St ch[8];
 #pragma unroll
@@ -842,8 +859,8 @@ static void qf(EP& P, const Sig& s, QweK f = qwe<0>) {
 static void esetup(EP& P, int m, int n, int k, uint32_t seed, bool gate) {
   P.m = m; P.n = n; P.k = k; P.seed = seed;
   // k = 128: cgemm.cu's cohalf, on its own operands (quant's 256-column steps leave this file's X unwritten there)
-  if (m % 1024 || n % 128 || (k % 256 && k != 128) || k > 16128) {
-    fprintf(stderr, "shape %d %d %d: m %% 1024 == 0 (EL's raster groups), n %% 128 == 0, k %% 256 == 0 or 128, k <= 16128 (S_1, S_2 in s8)\n", m, n, k);
+  if (m % 128 || n % 128 || (k % 256 && k != 128) || k > 16128) {
+    fprintf(stderr, "shape %d %d %d: m %% 128 == 0 (any-M: EL's raster has a ragged last group), n %% 128 == 0, k %% 256 == 0 or 128, k <= 16128 (S_1, S_2 in s8)\n", m, n, k);
     exit(2);
   }
   int nsm;
