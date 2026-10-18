@@ -5,6 +5,7 @@ import Proofs.Population.Pointer
 import Proofs.Population.Leakage
 import Proofs.Population.Work
 import Proofs.Population.Instance
+import Proofs.Population.LongValue
 
 /-!
 # Populations: which object each policy needs of sampled proofs' guarantee
@@ -27,4 +28,7 @@ root's weight; a copied unit is correct work never done, so luck needs distinct 
 `Instance`: a circuit's partition is a single-assignment population whose wrong units are the partition's, and an
 acyclic one when its units are ordered along the wires (intervals in layout order, as `Q_call` v1 cuts); a unit that
 sandwiches another on a path of wires, as `Q_word` v1 can cut, makes a cycle.
+`LongValue`: a committed value of another length than its slot's width buys nothing. The verifier refuses such an
+opening before it reads it, so the slot is ⊥ in its view (or the run holds a collision), and its writer and readers are
+wrong; ⊥ is weakly dominated by a short wrong value, and the theorems above hold over `Option V` with `|V| + 1` for `|V|`.
 -/
