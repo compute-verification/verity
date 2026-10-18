@@ -1179,6 +1179,22 @@ def test_a_sweep_points_decode_batch_and_prompt_name_its_key_and_its_graph_sizes
     assert E2E.decode_key() == "decode_b1" and E2E.CAPTURE_SIZES == [1]
 
 
+def test_a_prefill_point_off_8192_tokens_names_its_key():
+    """``--prefill`` off the panel's 8,192 tokens keys the prefill row by its length, so `panel_rows.py` (``prefill_8192``)
+    never reads it as the panel's prefill row."""
+    E2E = load("pearl_c_vllm_e2e_prefill", KERNEL.parent / "pearl_c_vllm" / "e2e.py")
+    E2E.configure(types.SimpleNamespace(batch=32, prompt=64, prefill=2560))
+    assert (E2E.prefill_key(), E2E.PREFILL) == ("prefill_2560", 2560)
+    assert E2E.SHAPES == {"prefill_2560": "e2e-llama31-8b-vllm-m2560", "decode_b32_step": "e2e-llama31-8b-vllm-m32"}
+    assert len(E2E.prompts(1)["prefill"][0]) == 2560
+    rec = lambda m, ph: {"mode": m, "phase": ph, "rep": 0, "s": 1.0, "gemm_s": 0.0, "step_s": 0.01, "gemm_step_s": 0.0}
+    t = E2E.timing([rec(m, ph) for m in E2E.MODES for ph in ("prefill", "decode")])
+    assert set(t["pearlc"]["timing"]) == {"prefill_2560_s", "prefill_2560_gemm_s", "decode_b32_step_s", "decode_b32_step_gemm_s"}
+    assert set(t["pearlc"]["reps"]) == {"prefill_2560", "decode_b32"} and list(E2E.split(t)) == ["prefill_2560", "decode_b32_step"]
+    E2E.configure(types.SimpleNamespace(batch=32, prompt=64))
+    assert E2E.SHAPES == {"prefill_8192": "e2e-llama31-8b-vllm-m8192", "decode_b32_step": "e2e-llama31-8b-vllm-m32"}
+
+
 def test_the_noise_sweep_pairs_each_pearl_c_rep_with_the_stock_reps_around_it(tmp_path):
     NS = load("pearl_c_vllm_noise_sweep", KERNEL.parent / "pearl_c_vllm" / "noise_sweep.py")
     fp8 = [10.0, 12.0, 14.0, 20.0, 22.0, 24.0]                       # two cycles of three fp8 reps
