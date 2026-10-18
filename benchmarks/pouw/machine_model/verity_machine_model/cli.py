@@ -41,12 +41,13 @@
                                               q* = 2, 4, 8, 16 and its floor, the core ε at q* = 2, 8 and Q, and the
                                               thresholds), then with --checking sampled the sample (ε_luck, ε_adapt
                                               and ε_sample at Q)
-    machine-model redteam [DESIGN ...] [--device sm_NN] [--q Q] [--operands O] [--credit C]
+    machine-model redteam [DESIGN ...] [--device sm_NN] [--q Q] [--operands O] [--credit C] [--vector V]
                                               the red-team audit (redteam.py): each design's binding and near-binding
                                               facets, the decision-76 move in the cheater's favour at which the core
                                               first rises (per row), and, where Π prices no uniform datapath, the ε a
                                               sibling-rate uniform route would open (default q* = 1.22, credit floor)
     machine-model margin [DESIGN ...] [--device sm_NN] [--m M] [--least [--mix FFMA]] [--q Q] [--operands O] [--credit C]
+                         [--vector V]
                                               decision 76's margin (redteam.margin_audit): each design's core as built,
                                               its worst core with every near measured facet's lane coefficient moved M
                                               in the cheater's favour at once (default 2%), the single facet that drives
@@ -459,7 +460,7 @@ def _redteam(args) -> int:
 
     names = args.designs or E.designs(args.data)
     for name in names:
-        a = RT.audit(name, args.data, q=args.q, operands=args.operands, credit=args.credit)
+        a = RT.audit(name, args.data, q=args.q, operands=args.operands, credit=args.credit, vector=args.vector or "")
         print(f"{a.design} on {a.device}: core {_pct(a.core)}  ε_machine {_pct(a.machine_eps)}  floor {_pct(a.floor)}  "
               f"γ {a.gamma:.3f}  binds {', '.join(a.binding)}" + ("" if a.uniform_route else "  [Π has no uniform route]"))
         for r in a.near:
@@ -471,7 +472,8 @@ def _redteam(args) -> int:
                 how = f"flips at {r.flip_pct}% → {_pct(r.core_at_flip)} (at 2%: {_pct(r.core_at_2pct)})"
             print(f"    {r.name:12s} load {r.load:.3f}  dual {r.dual:.3f}: {how}")
         if not a.uniform_route:
-            base, opened, binding = RT.uniform_gap(name, args.data, q=args.q, operands=args.operands, credit=args.credit)
+            base, opened, binding = RT.uniform_gap(name, args.data, q=args.q, operands=args.operands, credit=args.credit,
+                                                   vector=args.vector or "")
             print(f"    uniform-datapath gap: core {_pct(base)} → {_pct(opened)} with a sibling-rate uniform route "
                   f"(binds {', '.join(binding) or 'none'})")
     return 0
@@ -482,14 +484,15 @@ def _margin(args) -> int:
 
     mix = {c: 1.0 for c in args.mix.split(",")} if args.mix else None
     for name in args.designs or E.designs(args.data):
-        mg = RT.margin_audit(name, args.data, m=args.m, q=args.q, operands=args.operands, credit=args.credit)
+        mg = RT.margin_audit(name, args.data, m=args.m, q=args.q, operands=args.operands, credit=args.credit,
+                             vector=args.vector or "")
         drive = f"driven by {mg.driver}" if mg.driver else "no near facet drives it"
         print(f"{mg.design} on {mg.device}: core {_pct(mg.base)}  worst at {mg.m*100:g}% {_pct(mg.worst)}  ({drive})")
         for r, s in mg.rows:
             print(f"    {r:12s} alone → {_pct(s)}")
         if args.least:
             lf = RT.least_filler(name, args.data, mix=mix, m=args.m, q=args.q, operands=args.operands,
-                                 credit=args.credit)
+                                 credit=args.credit, vector=args.vector or "")
             how = (f"{lf.per_word:g} a word (worst {_pct(lf.core)}, γ {lf.gamma:.3f})" if lf.per_word is not None
                    else f"none ≤ cap holds it (worst {_pct(lf.core)})")
             print(f"    least {'+'.join(lf.mix)} filler that holds {mg.m*100:g}%: {how}")
@@ -564,6 +567,7 @@ def main(argv: list[str] | None = None) -> int:
                     help="the cheater's operand delivery on the tensor route (default %(default)s)")
     rt.add_argument("--credit", choices=E.CREDITS, default="floor",
                     help="what ε is a fraction of (default %(default)s: the floor program ♭)")
+    rt.add_argument("--vector", help="the vector whose rows are Π (default: model.toml's current)")
     mg = sub.add_parser("margin")
     mg.add_argument("designs", nargs="*", help="the designs to audit (default: every design in the data directory)")
     mg.add_argument("--device", default=argparse.SUPPRESS, help=dev)
@@ -576,6 +580,7 @@ def main(argv: list[str] | None = None) -> int:
                     help="the cheater's operand delivery on the tensor route (default %(default)s)")
     mg.add_argument("--credit", choices=E.CREDITS, default="floor",
                     help="what ε is a fraction of (default %(default)s: the floor program ♭)")
+    mg.add_argument("--vector", help="the vector whose rows are Π (default: model.toml's current)")
     args = p.parse_args(argv)
     if args.device is not None:
         if args.data != DATA:
