@@ -34,7 +34,10 @@ p = ¾'s log₂(4/3).
 **Deployed attention's floor (ATTN-NOISE, note:compute-accounting/20261018T0634Z-draft-attn-noise §5).** H1's QKᵀ and P·V
 (one seed a matmul, a head) lose a unit's floor when one operand row's noise is matched. That is visible after the seed,
 so the cheater picks the matched rows: each of N rows of b bits read by u units has moment 1 − 2^{-b} + 2^{-b}e^{θu},
-and π* = min_θ (ln(T/δ) + Σ N·ln(…))/θ units (`LuckMoment` at κ = 0 with `PrivateMoment`).
+and π* = min_θ (ln(T/δ) + Σ N·ln(…))/θ units (`LuckMoment` at κ = 0 with `PrivateMoment`). ATTN-NOISE's own form,
+log₂(T/δ)/(h·N) with h the least row's noise bits over the units reading it, leaves out which rows the cheater picks:
+it sits 0.5–8% below at decode and 10–21% below at prefill's QKᵀ, where the bound is smallest. Both are tabled, with
+the (head, request) pairs a decode seed must cover.
 
 The table shapes are `eps_budget.MODELS`; ε_sample, ε_luck and σ_w are `budget.today` per family. A seed group is a
 site (one matmul of a layer at one step, every head and the step's whole batch), `compile`'s default. Assumed for every
@@ -204,10 +207,11 @@ def visible_premium(rows: list[tuple[float, int, float]], t_bits: int) -> float:
     return obj((lo + hi) / 2)
 
 
-def h1_attention(shape: EB.Shape, regime: str, n: int, ctx: int, t_bits: int, group: str = "head") -> dict[str, float]:
-    """ATTN-NOISE's deployed QKᵀ and P·V floor under hashed seeds: ε per kind, one seed a head and request (`head`, as
-    deployed), one a call (`call`: the layer's heads and the step's whole batch), or one over every layer's call of the
-    kind in a step (`step`, which no seed binding the call's roots allows: see `decode_lever`)."""
+def h1_rows(shape: EB.Shape, regime: str, n: int, ctx: int, group: str | int = "head") -> dict:
+    """Per kind, H1's operand rows under one seed, (count, noise bits, units reading one), and the units it covers: one
+    seed a head and request (`head`, as deployed), one a call (`call`: the layer's heads and the step's whole batch),
+    one over every layer's call of the kind in a step (`step`, which no seed binding the call's roots allows: see
+    `decode_lever`), or an int g: g (head, request) pairs of one layer under one seed."""
     L, d = ctx, shape.d
     seqs = 1 if regime == "prefill" else n
     if regime == "prefill":
@@ -216,11 +220,43 @@ def h1_attention(shape: EB.Shape, regime: str, n: int, ctx: int, t_bits: int, gr
     else:
         qk = ([(L, H1_NOISE["k"], 1), (1, H1_NOISE["q"], L)], L)
         pv = ([(d, L, 1), (1, H1_NOISE["p"], d)], d)
-    mult = {"head": 1, "call": shape.heads * seqs, "step": shape.heads * seqs * shape.layers}[group]
+    mult = group if isinstance(group, int) else {
+        "head": 1, "call": shape.heads * seqs, "step": shape.heads * seqs * shape.layers}[group]
+    return {kind: ([(nr * mult, b, u) for nr, b, u in rows], units * mult) for kind, (rows, units) in
+            (("qk", qk), ("pv", pv))}
+
+
+def h1_attention(shape: EB.Shape, regime: str, n: int, ctx: int, t_bits: int,
+                 group: str | int = "head") -> dict[str, float]:
+    """ATTN-NOISE's deployed QKᵀ and P·V floor under hashed seeds: ε per kind, the cheater matching the rows it picks
+    after the seed (`visible_premium`)."""
+    return {kind: min(visible_premium(rows, t_bits) / units, 1.0)
+            for kind, (rows, units) in h1_rows(shape, regime, n, ctx, group).items()}
+
+
+def h1_h_form(shape: EB.Shape, regime: str, n: int, ctx: int, t_bits: int,
+              group: str | int = "head") -> dict[str, float]:
+    """ATTN-NOISE §5's form of the same floor: log₂(T/δ)/(h·N), with h the least, over operand rows, of a row's noise
+    bits over the units reading it, and N the units under the seed. It leaves out the cheater's choice of rows after
+    the seed, which `h1_attention` charges, so it sits slightly below it."""
+    return {kind: min((t_bits + DELTA_BITS) / (min(b / u for _, b, u in rows) * units), 1.0)
+            for kind, (rows, units) in h1_rows(shape, regime, n, ctx, group).items()}
+
+
+def decode_cover(t_bits: int, ctx: int = 2048, gmax: int = 1 << 16) -> dict[str, dict[str, int]]:
+    """The least (head, request) pairs of one layer under one decode seed that bring H1's QKᵀ and P·V under 0.1%, in
+    ATTN-NOISE's h form and with the rows picked after the seed. It is the same for every model: a pair's rows don't
+    depend on the head count."""
+    shape = EB.MODELS["llama-3.1-8b"]
     out = {}
-    for kind, (rows, units) in (("qk", qk), ("pv", pv)):
-        rows = [(nr * mult, b, u) for nr, b, u in rows]
-        out[kind] = min(visible_premium(rows, t_bits) / (units * mult), 1.0)
+    for name, f in (("h_form", h1_h_form), ("visible", h1_attention)):
+        out[name] = {}
+        for kind in ("qk", "pv"):
+            lo, hi = 1, gmax
+            while lo < hi:
+                mid = (lo + hi) // 2
+                lo, hi = (lo, mid) if f(shape, "decode", 1, ctx, t_bits, mid)[kind] <= FLAG * (1 + 1e-12) else (mid + 1, hi)
+            out[name][kind] = lo
     return out
 
 
@@ -250,8 +286,8 @@ def min_batch(f, kind: str, bmax: int = 4096) -> int | None:
 
 def decode_levers() -> dict:
     """`decode_lever` over batches, the least batch that brings each kind under 0.1% with one seed a call, and the
-    operand rows a seed group needs under H1's floor (log₂(T/δ)/b rows of b noise bits per 0.1%)."""
-    out = {"rows": [], "min_batch": []}
+    (head, request) pairs a seed must cover under H1's floor (`decode_cover`)."""
+    out = {"rows": [], "min_batch": [], "cover": {t: decode_cover(t) for t in T_BITS}}
     for model, shape in EB.MODELS.items():
         for ctx in DECODE_CTX:
             for t in T_BITS:
@@ -260,12 +296,12 @@ def decode_levers() -> dict:
                                         **decode_lever(shape, ctx, b, t)})
                 tpl = functools.partial(template_attention, shape, ctx, t_bits=t)
                 h1c = functools.partial(h1_attention, shape, "decode", ctx=ctx, t_bits=t, group="call")
+                h1f = functools.partial(h1_h_form, shape, "decode", ctx=ctx, t_bits=t, group="call")
                 out["min_batch"].append({"model": model, "ctx": ctx, "T_bits": t,
                                          **{f"template_{k}": min_batch(tpl, k) for k in ("qk", "pv")},
                                          **{f"h1_call_{k}": min_batch(h1c, k) for k in ("qk", "pv")},
+                                         **{f"h1_call_h_form_{k}": min_batch(h1f, k) for k in ("qk", "pv")},
                                          "h1_step_b1": h1_attention(shape, "decode", 1, ctx, t, "step")})
-    out["h1_rows_needed"] = {f"{k} at 2^{t}": (t + DELTA_BITS) / H1_NOISE[row] / FLAG
-                             for t in T_BITS for k, row in (("qk", "q"), ("pv", "p"))}
     return out
 
 
@@ -307,7 +343,9 @@ def table() -> dict:
                              **{f"h={h}": eps_at_h(ss, t, h) for h in H_BITS}})
                 h1.append({"model": model, "regime": label(regime, n, ctx), "T_bits": t,
                            "head": h1_attention(shape, regime, n, ctx, t, "head"),
-                           "call": h1_attention(shape, regime, n, ctx, t, "call")})
+                           "call": h1_attention(shape, regime, n, ctx, t, "call"),
+                           "head_h_form": h1_h_form(shape, regime, n, ctx, t, "head"),
+                           "call_h_form": h1_h_form(shape, regime, n, ctx, t, "call")})
     excess = {fam: (PROVED[0] - KAPPA_LIVE) / 4 * pt.eps_luck for fam, pt in fams.items()}
     return {"rows": rows, "proved": {"rows": proved, "kappa_excess": excess}, "sensitivity": sens,
             "h1_attention": h1, "template": templ, "levers": levers(), "decode_levers": decode_levers()}
@@ -373,11 +411,15 @@ def render(t: dict) -> str:
         cells = " | ".join(" / ".join(_cell(s[f"h={h}"][k]) for k in ("linears", "qk", "pv")) for h in H_BITS)
         lines.append(f"| {s['model']} | {s['regime']} | 2^{s['T_bits']} | {cells} |")
     lines += ["", "## Deployed H1 attention's floor (ATTN-NOISE §5's h), visible matched rows", "",
+              ("Each cell is the rows the cheater picks after the seed (`visible_premium`), then ATTN-NOISE's h form "
+               "log₂(T/δ)/(h·N) (QKᵀ: h = d/L at prefill, 448/L at decode; P·V: h = 1 at prefill, 1.75 at decode), which "
+               "leaves the pick out."), "",
               "| model | regime | T | QKᵀ, a seed a head | P·V, a seed a head | QKᵀ, a seed a call | P·V, a seed a call |",
               "|---|---|---|---|---|---|---|"]
     for a in t["h1_attention"]:
-        lines.append(f"| {a['model']} | {a['regime']} | 2^{a['T_bits']} | {_cell(a['head']['qk'])} | "
-                     f"{_cell(a['head']['pv'])} | {_cell(a['call']['qk'])} | {_cell(a['call']['pv'])} |")
+        cells = " | ".join(f"{_cell(a[g][k])} / {_cell(a[g + '_h_form'][k])}"
+                           for g, k in (("head", "qk"), ("head", "pv"), ("call", "qk"), ("call", "pv")))
+        lines.append(f"| {a['model']} | {a['regime']} | 2^{a['T_bits']} | {cells} |")
     d = t["decode_levers"]
     lines += ["", "## Decode's seed groups (attention)", "",
               ("A seed binds its call's operand roots and a step's calls run in order, so the largest group a decode step "
@@ -390,16 +432,26 @@ def render(t: dict) -> str:
         cells = " | ".join(f"{_cell(r[g]['qk'])} / {_cell(r[g]['pv'])}"
                            for g in ("template_call", "h1_head", "h1_call", "h1_step"))
         lines.append(f"| {r['model']} | {r['ctx'] // 1024}K | 2^{r['T_bits']} | {r['batch']} | {cells} |")
-    lines += ["", "Least decode batch for 0.1% with one seed a call:", "",
+    lines += ["", "Least decode batch for 0.1% with one seed a call (H1: rows picked after the seed / h form):", "",
               "| model | ctx | T | template QKᵀ | template P·V | H1 QKᵀ | H1 P·V | H1, every layer, batch 1: QKᵀ / P·V |",
               "|---|---|---|---|---|---|---|---|"]
     for m in d["min_batch"]:
         s = m["h1_step_b1"]
         lines.append(f"| {m['model']} | {m['ctx'] // 1024}K | 2^{m['T_bits']} | {m['template_qk']} | "
-                     f"{m['template_pv']} | {m['h1_call_qk']} | {m['h1_call_pv']} | {_cell(s['qk'])} / {_cell(s['pv'])} |")
-    lines += ["", "| H1 operand rows a seed group needs for 0.1% | rows |", "|---|---|"]
-    for k, v in d["h1_rows_needed"].items():
-        lines.append(f"| {k} | {v:.0f} |")
+                     f"{m['template_pv']} | {m['h1_call_qk']} / {m['h1_call_h_form_qk']} | "
+                     f"{m['h1_call_pv']} / {m['h1_call_h_form_pv']} | {_cell(s['qk'])} / {_cell(s['pv'])} |")
+    heads = {m: s.heads for m, s in EB.MODELS.items()}
+    lines += ["", ("Minimum seed coverage for decode attention under H1's floor: the (head, request) pairs of one layer "
+                   "a seed must cover for 0.1%, the same for every model, and the batch that is for one seed a call "
+                   "(the layer's heads × the batch) or one seed a (layer, head) over the batch (rows picked after the "
+                   "seed / h form):"), "",
+              "| T | kind | pairs a seed | " + " | ".join(f"batch, a call, {m} ({h} heads)" for m, h in heads.items())
+              + " | batch, a (layer, head) |", "|---|---|---|" + "---|" * len(heads) + "---|"]
+    for tb, cov in d["cover"].items():
+        for kind, name in (("qk", "QKᵀ"), ("pv", "P·V")):
+            v, f = cov["visible"][kind], cov["h_form"][kind]
+            per = " | ".join(f"{math.ceil(v / h)} / {math.ceil(f / h)}" for h in heads.values())
+            lines.append(f"| 2^{tb} | {name} | {v} / {f} | {per} | {v} / {f} |")
     lines += ["", "## The template: y* = rθ (nats a product × rows)", "", "| c, κ | y* (one-bit dither) | y* (keyed word) |",
               "|---|---|---|"]
     for k, v in t["template"].items():

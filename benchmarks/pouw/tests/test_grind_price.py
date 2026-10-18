@@ -65,6 +65,31 @@ def test_h1s_floor_a_seed_a_head_is_attn_noises_and_a_call_divides_it_by_its_row
     assert head["pv"] / (shape.heads * 8) <= call["pv"] <= 1.05 * head["pv"] / (shape.heads * 8)
 
 
+def test_h1s_h_form_is_attn_noises_closed_form_and_the_pick_after_the_seed_only_raises_it():
+    shape = G.EB.MODELS["llama-3.1-8b"]
+    for L in G.PREFILL:
+        f = G.h1_h_form(shape, "prefill", L, L, 128)
+        assert f["qk"] == pytest.approx(2.625 / (L + 1))
+        assert f["pv"] == pytest.approx(1.3125 / L)
+    f = G.h1_h_form(shape, "decode", 1, 32768, 128)
+    assert (f["qk"], f["pv"]) == (pytest.approx(0.375), pytest.approx(0.75))
+    for shape in G.EB.MODELS.values():
+        for regime, n, ctx in G.regimes():
+            for group in ("head", "call"):
+                f, v = G.h1_h_form(shape, regime, n, ctx, 128, group), G.h1_attention(shape, regime, n, ctx, 128, group)
+                assert all(f[k] <= v[k] <= 1.25 * f[k] for k in ("qk", "pv"))
+
+
+def test_decode_cover_is_the_least_seed_group_under_a_tenth_of_a_percent():
+    cov = G.decode_cover(128)
+    assert cov["h_form"] == {"qk": 375, "pv": 750}
+    shape = G.EB.MODELS["llama-3.1-70b"]
+    for kind, g in cov["visible"].items():
+        assert g >= cov["h_form"][kind]
+        assert G.h1_attention(shape, "decode", 1, 32768, 128, g)[kind] <= G.FLAG
+        assert G.h1_attention(shape, "decode", 1, 32768, 128, g - 1)[kind] > G.FLAG
+
+
 def test_sites_are_eps_budgets_shapes():
     for shape in G.EB.MODELS.values():
         ss = G.sites(shape, "decode", 1, 2048)
