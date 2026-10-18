@@ -1,85 +1,139 @@
-"""Declarations of real hardware, with every number's source.
+"""Declarations of real hardware, with every number's source: the one place a datacenter is declared.
 
-`rtx_node` is one of our nodes as `nvidia-smi topo -m` and `lspci -tv` showed it on 18 Oct (vy-nebius-1 and 2): eight
-RTX PRO 6000 GPUs, each on its own PCIe root port, in two NUMA groups of four, with host DRAM and one NIC on socket 1.
-`with_dpu` adds an NVIDIA BlueField-3 DPU and its BMC with Amodo's measured stores and wipe coverage
-(amododesign.com/notes/2026-10-02-dpu-memory-wipes): what a wipe can't reach on them is each device's residual.
-`rack` puts nodes behind certifiers on a leaf, with a challenger and the outside world.
+`rtx_node` is one of our nodes as vy-nebius-1 and -2 read with `nvidia-smi topo -m`, `lspci -tv` and `lsmem` (18 Oct):
+two sockets, each an Intel Xeon 6776P with its host DRAM and a PCIe root complex (a switch); eight RTX PRO 6000 GPUs,
+GPUs 0–3 on socket 0 and 4–7 on socket 1, each on a root port of its own; one NIC, on socket 1. Its capacities are the
+ones memory accounting reads, at the values `verity.core.protocols.remote_bandwidth.timing` states
+(`benchmarks/network_sim/tests/test_graph.py` pins them, since this package doesn't import `verity`): each GPU's memory,
+read bandwidth and on-chip state (S_chip), its rate per unit of work (tensor-core multiply-adds by precision, `mac:fp8`
+and the like, at the dense datasheet peaks that `benchmarks/census/hardware.json` gives under the same names; CUDA cores;
+the SHA-512 oracle; the codec's squarings at each width; and, for the walkthrough's unit of work, Boolean gates at its
+integer rate times 32 lanes), each socket's host DRAM (half the node's online memory), its read bandwidth and caches, and each PCIe link's
+bandwidth. A capacity not measured yet is `math.inf`: every reading of a capacity takes it as an upper bound, and
+infinity is the bound that claims nothing. The residuals of a GPU and of a socket's host DRAM are declared, not measured.
+
+`with_dpu` adds an NVIDIA BlueField-3 DPU between a node's NIC and its way out, and the DPU's BMC behind it, with Amodo's
+measured stores and wipe coverage (amododesign.com/notes/2026-10-02-dpu-memory-wipes): what a wipe can't reach on them is
+each device's residual. `leaf_spine` puts nodes behind a leaf-spine fabric, each through its own certifier, with hosts
+outside every block and challengers on the leaves. `rack` is the demo's: nodes with DPUs on one leaf, a challenger, and
+the outside world over a WAN.
 """
 from __future__ import annotations
+
+import math
 
 from .physical import Assumption, Block, Datacenter, Device, Grid, Link
 
 GB = 8e9
-TB = 8e12
+INF = math.inf
 US = Assumption("hop", 1e-6, "s", "measured")
 
-
-def _a(name: str, value: float, unit: str, source: str = "datasheet") -> Assumption:
-    return Assumption(name, value, unit, source)
-
-
-def rtx_gpu(name: str) -> Device:
-    """An RTX PRO 6000 Blackwell (sm_120): 96 GB of GDDR7 at about 1.6 TB/s, about 1 PFLOP/s of dense FP8 tensor work,
-    and, for the walkthrough's unit of work, Boolean gates at its integer rate times 32 lanes."""
-    return Device(name, "gpu",
-                  rate={"mac": _a(f"{name}.fp8_dense", 1.0e15, "MAC/s"), "gate": _a(f"{name}.gates", 2.6e13 * 32, "gate/s")},
-                  memory=_a(f"{name}.gddr7", 96 * GB, "bits"),
-                  bandwidth=_a(f"{name}.gddr7_bw", 1.6 * TB, "bit/s"),
-                  on_chip=_a(f"{name}.s_chip", 263_163_904 * 8, "bits", "measured"),
-                  residual=_a(f"{name}.residual", 1 * GB, "bits", "declared"))
-
-
-def rtx_node(n: str, gpus: int = 8) -> Block:
-    """One node: `gpus` RTX PRO 6000s, 1 TB of host DRAM, and its NIC."""
-    devices = [rtx_gpu(f"{n}.gpu{i}") for i in range(gpus)]
-    devices.append(Device(f"{n}.dram", "dram", memory=_a(f"{n}.dram", 1000 * GB, "bits", "declared"),
-                          bandwidth=_a(f"{n}.dram_bw", 0.4 * TB, "bit/s", "declared"),
-                          residual=_a(f"{n}.dram_residual", 8 * GB, "bits", "declared")))
-    devices.append(Device(f"{n}.nic", "nic"))
-    return Block(n, devices)
+S_CHIP = Assumption("rtx-pro-6000/S_chip", 263_163_904 * 8, "bits", "measured")
+GPU_MEMORY = Assumption("rtx-pro-6000/memory", 103_079_215_104 * 8, "bits", "datasheet")
+GPU_READ = Assumption("rtx-pro-6000/memory-read", 1_539_000_000_000 * 8, "bit/s", "measured")
+GPU_RESIDUAL = Assumption("rtx-pro-6000/residual", 1 * GB, "bits", "declared")
+GPU_RATE = {
+    "mac:bf16": Assumption("rtx-pro-6000-server/bf16", 250_000_000_000_000, "multiply-adds/s", "datasheet"),
+    "mac:fp8": Assumption("rtx-pro-6000-server/e4m3", 500_000_000_000_000, "multiply-adds/s", "datasheet"),
+    "mac:fp4": Assumption("rtx-pro-6000-server/e2m1", 1_000_000_000_000_000, "multiply-adds/s", "datasheet"),
+    "cuda": Assumption("rtx-pro-6000/cuda-ops", INF, "ops/s", "measured"),
+    "oracle": Assumption("rtx-pro-6000/sha512", 7_000_000_000, "compressions/s", "measured"),
+    "square-1024": Assumption("rtx-pro-6000/squarings-p1024", 14_990_000_000, "squarings/s", "measured"),
+    "square-512": Assumption("rtx-pro-6000/squarings-p512", 51_300_000_000, "squarings/s", "measured"),
+    "gate": Assumption("rtx-pro-6000/gates", 2.6e13 * 32, "gate/s", "datasheet"),
+}
+HOST_CHIP = Assumption("xeon-6776p/caches", 940_435_456 // 2 * 8, "bits", "declared")
+HOST_DRAM = Assumption("host-dram/socket-capacity", 1_872_605_741_056 // 2 * 8, "bits", "measured")
+HOST_READ = Assumption("host-dram/socket-read", 303_400_000_000 * 8, "bit/s", "measured")
+HOST_RESIDUAL = Assumption("host-dram/socket-residual", 4 * GB, "bits", "declared")
+PCIE_GPU = Assumption("pcie/gpu", INF, "bit/s", "measured")
+PCIE_SOCKET = Assumption("pcie/socket-aggregate", INF, "bit/s", "measured")
+PCIE_NIC = Assumption("pcie/nic", INF, "bit/s", "measured")
+SOCKET_LINK = Assumption("socket/inter-socket", INF, "bit/s", "measured")
 
 
-def node_links(n: str, gpus: int = 8) -> list[Link]:
-    """Each GPU's PCIe 5 x16 link to host DRAM (no shared switch, as `nvidia-smi topo -m` shows), and the NIC on
-    socket 1 to that socket's GPUs."""
-    pcie = _a("pcie5x16", 64e9 * 8, "bit/s")
-    links = [Link(f"{n}.gpu{i}", f"{n}.dram", pcie, US, "pcie") for i in range(gpus)]
-    links += [Link(f"{n}.gpu{i}", f"{n}.nic", pcie, US, "pcie") for i in range(gpus // 2, gpus)]
-    return links
+def rtx_node(name: str = "node") -> Datacenter:
+    """One node, a datacenter of one block named `name` and no fabric. A link inside it has no latency until one is
+    measured: a delay of 0, the bound that claims nothing for a path's delay."""
+    devices, links = [], []
+    for s in range(2):
+        cpu = Device(f"{name}.cpu{s}", "cpu", memory=HOST_DRAM, bandwidth=HOST_READ, on_chip=HOST_CHIP,
+                     residual=HOST_RESIDUAL)
+        rc = Device(f"{name}.pcie{s}", "switch")
+        devices += [cpu, rc]
+        links.append(Link(rc.name, cpu.name, PCIE_SOCKET, kind="pcie"))
+        for k in range(4 * s, 4 * s + 4):
+            gpu = Device(f"{name}.gpu{k}", "gpu", rate=dict(GPU_RATE), memory=GPU_MEMORY, bandwidth=GPU_READ,
+                         on_chip=S_CHIP, residual=GPU_RESIDUAL)
+            devices.append(gpu)
+            links.append(Link(gpu.name, rc.name, PCIE_GPU, kind="pcie"))
+    nic = Device(f"{name}.nic0", "nic")
+    devices.append(nic)
+    links += [Link(nic.name, f"{name}.pcie1", PCIE_NIC, kind="pcie"),
+              Link(f"{name}.cpu0", f"{name}.cpu1", SOCKET_LINK, kind="upi")]
+    return Datacenter(name, [Block(name, devices)], [], links)
 
 
-def with_dpu(node: Block) -> Block:
-    """`node` with a BlueField-3 DPU and its BMC. Amodo, 2 Oct 2026: the DPU's 32 GB DDR is at least 85% wipeable and its
-    40 GB eMMC and 128 GB NVMe at least 99%; the BMC's 1 GB DDR at least 75%, its 256 MB SPI flash at least 50%, and its
-    64 MB secure-firmware flash not at all. Each device's residual is what those leave."""
-    n = node.name
-    dpu = Device(f"{n}.dpu", "dpu", memory=_a(f"{n}.dpu.stores", (32 + 40 + 128) * GB, "bits"),
-                 residual=_a(f"{n}.dpu.unwiped", (0.15 * 32 + 0.01 * 40 + 0.01 * 128) * GB, "bits", "measured"))
-    bmc = Device(f"{n}.bmc", "bmc", memory=_a(f"{n}.bmc.stores", (1 + 0.256 + 0.064) * GB, "bits"),
-                 residual=_a(f"{n}.bmc.unwiped", (0.25 * 1 + 0.5 * 0.256 + 0.064) * GB, "bits", "measured"))
-    return Block(n, [*node.devices, dpu, bmc])
+def with_dpu(node: Datacenter) -> Datacenter:
+    """`node` (one block, as `rtx_node` declares it) with a BlueField-3 DPU after its NIC, which becomes the block's way
+    out, and the DPU's BMC behind it. Amodo, 2 Oct 2026: the DPU's 32 GB DDR is at least 85% wipeable and its 40 GB eMMC
+    and 128 GB NVMe at least 99%; the BMC's 1 GB DDR at least 75%, its 256 MB SPI flash at least 50%, and its 64 MB
+    secure-firmware flash not at all. Each device's residual is what those leave."""
+    (block,) = node.blocks
+    n = block.name
+    dpu = Device(f"{n}.dpu", "dpu", memory=Assumption(f"{n}.dpu.stores", (32 + 40 + 128) * GB, "bits"),
+                 residual=Assumption(f"{n}.dpu.unwiped", (0.15 * 32 + 0.01 * 40 + 0.01 * 128) * GB, "bits", "measured"))
+    bmc = Device(f"{n}.bmc", "bmc", memory=Assumption(f"{n}.bmc.stores", (1 + 0.256 + 0.064) * GB, "bits"),
+                 residual=Assumption(f"{n}.bmc.unwiped", (0.25 * 1 + 0.5 * 0.256 + 0.064) * GB, "bits", "measured"))
+    links = [Link(f"{n}.nic0", dpu.name, Assumption("dpu_link", 400e9, "bit/s"), US, "pcie"),
+             Link(dpu.name, bmc.name, Assumption("bmc_link", 1e9, "bit/s"), US)]
+    return Datacenter(node.name, [Block(n, [*block.devices, dpu, bmc])], list(node.fabric), node.links + links, node.grid)
 
 
-def rack(nodes: int = 2, gpus: int = 8, dpus: bool = True, uplink: float = 400e9, grid: Grid | None = None) -> Datacenter:
-    """`nodes` nodes, each behind its own certifier on a leaf switch, with an off-node challenger and the outside world.
-    A node's NIC (or its DPU, when it has one) is its only way out, through its certifier."""
-    up = _a("uplink", uplink, "bit/s", "declared")
-    blocks, links = [], []
-    for k in range(nodes):
-        n = f"n{k}"
-        b = rtx_node(n, gpus)
-        blocks.append(with_dpu(b) if dpus else b)
-        links += node_links(n, gpus)
-        if dpus:
-            links += [Link(f"{n}.nic", f"{n}.dpu", _a("dpu_link", 400e9, "bit/s"), US, "pcie"),
-                      Link(f"{n}.dpu", f"{n}.bmc", _a("bmc_link", 1e9, "bit/s"), US),
-                      Link(f"{n}.dpu", f"{n}.cert", up, US)]
-        else:
-            links.append(Link(f"{n}.nic", f"{n}.cert", up, US))
-        links.append(Link(f"{n}.cert", "leaf", up, US))
-    fabric = [Device(f"n{k}.cert", "certifier") for k in range(nodes)]
-    fabric += [Device("leaf", "switch"), Device("challenger", "challenger"), Device("world", "outside")]
-    links += [Link("challenger", "leaf", up, US), Link("world", "leaf", up, _a("wan_latency", 1e-3, "s", "declared"), "wan")]
-    return Datacenter("rack", blocks, fabric, links, grid or Grid(frame_bits=32, bucket=1, window=4, syncs=128,
-                                                                  tick=_a("tick", 1e-4, "s", "declared")))
+def leaf_spine(blocks: int, *, leaves: int = 1, spines: int = 0, outside: tuple[str, ...] = ("ext0",),
+               challengers: tuple[str, ...] = (), dpus: bool = False, prefix: str = "b", name: str | None = None,
+               uplink_gbps: int = 400, spine_gbps: int = 400, fabric_latency: float = 2e-6, uplink_latency: float = 1e-6,
+               outside_latency: float | None = None, grid: Grid | None = None) -> Datacenter:
+    """`blocks` nodes (`rtx_node`, named `{prefix}0`, `{prefix}1`, …, each `with_dpu` when `dpus`) behind a leaf-spine
+    fabric: each node's way out (its NIC, or its DPU) to its own certifier (`{prefix}I.cert`), the certifier to a leaf
+    switch (round-robin over `leaves`), every leaf to every spine, and the hosts `outside` every block (kind `outside`)
+    and the `challengers` on the leaves too. With one leaf, `spines` may be 0. Latencies are one way, in seconds:
+    `uplink_latency` from a node to its certifier, `fabric_latency` a fabric hop, and an outside host's link a WAN of
+    `outside_latency` when it is given, else a fabric hop. `grid` is the certifiers' (`Grid`'s default when None)."""
+    if blocks < 1 or leaves < 1 or (leaves > 1 and spines < 1):
+        raise ValueError("at least one block and one leaf, and spines to join more than one leaf")
+    up = Assumption("fabric/uplink", uplink_gbps * 1_000_000_000, "bit/s", "declared")
+    trunk = Assumption("fabric/spine", spine_gbps * 1_000_000_000, "bit/s", "declared")
+    nic_hop = Assumption("fabric/uplink-latency", uplink_latency, "s", "declared")
+    hop = Assumption("fabric/hop-latency", fabric_latency, "s", "declared")
+    wan = (hop, "ethernet") if outside_latency is None else (Assumption("fabric/wan-latency", outside_latency, "s",
+                                                                        "declared"), "wan")
+    switches = [Device(f"leaf{j}", "switch") for j in range(leaves)]
+    nodes, certs, links = [], [], []
+    for i in range(blocks):
+        n = f"{prefix}{i}"
+        node = with_dpu(rtx_node(n)) if dpus else rtx_node(n)
+        cert = Device(f"{n}.cert", "certifier")
+        nodes += node.blocks
+        certs.append(cert)
+        links += node.links
+        links += [Link(f"{n}.dpu" if dpus else f"{n}.nic0", cert.name, up, nic_hop, "ethernet"),
+                  Link(cert.name, switches[i % leaves].name, up, hop, "ethernet")]
+    tops = [Device(f"spine{k}", "switch") for k in range(spines)]
+    links += [Link(sw.name, sp.name, trunk, hop, "ethernet") for sp in tops for sw in switches]
+    hosts = [Device(x, "outside") for x in outside]
+    links += [Link(x.name, switches[c % leaves].name, up, *wan) for c, x in enumerate(hosts)]
+    checkers = [Device(x, "challenger") for x in challengers]
+    links += [Link(x.name, switches[c % leaves].name, up, hop, "ethernet") for c, x in enumerate(checkers)]
+    return Datacenter(name or f"leaf-spine-{blocks}", nodes, switches + certs + tops + hosts + checkers, links,
+                      grid or Grid())
+
+
+def rack(nodes: int = 2, dpus: bool = True, grid: Grid | None = None) -> Datacenter:
+    """The demo's rack: `nodes` nodes (`n0`, `n1`, …), each with a DPU when `dpus`, behind their own certifiers on one
+    leaf, with a challenger on it and the outside world (`world`) 1 ms away over a WAN, every other hop 1 µs. Its
+    certifiers frame 32 bits, a bucket a tick of 0.1 ms, a record every 4 buckets."""
+    return leaf_spine(nodes, prefix="n", name="rack", outside=("world",), challengers=("challenger",), dpus=dpus,
+                      fabric_latency=1e-6, outside_latency=1e-3,
+                      grid=grid or Grid(frame_bits=32, bucket=1, window=4, syncs=128,
+                                        tick=Assumption("tick", 1e-4, "s", "declared")))

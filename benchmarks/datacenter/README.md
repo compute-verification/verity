@@ -15,6 +15,11 @@ derives its crossings and publishes its `Profile`, the only part of the placemen
 the verifier's public plan for an epoch, and `observe.run` is the world: it executes a placement and records what the
 trusted devices see.
 
+`examples` is the one place hardware is declared, every number with its source: `rtx_node` (one of our measured
+nodes), `with_dpu` (a BlueField-3 between its NIC and its certifier, with its BMC behind it), `leaf_spine` (nodes behind
+their certifiers on a leaf-spine fabric) and `rack` (the demo's). `benchmarks/network_sim/graph.py` exports them as a
+network, a netns plan or a GML graph, and its tests pin their values against `verity` and the census.
+
 ~~~python
 from datacenter import *
 from datacenter.examples import rack
