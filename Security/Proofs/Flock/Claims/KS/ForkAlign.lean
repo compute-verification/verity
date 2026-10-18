@@ -10,7 +10,9 @@ reaches that node after exactly `j` coins on every path, or forks to nothing on 
 * `expect_le_of_get`, `expect₂_le_of_get`: below a node whose index holds a slot's entry, an expectation, and one over
   two runs, are monotone in a bound on the outcomes the leaves relate at that entry, since every table node below has
   a fresh slot and keeps the entry;
-* `SlotAt`, `forkE_le_forkC`: the alignment, and the bound it gives.
+* `SlotAt`, `forkE_le_forkC`: the alignment, and the bound it gives;
+* `Aligned.mono_self`, `forkE_mapL`, `SlotAt.mono`, `SlotAt.mapL`: weakening the leaf relation and relabelling the
+  oracle side keep the fork and the alignment.
 -/
 
 namespace FlockSoundness.Game.Lock
@@ -98,5 +100,59 @@ theorem forkE_le_forkC {T D I α β : Type} {get : I → ℕ → Option (T × D)
         (fun i₁ a₁ b₁ i₂ a₂ b₂ h₁ h₂ hi₁ hi₂ => hΦ _ _ i₁ a₁ b₁ i₂ a₂ b₂ h₁ h₂ hi₁ hi₂)
         (L (plur slot σ'.1 (k' σ'.1) σ'.2) σ'.1) σ'.2 (hs _ _)
   | nul h0 => rw [h0]; exact forkC_nonneg hF _ _ _
+
+/-- **A lockstep is aligned with its weakening.** -/
+theorem Aligned.mono_self {T D I α β : Type} {get : I → ℕ → Option (T × D)} {R R' : I → α → β → Prop}
+    (h : ∀ i a b, R i a b → R' i a b) :
+    ∀ {i : I} {g : Game α} {g' : Game β} (L : Lock T D get R i g g'), Aligned (Lock.mono h L) L
+  | _, _, _, .ret hr => .ret (h _ _ _ hr) hr
+  | _, _, _, @Lock.coin _ _ _ _ _ _ _ _ C _ _ _ _ L => .coin C fun c => Aligned.mono_self h (L c)
+  | _, _, _, .send M L => .send M fun m => Aligned.mono_self h (L m)
+  | _, _, _, .table slot _ _ _ _ L => .table slot fun t d => Aligned.mono_self h (L t d)
+
+/-- **Relabelling the oracle side keeps the fork.** -/
+theorem forkE_mapL {T D I α α₂ β : Type} {get : I → ℕ → Option (T × D)} {R : I → α → β → Prop}
+    {R₂ : I → α₂ → β → Prop} (plur : Chooser T D β) (slot : ℕ) (Φ : D → β → β → ℝ) (f : α → α₂)
+    (h : ∀ i a b, R i a b → R₂ i (f a) b) :
+    ∀ {i : I} {g : Game α} {g' : Game β} (L : Lock T D get R i g g') (σ' : Strategy g'),
+      forkE plur slot Φ (Lock.mapL f h L) σ' = forkE plur slot Φ L σ'
+  | _, _, _, .ret _, _ => rfl
+  | _, _, _, @Lock.coin _ _ _ _ _ _ _ _ C _ _ _ _ L, σ' => by
+      simp only [Lock.mapL, forkE]
+      exact congrArg (· / _) (Finset.sum_congr rfl fun c _ => forkE_mapL plur slot Φ f h (L c) (σ' c))
+  | _, _, _, .send _ L, σ' => by
+      simp only [Lock.mapL, forkE]
+      exact forkE_mapL plur slot Φ f h (L σ'.1) σ'.2
+  | _, _, _, .table s _ _ _ _ L, σ' => by
+      simp only [Lock.mapL, forkE]
+      split_ifs
+      · rfl
+      · exact forkE_mapL plur slot Φ f h _ σ'.2
+
+/-- **The slot is reached after `j` coins through a weakened lockstep** where it is through the lockstep. -/
+theorem SlotAt.mono {T D I α β : Type} {get : I → ℕ → Option (T × D)} {R R' : I → α → β → Prop}
+    {plur : Chooser T D β} {slot : ℕ} {Φ : D → β → β → ℝ} (h : ∀ i a b, R i a b → R' i a b) {j : ℕ} {i : I}
+    {g : Game α} {g' : Game β} {L : Lock T D get R i g g'} {σ' : Strategy g'} (hs : SlotAt plur slot Φ j L σ') :
+    SlotAt plur slot Φ j (Lock.mono h L) σ' := by
+  induction hs with
+  | ret hr σ' => exact .ret (h _ _ _ hr) σ'
+  | coin C _ ih => exact .coin C ih
+  | send M _ ih => exact .send M ih
+  | other s hne _ ih => exact .other s hne ih
+  | here σ' => exact .here σ'
+  | nul h0 => exact .nul ((forkE_congr _ _ _ (Aligned.mono_self h _) _).trans h0)
+
+/-- **The slot is reached after `j` coins through a relabelled lockstep** where it is through the lockstep. -/
+theorem SlotAt.mapL {T D I α α₂ β : Type} {get : I → ℕ → Option (T × D)} {R : I → α → β → Prop}
+    {R₂ : I → α₂ → β → Prop} {plur : Chooser T D β} {slot : ℕ} {Φ : D → β → β → ℝ} (f : α → α₂)
+    (h : ∀ i a b, R i a b → R₂ i (f a) b) {j : ℕ} {i : I} {g : Game α} {g' : Game β} {L : Lock T D get R i g g'}
+    {σ' : Strategy g'} (hs : SlotAt plur slot Φ j L σ') : SlotAt plur slot Φ j (Lock.mapL f h L) σ' := by
+  induction hs with
+  | ret hr σ' => exact .ret (h _ _ _ hr) σ'
+  | coin C _ ih => exact .coin C ih
+  | send M _ ih => exact .send M ih
+  | other s hne _ ih => exact .other s hne ih
+  | here σ' => exact .here σ'
+  | nul h0 => exact .nul ((forkE_mapL _ _ _ f h _ _).trans h0)
 
 end FlockSoundness.Game.Lock
