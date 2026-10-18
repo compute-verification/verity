@@ -724,3 +724,72 @@ def limbs(a: int) -> list[int]:
 
 def output_value(out_vals: list[int]) -> int:
     return sum(d << (8 * m) for m, d in enumerate(out_vals))
+
+
+CONSTRUCTIONS: dict[str, Callable[[Builder, list[int]], tuple[list[int], int]]] = {
+    "free_square": free_square, "ripple_square": ripple_square, "lookahead_square": lookahead_square,
+    "merged_square": merged_square, "onepass_square": onepass_square, "seam_square": seam_square,
+}
+
+
+def measure(name: str, inputs: list[int]) -> dict:
+    """One construction's units (Lean's and fixed), gate count, restriction and its outputs on `inputs`."""
+    b = Builder()
+    a = [b.inp(i, 0, 255) for i in range(N_LIMBS)]
+    out, _ = CONSTRUCTIONS[name](b, a)
+    right = window = hold = 0
+    for x in inputs:
+        vals, w, h = b.evaluate(dict(enumerate(limbs(x))))
+        o = [vals[g] for g in out]
+        right += all(0 <= v <= 255 for v in o) and output_value(o) % P == x * x % P
+        window += w
+        hold += h
+    budgeted_gates = [g for g in b.gates if g.op.kind == "budgeted"]
+    return {"lean_units": b.lean_units, "fixed_units": b.fixed_units, "gates": len(b.gates),
+            "budgeted_gates": len(budgeted_gates), "gathers": sum(g.op.kind == "gather" for g in b.gates),
+            "proven": proven(b.gates) == [], "operand_bits_128": operand_bits(128, b.gates),
+            "max_operand_bits": max((sum(b.gates[j].bits for j in g.args) for g in budgeted_gates), default=0),
+            "inputs": len(inputs), "right": right, "in_window": window, "declared_hold": hold}
+
+
+def main() -> None:
+    import argparse
+    import json
+    import random
+
+    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    ap.add_argument("--out", required=True, help="the JSON file to write")
+    ap.add_argument("--inputs", type=int, default=64, help="random inputs each construction is evaluated on")
+    ap.add_argument("--seam-samples", type=int, default=1 << 17, help="random inputs `seam_fails` is evaluated on")
+    args = ap.parse_args()
+    rng = random.Random(20261018)
+    inputs = [rng.randrange(1 << 1024) for _ in range(args.inputs)] + [P - 1, 0, 1 << 1023]
+    rows = {name: measure(name, inputs) for name in CONSTRUCTIONS}
+    fails, ctops = 0, []
+    for _ in range(args.seam_samples):
+        x = rng.randrange(1 << 1024)
+        ctops.append(sum(v << (8 * m) for m, v in enumerate(folded_columns(x))) >> (8 * N_LIMBS))
+        fails += seam_fails(x)
+    b = Builder()
+    f = column_sums(b, [b.inp(i, 0, 255) for i in range(N_LIMBS)])
+    _, _, widths = _greedy_pass(b, f, 0, N_LIMBS)
+    best = rows["seam_square"]["lean_units"]
+    result = {
+        "model": "Security/Definitions/Accounting/Gates/Model.lean @ d6df95f24a (#2363), ported scalar",
+        "constructions": rows,
+        "seam": {"samples": args.seam_samples, "fails": fails, "c_top_mean": sum(ctops) / len(ctops),
+                 "c_top_max": max(ctops), "model_rate": DELTA * (sum(ctops) / len(ctops)) / 2 ** 32},
+        "column_bits": [clog2(b.gates[g].hi + 1) for g in f], "greedy_widths": widths,
+        "conjecture": {f"2^-{t}": {"e": e_per_squaring(t), "E": ROUNDS * SQUARINGS * e_per_squaring(t),
+                                   "counting_floor": counting_floor(t)} for t in (20, 40)},
+        "best": {"per_squaring": best, "per_word_k_S_e": ROUNDS * SQUARINGS * best},
+        "squarings": SQUARINGS, "rounds": ROUNDS,
+    }
+    with open(args.out, "w") as fh:
+        json.dump(result, fh, indent=1)
+    print(json.dumps({k: (v["lean_units"], v["fixed_units"], v["right"]) for k, v in rows.items()}))
+    print(json.dumps(result["seam"]), json.dumps(result["best"]))
+
+
+if __name__ == "__main__":
+    main()
