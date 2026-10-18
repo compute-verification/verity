@@ -4864,6 +4864,12 @@
    "assumptions": [],
    "type_hash": "e57381cb5ec70754de5727e83fd659312830ca151e3abe1da5c28e8c03580b3b"
   },
+  "Pouw.SecurityProofs.Receipt.DuoCheckpointNoKernel": {
+   "owner": "@compute-accounting"
+  },
+  "Pouw.SecurityProofs.Receipt.DuoLongRunKernel": {
+   "owner": "@compute-accounting"
+  },
   "Pouw.SecurityProofs.Receipt.DuoPairNoKernel": {
    "owner": "@compute-accounting",
    "signature": ["Pouw.SecurityProofs.Receipt.DuoPairNoKernel : Pouw.Guarantees.Receipt.DuoPairNoKernel"],
@@ -4893,6 +4899,9 @@
    "signature": ["Pouw.SecurityProofs.Receipt.DuoTripleNoKernel : Pouw.Guarantees.Receipt.DuoTripleNoKernel"],
    "assumptions": [],
    "type_hash": "0c0d8a780d11a162b4729dd77a42d529113998e23b817bdcbb746f124180edfc"
+  },
+  "Pouw.SecurityProofs.Receipt.DuoWindowNoKernel": {
+   "owner": "@compute-accounting"
   },
   "Pouw.SecurityProofs.Receipt.DuoWordInjective": {
    "owner": "@compute-accounting",
@@ -5152,6 +5161,18 @@
     "outcome": "none"
    },
    "Pouw.SecurityProofs.Receipt.DuoRunWordInjective": {
+    "function": "Pouw.Receipt.duoRun",
+    "outcome": "none"
+   },
+   "Pouw.SecurityProofs.Receipt.DuoWindowNoKernel": {
+    "function": "Pouw.Receipt.duoQuadWith",
+    "outcome": "none"
+   },
+   "Pouw.SecurityProofs.Receipt.DuoCheckpointNoKernel": {
+    "function": "Pouw.Receipt.duoCheckpoints",
+    "outcome": "none"
+   },
+   "Pouw.SecurityProofs.Receipt.DuoLongRunKernel": {
     "function": "Pouw.Receipt.duoRun",
     "outcome": "none"
    },

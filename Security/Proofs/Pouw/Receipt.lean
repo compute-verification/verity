@@ -3,12 +3,14 @@ import Proofs.Pouw.Receipt.Duo
 import Proofs.Pouw.Receipt.Li
 import Proofs.Pouw.Receipt.Fx1
 import Proofs.Pouw.Receipt.Run
+import Proofs.Pouw.Receipt.Window
 
 /-!
 # The receipt folds duo's, fx1's and li's guarantees
 
 Each statement of `Models/Pouw/Guarantees/Receipt.lean`: duo's words, pairs, triples and quadruples in
-`Receipt/Duo.lean`, the state bijection and runs of any length in `Receipt/Run.lean`, fx1's transport of each in
+`Receipt/Duo.lean`, the state bijection and runs of any length in `Receipt/Run.lean`, four words anywhere in a run,
+checkpoints every four words and the kernel of long runs in `Receipt/Window.lean`, fx1's transport of each in
 `Receipt/Fx1.lean`, and li's half steps and checkpoints in `Receipt/Li.lean`.
 -/
 
@@ -33,6 +35,15 @@ theorem DuoStepBijective : Pouw.Guarantees.Receipt.DuoStepBijective :=
 
 theorem DuoRunWordInjective : Pouw.Guarantees.Receipt.DuoRunWordInjective :=
   fun _ _ k a r s w i => Pouw.ReceiptProofs.duoRun_update_injective k a r s w i
+
+theorem DuoWindowNoKernel : Pouw.Guarantees.Receipt.DuoWindowNoKernel :=
+  fun _ _ _ k a r w q k' a' r' w' => Pouw.ReceiptProofs.duoWindow_injective k a r w q k' a' r' w'
+
+theorem DuoCheckpointNoKernel : Pouw.Guarantees.Receipt.DuoCheckpointNoKernel :=
+  fun _ _ q => Pouw.ReceiptProofs.duoCheckpoints_injective q
+
+theorem DuoLongRunKernel : Pouw.Guarantees.Receipt.DuoLongRunKernel :=
+  fun n _ k a r => Pouw.ReceiptProofs.duoRun_kernel n.succ_pos (by omega) k a r
 
 theorem Fx1WordInjective : Pouw.Guarantees.Receipt.Fx1WordInjective :=
   fun _ k a r m s => Pouw.ReceiptProofs.fx1Word_injective k a r m s
