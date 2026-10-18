@@ -23,8 +23,9 @@ that the outside finds the window's salt, not the bytes that cross:
   `A = #Ac · (#Σ_sync · D^T)^m · 2^kc` values at each draw, and with at most `q` noise-hash calls
   (`Assumptions.OutsideQueries`) it finds the salt with probability at most `q · A / #Ωs`, `q · 2^(k − 512)` at
   `A = 2^k`;
-* the floor at that advice (`Assumptions.PouwFloorAdvice`, conjectured, scoped to full-rank per-entry noise: H1's
-  per-entry coins are in it, its period-32 `U` and the peel's clean side are not) puts the work at the block.
+* the floor at that advice (`Assumptions.PouwFloorAdvice`, conjectured, scoped to the noise whose floor is the
+  committed words' coin × coin products: H1 is in it while it commits a word at least every 32 keys, the peel's clean
+  side is not) puts the work at the block.
 
 The headline is at decision 112's (GRIND) `q = 2^128`, the outside's query budget with no economic argument: the
 outsourcing term `q · 2^(k − 512)` is at most `2^−64` when `k ≤ 320`, and the measured `k` (the boundary's bits plus

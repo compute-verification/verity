@@ -12,9 +12,9 @@ falsification test that runs. The other three premises are in `Models.Accounting
 
 `PouwFloorAdvice` is compute attribution's floor for a block that isn't isolated: the help that doesn't depend on the
 salt is free (TT, `Pouw.Assumptions.TT`), and the rest costs the chance of finding the salt, taken as a hypothesis by
-`Accounting.Guarantees.PouwBlockCredit`. It is an open conjecture too, scoped to the noise that is full-rank and
-per-entry (H1's per-entry coins included, its period-32 `U` and the peel's clean side not), and
-`verity/core/protocols/pouw/tests/test_pouw_floor_advice.py` is its falsification test.
+`Accounting.Guarantees.PouwBlockCredit`. It is an open conjecture too, scoped to the noise whose floor is the committed
+words' coin × coin products (H1 included while it commits a word at least every 32 keys, the peel's clean side not),
+and `verity/core/protocols/pouw/tests/test_pouw_floor_advice.py` is its falsification test.
 -/
 
 namespace Accounting.Assumptions
@@ -56,30 +56,36 @@ decision 112's `q = 2^128` when `k ≤ 320`. The operands are bound before the s
 hashed before the salt's release at `ts` and transmitted at `td`, and `E₁`'s rows read `A`'s), so the prover can't
 steer operands against the salt.
 
-Scoped to the noise that is full-rank and per-entry: each entry its own hash output, so the window's noise lies in no
-salt-independent subspace of lower dimension. It is false for low-rank or structured noise: with
-`F = Σ_{t < r} c_t(salt) · G_t` for salt-independent `G_t`, a helper ships the `r` products `A · G_t`, and the block
-finishes `A · F` in `r` multiply-adds an output instead of `k`. By scheme:
+Scoped to the noise whose floor is the committed words' coin × coin products, both factors depending on the salt
+(`note:20261018T1026Z-finding-pv-advice`): advice is a constant to the coins, so it lowers no such product. A product
+that reads one side's coins only floors nothing (it is 0 at the zero operand). Noise of rank `r` along the contraction
+on one side is out of scope where `r` is below the keys between committed words: then the floor is `k · r / C` a cell,
+`C` the keys a word. With `F = Σ_{t < r} c_t(salt) · G_t` for salt-independent `G_t`, a helper ships the `r` products
+`A · G_t`, and the block finishes each committed word of `A · F` in `r` multiply-adds instead of `C`. By scheme:
 
-* `ncp-v1` and `ncp-v1-shift24`: in scope, every entry of `E₁` and `F₁`.
+* `ncp-v1` and `ncp-v1-shift24`: in scope, every entry of `E₁` and `F₁` its own hash output.
 * `eps1-sm120-h1fx1` (H1 + fx1, the compile pass's scheme on the s8 linears, decision 117): in scope through its
-  per-entry coins, the dither bit `b` on each entry of `X = A + b` and the coin bit `c` on each entry of
-  `W' = B + c + U`, so the products `A · c` and `b · B`. H1's keyed word `U` is not: it has period 32 along the
-  contraction, the same in every segment, so it is rank 32 a row, and `A · U` is 32 multiply-adds an output from `A`'s
-  residue sums, which a helper holding `A` can ship (H1 computes it that way itself).
+  coin × coin blocks, `b` on each entry of `X = A + b` against `c` and `U` of `W' = B + c + U`. `A · c`, `b · B` and
+  `A · U` each read one side's coins only and floor nothing (0 at `A = B = 0`). `U`'s period, 32, is the keys between
+  committed words, so `b · U` is rank 32 a word, the word's whole depth.
 * H1's attention, outside the compile pass (`note:20261018T0634Z-draft-attn-noise`): cohalf `QKᵀ`
-  (`Q̃ = Q + c + U`, `K̃ = K + b`) is in scope through `c` and `b`, and not through `U`. Adopted `P · V`
-  (`P̃ = P − 64 + U`, `X = V + b`) is in scope only on `V`'s side, through `b`: `P` carries no per-entry coin, only `U`
-  of period 32, so `U · V` comes from `V`'s residue sums. The peel's clean side (the served `O = Σ P · V`) is
-  bit-affine in the coins and floors nothing at all.
+  (`Q̃ = Q + c + U`, `K̃ = K + b`) is in scope through its coin × coin blocks `U · b` and `c · b`. Adopted `P · V`
+  (`P̃ = P − 64 + U`, `X = V + b`) is in scope through `U · b`: `P` carries no per-entry coin, only `U` of period 32,
+  but a prefix word is committed every 32 keys, so `U · b` is 32 products a word from `b`'s residue sums, which depend
+  on the salt: `k` a cell at every operand. `U · V` (from `V`'s residue sums) and `P · b` each read one side's coins
+  only and floor nothing. The peel's clean side (the served `O = Σ P · V`) is bit-affine in the coins and floors
+  nothing at all.
 * The Pearl schemes (Komargodski–Weinstein noise of rank 32 or 64): outside it.
 
-`Wb` is meant at the products against per-entry coins only. The marking `hash` is meant to mark every evaluation of
-the scheme's noise hash, as `PouwFloorOff`'s `m` is meant removable. Its falsification test,
+H1 is in scope only while it commits a word at least every 32 keys, `U`'s period: with one every `C` keys, `U · b`
+floors only `32 · k / C`. `Wb` is meant at the committed words' coin × coin products (both factors depend on the salt;
+H1's `U · b`, `b · c` and `b · U`), as `chainBound_gProd` counts them. The marking `hash` is meant to mark every
+evaluation of the scheme's noise hash, as `PouwFloorOff`'s `m` is meant removable. Its falsification test,
 `verity/core/protocols/pouw/tests/test_pouw_floor_advice.py`, checks that each in-scope scheme's per-entry noise fills
-its noise space, that every scheme in the PoUW registry and in the compile pass's (`compile.SCHEMES`, where it is on
-the tree) is either in scope or excluded with its reason, and that the low-rank counterexample and a period-32 `U`
-alone are refused. An open conjecture, not under `shape.premises`. -/
+its noise space, that every scheme in the PoUW registry and in the compile pass's (`compile.SCHEMES`) is either in
+scope or excluded with its reason, that H1 commits a prefix word every 32 keys, that the low-rank counterexample is
+refused, and that a period-32 `U` costs `32 · k / C` products a cell from residue sums, `k` only at `C = 32`. An open
+conjecture, not under `shape.premises`. -/
 def PouwFloorAdvice {Ωs Ωd : Type} [Fintype Ωs] [Fintype Ωd] {L : Type*} [LinearOrder L] [Fintype L]
     (S : Ωs × Ωd → Actual.Run L) (P : Verdict (Ωs × Ωd) L) (B : Ωs × Ωd → Prop) (X cert : Finset L)
     (hash : ∀ r, Finset (Fin (S r).A.N)) (π : ∀ r, Fin (S r).A.N → ℕ) (m : ∀ r, Finset (Fin (S r).A.N))
