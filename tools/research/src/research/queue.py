@@ -1108,11 +1108,24 @@ def _tree(repo: Path, commit: str) -> str:
     return _git(repo, "rev-parse", "-q", "--verify", f"{commit}^{{tree}}", check=False).stdout.strip()
 
 
-#: the invariant tests the preflight runs on the merged tree, by the directory pytest runs in.  17 Oct's train breakers each
-#: failed one: a module string naming a module only an unlanded PR adds, stale Lake pins, a doc path, and a workspace member
-#: without its REAL_ROOTS entry (#2271, which reverted 12 landings)
-PREFLIGHT_TESTS = ((".", ("tests/test_module_strings.py", "tests/test_pins.py", "tests/test_doc_paths.py")),
-                   ("tools/research", ("tests/test_pythonpath.py",)))
+#: the invariant tests the preflight runs on the merged tree, from the root.  17 Oct's train breakers each failed one: a module
+#: string naming a module only an unlanded PR adds, stale Lake pins, a doc path, and a workspace member without its REAL_ROOTS
+#: entry (#2271, which reverted 12 landings)
+PREFLIGHT_TEST_PATHS = ("tests/test_module_strings.py", "tests/test_pins.py", "tests/test_doc_paths.py",
+                        "tools/research/tests/test_pythonpath.py")
+
+
+def _by_suite(paths: tuple[str, ...]) -> tuple[tuple[str, tuple[str, ...]], ...]:
+    """`paths` grouped by the directory pytest runs each in (the part before `tests/`), each relative to it."""
+    groups: dict[str, list[str]] = {}
+    for path in paths:
+        d, sep, rest = path.rpartition("tests/")
+        groups.setdefault(d.rstrip("/") or ".", []).append(sep + rest)
+    return tuple((d, tuple(fs)) for d, fs in groups.items())
+
+
+#: `PREFLIGHT_TEST_PATHS` by the directory pytest runs in
+PREFLIGHT_TESTS = _by_suite(PREFLIGHT_TEST_PATHS)
 #: suites whose collection is no cheap check, each with why; the preflight names them and leaves them to the train's check
 PREFLIGHT_UNCOLLECTED = {"tools/verity/circuit_check": "its collection builds every target: over 10 min and 10 GB (18 Oct)"}
 #: the merged tree's environment, as the quick tier's `uv run --locked` has it (a fresh tree syncs from uv's cache in seconds)
@@ -1146,7 +1159,7 @@ _LOCK_STALE = "needs to be updated"
 class Preflight:
     """`ready`'s preflight, before the mark (and before the quick tier): refused, each refusal naming its fix, when the head
     (a) conflicts with `next` (`conflicting_files`, no worktree), naming the paths and the PRs on `next` that touched them;
-    (b) merged onto `next`, fails `pins.py --stale`, a test of `PREFLIGHT_TESTS`, or `pytest --collect-only` in a suite whose inputs
+    (b) merged onto `next`, fails `pins.py --stale`, a test of `PREFLIGHT_TEST_PATHS`, or `pytest --collect-only` in a suite whose inputs
     the change touches (`suites.py`'s own `touched`, from `next` to the merged tree), or the merged tree's `uv sync --locked`
     finds its lock stale; or (c) contains another open PR's head that isn't admitted (no ready mark at that head, held, or no
     owner), naming each.  17 Oct's train breakers were each one of these (memory accounting's thread in #agent-coordination).
