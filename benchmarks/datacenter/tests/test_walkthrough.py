@@ -5,9 +5,10 @@ in order, and `python tests/test_walkthrough.py` prints what the guide prints.
 """
 from __future__ import annotations
 
-from datacenter import (FLEET_CLOSED, Assumption, Block, Cadence, Carried, Challenge, Credit, Datacenter, Deviation,
-                        Device, Fleet, Input, Interval, Ledger, Link, Maintenance, Plan, Port, ReadWindow, Refused, Store,
-                        Wipe, account, audit, commit, crossings, digest, double_credit, occupancy, place, run, trace)
+from datacenter import (FLEET_CLOSED, Append, Assumption, Block, Cadence, Carried, Challenge, Credit, Datacenter,
+                        Deviation, Device, Fleet, Input, Interval, Ledger, Link, Maintenance, Plan, Port, ReadWindow,
+                        Refused, Release, Store, Wipe, account, audit, commit, crossings, digest, double_credit,
+                        occupancy, place, run, trace)
 from datacenter.examples import GB
 
 INPUTS = {"x": 7, "w1": 3, "w2": 5}
@@ -154,6 +155,9 @@ def section_11():
     print(a.reads, a.reads_local_at_least)
     sampled = Plan(Interval(0, 1000), challenges=[Challenge("kv", at=0, deadline=1, sample=4096 * 8)])
     print(account(audit(run(q, {"x": 3}, sampled), q.public(sampled)), q.public(sampled)).located)
+    changes = [Append("kv", at=0, first=0, count=1000, coin_at=1, resident_at=4), Release("kv", first=0, count=1000, at=12)]
+    grows = Plan(Interval(0, 16), changes=changes, lifetime=3, deferred=True)
+    print(grows.bits(kv, 2), grows.bits(kv, 6), grows.held(kv, Interval(0, 16)))
 
 
 # §12 Telemetry and container images
