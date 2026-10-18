@@ -53,7 +53,10 @@ many reads of a node's registered blocks the node made in each window, from rece
    each γ term over the session's span and over each window's own (`WindowLedger`), μ_sample read per window and
    pooled over the session's horizon (`pooled`, `floors`).  It credits a receipt of a block appended after the seed
    only on the property's verdict on the circuits that wrote it (`credit_post_seed`, I2's), and then charges what
-   their carriers may hold (μ_carrier); without one, those receipts are certified but not credited.
+   their carriers may hold (μ_carrier); without one, those receipts are certified but not credited.  On the served
+   circuit's requirement linked to the passes (`requirement`, a `RequirementLink`: I4's plan and memory-map units and
+   the census's layout rule), each pass's credit is its receipts at the link's D bits each, at most the circuit's reads
+   at its step (`Ledger.linked`); without one the credit is the node's reads of its store.
    What an accepted window certifies, and on what, is `PROTOCOL.md`.
 
 The verifier's clock is injected (`clock`, nanoseconds, `time.monotonic_ns` by default).  Openings are checked in the
@@ -890,7 +893,8 @@ class Session:
 LEDGER_SOURCES = {
     "timing": "the record: the span its passes don't cover at the node's capacity (the round trip and the pass in "
               "flight at the span's ends, the chaining gaps, blocks a plan leaves out), the session's or a window's own "
-              "[b_(t−1), D_t]",
+              "[b_(t−1), D_t]; on a requirement link, each pass's credit is its receipts at D bits each, at most the "
+              "circuit's reads at its step",
     "sample": "the record: its openings' bound on wrong receipts, each window's own at delta (`Ledger.sample`, the "
               "per-window reading), or the session's pooled over its windows at one delta (`Ledger.horizon`, `pooled`)",
     "chip": "S_chip, measured: one pass's worth a block held on chip need not be read again",
@@ -917,6 +921,25 @@ class PostSeedVerdict(Protocol):
     def holds(self) -> bool: ...
 
     def carrier_bytes(self, read_bytes: int) -> float: ...
+
+
+class RequirementLink(Protocol):
+    """The served circuit's requirement, linked to a session's passes (A1's `Accounting.Requirement`), as `ledger`
+    reads it: whether the link `holds`; `density_bits`, D, the fewest bits of the circuit's values that any block a
+    plan holds carries; and `read_bits(step)`, the bits the circuit reads at a step (`requirement.Requirement.read_bits`
+    in `verity.ml.circuits`).  It holds once the proof units have shown, for every pass, that its plan holds only
+    blocks the circuit reads at the pass's step (`PlanMatches`; the plan unit, I4's), each carrying at least D of its
+    values' bits (`Packs` under the census's layout rule), and that every free in the memory map, of a registered
+    block or a written one, is at its values' last read (the memory-map unit, I4's).  Those checks are theirs; the
+    ledger takes the link as given."""
+
+    @property
+    def holds(self) -> bool: ...
+
+    @property
+    def density_bits(self) -> int: ...
+
+    def read_bits(self, step: int) -> int: ...
 
 
 class _Terms:
@@ -967,7 +990,9 @@ class Ledger(_Terms):
     both ways: `sample`, each window's openings bounding its own wrong receipts at δ, and `horizon`, the session's
     openings pooled over its windows at one δ (`pooled`).  `floor` is the most of any window's receipts the pooled
     event leaves wrong.  `windows` are the same terms over each window's own span, and `worst` and `worst_horizon`
-    the windows of the largest γ either way: the every-window half of the claim is theirs, beside the horizon's."""
+    the windows of the largest γ either way: the every-window half of the claim is theirs, beside the horizon's.
+    `linked`: whether the credit is the served circuit's (capped at its reads, on a `RequirementLink`); without a link
+    the credited bytes are the node's reads of its store, not shown to be reads the circuit makes."""
 
     timing: float
     sample: float
@@ -980,6 +1005,7 @@ class Ledger(_Terms):
     horizon: float
     floor: float
     windows: tuple[WindowLedger, ...]
+    linked: bool = False
 
     @property
     def worst(self) -> WindowLedger:
@@ -991,7 +1017,7 @@ class Ledger(_Terms):
 
     def to_json(self) -> dict:
         w, h = self.worst, self.worst_horizon
-        return {**self._json(), "windows": [x.to_json() for x in self.windows],
+        return {**self._json(), "linked": self.linked, "windows": [x.to_json() for x in self.windows],
                 "worst": {"gamma": w.gamma, "horizon": {"gamma": h.gamma_horizon, "window": h.window},
                           "window": w.window}}
 
@@ -1065,7 +1091,7 @@ def named_bits(k: int, queries_log2: int = QUERIES_LOG2) -> int:
 def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebuild: Rebuild, host: float = 0.0,
            link: float = 0.0, queries_log2: int = QUERIES_LOG2, slack_log2: int = SLACK_LOG2,
            wrong: Callable[[IntegrityProfile], float] = IntegrityProfile.bound,
-           credit_post_seed: PostSeedVerdict | None = None) -> Ledger:
+           credit_post_seed: PostSeedVerdict | None = None, requirement: RequirementLink | None = None) -> Ledger:
     """γ's terms for an accepted session on a node of `capacity_bytes_per_s` (HBM plus host DRAM) and `chip_bytes` of
     on-chip storage: the read bytes the record credits are at least `(1 − γ)·capacity·span`, except with probability
     `windows · delta`, and at least `(1 − γ_horizon)·capacity·span` except with `delta` (each plus 2^-slack_log2 a
@@ -1081,9 +1107,23 @@ def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebu
     The record credits the receipts of registered blocks, and those of blocks appended after the codec seed only on
     `credit_post_seed`, the property's verdict on the circuits that wrote them (I2's; None credits none, and a verdict
     that fails is refused).  Crediting them charges μ_carrier, each pass the least of the verdict's carrier bytes and
-    its post-seed bytes.  `sample`, `counting`, the horizon and the capacity check count every certified receipt."""
+    its post-seed bytes.  `sample`, `counting`, the horizon and the capacity check count every certified receipt.
+    On `requirement`, the served circuit's requirement linked to the passes (`RequirementLink`, which must hold), a
+    pass's credit is its credited receipts at D bits each, at most the bits the circuit reads at the pass's step, so
+    the credit is the circuit's reads (`Ledger.linked`); `sample` still charges a whole block for a wrong receipt."""
     if credit_post_seed is not None and credit_post_seed.holds is not True:
         raise ValueError("a verdict that the property fails credits nothing after the seed: pass None")
+    density = 8 * record.block_bytes
+    if requirement is not None:
+        if requirement.holds is not True:
+            raise ValueError("a requirement link whose proofs don't hold caps nothing: pass None, and the credit is "
+                             "the node's reads of its store, not the circuit's")
+        density = requirement.density_bits
+        if type(density) is not int or not 1 <= density <= 8 * record.block_bytes:
+            raise ValueError(f"a link's density is a whole number of bits from 1 to a block's {8 * record.block_bytes}")
+        if any(len(w.steps) != w.passes for w in record.windows):
+            raise ValueError("a requirement link reads each pass's step, and this record's passes name none: link a "
+                             "session's own record")
     if capacity_bytes_per_s <= 0 or chip_bytes < 0:
         raise ValueError("the capacity is positive and the chip's storage nonnegative")
     if type(rebuild) is not Rebuild:
@@ -1112,20 +1152,30 @@ def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebu
             raise ValueError("a verdict's carrier bytes are a finite nonnegative number")
         return sum(min(c, a * b) for a in w.post_seed)
 
-    windows, carriers = [], [carried(w) for w in record.windows]
-    for w, f, e, cb in zip(record.windows, floors(record), wrong_receipts, carriers):
+    def credited_bytes(w: WindowRecord) -> float:
+        if requirement is None:
+            return sum(w.credited(credit)) * b
+        out = 0
+        for n, s in zip(w.credited(credit), w.steps):
+            r = requirement.read_bits(s)
+            if type(r) is not int or r < 0:
+                raise ValueError(f"the bits the circuit reads at step {s} are a nonnegative integer")
+            out += min(n * density, r)
+        return out / 8
+
+    windows, carriers, credits = [], [carried(w) for w in record.windows], [credited_bytes(w) for w in record.windows]
+    for w, f, e, cb, cr in zip(record.windows, floors(record), wrong_receipts, carriers, credits):
         whole_t, reads_t = capacity_bytes_per_s * w.span_ns / 1e9, w.receipts * b
         if reads_t > whole_t:
             raise ValueError(f"window {w.window} certifies {reads_t} bytes read, more than the capacity allows in its "
                              "span: the capacity is understated")
         windows.append(WindowLedger(
-            w.window, w.span_ns, timing=1 - sum(w.credited(credit)) * b / whole_t, sample=e * b / whole_t,
+            w.window, w.span_ns, timing=1 - cr / whole_t, sample=e * b / whole_t,
             chip=w.passes * chip_bytes / whole_t, counting=sum(named[k] for k in w.lengths) / 8 / whole_t,
             rebuild=mu_rebuild, host=host, link=link, carrier=cb / whole_t, horizon=f * reads_t / whole_t, floor=f))
     horizon, floor = pooled(record)
     lam_bits = sum(named[k] for w in record.windows for k in w.lengths)
-    credited = sum(sum(w.credited(credit)) for w in record.windows) * b
-    return Ledger(timing=1 - credited / whole, sample=sum(wrong_receipts) * b / whole,
+    return Ledger(timing=1 - sum(credits) / whole, sample=sum(wrong_receipts) * b / whole,
                   chip=record.passes * chip_bytes / whole, counting=lam_bits / 8 / whole, rebuild=mu_rebuild, host=host,
                   link=link, carrier=sum(carriers) / whole, horizon=horizon * b / whole, floor=floor,
-                  windows=tuple(windows))
+                  windows=tuple(windows), linked=requirement is not None)
