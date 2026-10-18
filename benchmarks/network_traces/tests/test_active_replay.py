@@ -122,6 +122,31 @@ def test_an_honest_run_is_accepted_and_is_run_shapers(runs):
     assert audit["timing"]["tick_late_ms"]["egress"]["max"] < 0.001
 
 
+def test_a_salted_run_puts_the_salt_frame_on_ingress_only(setup, runs, tmp_path):
+    """With the certifier's salt on, each window's ingress record holds one salt frame and no egress record holds
+    any, nor any salt or commitment; the server receives every window's salt, the audit reads each commitment
+    against the salt `reveal` gave, and every verdict and comparison is the unsalted run's."""
+    _, report, _ = setup
+    plan, results = runs
+    assert ar.run_virtual(plan, report, tmp_path, salt=True) == {"server": 0, "proxy": 0, "peer": 0}
+    salts = json.loads((tmp_path / "salts.json").read_text())
+    assert sorted(salts) == ["0", "1", "2"] and all(len(bytes.fromhex(s)) == 64 for s in salts.values())
+    audit = ar.audit_configuration(plan, report, tmp_path)
+    honest = results["honest"][1]
+    assert audit["rows"] == honest["rows"]
+    assert audit["comparisons"] == honest["comparisons"]
+    assert audit["salt"] == {"accepted": True, "violations": [], "ingress_salt_frames": [1, 1, 1],
+                             "egress_salt_frames": 0, "egress_holds_salt": False, "block_received": True}
+    assert ar.against_honest(tmp_path, results["honest"][0])["wire_is_honests"]
+    assert "salt" not in honest
+
+    wrong = dict(salts, **{"1": bytes(64).hex()})
+    (tmp_path / "salts.json").write_text(json.dumps(wrong))
+    audit = ar.audit_configuration(plan, report, tmp_path)
+    assert audit["salt"]["accepted"] is False and audit["salt"]["violations"] == [[1, "salt"]]
+    assert audit["salt"]["block_received"] is False and audit["rows"] == honest["rows"]
+
+
 def test_a_released_frame_that_isnt_the_programs_is_counted_not_a_crash(setup, runs, tmp_path):
     """The records of an honest run with one released frame replaced, as a server that numbers an event other than
     the Program does: the audit counts it, and its window is a mismatch raw (the committed records are the run's)."""

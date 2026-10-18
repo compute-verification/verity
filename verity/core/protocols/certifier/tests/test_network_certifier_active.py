@@ -495,7 +495,7 @@ def test_the_salt_reaches_only_the_blocks_side_and_its_commitment_is_in_the_reco
 
     server = Server()
     proxy, wire = asyncio.run(replay(honest(), salt=source, server=server, probe=probe))
-    assert sorted(drawn) == list(range(WINDOWS))
+    assert sorted(drawn) == list(range(WINDOWS)) and proxy.salts_released == proxy.salts_delivered == WINDOWS
     assert server.salts == [active.salt_frame(w, drawn[w], active.SALT_FRAME_BYTES) for w in range(WINDOWS)]
     assert len(server.writers) == len(SESSIONS)
 

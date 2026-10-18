@@ -406,8 +406,8 @@ class Proxy:
       bucket by position; `lateness` holds each tick's lateness in seconds, per grid; `link_frames_read` and
       `requests_released` count the ingress frames read and the requests released to the server;
     - with `salt`, a source of one salt per window such as `fresh_salt`, the ingress grid carries each window's salt
-      frame, the server receives the salt on its own connection (`salts_delivered` counts them), and `reveal(w)`
-      gives the verifier window w's salt once w's ingress record is published;
+      frame, the server receives the salt on its own connection (`salts_released` and `salts_delivered` count them),
+      and `reveal(w)` gives the verifier window w's salt once w's ingress record is published;
     - `until(predicate)` waits until the proxy's state satisfies it, for a caller that drives a `VirtualClock`."""
 
     def __init__(self, upstream: tuple[str, int], egress: GridParams, ingress: GridParams, sync_set: SyncSet,
@@ -435,7 +435,7 @@ class Proxy:
         self._salt_frames: dict[int, bytes] = {}
         self._salt_out: asyncio.Queue | None = None
         self._salt_task: asyncio.Task | None = None
-        self._ingress_published = self.salts_delivered = 0
+        self._ingress_published = self.salts_released = self.salts_delivered = 0
         self.bucketer = Bucketer(Certifier(ingress_link, ingress), None if salt is None else self._draw_salt)
         self.records: list[Record] = []
         self.publish = publish or (lambda record, params: self.records.append(record))
@@ -563,6 +563,7 @@ class Proxy:
         if self._salt_frames.get(w) != frame:
             return
         del self._salt_frames[w]
+        self.salts_released += 1
         if self._salt_out is None:
             self._salt_out = asyncio.Queue()
             self._salt_task = asyncio.create_task(self._salt_upstream(self._salt_out))
