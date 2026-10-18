@@ -3377,3 +3377,32 @@ def test_backup_packs_nothing_while_a_timed_window_runs_or_waits(tmp_path):
         r = subprocess.run(["bash", str(NEBIUS / "backup.sh")], env={**env, "RESEARCH_RUN_DIR": str(run)}, capture_output=True, text=True)
         assert r.returncode == rc, (line, r.stderr)
         assert (run / "backup" / "tars").is_dir() and bool(list((run / "backup" / "tars").iterdir())) == (rc == 0)
+
+
+def test_a_run_on_a_stopped_nebius_vm_starts_it_and_waits_for_its_ssh(monkeypatch):
+    """INF-58: the H200s stop after 2 h idle with their disks kept, and `research run --on` brings one back: a machine whose registry
+    entry names its nebius_instance_id and whose ssh doesn't answer is started through the API, then waited for."""
+    answers = iter([1, 1, 1, 0])
+    monkeypatch.setattr(remote, "ssh_run", lambda ssh, argv, timeout=120: subprocess.CompletedProcess(argv, next(answers)))
+    calls, t = [], [0.0]
+
+    def nebius(*args):
+        calls.append(args[2])
+        return {"status": {"state": "STOPPED"}} if args[2] == "get" else {}
+
+    def sleep(s):
+        t[0] += s
+
+    m = {"name": "vy-glm53-eu", "nebius_instance_id": "computeinstance-x"}
+    assert remote.wake(m, ["ssh"], nebius=nebius, sleep=sleep, clock=lambda: t[0]) == "started from STOPPED"
+    assert calls == ["get", "start"] and t[0] == 3 * remote.WAKE_POLL_S
+    assert remote.wake({"name": "vy-nebius-2"}, ["ssh"], nebius=nebius) is None, "no instance id: nothing to wake"
+    monkeypatch.setattr(remote, "ssh_run", lambda ssh, argv, timeout=120: subprocess.CompletedProcess(argv, 1))
+    with pytest.raises(remote.Refused, match="didn't answer in 15 min"):
+        remote.wake(m, ["ssh"], nebius=nebius, sleep=sleep, clock=lambda: t[0])
+
+    def no_creds(*args):
+        raise RuntimeError("no NEBIUS_SA_ID")
+
+    with pytest.raises(remote.Refused, match="ask @infra to start computeinstance-x"):
+        remote.wake(m, ["ssh"], nebius=no_creds)

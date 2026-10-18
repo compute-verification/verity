@@ -313,6 +313,35 @@ def ssh_argv(host: str, port: int, *, user: str = "root", connect_timeout: int =
     return [*base[:-1], "-o", "BatchMode=yes", "-o", f"ConnectTimeout={connect_timeout}", base[-1]]
 
 
+WAKE_WAIT_S, WAKE_POLL_S = 900.0, 15.0
+
+
+def wake(machine: dict[str, Any], ssh: list[str], *, nebius=None, sleep=time.sleep, clock=time.monotonic) -> str | None:
+    """Start a stopped Nebius VM before a run and wait for its ssh (INF-58: the H200s stop after 2 h idle, disks kept): a machine
+    whose registry entry names its `nebius_instance_id` and whose ssh doesn't answer is started through the Nebius API, then waited
+    for up to WAKE_WAIT_S. Returns what it did, None when the machine answered at once or names no instance."""
+    iid = machine.get("nebius_instance_id")
+    if not iid or ssh_run(ssh, ["true"], timeout=30).returncode == 0:
+        return None
+    if nebius is None:
+        from .pods.nebius.fleet import nb as nebius
+    try:
+        state = (nebius("compute", "instance", "get", "--id", iid).get("status") or {}).get("state")
+        if state in ("STOPPED", "STOPPING"):
+            nebius("compute", "instance", "start", "--id", iid, "--async")
+    except (RuntimeError, OSError, ValueError) as e:
+        raise Refused(f"{machine['name']} doesn't answer on ssh and couldn't be started through the Nebius API ({e}); with no Nebius "
+                      f"credentials here, ask @infra to start {iid}") from None
+    print(f"research: {machine['name']} was {state}; started it through the Nebius API, waiting up to {WAKE_WAIT_S / 60:g} min "
+          f"for its ssh (disks kept)", file=sys.stderr)
+    end = clock() + WAKE_WAIT_S
+    while clock() < end:
+        sleep(WAKE_POLL_S)
+        if ssh_run(ssh, ["true"], timeout=30).returncode == 0:
+            return f"started from {state}"
+    raise Refused(f"{machine['name']} ({iid}) was started from {state} but its ssh didn't answer in {WAKE_WAIT_S / 60:g} min")
+
+
 def ssh_run(ssh: list[str], remote_argv: list[str], *, stdin: bytes | None = None, timeout: float = 120) -> subprocess.CompletedProcess:
     """Run one remote argv (quoted per-arg with shlex; no eval on the far side)."""
     cmd = [*ssh, " ".join(shlex.quote(a) for a in remote_argv)]
@@ -1693,6 +1722,8 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
         user = tgt.get("user", "root")
         ssh = ssh_argv(tgt["host"], tgt["port"], user=user)
         rec.update(pod_id=m.get("pod_id"), host=tgt["host"], port=tgt["port"], user=user, root=m["root"], phase="shipping")
+        if woke := wake(m, ssh):
+            rec["woke"] = woke
         write_json_atomic(local_dir / "remote.json", rec)
         tool_pkg = source_tool_package(source)      # --source <tree> with tools/research: the tree's own package runs the run
         if mem_gb and tool_pkg is not None and not (tool_pkg / "mem.py").exists():
