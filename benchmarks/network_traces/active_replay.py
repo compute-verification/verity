@@ -863,15 +863,19 @@ def write_logs(out: Path, proxy: Proxy | None = None, server: Server | None = No
         (out / "peer.json").write_text(json.dumps(peer.dump() | _usage()))
 
 
-def server_process(plan: dict, params: dict, conn, out: str) -> None:
+def server_process(plan: dict, params: dict, conn, out: str, host: str = "127.0.0.1", port: int = 0) -> None:
     _quiet_runtime()
-    asyncio.run(_server(plan, params, conn, Path(out)))
+    asyncio.run(_server(plan, params, conn, Path(out), host, port))
 
 
-async def _server(plan: dict, params: dict, conn, out: Path) -> None:
+# The server, the proxy and the peer each talk to their parent over `conn` (anything with `send` and a blocking `recv`):
+# each sends one value once it is listening or connected, then receives the origin; the server receives one more value
+# before it stops. Each listens on, or connects to, `host`; a `port` of 0 is any free one, which the listener sends.
+
+async def _server(plan: dict, params: dict, conn, out: Path, host: str = "127.0.0.1", port: int = 0) -> None:
     loop = asyncio.get_running_loop()
     server = LiveServer(plan, params) if "upstream" in params else Server(plan, params)
-    listening = await asyncio.start_server(server.handle, "127.0.0.1", 0)
+    listening = await asyncio.start_server(server.handle, host, port)
     conn.send(listening.sockets[0].getsockname()[1])
     await server.serve(await loop.run_in_executor(None, conn.recv))
     await loop.run_in_executor(None, conn.recv)
@@ -942,24 +946,28 @@ def _stopper():
 
 
 def proxy_process(plan: dict, setup_report: dict, upstream: tuple[str, int], conn, out: str,
-                  stalls: Sequence[tuple[int, float]] = ()) -> None:
+                  stalls: Sequence[tuple[int, float]] = (), host: str = "127.0.0.1", port: int = 0) -> None:
     _quiet_runtime()
     pause = _stopper() if stalls else None
-    asyncio.run(_proxy(plan, Setup(setup_report), upstream, conn, Path(out), stalls, pause))
+    asyncio.run(_proxy(plan, Setup(setup_report), upstream, conn, Path(out), stalls, pause, host, port))
 
 
 async def _proxy(plan: dict, setup: Setup, upstream: tuple[str, int], conn, out: Path,
-                 stalls: Sequence[tuple[int, float]] = (), pause=None) -> None:
+                 stalls: Sequence[tuple[int, float]] = (), pause=None, host: str = "127.0.0.1", port: int = 0) -> None:
     publish = Publisher(out, setup)
     advice = prover_args(plan, setup)
     done = asyncio.get_running_loop().create_future()
     holder: dict = {}
 
     async def on_link(reader, writer) -> None:
+        if "link" in holder:  # one link: a second connection is never the peer's
+            writer.close()
+            return
+        holder["link"] = writer
         await holder["proxy"].run(reader, writer)
         done.set_result(None)
 
-    listening = await asyncio.start_server(on_link, "127.0.0.1", 0)
+    listening = await asyncio.start_server(on_link, host, port)
     conn.send(listening.sockets[0].getsockname()[1])
     origin = conn.recv()
     proxy = holder["proxy"] = Proxy(upstream, setup.egress_params, setup.ingress_params, setup.sync_set,
@@ -975,14 +983,14 @@ async def _proxy(plan: dict, setup: Setup, upstream: tuple[str, int], conn, out:
         (out / "stalls.json").write_text(json.dumps(proxy._changed.done))
 
 
-def peer_process(plan: dict, params: dict, link_port: int, conn, out: str) -> None:
+def peer_process(plan: dict, params: dict, link_port: int, conn, out: str, host: str = "127.0.0.1") -> None:
     _quiet_runtime()
-    asyncio.run(_peer(plan, params, link_port, conn, Path(out)))
+    asyncio.run(_peer(plan, params, link_port, conn, Path(out), host))
 
 
-async def _peer(plan: dict, params: dict, link_port: int, conn, out: Path) -> None:
+async def _peer(plan: dict, params: dict, link_port: int, conn, out: Path, host: str = "127.0.0.1") -> None:
     peer = Peer(plan, params)
-    reader, writer = await asyncio.open_connection("127.0.0.1", link_port, limit=1 << 22)
+    reader, writer = await asyncio.open_connection(host, link_port, limit=1 << 22)
     conn.send("connected")
     origin = conn.recv()
     sending = asyncio.create_task(peer.send(writer, origin))
