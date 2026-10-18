@@ -20,11 +20,9 @@ import json
 import pytest
 
 from verity_vllm.check.c2_rules import _query_population_scope
+from verity_vllm.program.registry import bf16_gemm_check as BC
 from verity_vllm.check.verdict import commit_verdict
 from verity_vllm.check.replay import coverage as COV, driver as SR, index as IX, population as POP
-from verity_vllm.check.replay import replay_codes as RC
-from verity_vllm.program.kernels import rows as RK
-from verity_vllm.program.registry import bf16_gemm_check as BC
 from tests.check import test_sampled_replay as T
 from tests.check.test_sampled_replay import moe_world, world  # noqa: F401  -- fixtures
 
@@ -215,18 +213,6 @@ def test_moe_plane_identities_reconcile_at_their_planes(moe_world):  # noqa: F81
         assert u["mechanism"] and u["class"] != "unstated"
         if u["family"] == "moe_block_stream":
             assert u["class"] == "plane-fed" and u["spec"].startswith("Moe")
-
-
-def _expected_uncovered_class(spec: str) -> str | None:
-    """What the TREE says about a family: an evaluator registered -> its identities are REACHED (None here); in NOT_YET -> uncovered by
-    the class the entry states (K/V history = state-linked); neither -> no-evaluator.  Read from the registry, never hard-coded: dense's
-    RoPE_v1 (af80855b4, R17-9) and Attention_v2/v3 Stage A (M-0156, R17-11) evaluators land on int and this test must hold on both trees
-    (rel M-0157 collision 3)."""
-    if spec in RK.EVALUATORS and spec not in RC.NOT_YET:
-        return None
-    if spec in RC.NOT_YET:
-        return "state-linked" if "K/V history" in RC.NOT_YET[spec] else "no-evaluator"
-    return "no-evaluator"
 
 
 def test_a_required_family_without_a_stated_mechanism_fails_closed(world):  # noqa: F811
