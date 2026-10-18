@@ -1,6 +1,7 @@
 """`tools/popread.py` on a toy Program with one Call of each kind: one whose reads are public, one that reads every candidate and
 selects one inside the unit by another Call's output, and one that reads an input whose binding is planned from committed values.
-Also its step attribution from a workload Program's chronology, its planner counterfactual and its P_served reader."""
+Also its step attribution from a workload Program's chronology, its planner counterfactual, its P_served reader, each unit's
+egress E(u), and the circuit-native prefix form's read sets."""
 from __future__ import annotations
 
 import gzip
@@ -65,6 +66,10 @@ def test_each_kind_of_read_is_named_with_its_value_and_its_units(tmp_path):
     warm = fams["Bf16Add_v1"]
     assert warm["verdict"] == "VALUE-DEPENDENT" and warm["value"].startswith("prefix: prompt_token_ids")
     assert warm["reads"] == {"inputs": ["prefix"], "calls": ["GatherBf16x4_v1"]}
+
+    e = r["egress"]
+    assert (e["slots"], e["bits"], e["slot_bits"], e["E_max"]) == (1, 16, [[16, 16]], {"bits": 16, "slots": 1, "declared_bits": 16})
+    assert (e["weight"], e["at_max"]["share"], e["components"]["with_egress"]) == ("units", 1.0, 1)
 
     s = r["summary"]
     assert (s["value_dependent"]["units"], s["value_dependent"]["share_units"]) == (1, 1 / 3)
@@ -219,8 +224,30 @@ def test_served_reads_count_each_definition_per_row_and_name_the_embedding_gathe
     assert (fams["Gemm_v2"]["calls"], fams["TokenSelect_v1"]["calls"]) == (3, 3)
     assert r["eos"]["applied"] and "Activity keyed on EOS" in PR.render([dict(r, name="toy")])
 
+    # egress: r0's step-0 sampled row reaches both of its ids (2 bits each for V = 4); its 2 unsampled rows reach no k/v (the toy
+    # has no attention) and no logits, so E = 0
+    e = r["egress"]
+    assert (e["slots"], e["bits"], e["declared_bits"], e["weight"]) == (3, 6, 96, "gates")
+    assert e["E_max"] == {"bits": 4, "slots": 2, "declared_bits": 64}
+    assert sorted(f["family"] for f in e["at_max"]["families"]) == ["Embedding_v1", "Gemm_v2", "TokenSelect_v1"]
+    assert [(c["component"], c["slots"], c["E_max"]["bits"]) for c in e["components"]["per"]] == [("r0", 2, 4), ("r1", 1, 2)]
+    assert (e["zero"]["calls"], e["components"]["without_egress"]) == (3, 0)
+    assert "| toy | 3 (2) | 2 / 4 |" in PR.render_egress([dict(r, name="toy")])
+
     ignored = PR.analyze_served(build, ignore_eos=True)
     assert not ignored["eos"]["applied"] and ignored["summary"]["eos_step_keyed"]["calls"] == r["summary"]["eos_step_keyed"]["calls"]
+
+
+def test_served_liveness_splits_a_layer_at_its_attention():
+    """An unsampled row's qkv projection writes k/v, which later rows read; its attention output and what follows feed only its own
+    logits, which only a sampled row has."""
+    P = {"calls": [{"reads": [{"value": "c00.input/ids"}, {"weight": "emb"}], "writes": ["e"]},
+                   {"reads": [{"value": "e"}, {"weight": "wqkv"}], "writes": ["qkv"]},
+                   {"reads": [{"value": "att0"}, {"weight": "wo"}], "writes": ["h"]}],
+         "attention": [{"name": "att0", "q": {"value": "qkv"}, "k": {"value": "qkv"}, "v": {"value": "qkv"}}],
+         "logits": {"x": {"value": "h"}}}
+    kv, x = PR.served_live(P)
+    assert kv == {("c", 0), ("c", 1)} and x == {("c", 0), ("c", 1), ("c", 2), ("a", 0)}
 
 
 def test_served_moe_calls_take_the_step_plans_expert_gemm_once_per_routed_pair():
@@ -245,3 +272,134 @@ def test_served_moe_calls_take_the_step_plans_expert_gemm_once_per_routed_pair()
     assert (expert["calls"], expert["units"], expert["verdict"]) == (6, 24, "PUBLIC")
     assert expert["selects"] == [{"select": "GatherBf16x4", "V": 4, "count": 6 * 64, "index": ["input:router_ids"]}]
     assert r["units_source"]["cut"] == 3 and r["units_source"]["mismatches"] == []
+
+
+def _prefix_form(producers: int, warm: int) -> dict:
+    """Daniel's circuit-native prefix form (20:56Z) at C = 2 cached rows: one static pool of prompt KV pages.  Each producer computes
+    its page and its own row and samples a token.  Each warm request computes only its own row; its prefix-match unit compares its
+    first C prompt ids with each candidate producer's and outputs a page mask, and its attention reads every candidate page and
+    selects by the mask inside the unit.  One more request shares only the weights."""
+    from verity.ml.circuits.codec import encode_program
+    from verity.ml.circuits.defs import CompositeDefinition, bind
+    from verity.ml.circuits.ops.fp32 import Bf16Add
+    from verity.ml.circuits.ops.scalar import BitAnd, I32Eq, SelectBf16
+    from verity.ml.circuits.program import Program
+    from verity.ml.circuits.refs import array_of
+    from verity.ml.circuits.types import Array, Value
+    from verity_vllm.program.registry.prims import gather_bf16
+    from verity_vllm.query.call_scope import specialization
+
+    V, C, K = 4, 2, producers
+    I32, BF16, BIT = Value(32), Value(16), Value(1)
+    table_t, page_t = Array(V, BF16), Array(C, BF16)
+    kv, select = gather_bf16(V), specialization("TokenSelect_v1", {"V": V})
+
+    def comp(name, params, ret, body):
+        return bind(CompositeDefinition(name, 0, (), lambda S: (params, ret), body, register=False))
+
+    def fold(B, prim, xs):
+        acc = xs[0]
+        for x in xs[1:]:
+            acc = B.call(prim, acc, x)
+        return acc
+
+    def masked(B, S, mask, pages, own):
+        words = []
+        for i in range(C):
+            w = pages[K - 1][i]
+            for j in reversed(range(K - 1)):
+                w = B.call(SelectBf16, mask[j], pages[j][i], w)
+            words.append(w)
+        return fold(B, Bf16Add, words + [own])
+
+    page = comp("ToyKvPage", (("ids", Array(C, I32)), ("w", table_t)), page_t, lambda B, S, ids, w: B.batch(kv, ids, w, axes=(0, None)))
+    attend = comp("ToyAttention", (("page", page_t), ("own", BF16)), BF16, lambda B, S, p, own: fold(B, Bf16Add, [*p, own]))
+    match = comp("ToyPrefixMatch", (("w", Array(C, I32)), ("x", Array(C, I32))), BIT,
+                 lambda B, S, w, x: fold(B, BitAnd, list(B.batch(I32Eq, w, x, axes=(0, 0)))))
+    attend_pool = comp("ToyPoolAttention", (("mask", Array(K, BIT)), ("pages", Array(K, page_t)), ("own", BF16)), BF16, masked)
+    logits = comp("ToyLogits", (("h", BF16), ("w", table_t)), table_t, lambda B, S, h, w: B.batch(Bf16Add, w, h, axes=(0, None)))
+    names = [f"producer{j}" for j in range(K)] + [f"warm{j}" for j in range(warm)] + ["other"]
+
+    def body(B, S, *args):
+        *reqs, w = args
+        pages, toks = [], []
+
+        def own(ids):
+            return B.call(kv, ids[C], w)
+
+        def head(h):
+            return B.call(select, B.call(logits, h, w))
+
+        for ids in reqs[:K]:
+            pages.append(B.call(page, ids[:C], w))
+            toks.append(head(B.call(attend, pages[-1], own(ids))))
+        for ids in reqs[K:K + warm]:
+            mask = array_of([B.call(match, ids[:C], p[:C]) for p in reqs[:K]])
+            toks.append(head(B.call(attend_pool, mask, array_of(pages), own(ids))))
+        toks.append(head(B.call(attend, B.call(page, reqs[-1][:C], w), own(reqs[-1]))))
+        return array_of(toks)
+
+    fn = comp("ToyPrefixForm", tuple((n, Array(C + 1, I32)) for n in names) + (("table", table_t),), Array(len(names), I32), body)
+    return encode_program(Program(fn, annotations={"correspondence": {"inputs": names, "weights": ["table"]}}))
+
+
+def test_the_circuit_native_prefix_form_reads_only_public_positions_and_multiplies_a_pages_egress_by_its_sharers():
+    """Every read set is PUBLIC: the warm requests read every candidate page at fixed positions, and the page mask the prefix-match
+    unit computes from the prompts selects inside the attention unit.  A producer's page is in its own request's cone and in each
+    warm request's that reads it, so its E is 1 + the sharers' ids; the request that shares only weights is its own component."""
+    r = PR.analyze_descriptor(_prefix_form(producers=2, warm=2))
+    fams = _by_family(r)
+    assert {f["verdict"] for f in r["families"]} == {"PUBLIC"} and r["summary"]["value_dependent"]["calls"] == 0
+    pool = fams["ToyPoolAttention_v0"]
+    assert pool["reads"] == {"inputs": [], "calls": ["GatherBf16x4_v1", "ToyKvPage_v0", "ToyPrefixMatch_v0"]}
+    assert pool["selects"] == [{"select": "SelectBf16", "V": 2, "count": 2 * 2, "index": ["call:ToyPrefixMatch_v0"]}]
+    assert fams["ToyPrefixMatch_v0"]["reads"] == {"inputs": ["producer0", "producer1", "warm0", "warm1"], "calls": []}
+
+    e = r["egress"]
+    assert (e["slots"], e["bits"], e["slot_bits"]) == (5, 10, [[2, 32]])
+    assert e["E_max"] == {"bits": 6, "slots": 3, "declared_bits": 96}
+    assert [f["family"] for f in e["at_max"]["families"]] == ["ToyKvPage_v0"] and e["at_max"]["calls"] == 2
+    assert [(c["slots"], c["E_max"]["slots"]) for c in e["components"]["per"]] == [(4, 3), (1, 1)]
+    assert PR.analyze_descriptor(_prefix_form(producers=2, warm=3))["egress"]["E_max"]["slots"] == 4
+
+
+def test_a_k_way_page_mux_is_one_unit_a_word_and_a_prefix_match_one_unit():
+    """The prefix cost model's prices, by core's cut: a K-way select chain over a 16-bit KV word is one Q_word unit for every K (and
+    K - 1 gates), and the match of C = 128 prompt ids in blocks of 16, whose 8 mask bits fit one unit's output, is one unit."""
+    from verity.ml.circuits.cut import evaluate_definition
+    from verity.ml.circuits.defs import CompositeDefinition, bind
+    from verity.ml.circuits.ops.scalar import BitAnd, I32Eq, SelectBf16
+    from verity.ml.circuits.refs import array_of
+    from verity.ml.circuits.types import Array, Value
+
+    def mux(K, words=8):
+        def body(B, S, m, pages):
+            out = []
+            for i in range(words):
+                w = pages[K - 1][i]
+                for j in reversed(range(K - 1)):
+                    w = B.call(SelectBf16, m[j], pages[j][i], w)
+                out.append(w)
+            return array_of(out)
+        sig = ((("m", Array(K - 1, Value(1))), ("pages", Array(K, Array(words, Value(16))))), Array(words, Value(16)))
+        return bind(CompositeDefinition(f"ToyMux{K}", 0, (), lambda S: sig, body, register=False))
+
+    for K in (2, 4, 8):
+        fn = mux(K)
+        assert (fn.gates, evaluate_definition(fn, PR.UNIT_BITS, {}).units, PR.lean_units(fn, {})) == (8 * (K - 1), 8, 8)
+
+    C, BS = 128, 16
+
+    def match(B, S, w, x):
+        eq, out, m = list(B.batch(I32Eq, w, x, axes=(0, 0))), [], None
+        for b in range(C // BS):
+            e = eq[b * BS]
+            for i in range(1, BS):
+                e = B.call(BitAnd, e, eq[b * BS + i])
+            m = e if m is None else B.call(BitAnd, m, e)
+            out.append(m)
+        return array_of(out)
+
+    fn = bind(CompositeDefinition("ToyBlockMatch", 0, (), lambda S: ((("w", Array(C, Value(32))), ("x", Array(C, Value(32)))),
+                                                                       Array(C // BS, Value(1))), match, register=False))
+    assert (fn.gates, evaluate_definition(fn, PR.UNIT_BITS, {}).units) == (255, 1)
