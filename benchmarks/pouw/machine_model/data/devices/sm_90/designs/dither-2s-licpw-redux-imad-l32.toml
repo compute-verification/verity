@@ -1,0 +1,15 @@
+# dither-2s-licpw-redux-l32 with an integer filler on the IMAD pipe in place of ffill (DC r12's route b), kept to price
+# the comparison: two steps a MMA on a thread's words, each m = IMAD(w, 2, 1) and v = IMAD(v, m, c). No kernel or check
+# exists; ffill (route a) is the headline's.
+base = "dither-2s-licpw-redux-l32"
+name = "dither-2s-licpw-redux-imad-l32"
+title = "Dither-2S, LI-CP-W redux, IMAD filler (0.0313 a word), L = 32"
+summary = "dither-2s-licpw-redux-l32 with an IMAD-pipe chain (two IMAD a step, two steps a MMA) in place of ffill's FFMA chains: route b of DC r12, for comparison"
+
+[filler]
+per_word = 0.03125
+mix = { IMAD = 1 }
+route = "lanes"
+source = "DC r12 route b: v = IMAD(v, m, c) with m = IMAD(w, 2, 1) on a committed word w, two steps a MMA, 4/128 a committed word. The multiplier is odd so the chain doesn't contract: with the raw word as multiplier an even word shifts the history out 2-adically (the receipt reads only about the last 32 words), IMAD.HI and IMAD.WIDE's high half shrink it by w/2^32 a step, and a constant multiplier composes affinely. At credit floor, operands free: an IMAD filler binds JPI90_0 past about 0.045 a word (DC-90, q* 1.22: core 0.530% at 0.05, 1.029% at 0.07) and leaves JI90_0's slack below 0.025, so its window is 0.025 to 0.045. Here: DC-90 core 0.449%, ε_luck 0.075%, γ 1.677, binding JI90_0; DC-90-ri core 0.521% at q* 1.22 and 0.620% at ½ (the cheater runs 3.7% and 9.0% of it on the uniform datapath, at the model's one uniform instruction a lane instruction). Decision 76's 2% margin fails everywhere (redteam's margin, JI90_0 drives it): worst 1.378% and 3.236% on DC-90 at q* 1.22 and ½, 1.432% and 2.773% on DC-90-ri, and no IMAD filler up to 0.30 a word restores it. IMAD.HI costs about 2 IMAD on the IMAD pipe (4.18 a SM-clock alone against 2.0, uni.sh's IMAD forms) and has no window (DC-90 at 1.22: 0.884% at 0.02). FILL-OPT is its named assumption"
+p = 0.0
+luck = "Accounting.Guarantees.FillerLuck.PinnedFillBlocksDeficit: the chain is integer arithmetic mod 2^32 on committed words and the round's coins, so a check that recomputes the drawn tile's receipt reproduces it exactly and a wrong one fails whenever its tile is drawn; no kernel or check exists for it"
