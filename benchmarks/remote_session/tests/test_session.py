@@ -470,7 +470,8 @@ def test_a_paced_session_puts_each_group_of_k_passes_under_a_live_coin_and_a_dro
 def test_held_over_time_charges_what_a_burst_frees_in_one_groups_slack_and_the_snapshot_does_not():
     """Two stretches of four groups of two passes over N blocks, every pass reading all of them: stretching one
     group's interval (a burst then idle until its deadline) lowers the time-held credit by its absent block-time,
-    rebuilds at 2·L_max each and the wrong receipts at (L_(g−1) + L_g)/n_g, and leaves the snapshot's alone."""
+    rebuilds at 2·L_max each and the wrong receipts at Δ_g/n_g (L_max/n in the group after the stretch), and leaves the
+    snapshot's alone."""
     N, b = 1000, 4096
     held = {"weights": 600 * b, "hbm": N * b, "host": 0}
     mem = {"windows": [{"average": {"held": held}} for _ in range(12)]}
@@ -492,7 +493,7 @@ def test_held_over_time_charges_what_a_burst_frees_in_one_groups_slack_and_the_s
     s = burst["stretches"][1]
     assert s["span_ns"] == 10 * 4 + 80 and s["l_max_ns"] == 90
     assert s["rebuild_absent_blocks"] == pytest.approx(2 * 90 * 1e-3 * (120 + 180) / 120)
-    assert s["wrong_absent_blocks"] == pytest.approx(50 * (10 + 90) / 2 / 120)
+    assert s["wrong_absent_blocks"] == pytest.approx(50 * 90 / 2 / 120)
     assert burst["time"]["weights_bytes"] < even["time"]["weights_bytes"] <= 600 * b
     assert line(1)["time"]["weights_bytes"] == line(1)["snapshot"]["weights_bytes"] == 600 * b
 

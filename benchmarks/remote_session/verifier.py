@@ -334,21 +334,22 @@ def paced_line(mem: dict, seen: list[dict], *, groups: int, wrong: float, blocks
     session's pooled wrong receipts, `audit.pooled`), the stretch's rebuilds over its passes (X_r·Σ/P) and the chip.
 
     Held over time (`TIME_HELD`): at each instant a block is in node memory, on chip (at most S_chip blocks at once), or
-    absent.  An absent stretch of a block ends in a rebuild before its next correct read, or runs on through wrong
-    receipts.  One that ends in a rebuild, with no wrong read inside it, spans at most two groups: 2·L_max, against
-    rebuilds ≤ X_r·(Σ + 2·L_max).  A group whose passes all read the block wrong adds its L_g, which those n_g wrong
-    reads pay for, (L_(g−1) + L_g)/n_g each, which also covers the group before it for a stretch still absent past the
-    stretch's end.  The session's `wrong` receipts are spread over the groups at those rates, highest first, at most
-    N a pass.  So the time a block is absent, summed over blocks, is at most 2·L_max·X_r·(Σ + 2·L_max) plus that fill.
-    It is averaged over the stretch, from the first group's end for the first stretch (before its reads a block may
-    never have been there) and through the closing stretch's coin for the last, whose reads back it.  Both forms take
-    the side link as carrying no block (Identity)."""
+    absent.  An absent stretch of a block lies between a pass of group a and its next correct read, in group c, every
+    pass between them reading it wrong, so it lasts at most e_c − s_a = Δ_a + L_c + Σ Δ_g over the groups a < g < c,
+    each of whose n_g passes read the block wrong (Δ_g = s_(g+1) − s_g ≤ L_g, e_g = s_g + L_g).  Its next correct read
+    is a rebuild, at most X_r·(Σ + 2·L_max) of them, each ending one absent stretch of at most 2·L_max plus those
+    groups; a stretch still absent at the stretch's end ends in no rebuild, so the group after it (`hi`) is all wrong
+    and pays its L_max.  Those wrong reads pay Δ_g/n_g each, L_max/n_hi in `hi`, and the session's `wrong` receipts are
+    spread over the groups at those rates, highest first, at most N a pass.  So the time a block is absent, summed over
+    blocks, is at most 2·L_max·X_r·(Σ + 2·L_max) plus that fill.  It is averaged over the stretch, from the first
+    group's end for the first stretch (before its reads a block may never have been there) to the next stretch's coin,
+    whose reads back it.  Both forms take the side link as carrying no block (Identity)."""
     b, N, chip = block_bytes, blocks, chip_bytes / block_bytes
     s, n = [w["released_ns"] for w in seen], [w["passes"] for w in seen]
     ends = [max(w["arrivals_ns"][-1] if w["arrivals_ns"] else s[g], s[g + 1] if g + 1 < len(s) else 0)
             for g, w in enumerate(seen)]
     L = [e - x for e, x in zip(ends, s)]
-    v = [((L[g - 1] if g else 0) + L[g]) / n[g] for g in range(len(seen))]
+    gap = [s[g + 1] - s[g] if g + 1 < len(s) else L[g] for g in range(len(seen))]
     held = [x["average"]["held"] for x in mem["windows"]]
     stretches = []
     for m in range(len(seen) // groups - 1):
@@ -357,6 +358,7 @@ def paced_line(mem: dict, seen: list[dict], *, groups: int, wrong: float, blocks
         span, P = end - start, sum(n[lo:hi])
         l_max = max(L[g] for g in range(max(0, lo - 1), hi + 1))
         rebuilds = rebuild_per_ns * (span + 2 * l_max)
+        v = {g: (l_max if g == hi else gap[g]) / n[g] for g in range(lo, hi + 1)}
         left, fill = wrong, 0.0
         for g in sorted(range(lo, hi + 1), key=lambda g: v[g], reverse=True):
             took = min(left, n[g] * N)
