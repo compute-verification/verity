@@ -336,6 +336,21 @@ def test_a_resend_with_pytest_deferred_runs_the_suites_its_change_touches_too(wo
     assert [c for c, *_ in h.launched] == [tip, tip] and touched == [tip, tip]   # resent, with its touched suites
 
 
+def test_a_resend_of_a_check_still_running_after_it_failed_cancels_that_run(world, monkeypatch, tmp_path):
+    """A `--keep-going` check that has already failed is a failed verdict while it runs: resent, it went on holding its slot
+    to its end, outside `max_running`'s count."""
+    h = Harness(world, monkeypatch)
+    h.d.train_size = 2
+    for n in (1, 2):
+        world.gh.put(n, world.change({f"src{n}/f.py": f"{n}\n"}))
+    h.tick()
+    tip, (rid,) = _tip(world), h.run_state
+    h.run_state[rid] = ("running", None, None, "suite pkg (tests/test_x.py::test_y)")
+    h.evidence = [_failed_run(tmp_path, *FAILURE)]
+    h.tick()
+    assert [c for c, *_ in h.launched] == [tip, tip] and h.cancelled == [rid]
+
+
 # -- 8. `--first`
 
 def test_first_while_a_bisect_check_runs_keeps_that_check_and_bisection_still_ejects_only_the_cause(world, monkeypatch, tmp_path):

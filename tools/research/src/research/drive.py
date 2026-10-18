@@ -915,21 +915,26 @@ class Driver:
                            "deferred pytest still runs after landing")
         return ids, tail
 
-    def resend(self, drive: dict, m: Member, prs: str, v: Verdict) -> None:
-        """Check ``m``'s train again on ``on``'s machines, once: its failure was a kill and names no file, so no PR is at fault.
-        Its failed attempts stop counting (`verdict` passes over `resent`), so the new run's verdict is the train's."""
+    def resend(self, drive: dict, m: Member, prs: str, v: Verdict,
+               because: str = "no PR's change touches what failed, so no PR is ejected") -> None:
+        """Check ``m``'s train again on ``on``'s machines, once: its failure was a kill and names no file, so no PR is at fault, or
+        it is one run's word (``because``).  Its failed attempts stop counting (`verdict` passes over `resent`), so the new run's
+        verdict is the train's; a failed run still going (`--keep-going`) is cancelled, its slot the resend's."""
         main = _out(self.repo, "rev-parse", "origin/main")
         if self.q.shadow or self.dry_run:
             self.q.log(f"research queue drive: would resend {m.commit[:12]} ({prs}): {v.why}")
             return
-        ids, tail = self.launch(self.repo, m.commit, self.on, needs_agreement(self.repo, main, m.commit))
+        old = drive["launched"].get(m.commit) or {}
+        if old.get("failing") and (live := [r for r, (st, *_) in self._states([*old["ids"], *(old.get("touched") or [])]).items()
+                                            if st in ACTIVE and st != "unknown"]):
+            self.cancel(self.repo, live, f"drive: {m.commit[:12]} has failed and is checked again")
+        ids, tail = self._launch(drive, m, main)
         if not ids:
             self.refuse(drive, f"launch:{m.commit}", f"train.sh {m.commit[:12]} {self.on} registered no run on a resend: {tail}")
             return
-        drive["resent"][m.commit] = v.attempt.split()
-        drive["launched"][m.commit] = {"ids": ids, "at": self.now(), "agreement": needs_agreement(self.repo, main, m.commit)}
-        self.q.log(f"research queue drive: resent {m.commit[:12]} ({prs}) as {' '.join(ids)}: {v.attempt} failed ({v.why}), and "
-                   f"no PR's change touches what failed, so no PR is ejected")
+        drive.setdefault("resent", {})[m.commit] = v.attempt.split()
+        self.q.log(f"research queue drive: resent {m.commit[:12]} ({prs}) as {' '.join(ids)}: {v.attempt} failed ({v.why}); "
+                   f"{because}")
 
     # -- pre-warming a cold-forcing PR off `next`
 
