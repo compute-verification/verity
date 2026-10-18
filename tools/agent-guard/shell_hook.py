@@ -8,9 +8,16 @@ of the Nebius key reached agents' transcripts at least five times by 6 Oct. Refu
 secret's name, a bare `set`, `export` or `export -p`, `declare`/`typeset` listing variables, reading `/proc/*/environ`, and
 `tmux show-environment` (`showenv`) with no name or a secret's (11 Oct: piping tmux's global environment through `cut -d= -f1`
 printed the Nebius key's lines again).
-`compgen -e` lists names only and passes. Also refused: every process's full command line (`ps aux`, `ps -ef`, `ps -eo args`,
-`/proc/*/cmdline`), where a daemon's token can sit in argv; one process (`ps -p PID -o args`), a listing piped straight into
+`compgen -e` lists names only and passes. Also refused: full command lines of every process or of any selection beyond one pid
+(`ps aux`, `ps -ef`, `ps -eo args`, `ps -o cmd --ppid N`, `ps -f -u USER`, `/proc/*/cmdline`), where a daemon's or a git child's
+token can sit in argv; one process (`ps -p PID -o args`), a listing piped straight into
 `grep`/`rg`, and `pgrep -af PATTERN` pass. Reads Cursor's hook JSON on stdin and prints its verdict as JSON on stdout.
+
+It also carries messages to running agents, the one channel that reaches a subagent mid-run (`inbox.py send AGENT_ID`).
+A message waits in `$AGENT_INBOX` (default `/tmp/agent-inbox`) as `<conversation_id>.md`. The agent's next allowed
+command is refused once, with the message as the refusal's text, which is what Cursor shows the agent (an `agent_message`
+on an allowed command reaches no one). The agent then re-runs the command. A refused secret-printing command keeps the
+message queued, and the delivered text is appended to `<conversation_id>.delivered`.
 """
 import json
 import os
@@ -19,6 +26,7 @@ import shlex
 import sys
 
 PATTERN = re.compile(r"KEY|TOKEN|SECRET|PASSW|CREDENTIAL|PRIVATE", re.I)
+INBOX = os.environ.get("AGENT_INBOX", "/tmp/agent-inbox")
 WRAPPERS = {"sudo", "doas", "command", "builtin", "exec", "nohup", "time", "nice", "stdbuf", "timeout", "setsid", "taskset"}
 WRAPPER_ARG_OPTIONS = {"sudo": {"-u", "-g", "-C", "-h", "-p", "-U", "-r", "-t"}, "doas": {"-u", "-C"}, "nice": {"-n"},
                        "timeout": {"-s", "-k", "--signal", "--kill-after"}, "taskset": {"-c", "-p"}}
@@ -109,18 +117,29 @@ def unwrap(words: list[str]) -> list[str]:
     return words
 
 
+def one_pid(args: list[str]) -> bool:
+    """Whether `ps ARGS` selects exactly one process by pid (`-p PID`, `--pid PID`) and nothing else."""
+    sel = [(a, args[i + 1]) for i, a in enumerate(args[:-1]) if a in ("-p", "--pid", "-q", "--quick-pid")]
+    others = any(a in ("--ppid", "-C", "-u", "-U", "-g", "-G", "-t", "--user", "--group", "--sid", "-s") or a.startswith("--ppid=")
+                 for a in args)
+    return len(sel) == 1 and re.fullmatch(r"\d+", sel[0][1]) is not None and not others
+
+
 def every_argv(args: list[str]) -> bool:
-    """Whether `ps ARGS` prints every process's full command line."""
+    """Whether `ps ARGS` prints full command lines of more than one named process: of every process, or of a selection such as
+    `--ppid N`, `-C NAME` or `-u USER` (17 Oct, INF-52: `ps -o pid,etime,cmd --ppid N` printed a git child's token-bearing URL)."""
     fmt = next((args[i + 1] for i, a in enumerate(args[:-1])
                 if a == "--format" or re.fullmatch(r"-?[a-zA-Z]*[oO]", a)), None)
     fmt = fmt or next((a.split("=", 1)[1] for a in args if a.startswith("--format=")), None)
     shown = fmt is None or bool(re.search(r"\b(args|cmd|command)\b", fmt))
-    bsd = [a for a in args if not a.startswith("-") and re.fullmatch(r"[a-zA-Z]+", a) and a != fmt]
+    bsd = [a for i, a in enumerate(args) if not a.startswith("-") and re.fullmatch(r"[a-zA-Z]+", a) and a != fmt
+           and not (i and args[i - 1].startswith("-"))]
     short = "".join(a[1:] for a in args if a.startswith("-") and not a.startswith("--"))
     if any(set(b) & set("ax") for b in bsd):
         return shown and not any("c" in b for b in bsd)
-    everyone = bool(set(short) & set("eA")) or "--everyone" in args or "--deselect" in args
-    return everyone and (bool(set(short) & set("fF")) if fmt is None else shown)
+    if one_pid(args):
+        return False
+    return bool(set(short) & set("fF")) if fmt is None else shown
 
 
 def refused(words: list[str], filtered: bool = False) -> bool:
@@ -194,12 +213,34 @@ def refused_text(text: str) -> bool:
         return bool(FALLBACK.search(text))
 
 
+def delivery(conversation: str) -> str | None:
+    """The message queued for agent `conversation` (`inbox.py send`), taken out of its inbox, or None."""
+    if not conversation or "/" in conversation or conversation.startswith("."):
+        return None
+    box = os.path.join(INBOX, conversation + ".md")
+    taking = box + ".taking"
+    try:
+        os.replace(box, taking)
+    except OSError:
+        return None
+    try:
+        with open(taking) as f:
+            text = f.read()
+        with open(os.path.join(INBOX, conversation + ".delivered"), "a") as log:
+            log.write(text)
+    finally:
+        os.remove(taking)
+    return text if text.strip() else None
+
+
 def main() -> int:
     raw = sys.stdin.read()
     try:
-        command = json.loads(raw).get("command") or ""
+        event = json.loads(raw)
+        command = event.get("command") or ""
+        conversation = str(event.get("conversation_id") or "")
     except (ValueError, AttributeError):
-        command = raw
+        command, conversation = raw, ""
     try:
         deny = refused_text(command)
     except Exception:                                   # a bug here must not allow what the fallback would refuse
@@ -209,7 +250,17 @@ def main() -> int:
                           "user_message": "Refused by tools/agent-guard/shell_hook.py: " + REASON,
                           "agent_message": "Refused by tools/agent-guard/shell_hook.py (.cursor/hooks.json): " + REASON}))
     else:
-        print(json.dumps({"permission": "allow"}))
+        try:
+            message = delivery(conversation)
+        except Exception:                               # an unreadable inbox must not block the agent's command
+            message = None
+        if message:
+            note = ("MESSAGE FROM YOUR COORDINATOR, delivered by the shell hook (tools/agent-guard/inbox.py). This command was "
+                    "refused only to deliver it: nothing is wrong with it, so re-run it exactly as it was, then act on the "
+                    "message.\n\n" + message)
+            print(json.dumps({"permission": "deny", "user_message": note, "agent_message": note}))
+        else:
+            print(json.dumps({"permission": "allow"}))
     return 0
 
 

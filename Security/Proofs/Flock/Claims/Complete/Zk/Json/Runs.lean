@@ -6,8 +6,9 @@ import Proofs.Flock.Claims.Complete.Runs
 
 `Runs.lean` at the masked session: the goal `SessionRunsZk`, given `JsonSpec` and `StmtOkZk` (the masked record's
 `hello` prints) and one named hypothesis on the masked prover's pieces, `ProverRunsZk`: at every good masked case's
-table, the regions fit (`RegionsFit`), and on the masked level-0 commitment, the extra claims at the link's points and
-the tape's pads committed, rep `0` returns from the link's send and rep `1` from where rep `0` stopped (`repRunZk`), so
+table, on the masked level-0 commitment, the extra claims at the link's points (which return, the table's regions
+fitting by `readyZk`) and the tape's pads committed, rep `0` returns from the link's send and rep `1` from where rep `0`
+stopped (`repRunZk`), so
 each draws the case's coins at the session's rounds, where `¬ BadZk` passes the masked prover's coin checks. The table's
 `--zk` schedule returns (`zkSchedule_ok`), and through `Hashes.ofSha512` so do the masked level-0 commitment
 (`commitPZk_ok`) and the pads' commitment (`innerCommitP_ok`); the session walks its two rep streams in order
@@ -51,13 +52,13 @@ def repRunZk (c : CaseZk H rel) (st : Flock.Stmt) (v : Schedule × ℕ) (cm : Co
     (c.ω.extra 0) (c.ω.lanePad 0) (c.ω.salt 0 rep) (c.ω.nonce 0 rep)).run
     (Transcript.init #[] (c.spec.domain c.spec.tables[0]! rep).toUTF8)
 
-/-- **The masked prover's pieces return**, at every good masked case's table with its `--zk` schedule: the table's
-regions fit (`RegionsFit`, so its extra claims return), and on the masked level-0 commitment of the trace's packed table
-under the case's tape, the extra claims at the link's points, and the tape's pads committed, rep `0` returns from the
-link's send and rep `1` from where rep `0` stopped. The reps' coins are the case's at the session's rounds, where the
-masked prover's coin checks (level 0's pair, the inner `β`) pass by `¬ BadZk`. -/
+/-- **The masked prover's pieces return**, at every good masked case's table with its `--zk` schedule: on the masked
+level-0 commitment of the trace's packed table under the case's tape, the extra claims at the link's points, and the
+tape's pads committed, rep `0` returns from the link's send and rep `1` from where rep `0` stopped. The reps' coins are
+the case's at the session's rounds, where the masked prover's coin checks (level 0's pair, the inner `β`) pass by
+`¬ BadZk`. -/
 def ProverRunsZk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
-  ∀ c : CaseZk H rel, ∀ st v, c.sts = #[st] → Zk.schedule (Setup.ofCircuit st).m = .ok v → RegionsFit st ∧
+  ∀ c : CaseZk H rel, ∀ st v, c.sts = #[st] → Zk.schedule (Setup.ofCircuit st).m = .ok v →
     ∀ cm e, commitPZk (Hashes.ofSha512 (Claims.hOf H) : Hashes V) (Setup.ofCircuit st).merkle
       (v.1.levels.getD 0 default) v.2 (packed (tracesOf c.sts c.w)[0]! (Setup.ofCircuit st).m) (c.ω.extra 0)
       (c.ω.lanePad 0) (c.ω.salt 0 0 0) = .ok cm →
@@ -92,7 +93,8 @@ theorem Runs.forIn_idx {α β : Type} (f : α → β → PS (ForInStep β)) (inv
     exact ih
 
 /-- **The masked session runs**: the goal `SessionRunsZk`. -/
-theorem sessionRunsZk_goal (S : JsonSpec) (hS : StmtOkZk H rel) (hR : ProverRunsZk H rel) : SessionRunsZk H rel := by
+theorem sessionRunsZk_goal (S : Claims.JsonSpec printJ Flock.canon) (hS : StmtOkZk H rel)
+    (hR : ProverRunsZk H rel) : SessionRunsZk H rel := by
   intro c
   obtain ⟨st, hst, hsp, hm1, hm2⟩ := c.table
   obtain ⟨-, -, -, m, kvs, hown, -, -, -, hg⟩ := hS c
@@ -100,8 +102,8 @@ theorem sessionRunsZk_goal (S : JsonSpec) (hS : StmtOkZk H rel) (hR : ProverRuns
   obtain ⟨ct, hct⟩ : ∃ ct, c.spec.coinTree = some ct := Option.isSome_iff_exists.1 c.ready_parts.2.2.2.2
   have ht : c.spec.tables = #[st.tags.table] := by rw [hsp]; rfl
   obtain ⟨v, hv⟩ := zkSchedule_ok (m := (Setup.ofCircuit st).m) hm1 hm2
-  obtain ⟨hreg, hRep⟩ := hR c st v hst hv
-  obtain ⟨e, he⟩ := extraClaims_ok st hreg (pointsOf c.spec (Claims.coinSeq c.r 0))
+  have hRep := hR c st v hst hv
+  obtain ⟨e, he⟩ := extraClaims_ok st (c.ready_fits.1 st (by rw [hst]; simp)) (pointsOf c.spec (Claims.coinSeq c.r 0))
   replace he : (Setup.ofCircuit st).extra (pointsOf c.spec (Claims.coinSeq c.r 0)) = .ok e := he
   obtain ⟨cm, hcm⟩ := commitPZk_ok (Claims.hOf H) (Setup.ofCircuit st).merkle (v.1.levels.getD 0 default) v.2
     (packed (tracesOf c.sts c.w)[0]! (Setup.ofCircuit st).m) (c.ω.extra 0) (c.ω.lanePad 0) (c.ω.salt 0 0 0)
