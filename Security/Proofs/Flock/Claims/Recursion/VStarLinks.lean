@@ -54,7 +54,8 @@ that link once for every kind and every shape, with what is the circuit's own pr
   staged statement's (`partCircuit_staged`), whose input leaves are its input words in order (`checkParsed`), so each
   round the part holds is read at a port's input columns in an instance's copy (`layoutOf_msgAt_staged`), below the
   unit's constant (`leaves_le_constPos`). No held round is one the statement fixes (`layoutOf_fixedAt_of_msgAt`), so
-  every agreeing list of messages has there the frame then the bytes those columns hold.
+  every agreeing list of messages has there the frame then the bytes those columns hold. A level registers no message
+  port, so it holds nothing there and every list of messages agrees with it (`agrees_layoutOf_of_ownPorts_nil`).
 * **A table of V\*'s statement, by its kind** (`StmtUnit`, `stmtUnit_of_check`): a table named as V\*'s statement
   `sv` that passes `checkPart sv` is that kind's unit, with the kind's outputs (`UnitOuts`): a level's `LevelOuts`, an
   algebra part's or R's opening part's `ResOuts` at its parameters, RecSparse's `SparseReadOuts`. With `AllOuts`,
@@ -1630,6 +1631,26 @@ theorem layoutOf_fixedAt_of_msgAt {x : Msg} {s j : ℕ} {segs : List (Msg × Lis
     rw [Nat.mul_comm, Nat.mul_add_mod, Nat.mod_eq_of_lt hlt]
   rw [layoutOf_fixedAt_succ, streamFixed, hr, Option.bind_some, hrs, Option.bind_some]
   simp only [hmod, hflag, Bool.true_eq_false, and_false, ↓reduceIte]
+
+theorem partHolds_of_ownPorts_nil {r : XR} {s : ℕ} {sv : _root_.VStar.Stmt}
+    (hsv : ((Flock.RecVStar.statements r.shape).toOption.bind fun vs => vs[s]?) = some sv)
+    (h : Flock.RecVStar.ownPorts sv = []) : partHolds r s = [] := by
+  unfold partHolds
+  rw [hsv]
+  split <;> simp_all
+
+/-- **A part without message ports holds nothing at `layoutOf`**, so every list of messages agrees with it: a level
+(`ownPorts` is `[]` at `.recOpen` and `.recOpenStacked`) holds no round, and its check there reads no message. -/
+theorem agrees_layoutOf_of_ownPorts_nil {x : Msg} {r : XR} (hr : readX x = some r) {s : ℕ} {sv : _root_.VStar.Stmt}
+    (hsv : ((Flock.RecVStar.statements r.shape).toOption.bind fun vs => vs[s]?) = some sv)
+    (h : Flock.RecVStar.ownPorts sv = []) (w : Claims.Flock.Wit) (ms : List Msg) :
+    Claims.Recursion.VStar.Agrees layoutOf x s w ms := by
+  have hn : ∀ i, layoutOf.msgAt x s i = none := fun i => by
+    cases i with
+    | zero => rfl
+    | succ j => rw [layoutOf_msgAt_succ, hr, Option.bind_some, partHolds_of_ownPorts_nil hsv h]; rfl
+  intro i _ m hm
+  simp [Claims.Recursion.VStar.Layout.held, hn i] at hm
 
 /-- A raw statement's read: its masking, circuit file, tables, count, and tags (`Raw.ins`), none of them off its public
 file. -/
