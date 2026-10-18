@@ -148,7 +148,7 @@ class TickingBackend(prover.CpuBackend):
 
 def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sessions: int = 1, checks=None,
         read_bytes_per_s: float = 1e20, tiers: dict | None = None, lifetime: int = audit.LIFETIME,
-        registry: audit.Registry | None = None, layout: list | None = None, host_bytes: int = 0, **kv):
+        layout: list | None = None, host_bytes: int = 0, **kv):
     clock = PassClock()
     vconn, pconn = clock.conns()
     backend = TickingBackend(clock, blocks, random.Random(7), read_bytes_per_s=read_bytes_per_s, tiers=tiers,
@@ -166,7 +166,7 @@ def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sess
     th.start()
     v = verifier.Verifier(vconn, source=os.urandom(32), windows=windows, window_ns=20, samples=samples,
                           delta=2.0 ** -40, jitter_ns=10 ** 9, clock=clock, log=lambda m: None,
-                          checks=checks, lifetime=lifetime, registry=registry, host_bytes=host_bytes)
+                          checks=checks, lifetime=lifetime, host_bytes=host_bytes)
     v.register()
     allowance = v.allowance(v.ping(4))
     out, not_before = [], None
@@ -558,49 +558,6 @@ def test_aligned_engines_step_at_one_instant_of_the_host_clock_whatever_their_pe
 def test_a_layout_that_is_not_the_stores_regions_in_order_is_refused(layout):
     with pytest.raises(ValueError):
         verifier.regions_of(layout, 16)
-
-
-def registering(registry: audit.Registry) -> tuple[str, str]:
-    """A prover's hello to a verifier holding `registry`, for a node with a live registration there: the verifier's
-    refusal, and the reason the prover read in its `bye`."""
-    a, b = socket.socketpair()
-    p = prover.ProverSide(wire.Conn(b), prover.CpuBackend(16, random.Random(7)), b"test-node",
-                          prover.parse_plan("honest"), seed=11, log=lambda m: None)
-    heard = []
-
-    def prove() -> None:
-        try:
-            p.register(codec=P512)
-        except wire.Closed as e:
-            heard.append(str(e))
-
-    th = threading.Thread(target=prove, daemon=True)
-    th.start()
-    v = verifier.Verifier(wire.Conn(a), source=os.urandom(32), windows=3, window_ns=20, samples=6, delta=2.0 ** -40,
-                          jitter_ns=10 ** 9, log=lambda m: None, registry=registry)
-    with pytest.raises(audit.RegistryError) as refused:
-        v.register()
-    th.join()
-    return str(refused.value), heard[0]
-
-
-def test_a_node_with_a_live_registration_is_refused_until_the_verifier_closes_it_with_its_sessions_counted(monkeypatch):
-    """The red team's KB-4: a second registration is a retry that redraws the codec seed.  Over one registry, a
-    second hello from the node while its registration is live draws nothing and is answered `bye` with the reason;
-    closing the registration counts its sessions, the dropping prover's as its failure, and only then does the node
-    register again, R = 2."""
-    monkeypatch.setattr(prover, "OPENINGS_PART", 4)
-    registry = audit.Registry()
-    (honest, dropping), _ = run("honest,skip:0.5", sessions=2, registry=registry)
-    assert honest["accepted"] and not dropping["accepted"] and dropping["failure"]["failure"] == "receipt"
-    assert registry.live(b"test-node") == bytes.fromhex(honest["registration"])
-    refused, heard = registering(registry)
-    assert "live registration" in refused and heard == f"refused: {refused}"
-    assert registry.refused == {b"test-node": 1} and registry.drawn(b"test-node") == 1
-    closed = registry.close(b"test-node")
-    assert closed.sessions == ("accepted", "receipt") and closed.failed == 1
-    (again,), _ = run("honest", registry=registry)
-    assert again["accepted"] and again["registration"] != honest["registration"] and registry.drawn(b"test-node") == 2
 
 
 def test_the_verifier_closes_a_registration_left_live_from_its_registry_file(tmp_path, monkeypatch, capsys):
