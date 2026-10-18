@@ -51,6 +51,7 @@ import a0  # noqa: E402
 import a6  # noqa: E402
 import a8_kinds as K  # noqa: E402
 from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E402
+from verity.ml.circuits.defs import PrimitiveDefinition  # noqa: E402
 from verity.ml.circuits.evaluate import evaluate_region  # noqa: E402
 from verity.ml.circuits.program import Program  # noqa: E402
 from verity.ml.circuits.refs import runs  # noqa: E402
@@ -172,12 +173,15 @@ class Weights:
 
 def fold_values(vdir: Path, profile_name: str, roles: Path | None):
     """The rank's log folded into the request Program's root Calls, its snapshots, and the weights."""
+    from verity_vllm.check import fold_compare
     from verity_vllm.check.fold_compare import SnapshotStore, Values, _attach_specs, load_profile
     from verity_vllm.observe.events import RunHeader
     from verity_vllm.observe.fold.fold import fold
     from verity_vllm.observe.fold.patterns.pouw import with_protocols
     from verity_vllm.observe.log import read_log
     t0 = time.time()
+    for dt in ("float8_e4m3fn", "float8_e5m2", "float8_e8m0fnu"):
+        fold_compare._NP.setdefault(dt, np.uint8)
     profile = load_profile(profile_name)
     events = list(read_log(next(vdir.glob("log.rank*.jsonl.gz"))))
     header = next((e for e in events if isinstance(e, RunHeader)), None)
@@ -196,9 +200,54 @@ def fold_values(vdir: Path, profile_name: str, roles: Path | None):
                     toks = self.r.requests[0]["prompt_token_ids"]
                     return np.array([int(t) & 0xFFFFFFFF for t in toks[lo:hi]], dtype=np.uint64)
                 raise LookupError(f"parameter {name!r}: another rank's values, which this slice does not hold")
+            if space == "n":
+                return producer_words(self.by_node.get(idx), store, lo, hi, idx)
             return super().of_run(space, idx, lo, hi)
 
     return res, store, weights, A8Values(res, store, None), round(time.time() - t0, 1)
+
+
+_CONSTANTS: dict[str, np.ndarray] = {}
+
+
+def constant_words(spec) -> np.ndarray:
+    """The returns of a Definition without parameters (a ``Const32`` Call, which the capture has no snapshot of)."""
+    if spec.id not in _CONSTANTS and isinstance(spec, PrimitiveDefinition):
+        _CONSTANTS[spec.id] = np.array([spec.evaluate()], dtype=np.uint64)
+    if spec.id not in _CONSTANTS:
+        C = Program(spec).circuit
+        t: dict[int, int] = {}
+        evaluate_region(C, C.region(0, C.size), t)
+        _CONSTANTS[spec.id] = np.array([t[g] for g in C.root_outputs()], dtype=np.uint64)
+    return _CONSTANTS[spec.id]
+
+
+def producer_words(m: dict | None, store, lo: int, hi: int, idx: int) -> np.ndarray:
+    """Return leaves [lo, hi) of the Call ``m`` from its output snapshots, its views aligned to its trailing return components
+    (as `call_twin`); a Call without parameters is evaluated."""
+    from verity_vllm.check.fold_compare import _component_ranges
+    if m is None:
+        raise LookupError(f"node {idx} has no instance record")
+    comps, views = _component_ranges(m), m["output_views"]
+    spec = m["_spec"]
+    if not spec.signature()[0]:
+        return constant_words(spec)[lo:hi]
+    first = len(comps) - len(views)
+    out = []
+    for k, (clo, chi) in enumerate(comps):
+        if chi <= lo or clo >= hi:
+            continue
+        view = views[k - first] if k >= first else None
+        if view is None:
+            raise LookupError(f"node {idx} ({m['name']}) component {k}: no output view")
+        s = store.find(view, at=m["event"])
+        if s is None:
+            raise LookupError(f"node {idx} ({m['name']}): no snapshot of event {m['event']} covers {view!r}")
+        out.append(store.extract(s, view)[max(lo, clo) - clo:min(hi, chi) - clo])
+    w = np.concatenate(out) if out else np.zeros(0, np.uint64)
+    if w.size != hi - lo:
+        raise LookupError(f"node {idx}: leaves [{lo}, {hi}) outside its outputs")
+    return w
 
 
 def operands(res, store, vals, m: dict) -> list[np.ndarray]:
@@ -218,14 +267,34 @@ def operands(res, store, vals, m: dict) -> list[np.ndarray]:
     return out
 
 
-def output_words(store, m: dict) -> np.ndarray | None:
-    parts = []
-    for view in m["output_views"]:
-        s = None if view is None else store.find(view, at=m["event"])
+def call_twin(store, m: dict, got: list) -> dict:
+    """The evaluated Call's returns against the capture's output snapshots, on the returns evaluated. The capture has a view
+    per kernel output; a Definition that also returns intermediates ahead of them (DeepGEMM's quantized input and scales)
+    has fewer views than return components, and the views are its trailing components."""
+    from verity_vllm.check.fold_compare import _component_ranges
+    comps, views = _component_ranges(m), m["output_views"]
+    if len(views) > len(comps):
+        return {"compared": 0, "agree": False, "why": f"{len(views)} output views for {len(comps)} return components"}
+    compared, diff, held = 0, [], []
+    for k, ((clo, chi), view) in enumerate(zip(comps[len(comps) - len(views):], views), start=len(comps) - len(views)):
+        if view is None:
+            continue
+        if view.numel != chi - clo:
+            return {"compared": 0, "agree": False, "why": f"component {k}: {chi - clo} returns vs a {view.numel}-element view"}
+        s = store.find(view, at=m["event"])
         if s is None:
-            return None
-        parts.append(store.extract(s, view).astype(np.uint64))
-    return np.concatenate(parts) if parts else None
+            continue
+        want = store.extract(s, view)
+        held.append(k)
+        for i in range(clo, chi):
+            if got[i] is not None:
+                compared += 1
+                if int(got[i]) != int(want[i - clo]):
+                    diff.append(i)
+    if not held:
+        return {"compared": 0, "agree": None, "why": "no output snapshot"}
+    return {"compared": compared, "of": len(got), "components": held, "of_components": len(comps),
+            "agree": (not diff) if compared else None, "first_diff": diff[:4]}
 
 
 def find_units(circuit, unit, n: int) -> list:
@@ -335,9 +404,10 @@ def unit_rows(unit, rows_spec, leaves_in: list[list[int]], leaves_out: list[list
     return rows, outs
 
 
-def pick(res, kind: str, unit_fam: str, steps: list[int], layers: set[int], unit_gates: int):
-    """The kind's Calls in the chosen steps and layers (layer-less Calls too), earliest step first, each with its unit: the
-    deepest Definition of the Call's chain in the probed unit's family."""
+def pick(res, kind: str, unit_fam: str, steps: list[int], layers: set[int], unit_gates: int, probed: str | None = None):
+    """The kind's Calls in the chosen steps and layers (layer-less Calls too), each with its unit: the deepest Definition of
+    the Call's chain in the probed unit's family. Calls of the probed specialization come first (the unit the table sized;
+    prefill's attention, say, has one per prefix length), then by step preference."""
     cands = []
     for m in res.instances:
         if K.family(m["spec"]) != kind or m["step"] not in steps:
@@ -346,24 +416,12 @@ def pick(res, kind: str, unit_fam: str, steps: list[int], layers: set[int], unit
         if lm and int(lm[1]) not in layers:
             continue
         cands.append(m)
-    cands.sort(key=lambda m: (steps.index(m["step"]), m["event"]))
+    cands.sort(key=lambda m: (m["spec"] != probed, steps.index(m["step"]), m["event"]))
     for m in cands:
         spec = res.body.nodes[m["node"]].fn
         unit = next((f for f, _n in reversed(K.chain(spec, unit_gates)) if K.family(f.id) == unit_fam), None)
         if unit is not None:
             yield m, spec, unit
-
-
-def call_twin(store, m: dict, got: list) -> dict:
-    """The evaluated Call's returns against the capture's output snapshot, on the returns evaluated."""
-    want = output_words(store, m)
-    if want is None:
-        return {"compared": 0, "agree": None, "why": "no output snapshot"}
-    if len(want) != len(got):
-        return {"compared": 0, "agree": False, "why": f"{len(got)} returns vs {len(want)} snapshot words"}
-    idx = [i for i, g in enumerate(got) if g is not None]
-    diff = [i for i in idx if int(got[i]) != int(want[i])]
-    return {"compared": len(idx), "of": len(got), "agree": not diff, "first_diff": diff[:4]}
 
 
 def kind_values(res, store, vals, rec: dict, a) -> dict:
@@ -372,7 +430,7 @@ def kind_values(res, store, vals, rec: dict, a) -> dict:
     steps, layers = [int(s) for s in a.steps.split(",")], {int(x) for x in a.layers.split(",")}
     why, tried = [], 0
     acc: dict | None = None
-    for m, spec, unit in pick(res, rec["kind"], K.family(rec["unit"]), steps, layers, a.unit_gates):
+    for m, spec, unit in pick(res, rec["kind"], K.family(rec["unit"]), steps, layers, a.unit_gates, rec.get("call")):
         if acc is not None and len(acc["in"]) >= a.per_kind:
             break
         if acc is not None and spec.id != acc["spec"]:
