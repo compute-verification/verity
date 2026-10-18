@@ -93,7 +93,7 @@ The logical layer is the cryptography: PoUW, PoUS and the bandwidth audits prove
 
 - **Compute.** PoUW proves the noised products were computed, at least 1 − ε of them right. Traffic alone attributes nothing: a block is credited only through an anchor, fresh trusted data it must consume (bounded by its egress), or the named premise that the fleet is closed.
 - **Memory.** The bandwidth audits prove bits read, and PoUS bits held, at no location. Attribution places them in tiers, less what boundary links carry in.
-- **Network.** It proves no work. Its certifiers bound what crosses a block's boundary.
+- **Network.** Certifiers prove ports carried only committed values, timing aside; gaps cost line rate.
 
 The joint ledger charges each device's time once. Without attribution, it subtracts only from the whole fleet's capacity, if no undeclared hardware helped.
 
