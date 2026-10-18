@@ -326,7 +326,7 @@ def test_a_wide_gate_skips_the_calls_parameters_unresolved_and_its_graph_is_unch
                 yield resolve(s, refs[j])
 
     fast = cut.CallGraph(fn)
-    monkeypatch.setattr(cut, "_wide_operands", every_operand)
+    monkeypatch.setattr(cut, "wide_operands", every_operand)
     full = cut.CallGraph(fn)
     assert len(enumerated) > 4 * cut.WIDE_FAN_IN
     for a in ("n", "keep", "width", "prim", "scope", "external", "src", "dst", "input_ids", "input_reads", "outputs", "returned_inputs",

@@ -47,10 +47,10 @@ from typing import Any, Callable, Iterable, Mapping
 import numpy as np
 
 from verity.ml.circuits.codec import canonical_json, definition_entry
-from verity.ml.circuits.cut import WIDE_FAN_IN, WIRING, QueryInapplicable, _wide_operands, call_scope, cut_word, fits, separable
+from verity.ml.circuits.cut import WIDE_FAN_IN, WIRING, QueryInapplicable, call_scope, cut_word, fits, separable, wide_operands
 from verity.ml.circuits.defs import PrimitiveDefinition
 from verity.ml.circuits.layout import resolve
-from verity.ml.circuits.partition import _MAX_LISTED, CutVerdict
+from verity.ml.circuits.partition import MAX_LISTED, CutVerdict
 
 from verity_vllm.query.call_scope import QueryRuleViolation, specialization
 
@@ -146,7 +146,7 @@ class Graph:
             """The gate's operands as the reference lists them (a gate of the Call by its local index, an input as -1 - its index;
             a wide gate's inputs not listed), and whether it reads outside the Call."""
             mine, ext = [], wide
-            for o in g.operands if not wide else _wide_operands(g, call):
+            for o in g.operands if not wide else wide_operands(g, call):
                 q = o - lo
                 if 0 <= q < n:
                     if q >= j:
@@ -284,14 +284,14 @@ def cut_verdict(G: Graph, owner: np.ndarray, head: np.ndarray) -> CutVerdict:
         read[G.input_read[s:s + _READS_PER_STEP]] = True
     read[G.returned_inputs] = True
     across = sorted((int(a), int(b)) for a, b in G.recomputed if own[a] != own[b])
-    pairs = np.stack([cs[uncommitted][:_MAX_LISTED], cd[uncommitted][:_MAX_LISTED]], 1).tolist()
+    pairs = np.stack([cs[uncommitted][:MAX_LISTED], cd[uncommitted][:MAX_LISTED]], 1).tolist()
     unread = np.concatenate([np.flatnonzero(committed & ~boundary), n + np.flatnonzero(~read)])
-    problems = {"input-outside-input-unit": (0, []), "gate-not-certified-once": (len(uncertified), uncertified[:_MAX_LISTED].tolist()),
-                "gate-recomputed": (len(across), [list(p) for p in across[:_MAX_LISTED]]),
+    problems = {"input-outside-input-unit": (0, []), "gate-not-certified-once": (len(uncertified), uncertified[:MAX_LISTED].tolist()),
+                "gate-recomputed": (len(across), [list(p) for p in across[:MAX_LISTED]]),
                 "gate-count": (0, []) if certified + G.free == G.total else (1, [certified]),
                 "read-uncommitted": (int(uncommitted.sum()), pairs),
-                "output-uncommitted": (int((~committed[outs]).sum()), outs[~committed[outs]][:_MAX_LISTED].tolist()),
-                "committed-unread": (len(unread), unread[:_MAX_LISTED].tolist())}
+                "output-uncommitted": (int((~committed[outs]).sum()), outs[~committed[outs]][:MAX_LISTED].tolist()),
+                "committed-unread": (len(unread), unread[:MAX_LISTED].tolist())}
     detail: dict = {"input_gates": k, "computed_gates": n, "certified": certified, "structure_gates": int(G.free), "total_gates": int(G.total) + k,
                     "committed": int(committed.sum()) + k, "cross_unit_reads": len(cs) + len(G.input_read),
                     "computing_units": len(np.unique(own[own >= 0])), "redundant_gates": len(G.recomputed) - len(across)}
