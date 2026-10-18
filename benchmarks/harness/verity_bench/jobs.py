@@ -7,7 +7,7 @@ import json
 import os
 import re
 import subprocess
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -163,6 +163,23 @@ def queue_kind(gpu_count: int) -> str:
         ) from None
 
 
+def point_environment(spec: ResolvedSpec) -> dict[str, str]:
+    """What a point's job must run under: the spec's `env`, and its `setup` script (`run_point.sh` sources it before the
+    point's Python starts) as VERITY_BENCH_SETUP."""
+
+    return {**spec.env, **({"VERITY_BENCH_SETUP": spec.setup} if spec.setup else {})}
+
+
+def check_point_environment(spec: ResolvedSpec, environ: Mapping[str, str]) -> None:
+    expected = point_environment(spec)
+    wrong = sorted(name for name, want in expected.items() if environ.get(name) != want)
+    if "VERITY_BENCH_SETUP" not in expected and environ.get("VERITY_BENCH_SETUP"):
+        wrong.append("VERITY_BENCH_SETUP")
+    if wrong:
+        raise ValueError(f"the point's environment differs from spec {spec.id!r}'s env and setup in {wrong}: "
+                         "launch points with `verity-bench run SPEC`, which forwards them")
+
+
 def research_command(plan: Plan, source: str | Path, item: PlannedPoint, root: Path) -> list[str]:
     spec = plan.spec
     command = [
@@ -184,6 +201,8 @@ def research_command(plan: Plan, source: str | Path, item: PlannedPoint, root: P
         command += ["--max-min", str(spec.admission.max_minutes)]
     if os.environ.get("VERITY_BENCH_VENV"):
         command += ["--env", f"VERITY_BENCH_VENV={os.environ['VERITY_BENCH_VENV']}"]
+    for name, setting in point_environment(spec).items():
+        command += ["--env", f"{name}={setting}"]
     command += [
         "--",
         "bash", "benchmarks/harness/run_point.sh",

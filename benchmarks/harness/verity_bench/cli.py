@@ -52,6 +52,7 @@ def _point(args: Any) -> int:
     if item.identity != args.identity:
         raise ValueError(f"point identity changed: expected {item.identity}, invocation named {args.identity}")
     spec = plan.spec
+    jobs.check_point_environment(spec, os.environ)
     preset, eager = served(spec.preset, spec.eager)
     arms = resolve_arms(spec.arms, spec.arm_modules)
     doc = run_benchmark(

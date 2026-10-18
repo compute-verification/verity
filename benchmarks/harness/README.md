@@ -21,6 +21,12 @@ vLLM pin, engine settings), its arms, its sweep (another file in `benchmarks/spe
 eager or CUDA graphs, and admission (`max_minutes` and friends, which never enter identity). Loading is strict: an unknown
 key, a wrong type or an unknown GPU id is an error before anything runs.
 
+An experimental arm (`arm_modules`, `pkg.mod:NAME`) may need its own environment. The spec's `[env]` table (upper-case
+names, string values, none of the dispatcher's, queue's or launcher's own) and its `setup`, a script in the source tree
+that `run_point.sh` sources before the point's Python starts (to build the arm's libraries from the dispatched commit and
+export their paths, say), are part of the resolved spec and so of every point's identity. The dispatcher forwards both
+(`--env`, the setup as `VERITY_BENCH_SETUP`), and a point refuses to run under any other.
+
 ## How a point is timed
 
 1. **Gates before timing.** Every arm runs every point greedily before anything is timed:

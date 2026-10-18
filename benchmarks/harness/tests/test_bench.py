@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import subprocess
 import sys
@@ -189,6 +190,86 @@ def test_dispatch_forwards_the_point_venv_and_the_launcher_runs_the_point_in_it(
     pythonpath, argv = ran.stdout.splitlines()
     assert pythonpath.split(":")[:2] == [f"{root}/benchmarks/harness", f"{root}/integrations/vllm"]
     assert argv == "-m verity_bench _vllm-point --point p"
+
+
+def _spec_with(tmp_path, extra: str) -> Path:
+    base = (SPEC_ROOT / "llama31-8b-fp8-1gpu.toml").read_text()
+    head, sep, tail = base.partition("\n[preset]\n")
+    path = tmp_path / "spec.toml"
+    path.write_text(head + "\n" + extra + "\n" + sep + tail)
+    return path
+
+
+def test_a_spec_env_and_setup_load_strictly_and_bind_the_identity(tmp_path):
+    spec = resolve_spec(_spec_with(tmp_path, 'setup = "benchmarks/harness/run_point.sh"\n[env]\nARM_KNOB = "on"'))
+    assert spec.env == {"ARM_KNOB": "on"} and spec.setup == "benchmarks/harness/run_point.sh"
+    assert spec.config_sha256 != replace(spec, env={"ARM_KNOB": "off"}).config_sha256
+    assert spec.config_sha256 != replace(spec, setup=None).config_sha256
+    for bad in ('[env]\nVERITY_BENCH_VENV = "/x"', '[env]\nCUDA_VISIBLE_DEVICES = "1"', '[env]\nlower = "x"'):
+        with pytest.raises(ValueError, match="env names"):
+            load_spec(_spec_with(tmp_path, bad))
+    with pytest.raises(ValueError, match="env"):
+        load_spec(_spec_with(tmp_path, '[env]\nARM_KNOB = 1'))
+    for bad in ("/etc/profile", "../outside.sh", "benchmarks/harness/no-such.sh"):
+        with pytest.raises(ValueError, match="must name a script in the source tree"):
+            load_spec(_spec_with(tmp_path, f'setup = "{bad}"'))
+
+
+def test_dispatch_forwards_the_spec_env_and_setup_and_the_point_refuses_any_other(tmp_path, monkeypatch):
+    root = Path(__file__).resolve().parents[3]
+    spec = resolve_spec(_spec_with(tmp_path, 'setup = "benchmarks/harness/setup/vllm_encoded.sh"\n[env]\nARM_KNOB = "on"'))
+    monkeypatch.delenv("VERITY_BENCH_VENV", raising=False)
+    plan = jobs.Plan(spec, spec.config_sha256, jobs.toolchain(root, spec, commit="a" * 40),
+                     tuple(jobs.PlannedPoint(p, "f" * 64, None) for p in expand_sweep(spec.sweep.id)))
+    command = jobs.research_command(plan, "llama31-8b-fp8-1gpu", plan.points[0], root)
+    flags = command[:command.index("--")]
+    forwarded = [flags[i + 1] for i, token in enumerate(flags) if token == "--env"]
+    assert forwarded == ["ARM_KNOB=on", "VERITY_BENCH_SETUP=benchmarks/harness/setup/vllm_encoded.sh"]
+
+    environ = dict(item.split("=", 1) for item in forwarded)
+    jobs.check_point_environment(spec, environ)
+    for wrong in ({**environ, "ARM_KNOB": "off"}, {"ARM_KNOB": "on"}):
+        with pytest.raises(ValueError, match="verity-bench run SPEC"):
+            jobs.check_point_environment(spec, wrong)
+    stock = resolve_spec("llama31-8b-fp8-1gpu")
+    jobs.check_point_environment(stock, {})
+    with pytest.raises(ValueError, match=r"\['VERITY_BENCH_SETUP'\]"):
+        jobs.check_point_environment(stock, {"VERITY_BENCH_SETUP": "benchmarks/harness/setup/vllm_encoded.sh"})
+
+
+def test_the_launcher_sources_the_setup_before_the_point_runs(tmp_path):
+    root = Path(__file__).resolve().parents[3]
+    setup = tmp_path / "setup.sh"
+    python = tmp_path / "venv312" / "bin" / "python"
+    python.parent.mkdir(parents=True)
+    python.write_text('#!/bin/sh\necho "$FROM_SETUP $SETUP_SAW_PYTHONPATH"\n')
+    python.chmod(0o755)
+    env = {"PATH": "/usr/bin:/bin", "WORK": str(tmp_path), "CUDA_HOME": str(tmp_path),
+           "VERITY_BENCH_SETUP": os.path.relpath(setup, root)}
+    setup.write_text('export FROM_SETUP="built in $PWD" SETUP_SAW_PYTHONPATH=${PYTHONPATH%%:*}\n')
+    ran = subprocess.run(["bash", "benchmarks/harness/run_point.sh"], cwd=root, env=env, capture_output=True, text=True)
+    setup.write_text("false\n")
+    failed = subprocess.run(["bash", "benchmarks/harness/run_point.sh"], cwd=root, env=env, capture_output=True,
+                            text=True)
+    assert ran.returncode == 0, ran.stderr
+    assert ran.stdout.strip() == f"built in {root} {root}/benchmarks/harness"
+    assert failed.returncode != 0 and failed.stdout == ""
+
+
+def test_the_bandwidth_spec_runs_memory_accountings_arms_with_receipts_on_and_their_libraries_built():
+    spec = resolve_spec("llama31-8b-fp8-1gpu-bandwidth")
+    assert spec.arms == ("stock-fp8", "bandwidth-plain", "bandwidth-audit")
+    assert spec.arm_modules == ("benchmarks.vllm_encoded.bench_arm:PLAIN", "benchmarks.vllm_encoded.bench_arm:AUDIT")
+    assert spec.env["VERITY_VLLM_BENCH_KV_RECEIPTS"] == "on"
+    stock = resolve_spec("llama31-8b-fp8-1gpu")
+    assert replace(spec.preset, id=stock.preset.id) == stock.preset
+    root = Path(__file__).resolve().parents[3]
+    setup = (root / spec.setup).read_text()
+    bench_arm = (root / "benchmarks/vllm_encoded/bench_arm.py").read_text()
+    for name in re.findall(r'"(VERITY_VLLM_BENCH_\w+_LIB)"', bench_arm):
+        assert f"{name}=" in setup, name
+    for source in re.findall(r"benchmarks/[\w/]+\.cu", setup):
+        assert (root / source).is_file(), source
 
 
 def test_a_queued_point_records_its_identity_as_the_key_param_resume_matches():
