@@ -121,6 +121,17 @@ def test_a_registration_whose_digest_isnt_recorded_is_caught(server, tmp_path) -
     assert R.main(["record", str(path)]) == 1
 
 
+def test_a_registration_from_before_layout_and_rows_replays_without_its_digest(server, tmp_path) -> None:
+    v = verifier_json(run("honest"))
+    for k in R.LATER:
+        del v["registration"][k]
+    path = tmp_path / "verifier.json"
+    path.write_text(json.dumps(v))
+    row, = R.replay_record(path, server)
+    assert row["agree"] and row["held"] and row["digest"] is None, row
+    assert "layout and rows" in row["made"]["registration"]
+
+
 def test_case_of_keeps_the_recorded_parameters_and_clock() -> None:
     v = verifier_json(run("honest"))
     s = v["sessions"][0]

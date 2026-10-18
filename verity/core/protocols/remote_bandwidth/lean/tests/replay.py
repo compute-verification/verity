@@ -20,7 +20,8 @@ A record is one of two kinds:
   - one rejected for any other failure is rejected nowhere in what is replayed, and draws as many receipts as recorded
     in each window it drew. Its cause is in what the record doesn't keep: its openings, plans, appends or steps, or
     the root it rejected, whose arrival the verifier records only once `Session.receive` takes it (so not a late one).
-  Both verifiers also recompute the registration's digest from its fields, which must be the recorded one.
+  Both verifiers also recompute the registration's digest from its fields, which must be the recorded one, unless the
+  registration was recorded before it named its layout and rows (`LATER`), when the digest bound neither.
 
     uv run python verity/core/protocols/remote_bandwidth/lean/tests/replay.py transcript CASE.json ...
     uv run python verity/core/protocols/remote_bandwidth/lean/tests/replay.py record VERIFIER.json ... [--out ROWS.json]
@@ -121,10 +122,15 @@ def codec_of(name: str) -> dict:
     return {"field": field, "masked": masked == ["masked"], "rounds": int(rounds[1:])}
 
 
+#: What a registration has named, and its digest bound, since 13 Oct 09:24Z (36e0ea654). One recorded before names
+#: neither: it had the one layout and its kind's rows, and its digest is one neither verifier computes now.
+LATER = ("layout", "rows")
+
+
 def registration_of(reg: dict) -> dict:
     return {"bind": reg["bind"], "blocks": reg["blocks"], "codec": codec_of(reg["codec"]), "codec_seed": reg["codec_seed"],
-            "layout": reg["layout"], "node": reg["node"], "payload_root": reg["payload_root"],
-            "receipt": reg["receipt"], "rows": reg["rows"]}
+            "layout": reg.get("layout", receipts.LAYOUT), "node": reg["node"], "payload_root": reg["payload_root"],
+            "receipt": reg["receipt"], "rows": reg["rows"] if "rows" in reg else receipts.sketch_rows(reg["receipt"])}
 
 
 def _synthetic(label: bytes, n: int) -> str:
@@ -221,17 +227,20 @@ def replay_record(path: Path, s: D.Server) -> list[dict]:
         raise ValueError(f"{path}: not a verity/remote-session/verifier/v0 record")
     reg = registration_of(v["registration"])
     lean_digest, py_digest = digests(reg, s)
+    earlier = [k for k in LATER if k not in v["registration"]]
     rows = []
     for session in v.get("sessions", []):
         row = {"run": run_of(path), "session": session.get("k"), "recorded": recorded(session),
                "windows": session["windows"], "passes": sum(w["passes"] for w in session.get("windows_seen") or []),
                "window_ns": session["window_ns"],
-               "digest": lean_digest == py_digest == ("output", v["registration"]["digest"])
+               "digest": None if earlier else lean_digest == py_digest == ("output", v["registration"]["digest"])
                and session.get("registration") == v["registration"]["digest"]}
         if not session.get("windows_seen"):
             rows.append(row | {"agree": None, "held": None, "why": "no window seen"})
             continue
         case, made = case_of(v["registration"], session)
+        if earlier:
+            made["registration"] = f"recorded before it named {' and '.join(earlier)}, its digest not today's"
         row |= replay(case, s) | {"made": made}
         row["held"], row["why"] = held(session, row["lean"]) if row["agree"] else (False, "the verifiers differ")
         rows.append(row)
