@@ -10,8 +10,10 @@ exact: a census value or a TOML value read as its decimal, and eps_budget's ε_s
 `FAMILIES` lists them: sm_120 (H1 + fx1) and sm_80 (Dither-2S at L = 16).
 
 `instance()` derives one and checks it against Python's own numbers: the sheet reproduces every DS coefficient, ♭ is
-`setup`'s floor program at ω's words, π* is one facet, and the bound the Lean proof reads off the identity (w* and φ*
-at π*, p = 7/8, ln 2 < 0.6931471808, ln(8/7) ≥ 1/8) is at most the family's headline.
+`setup`'s floor program at ω's words, π* is one facet, and the bound the Lean proof reads off the identity is at most
+the family's headline. That bound is the larger of two branches (`Whole.headline_of_branches`): the folded one at w* and
+φ* at π*, p = 7/8, ln 2 < 0.6931471808 and ln(8/7) ≥ 1/8, and the unfolded one, a run that skips folds charged at the
+whole-unit luck ½ (`WholeLuckAt`), `1 − (N_w w* + N_w φ*)/B_♭ · (1 − 41/S)`.
 
 sm_120's measured instance (`Accounting.TS.Headline.Sm120Measured`, read by
 `Accounting.Guarantees.TS.Sm120MeasuredHeadline`): the same design and ♭ on the measured vector (VF3r-16, its rows
@@ -80,14 +82,14 @@ class Family:
 SM120 = Family(
     "Sm120", "RTX PRO 6000", device("sm_120"), "DS-120", "dither-c-peel-fx1", "h1fx1", "H1 + fx1",
     {"DS_imad": ("imad", 64), "DS_lop": ("lop", 64), "DS_xu": ("xu", 16), "DS_shfl": ("shfl", 32)},
-    (256, 512, 1024, 2048), 2430, "SPEC's P1", {"UNI": 1, "UNI64": 2}, "LDG32", "NOROW", Fraction(599, 100000),
+    (256, 512, 1024, 2048), 2430, "SPEC's P1", {"UNI": 1, "UNI64": 2}, "LDG32", "NOROW", Fraction(656, 100000),
     "an IMMA.16832 at L = 32",
     "fx1's fold on lanes (ALU 2 + IMAD 2 lane instructions a word) and alone on the uniform datapath (4 a word)")
 SM80 = Family(
     "Sm80", "A100", device("sm_80"), "DS-80", "dither-2s-l16", "d2s", "Dither-2S at L = 16",
     {"DS_alu": ("alu", 64), "DS_fma": ("fma", 64), "DS_xu": ("xu", 16), "DS_shfl": ("shfl", 32)},
     (64, 512, 1024, 2048, 4096, 16384), 1410, "the data sheet's boost clock", {}, "LDS32", "ALU",
-    Fraction(147, 100000), "an IMMA.16816 at L = 16", "duo's fold on lanes (ALU 2 + IMAD 1 lane instructions a word)")
+    Fraction(232, 100000), "an IMMA.16816 at L = 16", "duo's fold on lanes (ALU 2 + IMAD 1 lane instructions a word)")
 FAMILIES = (SM120, SM80)
 
 DEVICE, DESIGN, FMAX = SM120.device, SM120.design, SM120.fmax
@@ -132,6 +134,14 @@ class Instance:
     B: Fraction
     kappa: Fraction
     bound: Fraction
+    folded: Fraction = Fraction(0)
+    unfolded: Fraction = Fraction(0)
+
+
+def branches(Nw: int, w: Fraction, phi: Fraction, B: Fraction, checks: int) -> tuple[Fraction, Fraction]:
+    """The Lean bound's two branches: folded (ε_jl at p = 7/8) and unfolded (the whole-unit luck ½, ln(1/δ′)/ln 2 = 41)."""
+    Y = (Nw * w + Nw * phi) / B
+    return 1 - Y + Nw * w / B * 41 * LN2 / (LN_P * checks), 1 - Y * (1 - Fraction(41, checks))
 
 
 def coef(i: Instance, row: str, k: str) -> Fraction:
@@ -243,7 +253,8 @@ def instance(fam: Family = SM120) -> Instance:
     w = min([coef(i, pistar, k) / om for k, om in writers] + [Q / E.LANES * vmin])
     phi = min(load(i, pistar, f) for f in folds)
     kappa = Nw * w / B
-    bound = 1 - (Nw * w + Nw * phi) / B + kappa * 41 * LN2 / (LN_P * i.checks)
+    folded, unfolded = branches(Nw, w, phi, B, i.checks)
+    bound = max(folded, unfolded)
     if bound > fam.eps:
         raise SystemExit(f"{fam.design} on {fam.device}: the Lean bound {float(bound):.6%} is above "
                          f"{float(fam.eps):.4%}")
@@ -251,7 +262,7 @@ def instance(fam: Family = SM120) -> Instance:
         raise SystemExit(f"{fam.design} on {fam.device}: the terms at π* are not ε_machine and ε_skip over ♭ with its "
                          f"skip")
     return Instance(fam, classes, macs, peak, pipe, smem, writers, list(pi.cuda), folds, nw, nf, ns, Nw, i.checks,
-                    pistar, eps_skip, B, kappa, bound)
+                    pistar, eps_skip, B, kappa, bound, folded, unfolded)
 
 
 @dataclass(frozen=True)
@@ -267,6 +278,8 @@ class Measured:
     kappa: Fraction
     bound: Fraction
     checks: int
+    folded: Fraction = Fraction(0)
+    unfolded: Fraction = Fraction(0)
 
 
 def mload(m: Measured, row: str, n: dict[str, Fraction]) -> Fraction:
@@ -317,18 +330,20 @@ def measured(i: Instance | None = None) -> Measured:
     w = demand[wk]
     phi = min(mload(m, pistar, f) for f in i.folds)
     kappa = i.Nw * w / B
-    bound = 1 - (i.Nw * w + i.Nw * phi) / B + kappa * 41 * LN2 / (LN_P * i.checks)
+    folded, unfolded = branches(i.Nw, w, phi, B, i.checks)
+    bound = max(folded, unfolded)
     if bound >= EPS_M:
         raise SystemExit(f"{DESIGN} on {VECTOR}: the Lean bound {float(bound):.6%} is not below {float(EPS_M):.4%}")
     if abs(float(1 - (i.Nw * w + i.Nw * phi) / B) - (e.machine_eps * (1 - float(eps_skip)) + float(eps_skip))) > 1e-9:
         raise SystemExit(f"{DESIGN} on {VECTOR}: the terms at π* are not ε_machine and ε_skip over ♭ with its skip")
-    return Measured(list(pi.rows), c, writers, ns, eps_skip, pistar, wk, B, kappa, bound, i.checks)
+    return Measured(list(pi.rows), c, writers, ns, eps_skip, pistar, wk, B, kappa, bound, i.checks, folded, unfolded)
 
 
 def exact_logs(i: Instance | Measured) -> float:
-    """The bound with ln 2 and ln(1/p) exact, for the record."""
-    return float(i.bound) - float(i.kappa * 41) * (float(LN2) / (float(LN_P) * i.checks)
-                                                   - math.log(2) / (math.log(1 / float(P)) * i.checks))
+    """The bound with ln 2 and ln(1/p) exact, for the record (the unfolded branch reads no rational log bound)."""
+    folded = float(i.folded) - float(i.kappa * 41) * (float(LN2) / (float(LN_P) * i.checks)
+                                                      - math.log(2) / (math.log(1 / float(P)) * i.checks))
+    return max(folded, float(i.unfolded))
 
 
 def _wrap(items: list[str], indent: str, width: int = 120) -> str:
