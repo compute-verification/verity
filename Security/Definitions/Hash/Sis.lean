@@ -40,7 +40,7 @@ structure Params where
   hi : ℤ
   bits : ℕ
 
-instance (P : Params) : NeZero P.q := ⟨by have := P.one_lt_q; omega⟩
+instance instNeZeroNatQ (P : Params) : NeZero P.q := ⟨by have := P.one_lt_q; omega⟩
 
 /-- A public matrix: `n × m` over `Z_q`. -/
 abbrev Mat (P : Params) : Type := Fin P.n → Fin P.m → ZMod P.q
