@@ -1,6 +1,6 @@
 // One CUTLASS GEMM configuration for the bench (gemms.h), chosen by macros, so each configuration is its own translation
 // unit with its own register budget (gpu.sh builds one object per GEMM_CFGS entry):
-//   OV_NAME             its arm's name (a string)
+//   OV_NAME, OV_ID      its arm's name (a string, and the same as an identifier)
 //   OV_ARCH             90 (sm_90a: TMA warp-specialized, wgmma) or 100 (sm_100a: tcgen05/UMMA)
 //   OV_KIND             sm_90: 0 cooperative, 1 pingpong; sm_100: 0 1-SM, 1 2-SM
 //   OV_TM OV_TN OV_TK   the (MMA) tile; OV_CM OV_CN the cluster; OV_STAGES 0 = the carveout's auto count
@@ -20,7 +20,8 @@
 
 using namespace cute;
 
-namespace {
+// a named namespace per configuration (OV_ID): nvcc's host stub can't name a kernel templated on anonymous-namespace types
+namespace OV_ID {
 using EA = cutlass::bfloat16_t;
 using EC = cutlass::bfloat16_t;
 using LA = cutlass::layout::RowMajor;      // X [m, k]
@@ -109,4 +110,4 @@ std::vector<ExtGemm> make(int m, int n, int k) {
   return {ExtGemm{OV_NAME, new St{m, n, k, {}}, run}};
 }
 const ExtReg reg(make);
-}  // namespace
+}  // namespace OV_ID

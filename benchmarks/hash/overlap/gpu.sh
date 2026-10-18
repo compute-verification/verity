@@ -37,7 +37,7 @@ nvcc -O3 -std=c++17 $GEN -c -o "$W/gemms.o" $D/gemms.cu > "$O/build-gemms.log" 2
 objs=("$W/gemms.o")
 for cfg in ${GEMM_CFGS:-}; do
   IFS=: read -r nm ar kd tm tn tk cm cn sg mx lr mr <<< "$cfg"
-  defs=(-DOV_NAME="\"$nm\"" -DOV_ARCH="$ar" -DOV_KIND="$kd" -DOV_TM="$tm" -DOV_TN="$tn" -DOV_TK="$tk" -DOV_CM="$cm" -DOV_CN="$cn" -DOV_STAGES="$sg")
+  defs=(-DOV_NAME="\"$nm\"" -DOV_ID="$nm" -DOV_ARCH="$ar" -DOV_KIND="$kd" -DOV_TM="$tm" -DOV_TN="$tn" -DOV_TK="$tk" -DOV_CM="$cm" -DOV_CN="$cn" -DOV_STAGES="$sg")
   [ "$mx" != 0 ] && defs+=(-DOV_MAXNREG="$mx")
   [ "$lr" != 0 ] && defs+=(-DOV_LOADR_V="$lr" -DOV_MMAR_V="$mr")
   # shellcheck disable=SC2086

@@ -45,15 +45,25 @@ def main(o: str) -> int:
             print(f"| {r['summary']} | {r['gemm']} | {r['variant']} | {r['leaves']} | {r['lt_ms']:.4f} | {r['gemm_ms']:.4f} | {r['hash_ms']:.4f} | "
                   f"{r['seq_ms']:.4f} | {r['par_ms']:.4f} | {100 * r['hidden_vs_own_gemm']:.1f}% | {100 * r['hidden_vs_lt']:.1f}% | "
                   f"{r['net_vs_lt_plus_hash']:.3f} |")
-    print("\n| chain (per layer) | hash | cuBLASLt ms | GEMM ms | hash ms | seq ms | par ms | hidden (own GEMM) | hidden (vs cuBLASLt) | "
-          "par / (cuBLASLt + hash) | exposed GB/s |\n|---|---|---|---|---|---|---|---|---|---|---|")
+    for r in b:
+        if "ext_gemm" in r:
+            print(f"ext GEMM {r['ext_gemm']} (n {r['n']}, k {r['k']}): {r['threads']} threads, {r['regs']} regs, {r['smem']} B smem, "
+                  f"local {r['local']}")
+        if "gemm_check" in r:
+            print(f"GEMM check {r['gemm_check']} {r['gemm']}: max rel vs cuBLASLt {r['max_rel_vs_lt']}")
+        if "tuned" in r:
+            print(f"cuBLASLt {r['tuned']}: best algo {r['best']} of {r['of']}, {r['ms']:.4f} ms")
+    print("\nChain, per layer: h1 the hashes on one stream, hN each call on its own stream (the separate pass's throughput); "
+          "par the better of par1 and parN; hidden and net against cuBLASLt alone plus hN.\n")
+    print("| chain (per layer) | hash | cuBLASLt ms | GEMM ms | h1 ms | hN ms | seq ms | par1 ms | parN ms | hidden (own GEMM) | "
+          "hidden (vs cuBLASLt) | par / (cuBLASLt + hN) | exposed GB/s |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|")
     for r in b:
         if "chain_summary" in r:
             exp = r["exposed_hash_ms"]
             gbps = r["bytes_per_layer"] / (exp * 1e-3) / 1e9 if exp > 0 else float("inf")
-            print(f"| {r['chain_summary']} | {r['variant']} | {r['lt_ms']:.4f} | {r['gemm_ms']:.4f} | {r['hash_ms']:.4f} | {r['seq_ms']:.4f} | "
-                  f"{r['par_ms']:.4f} | {100 * r['hidden_vs_own_gemm']:.1f}% | {100 * r['hidden_vs_lt']:.1f}% | {r['net_vs_lt_plus_hash']:.3f} | "
-                  f"{gbps:,.0f} |")
+            print(f"| {r['chain_summary']} | {r['variant']} | {r['lt_ms']:.4f} | {r['gemm_ms']:.4f} | {r['h1_ms']:.4f} | {r['hN_ms']:.4f} | "
+                  f"{r['seq_ms']:.4f} | {r['par1_ms']:.4f} | {r['parN_ms']:.4f} | {100 * r['hidden_vs_own_gemm']:.1f}% | "
+                  f"{100 * r['hidden_vs_lt']:.1f}% | {r['net_vs_lt_plus_hash']:.3f} | {gbps:,.0f} |")
     for path in glob.glob(os.path.join(o, "nsys*_cuda_gpu_trace.csv")):
         seen: dict[str, tuple] = {}
         with open(path) as f:

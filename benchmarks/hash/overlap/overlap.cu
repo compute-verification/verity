@@ -167,8 +167,11 @@ struct Shape {
 static const std::vector<Shape> SHAPES = {
     {"qkv", QKV, H, false, "qkv"}, {"o", H, H, true, "res"}, {"gate_up", 2 * I, H, false, "act"}, {"down", H, I, true, "res"}};
 // committed tensors: name -> (bf16 columns, domain slot); attn is rope_q || kv_k || attention (non-GEMM outputs)
+// (res2, the post-MLP residual, is res's domain with its own buffer and levels, so a layer's two residuals hash concurrently)
 static const std::map<std::string, std::pair<int, int>> TENSORS = {
-    {"qkv", {QKV, 0}}, {"attn", {9216, 1}}, {"res", {H, 2}}, {"act", {I, 3}}};
+    {"qkv", {QKV, 0}}, {"attn", {9216, 1}}, {"res", {H, 2}}, {"act", {I, 3}}, {"res2", {H, 2}}};
+constexpr int NSLOT = 4;   // tensor slots: a layer of the chain each (the per-shape arms double-buffer over slots 0 and 1)
+constexpr int NB = 20;     // hash streams: one per call of the chain's 4 layers
 
 struct LtGemm {
   cublasLtHandle_t h{};
@@ -234,10 +237,11 @@ static double median(std::vector<double> v) {
 struct World {
   std::map<std::string, Params> params;   // by tensor
   cudaStream_t A{}, B{};                  // A: the step (high priority), B: the hash (low priority)
+  cudaStream_t P[NB]{};                   // the hash stream pool (low priority; P[0] is B)
   std::map<std::string, bf16*> W, X, R;   // by shape: weight, input, residual
   bf16* out[2] = {nullptr, nullptr};      // GEMM outputs, double-buffered (the largest, gate_up's)
-  std::map<std::string, bf16*> T[2];      // committed tensors, double-buffered
-  std::map<std::string, std::unique_ptr<Hash>> hs[2];   // their hashing state
+  std::map<std::string, bf16*> T[NSLOT];  // committed tensors by slot
+  std::map<std::string, std::unique_ptr<Hash>> hs[NSLOT];   // their hashing state
   std::map<std::string, LtGemm> lt;
   std::map<std::string, std::vector<ExtGemm>> ext;   // registered GEMMs (gemms.h) by shape
   std::vector<cudaEvent_t> ev;
@@ -247,6 +251,16 @@ struct World {
     cudaEvent_t a = e(), b = e();
     CK(cudaEventRecord(a, A)); CK(cudaEventRecord(b, B));
     CK(cudaStreamWaitEvent(B, a, 0)); CK(cudaStreamWaitEvent(A, b, 0));
+  }
+  void join_all() {   // A and every pool stream
+    cudaEvent_t a = e();
+    CK(cudaEventRecord(a, A));
+    for (auto p : P) {
+      cudaEvent_t x = e();
+      CK(cudaEventRecord(x, p));
+      CK(cudaStreamWaitEvent(A, x, 0));
+      CK(cudaStreamWaitEvent(p, a, 0));
+    }
   }
   static u64 leaves(const std::string& t) { return (u64)M * TENSORS.at(t).first * 2 / LB; }
   static void sync(const std::string& what) {
@@ -258,6 +272,8 @@ struct World {
     CK(cudaDeviceGetStreamPriorityRange(&lo, &hi));
     CK(cudaStreamCreateWithPriority(&A, cudaStreamNonBlocking, hi));
     CK(cudaStreamCreateWithPriority(&B, cudaStreamNonBlocking, lo));
+    P[0] = B;
+    for (int i = 1; i < NB; ++i) CK(cudaStreamCreateWithPriority(&P[i], cudaStreamNonBlocking, lo));
     u32 seed = 1;
     for (const auto& s : SHAPES) {
       const size_t wn = (size_t)s.n * s.k, xn = (size_t)M * s.k;
@@ -271,6 +287,8 @@ struct World {
     for (int b = 0; b < 2; ++b) {
       CK(cudaMalloc(&out[b], (size_t)M * 2 * I * 2));
       fill_bf16<<<4096, 256>>>(out[b], (size_t)M * 2 * I, 100 + b);
+    }
+    for (int b = 0; b < NSLOT; ++b) {
       for (const auto& [t, cd] : TENSORS) {
         const size_t elems = (size_t)M * cd.first;
         CK(cudaMalloc(&T[b][t], elems * 2));
@@ -378,6 +396,7 @@ static int dump(const std::string& pdir, const std::string& outd) {
   w.init(pdir);
   int fails = 0;
   for (const auto& [t, cd] : TENSORS) {
+    if (t == "res2") continue;   // res's domain, size and kernels
     const Shape& s = *std::find_if(SHAPES.begin(), SHAPES.end(), [&](const Shape& x) { return x.hashed == t || (t == "attn" && x.name == "o"); });
     auto gs = gemm_arms(w, s);
     // a real unit output: the GEMM's own result where the unit is a GEMM's (attn stays filled)
@@ -545,16 +564,23 @@ static int bench(const std::string& pdir, int reps, bool nsys) {
     }
     fflush(stdout);
   }
-  // --- the layer chain: L layers of the prefill step's GEMMs on A, each committed tensor hashed on B once it exists -----
-  const int L = nsys ? 1 : 4;
-  for (const auto& s : SHAPES) {   // both buffers hold real unit outputs for the chain's tensors
-    for (int b = 0; b < 2; ++b) {
-      w.lt[s.name].run(w.lt[s.name].best, w.X[s.name], w.W[s.name], s.residual ? w.R[s.name] : nullptr, w.out[b], w.A);
-      w.unit_out(s, w.out[b], b, w.A);
+  // --- the layer chain: L layers of the prefill step's GEMMs on A, each layer's committed tensors in their own slot -------
+  // A layer's calls: qkv after qkv; attn (rope_q || kv_k || attention) and res (the post-attention residual) after o; act
+  // after gate_up (silu(g) u); res2 (the post-MLP residual) after down. Modes: 0 the GEMMs alone; 1 h1, the hashes alone,
+  // one after another on one stream (each call latency-bound); 2 hN, the hashes alone, each call on its own stream (all
+  // of the chain's calls at once: the separate pass at the throughput the hash reaches over the step's bytes); 3 seq, each
+  // hash on A after its GEMM; 4 par1, the hashes on one stream beside the GEMMs, each after its tensor exists; 5 parN, as
+  // par1 with each call on its own stream.
+  const int L = nsys ? 1 : NSLOT;
+  for (int l = 0; l < L; ++l)   // every slot holds real unit outputs
+    for (const auto& s : SHAPES) {
+      w.lt[s.name].run(w.lt[s.name].best, w.X[s.name], w.W[s.name], s.residual ? w.R[s.name] : nullptr, w.out[0], w.A);
+      bf16* t = w.T[l][s.name == "down" ? "res2" : s.hashed];
+      if (s.name == "gate_up") silu_mul<<<2048, 256, 0, w.A>>>(w.out[0], t, M, I);
+      else CK(cudaMemcpyAsync(t, w.out[0], (size_t)M * s.n * 2, cudaMemcpyDeviceToDevice, w.A));
     }
-  }
   CK(cudaStreamSynchronize(w.A));
-  struct Chain { std::string name; std::string gemm; std::string var; int mode; };   // mode 0 GEMMs, 1 hash only, 2 par, 3 seq
+  struct Chain { std::string name; std::string gemm; std::string var; int mode; };
   std::vector<Chain> chains;
   std::vector<std::string> gnames = {"lt"};
   for (const auto& e : w.ext[SHAPES[0].name]) {
@@ -564,10 +590,12 @@ static int bench(const std::string& pdir, int reps, bool nsys) {
   }
   for (const auto& g : gnames) chains.push_back({"chain:" + g, g, "", 0});
   for (const auto& v : vs) {
-    chains.push_back({"chain:h:" + v.name, "", v.name, 1});
+    chains.push_back({"chain:h1:" + v.name, "", v.name, 1});
+    chains.push_back({"chain:hN:" + v.name, "", v.name, 2});
     for (const auto& g : gnames) {
-      chains.push_back({"chain:par:" + g + ":" + v.name, g, v.name, 2});
       chains.push_back({"chain:seq:" + g + ":" + v.name, g, v.name, 3});
+      chains.push_back({"chain:par1:" + g + ":" + v.name, g, v.name, 4});
+      chains.push_back({"chain:parN:" + g + ":" + v.name, g, v.name, 5});
     }
   }
   std::map<std::string, std::vector<GemmArm>> gas;
@@ -583,33 +611,31 @@ static int bench(const std::string& pdir, int reps, bool nsys) {
   std::map<std::string, std::vector<unsigned>> cmhz;
   auto chain = [&](const Chain& c) {
     w.nev = 0;
-    w.join();
+    w.join_all();
     CK(cudaEventRecord(c0, w.A));
     const Variant* v = nullptr;
     for (const auto& x : vs) if (x.name == c.var) v = &x;
-    cudaEvent_t done[2] = {nullptr, nullptr};   // B finished hashing buffer b's tensors
+    int k = 0;   // the chain's call index
     for (int l = 0; l < L; ++l) {
-      const int b = l & 1;
-      if (done[b]) CK(cudaStreamWaitEvent(w.A, done[b], 0));   // back-pressure: don't overwrite what B still reads
       auto hash = [&](const std::string& t) {
         if (!v) return;
-        cudaStream_t hs_ = c.mode == 3 ? w.A : w.B;
-        if (c.mode == 2) { cudaEvent_t x = w.e(); CK(cudaEventRecord(x, w.A)); CK(cudaStreamWaitEvent(w.B, x, 0)); }
-        w.hs[b][t]->run(*v, reinterpret_cast<const uint8_t*>(w.T[b][t]), hs_);
+        const cudaStream_t st = c.mode == 3 ? w.A : (c.mode == 1 || c.mode == 4) ? w.B : w.P[k % NB];
+        ++k;
+        if (c.mode >= 4) { cudaEvent_t x = w.e(); CK(cudaEventRecord(x, w.A)); CK(cudaStreamWaitEvent(st, x, 0)); }
+        w.hs[l][t]->run(*v, reinterpret_cast<const uint8_t*>(w.T[l][t]), st);
       };
       for (const auto& s : SHAPES) {
-        if (c.mode != 1) {
-          garm(s.name, c.gemm).run(w.X[s.name], w.W[s.name], s.residual ? w.R[s.name] : nullptr, w.out[b], w.A);
-          if (s.name == "gate_up") silu_mul<<<2048, 256, 0, w.A>>>(w.out[b], w.T[b]["act"], M, I);
+        if (c.mode == 0 || c.mode >= 3) {
+          garm(s.name, c.gemm).run(w.X[s.name], w.W[s.name], s.residual ? w.R[s.name] : nullptr, w.out[l & 1], w.A);
+          if (s.name == "gate_up") silu_mul<<<2048, 256, 0, w.A>>>(w.out[l & 1], w.T[l]["act"], M, I);
         }
         if (s.name == "qkv") hash("qkv");
         if (s.name == "o") { hash("attn"); hash("res"); }
         if (s.name == "gate_up") hash("act");
-        if (s.name == "down") hash("res");
+        if (s.name == "down") hash("res2");
       }
-      if (c.mode == 2) { done[b] = w.e(); CK(cudaEventRecord(done[b], w.B)); }
     }
-    w.join();
+    w.join_all();
     CK(cudaEventRecord(c1, w.A));
     CK(cudaEventSynchronize(c1));
     float ms;
@@ -630,17 +656,19 @@ static int bench(const std::string& pdir, int reps, bool nsys) {
     for (size_t i = 0; i < cmhz[c.name].size(); ++i) printf("%s%u", i ? ", " : "", cmhz[c.name][i]);
     printf("]}\n");
   }
+  // against cuBLASLt alone plus the separate pass at its throughput (hN); h1 is the one-stream pass, for reference
   const double clt = median(cms["chain:lt"]);
   for (const auto& v : vs) {
-    const double h = median(cms["chain:h:" + v.name]);
+    const double h1 = median(cms["chain:h1:" + v.name]), hn = median(cms["chain:hN:" + v.name]);
     for (const auto& g : gnames) {
-      const double cg = median(cms["chain:" + g]), par = median(cms["chain:par:" + g + ":" + v.name]),
-                   seq = median(cms["chain:seq:" + g + ":" + v.name]);
-      printf("{\"chain_summary\": \"%s\", \"variant\": \"%s\", \"lt_ms\": %.5f, \"gemm_ms\": %.5f, \"hash_ms\": %.5f, \"seq_ms\": %.5f, "
-             "\"par_ms\": %.5f, \"hidden_vs_own_gemm\": %.4f, \"hidden_vs_lt\": %.4f, \"net_vs_lt_plus_hash\": %.4f, "
-             "\"exposed_hash_ms\": %.5f, \"bytes_per_layer\": %llu}\n",
-             g.c_str(), v.name.c_str(), clt, cg, h, seq, par, (cg + h - par) / h, (clt + h - par) / h, par / (clt + h), par - clt,
-             (unsigned long long)(M * (QKV + 9216 + H + I + H) * 2ull));
+      const double cg = median(cms["chain:" + g]), seq = median(cms["chain:seq:" + g + ":" + v.name]),
+                   p1 = median(cms["chain:par1:" + g + ":" + v.name]), pn = median(cms["chain:parN:" + g + ":" + v.name]);
+      const double par = std::min(p1, pn);
+      printf("{\"chain_summary\": \"%s\", \"variant\": \"%s\", \"lt_ms\": %.5f, \"gemm_ms\": %.5f, \"h1_ms\": %.5f, \"hN_ms\": %.5f, "
+             "\"seq_ms\": %.5f, \"par1_ms\": %.5f, \"parN_ms\": %.5f, \"par_ms\": %.5f, \"hidden_vs_own_gemm\": %.4f, \"hidden_vs_lt\": %.4f, "
+             "\"net_vs_lt_plus_hash\": %.4f, \"exposed_hash_ms\": %.5f, \"bytes_per_layer\": %llu}\n",
+             g.c_str(), v.name.c_str(), clt, cg, h1, hn, seq, p1, pn, par, (cg + hn - par) / hn, (clt + hn - par) / hn, par / (clt + hn),
+             par - clt, (unsigned long long)(M * (QKV + 9216 + H + I + H) * 2ull));
     }
   }
   fflush(stdout);
