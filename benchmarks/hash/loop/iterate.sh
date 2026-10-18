@@ -33,8 +33,18 @@ declare -A LAUNCH=(
   [vy-dc-b200]="--mem-gb 64"
   [vy-nebius-2]="--queue --gpus 1 --gpu-model rtx-pro-6000 --cpus 16 --mem-gb 64 --max-min 75 --preemptible"
 )
+# the Build of record the H200 runs pinned under (served_commit prof.sh PIN_BUILD): Qwen3-8B's compiled Build, r20261018-062957-da83's
+# out/build.json (artifact digest 3bd5dcb1); compiled Builds accept only cc 9.0 today, so the B200 and RTX PRO 6000 rows are unpinned.
+# PIN_ART= (empty) runs the H200 unpinned too.
+PIN_ART=${PIN_ART-art:25a1a1e2b13beec1f5bf76334932fb89a5460cfb2f5f0c29ce3a456922f9fcb7}
+declare -A PINNED=([vy-dc-h200]=1)
 QUESTION="hash-loop: what each committer change does to served commit overhead (TPOT, throughput) per GPU and hash"
 LOGS=$(mktemp -d)
+if [ -n "$PIN_ART" ]; then
+  research data fetch "$PIN_ART" --path out/build.json --to "$LOGS/pin" > /dev/null && [ -f "$LOGS/pin/out/build.json" ] \
+    || { echo "iterate: could not fetch the Build of record $PIN_ART out/build.json" >&2; exit 2; }
+  mv "$LOGS/pin/out/build.json" "$LOGS/pin/qwen3-8b-build.json"
+fi
 for m in ${MACHINES:-vy-dc-h200 vy-dc-b200 vy-nebius-2}; do
   envs=()
   for kv in ${ENVS[$m]}; do envs+=(--env "$kv"); done
@@ -42,6 +52,8 @@ for m in ${MACHINES:-vy-dc-h200 vy-dc-b200 vy-nebius-2}; do
   [ -n "${REPS:-}" ] && envs+=(--env "REPS=$REPS")
   [ -n "${ARM_NAMES:-}" ] && envs+=(--env "ARM_NAMES=$ARM_NAMES")
   [ -n "${CHECK_TESTS+x}" ] && envs+=(--env "CHECK_TESTS=$CHECK_TESTS")
+  [ -n "$PIN_ART" ] && [ -n "${PINNED[$m]:-}" ] && envs+=(--send "$LOGS/pin/qwen3-8b-build.json" --env PIN_BUILD_NAME=qwen3-8b-build.json \
+    --env "PIN_BUILD_ART=$PIN_ART:out/build.json")
   read -r -a launch <<< "${LAUNCH[$m]}"
   [[ " ${launch[*]} " == *" --queue "* ]] && launch+=(--question "$QUESTION")
   research run --on "$m" --project verity --campaign hash-loop --source . --cwd source --timeout 7200 --wait "${launch[@]}" \

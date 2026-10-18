@@ -8,6 +8,8 @@
 # CHECK_TESTS (the committer's GPU byte-identity tests and check_b3.py, the BLAKE3 arm against the hash lane's hm96 reference, run in
 # the lease before timing, once in each rows-sha512 leaf form, VERITY_ROWS_FORM=fused and split; a failure is exit 7 and no timing;
 # empty skips them).  The timed arms run the device's own form (native_rows.cu, verity_rows_leaves_form).
+# PIN_BUILD_NAME (iterate.sh sets it on the H200, the one cc compiled Builds accept today): the Build of record sent with the run,
+# as $RESEARCH_RUN_DIR/inputs/<name>; prof.sh then runs every arm under its compile artifact (PIN_BUILD) and checks the winners after.
 # The loop's arms (arms.py: the BLAKE3 sibling served-commit-rows-blake3, what-if served-commit-rows-whatif-q) run through a copy
 # of circuits' prof.sh with their case lines added; prof.sh itself is circuits' and is not edited.
 # On a dc VM the GPU is held only for the timed bench; a queued job (vy-nebius-2) already runs inside the queue's lease, which
@@ -28,6 +30,10 @@ sed -e '/^    served-commit-rows) /i\    served-commit-rows-blake3) mods+=(--arm
     benchmarks/served_commit/prof.sh > "$PROF"
 grep -q "hash.loop.arms" "$PROF" || { echo "prof.sh has no served-commit-rows case line to add the loop's arms beside"; exit 9; }
 export PROF
+if [ -n "${PIN_BUILD_NAME:-}" ]; then
+  export PIN_BUILD=${RESEARCH_RUN_DIR:?}/inputs/$PIN_BUILD_NAME
+  [ -f "$PIN_BUILD" ] || { echo "PIN_BUILD $PIN_BUILD was not sent with the run"; exit 9; }
+fi
 bench='
   if [ -n "$CHECK_TESTS" ]; then
     for form in fused split; do
@@ -38,8 +44,8 @@ bench='
   fi
   q=clocks.sm,clocks.max.sm,clocks.mem,temperature.gpu,power.draw,name,uuid
   nvidia-smi -i "$GPU_LEASE_UUID" --query-gpu=$q --format=csv > "$OUT/clocks.before.csv"
-  NSYS=1 NSYS_EACH=1 SWEEP=b32 SPEC=qwen3-8b-bf16-h200-served bash "$PROF"
-  rc=$?
+  NSYS=1 NSYS_EACH=1 SWEEP=b32 SPEC=qwen3-8b-bf16-h200-served bash "$PROF" 2>&1 | tee "$OUT/prof.out"
+  rc=${PIPESTATUS[0]}
   nvidia-smi -i "$GPU_LEASE_UUID" --query-gpu=$q --format=csv > "$OUT/clocks.after.csv"
   exit $rc'
 if [ -n "${GPU_LEASE_UUID:-}" ]; then
@@ -50,5 +56,8 @@ else
 fi
 rc=$?
 echo "lease rc $rc"
-python3 benchmarks/hash/loop/collect.py "$OUT" --reps "$REPS" --row "${ROW:-}" --hypothesis "${HYP:-}" --bench-rc "$rc"
+rm -rf "$OUT/inductor/triton" "$OUT/vllm_cache"
+pin_rc=$(sed -n 's/^pin check rc //p' "$OUT/prof.out" 2>/dev/null | tail -1)
+python3 benchmarks/hash/loop/collect.py "$OUT" --reps "$REPS" --row "${ROW:-}" --hypothesis "${HYP:-}" --bench-rc "$rc" \
+  ${pin_rc:+--pin-rc "$pin_rc"}
 exit $(( rc ? rc : $? ))
