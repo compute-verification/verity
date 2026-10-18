@@ -10,8 +10,12 @@
 
 #include "sha512_mb.h"
 
-// libcrypto's, declared here so the build needs no OpenSSL headers (cpu_sha512.sh links libcrypto.so.3).
+// libcrypto's, declared here so the build needs no OpenSSL headers (cpu_sha512.sh links libcrypto.so.3).  The low-level calls on a
+// caller-owned context: OpenSSL 3's one-shot SHA512() fetches the digest per call and serializes threads on a lock.
 unsigned char *SHA512(const unsigned char *d, size_t n, unsigned char *md);
+int SHA512_Init(void *c);
+int SHA512_Update(void *c, const void *data, size_t len);
+int SHA512_Final(unsigned char *md, void *c);
 
 ISAL_SHA512_HASH_CTX *_sha512_ctx_mgr_submit_avx512(ISAL_SHA512_HASH_CTX_MGR *, ISAL_SHA512_HASH_CTX *, const void *, uint32_t,
                                                     ISAL_HASH_CTX_FLAG);
@@ -54,7 +58,12 @@ static double now(void) {
 
 static void run_once(Job *j) {
   if (!j->impl->init) {
-    for (size_t i = 0; i < j->n; i++) SHA512(j->buf + i * j->len, j->len, j->out);
+    _Alignas(64) uint8_t c[512];  // SHA512_CTX is 216 bytes
+    for (size_t i = 0; i < j->n; i++) {
+      SHA512_Init(c);
+      SHA512_Update(c, j->buf + i * j->len, j->len);
+      SHA512_Final(j->out, c);
+    }
     return;
   }
   ISAL_SHA512_HASH_CTX_MGR *mgr = aligned_alloc(64, (sizeof *mgr + 63) / 64 * 64);
@@ -78,7 +87,9 @@ static void *worker(void *arg) {
       for (int b = 0; b < 8; b++) got[8 * w + b] = (uint8_t)(j->ctx[0].job.result_digest[w] >> (56 - 8 * b));
     j->ok = j->ctx[0].status == ISAL_HASH_CTX_STS_COMPLETE && memcmp(ref, got, 64) == 0;
   } else {
-    j->ok = 1;
+    uint8_t ref[64];
+    SHA512(j->buf + (j->n - 1) * j->len, j->len, ref);
+    j->ok = memcmp(ref, j->out, 64) == 0;
   }
   pthread_barrier_wait(j->bar);
   double t0 = now();
