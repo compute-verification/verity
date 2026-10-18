@@ -8,7 +8,7 @@ A row's entry is one preserved `vllm-config-record/v1` artifact labelled `row=<i
 `commit`, and one ref per conformance capture, named by its property.  `manifests/records.json` indexes the database
 (`config_record.load_index`): per row id the record's art: id and its circuit's pins, every rank's Program digests as the Build made
 them, which `publish` writes and `verity-vllm neutrality` rebuilds and compares.  The store is reached through the research CLI
-(`python -m research data ...`), so `RESEARCH_STORE` / `RESEARCH_STORE_CONFIG` select it.
+(`pipeline.research_data`), so `RESEARCH_STORE` / `RESEARCH_STORE_CONFIG` select it.
 
 Conformance: the properties a row's Programs need are those its capture map (`commit.capture_map.of_checkpoint`, the Build's
 checkpoint and world) names for the Programs the Build uses (`captures` of each map Program one of whose Definitions a construction
@@ -55,8 +55,6 @@ from __future__ import annotations
 import io
 import json
 import re
-import subprocess
-import sys
 import tarfile
 import tempfile
 from dataclasses import dataclass, field
@@ -66,6 +64,7 @@ from typing import Any
 
 from verity_vllm.config import RowId, UsageError, option
 from verity_vllm.pipeline import config_record as CR
+from verity_vllm.pipeline.research_data import data, fetch, listing
 
 INDEX = CR.INDEX
 ART = re.compile(r"art:[0-9a-f]{64}")
@@ -74,34 +73,6 @@ TREE = re.compile(r"\S+@[0-9a-f]{7,40}")
 REFS = ("build", "manifest", "match", "commit")
 PROPERTY_KIND = "property-record/v1"
 CONSTRUCTION = "construction_manifest.json"
-
-
-def data(*args: str) -> str:
-    """`research data ARGS`'s stdout (this interpreter's research, in this process's environment); a refusal raises with what the CLI
-    said."""
-    p = subprocess.run([sys.executable, "-m", "research", "data", *args], capture_output=True, text=True)
-    if p.returncode != 0:
-        raise RuntimeError(f"research data {' '.join(args[:2])}: rc={p.returncode}: {p.stderr.strip()[-1500:]}")
-    return p.stdout
-
-
-def fetch(art: str, to: Path | None = None, paths: list[str] = ()) -> Path:
-    """Materialise `art`'s payload (only `paths` of a tree, when given) and return its path.  A store with no remote (a `research
-    run` job's) that lacks it names the bundle that serves a job instead."""
-    try:
-        out = data("fetch", art, *(["--to", str(to)] if to else []), *(f"--path={p}" for p in paths))
-    except RuntimeError as e:
-        if "no remote configured" not in str(e):
-            raise
-        raise RuntimeError(f"{e}: a research run job has no store; the launcher writes the row's bundle (`verity-vllm records fetch "
-                           f"ROW --to FILE`), sends it (`research run --send FILE`) and the job reads it (`records programs ROW --bundle "
-                           f"$RESEARCH_RUN_DIR/inputs/FILE`, `programs(row, bundle=...)`)") from None
-    return Path(out.strip().splitlines()[-1])
-
-
-def listing(art: str) -> list[str]:
-    """The paths of a tree artifact's files."""
-    return [f["path"] for f in json.loads(data("fetch", art, "--list", "--json"))]
 
 
 def index() -> dict[str, dict[str, Any]]:

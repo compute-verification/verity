@@ -224,11 +224,11 @@ class TpRow(Row):
         ``build.construction``."""
         self.aot = CR.aot_of(self.row) if self.cb.build_construction == "record" else None
         if self.aot is not None and not (aot_dir := self.cb.aot_trace):
-            from verity_vllm import records
+            from verity_vllm.pipeline import research_data as RD
             aot_dir = f"{self.d}/aot_trace"
             dirs = tuple(f"build/rank{r}/{n}/" for r in range(self.W) for n in ["build_step", *(f"build_request_LP{lp}_T{t}" for lp, t in self.shapes)])
             try:
-                records.fetch(self.aot["trace"], Path(aot_dir), [p for p in records.listing(self.aot["trace"]) if p.startswith(dirs)])
+                RD.fetch(self.aot["trace"], Path(aot_dir), [p for p in RD.listing(self.aot["trace"]) if p.startswith(dirs)])
             except RuntimeError as e:
                 self.verdict("build", "FAIL", f"rc=1 the AOT Build's trace {self.aot['trace']} did not fetch ({e}); --aot-trace DIR gives it")
                 self.tl("row", "end", ("ok", "false"), ("stopped_at", "build"))
