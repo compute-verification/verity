@@ -190,6 +190,26 @@ def test_a_requests_cache_dir_leaves_the_build_dir_untouched(tmp_path):
     assert PMM.of_build(d, digest, side / digest) == rows
 
 
+def test_the_map_reads_and_fills_the_replays_index_memo(tmp_path, monkeypatch):
+    program, lp = _build_dir(tmp_path, 4, 5)
+    rows, out = MM.rows(program), tmp_path / "memory_map.jsonl"
+    req = {"path": str(out), "registration": "ab" * 64}
+    kw = {"loaded": {"r0": lp}, "store": _store(rows), "arrivals": {"r0": ARRIVE},
+          "caches": _caches(MM.packed(rows), _payload(ProgramIndex(lp["instances"]), rows))}
+    memo: dict = {}
+    first, written = PMM.write(out, req, indices=memo, **kw), out.read_text()
+    ((key, pi),) = memo.items()
+    assert key == ("index", id(lp["instances"])) and isinstance(pi, ProgramIndex)
+
+    def built(*a, **k):
+        raise AssertionError("an index the memo holds is built again")
+
+    monkeypatch.setattr(PMM, "ProgramIndex", built)
+    again = PMM.write(out, req, indices=memo, **kw)
+    assert out.read_text() == written and memo == {key: pi}
+    assert [again[k] for k in ("page", "blocks", "written", "freed", "engine")] == [first[k] for k in ("page", "blocks", "written", "freed", "engine")]
+
+
 def test_a_descriptor_of_another_program_is_refused_beside_the_map(tmp_path):
     _, lp = _build_dir(tmp_path, 4, 5)
     _, other = _build_dir(tmp_path, 4, 1)

@@ -49,12 +49,12 @@ from verity_vllm.pipeline.serving_rows import _operand
 def after_commit(request: str | None, *, loaded: Mapping[str, Mapping[str, Any]], bmap: dict[str, Any], committed: Callable,
                  manifest: Any, arrivals: Mapping[str, int], caches: Mapping[str, Any] | None,
                  session: str | Path | None = None, tp: Mapping[str, int] | None = None,
-                 attention_paths: Sequence[str] = ()) -> dict[str, Any] | None:
+                 attention_paths: Sequence[str] = (), indices: dict | None = None) -> dict[str, Any] | None:
     """Write the run's memory map as ``request`` asks, from the requests' loaded Programs of record (`c2_replay.programs_of_record`)
     at their engine arrival steps and the KV-slots source's `caches`, under the deferral of the remote session whose record is at
     ``session`` if there is one; on TP rank ``tp`` (``{"rank", "world"}``) its rank's map (`at_rank`), the rank Programs read
-    with the implementation paths the Build observed (``attention_paths``).  None without a request.  A failure is written
-    beside the map and returned, never raised."""
+    with the implementation paths the Build observed (``attention_paths``), their indices shared with the replay's ``indices``
+    (`write`).  None without a request.  A failure is written beside the map and returned, never raised."""
     if not request:
         return None
     req = json.loads(Path(request).read_text())
@@ -65,7 +65,7 @@ def after_commit(request: str | None, *, loaded: Mapping[str, Mapping[str, Any]]
     try:
         return write(out, req, loaded=loaded, store=CommittedStore.of_record(bmap, committed, manifest if isinstance(manifest, dict) else None),
                      arrivals=arrivals, caches=caches, deferral=deferral(session) if session is not None else None, tp=tp,
-                     attention_paths=attention_paths)
+                     attention_paths=attention_paths, indices=indices)
     except Exception as e:  # noqa: BLE001
         out.with_name(out.name + ".error.txt").write_text(traceback.format_exc())
         print(f"[memory-map] FAILED (no verdict changes): {e!r}"[:400], flush=True)
@@ -176,11 +176,13 @@ def _layer(name: str) -> int:
 
 def write(out: Path, req: Mapping[str, Any], *, loaded: Mapping[str, Mapping[str, Any]], store: Any, arrivals: Mapping[str, int],
           caches: Mapping[str, Any] | None, deferral: MM.Deferral | None = None, tp: Mapping[str, int] | None = None,
-          attention_paths: Sequence[str] = ()) -> dict[str, Any]:
+          attention_paths: Sequence[str] = (), indices: dict | None = None) -> dict[str, Any]:
     """The map of ``req`` into ``out`` and its layout beside it: each request's slots and KV words read from ``store`` (a
     `CommittedStore`), its pages laid out as ``caches`` (KV layer name -> the engine's cache tensor) lay them out, its writes
     where ``deferral`` has their encodes land; the Programs a TP rank's (``tp``) when given, their members spelt as the
-    ProgramIndex spells them with ``attention_paths``."""
+    ProgramIndex spells them with ``attention_paths``.  ``indices`` is the replay's memo (`driver.sampled_replay`'s, keyed
+    ``("index", id(instances))``) when its indices are the ones built here (`rank_replay.index_memo`): each Program's index is
+    read from it, else built and put in it, since one index of a GLM-5.3 TP8 B8 request Program takes minutes."""
     if not caches:
         raise ValueError("no engine KV cache to lay pages out by: the Commit attached no KV-slots source (commit --memory-map attaches it)")
     t0 = time.perf_counter()
@@ -190,8 +192,13 @@ def write(out: Path, req: Mapping[str, Any], *, loaded: Mapping[str, Mapping[str
         d, digest = str(lp["dir"]), str(lp["instances"].get("digest"))
         if d not in by_dir:
             at = Path(req["cache_dir"]) / digest if req.get("cache_dir") else None
-            by_dir[d] = (of_build(d, digest, at), ProgramIndex(lp["instances"], attention_paths=list(attention_paths), tp=dict(tp) if tp else None,
-                                                               program_dir=d), digest)
+            key = ("index", id(lp["instances"]))
+            pi = (indices or {}).get(key)
+            if pi is None:
+                pi = ProgramIndex(lp["instances"], attention_paths=list(attention_paths), tp=dict(tp) if tp else None, program_dir=d)
+                if indices is not None:
+                    indices[key] = pi
+            by_dir[d] = (of_build(d, digest, at), pi, digest)
         rows[rid], index[rid], _ = by_dir[d]
     t_ir = time.perf_counter()
 
