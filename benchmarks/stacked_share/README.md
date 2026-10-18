@@ -20,7 +20,9 @@ At f ≥ 1 no KV is credited.
   - the per-token and per-sample units;
   - the attention window's units, fitted exactly as `r0 N + b_q R + b_kv S + w0 + w_start [N = S]` and held to the
     Program's own calls;
-  - what each lever acts on, read off the Program's Definitions.
+  - what each lever acts on, read off the Program's Definitions;
+  - the per-token, per-sample and attention units by primitive, every composite expanded at the ranges its call gives it
+    and held to the callee's own count.
 
   The exact-int8 profile's primitives that property/v1 doesn't list yet are classed provisionally (`PROVISIONAL`) and kept
   under `provisional:<class>`. `--as` models another model from the Program's callees at one rank's statics, for example
@@ -32,7 +34,10 @@ At f ≥ 1 no KV is credited.
   - V' stored once with a static scale;
   - an int8 LM head;
   - static activation scales.
-- `job.sh` builds the exact-int8 8B request Program (LP=256, T=31) on one GPU and runs `units.py` on it.
+
+  It also gives the units a token by primitive over the trace, held to the step model's total.
+- `job.sh` builds the exact-int8 8B request Program (LP=256, T=31) on one GPU and runs `units.py` on it (`DESCRIPTOR=PATH`
+  skips the Build and needs no GPU).
 
 What is measured and what is modeled:
 
