@@ -118,6 +118,9 @@ The built-in steps (`run.py steps` prints their parameters and docs):
 | `linear.grid(grid, act, weight, block, scales, density)` | quantize | both operands on a low-bit grid (`fp4c`, `fp4`, `int5`), per token and per row, each rounded, dithered or `sr`; `block = 16` adds NVFP4's integer block scales over k (`scales`: `odd`, the UE4M3 odd integers 1–15, or `int`); `density` < 1 coins only a coin-chosen fraction of every k64 word's positions | D4-LOWBIT, LOWBIT-DESIGN |
 | `linear.peel(alphabet, width, top)` | integer | the int8 design's weight-side coin: W + U served, U low-rank (period 32 in k, {0,1} or ±1..±width), peeled exactly and gated on the check window, with \|W + U\| ≤ top | LOWBIT-DESIGN |
 | `attention.grid(grid, q, k, p, v, p_sink)` | quantize | Q, K, P and V on a low-bit grid, each rounded or dithered (P's bits only where key ≤ query) | D4-LOWBIT |
+| `linear.fp(fmt, scale)`, `attention.fp(fmt, scale)` | quantize | a format's own plain quantization, no PoUW: both operands rounded to E4M3 or E2M1 under `tensor`, `channel`, `mx` (E8M0 blocks of 32) or `nv` (UE4M3 blocks of 16 and an FP32 tensor scale) scales along the contraction, products in FP32 | PPL-COMPILE |
+| `linear.native(grid, scale, act, weight, act_grid)` | quantize | Dither's coins on a format's exact integer grid (`e4m3i`, every integer E4M3 holds; `int5`; `e2m1i`) under the same scales, each operand rounded or dithered with fresh bits a call; `act_grid = "int8"` keeps Dither's int8 activations beside native weights | PPL-COMPILE |
+| `linear.emulate(route)`, `attention.emulate(route)` | integer | the int8 product recomputed from limb planes the format holds (`e4m3-k3`, Karatsuba; `e4m3-k4`; `fp4-k9`, base-8 digits), gated equal (`emulation`) and served | PPL-COMPILE, EMU8 |
 
 `specs/` holds the arms in use: the three plain int8 arms, and the adopted design (`adopted`) with its halves
 (`adopted-linears`, tonight's `d63-sm50-smkv`; `adopted-attention`, tonight's `int8-rot-eqp=w64-poff64-psink-kc-kv=dith`)
@@ -180,6 +183,15 @@ The arms:
 - `co32c-u16-cohalf-*` are the same on H1's numerics.
 `frontier_plot.py` draws perplexity against core ε (`machine-model eps --checking full`) under each reading of the table
 route, and writes the table.
+PPL-COMPILE's arms (`pc-*`) cost running Dither-2S (`adopted-bd-lm`) on FP8 and FP4 hardware, every matmul including
+lm_head, after the same SmoothQuant, rotations and key centring: `pc-int8` and the format baselines `pc-fp8-tensor`,
+`pc-fp8-channel`, `pc-mxfp8`, `pc-nvfp4` and `pc-mxfp4` are plain quantization with no PoUW, and each one's `-lin`
+twin quantizes only the linears in the format and keeps `pc-int8`'s attention (C2's and C3's scope); `pc-c1-ROUTE` is
+`adopted-bd-lm` with every int8 product emulated from limbs (its perplexity is `adopted-bd-lm`'s bit for bit);
+`pc-c2-GRID-2s|1s` puts the linears on a format's integer grid (`int5`, `e4m3i`, `e4m3i-t` per tensor, `mx8`, `nvfp4`
+with odd scales, `mxfp4`, on E2M1's integers; `nvfp4x2`, `mxfp4x2` on twice E2M1's values), both operands dithered or
+the activations only (`int5-1s` is `fp8-peel-w15`'s design), and `pc-c3-fp8|fp4|fp4x2` keeps Dither's int8 activations
+against native dithered weights; C2 and C3 keep Dither-2S's attention.
 Any other file passes as a path.
 
 ## Adding an intervention
@@ -213,7 +225,8 @@ The chain ends in the exact integer product, gated, or the FP32 product when the
 - `mm.x` and `mm.weight()`: the operands. W carries every earlier step's weight map, applied lazily.
 - `mm.replace(x=..., w=f | tensor)`: new operands. A callable `w` maps the weight.
 - `mm.integer(x, w)`: the quantizer's hand-off to the integer stage.
-- `mm.cached(name, fn)`: once per matmul and chain prefix, shared across windows and arms.
+- `mm.cached(name, fn)`: once per matmul and chain prefix, shared across windows and arms (and across seeds with
+  `coinless=True`, when fn reads none of the step's own coins).
 - `mm.shared(key, fn)`: once per run.
 - `mm.coins(shape)`: fresh bits from the arm's seed, the layer and the window.
 - `mm.checking`: this is the check window. `mm.gate(name, ok)` records a gate; `mm.int_product(x, w)` is a gated exact product.
@@ -232,7 +245,11 @@ exits 1.
 - `int8_range`: every integer product's operands within int8, on every call.
 - `grid_range`: instead of `int8_range`, for a quantizer that declares a wider grid (block-scaled E2M1, ±180): every
   operand within that bound, on every call.
-- `accumulator`: each product's s32 accumulator, bounded a priori by k max|x| max|w|, on every call.
+- `accumulator`: each product's s32 accumulator, bounded a priori by k max|x| max|w|, on every call (a wider grid's
+  product, FP32 chunks summed in float64, its wide operand split into base-16 limbs when chunks would be short: within
+  2^53).
+- `emulation`: every call of `emulate`: each limb plane exact in its format and the recombined product equal to the
+  int8 one it replaces.
 - `product_exact`: on the check window (window 0), every layer, each integer product against a float64 recomputation
   on 32 rows (linears) or 64 (attention).
 - `peel`: on the check window, every layer, KV group and P block (and every linear with `linear.peel`), each peel
