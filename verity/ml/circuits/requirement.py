@@ -19,7 +19,8 @@ the registered values, each produced value's engine step, each gate's operands, 
 run's values), and `Requirement.of` derives each value's birth and last read from it. Placed on devices (`leaf`, and
 `ticks`: the tick at which each device begins each engine step), an `Execution` also has `Placement`'s regions, ingress
 and credits (`region`, `ingress`, `credits`). `verity/core/primitives/requirement/` holds `Requirement.of`, `pack`,
-`store_matches`, `plan_matches` and the placed functions to the Lean definitions on `Execution`s by difftest.
+`credited`, `credited_reads`, `store_matches`, `plan_matches` and the placed functions to the Lean definitions on
+`Execution`s by difftest.
 
 `from_census` is the same requirement at any scale, from a census (`census.census`) in place of the gates: a value is a
 census value (a run of a root node's output leaves read alike), and a schedule's steps are whole root Calls. A census
@@ -33,10 +34,15 @@ the census's steps), or a WorkloadProgram's request calls, request r's step s (i
 request's executed prefix. A registered input is there before step 0, and a run input arrives at the first step whose
 gates read it.
 
+A block is complete when step `t` begins once every value a layout places in it was produced before `t` (`incomplete`),
+and the audit credits the live values in complete blocks (`credited`, `credited_reads`): memory-map/v1 writes a block
+once, complete, so a KV block later steps fill is in no record yet. `store_matches` asks for the blocks of the credited
+values resident, block for block, which is an equality for the registered store and `⊆` for KV.
+
 `pack` places the values that are ever live in blocks of `block_bits`: the registered ones in canonical order from store
 index 0 (the registered store), then each step's newly live values in fresh blocks after them (the memory map's appends),
-each block written at its values' step and freed at their last read. That is the honest layout: `store_matches` and
-`plan_matches` hold at every step.
+each block written at its values' step and freed at their last read. Each block is complete at its values' step, so every
+live value is credited. That is the honest layout: `store_matches` and `plan_matches` hold at every step.
 """
 
 from __future__ import annotations
@@ -418,11 +424,11 @@ def pack(req: Requirement, block_bits: int = BLOCK_BITS) -> tuple[Layout, Store]
     groups += [sorted(v for v, b in req.born.items() if b == s and req.last.get(v, -1) > s) for s in range(req.steps)]
     nxt, written, freed, payload, n_registered = 0, {}, {}, {}, 0
     for s, group in enumerate(groups, start=-1):
-        first, off = nxt, block_bits
+        first, off = nxt, 0
         for v in group:
             if req.width[v] > block_bits:
                 raise ValueError(f"value {v} has {req.width[v]} bits, more than a block's {block_bits}")
-            if off + req.width[v] > block_bits:
+            if nxt == first or off + req.width[v] > block_bits:
                 nxt, off = nxt + 1, 0
             block[v], offset[v] = nxt - 1, off
             off += req.width[v]
@@ -447,14 +453,33 @@ def read_blocks(req: Requirement, layout: Layout, t: int) -> frozenset[int]:
     return layout.blocks(req.reads(t))
 
 
+def incomplete(req: Requirement, layout: Layout, t: int) -> frozenset[int]:
+    """The blocks incomplete when step `t` begins, as `incomplete` defines them: those holding a value produced at `t` or
+    later. A value `layout` doesn't place is in no block."""
+    return frozenset(layout.block[v] for v, b in req.born.items() if b >= t and v in layout.block)
+
+
+def credited(req: Requirement, layout: Layout, t: int) -> frozenset[int]:
+    """The live values the audit credits when step `t` begins: those in complete blocks."""
+    open_ = incomplete(req, layout, t)
+    return frozenset(v for v in req.live(t) if layout.block[v] not in open_)
+
+
+def credited_reads(req: Requirement, layout: Layout, t: int) -> frozenset[int]:
+    """The values step `t` reads from complete blocks."""
+    open_ = incomplete(req, layout, t)
+    return frozenset(v for v in req.reads(t) if layout.block[v] not in open_)
+
+
 def store_matches(req: Requirement, layout: Layout, store: Store, block_bits: int, t: int) -> bool:
-    """`StoreMatches`: the resident blocks are W's live blocks, the live values are packed, and each is in its block's
-    payload (checked where the values are known)."""
-    live = req.live(t)
-    return (store.resident(t) == layout.blocks(live) and layout.packs(req, block_bits, live)
-            and (not req.values or layout.carries(req, store, live)))
+    """`StoreMatches`: the resident blocks are the credited values' blocks, the live values are packed, and each
+    credited value is in its block's payload (checked where the values are known)."""
+    live, cred = req.live(t), credited(req, layout, t)
+    return (store.resident(t) == layout.blocks(cred) and layout.packs(req, block_bits, live)
+            and (not req.values or layout.carries(req, store, cred)))
 
 
 def plan_matches(req: Requirement, layout: Layout, plan, block_bits: int, t: int) -> bool:
-    """`PlanMatches`: the plan is the blocks step `t` reads, and the values read are packed."""
-    return frozenset(plan) == read_blocks(req, layout, t) and layout.packs(req, block_bits, req.reads(t))
+    """`PlanMatches`: the plan is the complete blocks step `t` reads, and the values read are packed."""
+    return (frozenset(plan) == layout.blocks(credited_reads(req, layout, t))
+            and layout.packs(req, block_bits, req.reads(t)))

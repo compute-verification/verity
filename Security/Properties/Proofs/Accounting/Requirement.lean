@@ -19,6 +19,9 @@ open CircuitRequirement
 theorem contains_iff {l : List ℕ} {a : ℕ} : (Std.HashSet.ofList l).contains a = true ↔ a ∈ l := by
   simp [Std.HashSet.contains_ofList]
 
+theorem not_contains_iff {l : List ℕ} {a : ℕ} : (!(Std.HashSet.ofList l).contains a) = true ↔ a ∉ l := by
+  simp [Std.HashSet.contains_ofList]
+
 theorem mem_distinct {l : List ℕ} {a : ℕ} : a ∈ distinct l ↔ a ∈ l := by
   simp [distinct, List.mem_mergeSort, Std.HashSet.mem_toList, Std.HashSet.mem_ofList]
 
@@ -204,22 +207,58 @@ theorem carries_iff (s : CircuitRequirement.Store) (S : List ℕ) :
       Accounting.Requirement.Carries (wiring i) (execution i) (layout i) (store s) S.toFinset := by
   simp [Instance.carries, Accounting.Requirement.Carries, wiring, execution, layout, store]
 
+/-! ## Complete blocks -/
+
+theorem incomplete_eq (t : ℕ) :
+    (i.incomplete t).toFinset = Accounting.Requirement.incomplete (wiring i) (execution i) (layout i) t := by
+  ext j
+  simp only [Instance.incomplete, List.mem_toFinset, mem_distinct, List.mem_map, List.mem_filter, Bool.and_eq_true,
+    not_contains_iff, decide_eq_true_eq, Accounting.Requirement.incomplete, Finset.mem_image, Finset.mem_filter,
+    wiring, execution, layout]
+
+theorem mem_complete {S : List ℕ} {t v : ℕ} : v ∈ i.complete S t ↔ v ∈ S ∧ i.blockOf v ∉ i.incomplete t := by
+  simp only [Instance.complete, List.mem_filter, not_contains_iff]
+
+theorem credited_nodup (t : ℕ) : (i.credited t).Nodup := (live_nodup i t).filter _
+
+theorem creditedReads_nodup (t : ℕ) : (i.creditedReads t).Nodup := (reads_nodup i t).filter _
+
+theorem credited_eq (t : ℕ) :
+    (i.credited t).toFinset = Accounting.Requirement.credited (wiring i) (execution i) (layout i) t := by
+  ext v
+  rw [Accounting.Requirement.credited, ← live_eq, ← incomplete_eq, Instance.credited, List.mem_toFinset, mem_complete,
+    Finset.mem_filter, List.mem_toFinset, List.mem_toFinset]
+  rfl
+
+theorem creditedReads_eq (t : ℕ) :
+    (i.creditedReads t).toFinset = Accounting.Requirement.creditedReads (wiring i) (execution i) (layout i) t := by
+  ext v
+  rw [Accounting.Requirement.creditedReads, ← reads_eq, ← incomplete_eq, Instance.creditedReads, List.mem_toFinset,
+    mem_complete, Finset.mem_filter, List.mem_toFinset, List.mem_toFinset]
+  rfl
+
+theorem creditedBits_eq (t : ℕ) :
+    i.creditedBits t = Accounting.Requirement.creditedBits (wiring i) (execution i) (layout i) t := by
+  rw [Instance.creditedBits, bits_eq i (credited_nodup i t), credited_eq, Accounting.Requirement.creditedBits]
+
+theorem creditedReadBits_eq (t : ℕ) :
+    i.creditedReadBits t = Accounting.Requirement.creditedReadBits (wiring i) (execution i) (layout i) t := by
+  rw [Instance.creditedReadBits, bits_eq i (creditedReads_nodup i t), creditedReads_eq,
+    Accounting.Requirement.creditedReadBits]
+
 theorem storeMatches_iff (s : CircuitRequirement.Store) (B t : ℕ) :
     i.storeMatches s B t = true ↔
       Accounting.Requirement.StoreMatches (wiring i) (execution i) (layout i) (store s) B t := by
   simp only [Instance.storeMatches, Bool.and_eq_true, sameSet_iff, resident_eq, blocks_eq, packs_iff i (live_nodup i t),
-    carries_iff, live_eq, Accounting.Requirement.StoreMatches, Accounting.Requirement.liveBlocks, and_assoc]
+    carries_iff, live_eq, credited_eq, Accounting.Requirement.StoreMatches, and_assoc]
 
 theorem planMatches_iff (plan : List ℕ) (B t : ℕ) :
     i.planMatches plan B t = true ↔
       Accounting.Requirement.PlanMatches (wiring i) (execution i) (layout i) plan.toFinset B t := by
   simp only [Instance.planMatches, Bool.and_eq_true, sameSet_iff, blocks_eq, packs_iff i (reads_nodup i t), reads_eq,
-    Accounting.Requirement.PlanMatches, Accounting.Requirement.readBlocks]
+    creditedReads_eq, Accounting.Requirement.PlanMatches]
 
 /-! ## Placement -/
-
-theorem not_contains_iff {l : List ℕ} {a : ℕ} : (!(Std.HashSet.ofList l).contains a) = true ↔ a ∉ l := by
-  simp [Std.HashSet.contains_ofList]
 
 theorem distinct_nodup (l : List ℕ) : (distinct l).Nodup :=
   (List.mergeSort_perm _ _).nodup_iff.mpr ((Std.HashSet.ofList l).distinct_toList.imp fun h => by simpa using h)
@@ -289,6 +328,11 @@ theorem liveIn : LiveIn := liveIn_eq
 theorem readBlocks : ReadBlocks := readBlocks_eq
 theorem readIn : ReadIn := readIn_eq
 theorem resident : Resident := resident_eq
+theorem incomplete : Incomplete := incomplete_eq
+theorem credited : Credited := credited_eq
+theorem creditedReads : CreditedReads := creditedReads_eq
+theorem creditedBits : CreditedBits := creditedBits_eq
+theorem creditedReadBits : CreditedReadBits := creditedReadBits_eq
 theorem storeMatches : StoreMatches := storeMatches_iff
 theorem planMatches : PlanMatches := planMatches_iff
 theorem region : Region := region_eq

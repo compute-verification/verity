@@ -166,15 +166,33 @@ def packs (B : Nat) (S : List Nat) : Bool :=
 def carries (s : Store) (S : List Nat) : Bool :=
   S.all fun v => decide (s.payloadOf (i.blockOf v) / 2 ^ i.offsetOf v % 2 ^ i.widthOf v = i.valueOf v)
 
+/-- `incomplete t`: the blocks of the values the execution produces at step `t` or later, but the registered ones. -/
+def incomplete (t : Nat) : List Nat :=
+  let reg := Std.HashSet.ofList i.registered
+  distinct ((i.ran.filter fun v => !reg.contains v && decide (t ≤ i.stepOf v)).map i.blockOf)
+
+/-- The values of `S` in blocks complete when step `t` begins. -/
+def complete (S : List Nat) (t : Nat) : List Nat :=
+  let inc := Std.HashSet.ofList (i.incomplete t)
+  S.filter fun v => !inc.contains (i.blockOf v)
+
+/-- `credited t`: the live values in complete blocks. -/
+def credited (t : Nat) : List Nat := i.complete (i.live t) t
+
+/-- `creditedReads t`: the values step `t` reads from complete blocks. -/
+def creditedReads (t : Nat) : List Nat := i.complete (i.reads t) t
+
+def creditedBits (t : Nat) : Nat := i.bits (i.credited t)
+def creditedReadBits (t : Nat) : Nat := i.bits (i.creditedReads t)
+
 /-- `StoreMatches s B t`. -/
 def storeMatches (s : Store) (B t : Nat) : Bool :=
-  let S := i.live t
-  sameSet (s.resident t) (i.blocks S) && i.packs B S && i.carries s S
+  let C := i.credited t
+  sameSet (s.resident t) (i.blocks C) && i.packs B (i.live t) && i.carries s C
 
 /-- `PlanMatches plan B t`. -/
 def planMatches (plan : List Nat) (B t : Nat) : Bool :=
-  let S := i.reads t
-  sameSet plan (i.blocks S) && i.packs B S
+  sameSet plan (i.blocks (i.creditedReads t)) && i.packs B (i.reads t)
 
 /-- `Placement.tick`: the tick at which a value's device begins its engine step. -/
 def tick (p : Placement) (v : Nat) : Nat := p.ticksOf (p.leafOf v) (i.stepOf v)

@@ -20,8 +20,9 @@ A step is an engine step; `ticks` gives, device by device, the tick at which it 
 lowercase hex (Python writes no integer of more than 4,300 digits, a block's payload among them). It refuses an instance
 that isn't one (a field missing or of the wrong kind, a per-value list not of one entry per value, a registered value
 that isn't one, a plan count that isn't `T`) and an execution that doesn't follow its wiring. For each step `t < T` it
-returns the live and read values, their bits, the blocks that hold them with the bits in each, the resident blocks, and
-whether the store and the plan are `W`'s (`storeMatches`, `planMatches`), with `held` and `read` over the `T` steps; and
+returns the live and read values, their bits, the blocks that hold them with the bits in each, those of them in complete
+blocks (`credited`, `creditedReads`) and their bits, the resident blocks, and whether the store and the plan are `W`'s
+(`storeMatches`, `planMatches`), with `held` and `read` over the `T` steps; and
 for each window, PoUW's over the placed execution: the region at its ticks and at its engine steps, its ingress and its
 credits at the pricing `price`.
 -/
@@ -113,6 +114,8 @@ def stepJson (i : Instance) (s : Store) (plan : List Nat) (B t : Nat) : Json :=
   let reads := i.reads t
   Json.mkObj [("live", natsJson live), ("live_bits", toJson (i.bits live)), ("live_blocks", byBlock i live),
     ("reads", natsJson reads), ("read_bits", toJson (i.bits reads)), ("read_blocks", byBlock i reads),
+    ("credited", natsJson (i.credited t)), ("credited_bits", toJson (i.creditedBits t)),
+    ("credited_reads", natsJson (i.creditedReads t)), ("credited_read_bits", toJson (i.creditedReadBits t)),
     ("resident", natsJson (s.resident t)), ("store_matches", toJson (i.storeMatches s B t)),
     ("plan_matches", toJson (i.planMatches plan B t))]
 

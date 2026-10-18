@@ -87,6 +87,26 @@ def ReadIn : Prop :=
 
 def Resident : Prop := ∀ (s : CircuitRequirement.Store) (t : ℕ), (s.resident t).toFinset = (store s).resident t
 
+def Incomplete : Prop :=
+  ∀ (i : Instance) (t : ℕ),
+    (i.incomplete t).toFinset = Accounting.Requirement.incomplete (wiring i) (execution i) (layout i) t
+
+def Credited : Prop :=
+  ∀ (i : Instance) (t : ℕ),
+    (i.credited t).toFinset = Accounting.Requirement.credited (wiring i) (execution i) (layout i) t
+
+def CreditedReads : Prop :=
+  ∀ (i : Instance) (t : ℕ),
+    (i.creditedReads t).toFinset = Accounting.Requirement.creditedReads (wiring i) (execution i) (layout i) t
+
+def CreditedBits : Prop :=
+  ∀ (i : Instance) (t : ℕ),
+    i.creditedBits t = Accounting.Requirement.creditedBits (wiring i) (execution i) (layout i) t
+
+def CreditedReadBits : Prop :=
+  ∀ (i : Instance) (t : ℕ),
+    i.creditedReadBits t = Accounting.Requirement.creditedReadBits (wiring i) (execution i) (layout i) t
+
 /-- `storeMatches` decides `StoreMatches`. -/
 def StoreMatches : Prop :=
   ∀ (i : Instance) (s : CircuitRequirement.Store) (B t : ℕ),
