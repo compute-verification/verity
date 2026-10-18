@@ -67,7 +67,11 @@ struct TileSrcCG {
   DEV uint4 ld16(u32 off) const {
     return (long long)(off >> 5) < rows ? __ldcg(reinterpret_cast<const uint4*>(base + (off >> 5) * K + (off & 31))) : make_uint4(0, 0, 0, 0);
   }
-  DEV void pf(u32) const {}
+  DEV void pf(u32 off) const {
+#pragma unroll
+    for (u32 r = off >> 5; r < (off >> 5) + 4; ++r)
+      if ((long long)r < rows) asm volatile("prefetch.global.L2 [%0];" ::"l"(base + r * K));
+  }
 };
 
 struct Geo {
@@ -79,13 +83,15 @@ struct Geo {
   u32 R;
   const u64* S;      // the salt phase's records
   u64* lv0;          // level 0
+  bool pf;           // an L2 prefetch of each leaf's next block
+  int diag;          // timing only (wrong levels): bit 0 the MMA warps skip the k-loop, bit 1 the hash warps exit
 };
 
 DEV void leaf_at(const Geo& g, u64 br, u64 bc) {
   const u64 Kb = 2ull * g.N, pos = bc * g.mr + br;
   const TileSrcCG src{g.C + br * g.R * Kb + 32 * bc, Kb, (long long)g.M - (long long)(br * g.R)};
   u64 x[8];
-  hash_after_block(C.mid_P, src, 32 * g.R, x);
+  hash_after_block(C.mid_P, src, 32 * g.R, x, g.pf);
   leaf_from_digest<0>(0, pos, x, g.S, g.lv0 + 8 * pos, nullptr);
 }
 
@@ -101,6 +107,7 @@ __global__ void __launch_bounds__(MMA_THREADS + 32 * HW, 1) gemm_kernel(Geo g) {
   if (HW && tid == 0) done = 0;
   if (HW) __syncthreads();
   if (HW && tid >= MMA_THREADS) {
+    if (g.diag & 2) return;
     // A warp takes 32 consecutive leaves and waits, uniformly, for the last tile they reach: lanes waiting on different
     // tiles would diverge, and a sleeping path stalls the hashing one.
     const int hw = (tid - MMA_THREADS) >> 5, rbs = BM / g.R, L = rbs * (2 * BN / 32);
@@ -121,7 +128,7 @@ __global__ void __launch_bounds__(MMA_THREADS + 32 * HW, 1) gemm_kernel(Geo g) {
     return;
   }
   const int wm = warp >> 2, wn = warp & 3;
-  const int kt_n = g.K / BK;
+  const int kt_n = (g.diag & 1) ? 0 : g.K / BK;
   for (int k = 0; k < my_tiles; ++k) {
     const int t = blockIdx.x + k * gridDim.x, m0 = (t % g.tiles_m) * BM, n0 = (t / g.tiles_m) * BN;
     auto load = [&](int stage, int kt) {
@@ -459,10 +466,13 @@ struct Setup {
     CK(cudaDeviceSynchronize());
     CK(cudaGetLastError());
   }
-  void gemm(int hw, cudaStream_t st) {
-    if (hw == 0) gemm_kernel<0><<<grid, MMA_THREADS, SMEM_GEMM, st>>>(g);
-    else if (hw == 4) gemm_kernel<4><<<grid, MMA_THREADS + 128, SMEM_GEMM, st>>>(g);
-    else gemm_kernel<8><<<grid, MMA_THREADS + 256, SMEM_GEMM, st>>>(g);
+  void gemm(int hw, cudaStream_t st, bool pf = false, int diag = 0) {
+    Geo q = g;
+    q.pf = pf;
+    q.diag = diag;
+    if (hw == 0) gemm_kernel<0><<<grid, MMA_THREADS, SMEM_GEMM, st>>>(q);
+    else if (hw == 4) gemm_kernel<4><<<grid, MMA_THREADS + 128, SMEM_GEMM, st>>>(q);
+    else gemm_kernel<8><<<grid, MMA_THREADS + 256, SMEM_GEMM, st>>>(q);
   }
   void sep(cudaStream_t st) { sep_leaves<<<(unsigned)((n + 255) / 256), 256, 0, st>>>(g, n); }
   void rec(cudaStream_t st) { cm.tiles(Cb, M, 2ull * N, R, false, st); }
@@ -495,10 +505,10 @@ static int check(int argc, char** argv) {
   std::vector<uint8_t> want(cbytes), got(cbytes);
   CK(cudaMemcpy(want.data(), ref, cbytes, cudaMemcpyDeviceToHost));
   // each arm from poisoned levels and C: its levels must equal the first arm's
-  const char* arms[] = {"g+sep", "g+rec", "f4", "f8"};
+  const char* arms[] = {"g+sep", "g+rec", "f4", "f8", "f4pf", "f8pf"};
   std::vector<uint8_t> first;
   bool ok = true;
-  for (int a = 0; a < 4; ++a) {
+  for (int a = 0; a < 6; ++a) {
     s.clear_levels();
     CK(cudaMemset(s.Cb, 0xA5, cbytes));
     if (s.cm.width > s.n) pad_fill<<<(unsigned)((s.cm.width - s.n + 255) / 256), 256>>>(s.cm.lv[0], s.n, s.cm.width);
@@ -506,6 +516,8 @@ static int check(int argc, char** argv) {
     if (a == 1) { s.gemm(0, 0); s.rec(0); }
     if (a == 2) s.gemm(4, 0);
     if (a == 3) s.gemm(8, 0);
+    if (a == 4) s.gemm(4, 0, true);
+    if (a == 5) s.gemm(8, 0, true);
     s.cm.nodes(0);
     CK(cudaDeviceSynchronize());
     CK(cudaGetLastError());
@@ -591,6 +603,51 @@ static int bench(int argc, char** argv) {
   }
   printf("}}\n");
   fflush(stdout);
+  return 0;
+}
+
+// The fused kernel taken apart (timing only; the _nohash and _nomma arms' levels are wrong by design): the GEMM alone, the
+// separate leaves alone (and with the L2 prefetch), and the fused kernel at 4 and 8 hash warps: whole, with the prefetch,
+// with its hash warps exiting at once, and with its MMA warps skipping the k-loop (the hash warps' own rate in the CTA).
+static int diag(int argc, char** argv) {
+  if (argc < 8) { fprintf(stderr, "diag PARAMS M N K R REPS\n"); return 2; }
+  const Params p = read_params(argv[2]);
+  Setup s;
+  s.init(p, atoi(argv[3]), atoi(argv[4]), atoi(argv[5]), (u32)atoi(argv[6]));
+  const int reps = atoi(argv[7]);
+  cudaStream_t st;
+  CK(cudaStreamCreateWithFlags(&st, cudaStreamNonBlocking));
+  cudaEvent_t e0, e1;
+  CK(cudaEventCreate(&e0)); CK(cudaEventCreate(&e1));
+  const char* names[] = {"g", "sep", "seppf", "f4", "f4pf", "f4_nohash", "f4_nomma", "f8", "f8pf", "f8_nohash", "f8_nomma"};
+  constexpr int NA = 11;
+  auto body = [&](int a) {
+    if (a == 0) s.gemm(0, st);
+    if (a == 1) s.sep(st);
+    if (a == 2) { Geo q = s.g; q.pf = true; sep_leaves<<<(unsigned)((s.n + 255) / 256), 256, 0, st>>>(q, s.n); }
+    if (a >= 3) {
+      const int hw = a < 7 ? 4 : 8, v = (a - 3) % 4;
+      s.gemm(hw, st, v == 1, v == 2 ? 2 : v == 3 ? 1 : 0);
+    }
+  };
+  std::vector<double> t[NA], mz;
+  Nv nv;
+  for (int r = -2; r < reps; ++r)
+    for (int a = 0; a < NA; ++a) {
+      spin<<<1, 1, 0, st>>>(SPIN);
+      CK(cudaEventRecord(e0, st));
+      body(a);
+      CK(cudaEventRecord(e1, st));
+      CK(cudaEventSynchronize(e1));
+      float m; CK(cudaEventElapsedTime(&m, e0, e1));
+      if (r >= 0) { t[a].push_back(m); if (a == 3) mz.push_back(nv.sm()); }
+    }
+  CK(cudaGetLastError());
+  int dev; cudaDeviceProp prop;
+  CK(cudaGetDevice(&dev)); CK(cudaGetDeviceProperties(&prop, dev));
+  printf("{\"diag\": {\"gpu\": \"%s\", \"m\": %d, \"n\": %d, \"k\": %d, \"r\": %u, \"mhz\": %.0f", prop.name, s.M, s.N, s.K, s.R, median(mz));
+  for (int a = 0; a < NA; ++a) printf(", \"%s\": %.5f", names[a], median(t[a]));
+  printf("}}\n");
   return 0;
 }
 
@@ -782,10 +839,11 @@ static int probe(int argc, char** argv) {
 
 int main(int argc, char** argv) {
   if (argc >= 2 && !strcmp(argv[1], "probe")) return probe(argc, argv);
+  if (argc >= 2 && !strcmp(argv[1], "diag")) return diag(argc, argv);
   if (argc >= 2 && !strcmp(argv[1], "check")) return check(argc, argv);
   if (argc >= 2 && !strcmp(argv[1], "bench")) return bench(argc, argv);
   if (argc >= 2 && !strcmp(argv[1], "tree")) return tree(argc, argv);
   if (argc >= 2 && !strcmp(argv[1], "chacha")) return chacha(argc, argv);
-  fprintf(stderr, "usage: fuse check|bench|tree|chacha|probe ...\n");
+  fprintf(stderr, "usage: fuse check|bench|tree|chacha|probe|diag ...\n");
   return 2;
 }
