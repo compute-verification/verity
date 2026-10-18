@@ -7,7 +7,9 @@ One process writes `<out>/pouw_h1_gpu.json` and the option's record (`<out>/pouw
             option is installed and with it: the token ids are the same, since the arm serves its own y.
   calls     every served linear call the option recorded, per shape (m, k, n), with consecutive position ranges.
   compile   every served shape compiled to `eps1-sm120-h1fx1` (`H1Run.check`): its Program digest, units, one seed group and
-            only full 32 x 32 grid tiles.
+            only full 32 x 32 grid tiles. A shape takes minutes on the host (about 0.13 s a unit), so only `--compile` does it
+            here; otherwise `--compile-from <out>/pouw-h1-calls.json` does it on a CPU node from the record, with each call's
+            positions against its shape's compiled units, and writes `<out>/pouw_h1_compile.json`.
   z         the last retained calls' exact Y (`engine.int8_exact.int_mm` on the GPU) against the s8 product on the host, and
             a unit's z (`Call.z`) against its cells.
   hook      a listener (`H1Run.listen`) gets every call with the served tensors on the GPU: A int8 [m, k] and s_a f32 [m]
@@ -115,24 +117,59 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
                        "unit0_z": bool(np.array_equal(z0, [full[u.rows[i], u.cols[j]] for i, j in u.tile.pairs]))})
         doc["z"] = zs
 
-        t0 = time.monotonic()
-        try:
-            doc["compile"] = h1.check()
-            doc["compile_ok"] = all(v["tiles"] == ["32x32"] and v["groups"] == [[0]] for v in doc["compile"].values())
-        except Exception as e:  # noqa: BLE001
-            doc["compile"], doc["compile_ok"] = {"error": f"{type(e).__name__}: {e}"[:4000]}, False
-        doc["compile_s"] = round(time.monotonic() - t0, 1)
-        print(f"[h1] compile {doc['compile_ok']} in {doc['compile_s']} s over {len(h1.shapes())} shapes", flush=True)
+        doc["shapes"] = [list(x) for x in h1.shapes()]
+        if a.compile:
+            t0 = time.monotonic()
+            doc["compile"], doc["compile_ok"] = _check(h1)
+            doc["compile_s"] = round(time.monotonic() - t0, 1)
+            print(f"[h1] compile {doc['compile_ok']} in {doc['compile_s']} s over {len(h1.shapes())} shapes", flush=True)
+        else:
+            doc["compile"], doc["compile_ok"] = "deferred to --compile-from", None
     finally:
         comp.close()
     doc["commitment"] = comp.installed[0].commitment()
     doc["ok"] = bool(doc["served"]["same_tokens"] and not doc["hook"]["bad"] and doc["hook"]["bound"]
                      and doc["hook"]["steps_in_layer_order"] and doc["hook"]["leaves"]
                      and doc["calls"]["consecutive"] and doc["calls"]["count"] > 0 and zs and all(z["y_exact"] and z["unit0_z"] for z in zs)
-                     and doc["compile_ok"] and doc["engine"]["enforce_eager"] is not False)
+                     and doc["compile_ok"] is not False and doc["engine"]["enforce_eager"] is not False)
     (outdir / RECORD).write_text(json.dumps(doc, indent=1, default=str) + "\n")
     print(f"POUW-H1-GPU {'OK' if doc['ok'] else 'FAIL'} calls={doc['calls']['count']} units={doc['calls']['units']} "
-          f"shapes={len(doc['compile']) if doc['compile_ok'] else doc['compile']} same_tokens={doc['served']['same_tokens']}", flush=True)
+          f"shapes={len(doc['shapes'])} compile={doc['compile_ok']} same_tokens={doc['served']['same_tokens']}", flush=True)
+    return doc
+
+
+def _check(h1: Any) -> tuple[dict[str, Any], bool]:
+    try:
+        out = h1.check()
+        return out, all(v["tiles"] == ["32x32"] and v["groups"] == [[0]] for v in out.values())
+    except Exception as e:  # noqa: BLE001
+        return {"error": f"{type(e).__name__}: {e}"[:4000]}, False
+
+
+def compile_from(calls_file: str, out: str) -> dict[str, Any]:
+    """The record's calls compiled on the host: every shape by `H1Run.check`, and each call's base the previous call's plus
+    its shape's compiled units."""
+    from verity_vllm.protocol_options import pouw_h1 as PH
+
+    rec = json.loads(Path(calls_file).read_text())
+    h1 = PH.H1Run(rec["entry"], b"", {})
+    h1.calls = [PH.Call(c["index"], c["step"], c["layer"], c["module"], *c["shape"], c["base"]) for c in rec["calls"]]
+    doc: dict[str, Any] = {"schema": SCHEMA + "/compile", "argv": sys.argv, "calls_file": calls_file, "record": rec["schema"],
+                           "commitment": rec["commitment"], "calls": len(h1.calls), "shapes": [list(x) for x in h1.shapes()]}
+    t0 = time.monotonic()
+    doc["compile"], doc["compile_ok"] = _check(h1)
+    doc["compile_s"] = round(time.monotonic() - t0, 1)
+    pos, bad = 0, []
+    for c in h1.calls:
+        if c.base != pos:
+            bad.append(c.index)
+        pos = c.base + len(c.compiled().units) if doc["compile_ok"] else pos + c.units
+    doc["positions"] = {"consecutive": not bad, "bad": bad[:20], "units": pos, "committed_units": rec["commitment"].get("units")}
+    doc["ok"] = bool(doc["compile_ok"] and not bad and pos == rec["commitment"].get("units"))
+    Path(out).mkdir(parents=True, exist_ok=True)
+    (Path(out) / "pouw_h1_compile.json").write_text(json.dumps(doc, indent=1, default=str) + "\n")
+    print(f"POUW-H1-COMPILE {'OK' if doc['ok'] else 'FAIL'} calls={doc['calls']} shapes={len(doc['shapes'])} units={pos} "
+          f"in {doc['compile_s']} s", flush=True)
     return doc
 
 
@@ -144,11 +181,18 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--role", default="LLAMA31_8B_INT8")
     ap.add_argument("--repo", default="verity-int8/Llama-3.1-8B-INT8")
     ap.add_argument("--hf-home", default=os.environ.get("HF_HOME"))
-    ap.add_argument("--at", required=True, help="resolved_at of the pin entry, if one is made (UTC, ISO 8601)")
-    ap.add_argument("--by", required=True, help="resolved_by of the pin entry, if one is made")
+    ap.add_argument("--at", help="resolved_at of the pin entry, if one is made (UTC, ISO 8601)")
+    ap.add_argument("--by", help="resolved_by of the pin entry, if one is made")
     ap.add_argument("--max-tokens", type=int, default=8)
     ap.add_argument("--retain", type=int, default=4, help="the last calls whose operands and exact Y are kept and checked")
-    return 0 if run(ap.parse_args(argv))["ok"] else 1
+    ap.add_argument("--compile", action="store_true", help="compile every served shape in this process too")
+    ap.add_argument("--compile-from", metavar="CALLS_JSON", help="no GPU: compile a served run's record (pouw-h1-calls.json)")
+    a = ap.parse_args(argv)
+    if a.compile_from:
+        return 0 if compile_from(a.compile_from, a.out)["ok"] else 1
+    if not (a.at and a.by):
+        ap.error("serving needs --at and --by (the pin entry's, if one is made)")
+    return 0 if run(a)["ok"] else 1
 
 
 if __name__ == "__main__":
