@@ -344,7 +344,9 @@ def audit(out: Path, plans: dict, report: dict, strategies: dict) -> dict:
         entry = {"strategy": strategy, "accepted": all(r[2] is None and r[3] is None for r in rows), "verdicts": rows,
                  "records_are_run_shapers": c["records_are_run_shapers"], "wire_is_the_records": c["wire_is_the_records"],
                  "released_not_the_programs": c["released_not_the_programs"],
+                 "slack_ms": a["timing"]["slack_ms"],
                  "tick_late_ms_max": {k: v.get("max") for k, v in a["timing"]["tick_late_ms"].items()},
+                 "ticks_over_slack": {k: v["over_slack"] for k, v in a["timing"]["tick_late_ms"].items()},
                  "wire_bucket_lag_ms": a["timing"]["wire_bucket_lag_ms"]}
         if honest is not None and b != honest:
             entry["against_honest"] = ar.against_honest(out / b, out / honest)
