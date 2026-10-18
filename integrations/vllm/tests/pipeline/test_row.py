@@ -828,6 +828,29 @@ def test_a_tp_fold_match_bounds_each_leg_and_gives_the_whole_four_legs(tmp_path,
     assert int(cmd[cmd.index("--timeout") + 1]) == leg and to == 4 * leg
 
 
+@pytest.mark.parametrize("argv, workers, reuse", [((), "0", False), (("--fold-rank-workers", "2", "--reuse-fold", "on"), "2", True)])
+def test_a_cpu_half_rerun_keeps_its_captures_folds_with_bounded_ranks(tmp_path, monkeypatch, argv, workers, reuse):
+    """A GLM-5.3 B8 CPU half whose eight X-09 compares (125+ GB each) ran out of host memory reruns over the folds it persisted
+    (`--reuse-fold on`), `--fold-rank-workers` ranks at a time; a capture removes the folds of any earlier one, so none is ever kept."""
+    t = _tp_row(tmp_path, GLM53, "--match-phase", "cpu", *argv)
+    t.fold_profile = "derived_GLM53_tp8"
+    os.makedirs(t.M)
+    Path(t.M, "gpu_legs.json").write_text(json.dumps({"capture_rc": 0, "control_rc": 0}))
+    monkeypatch.setattr(R, "derived_ok", lambda p: True)
+    monkeypatch.setattr(R, "tp_passed", lambda p: True)
+    seen: dict[str, list[str]] = {}
+    monkeypatch.setattr(t, "run_tl", lambda stage, to, log, cmd: seen.setdefault(stage, cmd) and 0)
+    t.match()
+    cmd = seen["match.fold_match"]
+    assert cmd[cmd.index("--rank-workers") + 1] == workers and ("--reuse-fold" in cmd) == reuse
+    gpu = _tp_row(tmp_path, GLM53, "--match-phase", "gpu", *argv)
+    os.makedirs(f"{gpu.M}/fold_match/rank0", exist_ok=True)
+    monkeypatch.setattr(gpu, "run_gpu", lambda stage, to, log, cmd, **kw: 0)
+    with pytest.raises(Stop):
+        gpu.match()
+    assert not os.path.exists(f"{gpu.M}/fold_match")
+
+
 def test_a_single_and_a_tp_rows_folds_store_the_instances_form_of_record(tmp_path, monkeypatch):
     """Every child of either row (a TP row's per-rank folds under tp-fold-match among them) stores instances.jsonl in `--instances-form`,
     progressions by default, not the fold library's run-by-run default (a transposed weight's operand is ~1e6 runs per instance)."""
