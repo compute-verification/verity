@@ -413,8 +413,7 @@ def intervals (C : Dag ι) : List Iv := C.foldl (fun ivs g => ivs ++ [g.derive i
 /-- **The window, proven** (property/v1's interval analysis over the whole DAG): every constant, affine map,
 s8-family step and gather has its derived interval within its declared one, every affine map its declared interval
 within s32 (where `I32Add`, `I32Sub` and `Bf16ToF32` don't wrap), and every s8-family step its operands' derived
-intervals within
-their formats and its declared interval within s32. -/
+intervals within their formats and its declared interval within s32. -/
 def Proven (C : Dag ι) : Prop :=
   ∀ i (h : i < C.length),
     let g := C[i]
