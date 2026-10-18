@@ -105,7 +105,7 @@ def test_a_batch_hidden_row_is_covered_by_the_planes_no_manifest_row_spells():
     man = {"complete": True, "manifest_digest": "m" * 64, "identities": rows,
            "engine_steps": [{"engine_step": s, "members": [{"request_id": q, "rows": n} for q, n in rows_of[s].items()], "rows": sum(rows_of[s].values()),
                              "n_seq": 2} for s in (0, 1)]}
-    widths = MF.m1_class_widths(1, 128, 64)
+    widths = MF.hidden_stream_widths(1, 128, 64)
     lay = {0: [{"name": f"fa2.m1/L0/s{i}/g4x{sl}x1/{c}", "numel": 4 * sl * w} for i, sl in enumerate(rows_of[0].values()) for c, w in widths.items()],
            1: [{"name": "fa2.m1/L0/g8x1x1", "numel": MF.mat_total_words(*geo[1])}]}
     cov = coverage_check(man, lay)
@@ -121,7 +121,7 @@ def test_a_batch_hidden_row_is_covered_by_the_planes_no_manifest_row_spells():
 
 
 def _seq_planes(rows: list[int], *, h: int = 4, nb: int = 2, ms: bool = False) -> list[tuple[str, int]]:
-    return [(f"s{i}/g{h}x{sl}x{nb}/{c}", h * sl * w) for i, sl in enumerate(rows) for c, w in MF.m1_class_widths(nb, 128, 64, ms).items()]
+    return [(f"s{i}/g{h}x{sl}x{nb}/{c}", h * sl * w) for i, sl in enumerate(rows) for c, w in MF.hidden_stream_widths(nb, 128, 64, ms).items()]
 
 
 @pytest.mark.parametrize("active, members, why", [
@@ -134,8 +134,10 @@ def _seq_planes(rows: list[int], *, h: int = 4, nb: int = 2, ms: bool = False) -
     ([3, 1], _seq_planes([3, 1]) + _seq_planes([3])[:1], "s0/g4x3x2/S committed twice"),
     ([3, 1], _seq_planes([3, 1]) + [("s0/g4x3x2/bot", 1)], None),                           # a ⊥ padding plane is not the launch's stream
     ([3, 1], [("g8x3x2", MF.mat_total_words(8, 3, 2, 128, 64))], None),
+    ([3, 1], [("g8x12x2", MF.mat_total_words(8, 12, 2, 128, 64))], None),                # FA3's rows with its KV group's heads, an old manifest's M without
+    ([3, 1], [("g8x2x2", MF.mat_total_words(8, 2, 2, 128, 64))], "2 executing sequence(s) of this launch stage g8x>=3x2"),
     ([3], [("g4x3x2", MF.mat_total_words(4, 3, 2, 128, 64))], None),
-    ([3], [("g8x3x2", MF.mat_total_words(8, 3, 2, 128, 64))], "1 executing sequence(s) of this launch stage g4x3x<=2")])
+    ([3], [("g8x3x2", MF.mat_total_words(8, 3, 2, 128, 64))], "1 executing sequence(s) of this launch stage g4x>=3x<=2")])
 def test_batch_launch_shortfall_names_what_the_committed_stream_lacks(active, members, why):
     """`format.batch_launch_shortfall` over a two-sequence FA2 launch (4 heads a sequence, NB 2, the legacy tile): None when the committed
     tensors are its whole stream at the executing sequences' rows, else the shortfall named."""
