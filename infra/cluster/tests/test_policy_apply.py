@@ -101,7 +101,7 @@ def apply(capsys, node: Node, which: str = "nebius-1", *args: str, other: Node |
 def _args(args: tuple[str, ...]) -> tuple:
     a = list(args)
     get = lambda flag: a[a.index(flag) + 1] if flag in a else None
-    return get("--key"), "--apply" in a, get("--by"), get("--reason")
+    return get("--key"), "--apply" in a, get("--as"), get("--reason")
 
 
 def steps(rep: dict) -> dict[str, tuple[str, str | None]]:
@@ -129,12 +129,12 @@ def test_a_dry_run_plans_each_applier_and_writes_nothing(tmp_path, capsys):
     assert text.startswith(f"{N1}: 4 to change, 0 by hand, 1 skipped, 0 unknown\n")
     assert f"  skip     {N1}.pools.checks  declared 8-95,128-159  live 32-95,128-159  (no applier: the node's own" in text
     assert f"  change   {N1}.direct-cpus  live 0-95 -> 0-95,128-159  ({DCPUS}; owner infra)\n" in text
-    assert text.endswith("(a dry run: --apply --by WHO --reason WHY writes it)\n")
+    assert text.endswith("(a dry run: --apply --as WHO --reason WHY writes it)\n")
 
 
 def test_apply_writes_each_file_records_who_and_why_reads_it_back_and_a_second_apply_is_a_no_op(tmp_path, capsys):
     node = n1(tmp_path, N1_DRIFT)
-    rc, reps = apply(capsys, node, "nebius-1", "--apply", "--by", "infra", "--reason", "back to the description")
+    rc, reps = apply(capsys, node, "nebius-1", "--apply", "--as", "infra", "--reason", "back to the description")
     assert rc == 0, "pools.checks, which has no applier, follows the check slots"
     assert reps[N1]["result"] == {"ok": True, "wrote": [SLOTS, DCPUS, LEAN, DROPIN], "left": {}}
     note = f"cluster policy apply, infra {STAMP}"
@@ -154,7 +154,7 @@ def test_apply_writes_each_file_records_who_and_why_reads_it_back_and_a_second_a
     assert (tmp_path / "n1/systemctl.log").read_text().splitlines() == [
         "show -p AllowedCPUs --value user.slice", "daemon-reload", "show -p AllowedCPUs --value user.slice", "--user daemon-reexec"]
     after = node.snapshot()
-    rc, reps = apply(capsys, node, "nebius-1", "--apply", "--by", "infra", "--reason", "again")
+    rc, reps = apply(capsys, node, "nebius-1", "--apply", "--as", "infra", "--reason", "again")
     assert rc == 0 and reps[N1]["steps"] == [] and reps[N1]["result"] is None and node.snapshot() == after
     assert policy.main_diff(NEBIUS, "nebius-1", True, runner=lambda n: node.run) == 0
 
@@ -163,7 +163,7 @@ def test_node_2_writes_its_slot_and_cpu_set_lines_behind_its_gate_and_leaves_the
     files = {**N2_FILES, SLOTS: N2_FILES[SLOTS].replace("64-119", "64-127"), CPUSETS: N2_FILES[CPUSETS].replace("0-47 4 40", "0-47 2 40"),
              DROPIN: "[Service]\nDelegate=cpu memory pids\n"}
     node = Node(tmp_path / "n2", files)
-    rc, reps = apply(capsys, node, "nebius-2", "--apply", "--by", "infra", "--reason", "slot b off the device cores")
+    rc, reps = apply(capsys, node, "nebius-2", "--apply", "--as", "infra", "--reason", "slot b off the device cores")
     assert rc == 1, "the drop-in is left by hand"
     assert steps(reps[N2]) == {f"{N2}.check-slots.b": ("change", SLOTS), f"{N2}.fill.cpu-sets.bc-e6a46970-b6ef-5738-af64-182b143075d4":
                                ("change", CPUSETS), f"{N2}.user-cpuset.delegate": ("by-hand", DROPIN)}
@@ -177,7 +177,7 @@ def test_node_2_writes_its_slot_and_cpu_set_lines_behind_its_gate_and_leaves_the
     assert [r["key"].split(".")[-1] for r in ledger.read(tmp_path / "n2" / LOG.lstrip("/"))] == [
         "b", "bc-e6a46970-b6ef-5738-af64-182b143075d4"]
     after = node.snapshot()
-    rc, reps = apply(capsys, node, "nebius-2", "--apply", "--by", "infra", "--reason", "again")
+    rc, reps = apply(capsys, node, "nebius-2", "--apply", "--as", "infra", "--reason", "again")
     assert rc == 1 and [s["action"] for s in reps[N2]["steps"]] == ["by-hand"] and node.snapshot() == after
 
 
@@ -185,7 +185,7 @@ def test_unknown_keys_are_never_applied(tmp_path, capsys):
     node = n1(tmp_path, {**N1_DRIFT, DCPUS: None})
     (tmp_path / "n1" / DCPUS.lstrip("/")).mkdir()   # `cat` of it fails, as an unreadable file's would
     before = node.snapshot()
-    rc, reps = apply(capsys, node, "nebius-1", "--apply", "--by", "infra", "--reason", "r")
+    rc, reps = apply(capsys, node, "nebius-1", "--apply", "--as", "infra", "--reason", "r")
     assert rc == 3 and reps[N1]["files"] == {} and reps[N1]["result"] is None
     assert {s["action"] for s in reps[N1]["steps"]} == {"unknown"}
     assert all("never applied while unread: the policy files couldn't be read" in s["why"] for s in reps[N1]["steps"])
@@ -198,7 +198,7 @@ def test_unknown_keys_are_never_applied(tmp_path, capsys):
 def test_node_2_is_never_written_while_its_gate_refuses(tmp_path, capsys, status, why):
     node = Node(tmp_path / "n2", {**N2_FILES, SLOTS: "a 0-63\n"}, status=status)
     before = node.snapshot()
-    rc, reps = apply(capsys, node, "nebius-2", "--apply", "--by", "infra", "--reason", "r")
+    rc, reps = apply(capsys, node, "nebius-2", "--apply", "--as", "infra", "--reason", "r")
     assert rc == 3 and node.snapshot() == before and len(node.ran) == 1
     [s] = [s for s in reps[N2]["steps"] if s["key"] == f"{N2}.check-slots.a"]
     assert s["action"] == "unknown" and why in s["why"]
@@ -208,7 +208,7 @@ def test_a_window_that_starts_after_the_read_refuses_the_write(tmp_path, capsys)
     node = Node(tmp_path / "n2", {**N2_FILES, SLOTS: "a 0-63\n" + N2_FILES[SLOTS].split("\n", 1)[1]})
     node.after[2] = lambda: node.put({f"{policy.FILL}/windows": "2026-10-03T19:41Z 30 # booked meanwhile\n"})
     before = node.snapshot()
-    rc, reps = apply(capsys, node, "nebius-2", "--apply", "--by", "infra", "--reason", "r")
+    rc, reps = apply(capsys, node, "nebius-2", "--apply", "--as", "infra", "--reason", "r")
     assert rc == policy_apply.FAILED and steps(reps[N2])[f"{N2}.check-slots.a"] == ("change", SLOTS)
     assert reps[N2]["result"] == {"ok": False, "wrote": [], "why": "nothing written: refused window 2026-10-03T19:41Z (30 min) is "
                                   "on or starts within 60 s: " + STATUS, "left": {f"{N2}.check-slots.a": "change"}}
@@ -219,7 +219,7 @@ def test_a_window_that_starts_after_the_read_refuses_the_write(tmp_path, capsys)
 def test_a_file_changed_since_it_was_read_is_not_written(tmp_path, capsys):
     node = n1(tmp_path, N1_DRIFT)
     node.after[6] = lambda: node.put({LEAN: N1_DRIFT[LEAN] + "build 1\n"})
-    rc, reps = apply(capsys, node, "nebius-1", "--apply", "--by", "infra", "--reason", "r")
+    rc, reps = apply(capsys, node, "nebius-1", "--apply", "--as", "infra", "--reason", "r")
     assert rc == policy_apply.FAILED and reps[N1]["result"]["why"] == f"nothing written: changed {LEAN}"
     assert reps[N1]["result"]["wrote"] == []
     assert node.text(SLOTS) == N1_DRIFT[SLOTS] and node.text(DCPUS) == N1_DRIFT[DCPUS] and node.text(LOG) is None
@@ -229,7 +229,7 @@ def test_user_slice_losing_its_allowed_cpus_fails_the_apply(tmp_path, capsys):
     node = n1(tmp_path, {DROPIN: N1_DRIFT[DROPIN]})
     sysctl = tmp_path / "n1/bin/systemctl"
     sysctl.write_text(sysctl.read_text().replace("exit 0", f'[ "$1" = daemon-reload ] && echo 0-191 > {tmp_path}/n1/allowed\nexit 0'))
-    rc, reps = apply(capsys, node, "nebius-1", "--apply", "--by", "infra", "--reason", "r")
+    rc, reps = apply(capsys, node, "nebius-1", "--apply", "--as", "infra", "--reason", "r")
     assert rc == policy_apply.FAILED and reps[N1]["result"]["wrote"] == [DROPIN]
     assert "user.slice AllowedCPUs moved from 0-119 to 0-191: run sudo vy-device-cores" in reps[N1]["result"]["why"]
 
@@ -256,7 +256,7 @@ def test_key_plans_only_that_key_and_those_under_it(tmp_path, capsys):
 
 def test_two_lines_naming_one_slot_are_left_to_a_person(tmp_path, capsys):
     node = n1(tmp_path, {LEAN: "check 2\naudit 2\naudit 3\n"})
-    rc, reps = apply(capsys, node, "nebius-1", "--apply", "--by", "infra", "--reason", "r")
+    rc, reps = apply(capsys, node, "nebius-1", "--apply", "--as", "infra", "--reason", "r")
     [s] = reps[N1]["steps"]
     assert rc == 1 and s["action"] == "skip" and s["why"] == f"2 lines of {LEAN} name audit: fix it by hand"
     assert reps[N1]["result"] is None and node.text(LEAN) == "check 2\naudit 2\naudit 3\n"
@@ -288,8 +288,8 @@ def test_a_write_touches_only_policy_files_and_the_log_and_never_reverts_or_rest
 def test_the_cli_refuses_apply_without_who_and_why(capsys, monkeypatch, tmp_path):
     node = n1(tmp_path, N1_DRIFT)
     monkeypatch.setattr(policy_apply.status, "ssh", lambda dest, key=None: node.run)
-    assert cli.main(["policy", "apply", "--on", "nebius-1", "--apply", "--by", "infra"]) == 2
-    assert "--apply needs --by (the handle who decided it) and --reason (why)" in capsys.readouterr().out
+    assert cli.main(["policy", "apply", "--on", "nebius-1", "--apply", "--as", "infra"]) == 2
+    assert "--apply needs --as (the handle who decided it) and --reason (why)" in capsys.readouterr().out
     before = node.snapshot()
     assert cli.main(["policy", "apply", "--on", "nebius-1", "--json"]) == 1
     assert json.loads(capsys.readouterr().out)["applied"] is False and node.snapshot() == before

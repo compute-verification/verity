@@ -98,7 +98,7 @@ uv run cluster policy show [--on nebius-1|nebius-2|all] [--key K] [--json]   # t
 uv run cluster policy diff [--on nebius-1|nebius-2|all] [--json]   # over SSH: exit 1 drift, 3 a value unread
 uv run cluster policy override KEY VALUE --until 2026-10-04T10:30:00Z --by WHO --reason R [--apply]   # on KEY's node
 uv run cluster policy apply [--on nebius-1|nebius-2|all] [--key K] [--json]   # the plan: each change that converges a key
-uv run cluster policy apply --on nebius-2 [--key K] --apply --by WHO --reason R   # write it over SSH, log it, read it back
+uv run cluster policy apply --on nebius-2 [--key K] --apply --as WHO --reason R   # write it over SSH, log it, read it back
 ~~~
 
 Policy is what node services read from outside git: node 1's lease pools (the `n1-lease` panes' environment), Kueue's
@@ -114,7 +114,7 @@ three in force to `n1-lease.limits` in its lease directory, and `diff` reads the
 environment.
 
 `cluster policy apply` (`policy_apply.py`) converges the rest where it can. For each key `diff` calls drift it plans the
-exact change, as a diff of each file, and with `--apply --by WHO --reason R` writes it over the same SSH path, appends one
+exact change, as a diff of each file, and with `--apply --as WHO --reason R` writes it over the same SSH path, appends one
 `apply` record per key (key, value, was, who, why, the file's sha256 before and after) to the node's log, and reads the node
 again to confirm each key reads as in force. Its appliers: the check and Lean slot files and `fill/cpu-sets` (the key's line,
 the old one kept as a comment), `gpu-lease`'s direct-run maps (written whole: `gpu-lease` reads them whole), and the cpuset

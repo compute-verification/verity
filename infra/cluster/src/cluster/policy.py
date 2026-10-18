@@ -849,8 +849,8 @@ def main_override(description: str | Path, key: str, value: str, until: str, by:
         print(f"{'overrode' if apply else 'would override'} {key}: {was} -> {v} until {until}, by {by}: {reason}"
               f"{'' if apply else f' (in {path}; --apply records it)'}\n"
               "Nothing carries it to the node but n1_lease.py, for its pool's max, borrow and borrow-until while $VY_POOL_POLICY "
-              f"is set, and `cluster policy apply --key {key} --apply`: set any other value yourself. `cluster policy diff` "
-              "compares the live value with it.")
+              f"is set, and `cluster policy apply --key {key} --apply --as WHO --reason R`: set any other value yourself. "
+              "`cluster policy diff` compares the live value with it.")
     return 0
 
 

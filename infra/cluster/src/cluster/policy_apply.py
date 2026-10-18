@@ -388,7 +388,7 @@ def render(plans: list[Plan], results: dict[str, dict[str, Any]], applying: bool
         if r is not None:
             out.append(f"  applied and read back as in force: {', '.join(r['wrote'])}" if r["ok"] else f"  NOT APPLIED: {r['why']}")
     if not applying and any(p.files for p in plans):
-        out.append("(a dry run: --apply --by WHO --reason WHY writes it)")
+        out.append("(a dry run: --apply --as WHO --reason WHY writes it)")
     return "\n".join(out) + "\n"
 
 
@@ -398,7 +398,7 @@ def main_apply(description: str | Path, which: str, prefix: str | None, applying
     """Plan (and with `applying` write) the change of every key that differs: 0 nothing left to change, 1 a change planned
     or a key skipped, 3 a key unknown, 4 an apply that failed or didn't read back as in force, 2 a refused command."""
     if applying and not ((by or "").strip() and (reason or "").strip()):
-        print("cluster policy apply: refused: --apply needs --by (the handle who decided it) and --reason (why)")
+        print("cluster policy apply: refused: --apply needs --as (the handle who decided it) and --reason (why)")
         return 2
     d = policy._described(description)
     if d is None:

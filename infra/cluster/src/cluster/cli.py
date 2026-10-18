@@ -27,7 +27,7 @@
                                                         # (policy.py); exit 1 drift, 3 a value unread, 2 a bad description
   cluster policy override KEY VALUE --until T --by WHO --reason R [--log L] [--apply] [--json]   # on KEY's node: KEY is
                                                         # VALUE until T (UTC); a dry run without --apply; exit 2 refused
-  cluster policy apply [--description D] [--on N|all] [--key K] [--apply --by WHO --reason R] [--json]   # the change that
+  cluster policy apply [--description D] [--on N|all] [--key K] [--apply --as WHO --reason R] [--json]   # the change that
                                                         # converges each key that differs, a plan unless --apply writes it
                                                         # over SSH and reads it back (policy_apply.py); exit 1 a change
                                                         # left or a key skipped, 3 a key unknown, 4 an apply that failed
@@ -180,7 +180,7 @@ def main(argv: list[str] | None = None) -> int:
     pa.add_argument("--on", dest="node", choices=("nebius-1", "nebius-2", "all"), default="all")
     pa.add_argument("--key", help="only this key and the keys under it (exit 2 when there are none)")
     pa.add_argument("--apply", action="store_true", help="write it and read it back (else print the plan)")
-    pa.add_argument("--by", help="with --apply: the handle who decided it")
+    pa.add_argument("--as", dest="by", metavar="HANDLE", help="with --apply: the handle who decided it")
     pa.add_argument("--reason", help="with --apply: why, recorded with each change in the node's log")
     a = ap.parse_args(renamed(argv, {"--node": "--on"}))
 
