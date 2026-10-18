@@ -1,4 +1,4 @@
-"""The registration record (`docs/audit-protocols.md` §0.1): what serving is committed to, fixed before the verifier draws.
+"""The registration record (README "The registration record"): what serving is committed to, fixed before the verifier draws.
 
     {"format": "verity/registration/v1", "protocol": "verity/sampled-proofs/one-stage/v1",
      "program": "<SHA-512 of the program>", "query": "<SHA-512 of the query>", "partition": "<partition digest>",

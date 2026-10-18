@@ -9,8 +9,8 @@ union counts it once.
 
 The law is stated over named levels of a partition hierarchy (`verity.ml.circuits.partition.Level`): each level's members
 partition the members of the level above, and a level is either drawn (`Bernoulli`, `Subset`, `Stratified`) or only
-groups.  The names are the producer's labels (sampled proofs' two-stage law is one level "replay" drawn
-`Bernoulli(p * k / n_v)`); the profile carries draws, never roles.
+groups.  The names are the producer's labels (sampled proofs' one-stage profile is one level "unit"); the profile
+carries draws, never roles.
 """
 
 from __future__ import annotations
@@ -80,10 +80,10 @@ class IntegrityProfile:
     `drawn` counts the members actually drawn at each level, all passed.
 
     A profile of more than one level is valid only when its checked level is committed before the first draw
-    (one-stage, or two-stage with every intermediate committed up front).  When the checked level is committed after
+    (as serving commits every value, at serve time).  When the checked level is committed after
     a draw it follows, the prover picks how many checked members of a drawn member are wrong after seeing that draw,
     and `accept(m)` over m wrong checked members no longer bounds it; such a lifecycle's profile is over the level
-    committed first (`docs/audit-protocols.md` §2.9).
+    committed first.
 
     Let n be the checked members inside one Bernoulli member (the whole transcript when no level is Bernoulli-drawn,
     with p = 1).  The k-subset is uniform over all n of them, so undrawn levels in between don't change the law: a
@@ -338,7 +338,7 @@ def _key_lt(a: Stratum, ma: int, b: Stratum, mb: int) -> bool:
 @dataclass(frozen=True, slots=True)
 class Stratified:
     """The verifier's law as independent uniform draws inside disjoint strata of the partition's units (the `stratified`
-    law of `docs/audit-protocols.md` §2.3): the uniform k-subset is one stratum, and a template floor is a stratum with
+    law): the uniform k-subset is one stratum, and a template floor is a stratum with
     k >= 1.  The strata are fixed by the agreement before registration, like every law.
 
     A wrong-unit set with m_s units in stratum s escapes the draw with prod_s C(n_s - m_s, k_s) / C(n_s, k_s), which
