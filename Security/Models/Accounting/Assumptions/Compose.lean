@@ -37,11 +37,16 @@ operands and skips after querying later rounds' seeds):
 
 * `SeedExtractedAt`: the random-oracle premise, proofs' `Pouw.Assumptions.SeedExtraction` at the window's seeds: the
   seed each round's accepted proofs derive is the oracle's answer to one of the cheater's queries at the input its
-  commitment names, except on one event of probability `ε_id(rounds·T_q, rounds)`, per prover;
+  commitment names, except on one event of probability `ε_id(T, |J|)`, per prover, `T` the window's SHA-512 calls
+  and `|J|` the seeds the proofs name;
 * `SeedLuckAt`: per round, round `r`'s gain at exchange rate `κ` is at most the gain of the query its proofs' seed
   answers, whose moment over that one answer, every other answer of the window fixed, is at most `1` at the seed
-  group's rate, off a binding event of probability `δ_b`: at `κ = 4` for folded tiles (GRIND's `TemplateMoment` point)
-  and at `κ₀` for whole ones.
+  group's rate, off a binding event of probability `δ_b`: at `κ = 4` and the folded rate for folded tiles (GRIND's
+  `TemplateMoment` point), and at `κ₀` and the whole rate for whole ones (the guess bound's);
+* `WholeEntropyAt` (optional, read only by `Guarantees.Compose.WholeLuckOfEntropy`): a tile skipped whole keeps its
+  checked values with probability at most `e^{−h}` per seed query, jointly over the round's whole tiles, given the
+  cheater's view. At `h = 64·ln 2` it gives `SeedLuckAt`'s whole half at the guess bound's rate; at `K/8` nats, the
+  card RT-COMPOSE r6's fix (b) asks for, it would give it at the folded rate.
 
 The physical layer's (`CreditOfWork`):
 
@@ -71,7 +76,7 @@ oracle's answer at a committed input**: on the window's oracle answers `a` (roun
 `r`-th coin, `Fin T_q → B`, all uniform and independent), `sq a r` is the query of round `r` whose answer its drawn
 units derive their seed from in-circuit (decision 105), at the input `SHA-512(tag ‖ salt ‖ position ‖ root(A) ‖ root(B))`
 that names the roots the round committed, and it exists for every round except on one event `Off` of probability at
-most `ε_id(rounds·T_q, rounds)`.
+most `ε_id(T, |J|)`.
 
 The seeded statements are stated in the random-oracle model: the window's seeds are uniform answers to the prover's
 queries naming its operands' roots (the coin type `Paths (Fin T_q → B) rounds`), and this premise is where that model
@@ -89,13 +94,22 @@ Its content is gap (4)'s straight-line extraction, with no rewinding: each drawn
 the roots and position its seed is derived from, and the extractor reads the query off the cheater's query log. The
 oracle stands for SHA-512 domain-separated for the commitments' trees as well as the seeds, one oracle, so the
 witnessed input differs from every query's only if the queries hold a collision or open a node no query answered.
-`ε_id` is proofs' formula, `εid T |J|` at `T = rounds·T_q` evaluations under the window's salt and `|J| = rounds`
-seeds, whose expected instance is `(T² + T·|J|)/2^512`. It is false for a service whose proofs don't bind the seed to
-the committed roots and position: a position the prover picks inside the unit picks the seed (decision 106's
-condition). -/
+
+`ε_id` is proofs' formula `εid T |J|`, and the statement takes `T` and `|J|` as given, counted so:
+* a query of round `r` (one of its `T_q`) is one try of the round's roots, and its answer (`B`) is every position seed
+  of the round's units at those roots, so one query is `units_r` SHA-512 calls;
+* `T` counts the cheater's SHA-512 calls in the window under the one oracle: its `T_q` tries a round times the round's
+  units' position seeds, plus every call of the commitments' trees, so `T ≥ Σ_r T_q·units_r`, not `rounds·T_q`;
+* `|J|` counts the seed inputs the proofs name, one a drawn unit's seed, at most `Σ_r units_r`, not `rounds`.
+The random-oracle instance of `ε_id` is `(T² + T·|J|)/2^512` (`2^-256` at `T = 2^128`), and it is kept apart from
+the reading of SHA-512 outside the model: the collision part read through `ecr/sha-512` on a finder that runs the play
+(`E[cost]/2^256`, about `T/2^256`, `2^-128` at `T = 2^128`) prices collisions of SHA-512 itself, which the model has
+none of. That is the weaker figure, and the one a reader quoting `ε_id` per prover outside the model uses. It is false for a
+service whose proofs don't bind the seed to the committed roots and position: a position the prover picks inside the
+unit picks the seed (decision 106's condition). -/
 def SeedExtractedAt {B : Type} [Fintype B] {Tq M : ℕ} (sq : Paths (Fin Tq → B) M → Fin M → Option (Fin Tq))
-    (εid : ℕ → ℕ → ℝ) : Prop :=
-  ∃ Off : Paths (Fin Tq → B) M → Prop, prob Off ≤ εid (M * Tq) M ∧ ∀ a, ¬ Off a → ∀ r, (sq a r).isSome = true
+    (εid : ℕ → ℕ → ℝ) (T J : ℕ) : Prop :=
+  ∃ Off : Paths (Fin Tq → B) M → Prop, prob Off ≤ εid T J ∧ ∀ a, ¬ Off a → ∀ r, (sq a r).isSome = true
 
 /-- `accounting-compose-seed-luck` (proposed; GRIND's premise, note:compute-accounting/20261018T0700Z-draft-grind).
 **A seed group's template luck at exchange rate `κ`, per oracle query, over the whole window's oracle**: on the
@@ -125,18 +139,76 @@ At `s = folded`, `κ = 4` and `θ` from `Scheme.seedRate` (`seedTheta`) it is th
 `Accounting.Guarantees.TS.TemplateMoment` (32 columns, a word dead with probability at most `2^-w` over the row bits,
 then lucky at most `½` over the column bits, `θ = 1/(256·r)` a product) and `PrivateMoment`, the `½` from
 `Accounting.Guarantees.HMu.CoinPointMassHalf`. What stays assumed: that a seed group's gain decomposes into its
-segments' (argued in GRIND, not stated), that the query fixes the skip decision (E3), the binding term, and the
-oracle (`SeedExtractedAt`). At `s = whole` and `κ₀` it is the guess bound per query (`LuckMoment`, `PrivateMoment` at
-the fold state's guess), at the same rate. It is taken at `κ = 4`, not at the live luck `p = 7/8`: from `p = 7/8`
-alone no `θ > 0` has moment at most `1` at `κ = 4`, which needs `κ > p/(1 − p) = 7` (RT-COMPOSE r4). So the seeded
-statements read a stronger luck than the live ones: `TemplateMoment` sees each word's row and column bits, where the
-live statements' (H-μ) and B′ see a folded tile's one point mass. -/
+segments' (argued in GRIND, not stated); E3 in its one-oracle form, that query `q`'s own answer reaches round `r`'s
+gain only through `same` (the round's skips and the values the run commits for its tiles may read every other answer
+of the window, but not `q`'s, which decides only whether they are the honest ones); the binding term; and the oracle
+(`SeedExtractedAt`). A query is one try of the round's roots, whose answer is every position seed of the round's
+units (`SeedExtractedAt`'s count).
+
+At `s = whole` and `κ₀` it is the guess bound per query (`LuckMoment`, `PrivateMoment` at the fold state's guess) at
+the whole rate (`wholeTheta`, from `Scheme.wholeRate`), not the folded one: at the folded rate a whole tile's moment
+is `guess·e^{K/8}` (`e^{467}` at `K = 4096`), past `1` for `K ≥ 355` at `guess = 2^-64` (RT-COMPOSE r6). At the
+guess bound's rate, `x₀ = 44.34` nats a tile at `2^-64` and `κ₀ = 0.092`, it follows from `WholeEntropyAt` at
+`h = 64·ln 2` a tile (`Guarantees.Compose.WholeLuckOfEntropy`); at the folded rate it would need `WholeEntropyAt` at
+`K/8` nats a tile (to within `e^{−κ₀·K/8}`; RT-COMPOSE r6's fix (b), not taken).
+
+It is taken at `κ = 4`, not at the live luck `p = 7/8`: from `p = 7/8` alone no `θ > 0` has moment at most `1` at
+`κ = 4`, which needs `κ > p/(1 − p) = 7` (RT-COMPOSE r4). So the seeded statements read a stronger luck than the live
+ones: `TemplateMoment` sees each word's row and column bits, where the live statements' (H-μ) and B′ see a folded
+tile's one point mass.
+
+The premium's `T_q` and the binding's `δ_b` and `δ_bind` are priced at one prover budget `T`, the same cheater's: at
+`T = 2^128` a fork finder of that cost gives `δ_bind ≈ |L|·2^-64` (`Guarantees.Compose.BindingOfECR` at its best
+`δ'`), not negligible beside `δ_s = 2^-40` for `|L|` past `2^24`, and at `T = 2^80` it gives `|L|·2^-88`, where the
+premium is `0.73` of its `2^128` value. -/
 def SeedLuckAt {B V : Type} [Fintype B] [Fintype V] {Tq M : ℕ} (rd : V → ℕ)
     (R : JointRun (Paths (Fin Tq → B) M) V) (w : V → ℝ) (s : Mode) (κ : ℝ) (θ : ℕ → ℝ)
     (sq : Paths (Fin Tq → B) M → Fin M → Option (Fin Tq)) (δb : ℝ) : Prop :=
   ∀ r : Fin M, ∃ (g : Fin Tq → Paths (Fin Tq → B) M → ℝ) (Break : Paths (Fin Tq → B) M → Prop),
     (∀ q a, ∑ b : B, Real.exp (θ r.val * g q (redraw a r q b)) ≤ Fintype.card B) ∧ prob Break ≤ δb ∧
       ∀ a q, ¬ Break a → sq a r = some q → roundGain rd r.val R w s κ a ≤ g q a
+
+open Classical in
+/-- `accounting-compose-whole-entropy` (optional, proposed: RT-COMPOSE r6's fix (b) at `h = K/8`, card 8b00536a's
+seeded reading at `h = 64·ln 2`; read only by `Guarantees.Compose.WholeLuckOfEntropy`). **A tile skipped whole keeps
+its checked values with probability at most `e^{−h}` per seed query, jointly over the round's whole tiles, given the
+cheater's view**: on the window's oracle answers `a`, at every round `r` there are, per query `q`, a set `Wh q a` of
+round `r`'s tiles and a set `Lk q a` of lucky ones, `Wh q` not reading query `q`'s own answer (E3: the whole skips are
+chosen before it), such that for every `S ⊆ Wh q a` at most a share `e^{−Σ_{v∈S} h v}` of `q`'s answers puts all of
+`S` in `Lk q`, and a binding event `Break` of probability at most `δ_b`, off which, where the proofs' seed answers `q`
+(`sq a r = some q`), round `r`'s whole tiles are `Wh q a` and a whole tile whose checked values are honest (`same`)
+is in `Lk q a`.
+
+What a whole-skipped H1 + fx1 tile must reproduce (`verity/core/protocols/pouw/circuit/h1tile.py`): its served `z`,
+each cell's exact product, which reads no salt, and the CP-W receipt, `2·(K/32 + m)` 32-bit words (`256` served at
+`K = 4096`, then `O′` and `D`), each set's pair the XOR over the tile's 32 lanes and 8 duo chains of `PouwXinFinal`
+of the fx1 state, which starts from the lane's 512 seed-derived key bits (16,384 a tile). The fold state itself is
+not compared. Given a view that doesn't read the query's answer (E3), `z` is fixed and no receipt bit is: fx1's word
+step is a bijection of the state (`Pouw.Guarantees.Receipt.Fx1StepBijective`), so each set's 64-bit checkpoint is
+near-uniform over the keys (uniform if `PouwXinFinal` is balanced), and tiles read disjoint key blocks. So
+`h = 64·ln 2` a tile, one set's checkpoint, is the rigorous core, a fold-state size rather than a margin: it is
+conservative against the receipt's `64·(K/32 + m)` bits, about 11 times `K/(8·ln 2)` at every `K`. With it
+`WholeLuckOfEntropy` gives `SeedLuckAt`'s whole half at the guess bound's rate (`Scheme.wholeRate`, `x₀ = 44.34`
+nats a tile).
+
+At `h = K/8` nats a tile (`K/(8·ln 2)` bits, 739 at `K = 4096`) it would give it at the folded rate
+(`Scheme.seedRate`), the card fix (b) asks for: "A tile skipped whole keeps its checked values with probability at
+most `e^{−K/8}` per seed query given the cheater's view." That needs about `K/355` sets' checkpoints (11.5 at
+`K = 4096`, 9% of the served ones) jointly near-uniform, so fx1's set-to-set map behaving as a keyed random
+permutation, which is a heuristic, not proved (duo has a differential trail at `2^-32.05`), and E3 for whole skips
+under seeded coins. It fails if the cheater's view pins the receipt without the fold: a key block read before the
+skip, or checkpoints that one computed set determines. -/
+def WholeEntropyAt {B V : Type} [Fintype B] [Fintype V] {Tq M : ℕ} (rd : V → ℕ)
+    (R : JointRun (Paths (Fin Tq → B) M) V) (h : V → ℝ)
+    (sq : Paths (Fin Tq → B) M → Fin M → Option (Fin Tq)) (δb : ℝ) : Prop :=
+  ∀ r : Fin M, ∃ (Wh Lk : Fin Tq → Paths (Fin Tq → B) M → Finset V) (Break : Paths (Fin Tq → B) M → Prop),
+    (∀ q a b, Wh q (redraw a r q b) = Wh q a) ∧ (∀ q a v, v ∈ Wh q a → rd v = r.val) ∧
+    (∀ q a (S : Finset V), S ⊆ Wh q a →
+      ((Finset.univ.filter fun b : B => S ⊆ Lk q (redraw a r q b)).card : ℝ) ≤
+        Fintype.card B * Real.exp (-∑ v ∈ S, h v)) ∧
+    prob Break ≤ δb ∧
+    ∀ a q, ¬ Break a → sq a r = some q → ∀ v, rd v = r.val →
+      ((R.mode a v = .whole ↔ v ∈ Wh q a) ∧ (R.mode a v = .whole → R.same a v → v ∈ Lk q a))
 
 /-- `accounting-compose-fold-opt` (assumed; FOLD-OPT(fx1)'s mechanical fact, at least 4 issue slots a word folded).
 **FOLD-OPT_μ per word folded**: at every certificate, a run that folds `folded` committed words has its fold priced at

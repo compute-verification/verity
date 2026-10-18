@@ -58,15 +58,16 @@ defined from the IR (`Declared.layer`), so `StageCuts` (under `LayerCommitted`, 
    `T_cred > 0` (`Model.Wf`) to clear the division.
 8. `CircuitCredit`: step 6 at `a = aOf`, `b = bOf` (`≥ 0` by `stars_nonneg` and `Model.Wf`), and step 7 on each run
    off its event at `r = rOf`; the certificate is issued at `.live`.
-9. `CircuitWorkSeeded`: `SeedExtractedAt` gives one event `Off` of probability at most `ε_id(rounds·T_q, rounds)` off
-   which every round's `sq a r` is a query. Per round `r` and mode, `SeedLuckAt` gives the queries' gains `g` and
-   `Break`; off `Off` and `Break` round `r`'s gain is at most `g (sq a r)`, so at most `max_q g q`. Where
-   `θ_r = seedTheta r > 0`, GRIND's `Accounting.SecurityProofs.TS.GrindPremiumAt` (at `Ω₀` the window's other answers,
-   `redraw`'s one answer the query's, `M = 1`, its own break event empty) bounds `∃ q, ln(T_q/δ_g)/θ_r ≤ g q` by `δ_g`,
-   so round `r`'s gain `L − κ·U` is below `π*_r` except with probability `δ_g + δ_b`, off `Off`; where `θ_r = 0`,
-   `roundPremium` is the round's weight (`roundCone`), which bounds `L` and so the gain (`κ ≥ 0`). A union over the
-   `rounds` rounds and the two modes gives `L_F ≤ 4·U_F + Π` and `L_0 ≤ κ₀·U_0 + Π` off
-   `ε_id + 2·rounds·(δ_g + δ_b)`, with no stage order: each round's moment fixes every other answer of the window, so
+9. `CircuitWorkSeeded`: `SeedExtractedAt` gives one event `Off` of probability at most `ε_id(T, |J|)` off which
+   every round's `sq a r` is a query. Per round `r` and mode, `SeedLuckAt` gives the queries' gains `g` and `Break`;
+   off `Off` and `Break` round `r`'s gain is at most `g (sq a r)`, so at most `max_q g q`. Where `θ_r > 0`
+   (`seedTheta r` folded, `wholeTheta r` whole), GRIND's `Accounting.SecurityProofs.TS.GrindPremiumAt` (at `Ω₀` the
+   window's other answers, `redraw`'s one answer the query's, `M = 1`, its own break event empty) bounds
+   `∃ q, ln(T_q/δ_g)/θ_r ≤ g q` by `δ_g`, so round `r`'s gain `L − κ·U` is below `π*_r` except with probability
+   `δ_g + δ_b`, off `Off`; where `θ_r = 0`, `roundPremium` is the round's weight (`roundCone`), which bounds `L` and so
+   the gain (`κ ≥ 0`). A union over the `rounds` rounds and the two modes gives `L_F ≤ 4·U_F + Π_F` and
+   `L_0 ≤ κ₀·U_0 + Π_0` (`premiumOf` at `seedTheta` and at `wholeTheta`) off `ε_id + 2·rounds·(δ_g + δ_b)`, with no
+   stage order: each round's moment fixes every other answer of the window, so
    a mode that reads a later round's answers is in it. Given the rounds' coins, the service's live draw of a uniform
    `K_d`-subset misses the tiles whose checked values aren't honest with probability at most
    `(1 − ρ·U)^{K_d} ≤ e^{−ρ·K_d·U}`, so an accepted run with `ρ·K_d·U ≥ ln(1/δ_s)` has probability at most `δ_s`.
@@ -74,14 +75,23 @@ defined from the IR (`Declared.layer`), so `StageCuts` (under `LayerCommitted`, 
    share game's pass; `UnitFixed` and step 5's `Covers` on `Declared.atIR`'s layer (`LayerCommitted` by
    `layerCommitted_atIR`) at `jointMode` give the good tiles' words as in step 6. The two layers differ only in their
    cuts, and `UnitFixed`, `Covers` and the game read none of a layer's committed values, so they combine: `WorkAt` at
-   `a·S_F + b·S_0 ≤ max(5a, (1 + κ₀)·b)·U + (a + b)·Π`, strictly below `rOfSeeded`'s first two terms (`a > 0`), with
-   `D₀` as in step 6.
+   `a·S_F + b·S_0 ≤ max(5a, (1 + κ₀)·b)·U + a·Π_F + b·Π_0`, strictly below `rOfSeeded`'s first three terms
+   (`a > 0`), with `D₀` as in step 6. `SeedNamed` (in `ScopeSeeded`) is read by no step: it is the protocol fact under
+   which the `UnitFixed` premise on `Declared.atIR`'s layer can hold, as `LayerCommitted` is for the live pair.
 10. `CircuitCreditSeeded`: step 9 at `a = aOf`, `b = bOf`, and step 7 on each run off its event at `r = rOfSeeded`;
    the certificate is issued at `.seeded`.
 11. `BindingOfECR`: `Accounting.SecurityProofs.TS.DrawnBindingOfFork` gives `Pr[MovedIn] ≤ |L|·√Pr[fork]`; AM–GM,
    `|L|·√x ≤ δ' + |L|²·x/(4δ')`; then `Pr[fork] ≤ F.Pr H + κ` and, where `Claims.ExpectedCR H F` holds,
    `F.Pr H ≤ E[cost]/2^256`, through `ENNReal.ofReal`'s monotonicity and `ofReal_add_le`; where it fails, the right side
    is `⊤` unless `L` is empty, where `MovedIn` can't hold (no slot to move).
+12. `WholeLuckOfEntropy`: per round take `WholeEntropyAt`'s `Wh`, `Lk` and `Break`, and
+   `g q a = Σ_{v ∈ Wh q a} w_v·((1 + κ₀)·[v ∈ Lk q a] − κ₀)`. Off `Break` at `sq a r = some q` the round's whole
+   tiles are `Wh q a` and `same` lands in `Lk q a`, so `roundGain ≤ g q a` (`w ≥ 0`, `1 + κ₀ ≥ 0`). `Wh q` doesn't
+   read `q`'s answer, so on `redraw a r q b` the sum is over one set `W`, and with `x_v = θ_r·w_v`
+   `exp(θ_r·g) = Π_{v ∈ W} (e^{−κ₀x_v} + [v ∈ Lk]·c_v)`, `c_v = e^{x_v} − e^{−κ₀x_v} ≥ 0`
+   (`Finset.prod_add`), `Σ_{S ⊆ W} Π_{v ∈ S} c_v·[S ⊆ Lk]·Π_{v ∉ S} e^{−κ₀x_v}`. Summing over `b`, the entropy
+   conjunct bounds each `Σ_b [S ⊆ Lk]` by `|B|·e^{−Σ_S h}`, and the sum folds back to
+   `|B|·Π_v (e^{−h_v}·e^{x_v} + (1 − e^{−h_v})·e^{−κ₀x_v})`, each factor in `[0, 1]`.
 -/
 
 namespace Accounting.SecurityProofs.Compose
@@ -207,6 +217,9 @@ theorem ServiceCovers : Accounting.Guarantees.Compose.ServiceCovers := by
   sorry
 
 theorem BindingOfECR : Accounting.Guarantees.Compose.BindingOfECR := by
+  sorry
+
+theorem WholeLuckOfEntropy : Accounting.Guarantees.Compose.WholeLuckOfEntropy := by
   sorry
 
 theorem CircuitWork : Accounting.Guarantees.Compose.CircuitWork := by
