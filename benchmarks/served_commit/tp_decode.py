@@ -1,5 +1,6 @@
 """Commit under a TP engine in eager mode (GLM-5.3 TP8): plain served vLLM (`stock`) against one Commit arm in the same engine,
-run by run interleaved at batches B1, B8 and B32, each rank's committer made as `tp-commit` makes it
+run by run interleaved, batch by batch (B1, B8, B32: a Commit run follows the plans only of the committed run before it,
+`native_plans.h`, so each batch's warm-up learns them right before its pairs), each rank's committer made as `tp-commit` makes it
 (`engine.rank_worker.tp2_commit_make`, the native collector on windowed staging) and its root read as the rank's: no root
 combination, openings or verdict. Measurement only.
 
@@ -301,15 +302,14 @@ def main() -> None:
     m0 = min(made, key=lambda m: int(m["rank"]))
     print(f"[tp-decode] {a.arm}: {m0['committer']} scheme {m0['commit_scheme']} rows {m0['row_bytes']} B, {m0['modules']} modules, sources "
           f"{m0['sources']}{' ' + json.dumps(m0['per_layer']) if layer else ''}; made in {time.perf_counter() - t0:.1f}s", flush=True)
-    for b in batches:
-        (out / f"b{b}").mkdir(exist_ok=True)
-        PH.warmups(1, lambda i: run_workload(eng, va.throwaway_requests(eng, reqs[b], seed=100 + i), sampling))
-        WU.run(llm, lambda: run_workload(eng, va.throwaway_requests(eng, reqs[b], seed=200), sampling), out / f"b{b}", a.arm, a.rpc_timeout)
     rows: list[dict[str, Any]] = []
     ref: dict[int, Any] = {}
     with (out / "runs.jsonl").open("w") as f:
-        for pair in range(a.pairs):
-            for b in batches:
+        for b in batches:
+            (out / f"b{b}").mkdir(exist_ok=True)
+            PH.warmups(1, lambda i: run_workload(eng, va.throwaway_requests(eng, reqs[b], seed=100 + i), sampling))
+            WU.run(llm, lambda: run_workload(eng, va.throwaway_requests(eng, reqs[b], seed=200), sampling), out / f"b{b}", a.arm, a.rpc_timeout)
+            for pair in range(a.pairs):
                 for k, arm in enumerate(("control", a.arm) if pair % 2 == 0 else (a.arm, "control")):
                     gc.collect()
                     if arm != "control":
