@@ -25,7 +25,7 @@ import json
 import sys
 from dataclasses import dataclass, replace
 from itertools import product
-from math import ceil, log, log1p, log2
+from math import ceil, exp, inf, lgamma, log, log1p, log2
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -159,7 +159,7 @@ def plan_row(v: dict, model_name: str, which: str, eps: float, *, luck: float, s
             "levels": {q: levels.policies[q] / t[TOTAL[q]] for q in levels.policies},
             "drawn_by": drawn_by, "cut": cut_of(p, alts), "full": sorted(p.full), "floor_only": sorted(p.floor_only),
             "B_full": (full_all + extra) / gpu_s, "totals": t, "gpu_s": gpu_s,
-            "replay_units_met": p.cost["replay"] * gpu_s / vv["replay_layer_step"],
+            "replay_units_met": p.cost["replay"] / vv["replay_layer_step"],
             "dominant": {"template": dominant.template, "a0": a0, "a1": a1,
                          "b": costs.unit(dominant) + costs.of(dominant).replay,
                          "per_replay": dominant.per_replay},
@@ -181,17 +181,38 @@ def cluster(row: dict, ks=(1, 2, 8, 64)) -> list[dict]:
     return out
 
 
+def _block_rate(n_v: int, k: int, q: float) -> float:
+    """The least -ln(escape) a wrong unit costs in a block drawn with probability q and k of its n_v units checked, its m
+    wrong units committed before the first coins: min over m of -ln(1 - q (1 - C(n_v - m, k) / C(n_v, k))) / m, over a
+    log-spaced grid of m and both ends."""
+    ms = sorted({1, n_v, *(round(n_v ** (i / 400)) for i in range(401))})
+    best = inf
+    for m in ms:
+        miss = 0.0 if m > n_v - k else exp(lgamma(n_v - m + 1) - lgamma(n_v - m - k + 1) - lgamma(n_v + 1)
+                                           + lgamma(n_v - k + 1))
+        caught = q * (1 - miss)
+        escape = 1 - q + q * miss
+        best = min(best, (-log1p(-caught) if caught < 0.5 else inf if escape <= 0 else -log(escape)) / m)
+    return best
+
+
 def ts1(n_r: int = 442_368, n_v: int = 35_840, ms=(27_713, 1e6, 1e7, 1e8, 9.93e8)) -> list[dict]:
-    """TS1's table (note:proofs/20261018T1640Z-draft-two-stage-sampling) with every value committed at serve time: its
-    one-stage and k = 1 columns, and the all-committed bound beside them."""
+    """TS1's table (note:proofs/20261018T1640Z-draft-two-stage-sampling) with every value committed at serve time: one
+    stage; two stage as `twoStage_profile` charges it (each faulty block its n_v, the interiors registered after the first
+    coins), which is n_v ln(1/delta) / M at any k; two stage with every value committed, from the cheapest wrong count a
+    block (`_block_rate`), at the better of the least k that draws M proofs (q = M / (k N_R) <= 1) and every block drawn
+    with the k it affords (q = 1); and check-all."""
     lnd, n = log(1 / DELTA), n_r * n_v
     out = []
     for m in ms:
         t1 = lnd / -log1p(-m / n)
-        q = m / n_r
-        out.append({"M": m, "one_stage": t1 / n, "deferred_k1": min(1.0, t1 * n_v / n),
-                    "all_committed_k1": min(1.0, lnd / (q * n_r)) if q < 1 else 0.0,
-                    "check_all": min(1.0, n_v * lnd / m)})
+        up = max(1, ceil(m / n_r))
+        ways = [(lnd / _block_rate(n_v, up, m / (up * n_r)) / n, up, m / (up * n_r))]
+        if m >= n_r:
+            ways.append((lnd / _block_rate(n_v, int(m // n_r), 1.0) / n, int(m // n_r), 1.0))
+        eps, k, q = min(ways)
+        out.append({"M": m, "one_stage": t1 / n, "deferred": min(1.0, t1 * n_v / n), "k": k, "q": q,
+                    "all_committed": min(1.0, eps), "check_all": min(1.0, n_v * lnd / m)})
     return out
 
 
@@ -246,11 +267,11 @@ def render(out: dict) -> str:
             lines.append(f"| {c['k']} | {c['proofs']:.3g} | {c['blocks']:.3g} | {c['B_proving']:.4g} | "
                          f"{c['eps_at_equal_proving']:.3g} |")
     lines += ["", "TS1's table, every value committed at serve time (N_R = 442,368, n_v = 35,840):", "",
-              "| M | one-stage | two-stage k = 1, interiors after the coins (twoStage_profile) | two-stage k = 1, all "
-              "committed | check-all |", "|---|---|---|---|---|"]
+              "| M | one-stage | two-stage, interiors after the coins (twoStage_profile) | k | q | two-stage, all "
+              "committed | check-all |", "|---|---|---|---|---|---|---|"]
     for t in out["ts1"]:
-        lines.append(f"| {t['M']:.4g} | {t['one_stage']:.3g} | {t['deferred_k1']:.3g} | {t['all_committed_k1']:.3g} | "
-                     f"{t['check_all']:.3g} |")
+        lines.append(f"| {t['M']:.4g} | {t['one_stage']:.3g} | {t['deferred']:.3g} | {t['k']} | {t['q']:.3g} | "
+                     f"{t['all_committed']:.3g} | {t['check_all']:.3g} |")
     return "\n".join(lines)
 
 
