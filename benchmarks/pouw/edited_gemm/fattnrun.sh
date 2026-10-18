@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # H1's attention with S never stored (fattn.cu) on one leased sm_120 GPU (cwd = the source tree's root). Builds fattn.cu,
-# apv.cu and cgemm.cu outside the lease and runs the SASS gate on fattn (recorded; it doesn't stop the timing). Lease 1:
-# fattn's device gates at FA_GATES (bitwise against the unfused h_l7qs, hsref and apv_l7qs; dumps for fattn_ref.py) and
-# apv's at APV_GATES (s = 16,384: Ycum's third limb Y2) and cgemm's at FA_CG_GATES (the operand producers), judged by
-# apv_ref.py and cgemm_ref.py on the CPU beside lease 2. Only if every fattn gate and fattn_ref.py pass, lease 2 times
-# FA_ARMS at FA_BENCH, the four linears (cgemm.cu's LIN_ARMS at LIN_M tokens), plain attention (flash_ref.py: torch
-# SDPA, bf16, causal, GQA) at FLASH_SHAPES,
+# apv.cu, cgemm.cu and cwgemm.cu outside the lease and runs the SASS gate on fattn and cwgemm (recorded; it doesn't stop
+# the timing). Lease 1: fattn's device gates at FA_GATES (bitwise against the unfused h_l7qs, hsref and apv_l7qs; dumps for
+# fattn_ref.py) and apv's at APV_GATES (s = 16,384: Ycum's third limb Y2) and cgemm's at FA_CG_GATES (the operand
+# producers, c_fx1, and at k > 128 cwgemm's overlap orders), judged by apv_ref.py and cgemm_ref.py on the CPU beside
+# lease 2. Only if every fattn gate and fattn_ref.py pass, lease 2 times FA_ARMS at FA_BENCH, the four linears (cwgemm.cu's
+# LIN_ARMS at LIN_M tokens: cgemm.cu's arms and the cpar: orders), plain attention (flash_ref.py: torch SDPA, bf16, causal,
+# GQA) at FLASH_SHAPES,
 # and ncu's sections on FA_NCU at FA_NCU_SHAPES (out/ncu/, read by eps_profile.py, whose TOML ends the run); with
 # FA_GATES_ONLY set, the run ends after the gates. Clocks are read, never set.
 #   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --env GPU_LEASE_WHO=BC-KERNEL \
@@ -20,15 +21,15 @@ PY=${CG_PYTHON:-python3}
 REF=${CG_REF_PYTHON:-"uv run --no-project --with numpy --with python-sat --with-editable benchmarks/pouw/exact_kit python3"}
 git rev-parse HEAD > "$O/commit.txt" 2>&1
 NV=(nvcc -O3 -std=c++17 --no-compress -gencode arch=compute_120a,code=sm_120a -Xptxas -v)
-for b in fattn apv cgemm; do
+for b in fattn apv cgemm cwgemm; do
   "${NV[@]}" -o "$BIN/$b" $D/$b.cu -lcuda -lcublasLt -lnvidia-ml > "$O/build_$b.log" 2>&1 &
 done
 wait
-for b in fattn apv cgemm; do
+for b in fattn apv cgemm cwgemm; do
   [ -x "$BIN/$b" ] || { echo "build $b failed"; tail -30 "$O/build_$b.log"; echo "build $b rc 1" >> "$O/rc.txt"; exit 4; }
 done
 echo "build rc 0" >> "$O/rc.txt"
-$PY benchmarks/pouw/harness/sass_gate.py "$BIN/fattn" --json "$O/sass_gate.json" > "$O/sass_gate.txt" 2>&1
+$PY benchmarks/pouw/harness/sass_gate.py "$BIN/fattn" "$BIN/cwgemm" --json "$O/sass_gate.json" > "$O/sass_gate.txt" 2>&1
 echo "sass_gate (whole binary) rc $?" >> "$O/sass_gate.txt"
 # as aprun.sh: flagged instructions pass only in egemm.cu's never-launched kernels (an Args kernel of that name)
 $PY - "$O/sass_gate.json" > "$O/sass_scope.txt" 2>&1 <<'EOF'
@@ -49,15 +50,18 @@ print("\n".join(bad) if bad else f"pass: flagged only in unlaunched kernels {sor
 sys.exit(7 if bad else 0)
 EOF
 echo "sass_scope rc $?" > "$O/sass_rc.txt"
-cuobjdump -sass "$BIN/fattn" > "$BIN/fattn.sass" 2>/dev/null
-awk '/Function :/{f=$3} /[[:space:]](LDL|STL)[.[:space:]]/{n[f]++} END{for (f in n) print n[f], f}' "$BIN/fattn.sass" | sort -k2 \
-  > "$O/sass_local_mem_ops.txt" 2>&1
-gzip -c "$BIN/fattn.sass" > "$O/fattn.sass.gz"
+for b in fattn cwgemm; do
+  cuobjdump -sass "$BIN/$b" > "$BIN/$b.sass" 2>/dev/null
+  awk '/Function :/{f=$3} /[[:space:]](LDL|STL)[.[:space:]]/{n[f]++} END{for (f in n) print n[f], f}' "$BIN/$b.sass" | sort -k2 \
+    > "$O/sass_local_mem_ops_$b.txt" 2>&1
+  gzip -c "$BIN/$b.sass" > "$O/$b.sass.gz"
+done
 # name:s:H:rep. f1k: two KV heads at 1,024 tokens; l8: Llama-3.1-8B (32 query heads, 8 KV heads) at 2,048
 export FA_GATES=${FA_GATES:-"f1k:1024:4:2 l8:2048:32:4"}
 export APV_GATES=${APV_GATES:-"a16k:16384:1:1"}
-# cgemm.cu's gates (its operand producers: cohalf's hquant and hwedit at k = 128, the linears' cquant and cwedit), judged
-# by cgemm_ref.py on the CPU beside lease 2 (crun.sh's shapes, name:m:n:k)
+# cgemm.cu's gates (its operand producers: cohalf's hquant and hwedit at k = 128, the linears' cquant and cwedit; c_fx1),
+# through cwgemm's gate at k > 128 (cgemm's, then the overlap orders cpar:c_l7qs and cpar:c_fx1 against the serial
+# kernels), judged by cgemm_ref.py on the CPU beside lease 2 (crun.sh's shapes, name:m:n:k)
 export FA_CG_GATES=${FA_CG_GATES:-"hs:1024:256:128 h2k:2048:2048:128 small:1024:256:512 small3:1024:256:8192 q2k:2048:6144:4096 dn2k:2048:4096:14336"}
 export W="$BIN/gates"
 # shellcheck disable=SC2016
@@ -77,7 +81,8 @@ gpu-lease 1 --wait --max-min 15 -- bash -c '
   for g in $FA_CG_GATES; do
     IFS=: read -r name m n k <<< "$g"
     mkdir -p "$W/cg_$name"
-    "$BIN/cgemm" gate "$W/cg_$name" "$m" "$n" "$k" 0x9ABC >> "$O/cg_gate.jsonl" 2>> "$O/gate.err"; echo "cg gate $name rc $?" >> "$O/rc.txt"
+    b=cwgemm; [ "$k" = 128 ] && b=cgemm
+    "$BIN/$b" gate "$W/cg_$name" "$m" "$n" "$k" 0x9ABC >> "$O/cg_gate.jsonl" 2>> "$O/gate.err"; echo "cg gate $name rc $?" >> "$O/rc.txt"
   done'
 echo "lease 1 rc $?" >> "$O/rc.txt"
 dirs=""
@@ -113,9 +118,9 @@ if [ -n "${FA_GATES_ONLY:-}" ]; then
 fi
 # l8x32k: two KV heads (8 query heads) at 32,768 tokens; its whole-layer time is 4x
 export FA_BENCH=${FA_BENCH:-"l8:2048:32:4 l8x8k:8192:32:4 l8x32k:32768:8:4"}
-export FA_ARMS_UNF=${FA_ARMS_UNF:-"attn,qks,pv,hquant,hm,hm_full,hsm,lred,fu,hqk"}
-export FA_ARMS_BIG=${FA_ARMS_BIG:-"attn,qks,pv,hquant,hm,hm_full,hsm,lred,fu"}
-export LIN_ARMS=${LIN_ARMS:-"plain,plainq,c_l7qs,cedited:c_l7qs,cquant,cwedit"}
+export FA_ARMS_UNF=${FA_ARMS_UNF:-"attn,attn_vf,qks,pv,pv_vf,hquant,hm,hm_full,hsm,lred,fu,hqk"}
+export FA_ARMS_BIG=${FA_ARMS_BIG:-"attn,attn_vf,qks,pv,pv_vf,hquant,hm,hm_full,hsm,lred,fu"}
+export LIN_ARMS=${LIN_ARMS:-"plain,plainq,c_l7qs,c_fx1,cedited:c_l7qs,cedited:c_fx1,cpar:c_l7qs,cpar:c_fx1,cquant,cwedit"}
 export LIN_M=${LIN_M:-"2048 8192 32768"} LIN_SHAPES=${LIN_SHAPES:-"6144:4096 4096:4096 28672:4096 4096:14336"}
 export FLASH_SHAPES=${FLASH_SHAPES:-"2048:32:8 8192:32:8 32768:32:8 32768:8:2"}
 export FA_NCU=${FA_NCU:-"hm hsm fu lred hm_full"} FA_NCU_SHAPES=${FA_NCU_SHAPES:-"l8 l8x8k"}
@@ -140,7 +145,7 @@ gpu-lease 1 --wait --max-min 40 -- bash -c '
   for m in $LIN_M; do
     for sh in $LIN_SHAPES; do
       IFS=: read -r n k <<< "$sh"
-      CG_ARMS=$LIN_ARMS "$BIN/cgemm" bench "$REPS" "$m" "$n" "$k" >> "$O/lin.jsonl" 2>> "$O/lin.err"
+      CW_ARMS=$LIN_ARMS "$BIN/cwgemm" bench "$REPS" "$m" "$n" "$k" >> "$O/lin.jsonl" 2>> "$O/lin.err"
       echo "lin $m $n $k rc $?" >> "$O/rc.txt"
     done
   done
