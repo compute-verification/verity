@@ -422,11 +422,6 @@ def classify(attempt_dir: str | Path, rc: int | None = None, sig: int | None = N
                 "why": "SIGKILL exit and an oom_kill increment in the shared pod cgroup, but the victim could not be attributed to this job's tree",
                 "limitations": ["shared cgroup OOM: victim identity unresolved (an outsider vanished in the same window, or no tree process did)"]}
 
-    def oom_window_overlaps(t: float | None, slack: float = 1.0) -> bool:
-        if t is None:
-            return False
-        return any(float(w["window_start_mono"]) - slack <= t <= float(w["window_end_mono"]) + slack for w in delta_windows if "oom_kill" in w["counter"])
-
     # ---- rules -------------------------------------------------------------------------------------------------------------------------------
     cls, certainty, why = None, "established", ""
     competing: list[dict[str, Any]] = []
