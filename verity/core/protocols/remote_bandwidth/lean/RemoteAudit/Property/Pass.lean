@@ -154,13 +154,13 @@ abbrev PM := StateT St (Except String)
 
 private def refJ (r : Ref) : String := s!"{if r.p then "p" else "n"},{r.i},{r.j}"
 
-/-- `_key`: an index's leaves when it has at most 64, else its parts. -/
+/-- `_key`: an index's leaves when it has at most 64, else its non-empty parts. -/
 def indexKey (ps : Array Part) : String :=
   let n := partsCount ps
   if n ≤ 64 then
     "L" ++ ";".intercalate ((Array.range n).toList.filterMap fun k => (partsGet ps k).map refJ)
   else
-    "J" ++ ";".intercalate (ps.toList.map fun q => match q with
+    "J" ++ ";".intercalate ((ps.filter (·.count > 0)).toList.map fun q => match q with
       | .affine p i b c => s!"a,{p},{i},{b},{c}"
       | .strided p i b inner os is_ c => s!"s,{p},{i},{b},{inner},{os},{is_},{c}"
       | .explicit it => "e," ++ ",".intercalate (it.toList.map refJ))

@@ -500,10 +500,11 @@ def _read(refs: Refs, params: Sequence[Range], segs: Sequence[Segs], cache: dict
 
 
 def _read_segs(refs: Refs, params: Sequence[Range], segs: Sequence[Segs]) -> Segs:
-    """The segments of a body's return, in leaf order: an affine run of a node's leaves keeps that node's segments."""
+    """The segments of a body's return, in leaf order: an affine run of a node's leaves keeps that node's segments. A
+    concatenation is read flat, as the descriptor writes it (`codec._flat_parts`)."""
     out: list[tuple[int, int, Range]] = []
     pos = 0
-    for part in (refs.parts if isinstance(refs, Concat) else [refs]):
+    for part in _parts(refs):
         n = part.count
         if n and isinstance(part, Affine) and part.space == "n":
             for a, b, r in segs[part.idx]:
@@ -520,7 +521,7 @@ def _read_segs(refs: Refs, params: Sequence[Range], segs: Sequence[Segs]) -> Seg
 
 
 def _key(refs: Refs) -> Any:
-    return tuple(refs) if refs.count <= 64 else canonical_json(refs.to_json()).decode()
+    return tuple(refs) if refs.count <= 64 else canonical_json([p.to_json() for p in _parts(refs)]).decode()
 
 
 def _bits(t: Type) -> int:
