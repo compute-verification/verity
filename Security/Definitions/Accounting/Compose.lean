@@ -31,9 +31,10 @@ The logical layer:
   matmul of one shape are different kinds.
 * `unitGates`, `unitWords`, `Declared.roundOf`, `Declared.stageOf`, `Declared.kindOf`: a unit's gates and words, its
   round, its stage counted from the last round (as `SplitStages` counts) and its words' kind (none for glue).
-* `Declared.cutOf`, `Declared.Late`, `Declared.Reaches`: each value's cut, computed from the IR (W1): a registered input
-  before the first coin, and every other value (glue, a run input, the KV cache, decode feedback) with its writing
-  gate's round, before the next round's coin; a read is late when its operand's cut is past the reader's coin; a unit
+* `coinMark`, `Declared.firstRead`, `Declared.cutOf`, `Declared.Late`, `Declared.Reaches`: each value's cut, computed
+  from the IR (W1): a registered input before the first coin, a run input (decode feedback among them) before its first
+  reader's round's coin, and every other value (glue, the KV cache) with its writing gate's round, before that round's
+  coin or, when it depends on it, after; a read is late when its operand's cut is past the reader's coin; a unit
   reaches another along late reads, through any gate.
 * `LuckForm`, `Scheme`, `Scheme.LuckProved`, `Scheme.foldLuck`: per kind, the floor its template's noise proves at the
   worst operands (decision 109: `0` where its noise proves none), whether it is credited, its skip pattern's span, the
@@ -174,20 +175,37 @@ def Declared.kindOf {ι : Type} (Cd : Declared ι) (u : ℕ) : Option Kind := (u
 
 /-! ## Cuts and late cones, from the IR -/
 
-/-- **Gate `i`'s cut**: the coin before which its value is committed, as an index of the window's `rounds` coins (the
-draw is `rounds`). A registered input (a weight, a codec's parameters) is bound before the first coin, `0`. Every other
-value is committed with its writing gate's round, before the next round's coin (W1): a gate's output, glue among them,
-and a run input (a request's tokens, the KV cache, decode feedback), which is bound after the coins, so not before the
-first. -/
+/-- **The coins each gate's value depends on**, in order: one past the round of the latest coin input it reads,
+transitively (a coin input of a call site is its round's coin), and `0` for a value that reads no coin. -/
+def coinMark {ι : Type} (Cd : Declared ι) : List ℕ :=
+  Cd.dag.foldl (fun ms g => ms ++ [match g.op with
+    | .input .coin _ => Cd.round (Cd.call ms.length) + 1
+    | _ => (g.args.map fun j => ms.getD j 0).foldl max 0]) []
+
+/-- The round of the first gate that reads gate `i`, and `rounds` (the draw) when none does. -/
+def Declared.firstRead {ι : Type} (Cd : Declared ι) (i : ℕ) : ℕ :=
+  ((List.range Cd.dag.length).find? fun j => (Cd.dag[j]?).any fun g => g.args.contains i).elim Cd.rounds
+    fun j => Cd.round (Cd.call j)
+
+/-- **Gate `i`'s cut**, from the IR (W1): the coin before which its value is committed, as an index of the window's
+`rounds` coins (the draw is `rounds`). Under decision 122 a round's coin is released after the round's served values
+are committed, and its noised products are computed after it:
+* a registered input (a weight, a codec's parameters) is bound before the first coin, `0`;
+* a run input (a request's tokens, decode feedback) is bound after the coins, before the coin of the first round that
+  reads it;
+* any other value (a product's served output, glue, the KV cache) is committed with its writing gate's round, before
+  that round's coin, or after it when it depends on it (`coinMark`: a noised word, a receipt, glue fed by one). -/
 def Declared.cutOf {ι : Type} (Cd : Declared ι) (i : ℕ) : ℕ :=
   match (Cd.dag[i]?).map (·.op) with
   | some (.input .registered _) => 0
-  | _ => Cd.round (Cd.call i) + 1
+  | some (.input .run _) => Cd.firstRead i
+  | _ => max (Cd.round (Cd.call i)) ((coinMark Cd).getD i 0)
 
 /-- **Gate `j` reads gate `i` after its own coin**: `i` is one of `j`'s operands, and `i`'s cut is past the coin of
-`j`'s round, so `i`'s value can be chosen after `j`'s noise is drawn. Within a round every read is late (a K-chunk's
-running sum, glue between products of one round); a value committed in an earlier round, or registered, is fixed when
-`j`'s noise is drawn, whether it is right or not, so it is no edge. -/
+`j`'s round, so `i`'s value can be chosen after `j`'s noise is drawn: a noised word read in its own round (a K-chunk's
+running sum), or glue fed by one (a fused call site, W4). A value committed before `j`'s coin (a served value of `j`'s
+round or an earlier one, a registered or run input) is fixed when `j`'s noise is drawn, whether it is right or not, so
+it is no edge. -/
 def Declared.Late {ι : Type} (Cd : Declared ι) (i j : ℕ) : Prop :=
   (Cd.dag[j]?).any (fun g => g.args.contains i) = true ∧ Cd.round (Cd.call j) < Cd.cutOf i
 
