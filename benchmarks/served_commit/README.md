@@ -10,7 +10,8 @@ and batch, under continuous batching with staggered arrivals, greedy and seeded 
 - `run.sh`: `verity bench served_commit`, one spec's sweep in one process. Its header has the recorded form.
 - Measurement: `prof.sh` runs a sweep with the arms of `prof_arm.py` (roots and plans per run, native drain, rows-sha512,
   serving on a high-priority stream over the worker's hashing, the finalize profile, NVTX ranges; `-base` and `-batch`
-  arms turn the decode host-cost changes off, or all but the batched captured copies), optionally under nsys,
+  arms turn the decode host-cost changes off, or all but the batched captured copies; `-ring8` and `-w64` arms size the
+  staging ring at 32 windows of 256 or 64 MiB), optionally under nsys,
   summarized by `nsys_summary.py`; `gather_bench.py` times the
   gather kernel alone; `gpu_tests.sh` runs the committer's GPU byte-identity tests on a node; `granularity.py` lists, from
   a Build's request Programs, the Call boundaries a per-block or per-layer proof unit would keep, with their bytes and

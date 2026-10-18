@@ -114,6 +114,7 @@ class RootsArm(ProfArm):
         rec = {"arm": self.id, "committer": self.committer.name, "run": len(self.runs), "name": self.run_name,
                "toggles": {"batch_copies": bool(src.codegen.get("batch")), "slot_fast": bool(com._nc.slot_fast), "native_end": com.native_end,
                            "rows_off_thread": com.rows_off_thread, "native_drain": src.native_drain},
+               "ring": {k: self.windows.get(k) for k in ("window_bytes", "slots")},
                "source": {k: src.stats.get(k) for k in ("replayed_steps", "eager_steps", "drain_s", "capture_copies", "capture_flushes", "strided_copies")},
                "codegen": {k: src.codegen.get(k) for k in ("hooks", "flushes", "kept")},
                "spans_s": {k: round(v, 6) for k, v in com.spans.total.items()}, "spans_calls": dict(com.spans.calls),
@@ -183,12 +184,23 @@ class SwitchArm(RootsArm):
 class NativeDrainArm(RootsArm):
     """The prof arm whose compiled source drains a replayed step's slots through the committer's slot plans (one native call).
     ``host_fast`` False puts the committer's step back as it was before its host-cost changes (slots staged as views, the step end in
-    several calls, the row order expanded on the serving thread); ``batch_copies`` False, the source's captured copies one by one."""
+    several calls, the row order expanded on the serving thread); ``batch_copies`` False, the source's captured copies one by one.
+    ``window`` (MiB, slots) sizes the staging ring in place of the collector's default (256 MiB x 8)."""
 
     host_fast = True
+    window: tuple[int, int] | None = None
 
     def ready(self, target: Any) -> None:
-        super().ready(target)
+        import os
+
+        if self.window is None:
+            super().ready(target)
+        else:
+            os.environ["VERITY_WINDOW_MB"], os.environ["VERITY_WINDOW_SLOTS"] = map(str, self.window)
+            try:
+                super().ready(target)
+            finally:
+                del os.environ["VERITY_WINDOW_MB"], os.environ["VERITY_WINDOW_SLOTS"]
         self.source.native_drain = True
         com = self.committer
         com._nc.slot_fast = com.native_end = com.rows_off_thread = self.host_fast
@@ -214,6 +226,18 @@ class RowsBaseArm(RowsArm):
 
 class RowsBatchArm(RowsArm):
     host_fast = False
+
+
+class NativeDrainRing8Arm(NativeDrainArm):
+    window = (256, 32)
+
+
+class RowsRing8Arm(RowsArm):
+    window = (256, 32)
+
+
+class RowsW64Arm(RowsArm):
+    window = (64, 32)
 
 
 class HiPrioArm(NativeDrainArm):
@@ -302,6 +326,9 @@ SERVED_COMMIT_NATIVEDRAIN_BATCH = NativeDrainBatchArm("served-commit-nativedrain
 SERVED_COMMIT_ROWS = RowsArm("served-commit-rows", retain="none")
 SERVED_COMMIT_ROWS_BASE = RowsBaseArm("served-commit-rows-base", retain="none")
 SERVED_COMMIT_ROWS_BATCH = RowsBatchArm("served-commit-rows-batch", retain="none")
+SERVED_COMMIT_NATIVEDRAIN_RING8 = NativeDrainRing8Arm("served-commit-nativedrain-ring8", retain="none")
+SERVED_COMMIT_ROWS_RING8 = RowsRing8Arm("served-commit-rows-ring8", retain="none")
+SERVED_COMMIT_ROWS_W64 = RowsW64Arm("served-commit-rows-w64", retain="none")
 SERVED_COMMIT_HIPRIO = HiPrioArm("served-commit-hiprio", retain="none")
 SERVED_COMMIT_ROWS_HIPRIO = RowsHiPrioArm("served-commit-rows-hiprio", retain="none")
 SERVED_COMMIT_FPROF = FinalizeProfArm("served-commit-fprof", retain="none")

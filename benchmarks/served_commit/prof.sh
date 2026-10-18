@@ -18,6 +18,9 @@ for a in ${ARMS//,/ }; do
     served-commit-rows) mods+=(--arm-module served_commit.prof_arm:SERVED_COMMIT_ROWS);;
     served-commit-rows-base) mods+=(--arm-module served_commit.prof_arm:SERVED_COMMIT_ROWS_BASE);;
     served-commit-rows-batch) mods+=(--arm-module served_commit.prof_arm:SERVED_COMMIT_ROWS_BATCH);;
+    served-commit-nativedrain-ring8) mods+=(--arm-module served_commit.prof_arm:SERVED_COMMIT_NATIVEDRAIN_RING8);;
+    served-commit-rows-ring8) mods+=(--arm-module served_commit.prof_arm:SERVED_COMMIT_ROWS_RING8);;
+    served-commit-rows-w64) mods+=(--arm-module served_commit.prof_arm:SERVED_COMMIT_ROWS_W64);;
     served-commit-hiprio) mods+=(--arm-module served_commit.prof_arm:SERVED_COMMIT_HIPRIO);;
     served-commit-rows-hiprio) mods+=(--arm-module served_commit.prof_arm:SERVED_COMMIT_ROWS_HIPRIO);;
     served-commit-fprof) mods+=(--arm-module served_commit.prof_arm:SERVED_COMMIT_FPROF);;
