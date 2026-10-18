@@ -1,8 +1,10 @@
 """The attention half of `int8_exact_gpu.py` (`--int8-exact attention|all`): taps on served attention layers and their checks.
 
 `AttnTaps` wraps the forward of chosen `Int8AttentionImpl`s and keeps, per call and request, the query rows, the request's window
-(k, v gathered from the paged cache after the call, as the step read them), the layer's K scales and the served output rows, on
-the CPU.  `compare` judges one kept request, every check bit for bit (the LUT softmax has no device-dependent step):
+(k, v gathered from the paged cache after the call, as the step read them; under a credited read, `engine.int8_window`, the
+rows of the step's buffers pg_window decoded it into), the K and V the layer was handed, the layer's K scales and the served
+output rows, on the CPU.  `compare` judges one kept request, every check bit for bit (the LUT softmax has no device-dependent
+step):
 
   rerun     `int8_attention.window_attention` (`window_rows` over `kv_quant`, as served) again on the GPU
   cpu       `window_attention` on the CPU
@@ -11,6 +13,13 @@ the CPU.  `compare` judges one kept request, every check bit for bit (the LUT so
   fattn_ref the window's last query row of its first head: `fattn_ref.check` on the GPU's own S, P, m, e(0), s_q and z_q (head
             dimension 128 only)
   cache     a prefill's window from the cache against the K and V the layer was handed
+  defs      the Definitions the int8 fold binds the window to, evaluated on it: `Int8KvQuant_v1{S,D}` of the first and last KV
+            heads against the served `kv_quant`, `Int8LutAttentionRow_v1{D,S,SCALE}` of the first and last query rows, every
+            head, against the served output
+
+`written` judges a decode's window across the kept calls: its rows before the step's own are the K and V the layer was handed
+for this request in the earlier kept calls, and its last rows the step's own (under an encoded credited read, rows written
+earlier come back from the cache's encoding).
 """
 from __future__ import annotations
 
@@ -22,11 +31,30 @@ from typing import Any
 import torch
 
 from tests.engine import fattn_oracle as O
+from verity.ml.circuits.defs import bind
+from verity.ml.circuits.evaluation import evaluate
 from verity_vllm.engine import int8_attention as A
+from verity_vllm.program.registry import int8_exact as X
 
 
 def _words(t: torch.Tensor) -> torch.Tensor:
     return t.contiguous().view(torch.int16)
+
+
+def _u(t: torch.Tensor, dtype: torch.dtype, mask: int) -> list[int]:
+    return [int(w) & mask for w in t.contiguous().view(dtype).reshape(-1).tolist()]
+
+
+def _bf16(t: torch.Tensor) -> list[int]:
+    return _u(t, torch.int16, 0xFFFF)
+
+
+def _f32(t: torch.Tensor) -> list[int]:
+    return _u(t.float(), torch.int32, 0xFFFFFFFF)
+
+
+def _s8(t: torch.Tensor) -> list[int]:
+    return _u(t, torch.int8, 0xFF)
 
 
 def _key(*ts: torch.Tensor) -> str:
@@ -60,15 +88,21 @@ class AttnTaps:
             kc, vc = kv_cache.transpose(1, 2).split(impl.head_size, dim=-1)
             ks = impl.k_scales(layer.layer_name, query.device).cpu()
             qsl, lens = attn_metadata.query_start_loc.tolist(), attn_metadata.seq_lens.tolist()
-            for r, s in enumerate(lens):
+            read = getattr(impl, "credited", None)
+            st = read.current if read is not None else None
+            if read is not None and (st is None or st.meta is not attn_metadata):
+                raise RuntimeError(f"{name}: a credited read with no window of this step")
+            for r, s in enumerate(lens[:len(qsl) - 1]):
                 q0, q1 = qsl[r], qsl[r + 1]
                 if q1 == q0:
                     continue
-                k, v = A.window_of(kc, vc, attn_metadata.block_table[r], s)
+                if st is None:
+                    k, v = A.window_of(kc, vc, attn_metadata.block_table[r], s)
+                else:
+                    k, v = st.k[st.offsets[r]:st.offsets[r + 1]], st.v[st.offsets[r]:st.offsets[r + 1]]
                 rec = {"call": self.calls[(self.phase, name)] - 1, "request": r, "s": s, "n": q1 - q0, "scale": impl.scale,
-                       "k_scales": ks, "q": query[q0:q1].cpu(), "k": k.cpu(), "v": v.cpu(), "out": output[q0:q1].cpu()}
-                if q1 - q0 == s:
-                    rec["handed"] = (key[q0:q1].cpu(), value[q0:q1].cpu())
+                       "k_scales": ks, "q": query[q0:q1].cpu(), "k": k.cpu(), "v": v.cpu(), "out": output[q0:q1].cpu(),
+                       "window": "cache" if st is None else "credited", "handed": (key[q0:q1].cpu(), value[q0:q1].cpu())}
                 self.got.setdefault((self.phase, name), []).append(rec)
             return out
         return wrapped
@@ -109,10 +143,50 @@ def compare(rec: dict[str, Any]) -> dict[str, Any]:
            "cpu_mismatch": int((_words(cpu) != ow).sum()), "oracle_mismatch": int((_words(oracle) != ow).sum()),
            "kv_mismatch": sum(int((a.cpu().view(torch.uint8) != b.view(torch.uint8)).sum()) for a, b in zip(kv_gpu, kv_cpu)),
            "fattn_ref": fattn_ref_row(q, k, ks, scale), "scale_is_head_dim": scale == q.shape[-1] ** -0.5,
-           "k_clamped": int((k.float().abs() / ks[None, :, None] > 127.5).sum())}
-    if "handed" in rec:
+           "k_clamped": int((k.float().abs() / ks[None, :, None] > 127.5).sum()), "window": rec["window"],
+           **defs(q, k, v, ks, scale, out, [t.cpu() for t in kv_gpu])}
+    if n == s:
         got["cache_mismatch"] = int(not (torch.equal(rec["handed"][0], k) and torch.equal(rec["handed"][1], v)))
     return got
+
+
+def defs(q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, ks: torch.Tensor, scale: float, out: torch.Tensor,
+         served_kv: list[torch.Tensor]) -> dict[str, int]:
+    """`Int8KvQuant_v1` and `Int8LutAttentionRow_v1`, bound as the fold binds them, evaluated on the window (see the module)."""
+    n, h, d = q.shape
+    s, g = k.shape[0], k.shape[1]
+    kq, vq, sv, v0 = served_kv
+    kvd = bind(X.Int8KvQuant, S=s, D=d)
+    evaluated = mismatch = 0
+    for gi in sorted({0, g - 1}):
+        got = evaluate(kvd, _bf16(k[:, gi]), _bf16(v[:, gi]), _f32(ks[gi:gi + 1])[0])
+        want = _s8(kq[gi]) + _s8(vq[gi]) + _f32(sv[gi]) + _f32(v0[gi])
+        evaluated, mismatch = evaluated + 1, mismatch + int(list(got) != want)
+    for i in sorted({0, n - 1}):
+        p = s - n + i + 1
+        row = bind(X.Int8LutAttentionRow, D=d, S=p, SCALE=scale)
+        for hd in range(h):
+            gi = hd // (h // g)
+            got = evaluate(row, _bf16(q[i, hd]), _s8(kq[gi, :p]), _f32(ks[gi:gi + 1])[0], _s8(vq[gi, :p]), _f32(sv[gi]),
+                           _f32(v0[gi]))
+            evaluated, mismatch = evaluated + 1, mismatch + int(list(got) != _bf16(out[i, hd]))
+    return {"defs_evaluated": evaluated, "defs_mismatch": mismatch}
+
+
+def written(got: dict[tuple[str, str], list[dict[str, Any]]]) -> dict[str, int]:
+    """Each kept decode's window against the K and V its request was handed in its phase's earlier kept calls (see the module)."""
+    compared = mismatch = 0
+    for recs in got.values():
+        hist: dict[int, tuple[torch.Tensor, torch.Tensor]] = {}
+        for r in sorted(recs, key=lambda x: x["call"]):
+            hk, hv = r["handed"]
+            prior = hist.get(r["request"])
+            if r["n"] < r["s"] and prior is not None and prior[0].shape[0] == r["s"] - r["n"]:
+                compared += 1
+                mismatch += int(not (torch.equal(torch.cat([prior[0], hk]), r["k"]) and torch.equal(torch.cat([prior[1], hv]), r["v"])))
+            hist[r["request"]] = ((torch.cat([prior[0], hk]), torch.cat([prior[1], hv])) if prior is not None and r["n"] < r["s"]
+                                  else (hk, hv))
+    return {"written_compared": compared, "written_mismatch": mismatch}
 
 
 def batch_vs_solo(got: dict[tuple[str, str], list[dict[str, Any]]], names: list[str]) -> dict[str, Any]:
