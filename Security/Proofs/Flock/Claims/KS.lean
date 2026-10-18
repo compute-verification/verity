@@ -88,6 +88,7 @@ import Proofs.Flock.Claims.KS.LevelsAll
 import Proofs.Flock.Claims.KS.ZkLevelsAll
 import Proofs.Flock.Claims.KS.ZkLevels
 import Proofs.Flock.Claims.KS.ZkClashL
+import Proofs.Flock.Claims.KS.ZkFork0
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -435,4 +436,10 @@ log (`FlockDeploy.KS.zk_levelClash_tiedJ`). The decoders are right at those rows
 (`FlockSoundness.Discharge.ZkExec.zk_rep_rowsL`), so the view's clash past level 0 is such a collision (`ZkClashL`:
 `FlockDeploy.KS.zkViewClashQL`), and masked KS and the recursion's premise rest on the fork bounds and the view's pads
 clash alone (`FlockDeploy.KS.zk_KS_of_pads`, `FlockDeploy.KS.zk_tableBoundJOnAccR_of_pads`,
-`FlockDeploy.KS.zk_KSFlock_of_pads`). -/
+`FlockDeploy.KS.zk_KSFlock_of_pads`). At level 0 the masked simulator's fork bound holds (`ZkFork0`:
+`FlockDeploy.KS.zkSimForkLe₀`): `Adv₀` after `Commit` is two independent runs, at most two independent live runs
+decoding to a level-0 clash (`FlockDeploy.KS.adv₀SZ_simAtJZ_le`, through the simulation after `j` coins of `ForkSim`),
+which are two accepting runs of `P` whose rows at one position differ and collide in their logs
+(`FlockDeploy.KS.zkPair₀`). So masked KS and the recursion's premise rest on the cap/`τ` and pads fork bounds and the
+pads clash (`FlockDeploy.KS.zk_KS_of_kinds`, `FlockDeploy.KS.zk_tableBoundJOnAccR_of_kinds`,
+`FlockDeploy.KS.zk_KSFlock_of_kinds`). -/
