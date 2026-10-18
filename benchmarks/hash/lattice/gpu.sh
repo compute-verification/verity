@@ -25,7 +25,7 @@ nvcc -O3 -std=c++17 -gencode arch=compute_$arch,code=sm_$arch -DSHA_ADD=0 -DSHA_
 echo "build commit_gpu rc $?" >> "$O/rc.txt"
 mkdir -p "$O/dumps"
 export O W
-export CONFIGS=${CONFIGS:-"q32:4096:256:tree q32:16384:256:tree q16:4096:512:tree q16:16384:512:tree q8n:4096:384 q8n:16384:384 q32:16384:176 q32:16384:208 q16:16384:352 q16:16384:416 q8n:16384:272 q8n:16384:320"}
+export CONFIGS=${CONFIGS:-"q32:4096:256:tree q32:16384:256:tree q16:4096:512:tree q16:16384:512:tree q8n:4096:384 q8n:16384:384 q32:16384:176 q32:16384:208 q16:16384:352 q16:16384:416 q8n:16384:272 q8n:16384:320 q32:65536:256 q8n:65536:384"}
 export BATCH_MIB=${BATCH_MIB:-1024} REPS=${REPS:-10}
 # shellcheck disable=SC2086,SC2016
 gpu-lease 1 --wait ${LEASE:-} --max-min "${LEASE_MIN:-14}" -- bash -c '
