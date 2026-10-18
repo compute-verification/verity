@@ -109,6 +109,15 @@ def schedule(pairs: int, only_arm: str | None) -> list[tuple[int, str]]:
     return [(p, a) for p in range(pairs) for a in (("control", "instrumented") if p % 2 == 0 else ("instrumented", "control")) if only_arm in (None, a)]
 
 
+def ring_slots(committer: str, window_mb: str | None, window_slots: str | None, retain: str | None) -> int | None:
+    """The ranks' window ring slots as their committers read VERITY_WINDOW_MB / VERITY_WINDOW_SLOTS / VERITY_RETAIN (an unset window
+    is `native_collect.window_mb_default`), None when they stage in per-step blocks."""
+    from verity_vllm.commit.committer.native_collect import WINDOW_SLOTS, window_mb_default
+
+    window = (window_mb or "").strip() or window_mb_default(committer == "native_collect_v2b", retain or "device")
+    return int(window_slots or WINDOW_SLOTS) if float(window) > 0 else None
+
+
 def build_program_digest(d: str | None) -> tuple[str | None, str | None]:
     """A rank's Program digest FROM ITS BUILD dir ``d`` (never from the manifest), and which Program it is: a one-request row = the
     request Program's digest (result.json); a B>=2 row = the rank's GP-01 workload Program digest (build_workload/workload_program.json)
@@ -205,13 +214,16 @@ class Options:
     only_arm: str | None = option("--only-arm", choices=["control", "instrumented"], default=None, help="run only this arm (`--pairs` runs of it; the config run: one instrumented run)")
     all_pairs: bool = option("--all-pairs", default=False, action="store_true", help="run every pair and --value-check's run after a failed run (timing studies); "
                              "default: the Commit stops after the first failed run, FAIL, and summary.json's `stopped` names the runs not run")
+    trace_dir: str | None = option("--trace-dir", default=None, help="after the timed pairs, one more pair under torch.profiler on every rank, outside "
+                                   "runs.jsonl and the summary's timing (verity_vllm.pipeline.tp.trace)")
+    trace_ranks: str = option("--trace-ranks", default="0", help="with --trace-dir: the ranks whose Kineto trace is kept")
     serving_rows: str | None = option("--serving-rows", default=None, metavar="REQUEST_JSON", help="opt-in, not on the record: in the first instrumented run, once every rank's root is final and the TP run root fixed and before the challenge, each rank commits its units of the verifier's partition in M0's serving row format (verity_vllm.pipeline.tp.serving_rows; the row stage writes the request); needs --required-manifest and --replay-deferred")
 
 
 def main(args: Options) -> int:
     from verity_vllm.engine import engine_profile as prof, env as engine_env
     prof.apply_env()
-    from verity_vllm.pipeline.tp import lease as TPL, match as TPM, target as TT
+    from verity_vllm.pipeline.tp import lease as TPL, match as TPM, target as TT, trace as TRACE
     from vllm import LLM
     from verity_vllm.engine import vllm_adapter as va
     from verity_vllm.pipeline.commit import git_head, run_workload
@@ -310,6 +322,7 @@ def main(args: Options) -> int:
     # (B1: the request Program itself) and, at B>=2, the component digests the GP-01 workload_program of that rank composed (its workload
     # digest is the manifest's per-rank digest, checked above) -- the worker refuses any loaded Program outside this set BY NAME
     replay_cfg = None
+    retain_env = os.environ.get("VERITY_RETAIN")
     if args.required_manifest and not args.no_sampled_replay:
         import re as _re
         of_record: dict[str, list[str]] = {}
@@ -333,7 +346,7 @@ def main(args: Options) -> int:
                       "requests": [{"request_id": request_ids[str(r.get("request_id"))], "arrive_step": int(r.get("arrive_step") or 0), "prompt_len": len(r["prompt_token_ids"]),
                                     "max_tokens": int(r.get("max_tokens") or sampling.get("max_tokens") or 1), "prompt_token_ids": [int(t) for t in r["prompt_token_ids"]], "seed": int(r["seed"]) if r.get("seed") is not None else (int(sampling["seed"]) if sampling.get("seed") is not None else None)} for r in reqs],
                       "per_stratum": int(args.replay_per_stratum), "max_evaluate": int(args.replay_max), "seed": args.replay_seed, "workers": args.replay_workers,
-                      "challenge": args.replay_challenge, "targets": list(args.replay_target or []), "ring_slots": (int(os.environ["VERITY_WINDOW_SLOTS"]) if os.environ.get("VERITY_WINDOW_SLOTS") and os.environ.get("VERITY_WINDOW_MB") else None)}
+                      "challenge": args.replay_challenge, "targets": list(args.replay_target or []), "ring_slots": ring_slots(args.committer, os.environ.get("VERITY_WINDOW_MB"), os.environ.get("VERITY_WINDOW_SLOTS"), retain_env)}
         versions["sampled_replay"] = {"of_record": of_record, "per_stratum": replay_cfg["per_stratum"], "max_evaluate": replay_cfg["max_evaluate"], "seed": args.replay_seed,
                                       "challenge": args.replay_challenge, "rule": "manbind MAN-06 O1-O6 per rank: the rank's Programs of record x the rank's map x the rank's committed members + weight shards"}
         if args.replay_k:
@@ -426,20 +439,23 @@ def main(args: Options) -> int:
                     inst = llm.collective_rpc("tp2_commit_install", timeout=args.rpc_timeout)
                     if len(inst) != world:
                         raise SystemExit("fail-closed: install did not reach every rank")
+                cpu0 = llm.collective_rpc(TRACE.thread_cpu, timeout=args.rpc_timeout)
                 r = run_workload(eng, reqs, sampling)
+                cpu = TRACE.cpu_delta(cpu0, llm.collective_rpc(TRACE.thread_cpu, timeout=args.rpc_timeout))
                 ran.update(wall_s=round(r["wall_s"], 4), steps=len(r["step_wall_s"]))
                 row = {"schema": SCHEMA, "label": args.label, "workload": args.workload, "workload_sha256": wl.get("sha256"), "case": case, "model": cp["repo"],
                        "tp": args.tp, "pair": pair, "order_in_pair": k, "arm": arm, "committer": None if arm == "control" else args.committer,
                        "wall_s": r["wall_s"], "iterations": r["iterations"], "engine_steps": len(r["step_wall_s"]), "generated_tokens": r["generated_tokens"],
                        "prompt_tokens": r["prompt_tokens"], "generated_tokens_per_s": r["generated_tokens"] / r["wall_s"],
                        "step_wall_prefill_s": r["step_wall_s"][0], "step_wall_decode_mean_s": statistics.fmean(r["step_wall_s"][1:]) if len(r["step_wall_s"]) > 1 else None,
+                       "step_wall_s": r["step_wall_s"], "step_tokens_out": r["step_tokens_out"], "thread_cpu_s": cpu,
                        "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "commit_started": started}
                 if tokens_ref is None:
                     tokens_ref = r["tokens"]
                 row["tokens_equal_ref"] = r["tokens"] == tokens_ref
                 if arm != "control":
                     t_f = time.perf_counter()
-                    fin = TPL.finalize(llm, args.rpc_timeout, f"work.pair{pair}.{arm}", last=pair == args.pairs - 1 and k == len(order) - 1 and not args.value_check,
+                    fin = TPL.finalize(llm, args.rpc_timeout, f"work.pair{pair}.{arm}", last=pair == args.pairs - 1 and k == len(order) - 1 and not args.value_check and not args.trace_dir,
                                        defer={"out": str(out), "pair": pair} if args.replay_deferred else None)
                     t_ready = time.perf_counter() - t_f
                     if args.replay_deferred:
@@ -655,7 +671,7 @@ def main(args: Options) -> int:
                                "attribution_per_rank": {r: ({k2: (c.get("attribution") or {}).get(k2) for k2 in ("ok", "steps_checked", "rows_checked", "mismatches_n", "why", "swap_requests_negative")}
                                                             if c.get("attribution") is not None else None) for r, c in per_rank.items()},
                                "attribution_reference": versions.get("match_record"),
-                               "openings_after_release": True, "collector_variant": "windowed", "retention": os.environ.get("VERITY_RETAIN", "host"),
+                               "openings_after_release": True, "collector_variant": "windowed", "retention": retain_env or "host",
                                "negatives_suite": "tp2_commit --omit-rank / --omit-rank-partials <r> / --omit-partial-site r:site / --flip-partial r:site (TP-12) / --serve-shard-from r:param:from (TP-10) / --relabel-rank a:b / --wrong-root-rank <r> / --no-tp-partials / --swap-requests r:ra:rb (this lane) + bind test_binding_negatives.py (BIND-01, TP1)",
                                "negatives": versions["negatives"],
                                "reason": "; ".join(reasons) if reasons else None, "replay_pending_ranks": [int(r_) for r_ in pending] or None}
@@ -690,6 +706,11 @@ def main(args: Options) -> int:
                 break
         if stopped:
             break
+    if args.trace_dir and not stopped:
+        gc.collect()
+        with PH.TL.span("work.trace"):
+            TRACE.run(llm, lambda: run_workload(eng, reqs, sampling), Path(args.trace_dir), [int(x) for x in args.trace_ranks.split(",")],
+                      args.rpc_timeout, release=not args.value_check)
     vcheck = None
     if args.value_check and not stopped:
         # [R15 TP-04 C2] one extra instrumented run per rank (untimed): committed bytes vs hook-time reference clones + re-execution

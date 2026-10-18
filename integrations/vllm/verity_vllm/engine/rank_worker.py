@@ -67,7 +67,8 @@ def repo_modules_loaded() -> dict[str, Any]:
     jit = []
     if nc is not None and getattr(nc, "_EXT", None) is not None:
         here = Path(getattr(nc, "HERE", str(root / "verity_vllm" / "commit" / "committer")))
-        jit = [str(Path(here, n).resolve().relative_to(root)) for n in ("native_collect.cpp", "native_gather.cu", "native_tree.cu", "native_plans.h") if Path(here, n).exists()]
+        jit = [str(Path(here, n).resolve().relative_to(root))
+               for n in ("native_collect.cpp", "native_gather.cu", "native_tree.cu", "native_rows.cu", "native_plans.h", "sha512.cuh") if Path(here, n).exists()]
         files.update(jit)
     return {"method": "runtime: sys.modules of this process filtered to the repo root + vllm-poc, plus native_collect's cpp_extension sources when loaded (TP-11)",
             "pid": os.getpid(), "n": len(files), "files": sorted(files), "native_collect_jit_sources": jit}
@@ -91,6 +92,20 @@ def _moe_collective_modules() -> list[Any]:
 
 def _jsonable(x: Any) -> Any:
     return json.loads(json.dumps(x, default=str))
+
+
+def _commit_timing(com: Any, rc: Any) -> dict[str, Any]:
+    """Where a rank's Commit spent its time in the run that ended: per step, the root's lag behind the step's end, the worker's
+    hashing and the queue behind it; the span accounting (per step too); the staging ring's waits; the Python collections that paused
+    the process (on the steps' clock, `t_end`); and each source's own counters."""
+    sources = {}
+    for s in getattr(com, "sources", ()):
+        st = getattr(s, "stats", None)
+        sources[getattr(s, "short_name", type(s).__name__)] = st() if callable(st) else st
+    return {"steps": [{"step": s.step, "t_end": s.t_step_end, "lag_s": s.t_root_ready - s.t_step_end, "hashing_s": s.hashing_s,
+                       "backlog": s.backlog_at_step_end, "bytes": s.n_bytes, "tensors": s.n_tensors} for s in rc.steps],
+            "spans": rc.spans, "windows": rc.extra.get("windows"), "gc": rc.extra.get("gc"),
+            "collector": {k: v for k, v in (rc.extra.get("native_collect") or {}).items() if k != "fa2_wrap"}, "sources": sources}
 
 
 class _LLMShim:
@@ -888,7 +903,8 @@ class TP2CaptureWorkerExtension:
                           "identity_check": rc.extra.get("identity_check"), "expected_manifest": com.expected_manifest() if hasattr(com, "expected_manifest") else None,
                           "classes": class_coverage(d), "declaration": d, "weight_registration": rc.weight_registration,
                           "persistent_bytes": rc.persistent_bytes, "temporary_bytes_peak": rc.temporary_bytes_peak, "bounded_staging": rc.extra.get("bounded_staging"),
-                          "plans_cached": (rc.extra.get("native_collect") or {}).get("plans_cached"), "pinned_pool_bytes": rc.extra.get("pinned_pool_bytes")})
+                          "plans_cached": (rc.extra.get("native_collect") or {}).get("plans_cached"), "pinned_pool_bytes": rc.extra.get("pinned_pool_bytes"),
+                          "timing": _commit_timing(com, rc)})
 
     def _tp2_logical_request(self, rid: str, step: int | None = None) -> str:
         """Engine row id -> workload `r<i>` (commit_delta's rule, mirrored per rank): vLLM v1 suffixes the external request id with
@@ -1304,7 +1320,8 @@ class TP2CaptureWorkerExtension:
         self._tp2_prof = p
         return {"rank": int(_tp_facts(self)["tp"]["rank"]), "started": True, "pid": os.getpid()}
 
-    def tp2_profiler_stop(self, *, out_dir: str, keep_trace: bool = False) -> dict[str, Any]:
+    def tp2_profiler_stop(self, *, out_dir: str, keep_trace: bool = False, keep_ranks: list[int] | None = None) -> dict[str, Any]:
+        """The census of the profiled stretch; ``keep_trace``: the Kineto trace too, gzipped (only on ``keep_ranks`` when given)."""
         import torch
 
         from verity_vllm.properties import census
@@ -1324,7 +1341,7 @@ class TP2CaptureWorkerExtension:
         for e in evs:
             if e.get("ph") == "X" and e.get("cat") == "cpu_op":
                 cpu_ops[e.get("name", "")] = cpu_ops.get(e.get("name", ""), 0) + 1
-        if keep_trace:
+        if keep_trace and (keep_ranks is None or rank in keep_ranks):
             with open(tr, "rb") as fi, gzip.open(str(tr) + ".gz", "wb") as fo:
                 shutil.copyfileobj(fi, fo)
         tr.unlink()

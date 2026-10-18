@@ -70,7 +70,8 @@ _COMPILED = "a compiled row runs TargetProfile.COMPILATIONS' piecewise CUDA grap
 EXECUTIONS: dict[str | None, tuple[dict[str, Any], str]] = {
     None: ({"VLLM_BATCH_INVARIANT": True, "enforce_eager": True}, "a workload without a row id runs the harness's batch-invariant eager engine"),
     "eager": ({"enforce_eager": True}, "an eager row: its Programs are of the eager forward"),
-    "compiled": ({"enforce_eager": False, "cudagraph_mode": "PIECEWISE"}, _COMPILED),
+    "compiled": ({"enforce_eager": False}, "a compiled row at vLLM's serving defaults: torch.compile with vLLM's own CUDA-graph mode, "
+                                           "no batch invariance; its Program is P_compiled of that execution"),
     "bi-eager": ({"VLLM_BATCH_INVARIANT": True, "enforce_eager": True}, _BI),
     "bi-eager-fa2": ({"VLLM_BATCH_INVARIANT": True, "enforce_eager": True, "flash_attn_version": 2}, f"{_BI}, with attention_config.flash_attn_version 2"),
     "bi-compiled": ({"VLLM_BATCH_INVARIANT": True, "enforce_eager": False, "cudagraph_mode": "PIECEWISE"}, f"{_BI}; {_COMPILED}"),

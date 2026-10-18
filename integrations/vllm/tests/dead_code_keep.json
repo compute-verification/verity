@@ -20,6 +20,7 @@
   "verity_vllm.linear": "the linear-site interface, ahead of its first consumer (the MVP's install, migration step 3 of the research store's docs/pouw/vllm-integration-api.md); tests/linear",
   "verity_vllm.linear.api": "see verity_vllm.linear",
   "verity_vllm.linear.vllm_site": "see verity_vllm.linear; benchmarks/pouw's e2e.py, profile_decode.py and vllm_bench.py attach through it",
+  "verity_vllm.acquire.sources.served_compiled_source": "acquisition at vLLM's serving defaults (FULL_AND_PIECEWISE graphs, no batch invariance), checked by tests/acquire/test_served_compiled_source.py; benchmarks/served_commit's arm attaches through it; live once commit_delta's --compiled-taps takes it",
   "verity_vllm.program.registry.quarantine.collective": "provisional TP AllReduce definitions; test_tp_collective.py",
   "verity_vllm.program.registry.quarantine.collective.allreduce": "see quarantine.collective",
   "verity_vllm.program.registry.quarantine.collective.allreduce_difftest": "see quarantine.collective",

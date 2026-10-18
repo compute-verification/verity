@@ -46,6 +46,11 @@ EXPORT = {
     "TOKENIZERS_PARALLELISM": "false",
 }
 
+#: No compile cache of any layer (vLLM's, Inductor's FX graphs, AOTAutograd's): every compiled engine generates its wrappers
+#: in-process, so hooks installed before the build are in them (``served_compiled_source``), and an engine compared with
+#: one compiles the same way. Inductor's autotuning results (TORCHINDUCTOR_CACHE_DIR) stay shared.
+COMPILE_FRESH = {"VLLM_DISABLE_COMPILE_CACHE": "1", "TORCHINDUCTOR_FX_GRAPH_CACHE": "0", "TORCHINDUCTOR_AUTOGRAD_CACHE": "0"}
+
 #: Set by whoever gave this process its own TORCHINDUCTOR_CACHE_DIR (``prepare_compiled_process_cache``,
 #: ``ops/compiled_commit.sh``).
 INDUCTOR_DIR_MARK = "VERITY_INDUCTOR_DIR_PER_PROCESS"
@@ -70,6 +75,11 @@ def apply_target(env: Mapping[str, str]) -> dict[str, str]:
     """A ``TargetProfile.env()``: the profile's values replace whatever the process had."""
     os.environ.update(env)
     return {k: os.environ[k] for k in env}
+
+
+def apply_compile_fresh() -> dict[str, str]:
+    """``COMPILE_FRESH`` as overrides, before vLLM and torch read them."""
+    return apply_target(COMPILE_FRESH)
 
 
 def hide_devices() -> None:

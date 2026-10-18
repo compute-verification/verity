@@ -13,7 +13,7 @@
   = collective-level only, named), the per-rank fold Match (``tp-fold-match``).  A leased item's capture and control each hold the
   task's GPUs from right before their engine to their exit (``Row.run_gpu``); everything after them runs on the CPU, unleased.
 * **Commit**: the manifest over the W ranks, complete, then ``tp-commit`` with the windowed staging in its environment
-  (``VERITY_WINDOW_MB`` / ``VERITY_WINDOW_SLOTS`` / ``VERITY_RETAIN``, and a config run's ``VERITY_STAGING_BOUNDED``: flags it does not have) and ``--require-fold-match``
+  (``VERITY_WINDOW_MB`` / ``VERITY_WINDOW_SLOTS`` / ``VERITY_RETAIN``, and ``VERITY_STAGING_BOUNDED``, on in a config run only: flags it does not have) and ``--require-fold-match``
   when a fold Match is on disk.  The ranks run the guarded-max FA2 tap build and every tap the manifest names the family of
   (``row_records.applicable_taps``), as the single-GPU row does.  Each rank's weights registration hashes on its GPU
   (``VERITY_WEIGHTS_HASH=device`` unless the item sets ``host`` or ``device-checked``).  A leased item's ``tp-commit`` holds the task's
@@ -414,11 +414,9 @@ class TpRow(Row):
             self.verdict("commit", "FAIL", why)
             raise Stop(12)
         self.log(f"taps: {', '.join(taps) or 'none'} (on, and the manifest names their families); guarded max {'on' if ck.guarded_max_tap == '1' else 'off'}")
-        if ck.window_mb > 0:
-            self.child_env.update({"VERITY_WINDOW_MB": str(ck.window_mb), "VERITY_WINDOW_SLOTS": str(ck.window_slots)})
+        self.child_env.update({"VERITY_WINDOW_MB": str(ck.window_mb), "VERITY_WINDOW_SLOTS": str(ck.window_slots)})
         self.child_env["VERITY_RETAIN"] = ck.retain
-        if self.config_run:
-            self.child_env["VERITY_STAGING_BOUNDED"] = "1"
+        self.child_env["VERITY_STAGING_BOUNDED"] = "1" if self.config_run else "0"
         self.child_env.setdefault(GL.WEIGHTS_HASH, "device")
         self.log(f"commit staging: window_mb={ck.window_mb} slots={ck.window_slots} retain={ck.retain}{' bounded' if self.config_run else ''}; "
                  f"weights hash {self.child_env[GL.WEIGHTS_HASH]}")
