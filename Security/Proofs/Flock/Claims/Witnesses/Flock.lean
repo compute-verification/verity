@@ -119,7 +119,7 @@ theorem listWithin_unit {Col : Type} [DecidableEq Col] [Zero Col] (len : Unit �
   fun _ _ _ => List.mem_singleton.2 rfl
 
 theorem inStmt_inScope : Claims.Flock.InScope false inStmt := by
-  refine ⟨by decide, by decide, by decide, by decide, rfl, by decide, rfl, rfl, by decide, by decide,
+  refine ⟨by decide, by decide, by decide, by decide, rfl, by decide, rfl, Or.inl rfl, by decide, by decide,
     fun h => absurd h (by decide), Or.inl ⟨rfl, by decide⟩, by decide, rfl, Or.inl rfl⟩
 
 theorem inStmt_relS (w : Claims.Flock.Wit) : Claims.Flock.RelS inStmt w := fun _ _ => rfl

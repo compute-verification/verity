@@ -195,7 +195,8 @@ theorem plain_tableBoundθAt_of_simD {x : Claims.Msg} {ins : Ins} {spec : Sessio
 
 /-- **A simulator at a plain statement, at the verdict at the draw**: `PlainSimWrPAtD` at the statements in scope that
 set up at a draw, at their one table's `fast100` schedule, with the decoders `plain_hdecAt` where the outputs are
-public and `plain_hdecHAt` where they are hidden. -/
+public and `plain_hdecHAt` where they are hidden under `hm96-sha512/v1` leaves, and `PlainLiveAccAt` where they are
+hidden under any other leaf the scope admits. -/
 def PlainSimWD (x : Claims.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf false x = some (ins, spec, sts)) (st : Stmt)
@@ -208,10 +209,12 @@ def PlainSimWD (x : Claims.Msg) : Prop :=
       PlainSimWrPAtD h L m k0 l₀ l₁ rest ext hsch hk0 hm hlay ins.read.I d
         (plainOpn (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) ins.read.I d)
         (plain_hdecAt hs hin hset h hh hd L m k0 l₀ l₁ rest ext hsch hm hlay)) ∧
-    (∀ hh : ins.read.I.tags.hiddenOutputs = true,
+    (∀ (hh : ins.read.I.tags.hiddenOutputs = true) (hl : ins.read.I.tags.merkleLeaf = "hm96-sha512/v1"),
       PlainSimWrPAtD h L m k0 l₀ l₁ rest ext hsch hk0 hm hlay ins.read.I d
         (plainOpnH (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) ins.read.I d)
-        (plain_hdecHAt hs hin hset h hh hd L m k0 l₀ l₁ rest ext hsch hm hlay))
+        (plain_hdecHAt hs hin hset h hh hl hd L m k0 l₀ l₁ rest ext hsch hm hlay)) ∧
+    (∀ (_ : ins.read.I.tags.hiddenOutputs = true) (_ : ins.read.I.tags.merkleLeaf ≠ "hm96-sha512/v1"),
+      PlainLiveAccAt (wide false) h L m k0 l₀ l₁ rest ext hsch hk0 hm PT_LOCAL hlay)
 
 /-- **A simulator at the verdict at the draw gives the plain table bound at a statement some run accepts**: such a
 statement is in scope with one table (`acc_inScope`, `plain_one`), whose model statement no table off it is committed
@@ -236,10 +239,13 @@ theorem plain_tableBoundθAt_simD {x : Claims.Msg} (hno : ¬ Claims.Flock.NoAcc 
         (Claims.Flock.oracleOf C) := fun C hw hg => by
     have := plain_not_committed hs' hin hset h0 L C hw hg
     rwa [e] at this
-  obtain ⟨hw, hhid⟩ := hs s hs' hin ins spec sts hset _ ht d hd L _ k0 l₀ l₁ rest ext hsch hk0 hm13 hlay
+  obtain ⟨hw, hhid, hplain⟩ := hs s hs' hin ins spec sts hset _ ht d hd L _ k0 l₀ l₁ rest ext hsch hk0 hm13 hlay
   cases hh : ins.read.I.tags.hiddenOutputs
   · exact plain_tableBoundθAt_of_simD hset hd hnc (hw hh)
-  · exact plain_tableBoundθAt_of_simD hset hd hnc (hhid hh)
+  · by_cases hleaf : ins.read.I.tags.merkleLeaf = "hm96-sha512/v1"
+    · exact plain_tableBoundθAt_of_simD hset hd hnc (hhid hh hleaf)
+    · exact plain_tableBoundθAt_of_live Readable.relation (wide false) ht L _ k0 l₀ l₁ rest ext hsch hk0 hm13 PT_LOCAL
+        hlay hnc (plainLiveAt_of_acc (hplain hh hleaf))
 
 /-- **The deployed plain verifier: KS**, at SHA-512 at the trimmed record at the deployed relation, at the statements
 some run accepts from a simulator of each prover at the verdict at the draw (`PlainSimWD`). It asks nothing of the

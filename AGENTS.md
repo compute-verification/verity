@@ -1,7 +1,7 @@
 # Verity
 
 Verity represents AI datacenter computations exactly as Boolean circuits, proves claims about them, and derives
-compute, memory and network accounting from those proofs. `README.md` has the architecture and the Glossary, whose terms
+compute, memory and network accounting from those proofs. `DESIGN.md` has the architecture and the Glossary, whose terms
 code, docs and output use. This file states what is true on `main` now: what each directory is, the design rules, and how
 work lands. Each package's contents are in its own README and docstrings. Your checkout, and this file in your prompt, can
 be older than `main` (a cloud VM boots from a snapshot), so when they differ, `git show origin/main:AGENTS.md` wins.
@@ -55,7 +55,7 @@ Top-level directories (a grouping, not an import name, except `verity/`):
     `circuit_check/` (the property checks every circuit passes) and `lean/` (the Lean check, `check.py`).
   - `research`: the run recorder and the run-store client: runs, the evidence store, Slack, pods and deploys. It imports
     nothing from Verity.
-  - `agent-guard`: the VM's secret guard.
+  - `agent-guard`: the VM's secret guard, its OOM recorder, and the hook that keeps builds and tests off agent VMs (`research run --on auto` runs them on a node).
   - `move`: layout moves.
 - `infra/`: our machines.
   - `cluster/` (`cluster`): the shared machines' policy, planner and ledger. Stdlib only.
@@ -146,6 +146,11 @@ Every package's tests live in its own `tests/` and run as one suite, in its own 
 pytest-xdist workers), cached by input. The repository's own suite (`tests/`) holds only invariants of the whole tree. The
 testing skill, `.agents/skills/testing/SKILL.md`, says how to run them, what a suite may read (`[tool.verity.tests]
 inputs`), and the rules for slow tests, fixtures and dummy credentials.
+
+Heavy work runs on a node, never on an agent VM (16 GB, shared by every agent on it): circuit-check (24 GB a
+process), a Lean build of `Security/Proofs` (ArkLib), and the circuit_check and vLLM suites. Run them with `research run
+--on vy-nebius-1 --project verity --source . --cwd source -- …` (the writing-runs skill), or through the quick tier
+(`research queue ready N --on vy-nebius-1`).
 
 No test depends on wall-clock time: no sleeps, clock readings or timeouts. Wait on the event itself or inject the clock.
 `tests/test_no_wall_clock.py` enforces it, and its `ALLOWED` list, one reason per entry, holds the exceptions.
@@ -249,7 +254,7 @@ PRs land through ci's `research queue drive` (#1826), live since 12 Oct 06:00Z:
   - an assumption is a named `Prop`, taken as a hypothesis or read in a guarantee's statement, and listed by name in the
     lock with its own record;
   - every file is built, and every declaration is replayed through the kernel.
-- **The lock.** A guarantee (README "Glossary") is listed in `lean-audit.json`, and `check.py --update` records its
+- **The lock.** A guarantee (DESIGN.md "Glossary") is listed in `lean-audit.json`, and `check.py --update` records its
   statement and every definition the statement reads; those records are the lock.
   - When a changed record lands on `main`, Daniel gets a DM showing it. That DM is the check: nobody signs off and nothing
     waits on it.
@@ -268,7 +273,7 @@ abstractions or procedures. Enforce deterministic requirements in code, with the
 in prose. Remove obsolete rules and machinery rather than accumulating them.
 
 **A decision rolls out in the change that records it.** When Daniel rules, or a PR retires a term, a path or a procedure,
-that PR rewrites every place that states the old way: `git grep` the old phrase across this file, the README and its
+that PR rewrites every place that states the old way: `git grep` the old phrase across this file, DESIGN.md and its
 Glossary, the skills, READMEs, docstrings and CLI help. When code has to change first, the ruling's relay names the
 owner and the PR, and the docs change with that PR. A stale statement found later is fixed on sight, by whoever finds
 it. `tests/test_doc_paths.py` fails on a maintained doc that names a repository path that no longer exists.
@@ -343,6 +348,11 @@ Coordinators are launched, handed over and archived from Daniel's laptop with `i
 - **Keep chatter low** (contract §3a). Every message, and every background shell you start, reaches the coordinator and
   the human. So run long jobs detached on the pod, write one-line checkpoints, and message someone only to unblock them
   or to change their plan.
+- **Reach a running subagent through its next shell command:** `python3 tools/agent-guard/inbox.py send AGENT_ID --text
+  '…'`, where AGENT_ID is the `bc-…` id its Task call returned. A subagent never rereads a file mid-run, so don't put
+  ownership changes or new requirements in a shared file and hope. The shell hook refuses the agent's next command once,
+  with your message as the refusal's text, and the agent re-runs it. Agents on other VMs: through their coordinator on
+  Slack.
 - **Check what's being tried.** Before starting work another agent could plausibly be doing, read the notes'
   `kb/onboarding.md`, check `research notes approaches`, and claim yours at your first checkpoint
   (`research notes claim`).
