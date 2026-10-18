@@ -735,7 +735,8 @@ def test_the_dependencies_plugins_are_named_once_each():
 def test_a_plugin_two_libraries_load_is_linked_alone_first_so_the_build_links_it_no_more(tmp_path):
     """INF-62: Lake 4.34 links a plugin twice when a module-system library and a classic one load it, as ArkLib's `ArkLib` and
     `ArkLibTest` load `ArkLibLintPlugin:shared`, and the two links of one file race (three proofs builds failed so on 18 Oct).
-    Linked alone first (`plugin_targets`), the build finds it up to date and links nothing."""
+    Whether a plain build schedules the second link depends on Lake's scheduling, so the test checks only the fix: linked
+    alone first (`plugin_targets`), the build finds it up to date and links nothing."""
     dep, root = tmp_path / "dep", tmp_path / "root"
     (dep / "scripts").mkdir(parents=True)
     root.mkdir()
@@ -750,10 +751,6 @@ def test_a_plugin_two_libraries_load_is_linked_alone_first_so_the_build_links_it
     for d in (dep, root):
         (d / "lean-toolchain").write_text(toolchain)
     lake = lambda *a: subprocess.run(["lake", *a], cwd=root, capture_output=True, text=True, env=A.lake_env())
-    twice = tmp_path / "twice"
-    shutil.copytree(tmp_path, twice, ignore=lambda d, n: ["twice"] if Path(d) == tmp_path else [])
-    plain = subprocess.run(["lake", "build"], cwd=twice / "root", capture_output=True, text=True, env=A.lake_env())
-    assert plain.stdout.count("Built Plug:shared") == 2, "the double link this guards against"
     (root / ".lake" / "packages").mkdir(parents=True)
     (root / ".lake" / "packages" / "Dep").symlink_to(dep)
     assert A.plugin_targets(root) == ["@Dep/Plug:shared"]
