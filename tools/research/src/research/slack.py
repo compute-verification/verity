@@ -1934,14 +1934,16 @@ def nearest_rank(xs: list[float], q: float) -> float | None:
 def ask_latency(api: Slack, reg: dict, routes: Routes, ch: str, since: float, now: float, stale_s: float,
                 linear_client: Callable[[], Any] | None = None) -> dict:
     """Each ask posted in (since, now] that rang a lane's inbox, and how long the lane took to first answer it: the earliest of
-    a reply in the ask's thread under the lane's name, and (an ask linked to a Linear issue) the issue's first move out of
+    a reply in the ask's thread under a name of the lane's inbox (its own, or one it was renamed from), and (an ask linked to a Linear issue) the issue's first move out of
     Backlog or first comment by anyone but the asker (`issue_answer`).  An ask with no timed answer that carries 👀, ✅ or ❌
     and rang only this lane counts as answered but untimed: Slack keeps no time for a reaction, and every handle reacts as
     one bot.  Answers after `now` don't count.  Per lane: asks, answered (by Slack, Linear or untimed), the nearest-rank
     median and p90 of the timed answers in minutes, the unanswered, and those unanswered for longer than `stale_s`."""
     tops: dict[str, dict[str, dict]] = {}                            # channel -> ts -> top-level post
     replies: dict[tuple[str, str], list[dict]] = {}
-    asks, counted = [], set()
+    asks, counted, names = [], set(), {}
+    for r in routes.all().values():
+        names.setdefault(r.get("inbox_ts"), set()).add(r["name"])  # a renamed lane answers under its old name too
     for r in sorted(routes.all().values(), key=lambda r: (bool(r.get("closed")), r["name"])):
         if not r.get("inbox_ts") or r["inbox_ts"] in counted:
             continue                                                 # a renamed name forwards into its successor's inbox
@@ -1956,9 +1958,9 @@ def ask_latency(api: Slack, reg: dict, routes: Routes, ch: str, since: float, no
             if not d or (d[4] and d[4] != d[3]) or d[3] in seen:
                 continue                                             # a reply's doorbell, or one `deliver` rang again
             root = tops[rch].get(d[3])
-            if root and is_ask(root) and poster(root, reg) != r["name"]:
+            if root and is_ask(root) and poster(root, reg) not in names[r["inbox_ts"]]:
                 seen.add(d[3])
-                asks.append({"lane": r["name"], "channel": rch, "root": root})
+                asks.append({"lane": r["name"], "names": names[r["inbox_ts"]], "channel": rch, "root": root})
     rang: dict[tuple[str, str], int] = {}
     for a in asks:
         rang[(a["channel"], a["root"]["ts"])] = rang.get((a["channel"], a["root"]["ts"]), 0) + 1
@@ -1970,7 +1972,7 @@ def ask_latency(api: Slack, reg: dict, routes: Routes, ch: str, since: float, no
         if root.get("reply_count") and key not in replies:
             replies[key] = api.paged("conversations.replies", "messages", channel=a["channel"], ts=root["ts"], oldest=root["ts"])
         found = [{"at": float(m["ts"]), "how": "slack-reply", "by": lane} for m in replies.get(key, [])
-                 if m.get("ts") != root["ts"] and poster(m, reg) == lane and t0 < float(m["ts"]) <= now]
+                 if m.get("ts") != root["ts"] and poster(m, reg) in a["names"] and t0 < float(m["ts"]) <= now]
         asker = poster(root, reg)
         if link := LINEAR_LINK_RE.search(root.get("text") or ""):
             if (link[1], asker) not in issues:

@@ -1671,6 +1671,7 @@ def test_traffic_latency_takes_each_lanes_first_answer_on_slack_or_linear(fake, 
     in, and anything after --now are no answer."""
     from research import linear
     circuits, proofs = inbox(fake, routes_dirs, "circuits"), inbox(fake, routes_dirs, "proofs")
+    add_route(routes_dirs[0], "old-circuits", circuits, closed="2026-10-01T18:00Z", forward_to="circuits")   # renamed: one inbox
     now = T0 + 86400
     slack_ask = ask_at(fake, circuits, 0, "infra", "@circuits can the cut take 2^20 rows?")
     reply_at(fake, slack_ask, 60, "proofs", "not mine, but probably")                       # another lane's reply
@@ -1687,6 +1688,8 @@ def test_traffic_latency_takes_each_lanes_first_answer_on_slack_or_linear(fake, 
     for box, dt in ((proofs, 551), (circuits, 552)):                                          # `deliver` rang circuits again
         fake.add(COORD, text=slack.doorbell("infra", both["ts"], both["ts"], both["text"]), username="router", bot_id=BOT,
                  thread_ts=box, ts=f"{T0 + dt:.6f}")
+    renamed = ask_at(fake, circuits, 600, "infra", "@old-circuits the old lowering?")
+    reply_at(fake, renamed, 180, "old-circuits", "answered before the rename")                  # 3 min
     fresh = ask_at(fake, circuits, 86000, "infra", "@circuits one more")                        # unanswered, but not stale
     ask_at(fake, circuits, 700, "infra", f"{slack.ANNOUNCE} from @infra to @circuits: node 2 reboots")   # announcements aren't asks
     ask_at(fake, circuits, 800, "infra", "@circuits fyi: the census moved (quiet)")
@@ -1706,7 +1709,8 @@ def test_traffic_latency_takes_each_lanes_first_answer_on_slack_or_linear(fake, 
     rc, out, _ = run(capsys, "traffic", "--latency", "--hours", "24", "--now", f"{now:.0f}", "--json")
     rep = json.loads(out)
     by = {(a["lane"], a["ts"]): a for a in rep["asks"]}
-    assert rc == 0 and len(rep["asks"]) == 9 and sorted(fake_linear.asked) == ["PRF-1", "PRF-2", "PRF-3", "PRF-404"]
+    assert by["circuits", renamed["ts"]]["minutes"] == 3.0
+    assert rc == 0 and len(rep["asks"]) == 10 and sorted(fake_linear.asked) == ["PRF-1", "PRF-2", "PRF-3", "PRF-404"]
     assert (by["circuits", slack_ask["ts"]]["first"], by["circuits", slack_ask["ts"]]["minutes"]) == ("slack-reply", 10.0)
     assert (by["proofs", linear_ask["ts"]]["first"], by["proofs", linear_ask["ts"]]["minutes"]) == ("linear-state", 5.0)
     assert (by["proofs", filed_started["ts"]]["first"], by["proofs", filed_started["ts"]]["minutes"]) == ("linear-comment", 30.0)
@@ -1716,14 +1720,14 @@ def test_traffic_latency_takes_each_lanes_first_answer_on_slack_or_linear(fake, 
     assert by["circuits", both["ts"]]["first"] is None and by["proofs", both["ts"]]["first"] is None   # whose 👀? unknown
     assert by["circuits", fresh["ts"]]["age_minutes"] == round((now - float(fresh["ts"])) / 60, 1)
     assert rep["lanes"] == [
-        {"lane": "circuits", "asks": 4, "answered": 2, "slack": 1, "linear": 0, "untimed": 1, "median_min": 10.0,
+        {"lane": "circuits", "asks": 5, "answered": 3, "slack": 2, "linear": 0, "untimed": 1, "median_min": 3.0,
          "p90_min": 10.0, "unanswered": 2, "stale": 1},
         {"lane": "proofs", "asks": 5, "answered": 2, "slack": 0, "linear": 2, "untimed": 0, "median_min": 5.0,
          "p90_min": 30.0, "unanswered": 3, "stale": 3}]
     rc, out, _ = run(capsys, "traffic", "--latency", "--hours", "24", "--now", f"{now:.0f}")
     lines = out.splitlines()
     assert rc == 0 and lines[0].startswith("ask latency over the last 24 h")
-    assert lines[2].split() == ["@circuits", "4", "2", "1", "0", "1", "10.0", "10.0", "2", "1"]
+    assert lines[2].split() == ["@circuits", "5", "3", "2", "0", "1", "3.0", "10.0", "2", "1"]
     assert lines[3].split() == ["@proofs", "5", "2", "0", "2", "0", "5.0", "30.0", "3", "3"]
     assert lines[4] == "  linear: 1 issue(s) unread, counted from Slack alone: PRF-404: Linear: Entity not found: Issue"
 
