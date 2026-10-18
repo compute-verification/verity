@@ -131,16 +131,6 @@ def _node_of(node_or_inst: Any) -> Any:
     return getattr(node_or_inst, "node", node_or_inst)
 
 
-def _arg_names(node: Any) -> list[str]:
-    args = getattr(node, "args", None)
-    if args is not None and not isinstance(args, Mapping):
-        return [a.name for a in args]
-    if isinstance(node, Mapping):
-        a = node.get("args") or node.get("inputs") or {}
-        return list(a.keys()) if isinstance(a, Mapping) else [x["name"] for x in a]
-    return []
-
-
 def _arg_value(node: Any, inputs: Mapping[str, Any], role: str) -> Any:
     """The opened value for role ``x`` / ``w`` / ``bias``: by argument name first, then by the
     canonical id a plain node mapping names for it."""
