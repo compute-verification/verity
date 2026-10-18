@@ -110,7 +110,8 @@ class RootsArm(ProfArm):
         w = dict((rc.extra or {}).get("windows") or {})
         st = dict(self.committer._nc.stats()) if hasattr(self.committer._nc, "stats") else {}
         lay = self.committer._layouts
-        rec = {"arm": self.id, "run": len(self.runs), "name": self.run_name, "run_root": bytes(rc.run_root).hex(), "steps": len(lay),
+        rec = {"arm": self.id, "committer": self.committer.name, "run": len(self.runs), "name": self.run_name,
+               "run_root": bytes(rc.run_root).hex(), "steps": len(lay),
                "learned_only_steps": len(bs.get("learned_only_steps") or ()), "plan_mismatches": bs.get("plan_mismatches"),
                "bounded": bs.get("enabled"), "reupload_bytes": w.get("reupload_bytes"),
                "plans": {k: st.get(k) for k in ("plans", "plan_entries", "plans_dropped", "learn_steps")},
@@ -187,6 +188,26 @@ class RowsArm(NativeDrainArm):
     commit_scheme = "rows-sha512"
 
 
+class HiPrioArm(NativeDrainArm):
+    """The nativedrain arm with each engine step on a high-priority stream (the committer's VERITY_HI_PRIO): the worker's hashing,
+    on its side stream at the default priority (CUDA's lowest), gets a block slot only when no serving block waits for one."""
+
+    def ready(self, target: Any) -> None:
+        import os
+
+        os.environ["VERITY_HI_PRIO"] = "1"
+        try:
+            super().ready(target)
+        finally:
+            del os.environ["VERITY_HI_PRIO"]
+
+
+class RowsHiPrioArm(HiPrioArm):
+    """The hiprio arm committing under rows-sha512."""
+
+    commit_scheme = "rows-sha512"
+
+
 class FinalizeProfArm(NativeDrainArm):
     """The nativedrain arm with the committer's finalize under cProfile: the top functions by cumulative time of each run's finalize
     (inside the timed window) appended to $RESEARCH_RUN_DIR/out/finalize_prof.txt."""
@@ -249,6 +270,8 @@ SERVED_COMMIT_PROF = RootsArm("served-commit-prof", retain="none")
 SERVED_COMMIT_SWITCH = SwitchArm("served-commit-switch", retain="none")
 SERVED_COMMIT_NATIVEDRAIN = NativeDrainArm("served-commit-nativedrain", retain="none")
 SERVED_COMMIT_ROWS = RowsArm("served-commit-rows", retain="none")
+SERVED_COMMIT_HIPRIO = HiPrioArm("served-commit-hiprio", retain="none")
+SERVED_COMMIT_ROWS_HIPRIO = RowsHiPrioArm("served-commit-rows-hiprio", retain="none")
 SERVED_COMMIT_FPROF = FinalizeProfArm("served-commit-fprof", retain="none")
 SERVED_COMMIT_NOMEMO = NoMemoArm("served-commit-nomemo", retain="none")
 STOCK_PROF = StockProfArm("stock-prof")
