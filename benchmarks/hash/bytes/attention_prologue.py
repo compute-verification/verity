@@ -18,8 +18,9 @@ Three variants go through `verity.core.protocols.sampled_proofs` with the int8 p
 - `baseline`: rope_q and kv_k committed by per-element norm+RoPE units (zero-work templates, at their floor);
 - `prologue`: no rope units; each attention unit recomputes k's norm and RoPE for every key it reads, and q's once;
 - `kv-credited`: memory accounting's KV tree commits post-RoPE K, so the attention unit reads K from it and recomputes only
-  q; per-element link units prove cache K = RoPE(norm(k)) against the tree (zero-work, at their floor, nothing committed).
-In both changed variants rope_q and kv_k (10,240 B a token a layer) leave the Commit. The RoPE tables are registered tables
+  q; per-element link units prove cache K = RoPE(norm(k)) against the tree (zero-work, at their floor, nothing committed);
+- `q-prologue`: the attention unit recomputes q's norm and RoPE once; k's rope units and kv_k stay as in the baseline.
+rope_q and kv_k (10,240 B a token a layer) leave the Commit in `prologue` and `kv-credited`; rope_q (8,192 B) in `q-prologue`. The RoPE tables are registered tables
 (lookup rows, no ANDs), like the other gathers.
 """
 from __future__ import annotations
@@ -82,7 +83,7 @@ LINEARS = {4096: 4096 + 1024 + 1024 + 4096 + 12288 + 12288, 12288: 4096}
 #: Qwen3-8B B32 on one RTX PRO 6000, stock serve (r20261018-065034-aa8f): 4 prefill steps of 2,560 tokens at 117 ms and 64
 #: decode steps of 32 at 15 ms, 12,288 tokens in 1,428 ms
 TOKENS_PER_S = 12_288 / 1.428
-VARIANTS = ("baseline", "prologue", "kv-credited")
+VARIANTS = ("baseline", "prologue", "kv-credited", "q-prologue")
 
 
 def bf16_coord(k: int) -> Shape:
@@ -122,7 +123,7 @@ def rope_commit_b(v: dict) -> float:
 def plans(variant: str, leaves: int, *, commit_scale: float = 1.0, grid: int = 41) -> dict:
     v = {k: i.value for k, i in I.items()}
     v["tokens_per_s"] = TOKENS_PER_S
-    v["zero_work_templates"] = {"baseline": 30, "prologue": 28, "kv-credited": 29}[variant]
+    v["zero_work_templates"] = {"baseline": 30, "prologue": 28, "kv-credited": 29, "q-prologue": 29}[variant]
     fit = IL8.fitted(v)
     w = workload(v, variant, leaves, IL8.WINDOWS["week"])
     costs = IL8.model(v, fit, w["replay_units"])
@@ -133,8 +134,8 @@ def plans(variant: str, leaves: int, *, commit_scale: float = 1.0, grid: int = 4
                                  replay=("layer-step", w["replay_units"]))
         cands += cs
     front = frontier(cands, costs, objective, grid=grid, exact=False)
-    extra = IL8.zero_work_cost(costs, v) + (rope_commit_b(v) * commit_scale * w["window_gpu_s"]
-                                           if variant == "baseline" else 0.0)
+    kept = {"baseline": 1.0, "q-prologue": KV_HEADS / (HEADS + KV_HEADS)}.get(variant, 0.0)
+    extra = IL8.zero_work_cost(costs, v) + rope_commit_b(v) * commit_scale * kept * w["window_gpu_s"]
     out = {}
     for b in IL8.BUDGETS:
         p = for_budget(front, (b - v["commit_floor"]) * w["window_gpu_s"] - extra, candidates=cands, costs=costs,
