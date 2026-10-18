@@ -167,15 +167,15 @@ from verity.core.protocols.sampled_proofs.costfit import fit
 - `audit`: `audit_record`, and the profile in its forms: `profile`, `wrong_units`, `integrity_profile`; `core_law` is a
   sampling design as core's `Stratified`; `session_registered` reads the registered roots off the verdicts of record.
 - `verdict`: `Verdict`, what every check returns: `ok`, the failure codes in the order found, and a detail per code
-  (and `verifiers`, both verifiers' outcomes, from `verifier`).
+  (and `verifiers`: both verifiers' outcomes).
 - `hello`: `check_run`, the run's Hello and its one coin tree over `run_streams`.
-- `verifier`: the verifier of record, `check`, `matches_public`, `check_draw`, `check_proved`, `hello`, `audit_record`,
-  `check_public` and `check_verdicts` (given the service's Python verdict), and two-stage's `two_stage_profile` and
-  `check_probability`, by the Lean and the Python, `RECORD_VERDICT` naming whose is the record's.
+- `verifier`: the verifier of record: `check`, `matches_public`, `check_draw`, `check_proved`, `hello`, `audit_record`,
+  `check_public`, `check_verdicts` (given the service's Python verdict), `two_stage_profile` and `check_probability`,
+  by the Lean and the Python; `RECORD_VERDICT` names whose is the record's.
 - `consumers`: `exfiltration_bound`, `compute_bound` and `location_bits`, over any `IntegrityProfile`.
 - `two_stage`: `TwoStageLaw` of `Stage`s and its `profile`; stage 1's draws `select_replay_units` and `draw_first` (a
-  one-stage sampling design's draw object over the RUs, with `closure_of` for a work sampling design's closure), stage
-  2's `select_proof_units`, all from `OwnRandomness`; and `check_probability`.
+  one-stage design's draw over the RUs, with `closure_of` for a work design's closure), stage 2's `select_proof_units`,
+  all from `OwnRandomness`; and `check_probability`.
 - `plan`: `VerificationPlan` of `GateClass`es with its `UnconditionalObligation`s, `Obligation.of_call`, and
   `weight_binding_plan`.
 - `optimize`: the untrusted planner. From `Candidate`s (cuts of each op type into units), a `CostModel` (per

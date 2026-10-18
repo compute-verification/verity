@@ -401,10 +401,10 @@ def table : List (String × (Json → V Json)) :=
    ("domain", domain), ("check_draw", checkDraw), ("draw", draw), ("select", select), ("slots", slots),
    ("check_proved", checkProved),
    ("bound", bound), ("bernoulli_bound", bernoulliBound),
+   ("two_stage_profile", twoStageProfile), ("check_probability", checkProbability),
    ("verdict", verdict), ("matches_public", matchesPublic), ("session_registered", sessionRegistered), ("record", record),
    ("check_public", checkPublic), ("check_verdicts", checkVerdicts), ("run", run), ("replay_units", replayUnits),
-   ("proof_units", proofUnits), ("two_stage_profile", twoStageProfile), ("check_probability", checkProbability),
-   ("hello", Hello.check)]
+   ("proof_units", proofUnits), ("hello", Hello.check)]
 
 def verifier : List (String × (Json → V Json)) :=
   [("registration", registration), ("matches_public", matchesPublic), ("select", select), ("check_draw", checkDraw),
