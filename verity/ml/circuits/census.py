@@ -52,8 +52,9 @@ leaf a node passes through (a Call that returns one of its arguments, a scan's c
 reads the value passed, and its producer's.
 
 **Facts.** A value's fact is what `ports.facts(root)` knows of its leaves (PROTOCOL.md §12): an interval (null: it spans its
-width), its origins, whether it is a sink, and its word type. An input's interval is its port's bound and a constant's its value;
-a computed value's is what its producer declares or its transfer gives. `facts` lists each distinct fact once, in the order the
+width), its origins, whether it is a sink, and its word type. An input's interval is its port's declared bound, which evaluation
+doesn't enforce, so no reader takes it (or a transfer's from it) on trust; a constant's is its value; a computed value's is what
+its producer declares or its transfer gives. `facts` lists each distinct fact once, in the order the
 values first name it. A constant wider than the canonical JSON's integers is written with no interval (every declared interval
 is within them). A Program in which no Definition declares ports has only the default facts.
 
