@@ -213,6 +213,26 @@ def test_a_captured_copy_left_unflushed_is_an_error(monkeypatch):
     assert src.pending == [] and src.errors == ["capture FULL:4: 1 captured copies never flushed"]
 
 
+def test_a_captured_fused_moe_tap_copies_at_once_when_batching(monkeypatch):
+    """The fused-MoE op's taps fire inside the op, where no flush line runs, and its `up` and `down` share one workspace."""
+    src = S.ServedCompiledSource()
+    src.codegen = {"batch": True}
+    monkeypatch.setattr(S, "_capturing", lambda val: True)
+    src._begin_capture(4)
+    key = ("FULL", 4)
+    src.plans[key], src.capturing, src.piece = [], key, 1
+    workspace = torch.arange(16.0)
+    up = workspace.clone().view(4, 4)
+    src._moe_tap("up", workspace.view(4, 1, 4), 4)
+    workspace.neg_()
+    src._moe_tap("down", workspace.view(4, 1, 4), 4)
+    src.capturing = None
+    src._end_capture(key)
+    slots = {name: slot for _order, name, slot, _rows in src.plans[key]}
+    assert src.pending == [] and src.errors == []
+    assert torch.equal(slots["c01.moe/up"], up) and torch.equal(slots["c01.moe/down"], -up)
+
+
 def test_fixed_shape_tensor_whose_length_is_a_capture_size_is_never_cut(monkeypatch):
     src, sim, c = _setup(monkeypatch)
     got = dict(sim.step(c, "FULL", WIDTH, 2, *_inputs(2, WIDTH, seed=9)))

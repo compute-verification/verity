@@ -19,7 +19,8 @@ Three execution paths give the committer the same sequence of (name, bytes):
     uncaptured warm-up pass vLLM runs before each capture, outside the graph pool; vLLM's memory-profiling captures are discarded
     with their slots.  With `batch_copies` (the default) a captured hook records its copy and the wrapper's flush lines issue the
     recorded copies together, a multi-tensor copy per flush (one per word width) instead of one graph node per tensor; the flushes sit wherever
-    a recorded buffer's bytes could next change (`install_codegen_hooks`), so each copy reads what the immediate copy would.
+    a recorded buffer's bytes could next change (`install_codegen_hooks`), so each copy reads what the immediate copy would.  The
+    fused-MoE taps copy at once: they fire inside the op, past every flush line.
   * a replayed step: nothing Python runs for captured work.  Live work inside the step (attention between PIECEWISE pieces, piece 0's
     inputs at its wrapper) copies into its slot the same way.  When the forward is complete (the logits) the step's slots are
     acquired in canonical order: `slot[:n]` for token-row tensors (n = the step's tokens; rows n.. are CUDA-graph padding, never a
@@ -445,7 +446,9 @@ class ServedCompiledSource:
             into.wrap(mod, "invoke_fused_moe_triton_kernel", expert)
 
     def _moe_tap(self, plane: str, val: torch.Tensor, rows: int) -> None:
-        self._tap(2, f"c{self.piece:02d}.moe/{plane}", val.reshape(rows, -1))
+        # Copied at once, batch_copies or not: the op reuses its workspace within one call, past every flush line (TritonExperts'
+        # `up` and `down` are both views of workspace2).
+        self._tap(2, f"c{self.piece:02d}.moe/{plane}", val.reshape(rows, -1), defer=False)
 
     def remove_hooks(self) -> None:
         """Undo `install_hooks`.  Code Inductor generated while they were installed keeps its hook lines."""
@@ -537,7 +540,7 @@ class ServedCompiledSource:
             _, op, buf = name.split("|", 2)
             self._tap(0, f"c{self.piece:02d}.{op}/{buf}", val)
 
-    def _tap(self, sub: int, name: str, val: torch.Tensor) -> None:
+    def _tap(self, sub: int, name: str, val: torch.Tensor, defer: bool = True) -> None:
         if val.numel() == 0:
             return
         index = self.index.get(sub, 0)
@@ -547,7 +550,8 @@ class ServedCompiledSource:
             if self.capturing is None:
                 self.errors.append(f"{name}: captured outside a CudaGraphManager capture")
                 return
-            self.plans[self.capturing].append(self._stage(order, name, val, self.capturing[1], defer=bool(self.codegen.get("batch"))))
+            defer = defer and bool(self.codegen.get("batch"))
+            self.plans[self.capturing].append(self._stage(order, name, val, self.capturing[1], defer=defer))
             self.stats["capture_copies"] += 1
             return
         if self.capturing is not None:
