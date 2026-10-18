@@ -60,6 +60,7 @@ from verity_vllm.check.match import supplied_inputs as SI
 from verity_vllm.check.match.input_layout import weights_input_nodes  # noqa: F401  (re-exported: attribution, resolve_decomp, tests)
 from verity_vllm.check.program_ops import Ops
 from verity_vllm.config import option
+from verity_vllm.program import prefix_plan as PP
 from verity_vllm.program.sampling_event import is_sampling_event as _is_sampling_event  # [R15 stoch]
 
 XREQ = "XREQ"
@@ -399,14 +400,15 @@ def engine_steps_of(P: Projection, meta_of: dict[int, dict]) -> list[list[int]]:
 # ------------------------------------------------------------------------------------------------ derived index
 
 
-def derived_shape(d: str) -> tuple[int, int] | None:
-    """(LP, T) of a derived request-wrapper dir: derive_step's construction_manifest.json `structural_inputs`."""
+def derived_shape(d: str) -> tuple[int, ...] | None:
+    """(LP, T) of a derived request-wrapper dir, (LP, T, C) for a cached prefix of C rows (`program.prefix_plan.shape`): derive_step's
+    construction_manifest.json `structural_inputs`."""
     for fn in ("construction_manifest.json", "artifact.json"):
         p = os.path.join(d, fn)
         if os.path.exists(p):
             si = (json.load(open(p)).get("structural_inputs") or {})
             if si.get("LP") is not None and si.get("T") is not None:
-                return int(si["LP"]), int(si["T"])
+                return PP.shape(int(si["LP"]), int(si["T"]), int(si.get("C") or 0))
     rep = os.path.join(d, "derive-report.json")
     if os.path.exists(rep):
         r = json.load(open(rep))

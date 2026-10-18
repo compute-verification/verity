@@ -16,6 +16,7 @@ from typing import Any
 
 from verity_vllm.commit.partition import word_check_refusal
 from verity_vllm.config import RowConfig, checkpoint_dir
+from verity_vllm.program import prefix_plan as PP
 
 
 def load_json(path: str) -> Any:
@@ -57,23 +58,25 @@ def declared_target(wl: str, protocols: tuple[str, ...] | None = None, row: str 
     return json.dumps(t, sort_keys=True) if t else ""
 
 
-def request_shapes(wl: str) -> set[tuple[int, int]]:
-    """Every distinct (prompt length, cap - 1) of the manifest's requests: the shapes the workload Program composes."""
-    s = json.load(open(wl))["sweep"]
-    return {(int(p), int(c) - 1) for p, c in zip(s["input_lengths"], s["output_caps"])}
+def request_shapes(wl: str) -> set[tuple[int, ...]]:
+    """Every distinct (prompt length, cap - 1) of the manifest's requests, with the cached prefix C of a request vLLM's prefix cache
+    serves from row C (`program.prefix_plan.shape`): the shapes the workload Program composes."""
+    w = json.load(open(wl)); s = w["sweep"]
+    cached = PP.cached_of(w) if PP.prefix_caching(w) else [0] * len(s["input_lengths"])
+    return {PP.shape(int(p), int(c) - 1, k) for p, c, k in zip(s["input_lengths"], s["output_caps"], cached)}
 
 
-def extra_shapes(wl: str, lp: int, t: int) -> list[tuple[int, int]]:
-    """The batch's other request shapes: every distinct (prompt length, cap - 1) of the manifest but the (LP, T) the
-    request wrapper was derived for, largest first (a derive's cost grows with LP + T, so parallel derives start with the
-    longest)."""
+def extra_shapes(wl: str, lp: int, t: int) -> list[tuple[int, ...]]:
+    """The batch's other request shapes: every distinct shape of the manifest but the (LP, T) the request wrapper was derived for,
+    largest first (a derive's cost grows with LP + T, so parallel derives start with the longest)."""
     main = (int(lp), int(t))
-    return [(p, c) for p, c in longest_first(request_shapes(wl)) if (p, c) != main]
+    return [s for s in longest_first(request_shapes(wl)) if s != main]
 
 
-def longest_first(shapes: Any) -> list[tuple[int, int]]:
-    """(prompt length, decode steps) shapes, the longest LP + T first (then the longest prompt): a derive's cost grows with LP + T."""
-    return sorted(shapes, key=lambda pc: (-(pc[0] + pc[1]), -pc[0]))
+def longest_first(shapes: Any) -> list[tuple[int, ...]]:
+    """(prompt length, decode steps[, cached rows]) shapes, the longest LP + T first (then the longest prompt): a derive's cost grows
+    with LP + T."""
+    return sorted(shapes, key=lambda pc: (-(pc[0] + pc[1]), -pc[0], tuple(pc[2:])))
 
 
 def derived_ok(d: str) -> bool:
@@ -148,7 +151,7 @@ def build_jobs_auto(shapes: list[tuple[int, int]] | None = None, layers: int | N
         head = min(head, int(budget_gb * (1 << 30)))
     if not shapes or not layers:
         return max(1, min(8, derives or 8, head // int(peak_ratio * (20 << 30))))
-    per = int(peak_ratio * max(derive_bytes(lp, t, layers) for lp, t in shapes))
+    per = int(peak_ratio * max(derive_bytes(s[0], s[1], layers) for s in shapes))
     n = len(shapes) + 1 if derives is None else derives
     return max(1, min(_cpus() if cpus is None else cpus, n, int(0.8 * head) // per))
 

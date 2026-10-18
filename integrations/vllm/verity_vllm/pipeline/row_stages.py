@@ -50,6 +50,7 @@ from verity_vllm.pipeline import row_group as RG
 from verity_vllm.pipeline import row_plan as RP
 from verity_vllm.pipeline import row_records as R
 from verity_vllm.pipeline.row_driver import Row, Stop, copy_first, stage_on
+from verity_vllm.program import prefix_plan as PP
 
 SKIP = "census,census_reconcile,nonint,nonint_compare,compare,root_policy,golden,wiring,replay_a,replay_chain,fold_2"
 CAP = 14400
@@ -234,9 +235,10 @@ class SingleRow(Row):
         return RB.required_manifest(self, stage, digest)
 
     # ------------------------------------------------------------------------------------------------ Build
-    def request_cmd(self, lp: int, t: int, out: str, lctx: list[str] | None = None) -> list[str]:
+    def request_cmd(self, lp: int, t: int, out: str, lctx: list[str] | None = None, C: int = 0) -> list[str]:
         return self.cli("build", "--model", self.repo, "--revision", self.rev, "--wrapper", "request", "--LP", str(lp), "--T", str(t),
-                        "--max-model-len", str(self.MML), "--workload", self.wl, "--out", out, *self.tgt_args, *(lctx or []))
+                        *(["--cached", str(C)] if C else []), "--max-model-len", str(self.MML), "--workload", self.wl, "--out", out,
+                        *self.tgt_args, *(lctx or []))
 
     def derive_all(self, to: int) -> tuple[int, int]:
         """The step, request and extra-shape derives, ``--build-jobs`` wide (auto: `row_records.build_jobs_auto`) -> (step rc, request rc)."""
@@ -251,15 +253,15 @@ class SingleRow(Row):
         self.tl("build.jobs", "mark", ("jobs", jobs_n), ("requested", req))
         extra = []
         rc_x = 0
-        for lp, t in R.extra_shapes(self.path(self.wl), self.LP, self.T):
-            out = f"{self.d}/build_request_LP{lp}_T{t}"
+        for s in R.extra_shapes(self.path(self.wl), self.LP, self.T):
+            out = f"{self.d}/build_request_{PP.shape_name(s)}"
             if R.derived_ok(out):
                 continue
-            lx = self.launch_args(lp, t)
+            lx = self.launch_args(*s)
             if lx is None:
                 rc_x = 1
                 continue
-            extra.append((f"build.derive_request_LP{lp}_T{t}", f"{out}.log", self.request_cmd(lp, t, out, lx), out))
+            extra.append((f"build.derive_request_{PP.shape_name(s)}", f"{out}.log", self.request_cmd(s[0], s[1], out, lx, PP.cached_rows(s)), out))
         if jobs_n <= 1:
             rc1 = RC.derive_cached(self, "build.derive_step", to, f"{self.d}/build_step.log", cmd_s, f"{self.d}/build_step")
             rc2 = (RC.derive_cached(self, "build.derive_request", to, f"{self.d}/build_request.log", cmd_r, f"{self.d}/build_request")

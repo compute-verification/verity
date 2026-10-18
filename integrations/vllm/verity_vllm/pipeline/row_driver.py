@@ -29,6 +29,7 @@ from typing import Any
 from verity_vllm.config import ROOT, TARGETS, RowConfig, RunEnv, row_execution, row_target
 from verity_vllm.engine import served
 from verity_vllm.pipeline import gpu_lease as GL
+from verity_vllm.program import prefix_plan as PP
 
 CLI = ("-m", "verity_vllm.pipeline.cli")
 SIGNUM = {"TERM": 15, "INT": 2, "HUP": 1}
@@ -372,17 +373,18 @@ class Row:
             f.write(line + "\n")
         return rc, line
 
-    def launch_args(self, lp: int, t: int) -> list[str] | None:
-        """A B >= 2 request Program is built under its launch context (``launch-context``); None = the context did not
-        read, which FAILS that shape's Build (it is not "no context")."""
+    def launch_args(self, lp: int, t: int, C: int = 0) -> list[str] | None:
+        """A B >= 2 request Program is built under its launch context (``launch-context``; `C` a warm request's cached rows); None =
+        the context did not read, which FAILS that shape's Build (it is not "no context")."""
         if self.B <= 1:
             return []
-        err = f"{self.d}/launch_context_LP{lp}_T{t}.err"
+        name = PP.shape_name(PP.shape(lp, t, C))
+        err = f"{self.d}/launch_context_{name}.err"
         with open(err, "w") as f:
-            r = subprocess.run(self.cli("launch-context", self.wl, str(lp), str(t)), stdout=subprocess.PIPE, stderr=f, text=True,
-                               cwd=self.tree, env=self.child_env)
+            r = subprocess.run(self.cli("launch-context", self.wl, str(lp), str(t), *([str(C)] if C else [])), stdout=subprocess.PIPE,
+                               stderr=f, text=True, cwd=self.tree, env=self.child_env)
         if r.returncode != 0:
-            self.log(f"Build FAIL shape LP{lp} T{t}: launch_context rc={r.returncode} -- {open(err, errors='replace').read().replace(chr(10), ' ')[-300:]}")
+            self.log(f"Build FAIL shape {name}: launch_context rc={r.returncode} -- {open(err, errors='replace').read().replace(chr(10), ' ')[-300:]}")
             return None
         os.remove(err)
         lc = r.stdout.rstrip("\n")
