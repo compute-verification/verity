@@ -123,6 +123,7 @@ def listed(rng: random.Random, nslots: int) -> tuple[list[list[int]], int]:
 
 
 def table(torch, case: Case, caches, bjs, slots, news):
+    """The device table and the tensors it points to, which the caller holds until the re-key has run."""
     entries = []
     for l in range(LAYERS):
         st = torch.tensor(slots[l], dtype=torch.int64, device="cuda")
@@ -179,7 +180,7 @@ def gate_k(lib, torch, k: int, rng: random.Random, log) -> dict:
     bjs = [P.offsets(torch, o, case.f) for o in case.offs]
     slots, rows = listed(rng, case.nslots)
     v1, n1 = new_offsets(torch, case, rng, slots)
-    tab, _ = table(torch, case, caches, bjs, slots, n1)
+    tab, held = table(torch, case, caches, bjs, slots, n1)
     a = torch.randn(2048, 4096, device="cuda").to(torch.bfloat16)
     b = torch.randn(4096, 4096, device="cuda").to(torch.bfloat16)
     c = torch.empty(2048, 4096, device="cuda", dtype=torch.bfloat16)
@@ -216,7 +217,7 @@ def gate_k(lib, torch, k: int, rng: random.Random, log) -> dict:
     out["offsets"] = all(torch.equal(bjs[l], P.offsets(torch, offs1[l], case.f)) for l in range(LAYERS))
 
     v2, n2 = new_offsets(torch, case, rng, slots)
-    tab2, _ = table(torch, case, caches, bjs, slots, n2)
+    tab2, held2 = table(torch, case, caches, bjs, slots, n2)
     P.rekey(lib, torch, tab2, LAYERS, rows, case.lay, k)
     torch.cuda.synchronize()
     offs2 = moved(case, offs1, slots, v2)
@@ -237,7 +238,7 @@ def gate_k(lib, torch, k: int, rng: random.Random, log) -> dict:
                               and all(x["equal"] for x in att))
 
     back_vals = [[case.offs[l][s] if s >= 0 else 0 for s in slots[l]] for l in range(LAYERS)]
-    tab3, _ = table(torch, case, caches, bjs, slots, [P.offsets(torch, v, case.f) for v in back_vals])
+    tab3, held3 = table(torch, case, caches, bjs, slots, [P.offsets(torch, v, case.f) for v in back_vals])
     P.rekey(lib, torch, tab3, LAYERS, rows, case.lay, k)
     torch.cuda.synchronize()
     out["back"] = bool(all(eq(torch, caches[l], first[l]) for l in range(LAYERS))
@@ -247,7 +248,7 @@ def gate_k(lib, torch, k: int, rng: random.Random, log) -> dict:
     for ctas in (1, 7):
         cc = [x.clone() for x in first]
         bb = [P.offsets(torch, o, case.f) for o in case.offs]
-        t, _ = table(torch, case, cc, bb, slots, n1)
+        t, held_g = table(torch, case, cc, bb, slots, n1)
         P.rekey(lib, torch, t, LAYERS, rows, case.lay, k, ctas=ctas)
         torch.cuda.synchronize()
         grids[ctas] = all(eq(torch, cc[l], want1[l]) for l in range(LAYERS))
@@ -316,7 +317,8 @@ def pinned(lib, torch, log) -> dict:
         P.append(lib, torch, cache, lay, 0, LAYERS, layer, 1, rc.rounds, kr, vr, at, bj=bj)
         torch.cuda.synchronize()
         before = token_layer(torch, cache, slot, D)
-        tab = P.rekey_table(torch, [(at, 1, cache, 0, LAYERS, layer, bj, P.offsets(torch, [new], f))]).cuda()
+        new_t = P.offsets(torch, [new], f)
+        tab = P.rekey_table(torch, [(at, 1, cache, 0, LAYERS, layer, bj, new_t)]).cuda()
         P.rekey(lib, torch, tab, 1, 1, lay, rc.rounds)
         torch.cuda.synchronize()
         got = token_layer(torch, cache, slot, D)
@@ -324,7 +326,7 @@ def pinned(lib, torch, log) -> dict:
                        "old_differs": hashlib.sha512(before).hexdigest() != v["block_sha512"],
                        "word_0": got[:WB].hex() == v["word_0"],
                        "block_sha512": hashlib.sha512(got).hexdigest() == v["block_sha512"],
-                       "offset": torch.equal(bj[slot], P.offsets(torch, [new], f)[0])})
+                       "offset": torch.equal(bj[slot], new_t[0])})
     ok = all(b["old_differs"] and b["word_0"] and b["block_sha512"] and b["offset"] for b in blocks)
     log(f"pinned {rc.name}: {'ok' if ok else 'FAIL'} {blocks}")
     return {"codec": rc.name, "blocks": blocks, "ok": ok}
