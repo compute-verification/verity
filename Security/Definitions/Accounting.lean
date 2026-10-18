@@ -9,8 +9,8 @@ import Definitions.Accounting.Capacity
 import Definitions.Accounting.Confidence
 import Definitions.Accounting.CostModel
 import Definitions.Accounting.Device
-import Definitions.Accounting.Gates
 import Definitions.Accounting.HMu
+import Definitions.Accounting.Gates
 import Definitions.Accounting.Filler
 import Definitions.Accounting.Joint
 import Definitions.Accounting.Localization
