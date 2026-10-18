@@ -1,7 +1,8 @@
-"""The adapter from the real certifier's records to `datacenter.observe.Record`s, and their audit: a record's counts are
-its grid's occupancy and its digest binds the status and the real frames; the audit gives `claims.audit`'s claims and
-reasons; and on an injected clock an honest run publishes exactly the records the Program declares, while a block that
-holds a session late or writes an extra event is refused in the window it cheated in."""
+"""The adapter from the real certifier's records to `datacenter.observe.Record`s: a record's port is its block's
+certifier in the direction of travel, its counts are its grid's occupancy, and its digest binds the status and the real
+frames; the certifiers' parameters make the declaration's grid; and on an injected clock an honest run publishes exactly
+the records the Program declares, which `datacenter.check_records` carries, while a block that holds a session late or
+writes an extra event is refused in the window it cheated in."""
 
 from __future__ import annotations
 
@@ -15,7 +16,6 @@ from verity.core.protocols.certifier import calibration, grid
 from verity.core.protocols.certifier.grid import GridParams, Reason, Status
 
 HERE = Path(__file__).resolve().parents[1]
-UP = ("b0.nic0", "b0.cert")
 
 
 @pytest.fixture(scope="module")
@@ -27,6 +27,12 @@ def m():
         mp.setitem(sys.modules, spec.name, mod)
         spec.loader.exec_module(mod)
         yield mod
+
+
+@pytest.fixture(scope="module")
+def setup(m):
+    report = calibration.calibrate(m.trace())
+    return report, m.ar.Setup(report)
 
 
 def window(frames: list[bytes], per_bucket: list[int], status: Status = grid.COMPLETE) -> grid.Record:
@@ -42,68 +48,57 @@ def window(frames: list[bytes], per_bucket: list[int], status: Status = grid.COM
 
 
 def test_a_record_is_the_grids_occupancy_and_a_digest_of_its_status_and_real_frames(m):
-    rec = m.records
+    from datacenter import Port
+
+    out = Port("b0.cert", "egress")
     frames = [bytes([k]) * 8 for k in range(3)]
-    r = rec.to_record(window(frames, [2, 1, 0]), UP, "b0.cert")
-    assert (r.link, r.window, r.counts, r.certifier, len(r.digest)) == (UP, 0, (2, 1, 0), "b0.cert", 64)
-    assert rec.to_record(window(frames, [2, 1, 0]), UP, "b0.cert") == r
-    moved = rec.to_record(window(frames, [1, 2, 0]), UP, "b0.cert")
+    r = m.records.to_record(window(frames, [2, 1, 0]), out)
+    assert (r.port, r.window, r.counts, len(r.digest)) == (out, 0, (2, 1, 0), 64)
+    assert m.records.to_record(window(frames, [2, 1, 0]), out) == r
+    moved = m.records.to_record(window(frames, [1, 2, 0]), out)
     assert moved.counts == (1, 2, 0) and moved.digest == r.digest  # the counts, not the digest, fix the split
-    other = rec.to_record(window([frames[0], frames[1], b"\xff" * 8], [2, 1, 0]), UP, "b0.cert")
+    other = m.records.to_record(window([frames[0], frames[1], b"\xff" * 8], [2, 1, 0]), out)
     assert other.counts == r.counts and other.digest != r.digest
-    failed = rec.to_record(window(frames, [2, 1, 0], Status(Reason.COVERAGE_NEVER_ESTABLISHED)), UP, "b0.cert")
+    failed = m.records.to_record(window(frames, [2, 1, 0], Status(Reason.COVERAGE_NEVER_ESTABLISHED)), out)
     assert failed.counts == r.counts and failed.digest != r.digest
 
 
-def test_the_audit_carries_the_declared_windows_and_refuses_with_claims_reasons(m):
-    from datacenter.claims import Carried, Refused
-    from datacenter.observe import Record
+def test_the_certifiers_parameters_are_the_declarations_grid_and_the_ports_its_uplinks(m, setup):
+    from datacenter import Grid, Port
 
-    rec = m.records
-    d0, d1 = Record(UP, 0, (2, 1, 0), b"a" * 64, "b0.cert"), Record(UP, 1, (0, 0, 1), b"b" * 64, "b0.cert")
-    expected = [d0, d1]
-    assert rec.audit(expected, expected, syncs=16) == [Carried(UP, 0, 4.0), Carried(UP, 1, 4.0)]
-    where = f"link {UP} window 1"
-    assert rec.audit([d0], expected, 16)[0] == Refused(where, rec.NO_RECORD)
-    assert Refused(where, rec.OCCUPANCY) in rec.audit([d0, Record(UP, 1, (1, 0, 0), d1.digest, "b0.cert")], expected, 16)
-    assert Refused(where, rec.CONTENT) in rec.audit([d0, Record(UP, 1, d1.counts, b"c" * 64, "b0.cert")], expected, 16)
-    extra = Record(UP, 2, (0, 0, 0), b"d" * 64, "b0.cert")
-    assert Refused(f"link {UP} window 2", rec.OCCUPANCY) in rec.audit([*expected, extra], expected, 16)
-    assert rec.profile(expected) == {UP: {0: 2, 1: 1, 5: 1}}
+    _, s = setup
+    assert m.records.grid(s) == Grid(frame_bits=4096 * 8, bucket=100, window=60, syncs=16)
+    assert m.records.ports(m.graph.leaf_spine(2), "b1", s) == {
+        s.egress_link: Port("b1.cert", "egress"), s.ingress_link: Port("b1.cert", "ingress")}
+    with pytest.raises(ValueError, match="frame size, bucket or window"):
+        m.records.grid(type("S", (), {"egress_params": s.egress_params, "sync_set": s.sync_set,
+                                      "ingress_params": GridParams(buckets=30, allocation=1, frame_bytes=4096)})())
 
 
-def test_the_records_name_the_blocks_uplink_in_each_direction_of_travel(m):
-    dc = m.graph.leaf_spine(2)
-    report = calibration.calibrate(m.trace())
-    setup = m.ar.Setup(report)
-    ends, cert = m.records.directions(dc, "b1", setup)
-    assert ends == {setup.egress_link: ("b1.nic0", "b1.cert"), setup.ingress_link: ("b1.cert", "b1.nic0")}
-    assert cert == "b1.cert"
+def test_on_an_injected_clock_honest_publishes_the_declared_records_and_cheating_is_refused(m, setup, tmp_path):
+    from datacenter import Carried, Interval, Refused, check_records
 
-
-def test_on_an_injected_clock_honest_publishes_the_declared_records_and_cheating_is_refused(m, tmp_path):
-    from datacenter.claims import Carried, Refused
-
-    dc = m.graph.leaf_spine(1)
+    report, s = setup
     doc = m.trace()
-    report = calibration.calibrate(doc)
-    setup = m.ar.Setup(report)
-    honest = m.ar.plan_configuration(doc["configurations"][0], setup)
-    expected = m.records.declared(honest, setup, dc, "b0")
-    syncs = len(setup.sync_set.deltas) * len(setup.sync_set.rhos)
+    honest = m.ar.plan_configuration(doc["configurations"][0], s)
+    g = m.records.grid(s)
+    dc = m.graph.leaf_spine(1, grid=g)
+    declared = m.records.declared(honest, s, dc, "b0")
     windows = honest["windows"]
-    assert len(expected) == 2 * windows
-    refused = {}
+    assert sorted(declared, key=repr) == sorted(((p, w) for p in dc.ports for w in range(windows)), key=repr)
+    claims = {}
     for strategy in ("honest", "late", "extra"):
-        plan = m.strategy_plan(honest, setup, strategy)
+        plan = m.strategy_plan(honest, s, strategy)
         assert m.ar.run_virtual(plan, report, tmp_path / strategy) == {"server": 0, "proxy": 0, "peer": 0}
-        published = m.records.published(tmp_path / strategy, setup, dc, "b0")
-        claims = m.records.audit(published, expected, syncs)
+        published = m.records.published(tmp_path / strategy, s, dc, "b0")
         if strategy == "honest":
-            assert sorted(published, key=lambda r: (r.link, r.window)) == sorted(expected, key=lambda r: (r.link, r.window))
-            assert claims == [Carried(r.link, r.window, math.log2(syncs)) for r in published]
-        refused[strategy] = [c for c in claims if isinstance(c, Refused)]
-    egress = ("b0.nic0", "b0.cert")
-    assert refused["honest"] == []
-    assert refused["late"] == [Refused(f"link {egress} window 0", m.records.OCCUPANCY)]
-    assert refused["extra"] == [Refused(f"link {egress} window {windows - 1}", m.records.OCCUPANCY)]
+            assert {(r.port, r.window): r for r in published} == declared
+        claims[strategy] = check_records(published, declared, dc.grid)
+    assert claims["honest"] == [Carried(p, math.log2(16), Interval(w * 6000, (w + 1) * 6000)) for p, w in declared]
+    refused = {k: [(repr(c.on), c.why) for c in v if isinstance(c, Refused)] for k, v in claims.items()}
+    both = ["occupancy differs from the declared profile", "a frame is not a committed crossing"]
+    assert refused["late"] == [("port b0.cert:out [0, 6000)", why) for why in both]
+    assert refused["extra"] == [(f"port b0.cert:out [{(windows - 1) * 6000}, {windows * 6000})", why) for why in both]
+    missing = check_records([], declared, dc.grid)
+    assert {c.why for c in missing} == {"no record: the certifier was down or its record was withheld"}
+    assert len(missing) == len(declared)

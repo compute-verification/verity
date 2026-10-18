@@ -23,8 +23,9 @@ library. A block's strategy is its server's: `honest`; `bits`, which writes each
 by a random bit (`active_replay.adversary_writes`); `late`, which holds a session in window 0 past every sync; or
 `extra`, honest but for one more event, at a position the Program doesn't have. Each block is audited twice: by the
 certifier's reference verifier, `audit.Audit`, on the raw and committed records (`active_replay.audit_configuration`),
-and by the accounting layer's record check on the records as `datacenter.observe.Record`s against the ones the Program
-declares (`records`). A non-honest block's wire is compared with an honest block's of the same run
+and by the accounting layer's record check, `datacenter.check_records`, on the records as `datacenter.observe.Record`s
+against the ones the Program declares (`records`). For that check the declaration's grid is the certifiers' calibrated parameters (`records.grid`),
+whatever it declared. A non-honest block's wire is compared with an honest block's of the same run
 (`active_replay.against_honest`).
 
     python mockdc.py up | status | down
@@ -35,6 +36,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import dataclasses
 import importlib.util
 import json
 import os
@@ -52,7 +54,7 @@ sys.path[:0] = PATHS
 import active_replay as ar  # noqa: E402
 import graph  # noqa: E402
 import records  # noqa: E402
-from datacenter import Carried, Datacenter, Refused  # noqa: E402
+from datacenter import Carried, Datacenter, Refused, check_records  # noqa: E402
 from verity.core.protocols.certifier import calibration  # noqa: E402
 from verity.core.protocols.certifier.active import Proxy  # noqa: E402
 from verity.core.protocols.certifier.audit import Audit  # noqa: E402
@@ -325,6 +327,7 @@ def run(args) -> None:
     doc = trace()
     report = calibration.calibrate(doc)
     setup = ar.Setup(report)
+    dc = dataclasses.replace(dc, grid=records.grid(setup))
     honest = ar.plan_configuration(doc["configurations"][0], setup)
     params = ar.wire_params(setup)
     (out / "report.json").write_text(json.dumps(report))
@@ -368,17 +371,16 @@ def audit(out: Path, dc: Datacenter, honest_plan: dict, plans: dict, report: dic
     """Each block's audit by the certifier's verifier and by the accounting layer's record check, its timing, and its
     wire against an honest block's."""
     setup = ar.Setup(report)
-    syncs = len(setup.sync_set.deltas) * len(setup.sync_set.rhos)
-    summary = {"declaration": dc.name, "blocks": {}}
+    summary = {"declaration": dc.name, "grid": {k: v for k, v in vars(dc.grid).items() if k != "tick"}, "blocks": {}}
     honest = next((b for b, s in strategies.items() if s == "honest"), None)
     for b, strategy in strategies.items():
         a = ar.audit_configuration(plans[b], report, out / b, audit=Audit)
         (out / b / "audit.json").write_text(json.dumps(a))
         rows = [(r["link"], r["window"], r["raw"], r["committed"]) for r in a["rows"]]
         published = records.published(out / b, setup, dc, b)
-        claims = records.audit(published, records.declared(honest_plan, setup, dc, b), syncs)
+        claims = check_records(published, records.declared(honest_plan, setup, dc, b), dc.grid)
         (out / b / "records.json").write_text(json.dumps([records.to_json(r) for r in published]))
-        refused = [f"{c.what}: {c.why}" for c in claims if isinstance(c, Refused)]
+        refused = [f"{c.on}: {c.why}" for c in claims if isinstance(c, Refused)]
         c = a["comparisons"]
         entry = {"strategy": strategy, "accepted": all(r[2] is None and r[3] is None for r in rows), "verdicts": rows,
                  "datacenter": {"accepted": not refused, "refused": refused,
