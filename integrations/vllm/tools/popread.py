@@ -714,7 +714,7 @@ def render(reports: Iterable[dict[str, Any]]) -> str:
                        f"against their rule); {u['verified_units']} also cut by the reference, {len(u['mismatches'])} disagree.\n")
         out.append("| family | calls | units | share units | gates | share gates | cross-unit reads | in-unit selection (index) |")
         out.append("|---|---:|---:|---:|---:|---:|---|---|")
-        for f in r["families"]:
+        for f in _fold_consts(r["families"]):
             sel = "; ".join(f"{x['select']} x{x['count']:,} by {', '.join(x['index'])}" for x in f["selects"]) or "-"
             reads = f["verdict"] + (f" ({f['value']})" if f["value"] else "")
             out.append(f"| {f['family']} | {f['calls']:,} | {'-' if f['units'] is None else format(f['units'], ',')} | "
@@ -724,6 +724,22 @@ def render(reports: Iterable[dict[str, Any]]) -> str:
                    f"PUBLIC with an in-unit gather (V > 2): {_fmt(sel['share_units'])} of units, {_fmt(sel['share_gates'])} of gates. "
                    + _render_eos(r["eos"], s) + "\n")
     return "\n".join(out)
+
+
+def _fold_consts(fams: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The families with every `Const<W>[...]` Definition summed into one row (a Program holds one per literal it uses)."""
+    consts = [f for f in fams if CONST.match(f["family"])]
+    if len(consts) < 2:
+        return fams
+
+    def total(k: str) -> Any:
+        return None if any(f[k] is None for f in consts) else sum(f[k] for f in consts)
+
+    row = {k: total(k) for k in ("calls", "units", "share_units", "gates", "share_gates")}
+    verdicts = sorted({f["verdict"] for f in consts}, reverse=True)
+    row.update(family=f"Const[...] ({len(consts)} Definitions)", verdict="/".join(verdicts),
+               value="; ".join(sorted({f["value"] for f in consts if f["value"]})) or None, selects=[])
+    return [f for f in fams if not CONST.match(f["family"])] + [row]
 
 
 def _render_eos(e: dict[str, Any], s: dict[str, Any]) -> str:

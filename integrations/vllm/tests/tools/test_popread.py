@@ -70,6 +70,8 @@ def test_each_kind_of_read_is_named_with_its_value_and_its_units(tmp_path):
     assert (s["value_dependent"]["units"], s["value_dependent"]["share_units"]) == (1, 1 / 3)
     assert s["in_unit_select"]["units"] == 1
     assert "VALUE-DEPENDENT (prefix: prompt_token_ids" in PR.render([dict(r, name="toy")])
+    consts = [dict(add, family=f"Const32[0x0000000{i}]_v1") for i in (1, 2)]
+    assert "| Const[...] (2 Definitions) | 2 | 2 | 66.67% | 2 |" in PR.render([dict(r, name="toy", families=r["families"] + consts)])
 
 
 def test_a_selection_inside_a_composite_names_the_call_its_index_comes_from(tmp_path):
