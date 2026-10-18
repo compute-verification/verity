@@ -588,7 +588,7 @@ def _post(api: Slack, ch: str, handle: str, text: str, thread: str | None = None
     if route and route[1] is not None and not api.dry_run:
         if why := stale_routing():
             print(f"research msg: {why}", file=sys.stderr)
-        msg = {"text": text, "ts": ts, "thread_ts": thread, "bot_id": "self", "username": handle}
+        msg = {"text": text, "ts": ts, "thread_ts": thread, "bot_id": route[0].get("bot_id"), "username": handle}
         try:
             deliver(api, route[0], route[1], ch, msg, link)
         except SlackError as e:
@@ -691,12 +691,18 @@ def addressed(ev: dict, h: dict, reg: dict, key: str | None, api: Slack | None) 
 # The rule is `route_targets`, a pure function pinned by tests/slack_routing_vectors.json.  Delivery is a doorbell: the post itself (`doorbell`), as a reply in the
 # target's inbox thread, which its agent subscribes to.
 
+def ours(msg: dict | None, reg: dict) -> bool:
+    """Posted by Verity's bot, the registry's `bot_id`: another app's bot may take a handle's username too.  With no
+    `bot_id` recorded, no bot is ours."""
+    return bool(msg) and bool(reg.get("bot_id")) and msg.get("bot_id") == reg["bot_id"]
+
+
 def poster(msg: dict | None, reg: dict) -> str | None:
     """Who wrote `msg`, as a name: our bot's username, or `daniel`-style for a named human (first name, lower case)."""
     if not msg:
         return None
     if msg.get("bot_id"):
-        return msg.get("username") or None
+        return (msg.get("username") or None) if ours(msg, reg) else None
     return next((p["name"].split()[0].lower() for p in reg.get("humans", []) if p.get("slack_user") and msg.get("user") == p["slack_user"]), None)
 
 
@@ -1087,6 +1093,9 @@ def deliver(api: Slack, reg: dict, routes: Routes, ch: str, msg: dict, link: str
     author = poster(msg, reg) or "?"
     urgent = urgent or "urgent" in tags_of(msg.get("text", ""))
     src, lines, missed = thread or msg.get("ts") or "", [], []
+    if msg.get("bot_id") and not ours(msg, reg):
+        lines.append("no doorbells: " + ("another app's bot posted it, not Verity's" if reg.get("bot_id") else
+                                         "the registry records no bot_id (`research msg groups sync --apply` writes it)"))
     humans = {poster({"user": p.get("slack_user")}, reg) for p in reg.get("humans", [])}
     for name in route_targets(msg, root, reg, inboxes, history, branches):
         if name in humans:
@@ -1510,7 +1519,7 @@ def cmd_roster(ns: argparse.Namespace, reg: dict) -> int:
     expected = [n for n in aud if n != (root or {}).get("username")]
     status: dict[str, dict] = {}
     for m in msgs:
-        if m.get("ts") != ns.thread and m.get("username") in expected and m.get("bot_id") and (mt := STATUS_RE.match(m.get("text", ""))):
+        if m.get("ts") != ns.thread and m.get("username") in expected and ours(m, reg) and (mt := STATUS_RE.match(m.get("text", ""))):
             status[m["username"]] = {"status": mt.group(1).split()[1], "detail": DATE_TOKEN_RE.sub(r"\1", mt.group(2) or ""), "ts": m["ts"]}
     rows = [{"handle": n, **status.get(n, {"status": "missing"})} for n in expected]
     if ns.json:
