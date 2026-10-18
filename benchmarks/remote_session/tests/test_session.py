@@ -529,6 +529,86 @@ def test_the_node_line_credits_each_kind_against_the_nodes_hbm_and_host_dram(mon
     assert line["credited_bytes"] == pytest.approx(16 * B - lost) and line["held"] == node["held"]
 
 
+def test_the_memory_line_held_on_average_credits_what_the_worst_pass_form_cannot(monkeypatch):
+    """Both forms of the memory line on a store of 8 weights blocks and 8 of filler, every pass reading all 16, at 200
+    draws a window of its ~320 receipts, so f_t ≈ 0.14.  At every pass (the worst-pass form) a window loses f_t·U_t
+    ≈ 44 blocks, more than the store, and credits nothing.  On average a window loses f_t·U_t/P_t ≈ 2 blocks, its
+    rebuilds and the chip's block, so it credits the weights less those; with the rebuilds spread over its passes, less
+    again only f_t·N and the chip.  The node line carries both forms and both rebuild readings, the line's error
+    counts AuditRO's slack a pass beside δ, and a recorded session recomputes the same average line
+    (`recorded_memory`)."""
+    monkeypatch.setattr(prover, "OPENINGS_PART", 4)
+    monkeypatch.setattr(timing, "SQUARINGS_PER_S", {"p512": 0.0})
+    seen, memory = {}, verifier.memory
+
+    def keep(*a, **kw):
+        seen["args"] = a, kw
+        return memory(*a, **kw)
+
+    monkeypatch.setattr(verifier, "memory", keep)
+    layout = [{"kind": "weights", "tier": "hbm", "first": 0, "blocks": 8},
+              {"kind": "filler", "tier": "hbm", "first": 8, "blocks": 8}]
+    (r,), (p,) = run("honest", samples=200, layout=layout)
+    assert r["accepted"] and p["accepted"]
+    (record, plans, regions), kw = seen["args"]
+    assert kw["chip_bytes"] == timing.CHIP_BYTES
+    B, span = rcodec.BLOCK_BYTES, max(w.span_ns for w in record.windows)
+    rate = record.codec.encode_squarings * 1e9 / span / 2
+    m = verifier.memory(record, plans, regions, hbm_bytes=kw["hbm_bytes"], rebuild=audit.Rebuild(record.codec, rate),
+                        chip_bytes=B)
+    assert m["form"] == verifier.WORST_PASS and m["average"]["form"] == verifier.AVERAGE and m["chip_bytes"] == B
+    floors = audit.floors(record)
+    assert max(floors) > 0.1
+    for w, x, f in zip(record.windows, m["windows"], floors):
+        rebuilt, a = w.span_ns / span / 2, x["average"]
+        assert x["lost_blocks"] == pytest.approx(f * w.receipts + rebuilt) and w.receipts == 16 * w.passes
+        assert x["credited"]["weights"] == max(0.0, 8 * B - x["lost_blocks"] * B)
+        assert a["form"] == verifier.AVERAGE and a["held"] == {"weights": 8 * B, "hbm": 16 * B, "host": 0}
+        assert a["wrong_blocks"] == pytest.approx(f * 16) and a["rebuild_blocks"] == pytest.approx(rebuilt)
+        assert a["chip_blocks"] == 1 and a["lost_blocks"] == pytest.approx(f * 16 + rebuilt + 1)
+        assert a["credited"]["weights"] == pytest.approx(max(0.0, 8 * B - (f * 16 + rebuilt + 1) * B))
+        assert a["credited"]["hbm"] == pytest.approx(max(0.0, 16 * B - (f * 16 + rebuilt + 1) * B))
+        assert a["credited_rebuild_per_pass"]["weights"] == pytest.approx(8 * B - (f * 16 + rebuilt / w.passes + 1) * B)
+        assert a["epsilon"] == pytest.approx(a["lost_blocks"] / 16)
+    assert m["credited_bytes"] == min(x["credited"]["hbm"] for x in m["windows"]) == 0
+    avg = m["average"]
+    assert avg["credited_bytes"] == min(x["average"]["credited"]["hbm"] for x in m["windows"]) > 0
+    assert avg["weights_bytes"] == min(x["average"]["credited"]["weights"] for x in m["windows"]) > m["weights_bytes"]
+    assert avg["share"] == avg["credited_bytes"] / m["hbm_bytes"] and avg["residual"] == 1 - avg["share"]
+    assert avg["weights_bytes_rebuild_per_pass"] > avg["weights_bytes"]
+
+    host = 1843 * 10 ** 9
+    line = verifier.node_line(m, host_bytes=host)
+    assert line["form"] == verifier.WORST_PASS and line["credited_bytes"] == 0
+    a = line["average"]
+    lost = max(x["average"]["lost_blocks"] for x in m["windows"]) * B
+    assert a["form"] == verifier.AVERAGE and a["lost_bytes"] == pytest.approx(lost)
+    assert a["held"] == {"weights": 8 * B, "filler_hbm": 8 * B, "host": 0}
+    assert a["credited"]["weights"] == pytest.approx(8 * B - lost) == a["credited"]["filler_hbm"]
+    assert a["credited_bytes"] == pytest.approx(16 * B - lost) and a["share"]["weights"] == a["credited"]["weights"] / (
+        verifier.HBM_BYTES + host)
+    pp = line["average_rebuild_per_pass"]
+    lost_pp = max(x["average"]["lost_blocks_rebuild_per_pass"] for x in m["windows"]) * B
+    assert pp["form"] == verifier.AVERAGE and pp["lost_bytes"] == pytest.approx(lost_pp) and lost_pp < lost
+    assert pp["credited"]["weights"] == pytest.approx(8 * B - lost_pp) == pytest.approx(
+        avg["weights_bytes_rebuild_per_pass"])
+
+    lg = r["ledger"]
+    reading = next(lg[n] for n in ("spec", "measured") if "error" in lg[n])
+    assert lg["memory"]["error"] == verifier.memory_error(lg) == pytest.approx(
+        reading["error"]["horizon"] + 2.0 ** lg["sketch_failure"]["log2"])
+    assert lg["memory"]["error"] > lg["memory"]["delta"] + record.passes * 2.0 ** -audit.SLACK_LOG2 * 0.99
+
+    def same(x, y) -> bool:
+        if isinstance(x, dict):
+            return x.keys() == y.keys() and all(same(x[k], y[k]) for k in x)
+        return x == pytest.approx(y) if isinstance(x, float) else x == y
+
+    again = verifier.recorded_memory({"ledger": {"memory": m}, "record": r["record"]}, chip_bytes=B, host_bytes=host)
+    assert all(same(x["average"], y["average"]) for x, y in zip(again["windows"], m["windows"]))
+    assert same(again["average"], avg) and same(again["node"]["average"], a)
+
+
 def test_an_engines_arena_puts_each_weight_at_a_block_boundary_and_refuses_what_does_not_fit():
     import engine
 
