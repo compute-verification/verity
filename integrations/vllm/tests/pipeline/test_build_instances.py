@@ -168,6 +168,36 @@ def test_the_writer_encodes_each_heads_items_once_not_once_a_call(monkeypatch):
     assert old > 8 * 256 * 257 // 2 and new <= 4 * len(rows) and old > 25 * new, (old, new)
 
 
+def test_the_writer_encodes_a_weight_read_by_every_tokens_call_once(monkeypatch):
+    """GLM-5.3's MLA-absorb read of a transposed weight is a scattered `Strided` (a progression per row, ~1e6 leaves) that every
+    token's Call of a layer reads again, a new but equal object each time: `RowTexts` encodes each distinct read once (3 layers x 2
+    reads here, against one per Call and read), into the same text, and every time once its memo is full."""
+    from types import SimpleNamespace as NS
+
+    from verity.ml.circuits import codec
+    from verity.ml.circuits.refs import Affine, Concat, Strided
+    from verity_vllm.program import compact, instances_file
+    from verity_vllm.program.instances_file import RowTexts, instance_rows
+    monkeypatch.setattr(codec, "descriptor_id", lambda fn: fn)
+    nodes = []
+    for layer in range(3):
+        for t in range(64):
+            w = Strided("p", 7 + layer, 0, 64, 1, 512, 64 * 128)
+            args = [Affine("n", 100 * t + layer, 0, 512), w, Concat([Affine("p", 3, 16 * layer, 16), w])]
+            nodes.append(NS(fn="MlaAbsorb{H=16}", form="call", name=f"layers.{layer}.attn/absorb[{t}]", args=[NS(refs=r) for r in args]))
+    program = NS(fn=NS(body=NS(nodes=nodes)))
+    calls = []
+    scattered = compact._scattered_strided
+    monkeypatch.setattr(compact, "_scattered_strided", lambda *a: calls.append(a) or scattered(*a))
+    want = [json.dumps(r) for r in instance_rows(program)]
+    old, calls[:] = len(calls), []
+    assert list(RowTexts().rows(program)) == want
+    assert old == 3 * 64 * 2 and len(calls) == 3 * 2, (old, len(calls))
+    monkeypatch.setattr(instances_file, "SCATTERED_MEMO_BYTES", 0)
+    calls[:] = []
+    assert list(RowTexts().rows(program)) == want and len(calls) == old
+
+
 def _read_as_json_load(p, **dump) -> None:
     from verity_vllm.program.compact import expanded_file_args
     from verity_vllm.program.instances_file import read_instances

@@ -129,14 +129,46 @@ class _LogText:
         return f"[{self.final or rest}]"
 
 
+#: text `RowTexts` keeps of operands that read a scattered `Strided`
+SCATTERED_MEMO_BYTES = 1 << 30
+
+
+def _value_key(r) -> tuple:
+    """`r`'s references as a hashable value: equal keys are equal references, so equal stored items."""
+    from verity.ml.circuits.refs import Affine, Concat, Explicit, Strided
+    tr = type(r)
+    if tr is Strided:
+        return ("s", r.space, r.idx, r.base, r.inner, r.outer_stride, r.inner_stride, r.count)
+    if tr is Affine:
+        return ("a", r.space, r.idx, r.base, r.count)
+    if tr is Concat:
+        return ("c", *map(_value_key, r.parts))
+    if tr is Explicit:
+        return ("e", r.items)
+    raise TypeError(f"not a Refs object: {tr.__name__}")
+
+
+def _reads_scattered(r) -> bool:
+    """`r` reads a `Strided` whose rows are not contiguous: one progression per row (`compact._scattered_strided`)."""
+    from verity.ml.circuits.refs import Concat, Strided
+    tr = type(r)
+    if tr is Strided:
+        return r.inner != 1 and r.inner_stride != 1 and r.count > r.inner
+    return tr is Concat and any(map(_reads_scattered, r.parts))
+
+
 class RowTexts:
     """Each root node's row as the text `json.dumps` gives its `instance_rows` dict.  An operand cut from a `PartLog` (`Concat.prefix`)
     is the log's items so far plus its own (`_LogText`); a cut shorter than one already written for its log, and every other operand,
-    is encoded whole (`compact.file_items_from_refs`)."""
+    is encoded whole (`compact.file_items_from_refs`).  An operand encoded whole that reads a scattered `Strided` costs a progression
+    per row, and every token's Call reads the same one (GLM-5.3's MLA-absorb weight read, ~1e6 leaves), so its text is kept by value
+    (`_value_key`), up to `SCATTERED_MEMO_BYTES`."""
 
     def __init__(self) -> None:
         self.logs: dict[int, _LogText] = {}
         self.specs: dict[int, str] = {}
+        self.scattered: dict[tuple, str] = {}
+        self.scattered_bytes = 0
 
     def operand(self, r) -> str:
         from verity.ml.circuits.refs import Concat
@@ -148,7 +180,16 @@ class RowTexts:
                 lt = self.logs[id(log)] = _LogText(log)
             if j >= lt.w:
                 return lt.cut(j, r.parts[j:])
-        return json.dumps(file_items_from_refs(r))
+        if not _reads_scattered(r):
+            return json.dumps(file_items_from_refs(r))
+        k = _value_key(r)
+        text = self.scattered.get(k)
+        if text is None:
+            text = json.dumps(file_items_from_refs(r))
+            if self.scattered_bytes < SCATTERED_MEMO_BYTES:
+                self.scattered[k] = text
+                self.scattered_bytes += len(text)
+        return text
 
     def rows(self, program) -> Iterator[str]:
         from verity.ml.circuits.codec import descriptor_id
