@@ -43,7 +43,7 @@ from dataclasses import dataclass
 from typing import Literal, Protocol, runtime_checkable
 
 from .errors import InvalidArtifact
-from .integer import BLACKWELL_SM120_S8_M16N8K32, BLACKWELL_SM120_S8_M16N8K32_WRAP
+from .integer import BLACKWELL_SM120_S8_M16N8K32, BLACKWELL_SM120_S8_M16N8K32_WRAP, BLACKWELL_SM120_U8S8_M16N8K32
 from .term import (
     FP32_MAX_EXPONENT,
     FP32_MIN_NORMAL_EXPONENT,
@@ -902,5 +902,6 @@ MODELS: dict[str, Model] = {
         BLACKWELL_SM120_E2M1_M16N8K32,
         BLACKWELL_SM120_S8_M16N8K32,
         BLACKWELL_SM120_S8_M16N8K32_WRAP,
+        BLACKWELL_SM120_U8S8_M16N8K32,
     )
 }
