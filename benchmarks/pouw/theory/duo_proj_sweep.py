@@ -114,7 +114,8 @@ def sample(n: int, L: int, count: int, seed: int, modes=("xor", "add"), full: bo
     for _ in range(count):
         rot = [rng.randrange(1, n) for _ in range(L)]
         keys = [rng.randrange(1 << n) | 1 for _ in range(L)]
-        jobs += [{"set": "sample", "n": n, "L": L, "mode": m, "rot": rot, "keys": keys, "full": full} for m in modes]
+        jobs += [{"set": "sample", "n": n, "L": L, "mode": m, "rot": rot, "keys": keys, "full": full,
+                  "threads": 0 if n * (L - 1) >= 20 else 1} for m in modes]
     return jobs
 
 
