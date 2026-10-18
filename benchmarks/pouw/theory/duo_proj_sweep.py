@@ -15,6 +15,10 @@ many had a kernel element, the kappas seen and up to one kernel element an assig
 - ``generic``: every odd multiplier and every rotation 1..n-1 at each position.
 - ``sample``: random odd multipliers and rotations at lengths the exhaustive sweep can't reach.
 - ``curve``: the served schedule with start states on the curve (y, pi(y)) instead of every (y, z).
+- ``full``: the rows above over the full state (``-F``) under xor: runs whose states differ by one constant on every
+  start state, which is what wrong words in two chains need to cancel in a checkpoint that XORs every chain's y and
+  every chain's z, in three parts that can run side by side (``full-served``, ``full-generic``, ``full-sample``).
+  ``full-big`` is served n = 10, L = 4 (a 32 GiB table).
 
     python duo_proj_sweep.py --set quick            # seconds: the tests' rows
     python duo_proj_sweep.py --set pod --out DIR    # the pod rows (see the note)
@@ -30,7 +34,7 @@ import random
 import subprocess
 import sys
 import tempfile
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -59,6 +63,7 @@ def invoke(exe: Path, job: dict) -> dict:
     args = [str(exe), str(job["n"]), str(job["L"]), job["mode"], "-r", ",".join(map(str, job["rot"])), "-v", "4"]
     args += ["-a", ",".join(map(str, job["keys"]))] if job.get("keys") else ["-s"]
     args += ["-C"] if job.get("curve") else []
+    args += ["-F"] if job.get("full") else []
     args += ["-h", str(job["h"])] if job.get("h") is not None else []
     env = {**os.environ, "OMP_NUM_THREADS": str(job.get("threads", 1))}
     p = subprocess.run(args, capture_output=True, text=True, check=True, env=env)
@@ -71,7 +76,8 @@ def invoke(exe: Path, job: dict) -> dict:
             "kappas": [int(x) for x in f[f.index("kappas") + 2:f.index("kappas") + 2 + nk]], "hit_lines": lines[:-1][:400]}
 
 
-def served(n: int, Lmax: int, modes=("xor", "add"), curve: bool = False, Lmin: int = 1) -> list[dict]:
+def served(n: int, Lmax: int, modes=("xor", "add"), curve: bool = False, Lmin: int = 1,
+           full: bool = False) -> list[dict]:
     jobs = []
     for g in (0, 1):
         for L in range(Lmin, Lmax + 1):
@@ -79,11 +85,12 @@ def served(n: int, Lmax: int, modes=("xor", "add"), curve: bool = False, Lmin: i
                 keys, rot = served_keys(n, g, L, end)
                 for mode in modes:
                     jobs.append({"set": "curve" if curve else "served", "n": n, "L": L, "mode": mode, "group": g,
-                                 "end": end, "keys": list(keys), "rot": list(rot), "curve": curve, "threads": 0})
+                                 "end": end, "keys": list(keys), "rot": list(rot), "curve": curve, "full": full,
+                                 "threads": 0})
     return jobs
 
 
-def served_any_keys(n: int, Lmax: int, modes=("xor", "add")) -> list[dict]:
+def served_any_keys(n: int, Lmax: int, modes=("xor", "add"), full: bool = False) -> list[dict]:
     jobs, seen = [], set()
     for g in (0, 1):
         for L in range(1, Lmax + 1):
@@ -92,22 +99,24 @@ def served_any_keys(n: int, Lmax: int, modes=("xor", "add")) -> list[dict]:
                 if rot in seen:
                     continue
                 seen.add(rot)
-                jobs += [{"set": "served-keys", "n": n, "L": L, "mode": m, "rot": list(rot)} for m in modes]
+                jobs += [{"set": "served-keys", "n": n, "L": L, "mode": m, "rot": list(rot), "full": full}
+                         for m in modes]
     return jobs
 
 
-def generic(n: int, L: int, modes=("xor", "add")) -> list[dict]:
-    return [{"set": "generic", "n": n, "L": L, "mode": m, "rot": list(rot)}
+def generic(n: int, L: int, modes=("xor", "add"), full: bool = False) -> list[dict]:
+    return [{"set": "generic", "n": n, "L": L, "mode": m, "rot": list(rot), "full": full}
             for rot in itertools.product(range(1, n), repeat=L) for m in modes]
 
 
-def sample(n: int, L: int, count: int, seed: int, modes=("xor", "add")) -> list[dict]:
+def sample(n: int, L: int, count: int, seed: int, modes=("xor", "add"), full: bool = False) -> list[dict]:
     rng = random.Random(seed)
     jobs = []
     for _ in range(count):
         rot = [rng.randrange(1, n) for _ in range(L)]
         keys = [rng.randrange(1 << n) | 1 for _ in range(L)]
-        jobs += [{"set": "sample", "n": n, "L": L, "mode": m, "rot": rot, "keys": keys} for m in modes]
+        jobs += [{"set": "sample", "n": n, "L": L, "mode": m, "rot": rot, "keys": keys, "full": full,
+                  "threads": 0 if n * (L - 1) >= 20 else 1} for m in modes]
     return jobs
 
 
@@ -126,6 +135,27 @@ def plan(name: str) -> list[dict]:
         return jobs
     if name == "pod-big":
         return served(6, 6, ("xor",), Lmin=6)
+    if name == "full-quick":
+        return generic(4, 2, ("xor",), full=True) + served(6, 2, ("xor",), full=True)
+    x = ("xor",)
+    if name == "full-served":
+        return (served(6, 4, x, full=True) + served(8, 4, x, full=True) + served(10, 3, x, full=True)
+                + plan("full-served-wide"))
+    if name == "full-served-wide":
+        return served(16, 2, x, full=True) + served(12, 3, x, full=True)
+    if name == "full-generic":
+        jobs = served_any_keys(6, 3, x, full=True) + served_any_keys(8, 2, x, full=True)
+        jobs += generic(4, 1, x, full=True) + generic(4, 2, x, full=True) + generic(4, 3, x, full=True)
+        jobs += generic(4, 4, x, full=True) + generic(5, 2, x, full=True) + generic(5, 3, x, full=True)
+        jobs += generic(6, 1, x, full=True) + generic(6, 2, x, full=True)
+        return jobs + sample(6, 4, 300, 21, x, full=True) + sample(16, 2, 20, 25, x, full=True)
+    if name == "full-sample":
+        return (sample(8, 4, 24, 22, x, full=True) + sample(10, 3, 60, 23, x, full=True)
+                + sample(12, 3, 8, 24, x, full=True))
+    if name == "full":
+        return plan("full-served") + plan("full-generic") + plan("full-sample")
+    if name == "full-big":
+        return served(10, 4, ("xor",), Lmin=4, full=True)
     raise SystemExit(f"unknown set {name}")
 
 
@@ -156,8 +186,9 @@ def main() -> None:
         for j in (j for j in jobs if j.get("threads", 1) > 1):
             emit(invoke(exe, j))
         with ThreadPoolExecutor(a.jobs) as pool:
-            for r in pool.map(lambda j: invoke(exe, j), [j for j in jobs if j.get("threads", 1) == 1]):
-                emit(r)
+            futures = [pool.submit(invoke, exe, j) for j in jobs if j.get("threads", 1) == 1]
+            for f in as_completed(futures):
+                emit(f.result())
     print(json.dumps({"set": a.set, "invocations": len(jobs), "configs": total, "hit_configs": hit, "rows": str(rows),
                       "cpus": os.cpu_count()}))
 

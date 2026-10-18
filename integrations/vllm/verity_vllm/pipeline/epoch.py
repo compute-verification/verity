@@ -136,16 +136,18 @@ def _partition_digests(part: Any) -> list[str]:
     return sorted(dg for k in ("by_component", "by_rank") for v in (part.get(k) or {}).values() for dg in _partition_digests(v))
 
 
+def build_programs(d: Path) -> dict[str, dict]:
+    """Per rank, the Program digests of a row's Build (`build_summary.json`: a TP row's per rank under `ranks`, `row_records.tp_build_summary`)."""
+    s = _doc(d / "build_summary.json")
+    per_rank = {k.removeprefix("rank"): v for k, v in (s.get("ranks") or {}).items()} if isinstance(s.get("ranks"), dict) else {"0": s} if s else {}
+    return {r: {"step": (v.get("step") or v.get("build_step") or {}).get("program_digest"), "workload": (v.get("workload") or {}).get("workload_digest"),
+                "requests": {k: x.get("program_digest") for k, x in sorted(v.items()) if (k == "request" or k.startswith("build_request")) and isinstance(x, dict)}}
+            for r, v in sorted(per_rank.items(), key=lambda kv: int(kv[0]))}
+
+
 def row_digests(d: Path) -> dict[str, Any]:
-    """One row's digests from its run directory (a TP row's Builds under build/rank<r>/)."""
-    ranks: dict[str, dict] = {}
-    for bs in [d / "build_summary.json", *sorted(d.glob("build/rank*/build_summary.json"))]:
-        s = _doc(bs)
-        if s:
-            ranks[bs.parent.name.removeprefix("rank") if bs.parent != d else "0"] = {
-                "step": (s.get("step") or {}).get("program_digest"), "workload": (s.get("workload") or {}).get("workload_digest"),
-                "requests": {k: v.get("program_digest") for k, v in sorted(s.items())
-                             if (k == "request" or k.startswith("build_request")) and isinstance(v, dict)}}
+    """One row's digests from its run directory."""
+    ranks = build_programs(d)
     man, vd = _doc(d / "manifest.json"), _doc(d / "verdict.json")
     q = man.get("query") or {}
     return {"row": d.name, "programs": ranks, "manifest_digest": man.get("manifest_digest"), "program_digest": man.get("program_digest"),
@@ -167,15 +169,10 @@ def store_meta(row_dir: str | Path, *, kind: str, role: str, rownum: int, run_id
     """A stored tree's meta (serving-view's record-build layout), from the Build's own summaries."""
     d = Path(row_dir)
     progs, wds = {}, {}
-    for bs in [d / "build_summary.json", *sorted(d.glob("build/rank*/build_summary.json"))]:
-        s = _doc(bs)
-        r = "0" if bs.parent == d else bs.parent.name.removeprefix("rank")
-        for k, v in s.items():
-            if isinstance(v, dict) and v.get("program_digest") and (k in ("request", "step") or k.startswith("build_request")):
-                progs[f"rank{r}/{k}"] = v["program_digest"]
-        wd = (s.get("workload") or {}).get("workload_digest")
-        if wd:
-            wds[f"rank{r}"] = wd
+    for r, p in build_programs(d).items():
+        progs.update({f"rank{r}/{k}": dg for k, dg in [("step", p["step"]), *p["requests"].items()] if dg})
+        if p["workload"]:
+            wds[f"rank{r}"] = p["workload"]
     m, v = _doc(d / "manifest.json"), _doc(d / "verdict.json")
     return {"name": f"epoch-{kind}/{d.name}", "role": role, "row": rownum, "row_id": d.name, "epoch": epoch, "program_digests": progs,
             "workload_digests": wds, "manifest_digest": m.get("manifest_digest"), "query_id": (m.get("query") or {}).get("query_id"),

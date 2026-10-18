@@ -39,7 +39,7 @@ def test_spec_is_pre_execution_and_concrete():
 
 
 def test_spec_dtype_is_the_served_dtype():
-    """`configuration.dtype`: explicit driver value > engine-argument override (`engine_args_required.dtype`) > HF torch_dtype."""
+    """`configuration.dtype`: explicit driver value > engine-argument override (`engine.args.dtype`) > HF torch_dtype."""
     assert _spec()["configuration"]["dtype"] == "bfloat16"                                              # HF fallback (no override)
     s = _spec(engine_args={"max_num_batched_tokens": 2048, "dtype": "float16"})
     assert s["configuration"]["dtype"] == "float16" and s["configuration"]["engine_args"]["dtype"] == "float16"

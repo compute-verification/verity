@@ -25,6 +25,7 @@ from verity.ml.circuits.ops import fp32 as W
 from verity.ml.circuits.ops import prims as P
 from verity.ml.circuits.ops.boolean import gemm as BG
 from verity_vllm.program.boolean import boolean_version
+from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3
 from verity_vllm.program.registry import bf16_gemm_check as C
 from verity_vllm.program.registry import cublas_bf16 as CB
 from verity_vllm.program.registry import ll_bf16 as LL
@@ -377,6 +378,22 @@ def test_the_definitions_refuse_what_they_do_not_model() -> None:
         _ = bind(CB.CublasSplitKGemmF32Out, K=64, N=2, SPLIT_K=5, DOT=HOP).body
 
 
+def test_profile_vocabulary_binds_the_served_default_glm53_families() -> None:
+    v = PROFILE_B1_EAGER_V3
+    assert v.kind("cublas_splitk_gemm", K=6144, N=160, SPLIT_K=4, DOT=HOPW).id == \
+        bind(CB.CublasSplitKGemmWord, K=6144, N=160, SPLIT_K=4, DOT=HOPW).id
+    assert v.kind("cublas_gemm_f32out", K=6144, N=256, DOT=HOPW).id == \
+        bind(CB.GemmF32OutWord, K=6144, N=256, DOT=HOPW).id
+    assert v.kind("cublas_splitk_gemm_f32out", K=6144, N=256, SPLIT_K=3, DOT=HOPW).id == \
+        bind(CB.CublasSplitKGemmF32OutWord, K=6144, N=256, SPLIT_K=3, DOT=HOPW).id
+    assert v.kind("batched_gemm", B=8, K=192, N=512, DOT=HOPW).id == bind(CB.BatchedGemmWord, B=8, K=192, N=512, DOT=HOPW).id
+    assert v.kind("batched_gemm", B=8, K=512, N=256, DOT=HOPW).id == bind(CB.BatchedGemmWord, B=8, K=512, N=256, DOT=HOPW).id
+    assert v.kind("ll_bf16_dotprod", N=256, K=6144, BS=128, VEC=8, FMA=1).id == \
+        bind(LL.LlBf16DotprodGemmWord, N=256, K=6144, BS=128, VEC=8, FMA=1).id
+    assert v.kind("ll_bf16_splitk", N=256, K=6144, SPLIT_K=6, TILE_K=256, WARPS=4, DOT=HOPW).id == \
+        bind(LL.LlBf16SplitKGemmWord, N=256, K=6144, SPLIT_K=6, TILE_K=256, WARPS=4, DOT=HOPW).id
+
+
 @pytest.mark.parametrize("target", STEPS + PINNED, ids=[t.id for t in STEPS + PINNED])
 def test_pinned_counts_and_digests(target) -> None:
     pin = PINS[target.id]
@@ -387,3 +404,15 @@ def test_pinned_counts_and_digests(target) -> None:
 
 def test_every_pin_is_a_target() -> None:
     assert sorted(PINS) == sorted(t.id for t in STEPS + PINNED)
+
+
+def test_the_cublas_and_ll_bf16_conformance_cite_the_one_h200_capture_record() -> None:
+    """Both registries' Definitions are established by the same `glm53_bf16_gemm_capture` record the BatchedGemm_v1 evaluator cites,
+    and the FMA the words decided is the one the gate's Program binds by default."""
+    from verity_vllm.program.frontend.conformance import status_of
+    from verity_vllm.program.kernels.batched_gemm_rows import PROVENANCE
+
+    cite = (PROVENANCE["run"], PROVENANCE["record"][:16], PROVENANCE["art"]["record"])
+    for d in (CB.GemmF32OutWord, CB.CublasSplitKGemmWord, CB.BatchedGemm, LL.LlBf16DotprodGemmWord, LL.LlBf16SplitKGemmWord):
+        assert status_of(d.conformance) == "exact-model-tested" and all(c in d.conformance for c in cite), d.id
+    assert f"FMA {C.DEFAULT_LL_BF16_FMA} as the words decide it" in LL.CONFORMANCE

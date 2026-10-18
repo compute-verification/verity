@@ -110,6 +110,57 @@ def test_verdicts_are_reused_only_while_every_input_is_unchanged(tmp_path, monke
     assert sorted(_run(tmp_path, 5)[1]) == ["pkg/a warm", "pkg/b cold"]     # the auditor is an input of every package
 
 
+#: a stand-in for check.py that knows `--regenerate`: a package whose policy says "stale" fails on a record difference, or with
+#: the flag passes on the record it writes under --out (`check.py`'s `settled` and `regenerated`)
+REGEN_AUDIT = r'''
+import json, sys
+from pathlib import Path
+a = sys.argv[1:]
+root, out = Path.cwd(), Path(a[a.index("--out") + 1])
+named = [Path(x) for i, x in enumerate(a) if not x.startswith("--") and not (i and a[i - 1] in ("--out", "--repo", "--replay-cache", "--artifacts"))]
+out.mkdir(parents=True, exist_ok=True)
+reps, failed = [], []
+for pkg in named:
+    with open(out / "ran.txt", "a") as f:
+        f.write(f"{pkg.relative_to(root)}\n")
+    rep = {"package": str(pkg), "failures": []}
+    if json.loads((pkg / "lean-audit.json").read_text()).get("stale"):
+        rec = out / f"audit-{pkg.name}" / "lean-audit.json"
+        rec.parent.mkdir(parents=True, exist_ok=True)
+        rec.write_text("{}")
+        diff = ["guarantees: they no longer read definitions in P.Defs"]
+        rep |= {"settled": diff, "regenerated": str(rec)} if "--regenerate" in a else {"failures": diff}
+    if rep["failures"]:
+        failed.append(str(pkg))
+    reps.append(rep)
+(out / "audit.json").write_text(json.dumps({"passed": not failed, "failed": failed, "packages": reps}))
+sys.exit(1 if failed else 0)
+'''
+
+
+def test_a_trains_audit_passes_on_regenerated_records_names_them_and_keeps_no_such_pass(tmp_path, monkeypatch):
+    """`--regenerate` (a train's lean-audit step, CI-64) reaches check.py and not the cache key: a package that passes only on
+    its regenerated record is named in audit.json's `regenerated` for the train to commit, and is never kept as a reusable pass,
+    since its lock changes when the record lands; the other packages' passes are kept and reused as before."""
+    root = _tree(tmp_path, monkeypatch)
+    (root / "tools/verity/lean/check.py").write_text(REGEN_AUDIT)
+    (root / "pkg/b/lean-audit.json").write_text(json.dumps({"stale": True}))
+    cache, deps = tmp_path / "cache" / "lean-audit", tmp_path / "cache" / "lean-deps"
+
+    def go(n: int, regenerate: bool) -> tuple[int, list[str], dict]:
+        out = tmp_path / f"out{n}"
+        rc = LA.run(out, cache, deps, log=lambda s: None, regenerate=regenerate)
+        ran = (out / "ran.txt").read_text().split() if (out / "ran.txt").exists() else []
+        return rc, ran, json.loads((out / "audit.json").read_text())
+    rc, ran, doc = go(1, False)
+    assert rc == 1 and doc["failed"] == ["pkg/b"] and doc["regenerated"] == {}
+    rc, ran, doc = go(2, True)
+    assert rc == 0 and ran == ["pkg/b"] and list(doc["cached"]) == ["pkg/a"], "a's pass from run 1 is reused: same key"
+    assert doc["regenerated"] == {"pkg/b": str(tmp_path / "out2" / "audit-b" / "lean-audit.json")}
+    rc, ran, doc = go(3, True)
+    assert rc == 0 and ran == ["pkg/b"], "a pass on a regenerated record is not kept"
+
+
 def _move(root: Path, monkeypatch, old: str, new: str) -> None:
     """`git mv old new`: the directory, and the tracked files' paths."""
     files = LA.COMMON.tracked_files()

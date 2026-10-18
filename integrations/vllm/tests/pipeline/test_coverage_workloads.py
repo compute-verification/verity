@@ -60,7 +60,7 @@ def test_generated_b0_workloads_match_their_draws():
             assert doc["expected_engine_steps"] == gw.simulate_schedule(draws)["expected_engine_steps"]
             assert doc["serving_profile"] == prof and doc["context_class"] == ctx
             if prof != "B1":
-                assert doc["engine_args_required"]["max_num_batched_tokens"] >= 8 * gw.CTX[ctx]["cap"]
+                assert doc["engine"]["args"]["max_num_batched_tokens"] >= 8 * gw.CTX[ctx]["cap"]
 
 
 # ---------------------------------------------------------------------------------------------------------
