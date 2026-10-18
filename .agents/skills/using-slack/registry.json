@@ -81,7 +81,10 @@
         "benchmarks/private_circuit/",
         "benchmarks/proof_throughput/",
         "benchmarks/sampling_plan/",
-        "integrations/vllm/verity_vllm/protocol_options/sampled_proofs.py"
+        "integrations/vllm/verity_vllm/protocol_options/sampled_proofs.py",
+        "Security/Definitions/Hash/",
+        "Security/Models/Hash/",
+        "Security/Proofs/Hash/"
       ],
       "branch_suffixes": [
         "95d4",
@@ -371,10 +374,7 @@
       "charter": "Daniel, 2026-10-17 10:46 PM PDT (a new slice, via top)",
       "usergroup": "S0CAYGG5BDW",
       "owns": [
-        "benchmarks/hash/",
-        "Security/Definitions/Hash/",
-        "Security/Models/Hash/",
-        "Security/Proofs/Hash/"
+        "benchmarks/hash/"
       ],
       "branch_suffixes": [
         "15ad"
