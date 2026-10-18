@@ -781,11 +781,13 @@ def test_two_writers_of_one_entry_at_once_both_store_it(tmp_path, monkeypatch):
 @pytest.mark.slow
 @pytest.mark.skipif(not os.environ.get("VERITY_CIRCUIT_CHECK_SLOW"),
                     reason="8 min on a node, nearly all of it each worker's cold start: VERITY_CIRCUIT_CHECK_SLOW=1")
-def test_parallel_jobs_give_the_serial_report(tmp_path):
+def test_parallel_jobs_give_the_serial_report(tmp_path, monkeypatch):
     """It checks four real targets serially and in worker processes, so it catches a `--jobs` worker whose report differs from
-    the serial one. Opt-in: run it after a change to `cli.run`, `cli.parallel` or the task list's order."""
+    the serial one. Opt-in: run it after a change to `cli.run`, `cli.parallel` or the task list's order. Its workers budget
+    this process's memory, not an enclosing check slot's (`CHECK_SLOT_MEM_GB`), so three run beside each other in any slot."""
     from circuit_check import cli
 
+    monkeypatch.delenv(cli.SLOT_MEM_ENV, raising=False)
     specs = ["F32Mul_v1", "RMSNormTriton_v1{N=64,EPS=1e-05}", "TokenSelect_v1{V=64}", "rope-head"]
     strip = lambda rep: [{k: v for k, v in t.items() if k != "seconds"} for t in rep["targets"]]  # noqa: E731
     assert strip(cli.run(specs, OPTS, log=None, jobs=3)) == strip(cli.run(specs, OPTS, log=None, jobs=1))
