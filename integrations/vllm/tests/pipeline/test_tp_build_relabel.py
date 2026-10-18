@@ -159,7 +159,7 @@ class _Row:
     step, request, request_dir, launch_of, launch_args = TpRow.step, TpRow.request, TpRow.request_dir, TpRow.launch_of, TpRow.launch_args
 
     def __init__(self, tmp, W: int, hook=None) -> None:
-        self.W, self.B, self.bdir, self.hook, self.lctx = W, 1, f"{tmp}/build", hook, {}
+        self.W, self.B, self.bdir, self.hook, self.lctx, self.wl = W, 1, f"{tmp}/build", hook, {}, None
         self.marks: list = []
         self.logs: list[str] = []
         self.verdicts: list = []
@@ -167,6 +167,9 @@ class _Row:
 
     def rank(self, r: int) -> str:
         return f"{self.bdir}/rank{r}"
+
+    def path(self, rel):
+        return rel
 
     def tl(self, stage, ev, *kv) -> None:
         self.marks.append((stage, dict(kv)))

@@ -934,6 +934,21 @@ def test_a_row_declaring_prefix_caching_passes_its_precheck_at_any_world(tmp_pat
         assert e.value.rc == 99
 
 
+def test_a_b1_row_of_sequential_requests_without_batch_invariance_builds_each_shape_under_its_launch_batch(tmp_path):
+    """The derive refuses such a row's request Program without its batch (`launch_context.missing_batch`), so the row passes it: one
+    sequence per launch, the warm request's prefill its LP - C uncached rows from position C."""
+    t = _tp_row(tmp_path, "glm53__fp8__h200__tp8__b1__i256__o16__prefix__greedy__eager")
+    t.B, t.child_env = 1, {**os.environ, "PYTHONPATH": os.pathsep.join([str(TREE), os.environ.get("PYTHONPATH", "")])}
+    os.makedirs(t.d, exist_ok=True)
+    cold, warm = t.launch_args(256, 15), t.launch_args(199, 15, 128)
+    assert cold[0] == warm[0] == "--launch-context"
+    assert json.loads(cold[1]) == {"batch": [[[256, 0]], *[[[1, 256 + s]] for s in range(15)]]}
+    assert json.loads(warm[1]) == {"batch": [[[71, 128]], *[[[1, 199 + s]] for s in range(15)]]}
+    single = _row(tmp_path)
+    single.B = 1
+    assert single.launch_args(256, 31) == []
+
+
 @pytest.mark.parametrize("row, off", [
     (GLM53, False),                                  # an H box: vLLM's default, the custom all-reduce on
     (TP_DENSE, True),
