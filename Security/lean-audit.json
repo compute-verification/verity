@@ -939,13 +939,24 @@
    "type_hash": "9339b39fc50b0ff51f167aa0adcd15f02a302f90982b000ed84626e29d05c1d3"
   },
   "Accounting.SecurityProofs.Gates.SquaringCarryNibbles": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.Gates.SquaringCarryNibbles : Accounting.Guarantees.Gates.SquaringCarryNibbles"
+   ],
+   "assumptions": [],
+   "type_hash": "3f193bf405d2240af9bd36d88649260aca62c9c803f1cc7f329aeac4e43d7650"
   },
   "Accounting.SecurityProofs.Gates.SquaringUnits": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Gates.SquaringUnits : Accounting.Guarantees.Gates.SquaringUnits"],
+   "assumptions": [],
+   "type_hash": "dea8fd362488ce53327529678e4666c9db0b7ce96c3c2040009b3d101aba7ac5"
   },
   "Accounting.SecurityProofs.Gates.UnitsFooling": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Gates.UnitsFooling : Accounting.Guarantees.Gates.UnitsFooling"],
+   "assumptions": [],
+   "type_hash": "5b40f0c5460acaf648aa680d40b856fc259b43c20551db825483644902c6b28a"
   },
   "Accounting.SecurityProofs.HorizonSampling": {
    "owner": "@memory-accounting",
@@ -6117,7 +6128,7 @@
    ]
   },
   "Definitions.Accounting.Gates.Codec": {
-   "digest": "5885d57a3d56cca55a23dd8d3051596b8734056a54890bb47eadd05ee6ce0460",
+   "digest": "802aa9b04e67ec30ccf08189c047af85c88ecf4737bd6bc78ac8b56058c0eb1a",
    "definitions": {
     "Accounting.Gates.CodecInputs": "6524cf356d674b61ff89e4e77fc979bf4fdf415765b98fc7d50cdaa86792d328",
     "Accounting.Gates.ComputesWords": "85f4401b8abbfdaffb2549e6593b93091410d66af43060b81a1e4e35215ba56c",
@@ -6148,6 +6159,7 @@
     "Accounting.Gates.encodeCosts": "cf565cad456cfec121f966f7fc0f13304eea82116e2214f4665d0655e99b8b87",
     "Accounting.Gates.encodeWord": "554d51815728fecb57794d50b9fa8e5af60363cefaa851eb9b4bf664a685222d",
     "Accounting.Gates.lessParity": "31e8614acb1229ac42def0795071f4ba897d3a8e60746ca526ff33e13bcb305b",
+    "Accounting.Gates.nibbles": "c60b1f41d51faa275217f9e6b6a02d6623ed725af591a0f08398faf099670b86",
     "Accounting.Gates.rho": "ef65a85f7c61cfd841f11e14a7b06ecb13fd990b89a3e63f1206f51d7ed0126b",
     "Accounting.Gates.sigma": "1fa89715a668bb55c59206af4defc0f120b6544b444645c7cc756b3364163d38",
     "Accounting.Gates.sparse": "7c1a17c12010cff703689a84ee595aa07cc738e98414387aca0b0db81c4ba6a1"
@@ -6156,7 +6168,9 @@
     "Accounting.SecurityProofs.Gates.EncodeBudget",
     "Accounting.SecurityProofs.Gates.EncodeCost",
     "Accounting.SecurityProofs.Gates.RhoPairs",
-    "Accounting.SecurityProofs.Gates.SquaringCarry"
+    "Accounting.SecurityProofs.Gates.SquaringCarry",
+    "Accounting.SecurityProofs.Gates.SquaringCarryNibbles",
+    "Accounting.SecurityProofs.Gates.SquaringUnits"
    ]
   },
   "Definitions.Accounting.Gates.Model": {
@@ -6322,7 +6336,10 @@
     "Accounting.SecurityProofs.Gates.ProvenWindow",
     "Accounting.SecurityProofs.Gates.QuantRange",
     "Accounting.SecurityProofs.Gates.RzByteRange",
-    "Accounting.SecurityProofs.Gates.SquaringCarry"
+    "Accounting.SecurityProofs.Gates.SquaringCarry",
+    "Accounting.SecurityProofs.Gates.SquaringCarryNibbles",
+    "Accounting.SecurityProofs.Gates.SquaringUnits",
+    "Accounting.SecurityProofs.Gates.UnitsFooling"
    ]
   },
   "Definitions.Accounting.Gates.Ranges": {
@@ -17489,7 +17506,7 @@
    "guarantees": ["Accounting.SecurityProofs.Composition", "Accounting.SecurityProofs.Fit"]
   },
   "Models.Accounting.Guarantees.Gates": {
-   "digest": "32bb3869dfa71001694449d945a326c3f9684742af38cb4b1f3f8c441737c2d2",
+   "digest": "6ff997a6f1353908eef34dd77768f39fff3995f9da05ad4caa6f8f014b235e8d",
    "definitions": {
     "Accounting.Guarantees.Gates.ClampOrWrap": "318ac8e1baab7cf1f890e087111f044112c4815c8348e5c89a0c5551ac132bb6",
     "Accounting.Guarantees.Gates.DitherRange": "75d5cc47e783cf8a5696461c0ac93515fe0e495b8c5e6aa6cf721be61b9587fb",
@@ -17503,7 +17520,10 @@
     "Accounting.Guarantees.Gates.QuantRange": "94bb1a4ebb63f4b7d88fcc922e88fba7226d110bd9acd7b1e9981e3a7fd8510c",
     "Accounting.Guarantees.Gates.RhoPairs": "ad3a678d6605c6b41f91fcba1be9b3080a0ae18f424f88d168346c2c110c4e0a",
     "Accounting.Guarantees.Gates.RzByteRange": "a9cfce7337d3ba85179a1bd173f1f4acbd0f3c008431e6a9440b5f2e64a621b8",
-    "Accounting.Guarantees.Gates.SquaringCarry": "5c28d06eaf7905b44900da1f8165eeb9f9e69641b46faae77f3f69eb08001af3"
+    "Accounting.Guarantees.Gates.SquaringCarry": "5c28d06eaf7905b44900da1f8165eeb9f9e69641b46faae77f3f69eb08001af3",
+    "Accounting.Guarantees.Gates.SquaringCarryNibbles": "e3b6a679bf3f1b9903ef4040d670d3050b865aeb801da49be059f1168dad9e91",
+    "Accounting.Guarantees.Gates.SquaringUnits": "de91b1754dba1704b1603081146c989dba4beac3d204ec4fc65e4484f527e508",
+    "Accounting.Guarantees.Gates.UnitsFooling": "07b28f9ed3ef20e907a1fce3666a02fd99c6707dc19a99811534b3f3d0e1409a"
    },
    "guarantees": [
     "Accounting.SecurityProofs.Gates.ClampOrWrap",
@@ -17518,7 +17538,10 @@
     "Accounting.SecurityProofs.Gates.QuantRange",
     "Accounting.SecurityProofs.Gates.RhoPairs",
     "Accounting.SecurityProofs.Gates.RzByteRange",
-    "Accounting.SecurityProofs.Gates.SquaringCarry"
+    "Accounting.SecurityProofs.Gates.SquaringCarry",
+    "Accounting.SecurityProofs.Gates.SquaringCarryNibbles",
+    "Accounting.SecurityProofs.Gates.SquaringUnits",
+    "Accounting.SecurityProofs.Gates.UnitsFooling"
    ]
   },
   "Models.Accounting.Guarantees.Joint": {
