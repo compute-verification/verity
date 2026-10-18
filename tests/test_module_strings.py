@@ -57,9 +57,6 @@ EXEMPT = {
     ("tools/research/tests/test_store_prov.py", "tools.agree.tool:AGREE"): "a stand-in",
     # the shell line the one-CLI lint must pass over: a `-m` in a comment
     ("integrations/vllm/tests/lint/test_p06_one_cli.py", "verity_vllm.not_code"): "a stand-in",
-    # the s8 family's module, which compute accounting's S8-PORT adds; the red team's family cases skip until it lands, and
-    # S8-PORT's PR deletes this entry (`test_the_exemptions_are_current` fails once the module resolves)
-    ("benchmarks/property_redteam/cases.py", "verity.ml.circuits.ops.s8"): "pending",
 }
 
 #: packages whose modules a `sys.meta_path` finder in the package makes on import, by the names it accepts; importing one to

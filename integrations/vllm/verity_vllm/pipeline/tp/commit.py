@@ -218,6 +218,7 @@ class Options:
                                    "runs.jsonl and the summary's timing (verity_vllm.pipeline.tp.trace)")
     trace_ranks: str = option("--trace-ranks", default="0", help="with --trace-dir: the ranks whose Kineto trace is kept")
     serving_rows: str | None = option("--serving-rows", default=None, metavar="REQUEST_JSON", help="opt-in, not on the record: in the first instrumented run, once every rank's root is final and the TP run root fixed and before the challenge, each rank commits its units of the verifier's partition in M0's serving row format (verity_vllm.pipeline.tp.serving_rows; the row stage writes the request); needs --required-manifest and --replay-deferred")
+    memory_map: str | None = option("--memory-map", default=None, metavar="REQUEST_JSON", help="opt-in, not on the record: each rank commits its KV layers' `<layer>/slot_mapping` (acquire.sources.kv_slots_source) and, in its replay (in process or before its deferred bundle), writes memory-map/v1 of its KV to the request's path at `.rank<r>` (or the path `ranks[r]` names), its blocks from its request Programs of record at the pages those slots name, its digests from its committed KV words (verity_vllm.pipeline.memory_map, pipeline.tp.rank_replay.memory_map); the prover's witness, never published; needs --required-manifest with a --build-rank per rank")
 
 
 def main(args: Options) -> int:
@@ -353,6 +354,11 @@ def main(args: Options) -> int:
         if args.replay_k:
             replay_cfg["k_per_rank"] = versions["sampled_replay"]["k_per_rank"] = TPC.replay_k_per_rank(args.replay_k, world)
     SRT.require(args, replay_cfg)
+    if args.memory_map:
+        if replay_cfg is None or not Path(args.memory_map).is_file():
+            raise SystemExit("--memory-map on a TP Commit needs its request file and --required-manifest with a --build-rank per rank (each rank "
+                             "writes its map from its Programs of record, in its replay)")
+        replay_cfg["memory_map"] = str(Path(args.memory_map).resolve())
     # [MAN-09 per rank] the weights of record: each rank composes its record from ITS rank Program + the pinned checkpoint shards
     weights_pin_cfg = None
     if args.checkpoint_dir:
@@ -385,7 +391,7 @@ def main(args: Options) -> int:
                                           "required_manifest": args.required_manifest, "request_order": request_order, "request_ids": request_ids, "arrivals": arrivals, "caps": caps,
                                           "tp_relabel": relabel, "tp_partials_omit_rank": args.omit_rank_partials,
                                           "match_tokens": match_tokens, "tp_swap_requests": swap_requests, "match_capture_dir": match_capture_dir, "replay": replay_cfg,
-                                          "weights_pin": weights_pin_cfg, "flip_weight": flip_weight, "serve_shard_from": serve_shard_from, "tap_sources": TAPS.for_ranks(args.tap_sources),
+                                          "weights_pin": weights_pin_cfg, "flip_weight": flip_weight, "serve_shard_from": serve_shard_from, "tap_sources": TAPS.for_ranks(args.tap_sources, kv_slots=bool(args.memory_map)),
                                           "tp_partials_flip_site": ({args.flip_partial.split(":", 1)[0]: args.flip_partial.split(":", 1)[1]} if args.flip_partial else None),
                                           "tp_partials_omit_site": ({args.omit_partial_site.split(":", 1)[0]: args.omit_partial_site.split(":", 1)[1]} if args.omit_partial_site else None),
                                           "engine_kwargs": {k: v for k, v in kw.items() if k not in ("model", "tokenizer", "worker_extension_cls")}})

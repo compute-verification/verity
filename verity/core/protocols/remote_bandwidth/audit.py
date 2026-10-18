@@ -63,7 +63,8 @@ many reads of a node's registered blocks the node made in each window, from rece
    their carriers may hold (μ_carrier); without one, those receipts are certified but not credited.  On the served
    circuit's requirement linked to the passes (`requirement`, a `RequirementLink`: I4's plan and memory-map units and
    the census's layout rule, the memory-map unit's verdict on the record's appends among them, `mapped`), each pass's
-   credit is its receipts at the link's D bits each, at most the circuit's reads at its step (`Ledger.linked`);
+   credit is its receipts at the link's D bits each, at most the circuit's reads at its step (`Ledger.linked`), less
+   the share ε of it the units' draw leaves unproved, its δ added to the ledger's error (`Ledger.error`);
    without one the credit is the node's reads of its store.
    What an accepted window certifies, and on what, is `PROTOCOL.md`.
 
@@ -1130,7 +1131,7 @@ LEDGER_SOURCES = {
     "timing": "the record: the span its passes don't cover at the node's capacity (the round trip and the pass in "
               "flight at the span's ends, the chaining gaps, blocks a plan leaves out), the session's or a window's own "
               "[b_(t−1), D_t]; on a requirement link, each pass's credit is its receipts at D bits each, at most the "
-              "circuit's reads at its step",
+              "circuit's reads at its step, less the link's ε of the session's (the whole of it from any one window)",
     "sample": "the record: its openings' bound on wrong receipts, each window's own at delta (`Ledger.sample`, the "
               "per-window reading), or the session's pooled over its windows at one delta (`Ledger.horizon`, `pooled`)",
     "chip": "S_chip, measured: one pass's worth a block held on chip need not be read again",
@@ -1170,14 +1171,24 @@ class RequirementLink(Protocol):
     memory-map unit's verdict on this session's appends, the chain `Record.appends` (None without one): that W's memory
     map, the one the plan unit's plans are of, makes exactly those appends, each a write at its production step, in
     the map's order, at the index the verifier gave it, a re-key only at the lifetime cap and of the same payload,
-    and no other (PROTOCOL.md §8, "The memory map's choices").  Those checks are theirs; the ledger takes the link as
-    given, and refuses one whose `mapped` isn't True of the record's appends."""
+    and no other (PROTOCOL.md §8, "The memory map's choices").  The units are sampled, so the link holds on what their
+    draw established: `epsilon`, the most share of the linked credit (Σ min(n·D, read_bits(step)) over the passes)
+    that the units it leaves unproved can carry, the passes whose plan unit is wrong and those holding a block a wrong
+    memory-map unit wrote, except with probability `delta`.  Those checks are theirs; the ledger takes the link as
+    given, credits 1 − ε of the linked credit, adds δ to its error, and refuses a link whose `mapped` isn't True of the
+    record's appends."""
 
     @property
     def holds(self) -> bool: ...
 
     @property
     def density_bits(self) -> int: ...
+
+    @property
+    def epsilon(self) -> float: ...
+
+    @property
+    def delta(self) -> float: ...
 
     def read_bits(self, step: int) -> int: ...
 
@@ -1234,7 +1245,9 @@ class Ledger(_Terms):
     event leaves wrong.  `windows` are the same terms over each window's own span, and `worst` and `worst_horizon`
     the windows of the largest γ either way: the every-window half of the claim is theirs, beside the horizon's.
     `linked`: whether the credit is the served circuit's (capped at its reads, on a `RequirementLink`); without a link
-    the credited bytes are the node's reads of its store, not shown to be reads the circuit makes."""
+    the credited bytes are the node's reads of its store, not shown to be reads the circuit makes.  `error` is the
+    probability the per-window reading fails, every window's δ and AuditRO's 2^-slack_log2 a pass, plus the link's δ;
+    `error_horizon` the horizon's, one δ in place of the windows'.  A sketch-sha512 record adds `RateAuditSketch`'s."""
 
     timing: float
     sample: float
@@ -1247,6 +1260,8 @@ class Ledger(_Terms):
     horizon: float
     floor: float
     windows: tuple[WindowLedger, ...]
+    error: float
+    error_horizon: float
     linked: bool = False
 
     @property
@@ -1260,6 +1275,7 @@ class Ledger(_Terms):
     def to_json(self) -> dict:
         w, h = self.worst, self.worst_horizon
         return {**self._json(), "linked": self.linked, "windows": [x.to_json() for x in self.windows],
+                "error": {"windows": self.error, "horizon": self.error_horizon},
                 "worst": {"gamma": w.gamma, "horizon": {"gamma": h.gamma_horizon, "window": h.window},
                           "window": w.window}}
 
@@ -1352,10 +1368,13 @@ def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebu
     its post-seed bytes.  `sample`, `counting`, the horizon and the capacity check count every certified receipt.
     On `requirement`, the served circuit's requirement linked to the passes (`RequirementLink`, which must hold, its
     memory-map unit making the record's appends, `mapped`), a pass's credit is its credited receipts at D bits each, at most the bits the circuit reads at the pass's step, so
-    the credit is the circuit's reads (`Ledger.linked`); `sample` still charges a whole block for a wrong receipt."""
+    the credit is the circuit's reads (`Ledger.linked`); `sample` still charges a whole block for a wrong receipt.
+    The link's units are sampled: the session's credit is 1 − ε of that sum, and a window's is its own less ε of the
+    session's, since the unproved share may sit in any one window; the link's δ is added to `error` and
+    `error_horizon`."""
     if credit_post_seed is not None and credit_post_seed.holds is not True:
         raise ValueError("a verdict that the property fails credits nothing after the seed: pass None")
-    density = 8 * record.block_bytes
+    density, epsilon, link_delta = 8 * record.block_bytes, 0.0, 0.0
     if requirement is not None:
         if requirement.holds is not True:
             raise ValueError("a requirement link whose proofs don't hold caps nothing: pass None, and the credit is "
@@ -1370,6 +1389,11 @@ def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebu
         if any(len(w.steps) != w.passes for w in record.windows):
             raise ValueError("a requirement link reads each pass's step, and this record's passes name none: link a "
                              "session's own record")
+        epsilon, link_delta = requirement.epsilon, requirement.delta
+        if type(epsilon) not in (int, float) or not 0 <= epsilon <= 1:
+            raise ValueError("a link's epsilon is the share of its credit its units' draw leaves unproved, 0 to 1")
+        if type(link_delta) not in (int, float) or not 0 <= link_delta < 1:
+            raise ValueError("a link's delta is the probability its units' draw fails, at least 0 and below 1")
     if capacity_bytes_per_s <= 0 or chip_bytes < 0:
         raise ValueError("the capacity is positive and the chip's storage nonnegative")
     if type(rebuild) is not Rebuild:
@@ -1410,18 +1434,21 @@ def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebu
         return out / 8
 
     windows, carriers, credits = [], [carried(w) for w in record.windows], [credited_bytes(w) for w in record.windows]
+    unproved = epsilon * sum(credits)
     for w, f, e, cb, cr in zip(record.windows, floors(record), wrong_receipts, carriers, credits):
         whole_t, reads_t = capacity_bytes_per_s * w.span_ns / 1e9, w.receipts * b
         if reads_t > whole_t:
             raise ValueError(f"window {w.window} certifies {reads_t} bytes read, more than the capacity allows in its "
                              "span: the capacity is understated")
         windows.append(WindowLedger(
-            w.window, w.span_ns, timing=1 - cr / whole_t, sample=e * b / whole_t,
+            w.window, w.span_ns, timing=1 - max(0.0, cr - unproved) / whole_t, sample=e * b / whole_t,
             chip=w.passes * chip_bytes / whole_t, counting=sum(named[k] for k in w.lengths) / 8 / whole_t,
             rebuild=mu_rebuild, host=host, link=link, carrier=cb / whole_t, horizon=f * reads_t / whole_t, floor=f))
     horizon, floor = pooled(record)
     lam_bits = sum(named[k] for w in record.windows for k in w.lengths)
-    return Ledger(timing=1 - sum(credits) / whole, sample=sum(wrong_receipts) * b / whole,
+    beside = record.passes * 2.0 ** -slack_log2 + link_delta
+    return Ledger(timing=1 - (sum(credits) - unproved) / whole, sample=sum(wrong_receipts) * b / whole,
                   chip=record.passes * chip_bytes / whole, counting=lam_bits / 8 / whole, rebuild=mu_rebuild, host=host,
                   link=link, carrier=sum(carriers) / whole, horizon=horizon * b / whole, floor=floor,
-                  windows=tuple(windows), linked=requirement is not None)
+                  windows=tuple(windows), error=sum(w.profile.delta for w in record.windows) + beside,
+                  error_horizon=record.windows[0].profile.delta + beside, linked=requirement is not None)

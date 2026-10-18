@@ -148,6 +148,22 @@ def test_plan_layouts_repeating_names_get_the_record_their_tensor_metas_get():
     assert recs[1]["fa2_rule"]["steps"] == {"uniform": len(steps)}
 
 
+def test_a_sources_own_names_are_no_modules_tensors():
+    """The KV slots (`kv_slots_source`, commit --memory-map) are named by the engine's KV layer, which need not be a hooked module: the
+    source declares them (`own_names`), and (1) and (4) count module tensors only; undeclared, they read as an unknown module's."""
+    slots = [f"model.layers.{k}.self_attn.mla_attn/slot_mapping" for k in range(2)]
+    com = _com()
+    for s in range(2):
+        com._layouts[s] = _layout(_good_step() + slots)
+    assert com.identity_check()["violations"][0]["unknown_modules"] == ["model.layers.0.self_attn.mla_attn", "model.layers.1.self_attn.mla_attn"]
+
+    class _KvSlots:
+        short_name, own_names = "kv_slots", frozenset(slots)
+
+    com.sources.append(_KvSlots())
+    assert com.identity_check()["ok"] is True
+
+
 def test_offline_core_without_module_set_is_skipped_not_passed():
     com = NativeHostCommitter(None, run_id="x03-ids", gpu_tree=True)
     com._layouts[0] = _layout(_good_step())

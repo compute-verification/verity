@@ -767,6 +767,25 @@ def test_a_single_and_a_tp_rows_commit_carry_the_serving_rows_request(tmp_path):
     assert "--replay-deferred" in tp.commit_cmd([]) and "--serving-rows" not in _tp_row(tmp_path, TP_DENSE).commit_cmd([])
 
 
+def test_remote_verifier_reaches_the_single_gpu_commit_which_refuses_it_without_a_store(tmp_path):
+    """REMOTE_VERIFIER reaches the single-GPU Commit as ``--remote-verifier``, and a TP row refuses it; the Commit
+    refuses it, before anything runs, until it puts the store binder on its engine (`store.remote.unwired`)."""
+    from verity_vllm.pipeline import commit
+
+    single = _row(tmp_path, environ={"REMOTE_VERIFIER": "10.0.0.7:7781"})
+    single.hidden_so, single.B = "/x/verity_fa2_matReqG.so", 1
+    cmd = single.commit_cmd([])
+    assert cmd[cmd.index("--remote-verifier") + 1] == "10.0.0.7:7781"
+    assert "--remote-verifier" not in _tp_row(tmp_path, TP_DENSE).commit_cmd([])
+    with pytest.raises(SystemExit, match="REMOTE_VERIFIER"):
+        _tp_row(tmp_path, TP_DENSE, environ={"REMOTE_VERIFIER": "10.0.0.7:7781"}).commit_cmd([])
+    args = cli.parse("commit", cmd[cmd.index("commit") + 1:], {})
+    with pytest.raises(SystemExit, match="no store binder"):
+        commit.main(args)
+    with pytest.raises(ValueError, match="HOST:PORT"):
+        commit.main(dataclasses.replace(args, remote_verifier="7781"))
+
+
 @pytest.mark.parametrize("row, p2p", [
     ("glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager", None),   # an H box: its engine.env names none
     (TP_DENSE, "1"),                                                          # an L40S row's engine.env names it
