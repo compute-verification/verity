@@ -23,8 +23,8 @@ gpu-lease 1 --wait --max-min 28 -- timeout 1650 "$PY" "$ROOT/benchmarks/pouw/ser
 rc=$?
 echo "served-h1: serve.py exited $rc at $(date -u +%H:%M:%SZ)"
 if [ -f "$S/prover.tar" ]; then
-  if "$PY" -m research data put --kind pouw-h1-prover --file "$S/prover.tar" --preserve > "$OUT/prover-put.txt" 2>&1 \
-     || python3 -m research data put --kind pouw-h1-prover --file "$S/prover.tar" --preserve >> "$OUT/prover-put.txt" 2>&1; then
+  if "$PY" -m research data put --kind pouw-h1-prover/v1 --file "$S/prover.tar" --preserve > "$OUT/prover-put.txt" 2>&1 \
+     || python3 -m research data put --kind pouw-h1-prover/v1 --file "$S/prover.tar" --preserve >> "$OUT/prover-put.txt" 2>&1; then
     echo "served-h1: prover data put: $(tail -1 "$OUT/prover-put.txt")"
   else
     K=/workspace/pouw/served-h1-prover-${RESEARCH_RUN_ID:-$(basename "$D")}.tar
