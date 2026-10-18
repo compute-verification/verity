@@ -3,11 +3,12 @@ import Models.Accounting.Guarantees.Compose
 /-!
 # PoUW's credit on an arbitrary declared circuit: proofs (open)
 
-Every guarantee's proof here is open (note:compute-accounting/20261018T1600Z-draft-theorem-compose-r5 gives the
-order), and this file doesn't land until none is a `sorry`. What the window's proofs' layer meets is proved: its
-static half is defined from the IR (`Declared.layer`), so `StageCuts` (under `LayerCommitted`), `StageCoins` (under
-`Declared.Wf`), `StageSlots`, `WriterReads` and `StageComplete` (under `Declared.Wf` and `units ≤ N_p`) are lemmas
-below, not premises.
+Every guarantee's proof here is open (note:compute-accounting/20261018T1758Z-draft-compose-r6 gives the order), and
+this file doesn't land until none is a `sorry`. What the window's proofs' layer meets is proved: its static half is
+defined from the IR (`Declared.layer`), so `StageCuts` (under `LayerCommitted`, which `Declared.atIR` meets),
+`StageCoins` (under `Declared.Wf`), `StageSlots`, `WriterReads` and `StageComplete` (under `Declared.Wf` and
+`units ≤ N_p`) are lemmas below, not premises, as are the draw cut of `Declared.atDraw`'s layer and `serviceGame`,
+`tileMode` as `jointGame`, `jointMode` at a split-stage window's joint run.
 
 1. `SplitRateClosed`: the folded branch at `W_0 = 0` (`ν = expm1(W_F·a/Λ)/((1 − p)·W_F)`, the exponent concave in
    `W_F` so its endpoints suffice) and the whole branch at `W_F = 0` the same at `b`, `p0` (`ν₀`), then the mixed
@@ -23,7 +24,8 @@ below, not premises.
    honest with probability at most `(1 − ρ·(their share))^K`, which factors over the stages; `SplitRate` per stage at
    its share `≤ w_max`, its luck in expectation from `LuckAt` (`E[L_F] ≤ p·E[W_F]`, `E[L_0] ≤ p0·E[W_0]`), then
    backward induction over the stages, as `Accounting.SecurityProofs.TS.StageBudget`.
-5. `ServiceCovers`: `Accounting.SecurityProofs.TS.DrawnLayer.covers_of_cone` at the tiles' words (`≥ 0`). The game's
+5. `ServiceCovers`: `Accounting.SecurityProofs.TS.DrawnLayer.covers_of_cone` at the tiles' words (`≥ 0`), at any joint
+   run (the live statements use it at `SplitStages.joint`, by `serviceGame_eq` and `tileMode_eq`). The game's
    deficiency is the not-paid tiles' `tileCone` (the three modes, at `1` and `1`), so it is enough that a tile's layer
    cone is at most `N_w` times its `tileCone`: a layer edge `DrawnLayer.Late u v` at slot `k` has its position a value
    the prover writes and a gate of `u`'s unit (`layer_stageSlots`), and either one of `v`'s own gates (`u = v`) or an
@@ -56,21 +58,30 @@ below, not premises.
    `T_cred > 0` (`Model.Wf`) to clear the division.
 8. `CircuitCredit`: step 6 at `a = aOf`, `b = bOf` (`≥ 0` by `stars_nonneg` and `Model.Wf`), and step 7 on each run
    off its event at `r = rOf`; the certificate is issued at `.live`.
-9. `CircuitWorkSeeded`: per stage `j` and mode, `SeedLuckAt` gives the extracted query `sq`, its `Off` event
-   (`SeedExtractedAt`, at most `ε_id`), the queries' gains `g` and `Break`. Off `Off` the stage's gain is at most
-   `g (sq a)`, so at most `max_q g q`. Where `θ_j = seedTheta j > 0`, GRIND's
-   `Accounting.SecurityProofs.TS.GrindPremiumAt` (at `Ω₀ = Unit`, `M = 1`, its own break event empty) bounds
-   `∃ q, ln(T_q/δ_g)/θ_j ≤ g q` by `δ_g`, so off `Break` too the stage's gain `L − κ·U` is below `π*_j`, except with
-   probability `δ_g + δ_b + ε_id`; where `θ_j = 0`, `roundPremium` is the round's weight (`roundCone`), which bounds `L`
-   and so the gain (`κ ≥ 0`). A union over the `rounds` stages and the two modes gives `L_F ≤ 4·U_F + Π` and
-   `L_0 ≤ κ₀·U_0 + Π` off `2·rounds·(δ_g + δ_b + ε_id)` (`EveryStage`: whatever the past). Given the rounds' coins, the
-   service's live draw of a uniform `K_d`-subset misses the tiles whose checked values aren't honest with probability at
-   most `(1 − ρ·U)^{K_d} ≤ e^{−ρ·K_d·U}`, so an accepted run with `ρ·K_d·U ≥ ln(1/δ_s)` has probability at most `δ_s`.
-   Off these, `DrawnRightOff`, `UnitFixed` and step 5's `Covers` as in step 6 give `WorkAt` at
+9. `CircuitWorkSeeded`: `SeedExtractedAt` gives one event `Off` of probability at most `ε_id(rounds·T_q, rounds)` off
+   which every round's `sq a r` is a query. Per round `r` and mode, `SeedLuckAt` gives the queries' gains `g` and
+   `Break`; off `Off` and `Break` round `r`'s gain is at most `g (sq a r)`, so at most `max_q g q`. Where
+   `θ_r = seedTheta r > 0`, GRIND's `Accounting.SecurityProofs.TS.GrindPremiumAt` (at `Ω₀` the window's other answers,
+   `redraw`'s one answer the query's, `M = 1`, its own break event empty) bounds `∃ q, ln(T_q/δ_g)/θ_r ≤ g q` by `δ_g`,
+   so round `r`'s gain `L − κ·U` is below `π*_r` except with probability `δ_g + δ_b`, off `Off`; where `θ_r = 0`,
+   `roundPremium` is the round's weight (`roundCone`), which bounds `L` and so the gain (`κ ≥ 0`). A union over the
+   `rounds` rounds and the two modes gives `L_F ≤ 4·U_F + Π` and `L_0 ≤ κ₀·U_0 + Π` off
+   `ε_id + 2·rounds·(δ_g + δ_b)`, with no stage order: each round's moment fixes every other answer of the window, so
+   a mode that reads a later round's answers is in it. Given the rounds' coins, the service's live draw of a uniform
+   `K_d`-subset misses the tiles whose checked values aren't honest with probability at most
+   `(1 − ρ·U)^{K_d} ≤ e^{−ρ·K_d·U}`, so an accepted run with `ρ·K_d·U ≥ ln(1/δ_s)` has probability at most `δ_s`.
+   Off these, `DrawnRightOff` on `Declared.atDraw`'s layer (its `MovedIn`, `JointSound`, `Pins`) and `Of` give the
+   share game's pass; `UnitFixed` and step 5's `Covers` on `Declared.atIR`'s layer (`LayerCommitted` by
+   `layerCommitted_atIR`) at `jointMode` give the good tiles' words as in step 6. The two layers differ only in their
+   cuts, and `UnitFixed`, `Covers` and the game read none of a layer's committed values, so they combine: `WorkAt` at
    `a·S_F + b·S_0 ≤ max(5a, (1 + κ₀)·b)·U + (a + b)·Π`, strictly below `rOfSeeded`'s first two terms (`a > 0`), with
    `D₀` as in step 6.
 10. `CircuitCreditSeeded`: step 9 at `a = aOf`, `b = bOf`, and step 7 on each run off its event at `r = rOfSeeded`;
    the certificate is issued at `.seeded`.
+11. `BindingOfECR`: `Accounting.SecurityProofs.TS.DrawnBindingOfFork` gives `Pr[MovedIn] ≤ |L|·√Pr[fork]`; AM–GM,
+   `|L|·√x ≤ δ' + |L|²·x/(4δ')`; then `Pr[fork] ≤ F.Pr H + κ` and, where `Claims.ExpectedCR H F` holds,
+   `F.Pr H ≤ E[cost]/2^256`, through `ENNReal.ofReal`'s monotonicity and `ofReal_add_le`; where it fails, the right side
+   is `⊤` unless `L` is empty, where `MovedIn` can't hold (no slot to move).
 -/
 
 namespace Accounting.SecurityProofs.Compose
@@ -127,10 +138,16 @@ theorem layer_pos_mem (w : Fin 1) (t : Fin Np) (k : ℕ) :
     | none => exact List.mem_cons_self
     | some b => exact List.mem_iff_getElem?.mpr ⟨k, hk⟩
 
-theorem layer_stageCuts (hc : Accounting.Assumptions.Compose.LayerCommitted Cd) :
-    StageCuts Cd (Cd.layer hr hK pr) := fun ℓ hℓ => by
+theorem layer_stageCuts (hc : LayerCommitted Cd) : StageCuts Cd (Cd.layer hr hK pr) := fun ℓ hℓ => by
   show min (max (Cd.cutOf ℓ) (Cd.commitRound ℓ)) Cd.rounds = min (Cd.cutOf ℓ) Cd.rounds
   rw [Nat.max_eq_left (hc ℓ hℓ)]
+
+/-- The circuit cut at the IR commits by the IR's cuts. -/
+theorem layerCommitted_atIR : LayerCommitted Cd.atIR := fun _ _ => Nat.zero_le _
+
+/-- The layer of the circuit committed at the draw cuts every position at the draw. -/
+theorem layer_atDraw_cut (ℓ : ℕ) : (((Cd.atDraw.layer hr hK pr).cut ℓ).2 : ℕ) = Cd.rounds :=
+  Nat.min_eq_right (Nat.le_max_right _ _)
 
 theorem layer_stageCoins (hw : Cd.Wf) : StageCoins Cd (Cd.layer hr hK pr) :=
   fun t => Nat.min_eq_left (Nat.le_sub_one_of_lt (roundOf_lt hw hr t.val))
@@ -164,6 +181,14 @@ theorem layer_stageComplete (hw : Cd.Wf) (hN : Cd.units ≤ Np) : StageComplete 
 
 end Layer
 
+/-- A split-stage window's service game is the joint game at its joint run. -/
+theorem serviceGame_eq {C Ξ : Type} {N M : ℕ} (stg : Fin N → ℕ) (W : SplitStages C (Fin N) M) (w : Fin N → ℝ)
+    (a b : ℝ) (K : ℕ) : serviceGame (Ξ := Ξ) stg W w a b K = jointGame (W.joint stg) w a b K := rfl
+
+/-- A split-stage window's modes are its joint run's. -/
+theorem tileMode_eq {ι C B : Type} {Np : ℕ} (Cd : Declared ι) (W : SplitStages C (Fin Np) Cd.rounds) :
+    tileMode (B := B) Cd W = jointMode (W.joint (tileStage Cd Np)) := rfl
+
 /-! ## The guarantees -/
 
 theorem SplitRateClosed : Accounting.Guarantees.Compose.SplitRateClosed := by
@@ -179,6 +204,9 @@ theorem ServiceBudget : Accounting.Guarantees.Compose.ServiceBudget := by
   sorry
 
 theorem ServiceCovers : Accounting.Guarantees.Compose.ServiceCovers := by
+  sorry
+
+theorem BindingOfECR : Accounting.Guarantees.Compose.BindingOfECR := by
   sorry
 
 theorem CircuitWork : Accounting.Guarantees.Compose.CircuitWork := by
