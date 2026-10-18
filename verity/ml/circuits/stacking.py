@@ -13,7 +13,8 @@ The free set is closed. A gate is free only when it is
   proves: D's bound lies in s32, from its operands' ranges as their producers give them, so it never clamps or wraps; or
 - an integer affine map with constant coefficients (``affine``: `I32Add_v1`, `I32Sub_v1`, `I32Mul_v1` with a constant
   operand, and the BF16-to-FP32 widening `Bf16ToF32_v1`, its operand's encoding times 2^16 read as signed) that the interval
-  pass proves never wraps (the widening never does).
+  pass proves never wraps (the widening never does) over operand ranges within their width's signed reading: an operand's
+  range past it is never clipped to it, and the map is budgeted.
 
 Every other primitive the table lists is budgeted, one unit per output value (a primitive returns one value), in one of four
 classes: ``roundings`` (FP arithmetic, casts and dots, special functions, integer floors, mods and narrowing, integer products
@@ -48,8 +49,9 @@ of B operand bits isn't charged. B is 128 by default (`OPERAND_BITS`), the red t
 Ranges. A constant is its value, a proven core step its D, a proven affine map its exact result, a gate `RANGES` lists what its
 rule derives from its operands' ranges (`fmaxf` and `fminf` of a non-negative float, and the low byte of an f32's truncation
 below 128.0, over f32 bit patterns read as s32, which order +0..+inf as the floats; `Exp2Lut127_v1`'s table's hull with 0, as
-Lean's `hull0`), and every other value any word of its width
-(an s8 operand -128..127, an accumulator all of s32). Port types (`ports`, PROTOCOL.md §12) narrow a range, read through
+Lean's `hull0`, [0, 127] over the table its evaluator holds; `S32LowByte`'s code of a word in s8, the word itself, so the LUT
+softmax's P keeps [0, 127] and its P V' is proven to 132,096 keys, Lean's `LutPvWindow`), and every other value any word of its
+width (an s8 operand -128..127, an accumulator all of s32). Port types (`ports`, PROTOCOL.md §12) narrow a range, read through
 `ports.reading` as signed: a primitive's or Definition's value lies in the interval it declares, or a primitive's in what its
 transfer gives from its operands' ranges. A range comes from its producer and the producer's declaration, never from a reader's
 bound, and never from an input's declared bound (its census fact): evaluation doesn't enforce it, so no declared ``In(bound)`` is
@@ -81,7 +83,8 @@ audit certified as read in it and its duration):
 The sink, coin and limb-split types of the s8 family's companions (the receipt fold, the noise derivation, `LimbSplit`) are
 circuits' Build types; until the table lists those Definitions they are refused or budgeted gate by gate (`LimbSplit`'s byte,
 carry and clamp primitives are listed), never free. Bits become bytes exactly (bits / 8), and every comparison is exact
-(`fractions.Fraction`).
+(`fractions.Fraction`): c, R_in and a window's duration are given as an int, a Fraction or a str, and a float, which would be
+read at its binary value, is refused.
 """
 from __future__ import annotations
 
@@ -91,6 +94,7 @@ import struct
 from collections import Counter
 from dataclasses import dataclass, field
 from fractions import Fraction
+from numbers import Integral, Rational
 from typing import Any, Callable, Iterator, Mapping, Sequence
 
 from . import ports
@@ -379,14 +383,23 @@ def _point(r: Range) -> int | None:
     return r[0] if r is not None and r[0] == r[1] else None
 
 
+def _in(r: Range, bound: tuple[int, int]) -> tuple[int, int] | None:
+    """`r` within `bound`: `bound` when `r` is any word (or empty), None when it leaves `bound` (never clipped to it)."""
+    if r is None or r[0] > r[1]:
+        return bound
+    return r if _within(r, bound) else None
+
+
 def _affine(fid: str, rng: Sequence[Range]) -> tuple[int, int] | None:
     """An affine map's exact result range over s32 operands (the widening's over an s16 encoding), or None when it isn't
-    affine (a product of two non-constants)."""
+    affine (a product of two non-constants) or an operand's range leaves its width's signed reading."""
     if fid == "Bf16ToF32_v1":
-        x = _clip(rng[0], S16)
-        return (x[0] << 16, x[1] << 16)
+        x = _in(rng[0], S16)
+        return None if x is None else (x[0] << 16, x[1] << 16)
     a, b = rng[0], rng[1]
-    x, y = _clip(a, S32), _clip(b, S32)
+    x, y = _in(a, S32), _in(b, S32)
+    if x is None or y is None:
+        return None
     if fid == "I32Add_v1":
         return (x[0] + y[0], x[1] + y[1])
     if fid == "I32Sub_v1":
@@ -437,12 +450,23 @@ def _rz_byte(x: Range) -> Range:
     return (_trunc(x[0]) if x[0] >= 0 else 0, _trunc(x[1]) if x[1] >= 0 else 0)
 
 
-#: `Exp2Lut127_v1`'s value: the hull of its table's entries, rint(127 * 2^(-t/16)) for t < 256, and 0
-EXP2_LUT127 = (0, 127)
+#: `Exp2Lut127_v1`'s table, rint(127 * 2^(-t/16)) for t < 256, as its evaluator (vLLM's `engine.int8_attention.LUT`, which
+#: `verity` doesn't import) and Lean's `exp2Lut127` hold it: `round` is rint's half to even (t = 16, 63.5, is 64)
+EXP2_LUT127_TABLE = tuple(round(127 * 2 ** (-t / 16)) for t in range(256))
+#: `Exp2Lut127_v1`'s value: the hull of its table's entries and 0 (Lean's `hull0`)
+EXP2_LUT127 = (min(0, *EXP2_LUT127_TABLE), max(0, *EXP2_LUT127_TABLE))
+
+
+def _low_byte(y: Range) -> Range:
+    """`S32LowByte`'s s8 code, sext8(y): y itself when y lies in s8, so P's codes keep the LUT's hull (Lean's
+    `S32LowByteRange`)."""
+    return y if y is not None and y[0] <= y[1] and _within(y, S8) else None
+
 
 #: the budgeted gates whose value's range a rule derives from their operands' ranges (`F32_POS`)
 RANGES: dict[str, Callable[..., Range]] = {"F32Fmaxf_v1": _fmaxf, "F32Fminf_v1": _fminf, "F32ToU32RzByte_v1": _rz_byte,
-                                           "Exp2Lut127_v1": lambda _t: EXP2_LUT127}
+                                           "Exp2Lut127_v1": lambda _t: EXP2_LUT127, "S32LowByte_v1": _low_byte,
+                                           "S32LowByte_v2": _low_byte}
 
 
 def _colls(refs: Refs, cache: dict | None = None) -> frozenset[tuple[str, int]]:
@@ -862,10 +886,20 @@ class Verdict:
 def check(program: Any, census: Mapping, *, c: Mapping[str, Any], windows: Sequence[Window], R_in: Any = R_IN,
           L: int | None = None, B: int = OPERAND_BITS) -> Verdict:
     """P(c, R_in, L) at B operand bits on `program` and its census under the audit's `windows`. c maps each budgeted class to
-    its units per certified byte read, R_in is bytes per second, L is steps (None: left to re-keying). A window outside the
-    census's steps, a c without every budgeted class, or a B below 1 is refused (ValueError)."""
+    its units per certified byte read, R_in is bytes per second, L is steps (None: left to re-keying). c, R_in and a window's
+    seconds are exact: an int, a Fraction or a str `Fraction` reads. A window outside the census's steps, a c without every
+    budgeted class, a float among the exact numbers, or a B below 1 is refused (ValueError)."""
     a = analyze(program, census)
     return judge(a, c=c, windows=windows, R_in=R_in, L=L, B=B)
+
+
+def _exact(x: Any, what: str) -> Fraction:
+    """`x` as the rational it names. A float is refused: `Fraction` reads it at its binary value (0.1 a little past 1/10)."""
+    if isinstance(x, float):
+        raise ValueError(f"{what} is the float {x!r}, read at its binary value: give it exactly, as Fraction({str(x)!r})")
+    if not isinstance(x, (Rational, str)):
+        raise ValueError(f"{what} is an int, a Fraction or a str such as '1/10', not {x!r}")
+    return Fraction(x)
 
 
 def judge(a: Analysis, *, c: Mapping[str, Any], windows: Sequence[Window], R_in: Any = R_IN, L: int | None = None,
@@ -875,13 +909,15 @@ def judge(a: Analysis, *, c: Mapping[str, Any], windows: Sequence[Window], R_in:
         raise ValueError(f"c gives units per certified byte for exactly {list(BUDGETED)}, not {sorted(c)}")
     if not (isinstance(B, int) and not isinstance(B, bool) and B >= 1):
         raise ValueError(f"B is an integer >= 1, not {B!r}")
-    cq = {k: Fraction(c[k]) for k in BUDGETED}
-    R = Fraction(R_in)
+    cq = {k: _exact(c[k], f"c[{k!r}]") for k in BUDGETED}
+    R = _exact(R_in, "R_in")
     S = len(a.steps)
     for win in windows:
         if (not isinstance(win.steps, range) or win.steps.step != 1 or not 0 <= win.steps.start < win.steps.stop <= S
-                or win.reads < 0 or Fraction(win.seconds) <= 0):
-            raise ValueError(f"a window is a non-empty range of the census's {S} steps with reads >= 0 and seconds > 0, not {win}")
+                or not isinstance(win.reads, Integral) or win.reads < 0
+                or _exact(win.seconds, "a window's seconds") <= 0):
+            raise ValueError(f"a window is a non-empty range of the census's {S} steps with an integer reads >= 0 and seconds "
+                             f"> 0, not {win}")
     reasons: list[dict] = [{"code": code, "definitions" if code == "reinterpretation" else "primitives": a.refused[code]}
                            for code in REFUSED if code in a.refused]
     wide = {g: s["operand_bits"] for g, s in a.gates.items()
@@ -913,6 +949,7 @@ def judge(a: Analysis, *, c: Mapping[str, Any], windows: Sequence[Window], R_in:
     return Verdict(not reasons, tuple(reasons), numbers)
 
 
-__all__ = ["AFFINE", "Analysis", "BUDGETED", "CLASSES", "CONST_ID", "EXP2_LUT127", "F32_POS", "FAMILIES", "FAMILY", "GATHERS",
-           "LIFTS", "OPERAND_BITS", "RANGES", "REFUSED", "R_IN", "S16", "S32", "S8", "SCHEMA", "Step", "TAG", "Tally", "U8", "VERSION",
-           "Verdict", "Window", "analyze", "check", "class_of", "count", "digest", "gather", "judge", "spec"]
+__all__ = ["AFFINE", "Analysis", "BUDGETED", "CLASSES", "CONST_ID", "EXP2_LUT127", "EXP2_LUT127_TABLE", "F32_POS", "FAMILIES",
+           "FAMILY", "GATHERS", "LIFTS", "OPERAND_BITS", "RANGES", "REFUSED", "R_IN", "S16", "S32", "S8", "SCHEMA", "Step",
+           "TAG", "Tally", "U8", "VERSION", "Verdict", "Window", "analyze", "check", "class_of", "count", "digest", "gather",
+           "judge", "spec"]
