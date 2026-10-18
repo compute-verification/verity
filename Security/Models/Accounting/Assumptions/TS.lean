@@ -133,16 +133,16 @@ words are unpredictable from its view**: in the ideal game split at the receipt,
 the values of the round's deficient words have point mass at most `μ` given everything the cheater's skip and its
 values for them are functions of (`ReceiptGame.OperandPointMass`, HMU's `SkipRound.PointMass` at word level). The
 headlines take it at `¾`. Lemma B at fibre 1 (`Accounting.Guarantees.HMu.LemmaB`) turns it into the operand luck at
-`μ`. It is a claim about the noise, not a restriction on the cheater's play:
+`μ`. Where it holds:
 * the coins give it for a fresh-bit skipped value (`Accounting.Guarantees.HMu.CoinPointMass`: `½` at one bit);
 * for degree-2 operands on cube bits `OperandLuckCube` gives the operand luck at `¾` directly, on affine-operand runs
   only;
 * where the cheater computes a word that shares the skipped value's coins, it is computational: the cheater hasn't
   computed the product (`Models.Accounting.Guarantees.HMu`'s module doc).
 A cheater whose view pins the skipped value, one that reads a coin and skips exactly when it is right, falsifies it.
-The game names no view, so the premise is that some view that decides the share has the point mass. It is therefore
-equivalent to the operand luck at `μ` on every positive level of the share: the coarsest such view is the share itself,
-with the skipped value whether the words are right. -/
+The game names no view, so the premise is that some view that decides the share has the point mass. It implies the
+operand luck at `μ` on each positive level of the share, and that implies it on levels of at least `1/μ` outcomes,
+with the share itself as the view. -/
 def OperandHMu {Ω : Type} [Fintype Ω] {S : ℕ} (μ : ℝ) (G : ReceiptGame Ω S) : Prop := G.OperandPointMass μ
 
 /-- `accounting-ts-receipt-luck` (HMU's B′ case; the headlines' second luck premise, beside `OperandHMu`; on card
