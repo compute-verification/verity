@@ -215,6 +215,31 @@ def test_the_bound_blocks_reproduce_the_pinned_ones() -> None:
         assert all(block[s * w:s * (w + 1)] != seeds[s * w:s * (w + 1)] for w in range(k.codec.field.block_words))
 
 
+def test_the_coin_form_blocks_reproduce_the_pinned_ones() -> None:
+    """Blocks 0 and 20 under the coin form of their bound keys: the digest of the form without a coin, another offset,
+    and the words of the word path at that offset, which is all of the key a device that takes b_j as its input reads
+    (`kv.cu`, `paged.cu`).  Each decodes under its digest and its coin only: not without the coin, not under another
+    coin, and the form without a coin's encoding not under the coin."""
+    pinned = json.loads(rv.PATH.read_text())
+    k = codec.key(bytes.fromhex(pinned["codec"]["seed"]), codec.DEFAULT)
+    f, coin = k.codec.field, bytes.fromhex(pinned["codec"]["coin"]["c_a"])
+    s = f.word_bytes
+    assert coin == rv.APPEND_COIN and pinned["codec"]["coin"]["index"] == codec.COIN_INDEX == (1 << 32) - 4
+    for v, pre in zip(pinned["codec"]["coin"]["bound"], pinned["codec"]["bound"], strict=True):
+        j, payload = v["j"], rv.payload(v["j"])
+        d = codec.digest(payload)
+        b = codec.binding(d, j, k, coin)
+        assert j == pre["j"] and v["digest"] == pre["digest"] == d.hex() and format(b, "x") == v["b"] != pre["b"]
+        block = codec.encode(payload, j, k, bound=True, coin=coin)
+        words = [codec.encode_word(int.from_bytes(payload[s * w:s * (w + 1)], "little"), f.block_words * j + w, k, b)
+                 for w in range(f.block_words)]
+        assert block == b"".join(x.to_bytes(s, "little") for x in words)
+        assert block[:s].hex() == v["word_0"] and hashlib.sha512(block).hexdigest() == v["block_sha512"]
+        assert codec.decode(block, j, k, d, coin) == payload
+        assert codec.decode(block, j, k, d) is None and codec.decode(block, j, k, d, bytes(codec.COIN_BYTES)) is None
+        assert codec.decode(codec.encode(payload, j, k, bound=True), j, k, d, coin) is None
+
+
 def test_vectors_cover_zero_weights_a_short_last_leaf_a_partial_plan_and_the_chain() -> None:
     pinned = json.loads(rv.PATH.read_text())
     assert pinned["codec"]["words"][0]["payload"] == "00" * codec.DEFAULT.field.word_bytes

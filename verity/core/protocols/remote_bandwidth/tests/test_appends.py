@@ -65,7 +65,7 @@ def registered() -> audit.Store:
 def store() -> audit.Store:
     """A store of N registered blocks under p512/k2 with no appends yet, its own to append to."""
     out = copy.copy(registered())
-    out.blocks, out.appends = list(out.blocks), []
+    out.blocks, out.appends, out.pending = list(out.blocks), [], {}
     return out
 
 
@@ -75,25 +75,42 @@ def pages(first: int, count: int) -> list[bytes]:
 
 class Run:
     """One session over `store`, the verifier's side and the prover's in step, every receipt drawn by default.  The
-    prover computes its passes from `prover_store` (`store` by default) and commits `store`'s appends."""
+    prover computes its passes from `prover_store` (`store` by default) and commits `store`'s appends, each encoded
+    under the coin the verifier replies with (`coins`, by first index), each pass's seed binding every append it sent
+    before the pass's root (`head`).  With a `registry`, the session is its next over the store's registration."""
 
     def __init__(self, store: audit.Store, prover_store: audit.Store | None = None, windows: int = 2,
-                 samples: int = 10**6, lifetime: int = audit.LIFETIME) -> None:
+                 samples: int = 10**6, lifetime: int = audit.LIFETIME, registry: audit.Registry | None = None) -> None:
         reg = store.registration
         self.p = Params(blocks=reg.blocks, deadline_ns=10**6, windows=windows, samples=samples, delta=1e-6,
                         window_ns=10, codec=reg.codec, lifetime=lifetime)
         self.clock = Clock()
-        self.s = Session(self.p, reg, None, coins.Challenger(reg.digest, 0, self.p.coins, entropy=Entropy(b"coins")),
-                         not_before_ns=0, clock=self.clock)
+        if registry is None:
+            self.s = Session(self.p, reg, None, coins.Challenger(reg.digest, 0, self.p.coins, entropy=Entropy(b"coins")),
+                             not_before_ns=0, clock=self.clock)
+        else:
+            self.s = registry.session(self.p, reg, None, not_before_ns=0, clock=self.clock, entropy=Entropy(b"coins"))
         self.store = store
         self.prover = audit.Prover(prover_store or store, None, self.s.commitment, entropy=Entropy(b"receipt salts"))
         self.challenges = [self.s.start()]
         self.t, self.i, self.previous, self.plan, self.step = 0, 0, reg.digest, Plan.whole(reg.blocks), -1
+        self.head: bytes | None = None
         self.passes: dict[tuple[int, int], audit.Pass] = {}
+        self.coins: dict[int, bytes] = {}
+
+    def commit(self, root: bytes, count: int) -> int:
+        """An append's root sent (`Session.append`): the index the verifier assigns, its coin kept and, if the store
+        awaits that append's coin, its blocks encoded under it."""
+        first, coin = self.s.append(root, count)
+        self.coins[first] = coin
+        self.head = audit.append_head(self.head, first, count, root)
+        if first in self.store.pending:
+            self.store.encode(first, coin)
+        return first
 
     def append(self, count: int) -> audit.Append:
         a = self.store.append(pages(self.store.extent, count), salts(b"page salts %d" % self.store.extent, count))
-        assert self.s.append(a.root, a.count) == a.first
+        assert self.commit(a.root, a.count) == a.first
         return a
 
     def run(self, plan: Plan | None = None, change: tuple | None = None, sent=None, step: int | None = None
@@ -102,7 +119,7 @@ class Run:
         `step` (None: the step after the last pass's)."""
         if change is not None:
             plan = self.plan.changed(*change, self.store.extent)
-        ps = self.prover.run(self.challenges[self.t], self.i, self.previous, plan)
+        ps = self.prover.run(self.challenges[self.t], self.i, self.previous, plan, head=self.head)
         self.passes[self.t, self.i], self.previous, self.plan = ps, ps.root, ps.plan
         self.i += 1
         self.step = self.step + 1 if step is None else step
@@ -173,7 +190,9 @@ def test_an_honest_session_over_appended_and_released_pages_is_accepted(honest) 
     assert ps.plan.block(9) == 9 and o.digest == codec.digest(pages(9, 1)[0]) and len(o.digest) == 64
     assert registered.digest == b""
     assert o.size == registered.size + 64 + 64 * (len(o.payload_path) - len(registered.payload_path))
-    assert r.store.blocks[9] == codec.encode(pages(9, 1)[0], 9, r.store.registration.key, bound=True)
+    k = r.store.registration.key
+    assert r.store.blocks[9] == codec.encode(pages(9, 1)[0], 9, k, bound=True, coin=r.coins[8])
+    assert r.store.blocks[9] != codec.encode(pages(9, 1)[0], 9, k, bound=True)
 
 
 def test_the_ledger_credits_post_seed_receipts_only_on_the_property_s_verdict(honest) -> None:
@@ -213,13 +232,19 @@ def test_the_ledger_credits_post_seed_receipts_only_on_the_property_s_verdict(ho
 @dataclasses.dataclass(frozen=True)
 class Link:
     """A requirement link that holds or not, at `density_bits`, reading `reads[step]` bits at a step (plenty
-    otherwise)."""
+    otherwise), its memory-map unit's verdict `maps` on the appends it is asked about, each kept in `asked`."""
     holds: bool
     density_bits: int
     reads: dict
+    maps: object = True
+    asked: list = dataclasses.field(default_factory=list)
 
     def read_bits(self, step: int):
         return self.reads.get(step, 10**9)
+
+    def mapped(self, appends: bytes | None):
+        self.asked.append(appends)
+        return self.maps
 
 
 def test_on_a_requirement_link_a_pass_is_credited_at_most_the_circuit_s_reads_at_its_step(honest) -> None:
@@ -251,6 +276,25 @@ def test_on_a_requirement_link_a_pass_is_credited_at_most_the_circuit_s_reads_at
     bare = synthetic((10, 12), ())
     with pytest.raises(ValueError, match="name none"):
         audit.ledger(bare, **dict(common, rebuild=audit.Rebuild(bare.codec, 0.0)), requirement=Link(True, 8192, {}))
+
+
+def test_a_requirement_link_caps_nothing_unless_its_memory_map_unit_makes_the_record_s_appends(honest) -> None:
+    """The red team's KB-2: frees, re-keys and append order chosen after the seed cost no encode, so the advice they
+    give is zero only if W's memory map fixes them, which the memory-map unit proves.  The record carries the chain
+    over the session's appends (public: a hash over hiding roots and their indices), the link's `mapped` is asked
+    about exactly that chain, and a link whose unit doesn't make those appends is refused."""
+    r, _ = honest
+    rec = r.s.record()
+    assert r.head is not None and rec.appends == r.head and rec.public()["appends"] == r.head.hex()
+    common = dict(capacity_bytes_per_s=4096 * 10**9 / 10, chip_bytes=0, rebuild=audit.Rebuild(P512, 0.0))
+    link = Link(True, 8 * 4096, {})
+    assert audit.ledger(rec, **common, requirement=link).linked and link.asked == [r.head]
+    for maps in (False, None, 1):
+        with pytest.raises(ValueError, match="memory-map unit"):
+            audit.ledger(rec, **common, requirement=Link(True, 8 * 4096, {}, maps))
+    none = Link(True, 8 * 4096, {})
+    audit.ledger(dataclasses.replace(rec, appends=None), **common, requirement=none)
+    assert none.asked == [None]
 
 
 def synthetic(lengths: tuple[int, ...], post: tuple[int, ...], steps: tuple[int, ...] = ()) -> audit.Record:
@@ -331,7 +375,7 @@ def test_an_append_s_leaves_bind_the_indices_the_verifier_assigns() -> None:
     ys = salts(b"page salts", 2)
     a = st.append(pages(N, 2), ys)
     shifted = audit.append_tree(st.registration.digest, N + 1, a.digests, ys)
-    assert r.s.append(shifted.commitment.root, 2) == N
+    assert r.commit(shifted.commitment.root, 2) == N
     assert len(shifted.open(N + 1).path) == len(a.tree.open(N).path)
     assert r.run(change=(((N, 2),), ())) is None
     r.boundary()
@@ -388,7 +432,7 @@ def test_an_appended_block_leaves_every_plan_within_the_lifetime_unless_re_keyed
 
     r = two_windows_under_a_lifetime_of_two()
     a = r.store.append(pages(N, 2), salts(b"re-keyed", 2))
-    assert r.s.append(a.root, a.count) == N + 3 and r.s.release(((N, 2),)) is None
+    assert r.commit(a.root, a.count) == N + 3 and r.s.release(((N, 2),)) is None
     assert r.run(change=(((N + 3, 2),), ((N, 2),))) is None
     r.boundary()
     v = copy.deepcopy(r).run(change=((), ()))
@@ -421,14 +465,28 @@ def test_a_malformed_append_or_release_rejects_the_session() -> None:
 
 
 def test_a_store_appends_at_fresh_indices_under_bound_keys() -> None:
+    """An append commits its blocks' digests and leaves them unencoded until its coin arrives (`Store.encode`), which
+    encodes them once: a second coin for it, or a coin for no pending append, is refused, and a malformed coin
+    leaves it pending."""
     st = store()
     a = st.append(pages(N, 2), salts(b"a", 2))
     b = st.append(pages(N + 2, 1), salts(b"b", 1))
     assert (a.first, a.count, b.first, b.count, st.extent) == (N, 2, N + 2, 1, N + 3)
+    assert st.blocks[N:] == [None] * 3 and set(st.pending) == {N, N + 2}
+    ca, cb = (hashlib.sha512(label).digest()[:codec.COIN_BYTES] for label in (b"coin a", b"coin b"))
+    with pytest.raises(ValueError, match="32 bytes"):
+        st.encode(N, ca[:31])
+    assert set(st.pending) == {N, N + 2}
+    st.encode(N, ca)
+    st.encode(N + 2, cb)
+    for first in (N, N + 1, N + 2):
+        with pytest.raises(ValueError, match="awaits its coin"):
+            st.encode(first, ca)
     k = st.registration.key
-    for j in range(N, N + 3):
+    for j, coin in ((N, ca), (N + 1, ca), (N + 2, cb)):
         salt, path, d = st.committed(j)
-        assert d == codec.digest(pages(j, 1)[0]) and codec.decode(st.blocks[j], j, k, d) == pages(j, 1)[0]
+        assert d == codec.digest(pages(j, 1)[0]) and codec.decode(st.blocks[j], j, k, d, coin) == pages(j, 1)[0]
+        assert codec.decode(st.blocks[j], j, k, d) is None
     assert st.committed(N + 2)[1] == () and st.committed(0)[2] == b""
     assert a.tree.open(N + 1).value == receipts.hidden(pages(N + 1, 1)[0], a.salts[1])
     with pytest.raises(ValueError, match="salt per payload"):
