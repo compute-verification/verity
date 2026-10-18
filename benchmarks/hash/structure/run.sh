@@ -8,7 +8,7 @@
 #
 #   research run --on vy-nebius-2 --project verity --campaign hash --source . --cwd source --env GPU_LEASE_WHO=hash-structure \
 #     -- bash benchmarks/hash/structure/run.sh
-# REPS (default 15); LEASE_MIN (default 14); PREFILL_M (default 4096); SHAPES / DECODE (N:K lists); LEASE_ARGS (extra gpu-lease flags)
+# REPS (default 15); LEASE_MIN (default 14); FUSE_ONLY (set: lease 2 runs the fusion bench only); PREFILL_M (default 4096); SHAPES / DECODE (N:K lists); LEASE_ARGS (extra gpu-lease flags)
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda/bin:/usr/local/cuda-13.0/bin:$PATH
@@ -87,6 +87,7 @@ gpu-lease 1 --wait --max-min "$LEASE_MIN" ${LEASE_ARGS:-} -- bash -c '
   for nk in $SHAPES; do b "$M" "${nk%%:*}" "${nk##*:}" 64; done
   for nk in $DECODE; do for R in 32 16; do b 32 "${nk%%:*}" "${nk##*:}" $R; done; done
   for nk in 4096:4096 24576:4096; do for R in 16 32 128; do b "$M" "${nk%%:*}" "${nk##*:}" $R; done; done
+  [ -n "${FUSE_ONLY:-}" ] && { kill $smi; exit 0; }
   for n in 16384 131072 1048576; do "$W/fuse" tree "$W/p-tree.bin" $n "$REPS" >> "$O/tree.jsonl" 2>> "$O/bench.err"; done
   echo "tree rc $?" >> "$O/rc.txt"
   for n in 98304 1048576; do "$W/fuse" chacha "$W/p-chacha.bin" "$W" $n "$REPS" >> "$O/chacha.jsonl" 2>> "$O/bench.err"; done

@@ -101,11 +101,19 @@ __global__ void __launch_bounds__(MMA_THREADS + 32 * HW, 1) gemm_kernel(Geo g) {
   if (HW && tid == 0) done = 0;
   if (HW) __syncthreads();
   if (HW && tid >= MMA_THREADS) {
-    const int j = tid - MMA_THREADS, rbs = BM / g.R, L = rbs * (2 * BN / 32);
-    for (u64 s = j; s < (u64)my_tiles * L; s += 32 * HW) {
-      const int k = (int)(s / L), l = (int)(s % L);
-      while (done <= k) __nanosleep(128);
+    // A warp takes 32 consecutive leaves and waits, uniformly, for the last tile they reach: lanes waiting on different
+    // tiles would diverge, and a sleeping path stalls the hashing one.
+    const int hw = (tid - MMA_THREADS) >> 5, rbs = BM / g.R, L = rbs * (2 * BN / 32);
+    const u64 total = (u64)my_tiles * L;
+    for (u64 s0 = 32ull * hw; s0 < total; s0 += 32 * HW) {
+      const int kmax = (int)((s0 + 31 < total ? s0 + 31 : total - 1) / L);
+      if (lane == 0)
+        while (done <= kmax) __nanosleep(64);
+      __syncwarp();
       __threadfence();
+      const u64 s = s0 + lane;
+      if (s >= total) continue;
+      const int k = (int)(s / L), l = (int)(s % L);
       const int t = blockIdx.x + k * gridDim.x, tm = t % g.tiles_m, tn = t / g.tiles_m;
       const u64 br = (u64)tm * rbs + l % rbs, bc = (u64)tn * (2 * BN / 32) + l / rbs;
       if (br < g.mr) leaf_at(g, br, bc);
