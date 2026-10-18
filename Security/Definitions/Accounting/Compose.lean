@@ -330,12 +330,12 @@ checkpoint (W6), the form of the operand luck its template proves, and the three
 * `seedRate`: the rate `θ_k`, per committed word of the circuit, at which a seed group of kind `k`'s template gain at
   `κ = 4` has moment at most `1` over its seed (GRIND's `Accounting.Guarantees.TS.TemplateMoment`: `1/(256·r)` per
   product, times a word's products), and `0` where none is proved, which charges a group its whole weight.
-Under live coins H1's attention matmuls are credited at their floors (decision 117, ATTN-NOISE r2): `QKᵀ` draws a
-coin per entry on both operands; `P·V`'s `P` carries only the period-32 word `U` and `V` a coin `b` per entry, and its
-floor is `U·b`'s, a cell per `k`, which holds under any salt-independent advice while the kernel commits a prefix word at
-most every 32 keys (at one every `C` keys it is `32·k/C`). Under seeded coins they are uncredited (`Scheme.SeedPriced`,
-in `ScopeSeeded`): GRIND prices no premium for a kind reading two activations, and at a head's seed group it would be
-37.5% of `QKᵀ` and 75% of `P·V` (RT-COMPOSE r4). -/
+Under live coins H1's attention matmuls are credited at their floors (decision 117, ATTN-NOISE r2): `QKᵀ` draws a coin
+per entry on both operands; `P·V`'s `P` carries only the period-32 word `U` and `V` a coin `b` per entry, and its floor
+is `U·b`'s, a cell per `k`, which holds under any salt-independent advice while the kernel commits a prefix word at most
+every 32 keys (at one every `C` keys it is `32·k/C`). Under seeded coins they are uncredited (`Scheme.SeedPriced`, in
+`ScopeSeeded`): GRIND prices no premium for a kind reading two activations, and at a head's seed group it would be 37.5%
+of `QKᵀ` and 75% of `P·V` (RT-COMPOSE r4). -/
 structure Scheme (K : Type) where
   floor : Kind → Labelled K
   credited : Kind → Bool
@@ -665,7 +665,7 @@ noncomputable def rOf {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) (Np : ℕ
 open Classical in
 /-- **A stage's gain at exchange rate `κ`** (GRIND's `L − κ·U`, on one stage's coin `c`): the stage's tiles in mode
 `s`, each `w v` when its checked values are honest (`same`, lucky) and `−κ·w v` when not. GRIND bounds it per seed
-group by the premium `π*` except with probability `δ_g + δ_b` (`Assumptions.Compose.SeedLuckAt`). -/
+group by the premium `π*` except with probability `δ_g + δ_b + ε_id` (`Assumptions.Compose.SeedLuckAt`). -/
 noncomputable def stageGain {C V : Type} [Fintype V] (stg : V → ℕ) (j : ℕ) (mode : C → V → Mode)
     (same : C → V → Prop) (w : V → ℝ) (s : Mode) (κ : ℝ) (c : C) : ℝ :=
   ∑ v, if stg v = j ∧ mode c v = s then w v * ((1 + κ) * (if same c v then 1 else 0) - κ) else 0
@@ -707,11 +707,11 @@ noncomputable def premiumOf {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) (Np
 
 /-- **The seeded logical layer's bound** `r = max(5a, (1 + κ₀)·b)·ln(1/δ_s)/(ρ·K_d) + (a + b)·Π + min(a, b)·D₀`. Per
 stage, GRIND's premise (`Assumptions.Compose.SeedLuckAt`) at the template's `κ = 4` (`TemplateMoment`'s point) for
-folded tiles and at `κ₀` (the guess bound's) for whole ones gives, except with probability `δ_g + δ_b` each, lucky
-folded share `L_F < 4·U_F + π*` and lucky whole share `L_0 < κ₀·U_0 + π*`, `U` the share whose checked values aren't
-honest. An accepted draw of `K_d` tiles then has `ρ·K_d·(U_F + U_0) < ln(1/δ_s)` except with probability `δ_s`, so
-`a·(L_F + U_F) + b·(L_0 + U_0)` is below `r`, with `D₀` (`zeroCone`) as in `rOf`. No `SplitRate` is read: the live
-draw prices only the unlucky share, and the premium the lucky excess. -/
+folded tiles and at `κ₀` (the guess bound's) for whole ones gives, except with probability `δ_g + δ_b + ε_id` each,
+lucky folded share `L_F < 4·U_F + π*` and lucky whole share `L_0 < κ₀·U_0 + π*`, `U` the share whose checked values
+aren't honest. An accepted draw of `K_d` tiles then has `ρ·K_d·(U_F + U_0) < ln(1/δ_s)` except with probability
+`δ_s`, so `a·(L_F + U_F) + b·(L_0 + U_0)` is below `r`, with `D₀` (`zeroCone`) as in `rOf`. No `SplitRate` is read:
+the live draw prices only the unlucky share, and the premium the lucky excess. -/
 noncomputable def rOfSeeded {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) (Np Kd Tq : ℕ) (a b κ0 ρ δs δg : ℝ) : ℝ :=
   max (a * (1 + 4)) (b * (1 + κ0)) * Real.log (1 / δs) / (ρ * Kd) + (a + b) * premiumOf Sc Cd Np Tq δg +
     min a b * zeroCone Sc Cd Np

@@ -38,8 +38,9 @@ Decision 113 splits the credit in two, and `CircuitCredit` is their composition:
   (`Fits`, `ModelScope`), the data sheet's A1–A7, FOLD-OPT per word folded (`FoldOptFolded`) and FILL-OPT.
 
 The seeded pair is (L) and its composition with (P) under seeded coins: the same premises on the proofs' layer, GRIND's
-premise (`SeedLuckAt`) at the template's `κ = 4` in place of the live luck claims, and the bound `rOfSeeded`, the live
-draw's charge on the unlucky share plus each seed group's premium `π* = ln(T_q/δ_g)/θ` from the IR (`premiumOf`).
+premise (`SeedLuckAt`) at the template's `κ = 4` in place of the live luck claims, read through the random-oracle
+premise (`SeedExtractedAt`, `random-oracle`) at `ε_id` a stage, and the bound `rOfSeeded`, the live draw's charge on
+the unlucky share plus each seed group's premium `π* = ln(T_q/δ_g)/θ` from the IR (`premiumOf`).
 
 The other guarantees are (L)'s lemmas:
 
@@ -53,8 +54,8 @@ The other guarantees are (L)'s lemmas:
   isn't good at the run's modes on the IR's layer (#2466's `DrawnLayer.Covers`, from `DrawnLayer.covers_of_cone`).
 
 Round 4's `CircuitCreditFS`, a generic Fiat–Shamir form over an abstract service against proofs' `FiatShamirFloor`, is
-retired: the seeded pair takes GRIND's lemmas directly on the circuit's layer. Proofs' `FiatShamirFloor` and
-`ServiceFloorFS` are theirs and unchanged.
+retired: the seeded pair takes GRIND's lemmas directly on the circuit's layer. Proofs' Fiat–Shamir layer
+(`FiatShamirFloor`, `ServiceFloorFS`, `SeedExtraction`) is theirs to land, and nothing here reads it.
 
 `Pouw.Guarantees.EndToEnd` is not subsumed and stays: it is the TT cost model with Fiat–Shamir in the random-oracle
 model, concluding `(1 − ε_s)^t + ε(q, N)`, where `CircuitCredit` is the TS model under live coins (RT-COMPOSE §6).
@@ -192,9 +193,8 @@ def CircuitWork : Prop :=
 
 /-- **(L) The circuit's work, seeded coins** (decision 113's logical layer under decision 122's one seed a call). For
 every declared circuit `Cd` and scheme `Sc`, run as one window whose rounds are seed groups: each round one call site,
-its coin the oracle's answers to the cheater's `T_q` queries for that call's seed (`Fin T_q → B`, uniform: the
-random-oracle model, `random-oracle`, the statement's probability model, not a premise), then the service's live draw
-of `K_d ≥ 1` of the `N_p` tiles (`drawOf`) with the proofs' coins `Ξ`. Under:
+its coin the oracle's answers to the cheater's `T_q` queries for that call's seed (`Fin T_q → B`, uniform), then the
+service's live draw of `K_d ≥ 1` of the `N_p` tiles (`drawOf`) with the proofs' coins `Ξ`. Under:
 * the seeded ranges (`ScopeSeeded`: every round holding a credited tile seeded, one call site a round, and no credited
   kind GRIND hasn't priced, so H1's attention uncredited), the service's commit order (`LayerCommitted`, whose seeded
   reading is Fiat–Shamir over the roots its seed preimages name), and `δ_g > 0`;
@@ -202,13 +202,15 @@ of `K_d ≥ 1` of the `N_p` tiles (`drawOf`) with the proofs' coins `Ξ`. Under:
 * the same play and the same proofs' layer as `CircuitWork` (`Declared.layer` at the run's `pr`), with `Of`,
   `MovedIn` at `δ_bind`, `JointSound` at `δ_ks`, `Pins` and `UnitFixed`;
 * GRIND's premise per stage (`SeedLuckAt`): folded tiles at the template's `κ = 4` (`TemplateMoment`'s point) and
-  whole tiles at `κ₀`, both at the seed groups' rates from the IR (`seedTheta`), off a binding event of probability
-  `δ_b` each;
+  whole tiles at `κ₀`, both at the seed groups' rates from the IR (`seedTheta`), each read through the random-oracle
+  premise (`SeedExtractedAt`: the proofs' seed is a query's answer, off `ε_id`) and off a binding event of
+  probability `δ_b`, a per-prover term as `δ_bind` is;
 
 an accepted window's run has all but a share `d_F + d₀` of its committed words fixed right and all but `d₀` folded,
 with `a·d_F + b·d₀ < max(5a, (1 + κ₀)·b)·ln(1/δ_s)/(ρ·K_d) + (a + b)·Π + min(a, b)·D₀` (`WorkAt` at `rOfSeeded`, `Π`
 the seed groups' premiums `π* = ln(T_q/δ_g)/θ` from the IR, `premiumOf`), except with probability
-`δ_s + δ_bind + δ_ks + 2·rounds·(δ_g + δ_b)`. `a > 0` makes the bound positive, which `WorkAt`'s strict `<` needs.
+`δ_s + δ_bind + δ_ks + 2·rounds·(δ_g + δ_b + ε_id)`. `a > 0` makes the bound positive, which `WorkAt`'s strict `<`
+needs.
 Nothing yet builds a `Declared` from a compiled Program, and `Properties.Compose.UnitsOfLayout`, which would
 tie its units to the service's layout, is unproved: until both exist, this speaks of the declared circuit, not of a
 served workload. -/
@@ -219,18 +221,18 @@ def CircuitWorkSeeded : Prop :=
     (Pl : Play (Paths (Fin Tq → B) Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) 1 K T L U)
     (pr : ProofRun (Fin Tq → B) (Equiv.Perm (Fin Np) × Ξ) Cd.rounds Kd Np V)
     (folded : Paths (Paths (Fin Tq → B) Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) 1 → ℝ)
-    (ρ a b κ0 δs δg δb δbind δks : ℝ),
+    (ρ a b κ0 δs δg δb εid δbind δks : ℝ),
     ScopeSeeded Sc Cd δs → LayerCommitted Cd → 0 < δg → 0 < Kd →
     0 < ρ → (∀ t : Fin Np, ρ * Np * shareCone Sc Cd Np t ≤ 1) → 0 < a → 0 ≤ b → 0 ≤ κ0 →
     Pl.game = serviceGame (Ξ := Ξ) (tileStage Cd Np) W (tileCone Sc Cd Np) 1 1 Kd →
     (Cd.layer hr hK pr).Of Pl → (∀ w, prob (fun x => (Cd.layer hr hK pr).MovedIn x w) ≤ δbind) →
     (Cd.layer hr hK pr).JointSound δks → (Cd.layer hr hK pr).Pins →
-    SeedLuckAt (tileStage Cd Np) W (shareCone Sc Cd Np) .folded 4 (seedTheta Sc Cd) δb →
-    SeedLuckAt (tileStage Cd Np) W (shareCone Sc Cd Np) .whole κ0 (seedTheta Sc Cd) δb →
+    SeedLuckAt (tileStage Cd Np) W (shareCone Sc Cd Np) .folded 4 (seedTheta Sc Cd) εid δb →
+    SeedLuckAt (tileStage Cd Np) W (shareCone Sc Cd Np) .whole κ0 (seedTheta Sc Cd) εid δb →
     UnitFixed Pl (Cd.layer hr hK pr) (tileMode Cd W) (fun _ t => (tileWords Sc Cd Np t : ℝ)) folded →
     prob (fun x => Pl.accepts x ∧
       ¬ WorkAt (wordsOf Sc Cd : ℝ) a b (rOfSeeded Sc Cd Np Kd Tq a b κ0 ρ δs δg) (Pl.run x).fixed (folded x)) ≤
-      δs + (δbind + δks) + 2 * (Cd.rounds : ℝ) * (δg + δb)
+      δs + (δbind + δks) + 2 * (Cd.rounds : ℝ) * (δg + δb + εid)
 
 /-! ## The physical layer's step -/
 
@@ -297,7 +299,7 @@ def CircuitCredit : Prop :=
 /-- **The credit theorem, seeded coins**: `CreditOfWork ∘ CircuitWorkSeeded` at the circuit's costs `a = aOf > 0`,
 `b = bOf` (`≥ 0` under `ModelScope`). Under `CircuitWorkSeeded`'s premises at those costs and `CreditOfWork`'s on
 every run, the window's certificate in device window `win` holds at `.seeded` (`certOf`): it is accepted with time
-below `(1 − ε)·T_cred` with probability at most `δ_s + δ_bind + δ_ks + 2·rounds·(δ_g + δ_b)`, where
+below `(1 − ε)·T_cred` with probability at most `δ_s + δ_bind + δ_ks + 2·rounds·(δ_g + δ_b + ε_id)`, where
 `ε = ε_♭ + ε_μ + max(5a, (1 + κ₀)·b)·ln(1/δ_s)/(ρ·K_d) + (a + b)·Π + min(a, b)·D₀` (`rOfSeeded`, `Π` the seed groups'
 premiums from the IR). It is the credit of every deployed window, whose noise PoUW's code derives from the salt, once
 the code's seed preimages name the roots `LayerCommitted`'s seeded reading needs. Nothing yet builds a `Declared` from
@@ -312,14 +314,14 @@ def CircuitCreditSeeded : Prop :=
     (Pl : Play (Paths (Fin Tq → B) Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) 1 K T L U)
     (pr : ProofRun (Fin Tq → B) (Equiv.Perm (Fin Np) × Ξ) Cd.rounds Kd Np V)
     (folded : Paths (Paths (Fin Tq → B) Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) 1 → ℝ) (lam : SheetRow P → ℝ)
-    (ρ κ0 δs δg δb δbind δks : ℝ) (win : Accounting.Window),
+    (ρ κ0 δs δg δb εid δbind δks : ℝ) (win : Accounting.Window),
     ScopeSeeded Sc Cd δs → LayerCommitted Cd → 0 < δg → 0 < Kd →
     0 < ρ → (∀ t : Fin Np, ρ * Np * shareCone Sc Cd Np t ≤ 1) → 0 < aOf Sc Cd Z lam → 0 ≤ κ0 →
     Pl.game = serviceGame (Ξ := Ξ) (tileStage Cd Np) W (tileCone Sc Cd Np) 1 1 Kd →
     (Cd.layer hr hK pr).Of Pl → (∀ w, prob (fun x => (Cd.layer hr hK pr).MovedIn x w) ≤ δbind) →
     (Cd.layer hr hK pr).JointSound δks → (Cd.layer hr hK pr).Pins →
-    SeedLuckAt (tileStage Cd Np) W (shareCone Sc Cd Np) .folded 4 (seedTheta Sc Cd) δb →
-    SeedLuckAt (tileStage Cd Np) W (shareCone Sc Cd Np) .whole κ0 (seedTheta Sc Cd) δb →
+    SeedLuckAt (tileStage Cd Np) W (shareCone Sc Cd Np) .folded 4 (seedTheta Sc Cd) εid δb →
+    SeedLuckAt (tileStage Cd Np) W (shareCone Sc Cd Np) .whole κ0 (seedTheta Sc Cd) εid δb →
     UnitFixed Pl (Cd.layer hr hK pr) (tileMode Cd W) (fun _ t => (tileWords Sc Cd Np t : ℝ)) folded →
     Fits Sc Cd Sh Z → ModelScope Sc Cd Z lam → (∀ x, (Pl.run x).Split) →
     (∀ x, SheetClock Sh (Pl.run x).run) → (∀ x, SheetDispatch (Pl.run x).run) →
@@ -327,6 +329,6 @@ def CircuitCreditSeeded : Prop :=
     (∀ x, SheetSmem Sh (Pl.run x).run) → (∀ x, SheetWords Z (Pl.run x)) → (∀ x, SheetSemantics Z (Pl.run x)) →
     (∀ x, FoldOptFolded Z (Pl.run x) (folded x)) → (∀ x, FillOpt Z (Pl.run x)) →
     (certOf Sc Cd Z H lam (rOfSeeded Sc Cd Np Kd Tq (aOf Sc Cd Z lam) (bOf Sc Cd Z lam) κ0 ρ δs δg)
-      (δs + (δbind + δks) + 2 * (Cd.rounds : ℝ) * (δg + δb)) win .seeded).Holds Pl
+      (δs + (δbind + δks) + 2 * (Cd.rounds : ℝ) * (δg + δb + εid)) win .seeded).Holds Pl
 
 end Accounting.Guarantees.Compose
