@@ -47,7 +47,7 @@ gpu-lease 1 --wait --max-min 14 ${LEASE_ARGS:-} -- bash -c '
   nvidia-smi --query-gpu=index,uuid,name,driver_version,clocks.sm,clocks.max.sm,power.limit,memory.used --format=csv -i "$GPU_LEASE_UUID" > "$O/gpu.txt" 2>&1
   "$W/sharaw" selftest > "$O/selftest.jsonl"; s=$?
   ok=$s
-  for f in 0 1 2 3 4 5 6 7 8 9 10; do
+  for f in 0 1 2 3 4 5 6 7 8 9 10 11 12; do
     SHARAW_FORM=$f python3 $D/check.py check "$W/sharaw" "$W/cases" form$f > "$O/check-form$f.jsonl" 2> "$O/check-form$f.err"; c=$?
     echo "check form$f rc $c" >> "$O/rc.txt"
     [ $c = 0 ] || ok=1

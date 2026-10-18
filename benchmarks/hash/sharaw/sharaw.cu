@@ -525,11 +525,12 @@ __global__ void __launch_bounds__(TPB, MINB)
 
 // v3s's salt kernel: sr_salt with v3's single compression body and the rolled mask
 __global__ void __launch_bounds__(128) sr_salt3(const uint4* __restrict__ Tn, u64 n, u64 width, u64* __restrict__ S,
-                                                u64* __restrict__ F, u64* __restrict__ lv0) {
+                                                u64* __restrict__ F, u64* __restrict__ lv0, u64 first, u64 last) {
   __shared__ uint4 T[512];
   for (int i = threadIdx.x; i < 512; i += blockDim.x) T[i] = Tn[i];
   __syncthreads();
-  const u64 pos = (u64)blockIdx.x * blockDim.x + threadIdx.x;
+  const u64 pos = first + (u64)blockIdx.x * blockDim.x + threadIdx.x;
+  if (pos >= last) return;
   u64 o[8];
   if (pos < n) {
     u64 my[8], c[8];
@@ -549,8 +550,9 @@ __global__ void __launch_bounds__(128) sr_salt3(const uint4* __restrict__ Tn, u6
 template <bool FOLD>
 __global__ void __launch_bounds__(256, 2)
     sr_data3(const uint8_t* __restrict__ rows, u64 n, u64 width, int depth, const u64* __restrict__ S, const u64* __restrict__ F,
-             u64* levels, u32* ctr, u64* __restrict__ bc) {
-  const u64 pos = (u64)blockIdx.x * blockDim.x + threadIdx.x;
+             u64* levels, u32* ctr, u64* __restrict__ bc, u64 first = 0, u64 last = ~0ull) {
+  const u64 pos = first + (u64)blockIdx.x * blockDim.x + threadIdx.x;
+  if (!FOLD && pos >= last) return;
   u64 o[8];
   if (pos < n) {
     u64 x[8], B[16], h[8];
@@ -649,7 +651,7 @@ struct Mine {
     };
     const u32 cnt = (u32)std::min<u64>(width, 256);
     if constexpr (ORDER == 3) {   // v3s: the salt kernel, then the data kernel
-      sr_salt3<<<(unsigned)((width + 127) / 128), 128, 0, st>>>(Tn, n, width, S, F, levels);
+      sr_salt3<<<(unsigned)((width + 127) / 128), 128, 0, st>>>(Tn, n, width, S, F, levels, 0, width);
       sr_data3<FOLD><<<(unsigned)(width / cnt), cnt, 0, st>>>(rows, n, width, depth, S, F, levels, ctr, bc);
     } else if constexpr (U) sr_leaf3<256, 2, ORDER, FOLD><<<(unsigned)(width / cnt), cnt, 0, st>>>(rows, Tn, n, width, depth, levels, ctr, bc);
     else sr_leaf<256, 2, ORDER, FOLD><<<(unsigned)(width / cnt), cnt, 0, st>>>(rows, Tn, n, width, depth, levels, ctr, bc);
@@ -686,6 +688,48 @@ struct Mine {
   void v4(const uint8_t* rows, cudaStream_t st, u64* bc = nullptr) {
     const u32 cnt = (u32)std::min<u64>(width, TPB / 2);
     sr_leaf4<TPB><<<(unsigned)(width / cnt), 2 * cnt, 0, st>>>(rows, Tn, n, width, depth, levels, ctr, bc);
+  }
+  // commit_gpu's tree schedule over these levels (Committer::nodes, its large path): a level a launch while a level is wider
+  // than 512 nodes, then node_kernel
+  void nodes_cg(cudaStream_t st) {
+    int d = 0;
+    for (; d < depth && (width >> d) > 2 * NODE_THREADS; ++d) {
+      const u64 n_out = width >> (d + 1);
+      const unsigned t = n_out >= (1u << 16) ? NODE_THREADS : 64;
+      level_kernel<<<(unsigned)((n_out + t - 1) / t), t, 0, st>>>(0, level_at_h(d), level_at_h(d + 1), width >> d, d);
+    }
+    if (d < depth) {
+      LevelPtrs o{};
+      for (int l = 0; l < depth - d; ++l) o.p[l] = level_at_h(d + 1 + l);
+      node_kernel<<<1, NODE_THREADS, 0, st>>>(0, level_at_h(d), o, width >> d, d, depth - d);
+    }
+  }
+  u64* level_at_h(int d) const { return levels + 8 * (2 * width - 2 * (width >> d)); }
+  // v3s with commit_gpu's tree; halves = 2: the second half's salt kernel on st2 (a higher priority) beside the first
+  // half's data kernel, so the mask's shared-memory traffic overlaps compressions
+  void v3s_cg(const uint8_t* rows, cudaStream_t st, int halves = 1, cudaStream_t st2 = nullptr, cudaEvent_t* ev = nullptr,
+              u64* bc = nullptr) {
+    auto salt = [&](u64 a, u64 b, cudaStream_t s) {
+      if (b > a) sr_salt3<<<(unsigned)((b - a + 127) / 128), 128, 0, s>>>(Tn, n, width, S, F, levels, a, b);
+    };
+    auto data = [&](u64 a, u64 b) {
+      if (b > a) sr_data3<false><<<(unsigned)((b - a + 255) / 256), 256, 0, st>>>(rows, n, width, depth, S, F, levels, ctr, bc, a, b);
+    };
+    if (halves == 1) {
+      salt(0, width, st);
+      data(0, width);
+    } else {
+      const u64 mid = std::min<u64>(width, (n / 2 + 255) / 256 * 256);
+      salt(0, mid, st);
+      CK(cudaEventRecord(ev[0], st));
+      CK(cudaStreamWaitEvent(st2, ev[0], 0));
+      salt(mid, width, st2);
+      CK(cudaEventRecord(ev[1], st2));
+      data(0, mid);
+      CK(cudaStreamWaitEvent(st, ev[1], 0));
+      data(mid, width);
+    }
+    nodes_cg(st);
   }
   template <int TPB>
   void data3(const uint8_t* rows, cudaStream_t st) {
@@ -841,6 +885,18 @@ static int check(int argc, char** argv) {
       case 8: me.v2<3, true, true>(d, 0, 0, minw, nullptr, nullptr, bc); break;
       case 9: me.v4<128>(d, 0, bc); break;
       case 10: me.v4<64>(d, 0, bc); break;
+      case 11: me.v3s_cg(d, 0, 1, nullptr, nullptr, bc); break;
+      case 12: {
+        static cudaStream_t s2;
+        static cudaEvent_t e2[2];
+        if (!s2) {
+          CK(cudaStreamCreateWithFlags(&s2, cudaStreamNonBlocking));
+          CK(cudaEventCreateWithFlags(&e2[0], cudaEventDisableTiming));
+          CK(cudaEventCreateWithFlags(&e2[1], cudaEventDisableTiming));
+        }
+        me.v3s_cg(d, 0, 2, s2, e2, bc);
+        break;
+      }
       default: me.salts(0); me.data<256, 2, false>(d, 0, bc); break;
     }
   }
@@ -917,6 +973,17 @@ static int bench(int argc, char** argv, bool nsys_mode) {
   V2("v3s_s2", 3, false, 2, true);
   V2("v3s_s1", 3, false, 1, true);
   V2("v3s_fold", 3, true, 0, true);
+  cudaStream_t st2;
+  {
+    int lo, hi;
+    CK(cudaDeviceGetStreamPriorityRange(&lo, &hi));
+    CK(cudaStreamCreateWithPriority(&st2, cudaStreamNonBlocking, hi));
+  }
+  cudaEvent_t ovev[2];
+  CK(cudaEventCreateWithFlags(&ovev[0], cudaEventDisableTiming));
+  CK(cudaEventCreateWithFlags(&ovev[1], cudaEventDisableTiming));
+  arms.push_back({"v3s_cg", true, [&](cudaStream_t s) { me.v3s_cg(src, s); }, comps});
+  arms.push_back({"v3s_cg_ov", true, [&](cudaStream_t s) { me.v3s_cg(src, s, 2, st2, ovev); }, comps});
   arms.push_back({"v4_64", true, [&](cudaStream_t s) { me.v4<128>(src, s); }, comps});
   arms.push_back({"v4_32", true, [&](cudaStream_t s) { me.v4<64>(src, s); }, comps});
   arms.push_back({"v4_128", true, [&](cudaStream_t s) { me.v4<256>(src, s); }, comps});
@@ -928,7 +995,7 @@ static int bench(int argc, char** argv, bool nsys_mode) {
   // diagnostic forms of this file's committer (timing only)
   std::vector<Arm> diags = {
       {"salt_only", false, [&](cudaStream_t s) { me.salts<true>(s); }, c_salt},
-      {"salt3_only", false, [&](cudaStream_t s) { sr::sr_salt3<<<(unsigned)((width + 127) / 128), 128, 0, s>>>(me.Tn, n, width, me.S, me.F, me.levels); }, c_salt},
+      {"salt3_only", false, [&](cudaStream_t s) { sr::sr_salt3<<<(unsigned)((width + 127) / 128), 128, 0, s>>>(me.Tn, n, width, me.S, me.F, me.levels, 0, width); }, c_salt},
       {"salt_nomask", false, [&](cudaStream_t s) { me.salts<false>(s); }, c_salt},
       {"data_only", false, [&](cudaStream_t s) { me.data<256, 2, false>(src, s); }, comps - c_salt},
       {"data_noload", false, [&](cudaStream_t s) { me.data<256, 2, false, sr::NOLOAD>(src, s); }, comps - c_salt},
