@@ -527,4 +527,52 @@ theorem inv_run {params : Params} {reg : Registration} {coins appendCoins : Arra
       ⟨hs', fp.trans hp, fr.trans hr, fa.trans ha⟩)
     _ _ _ _ ⟨inv_init .., rfl, rfl, rfl⟩ h
 
+/-! ## The statements -/
+
+theorem verdict_beq {v : Option Verdict} (h : (v == some .accept) = true) : v = some .accept := by
+  rcases v with _ | _ | ⟨f, a⟩
+  · cases h
+  · rfl
+  · cases h
+
+theorem acceptedMinPasses : AcceptedMinPasses := by
+  intro params reg coins appendCoins notBeforeNs events rs s hrun hout
+  obtain ⟨h, hp, -, -⟩ := inv_run hrun
+  unfold State.outcome at hout
+  split at hout
+  · rename_i f _
+    have := Option.some.inj hout
+    cases hf : f.failure <;> simp [hf, Failure.name] at this
+  · split at hout
+    · rename_i hc
+      simp only [Bool.and_eq_true, beq_iff_eq, Array.all_eq_true] at hc
+      obtain ⟨hsz, hall⟩ := hc
+      refine ⟨by rw [← hp]; exact hsz, fun t ht => ?_⟩
+      rw [← hp]
+      exact h.few t ht (h.drawn t ht (verdict_beq (hall t ht)))
+    · cases hout
+
+theorem passesStepped : PassesStepped := by
+  intro params reg coins appendCoins notBeforeNs events rs s hrun
+  have h := (inv_run hrun).1
+  refine ⟨fun t ht => ⟨(h.sizes t ht).1, (h.sizes t ht).2.1, (h.sizes t ht).2.2, fun i hi => ?_⟩, h.inc⟩
+  have := h.below t ht i hi
+  have := h.limit
+  omega
+
+theorem passesReadDistinct : PassesReadDistinct :=
+  fun _ _ _ _ _ _ _ _ hrun => (inv_run hrun).1.reads
+
+theorem appendsInOrder : AppendsInOrder := by
+  intro params reg coins appendCoins notBeforeNs events rs s hrun
+  obtain ⟨h, -, hr, ha⟩ := inv_run hrun
+  refine ⟨by rw [← hr]; exact h.extentSum, fun k hk => by rw [← hr]; exact h.firsts k hk, ?_,
+    fun k hk => by rw [← ha]; exact h.coins k hk⟩
+  have := h.drawnN
+  rw [← ha]
+  omega
+
+theorem passesChained : PassesChained :=
+  fun _ _ _ _ _ _ _ _ hrun => ⟨(inv_run hrun).1.chain, (inv_run hrun).1.heads⟩
+
 end Properties.RemoteAudit
