@@ -938,7 +938,7 @@ def _auto_placement(ns: argparse.Namespace, harness_opts: list[str]) -> str | No
         if top.returncode != 0:
             return "--source GITDIR: no git checkout here to ship"
         ns.source = top.stdout.strip()
-    ns.queue, ns.on = True, AUTO_NODE
+    ns.queue, ns.on, ns.preemptible = True, AUTO_NODE, True      # a guest on node 2 is preemptible; a test reruns from the start
     ns.project = ns.project or AUTO_PROJECT
     if ns.queue_kind == "adhoc":
         ns.queue_kind = AUTO_KIND
