@@ -15,7 +15,10 @@ vLLM d9105ea80's choice of kernel for the MoE gate (`GateLinear.forward`, `LLBf1
   where the capture pinned it (M <= 256); past the pins `fit_cublas_split_k` names the split counts whose route computes a
   launch's observed words exactly, so the capture's decode-batch scan reads the split count out of the words (Kineto reports
   grid.z = 1 for these launches, so no profile field carries it).  Any other model's bf16-output routes are the cc 9.0 device
-  pin's (`pinned_routes`, `verity_vllm/pins/`), measured by `served routes`' probe, which the predicted served Program reads too.
+  pin's (`pinned_routes`, `verity_vllm/pins/`), measured by `served routes`' probe, which the predicted served Program reads too;
+* the cc 12.0 routes beside it: `cublas_splitk_rows(partial="bf16")` (a bf16 workspace), `cublas_serial_splitk_rows` (slices
+  meeting through the bf16 output) and `cublas_gemv_rows` (M = 1 gemvx lanes); `cublas_route_rows` is a device pin route's
+  twin, and `cublas_routes_at` with `route_probe_rows` what the probe tells apart.
 
 NaN payloads are not part of any comparison (`mla_check._words_equal`): the GPU's FFMA and FADD write 0x7FFFFFFF, numpy keeps
 an operand's.
@@ -283,7 +286,7 @@ def cublas_serial_splitk_rows(x: np.ndarray, w: np.ndarray, SPLIT_K: int) -> np.
 def cublas_gemv_rows(x: np.ndarray, w: np.ndarray, LANES: int, FMA: int = 1) -> np.ndarray:
     """`CublasGemv_v1{K, N, LANES, FMA}` of every row of x (M, K) against w (N, K): lane t of LANES runs one f32 chain from +0 over
     k = t, t + LANES, ... (FFMA when FMA, else FMUL then FADD), the lanes meet in a butterfly (offsets LANES/2, ..., 1: lane i
-    adds lane i + o), and lane 0's sum is rounded to bf16: bf16 words (M, N)."""
+    adds lane i + o), and lane 0's sum, added to +0 (so a -0 sum leaves as +0), is rounded to bf16: bf16 words (M, N)."""
     x, w = np.asarray(x, np.uint16), np.asarray(w, np.uint16)
     (M, K), N = x.shape, w.shape[0]
     xf, wf = DR.bf16_to_f32_words(x), DR.bf16_to_f32_words(w)
@@ -296,7 +299,47 @@ def cublas_gemv_rows(x: np.ndarray, w: np.ndarray, LANES: int, FMA: int = 1) -> 
     while o:
         acc = MK.add(acc[..., :o], acc[..., o:2 * o])
         o //= 2
-    return MK.bf16_of(acc[..., 0])
+    return MK.bf16_of(MK.add(np.zeros((M, N), U32), acc[..., 0]))
+
+
+def cublas_route_rows(route: dict[str, Any], x: np.ndarray, w: np.ndarray) -> np.ndarray:
+    """The bf16 words of `torch.mm(x, w.t())` (x (M, K), w (N, K)) along a probed cuBLAS route, a device pin's ``cublas`` entry."""
+    kind = route["kernel"]
+    if kind == "nosplit":
+        return linear_rows(x, w)
+    if kind == "splitk":
+        return cublas_splitk_rows(x, w, int(route["SPLIT_K"]), partial=route.get("partial", "f32"), out="bf16")
+    if kind == "serialk":
+        return cublas_serial_splitk_rows(x, w, int(route["SPLIT_K"]))
+    if kind == "gemv":
+        return cublas_gemv_rows(x, w, int(route["LANES"]))
+    raise ValueError(f"unknown cuBLAS route {route}")
+
+
+def cublas_routes_at(fits: list[int]) -> list[dict[str, Any]]:
+    """The routes `splitk_count_probe`'s words leave: the unsplit ones (the k16 chain, the gemvx lanes at 16 and 32, whose
+    count-probe words need not be the chain's) and, at each fitting split count, the f32- and bf16-workspace split-K and the serial
+    split-K."""
+    return ([{"kernel": "nosplit"}, {"kernel": "gemv", "LANES": 16}, {"kernel": "gemv", "LANES": 32}]
+            + [r for s in fits for r in ({"kernel": "splitk", "SPLIT_K": s}, {"kernel": "splitk", "SPLIT_K": s, "partial": "bf16"},
+                                         {"kernel": "serialk", "SPLIT_K": s})])
+
+
+def route_probe_rows(M: int, K: int, C: int, seed: int = 0) -> list[tuple[np.ndarray, np.ndarray]]:
+    """Two probes of a route at (M, K), each (x (M, K), w (C, K)) bf16 words: spread rows (x of exponents -6 to 6, w of -10 to 2),
+    and cancelling rows (x all ones; each W row small words and one +-2^8..2^13 pair, so which chain each product lands in decides
+    what the chains absorb, and the small sum shows it through the bf16 rounding)."""
+    rng = np.random.default_rng(seed)
+
+    def words(shape, lo, hi):
+        f = rng.standard_normal(shape, dtype=np.float32) * np.exp2(rng.integers(lo, hi, shape)).astype(np.float32)
+        return (f.view(U32) >> 16).astype(np.uint16)
+    wc = DR.bf16_to_f32_words(words((C, K), -12, -5)).view(np.float32)
+    k1 = rng.integers(0, K, C)
+    k2 = (k1 + rng.integers(1, K, C)) % K
+    big = np.exp2(rng.integers(8, 14, C)).astype(np.float32)
+    wc[np.arange(C), k1], wc[np.arange(C), k2] = big, -big
+    return [(words((M, K), -6, 7), words((C, K), -10, 3)), (np.full((M, K), 0x3F80, np.uint16), (wc.view(U32) >> 16).astype(np.uint16))]
 
 
 def dotprod_rounds(K: int, BS: int, VEC: int) -> list[np.ndarray]:
