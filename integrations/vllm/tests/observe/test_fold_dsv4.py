@@ -13,7 +13,9 @@
 * save_partial_states moves each token's kv row to its compressor state slot and writes the Build's `Dsv4CompressorScore_v1{W}`
   of its score row and ape[pos % R] beside it, per cache block, the indexer's compressor at its own width;
 * the o-projection input's inverse RoPE and FP8 quantisation is the Build's `Dsv4InvRopeQuantHead_v1` per token and head, into its
-  group's row and the wrapper's TMA-aligned scale layout, refused off the Definition's floor or that layout.
+  group's row and the wrapper's TMA-aligned scale layout, refused off the Definition's floor or that layout;
+* DeepGEMM's wo_a einsum leaves only z's allocation after it, which is the Build's `ScaledMmFp8BlockGrouped_v1` per token over the
+  quant's rows and wo_a's roots.
 """
 from __future__ import annotations
 
@@ -25,8 +27,8 @@ import importlib
 import pytest
 
 from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHeader, StepStart, TritonLaunch, ViewDesc
-from verity_vllm.observe.fold.patterns.dsv4 import (INV_ROPE_KERNEL, INV_ROPE_SRC_SHA, SAVE_STATES_KERNEL, SAVE_STATES_SRC_SHA, InvRopeQuant,
-                                                    Mhc, QKvRmsNorm, QNormRopeKvInsert, SavePartialStates)
+from verity_vllm.observe.fold.patterns.dsv4 import (INV_ROPE_KERNEL, INV_ROPE_SRC_SHA, SAVE_STATES_KERNEL, SAVE_STATES_SRC_SHA, Fp8Einsum,
+                                                    InvRopeQuant, Mhc, QKvRmsNorm, QNormRopeKvInsert, SavePartialStates)
 from verity_vllm.observe.fold.patterns.target import target_of_header
 from verity_vllm.observe.fold.resolver import Group, PerRow, Shared, StepContext, Unsupported, spec_label
 from verity_vllm.observe.fold.tree import build_trees
@@ -308,6 +310,34 @@ def test_an_inverse_rope_quant_off_the_definitions_floor_or_the_wrappers_scale_l
     assert isinstance(InvRopeQuant().match(_inv_rope(3, 4, scale_strides=(96, 1, 3)), _insert_ctx(3, [])), Unsupported), \
         "a chunk stride under the aligned rows lets a padding program's zero land on a live scale"
     assert isinstance(InvRopeQuant().match(_inv_rope(1, 4), _insert_ctx(1, [], roots=())), Unsupported)
+
+
+WO_A_ROOTS = (CS_ROOT, Root(view(993, (2, 1024, 4096), "float8_e4m3fn"), "weight", "model.layers.0.attn.wo_a.weight"),
+              Root(view(994, (2, 8, 32), "float32"), "weight", "model.layers.0.attn.wo_a.weight_scale_inv"))
+
+
+def _einsum(T, z_shape=None, roots=WO_A_ROOTS):
+    ctx = _insert_ctx(T, [], roots=roots)
+    assert isinstance(InvRopeQuant().match(_inv_rope(T, 4), ctx), Group)
+    return Fp8Einsum().match(_node("aten.empty.memory_format", view(995, z_shape or (T, 2, 1024)), "model.layers.0.attn"), ctx)
+
+
+def test_the_o_projection_einsum_is_the_builds_grouped_call_per_token_into_z_after_the_inverse_rope():
+    c = _einsum(3)
+    assert spec_label(c.spec) == "ScaledMmFp8BlockGrouped_v1{H=2,K=4096,N=1024,G=128}" and c.rows == 3 and c.consumed == (1,)
+    xq, sx, w, ws = c.operands
+    assert (xq.view.alloc, xq.view.shape, xq.view.strides) == (991, (3, 2, 4096), (4096, 3 * 4096, 1))
+    assert (sx.view.alloc, sx.view.shape, sx.view.strides) == (992, (3, 2, 32), (1, 128, 4))
+    assert [o.view.alloc for o in (w, ws)] == [993, 994] and c.roots[2:] == tuple(r.name for r in WO_A_ROOTS[1:])
+    assert c.outputs[0].view.alloc == 995
+    ctx = _insert_ctx(3, [], roots=WO_A_ROOTS)
+    assert Fp8Einsum().match(_node("aten.empty.memory_format", view(995, (3, 2, 1024)), "model.layers.0.attn"), ctx) is None, \
+        "an allocation with no inverse RoPE before it is not the einsum's"
+
+
+def test_an_einsum_allocation_off_z_or_without_the_wo_a_roots_is_refused():
+    assert isinstance(_einsum(3, z_shape=(3, 2048)), Unsupported)
+    assert isinstance(_einsum(3, roots=(CS_ROOT,)), Unsupported)
 
 
 def test_a_split_buffer_other_than_the_dispatchs_or_a_weight_without_a_root_is_refused():

@@ -24,6 +24,7 @@ from verity_vllm.observe.fold.patterns.target import target_of, vocab_kind
 from verity_vllm.observe.fold.resolver import Compute, Gather, Group, PerRow, Resolution, Shared, StepContext, Transparent, Unsupported
 from verity_vllm.observe.fold.tree import TreeNode
 from verity_vllm.program.frontend.dsv4_leaves import FP8_DS_MLA_QB
+from verity_vllm.program.frontend.rules.vllm_bindings.fp8 import FP8_QUANT_PINS
 from verity_vllm.program.frontend.rules.vllm_bindings.pins import QKV_RMS_PINS
 from verity_vllm.program.frontend.rules.vllm_bindings.triton_launches import QKV_ARGS, TRITON_DIVISIBILITY, qkv_rms_launch
 from verity_vllm.program.frontend.rules.vllm_mhc import MHC_GEOMETRY, post_pre_path
@@ -31,6 +32,7 @@ from verity_vllm.program.kernels.mhc_twin import tf32_num_split
 from verity_vllm.program.registry import dsv4_indexer as I
 from verity_vllm.program.registry import dsv4_qnorm_insert as Q
 from verity_vllm.program.registry.dsa_norm import check_block
+from verity_vllm.program.registry.fp8 import weight_blocks
 
 LAYER = re.compile(r"model\.layers\.(\d+)")
 QNORM_INSERT_OP = "_C.fused_deepseek_v4_qnorm_rope_kv_rope_quant_insert"
@@ -457,13 +459,47 @@ class InvRopeQuant:
             s = ViewDesc(sc.alloc, sc.offset + g * sc.strides[0] + j * CH * tma, (T, CH), (1, tma), sc.dtype, sc.device)
             parts.append(Compute(spec, T, (PerRow(head), Gather(cs, pos)), (PerRow(q), PerRow(s)), () if parts else (node.id,), hint=f"{hint}[h={k}]",
                                  kernels=(triton_name(kid),), attribution=rows, pattern=self.name, roots=(None, croots[0].name)))
+        ctx.scratch["dsv4_o_proj"] = (_module(node), fp8, sc)
         return Group(tuple(parts), tuple(sorted(node.ids())), hint=_module(node), pattern=self.name)
+
+
+@dataclass
+class Fp8Einsum:
+    """DeepGEMM's `fp8_einsum("bhr,hdr->bhd", (o_fp8, o_scale), (wo_a.weight, wo_a.weight_scale_inv), z, recipe=(1, 128, 128))`
+    (`deep_gemm_fp8_o_proj`, cc 9.0) -> per token `ScaledMmFp8BlockGrouped_v1{H,K,N,G}` of its G groups' bytes and scales over the
+    grouped weight: the Build's `DeepGemmFp8EinsumRule`.  The JIT kernel leaves no event; what does is z's allocation, the first in
+    the attention's module after the inverse-RoPE quant (`InvRopeQuant`), which this resolves to the Calls writing it."""
+
+    name = "dsv4.o_proj_einsum"
+
+    def match(self, node: TreeNode, ctx: StepContext) -> Resolution | None:
+        st = ctx.scratch.get("dsv4_o_proj")
+        if node.is_triton or op_name(node.op) != "empty" or st is None or st[0] != _module(node):
+            return None
+        mod, fp8, sc = ctx.scratch.pop("dsv4_o_proj")
+        (G, T, K), QG, outs = fp8.shape, FP8_QUANT_PINS["group_size"], node.output_views()
+        z = outs[0] if len(outs) == 1 else None
+        if not isinstance(z, ViewDesc) or z.dtype != "bfloat16" or z.rank != 3 or z.shape[:2] != (T, G) or K % QG or sc.shape[2] != K // QG:
+            return unsupported(node, "the o-projection's first allocation after the inverse RoPE is not z [T,G,N] bf16 over K/128 scales",
+                               z=repr(z), fp8=repr(fp8), scales=repr(sc))
+        N, names = z.shape[2], (f"{mod}.wo_a.weight", f"{mod}.wo_a.weight_scale_inv")
+        ws = _weights(node, ctx, names)
+        if isinstance(ws, Unsupported):
+            return ws
+        w, s = (x.view for x in ws)
+        if not (_is(w, (G, N, K), "float8_e4m3fn") and _is(s, (G, weight_blocks(N, QG), K // QG), "float32")):
+            return unsupported(node, "wo_a is not the grouped e4m3 weight [G,N,K] with its f32 block scales [G,cdiv(N,128),K/128]",
+                               w=repr(w), s=repr(s))
+        xq = ViewDesc(fp8.alloc, fp8.offset, (T, G, K), (fp8.strides[1], fp8.strides[0], 1), fp8.dtype, fp8.device)
+        sx = ViewDesc(sc.alloc, sc.offset, (T, G, K // QG), (sc.strides[1], sc.strides[0], sc.strides[2]), sc.dtype, sc.device)
+        return Compute(vocab_kind(ctx, "deepgemm_fp8_einsum_grouped", H=G, K=K, N=N, G=QG), T, (PerRow(xq), PerRow(sx), *ws), (PerRow(z),),
+                       (node.id,), hint=f"{mod}/wo_a", attribution=tuple(ctx.start.rows), pattern=self.name, roots=(None, None, *names))
 
 
 def dsv4_patterns() -> list:
     """The DeepSeek-V4 patterns, ahead of the rank's collectives (`Mhc` records the all-reduces they resolve)."""
-    return [Mhc(), QKvRmsNorm(), QNormRopeKvInsert(), SavePartialStates(), InvRopeQuant()]
+    return [Mhc(), QKvRmsNorm(), QNormRopeKvInsert(), SavePartialStates(), InvRopeQuant(), Fp8Einsum()]
 
 
-__all__ = ["InvRopeQuant", "Mhc", "QKvRmsNorm", "QNormRopeKvInsert", "SavePartialStates", "block_runs", "dsv4_patterns", "state_block",
-           "swa_block"]
+__all__ = ["Fp8Einsum", "InvRopeQuant", "Mhc", "QKvRmsNorm", "QNormRopeKvInsert", "SavePartialStates", "block_runs", "dsv4_patterns",
+           "state_block", "swa_block"]
