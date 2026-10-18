@@ -40,7 +40,7 @@ def section_2():
 def section_3(c):
     values = c.evaluate({"x": 7, "w1": 3, "w2": 5})
     commitment, salt = commit(c, values)
-    print(commitment.count, commitment.digest.hex()[:16])
+    print(commitment.count, len(commitment.digest), len(salt))
 
 
 # §4 Hardware is a declaration
@@ -133,23 +133,23 @@ def section_11():
                  bandwidth=Assumption("a.gpu.hbm_bw", 1.6e12 * 8, "bit/s"))
     dram = Device("a.dram", "dram", memory=Assumption("a.dram.size", 512 * GB, "bits"),
                   bandwidth=Assumption("a.dram.bw", 200e9 * 8, "bit/s"))
-    dc = Datacenter("dc1", [Block("a", [hbm, dram])],
-                    [Device("a.cert", "certifier"), Device("challenger", "challenger"), Device("leaf", "switch"),
-                     Device("world", "outside")],
-                    [Link("a.gpu", "a.dram", Assumption("pcie5x16", 64e9 * 8, "bit/s"), kind="pcie"),
-                     Link("a.gpu", "a.cert", net, us), Link("a.cert", "leaf", net, us),
-                     Link("challenger", "leaf", net, us), Link("world", "leaf", net, us)],
-                    Grid(window=4, tick=Assumption("tick", 1e-4, "s", "declared")))
+    node = Datacenter("dc1", [Block("a", [hbm, dram])],
+                      [Device("a.cert", "certifier"), Device("challenger", "challenger"), Device("leaf", "switch"),
+                       Device("world", "outside")],
+                      [Link("a.gpu", "a.dram", Assumption("pcie5x16", 64e9 * 8, "bit/s"), kind="pcie"),
+                       Link("a.gpu", "a.cert", net, us), Link("a.cert", "leaf", net, us),
+                       Link("challenger", "leaf", net, us), Link("world", "leaf", net, us)],
+                      Grid(window=4, tick=Assumption("tick", 1e-4, "s", "declared")))
     kv = Store("kv", 1 * GB, "a.gpu")
-    p = place(trace(lambda x: x ^ 1, x=Input(8)), dc, "a.gpu", deliver="world", stores=(kv,), x="world")
+    q = place(trace(lambda x: x ^ 1, x=Input(8)), node, "a.gpu", deliver="world", stores=(kv,), x="world")
     for deadline in (8, 300):
         plan = Plan(Interval(0, 1000), challenges=[Challenge("kv", at=0, deadline=deadline)])
-        print(deadline, account(audit(run(p, {"x": 3}, plan), p.public(plan)), p.public(plan)).located)
+        print(deadline, account(audit(run(q, {"x": 3}, plan), q.public(plan)), q.public(plan)).located)
     plan = Plan(Interval(0, 1000), challenges=[Challenge("kv", at=0, deadline=8)])
-    late = run(p, {"x": 3}, plan, Deviation(moved={"kv": "a.dram"}))
-    print([x for x in audit(late, p.public(plan)) if isinstance(x, Refused)])
+    late = run(q, {"x": 3}, plan, Deviation(moved={"kv": "a.dram"}))
+    print([x for x in audit(late, q.public(plan)) if isinstance(x, Refused)])
     reads = Plan(Interval(0, 16), reads=[Reads("kv", 0.5 * GB, Interval(0, 10))])
-    a = account(audit(run(p, {"x": 3}, reads), p.public(reads)), p.public(reads)).blocks[0]
+    a = account(audit(run(q, {"x": 3}, reads), q.public(reads)), q.public(reads)).blocks[0]
     print(a.reads, a.reads_local_at_least)
 
 
@@ -160,14 +160,14 @@ def served(x, w1, w2, image, temperature):
 
 
 def section_12(dc):
-    c = trace(served, x=Input(16), w1=Input(16, "registered", digest(3, 16)), w2=Input(16, "registered", digest(5, 16)),
-              image=Input(16, "registered", digest(IMAGE, 16)), temperature=Input(16, "inside"))
-    p = place(c, dc, "a.gpu", deliver="world", x="world", image="world", temperature="b.gpu",
-              h="a.gpu", w2="b.gpu", y="b.gpu")
+    c2 = trace(served, x=Input(16), w1=Input(16, "registered", digest(3, 16)), w2=Input(16, "registered", digest(5, 16)),
+               image=Input(16, "registered", digest(IMAGE, 16)), temperature=Input(16, "inside"))
+    p2 = place(c2, dc, "a.gpu", deliver="world", x="world", image="world", temperature="b.gpu",
+               h="a.gpu", w2="b.gpu", y="b.gpu")
     plan = Plan(Interval(0, 16))
-    acc = account(audit(run(p, INPUTS | {"image": IMAGE, "temperature": 45}, plan), p.public(plan)), p.public(plan))
+    acc = account(audit(run(p2, INPUTS | {"image": IMAGE, "temperature": 45}, plan), p2.public(plan)), p2.public(plan))
     print(acc.input_bits, acc.covert_bits)
-    swapped = audit(run(p, INPUTS | {"image": 0xBAD0, "temperature": 45}, plan), p.public(plan))
+    swapped = audit(run(p2, INPUTS | {"image": 0xBAD0, "temperature": 45}, plan), p2.public(plan))
     print([x for x in swapped if isinstance(x, Refused)])
     return acc
 
