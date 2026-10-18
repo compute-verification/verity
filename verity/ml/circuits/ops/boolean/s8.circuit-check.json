@@ -1,14 +1,5 @@
 {
  "definitions": {
-  "BlackwellU8S8ImmaDot32_v2": {
-   "and": 4157
-  },
-  "LimbSplit_v2{FORM='byteclamp',N=3,Y=(-65152,65151)}": {
-   "and": 104
-  },
-  "LimbSplit_v2{FORM='bytes',N=3,Y=(-8355711,8355711)}": {
-   "and": 22
-  },
   "S32ByteCarry_v2": {
    "and": 31
   },
@@ -20,12 +11,6 @@
   },
   "S32LowByte_v2": {
    "and": 0
-  },
-  "S8Dot_v2{K=64,L=32,T0='zero',C=None,DOT=BlackwellS8ImmaDot32_v2,A=(-127,127),B=(-127,127),TAIL=((2,'fresh',(-127,127),(-64,64)),(1,'fresh',(-128,127),(-64,64))),TDOT=BlackwellS8ImmaDot32_v2,NOISE='weight',LIMBS='byteclamp',COMMIT='prefix'}": {
-   "and": 20788
-  },
-  "S8Dot_v2{K=64,L=64,T0='zero',C=None,DOT=BlackwellS8ImmaDot32_v2,A=(-127,127),B=(-127,127),TAIL=(),TDOT=None,NOISE='none',LIMBS='none',COMMIT='final'}": {
-   "and": 8326
   }
  }
 }
