@@ -174,11 +174,11 @@ def test_trees_and_windowed_subtrees_are_step_rows_levels(ext, hasher, n):
         assert wroot == want[-1][0], j
 
 
-@pytest.mark.parametrize("n,level0,first", [(2048, 0, 0), (4096, 3, 0), (1536, 0, 4 * 1536)])
-def test_wide_trees_and_windows_cross_the_one_launch_top(ext, hasher, n, level0, first):
-    """Levels of more than 1024 nodes take a launch each and the narrower rest one launch: rows_tree from 2048 nodes (the bound exactly
-    after one level) and from 4096 at level 3, and a window's subtree of 1536 nodes (a multiple of 2^9, not a power of two) at a nonzero
-    first index with its levels to host, all against dom.node."""
+@pytest.mark.parametrize("n,level0,first", [(2048, 0, 0), (4096, 3, 0), (1536, 0, 4 * 1536), (3072, 0, 2 * 3072)])
+def test_wide_trees_and_windows_fold_ten_levels_a_launch(ext, hasher, n, level0, first):
+    """Ten levels a launch, each block folding an aligned slice of 1024 nodes: rows_tree from 2048 nodes (two blocks, then a launch of
+    one level over their tops) and from 4096 at level 3, and windows' subtrees of 1536 nodes (three blocks of 512) and 3072 (three of
+    1024) at nonzero first indices with their levels to host, all against dom.node."""
     rng = random.Random(n + level0)
     dom = R.domain(PD, CTX, GEO, 1 << 20)
     rs, st = _step(ext, dom, bytes(64), R.row_prefix(BITS), R.ROW_BYTES), _stream()

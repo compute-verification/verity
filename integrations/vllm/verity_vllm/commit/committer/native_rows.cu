@@ -14,7 +14,7 @@
 //   c    = SHA-512(salt_prefix || y);  b = x ^ M_key y;  h = SHA-512(leaf_prefix(key) || b || c)
 //   leaf = SHA-512(frame || "leaf" || domain id || uint(pos) || uint(pos) || "hm96-sha512/row/v2" || h)   (framed parts)
 //   pad  = SHA-512(frame || "pad" || domain id || uint(pos)) for n <= pos < width
-// then node(level, index, left, right) up the tree: a launch a level while levels are wide, the narrow top in one (rows_levels_kernel).
+// then node(level, index, left, right) up the tree, up to ten levels a launch, each block folding its own aligned slice (rows_levels_kernel).
 #include <cuda_runtime.h>
 
 #include <cstdint>
@@ -322,24 +322,27 @@ DEV void ld_be_written(const uint8_t* p, u64* d, int n) {
   }
 }
 
-// n_levels levels above n_in nodes of level `level` (the first at index base) in ONE block, each level's nodes right after the previous
-// level's in `out`: the narrow top of a tree, where a launch a level costs more than its hashing.  The same node as rows_level_kernel.
+// n_levels levels above n_in nodes of level `level` (the first at index base), each level's nodes right after the previous level's in
+// `out`; block b folds its own slice, nodes [b 2^n_levels, (b+1) 2^n_levels), so no pair crosses blocks.  The same node as
+// rows_level_kernel.
 __global__ void __launch_bounds__(THREADS) rows_levels_kernel(const __grid_constant__ NodeK N, const uint8_t* in, uint8_t* out, u64 n_in,
                                                               int level, u64 base, int n_levels) {
+  const u64 first = (u64)blockIdx.x << n_levels;
+  in += 64 * first;
   for (int k = 0; k < n_levels; ++k) {
-    const u64 n_out = n_in / 2;
-    for (u64 i = threadIdx.x; i < n_out; i += blockDim.x) {
+    const u64 n_out = n_in / 2, len_out = 1ull << (n_levels - k - 1), at = first >> (k + 1);
+    uint8_t* dst = out + 64 * at;
+    for (u64 i = threadIdx.x; i < len_out; i += blockDim.x) {
       u64 L[8], R[8], o[8];
       ld_be_written(in + 128 * i, L, 8);
       ld_be_written(in + 128 * i + 64, R, 8);
-      node(N, level + k, (base >> 1) + i, L, R, o);
-      st_be(out + 64 * i, o, 8);
+      node(N, level + k, (base >> (k + 1)) + at + i, L, R, o);
+      st_be(dst + 64 * i, o, 8);
     }
     __syncthreads();
-    in = out;
+    in = dst;
     out += 64 * n_out;
     n_in = n_out;
-    base >>= 1;
   }
 }
 
@@ -462,13 +465,14 @@ extern "C" int verity_rows_level_launch(const void* params, const uint8_t* in, u
   return static_cast<int>(cudaGetLastError());
 }
 
-// n_levels levels above n_in nodes (a nonzero multiple of 2^n_levels) of level `level`, the first at index base, in one launch
-// (rows_levels_kernel); out holds all of them, level after level.
+// n_levels (at most 10: a block's slice is 2^n_levels nodes) levels above n_in nodes (a nonzero multiple of 2^n_levels) of level
+// `level`, the first at index base, in one launch (rows_levels_kernel); out holds all of them, level after level.
 extern "C" int verity_rows_levels_launch(const void* params, const uint8_t* in, uint8_t* out, uint64_t n_in, int level, uint64_t base,
                                          int n_levels, cudaStream_t st) {
   if (n_levels <= 0) return 0;
-  if (level < 0 || level + n_levels >= LEVELS || !n_in || n_in % (1ull << n_levels)) return static_cast<int>(cudaErrorInvalidValue);
+  if (n_levels > 10 || level < 0 || level + n_levels >= LEVELS || !n_in || n_in % (1ull << n_levels))
+    return static_cast<int>(cudaErrorInvalidValue);
   const Params* p = static_cast<const Params*>(params);
-  rows_levels_kernel<<<1, THREADS, 0, st>>>(p->node, in, out, n_in, level, base, n_levels);
+  rows_levels_kernel<<<static_cast<unsigned>(n_in >> n_levels), THREADS, 0, st>>>(p->node, in, out, n_in, level, base, n_levels);
   return static_cast<int>(cudaGetLastError());
 }
