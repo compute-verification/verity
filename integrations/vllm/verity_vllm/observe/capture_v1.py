@@ -823,15 +823,6 @@ class Boundary:
                 return c
         return None
 
-    def token_at(self, t: int) -> int | None:
-        """The input token at position ``t`` (prompt, then outputs shifted by one)."""
-        if t < 0:
-            return None
-        if t < self.prompt_len:
-            return self.prompt_token_ids[t]
-        k = t - self.prompt_len
-        return self.output_token_ids[k] if k < len(self.output_token_ids) else None
-
     def sampled_token_at(self, t: int) -> int | None:
         """The token the sampler produced at position ``t`` (``output[t - prompt_len + 1]``)."""
         k = t - self.prompt_len + 1
