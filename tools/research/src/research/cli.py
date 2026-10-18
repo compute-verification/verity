@@ -1618,6 +1618,10 @@ def main(argv: list[str] | None = None) -> int:
         from .notes import main as notes_main
 
         return notes_main(rest)
+    if cmd == "digest":
+        from .digest import main as digest_main
+
+        return digest_main(rest)
     if cmd == "merge":
         from .merge import main as merge_main
 
@@ -1646,10 +1650,6 @@ def main(argv: list[str] | None = None) -> int:
         return slack_main(rest, prog="research msg")
     if cmd == "usage":
         return cmd_usage(rest)
-    if cmd == "digest":
-        from .digest import main as digest_main
-
-        return digest_main(rest)
     age = checkout_age()
     print(f"research: unknown command {cmd!r}" + (f". {age} If {cmd!r} is newer than that, update the checkout "
                                                   "(`git pull`) and retry." if age else "") + f"\n\n{__doc__.strip()}",
