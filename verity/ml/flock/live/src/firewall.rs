@@ -2,7 +2,8 @@
 //! the statement's skeleton in the algebraic phase, and byte for byte to an opening the firewall computes itself (the shadow,
 //! in lock-step on the same coins) in the opening phase, before the masking challenger sends any of it. A failed check is a
 //! `FIREWALL-REFUSED: <what>` reason, and nothing of the refused round leaves: the rep goes on releasing the statement's
-//! schedule in the device's place ([`Checker::scheduled`], the shadow's rounds) and the session stops at its `Finish`.
+//! schedule in the device's place ([`Checker::scheduled`], the shadow's rounds) and the session stops at its `Finish`. So does
+//! a worker that fails ([`run_worker`]: an error, a panic, silence past the deadline): a rep's end never depends on its worker.
 
 use std::sync::mpsc::{Receiver, Sender, channel};
 
@@ -327,6 +328,77 @@ impl ShadowLink {
     /// Stop the shadow: its next round finds no firewall.
     pub fn close(&mut self) {
         self.tx = None;
+    }
+}
+
+/// What a firewalled rep's worker (the device prover, on a thread of its own: [`run_worker`]) asks the firewall, which serves it
+/// on the session's thread.
+pub enum Ask<T> {
+    /// a round at its squeeze, and where its coins go
+    Round(Vec<u8>, usize, Sender<Vec<F128>>),
+    /// the level-0 root at the session's `Commit`, and where the extra claims' points go
+    Hook(Vec<u8>, Sender<Vec<Vec<F128>>>),
+    /// the deadline passed: a silent worker's control sends it as it falls silent, the injected clock's tick, so no test reads
+    /// the wall clock
+    Tick,
+    Done(Result<T, String>),
+}
+
+/// The worker's end of [`run_worker`]: each call waits for the firewall's answer. Once the firewall has given the worker up
+/// (it failed, or fell silent past the deadline), every call panics and unwinds the worker: nothing it does reaches the stream.
+pub struct WorkerEnd<T>(Sender<Ask<T>>);
+
+impl<T> WorkerEnd<T> {
+    pub fn round(&self, content: &[u8], n: usize) -> Vec<F128> {
+        let (tx, rx) = channel();
+        let _ = self.0.send(Ask::Round(content.to_vec(), n, tx));
+        rx.recv().unwrap_or_else(|_| panic!("the firewall gave this worker up"))
+    }
+
+    pub fn hook(&self, root: &[u8]) -> Vec<Vec<F128>> {
+        let (tx, rx) = channel();
+        let _ = self.0.send(Ask::Hook(root.to_vec(), tx));
+        rx.recv().unwrap_or_else(|_| panic!("the firewall gave this worker up"))
+    }
+
+    pub fn tick(&self) {
+        let _ = self.0.send(Ask::Tick);
+    }
+}
+
+/// The wall clock's wait for a worker's next ask: `secs` an ask, `None` once they pass.
+pub fn deadline<T>(secs: f64) -> impl FnMut(&Receiver<Ask<T>>) -> Option<Ask<T>> {
+    let d = std::time::Duration::from_secs_f64(secs);
+    move |rx| rx.recv_timeout(d).ok()
+}
+
+/// Runs a firewalled rep's worker on a thread of its own and serves its rounds and its hook here, on the session's thread,
+/// until it returns. Every way the worker can fail is `Err`, which the firewall answers by releasing the rest of the schedule
+/// itself: an error it returns (a nonzero return code, output that does not decode), a panic, or silence past the deadline
+/// (`wait` gives `None`, or the worker's control ticks). A worker given up may still run; whatever it asks later finds no
+/// firewall. A stop of the firewall's own (a coin refusal, the verifier's) panics in `round` or `hook`, on this thread.
+pub fn run_worker<T: Send + 'static>(work: impl FnOnce(WorkerEnd<T>) -> Result<T, String> + Send + 'static,
+                                     round: &mut dyn FnMut(&[u8], usize) -> Vec<F128>, hook: &mut dyn FnMut(&[u8]) -> Vec<Vec<F128>>,
+                                     wait: &mut dyn FnMut(&Receiver<Ask<T>>) -> Option<Ask<T>>) -> Result<T, String> {
+    let (tx, rx) = channel();
+    let end = WorkerEnd(tx.clone());
+    std::thread::Builder::new().name("flock-worker".into()).spawn(move || {
+        let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| work(end))).unwrap_or_else(|e| {
+            Err(format!("panicked: {}", e.downcast_ref::<String>().cloned().or_else(|| e.downcast_ref::<&str>().map(|s| s.to_string())).unwrap_or_default()))
+        });
+        let _ = tx.send(Ask::Done(r));
+    }).map_err(|e| format!("its thread did not start: {e}"))?;
+    loop {
+        match wait(&rx) {
+            Some(Ask::Round(c, n, back)) => {
+                let _ = back.send(round(&c, n));
+            }
+            Some(Ask::Hook(root, back)) => {
+                let _ = back.send(hook(&root));
+            }
+            Some(Ask::Done(r)) => return r,
+            Some(Ask::Tick) | None => return Err("silent past the firewall's deadline".into()),
+        }
     }
 }
 
@@ -739,5 +811,79 @@ mod tests {
         assert!(link.next().is_some());
         link.close();
         assert!(t.join().is_err(), "the shadow stops when the firewall closes");
+    }
+
+    /// The firewall's side of [`run_worker`] for a test: every ask served in order into `log`, round `k`'s coins `[k]`.
+    fn serve<T: Send + 'static>(work: impl FnOnce(WorkerEnd<T>) -> Result<T, String> + Send + 'static,
+                                wait: &mut dyn FnMut(&Receiver<Ask<T>>) -> Option<Ask<T>>) -> (Result<T, String>, Vec<String>) {
+        let log = std::cell::RefCell::new(Vec::new());
+        let r = {
+            let mut round = |c: &[u8], n: usize| {
+                log.borrow_mut().push(format!("round {} {n}", c[0]));
+                vec![F128::new(c[0] as u64, 0); n]
+            };
+            let mut hook = |root: &[u8]| {
+                log.borrow_mut().push(format!("hook {}", root[0]));
+                vec![vec![F128::ONE]]
+            };
+            run_worker(work, &mut round, &mut hook, wait)
+        };
+        (r, log.into_inner())
+    }
+
+    fn served<T>(rx: &Receiver<Ask<T>>) -> Option<Ask<T>> {
+        rx.recv().ok()
+    }
+
+    #[test]
+    fn a_worker_is_served_on_the_firewalls_thread_until_it_returns() {
+        let (r, log) = serve(|end| {
+            assert_eq!(end.hook(&[9]), vec![vec![F128::ONE]]);
+            let coins: Vec<F128> = (0..3u8).flat_map(|k| end.round(&[k], 2)).collect();
+            Ok(coins)
+        }, &mut served);
+        assert_eq!(r.unwrap(), [0, 0, 1, 1, 2, 2].map(|k| F128::new(k, 0)).to_vec());
+        assert_eq!(log, ["hook 9", "round 0 2", "round 1 2", "round 2 2"]);
+    }
+
+    /// Each way a worker fails is the firewall's `Err` after the rounds it asked, never a panic on the firewall's thread: an
+    /// error it returns, a panic, silence (the injected clock: `wait` says the deadline passed at the third ask), and its control's
+    /// tick. A worker given up gets nothing more: its next round panics on its own thread.
+    #[test]
+    fn every_worker_failure_is_an_error_after_the_rounds_it_asked() {
+        let (r, log) = serve(|end| {
+            end.round(&[0], 1);
+            Err::<(), _>("CUDA circuit prover returned error 3".into())
+        }, &mut served);
+        assert_eq!((r.unwrap_err().as_str(), log), ("CUDA circuit prover returned error 3", vec!["round 0 1".to_string()]));
+        let (r, log) = serve(|end: WorkerEnd<()>| {
+            end.round(&[0], 1);
+            end.round(&[1], 1);
+            panic!("the device's output does not decode")
+        }, &mut served);
+        assert_eq!((r.unwrap_err().as_str(), log.len()), ("panicked: the device's output does not decode", 2));
+        let (hold, held) = channel::<()>();
+        let (late_tx, late) = channel();
+        let mut asks = 0;
+        let mut clock = |rx: &Receiver<Ask<()>>| {
+            asks += 1;
+            if asks == 3 { None } else { rx.recv().ok() }
+        };
+        let (r, log) = serve(move |end| {
+            end.hook(&[4]);
+            end.round(&[0], 1);
+            let _ = held.recv();
+            let _ = late_tx.send(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| end.round(&[1], 1))).is_err());
+            Ok(())
+        }, &mut clock);
+        assert_eq!((r.unwrap_err().as_str(), log), ("silent past the firewall's deadline", vec!["hook 4".to_string(), "round 0 1".to_string()]));
+        drop(hold);
+        assert_eq!(late.recv(), Ok(true), "a worker given up gets no coins");
+        let (r, log) = serve(|end| {
+            end.round(&[0], 1);
+            end.tick();
+            Ok(())
+        }, &mut served);
+        assert_eq!((r.unwrap_err().as_str(), log.len()), ("silent past the firewall's deadline", 1));
     }
 }

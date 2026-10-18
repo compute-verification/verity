@@ -1067,6 +1067,9 @@ struct FirewallDraws {
     level0: Arc<Vec<u8>>,
     device_trees: usize,
     two: bool,
+    /// `cut-tree`: the table's device round at or after which the device's next tree draws its salts one leaf larger, the
+    /// rounds handed to the firewall so far, and whether it did
+    tree_cut: Option<(usize, Arc<std::sync::atomic::AtomicUsize>, Arc<std::sync::atomic::AtomicBool>)>,
 }
 
 /// The firewall's send check on one table (PROTOCOL.md §10, `FC_FIREWALL=1`): the level-0 recheck, and per rep the algebraic
@@ -1077,7 +1080,7 @@ struct FirewallDraws {
 /// witness), `label` (a frame of the statement's skeleton), `opening` (a recomputed opening message), `algebra` (a masked
 /// value, in the frame and the proof alike: the relation check's case), `algebra-proof` (the proof alone) and `shape` (a
 /// value appended to the proof's `round1_ab`, past the ones the firewall compares); `later-NAME` is `NAME` on every table but
-/// a several-table session's first.
+/// a several-table session's first; `cut-MODE` a worker that fails ([`Cut`]).
 struct Firewall {
     st: Arc<Stmt>,
     lig: LigeritoProfile,
@@ -1090,8 +1093,71 @@ struct Firewall {
     tamper: String,
     why: Option<String>,
     rep: Option<FirewallRep>,
+    /// the reps whose Lean frame answered `ok` at their end: the table's proofs leave only when every rep's did
+    lean_ok: usize,
+    /// the device rounds the firewall was handed in the table so far, and whether a `cut-` control's worker failed yet
+    seen: Arc<std::sync::atomic::AtomicUsize>,
+    cut_fired: Arc<std::sync::atomic::AtomicBool>,
     t_recheck: f64,
     cpu_recheck: f64,
+}
+
+/// `FC_FIREWALL_TAMPER=cut-MODE`: the worker fails in one named way (§10.1's worker failures), in the rep that holds the table's
+/// device round `FC_FIREWALL_CUT_AT` (default 0, counted over the table's reps), once. At that round it returns an error
+/// (`cut-rc`, a nonzero return code), claims the coins degenerate (`cut-rc240`, the device's return code 240), panics
+/// (`cut-panic`) or falls silent (`cut-silent`: it ticks the firewall's injected clock and asks nothing more); after its last
+/// round, its output does not decode (`cut-decode`). `cut-tree` is the firewall's salt context's: the device draws its first tree
+/// after level 0 at or after that round one leaf larger than the statement's.
+#[derive(Clone)]
+struct Cut {
+    mode: String,
+    /// the rep's own round index of the cut
+    at: usize,
+    fired: Arc<std::sync::atomic::AtomicBool>,
+}
+
+fn cut_at() -> usize {
+    std::env::var("FC_FIREWALL_CUT_AT").ok().and_then(|v| v.parse().ok()).unwrap_or(0)
+}
+
+impl Cut {
+    /// The worker's round `k`: a cut that fails here does (it never returns), once.
+    fn round<T>(&self, k: usize, end: &flock_live::firewall::WorkerEnd<T>) {
+        if k != self.at || self.mode == "cut-decode" || self.fired.swap(true, std::sync::atomic::Ordering::SeqCst) {
+            return;
+        }
+        match self.mode.as_str() {
+            "cut-rc" => std::panic::panic_any(CutErr("CUDA circuit prover returned error 1".into())),
+            "cut-rc240" => std::panic::panic_any(CutErr("PROVER-STOPPED: degenerate coins: rho_0, rho_1 dependent over F128".into())),
+            "cut-silent" => {
+                end.tick();
+                end.round(&[], 0);
+                unreachable!("a worker given up gets no coins")
+            }
+            _ => panic!("the worker panics at its round {k}"),
+        }
+    }
+
+    /// After the worker's last round (`rounds` of them): `cut-decode`'s output, which does not decode, if the cut's round was one.
+    fn output(&self, rounds: usize, proof: &R1csProofLigerito, cm: &Commitment) -> Result<(), String> {
+        if self.mode != "cut-decode" || rounds <= self.at || self.fired.swap(true, std::sync::atomic::Ordering::SeqCst) {
+            return Ok(());
+        }
+        let bytes = bincode::serialize(&(cm, proof)).unwrap();
+        bincode::deserialize::<(Commitment, R1csProofLigerito)>(&bytes[..bytes.len() / 2]).map(|_| ())
+            .map_err(|e| format!("the device's output does not decode: {e}"))
+    }
+}
+
+/// A cut's error return, raised from inside the CPU prover's round (the device returns it).
+struct CutErr(String);
+
+/// A CPU worker's result: its panic as the error it stands for (a [`CutErr`] is the device's error return).
+fn cut_result<T>(r: std::thread::Result<Result<T, String>>) -> Result<T, String> {
+    r.unwrap_or_else(|e| match e.downcast::<CutErr>() {
+        Ok(c) => Err(c.0),
+        Err(e) => std::panic::resume_unwind(e),
+    })
 }
 
 struct FirewallRep {
@@ -1135,9 +1201,13 @@ impl Firewall {
            salts: &Arc<Mutex<flock_live::zk_hooks::LeafSalts>>, two: bool) -> Firewall {
         let pcs = params(st.m, lig);
         let level0 = salts.lock().unwrap_or_else(PoisonError::into_inner).level0(pcs.n_leaves());
-        let draws = Arc::new(Mutex::new(FirewallDraws { shared: salts.clone(), fork: None, level0: level0.clone(), device_trees: 0, two }));
+        let tamper = std::env::var("FC_FIREWALL_TAMPER").unwrap_or_default();
+        let (seen, cut_fired) = (Arc::new(std::sync::atomic::AtomicUsize::new(0)), Arc::new(std::sync::atomic::AtomicBool::new(false)));
+        let tree_cut = (tamper == "cut-tree").then(|| (cut_at(), seen.clone(), cut_fired.clone()));
+        let draws = Arc::new(Mutex::new(FirewallDraws { shared: salts.clone(), fork: None, level0: level0.clone(), device_trees: 0, two, tree_cut }));
         let d = draws.clone();
         flock_merkle::hm96::begin(level0, Box::new(move |n| {
+            use std::sync::atomic::Ordering::SeqCst;
             let mut d = d.lock().unwrap_or_else(PoisonError::into_inner);
             if !d.two || IN_FIREWALL.with(|g| g.get()) {
                 let f = d.fork.as_mut().expect("the firewall's salts for a rep");
@@ -1148,8 +1218,14 @@ impl Firewall {
             if d.device_trees == 1 {
                 return d.level0.to_vec();
             }
+            let cut = d.tree_cut.as_ref().is_some_and(|(k, seen, fired)| seen.load(SeqCst) >= *k && !fired.swap(true, SeqCst));
             let mut s = d.shared.lock().unwrap_or_else(PoisonError::into_inner);
             let id = s.next_id();
+            if cut {
+                let mut b = s.expand(id, n + 1);
+                b.truncate(n * flock_live::zk_hooks::SALT_BYTES);
+                return b;
+            }
             s.expand(id, n)
         }));
         let threads = std::env::var("RAYON_NUM_THREADS").ok().and_then(|v| v.parse().ok())
@@ -1161,8 +1237,27 @@ impl Firewall {
         let (t_recheck, cpu_recheck) = (t0.elapsed().as_secs_f64(), flock_live::firewall::cpu_seconds() - c0);
         let root = merkle_digest_bytes(&cm.cap).to_vec();
         eprintln!("FIREWALL\t{}", json!({"recheck_root": hex(&root), "m": st.m, "t.firewall_recheck": t_recheck, "cpu.firewall_recheck": cpu_recheck, "threads": threads}));
-        Firewall { st: st.clone(), lig, z: Arc::new(z), cm, pd: Arc::new(pd), root, draws, pool, tamper: std::env::var("FC_FIREWALL_TAMPER").unwrap_or_default(),
-               why: None, rep: None, t_recheck, cpu_recheck }
+        Firewall { st: st.clone(), lig, z: Arc::new(z), cm, pd: Arc::new(pd), root, draws, pool, tamper, why: None, rep: None, lean_ok: 0, seen,
+                   cut_fired, t_recheck, cpu_recheck }
+    }
+
+    /// The rep's `cut-` control (the worker's failure), if its round is this rep's or later and it has not fired yet.
+    fn cut(&self) -> Option<Cut> {
+        let (seen, at) = (self.seen.load(std::sync::atomic::Ordering::SeqCst), cut_at());
+        (self.tamper.starts_with("cut-") && self.tamper != "cut-tree" && !self.cut_fired.load(std::sync::atomic::Ordering::SeqCst) && at >= seen)
+            .then(|| Cut { mode: self.tamper.clone(), at: at - seen, fired: self.cut_fired.clone() })
+    }
+
+    /// Whether the rep's `Commit` has been made (the hook took its root).
+    fn committed(&self) -> bool {
+        self.rep.as_ref().is_some_and(|r| r.extras.is_some())
+    }
+
+    /// The table's stop at `Finish`, if any: a failed check, or a rep whose Lean frame did not answer `ok` at its end. A table's
+    /// proofs leave only after both reps' `ok`.
+    fn verdict(&self) -> Option<String> {
+        self.why.clone().or_else(|| (self.lean_ok < 2).then(|| flock_live::firewall::refused(
+            format!("the Lean frame answered ok at the end of {} of the table's 2 reps", self.lean_ok))))
     }
 
     fn refuse(&mut self, why: String) -> String {
@@ -1234,6 +1329,7 @@ impl Firewall {
     /// statement's schedule has no round left. A failed check, or a round the Lean frame refuses, fails the rep: from then on
     /// every round that leaves is the scheduled one, whatever the device sends. An error is the firewall's own fault.
     fn round(&mut self, content: &[u8], n: usize) -> Result<Option<(Vec<u8>, Vec<u8>, usize)>, String> {
+        self.seen.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         if !self.rep.as_ref().ok_or_else(|| flock_live::firewall::refused("a round outside a firewalled rep"))?.failed {
             match self.round_inner(content, n) {
                 Ok((c, algebra)) => match self.release(&c, n, false) {
@@ -1376,33 +1472,45 @@ impl Firewall {
         }
     }
 
-    /// The device returned its proof (after [`Firewall::rest`]): every exposed value must be the one the firewall passed
-    /// (`final_c'` the one it computes from them), the commitment the recheck's, the opening the shadow's. What leaves is the
-    /// firewall's own whatever these find: the zerocheck and lincheck rebuilt from the passed values, the shadow's opening, and
-    /// the firewall's folded comb (`zk_finish` folds it). A failed check fails the rep, for `Finish`. Returns the rep's firewall
-    /// timings; an error is the firewall's own fault.
-    fn finish(&mut self, proof: &mut R1csProofLigerito, cm: &Commitment) -> Result<Value, String> {
+    /// The rep's end (after [`Firewall::rest`]): the Lean frame's `Finish`, and the device's proof if it returned one (`device`),
+    /// whose every exposed value must be the one the firewall passed (`final_c'` the one it computes from them), its commitment
+    /// the recheck's, its opening the shadow's. The rep's proof is the firewall's own whatever these find, or whether the device
+    /// returned at all: the zerocheck and lincheck rebuilt from the passed values, the shadow's opening, and the firewall's folded
+    /// comb (`zk_finish` folds it). A failed check fails the rep, for `Finish`. Returns that proof and the rep's firewall timings;
+    /// an error is the firewall's own fault, or the shadow's refusal of degenerate coins (a stop the coins decide).
+    fn finish(&mut self, mut device: Option<(&mut R1csProofLigerito, &Commitment)>) -> Result<(R1csProofLigerito, Value), String> {
         use flock_live::firewall::refused;
         let st = self.st.clone();
-        if self.tamper == "algebra" || self.tamper == "algebra-proof" {
-            proof.zerocheck.round1_ab[0].lo ^= 1;
-        }
-        if self.tamper == "shape" {
-            let v = proof.zerocheck.round1_ab[0];
-            proof.zerocheck.round1_ab.push(v);
+        if let Some((proof, _)) = device.as_mut() {
+            if self.tamper == "algebra" || self.tamper == "algebra-proof" {
+                if let Some(v) = proof.zerocheck.round1_ab.first_mut() {
+                    v.lo ^= 1;
+                }
+            }
+            if self.tamper == "shape" {
+                if let Some(&v) = proof.zerocheck.round1_ab.first() {
+                    proof.zerocheck.round1_ab.push(v);
+                }
+            }
         }
         let r = self.rep.as_mut().ok_or_else(|| refused("a proof outside a firewalled rep"))?;
-        let mut why: Option<String> = None;
+        let lean = r.lean.finish();
+        let stopped = *lean.as_ref().unwrap_or(&true);
+        if !stopped && !r.failed {
+            self.lean_ok += 1;
+        }
+        let mut why: Option<String> = lean.err();
         let mut check = |ok: bool, what: &dyn Fn() -> String| {
             if !ok && why.is_none() {
                 why = Some(refused(what()));
             }
         };
-        let mut link = r.link.take().ok_or_else(|| refused("the device returned before its opening"))?;
-        let stopped = r.lean.finish()?;
+        let mut link = r.link.take().ok_or_else(|| refused("the rep ended before its opening"))?;
         check(r.failed || !stopped, &|| "the Lean frame stopped the rep".into());
-        check(proof.zerocheck.grinding_nonces.is_empty() && proof.lincheck.grinding_nonces.is_empty() && proof.lincheck.matrix_evals.is_empty(),
-              &|| "the proof carries grinding nonces or matrix evaluations the transcript did not".into());
+        if let Some((proof, _)) = device.as_ref() {
+            check(proof.zerocheck.grinding_nonces.is_empty() && proof.lincheck.grinding_nonces.is_empty() && proof.lincheck.matrix_evals.is_empty(),
+                  &|| "the proof carries grinding nonces or matrix evaluations the transcript did not".into());
+        }
         let lay = r.lay;
         let mut vals = Vec::with_capacity(lay.piop_exposed());
         for (i, v) in r.checker.values.iter().enumerate() {
@@ -1415,27 +1523,40 @@ impl Firewall {
         })).map_err(|e| refused(format!("the replay of the passed values: {}", panic_msg(e))))?.map_err(refused)?;
         vals[lay.fc()] = rp.cons.iter().find(|c| c.0 == "zerocheck c_eval").ok_or_else(|| refused("no c_eval row"))?.1.c;
         flock_live::firewall_transcript::with(|t| t.passed(&vals));
-        let (zc, lc) = (&proof.zerocheck, &proof.lincheck);
-        let shape = [zc.round1_ab.len(), zc.round1_c.len(), zc.multilinear_rounds.len(), lc.rounds.len(), lc.z_partial.len()];
-        let want = [zkv::SKIP, zkv::SKIP, lay.n_mlv, lay.n_lc, zkv::SKIP];
-        check(shape == want, &|| format!("the proof's shape (round1_ab, round1_c, multilinear_rounds, lincheck rounds, z_partial) is {shape:?} where the statement's is {want:?}"));
-        if shape == want {
-            let got = zkv::exposed_values(&proof.zerocheck, &proof.lincheck, &lay);
-            let i = (0..vals.len()).find(|&i| got[i] != vals[i]);
-            check(i.is_none(), &|| if i == Some(lay.fc()) { "the proof's final_c is not the one the firewall computes from the passed values".to_string() }
-                                  else { format!("the proof's exposed value {} is not the one the firewall passed", i.unwrap_or(0)) });
+        if let Some((proof, cm)) = device.as_ref() {
+            let (zc, lc) = (&proof.zerocheck, &proof.lincheck);
+            let shape = [zc.round1_ab.len(), zc.round1_c.len(), zc.multilinear_rounds.len(), lc.rounds.len(), lc.z_partial.len()];
+            let want = [zkv::SKIP, zkv::SKIP, lay.n_mlv, lay.n_lc, zkv::SKIP];
+            check(shape == want, &|| format!("the proof's shape (round1_ab, round1_c, multilinear_rounds, lincheck rounds, z_partial) is {shape:?} where the statement's is {want:?}"));
+            if shape == want {
+                let got = zkv::exposed_values(&proof.zerocheck, &proof.lincheck, &lay);
+                let i = (0..vals.len()).find(|&i| got[i] != vals[i]);
+                check(i.is_none(), &|| if i == Some(lay.fc()) { "the proof's final_c is not the one the firewall computes from the passed values".to_string() }
+                                      else { format!("the proof's exposed value {} is not the one the firewall passed", i.unwrap_or(0)) });
+            }
+            check(bincode::serialize(*cm).unwrap() == bincode::serialize(&self.cm).unwrap(), &|| "the proof's commitment is not the recheck's".into());
         }
-        check(bincode::serialize(cm).unwrap() == bincode::serialize(&self.cm).unwrap(), &|| "the proof's commitment is not the recheck's".into());
         link.close();
         let t = Instant::now();
         let joined = r.shadow.take().expect("the shadow opening").join();
         r.t_wait += t.elapsed().as_secs_f64();
-        let (open, t_shadow) = joined.map_err(|e| refused(format!("the firewall's opening did not finish with the device's: {}", panic_msg(e))))?;
-        check(bincode::serialize(&proof.pcs_open).unwrap() == bincode::serialize(&open).unwrap(),
-              &|| format!("the proof's opening is not the firewall's: {}", opening_diff(&proof.pcs_open, &open)));
+        let (open, t_shadow) = match joined {
+            Ok(x) => x,
+            Err(e) => {
+                let m = panic_msg(e);
+                return Err(if m.starts_with("PROVER-STOPPED: degenerate coins") { m }
+                           else { refused(format!("the firewall's opening did not finish with the device's: {m}")) });
+            }
+        };
+        if let Some((proof, _)) = device.as_ref() {
+            check(bincode::serialize(&proof.pcs_open).unwrap() == bincode::serialize(&open).unwrap(),
+                  &|| format!("the proof's opening is not the firewall's: {}", opening_diff(&proof.pcs_open, &open)));
+        }
         match why {
             Some(e) => {
-                flock_live::firewall_transcript::with(|t| t.proof_candidate(proof));
+                if let Some((proof, _)) = device.as_ref() {
+                    flock_live::firewall_transcript::with(|t| t.proof_candidate(proof));
+                }
                 self.fail(e);
             }
             None => {
@@ -1443,17 +1564,17 @@ impl Firewall {
             }
         }
         let r = self.rep.as_mut().unwrap();
-        proof.pcs_open = open;
-        // what leaves is the firewall's own: the zerocheck and lincheck rebuilt from the passed values (no comb_partial: zk_finish
-        // folds the firewall's comb), the shadow's opening
-        (proof.zerocheck, proof.lincheck) = zkv::from_exposed(&vals, &lay);
+        // the firewall's own proof: the zerocheck and lincheck rebuilt from the passed values (no comb_partial: zk_finish folds the
+        // firewall's comb), the shadow's opening
+        let (zerocheck, lincheck) = zkv::from_exposed(&vals, &lay);
+        let own = R1csProofLigerito { zerocheck, lincheck, pcs_open: open };
         let mut v = json!({"t.firewall_shadow": t_shadow, "t.firewall_wait": r.t_wait, "firewall_opening_rounds": link.round,
                            "t.firewall_lean": r.t_lean, "firewall_lean_bytes": r.lean_bytes, "firewall_failed": r.failed});
         if r.rep == 0 {
             v["t.firewall_recheck"] = json!(self.t_recheck);
             v["cpu.firewall_recheck"] = json!(self.cpu_recheck);
         }
-        Ok(v)
+        Ok((own, v))
     }
 }
 
@@ -1512,22 +1633,69 @@ fn released<C: flock_transcript::challenger::Challenger>(g: &Arc<Mutex<Firewall>
     coins
 }
 
-/// The firewall's end of a rep whose device returned: the rest of the statement's schedule, if the device left any (onto the
-/// rep's stream `mch`), then the end check on the returned proof, with its timings added to the rep's buckets. Its error is
-/// the firewall's own fault.
-fn firewalled_finish<C: flock_transcript::challenger::Challenger>(firewall: &Option<Arc<Mutex<Firewall>>>, mch: &mut zkv::Masking<Gate<C>>,
-                                                                  proof: &mut R1csProofLigerito, cm: &Commitment, bk: &mut Value) -> Result<(), String> {
-    let Some(g) = firewall else { return Ok(()) };
+/// The firewall's end of a rep, whatever its worker did (PROTOCOL.md §10.1). A worker that failed (`dev`'s error: an error it
+/// returned, output that does not decode, a panic, silence past the deadline) fails the rep, and one that never reached its
+/// `Commit` has the hook taken here with the recheck's root. Then the rest of the statement's schedule, if any is left (onto
+/// the rep's stream `mch`), and the end check ([`Firewall::finish`]). Returns the firewall's own proof, the recheck's commitment
+/// and the rep's buckets; its error is the firewall's own fault, or the shadow's refusal of degenerate coins.
+fn firewalled_end<C: flock_transcript::challenger::Challenger>(g: &Arc<Mutex<Firewall>>, mch: &mut zkv::Masking<Gate<C>>, hook: Hook<'_>,
+                                                               dev: Result<(R1csProofLigerito, Commitment, Value), String>)
+                                                               -> Result<(R1csProofLigerito, Commitment, Value), String> {
+    let lock = || g.lock().unwrap_or_else(PoisonError::into_inner);
+    let (mut dev, mut bk) = match dev {
+        Ok((proof, cm, bk)) => (Some((proof, cm)), bk),
+        Err(why) => {
+            lock().fail(flock_live::firewall::refused(format!("the device failed: {why}")));
+            (None, json!({"firewall_device_failed": why}))
+        }
+    };
+    if !lock().committed() {
+        let root = lock().root.clone();
+        hook(&root);
+    }
     loop {
-        let next = g.lock().unwrap_or_else(PoisonError::into_inner).rest()?;
+        let next = lock().rest()?;
         let Some(x) = next else { break };
         released(g, mch, x);
     }
-    let v = g.lock().unwrap_or_else(PoisonError::into_inner).finish(proof, cm)?;
+    let (proof, v) = lock().finish(dev.as_mut().map(|(p, c)| (p, &*c)))?;
     if let (Some(o), Some(v)) = (bk.as_object_mut(), v.as_object()) {
         o.extend(v.clone());
     }
-    Ok(())
+    let cm = lock().cm.clone();
+    Ok((proof, cm, bk))
+}
+
+/// How long the firewall waits for a worker's next ask before it gives the worker up: `FC_FIREWALL_DEADLINE_S` seconds (default
+/// an hour).
+fn worker_wait<T>() -> impl FnMut(&std::sync::mpsc::Receiver<flock_live::firewall::Ask<T>>) -> Option<flock_live::firewall::Ask<T>> {
+    flock_live::firewall::deadline(std::env::var("FC_FIREWALL_DEADLINE_S").ok().and_then(|v| v.parse().ok()).unwrap_or(3600.0))
+}
+
+/// A rep's worker under the firewall: `work` (the device prover, given the worker's end) on a thread of its own, its rounds
+/// counted for the rep's `cut-` control, which fails it at its round and after its output.
+fn worker<T: Send + 'static>(cut: Option<Cut>, work: impl FnOnce(&mut (dyn FnMut(&[u8], usize) -> Vec<F128> + Send), &mut dyn FnMut(&[u8]) -> Vec<Vec<F128>>)
+                                                                 -> Result<(R1csProofLigerito, Commitment, T), String> + Send + 'static,
+                             round: &mut dyn FnMut(&[u8], usize) -> Vec<F128>, hook: Hook<'_>)
+                             -> Result<(R1csProofLigerito, Commitment, T), String> {
+    flock_live::firewall::run_worker(move |end| {
+        let mut k = 0;
+        let out = {
+            let mut rounds = |c: &[u8], n: usize| {
+                if let Some(x) = &cut {
+                    x.round(k, &end);
+                }
+                k += 1;
+                end.round(c, n)
+            };
+            let mut h = |root: &[u8]| end.hook(root);
+            cut_result(catch_unwind(AssertUnwindSafe(|| work(&mut rounds, &mut h))))?
+        };
+        if let Some(x) = &cut {
+            x.output(k, &out.0, &out.1)?;
+        }
+        Ok(out)
+    }, round, hook, &mut worker_wait())
 }
 
 /// M1's CPU prover: upstream's prover under the masking challenger (or, with `FC_ZK_FRAMED`, under a [`Framer`] whose rounds are
@@ -1539,8 +1707,23 @@ fn prove_cpu_zk(st: &Arc<Stmt>, wt: &WitData, lig: LigeritoProfile, rep: usize, 
     let WitData::Host((z, a, b, zl)) = wt.clone() else { panic!("M1's CPU prover takes a host witness") };
     let tp = Instant::now();
     let (mut mch, sent) = zk_masking(st, ByRef(ch), zk);
+    if let Some(g) = firewall {
+        // the device on its own thread (the firewall serves its rounds and its Commit here), whatever it does
+        let cut = g.lock().unwrap_or_else(PoisonError::into_inner).cut();
+        let (st2, level0, dom) = (st.clone(), zk.level0.clone(), domain(&st.c, rep));
+        let dev = worker(cut, move |rounds, hook| {
+            let mut hk = |cm: &Commitment| -> Vec<Vec<F128>> { hook(merkle_digest_bytes(&cm.cap)).into_iter().map(|p| p[6..].to_vec()).collect() };
+            let mut fr = Framer { pending: frame_domain(&dom), rounds };
+            let (proof, cm) = prove_fast_ligerito_from_witness_extra_zk(&st2.r1cs, &pcs_of(&st2, lig), z, a, b, zl, &st2.circuit, &mut hk,
+                                                                        Some(&level0), &mut fr);
+            Ok((proof, cm, json!({})))
+        }, &mut |c: &[u8], n: usize| firewalled_round(firewall, &mut mch, c, n), hook);
+        let t_upstream = tp.elapsed().as_secs_f64();
+        let (proof, cm, bk) = firewalled_end(g, &mut mch, hook, dev)?;
+        return Ok(zk_finish(st, zk, proof, cm, mch, &sent, tp, t_upstream, bk, true));
+    }
     let mut hk = |cm: &Commitment| -> Vec<Vec<F128>> { hook(merkle_digest_bytes(&cm.cap)).into_iter().map(|p| p[6..].to_vec()).collect() };
-    let (mut proof, commitment) = if std::env::var("FC_ZK_FRAMED").is_ok() || firewall.is_some() {
+    let (proof, commitment) = if std::env::var("FC_ZK_FRAMED").is_ok() {
         let mut rounds = |content: &[u8], n: usize| firewalled_round(firewall, &mut mch, content, n);
         let mut fr = Framer { pending: frame_domain(&domain(&st.c, rep)), rounds: &mut rounds };
         prove_fast_ligerito_from_witness_extra_zk(&st.r1cs, &pcs_of(st, lig), z, a, b, zl, &st.circuit, &mut hk, Some(&zk.level0), &mut fr)
@@ -1548,9 +1731,7 @@ fn prove_cpu_zk(st: &Arc<Stmt>, wt: &WitData, lig: LigeritoProfile, rep: usize, 
         prove_fast_ligerito_from_witness_extra_zk(&st.r1cs, &pcs_of(st, lig), z, a, b, zl, &st.circuit, &mut hk, Some(&zk.level0), &mut mch)
     };
     let t_upstream = tp.elapsed().as_secs_f64();
-    let mut bk = json!({});
-    firewalled_finish(firewall, &mut mch, &mut proof, &commitment, &mut bk)?;
-    Ok(zk_finish(st, zk, proof, commitment, mch, &sent, tp, t_upstream, bk, firewall.is_some()))
+    Ok(zk_finish(st, zk, proof, commitment, mch, &sent, tp, t_upstream, json!({}), false))
 }
 
 /// After upstream's prover (the CPU's, or the device's with the same unmasked proof, level-0 record and folded comb): the
@@ -2744,6 +2925,18 @@ fn gpu_zk_device(_: &Stmt, _: &WitData, _: LigeritoProfile, _: usize, _: Hook<'_
     Err("built without the gpu feature".into())
 }
 
+/// [`gpu_zk_device`] for a rep: under the firewall on a worker thread of its own ([`worker`], with the rep's `cut-` control), its
+/// rounds (`round`) and its hook served here, on the session's thread; without the firewall, here. Its error is the device's.
+#[allow(clippy::too_many_arguments)]
+fn gpu_device(st: &Arc<Stmt>, wt: &Arc<WitData>, lig: LigeritoProfile, rep: usize, hook: Hook<'_>, salts: &Arc<Mutex<flock_live::zk_hooks::LeafSalts>>,
+              level0: &Arc<flock_core::pcs::ligerito::zk::Level0Zk>, round: &mut dyn FnMut(&[u8], usize) -> Vec<F128>, native_sha: bool,
+              firewall: &Option<Arc<Mutex<Firewall>>>) -> Result<(R1csProofLigerito, Commitment, Value), String> {
+    let Some(g) = firewall else { return gpu_zk_device(st, wt, lig, rep, hook, salts, level0, round, native_sha) };
+    let cut = g.lock().unwrap_or_else(PoisonError::into_inner).cut();
+    let (st, wt, salts, level0) = (st.clone(), wt.clone(), salts.clone(), level0.clone());
+    worker(cut, move |rounds, hook| gpu_zk_device(&st, &wt, lig, rep, hook, &salts, &level0, rounds, native_sha), round, hook)
+}
+
 #[derive(Clone, Default)]
 struct Plan {
     gpu: bool,
@@ -2808,7 +3001,8 @@ struct Plan {
     /// those tables over the population, built once for a harness's repeated sessions without a draw
     split: Option<Tables>,
     /// a prover without the barrier: each table's proofs as soon as its reps finish, before the next table's coins (the
-    /// verifier accepts them; the barrier's order check must not)
+    /// verifier accepts them; the barrier's order check must not). A test harness's only: a proving build has no such prover
+    #[cfg(feature = "seed-injection")]
     early_proofs: bool,
 }
 
@@ -3106,6 +3300,7 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
     let mut link_pts: Option<Vec<Vec<F128>>> = None;
     let mut stop_why: Option<String> = None;
     // the proofs a prover without the barrier sent before the session's last coin (`early_proofs`)
+    #[cfg_attr(not(feature = "seed-injection"), allow(unused_mut))]
     let mut early = 0;
     let tp0 = Instant::now();
     let res: Result<(), String> = (|| {
@@ -3169,6 +3364,9 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
                     if let Some(t) = g.tamper.strip_prefix("later-") {
                         g.tamper = if j == 0 { String::new() } else { t.to_string() };
                     }
+                    if g.tamper == "cut-tree" && plan.gpu {
+                        return Err("FIREWALL-REFUSED: cut-tree is the CPU device's control (its trees draw through the salt context)".into());
+                    }
                     // a later table's root left in table 0's Commit (`level0_root`, the host's): the recheck must have it
                     if let Some(r) = root0.as_ref().filter(|r| **r != g.root) {
                         return Err(format!("FIREWALL-REFUSED: {}'s level-0 root: the session's Commit carried {} where the recheck has {}",
@@ -3180,13 +3378,15 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
             let t_level0 = t_level0 + if firewalled { tg.elapsed().as_secs_f64() } else { 0.0 };
             // FC_FIREWALL_TAMPER=witness: the device proves a witness one bit off the host's (its level-0 root is not the recheck's)
             let tampered = |t: &str| firewall.as_ref().is_some_and(|g| g.lock().unwrap_or_else(PoisonError::into_inner).tamper == t);
-            let wt_dev: Option<WitData> = tampered("witness").then(|| match wt0.clone() {
+            let mut wt_dev: Option<WitData> = tampered("witness").then(|| match wt0.clone() {
                 Some(WitData::Host((mut z, a, b, zl))) => {
                     z[0].lo ^= 1;
                     WitData::Host((z, a, b, zl))
                 }
                 _ => unreachable!("the firewall takes a host witness"),
             });
+            // the device's witness, shared by both reps unless rep 1 has its own (a worker thread holds it while it runs)
+            let mut shared0: Option<Arc<WitData>> = None;
             let mut cached: Option<Vec<Vec<F128>>> = None;
             // M1 on the device: rep 0's replay and inner proof run beside rep 1's device run; rep 1's stream opens (its first round)
             // after rep 0's last round, so the wire carries the sequential prover's messages in its order
@@ -3298,17 +3498,19 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
                 let mut zkrep = zkrep;
                 let proved = catch_unwind(AssertUnwindSafe(|| -> Result<(Vec<u8>, Value), String> {
                     if plan.gpu {
-                        let wt = if rep == 0 { wt_dev.as_ref().or(wt0.as_ref()) } else { wt1.as_ref().or(wt0.as_ref()) }.expect("a rep's witness");
+                        let wt: Arc<WitData> = if rep == 0 { wt_dev.take() } else { wt1.take() }.map(Arc::new)
+                            .unwrap_or_else(|| shared0.get_or_insert_with(|| Arc::new(wt0.take().expect("a rep's witness"))).clone());
                         match zkrep.take() {
                             // M1 on the device, rep 0: the device part, then its replay and inner proof on a thread
                             Some(z) if rep == 0 && overlap => {
                                 let (mut mch, sent) = zk_masking(st, lch.take().expect("rep 0's stream"), &z);
                                 let tp = Instant::now();
-                                let (mut proof, cm, mut bk) = {
-                                    let mut rounds = |c: &[u8], n: usize| firewalled_round(&firewall, &mut mch, c, n);
-                                    gpu_zk_device(st, wt, lig, rep, &mut hook, salts, &z.level0, &mut rounds, native_sha)?
+                                let dev = gpu_device(st, &wt, lig, rep, &mut hook, salts, &z.level0,
+                                                     &mut |c: &[u8], n: usize| firewalled_round(&firewall, &mut mch, c, n), native_sha, &firewall);
+                                let (proof, cm, bk) = match &firewall {
+                                    Some(g) => firewalled_end(g, &mut mch, &mut hook, dev)?,
+                                    None => dev?,
                                 };
-                                firewalled_finish(&firewall, &mut mch, &mut proof, &cm, &mut bk)?;
                                 let (t_up, st2, fw) = (tp.elapsed().as_secs_f64(), st.clone(), firewall.is_some());
                                 rep0_finish = Some(std::thread::spawn(move || zk_finish(&st2, &z, proof, cm, mch, &sent, tp, t_up, bk, fw)));
                                 Ok((Vec::new(), Value::Null))
@@ -3319,24 +3521,31 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
                                 let mut first = rep0_finish.take();
                                 let mut opened: Option<(zkv::Masking<Gate<LiveChallenger>>, zkv::Pads)> = lch.take().map(|l| zk_masking(st, l, &z));
                                 let mut r0: Option<Result<(Vec<u8>, Value), String>> = None;
+                                let open = |opened: &mut Option<(zkv::Masking<Gate<LiveChallenger>>, zkv::Pads)>,
+                                            first: &mut Option<std::thread::JoinHandle<(Vec<u8>, Value)>>, r0: &mut Option<Result<(Vec<u8>, Value), String>>| {
+                                    if opened.is_none() {
+                                        let done = first.take().expect("rep 0's replay and inner proof").join().map_err(panic_msg);
+                                        let stop = done.as_ref().err().cloned();
+                                        *r0 = Some(done);
+                                        if let Some(e) = stop {
+                                            panic!("{e}");
+                                        }
+                                        let l = LiveChallenger::new(t.clone(), &tb.name, rep, &dom(rep)).unwrap_or_else(|e| panic!("LIVE-REFUSED open: {e}"));
+                                        *opened = Some(zk_masking(st, l, &z));
+                                    }
+                                };
                                 let tp = Instant::now();
                                 let dev = catch_unwind(AssertUnwindSafe(|| {
                                     let mut rounds = |c: &[u8], n: usize| -> Vec<F128> {
-                                        if opened.is_none() {
-                                            let done = first.take().expect("rep 0's replay and inner proof").join().map_err(panic_msg);
-                                            let stop = done.as_ref().err().cloned();
-                                            r0 = Some(done);
-                                            if let Some(e) = stop {
-                                                panic!("{e}");
-                                            }
-                                            let l = LiveChallenger::new(t.clone(), &tb.name, rep, &dom(rep)).unwrap_or_else(|e| panic!("LIVE-REFUSED open: {e}"));
-                                            opened = Some(zk_masking(st, l, &z));
-                                        }
-                                        let m = &mut opened.as_mut().expect("rep 1's stream").0;
-                                        firewalled_round(&firewall, m, c, n)
+                                        open(&mut opened, &mut first, &mut r0);
+                                        firewalled_round(&firewall, &mut opened.as_mut().expect("rep 1's stream").0, c, n)
                                     };
-                                    gpu_zk_device(st, wt, lig, rep, &mut hook, salts, &z.level0, &mut rounds, native_sha)
+                                    gpu_device(st, &wt, lig, rep, &mut hook, salts, &z.level0, &mut rounds, native_sha, &firewall)
                                 }));
+                                // a device that asked no round: the firewall opens rep 1's stream for the schedule it releases
+                                if firewall.is_some() && dev.is_ok() {
+                                    open(&mut opened, &mut first, &mut r0);
+                                }
                                 if let Some(h) = first.take() {
                                     r0 = Some(h.join().map_err(panic_msg));
                                 }
@@ -3344,13 +3553,23 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
                                 if let Some(r) = r0 {
                                     rep0_done = Some(r.unwrap_or_else(|e| panic!("{e}")));
                                 }
-                                let (mut proof, cm, mut bk) = dev.unwrap_or_else(|e| std::panic::resume_unwind(e))?;
-                                let (mut mch, sent) = opened.take().expect("rep 1's stream opened");
-                                firewalled_finish(&firewall, &mut mch, &mut proof, &cm, &mut bk)?;
+                                let dev = dev.unwrap_or_else(|e| std::panic::resume_unwind(e));
+                                let (proof, cm, bk, mch, sent) = match &firewall {
+                                    Some(g) => {
+                                        let (mut mch, sent) = opened.take().expect("rep 1's stream opened");
+                                        let (proof, cm, bk) = firewalled_end(g, &mut mch, &mut hook, dev)?;
+                                        (proof, cm, bk, mch, sent)
+                                    }
+                                    None => {
+                                        let (proof, cm, bk) = dev?;
+                                        let (mch, sent) = opened.take().expect("rep 1's stream opened");
+                                        (proof, cm, bk, mch, sent)
+                                    }
+                                };
                                 let t_up = tp.elapsed().as_secs_f64();
                                 Ok(zk_finish(st, &z, proof, cm, mch, &sent, tp, t_up, bk, firewall.is_some()))
                             }
-                            None => prove_gpu(st, wt, lig, rep, &mut hook, lch.as_mut().expect("the rep's stream"), salts,
+                            None => prove_gpu(st, &wt, lig, rep, &mut hook, lch.as_mut().expect("the rep's stream"), salts,
                                              reuse_tag.map(|t| (t << 8) | j as u64), native_sha),
                         }
                     } else if let Some(z) = &zkrep {
@@ -3383,18 +3602,19 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
                 buckets.push(bk);
                 proofs.push(p);
             }
-            // a failed check, or a constraint that fails on the pads, stops the session at its Finish (§10.1): every round of the
-            // table left on schedule
+            // a failed check (a failed worker's among them), a rep whose Lean frame did not answer ok at its end, or a constraint
+            // that fails on the pads, stops the session at its Finish (§10.1): every round of the table left on schedule
             if let Some(g) = &firewall {
                 let rows = buckets[table_buckets..].iter()
                     .filter_map(|b| b["constraints_failing_on_pads"].as_array().filter(|r| !r.is_empty()))
                     .map(|r| r.iter().filter_map(Value::as_str).collect::<Vec<_>>().join(", ")).next();
-                let why = g.lock().unwrap_or_else(PoisonError::into_inner).why.clone()
+                let why = g.lock().unwrap_or_else(PoisonError::into_inner).verdict()
                     .or_else(|| rows.map(|r| format!("FIREWALL-REFUSED: {}: the constraints {r} fail on a rep's pads", tb.name)));
                 if let Some(w) = why {
                     stop_at_finish.get_or_insert(w);
                 }
             }
+            #[cfg(feature = "seed-injection")]
             if plan.early_proofs && j + 1 < tabs.list.len() {
                 for (rep, p) in proofs[early..].iter().enumerate() {
                     call(&t, Req::Proof { table: tb.name.clone(), rep: rep as u32, bytes: p.clone() })?;
@@ -3946,9 +4166,16 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
         // proof after the session's last coin. A prover without the barrier sends table 0's proofs before table 1's coins: the
         // verifier accepts them, and the order check must not.
         let early = name.ends_with("_detected");
+        #[cfg(not(feature = "seed-injection"))]
+        if early {
+            return json!({"case": name, "pass": true, "skipped": "a prover without the barrier is the test harness's (the seed-injection feature)"});
+        }
         let s0 = Arc::new(Mutex::new(server_tables(st, inst, 2)));
         let order = Arc::new(Mutex::new(Vec::new()));
+        #[cfg(feature = "seed-injection")]
         let plan = Plan { tables: 2, early_proofs: early, ..Plan::default() };
+        #[cfg(not(feature = "seed-injection"))]
+        let plan = Plan { tables: 2, ..Plan::default() };
         let (v, proofs) = session(st, inst, shared(Order { inner: InProc(s0.clone()), log: order.clone() }), &plan, ProverSeed::from_os());
         let rec = s0.lock().unwrap_or_else(PoisonError::into_inner).record_json();
         let reps: Vec<Value> = rec["verdict"]["reps"].as_array().cloned().unwrap_or_default();
