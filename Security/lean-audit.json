@@ -881,9 +881,15 @@
    "why": "a guarantee is stated over the bandwidth audit's game, never over a proof"
   },
   "Models.Accounting.Assumptions": {
-   "imports": ["Mathlib", "Definitions.Pouw", "Definitions.Accounting", "Models.Accounting.Assumptions"],
+   "imports": [
+    "Mathlib",
+    "Definitions.Pouw",
+    "Definitions.Accounting",
+    "Definitions.NetworkCertifier",
+    "Models.Accounting.Assumptions"
+   ],
    "except": [],
-   "why": "a named assumption of resource accounting (the remote audit's W at the rebuild pricing, Identity, PoUW's conjecture for the bound z) is a Prop over its definitions, never over a guarantee or a proof"
+   "why": "a named assumption of resource accounting (the remote audit's W at the rebuild pricing, Identity, PoUW's conjecture for the bound z, compute attribution's boundary observations in the network certifier's vocabulary) is a Prop over its definitions, never over a guarantee or a proof"
   },
   "Definitions.Claims": {
    "imports": ["Mathlib", "Definitions.Claims"],
@@ -6516,6 +6522,7 @@
   "premises": [
    "Definitions.Accounting.Actual",
    "Definitions.Accounting.Physical",
+   "Models.Accounting.Assumptions.Attribution",
    "Models.Accounting.Assumptions.PouwWork",
    "Proofs.Flock.Recursive.Premises"
   ],
@@ -7327,6 +7334,7 @@
    "Accounting.SecurityProofs.FillerLuck.PinnedFillLuckAt": "frozen (no-function): (I7) LuckAt at 0 over every full-checking window of pinned receipts (Accounting.Filler.FullPinnedFill), at any receipt function of the round's committed data and live coins, not a Lean function: the service's filler check has no Lean code yet.",
    "Accounting.SecurityProofs.FillerLuck.PinnedFillBudget": "frozen (no-function): Lemma C's BudgetAt at 1 over every spot-checked window of pinned receipts (Accounting.Filler.SpotPinnedFill), at any receipt function, not a Lean function: the service's spot check has no Lean code yet.",
    "Accounting.SecurityProofs.FillerLuck.PinnedFillBlocksDeficit": "frozen (no-function): Theorem S with another block's one-draw check beside a pinned receipt's spot check (Accounting.Filler.PinnedFillBlocks), the filler at p = 0, not a Lean function: the service's check has no Lean code yet; the other block's pass bound is part of each round's shape.",
+   "Accounting.Guarantees.PouwBlockCredit": "unstated: compute attribution's per-block credit, the floor Wb·Nmin at a block under salt custody over the outside only (decision 118's per-block certifier salt; restated after W5, note:compute-accounting/20261018T1948Z-report-redteam-salt-custody): PoUW and the boundary audit both accept while the block made fewer than Wb·Nmin credits with probability at most δdet + δluck + δfloor + q·A/2^s + δhide, s the salt's bits and δhide the hiding error of its public commitment (q·2^(k−s) at A = 2^k, at most 2^−64 at decision 112's q = 2^128 when k ≤ s − 192: k ≤ 320 at the certifier's 512-bit salt, δhide = 0 sealed; measured k 31–59; s and q stay parameters), where A counts the boundary's accepted observations (NetTiming's proved per-window count) times 2^kc at each commitment value; a strategy that fails the boundary audit at some salts is inside the statement, charged as a rejection there; statement only, for Daniel's card first. Its theorem Accounting.SecurityProofs.PouwBlockCredit is not proved yet. It rests on the premises Accounting.Assumptions.SaltCustody (the outside's and the off-boundary certifiers' history at ts depends on the window's coin only through its commitment; ∂X's certifiers may hold the salt), SaltHiding, SaltContainment (where the boundary audit accepts, the block leaks fewer than kc bits a window about its coins through every physical channel, a premise about the prover's host, a claim for the card), SaltFreeJitter (each certifier's sends outside the block until td from its open record, the salt frame's slot sealed), BoundaryObs (∂X's open records before td, where the boundary audit accepts) and OutsideQueries, and on the open conjecture Accounting.Assumptions.PouwFloorAdvice (TT and the random-oracle model with the commitment's hiding, scoped to the noise whose floor is the committed words' coin × coin products: ncp-v1, ncp-v1-shift24 and H1 (eps1-sm120-h1fx1's b·c and b·U, attention's U·b) are in it while H1 commits a word at least every 32 keys, since one every C keys floors only 32·k/C; the peel's clean side is not; falsification test verity/core/protocols/pouw/tests/test_pouw_floor_advice.py, which also reads the compile pass's registry) (note:20261018T0730Z-draft-attrib).",
    "Accounting.SecurityProofs.RequirementHeldLive": "frozen (no-function): A counting identity over a declared circuit's wiring, its execution and the audit's store (Security/Definitions/Accounting/Requirement.lean): once the store is W's block for block (StoreMatches), W's live bits are those in the held blocks plus the live bits of each resident block not held; about no function of the code.",
    "Accounting.SecurityProofs.TS.SampledBudget": "lemma: the sampled budget over every sampled window (Accounting.TS.SampledWindow), Lambda = r/ln(1/p) at s >= 2 draws a round, from its pricing and its draws' luck at p in [1/e, 1) taken as hypotheses (definitions, not named assumptions); not a property of a Lean function.",
    "Accounting.SecurityProofs.TS.StageBudget": "frozen (no-function,world-unlisted): the budget under per-stage coins over every stage window (Accounting.TS.StageWindow), Lambda = r/ln(1/p), not a Lean function: per-stage coins have no service code yet. Its premise StageLuck (Models.Accounting.Assumptions.Stages) is not on the premises list.",

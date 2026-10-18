@@ -1,4 +1,5 @@
 import Models.Accounting.Guarantees.Actual
+import Models.Accounting.Guarantees.Attribution
 import Models.Accounting.Guarantees.Bandwidth
 import Models.Accounting.Guarantees.Bandwidth.Causal
 import Models.Accounting.Guarantees.BandwidthAudit
@@ -48,6 +49,7 @@ composed guarantee for the remote bandwidth audit as deployed and its deployed i
 bandwidth audit's conservation and node-level guarantees on the actual-circuit model, the actual circuit's capacity
 theorem, runtime corollary, localization, composition and fit, the obligations B1, B2 and B4, the tag and sketch
 guarantees, Lemma B with (H-μ⁺) derived from fresh coins and Lemma B′ for a persistent pattern, the view independence the Build's coin rules give it, co-location and the link relay for receipts bound to the matmul, what a relay of the deployed bound
-receipt's sketch must exchange, the bandwidth audit's guarantee, their per-run forms, PoUW's work lower bound on an isolated node,
+receipt's sketch must exchange, the bandwidth audit's guarantee, their per-run forms, PoUW's work lower bound on an isolated node
+and at one block of a serving node under salt custody (stated, not proved),
 a declared circuit's live and read bits from the blocks the audit credits, and the grinding premium under hashed seeds
 and the deployed tile's moment. -/
