@@ -147,6 +147,18 @@ noncomputable def ksB (Coin : Type) : Bound Coin Unit Unit where
   final _ := none
   weight _ := 0
 
+/-- `ksR` at an inner verifier `IV`: its inner view runs `IV` on no messages at the statement itself. -/
+def ksRV (Coin : Type) [Inhabited Coin] (IV : Verifier Coin) : Recursion.Deploy Coin :=
+  { ksR Coin with innerView := fun H x r _ => (run H (replay []) IV x () fun i => coinSeq r i.val).seen }
+
+/-- The toy compiled record of `KSBound` and `KSPrivBound` at each inner verifier (`ksRV`), its inner view running the
+verifier it is given. -/
+def ksRAt (Coin : Type) [Inhabited Coin] : RecAt Coin where
+  record := ksRV Coin
+  msgs _ _ := []
+  xI x := x
+  runs _ _ _ _ _ := rfl
+
 theorem recStmt_inScope : Recursion.InScope recStmt :=
   ⟨rfl, le_rfl, by decide, le_rfl, rfl, Or.inl ⟨rfl, rfl⟩, fun _ h => absurd h List.not_mem_nil⟩
 
@@ -205,6 +217,60 @@ theorem ksR_prB (H : Msg → Msg) (x : Msg) : PrB H (ksR Coin).V silentP x = 0 :
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] in
 theorem ksR_κ {W : Type} (I : Recursion.Inner Coin W) (x : Msg) : Recursion.κ (ksR Coin) I x = I.κ [] := by
   have : IsEmpty (Fin ((ksR Coin).nS x)) := Fin.isEmpty'
+  unfold Recursion.κ
+  rw [Finset.univ_eq_empty, Finset.sum_empty, mul_zero, add_zero]
+  rfl
+
+/-! `ksRV`, `ksR` at an inner verifier, has `ksR`'s numbers: only its inner view differs. -/
+
+omit [Fintype Coin] [Nonempty Coin] [DecidableEq Col] in
+theorem ksRAt_record (IV : Verifier Coin) : (ksRAt Coin).record IV = ksRV Coin IV := rfl
+
+omit [Fintype Coin] [Nonempty Coin] [DecidableEq Col] in
+theorem ksRV_noR {W : Type} (IV : Verifier Coin) (I : Recursion.Inner Coin W) (x : Msg) (w : W) :
+    ¬ Recursion.R (ksRV Coin IV) I x w := by
+  rintro ⟨s, hs, -⟩
+  simp [ksRV, ksR] at hs
+
+omit [Fintype Coin] [Nonempty Coin] [DecidableEq Col] in
+theorem ksRV_noRPriv {W : Type} (IV : Verifier Coin) (I : Recursion.Inner Coin W) (x : Msg) (w : W) :
+    ¬ RPriv (ksRV Coin IV) I x w := by
+  rintro ⟨s, hs, -⟩
+  simp [ksRV, ksR] at hs
+
+omit [DecidableEq Col] in
+theorem ksRV_be_pr {W : Type} {Ω : Type} [Fintype Ω] [Nonempty Ω] (H : Msg → Msg) (IV : Verifier Coin)
+    (I : Recursion.Inner Coin W) (DO : Flock.Deploy Coin Col T) (decO : List (ℕ × Col) → List T) (P : Prover Ω)
+    (x : Msg) (hk : 0 < (ksRV Coin IV).V.k x) : (Be H (ksRV Coin IV) I DO decO P x hk).Pr H = 0 := by
+  unfold Finder.Pr
+  rw [Pr_congr fun s => iff_false_intro ?_]
+  · exact Pr_false
+  · rintro ⟨u, v, h, -⟩
+    simp only [Be, ksRV, ksR, List.append_nil, findColl, reduceCtorEq] at h
+
+omit [DecidableEq Col] in
+theorem ksRV_prBe {W : Type} {Ω : Type} [Fintype Ω] [Nonempty Ω] (H : Msg → Msg) (IV : Verifier Coin)
+    (I : Recursion.Inner Coin W) (DO : Flock.Deploy Coin Col T) (decO : List (ℕ × Col) → List T) (P : Prover Ω)
+    (x : Msg) : PrBe H (ksRV Coin IV) I DO decO P x = 0 := by
+  unfold PrBe
+  split_ifs with hk
+  · exact ksRV_be_pr H IV I DO decO P x hk
+  · rfl
+
+omit [DecidableEq Col] in
+theorem ksRV_prBad {W : Type} (H : Msg → Msg) (IV : Verifier Coin) (R : Rel W)
+    (E : Extractor Coin W (ksRV Coin IV).V) (x : Msg) (hR : ∀ w, ¬ R x w) :
+    PrBad H (ksRV Coin IV).V R E x silentP = 1 :=
+  prBad_accV H R E x silentP hR
+
+omit [DecidableEq Col] in
+theorem ksRV_prB (H : Msg → Msg) (IV : Verifier Coin) (x : Msg) : PrB H (ksRV Coin IV).V silentP x = 0 :=
+  prB_accV H silentP x
+
+omit [Fintype Coin] [Nonempty Coin] [DecidableEq Col] in
+theorem ksRV_κ {W : Type} (IV : Verifier Coin) (I : Recursion.Inner Coin W) (x : Msg) :
+    Recursion.κ (ksRV Coin IV) I x = I.κ [] := by
+  have : IsEmpty (Fin ((ksRV Coin IV).nS x)) := Fin.isEmpty'
   unfold Recursion.κ
   rw [Finset.univ_eq_empty, Finset.sum_empty, mul_zero, add_zero]
   rfl
@@ -515,27 +581,27 @@ theorem KSFlock_fails (H : Msg → Msg) : ¬ KSFlock H (ksR Coin) (Flock.ksD Coi
   change 1 ≤ Claims.Flock.κ (Flock.ksD Coin) [] at h1
   linarith
 
-/-- **The recursion's `KS` at the representation V\* binds fails** at `ksR` (at every inner verifier), `ksB` inside and
-`Flock.ksD` outside: the bound record's `κ` is `Flock.ksD`'s. -/
-theorem KSBound_fails (H : Msg → Msg) : ¬ KSBound H (fun _ => ksR Coin) (ksB Coin) (Flock.ksD Coin) := by
+/-- **The recursion's `KS` at the representation V\* binds fails** at `ksRAt` (`ksR`, its inner view running the
+verifier it is given), `ksB` inside and `Flock.ksD` outside: the bound record's `κ` is `Flock.ksD`'s. -/
+theorem KSBound_fails (H : Msg → Msg) : ¬ KSBound H (ksRAt Coin) (ksB Coin) (Flock.ksD Coin) := by
   intro h
   have h1 := h (fun _ => [()]) (Flock.listWithin_unit _ _ _) (fun _ => [()]) (Flock.listWithin_unit _ _ _) []
     Unit silentP
   try beta_reduce at h1
-  rw [ksR_prBad H _ _ [] (ksR_noR _ []), ksR_prB, ksR_prBe, ksR_κ] at h1
+  rw [ksRAt_record, ksRV_prBad H _ _ _ [] (ksRV_noR _ _ []), ksRV_prB, ksRV_prBe, ksRV_κ] at h1
   have := Flock.ksD_κ (Coin := Coin) []
   simp only [mul_zero, Real.sqrt_zero, add_zero] at h1
   change 1 ≤ Claims.Flock.κ (Flock.ksD Coin) [] at h1
   linarith
 
-/-- **The recursion's private `KS` at the representation V\* binds fails** at `ksR` (at every inner verifier), `ksB`
-inside and `Flock.ksD` outside. -/
-theorem KSPrivBound_fails (H : Msg → Msg) : ¬ KSPrivBound H (fun _ => ksR Coin) (ksB Coin) (Flock.ksD Coin) := by
+/-- **The recursion's private `KS` at the representation V\* binds fails** at `ksRAt`, `ksB` inside and `Flock.ksD`
+outside. -/
+theorem KSPrivBound_fails (H : Msg → Msg) : ¬ KSPrivBound H (ksRAt Coin) (ksB Coin) (Flock.ksD Coin) := by
   intro h
   have h1 := h (fun _ => [()]) (Flock.listWithin_unit _ _ _) (fun _ => [()]) (Flock.listWithin_unit _ _ _) []
     Unit silentP
   try beta_reduce at h1
-  rw [ksR_prBad H _ _ [] (ksR_noRPriv _ []), ksR_prB, ksR_prBe, ksR_κ] at h1
+  rw [ksRAt_record, ksRV_prBad H _ _ _ [] (ksRV_noRPriv _ _ []), ksRV_prB, ksRV_prBe, ksRV_κ] at h1
   have := Flock.ksD_κ (Coin := Coin) []
   simp only [mul_zero, Real.sqrt_zero, add_zero] at h1
   change 1 ≤ Claims.Flock.κ (Flock.ksD Coin) [] at h1

@@ -690,11 +690,12 @@ key, its last message their openings with the element-level last message. `KSBou
 `Bridge` the inner claim it rests on, from Flock's KS at `DE`.
 
 **Where it is stated.** `KS` reads acceptance off the compiled record's inner view (`Deploy.innerView`, through `dec`)
-and reads the inner record's verifier only for its rounds. So `KSBound` takes the compiled record as a function of the
-inner verifier its inner view runs, and applies it at `IVStar`: the record's inner view then runs `IVStar`. At the
-deployment that function is `deployRec · ivScope b`, with the readers at V*'s bound layout and `DE` the deployed plain
-record at plain leaves with only its verifier's steps, its columns and its weight replaced (`RecDeploy.KSBoundDeployed`,
-in `Proofs/`, as the deployed record is).
+and reads the inner record's verifier only for its rounds. So `KSBound` takes the compiled record at each inner
+verifier, its inner view running that verifier (`RecAt`), and applies it at `IVStar`: the record's inner view then runs
+`IVStar`. A compiled record that ignores the inner verifier it is given is no `RecAt`: there `KS` would read an
+accept-all verifier's acceptance. At the deployment it is `deployRec · ivScope b`, with the readers at V*'s bound layout
+and `DE` the deployed plain record at plain leaves with only its verifier's steps, its columns and its weight replaced
+(`RecDeploy.KSBoundDeployed`, in `Proofs/`, as the deployed record is).
 
 **What binds each message of an inner view to the run**, in V*'s setup:
 
@@ -844,18 +845,28 @@ freezes. -/
 def Bound.WeightCovers (Bd : Bound Coin Col T) : Prop :=
   ∀ x, Real.sqrt (Bd.DE.weight x) + Real.sqrt (2 * Bd.nOpen x) ≤ Real.sqrt (Bd.weight x)
 
-/-- **(P4) The last message is bound by the rounds before it.** Take two decisions `IVStar` accepts at one statement,
-on messages and coins that agree before the last round, with different last messages. They show a SHA-512 collision
-among `IVStar`'s calls in the two decisions. Two things bind: `IVStar`'s openings bind its commit strings (`Binds`), and
-`DE`'s last message is the openings at the query positions, which its earlier coins fix, under caps its earlier rounds
-committed (Flock's Merkle binding at plain leaves).
+/-- **(P4) The last message, as `final` reads it, is bound by the rounds before it.** Take two decisions `IVStar` accepts
+at one statement, on messages and coins that agree before the last round, whose last messages `final` reads
+differently. They show a SHA-512 collision among `IVStar`'s calls in the two decisions.
+
+It is stated modulo `final` because everything the extractor reads of the last message goes through `final`: `IVStar`'s
+decision and its calls, and the opened view whose columns `Bound.deploy` takes (`Bound.ivstar_congr_final`,
+`Bound.openView_congr_final`). Two last messages `final` reads alike are one view to `E*`, and asking a collision of
+them would make (P4) false at every record whose `final` tolerates a difference, such as trailing bytes.
+
+Where the two readings' openings differ, the collision is `Binds`': the commit strings are shared, so a different salt
+collides on the salt hashes and a different row, at one salt, on the row digests. Where the openings agree and only
+`DE`'s last message differs, it binds only where `DE`'s verifier binds its last message to the caps its earlier rounds
+committed (Flock's Merkle binding at plain leaves). At the deployment those steps are the code side's (`nextE`), so
+(P4) is a premise of the bound record, not a consequence of `Binds`.
 
 The recursion's KS reads this, not the bridge. `E*`'s inner views read the last message off the outer witnesses, and
 those differ across `E*`'s reruns. -/
 def Bound.LastBinds (H : Msg → Msg) (Bd : Bound Coin Col T) : Prop :=
   ∀ (x : Msg) (as as' : List Msg) (cs cs' : List Coin), as.length = Bd.DE.V.k x → as'.length = as.length →
     cs.length = as.length → cs'.length = as.length → as.dropLast = as'.dropLast → cs.dropLast = cs'.dropLast →
-    as ≠ as' → ((Bd.IVStar.next x as cs).eval H).1 = .acc → ((Bd.IVStar.next x as' cs').eval H).1 = .acc →
+    Bd.final (as.getLastD []) ≠ Bd.final (as'.getLastD []) →
+    ((Bd.IVStar.next x as cs).eval H).1 = .acc → ((Bd.IVStar.next x as' cs').eval H).1 = .acc →
     ∃ q ∈ (((Bd.IVStar.next x as cs).eval H).2 ++ ((Bd.IVStar.next x as' cs').eval H).2).map Prod.fst,
       ∃ q' ∈ (((Bd.IVStar.next x as cs).eval H).2 ++ ((Bd.IVStar.next x as' cs').eval H).2).map Prod.fst,
         Collision H q q'
@@ -892,23 +903,36 @@ def Bridge [Zero Col] (H : Msg → Msg) (Bd : Bound Coin Col T) : Prop :=
 
 variable {Col' T' : Type} [DecidableEq Col']
 
+/-- **The compiled record at each inner verifier, its inner view running it** (`KSBound`'s compiled record): `record IV`
+is a compiled record whose inner view (`Deploy.innerView`) is `IV`'s run, at the claim's oracle and the run's first
+coins, of the inner messages the outer witnesses give (`msgs`) at the inner statement (`xI`). So `KSBound` reads
+`IVStar`'s acceptance. A compiled record that ignores the inner verifier it is given is none: there `KS` would read an
+accept-all verifier's acceptance (`KSFlock` with the inner record's verifier replaced by an accept-all one). At the
+deployment `record` is `deployRec · ivScope b` at V*'s bound layout (`RecDeploy.recBoundAt`). -/
+structure RecAt (Coin : Type) [Inhabited Coin] where
+  record : Verifier Coin → Deploy Coin
+  msgs : Msg → List Flock.Wit → List Msg
+  xI : Msg → Msg
+  runs : ∀ (IV : Verifier Coin) (H : Msg → Msg) (x : Msg) (r : Fin ((record IV).V.k x) → Coin) (ws : List Flock.Wit),
+    (record IV).innerView H x r ws = (run H (replay (msgs x ws)) IV (xI x) () fun i => coinSeq r i.val).seen
+
 /-- **The recursion: KS at the representation V\* binds** (option (d)): `KS` at the compiled record whose inner view runs
-`IVStar` (`D Bd.IVStar`, where `D` builds the compiled record from the inner verifier its inner view runs), over the
-bound record (`Bound.deploy`), at every inner and outer decoder that meets the spec. `E*`'s inner views are what the
-compiled verifier reads off the outer witnesses (`Deploy.innerView`): at each round before the last, the inner
-session's commit strings, and at the last, their openings with `DE`'s last message. `IVStar` is the verifier that
-accepts them, and `KS` reads its acceptance there. At the deployment `D` is `deployRec · ivScope b`
-(`RecDeploy.KSBoundDeployed`). `KSFlock` at the deployed framed Flock is false at the deployed record (counterexample
-B: an honest view's held rounds are free-element rows, never its framed bytes). -/
-def KSBound [Zero Col] [Zero Col'] (H : Msg → Msg) (D : Verifier Coin → Deploy Coin) (Bd : Bound Coin Col T)
+`IVStar` (`D.record Bd.IVStar`), over the bound record (`Bound.deploy`), at every inner and outer decoder that meets the
+spec. `E*`'s inner views are what the compiled verifier reads off the outer witnesses (`Deploy.innerView`): at each
+round before the last, the inner session's commit strings, and at the last, their openings with `DE`'s last message.
+`IVStar` is the verifier that accepts them, and `KS` reads its acceptance there (`RecAt.runs`). At the deployment `D` is
+`deployRec · ivScope b` at V*'s bound layout and the guarantee is `RecDeploy.KSBoundDeployed`, in its ∀-form
+`RecDeploy.KSBoundRoute`. `KSFlock` at the deployed framed Flock is false at the deployed record (counterexample B: an
+honest view's held rounds are free-element rows, never its framed bytes). -/
+def KSBound [Zero Col] [Zero Col'] (H : Msg → Msg) (D : RecAt Coin) (Bd : Bound Coin Col T)
     (DO : Flock.Deploy Coin Col' T') : Prop :=
-  KSFlock H (D Bd.IVStar) Bd.deploy DO
+  KSFlock H (D.record Bd.IVStar) Bd.deploy DO
 
 /-- **The private variant: KS at the representation V\* binds**, at the compiled record whose inner view runs `IVStar`,
 over the bound record, at every inner and outer decoder that meets the spec. -/
-def KSPrivBound [Zero Col] [Zero Col'] (H : Msg → Msg) (D : Verifier Coin → Deploy Coin) (Bd : Bound Coin Col T)
+def KSPrivBound [Zero Col] [Zero Col'] (H : Msg → Msg) (D : RecAt Coin) (Bd : Bound Coin Col T)
     (DO : Flock.Deploy Coin Col' T') : Prop :=
-  ∀ decI, decOK Bd.DE decI → KSPriv H (D Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO
+  ∀ decI, decOK Bd.DE decI → KSPriv H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO
 
 end Bound
 
