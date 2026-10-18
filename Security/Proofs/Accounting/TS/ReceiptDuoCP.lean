@@ -57,10 +57,8 @@ theorem state_succ {Ω U : Type} {n S W C H : ℕ} (D : DuoCPUnits Ω U n S W C 
     (w : ℕ → CPPlace W C H → BitVec n) (s : ℕ) (ℓ : Fin W) (c : Fin C) :
     D.state ω u w (s + 1) ℓ c =
       duoRun (fun j => D.k ω u s (ℓ, c, j)) (fun j => (D.a ω u s (ℓ, c, j)).1) (fun j => D.r ω u s (ℓ, c, j))
-        (fun j => w s (ℓ, c, j)) (D.state ω u w s ℓ c) := by
-  first
-  | rfl
-  | simp only [DuoCPUnits.state]
+        (fun j => w s (ℓ, c, j)) (D.state ω u w s ℓ c) :=
+  rfl
 
 /-- The chains' states at segment `s` read only the words of the segments before it. -/
 theorem state_congr {Ω U : Type} {n S W C H : ℕ} (D : DuoCPUnits Ω U n S W C H) (ω : Ω) (u : U)
@@ -145,7 +143,7 @@ theorem fx1_right_of_same {Ω U : Type} {n S W C H : ℕ} (D : Fx1CPUnits Ω U n
     by_cases hq : q = D.pos ω u t
     · subst hq
       simp only [Function.update_self]
-    · simp only [Function.update_of_ne hq]
+    · simp only [Function.update_of_ne hq, Fx1CPUnits.imad]
   have e := right_of_checkpoints D.toDuoCPUnits ω u (D.imad ω u (D.word ω u)) (D.imad ω u (D.honest ω u))
     (D.pos ω u) (fun t => D.value ω u t * (D.m ω u t (D.pos ω u t)).1) hw (h u) s hs
   exact mul_odd_injective (D.m ω u s (D.pos ω u s)) (a₁ := D.value ω u s) (a₂ := D.honest ω u s (D.pos ω u s)) e
