@@ -45,6 +45,7 @@ import Proofs.Flock.Claims.Complete.Zk.MaskRank
 import Proofs.Flock.Claims.Complete.Zk.Layout
 import Proofs.Flock.Claims.Complete.Zk.RankBridge
 import Proofs.Flock.Claims.Complete.Zk.RankDual
+import Proofs.Flock.Claims.Complete.Zk.RankPrimal
 import Proofs.Flock.Claims.Complete.Zk.Complete
 
 /-! Flock's completeness at the deployed masked (`--zk`) verifier at one table (`ZkTables` lifts it to any number, at
@@ -96,6 +97,6 @@ slot's size (`maskWords_ge`: an in-scope masked table has at least `1024` words)
 refusal needs (`DeployedRankBound`, open; at the verifier's coins `MaskRankBound`, a premise of `complete_zk`); `Layout`
 the layout every table of a masked session in scope has (`layoutOk_of_scope`); `RankBridge` `MaskRankBound` from
 `DeployedRankBound` and the small slots' `SmallSlotBound`, open (`maskRankBound_of`); `RankDual` the bound's dual
-side, the deficient coins summed over the killing functionals' supports (`card_deficient_le`); `Complete` assembles
-them into `complete_zk`, from those premises and the goals not yet proved, and `complete_zk_relation` at the deployed
-relation. -/
+side, the deficient coins summed over the killing functionals' supports (`card_deficient_le`); `RankPrimal` its primal
+side, the spans' sizes step by step (`sum_env_le`, `chain`); `Complete` assembles them into `complete_zk`, from
+those premises and the goals not yet proved, and `complete_zk_relation` at the deployed relation. -/
