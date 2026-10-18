@@ -319,6 +319,12 @@ def by_member(got: dict[str, Any], ports: dict[str, str]) -> dict[str, Any]:
     return out | {p: v for p, v in got.items() if p not in ports and p not in out}
 
 
+def plane_ports(d: dict) -> dict[str, str]:
+    """A MoE plane row's output port j -> its j-th plane member (in_quant: 0 -> in_q, 1 -> in_scale): `_describe_plane` lists the
+    members in the relation's return order.  {} for any other row."""
+    return {str(j): m[0] for j, m in enumerate(d["members"])} if d.get("plane_kind") else {}
+
+
 def _replay_vu(pi: ProgramIndex, store: CommittedStore, weights: Callable[[str, int, int], np.ndarray | None], vu: dict, arrive: int,
                rec: dict[str, Any]) -> dict[str, Any]:
     r = pi.by_i[vu["i"]]
@@ -338,7 +344,7 @@ def _replay_vu(pi: ProgramIndex, store: CommittedStore, weights: Callable[[str, 
         rec["why"] = f"evaluator error: {e!r}"[:300]
         return rec | {"result": None}
     if len(got) > 1:
-        got = by_member(got, pi.member_of_port(vu["i"]))
+        got = by_member(got, pi.member_of_port(vu["i"]) or plane_ports(d))
     if d.get("plane") and d["plane"] not in got and len(got) == 1:
         got = {d["plane"]: next(iter(got.values()))}                             # [MAN-06f v3] a dense relation's `out` IS this row's plane (act = SiluMul out)
         rec["plane"] = d["plane"]
