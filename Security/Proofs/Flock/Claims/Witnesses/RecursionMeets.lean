@@ -21,7 +21,7 @@ read:
 * `KSFlock_meets_trim`, `Inner.KS_meets_trim`, `Inner.KSAbort_meets_trim`: the same at the trimmed records
   (`FlockDeploy.deployPlainTrim`, `FlockDeploy.deployZkTrim`, `FlockDeploy.listWithin_plainTrim`,
   `FlockDeploy.listWithin_zkTrim`), where the recursion's KS theorems sit;
-* `ZK_meets`, `ZKPriv_meets`: the deployed outer record is masked;
+* `ZK_meets`, `ZKPriv_meets`, `ZKStop_meets`, `ZKPrivStop_meets`: the deployed outer record is masked;
 * `ScopeMatches_meets`: the deployed inner Flock's readable scope is its scope check (`FlockDeploy.scopeMatches_plain`),
   which `Flock.RecScope.scopeMatches_deployed` reads;
 * `Complete_meets`, `Nontrivial_meets`: the readable scope holds a statement of each kind the compiled verifier accepts,
@@ -149,6 +149,16 @@ theorem ZK_meets (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.R
 
 /-- `ZKPriv`'s checkable antecedent at the deployment: the deployed outer record is masked. -/
 theorem ZKPriv_meets (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) :
+    (FlockDeploy.deployZk rel).zk = true :=
+  rfl
+
+/-- `ZKStop`'s checkable antecedent at the deployment: the deployed outer record is masked. -/
+theorem ZKStop_meets (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) :
+    (FlockDeploy.deployZk rel).zk = true :=
+  rfl
+
+/-- `ZKPrivStop`'s checkable antecedent at the deployment: the deployed outer record is masked. -/
+theorem ZKPrivStop_meets (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) :
     (FlockDeploy.deployZk rel).zk = true :=
   rfl
 

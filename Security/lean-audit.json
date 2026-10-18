@@ -530,6 +530,14 @@
     "fails": "Claims.Witness.Recursion.ZKPriv_fails",
     "meets": ["Claims.Witness.Recursion.ZKPriv_meets"]
    },
+   "Claims.Recursion.ZKPrivStop": {
+    "fails": "Claims.Witness.Recursion.ZKPrivStop_fails",
+    "meets": ["Claims.Witness.Recursion.ZKPrivStop_meets"]
+   },
+   "Claims.Recursion.ZKStop": {
+    "fails": "Claims.Witness.Recursion.ZKStop_fails",
+    "meets": ["Claims.Witness.Recursion.ZKStop_meets"]
+   },
    "Claims.Sampling.Binding": {
     "fails": "Claims.Sampling.Binding_fails",
     "meets": ["Claims.Sampling.Binding_meets", "Claims.Sampling.Binding_meets_one"]
@@ -2545,6 +2553,12 @@
    "assumptions": [],
    "type_hash": "28802eaa97b3fac8feb7b1807cb67fc8e9da0c3319193ecc96e51d75fb36e780"
   },
+  "Claims.Witness.Recursion.ZKPrivStop_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.ZKPrivStop_meets": {
+   "owner": "@proofs"
+  },
   "Claims.Witness.Recursion.ZKPriv_fails": {
    "owner": "@proofs",
    "signature": [
@@ -2565,6 +2579,12 @@
    ],
    "assumptions": [],
    "type_hash": "c9aee9249a386b4232cc2e4430bafa74c02dd818197685ebfd898a3ef2d4c60e"
+  },
+  "Claims.Witness.Recursion.ZKStop_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.ZKStop_meets": {
+   "owner": "@proofs"
   },
   "Claims.Witness.Recursion.ZK_fails": {
    "owner": "@proofs",

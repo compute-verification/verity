@@ -25,7 +25,9 @@ Each of the recursion's claims (`Definitions.Claims.Recursion`) fails at a toy r
   under an inner protocol of no rounds (`zeroI`), with no staging rounds and no V* session, so `Sim` outputs the empty
   transcript; its reference prover, `ksR`'s `silentP`, is the quiet prover on the masked record's one nonce and one
   rest. `ZK_fails`, `ZKPriv_fails`: at a masked outer Flock, every record's outer simulators and every hiding level
-  (all masks hide up to `δ₁ = 1`), that prover's one message is never simulated, at an error of `0`.
+  (all masks hide up to `δ₁ = 1`), that prover's one message is never simulated, at an error of `0`. `zkSR` and
+  `zkSPR` are those records with a stop that never fires, where `SimStop` runs as `Sim` does: `ZKStop_fails`,
+  `ZKPrivStop_fails`, as `ZK` and `ZKPriv` fail.
 * `Inner.KS_fails`, `Inner.KSAbort_fails`: at `noI`, an inner protocol that accepts and whose relation is empty, with
   no abort.
 
@@ -151,6 +153,14 @@ def zvZR (Coin : Type) (circ : Option Msg) (SO : ℕ → Msg → ℕ → OSim) :
     Rest := fun _ => Unit
     tapeOf := fun _ ω => ω
     SO := SO }
+
+/-- `zkZR` with a stop that never fires. -/
+def zkSR (Coin : Type) (SO : ℕ → Msg → ℕ → OSim) : Recursion.StopDeploy Coin :=
+  { zkZR Coin SO with stops := fun _ _ => false }
+
+/-- `zkZPR` with a stop that never fires. -/
+def zkSPR (Coin : Type) (SO : ℕ → Msg → ℕ → OSim) : Recursion.StopDeploy Coin :=
+  { zkZPR Coin SO with stops := fun _ _ => false }
 
 theorem recStmt_inScope : Recursion.InScope recStmt :=
   ⟨rfl, le_rfl, by decide, le_rfl, rfl, Or.inl ⟨rfl, rfl⟩, fun _ h => absurd h List.not_mem_nil⟩
@@ -430,6 +440,18 @@ theorem sim_out_nil (D : Recursion.Deploy Coin) (hk : D.kS [] = 0) (hn : D.nS []
   rw [simOuter_zero SO [] _ [] _ c.2.2 hn]
   rfl
 
+/-- `SimStop` outputs the empty transcript wherever the inner protocol, the staging and the V* sessions take no round
+and the stop doesn't fire at the start. -/
+theorem simStop_out_nil {W : Type} (D : Recursion.StopDeploy Coin) (I : Recursion.Inner Coin W)
+    (hI : I.V.k (xI D.toDeploy []) = 0) (hk : D.kS [] = 0) (hn : D.nS [] = 0) (hs : ∀ as, D.stops [] as = false)
+    (SO : Msg → ℕ → OSim) {Θ : Type} (H : Msg → Msg) (Vs : VStar Θ) (θ : Θ) (c : (SimStop D I SO).C []) :
+    (SimStop D I SO).out H Vs θ [] c = [] := by
+  have hh : D.halted 0 [] [] = false := by simp [StopDeploy.halted, hs]
+  unfold Simulator.out SimStop
+  simp only [simStage, simRounds, spBind, hI, hk, hh, Bool.false_eq_true, ↓reduceIte]
+  rw [simOuter_zero SO [] _ [] _ c.2.2 hn]
+  rfl
+
 theorem zk_εzk (D : Recursion.Deploy Coin) (hk : D.kS [] = 0) (hn : D.nS [] = 0) (t : ℕ) (δ₁ : ℝ) :
     Recursion.εzk D (zeroI Coin) t δ₁ [] = 0 := by
   have : IsEmpty (Fin (D.nS [])) := by rw [hn]; exact Fin.isEmpty'
@@ -599,6 +621,30 @@ theorem ZKPriv_fails (H : Msg → Msg) (SO : ℕ → Msg → ℕ → OSim) :
     Nat.one_pos
     (by rw [zk_εzk _ rfl rfl]; norm_num) (fun c => by rw [sim_out_nil _ rfl rfl]; nofun)
     ((ZKMal.zkmalRx_const_of H _ (zkZPR Coin SO).prover [] (fun _ _ => rfl) _ _ _ _).1
+      (h.2 1 Nat.one_pos 1 (hm96Hiding_one _ _)))
+
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
+/-- **The recursion's `ZK` with the prover's stop fails** at a masked outer Flock, at `zkSR`, whose stop never fires,
+at every record's outer simulators, whatever hm96 hides, as `ZK` does at `zkZR`. -/
+theorem ZKStop_fails (H : Msg → Msg) (SO : ℕ → Msg → ℕ → OSim) :
+    ¬ ZKStop H (zkSR Coin SO) (zeroI Coin) (zkO Coin) := fun h =>
+  ZKMal.not_zkmalR_of_out (N := Unit) (Ω := Unit) H _ _ [] _ _ _ [] ⟨[]⟩ ⟨recStmt, rfl, rfl, trivial⟩ Nat.one_pos
+    (by rw [zk_εzk _ rfl rfl]; norm_num)
+    (fun c => by rw [simStop_out_nil (zkSR Coin SO) (zeroI Coin) rfl rfl rfl fun _ => rfl]; nofun)
+    ((ZKMal.zkmalRx_const_of H _ (zkSR Coin SO).prover [] (fun _ _ => rfl) _ _ _ _).1
+      (h.2 1 Nat.one_pos 1 (hm96Hiding_one _ _)))
+
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
+/-- **The recursion's private `ZK` with the prover's stop fails** at a masked outer Flock, at `zkSPR`, whose stop
+never fires, as `ZKStop` does. -/
+theorem ZKPrivStop_fails (H : Msg → Msg) (SO : ℕ → Msg → ℕ → OSim) :
+    ¬ ZKPrivStop H (zkSPR Coin SO) (zeroI Coin) (zkO Coin) := fun h =>
+  ZKMal.not_zkmalR_of_out (N := Unit) (Ω := Unit) H _ _ [] _ _ _ [] ⟨[]⟩
+    ⟨{ recStmt with circ := some [] }, rfl, rfl, trivial⟩
+    Nat.one_pos
+    (by rw [zk_εzk _ rfl rfl]; norm_num)
+    (fun c => by rw [simStop_out_nil (zkSPR Coin SO) (zeroI Coin) rfl rfl rfl fun _ => rfl]; nofun)
+    ((ZKMal.zkmalRx_const_of H _ (zkSPR Coin SO).prover [] (fun _ _ => rfl) _ _ _ _).1
       (h.2 1 Nat.one_pos 1 (hm96Hiding_one _ _)))
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
