@@ -51,9 +51,9 @@ sent, never dropped at a boundary, since a coin no root follows rejects the sess
 went out sends nothing, and the next pass sends its appends and changes too.
 
 Every root's message names the step its pass covers (`Session.receive(..., step=...)`, PROTOCOL.md §8 "The pass and
-its step"): the backend's `step_of(ticket)` if it has one, which a serving backend takes from its engine, and otherwise
-the count of the session's passes launched before it. A serving trace's step before pass n is recorded as step n − 1,
-so pass n reads the store that step left.
+its step"): with serving ahead, the step the pass took; otherwise the backend's `step_of(ticket)` if it has one, which
+a serving backend takes from its engine, and else the count of the session's passes launched before it. A serving
+trace's step before pass n is recorded as step n − 1, so pass n reads the store that step left.
 
     python prover.py --connect HOST:PORT --out OUT --plan honest,skip:3e-5 [device options, `device.py`]
     python prover.py --connect HOST:PORT --out OUT --plan kv:4,kvdrop:4 --cpu 256 --codec p512/k2
@@ -691,22 +691,20 @@ class ProverSide:
                 return _Pass(t, i, ticket, start, step=step_of(ticket) if step_of is not None else n)
             if ahead is not None:
                 n = trace.take(t)
-                if mode == "kvdrop":
-                    backend.arm(trace.appended)
             elif mode in ("serve", "servedrop"):
                 trace.advance(t)
-                if mode == "servedrop":
-                    backend.arm(trace.appended[:int(fraction)])
             else:
                 due = n > 0 and n % self.kv_every == 0
                 if due or (n > 0 and trace.stale(t)):
                     trace.step(n - 1, t, due)
-                    if mode == "kvdrop":
-                        backend.arm(trace.appended)
+            if mode == "kvdrop":
+                backend.arm(trace.appended)
+            elif mode == "servedrop":
+                backend.arm(trace.appended[:int(fraction)])
             plan = trace.plan()
             ticket = backend.launch(i, after, plan)
             return _Pass(t, i, ticket, clock() if ahead is not None else start,
-                         step=step_of(ticket) if step_of is not None else n, plan=plan,
+                         step=step_of(ticket) if step_of is not None and ahead is None else n, plan=plan,
                          upto=(len(trace.appends), len(trace.released)))
 
         backend.begin_window(take(wire.coin_of(head["coin"])), self.registration.digest)
