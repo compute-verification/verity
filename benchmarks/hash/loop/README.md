@@ -40,6 +40,8 @@ arm's measures, each measurement naming its `arm` (stock, sha512, blake3, sha512
   copied: the timed runs replay its requests and hit its plans, so only that run takes the learning path every live step takes.
 - `overlap.py`: from a run's `served.nsys-rep`, each of the model's kernels (and the gather) timed alone and beside the hash
   kernels: the contention, kernel by kernel.
+- `kernels.py`: from a run's `served.nsys-rep`, one arm's commit kernels in one phase: launches a step, mean time, grid, stream, and
+  when each starts against the step's model kernels, with the GPU's idle time between them.
 - `label.py`: the labels, idempotent; rerun it on runs whose launching VM stopped waiting.
 - `plot.py`: iteration against each measure, one line per (GPU, workload:arm), from the evidence store only
   (`research data select --label campaign=hash-loop --kind bench-result/v1`, after `research data refresh`, since each run
