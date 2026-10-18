@@ -183,8 +183,9 @@ def test_a_pr_whose_new_head_came_while_the_check_that_blames_it_ran_is_not_ejec
     _record(world, monkeypatch, members[1].commit, False)
     h.tick()
     assert _ejected(h).get("2", {}).get("head") != fixed, h.posts
+    assert len(h.posts) == 1 and f"#2 was pushed to {fixed[:8]}" in h.posts[0], h.posts
     h.tick()
-    assert [(m.pr, m.head) for m in h.q.chain()][0] == (2, fixed)
+    assert (2, fixed) in [(m.pr, m.head) for m in h.q.chain()], ([(m.pr, m.head[:8]) for m in h.q.chain()], fixed[:8], h.posts)
 
 
 @pytest.mark.parametrize("pr", [1, 4])

@@ -725,6 +725,12 @@ class Driver:
             self._prs = {p.number: p for p in self.q.github.open_prs()}
         return self.q.handle(self._prs[pr]) if pr in self._prs else None
 
+    def _head(self, pr: int) -> str | None:
+        """Open PR ``pr``'s head now, None when it isn't open."""
+        if self._prs is None:
+            self._prs = {p.number: p for p in self.q.github.open_prs()}
+        return self._prs[pr].head if pr in self._prs else None
+
     def culprit(self, members: list[Member], v: Verdict) -> tuple[list[Member], str]:
         """The members of a failed train whose own change (its merge commit against the one below) touches a file the failure
         points at (`implicated`), and what it points at.  With none, what the failure says: `KILLED` for a kill that names no
@@ -854,9 +860,16 @@ class Driver:
                                 "the next sync rebuilds without it")
 
     def _eject(self, drive: dict, key: str, head: str, m: Member, prs: str, v: Verdict, xs: list[Member], because: str) -> None:
-        """Eject ``xs`` from ``m``'s failed train, and tell `CI` and their owners why (``because``)."""
-        ejected, why = [], because
+        """Eject ``xs`` from ``m``'s failed train, and tell `CI` and their owners why (``because``).  A PR pushed since the head
+        its member merged is not ejected: `eject` marks the PR's current head, often the owner's fix, and a running check kept
+        the old one on `next` (`queue.frozen`); the next sync checks the new head in its place."""
+        ejected, why, pushed = [], because, []
         for x in xs:
+            if (now := self._head(x.pr)) not in (None, x.head):
+                pushed.append(f"#{x.pr} was pushed to {now[:8]} since {x.head[:8]}, the head that failed: that head isn't "
+                              "ejected, and the next sync checks it in its place")
+                self.q.log(f"research queue drive: not ejecting #{x.pr}: {pushed[-1]}")
+                continue
             reason = f"train {m.commit[:12]} ({prs}), check {v.attempt}: #{x.pr}: {because}"
             if self.q.shadow or self.dry_run:
                 self.q.log(f"research queue drive: would eject #{x.pr}: {reason}")
@@ -866,13 +879,17 @@ class Driver:
                 ejected.append(x)
             except QueueError as e:
                 why = f"{because}; ejecting #{x.pr} failed: {e}"
+        also = "".join(f". {p}" for p in pushed)
         if ejected:
             names, one = " ".join(f"#{x.pr}" for x in ejected), len(ejected) == 1
             self.refuse(drive, key, f"{head}. Ejected {names}: {because}; the next sync rebuilds without "
-                                    f"{'it' if one else 'them'}. Fix and re-mark", *(self._handle(x.pr) for x in ejected))
+                                    f"{'it' if one else 'them'}. Fix and re-mark{also}", *(self._handle(x.pr) for x in xs))
+            return
+        if pushed and why == because:
+            self.refuse(drive, key, f"{head}. The cause: {because}{also}", *(self._handle(x.pr) for x in xs))
             return
         self.refuse(drive, key, f"{head}. Not ejected: {why}. Eject the PR that broke it (`research queue eject N --reason ...`); "
-                                "the next sync rebuilds without it", *(self._handle(x.pr) for x in xs))
+                                f"the next sync rebuilds without it{also}", *(self._handle(x.pr) for x in xs))
 
     def bisect(self, drive: dict, m: Member, members: list[Member], passed: int, lower: dict[int, str], what: str,
                fails: list[str]) -> None:
