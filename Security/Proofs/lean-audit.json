@@ -183,7 +183,7 @@
     "ack": ["CollisionResistance.romCRAdvantage_le_birthday"]
    },
    "A3-uniform-bytes": {
-    "about": "A3 (UniformRandomBytes, uniform/io-getrandombytes): the operating system's bytes, which the live draw reads through IO.getRandomBytes, are independent and uniform",
+    "about": "A3 (UniformRandomBytes, and per test UniformRandomBytesTest, uniform/io-getrandombytes): the operating system's bytes, which the live draw and the firewall's frame and tap read through IO.getRandomBytes and the prover reads as salts through getrandom(2), are independent and uniform, per test up to eta; it rests on Linux's CRNG (drivers/char/random.c, 5.18 and later) and its reseed on a VM generation change (vmgenid), without which a restored snapshot reuses pads",
     "mentions": ["IO.getRandomBytes"],
     "ack": []
    },
