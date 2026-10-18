@@ -1649,15 +1649,18 @@ def test_moving_the_proofs_into_another_package_leaves_the_spec_record_as_it_was
         "a statement reading a proof package's definition fails: that package requires the spec, so it is no spec of it"
 
 
-def test_the_steps_reading_only_the_packages_own_facts_start_before_its_proved_in_reading(tmp_path, monkeypatch):
-    """A spec's `proved_in` reading (`proved`) takes minutes on Security, and the kernel replay, the dependency scans and
-    digests and the upstream scan read only the package's own facts, which `proved` returns unchanged beside its pins: each
-    starts before `proved`, is given the package's own facts, and its result is judged as before (a recorded dependency
-    digest that differs still fails)."""
+@pytest.mark.parametrize("spec", [True, False])
+def test_the_steps_reading_only_the_packages_own_facts_start_before_its_proved_in_reading(tmp_path, monkeypatch, spec):
+    """A spec's `proved_in` reading (`proved`) waits for its provers' builds and reads them, and the kernel replay, the
+    dependency scans and digests and the upstream scan read only the package's own facts, which `proved` returns unchanged
+    beside its pins: each starts before `proved`, is given the package's own facts, and its result is judged as before (a
+    recorded dependency digest that differs still fails). A package without `proved_in` has no wait to fill: its replay
+    starts after its facts and the rest run in turn, as their Python would contend with the audits on the critical path."""
     pkg = tmp_path / "spec"
     pkg.mkdir()
     (pkg / "lean-toolchain").write_text("leanprover/lean4:v0\n")
-    A.dump(pkg, {"roots": ["P"], "proved_in": ["../proofs"], "upstream": {"scan": {}}, "dependencies": {"mathlib": "d0"}})
+    A.dump(pkg, {"roots": ["P"], "upstream": {"scan": {}}, "dependencies": {"mathlib": "d0"}} |
+           ({"proved_in": ["../proofs"]} if spec else {}))
     own = {"lean": "v0", "modules": ["P"], "declarations": 1, "axioms": [], "escapes": [], "oleans": ["own.olean"],
            "pins": {}}
     order, given = [], {}
@@ -1691,7 +1694,7 @@ def test_the_steps_reading_only_the_packages_own_facts_start_before_its_proved_i
                         ("anonymous_instances", []), ("run_paths", []), ("listings", ([], {}, [])), ("regenerated", None)):
         monkeypatch.setattr(A, name, lambda *a, value=value, **k: value)
     rep = A.audit(pkg, tmp_path / "out", runs=False, log=lambda *_: None)
-    assert order == ["pinned", "replay_step", "dependency_scans", "dependency_digests", "proved"]
+    assert order == (["pinned", "replay_step", "dependency_scans", "dependency_digests", "proved"] if spec else ["replay_step"])
     assert given["replay_step"][2] is own and given["dependency_scans"][1] == own["oleans"] == given["dependency_digests"][2]
     assert rep["failures"][0] == "unchecked: a hit" and rep["failures"][1].startswith("dependencies: the .olean files of the")
     assert rep["dependency_sources"] == 7 and rep["upstream"] == {"x": 1} and rep["replay"] == {"checked": 1, "reused": 0}

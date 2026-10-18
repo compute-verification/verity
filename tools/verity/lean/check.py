@@ -2257,8 +2257,12 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     files = lean_modules(pkg)
     background = ThreadPoolExecutor(max_workers=5)
     ran = background.submit(timed, tests, pkg, policy, files, work, repo, update) if runs and policy.get("runs") and not lifts else None
+    # a spec's `proved` waits for its provers' builds; the replay, the dependency scans and digests and the upstream scan
+    # read only the package's own facts, which `proved` leaves as they are, so they fill that wait. Elsewhere they keep
+    # their place: started together, their Python contends for the GIL with the audits on the critical path.
+    early = "proved_in" in policy and not lifts
     upstream = background.submit(timed, sibling("upstream").pinned, pkg, policy["upstream"]) \
-        if "upstream" in policy and not lifts else None
+        if early and "upstream" in policy else None
     current = policy
     if moved:
         renames = {}
@@ -2270,8 +2274,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     replayed = scanned = digested = None
     try:
         facts = facts_of(pkg, current, work, moved)
-        # these read only the package's own facts, which `proved` leaves as they are, so they overlap its reading
-        if not lifts:
+        if early:
             replayed = background.submit(timed, replay_step, pkg, policy, facts, rep["toolchain"], work, replay_cache) \
                 if replay else None
             scanned = background.submit(timed, dependency_scans, pkg, facts["oleans"], policy)
@@ -2284,6 +2287,8 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
         background.shutdown(cancel_futures=True)
         return rep
     rep["seconds"]["audit"] = round(time.monotonic() - s, 1)
+    if replay and not lifts and not early:
+        replayed = background.submit(timed, replay_step, pkg, policy, facts, rep["toolchain"], work, replay_cache)
     if lifts:
         try:
             rep["moved"] = lift(pkg, current, facts, lifts)
@@ -2294,7 +2299,8 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     fails = cross + fails + dropped(pkg, files, facts) + spec_reads(current, facts, reads_home(pkg, current)) + \
         shape(current, facts)
     rep["unread_spec"] = unread_spec(facts, read_by_dependents(pkg, repo))
-    (missed, rep["dependency_sources"]), rep["seconds"]["dependency-sources"] = scanned.result()
+    (missed, rep["dependency_sources"]), rep["seconds"]["dependency-sources"] = \
+        scanned.result() if scanned else timed(dependency_scans, pkg, facts["oleans"], policy)
     fails = scans(pkg, files, policy) + missed + fails
     rep["heartbeats"] = heartbeats(pkg, files, build_seconds([work / "build.log", work / "build-roots.log"] if build else []))
     anonymous = anonymous_instances(pkg, files, facts)
@@ -2309,10 +2315,12 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
               f"type (and, when nothing in the type is the project's own, its project's root): a move or a split renames it, and "
               f"with it every record whose definitions use it. Write `instance {i['id']}` there (`check.py --name-instances` "
               f"writes each one)" for i in anonymous]
-    if upstream:
-        (rep["upstream"], missed), rep["seconds"]["upstream"] = upstream.result()
+    if "upstream" in policy:
+        (rep["upstream"], missed), rep["seconds"]["upstream"] = \
+            upstream.result() if upstream else timed(sibling("upstream").pinned, pkg, policy["upstream"])
         fails += missed
-    deps, rep["seconds"]["dependencies"] = digested.result()
+    deps, rep["seconds"]["dependencies"] = \
+        digested.result() if digested else timed(dependency_digests, pkg, rep["toolchain"], facts["oleans"])
     if update:
         new["dependencies"] = deps
     elif "dependencies" not in policy:
