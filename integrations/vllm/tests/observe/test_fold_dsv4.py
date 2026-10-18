@@ -11,7 +11,9 @@
 * the q norm / RoPE / window insert is the Build's `Dsv4QNormRopeKvInsert_v1` per token, its kv row's NoPE, scale bytes and RoPE
   written to the token's slot of the layer's KV group in fp8_ds_mla's block layout, one Compute per cache block;
 * save_partial_states moves each token's kv row to its compressor state slot and writes the Build's `Dsv4CompressorScore_v1{W}`
-  of its score row and ape[pos % R] beside it, per cache block, the indexer's compressor at its own width.
+  of its score row and ape[pos % R] beside it, per cache block, the indexer's compressor at its own width;
+* the o-projection input's inverse RoPE and FP8 quantisation is the Build's `Dsv4InvRopeQuantHead_v1` per token and head, into its
+  group's row and the wrapper's TMA-aligned scale layout, refused off the Definition's floor or that layout.
 """
 from __future__ import annotations
 
@@ -23,8 +25,8 @@ import importlib
 import pytest
 
 from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHeader, StepStart, TritonLaunch, ViewDesc
-from verity_vllm.observe.fold.patterns.dsv4 import (SAVE_STATES_KERNEL, SAVE_STATES_SRC_SHA, Mhc, QKvRmsNorm, QNormRopeKvInsert,
-                                                    SavePartialStates)
+from verity_vllm.observe.fold.patterns.dsv4 import (INV_ROPE_KERNEL, INV_ROPE_SRC_SHA, SAVE_STATES_KERNEL, SAVE_STATES_SRC_SHA, InvRopeQuant,
+                                                    Mhc, QKvRmsNorm, QNormRopeKvInsert, SavePartialStates)
 from verity_vllm.observe.fold.patterns.target import target_of_header
 from verity_vllm.observe.fold.resolver import Group, PerRow, Shared, StepContext, Unsupported, spec_label
 from verity_vllm.observe.fold.tree import build_trees
@@ -266,6 +268,46 @@ def test_save_partial_states_off_its_state_layout_or_kv_group_or_without_the_ape
     assert isinstance(SavePartialStates().match(_save_states(1, width=2048), _insert_ctx(1, [8], layer, (APE_ROOT,), bs=8)), Unsupported)
     assert isinstance(SavePartialStates().match(_save_states(1), _insert_ctx(1, [8], layer, (APE_ROOT,), bs=4)), Unsupported)
     assert isinstance(SavePartialStates().match(_save_states(1), _insert_ctx(1, [8], layer, (), bs=8)), Unsupported)
+
+
+INV_ROPE_STATICS = {"heads_per_group": 8, "quant_group_size": 128, "chunks_per_head": 4, "rope_start": 64, "half_rope": 32,
+                    "tma_aligned_scales": False, "fp8_max": 448.0, "n_groups": 2, "d": 4096, "scale_inner": 32}
+
+
+def _inv_rope(T, tma, scale_strides=None, eps=1e-10):
+    o, pos, cs = ViewDesc(990, 0, (T, 16, 512), (32768, 512, 1), "bfloat16", CUDA), view(POS, (T,), "int64"), CS_ROOT.view
+    fp8 = ViewDesc(991, 0, (2, T, 4096), (T * 4096, 4096, 1), "float8_e4m3fn", CUDA)
+    sc = ViewDesc(992, 0, (2, T, 32), scale_strides or (32 * tma, 1, tma), "float32", CUDA)
+    kw = {"o": o, "positions": pos, "cos_sin_cache": cs, **INV_ROPE_STATICS, "tma_aligned_T": tma, "num_tokens": T}
+    consts = {"heads_per_group": 8, "fp8_max": 448.0, "eps": eps, "QUANT_GROUP_SIZE": 128, "CHUNKS_PER_HEAD": 4, "ROPE_START": 64,
+              "HALF_ROPE": 32, "TMA_ALIGNED_SCALES": False, "USE_GDC": True, "launch_pdl": True}
+    args = {"o_ptr": o, "positions_ptr": pos, "cos_sin_cache_ptr": cs, "fp8_ptr": fp8, "scale_ptr": sc, "num_tokens": T, "o_stride_token": 32768,
+            "o_stride_head": 512, "cache_stride_pos": 64, "fp8_stride_group": T * 4096, "fp8_stride_token": 4096,
+            "scale_stride_group": sc.strides[0], "scale_stride_k": sc.strides[2], **consts}
+    ev = [DispatchEnter(1, None, 0, "forward", "vllm.fused_inv_rope_fp8_quant_kernel.default", "", [], kw, 7, "model.layers.0.attn"),
+          TritonLaunch(2, 1, 0, "forward", INV_ROPE_KERNEL, INV_ROPE_SRC_SHA, args, consts, [tma, 16], 1, 1, 7, "model.layers.0.attn"),
+          DispatchExit(1, [fp8, sc])]
+    return build_trees(ev)[0][0]
+
+
+@pytest.mark.parametrize("T, tma", [(3, 4), (256, 256)])
+def test_the_inverse_rope_quant_is_the_builds_head_call_per_token_into_its_group_row_and_tma_aligned_scales(T, tma):
+    g = InvRopeQuant().match(_inv_rope(T, tma), _insert_ctx(T, []))
+    assert [spec_label(c.spec) for c in g.parts] == ["Dsv4InvRopeQuantHead_v1{CHUNKS=4,QG=128,ROPE=64}"] * 16 and g.consumed == (1, 2)
+    assert all(c.rows == T and c.roots[1] == CS_ROOT.name for c in g.parts) and [c.consumed for c in g.parts[:2]] == [(1,), ()]
+    c = g.parts[9]
+    head, cs = c.operands
+    q, s = c.outputs
+    assert (head.view.offset, head.view.shape, head.view.strides) == (9 * 512, (T, 512), (32768, 1)) and cs.indices == tuple(range(T))
+    assert (q.view.offset, q.view.strides) == (T * 4096 + 512, (4096, 1))
+    assert (s.view.offset, s.view.shape, s.view.strides) == (32 * tma + 4 * tma, (T, 4), (1, tma))
+
+
+def test_an_inverse_rope_quant_off_the_definitions_floor_or_the_wrappers_scale_layout_or_without_the_rotary_root_is_refused():
+    assert isinstance(InvRopeQuant().match(_inv_rope(1, 4, eps=1e-6), _insert_ctx(1, [])), Unsupported)
+    assert isinstance(InvRopeQuant().match(_inv_rope(3, 4, scale_strides=(96, 1, 3)), _insert_ctx(3, [])), Unsupported), \
+        "a chunk stride under the aligned rows lets a padding program's zero land on a live scale"
+    assert isinstance(InvRopeQuant().match(_inv_rope(1, 4), _insert_ctx(1, [], roots=())), Unsupported)
 
 
 def test_a_split_buffer_other_than_the_dispatchs_or_a_weight_without_a_root_is_refused():

@@ -28,6 +28,7 @@ from verity_vllm.program.frontend.rules.vllm_bindings.pins import QKV_RMS_PINS
 from verity_vllm.program.frontend.rules.vllm_bindings.triton_launches import QKV_ARGS, TRITON_DIVISIBILITY, qkv_rms_launch
 from verity_vllm.program.frontend.rules.vllm_mhc import MHC_GEOMETRY, post_pre_path
 from verity_vllm.program.kernels.mhc_twin import tf32_num_split
+from verity_vllm.program.registry import dsv4_indexer as I
 from verity_vllm.program.registry import dsv4_qnorm_insert as Q
 from verity_vllm.program.registry.dsa_norm import check_block
 
@@ -35,6 +36,11 @@ LAYER = re.compile(r"model\.layers\.(\d+)")
 QNORM_INSERT_OP = "_C.fused_deepseek_v4_qnorm_rope_kv_rope_quant_insert"
 SAVE_STATES_KERNEL = "vllm.models.deepseek_v4.common.ops.save_partial_states._save_partial_states_kernel"
 SAVE_STATES_SRC_SHA = "11230c3682661cfe7eb4f04edc099b0e19fb3efba7ac4e0c5738bcc49d9d19e8"
+INV_ROPE_OP = "vllm.fused_inv_rope_fp8_quant_kernel"
+INV_ROPE_KERNEL = "vllm.models.deepseek_v4.common.ops.fused_inv_rope_fp8_quant._fused_inv_rope_fp8_quant_per_head"
+INV_ROPE_SRC_SHA = "25e6ced0c59d2464bfa83a706c99bfe09d5b00f31e1ab31a600797d0cc8cd5cc"
+#: Dsv4InvRopeQuantHead_v1's clamp and amax floor
+INV_ROPE_FP8_MAX, INV_ROPE_EPS = 448.0, 1e-10
 
 
 def _module(node: TreeNode) -> str:
@@ -380,9 +386,84 @@ class SavePartialStates:
         return Group(tuple(parts), tuple(sorted(node.ids())), hint=_module(node), pattern=self.name)
 
 
+@dataclass
+class InvRopeQuant:
+    """`vllm.fused_inv_rope_fp8_quant_kernel(o, positions, cos_sin, ...)`, the o-projection's input -> per token and head
+    `Dsv4InvRopeQuantHead_v1{CHUNKS,QG,ROPE}` of o[t, h] and cos_sin[positions[t]]: the Build's `Dsv4InvRopeQuantRule`, on cc 9.0
+    with f32 scales.  Head h = g * HPG + j writes its bytes at [g, t, j * HD : (j + 1) * HD] and its CHUNKS scales at
+    [g, t, j * CHUNKS : (j + 1) * CHUNKS], one Compute per head over the step's tokens.  The scale buffer is the wrapper's
+    [G, scale_inner, TMA-aligned T] read as [G, T, scale_inner]: the programs past T zero its alignment rows, which no view holds."""
+
+    name = "dsv4.inv_rope_fp8_quant"
+
+    def match(self, node: TreeNode, ctx: StepContext) -> Resolution | None:
+        if node.is_triton or base_op(node.op) != INV_ROPE_OP:
+            return None
+        if len(node.children) != 1 or not node.children[0].is_triton or node.children[0].enter.fn != INV_ROPE_KERNEL:
+            return unsupported(node, "the op launched other than its one per-head kernel", children=[c.op for c in node.children])
+        kid = node.children[0]
+        if kid.enter.src_sha != INV_ROPE_SRC_SHA or kid.enter.num_warps != 1:
+            return unsupported(node, "the kernel's source or warps differ from the pin", src_sha=kid.enter.src_sha, num_warps=kid.enter.num_warps)
+        a, ka, outs = bound_args(node), bound_args(kid), node.output_views()
+        sizes = ("heads_per_group", "quant_group_size", "chunks_per_head", "rope_start", "half_rope", "num_tokens", "n_groups", "d",
+                 "scale_inner", "tma_aligned_T")
+        o, pos_v, cs = (a.get(k) for k in ("o", "positions", "cos_sin_cache"))
+        if not all(isinstance(a.get(k), int) for k in sizes) or not isinstance(a.get("tma_aligned_scales"), bool) \
+                or as_float(a.get("fp8_max")) is None or not all(isinstance(v, ViewDesc) for v in (o, pos_v, cs, *outs)) or len(outs) != 2:
+            return unsupported(node, "the launch's sizes, tma_aligned_scales and fp8_max are not statics over (o, positions, cos_sin) "
+                               "into (bytes, scales)")
+        if target_of(ctx)[0].compute_capability != (9, 0) or a["tma_aligned_scales"] or as_float(a["fp8_max"]) != INV_ROPE_FP8_MAX:
+            return unsupported(node, "the Definition is the cc 9.0 PTX with f32 scales clamped to 448", tma_aligned_scales=a["tma_aligned_scales"],
+                               fp8_max=a["fp8_max"])
+        rows = tuple(ctx.start.rows)
+        T, G, HPG, CH, QG, ROPE, tma = (len(rows), a["n_groups"], a["heads_per_group"], a["chunks_per_head"], a["quant_group_size"],
+                                        2 * a["half_rope"], a["tma_aligned_T"])
+        HD, fp8, sc = CH * QG, *outs
+        if (a["num_tokens"], a["d"], a["scale_inner"], QG - a["rope_start"]) != (T, HPG * HD, HPG * CH, ROPE):
+            return unsupported(node, f"the launch is not {T} tokens of {HPG} heads a group, each {CH} groups of {QG} with a rotary suffix of {ROPE}",
+                               num_tokens=a["num_tokens"], d=a["d"], scale_inner=a["scale_inner"], rope_start=a["rope_start"])
+        pins = {"heads_per_group": HPG, "QUANT_GROUP_SIZE": QG, "CHUNKS_PER_HEAD": CH, "ROPE_START": a["rope_start"],
+                "HALF_ROPE": a["half_rope"], "TMA_ALIGNED_SCALES": False, "fp8_max": INV_ROPE_FP8_MAX, "eps": INV_ROPE_EPS}
+        if any(kid.enter.constexprs.get(k) != v for k, v in pins.items()) or kid.enter.grid != [tma, G * HPG] or tma < T:
+            return unsupported(node, "the kernel's constexprs or grid are not the launch's", constexprs=kid.enter.constexprs, grid=kid.enter.grid,
+                               tma_aligned_T=tma)
+        try:
+            I.check_head_statics(QG, ROPE)
+        except ValueError as e:
+            return unsupported(node, str(e))
+        if not (_is(o, (T, G * HPG, HD), "bfloat16") and _is(fp8, (G, T, HPG * HD), "float8_e4m3fn") and _is(sc, (G, T, HPG * CH), "float32")) \
+                or o.strides[2] != 1 or fp8.strides[2] != 1 or sc.strides != (HPG * CH * tma, 1, tma) \
+                or cs.dtype != "float32" or cs.rank != 2 or cs.shape[1] != ROPE or cs.strides[1] != 1:
+            return unsupported(node, "o, the bytes and the scales are not [T,G*HPG,HD] bf16, [G,T,d] e4m3 and the wrapper's [G,T,scale_inner] f32, "
+                               "or cos_sin not an f32 [., ROPE] table", o=repr(o), fp8=repr(fp8), scales=repr(sc), cs=repr(cs))
+        if (ka.get("o_ptr"), ka.get("cos_sin_cache_ptr"), ka.get("fp8_ptr"), ka.get("scale_ptr"), ka.get("num_tokens")) != (o, cs, fp8, sc, T) \
+                or (ka.get("o_stride_token"), ka.get("o_stride_head"), ka.get("cache_stride_pos"), ka.get("fp8_stride_group"),
+                    ka.get("fp8_stride_token"), ka.get("scale_stride_group"), ka.get("scale_stride_k")) \
+                != (*o.strides[:2], cs.strides[0], *fp8.strides[:2], sc.strides[0], sc.strides[2]):
+            return unsupported(node, "the kernel's pointers and strides are not the op's views'")
+        pos = step_positions(node, ctx, ka.get("positions_ptr"), T)
+        if isinstance(pos, Unsupported):
+            return pos
+        if any(p < 0 or p >= cs.shape[0] for p in pos):
+            return unsupported(node, "a position is outside the rotary table", positions=pos[:8], table_rows=cs.shape[0])
+        croots = ctx.roots_of(cs)
+        if not croots:
+            return unsupported(node, "the rotary table is no root of the capture", cs=repr(cs))
+        spec, hint, parts = vocab_kind(ctx, "dsv4_inv_rope_quant_head", CHUNKS=CH, QG=QG, ROPE=ROPE), f"{_module(node)}/inv_rope_quant", []
+        for k in range(G * HPG):
+            g, j = divmod(k, HPG)
+            head = ViewDesc(o.alloc, o.offset + k * o.strides[1], (T, HD), (o.strides[0], 1), o.dtype, o.device)
+            q = ViewDesc(fp8.alloc, fp8.offset + g * fp8.strides[0] + j * HD, (T, HD), (fp8.strides[1], 1), fp8.dtype, fp8.device)
+            s = ViewDesc(sc.alloc, sc.offset + g * sc.strides[0] + j * CH * tma, (T, CH), (1, tma), sc.dtype, sc.device)
+            parts.append(Compute(spec, T, (PerRow(head), Gather(cs, pos)), (PerRow(q), PerRow(s)), () if parts else (node.id,), hint=f"{hint}[h={k}]",
+                                 kernels=(triton_name(kid),), attribution=rows, pattern=self.name, roots=(None, croots[0].name)))
+        return Group(tuple(parts), tuple(sorted(node.ids())), hint=_module(node), pattern=self.name)
+
+
 def dsv4_patterns() -> list:
     """The DeepSeek-V4 patterns, ahead of the rank's collectives (`Mhc` records the all-reduces they resolve)."""
-    return [Mhc(), QKvRmsNorm(), QNormRopeKvInsert(), SavePartialStates()]
+    return [Mhc(), QKvRmsNorm(), QNormRopeKvInsert(), SavePartialStates(), InvRopeQuant()]
 
 
-__all__ = ["Mhc", "QKvRmsNorm", "QNormRopeKvInsert", "SavePartialStates", "block_runs", "dsv4_patterns", "state_block", "swa_block"]
+__all__ = ["InvRopeQuant", "Mhc", "QKvRmsNorm", "QNormRopeKvInsert", "SavePartialStates", "block_runs", "dsv4_patterns", "state_block",
+           "swa_block"]
