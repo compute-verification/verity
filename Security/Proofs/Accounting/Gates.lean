@@ -16,8 +16,9 @@ import Models.Accounting.Guarantees.Gates
 # The circuit model's window and lower bounds, proved
 
 `ProvenWindow` by induction over the gates (each value lies in its derived interval: `Iv.add`, `Iv.scale` and
-`Iv.mul` are sound), and `ClampOrWrap` from it (in the window a clamp and a wrap are both the identity); `Fooling` by
-induction over the gates (every free gate is 2-adically triangular in its window) and a count of the
+`Iv.mul` are sound, and a gather's value is a column word or 0, in the hull `Iv.join` gives), and `ClampOrWrap` from
+it (in the window a clamp and a wrap are both the identity); `Fooling` by induction over the gates (every free gate is
+2-adically triangular in its window) and a count of the
 charged gates' joint values; `SquaringCarry` from it at `j = 1` on the sparse family, whose squares have no carries
 between bytes; `SquaringCarryNibbles` from it at `j = 4` on the nibble family, whose squares first differ two bytes
 above their first differing nibble (`a² − a'² = (a − a')(a + a')`); `UnitsFooling` by the same induction, the
@@ -228,6 +229,19 @@ lemma holds_mul_sum (I : ℕ → Iv) (V : ℕ → ℤ) (hIV : ∀ j, Holds (I j)
     have := holds_mul_sum I V hIV u w _ _ (h.add ((hIV i).mul (hIV j)))
     rwa [add_assoc] at this
 
+/-- A hull holds what its start or any of its intervals holds. -/
+lemma holds_foldl_join : ∀ (l : List Iv) (s : Iv) (z : ℤ), (Holds s z ∨ ∃ b ∈ l, Holds b z) →
+    Holds (l.foldl Iv.join s) z
+  | [], s, z, h => by simpa using h
+  | b :: l, s, z, h => by
+    simp only [List.foldl_cons]
+    refine holds_foldl_join l _ z ?_
+    rcases h with h | ⟨b', hb', h⟩
+    · exact .inl ⟨min_le_of_left_le h.1, le_max_of_le_left h.2⟩
+    · rcases List.mem_cons.mp hb' with rfl | hb'
+      · exact .inl ⟨min_le_of_right_le h.1, le_max_of_le_right h.2⟩
+      · exact .inr ⟨b', hb', h⟩
+
 /-- A derived gate's derived interval holds its exact value, given each operand in its derived interval. -/
 lemma derive_holds (g : Gate ι) (x : ι → ℤ) (ivs : List Iv) (vs : List ℤ)
     (hinv : ∀ j, Holds (ivs.getD j (0, 0)) (vs.getD j 0)) (hd : g.op.IsDerived) :
@@ -246,8 +260,21 @@ lemma derive_holds (g : Gate ι) (x : ι → ℤ) (ivs : List Iv) (vs : List ℤ
     | cons j u =>
       simp only [List.map_cons, List.headD_cons, List.tail_cons, ← List.map_take, ← List.map_drop]
       exact holds_mul_sum _ _ hinv _ _ _ _ (hinv j)
+  | gather =>
+    simp only [Op.raw]
+    generalize g.args = u
+    cases u with
+    | nil => simp
+    | cons j u =>
+      simp only [List.map_cons, List.headD_cons, List.tail_cons]
+      refine holds_foldl_join _ _ _ ?_
+      generalize (vs.getD j 0).toNat = k
+      rcases Nat.lt_or_ge k u.length with hk | hk
+      · refine .inr ⟨_, List.mem_map.mpr ⟨_, List.getElem_mem hk, rfl⟩, ?_⟩
+        rw [List.getD_eq_getElem (u.map fun c => vs.getD c 0) 0 (by simpa using hk), List.getElem_map]
+        exact hinv _
+      · exact .inl (by rw [List.getD_eq_default _ _ (by simpa using hk)]; exact ⟨le_rfl, le_rfl⟩)
   | input b i => rw [hop] at hd; exact hd.elim
-  | gather => rw [hop] at hd; exact hd.elim
   | budgeted cls f => rw [hop] at hd; exact hd.elim
 
 /-- **The window's step**: a gate whose window is proven (`Proven`'s clauses for it) and whose declared interval
@@ -296,7 +323,6 @@ lemma gate_window (g : Gate ι) (x : ι → ℤ) (ivs : List Iv) (vs : List ℤ)
       unfold Gate.derive
       cases hop : g.op with
       | input b i => rfl
-      | gather => rfl
       | budgeted cls f => rfl
       | _ => rw [hop] at hd; exact absurd trivial hd
     rw [this]
