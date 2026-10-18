@@ -170,6 +170,29 @@ def test_reference_follows_the_seed():
         assert other[0] == z and all(x != y for x, y in zip(other[1], rc))
 
 
+def test_live_salt_is_the_round_key_stream():
+    """A live window's unit salt is round r's `window.round_key` stream's first 64 bytes, from the round's 64-byte coin and
+    root; another round, root or coin gives another salt, and the unit's receipt follows it."""
+    from verity.core.protocols.pouw import window as Wd
+    from verity.core.protocols.sampled_proofs import challenger as Ch
+
+    count = iter(range(1 << 20))
+    ch = Wd.live_challenger(7, 2, entropy=lambda n: hashlib.shake_256(next(count).to_bytes(8, "big")).digest(n))
+    rec = Ch.LiveRecord(ch, Wd.ROUND)
+    roots = [hashlib.sha512(b"round 0").digest(), hashlib.sha512(b"round 1").digest()]
+    o0, o1 = rec.record(roots[0]), rec.record(roots[1])
+    assert rec.reason() is None and len(o0.coin) == 64
+    s0 = H.live_salt(ch.commitment, o0.coin, 0, roots[0])
+    assert len(s0) == H.SALT_BYTES == 64 and s0 == Wd.round_key(ch.commitment, o0.coin, 0, roots[0]).stream(0, 64)
+    others = {H.live_salt(ch.commitment, o1.coin, 1, roots[1]), H.live_salt(ch.commitment, o0.coin, 1, roots[0]),
+              H.live_salt(ch.commitment, o0.coin, 0, roots[1]), H.live_salt(ch.commitment, o1.coin, 0, roots[0])}
+    assert s0 not in others and len(others) == 4
+    rng = random.Random(5)
+    a, b = _rows(rng, 4, 64, -127, 127), _rows(rng, 8, 64, -60, 60)
+    assert H.reference(a, b, s0, 3, ROOTS)[1] != H.reference(a, b, H.live_salt(ch.commitment, o1.coin, 1, roots[1]), 3,
+                                                             ROOTS)[1]
+
+
 @compiles
 @pytest.mark.slow
 def test_h1_tile_is_its_reference():

@@ -10,6 +10,8 @@ The unit is ``(a: r rows of X, b: c rows of W, salt, position, roots) -> {z, rec
   ``r RB + [j CB, (j + 1) CB)``, its coin bits c (K) then U's 32 bytes (`PouwU129`: -64 + byte mod 129, H1's keyed word in
   ±64). Lane l's fold keys (duo's y_0..7, z_0..7), its chain's start, are block l of σ_R's stream (decision 121): no key
   is a function of seed_j. A kernel derives any row's or column's noise from seed_j alone, and any lane's keys from σ_R.
+  In a live window the salt is round r's, `live_salt` (`window.round_key` of round r's coin and root, its stream's first
+  64 bytes), and every unit computes its own noise from it in its own proof: no noise is a step that several units read.
 * **Lanes.** The tile is G × Q lanes, G = r / 4 and Q = c / 8 (at 32 × 32 a warp of cgemm.cu, lane 4 g + q): lane
   (g, q) holds rows ``g + G s`` (row slot s < 4) and columns ``2 q + 2 Q (s >> 1) + (s & 1)`` (column slot s < 8), and its
   entry e at row slot `segment.row_slot`(e) and column slot `segment.col_slot`(e), so the lanes' entries are the tile's
@@ -63,6 +65,8 @@ M32 = (1 << 32) - 1
 U_BITS = 256
 #: a lane's fold keys: duo's y_0..7, z_0..7, one block
 KEY_BITS = 512
+#: the salt port's bytes, a SHA-512 digest
+SALT_BYTES = 64
 
 
 @dataclass(frozen=True)
@@ -189,6 +193,14 @@ def fold_keys(sigma_r: bytes, lay: Layout) -> list[list[int]]:
         s = _stream(sigma_r, lay.lane(ln), KEY_BITS)
         keys.append([_value(s[32 * w:32 * w + 32]) for w in range(16)])
     return keys
+
+
+def live_salt(commitment, coin: bytes, r: int, root: bytes) -> bytes:
+    """A live window's unit salt in round r (`window`, "Live windows"): the first `SALT_BYTES` of `window.round_key`'s
+    stream from round r's opened coin and the round's root.  It is the unit's salt port; each unit derives its own seed_j,
+    σ_R and noise from it, its public position and its roots inside the unit, so no unit reads noise another computed."""
+    from .. import window as Wd
+    return Wd.round_key(commitment, coin, r, root).stream(0, SALT_BYTES)
 
 
 def reference(a: Sequence[Sequence[int]], b: Sequence[Sequence[int]], salt: bytes, position: int,
@@ -338,5 +350,5 @@ def scheme(tile: tuple[int, int] = (32, 32), name: str = SCHEME) -> C.Scheme:
 if SG is not None:
     C.register(scheme())
 
-__all__ = ["FOLD", "KINDS", "Layout", "PouwH1Tile", "PouwU129", "PouwU129Word", "SCHEME", "fold_keys", "noise", "reference",
-           "scheme", "u129"]
+__all__ = ["FOLD", "KINDS", "Layout", "PouwH1Tile", "PouwU129", "PouwU129Word", "SALT_BYTES", "SCHEME", "fold_keys",
+           "live_salt", "noise", "reference", "scheme", "u129"]
