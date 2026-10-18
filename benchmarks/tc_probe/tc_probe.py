@@ -26,12 +26,16 @@ Instructions (``--instruction``; ``--arch`` is derived from the entry and may be
     sm90.wgmma.m64n8k32.e5m2    sm_90a     wgmma_e5m2_m64n8k32_tiles    32  HYPOTHESIS hopper_e4m3_wgmma_k32 with e5m2 products
     sm90.wgmma.m64n8k16.bf16    sm_90a     wgmma_bf16_m64n8k16_tiles    16  hopper_bf16_wgmma_k16 (total semantics: specials asserted);
                                        (_rs_tiles: --a-source registers)     control HYPOTHESIS ampere_bf16_m16n8k16
+    sm100.mma.m16n8k16.bf16     sm_100a    mma_bf16_m16n8k16_tiles      16  HYPOTHESES hopper_bf16_m16n8k16 (sm_120's), control ampere_bf16_m16n8k16
+    sm100.tcgen05.mma.bf16      sm_100a    tcgen05_bf16_m128n8k16_tiles 16  HYPOTHESES hopper_bf16_wgmma_k16 (total), control ampere_bf16_m16n8k16 (total)
 
 A pinned model's mismatches fail ``validation``; a HYPOTHESIS model only yields agreement counts (validation ``not_run`` when no
 pinned model is compared) and the raw capture is recorded regardless.  The E5M2 product (``_e5m2_product``) is a local
 HYPOTHESIS pending the canonical one in ``verity.ml.circuits.silicon``.  Kernels: ``mma_tiles.cu`` (``mma.sync``, sm_80+/sm_89+) and
 ``wgmma_tiles.cu`` (``wgmma.mma_async``, sm_90a; B through a shared-memory descriptor, A from registers -- or, for BF16, from a
-second descriptor, the SS form GEMM mainloops issue).
+second descriptor, the SS form GEMM mainloops issue) and ``tcgen05_tiles.cu`` (``tcgen05.mma.cta_group::1.kind::f16``, sm_100a: A
+and B through descriptors, the accumulator in tensor memory, M = 128; ``--no-input-d`` runs its first MMA with enable_input_d = 0,
+the accumulator not read, over zero accumulators, as a GEMM mainloop's first k step).
 
 SASS (nvcc 12.4, compile check r20260922-180506-a006 on vy-sp1): every tile kernel holds exactly one MMA-class instruction --
 ``HMMA.16816.F32.BF16`` (sm_80/sm_89/sm_90a bf16), ``QMMA.16832.F32.E4M3.E4M3`` / ``QMMA.16832.F32.E5M2.E5M2`` (sm_89 FP8),
@@ -370,6 +374,7 @@ class Instruction:
     models: tuple[Model, ...]
     sass_mma: int = 1  # MMA-class SASS instructions ptxas emits for the PTX instruction (measured; 1 = single-instruction probe)
     rs_kernel: str | None = None  # the same instruction with A from registers (``--a-source registers``); ``kernel`` reads A from shared memory
+    chain: bool = False  # the TU has ``<kernel>_chain4`` (``--chain``)
 
     @property
     def a_sources(self) -> tuple[str, ...]:
@@ -397,7 +402,13 @@ def _wgmma(id_: str, fmt: Format, models: tuple[Model, ...]) -> Instruction:
     k = 16 if fmt is BF16 else 32
     rs = f"wgmma_{fmt.name}_m64n8k{k}_rs_tiles" if fmt is BF16 else None  # FP8: A is always in registers
     return Instruction(id_, "sm_90a", "wgmma_tiles.cu", f"wgmma_{fmt.name}_m64n8k{k}_tiles",
-                       f"wgmma.mma_async.sync.aligned.m64n8k{k}.f32.{fmt.name}.{fmt.name}", fmt, 64, k, models, rs_kernel=rs)
+                       f"wgmma.mma_async.sync.aligned.m64n8k{k}.f32.{fmt.name}.{fmt.name}", fmt, 64, k, models, rs_kernel=rs, chain=rs is not None)
+
+
+def _tcgen05(id_: str, models: tuple[Model, ...]) -> Instruction:
+    return Instruction(id_, "sm_100a", "tcgen05_tiles.cu", "tcgen05_bf16_m128n8k16_tiles",
+                       "tcgen05.mma.cta_group::1.kind::f16 [d_tmem], a_desc, b_desc, idesc(bf16 x bf16 -> f32, M128 N16 K16, K-major), enable_input_d",
+                       BF16, 128, 16, models, chain=True)
 
 
 _HOPPER_E5M2 = Model(S.HOPPER_E4M3_K32, "e5m2", declared=False)
@@ -429,6 +440,11 @@ INSTRUCTIONS: dict[str, Instruction] = {
         # lane wgmma-bf16: the BF16 wgmma vLLM's H100 GEMMs issue, against its total semantics (specials asserted); the Ampere
         # pipeline is the control that the tiles distinguish one group of 16 / 26 bits from two groups of 8 / 25 bits.
         _wgmma("sm90.wgmma.m64n8k16.bf16", BF16, (Model(TCM.HOPPER_BF16_WGMMA_K16, total=True), Model(S.AMPERE_BF16_M16N8K16, declared=False, total=True))),
+        # Blackwell datacenter (B200): the mma.sync FA2 runs (JIT from its sm_80 PTX) and the tcgen05 k16 step cuBLAS's GEMMs issue, each
+        # against Hopper's k16 pipeline as the hypothesis and Ampere's as the control that the families tell them apart.
+        _mma("sm100.mma.m16n8k16.bf16", "sm_100a", BF16, (Model(S.HOPPER_BF16_M16N8K16, declared=False), Model(S.AMPERE_BF16_M16N8K16, declared=False))),
+        _tcgen05("sm100.tcgen05.mma.bf16", (Model(TCM.HOPPER_BF16_WGMMA_K16, declared=False, total=True),
+                                            Model(S.AMPERE_BF16_M16N8K16, declared=False, total=True))),
     )
 }
 ARCH_DEFAULT_INSTRUCTION = {"sm_80": "sm80.mma.m16n8k16.bf16", "sm_89": "sm89.mma.m16n8k16.bf16", "sm_90a": "sm90.mma.m16n8k16.bf16"}
@@ -446,7 +462,9 @@ def build(tu: str, arch: str, out: Path) -> tuple[Path, str]:
     so = out / f"lib{Path(tu).stem}_{arch}.so"
     nvcc_bin = cuda_bin("nvcc")
     nvcc = subprocess.run([nvcc_bin, "--version"], capture_output=True, text=True, check=True).stdout.strip().splitlines()[-2:]
-    subprocess.run([nvcc_bin, "-O2", f"-arch={arch}", "-Xcompiler", "-fPIC", "-shared", "-o", str(so), str(HERE / tu)], check=True)
+    # sm_100a's tcgen05 is an `a`-feature instruction: a plain -arch=sm_100a also embeds compute_100 PTX, which refuses it
+    target = ["-gencode", f"arch=compute_{arch[3:]},code={arch}"] if arch == "sm_100a" else [f"-arch={arch}"]
+    subprocess.run([nvcc_bin, "-O2", *target, "-Xcompiler", "-fPIC", "-shared", "-o", str(so), str(HERE / tu)], check=True)
     ident = " / ".join(line.strip() for line in nvcc)
     Path(f"{so}.nvcc").write_text(ident + "\n")
     return so, ident
@@ -460,7 +478,7 @@ def prebuilt(path: str) -> tuple[Path, str]:
     return so, f"{ident} (prebuilt {so.name}, sha256 {hashlib.sha256(so.read_bytes()).hexdigest()})"
 
 
-MMA_SASS = re.compile(r"\b((?:[A-Z]{1,2})?MMA(?:\.[A-Za-z0-9_.]+)?)\b")
+MMA_SASS = re.compile(r"\b((?:[A-Z]{1,4})?MMA(?:\.[A-Za-z0-9_.]+)?)\b")  # HMMA, QGMMA, ... and tcgen05's UTCHMMA
 
 
 def sass_check(so: Path, kernel: str, out: Path | None = None, expected: int = 1) -> dict:
@@ -536,15 +554,24 @@ class Probe:
         ident.restype = ctypes.c_int
         ident.argtypes = [ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_int), ctypes.c_char_p, ctypes.c_int]
         self.descriptor: dict | None = None
-        if ins.tu == "wgmma_tiles.cu":
-            setter = self.lib.wgmma_set_descriptor_offsets
-            setter.restype = None
-            setter.argtypes = [ctypes.c_uint32, ctypes.c_uint32]
+        self.tcgen05 = ins.tu == "tcgen05_tiles.cu"
+        if ins.tu in ("wgmma_tiles.cu", "tcgen05_tiles.cu"):
+            self._set_offsets = getattr(self.lib, f"{Path(ins.tu).stem.split('_')[0]}_set_descriptor_offsets")
+            self._set_offsets.restype = None
+            self._set_offsets.argtypes = [ctypes.c_uint32, ctypes.c_uint32]
             self.set_descriptor(128, 256)
+        if self.tcgen05:
+            self.lib.tcgen05_replica_mismatches.restype = ctypes.c_ulonglong
+            self.lib.tcgen05_set_enable_input_d.restype = None
+            self.lib.tcgen05_set_enable_input_d.argtypes = [ctypes.c_uint32]
 
     def set_descriptor(self, lbo: int, sbo: int) -> None:
-        self.lib.wgmma_set_descriptor_offsets(lbo, sbo)
+        self._set_offsets(lbo, sbo)
         self.descriptor = {"lbo_bytes": lbo, "sbo_bytes": sbo, "layout": "K-major no swizzle (INTERLEAVE)"}
+
+    def set_enable_input_d(self, enable: bool) -> None:
+        """tcgen05: the first MMA's enable_input_d (False: D = A.B, the accumulator not read)."""
+        self.lib.tcgen05_set_enable_input_d(1 if enable else 0)
 
     def identity(self) -> dict:
         major, minor = ctypes.c_int(), ctypes.c_int()
@@ -570,6 +597,8 @@ class Probe:
             rc = self.fn(a.ctypes.data, b.ctypes.data, c.ctypes.data, d.ctypes.data, stop - start)
             if rc != 0:
                 raise RuntimeError(f"CUDA error {rc} in {self.kernel} (209 = no kernel image for this device: wrong --arch?)")
+            if self.tcgen05 and (bad := int(self.lib.tcgen05_replica_mismatches())):
+                raise RuntimeError(f"{self.kernel}: {bad} words of the instruction's columns 8..15 differ from its columns 0..7")
             D[start:stop] = d
         return D
 
@@ -1450,6 +1479,8 @@ def sweep(probe: Probe, ins: Instruction, args, out: Path, identity: dict) -> tu
     fams: dict = {}
     with mp.Pool(args.procs, initializer=_init, initargs=(model_descs(ins),)) as pool:
         for name, A, Bt, C, meta in families(rng, args.n_random, fmt, M, K):
+            if args.no_input_d:
+                C = np.zeros_like(C)
             n_sample = min(args.golden_per_family, A.shape[0] * M * N)
             if only is not None and name not in only:
                 rng.choice(A.shape[0] * M * N, size=n_sample, replace=False)  # the skipped family's sampling draw: --families leaves the others' tiles unchanged
@@ -1586,14 +1617,20 @@ def chain_sweep(so: Path, base: Probe, args, out: Path) -> dict:
     b = rng.integers(-8, 9, (64, N, K)).astype(np.float32)
     c = rng.integers(-1000, 1001, (64, M, N)).astype(np.float32)
     want = f32_bits((c + np.einsum("nik,njk->nij", a, b)).astype(np.float32))
+    if probe.tcgen05:
+        probe.set_enable_input_d(True)
     got = probe.tiles(fmt.from_f32(a), fmt.from_f32(b), f32_bits(c))
     if not np.array_equal(want, got):
         raise RuntimeError(f"chain layout check failed: {probe.kernel} ({int(np.count_nonzero(want != got))} words differ)")
+    if probe.tcgen05:
+        probe.set_enable_input_d(not args.no_input_d)
     model_names = [m.name for m in ins.models]
     fams: dict = {}
     rng = np.random.default_rng(args.seed + CHAIN_STEPS)
     with mp.Pool(args.procs, initializer=_init, initargs=(model_descs(ins),)) as pool:
         for name, A, Bt, C, _meta in families(rng, args.chain_n_random, fmt, M, K):
+            if args.no_input_d:
+                C = np.zeros_like(C)
             D = probe.tiles(A, Bt, C)
             results = model_eval(pool, A, Bt, C, args.procs, worker=_eval_chain_tiles)
             fam = {"tiles": int(A.shape[0]), "elements": int(A.shape[0]) * M * N, "asserted": family_asserted(ins, name), "models": {},
@@ -1697,6 +1734,8 @@ def main() -> int:
     ap.add_argument("--chain", action="store_true", help="BF16 wgmma: every family at K = 64 through four back-to-back wgmma in one commit group, "
                     "against the model's step folded over the four k16 slices")
     ap.add_argument("--chain-n-random", type=int, default=2000, help="--n-random of the chained families")
+    ap.add_argument("--no-input-d", action="store_true", help="tcgen05: the first MMA runs with enable_input_d = 0 (the accumulator not read) "
+                    "and every family's accumulators are +0, so the models see what the hardware computes")
     ap.add_argument("--n-random", type=int, default=100_000)
     ap.add_argument("--seed", type=int, default=SEED_DEFAULT)
     ap.add_argument("--procs", type=int, default=max(1, (os.cpu_count() or 4) - 4))
@@ -1751,6 +1790,11 @@ def main() -> int:
     identity["kernel"] = probe.kernel
     results["identity"] = identity
     results["layout_check"] = layout_check(probe, ins)
+    if args.no_input_d:
+        if not probe.tcgen05:
+            ap.error("--no-input-d is a tcgen05 mode (sm100.tcgen05.mma.bf16)")
+        probe.set_enable_input_d(False)
+        identity["enable_input_d"] = 0
     results["pipeline"] = ins.models[0].pipeline.name  # WP1 field
     print("device", json.dumps(identity), flush=True)
     print("layout_check", json.dumps(results["layout_check"]), flush=True)
@@ -1778,8 +1822,8 @@ def main() -> int:
         results["sweep"], _ = sweep(probe, ins, args, out, identity)
 
     if args.chain:
-        if ins.rs_kernel is None:
-            ap.error("--chain needs an instruction with the chained kernels (sm90.wgmma.m64n8k16.bf16)")
+        if not ins.chain:
+            ap.error("--chain needs an instruction with the chained kernels (sm90.wgmma.m64n8k16.bf16, sm100.tcgen05.mma.bf16)")
         results["chain_sweep"] = chain_sweep(so, probe, args, out)
         print("chain TOTAL", results["chain_sweep"]["total_asserted_elements"], "asserted elements,",
               json.dumps(results["chain_sweep"]["total_mismatches_by_model"]), "mismatches", flush=True)
