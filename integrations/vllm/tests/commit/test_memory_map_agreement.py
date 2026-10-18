@@ -3,15 +3,12 @@
 pool (2 layers of 4 pages, 8 slots of 1 KiB a plane: a plane-page is two 4 KiB blocks; N = 37).  A request prefills its first
 rows at its arrival step and decodes one row a step after, and its last step reads every row (`test_memory_map.decode`).  The
 two maps agree line for line (steps, j, d_j and slots) on a session with pages out of order, blocks completed over several
-steps, last blocks left part written, a block completed at its last read and a page reused after its request.  On a freed
-page's untouched blocks the circuit's map follows memory accounting's rule (18 Oct): they stay held until a write first reaches
-them, and the Store's writer is to follow."""
+steps, last blocks left part written, a block completed at its last read (in no record) and a page reused after its request,
+whose untouched blocks stay held until a write first reaches them (memory accounting's rules, 18 Oct)."""
 from __future__ import annotations
 
 from dataclasses import dataclass
 from itertools import groupby
-
-import pytest
 
 from tests.commit.test_memory_map import _payload, decode
 from tests.store.test_memory_map import SLOTS, store
@@ -98,15 +95,8 @@ def test_a_block_no_step_reads_while_resident_is_in_no_record():
 
 
 def test_a_freed_pages_untouched_filler_is_held_until_a_write_reaches_it():
-    _, steps = circuit(UNTOUCHED)
+    head, steps = circuit(UNTOUCHED)
+    assert stored(UNTOUCHED).splitlines() == dumps(head, steps).splitlines()
     # not at step 2, where r1 ends: its end frees only the blocks it wrote
     second = _second_blocks(3)
     assert [(st.step, sorted(second & set(st.freed))) for st in steps if second & set(st.freed)] == [(6, sorted(second))]
-
-
-@pytest.mark.xfail(strict=True, reason=(
-    "vllm's Store writer frees a freed page's untouched filler at kv_free (r1's, step 2); memory accounting ruled (18 Oct "
-    "02:29Z) that it stays held until a write first reaches it, and kv_free frees only a page's appended blocks: Store is "
-    "to follow"))
-def test_the_stores_map_holds_untouched_filler_too():
-    assert stored(UNTOUCHED).splitlines() == dumps(*circuit(UNTOUCHED)).splitlines()
