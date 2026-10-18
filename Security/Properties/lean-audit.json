@@ -32,10 +32,10 @@
   "Properties.Proofs.Pous.MemoryChallenger",
   "Properties.Pous.EndToEnd",
   "Properties.Proofs.Pous.Run",
-  "Properties.RemoteAudit",
-  "Properties.Proofs.RemoteAudit",
   "Properties.Accounting.Requirement",
-  "Properties.Proofs.Accounting.Requirement"
+  "Properties.Proofs.Accounting.Requirement",
+  "Properties.RemoteAudit",
+  "Properties.Proofs.RemoteAudit"
  ],
  "proved_in": ["../Proofs"],
  "assumptions": {
