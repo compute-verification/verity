@@ -28,7 +28,8 @@ ledger is (`ledger.Ledger`). `show` merges the overrides in force from a local l
 its live values and compares live with the policy in force, the description's value with any override applied. A log that
 doesn't verify is refused (exit 3): the policy in force can't be told from it. Recording an override changes nothing on a
 node: n1_lease.py takes its pool's `max`, `borrow` and `borrow-until` from `show` when `$VY_POOL_POLICY` names the command,
-and every other value is still set by hand. Those three of such a loop are read from the `LIMITS` file it writes, and while it
+`cluster policy apply` (policy_apply.py) writes the values whose surface has an applier, and every other value is set by
+hand. Those three of such a loop are read from the `LIMITS` file it writes, and while it
 says they came from anywhere but the policy, they are drift whatever their values.
 """
 from __future__ import annotations
@@ -848,7 +849,8 @@ def main_override(description: str | Path, key: str, value: str, until: str, by:
         print(f"{'overrode' if apply else 'would override'} {key}: {was} -> {v} until {until}, by {by}: {reason}"
               f"{'' if apply else f' (in {path}; --apply records it)'}\n"
               "Nothing carries it to the node but n1_lease.py, for its pool's max, borrow and borrow-until while $VY_POOL_POLICY "
-              "is set: set any other value yourself. `cluster policy diff` compares the live value with it.")
+              f"is set, and `cluster policy apply --key {key} --apply`: set any other value yourself. `cluster policy diff` "
+              "compares the live value with it.")
     return 0
 
 
