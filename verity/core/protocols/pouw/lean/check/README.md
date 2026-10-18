@@ -32,7 +32,9 @@ pins for the check's template (its header's `circuit_sha512`, which `flock-verif
 verifies against), whose first two rows (in its header's key order, serde's) are an A row and a B row of the fp8-p
 schemas, and each row's b ‖ c its side tree's leaf at the unit's row. So the circuit a window's units are proved over is
 the pinned one, not whatever builds it: a change to a template's Definition or to C-Flock's lowering lands its new digest
-in `PouwCheck/Tile.lean` (and `core_check.TILES`), which benchmarks/pouw's staged-unit test enforces at K = 128.
+in `PouwCheck/Tile.lean` (and `core_check.TILES`), which benchmarks/pouw's staged-unit test enforces at K = 128. A
+template has one circuit, so its units proved under an earlier lowering no longer open (the 9 to 10 Oct served windows,
+whose `Pc8TileSide` K = 4096 circuit was c7aaeee4…).
 `served_commit.check` keeps the draw, the level and the population's domain and calls the opening rule for the rest.
 
 `passEpoch` re-starts the window's pass's epoch from its manifest under the challenger's own coin commitment: a pass
