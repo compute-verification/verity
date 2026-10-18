@@ -42,7 +42,20 @@ import Proofs.Flock.Claims.Complete.Zk.ConsRingSwitch
 import Proofs.Flock.Claims.Complete.Zk.ConsReplay
 import Proofs.Flock.Claims.Complete.Zk.ConsCoins
 import Proofs.Flock.Claims.Complete.Zk.MaskRank
+import Proofs.Flock.Claims.Complete.Zk.Layout
+import Proofs.Flock.Claims.Complete.Zk.RankBridge
 import Proofs.Flock.Claims.Complete.Zk.Complete
+import Proofs.Flock.Claims.Complete.Zk.Level0Pad
+import Proofs.Flock.Claims.Complete.Zk.Level0Run
+import Proofs.Flock.Claims.Complete.Zk.Level0Lanes
+import Proofs.Flock.Claims.Complete.Zk.Level0Shape
+import Proofs.Flock.Claims.Complete.Zk.Level0Premises
+import Proofs.Flock.Claims.Complete.Zk.Level0Model
+import Proofs.Flock.Claims.Complete.Zk.Level0Honest
+import Proofs.Flock.Claims.Complete.Zk.Level0HonestRun
+import Proofs.Flock.Claims.Complete.Zk.Level0Opens
+import Proofs.Flock.Claims.Complete.Zk.Level0Verifier
+import Proofs.Flock.Claims.Complete.Zk.Level0Complete
 
 /-! Flock's completeness at the deployed masked (`--zk`) verifier at one table (`ZkTables` lifts it to any number, at
 the masked record's prover `ZkTables.honestPR`): the honest masked prover (`Honest`: `honestPZk`, on
@@ -87,9 +100,21 @@ and the verifier's inner check passing on it, on rounds carrying its sends, at a
 vanishing at the pads, from the plain algebra moved by the masks (`zcZ_masks`, `lcZ_masks`), and `ConsReplay` the five
 together on `Zk.replay`'s output wherever the plain checks pass at its coins (`replay_rows_zero`), and `ConsCoins`
 those coins the prover's on rounds carrying its sends, with the rows as `ConsHold` (`replay_coins`,
-`replay_consHold_agrees`); `MaskRank` the mask slot's span, the prover's rank check over the slot's words
-(`RankFull`, `maskRankOk`, `maskRankOk_iff`), a rep's claim points from its coins (`claimPoints`, `claimsAt`), the
-slot's size (`maskWords_ge`: an in-scope masked table has at least `1024` words), and the rank bound the prover's
-refusal needs (`DeployedRankBound`; at the verifier's coins `MaskRankBound`, a premise of `complete_zk`, both open);
-`Complete` assembles them into `complete_zk`, from those premises and the goals not yet proved, and
-`complete_zk_relation` at the deployed relation. -/
+`replay_consHold_agrees`); `MaskRank` the mask slot's span, the prover's rank check over the slot's words (`RankFull`,
+`maskRankOk`, `maskRankOk_iff`), a rep's claim points from its coins (`claimPoints`, `claimsAt`), the slot's size
+(`maskWords_ge`: an in-scope masked table has at least `1024` words), and the rank bound the prover's refusal needs
+(`DeployedRankBound`, open; at the verifier's coins `MaskRankBound`, a premise of `complete_zk`); `Layout` the layout
+every table of a masked session in scope has (`layoutOk_of_scope`); `RankBridge` `MaskRankBound` from
+`DeployedRankBound` and the small slots' `SmallSlotBound`, open (`maskRankBound_of`); `Complete` assembles them into
+`complete_zk`, from those premises and the goals not yet proved, and `complete_zk_relation` at the deployed relation.
+`Level0Pad` is level 0's masked query identity: a row's padded lanes combine to the blinded table's, the padding
+cancelling (`row_comb`, `consE0_honestZk`); `Level0Run` the masked Ligerito prover returning where its pair's coins are
+independent (`ligeritoPZk_ret`); `Level0Lanes` its lane phase in closed form (`ligeritoPZk_lanes`); `Level0Shape` its
+proof's lengths (`ligeritoPZk_shape`); `Level0Premises` the premises of `ZkTables.Level0` proved (`proverRuns`,
+`proverShape`, `lanes`); `Level0Model` the masked verifier's Ligerito returning on rounds carrying its closed-form
+model, given its openings and final identity at the model's values (`ligeritoWithZ_of`); `Level0Honest` the honest
+masked prover's Ligerito against that model (`mid_lv0Z`), and `Level0HonestRun` its whole walk: it ends at the model's
+transcript and meets the model's final identity (`honestZ`); `Level0Opens` its openings passing the masked Merkle
+checks, level 0's over rows `EXTRA_LANES` wider (`ligeritoPZk_opens`, `merkleOkZ_of_opens`); `Level0Verifier` the last
+premise, the verifier returning the prover's record at its transcript (`verifier`); `Level0Complete` the four in
+`complete_jsonT_of_level0`, leaving the JSON specification and `MaskRankBound` (`complete_jsonT_closed`). -/
