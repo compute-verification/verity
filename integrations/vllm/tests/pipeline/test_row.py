@@ -650,6 +650,24 @@ def test_a_manifest_of_an_older_query_another_program_or_no_partition_is_moved_a
     assert R.manifest_not_of_record(R.load_json(f"{r.d}/manifest.json"), PD, r.ck_) == ("", "")
 
 
+def test_a_passing_commit_verifies_the_manifest_its_preparation_named(tmp_path, monkeypatch):
+    """The Commit read the manifest of record out of `commit_prepare`'s scope, which it no longer shares: every passing single-GPU
+    Commit ended in a NameError (art:aef64aa6d6aa26bfa8e89a3ebdf2904507ae051ea6ad9045e48bbddf8509d81d)."""
+    r = _row(tmp_path)
+    verified: list[str] = []
+
+    def verify(man):
+        verified.append(man)
+        raise Stop(0)
+    monkeypatch.setattr(r, "commit_prepare", lambda: (600, ["commit"], f"{r.d}/manifest.json"))
+    monkeypatch.setattr(r, "gpu_exclusive", lambda stage: None)
+    monkeypatch.setattr(r, "run_gpu", lambda stage, to, log, cmd: 0)
+    monkeypatch.setattr(r, "manifest_verify", verify)
+    with pytest.raises(Stop):
+        r.commit()
+    assert verified == [f"{r.d}/manifest.json"]
+
+
 @pytest.mark.parametrize("kw, why", [({}, ""), ({"complete": False}, "not complete"), ({"query_id": "Q_module_body_v1"}, "query of record"),
                                      ({"partition": False}, "query of record"), ({"word_check": False}, "no word check recorded")])
 def test_a_tp_rows_complete_word_checked_manifest_is_reused_not_rebuilt_on_the_gpu_host(tmp_path, kw, why):
