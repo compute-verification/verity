@@ -840,7 +840,14 @@ and each window's, from it plus the node's capacities.
   session's appends (`mapped`, below). On it, a pass's credit is its credited
   receipts at \(D\) bits each, at most the circuit's read bits at the pass's step, and the ledger says it is linked
   (`Ledger.linked`); without it, the credit is the store's, flagged as such. The checks behind the link belong to the
-  units named below, and the ledger takes them as given.
+  units named below, and the ledger takes them as given. Those units are sampled, so the link carries what their draw
+  established: \(\varepsilon\), the most share of the linked credit the units it leaves unproved can carry (the
+  passes whose plan unit is wrong and those holding a block a wrong memory-map unit wrote), except with
+  probability \(\delta\). The session is credited \((1 - \varepsilon)\sum_\text{passes} \min(nD, r_s)\), a window
+  its own sum less \(\varepsilon\) of the session's (the unproved share may all be one window's), and \(\delta\) adds
+  to the ledger's error (`Ledger.error`, `error_horizon`). That \(\varepsilon\) bounds the unproved credit, not only
+  the share of units drawn wrong, is the link's to establish: a wrong unit at a heavy step carries more than its
+  share.
   - *Reads the circuit doesn't make.* The plan is the resident set, and the circuit's reads at a step can be fewer: a
     gather's unselected rows, requests absent from the step's batch, unrouted experts. Their receipts are capped at
     the circuit's reads at the pass's step (`read_bits`, `requirement.Requirement.read_bits`). That each receipted
