@@ -138,7 +138,8 @@ from verity.core.protocols.sampled_proofs.one_stage import audit, draw, partitio
 from verity.core.protocols.sampled_proofs.two_stage import OwnRandomness, ReplayUnit, Stage, TwoStageLaw, draw_first
 from verity.core.protocols.sampled_proofs.consumers import compute_bound, exfiltration_bound, location_bits
 from verity.core.protocols.sampled_proofs.plan import VerificationPlan
-from verity.core.protocols.sampled_proofs.optimize import Candidate, CostModel, Objective, frontier, for_budget
+from verity.core.protocols.sampled_proofs.optimize import (Candidate, Commitment, CostModel, Objective, for_budget,
+                                                           frontier, overlaps, weigh)
 from verity.core.protocols.sampled_proofs.candidates import Shape, cuts
 from verity.core.protocols.sampled_proofs.costfit import fit
 ~~~
@@ -179,9 +180,13 @@ from verity.core.protocols.sampled_proofs.costfit import fit
 - `plan`: `VerificationPlan` of `GateClass`es with its `UnconditionalObligation`s, `Obligation.of_call`, and
   `weight_binding_plan`.
 - `optimize`: the untrusted planner. From `Candidate`s (cuts of each op type into units), a `CostModel` (per
-  statement, per unit, commitment, replay) and an `Objective` (harm per unit at δ), `frontier` is the certified Pareto
-  frontier of cost against harm. `for_budget` and `for_target` query it, `certify` recomputes a plan's `Certificate`
-  from its sizes, `sensitivity` and `needs_benchmark` name what moves it, and `work_law` registers it as `work:1`.
+  statement, per unit, the units' commitment, the fixed serve-time `Commitment`s of every scale, and the replay that
+  builds witnesses) and an `Objective` (harm per unit at δ), `frontier` is the certified Pareto frontier of the total
+  cost against harm. Everything is committed at serve time (ASK-25), so a plan's cost and a budget are the serve-time and
+  proving total. `for_budget` and `for_target` query it, `weigh` chooses each block kind's weight on the draw at a
+  target, `overlaps` ranks the tensors committed at more than one scale by what committing them once would save,
+  `certify` recomputes a plan's `Certificate` from its sizes, `sensitivity` and `needs_benchmark` name what moves it,
+  and `work_law` registers it as `work:1`.
 - `candidates`: `cuts` derives the `Candidate`s from a Definition DAG of `Shape`s by a DP within the width rule;
   `pressure` gives the developer hints.
 - `costfit`: C-Flock's cost model fitted from measurements, as a cost-model/v1 record.
