@@ -1568,8 +1568,10 @@ impl Firewall {
         // firewall's comb), the shadow's opening
         let (zerocheck, lincheck) = zkv::from_exposed(&vals, &lay);
         let own = R1csProofLigerito { zerocheck, lincheck, pcs_open: open };
+        // firewall_device_rounds: the table's device rounds the firewall was handed so far (FC_FIREWALL_CUT_AT counts them)
         let mut v = json!({"t.firewall_shadow": t_shadow, "t.firewall_wait": r.t_wait, "firewall_opening_rounds": link.round,
-                           "t.firewall_lean": r.t_lean, "firewall_lean_bytes": r.lean_bytes, "firewall_failed": r.failed});
+                           "t.firewall_lean": r.t_lean, "firewall_lean_bytes": r.lean_bytes, "firewall_failed": r.failed,
+                           "firewall_device_rounds": self.seen.load(std::sync::atomic::Ordering::SeqCst)});
         if r.rep == 0 {
             v["t.firewall_recheck"] = json!(self.t_recheck);
             v["cpu.firewall_recheck"] = json!(self.cpu_recheck);
@@ -4639,12 +4641,14 @@ fn worker_session(st: &Arc<Stmt>, inst: &Arc<Instances>) -> Value {
     let log = Arc::new(Mutex::new(Vec::new()));
     let (v, _) = session(st, inst, shared(Seen { inner: InProc(s0), log: log.clone() }), &Plan::default(), ProverSeed::from_os());
     let seen = std::mem::take(&mut *log.lock().unwrap_or_else(PoisonError::into_inner));
-    json!({"accepted": v["accepted"], "why": v["why"], "prover_stopped": v["prover_stopped"], "seen": seen})
+    let device_rounds = v["buckets"].as_array().and_then(|b| b.iter().filter_map(|x| x["firewall_device_rounds"].as_u64()).max());
+    json!({"accepted": v["accepted"], "why": v["why"], "prover_stopped": v["prover_stopped"], "device_rounds": device_rounds, "seen": seen})
 }
 
 /// `zk_worker_cut_MODE` (PROTOCOL.md §10.1): a worker that fails in one way (`FC_FIREWALL_TAMPER=cut-MODE`) at its table's device
 /// round `k` never chooses where the session ends. Beside an honest firewalled session, one session per `k` (early, half way and
-/// the last round; `cut-tree` draws its trees in the opening phases, so it takes the first and the half-way round), each a CPU
+/// the last of the honest session's `firewall_device_rounds`; `cut-tree` draws its trees in the opening phases, so it takes the
+/// first and the half-way round), each a CPU
 /// session in a process of its own: the verifier gets the honest session's every request up to its `Finish`, in its order and
 /// at its sizes (the rounds, the Commit, the Link: the same bytes and public bytes), no proof, then `Finish`, which reports the
 /// firewall's stop. A worker given up gets no coins, and a silent one ticks the firewall's injected clock: no wall clock.
@@ -4688,9 +4692,11 @@ fn worker_cut_case(name: &str, mode: &str, gpu: bool) -> Value {
     let honest = run(None);
     let h = seen(&honest);
     let rounds = count(&h, "round");
-    let honest_ok = honest["accepted"] == true && count(&h, "proof") == 2 && h.last().map(kind).as_deref() == Some("finish");
+    // the device's rounds, which FC_FIREWALL_CUT_AT counts: the stream's rounds less those the host sends itself (the inner proof's)
+    let dev = honest["device_rounds"].as_u64().unwrap_or(0) as usize;
+    let honest_ok = honest["accepted"] == true && count(&h, "proof") == 2 && h.last().map(kind).as_deref() == Some("finish") && dev > 2;
     let want: Vec<Value> = h.iter().filter(|x| kind(x) != "proof").cloned().collect();
-    let ks: Vec<usize> = if mode == "tree" { vec![0, rounds / 2] } else { vec![2.min(rounds.saturating_sub(1)), rounds / 2, rounds.saturating_sub(1)] };
+    let ks: Vec<usize> = if !honest_ok { vec![] } else if mode == "tree" { vec![0, dev / 2] } else { vec![2, dev / 2, dev - 1] };
     let reason = if mode == "tree" { "FIREWALL-REFUSED: " } else { "FIREWALL-REFUSED: the device failed: " };
     let cuts: Vec<Value> = ks.iter().map(|&k| {
         let v = run(Some((k, mode)));
@@ -4703,8 +4709,8 @@ fn worker_cut_case(name: &str, mode: &str, gpu: bool) -> Value {
                "requests": s.len(), "last": s.last(), "first_miss": first_miss.map(|i| json!({"at": i, "honest": want.get(i), "cut": s.get(i)}))})
     }).collect();
     json!({"case": name, "expect": "the honest session's every request to its Finish, no proof, and the firewall's stop at Finish",
-           "honest": {"accepted": honest["accepted"], "error": honest["error"], "rounds": rounds, "round_bytes": round_bytes(&h),
-                      "public_bytes": public_bytes(&h), "proofs": count(&h, "proof"), "requests": h.len()},
+           "honest": {"accepted": honest["accepted"], "error": honest["error"], "rounds": rounds, "device_rounds": dev,
+                      "round_bytes": round_bytes(&h), "public_bytes": public_bytes(&h), "proofs": count(&h, "proof"), "requests": h.len()},
            "cuts": cuts, "pass": honest_ok && cuts.iter().all(|c| c["ok"] == true)})
 }
 
