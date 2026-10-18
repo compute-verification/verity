@@ -34,12 +34,15 @@ class Plan:
     changes: tuple[Append | Release | Rekey, ...] = ()
     lifetime: int | None = None
     deferred: bool = False
+    #: the tick the prover's registration is due by; the verifier publishes the blocks' salts only after it
+    registration: int | None = None
 
     def __init__(self, epoch: Interval, wipes=(), challenges=(), reads=(), maintenance=(), profiles: int = 1,
-                 changes=(), lifetime: int | None = None, deferred: bool = False):
+                 changes=(), lifetime: int | None = None, deferred: bool = False, registration: int | None = None):
         for name, value in (("epoch", epoch), ("wipes", tuple(wipes)), ("challenges", tuple(challenges)),
                             ("reads", tuple(reads)), ("maintenance", tuple(maintenance)), ("profiles", profiles),
-                            ("changes", tuple(changes)), ("lifetime", lifetime), ("deferred", deferred)):
+                            ("changes", tuple(changes)), ("lifetime", lifetime), ("deferred", deferred),
+                            ("registration", epoch.end if registration is None else registration)):
             object.__setattr__(self, name, value)
         if deferred and lifetime is not None and lifetime < 2:
             raise ValueError("deferred residency needs a lifetime of at least 2 read windows")

@@ -65,7 +65,45 @@ class Placement:
             forced[b] += c.gates[j].bits
         stores = {s.name: s for s in self.stores}
         stores.update({w.store.name: w.store for w in plan.wipes})
-        return Profile(self.datacenter, plan, occupancy(self), work, forced, stores, dict(c.weights))
+        salt, salt_out, pinned = self._custody(trusted, plan.registration)
+        return Profile(self.datacenter, plan, occupancy(self), work, forced, stores, dict(c.weights), salt, salt_out,
+                       pinned)
+
+    def _custody(self, trusted: set[int], registration: int) -> tuple[dict[str, float], ...]:
+        """For each block whose own certifier releases a salt into it: the salt's bits, the bits other than timing that
+        could carry it out before registration (the salt's cone crossing out, and the block's inside inputs that reach
+        anything crossing out), and the credit of the block's work in the salt's cone."""
+        c, dc = self.circuit, self.datacenter
+        readers: dict[int, list[int]] = {}
+        for i, g in enumerate(c.gates):
+            for j in g.operands:
+                readers.setdefault(j, []).append(i)
+
+        def cone(roots: set[int]) -> set[int]:
+            seen, todo = set(roots), list(roots)
+            while todo:
+                for r in readers.get(todo.pop(), []):
+                    if r not in seen:
+                        seen.add(r)
+                        todo.append(r)
+            return seen
+
+        out = [x for x in crossings(self) if x.at < registration and dc.block_of(x.src) is not dc.block_of(x.dst)]
+        salt, salt_out, pinned = ({b.name: 0.0 for b in dc.blocks} for _ in range(3))
+        salts: dict[str, set[int]] = {}
+        for i in trusted:
+            if dc.devices[self.leaf[i]].kind == "certifier":
+                salts.setdefault(dc.watched(Port(self.leaf[i], "ingress")).name, set()).add(i)
+        for b, roots in salts.items():
+            salt[b] = sum(c.gates[i].bits for i in roots)
+            reach = cone(roots)
+            pinned[b] = sum(c.weights.get(c.unit_of(c.gates[i]), 1.0) * c.gates[i].work for i in reach if self.block(i) == b)
+            salt_out[b] = sum(x.value.bits for x in out if x.value.id in reach and self.block(x.value) == b)
+            for v in c.inputs:
+                if v.source == "inside" and self.block(v) == b:
+                    reach_v = cone({v.id})
+                    salt_out[b] += v.bits * any(x.value.id in reach_v and self.block(x.value) == b for x in out)
+        return salt, salt_out, pinned
 
 
 @dataclass(frozen=True)
@@ -73,7 +111,9 @@ class Profile:
     """A placement's public properties, with the declaration and the verifier's plan they are read against: the frames
     each certifier port shows in each bucket (`occupancy`), the work each block is to be credited with, by kind
     (`work`; per-kind counts, as PoUW's census gives them), what one unit of each kind is credited (`weights`, W_ref),
-    the trusted data each block consumes (`forced`, in bits), and the registered stores."""
+    the trusted data each block consumes (`forced`, in bits), and the registered stores. For a block whose certifier
+    holds a salt for it: the salt's bits (`salt`), what besides timing could carry it out before registration
+    (`salt_out`, in bits), and the credit of the block's work that depends on it (`pinned`)."""
 
     datacenter: Datacenter
     plan: Plan
@@ -82,6 +122,9 @@ class Profile:
     forced: dict[str, float]
     stores: dict[str, Store]
     weights: dict[str, float] = field(default_factory=dict)
+    salt: dict[str, float] = field(default_factory=dict)
+    salt_out: dict[str, float] = field(default_factory=dict)
+    pinned: dict[str, float] = field(default_factory=dict)
 
     def credit(self, block: str) -> float:
         """The work `block` is to be credited with: each kind's units at its weight."""

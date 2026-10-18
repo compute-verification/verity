@@ -76,7 +76,8 @@ def digest(content: list[tuple[int, int]]) -> bytes:
     """The digest a certifier signs over a window's frames: their values, in order."""
     h = hashlib.sha512(b"datacenter/frames/v1\0")
     for vid, val in sorted(content):
-        h.update(vid.to_bytes(4, "big") + val.to_bytes(16, "big", signed=False))
+        n = (val.bit_length() + 7) // 8
+        h.update(vid.to_bytes(4, "big") + n.to_bytes(4, "big") + val.to_bytes(n, "big"))
     return h.digest()
 
 
