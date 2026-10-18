@@ -72,6 +72,11 @@ theorem noSlot_same {T D I α : Type} {get : I → ℕ → Option (T × D)} {slo
   | @Game.coin _ C _ _ k => .coin C fun c => noSlot_same (k c)
   | .send M k => .send M fun m => noSlot_same (k m)
 
+theorem NoSlot.slot_eq {T D I α β : Type} {get : I → ℕ → Option (T × D)} {R : I → α → β → Prop}
+    {slot slot' : ℕ} {i : I} {g : Game α} {g' : Game β} {L : Lock T D get R i g g'} (h : slot = slot')
+    (hL : NoSlot slot L) : NoSlot slot' L :=
+  h ▸ hL
+
 theorem NoSlot.mono {T D I α β : Type} {get : I → ℕ → Option (T × D)} {R R' : I → α → β → Prop}
     {slot : ℕ} (h : ∀ i a b, R i a b → R' i a b) {i : I} {g : Game α} {g' : Game β}
     {L : Lock T D get R i g g'} (hL : NoSlot slot L) : NoSlot slot (Lock.mono h L) := by
