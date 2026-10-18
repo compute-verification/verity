@@ -28,6 +28,7 @@ import torch.nn as nn
 
 from verity.ml.circuits import codec
 from verity.ml.circuits.defs import bind
+from verity.ml.circuits.refs import Affine
 from verity.ml.circuits.evaluation import evaluate
 from verity_vllm.program.frontend import targets as TG
 from verity_vllm.program.frontend.derive import derive_report
@@ -670,6 +671,30 @@ def test_the_dense_route_exports_q_and_k_as_their_parts(dense):
     ops = {str(n.target) for n in ep.graph.nodes if n.op == "call_function"}
     assert "vllm_iface.dsa_dense_mha.default" in ops
     assert not {o for o in ops if o.startswith(("aten.expand", "aten.cat"))}, ops
+
+
+def test_the_dense_prefill_locates_a_heads_q_k_v_in_their_parts_up_to_the_span_budget(dense, monkeypatch):
+    """A head's call reads q from q_nope's and q_pe's rows (two spans), k from k_nope's and k_pe's alternately (two spans a row) and
+    v from v's rows (one input, not one range); every k and v part is an `Affine`, so the emitter walks a head's log once, not once
+    a call.  Past `emit.MAX_SPANS` runs, k stays unlocated and says so: spans for every row of every head grow as rows squared."""
+    from verity_vllm.correspondence.runtime import NAMESPACE
+    from verity_vllm.program.frontend import emit
+    monkeypatch.setattr(emit, "MAX_SPANS", 2)
+    model = _model(dense=True)
+    rep = _derive(model, _inputs(model))
+    assert rep.program is not None, rep.unsupported
+    doc = rep.program.annotations[NAMESPACE]
+    att = [(k, n) for k, n in enumerate(rep.program.fn.body.nodes) if n.fn.id.startswith("Attention_v4{")]
+    assert {n.args[1].type.n for _, n in att} == {1, 2}
+    for k, n in att:
+        assert all(isinstance(p, Affine) for a in n.args[1:] for p in codec._flat_parts(a.refs)), n.fn.id
+        name = [vllm_dsa_dense._DENSE[i["arg"]] for i in doc["occurrences"][doc["calls"][k]["occ"]]["inputs"]]
+        q, key, v = doc["calls"][k]["args"]
+        assert [name[s["input"]] for s in q["spans"]] == ["q_nope", "q_pe"] and name[v["input"]] == "v"
+        if n.args[1].type.n == 1:
+            assert [name[s["input"]] for s in key["spans"]] == ["k_nope", "k_pe"]
+        else:
+            assert key == {"input": None, "leaves": None, "unlocated": "spans>2"}
 
 
 def test_the_served_dense_prefill_binds_attention_v4_at_the_128_x_80_tile():

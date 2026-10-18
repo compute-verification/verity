@@ -11,7 +11,7 @@
 
 from __future__ import annotations
 
-from verity.ml.circuits.refs import Coll, Concat, PartLog, array_of, concat
+from verity.ml.circuits.refs import Affine, Coll, Concat, PartLog, Strided, array_of, concat
 from verity.ml.circuits.types import Array, Value
 from verity_vllm.program.frontend.derive import refuse
 from verity_vllm.program.frontend.rules.base import RuleInfo, StateRule
@@ -175,8 +175,8 @@ class DsaDenseMhaRule(StateRule):
                 klog, vlog = klogs[hd], vlogs[hd]
                 for r in (kn[i][hd].refs, kpe[i].refs):
                     for p in (r.parts if isinstance(r, Concat) else (r,)):
-                        klog.append(p)
-                vlog.append(v[i][hd].refs)
+                        klog.append(_run(p))
+                vlog.append(_run(v[i][hd].refs))
                 q = Coll(head, concat([qn[i][hd].refs, qp[i][hd].refs]))
                 heads.append(ctx.call(fn, q, Coll(rows, klog.cut(len(klog))), Coll(rows, vlog.cut(i + 1)), node=node, rule=self,
                                       name=f"{h}[t={pos[i]},h={hd}]"))
@@ -189,6 +189,14 @@ class DsaDenseMhaRule(StateRule):
                                 "TOPK": TOPK, "indexer": has, "selection": "none (dense MHA reads every row; the indexer returns early)",
                                 "attention_impl_observed": (_OBSERVED["attention_impls"] or {}).get(layer)},
                    emitted=f"Attention_v4 x{T * NH} (T=1..{T}, one call per head)")
+
+
+def _run(p):
+    """`p` as an `Affine` when it is one run of consecutive leaves (a head's row of a `Strided` view): the same references, in the
+    form whose `PartLog` cuts the correspondence emitter walks once per log (`emit._arg_runs`), not once per call."""
+    if isinstance(p, Strided) and p.inner_stride == 1 and p.count <= p.inner:
+        return Affine(p.space, p.idx, p.base, p.count)
+    return p
 
 
 def _dense_splits(tp, T: int, NH: int, D: int) -> int:
