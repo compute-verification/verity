@@ -11,8 +11,8 @@ import Definitions.Accounting.Compose
 import Definitions.Accounting.Confidence
 import Definitions.Accounting.CostModel
 import Definitions.Accounting.Device
-import Definitions.Accounting.Gates
 import Definitions.Accounting.HMu
+import Definitions.Accounting.Gates
 import Definitions.Accounting.Joint
 import Definitions.Accounting.Localization
 import Definitions.Accounting.Memory

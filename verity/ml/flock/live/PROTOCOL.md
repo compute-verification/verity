@@ -327,6 +327,8 @@ is the minimum.
   The mask slot must have `blocks · 2^(mask_log−7) ≥ 128 · 4` words for the rank to be reachable. Both sides refuse a
   statement, or a table of a split session, with fewer than `128 · 4 + 64` words when it is built, before `Hello`
   (`zk_shape_ok`). RoPE and GEMM have 1024 at every split tried: m ≥ 25 at their `k_log` means at least 8 blocks.
+  Both sides also refuse a mask slot below `2^13` bits (`slot_log < 13`, `SLOT_LOG_MIN`): the bound on this check
+  refusing an honest prover's coin covers no smaller slot. Every deployed circuit has `mask_log = 14`.
 
 Negatives, each rejected on both reps (RoPE CPU selftest):
 - another extra lane folded than the committed one;

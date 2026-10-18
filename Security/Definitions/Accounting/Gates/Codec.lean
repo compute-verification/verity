@@ -147,4 +147,10 @@ noncomputable def encodeCost (F : Field) (k B εnum εden q : ℕ) : ℕ∞ :=
 of `a_S` is even and byte `2i + 1` of `a_S²` is odd exactly when `i ∈ S`. -/
 def sparse (S : Finset ℕ) : ℕ := 16 * ∑ i ∈ S, 256 ^ i
 
+/-- The nibble family: `a_t = 8 + Σ_{i<s} (16·t_i + 8)·256^(i+1)` for `t : Fin s → Fin 16`, byte 0 `8` and byte `i + 1`
+`16·t_i + 8`, so every byte of `a_t` is `8 mod 16` and the high nibbles are `t`. For `t ≠ t'` first apart at `m`,
+`a_t − a_t' = 16·256^(m+1)·D` with `D ≢ 0 mod 16` and `a_t + a_t' = 16·O` with `O` odd, so the squares agree below
+byte `m + 2` and differ there mod 16. -/
+def nibbles (s : ℕ) (t : Fin s → Fin 16) : ℕ := 8 + ∑ i : Fin s, (16 * (t i : ℕ) + 8) * 256 ^ (i.1 + 1)
+
 end Accounting.Gates
