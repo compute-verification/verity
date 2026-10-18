@@ -338,21 +338,22 @@ def test_moe_scope_declines_with_the_observed_values(kw, needle):
     assert needle in res[0].reason, res[0].reason
 
 
-def test_a_tuned_tile_binds_hoppers_expert_step_on_cc90_without_batch_invariance():
-    """At served defaults vLLM launches its tuned tile (the H200's at one row: BLOCK_SIZE_M 16, N 64, K 64, 5 stages); on cc 9.0 the scope
-    binds the expert GEMMs with Hopper's step there, and a batch-invariant target still declines the tile."""
+def test_a_tuned_tile_binds_hoppers_expert_step_on_cc90():
+    """vLLM launches its tuned tile (the H200's at one row: BLOCK_SIZE_M 16, N 64, K 64, 5 stages) with or without batch invariance; on
+    cc 9.0 the scope binds the expert GEMMs with Hopper's step there, and on another target it declines the tile."""
     from verity_vllm.program.frontend.target_profile import TargetProfile
     tile = {"BLOCK_SIZE_M": 16, "BLOCK_SIZE_N": 64, "BLOCK_SIZE_K": 64, "GROUP_SIZE_M": 1}
     kw = dict(consts_up=tile, consts_down=tile, num_stages=5)
     served = TargetProfile(compute_capability=(9, 0), num_sms=132, batch_invariant=False).to_json()
-    res, _ = _resolve(3, target=served, **kw)
-    assert len(res) == 1 and isinstance(res[0], Group), res
-    specs = [p.spec.id for p in res[0].parts if isinstance(p, Compute)]
-    assert specs[1] == f"MoeExpertGemm_v2{{E={E},K={H},N={2 * I},DOT=HopperBF16WgmmaDot16_v1}}"
-    assert specs[3] == f"MoeExpertGemmW_v2{{E={E},K={I},N={H},DOT=HopperBF16WgmmaDot16_v1}}"
-    for target in (TargetProfile(compute_capability=(9, 0), num_sms=132).to_json(), None):
+    for target in (served, TargetProfile(compute_capability=(9, 0), num_sms=132).to_json()):
         res, _ = _resolve(3, target=target, **kw)
-        assert len(res) == 1 and isinstance(res[0], Unsupported) and "tiling" in res[0].reason, res
+        assert len(res) == 1 and isinstance(res[0], Group), res
+        specs = [p.spec.id for p in res[0].parts if isinstance(p, Compute)]
+        assert specs[1] == f"MoeExpertGemm_v2{{E={E},K={H},N={2 * I},DOT=HopperBF16WgmmaDot16_v1}}"
+        assert specs[3] == f"MoeExpertGemmW_v2{{E={E},K={I},N={H},DOT=HopperBF16WgmmaDot16_v1}}"
+    res, _ = _resolve(3, target=None, **kw)
+    assert len(res) == 1 and isinstance(res[0], Unsupported) and "tiling" in res[0].reason, res
+    assert "cc 9.0 only" in res[0].detail["tuned"], res
     res, _ = _resolve(3, target=served, consts_up={**tile, "BLOCK_SIZE_K": 40}, consts_down=tile, num_stages=5)
     assert isinstance(res[0], Unsupported) and "k16 step" in res[0].detail["tuned"], res
 

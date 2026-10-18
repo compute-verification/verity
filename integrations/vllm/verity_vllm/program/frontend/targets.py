@@ -173,12 +173,12 @@ def moe_expert_gemm_spec(profile, E: int, K: int, N: int, *, routed: bool):
 
 
 def moe_tuned_tile_refusal(profile, kb: Any) -> str | None:
-    """None when a tuned (not batch-invariant) bf16 `fused_moe_kernel` tile is one the Definitions model on the declared target: cc 9.0,
-    where every tile's `tl.dot` is the k16 step `moe_expert_dot` names (wgmma or MMA v2, both Hopper's), and BLOCK_SIZE_K a multiple
-    of that step; else why not.  The Build's rule and the fold's are this one."""
+    """None when a tuned bf16 `fused_moe_kernel` tile (vLLM's per-device table, which batch invariance does not override) is one the
+    Definitions model on the declared target: cc 9.0, where every tile's `tl.dot` is the k16 step `moe_expert_dot` names (wgmma or MMA
+    v2, both Hopper's) and a row's chain does not depend on the tile, and BLOCK_SIZE_K a multiple of that step; else why not.  The
+    Build's rule and the fold's are this one."""
     if tuple(profile.compute_capability) != (9, 0):
-        return (f"numerics_unregistered: a tuned (not batch-invariant) bf16 expert launch is modelled on cc 9.0 only, not on "
-                f"cc {profile.capability_str}")
+        return (f"numerics_unregistered: a tuned bf16 expert launch is modelled on cc 9.0 only, not on cc {profile.capability_str}")
     if not isinstance(kb, int) or isinstance(kb, bool) or kb <= 0 or kb % 16:
         return f"numerics_unregistered: BLOCK_SIZE_K={kb!r} is not a multiple of the k16 step"
     return None

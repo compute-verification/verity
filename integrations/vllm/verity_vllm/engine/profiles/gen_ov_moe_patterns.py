@@ -383,19 +383,18 @@ class MoEFusedExperts:
         return unsupported(node, f"no profile pattern resolves the router's gate GEMM inside {op_name(node.op)}", child_id=gate.id)
 
     def _tiling(self, node: TreeNode, launch: TreeNode, ctx: StepContext) -> Unsupported | None:
-        """None when the launch's tiling is the profile's pinned one (`fused_pins`, warps, stages) or, on a target that is not
-        batch-invariant, a tuned tile the Build accepts (`targets.moe_tuned_tile_refusal`)."""
+        """None when the launch's tiling is the profile's pinned one (`fused_pins`, warps, stages) or a tuned tile the Build accepts
+        (`targets.moe_tuned_tile_refusal`)."""
         e = launch.enter
         consts = dict(e.constexprs)
         bad = {k: (consts.get(k), v) for k, v in self.fused_pins.items() if consts.get(k) != v}
         if bad or e.num_warps != self.fused_num_warps or e.num_stages != self.fused_num_stages:
-            tp = target_of(ctx)[0]
-            why = None if tp.batch_invariant else T.moe_tuned_tile_refusal(tp, consts.get("BLOCK_SIZE_K"))
-            if why is None and not tp.batch_invariant:
+            why = T.moe_tuned_tile_refusal(target_of(ctx)[0], consts.get("BLOCK_SIZE_K"))
+            if why is None:
                 return None
             return unsupported(node, "fused_moe_kernel tiling differs from the pinned profile",
                                mismatches={k: {"observed": o, "pinned": p} for k, (o, p) in bad.items()},
-                               num_warps=e.num_warps, num_stages=e.num_stages, **({"tuned": why} if why else {}))
+                               num_warps=e.num_warps, num_stages=e.num_stages, tuned=why)
         return None
 
     def _fused(self, node: TreeNode, launch: TreeNode, ctx: StepContext, *, expect_weighted: bool, expect_top_k: int, E: int, K: int, N: int,

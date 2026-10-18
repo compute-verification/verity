@@ -145,8 +145,8 @@ def _pinned_tile_refusal(sc, geom) -> str | None:
 
 def _launch_pins(node, meta, sc) -> str | None:
     """`fused_moe_kernel` launch pins shared by both families (`MOE_GEMM_PINS`: kernel, source body, numeric constexprs, no bias / scale
-    pointers, the difftested tiling and warps / stages, or on a target that is not batch-invariant a tuned tile
-    `frontend.targets.moe_tuned_tile_refusal` accepts): a refusal string or None.  Operand shapes / schedule are the family's own."""
+    pointers, the difftested tiling and warps / stages, or a tuned tile `frontend.targets.moe_tuned_tile_refusal` accepts): a refusal
+    string or None.  Operand shapes / schedule are the family's own."""
     if meta.get("kernel") != MOE_GEMM_PINS["kernel"]:
         return f"kernel {meta.get('kernel')} is not {MOE_GEMM_PINS['kernel']}"
     pin_sha = MOE_GEMM_PINS["src_sha256"]
@@ -160,8 +160,7 @@ def _launch_pins(node, meta, sc) -> str | None:
             return f"numerics_unregistered: {nm} is set (bias / scale epilogue is a different numeric)"
     if (r := _pinned_tile_refusal(sc, meta.get("geometry") or {})) is not None:
         from verity_vllm.program.frontend import targets as T
-        tp = active_target_profile()
-        if tp.batch_invariant or (r := T.moe_tuned_tile_refusal(tp, sc.get("BLOCK_SIZE_K"))) is not None:
+        if T.moe_tuned_tile_refusal(active_target_profile(), sc.get("BLOCK_SIZE_K")) is not None:
             return r
     bk = sc.get("BLOCK_SIZE_K")
     if not isinstance(bk, int) or bk % 16:

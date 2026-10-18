@@ -54,6 +54,7 @@ def test_a_tuned_bf16_tile_is_modelled_on_cc90_at_any_k16_multiple():
     tuned = TargetProfile(compute_capability=(9, 0), batch_invariant=False)
     for kb in (64, 128, 256):
         assert T.moe_tuned_tile_refusal(tuned, kb) is None
+    assert T.moe_tuned_tile_refusal(TargetProfile(compute_capability=(9, 0), batch_invariant=True), 64) is None
     assert "multiple of the k16 step" in T.moe_tuned_tile_refusal(tuned, 40)
     assert "cc 9.0 only" in T.moe_tuned_tile_refusal(TargetProfile(compute_capability=(12, 0), batch_invariant=False), 128)
 
