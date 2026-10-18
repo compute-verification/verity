@@ -21,7 +21,8 @@ background wait any call, finishing whose start the watch didn't see (it lay bef
   counting its subagents' progress, and longer because cancelling it may take its background workers with it; a wait after its
   turn ended is the normal state, never held). The watch cancels it (`POST .../runs/{run}/cancel`) and starts a new run on the
   agent (`POST /v1/agents/{id}/runs`) that says from when it was held and to read its inbox. A refused new run (409 agent_busy)
-  is tried again every sweep for `CONTINUE_RETRY_S`, then left for a person. It cancels at most once per agent every
+  is tried again every sweep for `CONTINUE_RETRY_S`, then left for a person. A cancel refused with 409 is not asked again;
+  a run still read as going `REFUSED_S` later is recorded for a person. It cancels at most once per agent every
   `RECANCEL_S`, so a run that hangs again is left for a person;
 - **in a long call** when a tool call the parent waits on has been running for `LONG_CALL_S` (recorded, never cancelled: a
   build or a wait may be legitimate);
@@ -66,6 +67,7 @@ HELD_BG_S = 60 * 60         # held while WAITING_FOR_BACKGROUND_WORK: cancelling
 LONG_CALL_S = 45 * 60
 RECANCEL_S = 3600
 CONTINUE_RETRY_S = 30 * 60  # how long a refused continue run is tried again before it is left for a person
+REFUSED_S = 5 * 60          # a run whose cancel got 409 still read as going this long after is left for a person
 MAX_RESTARTS = 3            # ERROR runs in a row the watch restarts before leaving the agent for a person
 IDLE_RECENT_S = 6 * 3600    # an IDLE agent is read only if it changed this recently (an ERROR leaves an agent IDLE)
 RUNS_PAGE = 50              # an ACTIVE agent's newest runs read each sweep (proofs had 25 runs cancelled on arrival in 7 h)
@@ -176,6 +178,7 @@ class Run:
     told: set[str] = field(default_factory=set)
     ended: str | None = None
     streaming: bool = False
+    refused_t: float | None = None                  # when its cancel got 409
 
 
 def lock(path: Path) -> IO | None:
@@ -317,10 +320,17 @@ class Watch:
                 r.told.add("held-again")
                 self.record("held_again", r, since=since, minutes=mins, action="none: freed once within the hour")
             return
+        if r.refused_t is not None:
+            if t - r.refused_t >= REFUSED_S and "refused" not in r.told:
+                r.told.add("refused")
+                self.record("held", r, since=since, minutes=mins,
+                            action=f"none: the API refused the cancel (409) and still reads it {r.status}")
+            return
         try:
             self.api.post(f"/v1/agents/{r.agent}/runs/{r.run}/cancel")
         except urllib.error.HTTPError as e:
-            if e.code == 409:                       # run_not_cancellable: it ended meanwhile; judged again next sweep
+            if e.code == 409:                       # run_not_cancellable: it ended meanwhile, and the runs list lags
+                r.refused_t = t
                 return
             self.freed[r.agent] = t
             self.save()

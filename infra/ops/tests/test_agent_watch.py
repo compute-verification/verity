@@ -216,6 +216,29 @@ def test_a_restart_seen_running_before_it_errors_still_counts_toward_the_limit(t
     assert "bc-a" not in w.errors, "a run that finished ends the streak"
 
 
+def test_a_run_the_api_wont_cancel_is_not_cancelled_every_sweep(tmp_path):
+    """409 run_not_cancellable while the runs list still reads RUNNING (it lags the run's end): asked once, not every minute."""
+    api, clock, w, started = setup(tmp_path)
+    held_tool_call(w)
+    calls = []
+
+    def refuse(path, body=None):
+        calls.append(path)
+        raise W.urllib.error.HTTPError(path, 409, "Conflict", {}, None)
+    api.post = refuse
+    clock.t += W.HELD_S
+    for _ in range(5):
+        w.sweep(started.append)
+        clock.t += 60
+    assert calls == ["/v1/agents/bc-a/runs/run-1/cancel"] and "bc-a" not in w.freed and records(tmp_path) == []
+    clock.t += W.REFUSED_S
+    w.sweep(started.append)
+    w.sweep(started.append)
+    assert len(calls) == 1
+    assert [(r["kind"], r["action"]) for r in records(tmp_path)] == [
+        ("held", "none: the API refused the cancel (409) and still reads it RUNNING")]
+
+
 def test_the_stream_parses_server_sent_events_until_done(monkeypatch):
     body = (b"event: status\ndata: {\"runId\": \"run-1\", \"status\": \"RUNNING\"}\n\n"
             b"id: 1-0\nevent: tool_call\ndata: {\"callId\": \"c1\", \"name\": \"Shell\",\n"
