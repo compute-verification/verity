@@ -204,7 +204,7 @@ def section_14(p):
 
 # §15 Many datacenters
 def section_15(c, dc):
-    wan = Link("east.a.cert", "west.a.cert", Assumption("wan", 100e9, "bit/s", "declared"), kind="wan")
+    wan = Link("east.leaf", "west.leaf", Assumption("wan", 100e9, "bit/s", "declared"), kind="wan")
     fleet = Fleet([dc.prefixed("east"), dc.prefixed("west")], [wan])
     print(fleet.validate())
     p = place(c, fleet.merged(), "west.a.gpu", deliver="world", x="world", h="west.a.gpu", w2="east.b.gpu", y="east.b.gpu")
