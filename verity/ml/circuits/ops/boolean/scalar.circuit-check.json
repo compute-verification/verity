@@ -6,8 +6,17 @@
   "BitAnd_v2": {
    "and": 1
   },
+  "BitNot_v2": {
+   "and": 0
+  },
+  "BitOr_v2": {
+   "and": 1
+  },
   "E4m3ToF32_v2": {
    "and": 15
+  },
+  "F32BitsShl23_v2": {
+   "and": 0
   },
   "F32Eq_v2": {
    "and": 117
@@ -21,11 +30,26 @@
   "F32Fminf_v2": {
    "and": 314
   },
+  "F32IsFinite_v2": {
+   "and": 7
+  },
+  "F32Neg_v2": {
+   "and": 0
+  },
+  "F32Sat_v2": {
+   "and": 100
+  },
   "F32ToE2m1Sat_v2": {
    "and": 60
   },
   "F32ToE4m3Sat_v2": {
    "and": 231
+  },
+  "I32Eq_v2": {
+   "and": 31
+  },
+  "I32Le_v2": {
+   "and": 32
   },
   "SelectBf16_v2": {
    "and": 16

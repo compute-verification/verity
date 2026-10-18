@@ -3,10 +3,19 @@
   "F32AddFtz_v3": {
    "and": 888
   },
+  "F32AddFtz_v4": {
+   "and": 857
+  },
   "F32FmaFtz_v3": {
    "and": 4584
   },
+  "F32FmaFtz_v4": {
+   "and": 4584
+  },
   "F32FmaSubFtz_v3": {
+   "and": 4584
+  },
+  "F32FmaSubFtz_v4": {
    "and": 4584
   },
   "F32Max_v2": {
@@ -15,8 +24,14 @@
   "F32MulFtz_v3": {
    "and": 2506
   },
+  "F32MulFtz_v4": {
+   "and": 2474
+  },
   "F32SubFtz_v3": {
    "and": 952
+  },
+  "F32SubFtz_v4": {
+   "and": 857
   },
   "Fa2InvSum_v2": {
    "and": 947
