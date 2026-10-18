@@ -20,7 +20,8 @@ open Accounting.Gates
 whose registered inputs are fixed before the draw and whose coin inputs are bytes of the draw or fixed
 (`CodecInputs`), and that computes the `q` distinct words `words` (each below `p`) of the masked `k`-round codec over
 `F`, byte for byte less their parity, on more than `ε = εnum/εden` of the uniform draws, its inputs and budgeted gates
-there in their declared intervals, so the whole circuit in its window (`ComputesWords`; claimed for `ε ≥ 2^−64`):
+but gathers there in their declared intervals, so the whole circuit in its window (`ComputesWords`; claimed for
+`ε ≥ 2^−64`):
 
   `q · E · (n − 1) ≤ budgeted C · (n − 1) + runBits C · E`,
 

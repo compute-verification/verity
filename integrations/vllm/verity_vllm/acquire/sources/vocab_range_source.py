@@ -30,6 +30,17 @@ def range_values(torch: Any, ids: Any, start: int, vs: int) -> Any:
     return torch.stack([local, ge, le], dim=-1).to(torch.int32)
 
 
+def module_of(op: str, mods: Mapping[str, Any]) -> str | None:
+    """The model module a manifest op path names: itself, else the one dotted suffix of it that is a module.  A global TP manifest
+    spells paths with the Build's export-wrapper prefix and records none ([GLM-5.3] `inner.model.model.embed_tokens` names the
+    implementation's `model.embed_tokens`); two candidate suffixes are ambiguous and name nothing."""
+    if op in mods:
+        return op
+    parts = op.split(".")
+    hits = [s for s in (".".join(parts[k:]) for k in range(1, len(parts))) if s in mods]
+    return hits[0] if len(hits) == 1 else None
+
+
 class VocabRangeSource:
     short_name = "vocab_range"
 
@@ -50,12 +61,13 @@ class VocabRangeSource:
 
     def install(self) -> None:
         mods = dict(self.model.named_modules())
-        missing = sorted(set(self.sites) - set(mods))
+        where = {op: module_of(op, mods) for op in self.sites}
+        missing = sorted(op for op, m in where.items() if m is None)
         if missing:
             raise RuntimeError(f"vocab range: the manifest's embedding sites are not modules of the model: {missing[:4]}")
-        for op in self.sites:
-            self._handles.append(mods[op].register_forward_pre_hook(self._enter(op)))
-            self._handles.append(mods[op].register_forward_hook(self._leave(op), always_call=True))
+        for op, m in where.items():
+            self._handles.append(mods[m].register_forward_pre_hook(self._enter(op)))
+            self._handles.append(mods[m].register_forward_hook(self._leave(op), always_call=True))
         self._hooks.patch(self.torch.ops._C, "vocab_parallel_embedding", self._wrap(self.torch.ops._C.vocab_parallel_embedding))
         self.active = True
 

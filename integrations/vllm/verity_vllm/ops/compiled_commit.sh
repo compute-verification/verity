@@ -44,7 +44,7 @@ HIDDEN_SO=${HIDDEN_SO:-/workspace/cp/fa2/build/matReq/verity_fa2_matReq.so}
 log() { echo "[$(date -u +%FT%TZ)] compiled_commit $ROW: $*" | tee -a "$D/stages.txt"; }
 COMMON=(--case "$ROLE" --workload "$WL" --committer native_collect_v2b --fast-copy --gpu-tree --hidden-so "$HIDDEN_SO" --openings 64 --pairs "$PAIRS" --warmup 2
         --max-num-seqs "$B" --engine-arg "gpu_memory_utilization=$GPU_UTIL" --engine-arg enforce_eager=false
-        # [M-0285 (b)] the compilation_config of record is the WORKLOAD's engine_args_required (workload.py --target: cudagraph_mode +
+        # [M-0285 (b)] the compilation_config of record is the WORKLOAD's engine.args (workload.py --target: cudagraph_mode +
         # inductor_compile_config {emulate_precision_casts: true} from TargetProfile.engine_args()); an explicit 3rd argument overrides the
         # cudagraph mode only and keeps the declared emulation (compiled_merge refuses arms whose inductor_compile_config differ);
         # the compilation_config engine arg itself is passed per process (run_arm: + the per-process cache_dir)
