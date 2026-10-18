@@ -627,6 +627,30 @@ def test_all_neither_updates_records_nor_names_instances(capsys):
         assert "neither updates records nor names instances" in capsys.readouterr().err
 
 
+def test_a_package_pinning_arklib_is_refused_below_the_memory_floor(tmp_path):
+    """A machine with less memory than ArkLib's build peaks at (swap included, within its cgroup) refuses to audit a package
+    that pins it, and the refusal prints the fast path's line on a node; other packages, or a floor set to 0, go ahead."""
+    (tmp_path / "proc").mkdir()
+    (tmp_path / "proc" / "meminfo").write_text("MemTotal:       16000000 kB\nMemFree:  100 kB\nSwapTotal:      4000000 kB\n")
+    cg = tmp_path / "cg"
+    cg.mkdir()
+    assert round(A.memory_gib(tmp_path / "proc", cg), 1) == 19.1
+    (cg / "memory.max").write_text(f"{8 * 2**30}\n")
+    (cg / "memory.swap.max").write_text("max\n")
+    assert round(A.memory_gib(tmp_path / "proc", cg), 1) == 11.8
+    (cg / "memory.swap.max").write_text("0\n")
+    assert A.memory_gib(tmp_path / "proc", cg) == 8
+    heavy, light = tmp_path / "Proofs", tmp_path / "Spec"
+    for p, deps in ((heavy, ["mathlib", "Arklib"]), (light, ["mathlib"])):
+        p.mkdir()
+        (p / "lake-manifest.json").write_text(json.dumps({"packages": [{"name": d} for d in deps]}))
+    why = A.memory_refusal([light, heavy], 16)
+    assert why.startswith(f"{heavy} pins ArkLib") and "lean_changed.py --records" in why and str(light) in why
+    assert A.memory_refusal([light], 16) is None
+    assert A.memory_refusal([light, heavy], 64) is None
+    assert A.memory_refusal([heavy], 16, env={"VERITY_LEAN_MEM_FLOOR_GIB": "0"}) is None
+
+
 def test_update_refuses_a_shared_shipped_tree(tmp_path, capsys):
     pkg = tmp_path / "Security"
     pkg.mkdir()
