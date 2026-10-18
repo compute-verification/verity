@@ -19,7 +19,7 @@ open Accounting.TS
 namespace LowBit
 
 theorem getLsbD_ofNat_toNat (w : ℕ) (b : Bool) : (BitVec.ofNat (w + 1) b.toNat).getLsbD 0 = b := by
-  cases b <;> simp [BitVec.getLsbD_ofNat]
+  cases b <;> simp
 
 /-- A map on two bits that is onto in each argument is their XOR, plus its value at `(0, 0)`. -/
 theorem latin (h : Bool → Bool → Bool) (hw : ∀ a t, ∃ e, h a e = t) (hs : ∀ e t, ∃ a, h a e = t) :
