@@ -74,6 +74,7 @@ files = [("/etc/vy/vy.env", "0644", base64.b64encode(gzip.compress(env.encode(),
          ("/usr/local/sbin/vy-nebius-stop", "0755", blob(f"{nebius}/vm_stop.sh")),
          ("/etc/systemd/system/user@.service.d/vy-cpuset.conf", "0644", blob(f"{nebius}/user-cpuset.conf")),
          ("/usr/local/share/vy/lease.sh", "0755", blob(f"{sh}/lease.sh")),
+         ("/usr/local/share/vy/gpu_adopt.py", "0755", blob(f"{nebius}/gpu_adopt.py")),
          ("/usr/local/bin/gpu-lease", "0755", blob(f"{sh}/gpu_lease.sh"))]
 out = ["#cloud-config", "users:", f"  - name: {os.environ['VY_USER']}", "    sudo: ALL=(ALL) NOPASSWD:ALL", "    shell: /bin/bash",
        "    ssh_authorized_keys:", f"      - {os.environ['VY_PUBKEY']}", "write_files:"]

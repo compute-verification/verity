@@ -33,9 +33,18 @@ Which form each takes:
 * (I8) `ProofsSound`: deterministic computation, the circuit and inputs committed before σ, Theorem S's order, binding
   `δ_bind` and proof soundness `δ_ZK`, with Lemma E1(c) (every adaptive word lies below a committed value wrong for its
   own derivation). E1(c) is proved on paper; it sits inside this premise until the adaptive model is in Lean.
+  `Accounting.Guarantees.TS.ProofsSoundOfPinned` derives it from a window's proofs (`Accounting.TS.ProofLayer`):
+  binding at `δ_bind` (at `√δ_fork` from its fork form, `Accounting.Guarantees.TS.BindingOfFork`), proof soundness at
+  `δ_ZK`, the Definitions' pinning, and `RightFixed`.
+* `RightFixed`: E1(c) with the rounds' equal shares, the part of (I8) that is the TS model's accounting rather than the
+  proof service's.
 * `LinSteer`: SAMPLING's LIN-STEER, for the compiler's closure.
 
 The joint-luck premise JL is not used: D-ideal keeps the proved `ε_jl`.
+
+`LinSteer` is false (`Accounting.Guarantees.TS.LinSteerSegments`: a segmented consumer satisfies it only when its
+noise-active segments carry equal counts), and no guarantee rests on it; `Accounting.Guarantees.TS.SegmentSteer` is the
+bound that holds.
 -/
 
 namespace Accounting.Assumptions.TS
@@ -121,9 +130,19 @@ def ProofsSound {Ω : Type} [Fintype Ω] {S : ℕ} (P : Play Ω S K T L U) (Nw �
   ∃ E : Paths Ω S → Prop, prob E ≤ S * (δbind + nπ * δzk) ∧
     ∀ x, P.accepts x → ¬ E x → P.game.accepts x ∧ (1 - P.game.deficiency x / S) * Nw ≤ (P.run x).fixed
 
-/-- `accounting-ts-lin-steer` (assumed; SAMPLING). **LIN-STEER**: zeroing a fraction `φ = |Z|/|act|` of the row's
-noise-active coordinates saves at most `φ` of the consumer's work. -/
+/-- `accounting-ts-lin-steer` (SAMPLING; false, `Accounting.Guarantees.TS.LinSteerSegments` and `LinSteerFalse`).
+**LIN-STEER**: zeroing a fraction `φ = |Z|/|act|` of the row's noise-active coordinates saves at most `φ` of the consumer's work. -/
 def LinSteer {m : ℕ} (c : Consumer m) : Prop :=
   ∀ Z ⊆ c.act, c.cost ∅ - c.cost Z ≤ (Z.card : ℝ) / c.act.card * c.cost ∅
+
+/-- `accounting-ts-right-fixed` (Lemma E1(c), proved on paper; the rounds' equal shares). **With every committed value
+right, what isn't fixed is in the shares**: on every accepted path whose committed values (each round's, read before its
+σ, `ProofLayer.committed`) are right for their derivations, the run's owned right fixed words per unit are at least
+`(1 − Σ_w d_w / S)·N_w`. An adaptive word lies below a committed value wrong for its own derivation (E1(c)), so with none
+wrong every word that isn't fixed is in its round's share, and the rounds carry equal shares of the window's words.
+`ProofsSound` held this inside it; it stays an assumption until the adaptive model is in Lean. -/
+def RightFixed {Ω : Type} [Fintype Ω] {S nπ : ℕ} {V : Type} (P : Play Ω S K T L U) (pf : ProofLayer Ω S nπ V)
+    (Nw : ℝ) : Prop :=
+  ∀ x, P.accepts x → pf.right (pf.committed x) → (1 - P.game.deficiency x / S) * Nw ≤ (P.run x).fixed
 
 end Accounting.Assumptions.TS
