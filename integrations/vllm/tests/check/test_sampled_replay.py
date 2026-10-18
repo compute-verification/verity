@@ -1605,6 +1605,38 @@ def test_moe_swapped_request_plane_split_fails_named(moe_world):
     assert {m["spec"].split("{")[0] for m in rep["mismatch"]} >= {"SiluMul_v1", "MoeExpertGemm_v1"}
 
 
+def _r0_rows_cover_r1(planes):
+    """The binding a B=2 step got before binding.py refused a MoE plane whose rows are not a multiple of the step's tokens: the committed
+    plane carries r0's rows only, and r1's entry is that whole plane at offset 0 (request-local range [0, r0's words])."""
+    def mutate(store, entries):
+        for plane in planes:
+            r0, r1 = (next(e for e in entries if e["identity"]["request_id"] == rid and e["identity"]["step"] == 0 and e["identity"]["op_path"] == "moe/L0"
+                           and e["identity"]["output_member"] == plane) for rid in ("r0", "r1"))
+            n0 = int(r0["identity"]["element_range"][1])
+            store[(0, r0["name"])] = store[(0, r0["name"])][:n0 * (4 if r0["encoding"]["dtype"] in ("f32", "i32") else 2)]
+            r1["identity"]["element_range"], r1["element_offset"] = [0, n0], 0
+    return mutate
+
+
+@pytest.mark.parametrize("planes, failing", [
+    (("router_w", "router_ids", "up", "act", "down", "sum"), {"MoeRouterTopK_v1", "MoeExpertGemm_v1", "MoeSum_v1"}),
+    (("sum",), {"MoeSum_v1"}), (("router_w",), {"MoeRouterTopK_v1", "MoeExpertGemmW_v1"}),
+    (("router_ids",), {"MoeRouterTopK_v1", "MoeExpertGemm_v1", "MoeExpertGemmW_v1"}), (("up",), {"MoeExpertGemm_v1", "SiluMul_v1"}),
+    (("act",), {"SiluMul_v1", "MoeExpertGemmW_v1"}), (("down",), {"MoeExpertGemmW_v1", "MoeSum_v1"})],
+    ids=["every_plane", "sum", "router_w", "router_ids", "up", "act", "down"])
+def test_moe_planes_carrying_r0_rows_only_bound_whole_to_r1_fail_the_replay(moe_world, planes, failing):
+    """Red-team claim 3's MoE case run through the replay (the red team checked coverage only): r1's VUs read r0's plane rows, so every
+    per-request stratum sampling of record (one pick per request x phase x op) fails the replay by name at r1 -- a plane alone at the VU that
+    produces it and the one that reads it; every plane cut at once, at the rows whose inputs come from outside the planes (the router reads
+    the gate logits, the up GEMM the normed input, the MoeSum's `out` copy), while r1's act and down VUs stay consistent with r0's words."""
+    w = moe_world
+    bmap, committed = w.bmap_and_reader(mutate=_r0_rows_cover_r1(planes))
+    rep = SR.sampled_replay(_programs(w), bmap, committed, _weights(w), per_stratum=1, seed=5, workers=0)
+    assert rep["result"] is False and rep["grade"] == "mismatch" and not rep["not_evaluated"], (rep["grade"], rep["not_evaluated"][:3])
+    assert {(m["request_id"], m["step"]) for m in rep["mismatch"]} == {("r1", 0)}, rep["mismatch"][:3]
+    assert {m["spec"].split("{")[0] for m in rep["mismatch"]} == failing
+
+
 def test_moe_plane_mapping_refuses_a_program_that_is_not_pair_major(moe_world):
     """[MAN-06f v3] the row -> plane mapping is checked against the Program, never guessed: an up row whose `[p]` name disagrees with its
     Program-order ordinal, or whose args do not read router slot p % TOPK, is NAMED as a mapping failure (class `mapping`, never carried on
