@@ -1,12 +1,13 @@
 """`requirement_units`: the plan unit and the memory-map unit on a toy decoder's requirement (eight weight blocks, the last read
 only through step 1, a gathered table of two rows a block, three requests, one paused), under `requirement.pack`'s layout and a
-layout of one value a block, held to their references and to `requirement.plan_matches` and `store_matches`; and each clause's
-negative refused."""
+layout of one value a block, held to their references and to `requirement.plan_matches` and `store_matches`; each clause's
+negative refused; and a re-key at the lifetime cap, one pass a window, accepted, and one window early refused."""
 
 from __future__ import annotations
 
 import dataclasses
 import hashlib
+import itertools
 from types import SimpleNamespace
 
 import numpy as np
@@ -17,8 +18,9 @@ from verity.ml.circuits import requirement_units as RU
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate_batch
 
-PLAN = SimpleNamespace(P=16, NR=16, V=16, G=4, TB=8, RPB=2)
-MAP = SimpleNamespace(K=2, C=2, V=16, M=8, N=16, SLOTS=2)
+MAP = SimpleNamespace(K=2, C=2, V=16, E=2, M=8, N=16, SLOTS=2)
+#: the plan unit reads the map's layout row as it is: an entry a value's epoch
+PLAN = SimpleNamespace(P=16, NR=16, V=MAP.V * MAP.E, G=4, TB=8, RPB=2)
 VW = RU.value_bits(MAP.SLOTS)
 STEPS = 4
 WEIGHTS = list(range(8))
@@ -125,8 +127,8 @@ def ref_plan(a) -> int:
 
 
 def ref_map(a) -> int:
-    return RU.memory_map(MAP, a["t"], a["first"], a["count"], a["present"], a["pos"], a["last"], a["rfree"], a["lam"], a["phi"],
-                         a["val"], a["pay"])
+    return RU.memory_map(MAP, a["t"], a["first"], a["count"], a["present"], a["pos"], a["ep"], a["last"], a["rfree"], a["cap"],
+                         a["lam"], a["phi"], a["val"], a["pay"])
 
 
 def test_the_toy_is_what_the_units_cover(case) -> None:
@@ -272,6 +274,113 @@ def test_the_value_leaves_are_the_values_each_map_row_carries(case) -> None:
     for bad in ({**a, "count": MAP.C + 1}, {**a, "present": 1 << MAP.K}, {**a, "pos": [MAP.V] + a["pos"][1:]}):
         with pytest.raises(ValueError, match="a public row of at most"):
             RU.map_value_leaves(MAP, bad)
+
+
+#: one pass a step, each its own window: a block written at step s joins window s + 1
+PASSES = [(s, s) for s in range(STEPS)]
+#: the re-key: written value 0 (A's step-0 value, block N since step 0, last read 3) moves at step 2
+MOVED, AT = 0, 2
+
+
+def rekeyed(case, caps, moved=MOVED):
+    """The spread layout with written value ``moved`` re-keyed at step 2 into a fresh block N + 5 of step 2 at its slot: its
+    epoch-1 layout entry, its old block freed at 2 and the new one at its last read. Each step's map arguments under
+    ``caps`` (`rekey_caps`'), the layout row and the new block."""
+    req, (layout, store) = case.req, case.layouts["spread"]
+    v = case.positions[moved]
+    old, new = layout.block[v], MAP.N + len(case.positions)
+    freed = {s: js - {old} for s, js in store.freed.items()}
+    freed[AT] = freed.get(AT, frozenset()) | {old}
+    freed[req.last[v]] |= {new}
+    store = dataclasses.replace(store, written={**store.written, AT: store.written[AT] | {new}}, freed=freed,
+                                payload={**store.payload, new: req.values[v]})
+    lam, phi = RU.layout_words(MAP, req, layout, case.positions), RU.map_words(MAP, store)
+    x = MAP.V + moved
+    lam[2 * x], lam[2 * x + 1] = new, layout.offset[v] // VW
+    maps = [RU.map_inputs(MAP, req, store, t, case.positions, lam, phi, case.reg_block, cap=caps[t]) for t in range(STEPS)]
+    born = maps[req.born[v]]
+    born["last"][born["pos"].index(moved)] = AT
+    a = maps[AT]
+    k = bin(a["present"]).count("1")
+    a["present"] |= 1 << k
+    a["pos"][k], a["ep"][k], a["last"][k], a["val"][k] = moved, 1, req.last[v], req.values[v] % (1 << VW)
+    return maps, lam, new
+
+
+def test_rekey_caps_are_the_stale_bound_in_step_form() -> None:
+    """Over every schedule of passes at steps 0 .. 5 in consecutive windows, appends of 1, 0, 2, 1, 1 and 0 blocks a step and
+    L of 1 .. 3: a block written at step s is below the stale bound of the first pass after a re-key's step r (N plus the
+    counts of the appends that joined a window L or more before it; none if no pass follows r) iff s < cap(r). An append
+    joins the window of the first pass after its step."""
+    steps, counts = 6, [1, 0, 2, 1, 1, 0]
+    blocks = [s for s in range(steps) for _ in range(counts[s])]
+    for chosen in itertools.product((0, 1), repeat=steps):
+        at = [s for s in range(steps) if chosen[s]]
+        for gaps in itertools.product((0, 1), repeat=max(len(at) - 1, 0)):
+            wins = [0] + list(itertools.accumulate(gaps))
+            passes = list(zip(wins, at))
+            joined = [next((w for w, p in passes if p > s), None) for s in range(steps)]
+            for L in (1, 2, 3):
+                caps = RU.rekey_caps(passes, L, steps)
+                for r in range(steps):
+                    stale = [s for s in range(steps) if joined[s] is not None and joined[r] is not None
+                             and joined[s] <= joined[r] - L]
+                    bound = -1 if joined[r] is None else MAP.N + sum(counts[s] for s in stale)
+                    assert [MAP.N + o < bound for o in range(len(blocks))] == [s < caps[r] for s in blocks], (passes, L, r)
+
+
+@pytest.mark.slow
+def test_a_rekey_at_the_cap_is_accepted_and_one_window_early_is_refused(case) -> None:
+    """Value 0's block, written at step 0, joined window 1; re-keyed at step 2, whose first pass after is window 3, it is 2
+    windows old. At L = 2 (cap 1 at step 2) every step's map unit accepts, and every step's plan unit with step 3 reading
+    the value at epoch 1, in the new block; a step-3 plan reading the old block, or the new one at epoch 0, is refused.
+    At L = 3 (cap 0) the re-key is one window early, and step 2's map unit refuses it. The references agree."""
+    req, (layout, _store) = case.req, case.layouts["spread"]
+    caps, early = RU.rekey_caps(PASSES, 2, STEPS), RU.rekey_caps(PASSES, 3, STEPS)
+    assert caps == [0, 0, 1, 0] and early == [0] * STEPS
+    maps, lam, new = rekeyed(case, caps)
+    batch = maps + [rekeyed(case, early)[0][AT]]
+    assert evaluate(case.map, MAP, batch) == [ref_map(a) for a in batch] == [1] * STEPS + [0]
+    v = case.positions[MOVED]
+    plans = []
+    for t in range(STEPS):
+        blocks, entries = set(R.read_blocks(req, layout, t)), {}
+        if t > AT:
+            blocks, entries = blocks - {layout.block[v]} | {new}, {v: MAP.V + MOVED}
+        gathered = frozenset(TABLE[r] for r in case.gathers[t])
+        plans.append(RU.plan_inputs(PLAN, req, t, blocks, case.reg_block, case.gathers[t], gathered, case.positions, lam,
+                                    entries))
+    bad = [RU.plan_inputs(PLAN, req, 3, R.read_blocks(req, layout, 3), case.reg_block, case.gathers[3],
+                          frozenset(TABLE[r] for r in case.gathers[3]), case.positions, lam, {v: MAP.V + MOVED}),
+           {**plans[3], "kvmask": RU.plan_inputs(PLAN, req, 3, [], case.reg_block, case.gathers[3],
+                                                 frozenset(TABLE[r] for r in case.gathers[3]), case.positions, lam)["kvmask"]}]
+    assert evaluate(case.plan, PLAN, plans + bad) == [ref_plan(a) for a in plans + bad] == [1] * STEPS + [0, 0]
+
+
+@pytest.mark.slow
+def test_a_rekey_s_old_block_is_held_to_its_slot_its_write_and_the_cap(case) -> None:
+    """Step 2's re-key of value 0, accepted at cap 1, returns 0 when the new block holds the value in another slot than the
+    old one, when its old block is a registered one, or one step 2 itself writes (at cap 3, which that block's write step
+    is below). Value 2 (A's step-1 value, written at step 1) re-keyed at step 2 is refused at cap 1: its block is one
+    window too young. Its write step forged to 0 in the map row passes step 2's unit, and its writer, step 1's, refuses
+    it. The reference agrees on each."""
+    caps = RU.rekey_caps(PASSES, 2, STEPS)
+    maps, _lam, new = rekeyed(case, caps)
+    a, x = maps[AT], MAP.V + MOVED
+    slot, reg, own = list(a["lam"]), list(a["lam"]), list(a["lam"])
+    slot[2 * x + 1] = 1
+    pay = list(a["pay"])
+    pay[new - a["first"]] <<= VW
+    reg[2 * MOVED] = 7
+    own[2 * MOVED] = a["first"]
+    young, _, _ = rekeyed(case, caps, moved=2)
+    phi = list(young[AT]["phi"])
+    phi[MAP.N + 2 * (case.layouts["spread"][0].block[case.positions[2]] - MAP.N)] = 0
+    batch = {"another-slot": {**a, "lam": slot, "pay": pay}, "registered-old-block": {**a, "lam": reg},
+             "old-block-the-step-writes": {**a, "lam": own, "cap": 3}, "one-window-too-young": young[AT],
+             "forged-write-step (re-key)": {**young[AT], "phi": phi}, "forged-write-step (writer)": {**young[1], "phi": phi}}
+    want = [0, 0, 0, 0, 1, 0]
+    assert evaluate(case.map, MAP, list(batch.values())) == [ref_map(b) for b in batch.values()] == want, list(batch)
 
 
 def test_the_rows_are_the_signature_s_params() -> None:
