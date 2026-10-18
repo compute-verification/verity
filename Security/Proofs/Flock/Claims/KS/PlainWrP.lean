@@ -13,9 +13,10 @@ the deployed runs. At a plain statement in scope with a draw, `wrP`'s decoders a
   decoder, at the draw and no drawn unit.
 * `PlainLiveWrPAt`: `PlainLiveAccAt` at `wrP`'s verdict and decoder and at openings whose decoders are right, and
   `plainLiveAccAt_of_wrP`, which gives it.
-* `PlainLiveW`: `PlainLiveWrPAt` at `plainOpn` where the outputs are public and at `plainOpnH` where they are hidden, at
-  the statements in scope that set up at a draw; it gives `PlainLiveAcc` where some run accepts (`plainLiveAcc_of_w`),
-  and with `Extendθ`, KS (`plain_KS_of_w`).
+* `PlainLiveW`: `PlainLiveWrPAt` at `plainOpn` where the outputs are public and at `plainOpnH` where they are hidden
+  under `hm96-sha512/v1` leaves, and `PlainLiveAccAt` itself where they are hidden under plain SHA-512 leaves, which the
+  scope admits and the deployed decoders are not yet proved right at, at the statements in scope that set up at a
+  draw; it gives `PlainLiveAcc` where some run accepts (`plainLiveAcc_of_w`), and with `Extendθ`, KS (`plain_KS_of_w`).
 -/
 
 namespace FlockDeploy.KS
@@ -169,7 +170,8 @@ theorem plainLiveAccAt_of_wrP {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} 
 
 /-- **The live sessions' bound at a plain statement, at the deployed decoders**: at each statement in scope that sets
 up at a draw, `PlainLiveWrPAt` at `wrP`'s openings, `plainOpn` where the outputs are public (`plain_hdec`) and
-`plainOpnH` where they are hidden (`plain_hdecH`). -/
+`plainOpnH` where they are hidden under `hm96-sha512/v1` leaves (`plain_hdecH`); where they are hidden under any other
+leaf the scope admits (plain SHA-512 leaves), `PlainLiveAccAt` itself. -/
 def PlainLiveW (x : Claims.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf false x = some (ins, spec, sts)) (st : Stmt)
@@ -182,10 +184,12 @@ def PlainLiveW (x : Claims.Msg) : Prop :=
       PlainLiveWrPAt h L m k0 l₀ l₁ rest ext hsch hk0 hm hlay ins.read.I d
         (plainOpn (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) ins.read.I d)
         (plain_hdec hs hin hset h hh hd L m k0 l₀ l₁ rest ext hsch hm hlay)) ∧
-    (∀ hh : ins.read.I.tags.hiddenOutputs = true,
+    (∀ (hh : ins.read.I.tags.hiddenOutputs = true) (hl : ins.read.I.tags.merkleLeaf = "hm96-sha512/v1"),
       PlainLiveWrPAt h L m k0 l₀ l₁ rest ext hsch hk0 hm hlay ins.read.I d
         (plainOpnH (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) ins.read.I d)
-        (plain_hdecH hs hin hset h hh hd L m k0 l₀ l₁ rest ext hsch hm hlay))
+        (plain_hdecH hs hin hset h hh hl hd L m k0 l₀ l₁ rest ext hsch hm hlay)) ∧
+    (∀ (_ : ins.read.I.tags.hiddenOutputs = true) (_ : ins.read.I.tags.merkleLeaf ≠ "hm96-sha512/v1"),
+      PlainLiveAccAt (wide false) h L m k0 l₀ l₁ rest ext hsch hk0 hm PT_LOCAL hlay)
 
 /-- **`PlainLiveW` gives `PlainLiveAcc`** where some run accepts: the statement parses in scope (`acc_inScope`) and sets
 up at a draw (`acc_draw`). -/
@@ -200,10 +204,12 @@ theorem plainLiveAcc_of_w {x : Claims.Msg} (hno : ¬ Claims.Flock.NoAcc sha512 (
     rw [hset] at hmem
     obtain ⟨a, -, ha⟩ := List.mem_map.1 hmem
     exact (Prod.mk.inj ha).1
-  obtain ⟨hw, hhid⟩ := hl s hs hin ins spec' sts hset st h d hd L m k0 l₀ l₁ rest ext hsch hk0 hm hlay
+  obtain ⟨hw, hhid, hplain⟩ := hl s hs hin ins spec' sts hset st h d hd L m k0 l₀ l₁ rest ext hsch hk0 hm hlay
   cases hh : ins.read.I.tags.hiddenOutputs
   · exact plainLiveAccAt_of_wrP (hw hh)
-  · exact plainLiveAccAt_of_wrP (hhid hh)
+  · by_cases hleaf : ins.read.I.tags.merkleLeaf = "hm96-sha512/v1"
+    · exact plainLiveAccAt_of_wrP (hhid hh hleaf)
+    · exact hplain hh hleaf
 
 /-- **The deployed plain verifier: KS**, at SHA-512 at the deployed relation, from the live sessions' bound at the
 deployed decoders (`PlainLiveW`) at the statements some run accepts, and `Extendθ` at full-width columns. -/

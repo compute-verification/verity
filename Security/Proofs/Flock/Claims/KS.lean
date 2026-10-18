@@ -197,11 +197,12 @@ with no level-0 opening off `C` unless it self-clashes, on the outcomes flock-ve
 deployed reader looks up no column off `C` (`DecodeSC`: `Claims.Bridge.DecodePlain.TxNoOff`,
 `Claims.Bridge.DecodePlain.decodesTable_wrP_sc`). At a plain statement in scope with public outputs, that table is
 `plainTab`, so those decoders are the ones `PlainLiveAccAt` asks for (`DecodeDeploy`: `FlockDeploy.KS.plain_hdec`).
-With hidden outputs, the hidden table is `plainTab` too, and the same holds at its openings (`DecodeHidden`:
-`Claims.Bridge.DecodePlain.decodesTable_wrP_scH`, `FlockDeploy.KS.plain_hdecH`). A statement some run accepts sets
-up at a draw, so the plain chain asks only for the mixture at those decoders, whether or not the outputs are hidden
-(`PlainWrP`: `FlockDeploy.KS.acc_draw`, `FlockDeploy.KS.PlainLiveWrPAt`, `FlockDeploy.KS.PlainLiveW`,
-`FlockDeploy.KS.plain_KS_of_w`). On an accepting deployed run whose record carries the statement's draw, the event the
+With hidden outputs and `hm96-sha512/v1` leaves, the hidden table is `plainTab` too, and the same holds at its openings
+(`DecodeHidden`: `Claims.Bridge.DecodePlain.decodesTable_wrP_scH`, `FlockDeploy.KS.plain_hdecH`). A statement some run
+accepts sets up at a draw, so the plain chain asks only for the mixture at those decoders, whether or not the outputs
+are hidden, and for `PlainLiveAccAt` itself at hidden outputs under the plain SHA-512 leaves the scope also admits,
+where the decoders at `leaf512` are not right (`PlainWrP`: `FlockDeploy.KS.acc_draw`, `FlockDeploy.KS.PlainLiveWrPAt`,
+`FlockDeploy.KS.PlainLiveW`, `FlockDeploy.KS.plain_KS_of_w`). On an accepting deployed run whose record carries the statement's draw, the event the
 mixture's first bound reads gives that verdict at the run's live outcome (`PlainEvent`:
 `FlockDeploy.KS.cols_plain`, `FlockDeploy.KS.plainVerdict_of_run`). A prover that plays the live session with the
 rest of each deployed coin on its tape bounds an event of the deployed coins by a mixture of live strategies, the
