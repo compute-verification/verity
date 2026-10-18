@@ -27,9 +27,9 @@ if [ -f "$S/prover.tar" ]; then
      || python3 -m research data put --kind pouw-h1-prover/v1 --file "$S/prover.tar" --preserve >> "$OUT/prover-put.txt" 2>&1; then
     echo "served-h1: prover data put: $(tail -1 "$OUT/prover-put.txt")"
   else
-    K=/workspace/pouw/served-h1-prover-${RESEARCH_RUN_ID:-$(basename "$D")}.tar
-    mv "$S/prover.tar" "$K" && echo "$K" > "$OUT/prover-kept.txt"
-    echo "served-h1: PROVER_PUT_FAIL, kept at $K"; tail -5 "$OUT/prover-put.txt"
+    # a job's environment holds no store key; custody uploads all of $OUT after the run (2.1 GB at 18 steps, under 4 GiB)
+    mv "$S/prover.tar" "$OUT/prover.tar" && sha256sum "$OUT/prover.tar" > "$OUT/prover.sha256"
+    echo "served-h1: prover data in OUT/prover.tar for custody ($(tail -1 "$OUT/prover-put.txt" | cut -c1-120))"
   fi
 fi
 exit "$rc"

@@ -38,7 +38,8 @@ In order, into OUT (`record.json` throughout, `manifest.json` at the end, the op
             the token ids must be the reference's
   receipts  one receipt tree per call (one leaf per unit, `commit`)
   prover    the prover's data (the table key, each call's real rows, scales and receipts) as SCRATCH/prover.tar, before the
-            gate so a gate failure keeps it; `serve.sh` puts it in the store once the GPU is released
+            gate so a gate failure keeps it; `serve.sh` puts it in the store once the GPU is released, else moves it into
+            OUT, which the run's custody uploads
   gate      drawn units, real and empty, against `h1tile.reference` (receipt) and the served integer product (z); controls: the
             unit at the next position, a flipped receipt bit, root(A) rebuilt (and a tampered row, real or empty), root(B)
             rebuilt (and a tampered row), the served rows read back from the committed scales
@@ -586,7 +587,7 @@ def prover(a, out: Path, key: bytes, calls: list[dict], data: list[dict]) -> dic
         for blk in iter(lambda: f.read(1 << 24), b""):
             h.update(blk)
     return {"bytes": tar.stat().st_size, "sha256": h.hexdigest(), "tar": str(tar),
-            "put": "serve.sh, after the lease: OUT/prover-put.txt"}
+            "put": "serve.sh, after the lease: OUT/prover-put.txt, else OUT/prover.tar"}
 
 
 def main(argv: list[str] | None = None) -> int:
