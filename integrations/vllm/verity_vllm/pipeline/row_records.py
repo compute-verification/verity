@@ -153,6 +153,11 @@ def build_jobs_auto(shapes: list[tuple[int, int]] | None = None, layers: int | N
     return max(1, min(_cpus() if cpus is None else cpus, n, int(0.8 * head) // per))
 
 
+def _ir(r: dict) -> dict:
+    """``{"ir": ...}`` for a Build whose Program isn't the word IR (its word root and digest, ``boolean.derived``'s provenance), else ``{}``."""
+    return {"ir": i} if (i := (r.get("program") or {}).get("ir")) else {}
+
+
 def build_summary(d: str) -> str:
     """Write ``build_summary.json`` (step, request and every other request shape's derive) -> PASS | FAIL."""
     out: dict[str, Any] = {}
@@ -164,11 +169,11 @@ def build_summary(d: str) -> str:
         out[w] = {"ok": bool(r.get("ok")), "unsupported": r.get("unsupported"), "exception": r.get("exception"), "message": (r.get("message") or "")[:300],
                   "program_digest": (r.get("program") or {}).get("digest") or a.get("program_digest"), "identity": a.get("identity"),
                   "correspondence_digest": (r.get("program") or {}).get("correspondence_digest") or a.get("correspondence_digest"),
-                  "target": (a.get("target_profile") or {}), "applicability": a.get("applicability")}
+                  "target": (a.get("target_profile") or {}), "applicability": a.get("applicability"), **_ir(r)}
     for p in sorted(glob.glob(f"{d}/build_request_LP*_T*/result.json")):
         r = json.load(open(p)); w = os.path.basename(os.path.dirname(p))
         out[w] = {"ok": bool(r.get("ok")), "unsupported": r.get("unsupported"), "message": (r.get("message") or "")[:300], "program_digest": (r.get("program") or {}).get("digest"),
-                  "correspondence_digest": (r.get("program") or {}).get("correspondence_digest")}
+                  "correspondence_digest": (r.get("program") or {}).get("correspondence_digest"), **_ir(r)}
     json.dump(out, open(f"{d}/build_summary.json", "w"), indent=1, default=str)
     return "PASS" if all(v["ok"] for v in out.values()) else "FAIL"
 
