@@ -121,6 +121,32 @@ def test_the_seam_is_wrong_exactly_where_its_predicate_says():
     assert vals[c_top] == sum(v << (8 * m) for m, v in enumerate(f)) >> 1024
 
 
+def test_hole_b_squares_at_one_unit_a_limb_and_chains():
+    b = S.Builder()
+    a = [b.inp(i, 0, 255) for i in range(S.N_LIMBS)]
+    once, _ = S.holeb_square(b, a)
+    assert b.lean_units == b.fixed_units == 128
+    twice, _ = S.holeb_square(b, once)
+    assert b.lean_units == b.fixed_units == 256
+    assert S.proven(b.gates) == [] and S.operand_bits(128, b.gates)
+    assert all(b.gates[g].op.kind == "gather" and b.ivs[g] == (0, 255) for g in once)
+    rng = random.Random(20261018)
+    tried = 0
+    while tried < 3:
+        x = rng.randrange(1 << 1024)
+        vals, window, hold = b.evaluate(dict(enumerate(S.limbs(x))))
+        y = S.output_value([vals[o] for o in once])
+        if S.seam_fails(x) or S.seam_fails(y):
+            continue
+        tried += 1
+        assert window and hold and y % S.P == x * x % S.P
+        z = [vals[o] for o in twice]
+        assert all(0 <= v <= 255 for v in z) and S.output_value(z) % S.P == pow(x, 4, S.P)
+    bad = next(x for x in (rng.randrange(1 << 1024) for _ in range(1 << 15)) if S.seam_fails(x))
+    vals, window, hold = b.evaluate(dict(enumerate(S.limbs(bad))))
+    assert not hold and not 0 <= vals[once[S.SEAM_W - 1]] <= 255
+
+
 def test_the_seam_fails_on_about_2_to_the_minus_12_of_inputs():
     rng = random.Random(1)
     n = 1 << 12
