@@ -4,8 +4,9 @@
     verity-vllm row stage STAGE ROW ROLE REPO REV [stage flags]           one stage as one research Attempt
                                                                           (plan: the Commit's plan, on CPU, before the GPU;
                                                                           replay: a config run's deferred C2, on CPU)
-    verity-vllm row chain ROW ROLE REPO REV [--stages ...] [--build-run RUN] [--campaign C] [--project P] [--ref REF] [--by LANE]
-                          [--tier T] [--no-publish] [stage flags]         a row whose Build, Match and Commit pass publishes
+    verity-vllm row chain ROW ROLE REPO REV [--stages ...] [--build-run RUN] [--match-run RUN] [--campaign C] [--project P]
+                          [--ref REF] [--by LANE] [--tier T] [--no-publish] [stage flags]
+                                                                          a row whose Build, Match and Commit pass publishes
                                                                           its record (`pipeline.research.chain`)
     verity-vllm row shed  [--force]
 
@@ -98,6 +99,9 @@ class Chain(_Research):
     build_run: str | None = option("--build-run", default=None,
                                    help="a passing Build Attempt the chain cites in place of its build stage (--stages without build); "
                                         "its row dir must be the chain's, whose Match precheck holds it to the cited Program digest")
+    match_run: str | None = option("--match-run", default=None,
+                                   help="a passing Match Attempt the chain cites in place of its match stage (--stages without match); "
+                                        "its row dir, with the Match's outputs, must be the chain's")
     campaign: str | None = option("--campaign", env="RESEARCH_CAMPAIGN", default=None)
     project: str = option("--project", env="RESEARCH_PROJECT", default="verity")
     publish: bool = option("--publish", action="boolean_optional", default=True,
@@ -210,7 +214,7 @@ def main(o: Any) -> int:
     if isinstance(o, Run):
         return run_row(o, o.stages)
     if isinstance(o, Chain):
-        stray = [f for f in ("--stages", "--build-run", "--campaign", "--project", "--publish", "--no-publish", "--ref", "--by", "--tier")
+        stray = [f for f in ("--stages", "--build-run", "--match-run", "--campaign", "--project", "--publish", "--no-publish", "--ref", "--by", "--tier")
                  if f in o.flags]
         if stray:
             raise UsageError(f"{', '.join(stray)} must come before ROW (the flags after the positionals go to every stage)")

@@ -18,6 +18,7 @@ ROW = "llama32-1b__bf16__l40s__tp2__b1__i256__o32__mixed__greedy__bi-eager"
 SHA = "1b53f685a81a38f649947e5f88b5ae360709a932"
 RECORD = "art:" + "e" * 64
 BUILD_RUN = "r20261018-021312-bf97"
+MATCH_RUN = "r20261018-094547-82c9"
 
 
 class _Research:
@@ -107,15 +108,30 @@ def test_a_chain_citing_a_passing_build_attempt_runs_the_rest_on_it_and_publishe
     assert stages["build"] == {"run_id": BUILD_RUN, "artifact": fake.art("build"), "rc": 0}
 
 
-@pytest.mark.parametrize("stages, rc, why", [
-    ("match,commit", 1, f"--build-run {BUILD_RUN}: not a passing Build Attempt"),
-    ("build,match,commit", 0, "--stages without build"),
+def test_a_commit_citing_a_passing_build_and_match_runs_on_them_and_publishes_with_them(tmp_path, research):
+    fake = research()
+    fake.stage_of.update({BUILD_RUN: "build", MATCH_RUN: "match"})
+    assert _chain(tmp_path, "--build-run", BUILD_RUN, "--match-run", MATCH_RUN, "--ref", "cursor/x", "--by", "circuits", "--tier", "fast",
+                  stages="commit") == 0
+    assert fake.ran == ["commit"]
+    assert fake.inputs == {"commit": [f"build={fake.art('build')}", f"match={fake.art('match')}"]}
+    p = fake.published[0]
+    assert (p[p.index("--match") + 1], p[p.index("--match-run") + 1]) == (fake.art("match"), MATCH_RUN)
+    stages = json.loads(Path(tmp_path, ROW, "row.json").read_text())["stages"]
+    assert stages["match"] == {"run_id": MATCH_RUN, "artifact": fake.art("match"), "rc": 0}
+
+
+@pytest.mark.parametrize("st, run, stages, rc, why", [
+    ("build", BUILD_RUN, "match,commit", 1, f"--build-run {BUILD_RUN}: not a passing Build Attempt"),
+    ("build", BUILD_RUN, "build,match,commit", 0, "--stages without build"),
+    ("match", MATCH_RUN, "commit", 1, f"--match-run {MATCH_RUN}: not a passing Match Attempt"),
+    ("match", MATCH_RUN, "match,commit", 0, "--stages without match"),
 ])
-def test_a_cited_build_that_did_not_pass_or_beside_a_build_stage_is_refused_before_any_stage_runs(tmp_path, research, stages, rc, why):
-    fake = research(rc={"build": rc})
-    fake.stage_of[BUILD_RUN] = "build"
+def test_a_cited_stage_that_did_not_pass_or_beside_its_own_stage_is_refused_before_any_stage_runs(tmp_path, research, st, run, stages, rc, why):
+    fake = research(rc={st: rc})
+    fake.stage_of[run] = st
     with pytest.raises(UsageError, match=why):
-        _chain(tmp_path, "--build-run", BUILD_RUN, "--ref", "cursor/x", "--by", "circuits", "--tier", "fast", stages=stages)
+        _chain(tmp_path, f"--{st}-run", run, "--ref", "cursor/x", "--by", "circuits", "--tier", "fast", stages=stages)
     assert fake.ran == []
 
 
