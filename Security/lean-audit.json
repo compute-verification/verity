@@ -711,9 +711,9 @@
    "why": "a guarantee is a Prop over the protocol and the assumptions, never a proof"
   },
   "Models.Pouw.Assumptions": {
-   "imports": ["Mathlib", "Definitions.Core", "Definitions.Pouw", "Models.Pouw.Assumptions"],
+   "imports": ["Mathlib", "Definitions.Core", "Definitions.Claims", "Definitions.Pouw", "Models.Pouw.Assumptions"],
    "except": [],
-   "why": "a named assumption, and a definition or statement over named assumptions, reads the protocol's definitions, never a guarantee or a proof"
+   "why": "a named assumption, and a definition or statement over named assumptions, reads the protocol's definitions, never a guarantee or a proof; the service premises per prover read the claims' collision finders and ecr/sha-512 (Claims.Finder, Claims.ExpectedCR), as C-Flock's guarantees do"
   },
   "Models.Pouw.Guarantees": {
    "imports": ["Mathlib", "Definitions.Core", "Definitions.Pouw", "Models.Pouw.Assumptions", "Models.Pouw.Guarantees"],
