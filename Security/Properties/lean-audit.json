@@ -172,6 +172,11 @@
    "except": ["Properties.SampledProofs.Draw"],
    "why": "the properties are stated against the one-stage audit's own functions, on Lean core: nothing of Mathlib or of `security`"
   },
+  "Properties.SampledProofs.Draw": {
+   "imports": ["Definitions.Claims", "SampledProofs"],
+   "except": [],
+   "why": "what the draw misses is stated against `Select.select`'s slots (`SampledProofs.Slots`) and the claims' miss probability `P_a` (`Definitions.Claims`), never a proof"
+  },
   "Properties.CertifierNetwork": {
    "imports": [
     "Properties.CertifierDevice",
@@ -187,11 +192,6 @@
    "imports": ["Definitions.Accounting", "CircuitRequirement"],
    "except": [],
    "why": "the requirement code's equalities are stated against its functions and the `Definitions.Accounting.Requirement` definitions they copy, never a proof"
-  },
-  "Properties.SampledProofs.Draw": {
-   "imports": ["Definitions.Claims", "SampledProofs"],
-   "except": [],
-   "why": "what the draw misses is stated against `Select.select`'s slots (`SampledProofs.Slots`) and the claims' miss probability `P_a` (`Definitions.Claims`), never a proof"
   }
  },
  "reads_exempt": {
@@ -1377,6 +1377,7 @@
  "shape": {
   "premises": ["Definitions.NetworkCertifier.Premises"],
   "statements": ["Properties"],
+  "events": ["Claims.Pr"],
   "properties": {
    "MemoryChallenger.Properties.SecurityProofs.judgeAccepts": {
     "function": "MemoryChallenger.Judge.judge",
@@ -2044,6 +2045,14 @@
     "function": "PouwWindow.Work.at?",
     "outcome": "accept"
    },
+   "Properties.SampledProofs.SecurityProofs.designWellFormed": {
+    "function": ["SampledProofs.Slots.layout", "Properties.SampledProofs.slotDesign"],
+    "outcome": "accept"
+   },
+   "Properties.SampledProofs.SecurityProofs.drawMisses": {
+    "function": "SampledProofs.Slots.select",
+    "outcome": "accept"
+   },
    "Properties.SampledProofs.acceptMeans": {
     "function": "SampledProofs.OneStage.check",
     "outcome": "accept"
@@ -2135,14 +2144,6 @@
    "Properties.Requirement.planMatches": {
     "function": "CircuitRequirement.Instance.planMatches",
     "outcome": "none"
-   },
-   "Properties.SampledProofs.SecurityProofs.designWellFormed": {
-    "function": ["SampledProofs.Slots.layout", "Properties.SampledProofs.slotDesign"],
-    "outcome": "accept"
-   },
-   "Properties.SampledProofs.SecurityProofs.drawMisses": {
-    "function": "SampledProofs.Slots.select",
-    "outcome": "accept"
    }
   },
   "frozen": {
@@ -2160,8 +2161,7 @@
     "test": "verity/core/protocols/pous/tests/test_pous_p2_ring.py::test_p2_ring_audit_secure_at_a_scaled_point",
     "why": "P2 in the ring model at the deployed point accepts a rho-bounded, (D, Q, L)-bounded responder with probability at most 1% + 2^-129 + 2^-130; open, and, if p is prime, false at D >= 32,894 (Q >= 2, L >= 65,789) for every k (PousP2Ring.tight_p16448, Security/Proofs/Pous/P2/RingTight.lean), and at L >= 2^30 for k <= 88 (PousP2Ring.not_meetsOn_b19_k88, Security/Proofs/Pous/P2/RingTrunc.lean). Its test plays the ring-model audit at a scaled point (w = 184, 16 blocks, lambda = 9) with those two attacks and seeded bounded responders."
    }
-  },
-  "events": ["Claims.Pr"]
+  }
  },
  "reads": {
   "CertifierDevice.Certifier": {
@@ -4388,15 +4388,18 @@
     "NciCheck.Properties.SecurityProofs.RejectsExactly",
     "NciCheck.Properties.SecurityProofs.Reports",
     "NciCheck.Properties.SecurityProofs.Witnesses",
+    "Properties.SampledProofs.SecurityProofs.designWellFormed",
+    "Properties.SampledProofs.SecurityProofs.drawMisses",
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBoundsNothing"
    ]
   },
   "Flock.TemplateQuery": {
-   "digest": "1cade5811487ee7fc26a2437ea9cb33962b0334669b0ddde071328c38272e60a",
+   "digest": "379d28ab9410b31771c988eeda38ec580dedaf4eab22b435c40045ae95f3dc7c",
    "definitions": {
     "Flock.TemplateQuery.DDef": "645f008e487ba991572c3d7659e26904c597f4992a45203064a039b8390c5c25",
     "Flock.TemplateQuery.DDef.nodes": "b1e5faa09c8fdd900e35d000003880cda625866e44f4dbade582562d61802677",
+    "Flock.TemplateQuery.DDef.prim": "3f74c1577efc153e85345d410dd3cc553898d4a4e9e7ea3145dcd28cb19cf857",
     "Flock.TemplateQuery.DNode": "890193965c40147964a817104ba9a8265ba7b1af8afa395b3b704c6ca7d994ce",
     "Flock.TemplateQuery.DNode.fn": "a5e92d610a69e7eefeac884fc94bda72166134a7258d55f51944f287e7d97b85",
     "Flock.TemplateQuery.DNode.form": "e39e090496e37d75b2ce92d8b64149894328814f2950d0c1e3f3a49e8cd3d631",
@@ -4406,7 +4409,8 @@
     "Flock.TemplateQuery.Desc.callees": "33bb87e8eb020344a125e89cf79e03bc0ad0113db1ea1a7fc95f3cc60a6a3749",
     "Flock.TemplateQuery.Desc.def?": "8a04a906d331d920d4386606705e205186757787f5ea17f0c38d80164dc4bf42",
     "Flock.TemplateQuery.Desc.defs": "a466ca8d691807d57e076170a41ac696cafde709cdf171d5f214cd3035cb666a",
-    "Flock.TemplateQuery.Desc.gates": "2f35e62da12d9430b444e9b38efbfd61045edb2b6f2d949b9daff66c408b4ab9",
+    "Flock.TemplateQuery.Desc.gates": "90ed4812c8d8ad8feea377aa03e417eddae2e141bbcde1b42d4ba94be4fa4113",
+    "Flock.TemplateQuery.Desc.gatesIn": "7277f0bd54b0c17cd460853a99457fa1c8c46279ff068076d9ef5c7b97013c72",
     "Flock.TemplateQuery.Desc.parse._sparseCasesOn_16": "48800d4c460e10d13aa25a1a651587414fbc20906f52503f2c6b6810aa8db9ed",
     "Flock.TemplateQuery.Desc.parse._sparseCasesOn_5": "623a4ccf9346efe3981dd841d34b179cddbb0cb41e59dce1e52add3107c54936",
     "Flock.TemplateQuery.Desc.parse._sparseCasesOn_6": "c6bcb309e4b63da7133b7cf3fa3023d9ae849629bfafe1e7e642dcc7525bc85c",
