@@ -27,8 +27,13 @@ records one at the step that reads the block's values for the last time (weights
 registered block stays credited past its last read; that every free, of a registered block or a written one, is at
 its values' last read is the memory-map unit's to prove (I4, `PROTOCOL.md` §8 "The requirement's link").  A step's
 frees apply before its writes; a step frees a slot at most once,
-only a live one, and writes a slot at most once.  A block is written once, complete: a KV block the step's tokens are
-still filling is not in the record until the step that completes it (the prover-side registry's dirty blocks).
+only a live one, and writes a slot at most once.  A block is written once, complete and encoded (deferred residency):
+a KV block the step's tokens are still filling is not in the record until it is complete, and a complete one is not
+until the device has encoded it in place under its append's coin (below).  The write of a block completed at step s is
+recorded at the step before the first step whose attention reads it encoded: s itself if the coin is back before step
+s + 1's reads, later if not.  Until then the block is in no record and uncredited, like a partly written block (the
+prover-side registry's dirty blocks, the block its slot held freed at the step a write first reached it), though
+serving reads it as plaintext from its slot.
 
 Lifetime.  No plan holds a written block L windows or more after the window its append joined (`audit.Params.lifetime`,
 an hour at the stated window), so every block written leaves the credited store within L.  A block the writer keeps
@@ -36,12 +41,16 @@ longer (a prefix cache's) is re-keyed: written again in its own slot with the sa
 index, which releases its old index and gives it a fresh bound key under a fresh coin, so the device encodes it anew.
 
 The record is the prover's: `d_j` is a hash of user data, a witness, never public (AGENTS.md's zero-knowledge rule).
-The prover's audit side (`Replay`) commits each step's digests in an append tree (`audit.append_tree`, under fresh
-salts) and sends its root and size (`Session.append`), and the released blocks' indices as runs (`Session.release`); the
-verifier sees those and the plans, never the record.  The verifier replies to each append with its coin, and the
-device encodes the step's blocks under it after it arrives and before the next step's reads.  The appends of a step
-are sent before the root of any pass whose plan holds them, and that pass's seed binds them (`audit.chained`), so it
-is computed after they are sent.
+The prover's audit side commits the digests of the blocks serving completes in an append tree (`audit.append_tree`,
+under fresh salts) and sends its root and size (`Session.append`) once they are complete, and the released blocks'
+indices as runs (`Session.release`); the verifier sees those and the plans, never the record.  The verifier replies
+to each append with its first index and its coin, and the device encodes the append's blocks in place under the coin
+once it arrives.  Residency waits for that encode, so the coin's round trip is off serving's critical path: the
+writer records the blocks' writes, in their appends' order and at the indices they took, at the step before the first
+step whose attention reads them encoded.  `Replay.apply` gives each step's `Change`: when every coin is back before
+the next step's reads, its blocks are the step's own append (`Change.append_tree`); deferred, they are those of the
+appends sent before whose writes the step records.  The appends are sent before the root of any pass whose plan
+holds them, and that pass's seed binds them (`audit.chained`), so it is computed after they are sent.
 That the session's appends, re-keys and frees are this record's, in its order and at its steps, is the memory-map
 unit's to prove against the record's append chain (`audit.Record.appends`, `RequirementLink.mapped`, `PROTOCOL.md` §8
 "The memory map's choices"): frees, re-keys and append order chosen after the seed would otherwise be advice.
@@ -51,12 +60,13 @@ step=s)`, public), and the steps of a session's passes strictly increase.  Its p
 `s`: with every resident block read, the blocks resident at `s`, registered or written at a step before `s` and not
 freed or overwritten at one (A1's `Store.resident` and `PlanMatches`, in the Lean module
 `Definitions.Accounting.Requirement`).
-A step's record takes effect after the step's reads: its writes are of values the step produced, and its frees are of
-blocks whose values the step read last.  `Replay.take(s)` is the plan's change for the pass at `s` since the last pass
-(`Plan.changed`, the root's `Session.receive(..., change=...)`), the blocks appended and released between them, of
-which a block appended and released in between is in neither; it refuses a step at or before one already applied or
-taken.  That a pass's plan is the blocks the circuit reads at its step is the plan's proof unit's to check, against
-this record and the circuit's requirement, inside zero knowledge.
+A step's record takes effect after the step's reads: its writes are of blocks the step completed, or an earlier step
+did and the device has since encoded, and its frees are of blocks whose values the step read last.  `Replay.take(s)`
+is the plan's change for the pass at `s` since the last pass (`Plan.changed`, the root's `Session.receive(...,
+change=...)`), the blocks appended and released between them, of which a block appended and released in between is in
+neither; it refuses a step at or before one already applied or taken.  That a pass's plan is the blocks the circuit
+reads at its step is the plan's proof unit's to check, against this record and the circuit's requirement, inside zero
+knowledge.
 """
 
 from __future__ import annotations
@@ -93,7 +103,8 @@ class Header:
 
 @dataclass(frozen=True, slots=True)
 class Written:
-    """A block a step completed: its slot, the store index its writer gave it, and its payload's digest `d_j`."""
+    """A block a step writes, one it or an earlier step completed and the device has encoded: its slot, the store
+    index its writer gave it, and its payload's digest `d_j`."""
 
     slot: int
     index: int

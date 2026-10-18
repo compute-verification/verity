@@ -1,6 +1,7 @@
-"""`requirement_units`: the plan unit and the memory-map unit on a toy decoder's requirement (eight weight blocks, a gathered
-table of two rows a block, three requests, one paused), under `requirement.pack`'s layout and a layout of one value a block,
-held to their references and to `requirement.plan_matches` and `store_matches`; and each clause's negative refused."""
+"""`requirement_units`: the plan unit and the memory-map unit on a toy decoder's requirement (eight weight blocks, the last read
+only through step 1, a gathered table of two rows a block, three requests, one paused), under `requirement.pack`'s layout and a
+layout of one value a block, held to their references and to `requirement.plan_matches` and `store_matches`; and each clause's
+negative refused."""
 
 from __future__ import annotations
 
@@ -21,6 +22,8 @@ MAP = SimpleNamespace(K=2, C=2, V=16, M=8, N=16, SLOTS=2)
 VW = RU.value_bits(MAP.SLOTS)
 STEPS = 4
 WEIGHTS = list(range(8))
+#: a weight block only the first steps read (an expert's): its registered block is freed at its last read
+READ_UNTIL = {7: 1}
 TABLE = list(range(8, 24))
 #: request: (its steps, the table row it gathers at each); C is paused at step 2
 REQUESTS = {"A": ({0: 3, 1: 5, 2: 0, 3: 7}), "B": ({0: 9, 1: 2}), "C": ({1: 4, 3: 11})}
@@ -34,14 +37,14 @@ def toy():
     """The requirement, each written value's id, and the table rows each step gathers."""
     width, born, last, uses, values = {}, {}, {}, {s: set() for s in range(STEPS)}, {}
     for v in WEIGHTS:
-        width[v], born[v], last[v], values[v] = R.BLOCK_BITS, -1, STEPS - 1, _value(f"w{v}", R.BLOCK_BITS)
+        width[v], born[v], last[v], values[v] = R.BLOCK_BITS, -1, READ_UNTIL.get(v, STEPS - 1), _value(f"w{v}", R.BLOCK_BITS)
     for r, v in enumerate(TABLE):
         width[v], born[v], last[v], values[v] = VW, -1, STEPS - 1, _value(f"row{r}", VW)
     kv, gathers, nxt = {}, {s: [] for s in range(STEPS)}, 100
     for name, steps in REQUESTS.items():
         mine = []
         for s in sorted(steps):
-            uses[s] |= set(WEIGHTS) | {TABLE[steps[s]]} | set(mine)
+            uses[s] |= {w for w in WEIGHTS if s <= last[w]} | {TABLE[steps[s]]} | set(mine)
             gathers[s].append(steps[s])
             for v in mine:
                 last[v] = s
@@ -114,7 +117,7 @@ def plan_args(c, layout, t, plan):
 
 def map_args(c, layout, store, t):
     lam, phi = RU.layout_words(MAP, c.req, layout, c.positions), RU.map_words(MAP, store)
-    return RU.map_inputs(MAP, c.req, store, t, c.positions, lam, phi)
+    return RU.map_inputs(MAP, c.req, store, t, c.positions, lam, phi, c.reg_block)
 
 
 def ref_plan(a) -> int:
@@ -122,19 +125,23 @@ def ref_plan(a) -> int:
 
 
 def ref_map(a) -> int:
-    return RU.memory_map(MAP, a["t"], a["first"], a["count"], a["present"], a["pos"], a["last"], a["lam"], a["phi"], a["val"],
-                         a["pay"])
+    return RU.memory_map(MAP, a["t"], a["first"], a["count"], a["present"], a["pos"], a["last"], a["rfree"], a["lam"], a["phi"],
+                         a["val"], a["pay"])
 
 
 def test_the_toy_is_what_the_units_cover(case) -> None:
     """Both layouts are honest (`store_matches` and `plan_matches` at every step), the spread one's blocks are half empty, and
     each step's plan is its weights, its gathered rows' blocks and its written values' blocks: C's block is resident at step
-    2, when C is paused, and no plan holds it."""
+    2, when C is paused, and no plan holds it. Weight block 7 is freed at step 1, its last read, in both stores and in the map
+    row, the only registered free before the last step."""
     req = case.req
     for layout, store in case.layouts.values():
         for t in range(STEPS):
             assert R.store_matches(req, layout, store, R.BLOCK_BITS, t)
             assert R.plan_matches(req, layout, R.read_blocks(req, layout, t), R.BLOCK_BITS, t)
+        assert 7 in store.freed[1] and 7 not in store.resident(2) and 7 in R.read_blocks(req, layout, 1)
+        assert RU.map_words(MAP, store)[:MAP.N] == [1 if j == 7 else STEPS - 1 for j in range(MAP.N)]
+        assert RU.registered_frees(req, case.reg_block) == {j: 1 if j == 7 else STEPS - 1 for j in range(MAP.N)}
     layout, store = case.layouts["spread"]
     c1 = next(v for v in case.positions if req.born[v] == 1 and req.last[v] == 3 and layout.block[v] not in
               R.read_blocks(req, layout, 2))
@@ -157,15 +164,17 @@ def test_each_step_s_honest_memory_map_is_accepted(case) -> None:
 
 
 def test_a_plan_with_a_wrong_block_is_refused(case) -> None:
-    """A plan holding a block the step doesn't read (a paused request's, a table block no gather selects), missing one it
-    reads, out of order, or past its count returns 0, as `plan_matches` refuses it, and so does a gather outside the table."""
+    """A plan holding a block the step doesn't read (a paused request's, a table block no gather selects, a registered block
+    past its last read), missing one it reads, out of order, or past its count returns 0, as `plan_matches` refuses it, and so
+    does a gather outside the table."""
     req, (layout, _store) = case.req, case.layouts["spread"]
     t = 2
     honest = sorted(R.read_blocks(req, layout, t))
     paused = next(layout.block[v] for v in case.positions if req.born[v] == 1 and layout.block[v] not in honest)
     unselected = next(PLAN.TB + r // PLAN.RPB for r in range(16) if PLAN.TB + r // PLAN.RPB not in honest)
     plans = {"paused-request-block": sorted(honest + [paused]), "unselected-table-block": sorted(honest + [unselected]),
-             "swapped": sorted(honest[:-1] + [paused]), "missing": honest[:-1]}
+             "freed-registered-block": sorted(honest + [7]), "swapped": sorted(honest[:-1] + [paused]),
+             "missing": honest[:-1]}
     batch = []
     for name, plan in plans.items():
         assert not R.plan_matches(req, layout, plan, R.BLOCK_BITS, t), name
@@ -179,19 +188,21 @@ def test_a_plan_with_a_wrong_block_is_refused(case) -> None:
 
 
 def _phi(a, j, write=None, free=None):
+    """``a`` with block j's write or free step in the map row replaced (a registered block has only its free)."""
     phi = list(a["phi"])
-    b = j - MAP.N
-    phi[2 * b] = phi[2 * b] if write is None else write
-    phi[2 * b + 1] = phi[2 * b + 1] if free is None else free
+    at = j if j < MAP.N else MAP.N + 2 * (j - MAP.N) + 1
+    phi[at] = phi[at] if free is None else free
+    if write is not None:
+        phi[at - 1] = write
     return {**a, "phi": phi}
 
 
 @pytest.mark.slow
 def test_each_memory_map_clause_s_negative_is_refused(case) -> None:
-    """A payload that doesn't carry its value, a free after its values' last read (late) or before it (early), a write at
-    another step, a block written empty, nonzero bits in an empty slot, two values in one slot, a value outside the step's
-    blocks: each returns 0 as the reference does; the late and early frees and the mismatch each break `store_matches` at a
-    step."""
+    """A payload that doesn't carry its value, a free after its values' last read (late) or before it (early), of a written
+    block or of a registered one (weight block 7, whose last read is step 1), a write at another step, a block written empty,
+    nonzero bits in an empty slot, two values in one slot, a value outside the step's blocks: each returns 0 as the reference
+    does; the late and early frees and the mismatch each break `store_matches` at a step."""
     req = case.req
     layout, store = case.layouts["spread"]
     t = 0
@@ -215,6 +226,10 @@ def test_each_memory_map_clause_s_negative_is_refused(case) -> None:
     shared = list(a["lam"])
     shared[2 * a["pos"][1]], shared[2 * a["pos"][1] + 1] = j0, 0
     batch["two-in-one-slot"] = {**a, "lam": shared, "pay": [a["pay"][0], 0]}
+    a1 = map_args(case, layout, store, 1)
+    assert RU._bits(a1["rfree"], MAP.N) == [int(j == 7) for j in range(MAP.N)]
+    batch["registered-late-free"] = _phi(a1, 7, free=2)
+    batch["registered-early-free"] = _phi(a1, 7, free=0)
     got = evaluate(case.map, MAP, list(batch.values()))
     assert got == [ref_map(x) for x in batch.values()] == [0] * len(batch)
 
@@ -230,7 +245,33 @@ def test_each_memory_map_clause_s_negative_is_refused(case) -> None:
         return f
 
     assert broken(refree(jk, lastk + 1)) and broken(refree(jk, lastk - 1))
+    assert broken(refree(7, 2)) and broken(refree(7, 0))
     assert broken(lambda s: dataclasses.replace(s, payload={**s.payload, j0: s.payload[j0] ^ (1 << 77)}))
+
+
+def test_the_value_leaves_are_the_values_each_map_row_carries(case) -> None:
+    """`map_value_leaves`, from the public row alone, names leaf i of the value commitments (written value positions[i]) for
+    each value row, whose words are that value's, and block first + c for each payload row, whose words are its payload.
+    Over the steps, every written value a later step reads is one value leaf, once; a public row past C blocks, past K
+    values or with a position past V is refused."""
+    req, rows = case.req, RU.memory_map_rows(MAP)
+    for layout, store in case.layouts.values():
+        seen = []
+        for t in range(STEPS):
+            a = map_args(case, layout, store, t)
+            words = RU.row_words(MAP, rows, a)
+            leaves = RU.map_value_leaves(MAP, {x: a[x] for x in ("first", "count", "present", "pos")})
+            for row, (kind, at) in leaves.items():
+                want = (RU._words(req.values[case.positions[at]], VW // 16) if kind == "value"
+                        else RU._words(store.payload[at], RU.BLOCK_WORDS))
+                assert words[row] == want, (t, row)
+            assert sorted(at for kind, at in leaves.values() if kind == "block") == sorted(store.written.get(t, ()))
+            seen += [at for kind, at in leaves.values() if kind == "value"]
+        assert sorted(seen) == [i for i, v in enumerate(case.positions) if req.last.get(v, -1) > req.born[v]]
+    a = map_args(case, *case.layouts["spread"], 0)
+    for bad in ({**a, "count": MAP.C + 1}, {**a, "present": 1 << MAP.K}, {**a, "pos": [MAP.V] + a["pos"][1:]}):
+        with pytest.raises(ValueError, match="a public row of at most"):
+            RU.map_value_leaves(MAP, bad)
 
 
 def test_the_rows_are_the_signature_s_params() -> None:
