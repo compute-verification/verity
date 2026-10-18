@@ -7,7 +7,7 @@ from typing import Any, Callable
 
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """The word Definitions: the gate's f32-out GEMM at GLM-5.3's K (6144) over two W rows, the batched GEMM at two members,
-    K = 32, N = 3, and both default split-K output types at K = 64, N = 3, four splits."""
+    K = 32, N = 3, and both default split-K output types and the bf16-workspace split-K at K = 64, N = 3, four splits."""
     from verity.ml.circuits.boolean.trace import word_of
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.ops.boolean import gemm as BG
@@ -19,6 +19,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("BatchedGemm_v1", lambda: bind(CB.BatchedGemmWord, B=2, K=32, N=3, DOT=HOP)),
         ("CublasSplitKGemmF32Out_v1", lambda: bind(CB.CublasSplitKGemmF32OutWord, K=64, N=3, SPLIT_K=4, DOT=HOP)),
         ("CublasSplitKGemm_v1", lambda: bind(CB.CublasSplitKGemmWord, K=64, N=3, SPLIT_K=4, DOT=HOP)),
+        ("CublasSplitKGemmBf16Partials_v1", lambda: bind(CB.CublasSplitKGemmBf16PartialsWord, K=64, N=3, SPLIT_K=4, DOT=HOP)),
     ]
 
 
@@ -35,4 +36,5 @@ def _boolean_roots() -> list[Any]:
         bind(CB.BatchedGemm, B=2, K=32, N=3, DOT=HOP),
         bind(CB.CublasSplitKGemmF32Out, K=64, N=3, SPLIT_K=4, DOT=HOP),
         bind(CB.CublasSplitKGemm, K=64, N=3, SPLIT_K=4, DOT=HOP),
+        bind(CB.CublasSplitKGemmBf16Partials, K=64, N=3, SPLIT_K=4, DOT=HOP),
     ]

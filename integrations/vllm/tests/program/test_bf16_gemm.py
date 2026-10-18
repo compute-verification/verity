@@ -73,6 +73,8 @@ PINS = {
         (91912, 179019, 9143, "5eca429c74900b6b569f648b957894ad339aa1648d12b11f06aca7dd1f2f76d5e2f93da288be7634078c87fb65c4ce8674eae8536517aa0f521552f322469428"),
     "CublasSplitKGemm_v2{K=64,N=3,SPLIT_K=4,DOT=HopperBF16WgmmaDot16_v2}":
         (92110, 179313, 9188, "3c0e23088a8a80db54673b576a5b88ed18e29fdd391c5e477d806cf1fe32dd220686d8caf2b72236aa3e66c901161c4bce5945946e648aa575fce8049dbcce02"),
+    "CublasSplitKGemmBf16Partials_v2{K=64,N=3,SPLIT_K=4,DOT=HopperBF16WgmmaDot16_v2}":
+        (92902, 180489, 9368, "99d175f24909cb347eed2c1c12ee379a9ca273cda9867ff7c4db2354aeffcb2b6a73503cc672fd5befba219806e784404047862ee5663f116c8c23abf34da47e"),
     "LlBf16DotprodDot_v2{K=256,BS=64,VEC=2,FMA=1}":
         (550400, 871680, 54784, "310290be808e36bd3308147d713f3bf718561ee1512a5b9dc2b5b5c3e5b297308b555d436a583357cdefeef7314aa303466916d65cd181c2131406ed3e1c2979"),
     "LlBf16DotprodDot_v2{K=256,BS=64,VEC=2,FMA=0}":
@@ -92,6 +94,7 @@ STEPS = [bind(d) for st in CHAIN_STEPS.values() for d in st]
 PINNED = [bind(CB.GemmF32Out, K=32, N=3, DOT=HOP), bind(CB.BatchedGemm, B=2, K=32, N=3, DOT=HOP),
           bind(CB.CublasSplitKGemmF32Out, K=64, N=3, SPLIT_K=4, DOT=HOP),
           bind(CB.CublasSplitKGemm, K=64, N=3, SPLIT_K=4, DOT=HOP),
+          bind(CB.CublasSplitKGemmBf16Partials, K=64, N=3, SPLIT_K=4, DOT=HOP),
           bind(LL.LlBf16DotprodDot, K=256, BS=64, VEC=2, FMA=1), bind(LL.LlBf16DotprodDot, K=256, BS=64, VEC=2, FMA=0),
           bind(LL.LlBf16DotprodDot, K=101, BS=32, VEC=2, FMA=1),
           bind(LL.LlBf16SplitKDot, K=128, SPLIT_K=2, TILE_K=32, WARPS=2, DOT=HOP),
@@ -248,15 +251,18 @@ def test_f32out_and_batched_gemm_agree_with_the_models() -> None:
 
 
 def test_cublas_splitk_definitions_agree_with_the_hypothesis() -> None:
-    """Both Boolean split-K output types agree with the word and numpy twins at a nontrivial four-way partition."""
+    """The Boolean split-K output types and the bf16-workspace split-K agree with the word and numpy twins at a nontrivial
+    four-way partition."""
     rng = np.random.default_rng(41)
     for kind in KINDS:
         x, w = _bf16_words(rng, (12, 64), kind), _bf16_words(rng, (3, 64), kind)
         f32 = _bits_rows(bind(CB.CublasSplitKGemmF32Out, K=64, N=3, SPLIT_K=4, DOT=HOP), x, w)
-        bf16 = np.asarray(BS.evaluate_words(bind(CB.CublasSplitKGemm, K=64, N=3, SPLIT_K=4, DOT=HOP), x,
-                                            np.broadcast_to(w, (len(x), *w.shape)))).astype(U16)
+        bf16, partials = (np.asarray(BS.evaluate_words(bind(d, K=64, N=3, SPLIT_K=4, DOT=HOP), x,
+                                                       np.broadcast_to(w, (len(x), *w.shape)))).astype(U16)
+                          for d in (CB.CublasSplitKGemm, CB.CublasSplitKGemmBf16Partials))
         assert _f32_equal(f32, C.cublas_splitk_rows(x, w, 4))
         assert np.array_equal(bf16, C.cublas_splitk_rows(x, w, 4, out="bf16"))
+        assert np.array_equal(partials, C.cublas_splitk_rows(x, w, 4, partial="bf16", out="bf16")), kind
 
 
 def test_cublas_default_split_bounds_are_equal_64_element_chunks_then_a_remainder() -> None:

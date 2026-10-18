@@ -266,6 +266,37 @@ def cublas_splitk_hypotheses(x: np.ndarray, w: np.ndarray, SPLIT_K: int, *, out:
     return ans
 
 
+def cublas_serial_splitk_rows(x: np.ndarray, w: np.ndarray, SPLIT_K: int) -> np.ndarray:
+    """`CublasSerialSplitKGemm_v1{K, N, SPLIT_K, HopperBF16WgmmaDot16_v1}` of every row of x (M, K) against w (N, K): the contiguous
+    chunks in order, each chunk's k16 chain from +0 added in f32 to the previous chunk's bf16 output and rounded to bf16 again
+    (the first rounded alone): bf16 words (M, N)."""
+    x, w = np.asarray(x, np.uint16), np.asarray(w, np.uint16)
+    out = None
+    for cols in _split_cols(x.shape[1], SPLIT_K, "contiguous"):
+        p = MK.dot_chain(x[:, cols], w[:, cols])
+        out = MK.bf16_of(p if out is None else MK.add(p, DR.bf16_to_f32_words(out)))
+    return out
+
+
+def cublas_gemv_rows(x: np.ndarray, w: np.ndarray, LANES: int, FMA: int = 1) -> np.ndarray:
+    """`CublasGemv_v1{K, N, LANES, FMA}` of every row of x (M, K) against w (N, K): lane t of LANES runs one f32 chain from +0 over
+    k = t, t + LANES, ... (FFMA when FMA, else FMUL then FADD), the lanes meet in a butterfly (offsets LANES/2, ..., 1: lane i
+    adds lane i + o), and lane 0's sum is rounded to bf16: bf16 words (M, N)."""
+    x, w = np.asarray(x, np.uint16), np.asarray(w, np.uint16)
+    (M, K), N = x.shape, w.shape[0]
+    xf, wf = DR.bf16_to_f32_words(x), DR.bf16_to_f32_words(w)
+    acc = np.zeros((M, N, LANES), U32)
+    for k0 in range(0, K, LANES):
+        n = min(LANES, K - k0)
+        a, b, c = xf[:, None, k0:k0 + n], wf[None, :, k0:k0 + n], acc[..., :n]
+        acc[..., :n] = MK.fma(a, b, c) if FMA else MK.add(c, MK.mul(a, b))
+    o = LANES // 2
+    while o:
+        acc = MK.add(acc[..., :o], acc[..., o:2 * o])
+        o //= 2
+    return MK.bf16_of(acc[..., 0])
+
+
 def dotprod_rounds(K: int, BS: int, VEC: int) -> list[np.ndarray]:
     """`LLBf16Dotprod`'s K loop as rounds, each the k every thread adds then (-1: none): the vector loads at width VEC over K's
     whole tiles of VEC BS, then at width VEC/2 over what is left (its 64-bit tail at VEC 8), then scalar rounds of BS, the last
