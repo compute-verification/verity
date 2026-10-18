@@ -1545,6 +1545,24 @@
    "assumptions": [],
    "type_hash": "8d29d2e533802015098f254806edb1e99d0a93e33acf916a76ca12484b570e3e"
   },
+  "Accounting.SecurityProofs.RequirementDense": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.RequirementDense : Accounting.Guarantees.RequirementDense"],
+   "assumptions": [],
+   "type_hash": "be03be0eecfe3f754c0b29a135ee3d90ddea95eee6e5e99cd7e6dc151dbef419"
+  },
+  "Accounting.SecurityProofs.RequirementHeld": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.RequirementHeld : Accounting.Guarantees.RequirementHeld"],
+   "assumptions": [],
+   "type_hash": "eb1d71eefdaee8934a9bf238b893b3128bacc151ddc6273bd93b97fa553311ba"
+  },
+  "Accounting.SecurityProofs.RequirementMoved": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.RequirementMoved : Accounting.Guarantees.RequirementMoved"],
+   "assumptions": [],
+   "type_hash": "0e3f73f68c101849e6b3822676bab1e1c8a4feadf7be7da359644da590003269"
+  },
   "Accounting.SecurityProofs.Sketch.CommitThenProject": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.Sketch.CommitThenProject : Accounting.Guarantees.Sketch.CommitThenProject"],
@@ -1625,11 +1643,53 @@
    "assumptions": [],
    "type_hash": "5cd9789694c0df8e5c5a09cd026a4f45b7c72ae8be8393f286cb479d9cac04d0"
   },
+  "Accounting.SecurityProofs.TS.FanInCount": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.FanInCount : Accounting.Guarantees.TS.FanInCount"],
+   "assumptions": [],
+   "type_hash": "3e1d5374cd0bc66c2c0b2ce69691138ba42b473ae7dad89b19127743e29d0b40"
+  },
+  "Accounting.SecurityProofs.TS.FillOptOfFanIn": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.FillOptOfFanIn : Accounting.Guarantees.TS.FillOptOfFanIn"],
+   "assumptions": [],
+   "type_hash": "568832759779f6343aa4730d2aa7371196de435e23c850b7fd3fb9757ff039f3"
+  },
   "Accounting.SecurityProofs.TS.FloorCreditD3": {
    "owner": "@compute-accounting",
    "signature": ["Accounting.SecurityProofs.TS.FloorCreditD3 : Accounting.Guarantees.TS.FloorCreditD3"],
    "assumptions": [],
    "type_hash": "010375a4f71170b4f5bce6e609521eeb3513178b58fb0ab590c0230ab29fee8f"
+  },
+  "Accounting.SecurityProofs.TS.FoldOptOfFanIn": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.FoldOptOfFanIn : Accounting.Guarantees.TS.FoldOptOfFanIn"],
+   "assumptions": [],
+   "type_hash": "22e2320fa4db7ad6c4182cab5d22d9df1ef0ede2c031c256c59be0e9997c4a1e"
+  },
+  "Accounting.SecurityProofs.TS.LuckCaseA": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.LuckCaseA : Accounting.Guarantees.TS.LuckCaseA"],
+   "assumptions": [],
+   "type_hash": "bfb776c1219550bda7250be4999baa53e805c1921a0a7ba9f0cbb554a7f16d56"
+  },
+  "Accounting.SecurityProofs.TS.LuckCaseACube": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.LuckCaseACube : Accounting.Guarantees.TS.LuckCaseACube"],
+   "assumptions": [],
+   "type_hash": "d084b40f522a78af1bea4d7f120109dd3d8713c7096795fd276431965bf3524c"
+  },
+  "Accounting.SecurityProofs.TS.LuckOfReceipt": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.LuckOfReceipt : Accounting.Guarantees.TS.LuckOfReceipt"],
+   "assumptions": [],
+   "type_hash": "ae399ff4f14b16a994012859adfb2f4af1fa9d30ae7bf2f368d6157b34573189"
+  },
+  "Accounting.SecurityProofs.TS.OperandLuckCube": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.OperandLuckCube : Accounting.Guarantees.TS.OperandLuckCube"],
+   "assumptions": [],
+   "type_hash": "59a1a10d17e458bed3ec7ae7d843edc76070ab6305d519024c21d258a32c3adb"
   },
   "Accounting.SecurityProofs.TS.OutputCount": {
    "owner": "@compute-accounting",
@@ -1637,11 +1697,23 @@
    "assumptions": [],
    "type_hash": "f63122b9d09208627838844f85921930911249f025c810b9936cfc84542bef96"
   },
+  "Accounting.SecurityProofs.TS.ReceiptLuckCaseA": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.ReceiptLuckCaseA : Accounting.Guarantees.TS.ReceiptLuckCaseA"],
+   "assumptions": [],
+   "type_hash": "4a9bafd0d213eaea7432547a51b90ce8048911b72b1db0096f54927529a3ef0d"
+  },
   "Accounting.SecurityProofs.TS.RoutesOffD2": {
    "owner": "@compute-accounting",
    "signature": ["Accounting.SecurityProofs.TS.RoutesOffD2 : Accounting.Guarantees.TS.RoutesOffD2"],
    "assumptions": [],
    "type_hash": "910ce6a26665e311102a94c12eaccac326387b0accd53002a814c6795e97b5fc"
+  },
+  "Accounting.SecurityProofs.TS.SeesOfInjective": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.SeesOfInjective : Accounting.Guarantees.TS.SeesOfInjective"],
+   "assumptions": [],
+   "type_hash": "c937ea1687f1688063a1c90c1b8da809f1a119c468d6fd44e050ed5cc450bd27"
   },
   "Accounting.SecurityProofs.TS.TensorSlotCount": {
    "owner": "@compute-accounting",
@@ -1654,6 +1726,12 @@
    "signature": ["Accounting.SecurityProofs.TS.TensorSlotTight : Accounting.Guarantees.TS.TensorSlotTight"],
    "assumptions": [],
    "type_hash": "30d003c694a3bd08644494216c161e39705b04f4adbc08b3afa985e29b5e7501"
+  },
+  "Accounting.SecurityProofs.TS.ThinFoldInjective": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.ThinFoldInjective : Accounting.Guarantees.TS.ThinFoldInjective"],
+   "assumptions": [],
+   "type_hash": "05c11dc008c2a2607af95ee24298aeb442207dd73f0dc17980a992372e1e94ef"
   },
   "Accounting.SecurityProofs.TS.TimeBound": {
    "owner": "@compute-accounting",
@@ -5697,6 +5775,18 @@
    "assumptions": [],
    "type_hash": "a236d72e1d9cd1d06b54e7baf0b21e92f7cfd039e84b3c901c5056961c72f88c"
   },
+  "Pouw.SecurityProofs.Receipt.DuoRunWordInjective": {
+   "owner": "@compute-accounting",
+   "signature": ["Pouw.SecurityProofs.Receipt.DuoRunWordInjective : Pouw.Guarantees.Receipt.DuoRunWordInjective"],
+   "assumptions": [],
+   "type_hash": "62acd21de9658a2bcd2417c64b8e4d123753628aa648c9cf735327c6fcfe4edd"
+  },
+  "Pouw.SecurityProofs.Receipt.DuoStepBijective": {
+   "owner": "@compute-accounting",
+   "signature": ["Pouw.SecurityProofs.Receipt.DuoStepBijective : Pouw.Guarantees.Receipt.DuoStepBijective"],
+   "assumptions": [],
+   "type_hash": "21689d972d3b051ae3357fcd8d091c2a79e522862fd233f0117983bf2059eda1"
+  },
   "Pouw.SecurityProofs.Receipt.DuoTripleNoKernel": {
    "owner": "@compute-accounting",
    "signature": ["Pouw.SecurityProofs.Receipt.DuoTripleNoKernel : Pouw.Guarantees.Receipt.DuoTripleNoKernel"],
@@ -5708,6 +5798,62 @@
    "signature": ["Pouw.SecurityProofs.Receipt.DuoWordInjective : Pouw.Guarantees.Receipt.DuoWordInjective"],
    "assumptions": [],
    "type_hash": "e750ff080ad0a230437eb91653a6a5efce0853e7ca3347d1aed8e1ae58b7118a"
+  },
+  "Pouw.SecurityProofs.Receipt.Fx1PairNoKernel": {
+   "owner": "@compute-accounting",
+   "signature": ["Pouw.SecurityProofs.Receipt.Fx1PairNoKernel : Pouw.Guarantees.Receipt.Fx1PairNoKernel"],
+   "assumptions": [],
+   "type_hash": "34825d055a5feb43636a9aeb0fb8c67a8f3aa46853d57f4d0748c0466d022587"
+  },
+  "Pouw.SecurityProofs.Receipt.Fx1QuadNoKernel": {
+   "owner": "@compute-accounting",
+   "signature": ["Pouw.SecurityProofs.Receipt.Fx1QuadNoKernel : Pouw.Guarantees.Receipt.Fx1QuadNoKernel"],
+   "assumptions": [],
+   "type_hash": "05795b7cd54a485979e0e6c30263ee878e7d5b5ab93ad62539061cdf5b98264e"
+  },
+  "Pouw.SecurityProofs.Receipt.Fx1RunWordInjective": {
+   "owner": "@compute-accounting",
+   "signature": ["Pouw.SecurityProofs.Receipt.Fx1RunWordInjective : Pouw.Guarantees.Receipt.Fx1RunWordInjective"],
+   "assumptions": [],
+   "type_hash": "06256314112e808c4ffad9c5d7df3e2d0d34ead38f64a6f4742fa337e81737b5"
+  },
+  "Pouw.SecurityProofs.Receipt.Fx1StepBijective": {
+   "owner": "@compute-accounting",
+   "signature": ["Pouw.SecurityProofs.Receipt.Fx1StepBijective : Pouw.Guarantees.Receipt.Fx1StepBijective"],
+   "assumptions": [],
+   "type_hash": "fea78657f527a450c2c797415538aea4256243996f07ca633b897118e08bef94"
+  },
+  "Pouw.SecurityProofs.Receipt.Fx1TripleNoKernel": {
+   "owner": "@compute-accounting",
+   "signature": ["Pouw.SecurityProofs.Receipt.Fx1TripleNoKernel : Pouw.Guarantees.Receipt.Fx1TripleNoKernel"],
+   "assumptions": [],
+   "type_hash": "641d158aed5513dc99dab70922f9884538f4af6a60518438d30abd001ca8583c"
+  },
+  "Pouw.SecurityProofs.Receipt.Fx1WordInjective": {
+   "owner": "@compute-accounting",
+   "signature": ["Pouw.SecurityProofs.Receipt.Fx1WordInjective : Pouw.Guarantees.Receipt.Fx1WordInjective"],
+   "assumptions": [],
+   "type_hash": "42b195843467d0940c71c0892667106c8d34a45468d9ea3b0082a72642442dfb"
+  },
+  "Pouw.SecurityProofs.Receipt.LiCheckpointLowBit": {
+   "owner": "@compute-accounting",
+   "signature": ["Pouw.SecurityProofs.Receipt.LiCheckpointLowBit : Pouw.Guarantees.Receipt.LiCheckpointLowBit"],
+   "assumptions": [],
+   "type_hash": "d61720fead71917e9de3883b9a9ea3496a302257c4a13aa99de1528683105be6"
+  },
+  "Pouw.SecurityProofs.Receipt.LiCheckpointWordInjective": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Pouw.SecurityProofs.Receipt.LiCheckpointWordInjective : Pouw.Guarantees.Receipt.LiCheckpointWordInjective"
+   ],
+   "assumptions": [],
+   "type_hash": "95a638d172bdfccdf1b6dca1f45f890abc5f6945023ced9f2ba01ab15fc75674"
+  },
+  "Pouw.SecurityProofs.Receipt.LiHalfBijective": {
+   "owner": "@compute-accounting",
+   "signature": ["Pouw.SecurityProofs.Receipt.LiHalfBijective : Pouw.Guarantees.Receipt.LiHalfBijective"],
+   "assumptions": [],
+   "type_hash": "9a62151d2a3a48d6146e45fb12da2d2a8baddbb2117cfeffd8f5f2c6f001b80c"
   },
   "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorK": {
    "owner": "@compute-accounting",
@@ -5762,74 +5908,6 @@
    "signature": ["Pouw.SecurityProofs.WorkWeightedSampling : Pouw.Guarantees.WorkWeightedSampling"],
    "assumptions": [],
    "type_hash": "2f6552a7668b089031af583e72b5e551727622dd8c12b1269790c9ad397ed88b"
-  },
-  "Accounting.SecurityProofs.RequirementDense": {
-   "owner": "@memory-accounting",
-   "signature": ["Accounting.SecurityProofs.RequirementDense : Accounting.Guarantees.RequirementDense"],
-   "assumptions": [],
-   "type_hash": "be03be0eecfe3f754c0b29a135ee3d90ddea95eee6e5e99cd7e6dc151dbef419"
-  },
-  "Accounting.SecurityProofs.RequirementHeld": {
-   "owner": "@memory-accounting",
-   "signature": ["Accounting.SecurityProofs.RequirementHeld : Accounting.Guarantees.RequirementHeld"],
-   "assumptions": [],
-   "type_hash": "eb1d71eefdaee8934a9bf238b893b3128bacc151ddc6273bd93b97fa553311ba"
-  },
-  "Accounting.SecurityProofs.RequirementMoved": {
-   "owner": "@memory-accounting",
-   "signature": ["Accounting.SecurityProofs.RequirementMoved : Accounting.Guarantees.RequirementMoved"],
-   "assumptions": [],
-   "type_hash": "0e3f73f68c101849e6b3822676bab1e1c8a4feadf7be7da359644da590003269"
-  },
-  "Accounting.SecurityProofs.TS.FanInCount": {
-   "owner": "@compute-accounting",
-   "signature": ["Accounting.SecurityProofs.TS.FanInCount : Accounting.Guarantees.TS.FanInCount"],
-   "assumptions": [],
-   "type_hash": "3e1d5374cd0bc66c2c0b2ce69691138ba42b473ae7dad89b19127743e29d0b40"
-  },
-  "Accounting.SecurityProofs.TS.FillOptOfFanIn": {
-   "owner": "@compute-accounting",
-   "signature": ["Accounting.SecurityProofs.TS.FillOptOfFanIn : Accounting.Guarantees.TS.FillOptOfFanIn"],
-   "assumptions": [],
-   "type_hash": "568832759779f6343aa4730d2aa7371196de435e23c850b7fd3fb9757ff039f3"
-  },
-  "Accounting.SecurityProofs.TS.FoldOptOfFanIn": {
-   "owner": "@compute-accounting",
-   "signature": ["Accounting.SecurityProofs.TS.FoldOptOfFanIn : Accounting.Guarantees.TS.FoldOptOfFanIn"],
-   "assumptions": [],
-   "type_hash": "22e2320fa4db7ad6c4182cab5d22d9df1ef0ede2c031c256c59be0e9997c4a1e"
-  },
-  "Accounting.SecurityProofs.TS.SeesOfInjective": {
-   "owner": "@compute-accounting",
-   "signature": ["Accounting.SecurityProofs.TS.SeesOfInjective : Accounting.Guarantees.TS.SeesOfInjective"],
-   "assumptions": [],
-   "type_hash": "c937ea1687f1688063a1c90c1b8da809f1a119c468d6fd44e050ed5cc450bd27"
-  },
-  "Accounting.SecurityProofs.TS.ThinFoldInjective": {
-   "owner": "@compute-accounting",
-   "signature": ["Accounting.SecurityProofs.TS.ThinFoldInjective : Accounting.Guarantees.TS.ThinFoldInjective"],
-   "assumptions": [],
-   "type_hash": "05c11dc008c2a2607af95ee24298aeb442207dd73f0dc17980a992372e1e94ef"
-  },
-  "Pouw.SecurityProofs.Receipt.LiCheckpointLowBit": {
-   "owner": "@compute-accounting",
-   "signature": ["Pouw.SecurityProofs.Receipt.LiCheckpointLowBit : Pouw.Guarantees.Receipt.LiCheckpointLowBit"],
-   "assumptions": [],
-   "type_hash": "d61720fead71917e9de3883b9a9ea3496a302257c4a13aa99de1528683105be6"
-  },
-  "Pouw.SecurityProofs.Receipt.LiCheckpointWordInjective": {
-   "owner": "@compute-accounting",
-   "signature": [
-    "Pouw.SecurityProofs.Receipt.LiCheckpointWordInjective : Pouw.Guarantees.Receipt.LiCheckpointWordInjective"
-   ],
-   "assumptions": [],
-   "type_hash": "95a638d172bdfccdf1b6dca1f45f890abc5f6945023ced9f2ba01ab15fc75674"
-  },
-  "Pouw.SecurityProofs.Receipt.LiHalfBijective": {
-   "owner": "@compute-accounting",
-   "signature": ["Pouw.SecurityProofs.Receipt.LiHalfBijective : Pouw.Guarantees.Receipt.LiHalfBijective"],
-   "assumptions": [],
-   "type_hash": "9a62151d2a3a48d6146e45fb12da2d2a8baddbb2117cfeffd8f5f2c6f001b80c"
   }
  },
  "shape": {
@@ -5966,6 +6044,38 @@
    },
    "Pouw.SecurityProofs.Receipt.LiCheckpointLowBit": {
     "function": "Pouw.Receipt.liCheckpoint",
+    "outcome": "none"
+   },
+   "Pouw.SecurityProofs.Receipt.DuoStepBijective": {
+    "function": "Pouw.Receipt.duoWord",
+    "outcome": "none"
+   },
+   "Pouw.SecurityProofs.Receipt.DuoRunWordInjective": {
+    "function": "Pouw.Receipt.duoRun",
+    "outcome": "none"
+   },
+   "Pouw.SecurityProofs.Receipt.Fx1WordInjective": {
+    "function": "Pouw.Receipt.fx1Word",
+    "outcome": "none"
+   },
+   "Pouw.SecurityProofs.Receipt.Fx1PairNoKernel": {
+    "function": "Pouw.Receipt.fx1Pair",
+    "outcome": "none"
+   },
+   "Pouw.SecurityProofs.Receipt.Fx1TripleNoKernel": {
+    "function": "Pouw.Receipt.fx1Triple",
+    "outcome": "none"
+   },
+   "Pouw.SecurityProofs.Receipt.Fx1QuadNoKernel": {
+    "function": "Pouw.Receipt.fx1Quad",
+    "outcome": "none"
+   },
+   "Pouw.SecurityProofs.Receipt.Fx1StepBijective": {
+    "function": "Pouw.Receipt.fx1Word",
+    "outcome": "none"
+   },
+   "Pouw.SecurityProofs.Receipt.Fx1RunWordInjective": {
+    "function": "Pouw.Receipt.fx1Run",
     "outcome": "none"
    }
   },
@@ -6462,7 +6572,12 @@
    "Accounting.SecurityProofs.TS.SeesOfInjective": "lemma: a receipt injective in each input sees it, over any dataflow and receipt map.",
    "Accounting.SecurityProofs.TS.ThinFoldInjective": "lemma: the thin fold's state is injective in each absorbed word and in its start, BitVec arithmetic.",
    "Accounting.SecurityProofs.TS.FoldOptOfFanIn": "frozen (no-function): FOLD-OPT from FanIn for any fold given as a straight-line dataflow over the committed words, not a Lean function.",
-   "Accounting.SecurityProofs.TS.FillOptOfFanIn": "frozen (no-function): FILL-OPT from FanIn for any filler given as a straight-line dataflow over its fresh inputs, not a Lean function."
+   "Accounting.SecurityProofs.TS.FillOptOfFanIn": "frozen (no-function): FILL-OPT from FanIn for any filler given as a straight-line dataflow over its fresh inputs, not a Lean function.",
+   "Accounting.SecurityProofs.TS.LuckOfReceipt": "lemma: the bridge of LEDGER 1.3-1.5 over every ideal game split at the receipt, the operand and receipt lucks (definitions, not named assumptions) giving (L) at p + (1 - p) pr; not a property of a Lean function.",
+   "Accounting.SecurityProofs.TS.ReceiptLuckCaseA": "lemma: Lemma B of LEDGER 1.3 in case (a), the receipt luck 0 over every game whose rounds are committed duo or fx1 units (a definition), from DuoRunWordInjective and Fx1RunWordInjective; not a property of a Lean function.",
+   "Accounting.SecurityProofs.TS.LuckCaseA": "lemma: LuckOfReceipt at the receipt luck ReceiptLuckCaseA gives, (L) at the operand luck in case (a); not a property of a Lean function.",
+   "Accounting.SecurityProofs.TS.OperandLuckCube": "lemma: the operand luck at 3/4 over every game whose rounds draw uniform cube bits against a degree-2 operand error (a definition), luck_quad as a probability; not a property of a Lean function.",
+   "Accounting.SecurityProofs.TS.LuckCaseACube": "lemma: LuckCaseA at OperandLuckCube's 3/4, (L) at 3/4 in case (a) with degree-2 operands and no luck hypothesis; not a property of a Lean function."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
@@ -7636,6 +7751,49 @@
     "Accounting.SecurityProofs.RemoteWindowRunConservationRelay"
    ]
   },
+  "Definitions.Accounting.Requirement": {
+   "digest": "cefa15ee095bef3b6c06931b359363f99ff95fe2de63a1b24b94a31961f0846f",
+   "definitions": {
+    "Accounting.Requirement.Carries": "93fd6dff6b04c716c5141e9212142e6ea3701b3aa0de94ca12483c0b48591a4d",
+    "Accounting.Requirement.Execution": "cd70ee0536fc5bb221c299172e35f32cb7f8664fbf0924096cf40b3a3ee791ea",
+    "Accounting.Requirement.Execution.ran": "ee3dc1ecb4abb911fe5cfb4f3839cfcf3370c9f185ad6642b82a4f9fde3a9056",
+    "Accounting.Requirement.Execution.step": "00915655b8abaa7d1a47f5a308023df723d997aaa885ac0da75c9873bacac17b",
+    "Accounting.Requirement.Execution.value": "12a2b08667ab39ede6ca4032fd90e3fea964ad63657984f7e862dcb2212a8913",
+    "Accounting.Requirement.Layout": "84667ae3da45c7005da85080a9a568dacda54998eaf163e6bf7bddf07a4726cb",
+    "Accounting.Requirement.Layout.block": "8b8a656a1a4ac9e1cb112cce0478d031ce085c24f455672653142a34e439b901",
+    "Accounting.Requirement.Layout.offset": "ea578971e1a12eb8fb75d0c055037d8e6b64e444bd1fb555fc29d173a87a90cb",
+    "Accounting.Requirement.Packs": "c1dcea15b3eb160b861154472627e3db97bbf61009e5a7dc8d32cfd612f0153d",
+    "Accounting.Requirement.PlanMatches": "3446fe70421d6f5818f116d517a0c5bb283236702b2a4171a7f8d15173caa730",
+    "Accounting.Requirement.Store": "1938f3251d1599270d57405be6bc6fc366ac23924f2e849c8b7b7acc6f7281ca",
+    "Accounting.Requirement.Store.freed": "4e87eda5acc330bde17fdc1204a03f0f98440c589337d909921d93fec0758313",
+    "Accounting.Requirement.Store.payload": "a17bee3d643705377f94199f7d34bad4c5c2d9bae5d7351647eab307cad64ad4",
+    "Accounting.Requirement.Store.registered": "0be772098f8e8fb16c7419539601a60d72ebb997163fc82efb10abce4db236e5",
+    "Accounting.Requirement.Store.resident": "6288862ccac1ec58bad7ae75f4bf8cbb24212257aea4a55bb31581cb649779c6",
+    "Accounting.Requirement.Store.written": "d99299a8c7926bc9f52976b4d302df1f9ebe28e59e60ab696478ad75fc03791b",
+    "Accounting.Requirement.StoreMatches": "e486f273f071bc5a01e0d4d5f0bf590dee56a6e844ab0d3768b1871822d8a2b8",
+    "Accounting.Requirement.Wiring": "67f416e91f81742945bad7c75704b565e448a72577d35db298f0d8514f89f1eb",
+    "Accounting.Requirement.Wiring.ops": "84cea9a8dda1abcc6e1f039a48984fcaf6ee71e621e29d964abc18011a8d48e2",
+    "Accounting.Requirement.Wiring.registered": "17de543eb7d0b9af217ea7d34e648ccc606223d8460c7be413f24e31608e8ca6",
+    "Accounting.Requirement.Wiring.uses": "dd353d8ef096871fea8b8e30d60bfa0e92bd496f87843a2bb7c2a21c19c5246f",
+    "Accounting.Requirement.Wiring.width": "2a77a320157f30d9975f87d370b6051fdbcfff2fafe50ffb69e6dad00719f661",
+    "Accounting.Requirement.bits": "64ed0ee81b2d8ba84f9ffd3c2964f2a68c6f7eca822492565bf9257671f88cb7",
+    "Accounting.Requirement.bitsAt": "893a7715539d4e1d88db8afcaf3f2f212e325676cfe6bf6dd25816df7f8a050f",
+    "Accounting.Requirement.bitsIn": "5440bee8fc2b080cd09ffdf36d4f4c2e490eab2913fd623940cc6a44c783c9b9",
+    "Accounting.Requirement.blocks": "43dd99e049f112b0b8fd74d4c35cca07a1cb09150ed5369f33334bdf9d7fe1d7",
+    "Accounting.Requirement.live": "fc7c4f9b1b45bf183ac91ab06378d9fae1dd203361b5ddb5c99abb723f8fa163",
+    "Accounting.Requirement.liveBits": "de62460b5313ef9bdae1bbd45f81196e59929ae2430c0b2ec1c4b664e93f11d5",
+    "Accounting.Requirement.liveBlocks": "96782dd578d5b274d1f92a82085f3a5c06ecef44cf189e64d04ea620d0ba09e8",
+    "Accounting.Requirement.liveIn": "52436c3c7a6b7a3c6935576d5b86b4b71b69e9e45f3c5a000dd54b3fe9ba2b26",
+    "Accounting.Requirement.readBits": "940ebb457d7936b46131a3e37e10e46cbf7281232b011c0bb9a16af8b8005fa9",
+    "Accounting.Requirement.readBlocks": "331777b495aa32b4f7a2d537b06f6c2c15aa89d44145e262922ef53deffa9179",
+    "Accounting.Requirement.reads": "1055164e912eff3e5e598f08c907dc222843666d7ddee15fd3753a5f5eb2530a"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.RequirementDense",
+    "Accounting.SecurityProofs.RequirementHeld",
+    "Accounting.SecurityProofs.RequirementMoved"
+   ]
+  },
   "Definitions.Accounting.Responder": {
    "digest": "826e7bc03f2aeb2a6bb4cf4e3bd71f425ce4dabd983d488123c8a8c0ad4fea6b",
    "definitions": {
@@ -7658,6 +7816,28 @@
     "Accounting.SecurityProofs.B2P2Ring",
     "Accounting.SecurityProofs.LengthCode",
     "Accounting.SecurityProofs.TimelyTicks"
+   ]
+  },
+  "Definitions.Accounting.TS.FanIn": {
+   "digest": "14abbaaf0750b664e1e0a60e94892364d0e5692e950a462bf0cae6e29ec22de2",
+   "definitions": {
+    "Accounting.TS.Dataflow": "71d86a964562ef29d79fe68c7e4255a74b48a6be8802cc5641acf376141533ca",
+    "Accounting.TS.Dataflow.Runs": "40634b2e7a2eab515450a98e875ace3b1421497dc4de80f971d169da87f1bf60",
+    "Accounting.TS.Dataflow.Sees": "1aaf6acf17a26090bb6aae2c0c56ee10b0ce47a73c72270c33101cea3e89a3a0",
+    "Accounting.TS.Dataflow.issued": "68f6df325f2d4db66dddd5c2b76dd9caba00300bac62d75d66a0c1f606db73c1",
+    "Accounting.TS.Dataflow.merges": "25a6c42a890dd16e21efb1f5f6c672f7dc86fe9071939557319da9a8eb3a345d",
+    "Accounting.TS.Dataflow.n": "b05b582735e5dbc794a63e5fc56f12b10ead2a9d43c2eb50dee380d34afefb66",
+    "Accounting.TS.Dataflow.op": "76d257614895b715217211ba6b497434cdab8ac5a89c4e9174d72f9a8d8689ca",
+    "Accounting.TS.Dataflow.src": "aa190418a579bfeb58d4cefaf0ebd7a16042d7e9e3d3154874e517493ea3526c",
+    "Accounting.TS.thinFold": "91a24891c397ebcda56b9407a92d7c0077da937455e207ce99a7585d48a41d8b",
+    "Accounting.TS.thinStep": "f23d750769766a0d93cda8d5c9bfafbf2c4148c618df2b5abb14ba22a493b986"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.TS.FanInCount",
+    "Accounting.SecurityProofs.TS.FillOptOfFanIn",
+    "Accounting.SecurityProofs.TS.FoldOptOfFanIn",
+    "Accounting.SecurityProofs.TS.SeesOfInjective",
+    "Accounting.SecurityProofs.TS.ThinFoldInjective"
    ]
   },
   "Definitions.Accounting.TS.Machine": {
@@ -7706,7 +7886,51 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.CompilerC",
     "Accounting.SecurityProofs.TS.DIdeal",
-    "Accounting.SecurityProofs.TS.DIdealFloor"
+    "Accounting.SecurityProofs.TS.DIdealFloor",
+    "Accounting.SecurityProofs.TS.LuckCaseA",
+    "Accounting.SecurityProofs.TS.LuckCaseACube",
+    "Accounting.SecurityProofs.TS.LuckOfReceipt"
+   ]
+  },
+  "Definitions.Accounting.TS.Receipt": {
+   "digest": "98b7ada605befa53c7f72f38372252cde9f459b1dee9c8913528d06cf6d1d060",
+   "definitions": {
+    "Accounting.TS.DuoUnits": "d330484da8d2fb119ce2541283d148f900bc4b3854bd8b53ee9e5be2a0b523ec",
+    "Accounting.TS.DuoUnits.a": "5d4b4c0b1dc2de8007052fb50e2a1fac16a98ff4b340a8c4448d0dc4085c5416",
+    "Accounting.TS.DuoUnits.honest": "64e78fb594ba3d929627f45a2b221226f1700719e12b2ad84dfcf941ed2198f9",
+    "Accounting.TS.DuoUnits.k": "f01608d1c57f1f1ec5f70a8fc8f3e6d2498ccedee5b96a74e2d89691c090fe6f",
+    "Accounting.TS.DuoUnits.pos": "b1d1ce4c0116d5b4435dcd182f9f65c1636022cb52f2137d4f1e6220d9c353ad",
+    "Accounting.TS.DuoUnits.r": "4783d13e3a9ed880ac04c12993c0ba7a17d30e22b259682fed9c952bdab3c471",
+    "Accounting.TS.DuoUnits.right": "44b5756696d69e6d6289f8502037839da01e8a93e8d6816adcf5c7cd3cbbc000",
+    "Accounting.TS.DuoUnits.same": "e9e3d38128640821ad27c957ae89e587144d2874cb696b0e95e14836b3010694",
+    "Accounting.TS.DuoUnits.start": "7d6ecdca800f57317498336eb8bd1d83b72b4b7ec9dfb4f66351bc3808aa3ec3",
+    "Accounting.TS.DuoUnits.value": "b7f3e3ddfa8e19cb007c747b7c202a5a06c4385b2c38320c44893d3d4d9917fd",
+    "Accounting.TS.DuoUnits.word": "05a2944f6a2b512133a75455666ae483b5d97bb5c91453c35c51e277e4aca63c",
+    "Accounting.TS.Fx1Units": "7579f118188f35c1cded661f17a087b0f5b494c631e75c951be41af371847896",
+    "Accounting.TS.Fx1Units.m": "a17c0adb613b486fdb12dfa9468efdd24bc5b8a9d6787fcb33273aafbe590c25",
+    "Accounting.TS.Fx1Units.same": "abaaa4738eb83ec3bb0ad72b33ca7f3a6872e8ad0568747955730838eba1f2e8",
+    "Accounting.TS.Fx1Units.toDuoUnits": "127a35ee370b5554470acbef32e7665d6b6c841ae16171970f608c13f140cb71",
+    "Accounting.TS.ReceiptGame": "2286970ee38b99490080368e7ff9c0e66baadf5fa6f01f3b20cbbfb537797690",
+    "Accounting.TS.ReceiptGame.CaseA": "168a0bf1840edf3c46742239f206bf2cb93d3cd701edbd1a8bc2fb9831046411",
+    "Accounting.TS.ReceiptGame.CubeOperands": "eff46a892aa26753dd82e289642a30757833303f310962553fe7ee39b67c26a4",
+    "Accounting.TS.ReceiptGame.OperandLuck": "dd7b63e23469b588ed492a68e2c85f69577d571be0b4b001064d2797a769a32d",
+    "Accounting.TS.ReceiptGame.Pinned": "d01f762cd1354d1255f9c53c3b8024f249165dda6e03903593c14f3d799b3cba",
+    "Accounting.TS.ReceiptGame.ReceiptLuck": "4532d24782feb63b96a3023e46f6c62353589be05189456c57fa4944dc00c5de",
+    "Accounting.TS.ReceiptGame.below": "9ea31cd8e8b7825f1ae2db00987697911674befa3f2f54a170f79685b90a96aa",
+    "Accounting.TS.ReceiptGame.brecOn": "8b56f30b30a49b35717b36c02fc1fb03adbc76e5ecf0c452b13cab19150c8cd1",
+    "Accounting.TS.ReceiptGame.brecOn.go": "abf70a713be8975bd2c832ffaab3fc50dae5ce1996254078a4eaa4ed5ce5211b",
+    "Accounting.TS.ReceiptGame.casesOn": "a8e5b56efbdb9c5b31bbf360a06520ee12679b15540337154465ce1dcbff7644",
+    "Accounting.TS.ReceiptGame.done": "84f1e4fcdda6bee1a0a46719c85077454d656a5d7202f6e5bf947d1e7391b2ff",
+    "Accounting.TS.ReceiptGame.game": "f3b781602a30fb67c5b607be5605ce0040772266fbab7e0128981be03d8ecc8e",
+    "Accounting.TS.ReceiptGame.rec": "0ef49937d32c5e50b66e1cb3e0ee453b5f0cbb2eaf6ec7d14e83554adf74f3cc",
+    "Accounting.TS.ReceiptGame.round": "7b75fa38de308279d8654e17570a0a508d65d464e465e54d2e116df7a8f2de2b"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.TS.LuckCaseA",
+    "Accounting.SecurityProofs.TS.LuckCaseACube",
+    "Accounting.SecurityProofs.TS.LuckOfReceipt",
+    "Accounting.SecurityProofs.TS.OperandLuckCube",
+    "Accounting.SecurityProofs.TS.ReceiptLuckCaseA"
    ]
   },
   "Definitions.Accounting.TS.Routes": {
@@ -12876,7 +13100,7 @@
    "guarantees": ["Pouw.SecurityProofs.PearlC.TileCheck4WordsCore"]
   },
   "Definitions.Pouw.Receipt.Duo": {
-   "digest": "de109bb1a562ba8466a97f59b11373f8fb166927fcf605b342f25a68ff58ea46",
+   "digest": "67a8518114c0557c9d8f59873a758408306097bbc0cfe0f43127973a3433f948",
    "definitions": {
     "Pouw.Receipt.OddKey": "523b501cdd837c78c17f35c23ebc1871830ca45008bbe284975ab20da8d90023",
     "Pouw.Receipt.OddKeyNotNegOne": "31c9ceda208246918d98a8986269a78312a849526081fe826eb2e33adbbc474a",
@@ -12884,14 +13108,64 @@
     "Pouw.Receipt.ShortRotation": "5766ac1e4ce0f1fccec0a23583c926017aab0c241fe51842556f0bc8bdac8911",
     "Pouw.Receipt.duoPair": "0db527ce0a70fb58bcba2efcb9e95bbb12578ea3956093f5343d250dd5d2d032",
     "Pouw.Receipt.duoQuad": "c8cf798e7e63e762cba5c917dcc71dd724ebe4dde1b897d6458f5f780a9a7531",
+    "Pouw.Receipt.duoRun": "8618a1b49c703cf3480ffe3cac63c3101855ba4299ee5a5e2c7118b784ce523a",
     "Pouw.Receipt.duoTriple": "5a2d96e7a402f773e07fc5d56b4396833148f6a078936f450481a819405448db",
     "Pouw.Receipt.duoWord": "cbd7aa3d7554fa9b6113932c730b75304b994a68bc15cfb4c5e6955f265142a9"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.TS.LuckCaseA",
+    "Accounting.SecurityProofs.TS.LuckCaseACube",
+    "Accounting.SecurityProofs.TS.ReceiptLuckCaseA",
     "Pouw.SecurityProofs.Receipt.DuoPairNoKernel",
     "Pouw.SecurityProofs.Receipt.DuoQuadNoKernel",
+    "Pouw.SecurityProofs.Receipt.DuoRunWordInjective",
+    "Pouw.SecurityProofs.Receipt.DuoStepBijective",
     "Pouw.SecurityProofs.Receipt.DuoTripleNoKernel",
     "Pouw.SecurityProofs.Receipt.DuoWordInjective",
+    "Pouw.SecurityProofs.Receipt.Fx1PairNoKernel",
+    "Pouw.SecurityProofs.Receipt.Fx1QuadNoKernel",
+    "Pouw.SecurityProofs.Receipt.Fx1RunWordInjective",
+    "Pouw.SecurityProofs.Receipt.Fx1StepBijective",
+    "Pouw.SecurityProofs.Receipt.Fx1TripleNoKernel",
+    "Pouw.SecurityProofs.Receipt.Fx1WordInjective",
+    "Pouw.SecurityProofs.Receipt.LiCheckpointLowBit",
+    "Pouw.SecurityProofs.Receipt.LiCheckpointWordInjective",
+    "Pouw.SecurityProofs.Receipt.LiHalfBijective"
+   ]
+  },
+  "Definitions.Pouw.Receipt.Fx1": {
+   "digest": "0b98146c7224978614b5127317d4fe470ab0f309a8ad65825c15f38b7e2eff34",
+   "definitions": {
+    "Pouw.Receipt.fx1Pair": "2e71db77b2fb80e52b8401880c9787e9d74ef19f72a4768dbbc1a2970c2a278d",
+    "Pouw.Receipt.fx1Quad": "14d9d79fdaadc8901617bdc134ede015ed7912c01358e7cc1f7fa0aa6b867892",
+    "Pouw.Receipt.fx1Run": "36e3e5b884f30960553936d8dcc184b5168dda5fba943ad5abb904bc79ead1cc",
+    "Pouw.Receipt.fx1Triple": "3c8622a00dd1477b4d62b43a363db00a86bc5f96dac752399b032ee3398e5b8f",
+    "Pouw.Receipt.fx1Word": "73eee01d3c5801774a602c2ecae3d7373f5e91b769955a7811df2864b3fca206"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.TS.LuckCaseA",
+    "Accounting.SecurityProofs.TS.LuckCaseACube",
+    "Accounting.SecurityProofs.TS.ReceiptLuckCaseA",
+    "Pouw.SecurityProofs.Receipt.Fx1PairNoKernel",
+    "Pouw.SecurityProofs.Receipt.Fx1QuadNoKernel",
+    "Pouw.SecurityProofs.Receipt.Fx1RunWordInjective",
+    "Pouw.SecurityProofs.Receipt.Fx1StepBijective",
+    "Pouw.SecurityProofs.Receipt.Fx1TripleNoKernel",
+    "Pouw.SecurityProofs.Receipt.Fx1WordInjective"
+   ]
+  },
+  "Definitions.Pouw.Receipt.Li": {
+   "digest": "2acdcf2b2dfa1184c1cbd074e385ed6c98cb4fd0f85a2f872e81b4ce6b464a4f",
+   "definitions": {
+    "Pouw.Receipt.LiHalfStep": "2b0c7f97989cfe7d679ab11b7b475be1750370c72dd66b4e0edc455432815f72",
+    "Pouw.Receipt.LiOddHalfStep": "6ffbb4ba1f7cbf43a5ec289d4d2abef18a090eb7921dcbd66c9bfc88bb0c775d",
+    "Pouw.Receipt.LiOddHalfStep.val": "b99ede61ff0c424e80d9b258010a07b28d5137ddc3064cd2643176e6429a4c31",
+    "Pouw.Receipt.LowBit": "426234b5df87b4f45a0bf509c26539569f1a15507f6fdf789812362f4700f3bf",
+    "Pouw.Receipt.liChain": "b42c60e1e6280161d7e7353ba86d2712744479d5408bb3d125f47fa36f6e7c54",
+    "Pouw.Receipt.liCheckpoint": "610176b310c5fedf25bc6a78b02b210c56c2bd5052f6803dfcd30e55d4adc0f5",
+    "Pouw.Receipt.liHalf": "14b4abf8590b72949c821f9d279c60b8fe96deb5cc391c7ac0e9649fe625c1bb"
+   },
+   "guarantees": [
     "Pouw.SecurityProofs.Receipt.LiCheckpointLowBit",
     "Pouw.SecurityProofs.Receipt.LiCheckpointWordInjective",
     "Pouw.SecurityProofs.Receipt.LiHalfBijective"
@@ -13043,6 +13317,11 @@
     "Accounting.SecurityProofs.TS.DIdealFloor",
     "Accounting.SecurityProofs.TS.DecompositionD",
     "Accounting.SecurityProofs.TS.FloorCreditD3",
+    "Accounting.SecurityProofs.TS.LuckCaseA",
+    "Accounting.SecurityProofs.TS.LuckCaseACube",
+    "Accounting.SecurityProofs.TS.LuckOfReceipt",
+    "Accounting.SecurityProofs.TS.OperandLuckCube",
+    "Accounting.SecurityProofs.TS.ReceiptLuckCaseA",
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorK",
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSided",
     "Pouw.SecurityProofs.RelativeSecurity.StagedFloorK",
@@ -17985,6 +18264,9 @@
     "Accounting.SecurityProofs.TS.FillOptOfFanIn",
     "Accounting.SecurityProofs.TS.FloorCreditD3",
     "Accounting.SecurityProofs.TS.FoldOptOfFanIn",
+    "Accounting.SecurityProofs.TS.LuckCaseA",
+    "Accounting.SecurityProofs.TS.LuckCaseACube",
+    "Accounting.SecurityProofs.TS.LuckOfReceipt",
     "Accounting.SecurityProofs.TS.TimeBound"
    ]
   },
@@ -18353,6 +18635,19 @@
     "Accounting.SecurityProofs.SketchRankFiber"
    ]
   },
+  "Models.Accounting.Guarantees.Requirement": {
+   "digest": "73bfe8651ce6f040a85e8f5f7315c5801333cee4ca7f244503245f0162d1dcb8",
+   "definitions": {
+    "Accounting.Guarantees.RequirementDense": "bc0c260f0105455699aef511a58389d289b3ffa932aa16305994e4dbac4f51cd",
+    "Accounting.Guarantees.RequirementHeld": "fb24a81856c506c3b2d41c062cd0cfb59c0b4de8d77562979377d2c41f26d4b8",
+    "Accounting.Guarantees.RequirementMoved": "4a10e3a792090f532ddcfa01a0e221a20f815cdd43ba694aea268337fe3cbdaf"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.RequirementDense",
+    "Accounting.SecurityProofs.RequirementHeld",
+    "Accounting.SecurityProofs.RequirementMoved"
+   ]
+  },
   "Models.Accounting.Guarantees.Responder": {
    "digest": "5b933204026d9680fcd71829c5bb0277e7d3edfc6aafb19c0f12fe36cf4a2859",
    "definitions": {
@@ -18440,6 +18735,23 @@
     "Accounting.SecurityProofs.TS.ThinFoldInjective",
     "Accounting.SecurityProofs.TS.TimeBound",
     "Accounting.SecurityProofs.TS.VectorThresholdD1"
+   ]
+  },
+  "Models.Accounting.Guarantees.TS.Receipt": {
+   "digest": "b884b66ab7718e9c84580d3b3953b9fc878c177f4877322b209a48a7d1c20941",
+   "definitions": {
+    "Accounting.Guarantees.TS.LuckCaseA": "89a5fc4ce0c50e6e494dc5c9f86855cceef42b29ef75fc24048cb1843ce04a2b",
+    "Accounting.Guarantees.TS.LuckCaseACube": "0de8167c49553164ac91c53c3a60561fa6c56d9d7fb984ad5b061801c62f2564",
+    "Accounting.Guarantees.TS.LuckOfReceipt": "5304611c4581a8f852f1e933cd1da3f74b2dfa7499bb3de43dc4021a02f94157",
+    "Accounting.Guarantees.TS.OperandLuckCube": "5cb76bd181ea65cd63d297bc2c0421106a4722e26c3a2f29125f06ce09a56de8",
+    "Accounting.Guarantees.TS.ReceiptLuckCaseA": "b1e2b795fbef1ea41e889b3121a0b8d6d3b56b007f19a30f43ae436d92ddcb4f"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.TS.LuckCaseA",
+    "Accounting.SecurityProofs.TS.LuckCaseACube",
+    "Accounting.SecurityProofs.TS.LuckOfReceipt",
+    "Accounting.SecurityProofs.TS.OperandLuckCube",
+    "Accounting.SecurityProofs.TS.ReceiptLuckCaseA"
    ]
   },
   "Models.Accounting.Guarantees.Tag": {
@@ -19441,12 +19753,20 @@
    "guarantees": ["Pouw.SecurityProofs.PearlC.TileCheck4WordsCore", "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"]
   },
   "Models.Pouw.Guarantees.Receipt": {
-   "digest": "b5c1c7c36443ecdb521e471004e28e7fa3e676a3a184972da2b55be6f0155f4f",
+   "digest": "d88a5c89dbae24f683ccfe15925f8d3384e44042abb0cdb255bf02ef1c8f78c7",
    "definitions": {
     "Pouw.Guarantees.Receipt.DuoPairNoKernel": "1039a7b3dddf68dfa9e864f897ef57aa49bf17ba7765af07a1332595eef247f9",
     "Pouw.Guarantees.Receipt.DuoQuadNoKernel": "298232eb24c7be9f9f65959660fca3aa8d57d2373f9da1fb34470020a5f872f9",
+    "Pouw.Guarantees.Receipt.DuoRunWordInjective": "c62e3619993c5ddafb8f07e364d2733dc3f57bd60891bb3006e06a6d32a3ae60",
+    "Pouw.Guarantees.Receipt.DuoStepBijective": "5fe72ace79835deaebb0f01d6407fb313ad1f57c2a53375318c667f42c27c828",
     "Pouw.Guarantees.Receipt.DuoTripleNoKernel": "e2f1ae4ae008bc102256d3583daf1493f02dd198e27cb904c16905596c78593d",
     "Pouw.Guarantees.Receipt.DuoWordInjective": "8f4f6573010e26ca624a4fb35b780ab09ff86f3e6b7b5c12867efd287dd3688d",
+    "Pouw.Guarantees.Receipt.Fx1PairNoKernel": "50855c03638c9f1a41b751d04cf419943d70f30b5f9e6634ac87ffae1342cc3a",
+    "Pouw.Guarantees.Receipt.Fx1QuadNoKernel": "1e7a490c457375d5bda075d70bc62799fa78664faaec8daf222b10f2ccdef308",
+    "Pouw.Guarantees.Receipt.Fx1RunWordInjective": "4d5382df57197db1b1f816b1c410f38a3096de8a8e1e162c3cf9c6109e1b4ab7",
+    "Pouw.Guarantees.Receipt.Fx1StepBijective": "ca85cc93eb07b153589d6be6bffd65ef4722071ea356286c5c509ad4c7826434",
+    "Pouw.Guarantees.Receipt.Fx1TripleNoKernel": "e51a7475a8f3125996fa3a1a3fc745a857b01a5c93c73492698aeaf030685fcd",
+    "Pouw.Guarantees.Receipt.Fx1WordInjective": "4bb0815da514bb3f71adcf176dec8a8156a5b9534f7422bbb0e576f895191c1c",
     "Pouw.Guarantees.Receipt.LiCheckpointLowBit": "1b7ec574421c1363892b9492d55d9afac0540018302d54bafc748cdee2d44f3a",
     "Pouw.Guarantees.Receipt.LiCheckpointWordInjective": "a55b75600bf6b04b8019661b6b0b66b2017acf0b1dd955085c39403a9b7ab7fa",
     "Pouw.Guarantees.Receipt.LiHalfBijective": "625e51a154a4bfa4958f5919c5f6cf9dc3a43f7a8fa295539f6c09765079e0d2"
@@ -19454,8 +19774,16 @@
    "guarantees": [
     "Pouw.SecurityProofs.Receipt.DuoPairNoKernel",
     "Pouw.SecurityProofs.Receipt.DuoQuadNoKernel",
+    "Pouw.SecurityProofs.Receipt.DuoRunWordInjective",
+    "Pouw.SecurityProofs.Receipt.DuoStepBijective",
     "Pouw.SecurityProofs.Receipt.DuoTripleNoKernel",
     "Pouw.SecurityProofs.Receipt.DuoWordInjective",
+    "Pouw.SecurityProofs.Receipt.Fx1PairNoKernel",
+    "Pouw.SecurityProofs.Receipt.Fx1QuadNoKernel",
+    "Pouw.SecurityProofs.Receipt.Fx1RunWordInjective",
+    "Pouw.SecurityProofs.Receipt.Fx1StepBijective",
+    "Pouw.SecurityProofs.Receipt.Fx1TripleNoKernel",
+    "Pouw.SecurityProofs.Receipt.Fx1WordInjective",
     "Pouw.SecurityProofs.Receipt.LiCheckpointLowBit",
     "Pouw.SecurityProofs.Receipt.LiCheckpointWordInjective",
     "Pouw.SecurityProofs.Receipt.LiHalfBijective"
@@ -27626,101 +27954,6 @@
     "VStar.rowLine": "ab93587c702fbaa39c07489ba4bea6c2afc786fd4db8544e4db97136c0f577c1"
    },
    "guarantees": ["Flock.SecurityProofs.PublicAudit", "Flock.SecurityProofs.RecursiveAuditC3"]
-  },
-  "Definitions.Accounting.Requirement": {
-   "digest": "cefa15ee095bef3b6c06931b359363f99ff95fe2de63a1b24b94a31961f0846f",
-   "definitions": {
-    "Accounting.Requirement.Carries": "93fd6dff6b04c716c5141e9212142e6ea3701b3aa0de94ca12483c0b48591a4d",
-    "Accounting.Requirement.Execution": "cd70ee0536fc5bb221c299172e35f32cb7f8664fbf0924096cf40b3a3ee791ea",
-    "Accounting.Requirement.Execution.ran": "ee3dc1ecb4abb911fe5cfb4f3839cfcf3370c9f185ad6642b82a4f9fde3a9056",
-    "Accounting.Requirement.Execution.step": "00915655b8abaa7d1a47f5a308023df723d997aaa885ac0da75c9873bacac17b",
-    "Accounting.Requirement.Execution.value": "12a2b08667ab39ede6ca4032fd90e3fea964ad63657984f7e862dcb2212a8913",
-    "Accounting.Requirement.Layout": "84667ae3da45c7005da85080a9a568dacda54998eaf163e6bf7bddf07a4726cb",
-    "Accounting.Requirement.Layout.block": "8b8a656a1a4ac9e1cb112cce0478d031ce085c24f455672653142a34e439b901",
-    "Accounting.Requirement.Layout.offset": "ea578971e1a12eb8fb75d0c055037d8e6b64e444bd1fb555fc29d173a87a90cb",
-    "Accounting.Requirement.Packs": "c1dcea15b3eb160b861154472627e3db97bbf61009e5a7dc8d32cfd612f0153d",
-    "Accounting.Requirement.PlanMatches": "3446fe70421d6f5818f116d517a0c5bb283236702b2a4171a7f8d15173caa730",
-    "Accounting.Requirement.Store": "1938f3251d1599270d57405be6bc6fc366ac23924f2e849c8b7b7acc6f7281ca",
-    "Accounting.Requirement.Store.freed": "4e87eda5acc330bde17fdc1204a03f0f98440c589337d909921d93fec0758313",
-    "Accounting.Requirement.Store.payload": "a17bee3d643705377f94199f7d34bad4c5c2d9bae5d7351647eab307cad64ad4",
-    "Accounting.Requirement.Store.registered": "0be772098f8e8fb16c7419539601a60d72ebb997163fc82efb10abce4db236e5",
-    "Accounting.Requirement.Store.resident": "6288862ccac1ec58bad7ae75f4bf8cbb24212257aea4a55bb31581cb649779c6",
-    "Accounting.Requirement.Store.written": "d99299a8c7926bc9f52976b4d302df1f9ebe28e59e60ab696478ad75fc03791b",
-    "Accounting.Requirement.StoreMatches": "e486f273f071bc5a01e0d4d5f0bf590dee56a6e844ab0d3768b1871822d8a2b8",
-    "Accounting.Requirement.Wiring": "67f416e91f81742945bad7c75704b565e448a72577d35db298f0d8514f89f1eb",
-    "Accounting.Requirement.Wiring.ops": "84cea9a8dda1abcc6e1f039a48984fcaf6ee71e621e29d964abc18011a8d48e2",
-    "Accounting.Requirement.Wiring.registered": "17de543eb7d0b9af217ea7d34e648ccc606223d8460c7be413f24e31608e8ca6",
-    "Accounting.Requirement.Wiring.uses": "dd353d8ef096871fea8b8e30d60bfa0e92bd496f87843a2bb7c2a21c19c5246f",
-    "Accounting.Requirement.Wiring.width": "2a77a320157f30d9975f87d370b6051fdbcfff2fafe50ffb69e6dad00719f661",
-    "Accounting.Requirement.bits": "64ed0ee81b2d8ba84f9ffd3c2964f2a68c6f7eca822492565bf9257671f88cb7",
-    "Accounting.Requirement.bitsAt": "893a7715539d4e1d88db8afcaf3f2f212e325676cfe6bf6dd25816df7f8a050f",
-    "Accounting.Requirement.bitsIn": "5440bee8fc2b080cd09ffdf36d4f4c2e490eab2913fd623940cc6a44c783c9b9",
-    "Accounting.Requirement.blocks": "43dd99e049f112b0b8fd74d4c35cca07a1cb09150ed5369f33334bdf9d7fe1d7",
-    "Accounting.Requirement.live": "fc7c4f9b1b45bf183ac91ab06378d9fae1dd203361b5ddb5c99abb723f8fa163",
-    "Accounting.Requirement.liveBits": "de62460b5313ef9bdae1bbd45f81196e59929ae2430c0b2ec1c4b664e93f11d5",
-    "Accounting.Requirement.liveBlocks": "96782dd578d5b274d1f92a82085f3a5c06ecef44cf189e64d04ea620d0ba09e8",
-    "Accounting.Requirement.liveIn": "52436c3c7a6b7a3c6935576d5b86b4b71b69e9e45f3c5a000dd54b3fe9ba2b26",
-    "Accounting.Requirement.readBits": "940ebb457d7936b46131a3e37e10e46cbf7281232b011c0bb9a16af8b8005fa9",
-    "Accounting.Requirement.readBlocks": "331777b495aa32b4f7a2d537b06f6c2c15aa89d44145e262922ef53deffa9179",
-    "Accounting.Requirement.reads": "1055164e912eff3e5e598f08c907dc222843666d7ddee15fd3753a5f5eb2530a"
-   },
-   "guarantees": [
-    "Accounting.SecurityProofs.RequirementDense",
-    "Accounting.SecurityProofs.RequirementHeld",
-    "Accounting.SecurityProofs.RequirementMoved"
-   ]
-  },
-  "Definitions.Accounting.TS.FanIn": {
-   "digest": "14abbaaf0750b664e1e0a60e94892364d0e5692e950a462bf0cae6e29ec22de2",
-   "definitions": {
-    "Accounting.TS.Dataflow": "71d86a964562ef29d79fe68c7e4255a74b48a6be8802cc5641acf376141533ca",
-    "Accounting.TS.Dataflow.Runs": "40634b2e7a2eab515450a98e875ace3b1421497dc4de80f971d169da87f1bf60",
-    "Accounting.TS.Dataflow.Sees": "1aaf6acf17a26090bb6aae2c0c56ee10b0ce47a73c72270c33101cea3e89a3a0",
-    "Accounting.TS.Dataflow.issued": "68f6df325f2d4db66dddd5c2b76dd9caba00300bac62d75d66a0c1f606db73c1",
-    "Accounting.TS.Dataflow.merges": "25a6c42a890dd16e21efb1f5f6c672f7dc86fe9071939557319da9a8eb3a345d",
-    "Accounting.TS.Dataflow.n": "b05b582735e5dbc794a63e5fc56f12b10ead2a9d43c2eb50dee380d34afefb66",
-    "Accounting.TS.Dataflow.op": "76d257614895b715217211ba6b497434cdab8ac5a89c4e9174d72f9a8d8689ca",
-    "Accounting.TS.Dataflow.src": "aa190418a579bfeb58d4cefaf0ebd7a16042d7e9e3d3154874e517493ea3526c",
-    "Accounting.TS.thinFold": "91a24891c397ebcda56b9407a92d7c0077da937455e207ce99a7585d48a41d8b",
-    "Accounting.TS.thinStep": "f23d750769766a0d93cda8d5c9bfafbf2c4148c618df2b5abb14ba22a493b986"
-   },
-   "guarantees": [
-    "Accounting.SecurityProofs.TS.FanInCount",
-    "Accounting.SecurityProofs.TS.FillOptOfFanIn",
-    "Accounting.SecurityProofs.TS.FoldOptOfFanIn",
-    "Accounting.SecurityProofs.TS.SeesOfInjective",
-    "Accounting.SecurityProofs.TS.ThinFoldInjective"
-   ]
-  },
-  "Definitions.Pouw.Receipt.Li": {
-   "digest": "2acdcf2b2dfa1184c1cbd074e385ed6c98cb4fd0f85a2f872e81b4ce6b464a4f",
-   "definitions": {
-    "Pouw.Receipt.LiHalfStep": "2b0c7f97989cfe7d679ab11b7b475be1750370c72dd66b4e0edc455432815f72",
-    "Pouw.Receipt.LiOddHalfStep": "6ffbb4ba1f7cbf43a5ec289d4d2abef18a090eb7921dcbd66c9bfc88bb0c775d",
-    "Pouw.Receipt.LiOddHalfStep.val": "b99ede61ff0c424e80d9b258010a07b28d5137ddc3064cd2643176e6429a4c31",
-    "Pouw.Receipt.LowBit": "426234b5df87b4f45a0bf509c26539569f1a15507f6fdf789812362f4700f3bf",
-    "Pouw.Receipt.liChain": "b42c60e1e6280161d7e7353ba86d2712744479d5408bb3d125f47fa36f6e7c54",
-    "Pouw.Receipt.liCheckpoint": "610176b310c5fedf25bc6a78b02b210c56c2bd5052f6803dfcd30e55d4adc0f5",
-    "Pouw.Receipt.liHalf": "14b4abf8590b72949c821f9d279c60b8fe96deb5cc391c7ac0e9649fe625c1bb"
-   },
-   "guarantees": [
-    "Pouw.SecurityProofs.Receipt.LiCheckpointLowBit",
-    "Pouw.SecurityProofs.Receipt.LiCheckpointWordInjective",
-    "Pouw.SecurityProofs.Receipt.LiHalfBijective"
-   ]
-  },
-  "Models.Accounting.Guarantees.Requirement": {
-   "digest": "73bfe8651ce6f040a85e8f5f7315c5801333cee4ca7f244503245f0162d1dcb8",
-   "definitions": {
-    "Accounting.Guarantees.RequirementDense": "bc0c260f0105455699aef511a58389d289b3ffa932aa16305994e4dbac4f51cd",
-    "Accounting.Guarantees.RequirementHeld": "fb24a81856c506c3b2d41c062cd0cfb59c0b4de8d77562979377d2c41f26d4b8",
-    "Accounting.Guarantees.RequirementMoved": "4a10e3a792090f532ddcfa01a0e221a20f815cdd43ba694aea268337fe3cbdaf"
-   },
-   "guarantees": [
-    "Accounting.SecurityProofs.RequirementDense",
-    "Accounting.SecurityProofs.RequirementHeld",
-    "Accounting.SecurityProofs.RequirementMoved"
-   ]
   }
  },
  "dependencies": {
