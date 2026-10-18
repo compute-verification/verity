@@ -1759,12 +1759,24 @@ def mark_read(name: str, msgs: list[dict]) -> None:
         p.write_text(new + "\n")
 
 
-def render_unread(name: str, msgs: list[dict]) -> str:
+def urgent_doorbell(m: dict, reg: dict) -> bool:
+    """A doorbell whose header says URGENT: `(URGENT)` in a post's body makes nothing urgent."""
+    return is_doorbell(m, reg) and bool((d := DOORBELL_RE.match(m.get("text") or "")) and d[2])
+
+
+def render_unread(name: str, msgs: list[dict], reg: dict) -> str:
+    """One `- ` item per reply in the inbox, its later lines indented under it so a body can't pass for another doorbell;
+    a reply the router didn't post says so."""
     if not msgs:
         return f"SLACK @{name}: nothing new"
-    msgs = sorted(msgs, key=lambda m: ("(URGENT)" not in (m.get("text") or ""), float(m["ts"])))
+    msgs = sorted(msgs, key=lambda m: (not urgent_doorbell(m, reg), float(m["ts"])))
     lines = [f"SLACK @{name}: {len(msgs)} new; answer with `research msg send --as {name} --thread T --text ...`"]
-    lines += ["- " + plain(m.get("text") or "") for m in msgs]
+    for m in msgs:
+        text = plain(m.get("text") or "")
+        if not is_doorbell(m, reg):
+            who = "@" + m["username"] if m.get("username") else m.get("user") or m.get("bot_id") or "?"
+            text = f"(posted in the inbox by {who}, not a doorbell) {text}"
+        lines.append("- " + re.sub(r"\n(?=.)", "\n  ", text))
     return "\n".join(lines)
 
 
@@ -1776,10 +1788,10 @@ def inbox_read(ns: argparse.Namespace, reg: dict, r: dict) -> int:
     if ns.json:
         print(json.dumps(msgs, indent=2, ensure_ascii=False))
     else:
-        print(render_unread(r["name"], msgs))
+        print(render_unread(r["name"], msgs, reg))
     if not ns.peek:
         mark_read(r["name"], msgs)
-    return 1 if ns.urgent and not any("(URGENT)" in (m.get("text") or "") for m in msgs) else 0
+    return 1 if ns.urgent and not any(urgent_doorbell(m, reg) for m in msgs) else 0
 
 
 def cmd_watch(ns: argparse.Namespace, reg: dict) -> int:
@@ -1798,7 +1810,7 @@ def cmd_watch(ns: argparse.Namespace, reg: dict) -> int:
         last = float(mark.read_text().strip()) if mark.is_file() else 0.0
         new = [m for m in unread(api, r) if float(m["ts"]) > last]
         if new:
-            print(render_unread(name, new))
+            print(render_unread(name, new, reg))
             mark_read(f"{name}.watch", new)
             return 0
     return 1
