@@ -329,7 +329,7 @@ def split_graph_wiring(path: str) -> dict[str, Any]:
                     role[key] = sname
             attention.append({"layer": attn_index[n], "submod": n, **role})
         else:
-            wiring.append({"piece": piece_index[n], "submod": n, "args": srcs, "arg_kinds": kinds,
+            wiring.append({"piece": piece_index[n], "submod": n, "args": srcs, "raw_args": args, "arg_kinds": kinds,
                            "n_ret": 1 + max([m for (q, m) in getitems.values() if q == n], default=-1)})
     return {"path": path, "pieces": len(pieces), "wiring": wiring, "attention": attention}
 
