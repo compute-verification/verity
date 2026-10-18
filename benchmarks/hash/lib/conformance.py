@@ -218,9 +218,11 @@ def case_rows(d: Dev, rng: random.Random, quick: bool) -> None:
         got = chunks(d.down(out, 64 * n), 64)
         want = [sha512_row_v2_digest(r, n_bits) for r in rows]
         report("row/v2", got == want, n_bits=n_bits, n=n, first_diff=first_diff(got, want))
-    for n_bits in (8, 5, 8 * 1024, 8 * 1025, 8 * 1024 * 3 + 5, 32768, 8 * 4 * 256, 8 * 4 * 4096, 8 * 1024 * 7 + 8 * 513) + (
-            () if quick else (8 * 4 * 32768,)):
-        n = 5
+    # one launch packs blockDim / s rows a block up to 128 segments, loops past it, and takes two launches past 768
+    shapes = [(b, 5) for b in (8, 5, 8 * 1024, 8 * 1025, 8 * 1024 * 3 + 5, 32768, 8 * 4 * 256, 8 * 4 * 4096, 8 * 1024 * 7 + 8 * 513)]
+    shapes += [(8 * 1024 * 3 + 5, 70), (8 * 1024 * 56, 9), (8 * 1024 * 200 + 56, 3), (8 * 1024 * 769 + 8, 2)]
+    shapes += [] if quick else [(8 * 4 * 32768, 5)]
+    for n_bits, n in shapes:
         rows = rows_of(rng, n, n_bits)
         plan = d.lib.plan(vclib.Spec(**vclib.row_seg_spec(did, n_bits)))
         st = stride_of(len(rows[0]))

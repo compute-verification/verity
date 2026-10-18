@@ -774,6 +774,22 @@ DEV void seg_fold(const u64* qst, const u64* dig, u32 s, uint8_t* out) {
   }
   st_be(out, st, 8);
 }
+// row-seg in one launch, its segment digests in shared memory: block b hashes rows g b .. g b + g - 1, g = blockDim / s (1 past
+// s = 128); segment j of its row q on thread q s + j (and j + 128 i), then thread q folds row q
+__global__ void __launch_bounds__(128) k_rows_seg(const __grid_constant__ RowK R, const uint8_t* __restrict__ tab,
+                                                  const uint8_t* __restrict__ rows, u64 stride, u64 n, uint8_t* __restrict__ out) {
+  extern __shared__ u64 sdig[];
+  const u32 s = R.s[0], g = s < blockDim.x ? blockDim.x / s : 1;
+  const u64 r0 = (u64)blockIdx.x * g;
+  for (u32 t = threadIdx.x; t < g * s; t += blockDim.x) {
+    const u32 q = t / s, j = t - q * s;
+    if (r0 + q < n) seg_hash(R, tab, 0, j, rows + (r0 + q) * stride + (u64)SEG * j, sdig + 8 * t);
+  }
+  __syncthreads();
+  if (threadIdx.x < g && r0 + threadIdx.x < n) seg_fold(R.mid_Q[0], sdig + 8ull * s * threadIdx.x, s, out + 64 * (r0 + threadIdx.x));
+}
+constexpr u32 ROWS_SEG_MAX_S = 768;   // k_rows_seg's 64 s bytes of shared memory within the default 48 KiB
+
 // units u < n0 have s[0] segments each, the rest s[1]
 __global__ void __launch_bounds__(32) k_folds(const __grid_constant__ RowK R, const u64* __restrict__ dig, u64 n_units, u64 n0,
                                               uint8_t* __restrict__ out) {
@@ -1479,6 +1495,12 @@ int vc_rows_launch(const void* plan, const void* tables, const uint8_t* rows, ui
     return rc();
   }
   if (p->row.scheme != VC_ROW_SEG || !tables || !scratch) return -1;
+  const u32 s = p->row.s[0];
+  if (s <= ROWS_SEG_MAX_S) {
+    const u32 threads = s < 128 ? (s + 31) / 32 * 32 : 128, g = s < threads ? threads / s : 1;
+    k_rows_seg<<<blocks(n_rows, g), threads, 64ull * g * s, st>>>(p->row, static_cast<const uint8_t*>(tables), rows, stride, n_rows, out);
+    return rc();
+  }
   u64* dig = static_cast<u64*>(scratch);
   k_row_segs<<<blocks(n_rows * p->row.s[0], 128), 128, 0, st>>>(p->row, static_cast<const uint8_t*>(tables), rows, stride, n_rows, dig);
   if (int e = rc()) return e;
