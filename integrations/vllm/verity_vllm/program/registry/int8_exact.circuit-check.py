@@ -18,4 +18,6 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("Int8RowQuant_v1", lambda: bind(X.Int8RowQuant, K=64)),
         ("Int8KvQuant_v1", lambda: bind(X.Int8KvQuant, S=3, D=32)),
         ("Int8LutAttentionRow_v1/s33", lambda: bind(X.Int8LutAttentionRow, D=32, S=33, SCALE=scale)),
+        # the same row reading the registered `exp2_lut127` (`Int8LutSoftmax_v2`, `Exp2Lut127_v2`, `TableRead8x2_v1`)
+        ("Int8LutAttentionRow_v2/s33", lambda: bind(X.Int8LutAttentionRowV2, D=32, S=33, SCALE=scale)),
     ]

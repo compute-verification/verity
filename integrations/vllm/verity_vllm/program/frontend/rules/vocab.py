@@ -418,7 +418,8 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "int8_row_quant": lambda K: ir_bind(_int8().Int8RowQuant, K=K),
            "int8_scaled_mm": lambda K, N: _int8().scaled_mm(K, N),
            "int8_kv_quant": lambda S, D: ir_bind(_int8().Int8KvQuant, S=S, D=D),
-           "int8_attention_row": lambda D, S, SCALE: ir_bind(_int8().Int8LutAttentionRow, D=D, S=S, SCALE=SCALE)},
+           "int8_attention_row": lambda D, S, SCALE: ir_bind(_int8().Int8LutAttentionRow, D=D, S=S, SCALE=SCALE),
+           "int8_attention_row_table": lambda D, S, SCALE: ir_bind(_int8().Int8LutAttentionRowV2, D=D, S=S, SCALE=SCALE)},
     notes={**PROFILE_B1_EAGER.notes, **_PAD_NOTES, **_DNN,
            "int8_row_quant": "Int8RowQuant_v1{K}: verity_int8::row_quant on one bf16 token row -> (x_q s8[K], s_a f32): s_a = "
                              "RN32(max(amax, RN32(1e-30))/127), x_q = clamp(rint(RN32(x/s_a)), ±127) (registry.int8_exact)",
@@ -431,6 +432,8 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "int8_attention_row": "Int8LutAttentionRow_v1{D,S,SCALE}: verity_int8::window_rows on one (query row, head) over its S keys "
                                  "-- Q' per row, S = Q'K'ᵀ, fattn's uint32 A and 256-entry exp2 LUT (Exp2Lut127_v1), P V', the sink "
                                  "term; K', V', s_v, f32(V'_0) its KV head's Int8KvQuant_v1 rows (registry.int8_exact)",
+           "int8_attention_row_table": "Int8LutAttentionRow_v2{D,S,SCALE}(.., exp2_lut127): Int8LutAttentionRow_v1 with the exp2 LUT "
+                                       "read from the registered table (Exp2Lut127_v2, TableRead8x2_v1)",
            "token_select_stochastic_split": "GumbelTopPTokenSelect_v2{V,S}: GumbelTopPTokenSelect_v1{V} at the constant split count S, "
                                             "its keep word TopPKeepWord_v1{V,S} as word gates (registry.topp_words); equal to v1 at splits = S",
            "token_select_stochastic": "GumbelTopPTokenSelect_v1{V}(logits bf16[V], top_p f32, seed i64, pos i64, temp f32, splits i32) -> i32: f32 "

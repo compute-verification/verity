@@ -122,6 +122,46 @@ def test_lut_softmax_is_the_served_softmax():
     assert list(got[:37]) == _s8(p[0]) and got[37] == _f32(r)[0] and got[38] == _f32(z)[0]
 
 
+def test_the_registered_table_forms_are_v1_reading_exp2_lut127():
+    """`Exp2Lut127_v2` reads LUT[t] from the registered `exp2_lut127` (`TableRead8x2_v1`, a u8 index): every byte gives v1's word.
+    `Int8LutSoftmax_v2` and `Int8LutAttentionRow_v2` compute v1's words, and a Program of them holds no table."""
+    from verity.ml.circuits import operations as O
+    from verity.ml.circuits.program import Program
+    from verity_vllm.program.registry import tables as T
+
+    table = X.exp2_lut127_words()
+    assert len(table) == X.EXP2_LUT127_TABLE.leaves == 512 and T.table_read(8, 2).params[0][1].w == 8
+    assert [evaluate(X.Exp2Lut127V2, t, table) for t in range(256)] == [(X.Exp2Lut127.evaluate(t),) for t in range(256)]
+    g = torch.Generator().manual_seed(8)
+    sc = [int(v) & 0xFFFFFFFF for v in torch.randint(-20000, 20000, (37,), generator=g).tolist()]
+    assert evaluate(bind(X.Int8LutSoftmaxV2, S=37), sc, 3 << 28, table) == evaluate(bind(X.Int8LutSoftmax, S=37), sc, 3 << 28)
+    d, s = 32, 33
+    k, v, q = _rows(g, s, d), _rows(g, s, d), _rows(g, d)
+    ks = (k.float().abs().amax() / 127).reshape(1)
+    kq, vq, sv, v0 = IA.kv_quant(k[:, None], v[:, None], ks)
+    args = (_bf16(q), _s8(kq[0]), _f32(ks)[0], _s8(vq[0]), _f32(sv[0]), _f32(v0[0]))
+    v1, v2 = bind(X.Int8LutAttentionRow, D=d, S=s, SCALE=d ** -0.5), bind(X.Int8LutAttentionRowV2, D=d, S=s, SCALE=d ** -0.5)
+    assert v2.id.startswith("Int8LutAttentionRow_v2{") and evaluate(v2, *args, table) == evaluate(v1, *args)
+    held = O.program_data(Program(X.Int8LutSoftmaxV2.bind(S=2), registered=("exp2_lut127",)).root)
+    assert X.Exp2Lut127.id not in held and all(t != "exp2_lut127" for v in held.values() for _, t in v)
+    with pytest.raises(ValueError, match="past its window"):
+        bind(X.Int8LutAttentionRowV2, D=d, S=X.PV_KEY_LIMIT + 1, SCALE=d ** -0.5)
+
+
+def test_the_int8_attention_rule_declares_the_table_only_over_an_int8_layer(monkeypatch):
+    """A `registered_values` derivation registers `exp2_lut127` when an attention call's layer is served by the int8 impl, and not
+    for an FA2 layer under the same op."""
+    from verity_vllm.program.frontend.rules.vllm_bindings import int8 as R
+
+    rule, op = R.Int8UnifiedAttentionRule(), object()
+    monkeypatch.setattr(rule, "targets", lambda: {op})
+    ep = SimpleNamespace(graph=SimpleNamespace(nodes=[SimpleNamespace(op="call_function", target=op, args=(None,) * 4 + ("l0",), kwargs={})]))
+    monkeypatch.setattr(rule, "impl_refusal", lambda ln: None)
+    assert rule.registered_tables(ep, "profile") == ("exp2_lut127",)
+    monkeypatch.setattr(rule, "impl_refusal", lambda ln: f"{ln} is FA2's")
+    assert rule.registered_tables(ep, "profile") == ()
+
+
 def test_primitives_at_their_edges():
     assert X.LUT == tuple(int(v) for v in IA.LUT)
     for v, want in [(0.5, 0.0), (1.5, 2.0), (-2.5, -2.0), (126.5, 126.0), (-0.3, -0.0)]:

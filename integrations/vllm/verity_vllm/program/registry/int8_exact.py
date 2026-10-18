@@ -35,6 +35,10 @@ every row of a KV group reads (K', V', s_v, f32(V'_0)) is computed once, by `Int
 
 The primitives here are the ones no registry had: `F32Rint`, `F32ToS8Rzi`, `S8ToF32`, `F32MulWide`, `F64Mul`, `F64ToU32RniSat`,
 `LutIndex`, `Exp2Lut127` (the LUT softmax's 256-entry gather, a u8 index to its 32-bit entry).  Each is total on encodings; the docstrings say where the served path's domain is narrower.
+
+The table is a value the program brings (PROTOCOL.md §5.3): `Exp2Lut127_v2`, `Int8LutSoftmax_v2{S}` and
+`Int8LutAttentionRow_v2{D,S,SCALE}` are the v1 forms with LUT read from the registered `exp2_lut127` (`registry.tables`,
+`TableRead8x2_v1`), which a `registered_values` derivation binds.
 """
 from __future__ import annotations
 
@@ -51,6 +55,7 @@ from verity.ml.circuits.ops.scalar import F32Fabs, F32Fmaxf, F32Fminf, I32Add, I
 from verity.ml.circuits.refs import Coll, concat, tuple_of
 from verity.ml.circuits.types import Array, Tuple, Value
 from verity_vllm.program.registry import prims as P
+from verity_vllm.program.registry import tables as T
 from verity_vllm.program.registry.dsa import I32Sub
 from verity_vllm.program.registry.prims import BF16, F32, I32, bits_of, f32_of
 from verity_vllm.program.registry.topp_word_gates import I32ToF32
@@ -150,6 +155,21 @@ def Exp2Lut127(t: int) -> int:
     return LUT[t & 0xFF]
 
 
+EXP2_LUT127_TABLE = T.table_type("exp2_lut127")
+
+
+def exp2_lut127_words() -> list[int]:
+    """The registered `exp2_lut127`'s words in leaf order: LUT[t] as a 32-bit entry, its low word first."""
+    return T.table_words("exp2_lut127", lambda t: LUT[t])
+
+
+@composite("Exp2Lut127", 2, [], lambda S: ((("t", V8), ("exp2_lut127", EXP2_LUT127_TABLE)), I32),
+           conformance="exact-model-tested: Exp2Lut127_v1 with LUT[t] read from the registered table")
+def Exp2Lut127V2(B, S, t, exp2_lut127):
+    """`Exp2Lut127_v1` with LUT[t] read from the registered `exp2_lut127` (`TableRead8x2_v1`) rather than held by the evaluator."""
+    return B.call(T.table_read(8, 2), t, exp2_lut127)
+
+
 C_TOP = CP.const(32, bits_of(float(TOP)))
 C_NEG_TOP = CP.const(32, bits_of(-float(TOP)))
 C_FLOOR = CP.const(32, bits_of(SCALE_FLOOR))
@@ -234,15 +254,30 @@ def Int8AttnScale(B, S, sq, sk):
     return B.call(F64ToU32RniSat, x)
 
 
-@composite("Int8LutSoftmax", 1, ["S"], lambda S: ((("sc", Array(S.S, I32)), ("a", I32)), Tuple(Array(S.S, V8), F32, F32)),
-           conformance=_CONF)
+def _softmax_sig(S, table: bool = False):
+    params = (("sc", Array(S.S, I32)), ("a", I32)) + ((("exp2_lut127", EXP2_LUT127_TABLE),) if table else ())
+    return params, Tuple(Array(S.S, V8), F32, F32)
+
+
+@composite("Int8LutSoftmax", 1, ["S"], _softmax_sig, conformance=_CONF)
 def Int8LutSoftmax(B, S, sc, a):
     """(P, r, z) of one row's S scores under A: m = max S, e_j = LUT[LutIndex(m - S_j, A)], L = sum e, r = RN32(1 / L),
     z = RN32(e_0 / L), P = (0, e_1, .., e_{S-1}) as s8 codes."""
+    return _softmax(B, S, sc, a, lambda t: B.call(Exp2Lut127, t))
+
+
+@composite("Int8LutSoftmax", 2, ["S"], lambda S: _softmax_sig(S, table=True),
+           conformance="exact-model-tested: Int8LutSoftmax_v1 with LUT[t] read from the registered table")
+def Int8LutSoftmaxV2(B, S, sc, a, exp2_lut127):
+    """`Int8LutSoftmax_v1` with each e_j read from the registered `exp2_lut127` (`Exp2Lut127_v2`)."""
+    return _softmax(B, S, sc, a, lambda t: B.call(Exp2Lut127V2, t, exp2_lut127))
+
+
+def _softmax(B, S, sc, a, exp2):
     m = sc[0]
     for j in range(1, S.S):
         m = B.call(SelectI32, B.call(I32Le, m, sc[j]), sc[j], m)
-    e = [B.call(Exp2Lut127, B.call(LutIndex, B.call(I32Sub, m, sc[j]), a)) for j in range(S.S)]
+    e = [exp2(B.call(LutIndex, B.call(I32Sub, m, sc[j]), a)) for j in range(S.S)]
     total = e[0]
     for j in range(1, S.S):
         total = B.call(I32Add, total, e[j])
@@ -267,10 +302,10 @@ def _pad_rows(B, rows: list[Coll], n: int) -> Coll:
     return Coll(Array(len(rows), Array(padded(n), V8)), concat([p for r in rows for p in [r.refs] + [zero] * pad]))
 
 
-def _row_sig(S):
+def _row_sig(S, table: bool = False):
     D, K = S.D, S.S
     return ((("q", Array(D, BF16)), ("kq", Array(K, Array(D, V8))), ("sk", F32), ("vq", Array(K, Array(D, V8))), ("sv", Array(D, F32)),
-             ("v0", Array(D, F32))), Array(D, BF16))
+             ("v0", Array(D, F32))) + ((("exp2_lut127", EXP2_LUT127_TABLE),) if table else ()), Array(D, BF16))
 
 
 def row_refusal(b: dict) -> str | None:
@@ -293,10 +328,21 @@ def Int8LutAttentionRow(B, S, q, kq, sk, vq, sv, v0):
     (`Int8AttnScale`), the LUT softmax (`Int8LutSoftmax`), P V' (`S8Matmul_v1{D, S'}` over the keys zero-padded to a multiple of
     32, P in [0, 127]) and the output (`Int8AttnOut` per channel).  `kq` and `vq` are K' and V' by key (`Int8KvQuant`'s first S
     rows), `sk` the KV head's K scale, `sv` V's per-channel scales and `v0` f32(V'_0)."""
+    return _row(B, S, q, kq, sk, vq, sv, v0, lambda sc, a: B.call(bind(Int8LutSoftmax, S=S.S), sc, a))
+
+
+@composite("Int8LutAttentionRow", 2, ["D", "S", "SCALE"], lambda S: _row_sig(S, table=True),
+           conformance="exact-model-tested: Int8LutAttentionRow_v1 with LUT[t] read from the registered table", refuse=row_refusal)
+def Int8LutAttentionRowV2(B, S, q, kq, sk, vq, sv, v0, exp2_lut127):
+    """`Int8LutAttentionRow_v1` whose softmax reads the registered `exp2_lut127` (`Int8LutSoftmax_v2`)."""
+    return _row(B, S, q, kq, sk, vq, sv, v0, lambda sc, a: B.call(bind(Int8LutSoftmaxV2, S=S.S), sc, a, exp2_lut127))
+
+
+def _row(B, S, q, kq, sk, vq, sv, v0, softmax):
     D, K = S.D, S.S
     qq = B.call(bind(Int8RowQuant, K=D), q)
     sc = B.call(bind(S8.S8Matmul, **plain_arm(D, K)), qq[0], kq)
-    soft = B.call(bind(Int8LutSoftmax, S=K), sc, B.call(bind(Int8AttnScale, SCALE=S.SCALE), qq[1], sk))
+    soft = softmax(sc, B.call(bind(Int8AttnScale, SCALE=S.SCALE), qq[1], sk))
     p = _pad_rows(B, [soft[0]], K)[0]
     v = _pad_rows(B, [Coll(Array(K, V8), concat([vq[j][c].refs for j in range(K)])) for c in range(D)], K)
     y = B.call(bind(S8.S8Matmul, **plain_arm(padded(K), D, (0, TOP))), p, v)
@@ -334,4 +380,4 @@ def Int8KvQuant(B, S, k, v, sk):
 
 
 INT8_COMPOSITES = [Int8QuantElement, Int8RowScale, Int8StaticQuant, Int8RowQuant, Int8Linear, Int8AttnScale, Int8LutSoftmax,
-                   Int8AttnOut, Int8LutAttentionRow, Int8ColumnQuant, Int8KvQuant]
+                   Int8AttnOut, Int8LutAttentionRow, Int8ColumnQuant, Int8KvQuant, Exp2Lut127V2, Int8LutSoftmaxV2, Int8LutAttentionRowV2]

@@ -129,7 +129,8 @@ class Int8UnifiedAttentionRule(UnifiedAttentionWithOutputRule):
     head's S keys; then per query row i (position P0 + i) and head h, ONE `int8_attention_row{D,P0+i+1,SCALE}` (Int8LutAttentionRow_v1)
     over the first P0 + i + 1 rows of its KV head's Int8KvQuant_v1.  The layer's K scales (the impl's, read back when the layer is
     instantiated: `vllm_meta.attention_impls`' `int8_k_scales`) enter as one Const32 before each Call that reads one, as the Match
-    fold emits them (`observe.fold.patterns.int8`)."""
+    fold emits them (`observe.fold.patterns.int8`).  Under `registered_values` each row is `int8_attention_row_table`
+    (Int8LutAttentionRow_v2), reading the registered `exp2_lut127` the rule declares when a layer's observed impl is the int8 one."""
     info = RuleInfo("Int8UnifiedAttentionWithOutput[vllm]", 2, "state",
                     applies_to="vllm.unified_attention_with_output(query, key, value, Tensor! output, layer_name: str, None, None, kv_cache_dummy_dep?)",
                     preconditions=(f"the layer's OBSERVED attention impl is {INT8_ATTENTION_IMPL}, with its K scales (one per KV head) and "
@@ -138,6 +139,11 @@ class Int8UnifiedAttentionRule(UnifiedAttentionWithOutputRule):
                                    "assumed (op contract): causal attention over the history + this call's rows"),
                     evidence_domain="structural; numerics: Int8KvQuant_v1 + Int8LutAttentionRow_v1 (engine.int8_attention's kv_quant and "
                                     "window_rows, bit-equal on the RTX PRO 6000 to its CPU run and to fattn_ref.py)")
+
+    def registered_tables(self, ep, mode):
+        ts = self.targets()
+        layers = (self._args(n)[4] for n in ep.graph.nodes if n.op == "call_function" and n.target in ts)
+        return ("exp2_lut127",) if any(isinstance(ln, str) and self.impl_refusal(ln) is None for ln in layers) else ()
 
     def impl_refusal(self, layer_name: str) -> str | None:
         obs = (_OBSERVED["attention_impls"] or {}).get(layer_name) or {}
@@ -181,19 +187,22 @@ class Int8UnifiedAttentionRule(UnifiedAttentionWithOutputRule):
             head = [Coll(Array(S, Array(D, Value(16))), concat([log[j][g].refs for j in range(S)])) for log in (klog, vlog)]
             kvq.append(ctx.call(fkv, head[0], head[1], k_scale(g, name), node=node, rule=self, name=name))
         rows = []
+        table = (ctx.table("exp2_lut127", node),) if ctx.registered_values else ()
         for i in range(h.T):
             n = h.P0 + i + 1
-            fr = ctx.kind("int8_attention_row", node, D=D, S=n, SCALE=scale)
+            fr = ctx.kind("int8_attention_row_table" if table else "int8_attention_row", node, D=D, S=n, SCALE=scale)
             for hd in range(h.NH):
                 g, name = hd // rep, f"{hint}[t={h.P0 + i},h={hd}]"
                 c = kvq[g]
-                rows.append(ctx.call(fr, h.qrows[i][hd], c[0][0:n], k_scale(g, name), c[1][0:n], c[2], c[3], node=node, rule=self, name=name))
+                rows.append(ctx.call(fr, h.qrows[i][hd], c[0][0:n], k_scale(g, name), c[1][0:n], c[2], c[3], *table, node=node, rule=self,
+                                     name=name))
         y = Coll(_tensor_type(h.qs, 16), concat([r.refs for r in rows]))
         ctx.rebind(out, y, self, what="output")
         ctx.record(self, node, {"layer_name": layer_name, "positions": [h.P0, S - 1], "NH": h.NH, "KVH": h.KVH, "D": D, "scale": scale,
                                 "k_scales": [f"0x{b:08x}" for b in bits], "kv_write_consumed": dep is not None, "assumed_causal": True,
                                 "impl": obs.get("impl")},
-                   emitted=f"{fkv.id} x{h.KVH} + Int8LutAttentionRow_v1{{S={h.P0 + 1}..{S}}} x{h.T * h.NH} + Const32 x{h.KVH + h.T * h.NH}")
+                   emitted=f"{fkv.id} x{h.KVH} + Int8LutAttentionRow_v{2 if table else 1}{{S={h.P0 + 1}..{S}}} x{h.T * h.NH} + Const32 "
+                           f"x{h.KVH + h.T * h.NH}")
 
 
 __all__ = ["Int8RowQuantRule", "Int8ScaledMmRule", "Int8UnifiedAttentionRule", "INT8_ATTENTION_IMPL"]
