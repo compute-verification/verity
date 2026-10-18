@@ -175,6 +175,23 @@ def test_the_rows_hold_every_parameter() -> None:
         assert sum(b for _r, b, _ps in laid) == sum(t.leaves for _, t in params)
 
 
+def test_the_public_rows_are_the_verifiers_own() -> None:
+    """`decode_public` and `receipt_public` are exactly the public rows' params of an instance's arguments, so a verifier
+    holding only the public inputs derives the words its public rows open to."""
+    rng = random.Random(4)
+    for S, coin in ((P512_SLICED, rng.randbytes(32)), (P1024, None)):
+        seed, j, q = rng.randbytes(32), rng.randrange(1 << 20), 1
+        a = BC.decode_args(S, seed, j, rng.randbytes(S.BYTES), rng.randbytes(S.BYTES), coin, q)
+        pub = BC.decode_public(S, seed, j, coin, q)
+        assert list(pub) == BC.decode_rows(S)[0][2] and pub == {p: a[p] for p in pub}
+    S = SimpleNamespace(ROWS=RC.SKETCH_ROWS, LEAF=RC.PER_LEAF, P=4, BYTES=CO.BLOCK_BYTES)
+    seed = rng.randbytes(64)
+    prefix, signs = RC.sketch_prefix(seed), RC.sign_bits(seed, S.ROWS)
+    a = BC.receipt_args(S, prefix, signs, 7, 2, 1, rng.randbytes(S.BYTES), rng.randbytes(64 * S.LEAF), [3, 7, 5, 1])
+    pub = BC.receipt_public(S, prefix, signs, 7, 2, 1)
+    assert list(pub) == [p for _r, _b, ps in BC.receipt_rows(S)[:2] for p in ps] and pub == {p: a[p] for p in pub}
+
+
 @pytest.mark.parametrize("bad", [dict(N=64, C=59), dict(BYTES=64), dict(K=1), dict(MASKED=2), dict(BYTES=96), dict(WORDS=24),
                                  dict(WORDS=0)])
 def test_a_decode_off_the_codec_is_refused(bad) -> None:

@@ -64,7 +64,8 @@ digest and binding) and about 32 M at p1024/k3/masked; in four slices about 5.4 
 and one compression at 16 rows: about 0.66 M ANDs.
 
 `decode_check` and `receipt_check` are the references, over each instance's u16 words; `decode_args` and `receipt_args` an
-instance's arguments, `decode_rows` and `receipt_rows` its rows (C-Flock's ``in_rows`` params), `row_words` its rows' words.
+instance's arguments, `decode_public` and `receipt_public` their public rows' (the verifier's own), `decode_rows` and
+`receipt_rows` its rows (C-Flock's ``in_rows`` params), `row_words` its rows' words.
 """
 from __future__ import annotations
 
@@ -84,8 +85,9 @@ from verity.ml.commitments.rowleaf import sha512_row_v2_digest, sha512_row_v2_pr
 
 from .sha512 import IV, commit as _commit, compress_gadget, compress_ref, midstate, pad_tail, words_be
 
-__all__ = ["BlockDecodeCheck", "BlockReceiptCheck", "FIELDS", "TOY", "decode_args", "decode_check", "decode_rows", "key",
-           "receipt", "receipt_args", "receipt_check", "receipt_rows", "row_words", "sketch"]
+__all__ = ["BlockDecodeCheck", "BlockReceiptCheck", "FIELDS", "TOY", "decode_args", "decode_check", "decode_public",
+           "decode_rows", "key", "receipt", "receipt_args", "receipt_check", "receipt_public", "receipt_rows", "row_words",
+           "sketch"]
 
 BIT = BL.BIT
 U16 = Array(16, BIT)
@@ -702,13 +704,12 @@ def decode_check(S, a: dict) -> int:
     return int(all(y < p and _decode_word(S, y, (t0 + i * tau + b) % p, c, mask) == m for i, (y, m) in enumerate(zip(ys, ms))))
 
 
-def decode_args(S, seed: bytes, j: int, block: bytes, payload: bytes, coin: bytes | None = None, q: int = 0
-                ) -> dict[str, list[int]]:
-    """An instance's u16 words: slice q of block j's encoding and its payload, under the codec key of ``seed``, bound under its
-    append's ``coin`` if one is given (an appended block), else the seed's key (a registered block)."""
+def decode_public(S, seed: bytes, j: int, coin: bytes | None = None, q: int = 0) -> dict[str, list[int]]:
+    """The public row's words of slice q of block j (`decode_rows`' first), which the verifier derives itself: the codec key of
+    ``seed``, bound under its append's ``coin`` if one is given (an appended block), else the seed's key (a registered block)."""
     _check_decode(S)
-    if len(block) != S.BYTES or len(payload) != S.BYTES or not 0 <= j < 1 << 64 or not 0 <= q < 1 << 16:
-        raise ValueError(f"a block and its payload are {S.BYTES} bytes, j a u64 and q a u16")
+    if not 0 <= j < 1 << 64 or not 0 <= q < 1 << 16:
+        raise ValueError("j is a u64 and q a u16")
     if coin is not None and (type(coin) is not bytes or len(coin) != COIN_BYTES):
         raise ValueError(f"an append's coin is {COIN_BYTES} bytes")
     c, tau, mask = key(S, seed)
@@ -718,8 +719,16 @@ def decode_args(S, seed: bytes, j: int, block: bytes, payload: bytes, coin: byte
            "t0": _u16s(tau * (_words_of(S) * j + q * S.WORDS) % _p(S), fw), "c": [x for r in c for x in _u16s(r, fw)]}
     if S.MASKED:
         out["mask"] = _u16s(mask, fw)
-    out.update(block=_u16s(block), payload=_u16s(payload))
     return out
+
+
+def decode_args(S, seed: bytes, j: int, block: bytes, payload: bytes, coin: bytes | None = None, q: int = 0
+                ) -> dict[str, list[int]]:
+    """An instance's u16 words: slice q of block j's encoding and its payload, with `decode_public`'s public row."""
+    _check_decode(S)
+    if len(block) != S.BYTES or len(payload) != S.BYTES:
+        raise ValueError(f"a block and its payload are {S.BYTES} bytes")
+    return {**decode_public(S, seed, j, coin, q), "block": _u16s(block), "payload": _u16s(payload)}
 
 
 def sketch(block: bytes, signs: Sequence[bytes]) -> bytes:
@@ -757,20 +766,27 @@ def receipt_check(S, a: dict) -> int:
     return int(k < S.LEAF and leaf[64 * k:64 * (k + 1)] == y and pos < S.P and j < 1 << 16 and a["plan"][pos] == j)
 
 
-def receipt_args(S, prefix: bytes, signs: Sequence[bytes], j: int, k: int, pos: int, block: bytes, leaf: bytes,
-                 plan: Sequence[int]) -> dict[str, list[int]]:
-    """An instance's u16 words: the pass's one-block receipt ``prefix`` (`receipts.sketch_prefix`) and sign rows
-    (`receipts.sign_bits`), block j at position ``pos`` of the plan, ``k`` its place in its receipt leaf ``leaf`` (LEAF
-    receipts), the block's encoding and the step's plan row (P entries)."""
+def receipt_public(S, prefix: bytes, signs: Sequence[bytes], j: int, k: int, pos: int) -> dict[str, list[int]]:
+    """The public rows' words (`receipt_rows`' first two), which the verifier derives itself: the pass's one-block receipt
+    ``prefix`` (`receipts.sketch_prefix`) and sign rows (`receipts.sign_bits`), block j at position ``pos`` of the plan and
+    ``k`` its place in its receipt leaf."""
     _check_receipt(S)
     if len(prefix) != 128 or len(signs) != S.ROWS or any(len(r) != S.BYTES // 8 for r in signs):
         raise ValueError(f"a prefix is one block and the signs {S.ROWS} rows of {S.BYTES // 8} bytes")
-    if len(block) != S.BYTES or len(leaf) != 64 * S.LEAF or len(plan) != S.P:
-        raise ValueError(f"a block is {S.BYTES} bytes, its leaf {S.LEAF} receipts and the plan {S.P} entries")
     if not (0 <= j < 1 << 64 and 0 <= k < 1 << 16 and 0 <= pos < 1 << 16):
         raise ValueError("j is a u64, k and pos u16s")
     return {"mid": [x for v in midstate(prefix) for x in _u16s(v, 4)], "j": _u16s(j, 4), "k": [k], "pos": [pos],
-            "signs": [x for r in signs for x in _u16s(r)], "block": _u16s(block), "leaf": _u16s(leaf), "plan": list(plan)}
+            "signs": [x for r in signs for x in _u16s(r)]}
+
+
+def receipt_args(S, prefix: bytes, signs: Sequence[bytes], j: int, k: int, pos: int, block: bytes, leaf: bytes,
+                 plan: Sequence[int]) -> dict[str, list[int]]:
+    """An instance's u16 words: `receipt_public`'s public rows, the block's encoding, its receipt leaf ``leaf`` (LEAF
+    receipts) and the step's plan row (P entries)."""
+    _check_receipt(S)
+    if len(block) != S.BYTES or len(leaf) != 64 * S.LEAF or len(plan) != S.P:
+        raise ValueError(f"a block is {S.BYTES} bytes, its leaf {S.LEAF} receipts and the plan {S.P} entries")
+    return {**receipt_public(S, prefix, signs, j, k, pos), "block": _u16s(block), "leaf": _u16s(leaf), "plan": list(plan)}
 
 
 # --- each instance's rows ----------------------------------------------------------------------------------------------------
