@@ -45,15 +45,16 @@ that link once for every kind and every shape, with what is the circuit's own pr
   record `deployZkRec relation`: `vstarAccepts_deployRec_of_linked`, `vstarParts_deployRec_of_linked` (what
   `ksA_deployed_parts` reads at each of the three shapes) and `vstarPartsStaging_deployRec_of_linked`.
 * **The held messages off a copy's columns** (`held_of_colsHold`, `agrees_colsHold`, `agrees_openRow`): where the
-  layout reads round `i`'s message at a run of a copy's columns (`copyPs`) that hold bytes `b` (`ColsHold`), the part
-  holds `b` there, and every agreeing list of messages has `b` at round `i`. Bits read back as the bytes they spell
-  (`bytesOf_bitL`). This is the message half of the input tie, at any layout that reads its messages at the copies'
-  input columns.
-* **The held tie at `layoutOf`** (`agrees_layoutOf`): M9's layout reads its messages there. At a part shown at
-  `showsPart`, of one table, the circuit `partCircuit` parses off the raw part is the staged statement's
-  (`partCircuit_staged`), whose input leaves are its input words in order (`checkParsed`), so each round the part holds
-  is read at a port's input columns in an instance's copy (`layoutOf_msgAt_staged`), below the unit's constant
-  (`leaves_le_constPos`), and every agreeing list of messages has there the bytes those columns hold.
+  statement doesn't fix round `i` and the layout reads its message as a frame `pre` then a run of a copy's columns
+  (`copyPs`) that hold bytes `b` (`ColsHold`), the part holds `pre ++ b` there, and every agreeing list of messages has
+  `pre ++ b` at round `i`. Bits read back as the bytes they spell (`bytesOf_bitL`). This is the message half of the
+  input tie, at any layout that reads its messages at the copies' input columns.
+* **The held tie at `layoutOf`** (`agrees_layoutOf`): M9's layout reads its messages there, each the frame `0` then a
+  port's row. At a part shown at `showsPart`, of one table, the circuit `partCircuit` parses off the raw part is the
+  staged statement's (`partCircuit_staged`), whose input leaves are its input words in order (`checkParsed`), so each
+  round the part holds is read at a port's input columns in an instance's copy (`layoutOf_msgAt_staged`), below the
+  unit's constant (`leaves_le_constPos`). No held round is one the statement fixes (`layoutOf_fixedAt_of_msgAt`), so
+  every agreeing list of messages has there the frame then the bytes those columns hold.
 * **A table of V\*'s statement, by its kind** (`StmtUnit`, `stmtUnit_of_check`): a table named as V\*'s statement
   `sv` that passes `checkPart sv` is that kind's unit, with the kind's outputs (`UnitOuts`): a level's `LevelOuts`, an
   algebra part's or R's opening part's `ResOuts` at its parameters, RecSparse's `SparseReadOuts`. With `AllOuts`,
@@ -818,17 +819,18 @@ theorem copyOf_eq {p : Flock.Readable.Parsed} {t : ℕ} {ht : t < p.sts.size} {w
 def copyPs (p : Flock.Readable.Parsed) (t : ℕ) (ht : t < p.sts.size) (o g u base n : ℕ) : List ℕ :=
   (List.range n).map fun q => copyIdx p t ht o g u (base + q)
 
-/-- **What a part holds at a run of a copy's columns is what they hold**: where the layout reads round `i`'s message
-at the copy's columns from `base` (`copyPs`), within the copy's columns, and those columns hold the bytes `b`
-(`ColsHold`), the part holds `b` at round `i`. -/
+/-- **What a part holds at a run of a copy's columns is what they hold**: where the statement doesn't fix round `i` and
+the layout reads its message as the constant frame `pre` then the copy's columns from `base` (`copyPs`), within the
+copy's columns, and those columns hold the bytes `b` (`ColsHold`), the part holds `pre ++ b` at round `i`. -/
 theorem held_of_colsHold {L : Layout} {x : Msg} {s i : ℕ} {p : Flock.Readable.Parsed} {t : ℕ}
-    {ht : t < p.sts.size} {w : Flock.Wit} {o g u base : ℕ} {b : ByteArray}
-    (hm : L.msgAt x s i = some (copyPs p t ht o g u base (8 * b.size)))
+    {ht : t < p.sts.size} {w : Flock.Wit} {o g u base : ℕ} {pre : Msg} {b : ByteArray} (hfx : L.fixedAt x i = none)
+    (hm : L.msgAt x s i = some [(pre, copyPs p t ht o g u base (8 * b.size))])
     (htop : base + 8 * b.size ≤ p.sts[t].c.unit.constPos + 1)
     (hb : FlockVBridge.ColsHold (Flock.Readable.copyOf p t ht w o g u) base b) :
-    L.held x s w i = some b.data.toList := by
-  simp only [Layout.held, hm, Option.map_some]
-  congr 1
+    L.held x s w i = some (pre ++ b.data.toList) := by
+  simp only [Layout.held, hfx, Option.isSome_none, Bool.false_eq_true, ↓reduceIte, hm, Option.map_some, readSegs,
+    List.flatMap_cons, List.flatMap_nil, List.append_nil]
+  congr 2
   apply readAt_of_bits
   · simp only [copyPs, List.length_map, List.length_range, Array.length_toList]
     rfl
@@ -839,22 +841,25 @@ theorem held_of_colsHold {L : Layout} {x : Msg} {s i : ℕ} {p : Flock.Readable.
     exact hb q hq'
 
 /-- **The input tie's messages off a copy's columns**: on every list of messages agreeing with what the part holds,
-round `i`'s message is the bytes the copy's columns hold where the layout reads it (`held_of_colsHold`). -/
+round `i`'s message is the frame then the bytes the copy's columns hold where the layout reads it
+(`held_of_colsHold`). -/
 theorem agrees_colsHold {L : Layout} {x : Msg} {s i : ℕ} {p : Flock.Readable.Parsed} {t : ℕ}
     {ht : t < p.sts.size} {w : Flock.Wit} {ms : List Msg} (hA : Agrees L x s w ms) (hi : i < L.rounds x)
-    {o g u base : ℕ} {b : ByteArray} (hm : L.msgAt x s i = some (copyPs p t ht o g u base (8 * b.size)))
+    (hfx : L.fixedAt x i = none) {o g u base : ℕ} {pre : Msg} {b : ByteArray}
+    (hm : L.msgAt x s i = some [(pre, copyPs p t ht o g u base (8 * b.size))])
     (htop : base + 8 * b.size ≤ p.sts[t].c.unit.constPos + 1)
-    (hb : FlockVBridge.ColsHold (Flock.Readable.copyOf p t ht w o g u) base b) : ms.getD i [] = b.data.toList :=
-  hA i hi _ (held_of_colsHold hm htop hb)
+    (hb : FlockVBridge.ColsHold (Flock.Readable.copyOf p t ht w o g u) base b) :
+    ms.getD i [] = pre ++ b.data.toList :=
+  hA i hi _ (held_of_colsHold hfx hm htop hb)
 
-/-- **A level's row is the held message**: where the layout reads round `i`'s message at a level copy's row columns
-(its first `128 LANES`), every agreeing list of messages has, at round `i`, the bytes of the row the copy's climb
-hashes (`openRow`, whose bytes `openIns_reads` puts there). -/
+/-- **A level's row is the held message**: where the layout reads round `i`'s message as a frame then a level copy's
+row columns (its first `128 LANES`), every agreeing list of messages has, at round `i`, the frame then the bytes of the
+row the copy's climb hashes (`openRow`, whose bytes `openIns_reads` puts there). -/
 theorem agrees_openRow {L : Layout} {x : Msg} {s i : ℕ} {p : Flock.Readable.Parsed} {t : ℕ} {ht : t < p.sts.size}
-    {w : Flock.Wit} {ms : List Msg} (hA : Agrees L x s w ms) (hi : i < L.rounds x) {o g u LANES H : ℕ}
-    (hm : L.msgAt x s i = some (copyPs p t ht o g u 0 (128 * LANES)))
+    {w : Flock.Wit} {ms : List Msg} (hA : Agrees L x s w ms) (hi : i < L.rounds x) (hfx : L.fixedAt x i = none)
+    {o g u LANES H : ℕ} {pre : Msg} (hm : L.msgAt x s i = some [(pre, copyPs p t ht o g u 0 (128 * LANES))])
     (htop : 128 * LANES ≤ p.sts[t].c.unit.constPos + 1) :
-    ms.getD i [] = (_root_.Flock.MerkleScheme.rowBytes
+    ms.getD i [] = pre ++ (_root_.Flock.MerkleScheme.rowBytes
       (Flock.Readable.openRow (Flock.Readable.copyOf p t ht w o g u) LANES)).data.toList := by
   have hs : 8 * (_root_.Flock.MerkleScheme.rowBytes
       (Flock.Readable.openRow (Flock.Readable.copyOf p t ht w o g u) LANES)).size = 128 * LANES := by
@@ -862,7 +867,7 @@ theorem agrees_openRow {L : Layout} {x : Msg} {s i : ℕ} {p : Flock.Readable.Pa
       LANES from FlockVBridge.Family.size_elems _ _ _]
     omega
   exact agrees_colsHold (b := _root_.Flock.MerkleScheme.rowBytes
-      (Flock.Readable.openRow (Flock.Readable.copyOf p t ht w o g u) LANES)) hA hi (by rw [hs]; exact hm)
+      (Flock.Readable.openRow (Flock.Readable.copyOf p t ht w o g u) LANES)) hA hi hfx (by rw [hs]; exact hm)
     (by omega) (Flock.Readable.openIns_reads (Flock.Readable.copyOf p t ht w o g u) LANES H).2.2.2.2.2.1
 
 end Held
@@ -1118,7 +1123,8 @@ theorem vstarAccepts_of_linked {H : Msg → Msg} {D : Deploy Coin} {I : Inner Co
 
 /-- **V\*'s parts at any shape, from every part's links** (`VStarParts`, what `codeFacts_of_parts` and
 `ksA_deployed_parts` read at each shape): every part linked (`LinkedPart`), its `PartOpens` through registered climbs,
-with the staging, the decompositions, the public calls the V* setup evaluates and the held rounds. -/
+with the staging, the decompositions, the public calls the V* setup evaluates and `HeldPub` (each inner round before
+the last public, fixed or held). -/
 theorem vstarParts_of_linked {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
     {L : Layout} {opening : Opening} {shape : Form → Prop} {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop}
     {chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop} {cmt dig : Msg → ℕ → Msg → Msg}
@@ -1129,7 +1135,7 @@ theorem vstarParts_of_linked {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin
     (hO : ∀ s, HeldOpens D DO L shape shows opening dig s) (hRC : ∀ s, RegClimbs H D DO L shape shows cmt dig s)
     (hS : Staged H D I L shape shows cmt) (hD : Decomp H D I.V shape chk)
     (hLD : LogDecompPub H D I.V shape logs pub) (hPR : PubReg H D shape pub)
-    (hH : Held D I L shape) : VStarParts H D I DO L opening shape :=
+    (hH : HeldPub D I L shape) : VStarParts H D I DO L opening shape :=
   ⟨shows, chk, cmt, logs, pub, partChecks_linked hDO hP, fun s => partOpens_of_climbs (hO s) (hRC s),
     partLogs_linked hDO hP, hS, hD, hLD, hPR, hH⟩
 
@@ -1144,7 +1150,7 @@ theorem vstarPartsStaging_of_linked {H : Msg → Msg} {D : Deploy Coin} {I : Inn
     (hP : ∀ s, LinkedPart H D decode L shape shows chk logs s)
     (hO : ∀ s, HeldOpens D DO L shape shows opening dig s) (hRC : ∀ s, RegClimbs H D DO L shape shows cmt dig s)
     (hV : VstarShows D I L shape decC shows cmt) (hD : Decomp H D I.V shape chk)
-    (hLD : LogDecompPub H D I.V shape logs pub) (hPR : PubReg H D shape pub) (hH : Held D I L shape) :
+    (hLD : LogDecompPub H D I.V shape logs pub) (hPR : PubReg H D shape pub) (hH : HeldPub D I L shape) :
     VStarPartsStaging D I DO H L opening decC shape :=
   ⟨shows, chk, cmt, logs, pub, partChecks_linked hDO hP, fun s => partOpens_of_climbs (hO s) (hRC s),
     partLogs_linked hDO hP, hV, hD, hLD, hPR, hH⟩
@@ -1191,7 +1197,7 @@ theorem vstarParts_deployRec_of_linked {L : Layout} {opening : Opening} {shape :
     (hD : Decomp H (RecDeploy.deployRec I.V ivScope b) I.V shape chk) {pub : Msg → List (Msg × Msg)}
     (hLD : LogDecompPub H (RecDeploy.deployRec I.V ivScope b) I.V shape logs pub)
     (hPR : PubReg H (RecDeploy.deployRec I.V ivScope b) shape pub)
-    (hH : Held (RecDeploy.deployRec I.V ivScope b) I L shape) :
+    (hH : HeldPub (RecDeploy.deployRec I.V ivScope b) I L shape) :
     VStarParts H (RecDeploy.deployRec I.V ivScope b) I (RecDeploy.deployZkRec Flock.Readable.relation) L opening
       shape :=
   vstarParts_of_linked rfl hP hO hRC hS hD hLD hPR hH
@@ -1211,7 +1217,7 @@ theorem vstarPartsStaging_deployRec_of_linked {L : Layout} {opening : Opening} {
     (hD : Decomp H (RecDeploy.deployRec I.V ivScope b) I.V shape chk) {pub : Msg → List (Msg × Msg)}
     (hLD : LogDecompPub H (RecDeploy.deployRec I.V ivScope b) I.V shape logs pub)
     (hPR : PubReg H (RecDeploy.deployRec I.V ivScope b) shape pub)
-    (hH : Held (RecDeploy.deployRec I.V ivScope b) I L shape) :
+    (hH : HeldPub (RecDeploy.deployRec I.V ivScope b) I L shape) :
     VStarPartsStaging (RecDeploy.deployRec I.V ivScope b) I (RecDeploy.deployZkRec Flock.Readable.relation) H L
       opening decC shape :=
   vstarPartsStaging_of_linked rfl hP hO hRC hV hD hLD hPR hH
@@ -1599,14 +1605,31 @@ theorem mem_partHolds {r : XR} {s j : ℕ} {ps : List ℕ} (h : (j, ps) ∈ part
     · cases h
   · cases h
 
-theorem layoutOf_msgAt_succ {x : Msg} {s j : ℕ} {ps : List ℕ} (h : layoutOf.msgAt x s (j + 1) = some ps) :
-    ∃ r, readX x = some r ∧ (j, ps) ∈ partHolds r s := by
+theorem layoutOf_msgAt_mem {x : Msg} {s j : ℕ} {segs : List (Msg × List ℕ)}
+    (h : layoutOf.msgAt x s (j + 1) = some segs) :
+    ∃ r ps, readX x = some r ∧ (j, ps) ∈ partHolds r s ∧ segs = [([0], ps)] := by
+  rw [layoutOf_msgAt_succ] at h
   obtain ⟨r, hr, h⟩ := Option.bind_eq_some_iff.1 h
   obtain ⟨e, he, rfl⟩ := Option.map_eq_some_iff.1 h
   have hj : e.1 = j := by simpa using List.find?_some he
-  refine ⟨r, hr, ?_⟩
+  refine ⟨r, e.2, hr, ?_, rfl⟩
   rw [← hj]
   exact List.mem_of_find?_eq_some he
+
+/-- **No round a part holds at `layoutOf` is fixed**: a held round is a rep's round that absorbs a message
+(`msgRound`, among `RecVStar.commitRounds`), and `streamFixed` fixes only the rounds that absorb none. -/
+theorem layoutOf_fixedAt_of_msgAt {x : Msg} {s j : ℕ} {segs : List (Msg × List ℕ)}
+    (h : layoutOf.msgAt x s (j + 1) = some segs) : layoutOf.fixedAt x (j + 1) = none := by
+  obtain ⟨r, ps, hr, hmem, -⟩ := layoutOf_msgAt_mem h
+  obtain ⟨-, -, rs, -, k, rep, -, -, hrs, -, -, hj, -⟩ := mem_partHolds hmem
+  unfold msgRound at hj
+  obtain ⟨t, ht, rfl⟩ := Option.map_eq_some_iff.1 hj
+  obtain ⟨hlt, hflag⟩ : t < rs.size ∧ (rs.getD t default).2.2.2 = true := by
+    simpa [Flock.RecVStar.commitRounds] using List.mem_of_getElem? ht
+  have hmod : (rep * rs.size + t) % rs.size = t := by
+    rw [Nat.mul_comm, Nat.mul_add_mod, Nat.mod_eq_of_lt hlt]
+  rw [layoutOf_fixedAt_succ, streamFixed, hr, Option.bind_some, hrs, Option.bind_some]
+  simp only [hmod, hflag, Bool.true_eq_false, and_false, ↓reduceIte]
 
 /-- A raw statement's read: its masking, circuit file, tables, count, and tags (`Raw.ins`), none of them off its public
 file. -/
@@ -1677,19 +1700,19 @@ theorem partCircuit_staged {st : Stage} {s : ℕ} {x xO : Msg} (h : StagedPart s
   rw [Option.some.inj hst0]
   exact (Except.ok.inj hc0).symm
 
-/-- **What a staged part holds at `layoutOf` is a run of a copy's input columns**: at one table, the hidden values
-`layoutOf` reads round `j + 1` at are a port's row's bits in some instance `rep`'s copy (block `rep / g`, VU
-`rep % g`), the input columns from the port's first word (`copyPs`). -/
+/-- **What a staged part holds at `layoutOf` is the frame `0` then a run of a copy's input columns**: at one table,
+the hidden values `layoutOf` reads round `j + 1` at, after the frame, are a port's row's bits in some instance `rep`'s
+copy (block `rep / g`, VU `rep % g`), the input columns from the port's first word (`copyPs`). -/
 theorem layoutOf_msgAt_staged {st : Stage} {s j : ℕ} {x xO : Msg} (h : StagedPart st s x xO)
     {p : Flock.Readable.Parsed} (hp : Flock.Readable.parseBytes readOfO xO = some p) (ht : p.tags.typed = false)
     (hpi : p.publicInputs = none) (h0 : 0 < p.sts.size) (h1 : p.sts.size = 1) {N : ℕ}
-    (hl : p.sts[0].c.leavesIn.getD 0 #[] = (Array.range N).map Int.ofNat) {ps : List ℕ}
-    (hm : layoutOf.msgAt x s (j + 1) = some ps) :
+    (hl : p.sts[0].c.leavesIn.getD 0 #[] = (Array.range N).map Int.ofNat) {segs : List (Msg × List ℕ)}
+    (hm : layoutOf.msgAt x s (j + 1) = some segs) :
     ∃ (q : ℕ) (pt : Flock.Port) (rep : ℕ), p.sts[0].c.ports[q]? = some pt ∧
       (0 < pt.bits → 16 * (p.sts[0].c.ports.extract 0 q).foldl (· + ·.words) 0 + pt.bits ≤ 16 * N) ∧
-      ps = Claims.Recursion.VStar.copyPs p 0 h0 (rep / p.sts[0].c.g) (rep % p.sts[0].c.g) 0
-        (16 * (p.sts[0].c.ports.extract 0 q).foldl (· + ·.words) 0) pt.bits := by
-  obtain ⟨r, hr, hmem⟩ := layoutOf_msgAt_succ hm
+      segs = [(([0] : Msg), Claims.Recursion.VStar.copyPs p 0 h0 (rep / p.sts[0].c.g) (rep % p.sts[0].c.g) 0
+        (16 * (p.sts[0].c.ports.extract 0 q).foldl (· + ·.words) 0) pt.bits)] := by
+  obtain ⟨r, ps, hr, hmem, rfl⟩ := layoutOf_msgAt_mem hm
   obtain ⟨sv, c, rs, q, k, rep, -, hc, -, -, -, -, hrh⟩ := mem_partHolds hmem
   have hce := partCircuit_staged h hp ht hpi hr hc h0
   subst hce
@@ -1698,33 +1721,36 @@ theorem layoutOf_msgAt_staged {st : Stage} {s j : ℕ} {x xO : Msg} (h : StagedP
   rw [copyPs_one h1 h0]
 
 /-- **The input tie's messages at `layoutOf`**: at a part shown at `showsPart`, of one table, on every list of
-messages agreeing with what the part holds, each round `j + 1` the part holds is the bytes a port's columns hold in
-some instance's copy, from the port's first word (`layoutOf_msgAt_staged`, `agrees_colsHold`), the port's leaves in
-order by V\*'s parse check (`checkParsed_ok`) and below the unit's constant (`leaves_le_constPos`). -/
+messages agreeing with what the part holds, each round `j + 1` the part holds, which the statement doesn't fix
+(`layoutOf_fixedAt_of_msgAt`), is the frame `0` then the bytes a port's columns hold in some instance's copy, from the
+port's first word (`layoutOf_msgAt_staged`, `agrees_colsHold`), the port's leaves in order by V\*'s parse check
+(`checkParsed_ok`) and below the unit's constant (`leaves_le_constPos`). -/
 theorem agrees_layoutOf {b : Brings} {s j : ℕ} {x xO : Msg} {c : ℕ → Coin} (hs : showsPart b s x xO c)
     {p : Flock.Readable.Parsed} (hp : Flock.Readable.parseBytes readOfO xO = some p) (h0 : 0 < p.sts.size)
     (h1 : p.sts.size = 1) {w : Claims.Flock.Wit} {ms : List Msg}
-    (hA : Claims.Recursion.VStar.Agrees layoutOf x s w ms) (hj : j + 1 < layoutOf.rounds x) {ps : List ℕ}
-    (hm : layoutOf.msgAt x s (j + 1) = some ps) :
+    (hA : Claims.Recursion.VStar.Agrees layoutOf x s w ms) (hj : j + 1 < layoutOf.rounds x)
+    {segs : List (Msg × List ℕ)} (hm : layoutOf.msgAt x s (j + 1) = some segs) :
     ∃ (q : ℕ) (pt : Flock.Port) (rep : ℕ), p.sts[0].c.ports[q]? = some pt ∧ ∀ bs : ByteArray, 8 * bs.size = pt.bits →
       FlockVBridge.ColsHold (Flock.Readable.copyOf p 0 h0 w (rep / p.sts[0].c.g) (rep % p.sts[0].c.g) 0)
-        (16 * (p.sts[0].c.ports.extract 0 q).foldl (· + ·.words) 0) bs → ms.getD (j + 1) [] = bs.data.toList := by
+        (16 * (p.sts[0].c.ports.extract 0 q).foldl (· + ·.words) 0) bs →
+      ms.getD (j + 1) [] = 0 :: bs.data.toList := by
   obtain ⟨p', r, sv, hp', ht, hpi, -, -, -, htab⟩ := stagedTables hs.2
   rw [hp] at hp'
   cases hp'
   obtain ⟨u, -, -, -, hl, -⟩ := FlockSoundness.Discharge.Recursion.checkParsed_ok (htab 0 h0).2.2
   obtain ⟨_, P⟩ := Flock.Readable.parseFacts_of_parse hp ht hpi h0
   have hN := leaves_le_constPos P hl
+  have hfx := layoutOf_fixedAt_of_msgAt hm
   obtain ⟨q, pt, rep, hpt, htop, hps⟩ := layoutOf_msgAt_staged hs.2 hp ht hpi h0 h1 hl hm
   refine ⟨q, pt, rep, hpt, fun bs hb hcol => ?_⟩
   rw [hps, ← hb] at hm
   rcases Nat.eq_zero_or_pos bs.size with hz | hz
-  · have hm0 : layoutOf.msgAt x s (j + 1) = some (Claims.Recursion.VStar.copyPs p 0 h0 (rep / p.sts[0].c.g)
-        (rep % p.sts[0].c.g) 0 0 (8 * bs.size)) := by
+  · have hm0 : layoutOf.msgAt x s (j + 1) = some [(([0] : Msg), Claims.Recursion.VStar.copyPs p 0 h0
+        (rep / p.sts[0].c.g) (rep % p.sts[0].c.g) 0 0 (8 * bs.size))] := by
       rw [hm]
       simp [Claims.Recursion.VStar.copyPs, hz]
-    exact Claims.Recursion.VStar.agrees_colsHold hA hj hm0 (by omega) fun t ht => absurd ht (by omega)
-  · exact Claims.Recursion.VStar.agrees_colsHold hA hj hm (by have := htop (by omega); omega) hcol
+    exact Claims.Recursion.VStar.agrees_colsHold hA hj hfx hm0 (by omega) fun t ht => absurd ht (by omega)
+  · exact Claims.Recursion.VStar.agrees_colsHold hA hj hfx hm (by have := htop (by omega); omega) hcol
 
 end RecDeploy
 
@@ -1840,7 +1866,7 @@ theorem vstarParts_deployRec_staged {L : Layout} {opening : Opening} {shape : Fo
     (hD : Decomp H (RecDeploy.deployRec I.V ivScope b) I.V shape chk) {pub : Msg → List (Msg × Msg)}
     (hLD : LogDecompPub H (RecDeploy.deployRec I.V ivScope b) I.V shape logs pub)
     (hPR : PubReg H (RecDeploy.deployRec I.V ivScope b) shape pub)
-    (hH : Held (RecDeploy.deployRec I.V ivScope b) I L shape) :
+    (hH : HeldPub (RecDeploy.deployRec I.V ivScope b) I L shape) :
     VStarParts H (RecDeploy.deployRec I.V ivScope b) I (RecDeploy.deployZkRec Flock.Readable.relation) L opening
       shape :=
   vstarParts_deployRec_of_linked H I ivScope b (fun s => linkedPart_deployRec H I ivScope b (hP s)) hO hRC

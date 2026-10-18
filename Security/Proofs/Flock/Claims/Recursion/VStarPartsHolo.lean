@@ -602,7 +602,7 @@ theorem vstarParts_holo_of_links [Inhabited Coin] {H : Msg → Msg} {D : Deploy 
     (hO : ∀ s, HeldOpens D DO L Form.Holo shows opening dig s)
     (hRC : ∀ s, RegClimbs H D DO L Form.Holo shows cmt dig s)
     (hS : Staged H D I L Form.Holo shows cmt) (hD : Decomp H D I.V Form.Holo chk)
-    (hLD : LogDecompPub H D I.V Form.Holo logs pub) (hPR : PubReg H D Form.Holo pub) (hH : Held D I L Form.Holo) :
+    (hLD : LogDecompPub H D I.V Form.Holo logs pub) (hPR : PubReg H D Form.Holo pub) (hH : HeldPub D I L Form.Holo) :
     VStarParts H D I DO L opening Form.Holo :=
   ⟨shows, chk, cmt, logs, pub, partChecks_holo hDO fun s => (hP s).1, partOpens_holo hO hRC,
     partLogs_holo hDO fun s => (hP s).2, hS, hD, hLD, hPR, hH⟩
@@ -620,7 +620,7 @@ theorem vstarPartsStaging_holo_of_links [Inhabited Coin] {H : Msg → Msg} {D : 
     (hO : ∀ s, HeldOpens D DO L Form.Holo shows opening dig s)
     (hRC : ∀ s, RegClimbs H D DO L Form.Holo shows cmt dig s)
     (hV : VstarShows D I L Form.Holo decC shows cmt) (hD : Decomp H D I.V Form.Holo chk)
-    (hLD : LogDecompPub H D I.V Form.Holo logs pub) (hPR : PubReg H D Form.Holo pub) (hH : Held D I L Form.Holo) :
+    (hLD : LogDecompPub H D I.V Form.Holo logs pub) (hPR : PubReg H D Form.Holo pub) (hH : HeldPub D I L Form.Holo) :
     VStarPartsStaging D I DO H L opening decC Form.Holo :=
   ⟨shows, chk, cmt, logs, pub, partChecks_holo hDO fun s => (hP s).1, partOpens_holo hO hRC,
     partLogs_holo hDO fun s => (hP s).2, hV, hD, hLD, hPR, hH⟩
@@ -669,7 +669,7 @@ theorem vstarParts_holo_deployRec {L : Layout} {opening : Opening}
     (hD : Decomp H (RecDeploy.deployRec I.V ivScope b) I.V Form.Holo chk) {pub : Msg → List (Msg × Msg)}
     (hLD : LogDecompPub H (RecDeploy.deployRec I.V ivScope b) I.V Form.Holo logs pub)
     (hPR : PubReg H (RecDeploy.deployRec I.V ivScope b) Form.Holo pub)
-    (hH : Held (RecDeploy.deployRec I.V ivScope b) I L Form.Holo) :
+    (hH : HeldPub (RecDeploy.deployRec I.V ivScope b) I L Form.Holo) :
     VStarParts H (RecDeploy.deployRec I.V ivScope b) I (RecDeploy.deployZkRec Flock.Readable.relation) L opening
       Form.Holo :=
   vstarParts_holo_of_links rfl hP hO hRC hS hD hLD hPR hH
@@ -689,7 +689,7 @@ theorem vstarPartsStaging_holo_deployRec {L : Layout} {opening : Opening} {decC 
     (hD : Decomp H (RecDeploy.deployRec I.V ivScope b) I.V Form.Holo chk) {pub : Msg → List (Msg × Msg)}
     (hLD : LogDecompPub H (RecDeploy.deployRec I.V ivScope b) I.V Form.Holo logs pub)
     (hPR : PubReg H (RecDeploy.deployRec I.V ivScope b) Form.Holo pub)
-    (hH : Held (RecDeploy.deployRec I.V ivScope b) I L Form.Holo) :
+    (hH : HeldPub (RecDeploy.deployRec I.V ivScope b) I L Form.Holo) :
     VStarPartsStaging (RecDeploy.deployRec I.V ivScope b) I (RecDeploy.deployZkRec Flock.Readable.relation) H L
       opening decC Form.Holo :=
   vstarPartsStaging_holo_of_links rfl hP hO hRC hV hD hLD hPR hH
