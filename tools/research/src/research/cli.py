@@ -1506,7 +1506,6 @@ def cmd_inspect(argv: list[str]) -> int:
         print(f"observed  {json.dumps(s['fingerprint_observed'], sort_keys=True)}")
     if s["measurements"]:
         print("measured  " + "; ".join(f"{m['name']}={m['value']} {m['unit']}" for m in s["measurements"][:12]))
-    tool = s["tool"]
     print(f"tool      {_tool_line(s['tool'])}")
     cost = s["cost"]
     print(f"cost      {('$' + str(cost['usd']) + ' est. (' + cost['basis'] + ')') if cost.get('usd') is not None else 'unknown: ' + str(cost.get('reason'))}")

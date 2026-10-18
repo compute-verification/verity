@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 
 from . import HOLD_REASONS, STATES
-from .events import Emitter, append, events_path, holds, queue_timeline, read_all, spans
+from .events import Emitter, holds, queue_timeline, read_all, spans
 
 
 def _kv(items: list[str]) -> dict:

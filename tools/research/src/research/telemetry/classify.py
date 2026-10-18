@@ -58,7 +58,7 @@ from pathlib import Path
 from typing import Any
 
 from . import CLASSIFIER_VERSION, FAILURE_SCHEMA
-from .events import ReadReport, iter_records, read_all, spans
+from .events import read_all, spans
 from .job import read_status, write_json_atomic
 
 CUDA_RE = re.compile(r"CUDA out of memory|cudaErrorMemoryAllocation|CUBLAS_STATUS_ALLOC_FAILED|CUDA error: out of memory|torch\.OutOfMemoryError", re.I)
