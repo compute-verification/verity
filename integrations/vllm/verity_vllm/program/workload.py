@@ -631,7 +631,7 @@ class WorkloadProgram:
                 "params": [[n, str(t)] for n, t in params[:len(self.shared)]] + [[f"... {len(params) - len(self.shared)} request-specific batches", ""]],
                 "n_params": len(params), "ret": str(ret),
                 "requests": [{"request_id": r.request_id, "index": r.index, "prompt_len": r.prompt_len, "cap": r.cap, "arrive_step": r.arrive_step,
-                              "component": r.component.to_json()} for r in self.requests],
+                              "component": r.component.to_json(), **({"prefix": r.prefix} if r.prefix else {})} for r in self.requests],
                 "representation": "hierarchical: Program(Workload_v1{requests, shared}); one call node per request Program component; the "
                                   "request subcircuits are Definitions (not flattened); no scheduler; builder inputs = manifest + request descriptors",
                 "padding_scope": "active-reference only (unchanged from R13): inactive padded interiors are outside this Program's claims; "

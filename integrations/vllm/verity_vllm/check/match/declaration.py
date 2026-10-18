@@ -11,6 +11,7 @@ import re
 
 from verity_vllm.check.match import batch_decomp as BD
 from verity_vllm.check.match.match_run import MatchRun, NamedCheck
+from verity_vllm.program import prefix_plan as PP
 
 GP_SCHEMA = "cb-a/global-program/v1"
 
@@ -31,8 +32,8 @@ def sha256_file(p: str) -> str:
     return h.hexdigest()
 
 
-def component_shape(d: str) -> tuple[int, int] | None:
-    """(LP, T) of a component dir: a derive_step dir (`construction_manifest.json`) or a fold record standing in for one."""
+def component_shape(d: str) -> tuple[int, ...] | None:
+    """(LP, T[, C]) of a component dir: a derive_step dir (`construction_manifest.json`) or a fold record standing in for one."""
     return BD.derived_shape(d)
 
 
@@ -236,6 +237,7 @@ def from_gprog(artifact_path: str, workload_path: str | None = None) -> dict:
     wl_uuids = {request_id_of(i): r.get("request_id") for i, r in enumerate((wl or {}).get("requests", []))}
     amap = {r["request_id"]: r for r in (art.get("address_map") or {}).get("requests", [])}
     chron = {r["request_id"]: r for r in (art.get("chronology") or {}).get("requests", [])}
+    plan = PP.plan(wl) if wl is not None else None
     reqs = []
     for r in art["requests"]:
         lp, cap = int(r["prompt_len"]), int(r["cap"])
@@ -246,11 +248,17 @@ def from_gprog(artifact_path: str, workload_path: str | None = None) -> dict:
         wrid = r.get("workload_request_id") or wl_uuids.get(rid)
         if wl is not None and wl_uuids.get(rid) is not None and wrid != wl_uuids[rid]:
             raise ValueError(f"{artifact_path}: {rid} carries workload_request_id {wrid!r} but the manifest at position {r['index']} has {wl_uuids[rid]!r}")
-        d = derived.get(f"{lp},{cap - 1}")
+        pfx = r.get("prefix")
+        p = plan[r["index"]] if plan is not None and r["index"] < len(plan) else None
+        if p is not None and pfx != ({"rows": p["cached"], "producers": [request_id_of(q) for q in p["producers"]]} if p["cached"] else None):
+            raise ValueError(f"{artifact_path}: {rid} declares the prefix-cache hit {pfx!r}, the manifest's arrival chronology and prompts give "
+                             f"{p!r} (program.prefix_plan)")
+        C = int((pfx or {}).get("rows") or 0)
+        d = derived.get(PP.shape_key(PP.shape(lp, cap - 1, C)))
         reqs.append({"index": r["index"], "request_id": rid, "workload_request_id": wrid, "prompt_len": lp, "max_tokens": cap, "T_bound": cap - 1,
-                     "arrive_step": int(r["arrive_step"]),
+                     "arrive_step": int(r["arrive_step"]), **({"prefix": pfx} if pfx else {}),
                      "prompt_sha256": hashlib.sha256(json.dumps(prompts[rid]).encode()).hexdigest()[:16] if rid in prompts else None,
-                     "component": {"dir": d, "LP": lp, "T": cap - 1, "program_digest": (r.get("component") or {}).get("program_digest"),
+                     "component": {"dir": d, "LP": lp, "T": cap - 1, **({"C": C} if C else {}), "program_digest": (r.get("component") or {}).get("program_digest"),
                                    "specialization": (r.get("component") or {}).get("specialization")},
                      "global_address": {k: amap[rid].get(k) for k in ("root_node", "gates", "n_instances", "rule")} if rid in amap else None,
                      "programmed_steps": (chron.get(rid) or {}).get("programmed_steps"),
