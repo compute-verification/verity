@@ -1118,6 +1118,8 @@ def persist_program(result: Any, run_dir: Path, *, profile_name: str, log_path: 
                 rec["operand_roots"] = m["operand_roots"]     # [R15 fp8] per-operand weight names (multi-weight Computes)
             if m.get("collective"):
                 rec["collective"] = m["collective"]           # [R17 D90] kind/step/k/site/rank/world + the peers field the row reads
+            if m.get("launch"):
+                rec["launch"] = m["launch"]                   # the shared launch (e<step>.<j>) this instance is the unit of
             rec = _jsonable(rec)                              # the meta fields only (small; may carry tuples / numpy scalars / objects)
             rec["operand_views"] = [view(v) for v in m.get("operand_views") or []]
             rec["output_views"] = [view(v) for v in m.get("output_views") or []]

@@ -46,6 +46,7 @@ PROTOCOL SUMMARY (Match stage, B>1: the per-request decomposition of the batched
 
 from __future__ import annotations
 
+import bisect
 import collections
 import gzip
 import json
@@ -114,6 +115,7 @@ def request_params(header: dict) -> tuple[list[dict], dict[str, int], dict[str, 
 
 
 SHARED = "*weight-only*"   # owner sentinel of a weight-only instance (F-r19-int-15); never a request id
+LAUNCH = "*launch*"        # owner sentinel of a launch unit's instance (fold meta `launch`): in no leg, GM-01 checks it against the workload's
 
 
 def is_weight_only(r: dict, weights_nodes: frozenset, shared_nodes: set, compact: bool) -> bool:
@@ -193,6 +195,12 @@ class Projection(C.Prog):
         w_index = getattr(oracle, "witness_index", {})
         self.witness_fields = {k: nm for k, nm in getattr(oracle, "witness_fields", {}).items() if w_index.get(k) == tok_node}
         self._all_witness_nodes = set(getattr(oracle, "witness_fields", {}))
+        # a shared launch's blocks (`Prog.launch_blocks`) read as this request's linked `schedule` words there (`Prog.linked`): its
+        # pairs' blocks at its slot, then the launch's block count (leaf P, the members' pairs); any other leaf is another member's
+        linked = getattr(oracle, "linked", {})
+        self.launch_reads = {k: (linked.get(u, {}).get(tok_node), sum(m[3] for m in linked.get(u, {}).values()))
+                             for k, u in getattr(oracle, "launch_blocks", {}).items()}
+        self._launch_sorted = sorted(self.launch_reads)
         # the registered `values` are shared like the weights; a `run_<i>` is request i's (the header index = this prompt's node)
         owner = getattr(oracle, "supplied_owner", {})
         self.supplied_fields = {k: f for k, f in getattr(oracle, "supplied_fields", {}).items() if owner.get(k) in (None, tok_node)}
@@ -246,6 +254,8 @@ class Projection(C.Prog):
                     kind = self._foreign_kind(idx)
                     self._xreq(f"{kind}-param", idx, lo, hi)
                     return (XREQ, kind, idx, lo, hi)
+            elif idx in self.launch_reads:
+                return self._launch_src(idx, lo, hi)
             elif idx not in self.k2i:
                 self._xreq("node", idx, lo, hi)
                 return (XREQ, "node", idx, lo, hi)
@@ -281,12 +291,16 @@ class Projection(C.Prog):
                         kind = self._foreign_kind(idx0)
                         self._xreq(f"{kind}-param", (idx0, lo0, hi0), (0, dL, dH), c)
                         return [(XREQ, kind, (idx0, lo0, hi0), (0, dL, dH), c)]
+                elif idx0 in self.launch_reads:
+                    return self._per_run(p, unfold)
                 elif idx0 not in self.k2i:
                     self._xreq("node", (idx0, lo0, hi0), (0, dL, dH), c)
                     return [(XREQ, "node", (idx0, lo0, hi0), (0, dL, dH), c)]
                 return super()._srcP(p, unfold)
             # a window over several producer nodes: all of them another request's (none ours, none an input) -> one XREQ progression
             lo_i, hi_i = min(idx0, idx0 + (c - 1) * dI), max(idx0, idx0 + (c - 1) * dI)
+            if self._launch_sorted and bisect.bisect_right(self._launch_sorted, hi_i) > bisect.bisect_left(self._launch_sorted, lo_i):
+                return self._per_run(p, unfold)
             if lo_i > self._max_input and self._own_count(lo_i, hi_i) == 0:
                 self._xreq("node", (idx0, lo0, hi0), (dI, dL, dH), c)
                 return [(XREQ, "node", (idx0, lo0, hi0), (dI, dL, dH), c)]
@@ -294,6 +308,18 @@ class Projection(C.Prog):
                 return super()._srcP(p, unfold)
             return self._per_run(p, unfold)
         return super()._srcP(p, unfold)
+
+    def _launch_src(self, idx: int, lo: int, hi: int):
+        """A read of a shared launch's blocks: this request's own linked `schedule` words, else a cross-request read."""
+        own, P = self.launch_reads[idx]
+        if own is not None:
+            name, off, slot, pairs = own
+            if slot <= lo and hi <= slot + pairs:
+                return ("WIT", name, off + lo - slot, off + hi - slot)
+            if (lo, hi) == (P, P + 1):
+                return ("WIT", name, off + pairs, off + pairs + 1)
+        self._xreq("launch", idx, lo, hi)
+        return (XREQ, "launch", idx, lo, hi)
 
     def _foreign_kind(self, idx: int) -> str:
         """Which parameter of another request Input node `idx` is: its seed, peers or witness, else its prompt."""
@@ -312,7 +338,6 @@ class Projection(C.Prog):
 
     def _own_count(self, lo_i: int, hi_i: int) -> int:
         """How many of this request's instance node indices lie in [lo_i, hi_i]."""
-        import bisect
         own = getattr(self, "_own_sorted", None)
         if own is None:
             own = self._own_sorted = sorted(self.k2i)
@@ -572,7 +597,8 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
     meta_of = {o["node"] + n_in: o for o in B.oracle_rows}
 
     # attribution of every instance, in node order (producers precede consumers). Channels, in order:
-    #   meta     -- the fold recorded `request` on the instance (fold._compute_emit, X-09+);
+    #   meta     -- the fold recorded `request` on the instance (fold._compute_emit, X-09+), or `launch`: a unit of a launch several
+    #               requests share (the Marlin align), owner LAUNCH, in no leg; reading it names no request;
     #   dataflow -- every request-owned operand the instance reads (its own prompt parameter / a node attributed earlier) names ONE request
     #               (row independence: an instance over one request's data is that request's; several requests -> non-separable, refused);
     #   weight-only -- [R19, F-r19-int-15] every node operand is a shared weight or an earlier weight-only instance (and there is at least
@@ -604,6 +630,10 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
             unattributed.append({"i": i, "k": r["k"], "spec": r["spec"], "why": "no instances.jsonl row"})
             continue
         rid, h = o.get("request"), "meta"
+        if o.get("launch"):
+            owner_of_node[r["k"]] = LAUNCH
+            how["launch"] += 1
+            continue
         if rid is None:
             deps: set = set()
             reads_weight = False        # a shared weight node or an earlier weight-only instance among the operands
@@ -621,7 +651,7 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
                             own = owner_of_node.get(idx, ("?", "node", idx))
                             if own == SHARED:
                                 reads_weight = True
-                            else:
+                            elif own != LAUNCH:
                                 deps.add(own)
             unknown = {d for d in deps if isinstance(d, tuple)}
             owners = deps - unknown
