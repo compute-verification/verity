@@ -1070,8 +1070,9 @@ struct FirewallDraws {
 }
 
 /// The firewall's send check on one table (PROTOCOL.md §10, `FC_FIREWALL=1`): the level-0 recheck, and per rep the algebraic
-/// phase's skeleton, the shadow opening in lock-step with the device's, and the end check on the returned proof. The device's
-/// callbacks swallow their panics, so the first refusal is kept in `why`. `FC_FIREWALL_TAMPER` makes the device's side dishonest
+/// phase's skeleton, the shadow opening in lock-step with the device's, and the end check on the returned proof. A failed check
+/// stops nothing before the session's `Finish` (§10.1): its reason is kept in `why`, the rep releases the statement's schedule
+/// in the device's place from then on, and the session ends in a stop at `Finish`. `FC_FIREWALL_TAMPER` makes the device's side dishonest
 /// in one named way (the negative controls): `root` (its level-0 root), `witness` (set by the caller: the device proves another
 /// witness), `label` (a frame of the statement's skeleton), `opening` (a recomputed opening message), `algebra` (a masked
 /// value, in the frame and the proof alike: the relation check's case), `algebra-proof` (the proof alone) and `shape` (a
@@ -1104,6 +1105,8 @@ struct FirewallRep {
     shadow: Option<std::thread::JoinHandle<(flock_core::pcs::BatchOpeningProofLigerito, f64)>>,
     t_wait: f64,
     algebra_tampered: bool,
+    /// a check failed: every later round that leaves is the statement's scheduled one, never the device's
+    failed: bool,
     /// the rep's release: every round that leaves is this Lean frame's
     lean: flock_live::firewall::LeanFrame,
     /// seconds spent waiting on the Lean frame, and the bytes it released
@@ -1190,22 +1193,32 @@ impl Firewall {
         });
         let lean = flock_live::firewall::LeanFrame::start(&flock_live::firewall::lean_frame_exe(), &lay, &sent_pads(zk).h, &zk.ic.root())?;
         self.rep = Some(FirewallRep { rep, lay, zk0: zk.level0.clone(), checker: flock_live::firewall::Checker::new(items, lay.piop_exposed()), coins: Vec::new(),
-                                  extras: None, link: None, shadow: None, t_wait: 0.0, algebra_tampered: false, lean, t_lean: 0.0, lean_bytes: 0 });
+                                  extras: None, link: None, shadow: None, t_wait: 0.0, algebra_tampered: false, failed: false, lean,
+                                  t_lean: 0.0, lean_bytes: 0 });
         Ok(())
     }
 
-    /// The device's level-0 root, at the session's `Commit`: the recheck's, or refused before it leaves.
-    fn root(&mut self, root: &[u8]) -> Result<(), String> {
+    /// A check failed: its reason is kept for `Finish`, and the rep releases the statement's schedule from here on.
+    fn fail(&mut self, why: String) {
+        self.refuse(why);
+        if let Some(r) = self.rep.as_mut() {
+            r.failed = true;
+        }
+    }
+
+    /// The device's level-0 root, at the session's `Commit`: the root that leaves, the recheck's (a device root that differs
+    /// fails the rep).
+    fn root(&mut self, root: &[u8]) -> Vec<u8> {
         let mut got = root.to_vec();
         if self.tamper == "root" {
             got[0] ^= 1;
         }
         flock_live::firewall_transcript::with(|t| t.root(&got, &self.root));
         if got != self.root {
-            return Err(self.refuse(flock_live::firewall::refused(format!("level-0 root: the device committed {} where the recheck has {}",
-                                                                      hex(&got[..8]), hex(&self.root[..8])))));
+            self.fail(flock_live::firewall::refused(format!("level-0 root: the device committed {} where the recheck has {}",
+                                                            hex(&got[..8]), hex(&self.root[..8]))));
         }
-        Ok(())
+        self.root.clone()
     }
 
     /// The extra claims' points the hook hands the opening (their multilinear part, as the device takes them).
@@ -1215,24 +1228,86 @@ impl Firewall {
         }
     }
 
-    /// One device round before it is sent: the skeleton's in the algebraic phase, the shadow's in the opening. Returns the
-    /// round it passed (the device's own bytes) and the round that leaves, the Lean frame's (`Flock.Firewall.Frame.round`).
-    fn round(&mut self, content: &[u8], n: usize) -> Result<(Vec<u8>, Vec<u8>), String> {
-        let r = self.round_inner(content, n).and_then(|c| {
-            let r = self.rep.as_mut().expect("a firewalled rep");
-            let t = Instant::now();
-            let release = r.lean.round(&c, n)?;
-            r.t_lean += t.elapsed().as_secs_f64();
-            r.lean_bytes += release.len();
-            Ok((c, release))
-        });
-        r.map_err(|e| self.refuse(e))
+    /// One device round before anything of it is sent: the skeleton's in the algebraic phase, the shadow's in the opening.
+    /// Returns the round the masking challenger takes (the device's, if it passed; else the statement's scheduled round in its
+    /// place), the round that leaves (the Lean frame's, `Flock.Firewall.Frame.round`) and its coin count; or nothing, once the
+    /// statement's schedule has no round left. A failed check, or a round the Lean frame refuses, fails the rep: from then on
+    /// every round that leaves is the scheduled one, whatever the device sends. An error is the firewall's own fault.
+    fn round(&mut self, content: &[u8], n: usize) -> Result<Option<(Vec<u8>, Vec<u8>, usize)>, String> {
+        if !self.rep.as_ref().ok_or_else(|| flock_live::firewall::refused("a round outside a firewalled rep"))?.failed {
+            match self.round_inner(content, n) {
+                Ok((c, algebra)) => match self.release(&c, n, false) {
+                    Ok(rel) => return Ok(Some((c, rel, n))),
+                    Err(e) => {
+                        let r = self.rep.as_mut().unwrap();
+                        match r.link.as_mut() {
+                            Some(l) if !algebra => l.last = Some((c, n)),
+                            _ => r.checker.rewind(),
+                        }
+                        self.fail(e);
+                    }
+                },
+                Err(e) => self.fail(e),
+            }
+        }
+        self.scheduled()
     }
 
-    fn round_inner(&mut self, content: &[u8], n: usize) -> Result<Vec<u8>, String> {
+    fn release(&mut self, c: &[u8], n: usize, fail: bool) -> Result<Vec<u8>, String> {
+        let r = self.rep.as_mut().expect("a firewalled rep");
+        let t = Instant::now();
+        let release = r.lean.round(c, n, fail)?;
+        r.t_lean += t.elapsed().as_secs_f64();
+        r.lean_bytes += release.len();
+        Ok(release)
+    }
+
+    /// A failed rep's next round: the skeleton's in the algebraic phase (every value zero; the Lean frame releases each pad
+    /// alone), then the shadow's, which the firewall computed itself.
+    fn scheduled(&mut self) -> Result<Option<(Vec<u8>, Vec<u8>, usize)>, String> {
+        let mut next = self.rep.as_mut().unwrap().checker.scheduled();
+        if next.is_none() {
+            if self.rep.as_ref().unwrap().link.is_none() {
+                self.start_shadow()?;
+            }
+            let r = self.rep.as_mut().unwrap();
+            let l = r.link.as_mut().unwrap();
+            let t = Instant::now();
+            next = l.last.take().or_else(|| l.next());
+            r.t_wait += t.elapsed().as_secs_f64();
+        }
+        let Some((c, k)) = next else { return Ok(None) };
+        let rel = self.release(&c, k, true)?;
+        Ok(Some((c, rel, k)))
+    }
+
+    /// The device returned: a rep whose schedule it left unfinished fails, and the firewall releases the rest of the schedule
+    /// itself, a round a call, until there is none.
+    fn rest(&mut self) -> Result<Option<(Vec<u8>, Vec<u8>, usize)>, String> {
+        let r = self.rep.as_mut().ok_or_else(|| flock_live::firewall::refused("a proof outside a firewalled rep"))?;
+        if !r.failed {
+            let left = match r.link.as_mut() {
+                None => true,
+                Some(l) => {
+                    let t = Instant::now();
+                    l.last = l.next();
+                    r.t_wait += t.elapsed().as_secs_f64();
+                    l.last.is_some()
+                }
+            };
+            if !left {
+                return Ok(None);
+            }
+            let why = if r.link.is_none() { "the device returned before its opening" } else { "the device returned before the firewall's opening ended" };
+            self.fail(flock_live::firewall::refused(why));
+        }
+        self.scheduled()
+    }
+
+    fn round_inner(&mut self, content: &[u8], n: usize) -> Result<(Vec<u8>, bool), String> {
         let mut c = content.to_vec();
         let tamper = self.tamper.clone();
-        let algebra = !self.rep.as_ref().ok_or_else(|| flock_live::firewall::refused("a round outside a firewalled rep"))?.checker.done();
+        let algebra = !self.rep.as_ref().unwrap().checker.done();
         if algebra {
             let r = self.rep.as_mut().unwrap();
             if (tamper == "label" || tamper == "algebra") && !r.algebra_tampered {
@@ -1240,7 +1315,7 @@ impl Firewall {
             }
             flock_live::firewall_transcript::with(|t| t.candidate(true, &c, n));
             r.checker.round(&c, n)?;
-            return Ok(c);
+            return Ok((c, true));
         }
         if self.rep.as_ref().unwrap().link.is_none() {
             self.start_shadow()?;
@@ -1254,7 +1329,7 @@ impl Firewall {
         let t = Instant::now();
         let res = link.check(&c, n);
         r.t_wait += t.elapsed().as_secs_f64();
-        res.map(|_| c)
+        res.map(|_| (c, false))
     }
 
     /// The opening's first round: the shadow starts on the algebraic phase's coins (the two claim points) and the hook's extra
@@ -1301,18 +1376,12 @@ impl Firewall {
         }
     }
 
-    /// The device returned its proof: every exposed value must be the one the firewall passed (`final_c'` the one it computes from
-    /// them), the commitment the recheck's, the opening the shadow's; the opening that leaves is the shadow's, and the lincheck's
-    /// folded comb is the firewall's own (`zk_finish` folds it). Returns the rep's firewall timings.
+    /// The device returned its proof (after [`Firewall::rest`]): every exposed value must be the one the firewall passed
+    /// (`final_c'` the one it computes from them), the commitment the recheck's, the opening the shadow's. What leaves is the
+    /// firewall's own whatever these find: the zerocheck and lincheck rebuilt from the passed values, the shadow's opening, and
+    /// the firewall's folded comb (`zk_finish` folds it). A failed check fails the rep, for `Finish`. Returns the rep's firewall
+    /// timings; an error is the firewall's own fault.
     fn finish(&mut self, proof: &mut R1csProofLigerito, cm: &Commitment) -> Result<Value, String> {
-        let r = self.finish_inner(proof, cm);
-        if r.is_err() {
-            flock_live::firewall_transcript::with(|t| t.proof_candidate(proof));
-        }
-        r.map_err(|e| self.refuse(e))
-    }
-
-    fn finish_inner(&mut self, proof: &mut R1csProofLigerito, cm: &Commitment) -> Result<Value, String> {
         use flock_live::firewall::refused;
         let st = self.st.clone();
         if self.tamper == "algebra" || self.tamper == "algebra-proof" {
@@ -1323,21 +1392,22 @@ impl Firewall {
             proof.zerocheck.round1_ab.push(v);
         }
         let r = self.rep.as_mut().ok_or_else(|| refused("a proof outside a firewalled rep"))?;
-        if r.link.is_none() {
-            return Err(refused("the device returned before its opening"));
-        }
-        r.lean.finish()?;
-        if !proof.zerocheck.grinding_nonces.is_empty() || !proof.lincheck.grinding_nonces.is_empty() || !proof.lincheck.matrix_evals.is_empty() {
-            return Err(refused("the proof carries grinding nonces or matrix evaluations the transcript did not"));
-        }
+        let mut why: Option<String> = None;
+        let mut check = |ok: bool, what: &dyn Fn() -> String| {
+            if !ok && why.is_none() {
+                why = Some(refused(what()));
+            }
+        };
+        let mut link = r.link.take().ok_or_else(|| refused("the device returned before its opening"))?;
+        let stopped = r.lean.finish()?;
+        check(r.failed || !stopped, &|| "the Lean frame stopped the rep".into());
+        check(proof.zerocheck.grinding_nonces.is_empty() && proof.lincheck.grinding_nonces.is_empty() && proof.lincheck.matrix_evals.is_empty(),
+              &|| "the proof carries grinding nonces or matrix evaluations the transcript did not".into());
         let lay = r.lay;
         let mut vals = Vec::with_capacity(lay.piop_exposed());
         for (i, v) in r.checker.values.iter().enumerate() {
-            match v {
-                Some(v) => vals.push(*v),
-                None if i == lay.fc() => vals.push(F128::ZERO),
-                None => return Err(refused(format!("exposed value {i} never passed the firewall"))),
-            }
+            check(v.is_some() || i == lay.fc(), &|| format!("exposed value {i} never passed the firewall"));
+            vals.push(v.unwrap_or(F128::ZERO));
         }
         let (zc0, lc0) = zkv::from_exposed(&vals, &lay);
         let rp = catch_unwind(AssertUnwindSafe(|| {
@@ -1348,33 +1418,37 @@ impl Firewall {
         let (zc, lc) = (&proof.zerocheck, &proof.lincheck);
         let shape = [zc.round1_ab.len(), zc.round1_c.len(), zc.multilinear_rounds.len(), lc.rounds.len(), lc.z_partial.len()];
         let want = [zkv::SKIP, zkv::SKIP, lay.n_mlv, lay.n_lc, zkv::SKIP];
-        if shape != want {
-            return Err(refused(format!("the proof's shape (round1_ab, round1_c, multilinear_rounds, lincheck rounds, z_partial) is {shape:?} where the statement's is {want:?}")));
+        check(shape == want, &|| format!("the proof's shape (round1_ab, round1_c, multilinear_rounds, lincheck rounds, z_partial) is {shape:?} where the statement's is {want:?}"));
+        if shape == want {
+            let got = zkv::exposed_values(&proof.zerocheck, &proof.lincheck, &lay);
+            let i = (0..vals.len()).find(|&i| got[i] != vals[i]);
+            check(i.is_none(), &|| if i == Some(lay.fc()) { "the proof's final_c is not the one the firewall computes from the passed values".to_string() }
+                                  else { format!("the proof's exposed value {} is not the one the firewall passed", i.unwrap_or(0)) });
         }
-        let got = zkv::exposed_values(&proof.zerocheck, &proof.lincheck, &lay);
-        if let Some(i) = (0..vals.len()).find(|&i| got[i] != vals[i]) {
-            return Err(refused(if i == lay.fc() { "the proof's final_c is not the one the firewall computes from the passed values".to_string() }
-                               else { format!("the proof's exposed value {i} is not the one the firewall passed") }));
-        }
-        if bincode::serialize(cm).unwrap() != bincode::serialize(&self.cm).unwrap() {
-            return Err(refused("the proof's commitment is not the recheck's"));
-        }
-        let mut link = r.link.take().unwrap();
+        check(bincode::serialize(cm).unwrap() == bincode::serialize(&self.cm).unwrap(), &|| "the proof's commitment is not the recheck's".into());
         link.close();
         let t = Instant::now();
         let joined = r.shadow.take().expect("the shadow opening").join();
         r.t_wait += t.elapsed().as_secs_f64();
         let (open, t_shadow) = joined.map_err(|e| refused(format!("the firewall's opening did not finish with the device's: {}", panic_msg(e))))?;
-        if bincode::serialize(&proof.pcs_open).unwrap() != bincode::serialize(&open).unwrap() {
-            return Err(refused(format!("the proof's opening is not the firewall's: {}", opening_diff(&proof.pcs_open, &open))));
+        check(bincode::serialize(&proof.pcs_open).unwrap() == bincode::serialize(&open).unwrap(),
+              &|| format!("the proof's opening is not the firewall's: {}", opening_diff(&proof.pcs_open, &open)));
+        match why {
+            Some(e) => {
+                flock_live::firewall_transcript::with(|t| t.proof_candidate(proof));
+                self.fail(e);
+            }
+            None => {
+                flock_live::firewall_transcript::with(|t| t.shadow_opening(&open));
+            }
         }
-        flock_live::firewall_transcript::with(|t| t.shadow_opening(&open));
+        let r = self.rep.as_mut().unwrap();
         proof.pcs_open = open;
         // what leaves is the firewall's own: the zerocheck and lincheck rebuilt from the passed values (no comb_partial: zk_finish
         // folds the firewall's comb), the shadow's opening
         (proof.zerocheck, proof.lincheck) = zkv::from_exposed(&vals, &lay);
         let mut v = json!({"t.firewall_shadow": t_shadow, "t.firewall_wait": r.t_wait, "firewall_opening_rounds": link.round,
-                           "t.firewall_lean": r.t_lean, "firewall_lean_bytes": r.lean_bytes});
+                           "t.firewall_lean": r.t_lean, "firewall_lean_bytes": r.lean_bytes, "firewall_failed": r.failed});
         if r.rep == 0 {
             v["t.firewall_recheck"] = json!(self.t_recheck);
             v["cpu.firewall_recheck"] = json!(self.cpu_recheck);
@@ -1417,21 +1491,38 @@ fn opening_diff(a: &flock_core::pcs::BatchOpeningProofLigerito, b: &flock_core::
 }
 
 /// One round of a firewalled rep's device (or of the rep's device without a firewall): the firewall's check, then the masking challenger's
-/// replay of the round onto the stream, and the coins back to the firewall.
+/// replay of the round that leaves onto the stream, and the coins back to the firewall. A failed rep's device gets its coin count
+/// back, the scheduled round's coins cut or padded with zeros: nothing it does reaches the stream.
 fn firewalled_round<C: flock_transcript::challenger::Challenger>(firewall: &Option<Arc<Mutex<Firewall>>>, mch: &mut zkv::Masking<Gate<C>>, c: &[u8],
                                                                  n: usize) -> Vec<F128> {
     let Some(g) = firewall else { return replay_round(mch, c, n).unwrap_or_else(|e| panic!("LIVE-ERROR replay: {e}")) };
-    let (c, release) = g.lock().unwrap_or_else(PoisonError::into_inner).round(c, n).unwrap_or_else(|why| panic!("{why}"));
+    let next = g.lock().unwrap_or_else(PoisonError::into_inner).round(c, n).unwrap_or_else(|why| panic!("{why}"));
+    let Some(mut coins) = next.map(|x| released(g, mch, x)) else { return vec![F128::ZERO; n] };
+    coins.resize(n, F128::ZERO);
+    coins
+}
+
+/// A round that leaves (the masking challenger's round, the Lean frame's, its coin count) onto the stream: its coins, which the
+/// firewall gets too.
+fn released<C: flock_transcript::challenger::Challenger>(g: &Arc<Mutex<Firewall>>, mch: &mut zkv::Masking<Gate<C>>,
+                                                         (c, release, k): (Vec<u8>, Vec<u8>, usize)) -> Vec<F128> {
     mch.inner.release = Some(release);
-    let coins = replay_round(mch, &c, n).unwrap_or_else(|e| panic!("LIVE-ERROR replay: {e}"));
+    let coins = replay_round(mch, &c, k).unwrap_or_else(|e| panic!("LIVE-ERROR replay: {e}"));
     g.lock().unwrap_or_else(PoisonError::into_inner).answer(&coins);
     coins
 }
 
-/// The firewall's end check on a device's returned proof (its refusal, by name, is the rep's error), with its timings added to the
-/// rep's buckets.
-fn firewalled_finish(firewall: &Option<Arc<Mutex<Firewall>>>, proof: &mut R1csProofLigerito, cm: &Commitment, bk: &mut Value) -> Result<(), String> {
+/// The firewall's end of a rep whose device returned: the rest of the statement's schedule, if the device left any (onto the
+/// rep's stream `mch`), then the end check on the returned proof, with its timings added to the rep's buckets. Its error is
+/// the firewall's own fault.
+fn firewalled_finish<C: flock_transcript::challenger::Challenger>(firewall: &Option<Arc<Mutex<Firewall>>>, mch: &mut zkv::Masking<Gate<C>>,
+                                                                  proof: &mut R1csProofLigerito, cm: &Commitment, bk: &mut Value) -> Result<(), String> {
     let Some(g) = firewall else { return Ok(()) };
+    loop {
+        let next = g.lock().unwrap_or_else(PoisonError::into_inner).rest()?;
+        let Some(x) = next else { break };
+        released(g, mch, x);
+    }
     let v = g.lock().unwrap_or_else(PoisonError::into_inner).finish(proof, cm)?;
     if let (Some(o), Some(v)) = (bk.as_object_mut(), v.as_object()) {
         o.extend(v.clone());
@@ -1458,16 +1549,18 @@ fn prove_cpu_zk(st: &Arc<Stmt>, wt: &WitData, lig: LigeritoProfile, rep: usize, 
     };
     let t_upstream = tp.elapsed().as_secs_f64();
     let mut bk = json!({});
-    firewalled_finish(firewall, &mut proof, &commitment, &mut bk)?;
-    Ok(zk_finish(st, zk, proof, commitment, mch, &sent, tp, t_upstream, bk))
+    firewalled_finish(firewall, &mut mch, &mut proof, &commitment, &mut bk)?;
+    Ok(zk_finish(st, zk, proof, commitment, mch, &sent, tp, t_upstream, bk, firewall.is_some()))
 }
 
 /// After upstream's prover (the CPU's, or the device's with the same unmasked proof, level-0 record and folded comb): the
 /// masked proof, the constraints replayed from the logged coins, and the inner proof on the rep's stream after the opening.
+/// Under the firewall (`firewalled`) the inner proof never stops on its batched constraint: it speaks on schedule, as M1's
+/// simulator's does, and the session stops at `Finish` when a constraint fails on the pads (`constraints_failing_on_pads`).
 #[allow(clippy::too_many_arguments)]
 fn zk_finish<C: flock_transcript::challenger::Challenger>(st: &Stmt, zk: &ZkRep, mut proof: R1csProofLigerito, commitment: Commitment,
-                                                           mch: zkv::Masking<C>, sent: &zkv::Pads, tp: Instant, t_upstream: f64, mut bk: Value)
-                                                           -> (Vec<u8>, Value) {
+                                                           mch: zkv::Masking<C>, sent: &zkv::Pads, tp: Instant, t_upstream: f64, mut bk: Value,
+                                                           firewalled: bool) -> (Vec<u8>, Value) {
     let (mut inner_ch, coins, _coins_l0) = mch.finish();
     let tz = Instant::now();
     let (mut zc, lc) = zkv::mask_proof(&proof.zerocheck, &proof.lincheck, &zk.lay, &sent.h);
@@ -1493,7 +1586,8 @@ fn zk_finish<C: flock_transcript::challenger::Challenger>(st: &Stmt, zk: &ZkRep,
     let kept = zk.final_c_solved.then(|| cons.clone());
     flock_live::firewall_transcript::with(|t| t.constraints(&cons));
     let mut lch = zkv::Logging { inner: &mut inner_ch, coins: Vec::new() };
-    let inner = zkv::prove_inner(&zk.ic, &zk.pads, &zk.lay, zc.final_c_eval, cons, zk.self_check, &mut lch).unwrap_or_else(|e| panic!("{e}"));
+    let check = if firewalled { zkv::SelfCheck::Skip } else { zk.self_check };
+    let inner = zkv::prove_inner(&zk.ic, &zk.pads, &zk.lay, zc.final_c_eval, cons, check, &mut lch).unwrap_or_else(|e| panic!("{e}"));
     if let Some(cons) = kept {
         zc.final_c_eval += final_c_shift(&zk.lay, &zk.pads.h, cons, &inner, &lch.coins);
     }
@@ -3035,7 +3129,9 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
         }
         let later_roots: Vec<Vec<u8>> = later.iter().map(|x| x.0.clone()).collect();
         let mut later = later.into_iter();
+        let mut stop_at_finish: Option<String> = None;
         for (j, (tb, (w0, mut wt0, mut wt1))) in tabs.list.iter().zip(wits).enumerate() {
+            let table_buckets = buckets.len();
             let (st, salts, zk_points) = (&tb.st, &salts_t[j], &points_t[j]);
             let dom = |rep: usize| domain_of(&tb.st.c, tabs.list.len(), &tb.name, rep);
             // a later table's reps bind the root it committed
@@ -3170,11 +3266,12 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
                     cached = Some(e.clone());
                     e
                 };
-                // the firewall holds the device's root to the recheck's before the hook sends it, and keeps the extra points
+                // the firewall holds the device's root to the recheck's before the hook sends it (the recheck's leaves either way),
+                // and keeps the extra points
                 let mut hook = |root: &[u8]| -> Vec<Vec<F128>> {
                     let Some(g) = &firewall else { return hook(root) };
-                    g.lock().unwrap_or_else(PoisonError::into_inner).root(root).unwrap_or_else(|why| panic!("{why}"));
-                    let e = hook(root);
+                    let root = g.lock().unwrap_or_else(PoisonError::into_inner).root(root);
+                    let e = hook(&root);
                     g.lock().unwrap_or_else(PoisonError::into_inner).extras(&e);
                     e
                 };
@@ -3211,9 +3308,9 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
                                     let mut rounds = |c: &[u8], n: usize| firewalled_round(&firewall, &mut mch, c, n);
                                     gpu_zk_device(st, wt, lig, rep, &mut hook, salts, &z.level0, &mut rounds, native_sha)?
                                 };
-                                firewalled_finish(&firewall, &mut proof, &cm, &mut bk)?;
-                                let (t_up, st2) = (tp.elapsed().as_secs_f64(), st.clone());
-                                rep0_finish = Some(std::thread::spawn(move || zk_finish(&st2, &z, proof, cm, mch, &sent, tp, t_up, bk)));
+                                firewalled_finish(&firewall, &mut mch, &mut proof, &cm, &mut bk)?;
+                                let (t_up, st2, fw) = (tp.elapsed().as_secs_f64(), st.clone(), firewall.is_some());
+                                rep0_finish = Some(std::thread::spawn(move || zk_finish(&st2, &z, proof, cm, mch, &sent, tp, t_up, bk, fw)));
                                 Ok((Vec::new(), Value::Null))
                             }
                             // rep 1 beside rep 0's finish: the device starts now, its first round waits for rep 0's last one and then
@@ -3248,10 +3345,10 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
                                     rep0_done = Some(r.unwrap_or_else(|e| panic!("{e}")));
                                 }
                                 let (mut proof, cm, mut bk) = dev.unwrap_or_else(|e| std::panic::resume_unwind(e))?;
-                                firewalled_finish(&firewall, &mut proof, &cm, &mut bk)?;
+                                let (mut mch, sent) = opened.take().expect("rep 1's stream opened");
+                                firewalled_finish(&firewall, &mut mch, &mut proof, &cm, &mut bk)?;
                                 let t_up = tp.elapsed().as_secs_f64();
-                                let (mch, sent) = opened.take().expect("rep 1's stream opened");
-                                Ok(zk_finish(st, &z, proof, cm, mch, &sent, tp, t_up, bk))
+                                Ok(zk_finish(st, &z, proof, cm, mch, &sent, tp, t_up, bk, firewall.is_some()))
                             }
                             None => prove_gpu(st, wt, lig, rep, &mut hook, lch.as_mut().expect("the rep's stream"), salts,
                                              reuse_tag.map(|t| (t << 8) | j as u64), native_sha),
@@ -3286,6 +3383,18 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
                 buckets.push(bk);
                 proofs.push(p);
             }
+            // a failed check, or a constraint that fails on the pads, stops the session at its Finish (§10.1): every round of the
+            // table left on schedule
+            if let Some(g) = &firewall {
+                let rows = buckets[table_buckets..].iter()
+                    .filter_map(|b| b["constraints_failing_on_pads"].as_array().filter(|r| !r.is_empty()))
+                    .map(|r| r.iter().filter_map(Value::as_str).collect::<Vec<_>>().join(", ")).next();
+                let why = g.lock().unwrap_or_else(PoisonError::into_inner).why.clone()
+                    .or_else(|| rows.map(|r| format!("FIREWALL-REFUSED: {}: the constraints {r} fail on a rep's pads", tb.name)));
+                if let Some(w) = why {
+                    stop_at_finish.get_or_insert(w);
+                }
+            }
             if plan.early_proofs && j + 1 < tabs.list.len() {
                 for (rep, p) in proofs[early..].iter().enumerate() {
                     call(&t, Req::Proof { table: tb.name.clone(), rep: rep as u32, bytes: p.clone() })?;
@@ -3293,7 +3402,10 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
                 early = proofs.len();
             }
         }
-        Ok(())
+        match stop_at_finish {
+            Some(w) => Err(w),
+            None => Ok(()),
+        }
     })();
     let e2e_s = t0.elapsed().as_secs_f64();
     let wait_e2e_s = t.lock().unwrap_or_else(PoisonError::into_inner).wait_s();
