@@ -144,7 +144,8 @@ theorem Held : Accounting.Guarantees.Remote.Held := by
 
 /-- Identity is the links' ceiling at rate 0. -/
 theorem links_of_identity (hI : Identity T) : Links T 0 := fun ω u v _ => by
-  simp [over, hI]
+  have h0 : over T.link ω u v = 0 := Finset.sum_eq_zero fun t _ => hI ω t
+  rw [h0, Nat.cast_zero, zero_mul]
 
 /-- **The time-held line under Identity is the link-charged one at links of rate 0**: `HeldOverTime` follows from
 `HeldOverTimeLinks`, so the one time-held proof left is `HeldOverTimeLinks`'s. -/
