@@ -1024,6 +1024,19 @@
       },
       "root": null,
       "targets": []
+    },
+    {
+      "name": "a user-group mention whose label disagrees with a known id routes by the id, the group Slack shows and notifies",
+      "msg": {
+        "ts": "1700000062.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "<!subteam^SCIRC|@proofs> can node 2 take a job?"
+      },
+      "root": null,
+      "targets": [
+        "circuits"
+      ]
     }
   ],
   "doorbells": {

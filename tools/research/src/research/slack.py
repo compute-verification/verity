@@ -722,7 +722,8 @@ def lead_names(text: str, reg: dict) -> list[str]:
         return [bare[1]]
     names: list[str] = []
     for at, gid, label in NAME_TOKEN_RE.findall(m.group(1) if m else ""):
-        n = at.rstrip("._-") if at else (label or "").lstrip("@") or next((h["handle"] for h in reg["handles"] if h.get("usergroup") == gid), "")
+        known = next((h["handle"] for h in reg["handles"] if gid and h.get("usergroup") == gid), "")
+        n = at.rstrip("._-") if at else known or (label or "").lstrip("@")     # Slack shows and notifies the id's group
         if n and n not in names:
             names.append(n)
     return names
