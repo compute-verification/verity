@@ -16,6 +16,7 @@ from verity_vllm.check import c2_rules
 from verity_vllm.check.replay import served_check as SC
 from verity_vllm.program.kernels.rows import token_select_first_max
 from verity_vllm.program.registry import b1, cublas_bf16
+from verity_vllm.program.registry import bf16_gemm_check as BC
 from verity_vllm.program.registry import fa3_check_inf as F3
 from verity_vllm.program.registry import inductor as IR
 from verity_vllm.query.manifest.format import manifest_digest
@@ -255,6 +256,17 @@ def test_the_gemm_is_the_plans_cublas_route(served, step):
     other = {"kernel": "nosplit"} if _route(plan["gemm_m"])["kernel"] == "splitk" else {"kernel": "splitk", "SPLIT_K": 2}
     plan["gemms"][f"{H},{QKV}"] = SV.gemm_definition(other, H, QKV, H200.dot)
     assert (step, QKVV) in _failed(_check(served, steps, build=build, weight=W.__getitem__))
+
+
+@pytest.mark.parametrize("route", [{"kernel": "nosplit"}, {"kernel": "splitk", "SPLIT_K": 2},
+                                   {"kernel": "splitk", "SPLIT_K": 2, "partial": "bf16"}, {"kernel": "serialk", "SPLIT_K": 2},
+                                   {"kernel": "gemv", "LANES": 16}, {"kernel": "gemv", "LANES": 32}])
+def test_each_cublas_route_binds_a_definition_whose_twin_is_the_routes(route):
+    """A device pin's route, the Definition `gemm_definition` binds for it and that Definition's twin here compute one function
+    (`bf16_gemm_check.cublas_route_rows`) on the route probe's spread and cancelling rows."""
+    d = SV.gemm_definition(route, 256, 5, H200.dot)
+    for x, w in BC.route_probe_rows(3, 256, 5):
+        assert np.array_equal(SC.GEMMS[d["base"]](d["statics"], x, w), BC.cublas_route_rows(route, x, w))
 
 
 def test_a_skipped_step_leaves_the_cache_stale(served):
