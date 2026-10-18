@@ -26,9 +26,10 @@ Which form each takes:
 * (I6) `FoldOpt` and `FillOpt` in the price form D-ideal's proof reads. FOLD-OPT's per-word kernel (the duo step
   `u = y ⊕ d ⊕ k`, `y' = u·a + z`, `z' = rotl(u, r) + y'` needs three instructions over the modeled ISA,
   `benchmarks/pouw/theory/fold_opt.py`, #2240) is a mechanical fact; the multi-round residual, that no program folds
-  below the menu's price across rounds, is what stays assumed. `FanIn`, the ISA's operand counts, gives both at the
-  fan-in menu's price (`Accounting.Guarantees.TS.FoldOptOfFanIn`, `FillOptOfFanIn`): for a fold or filler presented as
-  a straight-line dataflow over the words it absorbs, priced at least the menu's routes of `a_k/m_k` a word.
+  below the menu's price across rounds, is what stays assumed. `FanIn`, the sources the ISA lets an instruction read
+  (every form, guarded), gives both at the fan-in menu's price (`Accounting.Guarantees.TS.FoldOptOfFanIn`,
+  `FillOptOfFanIn`): for a fold or filler presented as a straight-line dataflow over the words it absorbs, priced at
+  least the menu's routes of `a_k/m_k` a word.
 * (I7) `LuckAt`: (L) at `p` with freshness (F1)–(F2), one bet a round.
 * (I8) `ProofsSound`: deterministic computation, the circuit and inputs committed before σ, Theorem S's order, binding
   `δ_bind` and proof soundness `δ_ZK`, with Lemma E1(c) (every adaptive word lies below a committed value wrong for its
@@ -102,15 +103,31 @@ def FoldOpt (Z : Model K R T L U F X) (A : Anatomy K T L U) : Prop :=
 def FillOpt (Z : Model K R T L U F X) (A : Anatomy K T L U) : Prop :=
   ∀ lam : R → ℝ, IsCert lam → (1 - Z.muX) * Z.chiStar lam ≤ Z.G.price lam A.nfill
 
-/-- `accounting-ts-fan-in` (ISA; register operands read from SASS on sm_80, sm_89, sm_90, sm_100 and sm_120). **An
-instruction merges at most `m` components**: the nodes a straight-line dataflow issues as instruction `j` (its lanes,
-or the one node of a warp-wide instruction) merge at most `m_{cls j}` components into one, `Σ (sources − 1)`. A lane
-of LOP3, IADD3, IMAD, IDP.4A or FFMA reads three 32-bit registers (2 a lane, 64 a warp instruction); counted by
-dependence its predicate and 64-bit operands count too (IADD3.X: three registers and two carry-ins, 4 a lane;
-IMAD.WIDE: 3); a warp-wide instruction counts its whole operand set (SHFL 63; IMMA.16832: ten registers a thread, 319).
-Memory is a node each access reads: a load merges its address and that node (1 a lane), a store or atomic its address,
-its value registers and that node (STS.32 and ATOMS 2 a lane; STS.128 and STSM.x4 5 a lane, 160 a warp instruction),
-so the classes that merge most per instruction are the wide stores. -/
+/-- `accounting-ts-fan-in` (ISA; every form nvdisasm decodes on sm_80, sm_89, sm_90, sm_100 and sm_120, counted by
+dependence). **An instruction merges at most `m` components**: the nodes a straight-line dataflow issues as instruction
+`j` (its lanes, or the one node of a warp-wide or uniform instruction) merge at most `m_{cls j}` components into one,
+`Σ (sources − 1)`. A node's sources are every value it depends on: each register or uniform-register word it reads (a
+pair is two), each predicate it reads (an operand, a carry-in, its guard), a constant bank (`c[..][..]`, and
+`cx[UR][..]`'s uniform register besides), the memory node of each access, and, since any instruction can carry a guard
+and keeps what it writes when the guard is false, every word and predicate it writes (its destination, carry-outs and
+predicate destinations). `cls` is the census's class: an MMA form's family and shape; a texture, surface, TMA, bulk or
+tensor-memory access's unit and width; else the opcode's (`loads.class_of`), a memory access the census doesn't name in
+its space's class, and every other form in NOROW. Each class at its widest form, a lane, on sm_100 and sm_120: ALU 8
+(IADD3.X: three registers, two carry-ins, the guard, the kept destination and two kept carry-outs), IMAD 6, IMAD.WIDE 8,
+IADD.64 8, LEA 6, FFMA 4 (sm_100's FFMA2 8), HFMA2, IDP.4A and F2FS 4, VIMNMX 6 (sm_120's IMNMX.U64 10: three pairs,
+two predicate operands, two kept predicate destinations and the guard), SEL 4 (sm_120's SEL.64 7), XU 4 (BAR.RED.POPC,
+the barrier a node), DFMA and DADD 8, DMUL 6, a constant load 5 (LDC.64 from `cx[UR][R]`), NOROW 9 (P2R: two
+registers, P0–P6 and the kept destination). sm_80, sm_89 and sm_90 read a `cx[UR][imm]` operand where the others read a
+register, one source more: ALU 9, IMAD 7, IMAD.WIDE 9, LEA 7, FFMA, HFMA2, IDP.4A, F2FS, SEL and VIMNMX 5 (sm_90's
+VIMNMX.U32 7), NOROW 10 (P2R). Memory, a lane: a shared load or store 7 (LDS.128, STS.128), a global load 15
+(LDG.E.ENL2.256 with its descriptor, address pair, predicate operand and predicate destination), a global or generic
+store 13 (STG.E.ENL2.256), a shared atomic 15 (ATOMS.CAS.128), a global or generic atomic 18 (ATOMG.E.CAS.128), a
+reduction 9 (REDG.E.ADD.F32x4), LDGSTS 9, LDSM and STSM 7, a texture or surface access 20. A warp-wide instruction
+counts its lanes together: SHFL 191; UNI's R2UR 96 and VOTEU 65; an MMA form its A, B and C words, the kept
+D, a guard a lane and its UP operand, with a block-scaled form's two scale registers a lane and uniform register and a
+sparse form's metadata register a lane (IMMA.16832 480, QMMA.SF.16832 545); sm_100's tensor-memory load or store its
+registers on 32 lanes, which it keeps under one uniform guard, with the guard, address and node (LDTM.32x32b.x128
+4098). A uniform one counts once: UNI64's UIADD3.64.X 12, a TMA or bulk copy 15. -/
 def FanIn {ι W J : Type} [DecidableEq J] (D : Dataflow ι W) (ins : Fin D.n → J) (cls : J → K) (m : K → ℝ) :
     Prop :=
   ∀ j, (D.issued ins j : ℝ) ≤ m (cls j)
