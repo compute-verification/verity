@@ -566,7 +566,8 @@ def bounded_host_bound(ssb: dict[str, Any], *, engine_rss_bytes: int, retain: st
             "margin_frac": ((host_cap_bytes - bound) / host_cap_bytes) if host_cap_bytes else None, "retain": retain, "retain_exclude": sorted(excl)}
 
 
-def step_bound_bytes(model: Any, modules: list[tuple[str, Any]], envelope: dict[str, Any], *, hidden_m1: bool, attn_backend: str = "fa2", moe_layers: int = 0) -> dict[str, Any]:
+def step_bound_bytes(model: Any, modules: list[tuple[str, Any]], envelope: dict[str, Any], *, hidden_m1: bool, attn_backend: str = "fa2", moe_layers: int = 0,
+                     chunk: int = GPU_CHUNK_BYTES) -> dict[str, Any]:
     """Upper bound of the bytes ONE engine step binds into the arena, from the acquired-module set (the required-value manifest of the
     native path: forward outputs of ACQUIRE_CLASSES, per token) and the workload envelope (`batch`, `max_prompt`, `max_new`,
     `max_num_batched_tokens`, `max_model_len`).  Prefill: the admitted prompt tokens of one step (<= max_num_batched_tokens, <= B x max
@@ -621,14 +622,14 @@ def step_bound_bytes(model: Any, modules: list[tuple[str, Any]], envelope: dict[
         else:
             w = hidden * 2
         per_token += w
-        per_step += GPU_CHUNK_BYTES
+        per_step += chunk
         cls = next((c for c in ("LogitsProcessor", "Sampler", "VocabParallelEmbedding", "RMSNorm", "RotaryEmbedding", "Attention", "SiluAndMul",
                                 "LinearBase") if c in names), "other")
         widths[cls] = widths.get(cls, 0) + w
     moe_pt = moe_bytes_per_token(model, moe_layers)
     if moe_pt:
         per_token += moe_pt
-        per_step += moe_layers * 6 * GPU_CHUNK_BYTES
+        per_step += moe_layers * 6 * chunk
         widths["MoeBlock"] = moe_pt
     B = max(1, int(envelope.get("batch") or 1))
     max_prompt = max(1, int(envelope.get("max_prompt") or 1))
@@ -841,8 +842,9 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
             hidden_m1 = any("Hidden" in type(s).__name__ for s in getattr(self, "sources", []))
         backend = "fa3" if any(type(s).__name__ in ("HiddenM1SourceFA3", "NativeHiddenM1SourceFA3") for s in getattr(self, "sources", [])) else "fa2"
         moe_src = next((s for s in getattr(self, "sources", []) if getattr(s, "short_name", "") == "moe"), None)
+        chunk = self.chunk if self.gpu_tree else GPU_CHUNK_BYTES
         rec = step_bound_bytes(self.model, self._modules, envelope, hidden_m1=bool(hidden_m1), attn_backend=backend,
-                               moe_layers=(len(moe_src.layers) if moe_src is not None else 0))
+                               moe_layers=(len(moe_src.layers) if moe_src is not None else 0), chunk=chunk)
         # [R14 TP-03] sources that bind extra tensors per step (TP partial source) widen the bound: per token / per sequence / chunk padding
         extra_pt = extra_ps = extra_step = extra_n = 0
         for s in getattr(self, "sources", []):
@@ -863,8 +865,8 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
             rec["promoted_inputs"] = {"consumers": sorted(self.acquire_inputs), "per_token_bytes": sum(int(v) for v in self.acquire_inputs.values())}
         if extra_pt or extra_ps or extra_step or extra_n:
             B = max(1, int(envelope.get("batch") or 1))
-            add_prefill = int(rec["prefill_tokens"]) * extra_pt + B * extra_ps + extra_step + extra_n * GPU_CHUNK_BYTES
-            add_decode = B * extra_pt + B * extra_ps + extra_step + extra_n * GPU_CHUNK_BYTES
+            add_prefill = int(rec["prefill_tokens"]) * extra_pt + B * extra_ps + extra_step + extra_n * chunk
+            add_decode = B * extra_pt + B * extra_ps + extra_step + extra_n * chunk
             rec["extra_sources"] = {"per_token_bytes": extra_pt, "per_seq_bytes": extra_ps, "per_step_bytes": extra_step, "tensors_per_step": extra_n,
                                     "prefill_add": add_prefill, "decode_add": add_decode}
             rec["prefill_step_bytes"] = int(rec["prefill_step_bytes"]) + add_prefill

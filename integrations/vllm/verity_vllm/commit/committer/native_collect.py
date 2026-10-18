@@ -474,16 +474,18 @@ class NativeCollectCommitter(NativeHostCommitter):
         if not self.retain_levels and not self.windowed:
             raise ValueError("retain_levels=False is implemented on the windowed path only (--window-mb > 0)")
         # the commitment scheme (`commit_scheme`, unset = vllm-v1): vllm-v1 (the record), or rows-sha512 (`step_rows`: every
-        # 256 B chunk an hm96-sha512 hiding leaf in a frame-v3-sha512 tree, 64-byte roots), on the windowed worker under chunk-leaf-v1.
+        # step_rows.ROW_BYTES (4 KiB) chunk an hm96-sha512 hiding leaf in a frame-v3-sha512 tree, 64-byte roots), on the windowed worker under chunk-leaf-v1.
         # Each step's salt key is fresh (`row_keys`); a replay that must reproduce a run's trees takes that run's keys
         # (`replay_row_keys`, set before the run and dropped by its finalize)
         self.commit_scheme = commit_scheme or "vllm-v1"
         if self.commit_scheme not in ("vllm-v1", step_rows.NAME):
             raise ValueError(f"unknown commit scheme {self.commit_scheme!r} (vllm-v1 | {step_rows.NAME})")
         self.rows = self.commit_scheme == step_rows.NAME
-        if self.rows and (not self.windowed or self.layout_v2 or self.hiding is not None or GPU_CHUNK_BYTES != step_rows.ROW_BYTES):
+        if self.rows and (not self.windowed or self.layout_v2 or self.hiding is not None):
             raise ValueError(f"{step_rows.NAME} is implemented on the windowed worker (native worker + gather + --window-mb > 0) under "
                              "chunk-leaf-v1 position leaves only")
+        if self.rows:
+            self.chunk = step_rows.ROW_BYTES      # a row is a chunk of the step's stream: the layout's leaves, the windows' and the tree's
         self.row_keys: dict[int, bytes] = {}
         self.replay_row_keys: dict[int, bytes] | None = None
         self._row_tn: Any | None = None
@@ -1115,11 +1117,12 @@ class NativeCollectCommitter(NativeHostCommitter):
         the FA2-02 geometry bound that made B=32 a 52-slot / 14 GB ring and let the engine run 32 decode steps ahead of the worker.)  The
         largest-tensor bound (prefill hidden bound / layers) is still reported for the record."""
         W = self.win_bytes
-        if W % GPU_CHUNK_BYTES or (W // GPU_CHUNK_BYTES) & (W // GPU_CHUNK_BYTES - 1):
-            raise ValueError(f"--window-mb: the window must hold a power of two of {GPU_CHUNK_BYTES}-byte chunks (per-window subtrees == whole-step tree)")
+        C = self.chunk
+        if W % C or (W // C) & (W // C - 1):
+            raise ValueError(f"--window-mb: the window must hold a power of two of {C}-byte chunks (per-window subtrees == whole-step tree)")
         if self.retain == "device":
             raise ValueError("windowed staging retains on host or not at all (--retain host|none|sample); device retention is the footprint")
-        self.win_log2_chunks = (W // GPU_CHUNK_BYTES).bit_length() - 1
+        self.win_log2_chunks = (W // C).bit_length() - 1
         largest = 0
         if rec:
             layers = int((rec.get("model") or {}).get("layers") or 1)
@@ -1295,7 +1298,7 @@ class NativeCollectCommitter(NativeHostCommitter):
 
         self._gpu_ext_load()
         side = self._side_stream()
-        nc, H, W, C = self._nc, self._hasher, self.win_bytes, GPU_CHUNK_BYTES
+        nc, H, W, C = self._nc, self._hasher, self.win_bytes, self.chunk
         if getattr(nc, "win_dead", False):
             # [R15 capacity] the serving thread's slot wait timed out earlier in this run: every stage() since was refused by name, so this step
             # has nothing staged -- fail it by the SAME name instead of tripping over an empty tree ("cudaMemcpyAsync(root): invalid argument").
@@ -1334,7 +1337,7 @@ class NativeCollectCommitter(NativeHostCommitter):
             state.update(n_total=n_total, n_levels=n_levels, views=views, tops=[])
 
         def row_leaves(src: Any, nbytes: int, k: int) -> Any:
-            """rows-sha512: window k's leaves, its nbytes / 256 rows at src and then pads to the window's end (or the tree's width); capped
+            """rows-sha512: window k's leaves, its nbytes / ROW_BYTES rows at src and then pads to the window's end (or the tree's width); capped
             launches for the window (its leaves and subtree) while the ring has room."""
             first, rs = k << j, state["rs"]
             rs.max_blocks = self.rows_cap_blocks if self.rows_cap_blocks and nc.free_slots() >= self.rows_cap_free else 0
@@ -1382,7 +1385,7 @@ class NativeCollectCommitter(NativeHostCommitter):
             excl = _excluded_chunk_ranges(hint, self.retain_exclude, C)
 
         # bounded retain=sample with the picks known by chunk (`retain_chunks`, set by openings_after_release for a replay): the retained
-        # bytes of a window are the challenged 256 B chunks inside it, sorted, as absolute step-stream ranges
+        # bytes of a window are the challenged chunks inside it, sorted, as absolute step-stream ranges
         chunk_picks: dict[int, list[int]] | None = None
         if bounded and self.retain == "sample" and getattr(self, "retain_chunks", None):
             chunk_picks = {}
@@ -1456,7 +1459,7 @@ class NativeCollectCommitter(NativeHostCommitter):
                         excl_bytes += padded_k - kept_b
                     elif padded_k and keep_set is not None and (job.step, k) in keep_set:
                         if chunk_picks is not None:
-                            # replay-to-open (R17-5): keep ONLY the challenged chunks of this window (256 B each) as byte ranges -- not the
+                            # replay-to-open (R17-5): keep ONLY the challenged chunks of this window (`chunk` bytes each) as byte ranges -- not the
                             # 256 MiB window; the replay's authentication paths come from its levels, so this is all a replay retains
                             base = k * W
                             for a, b in chunk_parts(job.step, base, base + padded_k):
@@ -1672,16 +1675,16 @@ class NativeCollectCommitter(NativeHostCommitter):
         if bounded and self.retain in ("host", "sample"):
             if self.retain == "sample" and not learning and chunk_picks is None:
                 kept = [(kk, hv, n) for kk, hv, n in host_wins if kk not in transient]
-                keep = _HostWindows(kept, used, W) if kept else None
+                keep = _HostWindows(kept, used, W, C) if kept else None
             else:
                 ex_fams: dict[str, int] = {}
                 for elo, ehi, fam in excl:
                     ex_fams[fam] = ex_fams.get(fam, 0) + (min(ehi, padded) - elo if elo < padded else 0)
-                keep = _HostRanges(ranges, used, ex_fams) if ranges else None
+                keep = _HostRanges(ranges, used, ex_fams, C) if ranges else None
             self.excluded_bytes += excl_bytes
         else:
             kept = [(kk, hv, n) for kk, hv, n in host_wins if kk not in transient] if self.retain in ("host", "sample") else []
-            keep = _HostWindows(kept, used, W) if kept else None
+            keep = _HostWindows(kept, used, W, C) if kept else None
         self._footprint_absorbed(job, padded, levels, keep)
         self._gpu_t["leaf_ms"] += leaf_ms
         self._gpu_t["tree_ms"] += tree_ms
