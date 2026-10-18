@@ -16,7 +16,9 @@ at most `(∑_{j ≤ m} C(n, j)) · |V| ^ (m w)` values; the location term and a
 time-ordered machine trace keeps the count, but with value-dependent reads one wrong one-bit unit makes the egress
 copy `N` secret words its honest run never reads; declared statically, the checker sees them upstream of the egress.
 `Leakage`: beyond the honest egress, the egress takes at most `C(|U|, m) · |V| ^ (m E_max)` values, `E(u)` the egress
-slots in `u`'s downstream cone, read off the wiring; the bound is attained, and a machine's step has `E_max = |E|`.
+slots in `u`'s downstream cone, read off the wiring; the bound is attained, and a machine's step has `E_max = |E|`. In
+bounded-reach terms, control reach is at most `min(m w, Reach_inf) + log C(|U|, ≤ m)` and leakage about the secrets at
+most `Reach_inf + log C(|U|, ≤ m)`, `Reach_inf` the egress slots inside the wrong units' cone.
 Equivalently, control times amplification: at most `K · α` values, `α = 1` when no secret is upstream of the egress, and
 fixed arithmetic at fixed indices amplifies one wrong bit into `N` secret bits.
 `Work`: every skipped unit is downstream of a wrong unit or lucky, so the skipped work is at most `m F` plus the lucky
