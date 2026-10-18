@@ -7,13 +7,15 @@
 // stream byte (l n + j) K + k. Then h_j = sum_l 2^(8l) sum_k A_l[j][k] s_k mod 2^(8L), stored little-endian (L bytes a
 // word). Uniform int8 limbs make each entry of A uniform mod q.
 //
-//   sis_bench ENC M_BYTES N_WORDS BATCH_MIB REPS OUTDIR [tree]
+//   sis_bench ENC M_BYTES N_WORDS BATCH_MIB REPS OUTDIR [tree] [fused]
 //
 // Order: build A on the host; fill a batch of rows; hash it on the GPU; check sampled rows against the host reference
 // (exit 4 on any mismatch, before anything is timed); dump the sampled rows and digests for reference.py; then REPS
 // interleaved reps of: the SIS hash (GEMM + limb combine), SHA-512 over every row, SHA-512 over every digest, and the raw
 // compression rate, each with the SM clock. With `tree`, an all-SIS tree (each level's digests are the next level's rows)
-// is checked on sampled rows of every level and timed in the same reps.
+// is checked on sampled rows of every level and timed in the same reps. With `fused`, the one-pass kernel (fz::sis_fused)
+// must reproduce the cuBLASLt path's digests byte for byte over the whole batch (exit 4 otherwise) and is timed first in
+// every rep.
 #include <cublasLt.h>
 #include <cuda_runtime.h>
 #include <nvml.h>
@@ -214,13 +216,29 @@ __global__ void sha_rate(u64* io, int reps) {
 // --- the fused kernel ----------------------------------------------------------------------------------------------
 //
 // One pass: rows of bytes in, digests out. mma.sync m16n8k32 s8 (every arch from sm_80), CTA tile 128 rows x 128 columns of
-// W, 8 warps of 64 x 32, a 64-digit k-step double-buffered through registers. W is A with its rows interleaved (row
-// j L + l is limb l of word j), so a thread's accumulators hold adjacent limbs of one word and the epilogue combines them
-// in registers (and across the lane pair t, t^1 when L = 4). With SPLIT = 2 each byte's two nibbles are split on the way
-// into shared memory. Rows a multiple of 128, L n a multiple of 128, K a multiple of 64.
+// W, 8 warps of 64 x 32, a k-step of 64 digits, ST stages of cp.async into XOR-swizzled shared memory (16-byte chunk c of
+// row r sits at chunk c ^ f(r), so the 8 rows an ldmatrix reads hit 8 distinct bank groups without padding). W is A with its
+// rows interleaved (row j L + l is limb l of word j), so a thread's accumulators hold adjacent limbs of one word and the
+// epilogue combines them in registers (and across the lane pair t, t^1 when L = 4). With SPLIT = 2 the rows stay bytes in
+// shared memory and each fragment register of 4 bytes becomes two of 4 nibbles (low, high); W's columns are permuted on the
+// host to match (fz::nib_col). Rows a multiple of 128, L n a multiple of 128, K a multiple of 64.
 namespace fz {
-constexpr int BM = 128, BN = 128, BK = 64, LD = BK + 16;  // LD: a smem row's stride in bytes (padding against conflicts)
+constexpr int BM = 128, BN = 128, BK = 64, ST = 3;
 
+// the digit of the hash's order that column p of the fused kernel's W multiplies (SPLIT = 2): in each 32-column block,
+// columns 0..15 take the low nibbles of the block's 16 bytes and columns 16..31 their high nibbles
+inline int nib_col(int p) { return ((p >> 5) * 16 + (p & 15)) * 2 + ((p >> 4) & 1); }
+
+template <int CH>  // CH 16-byte chunks a row
+__device__ __forceinline__ int swz(int r, int c) {
+  return r * CH * 16 + ((c ^ ((r >> (CH == 4 ? 1 : 2)) & (CH - 1))) << 4);
+}
+__device__ __forceinline__ void cp16(void* s, const void* g) {
+  asm volatile("cp.async.cg.shared.global [%0], [%1], 16;\n" ::"r"((u32)__cvta_generic_to_shared(s)), "l"(g));
+}
+__device__ __forceinline__ void cp_commit() { asm volatile("cp.async.commit_group;\n" ::); }
+template <int N>
+__device__ __forceinline__ void cp_wait() { asm volatile("cp.async.wait_group %0;\n" ::"n"(N)); }
 __device__ __forceinline__ void ldsm_x4(u32* r, const void* p) {
   const u32 a = (u32)__cvta_generic_to_shared(p);
   asm volatile("ldmatrix.sync.aligned.m8n8.x4.shared.b16 {%0,%1,%2,%3}, [%4];\n"
@@ -231,21 +249,16 @@ __device__ __forceinline__ void mma(int* c, const u32* a, const u32* b) {
                : "+r"(c[0]), "+r"(c[1]), "+r"(c[2]), "+r"(c[3])
                : "r"(a[0]), "r"(a[1]), "r"(a[2]), "r"(a[3]), "r"(b[0]), "r"(b[1]));
 }
-__device__ __forceinline__ uint4 nib_lo(uint4 v) {  // bytes 0..7 of 16 -> 16 digits
-  const u32 l0 = v.x & 0x0F0F0F0Fu, h0 = (v.x >> 4) & 0x0F0F0F0Fu, l1 = v.y & 0x0F0F0F0Fu, h1 = (v.y >> 4) & 0x0F0F0F0Fu;
-  return make_uint4(__byte_perm(l0, h0, 0x5140), __byte_perm(l0, h0, 0x7362), __byte_perm(l1, h1, 0x5140),
-                    __byte_perm(l1, h1, 0x7362));
-}
-__device__ __forceinline__ uint4 nib_hi(uint4 v) { return nib_lo(make_uint4(v.z, v.w, 0, 0)); }
 
 template <int L, int SPLIT>
 __global__ void __launch_bounds__(256) sis_fused(const uint8_t* __restrict__ X, const int8_t* __restrict__ W,
                                                  uint8_t* __restrict__ D, int m, int NW) {
-  __shared__ __align__(16) uint8_t sX[2][BM * LD], sW[2][BN * LD];
+  constexpr int XCH = 4 / SPLIT;  // 16-byte chunks of a row's bytes a k-step
+  __shared__ __align__(128) uint8_t sW[ST][BN * BK], sX[ST][BM * XCH * 16];
   const int tid = threadIdx.x, lane = tid & 31, warp = tid >> 5, wm = warp >> 2, wn = warp & 3;
   const int n0 = blockIdx.x * BN;
   const size_t r0 = (size_t)blockIdx.y * BM;
-  const int K = m * SPLIT, steps = K / BK, xb = BK / SPLIT;  // xb: data bytes a row a step
+  const int K = m * SPLIT, steps = K / BK;
   int acc[4][4][4];
 #pragma unroll
   for (int i = 0; i < 4; ++i)
@@ -254,68 +267,60 @@ __global__ void __launch_bounds__(256) sis_fused(const uint8_t* __restrict__ X, 
 #pragma unroll
       for (int c = 0; c < 4; ++c) acc[i][j][c] = 0;
 
-  uint4 rx[2], rw[2];
-  auto load = [&](int s) {
-    const int k0 = s * BK;
+  auto load = [&](int s, int b) {
 #pragma unroll
     for (int i = 0; i < 2; ++i) {
-      const int idx = tid + i * 256, row = idx >> 2, ch = idx & 3;
-      rw[i] = *(const uint4*)(W + (size_t)(n0 + row) * K + k0 + ch * 16);
+      const int idx = tid + i * 256, row = idx >> 2, c = idx & 3;
+      cp16(&sW[b][swz<4>(row, c)], W + (size_t)(n0 + row) * K + (size_t)s * BK + c * 16);
     }
-    if (SPLIT == 1) {
 #pragma unroll
-      for (int i = 0; i < 2; ++i) {
-        const int idx = tid + i * 256, row = idx >> 2, ch = idx & 3;
-        rx[i] = *(const uint4*)(X + (r0 + row) * m + (size_t)s * xb + ch * 16);
-      }
-    } else {
-      const int row = tid >> 1, ch = tid & 1;
-      rx[0] = *(const uint4*)(X + (r0 + row) * m + (size_t)s * xb + ch * 16);
-    }
-  };
-  auto store = [&](int b) {
-#pragma unroll
-    for (int i = 0; i < 2; ++i) {
-      const int idx = tid + i * 256, row = idx >> 2, ch = idx & 3;
-      *(uint4*)(&sW[b][row * LD + ch * 16]) = rw[i];
-    }
-    if (SPLIT == 1) {
-#pragma unroll
-      for (int i = 0; i < 2; ++i) {
-        const int idx = tid + i * 256, row = idx >> 2, ch = idx & 3;
-        *(uint4*)(&sX[b][row * LD + ch * 16]) = rx[i];
-      }
-    } else {
-      const int row = tid >> 1, ch = tid & 1;
-      *(uint4*)(&sX[b][row * LD + ch * 32]) = nib_lo(rx[0]);
-      *(uint4*)(&sX[b][row * LD + ch * 32 + 16]) = nib_hi(rx[0]);
+    for (int i = 0; i < XCH / 2; ++i) {
+      const int idx = tid + i * 256, row = idx / XCH, c = idx % XCH;
+      cp16(&sX[b][swz<XCH>(row, c)], X + (r0 + row) * m + (size_t)s * XCH * 16 + c * 16);
     }
   };
 
-  load(0);
-  store(0);
-  __syncthreads();
+#pragma unroll
+  for (int s = 0; s < ST - 1; ++s) {
+    if (s < steps) load(s, s);
+    cp_commit();
+  }
+  const int mi = lane >> 3, r = lane & 7;
   for (int s = 0; s < steps; ++s) {
-    const int b = s & 1;
-    if (s + 1 < steps) load(s + 1);
+    cp_wait<ST - 2>();
+    __syncthreads();
+    if (s + ST - 1 < steps) load(s + ST - 1, (s + ST - 1) % ST);
+    cp_commit();
+    const int b = s % ST;
+    u32 bf[2][2][4];
 #pragma unroll
-    for (int kk = 0; kk < BK; kk += 32) {
-      u32 af[4][4], bf[2][4];
-      const int mi = lane >> 3, r = lane & 7;
+    for (int q = 0; q < 2; ++q)
 #pragma unroll
-      for (int i = 0; i < 4; ++i)
-        ldsm_x4(af[i], &sX[b][(wm * 64 + i * 16 + (mi & 1) * 8 + r) * LD + kk + (mi >> 1) * 16]);
+      for (int j = 0; j < 2; ++j) ldsm_x4(bf[q][j], &sW[b][swz<4>(wn * 32 + j * 16 + (mi >> 1) * 8 + r, 2 * q + (mi & 1))]);
+    if (SPLIT == 1) {
 #pragma unroll
-      for (int j = 0; j < 2; ++j)
-        ldsm_x4(bf[j], &sW[b][(wn * 32 + j * 16 + (mi >> 1) * 8 + r) * LD + kk + (mi & 1) * 16]);
+      for (int q = 0; q < 2; ++q) {
+        u32 af[4][4];
 #pragma unroll
-      for (int i = 0; i < 4; ++i)
+        for (int i = 0; i < 4; ++i) ldsm_x4(af[i], &sX[b][swz<XCH>(wm * 64 + i * 16 + (mi & 1) * 8 + r, 2 * q + (mi >> 1))]);
 #pragma unroll
-        for (int j = 0; j < 4; ++j) mma(acc[i][j], af[i], &bf[j >> 1][(j & 1) * 2]);
-    }
-    if (s + 1 < steps) {
-      store(b ^ 1);
-      __syncthreads();
+        for (int i = 0; i < 4; ++i)
+#pragma unroll
+          for (int j = 0; j < 4; ++j) mma(acc[i][j], af[i], &bf[q][j >> 1][(j & 1) * 2]);
+      }
+    } else {
+      u32 raw[4][4];
+#pragma unroll
+      for (int i = 0; i < 4; ++i) ldsm_x4(raw[i], &sX[b][swz<XCH>(wm * 64 + i * 16 + (mi & 1) * 8 + r, mi >> 1)]);
+#pragma unroll
+      for (int q = 0; q < 2; ++q)
+#pragma unroll
+        for (int i = 0; i < 4; ++i) {
+          const u32 w0 = raw[i][2 * q], w1 = raw[i][2 * q + 1];
+          const u32 af[4] = {w0 & 0x0F0F0F0Fu, w1 & 0x0F0F0F0Fu, (w0 >> 4) & 0x0F0F0F0Fu, (w1 >> 4) & 0x0F0F0F0Fu};
+#pragma unroll
+          for (int j = 0; j < 4; ++j) mma(acc[i][j], af, &bf[q][j >> 1][(j & 1) * 2]);
+        }
     }
   }
 
@@ -559,8 +564,13 @@ int main(int argc, char** argv) {
   if (fused) {
     std::vector<int8_t> Wi(A.size());
     for (int l = 0; l < e.L; ++l)
-      for (int j = 0; j < n; ++j)
-        memcpy(Wi.data() + ((size_t)j * e.L + l) * K, A.data() + ((size_t)l * n + j) * K, K);
+      for (int j = 0; j < n; ++j) {
+        int8_t* w = Wi.data() + ((size_t)j * e.L + l) * K;
+        const int8_t* a = A.data() + ((size_t)l * n + j) * K;
+        if (e.split == 1) memcpy(w, a, K);
+        else
+          for (int p = 0; p < K; ++p) w[p] = a[fz::nib_col(p)];
+      }
     CK(cudaMalloc(&dWi, Wi.size()));
     CK(cudaMemcpy(dWi, Wi.data(), Wi.size(), cudaMemcpyHostToDevice));
     CK(cudaMalloc(&Df, rows * s0.dbytes()));
