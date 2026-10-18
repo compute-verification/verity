@@ -540,6 +540,10 @@
     "fails": "Claims.Witness.Recursion.KS_fails",
     "meets": ["Claims.Witness.Recursion.KS_meets"]
    },
+   "Claims.Recursion.KSBound": {
+    "fails": "Claims.Witness.Recursion.KSBound_fails",
+    "meets": ["Claims.Witness.Recursion.KSBound_meets"]
+   },
    "Claims.Recursion.KSFlock": {
     "fails": "Claims.Witness.Recursion.KSFlock_fails",
     "meets": ["Claims.Witness.Recursion.KSFlock_meets"]
@@ -547,6 +551,10 @@
    "Claims.Recursion.KSPriv": {
     "fails": "Claims.Witness.Recursion.KSPriv_fails",
     "meets": ["Claims.Witness.Recursion.KSPriv_meets"]
+   },
+   "Claims.Recursion.KSPrivBound": {
+    "fails": "Claims.Witness.Recursion.KSPrivBound_fails",
+    "meets": ["Claims.Witness.Recursion.KSPrivBound_meets"]
    },
    "Claims.Recursion.Nontrivial": {
     "fails": "Claims.Witness.Recursion.Nontrivial_fails",
@@ -630,6 +638,11 @@
    "Claims.Flock.ListWithin": "the list-decoding spec Flock's KS, Bits and Efficient ask of a decoder, proved of both deployed decoders (`FlockDeploy.listWithin_plain`, `listWithin_zk`)",
    "Claims.Flock.RelS": "a helper the claims read: a statement's relation, which `Flock.R` reads",
    "Claims.Flock.Scope": "a helper the claims read: the scope Flock's claims read",
+   "Claims.Recursion.Bound.Binds": "a premise of `Bridge` on the bound record (its row digest input is injective), a condition on the record like `decOK`, no claim",
+   "Claims.Recursion.Bound.LastBinds": "a premise the recursion's KS proof takes of the bound record (the last message is bound by the rounds before it), which that proof establishes at the deployed bound record from `Bound.Binds` and `DE`'s Merkle binding, no claim",
+   "Claims.Recursion.Bound.PlainKSAbort": "a premise of `KSBound`'s route on the bound record (P1: the element-level Flock's KS against aborting provers at plain leaves, `Inner.KSAbort` at `DE`), which `Bridge` takes at each decoder and Flock's table bound at `DE` is to give, no claim",
+   "Claims.Recursion.Bound.WeightCovers": "a premise of `Bridge` on the bound record (`γ`'s weight covers the openings), a condition on the record like `decOK`, no claim",
+   "Claims.Recursion.Bridge": "option (d)'s inner claim (`KSBound` rests on it), a statement over every bound record that its proof establishes from Flock's KS at `DE`, `Bound.Binds` and `Bound.WeightCovers`; it reads no deployed record, so it has no antecedent there to witness, no claim",
    "Claims.Recursion.Draw.Full": "a V* session's draw that takes every unit, a clause of the readable scope (`InScope`), no claim",
    "Claims.Recursion.InScope": "the readable scope's form, which the claims read through `Scope`, no claim",
    "Claims.Recursion.Scope": "the recursion's scope, which `ScopeMatches` and `Complete` read, no claim",
@@ -2969,6 +2982,12 @@
    "assumptions": [],
    "type_hash": "3428d76d26a41b9769df906e67d3204996cb5d716c1cc06a05fb84453a6749a4"
   },
+  "Claims.Witness.Recursion.KSBound_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.KSBound_meets": {
+   "owner": "@proofs"
+  },
   "Claims.Witness.Recursion.KSFlock_fails": {
    "owner": "@proofs",
    "signature": [
@@ -2990,6 +3009,12 @@
    ],
    "assumptions": [],
    "type_hash": "6afb69b897bceb3bdd88e1855ba6c429314dcecb98e84ae3ea2f6f590deb740c"
+  },
+  "Claims.Witness.Recursion.KSPrivBound_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.KSPrivBound_meets": {
+   "owner": "@proofs"
   },
   "Claims.Witness.Recursion.KSPriv_fails": {
    "owner": "@proofs",
