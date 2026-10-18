@@ -11,14 +11,19 @@ registration  the verifier's; the backend encodes the payloads under its key (`a
               region's kind, tier and blocks (`StoreBackend.layout`)
 session       the store records its memory map against `Registration.digest` under the session's lifetime cap L
               (`Store.record_memory_map`), one session a store: the map's indices are one session's
-pass          before each pass `Serving.advance` runs the engine's next step against the store (its frees, allocs and
-              `kv_append`, which closes the step before's memory-map line with its re-keys for the pass's window), turns
-              each closed line into the audit's append (committed by its digests alone, `audit.Store.append`) and
-              releases (`memory_map.Replay`, the map's).  `ProverSide` sends each append after the root before the
+pass          before each pass `Serving.advance` runs the engine's next step s against the store (its frees, allocs
+              and `kv_append`, which closes the step before's memory-map line with its re-keys for the pass's window),
+              then appends the blocks step s completed and still holds (`MemoryMap.complete`) as the audit's append
+              (committed by its digests alone, `audit.Store.append`), and applies each closed line's releases and
+              writes (`memory_map.Replay`, the map's).  `ProverSide` sends each append after the root before the
               pass, checks the reply's ``first`` against the append's j and hands its coin c_a to `encode_append`,
               which encodes the blocks under b_j = codec.binding(d_j, j, key, c_a) (`audit.Store.encode`, the CPU
               reference of kv.cu's and paged.cu's per-block offset, or `DeviceEncoded.encode`, which hands b_j to
-              kv.cu); then the pass reads every live block in store order; its
+              kv.cu) and tells the map the encode has landed: deferred residency (remote_bandwidth's ``PROTOCOL.md``
+              §4) records the blocks' writes in the line open then, the step before the first whose pass reads them
+              encoded, so a block step s completed joins the plans a step or more late (the driver keeps two passes in
+              flight, so its coin is back after step s + 1 has run: resident from s + 2) and is read as plaintext,
+              uncredited, until then; then the pass reads every live block in store order; its
               ticket carries the step (`step_of`), which the root's message names, and the head of the appends so
               far, which its seed chains (`audit.chained`: unchanged in a session without appends)
 openings      as the driver's reference: the block, its receipt leaf, and its payload's salt, path and d_j
@@ -83,27 +88,34 @@ def session_module(name: str, directory: str | Path = config.REMOTE_SESSION) -> 
 
 class Serving:
     """The serving node's steps as a session sees them, `ProverSide`'s serving trace in its ``serve`` modes: the
-    memory map's closed lines as the audit's appends (`appends`, each an `audit.Append`, and `appended`, their
-    indices) and releases (`released`), and `plan`, every live block, registered and appended."""
+    memory map's appends as the audit's (`appends`, each an `audit.Append`, and `appended`, their indices), made as
+    each step's blocks complete, its closed lines' releases (`released`), and `plan`, every block the record holds
+    live, registered and written: an appended block joins it once its write is recorded, after its encode has landed
+    (deferred residency; `encoded`)."""
 
     def __init__(self, backend: StoreBackend, registration: audit.Registration, lifetime: int) -> None:
         self.backend, self.store, self.lifetime = backend, backend.store, lifetime
-        self._lines: list[tuple[Any, list[bytes]]] = []
-        self.map = self.store.record_memory_map(backend.path, registration.digest, lifetime,
-                                                lambda change, payloads: self._lines.append((change, payloads)))
+        self._events: list[tuple] = []
+        self.map = self.store.record_memory_map(
+            backend.path, registration.digest, lifetime, lambda change: self._events.append(("line", change)),
+            lambda first, digests, payloads: self._events.append(("append", first, digests, payloads)))
         self.step, self.steps, self.first = -1, 0, None
         self.live = set(range(registration.blocks))
         self.appends: list[audit.Append] = []
         self.released: list[int] = []
         self.appended: list[int] = []
+        self.digests: list[bytes] = []
+        self.made: list[int] = []
+        self.landed: list[int] = []
 
     @property
     def rekeyed(self) -> int:
         return self.map.rekeyed
 
     def advance(self, window: int) -> int:
-        """The engine's next step s, run against the store up to its pass (in ``window``, the store's open one): each
-        line it closed applied as the audit's append and releases.  Returns s: the session's first step takes the
+        """The engine's next step s, run against the store up to its pass (in ``window``, the store's open one), its
+        completed blocks appended once it has returned (`MemoryMap.complete`): each append made as the audit's, and
+        each line closed applied as its releases and its writes.  Returns s: the session's first step takes the
         number the engine gives it (a binder on an engine that served before the session numbers on from there), and
         each later one the next."""
         if not self.store.window_open or self.store.window != window:
@@ -115,21 +127,44 @@ class Serving:
         s = self.map.last
         if not self.steps:
             self.first = s
-        for change, payloads in self._lines:
-            if change.count:
+        self.map.complete()
+        for kind, *ev in self._events:
+            if kind == "append":
+                first, digests, payloads = ev
                 a = self.backend.append(payloads, [self.backend.randbytes(rb.SALT_BYTES) for _ in payloads])
-                if a.first != change.first or a.digests != change.digests:
-                    raise AssertionError("the store's append is not its memory map's: a written block's bytes changed "
-                                         "between its digest and its line's close")
+                if a.first != first or a.digests != digests:
+                    raise AssertionError("the store's append is not its memory map's: a completed block's bytes "
+                                         "changed between its digest and its append")
                 self.appends.append(a)
                 self.appended.extend(range(a.first, a.first + a.count))
+                self.digests.extend(a.digests)
+                self.made.append(s)
+                continue
+            (change,) = ev
+            if change.digests != tuple(self.digests[change.first - self.map.header.blocks:][:change.count]):
+                raise AssertionError(f"step {change.step}'s writes from {change.first} are not the blocks appended there")
             gone = [j for f, c in change.released for j in range(f, f + c)]
             self.released.extend(gone)
             self.live.difference_update(gone)
             self.live.update(range(change.first, change.first + change.count))
-        self._lines.clear()
+        self._events.clear()
         self.step, self.steps = s, self.steps + 1
         return s
+
+    def encoded(self, first: int) -> None:
+        """The append from ``first`` is encoded: the record writes its blocks in the line open now, at the step the
+        trace last advanced to, so they join the plan from the next step's pass on."""
+        self.map.encoded(first)
+        self.landed.append(self.step)
+
+    def deferral(self) -> dict[str, Any]:
+        """The appends made, those whose encodes landed, and how many steps after its append's each landed (its
+        blocks resident from the step after that)."""
+        late: dict[int, int] = {}
+        for m, w in zip(self.made, self.landed):
+            late[w - m] = late.get(w - m, 0) + 1
+        return {"appends": len(self.made), "encoded": len(self.landed), "steps_late": dict(sorted(late.items())),
+                "waiting": self.map.waiting if self.store.memory_map is self.map else None}
 
     def plan(self) -> rb.Plan:
         out: list[list[int]] = []
@@ -190,6 +225,8 @@ class StoreBackend:
 
     def encode_append(self, first: int, coin: bytes) -> None:
         self.audit.encode(first, coin)
+        if self.trace is not None:
+            self.trace.encoded(first)
 
     def calibrate(self) -> dict:
         return {"pass_ns_max": 0, "gap_ns_max": 0, "read_bytes_per_s": self.read_bytes_per_s}
@@ -225,6 +262,9 @@ class StoreBackend:
 
     def run_pass(self, seed: bytes, plan: rb.Plan | None = None):
         plan = plan or rb.Plan.whole(self.blocks)
+        if waiting := [j for f, c in plan.runs for j in range(f, f + c) if self.audit.blocks[j] is None][:4]:
+            raise RuntimeError(f"the plan holds blocks {waiting}, appended and not yet encoded: their writes are "
+                               "recorded once their encodes land (deferred residency)")
         reg = self.registration
         r = rb.receipter(reg.receipt, seed, reg.rows)
         ys = tuple(r(j, bytes(rcodec.BLOCK_BYTES) if j in self.dropped else self.audit.blocks[j]) for j in plan)
@@ -547,7 +587,7 @@ class CommitSession:
                 "memory_map": None if trace is None else {
                     "path": None if backend.path is None else str(backend.path),
                     "registration": backend.registration.digest.hex(), "first_step": trace.first, "steps": trace.steps,
-                    "rekeyed": trace.rekeyed, **agree}}
+                    "rekeyed": trace.rekeyed, "deferral": trace.deferral(), **agree}}
             store_map.end(self.store)
         finally:
             self.lockstep.close()
@@ -568,8 +608,9 @@ class CommitSession:
 
 def agreement(backend: StoreBackend) -> dict[str, Any]:
     """The memory map against the session and the store, once the session is done: replayed from its header, its
-    live indices are the session's last plan's and its blocks the audit's appends (their digests, in order); then,
-    its open line closed, every slot it holds at an appended index holds bytes of that index's digest in the store."""
+    live indices are the session's last plan's and its blocks the audit's appends, in order, up to those whose writes
+    wait for their encodes (deferred residency); then, its open line closed, every slot it holds at an appended index
+    holds bytes of that index's digest in the store."""
     trace, store = backend.trace, backend.store
 
     def replay() -> tuple[memory_map.Replay, dict[int, bytes]]:
@@ -583,10 +624,11 @@ def agreement(backend: StoreBackend) -> dict[str, Any]:
     r, digests = replay()
     n = r.header.blocks
     live = {j for x in range(n) if (j := r.holds(x)) is not None} == trace.live
-    appends = [d for a in trace.appends for d in a.digests] == [digests[j] for j in sorted(digests)]
+    appends = sorted(digests) == list(range(n, r.extent)) and trace.digests[:r.extent - n] == [digests[j] for j in sorted(digests)]
     store.memory_map.flush()
     r, digests = replay()
     held = [x for x in range(n) if (r.holds(x) or 0) >= n]
     wrong = [x for x in held if rcodec.digest(store.payload(x)) != digests[r.holds(x)]]
-    return {"live_agrees": live, "appends_agree": appends, "held_appended": len(held), "held_wrong": wrong[:16],
+    return {"live_agrees": live, "appends_agree": appends, "recorded": r.extent - n,
+            "unrecorded": len(trace.digests) - (r.extent - n), "held_appended": len(held), "held_wrong": wrong[:16],
             "agrees": live and appends and not wrong}

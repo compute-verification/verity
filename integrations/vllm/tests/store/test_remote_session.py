@@ -1,11 +1,12 @@
 """The remote bandwidth session over the node's `Store` end to end on the CPU: `remote.prove` (the prover's side, the
 Commit's hook) connects over localhost TCP to `benchmarks/remote_session`'s verifier, registers the store, records its
 memory map against the registration, and runs each pass after an engine step of a serving-like trace (pages written
-over two steps, held, freed and reused, and one long-lived page re-keyed under L = 1 window).  The honest session is
+over two steps, held, freed and reused, and one long-lived page re-keyed under L = 2 windows).  The honest session is
 accepted with the appends, releases, re-keys and steps the verifier saw, each pass's seed chaining the appends sent
-before its root, each append encoded under its own coin; one whose prover seeds without them, encodes under a zero
-or stale coin, re-sends an append, appends after the last close or withholds a block it appended is rejected; a second
-registration of a node the verifier holds live is refused with its reason.  The verifier's clock is the prover's
+before its root, each append encoded under its own coin, and each block resident only once its encode has landed
+(deferred residency: read as plaintext and uncredited until then); one whose prover seeds without them, encodes under
+a zero or stale coin, re-sends an append, appends after the last close or withholds a block it appended is rejected; a
+second registration of a node the verifier holds live is refused with its reason.  The verifier's clock is the prover's
 passes, a tick each (`PassClock`)."""
 from __future__ import annotations
 
@@ -18,7 +19,7 @@ import threading
 import numpy as np
 import pytest
 
-from verity.core.protocols.remote_bandwidth import audit, codec as rcodec, memory_map
+from verity.core.protocols.remote_bandwidth import audit, codec as rcodec, memory_map, receipts as rb
 from verity_vllm.store import remote
 from verity_vllm.store.interface import Append, PageLayout
 from verity_vllm.store.registry import ArrayBacking, Store
@@ -86,7 +87,12 @@ def store() -> Store:
 class TickingBackend(remote.StoreBackend):
     def __init__(self, clock: PassClock, *args, **kw) -> None:
         super().__init__(*args, **kw)
-        self.clock, self.heads, self.coins = clock, [], []
+        self.clock, self.heads, self.coins, self.plans = clock, [], [], []
+
+    def launch(self, i: int, after, plan=None) -> dict:
+        ticket = super().launch(i, after, plan)
+        self.plans.append((ticket["step"], plan))
+        return ticket
 
     def encode_append(self, first: int, coin: bytes) -> None:
         self.coins.append((first, coin))
@@ -164,7 +170,7 @@ def engine(s: Store, at: int = 0):
     return step
 
 
-def run(plan: str, *, windows: int = 2, window_ns: int = 5, samples: int = 4096, lifetime: int = 1,
+def run(plan: str, *, windows: int = 2, window_ns: int = 5, samples: int = 4096, lifetime: int = 2,
         backend=TickingBackend, at: int = 0, **kw):
     """One session of ``plan``, every receipt of a window drawn at the default ``samples``; the backend keeps the
     regions the verifier read from its hello (``backend.regions``)."""
@@ -191,19 +197,19 @@ def run(plan: str, *, windows: int = 2, window_ns: int = 5, samples: int = 4096,
 
 
 def test_an_honest_store_session_is_accepted_with_its_frees_re_keys_and_steps():
-    r, p, s, backend = run("serve")
+    r, p, s, backend = run("serve", windows=3)
     assert r["accepted"] and p["accepted"] and r["failure"] is None
     # the hello carries the store's layout, which the verifier takes as the memory line's labels
     assert backend.regions == (("weights", "hbm", 0, 1), ("kv", "hbm", 1, 16), ("filler", "host", 17, 1))
-    # pass 0 has no append before it (step 0's line closes when step 1 opens), so its seed is the unchained one; every
-    # later pass's seed chains the head of the appends sent before its root (`audit.chained`)
-    assert backend.heads[0] is None and len(backend.heads) > 2 and all(h is not None for h in backend.heads[1:])
+    # step 0's completed blocks are appended once it has run, before pass 0's root, so every pass's seed chains the
+    # head of the appends sent before its root (`audit.chained`)
+    assert len(backend.heads) > 2 and all(h is not None for h in backend.heads)
     kv, pub = p["kv"], r["record"]["public"]
     # each append sent was answered with its first index and a coin of its own, under which its blocks were encoded
     sent = backend.trace.appends[:len(backend.coins)]
     assert [f for f, _ in backend.coins] == [a.first for a in sent] and len({c for _, c in backend.coins}) == len(sent)
     assert sum(a.count for a in sent) == kv["sent_appended"]
-    assert kv["lifetime"] == pub["lifetime"] == 1 and kv["rekeyed"] > 0
+    assert kv["lifetime"] == pub["lifetime"] == 2 and kv["rekeyed"] > 0
     assert kv["sent_appended"] == pub["appended"] > 0 and kv["sent_released"] == pub["released"] > 0
     assert sum(pub["post_seed"]) == sum(kv["pass_appended"]) > 0
     steps = [x for w in r["record"]["profile"]["windows"] for x in w["steps"]]
@@ -211,16 +217,60 @@ def test_an_honest_store_session_is_accepted_with_its_frees_re_keys_and_steps():
     head, lines = memory_map.parse(s.memory_map.text().splitlines())
     lines = list(lines)
     assert head.registration.hex() == pub["registration"] and head.blocks == 18
-    # page 0's first request, written at steps 0 and 1 and read at 2, is freed before step 3's write: at step 2, the
-    # step whose forward read it last
-    assert min(x.step for x in lines if {1, 2, 3, 4} <= set(x.freed)) == 2
-    # page 3, written over steps 0 and 1 and never freed, is written again whole in one step (re-keyed) once a window
-    # old; its first writes were split, so every line that writes all four of its blocks is a re-key
+    # page 0's first request, written at steps 0 and 1 and read at 2, is freed before step 3's write.  Its K0 V0
+    # (blocks 1, 3), resident from step 2, are freed at step 2, the step whose forward read them last; its K1 V1 (2, 4),
+    # completed at step 1, are appended, and their encode lands while step 2 runs, after the free: their write is
+    # recorded at step 2 all the same (their indices are the session's), and their free a step later
+    by = {x.step: x for x in lines}
+    assert {1, 3} <= set(by[2].freed) and {2, 4} <= {w.slot for w in by[2].written} and {2, 4} <= set(by[3].freed)
+    # page 3, written over steps 0 and 1 and never freed, is written again whole in one step (re-keyed) once two
+    # windows old, its old indices freed in the line before; its first writes were split, so every line that writes all
+    # four of its blocks is a re-key
     rekeys = [x.step for x in lines if {13, 14, 15, 16} <= {w.slot for w in x.written}]
     assert rekeys and min(rekeys) > 1 and kv["rekeyed"] >= 4 * len(rekeys)
+    assert next(x.step for x in lines if {13, 14, 15, 16} <= set(x.freed)) < min(rekeys)
     # the map, replayed, holds the session's live blocks, its writes are the appends' digests, and the store holds them
     agree = remote.agreement(backend)
     assert agree["agrees"] and agree["held_appended"] > 0 and agree["held_wrong"] == []
+
+
+def test_a_completed_block_is_uncredited_until_its_encode_lands_and_resident_from_the_step_after():
+    """Deferred residency end to end: each step's completed blocks go out as one append once the step has run, and
+    their coin comes back while the next step runs (the driver keeps two passes in flight), when the device encodes
+    them.  The map writes them at the step whose line is open then, so the passes up to it, the one after the
+    completing step among them, hold none of them (serving reads them as plaintext, uncredited), and the pass after it
+    holds them all, encoded under their own coin; most land the step after their append, one more at a window's
+    boundary, where a pass is discarded."""
+    r, p, s, backend = run("serve")
+    assert r["accepted"] and p["accepted"]
+    trace, plans = backend.trace, dict(backend.plans)
+    agree = remote.agreement(backend)
+    _, lines = memory_map.parse(s.memory_map.text().splitlines())
+    wrote = {w.index: x.step for x in lines for w in x.written}
+    late = trace.deferral()["steps_late"]
+    assert set(late) <= {1, 2} and late[1] > late.get(2, 0) and sum(late.values()) == len(trace.landed) > 4
+    for a, made, landed in zip(trace.appends, trace.made, trace.landed):
+        idx = set(range(a.first, a.first + a.count))
+        assert landed > made and {wrote[j] for j in idx} == {landed}
+        assert not any(idx & set(plan) for st, plan in plans.items() if st <= landed)
+        assert landed + 1 not in plans or idx <= set(plans[landed + 1])
+        assert all(backend.audit.blocks[j] is not None for j in idx)
+    for a in trace.appends[len(trace.landed):]:
+        assert all(j not in wrote and backend.audit.blocks[j] is None for j in range(a.first, a.first + a.count))
+    assert agree["agrees"] and agree["unrecorded"] == sum(a.count for a in trace.appends[len(trace.landed):])
+
+
+def test_a_pass_whose_plan_holds_a_block_not_yet_encoded_is_refused():
+    s = store()
+    b = remote.StoreBackend(s, engine(s))
+    reg = audit.register(bytes(32), b"n", b.blocks, b.payload_root(b"n"), P512, nonce=bytes(32))
+    b.encode(reg)
+    a = b.append([b"\x01" * rcodec.BLOCK_BYTES], [bytes(192)])
+    plan = rb.Plan(((0, 19),), 19)
+    with pytest.raises(RuntimeError, match=r"blocks \[18\], appended and not yet encoded"):
+        b.run_pass(bytes(64), plan)
+    b.encode_append(a.first, bytes(range(32)))
+    assert b.run_pass(bytes(64), plan)[1][3] == plan
 
 
 def test_a_session_on_an_engine_whose_steps_were_numbered_before_it_adopts_its_first_step():
@@ -298,7 +348,7 @@ class Stats:
 
 
 def lockstep(tmp_path, monkeypatch, run_steps: int, windows: int = 2):
-    """The Commit's session (`CommitSession.begin` … `end`) over a CPU store, its verifier on a thread at L = 1 window,
+    """The Commit's session (`CommitSession.begin` … `end`) over a CPU store, its verifier on a thread at L = 2 windows,
     the run ``run_steps`` steps of the scripted engine, each through the session's `Lockstep`."""
     clock = PassClock()
     monkeypatch.setattr(remote, "StoreBackend", lambda *a, **kw: TickingBackend(clock, *a, **kw))
@@ -311,7 +361,7 @@ def lockstep(tmp_path, monkeypatch, run_steps: int, windows: int = 2):
         sock, _ = lsock.accept()
         lsock.close()
         v = verifier.Verifier(wire.Conn(sock, clock=clock.now), source=os.urandom(32), windows=windows, window_ns=5,
-                              samples=4096, delta=2.0 ** -40, jitter_ns=10 ** 9, clock=clock, log=lambda m: None, lifetime=1)
+                              samples=4096, delta=2.0 ** -40, jitter_ns=10 ** 9, clock=clock, log=lambda m: None, lifetime=2)
         v.register()
         try:
             seen.append(v.session(0, v.allowance(v.ping(4)), None))
@@ -333,7 +383,7 @@ def lockstep(tmp_path, monkeypatch, run_steps: int, windows: int = 2):
 def test_the_commits_session_runs_in_lockstep_with_its_run_and_its_map_stops_with_it(tmp_path, monkeypatch):
     """Each pass's engine step is the run's next step: the session's steps are the run's first steps, from its first,
     and the run's steps after the session are unaudited and in no map line."""
-    rec, r, cs, steps = lockstep(tmp_path, monkeypatch, 40)
+    rec, r, cs, steps = lockstep(tmp_path, monkeypatch, 40, windows=3)
     assert r["accepted"] and rec["accepted"] and rec["error"] is None and steps == list(range(40))
     mm, run = rec["memory_map"], rec["run"]
     assert mm["first_step"] == 0 and mm["steps"] == run["audited"] and mm["agrees"] and mm["rekeyed"] > 0

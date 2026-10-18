@@ -3,7 +3,10 @@ over several steps, frees of written and part-written pages, re-allocation and o
 `memory_map.parse` and `Replay` accept every step, the live slots and the blocks they hold are the store's own (a
 dirty or released block is in no slot, and in no plan), each digest is the payload's, a free lands in the step whose
 forward ran last and frees each block once, a step's line closes when the next opens, indices run from N in record
-order, and a block as old as the lifetime cap is re-keyed before the first pass that could not hold it."""
+order, and a block as old as the lifetime cap is re-keyed before the first pass that could not hold it.  In a session
+(deferred residency) a step's completed blocks go out as one append, and the line open when its encode lands writes
+them: one freed before then is written there and freed a line later, a re-key frees its old index at once, and an
+encode that would write a slot its line writes already waits a line."""
 from __future__ import annotations
 
 import hashlib
@@ -363,3 +366,108 @@ def test_the_map_needs_4096_byte_blocks_registered_first_and_increasing_steps():
     with pytest.raises(MemoryMapError, match="strictly increase"):
         s.kv_write_reference([Append(0, 4, 4)], kv_payload, 5)
     assert (s.pool.fill == fill).all() and m.last == 5
+
+
+PAGE0, PAGE1 = [3, 4, 5, 6, 19, 20, 21, 22], [7, 8, 9, 10, 23, 24, 25, 26]
+
+
+def deferred(s: Store, lifetime: int = audit.LIFETIME):
+    """A map in a session: each append to ``sent`` as (first, digests, payloads), its encode landing when the test
+    says (`MemoryMap.encoded`)."""
+    sent: list = []
+    m = s.record_memory_map(registration=registration(s).digest, lifetime=lifetime,
+                            on_append=lambda first, digests, payloads: sent.append((first, digests, payloads)))
+    return m, sent
+
+
+def lines(m) -> list[tuple[int, tuple[int, ...], list[tuple[int, int]]]]:
+    return [(x.step, x.freed, [(w.slot, w.index) for w in x.written]) for x in memory_map.parse(m.text().splitlines())[1]]
+
+
+def test_a_completed_blocks_write_is_recorded_in_the_line_open_when_its_encode_lands():
+    """Deferred residency: page 1, written whole at step 0, goes out as one append once the step is done (`complete`),
+    the filler its blocks held freed at step 0, where the write reached them.  It is in no record while its coin is
+    out (step 0's line closes without it), and the line open when its encode lands, step 1's, writes it at the
+    append's indices with its digests.  Encodes land in their appends' order."""
+    s, _ = store()
+    m, sent = deferred(s)
+    s.kv_alloc([1])
+    s.kv_write_reference([Append(1, 0, 8)], kv_payload, 0)
+    m.complete()
+    m.complete()
+    assert [(f, len(d)) for f, d, _ in sent] == [(37, 8)] and m.waiting == 8
+    assert list(sent[0][1]) == [codec.digest(x) for x in sent[0][2]] == [codec.digest(s.payload(x)) for x in PAGE1]
+    s.kv_append([], 1)
+    with pytest.raises(RuntimeError, match="not the oldest awaiting its encode"):
+        m.encoded(38)
+    m.encoded(37)
+    s.kv_append([], 2)
+    assert lines(m) == [(0, tuple(PAGE1), []), (1, (), list(zip(PAGE1, range(37, 45))))]
+    assert m.waiting == 0 and [m.replay.holds(x) for x in PAGE1] == list(range(37, 45)) and m.joined == dict.fromkeys(PAGE1, 0)
+
+
+def test_a_block_freed_before_its_encode_lands_is_written_when_it_lands_and_freed_a_step_later():
+    """Page 1, completed at step 0, is freed after step 1's forward, its last read, before its encode lands in step
+    2's line: its write is recorded at step 2 all the same (its indices are the session's, and the record takes them
+    in order), and its free in step 3's line.  Its slots are dirty meanwhile, so no write's reach frees them again."""
+    s, _ = store()
+    m, _ = deferred(s)
+    s.kv_alloc([1])
+    s.kv_write_reference([Append(1, 0, 8)], kv_payload, 0)
+    m.complete()
+    s.kv_append([], 1)
+    s.kv_free([1])
+    assert s.pool.dirty[1].all()
+    s.kv_append([], 2)
+    m.encoded(37)
+    s.kv_append([], 3)
+    s.kv_append([], 4)
+    assert lines(m) == [(0, tuple(PAGE1), []), (2, (), list(zip(PAGE1, range(37, 45)))), (3, tuple(PAGE1), [])]
+    assert all(m.replay.holds(x) is None for x in PAGE1) and m.joined == {}
+
+
+def test_a_re_key_frees_the_old_index_at_once_and_writes_the_new_one_once_its_encode_lands():
+    """Under L = 1, page 0, written in window 0, is re-keyed by the line that closes in window 1: that line frees its
+    old indices, so window 1's passes hold none of them, and appends it again with the same digests; the line open
+    when that append's encode lands writes it at the fresh indices."""
+    s, _ = store()
+    reg = registration(s)
+    m, sent = deferred(s, lifetime=1)
+    s.begin_window(bytes(32), reg.digest)
+    s.kv_alloc([0])
+    s.kv_write_reference([Append(0, 0, 8)], kv_payload, 0)
+    m.complete()
+    m.encoded(37)
+    s.kv_append([], 1)
+    s.end_window()
+    s.begin_window(bytes(32))
+    s.kv_append([], 2)
+    assert [f for f, _, _ in sent] == [37, 45] and sent[1][1] == sent[0][1] and m.rekeyed == 8
+    m.encoded(45)
+    s.kv_append([], 3)
+    assert lines(m) == [(0, (), list(zip(PAGE0, range(37, 45)))), (1, tuple(PAGE0), []),
+                        (2, (), list(zip(PAGE0, range(45, 53))))]
+    assert m.joined == dict.fromkeys(PAGE0, 1)
+
+
+def test_two_encodes_landing_in_one_line_that_write_one_slot_are_written_a_line_apart():
+    """Page 1, completed at step 0 and freed after step 1, is completed again by a new request at step 2, and both
+    encodes land in step 2's line (as when a pass discarded at a window's boundary sends the first late): the line
+    writes the first, the second waits for the next line, whose write releases the first (in place of its free)."""
+    s, _ = store()
+    m, sent = deferred(s)
+    s.kv_alloc([1])
+    s.kv_write_reference([Append(1, 0, 8)], kv_payload, 0)
+    m.complete()
+    s.kv_append([], 1)
+    s.kv_free([1])
+    s.kv_alloc([1])
+    s.kv_write_reference([Append(1, 0, 8)], lambda li, p, x: kv_payload(li, p, x, 1), 2)
+    m.complete()
+    m.encoded(37)
+    m.encoded(45)
+    s.kv_append([], 3)
+    s.kv_append([], 4)
+    assert lines(m) == [(0, tuple(PAGE1), []), (2, (), list(zip(PAGE1, range(37, 45)))),
+                        (3, (), list(zip(PAGE1, range(45, 53))))]
+    assert sent[0][1] != sent[1][1] and [m.replay.holds(x) for x in PAGE1] == list(range(45, 53))
