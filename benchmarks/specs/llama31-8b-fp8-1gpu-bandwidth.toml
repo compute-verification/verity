@@ -6,7 +6,7 @@ id = "llama31-8b-fp8-1gpu-bandwidth"
 arms = ["stock-fp8", "bandwidth-plain", "bandwidth-audit"]
 arm_modules = ["benchmarks.vllm_encoded.bench_arm:PLAIN", "benchmarks.vllm_encoded.bench_arm:AUDIT"]
 sweep = "quick"
-reps = 3
+reps = 5
 eager = false
 # The arms' libraries, built from the dispatched commit.
 setup = "benchmarks/harness/setup/vllm_encoded.sh"
