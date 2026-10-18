@@ -2,14 +2,15 @@
 program brings is a value, committed and always hidden; the measured MUFU tables stay gates of their operations).
 
 A table of 2^IB entries of EW u16 words (an entry's low word first) is the registered parameter `table_type(name)`: rows of
-`ROW_WORDS` words, the shape `verity_flock.hidden_gather` registers and opens (`TABLES` here is its `TABLES`'s
-`(index_bits, entry_words)`):
+`ROW_WORDS` words, which a read takes whole as an operand (`TABLES` is each table's `(index_bits, entry_words)`):
 
     gelu_tanh_bf16   2^16 entries, one word each (1,024 rows): `dense.gelu_tanh_bf16_bits(g)`, the activation word of a bf16 g
     tanh_rn          2^27 entries, two words each (2^22 rows): RN32(tanh) at |x|'s low 27 bits (`tanh_rn_entry`)
 
     TableRead{IB}x{EW}_v1  (index: Value<16> if IB <= 16 else Value<32>, table: Array<2^IB EW / 64, Array<64, Value<16>>>)
                            -> Value<16 EW>: the entry at the index's low IB bits, its words joined low first; total
+    TableRead{IB}x{EW}_v2  its Boolean form, made with it (`verity.ml.circuits.boolean.table`): the multiplexer tree over the
+                           2^IB entries, (2^IB - 1) 16 EW ANDs, by which C-Flock lowers the read
 
 `GeluTanhMulBf16_v3` / `GeluTanhMul_v3{I}` are `GeluTanhMulBf16_v1` / `GeluTanhMul_v1{I}` with the activation read from the
 registered `gelu_tanh_bf16` rather than computed by the primitive's evaluator.  `TanhF32Rn_v2` is `TanhF32Rn_v1` with |x| in
@@ -20,6 +21,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 
+from verity.ml.circuits.boolean import table as BT
 from verity.ml.circuits.evaluation import RegisteredTable
 from verity.ml.circuits.codec import register_lazy_family
 from verity.ml.circuits.defs import PrimitiveDefinition, composite
@@ -73,6 +75,7 @@ def table_read(index_bits: int, entry_words: int) -> PrimitiveDefinition:
                                 conformance="exact by construction: an index into the operand")
         p.evaluate_lazy = ev_lazy  # type: ignore[attr-defined]
         _READS[key] = p
+        BT.table_read(p, ib)
     return p
 
 
