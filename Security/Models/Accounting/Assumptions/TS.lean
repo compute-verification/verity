@@ -140,9 +140,10 @@ given everything the cheater's skip and its values for them are functions of (`R
 * where the cheater computes a word that shares the skipped value's coins, it is computational: the cheater hasn't
   computed the product (`Models.Accounting.Guarantees.HMu`'s module doc).
 A cheater whose view pins the skipped value, one that reads a coin and skips exactly when it is right, falsifies it.
-The game names no view, so the premise is that some view that decides the share has the point mass. It implies the
-operand luck at `μ` on each positive level of the share, and that implies it on levels of at least `1/μ` outcomes,
-with the share itself as the view. -/
+The game names no view, so the premise is that some view that decides the share has the point mass.
+Implied by (H-μ) (decision 110) at the cheater's real view, and weaker: the view and the skipped value are existential.
+It implies the operand luck at `μ` on each positive level of the share, and that implies it on levels of at least
+`1/μ` outcomes, with the share itself as the view. -/
 def OperandHMu {Ω : Type} [Fintype Ω] {S : ℕ} (μ : ℝ) (G : ReceiptGame Ω S) : Prop := G.OperandPointMass μ
 
 /-- `accounting-ts-receipt-luck` (HMU's B′ case; the headlines' second luck premise, beside `OperandHMu`; on card
