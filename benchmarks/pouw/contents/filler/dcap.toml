@@ -1,0 +1,3 @@
+order = 10
+tool = "The decode step's driver and the filler ABI (`dfill_k`, `DFill`): pfill's filler, or FILL v1's chained one with `-DDFILL_V1`"
+files = "`dcap.cu`, `dcap.sh`, `dfill.sh`, `fill.sh`, `dfill_ref.py`, `share.py`"

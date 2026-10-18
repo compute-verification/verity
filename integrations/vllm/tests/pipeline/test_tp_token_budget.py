@@ -13,7 +13,7 @@ def _wl(tmp_path, batch, I, O, mnbt=None):
     p = tmp_path / "wl.json"
     req = {"max_model_len": I + O, **({"max_num_batched_tokens": mnbt} if mnbt is not None else {})}
     p.write_text(json.dumps({"sweep": {"batch": batch, "max_input": I, "max_output": O, "input_lengths": [I] * batch, "output_caps": [O] * batch},
-                             "engine_args_required": req, "model": "m", "tokenizer_revision": "r"}))
+                             "schema": "verity-vllm/workload/v2", "model": "m", "engine": {"revision": "0" * 40, "args": req}}))
     return str(p)
 
 

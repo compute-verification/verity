@@ -1,8 +1,25 @@
 {
- "schema": "verity-vllm/workload/v1",
+ "schema": "verity-vllm/workload/v2",
  "model": "Qwen/Qwen2.5-1.5B",
  "case": "B1",
- "tokenizer_revision": "8faed761d45a263340a0528343f099c05c9a4323",
+ "engine": {
+  "revision": "8faed761d45a263340a0528343f099c05c9a4323",
+  "vllm": "d9105ea80",
+  "args": {
+   "max_num_batched_tokens": 3439,
+   "max_model_len": 1152,
+   "enforce_eager": false,
+   "compilation_config": {
+    "cudagraph_mode": "PIECEWISE",
+    "inductor_compile_config": {
+     "emulate_precision_casts": false
+    }
+   }
+  },
+  "target": {
+   "compilation": "piecewise"
+  }
+ },
  "seed": 0,
  "variants": {
   "greedy": {
@@ -28,17 +45,6 @@
   "depends_on": "SHA256(row_id) only"
  },
  "expected_engine_steps": 192,
- "engine_args_required": {
-  "max_num_batched_tokens": 3439,
-  "max_model_len": 1152,
-  "enforce_eager": false,
-  "compilation_config": {
-   "cudagraph_mode": "PIECEWISE",
-   "inductor_compile_config": {
-    "emulate_precision_casts": false
-   }
-  }
- },
  "tokenizer_note": "prompt_token_ids from tokenizer.json sha256 c0382117ea329cdf (tokenizers, add_special_tokens=False), natural text from corpus_coverage.json, truncated to prompt_len; prompt_text is the decode of the ids (informational)",
  "prompt_lengths": [
   11,
@@ -128,7 +134,7 @@
    "origin": {
     "corpus": "corpus_coverage.json",
     "paragraphs": [
-     "Project Gutenberg #84: Frankenstein (public domain) \u00b676"
+     "Project Gutenberg #84: Frankenstein (public domain) ¶76"
     ]
    }
   },
@@ -596,15 +602,15 @@
     1033,
     14885
    ],
-   "prompt_text": "concern, and observe her in compassionate silence. At length she spoke again. \u201cI have just had a letter from Jane, with such dreadful news. It cannot be concealed from anyone. My youngest sister has left all her friends--has eloped; has thrown herself into the power of--of Mr. Wickham. They are gone off together from Brighton. _You_ know him too well to doubt the rest. She has no money, no connections, nothing that can tempt him to--she is lost for ever.\u201d She had never perceived, while the regiment was in Hertfordshire, that Lydia had any partiality for him; but she was convinced that Lydia had wanted only encouragement to attach herself to anybody. Sometimes one officer, sometimes another, had been her favourite, as their attentions raised them in her opinion. Her affections had been continually fluctuating, but never without an object. The mischief of neglect and mistaken indulgence towards such a girl--oh! how acutely did she now feel it! \u201cOf whom does Jane ever think ill? And who is there, whatever might be their former conduct, that she would believe capable of such an attempt, till it were proved against them? But Jane knows, as well as I do, what Wickham really is. We both know that he has been profligate in every sense of the word; that he has neither integrity nor honour; that he is as false and deceitful as he is insinuating.\u201d When they were all in the drawing-room, the questions which Elizabeth had already asked were of course repeated by the others, and they soon found that Jane had no intelligence to give. The sanguine hope of good, however, which the benevolence of her heart suggested, had not yet deserted her; she still expected that it would all end well, and that every morning would bring some letter, either from Lydia or her father, to explain their proceedings, and, perhaps, announce the marriage. In the dining-room they were soon joined by Mary and Kitty, who had been too busily engaged in their separate apartments to make their appearance before. One came from her books, and the other from her toilette. The faces of both, however, were toler",
+   "prompt_text": "concern, and observe her in compassionate silence. At length she spoke again. “I have just had a letter from Jane, with such dreadful news. It cannot be concealed from anyone. My youngest sister has left all her friends--has eloped; has thrown herself into the power of--of Mr. Wickham. They are gone off together from Brighton. _You_ know him too well to doubt the rest. She has no money, no connections, nothing that can tempt him to--she is lost for ever.” She had never perceived, while the regiment was in Hertfordshire, that Lydia had any partiality for him; but she was convinced that Lydia had wanted only encouragement to attach herself to anybody. Sometimes one officer, sometimes another, had been her favourite, as their attentions raised them in her opinion. Her affections had been continually fluctuating, but never without an object. The mischief of neglect and mistaken indulgence towards such a girl--oh! how acutely did she now feel it! “Of whom does Jane ever think ill? And who is there, whatever might be their former conduct, that she would believe capable of such an attempt, till it were proved against them? But Jane knows, as well as I do, what Wickham really is. We both know that he has been profligate in every sense of the word; that he has neither integrity nor honour; that he is as false and deceitful as he is insinuating.” When they were all in the drawing-room, the questions which Elizabeth had already asked were of course repeated by the others, and they soon found that Jane had no intelligence to give. The sanguine hope of good, however, which the benevolence of her heart suggested, had not yet deserted her; she still expected that it would all end well, and that every morning would bring some letter, either from Lydia or her father, to explain their proceedings, and, perhaps, announce the marriage. In the dining-room they were soon joined by Mary and Kitty, who had been too busily engaged in their separate apartments to make their appearance before. One came from her books, and the other from her toilette. The faces of both, however, were toler",
    "origin": {
     "corpus": "corpus_coverage.json",
     "paragraphs": [
-     "Project Gutenberg #1342: Pride and Prejudice (public domain) \u00b672",
-     "Project Gutenberg #1342: Pride and Prejudice (public domain) \u00b673",
-     "Project Gutenberg #1342: Pride and Prejudice (public domain) \u00b674",
-     "Project Gutenberg #1342: Pride and Prejudice (public domain) \u00b675",
-     "Project Gutenberg #1342: Pride and Prejudice (public domain) \u00b676"
+     "Project Gutenberg #1342: Pride and Prejudice (public domain) ¶72",
+     "Project Gutenberg #1342: Pride and Prejudice (public domain) ¶73",
+     "Project Gutenberg #1342: Pride and Prejudice (public domain) ¶74",
+     "Project Gutenberg #1342: Pride and Prejudice (public domain) ¶75",
+     "Project Gutenberg #1342: Pride and Prejudice (public domain) ¶76"
     ]
    }
   },
@@ -632,7 +638,7 @@
    "origin": {
     "corpus": "corpus_coverage.json",
     "paragraphs": [
-     "Project Gutenberg #2701: Moby Dick (public domain) \u00b652"
+     "Project Gutenberg #2701: Moby Dick (public domain) ¶52"
     ]
    }
   },
@@ -1669,19 +1675,19 @@
     5159,
     30
    ],
-   "prompt_text": "Lydia\u2019s voice was heard in the vestibule; the door was thrown open, and she ran into the room. Her mother stepped forwards, embraced her, and welcomed her with rapture; gave her hand with an affectionate smile to Wickham, who followed his lady; and wished them both joy, with an alacrity which showed no doubt of their happiness. It was not to be supposed that time would give Lydia that embarrassment from which she had been so wholly free at first. Her ease and good spirits increased. She longed to see Mrs. Philips, the Lucases, and all their other neighbours, and to hear herself called \u201cMrs. Wickham\u201d by each of them; and in the meantime she went after dinner to show her ring and boast of being married to Mrs. Hill and the two housemaids. \u201cWell, and so, just as the carriage came to the door, my uncle was called away upon business to that horrid man Mr. Stone. And then, you know, when once they get together, there is no end of it. Well, I was so frightened I did not know what to do, for my uncle was to give me away; and if we were beyond the hour we could not be married all day. But, luckily, he came back again in ten minutes\u2019 time, and then we all set out. However, I recollected afterwards, that if he _had_ been prevented going, the wedding need not be put off, for Mr. Darcy might have done as well.\u201d \u201cYou may depend on it,\u201d replied the other, \u201cfor Mrs. Nichols was in Meryton last night: I saw her passing by, and went out myself on purpose to know the truth of it; and she told me that it was certainly true. He comes down on Thursday, at the latest, very likely on Wednesday. She was going to the butcher\u2019s, she told me, on purpose to order in some meat on Wednesday, and she has got three couple of ducks just fit to be killed.\u201d Elizabeth said as little to either as civility would allow, and sat down again to her work, with an eagerness which it did not often command. She had ventured only one glance at Darcy. He looked serious as usual; and, she thought, more as he had been used to look in Hertfordshire, than as she had seen him at Pemberley. But, perhaps, he could not in her mother\u2019s presence be what he was before her uncle and aunt. It was a painful, but not an improbable, conjecture. Yet the misery, for which years of happiness were to offer no compensation, received soon afterwards material relief, from observing how much the beauty of her sister rekindled the admiration of her former lover. When first he came in, he had spoken to her but little, but every five minutes seemed to be giving her more of his attention. He found her as handsome as she had been last year; as good-natured, and as unaffected, though not quite so chatty. Jane was anxious that no difference should be perceived in her at all, and was really persuaded that she talked as much as ever; but her mind was so busily engaged, that she did not always know when she was silent. These reflections have dispelled the agitation with which I began my letter, and I feel my heart glow with an enthusiasm which elevates me to heaven, for nothing contributes so much to tranquillise the mind as a steady purpose\u2014a point on which the soul may fix its intellectual eye. This expedition has been the favourite dream of my early years. I have read with ardour the accounts of the various voyages which have been made in the prospect of arriving at the North Pacific Ocean through the seas which surround the pole. You may remember that a history of all the voyages made for purposes of discovery composed the whole of our good Uncle Thomas\u2019 library. My education was neglected, yet I was passionately fond of reading. These volumes were my study day and night, and my familiarity with them increased that regret which I had felt, as a child, on learning that my father\u2019s dying injunction had forbidden my uncle to allow me to embark in a seafaring life. I shall depart for the latter town in a fortnight or three weeks; and my intention is to hire a ship there, which can easily be done by paying the insurance for the owner, and to engage as many sailors as I think necessary among those who are accustomed to the whale-fishing. I do not intend to sail until the month of June; and when shall I return? Ah, dear sister, how can I answer this question? If I succeed, many, many months, perhaps years, will pass before you and I may meet. If I fail, you will see me again soon, or never. But to return to dearer considerations. Shall I meet you again, after having traversed immense seas, and returned by the most southern cape of Africa or America?",
+   "prompt_text": "Lydia’s voice was heard in the vestibule; the door was thrown open, and she ran into the room. Her mother stepped forwards, embraced her, and welcomed her with rapture; gave her hand with an affectionate smile to Wickham, who followed his lady; and wished them both joy, with an alacrity which showed no doubt of their happiness. It was not to be supposed that time would give Lydia that embarrassment from which she had been so wholly free at first. Her ease and good spirits increased. She longed to see Mrs. Philips, the Lucases, and all their other neighbours, and to hear herself called “Mrs. Wickham” by each of them; and in the meantime she went after dinner to show her ring and boast of being married to Mrs. Hill and the two housemaids. “Well, and so, just as the carriage came to the door, my uncle was called away upon business to that horrid man Mr. Stone. And then, you know, when once they get together, there is no end of it. Well, I was so frightened I did not know what to do, for my uncle was to give me away; and if we were beyond the hour we could not be married all day. But, luckily, he came back again in ten minutes’ time, and then we all set out. However, I recollected afterwards, that if he _had_ been prevented going, the wedding need not be put off, for Mr. Darcy might have done as well.” “You may depend on it,” replied the other, “for Mrs. Nichols was in Meryton last night: I saw her passing by, and went out myself on purpose to know the truth of it; and she told me that it was certainly true. He comes down on Thursday, at the latest, very likely on Wednesday. She was going to the butcher’s, she told me, on purpose to order in some meat on Wednesday, and she has got three couple of ducks just fit to be killed.” Elizabeth said as little to either as civility would allow, and sat down again to her work, with an eagerness which it did not often command. She had ventured only one glance at Darcy. He looked serious as usual; and, she thought, more as he had been used to look in Hertfordshire, than as she had seen him at Pemberley. But, perhaps, he could not in her mother’s presence be what he was before her uncle and aunt. It was a painful, but not an improbable, conjecture. Yet the misery, for which years of happiness were to offer no compensation, received soon afterwards material relief, from observing how much the beauty of her sister rekindled the admiration of her former lover. When first he came in, he had spoken to her but little, but every five minutes seemed to be giving her more of his attention. He found her as handsome as she had been last year; as good-natured, and as unaffected, though not quite so chatty. Jane was anxious that no difference should be perceived in her at all, and was really persuaded that she talked as much as ever; but her mind was so busily engaged, that she did not always know when she was silent. These reflections have dispelled the agitation with which I began my letter, and I feel my heart glow with an enthusiasm which elevates me to heaven, for nothing contributes so much to tranquillise the mind as a steady purpose—a point on which the soul may fix its intellectual eye. This expedition has been the favourite dream of my early years. I have read with ardour the accounts of the various voyages which have been made in the prospect of arriving at the North Pacific Ocean through the seas which surround the pole. You may remember that a history of all the voyages made for purposes of discovery composed the whole of our good Uncle Thomas’ library. My education was neglected, yet I was passionately fond of reading. These volumes were my study day and night, and my familiarity with them increased that regret which I had felt, as a child, on learning that my father’s dying injunction had forbidden my uncle to allow me to embark in a seafaring life. I shall depart for the latter town in a fortnight or three weeks; and my intention is to hire a ship there, which can easily be done by paying the insurance for the owner, and to engage as many sailors as I think necessary among those who are accustomed to the whale-fishing. I do not intend to sail until the month of June; and when shall I return? Ah, dear sister, how can I answer this question? If I succeed, many, many months, perhaps years, will pass before you and I may meet. If I fail, you will see me again soon, or never. But to return to dearer considerations. Shall I meet you again, after having traversed immense seas, and returned by the most southern cape of Africa or America?",
    "origin": {
     "corpus": "corpus_coverage.json",
     "paragraphs": [
-     "Project Gutenberg #1342: Pride and Prejudice (public domain) \u00b684",
-     "Project Gutenberg #1342: Pride and Prejudice (public domain) \u00b685",
-     "Project Gutenberg #1342: Pride and Prejudice (public domain) \u00b686",
-     "Project Gutenberg #1342: Pride and Prejudice (public domain) \u00b687",
-     "Project Gutenberg #1342: Pride and Prejudice (public domain) \u00b688",
-     "Project Gutenberg #1342: Pride and Prejudice (public domain) \u00b689",
-     "Project Gutenberg #84: Frankenstein (public domain) \u00b60",
-     "Project Gutenberg #84: Frankenstein (public domain) \u00b61",
-     "Project Gutenberg #84: Frankenstein (public domain) \u00b62"
+     "Project Gutenberg #1342: Pride and Prejudice (public domain) ¶84",
+     "Project Gutenberg #1342: Pride and Prejudice (public domain) ¶85",
+     "Project Gutenberg #1342: Pride and Prejudice (public domain) ¶86",
+     "Project Gutenberg #1342: Pride and Prejudice (public domain) ¶87",
+     "Project Gutenberg #1342: Pride and Prejudice (public domain) ¶88",
+     "Project Gutenberg #1342: Pride and Prejudice (public domain) ¶89",
+     "Project Gutenberg #84: Frankenstein (public domain) ¶0",
+     "Project Gutenberg #84: Frankenstein (public domain) ¶1",
+     "Project Gutenberg #84: Frankenstein (public domain) ¶2"
     ]
    }
   },
@@ -2235,13 +2241,13 @@
     1431,
     8413
    ],
-   "prompt_text": "I might proceed with several more examples, one way or another known to me, of the great power and malice at times of the sperm whale. In more than one instance, he has been known, not only to chase the assailing boats back to their ships, but to pursue the ship itself, and long withstand all the lances hurled at him from its decks. The English ship Pusie Hall can tell a story on that head; and, as for his strength, let me say, that there have been examples where the lines attached to a running sperm whale have, in a calm, been transferred to the ship, and secured there; the whale towing her great hull through the water, as a horse walks off with a cart. Again, it is very often observed that, if the sperm whale, once struck, is allowed time to rally, he then acts, not so often with blind rage, as with wilful, deliberate designs of destruction to his pursuers; nor is it without conveying some eloquent indication of his character, that upon being attacked he will frequently open his mouth, and retain it in that dread expansion for several consecutive minutes. But I must be content with only one more and a concluding illustration; a remarkable and most significant one, by which you will not fail to see, that not only is the most marvellous event in this book corroborated by plain facts of the present day, but that these marvels (like all marvels) are mere repetitions of the ages; so that for the millionth time we say amen with Solomon\u2014Verily there is nothing new under the sun. Hardly had they pulled out from under the ship\u2019s lee, when a fourth keel, coming from the windward side, pulled round under the stern, and showed the five strangers rowing Ahab, who, standing erect in the stern, loudly hailed Starbuck, Stubb, and Flask, to spread themselves widely, so as to cover a large expanse of water. But with all their eyes again riveted upon the swart Fedallah and his crew, the inmates of the other boats obeyed not the command. \u201cPull, pull, my good boys,\u201d said Starbuck, in the lowest possible but intensest concentrated whisper to his men; while the sharp fixed glance from his eyes darted straight ahead of the bow, almost seemed as two visible needles in two unerring binnacle compasses. He did not say much to his crew, though, nor did his crew say anything to him. Only the silence of the boat was at intervals startlingly pierced by one of his peculiar whispers, now harsh with command, now soft",
+   "prompt_text": "I might proceed with several more examples, one way or another known to me, of the great power and malice at times of the sperm whale. In more than one instance, he has been known, not only to chase the assailing boats back to their ships, but to pursue the ship itself, and long withstand all the lances hurled at him from its decks. The English ship Pusie Hall can tell a story on that head; and, as for his strength, let me say, that there have been examples where the lines attached to a running sperm whale have, in a calm, been transferred to the ship, and secured there; the whale towing her great hull through the water, as a horse walks off with a cart. Again, it is very often observed that, if the sperm whale, once struck, is allowed time to rally, he then acts, not so often with blind rage, as with wilful, deliberate designs of destruction to his pursuers; nor is it without conveying some eloquent indication of his character, that upon being attacked he will frequently open his mouth, and retain it in that dread expansion for several consecutive minutes. But I must be content with only one more and a concluding illustration; a remarkable and most significant one, by which you will not fail to see, that not only is the most marvellous event in this book corroborated by plain facts of the present day, but that these marvels (like all marvels) are mere repetitions of the ages; so that for the millionth time we say amen with Solomon—Verily there is nothing new under the sun. Hardly had they pulled out from under the ship’s lee, when a fourth keel, coming from the windward side, pulled round under the stern, and showed the five strangers rowing Ahab, who, standing erect in the stern, loudly hailed Starbuck, Stubb, and Flask, to spread themselves widely, so as to cover a large expanse of water. But with all their eyes again riveted upon the swart Fedallah and his crew, the inmates of the other boats obeyed not the command. “Pull, pull, my good boys,” said Starbuck, in the lowest possible but intensest concentrated whisper to his men; while the sharp fixed glance from his eyes darted straight ahead of the bow, almost seemed as two visible needles in two unerring binnacle compasses. He did not say much to his crew, though, nor did his crew say anything to him. Only the silence of the boat was at intervals startlingly pierced by one of his peculiar whispers, now harsh with command, now soft",
    "origin": {
     "corpus": "corpus_coverage.json",
     "paragraphs": [
-     "Project Gutenberg #2701: Moby Dick (public domain) \u00b632",
-     "Project Gutenberg #2701: Moby Dick (public domain) \u00b633",
-     "Project Gutenberg #2701: Moby Dick (public domain) \u00b634"
+     "Project Gutenberg #2701: Moby Dick (public domain) ¶32",
+     "Project Gutenberg #2701: Moby Dick (public domain) ¶33",
+     "Project Gutenberg #2701: Moby Dick (public domain) ¶34"
     ]
    }
   },
@@ -2587,14 +2593,14 @@
     1059,
     311
    ],
-   "prompt_text": "\u201cWhich do you mean?\u201d and turning round, he looked for a moment at Elizabeth, till, catching her eye, he withdrew his own, and coldly said, \u201cShe is tolerable: but not handsome enough to tempt _me_; and I am in no humour at present to give consequence to young ladies who are slighted by other men. You had better return to your partner and enjoy her smiles, for you are wasting your time with me.\u201d Mr. Bingley inherited property to the amount of nearly a hundred thousand pounds from his father, who had intended to purchase an estate, but did not live to do it. Mr. Bingley intended it likewise, and sometimes made choice of his county; but, as he was now provided with a good house and the liberty of a manor, it was doubtful to many of those who best knew the easiness of his temper, whether he might not spend the remainder of his days at Netherfield, and leave the next generation to purchase. \u201cI do not believe a word of it, my dear. If he had been so very agreeable, he would have talked to Mrs. Long. But I can guess how it was; everybody says that he is eat up with pride, and I dare say he had heard somehow that Mrs. Long does not keep a carriage, and had to come to the ball in a hack chaise.\u201d Occupied in observing Mr. Bingley\u2019s attention to her sister, Elizabeth was far from suspecting that she was herself becoming an object of some interest in the eyes of his friend. Mr. Darcy had at first scarcely allowed her to",
+   "prompt_text": "“Which do you mean?” and turning round, he looked for a moment at Elizabeth, till, catching her eye, he withdrew his own, and coldly said, “She is tolerable: but not handsome enough to tempt _me_; and I am in no humour at present to give consequence to young ladies who are slighted by other men. You had better return to your partner and enjoy her smiles, for you are wasting your time with me.” Mr. Bingley inherited property to the amount of nearly a hundred thousand pounds from his father, who had intended to purchase an estate, but did not live to do it. Mr. Bingley intended it likewise, and sometimes made choice of his county; but, as he was now provided with a good house and the liberty of a manor, it was doubtful to many of those who best knew the easiness of his temper, whether he might not spend the remainder of his days at Netherfield, and leave the next generation to purchase. “I do not believe a word of it, my dear. If he had been so very agreeable, he would have talked to Mrs. Long. But I can guess how it was; everybody says that he is eat up with pride, and I dare say he had heard somehow that Mrs. Long does not keep a carriage, and had to come to the ball in a hack chaise.” Occupied in observing Mr. Bingley’s attention to her sister, Elizabeth was far from suspecting that she was herself becoming an object of some interest in the eyes of his friend. Mr. Darcy had at first scarcely allowed her to",
    "origin": {
     "corpus": "corpus_coverage.json",
     "paragraphs": [
-     "Project Gutenberg #1342: Pride and Prejudice (public domain) \u00b63",
-     "Project Gutenberg #1342: Pride and Prejudice (public domain) \u00b64",
-     "Project Gutenberg #1342: Pride and Prejudice (public domain) \u00b65",
-     "Project Gutenberg #1342: Pride and Prejudice (public domain) \u00b66"
+     "Project Gutenberg #1342: Pride and Prejudice (public domain) ¶3",
+     "Project Gutenberg #1342: Pride and Prejudice (public domain) ¶4",
+     "Project Gutenberg #1342: Pride and Prejudice (public domain) ¶5",
+     "Project Gutenberg #1342: Pride and Prejudice (public domain) ¶6"
     ]
    }
   },
@@ -3608,19 +3614,19 @@
     11,
     4598
    ],
-   "prompt_text": "\u201cWhen she had finished, she gave the guitar to Agatha, who at first declined it. She played a simple air, and her voice accompanied it in sweet accents, but unlike the wondrous strain of the stranger. The old man appeared enraptured and said some words which Agatha endeavoured to explain to Safie, and by which he appeared to wish to express that she bestowed on him the greatest delight by her music. \u201cEvery conversation of the cottagers now opened new wonders to me. While I listened to the instructions which Felix bestowed upon the Arabian, the strange system of human society was explained to me. I heard of the division of property, of immense wealth and squalid poverty, of rank, descent, and noble blood. \u201cI will soon explain to what these feelings tended, but allow me now to return to the cottagers, whose story excited in me such various feelings of indignation, delight, and wonder, but which all terminated in additional love and reverence for my protectors (for so I loved, in an innocent, half-painful self-deceit, to call them).\u201d \u201cDuring the ensuing days, while the preparations were going forward for the escape of the merchant, the zeal of Felix was warmed by several letters that he received from this lovely girl, who found means to express her thoughts in the language of her lover by the aid of an old man, a servant of her father who understood French. She thanked him in the most ardent terms for his intended services towards her parent, and at the same time she gently deplored her own fate. \u201cThe Turk allowed this intimacy to take place and encouraged the hopes of the youthful lovers, while in his heart he had formed far other plans. He loathed the idea that his daughter should be united to a Christian, but he feared the resentment of Felix if he should appear lukewarm, for he knew that he was still in the power of his deliverer if he should choose to betray him to the Italian state which they inhabited. He revolved a thousand plans by which he should be enabled to prolong the deceit until it might be no longer necessary, and secretly to take his daughter with him when he departed. His plans were facilitated by the news which arrived from Paris. \u201cA few days after, the Turk entered his daughter\u2019s apartment and told her hastily that he had reason to believe that his residence at Leghorn had been divulged and that he should speedily be delivered up to the French government; he had consequently hired a vessel to convey him to Constantinople, for which city he should sail in a few hours. He intended to leave his daughter under the care of a confidential servant, to follow at her leisure with the greater part of his property, which had not yet arrived at Leghorn. \u201cI can hardly describe to you the effect of these books. They produced in me an infinity of new images and feelings, that sometimes raised me to ecstasy, but more frequently sunk me into the lowest dejection. In the _Sorrows of Werter_, besides the interest of its simple and affecting story, so many opinions are canvassed and so many lights thrown upon what had hitherto been to me obscure subjects that I found in it a never-ending source of speculation and astonishment. The gentle and domestic manners it described, combined with lofty sentiments and feelings, which had for their object something out of self, accorded well with my experience among my protectors and with the wants which were for ever alive in my own bosom. But I thought Werter himself a more divine being than I had ever beheld or imagined; his character contained no pretension, but it sank deep. The disquisitions upon death and suicide were calculated to fill me with wonder. I did not pretend to enter into the merits of the case, yet I inclined towards the opinions of the hero, whose extinction I wept, without precisely understanding it. \u201cThese were the reflections of my hours of despondency and solitude; but when I contemplated the virtues of the cottagers, their amiable and benevolent dispositions, I persuaded myself that when they should become acquainted with my admiration of their virtues they would compassionate me and overlook my personal deformity. Could they turn from their door one, however monstrous, who solicited their compassion and friendship? I resolved, at least, not to despair, but in every way to fit myself for an interview with them which would decide my fate. I postponed this attempt for some months longer, for the importance attached to its success inspired me with a dread lest I should fail. Besides, I found that my understanding improved so much with every day\u2019s experience that I was unwilling to commence this undertaking until a few more months should have added to my sagacity. \u201cOne day, when the sun shone on the red leaves that strewed the ground and diffused cheerfulness, although it denied warmth, Safie, Ag",
+   "prompt_text": "“When she had finished, she gave the guitar to Agatha, who at first declined it. She played a simple air, and her voice accompanied it in sweet accents, but unlike the wondrous strain of the stranger. The old man appeared enraptured and said some words which Agatha endeavoured to explain to Safie, and by which he appeared to wish to express that she bestowed on him the greatest delight by her music. “Every conversation of the cottagers now opened new wonders to me. While I listened to the instructions which Felix bestowed upon the Arabian, the strange system of human society was explained to me. I heard of the division of property, of immense wealth and squalid poverty, of rank, descent, and noble blood. “I will soon explain to what these feelings tended, but allow me now to return to the cottagers, whose story excited in me such various feelings of indignation, delight, and wonder, but which all terminated in additional love and reverence for my protectors (for so I loved, in an innocent, half-painful self-deceit, to call them).” “During the ensuing days, while the preparations were going forward for the escape of the merchant, the zeal of Felix was warmed by several letters that he received from this lovely girl, who found means to express her thoughts in the language of her lover by the aid of an old man, a servant of her father who understood French. She thanked him in the most ardent terms for his intended services towards her parent, and at the same time she gently deplored her own fate. “The Turk allowed this intimacy to take place and encouraged the hopes of the youthful lovers, while in his heart he had formed far other plans. He loathed the idea that his daughter should be united to a Christian, but he feared the resentment of Felix if he should appear lukewarm, for he knew that he was still in the power of his deliverer if he should choose to betray him to the Italian state which they inhabited. He revolved a thousand plans by which he should be enabled to prolong the deceit until it might be no longer necessary, and secretly to take his daughter with him when he departed. His plans were facilitated by the news which arrived from Paris. “A few days after, the Turk entered his daughter’s apartment and told her hastily that he had reason to believe that his residence at Leghorn had been divulged and that he should speedily be delivered up to the French government; he had consequently hired a vessel to convey him to Constantinople, for which city he should sail in a few hours. He intended to leave his daughter under the care of a confidential servant, to follow at her leisure with the greater part of his property, which had not yet arrived at Leghorn. “I can hardly describe to you the effect of these books. They produced in me an infinity of new images and feelings, that sometimes raised me to ecstasy, but more frequently sunk me into the lowest dejection. In the _Sorrows of Werter_, besides the interest of its simple and affecting story, so many opinions are canvassed and so many lights thrown upon what had hitherto been to me obscure subjects that I found in it a never-ending source of speculation and astonishment. The gentle and domestic manners it described, combined with lofty sentiments and feelings, which had for their object something out of self, accorded well with my experience among my protectors and with the wants which were for ever alive in my own bosom. But I thought Werter himself a more divine being than I had ever beheld or imagined; his character contained no pretension, but it sank deep. The disquisitions upon death and suicide were calculated to fill me with wonder. I did not pretend to enter into the merits of the case, yet I inclined towards the opinions of the hero, whose extinction I wept, without precisely understanding it. “These were the reflections of my hours of despondency and solitude; but when I contemplated the virtues of the cottagers, their amiable and benevolent dispositions, I persuaded myself that when they should become acquainted with my admiration of their virtues they would compassionate me and overlook my personal deformity. Could they turn from their door one, however monstrous, who solicited their compassion and friendship? I resolved, at least, not to despair, but in every way to fit myself for an interview with them which would decide my fate. I postponed this attempt for some months longer, for the importance attached to its success inspired me with a dread lest I should fail. Besides, I found that my understanding improved so much with every day’s experience that I was unwilling to commence this undertaking until a few more months should have added to my sagacity. “One day, when the sun shone on the red leaves that strewed the ground and diffused cheerfulness, although it denied warmth, Safie, Ag",
    "origin": {
     "corpus": "corpus_coverage.json",
     "paragraphs": [
-     "Project Gutenberg #84: Frankenstein (public domain) \u00b646",
-     "Project Gutenberg #84: Frankenstein (public domain) \u00b647",
-     "Project Gutenberg #84: Frankenstein (public domain) \u00b648",
-     "Project Gutenberg #84: Frankenstein (public domain) \u00b649",
-     "Project Gutenberg #84: Frankenstein (public domain) \u00b650",
-     "Project Gutenberg #84: Frankenstein (public domain) \u00b651",
-     "Project Gutenberg #84: Frankenstein (public domain) \u00b652",
-     "Project Gutenberg #84: Frankenstein (public domain) \u00b653",
-     "Project Gutenberg #84: Frankenstein (public domain) \u00b654"
+     "Project Gutenberg #84: Frankenstein (public domain) ¶46",
+     "Project Gutenberg #84: Frankenstein (public domain) ¶47",
+     "Project Gutenberg #84: Frankenstein (public domain) ¶48",
+     "Project Gutenberg #84: Frankenstein (public domain) ¶49",
+     "Project Gutenberg #84: Frankenstein (public domain) ¶50",
+     "Project Gutenberg #84: Frankenstein (public domain) ¶51",
+     "Project Gutenberg #84: Frankenstein (public domain) ¶52",
+     "Project Gutenberg #84: Frankenstein (public domain) ¶53",
+     "Project Gutenberg #84: Frankenstein (public domain) ¶54"
     ]
    }
   },
@@ -3648,7 +3654,7 @@
    "origin": {
     "corpus": "corpus_coverage.json",
     "paragraphs": [
-     "Project Gutenberg #2701: Moby Dick (public domain) \u00b69"
+     "Project Gutenberg #2701: Moby Dick (public domain) ¶9"
     ]
    }
   }
@@ -3724,8 +3730,5 @@
   "lengths_only": false,
   "execution": "bi-compiled"
  },
- "note": "R12 sweep qwen25-15b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-compiled: B=8 I<=1024 O<=128 greedy arrivals=staggered; prompt lens [55, 455, 11, 1024, 541, 333, 1001, 11], caps [15, 53, 2, 9, 123, 79, 128, 75], arrive steps [0, 8, 28, 36, 43, 47, 64, 70]; every request to max_tokens => 192 engine steps; max_num_batched_tokens keeps the whole admitted prefill in one step; max_model_len = I + O.  EOS untouched.",
- "target": {
-  "compilation": "piecewise"
- }
+ "note": "R12 sweep qwen25-15b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-compiled: B=8 I<=1024 O<=128 greedy arrivals=staggered; prompt lens [55, 455, 11, 1024, 541, 333, 1001, 11], caps [15, 53, 2, 9, 123, 79, 128, 75], arrive steps [0, 8, 28, 36, 43, 47, 64, 70]; every request to max_tokens => 192 engine steps; max_num_batched_tokens keeps the whole admitted prefill in one step; max_model_len = I + O.  EOS untouched."
 }

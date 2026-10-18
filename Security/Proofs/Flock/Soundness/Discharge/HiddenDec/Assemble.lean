@@ -9,8 +9,10 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepted
 outcome flock-verify accepts under hidden outputs:
 
 * `accepts_repsH`: DecodeZL's `accepts_reps` under hidden outputs. The one table's statement `st` is setupHidden's at
-  the record's draw, and the per-rep facts come from the acceptance lemmas without `hh` (`accepts_verdict_hm96Any`,
-  `accepts_rep_roundsAny`, `setupTables_okAny`, `setupTables_pointsAny`, `Discharge/HiddenExec`).
+  the record's draw, and the per-rep facts come from the acceptance lemmas without `hh` (`accepts_verdict_leafAny`,
+  `accepts_rep_roundsAny`, `setupTables_okAny`, `setupTables_pointsAny`, `Discharge/HiddenExec`), the verdict at the
+  model's leaf of the tags' leaf scheme (`leafOfId`: `leaf512` under `hm96-sha512/v1`, `leafPlain` under plain SHA-512
+  leaves).
 * `tableAtH_of_accepts` puts `stmtOf st` at the hidden table, `tableAtH_ptLocal` its link layout at `PT_LOCAL`, and
   `fast100_schedOf` its schedule at `fast100`'s.
 * DecodeZL's `repRun_at`, at its wires' chunk lemmas `op_carries` and `lig_carries` (and `zl_carries`, which `repRun_at`
@@ -27,9 +29,10 @@ open FlockSoundness.Discharge.HiddenExec
 local notation "𝔽" => FlockLevel3.GF128
 
 /-- **flock-verify's acceptance of a one-table session under hidden outputs, rep by rep**: DecodeZL's `accepts_reps`
-with setupHidden's statement `st` at the record's draw. -/
+with setupHidden's statement `st` at the record's draw, the verdict at the model's leaf of the tags' leaf scheme. -/
 theorem accepts_repsH {I : Inputs} {t : Exec.Transcript} (hh : I.tags.hiddenOutputs = true)
-    (hrr : I.tags.retainRounds = true) (hl : I.tags.merkleLeaf = "hm96-sha512/v1") (hc1 : I.count ≤ 1)
+    (hrr : I.tags.retainRounds = true)
+    (hl : I.tags.merkleLeaf = "hm96-sha512/v1" ∨ I.tags.merkleLeaf = "flock-leaf/sha512-unsalted") (hc1 : I.count ≤ 1)
     (h : Accepts I t) :
     ∃ (st : Flock.Stmt) (spec : SessionSpec) (sess : Session) (sch : Flock.Schedule),
       Flock.Stmt.setupHidden I.tags I.circuitFile I.publicFile I.coins I.tables (recordDraw t.record) I.partition
@@ -52,10 +55,10 @@ theorem accepts_repsH {I : Inputs} {t : Exec.Transcript} (hh : I.tags.hiddenOutp
           ∀ k < s.rounds.size, Retains (s.rounds[k]!) (encs ((chunks (repFrames (Setup.ofCircuit st) sch
             (spec.domain spec.tables[0]! r.val).toUTF8 (2 + (Model.extraClaims (stmtOf st hwf (regionsOf st)) PT_LOCAL
               st.mPts (ptsOf st.mPts sess.points)).length) p Tv)).1.getD k []))) ∧
-        (tableOutL H512 enc512 leaf512 (capOfRoot sess.rootB[0]!) (pend 0, pend 1)
+        (tableOutL H512 enc512 (leafOfId I.tags.merkleLeaf) (capOfRoot sess.rootB[0]!) (pend 0, pend 1)
           (opnOf (Setup.ofCircuit st) sch (Model.extraClaims (stmtOf st hwf (regionsOf st)) PT_LOCAL st.mPts
             (ptsOf st.mPts sess.points)).length #[t.proofs[0]!, t.proofs[1]!])).accepted = true := by
-  obtain ⟨spec, sts, sess, hsu, hdec, -, hall⟩ := accepts_verdict_hm96Any hl h
+  obtain ⟨spec, sts, sess, hsu, hdec, -, hall⟩ := accepts_verdict_leafAny (hl.imp id fun hl => ⟨hh, hl⟩) h
   obtain ⟨spec', sts', sess', hsu', hdec', -, hallR⟩ := accepts_rep_roundsAny hrr h
   rw [hsu, Except.ok.injEq, Prod.mk.injEq] at hsu'
   obtain ⟨rfl, rfl⟩ := hsu'
@@ -100,11 +103,13 @@ theorem decodesOn_execHI {c : Flock.Circuit} {n : ℕ} {I : Inputs} (ht : I.tags
     (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) {mPts : ℕ}
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀)) {Reg : Type}
     (L : Law n) (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript)
-    (hT : TagsOkH I) (hwr : RecordsLive I dj wr) (hdraw : ∀ ω, DrawOkH I dj mPts (L.draw ω)) :
-    DecodesOn H512 enc512 leaf512 (tablesAtH (Reg := Reg) dj x₀) I wr (opnAtH (tablesAtH dj x₀) I dj)
+    (hT : TagsOkHL I) (hwr : RecordsLive I dj wr) (hdraw : ∀ ω, DrawOkH I dj mPts (L.draw ω)) :
+    DecodesOn H512 enc512 (leafOfId I.tags.merkleLeaf) (tablesAtH (Reg := Reg) dj x₀) I wr
+      (opnAtH (tablesAtH dj x₀) I dj)
       (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) L := by
   obtain ⟨hh, hrr, hl, hc1⟩ := hT
-  refine PlaysCoin.decodesOnOfRuns H512 enc512 leaf512 (tablesAtH dj x₀) I wr (opnAtH (tablesAtH dj x₀) I dj)
+  refine PlaysCoin.decodesOnOfRuns H512 enc512 (leafOfId I.tags.merkleLeaf) (tablesAtH dj x₀) I wr
+    (opnAtH (tablesAtH dj x₀) I dj)
     (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) L ?_
   intro ω R o hacc
   obtain ⟨hd, hprf, hrec⟩ := hwr _ R o hacc
@@ -117,7 +122,10 @@ theorem decodesOn_execHI {c : Flock.Circuit} {n : ℕ} {I : Inputs} (ht : I.tags
   have hmP : st.mPts = mPts := hmPts st hst
   obtain ⟨-, hr⟩ := setupHidden_wf hst
   have hm : 13 ≤ st.m := by have := exec_fast100_ge hf; omega
-  have hms : st.merkle = MerkleScheme.hm96Sha512 := setupHidden_hm96 hl hst
+  have hdl : st.merkle.digestLen = 64 := by
+    rcases hl with hl | hl
+    · rw [setupHidden_hm96 hl hst]; rfl
+    · rw [setupHidden_plain hl hst]; rfl
   rw [hmP, hpts] at hk
   obtain ⟨pend, hreps, hv⟩ := hk hwf hr hm
   have hS : (tablesAtH (Reg := Reg) dj x₀ (L.draw ω) R).S = stmtOf st hwf (regionsOf st) := hTS
@@ -135,7 +143,7 @@ theorem decodesOn_execHI {c : Flock.Circuit} {n : ℕ} {I : Inputs} (ht : I.tags
     obtain ⟨s', hs', hrs⟩ := hstreams r
     obtain rfl : s' = s := Option.some.inj (hs'.symm.trans hs)
     rw [← hrs]
-    exact repRun_at op_carries lig_carries decodeProof_sizes _ st hwf sch hf (by rw [hms]; rfl) hS hsch hpl o.pts r
+    exact repRun_at op_carries lig_carries decodeProof_sizes _ st hwf sch hf hdl hS hsch hpl o.pts r
       hm rfl _ p hp s'.rounds (PlaysCoin.roundsWF_mem (decode_roundsWF hdec s' (Array.mem_toList_iff.2
         (Array.mem_of_find?_eq_some hs')))) _ hplay _ Tv hlen hret
   refine ⟨(pend 0, pend 1), hrep 0, hrep 1, ?_⟩
@@ -151,7 +159,7 @@ theorem decodesOn_execHI {c : Flock.Circuit} {n : ℕ} {I : Inputs} (ht : I.tags
     congr 1
     unfold nX
     rw [DecodeZL.extraClaims_length, DecodeZL.extraClaims_length, hS]
-  show (tableOutL H512 enc512 leaf512 (capOfRoot o.rootB) (pend 0, pend 1) _).accepted = true
+  show (tableOutL H512 enc512 (leafOfId I.tags.merkleLeaf) (capOfRoot o.rootB) (pend 0, pend 1) _).accepted = true
   rw [hopn, ← hroot]
   exact hv
 

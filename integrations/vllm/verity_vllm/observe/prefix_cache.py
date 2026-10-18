@@ -12,10 +12,10 @@ Two things live here:
        request A (cold)  = P (PREFIX_TOKENS shared prefix) + X (CONT_TOKENS), arrive_step 0
        request B (warm)  = P + Y (CONT_TOKENS, Y != X),      arrive_step WARM_ARRIVE_STEP (> 0: A's prefill has completed,
                                                              A is still decoding when B is admitted)
-   identical requests in both files; the warm file declares `engine_args_required: {"enable_prefix_caching": true}`, the cold one
+   identical requests in both files; the warm file declares `engine.args: {"enable_prefix_caching": true}`, the cold one
    `false`.  With block_size 16 the shared prefix is exactly PREFIX_TOKENS // 16 full blocks, so a warm B computes only
    CONT_TOKENS prompt rows (`StepStart.num_computed[B] == PREFIX_TOKENS` at its first step).  The format is
-   `bench/gen_coverage_workloads.py`'s (schema verity-vllm/workload/v1 + the D87 keys); that module is imported read-only.
+   `pipeline/coverage_workloads.py`'s (a row file, `config.RowConfig`, + the D87 keys); that module is imported read-only.
 
 2. The linkage record (`extract`): from `capture/log.jsonl.gz` alone (`StepStart.rows / slot_mapping / block_tables /
    num_computed / block_size`, `RunHeader.workload`), for every request: the KV blocks it did not compute itself
@@ -46,10 +46,9 @@ from .events import Event, RunHeader, StepStart
 from .log import read_log
 from dataclasses import dataclass, field
 
-from verity_vllm.config import option
+from verity_vllm.config import VLLM, WORKLOAD_SCHEMA, option
 
 SCHEMA_LINKAGE = "verity-capture/prefix-linkage/v1"
-WORKLOAD_SCHEMA = "verity-vllm/workload/v1"
 
 #: shared prefix length (tokens); a multiple of vLLM's block_size 16 so every prefix block is a full, cacheable block
 PREFIX_TOKENS = 128
@@ -115,7 +114,7 @@ def prefix_requests(tok: Any, *, case: str = "B0", seed: int = 0, prefix_tokens:
 
 def prefix_workload_docs(tok: Any, *, case: str = "B0", model: str = "HuggingFaceTB/SmolLM2-135M", tokenizer_revision: str | None = None,
                          seed: int = 0, block_size: int = BLOCK_SIZE_ASSUMED) -> dict[str, dict]:
-    """{stem: doc} for the warm and the cold file (identical requests; only `engine_args_required` and the labels differ)."""
+    """{stem: doc} for the warm and the cold file (identical requests; only `engine.args` and the labels differ)."""
     from verity_vllm.pipeline import coverage_workloads as gw
 
     reqs = prefix_requests(tok, case=case, seed=seed)
@@ -136,7 +135,8 @@ def prefix_workload_docs(tok: Any, *, case: str = "B0", model: str = "HuggingFac
                    f"{shared // block_size} prefix blocks in its block table are request 0's step-0 blocks.  "
                    if warm else f"Expected: request 1 computes all {reqs[1]['prompt_len']} prompt rows at its first step.  ")
                 + "Greedy.  The control run's realized step count is the gates' reference.")
-        out[stem] = {"schema": WORKLOAD_SCHEMA, "model": model, "case": case, "tokenizer_revision": tokenizer_revision, "seed": 0,
+        out[stem] = {"schema": WORKLOAD_SCHEMA, "model": model, "case": case,
+                     "engine": {"revision": tokenizer_revision, "vllm": VLLM, "args": {"enable_prefix_caching": bool(warm)}}, "seed": 0,
                      "variants": {"greedy": gw.VARIANTS["greedy"]}, "seeds": [],
                      "sampling": {"variant": "greedy", "seed": None, "n": 1},
                      "serving_profile": PROFILE_LABEL, "context_class": CTX_LABEL, "length_seed": seed, "prompt_seed": seed, "replicate": 0,
@@ -145,7 +145,6 @@ def prefix_workload_docs(tok: Any, *, case: str = "B0", model: str = "HuggingFac
                      "length_rule": {"prompt_len": f"{shared} shared + {reqs[0]['prompt_len'] - shared} continuation", "max_tokens": str(reqs[0]["max_tokens"]),
                                      "arrive_step": f"0 | {reqs[1]['arrive_step']}", "depends_on": "constants of verity_vllm.observe.prefix_cache"},
                      "expected_engine_steps": sim["expected_engine_steps"], "schedule_if_full_length": sim,
-                     "engine_args_required": {"enable_prefix_caching": bool(warm)},
                      "tokenizer_note": f"prompt_token_ids from {tok.path.name} sha256 {tok.sha256[:16]} (tokenizers, add_special_tokens=False), "
                                        f"natural text from {gw.CORPUS.name}; prompt_text is the decode of the ids (informational)",
                      "prompt_lengths": sorted({r["prompt_len"] for r in reqs}), "max_tokens": sorted({r["max_tokens"] for r in reqs}),
