@@ -10,5 +10,5 @@ ruling, because the commitment's hash is a design rule ("One hash", AGENTS.md).
 
 - `memsat/`: the Commit + memory arm at saturation for the int8 Llama-3.1-8B workload: memory accounting's
   `benchmarks/remote_session/` SERVE=node with its engines on vllm's exact-int8 profile, batch-capped below the offered
-  load, and every request's token times (`run.sh`, `engine_int8.py`, `summarize.py`); and the receipts pass part by
-  part on an idle GPU (`pass_split.sh`).
+  load, every request's token times, and each audit session's passes at a rate of its own (`run.sh`, `engine_int8.py`,
+  `node_paced.py`, `summarize.py`); and the receipts pass part by part on an idle GPU (`pass_split.sh`).
