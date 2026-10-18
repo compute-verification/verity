@@ -101,7 +101,9 @@ def _registration(rows: list[str], salts: list[str], row_bits: int, binding: byt
     return advice.register([bytes.fromhex(r) for r in rows], row_bits, binding, [bytes.fromhex(s) for s in salts])
 
 
-def _placement(public: dict, witness: dict, model: M.Model, hw: Hardware, report: Report) -> P.Placement | None:
+def placement_of(public: dict, witness: dict, model: M.Model, hw: Hardware, report: Report) -> P.Placement | None:
+    """The placement whose rows register to the public root, checked to be paced and causal on the hardware; None when
+    it doesn't decode or register."""
     w = witness["placement"]
     try:
         reg = _registration(w["rows"], w["salts"], P.ROW_BITS, P.BINDING)
@@ -128,7 +130,7 @@ def _placement(public: dict, witness: dict, model: M.Model, hw: Hardware, report
     return placement
 
 
-def _open(public: dict, witness: dict, placement: P.Placement, hw: Hardware, edges: list[P.Edge], width: int,
+def open_values(public: dict, witness: dict, placement: P.Placement, hw: Hardware, edges: list[P.Edge], width: int,
           report: Report) -> dict[int, int]:
     """Each crossing value, opened at its source unit's commitment and checked against the unit's public root."""
     by_unit: dict[str, list[P.Edge]] = defaultdict(list)
@@ -183,7 +185,7 @@ def check(public: dict, witness: dict, records: Records) -> Report:
         report.add("program", "", "the public digest isn't the spec's Program's")
     hw = Hardware.from_json(public["hardware"])
     B = public["frame_bytes"]
-    placement = _placement(public, witness, model, hw, report)
+    placement = placement_of(public, witness, model, hw, report)
     if placement is None:
         return report
     edges = P.crossings(model, placement, hw)
@@ -191,7 +193,7 @@ def check(public: dict, witness: dict, records: Records) -> Report:
     occupancy = phi.occupancy()
     if occupancy != public["occupancy"]:
         report.add("occupancy", "", "the public occupancy profile isn't the committed placement's")
-    opened = _open(public, witness, placement, hw, edges, model.value_bits, report)
+    opened = open_values(public, witness, placement, hw, edges, model.value_bits, report)
     report.stats.update(edges=len(edges), messages=len(phi.messages), directions=len(occupancy))
 
     for key in sorted(set(public["occupancy"]) | set(records)):
