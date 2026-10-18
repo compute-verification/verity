@@ -26,7 +26,8 @@ def unhex (s : String) : Msg := unhexL s.toList
 
 def ba (m : Msg) : ByteArray := ⟨m.toArray⟩
 
-def toDigest (b : ByteArray) : Digest := fun i => b.get! i.val
+/-- `noinline`: inlined, the compiler floats the hash into the closure and every byte read re-hashes. -/
+@[noinline] def toDigest (b : ByteArray) : Digest := fun i => b.get! i.val
 
 def sha (m : Msg) : Digest := toDigest (Flock.Sha512.hash (ba m))
 
