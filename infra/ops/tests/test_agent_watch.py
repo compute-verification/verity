@@ -14,18 +14,36 @@ class Clock:
 
 
 class FakeApi:
-    def __init__(self, agents, runs):
-        self._agents, self._runs, self.posts = agents, runs, []
+    """`older[agent]` lists an agent's runs before its latest, newest first; `GET .../runs` lists the latest, then those.
+    A goal run's id (run-goal-...) is listed but can't be read on its own, as on the API."""
+
+    def __init__(self, agents, runs, older=None):
+        self._agents, self._runs, self.older, self.posts = agents, runs, older or {}, []
 
     def agents(self):
         return iter(self._agents)
 
     def get(self, path, **params):
-        return self._runs[path.rsplit("/", 1)[1]]
+        parts = path.split("/")
+        if parts[-1] == "runs":
+            a = next(a for a in self._agents if a["id"] == parts[-2])
+            ids = [a["latestRunId"], *self.older.get(a["id"], [])]
+            return {"items": [{"id": i, **self._runs[i]} for i in ids if i in self._runs]}
+        if parts[-1].startswith("run-goal"):
+            raise W.urllib.error.HTTPError(path, 400, "Bad Request", {}, None)
+        return self._runs[parts[-1]]
 
     def post(self, path, body=None):
         self.posts.append((path, body))
         return {"run": {"id": "run-new"}} if path.endswith("/runs") else {"id": "run-1"}
+
+
+def held_tool_call(w, run="run-1", cid="c1"):
+    """A tool call as the API streams it: the simple event, then its `interaction_update` twin (18 Oct: 220 of 240)."""
+    w.on_event(run, "tool_call", {"callId": cid, "name": "run_terminal_cmd", "status": "running"})
+    w.on_event(run, "interaction_update", {"type": "tool-call-started", "callId": cid})
+    w.on_event(run, "tool_call", {"callId": cid, "name": "run_terminal_cmd", "status": "completed"})
+    w.on_event(run, "interaction_update", {"type": "tool-call-completed", "callId": cid})
 
 
 def setup(tmp_path, status="RUNNING"):
@@ -101,12 +119,6 @@ def test_an_unreadable_run_is_recorded_once_and_the_sweep_goes_on(tmp_path):
     """18 Oct: a goal run's id (run-goal-...) got 400 from the runs endpoint and stopped every sweep."""
     api = FakeApi([{"id": "bc-g", "status": "ACTIVE", "latestRunId": "run-goal-x"},
                    {"id": "bc-a", "status": "ACTIVE", "latestRunId": "run-1"}], {"run-1": {"status": "RUNNING"}})
-
-    def get(path, **params):
-        if "run-goal" in path:
-            raise W.urllib.error.HTTPError(path, 400, "Bad Request", {}, None)
-        return api._runs[path.rsplit("/", 1)[1]]
-    api.get = get
     w, started = W.Watch(api, tmp_path / "events.jsonl", Clock()), []
     w.sweep(started.append)
     w.sweep(started.append)
@@ -205,3 +217,242 @@ def test_the_stream_parses_server_sent_events_until_done(monkeypatch):
     assert events[1][1] == {"callId": "c1", "name": "Shell", "status": "completed"}
     assert seen[0].full_url.endswith("/v1/agents/bc-a/runs/run-1/stream")
     assert seen[0].get_header("Authorization").startswith("Basic ")
+
+
+def test_a_tool_calls_interaction_update_twin_doesnt_hide_a_held_run(tmp_path):
+    """18 Oct, live streams: every `tool_call` completed is followed within milliseconds by an `interaction_update`
+    `tool-call-completed` (220 of 240 sampled). The watch took it for the agent's own text, so no run could ever be held."""
+    api, clock, w, started = setup(tmp_path)
+    held_tool_call(w)
+    w.on_event("run-1", "interaction_update", {"type": "token-delta", "tokens": 3})
+    clock.t += W.HELD_S
+    w.sweep(started.append)
+    assert [p for p, _ in api.posts] == ["/v1/agents/bc-a/runs/run-1/cancel", "/v1/agents/bc-a/runs"]
+
+
+def test_the_status_resent_on_every_reconnect_is_not_activity(tmp_path):
+    """The API re-sends a run's `status`, with no id, at the top of every (re)connection; it says nothing about the agent."""
+    api, clock, w, started = setup(tmp_path)
+    held_tool_call(w)
+    held_from = clock.t
+    for _ in range(3):
+        clock.t += 5 * 60
+        w.on_event("run-1", "status", {"runId": "run-1", "status": "RUNNING"})
+    w.sweep(started.append)
+    assert len(api.posts) == 2 and records(tmp_path)[0]["since"] == W.iso(held_from)
+
+
+def test_background_subagents_neither_hide_a_held_run_nor_count_as_a_long_call(tmp_path):
+    """A cloud `task` call stays `running` in the parent's stream while its subagent works (benchmarks, lean and
+    compute-accounting had four each on 18 Oct, the parent thinking and calling tools meanwhile), and the subagent's progress
+    streams as `tool-call-delta`. A coordinator always has some, so none could be held, and each was recorded as a 45-minute
+    tool call."""
+    api, clock, w, started = setup(tmp_path)
+    w.on_event("run-1", "tool_call", {"callId": "t1", "name": "task", "status": "running"})
+    w.on_event("run-1", "interaction_update", {"type": "step-started", "stepId": "s2"})
+    w.on_event("run-1", "thinking", {"text": "the worker is off; now the build"})
+    held_tool_call(w, cid="c2")
+    held_from = clock.t
+    for _ in range(W.HELD_S // 60 - 1):
+        clock.t += 60
+        w.on_event("run-1", "interaction_update", {"type": "tool-call-delta", "callId": "t1", "taskUpdate": {}})
+        w.sweep(started.append)
+    assert api.posts == []
+    clock.t = held_from + W.LONG_CALL_S
+    w.sweep(started.append)
+    assert [p for p, _ in api.posts] == ["/v1/agents/bc-a/runs/run-1/cancel", "/v1/agents/bc-a/runs"]
+    assert [r["kind"] for r in records(tmp_path)] == ["held"]
+
+
+def test_a_subagent_the_parent_waits_on_is_a_long_call_never_held(tmp_path):
+    api, clock, w, started = setup(tmp_path)
+    w.on_event("run-1", "tool_call", {"callId": "t1", "name": "task", "status": "running"})
+    for _ in range(W.LONG_CALL_S // 60 + 1):
+        clock.t += 60
+        w.on_event("run-1", "interaction_update", {"type": "tool-call-delta", "callId": "t1", "taskUpdate": {}})
+        w.sweep(started.append)
+    assert api.posts == [] and [r["kind"] for r in records(tmp_path)] == ["long_call"]
+
+
+def test_a_turn_that_ended_is_held_only_while_the_run_still_reads_running(tmp_path):
+    """A turn ends (`turn-ended`) and the run turns FINISHED or WAITING_FOR_BACKGROUND_WORK within seconds (proofs, 19:13Z: 8 s).
+    Waiting on background work after it is the normal state; still RUNNING 15 min later is a hold."""
+    api, clock, w, started = setup(tmp_path, status="WAITING_FOR_BACKGROUND_WORK")
+    held_tool_call(w)
+    w.on_event("run-1", "interaction_update", {"type": "turn-ended"})
+    clock.t += 2 * W.HELD_BG_S
+    w.sweep(started.append)
+    assert api.posts == []
+    api2, clock2, w2, started2 = setup(tmp_path / "running")
+    held_tool_call(w2)
+    w2.on_event("run-1", "interaction_update", {"type": "turn-ended"})
+    clock2.t += W.HELD_S
+    w2.sweep(started2.append)
+    assert [p for p, _ in api2.posts] == ["/v1/agents/bc-a/runs/run-1/cancel", "/v1/agents/bc-a/runs"]
+
+
+def test_a_background_wait_with_working_subagents_is_left_alone_and_a_silent_one_recorded_stuck(tmp_path):
+    """A coordinator's run waits on its workers, whose progress streams as `tool-call-delta`: cancelling it may take them. A wait
+    with nothing at all streamed for 2 h is recorded as stuck, once, and never cancelled."""
+    api, clock, w, started = setup(tmp_path, status="WAITING_FOR_BACKGROUND_WORK")
+    w.on_event("run-1", "tool_call", {"callId": "t1", "name": "task", "status": "running"})
+    held_tool_call(w, cid="c2")
+    for _ in range(3 * 6):
+        clock.t += 10 * 60
+        w.on_event("run-1", "interaction_update", {"type": "tool-call-delta", "callId": "t1", "taskUpdate": {}})
+        w.sweep(started.append)
+    assert api.posts == [] and records(tmp_path) == []
+    clock.t += W.STUCK["WAITING_FOR_BACKGROUND_WORK"]
+    w.sweep(started.append)
+    w.sweep(started.append)
+    assert [(r["kind"], r["status"], r["minutes"]) for r in records(tmp_path)] == [("stuck", "WAITING_FOR_BACKGROUND_WORK", 120)]
+    assert api.posts == []
+
+
+def test_a_run_behind_one_cancelled_on_arrival_is_followed_and_freed(tmp_path):
+    """memory-accounting, 19:32Z 18 Oct: `latestRunId` was a run created and cancelled within 0.5 s, with run-7bb5675e RUNNING
+    behind it. The watch read only the latest, and dropped a followed run as soon as a newer one appeared."""
+    api = FakeApi([{"id": "bc-m", "name": "memory-accounting", "status": "ACTIVE", "latestRunId": "run-1"}],
+                  {"run-1": {"status": "RUNNING"}})
+    clock, started = Clock(), []
+    w = W.Watch(api, tmp_path / "events.jsonl", clock)
+    w.sweep(started.append)
+    held_tool_call(w)
+    clock.t += 60
+    api._agents[0]["latestRunId"] = "run-x"
+    api._runs["run-x"] = {"status": "CANCELLED"}
+    api.older["bc-m"] = ["run-1"]
+    w.sweep(started.append)
+    assert [r.run for r in started] == ["run-1"]
+    clock.t += W.HELD_S
+    w.sweep(started.append)
+    assert [p for p, _ in api.posts] == ["/v1/agents/bc-m/runs/run-1/cancel", "/v1/agents/bc-m/runs"]
+    w2, started2 = W.Watch(api, tmp_path / "fresh" / "events.jsonl", clock), []
+    w2.sweep(started2.append)
+    assert [r.run for r in started2] == ["run-1"], "a fresh watch finds it too"
+
+
+def test_a_run_creating_behind_the_latest_is_recorded_stuck(tmp_path):
+    """network-accounting, 18 Oct: a goal run RUNNING from 18:27:22Z, a run CREATING behind it from 18:27:29Z, and every later run
+    cancelled on arrival. The latest was always a cancelled one, so 1.5 h passed with nothing recorded (proofs from 08:26Z too)."""
+    clock = Clock(W.epoch("2026-10-18T19:52:00Z"))
+    api = FakeApi([{"id": "bc-n", "name": "network-accounting", "status": "ACTIVE", "latestRunId": "run-z"}],
+                  {"run-z": {"status": "CANCELLED"}, "run-y": {"status": "CANCELLED"},
+                   "run-q": {"status": "CREATING", "createdAt": "2026-10-18T18:27:29.896Z", "updatedAt": "2026-10-18T18:27:29.896Z"},
+                   "run-goal-g": {"status": "RUNNING", "updatedAt": "2026-10-18T18:27:23.430Z"}},
+                  older={"bc-n": ["run-y", "run-q", "run-goal-g"]})
+    w, started = W.Watch(api, tmp_path / "events.jsonl", clock), []
+    w.sweep(started.append)
+    w.sweep(started.append)
+    assert [(r["kind"], r["run"], r["status"], r["minutes"]) for r in records(tmp_path)] == [("stuck", "run-q", "CREATING", 84)]
+    assert started == [] and api.posts == [], "a goal run's stream can't be read, and the API refuses to cancel a CREATING run"
+
+
+def test_a_stream_that_ends_is_followed_again(tmp_path):
+    """The stream returns on 400, 404 or 410 (410 stream_expired past the retention window); the run stayed followed with
+    nothing feeding it and was never judged again."""
+    api, clock, w, started = setup(tmp_path)
+    (r,) = started
+    api.stream = lambda agent, run, stop=None: iter(())
+    W.pump(w, r)
+    w.sweep(started.append)
+    assert [x.run for x in started] == ["run-1", "run-1"]
+
+
+def test_the_stream_of_an_ended_run_is_closed(tmp_path):
+    """A run's stream carries the agent's later runs and sends no `done` once it is cancelled (proofs' run-891ea386, cancelled
+    15:32Z, streamed events to 19:31Z). The watch read every such stream forever: 67 threads for 18 runs at 19:29Z, 74 at 19:51Z."""
+    api, clock, w, started = setup(tmp_path)
+    (r,) = started
+    read = []
+
+    def stream(agent, run, stop=lambda: False):
+        yield "status", {"runId": run, "status": "CANCELLED"}
+        while True:
+            read.append(1)
+            assert len(read) < 5, "still reading a cancelled run's stream"
+            yield "assistant", {"text": "a later run's text"}
+    api.stream = stream
+    W.pump(w, r)
+    assert read == [] and not r.streaming
+
+
+def test_the_hourly_memory_survives_a_restart_of_the_watch(tmp_path):
+    """The watch restarts on every deploy (six times from 17:58 to 18:24Z on 18 Oct). Its once-an-hour memory and its restart
+    counts were in memory only, so a run that held again was cancelled again after each restart."""
+    api, clock, w, started = setup(tmp_path)
+    held_tool_call(w)
+    clock.t += W.HELD_S
+    w.sweep(started.append)
+    assert len(api.posts) == 2
+    api._agents[0]["latestRunId"] = "run-2"
+    api._runs["run-2"] = {"status": "RUNNING"}
+    w2, started2 = W.Watch(api, tmp_path / "events.jsonl", clock), []
+    clock.t += 60
+    w2.sweep(started2.append)
+    held_tool_call(w2, run="run-2", cid="c2")
+    clock.t += W.HELD_S
+    w2.sweep(started2.append)
+    assert len(api.posts) == 2 and [r["kind"] for r in records(tmp_path)] == ["held", "held_again"]
+
+
+def test_a_continue_refused_after_the_cancel_is_tried_again(tmp_path):
+    """Cancelling succeeds but starting the continue run gets 409 agent_busy (a run CREATING behind it, as memory-accounting's
+    at 19:28Z): the agent was left cancelled, with one 'free failed' line for a person."""
+    api, clock, w, started = setup(tmp_path)
+    real = api.post
+
+    def busy(path, body=None):
+        if path.endswith("/runs"):
+            raise W.urllib.error.HTTPError(path, 409, "Conflict", {}, None)
+        return real(path, body)
+    api.post = busy
+    held_tool_call(w)
+    clock.t += W.HELD_S
+    w.sweep(started.append)
+    api._runs["run-1"] = {"status": "CANCELLED"}
+    clock.t += 60
+    w.sweep(started.append)
+    api.post = real
+    clock.t += 60
+    w.sweep(started.append)
+    w.sweep(started.append)
+    assert [p for p, _ in api.posts] == ["/v1/agents/bc-a/runs/run-1/cancel", "/v1/agents/bc-a/runs"]
+    assert [(r["kind"], r.get("new_run")) for r in records(tmp_path)] == [("held", None), ("continued", "run-new")]
+
+
+def test_a_continue_refused_for_half_an_hour_is_left_for_a_person(tmp_path):
+    api, clock, w, started = setup(tmp_path)
+    real = api.post
+
+    def busy(path, body=None):
+        if path.endswith("/runs"):
+            raise W.urllib.error.HTTPError(path, 409, "Conflict", {}, None)
+        return real(path, body)
+    api.post = busy
+    held_tool_call(w)
+    clock.t += W.HELD_S
+    w.sweep(started.append)
+    api._runs["run-1"] = {"status": "CANCELLED"}
+    for _ in range(W.CONTINUE_RETRY_S // 60 + 2):
+        clock.t += 60
+        w.sweep(started.append)
+    assert [r["kind"] for r in records(tmp_path)] == ["held", "continue_failed"]
+
+
+def test_an_error_seen_in_the_stream_is_recorded_once(tmp_path):
+    """vllm, 18:07Z: a `crashed` line without an action from the stream, then another from the restart."""
+    api, clock, w, started = setup(tmp_path)
+    w.on_event("run-1", "status", {"runId": "run-1", "status": "ERROR"})
+    api._runs["run-1"] = {"status": "ERROR"}
+    api._agents[0].update({"status": "IDLE", "updatedAt": W.iso(clock.t)})
+    w.sweep(started.append)
+    w.sweep(started.append)
+    assert [(r["kind"], r.get("action", "")[:9]) for r in records(tmp_path)] == [("crashed", "restarted")]
+
+
+def test_a_second_watch_on_the_same_directory_stops(tmp_path):
+    """agent_watch.sh holds its flock but its Python child doesn't (dash opens it close-on-exec): a watch left running after
+    its shell dies, or started by hand, ran beside another, each with its own once-an-hour memory."""
+    first = W.lock(tmp_path / "watch.lock")
+    assert first is not None and W.lock(tmp_path / "watch.lock") is None
