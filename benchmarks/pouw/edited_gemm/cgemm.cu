@@ -26,14 +26,16 @@
 //   c_*              the GEMM: e_l7qs's mainloop over X and W', then the tail stage: O' = IMMA (A_0, -U) seeded by T_last,
 //                    D_d = IMMA (A_d, U), each word absorbed as it is made, O = O' - 128^d D_d (one IMAD a word a digit);
 //                    c_*_o writes O' instead of O (the recombination's cost, and O' for the CPU reference); c_l7qs_v
-//                    writes P.V's served value f = float(2 O + 127 S) s_row s_col instead (that epilogue's cost a cell)
+//                    writes P.V's served value f = float(2 O + 127 S) s_row s_col instead (that epilogue's cost a cell);
+//                    c_fx1 is c_l7qs with fx1's fold (decision 83: egemm.cu's fx_chain<FX1>, one IMAD by
+//                    key_mul(1, (4 t + e) 32) on word e of tile position t before duo, f = 4) on every word it absorbs
 //   hquant, hwedit   cohalf's X and P_A = [Y_lo | Y_hi | 0 | 0], W' and P_B = [-U_lo | -U_hi | 0 | 0]
 //   h_l7qs, h_l2q    cohalf's GEMM (htail: O = T_last - U Y, absorbed), on c_*'s schedules
 // Modes (at K = 128, cohalf's kernels):
 //   cgemm gate DIR M N K SEED       poisoned buffers: each c_* kernel's O against cuBLASLt's X W^T (W^ = W' - U on the
 //                                   device), c_l2q's receipts (another schedule) against c_l7qs's, c_l7qs_v's f against
-//                                   vref's, a no-write control; three tiles' operands, O, O' and receipts to DIR for
-//                                   cgemm_ref.py
+//                                   vref's, c_fx1's receipts unequal to c_l7qs's, a no-write control; three tiles'
+//                                   operands, O, O' and receipts (c_l7qs's and c_fx1's) to DIR for cgemm_ref.py
 //   cgemm bench REPS M N K          hot items interleaved across CG_ARMS (egemm.cu's arms too), one JSON line
 //   cgemm one ARM M N K             three warm-up calls, then one between cudaProfilerStart and Stop (for ncu)
 // Build: nvcc -O3 -std=c++17 --no-compress -gencode arch=compute_120a,code=sm_120a cgemm.cu -lcuda -lcublasLt -lnvidia-ml
@@ -384,30 +386,44 @@ __global__ void wfill(int8_t* W, size_t count, uint32_t seed, size_t k, int ends
 }
 
 // ---------------------------------------------------------------- the GEMM's tail
+// tile position J's words into chains 4 (J % 2) + e: duo's fold (RK DUO), or for an fx kind duo's fold of egemm.cu's
+// fx_chain<RK, J, e> of the word (FX1: one IMAD by key_mul(1, (4 J + e) 32), so f = 4)
+template <class L, int RK, int J> DEV void cfold(St (&ch)[8], const int (&w)[4]) {
+  if constexpr (is_fx(RK)) {
+    constexpr int H = 4 * (J % 2);
+    duo<DUO, 0, J>(ch[H], fx_chain<RK, J, 0>((uint32_t)w[0]));
+    duo<DUO, 0, J>(ch[H + 1], fx_chain<RK, J, 1>((uint32_t)w[1]));
+    duo<DUO, 0, J>(ch[H + 2], fx_chain<RK, J, 2>((uint32_t)w[2]));
+    duo<DUO, 0, J>(ch[H + 3], fx_chain<RK, J, 3>((uint32_t)w[3]));
+  } else {
+    static_assert(RK == DUO, "co32c's tail folds with duo or an fx kind");
+    L::template absorb<DUO, J / L::NI, J % L::NI>(ch, w);
+  }
+}
 // step D: D_d = A_d U^T tile by tile (atom D of the tail stage), each absorbed as made, and (SERVE) O -= 128^d D_d
-template <class L, int D, bool SERVE, int J = 0>
+template <class L, int D, bool SERVE, int RK = DUO, int J = 0>
 DEV void cdstep(int (&acc)[L::MI][L::NI][4], St (&ch)[8], const uint32_t (&fa)[L::MI][4], const uint32_t (&fb)[L::NI][2]) {
   if constexpr (J < L::MI * L::NI) {
     constexpr int mi = J / L::NI, ni = J % L::NI;
     int d[4];
     imma0(d, fa[mi], fb[ni]);
-    L::template absorb<DUO, mi, ni>(ch, d);
+    cfold<L, RK, J>(ch, d);
     if constexpr (SERVE) {
 #pragma unroll
       for (int e = 0; e < 4; e++) acc[mi][ni][e] = (int)((uint32_t)acc[mi][ni][e] - ((uint32_t)d[e] << (7 * D)));
     }
-    cdstep<L, D, SERVE, J + 1>(acc, ch, fa, fb);
+    cdstep<L, D, SERVE, RK, J + 1>(acc, ch, fa, fb);
   }
 }
-template <class L, int J = 0> DEV void cabs_all(St (&ch)[8], const int (&w)[L::MI][L::NI][4]) {
+template <class L, int RK = DUO, int J = 0> DEV void cabs_all(St (&ch)[8], const int (&w)[L::MI][L::NI][4]) {
   if constexpr (J < L::MI * L::NI) {
-    L::template absorb<DUO, J / L::NI, J % L::NI>(ch, w[J / L::NI][J % L::NI]);
-    cabs_all<L, J + 1>(ch, w);
+    cfold<L, RK, J>(ch, w[J / L::NI][J % L::NI]);
+    cabs_all<L, RK, J + 1>(ch, w);
   }
 }
 // the tail stage P_A = [A_0 | A_1 | A_2 | 0], P_B = [-U | U | U | 0]: O' = T_last + A_0 (-U)^T (atom 0, accumulated onto
 // T_last), absorbed; then D_1 (atom 1) and with THREE D_2 (atom 2)
-template <class L, bool THREE, bool SERVE> DEV void ctail(L& ml, int (&acc)[L::MI][L::NI][4], St (&ch)[8]) {
+template <class L, bool THREE, bool SERVE, int RK = DUO> DEV void ctail(L& ml, int (&acc)[L::MI][L::NI][4], St (&ch)[8]) {
   constexpr int MI = L::MI, NI = L::NI;
   ml.wait_full();
   const uint32_t tb = ml.stage(ml.s);
@@ -419,16 +435,16 @@ template <class L, bool THREE, bool SERVE> DEV void ctail(L& ml, int (&acc)[L::M
 #pragma unroll
     for (int ni = 0; ni < NI; ni++) imma(acc[mi][ni], fa[mi], fb[ni]);
   }
-  cabs_all<L>(ch, acc);
+  cabs_all<L, RK>(ch, acc);
   ml.load_b(fb, tb, 1);
 #pragma unroll
   for (int mi = 0; mi < MI; mi++) ml.load_a(fa[mi], tb, 1, mi);
-  cdstep<L, 1, SERVE>(acc, ch, fa, fb);
+  cdstep<L, 1, SERVE, RK>(acc, ch, fa, fb);
   if constexpr (THREE) {
     ml.load_b(fb, tb, 2);
 #pragma unroll
     for (int mi = 0; mi < MI; mi++) ml.load_a(fa[mi], tb, 2, mi);
-    cdstep<L, 2, SERVE>(acc, ch, fa, fb);
+    cdstep<L, 2, SERVE, RK>(acc, ch, fa, fb);
   }
   ml.release(ml.empty(ml.s));
   ml.advance();
@@ -456,9 +472,11 @@ template <class L> DEV void htail(L& ml, int (&acc)[L::MI][L::NI][4], St (&ch)[8
 }
 
 // TAIL 0: co32c's (ctail), 1: cohalf's (htail). SERVE 0: O' to U; 1: O; 2: P.V's served value as float, f = float(2 O + 127 S_row) (s_row s_col) with eb = [S (M ints) |
-// s_row (M floats) | s_col (N floats)] (pv's epilogue on a full key block, S per channel: the epilogue's cost a cell)
-template <int LAG, int TIE, bool SLEEP, bool THREE, int SERVE, int TAIL = 0> DEV void c_body(const Args& a) {
-  using L = EL<DUO, LAG, TIE, SLEEP>;
+// s_row (M floats) | s_col (N floats)] (pv's epilogue on a full key block, S per channel: the epilogue's cost a cell).
+// RK: the fold, DUO or (co32c) an fx kind on every absorbed word, the mainloop's (EL's) and the tail's
+template <int LAG, int TIE, bool SLEEP, bool THREE, int SERVE, int TAIL = 0, int RK = DUO> DEV void c_body(const Args& a) {
+  static_assert(RK == DUO || (TAIL == 0 && is_fx(RK)), "an fx fold is co32c's");
+  using L = EL<RK, LAG, TIE, SLEEP>;
   constexpr int MI = L::MI, NI = L::NI;
   extern __shared__ __align__(1024) uint8_t smem[];
   L ml(smem, a.maps, a.M, a.N, a.K, a.group, true, 1);
@@ -486,7 +504,7 @@ template <int LAG, int TIE, bool SLEEP, bool THREE, int SERVE, int TAIL = 0> DEV
     int acc[MI][NI][4];
     ml.tile_il(a.K, acc, ch, kr, zero);
     if constexpr (TAIL == 1) htail<L>(ml, acc, ch);
-    else ctail<L, THREE, SERVE != 0>(ml, acc, ch);
+    else ctail<L, THREE, SERVE != 0, RK>(ml, acc, ch);
     const int row0 = tm * 128 + wm * 32 + g, col0 = tn * 128 + wn * 32 + 2 * q;
     if constexpr (SERVE == 2) {
       const int* S = reinterpret_cast<const int*>(a.eb);
@@ -539,6 +557,9 @@ CGEMM(c_l2q, 2, 4, false)
 // _v: pv's served epilogue (SERVE 2)
 __global__ void __launch_bounds__(MLW::NT, 1) c_l7qs_v(const __grid_constant__ Args a) { c_body<7, 4, true, false, 2>(a); }
 __global__ void __launch_bounds__(MLW::NT, 1) c_l7qs_v_k3(const __grid_constant__ Args a) { c_body<7, 4, true, true, 2>(a); }
+// c_fx1: c_l7qs with every absorbed word behind fx1's keyed IMAD (decision 83, SAT-120's fx1_l7qs chain and keys)
+__global__ void __launch_bounds__(MLW::NT, 1) c_fx1(const __grid_constant__ Args a) { c_body<7, 4, true, false, 1, 0, FX1>(a); }
+__global__ void __launch_bounds__(MLW::NT, 1) c_fx1_k3(const __grid_constant__ Args a) { c_body<7, 4, true, true, 1, 0, FX1>(a); }
 // cohalf (k = 128)
 __global__ void __launch_bounds__(MLW::NT, 1) h_l7qs(const __grid_constant__ Args a) { c_body<7, 4, true, false, 1, 1>(a); }
 __global__ void __launch_bounds__(MLW::NT, 1) h_l2q(const __grid_constant__ Args a) { c_body<2, 4, false, false, 1, 1>(a); }
@@ -546,8 +567,8 @@ __global__ void __launch_bounds__(MLW::NT, 1) h_l2q(const __grid_constant__ Args
 // ---------------------------------------------------------------- host
 struct CKn { const char* name; Kern k, k3; };
 static const CKn CKERN[] = {{"c_l7qs", c_l7qs, c_l7qs_k3}, {"c_l7qs_o", c_l7qs_o, c_l7qs_o_k3}, {"c_l2q", c_l2q, c_l2q_k3},
-                          {"c_l2q_o", c_l2q_o, c_l2q_o_k3}, {"c_l7qs_v", c_l7qs_v, c_l7qs_v_k3}, {"h_l7qs", h_l7qs, h_l7qs},
-                          {"h_l2q", h_l2q, h_l2q}};
+                          {"c_l2q_o", c_l2q_o, c_l2q_o_k3}, {"c_l7qs_v", c_l7qs_v, c_l7qs_v_k3}, {"c_fx1", c_fx1, c_fx1_k3},
+                          {"h_l7qs", h_l7qs, h_l7qs}, {"h_l2q", h_l2q, h_l2q}};
 static const CKn* ckern(const std::string& n) {
   for (auto& e : CKERN) if (n == e.name) return &e;
   return nullptr;
@@ -708,6 +729,17 @@ static int cgate(const std::string& dir, int m, int n, int k, uint32_t seed) {
     if (name == "c_l7qs_o") dump_tiles(name, C.Y, nullptr);
   }
   if (F) CK(cudaFree(F));
+  // c_fx1 (co32c): O against cuBLASLt's; its receipts, judged by cgemm_ref.py from the key, differ from c_l7qs's (r_diff)
+  if (!C.half) {
+    CK(cudaMemsetAsync(C.Y, 0xA5, P.ny * 4, P.st)); CK(cudaMemsetAsync(C.R, 0xA5, P.nr * 4, P.st));
+    cgemm_run(C, cpick(C, ckern("c_fx1")), C.Y, C.R);
+    CK(cudaStreamSynchronize(P.st));
+    CK(cudaGetLastError());
+    const unsigned long long y = ecmp(P, C.Y, C.Yr, P.ny), r = ecmp(P, C.R, C.R2, P.nr);
+    res += ", \"c_fx1\": {\"y_bad\": " + std::to_string(y) + ", \"r_diff\": " + std::to_string(r) + "}";
+    ok &= y == 0 && r > 0;
+    dump_tiles("c_fx1", C.Y, C.R);
+  }
   // the no-write control: poisoned, nothing run; both compares must fail
   CK(cudaMemsetAsync(C.Y, 0xA5, P.ny * 4, P.st)); CK(cudaMemsetAsync(C.R, 0xA5, P.nr * 4, P.st));
   const unsigned long long cy = ecmp(P, C.Y, C.Yr, P.ny), cr = ecmp(P, C.R, C.R2, P.nr);
