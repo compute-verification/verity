@@ -10,7 +10,8 @@ output, sha256s; the tensors of the first `--store-steps` steps are saved) and t
 `control`: the identical engine without the extension (`tokens.json` only).
 `check` (CPU, offline): the three parts of the TP-aware Match this lane can execute on the collective skeleton of the run —
   1. STRUCTURE: per step and per rank, the sequence (kind, N) of the collectives equals the peer-input signature of THAT rank's
-     Build (`tp_links.json` of `derive_step --tp 2 --rank r`), and the rows of every collective equal the step's token count;
+     Build (`tp_links.json` of `derive_step --tp 2 --rank r`), and the rows of every collective are the step's tokens or sampled rows
+     in the schedule the capture realized (`step_rows`: arrivals and batch membership per step);
   2. CROSS-RANK PROVENANCE: for every stored collective k of every step, the value each rank RECEIVED equals the registered
      Definition of the two ranks' COMMITTED partials — `AllReduce2_v1{N}` (`bf16(f32(part_rank0) + f32(part_rank1))` per element) /
      `AllGather2_v1{N}` (`[part_rank0 | part_rank1]`) — bit-exactly, and both ranks received the same value; a
@@ -34,10 +35,22 @@ from typing import Any
 from verity_vllm.collectives import fused_norm as FN
 from verity_vllm.config import option
 from verity_vllm.pipeline.build import read_tp_links, same_module_path
+from verity_vllm.pipeline.launch_context import rows_at
+
+
+def step_rows(tok: dict) -> dict[int, tuple[int, int]]:
+    """{engine step: (tokens, sampled rows)} of the schedule a capture's `tokens.json` realized: each request from the forward that ran
+    its prefill (`timing.requests[rid].first_step`, 0 without one) for one forward per generated token, as `launch_context.rows_at`
+    schedules a declared request (a chunked prefill is not modelled: its steps' rows differ and fail)."""
+    timing = (tok.get("timing") or {}).get("requests") or {}
+    reqs = [{"arrive_step": int((timing.get(str(q["request_id"])) or {}).get("first_step") or 0), "prompt_len": len(q["prompt_token_ids"]),
+             "max_tokens": len(q["generated_token_ids"])} for q in tok["requests"]]
+    last = max((q["arrive_step"] + max(1, q["max_tokens"]) for q in reqs), default=0)
+    return {e: (sum(rows_at(q, e) for q in reqs), sum(1 for q in reqs if rows_at(q, e))) for e in range(last)}
 
 
 def _engine_main(args) -> None:
-    from verity_vllm.engine import engine_profile as prof
+    from verity_vllm.engine import engine_profile as prof, env as engine_env
 
     prof.apply_env()
     from vllm import LLM
@@ -51,6 +64,7 @@ def _engine_main(args) -> None:
     wl = va.load_workload(args.workload, None)
     case = va.case_of(wl, args.case)
     env_flags = {**prof.apply_env(), **served.apply(wl["execution"])}
+    engine_env.step_timeout(args.rpc_timeout)
     cp = prof.checkpoint_for(case, args.checkpoints)
     kw = prof.engine_kwargs(cp, replay=False, enforce_eager=True, tensor_parallel_size=args.tp)
     kw["enable_prefix_caching"] = False
@@ -117,8 +131,7 @@ def _check_main(args) -> int:
     recorder_sha = {str(r): hashlib.sha256((cap / f"coll.rank{r}.jsonl").read_bytes()).hexdigest() for r in ranks}
     steps = sorted({x["step"] for r in ranks for x in recs[r]})
     tok = json.load(open(cap / "tokens.json"))
-    n_tok_step = {}   # tokens per step: prefill = sum of prompt lens (one request at a time is the only admitted shape here), decode = #live requests
-    prompts = [len(q["prompt_token_ids"]) for q in tok["requests"]]
+    sched = step_rows(tok)
     gens = [len(q["generated_token_ids"]) for q in tok["requests"]]
     # ---- 1. structure vs each rank's Build peer-input signature
     struct = {"pass": True, "per_rank": {}}
@@ -137,12 +150,18 @@ def _check_main(args) -> int:
         per_step = {}
         bad = []
         bad_sites = []
+        bad_rows = []
         for s in steps:
             xs = [x for x in recs[r] if x["step"] == s]
             got = [(x["kind"], int(x["shape"][-1])) for x in xs]
-            # rows: the hidden-stream all-reduces carry the step's TOKENS (prefill = prompt tokens), the logits all-gather the step's SAMPLED rows
+            # rows (`step_rows`): the hidden-stream all-reduces carry the step's TOKENS; the all-gathers are of TWO row classes [R19 tp2
+            # F-r19-tp2-1]: the logits all-gather carries the step's SAMPLED rows and must be present, and a MID-MODULE all-gather
+            # (OlmoeAttention's q/k gathers) carries the step's tokens like the all-reduces.  Any other row count fails.
             rows_ar = sorted({int(x["shape"][0]) for x in xs if x["kind"] == "all_reduce" and len(x["shape"]) == 2})
             rows_ag = sorted({int(x["shape"][0]) for x in xs if x["kind"] == "all_gather" and len(x["shape"]) == 2})
+            n_tok, n_samp = sched.get(s, (0, 0))
+            if not (rows_ar == [n_tok] and n_samp in rows_ag and set(rows_ag) <= {n_samp, n_tok}):
+                bad_rows.append({"step": s, "rows_all_reduce": rows_ar, "rows_all_gather": rows_ag, "tokens": n_tok, "sampled": n_samp})
             ok = got == sig
             got_sites = [x.get("module") for x in xs]
             # [rev-pm M-0470] fail CLOSED by absence: a link without module_path or a record without a module is a site mismatch at that
@@ -160,6 +179,7 @@ def _check_main(args) -> int:
                     {"k": min(len(got_sites), len(sig_sites)), "record": None, "link": None, "note": "length mismatch"})})
         struct["per_rank"][r] = {"build_signature_len": len(sig), "build_digest": links["program_digest"], "n_steps": len(steps),
                                  "n_collectives": len(recs[r]), "steps_mismatching": bad,
+                                 "steps_rows_mismatching": bad_rows[:5], "n_steps_rows_mismatching": len(bad_rows),
                                  "sites_checked_per_step": len(sig_sites), "steps_site_mismatching": bad_sites[:5], "n_steps_site_mismatching": len(bad_sites),
                                  "site_rule": ("record.module == link.module (link.module_path minus the derive's RECORDED model_root, ' (Class)' dropped), per k; "
                                                if sites_exact else
@@ -171,21 +191,10 @@ def _check_main(args) -> int:
                                  "decode_rows_all_reduce": sorted({tuple(per_step[s]["rows_all_reduce"]) for s in steps[1:]}) if len(steps) > 1 else None,
                                  "decode_rows_all_gather": sorted({tuple(per_step[s]["rows_all_gather"]) for s in steps[1:]}) if len(steps) > 1 else None,
                                  "by_kind": _count(x["kind"] for x in recs[r]), "modules": _count(f'{x["module_class"]}' for x in recs[r])}
-        struct["pass"] &= not bad and not bad_sites and len(recs[r]) == len(sig) * len(steps)
-    # token count per step (B=1, arrivals none: one prefill of all prompt tokens, then one row per decode step)
-    if steps:
-        pre = struct["per_rank"][0]["prefill"]
-        struct["prefill_all_reduce_rows_equal_prompt_tokens"] = (pre["rows_all_reduce"] == [sum(prompts)])
-        # [R19 tp2 F-r19-tp2-1, after moe F-r19-moe-1] the prefill's all-gathers are of TWO row classes: the logits all-gather carries the
-        # step's SAMPLED rows (#requests) and must be present; a MID-MODULE all-gather (OlmoeAttention's q/k gathers, recorded since the
-        # recorder patches the model module's own import) carries the step's TOKENS, exactly like the hidden-stream all-reduces.  The R13 rule
-        # `rows_all_gather == [#requests]` read the 3755-row q/k gathers of row #70 as a structure FAIL (rows [8, 3755]) although every one
-        # of the 66 sites matched its link at every step.  Any other row count still fails.
-        rows_ag = list(pre["rows_all_gather"])
-        struct["prefill_all_gather_rows_equal_requests"] = (len(prompts) in rows_ag) and set(rows_ag) <= {len(prompts), sum(prompts)}
-        struct["prefill_all_gather_rows"] = {"observed": rows_ag, "sampled_rows": len(prompts), "prompt_tokens": sum(prompts),
-                                             "rule": "logits all-gather rows == #requests (required); mid-module all-gather rows == prompt tokens; nothing else"}
-        struct["pass"] &= bool(struct["prefill_all_reduce_rows_equal_prompt_tokens"] and struct["prefill_all_gather_rows_equal_requests"])
+        struct["pass"] &= not bad and not bad_sites and not bad_rows and len(recs[r]) == len(sig) * len(steps)
+    struct["step_rows"] = {s: list(sched.get(s, (0, 0))) for s in steps}
+    struct["rows_rule"] = ("per step of the realized schedule (tokens.json timing.requests first_step + generated tokens): all-reduce rows == "
+                           "the step's tokens; the logits all-gather's rows == its sampled rows (required); mid-module all-gather rows == its tokens; nothing else")
     res["structure"] = struct
     # ---- 2. cross-rank provenance on the stored steps
     prov = {"pass": True, "steps_checked": 0, "collectives_checked": 0, "elements_checked": 0, "all_reduce_checked": 0, "all_gather_checked": 0,

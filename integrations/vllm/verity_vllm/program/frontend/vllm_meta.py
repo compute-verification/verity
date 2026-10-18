@@ -19,7 +19,7 @@ from __future__ import annotations
 import os
 import socket
 import sys
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from typing import Any
 
 from verity_vllm.engine import env as engine_env
@@ -100,6 +100,9 @@ def with_peers(inner: nn.Module, inputs: tuple, bus) -> tuple[nn.Module, tuple]:
     """A tensor-parallel rank's traced wrapper over `inner` (a `make_wrapper` module) and its example inputs: `inner`'s own inputs (the
     prompt, and a stochastic wrapper's `seed` and `splits`), then the bus's example peers in collective order."""
     forms = {1: WithPeers, 2: SeededWithPeers, 3: SplitsWithPeers}
+    if getattr(inner, "C", 0):
+        raise ValueError(f"with_peers: a rank Program with a cached prefix (C={inner.C}) has no peer form yet (its prefix is the rank's own "
+                         f"KV heads, an input before the peers)")
     if len(inputs) not in forms:
         raise ValueError(f"with_peers: a wrapper takes 1 to 3 inputs of its own (prompt, seed, splits), {type(inner).__name__} takes {len(inputs)}")
     return forms[len(inputs)](inner, bus), tuple(inputs) + tuple(bus.example_peers())
@@ -315,19 +318,42 @@ class GreedyRequest(nn.Module):
         super().__init__()
         self.model, self.LP, self.T = model, LP, T
 
-    def _step(self, ids: torch.Tensor, pos0: int) -> torch.Tensor:
-        positions = torch.arange(pos0, pos0 + ids.shape[0], dtype=torch.int64)
-        hidden = self.model(ids, positions)
-        logits = self.model.compute_logits(hidden[-1:])
-        return torch.argmax(logits, dim=-1).to(torch.int32)
+    def _step(self, ids: torch.Tensor, pos0: int, s: int) -> torch.Tensor:
+        from verity_vllm.program.frontend.rules.vllm_bindings.observations import launch_region
+        with launch_region(s, "tokens"):
+            positions = torch.arange(pos0, pos0 + ids.shape[0], dtype=torch.int64)
+            hidden = self.model(ids, positions)
+        with launch_region(s, "sampled"):
+            logits = self.model.compute_logits(hidden[-1:])
+            return torch.argmax(logits, dim=-1).to(torch.int32)
 
     def forward(self, prompt: torch.Tensor) -> torch.Tensor:
-        tok = self._step(prompt, 0)
+        return self._decode(self._step(prompt, 0, 0))
+
+    def _decode(self, tok: torch.Tensor) -> torch.Tensor:
         toks = [tok]
         for s in range(self.T):
-            tok = self._step(tok, self.LP + s)
+            tok = self._step(tok, self.LP + s, s + 1)
             toks.append(tok)
         return torch.cat(toks)
+
+
+class CachedGreedyRequest(GreedyRequest):
+    """`GreedyRequest` for a request whose first `C` prompt rows vLLM's prefix cache serves: `forward(prompt, prefix)` hands `prefix`
+    (bf16 [L, 2, C, KVH*D]: every attention layer's cached key and value rows, layers in forward order) to `vllm_iface.kv_prefix`, so
+    each layer's history opens with them; prefills the uncached suffix prompt[C:] at positions C..LP-1 (the engine's launch rows), then
+    decodes as `GreedyRequest`.  The whole prompt stays the token input (Match wires prompt rows by position); no gate reads rows 0..C-1."""
+
+    DERIVE_SOURCE = "verity-vllm/cached-greedy-request/v1"
+
+    def __init__(self, model: nn.Module, LP: int, T: int, C: int) -> None:
+        super().__init__(model, LP, T)
+        self.C = C
+
+    def forward(self, prompt: torch.Tensor, prefix: torch.Tensor) -> torch.Tensor:
+        from verity_vllm.program.frontend.rules.vllm_iface import iface
+        iface.kv_prefix(prefix)
+        return self._decode(self._step(prompt[self.C:], self.C, 0))
 
 
 class PaddedGreedyRequest(nn.Module):
@@ -427,21 +453,56 @@ class StochasticRequest(nn.Module):
         self.temperature, self.top_p = float(temperature), float(top_p)
         self.S = S
 
-    def _step(self, ids: torch.Tensor, pos0: int, seed: torch.Tensor, splits: torch.Tensor | None) -> torch.Tensor:
+    def _step(self, ids: torch.Tensor, pos0: int, seed: torch.Tensor, splits: torch.Tensor | None, s: int) -> torch.Tensor:
+        from verity_vllm.program.frontend.rules.vllm_bindings.observations import launch_region
         from verity_vllm.program.frontend.rules.vllm_iface import iface
-        positions = torch.arange(pos0, pos0 + ids.shape[0], dtype=torch.int64)
-        hidden = self.model(ids, positions)
-        logits = self.model.compute_logits(hidden[-1:])
-        return iface.gumbel_topp_token_select(logits, seed, self.temperature, self.top_p, pos0 + ids.shape[0] - 1, splits, S=self.S)
+        with launch_region(s, "tokens"):
+            positions = torch.arange(pos0, pos0 + ids.shape[0], dtype=torch.int64)
+            hidden = self.model(ids, positions)
+        with launch_region(s, "sampled"):
+            logits = self.model.compute_logits(hidden[-1:])
+            return iface.gumbel_topp_token_select(logits, seed, self.temperature, self.top_p, pos0 + ids.shape[0] - 1, splits, S=self.S)
 
     def forward(self, prompt: torch.Tensor, seed: torch.Tensor, splits: torch.Tensor | None = None) -> torch.Tensor:
+        return self._request(prompt, 0, seed, splits)
+
+    def _request(self, prompt: torch.Tensor, C: int, seed: torch.Tensor, splits: torch.Tensor | None) -> torch.Tensor:
         entry = (lambda s: None) if self.S is not None else (lambda s: splits[s:s + 1])   # noqa: E731
-        tok = self._step(prompt, 0, seed, entry(0))
+        tok = self._step(prompt[C:] if C else prompt, C, seed, entry(0), 0)
         toks = [tok]
         for s in range(self.T):
-            tok = self._step(tok, self.LP + s, seed, entry(s + 1))
+            tok = self._step(tok, self.LP + s, seed, entry(s + 1), s + 1)
             toks.append(tok)
         return torch.cat(toks)
+
+
+class CachedStochasticRequest(StochasticRequest):
+    """`StochasticRequest` with a cached prefix of `C` rows (see `CachedGreedyRequest`): `forward(prompt, seed, [splits,] prefix)`, the
+    prefix after the request's other inputs."""
+
+    DERIVE_SOURCE = "verity-vllm/cached-stochastic-request/v1"
+
+    def __init__(self, model: nn.Module, LP: int, T: int, temperature: float, top_p: float, C: int, S: int | None = None) -> None:
+        super().__init__(model, LP, T, temperature, top_p, S=S)
+        self.C = C
+
+    def forward(self, prompt: torch.Tensor, seed: torch.Tensor, *rest: torch.Tensor) -> torch.Tensor:
+        from verity_vllm.program.frontend.rules.vllm_iface import iface
+        iface.kv_prefix(rest[-1])
+        return self._request(prompt, self.C, seed, rest[0] if len(rest) == 2 else None)
+
+
+def prefix_input(model: nn.Module, C: int) -> torch.Tensor:
+    """The example `prefix` input of a cached request wrapper: bf16 [L, 2, C, KVH*D] over the model's L attention layers (one KV
+    geometry for every layer; MLA's latent cache has no such prefix yet)."""
+    impls = attention_impls(model)
+    if not impls or any(v.get("kind") == "mla" for v in impls.values()):
+        raise ValueError(f"a cached prefix is a dense attention cache's rows; this model's attention layers are {sorted({v.get('kind', 'dense') for v in impls.values()})}")
+    geo = {(v["num_kv_heads"], v["head_size"]) for v in impls.values()}
+    if len(geo) != 1:
+        raise ValueError(f"a cached prefix holds one KV geometry for every layer; the layers have (KVH, D) in {sorted(geo)}")
+    (kvh, d), = geo
+    return torch.empty((len(impls), 2, C, kvh * d), dtype=torch.bfloat16, device="meta")
 
 
 def single_request_splits(sampling: dict) -> int | None:
@@ -454,15 +515,29 @@ def single_request_splits(sampling: dict) -> int | None:
     return S if S == int(splits_for_v1(1, int(g["num_sms"]))) else None
 
 
+def cached_wrapper(mod: nn.Module, inputs: tuple, model: nn.Module, C: int) -> tuple[nn.Module, tuple]:
+    """The request wrapper `mod` (with its example `inputs`) for a request whose first `C` prompt rows the prefix cache serves
+    (`CachedGreedyRequest`, `CachedStochasticRequest`), the prefix (`prefix_input`) its last input."""
+    if type(mod) not in (GreedyRequest, StochasticRequest) or not 0 < C < mod.LP:
+        raise ValueError(f"a cached prefix of C={C} rows needs a request wrapper and 0 < C < LP, got {type(mod).__name__}")
+    if isinstance(mod, StochasticRequest):
+        mod = CachedStochasticRequest(model, mod.LP, mod.T, mod.temperature, mod.top_p, C, S=mod.S)
+    else:
+        mod = CachedGreedyRequest(model, mod.LP, mod.T, C)
+    return mod, (*inputs, prefix_input(model, C))
+
+
 def make_wrapper(kind: str, model: nn.Module, *, pos0: int = 8, M: int = 1, LP: int = 8, T: int = 4, eos_id: int = 0,
-                 sampling: dict | None = None) -> tuple[nn.Module, tuple]:
-    """(module, example inputs on meta) for `kind` in {step, request, padded}.  [X-05] `sampling` is the row's declared policy: the greedy
-    wrappers author `torch.argmax`; [R15 stoch] `{"kind": "stochastic", "temperature", "top_p", "top_k": 0, "seeded": True, "splits": "derived"}`
+                 sampling: dict | None = None, C: int = 0) -> tuple[nn.Module, tuple]:
+    """(module, example inputs on meta) for `kind` in {step, request, padded}; `C` > 0: the request wrapper's `cached_wrapper`.
+    [X-05] `sampling` is the row's declared policy: the greedy wrappers author `torch.argmax`; [R15 stoch] `{"kind": "stochastic", "temperature", "top_p", "top_k": 0, "seeded": True, "splits": "derived"}`
     authors `vllm_iface.gumbel_topp_token_select` with the seed as a second forward input and [R16, coord M-0169] the derived split
     count `splits` (int32, one entry per sampling event: [1] for the step wrapper, [T+1] for the request wrapper) as a third (step /
     request wrappers; padded is greedy-only).  [single-request workloads] A numeric `splits` is the single-request constant S =
     SplitsFor_v1(1, num_SMs) (`build.sampler_geometry`, `geometry.sampler_batch == 1`): the wrapper takes no `splits` input.  Any other
     numeric `splits` (R15's static S / declared schedule) is REFUSED, as is any other policy (derive_step refuses earlier)."""
+    if C:
+        return cached_wrapper(*make_wrapper(kind, model, pos0=pos0, M=M, LP=LP, T=T, eos_id=eos_id, sampling=sampling), model, C)
     kind_s = (sampling or {"kind": "greedy"}).get("kind")
     if kind_s == "stochastic":
         s = sampling or {}
@@ -557,10 +632,14 @@ def export_module(mod: nn.Module, inputs: tuple, vllm_config, num_tokens: int, s
     """`torch.export.export(strict=False)` of a wrapper module on meta under vLLM's forward context + the export shims for the
     TargetProfile `profile` (default profile if None). `intercept_triton`: direct Python-level Triton launches become opaque
     `verity_cba::triton_launch` nodes (triton_capture.py). `applied_out`, if given, receives `read_back_applied()` taken INSIDE the
-    export context right after the export — what vLLM saw while the graph was produced (the driver refuses if it differs from the profile)."""
+    export context right after the export — what vLLM saw while the graph was produced (the driver refuses if it differs from the profile).
+    Under a declared launch batch the graph keeps each node's `launch_region` tag."""
+    import torch.fx.traceback as fxt
     from .export_compat import export_compat, read_back_applied
+    from .rules.vllm_bindings.observations import launch_batch_declared
     from .triton_capture import intercept_triton_launches
-    with torch.no_grad(), fake_forward_context(vllm_config, num_tokens), torch.device("meta"), export_compat(profile, mod), no_fx_stack_traces():
+    with (torch.no_grad(), fake_forward_context(vllm_config, num_tokens), torch.device("meta"), export_compat(profile, mod), no_fx_stack_traces(),
+          fxt.preserve_node_meta() if launch_batch_declared() else nullcontext()):
         if intercept_triton:
             with intercept_triton_launches(launch_log):
                 ep = torch.export.export(mod, inputs, strict=strict)
@@ -587,7 +666,7 @@ def op_histogram(ep) -> dict[str, int]:
 
 
 __all__ = ["PIN", "make_vllm_config", "ensure_distributed", "instantiate_meta", "fake_forward_context", "EngineStep", "GreedyRequest",
-           "PaddedGreedyRequest", "make_wrapper", "export_module", "export_step", "op_histogram", "consulted_facts",
+           "CachedGreedyRequest", "CachedStochasticRequest", "cached_wrapper", "prefix_input", "PaddedGreedyRequest", "make_wrapper", "export_module", "export_step", "op_histogram", "consulted_facts",
            "attention_impls", "export_facts", "BI_TRITON_KERNELS", "retie_lm_head_as_the_loader_does",
            "mla_absorbed_weights_as_the_loader_does"]
 

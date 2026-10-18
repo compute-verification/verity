@@ -10,6 +10,7 @@ import torch
 
 from verity.ml.circuits.refs import Coll, PartLog, array_of
 from verity.ml.circuits.types import Array
+from verity_vllm.program.frontend.outcomes import refuse
 from verity_vllm.program.frontend.torch_frontend import _tensor_type, shape_of
 
 
@@ -27,6 +28,17 @@ def kv_logs(ctx, layer_name: str, krow_list: list[Coll], vrow_list: list[Coll]) 
         out.append(log)
     logs[layer_name] = (out[0], out[1])
     return out[0], out[1]
+
+
+#: `ctx.state` key of a pending cached prefix (`vllm_bindings.kv_prefix.KvPrefixRule`)
+CACHED_PREFIX = "kv_prefix"
+
+
+def refuse_cached_prefix(ctx, node, what: str) -> None:
+    """Refuse an attention rule that does not read a cached prefix while one is pending."""
+    if ctx.state.get(CACHED_PREFIX):
+        refuse("numerics_unregistered", node, ctx.module_path(node), f"{what} does not read a cached prefix; only the dense "
+                                                                     f"unified_attention_with_output rule does (KvPrefix[vllm])")
 
 
 def norm_kind(ctx, role: str, node, N: int, eps: float, **statics) -> tuple[object, tuple[Coll, ...]]:

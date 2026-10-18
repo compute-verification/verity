@@ -416,9 +416,10 @@ class MatchConfig:
 
     match_impl: str = option("--match-impl", env="MATCH_IMPL", default="fast", help="global match checker: fast or record (the audit)")
     match_pipeline: str = option("--match-pipeline", env="MATCH_PIPELINE", default="shared",
-                                 help="shared = one batch decomposition inside the global match")
-    match_phase: str = option("--match-phase", env="MATCH_PHASE", default="all", choices=("all", "cpu"),
-                              help="cpu = resume the CPU half over the capture already on disk")
+                                 help="shared = one batch decomposition inside the global match (a TP row's: per rank)")
+    match_phase: str = option("--match-phase", env="MATCH_PHASE", default="all", choices=("all", "gpu", "cpu"),
+                              help="cpu = resume the CPU half over the capture already on disk; gpu (TP) = the capture and control alone, "
+                                   "which need no Build, then the row stops")
     snapshot_steps: str | None = option("--snapshot-steps", env="MATCH_SNAP_STEPS", default=None,
                                         help="0,1 | all; default 0,1 greedy, all stochastic or when form (B) must be complete")
     snapshot_max_bytes: str | None = option("--snapshot-max-bytes", env="MATCH_SNAP_MAX_BYTES", default=None,
@@ -433,7 +434,15 @@ class MatchConfig:
     compare_timeout: int | None = option("--compare-timeout", env="COMPARE_TIMEOUT", type=int, default=None,
                                          help="seconds per comparator (default scales with B and the envelope)")
     fold_timeout: int | None = option("--fold-timeout", env="FOLD_TIMEOUT", type=int, default=None,
-                                      help="TP: seconds for the per-rank fold Match (default 7200)")
+                                      help="TP: seconds for each leg of the per-rank fold Match (fold, compare, GM-01; default 7200); "
+                                           "tp-fold-match as a whole gets four legs' worth, the cross-rank leg included")
+    fold_rank_workers: int = option("--fold-rank-workers", env="FOLD_RANK_WORKERS", type=int, default=0,
+                                    help="TP: ranks whose fold Match legs run at once (0 = every rank; a GLM-5.3 B8 rank's X-09 compare "
+                                         "passes 200 GB, so 8 at once overfill a 1.5 TB host)")
+    match_reuse: str = option("--match-reuse", env="MATCH_REUSE", default="off", choices=("off", "fold", "legs"),
+                              help="TP, --match-phase cpu, rerunning a CPU half that stopped part way under the same code: fold = keep each "
+                                   "rank's persisted fold of the capture in place; legs = also each rank's written compare and GM-01 "
+                                   "documents, so only the missing legs and the cross-rank leg run")
     fold_profile: str | None = option("--fold-profile", env="FOLD_PROFILE", env_empty=True, default=None,
                                       help="TP: rank profile module (default derived_<ROLE>_tp<W>; empty = collective-level Match only)")
 

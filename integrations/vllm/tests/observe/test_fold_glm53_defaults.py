@@ -256,7 +256,7 @@ def _build_kind(settings, M, N=H):
     from verity_vllm.program.registry import tp_allreduce as T
 
     setting, route = T.served_route(settings, M, N)
-    plan = {"captured": T.covered(setting, N, route, M), "M": M, "N": N}
+    plan = {"captured": T.covered(setting, N, route, M), "M": M, "rows_n": M, "N": N}
     voc = vocabulary_for("profile", "b1-eager-v3")
     return BC._allreduce_kind(SimpleNamespace(kind=lambda role, node, **st: voc.kind(role, **st)), None, plan, 8)
 

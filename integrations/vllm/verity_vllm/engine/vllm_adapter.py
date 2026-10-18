@@ -15,6 +15,7 @@ from typing import Any
 import numpy as np
 
 from verity_vllm.config import RowEngine
+from verity_vllm.program import prefix_plan as PP
 from verity_vllm.engine.arrivals import run_requests_arrivals  # [coverage D87] step-indexed arrivals (torch-free module, unit-tested)
 from verity_vllm.observe import chunks as _chunks  # [chunked 2026-09-17] prefill-chunk / token-step attribution (torch-free, unit-tested)
 from verity_vllm.engine.build import (CASE, EXECUTION_ENFORCE_EAGER, Engine, build_engine, case_of, compilation_facts,  # noqa: F401
@@ -51,7 +52,8 @@ def load_workload(path: str | Path, max_tokens: int | None = None) -> dict:
     reqs = []
     accepted: dict[str, list[int]] = {}
     per_request: list[dict] = []
-    for r in doc["requests"]:
+    plan = PP.plan(doc)
+    for i, r in enumerate(doc["requests"]):
         rs = r.get("seed", seed)
         req = {"request_id": r["request_id"], "prompt_token_ids": [int(t) for t in r["prompt_token_ids"]],
                "max_tokens": int(max_tokens if max_tokens is not None else r["max_tokens"]),
@@ -59,7 +61,10 @@ def load_workload(path: str | Path, max_tokens: int | None = None) -> dict:
                # [coverage D87] serving profile B8-mixed: the engine step at which the request is admitted (0 = with the first
                # step, the historical behaviour).  Step-indexed, not wall-clock, so the observer and control runs see the same
                # batch membership at every step.
-               "arrive_step": int(r.get("arrive_step") or 0)}
+               "arrive_step": int(r.get("arrive_step") or 0),
+               # the prompt rows the prefix cache serves it and the request that computed each cached block (prefix_plan): its Program's
+               # shape is (LP, T, C), and the Commit's replay reads those rows from what the producers committed
+               "cached": plan[i]["cached"], "cached_from": [str(doc["requests"][q]["request_id"]) for q in plan[i]["producers"]]}
         if r.get("variant") is not None:
             # [ov-sampling] a request may pin ANOTHER variant (mixed batch: one greedy row next to a sampled row); the
             # request record then carries its own temperature / top_p / top_k and the manifest lists them per request
@@ -139,9 +144,17 @@ def sampling_params(req: dict, sampling: dict) -> Any:
                           logprobs=sampling.get("logprobs"))
 
 
+def fresh_prefix_cache(engine: Engine) -> None:
+    """Empty vLLM's prefix cache before a workload run of an engine that serves with it: a run's prefix-cache hits are its own requests'
+    (`program.prefix_plan`), never those of a run before it on the same engine (a warm-up, the other arm of a pair, a capture)."""
+    if engine.kwargs.get("enable_prefix_caching") and engine.llm.reset_prefix_cache() is False:
+        raise RuntimeError("vLLM refused to reset its prefix cache (a request is still running)")
+
+
 def run_requests(engine: Engine, requests: list[dict], sampling: dict) -> tuple[dict[str, list[int]], dict]:
     """Add every request with *our* request ids and step the engine until all finish (driver.run_requests; with declared
     `arrive_step`s, `run_requests_arrivals`).  `timing["requests"]` carries the realized per-request steps (D87)."""
+    fresh_prefix_cache(engine)
     class _R:
         def __init__(self, d: dict, order: int) -> None:
             self.request_id = d["request_id"]
