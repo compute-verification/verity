@@ -1460,10 +1460,16 @@
    "type_hash": "22e2320fa4db7ad6c4182cab5d22d9df1ef0ede2c031c256c59be0e9997c4a1e"
   },
   "Accounting.SecurityProofs.TS.LiSegmentsBind": {
-   "owner": "@compute-accounting"
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.LiSegmentsBind : Accounting.Guarantees.TS.LiSegmentsBind"],
+   "assumptions": [],
+   "type_hash": "4baef016fc83306a93149687b606f427b8c3cb674079797fb81dd5fbb73288ef"
   },
   "Accounting.SecurityProofs.TS.LiWindowUnbound": {
-   "owner": "@compute-accounting"
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.LiWindowUnbound : Accounting.Guarantees.TS.LiWindowUnbound"],
+   "assumptions": [],
+   "type_hash": "d9d6207c5412eb5466620e9d32e2aba034d1d2e17bdbb7555de5a140f68e1915"
   },
   "Accounting.SecurityProofs.TS.LuckCaseA": {
    "owner": "@compute-accounting",
@@ -1477,14 +1483,17 @@
    "assumptions": [],
    "type_hash": "d084b40f522a78af1bea4d7f120109dd3d8713c7096795fd276431965bf3524c"
   },
+  "Accounting.SecurityProofs.TS.LuckCaseAKeyed": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.LuckCaseAKeyed : Accounting.Guarantees.TS.LuckCaseAKeyed"],
+   "assumptions": [],
+   "type_hash": "d843adb387677d7f782ea44db601e82ebfecf578d72fbe57b4598a2dad87c6e3"
+  },
   "Accounting.SecurityProofs.TS.LuckOfReceipt": {
    "owner": "@compute-accounting",
    "signature": ["Accounting.SecurityProofs.TS.LuckOfReceipt : Accounting.Guarantees.TS.LuckOfReceipt"],
    "assumptions": [],
    "type_hash": "ae399ff4f14b16a994012859adfb2f4af1fa9d30ae7bf2f368d6157b34573189"
-  },
-  "Accounting.SecurityProofs.TS.LuckCaseAKeyed": {
-   "owner": "@compute-accounting"
   },
   "Accounting.SecurityProofs.TS.OperandLuckCube": {
    "owner": "@compute-accounting",
@@ -7002,11 +7011,12 @@
     "Accounting.SecurityProofs.TS.DIdealFloor",
     "Accounting.SecurityProofs.TS.LuckCaseA",
     "Accounting.SecurityProofs.TS.LuckCaseACube",
+    "Accounting.SecurityProofs.TS.LuckCaseAKeyed",
     "Accounting.SecurityProofs.TS.LuckOfReceipt"
    ]
   },
   "Definitions.Accounting.TS.Receipt": {
-   "digest": "98b7ada605befa53c7f72f38372252cde9f459b1dee9c8913528d06cf6d1d060",
+   "digest": "b75ef312537899445e95572519e9aa5af190842c93d70066b60ca1b67c9b96b4",
    "definitions": {
     "Accounting.TS.DuoUnits": "d330484da8d2fb119ce2541283d148f900bc4b3854bd8b53ee9e5be2a0b523ec",
     "Accounting.TS.DuoUnits.a": "5d4b4c0b1dc2de8007052fb50e2a1fac16a98ff4b340a8c4448d0dc4085c5416",
@@ -7023,12 +7033,28 @@
     "Accounting.TS.Fx1Units.m": "a17c0adb613b486fdb12dfa9468efdd24bc5b8a9d6787fcb33273aafbe590c25",
     "Accounting.TS.Fx1Units.same": "abaaa4738eb83ec3bb0ad72b33ca7f3a6872e8ad0568747955730838eba1f2e8",
     "Accounting.TS.Fx1Units.toDuoUnits": "127a35ee370b5554470acbef32e7665d6b6c841ae16171970f608c13f140cb71",
+    "Accounting.TS.LiPlace": "53683b1e9422faa9b2410ee08a5d5f09aecf2d9e10dd6986246f7ee877d994fd",
+    "Accounting.TS.LiUnits": "0269cde21cbd1d8fce16febd9bb4701c3e2d61069f5313837201cb48bd68d06d",
+    "Accounting.TS.LiUnits.a": "4bfc4d632abb6444f61c55571eba476661e23a3189f09b9971e64daad6d3ae73",
+    "Accounting.TS.LiUnits.checkpoint": "d0b35a6f176d5e36be21ac5cacaf1c10b2bfa022d97fe6e57253a870f46dbf0c",
+    "Accounting.TS.LiUnits.honest": "4f7582874fa50ed1a146e6552ef48de9405bd298e7dc4e15f7928b72597b2e6c",
+    "Accounting.TS.LiUnits.k": "d5f2ad995a0e53b9a7c1cceab8e533b67ecfb5031721a6d614cf3fe6b715e785",
+    "Accounting.TS.LiUnits.pos": "9d41bcfd7f16c2253239ecec3b89d67f2d65d2bde710d1e2bf5431ea6e6fa769",
+    "Accounting.TS.LiUnits.right": "aebdfe59dd9137a82e92c17783a0c38d8c7388821a28cab1ad1561e0550d5b3a",
+    "Accounting.TS.LiUnits.same": "5927b5e65e850cafe10034645ae1177813a5c245c0e2c5b63c0c8d10187f6a2d",
+    "Accounting.TS.LiUnits.sameWindow": "bf0e748d0fd21b62dd3e1762daf508d9162cf7ec77ea2c4a3478fdb9ee613c4a",
+    "Accounting.TS.LiUnits.start": "4de5aeca0f0a6006795207d57bcfa12b56f97ec77d2598a151563022d7a08640",
+    "Accounting.TS.LiUnits.state": "adccc55d8a91fc821683cb17674d5950481e0bc2b4c8fe9974b8d926c1a79b80",
+    "Accounting.TS.LiUnits.steps": "be2d9b09090ccaa42bf71f4f7f7d102712bde3523c32ce344acf1375627e513e",
+    "Accounting.TS.LiUnits.value": "11884c078749551ec4c1d6f65715768bc2fe32fefcd6f0c9c23439e57bbb17d9",
+    "Accounting.TS.LiUnits.word": "1b1e190a5d09f332fe07a86cb36a8a228c21103abe3828101acb883321e24853",
     "Accounting.TS.ReceiptGame": "2286970ee38b99490080368e7ff9c0e66baadf5fa6f01f3b20cbbfb537797690",
-    "Accounting.TS.ReceiptGame.CaseA": "168a0bf1840edf3c46742239f206bf2cb93d3cd701edbd1a8bc2fb9831046411",
+    "Accounting.TS.ReceiptGame.CaseA": "3e8cb777c37ee0ed45899a3408e29587e6770c3db5b522d94e5c5e00459abf6b",
     "Accounting.TS.ReceiptGame.CubeOperands": "eff46a892aa26753dd82e289642a30757833303f310962553fe7ee39b67c26a4",
     "Accounting.TS.ReceiptGame.OperandLuck": "dd7b63e23469b588ed492a68e2c85f69577d571be0b4b001064d2797a769a32d",
     "Accounting.TS.ReceiptGame.Pinned": "d01f762cd1354d1255f9c53c3b8024f249165dda6e03903593c14f3d799b3cba",
     "Accounting.TS.ReceiptGame.ReceiptLuck": "4532d24782feb63b96a3023e46f6c62353589be05189456c57fa4944dc00c5de",
+    "Accounting.TS.ReceiptGame.WrongWords": "29f104a8488bb31b3fc643194aa18152599233f938e93ffb717b3b9e2ce00b0a",
     "Accounting.TS.ReceiptGame.below": "9ea31cd8e8b7825f1ae2db00987697911674befa3f2f54a170f79685b90a96aa",
     "Accounting.TS.ReceiptGame.brecOn": "8b56f30b30a49b35717b36c02fc1fb03adbc76e5ecf0c452b13cab19150c8cd1",
     "Accounting.TS.ReceiptGame.brecOn.go": "abf70a713be8975bd2c832ffaab3fc50dae5ce1996254078a4eaa4ed5ce5211b",
@@ -7039,8 +7065,11 @@
     "Accounting.TS.ReceiptGame.round": "7b75fa38de308279d8654e17570a0a508d65d464e465e54d2e116df7a8f2de2b"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.TS.LiSegmentsBind",
+    "Accounting.SecurityProofs.TS.LiWindowUnbound",
     "Accounting.SecurityProofs.TS.LuckCaseA",
     "Accounting.SecurityProofs.TS.LuckCaseACube",
+    "Accounting.SecurityProofs.TS.LuckCaseAKeyed",
     "Accounting.SecurityProofs.TS.LuckOfReceipt",
     "Accounting.SecurityProofs.TS.OperandLuckCube",
     "Accounting.SecurityProofs.TS.ReceiptLuckCaseA"
@@ -12098,8 +12127,11 @@
     "Pouw.Receipt.duoWord": "cbd7aa3d7554fa9b6113932c730b75304b994a68bc15cfb4c5e6955f265142a9"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.TS.LiSegmentsBind",
+    "Accounting.SecurityProofs.TS.LiWindowUnbound",
     "Accounting.SecurityProofs.TS.LuckCaseA",
     "Accounting.SecurityProofs.TS.LuckCaseACube",
+    "Accounting.SecurityProofs.TS.LuckCaseAKeyed",
     "Accounting.SecurityProofs.TS.ReceiptLuckCaseA",
     "Pouw.SecurityProofs.Receipt.DuoPairNoKernel",
     "Pouw.SecurityProofs.Receipt.DuoQuadNoKernel",
@@ -12130,6 +12162,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.LuckCaseA",
     "Accounting.SecurityProofs.TS.LuckCaseACube",
+    "Accounting.SecurityProofs.TS.LuckCaseAKeyed",
     "Accounting.SecurityProofs.TS.ReceiptLuckCaseA",
     "Pouw.SecurityProofs.Receipt.Fx1PairNoKernel",
     "Pouw.SecurityProofs.Receipt.Fx1QuadNoKernel",
@@ -12151,6 +12184,12 @@
     "Pouw.Receipt.liHalf": "14b4abf8590b72949c821f9d279c60b8fe96deb5cc391c7ac0e9649fe625c1bb"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.TS.LiSegmentsBind",
+    "Accounting.SecurityProofs.TS.LiWindowUnbound",
+    "Accounting.SecurityProofs.TS.LuckCaseA",
+    "Accounting.SecurityProofs.TS.LuckCaseACube",
+    "Accounting.SecurityProofs.TS.LuckCaseAKeyed",
+    "Accounting.SecurityProofs.TS.ReceiptLuckCaseA",
     "Pouw.SecurityProofs.Receipt.LiCheckpointLowBit",
     "Pouw.SecurityProofs.Receipt.LiCheckpointWordInjective",
     "Pouw.SecurityProofs.Receipt.LiHalfBijective"
@@ -12304,6 +12343,7 @@
     "Accounting.SecurityProofs.TS.FloorCreditD3",
     "Accounting.SecurityProofs.TS.LuckCaseA",
     "Accounting.SecurityProofs.TS.LuckCaseACube",
+    "Accounting.SecurityProofs.TS.LuckCaseAKeyed",
     "Accounting.SecurityProofs.TS.LuckOfReceipt",
     "Accounting.SecurityProofs.TS.OperandLuckCube",
     "Accounting.SecurityProofs.TS.ReceiptLuckCaseA",
@@ -17198,6 +17238,7 @@
     "Accounting.SecurityProofs.TS.FoldOptOfFanIn",
     "Accounting.SecurityProofs.TS.LuckCaseA",
     "Accounting.SecurityProofs.TS.LuckCaseACube",
+    "Accounting.SecurityProofs.TS.LuckCaseAKeyed",
     "Accounting.SecurityProofs.TS.LuckOfReceipt",
     "Accounting.SecurityProofs.TS.TimeBound"
    ]
@@ -17670,17 +17711,23 @@
    ]
   },
   "Models.Accounting.Guarantees.TS.Receipt": {
-   "digest": "b884b66ab7718e9c84580d3b3953b9fc878c177f4877322b209a48a7d1c20941",
+   "digest": "ccb344d91438d2f4f86d1ee5529cf35eb781c11f3dd2851fe6430137e36c8a72",
    "definitions": {
+    "Accounting.Guarantees.TS.LiSegmentsBind": "b23e64b4e9497e4a58b88525da1b00752ba32f9cc292526e70479f8a93c63daa",
+    "Accounting.Guarantees.TS.LiWindowUnbound": "647b1f3468da6180e54bcb482210037e26ab91b121424203d825a97589417474",
     "Accounting.Guarantees.TS.LuckCaseA": "89a5fc4ce0c50e6e494dc5c9f86855cceef42b29ef75fc24048cb1843ce04a2b",
     "Accounting.Guarantees.TS.LuckCaseACube": "0de8167c49553164ac91c53c3a60561fa6c56d9d7fb984ad5b061801c62f2564",
+    "Accounting.Guarantees.TS.LuckCaseAKeyed": "747c5f1026a853b61966f01e4260873b978e6b5e033778bf5e505321405dbb6c",
     "Accounting.Guarantees.TS.LuckOfReceipt": "5304611c4581a8f852f1e933cd1da3f74b2dfa7499bb3de43dc4021a02f94157",
     "Accounting.Guarantees.TS.OperandLuckCube": "5cb76bd181ea65cd63d297bc2c0421106a4722e26c3a2f29125f06ce09a56de8",
     "Accounting.Guarantees.TS.ReceiptLuckCaseA": "b1e2b795fbef1ea41e889b3121a0b8d6d3b56b007f19a30f43ae436d92ddcb4f"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.TS.LiSegmentsBind",
+    "Accounting.SecurityProofs.TS.LiWindowUnbound",
     "Accounting.SecurityProofs.TS.LuckCaseA",
     "Accounting.SecurityProofs.TS.LuckCaseACube",
+    "Accounting.SecurityProofs.TS.LuckCaseAKeyed",
     "Accounting.SecurityProofs.TS.LuckOfReceipt",
     "Accounting.SecurityProofs.TS.OperandLuckCube",
     "Accounting.SecurityProofs.TS.ReceiptLuckCaseA"
