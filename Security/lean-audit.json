@@ -564,10 +564,6 @@
     "fails": "Claims.Witness.Recursion.ZKPriv_fails",
     "meets": ["Claims.Witness.Recursion.ZKPriv_meets"]
    },
-   "Claims.Recursion.ZKPrivStop": {
-    "fails": "Claims.Witness.Recursion.ZKPrivStop_fails",
-    "meets": ["Claims.Witness.Recursion.ZKPrivStop_meets"]
-   },
    "Claims.Recursion.ZKStop": {
     "fails": "Claims.Witness.Recursion.ZKStop_fails",
     "meets": ["Claims.Witness.Recursion.ZKStop_meets"]
@@ -627,6 +623,10 @@
    "Claims.Sampling.KSLinOn": {
     "fails": "Claims.Sampling.KSLinOn_fails",
     "meets": ["Claims.Sampling.decoder_meets_plain", "Claims.Sampling.decoder_meets_zk"]
+   },
+   "Claims.ZKmalRx": {
+    "fails": "Claims.ZKmalRx_fails",
+    "meets": ["Claims.Witness.Recursion.ZKStop_meets"]
    }
   },
   "not": {
@@ -3082,37 +3082,6 @@
    "assumptions": [],
    "type_hash": "28802eaa97b3fac8feb7b1807cb67fc8e9da0c3319193ecc96e51d75fb36e780"
   },
-  "Claims.Witness.Recursion.ZKPrivStop_fails": {
-   "owner": "@proofs",
-   "signature": [
-    "Claims.Witness.Recursion.ZKPrivStop_fails {Coin N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω]",
-    "  (H : Claims.Msg → Claims.Msg) (SO : Nat → Claims.Msg → Nat → Claims.Recursion.OSim) :",
-    "  Not",
-    "    (Claims.Recursion.ZKPrivStop H (Claims.Witness.Recursion.zkSPR Coin) (Claims.Witness.Recursion.zeroI Coin)",
-    "      (Claims.Witness.Recursion.zkO Coin) (fun x => Claims.ZKMal.quietP N Ω List.nil) SO)"
-   ],
-   "assumptions": [],
-   "type_hash": "7babc8c03a595bca71ada1195a8414a7286c14740a6856df0c83c87ec3f6ee8c"
-  },
-  "Claims.Witness.Recursion.ZKPrivStop_meets": {
-   "owner": "@proofs",
-   "signature": [
-    "Claims.Witness.Recursion.ZKPrivStop_meets (rel : Flock.Readable.Parsed → Flock.Readable.Relation)",
-    "  (IV : Claims.Verifier FlockDeploy.Coin) (ivScope : Claims.Msg → Bool) (b : RecDeploy.Brings) :",
-    "  And (Eq (FlockDeploy.deployZk rel).zk Bool.true)",
-    "    (And (Eq (RecDeploy.deployRecStop IV ivScope b).P (RecDeploy.refPStop IV ivScope b))",
-    "      (And",
-    "        (∀ (H : Claims.Msg → Claims.Msg) (w : Claims.Flock.Wit) (x : Claims.Msg)",
-    "          (hist : List (Prod Claims.Msg Claims.Msg)) (ω : RecDeploy.Tape b),",
-    "          Eq ((RecDeploy.deployRecStop IV ivScope b).halted H (RecDeploy.stopRounds IV x) x (RecDeploy.asRounds hist))",
-    "              Bool.true →",
-    "            Eq ((RecDeploy.refPStop IV ivScope b w).next x hist ω) (Claims.OC.ret List.nil))",
-    "        (∀ (I : Claims.Recursion.Inner FlockDeploy.Coin Claims.Flock.Wit) (x : Claims.Msg) (w : Claims.Flock.Wit),",
-    "          Not (Claims.Recursion.RPriv (RecDeploy.deployRecStop IV ivScope b).toDeploy I x w))))"
-   ],
-   "assumptions": [],
-   "type_hash": "d35aebc256a2a2cbf5d88dae05fc3c0f27aa524341fc9e9ab22be074c9069107"
-  },
   "Claims.Witness.Recursion.ZKPriv_fails": {
    "owner": "@proofs",
    "signature": [
@@ -3197,6 +3166,9 @@
    ],
    "assumptions": [],
    "type_hash": "186029323a95571ffc1885099305b7bedfb3432f1068675d2dd416e9bd0a90a6"
+  },
+  "Claims.ZKmalRx_fails": {
+   "owner": "@proofs"
   },
   "Flock.SecurityProofs.ClaimsStated": {
    "owner": "@proofs",
