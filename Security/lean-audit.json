@@ -1735,6 +1735,9 @@
    "assumptions": [],
    "type_hash": "4baef016fc83306a93149687b606f427b8c3cb674079797fb81dd5fbb73288ef"
   },
+  "Accounting.SecurityProofs.TS.LiLowBit": {
+   "owner": "@compute-accounting"
+  },
   "Accounting.SecurityProofs.TS.LiWindowUnbound": {
    "owner": "@compute-accounting",
    "signature": ["Accounting.SecurityProofs.TS.LiWindowUnbound : Accounting.Guarantees.TS.LiWindowUnbound"],
@@ -1764,6 +1767,9 @@
    "signature": ["Accounting.SecurityProofs.TS.LuckOfReceipt : Accounting.Guarantees.TS.LuckOfReceipt"],
    "assumptions": [],
    "type_hash": "ae399ff4f14b16a994012859adfb2f4af1fa9d30ae7bf2f368d6157b34573189"
+  },
+  "Accounting.SecurityProofs.TS.OneRegisterLowBit": {
+   "owner": "@compute-accounting"
   },
   "Accounting.SecurityProofs.TS.OperandLuckCube": {
    "owner": "@compute-accounting",

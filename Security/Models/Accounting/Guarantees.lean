@@ -32,6 +32,7 @@ import Models.Accounting.Guarantees.TS
 import Models.Accounting.Guarantees.Sheet
 import Models.Accounting.Guarantees.TS.Receipt
 import Models.Accounting.Guarantees.TS.FoldFanIn
+import Models.Accounting.Guarantees.TS.LowBit
 
 /-! Resource accounting's guarantee statements: the joint guarantee and its covert residual, PoUW's and the bandwidth
 audit's guarantees as a joint run's compute and bandwidth guarantees, the filler's per-check luck, a state-bounded
