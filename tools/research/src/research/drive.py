@@ -76,6 +76,9 @@ CHECK_STEPS = ("preflight-lock", "preflight-lints", "preflight-fixtures", "lean-
 DEFERRED = "every step but the deferred ones passed"
 #: a run stopped by SIGTERM (128 + 15): a cancel, or a twin whose sibling won the slot
 SIGTERM_RC = 143
+#: pre-warms running at once: each is a whole check in a slot, and a train waits behind every one (18 Oct 00:43Z: four took the
+#: room drive counts, and no train started)
+PREWARM_MAX = 1
 #: what decides how a check runs and what it passes: a `main` that changed any of it re-checks the queue rather than land on it
 CHECK_TOOLING = ("tools/verity/check/", "tools/verity/lean/", "tools/verity/circuit_check/")
 RUN_RE = re.compile(r"^RUN ((?:r20\d{6}-\d{6}-[0-9a-f]{4} ?)+)$", re.M)
@@ -752,7 +755,7 @@ class Driver:
 
     def prewarm(self, drive: dict, running: int) -> int:
         """Launch and follow each pre-warm `warming` asked for (one `train.sh` check of the PR's head, in a check slot, while fewer
-        than `max_running` checks run) and mark it done once it ends, passed or not: the train's check is the gate.  Returns
+        than `max_running` checks run, and `PREWARM_MAX` at a time) and mark it done once it ends, passed or not: the train's check is the gate.  Returns
         how many run now, for the running count."""
         q = self.q
         heads = {f"{p.number}@{p.head}" for p in q.github.open_prs()}
@@ -776,7 +779,7 @@ class Driver:
                     q.log(f"research queue drive: #{rec['pr']}'s pre-warm {' '.join(rec['ids'])} ended; it joins `{q.branch}`")
                     continue
                 rec.pop("ids")
-            if running + active >= self.max_running or self.dry_run or q.shadow:
+            if running + active >= self.max_running or active >= PREWARM_MAX or self.dry_run or q.shadow:
                 continue
             ids, tail = self.launch(self.repo, rec["head"], self.on, False)
             if not ids:

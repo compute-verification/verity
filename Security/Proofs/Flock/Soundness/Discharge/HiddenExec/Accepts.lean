@@ -248,4 +248,70 @@ theorem accepts_verdict_hm96Any : AcceptsVerdictHm96Any := by
     (ofCircuit_fold sts[j] hwf _) (setupOne_tagsAt_hm96 hl hset) _ sess hext (decode_roundsWF hsess) schs[j] hf j _ _
     c h0 h1
 
+/-- `setupOne_tagsAt_hm96` for every leaf the non-ZK headlines cover: under `hm96-sha512/v1` leaves a table's statement
+commits with `hm96Sha512`, and under hidden outputs with plain SHA-512 leaves with `MerkleScheme.sha512`. -/
+theorem setupOne_tagsAt_leaf {j : ℕ} {st : Flock.Stmt}
+    (hl : tags.merkleLeaf = "hm96-sha512/v1" ∨
+      (tags.hiddenOutputs = true ∧ tags.merkleLeaf = "flock-leaf/sha512-unsalted"))
+    (h : setupOne (tagsAt tags count j) cf pf coins tables draw partition program = .ok st) :
+    (tags.merkleLeaf = "hm96-sha512/v1" ∧ st.merkle = MerkleScheme.hm96Sha512) ∨
+      (tags.merkleLeaf = "flock-leaf/sha512-unsalted" ∧
+        st.merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted") := by
+  rcases hl with hl | ⟨hh, hl⟩
+  · exact Or.inl ⟨hl, setupOne_tagsAt_hm96 hl h⟩
+  · have hh' : (tagsAt tags count j).hiddenOutputs = true := by unfold tagsAt; split <;> exact hh
+    exact Or.inr ⟨hl, setupHidden_plain ((tagsAt_merkleLeaf tags count j).trans hl)
+      ((setupOne_hidden hh').symm.trans h)⟩
+
+/-- **flock-verify's acceptance makes each table's verdict accept, at the model's leaf of the tags' leaf scheme**
+(`leafOfId`): `accepts_verdict_hm96Any` under `hm96-sha512/v1` leaves, and under hidden outputs with plain SHA-512
+leaves the verdict at `leafPlain` (`table_verdict_leaf`). -/
+theorem accepts_verdict_leafAny {I : Exec.Inputs} {t : Exec.Transcript}
+    (hl : I.tags.merkleLeaf = "hm96-sha512/v1" ∨
+      (I.tags.hiddenOutputs = true ∧ I.tags.merkleLeaf = "flock-leaf/sha512-unsalted"))
+    (h : Accepts I t) :
+    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : Session), setupOf I t.record = .ok (spec, sts) ∧
+      Record.decode spec t.record = .ok sess ∧ sts.size = spec.tables.size ∧
+      ∀ (j : ℕ) (hj : j < sts.size), ∃ sch : Flock.Schedule, Flock.fast100 sts[j].m = some sch ∧
+        ∀ (hwf : StmtWF sts[j]) (hr : RegionsWF sts[j]) (hm : 13 ≤ sts[j].m),
+        ∃ (p₀ p₁ : Proof) (s₀ s₁ : StreamRec) (pend₀ pend₁ : PendL 𝔽 Dig),
+          decodeProof (shapeOf (Setup.ofCircuit sts[j]) sch (Model.extraClaims (stmtOf sts[j] hwf (regionsOf sts[j]))
+            PT_LOCAL sts[j].mPts (ptsOf sts[j].mPts sess.points)).length) t.proofs[2 * j]! = .ok p₀ ∧
+          decodeProof (shapeOf (Setup.ofCircuit sts[j]) sch (Model.extraClaims (stmtOf sts[j] hwf (regionsOf sts[j]))
+            PT_LOCAL sts[j].mPts (ptsOf sts[j].mPts sess.points)).length) t.proofs[2 * j + 1]! = .ok p₁ ∧
+          sess.streams.find? (fun x => x.name == toString spec.tables[j]! ++ toString "/rep" ++ toString 0) = some s₀ ∧
+          sess.streams.find? (fun x => x.name == toString spec.tables[j]! ++ toString "/rep" ++ toString 1) = some s₁ ∧
+          Plays fOf (Model.repC execArith 0 (stmtOf sts[j] hwf (regionsOf sts[j])) (schedOf sch) hm
+              (Model.extraClaims (stmtOf sts[j] hwf (regionsOf sts[j])) PT_LOCAL sts[j].mPts
+                (ptsOf sts[j].mPts sess.points)))
+            (repMsgs (Setup.ofCircuit sts[j]) sch (2 + (Model.extraClaims (stmtOf sts[j] hwf (regionsOf sts[j]))
+              PT_LOCAL sts[j].mPts (ptsOf sts[j].mPts sess.points)).length) p₀ capDig)
+            (s₀.rounds.toList.map (·.coins)) pend₀ ∧
+          Plays fOf (Model.repC execArith 1 (stmtOf sts[j] hwf (regionsOf sts[j])) (schedOf sch) hm
+              (Model.extraClaims (stmtOf sts[j] hwf (regionsOf sts[j])) PT_LOCAL sts[j].mPts
+                (ptsOf sts[j].mPts sess.points)))
+            (repMsgs (Setup.ofCircuit sts[j]) sch (2 + (Model.extraClaims (stmtOf sts[j] hwf (regionsOf sts[j]))
+              PT_LOCAL sts[j].mPts (ptsOf sts[j].mPts sess.points)).length) p₁ capDig)
+            (s₁.rounds.toList.map (·.coins)) pend₁ ∧
+          (tableOutL H512 enc512 (leafOfId I.tags.merkleLeaf) (capOfRoot sess.rootB[j]!) (pend₀, pend₁)
+            (opnOf (Setup.ofCircuit sts[j]) sch (Model.extraClaims (stmtOf sts[j] hwf (regionsOf sts[j])) PT_LOCAL
+              sts[j].mPts (ptsOf sts[j].mPts sess.points)).length #[t.proofs[2 * j]!, t.proofs[2 * j + 1]!])).accepted =
+            true := by
+  obtain ⟨spec, sts, hs, hv⟩ := h
+  obtain ⟨sess, schs, hsess, hsz, -, -, hall⟩ := verify_ok_tables hv
+  obtain ⟨-, hsetup⟩ := setupTables_setupOne hs
+  obtain ⟨hp2, hmp⟩ := setupTables_pointsAny hs
+  have hpts := decode_points hsess
+  rw [Array.size_map] at hsz
+  refine ⟨spec, sts, sess, hs, hsess, hsz, fun j hj => ?_⟩
+  obtain ⟨hs', c, hf, h0, h1⟩ := hall j (by rw [Array.size_map]; exact hj)
+  simp only [Array.getElem_map] at hf h0 h1
+  obtain ⟨d, hset, -⟩ := hsetup j hj
+  refine ⟨schs[j], hf, fun hwf hr hm => ?_⟩
+  have hext := ofCircuit_extra sts[j] hwf hr sess.points (by rw [hpts.1, hp2])
+    (fun p hp => (hpts.2 p hp).trans (hmp j hj).symm)
+  exact table_verdict_leaf spec (Setup.ofCircuit sts[j]) (stmtOf sts[j] hwf (regionsOf sts[j])) hm rfl rfl
+    (ofCircuit_fold sts[j] hwf _) (setupOne_tagsAt_leaf hl hset) _ sess hext (decode_roundsWF hsess) schs[j] hf j _ _
+    c h0 h1
+
 end FlockSoundness.Discharge.HiddenExec

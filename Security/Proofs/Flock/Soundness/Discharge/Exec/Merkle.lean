@@ -456,6 +456,9 @@ theorem setupH_find {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : 
 
 theorem find_hm96 : MerkleScheme.find? "hm96-sha512/v1" = some MerkleScheme.hm96Sha512 := rfl
 
+theorem find_plain :
+    MerkleScheme.find? "flock-leaf/sha512-unsalted" = some (MerkleScheme.sha512 "flock-leaf/sha512-unsalted") := rfl
+
 /-- **`hms` from the tags**: when the tags implement `hm96-sha512/v1`, a statement `setupH` accepts commits its rows
 with `hm96Sha512`. -/
 theorem setupH_hm96 {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
