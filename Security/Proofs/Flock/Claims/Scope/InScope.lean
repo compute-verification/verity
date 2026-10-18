@@ -35,20 +35,39 @@ theorem rules_of_inScope {rel : Parsed → Relation} {p : Parsed}
     Rules p.tags p.zk p.I.count p.publicInputs.isSome := by
   obtain ⟨-, -, -, -, h1, h2, h3, h4, h5, h6, -⟩ := h
   simp only [toReadable, Read.form, Bool.not_eq_true] at h1 h2 h3 h4 h5 h6
-  exact ⟨h1, h2, h3, h4, h5, h6⟩
+  exact ⟨h1, h2, h3, by simpa only [LeafOk] using h4, h5, h6⟩
 
 theorem sharedRowsOk_iff (t : Tags) (zk reg : Bool) :
     ProvedScope.sharedRowsOk t zk reg = true ↔ zk = true ∧ t.hiddenOutputs = true ∧ reg = true := by
   simp [ProvedScope.sharedRowsOk, and_assoc]
 
-/-- `scopeOk` (`scopeOkH` with hidden outputs) is the unit's conditions and the rows'. -/
+/-- The wire condition and `scopeOk` (`scopeOkI` with hidden outputs) are the unit's form, or with hidden outputs the
+wires' order, and the unit's and the rows' conditions. -/
 theorem scope_iff_rows (hidden : Bool) (c : Circuit) :
-    (if hidden then ProvedScope.scopeOkH c else ProvedScope.scopeOk c) = true ↔
-      (c.unit.inGroups.size = 1 ∧ ¬ (c.outNet != c.unitNet) = true ∧ c.unit.unitLog ≤ 32 ∧
-        ProvedScope.portReadsB c.unit = true) ∧
-      (if hidden then ProvedScope.v1Ports c || ProvedScope.bitRows c else ProvedScope.v1Ports c) = true := by
-  cases hidden <;>
-    simp [ProvedScope.scopeOk, ProvedScope.scopeOkH, and_assoc]
+    ((ProvedScope.wiresFeed c = true → ProvedScope.wiresAcyclic c = true) ∧
+        (if hidden then ProvedScope.scopeOkI c else ProvedScope.scopeOk c) = true) ↔
+      ((c.unit.inGroups.size = 1 ∧ ¬ (c.outNet != c.unitNet) = true) ∨
+          (hidden = true ∧ ProvedScope.wiresAcyclic c = true)) ∧
+        c.unit.unitLog ≤ 32 ∧ ProvedScope.portReadsB c.unit = true ∧
+        (if hidden then ProvedScope.v1Ports c || ProvedScope.bitRows c else ProvedScope.v1Ports c) = true := by
+  have hf : ProvedScope.wiresFeed c = true ↔ ¬ (c.unit.inGroups.size = 1 ∧ ¬ (c.outNet != c.unitNet) = true) := by
+    simp only [ProvedScope.wiresFeed, Bool.or_eq_true, bne_iff_ne, ne_eq, not_not]
+    tauto
+  rw [hf]
+  cases hidden
+  · simp only [ProvedScope.scopeOk, Bool.false_eq_true, ↓reduceIte, false_and, or_false, Bool.and_eq_true, beq_iff_eq,
+      decide_eq_true_eq, bne_iff_ne, ne_eq, not_not]
+    constructor
+    · rintro ⟨-, ⟨⟨⟨h1, h2⟩, h3⟩, h4⟩, h5⟩
+      exact ⟨⟨h1, h2⟩, h3, h4, h5⟩
+    · rintro ⟨⟨h1, h2⟩, h3, h4, h5⟩
+      exact ⟨fun h => absurd ⟨h1, h2⟩ h, ⟨⟨⟨h1, h2⟩, h3⟩, h4⟩, h5⟩
+  · simp only [ProvedScope.scopeOkI, ↓reduceIte, true_and, Bool.and_eq_true, decide_eq_true_eq]
+    constructor
+    · rintro ⟨hw, ⟨h3, h4⟩, h5⟩
+      exact ⟨(em _).elim Or.inl fun h => Or.inr (hw h), h3, h4, h5⟩
+    · rintro ⟨hu, h3, h4, h5⟩
+      exact ⟨fun h => hu.resolve_left h, ⟨h3, h4⟩, h5⟩
 
 /-- **The readable scope is the verifier's scope check, and `22 ≤ m`**, for every statement the verifier parses. -/
 theorem inScope_iff (rel : Parsed → Relation) {p : Parsed} (hp : Parses p) :
@@ -69,34 +88,37 @@ theorem inScope_iff (rel : Parsed → Relation) {p : Parsed} (hp : Parses p) :
   have eR : (∃ c pub, ProvedScope.circuitOf p.tags p.I.circuitFile p.I.tables = .ok c ∧
       ProvedScope.publicOf p.tags c p.I.publicFile = .ok pub ∧
       (pub.tables.isSome = true → ProvedScope.sharedRowsOk p.tags p.zk p.registered = true) ∧
-      (if p.tags.hiddenOutputs then ProvedScope.scopeOkH c else ProvedScope.scopeOk c) = true) ↔
+      (ProvedScope.wiresFeed c = true → ProvedScope.wiresAcyclic c = true) ∧
+      (if p.tags.hiddenOutputs then ProvedScope.scopeOkI c else ProvedScope.scopeOk c) = true) ↔
       (pop.tables.isSome = true → ProvedScope.sharedRowsOk p.tags p.zk p.registered = true) ∧
-      (if p.tags.hiddenOutputs then ProvedScope.scopeOkH st.c else ProvedScope.scopeOk st.c) = true := by
+      ((ProvedScope.wiresFeed st.c = true → ProvedScope.wiresAcyclic st.c = true) ∧
+        (if p.tags.hiddenOutputs then ProvedScope.scopeOkI st.c else ProvedScope.scopeOk st.c) = true) := by
     constructor
-    · rintro ⟨c, pub, e1, e2, hX⟩
+    · rintro ⟨c, pub, e1, e2, hX, hW, hS⟩
       rw [hc] at e1
       cases e1
       rw [hpop] at e2
       cases e2
-      exact hX
-    · intro hX
-      exact ⟨st.c, pop, hc, hpop, hX⟩
+      exact ⟨hX, hW, hS⟩
+    · rintro ⟨hX, hW, hS⟩
+      exact ⟨st.c, pop, hc, hpop, hX, hW, hS⟩
   rw [eR, em]
   simp only [Claims.Flock.InScope, em, ek, ef, Read.form, hcirc, hpub]
   rw [sharedRowsOk_iff, scope_iff_rows]
   constructor
-  · rintro ⟨hlo, -, -, -, -, -, -, -, -, -, hsh, hg, ht, hl, hpr, hrows⟩
-    refine ⟨⟨hR, hsh, ⟨hg, ht, hl, hpr⟩, ?_⟩, ?_⟩
+  · rintro ⟨hlo, -, -, -, -, -, -, -, -, -, hsh, hu, hl, hpr, hrows⟩
+    refine ⟨⟨hR, hsh, hu, hl, hpr, ?_⟩, ?_⟩
     · cases hh : p.tags.hiddenOutputs
       · simpa [hh] using hrows
       · simpa [hh] using hrows
     · split at hlo <;> omega
-  · rintro ⟨⟨-, hsh, ⟨hg, ht, hl, hpr⟩, hrows⟩, hlo⟩
+  · rintro ⟨⟨-, hsh, hu, hl, hpr, hrows⟩, hlo⟩
     have hlo' : (if p.zk = true then 25 else 22) ≤ st.m := by
       split
       · exact hzk (by assumption)
       · exact hlo
-    refine ⟨hlo', hm35, hk6, by omega, h1, by simp [h2], h3, h4, h5, by simp [h6], hsh, hg, ht, hl, hpr, ?_⟩
+    refine ⟨hlo', hm35, hk6, by omega, h1, by simp [h2], h3, by simpa only [LeafOk, Bool.not_eq_true] using h4, h5,
+      by simp [h6], hsh, hu, hl, hpr, ?_⟩
     cases hh : p.tags.hiddenOutputs
     · simp only [hh, Bool.false_eq_true, ↓reduceIte] at hrows
       exact Or.inl hrows

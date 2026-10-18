@@ -82,3 +82,44 @@ ALU,JPA100_1,,,0.682401081,,,,r20261017-062812-a7a7 r20261017-063727-4f9a r20261
 UNI,UP,,,1.9572915,,,,r20261017-095350-0a80 r20261017-103944-35c5 r20261017-112709-ec87 r20261017-113207-4cb8 r20261017-113541-9d33
 UNI,issue,,,0.924311492,,,,r20261017-095350-0a80 r20261017-103944-35c5 r20261017-112709-ec87 r20261017-113207-4cb8 r20261017-113541-9d33
 UNI,JI100_0,,,0.905904479,,,,r20261017-095350-0a80 r20261017-103944-35c5 r20261017-112709-ec87 r20261017-113207-4cb8 r20261017-113541-9d33
+ALU,DS_issue,,,1,,,,note:20261017T1818Z-draft-axioms
+ALU,DS_alu,,,2,,,,note:20261017T1818Z-draft-axioms
+FFMA,DS_issue,,,1,,,,note:20261017T1818Z-draft-axioms
+IMAD,DS_issue,,,1,,,,note:20261017T1818Z-draft-axioms
+IMAD,DS_imad,,,2,,,,note:20261017T1818Z-draft-axioms
+IMMA16816_S8,DS_issue,,,1,,,,note:20261017T1818Z-draft-axioms
+IMMA16816_S8,DS_tensor,,,1,,,,note:20261017T1818Z-draft-axioms
+IMMA16832_S8,DS_issue,,,1,,,,note:20261017T1818Z-draft-axioms
+IMMA16832_S8,DS_tensor,,,2,,,,note:20261017T1818Z-draft-axioms
+LDTM_16X128B_X8,DS_issue,,,1,,,,note:20261017T1818Z-draft-axioms
+LDTM_16X256B_X4,DS_issue,,,1,,,,note:20261017T1818Z-draft-axioms
+LDTM_16X64B_X16,DS_issue,,,1,,,,note:20261017T1818Z-draft-axioms
+LDTM_32X32B_X1,DS_issue,,,1,,,,note:20261017T1818Z-draft-axioms
+LDTM_32X32B_X128,DS_issue,,,1,,,,note:20261017T1818Z-draft-axioms
+LDTM_32X32B_X16,DS_issue,,,1,,,,note:20261017T1818Z-draft-axioms
+LDTM_32X32B_X32,DS_issue,,,1,,,,note:20261017T1818Z-draft-axioms
+LDTM_32X32B_X4,DS_issue,,,1,,,,note:20261017T1818Z-draft-axioms
+LDTM_32X32B_X64,DS_issue,,,1,,,,note:20261017T1818Z-draft-axioms
+SHFL,DS_issue,,,1,,,,note:20261017T1818Z-draft-axioms
+SHFL,DS_shfl,,,4,,,,note:20261017T1818Z-draft-axioms
+UNI,DS_issue,,,1,,,,note:20261017T1818Z-draft-axioms
+UTCHMMA_F16_M128_N256,DS_issue,,,1,,,,note:20261017T1818Z-draft-axioms
+UTCHMMA_F16_M128_N256,DS_tensor,,,512,,,,note:20261017T1818Z-draft-axioms
+UTCIMMA_M128_N128,DS_issue,,,1,,,,note:20261017T1818Z-draft-axioms
+UTCIMMA_M128_N128,DS_tensor,,,256,,,,note:20261017T1818Z-draft-axioms
+UTCIMMA_M128_N256,DS_issue,,,1,,,,note:20261017T1818Z-draft-axioms
+UTCIMMA_M128_N256,DS_tensor,,,512,,,,note:20261017T1818Z-draft-axioms
+UTCIMMA_M128_N32,DS_issue,,,1,,,,note:20261017T1818Z-draft-axioms
+UTCIMMA_M128_N32,DS_tensor,,,64,,,,note:20261017T1818Z-draft-axioms
+UTCIMMA_M128_N64,DS_issue,,,1,,,,note:20261017T1818Z-draft-axioms
+UTCIMMA_M128_N64,DS_tensor,,,128,,,,note:20261017T1818Z-draft-axioms
+UTCIMMA_M64_N128,DS_issue,,,1,,,,note:20261017T1818Z-draft-axioms
+UTCIMMA_M64_N128,DS_tensor,,,128,,,,note:20261017T1818Z-draft-axioms
+UTCIMMA_M64_N256,DS_issue,,,1,,,,note:20261017T1818Z-draft-axioms
+UTCIMMA_M64_N256,DS_tensor,,,256,,,,note:20261017T1818Z-draft-axioms
+UTCIMMA_M64_N64,DS_issue,,,1,,,,note:20261017T1818Z-draft-axioms
+UTCIMMA_M64_N64,DS_tensor,,,64,,,,note:20261017T1818Z-draft-axioms
+UTCQMMA_E4M3_M128_N128,DS_issue,,,1,,,,note:20261017T1818Z-draft-axioms
+UTCQMMA_E4M3_M128_N128,DS_tensor,,,256,,,,note:20261017T1818Z-draft-axioms
+UTCQMMA_E4M3_M128_N256,DS_issue,,,1,,,,note:20261017T1818Z-draft-axioms
+UTCQMMA_E4M3_M128_N256,DS_tensor,,,512,,,,note:20261017T1818Z-draft-axioms

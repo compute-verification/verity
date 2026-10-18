@@ -1,0 +1,49 @@
+description = "co32c-u16-cohalf (H1, decision 82) with the LUT softmax with K one scale per (layer, KV head) calibrated (the calibration windows' keys, the window's clamped into it) (PPL-LUT)"
+
+[[linear]]
+step = "smooth"
+alpha = 0.5
+kv_shared = true
+
+[[linear]]
+step = "rotate"
+
+[[linear]]
+step = "rotate"
+linears = ["lm_head"]
+
+[[linear]]
+step = "int8"
+act = "dither"
+weight = "dither"
+weight_top = 111
+
+[[linear]]
+step = "int8"
+act = "dither"
+weight = "dither"
+weight_top = 111
+linears = ["lm_head"]
+
+[[attention]]
+step = "rotate"
+
+[[attention]]
+step = "center_keys"
+
+[[attention]]
+step = "int8"
+q = "dither"
+q_top = 111
+k = "dither"
+k_top = 111
+k_scale = "calib"
+softmax = "lut"
+v = "dither"
+p_sink = true
+
+[[attention]]
+step = "peel"
+operand = "p"
+width = 64
+offset = 64

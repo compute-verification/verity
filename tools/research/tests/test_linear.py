@@ -21,6 +21,7 @@ class FakeLinear:
     def __init__(self, teams=("infra", "comms")):
         self.teams, self.labels, self.calls, self.grants, self.refuse = list(teams), {}, [], 0, set()
         self.subscribers, self.authors, self.comments, self.moved = {}, {}, [], []
+        self.state_type = "backlog"
 
     @staticmethod
     def _author(user: str, i: dict, field: str) -> dict:
@@ -73,6 +74,8 @@ class FakeLinear:
             return {"data": {"issues": {"nodes": [
                 {"identifier": "INF-2", "title": "later", "createdAt": "2026-10-14T02:00Z", "state": {"name": "In Progress"}},
                 {"identifier": "INF-1", "title": "first", "createdAt": "2026-10-14T01:00Z", "state": {"name": "Backlog"}}]}}}
+        if "state { type }" in q:
+            return {"data": {"issue": {"state": {"type": self.state_type}}}}
         if "team { key }" in q:
             return {"data": {"issue": {"id": "I1", "identifier": "INF-1", "url": "https://linear.app/x/issue/INF-1", "team": {"key": "INF"}}}}
         if "issue(id: $id) { id }" in q:
@@ -180,7 +183,7 @@ def test_an_ask_files_in_its_owners_team_and_still_goes_out_when_linear_fails(fa
     assert rc == 0 and "not filed on Linear (no Linear team named 'INF')" in err
     assert fake.messages[COORD][-1]["text"].endswith("again")
     n = len(lin.calls)
-    assert run(capsys, "ask", "--as", "infra", "--to", "@old-accounting", "--text", "no team")[0] == 0
+    assert run(capsys, "ask", "--as", "infra", "--to", "@console", "--text", "no team")[0] == 0
     assert len(lin.calls) == n and fake.messages[COORD][-1]["text"].endswith("no team")
 
 
@@ -254,11 +257,22 @@ def test_a_comment_rings_the_issues_team_and_the_names_it_starts_with_but_never_
     assert rc == 2 and "past its start" in err                                                         # names ring only at the start
 
 
+def test_traffic_counts_an_ask_taken_up_on_linear_as_answered(fake, registry, routes_dirs, capsys, lin):
+    """Asks are Linear-first: an owner who moved the issue out of Backlog answered it, whatever the Slack root shows."""
+    ask = fake.add(COORD, text="@infra 4 GPUs" + LINKED, username="compute-accounting", bot_id=slack_bot(registry), ts="1600000000.000001")
+    rc, out, _ = run(capsys, "traffic", "--hours", "1e6", "--now", "1700100000", "--json")
+    assert rc == 0 and ask["ts"] in [s["ts"] for s in json.loads(out)["unanswered"]]       # still in Backlog
+    lin.state_type = "started"
+    rc, out, _ = run(capsys, "traffic", "--hours", "1e6", "--now", "1700100000", "--json")
+    assert rc == 0 and ask["ts"] not in [s["ts"] for s in json.loads(out)["unanswered"]]
+    assert lin.sent("state { type }")[-1][1] == {"id": "INF-1"}
+
+
 def test_subscriptions_name_the_leads_linear_team_and_the_registry_refuses_a_shared_key(registry, capsys):
     rc, out, _ = run(capsys, "subscriptions", "--as", "comms")
     assert rc == 0 and 'subscribe_linear_issue(options={"scope": "team", "teamId": "COMM"}' in out
     assert "subscribe_linear_comment" not in out
-    assert "subscribe_linear" not in run(capsys, "subscriptions", "--as", "old-accounting")[1]
+    assert "subscribe_linear" not in run(capsys, "subscriptions", "--as", "console")[1]
     reg = json.loads(registry.read_text())
     next(h for h in reg["handles"] if h["handle"] == "ci")["linear"] = "COMM"
     registry.write_text(json.dumps(reg))
