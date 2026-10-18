@@ -90,7 +90,7 @@ def test_a_session_driven_by_a_memory_map_is_accepted() -> None:
         if change.count:
             a = st.append([page(w.slot, s.step) for w in s.written], salts(b"page salts %d" % s.step, change.count))
             assert (a.first, a.digests) == (change.first, change.digests)
-            assert run.s.append(a.root, a.count) == change.first
+            assert run.commit(a.root, a.count) == change.first
         if change.released:
             assert run.s.release(change.released) is None
         assert run.run(change=replay.take(s.step + 1), step=s.step + 1) is None

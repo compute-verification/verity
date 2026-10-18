@@ -287,8 +287,13 @@ trip waits on it. The prover refuses an openings coin as a challenge (`Prover.ru
 (`receipts.py`):
 
 ~~~text
-seed_(t,i)  SHA512("verity/remote-bandwidth/seed/v0\0" ‖ σ_t ‖ u32be i ‖ root_(t,i−1)),
+seed_(t,i)  SHA512("verity/remote-bandwidth/seed/v0\0" ‖ σ_t ‖ u32be i ‖ prev_(t,i)),
             root_(t,−1) = root_(t−1,last) in a session, and the registration's digest before its first window
+prev_(t,i)  root_(t,i−1) while no append has been received before root_(t,i); otherwise
+            SHA512("verity/remote-bandwidth/chained/v0\0" ‖ root_(t,i−1) ‖ a_(t,i)) (`audit.chained`)
+a_(t,i)     the chain over every append received before root_(t,i), in order: a = 64 zero bytes, then for each append
+            a ← SHA512("verity/remote-bandwidth/appends/v0\0" ‖ a ‖ u64be first ‖ u64be count ‖ its root)
+            (`audit.append_head`)
 plan_(t,i)  R runs (first, count) in read order: count ≥ 1, inside the store, pairwise disjoint, no run starting where
             the one before it ends.  Position p is the p-th block of the runs concatenated; L positions in all.
             digest SHA512("verity/remote-bandwidth/plan/v0\0" ‖ u32be R ‖ (u64be first ‖ u64be count) × R)
@@ -334,9 +339,20 @@ commits one of its blocks rejects with `plan`. The prover encodes each under its
 received after its release that holds it rejects with `plan`; its receipts from earlier passes can still be drawn, so
 the prover keeps it until its windows are drawn. An append that is malformed or would take the store past its
 codec's `max_blocks` rejects with `append`, and a release of a block outside the store or released already with
-`release`. Appends are a session's: the next session over the store starts again from \(N\) (§8). A late append
-buys nothing: a block whose payload is chosen after a pass's seed still costs an encode for any receipt of it, which
-\(\mu_{\text{rebuild}}\) prices, and its root still precedes the root of the pass that reads it.
+`release`. Appends are a session's: the next session over the store starts again from \(N\) (§8).
+
+**No block appended after a pass's seed is in that pass's plan.** A pass's seed binds every append received before
+its root (`prev_(t,i)` above), so every block its plan can hold, which must be appended before its root, was
+committed before its seed. A block appended after the seed is in no plan of the pass, and its receipts are credited
+in no pass whose seed came before its append. Without this the seed would depend only on \(\sigma_t\) and the root
+before, which the prover knows before it sends that root, so a page appended mid-window could hold the pass's
+sketches of other blocks (64 bytes a block at 16 rows, 64 blocks a page), and their receipts would follow from the
+page's bytes without reading them: the red team's KB-1, in note:20261017T1859Z-report-property-redteam §R4.2, whose
+test is `test_append_order.py`. A page that relayed any receipt of a pass whose seed binds it would be a fixed point
+of SHA-512. The prover therefore sends a pass's appends before its root and computes the seed after they're sent
+(`Store.head`, `Prover.run(..., head=...)`). A seed computed without an append the verifier received before the root
+fails every receipt of the pass. While a session has no appends the seeds are unchanged, so the GPU passes, which
+append nothing, derive them as before.
 
 **The lifetime cap.** \(L\) here is the lifetime cap of §1's carrier term, not a pass's length \(L_{t,i}\). An
 appended block joins the window of the next root received after its append, and no plan of a window \(L\) or more
