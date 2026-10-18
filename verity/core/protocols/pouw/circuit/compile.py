@@ -761,7 +761,8 @@ def _compiled_body(B: Any, S: Any, *args: Coll) -> Coll:
 
 
 def _compiled_ports(S: Any) -> Any:
-    return _ports.Ports(params={SALT: _ports.In(kind="coin")}, ret={"receipts": _ports.Out(sink=True)})
+    positions = {POSITIONS: _ports.In(kind="position")} if "position" in _ports.KINDS else {}
+    return _ports.Ports(params={SALT: _ports.In(kind="coin"), **positions}, ret={"receipts": _ports.Out(sink=True)})
 
 
 PouwCompiled = _composite(

@@ -289,7 +289,8 @@ def _body(B: Any, S: Any, a: Coll, b: Coll, salt: Coll, position: Coll, roots: C
 
 
 def _unit_ports(S: Any) -> Any:
-    return _ports.Ports(params={"salt": _ports.In(kind="coin")}, ret={"receipt": _ports.Out(sink=True)})
+    position = {"position": _ports.In(kind="position")} if "position" in _ports.KINDS else {}
+    return _ports.Ports(params={"salt": _ports.In(kind="coin"), **position}, ret={"receipt": _ports.Out(sink=True)})
 
 
 PouwH1Tile = CompositeDefinition(
