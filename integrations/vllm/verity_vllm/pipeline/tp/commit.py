@@ -442,6 +442,7 @@ def main(args: Options) -> int:
     xrank_pairs: list[dict] = []     # [TP-12] one verdict per instrumented pair
     from verity_vllm.program.frontend import collective_kinds
     xrank_families = collective_kinds.cross_rank_families(world)      # [lane vllm-tp-n] the cross-rank families of THIS world, from the registry's composites
+    xrank_on = args.xrank_per_stratum > 0 and not args.no_tp_partials
     runs = schedule(args.pairs, args.only_arm)
     stopped = None
     for pair in range(args.pairs):
@@ -575,7 +576,7 @@ def main(args: Options) -> int:
                             why_ = f"match oracle (tp partials vs tp2_match capture): {(mo or {}).get('why') or (mo or {}).get('error') or 'not run'}"
                             ok, why = False, (f"{why}; also: {why_}" if not ok and why else why_)
                         ok, why = C2.c2_and_pin_gates(cblock, f, ok, why, rank=rk, replay_on=replay_cfg is not None, required=args.required_manifest is not None,
-                                                   bundle=RB.path(out, pair, rank=rk).name)
+                                                   bundle=RB.path(out, pair, rank=rk).name, xrank_families=xrank_families if xrank_on else None)
                         cblock["commit_pass"], cblock["commit_fail_reason"] = ok, why
                         if ok is False:
                             reasons.append(f"rank {rk}: {why}")
@@ -612,7 +613,7 @@ def main(args: Options) -> int:
                     # combined root, stratified per site x kind x phase).  The only evaluator of the collective-output VUs from committed bytes (the
                     # per-rank replay has none: rev F-r16-18); a FAIL names the site and fails the ranks whose received output is not the definition.
                     xr = {"result": None, "why": "not run (--xrank-per-stratum 0)"}
-                    if args.xrank_per_stratum > 0 and not args.no_tp_partials:
+                    if xrank_on:
                         try:
                             import torch as _torch
 
