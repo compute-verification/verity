@@ -368,11 +368,12 @@ class KvDevice:
         if self.paged.K.token_layer_words(self.field) != codec.field.block_words:
             raise ValueError("kv.cu's bound offsets are a token-layer's: build it with a token-layer of one 4 KiB block")
 
-    def set_key(self, key: rcodec.Key) -> None:
+    def set_key(self, key: rcodec.Key, lib: Any = None) -> None:
+        """``key`` on kv.cu's build, or on ``lib`` (another build at the codec's field, paged.cu's)."""
         k = self.paged.K.key(self.field.name, key.seed, key.codec.rounds, mask=key.codec.masked)
         if (k.c, k.tau, k.mask) != (key.c, key.tau, key.mask):
             raise RuntimeError("kv.py's key is not the registration's codec key")
-        self.paged.KB.set_key(self.lib, k)
+        self.paged.KB.set_key(self.lib if lib is None else lib, k)
 
     def encode(self, payloads: Sequence[bytes], first: int, offsets: Sequence[int] | None = None) -> list[bytes]:
         """Blocks ``first`` … of ``payloads``: under the seed's key, or each under its bound offset."""

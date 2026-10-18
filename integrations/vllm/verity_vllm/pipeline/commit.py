@@ -1037,6 +1037,7 @@ class Options:
     remote_weight_blocks: int | None = option("--remote-weight-blocks", type=int, default=None, help="register weight tensors in order up to this many 4 KiB blocks (default: all)")
     remote_kv_lib: str | None = option("--remote-kv-lib", default=None, help="kv.cu built at the codec's field and mask: the store's encode on the GPU (default: the CPU reference)")
     remote_session_lib: str | None = option("--remote-session-lib", default=None, help="session.cu's build (benchmarks/remote_session): the session reads the store where the engine holds it, its weights and KV pool encoded in place by --remote-kv-lib, with no copy (verity_vllm.store.in_place)")
+    remote_paged_lib: str | None = option("--remote-paged-lib", default=None, help="paged.cu's build at the codec's field (benchmarks/vllm_encoded): with --remote-session-lib, the int8 attention reads the encoded KV pool through a credited read, each slot decoded under its offset (engine.int8_window, installed by verity_vllm.store.in_place)")
     plan: str | None = option("--plan", default=None, metavar="JSON", help="the Commit's plan, derived before the GPU (verity_vllm.pipeline.commit_plan; the row's `plan` stage): the producer facts are taken from it when its key (Program digest, manifest, workload, Programs, code identity, vLLM version) equals this Commit's; else derived here and recorded as plan_recomputed with the reason (verdict.json plan)")
     call_boundary_plan: str | None = option("--call-boundary-plan", default=None, metavar="JSON", help="the call-boundary source's host plan, derived at the Build's call-boundary check (verity_vllm.pipeline.boundary_plan): taken when its key (as --plan's) equals this Commit's; else derived here and recorded as plan_recomputed with the reason (verdict.json call_boundary_plan)")
     replay_target: list[str] | None = option("--replay-target", action="append", default=None, metavar="OP_PATH[@STEP]", help="sampled replay: add EVERY VU of a module (at a request-local step) to the sample, outside the cap -- the targeted negatives of record " "(a single-identity fault at a mid-phase step); repeatable; recorded under sample.targeted")
@@ -1056,9 +1057,11 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     if args.remote_verifier:
         from verity_vllm.store import remote
         _in_place = None
+        if args.remote_paged_lib and not args.remote_session_lib:
+            raise SystemExit("--remote-paged-lib reads the store in place: give --remote-session-lib with it")
         if args.remote_session_lib:
             from verity_vllm.store.in_place import InPlaceBackend
-            _in_place = InPlaceBackend.for_commit(args.remote_session_lib)
+            _in_place = InPlaceBackend.for_commit(args.remote_session_lib, args.remote_paged_lib)
         _rs = remote.CommitSession(args.remote_verifier, plan=args.remote_plan, kv_pages=args.remote_kv_pages or None, weight_blocks=args.remote_weight_blocks,
                                    kv_lib=args.remote_kv_lib, backend_of=_in_place, out=args.out)
         if args.only_arm == "control" or args.pairs < 1:

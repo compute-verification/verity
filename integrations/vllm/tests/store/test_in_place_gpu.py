@@ -4,24 +4,28 @@ localhost: weights and a KV pool in CUDA tensors registered as the binder regist
 under the serving trace of `test_remote_session` with each step's KV written after its `kv_append`, as a forward
 writes it.  The payload tree is the driver's, the encode `codec.encode`'s; the honest session is accepted with blocks
 the step's forward rewrote read from their copies; a prover that withholds a block, keeps no copies, or whose
-tensors moved is rejected.  Runs where CUDA, session.cu's build (``VERITY_SESSION_SO``) and kv.cu's at p1024, masked
-(``VERITY_KV_SO``) are."""
+tensors moved is rejected.  The int8 attention's credited read over the int8 backend's cache, encoded in place, gives
+its plaintext windows, before and after an append's encode moves its slots' offsets.  Runs where CUDA, session.cu's
+build (``VERITY_SESSION_SO``) and kv.cu's at p1024, masked (``VERITY_KV_SO``) are; the credited read where paged.cu's is
+too (``VERITY_PAGED_SO``, at p1024, masked, FOLD6, 32 query heads)."""
 from __future__ import annotations
 
 import os
 import random
 import threading
+import types
 
 import numpy as np
 import pytest
 
 torch = pytest.importorskip("torch")
 SESSION_SO, KV_SO = os.environ.get("VERITY_SESSION_SO"), os.environ.get("VERITY_KV_SO")
+PAGED_SO = os.environ.get("VERITY_PAGED_SO")
 pytestmark = pytest.mark.skipif(not (torch.cuda.is_available() and SESSION_SO and KV_SO),
                                 reason="a GPU, VERITY_SESSION_SO (session.cu) and VERITY_KV_SO (kv.cu at p1024, masked)")
 
 from verity.core.protocols.remote_bandwidth import audit, codec as rcodec  # noqa: E402
-from verity_vllm.store import remote  # noqa: E402
+from verity_vllm.store import int8_kv, remote  # noqa: E402
 from verity_vllm.store.binder import PagedBacking, TorchBacking, page_layout, storage_bytes  # noqa: E402
 from verity_vllm.store.in_place import InPlaceBackend  # noqa: E402
 from verity_vllm.store.interface import IDENTITY, Append, PageLayout  # noqa: E402
@@ -196,7 +200,7 @@ def test_weights_are_decoded_at_use_so_the_forward_is_the_models_and_decoded_bac
     ids = torch.arange(50, device="cuda")
     want, where = model(ids), {n: p.data_ptr() for n, p in weights.items()}
     b = InPlaceBackend(s, lambda _: None, [s.backing(r.name) for r in s.layout().regions], session_lib=SESSION_SO,
-                       kv_lib=KV_SO, randbytes=random.Random(7).randbytes, model=model, weights=weights)
+                       kv_lib=KV_SO, randbytes=random.Random(7).randbytes, model=model)
     b.payload_root(b"n")
     b.encode(audit.register(bytes(32), b"n", b.blocks, bytes(64), nonce=bytes(32)))
     assert not torch.equal(model.up.weight, plain["up.weight"])
@@ -239,3 +243,74 @@ def test_a_registered_tensor_moved_mid_session_fails_it_by_name():
 
     r, p, _, _ = run("serve", moved=moved)
     assert not r["accepted"] and isinstance(p, RuntimeError) and "kv[1]" in str(p)
+
+
+I8_PAGES, I8_SLOTS, I8_HEADS = 4, 16, 8
+
+
+def int8_store() -> tuple[Store, list]:
+    """Three weight blocks, then two layers of the int8 backend's cache (vLLM's view [pages, KV heads, slots, 2 x 128]
+    over [pages][slots][KV heads][K ‖ V] bf16, a token-layer one block): N = 3 + 2 x 64."""
+    s, g = Store(), torch.Generator().manual_seed(5)
+    w = torch.randint(0, 256, (3 * BLOCK,), dtype=torch.uint8, device="cuda")
+    s.register("w", "hbm", "weights", TorchBacking(w, 3 * BLOCK), block_bytes=BLOCK, codec=IDENTITY, receipt=RECEIPT,
+               source="w", encode=False)
+    caches = [torch.randn(I8_PAGES, I8_SLOTS, I8_HEADS, 2 * DIM, generator=g).to(torch.bfloat16).cuda().transpose(1, 2)
+              for _ in range(2)]
+    lay = int8_kv.token_layer_layout(caches[0], I8_PAGES, I8_SLOTS, DIM)
+    backings = [PagedBacking(storage_bytes(t), t.storage_offset() * t.element_size(), lay) for t in caches]
+    s.register_kv_pool("kv", backings, lay, block_bytes=BLOCK, codec=IDENTITY, receipt=RECEIPT, encode=False)
+    return s, caches
+
+
+def windows(read, cache, layer: int, lens: list[int], table, slot_mapping=None):
+    """One prefill step's windows of ``layer`` through ``read``: K and V [rows][KV heads][128]."""
+    qsl = torch.tensor([0, *np.cumsum(lens).tolist()], dtype=torch.int32, device="cuda")
+    st = read.step(types.SimpleNamespace(), qsl, torch.tensor(lens, dtype=torch.int32, device="cuda"), I8_HEADS, DIM)
+    read.window(st, cache, layer, table, slot_mapping)
+    return st.k, st.v
+
+
+def plain_windows(cache, lens: list[int], table):
+    rows = cache.transpose(1, 2).reshape(-1, I8_HEADS, 2 * DIM)
+    slot = torch.cat([table[r][torch.arange(n, device="cuda") // I8_SLOTS].long() * I8_SLOTS
+                      + torch.arange(n, device="cuda") % I8_SLOTS for r, n in enumerate(lens)])
+    return rows[slot, :, :DIM], rows[slot, :, DIM:]
+
+
+@pytest.mark.skipif(not PAGED_SO, reason="VERITY_PAGED_SO (paged.cu at p1024, masked, FOLD6, 32 query heads)")
+def test_the_credited_read_gives_the_int8_caches_plaintext_windows_through_registration_writes_and_appends():
+    s, caches = int8_store()
+    b = InPlaceBackend(s, lambda _: None, [s.backing(r.name) for r in s.layout().regions], session_lib=SESSION_SO,
+                       kv_lib=KV_SO, randbytes=random.Random(7).randbytes, paged_lib=PAGED_SO)
+    lens, table = [37, 20], torch.tensor([[2, 0, 3], [1, 3, 0]], dtype=torch.int32, device="cuda")
+    plain = [c.clone() for c in caches]
+    b.payload_root(b"n")
+    b.encode(audit.register(bytes(32), b"n", b.blocks, bytes(64), nonce=bytes(32)))
+    g = b.gates["credited_read"]
+    assert (g["layers"], g["installed"], g["slots"], g["settled"]) == (2, 0, 2 * I8_PAGES * I8_SLOTS, 0)
+    for li in (0, 1):
+        assert not torch.equal(caches[li], plain[li])
+        got, want = windows(b.credited, caches[li], li, lens, table), plain_windows(plain[li], lens, table)
+        assert all(torch.equal(x.view(torch.int16), y.view(torch.int16)) for x, y in zip(got, want))
+
+    # the step writes 4 slots of page 1 in both layers in the clear: read as written, flagged, then appended
+    written = torch.arange(I8_SLOTS, I8_SLOTS + 4, device="cuda")
+    for li, c in enumerate(caches):
+        new = torch.randn(4, I8_HEADS, 2 * DIM, device="cuda").to(torch.bfloat16)
+        c.transpose(1, 2)[1, :4] = new
+        plain[li].transpose(1, 2)[1, :4] = new
+        got, want = windows(b.credited, c, li, lens, table, written), plain_windows(plain[li], lens, table)
+        assert all(torch.equal(x.view(torch.int16), y.view(torch.int16)) for x, y in zip(got, want))
+        assert b.kv_tables[li][1][written].tolist() == [1] * 4
+    firsts = {r.name: r.first for r in s.layout().regions}
+    slots = np.array([firsts[f"kv/{li}"] + I8_SLOTS + x for li in (0, 1) for x in range(4)], np.int64)
+    payloads = [m.tobytes() for m in b._gather(slots).cpu().numpy()]
+    a = b.append(payloads, b.append_salts(b.blocks, len(slots)), slots)
+    b.encode_append(a.first, bytes(range(rcodec.COIN_BYTES)))
+    assert b.gates["credited_read"]["settled"] == 8
+    for li, c in enumerate(caches):
+        assert b.kv_tables[li][1][written].tolist() == [0] * 4
+        assert not torch.equal(c.transpose(1, 2)[1, :4], plain[li].transpose(1, 2)[1, :4])
+        got, want = windows(b.credited, c, li, lens, table), plain_windows(plain[li], lens, table)
+        assert all(torch.equal(x.view(torch.int16), y.view(torch.int16)) for x, y in zip(got, want))

@@ -21,10 +21,14 @@ opening       its subtree recomputed from the store under the same map, a block 
 
 A registered tensor stays where it is for the session (`Binder.moved`, checked before every pass: a tensor moved
 fails the session by name).  The tensors hold the codec's encoding from registration on.  The weights are decoded at
-use (`DecodeAtUse`: each module's into a scratch for its forward) and decoded back where they are when the session
-closes, so the Commit's replay reads the weights it committed.  Attention still reads the KV pool encoded (an appended
-block once its coin is in): until it decodes what it reads (paged.cu's decoded windows), the model's output under a
-session is not the model's after the first encoded append.  A re-key would append a block whose
+use (`decode_at_use.DecodeAtUse`: each module's into a scratch for its forward) and decoded back where they are when
+the session closes, so the Commit's replay reads the weights it committed.  With paged.cu's build (``paged_lib``), the
+int8 attention reads its cache through a credited read (`int8_window.CreditedRead`, installed at registration and
+kept after the session): each layer's slots decoded under their offsets, a slot the engine wrote read as it is until
+its append's coin is in and the session encodes it, which sets the slot's offset (b_j(c_a) moved from the append's
+index j to the slot's own, pg_window's index: b_j + τ · block_words · (j − slot)) and clears its flag.  Without it,
+attention reads the KV pool encoded, and the model's output under a session is not the model's after the first
+encoded append.  A re-key would append a block whose
 payload the map reads from its slot, which holds its encoding: the in-place session refuses it, so its lifetime cap
 must outlast its windows.
 """
@@ -42,6 +46,7 @@ import numpy as np
 
 from verity.core.protocols.remote_bandwidth import audit, codec as rcodec, receipts as rb
 from verity_vllm import config
+from verity_vllm.store.decode_at_use import DecodeAtUse, encoded_weights, kv_decoder
 from verity_vllm.store.interface import Stale
 from verity_vllm.store.registry import Store
 from verity_vllm.store.remote import KvDevice, StoreBackend, session_module
@@ -91,94 +96,18 @@ class Appends:
         return self.appends[bisect.bisect_right(self.firsts, j) - 1]
 
 
-class DecodeAtUse:
-    """The weights decoded at use (`benchmarks/remote_session/engine.py`'s ``Hooks``): before its forward, each module
-    holding a registered weight decodes the weight's registered blocks into one reused ``scratch`` (kv.cu,
-    `KvDevice.decode`), the tensor's bytes past its last whole block copied as they are (unregistered, so plain), and
-    points the parameter at it; after, back at the store's encoded bytes.  The LM head goes through the logits
-    processor's forward, which reads it without calling it.  ``weights`` are (parameter, its backing, first store
-    block, registered blocks)."""
-
-    def __init__(self, torch, device: KvDevice, model: Any, weights: Sequence[tuple[Any, Any, int, int]]) -> None:
-        self.torch, self.device, self.handles, self.calls = torch, device, [], 0
-        self.weights = [(p, b.flat, first, blocks, p.data) for p, b, first, blocks in weights]
-        by_param = {id(w[0]): w for w in self.weights}
-        names = {id(m): n for n, m in model.named_modules()}
-        lm_head, by_module = getattr(model, "lm_head", None), {}
-        for mname, mod in model.named_modules():
-            for p in mod._parameters.values():
-                if p is None or id(p) not in by_param:
-                    continue
-                target = getattr(model, "logits_processor", None) if mod is lm_head else mod
-                if target is None:
-                    raise ValueError(f"{mname} holds a registered weight and no module reads it")
-                items = by_module.setdefault(id(target), (target, names.get(id(target), mname), []))[2]
-                if all(x[0] is not p for x in items):
-                    items.append(by_param[id(p)])
-        held = {id(x[0]) for _, _, items in by_module.values() for x in items}
-        if missing := [id(w[0]) for w in self.weights if id(w[0]) not in held]:
-            raise ValueError(f"{len(missing)} registered weights no module of the model holds")
-        hooked = sorted(n for _, n, _ in by_module.values())
-        if nested := [(a, b) for a in hooked for b in hooked if b.startswith(a + ".")]:
-            raise ValueError(f"module {nested[0][1]} decodes its weights inside {nested[0][0]}'s forward, into the "
-                             "same scratch")
-        self.modules = list(by_module.values())
-        size = lambda items: sum(-(-x[1].numel() // BLOCK) * BLOCK for x in items)
-        self.scratch = torch.empty(max(size(items) for _, _, items in self.modules), dtype=torch.uint8,
-                                   device=self.weights[0][1].device)
-
-    def install(self) -> None:
-        for mod, _, items in self.modules:
-            self.handles.append(mod.register_forward_pre_hook(lambda m, a, items=items: self.before(items)))
-            self.handles.append(mod.register_forward_hook(lambda m, a, o, items=items: self.after(items)))
-
-    def uninstall(self) -> None:
-        for h in self.handles:
-            h.remove()
-        self.handles = []
-
-    def _decode(self, flat, first: int, blocks: int, dst) -> None:
-        if blocks:
-            self.device.decode(flat.data_ptr(), dst.data_ptr(), blocks, first)
-        if flat.numel() > blocks * BLOCK:
-            dst[blocks * BLOCK:flat.numel()].copy_(flat[blocks * BLOCK:])
-
-    def before(self, items) -> None:
-        at = 0
-        for p, flat, first, blocks, enc in items:
-            dst = self.scratch[at:at + flat.numel()]
-            self._decode(flat, first, blocks, dst)
-            p.data = dst.view(enc.dtype).as_strided(enc.shape, enc.stride())
-            at += -(-flat.numel() // BLOCK) * BLOCK
-        self.calls += 1
-
-    def after(self, items) -> None:
-        for p, _, _, _, enc in items:
-            p.data = enc
-
-    def decode_in_place(self) -> None:
-        """Every registered weight decoded back where it is, through the scratch a chunk at a time: the session is
-        over and the model's weights are its own again."""
-        span = self.scratch.numel() // BLOCK
-        for p, flat, first, blocks, enc in self.weights:
-            p.data = enc
-            for u in range(0, blocks, span):
-                c = min(span, blocks - u)
-                self.device.decode(flat.data_ptr() + u * BLOCK, self.scratch.data_ptr(), c, first + u)
-                flat[u * BLOCK:(u + c) * BLOCK].copy_(self.scratch[:c * BLOCK])
-        self.torch.cuda.synchronize()
-
-
 class InPlaceBackend(StoreBackend):
     """`StoreBackend` over the store's tensors in place (the module's docstring): ``backings`` are the registered
     regions' backings in store order (`Store.backing`), ``session_lib`` session.cu's build and ``kv_lib`` kv.cu's at
-    the codec's field and mask, ``moved()`` the registered tensors no longer where they were (`Binder.moved`)."""
+    the codec's field and mask, ``moved()`` the registered tensors no longer where they were (`Binder.moved`).
+    ``model``'s registered weights are decoded at use; with ``paged_lib`` (paged.cu's build at the codec's field), its
+    int8 attention reads the KV pool through `credited` (with no model, the read is built and not installed)."""
 
     def __init__(self, store: Store, engine: Callable[[int], None], backings: Sequence[Any], *, session_lib: str,
                  kv_lib: str, codec: rcodec.Codec = rcodec.DEFAULT, moved: Callable[[], list[str]] = list,
                  path: Any = None, randbytes: Callable[[int], bytes] = os.urandom, kept_from: int = 6,
                  calibration_passes: int = 256, calibration_warm: int = 16, warmup_ms: float = 500.0,
-                 model: Any = None, weights: dict[str, Any] | None = None) -> None:
+                 model: Any = None, paged_lib: str | None = None) -> None:
         import torch
 
         super().__init__(store, engine, randbytes=randbytes, path=path, device=KvDevice(kv_lib, codec))
@@ -187,8 +116,10 @@ class InPlaceBackend(StoreBackend):
         ipm = session_module("inplace", config.REMOTE_SESSION)
         self.torch, self.codec, self.moved = torch, codec, moved
         self.calibration_passes, self.calibration_warm, self.warmup_ms = calibration_passes, calibration_warm, warmup_ms
-        self.model, self.weights, self.decoded = model, weights or {}, None
-        self._plain: dict[int, bytes] = {}
+        self.model, self.paged_lib, self.decoded, self.credited = model, paged_lib, None, None
+        self._sample: dict[int, bytes] = {}
+        self._weight_names: set[str] = set()
+        self.kv_tables: dict[int, tuple[Any, Any]] = {}
         self.lib = self.dev.Lib(str(session_lib), torch)
         self.key = randbytes(32)
         lay = store.layout()
@@ -333,22 +264,78 @@ class InPlaceBackend(StoreBackend):
         self.gates["device_encode"] = {"registered": N, "appends": 0, "blocks_checked": len(sample) + 1,
                                        "in_place": True, "bound": "a scratch block at registration"}
         self.audit = Appends(registration)
-        self._plain = {j: m.tobytes() for j, m in zip(sample.tolist(), before)}
+        self._sample = {j: m.tobytes() for j, m in zip(sample.tolist(), before)}
         self._decode_at_use()
+        self._credited_read(registration.key)
         return {"encode_bytes_per_s": N * BLOCK / secs}
 
     def _decode_at_use(self) -> None:
         if self.model is None:
             return
-        regions = [r for r in self.store.layout().regions if r.kind == "weights" and r.name in self.weights]
-        if not regions:
+        f = self.codec.field
+        weights = encoded_weights(self.store.layout(), self.model, f.word_bytes)
+        if not weights:
             return
-        self.decoded = DecodeAtUse(self.torch, self.device, self.model,
-                                   [(self.weights[r.name], self.store.backing(r.name), r.first, r.blocks)
-                                    for r in regions])
+        self._weight_names = {w.name for w in weights}
+        self.decoded = DecodeAtUse(self.model, weights, kv_decoder(self.device.lib, self.codec.rounds, f.word_bytes))
         self.decoded.install()
-        self.gates["decode_at_use"] = {"weights": len(regions), "modules": len(self.decoded.modules),
+        self.gates["decode_at_use"] = {"weights": len(weights), "modules": len(self.decoded.modules),
                                        "scratch_bytes": self.decoded.scratch.numel(), "decoded_back": None}
+
+    def _credited_read(self, key: rcodec.Key) -> None:
+        """The int8 attention's read of the encoded pool: paged.cu under the registration's key, each KV layer's
+        offsets (zero: the seed's key, as registration encoded it) and plaintext flags on the device."""
+        if self.paged_lib is None:
+            return
+        from verity_vllm.engine.int8_window import CreditedRead
+        from verity_vllm.store import int8_kv
+
+        torch, P, f = self.torch, self.device.paged, self.device.field
+        lib = P.PagedLib(f.name, str(self.paged_lib))
+        if lib.mask != self.codec.masked or lib.kmax < self.codec.rounds:
+            raise ValueError(f"{self.paged_lib} is paged.cu at {f.name}, masked={lib.mask}, at most {lib.kmax} rounds: "
+                             f"not {self.codec.name}")
+        self.device.set_key(key, lib)
+        layout = self.store.layout()
+        bases = int8_kv.store_bases(layout, word_bytes=self.codec.field.word_bytes)
+        blocks = {int(r.name.split("/", 1)[1]): r.blocks for r in layout.regions
+                  if r.kind == "kv" and r.name.startswith("kv/")}
+        self.kv_tables = {
+            layer: (torch.zeros((n, f.limbs), dtype=torch.int32, device=self.cuda),
+                    torch.zeros(n, dtype=torch.uint8, device=self.cuda)) for layer, n in blocks.items()}
+        tables = self.kv_tables
+        self.credited = CreditedRead(P, lib, int8_kv.layer_keys(bases, bj=lambda layer: tables[layer][0],
+                                                                plain=lambda layer: tables[layer][1]),
+                                     rounds=self.codec.rounds)
+        layers = []
+        if self.model is not None:
+            from verity_vllm.engine.int8_attention_vllm import install_credited_read
+
+            layers = install_credited_read(self.model, self.credited)
+        self.gates["credited_read"] = {
+            "layers": len(tables), "installed": len(layers), "slots": sum(blocks.values()),
+            "table_bytes": sum(b.numel() * 4 + p.numel() for b, p in tables.values()), "settled": 0}
+
+    def _settle(self, first: int, slots: np.ndarray, offsets: Sequence[int]) -> None:
+        """The credited read's offsets and flags of an append's KV slots, once they hold its encoding: block
+        ``first + u`` at store slot ``slots[u]`` under b = ``offsets[u]`` at index j is read at the slot's own index,
+        under b + τ · block_words · (j − slot)."""
+        if not self.kv_tables:
+            return
+        torch, P, f = self.torch, self.device.paged, self.device.field
+        tau, bw, p = self.registration.key.tau, self.codec.field.block_words, self.codec.field.p
+        layout = self.store.layout()
+        r = np.searchsorted(self._firsts, slots, side="right") - 1
+        for ri in sorted(set(r.tolist())):
+            reg = layout.regions[ri]
+            if reg.kind != "kv" or not reg.name.startswith("kv/"):
+                raise ValueError(f"an appended block at slot {slots[r == ri][0]} is in {reg.name}, not a KV layer")
+            bj, plain = self.kv_tables[int(reg.name.split("/", 1)[1])]
+            at = np.flatnonzero(r == ri)
+            x = torch.from_numpy(slots[at] - reg.first).to(self.cuda)
+            bj[x] = P.offsets(torch, [(offsets[u] + tau * bw * (first + u - int(slots[u]))) % p for u in at.tolist()], f)
+            plain[x] = 0
+        self.gates["credited_read"]["settled"] += len(slots)
 
     def _gate_bound(self, key: rcodec.Key) -> None:
         """kv.cu's encode under an append's bound offset, in place, against `codec.encode`'s, on a scratch block at
@@ -397,6 +384,7 @@ class InPlaceBackend(StoreBackend):
         with phases.time("encode.device"):
             self.device.encode_in_place(data.reshape(-1), first, offsets)
             self._scatter(slots, data)
+            self._settle(first, slots, offsets)
             self.torch.cuda.synchronize()
         self.audit.coins[first] = coin
         self.stats["encoded_appends"] += 1
@@ -624,12 +612,14 @@ class InPlaceBackend(StoreBackend):
         if self.store.on_write == self._before_write:
             self.store.on_write = None
         self.saved, self._windex = [], None
+        if self.credited is not None:
+            self.gates["credited_read"].update(steps=self.credited.steps, windows=self.credited.windows)
         if self.decoded is not None and self.decoded.handles:
-            self.decoded.uninstall()
+            self.decoded.remove()
             self.decoded.decode_in_place()
-            firsts = np.array([j for j in sorted(self._plain) if j < self.blocks and self._is_weight(j)], np.int64)
+            firsts = np.array([j for j in sorted(self._sample) if j < self.blocks and self._is_weight(j)], np.int64)
             got = self._gather(firsts).cpu().numpy()
-            bad = [int(j) for j, g in zip(firsts, got) if g.tobytes() != self._plain[int(j)]]
+            bad = [int(j) for j, g in zip(firsts, got) if g.tobytes() != self._sample[int(j)]]
             self.gates["decode_at_use"].update(decoded_back=not bad, blocks_checked=len(firsts),
                                                calls=self.decoded.calls)
             if bad:
@@ -638,15 +628,16 @@ class InPlaceBackend(StoreBackend):
 
     def _is_weight(self, j: int) -> bool:
         r = self.store.layout().regions[int(np.searchsorted(self._firsts, j, side="right")) - 1]
-        return r.kind == "weights" and r.name in self.weights
+        return r.kind == "weights" and r.name in self._weight_names
 
     @classmethod
-    def for_commit(cls, session_lib: str) -> Callable[[Any, Any], InPlaceBackend]:
-        """`CommitSession`'s ``backend_of``: the backend over its store, in lockstep with its run."""
+    def for_commit(cls, session_lib: str, paged_lib: str | None = None) -> Callable[[Any, Any], InPlaceBackend]:
+        """`CommitSession`'s ``backend_of``: the backend over its store, in lockstep with its run (with ``paged_lib``,
+        the int8 attention's credited read)."""
         def build(cs, path) -> InPlaceBackend:
             backings = [cs.store.backing(r.name) for r in cs.store.layout().regions]
             return cls(cs.store, cs.lockstep, backings, session_lib=session_lib, kv_lib=cs.kv_lib, codec=cs.codec,
-                       moved=cs.binder.moved, path=path, model=cs.binder.model, weights=cs.binder.params)
+                       moved=cs.binder.moved, path=path, model=cs.binder.model, paged_lib=paged_lib)
         return build
 
     def session_stats(self) -> dict:

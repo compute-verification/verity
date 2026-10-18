@@ -40,13 +40,17 @@ class EncodedWeight:
     word_bytes: int
 
 
-def encoded_weights(layout: Layout, model: Any) -> list[EncodedWeight]:
-    """The store's weight regions that are ``model``'s parameters (a region is named for its parameter, `binder.model_weights`)."""
+def encoded_weights(layout: Layout, model: Any, word_bytes: int | None = None) -> list[EncodedWeight]:
+    """The store's weight regions that are ``model``'s parameters (a region is named for its parameter, `binder.model_weights`).
+    With ``word_bytes``, their words are those of the session's codec, not the regions' own: block j's from index
+    ``j * block_bytes / word_bytes`` (`remote_bandwidth.codec`'s indices, block by block from the store's first)."""
     params = dict(model.named_parameters())
     out = []
     for r in layout.regions:
         if r.kind == "weights" and r.name in params:
-            out.append(EncodedWeight(r.name, params[r.name], r.first_word, r.blocks, r.block_bytes // r.word_bytes, r.word_bytes))
+            wb = r.word_bytes if word_bytes is None else word_bytes
+            first = r.first_word if word_bytes is None else r.first * (r.block_bytes // wb)
+            out.append(EncodedWeight(r.name, params[r.name], first, r.blocks, r.block_bytes // wb, wb))
     return out
 
 
@@ -64,6 +68,7 @@ class DecodeAtUse:
         import torch
 
         self.torch, self.decode, self.calls, self.handles, self._active = torch, decode, 0, [], None
+        self.weights = list(weights)
         lm_head = getattr(model, "lm_head", None)
         by_id = {id(w.param): w for w in weights}
         mods: dict[int, tuple[Any, list]] = {}
@@ -81,6 +86,8 @@ class DecodeAtUse:
                 mods.setdefault(id(target), (target, []))[1].append(w)
         if not mods:
             raise ValueError("no module holds a registered weight")
+        if missing := [w.name for w in weights if id(w.param) not in self.home]:
+            raise ValueError(f"no module of the model holds {missing[0]} ({len(missing)} registered weights)")
         self.modules = list(mods.values())
         size = max(sum(self._span(w) for w in ws) for _, ws in self.modules)
         self.scratch = torch.empty(size, dtype=torch.uint8, device=weights[0].param.device)
@@ -139,3 +146,19 @@ class DecodeAtUse:
         for w in ws:
             w.param.data = self.home[id(w.param)]
         self._active = None
+
+    def decode_in_place(self) -> None:
+        """Every weight's whole blocks decoded back where they are, through the scratch a chunk at a time (the hooks
+        removed first): once the store's session is over, the model's weights are its own again."""
+        if self.handles:
+            raise RuntimeError("decode at use: remove the hooks before decoding the weights back in place")
+        stream = self.torch.cuda.current_stream().cuda_stream if self.scratch.is_cuda else 0
+        for w in self.weights:
+            src, b = self.home[id(w.param)], w.block_words * w.word_bytes
+            w.param.data, flat, span = src, self._flat(src), self.scratch.numel() // b * b
+            for u in range(0, w.blocks * b, span):
+                c = min(span, w.blocks * b - u)
+                self.decode(flat[u:u + c], self.scratch[:c], w.first_word + u // w.word_bytes, stream)
+                flat[u:u + c].copy_(self.scratch[:c])
+        if self.scratch.is_cuda:
+            self.torch.cuda.synchronize()
