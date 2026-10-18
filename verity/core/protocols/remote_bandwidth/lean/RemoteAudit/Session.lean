@@ -266,6 +266,31 @@ def verify (s : State) (t : Int) (openings : Array Opening) : Result × State :=
   | .accept => return (.accepted t, { s with windows := s.windows.modify t ({· with verdict := some .accept}) })
   | .reject f at? => return s.fail t f at?
 
+/-- What window t's openings are checked against, once its draws are out and it has no verdict: the registration, its
+digest, the appends, the window's record and its draws (`none` where `verify` refuses). -/
+def State.awaiting (s : State) (t : Int) : Option (WindowRecord × Array (Nat × Nat)) := do
+  if s.failed.isSome || t < 0 || t ≥ s.windows.size then none
+  let w := s.windows[t.toNat]!
+  let drawn ← w.drawn
+  if w.verdict.isSome then none
+  pure (s.record t.toNat, drawn)
+
+/-- `verify` with the window's verdict `check` computed on its draws: `verify s t openings` is
+`verifyBy s t (checkWindow s.reg s.digest s.appends (s.record t.toNat) · openings)` (`verify_eq_verifyBy`). -/
+def verifyBy (s : State) (t : Int) (check : Array (Nat × Nat) → Verdict) : Result × State := Id.run do
+  if let some r := live s then return (r, s)
+  if t < 0 || t ≥ s.windows.size then return (.refused "the window has no draws awaiting openings", s)
+  let t := t.toNat
+  let w := s.windows[t]!
+  let some drawn := w.drawn | return (.refused "the window has no draws awaiting openings", s)
+  if w.verdict.isSome then return (.refused "the window has no draws awaiting openings", s)
+  match check drawn with
+  | .accept => return (.accepted t, { s with windows := s.windows.modify t ({· with verdict := some .accept}) })
+  | .reject f at? => return s.fail t f at?
+
+theorem verify_eq_verifyBy (s : State) (t : Int) (openings : Array Opening) :
+    verify s t openings = verifyBy s t (checkWindow s.reg s.digest s.appends (s.record t.toNat) · openings) := rfl
+
 def step (s : State) : Event → Except String (Result × State)
   | .start now => pure (start s now)
   | .boundary now => pure (boundary s now)
