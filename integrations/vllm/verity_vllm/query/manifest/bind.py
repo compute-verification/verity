@@ -43,7 +43,7 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass
 from typing import Any, Iterable, Mapping, Sequence
 
-from verity_vllm.query.manifest.format import promoted_observation
+from verity_vllm.query.manifest.format import batch_launch_shortfall, promoted_observation
 
 __all__ = ["HIDDEN_FAMILIES", "Port", "Binder", "coverage_check", "source_ports", "split_name"]
 
@@ -211,6 +211,25 @@ class Binder:
         return out  # type: ignore[return-value]
 
 
+def _request_share_shortfall(numel: int, rows: int | None, tokens: int, rows_r: int | None, hi: int) -> str | None:
+    """Whether a request-local range [0, hi) of one batched per-token plane (a MoE block plane over the step's requests) fits inside the
+    request's own `rows_r` token rows of it: the plane's rows are a multiple f of the step's `tokens` (f = TOPK for `act`), the request's
+    share is rows_r x f of them.  Without a shape the plane's words must split into `tokens` equal rows.  None, or the shortfall named."""
+    if rows_r is None:
+        return "the request has no declared rows at the step"
+    if tokens <= 0:
+        return "the step declares no token rows"
+    if rows is None:
+        if numel % tokens:
+            return f"{numel} words do not split into the step's {tokens} token rows"
+        share = numel // tokens * rows_r
+    else:
+        if rows < tokens or rows % tokens:
+            return f"{rows} rows, not a multiple of the step's {tokens} token rows: the plane covers no request"
+        share = rows_r * (rows // tokens) * (numel // rows)
+    return None if hi <= share else f"the request-local range ends at {hi}; the request's {rows_r} token rows of the plane hold {share} words"
+
+
 def coverage_check(manifest: dict[str, Any], layouts: dict[int | str, list[dict[str, Any]]], *, request_id: str | int | None = None,
                    rank: int = 0, max_report: int = 12, ports: Any = None) -> dict[str, Any]:
     """Every manifest identity of (`request_id`, `rank`) must have a committed tensor bound to the same (step, op_path, output_member,
@@ -218,8 +237,11 @@ def coverage_check(manifest: dict[str, Any], layouts: dict[int | str, list[dict[
     name bound by the manifest's binder (`Binder`, with the committing sources' declared `ports`).  Reports missing
     identities (by family / step), and the committed extras (allowed).  Identity coverage only -- value correspondence is bind's separate
     check.  A kernel-stream tensor (`HIDDEN_FAMILIES`) the binder leaves unbound is still committed under its own name, as the binding
-    map keeps it: a B>1 batch-level hidden row (request `*`) names the padded whole-step geometry, and is covered op-level by the
-    per-sequence planes (`s<i>/...`) or the whole launch the tap committed under another spelling."""
+    map keeps it: a B>1 batch-level hidden row (request `*`) names the padded whole-step geometry, and is covered when the tensors of its
+    op at the step carry the whole stream of the sequences its `requests` list (`format.batch_launch_shortfall`, their rows from the
+    declared composition), whatever the spelling.  In a global manifest a MoE block plane is one batched tensor per step: a request's
+    request-local range must fit inside its own token rows of it, and a plane whose rows are not a multiple of the step's tokens covers
+    no request (named)."""
     if manifest.get("complete") is False:                                        # [MAN-02] an incomplete manifest never yields coverage
         um = manifest.get("unmodelled") or {}
         n = len(manifest.get("identities") or [])
@@ -229,6 +251,8 @@ def coverage_check(manifest: dict[str, Any], layouts: dict[int | str, list[dict[
                 "committed_unmatched_n": 0, "committed_unmatched": [], "committed_extras_n": 0, "duplicate_names_n": 0, "steps_committed": [], "unmodelled": um}
     binder = Binder.of_manifest(manifest, rank=rank, ports=ports)
     have: dict[tuple, list[int]] = {}
+    rows_of: dict[tuple, list[int | None]] = {}
+    by_op: dict[tuple, list[tuple[str, int]]] = defaultdict(list)
     extras = 0
     for step, metas in layouts.items():
         for m, (op, member, inv, how) in zip(metas, binder.bind(int(step), [m["name"] for m in metas])):
@@ -241,6 +265,15 @@ def coverage_check(manifest: dict[str, Any], layouts: dict[int | str, list[dict[
                 for d in m.get("shape") or []:
                     numel *= int(d)
             have.setdefault((int(step), op, member, inv), []).append(int(numel))
+            rows_of.setdefault((int(step), op, member, inv), []).append(int(m["shape"][0]) if m.get("shape") else None)
+            by_op[(int(step), op, inv)].append((member, int(numel)))
+    # the declared composition: engine step -> {request: token rows}, and the step's token rows
+    comp: dict[int, dict[str, int]] = {}
+    tokens: dict[int, int] = {}
+    for es in manifest.get("engine_steps") or []:
+        if isinstance(es, dict):
+            comp[int(es["engine_step"])] = {str(m["request_id"]): int(m["rows"]) for m in es.get("members") or []}
+            tokens[int(es["engine_step"])] = int(es.get("rows", sum(comp[int(es["engine_step"])].values())))
     missing: list[dict[str, Any]] = []
     by_family_missing: Counter = Counter()
     by_family_checked: Counter = Counter()
@@ -256,33 +289,27 @@ def coverage_check(manifest: dict[str, Any], layouts: dict[int | str, list[dict[
         k = (int(r.get("engine_step", r["step"])), r["op_path"], r["output_member"], int(r["invocation"]))
         lo, hi = r["element_range"]
         got = have.get(k)
-        seq_short = None
-        if got is None and r.get("request_id") == "*" and isinstance(r.get("requests"), list) and r["requests"]:
-            # [R15 B8] a batch-level hidden row (B>1: one attention launch per layer per engine step over the co-scheduled sequences) names
-            # the padded whole-step geometry; the tap commits per-SEQUENCE planes (`s<i>/g<HB>x<M>x<NB>/<plane>`) at a segmented prefill, or
-            # one whole-launch plane set at decode.  The requirement is op-level per engine step: every co-scheduled sequence has its planes
-            # (>= n_seq distinct `s<i>` prefixes), or the launch is whole (unsegmented members present).  Same rule as binding.coverage_check.
-            seqs, whole, numels = set(), False, []
-            for (st, op, mem, inv), v in have.items():
-                if st == k[0] and op == k[1] and inv == k[3]:
-                    numels += v
-                    if mem.startswith("s") and "/" in mem and mem[1:mem.index("/")].isdigit():
-                        seqs.add(mem[:mem.index("/")])
-                    else:
-                        whole = True
-            if numels and (whole or len(seqs) >= len(r["requests"])):
-                got, hi = numels, None                                       # op-level: covered; matched below
-                for kk in list(have):
-                    if kk[0] == k[0] and kk[1] == k[1] and kk[3] == k[3]:
-                        matched_keys.add(kk)
-            elif numels:
-                got, seq_short = None, f"{len(seqs)} sequence plane sets committed, {len(r['requests'])} co-scheduled sequences declared ({sorted(seqs)})"
-        if not got or (hi is not None and max(got) < int(hi)):
+        why = None
+        if r.get("request_id") == "*" and isinstance(r.get("requests"), list) and r["requests"]:
+            # [R15 B8; red-team claim 3] a batch-level hidden row (B>1: one attention launch per layer per engine step over the co-scheduled
+            # sequences) names the padded whole-step geometry; the tap stages the launch whole or as per-SEQUENCE planes
+            # (`s<i>/g<h>x<rows_i>x<NB>/<class>`).  Covered when the op's tensors at the step carry the whole stream of the sequences the row
+            # lists, sized by their names' geometry; the same rule as binding.coverage_check.
+            members = by_op.get((k[0], k[1], k[3]), [])
+            undeclared = [q for q in r["requests"] if str(q) not in comp.get(k[0], {})]
+            why = (f"requests {undeclared[:3]} have no declared rows at engine step {k[0]}" if undeclared else
+                   batch_launch_shortfall(r.get("geometry"), [comp[k[0]][str(q)] for q in r["requests"]], members))
+            got, hi = ([w for _m, w in members] or None), None
+            if why is None:
+                matched_keys.update((k[0], k[1], mem, k[3]) for mem, _w in members)
+        elif got and manifest.get("global") and r["family"] == "moe_block_stream" and k[0] in tokens:
+            why = _request_share_shortfall(max(got), rows_of[k][got.index(max(got))], tokens[k[0]], comp[k[0]].get(str(r["request_id"])), int(hi))
+        if not got or why or (hi is not None and max(got) < int(hi)):
             missing.append({"family": r["family"], "step": r["step"], "engine_step": k[0], "request_id": r["request_id"], "op_path": r["op_path"],
-                            "output_member": r["output_member"], "invocation": r["invocation"], "want_range": [lo, hi], "committed_numel": got}
-                           | ({"why": seq_short} if seq_short else {}))
+                            "output_member": r["output_member"], "invocation": r["invocation"], "want_range": [lo, hi],
+                            "committed_numel": got if got is None or len(got) <= 8 else got[:8] + ["..."]} | ({"why": why} if why else {}))
             by_family_missing[r["family"]] += 1
-        else:
+        elif r.get("request_id") != "*":
             matched_keys.add(k)
     unexpected = [k for k in have if k not in matched_keys]
     dup = {k: len(v) for k, v in have.items() if len(v) > 1}
