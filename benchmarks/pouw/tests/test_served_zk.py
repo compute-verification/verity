@@ -123,11 +123,13 @@ def _codes(e: pytest.ExceptionInfo) -> set[str]:
 
 
 def _pub(bca: bytes, bcb: bytes) -> bytes:
-    """A tile proof's public file as `verity_flock.circuit.write` lays it out: its header, then instance 0's b || c in port
-    order (the A row, the B row, the tile digest's row)."""
+    """A tile proof's public file as `verity_flock.circuit.write` lays it out: its header (over the circuit the verifier
+    pins for the window's template), then instance 0's b || c in port order (the A row, the B row, the tile digest's
+    row)."""
     schemas = {"a0": L.ROW_SCHEMA["fp8-pi", SC.SIDES["a"]], "b0": L.ROW_SCHEMA["fp8-pi", SC.SIDES["b"]],
                "o0": L.ROW_SCHEMA["tile", SC.SIDES["a"]]}
-    return json.dumps({"instances": 1, "frame_v3": {"schemas": schemas}}).encode() + b"\n" + bca + bcb + bytes(128)
+    head = {"circuit_sha512": CC.TILES[SC.template(K).id].circuit, "instances": 1, "frame_v3": {"schemas": schemas}}
+    return json.dumps(head).encode() + b"\n" + bca + bcb + bytes(128)
 
 
 def _unit_pub(advice, priv, t: int) -> bytes:
@@ -882,9 +884,11 @@ def test_shape_compares_what_the_prover_sends(tmp_path):
 @pytest.mark.slow
 def test_a_staged_unit_opens_under_the_window_root(served, tmp_path):
     """stage_tile.py stages a call's tile and a filler tile of a committed window as `Pc8TileSide` units, each in its own
-    process, on the committer's side rows and salts: each public file's rows are the side trees' leaves, so the opening
+    process, on the committer's side rows and salts: each is over the circuit the verifier pins for the template
+    (`core_check.TILES`, Lean's `PouwCheck.tiles`), and each public file's rows are the side trees' leaves, so the opening
     accepts.  Nothing cheaper catches a unit whose committed rows are not the side rows (the index field dropped or moved),
-    which only the staged public file shows; about a minute at K = 128."""
+    or a change to the template or to C-Flock's lowering that moves the circuit off its pin, which only staging shows;
+    about a minute at K = 128."""
     *_, words = served
     params, public, advice, priv = _window(words)
     rec = _register(params, public)
@@ -903,6 +907,9 @@ def test_a_staged_unit_opens_under_the_window_root(served, tmp_path):
         st = json.loads((out / "stage.json").read_text())
         assert st["definition"] == SC.template(K).id and st["row_schemas"][:2] == [
             [L.ROW_SCHEMA["fp8-pi", SC.SIDES[s]], 16 * L.ROW_WORDS["fp8-pi"](K)] for s in "ab"]
+        assert st["circuit_sha512"] == CC.TILES[st["definition"]].circuit, (
+            f"unit {t}: {st['definition']} builds circuit {st['circuit_sha512']}, not the one the verifier pins: a change "
+            "to the template or to C-Flock's lowering lands its new digest in PouwCheck/Tile.lean and core_check.TILES")
         op = json.loads((out / "opening.json").read_text())
         assert SC.check(params, rec, draw, t, (out / "pub.bin").read_bytes(), op) is None, t
     assert json.loads((tmp_path / "u25" / "stage.json").read_text())["kind"] == "filler"

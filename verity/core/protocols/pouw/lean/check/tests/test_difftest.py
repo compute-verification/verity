@@ -84,6 +84,7 @@ REASONS = {_template(r) for r in (
     "entry # is not the registered window's entry", "entry #: index # is not in the entry's range",
     "the proof's public file has no JSON header", "the proof's header has no instance count",
     "the proof has # instances, not one tile",
+    "the proof's circuit is not the one the verifier pins for the check's template",
     "the proof's first rows are not an A row and a B row of the registered schemas",
     "the proof's body holds no A row and B row",
     *(f"side {s}: the opening is of row #, not the unit's row #" for s in "ab"),
