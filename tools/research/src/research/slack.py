@@ -2533,7 +2533,7 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     ap = argparse.ArgumentParser(prog=prog, description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
 
-    def cmd(name: str, help: str, *, as_: bool = False, thread: bool = False, body: bool = False, url: bool = False,
+    def cmd(name: str, help: str, *, as_: bool = False, thread: bool = False, body: bool = False,
             aliases: tuple[str, ...] = ()) -> argparse.ArgumentParser:
         p = sub.add_parser(name, parents=[c], help=help, aliases=list(aliases))
         if as_:
@@ -2543,16 +2543,13 @@ def main(argv: list[str], prog: str = "research msg") -> int:
         if body:
             p.add_argument("--text", default=None)
             p.add_argument("--file", default=None, metavar="PATH", help="the body from PATH (`-` or neither: stdin)")
-        if url:
-            p.add_argument("--agent-url", default=None, help="the asking agent's link on a card (default $RESEARCH_AGENT_URL); "
-                                                                     "messages ignore it: their name is their author")
         return p
 
     cmd("handles", "the registry").add_argument("--json", action="store_true")
     cmd("owners", "the handle that owns each path (`-`: nobody)").add_argument("paths", nargs="*", metavar="PATH",
                                                                                help="checkout paths (none: read them from stdin)")
     cmd("subscriptions", "the subscribe calls this handle's holder makes", as_=True)
-    p = cmd("send", "post a message: a new thread, or into --thread; the --to names lead it and get it", as_=True, body=True, url=True)
+    p = cmd("send", "post a message: a new thread, or into --thread; the --to names lead it and get it", as_=True, body=True)
     p.add_argument("--to", nargs="+", action="extend", default=[], metavar="@NAME", help="who it's for: handles or names with an inbox")
     p.add_argument("--thread", default=None, metavar="TS", help="reply in this thread (default: start one)")
     p.add_argument("--kind", default=None, metavar="WORD",
@@ -2563,11 +2560,11 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--quiet", action="store_true", help="wake only the names it starts with: no reply needed")
     p.add_argument("--urgent", action="store_true", help="the doorbells say URGENT, and `read --as` lists them first")
     p = cmd("close", "close a thread you were asked in: a status line (done, or --declined WHY), and the root's reaction",
-            as_=True, thread=True, url=True)
+            as_=True, thread=True)
     p.add_argument("--declined", default=None, metavar="WHY")
     p.add_argument("--link", default=None, metavar="URL", help="the result: a PR, file or art: id")
     p.add_argument("--note", default=None)
-    p = cmd("ask", "1:1: tag one handle or name in #agent-coordination, and ring its doorbell", as_=True, body=True, url=True)
+    p = cmd("ask", "1:1: tag one handle or name in #agent-coordination, and ring its doorbell", as_=True, body=True)
     p.add_argument("--to", required=True, metavar="@OWNER")
     p.add_argument("--urgent", action="store_true", help="the doorbell says URGENT")
     p = cmd("linear", "Linear issues: `check` (what the credentials reach; exit 0 when fit for asks), `state ISSUE STATE` "
@@ -2579,15 +2576,15 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--write", default=None, metavar="TEAM", help="check: also file, comment on and cancel a test issue in TEAM")
     p.add_argument("--as", dest="handle", default=None, metavar="HANDLE",
                    help="comment: its sender (required); check: the test issue's sender (default comms)")
-    p = cmd("announce", "1:some or 1:all in #agent-coordination", as_=True, body=True, url=True)
+    p = cmd("announce", "1:some or 1:all in #agent-coordination", as_=True, body=True)
     p.add_argument("--to", nargs="+", action="extend", default=[], metavar="@HANDLE", help="the handles or names it's for (default: every handle)")
     p.add_argument("--verify", default=None, metavar="CMD", help="a required action: the command that shows it took")
     p.add_argument("--ships", action="append", default=[], metavar="URL#sha256=HEX|git:SHA", help="code it runs, pinned")
     p.add_argument("--urgent", action="store_true", help="the doorbells say URGENT")
-    p = cmd("reply", "a post in a thread; `@name` at its start also rings that name's doorbell", as_=True, thread=True, body=True, url=True)
+    p = cmd("reply", "a post in a thread; `@name` at its start also rings that name's doorbell", as_=True, thread=True, body=True)
     p.add_argument("--quiet", action="store_true", help="ring only the names it starts with: no reply needed")
     p.add_argument("--urgent", action="store_true", help="the doorbells say URGENT")
-    p = cmd("names", "the leads' names, each an inbox thread: open, read, close, list", url=True)
+    p = cmd("names", "the leads' names, each an inbox thread: open, read, close, list")
     p.add_argument("verb", choices=("open", "read", "close", "list"))
     p.add_argument("--as", dest="handle", default=None, metavar="NAME", help="the inbox's name: your handle")
     p.add_argument("--holder", default=None, metavar="BC_ID", help="open: the agent that holds it (default: this agent)")
@@ -2636,10 +2633,11 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--peek", action="store_true", help="--as: don't mark them read")
     p.add_argument("--urgent", action="store_true", help="--as: exit 1 unless an unread doorbell is URGENT")
     p.add_argument("--json", action="store_true")
-    p = cmd("ask-daniel", "a card for Daniel in #ask-daniel; `status ID` reads its answer, `resolve ID` records a thread answer", url=True)
+    p = cmd("ask-daniel", "a card for Daniel in #ask-daniel; `status ID` reads its answer, `resolve ID` records a thread answer")
     p.add_argument("verb", nargs="?", choices=("status", "resolve"), help="read a card's decision, or record Daniel's answer from its thread")
     p.add_argument("id", nargs="?", metavar="ID", help="the card's id, as posting it printed")
     p.add_argument("--as", dest="handle", default=None, metavar="HANDLE", help="the asking coordinator's handle (workers ask through theirs)")
+    p.add_argument("--agent-url", default=None, help="the asking agent's link on the card (default $RESEARCH_AGENT_URL)")
     p.add_argument("--kind", choices=KINDS, default=None, help="blocking waits for Daniel; default proceeds at the deadline unless he objects")
     p.add_argument("--question", default=None, help="one line")
     p.add_argument("--why", default=None, help="why it matters")
