@@ -36,6 +36,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import random
 import sys
 import time
@@ -409,7 +410,7 @@ def stage(defn, S, rows, args: list[dict], name: str, out: Path, base: int, boun
     (d / "inst.bin").rename(d / f"inst-{n}.bin")
     (d / "pub.bin").rename(d / f"pub-{n}.bin")
     (d / "tables").mkdir(exist_ok=True)
-    (d / "circuit.txt").symlink_to("../circuit.txt")
+    os.link(out / "circuit.txt", d / "circuit.txt")
     oks = [int(x) for x in np.asarray(got["outs"]["o0"])[:, 0]]
     return {"tag": f"{name}-c0", "dir": d, "meta": st.meta, "pin": st.pin, "class": st.class_sha512, "set": set_name, "n": n,
             "lo": 0, "cap": n, "ands": got["ands"], "unit_nnz": got["unit_nnz"], "salts": got["salts"], "ports": st.ports,
@@ -719,25 +720,24 @@ def uncertified(result: dict, rrec, view: dict, store, req, link, common, member
     """What the sample leaves uncertified, for memory accounting's ledger: the profile's bound on wrong units of each
     template at delta, and the most credit those could carry (the passes whose plan unit is wrong, and those holding a block
     a wrong map unit wrote), as a fraction of the session's capacity: a term to charge beside the link's cap."""
-    profile = result.get("profile") or {}
     wrong = result.get("wrong_units")
-    per = []
+    if not isinstance(wrong, dict):
+        return {"wrong_units": wrong, "term": None}
+    per_t = wrong["per_template"]
+    sizes = {s["name"]: s["size"] for s in (result.get("profile") or {}).get("strata", [])}
+    w_plan, w_map = (per_t[P.template_id(m["defn"])] for m in members)
+    credit = {}
     for w in rrec.windows:
         for n, s in zip(w.credited(True), w.steps):
-            per.append((s, min(n * link.density_bits, req.read_bits(s)) / 8))
-    credit = dict(per)
+            credit[s] = min(n * link.density_bits, req.read_bits(s)) / 8
     whole = common["capacity_bytes_per_s"] * rrec.span_ns / 1e9
-    if wrong is None:
-        return {"wrong_units": None, "term": None}
-    w_units = int(np.ceil(wrong)) if isinstance(wrong, (int, float)) else wrong
-    top_plan = sum(sorted(credit.values(), reverse=True)[:w_units]) if isinstance(w_units, int) else None
-    reach = {}
-    for t, js in store.written.items():
-        reach[t] = sum(credit[s] for s in credit if s > t and set(view["plans"].get(s, ())) & set(js))
-    top_map = sum(sorted(reach.values(), reverse=True)[:w_units]) if isinstance(w_units, int) else None
-    term = None if top_plan is None else (top_plan + top_map) / whole
-    return {"wrong_units": wrong, "plan_credit_bytes": top_plan, "map_credit_bytes": top_map, "term": term,
-            "profile": {k: profile.get(k) for k in ("epsilon", "delta", "k", "population")} if isinstance(profile, dict) else profile}
+    top_plan = sum(sorted(credit.values(), reverse=True)[:w_plan])
+    reach = {t: sum(c for s, c in credit.items() if s > t and set(view["plans"].get(s, ())) & set(js)) for t, js in store.written.items()}
+    top_map = sum(sorted(reach.values(), reverse=True)[:w_map])
+    at_most = min(top_plan + top_map, sum(credit.values()))
+    return {"wrong_units": wrong, "epsilon": {t: per_t[t] / sizes[t] for t in per_t if sizes.get(t)},
+            "plan_credit_bytes": top_plan, "map_credit_bytes": top_map, "credit_bytes": sum(credit.values()),
+            "uncertified_bytes": at_most, "term": at_most / whole}
 
 
 def _forged(m: dict, i: int, args: dict) -> dict:
@@ -798,21 +798,20 @@ def negatives(a, out, rec, receipt, result, members, canons, sd, layout, store, 
     f = _forged(plan_m, s0, dict(plan_m["args"][s0], count=len(short), plan=short + [0] * (sp.P - len(short))))
     neg["plan-misses-a-block-the-step-reads (PlanMatches)"] = {"refused": f["ok_output"] == 0 and not f["opens_to_1"], "unit": f}
 
-    # the memory-map unit's clauses: a payload mismatch, a late free, an early free
-    t = next(s for s in range(req_steps) if store.written.get(s))
+    # the memory-map unit's clauses: a payload mismatch, a late free, an early free, on a block whose values' last read is
+    # at least two steps after its write and before the last step, so both frees fall inside the run after the write
+    def block_last(a_s, j):
+        return max(a_s["last"][i] for i in range(sm.K) if (a_s["present"] >> i) & 1 and a_s["lam"][2 * a_s["pos"][i]] == j)
+
+    t, j, lastj = next((s, j_, block_last(map_m["args"][s], j_)) for s in range(req_steps) for j_ in sorted(store.written.get(s, ()))
+                       if s + 2 <= block_last(map_m["args"][s], j_) <= req_steps - 2)
     a_t = map_m["args"][t]
-    k = min(range(sm.K), key=lambda i: a_t["last"][i] if (a_t["present"] >> i) & 1 else 1 << 20)
-    j = a_t["lam"][2 * a_t["pos"][k]]
-    lastj = max(a_t["last"][i] for i in range(sm.K) if (a_t["present"] >> i) & 1 and a_t["lam"][2 * a_t["pos"][i]] == j)
     pay = list(a_t["pay"])
     pay[j - a_t["first"]] ^= 1 << 1234
     f = _forged(map_m, t, dict(a_t, pay=pay))
     neg["payload-does-not-carry-its-value (Carries)"] = {"refused": f["ok_output"] == 0 and not f["opens_to_1"], "step": t, "block": j, "unit": f}
     for name, at in (("late-free (a block kept past its values' last read)", lastj + 1),
                      ("early-free (a block freed before its values' last read)", lastj - 1)):
-        if at <= t:
-            neg[name] = {"refused": False, "why": f"block {j} is read only at its write step"}
-            continue
         phi = list(a_t["phi"])
         phi[2 * (j - sm.N) + 1] = at
         f = _forged(map_m, t, dict(a_t, phi=phi))
@@ -836,10 +835,10 @@ def negatives(a, out, rec, receipt, result, members, canons, sd, layout, store, 
     other = list(plan_m["args"][1]["lam"])
     other[0], other[2] = other[2], other[0]
     neg["layout-row-not-the-shared-one (binding)"] = rebound(plan_m, 1, "lam", other)
-    if a_t["count"] > 1:
-        neg["payload-row-of-another-block (binding)"] = rebound(map_m, t, "pay0", RU._words(a_t["pay"][1], RU.BLOCK_WORDS))
-    if bin(a_t["present"]).count("1") > 1:
-        neg["value-row-of-another-value (binding)"] = rebound(map_m, t, "val0", RU._words(a_t["val"][1], VW // 16))
+    t2 = next(s for s in range(req_steps) if map_m["args"][s]["count"] > 1 and bin(map_m["args"][s]["present"]).count("1") > 1)
+    a_2 = map_m["args"][t2]
+    neg["payload-row-of-another-block (binding)"] = rebound(map_m, t2, "pay0", RU._words(a_2["pay"][1], RU.BLOCK_WORDS))
+    neg["value-row-of-another-value (binding)"] = rebound(map_m, t2, "val0", RU._words(a_2["val"][1], VW // 16))
 
     # the v0 bridge and the link: a session plan larger than the certified one, a release later than the map's
     rs = remote_session(req, layout, store, plans, extra={s0: [unselected_table_block(s0)]})
@@ -865,16 +864,17 @@ def negatives(a, out, rec, receipt, result, members, canons, sd, layout, store, 
     bcs = public_bcs(m0["dir"] / f"pub-{m0['n']}.bin", m0["ports"])
     neg["public-row-not-the-verifier's-copy (opening)"] = {
         "refused": not opens(port, public_words(other_pub, m0["rows"]), m0["salts"]["pub"][i0], bcs[i0]["pub"])}
-    last = next((m for m in members if m.get("drawn") and m["n"] - 1 in m["drawn"]), None)
+    last = next((m for m in members if any((out / f"session-{m['name']}" / "sessions").glob("*/session.json"))), None)
     if last is not None:
         sdir = out / f"session-{last['name']}"
 
         def check(r, ll):
-            return V.check(r, program, query, law, a0.SCHEME, want, leaf_layer=hashlib.sha512(canonical_json(
-                {**publics, last["name"]: ll})).hexdigest())
+            layer = hashlib.sha512(canonical_json({**publics, last["name"]: ll})).hexdigest()
+            return V.check(dict(r, leaf_layer=layer), program, query, law, a0.SCHEME, want, leaf_layer=layer)
 
-        neg["ok-row-commitment-altered-after-the-proof (Lean)"] = a0.altered_public(
-            a.lean, last, last["n"], sdir, out / "neg-altered-ok", dict(rec, leaf_layer=leaf_layer), check)
+        neg["public-file-altered-after-the-proof (Lean roots)"] = {**a0.altered_public(
+            a.lean, last, last["n"], sdir, out / "neg-altered-public", dict(rec, leaf_layer=leaf_layer), check, zk=True),
+            "member": last["name"], "row": f"instance {last['n'] - 1}, port {last['ports'][-1].name}"}
     # the sampled-proofs registration and draw, as A6 checks them
     fewer = P.mixed_population_program([(plan_m["defn"], plan_m["n"] - 1), (map_m["defn"], map_m["n"])])
     v = V.check(rec, fewer, query, law, a0.SCHEME, want, leaf_layer=leaf_layer)
