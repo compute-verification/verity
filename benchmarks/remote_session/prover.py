@@ -25,7 +25,20 @@ serve           honest, beside the backend's own serving (`backend.serving`: a n
                 write, free and re-key its KV, `verity_vllm.store.remote`): before each pass the backend's engine runs
                 its next step, and the pass reads every live block at it
 servedrop:K     serve, but the first K blocks appended (1 by default) are not held, as kvdrop's
+kvoverwrite:P   kv:P with serving ahead of the passes (--ahead), but its writes skip the free fence: a write lands in
+                a slot whose block a pass still has to read, that pass's receipt of it is of the new bytes, and an
+                opening of it carries the true block
 ~~~
+
+With serving ahead of the passes (`Ahead`: --ahead K for a kv session, or a serving backend's own), serving runs on
+its own thread, at most K steps past the pass reading, and the session takes each pass's step from it: the pass at s,
+once serving has handed step s − 1's record, to which a kv session adds the re-keys the pass's window needs and the
+store's indices (`ServingTrace.take`).  Each block is read in its slot (`CpuBackend.write`, `place`), so a write that
+lands in a slot while a pass still has to read the block it held changes that pass's receipts: serving writes into a
+slot whose block was released at step r (freed at r, or overwritten by the write itself at r) only once the pass at
+r has read (`Ahead.reuse`, the free fence).  One pass is then in flight at a time, not two: the next pass's step waits
+on serving, whose write may wait on this pass's read.  Without serving ahead the trace's step is the session's own,
+before each pass, and a block lands in its slot when it is encoded.
 
 With a serving trace, the appends a pass's step made go out after the root before it and before the pass is computed,
 each its own message (its tree's root and size, `Session.append`) answered with its coin, under which the backend
@@ -44,6 +57,9 @@ so pass n reads the store that step left.
     python prover.py --connect HOST:PORT --out OUT --plan honest,skip:3e-5 [device options, `device.py`]
     python prover.py --connect HOST:PORT --out OUT --plan kv:4,kvdrop:4 --cpu 256 --codec p512/k2
                                                         the driver's reference as the backend, no GPU
+    python prover.py ... --plan kv:4 --cpu 256 --ahead 4 --kv-headroom 5
+                                                        serving up to 4 steps past the passes, each slot reused 5 steps
+                                                        after its free
 """
 from __future__ import annotations
 
@@ -58,6 +74,7 @@ import sys
 import threading
 import time
 from collections import defaultdict, deque
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -78,7 +95,8 @@ OPENINGS_PART = 128
 DROPPED_LISTED = 4096
 """A session's result lists its dropped blocks up to this many, and counts them always."""
 BOUNDARIES = ("coin", "close", "end")
-MODES = ("honest", "skip", "kv", "kvdrop", "serve", "servedrop")
+MODES = ("honest", "skip", "kv", "kvdrop", "kvoverwrite", "serve", "servedrop")
+TRACED = ("kv", "kvdrop", "kvoverwrite")
 
 
 @dataclass
@@ -107,10 +125,10 @@ def parse_plan(plan: str) -> list[tuple[str, float]]:
     out = []
     for part in plan.split(","):
         mode, _, f = part.partition(":")
-        if mode not in MODES or (mode in ("kv", "kvdrop") and (not f.isdigit() or int(f) < 1)) or (
+        if mode not in MODES or (mode in TRACED and (not f.isdigit() or int(f) < 1)) or (
                 mode == "serve" and f) or (mode == "servedrop" and f and (not f.isdigit() or int(f) < 1)):
-            raise ValueError(f"a session's mode is honest, skip:F, kv:P, kvdrop:P (P pages a step), serve or "
-                             f"servedrop:K (K blocks withheld), not {part!r}")
+            raise ValueError(f"a session's mode is honest, skip:F, kv:P, kvdrop:P, kvoverwrite:P (P pages a step), "
+                             f"serve or servedrop:K (K blocks withheld), not {part!r}")
         out.append((mode, float(f) if f else 1.0 if mode == "servedrop" else 0.0))
     return out
 
@@ -137,28 +155,139 @@ def plan_change(before: rb.Plan, after: rb.Plan) -> tuple[tuple[tuple[int, int],
     return runs_of(sorted(b - a)), runs_of(sorted(a - b))
 
 
+class Ahead:
+    """Serving's steps beside the session's passes, serving at most `k` steps past the pass reading: the hook that takes
+    the audit off serving's critical path.  R is the last step whose pass has read (-1 before the first), and the
+    session's next pass is at step R + 1, one pass a serving step.
+
+    serving's thread (the run's)
+      begin(s)     before step s: waits until s ≤ R + 1 + k; False once the session has ended (`end`), and serving's
+                   steps from s on are unaudited
+      reuse(r)     before a write into memory whose block was released at step r (freed there, or overwritten by this
+                   very write, r = s): waits until R ≥ r, the free fence, so every pass that holds the block has read
+                   it in place first
+      hand(s, x)   once step s has run, its record x, which the session takes for the pass at s + 1
+      finish()     serving has no more steps: the passes after its last cover idle steps
+      fail(e)      serving raised e: the session's next `take` raises
+    the session's thread
+      take(s)      the record of step s − 1 (None for one serving never ran), once serving has handed it or finished
+      passed(s)    the pass at s has read, or never will (dropped at a boundary before it read)
+      end()        the session is over: serving runs free
+
+    With `fill`, `take` also waits until serving waits on the passes (in `begin` or `reuse`) or has finished, so each
+    pass reads with serving as far ahead as the bound and the fence let it, whatever the threads' timing: one schedule
+    a run, the furthest, for tests.  `leads` is, for each pass, how many steps past its own serving had begun when it
+    finished reading (at most k); `waits` counts serving's waits on the bound and on the fence."""
+
+    def __init__(self, k: int, fill: bool = False) -> None:
+        if type(k) is not int or k < 0:
+            raise ValueError(f"serving runs k ≥ 0 steps past the passes, not {k!r}")
+        self.k, self.fill = k, fill
+        self.read, self.begun, self.last = -1, -1, -1
+        self.handed: dict[int, object] = {}
+        self.waiting: Callable[[], bool] | None = None
+        self.over = self.done = False
+        self.error: BaseException | None = None
+        self.leads: list[int] = []
+        self.waits = {"bound": 0, "fence": 0}
+        self.cv = threading.Condition()
+
+    def _hold(self, on: str, ready: Callable[[], bool]) -> None:
+        """Under the lock: wait until `ready` or the session's end, counting the wait on `on` as it starts."""
+        if self.over or ready():
+            return
+        self.waits[on] += 1
+        self.waiting = ready
+        self.cv.notify_all()
+        self.cv.wait_for(lambda: self.over or ready())
+        self.waiting = None
+
+    def begin(self, s: int) -> bool:
+        with self.cv:
+            self._hold("bound", lambda: s <= self.read + 1 + self.k)
+            if self.over:
+                return False
+            self.begun = s
+            return True
+
+    def reuse(self, r: int) -> None:
+        with self.cv:
+            self._hold("fence", lambda: r <= self.read)
+
+    def hand(self, s: int, record) -> None:
+        with self.cv:
+            if not self.over:
+                self.handed[s], self.last = record, s
+                self.cv.notify_all()
+
+    def finish(self) -> None:
+        with self.cv:
+            self.done = True
+            self.cv.notify_all()
+
+    def fail(self, error: BaseException) -> None:
+        with self.cv:
+            self.error, self.done = error, True
+            self.cv.notify_all()
+
+    def take(self, s: int):
+        with self.cv:
+            self.cv.wait_for(lambda: self.done or (self.last >= s - 1 and (
+                not self.fill or (self.waiting is not None and not self.waiting()))))
+            if self.error is not None:
+                raise RuntimeError(f"serving raised before step {s}'s pass") from self.error
+            return self.handed.pop(s - 1, None)
+
+    def passed(self, s: int) -> None:
+        with self.cv:
+            if s > self.read:
+                self.leads.append(self.begun - s)
+                self.read = s
+                self.cv.notify_all()
+
+    def end(self) -> None:
+        with self.cv:
+            self.over = True
+            self.cv.notify_all()
+
+    def stats(self) -> dict:
+        return {"k": self.k, "fill": self.fill, "steps": self.begun + 1, "leads": self.leads,
+                "bound_waits": self.waits["bound"], "fence_waits": self.waits["fence"]}
+
+
 class ServingTrace:
     """A serving node's KV writes beside its registered store, as memory-map/v1 steps (`memory_map`).  Step s writes
     `pages` blocks of fresh payloads round-robin over a pool of slots: the store's last `pool` registered blocks (a KV
     pool's pages, registered as filler) and `pool // 4` slots of memory outside the store.  Every third step first frees
-    the `pages // 2` slots after its last write, so a later write lands in a slot holding nothing.  A block written in
-    window a is stale from window a + `lifetime` (`audit.Params.lifetime`), and the step before a pass of a window
-    that would hold a stale block re-keys it: writes its payload again in its slot, at the store's next fresh index.
-    `memory_map.Replay` turns each step into the audit's append, which the backend's store commits and, once the
-    verifier's coin for it arrives, encodes under the pages' bound keys, and its release; `plan` is every live block in
-    store order."""
+    the `pages // 2` slots after its last write, so a later write lands in a slot holding nothing; or, with `headroom`
+    h, every step frees the slots the step h steps on writes, so each write lands in a slot freed h steps before (an
+    allocator that keeps h steps of frees before it reuses one).  A block written in window a is stale from window
+    a + `lifetime` (`audit.Params.lifetime`), and the step before a pass of a window that would hold a stale block
+    re-keys it: writes its payload again in its slot, at the store's next fresh index.  `memory_map.Replay` turns each
+    step into the audit's append, which the backend's store commits and, once the verifier's coin for it arrives,
+    encodes under the pages' bound keys, and its release; `plan` is every live block in store order.
+
+    A step is serving's half (`serve`: its frees and writes, by slot) and then the session's (`record`: the re-keys,
+    the indices, the append), which `step` runs together before the session's pass.  With serving ahead of the passes
+    (`ahead`, an `Ahead`), `run` is serving on its own thread and `take` the session's half at each pass."""
 
     def __init__(self, backend, registration: audit.Registration, pages: int, pool: int, rng: random.Random,
-                 lifetime: int = audit.LIFETIME) -> None:
+                 lifetime: int = audit.LIFETIME, headroom: int = 0) -> None:
         N = registration.blocks
         pool = max(1, min(pool, N))
         self.slots = list(range(N - pool, N)) + list(range(N, N + max(1, pool // 4)))
-        if pages + pages // 2 > len(self.slots):
-            raise ValueError(f"a step of {pages} pages frees and writes more than the pool's {len(self.slots)} slots")
+        if pages + pages // 2 > len(self.slots) or (headroom + 1) * pages > len(self.slots):
+            raise ValueError(f"a step of {pages} pages, its slots kept {headroom} steps after their free, frees and "
+                             f"writes more than the pool's {len(self.slots)} slots")
         self.backend, self.registration, self.pages, self.rng = backend, registration, pages, rng
-        self.lifetime = lifetime
+        self.salts = random.Random(rng.getrandbits(64))
+        self.lifetime, self.headroom = lifetime, headroom
         self.replay = memory_map.Replay(memory_map.Header(registration.digest, N), registration)
-        self.steps, self.cursor, self.rekeyed = 0, 0, 0
+        self.steps, self.served, self.cursor, self.rekeyed = 0, 0, 0, 0
+        self.full = set(range(N - pool, N))
+        self.freed_at: dict[int, int] = {}
+        self.ahead: Ahead | None = None
+        self.taken = -1
         self.live = set(range(N))
         self.held: dict[int, tuple[int, bytes]] = {}
         self.appends: list[audit.Append] = []
@@ -170,17 +299,50 @@ class ServingTrace:
         old = [x for x, (a, _) in self.held.items() if a <= window - self.lifetime]
         return sorted(old, key=self.replay.holds)
 
-    def step(self, s: int, window: int, pages: bool = True) -> memory_map.Change:
+    def step(self, s: int, window: int, pages: bool = True) -> memory_map.Change | None:
         """The trace's next step in `window`, recorded as memory-map step `s`: its `pages` writes if `pages`, and the
         stale blocks' re-keys."""
-        n, k = len(self.slots), (self.pages // 2 if pages and self.steps % 3 == 2 else 0)
-        freed = [x for x in (self.slots[(self.cursor + u) % n] for u in range(k)) if self.replay.holds(x) is not None]
-        slots = [self.slots[(self.cursor + k + u) % n] for u in range(self.pages)] if pages else []
-        if pages:
-            self.cursor = (self.cursor + k + self.pages) % n
-            self.steps += 1
-        payloads = [payload(self.rng) for _ in slots]
+        return self.record(s, window, *self.serve(s, pages))
+
+    def serve(self, s: int, pages: bool = True, fence: Callable[[int], None] | None = None):
+        """Serving's step s: the slots it frees, then its writes as (slot, payload), if it writes `pages`.  With
+        `fence`, each write lands in its slot as the step runs (`backend.write`), after fence(r) for the step r at
+        which the block its slot held was released; without, the block lands when the session encodes it."""
+        if not pages:
+            return (), ()
+        n, P = len(self.slots), self.pages
+        if self.headroom:
+            write = [self.slots[(self.cursor + u) % n] for u in range(P)]
+            freed = [x for x in (self.slots[(self.cursor + self.headroom * P + u) % n] for u in range(P))
+                     if x in self.full and x not in write]
+            self.cursor = (self.cursor + P) % n
+        else:
+            k = P // 2 if self.served % 3 == 2 else 0
+            freed = [x for x in (self.slots[(self.cursor + u) % n] for u in range(k)) if x in self.full]
+            write = [self.slots[(self.cursor + k + u) % n] for u in range(P)]
+            self.cursor = (self.cursor + k + P) % n
+        self.served += 1
+        self.full.difference_update(freed)
+        self.freed_at.update((x, s) for x in freed)
+        writes = tuple((x, payload(self.rng)) for x in write)
+        for x, m in writes:
+            if fence is not None:
+                released = s if x in self.full else self.freed_at.get(x)
+                if released is not None:
+                    fence(released)
+                self.backend.write(x, m, s)
+            self.full.add(x)
+        return tuple(freed), writes
+
+    def record(self, s: int, window: int, freed, writes) -> memory_map.Change | None:
+        """Step s's record, the session's, in `window`: serving's frees and writes, then the re-keys of the blocks stale
+        in `window`, at the store's next fresh indices, appended to the backend's store and placed in their slots;
+        None for a step that changes nothing."""
+        slots, payloads = [x for x, _ in writes], [m for _, m in writes]
         rekey = [x for x in self.stale(window) if x not in slots and x not in freed]
+        if not (freed or slots or rekey):
+            return None
+        self.steps += bool(slots)
         slots, payloads = slots + rekey, payloads + [self.held[x][1] for x in rekey]
         self.rekeyed += len(rekey)
         first = self.replay.extent
@@ -189,16 +351,40 @@ class ServingTrace:
         for x in freed:
             self.held.pop(x, None)
         self.held.update((x, (window, m)) for x, m in zip(slots, payloads))
-        a = self.backend.append(payloads, [self.rng.randbytes(rb.SALT_BYTES) for _ in payloads])
-        if a.first != change.first or a.digests != change.digests:
-            raise AssertionError("the store's append is not the memory map's")
-        self.appends.append(a)
-        self.appended.extend(range(a.first, a.first + a.count))
+        if slots:
+            a = self.backend.append(payloads, [self.salts.randbytes(rb.SALT_BYTES) for _ in payloads])
+            if a.first != change.first or a.digests != change.digests:
+                raise AssertionError("the store's append is not the memory map's")
+            getattr(self.backend, "place", lambda first, slots, step: None)(a.first, slots, s)
+            self.appends.append(a)
+            self.appended.extend(range(a.first, a.first + a.count))
+            self.live.update(range(a.first, a.first + a.count))
         gone = [j for f, c in change.released for j in range(f, f + c)]
         self.released.extend(gone)
         self.live.difference_update(gone)
-        self.live.update(range(a.first, a.first + a.count))
         return change
+
+    def run(self, ahead: Ahead, every: int, fenced: bool = True) -> None:
+        """Serving on its own thread, until the session ends: step s writes pages when s + 1 is a multiple of `every`
+        (the step before every `every`'th pass), each write past `ahead`'s free fence unless not `fenced`."""
+        fence = ahead.reuse if fenced else (lambda r: None)
+        try:
+            s = 0
+            while ahead.begin(s):
+                ahead.hand(s, self.serve(s, (s + 1) % every == 0, fence))
+                s += 1
+        except BaseException as e:
+            ahead.fail(e)
+
+    def take(self, window: int) -> int:
+        """The step of the session's next pass, in `window`: one pass a serving step, the pass at s once serving has
+        handed step s − 1 (`Ahead.take`), whose record, with the re-keys `window` needs, is applied first."""
+        s = self.taken + 1
+        got = self.ahead.take(s)
+        if s > 0:
+            self.record(s - 1, window, *(got or ((), ())))
+        self.taken = s
+        return s
 
     def plan(self) -> rb.Plan:
         return rb.Plan(runs_of(sorted(self.live)), self.replay.extent)
@@ -208,7 +394,12 @@ class CpuBackend:
     """The driver's reference as a backend: a store of `blocks` random payload blocks under the registration's codec,
     every pass `receipts.receipter` over its plan's blocks (every registered block unless the pass names a plan), its
     tree `receipts.tree`, salts from `entropy`; blocks appended after the codec seed (`append`, committed, then
-    `encode_append` under the append's coin) are the session's."""
+    `encode_append` under the append's coin) are the session's.  A pass reads each block in its slot (`mem`): block j
+    of the registered store in slot j, an appended one in the slot `place` gave it, put there encoded by
+    `encode_append`; serving's `write` puts a payload in a slot as it runs, whatever block a pass may still have to
+    read there.  A block's encode lands only in a slot nothing has been written into since the step that placed it:
+    a block freed before its coin arrived (its pass dropped at a boundary) is never put over serving's later write.
+    `misread(ticket)` is the pass's blocks whose slot held other bytes than the block when it read."""
 
     def __init__(self, blocks: int, rng: random.Random, read_bytes_per_s: float = 1e12) -> None:
         self.blocks, self.rng, self.read_bytes_per_s = blocks, rng, read_bytes_per_s
@@ -216,6 +407,8 @@ class CpuBackend:
         self.salts = [rng.randbytes(rb.SALT_BYTES) for _ in range(blocks)]
         self.dropped: set[int] = set()
         self.gates: dict = {}
+        self.misreads: tuple[int, ...] = ()
+        self.slot_lock = threading.Lock()
 
     def payload_root(self, node: bytes) -> bytes:
         return audit.payload_tree(node, self.payloads, self.salts).commitment.root
@@ -223,19 +416,41 @@ class CpuBackend:
     def encode(self, registration: audit.Registration) -> dict:
         self.store = audit.Store(registration, self.payloads, self.salts)
         self.plan = rb.Plan.whole(self.blocks)
+        self._slots()
         return {"encode_bytes_per_s": 1.0}
 
+    def _slots(self) -> None:
+        self.mem, self.where, self.placed, self.wrote = dict(enumerate(self.store.blocks)), {}, {}, {}
+
     def begin_session(self) -> None:
-        """A session's appends start again from N."""
+        """A session's appends start again from N, over the registered store as encoded: the KV pool's filler is put
+        back where the last session's pages overwrote it."""
         del self.store.blocks[self.blocks:]
         self.store.appends.clear()
         self.store.pending.clear()
+        self._slots()
 
     def append(self, payloads, salts) -> audit.Append:
         return self.store.append(payloads, salts)
 
+    def place(self, first: int, slots, step: int) -> None:
+        """The slots of the blocks step `step` appended from `first`, in order."""
+        with self.slot_lock:
+            for j, x in enumerate(slots, first):
+                self.where[j], self.placed[j] = x, step
+
+    def write(self, slot: int, block: bytes, step: int) -> None:
+        with self.slot_lock:
+            self.mem[slot], self.wrote[slot] = block, step
+
     def encode_append(self, first: int, coin: bytes) -> None:
+        count = len(self.store.pending[first])
         self.store.encode(first, coin)
+        with self.slot_lock:
+            for j in range(first, first + count):
+                x = self.where.get(j, j)
+                if self.wrote.get(x, -1) <= self.placed.get(j, self.wrote.get(x, -1)):
+                    self.mem[x] = self.store.blocks[j]
 
     def calibrate(self) -> dict:
         return {"pass_ns_max": 0, "gap_ns_max": 0, "read_bytes_per_s": self.read_bytes_per_s}
@@ -259,13 +474,19 @@ class CpuBackend:
         after = ticket["after"]
         prev = audit.chained(ticket["previous"] if after is None else after["root"], ticket["head"])
         root, handle = self.run_pass(rb.seed(ticket["challenge"], ticket["i"], prev), ticket["plan"])
-        ticket["root"] = root
+        ticket["root"], ticket["misread"] = root, self.misreads
         return root, handle
+
+    def misread(self, ticket: dict) -> tuple[int, ...]:
+        return ticket.get("misread", ())
 
     def run_pass(self, seed: bytes, plan: rb.Plan | None = None):
         plan = plan or self.plan
         r = rb.receipter(self.store.registration.receipt, seed, self.store.registration.rows)
-        ys = tuple(r(j, bytes(rcodec.BLOCK_BYTES) if j in self.dropped else self.store.blocks[j]) for j in plan)
+        zero = bytes(rcodec.BLOCK_BYTES)
+        held = [zero if j in self.dropped else self.mem.get(self.where.get(j, j), zero) for j in plan]
+        self.misreads = tuple(j for j, e in zip(plan, held) if j not in self.dropped and e != self.store.blocks[j])
+        ys = tuple(r(j, e) for j, e in zip(plan, held))
         salts = tuple(self.rng.randbytes(rb.SALT_BYTES) for _ in range(rb.leaves(plan.length)))
         tree = rb.tree(seed, plan, ys, salts)
         return tree.commitment.root, (ys, salts, tree, plan)
@@ -288,10 +509,13 @@ class CpuBackend:
 class ProverSide:
     def __init__(self, conn: wire.Conn, backend, node: bytes, plan: list[tuple[str, float]], *, seed: int = 0,
                  defer_openings: bool = True, warmup_ns: int = 0, kv_every: int = 1, kv_pool: int = 64,
-                 log=print) -> None:
+                 kv_headroom: int = 0, ahead: int | None = None, fill: bool = False, log=print) -> None:
+        """`ahead`: a kv session's serving runs on its own thread, at most that many steps past the passes (`Ahead`,
+        `fill` its test schedule); `kv_headroom`: its trace's steps between a slot's free and its reuse."""
         self.conn, self.backend, self.node, self.plan, self.log = conn, backend, node, plan, log
         self.defer_openings, self.warmup_ns = defer_openings, warmup_ns
-        self.kv_every, self.kv_pool = kv_every, kv_pool
+        self.kv_every, self.kv_pool, self.kv_headroom = kv_every, kv_pool, kv_headroom
+        self.ahead, self.fill = ahead, fill
         self.rng = random.Random(seed)
         self.inbox: queue.Queue = queue.Queue()
         self.jobs: queue.Queue = queue.Queue()
@@ -394,12 +618,19 @@ class ProverSide:
             raise ValueError("the session's coins are not for this registration")
         N = self.backend.blocks
         getattr(self.backend, "begin_session", lambda: None)()
-        trace = None
-        if mode in ("kv", "kvdrop"):
+        trace = serving = None
+        if mode in TRACED:
             if not hasattr(self.backend, "append"):
                 raise ValueError(f"a {mode} session needs a backend that appends blocks after the codec seed (--cpu)")
+            if mode == "kvoverwrite" and self.ahead is None:
+                raise ValueError("a kvoverwrite session's serving runs ahead of its passes (ahead=K)")
             trace = ServingTrace(self.backend, self.registration, int(fraction), self.kv_pool,
-                                 random.Random(self.rng.getrandbits(64)), head.get("lifetime", audit.LIFETIME))
+                                 random.Random(self.rng.getrandbits(64)), head.get("lifetime", audit.LIFETIME),
+                                 self.kv_headroom)
+            if self.ahead is not None:
+                trace.ahead = Ahead(self.ahead, self.fill)
+                serving = threading.Thread(target=trace.run, args=(trace.ahead, self.kv_every, mode != "kvoverwrite"),
+                                           daemon=True)
         elif mode in ("serve", "servedrop"):
             if not hasattr(self.backend, "serving"):
                 raise ValueError(f"a {mode} session needs a backend that serves (a Store's: verity_vllm.store.remote)")
@@ -432,16 +663,24 @@ class ProverSide:
         backend, clock = self.backend, self.conn.clock
         step_of = getattr(backend, "step_of", None)
         launched, sent_plan, sent_released, sent_appends = 0, rb.Plan.whole(N), 0, 0
+        ahead: Ahead | None = getattr(trace, "ahead", None)
+        self.misread = {}
 
         def launch(t: int, i: int, after, start: int | None) -> _Pass:
             """Pass i of window t; with a serving trace, after the trace's step if one falls due (the backend's next
-            engine step, serving), over every live block."""
+            engine step, serving), over every live block; with serving ahead, at the step it takes from serving, and
+            started once it has.  Then one pass is in flight at a time: the next one's step waits on serving, whose
+            write may wait on this one's read."""
             nonlocal launched
             n, launched = launched, launched + 1
             if trace is None:
                 ticket = backend.launch(i, after)
                 return _Pass(t, i, ticket, start, step=step_of(ticket) if step_of is not None else n)
-            if mode in ("serve", "servedrop"):
+            if ahead is not None:
+                n = trace.take(t)
+                if mode == "kvdrop":
+                    backend.arm(trace.appended)
+            elif mode in ("serve", "servedrop"):
                 trace.advance(t)
                 if mode == "servedrop":
                     backend.arm(trace.appended[:int(fraction)])
@@ -453,13 +692,15 @@ class ProverSide:
                         backend.arm(trace.appended)
             plan = trace.plan()
             ticket = backend.launch(i, after, plan)
-            return _Pass(t, i, ticket, start, step=step_of(ticket) if step_of is not None else n, plan=plan,
+            return _Pass(t, i, ticket, clock() if ahead is not None else start,
+                         step=step_of(ticket) if step_of is not None else n, plan=plan,
                          upto=(len(trace.appends), len(trace.released)))
 
         backend.begin_window(take(wire.coin_of(head["coin"])), self.registration.digest)
-        inflight = deque([launch(0, 0, None, clock())])
         pending: deque = deque()
         passes, last, nxt, stopping, ended, discarded = [], None, 1, False, None, 0
+        depth = 1 if ahead is not None else 2
+        misread = getattr(backend, "misread", None)
 
         def send(x: _Pass, root: bytes, handle, seen: int) -> None:
             nonlocal sent_plan, sent_released
@@ -472,6 +713,8 @@ class ProverSide:
                 msg["change"] = [[list(r) for r in side] for side in plan_change(sent_plan, x.plan)]
                 self.plans[(x.t, x.i)] = x.plan
                 sent_plan, sent_released = x.plan, x.upto[1]
+            if misread is not None and (got := misread(x.ticket)):
+                self.misread[(x.t, x.i)] = got
             self.conn.send(msg)
             passes.append((x.t, x.i, x.start, seen, clock()))
 
@@ -490,55 +733,69 @@ class ProverSide:
                 backend.encode_append(a.first, bytes.fromhex(reply["coin"]))
             return None
 
-        while inflight:
-            if not stopping and len(inflight) < 2:
-                inflight.append(launch(t, nxt, inflight[-1].ticket, None))
-                nxt += 1
-            x = inflight.popleft()
-            unsent = x.plan is not None and x.upto[0] > sent_appends
-            if unsent and not x.discard:
+        if serving is not None:
+            serving.start()
+        try:
+            inflight = deque([launch(0, 0, None, clock())])
+            while inflight:
+                if not stopping and len(inflight) < depth:
+                    inflight.append(launch(t, nxt, inflight[-1].ticket, None))
+                    nxt += 1
+                x = inflight.popleft()
+                unsent = x.plan is not None and x.upto[0] > sent_appends
+                if unsent and not x.discard:
+                    self._drain(pending)
+                    if not pending or (pending[0][0]["type"] != "end" and pending[0][2] >= x.start):
+                        if (gone := flush(x)) is not None:
+                            ended, stopping = gone, True
+                            discarded += 1 + len(inflight)
+                            break
+                        unsent = False
+                if unsent:
+                    if inflight:
+                        inflight[0].start = clock()
+                else:
+                    root, handle = backend.wait(x.ticket)
+                    seen = clock()
+                    if inflight:
+                        inflight[0].start = seen
+                if ahead is not None:
+                    ahead.passed(x.step)
                 self._drain(pending)
-                if not pending or (pending[0][0]["type"] != "end" and pending[0][2] >= x.start):
-                    if (gone := flush(x)) is not None:
-                        ended, stopping = gone, True
-                        discarded += 1 + len(inflight)
-                        break
-                    unsent = False
-            if unsent:
-                if inflight:
-                    inflight[0].start = clock()
-            else:
-                root, handle = backend.wait(x.ticket)
-                seen = clock()
-                if inflight:
-                    inflight[0].start = seen
-            self._drain(pending)
-            if x.discard:
-                discarded += 1
-                continue
-            if not pending:
-                send(x, root, handle, seen)
-                last = x
-                continue
-            msg, _, stamp = pending.popleft()
-            for p in inflight:
-                p.discard = True
-            if msg["type"] == "end":
-                ended, stopping = msg, True
-                discarded += 1
-                continue
-            if stamp < x.start and not x.flushed:
-                discarded += 1
-            else:
-                send(x, root, handle, seen)
-                last = x
-            if msg["type"] == "close":
-                stopping = True
-                continue
-            t += 1
-            backend.begin_window(take(wire.coin_of(msg["coin"])), None)
-            inflight.append(launch(t, 0, last.ticket if last else None, None if inflight else clock()))
-            nxt = 1
+                if x.discard:
+                    discarded += 1
+                    continue
+                if not pending:
+                    send(x, root, handle, seen)
+                    last = x
+                    if depth == 1 and not stopping:
+                        inflight.append(launch(t, nxt, x.ticket, None))
+                        nxt += 1
+                    continue
+                msg, _, stamp = pending.popleft()
+                for p in inflight:
+                    p.discard = True
+                if msg["type"] == "end":
+                    ended, stopping = msg, True
+                    discarded += 1
+                    continue
+                if stamp < x.start and not x.flushed:
+                    discarded += 1
+                else:
+                    send(x, root, handle, seen)
+                    last = x
+                if msg["type"] == "close":
+                    stopping = True
+                    continue
+                t += 1
+                backend.begin_window(take(wire.coin_of(msg["coin"])), None)
+                inflight.append(launch(t, 0, last.ticket if last else None, None if inflight else clock()))
+                nxt = 1
+        finally:
+            if ahead is not None:
+                ahead.end()
+            if serving is not None:
+                serving.join()
         if mode in ("kvdrop", "servedrop"):
             held = trace.appended if mode == "kvdrop" else trace.appended[:int(fraction)]
             dropped = self.dropped = np.array(sorted(held), dtype=np.int64)
@@ -574,6 +831,11 @@ class ProverSide:
                          "sent_released": sent_released,
                          "pass_blocks": [p.length for p in sent],
                          "pass_appended": [sum(max(0, f + c - max(f, N)) for f, c in p.runs) for p in sent]}
+        if ahead is not None:
+            out["ahead"] = {**ahead.stats(), "headroom": getattr(trace, "headroom", None)}
+        out["misread"] = [[tt, i, j] for (tt, i), js in sorted(self.misread.items()) for j in js]
+        out["failure_on_misread"] = (self.block(failure["t"], *at) in self.misread.get((failure["t"], at[0]), ())
+                                     if at else None)
         return out
 
     def _appended(self, pending: deque) -> dict:
@@ -623,6 +885,11 @@ def main() -> int:
     ap.add_argument("--codec", default=rcodec.DEFAULT.name, help="the registration's codec, with --cpu")
     ap.add_argument("--kv-every", type=int, default=1, help="a kv session's passes per memory-map step")
     ap.add_argument("--kv-pool", type=int, default=64, help="a kv session's registered slots the KV pool writes over")
+    ap.add_argument("--ahead", type=int, default=None, metavar="K",
+                    help="a kv session's serving on its own thread, at most K steps past the passes (default: none, "
+                         "each step before its pass)")
+    ap.add_argument("--kv-headroom", type=int, default=0, metavar="H",
+                    help="a kv session's steps between a slot's free and its reuse (0: every third step frees)")
     pre = argparse.ArgumentParser(add_help=False)
     pre.add_argument("--cpu", type=int, default=0)
     if not pre.parse_known_args()[0].cpu:
@@ -640,7 +907,7 @@ def main() -> int:
     conn = wire.connect(host, int(port))
     p = ProverSide(conn, backend, a.node.encode(), parse_plan(a.plan), seed=a.seed,
                    defer_openings=not a.overlap_openings, warmup_ns=round(a.warmup_ms * 1e6), kv_every=a.kv_every,
-                   kv_pool=a.kv_pool, log=lambda m: print(m, flush=True))
+                   kv_pool=a.kv_pool, kv_headroom=a.kv_headroom, ahead=a.ahead, log=lambda m: print(m, flush=True))
     cal = p.register(codec=wire.codec_named(a.codec)) if a.cpu else p.register()
     print(f"prover: registered, calibration {json.dumps(cal)}", flush=True)
     stalls = getattr(backend, "calibration_trace", None)
