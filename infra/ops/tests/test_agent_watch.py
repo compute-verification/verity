@@ -195,6 +195,27 @@ def test_an_error_run_is_restarted_once_an_hour_and_three_times_in_a_row_at_most
     assert len(api.posts) == 3, "an IDLE agent not changed in 6 h isn't read"
 
 
+def test_a_restart_seen_running_before_it_errors_still_counts_toward_the_limit(tmp_path):
+    """A restarted run reads CREATING, then RUNNING for a minute before it ends in ERROR again; a sweep that saw it running
+    reset the count, so a crashing agent was restarted every hour for good."""
+    api, clock, w, started = setup(tmp_path, status="ERROR")
+    for n in (2, 3, 4, 5):
+        clock.t += W.RECANCEL_S
+        api._agents[0]["latestRunId"] = f"run-e{n}"
+        api._runs[f"run-e{n}"] = {"status": "RUNNING"}
+        w.sweep(started.append)
+        api._runs[f"run-e{n}"] = {"status": "ERROR"}
+        w.runs[f"run-e{n}"].ended = "ERROR"
+        clock.t += 60
+        w.sweep(started.append)
+    assert len(api.posts) == W.MAX_RESTARTS
+    assert [r["kind"] for r in records(tmp_path)][-1] == "erroring"
+    api._agents[0]["latestRunId"] = "run-ok"
+    api._runs["run-ok"] = {"status": "FINISHED"}
+    w.sweep(started.append)
+    assert "bc-a" not in w.errors, "a run that finished ends the streak"
+
+
 def test_the_stream_parses_server_sent_events_until_done(monkeypatch):
     body = (b"event: status\ndata: {\"runId\": \"run-1\", \"status\": \"RUNNING\"}\n\n"
             b"id: 1-0\nevent: tool_call\ndata: {\"callId\": \"c1\", \"name\": \"Shell\",\n"

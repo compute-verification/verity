@@ -27,6 +27,7 @@ background wait any call, finishing whose start the watch didn't see (it lay bef
   build or a wait may be legitimate);
 - **crashed** when the agent's latest run ended in ERROR: the watch starts a new run, at most once an hour and `MAX_RESTARTS`
   times in a row (vllm's runs errored within a minute, run after run, on 18 Oct), then records it as **erroring**, for a person.
+  Only a latest run that FINISHED ends the row: a restarted run reads RUNNING for a while before it errors again.
 
 A run among an agent's newest left in CREATING for 10 min by the API's own `updatedAt` with no newer run started (only ones
 cancelled on arrival), or a followed background wait with nothing at all streamed for 2 h, is recorded once as **stuck**: on 18 Oct proofs' and circuits' runs sat in CREATING behind a
@@ -423,7 +424,7 @@ class Watch:
             last = next((x for x in runs if x.get("id") == latest), None)
             if follow:
                 current[follow["id"]] = (a, follow)
-            if follow or (last and last.get("status") == "FINISHED"):
+            if last and last.get("status") == "FINISHED":   # not a run going: a restart runs a minute before it errors
                 if self.errors.pop(a["id"], None) is not None or a["id"] in self.left:
                     self.left.discard(a["id"])
                     self.save()
