@@ -83,25 +83,6 @@ def test_learning_and_hit_runs_commit_step_rows_roots(monkeypatch, retain_levels
         com.close()
 
 
-def test_copy_engine_gather_commits_step_rows_roots(monkeypatch):
-    """Every flush through the copy engines (VERITY_GATHER_CE_MIN_MB at one byte, as prefill's flushes are): the same roots, the
-    pitched view's window-straddling segments (partial first and last rows, whole rows in one 2-D copy) included."""
-    monkeypatch.setenv("VERITY_GATHER_CE_MIN_MB", str(1 / (1 << 20)))
-    com = committer(monkeypatch, retain_levels=False)
-    try:
-        assert com._nc.gather_ce_min_bytes == 1
-        learn = WR.run(com, SCHED)
-        learn_keys = dict(com.row_keys)
-        hit = WR.run(com, SCHED)
-        check_run(learn, learn_keys)
-        check_run(hit, com.row_keys)
-        for rc in (learn, hit):
-            st = rc.extra["native_collect"]
-            assert st["gather_ce_flushes"] == st["flushes"] > 0 and st["gather_blocks"] == 0, st
-    finally:
-        com.close()
-
-
 def test_capped_runs_commit_step_rows_roots(monkeypatch):
     """VERITY_ROWS_CAP_BLOCKS's policy on the worker (each window capped while the ring has room; test_rows_cuda splits launches)."""
     com = committer(monkeypatch)

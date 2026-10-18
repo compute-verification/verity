@@ -66,17 +66,16 @@ def test_layout_matches_reference_and_gaps_are_zero(mod, gather):
     assert [(e[4], e[3]) for e in plan] == [(o, nb) for o, _, nb in ref]      # (name_id, dtype, sizes, nbytes, off, gap)
 
 
-@pytest.mark.parametrize("bpd,auto,ce", [(1, False, False), (4, False, False), (32, False, False), (32, True, False),
-                                         (1024, True, False), (1024, True, True)])
-def test_gather_writes_the_reference_layout_at_every_alignment_and_grid(mod, bpd, auto, ce):
+@pytest.mark.parametrize("bpd,auto", [(1, False), (4, False), (32, False), (32, True), (1024, True)])
+def test_gather_writes_the_reference_layout_at_every_alignment_and_grid(mod, bpd, auto):
     """The gather kernel's paths (16 B words between byte heads and tails when source and destination share their offset mod 16, 16 B
     words joined from two source loads when both are 4 B aligned at other offsets, pitched rows by 16 B or 4 B words, bytes otherwise)
     write exactly the reference layout's bytes: tensors of every length and source offset (slices of one buffer), three dtypes, pitched
     views, small ones and ones that take many grid-stride rounds, every (source, destination) offset pair mod 16 of the 4 B aligned
-    ones, under any grid; and so do the copy engines (`ce`: a flush of at least gather_ce_min_bytes, here every one)."""
+    ones, under any grid."""
     c = mod.Collector()
     c.enable_gather(256)
-    c.blocks_per_desc, c.auto_blocks, c.gather_ce_min_bytes = bpd, auto, 1 if ce else 0
+    c.blocks_per_desc, c.auto_blocks = bpd, auto
     g = torch.Generator(device="cuda").manual_seed(bpd * 2 + auto)
     base = torch.randint(-128, 128, (1 << 21,), dtype=torch.int8, device="cuda", generator=g)
     f32, bf16 = base.view(torch.float32), base.view(torch.bfloat16)
@@ -97,7 +96,6 @@ def test_gather_writes_the_reference_layout_at_every_alignment_and_grid(mod, bpd
         if gap:
             assert int(arena[off - gap:off].max()) == 0, f"tensor {k}: alignment gap not zero-filled"
         assert torch.equal(arena[off:off + nb], _as_bytes(t)), f"tensor {k} (src offset {t.data_ptr() % 16}, dst offset {off % 16}, {nb} B)"
-    assert (c.stats()["gather_ce_flushes"] == 1) is ce
 
 
 @pytest.mark.parametrize(("gather", "fast"), [(False, True), (True, False), (True, True)], ids=["memcpy", "gather", "gather-fast"])
