@@ -1013,6 +1013,17 @@
         "text": "@proofs is the tree ready?"
       },
       "targets": []
+    },
+    {
+      "name": "an announcement to a user group the registry doesn't know goes to no one, not to every handle",
+      "msg": {
+        "ts": "1700000061.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": ":mega: *Announcement* from @infra to <!subteam^SNEWGROUP>\nnode 2 reboots"
+      },
+      "root": null,
+      "targets": []
     }
   ],
   "doorbells": {

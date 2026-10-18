@@ -2005,3 +2005,11 @@ def test_deliver_reads_all_of_the_inboxs_last_hour_so_a_busy_inbox_is_not_rung_t
     for _ in range(3):
         assert run(capsys, "deliver", "--ts", post["ts"])[0] == 0
     assert sum(post["ts"] in m["text"] for m in bells(fake, box)) == 1
+
+def test_an_announcement_to_a_group_the_registry_lacks_matches_no_one_and_its_roster_expects_no_one(fake, registry, capsys):
+    """Its header's audience resolved to no handle, which read as `to every handle`: every lead was rung and matched."""
+    ann = fake.add(COORD, text=":mega: *Announcement* from @infra to <!subteam^SNEWGROUP>\nnode 2 reboots", username="infra", bot_id=BOT)
+    handles = [h["handle"] for h in json.loads(registry.read_text())["handles"]]
+    assert [h for h in handles if match(capsys, h, {**ann, "channel": COORD})[0] == 0] == []
+    rc, out, _ = run(capsys, "roster", "--thread", ann["ts"], "--json")
+    assert rc == 0 and json.loads(out) == []

@@ -643,8 +643,15 @@ def is_announcement(msg: dict | None) -> bool:
     return bool(msg) and (msg.get("text") or "").startswith((ANNOUNCE, SHORTCODES[ANNOUNCE]))
 
 
+def to_every_handle(text: str) -> bool:
+    """Whether an announcement's header addresses every handle: it says `to every handle`, or (an older header) names no
+    audience.  A header whose audience resolves to no handle (a user group the registry lacks) is for no one, not all."""
+    first = (text or "").split("\n", 1)[0]
+    return " to " not in first or first.split(" to ", 1)[1].strip().startswith("every handle")
+
+
 def audience(text: str, reg: dict) -> list[str]:
-    """The handles an announcement's header tags after ` to ` (the header also names its author); empty means every handle."""
+    """The handles an announcement's header tags after ` to ` (the header also names its author); see `to_every_handle`."""
     first = (text or "").split("\n", 1)[0]
     return tagged(first.split(" to ", 1)[1], reg) if " to " in first else []
 
@@ -664,7 +671,7 @@ def addressed(ev: dict, h: dict, reg: dict, key: str | None, api: Slack | None) 
             return f"top-level post in #{key}, which @{handle} subscribes to"
         if why := mentions(text, h):
             return why
-        if is_announcement(ev) and not audience(text, reg):
+        if is_announcement(ev) and to_every_handle(text):
             return "an announcement to every handle"
         return None
     if not is_status(text) and (why := mentions(text, h)):
@@ -860,7 +867,7 @@ def route_targets(msg: dict, root: dict | None, reg: dict, inboxes: set[str] | f
     else:
         out = lead_names(text, reg)
         if not reply and is_announcement(msg):
-            out += header_names(text, reg) or [h["handle"] for h in reg["handles"]]
+            out += [h["handle"] for h in reg["handles"]] if to_every_handle(text) else header_names(text, reg)
         if reply and set(out) - {author}:
             pass                                                     # a reply that names someone else is for them alone
         elif reply and by and by != author:
@@ -1522,7 +1529,8 @@ def cmd_roster(ns: argparse.Namespace, reg: dict) -> int:
     root = next((m for m in msgs if m.get("ts") == ns.thread), None)
     if not ns.dry_run and not is_announcement(root):
         raise SlackError(f"{ns.thread} is not an announcement")
-    aud = audience((root or {}).get("text", ""), reg) or [h["handle"] for h in reg["handles"]]
+    head = (root or {}).get("text", "")
+    aud = [h["handle"] for h in reg["handles"]] if to_every_handle(head) else audience(head, reg)
     expected = [n for n in aud if n != (root or {}).get("username")]
     status: dict[str, dict] = {}
     for m in msgs:
