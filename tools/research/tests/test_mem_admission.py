@@ -203,3 +203,102 @@ def test_active_file_cache_is_reclaimable_and_not_in_use(machine):
     (machine["cg"] / "memory.stat").write_text(f"anon {366 * G}\nfile {557 * G}\nshmem {11 * G}\nactive_file {454 * G}\ninactive_file {93 * G}\n")
     r = M.reading()
     assert r["in_use"] == (930 - 454 - 93) * G
+
+
+def _ticket(ram: Path, ns: int, gb: float, run_id: str, pid: int | None = None, **extra) -> Path:
+    """A waiter's ticket as admit() writes it; by default this process's, so it is live."""
+    pid = pid or os.getpid()
+    (ram / M.WAITING).mkdir(exist_ok=True)
+    p = ram / M.WAITING / f"{ns}.{pid}.json"
+    p.write_text(json.dumps({"run_id": run_id, "gb": gb, "pid": pid, "since": "t", **extra}))
+    return p
+
+
+def _in_line(ram: Path) -> list[str]:
+    return [w["run_id"] for w in M.waiters(ram)]
+
+
+def test_a_big_head_waiter_is_admitted_when_room_frees_and_later_smaller_runs_wait_behind_it(machine, monkeypatch):
+    """INF-77, vy-glm53-cpu-2: r20261018-182135-46fd needed 550 GB in one process and waited from 10:35Z while later, smaller runs
+    took the room as it freed.  Here "big" (45 GB) waits; at t=2 there is room for 10 GB runs but not for it: a run without a wait
+    is refused naming it, a waiting one is held until it gives up; at t=6 there is room for big, which goes first."""
+    clock = FakeClock(1000.0)
+    monkeypatch.setattr(M, "time", clock.module)
+    ram, rd = machine["ram"], machine["root"]
+    blocker = ram / "someone.json"
+    blocker.write_text(json.dumps({"owner": "someone", "gb": 45}))            # available 5
+    seen: dict = {}
+
+    def room_for_small() -> None:
+        blocker.write_text(json.dumps({"owner": "someone", "gb": 20}))        # available 30
+        (seen["big"],) = M.waiters(ram)
+        with pytest.raises(remote.MemoryNotAvailable) as e:
+            M.admit(10, ramlock_dir=ram, run_id="small", run_dir=rd / "small")
+        seen["refused"] = str(e.value)
+        with pytest.raises(remote.MemoryNotAvailable) as e:
+            M.admit(10, ramlock_dir=ram, run_id="small-w", run_dir=rd / "small-w", wait_s=2, poll_s=1)
+        seen["held"], seen["after_held"] = str(e.value), _in_line(ram)
+        seen["later"] = _ticket(ram, seen["big"]["ns"] + 10, 5, "later")      # a later waiter that fits all along
+
+    clock.at(1002.0, room_for_small)
+    clock.at(1006.0, blocker.unlink)                                          # available 50
+    out = M.admit(45, ramlock_dir=ram, run_id="big", run_dir=rd / "big", wait_s=60, poll_s=1)
+
+    assert seen["big"]["run_id"] == "big" and seen["big"]["gb"] == 45 and seen["big"]["pid"] == os.getpid()
+    assert seen["refused"].startswith("held behind 1 older waiter(s), first come first served (research.mem), oldest first: big 45 GB")
+    assert "asked 10 GB; available 30 GB" in seen["refused"] and "--mem-wait S waits for it" in seen["refused"]
+    assert seen["held"].startswith("held behind 1 older waiter(s)") and "big 45 GB" in seen["held"] and "waited 2s" in seen["held"]
+    assert seen["after_held"] == ["big"], "a waiter that gives up leaves the line"
+    assert out["waited_s"] == 6.0 and out["available_gb"] == 50 and (ram / "research-big.json").exists()
+    assert _in_line(ram) == ["later"], "the admitted waiter's ticket is gone, the later one still waits"
+    with pytest.raises(remote.MemoryNotAvailable, match="held behind 1 older waiter.*later 5 GB"):
+        M.admit(5, ramlock_dir=ram, run_id="next", run_dir=rd / "next")      # 5 GB is free, but "later" asked first
+    seen["later"].unlink()
+    assert M.admit(5, ramlock_dir=ram, run_id="next", run_dir=rd / "next")["available_gb"] == 5
+
+
+def test_a_dead_or_reused_pids_ticket_holds_no_place_and_is_removed(machine):
+    ram = machine["ram"]
+    dead = _ticket(ram, 1, 10, "gone", pid=_dead_pid())
+    reused = _ticket(ram, 2, 10, "reused", start=-1)                          # this pid, but another process's start time
+    assert _in_line(ram) == []
+    assert M.admit(20, ramlock_dir=ram, run_id="r", run_dir=machine["root"] / "r")["available_gb"] == 50
+    assert not dead.exists() and not reused.exists()
+
+
+def test_a_waiter_larger_than_the_limit_blocks_nobody_and_takes_no_place(machine, monkeypatch):
+    ram = machine["ram"]
+    huge = _ticket(ram, 1, 150, "huge")                                       # the limit is 100 GB: it can never fit
+    assert M.admit(20, ramlock_dir=ram, run_id="r", run_dir=machine["root"] / "r")["available_gb"] == 50
+    assert huge.exists(), "it is live: only ignored, not removed"
+    clock = FakeClock()
+    monkeypatch.setattr(M, "time", clock.module)
+    seen = []
+    clock.at(1.0, lambda: seen.append(_in_line(ram)))
+    with pytest.raises(remote.MemoryNotAvailable, match="asked 150 GB.*waited 3s"):
+        M.admit(150, ramlock_dir=ram, run_id="huge2", run_dir=machine["root"] / "huge2", wait_s=3, poll_s=1)
+    assert seen == [["huge"]], "a run asking for more than the limit waits without a ticket"
+
+
+def test_the_ticket_is_removed_when_the_wait_ends_by_an_exception(machine, monkeypatch):
+    clock = FakeClock()
+    monkeypatch.setattr(M, "time", clock.module)
+    seen = []
+
+    def interrupt() -> None:
+        seen.append(_in_line(machine["ram"]))
+        raise KeyboardInterrupt
+
+    clock.at(1.0, interrupt)
+    with pytest.raises(KeyboardInterrupt):
+        M.admit(60, ramlock_dir=machine["ram"], run_id="w", run_dir=machine["root"] / "w", wait_s=10, poll_s=1)
+    assert seen == [["w"]] and list((machine["ram"] / M.WAITING).iterdir()) == []
+
+
+def test_research_mem_lists_the_waiters_oldest_first(machine, capsys):
+    _ticket(machine["ram"], 20, 30, "second")
+    _ticket(machine["ram"], 10, 60, "first")
+    assert main(["mem", "--ramlock", str(machine["ram"])]) == 0
+    assert f"; waiting, oldest first: first 60 GB (pid {os.getpid()}, since t), second 30 GB" in capsys.readouterr().out
+    assert main(["mem", "--ramlock", str(machine["ram"]), "--json"]) == 0
+    assert [w["run_id"] for w in json.loads(capsys.readouterr().out)["waiting"]] == ["first", "second"]

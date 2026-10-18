@@ -20,7 +20,17 @@ refused.json).  An unreadable file is listed and not counted (its size is unknow
 admit() holds an flock on <ramlock>/.admission.lock from the reading through writing research-<run id>.json (same schema, plus
 run_id / run_dir), so two launches cannot both take the last N GB.  Short of N it raises MemoryNotAvailable (refused.json names
 it), or with wait_s polls until then.  The runner removes its file at exit, any status ($RESEARCH_MEM_RESERVATION, research.cli);
-a runner that dies leaves a file whose pid is gone.  `research mem [--ramlock DIR] [--json]` prints the reading on the machine."""
+a runner that dies leaves a file whose pid is gone.  `research mem [--ramlock DIR] [--json]` prints the reading on the machine,
+and the waiters in line.
+
+Waiters form a line, first come first served: a run that waits writes a ticket, <ramlock>/.waiting/<ns>.<pid>.json ({"run_id",
+"gb", "pid", "start"}), under the admission lock, and removes it when admitted or on any exit.  A run, waiting or not, is admitted
+only when it fits and no older live waiter is in line; the head waiter is admitted as soon as it fits.  Without the line, whoever
+fits at a poll took the room as it freed, and a big job never fit: on vy-glm53-cpu-2 r20261018-182135-46fd, 550 GB in one process,
+was refused or waiting from 10:35Z while later, smaller runs kept being admitted (INF-77).  The cost: a run that would fit now
+waits (or, without wait_s, is refused, naming the waiter it is behind) until every older waiter is admitted or gives up.  A ticket
+whose process is gone (its pid dead, or reused by a process with another start time) is ignored and removed; a waiter asking for
+more than the whole limit can never fit, so it holds no place in line and waits out wait_s to be refused as before."""
 from __future__ import annotations
 
 import argparse
@@ -38,6 +48,7 @@ from .telemetry.cgroup import _int_or_kind, _kv_file, _read
 from .telemetry.job import write_json_atomic
 
 RAMLOCK_DIR = "/workspace/ramlock"
+WAITING = ".waiting"
 GB = 1e9
 TERMINAL = ("done", "failed", "cancelled")
 
@@ -174,13 +185,52 @@ def reserved_bytes(res: list[dict[str, Any]]) -> float:
     return sum(by.values())
 
 
-def snapshot(ramlock_dir: Path) -> dict[str, Any]:
+def _start_time(pid: int) -> int | None:
+    """pid's start time in clock ticks (the real /proc/<pid>/stat field 22, whatever RESEARCH_PROC_ROOT says), None if unreadable."""
+    try:
+        return int(Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()[19])
+    except (OSError, IndexError, ValueError):
+        return None
+
+
+def waiters(ramlock_dir: Path, *, prune: bool = False) -> list[dict[str, Any]]:
+    """The live waiters' tickets, oldest first ({"file", "ns", "run_id", "gb", "pid", "since"}).  A ticket whose process is gone, or
+    that is unreadable, is skipped, and with `prune` (under the admission lock) removed."""
+    out = []
+    for f in Path(ramlock_dir, WAITING).glob("*.json"):
+        try:
+            ns, pid = (int(x) for x in f.name.split(".")[:2])
+            doc = json.loads(f.read_text())
+            gb = float(doc["gb"])
+            live = _alive(pid) and doc.get("start") in (None, _start_time(pid))
+        except (OSError, ValueError, KeyError, TypeError):
+            live = False
+        if not live:
+            if prune:
+                f.unlink(missing_ok=True)
+            continue
+        out.append({"file": f.name, "ns": ns, "run_id": doc.get("run_id"), "gb": gb, "pid": pid, "since": doc.get("since")})
+    return sorted(out, key=lambda w: (w["ns"], w["pid"]))
+
+
+def snapshot(ramlock_dir: Path, *, prune: bool = False) -> dict[str, Any]:
     r = reading()
     res = reservations(ramlock_dir)
     reserved = reserved_bytes(res)
     return {"limit_gb": round(r["limit"] / GB, 1), "in_use_gb": round(r["in_use"] / GB, 1), "reserved_gb": round(reserved / GB, 1),
             "available_gb": round((r["limit"] - r["in_use"] - reserved) / GB, 1), "source": r["source"], "cgroup": r["cgroup"],
-            "ramlock_dir": str(ramlock_dir), "reservations": res}
+            "ramlock_dir": str(ramlock_dir), "reservations": res, "waiting": waiters(ramlock_dir, prune=prune)}
+
+
+def _ahead(s: dict[str, Any], ticket: Path | None) -> list[dict[str, Any]]:
+    """The waiters in line before `ticket` (all of them for a run without one), less those asking for more than the whole limit."""
+    return [w for w in s["waiting"] if (ticket is None or w["file"] != ticket.name) and w["gb"] <= s["limit_gb"]
+            and (ticket is None or (w["ns"], w["pid"]) < tuple(int(x) for x in ticket.name.split(".")[:2]))]
+
+
+def _line(ws: list[dict[str, Any]]) -> str:
+    text = ", ".join(f"{w['run_id']} {w['gb']:g} GB (pid {w['pid']}, since {w['since']})" for w in ws[:4])
+    return text + (f" (+{len(ws) - 4} more)" if len(ws) > 4 else "")
 
 
 def describe(s: dict[str, Any], asked: float | None = None) -> str:
@@ -194,6 +244,8 @@ def describe(s: dict[str, Any], asked: float | None = None) -> str:
     stale = [x for x in s["reservations"] if not x["live"]]
     if stale:
         text += "; not counted: " + ", ".join(f"{x['file']} ({x['why']})" for x in stale[:4])
+    if s.get("waiting"):
+        text += f"; waiting, oldest first: {_line(s['waiting'])}"
     return text
 
 
@@ -208,23 +260,38 @@ def _locked(ramlock_dir: Path) -> Iterator[None]:
 
 
 def admit(gb: float, *, ramlock_dir: Path, run_id: str, run_dir: Path, wait_s: float = 0.0, poll_s: float = 5.0, note: str = "") -> dict[str, Any]:
-    """Reserve `gb` or raise MemoryNotAvailable.  -> the record for job.json run.remote.mem."""
+    """Reserve `gb` or raise MemoryNotAvailable, in line behind older waiters (module doc).  -> the record for job.json run.remote.mem."""
     ramlock_dir = Path(ramlock_dir)
     ramlock_dir.mkdir(parents=True, exist_ok=True)
     path = ramlock_dir / f"research-{run_id}.json"
+    ticket: Path | None = None
     t0 = time.monotonic()
-    while True:
-        with _locked(ramlock_dir):
-            s = snapshot(ramlock_dir)
-            if s["available_gb"] >= gb:
-                write_json_atomic(path, {"owner": "research", "gb": gb, "started": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "pid": None,
-                                         "run_id": run_id, "run_dir": str(run_dir), "note": note[:300]})
-                return {"gb": gb, "reservation": str(path), "waited_s": round(time.monotonic() - t0, 1),
-                        **{k: s[k] for k in ("limit_gb", "in_use_gb", "reserved_gb", "available_gb", "source", "cgroup")}}
-        waited = time.monotonic() - t0
-        if waited >= wait_s:
-            raise MemoryNotAvailable(describe(s, gb) + (f"; waited {waited:.0f}s" if wait_s else "; --mem-wait S waits for it"))
-        time.sleep(max(0.05, min(poll_s, wait_s - waited)))
+    try:
+        while True:
+            with _locked(ramlock_dir):
+                s = snapshot(ramlock_dir, prune=True)
+                ahead = _ahead(s, ticket)
+                if s["available_gb"] >= gb and not ahead:
+                    write_json_atomic(path, {"owner": "research", "gb": gb, "started": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "pid": None,
+                                             "run_id": run_id, "run_dir": str(run_dir), "note": note[:300]})
+                    if ticket is not None:
+                        ticket.unlink(missing_ok=True)
+                    return {"gb": gb, "reservation": str(path), "waited_s": round(time.monotonic() - t0, 1),
+                            **{k: s[k] for k in ("limit_gb", "in_use_gb", "reserved_gb", "available_gb", "source", "cgroup")}}
+                if ticket is None and wait_s > 0 and gb <= s["limit_gb"]:
+                    ticket = ramlock_dir / WAITING / f"{max([int(time.time() * 1e9)] + [w['ns'] + 1 for w in s['waiting']])}.{os.getpid()}.json"
+                    ticket.parent.mkdir(exist_ok=True)
+                    write_json_atomic(ticket, {"run_id": run_id, "gb": gb, "pid": os.getpid(), "start": _start_time(os.getpid()),
+                                               "since": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "run_dir": str(run_dir)})
+            waited = time.monotonic() - t0
+            if waited >= wait_s:
+                held = (f"held behind {len(ahead)} older waiter(s), first come first served (research.mem), oldest first: {_line(ahead)}; "
+                        if ahead and s["available_gb"] >= gb else "")
+                raise MemoryNotAvailable(held + describe(s, gb) + (f"; waited {waited:.0f}s" if wait_s else "; --mem-wait S waits for it"))
+            time.sleep(max(0.05, min(poll_s, wait_s - waited)))
+    finally:
+        if ticket is not None:
+            ticket.unlink(missing_ok=True)
 
 
 def set_pid(path: str | Path, pid: int) -> None:
