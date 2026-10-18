@@ -339,8 +339,9 @@ DEV void salt_regs(u64 pos, const uint4* T, u64* my, u64* c) {
 // node): the warp folds its own aligned subtree through shuffles, then lane 0 climbs; at each level above, the second of
 // two sibling subtrees to finish (an atomic count a parent) folds the parent and goes on.
 template <bool U>
-DEV void fold_climb(u64* o, u64 i, int d0, u64 width, int depth, u64* levels, u32* ctr) {
-  const u32 lane = threadIdx.x & 31, wsz = blockDim.x < 32 ? blockDim.x : 32;
+DEV void fold_climb(u64* o, u64 i, int d0, u64 width, int depth, u64* levels, u32* ctr, u32 cnt = 0) {
+  if (!cnt) cnt = blockDim.x;
+  const u32 lane = threadIdx.x & 31, wsz = cnt < 32 ? cnt : 32;
   const unsigned mask = wsz == 32 ? 0xFFFFFFFFu : (1u << wsz) - 1;
   int L = 0;
   while ((1u << L) < wsz) ++L;
@@ -514,6 +515,63 @@ __global__ void __launch_bounds__(256, 2)
   if constexpr (FOLD) fold_climb<true>(o, pos, 0, width, depth, levels, ctr);
 }
 
+// v4 (a step too small to fill the GPU): a CTA of 2 R threads for R leaves. Warps below R hash the rows; the warps above
+// compute, for the same leaves and at the same time, y, M_key y, c and the frame leaf's first block (or the pad) into
+// shared memory, so none of it is on the rows' path and no launch runs before the data. Then the row warps finish their
+// leaves and fold and climb to the root. R = cnt = min(width, TPB / 2).
+template <int TPB>
+__global__ void __launch_bounds__(TPB, 512 / TPB)
+    sr_leaf4(const uint8_t* __restrict__ rows, const uint4* __restrict__ Tn, u64 n, u64 width, int depth, u64* levels, u32* ctr,
+             u64* __restrict__ bc) {
+  constexpr int R = TPB / 2;
+  __shared__ uint4 T[512];
+  __shared__ u64 SF[R * 24];   // my || c || frame state (or the pad) a leaf
+  const u32 cnt = blockDim.x / 2, t = threadIdx.x;
+  for (int i = t; i < 512; i += blockDim.x) T[i] = Tn[i];
+  __syncthreads();
+  const bool rower = t < cnt;
+  const u32 j = rower ? t : t - cnt;
+  const u64 pos = (u64)blockIdx.x * cnt + j;
+  u64 x[8];
+  if (rower) {
+    if (pos < n) row3(rows + pos * LB, x);
+  } else {
+    u64* s = SF + 24 * j;
+    if (pos < n) {
+      u64 my[8], c[8], f[8];
+      salt3(pos, T, my, c);
+      f_first3(pos, f);
+      cpy8(s, my); cpy8(s + 8, c); cpy8(s + 16, f);
+    } else {
+      u64 o[8];
+      pad3(pos, o);
+      cpy8(s + 16, o);
+    }
+  }
+  __syncthreads();
+  if (!rower) return;
+  const u64* s = SF + 24 * j;
+  u64 o[8];
+  if (pos < n) {
+    u64 B[16], h[8];
+#pragma unroll
+    for (int k = 0; k < 8; ++k) { B[k] = x[k] ^ s[k]; B[8 + k] = s[8 + k]; }
+    if (bc) {
+      st8(bc + 16 * pos, B);
+      st8(bc + 16 * pos + 8, B + 8);
+    }
+    cpy8(h, C.mid_leaf);
+    cmp(h, B);
+    cmp_kw(h, C.kw_leafpad);
+    cpy8(o, s + 16);
+    f_second3(pos, h, o);
+  } else {
+    cpy8(o, s + 16);
+  }
+  st8(levels + 8 * pos, o);
+  fold_climb<true>(o, pos, 0, width, depth, levels, ctr, cnt);
+}
+
 struct Mine {
   u64 n = 0, width = 0;
   int depth = 0;
@@ -563,6 +621,16 @@ struct Mine {
         for (int u = 0; u < 16; ++u) memcpy(&tn[4096 * h + 256 * c + 16 * u], &p.T[256 * (h ? 16 * u : u) + 16 * c], 16);
     CK(cudaMalloc(&Tn, tn.size()));
     CK(cudaMemcpy(Tn, tn.data(), tn.size(), cudaMemcpyHostToDevice));
+  }
+  template <int TPB>
+  void v4(const uint8_t* rows, cudaStream_t st, u64* bc = nullptr) {
+    const u32 cnt = (u32)std::min<u64>(width, TPB / 2);
+    sr_leaf4<TPB><<<(unsigned)(width / cnt), 2 * cnt, 0, st>>>(rows, Tn, n, width, depth, levels, ctr, bc);
+  }
+  template <int TPB>
+  void data3(const uint8_t* rows, cudaStream_t st) {
+    const u32 cnt = (u32)std::min<u64>(width, 256);
+    sr_data3<true><<<(unsigned)(width / cnt), cnt, 0, st>>>(rows, n, width, depth, S, F, levels, ctr, nullptr);
   }
   template <bool MASK = true>
   void salts(cudaStream_t st) {
@@ -711,6 +779,8 @@ static int check(int argc, char** argv) {
       case 6: me.v2<0, false, true>(d, 0, 0, minw, nullptr, nullptr, bc); break;
       case 7: me.v2<3, false, true>(d, 0, 2, minw, nullptr, nullptr, bc); break;
       case 8: me.v2<3, true, true>(d, 0, 0, minw, nullptr, nullptr, bc); break;
+      case 9: me.v4<128>(d, 0, bc); break;
+      case 10: me.v4<64>(d, 0, bc); break;
       default: me.salts(0); me.data<256, 2, false>(d, 0, bc); break;
     }
   }
@@ -790,6 +860,9 @@ static int bench(int argc, char** argv, bool nsys_mode) {
   V2("v3_par_fold", 2, true, 0, true);
   V2("v3s_s2", 3, false, 2, true);
   V2("v3s_fold", 3, true, 0, true);
+  arms.push_back({"v4_64", true, [&](cudaStream_t s) { me.v4<128>(src, s); }, comps});
+  arms.push_back({"v4_32", true, [&](cudaStream_t s) { me.v4<64>(src, s); }, comps});
+  arms.push_back({"v4_128", true, [&](cudaStream_t s) { me.v4<256>(src, s); }, comps});
 #undef V2
   u64* io;
   const int rt = 256, rb = prop.multiProcessorCount * 8, chain = 256;
@@ -802,6 +875,7 @@ static int bench(int argc, char** argv, bool nsys_mode) {
       {"data_only", false, [&](cudaStream_t s) { me.data<256, 2, false>(src, s); }, comps - c_salt},
       {"data_noload", false, [&](cudaStream_t s) { me.data<256, 2, false, sr::NOLOAD>(src, s); }, comps - c_salt},
       {"data_rowonly", false, [&](cudaStream_t s) { me.data<256, 2, false, sr::ROWONLY>(src, s); }, n * 33.0},
+      {"v3s_fold_data_only", false, [&](cudaStream_t s) { me.data3<256>(src, s); }, comps - c_salt},
       {"data_nofold", false, [&](cudaStream_t s) { me.data<256, 2, false, sr::NOFOLD>(src, s); }, n * 36.0},
   };
 
