@@ -1,49 +1,50 @@
-import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-import Mathlib.Data.Fintype.Prod
-import Mathlib.Basic.Real.Basic
+import Definitions.Claims
 
 /-!
-# Messages, digests, collisions and uniform probability (trusted)
+# Messages, digests, collisions among a run's inputs, and the byte encodings (trusted)
 
-The vocabulary the hash area's statements share. A message is a byte string, as the deployed hashes read it; a digest
-is 64 bytes, SHA-512's whole output (`Digest`), so a node's input splits back into its children's digests. A collision
-of `H` is two different inputs with one output; a collision *among* a list of inputs (`CollisionIn`) is one whose two
-inputs both appear in the list, which is how a statement ties a break to the inputs a run itself hashed (ruling of
-8 Oct: every `∃` in a break is bounded by something the run carries).
+The vocabulary the hash area's statements share. A message is `Claims.Msg`, whole bytes as the deployed hashes read
+them. A digest is 64 bytes (`Digest`): SHA-512's whole output, and the width every digest has in the formats below
+(frame-v3-sha512's ids, leaves and nodes, hm96-sha512's `x`, `b` and `c`, `sha512/row-seg/v1`'s segment digests), so
+a concatenation of digests splits back into them.
 
-Probability is a uniform average over a finite coin space (`Pr`, `Ex`), as in `Definitions/Claims.lean`; the area
-imports only Mathlib and itself, so it states its own.
+A collision is `Claims.Collision`, read on a digest's bytes. A collision *among* a list of inputs (`CollisionIn`) has
+both inputs in the list: that is how a statement ties a break to the inputs a run itself hashed (Daniel, 8 Oct: every
+`∃` in a break is bounded by something the run carries).
+
+The encodings are the formats' own: `be k n`, `n` big-endian in `k` bytes (u32be, u64be); `uint n`, `n` big-endian in
+the fewest bytes, one byte for 0 (`merkle.py`'s `uint`); `cstr s`, a tag's bytes and its terminating zero byte; and
+`padTo n m`, `m` zero-padded to `n` bytes (a tag block).
 -/
 
 namespace Hash
 
-/-- A message: whole bytes, as the deployed SHA-512 reads them. -/
-abbrev Msg := List UInt8
+/-- A message: whole bytes. -/
+abbrev Msg := Claims.Msg
 
-/-- A digest: 64 bytes, SHA-512's whole output. -/
+/-- A digest: 64 bytes. -/
 abbrev Digest := Fin 64 → UInt8
 
-/-- A collision of `H`: two different inputs with one output. -/
-def Collision {α β : Type} (H : α → β) (u v : α) : Prop := u ≠ v ∧ H u = H v
+/-- A digest's 64 bytes, in order. -/
+def Digest.bytes (d : Digest) : Msg := List.ofFn d
 
-/-- A collision of `H` between two of the inputs `xs`: the break a statement ties to a run, `xs` being what the run
-hashed. -/
-def CollisionIn {β : Type} (H : Msg → β) (xs : List Msg) : Prop := ∃ u ∈ xs, ∃ v ∈ xs, Collision H u v
+/-- A collision of `H` between two of the inputs `xs`: two different messages of `xs` with one digest. -/
+def CollisionIn (H : Msg → Digest) (xs : List Msg) : Prop :=
+  ∃ x ∈ xs, ∃ y ∈ xs, Claims.Collision (fun m => (H m).bytes) x y
 
-open Classical in
-/-- `Pr[p]` for a uniform coin. -/
-noncomputable def Pr {α : Type} [Fintype α] (p : α → Prop) : ℝ :=
-  ((Finset.univ.filter p).card : ℝ) / Fintype.card α
+/-- `n` big-endian in `k` bytes (`n mod 256^k`). -/
+def be (k n : ℕ) : Msg := (List.range k).map fun i => (n / 256 ^ (k - 1 - i) % 256).toUInt8
 
-/-- The expectation of `f` under a uniform coin. -/
-noncomputable def Ex {α : Type} [Fintype α] (f : α → ℝ) : ℝ := (∑ a, f a) / Fintype.card α
+/-- `n` big-endian in the fewest bytes, one byte for 0. -/
+def uint (n : ℕ) : Msg := be (max 1 ((Nat.size n + 7) / 8)) n
 
-/-- The first collision among the `(input, output)` pairs `l`: two different inputs with one output. -/
-def findColl {β : Type} [DecidableEq β] : List (Msg × β) → Option (Msg × Msg)
-  | [] => none
-  | (u, a) :: l =>
-    match l.find? (fun p => decide (p.1 ≠ u) && decide (p.2 = a)) with
-    | some p => some (u, p.1)
-    | none => findColl l
+/-- A string's UTF-8 bytes. -/
+def utf8 (s : String) : Msg := s.toUTF8.data.toList
+
+/-- A tag: its bytes, then a zero byte. -/
+def cstr (s : String) : Msg := utf8 s ++ [0]
+
+/-- `m` zero-padded to `n` bytes. -/
+def padTo (n : ℕ) (m : Msg) : Msg := m ++ List.replicate (n - m.length) 0
 
 end Hash

@@ -421,7 +421,6 @@
   "Definitions.Accounting.Bandwidth",
   "Models.Accounting.Guarantees.Bandwidth",
   "Definitions.Hash",
-  "Models.Hash.Assumptions",
   "Models.Hash.Guarantees"
  ],
  "layers": {
@@ -659,19 +658,14 @@
    "why": "the claims and the definitions they read are trusted text: they import no assumption, guarantee or proof"
   },
   "Definitions.Hash": {
-   "imports": ["Mathlib", "Definitions.Hash"],
+   "imports": ["Mathlib", "Definitions.Claims", "Definitions.Hash"],
    "except": [],
-   "why": "the hash area's definitions are trusted text: messages, digests, a Merkle path, an SIS leaf and the keyed window game, on Mathlib alone; they import no assumption, guarantee or proof"
-  },
-  "Models.Hash.Assumptions": {
-   "imports": ["Mathlib", "Definitions.Hash", "Models.Hash.Assumptions"],
-   "except": [],
-   "why": "a named assumption reads the hash area's definitions, never a guarantee or a proof"
+   "why": "the hash area's definitions are trusted text: the served row leaf's formats (frame-v3 trees, sha512/row-seg/v1, hm96-sha512/v1) over a hash, on Mathlib and the claims' messages and collisions (Definitions.Claims); they import no assumption, guarantee or proof"
   },
   "Models.Hash.Guarantees": {
-   "imports": ["Mathlib", "Definitions.Hash", "Models.Hash.Assumptions", "Models.Hash.Guarantees"],
+   "imports": ["Mathlib", "Definitions.Claims", "Definitions.Hash", "Models.Hash.Guarantees"],
    "except": [],
-   "why": "a guarantee is stated over the hash area's definitions with its named assumptions as hypotheses, never over a proof"
+   "why": "a guarantee is stated over the hash area's definitions, never over a proof"
   }
  },
  "reads_exempt": {
@@ -3722,6 +3716,9 @@
    "assumptions": [],
    "type_hash": "e68eb3b88c65d2f37e9f5f41402a589d574ad22ab95867ac9f47a796660fcbbe"
   },
+  "Hash.SecurityProofs.Stated": {
+   "owner": "@hash"
+  },
   "Nci.SecurityProofs.FullPositions": {
    "owner": "@lean",
    "signature": ["Nci.SecurityProofs.FullPositions : Nci.Guarantees.FullPositions"],
@@ -5929,10 +5926,9 @@
    "Accounting.SecurityProofs.Gates.SquaringUnits": "frozen (no-function): The units bound over every circuit of the gate model that squares on the nibble family (Accounting.Gates.nibbles), a counting bound from UnitsFooling, not a property of a Lean function.",
    "Accounting.SecurityProofs.HMu.LemmaB": "lemma: Lemma B of the receipt-aggregate binding note (decisions 22 and 48), receipt luck at most Z*mu times the deficiency under (H-mu+) taken as a hypothesis (SkipRound.HMuPlus, a definition, not a named assumption); ReceiptLuckOfCoins and ReceiptLuckOfCoin are what it is for.",
    "Accounting.SecurityProofs.HMu.PersistentOneWord": "lemma: Lemma B' for a persistent pattern with one word before the checkpoint, a fold's checkpoint state injective in the skipped value from the step's injectivity in state and word and the pattern's positions, taken as hypotheses; it gives SkipRound.Inj with Z = 1.",
-   "Hash.Guarantees.TreeBinding": "unstated: a hash lane proposal, statement first (Daniel's ruling): red team, then a card to Daniel, then the proof, Hash.SecurityProofs.TreeBinding in Security/Proofs/Hash/, which the lock then lists under guarantees",
-   "Hash.Guarantees.SisTreeBinding": "unstated: a hash lane proposal, statement first (Daniel's ruling): red team, then a card to Daniel, then the proof, Hash.SecurityProofs.SisTreeBinding in Security/Proofs/Hash/, which the lock then lists under guarantees",
-   "Hash.Guarantees.SisEpochBinding": "unstated: a hash lane proposal, statement first (Daniel's ruling): red team, then a card to Daniel, then the proof, Hash.SecurityProofs.SisEpochBinding in Security/Proofs/Hash/, which the lock then lists under guarantees",
-   "Hash.Guarantees.EpochBinding": "unstated: a hash lane proposal, statement first (Daniel's ruling): red team, then a card to Daniel, then the proof, Hash.SecurityProofs.EpochBinding in Security/Proofs/Hash/, which the lock then lists under guarantees"
+   "Hash.Guarantees.TreeBinding": "unstated: statement first (Daniel, 17 Oct), restated to the served frame node after the red team (note:hash/20261018T0846Z-finding-redteam-2474, T1-T3) and recorded through Hash.SecurityProofs.Stated; next a card to Daniel, then the proof, Hash.SecurityProofs.TreeBinding in Security/Proofs/Hash/, which the lock then lists under guarantees",
+   "Hash.Guarantees.RowBinding": "unstated: statement first (Daniel, 17 Oct), the statement the red team found missing (note:hash/20261018T0846Z-finding-redteam-2474, T4), recorded through Hash.SecurityProofs.Stated; next its red team, a card to Daniel, then the proof, Hash.SecurityProofs.RowBinding in Security/Proofs/Hash/, which the lock then lists under guarantees",
+   "Hash.SecurityProofs.Stated": "frozen (no-function): It states no property of the verifier: it reads the hash area's statements (Hash.Guarantees.RowBinding, Hash.Guarantees.TreeBinding), so the lock records their text, and a statement leaves it when its own proof is listed."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {

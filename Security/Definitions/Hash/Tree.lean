@@ -1,43 +1,62 @@
 import Definitions.Hash.Basic
 
 /-!
-# A binary Merkle path (trusted)
+# frame-v3 trees over a hash (trusted)
 
-A tree of depth `d` over a hash `H : Msg → Digest`, its leaf the hash of a leaf input and each node the hash of a node
-input built from its two children's digests (frame-v3-sha512's shape, `verity/ml/commitments/frame_v3/PROTOCOL.md` §6,
-with the node's constant material in `tag`). An opening at position `i` is the leaf input and the sibling digests from
-the leaf level up; bit `j` of `i` says whether the path's node at level `j` is a right child. The verifier recomputes
-the root (`Path.root`) and accepts when the path has exactly `d` siblings, `i < 2^d`, and the root is the committed one
-(`Path.accepts`). `Path.hashed` lists every input the recomputation hashed: the leaf input, then each node input.
+The served tree, `verity.ml.commitments.merkle` under `frame-v3-sha512` (`verity/ml/commitments/frame_v3/PROTOCOL.md`
+§1 and §6), with the hash a parameter `H` (SHA-512 is the instance of record). A frame hashes
+`FRAME ‖ u32be |tag| ‖ tag ‖ Σ (u64be |part| ‖ part)` (`frame`). A domain is the verifier's: its id (a digest the verifier
+derives from the binding, owner, positions and count, never from an opening), its count, and its positions. The frame
+leaf is `H(frame "leaf" [id, uint rank, uint position, schema, value])` and a node at level `lv` and index `i` is
+`H(frame "node" [id, uint lv, uint i, l, r])`; the verifier's code is `PouwCommit.Domain.verify`.
 
-What a leaf input is belongs to the scheme: a keyed row (`Definitions/Hash/Keyed.lean`) or the encoding of an SIS digest
-(`Definitions/Hash/Sis.lean`). Children's digests are 64 bytes each, so a node input determines them.
+An opening at `rank` is the leaf digest and the path's siblings from the leaf level up. The verifier accepts when
+`rank < count`, the path has `merkle_depth count` siblings, and the climb reaches the committed root (`Tree.accepts`).
+Leaf, node and root are 64-byte digests, which the verifier's size checks (`root.size`, each sibling's) refuse otherwise;
+`Digest` carries that in its type. `Tree.hashed` lists the node messages the climb hashed, bottom first.
 -/
 
-namespace Hash.Path
+namespace Hash.Tree
 
-/-- A node's input: the tag, then the left child's digest, then the right's; `cur` is the right child when `right`. -/
-def nodeIn (tag : Msg) (right : Bool) (cur sib : Digest) : Msg :=
-  if right then tag ++ List.ofFn sib ++ List.ofFn cur else tag ++ List.ofFn cur ++ List.ofFn sib
+/-- `veritor/protocol/merkle/frame/v3\0`. -/
+def FRAME : Msg := cstr "veritor/protocol/merkle/frame/v3"
 
-/-- From digest `x` at position `i`, up the siblings `sibs`: the node inputs hashed on the way, and the digest reached. -/
-def climb (H : Msg → Digest) (tag : Msg) : ℕ → Digest → List Digest → List Msg × Digest
-  | _, x, [] => ([], x)
-  | i, x, s :: ss =>
-    let m := nodeIn tag (i % 2 = 1) x s
-    let up := climb H tag (i / 2) (H m) ss
+/-- The message a frame hashes: `FRAME ‖ u32be |tag| ‖ tag ‖ Σ (u64be |part| ‖ part)`. -/
+def frame (tag : String) (parts : List Msg) : Msg :=
+  FRAME ++ be 4 (utf8 tag).length ++ utf8 tag ++ parts.flatMap fun p => be 8 p.length ++ p
+
+/-- A frame-v3 domain as the verifier holds it: its id, its count, and the position of each rank. -/
+structure Domain where
+  id : Digest
+  count : ℕ
+  position : ℕ → ℕ
+
+/-- The frame leaf's message over `value` at `rank`, under `schema`. -/
+def leafMsg (D : Domain) (rank : ℕ) (schema : String) (value : Msg) : Msg :=
+  frame "leaf" [D.id.bytes, uint rank, uint (D.position rank), utf8 schema, value]
+
+/-- The node's message at level `lv` and index `i` over the children `l` and `r`. -/
+def nodeMsg (D : Domain) (lv i : ℕ) (l r : Digest) : Msg :=
+  frame "node" [D.id.bytes, uint lv, uint i, l.bytes, r.bytes]
+
+/-- `merkle_depth`: `⌈log₂ count⌉`, and 0 for a count of at most 1. -/
+def depth (count : ℕ) : ℕ := if count ≤ 1 then 0 else Nat.log2 (count - 1) + 1
+
+/-- From digest `x` at index `cur` of level `lv`, up the siblings: the node messages hashed on the way, and the digest
+reached. -/
+def climb (H : Msg → Digest) (D : Domain) : ℕ → ℕ → Digest → List Digest → List Msg × Digest
+  | _, _, x, [] => ([], x)
+  | lv, cur, x, s :: ss =>
+    let m := if cur % 2 = 0 then nodeMsg D lv (cur / 2) x s else nodeMsg D lv (cur / 2) s x
+    let up := climb H D (lv + 1) (cur / 2) (H m) ss
     (m :: up.1, up.2)
 
-/-- The root an opening recomputes: the leaf input `leaf` hashed, then climbed. -/
-def root (H : Msg → Digest) (tag : Msg) (i : ℕ) (leaf : Msg) (sibs : List Digest) : Digest :=
-  (climb H tag i (H leaf) sibs).2
+/-- The verifier accepts the leaf digest `leaf` at `rank` with path `sibs` against `root`. -/
+def accepts (H : Msg → Digest) (D : Domain) (root : Digest) (rank : ℕ) (leaf : Digest) (sibs : List Digest) : Prop :=
+  rank < D.count ∧ sibs.length = depth D.count ∧ (climb H D 0 rank leaf sibs).2 = root
 
-/-- Every input the recomputation hashed: the leaf input, then the node inputs from the leaf level up. -/
-def hashed (H : Msg → Digest) (tag : Msg) (i : ℕ) (leaf : Msg) (sibs : List Digest) : List Msg :=
-  leaf :: (climb H tag i (H leaf) sibs).1
+/-- The node messages the verifier hashed checking that opening, bottom first. -/
+def hashed (H : Msg → Digest) (D : Domain) (rank : ℕ) (leaf : Digest) (sibs : List Digest) : List Msg :=
+  (climb H D 0 rank leaf sibs).1
 
-/-- The verifier accepts an opening (`leaf`, `sibs`) at position `i` of a depth-`d` tree with root `r`. -/
-def accepts (H : Msg → Digest) (tag : Msg) (d : ℕ) (r : Digest) (i : ℕ) (leaf : Msg) (sibs : List Digest) : Prop :=
-  sibs.length = d ∧ i < 2 ^ d ∧ root H tag i leaf sibs = r
-
-end Hash.Path
+end Hash.Tree

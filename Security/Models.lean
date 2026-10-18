@@ -11,7 +11,6 @@ import Models.NetworkCertifier.Assumptions
 import Models.NetworkCertifier.Guarantees
 import Models.Flock.Guarantees
 import Models.Accounting.Guarantees
-import Models.Hash.Assumptions
 import Models.Hash.Guarantees
 
 /-! Each component's named assumptions and guarantee statements. -/
