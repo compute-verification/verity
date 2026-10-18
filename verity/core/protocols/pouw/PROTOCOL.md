@@ -110,10 +110,11 @@ Vectors: `tests/vectors/epoch_coins_v1.json`.
 **Live coins** come from the proof service's one challenger (`verity.core.protocols.sampled_proofs.challenger`, Lean of
 record `SampledProofs.Challenger`), whose coins are indexed by label and index and named by no protocol, so every client
 uses the same form: a layout is a scheme, an epoch and its families `(label, count)` in order, coin `(label, i)` at its
-family's offset plus i, at most 2^20 coins. Before the epoch the challenger draws every coin and publishes
+family's offset plus i, at most 2^20 coins. Before the epoch the challenger draws every coin, 64 bytes, SHA-512's whole
+width (the seeded coins above stay 32 bytes, so a recorded seeded registration reads as it did), and publishes
 
 ~~~text
-x_p     = SHA-512(scheme || 0x00 || coin_p)
+x_p     = SHA-512(scheme || 0x00 || coin_p)                               coin_p: 64 fresh bytes (`COIN_BYTES`)
 value_p = hm96-sha512 tree_leaf(key, commit_string(key, x_p, salt_p))     salt_p: 192 fresh bytes, key the pinned default
 root    = frame-v3-sha512 tree over value_0 … value_(K−1) at positions 0 … K−1, leaf schema the scheme, domain binding
           identity_digest_sha512("verity/challenger/coins/v1", {epoch, families, scheme}), owner -1
@@ -124,6 +125,12 @@ label and index, its form, the path against the root, and `after`); `order_reaso
 roots the verifier recorded, in order: coin i opened after root i, none twice ("a retry never redraws"), none before its
 root is recorded, and every recorded root's coin opened. `LiveRecord` is the verifier's side: it records a root and only
 then asks the challenger for that root's coin.
+
+Timing is a trust assumption, not a check. `after` binds an opening to the root the verifier recorded, but can't show the
+coin was released after it: that rests on the challenger releasing coin i only once it has received root i. The
+challenger is auditor-trusted, the auditor's device on a machine the prover doesn't control, under the named assumption
+`trusted-nebius-host`. The record keeps the order on its own clock: `LiveRecord.log` logs root i's receipt
+(`received_at`) and then coin i's release after it (`released_at`).
 
 **Live epochs** (`window.live_challenger`, `rounds_reason`, `round_key`; Lean `PouwWindow.Rounds`). A live PoUW epoch's
 coins are the layout `live_families(R)` under `LIVE_SCHEME` (`"verity/pouw/epoch-coins/live/v1"`): its salt coin

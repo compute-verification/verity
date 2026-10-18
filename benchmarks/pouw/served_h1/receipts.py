@@ -258,5 +258,25 @@ def reference(call: Call, salt: bytes, base: int, root_a: bytes, root_b: bytes, 
     return HT.reference(a, b, salt, base + u, (root_a, root_b))
 
 
-__all__ = ["Call", "Cubin", "LANES", "call_receipts", "layout", "noise_blocks", "noise_blocks_cpu", "reference",
-           "tile_receipts", "unit_seeds", "units"]
+def gated_receipts(call: Call, admit, salt: bytes, base: int, root_a: bytes, root_b: bytes, cubin: Cubin | None = None,
+                   chunk: int | None = None) -> tuple[np.ndarray, list[int]]:
+    """The call's receipts under its admit bits: a live unit's (a selected slot among its rows) is `h1tile`'s, a dead
+    unit's the canonical empty receipt (zero words) with no noise derived; and the live units."""
+    live = [ri * (call.b.shape[0] // C_) + cj for ri in range(call.a.shape[0] // R)
+            if bool(np.asarray(admit[R * ri:R * ri + R]).any()) for cj in range(call.b.shape[0] // C_)]
+    out = np.zeros((len(call.units), 2 * layout(call.a.shape[1]).sets), dtype=np.uint32)
+    if live:
+        out[live] = call_receipts(call, salt, base, root_a, root_b, cubin, chunk=chunk, only=live)
+    return out, live
+
+
+def gated_reference(call: Call, admit, salt: bytes, base: int, root_a: bytes, root_b: bytes, u: int) -> list[int]:
+    """The gated template's receipt on unit u: `h1tile.reference`'s when a slot of its rows is selected, else zero words."""
+    i, _ = call.units[u]
+    if bool(np.asarray(admit[R * i:R * i + R]).any()):
+        return reference(call, salt, base, root_a, root_b, u)[1]
+    return [0] * (2 * layout(call.a.shape[1]).sets)
+
+
+__all__ = ["Call", "Cubin", "LANES", "call_receipts", "gated_receipts", "gated_reference", "layout", "noise_blocks",
+           "noise_blocks_cpu", "reference", "tile_receipts", "unit_seeds", "units"]

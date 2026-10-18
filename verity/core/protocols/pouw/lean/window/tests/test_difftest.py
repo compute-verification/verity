@@ -669,7 +669,7 @@ def live_epoch_reason(v: dict) -> str | None:
 
 
 def round_key_in(rng: random.Random) -> dict:
-    return {**live_commitment_in(rng), "coin": rng.randbytes(rng.choice([0, 5, 32, 32, 32])).hex(),
+    return {**live_commitment_in(rng), "coin": rng.randbytes(rng.choice([0, 5, 32, 64, 64, 64])).hex(),
             "round": rng.randrange(9), "root": rng.randbytes(rng.choice([0, 64, 64])).hex()}
 
 

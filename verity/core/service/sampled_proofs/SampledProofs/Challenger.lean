@@ -7,12 +7,14 @@ Coins are indexed by label and index and named by no protocol. A layout is a sch
 `(label, count)` in order: coin `(label, i)` sits at its family's offset plus `i`, at most `MAX_COINS` coins. Before the
 epoch the challenger draws every coin and its hm96 salt and publishes the coin commitment:
 
-    x_p     = SHA-512(scheme ‖ 0x00 ‖ coin_p)
+    x_p     = SHA-512(scheme ‖ 0x00 ‖ coin_p)                                       coin_p 64 bytes (`COIN_BYTES`)
     value_p = hm96-sha512 tree_leaf(key, commit_string(key, x_p, salt_p))           salt_p 192 bytes, the pinned key
     root    = the frame-v3-sha512 tree over value_0 … value_(K−1) at positions 0 … K−1, leaf schema the scheme, domain
               binding identity_digest_sha512("verity/challenger/coins/v1", {epoch, families, scheme}), owner -1
 
 and opens coin `(label, i)` once, after the root the verifier recorded for it. There is no beacon and no Fiat–Shamir.
+`after` binds an opening to that root but can't show the coin was released after it: the release order is a trust
+assumption on the auditor-trusted challenger (`trusted-nebius-host`), not something this checks.
 `liveReason` is `live_reason`, the check of one opening; `orderReason` is `order_reason`, the check of a family's
 openings against the roots the verifier recorded, in order: coin `i` opened after root `i`, each once, none before its
 root is recorded, and every recorded root's coin opened. Both give Python's reasons in Python's words and order, `none`
@@ -36,7 +38,7 @@ open Lean (Json)
 open Flock (V)
 
 def BINDING : String := "verity/challenger/coins/v1"
-def COIN_BYTES : Nat := 32
+def COIN_BYTES : Nat := 64
 def SALT_BYTES : Nat := 192
 def MAX_COINS : Nat := 2 ^ 20
 def COMMITMENT_FORM : String :=
