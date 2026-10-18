@@ -98,13 +98,15 @@ leaf with the thread's N words at slot rsel: FOLD ``duo`` or ``fx1``, OUT ``chai
 
 LI-CP-W (decision 97, note:20261017T1848Z-draft-li-alt): li's chains (8 a lane: chain c absorbs `li_entries`(c) as two
 half steps a set, y <- (y ^ d0 ^ `LK`[c][h]) `LA`[c][h] + d1, from duo's y keys) and a checkpoint after every set, the XOR
-of the warp's chain states (redux.sync.xor), one word a set, KS + m words a warp in a leaf of its own.
+of the warp's chain states (redux.sync.xor), one word a set, KS + m words a warp in leaves of their own.
 
     PouwWarpCheck_v1{KS, NL}  (x, xsel: Array<NL, ...>, b: Array<NL, ...>, w, wsel: Array<NL, ...>, c: Array<NL, ...>,
-                               u: Array<NL, ...>, z: Array<NL, ...>, st: Array<NL, Array<8, u32>>, rc: Array<512, u32>) -> bit
+                               u: Array<NL, ...>, z: Array<NL, ...>, st: Array<NL, Array<8, u32>>, rc: Array<512 L, u32>) -> bit
 
 `PouwCallCheck_v1`'s ports with a lane axis on the thread's own (NL = 32 a warp; fewer lanes check that many lanes'
-XOR), 1 exactly when word s of the leaf is the checkpoint after set s for every s < KS + m.
+XOR), 1 exactly when word s of rc is the checkpoint after set s for every s < KS + m. rc is the warp's receipt, L =
+ceil(P (KS + m) / 512) leaves in order (P = 1 here; L = 2 for duo and fx1 at K = 8192: KS = 256, m = 3, 518 words), and
+the words after the last checkpoint are unread.
 
 DUO-CP-W and FX1-CP-W (#2438): duo's or fx1's chains with a full-state checkpoint after every set, the XOR over the warp
 of every chain's y and, separately, of every chain's z (`warp_checkpoint`), two words a set.
@@ -112,7 +114,7 @@ of every chain's y and, separately, of every chain's z (`warp_checkpoint`), two 
     PouwWarpCheck_v2{KS, NL, FOLD}  (PouwWarpCheck_v1's ports, st: Array<NL, Array<P 8, u32>>) -> bit
 
 FOLD li (P = 1, `PouwWarpCheck_v1`), duo or fx1 (P = 2, st each lane's y then z); 1 exactly when words P s .. P s + P - 1
-of the leaf are the checkpoint after set s for every s < KS + m. The checkpoint is a set's, never spaced wider: the
+of rc are the checkpoint after set s for every s < KS + m. The checkpoint is a set's, never spaced wider: the
 binding proved without FOLD-R's whole-state assumption is a set's 4 words a chain (note:20261018T0515Z-draft-proj-r4).
 
 A statement holds the operand leaves and ``rc`` to the trees committed before and after the coin, and recomputes the
@@ -844,8 +846,8 @@ def warp_checkpoint(states: list[list[int]]) -> list[int]:
 
 def warp_check(x, xsel, b, w, wsel, c, u, z, st, rc, fold: str = "li") -> int:
     """`PouwWarpCheck_v1` (``fold`` li) and `PouwWarpCheck_v2` on words: x and w KS leaves, then per lane xsel, b, wsel, c,
-    u, z and st (li: 8 words; duo, fx1: 16) as `call_check`'s, and rc (512 words, the warp's checkpoints, P words after
-    each set s at P s .. P s + P - 1, P the state's parts)."""
+    u, z and st (li: 8 words; duo, fx1: 16) as `call_check`'s, and rc (512 L words, the warp's L receipt leaves: P words
+    after each set s at P s .. P s + P - 1, P the state's parts)."""
     states = [list(s) for s in st]
     sets = [lane_words(x, w, xsel[ln], b[ln], wsel[ln], c[ln], u[ln], z[ln]) for ln in range(len(st))]
     ok = True
@@ -1189,13 +1191,12 @@ def _warp_ports(name: str, ks: int, nl: int, fold: str):
     if not 1 <= nl <= 32:
         raise ValueError(f"{name}: NL {nl} lanes is not 1 .. 32")
     words = WARP_FOLDS[fold][1]
-    n = words // NCH * (ks + n_digits(ks))
-    if n > RW:
-        raise ValueError(f"{name}: KS {ks}'s {n} checkpoint words overflow a leaf of {RW}")
     ports = dict(_call_ports(ks))
+    n = words // NCH * (ks + n_digits(ks))
     lane = ("xsel", "b", "wsel", "c", "u", "z")
     return ((("x", ports["x"]), *[(k, Array(nl, ports[k])) for k in lane[:2]], ("w", ports["w"]),
-             *[(k, Array(nl, ports[k])) for k in lane[2:]], ("st", Array(nl, Array(words, U32))), ("rc", Array(RW, U32))), BIT)
+             *[(k, Array(nl, ports[k])) for k in lane[2:]], ("st", Array(nl, Array(words, U32))),
+             ("rc", Array(RW * -(-n // RW), U32))), BIT)
 
 
 def _warp_signature(S):

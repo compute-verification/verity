@@ -185,7 +185,7 @@ def _call(rnd, ks, fold, out, nl=None):
     lanes = [lane(32 * warp + ln) for ln in range(nl)]
     st = [[v for half in SG.init(seed, tile, 32 * warp + ln, 0, 1)[:parts] for v in half] for ln in range(nl)]
     sets = [SG.lane_words(x, w, *L) for L in lanes]
-    states, rc = [list(v) for v in st], [0] * SG.RW
+    states, rc = [list(v) for v in st], [0] * (SG.RW * -(-parts * (ks + m) // SG.RW))
     for s in range(ks + m):
         for ln in range(nl):
             states[ln] = SG.absorb(fold, states[ln], sets[ln][s])
@@ -253,6 +253,16 @@ def test_warp_check_v2_reads_both_words_of_every_set(fold):
     assert SG.warp_check(*args, fold=fold) == 1
     for at in (2, 3, last):
         assert SG.warp_check(*_tamper(args, at), fold=fold) == 0, at
+
+
+def test_a_warp_receipt_past_a_leaf_takes_the_next():
+    """At K = 8192 (KS = 256, m = 3) li's 259 checkpoint words fit one receipt leaf and duo's and fx1's 518 take two: the
+    port is 1024 words, and the word view reads the second leaf's checkpoints and nothing after them."""
+    assert [dict(bind(SG.PouwWarpCheckV2, KS=256, NL=1, FOLD=f).signature()[0])["rc"].n for f in ("li", "duo", "fx1")] \
+        == [SG.RW, 2 * SG.RW, 2 * SG.RW]
+    args, last = _call(random.Random("k8192"), 256, "duo", "cp", nl=1)
+    assert (last, len(args[9]), SG.warp_check(*args, fold="duo")) == (517, 2 * SG.RW, 1)
+    assert [SG.warp_check(*_tamper(args, at), fold="duo") for at in (SG.RW, last, last + 1)] == [0, 0, 1]
 
 
 def test_the_served_receipt_is_not_injective_at_a_state():
