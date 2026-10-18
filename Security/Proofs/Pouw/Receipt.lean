@@ -5,6 +5,7 @@ import Proofs.Pouw.Receipt.Li
 import Proofs.Pouw.Receipt.Fx1
 import Proofs.Pouw.Receipt.Run
 import Proofs.Pouw.Receipt.DuoReceipt
+import Proofs.Pouw.Receipt.AtState
 
 /-!
 # The receipt folds duo's, fx1's and li's guarantees
@@ -16,6 +17,9 @@ Each statement of `Models/Pouw/Guarantees/Receipt.lean`: duo's words, pairs, tri
 `Receipt/Duo.lean`, the state bijection and runs of any length in `Receipt/Run.lean`, the served receipt in
 `Receipt/DuoReceipt.lean`, fx1's transport of each in `Receipt/Fx1.lean`, and li's half steps and checkpoints in
 `Receipt/Li.lean`.
+
+Runs at one start state, the counting bound past two words and the served chain's two-word counterexample, are in
+`Receipt/AtState.lean`.
 -/
 
 namespace Pouw.SecurityProofs.Receipt
@@ -84,5 +88,12 @@ theorem DuoWordProjNoKernel : Pouw.Guarantees.Receipt.DuoWordProjNoKernel :=
 
 theorem DuoReceiptNotInjective : Pouw.Guarantees.Receipt.DuoReceiptNotInjective :=
   fun hinj => (by decide : (0x1632c#32) ≠ 0x2237a#32) (hinj (a₁ := 0x1632c#32) (a₂ := 0x2237a#32) (by decide))
+
+theorem DuoPairAtStateNotInjective : Pouw.Guarantees.Receipt.DuoPairAtStateNotInjective :=
+  fun hinj => (by decide : ((0x40156b95#32, 0x0#32) : BitVec 32 × BitVec 32) ≠ (0xb4d85e5c#32, 0x375f7285#32))
+    (hinj (a₁ := (0x40156b95#32, 0x0#32)) (a₂ := (0xb4d85e5c#32, 0x375f7285#32)) (by decide))
+
+theorem DuoRunAtStateNotInjective : Pouw.Guarantees.Receipt.DuoRunAtStateNotInjective :=
+  fun n L k a r s => Pouw.ReceiptProofs.duoRun_atState_not_injective k a r s (Nat.succ_pos n) (by omega : 2 < L + 3)
 
 end Pouw.SecurityProofs.Receipt

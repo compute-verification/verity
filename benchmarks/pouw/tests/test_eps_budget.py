@@ -106,6 +106,23 @@ def test_the_registry_skip_is_eps_budgets_number():
                 f"[skip.served] eps = {want:#.3g} in {data / 'designs' / name}.toml")
 
 
+def test_a_skip_at_another_vector_is_eps_budgets_number_there():
+    """♭ moves with Π, so a design read on a vector other than its device's current records ε_skip there as
+    `[skip.served] at = { V = … }` (`machine-model headline` refuses a reading without it), design_skip's at V."""
+    seen = 0
+    for dev in devices():
+        data = device(dev)
+        for name in designs(data):
+            d = design(name, data)
+            for vec in {v for p in d.skip.values() for v in p.at}:
+                got = sum(p.at.get(vec, p.eps) for p in d.skip.values())
+                want = E.design_skip(d, data=data, vector=vec).eps_time
+                assert got == pytest.approx(want, rel=5e-3), (
+                    f"{dev} {name}: [skip] at {vec} is {got:.4g}, design_skip(d, vector={vec!r}) gives {want:.4g}")
+                seen += 1
+    assert seen >= 9
+
+
 def test_each_device_prices_its_own_floor_and_the_same_skippable_work():
     """♭ on each device's own Π (`prices`): SPEC's 19.049 and 19.183 on VF3q-16, the LI designs' 5.961 (H200) and 4.035
     (B200), and each variant's own (decision 90), dither-2s-fill's with its 4.5 filler instructions a word. The peel's
@@ -148,17 +165,20 @@ def test_the_b200s_filled_li_design_is_under_one_percent_with_the_operands_free(
     tcgen05.ld.x128 a MMA, 8 of ♭'s 1033 issue cycles at every q* (the lane and uniform routes write no word), beside
     its ε_skip of 0.839% with vfold's sums (decision 91; 1.005% with vsum's): core 1.61%. ¾ verified lane instruction a
     word adds 768 to ♭ and to the cheater, diluting both terms over one B_♭, and vfold's sums (#2300) cost 0.7265 an
-    entry against vsum's 35/32: core 0.927% at γ 3.90 (EPS1 DC r6)."""
+    entry against vsum's 35/32: core 0.927% at γ 3.90 (EPS1 DC r6), 0.952% with its ε_luck (Corollary D3; the filler at
+    p = 0, #2392). Re-sized with ε_luck and each size's own ε_skip, 0.661 a word is the least that reaches 1.000%
+    (γ 3.72), and 0.755 gets to 0.950% (γ 3.91) (CALC r11)."""
     sm100 = device("sm_100")
     pi = machine("", sm100)
     li, fill = design("dither-2s-li-l32", sm100), design("dither-2s-li-fill-l32", sm100)
     assert (li.sums, fill.sums, fill.noise, fill.honest) == ("vfold", "vfold", li.noise, li.honest)
     bare = eps(li, pi, 1.22, sm100, operands="free", credit="floor")
     assert bare.machine_eps == pytest.approx(8 / 1033, abs=1e-9) and bare.skip == pytest.approx(0.00839, abs=5e-6)
-    assert bare.core() == pytest.approx(0.01613, abs=1e-5)
+    assert bare.core() - bare.luck == pytest.approx(0.01613, abs=1e-5) and bare.luck < 1e-5
     e = eps(fill, pi, 1.22, sm100, operands="free", credit="floor")
     assert e.machine_eps == pytest.approx(8 / 1801, abs=1e-9) and e.skip == pytest.approx(0.00483, abs=5e-6)
-    assert e.core() == pytest.approx(0.00927, abs=1e-5) and e.gamma == pytest.approx(3.900, abs=1e-3)
+    assert e.core() - e.luck == pytest.approx(0.00927, abs=1e-5) and e.gamma == pytest.approx(3.900, abs=1e-3)
+    assert e.core() == pytest.approx(0.00952, abs=1e-5)
     assert E.prices(fill.name, sm100).mma == pytest.approx(1801 / 256, abs=1e-9)
     m = "llama-3.1-8b"
     _, vfold, _ = E.floor_skip(m, 2048, fill, data=sm100)

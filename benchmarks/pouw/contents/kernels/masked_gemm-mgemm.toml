@@ -1,0 +1,4 @@
+order = 30
+tool = "The masked GEMM (full and low rank), the first edited GEMM (noise from {±5, ±7}), its noise expanded from σ, P·V's noise, the one-side peel"
+files = "`masked_gemm/mgemm.cu`, `egemm.cu`, `sgemm.cu`, `pvgemm.cu`, `lpgemm.cu`, each with its `*ref.py`, `*run.sh` and `*table.py`"
+includes = "`floored_gemm/fgemm.cu`"
