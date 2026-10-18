@@ -118,7 +118,7 @@ def hasher(kind: int, rounds: int):
                 st = sha256_comp(st, w)
             return st
         return (lambda m: hashlib.sha256(m).digest()), chain, 4
-    if kind == 3:
+    if kind in (3, 4):
         def chain(t: int, n: int) -> list[int]:
             cv, m = list(b3.IV), [(t * 16 + i) & M32 for i in range(16)]
             for k in range(n):
@@ -158,7 +158,7 @@ def check_one(dump: str, operand: str, side: str, kind: int, rounds: int, meta: 
     raw_bad = [t for t in sample if [int(x) for x in raw[t]] != chain(t, meta["chain"])]
     n = meta["leaves"]
     op = open(operand, "rb").read()
-    lv = digests(f"{dump}/levels-{side}.bin", 2 * n - 1, word, be=kind != 3)
+    lv = digests(f"{dump}/levels-{side}.bin", 2 * n - 1, word, be=kind < 3)
     want = [h(op[4096 * j: 4096 * (j + 1)]) for j in range(n)]
     tree_bad, off, width = 0, 0, n
     while True:

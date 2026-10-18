@@ -3,10 +3,10 @@
 // round count a compile-time constant: a speed curve, not a hash anyone serves), SHA-256 (FIPS 180-4) and BLAKE3
 // (archive/pouw-blake3/pearl_c/hash.cuh's compression, unedited).
 //
-// Each candidate H has: BLOCK (bytes a compression takes), DIG (digest bytes), state words `S` of type `W`; `iv`, `comp`
-// (one compression, the message words' 16-word ring left as the schedule leaves it), `rate_step` (the raw rate's chained
-// step: the block's first words XOR the state, then a compression), `leaf` (the standard hash of one 4096-byte leaf) and
-// `node` (the standard hash of left || right, two digests).
+// Each candidate H has: BLOCK (bytes a compression takes), state words of type `W`; `iv`, `comp` (one compression, the
+// message words' 16-word ring left as the schedule leaves it), `rate_step` (the raw rate's chained step: the block's first
+// words XOR the state, then a compression), `leaf` (the standard hash of one 4096-byte leaf, its blocks from a
+// WarpLoader; TPL threads a leaf, each a stream of STRIDE bytes) and `node` (the standard hash of left || right).
 #pragma once
 #include <cstdint>
 
@@ -19,6 +19,30 @@ using u64 = uint64_t;
 constexpr int LEAF = 4096;
 
 __device__ __forceinline__ u32 bswap32(u32 x) { return __byte_perm(x, 0, 0x0123); }
+
+// A warp's 32 threads each read a stream of BLOCK-byte blocks, stream s at base + s STRIDE: `block(b, q)` loads the
+// 32 streams' block b cooperatively (each load instruction covers whole 128-byte lines of BLOCK/16-uint4 rows) into this
+// warp's shared rows (padded by one uint4, so the per-thread reads hit distinct banks), then gives the thread its row.
+// Every lane calls it with the same b.
+template <int BLOCK, int STRIDE>
+struct WarpLoader {
+  static constexpr int Q = BLOCK / 16, ROW = Q + 1;
+  static constexpr int SMEM = 32 * ROW * 16;   // bytes a warp
+  const uint8_t* base;
+  uint4* sm;
+  int lane;
+  __device__ __forceinline__ void block(int b, uint4* q) const {
+    __syncwarp();
+#pragma unroll
+    for (int k = 0; k < Q; ++k) {
+      const int i = k * 32 + lane, s = i / Q, o = i % Q;
+      sm[s * ROW + o] = __ldg(reinterpret_cast<const uint4*>(base + (size_t)s * STRIDE + (size_t)b * BLOCK) + o);
+    }
+    __syncwarp();
+#pragma unroll
+    for (int k = 0; k < Q; ++k) q[k] = sm[lane * ROW + k];
+  }
+};
 
 // --- SHA-512 at R rounds: sha512.cuh's compress_from<0> with the round count R ----------------------------------------
 template <int R>
@@ -67,7 +91,7 @@ __device__ __forceinline__ void sha512_rounds(u64* st, u64* w) {
 template <int R>
 struct Sha512 {
   using W = u64;
-  static constexpr int BLOCK = 128, DIG = 64, S = 8;
+  static constexpr int BLOCK = 128, TPL = 1, STRIDE = LEAF;
   static __device__ __forceinline__ void iv(u64* s) { sha::iv(s); }
   static __device__ __forceinline__ void comp(u64* s, u64* w) {
     if constexpr (R == 0) sha::compress(s, w);
@@ -78,24 +102,28 @@ struct Sha512 {
     for (int i = 0; i < 8; ++i) w[i] ^= s[i];
     comp(s, w);
   }
-  static __device__ __forceinline__ void leaf(const uint4* p, u64* out) {
-    u64 w[16];
-    iv(out);
+  template <class L>
+  static __device__ __forceinline__ void leaf(const L& ld, u64 t, u64* out) {
+    u64 w[16], st[8];
+    iv(st);
 #pragma unroll 1
     for (int blk = 0; blk < LEAF / 128; ++blk) {
+      uint4 v[8];
+      ld.block(blk, v);
 #pragma unroll
       for (int q = 0; q < 8; ++q) {
-        const uint4 v = __ldg(p + 8 * blk + q);
-        w[2 * q] = (u64)bswap32(v.x) << 32 | bswap32(v.y);
-        w[2 * q + 1] = (u64)bswap32(v.z) << 32 | bswap32(v.w);
+        w[2 * q] = (u64)bswap32(v[q].x) << 32 | bswap32(v[q].y);
+        w[2 * q + 1] = (u64)bswap32(v[q].z) << 32 | bswap32(v[q].w);
       }
-      comp(out, w);
+      comp(st, w);
     }
 #pragma unroll
     for (int i = 0; i < 16; ++i) w[i] = 0;
     w[0] = 0x8000000000000000ull;
     w[15] = 8ull * LEAF;
-    comp(out, w);
+    comp(st, w);
+#pragma unroll
+    for (int i = 0; i < 8; ++i) out[t * 8 + i] = st[i];
   }
   static __device__ __forceinline__ void node(const u64* l, const u64* r, u64* out) {
     u64 w[16];
@@ -155,7 +183,7 @@ __device__ __forceinline__ void sha256_comp(u32* st, u32* w) {
 
 struct Sha256 {
   using W = u32;
-  static constexpr int BLOCK = 64, DIG = 32, S = 8;
+  static constexpr int BLOCK = 64, TPL = 1, STRIDE = LEAF;
   static __device__ __forceinline__ void iv(u32* s) {
     s[0] = 0x6a09e667; s[1] = 0xbb67ae85; s[2] = 0x3c6ef372; s[3] = 0xa54ff53a;
     s[4] = 0x510e527f; s[5] = 0x9b05688c; s[6] = 0x1f83d9ab; s[7] = 0x5be0cd19;
@@ -166,23 +194,27 @@ struct Sha256 {
     for (int i = 0; i < 8; ++i) w[i] ^= s[i];
     comp(s, w);
   }
-  static __device__ __forceinline__ void leaf(const uint4* p, u32* out) {
-    u32 w[16];
-    iv(out);
+  template <class L>
+  static __device__ __forceinline__ void leaf(const L& ld, u64 t, u32* out) {
+    u32 w[16], st[8];
+    iv(st);
 #pragma unroll 1
     for (int blk = 0; blk < LEAF / 64; ++blk) {
+      uint4 v[4];
+      ld.block(blk, v);
 #pragma unroll
       for (int q = 0; q < 4; ++q) {
-        const uint4 v = __ldg(p + 4 * blk + q);
-        w[4 * q] = bswap32(v.x); w[4 * q + 1] = bswap32(v.y); w[4 * q + 2] = bswap32(v.z); w[4 * q + 3] = bswap32(v.w);
+        w[4 * q] = bswap32(v[q].x); w[4 * q + 1] = bswap32(v[q].y); w[4 * q + 2] = bswap32(v[q].z); w[4 * q + 3] = bswap32(v[q].w);
       }
-      comp(out, w);
+      comp(st, w);
     }
 #pragma unroll
     for (int i = 0; i < 16; ++i) w[i] = 0;
     w[0] = 0x80000000u;
     w[15] = 8u * LEAF;
-    comp(out, w);
+    comp(st, w);
+#pragma unroll
+    for (int i = 0; i < 8; ++i) out[t * 8 + i] = st[i];
   }
   static __device__ __forceinline__ void node(const u32* l, const u32* r, u32* out) {
     u32 w[16];
@@ -201,7 +233,7 @@ struct Sha256 {
 // --- BLAKE3: hash.cuh's b3c; a 4096-byte leaf is BLAKE3's 4 chunks of 16 blocks and 3 parents, a node one block ---------
 struct Blake3 {
   using W = u32;
-  static constexpr int BLOCK = 64, DIG = 32, S = 8;
+  static constexpr int BLOCK = 64, TPL = 1, STRIDE = LEAF;
   static __device__ __forceinline__ void iv(u32* s) {
 #pragma unroll
     for (int i = 0; i < 8; ++i) s[i] = B3_IV[i];
@@ -212,27 +244,6 @@ struct Blake3 {
     for (int i = 0; i < 8; ++i) w[i] ^= s[i];
     b3c(s, w, (uint64_t)r, 64, 0, s);
   }
-  static __device__ __forceinline__ void leaf(const uint4* p, u32* out) {
-    u32 cv[4][8], m[16];
-#pragma unroll
-    for (int c = 0; c < 4; ++c) {
-      iv(cv[c]);
-#pragma unroll 1
-      for (int blk = 0; blk < 16; ++blk) {
-#pragma unroll
-        for (int q = 0; q < 4; ++q) {
-          const uint4 v = __ldg(p + 64 * c + 4 * blk + q);
-          m[4 * q] = v.x; m[4 * q + 1] = v.y; m[4 * q + 2] = v.z; m[4 * q + 3] = v.w;
-        }
-        const u32 fl = (blk == 0 ? B3_START : 0) | (blk == 15 ? B3_END : 0);
-        b3c(cv[c], m, (uint64_t)c, 64, fl, cv[c]);
-      }
-    }
-    u32 l[8], r[8];
-    parent(cv[0], cv[1], 0, l);
-    parent(cv[2], cv[3], 0, r);
-    parent(l, r, B3_ROOT, out);
-  }
   // hash.cuh's b3_parent is keyed; the unkeyed hash's parent is IV, PARENT
   static __device__ __forceinline__ void parent(const u32* l, const u32* r, u32 flags, u32* out) {
     u32 m[16], key[8];
@@ -241,12 +252,60 @@ struct Blake3 {
     iv(key);
     b3c(key, m, 0, 64, B3_PARENT | flags, out);
   }
+  // chunk c (1024 bytes) of a stream whose blocks b0 .. b0 + 15 it is
+  template <class L>
+  static __device__ __forceinline__ void chunk(const L& ld, int b0, u64 c, u32* cv) {
+    u32 m[16];
+    iv(cv);
+#pragma unroll 1
+    for (int blk = 0; blk < 16; ++blk) {
+      uint4 v[4];
+      ld.block(b0 + blk, v);
+#pragma unroll
+      for (int q = 0; q < 4; ++q) { m[4 * q] = v[q].x; m[4 * q + 1] = v[q].y; m[4 * q + 2] = v[q].z; m[4 * q + 3] = v[q].w; }
+      b3c(cv, m, c, 64, (blk == 0 ? B3_START : 0) | (blk == 15 ? B3_END : 0), cv);
+    }
+  }
+  template <class L>
+  static __device__ __forceinline__ void leaf(const L& ld, u64 t, u32* out) {
+    u32 a[8], b[8], l[8], r[8], h[8];
+    chunk(ld, 0, 0, a);
+    chunk(ld, 16, 1, b);
+    parent(a, b, 0, l);
+    chunk(ld, 32, 2, a);
+    chunk(ld, 48, 3, b);
+    parent(a, b, 0, r);
+    parent(l, r, B3_ROOT, h);
+#pragma unroll
+    for (int i = 0; i < 8; ++i) out[t * 8 + i] = h[i];
+  }
   static __device__ __forceinline__ void node(const u32* l, const u32* r, u32* out) {
     u32 m[16], key[8];
 #pragma unroll
     for (int i = 0; i < 8; ++i) { m[i] = l[i]; m[i + 8] = r[i]; }
     iv(key);
     b3c(key, m, 0, 64, B3_START | B3_END | B3_ROOT, out);
+  }
+};
+
+// The same hash, chunk-parallel as BLAKE3 is meant to run: 4 threads a leaf, thread t chunk t % 4, then the parents across
+// lanes (every lane computes both parent levels; lanes t % 4 == 0 hold the root)
+struct Blake3Chunks : Blake3 {
+  static constexpr int TPL = 4, STRIDE = 1024;
+  template <class L>
+  static __device__ __forceinline__ void leaf(const L& ld, u64 t, u32* out) {
+    u32 cv[8], o[8], p[8], h[8];
+    chunk(ld, 0, t & 3, cv);
+#pragma unroll
+    for (int i = 0; i < 8; ++i) o[i] = __shfl_down_sync(0xffffffffu, cv[i], 1);
+    parent(cv, o, 0, p);
+#pragma unroll
+    for (int i = 0; i < 8; ++i) o[i] = __shfl_down_sync(0xffffffffu, p[i], 2);
+    parent(p, o, B3_ROOT, h);
+    if ((t & 3) == 0) {
+#pragma unroll
+      for (int i = 0; i < 8; ++i) out[(t >> 2) * 8 + i] = h[i];
+    }
   }
 };
 }  // namespace ip

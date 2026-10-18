@@ -84,11 +84,11 @@ def ands_per_compression(kind: int, rounds: int) -> int:
 
 
 def hashes(out: str) -> None:
-    by: dict[tuple[str, int, str], list[dict]] = {}
+    by: dict[tuple[str, int, str, int], list[dict]] = {}
     for r in lines(os.path.join(out, "bench.jsonl")):
         if "candidate" in r:
-            by.setdefault((r["candidate"], r["sha_roll"], r["mode"]), []).append(r)
-    for (cand, roll, mode), rs in sorted(by.items()):
+            by.setdefault((r["candidate"], r["sha_roll"], r["mode"], r.get("leaves", 0)), []).append(r)
+    for (cand, roll, mode, _), rs in sorted(by.items()):
         m = rs[0]
         mhz = med([r["mhz"] for r in rs])
         ands = ands_per_compression(m["cand_kind"], m["cand_r"])
@@ -118,6 +118,9 @@ def hashes(out: str) -> None:
             rec["leaves"] = n
             rec["leaf_ms"] = med([r["leaf_ms"] for r in rs])
             rec["ms"] = med([r["ms"] for r in rs])
+            rec["leaf_gb_per_s"] = med([r["leaf_gb_per_s"] for r in rs])
+            rec["base_leaf_gb_per_s"] = med([r["base_leaf_gb_per_s"] for r in rs])
+            rec["threads_per_leaf"] = m["threads_per_leaf"]
             rec["ands_per_byte"] = (m["leaf_comps"] * n + m["node_comps"] * (n - 1)) * ands / (4096 * n)
         print(json.dumps(rec))
 
