@@ -4894,14 +4894,19 @@
    "assumptions": [],
    "type_hash": "e57381cb5ec70754de5727e83fd659312830ca151e3abe1da5c28e8c03580b3b"
   },
+  "Pouw.SecurityProofs.Receipt.DuoPairAtStateNotInjective": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Pouw.SecurityProofs.Receipt.DuoPairAtStateNotInjective : Pouw.Guarantees.Receipt.DuoPairAtStateNotInjective"
+   ],
+   "assumptions": [],
+   "type_hash": "574b570981922872c2779a182e07ef3ece74b49100d22f41f189290113baeb14"
+  },
   "Pouw.SecurityProofs.Receipt.DuoPairNoKernel": {
    "owner": "@compute-accounting",
    "signature": ["Pouw.SecurityProofs.Receipt.DuoPairNoKernel : Pouw.Guarantees.Receipt.DuoPairNoKernel"],
    "assumptions": [],
    "type_hash": "66ead21683656113cf926808d76850f0e2838d9d8254b0aa9e5e1a4086ad9ddc"
-  },
-  "Pouw.SecurityProofs.Receipt.DuoPairAtStateNotInjective": {
-   "owner": "@compute-accounting"
   },
   "Pouw.SecurityProofs.Receipt.DuoQuadNoKernel": {
    "owner": "@compute-accounting",
@@ -4916,7 +4921,12 @@
    "type_hash": "0eef8a8219c603404d51a23bf68d8b863d5db41699d9dd93467b160bd5b683bd"
   },
   "Pouw.SecurityProofs.Receipt.DuoRunAtStateNotInjective": {
-   "owner": "@compute-accounting"
+   "owner": "@compute-accounting",
+   "signature": [
+    "Pouw.SecurityProofs.Receipt.DuoRunAtStateNotInjective : Pouw.Guarantees.Receipt.DuoRunAtStateNotInjective"
+   ],
+   "assumptions": [],
+   "type_hash": "092d7bbd8d65a070e558e0195332421103ab2a0e5c10e9fdd7c319bf0e8df77b"
   },
   "Pouw.SecurityProofs.Receipt.DuoRunWordInjective": {
    "owner": "@compute-accounting",
@@ -12201,9 +12211,11 @@
     "Accounting.SecurityProofs.TS.LuckCaseACube",
     "Accounting.SecurityProofs.TS.LuckCaseAKeyed",
     "Accounting.SecurityProofs.TS.ReceiptLuckCaseA",
+    "Pouw.SecurityProofs.Receipt.DuoPairAtStateNotInjective",
     "Pouw.SecurityProofs.Receipt.DuoPairNoKernel",
     "Pouw.SecurityProofs.Receipt.DuoQuadNoKernel",
     "Pouw.SecurityProofs.Receipt.DuoReceiptNotInjective",
+    "Pouw.SecurityProofs.Receipt.DuoRunAtStateNotInjective",
     "Pouw.SecurityProofs.Receipt.DuoRunWordInjective",
     "Pouw.SecurityProofs.Receipt.DuoStepBijective",
     "Pouw.SecurityProofs.Receipt.DuoTripleNoKernel",
@@ -18806,11 +18818,13 @@
    "guarantees": ["Pouw.SecurityProofs.PearlC.TileCheck4WordsCore", "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"]
   },
   "Models.Pouw.Guarantees.Receipt": {
-   "digest": "d3f529c9b4bc91a3af2f4df5548eeaa92c889660c6c2fb5dc798f1ab30833238",
+   "digest": "e87923d0e9bf9ab7187d6c6f01706010d66d2df7d4e1c5a2e1c3fbfff3d408cf",
    "definitions": {
+    "Pouw.Guarantees.Receipt.DuoPairAtStateNotInjective": "da36146359025bb0f7a742f556f73a16592e101a9dd699bf46bb02c485b42f06",
     "Pouw.Guarantees.Receipt.DuoPairNoKernel": "1039a7b3dddf68dfa9e864f897ef57aa49bf17ba7765af07a1332595eef247f9",
     "Pouw.Guarantees.Receipt.DuoQuadNoKernel": "298232eb24c7be9f9f65959660fca3aa8d57d2373f9da1fb34470020a5f872f9",
     "Pouw.Guarantees.Receipt.DuoReceiptNotInjective": "23987edb81eb08f5f48eca3c178776648ed20318a52ad7e6204b8f483e47df87",
+    "Pouw.Guarantees.Receipt.DuoRunAtStateNotInjective": "8d0966afc9a0a6d4580b9fc698e26dc35a5dd3e938bd827375422d862af0216e",
     "Pouw.Guarantees.Receipt.DuoRunWordInjective": "c62e3619993c5ddafb8f07e364d2733dc3f57bd60891bb3006e06a6d32a3ae60",
     "Pouw.Guarantees.Receipt.DuoStepBijective": "5fe72ace79835deaebb0f01d6407fb313ad1f57c2a53375318c667f42c27c828",
     "Pouw.Guarantees.Receipt.DuoTripleNoKernel": "e2f1ae4ae008bc102256d3583daf1493f02dd198e27cb904c16905596c78593d",
@@ -18827,9 +18841,11 @@
     "Pouw.Guarantees.Receipt.LiHalfBijective": "625e51a154a4bfa4958f5919c5f6cf9dc3a43f7a8fa295539f6c09765079e0d2"
    },
    "guarantees": [
+    "Pouw.SecurityProofs.Receipt.DuoPairAtStateNotInjective",
     "Pouw.SecurityProofs.Receipt.DuoPairNoKernel",
     "Pouw.SecurityProofs.Receipt.DuoQuadNoKernel",
     "Pouw.SecurityProofs.Receipt.DuoReceiptNotInjective",
+    "Pouw.SecurityProofs.Receipt.DuoRunAtStateNotInjective",
     "Pouw.SecurityProofs.Receipt.DuoRunWordInjective",
     "Pouw.SecurityProofs.Receipt.DuoStepBijective",
     "Pouw.SecurityProofs.Receipt.DuoTripleNoKernel",
