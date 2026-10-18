@@ -10,9 +10,7 @@ import Proofs.Flock.Claims.KS.PlainSched
 and the rest on rep 1:
 
 * `leadsAfter_simAt`: `LeadsAfter` at `simAt`, from `SchedL` at every link point;
-* `PlainLiveSched`, `plainSchedAlign_of_live`, `plain_KS_of_liveSched`: so `PlainSchedAlign`, and KS at the deployed
-  plain verifier's trimmed record, hold where the plain simulator's live strategy submits `repRounds` rounds on rep 0
-  first.
+* `leadsAfter_plainSimAt`: so at `plainSimAt`, from `SchedL` at the plain simulator's live strategy (`plainLive`).
 -/
 
 namespace FlockDeploy.KS
@@ -155,35 +153,5 @@ theorem leadsAfter_plainSimAt {spec : SessionSpec} {st : Stmt} (L : Layout st) (
     (plainDec (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay)) (fun _ _ => true) (fun _ _ _ => [])
     (fun rs _ => capOfRoot rs[0]!) (plainN x) (hdec C (plainRoot P x ω)) (fun _ => rfl) (plainRoot P x ω)
     (plainLive x spec st hw P ω u) (plainSim_root P x spec st ω hw u) hS
-
-/-- **The plain simulator's live strategy submits `repRounds` rounds on rep 0 first**, then only rep 1's, at every
-plain statement in scope with its one table, every prover, tape and link points. -/
-def PlainLiveSched (x : Claims.Msg) : Prop :=
-  ∀ (s : Claims.Flock.Stmt) (_ : parse false Readable.relation x = some s) (_ : Claims.Flock.InScope false s)
-    (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (_ : setupOf false x = some (ins, spec, sts)) (st : Stmt)
-    (_ : tables false x = [(spec, st)]) (hw : 2 * spec.mPts ≤ 65536) (Ω : Type) (P : Claims.Prover Ω) (ω : Ω)
-    (u : plainTape x) (pts : Fin 2 → Fin spec.mPts → 𝔽),
-    SchedL (plainDg spec) (plainLive x spec st hw P ω u).1 pts (plainN x) (fun _ _ => []) (repRounds false spec st)
-      ((plainLive x spec st hw P ω u).2 pts)
-
-theorem plainSchedAlign_of_live {x : Claims.Msg} (h : PlainLiveSched x) : PlainSchedAlign x := by
-  intro s hs hin ins spec sts hset st ht d hd L m k0 l₀ l₁ rest ext hsch hm hlay Ω P ω
-  refine ⟨fun hh C u => ?_, fun hh hl C u => ?_⟩
-  · exact leadsAfter_plainSimAt L m k0 l₀ l₁ rest ext hsch hm hlay ins.read.I d x
-      (plainOpn (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) ins.read.I d)
-      (plain_hdecAt hs hin hset ht hh hd L m k0 l₀ l₁ rest ext hsch hm hlay) (plain_mPts hs hin hset).1 P ω C u
-      (h s hs hin ins spec sts hset st ht (plain_mPts hs hin hset).1 Ω P ω u)
-  · exact leadsAfter_plainSimAt L m k0 l₀ l₁ rest ext hsch hm hlay ins.read.I d x
-      (plainOpnH (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) ins.read.I d)
-      (plain_hdecHAt hs hin hset ht hh hl hd L m k0 l₀ l₁ rest ext hsch hm hlay) (plain_mPts hs hin hset).1 P ω C u
-      (h s hs hin ins spec sts hset st ht (plain_mPts hs hin hset).1 Ω P ω u)
-
-/-- **The deployed plain verifier: KS, from the plain simulator's schedule**, at SHA-512 at the trimmed record at the
-deployed relation: `plain_KS_of_sched` at `plainSchedAlign_of_live`, with the live sessions' bound where hidden
-outputs sit under plain leaves (`PlainLeafLive`). -/
-theorem plain_KS_of_liveSched (h : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V false) x → PlainLiveSched x)
-    (hleaf : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V false) x → PlainLeafLive x) :
-    Claims.Flock.KS sha512 (deployPlainTrim Readable.relation) :=
-  plain_KS_of_sched (fun x hno => plainSchedAlign_of_live (h x hno)) hleaf
 
 end FlockDeploy.KS
