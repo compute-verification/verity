@@ -188,13 +188,16 @@ def section_13():
 
 
 # §14 Many nights
-def section_14(p):
+def section_14(c, dc, p):
     ledger = Ledger()
     for night in range(3):
-        wipes = [Wipe(d, 96 * GB - 8e6, Interval(0, 2)) for d in ("a.gpu", "b.gpu")] if night else []
-        plan = Plan(Interval(0, 16), wipes=wipes)
-        ledger.add(account(audit(run(p, INPUTS, plan), p.public(plan)), p.public(plan)))
+        start = 16 * night
+        tonight = place(c, dc, "a.gpu", deliver="world", x="world", h="a.gpu", w2="b.gpu", y="b.gpu", start=start)
+        wipes = [Wipe(d, 96 * GB - 8e6, Interval(start, start + 2)) for d in ("a.gpu", "b.gpu")] if night else []
+        plan = Plan(Interval(start, start + 16), wipes=wipes)
+        ledger.add(account(audit(run(tonight, INPUTS, plan), tonight.public(plan)), tonight.public(plan)))
     print(ledger)
+    print(Ledger([ledger.epochs[1], ledger.epochs[1]]).joint())
     serviced = Plan(Interval(0, 16), maintenance=[Maintenance("b", Interval(12, 16))])
     off = Deviation(down={(Port("b.cert", "egress"), 3), (Port("b.cert", "ingress"), 3)})
     acc = account(audit(run(p, INPUTS, serviced, off), p.public(serviced)), p.public(serviced))
@@ -231,7 +234,7 @@ def walkthrough(between=lambda n: None):
     between(11); section_11()
     between(12); acc12 = section_12(dc)
     between(13); section_13()
-    between(14); ledger = section_14(p)
+    between(14); ledger = section_14(c, dc, p)
     between(15); section_15(c, dc)
     between(16); section_16()
     return c, acc, acc12, ledger

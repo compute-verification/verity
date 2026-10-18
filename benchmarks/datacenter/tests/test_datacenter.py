@@ -6,7 +6,7 @@ from dataclasses import replace
 
 import pytest
 
-from datacenter import (FLEET_CLOSED, SALT_CUSTODY, Assumption, Block, Carried, Computed, Credit, Datacenter, Deviation, Device,
+from datacenter import (FLEET_CLOSED, SALT_CUSTODY, Assumption, Challenge, Store, Block, Carried, Computed, Credit, Datacenter, Deviation, Device,
                         Entered, Fleet, Cadence, Held, Input, Interval, Ledger, Link, Maintenance, On, Plan, Port, Record,
                         Refused, Wipe,
                         account, audit, check_records, crossings, digest, double_credit, place, run, trace, traffic)
@@ -44,8 +44,8 @@ def refusals(claims) -> list[Refused]:
     return [x for x in claims if isinstance(x, Refused)]
 
 
-def wipes(*devices: str) -> list[Wipe]:
-    return [Wipe(d, HBM - RESIDUAL, Interval(0, 2)) for d in devices]
+def wipes(*devices: str, at: int = 0) -> list[Wipe]:
+    return [Wipe(d, HBM - RESIDUAL, Interval(at, at + 2)) for d in devices]
 
 
 @pytest.fixture
@@ -266,6 +266,28 @@ def test_a_salt_in_its_certifiers_custody_pins_the_work_that_depends_on_it():
     assert not acc.sound and acc.blocks[0].local_at_least == 0
 
 
+def test_the_joint_ledger_credits_each_units_time_and_memory_once(setup):
+    """The joint rule on real accounts. The claims credit a block its busy share of the epoch, and a store's device the
+    bits read from it and the bit-ticks it held, and `capacity` says what each can give a tick. Two 50 Gbit stores held
+    on one 64 Gbit GPU at once is more than it has, so that account is unsound. And the same night entered twice in a
+    ledger credits the wiped GPU's memory twice over the wipe, which `joint` refuses, though each account alone is
+    sound."""
+    c, dc, p = setup
+    stores = (Store("s1", 5e10, "a.gpu"), Store("s2", 5e10, "a.gpu"))
+    crowded = place(c, dc, "a.gpu", deliver="world", x="world", w2="b.gpu", stores=stores)
+    plan = Plan(EPOCH, challenges=[Challenge("s1", 0, 8), Challenge("s2", 0, 8)])
+    acc = account(audit(run(crowded, INPUTS, plan), crowded.public(plan)), crowded.public(plan))
+    assert not acc.refused and not acc.sound
+    assert acc.overcredited == [("a.gpu", "held", Interval(0, 8), 2 * 5e10 * 8, HBM * 8)]
+    one = Plan(EPOCH, challenges=[Challenge("s1", 0, 8)])
+    assert account(audit(run(crowded, INPUTS, one), crowded.public(one)), crowded.public(one)).sound
+    night = Plan(EPOCH, wipes=wipes("b.gpu"))
+    honest = account(audit(run(p, INPUTS, night), p.public(night)), p.public(night))
+    assert honest.sound and {(x.unit, x.resource) for x in honest.credits} == {("a", "compute"), ("b.gpu", "held")}
+    twice = Ledger().add(honest).add(honest)
+    assert not twice.sound and [(u, r, i) for u, r, i, _, _ in twice.joint()] == [("b.gpu", "held", Interval(0, 2))]
+
+
 def test_credit_from_two_audits_on_one_device_must_fit_every_interval_per_resource():
     capacity = {("gpu0", "compute"): 10.0, ("gpu0", "read"): 10.0}
     fits = [Credit("gpu0", "compute", Interval(0, 10), 60), Credit("gpu0", "compute", Interval(5, 15), 40)]
@@ -333,10 +355,12 @@ def test_a_fleet_links_datacenters_only_through_certifiers():
 
 
 def test_a_ledger_adds_covert_bits_across_nights_and_wipes_bound_what_each_night_carries(setup):
-    c, dc, p = setup
+    c, dc, _ = setup
     ledger = Ledger()
     for night in range(3):
-        plan = Plan(EPOCH, wipes=wipes("a.gpu", "b.gpu") if night else ())
+        start = 16 * night                                           # successive nights on the one trusted clock
+        p = place(c, dc, "a.gpu", deliver="world", x="world", w2="b.gpu", start=start)
+        plan = Plan(Interval(start, start + 16), wipes=wipes("a.gpu", "b.gpu", at=start) if night else ())
         ledger.add(account(audit(run(p, INPUTS, plan), p.public(plan)), p.public(plan)))
     assert ledger.sound and ledger.covert_bits == 3 * ledger.epochs[0].covert_bits
     first, *wiped = ledger.carried

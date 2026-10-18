@@ -10,7 +10,7 @@ interprets those claims in light of the declared hardware, named assumptions and
     claims = audit(run(p, inputs, plan), profile)
     print(account(claims, profile))
 """
-from .account import FLEET_CLOSED, SALT_CUSTODY, Account, BlockAccount, Credit, Ledger, account, credits, double_credit
+from .account import FLEET_CLOSED, SALT_CUSTODY, Account, BlockAccount, Credit, Ledger, account, capacity, double_credit
 from .binding import Crossing, Placement, Profile, crossings, occupancy, place, route, traffic
 from .claims import Carried, Computed, Entered, Held, On, Read, Refused, Scheduled, audit, check_records
 from .logical import Circuit, Commitment, Input, Value, commit, digest, trace
@@ -26,6 +26,6 @@ __all__ = [
     "Cadence", "Commitment", "Computed", "Credit", "Crossing", "Datacenter", "Deviation", "Device", "Entered", "Fleet", "Held",
     "Input", "Interval", "Ledger", "Link", "Maintenance", "On", "Placement", "Plan", "Port", "Profile", "Read", "ReadWindow",
     "Record", "Refused", "Scheduled", "Store", "Trace", "Value", "Wipe", "account", "answer_time", "audit", "check_records",
-    "commit", "credits", "crossings", "digest", "double_credit", "occupancy", "place", "read_rate", "regen_time", "route",
+    "capacity", "commit", "crossings", "digest", "double_credit", "occupancy", "place", "read_rate", "regen_time", "route",
     "run", "serve_time", "trace", "traffic",
 ]

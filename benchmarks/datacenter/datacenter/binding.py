@@ -138,11 +138,11 @@ class Profile:
 
 
 def place(c: Circuit, dc: Datacenter, default: str, *, deliver: str | None = None, stores: tuple[Store, ...] = (),
-          ticks_per_step: int = 1, transfer_steps: int = 2, **where: str) -> Placement:
+          start: int = 0, ticks_per_step: int = 1, transfer_steps: int = 2, **where: str) -> Placement:
     """Place `c` on `dc`: each keyword names a value and the device it is produced on; an unnamed value is computed
     where it is needed, on the device of its first reader that sits in a block, else on `default`. A value's step is one
     past its operands' (plus `transfer_steps` when an operand crosses a block), and each device's step s begins at tick
-    s·ticks_per_step. The outputs are delivered to `deliver`."""
+    start + s·ticks_per_step. The outputs are delivered to `deliver`."""
     devices = dc.devices
     unknown = [n for n in where if n not in c.names.values()] + [d for d in [default, deliver, *where.values()]
                                                                  if d is not None and d not in devices]
@@ -166,7 +166,8 @@ def place(c: Circuit, dc: Datacenter, default: str, *, deliver: str | None = Non
         step[i] = 1 + max((step[j] + (transfer_steps if dc.block_of(leaf[j]) is not here else 0) for j in g.operands),
                           default=-1)
     horizon = max(step.values(), default=0) + 1 + transfer_steps
-    ticks = {d: [s * ticks_per_step for s in range(horizon)] for d in set(leaf.values()) | ({deliver} if deliver else set())}
+    ticks = {d: [start + s * ticks_per_step for s in range(horizon)]
+             for d in set(leaf.values()) | ({deliver} if deliver else set())}
     cell: dict[int, int] = {}
     used: dict[tuple[str, int], int] = {}
     for i in range(len(c.gates)):

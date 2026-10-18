@@ -25,6 +25,12 @@ For the whole datacenter it gives where each held store could have been (`locate
 answered its sample by the deadline, and none when the prover could rebuild the sample in time), the covert budget (the profile's
 advice, timing advice, inputs, every refused port-window charged at its link's full capacity, so it fails closed, and
 everything a block out for maintenance held), and the failure probability (the sum of the claims' deltas).
+
+Every claim's credit is also a `Credit` on a unit: a block's compute in block-ticks of its devices' time, a store's
+device the bits read from it and the bit-ticks it held. `capacity` gives each unit's resources a tick by the
+declaration, and an account whose credits exceed them anywhere (`overcredited`, by `double_credit`, Horn's interval
+test) is unsound. A `Ledger` joins accounts of successive epochs or of overlapping audits, and applies the same rule
+across them (`joint`): one device's time, bandwidth and memory are credited once.
 """
 from __future__ import annotations
 
@@ -83,10 +89,18 @@ class Account:
     delta: float = 0.0
     #: each block out for maintenance: the bits its devices hold, which may leave with whoever services it
     serviced: dict[str, float] = field(default_factory=dict)
+    #: what the claims credit each unit, by resource and interval, and what each unit can give a tick (`capacity`)
+    credits: list[Credit] = field(default_factory=list)
+    capacity: dict[tuple[str, str], float] = field(default_factory=dict)
+
+    @property
+    def overcredited(self) -> list[tuple[str, str, Interval, float, float]]:
+        """Every interval where the claims credit a unit more than the declaration says it can do (`double_credit`)."""
+        return double_credit(self.credits, self.capacity)
 
     @property
     def sound(self) -> bool:
-        return not self.refused
+        return not self.refused and not self.overcredited
 
     @property
     def covert_bits(self) -> float:
@@ -115,6 +129,7 @@ class Account:
         if self.delta:
             lines.append(f"fails with probability at most {self.delta:.3g}")
         lines += [f"REFUSED {r.on!r}: {r.why}" for r in self.refused]
+        lines += [f"OVERCREDITED {u} {r} in {i}: {w:.3g} credited, {c:.3g} possible" for u, r, i, w, c in self.overcredited]
         return "\n".join(lines)
 
 
@@ -215,14 +230,28 @@ def account(claims: list[Claim], profile: Profile, assume: tuple[Assumption, ...
                    sum(c.bits for c in claims if isinstance(c, Scheduled)),
                    refused_bits,
                    sum(c.delta for c in claims if isinstance(c, (Computed, Held, Read))),
-                   {b: sum(float(d.memory) for d in dc.block(b).devices if d.memory is not None) for b in back})
+                   {b: sum(float(d.memory) for d in dc.block(b).devices if d.memory is not None) for b in back},
+                   _credits(claims, profile, blocks, inside, refused_stores), capacity(dc))
+
+
+def _credits(claims: list[Claim], profile: Profile, blocks: list[BlockAccount], inside, refused_stores) -> list[Credit]:
+    """What the claims credit each unit: a block its busy share of the epoch, a store's device the bits read from it and
+    the bit-ticks it held."""
+    epoch, stores = profile.plan.epoch, profile.stores
+    out = [Credit(b.block, "compute", epoch, b.busy * epoch.length) for b in blocks if b.credited]
+    for c in claims:
+        if isinstance(c, (Read, Held)) and inside(c) and c.store not in refused_stores:
+            out.append(Credit(stores[c.store].device, "read", c.during, c.bits) if isinstance(c, Read) else
+                       Credit(stores[c.store].device, "held", c.during, c.bits * c.during.length))
+    return out
 
 
 @dataclass
 class Ledger:
-    """Accounts of successive epochs (nights, say), joined. Covert bits and failure probabilities add up across epochs,
-    since an adversary with a long horizon can save them up and break out at the end; what each epoch could carry in is
-    per epoch, and nightly wipes keep it down to the devices' residuals."""
+    """The joint ledger: accounts of successive epochs (nights, say) or of audits that overlap, joined. Covert bits and
+    failure probabilities add up, since an adversary with a long horizon can save them up and break out at the end; what
+    each epoch could carry in is per epoch, and nightly wipes keep it down to the devices' residuals; and each unit's
+    time, bandwidth and memory are credited once across all of them (`joint`)."""
 
     epochs: list[Account] = field(default_factory=list)
 
@@ -230,9 +259,15 @@ class Ledger:
         self.epochs.append(acc)
         return self
 
+    def joint(self) -> list[tuple[str, str, Interval, float, float]]:
+        """The joint rule across the ledger's accounts: every interval where they credit a unit's resource more than the
+        declaration says it can do. Two audits of one device in overlapping windows can't both have its whole time."""
+        cap = {k: v for a in self.epochs for k, v in a.capacity.items()}
+        return double_credit([c for a in self.epochs for c in a.credits], cap)
+
     @property
     def sound(self) -> bool:
-        return all(a.sound for a in self.epochs)
+        return all(a.sound for a in self.epochs) and not self.joint()
 
     @property
     def covert_bits(self) -> float:
@@ -254,7 +289,8 @@ class Ledger:
 
 @dataclass(frozen=True)
 class Credit:
-    """Work `work` of `resource` (compute, held, read) an audit credits to `unit` (a device or a block) within `during`."""
+    """Work `work` of `resource` an audit credits to `unit` within `during`: a block's `compute` in block-ticks, a
+    device's `read` in bits and its `held` in bit-ticks (`capacity` gives each per tick)."""
 
     unit: str
     resource: str
@@ -262,9 +298,18 @@ class Credit:
     work: float
 
 
-def credits(acc: Account, epoch: Interval) -> list[Credit]:
-    """The account's compute credit as `Credit`s, one per block, for the joint rule (`double_credit`)."""
-    return [Credit(b.block, "compute", epoch, b.credited) for b in acc.blocks if b.credited]
+def capacity(dc: Datacenter) -> dict[tuple[str, str], float]:
+    """What each unit can give each resource in one tick, by the declaration: a block one tick of its devices' time
+    (`compute`, in block-ticks), a device its read bandwidth (`read`, in bits) and its memory (`held`, in bits, so
+    bit-ticks a tick)."""
+    tick = dc.cadence.seconds(1)
+    out = {(b.name, "compute"): 1.0 for b in dc.blocks}
+    for d in dc.devices.values():
+        if d.bandwidth is not None:
+            out[d.name, "read"] = float(d.bandwidth) * tick
+        if d.memory is not None:
+            out[d.name, "held"] = float(d.memory)
+    return out
 
 
 def double_credit(credits: list[Credit], capacity: dict[tuple[str, str], float]) -> list[tuple[str, str, Interval, float, float]]:
