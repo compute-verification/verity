@@ -284,7 +284,7 @@ FAMILY_FACTS: dict[str, dict[str, Any]] = {
                           f"{_DSV2}:257-265 DeepseekV2MLP (gate_up_proj, down_proj), :317-328 (gate, e_score_correction_bias), :360-368 "
                           f"(shared_experts), :370-373 FusedMoEFactory -> {_FMOE}:369 routed_experts (w13_weight, w2_weight); "
                           f"vllm/model_executor/layers/quantization/fp8.py:354-355 a block-FP8 linear's scales are its weight_scale_inv. "
-                          f"order / buffers: vllm_meta.py:242-264 (W_UK_T, W_UV registered on the attention module itself); {_DSA_ATTN}:176-217 "
+                          f"order / buffers: loader_parity.mla_absorbed_weights_as_the_loader_does (W_UK_T, W_UV registered on the attention module itself); {_DSA_ATTN}:176-217 "
                           f"kv_b_proj and the indexer built before MLAAttention.__init__ (which sets the four scale buffers, "
                           f"vllm/model_executor/layers/attention/attention.py:127-135), :239-264 the remaining projections, then rotary_emb (one "
                           f"cos_sin_cache shared by every layer and the indexer's rope); {_DSA}:85-113 mlp, then the two layer norms; {_FMOE}:369 "
@@ -388,7 +388,7 @@ FAMILY_FACTS: dict[str, dict[str, Any]] = {
             "buffers": ("attn.rotary_emb.cos_sin_cache",),
             "provenance": f"{_DSV4}:1337-1355 DeepseekV4Model's own hc_head_fn / base / scale (own parameters before its children's), :1312, "
                           f":1321, :1333 embed_tokens, layers, norm; :1785 lm_head; :1111-1175 a layer's six hc_ parameters, then attn, ffn, "
-                          f"attn_norm, ffn_norm; vllm_meta.post_load_tensors_as_the_loader_does registers layer 0's hc_attn_fn_broadcast "
+                          f"attn_norm, ffn_norm; loader_parity.post_load_tensors_as_the_loader_does registers layer 0's hc_attn_fn_broadcast "
                           f"({_DSV4}:1651-1664 finalize_mhc_broadcast_weights) after them; {_DSV4_ATTN}:233-308 attn_sink, fused_wqa_wkv, "
                           f"q_norm, wq_b, kv_norm, wo_a, wo_b, rotary_emb, the indexer, then the compressor; {_DSV4}:794-858 gate, tid2eid / "
                           f"e_score_correction_bias, shared_experts, then the experts (:217-251 w13 / w2 and their e8m0 scales); "

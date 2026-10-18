@@ -17,6 +17,7 @@ import pytest
 
 from tests.pipeline import tp_toy as T
 from verity_vllm.pipeline import build as B
+from verity_vllm.pipeline.construction_manifest import write_construction_manifest
 from verity_vllm.pipeline.row_driver import Stop
 from verity_vllm.pipeline.row_tp import TpRow
 from verity_vllm.pipeline.tp import emit_ranks, relabel_build as RB
@@ -56,7 +57,7 @@ def _fake_build(W: int, r: int, out: str, args: tuple, hook=None) -> None:
                         write=hook(out, write) if hook else write)
     res = B._finish(out, res, 0.0)
     if emit:
-        emit_ranks.finish(emit, out, res, B._write_manifest)
+        emit_ranks.finish(emit, out, res, write_construction_manifest)
 
 
 def _files(d: str) -> dict[str, bytes]:

@@ -158,7 +158,7 @@
     {"file": "verity_vllm/pipeline/coverage_workloads.py", "kind": "seed-default", "symbol": "build_requests", "detail": "prompt_seed"},
     {"file": "verity_vllm/pipeline/coverage_workloads.py", "kind": "seed-default", "symbol": "workload_doc", "detail": "sampling_seed"},
     {"file": "verity_vllm/pipeline/build.py", "kind": "broad-except", "symbol": "_cuda_available", "detail": "except Exception"},
-    {"file": "verity_vllm/pipeline/build.py", "kind": "broad-except", "symbol": "_write_manifest", "detail": "except Exception"},
+    {"file": "verity_vllm/pipeline/construction_manifest.py", "kind": "broad-except", "symbol": "write_construction_manifest", "detail": "except Exception"},
     {"file": "verity_vllm/pipeline/build.py", "kind": "broad-except", "symbol": "run", "detail": "except Exception"},
     {"file": "verity_vllm/pipeline/experiment.py", "kind": "broad-except", "symbol": "_load", "detail": "except Exception"},
     {"file": "verity_vllm/pipeline/experiment.py", "kind": "broad-except", "symbol": "code_version", "detail": "except Exception", "count": 2},

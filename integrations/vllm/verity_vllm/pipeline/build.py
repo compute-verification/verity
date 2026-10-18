@@ -26,6 +26,7 @@ from dataclasses import dataclass
 from verity_vllm.config import RowConfig, option
 from verity_vllm.engine import env as engine_env, hooks
 from verity_vllm.pipeline import launch_context as LC
+from verity_vllm.pipeline.construction_manifest import write_construction_manifest
 from verity_vllm.program.boolean import derived
 from verity_vllm.program.frontend.inputs_trace import InputsTrace
 from verity_vllm.pipeline.tp.links import module_in_model_vocabulary, read_tp_links, same_module_path, write_tp_links  # noqa: F401 (read through here)
@@ -100,10 +101,11 @@ def write_instances(out: str, program, digest: str, corr_digest: str | None, sup
                           rows)
 
 
-#: the builder's own sources (hashed into `construction_version`): the export shims, the meta instantiation / wrappers, this driver,
-#: the Triton interception, the vLLM bindings + vocabulary + derive core, and the applicability contract itself.
+#: the builder's own sources (hashed into `construction_version`): the export shims, the meta instantiation / wrappers and its loader
+#: parity, this driver and its construction manifest, the Triton interception, the vLLM bindings + vocabulary + derive core, and the applicability contract itself.
 _CONSTRUCTION_SOURCES = ("verity_vllm/program/frontend/export_compat.py", "verity_vllm/program/frontend/vllm_meta.py",
-                         "verity_vllm/pipeline/build.py", "verity_vllm/program/frontend/triton_capture.py",
+                         "verity_vllm/pipeline/build.py", "verity_vllm/program/frontend/loader_parity.py",
+                         "verity_vllm/pipeline/construction_manifest.py", "verity_vllm/program/frontend/triton_capture.py",
                          "verity_vllm/program/frontend/rules/vllm_bindings/__init__.py",
                          "verity_vllm/program/frontend/rules/vllm_bindings/attention.py",
                          "verity_vllm/program/frontend/rules/vllm_bindings/cache_pad.py",
@@ -459,7 +461,7 @@ def run(out: str, M: int, pos0: int, profile: str, backend: str, intercept: bool
     res = _finish(out, res, t_start)
     if emit is not None:
         from verity_vllm.pipeline.tp.emit_ranks import finish
-        finish(emit, out, res, _write_manifest)
+        finish(emit, out, res, write_construction_manifest)
     return res
 
 
@@ -474,7 +476,7 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
                tp: int = 1, rank: int = 0, launch: dict | None = None, emit=None, engine_args: dict | None = None) -> None:
     from verity_vllm.program.frontend.target_profile import ArtifactIdentity, profile_mismatches
     with InputsTrace(os.path.join(out, "inputs.json")), contextlib.ExitStack() as tp_stack:
-        from verity_vllm.program.frontend import vllm_meta as vm
+        from verity_vllm.program.frontend import loader_parity as parity, vllm_meta as vm
         from verity_vllm.program.frontend.export_compat import apply_target_profile, host_facts, read_back_applied
         from verity_vllm.program.frontend.triton_capture import TritonLaunchLog
         import torch
@@ -516,11 +518,11 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             model = vm.instantiate_meta(cfg)
             # [R15 fp8] loader parity: a checkpoint that ships a redundant `lm_head.weight` under `tie_word_embeddings` is untied by
             # vLLM for loading and RE-TIED after it iff the two tensors are equal (Qwen3-4B-Instruct-2507-FP8); the same decision from the
-            # pinned checkpoint's bytes, so the Program has the served model's one shared root (see `vm.retie_lm_head_as_the_loader_does`)
-            res["lm_head_tying"] = vm.retie_lm_head_as_the_loader_does(model, cfg)
-            res["mla_absorbed_weights"] = vm.mla_absorbed_weights_as_the_loader_does(model, cfg)
-            res["fp8_block_weights"] = vm.fp8_block_weights_as_the_loader_does(model)
-            res["post_load_tensors"] = vm.post_load_tensors_as_the_loader_does(model)
+            # pinned checkpoint's bytes, so the Program has the served model's one shared root (see `parity.retie_lm_head_as_the_loader_does`)
+            res["lm_head_tying"] = parity.retie_lm_head_as_the_loader_does(model, cfg)
+            res["mla_absorbed_weights"] = parity.mla_absorbed_weights_as_the_loader_does(model, cfg)
+            res["fp8_block_weights"] = parity.fp8_block_weights_as_the_loader_does(model)
+            res["post_load_tensors"] = parity.post_load_tensors_as_the_loader_does(model)
             if tp > 1:
                 res["tp"]["embedding_shards"] = bind_vocab_parallel_embeddings(model, tp_stack.enter_context(hooks.Hooks()))
                 res["tp"]["sharded_params"] = _sharded_param_summary(model)
@@ -705,52 +707,8 @@ def _finish(out: str, res: dict, t_start: float) -> dict:
     res["wall_secs_total"] = round(time.time() - t_start, 2)
     res["max_rss_mb"] = round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024.0, 1)  # Linux: KB
     json.dump(res, open(os.path.join(out, "result.json"), "w"), indent=1, default=str)
-    _write_manifest(out, res)
+    write_construction_manifest(out, res)
     return res
-
-
-def _write_manifest(out: str, res: dict) -> None:
-    """`construction_manifest.json`: what the construction read (inputs trace summary), which rules fired, the declared
-    facts it relied on, wall/RSS, and the program identity — for the independent validator."""
-    tr = {}
-    try:
-        tr = json.load(open(os.path.join(out, "inputs.json")))
-    except Exception:  # noqa: BLE001
-        pass
-    m = {"schema": "cb-a/construction_manifest/v3", "utc": res.get("utc"), "wrapper": res.get("wrapper"),
-         # [X-05] `sampling` is the row's declared policy (manifest / --sampling / default-by-omission), never a literal
-         "structural_inputs": {"LP": res.get("LP"), "T": res.get("T"), "M": res.get("M"), "pos0": res.get("pos0"), "eos": res.get("eos"),
-                               "sampling": res.get("sampling"), "tp": (res.get("tp") or {}).get("world", 1), "rank": (res.get("tp") or {}).get("rank", 0),
-                               "launch_context": res.get("launch_context")},
-         # [R13 tp] world > 1: the rank's collectives (peer-input signature), embedding shard, engine args + env the admitted TP path requires,
-         # the sharded parameter shapes and the cross-rank binding summary (full record: result.json `tp`, tp_links.json)
-         "tp": ({k: v for k, v in res["tp"].items() if k != "collectives"} | {"collectives": {k: v for k, v in res["tp"].get("collectives", {}).items() if k != "record"}}
-                if (res.get("tp") or {}).get("world", 1) > 1 else None),
-         "model": {"class": res.get("model_class"), "hf_config": res.get("hf_config"), "pin": res.get("model_pin"),
-                   # [R15 fp8] `hf_config.tie_word_embeddings` above is what vLLM SET for loading (False when the checkpoint ships an
-                   # lm_head); the loader's re-tie decision, reproduced from the checkpoint's bytes, is the served model's fact
-                   "lm_head_tying": res.get("lm_head_tying")},
-         "code_rev": res.get("code_rev"), "profile": res.get("profile"),
-         # v3: `target.declared` = the TargetProfile (the only source of every applied value); `target.applied` / `applied_after_export` =
-         # read back from vLLM inside the applied shim; `target.host` = the construction host (informational, in no identity);
-         # `target.consulted` = config facts + env split into consulted / ignored (dead in this pin) / non-vLLM
-         "target": res.get("target"), "artifact": res.get("artifact"),
-         "declared": (res.get("declared_derived") or {}).get("declared"), "derived": (res.get("declared_derived") or {}).get("derived"),
-         "observed": {"attention_impls": res.get("attention_impls_observed"), "export_facts": res.get("export_facts")},
-         "construction": {"mechanism": "torch.export(strict=False) of the vLLM model class on meta + verity_vllm.program.frontend.derive (profile mode)",
-                          "export": res.get("export"), "derive_secs": res.get("derive_secs"), "wall_secs_total": res.get("wall_secs_total"),
-                          "max_rss_mb": res.get("max_rss_mb"), "cuda_available": res.get("cuda_available"), "param_device": res.get("param_device"),
-                          "real_inference": False, "weights_loaded": False},
-         "rules_applied": res.get("rules_applied"), "n_applications": res.get("n_applications"), "bindings_rules": res.get("bindings_rules"),
-         "inputs_trace": {"n_open_events": tr.get("n_open_events"), "distinct_paths": tr.get("distinct_paths"), "forbidden_hits": tr.get("forbidden_hits"),
-                          "site_packages_by_package": tr.get("site_packages_by_package"),
-                          "non_site_packages_paths": [p for p in tr.get("non_site_packages_paths", []) if not p.startswith("/usr/lib/python")]},
-         "program": res.get("program"), "spec_histogram": res.get("spec_histogram"), "ok": res.get("ok"), "unsupported": res.get("unsupported"),
-         "files": ["descriptor.json.gz (verity.ml.circuits descriptor v1)", "instances.json.gz (instance sequence: spec + operand run progressions)", "derive-report.json", "inputs.json", "result.json",
-                   "artifact.json (verity/aot-artifact/v1: identity + construction_version + target_profile + applicability + program_digest)"]}
-    if res.get("relabeled_from"):
-        m["relabeled_from"] = res["relabeled_from"]
-    json.dump(m, open(os.path.join(out, "construction_manifest.json"), "w"), indent=1, default=str)
 
 
 @dataclass(frozen=True, kw_only=True)
