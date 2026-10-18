@@ -263,6 +263,9 @@ research msg ask-daniel resolve <id> --choice no --note 'his reply: <permalink>'
   deadline itself.
 - **Record each answer as a ruling**, for the class of case, where the next asker will read it (friction skill §3). The card
   is the evidence; cite its permalink.
+- **The decision reaches @top by itself.** When your card's thread wakes you with a decision, run `research msg ask-daniel
+  status ID` (or `resolve`): it rings @top's inbox once with the question, the outcome and you, for Daniel's decisions
+  log. File no TOP issue just to log it (COMM-34).
 
 ## Norms
 

@@ -86,6 +86,10 @@ NOISE = {                                          # how a product is noised and
     "pv": "P served with a fresh bit, V served, Ycum's base-128 digits committed: every product checked",
     "clean": "served plain, never proved",
 }
+SUMS = {                                           # the kernel forming a peel's sums DG, S and X(0) (eps_budget prices it)
+    "vsum": "BC-KERNEL r2's linear vsum, 35 per-thread instructions an entry",
+    "vfold": "D2S-KERNEL r3's vfold, the V producers in one pass (#2300): 0.69–0.73 warp instructions an entry",
+}
 OWN = ("name", "title", "summary")                 # what a design file states itself, never from its base
 
 
@@ -171,22 +175,39 @@ class Part:
     source: str
 
 
+PINNED = ("Accounting.Guarantees.FillerLuck.PinnedFillBlocksDeficit (and PinnedFillLuckAt): the check recomputes the "
+          "drawn tile's receipt from committed data and the round's coins and compares it with the committed one, so a "
+          "wrong receipt fails whenever its tile is drawn and nothing is left to guess; what a right receipt cost is "
+          "FILL-OPT's")
+PFILL = ("Accounting.Guarantees.FillerLuck.FillerBlocksDeficit (and FillerLuckAt): pfill's cell check, a short cell "
+         "right with probability at most ½ + 2^(−3/2)")
+
+
 @dataclass(frozen=True)
 class Filler:
     """Verified proof-of-work filler: `per_word` lane instructions a committed word in the class mix `mix`, run by
-    honest on `route`; a deficient block of it passes its check with probability ≤ `p` (SPEC §5: 0.854 for both
-    fillers, any K)."""
+    honest on `route`; a deficient block of it passes its check with probability ≤ `p`, as the theorem `luck` names
+    proves. Without one p is 1, no luck credit: the cheater leaves the filler undone at no cost to Theorem S's budget,
+    even with every block checked. A receipt the check recomputes and compares with the committed one has p = 0
+    (`PINNED`), pfill's cells 0.854 (`PFILL`)."""
     per_word: float = 0.0
     mix: dict[str, float] | None = None
     route: str = "lanes"         # lanes or uniform
     source: str = ""
-    p: float = 0.854
+    p: float = 1.0
+    luck: str = ""               # the theorem that proves p < 1
 
 
-def lane_fill(x: float) -> Filler:
-    """x lane instructions a word of verified filler on lanes, LOP3 and IMAD alternating (FILL-OPT)."""
-    return Filler(per_word=x, mix={"ALU": 1.0, "IMAD": 1.0}, route="lanes",
-                  source="CALC: a lane chain of LOP3 and IMAD, receipts checked like the fold's (candidate)")
+def lane_fill(x: float, mix: dict[str, float] | None = None) -> Filler:
+    """x lane instructions a word of verified filler on lanes, LOP3 and IMAD alternating (FILL-OPT), or in `mix`, its
+    receipts recomputed by the check (p = 0, `PINNED`)."""
+    if mix is None:
+        return Filler(per_word=x, mix={"ALU": 1.0, "IMAD": 1.0}, route="lanes",
+                      source="CALC: a lane chain of LOP3 and IMAD, receipts checked like the fold's (candidate)",
+                      p=0.0, luck=PINNED)
+    return Filler(per_word=x, mix=dict(mix), route="lanes",
+                  source=f"a lane chain in the mix {', '.join(f'{k} {v:g}' for k, v in mix.items())} (candidate)",
+                  p=0.0, luck=PINNED)
 
 
 @dataclass(frozen=True)
@@ -223,6 +244,7 @@ class Design:
     base: str = ""               # the design this one varies
     ppl: str = ""                # its perplexity arm, benchmarks/ppl/specs/PPL.toml; "": none on main
     noise: dict[str, str] | None = None   # each of PRODUCTS: a leaf of NOISE
+    sums: str = "vsum"           # a peel's sums kernel, a key of SUMS
     unit: str = ""               # the proof unit, a table of data/adapt.toml
     coin_bits: int = 1           # a noised entry's coin on {0, …, 2^coin_bits − 1}
     coins_source: str = ""
@@ -236,9 +258,9 @@ class Design:
         return replace(self, name=f"{self.name}@r{r:g}", fold={k: v * s for k, v in self.fold.items()},
                        fold_name=f"{self.fold_name}×{s:.3g}")
 
-    def with_fill(self, x: float) -> Design:
+    def with_fill(self, x: float, mix: dict[str, float] | None = None) -> Design:
         """The design with x lane instructions a word of verified filler on lanes (`lane_fill`)."""
-        return replace(self, name=f"{self.name}+fill{x:g}", filler=(*self.filler, lane_fill(x)))
+        return replace(self, name=f"{self.name}+fill{x:g}", filler=(*self.filler, lane_fill(x, mix)))
 
     def with_index_bits(self, b: int) -> Design:
         """The design with b-bit noise entries on the operand the table route indexes, the other operand as it is."""
@@ -310,13 +332,19 @@ def design(name: str, data: Path = DATA) -> Design:
     ops = t.get("operands", {"floor": h.floor, "source": h.floor_source})
     f = t.get("filler", {})
     filler = Filler(per_word=f.get("per_word", 0.0), mix=f.get("mix"), route=f.get("route", "lanes"),
-                    source=f.get("source", ""), p=f.get("p", Filler.p))
+                    source=f.get("source", ""), p=f.get("p", Filler.p), luck=f.get("luck", ""))
     if filler.route != "lanes" or (filler.per_word and not filler.mix):
         raise SystemExit(f"{name}: honest runs a filler on lanes, with its class mix (decision 73: a uniform "
                          "instruction takes an issue slot, so no design fills the uniform datapath)")
+    if filler.per_word and ("p" not in f or not 0 <= filler.p <= 1 or (filler.p < 1 and not filler.luck)):
+        raise SystemExit(f"{name}: [filler] p is the probability a deficient block passes its check, and `luck` the "
+                         f"theorem that proves it: 0 for a receipt the check recomputes ({PINNED.split(' ')[0]}), "
+                         f"0.854 for pfill's cells ({PFILL.split(' ')[0]}), or p = 1 with no `luck` (no luck credit)")
     noise = dict(t.get("noise", {}))
     if set(noise) != set(PRODUCTS) or set(noise.values()) - set(NOISE):
         raise SystemExit(f"{name}: [noise] names a leaf of NOISE ({', '.join(NOISE)}) for each of {', '.join(PRODUCTS)}")
+    if t.get("sums", "vsum") not in SUMS:
+        raise SystemExit(f"{name}: sums {t['sums']!r} is not a peel sums kernel ({', '.join(SUMS)})")
     if t["unit"] not in adapts(data):
         raise SystemExit(f"{name}: unit {t['unit']!r} is not a proof unit of adapt.toml ({', '.join(adapts(data))})")
     coins = t["coins"]
@@ -335,7 +363,7 @@ def design(name: str, data: Path = DATA) -> Design:
                   uniform=routes.get("uniform", True), q_uniform=routes.get("q_uniform"),
                   index_bits=index_bits, title=t["title"],
                   aliases=tuple(t.get("aliases", ())), base=t.get("base", ""), ppl=t.get("ppl", ""), noise=noise,
-                  unit=t["unit"], coin_bits=coins["bits"], coins_source=coins["source"])
+                  sums=t.get("sums", "vsum"), unit=t["unit"], coin_bits=coins["bits"], coins_source=coins["source"])
 
 
 def profiles(data: Path = DATA) -> list[str]:
