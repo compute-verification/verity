@@ -13,6 +13,10 @@ outside every block.
   `datacenter.check_records` audits them.
 - `mockdc.py`: a declaration's netns plan stood up on one host, the certifier's proxy on each block's uplink, and both
   audits.
+- `workload/`: what runs on the blocks, with its own suite (its modules are listed in `workload/__init__.py`).
+  `python -m workload.lab_run run --out DIR`, from this directory in a Python with torch, serves verity_vllm's serving
+  Program on the lab, each block in its namespace behind its certifier's proxy and the client on the outside host, then
+  checks the certifiers' audit, N3 and the answers.
 - `tests/`: the exports' tests, the declarations' values pinned against memory accounting's constants
   (`verity.core.protocols.remote_bandwidth.timing`) and the census, and the records adapter's tests on an injected clock
   (`uv run tools/verity/check/suites.py verity-network-sim`). The mock datacenter is a script, not a test: it runs in real time.
