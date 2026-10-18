@@ -866,6 +866,9 @@
    "assumptions": [],
    "type_hash": "2c4fc16427f8682cead2cb20919547db1fe6e4af5c742460575d8844436ca9ca"
   },
+  "Accounting.SecurityProofs.Gates.DitherRange": {
+   "owner": "@memory-accounting"
+  },
   "Accounting.SecurityProofs.Gates.EncodeBudget": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.Gates.EncodeBudget : Accounting.Guarantees.Gates.EncodeBudget"],
@@ -878,11 +881,20 @@
    "assumptions": [],
    "type_hash": "57558a140ad883d730f093eb49f6b906782a6f957d3f6a649dd2c74cd2837f97"
   },
+  "Accounting.SecurityProofs.Gates.FmaxfRange": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.Gates.FminfRange": {
+   "owner": "@memory-accounting"
+  },
   "Accounting.SecurityProofs.Gates.Fooling": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.Gates.Fooling : Accounting.Guarantees.Gates.Fooling"],
    "assumptions": [],
    "type_hash": "d11e89c1bfbcc555adf41b1d45f9dc704ea0d62c60243fe5b1a5e59a90930097"
+  },
+  "Accounting.SecurityProofs.Gates.LutSoftmaxRange": {
+   "owner": "@memory-accounting"
   },
   "Accounting.SecurityProofs.Gates.ProvenWindow": {
    "owner": "@memory-accounting",
@@ -890,11 +902,17 @@
    "assumptions": [],
    "type_hash": "59fda584e7cbcdc063143484aaf92b346c31dc58334e8e5216c0d469de199bf5"
   },
+  "Accounting.SecurityProofs.Gates.QuantRange": {
+   "owner": "@memory-accounting"
+  },
   "Accounting.SecurityProofs.Gates.RhoPairs": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.Gates.RhoPairs : Accounting.Guarantees.Gates.RhoPairs"],
    "assumptions": [],
    "type_hash": "e594b11c95d53b3e8c2054596384a7bcf1c12fc0f8ba64b08a0d4ab7f933c48d"
+  },
+  "Accounting.SecurityProofs.Gates.RzByteRange": {
+   "owner": "@memory-accounting"
   },
   "Accounting.SecurityProofs.Gates.SquaringCarry": {
    "owner": "@memory-accounting",
@@ -5114,6 +5132,30 @@
    "Pouw.SecurityProofs.Receipt.LiCheckpointLowBit": {
     "function": "Pouw.Receipt.liCheckpoint",
     "outcome": "none"
+   },
+   "Accounting.SecurityProofs.Gates.FmaxfRange": {
+    "function": "Accounting.Gates.fmaxfRule",
+    "outcome": "accept"
+   },
+   "Accounting.SecurityProofs.Gates.FminfRange": {
+    "function": "Accounting.Gates.fminfRule",
+    "outcome": "accept"
+   },
+   "Accounting.SecurityProofs.Gates.RzByteRange": {
+    "function": "Accounting.Gates.rzByteRule",
+    "outcome": "accept"
+   },
+   "Accounting.SecurityProofs.Gates.QuantRange": {
+    "function": "Accounting.Gates.quantize",
+    "outcome": "none"
+   },
+   "Accounting.SecurityProofs.Gates.DitherRange": {
+    "function": "Accounting.Gates.dither",
+    "outcome": "none"
+   },
+   "Accounting.SecurityProofs.Gates.LutSoftmaxRange": {
+    "function": "Accounting.Gates.lutSoftmax",
+    "outcome": "none"
    }
   },
   "frozen": {
@@ -5616,13 +5658,7 @@
    "Accounting.SecurityProofs.TS.FillOptOfFanIn": "frozen (no-function): FILL-OPT from FanIn for any filler given as a straight-line dataflow over its fresh inputs, not a Lean function.",
    "Accounting.SecurityProofs.Gates.ProvenWindow": "frozen (no-function): The soundness of the gate model's interval analysis (Accounting.Gates.Proven) over every circuit and input, not a property of a Lean function: property/v1's interval analysis has no Lean code yet.",
    "Accounting.SecurityProofs.Gates.ClampOrWrap": "frozen (no-function): A corollary of ProvenWindow over every circuit of the gate model and its s8-family steps' clamp or wrap, not a property of a Lean function.",
-   "Accounting.SecurityProofs.Gates.RhoPairs": "frozen (no-function): A fact about the gate model's codec square root (Accounting.Gates.rho) at every prime p ≡ 3 mod 4, not a property of the codec's code: remote_bandwidth's codec has no Lean port.",
-   "Accounting.Guarantees.Gates.FmaxfRange": "unstated: property/v1's interval rule for F32Fmaxf holds fmaxf's value on operands in their ranges; its theorem Accounting.SecurityProofs.Gates.FmaxfRange is not proved yet.",
-   "Accounting.Guarantees.Gates.FminfRange": "unstated: property/v1's interval rule for F32Fminf holds fminf's value on operands in their ranges; its theorem Accounting.SecurityProofs.Gates.FminfRange is not proved yet.",
-   "Accounting.Guarantees.Gates.RzByteRange": "unstated: property/v1's interval rule for F32ToU32RzByte holds the truncation's low byte on an operand in its range; its theorem Accounting.SecurityProofs.Gates.RzByteRange is not proved yet.",
-   "Accounting.Guarantees.Gates.QuantRange": "unstated: a clamped quantizer's value lies in its clamp's interval whatever the rounding; its theorem Accounting.SecurityProofs.Gates.QuantRange is not proved yet.",
-   "Accounting.Guarantees.Gates.DitherRange": "unstated: a b-bit dither of a clamped floor lies in [lo − m, lo + w + m + 1]; its theorem Accounting.SecurityProofs.Gates.DitherRange is not proved yet.",
-   "Accounting.Guarantees.Gates.LutSoftmaxRange": "unstated: the LUT softmax's element lies in the hull of its table and 0; its theorem Accounting.SecurityProofs.Gates.LutSoftmaxRange is not proved yet."
+   "Accounting.SecurityProofs.Gates.RhoPairs": "frozen (no-function): A fact about the gate model's codec square root (Accounting.Gates.rho) at every prime p ≡ 3 mod 4, not a property of the codec's code: remote_bandwidth's codec has no Lean port."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
