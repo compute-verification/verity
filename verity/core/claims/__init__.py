@@ -286,9 +286,11 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "Lemma E1(c) with the rounds' equal shares: on an accepted window whose committed values are right for their "
           "derivations, every word that isn't fixed is in its round's share", "TS right fixed", "proven"),
     Entry("accounting-ts-unit-fixed", "assumption",
-          "Lemma E1(c) per unit, which doesn't read the draw: on an accepted window the fixed words per round are at "
-          "least the good units' words over the rounds, a good unit being one that, with every unit writing it a value "
-          "after the coin its noise reads, has its committed values held and right", "TS unit fixed", "proven"),
+          "Lemma E1(c) per unit with its fold clause, which doesn't read the draw: on an accepted window the fixed "
+          "words per round are at least the good units' words over the rounds, a good unit being one the run computed "
+          "(not skipped and guessed), with every unit writing it a value after the coin its noise reads, so a unit "
+          "whose check passes by luck isn't credited; and the folded words per round are at least the words of the "
+          "units not skipped whole over the rounds", "TS unit fixed", "proven"),
 )}
 
 

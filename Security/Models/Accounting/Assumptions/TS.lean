@@ -41,9 +41,11 @@ Which form each takes:
   `UnitFixed`. Its crypto half, the drawn units right, is `Accounting.Guarantees.TS.DrawnRightOff`.
 * `RightFixed`: E1(c) with the rounds' equal shares, the part of (I8) that is the TS model's accounting rather than the
   proof service's.
-* `UnitFixed`: E1(c) per unit, which doesn't read the draw: the good units' words are fixed, a unit being good when it
-  and the units that write it values after its coin are held and right. A sampled window's proofs vouch for the drawn
-  units only, so `RightFixed`, which asks for every committed value right, says nothing there.
+* `UnitFixed`: E1(c) per unit, which doesn't read the draw: the good units' words are fixed, a unit being good when
+  the run computed it and the units that write it values after its coin (not skipped and guessed), and the words of
+  every unit not skipped whole are folded (its fold clause). A sampled window's proofs vouch for the drawn units only,
+  so `RightFixed`, which asks for every committed value right, says nothing there; and a unit's check can pass by luck,
+  so goodness reads the run's modes, not rightness.
 * `LinSteer`: SAMPLING's LIN-STEER, for the compiler's closure.
 
 The joint-luck premise JL is not used: D-ideal keeps the proved `ε_jl`.
@@ -133,20 +135,31 @@ def RightFixed {Ω : Type} [Fintype Ω] {S nπ : ℕ} {V : Type} (P : Play Ω S 
   ∀ x, P.accepts x → pf.right (pf.committed x) → (1 - P.game.deficiency x / S) * Nw ≤ (P.run x).fixed
 
 open Classical in
-/-- `accounting-ts-unit-fixed` (Lemma E1(c) per unit, proved on paper; the rounds' equal shares). **The good units'
-words are fixed**: for a layer whose positions' writers read them (`DrawnLayer.WriterReads`) and whose cuts are no later
-than the protocol's commitments, on every accepted path, the run's owned right fixed words per unit are at least the
-words `wt w j` of the good units over `S`. Unit `j` of round `w` is good (`DrawnLayer.Good`, decision 119) when it and
-every unit that writes it a value after the coin its noise reads (`DrawnLayer.Late`, transitively; under decision 107,
-the K-chunks before it in its running sum) are held and right at their committed values. Values committed before a
-unit's coin are fixed when its noise is drawn, and a late value from a right unit is the honest function of fixed ones,
-so no word of a good unit is adaptive (E1(c): an adaptive word lies below a committed value wrong for its own
-derivation). It reads neither the draw nor the proofs: which units are good is a function of the committed values, and
-the proofs only vouch for the drawn ones (`Accounting.Guarantees.TS.DrawnRightOff`). With `Σ wt = S·N_w` and the share
-covering every unit that isn't good (`DrawnLayer.Covers`), it gives `(1 − Σ_w d_w / S)·N_w`. It stays an assumption
-until the play's fixed words are defined from the committed values (the adaptive model). -/
-def UnitFixed {C B : Type} [Fintype C] [Fintype B] {S m s : ℕ} {J Q Pos V : Type} [Fintype J] [Nonempty V]
-    (P : Play (Paths C m × B) S K T L U) (pf : DrawnLayer C B S m s J Q Pos V) (wt : Fin S → J → ℝ) : Prop :=
-  pf.WriterReads → ∀ x, P.accepts x → (∑ w, ∑ j, if pf.Good x w j then wt w j else 0) / S ≤ (P.run x).fixed
+/-- `accounting-ts-unit-fixed` (Lemma E1(c) per unit with its fold clause, proved on paper; the rounds' equal shares).
+**The good units' words are fixed, and a unit not skipped whole has its words folded**: for a layer whose positions'
+writers read them (`DrawnLayer.WriterReads`) and whose cuts are no later than the protocol's commitments, under the
+run's modes `mode` (a unit is paid only if the run computed it, from the operands it committed, under its noise), on
+every accepted path:
+* the run's owned right fixed words per unit are at least the words `wt w j` of the good units over `S`. Unit `j` of
+  round `w` is good (`DrawnLayer.Good`, decision 119) when the run computed it and every unit that writes it a value
+  after the coin its noise reads (`DrawnLayer.Late`, transitively; under decision 107, the K-chunks before it in its
+  running sum), none of them skipped and guessed. Values committed before a unit's coin are fixed when its noise is
+  drawn, and a late value from a computed unit is the honest function of values fixed before it, so a good unit's
+  words are its own and none is adaptive (E1(c): an adaptive word lies below a committed value wrong for its own
+  derivation). A skipped unit whose check passes by luck (`PouwWarpCheck_v2` compares its receipt's checkpoints, not
+  its words) isn't credited: its words are guesses, and the luck term pays for it;
+* the fold clause: the run's folded words `folded x` per unit are at least the words of the units not skipped whole
+  over `S`: a paid unit folds its words, a folded unit its committed ones, and only a whole unit skips its fold.
+
+It reads neither the draw nor the proofs: the modes are the run's, and the proofs only vouch for the drawn units
+(`Accounting.Guarantees.TS.DrawnRightOff`). With `Σ wt = S·N_w` and the share covering every unit that isn't good
+(`DrawnLayer.Covers`), it gives `(1 − Σ_w d_w / S)·N_w` fixed words. It stays an assumption until the play's fixed and
+folded words are defined from the committed values (the adaptive model). -/
+def UnitFixed {C B : Type} {S m s : ℕ} {J Q Pos V : Type} [Fintype J] (P : Play (Paths C m × B) S K T L U)
+    (pf : DrawnLayer C B S m s J Q Pos V) (mode : Paths (Paths C m × B) S → Fin S × J → Mode)
+    (wt : Fin S → J → ℝ) (folded : Paths (Paths C m × B) S → ℝ) : Prop :=
+  pf.WriterReads → ∀ x, P.accepts x →
+    (∑ w, ∑ j, if pf.Good mode x w j then wt w j else 0) / S ≤ (P.run x).fixed ∧
+      (∑ w, ∑ j, if mode x (w, j) = .whole then 0 else wt w j) / S ≤ folded x
 
 end Accounting.Assumptions.TS

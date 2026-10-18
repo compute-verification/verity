@@ -4,7 +4,8 @@ import Definitions.Accounting.TS.ProofLayer
 # A sampled window's proofs: what (I8) reads of its drawn units (trusted)
 
 `ProofLayer`'s counterpart for 𝒫_samp (note:20261018T0449Z-draft-i8-sampled, restated after
-note:20261018T0728Z-draft-rt-i8, decisions 114 and 119). A round's coins are `Paths C m × B`: on `Paths C m` the `m` coins
+note:20261018T0728Z-draft-rt-i8, decisions 114 and 119, and after RT-COMPOSE r2's R2-B1,
+note:20261018T1200Z-draft-rt-compose-r2). A round's coins are `Paths C m × B`: on `Paths C m` the `m` coins
 released before the draws, in order (the round's σ, or a window's call sites' coins, each after the values it follows
 are committed), and on `B` the live draw coin, which names `s` units (`DrawnLayer.draw`), with the proofs' coins. Each
 drawn unit is proved alone, with its own noise's generation (decision 105); a unit is one output coordinate, or a
@@ -28,19 +29,26 @@ Proofs exist for drawn units only: round `w`'s proof `i` is drawn unit `drawnAt 
 * `DrawnLayer`: the draw; each unit's slots' positions and noise coin, each position's cut and writer; per path, round
   and draw, whether the drawn unit's proof was accepted and the values it opened its slots to; each unit's relation and
   rightness, on its slots' values and the public coins.
-* `Opens`, `committed`, `Held`, `view`: a path's accepted openings of a position; its committed value; whether some
-  continuation from its cut opens it to that value alone; a unit's committed slots.
+* `Opens`, `committed`, `view`: a path's accepted openings of a position; its committed value; a unit's committed
+  slots.
 * `Moved`, `MovedIn`, `Forked`: binding's failure, per position and per round, and its fork form; `Unsound`,
   `JointSound`: proof soundness, jointly over a round's draws; `Pins`: each unit's relation pins its rightness.
 * `WriterReads`: a position's writer has it among its slots, checked for each layer.
-* `HeldRight`, `Late`, `Good`, `coneWt`: a unit held and right at its committed values; a unit writes a position
-  another reads, committed after the coin the reader's noise reads (decision 119); a unit whose late cone (itself
-  included) is held and right; a unit's late cone's weight, which the share charges a skipped unit.
+* `Mode`: a unit's mode in the run: paid (computed), folded (skipped, its committed words folded) or whole (skipped
+  with its fold).
+* `Late`, `Good`, `coneWt`: a unit writes a position another reads, committed after the coin the reader's noise reads
+  (decision 119); a unit whose late cone (itself included) the run paid for, under the run's modes; a unit's late
+  cone's weight, which the share charges a skipped unit.
 * `Of`: the play's tie to its drawn units' proofs; `Covers`: the ideal game's share counts every unit that isn't good,
   a property of the share's definition, proved for each game.
 
-A layer's `cut` must be no later than the protocol's real commitment of each position: a later cut binds less, and
-`UnitFixed` (E1(c) per unit) is claimed only at faithful cuts. That is protocol structure, outside this vocabulary.
+`Good` reads the run's modes, not rightness: a unit's check can pin less than its words (`PouwWarpCheck_v2` compares
+its receipt's checkpoints), so a skipped unit whose receipt is lucky is right and its words still wrong.
+
+Two conditions are protocol structure, outside this vocabulary, and `UnitFixed` (E1(c) per unit) is claimed only where
+they hold: a layer's `cut` is no later than the protocol's real commitment of each position (a later cut binds less),
+and the modes are the run's (a unit is paid only if the run computed it, from the values it committed, under its
+noise).
 -/
 
 namespace Accounting.TS
@@ -79,6 +87,15 @@ noncomputable def plural [Fintype X] [Nonempty V] (sp : X → X → X) (opens : 
   Classical.epsilon fun v => ∀ u, tally sp opens x u ≤ tally sp opens x v
 
 end Plurality
+
+/-- A unit's mode in a cheater's run: paid (the run computed it: its outputs are its own, from the operands it
+committed, under its noise); folded (skipped and its words guessed, its committed words folded into the receipts); or
+whole (skipped with its fold). -/
+inductive Mode
+  | paid
+  | folded
+  | whole
+  deriving DecidableEq
 
 /-- **A sampled window's proofs** over `S` rounds of coins on `Paths C m × B`, `s` draws a round of units `J`, each
 unit reading its slots `Q`'s positions `Pos`, each position's value in `V`:
@@ -125,11 +142,6 @@ most continuations of `x` from `ℓ`'s cut. -/
 noncomputable def committed [Fintype C] [Fintype B] [Nonempty V] (x : Paths (Paths C m × B) S) (ℓ : Pos) : V :=
   plural (pf.cont ℓ) (fun y v => pf.Opens y ℓ v) x
 
-/-- **Position `ℓ` is held at its committed value**: some continuation of `x` from `ℓ`'s cut opens it to that value
-alone. -/
-def Held [Fintype C] [Fintype B] [Nonempty V] (x : Paths (Paths C m × B) S) (ℓ : Pos) : Prop :=
-  ∃ z, Alone (fun y v => pf.Opens y ℓ v) (pf.cont ℓ x z) (pf.committed x ℓ)
-
 /-- Unit `j` of round `w`'s slots at their committed values. -/
 noncomputable def view [Fintype C] [Fintype B] [Nonempty V] (x : Paths (Paths C m × B) S) (w : Fin S) (j : J) :
     Q → V :=
@@ -171,11 +183,6 @@ def Pins : Prop := ∀ x w j v, pf.rel x w j v → pf.right x w j v
 rightness speaks of it. Protocol structure, checked for each layer. -/
 def WriterReads : Prop := ∀ ℓ u, pf.src ℓ = some u → ∃ k, pf.pos u.1 u.2 k = ℓ
 
-/-- Unit `u` of round `u.1` is held and right on `x`: its slots are held at their committed values, and it is right at
-them. -/
-def HeldRight [Fintype C] [Fintype B] [Nonempty V] (x : Paths (Paths C m × B) S) (u : Fin S × J) : Prop :=
-  (∀ k, pf.Held x (pf.pos u.1 u.2 k)) ∧ pf.right x u.1 u.2 (pf.view x u.1 u.2)
-
 /-- **Unit `u` writes, after `v`'s coin, a position that unit `v` reads**: the position's cut is after the coin `v`'s
 noise reads, so its value can be chosen after that coin (under decision 107, a K-chunk's running sum). A position
 committed before `v`'s coin is fixed when `v`'s noise is drawn, whether its writer is right or not, so it is no edge. -/
@@ -184,15 +191,17 @@ def Late (u v : Fin S × J) : Prop :=
     (v.1 < (pf.cut (pf.pos v.1 v.2 k)).1 ∨
       v.1 = (pf.cut (pf.pos v.1 v.2 k)).1 ∧ (pf.coin v.1 v.2).castSucc < (pf.cut (pf.pos v.1 v.2 k)).2)
 
-/-- **Unit `j` of round `w` is good on `x`**: every unit of its late cone (itself, and every unit that writes it a value
-after its coin, transitively) is held and right. -/
-def Good [Fintype C] [Fintype B] [Nonempty V] (x : Paths (Paths C m × B) S) (w : Fin S) (j : J) : Prop :=
-  ∀ u : Fin S × J, Relation.ReflTransGen pf.Late u (w, j) → pf.HeldRight x u
+/-- **Unit `j` of round `w` is good on `x`** under the run's modes `mode`: the run paid for every unit of its late cone
+(itself, and every unit that writes it a value after its coin, transitively). A skipped unit isn't good even when its
+check passes by luck. -/
+def Good (mode : Paths (Paths C m × B) S → Fin S × J → Mode) (x : Paths (Paths C m × B) S) (w : Fin S) (j : J) :
+    Prop :=
+  ∀ u : Fin S × J, Relation.ReflTransGen pf.Late u (w, j) → mode x u = .paid
 
 open Classical in
 /-- **Unit `u`'s late cone's weight**: the weights `wt` of every unit `u` reaches along `Late`, itself included. A share
-that charges each skipped unit this covers every unit that isn't good when every unit it doesn't charge is held and
-right; for whole-coordinate units there are no late edges and it is `wt u`. -/
+that charges each skipped unit this covers every unit that isn't good; for whole-coordinate units there are no late
+edges and it is `wt u`. -/
 noncomputable def coneWt [Fintype J] (wt : Fin S → J → ℝ) (u : Fin S × J) : ℝ :=
   ∑ v : Fin S × J, if Relation.ReflTransGen pf.Late u v then wt v.1 v.2 else 0
 
@@ -205,12 +214,12 @@ def Of [Fintype C] [Fintype B] [Nonempty V] {K T L U : Type} (P : Play (Paths C 
 
 open Classical in
 /-- **The share covers every unit that isn't good**: on an accepted path, the weight `wt w j` (unit `j`'s words in round
-`w`) of the units that aren't good is at most the ideal game's deficiency times `N_w`. A property of the share's
-definition, proved for each game, not assumed: a share that charges each unit that isn't held and right its `coneWt`
-covers (`Accounting.SecurityProofs.TS.DrawnLayer.covers_of_cone`). -/
-def Covers [Fintype C] [Fintype B] [Nonempty V] [Fintype J] {K T L U : Type} (P : Play (Paths C m × B) S K T L U)
-    (wt : Fin S → J → ℝ) (Nw : ℝ) : Prop :=
-  ∀ x, P.accepts x → (∑ w, ∑ j, if pf.Good x w j then 0 else wt w j) ≤ P.game.deficiency x * Nw
+`w`) of the units that aren't good under the run's modes is at most the ideal game's deficiency times `N_w`. A property
+of the share's definition, proved for each game, not assumed: a share that charges each unit the run didn't pay for its
+`coneWt` covers (`Accounting.SecurityProofs.TS.DrawnLayer.covers_of_cone`). -/
+def Covers [Fintype J] {K T L U : Type} (P : Play (Paths C m × B) S K T L U)
+    (mode : Paths (Paths C m × B) S → Fin S × J → Mode) (wt : Fin S → J → ℝ) (Nw : ℝ) : Prop :=
+  ∀ x, P.accepts x → (∑ w, ∑ j, if pf.Good mode x w j then 0 else wt w j) ≤ P.game.deficiency x * Nw
 
 end DrawnLayer
 
