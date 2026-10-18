@@ -5033,6 +5033,30 @@
    "signature": ["Pouw.SecurityProofs.WorkWeightedSampling : Pouw.Guarantees.WorkWeightedSampling"],
    "assumptions": [],
    "type_hash": "2f6552a7668b089031af583e72b5e551727622dd8c12b1269790c9ad397ed88b"
+  },
+  "Accounting.SecurityProofs.Gates.F32ToS8RziRange": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.Gates.Int8ClampRange": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.Gates.LutIndexRange": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.Gates.Exp2Lut127Range": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.Gates.S32LowByteRange": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.Gates.DeclaredWindow": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.Gates.Int8LinearWindow": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.Gates.LutPvWindow": {
+   "owner": "@memory-accounting"
   }
  },
  "shape": {
@@ -5193,6 +5217,26 @@
    },
    "Accounting.SecurityProofs.Gates.LutSoftmaxRange": {
     "function": "Accounting.Gates.lutSoftmax",
+    "outcome": "none"
+   },
+   "Accounting.SecurityProofs.Gates.F32ToS8RziRange": {
+    "function": "Accounting.Gates.f32ToS8Rzi",
+    "outcome": "none"
+   },
+   "Accounting.SecurityProofs.Gates.Int8ClampRange": {
+    "function": "Accounting.Gates.int8Clamp",
+    "outcome": "none"
+   },
+   "Accounting.SecurityProofs.Gates.LutIndexRange": {
+    "function": "Accounting.Gates.lutIndex",
+    "outcome": "none"
+   },
+   "Accounting.SecurityProofs.Gates.Exp2Lut127Range": {
+    "function": "Accounting.Gates.exp2Lut127",
+    "outcome": "none"
+   },
+   "Accounting.SecurityProofs.Gates.S32LowByteRange": {
+    "function": "Accounting.Gates.s32LowByte",
     "outcome": "none"
    }
   },
@@ -5699,7 +5743,10 @@
    "Accounting.SecurityProofs.Gates.RhoPairs": "frozen (no-function): A fact about the gate model's codec square root (Accounting.Gates.rho) at every prime p ≡ 3 mod 4, not a property of the codec's code: remote_bandwidth's codec has no Lean port.",
    "Accounting.SecurityProofs.Gates.SquaringCarryNibbles": "frozen (no-function): The carry bound over every circuit of the gate model that squares on the nibble family (Accounting.Gates.nibbles), a counting bound from Fooling at j = 4, not a property of a Lean function.",
    "Accounting.SecurityProofs.Gates.UnitsFooling": "frozen (no-function): A counting bound in budgeted units over every circuit of the gate model (Security/Definitions/Accounting/Gates/Model.lean) and every set of inputs, not a property of a Lean function: the property's census check has no Lean code yet.",
-   "Accounting.SecurityProofs.Gates.SquaringUnits": "frozen (no-function): The units bound over every circuit of the gate model that squares on the nibble family (Accounting.Gates.nibbles), a counting bound from UnitsFooling, not a property of a Lean function."
+   "Accounting.SecurityProofs.Gates.SquaringUnits": "frozen (no-function): The units bound over every circuit of the gate model that squares on the nibble family (Accounting.Gates.nibbles), a counting bound from UnitsFooling, not a property of a Lean function.",
+   "Accounting.SecurityProofs.Gates.DeclaredWindow": "frozen (no-function): The soundness of the gate model's interval analysis over every circuit whose declared bounds are earned (Accounting.Gates.Declared: an input at its type, a budgeted gate at an interval its evaluator keeps) and every input that holds words of its inputs' types (Accounting.Gates.Typed), not a property of a Lean function: ProvenWindow with its hypothesis on run inputs' values discharged.",
+   "Accounting.SecurityProofs.Gates.Int8LinearWindow": "frozen (no-function): The window of the gate model's circuit Accounting.Gates.int8Linear (vLLM's served int8 linear: its row quantizer into a satfinite s8·s8 IMMA chain) at every K = 32·S ≤ 131,040, not a property of the served code: vLLM's int8 Definitions (int8_exact.py) have no Lean port.",
+   "Accounting.SecurityProofs.Gates.LutPvWindow": "frozen (no-function): The window of the gate model's circuit Accounting.Gates.lutPv (vLLM's served LUT attention's P·V: LUT index, table gather and low byte into a satfinite s8·s8 IMMA chain) at every 32·S ≤ 132,096 and table of values in [0, 127], not a property of the served code: vLLM's int8 Definitions (int8_exact.py) have no Lean port."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {

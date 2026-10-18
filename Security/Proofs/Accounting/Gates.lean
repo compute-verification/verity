@@ -2004,8 +2004,16 @@ lemma fminf_top (u : ℤ) (hn : f32NaN u = false) (hu : S32 u) (hk : -0x42FE0000
   · exact ⟨hn, hu, hk, by omega⟩
   · exact ⟨tn, ts, by omega, by omega⟩
 
+lemma wrapS32_mem (z : ℤ) : Iv.Mem (s32Min, s32Max) (wrapS32 z) := by
+  unfold wrapS32 Iv.Mem s32Min s32Max
+  have h1 := Int.emod_nonneg (z - -2 ^ 31) (by norm_num : (2 : ℤ) ^ 32 ≠ 0)
+  have h2 := Int.emod_lt_of_pos (z - -2 ^ 31) (by norm_num : (0 : ℤ) < 2 ^ 32)
+  constructor <;> dsimp only <;> omega
+
 theorem Int8ClampRange : Accounting.Guarantees.Gates.Int8ClampRange := by
-  intro r hr
+  intro z
+  have hr : S32 (wrapS32 z) := wrapS32_mem z
+  generalize wrapS32 z = r at hr ⊢
   obtain ⟨un, us, uk⟩ := fmaxf_negTop r hr
   obtain ⟨vn, vs, vk1, vk2⟩ := fminf_top _ un us uk
   unfold int8Clamp f32ToS8Rzi
@@ -2031,14 +2039,19 @@ theorem LutIndexRange : Accounting.Guarantees.Gates.LutIndexRange := by
   refine ⟨le_min (Int.ediv_nonneg (mul_nonneg (le_max_right d 0) (Int.emod_nonneg _ (by norm_num))) (by norm_num))
     (by norm_num), min_le_right _ _⟩
 
-theorem Exp2Lut127Range : Accounting.Guarantees.Gates.Exp2Lut127Range := by
-  unfold Accounting.Guarantees.Gates.Exp2Lut127Range
+lemma exp2Lut127_mem : ∀ t ∈ exp2Lut127, 0 ≤ t ∧ t ≤ 127 := by
   decide +kernel
 
+theorem Exp2Lut127Range : Accounting.Guarantees.Gates.Exp2Lut127Range := by
+  refine ⟨by decide +kernel, fun t => ?_⟩
+  rcases Nat.lt_or_ge t exp2Lut127.length with h | h
+  · rw [List.getD_eq_getElem _ _ h]; exact exp2Lut127_mem _ (List.getElem_mem h)
+  · rw [List.getD_eq_default _ _ h]; exact ⟨le_rfl, by norm_num⟩
+
 theorem S32LowByteRange : Accounting.Guarantees.Gates.S32LowByteRange := by
-  intro z
-  unfold s32LowByte
-  exact ⟨⟨by dsimp only; omega, by dsimp only; omega⟩, fun h1 h2 => by omega⟩
+  refine ⟨fun z => ?_, fun t => ?_⟩ <;> unfold s32LowByte
+  · exact ⟨by dsimp only; omega, by dsimp only; omega⟩
+  · have := t.isLt; omega
 
 /-! ## Declared bounds, earned -/
 
@@ -2343,12 +2356,6 @@ lemma dotChain_ok (pre : Dag ι) (fa fb : Int8Fmt) (sat : Bool) (prim : String) 
     have hg : C[pre.length + 1 + s] = _ := dotChain_step pre fa fb sat prim S a b s hi
     refine ⟨fun b s hop => ?_, fun cls f hop => ?_⟩ <;> rw [hg] at hop <;> simp at hop
 
-lemma wrapS32_mem (z : ℤ) : Iv.Mem (s32Min, s32Max) (wrapS32 z) := by
-  unfold wrapS32 Iv.Mem s32Min s32Max
-  have h1 := Int.emod_nonneg (z - -2 ^ 31) (by norm_num : (2 : ℤ) ^ 32 ≠ 0)
-  have h2 := Int.emod_lt_of_pos (z - -2 ^ 31) (by norm_num : (0 : ℤ) < 2 ^ 32)
-  constructor <;> dsimp only <;> omega
-
 theorem Int8LinearWindow : Accounting.Guarantees.Gates.Int8LinearWindow := by
   intro S fs fr hS
   suffices hPD : Proven (int8Linear S fs fr) ∧ Declared (int8Linear S fs fr) from
@@ -2441,7 +2448,9 @@ lemma pvPre_decl (S n : ℕ) (T : List ℤ) (pre : Dag ℕ) (hlen : pre.length =
     have z0 : 0 ≤ vs.getD (i - n) 0 := le_trans hw.1 hm.1
     have z1 : vs.getD (i - n) 0 ≤ 127 := le_trans hm.2 hw.2
     simp only [plainGate, List.map_cons, List.map_nil, List.headD_cons]
-    rw [(S32LowByteRange _).2 z0 z1]
+    obtain ⟨t, ht⟩ : ∃ t : ℕ, (t : ℤ) = vs.getD (i - n) 0 := ⟨(vs.getD (i - n) 0).toNat, by omega⟩
+    rw [← ht, S32LowByteRange.2 ⟨t, by omega⟩]
+    rw [← ht] at z0 z1
     exact ⟨z0, z1⟩
   rw [hget]
   generalize hgi : pvGate S n T i = g

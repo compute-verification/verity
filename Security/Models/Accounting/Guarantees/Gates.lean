@@ -258,25 +258,25 @@ def F32ToS8RziRange : Prop :=
   ∀ a, Iv.Mem (-128, 127) (f32ToS8Rzi a)
 
 /-- **The int8 quantizer's clamp.** `Int8QuantElement`'s `s8(clamp(r, −127, 127))` (`F32Fmaxf` against `−127.0`,
-`F32Fminf` against `127.0`, `F32ToS8Rzi`) of any s32 reading `r`, a NaN included, lies in `[−127, 127]`: the s8
-family's static `A = (−127, 127)`. The interval analysis over s32 readings can't carry it from the clamp to the cast
-(a float in `[−127.0, 127.0]` reads as two s32 intervals), so a gate-by-gate window takes the cast's type,
-`[−128, 127]`, as property/v1 does. -/
+`F32Fminf` against `127.0`, `F32ToS8Rzi`) of any s32 reading (`wrapS32 z`, which is every s32 word for some `z`), a
+NaN included, lies in `[−127, 127]`: the s8 family's static `A = (−127, 127)`. The interval analysis over s32
+readings can't carry it from the clamp to the cast (a float in `[−127.0, 127.0]` reads as two s32 intervals), so a
+gate-by-gate window takes the cast's type, `[−128, 127]`, as property/v1 does. -/
 def Int8ClampRange : Prop :=
-  ∀ r, S32 r → Iv.Mem (-127, 127) (int8Clamp r)
+  ∀ z, Iv.Mem (-127, 127) (int8Clamp (wrapS32 z))
 
 /-- **`LutIndex`'s interval.** `[0, 255]`, whatever its operands. -/
 def LutIndexRange : Prop :=
   ∀ d a, Iv.Mem (0, 255) (lutIndex d a)
 
-/-- **`Exp2Lut127`'s table.** 256 entries, each in `[0, 127]`. -/
+/-- **`Exp2Lut127`'s table.** 256 entries, and a read at any index lies in `[0, 127]` (past the table, 0). -/
 def Exp2Lut127Range : Prop :=
-  exp2Lut127.length = 256 ∧ ∀ t ∈ exp2Lut127, 0 ≤ t ∧ t ≤ 127
+  exp2Lut127.length = 256 ∧ ∀ t : ℕ, Iv.Mem (0, 127) (exp2Lut127.getD t 0)
 
 /-- **`S32LowByte`'s interval.** `[−128, 127]`, its type; and a word in `[0, 127]` is its own low byte, so P's codes
 keep the LUT's `[0, 127]`. -/
 def S32LowByteRange : Prop :=
-  ∀ z, Iv.Mem (-128, 127) (s32LowByte z) ∧ (0 ≤ z → z ≤ 127 → s32LowByte z = z)
+  (∀ z, Iv.Mem (-128, 127) (s32LowByte z)) ∧ ∀ t : Fin 128, s32LowByte (t.val : ℤ) = t.val
 
 /-! ## Declared bounds, earned
 
