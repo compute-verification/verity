@@ -88,7 +88,7 @@ class TickingBackend(prover.CpuBackend):
 
 def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sessions: int = 1, checks=None,
         read_bytes_per_s: float = 1e20, tiers: dict | None = None, lifetime: int = audit.LIFETIME,
-        registry: audit.Registry | None = None, layout: list | None = None, **kv):
+        registry: audit.Registry | None = None, layout: list | None = None, host_bytes: int = 0, **kv):
     clock = PassClock()
     a, b = socket.socketpair()
     vconn, pconn = wire.Conn(a, clock=clock.now), wire.Conn(b)
@@ -107,7 +107,7 @@ def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sess
     th.start()
     v = verifier.Verifier(vconn, source=os.urandom(32), windows=windows, window_ns=20, samples=samples,
                           delta=2.0 ** -40, jitter_ns=10 ** 9, clock=clock, log=lambda m: None,
-                          checks=checks, lifetime=lifetime, registry=registry)
+                          checks=checks, lifetime=lifetime, registry=registry, host_bytes=host_bytes)
     v.register()
     allowance = v.allowance(v.ping(4))
     out, not_before = [], None
@@ -311,6 +311,54 @@ def test_the_memory_line_credits_the_labelled_weights_and_kv_only_on_a_verdict(m
 
     bare = verifier.memory(record, plans, None, **kw)
     assert not bare["labels"] and bare["weights_bytes"] == 0 and bare["credited_bytes"] == mem["credited_bytes"]
+
+
+def test_the_node_line_credits_each_kind_against_the_nodes_hbm_and_host_dram(monkeypatch):
+    """With the node's host DRAM given, the memory line is also by kind against HBM and DRAM: a store of 8 weights
+    blocks and 4 of filler in HBM, then 4 of filler in host memory, every pass reading all 16, credits each kind what
+    every pass held less the window's lost blocks, and in all every held block less them once, KV nothing without a
+    verdict; each share is of HBM plus DRAM, the residual what the total leaves, and the line is its worst window's."""
+    monkeypatch.setattr(prover, "OPENINGS_PART", 4)
+    monkeypatch.setattr(timing, "SQUARINGS_PER_S", {"p512": 0.0})
+    seen, memory = {}, verifier.memory
+
+    def keep(*a, **kw):
+        seen["args"] = a, kw
+        return memory(*a, **kw)
+
+    monkeypatch.setattr(verifier, "memory", keep)
+    layout = [{"kind": "weights", "tier": "hbm", "first": 0, "blocks": 8},
+              {"kind": "filler", "tier": "hbm", "first": 8, "blocks": 4},
+              {"kind": "filler", "tier": "host", "first": 12, "blocks": 4}]
+    host = 1843 * 10 ** 9
+    (r,), (p,) = run("honest", samples=4096, layout=layout, host_bytes=host)
+    assert r["accepted"] and p["accepted"]
+    B, node, whole = rcodec.BLOCK_BYTES, r["ledger"]["memory"]["node"], verifier.HBM_BYTES + host
+    assert node["node_bytes"] == whole and node["host_bytes"] == host and node["lost_bytes"] == 0
+    assert node["held"] == {"weights": 8 * B, "filler_hbm": 4 * B, "host": 4 * B}
+    assert node["credited"] == {"weights": 8 * B, "filler_hbm": 4 * B, "host": 4 * B, "kv": 0}
+    assert node["credited_bytes"] == 16 * B and node["residual"] == 1 - 16 * B / whole
+    assert node["share"] == {k: v / whole for k, v in node["credited"].items()}
+
+    (record, plans, regions), kw = seen["args"]
+    span = max(w.span_ns for w in record.windows)
+    rate = record.codec.encode_squarings * 1e9 / span / 2
+    lossy = verifier.memory(record, plans, regions, hbm_bytes=kw["hbm_bytes"], rebuild=audit.Rebuild(record.codec, rate))
+    line = verifier.node_line(lossy, host_bytes=host)
+    worst = max(lossy["windows"], key=lambda x: x["lost_blocks"])
+    lost = worst["lost_blocks"] * B
+    assert line["window"] == worst["window"] and line["lost_bytes"] == lost == pytest.approx(B / 2)
+    assert line["credited"]["weights"] == pytest.approx(8 * B - lost)
+    assert line["credited"]["filler_hbm"] == pytest.approx(4 * B - lost) == line["credited"]["host"]
+    assert line["credited_bytes"] == pytest.approx(16 * B - lost) and line["held"] == node["held"]
+
+
+def test_an_engines_arena_puts_each_weight_at_a_block_boundary_and_refuses_what_does_not_fit():
+    import engine
+
+    assert engine.pack([1, 4096, 4097, 10], 5 * 4096) == [0, 4096, 8192, 16384]
+    with pytest.raises(ValueError, match="more than the arena"):
+        engine.pack([1, 4096, 4097, 10], 5 * 4096 - 1)
 
 
 @pytest.mark.parametrize("layout", [

@@ -19,7 +19,8 @@ One connection serves one registration and then `--sessions` sessions over it, e
    checked as their frames arrive, by `--check-workers` processes (`checks.py`, the driver's own check of an opening,
    verdict as `Session.verify`'s) or by `Session.verify` on a thread of the verifier's, so a window's checks run while
    the next window's passes arrive; once every window is accepted the record (`Session.record`), its γ terms
-   (`audit.ledger`) and the node's HBM it shows held (`memory`: the credited share and the residual, at ε).
+   (`audit.ledger`) and the node's HBM it shows held (`memory`: the credited share and the residual, at ε), and with
+   `--host-bytes` the same by kind against the node's HBM and host DRAM (`node_line`).
 
 A node has one live registration (`audit.Registry`), this process's own or kept across processes in `--registry`: a
 hello for a node with a live registration is answered `bye` with the reason and draws nothing. The process closes its
@@ -177,6 +178,26 @@ def memory(record: audit.Record, plans, regions, *, hbm_bytes: int, rebuild: aud
             "read": {k: sum(x["read"][k] for x in windows) for k in ("weights", "kv")}, "windows": windows}
 
 
+def node_line(mem: dict, *, host_bytes: int) -> dict:
+    """`memory`'s line against the node's whole memory, its HBM and `host_bytes` of host DRAM, by kind: each window's
+    held weights (HBM), the rest of its held HBM (filler) and its held host tier, each less the window's lost blocks
+    (as `memory` takes them off each kind), the KV it credits, and in all its held HBM and host less the lost blocks
+    once, plus that KV. The line is the worst window's by that total: each kind's bytes and share of the node, and the
+    residual, the share it doesn't show used. `held` is the same before the losses, which the line shows beside."""
+    node, b = mem["hbm_bytes"] + host_bytes, mem["block_bytes"]
+    rows = []
+    for x in mem["windows"]:
+        h, lost = x["held"], x["lost_blocks"] * b
+        held = {"weights": h["weights"], "filler_hbm": h["hbm"] - h["weights"], "host": h["host"]}
+        kinds = {k: max(0.0, v - lost) for k, v in held.items()} | {"kv": x["credited"]["kv"]}
+        rows.append((max(0.0, h["hbm"] + h["host"] - lost) + kinds["kv"], kinds, held, x))
+    total, kinds, held, x = min(rows, key=lambda r: r[0])
+    return {"node_bytes": node, "hbm_bytes": mem["hbm_bytes"], "host_bytes": host_bytes, "window": x["window"],
+            "lost_bytes": x["lost_blocks"] * b, "credited_bytes": total, "credited": kinds,
+            "share": {k: v / node for k, v in kinds.items()}, "residual": 1 - total / node, "held": held,
+            "held_share": {k: v / node for k, v in held.items()}, "kv_read_bytes": mem["read"]["kv"]}
+
+
 class RealClock:
     def now(self) -> int:
         return time.monotonic_ns()
@@ -203,9 +224,9 @@ class RealClock:
 class Verifier:
     def __init__(self, conn: wire.Conn, *, source: bytes, windows: int, window_ns: int, samples: int, delta: float,
                  jitter_ns: int, clock=None, log=print, checks=None, lifetime: int = audit.LIFETIME,
-                 registry: audit.Registry | None = None, hbm_bytes: int = HBM_BYTES) -> None:
+                 registry: audit.Registry | None = None, hbm_bytes: int = HBM_BYTES, host_bytes: int = 0) -> None:
         self.conn, self.source, self.W, self.T, self.lifetime = conn, source, windows, window_ns, lifetime
-        self.hbm_bytes, self.regions = hbm_bytes, None
+        self.hbm_bytes, self.host_bytes, self.regions = hbm_bytes, host_bytes, None
         self.checks = checks
         self.registry = audit.Registry() if registry is None else registry
         self.samples, self.delta, self.jitter_ns = samples, delta, jitter_ns
@@ -555,6 +576,8 @@ class Verifier:
                                  "log2": timing.log2(timing.sketch_failure(compressions, record.passes, record.rows))}
         if plans is not None:
             out["memory"] = memory(record, plans, self.regions, hbm_bytes=self.hbm_bytes, rebuild=rebuild)
+            if self.host_bytes:
+                out["memory"]["node"] = node_line(out["memory"], host_bytes=self.host_bytes)
         return out
 
 
@@ -595,6 +618,9 @@ def main() -> int:
                          "live registration there is refused (default: this process's own)")
     ap.add_argument("--hbm-bytes", type=int, default=HBM_BYTES,
                     help="the node's HBM, the memory line's capacity (default: its GPUs' at 96 GiB each)")
+    ap.add_argument("--host-bytes", type=int, default=0,
+                    help="the node's host DRAM: with it the memory line is also by kind against HBM and DRAM "
+                         "(`node_line`)")
     ap.add_argument("--close", metavar="NODE_HEX",
                     help="close the node's live registration in --registry, its sessions counted as they stood, "
                          "and exit")
@@ -621,7 +647,7 @@ def main() -> int:
     v = Verifier(conn, source=os.urandom(32), windows=a.windows, window_ns=round(a.window_ms * 1e6), samples=a.samples,
                  delta=2.0 ** a.delta_log2, jitter_ns=round(a.jitter_ms * 1e6),
                  log=lambda m: print(m, flush=True), checks=checks, lifetime=a.lifetime, registry=registry,
-                 hbm_bytes=a.hbm_bytes)
+                 hbm_bytes=a.hbm_bytes, host_bytes=a.host_bytes)
     c0 = time.process_time_ns()
     try:
         reg, cal = v.register()
@@ -661,8 +687,8 @@ def main() -> int:
             print(f"verifier: session {k}: accepted={r['accepted']} failure={r['failure']} "
                   f"passes={[w['passes'] for w in r['windows_seen']]} gamma={lg.get('gamma')} "
                   f"appended={r['appended']} released={r['released']} post_seed={pub.get('post_seed')} "
-                  f"memory share={mem.get('share')} residual={mem.get('residual')} epsilon={mem.get('epsilon')}",
-                  flush=True)
+                  f"memory share={mem.get('share')} residual={mem.get('residual')} epsilon={mem.get('epsilon')} "
+                  f"node={json.dumps(mem['node']['share']) if 'node' in mem else None}", flush=True)
             record()
     finally:
         save_registry(a.registry, registry)
