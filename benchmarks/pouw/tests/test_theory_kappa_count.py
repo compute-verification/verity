@@ -22,6 +22,7 @@ def test_every_device_classified(tmp_path):
 
 def test_sm120():
     r = kc.count("sm_120")
+    assert not [k for k in r["kinds"] if k.startswith("@")], "a census line's @-list kind reached the table unexpanded"
     assert r["kinds"]["LDG256"]["kappa"] == 520
     assert r["kinds"]["IMADW"]["kappa"] == 130
     assert r["kinds"]["IMMA16832"]["kappa"] is None
