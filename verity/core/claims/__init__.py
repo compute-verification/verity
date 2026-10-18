@@ -275,10 +275,11 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     Entry("accounting-ts-fan-in", "assumption",
           "An instruction merges at most m_k components, Σ(sources − 1) over its nodes, for every SASS form on sm_80, "
           "sm_89, sm_90, sm_100 and sm_120, counted by dependence: every register, uniform-register and predicate "
-          "word it reads, its guard, a constant-bank operand, the memory node, and every word and predicate it writes, "
-          "which a guarded instruction keeps (a lane: ALU 8, a guarded IADD3.X; VIMNMX 10, IMNMX.U64; NOROW 9, P2R; a "
-          "shared load or store 7, a shared atomic 15, a global atomic 18, a texture 20; a warp instruction: SHFL 191, "
-          "IMMA.16832 480)", "TS fan-in", "measured"),
+          "word it reads, its guard, a constant bank, the memory node, and every word and predicate it writes, which a "
+          "guarded instruction keeps (a lane: ALU 9, a guarded IADD3.X with a cx[UR] operand on sm_80–sm_90, 8 on "
+          "sm_100 and sm_120; VIMNMX 10, IMNMX.U64; NOROW 10, P2R; a shared load or store 7, a global store 13, a "
+          "shared atomic 15, a global atomic 18, a texture 20; a warp instruction: SHFL 191, IMMA.16832 480, sm_100's "
+          "LDTM.32x32b.x128 4098)", "TS fan-in", "measured"),
     Entry("accounting-ts-luck", "assumption",
           "(L) at p with freshness (F1)–(F2): given the past, a round with a deficient block passes with probability at "
           "most p", "TS luck at p", "proven"),
