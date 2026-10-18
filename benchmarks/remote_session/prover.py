@@ -273,8 +273,10 @@ class ServingTrace:
     `pages` blocks of fresh payloads round-robin over a pool of slots: the store's last `pool` registered blocks (a KV
     pool's pages, registered as filler) and `pool // 4` slots of memory outside the store.  Every third step first frees
     the `pages // 2` slots after its last write, so a later write lands in a slot holding nothing; or, with `headroom`
-    h, every step frees the slots the step h steps on writes, so each write lands in a slot freed h steps before (an
-    allocator that keeps h steps of frees before it reuses one).  A block written in window a is stale from window
+    h, every step frees the slots the step h steps on writes, and the first also those the h - 1 steps after it
+    write, so each write after the first step's lands in a slot freed h steps before or at the first step (an allocator
+    that keeps h steps of frees before it reuses one, the pool's filler among them, so only the first step overwrites
+    a block in place).  A block written in window a is stale from window
     a + `lifetime` (`audit.Params.lifetime`), and the step before a pass of a window that would hold a stale block
     re-keys it: writes its payload again in its slot, at the store's next fresh index.  `memory_map.Replay` turns each
     step into the audit's append, which the backend's store commits and, once the verifier's coin for it arrives,
@@ -325,7 +327,8 @@ class ServingTrace:
         n, P = len(self.slots), self.pages
         if self.headroom:
             write = [self.slots[(self.cursor + u) % n] for u in range(P)]
-            freed = [x for x in (self.slots[(self.cursor + self.headroom * P + u) % n] for u in range(P))
+            upcoming = range(P if self.served == 0 else self.headroom * P, (self.headroom + 1) * P)
+            freed = [x for x in (self.slots[(self.cursor + u) % n] for u in upcoming)
                      if x in self.full and x not in write]
             self.cursor = (self.cursor + P) % n
         else:

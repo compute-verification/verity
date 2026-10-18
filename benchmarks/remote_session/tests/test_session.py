@@ -375,14 +375,14 @@ def test_a_pipelined_session_with_serving_up_to_k_steps_past_its_passes_is_accep
     before, each pass covers the newest step serving has handed and reads every block in its slot, and pages stale
     under L = 1 are re-keyed at each window's first pass: the session is accepted, no pass read a block serving had
     overwritten, serving ran more steps than there were passes, every pass read with serving at most k steps past its
-    own and some at exactly k, and the fence held only the first k + 1 steps, whose writes overwrite the pool's filler
-    in place and wait on their own step's pass."""
+    own and some at exactly k, and the fence held serving once: at the first step, whose write overwrites the pool's
+    filler in place and waits on its own step's pass (the filler the next k + 1 steps write is freed there)."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
     (r,), (p,) = run("kv:1", windows=2, samples=16, kv_every=1, kv_pool=8, lifetime=1, ahead=k, fill=True,
                      kv_headroom=k + 1)
     assert r["accepted"] and p["accepted"] and r["failure"] is None and p["misread"] == []
     a, kv = p["ahead"], p["kv"]
-    assert all(0 <= lead <= k for lead in a["leads"]) and max(a["leads"]) == k and a["fence_waits"] == k + 1
+    assert all(0 <= lead <= k for lead in a["leads"]) and max(a["leads"]) == k and a["fence_waits"] == 1
     assert len(a["leads"]) == sum(p["passes"]) + p["discarded"] < a["steps"]
     assert kv["rekeyed"] > 0 and kv["appended"] == kv["steps"] + kv["rekeyed"]
     assert r["appended"] == kv["sent_appended"] > 0 and r["released"] == kv["sent_released"] > 0
