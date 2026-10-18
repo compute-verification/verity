@@ -2,12 +2,14 @@
 certifier's proxy on its uplink, and the client on the outside host, with the lab's Program (`lab.Lab`) on every link;
 then the certifier's audit, N3 (`lab.check`) and the answers.
 
-    python -m workload.lab_run run --out DIR [--layers 4 --blocks 4] [--tamper b1:flip-bit --expect refused] [--local]
+    python -m workload.lab_run run --out DIR [--layers 4] [--tamper b1:flip-bit --expect refused] [--local]
 
-Run it from `benchmarks/network_sim/`, or with it on `PYTHONPATH`, in a Python with torch. It needs mockdc's lab up in the
-shape it is given (`mockdc.py up`; by default mockdc's own, `--lab-blocks 4 --leaves 2 --spines 1`) and idle: a lab whose
-namespaces run any process is refused, since `mockdc.py down`, or another run, would kill or collide with this one.
-`--local` runs the same processes on loopback addresses instead, with no namespaces and no sudo.
+Run it from `benchmarks/network_sim/`, or with it on `PYTHONPATH`, in a Python with torch. The workload is placed on the
+lab's declaration as `mockdc.lab` builds it, at the certifiers' cadence (`hardware`): its blocks are the units, their
+GPUs compute and the outside host is the client. It needs mockdc's lab up in that shape (`mockdc.py up`; by default mockdc's own,
+`--blocks 4 --leaves 2 --spines 1`) and idle: a lab whose namespaces run any process is refused, since `mockdc.py down`,
+or another run, would kill or collide with this one. `--local` runs the same processes on loopback addresses instead,
+with no namespaces and no sudo.
 
 **Processes.** Each starts as `mockdc.Process` starts one (in its namespace, as the invoking user), prints one line when it
 is ready and reads the origin from its stdin; all are timed from that origin on the host's monotonic clock.
@@ -53,6 +55,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import contextlib
+import dataclasses
 import gzip
 import hashlib
 import json
@@ -70,6 +73,7 @@ import mockdc  # puts network_traces, datacenter and the repository root on sys.
 import active_replay as ar
 import graph
 import records
+from datacenter import Cadence
 from verity.core.protocols.certifier import calibration
 from verity.core.protocols.certifier.active import HEADER, PAD, decode_frame
 from verity.core.protocols.certifier.audit import Audit
@@ -80,7 +84,7 @@ from . import lab as L
 from . import model as M
 from . import values as V
 from .block import Context
-from .hardware import OUTSIDE
+from .hardware import OUTSIDE, Hardware
 from .run import statement
 
 BUCKET_MS, WINDOW_BUCKETS, FRAME_BYTES, QUEUE = 100, 60, 4096, 1 << 16
@@ -443,17 +447,24 @@ class Place:
     link: str
 
 
-def lab_places(args, blocks: list[str]) -> tuple[dict[str, Place], str]:
+def hardware(dc) -> Hardware:
+    """The workload's hardware: the lab's declaration at the certifiers' cadence (`records.cadence`'s bucket of
+    `BUCKET_MS` ticks of `records.TICK_MS`), so that an engine step is one of their buckets."""
+    cadence = Cadence(frame_bits=8 * FRAME_BYTES, bucket_ticks=BUCKET_MS // records.TICK_MS, buckets=WINDOW_BUCKETS)
+    return Hardware.from_datacenter(dataclasses.replace(dc, cadence=cadence))
+
+
+def shape_of(args) -> argparse.Namespace:
+    """The lab's shape in `mockdc.py`'s options."""
+    return argparse.Namespace(declaration=args.declaration, blocks=args.blocks, leaves=args.leaves, spines=args.spines,
+                              fabric_latency_us=args.fabric_latency_us, fabric_jitter_us=args.fabric_jitter_us)
+
+
+def lab_places(shape: argparse.Namespace, dc, blocks: list[str]) -> tuple[dict[str, Place], str]:
     """Each block's place in mockdc's lab, and the outside host's namespace, once the lab is up in its shape and idle."""
-    shape = argparse.Namespace(declaration=args.declaration, blocks=args.lab_blocks, leaves=args.leaves,
-                               spines=args.spines, fabric_latency_us=args.fabric_latency_us,
-                               fabric_jitter_us=args.fabric_jitter_us)
-    dc = mockdc.lab(shape)
     plan = mockdc.plan_of(shape, dc)
     if diff := mockdc.differences(plan):
         raise SystemExit(f"{'; '.join(diff)}: {mockdc.RESHAPE}")
-    if missing := sorted(set(blocks) - {b.name for b in dc.blocks}):
-        raise SystemExit(f"the lab has no block {missing}: bring it up with as many blocks as the workload's")
     if busy := {ns: pids for ns in mockdc.namespaces() if (pids := mockdc.sudo(["ip", "netns", "pids", ns]).stdout.split())}:
         raise SystemExit(f"the lab is busy, processes {busy} run in its namespaces: wait until its run ends")
     places = {}
@@ -485,10 +496,10 @@ def spec_of(args) -> dict:
     return {"layers": args.layers, "prompt": args.prompt, "steps": args.steps}
 
 
-def launch(args, out: Path, config: dict, lab: L.Lab, report: dict, setup: ar.Setup, plans: dict,
+def launch(args, dc, out: Path, config: dict, lab: L.Lab, report: dict, setup: ar.Setup, plans: dict,
            tamper: tuple[str, str] | None) -> dict[str, int]:
     """Start every process, give them one origin, wait for them, and return their exit codes."""
-    places, client_ns = local_places(lab.blocks) if args.local else lab_places(args, lab.blocks)
+    places, client_ns = local_places(lab.blocks) if args.local else lab_places(shape_of(args), dc, lab.blocks)
     namespaces = [] if args.local else [ns for p in places.values() for ns in (p.block_ns, p.cert_ns)] + [client_ns]
     me = ["-m", "workload.lab_run", "role"]
     procs: list[mockdc.Process] = []
@@ -536,7 +547,8 @@ def launch(args, out: Path, config: dict, lab: L.Lab, report: dict, setup: ar.Se
 def run(args) -> int:
     out = Path(args.out).resolve()
     out.mkdir(parents=True, exist_ok=True)
-    config = {"workload": args.workload, "spec": spec_of(args), "blocks": args.blocks, "devices": 1,
+    dc = mockdc.lab(shape_of(args))
+    config = {"workload": args.workload, "spec": spec_of(args), "hardware": hardware(dc).to_json(),
               "frame_bytes": FRAME_BYTES, "seed": args.seed}
     ctx = Context(config)
     lab = L.Lab.of(ctx, FRAME_BYTES)
@@ -552,12 +564,13 @@ def run(args) -> int:
     name = f"lab/{args.workload}"
     report, setup, plans = calibrate_run(lab, D, name)
     (out / "report.json").write_text(json.dumps(report))
-    print(f"{name}: {ctx.model.n} gates, {len(lab.messages)} messages, "
+    print(f"{name} on {dc.name} ({len(lab.blocks)} blocks of {', '.join(str(len(ctx.hw.devices(b))) for b in lab.blocks)} "
+          f"GPUs): {ctx.model.n} gates, {len(lab.messages)} messages, "
           f"{sum(len(ss) for ss in lab.sessions.values())} sessions, {sum(len(e) for e in lab.events.values())} events; "
           f"slowest session {max(compute.values()) * 1000:.0f} ms, D = {D} buckets; envelope δ = {setup.envelope.delta}, "
           f"ρ = {setup.envelope.rho}, r = {setup.egress_params.allocation}, r_in = {setup.ingress_params.allocation}",
           flush=True)
-    codes = launch(args, out, config, lab, report, setup, plans, tamper)
+    codes = launch(args, dc, out, config, lab, report, setup, plans, tamper)
 
     published, blocks = {}, {}
     for b in lab.blocks:
@@ -630,7 +643,6 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--out", required=True)
     r.add_argument("--workload", choices=M.WORKLOADS, default="served")
     r.add_argument("--layers", type=int, default=4)
-    r.add_argument("--blocks", type=int, default=4, help="the workload's blocks, b0 … on the lab's blocks of those names")
     r.add_argument("--prompt", type=int, default=2, help="served: prompt tokens")
     r.add_argument("--steps", type=int, default=1, help="served: greedy decode steps")
     r.add_argument("--seed", type=int, default=0)
@@ -639,7 +651,7 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--delta-buckets", type=int, help="the first-frame latency D (default: from the sessions' timing)")
     r.add_argument("--local", action="store_true", help="every process on loopback addresses, no namespaces")
     r.add_argument("--declaration", metavar="FILE.py:NAME", help="the lab's declaration, as mockdc.py takes it")
-    r.add_argument("--lab-blocks", type=int, default=4, help="the lab's blocks, as mockdc.py --blocks")
+    r.add_argument("--blocks", type=int, default=4, help="the lab's blocks, as mockdc.py takes them")
     r.add_argument("--leaves", type=int, default=2)
     r.add_argument("--spines", type=int, default=1)
     r.add_argument("--fabric-latency-us", type=int, default=2_000)
