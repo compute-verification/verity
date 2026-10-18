@@ -137,6 +137,40 @@ def _weight_gather(pi: ProgramIndex, weights: Callable[[str, int, int], np.ndarr
     return words[idx - mn], {"field": fname, "range": [flo, fhi], "gather": gather}
 
 
+def _cached_prefix_words(pi: ProgramIndex, store: CommittedStore, rid: str, pname: str, lo: int, hi: int, inputs_rec: list) -> list[np.ndarray]:
+    """A warm request's cached rows [lo, hi) of the kv-prefix input: what its producing requests of record committed."""
+    src = pi.cached_prefix.get(rid)
+    if src is None:
+        raise _Unresolved(f"{pname} slice [{lo}, {hi}): no producing requests of record for {rid}'s cached rows")
+    out = []
+    for q, qstep, qop, qmem, qlo, qhi in src.identities(lo, hi):
+        w, why = store.words(q, qstep, qop, qmem, qlo, qhi)
+        if w is None:
+            raise _Unresolved(why)
+        out.append(w)
+        inputs_rec.append({"kind": "cached", "identity": [q, qstep, qop, qmem, [qlo, qhi]]})
+    return out
+
+
+def _schedule_witness(pi: ProgramIndex, store: CommittedStore, r: dict, d: dict, rid: str, arrive: int, pname: str, lo: int, hi: int,
+                      inputs_rec: list) -> np.ndarray:
+    """The witness keys of a MoeAlignRanks_v1 row (`format.SCHEDULE_PARAM`): its OWN committed rank, so the row reproduces that rank
+    exactly when it ranks each expert's pairs."""
+    fam = d["family"]
+    own = pi.member_of_port(int(r["i"])).get("0") if fam in RM.SCHEDULE_READERS else None
+    width = next((int(m[1]) for m in d["members"] if m[0] == own), None)
+    if width is None or width != hi - lo:
+        raise _Unresolved(f"{pname} slice [{lo}, {hi}) read by {fam}: only a {sorted(RM.SCHEDULE_READERS)} row's own "
+                          f"committed rank (port 0, one key per pair) binds it")
+    at = d["row"] * width
+    w, why = store.words(rid, arrive + d["step"], d["op_path"], own, at, at + width)
+    if w is None:
+        raise _Unresolved(why)
+    inputs_rec.append({"kind": "witness", "param": pname, "range": [lo, hi],
+                       "identity": [rid, arrive + d["step"], d["op_path"], own, [at, at + width]]})
+    return w
+
+
 def _evaluate_row(pi: ProgramIndex, store: CommittedStore, weights: Callable[[str, int, int], np.ndarray | None], r: dict, rid: str, arrive: int,
                   inputs_rec: list, *, depth: int, interior: dict[int, dict[str, np.ndarray]] | None = None,
                   row: int | None = None, plan: bool = False) -> dict[str, np.ndarray]:
@@ -204,31 +238,10 @@ def _evaluate_row(pi: ProgramIndex, store: CommittedStore, weights: Callable[[st
                         raise _Unresolved(why)
                     words.append(w)
                     inputs_rec.append({"kind": "committed", "identity": [rid, arrive + step, SAMPLER_OP, pname, [0, 1]]})
-                elif pi.kv_prefix and a == pi.kv_prefix["input"]:                # a warm request's cached rows: what its producers committed
-                    src = pi.cached_prefix.get(rid)
-                    if src is None:
-                        raise _Unresolved(f"{pname} slice [{lo}, {hi}): no producing requests of record for {rid}'s cached rows")
-                    for q, qstep, qop, qmem, qlo, qhi in src.identities(lo, hi):
-                        w, why = store.words(q, qstep, qop, qmem, qlo, qhi)
-                        if w is None:
-                            raise _Unresolved(why)
-                        words.append(w)
-                        inputs_rec.append({"kind": "cached", "identity": [q, qstep, qop, qmem, [qlo, qhi]]})
+                elif pi.kv_prefix and a == pi.kv_prefix["input"]:
+                    words.extend(_cached_prefix_words(pi, store, rid, pname, lo, hi, inputs_rec))
                 elif pname == RM.SCHEDULE_PARAM:
-                    # [DSV4] the witness keys of a MoeAlignRanks_v1 row are its OWN committed rank (`format.SCHEDULE_PARAM`): the row then
-                    # reproduces that rank exactly when it ranks each expert's pairs
-                    own = pi.member_of_port(int(r["i"])).get("0") if fam in RM.SCHEDULE_READERS else None
-                    width = next((int(m[1]) for m in d["members"] if m[0] == own), None)
-                    if width is None or width != hi - lo:
-                        raise _Unresolved(f"{pname} slice [{lo}, {hi}) read by {fam}: only a {sorted(RM.SCHEDULE_READERS)} row's own "
-                                          f"committed rank (port 0, one key per pair) binds it")
-                    at = d["row"] * width
-                    w, why = store.words(rid, arrive + d["step"], d["op_path"], own, at, at + width)
-                    if w is None:
-                        raise _Unresolved(why)
-                    words.append(w)
-                    inputs_rec.append({"kind": "witness", "param": pname, "range": [lo, hi],
-                                       "identity": [rid, arrive + d["step"], d["op_path"], own, [at, at + width]]})
+                    words.append(_schedule_witness(pi, store, r, d, rid, arrive, pname, lo, hi, inputs_rec))
                 else:                                                             # the declared prompt: committed input_token_ids of the arrival step
                     eop = pi.embed_op_path()
                     if eop is None:
