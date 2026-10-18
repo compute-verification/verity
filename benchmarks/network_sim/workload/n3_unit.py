@@ -45,11 +45,12 @@ frame is prefix XOR text << 8p XOR suffix << 8s over B bytes, where the stream i
 
 **Commitments and who registers them.** Each unit registers its values (`values`). The prover registers the layout
 before the run (`register_layout`): one advice tree of the descriptors, one per (port, frame index) at port * CAP +
-index, under the binding SHA-512(`LAYOUT_LABEL` || program || placement root). The certifiers register each window's
-record commitment (`register_record`): a two-row advice tree of the link's two directions' record digests, under
-SHA-512(`RECORD_LABEL` || program || link || window), publishing its root instead of the digests; the salts go to the
-proof service behind the firewall. The network_sim README ("N3 in zero knowledge") has what that asks of the
-certifier, and the open questions.
+index, under the binding SHA-512(`LAYOUT_LABEL` || program || placement root). The record commitment
+(`register_record`) is a two-row advice tree of the link's two directions' record digests, under SHA-512(`RECORD_LABEL`
+|| program || link || window), whose root alone is public; the salts go to the proof service behind the firewall. It
+stands in for N2's commitment to the link-window's certified records (`verity.core.protocols.certifier.service`), which
+the firewall registers. The network_sim README ("N3 in zero knowledge") has what opening N2's leaf would take, and the
+open questions.
 
     python -m workload.n3_unit sim --out FILE [--tamper UNIT:MODE] [--buckets K] [--frame-bytes B]
     python -m workload.n3_unit lab RUN_DIR --out FILE     every window a lab run's certifiers recorded (lab_run --out)
