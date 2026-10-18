@@ -1,6 +1,8 @@
 """proved_ticks at the hand-checked point, H1 + fx1 on DS-120: ♭ is an IMMA.16832, 1/39 LDSM_X4 and fx1's 8 ALU and
 8 IMAD warp instructions a unit, B_♭ with ε_skip's work is Lean's 17.097571, and a GPU-second of linears at a cycle a
-unit is (1 − 0.599%) · 17.097571 s; QKᵀ counts at 1.25, and a block divides by its GPUs."""
+unit is (1 − 0.599%) · 17.097571 s; QKᵀ counts at 1.25, and a block divides by its GPUs. A block where the datacenter
+places PoUW's compiled Program is its int8 products, a linear's each (benchmarks/datacenter's test of that Program
+credits this figure as the block's compute)."""
 
 from __future__ import annotations
 
@@ -54,3 +56,15 @@ def test_work_outside_the_designs_products_is_refused(census):
 def test_a_family_without_a_sheet_clock_is_refused():
     with pytest.raises(ValueError, match="FMAX_MHZ"):
         P.sheet("sm_90")
+
+
+def test_a_block_of_the_compiled_scheme_is_its_int8_products_as_linears_and_other_work_is_refused():
+    from verity.core.protocols.pouw.circuit import h1tile
+
+    assert (h1tile.SCHEME, h1tile.FOLD) == (P.SCHEME, "fx1") and all("S8" in k for k in h1tile.KINDS)
+    block = {"cuda:gate": 13250921, "mac:int8": 4 * 16 * 64}     # benchmarks/datacenter's compiled s8 grid on its block
+    assert P.placed(block) == {"mac:linears": 4096} and P.units(P.placed(block), S) == 1
+    assert P.proved_block_ticks(P.placed(block), S, P.SHEET_EPS, 1e-3) == pytest.approx(
+        0.99401 * 17.097571 / (4 * 188 * 2430e3), rel=1e-7)
+    with pytest.raises(ValueError, match="isn't eps1-sm120-h1fx1's"):
+        P.placed({"mac:int8": 1, "mac:bf16": 1})

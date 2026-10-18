@@ -1,9 +1,11 @@
 """`proved_ticks`: PoUW's proved block-ticks for a window's declared work, the figure network accounting's joint ledger
-credits as a block's `compute` with basis "proved" (`benchmarks/datacenter`: `Placement.public(plan, ticks=...)`).
+credits as a block's `compute` with basis "proved" (`benchmarks/datacenter`: `Placement.public(plan, ticks=...)`, where
+its tests place PoUW's compiled Program on a block).
 
     uv run python benchmarks/pouw/proved_ticks.py     the hand-checked point: H1 + fx1 on DS-120
 
-For a census W of a window's declared work on a block of G GPUs of one device, at its data-sheet reading:
+For a census W of a window's declared work on a block of G GPUs of one device, at its data-sheet reading (`placed`
+reads W off a block where the datacenter places a Program `SCHEME` compiled):
 
     ticks(W) = (1 − ε) · U(W) · B_♭ / (4 · SMs · f_max) / G / tick_seconds
 
@@ -49,7 +51,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.append(str(Path(__file__).parent))     # appended: network accounting's tests import this module by path
 import eps_budget as EB
 from verity_machine_model import headline
 from verity_machine_model.eps import PRODUCTS, design, honest, table
@@ -62,6 +64,8 @@ FMAX_MHZ = {"sm_120": 2430}
 #: PoUW's headline ε at the data sheet, H1 + fx1 on DS-120: `Accounting.SecurityProofs.TS.Sm120SheetHeadline` (#2482)
 SHEET_EPS = 599 / 100000
 KINDS = tuple(f"mac:{p}" for p in PRODUCTS)
+#: PoUW's compile pass for H1 + fx1 on sm_120 (`verity.core.protocols.pouw.circuit.h1tile.SCHEME`)
+SCHEME = "eps1-sm120-h1fx1"
 
 
 @dataclass(frozen=True)
@@ -100,6 +104,19 @@ def units(census: Mapping[str, float], s: Sheet) -> float:
                          "at least 0; other work binds its own facets, and its bound with these is an LP over the union")
     h = honest(d.honest, data)
     return sum(n * EB.FLOOR_WORDS.get(d.noise[k[4:]], 1.0) for k, n in census.items()) / (h.words * h.depth)
+
+
+def placed(work: Mapping[str, float]) -> dict[str, float]:
+    """The census of a block's work where the datacenter places a Program `SCHEME` compiled (`Profile.work[block]`, the
+    Program's Calls on the block by kind). Its int8 products (`mac:int8`) are the tile units' served products, each a
+    linear's (the unit is H1's Dither-C tile, a committed word a product). Its Boolean gates (`cuda:gate`) are the units'
+    seeds, noise and receipt folds: ♭ prices the fold a unit, and leaving the rest out only lowers the bound. Any other
+    kind isn't the scheme's, and the proved figure stands in for the block's whole compute, so it is refused."""
+    other = sorted(set(work) - {"mac:int8", "cuda:gate"})
+    if other:
+        raise ValueError(f"work {other} on the block isn't {SCHEME}'s, whose units are int8 products and Boolean gates: "
+                         "the proved figure would leave it out of the block's compute")
+    return {"mac:linears": work.get("mac:int8", 0.0)}
 
 
 def proved_block_ticks(census: Mapping[str, float], s: Sheet, eps: float, tick_seconds: float, gpus: int = 1) -> float:
