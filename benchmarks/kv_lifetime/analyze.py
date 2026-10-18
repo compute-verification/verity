@@ -48,7 +48,8 @@ def binned(steps: dict[str, np.ndarray], t0: float, t1: float, width: float = 1.
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("out", type=Path)
-    ap.add_argument("--warmup", type=float, default=120.0)
+    ap.add_argument("--warmup", type=float, default=120.0, help="seconds of each phase's start left out, on the run's "
+                    "own clock (stretched with --time-scale)")
     ap.add_argument("--phases", type=lambda s: [int(x) for x in s.split(",")], default=None)
     ap.add_argument("--delays", type=lambda s: [float(x) for x in s.split(",")], default=[0.0, 10.0, 30.0],
                     help="append delays (s) to compute the frontier at")
