@@ -5,17 +5,12 @@
 its callee's id: instances, units by class, and the gates property/v1 refuses. On a Program it also sums them by step (the
 census/v1 steps at `ends`) and checks every step against `stacking.analyze`, so the table reads property/v1's own numbers.
 
-Property/v1 refuses an unlisted primitive. `PROVISIONAL` classes the exact-int8 profile's eight (vLLM's
-`program/registry/int8_exact.py`) by the table's own rules until property/v1 lists them: FP arithmetic and casts are roundings,
-`LutIndex`'s shift and clamp is one rounding, and `Exp2Lut127` reads one of 256 constant entries, a gather of 8 fresh index bits.
-Each instance is charged, as property/v1 refuses each. Their units are kept under ``provisional:<class>``, so a reader sees what
-rests on them. Anything else unlisted stays refused.
-
-`fit(count, points, checks)` writes a callee whose cost grows with context, an attention window of S keys and N query rows (the
-rows at keys S - N + 1 .. S), as units(N, S) = r0 N + b_q R + b_kv S + w0 + w_start [N = S] with R = N S - N (N - 1) / 2, the
-rows' keys, and [N = S] a window from position 0 (its first row reads one key: in the int8 window that row's max is its score,
-whose range is proven, so its subtraction is affine). It solves the coefficients from as many shapes exactly and refuses a fit
-that misses any check shape (the Program's own calls among them).
+The attention of one request-step-layer (`Window`) is the exact-int8 profile's two calls: `Int8KvQuant_v1{S, D}` once a KV head
+(G of them) over the window's S keys, then `Int8LutAttentionRow_v1{D, s, SCALE}` once a (row, head), H heads a row, for its N last
+rows s = S - N + 1 .. S. `fit(count, points, checks)` writes it as units(N, S) = r0 N + b_q R + b_kv S + w0 + w_start [N = S]
+with R = N S - N (N - 1) / 2, the rows' keys, and [N = S] a window from position 0 (its first row reads one key: that row's max
+is its score, whose range is proven, so its subtraction is affine). It solves the coefficients from as many shapes exactly and
+refuses a fit that misses any check shape (the Program's own windows among them).
 
     python units.py DESCRIPTOR.json[.gz] --out units.json   # a Build's Program, decoded through vLLM's registry
 """
@@ -36,32 +31,18 @@ from verity.ml.circuits.census import census, family, step_ends
 from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.program import is_input
 
-#: the exact-int8 profile's primitives property/v1 doesn't list yet: each one's class and units an instance
-PROVISIONAL: dict[str, tuple[str, int]] = {
-    **dict.fromkeys(("F32Rint_v1", "F32ToS8Rzi_v1", "S8ToF32_v1", "F32MulWide_v1", "F64Mul_v1", "F64ToU32RniSat_v1",
-                     "LutIndex_v1"), ("roundings", 1)),
-    "Exp2Lut127_v1": ("gathers", 8),
-}
-KEYS = P.BUDGETED + tuple(f"provisional:{c}" for c in P.BUDGETED)
-
-
 def charged(t: P.Tally) -> tuple[Counter, Counter]:
-    """A tally's units by `KEYS` (property/v1's, and the provisional classes'), and the gates left refused by ``code:primitive``."""
+    """A tally's units by class, and its refused gates by ``code:primitive``."""
     u: Counter = Counter({c: n for c, n in t.units.items() if n})
-    refused: Counter = Counter()
-    for (code, fid), n in t.refused.items():
-        if code == "unlisted" and fid in PROVISIONAL:
-            cls, per = PROVISIONAL[fid]
-            u[f"provisional:{cls}"] += n * per
-        else:
-            refused[f"{code}:{fid}"] += n
+    refused: Counter = Counter({f"{code}:{fid}": n for (code, fid), n in t.refused.items()})
     return u, refused
 
 
 def units(fn: Any, ends: Sequence[int] | None = None, dyn: Sequence[bool] | None = None, rng: Sequence[Any] | None = None) -> dict:
     """``callees``: each callee of `fn`'s body by id, with its family, instances, units and refused gates; ``total``. On a Program
     (anything with a ``root``: its run inputs are its dynamic values) also ``steps``, the units of each census/v1 step at `ends`
-    (default: one step), checked against `stacking.analyze`. A Definition's parameters depend on a run input as `dyn` says
+    (default: one step), checked against `stacking.analyze`, and ``reasons``, property/v1's refusals but the budgets' (`judge`'s
+    ``operand-bits``, ``s8-window``, ``uncovered``). A Definition's parameters depend on a run input as `dyn` says
     (default: all) and take the value ranges `rng` (default: any word); gather index bits its parameters carry go under
     ``(parameters)``, and ``arg_rng`` holds each call's argument ranges (a scan's: its first iteration's, its carry dependent on
     a run input when any argument is, as the walk has it)."""
@@ -102,6 +83,8 @@ def units(fn: Any, ends: Sequence[int] | None = None, dyn: Sequence[bool] | None
             if listed != theirs["units"]:
                 raise AssertionError(f"step {s}: the callees' units {listed} are not stacking.analyze's {theirs['units']}")
         out["steps"] = [dict(s) for s in steps]
+        v = P.judge(a, c=dict.fromkeys(P.BUDGETED, 0), windows=[P.Window(range(len(a.steps)), 1, 1)])
+        out["reasons"] = [r for r in v.reasons if r["code"] not in P.BUDGETED]
     out["arg_dyn"] = {}
     for k, nd in enumerate(body.nodes):
         if not is_input(nd.fn):
@@ -113,7 +96,7 @@ def units(fn: Any, ends: Sequence[int] | None = None, dyn: Sequence[bool] | None
 
 
 def count(fn: Any, dyn: Sequence[bool], rng: Sequence[Any] | None = None) -> dict[str, int]:
-    """One call's units by `KEYS` (refused gates other than the provisional ones raise: their cost isn't known)."""
+    """One call's units by class (a refused gate raises: its cost isn't known)."""
     u, refused = charged(P.count(bind(fn) if isinstance(fn, CompositeDefinition) else fn, dyn, rng))
     if refused:
         raise ValueError(f"{fn.id}: property/v1 refuses {dict(refused)}")
@@ -185,10 +168,10 @@ def rebound(fn: Any, **statics: Any) -> Any:
     return bind(template(fn), **{**fn.bindings, **statics})
 
 
-def components(rows: Mapping[str, dict], *, token: str, sample: Iterable[str], attention: str) -> dict:
+def components(rows: Mapping[str, dict], *, token: str, sample: Iterable[str], attention: Sequence[str]) -> dict:
     """A Program's callees as the per-step model's parts: ``tokens`` (instances of the `token` family, one a computed token row),
-    ``samples`` (of the last `sample` family), ``token`` and ``sample`` units each (every callee but the attention's is a token's,
-    except the `sample` families'), and the attention calls by (N, S) with their units a call."""
+    ``samples`` (of the last `sample` family), and ``token`` and ``sample`` units each (every callee but the `attention`
+    families' is a token's, except the `sample` families')."""
     sample = tuple(sample)
     fams = Counter()
     for r in rows.values():
@@ -196,16 +179,12 @@ def components(rows: Mapping[str, dict], *, token: str, sample: Iterable[str], a
     tokens, samples = fams[token], fams[sample[-1]]
     tok: Counter = Counter()
     smp: Counter = Counter()
-    calls = []
-    for cid, r in rows.items():
-        if r["family"] == attention:
-            calls.append((cid, r))
-        elif r["family"] in sample:
-            smp.update(r["units"])
-        else:
-            tok.update(r["units"])
+    for r in rows.values():
+        if r["family"] in attention:
+            continue
+        (smp if r["family"] in sample else tok).update(r["units"])
     return {"tokens": tokens, "samples": samples, "token": {k: Fraction(v, tokens) for k, v in tok.items()},
-            "sample": {k: Fraction(v, samples) for k, v in smp.items()}, "calls": calls}
+            "sample": {k: Fraction(v, samples) for k, v in smp.items()}}
 
 
 def load(path: Path) -> Any:
@@ -235,24 +214,100 @@ FIT_POINTS = ((1, 64), (1, 128), (2, 128), (4, 256), (4, 4))
 FIT_CHECKS = ((1, 2048), (3, 77), (8, 512), (1, 1), (6, 6), (33, 33))
 
 
-def attention_fit(program: Any, rows: Mapping[str, dict], fam: str, arg_dyn: Mapping[int, list[bool]],
-                  **statics: Any) -> tuple[dict, dict]:
-    """The attention family's fit at the Program's own statics (or at `statics`, e.g. a TP rank's heads), held to the Program's
-    calls when `statics` is empty. Returns the coefficients and the statics fitted."""
-    nodes = program.root.body.nodes
-    k0 = next(k for k, nd in enumerate(nodes) if not is_input(nd.fn) and family(nd.fn) == fam)
-    fn, dyn = nodes[k0].fn, arg_dyn[k0]
-    checks = [(N, S, None) for N, S in FIT_CHECKS]
-    if not statics:
-        for nd in nodes:
-            if not is_input(nd.fn) and family(nd.fn) == fam:
-                r = rows[nd.fn.id]
-                want = {k: v // r["instances"] for k, v in r["units"].items()}
-                checks.append((nd.fn.bindings["N"], nd.fn.bindings["S"], want))
-        checks = list(dict.fromkeys((N, S, json.dumps(w, sort_keys=True) if w else None) for N, S, w in checks))
-        checks = [(N, S, json.loads(w) if w else None) for N, S, w in checks]
-    co = fit(lambda N, S: count(rebound(fn, N=N, S=S, **statics), dyn), FIT_POINTS, checks)
-    return co, {k: v for k, v in {**fn.bindings, **statics}.items() if k not in ("N", "S")}
+#: the attention's families: one call a KV head over a request-step-layer's window of S keys, and one a (row, head)
+KV, ROW = "Int8KvQuant_v1", "Int8LutAttentionRow_v1"
+ATTENTION = (KV, ROW)
+
+
+class Window:
+    """One request-step-layer's attention over its window of S keys and its N last rows: G calls of `kv` at S, and H calls of
+    `row` at each row's keys s = S - N + 1 .. S, each with its first call's run dependence. ``units``, ``primitives`` and
+    ``families`` give its units by class, by ``primitive|class`` (every composite expanded) and by the family of each callee of
+    the two Definitions' bodies; each call's are counted once a shape."""
+
+    def __init__(self, kv: tuple[Any, list[bool]], row: tuple[Any, list[bool]], G: int, H: int) -> None:
+        (self.kv, self.kv_dyn), (self.row, self.row_dyn), self.G, self.H = kv, row, G, H
+        self.memo: dict[tuple, dict] = {}
+
+    def _at(self, how: str, which: str, s: int) -> dict:
+        key = (how, which, s)
+        if key not in self.memo:
+            fn, dyn = (self.kv, self.kv_dyn) if which == "kv" else (self.row, self.row_dyn)
+            g = rebound(fn, S=s)
+            self.memo[key] = (count(g, dyn) if how == "units" else by_primitive(g, dyn) if how == "primitives"
+                              else by_family(g, dyn))
+        return self.memo[key]
+
+    def _sum(self, how: str, N: int, S: int) -> dict:
+        out: Counter = Counter({k: self.G * v for k, v in self._at(how, "kv", S).items()})
+        for s in range(S - N + 1, S + 1):
+            out.update({k: self.H * v for k, v in self._at(how, "row", s).items()})
+        return {k: v for k, v in out.items() if v}
+
+    def units(self, N: int, S: int) -> dict:
+        return self._sum("units", N, S)
+
+    def primitives(self, N: int, S: int) -> dict:
+        return self._sum("primitives", N, S)
+
+    def families(self, S: int) -> dict:
+        """A one-row window's units by family, the `families` of each call merged."""
+        out: dict[str, Counter] = {}
+        for which, m in (("kv", self.G), ("row", self.H)):
+            for f, v in self._at("families", which, S).items():
+                out.setdefault(f, Counter()).update({k: m * n for k, n in v.items()})
+        return {f: dict(v) for f, v in out.items()}
+
+    def statics(self) -> dict:
+        return {"G": self.G, "H": self.H, KV: {k: v for k, v in self.kv.bindings.items() if k != "S"},
+                ROW: {k: v for k, v in self.row.bindings.items() if k != "S"}}
+
+
+def window(program: Any, rows: Mapping[str, dict], arg_dyn: Mapping[int, list[bool]], G: int, H: int,
+           spec: Mapping[str, Any] | None = None) -> tuple[Window, int]:
+    """The Program's attention as a `Window` of G KV heads and H heads (or `spec`'s: one TP rank's), and the calls a
+    request-step makes (its layers, ``L``). Held to the Program: every `KV` callee is G L instances and every `ROW` callee H L
+    (a window's S keys once a step, each row's keys once), and each callee's units an instance are the Definition's own at its
+    statics (so the window's counts hold at the Program's ranges)."""
+    fns = first_calls(program, arg_dyn)
+    w = Window(fns[KV], fns[ROW], G, H)
+    Ls = set()
+    for cid, r in rows.items():
+        if r["family"] not in ATTENTION:
+            continue
+        which, m = ("kv", G) if r["family"] == KV else ("row", H)
+        if r["instances"] % m:
+            raise ValueError(f"{cid}: {r['instances']} instances, not a multiple of {m}")
+        Ls.add(r["instances"] // m)
+        per = {k: Fraction(v, r["instances"]) for k, v in r["units"].items() if v}
+        if per != w._at("units", which, r["statics"]["S"]):
+            raise AssertionError(f"{cid}: its units an instance {_ints(per)} are not its Definition's "
+                                 f"{w._at('units', which, r['statics']['S'])}")
+    if len(Ls) != 1:
+        raise ValueError(f"the attention callees give {sorted(Ls)} calls a request-step (G={G}, H={H}), not one")
+    if spec:
+        w = Window(fns[KV], fns[ROW], spec["G"], spec["H"])
+    return w, Ls.pop()
+
+
+def windows_of(rows: Mapping[str, dict]) -> list[tuple[int, int]]:
+    """One request's windows (N, S) in its Program: each `KV` callee's S, its rows the keys its step adds (a prefill from 0 all
+    S of them, a decode its last), held to the `ROW` callees' keys (each row's once)."""
+    kv = sorted(r["statics"]["S"] for r in rows.values() if r["family"] == KV)
+    out, prev = [], 0
+    for S in kv:
+        out.append((S - prev, S))
+        prev = S
+    keys = sorted(r["statics"]["S"] for r in rows.values() if r["family"] == ROW)
+    if keys != list(range(1, prev + 1)):
+        raise ValueError(f"the rows' keys {keys[:3]}..{keys[-3:]} are not 1..{prev}: not one request's windows")
+    return out
+
+
+def attention_fit(w: Window, own: Iterable[tuple[int, int]] = ()) -> dict:
+    """The window's fit (`fit`), held to `FIT_CHECKS` and the Program's own windows `own`."""
+    checks = [(N, S, None) for N, S in dict.fromkeys(tuple(FIT_CHECKS) + tuple(own))]
+    return fit(w.units, FIT_POINTS, checks)
 
 
 def bind_body(fn: Any) -> Any:
@@ -294,9 +349,10 @@ def by_primitive(fn: Any, dyn: Sequence[bool]) -> dict[str, int]:
     return out
 
 
-def per_key(fn: Any, dyn: Sequence[bool], S0: int = 128) -> dict[str, dict[str, Fraction]]:
-    """A one-row attention window's units a key, by the family of each callee of its body: the slope between S0 and 2 S0 keys."""
-    a, b = by_family(rebound(fn, N=1, S=S0), dyn), by_family(rebound(fn, N=1, S=2 * S0), dyn)
+def per_key(w: Window, S0: int = 128) -> dict[str, dict[str, Fraction]]:
+    """A one-row attention window's units a key, by the family of each callee of its Definitions' bodies: the slope between S0
+    and 2 S0 keys."""
+    a, b = w.families(S0), w.families(2 * S0)
     out = {}
     for f in sorted(set(a) | set(b)):
         d = {k: Fraction(b.get(f, {}).get(k, 0) - a.get(f, {}).get(k, 0), S0) for k in set(a.get(f, {})) | set(b.get(f, {}))}
@@ -317,21 +373,40 @@ def first_calls(program: Any, arg_dyn: Mapping[int, list[bool]]) -> dict[str, tu
 
 
 #: a family whose callees pair one to one with another family's at the same K: the int8 linear's row quantizer, read by its product
-PAIRED = {"Int8RowQuant_v1": "Int8ScaledMm_v1"}
+PAIRED = {"Int8RowQuant_v1": "ScaledMmS8_v1"}
+
+
+def spec_statics(statics: Mapping[str, Mapping[str, Any]], cid: str, r: Mapping[str, Any], used: set[str]) -> dict | None:
+    """The statics `statics` (a spec's) binds the callee `cid` (row `r`) at: its id's entry, else the one ``Family{k=v,..}`` key
+    whose family and statics it has, else its family's; the key read goes in `used`."""
+    hits = [cid] if cid in statics else []
+    if not hits:
+        for key in statics:
+            fam, _, rest = key.partition("{")
+            if rest and fam == r["family"] and all(str(r["statics"].get(k)) == v
+                                                   for k, v in (kv.split("=", 1) for kv in rest.rstrip("}").split(","))):
+                hits.append(key)
+    if not hits and r["family"] in statics:
+        hits = [r["family"]]
+    if len(hits) > 1:
+        raise ValueError(f"{cid}: the spec's keys {hits} all name it")
+    used.update(hits)
+    return dict(statics[hits[0]]) if hits else None
 
 
 def modeled(program: Any, rows: Mapping[str, dict], spec: Mapping[str, Any], arg_dyn: Mapping[int, list[bool]], *,
-            token: str, attention: str) -> dict[str, dict]:
-    """The Program's callees as another model's (`spec`): each callee `spec["statics"]` names (by id, else by family) bound at
-    those statics and counted; a layer's callee (a multiple of ``layers[0]`` instances a token row) repeated ``layers[1]`` times a
-    token row instead; every callee on each of ``ranks`` ranks (``instances`` stays one rank's, ``units`` is every rank's) but a
-    family ``once`` names, computed once; and a `PAIRED` family's callees again from its partner's, one at the partner's new K
-    an instance (each partner a K of its own: the 70B's o and qkv linears share none of the 8B's K = 4096). The attention's calls
-    are left out (`attention_fit` at ``spec["attention"]`` prices them)."""
+            token: str) -> dict[str, dict]:
+    """The Program's callees as another model's (`spec`): each callee `spec["statics"]` names (`spec_statics`; a key that names
+    none is refused) bound at those statics and counted; a layer's callee (a multiple of ``layers[0]`` instances a token row)
+    repeated ``layers[1]`` times a token row instead; every callee on each of ``ranks`` ranks (``instances`` stays one rank's,
+    ``units`` is every rank's) but a family ``once`` names, computed once; and a `PAIRED` family's callees again from its
+    partner's, one at the partner's new K an instance (each partner a K of its own: the 70B's o and qkv linears share none of
+    the 8B's K = 4096). The attention's calls are left out (`window` at ``spec["attention"]`` prices them)."""
     fns = first_calls(program, arg_dyn)
     tokens = sum(r["instances"] for r in rows.values() if r["family"] == token)
     (L0, L1), ranks = spec["layers"], spec["ranks"]
     once = set(spec.get("once", ()))
+    used: set[str] = set()
     for fam, by in PAIRED.items():
         mine, theirs = Counter(), Counter()
         for r in rows.values():
@@ -341,16 +416,18 @@ def modeled(program: Any, rows: Mapping[str, dict], spec: Mapping[str, Any], arg
             raise ValueError(f"{fam}'s instances by K {dict(mine)} don't pair with {by}'s {dict(theirs)}")
     out: dict[str, dict] = {}
     for cid, r in rows.items():
-        if r["family"] == attention or r["family"] in PAIRED:
+        if r["family"] in ATTENTION or r["family"] in PAIRED:
             continue
         fn, dyn = fns[cid]
-        st = spec["statics"].get(cid) or spec["statics"].get(r["family"])
+        st = spec_statics(spec["statics"], cid, r, used)
         n = r["instances"]
         per = count(rebound(fn, **st), dyn) if st else {k: Fraction(v, n) for k, v in r["units"].items()}
         m = n * L1 // L0 if n % (tokens * L0) == 0 else n
         rk = 1 if r["family"] in once else ranks
         out[cid] = {"family": r["family"], "statics": {**r["statics"], **(st or {})}, "instances": m, "ranks": rk,
                     "refused": r["refused"], "units": {k: v * m * rk for k, v in per.items()}}
+    if set(spec["statics"]) - used:
+        raise ValueError(f"the spec's statics {sorted(set(spec['statics']) - used)} name no callee of the Program")
     for fam, by in PAIRED.items():
         if fam not in fns:
             continue
@@ -369,19 +446,25 @@ LINEAR = ("Int8Linear_v1", "Int8RowQuant_v1")
 LINEAR_INNER = ("Int8RowQuant_v1",)
 
 
-def levers(program: Any, rows: Mapping[str, dict], arg_dyn: Mapping[int, list[bool]], *, token: str, sample: Sequence[str],
-           attention: str, spec: Mapping[str, Any] | None = None) -> dict:
-    """What the levers act on, from the Program's own Definitions at `rows`' statics (a modeled variant's rows, with `spec`'s
-    attention statics): the attention window's units a key by inner family (a K' quantized once at the KV write removes
-    ``Int8StaticQuant``'s; a V' stored once, with a static scale, removes ``Int8ColumnQuant``'s), each int8 linear's activation
-    quantizer's units a call by inner family (a static activation scale removes ``Int8RowScale``'s), the LM head as an int8
-    linear (``Int8Linear_v1`` at the BF16 ``Gemm_v2``'s K and N), and ``primitives``: the units a token row and a sampled row
-    spend by ``primitive|class``, and the attention window's coefficients by the same keys (`fit`, exact)."""
+def levers(program: Any, rows: Mapping[str, dict], arg_dyn: Mapping[int, list[bool]], w: Window, *, token: str,
+           sample: Sequence[str]) -> dict:
+    """What the levers act on, from the Program's own Definitions at `rows`' statics (a modeled variant's rows, with its window
+    `w`): the attention window's units a key and a call by inner family (``attention_per_key``, ``attention_per_call``: a K'
+    quantized once at the KV write takes ``Int8StaticQuant``'s from every key a step reads to ``key_write``, its own cost, once a
+    token row; a V' stored once with a static scale takes ``Int8ColumnQuant``'s to ``key_write`` again), each int8 linear's
+    activation quantizer's units a call by inner family (a static activation scale removes ``Int8RowScale``'s), the LM head as
+    an int8 linear (``Int8Linear_v1`` at the BF16 ``Gemm_v2``'s K and N), and ``primitives``: the units a token row and a sampled
+    row spend by ``primitive|class``, and the attention window's coefficients by the same keys (`fit`, exact)."""
     fns = first_calls(program, arg_dyn)
-    fn, dyn = fns[attention]
-    att = (spec or {}).get("attention") or {}
-    win = rebound(fn, **att) if att else fn
-    out: dict[str, Any] = {"attention_per_key": per_key(win, dyn), "linear": {}}
+    slope = per_key(w)
+    a = w.families(128)
+    call = {f: {k: v for k, v in ((k, Fraction(n) - 128 * slope.get(f, {}).get(k, 0)) for k, n in a[f].items()) if v}
+            for f in ("Int8StaticQuant_v1", "Int8ColumnQuant_v1") if f in a}
+    write = {k: w.G * v for k, v in count(bind(REGISTRY.defs["Int8StaticQuant_v1"], K=w.kv.bindings["D"]), [True, False]).items()}
+    if slope.get("Int8StaticQuant_v1") != write or call.get("Int8StaticQuant_v1"):
+        raise AssertionError(f"K' costs {slope.get('Int8StaticQuant_v1')} a key and {call.get('Int8StaticQuant_v1')} a call, "
+                             f"not one write's {write} a key")
+    out: dict[str, Any] = {"attention_per_key": slope, "attention_per_call": call, "key_write": write, "linear": {}}
     tokens = sum(r["instances"] for r in rows.values() if r["family"] == token)
     samples = sum(r["instances"] for r in rows.values() if r["family"] == sample[-1])
     prims: dict[str, Counter] = {"token": Counter(), "sample": Counter()}
@@ -392,28 +475,27 @@ def levers(program: Any, rows: Mapping[str, dict], arg_dyn: Mapping[int, list[bo
         elif r["family"] == "Gemm_v2":
             K, N = r["statics"]["K"], r["statics"]["N"]
             out["lm_head_int8"] = {"K": K, "N": N, "units": count(bind(REGISTRY.defs["Int8Linear_v1"], K=K, N=N), [True, False, False])}
-        if r["family"] in (attention, "(parameters)"):
+        if r["family"] in ATTENTION + ("(parameters)",):
             continue
         f, d = fns.get(cid) or fns[r["family"]]
         g = f if r["statics"] == dict(getattr(f, "bindings", {})) else rebound(f, **r["statics"])
         part, n = ("sample", samples) if r["family"] in sample else ("token", tokens)
         prims[part].update({p: Fraction(v * r["instances"] * r.get("ranks", 1), n) for p, v in by_primitive(g, d).items()})
     out["primitives"] = {k: dict(v) for k, v in prims.items()}
-    out["primitives"]["attention"] = fit(lambda N, S: by_primitive(rebound(win, N=N, S=S), dyn), FIT_POINTS,
-                                         [(N, S, None) for N, S in FIT_CHECKS])
+    out["primitives"]["attention"] = fit(w.primitives, FIT_POINTS, [(N, S, None) for N, S in FIT_CHECKS])
     return out
 
 
-def describe(program: Any, rows: Mapping[str, dict], *, token: str, sample: Sequence[str], attention: str,
-             att: tuple[dict, dict], layers: int, extra: Mapping[str, Any] | None = None) -> dict:
-    parts = components(rows, token=token, sample=sample, attention=attention)
+def describe(program: Any, rows: Mapping[str, dict], *, token: str, sample: Sequence[str], w: Window,
+             co: Mapping[str, Mapping[str, Fraction]], layers: int, extra: Mapping[str, Any] | None = None) -> dict:
+    parts = components(rows, token=token, sample=sample, attention=ATTENTION)
     tok = Counter(parts["token"])
     for k, v in ((extra or {}).get("token") or {}).items():
         tok[k] += Fraction(v)
-    return {"schema": "verity-stacked-share/units/v1", "classes": P.digest(), "provisional": PROVISIONAL,
+    return {"schema": "verity-stacked-share/units/v2", "classes": P.digest(),
             "program": {"function": program.root.id, "root_nodes": len(program.root.body.nodes)},
             "tokens": parts["tokens"], "samples": parts["samples"], "token": dict(tok), "sample": parts["sample"],
-            "attention": {"family": attention, "statics": att[1], "coefficients": att[0], "calls": layers},
+            "attention": {"families": list(ATTENTION), "statics": w.statics(), "coefficients": co, "calls": layers},
             "extra": dict(extra or {}),
             "callees": {k: dict(r) for k, r in rows.items()},
             "total": dict(sum((Counter(r["units"]) for r in rows.values()), Counter()))}
@@ -449,9 +531,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--token", default="Embedding_v1", help="the family with one instance a computed token row")
     ap.add_argument("--sample", default="Gemm_v2,TokenSelect_v1", help="the families computed once a sampled row (last: one a sample)")
-    ap.add_argument("--attention", default="Int8LutAttentionWindow_v1")
+    ap.add_argument("--heads", type=int, default=32, help="H: the query heads of a row")
+    ap.add_argument("--kv-heads", type=int, default=8, help="G: the KV heads of a request-step-layer")
     ap.add_argument("--as", dest="spec", type=Path, help="a modeled variant's spec (JSON: label, layers, ranks, once, statics, "
-                    "attention, extra), written to --as-out")
+                    "attention: one rank's H and G, extra), written to --as-out")
     ap.add_argument("--as-out", type=Path)
     a = ap.parse_args(argv)
     program = load(a.descriptor)
@@ -459,26 +542,24 @@ def main(argv: Sequence[str] | None = None) -> int:
     ends = step_ends(program, [sample[-1]])
     u = units(program, ends)
     dyn = {int(k): v for k, v in u["arg_dyn"].items()}
-    att = attention_fit(program, u["callees"], a.attention, dyn)
-    calls = {r["instances"] for r in u["callees"].values() if r["family"] == a.attention}
-    if len(calls) != 1:
-        raise ValueError(f"{a.attention}'s callees have {sorted(calls)} instances each, not one count a step (a layer each)")
-    doc = describe(program, u["callees"], token=a.token, sample=sample, attention=a.attention, att=att, layers=calls.pop())
+    w, layers = window(program, u["callees"], dyn, a.kv_heads, a.heads)
+    co = attention_fit(w, windows_of(u["callees"]))
+    doc = describe(program, u["callees"], token=a.token, sample=sample, w=w, co=co, layers=layers)
     doc["program"]["descriptor"] = str(a.descriptor)
-    doc["steps"] = u["steps"]
-    doc["levers"] = levers(program, u["callees"], dyn, token=a.token, sample=sample, attention=a.attention)
+    doc["steps"], doc["reasons"] = u["steps"], u["reasons"]
+    doc["levers"] = levers(program, u["callees"], dyn, w, token=a.token, sample=sample)
     check_primitives(doc)
     a.out.write_text(json.dumps(jsonable(doc), indent=1, default=str))
-    print(json.dumps(jsonable({k: doc[k] for k in ("tokens", "samples", "token", "sample", "attention", "total")}), indent=1,
-                     default=str))
+    print(json.dumps(jsonable({k: doc[k] for k in ("tokens", "samples", "token", "sample", "attention", "reasons", "total")}),
+                     indent=1, default=str))
     if a.spec:
         spec = json.loads(a.spec.read_text())
-        rows = modeled(program, u["callees"], spec, dyn, token=a.token, attention=a.attention)
-        att2 = attention_fit(program, u["callees"], a.attention, dyn, **spec["attention"])
-        m = describe(program, rows, token=a.token, sample=sample, attention=a.attention, att=att2,
+        rows = modeled(program, u["callees"], spec, dyn, token=a.token)
+        w2, _ = window(program, u["callees"], dyn, a.kv_heads, a.heads, spec=spec["attention"])
+        m = describe(program, rows, token=a.token, sample=sample, w=w2, co=attention_fit(w2),
                      layers=spec["layers"][1] * spec["ranks"], extra=spec.get("extra"))
         m["program"]["modeled"] = {k: spec[k] for k in ("label", "layers", "ranks", "once", "statics", "attention") if k in spec}
-        m["levers"] = levers(program, rows, dyn, token=a.token, sample=sample, attention=a.attention, spec=spec)
+        m["levers"] = levers(program, rows, dyn, w2, token=a.token, sample=sample)
         check_primitives(m)
         a.as_out.write_text(json.dumps(jsonable(m), indent=1, default=str))
         print(json.dumps(jsonable({k: m[k] for k in ("tokens", "samples", "token", "sample", "attention", "total")}), indent=1,
