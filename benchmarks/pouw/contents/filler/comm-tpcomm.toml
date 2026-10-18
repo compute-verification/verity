@@ -1,0 +1,3 @@
+order = 80
+tool = "The filler in tensor-parallel decode's collectives"
+files = "`comm/tpcomm.cu`, `comm/tpcomm.sh`, `comm/report.py`"

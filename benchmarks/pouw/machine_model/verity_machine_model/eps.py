@@ -1,11 +1,12 @@
 """ε for a PoUW design in the tensor–scalar model (note:20261017T0310Z-report-eps1-program §2), every term from data,
 in two layers that are never mixed (Daniel, 17 Oct 06:29Z). The protocol with 100% checking, every word and operand
-verified, has the core ε
+verified, has the core ε, Corollary D3's
 
-    1 − ε_core = (1 − ε_skip − ε_mand − ε_machine) · (1 − ε_sched) · (1 − ε_clock)
+    1 − ε_core = (1 − ε_skip − ε_mand − ε_machine − ε_luck) · (1 − ε_sched) · (1 − ε_clock)
 
-and the sampling compiler adds ε_sample = ε_luck + ε_adapt, a function of the proof unit, its budget and its selection
-rule, 0 at 100% sampling. Each term is a fraction of honest time.
+ε_luck in it: every check is one draw, so an accepted cheater spends Theorem S's budget with every block checked
+(LEDGER, note:20261017T1723Z-draft-ledger; JL is not assumed). The sampling compiler adds ε_sample = ε_adapt, a function
+of the proof unit and its selection rule, 0 at 100% sampling. Each term is a fraction of honest time.
 
 - **Π** is a named vector's rows at its epoch, as the price LP reads them: row r holds Σ_k c_kr·n_k SMSP-cycles for n_k warp
   instructions of class k, and a program takes at least its largest row.
@@ -17,7 +18,8 @@ rule, 0 at 100% sampling. Each term is a fraction of honest time.
   program, dp4a, folded on lanes) or `uniform` (q_u uniform instructions a word, folded there too); the cheater may
   have a fifth, `table` (QSTAR's register-indexed lookups, data/table.toml: q_T lane instructions from the lanes' pool
   and 8 B of L2 a word against an L2 facet at the card's bandwidth, honest's L2 uncharged). Honest runs each filler on
-  lanes (its class mix); the cheater may run it on the uniform datapath (one uniform instruction a lane instruction).
+  lanes (its class mix); the cheater may run it on the uniform datapath (one uniform instruction a lane instruction)
+  when every class of its mix has a uniform form there (the device's `uniform_forms`; sm_90's datapath has no FFMA).
   The cheater minimizes
   T at q = q* over every route. Honest is the same LP with its own routes: the tensor route at its own operand cost, the
   baseline program (whose words belong to the baseline, not to ε: the brief §2) and its filler where it runs it.
@@ -25,14 +27,16 @@ rule, 0 at 100% sampling. Each term is a fraction of honest time.
   operand delivery is priced 0 (`free`, SPEC's conservative default), at the noise's floor φ_del (`floor`: the
   design's `[operands]`, else the profile's), or at honest's own (`honest`). The LP's duals are the certificate π*, at
   which ε_machine splits exactly into ε_cert (1 − π*·n(H)/B(H)) and ε_route. With the scalar routes closed it is
-  ε_machine's floor, which no q* lowers; the threshold is the least q* at which ε_machine reaches it.
+  ε_machine's floor, which no q* lowers; the threshold is the least q* at which ε_machine reaches it. q* is (I3)
+  ScalarRoute's floor: ½ is Lean's (SheetScalarRouteHalf, from A6), and 1.22, decision 89's reading, is the 1.22-slot
+  issue floor (Theorem C, unproved in Lean).
 - **The credit** is honest's kernel (`H`, the master inequality), its model bound B(H)/f_max (`model`, PROFILE's
   reading: ε_sched and ε_clock leave ε for γ), or the floor program ♭ (`floor`, SPEC §0.7a's Corollary D3): the same LP
   restricted to honest's routes with the tensor route at φ_del and no overhead. Under ♭, ε_sched, ε_clock and honest's
   overhead above ♭ leave ε for γ, as the factor T_H/B_♭ · f_max/f_H (`credit_ratio`; f_max/f_H = 1/(1 − ε_clock)).
 - **ε_luck** is Theorem S inside the same LP: an accepted cheater writes (1 − d̄) of the words and folds them all, d̄ =
-  ln(1/δ)/((1 − p)·S) over S spot checks (note:20261016T0005Z-draft-luck-loss-round4), and ε_luck is what that saves
-  it, d̄·w*/B(H) at π*. The terms add up to the LP exactly.
+  ln(1/δ)/((1 − p)·S) over S spot checks (note:20261016T0005Z-draft-luck-loss-round4), each filler's blocks at their
+  own p (`budget`), and ε_luck is what that saves it, d̄·w*/B(H) at π*. The terms add up to the LP exactly.
 - **ε_sched** is honest's measured time above its model time (`[measured]` in data/honest/), when the design runs the
   profile's fold at its L (with its fillers, the measured time plus their model cost). Unmeasured, it is 0: honest is
   certified at the model's bound, which moves it into γ.
@@ -41,8 +45,8 @@ rule, 0 at 100% sampling. Each term is a fraction of honest time.
   measured time plus the model's difference between the design and the profile's kernel, and else its fastest
   program's model time.
 - **ε_skip** is SKIP's calculator's number for the design's noise (benchmarks/pouw/eps_budget.py, `design_skip`), which
-  its `[skip.served]` records; **ε_mand** and **ε_clock** are the design's accounting (data/designs/), each part with its
-  source.
+  its `[skip.served]` records at the device's current vector, and at another vector V as `at = { V = … }` (♭ moves
+  with Π); **ε_mand** and **ε_clock** are the design's accounting (data/designs/), each part with its source.
 - **ε_adapt** is the proof unit's (data/adapt.toml, SPEC's Theorem D): what steering instances in unproved regions gains
   when σ is drawn after the commitment and before evaluation. A design names its unit (`unit`).
 
@@ -62,7 +66,7 @@ from __future__ import annotations
 import math
 import re
 import tomllib
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from scipy.optimize import linprog
@@ -171,8 +175,9 @@ class Honest:
 
 @dataclass(frozen=True)
 class Part:
-    eps: float
+    eps: float                   # at the device's current vector
     source: str
+    at: dict[str, float] = field(default_factory=dict)   # at other vectors, by name
 
 
 PINNED = ("Accounting.Guarantees.FillerLuck.PinnedFillBlocksDeficit (and PinnedFillLuckAt): the check recomputes the "
@@ -188,8 +193,9 @@ class Filler:
     """Verified proof-of-work filler: `per_word` lane instructions a committed word in the class mix `mix`, run by
     honest on `route`; a deficient block of it passes its check with probability ≤ `p`, as the theorem `luck` names
     proves. Without one p is 1, no luck credit: the cheater leaves the filler undone at no cost to Theorem S's budget,
-    even with every block checked. A receipt the check recomputes and compares with the committed one has p = 0
-    (`PINNED`), pfill's cells 0.854 (`PFILL`)."""
+    even with every block checked, and the floor program ♭ leaves it out too (decision 99: a filler's credit is the
+    theorem its check meets), while honest's time, γ, still counts it. A receipt the check recomputes and compares
+    with the committed one has p = 0 (`PINNED`), pfill's cells 0.854 (`PFILL`)."""
     per_word: float = 0.0
     mix: dict[str, float] | None = None
     route: str = "lanes"         # lanes or uniform
@@ -274,7 +280,8 @@ class Design:
 
 
 def _parts(t: dict) -> dict[str, Part]:
-    return {k: Part(float(v["eps"]), v["source"]) for k, v in t.items()}
+    return {k: Part(float(v["eps"]), v["source"], {n: float(x) for n, x in v.get("at", {}).items()})
+            for k, v in t.items()}
 
 
 def honest(name: str, data: Path = DATA) -> Honest:
@@ -443,6 +450,11 @@ class Machine:
     rows: tuple[str, ...]
     c: dict[str, dict[str, float]]
     cuda: tuple[str, ...]        # the CUDA lane classes a word on lanes may use
+    uniform_forms: tuple[str, ...] | None = None   # the lane classes with a uniform-datapath form; None: every one
+
+    def uniform_form(self, f: Filler) -> bool:
+        """Whether every class of the filler's mix has a uniform-datapath form, so its work can run there."""
+        return self.uniform_forms is None or not set(f.mix or {}) - set(self.uniform_forms)
 
     def load(self, n: dict[str, float]) -> dict[str, float]:
         """Each row's SMSP-cycles for n_k warp instructions of each class k."""
@@ -461,7 +473,7 @@ def machine(name: str = "", data: Path = DATA) -> Machine:
     for f in forms(data):
         c[f.kind] = {**c.get(MMA, {}), **c.get(f.kind, {})}
     cuda = tuple(k for k in m.cuda if k in c and any(c[k].values()))
-    return Machine(vector=v.name, rows=v.rows, c=c, cuda=cuda)
+    return Machine(vector=v.name, rows=v.rows, c=c, cuda=cuda, uniform_forms=m.uniform_forms)
 
 
 def uniform_issue_charged(pi: Machine) -> bool:
@@ -626,7 +638,7 @@ def fastest(d: Design, h: Honest, pi: Machine, *, q: float | None, q_uniform: fl
     for j, (f, _) in enumerate(fillers):
         if not cheat:
             bounds[fu[j] if f.route == "lanes" else fv[j]] = (0, 0)
-        if not uni:
+        if not uni or not pi.uniform_form(f):
             bounds[fu[j]] = (0, 0)
     obj = [0.0] * nv
     obj[iT] = 1.0
@@ -774,15 +786,15 @@ class Eps:
         return r if self.credit == "H" else r / (1 - self.design.clock.eps)
 
     def core(self, sched: bool = True) -> float:
-        """ε with 100% checking, every word and operand verified (Daniel, 17 Oct 06:29Z): ε_skip, ε_mand, ε_machine and
-        the credit terms, with ε_luck = ε_adapt = 0."""
+        """ε with 100% checking, every word and operand verified, Corollary D3's: ε_skip, ε_mand, ε_machine, ε_luck
+        (each check one draw, Theorem S at each block's own p) and the credit terms, with ε_adapt = 0."""
         s = (self.sched or 0.0) if sched else 0.0
-        return 1 - (1 - self.skip - self.mand - self.machine_eps) * (1 - s) * (1 - self.clock)
+        return 1 - (1 - self.skip - self.mand - self.machine_eps - self.luck) * (1 - s) * (1 - self.clock)
 
     def sample(self) -> float:
-        """ε_sample = ε_luck + ε_adapt, the sampling compiler's: the proof unit's, its budget's and its selection rule's,
-        0 at 100% sampling. It is reported beside `core`, never inside it."""
-        return self.luck + (self.adapt.eps if self.adapt else 0.0)
+        """ε_sample = ε_adapt, the sampling compiler's: the proof unit's and its selection rule's, 0 at 100% sampling.
+        It is reported beside `core`, never inside it."""
+        return self.adapt.eps if self.adapt else 0.0
 
     def total(self, sched: bool = True) -> float:
         """The compiled protocol's ε, core and sample in one product; for the record, never for comparing designs."""
@@ -801,7 +813,8 @@ def eps(d: Design, pi: Machine, q: float, data: Path = DATA, *, operands: str = 
     """Under the model and floor credits ε_sched and ε_clock leave ε (honest's time above the credit is in γ,
     `credit_ratio`). `table` opens the cheater's table route; `adapt` charges a proof unit's ε_adapt."""
     s = setup(d, pi, data, operands, credit, table)
-    hs = s if credit != "floor" else setup(d, pi, data, "free")
+    run = replace(d, filler=tuple(replace(f, p=0.0) for f in d.filler))   # honest runs every filler, credited or not
+    hs = setup(run, pi, data, "free") if credit == "floor" or any(f.p >= 1 for f in d.filler) else s
     h, base = s.honest, s.baseline
     routes = {"lanes": lanes, "uniform": uniform, "q_uniform": q_uniform}
     c, lucky = s.cheat(q, **routes), s.cheat(q, luck=True, **routes)
@@ -824,7 +837,7 @@ def eps(d: Design, pi: Machine, q: float, data: Path = DATA, *, operands: str = 
                T_honest_source=t_src,
                gamma=d.work * t_h * words_per_mma / plain_mma + d.plain,
                sched=(1 - hs.as_built.T / t_h) if (kernel and credit == "H") else None,
-               skip=sum(p.eps for p in d.skip.values()),
+               skip=sum(p.at.get(pi.vector, p.eps) for p in d.skip.values()),
                mand=sum(p.eps for p in d.mand.values()), machine_eps=machine_eps,
                machine_as_built=max(0.0, 1 - c.T / s.as_built.T),
                cert=min(machine_eps, max(0.0, 1 - c.price(pi, base.n) / base.T)), floor=s.floor(),
