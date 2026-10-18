@@ -723,6 +723,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
   let setupOf := fun (draw : Option Lean.Json) =>
     match (do
         RecSetup.checkInner recInner recCoins recBound
+        RecSetup.innerScope recCoins
         let r ← buildSessionOf parsed tags circuitB pubB compB coins tables count draw partition program work stratified closure
           registered publicInputs (identifier.map Prod.snd)
         RecSetup.checks recInner recCommits stmtTags tables r.2 circuitB partition program registered recPart
@@ -856,6 +857,7 @@ def statementCmd (args : List String) : IO UInt32 := do
   let c3 := RecSetup.c3 recInner recCommits
   match (do
       RecSetup.checkInner recInner recCoins recBound
+      RecSetup.innerScope recCoins
       let st ← buildStmt tags circuitB pubB compB coins tables none partition program registered publicInputs
         (identifier.map Prod.snd)
       if recInner.isSome then
