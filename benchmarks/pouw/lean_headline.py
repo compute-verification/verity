@@ -333,7 +333,11 @@ inductive Pipe
   | lop
   | xu
   | shfl
-  deriving DecidableEq, Fintype
+  deriving DecidableEq
+
+instance : Fintype Pipe where
+  elems := {{Pipe.imad, Pipe.lop, Pipe.xu, Pipe.shfl}}
+  complete x := by cases x <;> simp
 
 /-- Each pipe's Programming Guide results an SM clock. -/
 def Pipe.width : Pipe → ℕ

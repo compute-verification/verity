@@ -49,7 +49,6 @@ theorem coeff_nonneg (v : Sparse) (i : ℕ) : 0 ≤ Sparse.coeff v i := by
   unfold Sparse.coeff
   refine List.sum_nonneg fun x hx => ?_
   obtain ⟨e, -, rfl⟩ := List.mem_map.mp hx
-  dsimp only
   split_ifs
   · exact div_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _)
   · exact le_rfl
@@ -77,7 +76,16 @@ def sheetCoef {P : Type} [DecidableEq P] (D : SheetData P) : SheetRow P → ℕ 
 
 theorem sheet_a {P : Type} [DecidableEq P] (D : SheetData P) (n : ℕ) (r : SheetRow P) (k : Fin n) :
     (D.sheet n).machine.a r k = (sheetCoef D r k.val : ℝ) := by
-  cases r <;> simp only [Sheet.machine, SheetData.sheet, sheetCoef] <;> (try split_ifs) <;> simp
+  cases r with
+  | pipe p =>
+    show (if D.pipe.getD k.val none = some p then (128 : ℝ) / (D.width p : ℝ) else 0) =
+      ((if D.pipe.getD k.val none = some p then (128 : ℚ) / (D.width p : ℚ) else 0 : ℚ) : ℝ)
+    by_cases h : D.pipe.getD k.val none = some p
+    · rw [if_pos h, if_pos h, Rat.cast_div, Rat.cast_ofNat, Rat.cast_natCast]
+    · rw [if_neg h, if_neg h, Rat.cast_zero]
+  | issue => simp only [Sheet.machine, SheetData.sheet, sheetCoef] <;> simp
+  | tensor => simp only [Sheet.machine, SheetData.sheet, sheetCoef] <;> simp
+  | smem => simp only [Sheet.machine, SheetData.sheet, sheetCoef] <;> simp
 
 theorem sheetCoef_nonneg {P : Type} [DecidableEq P] (D : SheetData P) (r : SheetRow P) (i : ℕ) :
     0 ≤ sheetCoef D r i := by
@@ -89,7 +97,8 @@ theorem bound_eq {n : ℕ} {R : Type} [Fintype R] [Nonempty R] (G : Machine (Fin
     G.bound (Sparse.counts v) = (dot (c r0) n v : ℝ) := by
   unfold Machine.bound
   simp only [load_counts G c hG v]
-  exact le_antisymm (ciSup_le fun r => Rat.cast_le.mpr (h r)) (le_ciSup (Set.finite_range _).bddAbove r0)
+  exact le_antisymm (ciSup_le fun r => Rat.cast_le.mpr (h r))
+    (le_ciSup (f := fun r => ((dot (c r) n v : ℚ) : ℝ)) (Set.finite_range _).bddAbove r0)
 
 theorem demandPrice_onFacet {R : Type} [Fintype R] [DecidableEq R] (r0 : R) (d : R → ℝ) :
     demandPrice (onFacet r0) d = d r0 := by
