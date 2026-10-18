@@ -35,9 +35,14 @@ Which form each takes:
   own derivation). E1(c) is proved on paper; it sits inside this premise until the adaptive model is in Lean.
   `Accounting.Guarantees.TS.ProofsSoundOfPinned` derives it from a window's proofs (`Accounting.TS.ProofLayer`):
   binding at `δ_bind` (at `√δ_fork` from its fork form, `Accounting.Guarantees.TS.BindingOfFork`), proof soundness at
-  `δ_ZK`, the Definitions' pinning, and `RightFixed`.
+  `δ_ZK`, the Definitions' pinning, and `RightFixed`. For a sampled window, `Accounting.Guarantees.TS.ProofsSoundOfDrawn`
+  derives it at `n_π = s` from the drawn units' proofs (`Accounting.TS.DrawnLayer`): binding for the drawn units against
+  the values committed before the draw (at `|J|·√δ_fork`, `Accounting.Guarantees.TS.DrawnBindingOfFork`), each drawn
+  proof's soundness at `δ_ZK`, each unit's pinning, and `RightFixedDrawn`.
 * `RightFixed`: E1(c) with the rounds' equal shares, the part of (I8) that is the TS model's accounting rather than the
   proof service's.
+* `RightFixedDrawn`: `RightFixed` for a sampled window, where the proofs vouch for the drawn units only and the share
+  carries the rest.
 * `LinSteer`: SAMPLING's LIN-STEER, for the compiler's closure.
 
 The joint-luck premise JL is not used: D-ideal keeps the proved `ε_jl`.
@@ -138,5 +143,17 @@ wrong every word that isn't fixed is in its round's share, and the rounds carry 
 def RightFixed {Ω : Type} [Fintype Ω] {S nπ : ℕ} {V : Type} (P : Play Ω S K T L U) (pf : ProofLayer Ω S nπ V)
     (Nw : ℝ) : Prop :=
   ∀ x, P.accepts x → pf.right (pf.committed x) → (1 - P.game.deficiency x / S) * Nw ≤ (P.run x).fixed
+
+/-- `accounting-ts-right-fixed-drawn` (Lemma E1(c), proved on paper; the rounds' equal shares; a sampled window).
+**With the drawn units right, what isn't fixed is in the shares**: on every accepted path whose drawn units' committed
+values (each read before its round's draws, `DrawnLayer.committed`) are right, the run's owned right fixed words per
+unit are at least `(1 − Σ_w d_w / S)·N_w`. In 𝒫_samp a round's share counts its deficient, wrong and adaptive work, so
+a unit outside it has right committed values, drawn or not, and E1(c) puts its words among the fixed ones. `RightFixed`
+asks for every committed value right, which only a fully checked window's proofs give; a sampled window's proofs give
+the drawn units', so the undrawn units' rightness is the share's, never the draw's. -/
+def RightFixedDrawn {A B : Type} [Fintype A] [Fintype B] {S s : ℕ} {J V : Type} (P : Play (A × B) S K T L U)
+    (pf : DrawnLayer A B S s J V) (Nw : ℝ) : Prop :=
+  ∀ x, P.accepts x → (∀ w i, pf.right w (pf.drawnAt x w i) (pf.committed x w (pf.drawnAt x w i))) →
+    (1 - P.game.deficiency x / S) * Nw ≤ (P.run x).fixed
 
 end Accounting.Assumptions.TS

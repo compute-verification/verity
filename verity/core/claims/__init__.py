@@ -315,6 +315,10 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     Entry("accounting-ts-right-fixed", "assumption",
           "Lemma E1(c) with the rounds' equal shares: on an accepted window whose committed values are right for their "
           "derivations, every word that isn't fixed is in its round's share", "TS right fixed", "proven"),
+    Entry("accounting-ts-right-fixed-drawn", "assumption",
+          "Lemma E1(c) with the rounds' equal shares, for a sampled window: on an accepted window whose drawn units' "
+          "committed values are right, every word that isn't fixed is in its round's share, which counts every wrong "
+          "unit, drawn or not", "TS right fixed (drawn)", "proven"),
 )}
 
 

@@ -4,6 +4,7 @@ import Definitions.Accounting.TS.Play
 import Definitions.Accounting.TS.Receipt
 import Definitions.Accounting.TS.Slots
 import Definitions.Accounting.TS.ProofLayer
+import Definitions.Accounting.TS.Drawn
 import Definitions.Accounting.TS.FanIn
 import Definitions.Accounting.TS.Fold
 import Definitions.Accounting.TS.Stages
