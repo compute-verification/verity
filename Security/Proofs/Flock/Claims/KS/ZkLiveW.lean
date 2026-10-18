@@ -23,10 +23,11 @@ section At
 
 variable {Coin Col T : Type} [Fintype Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
 
-/-- **`TableBoundθAccAt` with the escapes counted per round** (`Escapes.FitsForkR`). -/
+/-- **`TableBoundθAccAt` with the escapes counted per round** (`Escapes.FitsForkR`), on accepted first runs
+(`Escapes.OnAcc₁`). -/
 def TableBoundθAccAtR [Nonempty Coin] (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg → ℕ) (Ok : Msg → Col → Prop)
     (x : Msg) : Prop :=
-  ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω), ∃ e : Escapes H D.V P x, e.OnAcc ∧
+  ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω), ∃ e : Escapes H D.V P x, e.OnAcc₁ ∧
     e.FitsForkR (D.weight x) (D.k x) ∧ ∀ (ω : Ω) (C : Fin (N x) → Col), (∀ p, Ok x (C p)) →
       ¬ GoodTable D N x C →
       accPr H D.V P x ω ≤ D.εtable x + e.term ω +
@@ -38,7 +39,7 @@ theorem TableBoundθAccAt.tableBoundθAccAtR [Nonempty Coin] {H : Msg → Msg} {
     TableBoundθAccAtR H D N Ok x := by
   intro Ω _ _ P
   obtain ⟨e, ha, hf, hb⟩ := h Ω P
-  exact ⟨e, ha, hf.fitsForkR (Nat.cast_nonneg _) hk, hb⟩
+  exact ⟨e, ha.onAcc₁, hf.fitsForkR (Nat.cast_nonneg _) hk, hb⟩
 
 /-- **Where the verifier accepts no run**, `TableBoundJAccAtR` holds with no escapes, when the verifier takes a round,
 the weight covers `k` and `ε_table ≥ 0`. -/
@@ -74,13 +75,16 @@ open Classical in
 /-- **The live sessions' bound at the masked tables, off the table on a witness lane, with escapes on accepted
 runs**: `ZkLiveAccAtJ` with level 0's fork event at each table (`Claims.Flock.IZW`) bounding the simulated strategies'
 `Adv₀` after `Commit` at table `j`, and table `j`'s decoder verdict implying acceptance with no level-0 opening off `C`
-on a witness lane unless it self-clashes (`OffW₀Z`). -/
+on a witness lane unless it self-clashes (`OffW₀Z`). Each fork bound is its event's probability and the slack of the
+fork at its round (`Claims.Flock.forkSlack`), as `ZkSessWJ` reads. -/
 def ZkLiveAccAtWJ {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [Inhabited Sl]
     (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (Ok : Claims.Msg → ℕ → List 𝔽 → Prop) (x : Claims.Msg) {mPts : ℕ}
     (T : ℕ → TabZK 𝔽 mPts) : Prop :=
   ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Claims.Prover Ω),
     ∃ (rd : (j : ℕ) → Claims.Flock.IZW (T j).sch.levels.length → Fin ((V true).k x))
-      (_ : ∀ j, Function.Injective (rd j))
+      (_ : ∀ j, Function.Injective (rd j)) (_ : ∀ j i, (rd j i).val = 0 → i = .inr ()) (δ : ℕ → ℝ)
+      (_ : ∀ t, 0 ≤ δ t)
+      (_ : Claims.Flock.SlackFitW (tables true x).length (fun j => (T j).sch) (fun j => (T j).N) rd δ)
       (ev : (j : ℕ) → Claims.Flock.IZW (T j).sch.levels.length → Ω → (Fin ((V true).k x) → Coin) →
         (Fin ((V true).k x) → Coin) → Prop)
       (ev₁ : ℕ → Ω → (Fin ((V true).k x) → Coin) → Prop)
@@ -116,23 +120,26 @@ def ZkLiveAccAtWJ {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabit
           (∀ r ℓ, (∑ u, advRSZ A Hs (T j) _ _ (capOf rootB₀ (finJ T hj)) r.val (ℓ.val + 1)
               (simAtJZ A Hs _ ok pL opn dg dec one fin capOf N hdec rootB₀ (σL u) (hσ u) (finJ T hj)
                 (tabsJ_get _ T _))) / Fintype.card τ ≤
-            Claims.Pr fun s : (Fin ((V true).k x) → Coin) × (Fin ((V true).k x) → Coin) =>
-              ev j (.inl (.inl (r, ℓ))) ω s.1 s.2) ∧
+            (Claims.Pr fun s : (Fin ((V true).k x) → Coin) × (Fin ((V true).k x) → Coin) =>
+              ev j (.inl (.inl (r, ℓ))) ω s.1 s.2) +
+              Claims.Flock.forkSlack sha512 (V true) P x δ (rd j (.inl (.inl (r, ℓ)))).val ω) ∧
           (∀ r : Fin 2, (∑ u, advPadsSZ A Hs (T j) _ _ (capOf rootB₀ (finJ T hj)) r.val
               (simAtJZ A Hs _ ok pL opn dg dec one fin capOf N hdec rootB₀ (σL u) (hσ u) (finJ T hj)
                 (tabsJ_get _ T _))) / Fintype.card τ ≤
-            Claims.Pr fun s : (Fin ((V true).k x) → Coin) × (Fin ((V true).k x) → Coin) =>
-              ev j (.inl (.inr (.inl r))) ω s.1 s.2) ∧
+            (Claims.Pr fun s : (Fin ((V true).k x) → Coin) × (Fin ((V true).k x) → Coin) =>
+              ev j (.inl (.inr (.inl r))) ω s.1 s.2) +
+              Claims.Flock.forkSlack sha512 (V true) P x δ (rd j (.inl (.inr (.inl r)))).val ω) ∧
           (∀ r : Fin 2, (∑ u, advTauSZ A Hs (T j) _ _ (capOf rootB₀ (finJ T hj)) r.val
               (simAtJZ A Hs _ ok pL opn dg dec one fin capOf N hdec rootB₀ (σL u) (hσ u) (finJ T hj)
                 (tabsJ_get _ T _))) / Fintype.card τ ≤
-            Claims.Pr fun s : (Fin ((V true).k x) → Coin) × (Fin ((V true).k x) → Coin) =>
-              ev j (.inl (.inr (.inr r))) ω s.1 s.2) ∧
+            (Claims.Pr fun s : (Fin ((V true).k x) → Coin) × (Fin ((V true).k x) → Coin) =>
+              ev j (.inl (.inr (.inr r))) ω s.1 s.2) +
+              Claims.Flock.forkSlack sha512 (V true) P x δ (rd j (.inl (.inr (.inr r)))).val ω) ∧
           ((∑ u, adv₀SZ A Hs (T j) _ _ (capOf rootB₀ (finJ T hj))
               (simAtJZ A Hs _ ok pL opn dg dec one fin capOf N hdec rootB₀ (σL u) (hσ u) (finJ T hj)
                 (tabsJ_get _ T _))) / Fintype.card τ ≤
-            Claims.Pr fun s : (Fin ((V true).k x) → Coin) × (Fin ((V true).k x) → Coin) =>
-              ev j (.inr ()) ω s.1 s.2) ∧
+            (Claims.Pr fun s : (Fin ((V true).k x) → Coin) × (Fin ((V true).k x) → Coin) =>
+              ev j (.inr ()) ω s.1 s.2) + Claims.Flock.forkSlack sha512 (V true) P x δ (rd j (.inr ())).val ω) ∧
           (∑ u, (prob (LiveSelfClashZ Hs (T j) (outJ Hs (tabsJ (tables true x).length T)) pL opn dec one fin capOf
               (repJ A Hs (tabsJ (tables true x).length T)) j)
             (liveSession dg (tabsJ (tables true x).length T).length mPts N) (σL u)).toReal) / Fintype.card τ ≤
@@ -145,8 +152,8 @@ theorem zkSessWJ_of_liveW {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] 
     {A : Model.Arith 𝔽 K} {Hs : Hashes 𝔽 D Sl} {Ok : Claims.Msg → ℕ → List 𝔽 → Prop} {x : Claims.Msg} {mPts : ℕ}
     {T : ℕ → TabZK 𝔽 mPts} (hl : ZkLiveAccAtWJ A Hs Ok x T) : ZkSessWJ A Hs Ok x T := by
   intro Ω _ _ P
-  obtain ⟨rd, hrd, ev, ev₁, tied, tied₁, hacc, hacc₁, hω⟩ := hl Ω P
-  refine ⟨rd, hrd, ev, ev₁, tied, tied₁, hacc, hacc₁, fun ω j hj C hok => ?_⟩
+  obtain ⟨rd, hrd, hr0, δ, hδ, hfit, ev, ev₁, tied, tied₁, hacc, hacc₁, hω⟩ := hl Ω P
+  refine ⟨rd, hrd, hr0, δ, hδ, hfit, ev, ev₁, tied, tied₁, hacc, hacc₁, fun ω j hj C hok => ?_⟩
   obtain ⟨ok, pL, opn, dg, dec, one, fin, capOf, N, rootB₀, hok', hdec, τ, _, _, σL, hσ, htr, hadv, hP, hTau, h₀,
     hsc⟩ := hω ω j hj C hok
   have hlen := take_gamesZC_length A Hs (tabsJ (tables true x).length T) (capOf rootB₀) (finJ T hj)
