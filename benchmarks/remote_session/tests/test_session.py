@@ -228,6 +228,20 @@ def test_kv_pages_are_checked_by_worker_processes_under_seeds_that_bind_the_appe
     assert r["accepted"] and p["accepted"] and r["failure"] is None and r["appended"] > 0
 
 
+def test_the_check_workers_bound_each_windows_wrong_receipts_as_its_profile_does():
+    from checks import Checks
+
+    from verity.core.protocols.profile import IntegrityProfile, Subset
+
+    profiles = [IntegrityProfile(("receipt",), (n,), {"receipt": Subset(k)}, 2.0 ** -40, drawn={"receipt": k})
+                for n, k in ((4096, 64), (10 ** 6, 300), (10 ** 6, 301))]
+    checks = Checks(2)
+    try:
+        assert checks.bounds(profiles) == [p.bound() for p in profiles]
+    finally:
+        checks.close(wait=True)
+
+
 def test_kv_pages_past_the_lifetime_are_re_keyed_and_a_prover_that_keeps_them_is_rejected(monkeypatch):
     """Under L = 1 window, sent with the session, every appended page is stale in the window after the one it joined.
     The honest prover re-keys each before that window's first pass (writes its payload again in its slot, at a fresh

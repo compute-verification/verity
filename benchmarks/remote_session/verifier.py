@@ -532,7 +532,8 @@ class Verifier:
         is the node's only once its store spans the node.  Each reading carries its timing term's parts
         (`timing_parts`) when the calibration has a bare read of each tier covering the registered store and a window
         had two roots.  With the session's plans, `memory` is the node's HBM it shows held (`memory`), KV credited
-        on no verdict yet."""
+        on no verdict yet.  Each window's bound on wrong receipts is computed once for both readings, exactly, in the
+        check workers when there are some (`checks.Checks.bounds`)."""
         cal = self.calibration
         reported = float(cal["read_bytes_per_s"])
         measured = max(timing.READ_BYTES_PER_S, reported)
@@ -560,9 +561,13 @@ class Verifier:
                      "tiers": {k: {"bytes": t["bytes"], "ms": t["ms"]} for k, t in tiers.items()},
                      "pass_ns": spacings[len(spacings) // 2]}
             out["inputs"]["timing_parts"] = {"pass_ns": parts["pass_ns"], "tiers": parts["tiers"]}
+        profiles = [w.profile for w in record.windows]
+        bounds = self.checks.bounds(profiles) if self.checks else [p.bound() for p in profiles]
+        by = {id(p): x for p, x in zip(profiles, bounds)}
         for name, r in (("spec", spec), ("measured", measured)):
             try:
-                lg = audit.ledger(record, capacity_bytes_per_s=r, chip_bytes=timing.CHIP_BYTES, rebuild=rebuild)
+                lg = audit.ledger(record, capacity_bytes_per_s=r, chip_bytes=timing.CHIP_BYTES, rebuild=rebuild,
+                                  wrong=lambda p: by[id(p)])
                 whole = r * record.span_ns / 1e9
                 out[name] = {"capacity_bytes_per_s": r, **lg.to_json(), "certified_bytes": (1 - lg.gamma) * whole,
                              "certified_bytes_horizon": (1 - lg.gamma_horizon) * whole}
