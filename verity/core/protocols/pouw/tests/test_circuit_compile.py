@@ -75,6 +75,8 @@ XOR1 = _prim("CompileTestXor1", (("x", V1), ("e", V1)), V1, lambda x, e: x ^ e)
 PIECES = {w: tuple(_prim(f"CompileTestPiece{w}x{s}", (("x", V32),), Value(w), lambda x, s=s, w=w: (x >> w * s) % (1 << w))
                    for s in range(32 // w)) for w in (8, 16)}
 ADD8 = ADD[8]
+#: a noise primitive (COIN-RULES' coin flow): it adds its coin to its operand
+NOISED8 = _prim("CompileTestNoised8", (("x", V8), ("e", V8)), V8, lambda x, e: (x + e) & 0xFF, ports=COIN)
 FOLD32 = _prim("CompileTestFold32", (("r", V32), ("t", V32)), V32, lambda r, t: (r * 0x9E3779B1 + t) & M32, ports=FOLD)
 FOLD1 = _prim("CompileTestFold1", (("r", V1), ("t", V1)), V1, lambda r, t: r ^ t, ports=FOLD)
 NEG8 = _prim("CompileTestNeg8", (("x", V8),), V8, lambda x: -x & 0xFF)
@@ -679,12 +681,13 @@ def test_shared_position_slots_refused(monkeypatch):
 
 
 def _coin_served_body(B, S, x, w, u):
-    return B.call(_acc(64), x, Coll(w.type, B.batch(ADD8, w, u, axes=(0, 0)).refs))
+    return B.call(_acc(64), x, Coll(w.type, B.batch(NOISED8, w, u, axes=(0, 0)).refs))
 
 
 @ports
 def test_served_coin_parameter_refused():
-    """A served Program that takes a coin is refused: the salt enters only through compile."""
+    """A served Program that takes a coin is refused, even one whose coin flows as COIN-RULES allows (into a noise
+    primitive): the salt enters only through compile."""
     defn = _def("CompileTestCoin", (), lambda S: ((*XW, ("u", Array(64, V8))), V32), _coin_served_body,
                 ports={"params": lambda p: {"u": p.In(kind="coin")}})
     _refused("coin-read", Program(bind(defn)))
@@ -747,6 +750,7 @@ def _seed_args(boolean, salt, position, roots):
     return [SD.leaves(salt, boolean), SD.position_leaves(position, boolean), SD.leaves(b"".join(roots), boolean)]
 
 
+@compiles
 def test_seed_in_gates_is_the_reference():
     """`PouwSeed_v1` and `PouwNoiseBlock_v1` on words are `seeds.seed` and `seeds.noise_block`."""
     roots = (hashlib.sha512(b"ra").digest(), hashlib.sha512(b"rb").digest())
@@ -756,6 +760,7 @@ def test_seed_in_gates_is_the_reference():
         SD.halves(SD.noise_block(want, 3))
 
 
+@compiles
 @pytest.mark.slow
 def test_seed_on_bits_is_the_reference():
     """`PouwSeed_v2` and `PouwNoiseBlock_v2` on bits (three SHA-512 compressions, a few seconds) are the reference."""
