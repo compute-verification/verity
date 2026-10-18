@@ -323,8 +323,8 @@ def MaskRankAt (st : Flock.Stmt) {k : ℕ} (r : Fin k → Coin) (n₀ n₁ : ℕ
   maskRankOk (claimsAt st r n₀ ++ claimsAt st r n₁) (maskWordsOf st) = true
 
 /-- **What the rank bound reads of a table**, which every table of a masked session in scope has
-(`layoutOk_of_scope`): it passes `Zk.shapeOk` (`25 ≤ m ≤ 35`, a mask slot of `N ≥ 576` words), its `m` is
-`k_log + nbl`, and its mask slot is at least a word and inside the block. -/
+(`layoutOk_of_scope`): it passes `Zk.shapeOk` (`25 ≤ m ≤ 35`, a mask slot of `2^13` bits or more and `N ≥ 576`
+words), its `m` is `k_log + nbl`, and its mask slot is at least a word and inside the block. -/
 def LayoutOk (st : Flock.Stmt) : Prop :=
   Flock.Zk.shapeOk st = .ok () ∧ st.m = st.c.kLog + st.nbl ∧
     ∀ r ∈ st.c.ranges.toList, r.kind = Flock.Kind.mask → 7 ≤ r.slotLog ∧ r.start + 2 ^ r.slotLog ≤ 2 ^ st.c.kLog
@@ -336,8 +336,8 @@ def RankBoundAt (st : Flock.Stmt) : Prop :=
     Claims.Pr (fun r : Fin k → Coin => n₁ + (st.m + st.c.kLog) ≤ k ∧ ¬ MaskRankAt st r n₀ n₁) ≤ 4 * st.m / 2 ^ 128
 
 /-- **The rank bound at the verifier's coins**: `RankBoundAt` at every table of the layout the setup admits. It follows
-from `DeployedRankBound` and the open `SmallSlotBound` (`maskRankBound_of`, in `Zk.RankBridge`), so from
-`SmallSlotBound` alone (`maskRankBound_of_small`, in `Zk.RankDeployed`). -/
+from `DeployedRankBound` and `SmallSlotBound` (`maskRankBound_of`, in `Zk.RankBridge`), both proved, so it holds
+(`maskRankBound`, in `Zk.RankDeployed`). -/
 def MaskRankBound : Prop := ∀ st : Flock.Stmt, LayoutOk st → RankBoundAt st
 
 /-! ## The slot's size -/

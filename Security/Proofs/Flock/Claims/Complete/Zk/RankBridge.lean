@@ -6,8 +6,8 @@ import Proofs.Flock.Claims.KS.Range
 
 `MaskRankBound` (each table's rank checks refuse at most `4·m·2^-128` of the verifier's coins) from
 `DeployedRankBound` (four points of ten coordinates, the `c` claims' first six pinned, rank-deficient at most `2^-122`
-of the time; proved in `Zk.RankDeployed`) and, for a slot under `2^13` bits, the open `SmallSlotBound`
-(`maskRankBound_of`).
+of the time; proved in `Zk.RankDeployed`) and, for a slot under `2^13` bits, `SmallSlotBound` (`maskRankBound_of`),
+which holds because the verifier refuses such a slot (`smallSlotBound`, from `Zk.SLOT_LOG_MIN`).
 
 At a table with `s = slot_log − 7 ≥ 6` and `K = k_log − 7`, the slot's words `b·2^K + pos0·2^s + j` (`b < 2^nbl`,
 `j < 2^s`) hold every pattern on ten coordinates (`pos`: the slot's low `min s 10`, then the block index's), so the
@@ -618,11 +618,20 @@ theorem rankBoundAt_of_deployed (hD : DeployedRankBound) {st : Flock.Stmt} (hl :
       linarith
 
 /-- **The rank bound at a table whose slot holds fewer than `2^13` bits** (`slot_log < 13`, so `s < 6` of the ten
-coordinates are the slot's and the `c` claims' pinned coordinates `s..5` sit off them): open. The deployed tables have
-`slot_log = 14`; the verifier's refusing `slot_log < 13` at `Zk.shapeOk` would discharge it. -/
+coordinates are the slot's and the `c` claims' pinned coordinates `s..5` sit off them). The verifier refuses such a
+slot at `Zk.shapeOk` (`Zk.SLOT_LOG_MIN`), so it holds with no table to bound (`smallSlotBound`). -/
 def SmallSlotBound : Prop :=
   ∀ (st : Flock.Stmt) (rg : Flock.Range), LayoutOk st →
     st.c.ranges.toList.find? (fun r => r.kind == Flock.Kind.mask) = some rg → rg.slotLog < 13 → RankBoundAt st
+
+/-- **No table the setup admits has a slot under `2^13` bits**: `Zk.shapeOk` refuses `slot_log < SLOT_LOG_MIN = 13`
+(`FailClosed.slotLog_of_shapeOk`). -/
+theorem smallSlotBound : SmallSlotBound := by
+  intro st rg hl hrg hlt
+  obtain ⟨r, hr, h13⟩ := FlockSoundness.Discharge.FailClosed.slotLog_of_shapeOk hl.1
+  rw [← Array.find?_toList, hrg] at hr
+  cases hr
+  exact absurd h13 (by simp only [Flock.Zk.SLOT_LOG_MIN]; omega)
 
 /-- **The rank bound at the verifier's coins** from the deployed bound and the small slots': a table the setup admits
 has a mask slot (`Zk.shapeOk`), of `2^13` bits or more (`rankBoundAt_of_deployed`) or fewer (`SmallSlotBound`). -/

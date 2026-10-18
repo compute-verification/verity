@@ -108,10 +108,11 @@ those coins the prover's on rounds carrying its sends, with the rows as `ConsHol
 slot's size (`maskWords_ge`: an in-scope masked table has at least `1024` words), and the rank bound the prover's
 refusal needs (`DeployedRankBound`; at the verifier's coins `MaskRankBound`, a premise of `complete_zk`); `Layout`
 the layout every table of a masked session in scope has (`layoutOk_of_scope`); `RankBridge` `MaskRankBound` from
-`DeployedRankBound` and the small slots' `SmallSlotBound`, open (`maskRankBound_of`); `RankDual` the bound's dual
-side, the deficient coins summed over the killing functionals' supports (`card_deficient_le`); `RankPrimal` its primal
-side, the spans' sizes step by step (`sum_env_le`, `chain`); `RankDeployed` `DeployedRankBound` from the two
-(`deployedRankBound`), so `MaskRankBound` from `SmallSlotBound` alone (`maskRankBound_of_small`); `Complete`
+`DeployedRankBound` and the small slots' `SmallSlotBound` (`maskRankBound_of`), which holds since the verifier refuses
+a slot under `2^13` bits (`smallSlotBound`); `RankDual` the bound's dual side, the deficient coins summed over the
+killing functionals' supports (`card_deficient_le`); `RankPrimal` its primal side, the spans' sizes step by step
+(`sum_env_le`, `chain`); `RankDeployed` `DeployedRankBound` from the two (`deployedRankBound`), so `MaskRankBound`
+(`maskRankBound`); `Complete`
 assembles them into `complete_zk`, from those premises and the goals not yet proved, and `complete_zk_relation` at
 the deployed relation.
 `Level0Pad` is level 0's masked query identity: a row's padded lanes combine to the blinded table's, the padding
@@ -124,4 +125,5 @@ masked prover's Ligerito against that model (`mid_lv0Z`), and `Level0HonestRun` 
 transcript and meets the model's final identity (`honestZ`); `Level0Opens` its openings passing the masked Merkle
 checks, level 0's over rows `EXTRA_LANES` wider (`ligeritoPZk_opens`, `merkleOkZ_of_opens`); `Level0Verifier` the last
 premise, the verifier returning the prover's record at its transcript (`verifier`); `Level0Complete` the four in
-`complete_jsonT_of_level0`, leaving the JSON specification and `MaskRankBound` (`complete_jsonT_closed`). -/
+`complete_jsonT_of_level0`, leaving the JSON specification and `MaskRankBound` (`complete_jsonT_closed`), and with
+`maskRankBound` the JSON specification alone (`complete_jsonT_of_spec`). -/

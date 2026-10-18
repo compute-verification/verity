@@ -17,7 +17,8 @@ the `c` claims' first six pinned, at most `2^-122` of the coins leave the mask s
   in `S` and by `chain` at `{0, 2}`.
 * `term_univ`: all four, one fresh step from `U_7`, where every triple's projection of `U_7` is the whole `2^128`
   (`Good`; `bad_triple_le` where one falls short).
-* `maskRankBound_of_small`: `MaskRankBound` from `SmallSlotBound` alone.
+* `maskRankBound_of_small`: `MaskRankBound` from `SmallSlotBound` alone, so `maskRankBound`: `MaskRankBound` holds,
+  `SmallSlotBound` by the verifier's floor (`smallSlotBound`).
 -/
 
 namespace FlockComplete.MaskRank
@@ -886,6 +887,10 @@ theorem deployedRankBound : DeployedRankBound := by
 
 /-- **The rank bound at the verifier's coins** from the small slots' alone. -/
 theorem maskRankBound_of_small (hS : SmallSlotBound) : MaskRankBound := maskRankBound_of deployedRankBound hS
+
+/-- **The rank bound at the verifier's coins holds**: the deployed bound, and no slot the verifier admits is under
+`2^13` bits (`smallSlotBound`). -/
+theorem maskRankBound : MaskRankBound := maskRankBound_of_small smallSlotBound
 
 end Assembly
 
