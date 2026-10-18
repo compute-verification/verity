@@ -408,6 +408,13 @@ class BuildConfig:
     build_programs_only: str = option("--build-programs-only", env="BUILD_PROGRAMS_ONLY", default="0",
                                       help="TP: 1 = the Build ends at the rank Programs and GP-01: no required-value manifest, no call-boundary "
                                            "check (the Commit builds the manifest it runs over); `verity-vllm neutrality`'s heavy tier")
+    build_construction: str = option("--build-construction", env="BUILD_CONSTRUCTION", default="record", choices=("record", "trace"),
+                                     help="TP: record = the row's construction of record, the AOT Build for a switched row (its `aot` in "
+                                          "manifests/records.json, verity_vllm.predict.aot) and the trace for any other; trace = the trace "
+                                          "(`verity-vllm neutrality`'s heavy tier)")
+    aot_trace: str | None = option("--aot-trace", env="AOT_TRACE", default=None,
+                                   help="TP, a switched row: the dir holding its `aot.trace` Build (build/rank<r>/build_*), e.g. a job's "
+                                        "--send of it; default fetched from the store into <row dir>/aot_trace")
 
 
 @dataclass(frozen=True, kw_only=True)

@@ -608,7 +608,7 @@ class TP2CaptureWorkerExtension:
                         request_ids: dict[str, str] | None = None, match_tokens: dict[str, list[int]] | None = None,
                         tp_swap_requests: dict | None = None, match_capture_dir: str | None = None, replay: dict | None = None,
                         weights_pin: dict | None = None, flip_weight: dict | None = None, tp_partials_flip_site: dict | None = None,
-                        serve_shard_from: dict | None = None, tap_sources: Any = None) -> dict[str, Any]:
+                        serve_shard_from: dict | None = None, tap_sources: Any = None, weights_as_loaded: Any = None) -> dict[str, Any]:
         """Construct THIS rank's committer (`commit_delta.make_committer` on a per-rank engine shim: this worker's model runner + model,
         the rank's loaded weight SHARDS), attach the FA hidden source (none for MLA), size the arena from the workload envelope, register the rank's
         weights.  The rank's root binds its own values (its shards' roots, its partial GEMMs, its FA2 hidden stream for its heads); the
@@ -732,7 +732,12 @@ class TP2CaptureWorkerExtension:
                                 "served_before_sha256": before, "served_after_sha256": after, "own_shard_of_record_sha256": own_sha,
                                 "own_equals_before": own_sha == before, "after_equals_before": after == before})
             res["serve_shard_from"] = applied
-        res["weight_registration"] = _jsonable(com.register_weights())
+        # the weights the rank registers, pins and replays: its MXFP4 Marlin experts' fields as loaded (`acquire.as_loaded`, bound by the TP
+        # driver with the checkpoint of record), every other tensor as served
+        weights, res["weights_as_loaded"] = (weights_as_loaded(model, world=int(facts["tp"]["world_size"]), rank=rank) if weights_as_loaded
+                                             else (model, None))
+        with hooks.patched(com, "model", weights):
+            res["weight_registration"] = _jsonable(com.register_weights())
         # [manbind MAN-09, COORD M-0614 (1)] WEIGHTS OF RECORD per rank: sha256 of every live parameter of THIS rank (the shards the root
         # covers) == the digest composed from the PINNED checkpoint shards by the rank Program's shard map (weights_of_record.build_record,
         # engine-free, from result.json tp {world, rank}); self-consistency with the run's own root is not this check.  Absent -> unpinned
@@ -757,7 +762,7 @@ class TP2CaptureWorkerExtension:
                 world_ = int(facts["tp"]["world_size"])
                 if int(rtp.get("world") or 1) != world_ or int(rtp.get("rank") or 0) != int(rank):
                     raise RuntimeError(f"rank {rank}: weights of record built from a Program of tp={rtp}, not this rank's (world {world_}, rank {rank})")
-                live = WR.live_param_digests(model)
+                live = WR.live_param_digests(weights)
                 chk = WR.check(rec, live)
                 chk["rank"] = rank
                 chk["program_dir"] = str(pdir)
@@ -825,7 +830,7 @@ class TP2CaptureWorkerExtension:
             except Exception as e:  # noqa: BLE001
                 res["attention_plane_classes"]["error"] = repr(e)[:300]
         self._tp2_commit = {"com": com, "eng": eng, "base": baseline_state(eng), "rank": rank, "rc": None, "program_digest": program_digest,
-                            "tps": (tps if tp_partials else None), "world": int(facts["tp"]["world_size"]), "n_requests": int(n_requests),
+                            "weights": weights, "tps": (tps if tp_partials else None), "world": int(facts["tp"]["world_size"]), "n_requests": int(n_requests),
                             "required_manifest": required_manifest, "request_order": list(request_order or []), "arrivals": dict(arrivals or {}),
                             "caps": dict(caps or {}), "match_tokens": dict(match_tokens) if match_tokens else None, "swap_requests": swapped, "swap_rule": swap_rule,
                             "match_capture_dir": (str(match_capture_dir) if match_capture_dir else None), "weights_pin": st_pin,

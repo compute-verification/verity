@@ -332,11 +332,16 @@ def head_sig(T):
                       Tuple(Array(S.CHUNKS * S.QG, T.E4M3), Array(S.CHUNKS, T.F32)))
 
 
+def check_head_statics(QG: int, ROPE: int) -> None:
+    check_pow2("Dsv4InvRopeQuant", QG)
+    if not (0 < ROPE <= QG and ROPE % 2 == 0):
+        raise ValueError(f"Dsv4InvRopeQuantHead: an even rotary suffix within the last group (ROPE={ROPE}, QG={QG})")
+
+
 def inv_rope_head(B, S, x, cs, defs, T) -> Coll:
     """`Dsv4InvRopeQuantHead`'s body over the Definitions ``defs`` (cvt, inv_rope, quant) and element types ``T``."""
     hd = S.CHUNKS * S.QG
-    if not (0 < S.ROPE <= S.QG and S.ROPE % 2 == 0):
-        raise ValueError(f"Dsv4InvRopeQuantHead: an even rotary suffix within the last group (ROPE={S.ROPE}, QG={S.QG})")
+    check_head_statics(S.QG, S.ROPE)
     plain = B.batch(defs.cvt, x[0:hd - S.ROPE], axes=(0,))
     rot = B.call(bind(defs.inv_rope, ROPE=S.ROPE), x[hd - S.ROPE:hd], cs)
     words = [plain[i] for i in range(hd - S.ROPE)] + [rot[i] for i in range(S.ROPE)]

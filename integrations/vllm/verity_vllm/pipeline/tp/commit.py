@@ -29,8 +29,10 @@ import struct
 import sys
 import time
 from dataclasses import dataclass
+from functools import partial
 from pathlib import Path
 
+from verity_vllm.acquire import as_loaded as AL
 from verity_vllm.acquire.sources import taps as TAPS
 from verity_vllm.check import weights_of_record as WR
 from verity_vllm.config import group, option
@@ -85,6 +87,15 @@ def tree_of_record(root: str | os.PathLike | None = None) -> dict:
     from verity_vllm.pipeline import research_tools, source_identity
     root = Path(root) if root is not None else source_identity.TREE
     return {"source": "source_identity.code_identity", "root": str(root), "closure": list(research_tools.CLOSURE), **source_identity.code_identity(root)}
+
+
+def weights_as_loaded(pin: dict | None) -> partial | None:
+    """What `tp2_commit_make` calls on every rank for the weights it registers (`acquire.as_loaded.attach_rank`), composing from the
+    checkpoint of record; None without one."""
+    if not pin:
+        return None
+    return partial(AL.attach_rank, composer=partial(WR.rank_composer, checkpoint_dir=pin["checkpoint_dir"],
+                                                    checkpoints_manifest=pin["checkpoints_manifest"], model=pin["model"]))
 
 
 def parse_serve_shard_from(specs: list[str] | None, world: int) -> dict[str, list[dict]] | None:
@@ -386,6 +397,7 @@ def main(args: Options) -> int:
                                           "tp_relabel": relabel, "tp_partials_omit_rank": args.omit_rank_partials,
                                           "match_tokens": match_tokens, "tp_swap_requests": swap_requests, "match_capture_dir": match_capture_dir, "replay": replay_cfg,
                                           "weights_pin": weights_pin_cfg, "flip_weight": flip_weight, "serve_shard_from": serve_shard_from, "tap_sources": TAPS.for_ranks(args.tap_sources),
+                                          "weights_as_loaded": weights_as_loaded(weights_pin_cfg),
                                           "tp_partials_flip_site": ({args.flip_partial.split(":", 1)[0]: args.flip_partial.split(":", 1)[1]} if args.flip_partial else None),
                                           "tp_partials_omit_site": ({args.omit_partial_site.split(":", 1)[0]: args.omit_partial_site.split(":", 1)[1]} if args.omit_partial_site else None),
                                           "engine_kwargs": {k: v for k, v in kw.items() if k not in ("model", "tokenizer", "worker_extension_cls")}})

@@ -26,6 +26,9 @@ def compose_global(fixture: Mapping[str, Any], parts: Mapping[str, dict[str, Any
             by_engine.setdefault(int(r.get("arrive_step", 0)) + s, []).append((r["request_id"], s))
     hidden_family = parts[reqs[0]["request_id"]]["query"]["attention_hidden_family"]
     ids: list[dict[str, Any]] = []
+    engine_of = {(rid, s): e for e, members in by_engine.items() for rid, s in members}
+    unreturned = [dict(row, program_digest=pdig, component_digest=row["program_digest"], engine_step=engine_of.get((rid, row["step"]), row.get("engine_step")))
+                  for rid, p in parts.items() for row in p.get("unreturned") or ()]
     seen_w: set = set()
     for rid, p in parts.items():
         for row in p["identities"]:
@@ -97,7 +100,7 @@ def compose_global(fixture: Mapping[str, Any], parts: Mapping[str, dict[str, Any
             "ranks": ranks, "rank": rank,
             "engine_steps": engine_steps_out, "steps": sorted(by_engine), "requests": [r["request_id"] for r in reqs],
             "populations": {"identities": len(ids), "by_family": dict(fam), "engine_steps": len(by_engine), "requests": len(reqs)},
-            "manifest_digest": fmt.manifest_digest(ids), "identities": ids}
+            "manifest_digest": fmt.manifest_digest(ids), "identities": ids, **fmt.unreturned_block(unreturned)}
 
 
 def _with_partitions(q: dict[str, Any], key: str, queries: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:
@@ -154,4 +157,5 @@ def merge_ranks(parts: list[dict[str, Any]]) -> dict[str, Any]:
             "steps": sorted({s for p in parts for s in p["steps"]}), "requests": list(dict.fromkeys(rq for p in parts for rq in p["requests"])),
             "complete": all(p.get("complete", True) for p in parts) and not binding["unbound"], "unmodelled": unmodelled,
             "populations": {"identities": len(ids), "by_family": dict(Counter(r["family"] for r in ids))},
-            "manifest_digest": fmt.manifest_digest(ids), "identities": ids, "tp_peer_binding": binding}
+            "manifest_digest": fmt.manifest_digest(ids), "identities": ids, "tp_peer_binding": binding,
+            **fmt.unreturned_block([r for p in parts for r in p.get("unreturned") or ()])}

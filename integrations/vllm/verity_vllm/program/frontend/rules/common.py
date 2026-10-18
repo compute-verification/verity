@@ -114,4 +114,11 @@ def shape(ctx, a) -> tuple[int, ...] | None:
     return ctx.shape_of_node(a) if isinstance(a, torch.fx.Node) else None
 
 
-__all__ = ["rows_of", "from_rows", "dtype_is", "shape"]
+def call_args(node) -> dict:
+    """The call's arguments by their schema names, with the defaults the export leaves out of a call that passes them."""
+    names = node.target._schema.arguments
+    return {**{x.name: x.default_value for x in names if x.has_default_value()}, **dict(zip((x.name for x in names), node.args)),
+            **node.kwargs}
+
+
+__all__ = ["rows_of", "from_rows", "dtype_is", "shape", "call_args"]

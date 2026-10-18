@@ -198,11 +198,13 @@ def test_the_route_table_covers_every_decode_batch_once() -> None:
 def test_the_default_cublas_route_does_not_confuse_unrecorded_with_non_split() -> None:
     for M in X.LINEAR_M:
         assert BC.default_cublas_route("linear", M, 6144, 160) == ("splitk", {"SPLIT_K": 4})
-        assert BC.default_cublas_route("linear", M, 6144, 19360) == ("non_split", {})
+        assert BC.default_cublas_route("linear", M, 6144, 19360) == BC.default_cublas_route("linear", M, 7168, 16160) == ("non_split", {})
     assert BC.default_cublas_route("linear", 393, 6144, 160) == ("splitk", {"SPLIT_K": 3})
     assert BC.default_cublas_route("linear", BC.CUBLAS_ROUTES["m_max"] + 1, 6144, 19360) is None
     assert BC.default_cublas_route("router", 16, 6144, 256) is None
     assert BC.default_cublas_route("linear", 1, 6144, 161) is None
+    assert BC.default_cublas_route("f32out", 256, 7168, 2048) == ("non_split", {})
+    assert BC.default_cublas_route("f32out", 128, 7168, 2048) == ("splitk", {"SPLIT_K": 2})
 
 
 def test_scan_routes_merges_adjacent_regimes_of_one_model() -> None:

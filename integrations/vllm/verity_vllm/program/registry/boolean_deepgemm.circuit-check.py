@@ -19,6 +19,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("Fp8GroupQuantUe8m0_v2", lambda: bind(BDG.Fp8GroupQuantUe8m0V2, K=64, G=32)),
         ("DeepGemmFp8Linear_v2", lambda: bind(BDG.DeepGemmFp8LinearV2, K=128, N=2)),
         ("FlashInferFp8Linear_v2", lambda: bind(BDG.FlashInferFp8LinearV2, K=128, N=2)),
-        # two groups over two k blocks and a partial weight block (a whole one too, N = 34, is over `Options.partition_max_gates`)
+        # two groups over two k blocks and a partial weight block (a whole one too, N = 34, is 4.5M gates, near
+        # `Options.partition_max_gates`)
         ("ScaledMmFp8BlockGrouped_v2", lambda: bind(BDG.ScaledMmFp8BlockGroupedV2, H=2, K=64, N=2, G=32)),
     ]

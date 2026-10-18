@@ -60,8 +60,9 @@ def make_vllm_config(model: str = PIN["model"], revision: str = PIN["revision"],
 class WithPeers(nn.Module):
     """[R13 tp] A rank's wrapper with its PEER INPUTS: `forward(prompt, *peers)` hands the peers (the other rank's collective partials,
     in collective call order) to the rank's `CollectiveBus` and runs the inner wrapper; the k-th collective of this forward consumes
-    peer k (see `tp_ops.CollectiveBus`).  A stochastic inner wrapper's own inputs come before the peers, in its order
-    (`SeededWithPeers`, `SplitsWithPeers`; `with_peers` picks the form): the Program's parameters are the TP1 Program's, then the peers."""
+    peer k (see `export_ops.CollectiveBus`).  A stochastic inner wrapper's own inputs come before the peers, in its order
+    (`SeededWithPeers`, `SplitsWithPeers`), and so does a `schedule` witness (`ScheduledWithPeers`); `with_peers` picks the form: the
+    Program's parameters are the TP1 Program's, then the schedule, then the peers."""
 
     def __init__(self, inner: nn.Module, bus) -> None:
         super().__init__()
@@ -74,11 +75,14 @@ class WithPeers(nn.Module):
     def forward(self, prompt: torch.Tensor, *peers: torch.Tensor):
         return self._run((prompt,), peers)
 
-    def _run(self, own: tuple, peers: tuple):
-        self.bus.reset("trace", list(peers))
+    def _run(self, own: tuple, peers: tuple, schedule: torch.Tensor | None = None):
+        self.bus.reset("trace", list(peers), schedule)
         out = self.inner(*own)
         if self.bus.cursor * (self.bus.world - 1) != len(peers):    # [lane vllm-tp-n] world-1 peer inputs per collective
             raise RuntimeError(f"rank {self.bus.rank}: {self.bus.cursor} collectives consumed x {self.bus.world - 1} peers, {len(peers)} peer inputs given")
+        if self.bus.schedule_cursor != len(self.bus.schedule_record):
+            raise RuntimeError(f"rank {self.bus.rank}: {self.bus.schedule_cursor} align calls read the schedule, the probe recorded "
+                               f"{len(self.bus.schedule_record)}")
         return out
 
 
@@ -96,15 +100,33 @@ class SplitsWithPeers(WithPeers):
         return self._run((prompt, seed, splits), peers)
 
 
+class ScheduledWithPeers(WithPeers):
+    """`WithPeers` over a greedy wrapper whose forward reads the `schedule` witness (`CollectiveBus.schedule_key`, each
+    `moe_align_block_size` call's key per pair): `forward(prompt, schedule, *peers)`."""
+
+    @property
+    def DERIVE_SOURCE(self) -> str:
+        return f"verity-vllm/scheduled-with-peers/v1[{self.inner.DERIVE_SOURCE}]"
+
+    def forward(self, prompt: torch.Tensor, schedule: torch.Tensor, *peers: torch.Tensor):
+        return self._run((prompt,), peers, schedule)
+
+
 def with_peers(inner: nn.Module, inputs: tuple, bus) -> tuple[nn.Module, tuple]:
     """A tensor-parallel rank's traced wrapper over `inner` (a `make_wrapper` module) and its example inputs: `inner`'s own inputs (the
-    prompt, and a stochastic wrapper's `seed` and `splits`), then the bus's example peers in collective order."""
+    prompt, and a stochastic wrapper's `seed` and `splits`), the `schedule` when the probe recorded an align call that reads it, then
+    the bus's example peers in collective order."""
     forms = {1: WithPeers, 2: SeededWithPeers, 3: SplitsWithPeers}
     if getattr(inner, "C", 0):
         raise ValueError(f"with_peers: a rank Program with a cached prefix (C={inner.C}) has no peer form yet (its prefix is the rank's own "
                          f"KV heads, an input before the peers)")
     if len(inputs) not in forms:
         raise ValueError(f"with_peers: a wrapper takes 1 to 3 inputs of its own (prompt, seed, splits), {type(inner).__name__} takes {len(inputs)}")
+    if bus.schedule_record:
+        if len(inputs) != 1:
+            raise ValueError(f"with_peers: the schedule witness has a greedy wrapper's form only (prompt, schedule, *peers), not one "
+                             f"with {len(inputs)} inputs of its own")
+        return ScheduledWithPeers(inner, bus), tuple(inputs) + (bus.example_schedule(),) + tuple(bus.example_peers())
     return forms[len(inputs)](inner, bus), tuple(inputs) + tuple(bus.example_peers())
 
 
@@ -161,10 +183,13 @@ class _CudaFactoriesOnMeta(torch.overrides.TorchFunctionMode):
 
 def instantiate_meta(vllm_config) -> nn.Module:
     """The registered model class for `vllm_config.model_config` (vLLM's registry), constructed on `meta` (shapes only); a buffer
-    vLLM puts on the CUDA device explicitly is on `meta` too (`_CudaFactoriesOnMeta`)."""
+    vLLM puts on the CUDA device explicitly is on `meta` too (`_CudaFactoriesOnMeta`), and a CUDA stream or event it makes is an
+    inert stand-in (`export_compat.cuda_streams_inert`)."""
     from vllm.config import set_current_vllm_config
     from vllm.model_executor.model_loader.utils import get_model_architecture
     from vllm.utils.torch_utils import set_default_torch_dtype
+
+    from .export_compat import cuda_streams_inert
     model_cls, arch = get_model_architecture(vllm_config.model_config)
     # worker parity (vllm/v1/worker/worker_base.py: "IR op priority and torch-wrap state are constant for the worker's lifetime"):
     # without these, vLLM's `ir.ops.*` (e.g. GemmaRMSNorm's unfused norm) stay opaque `vllm_ir.*` torch ops instead of running
@@ -176,7 +201,7 @@ def instantiate_meta(vllm_config) -> nn.Module:
     except Exception:  # noqa: BLE001
         pass
     with set_current_vllm_config(vllm_config), set_default_torch_dtype(vllm_config.model_config.dtype), torch.device("meta"), \
-            _CudaFactoriesOnMeta():
+            _CudaFactoriesOnMeta(), cuda_streams_inert():
         model = model_cls(vllm_config=vllm_config)
     model.eval()
     model._verity_arch = arch  # annotation only
@@ -266,6 +291,67 @@ def mla_absorbed_weights_as_the_loader_does(model: nn.Module, vllm_config) -> di
         fact.update(dtype=str(dt).removeprefix("torch."), W_UK_T=[N, P, L], W_UV=[N, L, V],
                     rule=f"{MLAAttention.__qualname__}.process_weights_after_loading: replace_parameter(W_UV = "
                          "W_UV.transpose(0, 1), W_UK_T = W_UK.permute(1, 2, 0)) from kv_b_proj")
+    return fact
+
+
+def fp8_block_weights_as_the_loader_does(model: nn.Module) -> dict:
+    """Loader parity for the block-FP8 linears' DeepGEMM post-process (`fp8_utils.deepgemm_post_process_fp8_weight_block`, which the
+    sm_90 block-FP8 kernels' `process_weights_after_loading` runs): checkpoint UE8M0 block scales (`float8_e8m0fnu`, DeepSeek-V4) are
+    upcast to the f32 words the kernels read, and a layer marked `is_bmm` (DeepSeek-V4's grouped o-projection `wo_a`, the einsum's
+    B) has its weight [g*r, d] and scales [g*r/128, d/128] as [g, r, d] and [g, r/128, d/128].  A meta instantiation never loads,
+    so each such layer gets them here, empty, in the served shapes and dtypes, under the served names.  A model whose block-FP8
+    scales are f32 and that marks no layer `is_bmm` is unchanged."""
+    fact: dict[str, Any] = {"upcast": [], "bmm": []}
+    for name, m in model.named_modules():
+        w, s = getattr(m, "weight", None), getattr(m, "weight_scale_inv", None)
+        if not (isinstance(w, nn.Parameter) and isinstance(s, nn.Parameter) and w.dtype == torch.float8_e4m3fn):
+            continue
+        upcast, g = s.dtype == torch.float8_e8m0fnu, getattr(m, "bmm_batch_size", 0) if getattr(m, "is_bmm", False) else 0
+        if not upcast and not g:
+            continue
+        wshape, sshape = tuple(w.shape), tuple(s.shape)
+        if g:
+            wshape, sshape = (g, wshape[0] // g, wshape[1]), (g, sshape[0] // g, sshape[1])
+            m.register_parameter("weight", nn.Parameter(torch.empty(wshape, dtype=w.dtype, device=w.device), requires_grad=False))
+            fact["bmm"].append(name)
+        m.register_parameter("weight_scale_inv", nn.Parameter(torch.empty(sshape, dtype=torch.float32, device=s.device), requires_grad=False))
+        if upcast:
+            fact["upcast"].append(name)
+    if fact["upcast"] or fact["bmm"]:
+        fact["rule"] = ("deepgemm_post_process_fp8_weight_block: _upcast_e8m0_to_fp32(ws) for float8_e8m0fnu scales; is_bmm: "
+                        "wq.view(g, r, d), ws.view(g, r // 128, d // 128)")
+    return fact
+
+
+def _plain_tensors(model: nn.Module) -> dict[tuple[str, str], torch.Tensor]:
+    return {(mname, n): v for mname, m in model.named_modules() for n, v in vars(m).items()
+            if isinstance(v, torch.Tensor) and not isinstance(v, nn.Parameter)}
+
+
+def post_load_tensors_as_the_loader_does(model: nn.Module) -> dict:
+    """Loader parity for the model-level post-load hook, the loader's last step (`model_loader/utils.py`
+    `process_weights_after_loading`: `model.process_weights_after_loading()` after the per-layer quant finalize).  A hook may make a
+    tensor from loaded weights and keep it as a plain attribute that the forward reads (DeepSeek-V4's first-layer
+    `hc_attn_fn_broadcast`, its mHC `hc_attn_fn` summed over the residual streams, `finalize_mhc_broadcast_weights`).  The hook runs
+    here on meta, and each plain tensor attribute it makes is registered as a Parameter under the same name: the Program reads it as a
+    weight under the served name, the root the collector commits (the meta inventory walks plain tensor attributes).  A model without
+    the hook is unchanged."""
+    fact: dict[str, Any] = {"applies": False}
+    hook = getattr(model, "process_weights_after_loading", None)
+    if not callable(hook):
+        return fact
+    before = _plain_tensors(model)
+    with torch.no_grad():
+        hook()
+    made = {k: v for k, v in _plain_tensors(model).items() if before.get(k) is not v}
+    modules = dict(model.named_modules())
+    for (mname, n), v in made.items():
+        m = modules[mname]
+        delattr(m, n)
+        m.register_parameter(n, nn.Parameter(v, requires_grad=False))
+    fact.update(applies=True, hook=f"{type(model).__qualname__}.process_weights_after_loading",
+                parameters={f"{mname}.{n}" if mname else n: {"shape": list(v.shape), "dtype": str(v.dtype).removeprefix("torch.")}
+                            for (mname, n), v in sorted(made.items())})
     return fact
 
 
@@ -668,7 +754,7 @@ def op_histogram(ep) -> dict[str, int]:
 __all__ = ["PIN", "make_vllm_config", "ensure_distributed", "instantiate_meta", "fake_forward_context", "EngineStep", "GreedyRequest",
            "CachedGreedyRequest", "CachedStochasticRequest", "cached_wrapper", "prefix_input", "PaddedGreedyRequest", "make_wrapper", "export_module", "export_step", "op_histogram", "consulted_facts",
            "attention_impls", "export_facts", "BI_TRITON_KERNELS", "retie_lm_head_as_the_loader_does",
-           "mla_absorbed_weights_as_the_loader_does"]
+           "mla_absorbed_weights_as_the_loader_does", "fp8_block_weights_as_the_loader_does", "post_load_tensors_as_the_loader_does"]
 
 
 def attention_impls(model: nn.Module) -> dict:
@@ -679,7 +765,9 @@ def attention_impls(model: nn.Module) -> dict:
     `MLAAttention` layer has an entry with `"kind": "mla"`: its impl, backend name, kv dtype, heads, scale, context-parallel sizes,
     dense-MHA prefill backend, the FA3 split count its impl's module calls `flash_attn_varlen_func` with (`num_splits`: the one
     `engine.sparse_mla`'s pin marks, None for vLLM's heuristic), and from the layer's vLLM config the query heads per rank its
-    metadata builder keys the decode threshold on and `sparse_mla_force_mqa`, what `rules/vllm_dsa.py` reads."""
+    metadata builder keys the decode threshold on and `sparse_mla_force_mqa`, what `rules/vllm_dsa.py` reads.  Any other attention
+    layer (`AttentionLayerBase`: DeepSeek-V4's sparse MLA, its window, indexer and compressor-state caches) has an entry with `"kind":
+    "layer"` under its prefix: its class, its backend's name and its kv cache dtype."""
     from vllm.model_executor.layers.attention import Attention, MLAAttention
     out = {}
     for name, mod in model.named_modules():
@@ -716,6 +804,12 @@ def attention_impls(model: nn.Module) -> dict:
             "use_sparse": getattr(mod, "use_sparse", None), "num_splits": getattr(fa, "verity_sparse_mla_splits", None),
             "q_heads_per_rank": vc.model_config.get_num_attention_heads(vc.parallel_config),
             "sparse_mla_force_mqa": bool(vc.attention_config.sparse_mla_force_mqa)}
+    base = getattr(sys.modules.get("vllm.model_executor.layers.attention_layer_base"), "AttentionLayerBase", None)
+    for name, mod in model.named_modules():
+        if base is None or isinstance(mod, (Attention, MLAAttention)) or not isinstance(mod, base):
+            continue
+        out[getattr(mod, "prefix", name)] = {"kind": "layer", "impl": f"{type(mod).__module__}.{type(mod).__qualname__}",
+                                             "backend": mod.get_attn_backend().get_name(), "kv_cache_dtype": getattr(mod, "kv_cache_dtype", None)}
     return out
 
 

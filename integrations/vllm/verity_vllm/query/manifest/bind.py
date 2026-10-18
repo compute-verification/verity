@@ -3,9 +3,10 @@ value are bound to that row by structure.  Nothing reconciles a tap's spelling w
 
 IDENTITY.  The manifest of record (`verity_vllm.query.required`) spells each required Value as (op_path, output_member, invocation) at
 an engine step on a rank, from the Program and its correspondence alone: op_path is the producing Call's owning module (a collective
-site's enclosing module at invocation k, `<module>/<fx node>` for a Value two Calls of one module body exchange); output_member is the
-Definition's port name when it returns several (`<hint>.<port>` when the Build recorded a hint, which names the Call), else the recorded
-hint, else `out`.  The protocol's encodings are identity format, each one constant the manifest and the committing tap share:
+site's enclosing module at invocation k, `<module>/<fx node>` for a Value two Calls of one module body exchange, and for each fx node's
+Value when two fx nodes of the module produce a member of one name at the step); output_member is the Definition's port name when it
+returns several (`<hint>.<port>` when the Build recorded a hint, which names the Call), else the recorded hint, else `out`.  The
+protocol's encodings are identity format, each one constant the manifest and the committing tap share:
 `part_rank<r>` / `shard_rank<r>` (`format.TP_PARTIAL_MEMBER`), a norm site's `all_reduce` (`collective_names.NORM_SITE_MEMBER`), the
 token ids `<consumer>/in`, `runner.sampler/sampled_token_ids`, the kernel streams `fa2.m1/L<k>/<geometry>` and `moe/L<k>/<plane>`.  A
 row also carries its Call's `spec`, `port` and `position` (Program order), outside the manifest digest.

@@ -85,6 +85,21 @@ def _write_instances_file(path: str, head: dict, rows) -> None:
         _write_instances(f, head, rows)
 
 
+def write_instances(out: str, program, digest: str, corr_digest: str | None, supplied: dict, *, names: dict[int, str | None] | None = None,
+                    params: list[list[str]] | None = None) -> None:
+    """A derive dir's `instances.json.gz`: the Program's instance sequence (`_instance_rows`) under its digests.  `names` (by Call)
+    and `params` stand in for the Program's own Call names and parameters, which no digest covers (`predict.aot.emit`: as its
+    trace named them)."""
+    rows = _instance_rows(program)
+    if names is not None:
+        rows = ({**r, "name": names.get(r["i"])} for r in rows)
+    if params is None and hasattr(program.fn.body, "params"):
+        params = [[n, str(t)] for n, t in program.fn.body.params]
+    _write_instances_file(os.path.join(out, "instances.json.gz"),
+                          {"schema": "cb-a/instance-sequence/v2", "digest": digest, "correspondence_digest": corr_digest, "params": params, **supplied},
+                          rows)
+
+
 #: the builder's own sources (hashed into `construction_version`): the export shims, the meta instantiation / wrappers, this driver,
 #: the Triton interception, the vLLM bindings + vocabulary + derive core, and the applicability contract itself.
 _CONSTRUCTION_SOURCES = ("verity_vllm/program/frontend/export_compat.py", "verity_vllm/program/frontend/vllm_meta.py",
@@ -500,6 +515,8 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             # pinned checkpoint's bytes, so the Program has the served model's one shared root (see `vm.retie_lm_head_as_the_loader_does`)
             res["lm_head_tying"] = vm.retie_lm_head_as_the_loader_does(model, cfg)
             res["mla_absorbed_weights"] = vm.mla_absorbed_weights_as_the_loader_does(model, cfg)
+            res["fp8_block_weights"] = vm.fp8_block_weights_as_the_loader_does(model)
+            res["post_load_tensors"] = vm.post_load_tensors_as_the_loader_does(model)
             if tp > 1:
                 res["tp"]["embedding_shards"] = bind_vocab_parallel_embeddings(model, tp_stack.enter_context(hooks.Hooks()))
                 res["tp"]["sharded_params"] = _sharded_param_summary(model)
@@ -541,6 +558,9 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
                 probe = vm.probe_collectives(mod, inputs, cfg, ntok, bus, profile=target)
                 res["tp"]["collectives"] = {"n": len(probe), "by_kind": _count([p["kind"] for p in probe]),
                                             "by_shape": _count([f'{p["kind"]}{tuple(p["shape"])}' for p in probe]), "record": probe}
+                if bus.schedule_record:      # the align calls' keys, the `schedule` input before the peers (`CollectiveBus.schedule_key`)
+                    res["tp"]["schedule"] = {"calls": len(bus.schedule_record), "pairs": sum(r["pairs"] for r in bus.schedule_record),
+                                             "record": list(bus.schedule_record)}
                 mod, inputs = vm.with_peers(mod, inputs, bus)
             applied_export: dict = {}
             ep = vm.export_module(mod, inputs, cfg, ntok, intercept_triton=intercept, launch_log=log, profile=target, applied_out=applied_export)
@@ -629,10 +649,7 @@ def _write_program(out: str, res: dict, rep, *, target, applied: dict, sampling:
     if (pfx := KP.layout_of(rep.provenance)) is not None:   # the cached prefix's input and layer order, for Match
         res["prefix"] = json.dump(pfx, open(os.path.join(out, "prefix_cache.json"), "w"), indent=1) or pfx
     json.dump(rep.to_json(), open(os.path.join(out, "derive-report.json"), "w"), indent=1, default=str)
-    _write_instances_file(os.path.join(out, "instances.json.gz"),
-                          {"schema": "cb-a/instance-sequence/v2", "digest": digest, "correspondence_digest": corr_digest,
-                           "params": [[n, str(t)] for n, t in program.fn.body.params] if hasattr(program.fn.body, "params") else None, **supplied},
-                          _instance_rows(program))
+    write_instances(out, program, digest, corr_digest, supplied)
     # the artifact wrapper: identity = H(construction version || target profile || applicability || Program digest); digest unchanged
     art = ArtifactIdentity.build(construction_version(VLLM_BINDING_RULES), target,
                                  applicability_conditions(target, applied, res["attention_impls_observed"], res["export_facts"], sampling, res.get("tp"), launch), digest)

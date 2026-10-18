@@ -69,11 +69,11 @@ def _args(node, names: tuple[str, ...]) -> dict:
     return d
 
 
-def _missing(ctx, roles) -> str | None:
+def _missing(ctx, roles, kernels: dict = ROLE_KERNELS) -> str | None:
     gone = [r for r in roles if not ctx.vocab.has(r)]
     if not gone:
         return None
-    return "numerics_unregistered: the vocabulary has no " + "; no ".join(f"{r} ({ROLE_KERNELS[r]})" for r in gone)
+    return "numerics_unregistered: the vocabulary has no " + "; no ".join(f"{r} ({kernels[r]})" for r in gone)
 
 
 def _value(ctx, a, dt, shp, what: str) -> str | None:
@@ -103,9 +103,9 @@ def _positions(ctx, a) -> list[int] | str:
     return v.flat()
 
 
-def _table(ctx, a, width: int, positions: list[int], what: str) -> str | None:
-    """None when ``a`` is a bf16 rotary cache [MAX_POS, width] holding every position."""
-    r = _value(ctx, a, BF16, (None, width), what)
+def _table(ctx, a, width: int, positions: list[int], what: str, dt=BF16) -> str | None:
+    """None when ``a`` is a rotary cache [MAX_POS, width] of ``dt`` holding every position."""
+    r = _value(ctx, a, dt, (None, width), what)
     if r:
         return r
     n = shape(ctx, a)[0]

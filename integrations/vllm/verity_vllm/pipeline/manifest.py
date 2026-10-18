@@ -82,9 +82,10 @@ def word_check(P: Any, corr: Correspondence, required: Any, word: str, *, strict
                max_gates: str | None = None, unreturned: frozenset[int] = frozenset(), log=None) -> dict[str, Any]:
     """`Q_word_v1{X,W}` (`word`: "16/32[+extras]") over `P`, committed = the manifest's required values and the interior words a tap
     acquires (`acquired`, `word.check_calls`; `max_gates`, the run's gate limits: `word.gate_limits`); `strict` raises
-    `word.QueryRuleViolation` naming every violation.  The `unreturned` Calls (`Population.unreturned`: no Call reads their Values and
-    the Program does not return them, e.g. GLM-5.3's indexer logits and top-k while every key is selected) are skipped like literals:
-    nothing depends on them, so no unit has to end at their outputs.  The manifest is not touched."""
+    `word.QueryRuleViolation` naming every violation.  The `unreturned` Calls (`Population.unreturned`: no Call reads their Values, the
+    Program does not return them and no policy requires them, e.g. GLM-5.3's indexer logits and top-k while every key is selected) are
+    skipped like literals: nothing depends on them, so no unit has to end at their outputs; the manifest lists them under `unreturned`.
+    The manifest is not touched."""
     from verity_vllm.query.module_body import literal_calls
     X, W, extras = word_query.parse(word)
     r = word_query.check_query(P, _Committed(required, literal_calls(P) | unreturned, corr.module_of), X, W, extras, strict=strict,

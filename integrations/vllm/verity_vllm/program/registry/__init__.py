@@ -65,12 +65,19 @@ def _register_lazy_families() -> None:
         from verity_vllm.program.registry import fp8_moe_experts
         return fp8_moe_experts
 
+    def _marlin_moe():
+        from verity_vllm.program.registry import marlin_moe
+        return marlin_moe
+
     register_lazy_family(r"^Const([1-9][0-9]*)\[0x([0-9a-f]+)\]_v1$", lambda m: _b1().const(int(m[1]), int(m[2], 16)))  # prims.CONST_ID
     register_lazy_family(r"^GatherBf16x(\d+)_v1$", lambda m: _prims().gather_bf16(int(m[1])))
     # [GLM-5.3] the FP8 MoE expert-row gathers are built per vocabulary while deriving (`fp8_moe_experts._gather`), so a cold decode
     # of such a descriptor (the Match of record, replay) must resolve them by id like GatherBf16
     register_lazy_family(r"^GatherE4m3x(\d+)_v1$", lambda m: _fp8_moe().gather_e4m3(int(m[1])))
     register_lazy_family(r"^GatherF32x(\d+)_v1$", lambda m: _fp8_moe().gather_f32(int(m[1])))
+    # [DeepSeek-V4] the Marlin W4A16 expert-row gathers, likewise built per expert count while deriving (`marlin_moe`)
+    register_lazy_family(r"^GatherE2m1Pairx(\d+)_v1$", lambda m: _marlin_moe().gather_e2m1_pair(int(m[1])))
+    register_lazy_family(r"^GatherE8m0x(\d+)_v1$", lambda m: _marlin_moe().gather_e8m0(int(m[1])))
     # [R15 stoch] the top-p keep word (one per vocabulary; [R16] the split count S is its i32 `splits` OPERAND) and the bit extractor
     register_lazy_family(r"^TopPMaskWordx(\d+)_v1$", lambda m: _sampling().topp_mask_word(int(m[1])))
     register_lazy_family(r"^BitAtx(\d+)_v1$", lambda m: _sampling().bit_at(int(m[1])))

@@ -118,6 +118,7 @@ class Liveness:
         scan_runs: dict[int, list[tuple[Intervals, int]]] = {}
 
         marked: dict[int, list] = {}  # id(PartLog) -> [log, how many of its parts are marked]
+        seen: set = set()  # the strided reads marked so far (ref_intervals)
 
         def mark(refs: Refs) -> None:
             t: dict[tuple[str, int], list] = {}
@@ -127,12 +128,12 @@ class Liveness:
                 if m is None or m[0] is not log:
                     m = marked[id(log)] = [log, 0]
                 for p in log.parts[m[1]:j]:
-                    ref_intervals(p, t)
+                    ref_intervals(p, t, seen)
                 m[1] = max(m[1], j)
                 for p in refs.parts[j:]:
-                    ref_intervals(p, t)
+                    ref_intervals(p, t, seen)
             else:
-                ref_intervals(refs, t)
+                ref_intervals(refs, t, seen)
             for (space, idx), ivs in t.items():
                 (live if space == "n" else pread)[idx].extend(ivs)
 

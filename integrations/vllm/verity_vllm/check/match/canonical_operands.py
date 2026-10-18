@@ -18,13 +18,13 @@ def weight_field_name(name: str) -> str:
 
 
 #: how many trailing fields of a record-form canonical tuple are its base, by kind (the rest is its head); 3 for any other kind
-_BASE_FIELDS = {"N": 4, "N-PAD": 4, "W": 2, "SUPPLIED": 2, "PFX": 2, "TOK": 2, "SEED": 2, "SPLITS": 2, "XREQ": 3}
+_BASE_FIELDS = {"N": 4, "N-PAD": 4, "W": 2, "SUPPLIED": 2, "WIT": 2, "PFX": 2, "TOK": 2, "SEED": 2, "SPLITS": 2, "XREQ": 3}
 
 
 def as_progression(t: tuple) -> tuple:
     """A record-form canonical tuple as a one-run progression `head + (base, zero delta, 1)`, with the head/base split the
-    uniform mappings use: N / N-PAD -> base (s, jj, lo, hi); XREQ -> head (XREQ, kind), base (idx, lo, hi); W / SUPPLIED -> head
-    (W | SUPPLIED, name), base (lo, hi); W? / MUX-UNFOLD-FAILED -> base (idx | j, lo, hi); TOK / SEED / SPLITS -> base (lo, hi);
+    uniform mappings use: N / N-PAD -> base (s, jj, lo, hi); XREQ -> head (XREQ, kind), base (idx, lo, hi); W / SUPPLIED / WIT -> head
+    (W | SUPPLIED | WIT, name), base (lo, hi); W? / MUX-UNFOLD-FAILED -> base (idx | j, lo, hi); TOK / SEED / SPLITS -> base (lo, hi);
     PFX -> head (PFX, layer, kv), base (lo, hi); a raw run -> base (idx, lo, hi)."""
     n = _BASE_FIELDS.get(t[0], 3)
     return t[:-n] + (t[-n:], (0,) * n, 1)

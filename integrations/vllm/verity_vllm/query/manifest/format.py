@@ -404,6 +404,13 @@ STOCHASTIC_SELECT_PREFIXES = ("Gumbel",)
 #: parameter (R15 static-form `{V,S}` Programs and greedy Programs have none: byte-for-byte unchanged).
 SPLITS_PARAM = "splits"
 
+#: [DSV4] a TP rank Program's WITNESS input (`vllm_meta.ScheduledWithPeers`): `schedule`, each Marlin align call's key per pair, read
+#: by `MoeAlignRanks_v1` only.  It is neither the prompt nor a committed word of its own: any key gives ranks the kernel can produce, so
+#: the Commit's replay binds a reader's slice to that Call's own committed rank (port 0; key := rank gives rank back exactly when the
+#: committed ranks rank each expert's pairs), and the manifest names no identity for it.
+SCHEDULE_PARAM = "schedule"
+SCHEDULE_READERS = frozenset({"MoeAlignRanks_v1"})
+
 
 def has_splits_param(params) -> bool:
     return any(str(n) == SPLITS_PARAM for n, _t in (params or []))
@@ -567,6 +574,13 @@ def manifest_digest(identities: list[dict[str, Any]]) -> str:
         h.update(json.dumps([r["family"]] + canonical_identity(r), separators=(",", ":"), sort_keys=True).encode())
         h.update(b"\n")
     return h.hexdigest()
+
+
+def unreturned_block(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """A manifest's UNRETURNED outputs (`required.Population.unreturned`: no Call reads them, the Program does not return them, no policy
+    requires them): identity rows outside `identities`, with their own digest, so what the word check skipped is auditable."""
+    rows = sorted(rows, key=row_key)
+    return {"unreturned": rows, "unreturned_digest": manifest_digest(rows)}
 
 
 def programs_for(fx: dict[str, Any], programs_root: str) -> dict[str, Any]:
