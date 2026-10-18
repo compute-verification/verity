@@ -20,7 +20,8 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 
 TOPICS = frozenset({"weights", "updates", "seed-based", "gradients", "activations", "tokens", "capability-per-bit",
-                    "theory", "governance", "integration-measures"})
+                    "theory", "governance", "integration-measures", "efficiency-metrics", "strategy-local",
+                    "strategy-lowrank-sparse", "strategy-gradient-free", "strategy-reuse"})
 GRADES = frozenset({"measured-at-scale", "measured-small", "extrapolated", "theoretical", "speculative"})
 VERIFIED = frozenset({"fetched", "search-snippet"})
 PARAMS = frozenset({"b_w.pretrained", "b_w.lossless", "b_w.capacity", "b_w.delta", "update.bits_total",
