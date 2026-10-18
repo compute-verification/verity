@@ -94,13 +94,19 @@ class TritonRmsNormRule(InPlaceRule):
 #: Triton specializes an integer argument divisible by 16 and a pointer aligned to 16 bytes (`tt.divisibility`); the PTX of
 #: `_fused_q_kv_rmsnorm_kernel` that `registry.dsa_norm` reads is the specialization where every stride and pointer is
 TRITON_DIVISIBILITY = 16
-_QKV = (("q", "q_ptr", "q_out_ptr", "q_weight_ptr", "q_in_stride", "q_out_stride", "Q_SIZE"),
-        ("kv", "kv_ptr", "kv_out_ptr", "kv_weight_ptr", "kv_in_stride", "kv_out_stride", "KV_SIZE"))
+QKV_ARGS = (("q", "q_ptr", "q_out_ptr", "q_weight_ptr", "q_in_stride", "q_out_stride", "Q_SIZE"),
+            ("kv", "kv_ptr", "kv_out_ptr", "kv_weight_ptr", "kv_in_stride", "kv_out_stride", "KV_SIZE"))
 
 
 def _aligned(t) -> bool:
     v = t.meta["val"]
     return v.storage_offset() * v.element_size() % TRITON_DIVISIBILITY == 0
+
+
+def qkv_rms_launch(sizes: list[int]) -> tuple[int, int]:
+    """`fused_q_kv_rmsnorm`'s BLOCK_SIZE and num_warps at (Q_SIZE, KV_SIZE): the next power of two of the larger, 8 warps from 2048."""
+    block = 1 << (max(sizes) - 1).bit_length()
+    return block, 8 if block >= 2048 else 4
 
 
 class FusedQKvRmsNormRule(InPlaceRule):
@@ -131,11 +137,10 @@ class FusedQKvRmsNormRule(InPlaceRule):
         if not ctx.vocab.has("triton_block_rmsnorm"):
             return "numerics_unregistered: the vocabulary has no triton_block_rmsnorm"
         sc, nw = meta.get("scalars", {}), (meta.get("geometry") or {}).get("num_warps")
-        sizes = [sc.get(k[-1]) for k in _QKV]
+        sizes = [sc.get(k[-1]) for k in QKV_ARGS]
         if not all(isinstance(n, int) and n > 0 for n in sizes) or not isinstance(sc.get("eps"), float):
             return f"Q_SIZE, KV_SIZE {sizes} and eps {sc.get('eps')!r} are not static positive sizes and a float"
-        block = 1 << (max(sizes) - 1).bit_length()
-        warps = 8 if block >= 2048 else 4
+        block, warps = qkv_rms_launch(sizes)
         if sc.get("BLOCK_SIZE") != block or nw != warps:
             return f"BLOCK_SIZE {sc.get('BLOCK_SIZE')}, num_warps {nw}: the wrapper launches {block}, {warps}"
         try:
@@ -143,14 +148,14 @@ class FusedQKvRmsNormRule(InPlaceRule):
                 check_block(N, block, warps, sc["eps"])
         except ValueError as e:
             return f"numerics_unregistered: {e}"
-        tensors = [[launch_tensor(node, meta, n) for n in k[1:4]] for k in _QKV]
+        tensors = [[launch_tensor(node, meta, n) for n in k[1:4]] for k in QKV_ARGS]
         if any(t is None for ts in tensors for t in ts):
-            return f"tensor arguments {[k[1:4] for k in _QKV]} not all present"
+            return f"tensor arguments {[k[1:4] for k in QKV_ARGS]} not all present"
         outs = {ts[1] for ts in tensors}
         if len(outs) != 2 or outs & {t for ts in tensors for t in (ts[0], ts[2])}:
             return "q_out and kv_out are not two tensors apart from the inputs"
         T = None
-        for (name, _, _, _, in_stride, out_stride, size_key), (x, out, w) in zip(_QKV, tensors):
+        for (name, _, _, _, in_stride, out_stride, size_key), (x, out, w) in zip(QKV_ARGS, tensors):
             r = _row_value(ctx, x, name) or _row_value(ctx, w, f"{name} weight")
             if r:
                 return r
@@ -175,7 +180,7 @@ class FusedQKvRmsNormRule(InPlaceRule):
         sc, eps = meta["scalars"], float(meta["scalars"]["eps"])
         S = {"BLOCK": sc["BLOCK_SIZE"], "WARPS": meta["geometry"]["num_warps"], "EPS": eps}
         emitted = []
-        for name, x_arg, out_arg, w_arg, _, _, size_key in _QKV:
+        for name, x_arg, out_arg, w_arg, _, _, size_key in QKV_ARGS:
             x, out, w = (launch_tensor(node, meta, n) for n in (x_arg, out_arg, w_arg))
             N = sc[size_key]
             fn = ctx.kind("triton_block_rmsnorm", node, N=N, **S)

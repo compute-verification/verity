@@ -4,7 +4,10 @@
   `MhcPreBroadcast_v1` and `MhcResidualBroadcast_v1`, each fused post_pre to the path and split count the step's tokens select, the
   final call to `MhcPost_v1` and `HcHead_v1`; inputs are the previous call's outputs and the last all-reduce's, weights the
   sublayer's by name;
-* a call whose split buffer disagrees with the dispatch's NS, or whose weights the capture has no root for, is refused.
+* a call whose split buffer disagrees with the dispatch's NS, or whose weights the capture has no root for, is refused;
+* the KV compressors' `aten.mm.dtype` is the Build's f32-output cuBLAS GEMM on its captured route;
+* the fused q / kv RMSNorm launch is a `TritonBlockRMSNorm_v1` of each token's q row and of its kv row, refused off the wrapper's
+  launch or the PTX's 16-divisible specialization.
 """
 from __future__ import annotations
 
@@ -15,11 +18,12 @@ import importlib
 
 import pytest
 
-from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHeader, StepStart, ViewDesc
-from verity_vllm.observe.fold.patterns.dsv4 import Mhc
+from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHeader, StepStart, TritonLaunch, ViewDesc
+from verity_vllm.observe.fold.patterns.dsv4 import Mhc, QKvRmsNorm
 from verity_vllm.observe.fold.patterns.target import target_of_header
 from verity_vllm.observe.fold.resolver import Group, PerRow, Shared, StepContext, Unsupported, spec_label
 from verity_vllm.observe.fold.tree import build_trees
+from verity_vllm.program.frontend.rules.vllm_bindings.pins import QKV_RMS_PINS
 
 CUDA, HC, H, OUT = "cuda:0", 4, 7168, 24
 H200 = dataclasses.replace(target_of_header(None)[0], compute_capability=(9, 0), num_sms=132, batch_invariant=False)
@@ -145,6 +149,37 @@ def test_a_compressor_mm_is_the_builds_f32_output_cublas_gemm_over_its_weight(T,
     assert spec_label(c.spec) == label and c.rows == T and c.roots[1] == w.name
     assert [o.view.alloc for o in c.operands] == [901, 950] and c.operands[1].view.shape == (N, H) and c.outputs[0].view.alloc == 900
     assert isinstance(CublasMmF32Out().match(_mm(T, N, 950), _ctx(T)), Unsupported), "a weight with no root is refused"
+
+
+def _qkv_norm(T, q_offset=0, block=2048):
+    args = {"q_ptr": ViewDesc(960, q_offset, (T, 1536), (2048, 1), "bfloat16", CUDA), "q_out_ptr": view(961, (T, 1536)),
+            "q_weight_ptr": view(962, (1536,)), "q_in_stride": 2048, "q_out_stride": 1536,
+            "kv_ptr": ViewDesc(960, q_offset + 1536, (T, 512), (2048, 1), "bfloat16", CUDA), "kv_out_ptr": view(963, (T, 512)),
+            "kv_weight_ptr": view(964, (512,)), "kv_in_stride": 2048, "kv_out_stride": 512, "eps": 1e-6}
+    consts = {"Q_SIZE": 1536, "KV_SIZE": 512, "BLOCK_SIZE": block, "launch_pdl": True}
+    ev = TritonLaunch(1, None, 0, "forward", QKV_RMS_PINS["kernel"], QKV_RMS_PINS["src_sha256"], {**args, **consts}, consts, [T, 2], 8, 3, 7,
+                      "model.layers.0.attn")
+    return build_trees([ev])[0][0]
+
+
+QKV_ROOTS = ROOTS + [Root(view(962, (1536,)), "weight", "model.layers.0.attn.q_norm.weight"),
+                     Root(view(964, (512,)), "weight", "model.layers.0.attn.kv_norm.weight")]
+
+
+@pytest.mark.parametrize("T", [256, 1])
+def test_the_fused_q_kv_rmsnorm_is_a_block_rmsnorm_of_the_q_row_and_of_the_kv_row_per_token(T):
+    g = QKvRmsNorm().match(_qkv_norm(T), _ctx(T, QKV_ROOTS))
+    assert [spec_label(c.spec) for c in g.parts] == ["TritonBlockRMSNorm_v1{N=1536,BLOCK=2048,WARPS=8,EPS=1e-06}",
+                                                     "TritonBlockRMSNorm_v1{N=512,BLOCK=2048,WARPS=8,EPS=1e-06}"]
+    assert all(c.rows == T for c in g.parts) and [c.roots[1] for c in g.parts] == [r.name for r in QKV_ROOTS[-2:]]
+    assert [[o.view.alloc for o in c.operands + c.outputs] for c in g.parts] == [[960, 962, 961], [960, 964, 963]]
+    assert g.parts[1].operands[0].view.offset == 1536
+
+
+def test_a_fused_q_kv_rmsnorm_off_the_wrappers_launch_or_ptx_specialization_or_without_weight_roots_is_refused():
+    assert isinstance(QKvRmsNorm().match(_qkv_norm(1, block=4096), _ctx(1, QKV_ROOTS)), Unsupported)
+    assert isinstance(QKvRmsNorm().match(_qkv_norm(1, q_offset=4), _ctx(1, QKV_ROOTS)), Unsupported), "a pointer 8 bytes off 16"
+    assert isinstance(QKvRmsNorm().match(_qkv_norm(1), _ctx(1)), Unsupported)
 
 
 def test_a_split_buffer_other_than_the_dispatchs_or_a_weight_without_a_root_is_refused():

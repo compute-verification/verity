@@ -1,6 +1,7 @@
 """DeepSeek-V4-Pro's H200 observer folds (vLLM d9105ea80).
 
-Each pattern states one of the Build's DeepSeek-V4 rules (`rules/vllm_mhc.py`, `rules/vllm_dsv4.py`) over the observer log, and binds
+Each pattern states one of the Build's DeepSeek-V4 rules (`rules/vllm_mhc.py`, `rules/vllm_dsv4.py`, the fused q / kv norm of
+`vllm_bindings/triton_launches.py`) over the observer log, and binds
 its Definitions through the record target's vocabulary as the Build binds them (`target.vocab_kind`), so each Compute is the Build's
 Call.
 """
@@ -14,13 +15,16 @@ from dataclasses import dataclass
 
 from verity_vllm.observe.events import Root, ViewDesc
 from verity_vllm.observe.fold.patterns.collectives import ALL_REDUCE_OP
-from verity_vllm.observe.fold.patterns.ops import base_op, op_name
-from verity_vllm.observe.fold.patterns.resolutions import unsupported
+from verity_vllm.observe.fold.patterns.ops import as_float, base_op, bound_args, op_name, triton_name
+from verity_vllm.observe.fold.patterns.resolutions import attribution_for, unsupported
 from verity_vllm.observe.fold.patterns.target import target_of, vocab_kind
 from verity_vllm.observe.fold.resolver import Compute, Group, PerRow, Resolution, Shared, StepContext, Unsupported
 from verity_vllm.observe.fold.tree import TreeNode
+from verity_vllm.program.frontend.rules.vllm_bindings.pins import QKV_RMS_PINS
+from verity_vllm.program.frontend.rules.vllm_bindings.triton_launches import QKV_ARGS, TRITON_DIVISIBILITY, qkv_rms_launch
 from verity_vllm.program.frontend.rules.vllm_mhc import MHC_GEOMETRY, post_pre_path
 from verity_vllm.program.kernels.mhc_twin import tf32_num_split
+from verity_vllm.program.registry.dsa_norm import check_block
 
 LAYER = re.compile(r"model\.layers\.(\d+)")
 
@@ -153,9 +157,60 @@ class Mhc:
         return Group(parts, tuple(sorted(node.ids())), hint="model", pattern=self.name)
 
 
+@dataclass
+class QKvRmsNorm:
+    """`_fused_q_kv_rmsnorm_kernel[(T, 2)]` (`fused_q_kv_rmsnorm`, the attention's q and kv norms) -> per token `TritonBlockRMSNorm{N=Q_SIZE}`
+    of the q row and `{N=KV_SIZE}` of the kv row over their weights: the Build's `FusedQKvRmsNormRule`, with its pins (the source, the
+    wrapper's BLOCK_SIZE and num_warps, packed outputs apart from the inputs, and Triton's 16-divisible specialization the PTX is)."""
+
+    name = "dsv4.fused_q_kv_rmsnorm"
+
+    def match(self, node: TreeNode, ctx: StepContext) -> Resolution | None:
+        if not node.is_triton or node.enter.fn != QKV_RMS_PINS["kernel"]:
+            return None
+        if node.enter.src_sha != QKV_RMS_PINS["src_sha256"]:
+            return unsupported(node, "the kernel's source differs from the pin", src_sha=node.enter.src_sha, pinned=QKV_RMS_PINS["src_sha256"])
+        a = bound_args(node)
+        sizes, eps = [a.get(k[-1]) for k in QKV_ARGS], as_float(a.get("eps"))
+        if not all(isinstance(n, int) and n > 0 for n in sizes) or eps is None:
+            return unsupported(node, "Q_SIZE, KV_SIZE and eps are not static positive sizes and a float", sizes=sizes, eps=repr(a.get("eps")))
+        block, warps = qkv_rms_launch(sizes)
+        if a.get("BLOCK_SIZE") != block or node.enter.num_warps != warps:
+            return unsupported(node, "BLOCK_SIZE and num_warps are not the wrapper's", BLOCK_SIZE=a.get("BLOCK_SIZE"), num_warps=node.enter.num_warps,
+                               wrapper=(block, warps))
+        try:
+            for N in sizes:
+                check_block(N, block, warps, eps)
+        except ValueError as e:
+            return unsupported(node, str(e))
+        mod, parts, outs = _module(node), [], set()
+        for side, x_arg, out_arg, w_arg, in_stride, out_stride, size_key in QKV_ARGS:
+            x, out, w, N = a.get(x_arg), a.get(out_arg), a.get(w_arg), a[size_key]
+            if not all(isinstance(v, ViewDesc) and v.dtype == "bfloat16" for v in (x, out, w)):
+                return unsupported(node, f"the {side} arguments are not bf16 views", x=repr(x), out=repr(out), w=repr(w))
+            M = x.shape[0]
+            if x.shape != (M, N) or x.strides != (a.get(in_stride), 1) or out.shape != (M, N) or out.strides != (N, 1) or a.get(out_stride) != N \
+                    or w.shape != (N,) or w.strides != (1,) or node.enter.grid != [M, 2]:
+                return unsupported(node, f"the {side} row is not [T,{size_key}] at the launch's stride into a packed output over a [{size_key}] weight on a (T, 2) grid",
+                                   x=repr(x), out=repr(out), w=repr(w), grid=node.enter.grid)
+            if x.strides[0] % TRITON_DIVISIBILITY or N % TRITON_DIVISIBILITY or any(2 * v.offset % TRITON_DIVISIBILITY for v in (x, out, w)):
+                return unsupported(node, f"the {side} row strides or a pointer are not {TRITON_DIVISIBILITY}-divisible: another Triton specialization than the PTX",
+                                   x=repr(x), out=repr(out), w=repr(w))
+            if out.alloc in {x.alloc, w.alloc} or out.alloc in outs:
+                return unsupported(node, "q_out and kv_out are not two allocations apart from the inputs", out=repr(out))
+            outs.add(out.alloc)
+            roots = ctx.roots_of(w)
+            if not roots:
+                return unsupported(node, f"the {side} norm weight is no root of the capture", w=repr(w))
+            parts.append(Compute(vocab_kind(ctx, "triton_block_rmsnorm", N=N, BLOCK=block, WARPS=warps, EPS=eps), M, (PerRow(x), Shared(w)),
+                                 (PerRow(out),), () if parts else (node.id,), hint=f"{mod}/{side}_norm", kernels=(triton_name(node),),
+                                 attribution=attribution_for(ctx, M, node.phase), pattern=self.name, roots=(None, roots[0].name)))
+        return Group(tuple(parts), tuple(sorted(node.ids())), hint=mod, pattern=self.name)
+
+
 def dsv4_patterns() -> list:
     """The DeepSeek-V4 patterns, ahead of the rank's collectives (`Mhc` records the all-reduces they resolve)."""
-    return [Mhc()]
+    return [Mhc(), QKvRmsNorm()]
 
 
-__all__ = ["Mhc", "dsv4_patterns"]
+__all__ = ["Mhc", "QKvRmsNorm", "dsv4_patterns"]
