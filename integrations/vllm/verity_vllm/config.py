@@ -422,10 +422,11 @@ class MatchConfig:
                                            "tp-fold-match as a whole gets four legs' worth, the cross-rank leg included")
     fold_rank_workers: int = option("--fold-rank-workers", env="FOLD_RANK_WORKERS", type=int, default=0,
                                     help="TP: ranks whose fold Match legs run at once (0 = every rank; a GLM-5.3 B8 rank's X-09 compare "
-                                         "passes 125 GB, so 8 at once fill a 1.5 TB host)")
-    reuse_fold: str = option("--reuse-fold", env="REUSE_FOLD", default="off", choices=("off", "on"),
-                             help="TP, --match-phase cpu: keep each rank's persisted fold of the capture in place (the folds of a CPU half "
-                                  "that stopped after them, under the same fold code) and run only its compare, GM-01 and the cross-rank leg")
+                                         "passes 200 GB, so 8 at once overfill a 1.5 TB host)")
+    match_reuse: str = option("--match-reuse", env="MATCH_REUSE", default="off", choices=("off", "fold", "legs"),
+                              help="TP, --match-phase cpu, rerunning a CPU half that stopped part way under the same code: fold = keep each "
+                                   "rank's persisted fold of the capture in place; legs = also each rank's written compare and GM-01 "
+                                   "documents, so only the missing legs and the cross-rank leg run")
     fold_profile: str | None = option("--fold-profile", env="FOLD_PROFILE", env_empty=True, default=None,
                                       help="TP: rank profile module (default derived_<ROLE>_tp<W>; empty = collective-level Match only)")
 

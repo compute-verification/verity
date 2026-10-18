@@ -828,10 +828,12 @@ def test_a_tp_fold_match_bounds_each_leg_and_gives_the_whole_four_legs(tmp_path,
     assert int(cmd[cmd.index("--timeout") + 1]) == leg and to == 4 * leg
 
 
-@pytest.mark.parametrize("argv, workers, reuse", [((), "0", False), (("--fold-rank-workers", "2", "--reuse-fold", "on"), "2", True)])
+@pytest.mark.parametrize("argv, workers, reuse", [((), "0", []), (("--fold-rank-workers", "2", "--match-reuse", "fold"), "2", ["--reuse-fold"]),
+                                                  (("--match-reuse", "legs"), "0", ["--reuse-fold", "--reuse-legs"])])
 def test_a_cpu_half_rerun_keeps_its_captures_folds_with_bounded_ranks(tmp_path, monkeypatch, argv, workers, reuse):
-    """A GLM-5.3 B8 CPU half whose eight X-09 compares (125+ GB each) ran out of host memory reruns over the folds it persisted
-    (`--reuse-fold on`), `--fold-rank-workers` ranks at a time; a capture removes the folds of any earlier one, so none is ever kept."""
+    """A GLM-5.3 B8 CPU half whose eight X-09 compares (200+ GB each) ran out of host memory reruns over the folds it persisted
+    (`--match-reuse fold`, and with `legs` the compares and GM-01s it wrote), `--fold-rank-workers` ranks at a time; a capture removes
+    the folds and legs of any earlier one, so none is ever kept."""
     t = _tp_row(tmp_path, GLM53, "--match-phase", "cpu", *argv)
     t.fold_profile = "derived_GLM53_tp8"
     os.makedirs(t.M)
@@ -842,13 +844,25 @@ def test_a_cpu_half_rerun_keeps_its_captures_folds_with_bounded_ranks(tmp_path, 
     monkeypatch.setattr(t, "run_tl", lambda stage, to, log, cmd: seen.setdefault(stage, cmd) and 0)
     t.match()
     cmd = seen["match.fold_match"]
-    assert cmd[cmd.index("--rank-workers") + 1] == workers and ("--reuse-fold" in cmd) == reuse
+    assert cmd[cmd.index("--rank-workers") + 1] == workers and [a for a in cmd if a.startswith("--reuse-")] == reuse
     gpu = _tp_row(tmp_path, GLM53, "--match-phase", "gpu", *argv)
     os.makedirs(f"{gpu.M}/fold_match/rank0", exist_ok=True)
     monkeypatch.setattr(gpu, "run_gpu", lambda stage, to, log, cmd, **kw: 0)
     with pytest.raises(Stop):
         gpu.match()
     assert not os.path.exists(f"{gpu.M}/fold_match")
+
+
+def test_reused_legs_keep_a_b8_ranks_x09_compare_and_rerun_one_cut_short(tmp_path):
+    """Under --reuse-legs a B>1 rank's written X-09 document (`match_decomp.json`) is its compare, as cb_a.compare's is at B1; one a
+    killed batch-decomp left unparseable runs again (here `/bin/false`, so a leg that runs fails)."""
+    from verity_vllm.pipeline.tp import fold_match as FM
+    doc = tmp_path / "match_decomp.json"
+    for text, reuse, verdict in (('{"verdict": "PASS", "requests": []}', True, "PASS"), ('{"verdict": "PASS", "requests": []}', False, "FAIL"),
+                                 ('{"verdict": "PA', True, "FAIL")):
+        doc.write_text(text)
+        got = FM.compare_rank("/bin/false", tmp_path, tmp_path / "build", ["derived"], "dag", None, reuse=reuse)
+        assert got["verdict"].split()[0] == verdict, (text, reuse, got)
 
 
 def test_a_single_and_a_tp_rows_folds_store_the_instances_form_of_record(tmp_path, monkeypatch):

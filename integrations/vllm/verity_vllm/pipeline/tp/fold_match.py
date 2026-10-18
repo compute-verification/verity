@@ -46,8 +46,9 @@ def _run(cmd: list[str], log: Path, timeout: int | None = None) -> int:
 
 
 def _run_unless(reuse: bool, out: Path, cmd: list[str], log: Path, timeout: int | None) -> int:
-    """`_run`, except under --reuse-legs a leg whose document `out` is already written is kept (rc 0)."""
-    return 0 if reuse and out.is_file() and out.stat().st_size else _run(cmd, log, timeout)
+    """`_run`, except under --reuse-legs a leg whose document `out` is already written is kept (rc 0); one a killed leg cut short,
+    which does not load, runs again."""
+    return 0 if reuse and _load(out) is not None else _run(cmd, log, timeout)
 
 
 def _load(p: Path) -> dict | None:
@@ -98,7 +99,7 @@ def compare_rank(py: str, rank_dir: Path, build: Path, derived: list[str], withi
                "--within-step", within]
         for d in [str(build)] + list(derived):
             cmd += ["--derived", d]
-        rc = _run(cmd, rank_dir / "match_compare.log", timeout)
+        rc = _run_unless(reuse, rank_dir / "match_decomp.json", cmd, rank_dir / "match_compare.log", timeout)
         dec = _load(rank_dir / "match_decomp.json") or {}
         reqs = dec.get("requests") or []
         verdict = "PASS" if dec.get("verdict") == "PASS" and rc == 0 else f"FAIL batch_decomp {dec.get('verdict')} rc={rc}: {'; '.join(dec.get('reasons') or [])[:300]}"
@@ -192,7 +193,7 @@ class Options:
     reuse_fold: bool = option("--reuse-fold", action="store_true", default=False,
                               help="keep a rank's persisted fold (fold_summary.json, program.json, instances.jsonl under --out) and run only its compare and GM-01 legs")
     reuse_legs: bool = option("--reuse-legs", action="store_true", default=False,
-                              help="also keep a rank's written compare / DAG / GM-01 documents under --out, so only the missing legs and the cross-rank leg run")
+                              help="also keep a rank's written compare (X-09 at B>1) / DAG / GM-01 documents under --out, so only the missing legs and the cross-rank leg run")
 
 
 def main(a: Options) -> int:
