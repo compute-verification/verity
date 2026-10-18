@@ -1,6 +1,7 @@
-"""The stacked-share tool on toys: `units.py` on a small Program (property/v1's units by callee and step, the provisional classes
-kept apart, the cross-check against `stacking.analyze`), the exact window fit and its refusal of another form, a modeled TP
-variant, and `share.py`'s trace totals, its refusal of keys the requests can't account for, the per-step split, f and the levers."""
+"""The stacked-share tool on toys: `units.py` on a small Program (property/v1's units by callee and step, the cross-check against
+`stacking.analyze`), the exact window fit and its refusal of another form, the attention window of a KV call a head and a row
+call a (row, head), a modeled TP variant, and `share.py`'s trace totals, its refusal of keys the requests can't account for, the
+per-step split, f and the levers."""
 from __future__ import annotations
 
 import sys
@@ -27,7 +28,7 @@ def stand_in(name: str, n: int = 1) -> PrimitiveDefinition:
     return PrimitiveDefinition(name, 1, tuple((f"a{i}", S32) for i in range(n)), S32, lambda *v: 0, register=False)
 
 
-RINT = stand_in("F32Rint")  # a provisional rounding (`units.PROVISIONAL`)
+RINT = stand_in("F32Rint")
 UNLISTED = stand_in("TestStackedUnlisted")
 
 
@@ -37,7 +38,7 @@ def comp(name: str, params, ret, body, statics=(), register=False) -> CompositeD
 
 
 def two_steps() -> tuple[Program, list[int]]:
-    """Step 0: x0 + x1 (a rounding), its rint (provisional) and a sum of constants (free); step 1: + x2 and an unlisted gate."""
+    """Step 0: x0 + x1 and its rint (roundings) and a sum of constants (free); step 1: + x2 and an unlisted gate."""
     ends: list[int] = []
 
     def body(B, _S, x):
@@ -53,18 +54,19 @@ def two_steps() -> tuple[Program, list[int]]:
     return Program(fn), ends
 
 
-def test_units_by_callee_and_step_with_provisional_classes_apart():
+def test_units_by_callee_and_step():
     program, ends = two_steps()
     u = U.units(program, ends)
     add = u["callees"]["F32Add_v1"]
     assert (add["instances"], add["units"]) == (3, {"roundings": 2})  # the constants' sum is free
-    assert u["callees"]["F32Rint_v1"]["units"] == {"provisional:roundings": 1}
+    assert u["callees"]["F32Rint_v1"]["units"] == {"roundings": 1}
     assert u["callees"]["TestStackedUnlisted_v1"]["refused"] == {"unlisted:TestStackedUnlisted_v1": 1}
-    assert u["steps"] == [{"roundings": 1, "provisional:roundings": 1}, {"roundings": 1}]
-    assert u["total"] == {"roundings": 2, "provisional:roundings": 1}
+    assert u["steps"] == [{"roundings": 2}, {"roundings": 1}]
+    assert u["total"] == {"roundings": 3}
+    assert u["reasons"] == [{"code": "unlisted", "primitives": {"TestStackedUnlisted_v1": 1}}]
     with pytest.raises(ValueError, match="refuses"):
         U.count(UNLISTED, [True])
-    assert U.count(RINT, [False]) == {"provisional:roundings": 1}  # charged on every instance, as property/v1 refuses each
+    assert U.count(RINT, [True]) == {"roundings": 1} and U.count(RINT, [False]) == {}  # a constant's rounding is free
 
 
 def window(cost, name: str) -> CompositeDefinition:
@@ -140,8 +142,8 @@ def test_a_modeled_variant_rebinds_repeats_layers_and_pairs_the_quantizer(monkey
     program = layered()
     u = U.units(program)
     dyn = {int(k): v for k, v in u["arg_dyn"].items()}
-    spec = {"layers": [2, 5], "ranks": 4, "once": ["TestStackedHead_v1"], "statics": {"TestStackedMm_v1": {"K": 8, "N": 6}}}
-    rows = U.modeled(program, u["callees"], spec, dyn, token=EMBED.id, attention="(none)")
+    spec = {"layers": [2, 5], "ranks": 4, "once": ["TestStackedHead_v1"], "statics": {"TestStackedMm_v1{N=3}": {"K": 8, "N": 6}}}
+    rows = U.modeled(program, u["callees"], spec, dyn, token=EMBED.id)
     assert rows["TestStackedEmbed_v1"] == {"family": "TestStackedEmbed_v1", "statics": {}, "instances": 2, "ranks": 4,
                                            "refused": {}, "units": {"roundings": 2 * 4}}
     mm = rows["TestStackedMm_v1{K=4,N=3}"]
@@ -150,8 +152,49 @@ def test_a_modeled_variant_rebinds_repeats_layers_and_pairs_the_quantizer(monkey
     assert (q["instances"], q["ranks"], q["units"]) == (10, 4, {"roundings": 8 * 10 * 4})
     assert "TestStackedQuant_v1{K=4}" not in rows
     assert (rows["TestStackedHead_v1"]["ranks"], rows["TestStackedHead_v1"]["units"]) == (1, {"compare_select": 1})
-    parts = U.components(rows, token=EMBED.id, sample=["TestStackedHead_v1"], attention="(none)")
+    parts = U.components(rows, token=EMBED.id, sample=["TestStackedHead_v1"], attention=())
     assert parts["token"] == {"roundings": Fraction(8 + 560 + 320, 2)} and parts["sample"] == {"compare_select": 1}
+    with pytest.raises(ValueError, match="name no callee"):
+        U.modeled(program, u["callees"], {**spec, "statics": {"TestStackedMm_v1{N=5}": {"K": 8, "N": 6}}}, dyn, token=EMBED.id)
+
+
+KVT = comp("TestStackedKv", lambda S: ((("x", S32),), S32), None, chain(scalar.F32Fmaxf, lambda S: S.S), ("S", "D"), register=True)
+ROWT = comp("TestStackedRow", lambda S: ((("x", S32),), S32), None, chain(fp32.F32Add, lambda S: 2 + S.S), ("D", "S"),
+            register=True)
+
+
+def test_the_attention_window_is_a_kv_call_a_head_and_a_row_call_a_row_and_head(monkeypatch):
+    """A request of 2 layers: a prefill of 3 keys, then a decode to 4; G = 2 KV calls (S compare_selects each) a layer-step, and
+    H = 3 row calls (2 + s roundings, s the row's keys) a row."""
+    monkeypatch.setattr(U, "KV", KVT.id)
+    monkeypatch.setattr(U, "ROW", ROWT.id)
+    monkeypatch.setattr(U, "ATTENTION", (KVT.id, ROWT.id))
+
+    def body(B, _S, x):
+        h = x[0]
+        for N, S in ((3, 3), (1, 4)):
+            for _ in range(2):
+                for _ in range(2):
+                    h = B.call(bind(KVT, S=S, D=1), h)
+                for s in range(S - N + 1, S + 1):
+                    for _ in range(3):
+                        h = B.call(bind(ROWT, D=1, S=s), h)
+        return h
+
+    program = Program(comp("TestStackedRequest", (("x", Array(1, S32)),), S32, body))
+    u = U.units(program)
+    dyn = {int(k): v for k, v in u["arg_dyn"].items()}
+    w, L = U.window(program, u["callees"], dyn, 2, 3)
+    assert L == 2 and U.windows_of(u["callees"]) == [(3, 3), (1, 4)]
+    assert w.units(3, 3) == {"compare_select": 2 * 3, "roundings": 3 * (3 + 4 + 5)}
+    co = U.attention_fit(w, U.windows_of(u["callees"]))
+    assert co == {"compare_select": {"r0": 0, "b_q": 0, "b_kv": 2, "w0": 0, "w_start": 0},
+                  "roundings": {"r0": 6, "b_q": 3, "b_kv": 0, "w0": 0, "w_start": 0}}
+    assert w.statics() == {"G": 2, "H": 3, KVT.id: {"D": 1}, ROWT.id: {"D": 1}}
+    with pytest.raises(ValueError, match="not a multiple of 3"):
+        U.window(program, u["callees"], dyn, 3, 3)
+    with pytest.raises(ValueError, match=r"give \[1, 2\] calls"):
+        U.window(program, u["callees"], dyn, 4, 3)
 
 
 # ---- share.py ---------------------------------------------------------------------------------------------------------------
@@ -179,16 +222,17 @@ def test_the_trace_totals_are_exact_with_a_split_prompt():
         share.exact(mix(), REQUESTS[:1] + [{"prompt": 2, "output": 2}])
 
 
-DOC = {"program": {"function": "toy"}, "tokens": 4, "samples": 2, "token": {"roundings": 10, "provisional:roundings": 2}, "sample": {"compare_select": 3, "products": 10},
+DOC = {"program": {"function": "toy"}, "tokens": 4, "samples": 2, "token": {"roundings": 10}, "sample": {"compare_select": 3, "roundings": 10},
        "attention": {"coefficients": {"roundings": {"r0": 1, "b_q": 2, "b_kv": 5, "w0": 7, "w_start": -1}}, "calls": 3},
-       "callees": {"g": {"family": "Gemm_v2", "instances": 2, "units": {"products": 20}},
+       "callees": {"g": {"family": "Gemm_v2", "instances": 2, "units": {"roundings": 20}},
                    "q": {"family": "Int8RowQuant_v1", "instances": 8, "units": {"roundings": 24}}},
        "levers": {"attention_per_key": {"Int8StaticQuant_v1": {"roundings": 2}, "Int8ColumnQuant_v1": {"roundings": 1},
                                         "Int8LutAttentionRow_v1": {"roundings": 2}},
+                  "attention_per_call": {"Int8ColumnQuant_v1": {"roundings": 3}}, "key_write": {"roundings": 2},
                   "linear": {"q": {"by_family": {"Int8RowScale_v1": {"roundings": 1}}}},
                   "lm_head_int8": {"units": {"roundings": 4}},
-                  "primitives": {"token": {"A|roundings": 10, "B|provisional:roundings": 2},
-                                 "sample": {"C|compare_select": 3, "G|products": 10},
+                  "primitives": {"token": {"A|roundings": 10},
+                                 "sample": {"C|compare_select": 3, "G|roundings": 10},
                                  "attention": {"D|roundings": {"r0": 1, "b_q": 2, "b_kv": 5, "w0": 7, "w_start": -1}}}}}
 
 
@@ -197,14 +241,17 @@ def test_rates_f_and_the_levers():
     t = share.exact(mix(), REQUESTS)
     u = share.step_units(m, **{k: t[k] for k in share.MODEL})
     # token 8 rows, sample 5 rows, attention 3 calls of 8 + 2 * 20 + 5 * 17 + 7 * 6 - 2
-    assert u == {"roundings": 10 * 8 + 3 * (8 + 40 + 85 + 42 - 2), "provisional:roundings": 16, "compare_select": 15, "products": 50}
+    assert u == {"roundings": 10 * 8 + 10 * 5 + 3 * (8 + 40 + 85 + 42 - 2), "compare_select": 15}
     r = share.rates(m, mix(), REQUESTS)
-    assert r["busy_s"] == 2.0 and r["mean"] == float(share.total(u)) / 2.0 and r["provisional"] == 16 / float(share.total(u))
+    assert r["busy_s"] == 2.0 and r["mean"] == float(share.total(u)) / 2.0
+    with pytest.raises(ValueError, match="doesn't budget"):
+        share.by_class({"products": 1})
     assert share.pool(mix()) == 10 * 16 * 1024 * 2
     assert share.f(1e9, 6126, 600, 1e5, 1e12) == pytest.approx((128 * 1e9 * 600 / 6126 + 1e5 * 600) / 1e12)
     lv = share.lever_models(DOC)
-    b_kv = [lv[k]["coefficients"]["roundings"]["b_kv"] for k in ("as built", "K' at write", "+ V' at write")]
-    assert b_kv == [5, 3, 2]
+    co = [lv[k]["coefficients"]["roundings"] for k in ("as built", "K' at write", "+ V' at write")]
+    # K' leaves every key a step reads (2) for one write a token row (2); V' leaves its key (1) and call (3) for another write
+    assert [(c["r0"], c["b_kv"], c["w0"]) for c in co] == [(1, 5, 7), (3, 3, 7), (5, 2, 4)]
     assert lv["+ int8 LM head"]["sample"] == {"compare_select": 3, "roundings": 4}
     assert lv["+ static act. scales"]["token"]["roundings"] == 10 - Fraction(8, 4)
     tab = share.table({"toy": (DOC, mix(), REQUESTS)}, gpus=4)
@@ -212,4 +259,4 @@ def test_rates_f_and_the_levers():
     assert toy["engines"] == 2 and toy["M_dyn"] == 2 * share.pool(mix())
     assert list(toy["levers"]) == list(lv) and "| toy | 10 min |" in share.markdown(tab)
     prims = share.primitives(DOC, mix(), REQUESTS)  # table() holds their sum to the document's
-    assert list(prims)[0] == "D|roundings" and prims["G|products"] == Fraction(50, 8) and toy["primitives_per_token"] == prims
+    assert list(prims)[0] == "D|roundings" and prims["G|roundings"] == Fraction(50, 8) and toy["primitives_per_token"] == prims

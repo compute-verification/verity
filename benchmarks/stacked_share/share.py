@@ -41,14 +41,16 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-#: E, the units an encode of one 1024-bit word costs: proved (2 gates a squaring), the best construction found (the 3-limb
-#: look-ahead, 342 a squaring), and conjectured (EncodeChainHardness at 2^-40); each over 3 rounds of 1,021 squarings
-E_WORD = {"proved": 2 * 3 * 1021, "best found": 342 * 3 * 1021, "conjectured": 364_497}
+#: E, the units an encode of one 1024-bit word costs, each over 3 rounds of 1,021 squarings: proved (8 units a squaring; counting
+#: proves 8 to 24), conjectured (EncodeChainHardness at 2^-40), and the red team's cheapest construction (160 a squaring under
+#: #2420, 128 while hole B is open)
+E_WORD = {"proved": 8 * 3 * 1021, "conjectured": 364_497, "red team (#2420)": 160 * 3 * 1021,
+          "red team, hole B open": 128 * 3 * 1021}
 LIFETIMES = {"10 min": 600, "1 h": 3600}
 R_INS = (100_000, 1_000_000)
 BLOCK = 16
 WIDTH = 1.0
-CLASSES = ("roundings", "compare_select", "gathers", "products", "folds")
+CLASSES = ("roundings", "compare_select", "gathers", "folds")
 COEFFICIENTS = ("r0", "b_q", "b_kv", "w0", "w_start")
 
 
@@ -57,11 +59,10 @@ def F(x: Any) -> Fraction:
 
 
 def by_class(u: Mapping[str, Any]) -> dict[str, Fraction]:
-    """Units by class, a provisional class's with its class."""
-    out: Counter = Counter()
-    for k, v in u.items():
-        out[k.split(":", 1)[-1]] += F(v)
-    return {c: out[c] for c in CLASSES if out[c]}
+    """Units by class (a class `CLASSES` doesn't list is refused)."""
+    if set(u) - set(CLASSES):
+        raise ValueError(f"units in classes {sorted(set(u) - set(CLASSES))} that property/v1 doesn't budget")
+    return {c: F(u[c]) for c in CLASSES if u.get(c)}
 
 
 def total(u: Mapping[str, Any]) -> Fraction:
@@ -205,8 +206,7 @@ def rates(m: Mapping[str, Any], mix: Mapping[str, Any], requests: Sequence[Mappi
             "tokens_per_s_peak": peak(mix, [s["tokens"] for s in mix["steps"]], width),
             "units_per_token": total(u) / tot["T"], "mean": float(total(u)) / b, "peak": pk,
             "by_class_mean": {c: s * float(total(u)) / b for c, s in share.items()},
-            "by_class_peak": {c: s * pk for c, s in share.items()}, "share": share,
-            "provisional": float(sum((v for k, v in u.items() if k.startswith("provisional:")), Fraction(0)) / total(u))}
+            "by_class_peak": {c: s * pk for c, s in share.items()}, "share": share}
 
 
 def f(R_cap: float, E: float, L: float, R_in: float, M: float) -> float:
@@ -215,21 +215,25 @@ def f(R_cap: float, E: float, L: float, R_in: float, M: float) -> float:
 
 def lever_models(doc: Mapping[str, Any]) -> dict[str, dict]:
     """The step model as built and under each lever, cumulatively: K' quantized once at the KV write (exact: its scale is
-    static), then V' stored once with a static scale, then an int8 LM head, then static activation scales in the linears."""
+    static), then V' stored once with a static scale, then an int8 LM head, then static activation scales in the linears. A
+    write lever takes its family's units from every key a step reads (``b_kv``) and every call (``w0``) to one write a token
+    row (``r0``, `units.py`'s ``key_write``)."""
     m = model_units(doc)
     lv = doc["levers"]
     out = {"as built": m}
 
-    def minus_key(m0: dict, fam: str) -> dict:
-        per = lv["attention_per_key"].get(fam, {})
+    def at_write(m0: dict, fam: str) -> dict:
         co = {c: dict(v) for c, v in m0["coefficients"].items()}
-        for c, v in per.items():
-            co.setdefault(c, {name: Fraction(0) for name in COEFFICIENTS})["b_kv"] -= F(v)
+        zero = {name: Fraction(0) for name in COEFFICIENTS}
+        for name, per in (("b_kv", lv["attention_per_key"].get(fam, {})), ("w0", lv["attention_per_call"].get(fam, {})),
+                          ("r0", {c: -F(v) for c, v in lv["key_write"].items()})):
+            for c, v in per.items():
+                co.setdefault(c, dict(zero))[name] -= F(v)
         return {**m0, "coefficients": co}
 
-    k = minus_key(m, "Int8StaticQuant_v1")
+    k = at_write(m, "Int8StaticQuant_v1")
     out["K' at write"] = k
-    v = minus_key(k, "Int8ColumnQuant_v1")
+    v = at_write(k, "Int8ColumnQuant_v1")
     out["+ V' at write"] = v
     smp = dict(v["sample"])
     gemm = [r for r in doc["callees"].values() if r["family"] == "Gemm_v2"]
@@ -280,7 +284,7 @@ def table(models: Mapping[str, tuple[Mapping[str, Any], Mapping[str, Any], Seque
             rows[lever] = {
                 "units_per_token": float(r["units_per_token"]), "R_cap_node": node,
                 "R_cap_node_by_class_peak": {c: x * engines for c, x in r["by_class_peak"].items()},
-                "share": r["share"], "provisional": r["provisional"],
+                "share": r["share"],
                 "f": {lt: {e: {str(R_in): {"peak": f(node["peak"], E, L, R_in, M), "mean": f(node["mean"], E, L, R_in, M)}
                                for R_in in R_INS} for e, E in E_WORD.items()} for lt, L in LIFETIMES.items()}}
             if lever == "as built":
@@ -313,13 +317,15 @@ def markdown(t: Mapping[str, Any]) -> str:
             cells = [_pct(built["f"][lt][e][str(R_INS[0])]["peak"]) for e in E]
             lines.append(f"| {name} | {lt} | " + " | ".join(cells) + f" | {_pct(m['input_term'][lt][str(R_INS[1])])} |")
     lines.append("")
-    lines.append("| model | lever (cumulative) | units/token | R_cap node, peak (units/s) | dominant class | f, 1 h, E best found |")
-    lines.append("|---|---|---|---|---|---|")
+    lines.append("| model | lever (cumulative) | units/token | R_cap node, peak (units/s) | dominant class | "
+                 + " | ".join(f"f, 1 h, E {e}" for e in E) + " |")
+    lines.append("|---|---|---|---|---|" + "---|" * len(E))
     for name, m in t["models"].items():
         for lever, r in m["levers"].items():
             dom = max(r["share"], key=r["share"].get)
             lines.append(f"| {name} | {lever} | {r['units_per_token']:.3g} | {r['R_cap_node']['peak']:.3g} | "
-                         f"{dom} {r['share'][dom]:.0%} | {_pct(r['f']['1 h']['best found'][str(R_INS[0])]['peak'])} |")
+                         f"{dom} {r['share'][dom]:.0%} | "
+                         + " | ".join(_pct(r["f"]["1 h"][e][str(R_INS[0])]["peak"]) for e in E) + " |")
     lines += ["", "| model | primitive (class) | units/token, as built | share |", "|---|---|---|---|"]
     for name, m in t["models"].items():
         whole = sum(m["primitives_per_token"].values())
