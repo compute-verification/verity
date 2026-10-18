@@ -5,10 +5,10 @@ inside one module body, committed as the ops computed them.
   (`Int8RowQuant_v1`, read only by the linear's `ScaledMmS8_v1`), claimed here (`claim`) so the call-boundary source never evaluates
   them on the host.  The fx node's name counts on through the run, so the names come from the manifest: per (engine step, module) its
   one Int8RowQuant_v1 site.
-- `verity_int8::kv_quant` inside an attention module: its (K', V', s_v, f32(V'_0)) per KV head are the `instance_outputs` identities
-  `<attention>/0..3` (`Int8KvQuant_v1`, hinted), each the op's result over every KV head; several requests at one step are committed
-  in call order, concatenated.  Under a credited read (`engine.int8_window`) the layer quantizes the window it read with
-  `verity_int8::kv_quant_window` instead, the same results, committed under the same names.
+- `verity_int8::kv_quant` inside an attention module, or `verity_int8::kv_quant_window` under a credited cache read
+  (`engine.int8_window`): its (K', V', s_v, f32(V'_0)) per KV head are the `instance_outputs` identities `<attention>/0..3`
+  (`Int8KvQuant_v1`, hinted), each the op's result over every KV head; several requests at one step are committed in call order,
+  concatenated.
 
 Attached whenever the required manifest names either (`taps.attach`); no kernel changes: the wrappers run the installed ops unchanged
 and acquire their results on their device.
@@ -23,10 +23,10 @@ from verity_vllm.acquire.sources.call_boundary_plan import FAMILY
 SHORT_NAME = "int8"
 QUANT_SPEC = "Int8RowQuant_v1"
 KV_SPEC = "Int8KvQuant_v1"
-#: the ops whose results are an attention module's Int8KvQuant_v1: the paged read's and a credited read's
-KV_OPS = ("kv_quant", "kv_quant_window")
 KV_MEMBERS = ("0", "1", "2", "3")
 KV_CLASS = "int8_kv_quant"
+#: the ops whose results are a request's Int8KvQuant_v1: from the pages (`paged_attention`) or a credited read's window
+KV_OPS = ("kv_quant", "kv_quant_window")
 
 
 def _spec(r: Mapping[str, Any]) -> str:
@@ -234,7 +234,8 @@ class Int8Source:
             out.append({"class": KV_CLASS, "how": "bound-as-leaf", "rule": None, "count": self.stats["kv_tensors"], "bytes": self.stats["kv_bytes"],
                         "tensors": self.stats["kv_tensors"], "errors": self.stats["errors"],
                         "evidence": (f"int8 source: `<attention>/0..3` of {len(self.kv)} attention modules, the results of verity_int8::kv_quant "
-                                     "(kv_quant_window under a credited read) per KV head as the served op computed them (engine.int8_ops; no kernel change)")})
+                                     "(or kv_quant_window under a credited read) per KV head as the served op computed them (engine.int8_ops; "
+                                     "no kernel change)")})
         return out
 
 

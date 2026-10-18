@@ -204,17 +204,19 @@ def engine(c: Codec) -> dict[str, Any]:
     flags = [torch.zeros(nslots, dtype=torch.uint8, device="cuda") for _ in range(L)]
 
     class Settling(CreditedRead):
-        """At each step's start, every slot flagged (an earlier step's write) encoded in place under its bound offset and
-        unflagged: the session's encode once an append's coin arrives."""
+        """Before each layer's window, every slot flagged (an earlier step's write) encoded in place under its bound offset and
+        unflagged, but for a slot this step's write refilled: the session's encode once an append's coin arrives."""
         settled = 0
 
-        def buffers(self, *a):
-            for li in range(L):
-                slots = flags[li].nonzero().flatten().tolist()
-                c.encode_slots(caches[li], slots, bases[li], bjs[li])
-                flags[li].zero_()
-                self.settled += len(slots)
-            return super().buffers(*a)
+        def read(self, kv_cache, li, block_table, slot_mapping, *rest):
+            due = flags[li].clone()
+            if slot_mapping is not None:
+                due[slot_mapping[slot_mapping >= 0].long()] = 0
+            slots = due.nonzero().flatten().tolist()
+            c.encode_slots(caches[li], slots, bases[li], bjs[li])
+            flags[li].zero_()
+            self.settled += len(slots)
+            super().read(kv_cache, li, block_table, slot_mapping, *rest)
 
     settling = Settling(c.P, c.lib, layer_keys(bases, bj=lambda li: bjs[li], plain=lambda li: flags[li]), rounds=ROUNDS)
     install_credited_read(model, settling)
