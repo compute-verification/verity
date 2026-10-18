@@ -281,6 +281,17 @@ def _twice_body(B, S, x, w):
 
 TWICE = _def("CompileTestTwice", (), lambda S: ((("x", Array(64, V8)), ("w", Array(64, V8))), Array(2, V32)), _twice_body)
 
+
+def _chained_body(B, S, x, w):
+    y = B.call(_acc(64), x, w)
+    xb = Coll(Array(64, V8), concat([B.call(p, y).refs for p in PIECES[8]] * 16))
+    return Coll(Array(2, V32), concat([y.refs, B.call(_acc(64), xb, w).refs]))
+
+
+#: two calls, the second's operand computed from the first's output (a layer's and the next's)
+CHAINED = _def("CompileTestChained", (), lambda S: ((("x", Array(64, V8)), ("w", Array(64, V8))), Array(2, V32)),
+               _chained_body)
+
 FAMILIES = {
     "s8dot": (lambda: Program(bind(S8.S8Dot, **S8.SMOKE_PLAIN)), [("S8Dot_v1", (1, 64, 1))]),
     "s8matmul": (lambda: Program(bind(MATMUL_INC, N=3)), [("S8Matmul_v1", (1, 64, 3))]),
@@ -573,16 +584,24 @@ ATTN_HEADS = _def("CompileTestAttnHeads", ("H",),
                   lambda S: ((("q", Array(S.H, Array(64, BF))), ("k", Array(S.H, Array(16, Array(64, BF)))),
                               ("v", Array(S.H, P.A16))), Array(S.H, P.F32)),
                   lambda B, S, q, k, v: B.batch(ATTN, q, k, v, axes=(0, 0, 0)))
+GQA = _def("CompileTestGqa", ("H", "N"),
+           lambda S: ((("q", Array(S.H, Array(64, BF))), ("k", Array(S.N, Array(64, BF)))), Array(S.H, P.F32)),
+           lambda B, S, q, k: B.batch(bind(SCORES, N=S.N), q, k, axes=(0, None)))
 KINDS = C.register(C.Scheme("compile-test-kinds", (2, 2), {"GemmAccumulatorS8_v1": _unit(UNIT)}))
 COVER2 = C.register(C.Scheme("compile-test-cover", (2, 2), {C.ANY: _unit(UNIT)}, cover=2)).name
+#: the test scheme with no pair cover, and at a QKᵀ cover of n pairs
+QK_OPEN = C.register(C.Scheme("compile-test-qk-open", (2, 2), {C.ANY: _unit(UNIT)}, pair_cover={})).name
+QK_COVER = {n: C.register(C.Scheme(f"compile-test-qk-{n}", (2, 2), {C.ANY: _unit(UNIT)}, pair_cover={"DotBf16_v2": n})).name
+            for n in (4, 5)}
 
 
 @compiles
 def test_qk_heads_compile():
     """Attention's QKᵀ is credited (decision 109): each head's scores, `DotBf16` of its query on its keys, are a site's dots,
-    its query meeting only its own keys (a 1 × 2 tile a head), and the softmax max chain is the rest."""
+    its query meeting only its own keys (a 1 × 2 tile a head), and the softmax max chain is the rest (under a scheme with
+    no pair cover: `test_qk_pair_cover`)."""
     served = Program(bind(HEADS, H=4, N=2))
-    c = C.compile(served, SCHEME)
+    c = C.compile(served, QK_OPEN)
     (s,) = c.sites
     assert (s.dot.family, s.shape, s.count) == ("DotBf16_v2", (4, 64, 8), 8)
     assert {u.tile for u in c.units} == {C.Tile(1, 2, ((0, 0), (0, 1)))}
@@ -594,10 +613,28 @@ def test_qk_heads_compile():
 
 
 @compiles
+def test_qk_pair_cover():
+    """Decision 122: a seed group's QKᵀ covers at least `QK_PAIRS` (385) (head, request) pairs by default, a pair a component
+    of its dots (here a head's query and its keys), so one call of 4 heads is refused, pointing to decision 36's live coin;
+    at a cover of 4 pairs it compiles, at 5 it is refused. Heads sharing their keys (GQA) are one pair."""
+    served = Program(bind(HEADS, H=4, N=2))
+    e = _refused("cover", served)
+    assert "4 (head, request) pairs of DotBf16_v2, fewer than compile-test's 385" in str(e) and "decision 36" in str(e)
+    assert C.compile(served, QK_COVER[4]).pair_cover == ({"DotBf16_v2": 4},)
+    _refused("cover", served, QK_COVER[5])
+    assert C.compile(Program(bind(GQA, H=4, N=2)), QK_OPEN).pair_cover == ({"DotBf16_v2": 1},)
+    assert C.QK_PAIRS == 385 and C.PV_PAIRS == 791 and C.SCHEMES[SCHEME].pair_cover == C.PAIR_COVER
+    plugged = KINDS.plug("CompileTestPv_v1", _unit(UNIT), "compile-test-kinds-pv", pairs=C.PV_PAIRS)
+    assert plugged.pair_cover == {**C.PAIR_COVER, "CompileTestPv_v1": C.PV_PAIRS}
+    with pytest.raises(ValueError):
+        C.register(C.Scheme("compile-test-no-pairs", (2, 2), {C.ANY: _unit(UNIT)}, pair_cover={"DotBf16_v2": 0}))
+
+
+@compiles
 def test_pv_inside_attention_is_uncovered():
     """P·V as attention serves it today, tensor-core steps on a P the block computes, is no Call of a registered family, so its
     dots can't be units: the pass refuses it rather than leave attention's second product uncredited."""
-    e = _refused("uncovered", Program(bind(ATTN_HEADS, H=2)))
+    e = _refused("uncovered", Program(bind(ATTN_HEADS, H=2)), QK_OPEN)
     assert "AmpereBF16TcDot16" in str(e)
 
 
@@ -655,6 +692,20 @@ def test_cover_is_the_least_seed_group():
     assert layer.cover == (3,)
     gc = layer.check_gates()
     assert gc.ok, gc
+
+
+@compiles
+def test_seed_group_never_spans_a_chain():
+    """A seed binds its calls' operand roots, so one seed group can't hold a call and a call that reads its output (a step's
+    layer ℓ and ℓ + 1, decision 122): each alone compiles, with the served outputs unchanged, and together they are refused."""
+    served = Program(bind(CHAINED))
+    c = C.compile(served, SCHEME)
+    assert c.groups == ((0,), (1,))
+    args = _args(served.fn, random.Random(3))
+    assert _run(c, args)[:2] == evaluate(served.fn, *args)
+    with pytest.raises(C.CompileError) as e:
+        C.compile(served, SCHEME, groups=[0, 0])
+    assert e.value.code == "span" and "node 0" in str(e.value), str(e.value)
 
 
 @compiles

@@ -1311,10 +1311,22 @@ A unit's receipt keys and chain starts come from σ_R, a hash of its own tag, ne
 whose folds take keys calls `PouwUnitSeeds` once for both, [seed_j, σ_R] with the masked salt and roots shared, since two
 seeds at one position are one seed (COIN-RULES' `E_COIN_REUSE`).
 
-**Seed groups** (decision 112). `groups` names the calls committed together: sites of one key share a slot of `pouw.roots`
-(all heads of a layer's QKᵀ, a decode step's batch), each unit still at its own position. One commitment fixes the noise of
-every unit it covers, so the grinding premium is a constant number of units per group (`Compiled.cover`), and the scheme's
-`cover` is the fewest a group may cover, GRIND/BUDGET's to set. By default each site is a group.
+**Seed groups** (decisions 112 and 122). `groups` names the calls committed together: sites of one key share a slot of
+`pouw.roots`, each unit still at its own position. One commitment fixes the noise of every unit it covers, so the grinding
+premium is a constant number of units per group (`Compiled.cover`), and the scheme's `cover` is the fewest a group may
+cover. By default each site is a group, and a site is one call: a layer's QKᵀ batched over its heads and the step's batch
+is one site, so one seed covers the call, not one head.
+
+GRIND (decision 122) sets the attention kinds' cover in (head, request) pairs (`Scheme.pair_cover`, `Compiled.pair_cover`):
+385 for QKᵀ (`QK_PAIRS`, on `DotBf16_v1 .. v3`) and 791 for P·V (`PV_PAIRS`, for the kind ATTN-NOISE plugs), which hold
+the decode grind term under 0.1% at T = 2^128. At one seed a call that is 8B's decode at batch ≥ 13 for QKᵀ and ≥ 25 for
+P·V. Below it the pass refuses the seed group (`cover`): its noise is the live per-round coin of decision 36, not a seed's.
+A pair is a connected component of the group's dots of the kind, its rows joined through the dots they share: at decode
+one (head, request), a query and its keys. Query heads that read one KV head's keys (GQA) are one pair by this count, so
+for a GQA model it refuses more than GRIND's per-query-head table does (8B: batch ≥ 49 for QKᵀ). A bf16 linear on
+`DotBf16` is one pair a call, so it is refused under a scheme that keeps QKᵀ's cover for its family. A seed group never
+spans calls run one after another (`span`): a seed binds its calls' operand roots, and layer ℓ + 1's operands exist only
+after layer ℓ has run.
 
 **Check** (`CompileError.code`):
 
@@ -1322,7 +1334,9 @@ every unit it covers, so the grinding premium is a constant number of units per 
 - `edited-arm`, `arm`: a Call isn't the registered arm; `scan`, `operand-inside`: a matmul inside a scan, or on an operand
   computed inside its Definition;
 - `uncovered`: a registered Call or a matmul step left outside every unit;
-- `cover`: a seed group covers fewer units than the scheme's `cover`;
+- `cover`: a seed group covers fewer units than the scheme's `cover`, or fewer (head, request) pairs of a kind than its
+  `pair_cover`;
+- `span`: a seed group holds a call and a call that reads its output;
 - `salt-flow`: the salt reaches anything but a unit's seed;
 - `position`: a unit's seed reads a position or roots other than its own parameters, or at the root a unit batch reads slots
   other than its own: no unit chooses its position, and no two share one;
