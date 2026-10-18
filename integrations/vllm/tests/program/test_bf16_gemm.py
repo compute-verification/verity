@@ -1,12 +1,12 @@
-"""`registry.cublas_bf16` and `registry.ll_bf16`, GLM-5.3's bf16 GEMMs on sm_90: on bits they are Boolean and are the Boolean
+"""`registry.cublas_bf16` and `registry.ll_bf16`, GLM-5.3's bf16 GEMMs on sm_90, and `registry.cublas_gemv`: on bits they are Boolean and are the Boolean
 versions of their words; they agree with their words (the reference evaluator) and with `bf16_gemm_check`'s numpy models of the
 kernels on random words and on words at every class edge (signed zeros, subnormals, infinities, NaNs, and products that overflow
 or underflow f32, the only inputs on which the dotprod's contraction changes a word); each chain step's parts, composed,
 agree with its word from +0 and from any accumulator (the dotprod's on accumulators that cancel the product too) and no
 body on bits computes a value twice; `BatchedGemm_v2` is `mla.MlaBmm_v1`'s
 function; the dotprod's K loop is the kernel's (main tiles, the tail at half width, scalar rounds); the words at GLM-5.3's and
-DeepSeek-V4-Pro's gate statics (K 6144, 7168) agree with the models; `dispatch_sm90` is vLLM's table; and each is pinned by gate
-count and program digest."""
+DeepSeek-V4-Pro's gate statics (K 6144, 7168) agree with the models; `dispatch_sm90` is vLLM's table; the route probe's rows
+tell every candidate cuBLAS route apart; and each is pinned by gate count and program digest."""
 from __future__ import annotations
 
 __models__ = ("zai-org/GLM-5.3", "deepseek-ai/DeepSeek-V4-Pro")
@@ -30,6 +30,7 @@ from verity_vllm.program.boolean import boolean_version
 from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3
 from verity_vllm.program.registry import bf16_gemm_check as C
 from verity_vllm.program.registry import cublas_bf16 as CB
+from verity_vllm.program.registry import cublas_gemv as GV
 from verity_vllm.program.registry import ll_bf16 as LL
 from verity_vllm.program.registry import mla
 from verity_vllm.program.registry import mla_check as MK
@@ -75,6 +76,14 @@ PINS = {
         (92110, 179313, 9188, "3c0e23088a8a80db54673b576a5b88ed18e29fdd391c5e477d806cf1fe32dd220686d8caf2b72236aa3e66c901161c4bce5945946e648aa575fce8049dbcce02"),
     "CublasSplitKGemmBf16Partials_v2{K=64,N=3,SPLIT_K=4,DOT=HopperBF16WgmmaDot16_v2}":
         (92902, 180489, 9368, "99d175f24909cb347eed2c1c12ee379a9ca273cda9867ff7c4db2354aeffcb2b6a73503cc672fd5befba219806e784404047862ee5663f116c8c23abf34da47e"),
+    "CublasSerialSplitKGemm_v2{K=64,N=3,SPLIT_K=4,DOT=HopperBF16WgmmaDot16_v2}":
+        (92704, 180195, 9323, "e204f1965b375338ddf7412444cef4cab3c76c4fccc6c618d5f4c55db09b4d19adca33fd441e7fb08ab8b7897e9bec1999b959b57c440ea0844eb2bc222d3051"),
+    "CublasGemvDot_v2{K=64,LANES=16}":
+        (137666, 218018, 13711, "546871692ac87460be2511090569b0c136ca8ebfda0516cdcf004e94bfb3c2aafc46f2ed0e2050f833c0cb001b178f6b73e4fb2f87da42c83045894f8abd843a"),
+    "CublasGemvDot_v2{K=64,LANES=32}":
+        (136578, 214946, 14543, "791e2f918bf2bc2c308d060e36c825e085925d92e4b6d364532edcd2935a1766672a6f18f1ed63cc5c92928e52b0c19454fb7f5f9bf17ab261dbccdb09f30634"),
+    "CublasGemv_v2{K=64,N=2,LANES=16}":
+        (272132, 431620, 26718, "a571b0142349d3b84b707961bec9b6e9144c951f097b0123948edc0627faceefc180a0ef4fa471e46c1cba7738142007ac7423bea917fb9eb4d0f3197bde0af4"),
     "LlBf16DotprodDot_v2{K=256,BS=64,VEC=2,FMA=1}":
         (550400, 871680, 54784, "310290be808e36bd3308147d713f3bf718561ee1512a5b9dc2b5b5c3e5b297308b555d436a583357cdefeef7314aa303466916d65cd181c2131406ed3e1c2979"),
     "LlBf16DotprodDot_v2{K=256,BS=64,VEC=2,FMA=0}":
@@ -95,6 +104,8 @@ PINNED = [bind(CB.GemmF32Out, K=32, N=3, DOT=HOP), bind(CB.BatchedGemm, B=2, K=3
           bind(CB.CublasSplitKGemmF32Out, K=64, N=3, SPLIT_K=4, DOT=HOP),
           bind(CB.CublasSplitKGemm, K=64, N=3, SPLIT_K=4, DOT=HOP),
           bind(CB.CublasSplitKGemmBf16Partials, K=64, N=3, SPLIT_K=4, DOT=HOP),
+          bind(CB.CublasSerialSplitKGemm, K=64, N=3, SPLIT_K=4, DOT=HOP),
+          bind(GV.CublasGemvDot, K=64, LANES=16), bind(GV.CublasGemvDot, K=64, LANES=32), bind(GV.CublasGemv, K=64, N=2, LANES=16),
           bind(LL.LlBf16DotprodDot, K=256, BS=64, VEC=2, FMA=1), bind(LL.LlBf16DotprodDot, K=256, BS=64, VEC=2, FMA=0),
           bind(LL.LlBf16DotprodDot, K=101, BS=32, VEC=2, FMA=1),
           bind(LL.LlBf16SplitKDot, K=128, SPLIT_K=2, TILE_K=32, WARPS=2, DOT=HOP),
@@ -251,18 +262,56 @@ def test_f32out_and_batched_gemm_agree_with_the_models() -> None:
 
 
 def test_cublas_splitk_definitions_agree_with_the_hypothesis() -> None:
-    """The Boolean split-K output types and the bf16-workspace split-K agree with the word and numpy twins at a nontrivial
-    four-way partition."""
+    """The Boolean split-K output types, the bf16-workspace and the serial split-K agree with the word and numpy twins at a
+    nontrivial four-way partition."""
     rng = np.random.default_rng(41)
     for kind in KINDS:
         x, w = _bf16_words(rng, (12, 64), kind), _bf16_words(rng, (3, 64), kind)
         f32 = _bits_rows(bind(CB.CublasSplitKGemmF32Out, K=64, N=3, SPLIT_K=4, DOT=HOP), x, w)
-        bf16, partials = (np.asarray(BS.evaluate_words(bind(d, K=64, N=3, SPLIT_K=4, DOT=HOP), x,
-                                                       np.broadcast_to(w, (len(x), *w.shape)))).astype(U16)
-                          for d in (CB.CublasSplitKGemm, CB.CublasSplitKGemmBf16Partials))
+        bf16, partials, serial = (np.asarray(BS.evaluate_words(bind(d, K=64, N=3, SPLIT_K=4, DOT=HOP), x,
+                                                               np.broadcast_to(w, (len(x), *w.shape)))).astype(U16)
+                                  for d in (CB.CublasSplitKGemm, CB.CublasSplitKGemmBf16Partials, CB.CublasSerialSplitKGemm))
         assert _f32_equal(f32, C.cublas_splitk_rows(x, w, 4))
         assert np.array_equal(bf16, C.cublas_splitk_rows(x, w, 4, out="bf16"))
         assert np.array_equal(partials, C.cublas_splitk_rows(x, w, 4, partial="bf16", out="bf16")), kind
+        assert np.array_equal(serial, C.cublas_serial_splitk_rows(x, w, 4)), kind
+
+
+def test_cublas_gemv_agrees_with_its_twin_and_contracts() -> None:
+    """`CublasGemv_v2` against `cublas_gemv_rows` at 16 and 32 lanes on every kind, on a row that tells its FFMA from an FMUL then
+    an FADD (a lane whose second product overflows f32 alone but not added to its first: finite under FFMA, +inf otherwise), and
+    on one whose every lane's chain is -0 (a negative f32 underflow, then -0 products), which the +0 after the butterfly leaves +0."""
+    rng = np.random.default_rng(43)
+    for LANES in (16, 32):
+        gemv = bind(GV.CublasGemv, K=64, N=2, LANES=LANES)
+        for kind in KINDS:
+            x, w = _bf16_words(rng, (8, 64), kind), _bf16_words(rng, (2, 64), kind)
+            got = np.asarray(BS.evaluate_words(gemv, x, np.broadcast_to(w, (8, *w.shape)))).astype(U16)
+            assert np.array_equal(got, C.cublas_gemv_rows(x, w, LANES)), (LANES, kind)
+        ovf = np.zeros((2, 64), U16)
+        ovf[:, 3], ovf[:, 3 + LANES] = 0xDF7F, 0x5FC0
+        neg = np.full((2, 64), 0x8000, U16)
+        neg[:, :LANES] = 0x9980
+        x = np.full((1, 64), 0x5F80, U16)
+        got = np.asarray(BS.evaluate_words(gemv, x, ovf[None])).astype(U16)
+        assert np.array_equal(got, C.cublas_gemv_rows(x, ovf, LANES)) and not np.array_equal(got, C.cublas_gemv_rows(x, ovf, LANES, 0))
+        x = np.full((1, 64), 0x1A00, U16)
+        got = np.asarray(BS.evaluate_words(gemv, x, neg[None])).astype(U16)
+        assert np.array_equal(got, C.cublas_gemv_rows(x, neg, LANES)) and not got.any()
+    with pytest.raises(ValueError, match="K_positive_multiple_of_LANES"):
+        _ = bind(GV.CublasGemvDot, K=40, LANES=16).body
+
+
+@pytest.mark.parametrize("M,K,SPLIT_K", [(1, 2048, 5), (4, 1024, 3), (303, 512, 2)])
+def test_route_probe_rows_tell_every_candidate_route_apart(M, K, SPLIT_K) -> None:
+    """`served routes` keeps the one candidate route (`cublas_routes_at`) whose twin computes every word of `route_probe_rows`; on
+    the rows it reads, each pair of candidates at a split count differs somewhere, so the device's route is never ambiguous."""
+    rows = sorted({0, M // 2, M - 1})
+    tests = [(x[rows], w) for x, w in C.route_probe_rows(M, K, 64)]
+    outs = [(r, [C.cublas_route_rows(r, x, w) for x, w in tests]) for r in C.cublas_routes_at([SPLIT_K])]
+    for i, (a, pa) in enumerate(outs):
+        for b, pb in outs[i + 1:]:
+            assert any(not np.array_equal(p, q) for p, q in zip(pa, pb)), (a, b)
 
 
 def test_cublas_default_split_bounds_are_equal_64_element_chunks_then_a_remainder() -> None:
