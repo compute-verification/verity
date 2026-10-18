@@ -308,6 +308,71 @@ theorem zk_table_rowsLZ {n mPts : ℕ} {Reg : Type} (T : Finset (Fin n) → Reg 
   rw [hsh] at he₀ he₁
   exact ⟨he₀, he₁⟩
 
+/-- **A rep's pads at an output**: its inner openings are those of the inner proof its proof file decodes to, and it
+recorded at inner query `jj` the position `Zk.verifyInner` reads there: its stream's last round's coin `jj`, `lo` mod
+`innerN`. -/
+def PadsRep (st : Setup) (sch : Flock.Schedule) (n : ℕ) (s : StreamRec) (bytes : ByteArray)
+    (io : ZkLink.InnerOpens 𝔽 Dig (List UInt8)) (qpos : ℕ → ℕ) : Prop :=
+  ∃ zp : Zk.ZkProof, Zk.decode (shapeZKn st sch n) bytes = .ok zp ∧ io = innerOpensOf zp.inner ∧
+    ∀ jj < Zk.Q, qpos jj = ((s.rounds[s.rounds.size - 1]!).coins[jj]!).lo.toNat % innerN (layZ st sch)
+
+/-- **At `verify --zk`'s acceptance of a table, its reps' pads are their proof files' at their streams' query words**:
+each rep's inner openings are its decoded inner proof's (`opnZ_pair`), and the positions it recorded are its last
+round's coins, through the table's `pos` (`zk_qpos_of_rep`, `ZkTabLay.hpos`). -/
+theorem zk_table_padsZ {n mPts : ℕ} {Reg : Type} (T : Finset (Fin n) → Reg → ZkSession.TabZK 𝔽 mPts)
+    (S : Finset (Fin n)) (R : Reg) (pts : Fin 2 → Fin mPts → 𝔽) (spec : SessionSpec) (st : Setup)
+    (sch : Flock.Schedule) (tPad : ℕ) (sess : Session) (i : ℕ) (b₀ b₁ c : ByteArray) (N : ℕ)
+    (hN : (Model.extraClaims (T S R).S (T S R).ptLocal mPts pts).length = N)
+    (hsch : Zk.schedule st.m = .ok (sch, tPad)) (hseam : ZkTabSeam (T S R) st sch tPad)
+    (htab : ZkTabLay (T S R) st sch) (hfold : FoldRealizes st.fold (T S R).S)
+    (hext : ExtraRealizes st (T S R).S sess.points (Model.extraClaims (T S R).S (T S R).ptLocal mPts pts))
+    (hwf : ∀ s ∈ sess.streams.toList, RoundsWF s.rounds)
+    (h0 : Zk.verifyRep spec st sch tPad sess i 0 b₀ = .ok c) (h1 : Zk.verifyRep spec st sch tPad sess i 1 b₁ = .ok c)
+    (s₀ s₁ : StreamRec) (zp₀ zp₁ : Zk.ZkProof)
+    (hs₀ : sess.streams.find? (fun x => x.name == toString spec.tables[i]! ++ toString "/rep" ++ toString 0) =
+      some s₀)
+    (hs₁ : sess.streams.find? (fun x => x.name == toString spec.tables[i]! ++ toString "/rep" ++ toString 1) =
+      some s₁)
+    (hd₀ : Zk.decode (shapeZKn st sch N) b₀ = .ok zp₀) (hd₁ : Zk.decode (shapeZKn st sch N) b₁ = .ok zp₁)
+    (pend : ZkLink.PendZ 𝔽 Dig (List UInt8) × ZkLink.PendZ 𝔽 Dig (List UInt8)) (cap : Cap Dig)
+    (hp₀ : Plays fOf (ZkLink.repZCAt execArith hs512 (T S R) pts 0) (repMsgsZ st sch (2 + N) tPad zp₀)
+      (s₀.rounds.toList.map (·.coins)) pend.1)
+    (hp₁ : Plays fOf (ZkLink.repZCAt execArith hs512 (T S R) pts 1) (repMsgsZ st sch (2 + N) tPad zp₁)
+      (s₁.rounds.toList.map (·.coins)) pend.2) :
+    PadsRep st sch N s₀ b₀ ((ZkLink.outZC hs512 (T S R) cap pend (opnZ st sch N #[b₀, b₁])).opens.inner 0)
+        (ZkLink.outZC hs512 (T S R) cap pend (opnZ st sch N #[b₀, b₁])).pend.1.qpos ∧
+      PadsRep st sch N s₁ b₁ ((ZkLink.outZC hs512 (T S R) cap pend (opnZ st sch N #[b₀, b₁])).opens.inner 1)
+        (ZkLink.outZC hs512 (T S R) cap pend (opnZ st sch N #[b₀, b₁])).pend.2.qpos := by
+  obtain ⟨s₀', ex, zp₀', tr₀, hs₀', hx₀, hd₀', -, -, hrun₀, hk₀, -, -⟩ :=
+    zk_verifyRep_ok spec st sch tPad sess i 0 b₀ c h0
+  obtain ⟨s₁', ex₁, zp₁', tr₁, hs₁', hx₁, hd₁', -, -, hrun₁, hk₁, -, -⟩ :=
+    zk_verifyRep_ok spec st sch tPad sess i 1 b₁ c h1
+  obtain rfl : ex = ex₁ := Except.ok.inj (hx₀.symm.trans hx₁)
+  obtain ⟨hsz, hrel⟩ := hext ex hx₀
+  have hsh : shapeZK st sch ex = shapeZKn st sch N := by
+    unfold shapeZK shapeZKn; rw [hsz, hN]
+  obtain rfl : s₀' = s₀ := Option.some.inj (hs₀'.symm.trans hs₀)
+  obtain rfl : s₁' = s₁ := Option.some.inj (hs₁'.symm.trans hs₁)
+  have hz₀ := hd₀'
+  have hz₁ := hd₁'
+  rw [hsh] at hz₀ hz₁
+  obtain rfl : zp₀' = zp₀ := Except.ok.inj (hz₀.symm.trans hd₀)
+  obtain rfl : zp₁' = zp₁ := Except.ok.inj (hz₁.symm.trans hd₁)
+  have hn : ex.size = N := hsz.trans hN
+  rw [← hn] at hp₀ hp₁
+  obtain ⟨-, -, hi₀, hi₁⟩ := opnZ_pair hd₀ hd₁
+  have hq₀ := zk_qpos_of_rep (T S R) pts 0 st sch tPad ex b₀ zp₀' s₀'.rounds _ tr₀ hsch hseam htab hfold hsz hrel
+    hd₀' (hwf s₀' (Array.mem_toList_iff.2 (Array.mem_of_find?_eq_some hs₀))) hrun₀ hk₀ pend.1 hp₀
+  have hq₁ := zk_qpos_of_rep (T S R) pts 1 st sch tPad ex b₁ zp₁' s₁'.rounds _ tr₁ hsch hseam htab hfold hsz hrel
+    hd₁' (hwf s₁' (Array.mem_toList_iff.2 (Array.mem_of_find?_eq_some hs₁))) hrun₁ hk₁ pend.2 hp₁
+  refine ⟨⟨zp₀', hd₀, hi₀, fun jj hjj => ?_⟩, ⟨zp₁', hd₁, hi₁, fun jj hjj => ?_⟩⟩
+  · show pend.1.qpos jj = _
+    rw [hq₀ jj hjj, htab.hpos, htab.hN]
+    rfl
+  · show pend.2.qpos jj = _
+    rw [hq₁ jj hjj, htab.hpos, htab.hN]
+    rfl
+
 end FlockSoundness.Discharge.ZkExec
 
 namespace FlockSoundness.Discharge.Composed
@@ -320,9 +385,10 @@ local notation "𝕂" => FlockLevel3.GF256
 
 variable {n mPts : ℕ} {Reg : Type}
 
-/-- **An output's level-0 openings are its reps' rows at table `j`**: `OpensEntries` with each row whole, at the
-setup at the draw `d`, table `j`'s `Zk.schedule` schedule and the session's two rep streams of table `j`, at
-`2·|regions|` extra claims on the streams' rounds and table `j`'s proof files. -/
+/-- **An output's openings are its reps' rows at table `j`**: `OpensEntries` with each row whole, at the setup at
+the draw `d`, table `j`'s `Zk.schedule` schedule and the session's two rep streams of table `j`, at `2·|regions|` extra
+claims on the streams' rounds and table `j`'s proof files; and each rep's pads are its proof file's, recorded at its
+stream's query words (`PadsRep`). -/
 def OpensRows (I : Inputs) (d : Lean.Json) (t : Exec.Transcript) (j : ℕ) (T : TabZK 𝔽 mPts)
     (out : OutZC 𝔽 Dig (List UInt8)) : Prop :=
   ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : Session) (sch : Flock.Schedule) (tPad : ℕ)
@@ -336,13 +402,18 @@ def OpensRows (I : Inputs) (d : Lean.Json) (t : Exec.Transcript) (j : ℕ) (T : 
           t.proofs[2 * j]! ++
         Claims.Flock.zkRepRowsOf (shapeZKn (Setup.ofCircuit sts[j]) sch (2 * sts[j].regions.size)) s₁.rounds
           t.proofs[2 * j + 1]! ∧
-    ∀ ℓ, 1 ≤ ℓ →
+    (∀ ℓ, 1 ≤ ℓ →
       (slotOpensZ out 0 ℓ (lvOf T.sch ℓ).queries).map (fun x => (x.1, x.2.1)) =
           FlockDeploy.KS.zkLevelRowsOf (shapeZKn (Setup.ofCircuit sts[j]) sch (2 * sts[j].regions.size)) s₀.rounds
             t.proofs[2 * j]! ℓ ∧
         (slotOpensZ out 1 ℓ (lvOf T.sch ℓ).queries).map (fun x => (x.1, x.2.1)) =
           FlockDeploy.KS.zkLevelRowsOf (shapeZKn (Setup.ofCircuit sts[j]) sch (2 * sts[j].regions.size)) s₁.rounds
-            t.proofs[2 * j + 1]! ℓ
+            t.proofs[2 * j + 1]! ℓ) ∧
+    T.q = Zk.Q ∧
+    PadsRep (Setup.ofCircuit sts[j]) sch (2 * sts[j].regions.size) s₀ t.proofs[2 * j]! (out.opens.inner 0)
+      out.pend.1.qpos ∧
+    PadsRep (Setup.ofCircuit sts[j]) sch (2 * sts[j].regions.size) s₁ t.proofs[2 * j + 1]! (out.opens.inner 1)
+      out.pend.2.qpos
 
 /-- **`runsZCJ_live` at the setup at each draw, with the rows**: `runsAtZCJ_live_entries` at `OpensRows`
 (`zk_table_rows₀Z`). -/
@@ -477,6 +548,10 @@ theorem runsAtZCJ_live_rows (I : Inputs) (_ht : I.tags.typed = false) (dj : Fins
       rw [DecodeZL.extraClaims_length, ← hyst]
       show 2 * (regionsOf y.x.st).length = _
       simp [regionsOf]
+    have hpads := fun cp : Cap Dig => zk_table_padsZ (fun (_ : Finset (Fin n)) (_ : Reg) => y.table) (L.draw ω) R o.pts spec
+      (Setup.ofCircuit y.x.st) y.sch y.tPad sess j.val _ _ c _ rfl y.hz hseam hlay hfold hExt hwfA hv0 hv1 s₀ s₁
+      zp₀ zp₁ hf₀ hf₁ hdz₀ hdz₁ (p₀, p₁) cp hpl₀ hpl₁
+    rw [hN, hyst] at hpads
     refine ⟨hok, spec, sts, sess, y.sch, y.tPad, s₀, s₁, hj, hs, hdecS, by rw [← hyst]; exact y.hz, hf₀, hf₁,
       (zk_table_rows₀Z (fun (_ : Finset (Fin n)) (_ : Reg) => y.table) (L.draw ω) R o.pts spec
         (Setup.ofCircuit y.x.st) y.sch y.tPad sess j.val _ _ c _ rfl y.hz hseam hExt hwfA hv0 hv1 s₀ s₁ zp₀ zp₁
@@ -486,8 +561,9 @@ theorem runsAtZCJ_live_rows (I : Inputs) (_ht : I.tags.typed = false) (dj : Fins
         hf₀ hf₁ hdz₀ hdz₁ (p₀, p₁) _ hpl₀ hpl₁ ℓ h1).1.trans ?_,
       (zk_table_rowsLZ (fun (_ : Finset (Fin n)) (_ : Reg) => y.table) (L.draw ω) R o.pts spec
         (Setup.ofCircuit y.x.st) y.sch y.tPad sess j.val _ _ c _ rfl y.hz hseam hExt hwfA hv0 hv1 s₀ s₁ zp₀ zp₁
-        hf₀ hf₁ hdz₀ hdz₁ (p₀, p₁) _ hpl₀ hpl₁ ℓ h1).2.trans ?_⟩⟩
+        hf₀ hf₁ hdz₀ hdz₁ (p₀, p₁) _ hpl₀ hpl₁ ℓ h1).2.trans ?_⟩, hseam.hq, ?_, ?_⟩
     all_goals rw [hN, hyst]
+    exacts [(hpads _).1, (hpads _).2]
 
 end FlockSoundness.Discharge.Composed
 
@@ -638,6 +714,10 @@ theorem runsAtZCJH_live_rows (I : Inputs) (ht : I.tags.typed = false) {c : Flock
       rw [DecodeZL.extraClaims_length, ← hyst]
       show 2 * (regionsOf y.x.st).length = _
       simp [regionsOf]
+    have hpads := fun cp : Cap Dig => zk_table_padsZ (fun (_ : Finset (Fin n)) (_ : Reg) => y.table) (L.draw ω) R o.pts spec
+      (Setup.ofCircuit y.x.st) y.sch y.tPad sess j.val _ _ cap _ rfl y.hz hseam hlay hfold hExt hwfA hv0 hv1 s₀ s₁
+      zp₀ zp₁ hf₀ hf₁ hdz₀ hdz₁ (p₀, p₁) cp hpl₀ hpl₁
+    rw [hN, hyst] at hpads
     refine ⟨hok, spec, sts, sess, y.sch, y.tPad, s₀, s₁, hj, hs, hdecS, by rw [← hyst]; exact y.hz, hf₀, hf₁,
       (zk_table_rows₀Z (fun (_ : Finset (Fin n)) (_ : Reg) => y.table) (L.draw ω) R o.pts spec
         (Setup.ofCircuit y.x.st) y.sch y.tPad sess j.val _ _ cap _ rfl y.hz hseam hExt hwfA hv0 hv1 s₀ s₁ zp₀ zp₁
@@ -647,8 +727,9 @@ theorem runsAtZCJH_live_rows (I : Inputs) (ht : I.tags.typed = false) {c : Flock
         hf₀ hf₁ hdz₀ hdz₁ (p₀, p₁) _ hpl₀ hpl₁ ℓ h1).1.trans ?_,
       (zk_table_rowsLZ (fun (_ : Finset (Fin n)) (_ : Reg) => y.table) (L.draw ω) R o.pts spec
         (Setup.ofCircuit y.x.st) y.sch y.tPad sess j.val _ _ cap _ rfl y.hz hseam hExt hwfA hv0 hv1 s₀ s₁ zp₀ zp₁
-        hf₀ hf₁ hdz₀ hdz₁ (p₀, p₁) _ hpl₀ hpl₁ ℓ h1).2.trans ?_⟩⟩
+        hf₀ hf₁ hdz₀ hdz₁ (p₀, p₁) _ hpl₀ hpl₁ ℓ h1).2.trans ?_⟩, hseam.hq, ?_, ?_⟩
     all_goals rw [hN, hyst]
+    exacts [(hpads _).1, (hpads _).2]
 
 end FlockSoundness.Discharge.ZkHidden
 

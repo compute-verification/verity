@@ -12,6 +12,8 @@ values are the claim checks, `openingZK_plays'`) and level 0's two lane rows (`l
 * `zk_inner_rows`: the run of the compiled rep that `zk_rep_plays` builds has an inner check that holds on the proof's
   inner openings.
 * `zk_inner_of_rep`: at `ZkRepAccepts`'s hypotheses, every result of the compiled rep does (`plays_det`).
+* `zk_inner_qpos`, `zk_qpos_of_rep`: the position a result of the compiled rep records for inner query `jj` is the
+  table's `pos` at the rounds' last coin `jj`, the query word `Zk.verifyInner` draws.
 -/
 
 namespace FlockSoundness.Discharge.ZkExec
@@ -221,6 +223,26 @@ theorem rows7 {np : ℕ} {β : Type} (row row' A B C D E : ZkSession.Lin 𝔽 np
 
 /-! ## The rep's inner check -/
 
+/-- **The positions the compiled inner proof records are the query words'**: on the coins a successful
+`Zk.verifyInner` consumed, a run of `innerGameC` records at query `jj` the position `pos` gives the fourth round's coin
+`jj`; the inner proof reads exactly four rounds. -/
+theorem zk_inner_qpos {lay : Zk.PadLayout} {pr : Zk.InnerProof} {finalC : F128} {cons : Array (String × Zk.Lin)}
+    {t t' : Flock.Transcript} (hcons : cons.size = 7) (hwf : RoundsWF t.rounds)
+    (h : Zk.verifyInner lay pr finalC cons t = .ok ((), t')) {Sl : Type} (Hs : ZkLink.Hashes 𝔽 Dig Sl) {N : ℕ}
+    (dom : Fin N ↪ 𝔽) (np nP : ℕ) (pos : 𝔽 → Fin N) (rows : Fin 7 → ZkSession.Lin 𝔽 np)
+    (tr : ZkSession.Triple np) (root : Dig) {v : (ZkLink.InnerOpens 𝔽 Dig Sl → Prop) × (ℕ → ℕ)}
+    (hv : Plays fOf (ZkLink.innerGameC Hs.H Hs.Ep Hs.Lp Hs.Lτ dom np nP Zk.Q pos rows tr root)
+      [⟨𝔽 × 𝔽, (fOf pr.rho, fOf pr.sigma)⟩, ⟨Dig, toDig pr.tauCommit⟩, ⟨Fin (np + nP) → 𝔽, vecOf (np + nP) pr.y⟩]
+      (consumed t.rounds t.k t'.k) v) :
+    t'.k = t.k + 4 ∧ ∀ jj < Zk.Q, v.2 jj = (pos (fOf ((t.rounds[t.k + 3]!).coins[jj]!))).val := by
+  obtain ⟨-, hk, c₀, c₁, c₂, c₃, hsz₀, hsz₁, hsz₂, hsz₃, hc₃, hcoins⟩ := zk_inner_coins hcons hwf h
+  rw [hcoins] at hv
+  obtain ⟨u, hu⟩ := innerGameC_plays Hs dom np nP pos rows tr root pr hsz₀ hsz₁ hsz₂ hsz₃
+  obtain rfl := plays_det hv hu
+  refine ⟨hk, fun jj hjj => ?_⟩
+  dsimp only
+  rw [ZkLink.qposOf, dite_eq_left hjj, hc₃]
+
 set_option maxHeartbeats 1000000 in
 /-- **`repProg`'s run has an inner check that holds** (`zk_rep_plays` with its inner check): the run of the compiled
 rep that `zk_rep_plays` builds, at a table whose pads and inner code are the executable's and whose statement's fold
@@ -239,7 +261,8 @@ theorem zk_inner_rows {mPts : ℕ} (T : ZkSession.TabZK 𝔽 mPts) (pts : Fin 2 
     ∃ pend : ZkLink.PendZ 𝔽 Dig (List UInt8),
       Plays fOf (ZkLink.repZCAt execArith hs512 T pts r) (repMsgsZ st sch (2 + extras.size) tPad zp)
         (rounds.toList.map (·.coins)) pend ∧
-      pend.inner (innerOpensOf zp.inner) := by
+      pend.inner (innerOpensOf zp.inner) ∧
+      ∀ jj < Zk.Q, pend.qpos jj = (T.pos (fOf ((rounds[rounds.size - 1]!).coins[jj]!))).val := by
   obtain ⟨h25, -, -, hk0, -, hdim, hlv, hα1, -⟩ := zk_schedule_seams _ _ _ hsch
   have hTm : T.S.m = st.m := hseam.hm
   have h7 : 7 ≤ T.S.m := by omega
@@ -378,9 +401,13 @@ theorem zk_inner_rows {mPts : ℕ} (T : ZkSession.TabZK 𝔽 mPts) (pts : Fin 2 
   refine exQ_recv (toDig zp.inner.root) ?_
   refine pq_bindQ hM (fun o ho => ?_) hmsgs hcoins
   obtain ⟨v, hv⟩ := hIP hs512 T.dom T.np T.nP T.pos o.1 T.tr (toDig zp.inner.root)
-  exact ⟨⟨o.2, v.1, v.2⟩, Plays.bind' hv (Plays.pure _) (List.append_nil _).symm (List.append_nil _).symm,
+  obtain ⟨hk₄, hq⟩ := zk_inner_qpos hcons7 hwf₃ h₅ hs512 T.dom T.np T.nP T.pos o.1 T.tr (toDig zp.inner.root) hv
+  have ht₃ : t₃.rounds = rounds := by rw [hr₃, hr₂, hr₁]; rfl
+  refine ⟨⟨o.2, v.1, v.2⟩, Plays.bind' hv (Plays.pure _) (List.append_nil _).symm (List.append_nil _).symm,
     zk_inner_accepts _ zp.inner _ _ t₃ tr T st sch tPad o.1 rfl hseam htab hcons7 ho (zk_decode_paths hdec) hwf₃ h₅
-      v (by rw [hseam.hq]; exact hv)⟩
+      v (by rw [hseam.hq]; exact hv), fun jj hjj => ?_⟩
+  show v.2 jj = _
+  rw [hq jj hjj, ht₃, show t₃.k + 3 = rounds.size - 1 by omega]
 
 /-- **A `--zk` rep's inner check holds on its inner openings** (`ZkRepAccepts`'s second conclusion, at its
 hypotheses): every result of the compiled rep, played with the rep's messages and the rounds' coins, has an inner check
@@ -403,10 +430,31 @@ theorem zk_inner_of_rep {mPts : ℕ} (T : ZkSession.TabZK 𝔽 mPts) (pts : Fin 
     (hp : Plays fOf (ZkLink.repZCAt execArith hs512 T pts r) (repMsgsZ st sch (2 + extras.size) tPad zp)
       (rounds.toList.map (·.coins)) pend) :
     pend.inner (os.inner r.val) := by
-  obtain ⟨pend', hp', hin⟩ :=
+  obtain ⟨pend', hp', hin, -⟩ :=
     zk_inner_rows T pts r st sch tPad extras bytes zp rounds dom tr hsch hseam htab hfold hlen hext hdec hwf hrun hk
   obtain rfl := plays_det hp hp'
   rw [hinner]
   exact hin
+
+/-- **A `--zk` rep's result records the query words' positions**: every result of the compiled rep, played with the
+rep's messages and the rounds' coins, records at inner query `jj` the table's `pos` at the rounds' last coin `jj`. -/
+theorem zk_qpos_of_rep {mPts : ℕ} (T : ZkSession.TabZK 𝔽 mPts) (pts : Fin 2 → Fin mPts → 𝔽) (r : Fin 2)
+    (st : Setup) (sch : Flock.Schedule) (tPad : ℕ) (extras : Array Flock.Claim) (bytes : ByteArray) (zp : Zk.ZkProof)
+    (rounds : Array Round) (dom : ByteArray) (tr : Flock.Transcript)
+    (hsch : Zk.schedule st.m = .ok (sch, tPad)) (hseam : ZkTabSeam T st sch tPad) (htab : ZkTabLay T st sch)
+    (hfold : FoldRealizes st.fold T.S)
+    (hlen : extras.size = (Model.extraClaims T.S T.ptLocal mPts pts).length)
+    (hext : ∀ (j : ℕ) (hj : j < (Model.extraClaims T.S T.ptLocal mPts pts).length),
+      ClaimRel T.S.m extras[j]! (Model.extraClaims T.S T.ptLocal mPts pts)[j])
+    (hdec : Zk.decode (shapeZK st sch extras) bytes = .ok zp) (hwf : RoundsWF rounds)
+    (hrun : (repProg st sch tPad r.val extras zp).run (Flock.Transcript.init rounds dom) = .ok ((), tr))
+    (hk : tr.k = rounds.size) (pend : ZkLink.PendZ 𝔽 Dig (List UInt8))
+    (hp : Plays fOf (ZkLink.repZCAt execArith hs512 T pts r) (repMsgsZ st sch (2 + extras.size) tPad zp)
+      (rounds.toList.map (·.coins)) pend) :
+    ∀ jj < Zk.Q, pend.qpos jj = (T.pos (fOf ((rounds[rounds.size - 1]!).coins[jj]!))).val := by
+  obtain ⟨pend', hp', -, hq⟩ :=
+    zk_inner_rows T pts r st sch tPad extras bytes zp rounds dom tr hsch hseam htab hfold hlen hext hdec hwf hrun hk
+  obtain rfl := plays_det hp hp'
+  exact hq
 
 end FlockSoundness.Discharge.ZkExec
