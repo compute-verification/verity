@@ -53,6 +53,7 @@ from verity_vllm.config import option
 from verity_vllm.observe.events import DispatchEnter, DispatchExit, TritonLaunch, ViewDesc
 from verity_vllm.observe.log import read_log
 from verity_vllm.observe.fold.views import byte_extent, collapsed_dims, element_runs, row_view
+from verity_vllm.observe.fold.memory import access_runs
 
 Run = tuple[str, int, int, int]      # (space, idx, lo, hi) — the same runs `verity.ml.circuits.refs.runs` yields
 
@@ -200,7 +201,7 @@ class ProvenanceChecker:
             return
         view: ViewDesc = acc["view"]
         eb = view.itemsize
-        rs: list[Run] = [tuple(r) for r in acc["refs"]]
+        rs: list[Run] = [tuple(r) for r in access_runs(acc["refs"])]
         eruns = self._runs_of_view(view, acc.get("rows"))
         if kind in ("write", "root", "token"):
             self.writes += 1

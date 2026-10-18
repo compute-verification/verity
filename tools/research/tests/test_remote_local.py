@@ -124,6 +124,30 @@ def test_a_queued_run_holds_its_cpu_allocation_through_custody_and_its_gpu_lease
     assert argv[argv.index("--", len(wrap)) + 1:][: len(lease)] == lease
 
 
+def test_a_direct_run_on_a_gpu_lease_host_gets_gpus_only_through_gpu_lease(tmp_path, monkeypatch):
+    """INF-55: where gpu-lease hands out every GPU, a run without --gpus sees CUDA_VISIBLE_DEVICES='' whatever its --env says, and
+    one with --gpus 2 runs under `gpu-lease 2 --wait`, which names its GPUs; the launch's answer says which."""
+    monkeypatch.setenv("GPU_LEASE_HOST_FILE", str(tmp_path / "gpu-lease-host"))
+    (tmp_path / "gpu-lease-host").write_text("")
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    (bin_dir / "gpu-lease").write_text('#!/bin/sh\necho "$*" > "$RESEARCH_RUN_DIR/lease-args"\nwhile [ "$1" != -- ]; do shift; done; shift\n'
+                                       'CUDA_VISIBLE_DEVICES=4,5 exec "$@"\n')
+    (bin_dir / "gpu-lease").chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
+    show = [PY, "-c", "import os; print(repr(os.environ['CUDA_VISIBLE_DEVICES']))"]
+    req, runs_root = _request(tmp_path, "g0", show, env={"CUDA_VISIBLE_DEVICES": "0"})
+    out = remote.launch_request(req)
+    assert out["started"] and out["gpus"].startswith("none: gpu-lease hands out every GPU here")
+    assert _wait_terminal(runs_root / "g0")["state"] == "done" and (runs_root / "g0" / "stdout.log").read_text() == "''\n"
+    req, _ = _request(tmp_path, "g2", show)
+    doc = json.loads(req.read_text()); doc["gpus"] = 2; req.write_text(json.dumps(doc))
+    out = remote.launch_request(req)
+    assert out["started"] and out["gpus"].startswith("2 through `gpu-lease 2 --wait`")
+    assert _wait_terminal(runs_root / "g2")["state"] == "done" and (runs_root / "g2" / "stdout.log").read_text() == "'4,5'\n"
+    assert (runs_root / "g2" / "lease-args").read_text().split()[:5] == ["2", "--wait", "--mem-gb", "0", "--"]
+
+
 def test_a_queued_run_with_a_disk_request_is_admitted_on_the_machine_ahead_of_its_allocation(tmp_path):
     req, runs_root = _request(tmp_path, "d1", [PY, "-c", "print('ok')"])
     doc = json.loads(req.read_text())

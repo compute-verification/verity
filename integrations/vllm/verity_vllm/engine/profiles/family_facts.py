@@ -14,7 +14,7 @@ Every fact cites the vLLM source that hard-codes it (`provenance`: file:line @ d
   * `derive` -- a value computed from the configuration the way vLLM computes it (Gemma-2's `normalizer = sqrt(H)`; Pythia's rotary width).
 `rules` are the `analytic.config_of` family rules (QKV bias, default rope theta, per-head q/k norm); for the families `analytic.FAMILY_RULES`
 already lists they MUST agree (`tests/test_profiles_generic.py` pins that), the others (`gpt_neox`, `qwen3_moe`) are passed as `family_rules`.
-`arch` selects the constructor class in `profiles.generic` (`dense`, `dense-ln`, `moe`; `dsa-moe` is described and refused); `params` are the architecture's vLLM parameter
+`arch` selects the constructor class in `profiles.generic` (`dense`, `dense-ln`, `moe`, `dsa-moe`); `params` are the architecture's vLLM parameter
 names that the base Llama map (`vllm_d9105ea80_sm89_eager._LAYER_FIELDS`) does not know, per weights-Record field.
 """
 from __future__ import annotations
@@ -197,9 +197,7 @@ FAMILY_FACTS: dict[str, dict[str, Any]] = {
     },
     # --------------------------------------------------------------------------------------------------------------------------- dsa-moe
     # Sparse attention (multi-head latent attention whose decode attends the top-k positions a lightning indexer picks) and a sigmoid
-    # grouped-top-k MoE with a shared expert.  `structural_refusal` refuses the class: the κ fold has patterns for the MoE block
-    # (`gen_shared_moe_patterns`) but none for the indexer or sparse MLA, so a profile would be silently mis-fitted.  The facts below are
-    # what the Build's lowering, the MoE scope and the capture map read.
+    # grouped-top-k MoE with a shared expert.  The facts below are what the Build's lowering, the MoE scope and the capture map read.
     "glm_moe_dsa": {
         "arch": "dsa-moe", "vllm_class": "GlmMoeDsaForCausalLM (= DeepseekV32ForCausalLM)",
         "rules": {"qkv_bias_key": "attention_bias"},
@@ -244,6 +242,43 @@ FAMILY_FACTS: dict[str, dict[str, Any]] = {
                                                                         f"n_shared_experts, reduce_results=False) unless the fused shared expert is enabled"},
             "SHARED_I": {"derive": lambda cfg, C: int(cfg["moe_intermediate_size"]) * int(cfg["n_shared_experts"]),
                          "provenance": f"{_DSV2}:358 intermediate_size = moe_intermediate_size * n_shared_experts (a rank's: the rank's moe_intermediate_size)"},
+        },
+        # per `analytic.mla_layer_weights_type` field: `layer` on every decoder layer, `dense` below FIRST_DENSE, `moe` from it on,
+        # `indexer` on the INDEXER_LAYERS (`indexers` entries in layer order)
+        "params": {
+            "layer": {
+                "input_layernorm.weight": "ln1", "post_attention_layernorm.weight": "ln2",
+                "self_attn.fused_qkv_a_proj.weight": "qkv_a_w", "self_attn.q_a_layernorm.weight": "q_a_ln", "self_attn.q_b_proj.weight": "q_b_w",
+                "self_attn.kv_a_layernorm.weight": "kv_a_ln", "self_attn.kv_b_proj.weight": "kv_b_w", "self_attn.o_proj.weight": "o_w",
+                "self_attn.fused_qkv_a_proj.weight_scale_inv": "qkv_a_ws", "self_attn.q_b_proj.weight_scale_inv": "q_b_ws",
+                "self_attn.kv_b_proj.weight_scale_inv": "kv_b_ws", "self_attn.o_proj.weight_scale_inv": "o_ws",
+            },
+            "dense": {
+                "mlp.gate_up_proj.weight": "gate_up_w", "mlp.gate_up_proj.weight_scale_inv": "gate_up_ws",
+                "mlp.down_proj.weight": "down_w", "mlp.down_proj.weight_scale_inv": "down_ws",
+            },
+            "moe": {
+                "mlp.gate.weight": "gate_w", "mlp.gate.e_score_correction_bias": "gate_bias",
+                "mlp.shared_experts.gate_up_proj.weight": "sh_gate_up_w", "mlp.shared_experts.down_proj.weight": "sh_down_w",
+                "mlp.experts.routed_experts.w13_weight": "w13", "mlp.experts.routed_experts.w2_weight": "w2",
+                "mlp.shared_experts.gate_up_proj.weight_scale_inv": "sh_gate_up_ws",
+                "mlp.shared_experts.down_proj.weight_scale_inv": "sh_down_ws",
+                "mlp.experts.routed_experts.w13_weight_scale_inv": "w13_ws",
+                "mlp.experts.routed_experts.w2_weight_scale_inv": "w2_ws",
+            },
+            "indexer": {
+                "self_attn.indexer.wq_b.weight": "wq_b_w",
+                "self_attn.indexer.wq_b.weight_scale_inv": "wq_b_ws",
+                "self_attn.indexer.wk_weights_proj.weight": "wk_w",
+                "self_attn.indexer.k_norm.weight": "k_norm_w",
+                "self_attn.indexer.k_norm.bias": "k_norm_b",
+            },
+            "provenance": f"{_DSA}:110-113 (input_layernorm, post_attention_layernorm), :92-108 (mlp: DeepseekV2MoE from first_k_dense_replace on, "
+                          f"else DeepseekV2MLP); {_DSA_ATTN}:239-261 (fused_qkv_a_proj, q_a_layernorm, q_b_proj, kv_a_layernorm, o_proj), :177-182 "
+                          f"(kv_b_proj), :68-84 DeepseekV32Indexer (wq_b, wk_weights_proj with quant_config=None, k_norm = LayerNorm with bias); "
+                          f"{_DSV2}:257-265 DeepseekV2MLP (gate_up_proj, down_proj), :317-328 (gate, e_score_correction_bias), :360-368 "
+                          f"(shared_experts), :370-373 FusedMoEFactory -> {_FMOE}:369 routed_experts (w13_weight, w2_weight); "
+                          f"vllm/model_executor/layers/quantization/fp8.py:354-355 a block-FP8 linear's scales are its weight_scale_inv",
         },
         "moe_width_key": "moe_intermediate_size",
         "moe_width_provenance": f"{_DSV2}:376 FusedMoE(intermediate_size=config.moe_intermediate_size); intermediate_size is the dense layers' width "

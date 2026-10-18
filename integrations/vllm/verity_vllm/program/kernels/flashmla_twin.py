@@ -497,7 +497,8 @@ def _sample_decode(rng, n, params, *, NH, SPLITS, NW, DN, DR, QT, BN, DOT, SCALE
 
 
 def _targets(defs: dict, family: str) -> list:
-    """The specialisations the self-check binds: small statics, every arm of SPLITS and PARTIAL."""
+    """The specialisations the self-check binds: small statics, every arm of SPLITS and PARTIAL, and the combine at 3, 33 and 127
+    splits (one, two and four partials on a lane; 127 is the most any batch gives a request)."""
     from verity.ml.circuits.defs import bind
 
     d, dot, s = defs, HopperBF16WgmmaDot16, 32 ** -0.5
@@ -508,7 +509,8 @@ def _targets(defs: dict, family: str) -> list:
         "FlashMlaKvRow_v1": [bind(d["FlashMlaKvRow_v1"], DN=32, DR=16, QT=16)],
         "FlashMlaSplit_v1": [bind(d["FlashMlaSplit_v1"], NB=2, D=32, BN=16, PARTIAL=False, DOT=dot, SCALE=s),
                              bind(d["FlashMlaSplit_v1"], NB=1, D=32, BN=16, PARTIAL=True, DOT=dot, SCALE=s)],
-        "FlashMlaCombine_v1": [bind(d["FlashMlaCombine_v1"], NS=3, D=16), bind(d["FlashMlaCombine_v1"], NS=33, D=2)],
+        "FlashMlaCombine_v1": [bind(d["FlashMlaCombine_v1"], NS=3, D=16), bind(d["FlashMlaCombine_v1"], NS=33, D=2),
+                               bind(d["FlashMlaCombine_v1"], NS=127, D=2)],
         "FlashMlaDecode_v1": [bind(d["FlashMlaDecode_v1"], SPLITS=(0, 1, 2), NW=16, **decode),
                               bind(d["FlashMlaDecode_v1"], SPLITS=(0, 2), NW=32, **decode)],
     }[family]

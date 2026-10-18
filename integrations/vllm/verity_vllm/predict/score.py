@@ -54,14 +54,14 @@ def hf_config_path(hf_home: str, repo: str, revision: str) -> str:
 
 def phi_of(rec: dict, *, hf_home: str, checkpoints: dict | None = None) -> Phi:
     """φ from a row's declared inputs: never a Build output (the traced Programs are what φ's prediction is scored against)."""
-    from verity_vllm.config import DTYPES, RowId
+    from verity_vllm.config import DTYPES, RowEngine, RowId
     from verity_vllm.target_family import declared_profile
     rid = RowId.parse(rec["row"])
     w = rec.get("workload")
     if not w:
         raise Unexpressible(f"row {rec['row']}: no declared workload manifest at {rec.get('workload_path')}")
     repo = w.get("model")
-    rev = _checkpoint_revision(repo, checkpoints) or w.get("tokenizer_revision")
+    rev = _checkpoint_revision(repo, checkpoints) or RowEngine.of(w).revision
     cp = hf_config_path(hf_home, repo, rev)
     if not os.path.exists(cp):
         raise Unexpressible(f"no config.json for {repo}@{rev} under {hf_home}")
@@ -71,7 +71,7 @@ def phi_of(rec: dict, *, hf_home: str, checkpoints: dict | None = None) -> Phi:
             for i, q in enumerate(w.get("requests") or [])]
     target = declared_profile(rec["row"], w)
     phi = Phi(model={"repo": repo, "revision": rev, "hf_config": hf, "dtype": DTYPES.get(rid.dtype, rid.dtype)}, target=target,
-              tp={"world": rid.world, "rank": 0}, engine=dict(w.get("engine_args_required") or {}),
+              tp={"world": rid.world, "rank": 0}, engine=dict(RowEngine.of(w).args),
               workload={"requests": reqs}, execution=rid.execution, profile=target.get("numerics_profile") or "b1-eager-v3")
     phi.sampling = sampling_of(w, phi)
     return phi
