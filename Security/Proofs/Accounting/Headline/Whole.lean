@@ -142,7 +142,7 @@ theorem dIdealFloor_whole {K R T L U F X : Type} [Fintype K] [Fintype R] [Fintyp
   have hexp := wgame_expBound hp hp0 G Uf hPin hLG hWL
   have het : Real.exp (-(1 * t)) = δ' := by
     rw [one_mul, ht, one_div, Real.log_inv, neg_neg, Real.exp_log hδ]
-  have hB := (prob_accepts_le zero_le_one (wgame p p0 G Uf) hexp t).trans het.le
+  have hB := ((wgame p p0 G Uf).prob_accepts_le zero_le_one hexp t).trans het.le
   have hZ' := hZ
   obtain ⟨-, -, hNw, hB0, -, -, -, -, -, -, -, -, hmuF1, -, -⟩ := hZ'
   obtain ⟨-, hw0, hφ0, -⟩ := stars_nonneg Z Fl lam hZ h
