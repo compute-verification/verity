@@ -1165,6 +1165,7 @@ static int check(int argc, char** argv) {
       case 20: me.v5<256, 2>(d, 0, bc); break;
       case 21: me.v5<128, 0>(d, 0, bc); break;
       case 22: me.v1_cg8(d, 0, bc); break;
+      case 23: me.v4<256>(d, 0, bc); break;
       case 12: {
         static cudaStream_t s2;
         static cudaEvent_t e2[2];

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # sharaw on one leased GPU (cwd = the source tree's root). Outside the lease: circuits' native_rows.cu fetched at a pinned
 # commit and built as its own library, sharaw built for the card, the reference's cases and the parameter files. Under one
-# lease: the selftest, every sharaw form's bit-exactness check against the reference (check.py), then at each step size
+# lease: the selftest, the bit-exactness check against the reference (check.py) of each candidate form (CHECK_FORMS, and
+# CHECK_FORMS_INL for the SR_INLINE=1 build), then at each step size
 # (DECODE_N, PREFILL_N leaves of 4 KiB) the bench: every committer's levels compared with commit_gpu's, then the raw rate,
 # commit_gpu, native_rows and the sharaw forms interleaved rep by rep with the SM clock of each, then the time split.
 # PROF=1: a second lease for nsys (each arm at both sizes) and ncu (the leaf kernels at the decode size). Clocks are read,
@@ -44,19 +45,23 @@ cat "$O/rc.txt"
 [ -x "$W/sharaw" ] || exit 1
 export SO="$W/native_rows.so"
 [ -f "$SO" ] || SO=""
+# The forms behind the bench's candidate arms (a check costs 18 process starts, 20-70 s on vy-nebius-2): 0 sharaw_v1, 2
+# v3_salt_s2, 7 v3s_s2, 11 v3s_cg, 14 v1_cg, 15 v1n, 17 lf0_cg, 22 v1_cg8, 23 v4_128. Every arm's levels are also compared
+# with commit_gpu's on the device before it is timed.
+export CHECK_FORMS=${CHECK_FORMS:-0 2 7 11 14 15 17 22 23} CHECK_FORMS_INL=${CHECK_FORMS_INL:-0 2 14 15 17 22 23}
 export REPS=${REPS:-7} PROF_BIN=${PROF_BIN:-sharaw} PROF_ARMS=${PROF_ARMS:-commit_gpu native_rows v3s_cg v4_128}
 # shellcheck disable=SC2016,SC2086
 gpu-lease 1 --wait --max-min 14 ${LEASE_ARGS:-} -- bash -c '
   nvidia-smi --query-gpu=index,uuid,name,driver_version,clocks.sm,clocks.max.sm,power.limit,memory.used --format=csv -i "$GPU_LEASE_UUID" > "$O/gpu.txt" 2>&1
   "$W/sharaw" selftest > "$O/selftest.jsonl"; s=$?
   ok=$s
-  for f in 0 1 2 3 6 7 9 10 11 12 13 14 15 16 17 18 19 20 21 22; do
+  for f in $CHECK_FORMS; do
     SHARAW_FORM=$f python3 $D/check.py check "$W/sharaw" "$W/cases" form$f > "$O/check-form$f.jsonl" 2> "$O/check-form$f.err"; c=$?
     echo "check form$f rc $c" >> "$O/rc.txt"
     [ $c = 0 ] || ok=1
   done
   if [ -x "$W/sharaw_inl" ]; then
-    for f in 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22; do
+    for f in $CHECK_FORMS_INL; do
       SHARAW_FORM=$f python3 $D/check.py check "$W/sharaw_inl" "$W/cases" inl-form$f > "$O/check-inl-form$f.jsonl" 2> "$O/check-inl-form$f.err"
       echo "check inl-form$f rc $?" >> "$O/rc.txt"
     done
