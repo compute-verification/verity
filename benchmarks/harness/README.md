@@ -38,7 +38,10 @@ key, a wrong type or an unknown GPU id is an error before anything runs.
    gets its own engine for two alternating cycles, with a discarded warm-up per point in each. `execution` records the mode,
    why resident failed, and the full warm-up and timed schedule.
 3. **Measured, not estimated.** A timed rep synchronizes the device around the run and reads the engine's own request
-   and step timings (`engine.arrivals.run_requests_arrivals` with `request_timing` and `step_timing`).
+   and step timings (`engine.arrivals.run_requests_arrivals` with `request_timing` and `step_timing`). An experimental
+   arm's `begin_run` runs before the clock starts and its `end_run` inside the timed window, so work an arm finishes at
+   the end of a run (the Commit's hashing backlog) is in its time; the arm's `Target` names the run's phase (`gate`,
+   `warmup` or `measure`) and point.
 
 ## Metrics
 

@@ -545,12 +545,13 @@ class _VllmEngine:
                 return got
         return {} if self.llm.protocols is None else self.llm.protocols.info()
 
-    def _run(self, point: SweepPoint, measured: bool) -> tuple[dict[str, tuple[int, ...]], dict[str, Any]]:
+    def _run(self, point: SweepPoint, phase: str) -> tuple[dict[str, tuple[int, ...]], dict[str, Any]]:
         import torch
         from vllm import SamplingParams
 
         from verity_vllm.engine.arrivals import run_requests_arrivals
 
+        measured = phase == "measure"
         requests = self._requests(point)
         params = lambda r: SamplingParams(temperature=0.0, max_tokens=r.max_tokens, ignore_eos=True,  # noqa: E731
                                           detokenize=False, seed=0)
@@ -558,6 +559,9 @@ class _VllmEngine:
         if measured:
             torch.cuda.synchronize()
             torch.cuda.reset_peak_memory_stats()
+        self.target.phase, self.target.point = phase, point.id
+        if self.obj is not None:
+            _callback(self.obj, "begin_run", self.target, None)
         start = time.perf_counter()
         finished, timing = run_requests_arrivals(
             self.llm.vllm,
@@ -566,6 +570,8 @@ class _VllmEngine:
             request_timing=True,
             step_timing=True,
         )
+        if self.obj is not None:
+            _callback(self.obj, "end_run", self.target, None)
         torch.cuda.synchronize()
         wall = time.perf_counter() - start
         tokens = {rid: tuple(int(t) for t in out.outputs[0].token_ids) for rid, out in finished.items()}
@@ -593,7 +599,7 @@ class _VllmEngine:
         }
 
     def gate(self, point: SweepPoint) -> Mapping[str, tuple[int, ...]]:
-        return self._run(point, False)[0]
+        return self._run(point, "gate")[0]
 
     def custom_gate(self) -> Mapping[str, Any]:
         if self.obj is None:
@@ -606,10 +612,10 @@ class _VllmEngine:
         return dict(got)
 
     def warmup(self, point: SweepPoint) -> None:
-        self._run(point, False)
+        self._run(point, "warmup")
 
     def measure(self, point: SweepPoint) -> Mapping[str, Any]:
-        return self._run(point, True)[1]
+        return self._run(point, "measure")[1]
 
     def close(self) -> None:
         try:
