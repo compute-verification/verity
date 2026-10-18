@@ -81,6 +81,7 @@ Implementation notes (L4)
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import json
 import re
@@ -131,6 +132,7 @@ from verity_vllm.observe.fold.resolver import (
     Operand,
     Param,
     PerRow,
+    Pieces,
     Profile,
     ResolutionReport,
     Shared,
@@ -329,6 +331,7 @@ class _Fold:
         self.cur_start: StepStart | None = None
         self.cur_resolution: int = -1
         self.cur_event: int = -1
+        self.shared_consts: tuple[int, dict[tuple[int, int], Coll]] = (-1, {})
         self.ended = False
 
     # -- driver --------------------------------------------------------------------------
@@ -752,6 +755,8 @@ class _Fold:
                     if k not in shared:
                         shared[k] = self._const(op, ptype, c, pname)
                     colls.append(shared[k])
+                elif isinstance(op, Pieces):
+                    colls.append(self._pieces(op, i, ptype, c, pname))
                 elif isinstance(op, Param):
                     colls.append(self._param(op, i, ptype, c, pname))
                 elif isinstance(op, Supplied):
@@ -761,10 +766,36 @@ class _Fold:
             rows.append(colls)
         return rows
 
+    def _pieces(self, op: Pieces, i: int, ptype: Type, c: Compute, pname: str) -> Coll:
+        """Row i of a `Pieces` operand: its views' refs and its constants' copies, concatenated in order."""
+        what, w, parts = f"{spec_label(c.spec)}.{pname}[row {i}]", _width_of(ptype), []
+        for piece in op.rows[i]:
+            if isinstance(piece, Const):
+                if int(piece.width) != w or not piece.shared:
+                    raise FoldError(f"{what}: a piece's Const{piece.width} is not a shared constant of the parameter's {w}-bit leaves")
+                parts += [self._const(piece, Value(w), c, pname).refs] * int(piece.count)
+            else:
+                self._check_width(ptype, piece, what)
+                r = self._mem("read", self.mem.read, piece)
+                self._journal("read", piece, r, what=f"piece of row {i}")
+                parts.append(r)
+        refs = concat(parts)
+        if refs.count != ptype.leaves:
+            raise FoldError(f"{what}: {refs.count} refs, the parameter type {ptype!r} has {ptype.leaves} leaves")
+        return Coll(ptype, refs)
+
     def _const(self, op: Const, ptype: Type, c: Compute, pname: str) -> Coll:
-        """[R15 stoch] Emit the constant's primitive instance and return its output (typed `Value<W>`)."""
+        """[R15 stoch] Emit the constant's primitive instance and return its output (typed `Value<W>`); a `shared` constant once per
+        value in the resolution."""
         if ptype != Value(int(op.width)):
             raise FoldError(f"{spec_label(c.spec)}.{pname}: Const{op.width} for a parameter of type {ptype!r}")
+        if op.shared:
+            if self.shared_consts[0] != self.cur_resolution:
+                self.shared_consts = (self.cur_resolution, {})
+            cache, key = self.shared_consts[1], (int(op.width), int(op.bits))
+            if key not in cache:
+                cache[key] = self._const(dataclasses.replace(op, shared=False), ptype, c, pname)
+            return cache[key]
         prim = b1.const(int(op.width), int(op.bits))
         tail = op.name or pname
         rp = self._attribution(c, 0)
@@ -970,6 +1001,8 @@ class _Fold:
                 self._journal("write", v, part, what=what)
             return
         view = _row_operand_view(op, i)
+        if view is None:
+            raise FoldError(f"{what}: a {type(op).__name__} operand is no output")
         if refs.count != view.numel:
             raise FoldError(f"{what}: {refs.count} refs for a view of {view.numel} elements ({view!r})")
         if t is not None:
@@ -1232,6 +1265,8 @@ def _operand_capacity(op: Operand) -> int | None:
         return 1 if op.flat or not op.own.shape else op.own.shape[0]
     if isinstance(op, (Gather, GatherMany)):
         return len(op.indices)
+    if isinstance(op, Pieces):
+        return len(op.rows)
     if isinstance(op, Param):
         return len(op.keys)
     return None
@@ -1243,8 +1278,8 @@ def _same_element(a: ViewDesc, b: ViewDesc) -> bool:
 
 
 def _row_operand_view(op: Operand, i: int) -> ViewDesc | None:
-    if isinstance(op, (Const, Param, Supplied)):
-        return None          # [R15 stoch] no device view: a Program constant / a declared parameter
+    if isinstance(op, (Const, Param, Supplied, Pieces)):
+        return None          # [R15 stoch] no device view: a Program constant / a declared parameter / several pieces
     if isinstance(op, Shared):
         return op.view
     if isinstance(op, PerRow):

@@ -68,11 +68,23 @@ class Const:
     """[R15 stoch] Every row consumes ONE Program constant: a `Const<width>[0x<bits>]` primitive instance the fold emits (once per
     Compute, immediately before it, in operand order) and wires in -- the derived Program's `ctx.kind("const")` of the same value.
     No device view: the value is a declared fact of the run header (the sampler's temperature / top_p / the row's position), never
-    read from memory.  `name` is the instance-name tail (`gumbel_topp_token_select/top_p`)."""
+    read from memory.  `name` is the instance-name tail (`gumbel_topp_token_select/top_p`).  `shared`: one instance per value for
+    the whole resolution, as a Build rule that caches its constants per call (`vllm_dsv4`'s `i32`).  As a `Pieces` piece it stands
+    for `count` copies of its instance."""
 
     width: int
     bits: int
     name: str = ""
+    shared: bool = False
+    count: int = 1
+
+
+@dataclass(frozen=True)
+class Pieces:
+    """Row i consumes the concatenation of `rows[i]`: each piece a view read whole or a `Const`'s copies.  For reads no one view
+    states: rows of several caches or of blocks at no common stride, a padding row repeated, a masked row's constants."""
+
+    rows: tuple[tuple[ViewDesc | Const, ...], ...]
 
 
 @dataclass(frozen=True)
@@ -120,12 +132,14 @@ class Supplied:
     request: str | None = None
 
 
-Operand = Shared | PerRow | Gather | GatherMany | Const | Param | Collective | Supplied
+Operand = Shared | PerRow | Gather | GatherMany | Pieces | Const | Param | Collective | Supplied
 
 
 def operand_rows(op: Operand) -> int | None:
     if isinstance(op, Param):
         return len(op.keys)
+    if isinstance(op, Pieces):
+        return len(op.rows)
     if isinstance(op, (PerRow, Collective)):
         view = op.view if isinstance(op, PerRow) else op.own
         return view.shape[0] if view.shape else 1
