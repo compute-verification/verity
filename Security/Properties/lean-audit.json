@@ -33,7 +33,9 @@
   "Properties.Pous.EndToEnd",
   "Properties.Proofs.Pous.Run",
   "Properties.RemoteAudit",
-  "Properties.Proofs.RemoteAudit"
+  "Properties.Proofs.RemoteAudit",
+  "Properties.Accounting.Requirement",
+  "Properties.Proofs.Accounting.Requirement"
  ],
  "proved_in": ["../Proofs"],
  "assumptions": {
@@ -108,7 +110,10 @@
   "Definitions.Pous",
   "Models.Pous.Assumptions",
   "Properties.RemoteAudit",
-  "RemoteAudit"
+  "RemoteAudit",
+  "Properties.Accounting",
+  "CircuitRequirement",
+  "Definitions.Accounting"
  ],
  "layers": {
   "Properties.Pouw": {
@@ -184,6 +189,11 @@
    "imports": ["RemoteAudit"],
    "except": [],
    "why": "the properties are stated against the verifier's own functions, on Lean core: nothing of Mathlib or of `security`"
+  },
+  "Properties.Accounting": {
+   "imports": ["Definitions.Accounting", "CircuitRequirement"],
+   "except": [],
+   "why": "the requirement code's equalities are stated against its functions and the `Definitions.Accounting.Requirement` definitions they copy, never a proof"
   }
  },
  "reads_exempt": {
@@ -1304,6 +1314,90 @@
   },
   "Properties.RemoteAudit.lifetimeCapped": {
    "owner": "@memory-accounting"
+  },
+  "Properties.Requirement.follows": {
+   "owner": "@memory-accounting",
+   "signature": ["Properties.Requirement.follows : Properties.Requirement.Follows"],
+   "assumptions": [],
+   "type_hash": "e2faa103b756cbd8f22e357def204322b5af6d8b64ad74d374032bdc35db5f89"
+  },
+  "Properties.Requirement.held": {
+   "owner": "@memory-accounting",
+   "signature": ["Properties.Requirement.held : Properties.Requirement.Held"],
+   "assumptions": [],
+   "type_hash": "3d7c2fbd60187988784f07c165f16e3d0f5a06edcc2581a7a629f9757e8fb12c"
+  },
+  "Properties.Requirement.live": {
+   "owner": "@memory-accounting",
+   "signature": ["Properties.Requirement.live : Properties.Requirement.Live"],
+   "assumptions": [],
+   "type_hash": "06e7ebedf734fc0a4739792425df475d473991627bc6775f2c36f1b2c847c19f"
+  },
+  "Properties.Requirement.liveBits": {
+   "owner": "@memory-accounting",
+   "signature": ["Properties.Requirement.liveBits : Properties.Requirement.LiveBits"],
+   "assumptions": [],
+   "type_hash": "532201672979077ffeea2e62550f198abe27da3a9698c3659918cb491abf4ec1"
+  },
+  "Properties.Requirement.liveBlocks": {
+   "owner": "@memory-accounting",
+   "signature": ["Properties.Requirement.liveBlocks : Properties.Requirement.LiveBlocks"],
+   "assumptions": [],
+   "type_hash": "aec081b30738e5df342b898b0c868bd37a12b9ab83090e3c0918d63aeb3ab484"
+  },
+  "Properties.Requirement.liveIn": {
+   "owner": "@memory-accounting",
+   "signature": ["Properties.Requirement.liveIn : Properties.Requirement.LiveIn"],
+   "assumptions": [],
+   "type_hash": "b73cd87d86d6229fcb2987056586cbc0ef36e92ca211120e891f63b62e5dc7a8"
+  },
+  "Properties.Requirement.planMatches": {
+   "owner": "@memory-accounting",
+   "signature": ["Properties.Requirement.planMatches : Properties.Requirement.PlanMatches"],
+   "assumptions": [],
+   "type_hash": "1c83f2a847737fe140d1c98e747edfc797a178a779da380bb68011b5ec2f6d9d"
+  },
+  "Properties.Requirement.read": {
+   "owner": "@memory-accounting",
+   "signature": ["Properties.Requirement.read : Properties.Requirement.Read"],
+   "assumptions": [],
+   "type_hash": "581e8db2de0251048dd936253583a9da26856d9679beb7683c28889f13fdce01"
+  },
+  "Properties.Requirement.readBits": {
+   "owner": "@memory-accounting",
+   "signature": ["Properties.Requirement.readBits : Properties.Requirement.ReadBits"],
+   "assumptions": [],
+   "type_hash": "1e549e77926a7e5946f10677d6b7b5f9b74def90e2a93f3b1f4e8cdbac956f2e"
+  },
+  "Properties.Requirement.readBlocks": {
+   "owner": "@memory-accounting",
+   "signature": ["Properties.Requirement.readBlocks : Properties.Requirement.ReadBlocks"],
+   "assumptions": [],
+   "type_hash": "3c5cc259bb578ce609d155221b9bf562223d0000014dcafebb12567e0d8574c1"
+  },
+  "Properties.Requirement.readIn": {
+   "owner": "@memory-accounting",
+   "signature": ["Properties.Requirement.readIn : Properties.Requirement.ReadIn"],
+   "assumptions": [],
+   "type_hash": "bcbba455a24e802b481874b3705b4d6ab585e41878fdfdd2855571e26385ae41"
+  },
+  "Properties.Requirement.reads": {
+   "owner": "@memory-accounting",
+   "signature": ["Properties.Requirement.reads : Properties.Requirement.Reads"],
+   "assumptions": [],
+   "type_hash": "f633ba4c7cf1d592ad705a48c7721f4c953453594bcae3773340fd0d750d5dc7"
+  },
+  "Properties.Requirement.resident": {
+   "owner": "@memory-accounting",
+   "signature": ["Properties.Requirement.resident : Properties.Requirement.Resident"],
+   "assumptions": [],
+   "type_hash": "470291f02debf0fb8da9e2db573d6030baf1dc36857302f60b387f5cc259d84c"
+  },
+  "Properties.Requirement.storeMatches": {
+   "owner": "@memory-accounting",
+   "signature": ["Properties.Requirement.storeMatches : Properties.Requirement.StoreMatches"],
+   "assumptions": [],
+   "type_hash": "c5903d4298ec9341315cfb09374b37849013cb995fd078d50b0312081a60a2a3"
   }
  },
  "shape": {
@@ -2059,6 +2153,62 @@
    "Properties.RemoteAudit.lifetimeCapped": {
     "function": "RemoteAudit.Session.run",
     "outcome": "accept"
+   },
+   "Properties.Requirement.follows": {
+    "function": "CircuitRequirement.Instance.follows",
+    "outcome": "none"
+   },
+   "Properties.Requirement.live": {
+    "function": "CircuitRequirement.Instance.live",
+    "outcome": "none"
+   },
+   "Properties.Requirement.reads": {
+    "function": "CircuitRequirement.Instance.reads",
+    "outcome": "none"
+   },
+   "Properties.Requirement.liveBits": {
+    "function": "CircuitRequirement.Instance.liveBits",
+    "outcome": "none"
+   },
+   "Properties.Requirement.readBits": {
+    "function": "CircuitRequirement.Instance.readBits",
+    "outcome": "none"
+   },
+   "Properties.Requirement.held": {
+    "function": "CircuitRequirement.Instance.held",
+    "outcome": "none"
+   },
+   "Properties.Requirement.read": {
+    "function": "CircuitRequirement.Instance.read",
+    "outcome": "none"
+   },
+   "Properties.Requirement.liveBlocks": {
+    "function": "CircuitRequirement.Instance.liveBlocks",
+    "outcome": "none"
+   },
+   "Properties.Requirement.liveIn": {
+    "function": "CircuitRequirement.Instance.liveIn",
+    "outcome": "none"
+   },
+   "Properties.Requirement.readBlocks": {
+    "function": "CircuitRequirement.Instance.readBlocks",
+    "outcome": "none"
+   },
+   "Properties.Requirement.readIn": {
+    "function": "CircuitRequirement.Instance.readIn",
+    "outcome": "none"
+   },
+   "Properties.Requirement.resident": {
+    "function": "CircuitRequirement.Store.resident",
+    "outcome": "none"
+   },
+   "Properties.Requirement.storeMatches": {
+    "function": "CircuitRequirement.Instance.storeMatches",
+    "outcome": "none"
+   },
+   "Properties.Requirement.planMatches": {
+    "function": "CircuitRequirement.Instance.planMatches",
+    "outcome": "none"
    }
   },
   "frozen": {
@@ -2401,6 +2551,77 @@
     "Properties.NetworkCertifier.acceptedRowsAreProgramRows"
    ]
   },
+  "CircuitRequirement": {
+   "digest": "837fdecc3aec17f5e127218e3dec95d47ce81b2ef22119e6dc7446358ac0e121",
+   "definitions": {
+    "CircuitRequirement.Instance": "6a19ecf3db2275179f9b41e9101dad07a32b8f034f0845279c8a8f7641c70ec8",
+    "CircuitRequirement.Instance.apart": "74e694a52cf9ca1351045f3a9794e2809026001cb0e277fcf06a06395995b008",
+    "CircuitRequirement.Instance.apart._sparseCasesOn_1": "8269ba728e42aa1ca0f9c0c1035cc4ed201d30b442dda4bc908295944ecfb6e5",
+    "CircuitRequirement.Instance.before": "39ad34d156f7c8d5c7ddb6938da6116078245b90757806547eae8683d884019f",
+    "CircuitRequirement.Instance.bits": "035eb941bb113777167dce845de98888b2c8aaeda492510595eca2cb7226c3bf",
+    "CircuitRequirement.Instance.bitsIn": "ced6d3dbc2b1d5999a91870aaf9b39f0f549c30fc7f5e0aaa7181a1527bb4118",
+    "CircuitRequirement.Instance.block": "9f15484141bdcfc2a595cc802d2639507fbf30bcc7fdd8fb6516f0ea45312101",
+    "CircuitRequirement.Instance.blockOf": "b11503716b08e556a32943b99fa5d48067dca1abe1339155fe47c04bf367ebcf",
+    "CircuitRequirement.Instance.blocks": "b03f0fa33627c19a178d53e85012a9b7892000d37833c9757587bb606dbe467f",
+    "CircuitRequirement.Instance.carries": "24a15caac8dde09141cc907620a333227e55c6bb30ec83a8ac4c4a544d89c055",
+    "CircuitRequirement.Instance.endOf": "489016157dfb31d9f4272b6e2d1e5ea4f44de75aaa4b3b03cf825d87e0d81a14",
+    "CircuitRequirement.Instance.follows": "c7d8ea65433c1e7ff7dad5349a9c10c85348d05fd4028a5bca1e7b86b5c7f1a5",
+    "CircuitRequirement.Instance.held": "a6c6543f70298b6ecabe03ef9d8919d682e439c12b7cf9b47487c5f75cb7ea5b",
+    "CircuitRequirement.Instance.live": "64ea9db6dc4035f027fd007bdcdc2086ec7284237f60270141084a50c8887e16",
+    "CircuitRequirement.Instance.liveBits": "0c4709da046de6185b58a9d662c3e05ba3d70fbe81ebe99a5f681782dbad1995",
+    "CircuitRequirement.Instance.liveBlocks": "62422c2d1dd5577a8c09e7d2bec8a35d2809afe6008d0a5ccbbd159158518cb8",
+    "CircuitRequirement.Instance.liveIn": "d1835b71ce2e50ea22cb89941224cc4f7dcb2e6785df630cea489170d21cf99c",
+    "CircuitRequirement.Instance.offset": "ee0b140dd9709259df4f2bb266cc9c8f98fc083989f1a0bc0b28ef02c9d03cc7",
+    "CircuitRequirement.Instance.offsetOf": "0ef3ff7b7b9b05fe01b2d2bf6a58b9382e38fba0209fa7364b491d1cf3b61919",
+    "CircuitRequirement.Instance.ops": "0f638ce5f39ed1520d05c801f2543fbecd27d7aea529a60d00ae902e80380b05",
+    "CircuitRequirement.Instance.opsOf": "e4b0bdd5c9729f9cdd58c94a335e3239a30399c7506a919634ab5b4798e09f11",
+    "CircuitRequirement.Instance.packs": "afe0a1513a4dd69dfe94133e08f39160ce314bba99599fbda46f37aff49bb826",
+    "CircuitRequirement.Instance.planMatches": "87ea950abdb017c76e9cd275c77a30d6589e679b4b461e098fc49c936987f2ca",
+    "CircuitRequirement.Instance.ran": "f01d7bb3b7cc3e55f2242cc1133e06a925a7c19e6b1a0fee8551c5924343d803",
+    "CircuitRequirement.Instance.read": "d2ff4b52636578cf76304ac753df94d0124af60f78dae731ab7e437ae00fe081",
+    "CircuitRequirement.Instance.readBits": "c13accc3c4eecbaa6dea34df61bf27fdc52619135bf0ca3d92d06cf0973a93a0",
+    "CircuitRequirement.Instance.readBlocks": "b6fa5c2b4718e86224a2c20dd1fac19795ae091f9a447dcb01e4ba007160c69d",
+    "CircuitRequirement.Instance.readIn": "373671629c585973edd18c1e10a827f425d583b5ba8e28c048adde9fd2c6812d",
+    "CircuitRequirement.Instance.reads": "742c120da7f2cf4a5a972acb6cc7c1b29877e86425f267cb3362dd16505d3071",
+    "CircuitRequirement.Instance.registered": "990a80a1d9508b11539580e6ae118e1ced97beedc5e6d4a776bcbf407e28ba10",
+    "CircuitRequirement.Instance.step": "e2d57037c009f69d53a8778131210dc21d90ae786bbacba588de3af089865558",
+    "CircuitRequirement.Instance.stepOf": "c4ea0cb6742381e78c3cd8a2ef7b94d0a7cd5a8a986d45cceaf45798b629dcd5",
+    "CircuitRequirement.Instance.storeMatches": "52174a71168cbfb8a97d9c714e35364351a4b308c63343635024903ba68e50a9",
+    "CircuitRequirement.Instance.uses": "cae58006e85592c514d863dc8b05238f9efcf706d47705804156786779c334d6",
+    "CircuitRequirement.Instance.usesOf": "884688d297cd142b430cd489e5d0568dc122fa6a199e7b13fd259f0c403a5802",
+    "CircuitRequirement.Instance.value": "9f151305d12bb6f74207ac3d65d3a000cd6288235022736430588a572c9c05a6",
+    "CircuitRequirement.Instance.valueOf": "4542537e930e2080d4dee1c0e67d105314a467cdd07b1157f363097bd616282b",
+    "CircuitRequirement.Instance.width": "25ce5139fca70ee9ce6abd6fc375ac9151fb4b8cf3b5bdcc30d78f6ba06a9fa9",
+    "CircuitRequirement.Instance.widthOf": "76c7d8f7ea1380da13072bc9ee50f285ff14a0760243a1a9f2468930c7ed88c0",
+    "CircuitRequirement.Store": "3ee12b349421131b136106953a14bdc9992677e5dd1966e6626e68c7356806c1",
+    "CircuitRequirement.Store.freed": "335c7b6d4194f821fb61fa2ca5af48a4addddd5ac78e71c90751d7961228c300",
+    "CircuitRequirement.Store.freedAt": "d40497e492741ab9af7a60000b8a55c67f476ba0124f215ef91717c3dc91f25b",
+    "CircuitRequirement.Store.payload": "042af4ba3e83d79d86866757f182b83e2ec102e410b11a6457572bec8156636f",
+    "CircuitRequirement.Store.payloadOf": "31f0e49f9637c2ee7895b22d6a4cd6116a7ed4b70b1d4e3fed2bc23ee2cb7eb1",
+    "CircuitRequirement.Store.registered": "fcc8ca2afc1238fe0947b4bc18919bdc3bacd91de382008bc89f6cf4024a8ce4",
+    "CircuitRequirement.Store.resident": "dd3b9134662d637987453f7a5feb0a8cfd0f84440ab5205defeda501cafc431f",
+    "CircuitRequirement.Store.written": "9d130c3a5330e464054d4ea4fb655ff648a922d50690526a134c0aba751cfa49",
+    "CircuitRequirement.Store.writtenAt": "a7c95e9111eecb8d6091ee525d0e4fe4dbe9eb7d1791face32b865c7384f5437",
+    "CircuitRequirement.distinct": "e6e9e8d537630a60d8eca7273f88192c057e0d256ced2e40ce4b6b590461fd1b",
+    "CircuitRequirement.sameSet": "0a659ec09c56a68b105e2cd6e3fe9bde3b4b6691dd98bfd15b931f2e9b246098"
+   },
+   "guarantees": [
+    "Properties.Requirement.follows",
+    "Properties.Requirement.held",
+    "Properties.Requirement.live",
+    "Properties.Requirement.liveBits",
+    "Properties.Requirement.liveBlocks",
+    "Properties.Requirement.liveIn",
+    "Properties.Requirement.planMatches",
+    "Properties.Requirement.read",
+    "Properties.Requirement.readBits",
+    "Properties.Requirement.readBlocks",
+    "Properties.Requirement.readIn",
+    "Properties.Requirement.reads",
+    "Properties.Requirement.resident",
+    "Properties.Requirement.storeMatches"
+   ]
+  },
   "CoreProtocol.Profile": {
    "digest": "57a2650e841fd38e788a338824bddbe0981991aa914cd04d1e70e4adfa3aa64f",
    "definitions": {
@@ -2568,6 +2789,73 @@
     "Properties.Pouw.Check.undecidedOnlyFromService",
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBoundsNothing"
+   ]
+  },
+  "Definitions.Accounting.Device": {
+   "digest": "769dc2eda20427c435c9f6a1c78925b1c07c8373b46f70142364ffda5af2f7a8",
+   "definitions": {
+    "Accounting.Window": "50a5d286cabc70780af47a1912cdeb44f144e49bd7b339a9f7eee6934931f2b8",
+    "Accounting.Window.len": "f578b444a3747631248efdc6023c2ee07db832d59315e11e547b8a497453aa78",
+    "Accounting.Window.start": "6bc10dfceff8bad8ecee79fe3871d22507cc431f9f8c139866299481336a192f",
+    "Accounting.Window.ticks": "c361f40af35edc50725864af56fa88f98a73332059de22d1cdd53f262231d39e"
+   },
+   "guarantees": ["Properties.Requirement.held", "Properties.Requirement.read"]
+  },
+  "Definitions.Accounting.Requirement": {
+   "digest": "e1b445e3008626feb701f2c54ed5983925ba1dde3dae348e9d7d6e72e8614000",
+   "definitions": {
+    "Accounting.Requirement.Carries": "93fd6dff6b04c716c5141e9212142e6ea3701b3aa0de94ca12483c0b48591a4d",
+    "Accounting.Requirement.Execution": "cd70ee0536fc5bb221c299172e35f32cb7f8664fbf0924096cf40b3a3ee791ea",
+    "Accounting.Requirement.Execution.Follows": "9a0ec163c95db890cf39d14ff39235550026410f9c252f58b75f0fcc5f893741",
+    "Accounting.Requirement.Execution.ran": "ee3dc1ecb4abb911fe5cfb4f3839cfcf3370c9f185ad6642b82a4f9fde3a9056",
+    "Accounting.Requirement.Execution.step": "00915655b8abaa7d1a47f5a308023df723d997aaa885ac0da75c9873bacac17b",
+    "Accounting.Requirement.Execution.value": "12a2b08667ab39ede6ca4032fd90e3fea964ad63657984f7e862dcb2212a8913",
+    "Accounting.Requirement.Layout": "84667ae3da45c7005da85080a9a568dacda54998eaf163e6bf7bddf07a4726cb",
+    "Accounting.Requirement.Layout.block": "8b8a656a1a4ac9e1cb112cce0478d031ce085c24f455672653142a34e439b901",
+    "Accounting.Requirement.Layout.offset": "ea578971e1a12eb8fb75d0c055037d8e6b64e444bd1fb555fc29d173a87a90cb",
+    "Accounting.Requirement.Packs": "c1dcea15b3eb160b861154472627e3db97bbf61009e5a7dc8d32cfd612f0153d",
+    "Accounting.Requirement.PlanMatches": "3446fe70421d6f5818f116d517a0c5bb283236702b2a4171a7f8d15173caa730",
+    "Accounting.Requirement.Store": "1938f3251d1599270d57405be6bc6fc366ac23924f2e849c8b7b7acc6f7281ca",
+    "Accounting.Requirement.Store.freed": "4e87eda5acc330bde17fdc1204a03f0f98440c589337d909921d93fec0758313",
+    "Accounting.Requirement.Store.payload": "a17bee3d643705377f94199f7d34bad4c5c2d9bae5d7351647eab307cad64ad4",
+    "Accounting.Requirement.Store.registered": "0be772098f8e8fb16c7419539601a60d72ebb997163fc82efb10abce4db236e5",
+    "Accounting.Requirement.Store.resident": "6288862ccac1ec58bad7ae75f4bf8cbb24212257aea4a55bb31581cb649779c6",
+    "Accounting.Requirement.Store.written": "d99299a8c7926bc9f52976b4d302df1f9ebe28e59e60ab696478ad75fc03791b",
+    "Accounting.Requirement.StoreMatches": "e486f273f071bc5a01e0d4d5f0bf590dee56a6e844ab0d3768b1871822d8a2b8",
+    "Accounting.Requirement.Wiring": "67f416e91f81742945bad7c75704b565e448a72577d35db298f0d8514f89f1eb",
+    "Accounting.Requirement.Wiring.ops": "84cea9a8dda1abcc6e1f039a48984fcaf6ee71e621e29d964abc18011a8d48e2",
+    "Accounting.Requirement.Wiring.registered": "17de543eb7d0b9af217ea7d34e648ccc606223d8460c7be413f24e31608e8ca6",
+    "Accounting.Requirement.Wiring.uses": "dd353d8ef096871fea8b8e30d60bfa0e92bd496f87843a2bb7c2a21c19c5246f",
+    "Accounting.Requirement.Wiring.width": "2a77a320157f30d9975f87d370b6051fdbcfff2fafe50ffb69e6dad00719f661",
+    "Accounting.Requirement.bits": "64ed0ee81b2d8ba84f9ffd3c2964f2a68c6f7eca822492565bf9257671f88cb7",
+    "Accounting.Requirement.bitsIn": "5440bee8fc2b080cd09ffdf36d4f4c2e490eab2913fd623940cc6a44c783c9b9",
+    "Accounting.Requirement.blocks": "43dd99e049f112b0b8fd74d4c35cca07a1cb09150ed5369f33334bdf9d7fe1d7",
+    "Accounting.Requirement.held": "64cdeb5d4430c3aefead5921a08faa7345ce4003f6469f90e8639698aa4a6633",
+    "Accounting.Requirement.live": "fc7c4f9b1b45bf183ac91ab06378d9fae1dd203361b5ddb5c99abb723f8fa163",
+    "Accounting.Requirement.liveBits": "de62460b5313ef9bdae1bbd45f81196e59929ae2430c0b2ec1c4b664e93f11d5",
+    "Accounting.Requirement.liveBlocks": "96782dd578d5b274d1f92a82085f3a5c06ecef44cf189e64d04ea620d0ba09e8",
+    "Accounting.Requirement.liveIn": "52436c3c7a6b7a3c6935576d5b86b4b71b69e9e45f3c5a000dd54b3fe9ba2b26",
+    "Accounting.Requirement.read": "9b70831840160d624205252e630720c7c4271001fdccf201007417b2aeaac75f",
+    "Accounting.Requirement.readBits": "940ebb457d7936b46131a3e37e10e46cbf7281232b011c0bb9a16af8b8005fa9",
+    "Accounting.Requirement.readBlocks": "331777b495aa32b4f7a2d537b06f6c2c15aa89d44145e262922ef53deffa9179",
+    "Accounting.Requirement.readIn": "cb46f46f43e8cac5a273df04eb3ea93d905e49359dc0776651a24372c95e25a1",
+    "Accounting.Requirement.reads": "1055164e912eff3e5e598f08c907dc222843666d7ddee15fd3753a5f5eb2530a"
+   },
+   "guarantees": [
+    "Properties.Requirement.follows",
+    "Properties.Requirement.held",
+    "Properties.Requirement.live",
+    "Properties.Requirement.liveBits",
+    "Properties.Requirement.liveBlocks",
+    "Properties.Requirement.liveIn",
+    "Properties.Requirement.planMatches",
+    "Properties.Requirement.read",
+    "Properties.Requirement.readBits",
+    "Properties.Requirement.readBlocks",
+    "Properties.Requirement.readIn",
+    "Properties.Requirement.reads",
+    "Properties.Requirement.resident",
+    "Properties.Requirement.storeMatches"
    ]
   },
   "Definitions.Core.Circuit": {
@@ -5438,6 +5726,45 @@
     "Properties.Pouw.Check.publishesPublic",
     "Properties.Pouw.Check.undecidedOnlyFromService",
     "Properties.Pouw.Window.publicItems_eq"
+   ]
+  },
+  "Properties.Accounting.Requirement": {
+   "digest": "907c5c34b9cb36cf4d09ff97a3a0e1bc47f31f5f3398f9020c200a959328600d",
+   "definitions": {
+    "Properties.Requirement.Follows": "0db852472711542983e77851e2173368797dc4ed395edc2cd74c76691dc7a618",
+    "Properties.Requirement.Held": "2acf8fbe2765670b6fd5b9f4c8e6b3a17e8f73223248983a158faa65dbb60385",
+    "Properties.Requirement.Live": "85b88b5ab6a07b692ac0af7519fb95d5e54e7be334727dec1c9def11e4bb95dd",
+    "Properties.Requirement.LiveBits": "e138ec9212ecc782f17dff7ec1396fe8e68b396f354d183aa60e5a7eabfc5b71",
+    "Properties.Requirement.LiveBlocks": "bc58866c1dd70e21a3cbc7b393401649b5782ad02e833ee7b49131a15333b2ec",
+    "Properties.Requirement.LiveIn": "f3771eea83e164aeb47333139b49d39e647d0b6ddaaea537ccbdcc0d7d071383",
+    "Properties.Requirement.PlanMatches": "cb9d5592944349b46c1385e67489a6bfbc6db810f6d22922591067118b14ac5c",
+    "Properties.Requirement.Read": "1522ba1e5aea38ca5482408ec5759a2ee82cacf79fb721eafe439b5e04ff3244",
+    "Properties.Requirement.ReadBits": "eb1cbc434d5d9c4f70ab22e2562e1151dca4844472918766721e826ae1447a20",
+    "Properties.Requirement.ReadBlocks": "d18be37e328288f840b3f4620738f030288a0e80be947d66b43e7c5094a8fd6b",
+    "Properties.Requirement.ReadIn": "df7c1442b3c35a33bf1b9532ecb23bdbd477be7af33b7a57065f8a2afc8301f8",
+    "Properties.Requirement.Reads": "8d0793e58308eadc3a9f906d21f8324b58cf65524d6985393875cd8c39e02548",
+    "Properties.Requirement.Resident": "13a9be5b44cf100e14e15c40438a34913823387c0a8727a81711b3f5163343b9",
+    "Properties.Requirement.StoreMatches": "0d9b2073a1f3946c1f1a735519163c65c18f4724dcab1b8ee4e24fb5fc22f612",
+    "Properties.Requirement.execution": "6b831c584424c2f21fefd717f36b0610dbe387496e3c7a458eda7b4f1db4885a",
+    "Properties.Requirement.layout": "00d59b1846d400aa993a694568a070fd646145058b34ff9614f53fef01917561",
+    "Properties.Requirement.store": "490a7153c1cc7ce6ed8da10d8d8fc02023e180b92335f085eddd8b47e553d719",
+    "Properties.Requirement.wiring": "d40130b60f50d7e336ed05c27b4a1a8a83f9148f6706e9fd1663e1a1abdc095d"
+   },
+   "guarantees": [
+    "Properties.Requirement.follows",
+    "Properties.Requirement.held",
+    "Properties.Requirement.live",
+    "Properties.Requirement.liveBits",
+    "Properties.Requirement.liveBlocks",
+    "Properties.Requirement.liveIn",
+    "Properties.Requirement.planMatches",
+    "Properties.Requirement.read",
+    "Properties.Requirement.readBits",
+    "Properties.Requirement.readBlocks",
+    "Properties.Requirement.readIn",
+    "Properties.Requirement.reads",
+    "Properties.Requirement.resident",
+    "Properties.Requirement.storeMatches"
    ]
   },
   "Properties.CertifierDevice": {

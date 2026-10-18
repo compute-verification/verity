@@ -183,6 +183,10 @@ theorem CaseZk.hm96 {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → R
   obtain ⟨p, hp, hsc⟩ := (Readable.scope_iff (deployZk rel) rel (readOf true) rfl
     (fun _ _ h => readOf_zk h) c.x).1 c.scope
   have hi := (setupOf_some c.setup).1
+  have hzk : p.zk = true := readOf_zk (x := c.x) (by
+    unfold Readable.parseBytes at hp
+    obtain ⟨r, hr, hrp⟩ := Option.bind_eq_some_iff.1 hp
+    rw [hr, ← Readable.toRead_of_parse hrp])
   unfold Readable.parseBytes readOf at hp
   rw [hi] at hp
   have ht := Readable.toRead_of_parse (r := c.s.read) hp
@@ -195,7 +199,11 @@ theorem CaseZk.hm96 {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → R
     unfold Readable.Read.check at this
     rw [hpi] at this
     exact this
-  have hl := (FlockSoundness.Discharge.FailClosed.check_ok hc').1.2.2.2.1
+  have hl : p.tags.merkleLeaf = "hm96-sha512/v1" := by
+    rcases (FlockSoundness.Discharge.FailClosed.check_ok hc').1.2.2.2.1 with hl | ⟨hz, -⟩
+    · exact hl
+    · rw [hzk] at hz
+      cases hz
   have hset := Ins.setup_read (setupOf_some c.setup).2
   rw [← ht] at hset
   unfold Readable.Read.setup at hset

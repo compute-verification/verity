@@ -67,6 +67,10 @@ path = "../../verity/core/primitives/evaluate"
 name = "remote_audit"
 path = "../../verity/core/protocols/remote_bandwidth/lean"
 
+[[require]]
+name = "core_requirement"
+path = "../../verity/core/primitives/requirement"
+
 [[lean_lib]]
 name = "Properties"
 roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "Properties.Proofs.Pouw",
@@ -77,4 +81,5 @@ roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "
   "Properties.CertifierNetwork", "Properties.Proofs.CertifierNetwork", "Properties.CertifierNetwork.Runs",
   "Properties.Proofs.CertifierNetwork.Runs", "Properties.Identity", "Properties.Proofs.Identity",
   "Properties.SampledProofs", "Properties.Proofs.SampledProofs", "Properties.Evaluate", "Properties.Proofs.Evaluate",
-  "Properties.NetworkRecords", "Properties.Proofs.NetworkRecords", "Properties.RemoteAudit", "Properties.Proofs.RemoteAudit"]
+  "Properties.NetworkRecords", "Properties.Proofs.NetworkRecords", "Properties.RemoteAudit", "Properties.Proofs.RemoteAudit",
+  "Properties.Accounting.Requirement", "Properties.Proofs.Accounting.Requirement"]
