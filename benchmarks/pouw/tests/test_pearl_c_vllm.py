@@ -32,12 +32,13 @@ from verity.core.protocols.pouw.audit import (
     Prover,
     Verifier,
     Workload,
-    activation_binding,
+    a_binding,
     commit_rows,
     hm96_kernel_constants,
     hm96_salt,
     opened_value,
     rows_domain,
+    tap_binding,
     transcript_domain,
     weight_binding,
     weights_root,
@@ -143,7 +144,8 @@ def test_call_keys_are_the_fixtures_keys_of(scheme):
     for index, w, m16 in ((0, 0, 32), (5, 1, 8192), (127, 0, 16)):
         mm = Matmul(index, Shape(m16, 1024, 256 if w == 0 else 128), w)
         kk = F.keys_of(s, epoch, mm, C._labelled(epoch.salt + roots[w], "seed-B"))
-        assert PPD.call_keys(F, epoch.salt, roots[w], index, m16, s.commitment_hash) == kk["dom_a"] + kk["unit"]
+        binding = lambda salt, i: a_binding(s, salt, i)  # noqa: E731
+        assert PPD.call_keys(F, epoch.salt, roots[w], index, m16, s.commitment_hash, binding) == kk["dom_a"] + kk["unit"]
 
 
 # ---- the run on a recording stand-in for the device ---------------------------------------------------------------
@@ -229,6 +231,31 @@ def test_each_call_runs_the_pipelines_call_steps_at_its_offset_and_keys(device_r
     assert dev.log[-2][3] == (0, 10)
     assert out["units"] == 3 and out["tiles"] == 10 and len(out["transcript_root"]) == 128
     assert run.commits["transcript_root"] == out["transcript_root"]
+
+
+def test_under_h4_a_calls_row_digests_read_the_commit_taps_bf16_rows():
+    """Under h4 a call stages x's BF16 rows (``xa16``, filler zero), A's FP32 words are those widened, its row digests read
+    the BF16 rows as k/2 words, and its keys are the tap's domain (`audit.tap_binding`): the call builds no tree of A's own."""
+    scheme = "pearl-c-sm120-v1-h4"
+    rng = np.random.default_rng(3)
+    weights = {0: torch.from_numpy(bf16_words(rng, 128, 1024).view(np.float32).copy()).to(torch.bfloat16)}
+    kernel = PPD.Kernel(R, F, RecordingDev(), "0" * 64)
+    roots = PPD.weight_roots(kernel, weights, scheme, salt_key=SALT_KEY)
+    coins = salt_coin(roots)
+    run = PPD.PearlCDeviceRun(PPD.scheme_of(scheme), f"pouw:{scheme}", kernel, weights, roots, *coins, capacity=1 << 12,
+                              salt_key=SALT_KEY)
+    kernel.dev.log.clear()
+    x = torch.randn(20, 1024).to(torch.bfloat16)
+    run.gemm(0, x, weights[0], None)
+    assert [n for n, *_ in kernel.dev.log if not n.endswith("_smem")] == PER_CALL
+    sh = run.shapes[(32, 128, 1024)]
+    tap = sh.b["xa16"][:2 * sh.mp * 1024].view(torch.bfloat16).view(sh.mp, 1024)
+    assert torch.equal(tap[:20], x) and bool((tap[20:32] == 0).all()) and torch.equal(sh.xa[:32], tap[:32].float())
+    (segs,) = [(p, i) for n, _, p, i in kernel.dev.log if n == "s512_row_segs"]
+    assert segs[0][0] == sh.b["xa16"].data_ptr() and segs[1] == (32, 512)
+    salt = run.salt
+    assert PPD._bytes(sh.keys[:168]) == PPD.call_keys(F, salt, roots[0], 0, 32, run.tree_hash, tap_binding)
+    assert PPD.call_keys(F, salt, roots[0], 0, 32, run.tree_hash, tap_binding) != PPD.call_keys(F, salt, roots[0], 0, 32, run.tree_hash)
 
 
 def test_a_call_over_whole_128_row_tiles_runs_the_128_tile_chain(device_run):
@@ -365,6 +392,7 @@ def test_every_tree_the_device_path_commits_is_its_hashing_formats(scheme):
     rng = np.random.default_rng(5)
     weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16) for w, n in ((0, 256), (1, 128))}
     rows = lambda x: [r.tobytes() for r in x.float().numpy()]  # noqa: E731
+    a_rows = (lambda x: [r.tobytes() for r in x.to(torch.bfloat16).view(torch.int16).numpy()]) if s.a_tap else rows  # noqa: E731
     kernel = PPD.Kernel(R, F, TwinDev(), "0" * 64)
     roots = PPD.weight_roots(kernel, weights, scheme, salt_key=key)
     assert roots == {w: commit_rows(weight_binding(w), -2, rows(t), h, key, HM96_WEIGHTS + w).commitment.root
@@ -386,8 +414,8 @@ def test_every_tree_the_device_path_commits_is_its_hashing_formats(scheme):
         a[:x.shape[0]] = x.float()
         mm = Matmul(index, Shape(32, 1024, weights[w].shape[0]), w)
         ctx = Context(salt, mm, PPD._bytes(run.roots_buf[nb * index:nb * index + nb]), roots[w])
-        want = s.row_seeds(ctx, rows(a), range(32))
-        assert PPD._bytes(sh.b["rowdig_a"][:64 * 32]) == b"".join(C.row_digest(r) for r in rows(a))
+        want = s.row_seeds(ctx, a_rows(a), range(32))
+        assert PPD._bytes(sh.b["rowdig_a"][:64 * 32]) == b"".join(C.row_digest(r) for r in a_rows(a))
         assert PPD._bytes(sh.b["seeds_a"][:32 * 32]) == b"".join(want)
         assert PPD._bytes(sh.b["lkeys_a"][:32 * 32]) == b"".join(C.line_key(z) for z in want)
         assert PPD._bytes(sh.b["seed_a"][:32]) == s.noise(ctx).seed_a
@@ -398,7 +426,7 @@ def test_every_tree_the_device_path_commits_is_its_hashing_formats(scheme):
     for index, (w, x) in enumerate(calls):
         a = torch.zeros((32, 1024), dtype=torch.float32)
         a[:x.shape[0]] = x.float()
-        want = commit_rows(activation_binding(salt, index), index, rows(a), h, key, index).commitment.root
+        want = commit_rows(a_binding(s, salt, index), index, a_rows(a), h, key, index).commitment.root
         assert PPD._bytes(run.roots_buf[nb * index:nb * index + nb]) == want, index
     count = run.cur.tiles
     assert count == 4 + 2
@@ -440,14 +468,15 @@ def honest_pass(tmp_path, request):
     a0[5, [1, 2, 3]] = np.float32(1e4).view(np.uint32) & 0xFFFF0000
     acts = {0: a0, 1: bf16_words(rng, 16, k)}
     rows = lambda x: [r.tobytes() for r in x]
+    a_rows = (lambda x: [r.tobytes() for r in (x >> 16).astype("<u2")]) if s.a_tap else rows  # noqa: E731
     work = Workload((Matmul(0, Shape(32, k, 16), 0), Matmul(1, Shape(16, k, 32), 1)))
     prover = Prover(s, {w: rows(x) for w, x in wrows.items()}, salt_key=bytes(32))
     salted = lambda v, nonce, i: v + hm96_salt(prover.salt_key, nonce, i)  # noqa: E731
     coins = salt_coin(prover.weight_roots)
     epoch = Epoch.start(work, prover.weight_roots, *coins)
-    tr = prover.prove(epoch, {i: rows(x) for i, x in acts.items()})
+    tr = prover.prove(epoch, {i: a_rows(x) for i, x in acts.items()})
     splits = {w: PW.Split(k) for w in wrows}
-    records = PW.declare(s, epoch, {i: rows(x) for i, x in acts.items()}, {w: rows(x) for w, x in wrows.items()}, splits,
+    records = PW.declare(s, epoch, {i: a_rows(x) for i, x in acts.items()}, {w: rows(x) for w, x in wrows.items()}, splits,
                          real_rows={0: 20})
     assert records[0].excluded_a == (5,)
     (tmp_path / "calls").mkdir()
@@ -462,13 +491,13 @@ def honest_pass(tmp_path, request):
                                                            for j, r in enumerate(rows(x))]))}
     matmuls = []
     for u, rec, root in zip(work.matmuls, records, tr.activation_roots):
-        x = rows(acts[u.index])
-        d = rows_domain(activation_binding(epoch.salt, u.index), u.index, u.shape.m, s.commitment_hash)
+        x, xa = rows(acts[u.index]), a_rows(acts[u.index])
+        d = rows_domain(a_binding(s, epoch.salt, u.index), u.index, u.shape.m, s.commitment_hash)
         matmuls.append({"index": u.index, "m": u.shape.m, "k": k, "n": u.shape.n, "weight": u.weight, "real_rows": rec.real_rows,
                         "k_kept": rec.k_kept, "excluded_a": list(rec.excluded_a), "root_a": root.hex(),
                         "rows": PPD._write(tmp_path / "calls" / f"{u.index}.rows.bf16", bf16_file(x), digest=False),
                         "tree": PPD._write(tmp_path / "calls" / f"{u.index}.tree",
-                                           laid_out(d, [d.leaf(i, i, ROW_SCHEMA, salted(r, u.index, i)) for i, r in enumerate(x)]))})
+                                           laid_out(d, [d.leaf(i, i, ROW_SCHEMA, salted(r, u.index, i)) for i, r in enumerate(xa)]))})
     count = tr.commitment.count
     leaves = [prover.digest(t) for t in range(count)]
     dt = transcript_domain(epoch, count, s.commitment_hash)
@@ -538,7 +567,7 @@ def test_h3_screens_check_holds_a_pass_to_the_reference(honest_pass):
     for u in epoch.workload.matmuls:
         ctx = Context(epoch.salt, u, tr.activation_roots[u.index], epoch.weight_roots[u.weight])
         data = VR.Files(d)(json.loads(path.read_text())["matmuls"][u.index]["rows"])
-        rows = [VR.f32_row(data, u.shape.k, i) for i in range(u.shape.m)]
+        rows = [(VR.tap_row if s.a_tap else VR.f32_row)(data, u.shape.k, i) for i in range(u.shape.m)]
         seeds, seed_a = s.row_seeds(ctx, rows, range(u.shape.m)), s.noise(ctx).seed_a
         lines = [C.sample_line(x, 0, 0, 0) for x in seeds] + [C.sample_line(seed_a, 0, 0, r) for r in range(u.shape.m, u.shape.m + 16)]
         (d / f"call{u.index}.seeds_a").write_bytes(b"".join(seeds))
@@ -1580,7 +1609,7 @@ def test_the_device_path_commits_with_its_schemes_hashing_format(device_run):
     run = make()
     fmt = hash_format(run.scheme)
     assert fmt is HASH_FORMATS["h3"] and run.tree_hash == fmt.tree_hash == run.scheme.commitment_hash == HM96
-    assert PPD._bytes(run.const[:32]) == SALT_KEY and set(HASH_FORMATS) == {"h0", "h3"}
+    assert PPD._bytes(run.const[:32]) == SALT_KEY and set(HASH_FORMATS) == {"h0", "h3", "h4"}
     assert not hasattr(PPD, "TREE_HASH") and all(SchemeId.parse(n).name == n for n in PPD.SCHEMES)
     assert not hasattr(PPD, "tree_hash") and not hasattr(PPD, "variant")
     assert C.PearlC(forming="v1", hashing="h0").commitment_hash == "sha256"

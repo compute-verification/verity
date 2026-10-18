@@ -14,7 +14,8 @@
 - **The prover only opens.** Each opening's value and path come from the pass's files: A's rows and tree levels per call,
   B's rows and tree levels per weight, the tile tree.  Each is checked against the published roots.  Under ``hm96-sha512``
   (-h3's) a node is 64 bytes and each value is followed by its salt, `audit.hm96_salt` under the manifest's
-  ``hm96_salt_key`` (the prover's, retained for this replay), and the scheme reads the value less its salt.
+  ``hm96_salt_key`` (the prover's, retained for this replay), and the scheme reads the value less its salt.  An A value
+  is the row's FP32 words (BF16 widened), or under h4 the Commit tap's BF16 words as retained, which the unit widens.
 - **The tiles** are `pearl_c_work.audit`'s: its t work-weighted draws (`draw`) and one tile per excluded row
   (`exclusion_tiles`).  Each is held to `Verifier.check_tile` and `check_opened`, as `audit` does, but mapped over J
   processes, since each costs about 11 s of CPU per 1,024 of k (``--fast``: about a tenth of that on `fast_tile`'s batch
@@ -101,12 +102,19 @@ def f32_row(data, k: int, i: int) -> bytes:
     return (np.frombuffer(data[2 * k * i:2 * k * (i + 1)], "<u2").astype("<u4") << 16).tobytes()
 
 
+def tap_row(data, k: int, i: int) -> bytes:
+    """Row i of a BF16 row file as the Commit tap commits it (h4's A rows): its k BF16 words, as written."""
+    return bytes(data[2 * k * i:2 * k * (i + 1)])
+
+
 class Opened:
     """The prover's side of the audit from the pass's files: `open`, as `verity.core.protocols.pouw.audit.Prover` has it."""
 
     def __init__(self, man: dict, files: Files, refs):
         self.man, self.files, self.refs = man, files, refs
-        hash = PD.scheme_of(man["scheme"]).commitment_hash
+        scheme = PD.scheme_of(man["scheme"])
+        hash = scheme.commitment_hash
+        self.a_row = tap_row if scheme.a_tap else f32_row
         self.key = bytes.fromhex(man["hm96_salt_key"]) if hash == HM96 else None
         self.nb = 64 if hash == HM96 else 32
 
@@ -121,7 +129,7 @@ class Opened:
         b_rows, b_tree = self.files(wt["rows"]), self.files(wt["tree"])
         c = self.man["commitment"]
         leaves = self.files(self.man["leaves"])
-        return TileOpening(ref, tuple(opening(a_tree, u.shape.m, i, sv(f32_row(a_rows, u.shape.k, i), u.index, i), nb)
+        return TileOpening(ref, tuple(opening(a_tree, u.shape.m, i, sv(self.a_row(a_rows, u.shape.k, i), u.index, i), nb)
                                       for i in ref.tile.rows),
                            tuple(opening(b_tree, u.shape.n, j, sv(f32_row(b_rows, u.shape.k, j), HM96_WEIGHTS + u.weight, j), nb)
                                  for j in ref.tile.cols),

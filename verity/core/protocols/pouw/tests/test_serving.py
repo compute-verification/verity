@@ -23,7 +23,7 @@ from verity.core.protocols.pouw.serving import (
 #: every Pearl-C name in use: `schemes.SCHEMES`, `pouw_pearl_c_device.SCHEMES`, Pearl-C4 and its -h3, and PearlC's
 #: price-override spelling
 NAMES_IN_USE = ("pearl-c-h100-v0", "pearl-c-h100-v1", "pearl-c-h100-v1-h3", "pearl-c-sm120-v1-h3", "pearl-c-h100-v1@sm_120",
-                "pearl-c-sm120-v1", "pearl-c-sm120-unpromoted-v1-h3", "pearl-c-nvfp4-v0", "pearl-c-nvfp4-v0-h3",
+                "pearl-c-sm120-v1", "pearl-c-sm120-unpromoted-v1-h3", "pearl-c-sm120-v1-h4", "pearl-c-sm120-unpromoted-v1-h4", "pearl-c-nvfp4-v0", "pearl-c-nvfp4-v0-h3",
                 "pearl-c-mxfp4-v0")
 
 
@@ -63,13 +63,14 @@ def test_a_name_outside_the_grammar_is_refused_by_what_is_wrong(name, why):
         SchemeId.parse(name)
 
 
-def test_the_formats_are_h0_and_sha512_h3():
+def test_the_formats_are_h0_and_sha512_h3_and_h4():
     """One hash, SHA-512 (Daniel, 2026-10-06): h3's trees are hm96-sha512 and its rows seed on their SHA-512 digests; h0 is
-    the unhashed default."""
-    assert list(HASH_FORMATS) == ["h0", "h3"]
-    h0, h3 = HASH_FORMATS["h0"], HASH_FORMATS["h3"]
-    assert (h0.tree_hash, h0.seed_a, h0.row_cap, h0.row_digest) == ("sha256", "unit-root", False, None)
-    assert (h3.tree_hash, h3.seed_a, h3.row_cap, h3.row_digest) == ("hm96-sha512", "row", True, "sha512/row-seg/v1")
+    the unhashed default; h4 is h3 with A's rows the Commit tap's (one commitment per tensor, ASK-25)."""
+    assert list(HASH_FORMATS) == ["h0", "h3", "h4"]
+    h0, h3, h4 = HASH_FORMATS["h0"], HASH_FORMATS["h3"], HASH_FORMATS["h4"]
+    assert (h0.tree_hash, h0.seed_a, h0.row_cap, h0.row_digest, h0.a_rows) == ("sha256", "unit-root", False, None, "own")
+    assert (h3.tree_hash, h3.seed_a, h3.row_cap, h3.row_digest, h3.a_rows) == ("hm96-sha512", "row", True, "sha512/row-seg/v1", "own")
+    assert (h4.tree_hash, h4.seed_a, h4.row_cap, h4.row_digest, h4.a_rows) == ("hm96-sha512", "row", True, "sha512/row-seg/v1", "tap")
 
 
 def test_hash_format_reads_a_name_an_id_or_a_scheme_object():

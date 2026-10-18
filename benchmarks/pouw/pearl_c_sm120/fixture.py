@@ -43,7 +43,7 @@ from verity.ml.commitments.merkle import tree_levels  # noqa: E402
 from verity.ml.circuits.silicon import fp32  # noqa: E402
 from verity.ml.kernels.tc import group_sum_total_batch  # noqa: E402
 from verity.core.protocols.pouw.audit import (HM96, HM96_TRANSCRIPT, HM96_WEIGHTS, ROW_SCHEMA, TILE_SCHEMA,  # noqa: E402
-                                                         Epoch, Workload, activation_binding, commit_rows, hm96_kernel_constants,
+                                                         Epoch, Workload, a_binding, activation_binding, commit_rows, hm96_kernel_constants,
                                                          hm96_salt, rows_domain, transcript_domain, weight_binding, weights_root)
 from verity.core.protocols.pouw.coins import Challenger, CoinOpening  # noqa: E402
 from verity.core.protocols.pouw.protocol import Context, Matmul, Shape, Tile  # noqa: E402
@@ -103,10 +103,11 @@ def epoch_of(matmul: Matmul, b_rows: list[bytes], coins: Challenger, salt_key: b
 
 def keys_of(scheme: C.PearlC, epoch: Epoch, matmul: Matmul, seed_b: bytes) -> dict[str, bytes]:
     """The pipeline's key inputs for a unit of `epoch` (run.Pipeline's `keys`) but the prover's salt key and the hm96
-    constants, which the caller adds: E_B's line key and the domains in the scheme's tree hash."""
+    constants, which the caller adds: E_B's line key and the domains in the scheme's tree hash, A's under its binding
+    (`audit.a_binding`: under h4 the Commit tap's)."""
     s, salt, h = matmul.shape, epoch.salt, scheme.commitment_hash
     return {"line_b": C.line_key(seed_b),
-            "dom_a": rows_domain(activation_binding(salt, matmul.index), matmul.index, s.m, h).domain_id,
+            "dom_a": rows_domain(a_binding(scheme, salt, matmul.index), matmul.index, s.m, h).domain_id,
             "dom_b": rows_domain(weight_binding(matmul.weight), -2, s.n, h).domain_id,
             "dom_t": transcript_domain(epoch, len(scheme.tiles(s)), h).domain_id,
             "unit": unit_block(salt, epoch.weight_roots[matmul.weight], matmul.index)}

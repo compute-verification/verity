@@ -292,9 +292,14 @@ def f32_rows(data, k: int, idx) -> list[bytes]:
     return out
 
 
+def tap_rows(data, k: int, idx) -> list[bytes]:
+    """Rows `idx` of a BF16 row file as the Commit tap commits them (h4's A rows): k BF16 words each, as written."""
+    return [bytes(data[2 * k * i:2 * k * (i + 1)]) for i in idx]
+
+
 def _form(scheme: C.PearlC, ctx: Context, noise: C.Noise, k: int, side: str, rows: list[bytes], idx: list[int]
           ) -> list[list[int]]:
-    """The fp8-p words of rows `idx` (FP32 bytes `rows`) on one side, as `PearlC.encode` forms them (A's E lines from its
+    """The fp8-p words of rows `idx` (FP32 bytes `rows`, or under h4 A's BF16 tap rows) on one side, as `PearlC.encode` forms them (A's E lines from its
     rows' own seeds under a row-seeded hashing); raises `P.Reject`."""
     seed_e = noise.seed_a if side == "a" else noise.seed_b
     rows_e = ([C.sample_line(x, 0, 0, 0) for x in scheme.row_seeds(ctx, rows, idx)]
@@ -983,7 +988,8 @@ def cmd_commit(a) -> int:
             noise = scheme.noise(ctx)
             a_data = (pass_dir / u["rows"]["path"]).read_bytes()
             b_data = np.memmap(pass_dir / w["rows"]["path"], dtype=np.uint8, mode="r")
-            words = {"a": form(scheme, ctx, noise, k, "a", f32_rows(a_data, k, range(real)), list(range(real))),
+            a_rows = (tap_rows if scheme.a_tap else f32_rows)(a_data, k, range(real))
+            words = {"a": form(scheme, ctx, noise, k, "a", a_rows, list(range(real))),
                      "b": form(scheme, ctx, noise, k, "b", f32_rows(b_data, k, range(n)), list(range(n)))}
             record = {"matmul": u["index"], "shape": [u["m"], k, n], "tile0": tile0[u["index"]], "weight": u["weight"],
                       "real_rows": real,

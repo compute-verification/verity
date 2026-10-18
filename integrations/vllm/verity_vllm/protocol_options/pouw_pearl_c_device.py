@@ -16,7 +16,8 @@ device's primary context:
   weight side keeps about a byte per weight (B̃) beside the model's own weight.
 * **Each call** (`gemm`):
   - x's rows are widened into A's FP32 words, with zero filler rows up to m₁₆ (the domain's 16 | m; filler is committed as
-    zero rows) and zero padding up to the kernels' tile;
+    zero rows) and zero padding up to the kernels' tile.  Under h4 x's rows are first staged as BF16 (``xa16``, the same
+    filler), which A's words widen and A's row digests read: A's tree is then the Commit tap's;
   - ``commit``: A's pads under its domain, each row's SHA-512 row digest (``rowdig_a``: s512_rows, `pearl_c.row_digest`, the
     inner digest of A's hm96 leaves), A's row tree, seed_A and E_A's line key, and each real row's seed over its row digest
     with its line key (``seeds_a``: s512_seeds, `pearl_c.row_seed`);
@@ -68,7 +69,15 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from verity.core.protocols.pouw.audit import Epoch, Workload, hm96_kernel_constants, rows_domain, transcript_domain
+from verity.core.protocols.pouw.audit import (
+    Epoch,
+    Workload,
+    activation_binding,
+    hm96_kernel_constants,
+    rows_domain,
+    tap_binding,
+    transcript_domain,
+)
 from verity.core.protocols.pouw.coins import CoinCommitment, CoinOpening
 from verity.core.protocols.pouw.protocol import Matmul, Shape
 from verity.core.protocols.pouw.schemes import pearl_c as C
@@ -120,8 +129,10 @@ from .pouw_pearl_c_screen import (
 #: ``sm120-unpromoted`` (no promotion, the panel's v2, counted once the theory and Lean lanes restate it).  The format is
 #: -h3, SHA-512 throughout (its seeds, lines, tile leaves and HM96 trees; Daniel's 2026-10-06 ruling), each row's E_A line
 #: from its own seed (the work law capping each credited row too); its tree hash comes from
-#: `verity.core.protocols.pouw.serving.HASH_FORMATS` through the scheme.
-SCHEMES = tuple(C.PearlC(forming="v1", device=d, hashing="h3").name for d in (SM120, SM120_UNPROMOTED))
+#: `verity.core.protocols.pouw.serving.HASH_FORMATS` through the scheme.  h4 is -h3 with A's tree the Commit tap's
+#: (`HashFormat.a_rows`): A's row digests are over each row's BF16 words (``xa16``) under `audit.tap_binding`, and no
+#: tree of A's own is built.  The first name, -h3's, is the default.
+SCHEMES = tuple(C.PearlC(forming="v1", device=d, hashing=h).name for h in ("h3", "h4") for d in (SM120, SM120_UNPROMOTED))
 #: the domain's row granularity: m₁₆ = m rounded up to it, the filler rows zero
 ROW_ALIGN = 16
 #: tiles one pass's leaf buffer holds (256 MiB)
@@ -289,9 +300,10 @@ def _constant_keys(t: Any) -> dict[str, int]:
 
 
 def _pipeline(kernel: Kernel, m: int, n: int, k: int, bufs: dict[str, int], xb: int, keys: dict[str, int], xa: int = 0,
-              m_real: int | None = None, *, variant: str, weight: int = 0) -> Any:
+              m_real: int | None = None, *, variant: str, weight: int = 0, a_tap: bool = False) -> Any:
     full = {"dom_a": 0, "dom_b": 0, "dom_t": 0, "line_b": 0, "unit": 0, "salt_key": 0, "hm": 0, **keys}
-    return kernel.run.Pipeline(kernel.dev, m, n, k, variant, full, xa, xb, bufs=bufs, m_real=m_real, weight=weight)
+    tap = {"a_tap": True} if a_tap else {}
+    return kernel.run.Pipeline(kernel.dev, m, n, k, variant, full, xa, xb, bufs=bufs, m_real=m_real, weight=weight, **tap)
 
 
 def _steps(pipe: Any, names: tuple[str, ...]) -> list[Any]:
@@ -345,7 +357,8 @@ class PearlCDeviceRun(GraphCalls):
         self.roots_buf = _zeros(self.nb * CALL_CAPACITY, self.device)
         self.flag_buf = _zeros(2 * flag_rows, self.device).view(flag_rows, 2)
         self.tree_hash = hash_format(scheme).tree_hash
-        self.keys, self.uploads = _Keys(kernel.fixture, salt, self.tree_hash), _Uploads(self.device)
+        self.keys = _Keys(kernel.fixture, salt, self.tree_hash, tap_binding if scheme.a_tap else activation_binding)
+        self.uploads = _Uploads(self.device)
         self.fused_screen = self.device.type == "cuda"
         self.weights = {w: self._weight_side(w, t) for w, t in weights.items()}
         if self.graphs:
@@ -430,7 +443,9 @@ class PearlCDeviceRun(GraphCalls):
             R = self.kernel.run
             mp = R.cdiv(m16, R.BM_D) * R.BM_D
             size = R.Pipeline.sizes(mp, n, k, m16)
-            sh = _Shape(m16, mp, n, k, {x: _zeros(size[x], self.device) for x in CALL_BUFFERS},
+            names = CALL_BUFFERS + (("xa16",) if self.scheme.a_tap else ())
+            size = {**size, "xa16": 2 * mp * k}
+            sh = _Shape(m16, mp, n, k, {x: _zeros(size[x], self.device) for x in names},
                         torch.zeros((mp, k), dtype=torch.float32, device=self.device), _zeros(self.nb + 104, self.device))
             sh.sets = [dict(sh.b)]
             sh.size = size
@@ -490,7 +505,8 @@ class PearlCDeviceRun(GraphCalls):
             kp = self.key_slots[self.order[w]].data_ptr() if self._graphed(sh.m16) else sh.keys.data_ptr()
             keys = {"line_b": wt.keys.data_ptr(), "dom_b": wt.keys.data_ptr() + 64, "dom_a": kp, "unit": kp + self.nb,
                     **self.const_keys}
-            pipe = _pipeline(K, sh.mp, sh.n, sh.k, bufs, 0, keys, sh.xa.data_ptr(), sh.m16, variant=self.variant)
+            pipe = _pipeline(K, sh.mp, sh.n, sh.k, bufs, 0, keys, sh.xa.data_ptr(), sh.m16, variant=self.variant,
+                             a_tap=self.scheme.a_tap)
             names = self._call_names()
             present = [x for x in names if x in {n for n, _, _ in pipe.steps()}]
             steps = _steps(pipe, names)
@@ -547,7 +563,14 @@ class PearlCDeviceRun(GraphCalls):
             raise RuntimeError(f"{self.entry}: the pass is over its capacity ({self.capacity} tiles, {CALL_CAPACITY} calls, "
                                f"{len(self.flag_buf)} screened rows); end it and begin another")
         self.join_before(sh)
-        sh.xa[:m].copy_(x2)
+        if self.scheme.a_tap:
+            tap = sh.b["xa16"][:2 * sh.mp * k].view(torch.bfloat16).view(sh.mp, k)
+            tap[:m].copy_(x2)
+            if m16 > m:
+                tap[m:m16].zero_()
+            sh.xa[:m].copy_(tap[:m])
+        else:
+            sh.xa[:m].copy_(x2)
         if m16 > m:
             sh.xa[m:m16].zero_()
         pipe, steps, side = self._pipe(w, sh)

@@ -103,7 +103,7 @@ def _calls(d: Path) -> dict:
         ctx = Context(bytes.fromhex(man["salt"]), Matmul(u["index"], Shape(u["m"], u["k"], u["n"]), u["weight"]),
                       bytes.fromhex(u["root_a"]), bytes.fromhex(wt["root"]))
         data = files(u["rows"])
-        rows = [VR.f32_row(data, u["k"], i) for i in range(u["m"])]
+        rows = [(VR.tap_row if s.a_tap else VR.f32_row)(data, u["k"], i) for i in range(u["m"])]
         seeds = s.row_seeds(ctx, rows, range(u["m"]))
         got = (d / f"call{u['index']}.seeds_a").read_bytes()
         seed_a, ea = (d / f"call{u['index']}.seed_a").read_bytes()[:32], (d / f"call{u['index']}.ea_codes").read_bytes()

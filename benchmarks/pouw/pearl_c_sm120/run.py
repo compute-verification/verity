@@ -340,10 +340,15 @@ class Pipeline:
 
     def __init__(self, dev: Dev, m: int, n: int, k: int, variant: str, keys: dict[str, int], xa: int, xb: int,
                  bufs: dict[str, int] | None = None, m_real: int | None = None, bm: int | None = None, weight: int = 0,
-                 sha: str | None = None):
+                 sha: str | None = None, a_tap: bool = False):
         """`bufs` names the buffers when the caller owns them (only those its steps touch); `m_real` rows of A are the
-        matmul's, committed and hashed, the rest filler that only the products see."""
+        matmul's, committed and hashed, the rest filler that only the products see.  With `a_tap` (format h4) A's tree is
+        the Commit tap's row table: its row digests are over the caller's BF16 rows ``xa16`` (k u16 words a row, which xa's
+        FP32 words widen), hashed as k/2 FP32 words, the same bytes, under the tap's domain ``dom_a``."""
         self.dev, self.m, self.n, self.k, self.variant, self.keys = dev, m, n, k, variant, keys
+        self.a_tap = a_tap
+        if a_tap and (bufs is None or "xa16" not in bufs):
+            raise ValueError("a_tap reads A's rows from the caller's BF16 buffer xa16")
         self.sha = sha or os.environ.get("PEARLC_SHA", "fast")
         if self.sha not in ("fast", "ref"):
             raise ValueError(f"sha is 'fast' or 'ref', not {self.sha!r}")
@@ -436,18 +441,20 @@ class Pipeline:
         d, b = self.dev, self.b
         nonce = (0, 0) if tag == "a" else nonce_args(HM96_WEIGHTS + self.weight)
         block = self.keys["unit"] + 96 if tag == "a" else 0
-        return [(f"rowdig_{tag}", lambda: self.row_digests(b[x], b[f"rowdig_{tag}"], b.get(f"segdig_{tag}", 0), count)),
+        x, words = ("xa16", self.k // 2) if tag == "a" and self.a_tap else (x, self.k)
+        return [(f"rowdig_{tag}", lambda: self.row_digests(b[x], b[f"rowdig_{tag}"], b.get(f"segdig_{tag}", 0), count, words)),
                 (f"hash_rows_{tag}", lambda: Pipeline.hm_level0(self, tag, b[f"rowdig_{tag}"], count, dom, block, nonce)),
                 (f"tree_{tag}", lambda: self.levels(tag, count, dom))]
 
-    def row_digests(self, x: int, out: int, scratch: int, count: int) -> None:
-        """The sha512/row-seg/v1 digests of `count` FP32 rows at x into out: s512_rows, or with a scratch buffer
-        s512_row_segs then s512_folds."""
-        d, segs = self.dev, self.k // 256
+    def row_digests(self, x: int, out: int, scratch: int, count: int, k: int | None = None) -> None:
+        """The sha512/row-seg/v1 digests of `count` rows of `k` FP32 words (default the pipeline's k) at x into out:
+        s512_rows, or with a scratch buffer s512_row_segs then s512_folds."""
+        k = k or self.k
+        d, segs = self.dev, k // 256
         if self.sha == "ref" or not scratch:
-            d.launch("s512_rows", count, 128, p=(x, out), i=(count, self.k))
+            d.launch("s512_rows", count, 128, p=(x, out), i=(count, k))
             return
-        d.launch("s512_row_segs", cdiv(count * segs, RS_FAST_NT), RS_FAST_NT, p=(x, scratch), i=(count, self.k))
+        d.launch("s512_row_segs", cdiv(count * segs, RS_FAST_NT), RS_FAST_NT, p=(x, scratch), i=(count, k))
         d.launch("s512_folds", cdiv(count, RS_FOLD_NT), RS_FOLD_NT, p=(scratch, out), i=(count, segs, count, segs))
 
     def tile_leaves(self) -> None:
