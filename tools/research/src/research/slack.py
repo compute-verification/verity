@@ -460,6 +460,8 @@ class Slack:
         return self._oidc.send(lambda t: self.transport(BROKER, body, {"Authorization": f"Bearer {t}", "Content-Type": "application/json"}))
 
     def paged(self, method: str, key: str, limit: int | None = None, **params: Any) -> list[dict]:
+        if method == "conversations.replies":
+            return self._replies(key, limit, **params)
         items: list[dict] = []
         cursor = None
         while True:
@@ -467,6 +469,28 @@ class Slack:
             items += out.get(key, [])
             cursor = (out.get("response_metadata") or {}).get("next_cursor")
             if not cursor or (limit and len(items) >= limit):
+                return items[:limit] if limit else items
+
+    def _replies(self, key: str, limit: int | None, **params: Any) -> list[dict]:
+        """A thread's replies, paged by moving `oldest` past the last one seen: Slack's cursor for conversations.replies
+        drops the message at each page boundary (a doorbell lost from a 204-reply inbox read, 18 Oct)."""
+        items: list[dict] = []
+        seen: set[str] = set()
+        while True:
+            out = self.call("conversations.replies", limit=PAGE, **params)
+            page = [m for m in out.get(key, []) if m.get("ts") not in seen]
+            seen.update(m.get("ts") for m in page)
+            items += page
+            cursor = (out.get("response_metadata") or {}).get("next_cursor")
+            if not (out.get("has_more") or cursor) or (limit and len(items) >= limit):
+                return items[:limit] if limit else items
+            newest = max((m["ts"] for m in page if m.get("ts") and m["ts"] != params.get("ts")), key=float, default=None)
+            if newest is not None and float(newest) > float(params.get("oldest") or 0):
+                params.pop("cursor", None)
+                params["oldest"] = newest
+            elif cursor and cursor != params.get("cursor"):
+                params["cursor"] = cursor                                # no progress by `oldest` (a tiny page): one by cursor
+            else:
                 return items[:limit] if limit else items
 
     def root(self, channel: str, thread: str) -> dict | None:
