@@ -8,7 +8,7 @@ import Lean.Data.Json
 * `cases.json` (`gen_cases.py`, the served Python's `audit.commit_rows`, `MerkleTree.open`, `verify_opening`): every rank of
   hm96-sha512 row trees of counts 0, 1, 2, 3, 5, 6, 7, 8, 9, rows of 0 … 3073 bytes. The model must accept every Python
   opening, its frame leaf must be the served Lean's (`RowsDomain.leaf`), and it must refuse the zero-padded row, a
-  wrong rank, a short path, a changed salt and another key.
+  wrong rank, a short or long path, and (at rank 0 of each tree) a changed salt, a short salt and another key.
 * `vectors_sha512.json`: `row_seg_leaves` (ℓ = 0, 1, 13, 8191, 8192, 8193, 24581, 65536 bits) and
   `bit_row_hiding_leaves` (hm96 `b ‖ c`, the hm96 leaf, `H(key)` and the frame leaf). -/
 
@@ -45,12 +45,53 @@ def chk (r : IO.Ref Tally) (name : String) (ok : Bool) : IO Unit := do
   r.modify fun t => if ok then { t with pass := t.pass + 1 } else { t with fail := t.fail + 1 }
   unless ok do IO.println s!"FAIL {name}"
 
-instance (V : RowLeaf.Verifier) (root : Digest) (rank : ℕ) (o : RowLeaf.Opening) :
-    Decidable (RowLeaf.accepts sha sha V root rank o) := by
-  unfold RowLeaf.accepts Tree.accepts; infer_instance
+/-! `Hm96.commitString` reads `mask key y` once per byte, and the interpreter recomputes it each time (a dense salt's
+mask is ~10⁸ steps). The `…With` forms take the mask as an argument; each is the model's definition with
+`m := Hm96.mask key y`, by `rfl`, so evaluating them at that `m` evaluates the model. -/
 
-def acc (V : RowLeaf.Verifier) (root : Digest) (rank : ℕ) (o : RowLeaf.Opening) : Bool :=
-  decide (RowLeaf.accepts sha sha V root rank o)
+def csWith (H : Msg → Digest) (x : Digest) (y m : Msg) : Msg :=
+  (List.ofFn fun i : Fin 64 => x i ^^^ m.getD i 0) ++ (H (Hm96.saltPrefix ++ y)).bytes
+
+theorem cs_eq (H : Msg → Digest) (key : Msg) (x : Digest) (y : Msg) :
+    Hm96.commitString H key x y = csWith H x y (Hm96.mask key y) := rfl
+
+def hm96LeafWith (H : Msg → Digest) (key : Msg) (x : Digest) (y m : Msg) : Digest :=
+  H (Hm96.leafPrefix H key ++ csWith H x y m)
+
+theorem hm96Leaf_eq (H : Msg → Digest) (key : Msg) (x : Digest) (y : Msg) :
+    Hm96.leaf H key x y = hm96LeafWith H key x y (Hm96.mask key y) := rfl
+
+def leafMsgWith (H G : Msg → Digest) (V : RowLeaf.Verifier) (rank : ℕ) (o : RowLeaf.Opening) (m : Msg) : Msg :=
+  Tree.leafMsg V.domain rank RowLeaf.SCHEMA (hm96LeafWith H V.key (RowSeg.digest G o.row) o.salt m).bytes
+
+theorem leafMsg_eq (H G : Msg → Digest) (V : RowLeaf.Verifier) (rank : ℕ) (o : RowLeaf.Opening) :
+    RowLeaf.leafMsg H G V rank o = leafMsgWith H G V rank o (Hm96.mask V.key o.salt) := rfl
+
+def acceptsWith (V : RowLeaf.Verifier) (root : Digest) (rank : ℕ) (o : RowLeaf.Opening) (m : Msg) : Prop :=
+  o.row.length < 2 ^ 64 ∧ o.salt.length = Hm96.SALT_BYTES ∧
+    Tree.accepts sha V.domain root rank (sha (leafMsgWith sha sha V rank o m)) o.sibs
+
+theorem accepts_iff (V : RowLeaf.Verifier) (root : Digest) (rank : ℕ) (o : RowLeaf.Opening) :
+    RowLeaf.accepts sha sha V root rank o ↔ acceptsWith V root rank o (Hm96.mask V.key o.salt) := Iff.rfl
+
+def outerHashedWith (H G : Msg → Digest) (V : RowLeaf.Verifier) (rank : ℕ) (o : RowLeaf.Opening) (m : Msg) : List Msg :=
+  [Hm96.saltPrefix ++ o.salt, Hm96.leafPrefix H V.key ++ csWith H (RowSeg.digest G o.row) o.salt m] ++
+    [leafMsgWith H G V rank o m] ++ Tree.hashed H V.domain rank (H (leafMsgWith H G V rank o m)) o.sibs
+
+theorem outerHashed_eq (H G : Msg → Digest) (V : RowLeaf.Verifier) (rank : ℕ) (o : RowLeaf.Opening) :
+    RowLeaf.outerHashed H G V rank o = outerHashedWith H G V rank o (Hm96.mask V.key o.salt) := rfl
+
+instance (V : RowLeaf.Verifier) (root : Digest) (rank : ℕ) (o : RowLeaf.Opening) (m : Msg) :
+    Decidable (acceptsWith V root rank o m) := by
+  unfold acceptsWith Tree.accepts; infer_instance
+
+/-- `decide (RowLeaf.accepts sha sha V root rank o)` when `m = Hm96.mask V.key o.salt` (`accepts_iff`). -/
+def acc (V : RowLeaf.Verifier) (root : Digest) (rank : ℕ) (o : RowLeaf.Opening) (m : Msg) : Bool :=
+  decide (acceptsWith V root rank o m)
+
+/-- The same, computing the mask. -/
+def acc' (V : RowLeaf.Verifier) (root : Digest) (rank : ℕ) (o : RowLeaf.Opening) : Bool :=
+  acc V root rank o (Hm96.mask V.key o.salt)
 
 def distinct (xs : List Msg) : Bool := xs.eraseDups.length == xs.length
 
@@ -71,7 +112,7 @@ def treeCase (r : IO.Ref Tally) (key : Msg) (t : Json) : IO Unit := do
   if count == 0 then
     chk r "c=0 empty root = Python" (dom.frame.empty.data.toList == unhex (str t "empty_root") && rootB == unhex (str t "empty_root"))
     for rank in [0:3] do
-      chk r s!"c=0 r={rank}: model refuses (empty tree)" (!acc V root rank ⟨[], List.replicate 192 0, []⟩)
+      chk r s!"c=0 r={rank}: model refuses (empty tree)" (!acc' V root rank ⟨[], List.replicate 192 0, []⟩)
   for op in arr t "openings" do
     let rank := nat op "rank"
     let rowB := unhex (str op "row")
@@ -79,25 +120,28 @@ def treeCase (r : IO.Ref Tally) (key : Msg) (t : Json) : IO Unit := do
     let sibs := (hexes op "path").map fun p => toDigest (ba p)
     let o : RowLeaf.Opening := ⟨bitsOf rowB, salt, sibs⟩
     let tag := s!"c={count} r={rank} len={rowB.length}"
-    chk r s!"{tag}: model accepts the Python opening" (acc V root rank o)
+    -- the mask depends on the key and salt only, so row, rank and path variants share it
+    let m := Hm96.mask key salt
+    chk r s!"{tag}: model accepts the Python opening" (acc V root rank o m)
     chk r s!"{tag}: served Lean verify accepts it"
       ((dom.verify (ba rootB) rank "verity/pouw/row/v1" (ba (rowB ++ salt)) ((hexes op "path").map ba)).toOption == some true)
     let servedLeaf := (dom.leaf rank "verity/pouw/row/v1" (ba (rowB ++ salt))).toOption.map (·.data.toList)
-    chk r s!"{tag}: model frame leaf = served Lean leaf" (some (sha (RowLeaf.leafMsg sha sha V rank o)).bytes == servedLeaf)
+    chk r s!"{tag}: model frame leaf = served Lean leaf" (some (sha (leafMsgWith sha sha V rank o m)).bytes == servedLeaf)
     chk r s!"{tag}: model row-seg digest = served segDigest"
       ((RowSeg.digest sha o.row).bytes == (Flock.HmRow.segDigest (8 * rowB.length) (ba rowB)).data.toList)
-    chk r s!"{tag}: refuses the row padded by one zero byte" (!acc V root rank { o with row := o.row ++ List.replicate 8 false })
-    chk r s!"{tag}: refuses the row padded by one zero bit" (!acc V root rank { o with row := o.row ++ [false] })
+    chk r s!"{tag}: refuses the row padded by one zero byte" (!acc V root rank { o with row := o.row ++ List.replicate 8 false } m)
+    chk r s!"{tag}: refuses the row padded by one zero bit" (!acc V root rank { o with row := o.row ++ [false] } m)
     if rowB.length > 0 then
-      chk r s!"{tag}: refuses the row less its last bit" (!acc V root rank { o with row := o.row.dropLast })
-    chk r s!"{tag}: refuses a changed salt" (!acc V root rank { o with salt := (salt.head! ^^^ 1) :: salt.tail })
-    chk r s!"{tag}: refuses a 191-byte salt" (!acc V root rank { o with salt := salt.dropLast })
-    chk r s!"{tag}: refuses another key" (!acc ⟨D, (key.head! ^^^ 1) :: key.tail⟩ root rank o)
-    chk r s!"{tag}: refuses rank+1" (!acc V root (rank + 1) o)
+      chk r s!"{tag}: refuses the row less its last bit" (!acc V root rank { o with row := o.row.dropLast } m)
+    if rank == 0 then
+      chk r s!"{tag}: refuses a changed salt" (!acc' V root rank { o with salt := (salt.head! ^^^ 1) :: salt.tail })
+      chk r s!"{tag}: refuses a 191-byte salt" (!acc' V root rank { o with salt := salt.dropLast })
+      chk r s!"{tag}: refuses another key" (!acc' ⟨D, (key.head! ^^^ 1) :: key.tail⟩ root rank o)
+    chk r s!"{tag}: refuses rank+1" (!acc V root (rank + 1) o m)
     if sibs.length > 0 then
-      chk r s!"{tag}: refuses a short path" (!acc V root rank { o with sibs := sibs.dropLast })
-    chk r s!"{tag}: refuses a long path" (!acc V root rank { o with sibs := sibs ++ [root] })
-    let outer := RowLeaf.outerHashed sha sha V rank o
+      chk r s!"{tag}: refuses a short path" (!acc V root rank { o with sibs := sibs.dropLast } m)
+    chk r s!"{tag}: refuses a long path" (!acc V root rank { o with sibs := sibs ++ [root] } m)
+    let outer := outerHashedWith sha sha V rank o m
     let inner := RowLeaf.innerHashed sha o
     chk r s!"{tag}: |outerHashed| = 3 + depth" (outer.length == 3 + Tree.depth count)
     chk r s!"{tag}: |innerHashed| = s + 1" (inner.length == RowSeg.segCount (8 * rowB.length) + 1)
@@ -131,20 +175,25 @@ def hidingCase (r : IO.Ref Tally) (key : Msg) (e : Json) : IO Unit := do
   let rank := nat e "rank"
   let D : Tree.Domain := ⟨toDigest (ba (unhex (str dj "domain_id"))), rank + 1, id⟩
   chk r s!"{tag}: H(key) = vector" ((sha key).bytes == unhex (str e "key_sha512"))
-  chk r s!"{tag}: b ‖ c = vector" (Hm96.commitString sha key x y == unhex (str e "bc"))
-  chk r s!"{tag}: hm96 leaf = vector" ((Hm96.leaf sha key x y).bytes == unhex (str e "hm96_leaf"))
-  chk r s!"{tag}: frame leaf = vector"
-    ((sha (Tree.leafMsg D rank (str e "schema") (Hm96.leaf sha key x y).bytes)).bytes == unhex (str e "leaf"))
+  let m := Hm96.mask key y
+  chk r s!"{tag}: b ‖ c = vector" (csWith sha x y m == unhex (str e "bc"))
+  let hl := hm96LeafWith sha key x y m
+  chk r s!"{tag}: hm96 leaf = vector" (hl.bytes == unhex (str e "hm96_leaf"))
+  chk r s!"{tag}: frame leaf = vector" ((sha (Tree.leafMsg D rank (str e "schema") hl.bytes)).bytes == unhex (str e "leaf"))
 
 def main (cases vectors : String) : IO Unit := do
   let r ← IO.mkRef ({} : Tally)
   let c ← IO.ofExcept (Json.parse (← IO.FS.readFile cases))
   let key := unhex (str c "key")
   chk r "model key bytes = served Lean Default512.key" (key == Flock.Hm96.Default512.key.data.toList)
-  for t in arr c "trees" do treeCase r key t
   let v ← IO.ofExcept (Json.parse (← IO.FS.readFile vectors))
   for e in arr v "row_seg_leaves" do segCase r e
+  IO.eprintln s!"row-seg vectors done: {(← r.get).pass} passed, {(← r.get).fail} failed"
   for e in arr v "bit_row_hiding_leaves" do hidingCase r key e
+  IO.eprintln s!"hiding vectors done: {(← r.get).pass} passed, {(← r.get).fail} failed"
+  for t in arr c "trees" do
+    treeCase r key t
+    IO.eprintln s!"tree count={nat t "count"} done: {(← r.get).pass} passed, {(← r.get).fail} failed"
   let t ← r.get
   IO.println s!"RowProbe: {t.pass} checks passed, {t.fail} failed"
 
