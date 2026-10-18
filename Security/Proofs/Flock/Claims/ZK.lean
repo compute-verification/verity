@@ -30,6 +30,8 @@ import Proofs.Flock.Claims.ZK.Blind
 import Proofs.Flock.Claims.ZK.Release
 import Proofs.Flock.Claims.ZK.NonVacuous
 import Proofs.Flock.Claims.ZK.SamplingNonVacuous
+import Proofs.Flock.Claims.ZK.Compose
+import Proofs.Flock.Claims.ZK.Layout
 
 /-!
 # Flock's zero knowledge against a malicious verifier
@@ -172,4 +174,16 @@ import Proofs.Flock.Claims.ZK.SamplingNonVacuous
   whose simulator is colliding given the leaf layer (`not_samplingZK_collSim`), at one whose reference prover sends its
   witness at two honest witnesses of one leaf layer (`not_samplingZK_leak`), and is not met at every masked deployment
   where one has an honest pair (`not_forall_samplingZK`).
+* `Compose`: sequential composition. Two protocols in turn, the second at a statement the first's history selects
+  (`Seq`), are `ZKmalR` under the simulator that runs the first's, then the second's at the unit its transcript selects
+  (**`zkmalR_seqU`**, with one coin type for the second at every unit, so units need not be finitely many;
+  **`zkmalR_seq`** for finitely many): `ε` and `γ` add up, the hybrid that changes the second keeping the first real
+  and giving `V*` its messages as tape, and the composed tape (`forkTape`) guesses which session's `Fork` to charge
+  (`Seq.fork_ge`). A first protocol with `γ₀ ≤ c·g`, then `n` sessions in turn (**`zkmalR_iter`**), cost
+  `ε₀ + Σ_{j < n} eB j` and `(c + n)·g`: `n·g` after a prefix that rewinds nothing. Both hold at one statement
+  (`zkmalAt_seqU`, `zkmalAt_iter`), so the tapes and the number of sessions may be chosen per statement: on the
+  spec's statement-indexed tapes (`ZKmalRx`), `m x` sessions in turn (`zkmalRx_iter`).
+* `Layout`: a run in parts, a first part then sessions back to back, on a flat tape (the first part's and one session
+  tape per slot) is `zkmalAt_iterG`'s nested run (`Layout.iterProver_flat`), so **`zkmalAt_layout`** charges it
+  `ε₀ + Σ_{j < m} eB j` and `(c + m)·g`, each session's zero knowledge needed only at the histories that start it.
 -/
