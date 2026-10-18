@@ -194,6 +194,41 @@ def account(claims: list[Claim], p: Placement, clock: Clock, epoch: Interval, op
     return Account(blocks, timing, inputs, refused, dict(offramp), located, advice, delta)
 
 
+@dataclass
+class Ledger:
+    """Accounts of successive epochs (nights, say), joined. Covert bits and failure probabilities add up across epochs,
+    since an adversary with a long horizon can save them up and break out at the end. State is per epoch: what could
+    survive each epoch's end, which nightly wipes keep down to the devices' residuals."""
+
+    epochs: list[Account] = field(default_factory=list)
+
+    def add(self, acc: Account) -> Ledger:
+        self.epochs.append(acc)
+        return self
+
+    @property
+    def sound(self) -> bool:
+        return all(a.sound for a in self.epochs)
+
+    @property
+    def covert_bits(self) -> float:
+        return sum(a.covert_bits for a in self.epochs)
+
+    @property
+    def delta(self) -> float:
+        return sum(a.delta for a in self.epochs)
+
+    @property
+    def carried(self) -> list[float]:
+        """The bits that could survive each epoch's end, summed over blocks."""
+        return [sum(b.state for b in a.blocks) for a in self.epochs]
+
+    def __repr__(self) -> str:
+        return (f"{len(self.epochs)} epochs, {'sound' if self.sound else 'NOT sound'}: {self.covert_bits:g} covert bits in "
+                f"all, at most {max(self.carried, default=0):.3g} bits carried across any epoch boundary, "
+                f"failure probability at most {self.delta:.3g}")
+
+
 @dataclass(frozen=True)
 class Credit:
     """Work `work` of `resource` (compute, bits held, bits read) an audit credits to `device` within `window`."""

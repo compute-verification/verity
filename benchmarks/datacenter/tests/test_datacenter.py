@@ -219,3 +219,16 @@ def test_a_fleet_links_datacenters_only_through_certifiers():
     assert any("not a certifier" in p for p in bad.validate())
     clash = Fleet([datacenter(), datacenter()])
     assert any("is in both" in p for p in clash.validate())
+
+
+def test_a_ledger_adds_covert_bits_across_nights_and_wipes_bound_what_each_night_carries(setup):
+    from datacenter import Ledger
+    c, dc, p = setup
+    profile = occupancy(p, 32, 1, window=4)
+    ledger = Ledger()
+    for night in range(3):
+        wipes = [Wipe("a.gpu", Interval(0, 2)), Wipe("b.gpu", Interval(0, 2))] if night else []
+        ledger.add(account(audit(run(p, INPUTS, window=4, wipes=wipes), profile, syncs=128), p, Clock(1e-3), Interval(0, 16)))
+    assert ledger.sound and ledger.covert_bits == 3 * ledger.epochs[0].covert_bits
+    first, *wiped = ledger.carried
+    assert all(w == 2 * 8e6 for w in wiped) and first == 2 * 6.4e10
