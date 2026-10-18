@@ -16,7 +16,7 @@ through an opened reader, registered weights for weight slices), committed in M0
 
 The partition file is the verifier's: ``{"templates": [<descriptor id>, ...], "law": "subset:K" | "stratified:K" | {...},
 "query"?: "Q_template_instance" | "Q_template_instances", "scope"?: {"op_path_prefix", "steps"}, "chunk_cap"?: {<descriptor id>:
-cap}, "partition_digest"?}``.  The members are its templates in order, each instance count read off the Build's Programs; the
+cap}, "row_tables"?: true, "partition_digest"?}``.  The members are its templates in order, each instance count read off the Build's Programs; the
 population program over them (``commit.serving_rows.population_program``: ``TemplatePopulations`` for several templates, or for one
 when the file names ``Q_template_instances``) is the one the verifier builds from the same Programs, and a ``partition_digest`` in
 the file that is not that program's partition is refused, as is any other query (a word partition, ``Q_word``, never: with the
@@ -37,7 +37,9 @@ the row computes is no match).  Each member's ports:
                                    are fixed by the layout, never by the values, so repeated rows stay separate table rows
   ``ScaledMmS8Coordinate_v1{K=..}``  every coordinate of the ``ScaledMmS8_v1`` rows of that K, A6's bit rows per instance:
                                    ``x`` (the token's s8 codes then its f32 scale, row-seg), ``w`` (``W[c, :]`` then ``sw[c]``,
-                                   v2) -> ``o0`` (the bf16 output, a v2 row of its one word)
+                                   v2) -> ``o0`` (the bf16 output, a v2 row of its one word); with ``row_tables``, shared
+                                   rows (`with_row_tables`): the ``x`` table the chunk's distinct token rows, each a row of its
+                                   row table (one per engine step and op_path), and the ``w`` table its own rows
   any row's own Definition         every row of it, the row itself: ``in<g>`` per argument group -> ``out.<member>`` per
                                    committed member (``vu_export._decompose_row``'s port rule)
 
@@ -52,6 +54,7 @@ import re
 import time
 import traceback
 from collections.abc import Callable, Mapping, Sequence
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -264,15 +267,47 @@ def members(tmpls: Sequence[str], rows: Sequence[list[Row]], counts: Sequence[in
     return out
 
 
+def with_row_tables(ms: Sequence[CS.Member], tmpls: Sequence[str], rows: Sequence[list[Row]],
+                    arrivals: Mapping[str, int] | None = None) -> tuple[list[CS.Member], tuple[CS.RowTable, ...]]:
+    """The row-table layout of ``members``' ``ScaledMmS8Coordinate`` chunks: one row table per (engine step, op_path) of their
+    ``ScaledMmS8_v1`` rows, its token rows in the window's order, and each chunk a shared-row member whose ``x`` table is the
+    distinct token rows its units read (``links``: each one's row table and rank) and whose ``w`` table is its own rows."""
+    tables: dict[tuple[int, str], int] = {}
+    specs: list[tuple[int, str, str, int, list[tuple[str, int, int]]]] = []
+    segs: dict[str, list[tuple[int, int, int, int]]] = {}
+    for t, rs in zip(tmpls, rows, strict=True):
+        if not t.startswith(S8):
+            continue
+        lo = next(m.base for m in ms if m.template == t)
+        for rid, _pi, r, d in rs:
+            step, n = int((arrivals or {}).get(rid, 0)) + int(d["step"]), int(d["statics"]["N"])
+            k = tables.setdefault((step, d["op_path"]), len(specs))
+            if k == len(specs):
+                specs.append((step, d["op_path"], t, s8_words(int(d["statics"]["K"])), []))
+            specs[k][4].append((str(rid), int(d["row"]), int(r["i"])))
+            segs.setdefault(t, []).append((lo, lo + n, k, len(specs[k][4]) - 1))
+            lo += n
+    out = []
+    for m in ms:
+        if m.template not in segs:
+            out.append(m)
+            continue
+        links = tuple((k, rank) for a, b, k, rank in segs[m.template] if a < m.base + m.n and b > m.base)
+        out.append(replace(m, tables=((CS.LINKED, len(links)), ("w", m.n)), links=links))
+    return out, tuple(CS.RowTable(step, op, t, words, tuple(rs)) for step, op, t, words, rs in specs)
+
+
 def law_of(law: str | Mapping[str, Any]) -> dict[str, Any]:
     return DR.parse_law(law) if isinstance(law, str) else dict(law)
 
 
 def population(programs: dict[str, dict[str, Any]], partition: Mapping[str, Any], run_root: str,
-               program_dirs: dict[str, str] | None = None, index: Mapping[str, Any] | None = None) -> tuple[CS.Window, list[list[Row]]]:
+               program_dirs: dict[str, str] | None = None, index: Mapping[str, Any] | None = None,
+               arrivals: Mapping[str, int] | None = None) -> tuple[CS.Window, list[list[Row]]]:
     """The verifier's window over the run's Programs (``partition``: the partition file's ``templates``, ``law`` and ``scope``) and
     each template's rows; refused when the file names a ``partition_digest`` that is not the window's, or a ``query`` other than the
-    template queries."""
+    template queries.  ``row_tables: true`` in the file: the ``ScaledMmS8Coordinate`` chunks in the row-table layout
+    (`with_row_tables`, its engine steps the requests' ``arrivals`` plus their steps)."""
     tmpls, law = list(partition["templates"]), law_of(partition["law"])
     q = partition.get("query")
     if q is not None and q not in TEMPLATE_QUERIES:
@@ -284,9 +319,12 @@ def population(programs: dict[str, dict[str, Any]], partition: Mapping[str, Any]
     scope = partition.get("scope") or {}
     rows, defs, counts = member_rows(programs, tmpls, scope.get("op_path_prefix"), program_dirs, index, scope.get("steps"))
     ms = members(tmpls, rows, counts, partition.get("chunk_cap"))
+    tables: tuple[CS.RowTable, ...] = ()
+    if partition.get("row_tables"):
+        ms, tables = with_row_tables(ms, tmpls, rows, arrivals)
     n_of = {t: sum(m.n for m in ms if m.template == t) for t in tmpls}
     program, query = CS.population_program([(fn, n_of[t]) for fn, t in zip(defs, tmpls, strict=True)], several=q == TEMPLATE_QUERIES[1])
-    window = CS.Window(program, query, law, run_root, tuple(ms))
+    window = CS.Window(program, query, law, run_root, tuple(ms), tables)
     want = partition.get("partition_digest")
     if want and want != window.partition_digest:
         raise ValueError(f"the run's population ({', '.join(f'{t} x {n}' for t, n in n_of.items())}) is partition "
@@ -298,7 +336,8 @@ def partition_doc(window: CS.Window, partition: Mapping[str, Any]) -> dict[str, 
     """The partition file as derived: the verifier's templates, law and scope, with the members, the partition object and digest."""
     return {"format": PARTITION_FORMAT, "templates": list(dict.fromkeys(m.template for m in window.members)), "law": window.law,
             "query": window.query["name"], "scope": partition.get("scope"), "members": [[m.key, m.n] for m in window.members],
-            **({"chunk_cap": partition["chunk_cap"]} if partition.get("chunk_cap") else {}), "partition": window.partition,
+            **({"chunk_cap": partition["chunk_cap"]} if partition.get("chunk_cap") else {}),
+            **({"row_tables": [t.port for t in window.row_tables]} if window.row_tables else {}), "partition": window.partition,
             "partition_digest": window.partition_digest, "population": window.population}
 
 
@@ -400,9 +439,11 @@ def _read_s8(ms: Sequence[CS.Member], rows: list[Row], store: Any, weights: Call
     """A ``ScaledMmS8Coordinate`` template's chunks: coordinate ``c`` of a ``ScaledMmS8_v1`` row (token row ``x`` with scale
     ``sx``, weight rows ``W`` with scales ``sw``) is ``x`` = the codes' bytes then ``sx``'s, ``w`` = ``W[c]``'s bytes then
     ``sw[c]``'s (u16 little-endian words, as A6 stages them), ``o0`` = ``y[c]``; units go row by row, then coordinate.  Each
-    chunk's index entries are the rows whose units it holds, each with the row's whole range."""
+    chunk's index entries are the rows whose units it holds, each with the row's whole range.  A linked chunk (the row-table layout)
+    reads its ``x`` table, the distinct token rows its units read, and refs: unit ``i`` reads ``x`` row ``ref`` and its own ``w``
+    row."""
     K = int(rows[0][3]["statics"]["K"])
-    xs, ws, ys, entries, wcache = [], [], [], [], {}
+    xs, ws, ys, entries, wcache, xrows = [], [], [], [], {}, []
     lo = ms[0].base
     for rid, pi, r, d in rows:
         arrive, N = int((arrivals or {}).get(rid, 0)), int(d["statics"]["N"])
@@ -418,19 +459,30 @@ def _read_s8(ms: Sequence[CS.Member], rows: list[Row], store: Any, weights: Call
         y, why = store.words(rid, arrive + d["step"], d["op_path"], member, d["row"] * int(width), (d["row"] + 1) * int(width))
         if y is None:
             raise LookupError(f"row {r['i']} output {member}: {why}")
-        xs.append(np.broadcast_to(xrow, (N, xrow.size)))
+        xrows.append(xrow)
         ws.append(wcache[key])
         ys.append(_as(y, 2, N, f"row {r['i']} y").reshape(N, 1))
         layer = _LAYER.search(d["op_path"])
         entries.append([lo, lo + N, rid, arrive + int(d["step"]), int(layer.group(1)) if layer else None, d["op_path"], str(member),
                         int(d["row"]), int(r["i"])])
         lo += N
-    X, Wr, Y = np.concatenate(xs), np.concatenate(ws), np.concatenate(ys)
+    Wr, Y = np.concatenate(ws), np.concatenate(ys)
+    linked = all(m.links for m in ms)
+    if not linked:
+        X = np.concatenate([np.broadcast_to(x, (e[1] - e[0], x.size)) for x, e in zip(xrows, entries, strict=True)])
     out, b0 = [], ms[0].base
     for m in ms:
         a, b = m.base - b0, m.base - b0 + m.n
-        out.append(({"rows": {"x": X[a:b], "w": Wr[a:b]}, "outs": {"o0": Y[a:b]}},
-                    [e for e in entries if e[0] < m.base + m.n and e[1] > m.base]))
+        mine = [j for j, e in enumerate(entries) if e[0] < m.base + m.n and e[1] > m.base]
+        if linked:
+            if len(mine) != len(m.links):
+                raise ValueError(f"{m.key}: reads {len(mine)} token rows, links {len(m.links)}")
+            at = np.repeat(np.arange(len(mine)), [min(entries[j][1], m.base + m.n) - max(entries[j][0], m.base) for j in mine])
+            got = {"rows": {"x": np.stack([xrows[j] for j in mine]), "w": Wr[a:b]}, "outs": {"o0": Y[a:b]},
+                   "refs": np.stack([at, np.arange(m.n)], axis=1)}
+        else:
+            got = {"rows": {"x": X[a:b], "w": Wr[a:b]}, "outs": {"o0": Y[a:b]}}
+        out.append((got, [entries[j] for j in mine]))
     return out
 
 
@@ -490,7 +542,7 @@ def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[
     t0 = time.perf_counter()
     dirs = {str(k): v for k, v in (program_dirs or {}).items()}
     pf = json.loads(Path(partition_file).read_text())
-    window, rows = population(programs, pf, run_root if isinstance(run_root, str) else bytes(run_root).hex(), dirs, index)
+    window, rows = population(programs, pf, run_root if isinstance(run_root, str) else bytes(run_root).hex(), dirs, index, arrivals)
     ms = window.members
     store = CommittedStore.of_record(bmap, committed, manifest)
     got = read_all(ms, rows, store, weights, arrivals)
