@@ -110,6 +110,27 @@ def test_the_commits_map_is_the_records_at_the_engines_pages(tmp_path):
     assert json.loads((tmp_path / "memory_map.jsonl.json").read_text())["engine"] == doc["engine"]
 
 
+def test_a_remote_sessions_map_is_written_where_its_encodes_land(tmp_path):
+    program, lp = _build_dir(tmp_path, 4, 5)
+    rows, out = MM.rows(program), tmp_path / "memory_map.jsonl"
+    rec = {"prover": {"kv": {"lifetime": 60}},
+           "memory_map": {"first_step": 100, "deferral": {"encodes": [[102, 103, 32, 4], [104, 105, 36, 2], [106, 107, 38, 2]]}}}
+    (tmp_path / PMM.SESSION).write_text(json.dumps(rec))
+    d = PMM.deferral(tmp_path / PMM.SESSION)
+    assert d == MM.Deferral(((102, 103, 32, 4), (104, 105, 36, 2), (106, 107, 38, 2)), 100, 60)
+    doc = PMM.write(out, {"path": str(out), "registration": "ab" * 64}, loaded={"r0": lp}, store=_store(rows), arrivals={"r0": ARRIVE},
+                    caches=_caches(MM.packed(rows), _payload(ProgramIndex(lp["instances"]), rows)), deferral=d)
+    # each append lands a step after it is made: the filler freed where a write first reaches it, page 2's second half, read
+    # last at step 7 where its encode lands, written there and freed a line later
+    _, steps = parse(out.read_text().splitlines())
+    assert [(s.step, sorted(s.freed), sorted(w.slot for w in s.written)) for s in steps] == [
+        (2, [12, 13, 28, 29], []), (3, [4, 20], [12, 13, 28, 29]), (5, [5, 21], [4, 20]),
+        (7, [4, 8, 12, 13, 20, 24, 28, 29], [5, 21]), (8, [5, 21], [])]
+    assert doc["deferral"] == {"first_step": 100, "appends": 3, "lifetime": 60}
+    (tmp_path / PMM.SESSION).write_text(json.dumps({"prover": {"kv": {"lifetime": 60}}, "memory_map": None}))
+    assert PMM.deferral(tmp_path / PMM.SESSION) is None and PMM.deferral(tmp_path / "none.json") is None
+
+
 def test_no_page_is_assumed(tmp_path):
     program, lp = _build_dir(tmp_path, 4, 5)
     rows, out = MM.rows(program), tmp_path / "memory_map.jsonl"
@@ -136,7 +157,7 @@ def test_the_census_and_kv_rows_are_computed_once_per_program(tmp_path):
     with pytest.raises(FileNotFoundError):
         PMM.of_build(d, "f" * 128)
     got = PMM.cache(d, program, digest)
-    assert (got["census"], got["kv_rows"]) == (census["digest"], True)
+    assert got == {"census": census["digest"], "kv_rows": True}, "a Build's result.json holds what its Program determines, no timings"
 
 
 def test_a_descriptor_of_another_program_is_refused_beside_the_map(tmp_path):

@@ -5,7 +5,9 @@ wrote there, `cache`; a Build without them has them computed once and cached, `o
 request's slots as the Commit committed them (`<layer>/slot_mapping`, `acquire.sources.kv_slots_source`, which the flag
 attaches), in the page layout of the engine's cache tensors.  Each d_j is from the committed K and V words of the block's rows,
 read as the serving rows read a Program's slices (`serving_rows._operand`: the ProgramIndex's members, the binding map's
-committed words).  A request whose slots weren't committed is refused by name: no page is assumed.
+committed words).  A request whose slots weren't committed is refused by name: no page is assumed.  A Commit whose run a remote
+session audited (``--remote-verifier``) has written the session's record, ``remote_session.json``, by then, and the map
+follows its deferred residency (`commit.memory_map.Deferral`, `deferral`): each block written where its append's encode landed.
 
 The request (``REQUEST_JSON``)::
 
@@ -40,10 +42,11 @@ from verity_vllm.pipeline.serving_rows import _operand
 
 
 def after_commit(request: str | None, *, loaded: Mapping[str, Mapping[str, Any]], bmap: dict[str, Any], committed: Callable,
-                 manifest: Any, arrivals: Mapping[str, int], caches: Mapping[str, Any] | None) -> dict[str, Any] | None:
+                 manifest: Any, arrivals: Mapping[str, int], caches: Mapping[str, Any] | None,
+                 session: str | Path | None = None) -> dict[str, Any] | None:
     """Write the run's memory map as ``request`` asks, from the requests' loaded Programs of record (`c2_replay.programs_of_record`)
-    at their engine arrival steps and the KV-slots source's `caches`; None without a request.  A failure is written beside the
-    map and returned, never raised."""
+    at their engine arrival steps and the KV-slots source's `caches`, under the deferral of the remote session whose record is at
+    ``session`` if there is one; None without a request.  A failure is written beside the map and returned, never raised."""
     if not request:
         return None
     req = json.loads(Path(request).read_text())
@@ -51,11 +54,30 @@ def after_commit(request: str | None, *, loaded: Mapping[str, Mapping[str, Any]]
     out.parent.mkdir(parents=True, exist_ok=True)
     try:
         return write(out, req, loaded=loaded, store=CommittedStore.of_record(bmap, committed, manifest if isinstance(manifest, dict) else None),
-                     arrivals=arrivals, caches=caches)
+                     arrivals=arrivals, caches=caches, deferral=deferral(session) if session is not None else None)
     except Exception as e:  # noqa: BLE001
         out.with_name(out.name + ".error.txt").write_text(traceback.format_exc())
         print(f"[memory-map] FAILED (no verdict changes): {e!r}"[:400], flush=True)
         return {"error": repr(e)}
+
+
+#: the Commit's remote session record (`store.remote.CommitSession.end`), in its out dir
+SESSION = "remote_session.json"
+
+
+def deferral(path: str | Path) -> MM.Deferral | None:
+    """The deferred residency of the remote session whose record is at ``path``: its map's first step and its appends' encodes
+    (``memory_map``'s ``first_step`` and ``deferral.encodes``), under its prover's lifetime cap; None without a record or a map
+    deferring residency."""
+    p = Path(path)
+    if not p.is_file():
+        return None
+    rec = json.loads(p.read_text())
+    mm = rec.get("memory_map") or {}
+    if mm.get("deferral") is None:
+        return None
+    return MM.Deferral(tuple((int(m), None if r is None else int(r), int(f), int(c)) for m, r, f, c in mm["deferral"]["encodes"]),
+                       int(mm["first_step"]), int(rec["prover"]["kv"]["lifetime"]))
 
 
 #: beside a request Build's ``descriptor.json.gz``: its Program's census (`MM.census_of`) and KV rows (`MM.rows_doc`), each naming
@@ -82,7 +104,7 @@ def _put(path: Path, doc: Mapping[str, Any]) -> None:
 def cache(d: str | Path, program: Any, digest: str) -> dict[str, Any]:
     """Write Build dir ``d``'s `CENSUS` and `KV_ROWS` for its request Program ``program`` (``digest``), the census read back when
     one beside it already names the Program; a Program with no KV a memory map lays out gets the reason in place of its rows."""
-    d, t0 = Path(d), time.perf_counter()
+    d = Path(d)
     c = _read(d / CENSUS, digest)
     if c is None:
         c = MM.census_of(program, digest)
@@ -93,7 +115,7 @@ def cache(d: str | Path, program: Any, digest: str) -> dict[str, Any]:
     except ValueError as e:
         doc["refused"] = str(e)
     _put(d / KV_ROWS, doc)
-    return {"census": c["digest"], "kv_rows": "refused" not in doc, "seconds": round(time.perf_counter() - t0, 2)}
+    return {"census": c["digest"], "kv_rows": "refused" not in doc}
 
 
 def of_build(d: str | Path, digest: str) -> MM.Rows:
@@ -122,9 +144,10 @@ def _layer(name: str) -> int:
 
 
 def write(out: Path, req: Mapping[str, Any], *, loaded: Mapping[str, Mapping[str, Any]], store: Any, arrivals: Mapping[str, int],
-          caches: Mapping[str, Any] | None) -> dict[str, Any]:
+          caches: Mapping[str, Any] | None, deferral: MM.Deferral | None = None) -> dict[str, Any]:
     """The map of ``req`` into ``out`` and its layout beside it: each request's slots and K and V words read from ``store`` (a
-    `CommittedStore`), its pages laid out as ``caches`` (KV layer name -> the engine's cache tensor) lay them out."""
+    `CommittedStore`), its pages laid out as ``caches`` (KV layer name -> the engine's cache tensor) lay them out, its writes
+    where ``deferral`` has their encodes land."""
     if not caches:
         raise ValueError("no engine KV cache to lay pages out by: the Commit attached no KV-slots source (commit --memory-map attaches it)")
     t0 = time.perf_counter()
@@ -169,7 +192,7 @@ def write(out: Path, req: Mapping[str, Any], *, loaded: Mapping[str, Mapping[str
 
     layout = MM.Layout(page.block_size, page.pages, tuple(req["firsts"]) if req.get("firsts") is not None else None,
                        int(req["blocks"]) if req.get("blocks") is not None else None)
-    head, steps = MM.record(kv, {r: int(arrivals[r]) for r in rows}, payload, bytes.fromhex(req["registration"]), layout, tables)
+    head, steps = MM.record(kv, {r: int(arrivals[r]) for r in rows}, payload, bytes.fromhex(req["registration"]), layout, tables, deferral)
     out.write_text(dumps(head, steps))
     t_d = time.perf_counter()
     engine = MM.engine_agrees(kv, layout, tables, steps, _engine_blocks([caches[n] for n in layers], tables))
@@ -178,6 +201,8 @@ def write(out: Path, req: Mapping[str, Any], *, loaded: Mapping[str, Mapping[str
            "requests": {r: {"arrive": int(arrivals[r]), "steps": rs.steps, "positions": rs.positions, "layers": len(rs.layers),
                             "row_bytes": rs.row_bytes, "pages": tables[r], "program_digest": by_dir[str(loaded[r]["dir"])][2]}
                         for r, rs in rows.items()},
+           "deferral": None if deferral is None else {"first_step": deferral.first_step, "appends": len(deferral.encodes),
+                                                      "lifetime": deferral.lifetime},
            "steps": len(steps), "written": sum(len(s.written) for s in steps), "freed": sum(len(s.freed) for s in steps), "engine": engine,
            "seconds": {"rows_s": round(t_ir - t0, 3), "digests_s": round(t_d - t_ir, 3), "engine_s": round(time.perf_counter() - t_d, 3)}}
     out.with_name(out.name + ".json").write_text(json.dumps(doc, indent=1) + "\n")

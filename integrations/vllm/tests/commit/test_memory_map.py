@@ -187,6 +187,94 @@ def test_a_page_reused_after_its_request_frees_its_filler_once(reqs):
     assert [s.step for s in steps if _slot(0, 5, 0) in s.freed] == [2]
 
 
+#: the session's steps from the engine's step 0 at 64, as a binder that served before numbers them
+FIRST = 64
+SESSION = {"r0": decode(4, 9), "r1": decode(4, 5)}
+
+
+def _page(p: int) -> list[int]:
+    return sorted(_slot(layer, p, plane) for layer in range(2) for plane in range(2))
+
+
+def _deferred(*encodes, lifetime: int = 60) -> MM.Deferral:
+    """A deferral of ``encodes``, ``(made, landed, first, count)`` on the engine's steps, as the session numbers them."""
+    return MM.Deferral(tuple((m + FIRST, None if r is None else r + FIRST, f, c) for m, r, f, c in encodes), FIRST, lifetime)
+
+
+def _lines(steps):
+    return [(s.step, list(s.freed), [(w.slot, w.index) for w in s.written]) for s in steps]
+
+
+def _replayed(head, steps):
+    rp = Replay(head)
+    for s in steps:
+        rp.apply(s)
+    return rp
+
+
+def test_a_deferred_block_is_written_where_its_encode_lands():
+    # each append lands a step after its completion: the filler is freed where a write first reaches it, even at the step
+    # completing the block (pages 1 and 3); r1's first page, read last at step 2, where its encode lands, is written there
+    # and freed a line later (memory accounting's withdrawn block, until memory-map/v1 records one), and so is r0's second
+    d = _deferred((0, 1, 24, 4), (1, 2, 28, 4), (4, 5, 32, 4))
+    head, steps = MM.record(SESSION, ARRIVE, _payload, REGISTRATION, LAYOUT, TABLES, d)
+    at = lambda p, j: list(zip(_page(p), range(j, j + 4)))  # noqa: E731
+    assert _lines(steps) == [(0, _page(1), []), (1, sorted(_page(2) + _page(3)), at(1, 24)), (2, _page(4), at(3, 28)),
+                             (3, _page(3), []), (5, sorted(_page(1) + _page(5)), at(2, 32)), (6, _page(2), [])]
+    assert _replayed(head, steps).extent == 36
+    # landing at once is the map without a deferral
+    now = _deferred((0, 0, 24, 4), (1, 1, 28, 4), (4, 4, 32, 4))
+    assert MM.record(SESSION, ARRIVE, _payload, REGISTRATION, LAYOUT, TABLES, now) == MM.record(SESSION, ARRIVE, _payload, REGISTRATION,
+                                                                                                LAYOUT, TABLES)
+    # an encode still out is no write, and its block no free
+    _, steps = MM.record(SESSION, ARRIVE, _payload, REGISTRATION, LAYOUT, TABLES, _deferred((0, 1, 24, 4), (1, 2, 28, 4), (4, None, 32, 4)))
+    assert _lines(steps)[-2:] == [(3, _page(3), []), (5, sorted(_page(1) + _page(5)), [])]
+    # and the circuit's appends after the session's last are never made
+    _, steps = MM.record(SESSION, ARRIVE, _payload, REGISTRATION, LAYOUT, TABLES, _deferred((0, 1, 24, 4), (1, 2, 28, 4)))
+    assert [w for s in steps for w in s.written if w.index >= 32] == []
+
+
+def test_two_appends_landing_in_one_line_that_write_one_slot_are_written_a_line_apart():
+    # a's page 1, completed at step 0 and read last at 1, lands at 2 with b's, which reuses the page from step 2: the line
+    # writes a's, and b's waits a line, whose write releases a's in place of its free
+    reqs, arrive, tables = {"a": decode(4, 5), "b": decode(4, 6)}, {"a": 0, "b": 2}, {"a": [1, 2], "b": [1, 3]}
+    head, steps = MM.record(reqs, arrive, _payload, REGISTRATION, MM.Layout(block_size=4, pages=6), tables,
+                            _deferred((0, 2, 24, 4), (2, 2, 28, 4)))
+    assert _lines(steps) == [(0, _page(1), []), (1, _page(2), []), (2, [], list(zip(_page(1), range(24, 28)))),
+                             (3, _page(3), list(zip(_page(1), range(28, 32)))), (4, _page(1), [])]
+    assert _replayed(head, steps).holds(_slot(0, 1, 0)) is None
+
+
+def test_a_re_key_frees_the_old_index_at_once_and_writes_the_new_one_where_its_encode_lands():
+    # the session re-keys 4 blocks in the append it makes at step 3: step 2's line frees the oldest live, r0's first page,
+    # and step 3's, where the encode lands, writes them again at the fresh indices; step 4's append numbers on from there
+    d = _deferred((0, 1, 24, 4), (1, 2, 28, 4), (3, 3, 32, 4), (4, 5, 36, 4), lifetime=2)
+    head, steps = MM.record(SESSION, ARRIVE, _payload, REGISTRATION, LAYOUT, TABLES, d)
+    at = lambda p, j: list(zip(_page(p), range(j, j + 4)))  # noqa: E731
+    assert _lines(steps) == [(0, _page(1), []), (1, sorted(_page(2) + _page(3)), at(1, 24)),
+                             (2, sorted(_page(1) + _page(4)), at(3, 28)), (3, _page(3), at(1, 32)),
+                             (5, sorted(_page(1) + _page(5)), at(2, 36)), (6, _page(2), [])]
+    assert [w.digest for w in steps[1].written] == [w.digest for w in steps[3].written]
+    assert _replayed(head, steps).extent == 40
+
+
+def test_a_deferral_that_is_not_the_circuits_is_refused():
+    def record(*encodes, lifetime=60):
+        return MM.record(SESSION, ARRIVE, _payload, REGISTRATION, LAYOUT, TABLES, _deferred(*encodes, lifetime=lifetime))
+    with pytest.raises(ValueError, match="lifetime cap 1 is refused"):
+        record((0, 1, 24, 4), lifetime=1)
+    with pytest.raises(ValueError, match="at step 0 is of 3 blocks, and the circuit completed 4"):
+        record((0, 1, 24, 3))
+    with pytest.raises(ValueError, match="no append of the blocks the circuit completed at steps .1."):
+        record((0, 1, 24, 4), (4, 5, 28, 4))
+    with pytest.raises(ValueError, match="no append of the store's next blocks from 24"):
+        record((0, 1, 25, 4))
+    with pytest.raises(ValueError, match="no append of the store's next blocks from 28"):
+        record((0, 2, 24, 4), (1, 1, 28, 4))
+    with pytest.raises(ValueError, match="re-keys 8 blocks at step 2, and the circuit holds 4 live"):
+        record((0, 1, 24, 4), (1, 2, 28, 4), (3, 3, 32, 8), lifetime=2)
+
+
 def test_refusals(reqs):
     with pytest.raises(ValueError, match="while a request's rows in it are read to step"):
         MM.record(reqs, ARRIVE, _payload, REGISTRATION, LAYOUT, {"r0": [1, 2, 5], "r1": [2, 4]})
