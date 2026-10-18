@@ -46,7 +46,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Iterator, Mapping, Sequence
 
 from .refs import Affine, Coll, Concat, Explicit, Refs, runs as ref_runs
-from .types import Array, Record, Tuple as TupleT, Type, Value, remove_axis
+from .types import Record, Tuple as TupleT, Type, range_widths, remove_axis
 
 KINDS = ("value", "coin", "static")
 WORD = re.compile(r"[a-z][a-z0-9_]*")
@@ -244,30 +244,6 @@ class PortTypes:
         return pt
 
 
-def _widths(t: Type, lo: int, hi: int) -> frozenset:
-    """The widths of leaves [lo, hi) of `t`, computed structurally."""
-    if hi <= lo:
-        return frozenset()
-    if lo == 0 and hi == t.leaves:
-        return t.width_set()
-    if isinstance(t, Array):
-        L = t.elem.leaves
-        first, last = lo // L, (hi - 1) // L
-        if first == last:
-            return _widths(t.elem, lo - first * L, hi - first * L)
-        out = _widths(t.elem, lo - first * L, L) | _widths(t.elem, 0, hi - last * L)
-        return out | t.elem.width_set() if last - first >= 2 else out
-    fields = [ft for _, ft in t.fields] if isinstance(t, Record) else list(t.fields)  # type: ignore[attr-defined]
-    out: frozenset = frozenset()
-    pos = 0
-    for ft in fields:
-        a, b = max(lo, pos), min(hi, pos + ft.leaves)
-        if a < b:
-            out |= _widths(ft, a - pos, b - pos)
-        pos += ft.leaves
-    return out
-
-
 def full(iv: tuple[int, int], w: int) -> bool:
     """Whether an interval of `Value<w>` holds every encoding (it assumes nothing)."""
     return iv in ((-(1 << (w - 1)), (1 << (w - 1)) - 1), (0, (1 << w) - 1))
@@ -350,7 +326,7 @@ def _merged(owner: str, where: str, t: Type, runs: list) -> tuple[Run, ...]:
             out.append([lo, hi, p])
     typed = []
     for lo, hi, p in out:
-        ws = _widths(t, lo, hi)
+        ws = range_widths(t, lo, hi)
         w = next(iter(ws)) if len(ws) == 1 else None
         if p.interval is not None:
             _check_interval(owner, where, p.interval, w)

@@ -741,9 +741,13 @@ def decode_program(desc: dict, registry: Registry) -> DecodedProgram:
                 raise ValueError(f"definition {fid!r} node {k}: {e}") from e
             _build_node(B, fid, k, nd, fn, args, arg_type(nd["out"]))
         try:
-            sp.set_body(B.finish(Coll(ret_type, _decode_refs(b["ret"], nodes, schema, leaves))))
+            ret = Coll(ret_type, _decode_refs(b["ret"], nodes, schema, leaves))
         except (TypeError, ValueError) as e:
             raise ValueError(f"definition {fid!r} ret: {e}") from e
+        try:
+            sp.set_body(B.finish(ret))
+        except TypeError as e:
+            raise ValueError(f"definition {fid!r}: {e}") from e
         sp.set_port_types(P.PortTypes.from_json(fid, d["ports"], params, ret_type, outs if fid == desc["root"] else None)
                           if "ports" in d else None)
         return sp

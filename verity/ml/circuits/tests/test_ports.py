@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import re
 
 import pytest
 
@@ -14,7 +15,7 @@ from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, bind, primiti
 from verity.ml.circuits.evaluation.reference import evaluate, standalone_call
 from verity.ml.circuits.ports import In, Leaves, Out, PortError, Ports
 from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import array_of, tuple_of
+from verity.ml.circuits.refs import Affine, Coll, PartLog, Strided, array_of, concat, tuple_of
 from verity.ml.circuits.types import Array, Record, Tuple as TupleT, Value
 
 V8, V16, V32 = Value(8), Value(16), Value(32)
@@ -444,6 +445,143 @@ def test_inputs_constants_and_registered_words_may_be_reinterpreted():
     for reg in ((), ("x",)):
         prog = Program(comp("PortsTestReinterp", [("x", V32)], V8, lambda B, S, x: B.call(Limbs, x)), registered=reg)
         roundtrip(prog)
+
+
+@primitive("PortsTestId8", 1, (("x", V8),), V8)
+def Id8(x):
+    return x
+
+
+@primitive("PortsTestLo8", 1, (("w", V32),), V8)
+def Lo8(w):
+    """The low byte of a word: a gate that computes an 8-bit lane."""
+    return w & 0xFF
+
+
+def lanes(c: Coll, n: int = 32) -> Coll:
+    """`n` references to the one leaf of `c`, typed as `n` 8-bit lanes."""
+    return Coll(Array(n, V8), concat([c.refs] * n))
+
+
+# --- E_REINTERPRET: a leaf is read at the width it was committed with ---------------------------------------------------------
+
+def used(f: CompositeDefinition) -> CompositeDefinition:
+    """A program function that calls `f`, so that `f`'s body is a composite's (the root inlines its program function's)."""
+    params, ret = bind(f).signature()
+    return comp(f"{f.name}Use", params, ret, lambda B, S, *args: B.call(f, *args))
+
+
+def test_an_s32_word_typed_as_s8_lanes_is_refused_as_an_argument_and_as_a_return():
+    """`Coll(Array(32, S8), refs to one s32 word)` names a 32-bit leaf at every 8-bit position: the Builder refuses it where a
+    node reads it and where the body returns it, whether the word is a node's or a parameter's."""
+    arg = comp("PortsTestLanesArg", [("x", V32)], Array(32, V8), lambda B, S, x: B.batch(Id8, lanes(B.call(Pair, x)), axes=(0,)))
+    with pytest.raises(TypeError, match=r"E_REINTERPRET: node 1 \(batch PortsTestId8_v1\) argument 'x': leaf 0 is typed "
+                                        r"Value<8> but names leaf 0 of node 0, a Value<32>: a silent reinterpretation"):
+        Program(used(arg))
+    ret = comp("PortsTestLanesRet", [("x", V32)], Array(32, V8), lambda B, S, x: lanes(B.call(Pair, x)))
+    with pytest.raises(TypeError, match=r"E_REINTERPRET: the body's return: leaf 0 is typed Value<8> but names leaf 0 of node 0"):
+        Program(used(ret))
+    param = comp("PortsTestLanesParam", [("x", V32)], Array(32, V8), lambda B, S, x: lanes(x))
+    with pytest.raises(TypeError, match="the body's return: leaf 0 is typed Value<8> but names leaf 0 of parameter 'x', a Value<32>"):
+        Program(used(param))
+    with pytest.raises(TypeError, match=r"E_REINTERPRET: node 1 \(batch PortsTestId8_v1\) argument 'x': leaf 0 is typed "
+                                        r"Value<8> but names leaf 0 of node 0, a Value<32>"):
+        Program(comp("PortsTestLanesRoot", [("x", V32)], Array(32, V8), lambda B, S, x: B.batch(Id8, lanes(x), axes=(0,))))
+
+
+def _retarget(refs, src: int, dst: int):
+    """`refs` (a descriptor's reference JSON) with every reference to node `src` naming node `dst` instead."""
+    if isinstance(refs, dict):
+        return {k: _retarget(v, src, dst) for k, v in refs.items()}
+    if isinstance(refs, list):
+        if len(refs) >= 3 and refs[0] == "n" and refs[1] == src:
+            return ["n", dst, *refs[2:]]
+        return [_retarget(r, src, dst) for r in refs]
+    return refs
+
+
+def test_the_decoder_refuses_a_tampered_word_typed_as_s8_lanes():
+    """The same reinterpretation written into a descriptor, at a node's argument and at the return: lanes of an 8-bit word
+    retargeted to the s32 word."""
+    f = comp("PortsTestLanesOk", [("x", V32)], TupleT(Array(32, V8), Array(32, V8)),
+             lambda B, S, x: (lambda y, lo: tuple_of(B.batch(Id8, lanes(lo), axes=(0,)), lanes(lo)))(B.call(Pair, x), B.call(Lo8, x)))
+    desc, _ = roundtrip(Program(used(f)))
+    body = desc["definitions"]["PortsTestLanesOk_v1"]["body"]
+    assert [n["form"] for n in body["nodes"]] == ["primitive", "primitive", "batch"]
+    for where, leaf, edit in (("node 2 (batch PortsTestId8_v1) argument 'x'", 0, lambda b: b["nodes"][2]["args"][0].update(
+                                  refs=_retarget(b["nodes"][2]["args"][0]["refs"], 1, 0))),
+                              ("the body's return", 32, lambda b: b.update(ret=_retarget(b["ret"], 1, 0)))):
+        tampered = copy.deepcopy(desc)
+        edit(tampered["definitions"]["PortsTestLanesOk_v1"]["body"])
+        with pytest.raises(ValueError, match=re.escape(f"definition 'PortsTestLanesOk_v1': E_REINTERPRET: {where}: leaf {leaf} is "
+                                                       f"typed Value<8> but names leaf 0 of node 0, a Value<32>")):
+            decode_program(tampered, REGISTRY)
+
+
+@primitive("PortsTestPair", 1, (("x", V32),), V32)
+def Pair(x):
+    """A 32-bit word no port types."""
+    return x
+
+
+def test_a_word_read_at_its_own_width_builds():
+    """A same-width reshape, an aligned mixed tuple, strided views of an array of records and a whole read of it as another type
+    of the same layout read every leaf at its width; the misaligned ones are refused at the first leaf they misread."""
+    rec = comp("PortsTestRec", [("x", V32)], TupleT(V32, V8), lambda B, S, x: tuple_of(B.call(Pair, x), B.call(Lo8, x)))
+    n = 100
+
+    def case(name, ret, view):
+        """`view(B, x, r)` over r, node 0: an `Array<n, (Value<32>, Value<8>)>`."""
+        return used(comp(name, [("x", Array(4, V32)), ("v", Array(n, V32))], ret,
+                         lambda B, S, x, v: view(B, x, B.batch(rec, v, axes=(0,)))))
+
+    ok = [
+        (Array(2, Array(2, V32)), lambda B, x, r: Coll(Array(2, Array(2, V32)), B.batch(Pair, x, axes=(0,)).refs)),
+        (TupleT(V8, V32), lambda B, x, r: tuple_of(r[0][1], r[1][0])),
+        (Array(n, V32), lambda B, x, r: Coll(Array(n, V32), Strided("n", 0, 0, 1, 2, 0, n))),
+        (Array(n, V8), lambda B, x, r: Coll(Array(n, V8), Strided("n", 0, 1, 1, 2, 0, n))),
+        (Array(n, Record(("a", V32), ("b", V8))), lambda B, x, r: Coll(Array(n, Record(("a", V32), ("b", V8))), r.refs)),
+    ]
+    for i, (ret, view) in enumerate(ok):
+        roundtrip(Program(case(f"PortsTestWidthOk{i}", ret, view)))
+    bad = [
+        (TupleT(V32, V8), lambda B, x, r: Coll(TupleT(V32, V8), tuple_of(r[0][1], r[1][0]).refs), 0,
+         "Value<32> but names leaf 1 of node 0, a Value<8>"),
+        (Array(n, V32), lambda B, x, r: Coll(Array(n, V32), Strided("n", 0, 1, 1, 2, 0, n)), 0, "names leaf 1 of node 0, a Value<8>"),
+        (Array(n, TupleT(V8, V32)), lambda B, x, r: Coll(Array(n, TupleT(V8, V32)), r.refs), 0, "names leaf 0 of node 0, a Value<32>"),
+        (Array(n, V32), lambda B, x, r: Coll(Array(n, V32), concat([Strided("n", 0, 0, 1, 2, 0, n - 1), Affine("n", 0, 1, 1)])),
+         n - 1, "names leaf 1 of node 0, a Value<8>"),
+    ]
+    for i, (ret, view, leaf, why) in enumerate(bad):
+        with pytest.raises(TypeError, match=re.escape(f"the body's return: leaf {leaf} is typed")) as e:
+            Program(case(f"PortsTestWidthBad{i}", ret, view))
+        assert why in str(e.value), (why, str(e.value))
+
+
+def test_a_part_log_cut_is_checked_past_its_longest_checked_cut():
+    """Cuts of one `PartLog` (the key rows of successive attention calls) are checked part by part only past the longest cut
+    already checked at that width; a tail of another width is still refused."""
+    logs = []
+
+    def body(B, S, x, tail):
+        log = PartLog()
+        logs.append(log)
+        outs = []
+        for t in range(6):
+            log.append(B.call(Quant, x[t]).refs)
+            if t >= 1:
+                extra = [B.call(Add32, tail, tail).refs] if tail is not None and t == 5 else []
+                outs.append(B.batch(AnyBound, Coll(Array(t + 1 + len(extra), V16), log.cut(t + 1, extra)), axes=(0,)))
+        return tuple_of(*outs)
+
+    rets = TupleT(*(Array(t + 1, V16) for t in range(1, 6)))
+    prog = Program(comp("PortsTestLogOk", [("x", Array(6, V16))], rets, lambda B, S, x: body(B, S, x, None)))
+    roundtrip(prog)
+    token, done = logs[0].memo["defs.widths"]
+    assert done == {16: 6}
+    rets_bad = TupleT(*(Array(t + 1 + (t == 5), V16) for t in range(1, 6)))
+    with pytest.raises(TypeError, match="argument 'a': leaf 6 is typed Value<16> but names leaf 0 of node .*, a Value<32>"):
+        Program(comp("PortsTestLogBad", [("x", Array(6, V16)), ("y", V32)], rets_bad, lambda B, S, x, y: body(B, S, x, y)))
 
 
 def test_a_composite_keeps_the_words_it_returns():

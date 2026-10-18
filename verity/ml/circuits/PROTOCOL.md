@@ -169,6 +169,11 @@ every partition query refuses it (`partition_object.order_violation`, §8). The 
   `(init, xs1..xsk, shared1..sharedm)`: `init` has the carry type, `xsj` is `Array<n, type(xj)>` and `sharedj` has the type of
   `sj`. `n` is the common length of the xs, or any n ≥ 0 when k = 0. `out` = `Tuple(carry, Array<n, Y>)`.
 
+Every leaf a node's argument or the body's `ret` names has the width its type gives that position: a word is read only at the
+width it was committed with. A sequence typed `Array<32, Value<8>>` whose references name an s32 word (a `Value<32>`) is a
+silent reinterpretation, a limb split no gate computes, and is refused (`E_REINTERPRET`, `defs.Builder.finish`). A runtime
+word becomes limbs only through a registered `LimbSplit` Definition that computes them and their carries (§12).
+
 ### 4.5 Flat concatenation and the alias
 
 Readers: a concat part that is itself a concat is spliced in, so a decoded sequence is flat. `{"alias": [k, a]}`, alone or as
@@ -221,6 +226,7 @@ have):
   computes (the decoder rebuilds every node through `defs.Builder`, with the checks a program is built with);
 - a type that is malformed, or whose width or length is a boolean;
 - a body whose `ret` does not have its `ret_type`;
+- a node argument or a `ret` that names a leaf of another width than its type gives that position (`E_REINTERPRET`, §4.4);
 - `ports` that are malformed or not canonical, a primitive's that differ from the registry's, or a Program the port rules
   refuse (§12, `ports.PortError`, a `ValueError`).
 
