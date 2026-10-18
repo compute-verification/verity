@@ -72,6 +72,8 @@ is 0x7FFF.
 """
 from __future__ import annotations
 
+__models__ = ("zai-org/GLM-5.3",)
+
 from typing import NamedTuple
 
 import numpy as np
@@ -88,7 +90,7 @@ __all__ = ["AllReduceCustom", "AllReduceCustomCoordinate", "AllReduceMnnvl", "Al
            "CUSTOM_SYMM_MAX_BYTES", "Captured", "FI_MAX_BYTES", "MNNVL_ONE_SHOT_BYTES", "SETTINGS",
            "SYMM_MEM_MAX_BYTES", "WARP", "chain", "covered", "custom_order", "custom_owners", "custom_stage", "eps_bits",
            "fused_max_tokens", "mnnvl_grid", "mnnvl_shot", "multimem_owners", "multimem_runs", "multimem_tree", "multimem_trees",
-           "ranks", "strategy", "tree_clusters", "tree_from_clusters", "tree_leaves"]
+           "offset_free", "ranks", "route_binding", "served_route", "settings_of", "strategy", "tree_clusters", "tree_from_clusters", "tree_leaves"]
 
 WARP = 32
 #: FlashInfer `MNNVL_ONE_SHOT_THRESHOLD`: the one-shot kernel up to this many bytes of M * H * WORLD
@@ -535,3 +537,59 @@ def AllReduceMultimem(B, S, parts):
         cols = array_of([parts[r][lo:hi] for r in range(W)])
         outs.append(B.batch(bind(AllReduceMultimemCoordinate, WORLD=W, TREE=tree, FTZ=bool(S.FTZ)), cols, axes=(1,)))
     return outs[0] if len(outs) == 1 else coll_concat(Array(int(S.SIZE), BF16), outs)
+
+
+def settings_of(disable_custom_all_reduce: bool, env) -> dict[str, bool]:
+    """vLLM's all-reduce switches as `served_route` reads them: the engine's ``disable_custom_all_reduce`` and the process's
+    ``VLLM_ALLREDUCE_USE_SYMM_MEM`` / ``VLLM_ALLREDUCE_USE_FLASHINFER`` (unset is vLLM's default, on)."""
+    on = lambda name: str(env.get(name, "1")).strip().lower() not in ("0", "false", "no", "off")  # noqa: E731
+    return {"custom_all_reduce": not bool(disable_custom_all_reduce), "symmetric_memory": on("VLLM_ALLREDUCE_USE_SYMM_MEM"),
+            "flashinfer": on("VLLM_ALLREDUCE_USE_FLASHINFER")}
+
+
+def served_route(settings: dict, M: int, N: int) -> tuple[str | None, str]:
+    """The setting name and communicator route vLLM d9105ea80 takes for one bf16 [M,N] world-8 all-reduce."""
+    custom = bool(settings.get("custom_all_reduce"))
+    symm = bool(settings.get("symmetric_memory"))
+    flashinfer = bool(settings.get("flashinfer"))
+    setting = ("custom-off" if not custom and symm and flashinfer else
+               "defaults" if custom and symm and flashinfer else
+               "switch" if custom and not symm and flashinfer else None)
+    nbytes = M * N * 2
+    if flashinfer and nbytes <= FI_MAX_BYTES:
+        route = "fi_ar_comm"
+    elif custom and nbytes < (CUSTOM_SYMM_MAX_BYTES if symm else CUSTOM_MAX_BYTES):
+        route = "ca_comm"
+    elif symm and nbytes <= SYMM_MEM_MAX_BYTES:
+        route = "symm_mem_comm"
+    else:
+        route = "pynccl_comm"
+    return setting, route
+
+
+def offset_free(c: Captured, world: int) -> bool:
+    """Whether every element of the covered route is reduced the same way wherever it sits in the call: MNNVL's per-element sum,
+    multimem with one tree for every owner, the custom all-reduce's 1-stage kernel (`custom_owners`)."""
+    if c.definition == "AllReduceMnnvl_v1":
+        return True
+    if c.definition == "AllReduceMultimem_v1":
+        return len(set(multimem_trees(c.statics["TREES"], world))) == 1
+    return c.definition == "AllReduceCustom_v1" and int(c.statics["STAGE"]) == 1
+
+
+def route_binding(c: Captured, world: int, M: int, N: int, rows: int | None = None) -> tuple[object, dict]:
+    """The Definition and statics of one covered communicator all-reduce of [M,N] over `world` ranks: one call over the `rows` * N
+    words of this request's rows among the launch's M tokens (default all M).  The launch's M picks the kernel; a call of fewer
+    rows than the launch is only stated for an `offset_free` route, since the others reduce an element by its offset in the launch."""
+    rows = M if rows is None else int(rows)
+    if rows != M and not offset_free(c, world):
+        raise ValueError(f"route {c.route!r} ({c.definition} {c.statics}) reduces an element by its offset among the launch's {M} "
+                         f"tokens, which a call of this request's {rows} rows does not know")
+    size = rows * N
+    if c.definition == "AllReduceMnnvl_v1":
+        return AllReduceMnnvl, {"WORLD": world, "N": size, "SHOT": mnnvl_shot(M, N, world)}
+    if c.definition == "AllReduceMultimem_v1":
+        return AllReduceMultimem, {"WORLD": world, "SIZE": size, **c.statics}
+    if c.definition == "AllReduceCustom_v1":
+        return AllReduceCustom, {"WORLD": world, "SIZE": size, **c.statics}
+    raise ValueError(f"covered route {c.route!r} names unsupported definition {c.definition!r}")

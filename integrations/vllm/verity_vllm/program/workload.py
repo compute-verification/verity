@@ -313,16 +313,20 @@ class WorkloadRequest:
     arrive_step: int      # declared arrival, engine-step units
     component: RequestComponent
     T: int | None = None  # decode steps derived (cap - 1); checked against the component's program_fn when it names T
+    # a prefix-cache hit (`program.prefix_plan`): {"rows": C, "producers": [the request that computed each cached block]}; the
+    # component reads rows 0..C-1 of every layer's KV cache as its `prefix` input, which Match binds to the producers' rows
+    prefix: dict | None = None
 
     def static(self) -> dict:
         return {"request_id": self.request_id, "index": self.index, "prompt_len": self.prompt_len, "cap": self.cap,
-                "arrive_step": self.arrive_step, "fn": self.component.fn}
+                "arrive_step": self.arrive_step, "fn": self.component.fn, **({"prefix": self.prefix} if self.prefix else {})}
 
 
 # request-LOCAL wrapper parameter groups: a component's own inputs, positions may differ per component (TP rank Programs carry
 # `peers_<k>` = the received collective values, one per site x step, so K differs per (LP, T) shape -- tp M-0314 (B)); a stochastic
-# wrapper's `seed` and `splits` are its request's own, like the prompt
-_REQUEST_LOCAL_GROUPS = ("prompt", "seed", "splits")
+# wrapper's `seed` and `splits` are its request's own, like the prompt, and so are a warm request's cached `prefix` and a TP rank
+# Program's `schedule` (its MoE align calls' keys, `CollectiveBus.schedule_key`)
+_REQUEST_LOCAL_GROUPS = ("prompt", "seed", "splits", "prefix", "schedule")
 _REQUEST_LOCAL_PREFIXES = ("peers",)
 
 
@@ -436,7 +440,7 @@ class WorkloadProgram:
         uniform = len(set(idx)) == 1
         if not uniform:
             # [tp M-0314 (B)] the shared group may sit at different positions per component ONLY when what precedes/follows it is
-            # request-local by construction (prompt, seed, splits, peers_*: a TP rank Program's received collective values, K per shape); any other
+            # request-local by construction (prompt, seed, splits, schedule, peers_*: a TP rank Program's received collective values, K per shape); any other
             # group at a shifting position is still refused -- it would mean the components disagree on what the model's inputs are
             foreign = sorted({g for r in requests for g in r.component.groups if g != shared and not _is_request_local(g)})
             if foreign:
@@ -543,7 +547,10 @@ class WorkloadProgram:
                          # [R17-1] the two lengths, bounded from the declaration alone: served <= cap; executed <= cap (the lag step fits)
                          "lengths": {"served_output_len_max": r.cap, "executed_prefix_len_max": r.cap,
                                      "eos_stop_executed_prefix_max": min(r.cap, max(r.cap - 1, 0) + self.lag), "lag": self.lag, "capacity_events": r.cap},
-                         "input_interface": {"prompt_tokens": r.prompt_len, "available_at": r.arrive_step}})
+                         "input_interface": {"prompt_tokens": r.prompt_len, "available_at": r.arrive_step},
+                         **({"prefix": {**r.prefix, "rule": "rows 0..rows-1 of every layer's KV cache are the producers' rows (served from the "
+                                                            "prefix cache, never recomputed); the prefill computes rows..prompt_len-1"}}
+                            if r.prefix else {})})
         last = max(r.arrive_step + r.cap - 1 for r in self.requests)
         # the programmed instance set of every engine step: the union over the requests programmed for it of their step-s
         # segment (component node range + global gate range) — well-defined from the declaration alone, no observation read
@@ -584,8 +591,9 @@ class WorkloadProgram:
                                 "criterion": "DAG multiset per (request, s) with structural canonical addresses (rev-pm M-0099 (c)); the "
                                              "fold's emission sequence is an encoding of the record, recorded by the checker as layout"},
                 "programmed_horizon_steps": last + 1, "requests": rows,
-                "state_dependencies": "request-local only: each request's KV cache and previous-token dependencies live inside its "
-                                      "component (the request wrapper); no cross-request state, no cache reuse across requests",
+                "state_dependencies": "request-local: each request's KV cache and previous-token dependencies live inside its component "
+                                      "(the request wrapper); the one cross-request state is a declared prefix-cache hit (`requests[].prefix`): "
+                                      "the producers' KV rows, read as the warm request's `prefix` input",
                 "observed_time": "not represented: observed step indices (fold StepStart) and elapsed time belong to the execution record; "
                                  "agreement with the programmed schedule is the global checker's (gmatch) check, not a builder claim",
                 "future_dependent_events": {"eos_stop": "prescribed: the Program computes all cap steps of every request; an execution that "
@@ -627,11 +635,11 @@ class WorkloadProgram:
                 "params": [[n, str(t)] for n, t in params[:len(self.shared)]] + [[f"... {len(params) - len(self.shared)} request-specific batches", ""]],
                 "n_params": len(params), "ret": str(ret),
                 "requests": [{"request_id": r.request_id, "index": r.index, "prompt_len": r.prompt_len, "cap": r.cap, "arrive_step": r.arrive_step,
-                              "component": r.component.to_json()} for r in self.requests],
+                              "component": r.component.to_json(), **({"prefix": r.prefix} if r.prefix else {})} for r in self.requests],
                 "representation": "hierarchical: Program(Workload_v1{requests, shared}); one call node per request Program component; the "
                                   "request subcircuits are Definitions (not flattened); no scheduler; builder inputs = manifest + request descriptors",
-                "padding_scope": "active-reference only (unchanged from R13): inactive padded interiors and cross-request cache reuse are "
-                                 "outside this Program's claims",
+                "padding_scope": "active-reference only (unchanged from R13): inactive padded interiors are outside this Program's claims; "
+                                 "cross-request cache reuse is only the declared prefix-cache hits (`requests[].prefix`)",
                 "x09_inside": "each component is the X-09 request-wrapper Program (its digest is a static of the component); X-09 per-request "
                               "equality is evidence inside the global check, not a substitute for it",
                 "address_map": self.address_map(), "chronology": self.chronology()}

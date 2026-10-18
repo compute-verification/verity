@@ -72,6 +72,22 @@ def ensure_ops() -> None:
     def _(parts: list[torch.Tensor]) -> torch.Tensor:
         return torch.empty_like(parts[0])
 
+    @torch.library.custom_op("verity_tp::fused_allreduce_rms_norm", mutates_args=())
+    def fused_allreduce_rms_norm(parts: list[torch.Tensor], residual: torch.Tensor, weight: torch.Tensor,
+                                 eps: float) -> tuple[torch.Tensor, torch.Tensor]:
+        # This eager body is only a shape/ordinary-arithmetic check.  The frontend binds the op to the captured
+        # FlashInfer MNNVL Definition; it never claims these PyTorch reductions are its implementation.
+        reduced = torch.stack(list(parts), dim=0).float().sum(dim=0).to(parts[0].dtype)
+        residual_out = reduced + residual
+        variance = residual_out.float().pow(2).mean(dim=-1, keepdim=True)
+        normed = (residual_out.float() * torch.rsqrt(variance + eps) * weight.float()).to(residual_out.dtype)
+        return normed, residual_out
+
+    @fused_allreduce_rms_norm.register_fake
+    def _(parts: list[torch.Tensor], residual: torch.Tensor, weight: torch.Tensor,
+          eps: float) -> tuple[torch.Tensor, torch.Tensor]:
+        return torch.empty_like(parts[0]), torch.empty_like(residual)
+
     @torch.library.custom_op("verity_tp::all_gather", mutates_args=())
     def all_gather(parts: list[torch.Tensor]) -> torch.Tensor:
         return torch.cat(list(parts), dim=-1)
@@ -97,13 +113,18 @@ def ensure_ops() -> None:
 
 @dataclass
 class CollectiveBus:
-    """The collectives of one rank's forward, in call order.  `mode`: `probe` (record; no peers) or `trace` (consume peers, emit ops)."""
+    """The collectives of one rank's forward, in call order.  `mode`: `probe` (record; no peers) or `trace` (consume peers, emit ops).
+    It also hands out the rank Program's one other input a kernel reads mid-forward, the `schedule` witness (`schedule_key`)."""
     rank: int
     world: int
     mode: str = "probe"
     peers: list[torch.Tensor] = field(default_factory=list)
     record: list[dict] = field(default_factory=list)
+    settings: dict[str, bool] = field(default_factory=dict)
     cursor: int = 0
+    schedule: torch.Tensor | None = None
+    schedule_record: list[dict] = field(default_factory=list)
+    schedule_cursor: int = 0
 
     @property
     def peer_ranks(self) -> list[int]:
@@ -157,16 +178,43 @@ class CollectiveBus:
             return torch.ops.verity_tp.all_gather2(parts[0], parts[1])
         return torch.ops.verity_tp.all_gather(parts)
 
+    def fused_allreduce_rms_norm(self, x: torch.Tensor, residual: torch.Tensor, weight: torch.Tensor,
+                                 eps: float) -> tuple[torch.Tensor, torch.Tensor]:
+        """Author the FlashInfer fused leaf after its served dispatch has been established by `export_compat`."""
+        peers = self._peers_of("fused_allreduce_rms_norm", x, tuple(x.shape))
+        if peers is None:
+            return torch.empty_like(x), torch.empty_like(residual)
+        ensure_ops()
+        return torch.ops.verity_tp.fused_allreduce_rms_norm(self._parts(x, peers), residual, weight, float(eps))
+
+    def schedule_key(self, ids: torch.Tensor) -> torch.Tensor:
+        """The next `moe_align_block_size` call's key per pair (`registry.marlin_moe.MoeAlignRanks`), shaped as its router `ids`:
+        the next `ids.numel()` words of the `schedule` input, which the run's GPU sorted positions fill; recorded in probe mode."""
+        shape, n = tuple(ids.shape), ids.numel()
+        if self.mode == "probe":
+            off = sum(r["pairs"] for r in self.schedule_record)
+            self.schedule_record.append({"k": len(self.schedule_record), "shape": list(shape), "pairs": n, "offset": off})
+            return torch.empty(shape, dtype=torch.int32, device=ids.device)
+        k = self.schedule_cursor
+        self.schedule_cursor += 1
+        if self.schedule is None or k >= len(self.schedule_record) or self.schedule_record[k]["shape"] != list(shape):
+            raise RuntimeError(f"align call #{k} {shape} is not the probe's ({len(self.schedule_record)} calls recorded)")
+        off = self.schedule_record[k]["offset"]
+        return self.schedule[off:off + n].view(shape)
+
     def example_peers(self, device: str = "meta") -> tuple[torch.Tensor, ...]:
         """One example peer tensor per (collective k, peer rank j) in flat order `k*(world-1) + j`."""
         return tuple(torch.empty(tuple(r["shape"]), dtype=getattr(torch, r["dtype"]), device=device)
                      for r in self.record for _j in range(self.world - 1))
 
-    def reset(self, mode: str, peers: list[torch.Tensor] | None = None) -> None:
-        self.mode, self.cursor = mode, 0
-        self.peers = list(peers or [])
+    def example_schedule(self, device: str = "meta") -> torch.Tensor:
+        return torch.empty(sum(r["pairs"] for r in self.schedule_record), dtype=torch.int32, device=device)
+
+    def reset(self, mode: str, peers: list[torch.Tensor] | None = None, schedule: torch.Tensor | None = None) -> None:
+        self.mode, self.cursor, self.schedule_cursor = mode, 0, 0
+        self.peers, self.schedule = list(peers or []), schedule
         if mode == "probe":
-            self.record = []
+            self.record, self.schedule_record = [], []
 
 
 class TPStub:

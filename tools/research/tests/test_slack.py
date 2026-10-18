@@ -28,7 +28,7 @@ TOKEN = "dummy-verity-bot"
 BOT = "B0VERITY"
 COORD, ALERTS = "CCOORD", "CALERTS"
 HANDLES = ["infra", "proofs", "circuits", "compute-accounting", "memory-accounting", "network-accounting", "console",
-           "ci", "lean", "comms", "top", "vllm", "benchmarks"]
+           "ci", "lean", "comms", "top", "vllm", "benchmarks", "hash"]
 
 
 class FakeSlack:
@@ -441,6 +441,24 @@ def test_broker_failures_are_clear_exit_2_and_never_show_the_identity(broker, re
     assert rc == 2 and says in err and err.startswith("research msg: reactions.add: ")
     assert OIDC not in out + err
     assert waits == ([30.0] * slack.RATE_RETRIES if getattr(fail, "code", None) == 429 else [])
+
+
+def test_a_long_thread_is_paged_by_oldest_so_no_reply_at_a_page_boundary_is_lost():
+    """Slack's cursor for conversations.replies skipped the message at each page boundary: a doorbell in a 204-reply inbox
+    read was lost (18 Oct)."""
+    replies = [{"ts": f"1700000000.{i:06d}"} for i in range(1, 6)]
+    asked = []
+
+    def transport(url, data, headers):
+        params = dict(urllib.parse.parse_qsl(data.decode()))
+        asked.append(params.get("oldest"))
+        newer = [m for m in replies if float(m["ts"]) > float(params.get("oldest") or 0)]
+        return {"ok": True, "messages": [{"ts": "1700000000.000000"}] + newer[:2], "has_more": len(newer) > 2,
+                "response_metadata": {"next_cursor": "skips-one" if len(newer) > 2 else ""}}
+
+    got = slack.Slack("xoxb-dummy", transport=transport).paged("conversations.replies", "messages", channel=COORD, ts="1700000000.000000")
+    assert [m["ts"] for m in got] == ["1700000000.000000"] + [m["ts"] for m in replies]
+    assert asked == [None, "1700000000.000002", "1700000000.000004"]
 
 
 def test_a_rate_limited_call_waits_as_asked_then_succeeds(broker, monkeypatch):
@@ -1012,6 +1030,25 @@ def test_status_reads_the_decision_and_exits_0_only_once_decided(route, registry
     assert run(capsys, "ask-daniel", "status")[0] == 2
 
 
+def test_a_decided_card_rings_tops_inbox_once_with_its_question_outcome_and_asker(route, fake, registry, routes_dirs, capsys, monkeypatch):
+    """Leads filed TOP issues only to get Daniel's decisions logged (eight on 17 Oct; COMM-34)."""
+    monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(1700000100, timezone.utc))
+    top = inbox(fake, routes_dirs, "top")
+    card = fake.add(ASK, text="No objection by the deadline, so the default applies.", username="Verity", bot_id=BOT, blocks=[
+        {"type": "section", "text": {"type": "mrkdwn", "text": "`DEFAULT` *Move the nightly check to 02:00 PT?*"}},
+        {"type": "context", "elements": [{"type": "mrkdwn", "text": "asked by <https://cursor.com/agents/bc-x|infra> (agent `bc-x`)"}]}])
+    route.statuses = [{"status": "decided", "choice": "yes", "source": "default", "decided_at": "2026-09-30T22:00:05Z",
+                       "ts": card["ts"], "channel": ASK}]
+    rc, _, err = run(capsys, "ask-daniel", "status", "42")
+    assert rc == 0 and "route @top: rang with the decision" in err
+    (bell,) = bells(fake, top)
+    assert bell["text"].startswith("from ask-daniel, card `42` decided: `yes` (default, 2026-09-30T22:00:05Z)")
+    assert "on: Move the nightly check to 02:00 PT?; asked by infra" in bell["text"]
+    assert run(capsys, "ask-daniel", "status", "42")[0] == 0 and len(bells(fake, top)) == 1          # once per card
+    route.statuses = [{"status": "pending"}]
+    assert run(capsys, "ask-daniel", "status", "43")[0] == 1 and len(bells(fake, top)) == 1          # pending rings no one
+
+
 def test_status_404_says_no_card_has_that_id(route, registry, capsys):
     route.answer = (404, {"error": "not_found"})
     rc, _, err = run(capsys, "ask-daniel", "status", "1790800000.000100")
@@ -1540,6 +1577,21 @@ def test_traffic_counts_doorbells_and_reports_dropped_names_and_unanswered_asks(
     assert old["ts"] in stale and fyi["ts"] not in stale and bare["ts"] not in stale
 
 
+def test_traffic_replay_names_each_post_whose_doorbells_differ_from_route_targets(fake, registry, routes_dirs, capsys):
+    box = inbox(fake, routes_dirs, "circuits")
+    rung = posted(fake, run(capsys, "send", "--as", "infra", "--to", "@circuits", "--text", "rang as it should")[1])
+    typed = fake.add(COORD, text="@circuits sent by a client that never delivered", username="proofs", bot_id=BOT)
+    stray = fake.add(COORD, text="for no one in particular", username="lean", bot_id=BOT)
+    fake.add(COORD, text=slack.doorbell("lean", stray["ts"], stray["ts"], stray["text"]), username="router", bot_id=BOT, thread_ts=box)
+    rc, out, _ = run(capsys, "traffic", "--hours", "1e6", "--now", "1700100000", "--replay", "--json")
+    rep = {x["ts"]: x for x in json.loads(out)["replay"]}
+    assert rc == 0 and rung["ts"] not in rep
+    assert (rep[typed["ts"]]["missed"], rep[typed["ts"]]["extra"]) == (["circuits"], [])
+    assert (rep[stray["ts"]]["missed"], rep[stray["ts"]]["extra"]) == ([], ["circuits"])
+    rc, out, _ = run(capsys, "traffic", "--hours", "1e6", "--now", "1700100000", "--replay")
+    assert f"REPLAY {typed['ts']} by @proofs: missed @circuits: @circuits sent by a client" in out and "replayed: 2 post(s)" in out
+
+
 def test_traffic_asks_origin_main_before_dropping_an_unknown_group(fake, registry, routes_dirs, capsys, monkeypatch):
     """A stale analysis checkout must not report a fresher sender's group mentions as dropped (14 Oct: three false
     DROPPED lines for groups created that morning); a group origin/main doesn't know either still drops."""
@@ -1626,6 +1678,8 @@ def test_send_starts_a_thread_or_replies_and_its_footer_carries_the_kind(fake, r
                        (["--kind", "announce", "--thread", root["ts"]], "starts its own thread")):
         rc, _, err = run(capsys, "send", "--as", "infra", *argv, "--text", "x")
         assert rc == 2 and says in err, argv
+    rc, out, _ = run(capsys, "send", "--as", "infra", "--channel", "agent-alerts", "--kind", "alert", "--text", "OOM kill on agent VM x")
+    assert rc == 0 and fake.messages[ALERTS][-1]["text"].startswith("OOM kill on agent VM x"), "--channel puts a top-level post there"
 
 
 def test_close_posts_a_status_line_and_reacts(fake, registry, routes_dirs, capsys, monkeypatch):

@@ -271,12 +271,17 @@ void fa2_rows(const uint16_t* Q, const uint16_t* K, const uint16_t* V, int KVH, 
 // kBlockN is checked against the sm90 bf16 forward tiles vLLM reaches rather than left free, so the entry point denotes one
 // kernel family: 128 (hdim 128 causal / paged non-TMA; hdim 64 in the 192 x 128 tile) and 192 (hdim 64 under one MMA
 // warpgroup, seqlen_q * qheads_per_kvhead <= 64: the 64 x 192 tile) [R13 hopper].  D: 64 or 128 (ksteps = D / 16).
+// hdim 256 (GLM-5.3's dense MHA prefill, qk 192 + 64 = v 256) runs the 128 x 80 tile: kBlockN 80 (5 P.V k16 steps a block,
+// 16 QK k16 steps) and RescaleOBeforeGemm = true, which moves block n's rescale of O from the end of fwd_step(n) to just before
+// P(n+1) V(n+1)'s gemm in fwd_step(n-1) (and the tail): the same O = O * scale + P V per element, so the same recurrence.
 void fa3_rows(const uint16_t* Q, const uint16_t* K, const uint16_t* V, int KVH, int D, const int* kvh,
               const int* col_limit, const int* n_block_max, int nrows, int kBlockN, float scale_log2,
               const uint32_t* ex2_tab, const uint32_t* rcp_tab, uint16_t* out, uint32_t* out_f32,
               uint32_t* dbg_s, uint32_t* dbg_p, uint32_t* dbg_m, uint32_t* dbg_l, uint32_t* dbg_o_pre, int max_blocks,
               int variant, uint8_t* flags) {
-    if ((kBlockN != 128 && kBlockN != 192) || (D != 64 && D != 128)) {  // flag bit 1: refused
+    bool const hd128 = (kBlockN == 128 || kBlockN == 192) && (D == 64 || D == 128);
+    bool const hd256 = kBlockN == 80 && D == 256;
+    if (!hd128 && !hd256) {  // flag bit 1: refused
         if (flags) for (int i = 0; i < nrows; ++i) flags[i] = 2;
         return;
     }

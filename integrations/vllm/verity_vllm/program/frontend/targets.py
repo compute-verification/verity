@@ -12,7 +12,8 @@ split along them:
     FA2 -> `BN = fa2_kblock_n(D)` (128 at D <= 64, else 64; constant per head dim), `INV = Fa2InvSum_v1` (`sum == 0 ? 1 : 1/sum`);
     FA3 -> `BN = fa3_kblock_n(D, seqlen_q, NH // KVH)` (vllm-flash-attn 506341a1 `hopper/tile_size.h::tile_size_fwd_sm90` with
            `heuristics.h::use_one_mma_wg`: at D <= 64 the decode launch (`seqlen_q * (NH/KVH) <= 64`) runs the 64 x 192 tile, prefill
-           192 x 128; at D = 128 both run kBlockN 128), `INV = Fa3InvSum_v1` (`sum == 0 || sum != sum ? 0 : 1/sum`).
+           192 x 128; at D = 128 both run kBlockN 128; at D = 256 every launch runs 128 x 80), `INV = Fa3InvSum_v1`
+           (`sum == 0 || sum != sum ? 0 : 1/sum`).
   `TARGETS[family]["flash_attn_versions"]` says which versions have a registered chain on a step family; `check_flash_attn_registered` refuses
   the rest with the reason.
 
@@ -29,7 +30,8 @@ from __future__ import annotations
 from typing import Any
 
 from verity.ml.circuits.defs import bind
-from verity.ml.circuits.ops.prims import BlackwellE4m3QmmaDot32, BlackwellNvf4OmmaDot64, HopperBF16WgmmaDot16, HopperE4m3QgmmaDot32
+from verity.ml.circuits.ops.prims import (BlackwellE4m3QmmaDot32, BlackwellNvf4OmmaDot64, HopperBF16WgmmaDot16,
+                                          HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32)
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import fa2_check_inf as F2
 from verity_vllm.program.registry import attention_vocab
@@ -51,7 +53,8 @@ class UnregisteredTarget(ValueError):
 #: the registered k16 step primitives by the name a `GemmTarget.dot` record carries.
 DOTS: dict[str, Any] = {"AmpereBF16TcDot16": P.AmpereBF16TcDot16, "HopperBF16WgmmaDot16": HopperBF16WgmmaDot16}
 #: the registered e4m3 k32 step primitives by the name a `GemmTarget.fp8_dot` record carries.
-FP8_DOTS: dict[str, Any] = {"HopperE4m3QgmmaDot32": HopperE4m3QgmmaDot32, "BlackwellE4m3QmmaDot32": BlackwellE4m3QmmaDot32}
+FP8_DOTS: dict[str, Any] = {"HopperE4m3QgmmaDot32": HopperE4m3QgmmaDot32, "HopperE4m3MmaV2Dot32": HopperE4m3MmaV2Dot32,
+                            "BlackwellE4m3QmmaDot32": BlackwellE4m3QmmaDot32}
 #: the registered NVFP4 k64 block-scaled step primitives by the name a `GemmTarget.fp4_dot` record carries.
 FP4_DOTS: dict[str, Any] = {"BlackwellNvf4OmmaDot64": BlackwellNvf4OmmaDot64}
 
@@ -70,7 +73,19 @@ TARGETS: dict[str, dict[str, Any]] = {
                # a biased linear binds GemmBias_v2{K,N,DOT} with this family's step (`gemm_bias_dot`): serving has no source for the
                # pre-bias word of Gemm_v2 + BiasAdd_v1
                "gemm_bias_dot": True,
+               # the bf16 fused-MoE expert GEMMs bind MoeExpertGemm_v2 / MoeExpertGemmW_v2{DOT} with this family's step (`moe_expert_dot`),
+               # at any tuned tile at served defaults (`moe_tuned_tile_refusal`); the runs are Qwen3-30B-A3B's on one H200
+               "moe_expert_dot": True,
                "evidence": {"attention_fa2": "R13 hopper: forced-FA2 row `…__h100__…__bi-eager-fa2` Match replay (D=64, BN=128, DOT=Hopper, INV=Fa2InvSum)",
+                            "moe_expert": "Triton lowers the bf16 fused_moe_kernel's tl.dot to wgmma k16 or to MMA v2's mma.sync m16n8k16, whose "
+                                          "HMMA.16816 on cc 9.0 is silicon.HOPPER_BF16_M16N8K16, the wgmma step's parameters and not the Ampere "
+                                          "step (silicon.instructions, r20260922-185339-e337); cc 9.0, 132 SMs, vLLM d9105ea80, served defaults: "
+                                          "the compiled Match r20261018-084657-c7f6 equals MoeExpertGemm_v2 / MoeExpertGemmW_v2{DOT=HopperBF16WgmmaDot16_v1} "
+                                          "on 672 of 672 rows each at the tuned tiles of 1 to 303 rows, where the _v1 binding matched 27 of 1,344 "
+                                          "(r20261018-062333-f1a7); eager under batch invariance, whose launches take the same tuned tiles: the "
+                                          "Match r20261018-101214-aa8f folds every expert row of 32 steps to these Definitions, and tier A on its "
+                                          "rerun's capture (r20261018-103507-288c, replayed by r20261018-122240-8e2d) evaluates 1,536 of 1,536 rows "
+                                          "exactly at the gates, each launch's 384 rows of decode step 1 and 384 of the prefill",
                             "attention_fa3": "lane HP CONF-b1-hopper (D=128, BN=128, 39 leaves exact, positions 0..526); R13 hopper: D=64 (BN 128 prefill / "
                                              "192 decode) — the native FA3 row's Match replay"}},
     "blackwell_consumer": {"dot_id": "HopperBF16WgmmaDot16_v1",
@@ -127,8 +142,8 @@ def tensor_core_dot(profile):
 def moe_expert_dot(profile):
     """The k16 step of the fused-MoE expert GEMMs' Definition on the declared target: None for the `_v1` Definitions, else the
     target's registered step for the `_v2{E,K,N,DOT}` ones.  A family binds them when its record says `moe_expert_dot` (its
-    fused_moe_kernel correspondence ran on a step other than the Ampere/Ada one); every other family keeps the `_v1` records' binding
-    (cc 9.0 too: its fused_moe_kernel lowering has no correspondence run yet).  An unregistered target raises `UnregisteredTarget`."""
+    fused_moe_kernel correspondence ran on a step other than the Ampere/Ada one: cc 9.0 and 12.0); the Ampere/Ada family keeps the
+    `_v1` records' binding.  An unregistered target raises `UnregisteredTarget`."""
     return tensor_core_dot(profile) if TARGETS[target_family(profile)].get("moe_expert_dot") else None
 
 
@@ -160,6 +175,18 @@ def moe_expert_gemm_spec(profile, E: int, K: int, N: int, *, routed: bool):
     return bind(M.MoeExpertGemmWV2 if routed else M.MoeExpertGemmV2, E=int(E), K=int(K), N=int(N), DOT=dot)
 
 
+def moe_tuned_tile_refusal(profile, kb: Any) -> str | None:
+    """None when a tuned bf16 `fused_moe_kernel` tile (vLLM's per-device table, which batch invariance does not override) is one the
+    Definitions model on the declared target: cc 9.0, where every tile's `tl.dot` is the k16 step `moe_expert_dot` names (wgmma or MMA
+    v2, both Hopper's) and a row's chain does not depend on the tile, and BLOCK_SIZE_K a multiple of that step; else why not.  The
+    Build's rule and the fold's are this one."""
+    if tuple(profile.compute_capability) != (9, 0):
+        return (f"numerics_unregistered: a tuned bf16 expert launch is modelled on cc 9.0 only, not on cc {profile.capability_str}")
+    if not isinstance(kb, int) or isinstance(kb, bool) or kb <= 0 or kb % 16:
+        return f"numerics_unregistered: BLOCK_SIZE_K={kb!r} is not a multiple of the k16 step"
+    return None
+
+
 def moe_expert_fp8_dot(profile):
     """The e4m3 k32 step of the block-FP8 fused-MoE expert GEMMs (`TritonExperts`' `fused_moe_kernel`) on the declared target: the GEMM
     target's `fp8_moe_dot`, its own measurement rather than the per-tensor FP8 linear's (`fp8_dot`) or the blockwise one's
@@ -172,20 +199,38 @@ def moe_expert_fp8_dot(profile):
     return dot
 
 
+def moe_expert_fp8_launch_dot(profile, bm: int, bn: int, warps: int, swap: bool):
+    """The registered e4m3 k32 step of one block-FP8 fused-MoE launch.
+
+    A tuned cc 9.0 launch is tile-dependent: use `fp8_moe.sm90_dot`, the Triton 3.7.1 lowering rule pinned by #1944.  Other
+    registered targets and batch-invariant cc 9.0 launches use their target-wide `GemmTarget.fp8_moe_dot`.
+    """
+    target_dot = moe_expert_fp8_dot(profile)
+    if profile.batch_invariant or tuple(profile.compute_capability) != (9, 0):
+        return target_dot
+    from verity_vllm.program.registry import fp8_moe
+    dot = fp8_moe.sm90_dot(int(bm), int(bn), int(warps), bool(swap))
+    if dot not in FP8_DOTS.values():
+        raise UnregisteredTarget(f"block-FP8 fused-MoE tile {bm}x{bn}, {warps} warps, SWAP_AB={swap}: "
+                                 f"Triton's step {getattr(dot, 'id', dot)!r} has no registered primitive")
+    return dot
+
+
 def wgmma_tile(config: dict, swap: bool) -> bool:
-    """Whether Triton lowers a `fused_moe_kernel` launch's `tl.dot` to wgmma (MMAv3), the one FP8 dot the Hopper Definitions model: the
-    dot's M (BLOCK_SIZE_N under SWAP_AB, else BLOCK_SIZE_M) a multiple of 64 over a multiple of 4 warps and its N a multiple of 8.  A
-    smaller tile takes `mma.sync` or FMA, which no Definition models."""
+    """Whether Triton 3.7.1 lowers a `fused_moe_kernel` launch's `tl.dot` to wgmma (MMAv3): the dot's M (BLOCK_SIZE_N under
+    SWAP_AB, else BLOCK_SIZE_M) is a multiple of 64 over a multiple of 4 warps and its N a multiple of 16.  Other registered
+    cc 9.0 tiles take MMAv2 (`fp8_moe.sm90_dot`)."""
     m, n = (config["BLOCK_SIZE_N"], config["BLOCK_SIZE_M"]) if swap else (config["BLOCK_SIZE_M"], config["BLOCK_SIZE_N"])
-    return config.get("num_warps", 4) % 4 == 0 and m % 64 == 0 and n % 8 == 0
+    return config.get("num_warps", 4) % 4 == 0 and m % 64 == 0 and n % 16 == 0
 
 
 def moe_fp8_tuned_tile_refusal(profile, bm: Any, bn: Any, kb: Any, warps: Any, swap: Any) -> str | None:
     """None when a tuned (not batch-invariant) block-FP8 `fused_moe_kernel` tile is one the Definitions model on the declared target:
     cc 9.0, SWAP_AB = `enable_swap_ab` (BLOCK_SIZE_M < 64 and BLOCK_SIZE_N >= 64, vLLM d9105ea80 fused_moe/utils.py:628-633), BLOCK_SIZE_K
-    a multiple of the k32 step and a `wgmma_tile`; else why not.  The Build's rule and the fold's are this one."""
+    a multiple of the k32 step, and a step selected by `fp8_moe.sm90_dot` with a registered primitive; else why not.  The Build's
+    rule and the fold's are this one."""
     if tuple(profile.compute_capability) != (9, 0):
-        return (f"numerics_unregistered: a tuned (not batch-invariant) block-FP8 expert launch is modelled on cc 9.0 only (wgmma), not on "
+        return (f"numerics_unregistered: a tuned (not batch-invariant) block-FP8 expert launch is modelled on cc 9.0 only, not on "
                 f"cc {profile.capability_str}")
     if not all(isinstance(v, int) and not isinstance(v, bool) and v > 0 for v in (bm, bn, kb, warps)):
         return f"tiling BLOCK_SIZE_M/N/K={bm!r}/{bn!r}/{kb!r}, num_warps={warps!r} are not positive integers"
@@ -194,18 +239,20 @@ def moe_fp8_tuned_tile_refusal(profile, bm: Any, bn: Any, kb: Any, warps: Any, s
         return f"numerics_unregistered: SWAP_AB={swap!r} is not enable_swap_ab(BLOCK_SIZE_M={bm}, BLOCK_SIZE_N={bn}) = {want} on cc 9.0"
     if kb % 32:
         return f"numerics_unregistered: BLOCK_SIZE_K={kb} is not a multiple of the k32 step"
-    if not wgmma_tile({"BLOCK_SIZE_M": bm, "BLOCK_SIZE_N": bn, "num_warps": warps}, want):
-        return (f"numerics_unregistered: the launch's tl.dot (BLOCK_SIZE_M {bm} x BLOCK_SIZE_N {bn}, SWAP_AB {want}, {warps} warps) is no "
-                f"wgmma tile: it takes mma.sync, whose e4m3 step no Definition models")
+    try:
+        moe_expert_fp8_launch_dot(profile, bm, bn, warps, want)
+    except UnregisteredTarget as e:
+        return f"numerics_unregistered: {e}"
     return None
 
 
-def moe_expert_fp8_gemm_spec(profile, E: int, K: int, N: int, G: int, KB: int, SWAP: bool, *, routed: bool):
+def moe_expert_fp8_gemm_spec(profile, E: int, K: int, N: int, G: int, KB: int, SWAP: bool, *, BM: int, BN: int, WARPS: int,
+                             routed: bool):
     """The registered Definition of one (token, slot) pair of a block-FP8 `fused_moe_kernel` launch on the declared target:
     `MoeExpertFp8Gemm(W)_v1{E,K,N,G,KB,SWAP,DOT}`, the w13 launch (`routed` False) or the w2 launch with the routed weight."""
     from verity_vllm.program.registry import fp8_moe_experts as X
     return bind(X.MoeExpertFp8GemmW if routed else X.MoeExpertFp8Gemm, E=int(E), K=int(K), N=int(N), G=int(G), KB=int(KB),
-                SWAP=bool(SWAP), DOT=moe_expert_fp8_dot(profile))
+                SWAP=bool(SWAP), DOT=moe_expert_fp8_launch_dot(profile, BM, BN, WARPS, SWAP))
 
 
 def tuned_gemm_table(profile) -> dict[tuple[int, int], dict[str, Any]]:
@@ -226,7 +273,8 @@ def fa3_kblock_n(D: int, seqlen_q: int, qh_per_kvh: int) -> int:
     """kBlockN of the FA3 forward vLLM launches (vllm-flash-attn 506341a1 `hopper/tile_size.h::tile_size_fwd_sm90`, element_size 2,
     causal, not local, `paged_kv_non_TMA` = paged KV without TMA, `use_one_mma_wg = (D in {64, 128}) and seqlen_q * qh_per_kvh <= 64`
     (`hopper/heuristics.h`; `seqlen_q` = the launch's max_seqlen_q under varlen)):  D <= 64: one-MMA-warpgroup 64 x 192 else 192 x 128;
-    D <= 96: 128 (paged non-TMA); D <= 128: 128 (causal).  Larger head dims are not registered."""
+    D <= 96: 128 (paged non-TMA); D <= 128: 128 (causal); D = 256 (qk and v head 256, GLM-5.3's dense MHA prefill): 80, the 128 x 80
+    tile whatever seqlen_q or paging.  The head dims between are not registered."""
     D, seqlen_q, qh = int(D), int(seqlen_q), int(qh_per_kvh)
     one_wg = D in (64, 128) and seqlen_q * qh <= 64
     if D <= 64:
@@ -235,12 +283,14 @@ def fa3_kblock_n(D: int, seqlen_q: int, qh_per_kvh: int) -> int:
         return 128
     if D <= 128:
         return 128
+    if D == 256:
+        return 80
     raise UnregisteredTarget(f"FA3 head dim {D}: no registered kBlockN rule")
 
 
 def fa3_tile_m(D: int, seqlen_q: int, qh_per_kvh: int) -> int:
     """kBlockM of the FA3 forward tile (the same `tile_size_fwd_sm90` / `use_one_mma_wg` rule as `fa3_kblock_n`): D <= 64: 64 (one MMA
-    warpgroup) else 192; D <= 96: 192; D <= 128: 64 (one MMA warpgroup) else 128."""
+    warpgroup) else 192; D <= 96: 192; D <= 128: 64 (one MMA warpgroup) else 128; D = 256: 128."""
     D, seqlen_q, qh = int(D), int(seqlen_q), int(qh_per_kvh)
     one_wg = D in (64, 128) and seqlen_q * qh <= 64
     if D <= 64:
@@ -249,6 +299,8 @@ def fa3_tile_m(D: int, seqlen_q: int, qh_per_kvh: int) -> int:
         return 192
     if D <= 128:
         return 64 if one_wg else 128
+    if D == 256:
+        return 128
     raise UnregisteredTarget(f"FA3 head dim {D}: no registered kBlockM rule")
 
 
@@ -297,8 +349,12 @@ def parse_launch_context(spec: str | int | list | dict | None) -> dict[str, Any]
         int N                -> {0: N}                    the prefill step's launch has a sequence of N query rows (co-arrival, no later arrivals)
         list [n0, n1, ...]   -> {s: n_s}                  per request step s: the launch's max_seqlen_q at that engine step (1 = decode-only step)
         dict {"s": n}        -> same, string or int keys
+        dict {"batch": [[[rows, start], ...], ...]}
+                             -> per request step s: every sequence the engine step schedules, its query rows and the position of its
+                                first row (`batch_by_step`); max_seqlen_q follows from it.  Without batch invariance every
+                                token-count-dependent kernel choice reads it (`launch_tokens`, `launch_keys`)
         "conflict"           -> {"conflict": True}        requests of this shape have DIFFERENT contexts: refused where the tile rule reads it
-    Returns {"max_seqlen_q_by_step": {int: int}, "conflict": bool, "declared": True}."""
+    Returns {"max_seqlen_q_by_step": {int: int}, "conflict": bool, "declared": True} (+ "batch_by_step": {int: [(rows, start), ...]})."""
     if spec is None or spec == "":
         return None
     if isinstance(spec, str):
@@ -321,6 +377,8 @@ def parse_launch_context(spec: str | int | list | dict | None) -> dict[str, Any]
     elif isinstance(spec, dict):
         if spec.get("conflict"):
             return {"max_seqlen_q_by_step": {}, "conflict": True, "declared": True}
+        if "batch" in spec:
+            return _launch_batch(spec["batch"])
         src = spec.get("max_seqlen_q_by_step", spec)
         by = {int(k): int(v) for k, v in src.items()}
     else:
@@ -328,6 +386,19 @@ def parse_launch_context(spec: str | int | list | dict | None) -> dict[str, Any]
     if any(v < 1 for v in by.values()) or any(k < 0 for k in by):
         raise ValueError(f"launch context: steps and max_seqlen_q must be >= 0 / >= 1: {by}")
     return {"max_seqlen_q_by_step": by, "conflict": False, "declared": True}
+
+
+def _launch_batch(steps) -> dict[str, Any]:
+    if not isinstance(steps, list) or not steps:
+        raise ValueError(f"launch context: batch must be a non-empty list of steps, got {steps!r}")
+    batch: dict[int, list[tuple[int, int]]] = {}
+    for s, seqs in enumerate(steps):
+        seqs = [(int(n), int(p)) for n, p in seqs]
+        if not seqs or any(n < 1 or p < 0 for n, p in seqs):
+            raise ValueError(f"launch context: step {s} schedules {seqs}: every step holds sequences of >= 1 rows at positions >= 0")
+        batch[s] = seqs
+    return {"max_seqlen_q_by_step": {s: max(n for n, _ in seqs) for s, seqs in batch.items()}, "batch_by_step": batch, "conflict": False,
+            "declared": True}
 
 
 class LaunchContextInvalid(ValueError):
@@ -359,6 +430,41 @@ def launch_seqlen_q(own_rows: int, step: int, launch: dict[str, Any] | None) -> 
         raise LaunchContextInvalid(f"the declared launch context says max_seqlen_q {int(v)} at step {int(step)} but this request alone has {own} "
                                    f"query rows there: the launch contains the request, so the declaration is another shape's context")
     return int(v), "declared launch context"
+
+
+def _launch_step(step: int, launch: dict[str, Any] | None) -> list[tuple[int, int]] | None:
+    """The sequences the declared batch schedules at a request step, or None without a declared batch (a batch of one)."""
+    if launch and launch.get("conflict"):
+        raise LaunchContextConflict("the launch context of this request shape is not one value ('conflict'): requests of the same (LP, T) are "
+                                    "co-scheduled with different batches; give each request its own shape")
+    batch = (launch or {}).get("batch_by_step")
+    if not batch:
+        return None
+    seqs = batch.get(int(step))
+    if seqs is None:
+        raise LaunchContextInvalid(f"the declared launch batch names steps 0..{max(batch)} but the request runs step {int(step)}")
+    return seqs
+
+
+def launch_tokens(own_rows: int, step: int, launch: dict[str, Any] | None, *, sampled: bool = False) -> int:
+    """The rows of the batched launch that a request's `own_rows` run in at its request `step`: the step's token count (every scheduled
+    sequence's query rows), or, for the rows after the logits selection (`sampled`), its sequence count (one logits row per scheduled
+    sequence: without chunked prefill every one samples).  Without a declared batch, `own_rows` (a batch of one).  A count below
+    `own_rows` is refused: the launch contains the request."""
+    own, seqs = int(own_rows), _launch_step(step, launch)
+    if seqs is None:
+        return own
+    n = len(seqs) if sampled else sum(r for r, _ in seqs)
+    if n < own:
+        raise LaunchContextInvalid(f"the declared launch batch has {n} {'sequences' if sampled else 'rows'} at step {int(step)} but this request "
+                                   f"alone has {own} there: the declaration is another request's context")
+    return n
+
+
+def launch_keys(step: int, launch: dict[str, Any] | None) -> list[int] | None:
+    """Every query row's key count in the declared batch's step (a row at position p sees p + 1 keys), or None without a declared batch."""
+    seqs = _launch_step(step, launch)
+    return None if seqs is None else [p + i + 1 for n, p in seqs for i in range(n)]
 
 
 def attention_geometry(profile, D: int, seqlen_q: int, NH: int, KVH: int) -> dict[str, Any]:
@@ -544,7 +650,8 @@ def describe(profile) -> dict[str, Any]:
 
 
 __all__ = ["TARGETS", "DOTS", "FP8_DOTS", "FP4_DOTS", "UnregisteredTarget", "target_family", "gemm_target", "tensor_core_dot",
-           "moe_expert_dot", "moe_expert_gemm_spec", "moe_expert_fp8_dot", "moe_expert_fp8_gemm_spec", "gemm_bias_dot", "gemm_bias_spec", "tuned_gemm_table",
+           "moe_expert_dot", "moe_expert_gemm_spec", "moe_tuned_tile_refusal", "moe_expert_fp8_dot", "moe_expert_fp8_launch_dot",
+           "moe_expert_fp8_gemm_spec", "gemm_bias_dot", "gemm_bias_spec", "tuned_gemm_table",
            "check_flash_attn_registered", "fa3_kblock_n", "fa3_tile_m", "fa3_check_inf", "fa3_masked_from", "fa2_check_inf", "fa2_masked_from", "attention_geometry", "uses_accepted_kinds", "gemm_spec",
            "scaled_mm_fp8_spec", "fp8_block_dot", "scaled_mm_fp8_block_spec", "nvfp4_quant_spec", "nvfp4_gemm_spec", "rmsnorm_spec", "rmsnorm_value_spec", "rmsnorm_fused_spec", "attention_spec", "describe",
-           "LaunchContextConflict", "parse_launch_context", "launch_seqlen_q"]
+           "LaunchContextConflict", "LaunchContextInvalid", "parse_launch_context", "launch_seqlen_q", "launch_tokens", "launch_keys"]

@@ -34,6 +34,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from verity_vllm.config import option
+from verity_vllm.program import prefix_plan as PP
 from verity_vllm.query.compare import compare, summarize
 from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.query.program_view import from_instances
@@ -78,14 +79,17 @@ class _Committed:
 
 
 def word_check(P: Any, corr: Correspondence, required: Any, word: str, *, strict: bool = True, acquired: dict[str, int] | None = None,
-               max_gates: str | None = None, log=None) -> dict[str, Any]:
+               max_gates: str | None = None, unreturned: frozenset[int] = frozenset(), log=None) -> dict[str, Any]:
     """`Q_word_v1{X,W}` (`word`: "16/32[+extras]") over `P`, committed = the manifest's required values and the interior words a tap
     acquires (`acquired`, `word.check_calls`; `max_gates`, the run's gate limits: `word.gate_limits`); `strict` raises
-    `word.QueryRuleViolation` naming every violation.  The manifest is not touched."""
+    `word.QueryRuleViolation` naming every violation.  The `unreturned` Calls (`Population.unreturned`: no Call reads their Values, the
+    Program does not return them and no policy requires them, e.g. GLM-5.3's indexer logits and top-k while every key is selected) are
+    skipped like literals: nothing depends on them, so no unit has to end at their outputs; the manifest lists them under `unreturned`.
+    The manifest is not touched."""
     from verity_vllm.query.module_body import literal_calls
     X, W, extras = word_query.parse(word)
-    r = word_query.check_query(P, _Committed(required, literal_calls(P), corr.module_of), X, W, extras, strict=strict, acquired=acquired,
-                                max_gates=max_gates)
+    r = word_query.check_query(P, _Committed(required, literal_calls(P) | unreturned, corr.module_of), X, W, extras, strict=strict,
+                                acquired=acquired, max_gates=max_gates)
     if log:
         log(f"  {r['query']}: {r['calls']} calls -> {r['units']} units over {r['gates']} gates, {r['committed_interior_words']} committed interior words"
             + (f" ({r['acquired_interior_words']} acquired by a tap)" if acquired is not None else ""))
@@ -142,7 +146,8 @@ def build(program_dir: str, *, workload: dict[str, Any] | None = None, request_i
     if word and word != "off":
         sp = SP.policy_of(r.manifest)
         acquired = {**(NS.TAP_WORDS if norm_scales else {}), **{f: w for t in taps for f, w in TAPS[t].tap_words.items()}, **(SP.TAP_WORDS if sp else {})}
-        wc = word_check(P, corr, r.required, word, acquired=acquired if (norm_scales or taps or sp) else None, max_gates=word_max_gates, log=log)
+        wc = word_check(P, corr, r.required, word, acquired=acquired if (norm_scales or taps or sp) else None, max_gates=word_max_gates,
+                        unreturned=r.unreturned, log=log)
         r.manifest["query"]["word_check"] = word_record(wc, strict=True, max_gates=word_max_gates)
     if guarded_max:
         r.manifest["query"] = GM.header(r.manifest["query"], GM.attention_words(P), GM.max_scaled_words(P))
@@ -388,12 +393,12 @@ def _build_forked(tasks: list[tuple[str, dict[str, Any]]], jobs: int, after: Cal
 
 
 def _program_dirs_for(fx: dict[str, Any], programs_root: str) -> dict[str, str]:
-    """v1's lookup (`required_manifest._program_dirs_for`): `*LP<prompt_len>_T<max_tokens-1>` under the root, else a `build_request*`
-    whose result.json declares exactly (LP, T)."""
+    """v1's lookup (`required_manifest._program_dirs_for`): `*LP<prompt_len>_T<max_tokens-1>[_C<cached>]` under the root, else a
+    `build_request*` whose result.json declares exactly (LP, T, C) (`prefix_plan.request_shape`)."""
     progs: dict[str, str] = {}
     for r in fx["requests"]:
-        lp, t = int(r["prompt_len"]), int(r["max_tokens"]) - 1
-        hits = sorted(glob.glob(os.path.join(programs_root, f"*LP{lp}_T{t}")))
+        sh = PP.request_shape(r)
+        hits = sorted(glob.glob(os.path.join(programs_root, f"*{PP.shape_name(sh)}")))
         if not hits:
             for cand in sorted(glob.glob(os.path.join(programs_root, "build_request*"))):
                 rj = os.path.join(cand, "result.json")
@@ -402,11 +407,11 @@ def _program_dirs_for(fx: dict[str, Any], programs_root: str) -> dict[str, str]:
                         res = _load_json(rj)
                     except Exception:  # noqa: BLE001
                         continue
-                    if res.get("ok") and int(res.get("LP", -1)) == lp and int(res.get("T", -1)) == t:
+                    if res.get("ok") and PP.declares(res, sh):
                         hits = [cand]
                         break
         if not hits:
-            raise SystemExit(f"no request Program for {r['request_id']} (LP={lp} T={t}) under {programs_root}")
+            raise SystemExit(f"no request Program for {r['request_id']} ({PP.shape_key(sh)}) under {programs_root}")
         progs[str(r["request_id"])] = hits[0]
     return progs
 
@@ -436,7 +441,7 @@ def _global(fixture: dict[str, Any], roots: list[str], ranks: list[int], world: 
     wl = [{"sweep": {"arrive_steps": [int(r.get("arrive_step", 0))], "row_id": fixture.get("fixture"), "batch": len(reqs)}} for r in reqs]
     tasks = []
     for root, rank in zip(roots, ranks):
-        dirs = _program_dirs_for(fixture, root)
+        dirs = _program_dirs_for(dict(fixture, requests=PP.with_cached(fixture)), root)
         tasks += [(dirs[str(r["workload_request_id"])], dict(kw, workload=w, request_id=r["request_id"], rank=rank, ranks=world,
                                                              guarded_max=guarded_max, log=log)) for r, w in zip(reqs, wl)]
     prefetch_word_rules([d for d, _kw in tasks], kw.get("word"), word_max_gates=kw.get("word_max_gates"), jobs=jobs, log=log)

@@ -12,10 +12,11 @@ from verity_vllm.check.replay.replay_dump import dump_row_words
 from verity_vllm.commit.opened import OpeningNotVerified, opened_check
 from verity_vllm.program.kernels.kernel_registry import Declined
 from verity_vllm.program.kernels.rows import EVALUATORS, ROWS
-from verity_vllm.check.replay.index import IDS_MEMBER, SAMPLER_OP, SEED_PARAM, ProgramIndex, const_word
+from verity_vllm.check.replay.index import IDS_MEMBER, SAMPLER_OP, SEED_PARAM, ProgramIndex, const_word, row_args
 from verity_vllm.check.replay.opening import _ITEMSIZE, CommittedStore
 from verity_vllm.check.replay.compare import _interior_slice, _tp_member_alias, lifted_compare, padded_slot_enable
 from verity_vllm.check.replay.delegate import DELEGATES, Place
+from verity_vllm.program.compact import is_file_prog
 
 
 #: [R16 fp8] a `weights` field's leaf width (its `Value<b>`) -> the word dtype the registered slice is read as (bf16 -> u16, e4m3 -> u8, f32 -> u32)
@@ -71,6 +72,105 @@ _Unresolved = Declined
 INTERIOR_DEPTH = 4     # composed interior producers per VU (Gemm under a BiasAdd = 1); a deeper chain is 'not evaluable', named
 
 
+def _weight_words(pi: ProgramIndex, weights: Callable[[str, int, int], np.ndarray | None], fname: str, flo: int, fhi: int) -> tuple[np.ndarray, int]:
+    """The registered words [flo, fhi) of `weights` field `fname` in the field's declared leaf width, and that width."""
+    arr = weights(fname, flo, fhi)
+    if arr is None:
+        raise _Unresolved(f"registered weight field {fname} not available to the replay")
+    # [R16 fp8] the slice is read in the field's DECLARED leaf width (bf16 u16 / e4m3 u8 / f32 u32): a 16-bit cast of an
+    # f32 block scale or of an e4m3 byte would be a silent corruption of a load-bearing input
+    bits = pi.weight_bits(fname)
+    arr = np.asarray(arr).reshape(-1)
+    if arr.dtype.itemsize * 8 != bits:
+        raise _Unresolved(f"registered weight field {fname} is provided as {arr.dtype} but the Program declares Value<{bits}>")
+    return np.asarray(arr, dtype=_NP_BY_BITS.get(bits, np.uint16)).reshape(-1), bits
+
+
+def _weight_runs(pi: ProgramIndex, group: list) -> tuple[np.ndarray, np.ndarray] | None:
+    """A `weights` operand of more than one run as its runs' (lo, hi), in operand order, straight from the stored items: a strided
+    view's "P" progressions (GLM-5.3's MLA-absorb W_UK_T / W_UV reads, ~1e6 runs in ~2048 progressions, never expanded) or several
+    "p" runs.  None for an operand of one run or one that reads anything but `weights`."""
+    if not any(it and it[0] in ("p", "P") for it in group) or "weights" not in pi.pnames:
+        return None
+    wp = pi.pnames.index("weights")
+    los: list[np.ndarray] = []
+    his: list[np.ndarray] = []
+    lo1: list[int] = []
+    hi1: list[int] = []
+    for it in group:
+        if it[0] == "p" and int(it[1]) == wp:
+            lo1.append(int(it[2]))
+            hi1.append(int(it[3]))
+        elif is_file_prog(it) and it[0] == "P" and int(it[1]) == wp and int(it[4]) == 0:
+            if lo1:
+                los.append(np.asarray(lo1, dtype=np.int64))
+                his.append(np.asarray(hi1, dtype=np.int64))
+                lo1, hi1 = [], []
+            k = np.arange(int(it[7]), dtype=np.int64)
+            los.append(int(it[2]) + k * int(it[5]))
+            his.append(int(it[3]) + k * int(it[6]))
+        else:
+            return None
+    if lo1:
+        los.append(np.asarray(lo1, dtype=np.int64))
+        his.append(np.asarray(hi1, dtype=np.int64))
+    lo, hi = np.concatenate(los), np.concatenate(his)
+    return (lo, hi) if lo.size > 1 else None
+
+
+def _weight_gather(pi: ProgramIndex, weights: Callable[[str, int, int], np.ndarray | None], lo: np.ndarray, hi: np.ndarray,
+                   inputs_rec: list) -> tuple[np.ndarray, dict[str, Any]]:
+    """The leaves of runs [lo, hi) of the `weights` struct, in order: one read of the span of the one field they lie in, then a gather.
+    Recorded once, the field and span with the run and leaf counts (the row's stored args name every leaf)."""
+    n = hi - lo
+    if (n < 0).any() or not n.any():
+        raise _Unresolved(f"weights operand of {lo.size} runs reads {int(n.clip(0).sum())} leaves (a run with hi < lo, or none)")
+    idx = np.repeat(lo - (np.cumsum(n) - n), n) + np.arange(int(n.sum()), dtype=np.int64)
+    mn, mx = int(idx.min()), int(idx.max()) + 1
+    ws = pi.weight_slice(mn, mx)
+    if ws is None:
+        raise _Unresolved(f"weights operand of {lo.size} runs over [{mn}, {mx}) spans fields")
+    fname, flo, fhi, _shape = ws
+    words, bits = _weight_words(pi, weights, fname, flo, fhi)
+    gather = {"runs": int(lo.size), "leaves": int(idx.size)}
+    inputs_rec.append({"kind": "weights", "field": fname, "range": [flo, fhi], "bits": bits, "gather": gather})
+    return words[idx - mn], {"field": fname, "range": [flo, fhi], "gather": gather}
+
+
+def _cached_prefix_words(pi: ProgramIndex, store: CommittedStore, rid: str, pname: str, lo: int, hi: int, inputs_rec: list) -> list[np.ndarray]:
+    """A warm request's cached rows [lo, hi) of the kv-prefix input: what its producing requests of record committed."""
+    src = pi.cached_prefix.get(rid)
+    if src is None:
+        raise _Unresolved(f"{pname} slice [{lo}, {hi}): no producing requests of record for {rid}'s cached rows")
+    out = []
+    for q, qstep, qop, qmem, qlo, qhi in src.identities(lo, hi):
+        w, why = store.words(q, qstep, qop, qmem, qlo, qhi)
+        if w is None:
+            raise _Unresolved(why)
+        out.append(w)
+        inputs_rec.append({"kind": "cached", "identity": [q, qstep, qop, qmem, [qlo, qhi]]})
+    return out
+
+
+def _schedule_witness(pi: ProgramIndex, store: CommittedStore, r: dict, d: dict, rid: str, arrive: int, pname: str, lo: int, hi: int,
+                      inputs_rec: list) -> np.ndarray:
+    """The witness keys of a MoeAlignRanks_v1 row (`format.SCHEDULE_PARAM`): its OWN committed rank, so the row reproduces that rank
+    exactly when it ranks each expert's pairs."""
+    fam = d["family"]
+    own = pi.member_of_port(int(r["i"])).get("0") if fam in RM.SCHEDULE_READERS else None
+    width = next((int(m[1]) for m in d["members"] if m[0] == own), None)
+    if width is None or width != hi - lo:
+        raise _Unresolved(f"{pname} slice [{lo}, {hi}) read by {fam}: only a {sorted(RM.SCHEDULE_READERS)} row's own "
+                          f"committed rank (port 0, one key per pair) binds it")
+    at = d["row"] * width
+    w, why = store.words(rid, arrive + d["step"], d["op_path"], own, at, at + width)
+    if w is None:
+        raise _Unresolved(why)
+    inputs_rec.append({"kind": "witness", "param": pname, "range": [lo, hi],
+                       "identity": [rid, arrive + d["step"], d["op_path"], own, [at, at + width]]})
+    return w
+
+
 def _evaluate_row(pi: ProgramIndex, store: CommittedStore, weights: Callable[[str, int, int], np.ndarray | None], r: dict, rid: str, arrive: int,
                   inputs_rec: list, *, depth: int, interior: dict[int, dict[str, np.ndarray]] | None = None,
                   row: int | None = None, plan: bool = False) -> dict[str, np.ndarray]:
@@ -88,7 +188,15 @@ def _evaluate_row(pi: ProgramIndex, store: CommittedStore, weights: Callable[[st
     inputs: list[list[np.ndarray]] = []
     wslices: list[np.ndarray | None] = []
     wrefs: list[dict[str, Any] | None] = []
-    for group in r.get("args") or []:
+    for stored in r.get("args") or []:
+        runs = _weight_runs(pi, stored)
+        if runs is not None:
+            wsl, wref = (None, None) if plan else _weight_gather(pi, weights, *runs, inputs_rec)
+            inputs.append([])
+            wslices.append(wsl)
+            wrefs.append(wref)
+            continue
+        (group,) = row_args({"args": [stored]})
         words: list[np.ndarray] = []
         wsl = None
         wref = None
@@ -103,16 +211,7 @@ def _evaluate_row(pi: ProgramIndex, store: CommittedStore, weights: Callable[[st
                     if ws is None:
                         raise _Unresolved(f"weights slice [{lo}, {hi}) spans fields")
                     fname, flo, fhi, _shape = ws
-                    arr = weights(fname, flo, fhi)
-                    if arr is None:
-                        raise _Unresolved(f"registered weight field {fname} not available to the replay")
-                    # [R16 fp8] the slice is read in the field's DECLARED leaf width (bf16 u16 / e4m3 u8 / f32 u32): a 16-bit cast of an
-                    # f32 block scale or of an e4m3 byte would be a silent corruption of a load-bearing input
-                    bits = pi.weight_bits(fname)
-                    arr = np.asarray(arr).reshape(-1)
-                    if arr.dtype.itemsize * 8 != bits:
-                        raise _Unresolved(f"registered weight field {fname} is provided as {arr.dtype} but the Program declares Value<{bits}>")
-                    wsl = np.asarray(arr, dtype=_NP_BY_BITS.get(bits, np.uint16)).reshape(-1)
+                    wsl, bits = _weight_words(pi, weights, fname, flo, fhi)
                     inputs_rec.append({"kind": "weights", "field": fname, "range": [flo, fhi], "bits": bits})
                     wref = {"field": fname, "range": [flo, fhi]}
                 elif a in pi.supplied:
@@ -139,15 +238,22 @@ def _evaluate_row(pi: ProgramIndex, store: CommittedStore, weights: Callable[[st
                         raise _Unresolved(why)
                     words.append(w)
                     inputs_rec.append({"kind": "committed", "identity": [rid, arrive + step, SAMPLER_OP, pname, [0, 1]]})
+                elif pi.kv_prefix and a == pi.kv_prefix["input"]:
+                    words.extend(_cached_prefix_words(pi, store, rid, pname, lo, hi, inputs_rec))
+                elif pname == RM.SCHEDULE_PARAM:
+                    words.append(_schedule_witness(pi, store, r, d, rid, arrive, pname, lo, hi, inputs_rec))
                 else:                                                             # the declared prompt: committed input_token_ids of the arrival step
                     eop = pi.embed_op_path()
                     if eop is None:
                         raise _Unresolved("Program has no Embedding row: prompt ids have no committed identity")
-                    w, why = store.words(rid, arrive + 0, eop, IDS_MEMBER, lo, hi)
+                    c = int(pi.kv_prefix["C"]) if pi.kv_prefix else 0          # a warm request's arrival step embeds prompt[C:]
+                    if lo < c:
+                        raise _Unresolved(f"prompt slice [{lo}, {hi}) reads a row the prefix cache served (C = {c}): no committed input id")
+                    w, why = store.words(rid, arrive + 0, eop, IDS_MEMBER, lo - c, hi - c)
                     if w is None:
                         raise _Unresolved(why)
                     words.append(w)
-                    inputs_rec.append({"kind": "prompt", "identity": [rid, arrive, eop, IDS_MEMBER, [lo, hi]]})
+                    inputs_rec.append({"kind": "prompt", "identity": [rid, arrive, eop, IDS_MEMBER, [lo - c, hi - c]]})
             elif kind == "n":
                 m = pi.member_at(a, lo, hi)
                 if m is None:
@@ -231,6 +337,14 @@ def plan_vu(pi: ProgramIndex, store: CommittedStore, vu: dict, *, arrive: int) -
     return why
 
 
+def by_member(got: dict[str, Any], ports: dict[str, str]) -> dict[str, Any]:
+    """A multi-output relation's values (keyed by its Definition's ports) under the member each port is committed as
+    (`ProgramIndex.member_of_port`; DeepGemmFp8Linear_v1: 0 -> x_q, 1 -> x_s, 2 -> 0 or part_rank<r>).  A port with no committed member
+    keeps its name unless that name is another port's member: it never stands in for it."""
+    out = {ports[p]: v for p, v in got.items() if p in ports}
+    return out | {p: v for p, v in got.items() if p not in ports and p not in out}
+
+
 def _replay_vu(pi: ProgramIndex, store: CommittedStore, weights: Callable[[str, int, int], np.ndarray | None], vu: dict, arrive: int,
                rec: dict[str, Any]) -> dict[str, Any]:
     r = pi.by_i[vu["i"]]
@@ -249,6 +363,8 @@ def _replay_vu(pi: ProgramIndex, store: CommittedStore, weights: Callable[[str, 
     except Exception as e:  # noqa: BLE001
         rec["why"] = f"evaluator error: {e!r}"[:300]
         return rec | {"result": None}
+    if len(got) > 1:
+        got = by_member(got, pi.member_of_port(vu["i"]))
     if d.get("plane") and d["plane"] not in got and len(got) == 1:
         got = {d["plane"]: next(iter(got.values()))}                             # [MAN-06f v3] a dense relation's `out` IS this row's plane (act = SiluMul out)
         rec["plane"] = d["plane"]

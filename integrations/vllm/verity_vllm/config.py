@@ -3,7 +3,8 @@
 * **Run definitions.**  ``manifests/`` (checkpoint pins, semantic profiles) and ``workloads/`` (row workloads) sit beside
   the package in the source tree; they are run definitions, not package data.  Library code locates them, and the source
   tree itself, through ``ROOT``, ``MANIFESTS``, ``WORKLOADS`` and ``CHECKPOINTS``.
-* **What runs.**  The row-id grammar (:class:`RowId`), the dtype vocabulary (``DTYPES``), the target table
+* **What runs.**  :class:`RowConfig`, a row's one config (its file ``workloads/<row>.json``: the workload and the pinned
+  :class:`RowEngine`), the row-id grammar (:class:`RowId`), the dtype vocabulary (``DTYPES``), the target table
   (``TARGETS``), the protocol-set grammar (``PROTOCOLS``, :func:`parse_protocols`), and :class:`EnginePin`, the pinned
   engine record every engine is built from: model, full revision and checkpoint role, checked against
   ``manifests/checkpoints.json``.
@@ -22,7 +23,7 @@ import json
 import os
 import re
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from importlib import resources
 from pathlib import Path
 from typing import Any
@@ -32,6 +33,8 @@ ROOT = Path(str(resources.files("verity_vllm"))).resolve().parent
 MANIFESTS = ROOT / "manifests"
 WORKLOADS = ROOT / "workloads"
 CHECKPOINTS = MANIFESTS / "checkpoints.json"
+#: The remote bandwidth session's processes (not a package), whose prover runs in the Commit's (`store.remote`).
+REMOTE_SESSION = ROOT.parent.parent / "benchmarks" / "remote_session"
 
 
 def checkpoints_hf_home() -> str | None:
@@ -94,7 +97,8 @@ TARGETS: dict[str, tuple[int, int]] = {
 #: Row-id target token -> the device class's SM count, for the classes where it is fixed by the class: such a row declares its whole
 #: Build target (capability + SM count) by its id, so its Build derives for it on any host, a GPU-free one included.  A class whose SM
 #: count varies by part (h100 SXM 132 / PCIe 114) is not listed: its Build target is the host GPU's unless the workload declares one.
-TARGET_NUM_SMS: dict[str, int] = {"rtxpro6000": 188}
+#: The H200 is 132 SMs as SXM and as NVL.
+TARGET_NUM_SMS: dict[str, int] = {"rtxpro6000": 188, "h200": 132}
 
 ROW_FIELDS = ("model", "dtype", "target", "world", "batch", "max_input", "max_output", "arrivals", "sampling", "execution")
 _ROW_INT_PREFIX = {"world": "tp", "batch": "b", "max_input": "i", "max_output": "o"}
@@ -271,6 +275,112 @@ def checkpoint_dir(model: str, revision: str, hf_home: str, checkpoints: str | P
     return local
 
 
+#: The vLLM commit this tree derives and serves on: ``vllm.__version__`` must carry ``+g<VLLM>`` (``TargetProfile.vllm_revision``).
+VLLM = "d9105ea80"
+
+#: A row file (``workloads/<row>.json``): the workload and its pinned ``engine`` block (:class:`RowConfig`).
+WORKLOAD_SCHEMA = "verity-vllm/workload/v2"
+
+_SHA = re.compile(r"[0-9a-f]{40}")
+#: The flat v1 keys the ``engine`` block replaced, by their place in it.
+_V1_KEYS = {"engine_args_required": "args", "env_required": "env", "target": "target", "tokenizer_revision": "revision",
+            "checkpoint_revision": "revision"}
+
+
+@dataclass(frozen=True)
+class RowEngine:
+    """What, besides its requests, determines a row's circuit and its run: the checkpoint's full ``revision`` (its repo is the row's
+    ``model``), the ``vllm`` commit, the engine ``args``, the ``env`` its engines run under (kernel selection: ``VLLM_BATCH_INVARIANT``,
+    ``NCCL_P2P_DISABLE``), the declared ``target`` (``TargetProfile`` fields; None: the device's) and ``reasons``: why the row sets a
+    switch away from vLLM's default, by the switch's name (``engine.served.DEFAULTS``; a served Commit refuses one without).  The κ
+    profile a Match folds with is the role's (``engine.profiles.generic.module_name``), never a field."""
+
+    revision: str | None = None
+    vllm: str = VLLM
+    args: Mapping[str, Any] = field(default_factory=dict)
+    env: Mapping[str, str] = field(default_factory=dict)
+    target: Mapping[str, Any] | None = None
+    reasons: Mapping[str, str] = field(default_factory=dict)
+
+    @classmethod
+    def of(cls, doc: Mapping[str, Any]) -> RowEngine:
+        """The ``engine`` block of a row file (or any workload doc); refuses the flat v1 keys and another vLLM."""
+        stale = sorted(k for k in _V1_KEYS if k in doc)
+        if stale:
+            raise ValueError(f"workload keys {', '.join(stale)} are the v1 layout: regenerate the file (`verity-vllm workload`) or move "
+                             f"them into its `engine` block ({', '.join(f'{k} -> engine.{_V1_KEYS[k]}' for k in stale)})")
+        e = doc.get("engine") or {}
+        unknown = sorted(set(e) - {f.name for f in fields(cls)})
+        if unknown:
+            raise ValueError(f"engine block: unknown field(s) {', '.join(unknown)} (known: {', '.join(f.name for f in fields(cls))})")
+        eng = cls(revision=e.get("revision"), vllm=str(e.get("vllm", VLLM)), args=dict(e.get("args") or {}),
+                  env={str(k): str(v) for k, v in (e.get("env") or {}).items()}, target=dict(e["target"]) if e.get("target") else None,
+                  reasons={str(k): str(v) for k, v in (e.get("reasons") or {}).items()})
+        if eng.vllm != VLLM:
+            raise ValueError(f"engine.vllm {eng.vllm!r}: this tree derives and serves on vLLM {VLLM} only (config.VLLM)")
+        if eng.target and eng.target.get("vllm_revision", eng.vllm) != eng.vllm:
+            raise ValueError(f"engine.target.vllm_revision {eng.target['vllm_revision']!r} disagrees with engine.vllm {eng.vllm!r}")
+        return eng
+
+    def to_json(self) -> dict[str, Any]:
+        out: dict[str, Any] = {"revision": self.revision, "vllm": self.vllm, "args": dict(self.args)}
+        if self.env:
+            out["env"] = dict(self.env)
+        if self.target:
+            out["target"] = dict(self.target)
+        if self.reasons:
+            out["reasons"] = dict(self.reasons)
+        return out
+
+
+@dataclass(frozen=True)
+class RowConfig:
+    """A row's one config, its file ``workloads/<row>.json``: the checkpoint's repo (``model``) and role (``case``), the pinned
+    :class:`RowEngine` and the workload (everything else in the file: requests, sampling, the sweep's parameters).
+
+    The flags and environment variables of ``verity-vllm row`` override how its stages run, never this; what a run used is its
+    effective config (``pipeline.row.effective_config``, ``<row dir>/effective_config.json``)."""
+
+    model: str
+    case: str | None
+    engine: RowEngine
+    workload: Mapping[str, Any]
+
+    @classmethod
+    def of(cls, doc: Mapping[str, Any]) -> RowConfig:
+        if doc.get("schema") != WORKLOAD_SCHEMA:
+            raise ValueError(f"workload schema {doc.get('schema')!r}, expected {WORKLOAD_SCHEMA!r}")
+        rest = {k: v for k, v in doc.items() if k not in ("schema", "model", "case", "engine")}
+        cfg = cls(model=str(doc["model"]), case=doc.get("case"), engine=RowEngine.of(doc), workload=rest)
+        if cfg.engine.revision is not None and not _SHA.fullmatch(cfg.engine.revision):
+            raise ValueError(f"engine.revision {cfg.engine.revision!r}: the checkpoint's full commit sha (manifests/checkpoints.json)")
+        if cfg.row and row_world(cfg.row) > 1 and not isinstance(cfg.engine.args.get("disable_custom_all_reduce"), bool):
+            raise ValueError(f"{cfg.row}: a tensor-parallel row states engine.args.disable_custom_all_reduce (true on a SYS box, "
+                             f"`engine.profiles.transport.row_custom_all_reduce_off`)")
+        return cfg
+
+    @classmethod
+    def load(cls, row_or_path: str | Path) -> RowConfig:
+        """A row's config by row id (``WORKLOADS/<row>.json``) or by file."""
+        p = Path(row_or_path)
+        return cls.of(json.loads((p if p.suffix == ".json" else WORKLOADS / f"{row_or_path}.json").read_text()))
+
+    @property
+    def row(self) -> str | None:
+        """The row id the requests were drawn for (``sweep.row_id``); a variant file (``olmoe-1b-7b-padded__…``) keeps its base row's."""
+        sw = self.workload.get("sweep")
+        return sw.get("row_id") if isinstance(sw, Mapping) else None
+
+    def pin(self, world: int = 1, checkpoints: str | Path = CHECKPOINTS) -> EnginePin:
+        if not self.engine.revision:
+            raise ValueError(f"{self.row or self.model}: the row pins no checkpoint revision (engine.revision)")
+        return EnginePin.resolve(self.model, self.engine.revision, world=world, checkpoints=checkpoints)
+
+    def to_json(self) -> dict[str, Any]:
+        return {"schema": WORKLOAD_SCHEMA, "model": self.model, **({"case": self.case} if self.case is not None else {}),
+                "engine": self.engine.to_json(), **self.workload}
+
+
 # ---------------------------------------------------------------------------------------------------------------- stage configs
 
 @dataclass(frozen=True, kw_only=True)
@@ -295,6 +405,16 @@ class BuildConfig:
     build_relabel: str = option("--build-relabel", env="BUILD_RELABEL", default="off", choices=("off", "on"),
                                 help="TP: one template rank's request derives write the other ranks' (pipeline.tp.relabel_build), behind a "
                                      "step guard over every rank and a canary request derived in full; default off")
+    build_programs_only: str = option("--build-programs-only", env="BUILD_PROGRAMS_ONLY", default="0",
+                                      help="TP: 1 = the Build ends at the rank Programs and GP-01: no required-value manifest, no call-boundary "
+                                           "check (the Commit builds the manifest it runs over); `verity-vllm neutrality`'s heavy tier")
+    build_construction: str = option("--build-construction", env="BUILD_CONSTRUCTION", default="record", choices=("record", "trace"),
+                                     help="TP: record = the row's construction of record, the AOT Build for a switched row (its `aot` in "
+                                          "manifests/records.json, verity_vllm.predict.aot) and the trace for any other; trace = the trace "
+                                          "(`verity-vllm neutrality`'s heavy tier)")
+    aot_trace: str | None = option("--aot-trace", env="AOT_TRACE", default=None,
+                                   help="TP, a switched row: the dir holding its `aot.trace` Build (build/rank<r>/build_*), e.g. a job's "
+                                        "--send of it; default fetched from the store into <row dir>/aot_trace")
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -303,9 +423,10 @@ class MatchConfig:
 
     match_impl: str = option("--match-impl", env="MATCH_IMPL", default="fast", help="global match checker: fast or record (the audit)")
     match_pipeline: str = option("--match-pipeline", env="MATCH_PIPELINE", default="shared",
-                                 help="shared = one batch decomposition inside the global match")
-    match_phase: str = option("--match-phase", env="MATCH_PHASE", default="all", choices=("all", "cpu"),
-                              help="cpu = resume the CPU half over the capture already on disk")
+                                 help="shared = one batch decomposition inside the global match (a TP row's: per rank)")
+    match_phase: str = option("--match-phase", env="MATCH_PHASE", default="all", choices=("all", "gpu", "cpu"),
+                              help="cpu = resume the CPU half over the capture already on disk; gpu (TP) = the capture and control alone, "
+                                   "which need no Build, then the row stops")
     snapshot_steps: str | None = option("--snapshot-steps", env="MATCH_SNAP_STEPS", default=None,
                                         help="0,1 | all; default 0,1 greedy, all stochastic or when form (B) must be complete")
     snapshot_max_bytes: str | None = option("--snapshot-max-bytes", env="MATCH_SNAP_MAX_BYTES", default=None,
@@ -320,7 +441,15 @@ class MatchConfig:
     compare_timeout: int | None = option("--compare-timeout", env="COMPARE_TIMEOUT", type=int, default=None,
                                          help="seconds per comparator (default scales with B and the envelope)")
     fold_timeout: int | None = option("--fold-timeout", env="FOLD_TIMEOUT", type=int, default=None,
-                                      help="TP: seconds for the per-rank fold Match (default 7200)")
+                                      help="TP: seconds for each leg of the per-rank fold Match (fold, compare, GM-01; default 7200); "
+                                           "tp-fold-match as a whole gets four legs' worth, the cross-rank leg included")
+    fold_rank_workers: int = option("--fold-rank-workers", env="FOLD_RANK_WORKERS", type=int, default=0,
+                                    help="TP: ranks whose fold Match legs run at once (0 = every rank; a GLM-5.3 B8 rank's X-09 compare "
+                                         "passes 200 GB, so 8 at once overfill a 1.5 TB host)")
+    match_reuse: str = option("--match-reuse", env="MATCH_REUSE", default="off", choices=("off", "fold", "legs"),
+                              help="TP, --match-phase cpu, rerunning a CPU half that stopped part way under the same code: fold = keep each "
+                                   "rank's persisted fold of the capture in place; legs = also each rank's written compare and GM-01 "
+                                   "documents, so only the missing legs and the cross-rank leg run")
     fold_profile: str | None = option("--fold-profile", env="FOLD_PROFILE", env_empty=True, default=None,
                                       help="TP: rank profile module (default derived_<ROLE>_tp<W>; empty = collective-level Match only)")
 
@@ -379,6 +508,9 @@ class CommitConfig:
                                            "in M0's serving row format (verity_vllm.pipeline.serving_rows), fixed before serving; a "
                                            "deferred Commit's come from its bundle (verity-vllm serving-rows); a TP row's, one window per "
                                            "rank, from tp-commit itself (verity_vllm.pipeline.tp.serving_rows; needs REPLAY_DEFERRED=1)")
+    remote_verifier: str | None = option("--remote-verifier", env="REMOTE_VERIFIER", default=None, metavar="HOST:PORT",
+                                         help="the remote bandwidth session's verifier: the Commit proves its store to it while "
+                                              "serving (verity_vllm.store.remote; single-GPU rows)")
     norm_tap: str = option("--norm-tap", env="NORM_TAP", default="1",
                            help="0 opts out, for A/B only: by default the row commits one scale per norm Call row (verity_vllm.query."
                                 "norm_scales) through the norm-scale tap (acquire.sources.norm_scale_source) when its manifest names norm scales")

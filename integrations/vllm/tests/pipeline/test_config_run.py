@@ -10,6 +10,7 @@ import pytest
 from tests.pipeline.test_row import _row
 from verity_vllm.check.replay.driver import family_strata
 from verity_vllm.check.replay.sample import sample
+from verity_vllm.engine import served as SV
 from verity_vllm.pipeline import config_record as CR
 from verity_vllm.pipeline import program_cache as PC
 from verity_vllm.pipeline import row_config as RC
@@ -344,6 +345,10 @@ def test_the_tp2_config_run_s_commit_decides_by_its_one_run(tmp_path, commit_pas
 
 # ---------------------------------------------------------------------------------------------------------------- the config record
 
+#: The served switches of a Commit whose every rank read back what its row declares (`engine.served.record`).
+SERVED = {"schema": SV.SCHEMA, "ok": True, "problems": []}
+
+
 def _row_dir(tmp_path: Path, *, mismatch: int = 0, commit_pass: bool = True, word_ok: bool = True) -> Path:
     d = tmp_path / ROW
     (d / "commit").mkdir(parents=True)
@@ -360,6 +365,7 @@ def _row_dir(tmp_path: Path, *, mismatch: int = 0, commit_pass: bool = True, wor
            "commit": {"commit_pass": commit_pass, "commit_fail_reason": None if commit_pass else "C2 mismatch", "run_root": "rr",
                       "openings": {"n": 64, "verified": 64}, "expected_tensors": 9, "committed_tensors": 9, "sampled_replay": sr}}
     (d / "commit" / "runs.jsonl").write_text(json.dumps(run) + "\n")
+    (d / "commit" / "summary.json").write_text(json.dumps({"versions": {"served": SERVED}}))
     return d
 
 
@@ -381,10 +387,40 @@ def test_a_config_run_that_failed_says_why_first(tmp_path, kw, why):
         assert rec["replay"]["differed"][0]["family"] == "Gemm_v1" and rec["replay"]["by_family"] == {"Gemm_v1": 2}
 
 
+@pytest.mark.parametrize("gm, outcome, why", [("PASS", "PASS", None), ("FAIL", "PASS", "match FAIL"), ("PASS", "FAIL", "commit FAIL")])
+def test_a_single_gpu_row_of_record_is_its_global_matchs_verdict_and_its_commits_decision_document(tmp_path, gm, outcome, why):
+    """GM-01 writes ``verdict`` (`check.match.global_match`), never the ``ok`` the record read, and a single-GPU Commit's summary
+    decides nothing (its decision document is the row dir's verdict.json): the first single-GPU row chain to reach its publish
+    (r20261018-000059-6968) was refused as "match FAIL", then "commit FAIL", over a passing Match and Commit."""
+    d = _row_dir(tmp_path)
+    (d / "global_match.json").write_text(json.dumps({"schema": "cb-a/global-match/v1", "verdict": gm, "failed_checks": []}))
+    (d / "verdict.json").write_text(json.dumps({"schema": "vllm-verdict/v1", "outcome": outcome, "manifest_digest": "mm"}))
+    rec = CR.record(d, ROW, summary={"versions": {"served": SERVED}})
+    assert (rec["outcome"], rec["why"]) == ("PASS" if why is None else "FAIL", why)
+    assert rec["commit"]["manifest"] == {"manifest_digest": "mm"} and rec["commit"]["run_root"] == "rr"
+
+
 def test_a_config_run_with_no_commit_is_not_pass(tmp_path):
     d = _row_dir(tmp_path)
     (d / "commit" / "runs.jsonl").unlink()
     assert CR.record(d, ROW)["why"] == "commit not run"
+
+
+def test_a_commit_that_read_no_switches_back_is_not_pass(tmp_path):
+    d = _row_dir(tmp_path)
+    (d / "commit" / "summary.json").unlink()
+    rec = CR.record(d, ROW)
+    assert (rec["outcome"], rec["why"], rec["served"]) == ("FAIL", "served switches not run", None)
+
+
+def test_a_commit_its_switches_failed_closed_says_so_first(tmp_path):
+    d = _row_dir(tmp_path)
+    (d / "commit" / "runs.jsonl").unlink()
+    bad = {**SERVED, "ok": False, "problems": ["rank 0: VLLM_BATCH_INVARIANT=True where row file declares False"]}
+    (d / "commit" / "summary.json").write_text(json.dumps({"schema": SV.SCHEMA, "pass": False, "served": bad}))
+    rec = CR.record(d, ROW)
+    assert rec["why"] == "served switches FAIL: rank 0: VLLM_BATCH_INVARIANT=True where row file declares False"
+    assert rec["served"] == bad
 
 
 ROW_TP2 = "llama32-1b__bf16__l40s__tp2__b1__i256__o32__mixed__greedy__bi-eager"
@@ -415,6 +451,7 @@ def _tp_row_dir(tmp_path: Path, *, mismatch_r1: int = 0, ranks: int = 2) -> Path
            "commit": {"tp_run_root": "tproot", "world": 2, "per_rank": per, "openings": {"n": 128, "verified": 128}, "tensors": 18,
                       "commit_pass": not fail, "commit_fail_reason": "rank 1: sampled replay mismatch" if fail else "PASS"}}
     (d / "commit" / "runs.jsonl").write_text(json.dumps(run) + "\n")
+    (d / "commit" / "summary.json").write_text(json.dumps({"served": SERVED}))
     return d
 
 
@@ -445,6 +482,40 @@ def test_a_tp2_config_run_missing_a_rank_is_not_pass(tmp_path):
     d = _tp_row_dir(tmp_path, ranks=1)
     rec = CR.record(d, ROW_TP2)
     assert rec["replay"]["ok"] is False and rec["outcome"] == "FAIL"
+
+
+MANIFEST_OF_RECORD = "art:" + "6" * 64
+
+
+@pytest.mark.parametrize("line,programs_ok,manifest,ok,superseded", [
+    ("build FAIL 2026-10-15T19:12:49Z rc=1 manifest_rc=137", True, MANIFEST_OF_RECORD, True, True),
+    ("build FAIL 2026-10-15T19:12:49Z rc=1 manifest_rc=137", True, None, False, False),
+    ("build FAIL 2026-10-15T19:12:49Z rc=1", True, MANIFEST_OF_RECORD, False, False),
+    ("build FAIL 2026-10-15T19:12:49Z rc=1 manifest_rc=137", False, MANIFEST_OF_RECORD, False, False),
+    ("build PASS 2026-10-15T19:12:49Z rc=0 manifest_rc=0", True, None, True, False),
+])
+def test_a_build_whose_in_stage_manifest_alone_failed_passes_only_superseded_by_the_manifest_of_record(
+        tmp_path, line, programs_ok, manifest, ok, superseded):
+    d = _tp_row_dir(tmp_path)
+    (d / "stages.txt").write_text(f"precheck PASS 2026-10-15T18:00:00Z rc=0\n{line}\ncommit PASS 2026-10-16T23:26:33Z rc=0\n")
+    if not programs_ok:
+        bs = json.loads((d / "build_summary.json").read_text())
+        bs["ranks"]["rank1"]["build_step"]["ok"] = False
+        (d / "build_summary.json").write_text(json.dumps(bs))
+    rec = CR.record(d, ROW_TP2, evidence={"manifest": manifest})
+    st = rec["build"]["stage"]
+    assert rec["build"]["ok"] is ok and rec["outcome"] == ("PASS" if ok else "FAIL")
+    assert st["status"] == line.split()[1] and st.get("superseded_by") == (manifest if superseded else None)
+    assert {s: v["status"] for s, v in rec["stages"].items()} == {"precheck": "PASS", "build": line.split()[1], "commit": "PASS"}
+    if not ok:
+        stranded = programs_ok and "manifest_rc=137" in line
+        assert rec["why"] == ("build FAIL: the in-stage manifest exited 137 and no manifest of record supersedes it (evidence.manifest)"
+                              if stranded else "build FAIL")
+
+
+def test_a_row_dir_without_a_build_verdict_keeps_the_programs_verdict(tmp_path):
+    rec = CR.record(_tp_row_dir(tmp_path), ROW_TP2)
+    assert rec["build"]["stage"] is None and rec["stages"] == {} and rec["outcome"] == "PASS"
 
 
 def test_the_record_s_slowdown_is_instrumented_over_control_per_phase(tmp_path):

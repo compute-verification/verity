@@ -29,9 +29,9 @@ from dataclasses import dataclass
 
 from verity.ml.circuits.codec import canonical_json, descriptor_size
 from verity.ml.circuits.defs import REGISTRY
-from verity_vllm.config import option
+from verity_vllm.config import RowEngine, option
 from verity_vllm.pipeline import layout as build_paths
-from verity_vllm.program import workload as W
+from verity_vllm.program import prefix_plan as PP, workload as W
 from verity_vllm.program.registry.catalog import load as _load_registry
 
 # the request descriptors decode through the registry the Match reads (`program_compare._registry`): every registry module loaded
@@ -64,7 +64,14 @@ def manifest_requests(m: dict) -> list[dict]:
             raise ValueError(f"manifest request {wrid or i}: no prompt_len / max_tokens")
         out.append({"request_id": request_id_of(i), "workload_request_id": wrid, "index": i, "prompt_len": int(lp), "cap": int(cap),
                     "arrive_step": int(r.get("arrive_step", 0) or 0)})
+    for r, p in zip(out, PP.plan(m) if reqs and PP.prefix_caching(m) else ()):   # a warm request's cached rows and their producers
+        r["cached"], r["producers"] = p["cached"], [request_id_of(q) for q in p["producers"]]
     return out
+
+
+def shape_of(r: dict) -> tuple[int, ...]:
+    """A manifest request's component shape (`manifest_requests` row): (LP, cap - 1[, cached rows])."""
+    return PP.shape(r["prompt_len"], r["cap"] - 1, r.get("cached", 0))
 
 
 def execution_of_workload(m: dict) -> str:
@@ -79,8 +86,9 @@ def execution_of_workload(m: dict) -> str:
 
 
 # engine conditions the workload Program models (COORD M-0063 (1)): the components are eager per-request Programs (X-09) over one shared
-# weights input; no cross-request cache reuse (G5 requires 0 cross-request reads); a request's prefill may be chunked over engine steps
-# (X-09's chunked-prefill criterion) -- so chunked prefill is modelled, prefix caching is not.
+# weights input; a request's prefill may be chunked over engine steps (X-09's chunked-prefill criterion).  Prefix caching is the
+# manifest's (`workload_applicability`): with it on, a request whose first C rows the prefix cache serves (`program.prefix_plan`) is a
+# component that reads them as its `prefix` input, which Match binds to the producing requests' rows; no other cross-request read.
 MODELLED_ENGINE = {"enforce_eager": True, "enable_prefix_caching": False, "enable_chunked_prefill": "modelled (a request's prefill rows may span engine steps)"}
 
 # [compiled M-0153 (4a) / M-0141] a COMPILED execution is modelled only when every component declares it (applicability.execution
@@ -125,12 +133,13 @@ def eos_lag_rows_declared(engine: dict | None) -> int | None:
     return None
 
 
-def workload_target(manifest: dict):
-    """[R17-1] The row's declared TargetProfile as GP-01 reads it: the manifest's `target` block (the ONE declared target source; row_pod
-    passes the same block to derive_step as --target and every GPU stage builds its engine for it) over the default profile.  A GP-01
-    compose has no GPU, so cc / SMs are whatever the block says (they do not enter the lag); an unknown field is refused by name."""
+def workload_target(target: dict | None):
+    """[R17-1] The row's declared TargetProfile as GP-01 reads it: its declared `target` block (the row file's `engine.target`, the ONE
+    declared target source; the row driver passes the same block to derive_step as --target and every GPU stage builds its engine for it)
+    over the default profile.  A GP-01 compose has no GPU, so cc / SMs are whatever the block says (they do not enter the lag); an unknown
+    field is refused by name."""
     from verity_vllm.program.frontend.target_profile import TargetProfile
-    t = manifest.get("target") if isinstance(manifest.get("target"), dict) else {}
+    t = target if isinstance(target, dict) else {}
     unknown = set(t) - set(TargetProfile.__dataclass_fields__)
     if unknown:
         raise ValueError(f"workload target: unknown TargetProfile fields {sorted(unknown)}")
@@ -160,7 +169,7 @@ def workload_lag(manifest: dict, shapes: dict) -> dict:
     the first disagreement.  The record's resolved read-back is compared by GM-01 G1/G6 -- never read here (a Build reads no execution)."""
     from verity_vllm.program.frontend.target_profile import TargetProfile
     try:
-        tp = workload_target(manifest)
+        tp = workload_target(RowEngine.of(manifest).target)
     except (TypeError, ValueError) as e:
         return {"schema": "verity/workload-program/v1/lag", "value": None, "refusal": f"the manifest's target block does not parse as a TargetProfile: {e}"}
     decl = tp.async_scheduling_declaration()
@@ -172,7 +181,7 @@ def workload_lag(manifest: dict, shapes: dict) -> dict:
            "components": {}, "refusal": None}
     for s, d in sorted(shapes.items()):
         ct = component_declared_target(d)
-        key = f"{s[0]},{s[1]}"
+        key = PP.shape_key(s)
         if ct is None:
             out["components"][key] = {"dir": d, "declared_target": None, "lag": None, "note": "component carries no target.declared (pre-v3 derive): not checked"}
             continue
@@ -227,7 +236,7 @@ def workload_moe_construction(manifest: dict, shapes: dict) -> dict:
     `moe_block_present` labels the workload; `population_label` is what PADDED-TABLE reports the row under (R17-45 (1): actual population)."""
     from verity_vllm.program.frontend.target_profile import TargetProfile
     try:
-        tp = workload_target(manifest)
+        tp = workload_target(RowEngine.of(manifest).target)
     except (TypeError, ValueError) as e:
         return {"schema": "verity/workload-program/v1/moe_construction", "value": None, "refusal": f"the manifest's target block does not parse as a TargetProfile: {e}"}
     decl = tp.moe_construction_declaration()
@@ -239,7 +248,7 @@ def workload_moe_construction(manifest: dict, shapes: dict) -> dict:
            "components": {}, "moe_block_present": False, "refusal": None}
     own, other = _MOE_CONSTRUCTION_SPECS[decl["value"]], {s for v in _MOE_CONSTRUCTION_SPECS.values() for s in v} - set(_MOE_CONSTRUCTION_SPECS[decl["value"]])
     for s, d in sorted(shapes.items()):
-        key = f"{s[0]},{s[1]}"
+        key = PP.shape_key(s)
         ct = component_declared_target(d)
         hist = component_spec_histogram(d) or {}
         names = {k.split("{", 1)[0] for k in hist}
@@ -287,11 +296,11 @@ def modelled_engine(execution: str, comps: dict) -> tuple[dict, str | None]:
     `applicability.engine` blocks (derive_step writes profile.modelled_engine(): enforce_eager False + compilation_mode/backend/cudagraph_mode/…)
     or their `applicability.compilation` dicts must AGREE and carry compilation facts (at least cudagraph_mode); the workload engine block
     is then enforce_eager False + `compilation` = the normalised facts (what GM-01 G1 compares with the record header) + GP-01's own
-    conditions (no prefix caching; chunked prefill modelled)."""
+    conditions (prefix caching as the manifest declares it, `workload_applicability`; chunked prefill modelled)."""
     ex = str(execution or "")
     # [compiled M-0174 (a)] the components' agreed applicability.engine block (derive_step: profile.modelled_engine()) is carried verbatim
     # into the workload engine block (claim text, program_derivation, attention note...); GP-01's own compose-level conditions stay
-    # authoritative for what GP-01 models (no prefix caching; chunked prefill modelled) and enforce_eager follows the execution label.
+    # authoritative for what GP-01 models (prefix caching the manifest's; chunked prefill modelled), enforce_eager follows the execution label.
     blocks = [a.get("engine") for a in comps.values() if a and isinstance(a.get("engine"), dict)]
     encs_b = {json.dumps(b, sort_keys=True, default=str) for b in blocks}
     if len(encs_b) > 1:
@@ -361,6 +370,7 @@ def workload_applicability(m: dict, comps: dict) -> dict:
         refusal = f"components disagree on applicability fields {sorted(disagreed)}"
     else:
         engine, refusal = modelled_engine(sorted(execs)[0], comps)
+    engine["enable_prefix_caching"] = PP.prefix_caching(m)
     return {"schema": "verity/workload-program/v1/applicability", "execution": sorted(execs)[0] if len(execs) == 1 else sorted(execs),
             "row_execution": row_ex, "engine": engine, "components": agreed, "components_disagree": disagreed or None,
             "refusal": refusal}
@@ -443,10 +453,10 @@ def sampler_schedule_binding(reqs: list[dict], shapes: dict[tuple[int, int], str
             return out
         if not req and not isinstance(splits, list):
             continue
-        bound = [r for r in reqs if (r["prompt_len"], r["cap"] - 1) == s]
+        bound = [r for r in reqs if shape_of(r) == s]
         rec = {"component": d, "declared_arrive_step": (req or {}).get("arrive_step"), "bound_requests": [r["request_id"] for r in bound],
                "splits": splits if not isinstance(splits, list) else f"schedule[{len(splits)}]"}
-        out["checked"][f"{s[0]},{s[1]}"] = rec
+        out["checked"][PP.shape_key(s)] = rec
         if req is not None:
             for r in bound:
                 if int(r["arrive_step"]) != int(req.get("arrive_step", -1)):
@@ -606,7 +616,7 @@ def build(workload_path: str, derived_dirs: list[str], out: str, checkpoint_dir:
     mdigest = hashlib.sha256(raw).hexdigest()
     reqs = manifest_requests(m)
     # bind each manifest request to the derived shape (LP, cap-1) — derived once per distinct shape, reused for equal shapes
-    shapes: dict[tuple[int, int], str] = {}
+    shapes: dict[tuple[int, ...], str] = {}
     for d in derived_dirs:
         s = derived_shape(d)
         if s is None:
@@ -614,7 +624,7 @@ def build(workload_path: str, derived_dirs: list[str], out: str, checkpoint_dir:
         if s in shapes and shapes[s] != d:
             raise ValueError(f"two derived dirs for shape {s}: {shapes[s]} and {d}")
         shapes[s] = d
-    need = sorted({(r["prompt_len"], r["cap"] - 1) for r in reqs})
+    need = sorted({shape_of(r) for r in reqs})
     missing = [s for s in need if s not in shapes]
     os.makedirs(out, exist_ok=True)
     if missing:
@@ -632,7 +642,7 @@ def build(workload_path: str, derived_dirs: list[str], out: str, checkpoint_dir:
     sched = sampler_schedule_binding(reqs, {s: shapes[s] for s in need})
     # [M-0571 (3)] a component derived under stoch's EXPERIMENTAL per-event S (STOCH_DECLARED_CHRONOLOGY_S=1, sampling.geometry.experimental)
     # never composes into a canonical workload Program: refused unless this compose is itself marked experimental by the same variable
-    exp = {f"{s[0]},{s[1]}": (component_sampling(shapes[s]).get("geometry") or {}).get("experimental") for s in need}
+    exp = {PP.shape_key(s): (component_sampling(shapes[s]).get("geometry") or {}).get("experimental") for s in need}
     exp = {k: v for k, v in exp.items() if v}
     if exp and os.environ.get("STOCH_DECLARED_CHRONOLOGY_S") != "1":
         sched["refusal"] = (f"components {sorted(exp)} were derived under the EXPERIMENTAL per-event split schedule "
@@ -658,7 +668,7 @@ def build(workload_path: str, derived_dirs: list[str], out: str, checkpoint_dir:
         res = {"schema": W.SCHEMA + "/result", "ok": False, "reason": "moe_construction", "message": moec["refusal"], "moe_construction": moec,
                "manifest_sha256": mdigest}
         return _refused(out, res)
-    comps: dict[tuple[int, int], W.RequestComponent] = {}
+    comps: dict[tuple[int, ...], W.RequestComponent] = {}
     comp_secs = {}
     comp_provenance = {}
     canon = {} if canon is None else canon   # [rev-pm M-0123 F(1)] this compose's shared-definition set, never another compose's in the same process
@@ -678,14 +688,14 @@ def build(workload_path: str, derived_dirs: list[str], out: str, checkpoint_dir:
         lc = component_applicability(d).get("launch_context")
         if lc is not None:
             prov["launch_context"] = lc
-        comp_provenance[f"{s[0]},{s[1]}"] = prov
+        comp_provenance[PP.shape_key(s)] = prov
         comps[s] = component_of(pre)
-        comp_secs[f"{s[0]},{s[1]}"] = pre["secs"]
+        comp_secs[PP.shape_key(s)] = pre["secs"]
     if why := registration_refusal([shapes[s_] for s_ in need]):   # the requests share one registration (`shared.values`, the tables)
         res = {"schema": W.SCHEMA + "/result", "ok": False, "reason": "registration", "message": why, "manifest_sha256": mdigest}
         return _refused(out, res)
-    wreqs = [W.WorkloadRequest(r["request_id"], r["index"], r["prompt_len"], r["cap"], r["arrive_step"], comps[(r["prompt_len"], r["cap"] - 1)],
-                               T=r["cap"] - 1) for r in reqs]
+    wreqs = [W.WorkloadRequest(r["request_id"], r["index"], r["prompt_len"], r["cap"], r["arrive_step"], comps[shape_of(r)], T=r["cap"] - 1,
+                               prefix={"rows": r["cached"], "producers": r["producers"]} if r.get("cached") else None) for r in reqs]
     t2 = time.time()
     wl = W.WorkloadProgram(wreqs, manifest_digest=mdigest, lag=int(lag["value"]))
     art = wl.artifact()
@@ -736,7 +746,7 @@ def build(workload_path: str, derived_dirs: list[str], out: str, checkpoint_dir:
         f.write(cj := canonical_json(desc))
     art["descriptor"] = {"bytes": len(cj) if "annotations" not in desc else descriptor_size(desc), "sha256": hashlib.sha256(cj).hexdigest(),
                          "n_definitions": len(desc["definitions"])}
-    art["inputs"] = {"manifest": workload_path, "manifest_sha256": mdigest, "derived": {f"{k[0]},{k[1]}": v for k, v in shapes.items() if k in comps},
+    art["inputs"] = {"manifest": workload_path, "manifest_sha256": mdigest, "derived": {PP.shape_key(k): v for k, v in shapes.items() if k in comps},
                      # per component: the descriptor's recomputed digest == the derive's recorded program_digest (checked above), descriptor sha
                      "component_provenance": comp_provenance,
                      "sampler_schedule": sched["checked"] or None,   # [M-0560 (1)] per-request S-schedule components and their bound request
@@ -772,7 +782,7 @@ def main(a: Options) -> int:
     early, canon = None, {}
     if a.follow:
         reqs = manifest_requests(json.load(open(a.workload)))
-        early = follow_components(a.derived, {(r["prompt_len"], r["cap"] - 1) for r in reqs}, canon, timeout=a.follow, done=a.follow_done,
+        early = follow_components(a.derived, {shape_of(r) for r in reqs}, canon, timeout=a.follow, done=a.follow_done,
                                   stop=a.follow_stop)
         if early is None:
             return 5

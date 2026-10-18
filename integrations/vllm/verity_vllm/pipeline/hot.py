@@ -13,8 +13,8 @@ Key (what may share an engine) = sha256 of
   * the native extensions the job would load (`--hidden-so`, $NATIVE_COLLECT_BUILD/*.so, the hidden_gpu_tree torch extension) by sha256,
   * the interpreter (`sys.executable`) and the process environment that shapes the engine / collector (PYTHONPATH, VLLM_*, VERITY_* except
     the per-job VERITY_TIMELINE / VERITY_FOOTPRINT, CUDA_*, HF_*),
-  * the engine-shaping arguments: the workload file's engine-relevant blocks (case / model, engine_args_required, target, execution, tokenizer
-    keys), --checkpoints (content), --case, --max-num-seqs, --engine-arg, --target.
+  * the engine-shaping arguments: the workload file's engine-relevant blocks (case / model, its `engine` block, execution), --checkpoints
+    (content), --case, --max-num-seqs, --engine-arg, --target.
 The worker additionally compares the EXACT `LLM(**kw)` keyword set the job would build (`vllm_adapter.engine_kwargs_for`) against its live
 engine (commit_delta: HOT-KEY-MISMATCH -> the client re-runs cold).  Jobs whose flags mutate process state (compiled taps, arms, faults, ...)
 are refused by commit_delta (HOT-UNSAFE) and re-run cold by the client; the reason is recorded in the row log and on the timeline.
@@ -23,7 +23,8 @@ State between jobs (the worker, after every job): every committer built in the j
 thread stopped, pool shut down) and dropped; gc + torch.cuda.synchronize + empty_cache; no unfinished engine requests; forward hooks / wrapped
 forwards / sampler hooks == the baseline taken right after the engine build (commit_delta.assert_pristine).  A failed check STOPS the worker
 (recorded as the next worker's restart reason) -- it never serves another job on a dirty engine.  KV/prefix cache: the engine is built with
-enable_prefix_caching=False (vllm_adapter.build_engine), so no request reads another's blocks; RNG: greedy rows are RNG-free, seeded rows carry
+enable_prefix_caching=False (engine.build.engine_kwargs_for) unless the row's engine args turn it on, and then every workload run starts from
+an empty cache (vllm_adapter.fresh_prefix_cache), so a job's hits are its own requests'; RNG: greedy rows are RNG-free, seeded rows carry
 per-request seeds (vllm_adapter.sampling_params), so the process RNG state does not enter the result -- the fresh-process comparison
 (cold vs hot roots) is the check of record, not this paragraph.
 
@@ -56,7 +57,7 @@ SCHEMA = "verity-sweep/hot-commit/v1"
 ENV_PREFIXES = ("PYTHONPATH", "PATH", "LD_LIBRARY_PATH", "VLLM_", "VERITY_", "CUDA_", "HF_", "TORCH", "NATIVE_COLLECT_BUILD", "HIDDEN_GPU_BUILD",
                 "TOKENIZERS_PARALLELISM", "OMP_")
 ENV_PER_JOB = {"VERITY_TIMELINE", "VERITY_FOOTPRINT", "VERITY_TRACEDUMP", "VERITY_HOT_RESTART_REASON", "VERITY_HOT_SUBMIT", "VERITY_WEIGHTS_HASH", "HASH_THREADS"}
-WORKLOAD_ENGINE_KEYS = ("case", "model", "repo", "revision", "engine_args_required", "target", "execution", "row", "tokenizer", "dtype", "max_model_len")
+WORKLOAD_ENGINE_KEYS = ("case", "model", "engine", "execution")
 RC_HOT_INFRA = 70          # the worker died / refused before running the job (client falls back to cold)
 RELEASING_MARKER = Path(os.environ.get("HOT_RELEASING_MARKER", "/workspace/cp/RELEASING"))     # pod_release.sh holds it while it ships
 RELEASING_STALE_S = float(os.environ.get("RELEASING_STALE_S", "900"))    # pod_release.sh refreshes the marker per step; older = that ship died

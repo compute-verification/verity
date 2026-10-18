@@ -11,12 +11,25 @@ vLLM d9105ea80's choice of kernel for the MoE gate (`GateLinear.forward`, `LLBf1
   `Gemm_v2` (lm_head, GLM-5.3's indexer `wk_weights_proj`, DeepSeek-V4-Pro's `weights_proj`); `bmm_rows`: `BatchedGemm_v1`,
   `mla_check.bmm_rows`;
 * `cublas_splitk_rows`: cuBLAS 12.9.1's H200 route in `cublas_bf16`: equal 64-element-aligned contiguous chunks, a final
-  remainder, f32 partials and a serial increasing-order f32 reduction. `default_cublas_split_k` pins the selected split count.
+  remainder, f32 partials and a serial increasing-order f32 reduction. `default_cublas_route` reads the selected route at
+  every decode batch to `CUBLAS_ROUTES["m_max"]` tokens out of `cublas_routes.json`, the capture's decode-batch scan
+  (`glm53_bf16_gemm_capture_gpu.scan_routes`), in which `fit_cublas_split_k` names the split counts whose route computes a
+  launch's observed words exactly, so the split count is read out of the words (Kineto reports grid.z = 1 for these launches,
+  so no profile field carries it).  Any other model's bf16-output routes are the cc 9.0 device pin's (`pinned_routes`,
+  `verity_vllm/pins/`), measured by `served routes`' probe, which the predicted served Program reads too.
 
 NaN payloads are not part of any comparison (`mla_check._words_equal`): the GPU's FFMA and FADD write 0x7FFFFFFF, numpy keeps
 an operand's.
 """
 from __future__ import annotations
+
+__models__ = ("zai-org/GLM-5.3", "deepseek-ai/DeepSeek-V4-Pro")
+
+import json
+from functools import cache
+from importlib import resources
+from pathlib import Path
+from typing import Any
 
 import numpy as np
 
@@ -34,20 +47,128 @@ SM90_SPLITK = {(4096, 256): {**{m: 8 for m in range(5, 8)}, 10: 8, 11: 8, 13: 8,
                (6144, 256): {9: 8, 11: 8},
                (7168, 384): {m: (8 if m in (6, 8, 12) else 7) for m in range(6, 17)}}
 LL_MAX_M = 16
-DEFAULT_CUBLAS_SPLIT_K = {
-    ("router", 6144, 256): {17: 4, 32: 4, 128: 4, 256: 3},
-    ("router", 7168, 384): {17: 5, 32: 5, 128: 4, 256: 4},
-    ("linear", 6144, 160): {m: 4 for m in (1, 4, 16, 128, 256)},
-    ("linear", 7168, 64): {m: 5 for m in (1, 4, 16, 128, 256)},
-    ("f32out", 7168, 2048): {1: 3, 4: 3, 16: 3, 128: 2},
-    ("f32out", 7168, 1024): {1: 5, 4: 5, 16: 5, 128: 3, 256: 2},
-    ("f32out", 7168, 512): {1: 5, 4: 5, 16: 5, 128: 3, 256: 3},
-}
+DEFAULT_LL_BF16_FMA = 1
+#: cuBLAS 12.9.1's default route on the H200 by "phase K N": [m0, m1, split] runs over M (split None: the non-split serial
+#: chain), as the capture's decode-batch scan (run `run`) mapped them
+CUBLAS_ROUTES = json.loads(Path(__file__).with_name("cublas_routes.json").read_text())
+_ROUTES = {(p, int(k), int(n)): runs for (p, k, n), runs in ((key.split(), v) for key, v in CUBLAS_ROUTES["routes"].items())}
+
+
+def _route_run(phase: str, M: int, K: int, N: int) -> list | None:
+    return next((r for r in _ROUTES.get((phase, K, N), ()) if r[0] <= M <= r[1]), None)
 
 
 def default_cublas_split_k(phase: str, M: int, K: int, N: int) -> int | None:
     """The split count selected by cuBLAS 12.9.1 on the pinned H200, or None for its non-split routes."""
-    return DEFAULT_CUBLAS_SPLIT_K.get((phase, K, N), {}).get(M)
+    run = _route_run(phase, M, K, N)
+    return run[2] if run else None
+
+
+#: each pinned device's measured facts, `<its name in vLLM's file-name form>.json`: its compute capability, multiprocessor count,
+#: library versions and cuBLAS routes
+PINS = resources.files("verity_vllm") / "pins"
+
+
+@cache
+def device_pin(device: str) -> dict[str, Any]:
+    """The pin of the device that reports `device` (`torch.cuda.get_device_name`)."""
+    path = PINS / f"{device.replace(' ', '_')}.json"
+    if not path.is_file():
+        raise KeyError(f"no device pin {path.name} in verity_vllm/pins")
+    return json.loads(path.read_text())
+
+
+@cache
+def capability_pin(cc: tuple[int, int]) -> dict[str, Any]:
+    """The one pinned device of compute capability `cc`."""
+    pins = [json.loads(p.read_text()) for p in PINS.iterdir() if p.name.endswith(".json")]
+    got = [p for p in pins if tuple(p["compute_capability"]) == tuple(cc)]
+    if len(got) != 1:
+        raise KeyError(f"{len(got)} device pins of compute capability {cc} in verity_vllm/pins; one is required")
+    return got[0]
+
+
+def pinned_routes() -> dict[str, dict[str, Any]]:
+    """The cc 9.0 device's bf16-output cuBLAS route at each probed (M, K, N), "M,K,N" -> {"kernel": "nosplit"} or {"kernel": "splitk",
+    "SPLIT_K": s}: `torch.mm(x, w.t())`, which an unbiased `aten.linear` and the served wrapper's extern mm both run."""
+    return capability_pin((9, 0))["cublas"]
+
+
+def default_cublas_route(phase: str, M: int, K: int, N: int) -> tuple[str, dict[str, int]] | None:
+    """The captured default cuBLAS route, else (a linear) the cc 9.0 device pin's, distinguishing a known non-split launch from a
+    shape/M with no record."""
+    run = _route_run(phase, M, K, N)
+    if run is not None:
+        return ("splitk", {"SPLIT_K": run[2]}) if run[2] is not None else ("non_split", {})
+    if phase == "linear" and (r := pinned_routes().get(f"{M},{K},{N}")) is not None:
+        return ("splitk", {"SPLIT_K": r["SPLIT_K"]}) if r["kernel"] == "splitk" else ("non_split", {})
+    return None
+
+
+SPLITK_CANDIDATES = range(2, 17)
+
+
+def fit_cublas_split_k(x: np.ndarray, w: np.ndarray, got: np.ndarray, *, out: str,
+                       candidates: range = SPLITK_CANDIDATES) -> list[int]:
+    """The split counts in `candidates` under which the modeled route (`cublas_splitk_rows` at the default hypothesis,
+    `CUBLAS_SPLITK_HYPOTHESIS`) computes exactly the observed words `got` of x's rows against every row of w; [] names a route
+    no candidate models.  Under `splitk_count_probe` rows the fit is unique by construction; elsewhere more than one fit means
+    these rows cannot tell the candidates apart."""
+    x, w, got = np.asarray(x, np.uint16), np.asarray(w, np.uint16), np.asarray(got)
+    fits = []
+    for s in candidates:
+        if not 1 < s <= x.shape[1] // 16:
+            continue
+        want = cublas_splitk_rows(x, w, s, out=out)
+        if not (~MK._words_equal(got, want, f32_words=out == "f32")).any():
+            fits.append(int(s))
+    return fits
+
+
+def splitk_count_probe(K: int, max_rows: int, candidates: range = SPLITK_CANDIDATES) -> np.ndarray:
+    """W rows that tell every candidate split count apart through an all-ones activation row, under either output rounding.
+
+    Each row tests one chunk boundary t of some candidate's partition: -2^25 at t - 16, +2^25 at t and +1 at t + 16 (zeros
+    elsewhere).  A serial chain that crosses no boundary at t cancels the pair exactly before adding the +1; a partition split
+    at t reduces two +-2^25 partials whose chunk chains absorbed (lost) the +1.  The 1-against-0 difference survives the bf16
+    rounding, unlike the low-bit reassociation noise random rows leave, so `fit_cublas_split_k` over these rows reads the
+    served partition out of the words at any output type.  A greedy cover picks boundaries until every pair of candidates with
+    distinct partitions differs somewhere and every candidate has a probed boundary (so the unsplit serial chain fits no
+    candidate), and the builder verifies those distinctions on the models, raising otherwise."""
+    cands = [s for s in candidates if 1 < s <= K // 16]
+    sets = {s: frozenset(int(c[0]) for c in _split_cols(K, s, "contiguous")[1:]) for s in cands}
+    usable = sorted({t for b in sets.values() for t in b if 16 <= t <= K - 32})
+    pairs = {(a, b) for i, a in enumerate(cands) for b in cands[i + 1:] if sets[a] != sets[b]}
+    chosen: list[int] = []
+    while pairs:
+        t = max(usable, key=lambda t: sum((t in sets[a]) != (t in sets[b]) for a, b in pairs))
+        covered = {(a, b) for a, b in pairs if (t in sets[a]) != (t in sets[b])}
+        if not covered:
+            raise ValueError(f"split count probe cannot separate {sorted(pairs)} at K {K}")
+        chosen.append(t)
+        pairs -= covered
+    for s in cands:
+        if not sets[s] & set(chosen):
+            hit = next((t for t in usable if t in sets[s]), None)
+            if hit is None:
+                raise ValueError(f"split count probe has no usable boundary for {s} splits at K {K}")
+            chosen.append(hit)
+    if len(chosen) > max_rows:
+        raise ValueError(f"split count probe needs {len(chosen)} rows at K {K}, only {max_rows} available")
+    w = np.zeros((len(chosen), K), np.uint16)
+    for i, t in enumerate(chosen):
+        w[i, t - 16], w[i, t], w[i, t + 16] = 0xCC00, 0x4C00, 0x3F80
+    x = np.full((1, K), 0x3F80, np.uint16)
+    for out in ("f32", "bf16"):
+        serial = MK.dot_chain(x, w) if out == "f32" else MK.bf16_of(MK.dot_chain(x, w))
+        models = {s: cublas_splitk_rows(x, w, s, out=out) for s in cands}
+        for i, a in enumerate(cands):
+            if np.array_equal(models[a], serial):
+                raise ValueError(f"split count probe does not tell {a} splits from the serial chain at K {K} ({out})")
+            for b in cands[i + 1:]:
+                if sets[a] != sets[b] and np.array_equal(models[a], models[b]):
+                    raise ValueError(f"split count probe does not tell {a} from {b} apart at K {K} ({out})")
+    return w
 
 
 def dispatch_sm90(M: int, K: int, N: int) -> tuple[str, dict]:

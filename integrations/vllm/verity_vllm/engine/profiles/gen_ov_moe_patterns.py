@@ -176,7 +176,7 @@ class MoEFusedExperts:
     #: A profile states ONE of them (the checkpoint's `norm_topk_prob`, `C["NORM_TOPK_PROB"]`); the other value observed is Unsupported.
     renormalize: bool = False
     #: the router's statement: None = kernel order, "ordered" = `MoeRouterTopKOrdered[Norm]_v1`, the same function (`MoEFusedExpertsOrdered`);
-    #: a class attribute, not a field, so the profile's canonical form (and its fixtures) are unchanged
+    #: a class attribute, not a field, so the default construction's pattern fields are unchanged
     router = None
     #: [R19 qwen3, TP] patterns for descendants of the scope that are neither the six MoE kernels nor scope glue -- vLLM's `FusedMoE`
     #: issues the tensor-parallel all-reduce of the routed sum INSIDE `vllm.moe_forward` when `reduce_results=True`; a rank profile puts
@@ -383,14 +383,18 @@ class MoEFusedExperts:
         return unsupported(node, f"no profile pattern resolves the router's gate GEMM inside {op_name(node.op)}", child_id=gate.id)
 
     def _tiling(self, node: TreeNode, launch: TreeNode, ctx: StepContext) -> Unsupported | None:
-        """None when the launch's tiling is the profile's pinned one (`fused_pins`, warps, stages)."""
+        """None when the launch's tiling is the profile's pinned one (`fused_pins`, warps, stages) or a tuned tile the Build accepts
+        (`targets.moe_tuned_tile_refusal`)."""
         e = launch.enter
         consts = dict(e.constexprs)
         bad = {k: (consts.get(k), v) for k, v in self.fused_pins.items() if consts.get(k) != v}
         if bad or e.num_warps != self.fused_num_warps or e.num_stages != self.fused_num_stages:
+            why = T.moe_tuned_tile_refusal(target_of(ctx)[0], consts.get("BLOCK_SIZE_K"))
+            if why is None:
+                return None
             return unsupported(node, "fused_moe_kernel tiling differs from the pinned profile",
                                mismatches={k: {"observed": o, "pinned": p} for k, (o, p) in bad.items()},
-                               num_warps=e.num_warps, num_stages=e.num_stages)
+                               num_warps=e.num_warps, num_stages=e.num_stages, tuned=why)
         return None
 
     def _fused(self, node: TreeNode, launch: TreeNode, ctx: StepContext, *, expect_weighted: bool, expect_top_k: int, E: int, K: int, N: int,
@@ -563,8 +567,9 @@ class MoEFusedExpertsFp8(MoEFusedExperts):
     The router, the alignment schedule, the in-scope gate GEMM, `moe_sum` and the TP collective are `MoEFusedExperts`'.  The launch is
     `use_fp8_w8a8` with `group_n == group_k == G`, A_scale `[rows, K/G]` and B_scale `[E, cdiv(N, G), K/G]` row-major, the tiling pins as
     above, and `BLOCK_SIZE_K` dividing G.  At block 128 vLLM fuses the SiLU with the second quant (`silu_and_mul_per_block_quant`,
-    `triton_moe.py:474-485`), which this scope refuses by its shape.  DOT is the record target's e4m3 step (`targets.moe_expert_fp8_dot`);
-    a target with none refuses by name.  The record must attest `TritonExperts` (`header_moe_experts_class`): vLLM's FP8 MoE oracle may
+    `triton_moe.py:474-485`), which this scope refuses by its shape.  DOT is the launch tile's e4m3 step
+    (`targets.moe_expert_fp8_launch_dot`; #1944's `fp8_moe.sm90_dot` on tuned cc 9.0 launches); a target or tile with no registered
+    step refuses by name.  The record must attest `TritonExperts` (`header_moe_experts_class`): vLLM's FP8 MoE oracle may
     select another experts class, whose arithmetic these Definitions do not state."""
 
     name = "moe.fused_experts.pairwise.fp8"
@@ -600,7 +605,7 @@ class MoEFusedExpertsFp8(MoEFusedExperts):
 
     def _tiling(self, node: TreeNode, launch: TreeNode, ctx: StepContext) -> Unsupported | None:
         """A batch-invariant target's pinned tile (`MoEFusedExperts._tiling`) with SWAP_AB False; otherwise the tuned tile the Build
-        accepts (`targets.moe_fp8_tuned_tile_refusal`: cc 9.0, SWAP_AB = `enable_swap_ab`, a wgmma tile)."""
+        accepts (`targets.moe_fp8_tuned_tile_refusal`: cc 9.0, SWAP_AB = `enable_swap_ab`, registered MMAv2/QGMMA step)."""
         tp = target_of(ctx)[0]
         e = launch.enter
         c = e.constexprs
@@ -679,7 +684,10 @@ class MoEFusedExpertsFp8(MoEFusedExperts):
             if not routed and not s.quant.id < launch.id:
                 return unsupported(node, "the w13 launch's quant runs after the launch", quant_id=s.quant.id, launch_id=launch.id)
             try:
-                spec = T.moe_expert_fp8_gemm_spec(tp, E, K, N, G, s.KB, bool(launch.enter.constexprs.get("SWAP_AB")), routed=routed)
+                c = launch.enter.constexprs
+                spec = T.moe_expert_fp8_gemm_spec(tp, E, K, N, G, s.KB, bool(c.get("SWAP_AB")),
+                                                  BM=c.get("BLOCK_SIZE_M"), BN=c.get("BLOCK_SIZE_N"),
+                                                  WARPS=launch.enter.num_warps, routed=routed)
             except T.UnregisteredTarget as e:
                 return unsupported(node, f"target has no registered block-FP8 fused-MoE binding: {e}")
             if routed:

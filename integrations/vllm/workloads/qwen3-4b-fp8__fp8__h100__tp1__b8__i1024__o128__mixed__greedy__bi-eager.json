@@ -1,8 +1,26 @@
 {
- "schema": "verity-vllm/workload/v1",
+ "schema": "verity-vllm/workload/v2",
  "model": "Qwen/Qwen3-4B-Instruct-2507-FP8",
  "case": "QWEN3_4B_FP8",
- "tokenizer_revision": "8591804019c8b22094c3b5b4454e0edc05dffc98",
+ "engine": {
+  "revision": "8591804019c8b22094c3b5b4454e0edc05dffc98",
+  "vllm": "d9105ea80",
+  "args": {
+   "max_num_batched_tokens": 3545,
+   "max_model_len": 1152
+  },
+  "target": {
+   "compute_capability": [
+    9,
+    0
+   ],
+   "num_sms": 132,
+   "fp8_block_gemm": "cutlass"
+  },
+  "reasons": {
+   "VLLM_USE_DEEP_GEMM": "the target's fp8_block_gemm cutlass: with both DeepGEMM kernels excluded the cc 9.x selector takes CutlassFp8BlockScaledMMKernel, whose arithmetic is the registered ScaledMmFp8Block_v1 (DeepGEMM has no registered Definition)"
+  }
+ },
  "seed": 0,
  "variants": {
   "greedy": {
@@ -28,10 +46,6 @@
   "depends_on": "SHA256(row_id) only"
  },
  "expected_engine_steps": 128,
- "engine_args_required": {
-  "max_num_batched_tokens": 3545,
-  "max_model_len": 1152
- },
  "tokenizer_note": "prompt_token_ids from tokenizer.json sha256 aeb13307a71acd8f (tokenizers, add_special_tokens=False), natural text from corpus_coverage.json, truncated to prompt_len; prompt_text is the decode of the ids (informational)",
  "prompt_lengths": [
   11,
@@ -3820,13 +3834,5 @@
   "lengths_only": false,
   "execution": "bi-eager"
  },
- "note": "R12 sweep qwen3-4b-fp8__fp8__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager: B=8 I<=1024 O<=128 greedy arrivals=none; prompt lens [365, 633, 11, 1024, 817, 449, 165, 73], caps [128, 113, 95, 35, 121, 3, 9, 2], arrive steps [0, 0, 0, 0, 0, 0, 0, 0]; every request to max_tokens => 128 engine steps; max_num_batched_tokens keeps the whole admitted prefill in one step; max_model_len = I + O.  EOS untouched.",
- "target": {
-  "compute_capability": [
-   9,
-   0
-  ],
-  "num_sms": 132,
-  "fp8_block_gemm": "cutlass"
- }
+ "note": "R12 sweep qwen3-4b-fp8__fp8__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager: B=8 I<=1024 O<=128 greedy arrivals=none; prompt lens [365, 633, 11, 1024, 817, 449, 165, 73], caps [128, 113, 95, 35, 121, 3, 9, 2], arrive steps [0, 0, 0, 0, 0, 0, 0, 0]; every request to max_tokens => 128 engine steps; max_num_batched_tokens keeps the whole admitted prefill in one step; max_model_len = I + O.  EOS untouched."
 }

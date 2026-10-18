@@ -346,13 +346,13 @@ def test_a_row_refuses_a_set_it_cannot_run_before_any_stage(monkeypatch, knob, t
     else:
         monkeypatch.setitem(PO.ADAPTERS, "pous", "not_landed_here")
     with pytest.raises(PO.Refused, match=match):
-        PO.at_row(knob, {"target": target}, world=world)
+        PO.at_row(knob, {"engine": {"target": target}}, world=world)
 
 
 def test_a_row_without_protocols_is_the_row_as_before(monkeypatch):
-    assert PO.at_row(None, {}) is None and PO.at_row("sampled-proofs:vllm-v1", {"target": {"flash_attn_version": 2}}) is None
+    assert PO.at_row(None, {}) is None and PO.at_row("sampled-proofs:vllm-v1", {"engine": {"target": {"flash_attn_version": 2}}}) is None
     _fake_adapter(monkeypatch, "pous", _pous([]))
-    assert PO.at_row("sampled-proofs:vllm-v1,pous:s1", {"target": {}}) == ("pous:s1", "sampled-proofs:vllm-v1")
+    assert PO.at_row("sampled-proofs:vllm-v1,pous:s1", {"engine": {"target": {}}}) == ("pous:s1", "sampled-proofs:vllm-v1")
     with pytest.raises(PO.Refused, match="does not enable"):
         PO.at_row("sampled-proofs:vllm-v1,pous:s1", {"protocols_config": {"pouw": {}}})
 
@@ -360,6 +360,8 @@ def test_a_row_without_protocols_is_the_row_as_before(monkeypatch):
 def test_run_row_refuses_first_and_hands_the_set_to_the_stages(monkeypatch, tmp_path, capsys):
     from types import SimpleNamespace
 
+    from verity_vllm.config import RowConfig
+    from verity_vllm.pipeline import cli
     from verity_vllm.pipeline import row as ROW
     from verity_vllm.pipeline import row_records as R
     from verity_vllm.pipeline import row_stages
@@ -374,9 +376,11 @@ def test_run_row_refuses_first_and_hands_the_set_to_the_stages(monkeypatch, tmp_
             return 0
 
     monkeypatch.setattr(row_stages, "SingleRow", Single)
-    o = SimpleNamespace(row=row, role="LLAMA32_1B", repo="r", rev="v", env=None, gpu_util=None, build=None, match=None, commit=None,
-                        world=None, protocols=None)
+    o = cli.parse("row", ["run", row, "LLAMA32_1B", "r", "v", "--sweep-dir", str(tmp_path)], {})
     assert ROW.run_row(o, "build") == 0 and seen["protocols"] is None
+    eff = json.loads((tmp_path / row / ROW.EFFECTIVE_NAME).read_text())
+    assert eff["row"] == row and eff["config"]["engine"] == RowConfig.load(row).engine.to_json() and "requests" not in eff["config"]
+    assert eff["run_differs_from_config"] == ["repo", "rev"] and eff["run"]["protocols"] is None
     assert ROW.run_row(SimpleNamespace(**{**vars(o), "protocols": "pous:s1"}), "build") == 3
     assert "REFUSE (fail-closed)" in capsys.readouterr().out
     _fake_adapter(monkeypatch, "pous", _pous([]))
@@ -385,7 +389,7 @@ def test_run_row_refuses_first_and_hands_the_set_to_the_stages(monkeypatch, tmp_
     tp = SimpleNamespace(**{**vars(o), "row": row.replace("__tp1__", "__tp2__"), "protocols": "pous:s1,sampled-proofs:vllm-v1"})
     assert ROW.run_row(tp, "build") == 3
     wl = tmp_path / "wl.json"
-    wl.write_text(json.dumps({"target": {"flash_attn_version": 2}}))
+    wl.write_text(json.dumps({"engine": {"target": {"flash_attn_version": 2}}}))
     assert R.declared_target(str(wl)) == '{"flash_attn_version": 2}'
     assert json.loads(R.declared_target(str(wl), seen["protocols"])) == {"flash_attn_version": 2, "protocols": list(seen["protocols"])}
 
@@ -440,7 +444,7 @@ def test_beside_sampled_proofs_pouw_is_admitted_for_ncp_v2_only(monkeypatch):
     for scheme in POUW_SCHEMES:
         assert PO.refusals(_serve(f"pouw:{scheme}")) == ()
     p = TargetProfile(protocols=("pouw:ncp-v2", "sampled-proofs:vllm-v1"))
-    assert PO.commit_guard(p) is p and PO.at_row(None, {"target": p.to_json()}) == p.protocols
+    assert PO.commit_guard(p) is p and PO.at_row(None, {"engine": {"target": p.to_json()}}) == p.protocols
     with pytest.raises(SystemExit) as e:
         PO.commit_guard(TargetProfile(protocols=("pouw:ncp-v1", "sampled-proofs:vllm-v1")))
     assert e.value.code == 3

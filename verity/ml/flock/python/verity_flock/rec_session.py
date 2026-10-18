@@ -455,7 +455,7 @@ class Relay:
 
 def serve(listen: str, out: Path, statement: dict, circuit: Path, hidden: Sequence[str] = HIDDEN,
           rand: Callable[[int], bytes] = os.urandom, ready: Callable[[str], None] | None = None, sparse=None,
-          workers: int = 1, stacked: Path | None = None, forge: str | None = None) -> dict:
+          workers: int = 1, stacked: Path | None = None, forge: str | None = None, draw: dict | None = None) -> dict:
     """One session on ``listen``, held to the statement's holo schedule (`rec_live.schedule_for`, written to
     ``out/schedule.json`` first), through a `Relay` whose h is the ``hidden`` circuits' fold in ``circuit``; written into
     ``out`` (`Relay.write`), or, when it stops, the coin server's record alone. ``sparse``: the bucket's `rec_sparse.Shape`,
@@ -463,7 +463,8 @@ def serve(listen: str, out: Path, statement: dict, circuit: Path, hidden: Sequen
     (with ``sparse``): flock-circuit, which opens R at the sparse claims (`Relay.stacked_phase`, under ``out/stacked``;
     ``forge`` its forgery), R and its registered top as staged beside ``circuit`` (`stage_stacked`, read by
     `staged_stacked`): the session is refused before it starts unless the circuit registration META binds carries the
-    entry `rec_live.STACKED` and the prover holds its opening. Returns its summary."""
+    entry `rec_live.STACKED` and the prover holds its opening. ``draw``: the verifier's draw, answered at ``Register`` and
+    kept as both records' ``unit_draw`` (`rec_live.Proxy`). Returns its summary."""
     m, k_log = statement["dense_m"], statement["k_log"]
     nets, ranges, meta = hidden_circuits(Path(circuit), hidden)
     if meta["k_log"] != k_log:
@@ -490,7 +491,8 @@ def serve(listen: str, out: Path, statement: dict, circuit: Path, hidden: Sequen
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
     (out / "schedule.json").write_text(json.dumps(schedule, indent=1))
-    proxy = RL.Proxy(RL.CoinServer(rand), schedule=schedule, registration=registration, registered=registered, bound=bound)
+    proxy = RL.Proxy(RL.CoinServer(rand), schedule=schedule, registration=registration, registered=registered, bound=bound,
+                     draw=draw)
     relay = Relay(proxy, m, k_log, lambda p: hidden_fold(nets, ranges, p["alpha"], p["lw"], p["rho_in"], p["ts"]), phase, workers, st)
     host, port = listen.rsplit(":", 1)
     with socket.create_server((host, int(port))) as srv:
@@ -530,6 +532,7 @@ def main(argv=None) -> int:
     ap.add_argument("--statement", help="flock-circuit statement's output (its STATEMENT record)")
     ap.add_argument("--circuit", help="the inner statement's circuit.txt (the hidden circuits' rows)")
     ap.add_argument("--hidden", default=",".join(HIDDEN), help="the hidden circuits, comma-separated")
+    ap.add_argument("--draw", help="the verifier's draw, answered at Register and recorded (rec_inner.py stage's draw.json)")
     ap.add_argument("--check-fold", metavar="FOLD", help="InnerFold.lean --hide's output: check its comb plus the session's h "
                     "is its full fold, and exit (1 if not)")
     ap.add_argument("--inner", help="--check-fold: the session directory, whose private.json holds h")
@@ -554,7 +557,8 @@ def main(argv=None) -> int:
         sparse = Shape(*(int(v) for v in a.sparse.split(",")))
     res = serve(a.listen, Path(a.out), RL.statement_of(Path(a.statement).read_text()), Path(a.circuit), a.hidden.split(","),
                 ready=lambda addr: print(f"SERVING {addr}", flush=True), sparse=sparse,
-                workers=len(os.sched_getaffinity(0)) if a.workers is None else a.workers, stacked=a.stacked, forge=a.forge)
+                workers=len(os.sched_getaffinity(0)) if a.workers is None else a.workers, stacked=a.stacked, forge=a.forge,
+                draw=json.loads(Path(a.draw).read_text()) if a.draw else None)
     print("REC_INNER\t" + json.dumps(res), flush=True)
     return 0 if res["session"] else 1
 

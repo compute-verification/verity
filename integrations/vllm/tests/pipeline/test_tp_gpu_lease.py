@@ -25,6 +25,7 @@ import pytest
 
 from tests.pipeline.test_gpu_lease import fake_lease, released
 from tests.pipeline.test_row import TP_DENSE, _tp_row
+from verity_vllm.acquire.committer_api import StepCommitment
 from verity_vllm.engine import hooks
 from verity_vllm.engine.rank_worker import TP2CaptureWorkerExtension as _cls
 from verity_vllm.pipeline import gpu_lease as GL
@@ -103,7 +104,7 @@ class _Com:
 
     def finalize(self):
         self.ev.append((self.rank, "root"))
-        return SimpleNamespace(steps=[SimpleNamespace(n_leaves=3, n_bytes=12, n_tensors=2)], run_root=bytes([self.rank + 1]) * 32,
+        return SimpleNamespace(steps=[StepCommitment(0, b"", b"", 3, 12, 2, b"", 1.0, 1.5, 0)], run_root=bytes([self.rank + 1]) * 32,
                                root_ready_delay_s=0.0, t_finalize_s=0.0, spans={"total_s": 0.0}, weight_registration=None, persistent_bytes=0,
                                temporary_bytes_peak=0, extra={"errors": []})
 
@@ -345,6 +346,31 @@ def test_a_run_before_the_last_or_a_commit_without_a_lease_finalizes_and_resets_
     assert [f["binding"] for f in fin] == [{"ok": True}] * 2 and lease.watched == [] and not (lease.started.parent / "gpu_lease.released").exists()
 
 
+def test_a_commit_that_stops_after_a_failed_run_gives_every_gpu_back_there_and_only_once(lease):
+    """Fail-fast (`tp.commit`): the run a failed one stopped the Commit after was its last device work, so its GPUs go back there as at
+    the last run's finalize; after that finalize's own release, or with no lease, the stop asks the ranks nothing."""
+    lease.cuda.looks = [[], [], [0]]
+    _last_run(lease, last=False)
+    TPL.stop(lease.llm, 60.0, LAST, wait=lambda s: None)
+    assert _rpcs(lease.ev)[-4:] == [("tp2_commit_reset", {}), ("rank_kept", {}), ("rank_off", {}), ("rank_reset", {})]
+    assert GL._HELD == [] and lease.note()["released_at"] == LAST and "kept" not in lease.note() and all(free(p) for p in lease.locks)
+    n = len(lease.ev)
+    TPL.stop(lease.llm, 60.0, LAST, wait=lambda s: None)
+    assert len(lease.ev) == n
+
+
+def test_a_stop_after_the_last_runs_release_or_without_a_lease_asks_the_ranks_nothing(lease, monkeypatch):
+    lease.cuda.looks = [[], [], [0]]
+    _last_run(lease)
+    n = len(lease.ev)
+    TPL.stop(lease.llm, 60.0, LAST, wait=lambda s: None)
+    assert len(lease.ev) == n
+    monkeypatch.setattr(GL, "_HELD", [])
+    monkeypatch.setattr(TPL, "_OFF", threading.Event())
+    TPL.stop(lease.llm, 60.0, LAST, wait=lambda s: None)
+    assert len(lease.ev) == n
+
+
 def test_the_driver_that_never_initialised_cuda_has_no_context_to_reset(monkeypatch):
     monkeypatch.setattr(GL, "cuda_initialised", lambda: False)
     monkeypatch.setattr(GL, "DRIVER", lambda: (_ for _ in ()).throw(RuntimeError("cuDeviceGetCount: CUDA driver error 3")))
@@ -408,14 +434,14 @@ def test_a_tp_commit_that_fails_holding_its_lease_frees_every_gpu_at_its_exit(tm
 
 def test_the_tp_commit_takes_its_lease_before_the_device_and_gives_it_back_only_at_its_last_runs_finalize():
     """In `tp.commit.main`: the lease before the target reads the device and before the engine; the one release at the finalize of the
-    last instrumented run (not under --value-check, whose run follows), before the openings and the cross-rank pass; and in the row,
-    the Commit under the lease."""
+    last instrumented run (not under --value-check, whose run follows), before the openings and the cross-rank pass, or at the run a
+    failed one stopped the Commit after, before the value check it skips; and in the row, the Commit under the lease."""
     src = Path(TPL.__file__).with_name("commit.py").read_text()
     main = ast.get_source_segment(src, next(n for n in ast.parse(src).body if isinstance(n, ast.FunctionDef) and n.name == "main"))
     marks = ["TPL.acquire()", "va.target_of_workload(wl)", "LLM(**kw)", '"tp2_commit_make"', '"tp2_commit_install"', "TPL.finalize(llm",
-             '"tp2_commit_open"', '"tp2_commit_xrank_dump"', "TPL.reset(llm", "if args.value_check:"]
+             '"tp2_commit_open"', '"tp2_commit_xrank_dump"', "TPL.reset(llm", "TPL.stop(llm", "if args.value_check and not stopped:"]
     at = [main.index(m) for m in marks]
-    assert at == sorted(at) and main.count("TPL.finalize(") == 1, dict(zip(marks, at))
+    assert at == sorted(at) and main.count("TPL.finalize(") == 1 and main.count("TPL.stop(") == 1, dict(zip(marks, at))
     assert '"tp2_commit_finalize"' not in main and '"tp2_commit_reset"' not in main and "torch.cuda" not in main
     call = main[at[5]:main.index("\n", at[5])]
     assert 'last=pair == args.pairs - 1 and k == len(order) - 1 and not args.value_check' in call and 'f"work.pair{pair}.{arm}"' in call

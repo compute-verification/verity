@@ -15,7 +15,9 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     return [
         # DeepSeek-V4-Pro's served statics (HC 4, H 7168, Sinkhorn 20, the eps 1e-6): the Sinkhorn, the mixes at 4 splits (at most
         # 16 tokens), 112 (the TF32 GEMM at most 64 tokens) and 28 (layer 0's broadcast), the fused RMSNorm, the post, one split of
-        # mhc_fused, one split and the whole of the TF32 prenorm GEMM, the broadcast pre and hc_head
+        # mhc_fused, one split and the whole of the TF32 prenorm GEMM, the broadcast pre and hc_head.  The served TF32 split count
+        # falls from 112 to 8 toward the 1024-token envelope (`mhc_twin.tf32_split_schedule`); the capture binds and compares every
+        # served NS, and these bindings stay the representative shapes.
         ("MhcSinkhorn_v1", lambda: bind(mhc.MhcSinkhorn, HC=4, REPEAT=20, EPS=1e-6)),
         ("MhcMixes_v1", lambda: bind(mhc.MhcMixes, HC=4, NS=4, K=28672, REPEAT=20, **e)),
         ("MhcMixes_v1/ns112", lambda: bind(mhc.MhcMixes, HC=4, NS=112, K=28672, REPEAT=20, **e)),

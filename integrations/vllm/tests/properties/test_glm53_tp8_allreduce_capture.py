@@ -10,6 +10,8 @@ GLM-5.3's 6144, so the two contractions of the norm differ on some tokens (at a 
 is 2 CTAs."""
 from __future__ import annotations
 
+__models__ = ("zai-org/GLM-5.3", "deepseek-ai/DeepSeek-V4-Pro")
+
 import copy
 import json
 from pathlib import Path
@@ -181,11 +183,11 @@ def test_the_served_setting_follows_the_workload(tmp_path) -> None:
     for args, setting, source in [({"disable_custom_all_reduce": False}, "defaults", "w.json"),
                                   ({"disable_custom_all_reduce": True}, "custom-off", "w.json"),
                                   ({"max_model_len": 288}, "defaults", "vLLM's default: w.json states none")]:
-        p.write_text(json.dumps({"engine_args_required": args}))
+        p.write_text(json.dumps({"engine": {"args": args}}))
         assert X.workload_setting(p) == {"setting": setting, "disable_custom_all_reduce": args.get("disable_custom_all_reduce"),
                                          "source": source}
     assert X.workload_setting(tmp_path / "absent.json")["setting"] == "defaults"
-    p.write_text(json.dumps({"engine_args_required": {"disable_custom_all_reduce": "false"}}))
+    p.write_text(json.dumps({"engine": {"args": {"disable_custom_all_reduce": "false"}}}))
     with pytest.raises(ValueError):
         X.workload_setting(p)
     assert X.WORKLOAD_PATH.name == f"{X.WORKLOAD}.json" and X.WORKLOAD_PATH.parent.name == "workloads"
@@ -842,7 +844,7 @@ def test_main_end_to_end_on_stubbed_ranks(small, tmp_path, monkeypatch, capsys) 
     monkeypatch.setattr(X, "gate", lambda *a: {"ok": True, "checks": {}})
     monkeypatch.setattr(X.G, "_environment", lambda: {})
     workload = tmp_path / "workload.json"
-    workload.write_text(json.dumps({"engine_args_required": {"disable_custom_all_reduce": False}}))
+    workload.write_text(json.dumps({"engine": {"args": {"disable_custom_all_reduce": False}}}))
     monkeypatch.setattr(X, "WORKLOAD_PATH", workload)
     flip = {"fused/M3": ("residual", (1, 5))}
     trees_of = {"served": TREES, "served_again": TREES, "switch": TREES, "h7168": TREES}

@@ -36,14 +36,14 @@ def test_60_shape_hopper_build_for_an_l40s_row_fails_by_name():
 
 
 def test_declared_target_of_another_family_fails_before_build():
-    wl = {"target": {"compute_capability": [9, 0], "num_sms": 132, "flash_attn_version": 3}}
+    wl = {"engine": {"target": {"compute_capability": [9, 0], "num_sms": 132, "flash_attn_version": 3}}}
     rec = tf.check(ROW_L40S, wl, ["build"], want_device=False)
     assert rec["verdict"] == "FAIL" and rec["fail_class"] == "PRECHECK_FAIL_TARGET_FAMILY"
     assert rec["declared"] == [9, 0] and [m["fact"] for m in rec["mismatches"]] == ["declared"]
 
 
 def test_matching_declared_target_and_matching_build_pass():
-    wl = {"target": {"compute_capability": [8, 9], "num_sms": 142}}
+    wl = {"engine": {"target": {"compute_capability": [8, 9], "num_sms": 142}}}
     bs = {"step": {"target": {"compute_capability": [8, 9]}}}
     rec = tf.check(ROW_L40S, wl, ["build"], want_device=False, build_summary=bs)
     assert rec["verdict"] == "PASS" and rec["ok"] and rec["fail_class"] is None and rec["mismatches"] == []
@@ -62,8 +62,21 @@ def test_pod_device_of_another_family_fails_for_a_gpu_stage(monkeypatch):
 def test_device_target_build_reads_the_pod_device_declared_target_build_does_not(monkeypatch):
     monkeypatch.setattr(tf, "device_cc", lambda: ((9, 0), "test"))
     assert tf.check(ROW_L40S, {"sweep": {}}, ["build"])["verdict"] == "FAIL"          # target=device -> the Build would be Hopper
-    wl = {"target": {"compute_capability": [8, 9]}}
+    wl = {"engine": {"target": {"compute_capability": [8, 9]}}}
     assert tf.check(ROW_L40S, wl, ["build"])["verdict"] == "PASS"                       # declared L40S target on a Hopper host: Build is portable
+
+
+def test_a_leased_row_s_device_target_build_is_refused_and_its_gpu_stages_still_read_the_node(monkeypatch):
+    """A leased row hides every GPU from its stages (CUDA_VISIBLE_DEVICES empty), so a Build that targets the device sees none and
+    derives for the default target; nvidia-smi, which ignores the variable, would have read the node's GPU and passed it."""
+    monkeypatch.setattr(tf, "device_cc", lambda: (_ for _ in ()).throw(AssertionError("device read for a Build that cannot see it")))
+    rec = tf.check(ROW_L40S, {"sweep": {}}, ["build"], devices="")
+    assert rec["verdict"] == "FAIL" and [m["fact"] for m in rec["mismatches"]] == ["device"]
+    assert "CUDA_VISIBLE_DEVICES hides" in tf.summary_line(rec)
+    monkeypatch.setattr(tf, "device_cc", lambda: ((8, 9), "test"))
+    assert tf.check(ROW_L40S, {"sweep": {}}, ["build", "match"], devices="0")["verdict"] == "PASS"
+    assert tf.check(ROW_L40S, {"engine": {"target": {"compute_capability": [8, 9]}}}, ["build", "match"], devices="")["verdict"] == "PASS"
+    assert tf.check(ROW_L40S, {"sweep": {}}, ["match", "commit"], devices="")["verdict"] == "PASS", "a GPU stage takes the node's GPU by its lease"
 
 
 def test_no_visible_gpu_for_a_gpu_stage_fails_closed(monkeypatch):
@@ -77,7 +90,7 @@ def test_rtxpro6000_rows_are_the_cc_12_0_family(monkeypatch):
     assert tf.row_family(row) == ("rtxpro6000", (12, 0))
     monkeypatch.setattr(tf, "device_cc", lambda: ((12, 0), "test"))
     bs = {"step": {"target": {"compute_capability": [12, 0], "num_sms": 188}}}
-    assert tf.check(row, {"target": {"compute_capability": [12, 0]}}, ["build", "match", "commit"], build_summary=bs)["verdict"] == "PASS"
+    assert tf.check(row, {"engine": {"target": {"compute_capability": [12, 0]}}}, ["build", "match", "commit"], build_summary=bs)["verdict"] == "PASS"
     assert tf.check(ROW_L40S, {"sweep": {}}, ["match"])["mismatches"][0]["why"].startswith("pod device 12.0 != row family 8.9")
     monkeypatch.setattr(tf, "device_cc", lambda: ((8, 9), "test"))
     assert tf.check(row, {"sweep": {}}, ["match"])["verdict"] == "FAIL"
@@ -117,6 +130,9 @@ def test_cli_fails_by_name_with_rc_3_and_writes_the_record(tmp_path):
                          "--build-summary", str(bs), "--out", str(out)], capture_output=True, text=True, env={**env, "TARGET_FAMILY_WAIVER": "canary t"}, cwd=TREE)
     assert r2.returncode == 0 and r2.stdout.startswith("TARGET-FAMILY-WAIVED (canary t)")
     assert json.loads(out.read_text())["verdict"] == "WAIVED"
+    r3 = subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.cli", "target-family", "--row", ROW_L40S, "--stages", "build", "--out", str(out)],
+                        capture_output=True, text=True, env={**env, "CUDA_VISIBLE_DEVICES": ""}, cwd=TREE)
+    assert r3.returncode == 3 and "CUDA_VISIBLE_DEVICES hides" in r3.stderr, "the row's empty CUDA_VISIBLE_DEVICES reaches the check"
 
 
 def test_the_row_runs_the_preflight_before_build_and_canary_waives_by_name(tmp_path, monkeypatch):

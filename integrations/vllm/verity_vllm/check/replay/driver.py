@@ -61,13 +61,15 @@ import numpy as np
 
 from verity.ml.randomness import Key
 
+from verity_vllm.check.replay import cached_prefix as CP
 from verity_vllm.check.replay import fork as FK
 from verity_vllm.check.replay import replay_codes as RC
 from verity_vllm.check.replay.fork import WorkerDied
 from verity_vllm.check.replay.replay_codes import NOT_YET, WHY_CLASSES_BY_NAME, WHY_CLASSES_FAULT, why_class
 from verity_vllm.commit.opened import opened_in_children
 from verity_vllm.program.kernels.rows import EVALUATOR_PROVENANCE, EVALUATORS
-from verity_vllm.check.replay.index import V2_QUERY, ProgramIndex
+from verity_vllm.check.replay.index import V2_QUERY, ProgramIndex, node_runs
+from verity_vllm.program.compact import p_item_weight_span
 from verity_vllm.query import norm_scales
 from verity_vllm.check.replay.opening import CommittedStore, model_weights_provider
 from verity_vllm.check.replay.evaluate import INTERIOR_DEPTH, ROW_EVALUATORS, plan_vu, replay_vu
@@ -126,20 +128,21 @@ def _prewarm_weights(indices: dict, picked: list[dict], weights: Callable[[str, 
     seen: set[str] = set()
 
     def walk(pi: ProgramIndex, r: dict, depth: int) -> None:
+        wp = pi.pnames.index("weights") if "weights" in pi.pnames else None
         for group in r.get("args") or []:
-            for sl in group:
-                if sl[0] == "p" and int(sl[1]) < len(pi.pnames) and pi.pnames[int(sl[1])] == "weights":
-                    ws = pi.weight_slice(int(sl[2]), int(sl[3]))
-                    if ws is not None and ws[0] not in seen:
-                        seen.add(ws[0])
-                        weights(ws[0], ws[1], ws[2])
-                elif sl[0] == "n" and depth < INTERIOR_DEPTH:
-                    a, lo, hi = int(sl[1]), int(sl[2]), int(sl[3])
-                    if pi.member_at(a, lo, hi) is None:
-                        pr = pi.by_i.get(a)
-                        pd = pi.describe(pr) if pr is not None else None
-                        if pd is not None and pd["members"] == [] and pd["family"] in EVALUATORS:
-                            walk(pi, pr, depth + 1)                                # the interior producer's weights are the VU's too
+            for it in group if wp is not None else ():
+                span = p_item_weight_span(it, wp)                                  # a "P" progression's span, never its runs
+                ws = pi.weight_slice(*span) if span is not None else None
+                if ws is not None and ws[0] not in seen:
+                    seen.add(ws[0])
+                    weights(ws[0], ws[1], ws[2])
+            for sl in node_runs(group) if depth < INTERIOR_DEPTH else ():
+                a, lo, hi = int(sl[1]), int(sl[2]), int(sl[3])
+                if pi.member_at(a, lo, hi) is None:
+                    pr = pi.by_i.get(a)
+                    pd = pi.describe(pr) if pr is not None else None
+                    if pd is not None and pd["members"] == [] and pd["family"] in EVALUATORS:
+                        walk(pi, pr, depth + 1)                                    # the interior producer's weights are the VU's too
 
     for vu in picked:
         pi = indices[vu["request_id"]]
@@ -398,10 +401,11 @@ def family_strata(vus: list[dict], k: int | None, per_stratum: int = 2, draw: st
 
 def populate(programs: dict[str, dict[str, Any]], ranks: list[int], arrivals: dict[str, int], executed_prefix: dict[str, dict] | None,
              ring_slots: int | None, *, attention_paths: list[str] | None, tp: dict[str, Any] | None, program_dirs: dict[str, str] | None,
-             manifest: dict[str, Any] | None, memo: dict | None = None) -> tuple:
+             manifest: dict[str, Any] | None, memo: dict | None = None, cached_prefixes: dict[str, dict] | None = None) -> tuple:
     """`sampled_replay`'s enumeration: every Program's index and its request's population, with the not-evaluable counts, their codes,
     the manifest addresses, the `last` anchors and the address correspondence.  ``memo`` keeps the indices and the populations across calls
-    on the same Programs objects (the slim planner fills it before the run's seed exists)."""
+    on the same Programs objects (the slim planner fills it before the run's seed exists).  ``cached_prefixes``: per warm request
+    {"cached": C, "producers": [request label per cached block]} (`program.prefix_plan`), what its `prefix` reads resolve to."""
     memo = {} if memo is None else memo
     all_vus, not_ev, not_ev_fam, indices, codes = [], Counter(), Counter(), {}, {}   # codes: not-evaluable reason -> its structured code
     addresses: dict[tuple, dict] = {}                                             # [R17-3] manifest address -> class of the rows producing it
@@ -433,6 +437,14 @@ def populate(programs: dict[str, dict[str, Any]], ranks: list[int], arrivals: di
         addresses.update(got_a)
         codes.update(got_c)
         indices[rid] = pi
+    for rid, pc in (cached_prefixes or {}).items():
+        pi = indices.get(rid)
+        if pi is None or not int(pc.get("cached") or 0):
+            continue
+        if pi.kv_prefix is None or int(pi.kv_prefix["C"]) != int(pc["cached"]):
+            raise ValueError(f"{rid} is served {pc['cached']} cached prompt rows but its Program of record takes "
+                             f"{pi.kv_prefix['C'] if pi.kv_prefix else 'no'} cached prefix")
+        pi.cached_prefix[rid] = CP.CachedPrefix(pi.kv_prefix, [str(q) for q in pc["producers"]], indices, arrivals)
     return all_vus, not_ev, not_ev_fam, indices, codes, addresses, anchors, addr_rec
 
 
@@ -476,8 +488,10 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
                    weights_check: dict[str, Any] | None = None, targets: list[str] | None = None, workers: int | None = None, worker_peak: int | None = None,
                    ring_slots: int | None = None, retention: str | None = None, seed_challenge: str | None = None,
                    manifest: dict[str, Any] | None = None, executed_prefix: dict[str, dict] | None = None,
-                   program_dirs: dict[str, str] | None = None, challenge_key: Key | None = None, replay_k: int | None = None, replay_draw: str = "family", plan: bool = False, memo: dict | None = None) -> dict[str, Any]:
-    """C2 of record.  `challenge_key` (off legacy, `challenge.replay_key`) draws the sample in place of `seed`.  `executed_prefix` [COORD R17-26]: request -> `executed_prefix_of_record(...)` from the Commit's own committed tokens;
+                   program_dirs: dict[str, str] | None = None, challenge_key: Key | None = None, replay_k: int | None = None, replay_draw: str = "family", plan: bool = False, memo: dict | None = None,
+                   cached_prefixes: dict[str, dict] | None = None) -> dict[str, Any]:
+    """C2 of record.  `challenge_key` (off legacy, `challenge.replay_key`) draws the sample in place of `seed`.  `cached_prefixes`: each warm
+    request's cached rows and their producers (`populate`): its attention reads its cached prefix from what they committed.  `executed_prefix` [COORD R17-26]: request -> `executed_prefix_of_record(...)` from the Commit's own committed tokens;
     rows at request-relative steps >= n_exec leave the sampling pool into the named class `population.not_executed_by_rule` (never a
     stratum that grades 'not evaluated'); a request with prefix faults is not classified and fails `query_checks` by name.  `programs`: request label -> Program instances doc ({"rows", "params", ...}; requests sharing a shape share it).
     `manifest` [R17-3]: the row's required-value manifest (Q(P)) -- the population of record the replay's reach is reconciled against,
@@ -497,7 +511,8 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
     arrivals = arrivals or {}
     ranks = sorted({int((e.get("identity") or {}).get("rank", 0) or 0) for e in (bmap.get("entries") or [])}) or [0]
     all_vus, not_ev, not_ev_fam, indices, codes, addresses, anchors, addr_rec = populate(
-        programs, ranks, arrivals, executed_prefix, ring_slots, attention_paths=attention_paths, tp=tp, program_dirs=program_dirs, manifest=manifest, memo=memo)
+        programs, ranks, arrivals, executed_prefix, ring_slots, attention_paths=attention_paths, tp=tp, program_dirs=program_dirs, manifest=manifest, memo=memo,
+        cached_prefixes=cached_prefixes)
     pool_vus, not_exec_vus = _kept(split_not_executed(all_vus, executed_prefix), indices, all_vus)   # [R17-26] classified out of the pool
     picked_all, strata, tgt = sample(*family_strata(pool_vus, replay_k, per_stratum, replay_draw), seed, targets=targets, key=challenge_key)
     targeted, n_targeted, n_strat = tgt["hits"], int(tgt["added"]), int(tgt["stratified"])

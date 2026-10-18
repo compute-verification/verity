@@ -125,7 +125,7 @@ def softcap_head_states(q, k, v, BN: int, *, cap: float, masked_from: int, dot16
 
 def attention_softcap(statics: dict[str, Any], ops: Sequence[np.ndarray], dot_id: str, inv_id: str) -> dict[str, np.ndarray]:
     """One `AttentionSoftcap_v2` ROW: arg 0 = the query (NH*D words), args 1 / 2 = the T committed K / V rows (KVH*D words each), as
-    `rows.attention`; head h reads KV head h // (NH/KVH).  `dot_id` / `inv_id` are the DOT / INV statics resolved by `rows.prim_static`."""
+    `rows.attention`; head h reads KV head h // (NH/KVH).  `dot_id` / `inv_id` are the DOT / INV statics resolved by `kernel_registry.prim_static`."""
     T, NH, KVH, Dh, BN, MF = (int(statics[x]) for x in ("T", "NH", "KVH", "D", "BN", "MASKED_FROM"))
     cap = float(statics["CAP"])
     if len(ops) != 3:

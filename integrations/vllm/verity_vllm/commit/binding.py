@@ -32,6 +32,8 @@ from collections import Counter
 from typing import Any, Iterable, Iterator
 
 from verity_vllm.commit import challenge as CH
+from verity_vllm.query.manifest.bind import HIDDEN_FAMILIES, split_name
+from verity_vllm.query.manifest.format import MOE_PLANES
 from verity_vllm.query.manifest.format import PROMOTED_DTYPE_BYTES  # noqa: F401  -- re-exported (R19 int-20)
 from verity_vllm.query.manifest.format import PROMOTED_OBSERVATION_RULE as PROMOTED_INPUT_RULE  # noqa: F401  -- re-exported
 from verity_vllm.query.manifest.format import promoted_observation as promoted_input_acquisition  # noqa: F401  -- re-exported
@@ -39,7 +41,6 @@ from verity_vllm.query.manifest.format import promoted_observation as promoted_i
 IDENTITY_KEY = ("program_digest", "request_id", "step", "invocation", "op_path", "output_member", "element_range", "rank")
 RULES_VERSION = "r14-v1"
 MAP_SCHEMA = "binding-map/1"
-HIDDEN_FAMILIES = ("fa2.m1/", "fa3.m1/", "moe/")
 MOE_FAMILY = "moe/"                 # [R15 moe] block-stream planes: per-token (pair-major) members, split by request rows at B>1 (not per-launch)
 
 # Fixed per-module-class output-member rule (pre-execution structural knowledge of the vLLM Llama-family forward, NOT observation).
@@ -55,22 +56,10 @@ FIRST_NORM_SUFFIX = ".layers.0.input_layernorm"
 
 #: [R19 int-20, F-r19-int-20] a promoted member's observation point (`PROMOTED_INPUT_RULE`, `promoted_input_acquisition`): the manifest
 #: module owns the rule (manifest_format.PROMOTED_OBSERVATION_RULE / promoted_observation, shared by the collector's arming, this map and
-#: the layout-level manifest_format.coverage_check); imported above under the binding's names for its callers (bench.commit_delta, tests).
+#: the layout-level manifest.bind.coverage_check); imported above under the binding's names for its callers (bench.commit_delta, tests).
 
 
 # ---------------------------------------------------------------------- names -> identity parts
-
-def split_name(name: str) -> tuple[str, str]:
-    """Committed tensor name -> (op_path, output_member)."""
-    for fam in HIDDEN_FAMILIES:
-        if name.startswith(fam):
-            parts = name.split("/")
-            return "/".join(parts[:2]), "/".join(parts[2:]) or "out"       # fa2.m1/L3/g4x64x128/... -> ("fa2.m1/L3", "g4x64x128/...")
-    if "/" in name:
-        base, member = name.rsplit("/", 1)                                 # `<module>/<fx node>/<member>`: a call boundary's op_path has a `/`
-        return base, member
-    return name, "out"
-
 
 def logical_request(rid: str, order: dict[str, str]) -> str:
     """Engine row id -> workload `r<i>` (`order`: workload request id -> `r<i>`).  vLLM v1 suffixes the external request id with
@@ -108,30 +97,29 @@ def _numel(shape: Iterable[int]) -> int:
 def build_binding_map(layouts: dict[int, list], steps: list, run_root: bytes, program_digest: str, *, request_rows: dict[int, list[tuple[str, int, int]]] | None = None,
                       request_id: str = "r0", rank: int = 0, layout_version: str = "chunk-leaf-v1", chunk: int = 256,
                       weight_registration: dict | None = None, collector: dict | None = None,
-                      name_bindings: dict[str, list[str] | tuple[str, str]] | None = None) -> dict[str, Any]:
+                      binder: Any = None) -> dict[str, Any]:
     """identity -> commitment location, for every committed tensor of every step, from the published layouts + the step roots.
 
     `request_rows[step]` = [(request_id, row_lo, row_hi)] splits the leading (token/row) dimension of a batched member between the
     requests of that step (the scheduler's row order, recorded by the engine wrapper); without it the whole member binds `request_id`.
     Entries are compact (one per tensor x request); `digest` is over the canonical JSON of the entries -- recorded in the Commit record and
     mixed into the challenge, so the map cannot be chosen after the openings.
-    `name_bindings` [R19 int-20]: committed name -> (op_path, member) of the identity it binds when that is not the name's own (a promoted
-    member observed at its consumer's input: `<consumer>/in` binds (producer, `out`); `promoted_input_acquisition`).  The entry keeps the
-    committed name and says so (`observation`)."""
+    `binder` (`verity_vllm.query.manifest.bind.Binder`, from the required manifest): the identity each committed tensor binds; an entry bound
+    other than by its label or a tuple slot says how (`observation`).  Without one (no manifest) a name is its identity (`split_name`)."""
     entries: list[dict[str, Any]] = []
-    rebind = {str(k): (str(v[0]), str(v[1])) for k, v in (name_bindings or {}).items()}
     for step in sorted(layouts):
         metas = layouts[step]
         sc = steps[step] if step < len(steps) else None
         step_root = sc.root.hex() if sc is not None else None
-        inv: Counter = Counter()
-        for m in metas:
-            op, member = split_name(m.name)
-            bound_via = rebind.get(m.name)
-            if bound_via is not None:
-                op, member = bound_via
-            k = inv[m.name]
-            inv[m.name] += 1
+        if binder is not None:
+            bound = binder.bind(step, [m.name for m in metas])
+        else:
+            seen: Counter = Counter()
+            bound = []
+            for m in metas:
+                bound.append((*split_name(m.name), seen[m.name], "label"))
+                seen[m.name] += 1
+        for m, (op, member, k, how) in zip(metas, bound):
             numel = _numel(m.shape)
             off = m.stream_off if m.stream_off is not None and m.stream_off >= 0 else m.first_leaf * m.chunk
             rr = (request_rows or {}).get(step)
@@ -172,7 +160,7 @@ def build_binding_map(layouts: dict[int, list], steps: list, run_root: bytes, pr
                     "leaf_lo": int(off // chunk), "leaf_hi": int((off + max(m.nbytes, 1) - 1) // chunk + 1),
                     "stream_offset": int(off), "width_bytes": int(m.nbytes), "encoding": {"dtype": m.dtype, "shape": list(m.shape)}, "element_offset": int(goff),
                     "tensor_ordinal": int(m.ordinal), "name": m.name,
-                    **({"observation": "consumer-input"} if bound_via is not None else {}),
+                    **({"observation": how} if how not in ("label", "slot") else {}),
                 })
     if weight_registration:
         entries.append({"identity": identity_dict(identity(program_digest, "*", -1, 0, "weights", "registered", 0, 0, rank)), "kind": "registered-input",
@@ -282,7 +270,7 @@ def structure_of(committer, *, stochastic: bool = False, derived_splits: bool = 
     moe_src = next((s for s in committer.sources if getattr(s, "short_name", "") == "moe"), None)
     moe_layers = sorted(set(moe_src.layers.values())) if moe_src is not None else []
     return {"modules": mods, "attention_layers": sorted(attn_layers), "hidden": hidden, "moe_layers": moe_layers,
-            "moe_planes": ["router_w", "router_ids", "up", "act", "down", "sum"] if moe_layers else [],
+            "moe_planes": list(getattr(moe_src, "planes", MOE_PLANES)) if moe_layers else [],
             "weights_registered": bool(getattr(committer, "weights", None))}
 
 

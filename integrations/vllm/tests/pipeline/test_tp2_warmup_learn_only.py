@@ -11,6 +11,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from verity_vllm.acquire.committer_api import StepCommitment
 from verity_vllm.engine.rank_worker import TP2CaptureWorkerExtension as _cls
 from verity_vllm.pipeline.tp import warmup as WU
 
@@ -39,7 +40,7 @@ class _Com:
         learned = [0] if self.bounded and self.learn_only else []
         bs = {"enabled": self.bounded, "learn_only": self.learn_only, "learned_only_steps": learned, "learned_only_bytes": (4352 << 20) if learned else 0,
               "transient_peak_bytes": 0, "learn_budget_bytes": 4096 << 20, "plan_mismatches": 0}
-        return SimpleNamespace(steps=[SimpleNamespace(n_leaves=3, n_bytes=12, n_tensors=2)], run_root=(b"" if learned else b"\x01" * 32), root_ready_delay_s=0.0,
+        return SimpleNamespace(steps=[StepCommitment(0, b"", b"", 3, 12, 2, b"", 1.0, 1.5, 0)], run_root=(b"" if learned else b"\x01" * 32), root_ready_delay_s=0.0,
                                t_finalize_s=0.0, spans={"total_s": 0.0}, weight_registration=None, persistent_bytes=0, temporary_bytes_peak=0,
                                extra={"bounded_staging": bs, "native_collect": {"plans_cached": 5}, "pinned_pool_bytes": 1 << 20, "errors": []})
 

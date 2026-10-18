@@ -1,26 +1,82 @@
-"""The config record (`verity-vllm/config-record/v1`): what a config run keeps (docs/vllm-config-sweep-plan.md §2 step 4, §5).
+"""The config record (`verity-vllm/config-record/v1`): what a row's run keeps, and the circuit database's record of the row.
 
 A config run is one job over one vLLM configuration: the Build (the Programs and the `Q_word` manifest, with the strict word check), ONE
 instrumented Commit (no pairs; a control arm only as the slowdown's baseline) and a k-unit random replay.  Its record is small (kB) and
 keyed by the config (the row id): the Build's Program digests and manifest, the word check, the Commit's run root, openings and verdict,
 the replay's result with the units that differed, and the timing per arm.  Everything is read from the files the stages write in the row
-dir; nothing here runs a stage.  A TP2 row's record has the same parts, each with `per_rank` beside the total: the ranks' Program and
+dir; nothing here runs a stage.  A TP row's record has the same parts, each with `per_rank` beside the total: the ranks' Program and
 workload digests, run roots, openings and replays, the global manifest, the combined run root and the replay summed over the ranks.
 
-Outcome PASS: the Build passed, the word check passed, the instrumented run's Commit verdict passed (`check.verdict.commit_verdict`, which
-includes the replay) and the replay evaluated k units, all equal.  Anything else is FAIL with the first reason; a failure is a finding of
-the sweep, not a stop.
+A row of record (Build, Match, Commit) keeps the same record, with the Match (`match`) and the Commit read from that Commit's own
+summary (`summary_part`, as `verity_vllm.records.publish` passes it), since a later run rewrites the row dir's; a single-GPU Commit's
+summary decides nothing, so its Commit is its decision document, the row dir's `verdict.json` (`single_gpu_commit_part`).  Every
+record states the row's config (`row`: its file without the requests, the file's sha256 and the κ profile) and, once published,
+`evidence`: the art: ids of the Programs per rank, the manifest, the Match and Commit records and the conformance captures
+(`verity_vllm.records`).
+
+`stages` is each stage's last verdict in the row dir's `stages.txt`.  The Build's own (`build.stage`) is its status and the in-stage
+manifest's exit code; a Build whose Programs passed while that manifest alone failed is superseded by the manifest of record
+(`evidence.manifest`, `build.stage.superseded_by`), and passes only so.
+
+`served` is the switches that selected the Commit's kernels, as each serving process read them back, against what the row's config
+declares (`engine.served`, from the Commit's summary.json).
+
+Outcome PASS: the Build passed, the word check passed (a config run) or the Match passed (a row of record), the Commit verdict passed
+(`check.verdict.commit_verdict`, which includes the replay), the replay evaluated k units, all equal, and the served switches passed (a
+Commit that read none back is not run).  Anything else is FAIL with the first reason; a failure is a finding of the sweep, not a stop.
+Served switches that failed come before the Commit: the Commit fails closed on them before it runs.
 """
 from __future__ import annotations
 
+import hashlib
 import json
+import re
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.config import RowId
+from verity_vllm.config import MANIFESTS, WORKLOADS, RowConfig, RowId, UsageError
+from verity_vllm.engine import served as SV
+from verity_vllm.pipeline.research_outputs import verdicts
 
 SCHEMA = "verity-vllm/config-record/v1"
 NAME = "config_record.json"
+#: The evidence store's kind of a published record (`verity_vllm.records`).
+KIND = "vllm-config-record/v1"
+MANIFEST_RC = re.compile(r"\bmanifest_rc=(-?\d+)\b")
+INDEX = MANIFESTS / "records.json"
+INDEX_SCHEMA = "verity-vllm/records-index/v1"
+#: The tiers of a row's rebuild (`pipeline.neutrality.TIER_FLAGS`).
+TIERS = ("fast", "heavy")
+INDEX_ABOUT = ("Per row of record: `record`, its config record's art: id (`verity-vllm records publish`; null for a row pinned "
+               "before it has one), and its circuit's pins: every rank's Program digests (step, each request shape, GP-01's workload) "
+               "as the Build `pinned_from` names made them (the record, when they are its Programs), the manifest digest and the tier "
+               "of its rebuild.  `verity-vllm neutrality` rebuilds a row and compares; the PR that changes a circuit on purpose "
+               "re-pins it (`verity-vllm neutrality ROW --update`) and re-publishes its record.  A switched row's `aot` names the "
+               "comparison run whose predicted Programs equal its traced Build's on every rank (`verity-vllm predict compare`) and "
+               "that traced Build (`trace`): its record path's Build is the AOT Build (`verity_vllm.predict.aot`), its pins the "
+               "predicted Programs, and its rebuild the trace.")
+
+
+def load_index(path: Path) -> dict[str, Any]:
+    """The circuit database's index (`manifests/records.json`, `INDEX_SCHEMA`, `INDEX_ABOUT`): `rows`, per row of record its
+    `record` and its circuit's pins (`programs` per rank as `epoch.build_programs` reads them, `manifest_digest`, `tier`,
+    `pinned_from`), which `verity_vllm.records` publishes and `verity-vllm neutrality` compares.  No file is an empty index."""
+    if not path.is_file():
+        return {"schema": INDEX_SCHEMA, "about": INDEX_ABOUT, "rows": {}}
+    doc = json.loads(path.read_text())
+    if doc.get("schema") != INDEX_SCHEMA:
+        raise UsageError(f"{path}: schema {doc.get('schema')!r}, not {INDEX_SCHEMA}")
+    return doc
+
+
+def write_index(doc: dict[str, Any], path: Path) -> None:
+    path.write_text(json.dumps({**doc, "about": INDEX_ABOUT, "rows": dict(sorted(doc["rows"].items()))}, indent=1) + "\n")
+
+
+def aot_of(row: str, path: Path = INDEX) -> dict[str, Any] | None:
+    """A switched row's `aot` (`comparison`: the run that found its predicted Programs equal to its traced Build's on every rank;
+    `trace`: that Build, a `vllm-build/v1`), None for a row on the trace."""
+    return (load_index(path)["rows"].get(row) or {}).get("aot")
 
 
 def _json(p: Path) -> Any:
@@ -45,6 +101,87 @@ def config_of(row: str) -> dict[str, Any]:
         return {"row": row}
     return {"row": row, "model": r.model, "dtype": r.dtype, "gpu": r.target, "tp": r.world, "batch": r.batch, "input": r.max_input,
             "output": r.max_output, "arrivals": r.arrivals, "sampling": r.sampling, "engine": r.execution}
+
+
+def row_part(row: str, profile: str | None = None) -> dict[str, Any] | None:
+    """The row's config (`config.RowConfig`, its file without the requests), the file's sha256 and the κ profile its Match folds with
+    (`profile`, else the role's: `engine.profiles.generic.module_name`).  None for a row without a file."""
+    p = WORKLOADS / f"{row}.json"
+    if not p.is_file():
+        return None
+    cfg = RowConfig.load(p)
+    if profile is None and cfg.case:
+        from verity_vllm.engine.profiles.generic import module_name
+        profile = module_name(cfg.case, int(config_of(row).get("tp") or 1))
+    return {"file": f"workloads/{row}.json", "sha256": hashlib.sha256(p.read_bytes()).hexdigest(), "profile": profile,
+            "config": {k: v for k, v in cfg.to_json().items() if k != "requests"}}
+
+
+def match_part(d: Path, world: int) -> dict[str, Any] | None:
+    """The Match's verdict: a TP row's fold Match (`match/fold_match/tp2_fold_match.json`: per-rank fold, compare and GM-01, the
+    cross-rank leg, the profile it folded with), a single-GPU row's global Match (`global_match.json`, GM-01's ``verdict``).  None when
+    no Match ran."""
+    if world > 1:
+        fm = _json(d / "match" / "fold_match" / "tp2_fold_match.json")
+        if not fm:
+            return None
+        return {"ok": fm.get("pass") is True, "schema": fm.get("schema"), "profile": fm.get("profile"), "world": fm.get("world"),
+                "legs": fm.get("legs"), "problems": (fm.get("problems") or [])[:16]}
+    gm = _json(d / "global_match.json")
+    return {"ok": gm.get("verdict") == "PASS", "schema": gm.get("schema")} if isinstance(gm, dict) else None
+
+
+SUMMARY_GATES = ("weights_pin", "boundary_linkage", "cross_rank_collectives", "fold_match_binding", "query_population", "oracle_compare",
+                 "value_check")
+
+
+def _gate(v: Any) -> bool | None:
+    if not isinstance(v, dict):
+        return v if isinstance(v, bool) else None
+    return v["result"] if isinstance(v.get("result"), bool) else (v["verdict"] == "PASS" if "verdict" in v else None)
+
+
+def summary_part(sm: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    """(commit, replay) of a Commit of record from its summary (`commit/summary.json`, every pair): its pass, each pair's verdict and
+    run root (per rank too), the openings, each gate's result, the walls and the required manifest it committed against."""
+    rm = sm.get("required_manifest") or {}
+    roots = sm.get("tp_run_roots") or sm.get("run_roots") or []
+    gates = {k: _gate(sm.get(k)) for k in SUMMARY_GATES if k in sm}
+    if isinstance(sm.get("match_oracle"), dict):
+        gates["match_oracle"] = all(_gate(v) is True for v in sm["match_oracle"].values()) and bool(sm["match_oracle"])
+    per_pair = [p for p in sm.get("per_rank_roots") or [] if isinstance(p, dict)]
+    sr = sm.get("sampled_replay") or {}
+    commit = {"ok": sm.get("pass") is True, "pairs": sm.get("pairs"), "pass_per_pair": sm.get("commit_pass"), "run_root": roots[0] if roots
+              and len(set(roots)) == 1 else None, "run_roots": roots, "openings": sm.get("openings"), "tokens_equal": sm.get("tokens_equal"),
+              "gates": gates, "manifest": {k: rm.get(k) for k in ("manifest_digest", "identities", "program_digest_per_rank")},
+              "wall": {k: sm.get(k) for k in ("control_wall", "treatment_wall", "delta_wall_pct")}, "schema": sm.get("schema"),
+              "per_rank": {r: {"run_roots": [p.get(r) for p in per_pair]} for r in sorted({r for p in per_pair for r in p}, key=int)}
+              if per_pair else None}
+    smp = sr.get("sample") or {}
+    replay = {"ok": sr.get("result") is True and int(smp.get("mismatch_n") or 0) == 0, "result": sr.get("result"),
+              **{k: smp.get(k) for k in ("picked", "evaluated", "equal", "mismatch_n", "not_evaluated_n")},
+              "population": (sr.get("population") or {}).get("by_family"),
+              "per_rank": {r: {k: v.get(k) for k in ("result", "grade")} for r, v in sorted((sr.get("per_rank") or {}).items(), key=lambda kv: int(kv[0]))
+                           if isinstance(v, dict)} or None}
+    return commit, replay
+
+
+def stages_part(d: Path) -> dict[str, dict[str, str]]:
+    """Each stage's last verdict in the row dir's `stages.txt`: stage -> {status, line}."""
+    return {s: {"status": st, "line": rest[:240]} for s, (st, rest) in verdicts(d / "stages.txt").items()}
+
+
+def build_stage(stage: dict[str, str] | None, programs_ok: bool, manifest: str | None) -> dict[str, Any] | None:
+    """The Build stage's verdict: its status, the in-stage manifest's exit code (`manifest_rc`, a TP Build's; None when the Programs
+    failed before it ran) and, when the Programs passed and that manifest alone failed, `superseded_by`: the manifest of record
+    (`manifest`).  None when the row dir has no Build verdict."""
+    if stage is None:
+        return None
+    m = MANIFEST_RC.search(stage["line"])
+    out: dict[str, Any] = {"status": stage["status"], "manifest_rc": int(m.group(1)) if m else None}
+    if out["status"] != "PASS" and programs_ok and out["manifest_rc"] not in (None, 0) and manifest:
+        out["superseded_by"] = manifest
+    return out
 
 
 def build_part(d: Path) -> dict[str, Any]:
@@ -78,6 +215,15 @@ def commit_part(d: Path) -> tuple[dict[str, Any], dict[str, Any]]:
     if c.get("weights_attest"):
         commit["weights_attest"] = c["weights_attest"]
     return commit, replay_of(c.get("sampled_replay") or {})
+
+
+def single_gpu_commit_part(d: Path) -> tuple[dict[str, Any], dict[str, Any]]:
+    """(commit, replay) of a single-GPU Commit of record: its decision document (`verdict.json`, vllm-verdict/v1, over every pair and
+    the replay) decides it and names the manifest it committed against; its last instrumented run (`commit_part`) the rest."""
+    commit, replay = commit_part(d)
+    v = _json(d / "verdict.json") or {}
+    commit.update(ok=v.get("outcome") == "PASS", outcome=v.get("outcome"), manifest={"manifest_digest": v.get("manifest_digest")})
+    return commit, replay
 
 
 def replay_of(sr: dict[str, Any]) -> dict[str, Any]:
@@ -170,19 +316,35 @@ def timing_part(d: Path) -> dict[str, Any]:
 
 
 def record(d: str | Path, row: str, *, tree: str | None = None, device: dict[str, Any] | None = None,
-           stages: dict[str, Any] | None = None) -> dict[str, Any]:
-    """The config record of the run in row dir `d` (a TP row's per rank and in total)."""
+           summary: dict[str, Any] | None = None, evidence: dict[str, Any] | None = None) -> dict[str, Any]:
+    """The config record of the run in row dir `d` (a TP row's per rank and in total); with `summary`, a Commit of record's
+    (`summary_part`: the row dir's own `commit/` is then not read), and `evidence`, the art: ids the record cites."""
     d = Path(d)
     world = int(config_of(row).get("tp") or 1)
-    build, word = (tp_build_part(d, world) if world > 1 else build_part(d)), word_check_part(d)
-    commit, replay = tp_commit_part(d, world) if world > 1 else commit_part(d)
-    checks = (("build", build["ok"]), ("word check", word.get("ok")), ("commit", commit.get("ok")), ("replay", replay.get("ok")))
+    build, word, match = (tp_build_part(d, world) if world > 1 else build_part(d)), word_check_part(d), match_part(d, world)
+    stages, programs_ok = stages_part(d), build["ok"]
+    stage = build["stage"] = build_stage(stages.get("build"), programs_ok, (evidence or {}).get("manifest"))
+    build["ok"] = programs_ok and (stage is None or stage["status"] == "PASS" or "superseded_by" in stage)
+    if summary is not None:
+        (commit, replay), engine, timing = summary_part(summary) if world > 1 else single_gpu_commit_part(d), None, {}
+    else:
+        commit, replay = tp_commit_part(d, world) if world > 1 else commit_part(d)
+        engine, timing = engine_part(d), timing_part(d)
+    served = SV.of_summary(summary if summary is not None else _json(d / "commit" / "summary.json"))
+    gate = ("match", match["ok"]) if match is not None else ("word check", word.get("ok"))
+    switches = ("served switches", (served or {}).get("ok"))
+    checks = (("build", build["ok"]), gate, *((switches,) if switches[1] is False else ()), ("commit", commit.get("ok")),
+              ("replay", replay.get("ok")), switches)
     why = next((f"{name} {'FAIL' if ok is False else 'not run'}" for name, ok in checks if ok is not True), None)
+    if why == "served switches FAIL":
+        why = f"served switches FAIL: {'; '.join(served.get('problems') or [])}"
+    if why == "build FAIL" and programs_ok and stage and stage["manifest_rc"] not in (None, 0):
+        why = f"build FAIL: the in-stage manifest exited {stage['manifest_rc']} and no manifest of record supersedes it (evidence.manifest)"
     if why == "commit FAIL" and commit.get("reason"):
         why = f"commit FAIL: {commit['reason']}"
-    return {"schema": SCHEMA, "config": config_of(row), "tree": tree, "device": device, "outcome": "PASS" if why is None else "FAIL",
-            "why": why, "build": build, "word_check": word, "commit": commit, "replay": replay, "engine": engine_part(d), "timing": timing_part(d),
-            "stages": stages or {}}
+    return {"schema": SCHEMA, "config": config_of(row), "row": row_part(row, (match or {}).get("profile")), "tree": tree, "device": device,
+            "outcome": "PASS" if why is None else "FAIL", "why": why, "build": build, "word_check": word, "match": match, "commit": commit,
+            "replay": replay, "engine": engine, "served": served, "timing": timing, "stages": stages, "evidence": evidence or {}}
 
 
 def write(d: str | Path, row: str, **kw: Any) -> dict[str, Any]:

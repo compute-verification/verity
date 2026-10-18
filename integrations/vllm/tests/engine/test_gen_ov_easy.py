@@ -187,8 +187,8 @@ def test_every_b7_gemm_k_is_a_multiple_of_the_pinned_block_k():
 def test_workload_file():
     path = REPO / WORKLOAD
     doc = json.loads(path.read_text())
-    assert doc["schema"] == "verity-vllm/workload/v1" and doc["case"] == "B7"
-    assert doc["model"] == B7.REPO_ID and doc["checkpoint_revision"] == B7.REVISION
+    assert doc["schema"] == "verity-vllm/workload/v2" and doc["case"] == "B7"
+    assert doc["model"] == B7.REPO_ID and doc["engine"]["revision"] == B7.REVISION
     assert doc["variants"] == {"greedy": {"temperature": 0.0, "top_p": 1.0, "top_k": 0}}
     assert doc["prompt_lengths"] == [32] and doc["max_tokens"] == [16] and len(doc["requests"]) == 1
     r = doc["requests"][0]
