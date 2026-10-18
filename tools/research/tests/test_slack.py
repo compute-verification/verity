@@ -1634,6 +1634,31 @@ def test_a_clone_holding_an_open_route_follows_the_published_close_and_its_forwa
     assert (len(bells(fake, old)), len(bells(fake, new))) == (0, 1)
 
 
+def test_a_forward_target_is_read_as_published_and_one_that_cannot_be_read_is_unreachable(fake, registry, routes_dirs, capsys):
+    """`resolve` reads each forward target's published copy as `deliver` reads the names it starts from: a target this
+    clone holds open, published closed into another name, rings that name; a target the clone lacks whose published copy
+    can't be read is unreachable, and the post's other names still ring."""
+    local, remote = routes_dirs
+    stale, box = inbox(fake, routes_dirs, "old-b"), inbox(fake, routes_dirs, "circuits")
+    add_route(local, "old-a", "1.0", closed="2026-10-18T16:00Z", forward_to="old-b")
+    add_route(remote, "old-b", stale, closed="2026-10-18T16:47Z", forward_to="circuits")         # published: closed
+    rc, _, err = run(capsys, "send", "--as", "ci", "--to", "@old-a", "--text", "is it batched yet?")
+    assert rc == 0 and "route @circuits: rang (for @old-a, finished)" in err
+    assert (len(bells(fake, stale)), len(bells(fake, box))) == (0, 1)
+
+    def get(url: str) -> bytes | None:
+        if url.endswith("/gone.json"):
+            raise slack.SlackError(f"{url}: HTTP 503")
+        return slack.http_get(url)
+    add_route(local, "old-c", "2.0", closed="2026-10-18T16:00Z", forward_to="gone")
+    to, r = slack.Routes(get=get).resolve("old-c")
+    assert (to, r) == ("gone", None)
+    assert slack.unreachable("old-c", to, r) == "it forwards to @gone, which has no inbox: see `research msg names list`"
+    lines = slack.deliver(slack.client(argparse_ns()), slack.load_registry(registry), slack.Routes(get=get), COORD,
+                          {"text": "@old-c @circuits a question", "ts": "1700000000.900000", "username": "ci", "bot_id": BOT})
+    assert lines == ["@old-c: it forwards to @gone, which has no inbox: see `research msg names list`", "@circuits: rang"]
+
+
 def test_of_a_routes_two_copies_the_newer_counts():
     base = {"schema": slack.ROUTE_SCHEMA, "name": "x", "holder": "bc-a", "inbox_ts": "1.0", "opened": "2026-10-01T17:00Z", "closed": None}
     reopened = {**base, "holder": "bc-b", "opened": "2026-10-16T21:38Z"}

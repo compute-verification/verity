@@ -1002,6 +1002,7 @@ class Routes:
             if _route_ok(r, p.stem):
                 self.local[p.stem] = r
         self._fetched: dict[str, dict | None] = {}
+        self._unread: set[str] = set()                           # names whose published copy couldn't be read
 
     def _fetch(self, name: str) -> dict | None:
         raw = self.get(f"{self.base}{name}.json")
@@ -1027,13 +1028,22 @@ class Routes:
             try:
                 self._fetch(name)
             except SlackError:
-                pass
+                self._unread.add(name)
         if len(names) == 1:
             one(names[0])
         elif names:
             from concurrent.futures import ThreadPoolExecutor  # noqa: PLC0415
             with ThreadPoolExecutor(max_workers=min(16, len(names))) as pool:
                 list(pool.map(one, names))
+
+    def current(self, name: str) -> dict | None:
+        """`name`'s route as the published table has it, read once per table (`deliver` reads every name it starts from so):
+        a copy that can't be read leaves the clone's, so a name the clone lacks then has none."""
+        if not NAME_RE.match(name):
+            return None
+        if name not in self._fetched and name not in self._unread:
+            self.refresh([name])
+        return _newer(self.local.get(name), self._fetched.get(name))
 
     def all(self) -> dict[str, dict]:
         return {n: r for n in {**self.local, **self._fetched} if (r := _newer(self.local.get(n), self._fetched.get(n)))}
@@ -1042,13 +1052,14 @@ class Routes:
         return {r["inbox_ts"] for r in self.all().values()}
 
     def resolve(self, name: str) -> tuple[str, dict | None]:
-        """Follow a closed route's `forward_to` (at most FORWARD_HOPS hops): the name that gets the doorbell, and its route.
-        A route still closed at the end (`unreachable`) is a dead end, a loop or a chain too long: nobody reads its inbox."""
-        r = self.get_route(name)
+        """Follow a closed route's `forward_to` (at most FORWARD_HOPS hops), each name as published (`current`): the name that
+        gets the doorbell, and its route.  No route at the end, or one still closed (`unreachable`), is a dead end, a loop or
+        a chain too long: nobody reads its inbox."""
+        r = self.current(name)
         for _ in range(FORWARD_HOPS):
             if not r or not r.get("closed") or not r.get("forward_to"):
                 break
-            name, r = r["forward_to"], self.get_route(r["forward_to"])
+            name, r = r["forward_to"], self.current(r["forward_to"])
         return name, r
 
 
@@ -1058,7 +1069,7 @@ FORWARD_HOPS = 3
 def unreachable(name: str, to: str, r: dict | None) -> str | None:
     """Why `Routes.resolve(name)`'s answer `(to, r)` rings no inbox, or None when `r` is open."""
     if not r:
-        return "no inbox"
+        return "no inbox" if to == name else f"it forwards to @{to}, which has no inbox: see `research msg names list`"
     if not r.get("closed"):
         return None
     if r.get("forward_to"):
@@ -1179,7 +1190,8 @@ def deliver(api: Slack, reg: dict, routes: Routes, ch: str, msg: dict, *, urgent
                 continue
             known = h is not None
             lines.append(f"@{name}: no inbox" + (f"; its holder opens one with `research msg names open --as {name}`" if known else
-                         " -- nobody will see this; check the name (`research msg names list`)") if not r else f"@{name}: {why}")
+                         " -- nobody will see this; check the name (`research msg names list`)") if not r and to == name
+                         else f"@{name}: {why}")
             continue
         if to == author:
             continue
