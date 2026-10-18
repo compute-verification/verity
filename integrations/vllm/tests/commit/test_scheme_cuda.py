@@ -134,11 +134,12 @@ def test_native_tree() -> None:
         assert nt.chunk_leaves(window, f, f["chunk_index"])[0].hex() == c["leaf"]
 
 
-@pytest.mark.parametrize("n", [1, 2, 3, 1023, 1024, 1025, 2049, 3589, 4097])
+@pytest.mark.parametrize("n", [1, 2, 3, 1023, 1024, 1025, 2049, 3589, 4097, 65537, 131075])
 def test_step_hasher_trees_are_fold_levels(n: int) -> None:
-    """``StepHasher.tree``, ``tree_window`` and ``tree_window_top`` (ten levels a launch, each block folding an aligned slice of 1024
-    nodes) give every level of ``scheme.fold_levels``: odd widths, a partial last slice of one node or of an odd count, a second launch
-    over the first's tops, and windows of 2048 leaves whose partial last one climbs by lifts."""
+    """``StepHasher.tree``, ``tree_window`` and ``tree_window_top`` (a level of more than 65536 nodes a launch, the narrower ones ten a
+    launch, each block folding an aligned slice of 1024 nodes) give every level of ``scheme.fold_levels``: odd widths, a partial last
+    slice of one node or of an odd count, a second launch over the first's tops, one and two wide levels of odd width before the
+    narrow ones, and windows of 2048 leaves whose partial last one climbs by lifts."""
     from verity_vllm.commit.committer import native_collect as NC
 
     hasher, st = NC.ext().StepHasher(), torch.cuda.current_stream().cuda_stream

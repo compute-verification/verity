@@ -42,6 +42,7 @@ extern "C" int verity_chunk_leaves_launch(const uint32_t* stream, uint32_t* out,
                                           uint32_t src_mask, uint32_t HB, uint32_t M, uint32_t NB, cudaStream_t st);   // native_tree.cu
 extern "C" int verity_chunk_leaves_launch_base(const uint32_t* stream, uint32_t* out, long n_chunks, int chunk_words, uint32_t launch_tag,
                                                uint32_t src_mask, uint32_t HB, uint32_t M, uint32_t NB, long ci_base, cudaStream_t st);
+extern "C" int verity_tree_level_launch(const uint32_t* in, uint32_t* out, long n_in, cudaStream_t st);                // native_tree.cu
 extern "C" int verity_tree_levels_launch(const uint32_t* in, uint32_t* out, long n_in, int n_levels, cudaStream_t st);  // native_tree.cu
 extern "C" int verity_rows_params_bytes();                                                                              // native_rows.cu
 extern "C" int verity_rows_build(const uint8_t* domain_id, const uint8_t* ks, const uint8_t* row_prefix, const uint8_t* salt_prefix,
@@ -49,6 +50,8 @@ extern "C" int verity_rows_build(const uint8_t* domain_id, const uint8_t* ks, co
 extern "C" int verity_rows_leaves_launch(const void* params, const uint8_t* rows, uint64_t stride, uint64_t n_rows, const uint8_t* salts,
                                          const uint8_t* tn, uint64_t first, uint64_t m, uint64_t n_total, uint8_t* out, uint8_t* bc,
                                          uint8_t* hs, cudaStream_t st);
+extern "C" int verity_rows_level_launch(const void* params, const uint8_t* in, uint8_t* out, uint64_t n_out, int level, uint64_t first_index,
+                                        cudaStream_t st);
 extern "C" int verity_rows_levels_launch(const void* params, const uint8_t* in, uint8_t* out, uint64_t n_in, int level, uint64_t base,
                                          int n_levels, cudaStream_t st);
 
@@ -61,8 +64,11 @@ inline double now_s() {
   return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
 }
 
-// Levels are built this many at a time, one launch each (verity_tree_levels_launch, verity_rows_levels_launch: a block folds its own
-// aligned slice of 2^kFusedLevels nodes), so a window of 2^18 leaves takes two launches, not eighteen.
+// A level of more than kWideLevel nodes is built by one launch of a thread a parent (verity_tree_level_launch, verity_rows_level_launch);
+// the narrower ones kFusedLevels at a time, one launch each (verity_tree_levels_launch, verity_rows_levels_launch: a block folds its own
+// aligned slice of 2^kFusedLevels nodes).  A block's threads idle as its slice narrows, which on a wide level costs more than the
+// launches saved (a 2^22-leaf tree a third slower on H200 folded from its leaves), while below kWideLevel a level's launch is its cost.
+constexpr int64_t kWideLevel = int64_t{1} << 16;
 constexpr int64_t kFusedLevels = 10;
 
 int64_t levels_to_root(int64_t n) {
@@ -77,6 +83,16 @@ std::vector<at::Tensor> tree_levels_above(const at::Tensor& base, int64_t n_up, 
   std::vector<at::Tensor> up;
   at::Tensor cur = base;
   while (n_up > 0) {
+    if (cur.size(0) > kWideLevel) {
+      at::Tensor out = at::empty({(cur.size(0) + 1) / 2, 8}, base.options());
+      int lrc = verity_tree_level_launch(reinterpret_cast<const uint32_t*>(cur.data_ptr()), reinterpret_cast<uint32_t*>(out.data_ptr()),
+                                         cur.size(0), side);
+      if (lrc != 0) throw std::runtime_error(std::string("tree_level: ") + cudaGetErrorString(static_cast<cudaError_t>(lrc)));
+      up.push_back(out);
+      cur = out;
+      --n_up;
+      continue;
+    }
     const int64_t k = std::min(n_up, kFusedLevels);
     std::vector<int64_t> widths;
     int64_t total = 0;
@@ -107,6 +123,19 @@ std::vector<at::Tensor> rows_levels_above(const void* params, const at::Tensor& 
   std::vector<at::Tensor> up;
   at::Tensor cur = base;
   while (n_up > 0) {
+    if (cur.size(0) > kWideLevel) {
+      const int64_t n_out = cur.size(0) / 2;
+      at::Tensor out = at::empty({n_out, 64}, base.options());
+      int lrc = verity_rows_level_launch(params, reinterpret_cast<const uint8_t*>(cur.data_ptr()), reinterpret_cast<uint8_t*>(out.data_ptr()),
+                                         static_cast<uint64_t>(n_out), static_cast<int>(level), static_cast<uint64_t>(first_index >> 1), side);
+      if (lrc != 0) throw std::runtime_error(std::string("rows_level: ") + cudaGetErrorString(static_cast<cudaError_t>(lrc)));
+      up.push_back(out);
+      cur = out;
+      --n_up;
+      ++level;
+      first_index >>= 1;
+      continue;
+    }
     const int64_t k = std::min(n_up, kFusedLevels), n_in = cur.size(0);
     at::Tensor buf = at::empty({n_in - (n_in >> k), 64}, base.options());
     int lrc = verity_rows_levels_launch(params, reinterpret_cast<const uint8_t*>(cur.data_ptr()), reinterpret_cast<uint8_t*>(buf.data_ptr()),
