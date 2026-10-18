@@ -228,7 +228,7 @@ def walkthrough(between=lambda n: None):
 
 def test_the_walkthrough_runs_as_shown(capsys):
     c, acc, acc12, ledger = walkthrough()
-    assert acc.sound and sum(b.credited for b in acc.blocks) == c.boolean_size
+    assert acc.sound and sum(b.credited for b in acc.blocks) == c.work
     assert all(b.credited > 0 for b in acc.blocks)        # each stage is credited to the block it ran on
     assert acc12.sound and acc12.input_bits == {"x": 16, "temperature": 16}
     assert ledger.sound and len(ledger.epochs) == 3

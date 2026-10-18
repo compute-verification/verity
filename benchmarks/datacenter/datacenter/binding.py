@@ -53,22 +53,24 @@ class Placement:
         """The placement's public properties for the epoch `plan` audits."""
         work: dict[str, float] = {b.name: 0.0 for b in self.datacenter.blocks}
         forced: dict[str, float] = {b.name: 0.0 for b in self.datacenter.blocks}
+        trusted = {i for i, g in enumerate(self.circuit.gates) if g.op == "input" and g.input.source == "trusted"}
+        consumed: set[tuple[int, str]] = set()
         for i, g in enumerate(self.circuit.gates):
             if (b := self.block(i)) is not None:
-                work[b] += g.boolean_size
-            if g.op == "input" and g.input.source == "trusted":
-                for r in {self.block(j) for j, h in enumerate(self.circuit.gates) if i in h.operands} - {None}:
-                    forced[r] += g.bits
+                work[b] += g.work
+                consumed.update((j, b) for j in trusted.intersection(g.operands))
+        for j, b in consumed:
+            forced[b] += self.circuit.gates[j].bits
         stores = {s.name: s for s in self.stores}
         stores.update({w.store.name: w.store for w in plan.wipes})
-        return Profile(self.datacenter, plan, occupancy(self), work, forced, stores)
+        return Profile(self.datacenter, plan, occupancy(self), work, forced, stores, self.circuit.unit)
 
 
 @dataclass(frozen=True)
 class Profile:
     """A placement's public properties, with the declaration and the verifier's plan they are read against: the frames
-    each certifier port shows in each bucket (`occupancy`), the work each block is to be credited with (`work`, in
-    Boolean gates), the trusted data each block consumes (`forced`, in bits), and the registered stores."""
+    each certifier port shows in each bucket (`occupancy`), the work each block is to be credited with (`work`, in the
+    circuit's `unit`), the trusted data each block consumes (`forced`, in bits), and the registered stores."""
 
     datacenter: Datacenter
     plan: Plan
@@ -76,6 +78,7 @@ class Profile:
     work: dict[str, float]
     forced: dict[str, float]
     stores: dict[str, Store]
+    unit: str = "gate"
 
     @property
     def windows(self) -> range:
