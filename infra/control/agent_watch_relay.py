@@ -4,6 +4,10 @@ cancelled and continued, one held again within the hour (left for a person), a t
 agent that holds a handle (the Slack registry's `holder`) is named by its handle. The pod frees held runs whether or not this runs;
 it stops when infra's VM is suspended, and resumes from the offset it last posted.
 
+Each pass also writes /data/agent-watch/doorbells.json, which the watch's ready-to-wake rule reads: each open inbox's holder (the
+notes' routes.d) and its latest doorbell in the last day (a reply in the inbox thread, `from NAME, thread ...`). The watch ignores
+it once 30 minutes old, so a suspended VM silences that half of the rule, never fakes it.
+
 usage (tmux agent-watch-relay, research importable, $SLACK_BOT_TOKEN set, $RESEARCH_SLACK_REGISTRY when not run from a checkout):
   python3 infra/control/agent_watch_relay.py [--once] [--dry-run]"""
 import json
@@ -18,6 +22,8 @@ from research import slack
 from research.pods import budgets, connect
 
 EVENTS = "/data/agent-watch/events.jsonl"
+BELLS = "/data/agent-watch/doorbells.json"
+BELLS_WINDOW_S = 24 * 3600
 OFFSET = Path.home() / "agent-watch/offset"
 EVERY_S = 5 * 60
 DRY = "--dry-run" in sys.argv
@@ -30,7 +36,8 @@ SAY = {"held": "was held after a finished tool call since {since} ({minutes} min
        "long_call": "has had a tool call running since {since} (45+ min); not cancelled",
        "crashed": "ended in ERROR; the watch {action}",
        "erroring": "ended in ERROR again after {restarts} restarts in a row: left for a person (relaunch it, or report it to Cursor)",
-       "stuck": "has a run in {status} since {since} ({minutes} min) and starts no other; not cancelled (the API refuses it)"}
+       "stuck": "has a run in {status} since {since} ({minutes} min) and starts no other; not cancelled (the API refuses it)",
+       "ready_to_wake": "is idle with nothing waking it: {reason}; the watch {action}"}
 
 
 def log(msg: str) -> None:
@@ -38,9 +45,10 @@ def log(msg: str) -> None:
 
 
 def text(rec: dict) -> str:
-    who = f"@{HOLDERS[rec['agent']]}'s coordinator" if rec.get("agent") in HOLDERS else (rec.get("name") or "an agent")
+    handle = rec.get("handle") or HOLDERS.get(rec.get("agent"))
+    who = f"@{handle}'s coordinator" if handle else (rec.get("name") or "an agent")
     line = SAY.get(rec.get("kind"), "{kind}").format(**{"since": "?", "minutes": "?", "action": "recorded it", "restarts": "?",
-                                                         **rec})
+                                                         "reason": "?", **rec})
     return (f"*Agent watch:* {who} (<https://cursor.com/agents/{rec.get('agent')}|{rec.get('agent')}>, run {rec.get('run')}) {line}."
             + (f" New run {rec['new_run']}." if rec.get("new_run") else ""))
 
@@ -49,7 +57,31 @@ def pod(cmd: str) -> str:
     return subprocess.run([*connect.ssh_base(budgets.GUARD_HOST), cmd], capture_output=True, text=True, timeout=120, check=True).stdout
 
 
+def bells(api: slack.Slack, now: float) -> dict:
+    """doorbells.json: each open inbox's holder and the ts of its latest doorbell in the last BELLS_WINDOW_S (0 for none)."""
+    routes, inboxes = slack.Routes(), {}
+    for name in sorted({*routes.local, *(h["handle"] for h in REG.get("handles") or [])}):
+        r = routes.get_route(name, fresh=True)
+        if not r or r.get("closed") or not slack.AGENT_ID_RE.fullmatch(str(r.get("holder") or "")):
+            continue
+        msgs = api.paged("conversations.replies", "messages", channel=r.get("channel") or slack.channel_id_for(REG, slack.FRONT_DOOR),
+                         ts=r["inbox_ts"], oldest=f"{now - BELLS_WINDOW_S:.6f}")
+        rung = [float(m["ts"]) for m in msgs if m.get("ts") != r["inbox_ts"]
+                and (b := slack.DOORBELL_RE.match(m.get("text") or "")) and b[1] != "router"]
+        inboxes[name] = {"agent": r["holder"], "last": max(rung, default=0.0)}
+    return {"t": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now)), "inboxes": inboxes}
+
+
 def once() -> None:
+    try:
+        b = json.dumps(bells(slack.Slack(os.environ.get("SLACK_BOT_TOKEN")), time.time()))
+        if DRY:
+            log(f"would write {BELLS}: {b}")
+        else:
+            subprocess.run([*connect.ssh_base(budgets.GUARD_HOST), f"cat > {BELLS}.tmp && mv {BELLS}.tmp {BELLS}"], input=b,
+                           capture_output=True, text=True, timeout=120, check=True)
+    except slack.SlackError as e:
+        log(f"doorbells not read: {e}")
     done = int(OFFSET.read_text()) if OFFSET.exists() else 0
     lines = pod(f"tail -n +{done + 1} {EVENTS} 2>/dev/null || true").splitlines()
     for ln in lines:

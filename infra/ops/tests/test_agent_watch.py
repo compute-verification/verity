@@ -45,7 +45,8 @@ def records(tmp_path):
 def test_a_run_held_after_a_finished_tool_call_is_cancelled_and_continued_once(tmp_path):
     api, clock, w, started = setup(tmp_path)
     assert [r.run for r in started] == ["run-1"]
-    assert json.loads((tmp_path / "status.json").read_text()) == {"t": W.iso(clock.t), "active": 1, "followed": ["run-1"]}
+    assert json.loads((tmp_path / "status.json").read_text()) == {"t": W.iso(clock.t), "active": 1, "followed": ["run-1"],
+                                                                   "coordinators": 0, "doorbells": "missing"}
     w.on_event("run-1", "tool_call", {"callId": "c1", "name": "Shell", "status": "running"})
     clock.t += 30
     w.on_event("run-1", "tool_call", {"callId": "c1", "name": "Shell", "status": "completed"})
@@ -205,3 +206,134 @@ def test_the_stream_parses_server_sent_events_until_done(monkeypatch):
     assert events[1][1] == {"callId": "c1", "name": "Shell", "status": "completed"}
     assert seen[0].full_url.endswith("/v1/agents/bc-a/runs/run-1/stream")
     assert seen[0].get_header("Authorization").startswith("Basic ")
+
+
+T0 = W.epoch("2026-10-18T20:00:00Z")
+
+
+def coordinators(tmp_path, agents, runs, wake=False, bells=None):
+    """A registry where bc-c… holds @circuits (with a lane bc-l… that posts as it) and the watch over `agents`."""
+    reg = tmp_path / "registry.json"
+    reg.write_text(json.dumps({"handles": [
+        {"handle": "circuits", "holder": f"the circuits coordinator ({CO}); its lane ({LANE}) posts as it too"},
+        {"handle": "console", "holder": "Daniel's desktop agent (f7772a12-d61f-4bbb-8c4f-e79e8d6d30dc)"}]}))
+    if bells is not None:
+        (tmp_path / "doorbells.json").write_text(json.dumps(bells))
+    api, clock = FakeApi(agents, runs), Clock(T0)
+    return api, clock, W.Watch(api, tmp_path / "events.jsonl", clock, registry=reg, wake=wake)
+
+
+CO, LANE, OTHER = (f"bc-{c * 8}-{c * 4}-{c * 4}-{c * 4}-{c * 12}" for c in "cbd")
+FINISHED = {"status": "FINISHED", "createdAt": "2026-10-18T19:10:00Z", "updatedAt": "2026-10-18T19:20:00Z"}
+
+
+def test_a_coordinator_with_no_run_for_30_min_is_recorded_ready_to_wake_once_an_hour(tmp_path):
+    """A coordinator's 15-minute duty timer didn't fire: its latest run FINISHED at 19:20Z and nothing ran until 20:00Z."""
+    api, clock, w = coordinators(tmp_path, [{"id": CO, "name": "circuits", "status": "IDLE", "latestRunId": "run-f",
+                                             "updatedAt": "2026-10-18T19:20:00Z"}], {"run-f": dict(FINISHED)})
+    w.sweep(lambda r: None)
+    clock.t += W.RECANCEL_S - 60
+    w.sweep(lambda r: None)
+    (rec,) = records(tmp_path)
+    assert (rec["kind"], rec["agent"], rec["handle"], rec["run"]) == ("ready_to_wake", CO, "circuits", "run-f")
+    assert rec["reason"] == "no run for 40 min since its last ended at 2026-10-18T19:20:00Z"
+    assert rec["action"] == "recorded (--wake is off)" and api.posts == [], "the flag is off: recorded, never a POST"
+    assert json.loads((tmp_path / "status.json").read_text())["coordinators"] == 1
+    clock.t += 60
+    w.sweep(lambda r: None)
+    assert [r["kind"] for r in records(tmp_path)] == ["ready_to_wake"] * 2, "again once the hour is up"
+
+
+def test_ready_to_wake_needs_a_holder_a_finished_run_and_30_min(tmp_path):
+    agents = [{"id": CO, "status": "IDLE", "latestRunId": "run-recent"},          # ended 25 min ago: its timer may yet fire
+              {"id": OTHER, "status": "IDLE", "latestRunId": "run-f"},             # holds no handle
+              {"id": LANE, "status": "IDLE", "latestRunId": "run-f2"},             # a lane that posts as the handle
+              {"id": "bc-x", "status": "ARCHIVED", "latestRunId": "run-f3"}]
+    runs = {"run-recent": {**FINISHED, "updatedAt": "2026-10-18T19:35:00Z"}, "run-f": dict(FINISHED), "run-f2": dict(FINISHED),
+            "run-f3": dict(FINISHED)}
+    api, clock, w = coordinators(tmp_path, agents, runs)
+    w.sweep(lambda r: None)
+    assert records(tmp_path) == []
+    api._agents[0]["latestRunId"], runs["run-c"] = "run-c", {"status": "CANCELLED", "updatedAt": "2026-10-18T19:00:00Z"}
+    w.sweep(lambda r: None)
+    assert records(tmp_path) == [], "a cancelled run is a person's stop (or the watch's own), not a missed timer"
+    api._agents[0].update(status="ACTIVE", latestRunId="run-r")
+    runs["run-r"] = {"status": "RUNNING", "createdAt": "2026-10-18T19:00:00Z"}
+    started = []
+    w.sweep(started.append)
+    assert records(tmp_path) == [] and [r.run for r in started] == ["run-r"], "a run in the window: followed, not woken"
+
+
+def test_an_archived_coordinator_is_never_woken(tmp_path):
+    api, clock, w = coordinators(tmp_path, [{"id": CO, "status": "ARCHIVED", "latestRunId": "run-f"}], {"run-f": dict(FINISHED)},
+                                 wake=True)
+    w.sweep(lambda r: None)
+    assert records(tmp_path) == [] and api.posts == []
+
+
+def test_a_pending_doorbell_marks_an_idle_coordinator_ready_to_wake(tmp_path):
+    """Its inbox rang at 19:45Z, after its latest run started; 10 min on, nothing has run. The relay writes the doorbells."""
+    rang = W.epoch("2026-10-18T19:45:00Z") + 0.123
+    run = {"status": "FINISHED", "createdAt": "2026-10-18T19:40:00Z", "updatedAt": "2026-10-18T19:44:00Z"}
+    bells = {"t": W.iso(T0 - 60), "inboxes": {"vllm": {"agent": OTHER, "last": f"{rang:.6f}"},
+                                              "circuits": {"agent": CO, "last": f"{rang:.6f}"}}}
+    api, clock, w = coordinators(tmp_path, [{"id": OTHER, "status": "IDLE", "latestRunId": "run-v"},
+                                            {"id": CO, "status": "IDLE", "latestRunId": "run-c"}],
+                                 {"run-v": dict(run), "run-c": dict(run)}, bells=bells)
+    clock.t = rang + W.DOORBELL_S - 1
+    w.sweep(lambda r: None)
+    assert records(tmp_path) == [], "the subscription has 10 min to start a run"
+    clock.t += 1
+    w.sweep(lambda r: None)
+    assert sorted((r["handle"], r["reason"]) for r in records(tmp_path)) == [
+        ("circuits", "a doorbell rang at 2026-10-18T19:45:00Z and no run has started since"),
+        ("vllm", "a doorbell rang at 2026-10-18T19:45:00Z and no run has started since")], \
+        "the inbox's holder counts as a holder, even one the registry hasn't caught up with"
+    assert json.loads((tmp_path / "status.json").read_text())["doorbells"] == "fresh"
+
+
+def test_a_doorbell_before_the_run_or_a_stale_file_marks_nothing(tmp_path):
+    run = {"status": "FINISHED", "createdAt": "2026-10-18T19:50:00Z", "updatedAt": "2026-10-18T19:51:00Z"}
+    before = {"t": W.iso(T0), "inboxes": {"vllm": {"agent": OTHER, "last": str(W.epoch("2026-10-18T19:45:00Z"))}}}
+    api, clock, w = coordinators(tmp_path, [{"id": OTHER, "status": "IDLE", "latestRunId": "run-v"}], {"run-v": run}, bells=before)
+    w.sweep(lambda r: None)
+    assert records(tmp_path) == [], "the run that started at 19:50Z answered the 19:45Z doorbell"
+    after = {"t": W.iso(T0 - W.BELLS_STALE_S), "inboxes": {"vllm": {"agent": OTHER, "last": str(W.epoch("2026-10-18T19:50:30Z"))}}}
+    (tmp_path / "doorbells.json").write_text(json.dumps(after))
+    w.sweep(lambda r: None)
+    assert records(tmp_path) == [] and json.loads((tmp_path / "status.json").read_text())["doorbells"] == "stale"
+
+
+def test_wake_starts_one_run_an_hour_and_a_busy_agent_is_not_counted(tmp_path):
+    api, clock, w = coordinators(tmp_path, [{"id": CO, "status": "IDLE", "latestRunId": "run-f"}], {"run-f": dict(FINISHED)},
+                                 wake=True)
+    real_post = api.post
+
+    def busy(path, body=None):
+        raise W.urllib.error.HTTPError(path, 409, "Conflict", {}, None)
+    api.post = busy
+    w.sweep(lambda r: None)
+    assert records(tmp_path) == [] and CO not in w.woken, "409 agent_busy: a run of its own started; not counted"
+    api.post = real_post
+    clock.t += 60
+    w.sweep(lambda r: None)
+    w.sweep(lambda r: None)
+    ((path, body),) = api.posts
+    assert path == f"/v1/agents/{CO}/runs" and "duty timer" in body["prompt"]["text"]
+    assert "research msg read --as circuits" in body["prompt"]["text"]
+    (rec,) = records(tmp_path)
+    assert (rec["kind"], rec["action"], rec["new_run"]) == ("ready_to_wake", "started a run", "run-new")
+    clock.t += W.RECANCEL_S
+    w.sweep(lambda r: None)
+    assert len(api.posts) == 2, "still idle an hour later: woken again"
+
+
+def test_a_terminal_run_is_read_once(tmp_path):
+    api, clock, w = coordinators(tmp_path, [{"id": CO, "status": "IDLE", "latestRunId": "run-f", "updatedAt": W.iso(T0)}],
+                                 {"run-f": dict(FINISHED)})
+    reads = []
+    get = api.get
+    api.get = lambda path, **p: reads.append(path) or get(path, **p)
+    for _ in range(3):
+        w.sweep(lambda r: None)
+    assert reads == [f"/v1/agents/{CO}/runs/run-f"]
