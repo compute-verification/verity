@@ -55,9 +55,9 @@ theorem FibersEq.piConst {ι α β : Type} [Fintype ι] {f : α → β} (h : Fib
 
 /-- **Reading a function at an injection's points has fibers of one size**: the fiber at `g` is the functions on the
 points the injection misses. -/
-theorem fibersEq_comp_emb {A B X : Type} (ι : A ↪ B) : FibersEq fun f : B → X => f ∘ ι := by
+theorem fibersEq_comp_emb {A B Cod : Type} (ι : A ↪ B) : FibersEq fun f : B → Cod => f ∘ ι := by
   classical
-  refine fibersEq_of_equiv (D := {b // b ∉ Set.range ι} → X)
+  refine fibersEq_of_equiv (D := {b // b ∉ Set.range ι} → Cod)
     { toFun := fun f => (f ∘ ι, fun b => f b.1)
       invFun := fun p b => if hb : b ∈ Set.range ι then p.1 (Set.mem_range.1 hb).choose else p.2 ⟨b, hb⟩
       left_inv := fun f => funext fun b => by
@@ -79,12 +79,14 @@ theorem fibersEq_comp_emb {A B X : Type} (ι : A ↪ B) : FibersEq fun f : B →
 namespace Masked
 
 /-- `Fin n` in `Fin N`, `n ≤ N`, at the same index. -/
-def castEmb {n N : ℕ} (h : n ≤ N) : Fin n ↪ Fin N := ⟨Fin.castLE h, fun _ _ e => Fin.ext (congrArg Fin.val e)⟩
+def castEmb {n N : ℕ} (h : n ≤ N) : Fin n ↪ Fin N :=
+  ⟨Fin.castLE h, fun a b e => Fin.ext (show a.val = b.val from (congrArg Fin.val e :))⟩
 
 /-- **The first `n` of `N` values.** -/
-def cut {X : Type} {n N : ℕ} (h : n ≤ N) (f : Fin N → X) : Fin n → X := f ∘ castEmb h
+def cut {Cod : Type} {n N : ℕ} (h : n ≤ N) (f : Fin N → Cod) : Fin n → Cod := f ∘ castEmb h
 
-theorem fibersEq_cut {X : Type} {n N : ℕ} (h : n ≤ N) : FibersEq (cut (X := X) h) := fibersEq_comp_emb (castEmb h)
+theorem fibersEq_cut {Cod : Type} {n N : ℕ} (h : n ≤ N) : FibersEq (cut (Cod := Cod) h) :=
+  fibersEq_comp_emb (castEmb h)
 
 /-! ## The table count -/
 
@@ -150,6 +152,12 @@ masked prover's tape `z`'s with table `c`'s mask words its cell's (`TapeZk.mask`
 noncomputable def TapePlan.ofLayout {P : Composed.LigProver} (L : TapeLayout P)
     (z : (Fin Claims.Flock.zkTableCap → L.Cell) → FlockComplete.TapeZk) : TapePlan (tabC P) where
   Tape := Fin Claims.Flock.zkTableCap → L.Cell
+  finTape := by
+    haveI : Fintype L.Cell := L.finCell
+    exact inferInstance
+  neTape := by
+    haveI : Nonempty L.Cell := L.neCell
+    exact inferInstance
   tapeZk t := { z t with mask := fun c k => if hc : c < Claims.Flock.zkTableCap then L.maskAt (t ⟨c, hc⟩) k else 0 }
   tape x t := rejoin (tabC P) x fun j => L.read x j (t (Fin.castLE (jOf_le_cap x) j))
 
@@ -164,7 +172,7 @@ of one size, then joined by a bijection. -/
 theorem fibersEq_ofLayout {P : Composed.LigProver} (L : TapeLayout P)
     (z : (Fin Claims.Flock.zkTableCap → L.Cell) → FlockComplete.TapeZk) (x : Msg) :
     FibersEq ((TapePlan.ofLayout L z).tape x) := by
-  have h1 : FibersEq (cut (X := L.Cell) (jOf_le_cap x)) := fibersEq_cut _
+  have h1 : FibersEq (cut (Cod := L.Cell) (jOf_le_cap x)) := fibersEq_cut _
   have h2 : FibersEq fun (g : Fin (jOf x) → L.Cell) j => L.read x j (g j) :=
     FibersEq.pi (f := fun j => L.read x j) fun j => L.fibers x j
   exact (h1.comp h2).comp (fibersEq_of_bijective (rejoin_bijective (tabC P) x))
@@ -273,6 +281,11 @@ theorem fibersEq_resTab {z zM : ZkView.Sizes} (hz : Fits z zM) {h hM : ℕ} (hh 
   unfold resTab
   exact (fibersEq_resBase hz hh).prodMap ((fibersEq_comp_emb _).prodMap (fibersEq_comp_emb _))
 
+theorem resTab_mask {z zM : ZkView.Sizes} (hz : Fits z zM) {h hM : ℕ} (hh : h ≤ hM)
+    (c : TabRand zM (Fin hM → ZkView.Salt)) (k : Fin z.nMask) :
+    (resTab hz hh c).1.1 k = c.1.1 (Fin.castLE hz.nMask k) :=
+  rfl
+
 /-- A `--zk` schedule's sizes the randomness reads: `2^k₀` lanes of `2^cols` words, `t_pad`, level 0's `2^logLen`
 positions, and the salts of levels ≥ 1 (`hiCount`). -/
 def bnd (p : _root_.Flock.Schedule × ℕ) : ℕ :=
@@ -337,24 +350,29 @@ theorem maskWordsOf_length_le {st : _root_.Flock.Stmt} (M : Composed.MaskSetup s
       _ = 2 ^ st.m := by rw [M.m, pow_add, mul_comm]
       _ ≤ 2 ^ 35 := Nat.pow_le_pow_right (by norm_num) hm
 
+theorem bnd_parts {a b c d e M : ℕ} (h : a + b + c + d + e ≤ M) :
+    a ≤ M ∧ b ≤ M ∧ c ≤ M ∧ d ≤ M ∧ e ≤ M := by
+  omega
+
 /-- **A live table's sizes fit `zMax`.** -/
 theorem fits_zkTab (P : Composed.LigProver) {st : _root_.Flock.Stmt} (y : ZkHidden.ZkTab st) :
     Fits (Composed.coinedOf P y.table st).z zMax := by
   have hB := bnd_le y
   simp only [bnd] at hB
+  obtain ⟨h1, h2, h3, h4, -⟩ := bnd_parts hB
   have hN := y.hN
   have hL := y.hL
   refine ⟨maskWordsOf_length_le y.mask (ZkHidden.schedule_range y.hz).2, ?_, ?_, ?_, ?_, ?_, ?_, le_rfl, ?_, le_rfl⟩
   · show 2 ^ (FlockSoundness.Refine.schedOf y.sch).k0 ≤ schMax
-    omega
+    exact h1
   · show 2 ^ (FlockSoundness.Refine.schedOf y.sch).level₀.logCols ≤ schMax
-    omega
+    exact h2
   · show y.tPad ≤ schMax
-    omega
+    exact h3
   · show y.tPad ≤ schMax
-    omega
+    exact h3
   · show 2 ^ (FlockSoundness.Refine.schedOf y.sch).level₀.logLen - y.tPad ≤ schMax
-    omega
+    exact le_trans (Nat.sub_le _ _) h4
   · show (ZkLink.layOf st y.sch).len - 4 ≤ 2 ^ 64
     omega
   · show ZkExec.innerN (ZkLink.layOf st y.sch) - _root_.Flock.Zk.Q ≤ 2 ^ 64
@@ -365,7 +383,7 @@ theorem hi_le {st : _root_.Flock.Stmt} (y : ZkHidden.ZkTab st) : Composed.hiCoun
   have hB := bnd_le y
   simp only [bnd] at hB
   show 2 * ((FlockSoundness.Refine.schedOf y.sch).levels.tail.map fun l => 2 ^ l.logLen).sum ≤ schMax
-  omega
+  exact (bnd_parts hB).2.2.2.2
 
 /-- **The prefix layout**: a cell of a table's randomness at `zMax` and `schMax` salts, each statement's table reading
 every coordinate at its index (`resTab`); the mask words the cell's slot bits, packed. -/
@@ -377,7 +395,10 @@ noncomputable def TapeLayout.prefix (P : Composed.LigProver) : TapeLayout P wher
   mask_read x j c k hk := by
     have hk' : k < zMax.nMask := lt_of_lt_of_le hk (fits_zkTab P (zkTab x j)).nMask
     simp only [hk', ↓reduceDIte]
-    rfl
+    first
+      | exact congrArg wordOfBits (resTab_mask (fits_zkTab P (zkTab x j)) (hi_le (zkTab x j)) c ⟨k, hk⟩).symm
+      | exact congrArg wordOfBits (resTab_mask _ _ c ⟨k, hk⟩).symm
+      | exact congrArg wordOfBits rfl
 
 end Masked
 
