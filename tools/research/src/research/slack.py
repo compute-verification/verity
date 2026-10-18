@@ -1369,7 +1369,7 @@ def cmd_send(ns: argparse.Namespace, reg: dict) -> int:
         if kind == "ask" and not ns.thread and len(to) == 1:
             body = linear_ask(ns, to[0], h["handle"], body)
         text = " ".join([*(tag(t) for t in to), body])
-    ch = channel_id(ns, reg, FRONT_DOOR) if not ns.thread else channel_id(ns, reg)
+    ch = channel_id(ns, reg, FRONT_DOOR) if not (ns.thread or ns.channel) else channel_id(ns, reg)   # --channel: a machine's alert
     quiet = ns.quiet or kind == "fyi"                                # an fyi wants no reply, so it wakes only its --to names
     tags = tuple(t for t in (kind if kind not in ("announce", "reply") else "", QUIET if quiet else "") if t)
     _post(client(ns), ch, h["handle"], text, ns.thread, route=_route(ns, reg, ch), urgent=ns.urgent, tags=tags)
