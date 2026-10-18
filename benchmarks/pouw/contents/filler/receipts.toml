@@ -1,0 +1,3 @@
+order = 30
+tool = "The receipt folds' steps, key rules and pfill's lane starts, which `pfill.cuh` and `pfill_ref.py` call: change a fold there, never in the filler"
+files = "`../receipts/` (`receipt_folds.cuh`, `receipt_folds.py`, `vectors.json`; its own README)"

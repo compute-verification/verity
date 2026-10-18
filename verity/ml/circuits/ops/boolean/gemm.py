@@ -18,6 +18,11 @@
                                 -> Array<32, Value<1>>                                                word view: BlackwellNvf4OmmaDot64_v1
     BlackwellMxf4OmmaDot64_v2   the same with sa, sb: Array<2, Array<8, Value<1>>>                    word view: BlackwellMxf4OmmaDot64_v1
     GemmCoordinateNvf4_v2{K, DOT}, GemmCoordinateMxf4_v2{K, DOT}  (x, wrow, sx, sw) -> bf16 bits      word views: their v1{K, DOT'}
+    BlackwellS8ImmaDot32_v2     (acc: Array<32, Value<1>>, a, b: Array<32, Array<8, Value<1>>>)
+                                -> Array<32, Value<1>>                                                word view: BlackwellS8ImmaDot32_v1
+    S32ToF32Rn_v2               (a: Array<32, Value<1>>) -> Array<32, Value<1>>                       word view: S32ToF32Rn_v1
+    GemmAccumulatorS8_v2{K, DOT}    (x, wrow: Array<K, Array<8, Value<1>>>) -> Array<32, Value<1>>   word view: GemmAccumulatorS8_v1{K, DOT'}
+    ScaledMmS8Coordinate_v2{K, DOT} (x, sx, wrow, sw) -> Array<16, Value<1>>                          word view: ScaledMmS8Coordinate_v1{K, DOT'}
 
 The steps and the cast are traced from `fp`'s builders (`trace.definition`): their bodies are And/Xor/Not gates, with exactly
 the builders' live ANDs. `GemmCoordinate_v3` is `GemmCoordinate_v2`'s body on bits: K/16 calls of `DOT` from the zero
@@ -25,7 +30,9 @@ accumulator (32 constant-0 bits), then `F2fpBf16_v2`; `DotBf16_v3` is the same s
 `Gemm_v2`'s: the coordinate batched over W's N rows. The E4M3 steps are `fp.tc_dot_e4m3` at each step's groups, adder width and floor
 (`HopperE4m3MmaV2Dot32_v2` on the operands in `MMAV2_E4M3_K_ORDER`; the E5M2 step `fp.tc_dot_e5m2`),
 and `GemmCoordinateE4m3_v2` is K/32 of them, then the cast; the FP4 steps are `fp4.step_total` and their coordinates K/64 of
-them. Each names its word
+them. The s8 step is `integer.step_s8_bits` (Baugh-Wooley arrays, one carry-save reduction modulo 2^33, the clamp at D), the
+int-to-float cast `fp.s32_to_f32`, and `ScaledMmS8Coordinate_v2` the accumulator, the cast, two `F32Mul_v4` and `F2fpBf16_v2`.
+Each names its word
 Definition (`trace.word_of`; ``DOT'`` is `DOT`'s); the tests check that the two agree, on random and special words and on the
 hardware captures.
 """
@@ -38,14 +45,18 @@ from verity.ml.circuits.types import Array
 
 from .. import gemm as G
 from .. import prims as P
+from . import elementwise as EW
 from verity.ml.circuits.silicon import fp, fp4
+from verity.ml.circuits.silicon.integer import BLACKWELL_SM120_S8_M16N8K32, step_s8_bits
 from verity.ml.circuits.silicon.total_fp8 import MMAV2_E4M3_K_ORDER
 from verity.ml.circuits.boolean.trace import definition, word_of
 
-__all__ = ["AmpereBF16TcDot16", "BlackwellE4m3QmmaDot32", "BlackwellE5m2QmmaDot32", "BlackwellMxf4OmmaDot64", "BlackwellNvf4OmmaDot64", "DotBf16", "F2fpBf16",
-           "GEMM_AMPERE", "GEMM_HOPPER", "GEMM_HOPPER_E4M3", "GEMM_HOPPER_E4M3_MMAV2", "GEMM_SM120_E4M3", "GEMM_SM120_MXF4", "GEMM_SM120_NVF4", "Gemm",
+__all__ = ["AmpereBF16TcDot16", "BlackwellE4m3QmmaDot32", "BlackwellE5m2QmmaDot32", "BlackwellMxf4OmmaDot64", "BlackwellNvf4OmmaDot64",
+           "BlackwellS8ImmaDot32", "DotBf16", "F2fpBf16",
+           "GEMM_AMPERE", "GEMM_HOPPER", "GEMM_HOPPER_E4M3", "GEMM_HOPPER_E4M3_MMAV2", "GEMM_SM120_E4M3", "GEMM_SM120_MXF4", "GEMM_SM120_NVF4",
+           "GEMM_SM120_S8", "Gemm", "GemmAccumulatorS8",
            "GemmCoordinate", "GemmCoordinateE4m3", "GemmCoordinateMxf4", "GemmCoordinateNvf4", "HopperBF16WgmmaDot16",
-           "HopperE4m3MmaV2Dot32", "HopperE4m3QgmmaDot32"]
+           "HopperE4m3MmaV2Dot32", "HopperE4m3QgmmaDot32", "S32ToF32Rn", "ScaledMmS8Coordinate"]
 
 BIT = BL.BIT
 F32 = Array(32, BIT)
@@ -106,6 +117,13 @@ BlackwellMxf4OmmaDot64 = definition(
     lambda C, acc, *ab: fp4.step_total(C, acc, ab[:64], ab[64:128], ab[128:130], ab[130:132], ue8m0=True),
     (("acc", F32), ("a", A64_4), ("b", A64_4), ("sa", A2_8), ("sb", A2_8)), F32, word=P.BlackwellMxf4OmmaDot64,
     doc="mma.sync kind::mxf4 with UE8M0 scales over blocks of 32, one accumulator coordinate, on bits: BlackwellMxf4OmmaDot64_v1")
+BlackwellS8ImmaDot32 = definition(
+    "BlackwellS8ImmaDot32", 2,
+    lambda C, acc, *ab: step_s8_bits(C, BLACKWELL_SM120_S8_M16N8K32, acc, list(ab[:32]), list(ab[32:])),
+    (("acc", F32), ("a", A32_8), ("b", A32_8)), F32, word=P.BlackwellS8ImmaDot32,
+    doc="mma.sync.m16n8k32.satfinite s32.s8.s8.s32 on sm_120, one accumulator coordinate, on bits: BlackwellS8ImmaDot32_v1")
+S32ToF32Rn = definition("S32ToF32Rn", 2, fp.s32_to_f32, (("a", F32),), F32, word=P.S32ToF32Rn,
+                        doc="cvt.rn.f32.s32 on bits: S32ToF32Rn_v1 (round to nearest even, zero +0)")
 
 
 def _zero_acc(B) -> Coll:
@@ -177,12 +195,30 @@ def GemmCoordinateMxf4(B, S, x, wrow, sx, sw):
     return _block_scaled_coordinate(B, S, x, wrow, sx, sw, 2)
 
 
+@composite("GemmAccumulatorS8", 2, ["K", "DOT"], lambda S: ((("x", Array(S.K, E4M3)), ("wrow", Array(S.K, E4M3))), F32),
+           conformance="exact-model-tested")
+def GemmAccumulatorS8(B, S, x, wrow):
+    """The s32 accumulator of an s8 `x @ W^T` coordinate on bits: K/32 `DOT` steps in ascending k from the zero accumulator."""
+    return _steps(B, S, x, wrow, 32)
+
+
+@composite("ScaledMmS8Coordinate", 2, ["K", "DOT"],
+           lambda S: ((("x", Array(S.K, E4M3)), ("sx", F32), ("wrow", Array(S.K, E4M3)), ("sw", F32)), BF16),
+           conformance=G.ScaledMmS8Coordinate.conformance)
+def ScaledMmS8Coordinate(B, S, x, sx, wrow, sw):
+    """One output word of a W8A8 linear on bits: `F2fpBf16_v2((S32ToF32Rn_v2(acc) * sx) * sw)` with `F32Mul_v4`."""
+    acc = B.call(S32ToF32Rn, B.call(bind(GemmAccumulatorS8, K=S.K, DOT=S.DOT), x, wrow))
+    return B.call(F2fpBf16, B.call(EW.F32MulV4, B.call(EW.F32MulV4, acc, sx), sw))
+
+
 DotBf16.word = lambda b: bind(G.DotBf16, K=b["K"], DOT=word_of(b["DOT"]))  # type: ignore[attr-defined]
 GemmCoordinate.word = lambda b: bind(G.GemmCoordinate, K=b["K"], DOT=word_of(b["DOT"]))  # type: ignore[attr-defined]
 Gemm.word = lambda b: bind(G.Gemm, K=b["K"], N=b["N"], DOT=word_of(b["DOT"]))  # type: ignore[attr-defined]
 GemmCoordinateE4m3.word = lambda b: bind(G.GemmCoordinateE4m3, K=b["K"], DOT=word_of(b["DOT"]))  # type: ignore[attr-defined]
 GemmCoordinateNvf4.word = lambda b: bind(G.GemmCoordinateNvf4, K=b["K"], DOT=word_of(b["DOT"]))  # type: ignore[attr-defined]
 GemmCoordinateMxf4.word = lambda b: bind(G.GemmCoordinateMxf4, K=b["K"], DOT=word_of(b["DOT"]))  # type: ignore[attr-defined]
+GemmAccumulatorS8.word = lambda b: bind(G.GemmAccumulatorS8, K=b["K"], DOT=word_of(b["DOT"]))  # type: ignore[attr-defined]
+ScaledMmS8Coordinate.word = lambda b: bind(G.ScaledMmS8Coordinate, K=b["K"], DOT=word_of(b["DOT"]))  # type: ignore[attr-defined]
 
 GEMM_AMPERE: dict = {"DOT": AmpereBF16TcDot16}
 GEMM_HOPPER: dict = {"DOT": HopperBF16WgmmaDot16}
@@ -191,3 +227,4 @@ GEMM_HOPPER_E4M3_MMAV2: dict = {"DOT": HopperE4m3MmaV2Dot32}
 GEMM_SM120_E4M3: dict = {"DOT": BlackwellE4m3QmmaDot32}
 GEMM_SM120_NVF4: dict = {"DOT": BlackwellNvf4OmmaDot64}
 GEMM_SM120_MXF4: dict = {"DOT": BlackwellMxf4OmmaDot64}
+GEMM_SM120_S8: dict = {"DOT": BlackwellS8ImmaDot32}

@@ -8,6 +8,7 @@ import Models.Accounting.Guarantees.Bridges
 import Models.Accounting.Guarantees.Capacity
 import Models.Accounting.Guarantees.Confidence
 import Models.Accounting.Guarantees.FillerLuck
+import Models.Accounting.Guarantees.Gates
 import Models.Accounting.Guarantees.Joint
 import Models.Accounting.Guarantees.Localization
 import Models.Accounting.Guarantees.Memory
@@ -28,6 +29,7 @@ import Models.Accounting.Guarantees.Sketch
 import Models.Accounting.Guarantees.Tag
 import Models.Accounting.Guarantees.TS
 import Models.Accounting.Guarantees.TS.Receipt
+import Models.Accounting.Guarantees.TS.FoldFanIn
 import Models.Accounting.Guarantees.Sheet
 
 /-! Resource accounting's guarantee statements: the joint guarantee and its covert residual, PoUW's and the bandwidth

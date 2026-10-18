@@ -15,12 +15,17 @@ and come back within the instruction exclude a clamp after every product or ever
 order (in each form with a signed operand; u8 x u8 sums only grow, so there every clamp point gives the same word).
 Without it, D wraps modulo 2^32.  An earlier library-kernel probe (run r20261015-071801-6d3c, CUTLASS ``i16832gemm_s8``
 through ``torch._int_mm``) agrees: random int8 products exact to k = 133,120, and the s32 edge saturating.
+
+`step_s8_bits` is the s8 x s8 step as a GF(2) circuit (`verity.ml.circuits.boolean.forms`), the builder of
+`verity.ml.circuits.ops.boolean.gemm.BlackwellS8ImmaDot32_v2`.
 """
 from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Literal
+
+from verity.ml.circuits.boolean.forms import NOT, ONE, compress_columns
 
 from .errors import InvalidArtifact
 from .term import FP32_SIGNIFICAND_WIDTH, Term
@@ -34,6 +39,7 @@ __all__ = [
     "decode_int8",
     "s32_value",
     "s32_word",
+    "step_s8_bits",
 ]
 
 S32_MIN, S32_MAX = -(1 << 31), (1 << 31) - 1
@@ -134,3 +140,42 @@ BLACKWELL_SM120_S8_M16N8K32_WRAP = IntegerMma(
     satfinite=False,
     validated="the form without .satfinite on the device: " + _PRO6000_IMMA_PROBE + "; out-of-range sums wrap modulo 2^32",
 )
+
+#: Baugh-Wooley's constant for one s8 x s8 product: the two negated rows' -(2^14 - 2^7) each
+_BW_CONSTANT = -(1 << 15) + (1 << 8)
+
+
+def step_s8_bits(C, model: IntegerMma, acc, a, b):
+    """``model``'s step on bits (an s8 x s8 model): ``acc`` 32 bits, ``a`` and ``b`` k operands of 8 bits each, LSB first.
+
+    Each product is a Baugh-Wooley array: the 49 unsigned partial products, the 14 that carry one sign bit negated, the
+    sign bits' product, and a constant. The k arrays, the accumulator sign-extended to 33 bits and the k constants are
+    reduced once, modulo 2^33, which holds every sum (``|acc| <= 2^31`` and ``|products| <= k * 2^14``). With ``.satfinite``
+    the sum is clamped at D: it leaves s32 exactly when its bits 31 and 32 differ, and bit 32 is then its sign.
+
+    The result is committed (``C.commit``, a row of a lowering and no gate): uncommitted, each accumulator bit is an XOR form
+    over every earlier step's, and a K/k-step chain's lowering grows as K^2 (C-Flock's unit at K = 256: 20.9M nonzeros, against
+    2.0M committed)."""
+    if (model.dtype, model.b_dtype) != ("s8", "s8"):
+        raise InvalidArtifact(f"{model.name}: step_s8_bits takes s8 x s8 models")
+    if len(acc) != 32 or len(a) != model.k or len(b) != model.k:
+        raise InvalidArtifact(f"{model.name} takes a 32-bit accumulator and {model.k} operand pairs of 8 bits")
+    W = 33
+    cols: list[list] = [[] for _ in range(W)]
+    for x, y in zip(a, b):
+        for i in range(8):
+            for j in range(8):
+                p = C.AND(x[i], y[j])
+                cols[i + j].append(NOT(p) if (i == 7) != (j == 7) else p)
+    for i in range(32):
+        cols[i].append(acc[i])
+    cols[32].append(acc[31])
+    const = (model.k * _BW_CONSTANT) % (1 << W)
+    for i in range(W):
+        if const >> i & 1:
+            cols[i].append(ONE)
+    s = compress_columns(C, cols)[:W]
+    if not model.satfinite:
+        return C.commit(s[:32])
+    ovf = s[31] ^ s[32]
+    return C.commit([s[i] ^ C.AND(ovf, NOT(s[32]) ^ s[i]) for i in range(31)] + [s[32]])
