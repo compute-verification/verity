@@ -88,8 +88,13 @@ command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
 log "Lean of record: pouw-check, pouw-check-difftest, sampled-proofs-difftest built"
 
 # ---- 2-3. params and commit ---------------------------------------------------------------------------------------------------
+# SZ_EPS / SZ_DELTA drive the draw at a non-default (ε, δ) for a realistic-parameter audit (k_prime grows with ln(1/δ)/ε);
+# unset, served_commit's own defaults stand, so the default run is unchanged.
+PARG=()
+[ -n "${SZ_EPS:-}" ] && PARG+=(--eps "$SZ_EPS")
+[ -n "${SZ_DELTA:-}" ] && PARG+=(--delta "$SZ_DELTA")
 for p in request other; do
-  "$VPY" "$SC" params "$PASSES/$p" "$OUT/$p/params.json" > "$OUT/params-$p.out" 2>&1 || { log "params FAILED: $(tail -3 "$OUT/params-$p.out")"; exit 3; }
+  "$VPY" "$SC" params "$PASSES/$p" "$OUT/$p/params.json" "${PARG[@]}" > "$OUT/params-$p.out" 2>&1 || { log "params FAILED: $(tail -3 "$OUT/params-$p.out")"; exit 3; }
 done
 CALLS=${SZ_CALL_LIST:-$("$PY" -c "import json, random, sys; m = json.load(open(sys.argv[1])); \
 c = sorted(u['index'] for u in m['matmuls'] if u['k'] == u['n'] == 4096); print(' '.join(map(str, sorted(random.SystemRandom().sample(c, int(sys.argv[2]))))))" \
