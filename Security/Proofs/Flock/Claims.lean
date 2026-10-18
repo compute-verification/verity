@@ -35,6 +35,7 @@ import Proofs.Flock.Claims.Recursion.DeployReg
 import Proofs.Flock.Claims.Recursion.VStarPartsSparse
 import Proofs.Flock.Claims.Recursion.VStarPartsSparseDeploy
 import Proofs.Flock.Claims.Recursion.VStarCross
+import Proofs.Flock.Claims.Recursion.DeployChecked
 import Proofs.Flock.Claims.Recursion.DeployLayout
 import Proofs.Flock.Claims.Counted
 import Proofs.Flock.Claims.Recursion
