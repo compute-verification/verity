@@ -197,8 +197,11 @@ research run --tool flock-agreement --campaign flock-verifier -- python ci.py --
   `template_instance_vectors.json` (16 of 16: the population, the ranges, every unit's node, member and gates, the
   refusals word for word, the malformed parameters).
 - The outer firewall's release (`Flock.Firewall.Frame`, `flock-firewall frame`, live PROTOCOL.md §10.4): every round a
-  firewalled rep sends is the Lean frame's, with the masking challenger held to it byte for byte (`test_firewall_frame.py`
-  on hand-made reps). On RoPE d64 at m = 25 (`art:edc7c50b`), 3 honest firewalled CPU sessions were accepted and each of the
+  firewalled rep sends is the Lean frame's, with the masking challenger held to it byte for byte, the rep's pads and the
+  pads tree's salts are the frame's own OS draws, with the root it computes, and the coins' two refusals (an outer coin 1,
+  the mask slot's rank) are the frame's. `flock-firewall tap` serves the prover's every other OS read
+  (`test_firewall_frame.py` on hand-made reps: the draws, the release, the refusals, the coin and prior protocol, the
+  tap). On RoPE d64 at m = 25 (`art:edc7c50b`), 3 honest firewalled CPU sessions were accepted and each of the
   7 `FC_FIREWALL_TAMPER` controls was refused or stopped as before; `firewall_outer_agree.py` found 10 of 10 transcripts as
   expected, with the same public input and the same 1,454-item sequence as `r20261006-134729-fddc` before the Lean release.
 - The firewall's contract (`Flock.Firewall.Contract`, `flock-firewall contract`), the property every firewall's sessions

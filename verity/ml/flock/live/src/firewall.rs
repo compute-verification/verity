@@ -502,6 +502,32 @@ pub fn lean_frame_exe() -> std::path::PathBuf {
         .unwrap_or_else(|| std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../core/service/flock/.lake/build/bin/flock-firewall"))
 }
 
+/// Makes the Lean server's `flock-firewall tap` (`Flock.Firewall.Frame.tapCmd`) the OS source of every draw of this process
+/// that is not a rep's own (`zk_hooks::set_os_source`): the mask slot's words, level 0's hiding, every tree's salts but the
+/// pads', the coin tree's nonce. Set it before the first draw. A tap that fails later panics, as an OS generator that fails
+/// does.
+#[cfg(feature = "sha512")]
+pub fn lean_tap(exe: &std::path::Path) -> Result<(), String> {
+    use std::io::{Read, Write};
+    use std::process::{Command, Stdio};
+    const MAX: usize = 1 << 24;
+    let mut child = Command::new(exe).arg("tap").stdin(Stdio::piped()).stdout(Stdio::piped()).spawn()
+        .map_err(|e| refused(format!("the Lean tap {} does not start ({e}): `lake build flock-firewall` in verity/core/service/flock, or FC_FIREWALL_LEAN", exe.display())))?;
+    let (mut stdin, mut stdout) = (child.stdin.take().expect("piped stdin"), child.stdout.take().expect("piped stdout"));
+    let mut read = move |out: &mut [u8]| -> std::io::Result<()> {
+        for p in out.chunks_mut(MAX) {
+            writeln!(stdin, "{}", p.len())?;
+            stdin.flush()?;
+            stdout.read_exact(p)?;
+        }
+        Ok(())
+    };
+    read(&mut [0u8; 32]).map_err(|e| refused(format!("the Lean tap {} does not answer ({e})", exe.display())))?;
+    crate::zk_hooks::set_os_source(Box::new(move |out: &mut [u8]| {
+        read(out).unwrap_or_else(|e| panic!("the Lean tap failed ({e}): refusing to prove without prover randomness"))
+    })).map_err(refused)
+}
+
 #[cfg(feature = "sha512")]
 impl LeanFrame {
     /// Starts a rep on layout `lay` and the statement's mask slot: the frame draws the rep's randomness and commits it, and

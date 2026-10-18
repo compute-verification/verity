@@ -12,7 +12,8 @@ failed. The frame decides the rep's refusals from the coins the stream answered 
 zerocheck outer coin `r_j = 1`, and, at the opening's label, a mask slot short of full rank on the claim points of the
 table's reps (`prior`'s and the rep's own); either answers `stop` at once, nothing of the round leaving. `flock-circuit`
 holds its own masking challenger to this release byte for byte on every round it sends (`firewall::Gate`), its pads tree
-over the frame's draws to the frame's root, and its own refusals to the frame's."""
+over the frame's draws to the frame's root, and its own refusals to the frame's. The prover's every other OS read is
+`flock-firewall tap`'s: a line `N` answered with `N` fresh bytes."""
 from __future__ import annotations
 
 import json
@@ -367,3 +368,13 @@ def test_an_earlier_reps_coins_come_whole_and_before_the_reps_first_round():
     f = Frame(RANK)
     assert f.round(R0, 6)[0].startswith("ok ")
     assert f.ask("prior 24", bytes(16 * 24)) == "err an earlier rep's coins after the rep's first round" and f.close() == 1
+
+
+def test_the_tap_serves_fresh_os_bytes_by_the_count_asked_and_ends_on_anything_else():
+    p = subprocess.Popen([str(BIN), "tap"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    out, err = p.communicate(b"32\n0\n32\n")
+    assert p.returncode == 0 and len(out) == 64 and out[:32] != out[32:], "two draws of 32 bytes, each the OS's own"
+    for bad, why in [(b"x\n", b"a request `x`"), (b"16777217\n", b"16777217 bytes in one request, past 16777216")]:
+        p = subprocess.Popen([str(BIN), "tap"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        out, err = p.communicate(bad + b"32\n")
+        assert (p.returncode, out) == (1, b"") and why in err

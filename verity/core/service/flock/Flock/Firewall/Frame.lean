@@ -469,4 +469,29 @@ def cmd (_ : List String) : IO UInt32 := do
     | _ => return (← refuse s!"a request `{line}`")
   return 0
 
+/-- The most bytes one `tap` request takes. -/
+def TAP_MAX : Nat := 2 ^ 24
+
+/-- `flock-firewall tap`: the OS bytes of every other draw of a firewalled prover (the mask slot's words, level 0's hiding,
+the leaf salts of every tree but the pads', the coin tree's nonce), which the prover takes from here and never from the OS
+itself. Each request is a line `N`, `N ≤ TAP_MAX`, answered with `N` bytes of `IO.getRandomBytes`. Anything else ends it
+with exit 1, and its end of input with exit 0. -/
+def tapCmd (_ : List String) : IO UInt32 := do
+  let stdin ← IO.getStdin
+  let stdout ← IO.getStdout
+  repeat
+    let line := (← stdin.getLine).replace "\n" ""
+    if line.isEmpty then break
+    match line.toNat? with
+    | some n =>
+      if n > TAP_MAX then
+        IO.eprintln s!"flock-firewall tap: {n} bytes in one request, past {TAP_MAX}"
+        return 1
+      stdout.write (← IO.getRandomBytes n.toUSize)
+      stdout.flush
+    | none =>
+      IO.eprintln s!"flock-firewall tap: a request `{line}`"
+      return 1
+  return 0
+
 end Flock.Firewall.Frame

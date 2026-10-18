@@ -5336,6 +5336,9 @@ fn main() {
             serve_loop(move || server_of(&sv, &st, &inst, tables))
         }
         "prove" => {
+            if firewall_on(&st) {
+                flock_live::firewall::lean_tap(&flock_live::firewall::lean_frame_exe()).unwrap_or_else(|e| refuse(e));
+            }
             let runs: usize = arg("--runs", "1").parse().unwrap();
             let warm: usize = arg("--warm", "0").parse().unwrap();
             let dump = arg("--dump", "");
