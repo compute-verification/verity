@@ -44,7 +44,10 @@ counters are bottom-up, per instance. An instance of a tensor-core step (a word 
 performs `PRODUCTS[family]` products, and every one counts as a served MAC. A family named in `FAMILY_COUNTS` takes its
 counters from its rule over its statics instead: that is how a matmul family states
 its served MACs (m·n·k) apart from its tail atoms (k-steps appended to the same product) and a fold Definition its receipt folds; the
-class's ancestors add up what the rule says. `served_macs_by_precision` splits the served MACs by the operand format of the steps
+class's ancestors add up what the rule says. A class of a family `RULED` names is refused while `FAMILY_COUNTS` has no rule for it
+(the family's module registers it when imported, which decoding a Program never does), and so is a Definition carrying a rule
+(`.counts`) that `FAMILY_COUNTS` lacks: neither is counted by `PRODUCTS`. `served_macs_by_precision` splits the served MACs by the
+operand format of the steps
 performing them (`PRECISION[family]`), keyed by the accounting layer's kinds (`mac:bf16`, `mac:int8`, ...), and adds up to
 `served_macs` in every class, step and the totals; a rule's served MACs take the one precision of the steps under it.
 
@@ -125,6 +128,11 @@ COUNTERS = ("served_macs", "tail_atoms", "receipt_folds")
 
 #: family `Name_vN` -> its counters per instance from its statics (a subset of `COUNTERS`; the rest stay bottom-up)
 FAMILY_COUNTS: dict[str, Callable[[dict], dict[str, int]]] = {}
+
+#: the families that count by a `FAMILY_COUNTS` rule -> the module that registers it when imported (the IR never imports a
+#: semantics package, and decoding a Program imports none)
+RULED: dict[str, str] = {"S8Dot_v1": "verity.ml.circuits.ops.s8", "S8Matmul_v1": "verity.ml.circuits.ops.s8",
+                         "S8Dot_v2": "verity.ml.circuits.ops.boolean.s8"}
 
 
 def family(fn: Any) -> str:
@@ -415,6 +423,12 @@ def _kind(fn: Any) -> tuple[str, str | None]:
 def _rule(fn: Any) -> dict[str, int] | None:
     rule = FAMILY_COUNTS.get(family(fn))
     if rule is None:
+        if family(fn) in RULED:
+            raise ValueError(f"{descriptor_id(fn)} counts by its family's rule, which census.FAMILY_COUNTS lacks: import "
+                             f"{RULED[family(fn)]}, which registers it, before taking the census")
+        if hasattr(getattr(fn, "defn", None), "counts"):
+            raise ValueError(f"{family(fn)} has a census rule (`.counts`) that census.FAMILY_COUNTS and census.RULED don't name: "
+                             f"register it in both")
         return None
     got = rule(dict(fn.bindings))
     bad = {k: v for k, v in got.items() if k not in COUNTERS or not isinstance(v, int) or isinstance(v, bool) or v < 0}
@@ -726,4 +740,4 @@ def step_of(doc: dict) -> Callable[[int], int]:
     return lambda k: -1 if k < I else bisect.bisect_right(ends, k)
 
 
-__all__ = ["SCHEMA", "PRODUCTS", "PRECISION", "COUNTERS", "FAMILY_COUNTS", "census", "family", "seal", "step_ends", "step_of"]
+__all__ = ["SCHEMA", "PRODUCTS", "PRECISION", "COUNTERS", "FAMILY_COUNTS", "RULED", "census", "family", "seal", "step_ends", "step_of"]

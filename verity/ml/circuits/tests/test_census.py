@@ -7,7 +7,7 @@ from collections import Counter, defaultdict
 import pytest
 
 import test_ports as TP
-from test_ir_liveness import Add16, Add32, Embedding, Gemm, Mul16, comp, prim, programs as liveness_programs
+from test_ir_liveness import Add16, Add32, Coord, Embedding, Gemm, Mul16, comp, prim, programs as liveness_programs
 from verity.ml.circuits import census as CE, ports
 from verity.ml.circuits.census import census, seal, step_ends
 from verity.ml.circuits.codec import canonical_json, descriptor_id
@@ -215,6 +215,25 @@ def test_served_macs_and_family_rules(monkeypatch):
     monkeypatch.setitem(CE.FAMILY_COUNTS, "TGemmCoordinate_v1", lambda S: {"served": 1})
     with pytest.raises(ValueError, match="non-negative ints"):
         census(P)
+
+
+def test_a_rule_family_counts_lacks_is_refused(monkeypatch):
+    """A family `RULED` names, or a Definition with a rule (`.counts`), is refused while `FAMILY_COUNTS` has no rule for it, never
+    counted by `PRODUCTS`."""
+    P = Program(bind(Gemm, K=32, N=6))
+    monkeypatch.setitem(CE.PRODUCTS, "TDot16_v1", 16)
+    monkeypatch.setitem(CE.PRECISION, "TDot16_v1", "bf16")
+    monkeypatch.setitem(CE.RULED, "TGemmCoordinate_v1", "toy.module")
+    with pytest.raises(ValueError, match=r"^TGemmCoordinate_v1\{K=32\} counts by its family's rule, which census.FAMILY_COUNTS "
+                                         r"lacks: import toy.module, which registers it"):
+        census(P)
+    monkeypatch.delitem(CE.RULED, "TGemmCoordinate_v1")
+    monkeypatch.setattr(Coord, "counts", lambda S: {"served_macs": S["K"] - 2}, raising=False)
+    with pytest.raises(ValueError, match=r"^TGemmCoordinate_v1 has a census rule \(`.counts`\) that census.FAMILY_COUNTS and "
+                                         r"census.RULED don't name"):
+        census(P)
+    monkeypatch.setitem(CE.FAMILY_COUNTS, "TGemmCoordinate_v1", Coord.counts)
+    assert census(P)["totals"]["served_macs"] == 6 * 30
 
 
 def test_served_macs_split_by_precision(monkeypatch):
