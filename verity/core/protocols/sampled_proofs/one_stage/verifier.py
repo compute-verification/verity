@@ -52,7 +52,6 @@ RECORD_VERDICT = "lean"
 """Whose verdict is the record's: `"lean"` (`sampled-proofs-verifier`) or `"python"` (this package's, the reference)."""
 
 DISAGREE = "disagree"
-VERIFIERS = ("lean", "python")
 CORE = Path(__file__).resolve().parents[3]
 PACKAGE = CORE / "service" / "sampled_proofs"
 EXE = "sampled-proofs-verifier"
