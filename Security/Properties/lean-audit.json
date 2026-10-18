@@ -1443,7 +1443,10 @@
    "type_hash": "8b5d59c8e389ebb7fca362bc1f59eb906994cdeb37ade677622b6b55e7d43910"
   },
   "Properties.SampledProofs.bernoulliBounds": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": ["Properties.SampledProofs.bernoulliBounds : Properties.SampledProofs.BernoulliBounds"],
+   "assumptions": [],
+   "type_hash": "e3a8add316d4cc582418009f5a507de3cf4393c4712c5ca61ea1fbefa554eb1b"
   },
   "Properties.SampledProofs.digestIsRecord's": {
    "owner": "@proofs",
@@ -2684,11 +2687,12 @@
    ]
   },
   "CoreProtocol.Profile": {
-   "digest": "57a2650e841fd38e788a338824bddbe0981991aa914cd04d1e70e4adfa3aa64f",
+   "digest": "6b48d70a03be47bbc16fb54d2b4ca09269285cd9442ce7211c9abdf9cec0535b",
    "definitions": {
     "Core.Draw": "63bd5fc8cb5ba70cab5d5a3789f60ea0efa8ac6bea3ef09b6f0d36bb05bc9259",
     "Core.Draw.bernoulli": "79ff4efbbfa3ce939d7c3fa39dbaa9686ce7a76d8b63369924227c3abd0cf74f",
     "Core.Draw.casesOn": "30fab3f381d85258525bbcdf795bfd281ac3381c2bdf6a4eb2a90e85b76f2147",
+    "Core.Draw.ctorIdx": "a9c507dc021c79642c3507879dbf08219803fcb02f576963e51d2fdfc71b34fb",
     "Core.Draw.ofJson": "b2277d2d4a38fd7379717d08c3ed4d92019ac78dff845c757034ae7d0b0f7d80",
     "Core.Draw.rec": "d12e751c269e730229e2f705d58152337c71618e3d3ead8a73c44d7bc1ae40d6",
     "Core.Draw.stratified": "6bf508b1d8acc9dc0dac42677f1b076c33683ca24d1ec670a91d85df404a7dce",
@@ -2742,7 +2746,7 @@
     "Properties.Pouw.Check.neverNull",
     "Properties.Pouw.Check.undecidedOnlyFromService",
     "Properties.SampledProofs.acceptMeans",
-    "Properties.SampledProofs.bernoulliBoundsNothing"
+    "Properties.SampledProofs.bernoulliBounds"
    ]
   },
   "CoreProtocol.Protocol": {
@@ -2818,7 +2822,7 @@
     "Properties.Pouw.Check.neverNull",
     "Properties.Pouw.Check.undecidedOnlyFromService",
     "Properties.SampledProofs.acceptMeans",
-    "Properties.SampledProofs.bernoulliBoundsNothing",
+    "Properties.SampledProofs.bernoulliBounds",
     "Properties.SampledProofs.digestIsRecord's"
    ]
   },
@@ -2849,7 +2853,7 @@
     "Properties.Pouw.Check.neverNull",
     "Properties.Pouw.Check.undecidedOnlyFromService",
     "Properties.SampledProofs.acceptMeans",
-    "Properties.SampledProofs.bernoulliBoundsNothing"
+    "Properties.SampledProofs.bernoulliBounds"
    ]
   },
   "Definitions.Accounting.Device": {
@@ -3885,7 +3889,7 @@
     "Properties.SampledProofs.SecurityProofs.designWellFormed",
     "Properties.SampledProofs.SecurityProofs.drawMisses",
     "Properties.SampledProofs.acceptMeans",
-    "Properties.SampledProofs.bernoulliBoundsNothing",
+    "Properties.SampledProofs.bernoulliBounds",
     "Properties.SampledProofs.digestIsRecord's"
    ]
   },
@@ -3937,7 +3941,7 @@
     "Properties.SampledProofs.SecurityProofs.designWellFormed",
     "Properties.SampledProofs.SecurityProofs.drawMisses",
     "Properties.SampledProofs.acceptMeans",
-    "Properties.SampledProofs.bernoulliBoundsNothing",
+    "Properties.SampledProofs.bernoulliBounds",
     "Properties.SampledProofs.digestIsRecord's"
    ]
   },
@@ -3998,7 +4002,7 @@
     "Properties.SampledProofs.SecurityProofs.designWellFormed",
     "Properties.SampledProofs.SecurityProofs.drawMisses",
     "Properties.SampledProofs.acceptMeans",
-    "Properties.SampledProofs.bernoulliBoundsNothing"
+    "Properties.SampledProofs.bernoulliBounds"
    ]
   },
   "Flock.Extract": {
@@ -4023,7 +4027,7 @@
     "Properties.SampledProofs.SecurityProofs.designWellFormed",
     "Properties.SampledProofs.SecurityProofs.drawMisses",
     "Properties.SampledProofs.acceptMeans",
-    "Properties.SampledProofs.bernoulliBoundsNothing"
+    "Properties.SampledProofs.bernoulliBounds"
    ]
   },
   "Flock.Hash": {
@@ -4106,7 +4110,7 @@
     "Properties.RemoteAudit.passesStepped",
     "Properties.RemoteAudit.releasedStayOut",
     "Properties.SampledProofs.acceptMeans",
-    "Properties.SampledProofs.bernoulliBoundsNothing",
+    "Properties.SampledProofs.bernoulliBounds",
     "Properties.SampledProofs.digestIsRecord's"
    ]
   },
@@ -4205,7 +4209,7 @@
     "Properties.SampledProofs.SecurityProofs.designWellFormed",
     "Properties.SampledProofs.SecurityProofs.drawMisses",
     "Properties.SampledProofs.acceptMeans",
-    "Properties.SampledProofs.bernoulliBoundsNothing"
+    "Properties.SampledProofs.bernoulliBounds"
    ]
   },
   "Flock.Partition": {
@@ -4223,7 +4227,7 @@
     "Properties.SampledProofs.SecurityProofs.designWellFormed",
     "Properties.SampledProofs.SecurityProofs.drawMisses",
     "Properties.SampledProofs.acceptMeans",
-    "Properties.SampledProofs.bernoulliBoundsNothing"
+    "Properties.SampledProofs.bernoulliBounds"
    ]
   },
   "Flock.Program": {
@@ -4425,7 +4429,7 @@
     "Properties.SampledProofs.SecurityProofs.designWellFormed",
     "Properties.SampledProofs.SecurityProofs.drawMisses",
     "Properties.SampledProofs.acceptMeans",
-    "Properties.SampledProofs.bernoulliBoundsNothing"
+    "Properties.SampledProofs.bernoulliBounds"
    ]
   },
   "Flock.Public": {
@@ -4445,7 +4449,7 @@
     "Pous.EndToEnd.SecurityProofs.honestPassesAccepts",
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
     "Properties.SampledProofs.acceptMeans",
-    "Properties.SampledProofs.bernoulliBoundsNothing"
+    "Properties.SampledProofs.bernoulliBounds"
    ]
   },
   "Flock.Qcall": {
@@ -4500,7 +4504,7 @@
     "Properties.SampledProofs.SecurityProofs.designWellFormed",
     "Properties.SampledProofs.SecurityProofs.drawMisses",
     "Properties.SampledProofs.acceptMeans",
-    "Properties.SampledProofs.bernoulliBoundsNothing"
+    "Properties.SampledProofs.bernoulliBounds"
    ]
   },
   "Flock.Qword": {
@@ -4524,7 +4528,7 @@
     "Properties.SampledProofs.SecurityProofs.designWellFormed",
     "Properties.SampledProofs.SecurityProofs.drawMisses",
     "Properties.SampledProofs.acceptMeans",
-    "Properties.SampledProofs.bernoulliBoundsNothing"
+    "Properties.SampledProofs.bernoulliBounds"
    ]
   },
   "Flock.Steps": {
@@ -4544,7 +4548,7 @@
     "Properties.SampledProofs.SecurityProofs.designWellFormed",
     "Properties.SampledProofs.SecurityProofs.drawMisses",
     "Properties.SampledProofs.acceptMeans",
-    "Properties.SampledProofs.bernoulliBoundsNothing"
+    "Properties.SampledProofs.bernoulliBounds"
    ]
   },
   "Flock.TemplateQuery": {
@@ -4592,7 +4596,7 @@
     "Properties.SampledProofs.SecurityProofs.designWellFormed",
     "Properties.SampledProofs.SecurityProofs.drawMisses",
     "Properties.SampledProofs.acceptMeans",
-    "Properties.SampledProofs.bernoulliBoundsNothing"
+    "Properties.SampledProofs.bernoulliBounds"
    ]
   },
   "Identity.Sha512": {
@@ -6769,11 +6773,11 @@
    ]
   },
   "Properties.SampledProofs": {
-   "digest": "12ebb27e62d947e563ea2abfe68a684bf1ade2c18468c486d9104f960fb9bb7a",
+   "digest": "0531eeec44042905e7aebfaa7c2c9ec6cc2e26fce0c637cbbf0fe577ec09712d",
    "definitions": {
     "Properties.SampledProofs.AcceptMeans": "95ddd9c6b9371f1cd10f11f0e71543c64c748c1a0dd841830ebb874f8605b71e",
     "Properties.SampledProofs.Ascending": "04f876a5de5d22c8370686b72b8247c3d51ea5c1cb9d5234cb8033aeebd56d49",
-    "Properties.SampledProofs.BernoulliBoundsNothing": "761bc8c0a0ec96481d4dbae5124c9fd4f9a30396fd869c1b0e53d99f0434a90a",
+    "Properties.SampledProofs.BernoulliBounds": "3d3dab08bc973dd599bad48e84642d78ffcc3fdf62bc5f45864445c44d7c3381",
     "Properties.SampledProofs.DigestIsRecord's": "69747f08d8b9c81f22b803d141613418c4da9f7a21c26311c76112bfff24f636",
     "Properties.SampledProofs.Drawn": "8f2fe98cd469116b5e7d561ee565c564c6b4315c38f1fb038bc1d50f4612235b",
     "Properties.SampledProofs.EntryIs": "cee40a0a33edafef67c74f4483c0e6d201583686c6842c40b8f08fccadcbef9c",
@@ -6804,14 +6808,14 @@
     "Properties.SampledProofs.partitionOf": "0847264fd506d5cd548085e50af85399a290b5944b58972cbe34f93770932832",
     "Properties.SampledProofs.portsOf": "66819b350563f6620817d56fb64507e1148165217dba877329dd72370a4f5463",
     "Properties.SampledProofs.profileOf": "6c9954e85bbba9a21c0aa688b7f92080e2163a4d7f5f3354bef2ed74d8cd8d8c",
-    "Properties.SampledProofs.publicOf": "8c96b68b9e0f660d303a10f5d291075b518ccf47ea8af0560e4ebd38c51874fa",
+    "Properties.SampledProofs.publicOf": "409da8de48599f3872d1756998da147fcc02aaf0746648a6f152ac54d77147af",
     "Properties.SampledProofs.rootFor": "497cb8cec464322c86b29a109a31bf43ab91a4b4b72d864dbffabeacdd9e2555",
     "Properties.SampledProofs.rootsOf": "66d790a244674a09686749bb7f97cc368f4a985aa853299abf7f7222265508bd",
     "Properties.SampledProofs.rootsOf._sparseCasesOn_1": "4cb8436187d00b465a2c3af68338e9892437ddd4087aa26a78154609dec9914c"
    },
    "guarantees": [
     "Properties.SampledProofs.acceptMeans",
-    "Properties.SampledProofs.bernoulliBoundsNothing",
+    "Properties.SampledProofs.bernoulliBounds",
     "Properties.SampledProofs.digestIsRecord's"
    ]
   },
@@ -7227,18 +7231,22 @@
    ]
   },
   "SampledProofs.Bound": {
-   "digest": "47cb5038b6d00eee56c2e70a1d4d9913f91b4b3a9180ae4771824db88ef2186c",
+   "digest": "23ae437f7f883dcf409e9a6ad03dc10cfc00cf974f4a5de70ac7607e33a42161",
    "definitions": {
     "SampledProofs.Bound.Stratum.finite": "57e8380218c68fbdb2e6b9b647987245a5ddfd2c479338af786e63e6d40e22c6",
+    "SampledProofs.Bound.bernoulliBound": "a2cf67e59b5926940c7337d08c7a3b74a09aa8efa31c4fbef576b2c6597c76f4",
+    "SampledProofs.Bound.boundOf": "3769f53a360576a07d35f46e18c00f56b6c5b8c2fdc84f29b6edbc1eb89c0bab",
+    "SampledProofs.Bound.boundOf._sparseCasesOn_3": "20a3b8fb35a5eaea894af89d0c0846acdf2bcd972c3345b3d0d4ba33cabb6d71",
     "SampledProofs.Bound.countBound": "1e60fed75d4eed7f8c07a33623b6723636c46baf26f5bd89dbd8ba61a14536ff",
     "SampledProofs.Bound.countBound._sparseCasesOn_5": "c07f86638ecd1719cceddc80faa4c5c1f2862bbef8fd2e7caf59ab1e7ede4cb7",
     "SampledProofs.Bound.strataOf": "3c7232f17822be0fae7c0bfe0fc39b2ff31cf3ff1b4b2a20183ecedda595c033",
     "SampledProofs.Bound.stratumBound": "05e437628bdd224e54ab7a9a096ed0aeb7b19af5b916ec8520835c19206dac09",
     "_private.SampledProofs.Bound.0.SampledProofs.Bound.atLeast": "bdcfaab6a4403f46a76b672cef6ff1131cd57800ed90b417f224cfca19a869c5",
+    "_private.SampledProofs.Bound.0.SampledProofs.Bound.escapes": "65ae2cdc0c08d59de1ff3cae9612589942a21faa63a5a873ba8613269664a458",
     "_private.SampledProofs.Bound.0.SampledProofs.Bound.next": "aa06d4d7589e09abc5a235934ea44d921c2c972d77793631b2215a6e4df7419c",
     "_private.SampledProofs.Bound.0.SampledProofs.Bound.reduce": "63c5ef090c49de08468bfa27f6b97e3eb39200cde9286aca77609567ae980713"
    },
-   "guarantees": ["Properties.SampledProofs.acceptMeans", "Properties.SampledProofs.bernoulliBoundsNothing"]
+   "guarantees": ["Properties.SampledProofs.acceptMeans", "Properties.SampledProofs.bernoulliBounds"]
   },
   "SampledProofs.Draw": {
    "digest": "52e7b5a7478dddb26308aabbb93c41548c91480450c21fce2093538be1355905",
@@ -7277,7 +7285,7 @@
     "Properties.SampledProofs.SecurityProofs.designWellFormed",
     "Properties.SampledProofs.SecurityProofs.drawMisses",
     "Properties.SampledProofs.acceptMeans",
-    "Properties.SampledProofs.bernoulliBoundsNothing"
+    "Properties.SampledProofs.bernoulliBounds"
    ]
   },
   "SampledProofs.Json": {
@@ -7312,12 +7320,12 @@
     "Properties.SampledProofs.SecurityProofs.designWellFormed",
     "Properties.SampledProofs.SecurityProofs.drawMisses",
     "Properties.SampledProofs.acceptMeans",
-    "Properties.SampledProofs.bernoulliBoundsNothing",
+    "Properties.SampledProofs.bernoulliBounds",
     "Properties.SampledProofs.digestIsRecord's"
    ]
   },
   "SampledProofs.OneStage": {
-   "digest": "a23b1c5b1ba1c5cd190a5dc6a3ceef6c98b12f5145a7bbbac32bda68528e7b32",
+   "digest": "49121ed1a1a33fae91c6010ccc8a1a75a0ea3d84677c76a8128c70b468a64aaa",
    "definitions": {
     "SampledProofs.OneStage.Commitment": "d744e6fb2fdff36157845bc9fb3224434ff1f62fc26396f87b4393a0af67c01b",
     "SampledProofs.OneStage.Commitment.digest": "8f1997edbf41ef170699331a03a0ea01ec0eeefb3a34a36d521c4eb1673c6f01",
@@ -7333,9 +7341,9 @@
     "SampledProofs.OneStage.Params": "22825554339a4abd6e712ca108d556455eaafa1e7ab4ead36dcada022e32b453",
     "SampledProofs.OneStage.Params.delta": "aec48d4bb81bf5c81c2309b92d9e805c095f778149cb1fa31fb91c55b80df8b6",
     "SampledProofs.OneStage.Params.verifier": "1774a7ae1000d869c7c34b71d7c55b661a6536f5b29e6f6cc6682ca12e56c9e9",
-    "SampledProofs.OneStage.Public": "fb13fc0d6d96f9fd8fc85de8575945a9712c6ee1265db4aadfdc51591e257bf1",
-    "SampledProofs.OneStage.Public.bound": "d3f9664cf7e1f613d43c088727956f2258c323710d7cef4e4051dba6520d6a27",
-    "SampledProofs.OneStage.check": "3df8b30dabcb91082028081e49103b4084012f198fc9eae323617cacd4a013f7",
+    "SampledProofs.OneStage.Public": "27240f20d02a2ba4a3fec008798a134ae627f74ae9c61a69d48d83a25a246b41",
+    "SampledProofs.OneStage.Public.bound": "ca5b4c96ceafc6f32086a5ee36ba1ac302268f36154e069f712016dd9e4c59aa",
+    "SampledProofs.OneStage.check": "ff2113bc9a80eb888d8447e2251d5f8d6d27672fcb28c2589921cdfcba702d43",
     "SampledProofs.OneStage.commitmentOf": "5bfb1e03c91600c44f3a6747c32138ad793238e8ace18e02798c7a743242ca2a",
     "SampledProofs.OneStage.evidenceOf._sparseCasesOn_1": "8e558b5b22ba8f2e6fc45b155e2873ea54e96b3eb143741661ce605035691d8a",
     "SampledProofs.OneStage.paramsOfJson._sparseCasesOn_1": "550ca3a6407ae9eddfce113acbbe7f68a39f38515b10ee793b9c6f5cec0e989a",
@@ -7352,7 +7360,7 @@
    },
    "guarantees": [
     "Properties.SampledProofs.acceptMeans",
-    "Properties.SampledProofs.bernoulliBoundsNothing",
+    "Properties.SampledProofs.bernoulliBounds",
     "Properties.SampledProofs.digestIsRecord's"
    ]
   },
@@ -7383,7 +7391,7 @@
     "Properties.SampledProofs.SecurityProofs.designWellFormed",
     "Properties.SampledProofs.SecurityProofs.drawMisses",
     "Properties.SampledProofs.acceptMeans",
-    "Properties.SampledProofs.bernoulliBoundsNothing"
+    "Properties.SampledProofs.bernoulliBounds"
    ]
   },
   "SampledProofs.Program": {
@@ -7398,7 +7406,7 @@
     "Properties.SampledProofs.SecurityProofs.designWellFormed",
     "Properties.SampledProofs.SecurityProofs.drawMisses",
     "Properties.SampledProofs.acceptMeans",
-    "Properties.SampledProofs.bernoulliBoundsNothing"
+    "Properties.SampledProofs.bernoulliBounds"
    ]
   },
   "SampledProofs.Record": {
@@ -7420,7 +7428,7 @@
     "_private.SampledProofs.Record.0.SampledProofs.Record.obj": "6303766253888605800e6e09f3608d8ff447caa237d350e6e5ff7bfab4371dde",
     "_private.SampledProofs.Record.0.SampledProofs.Record.sortedInts": "ca6689822062b8ed8b9809b08de9518fbfe851e5773bc1add2d4b587faf72a33"
    },
-   "guarantees": ["Properties.SampledProofs.acceptMeans", "Properties.SampledProofs.bernoulliBoundsNothing"]
+   "guarantees": ["Properties.SampledProofs.acceptMeans", "Properties.SampledProofs.bernoulliBounds"]
   },
   "SampledProofs.Registered": {
    "digest": "717ecd471ded72c4fe974dd69b9c875bcc8649950dc9b367ca95cc92f38a9e44",
@@ -7451,7 +7459,7 @@
     "SampledProofs.Registered.widthSet": "456027ea3ccec5998cf8c30b9e6ac2595e98886b7b33d25eeff0238c4502fca2",
     "_private.SampledProofs.Registered.0.SampledProofs.Registered.tagged": "c60ace592236ee8cff61eec70a4bd12397e594bb3e257886065716c9eb1a53f2"
    },
-   "guarantees": ["Properties.SampledProofs.acceptMeans", "Properties.SampledProofs.bernoulliBoundsNothing"]
+   "guarantees": ["Properties.SampledProofs.acceptMeans", "Properties.SampledProofs.bernoulliBounds"]
   },
   "SampledProofs.Registration": {
    "digest": "c7ff964a5b62ecec44cffb007b3cec757fbe040a2a2a500287729e1569970011",
@@ -7491,7 +7499,7 @@
    },
    "guarantees": [
     "Properties.SampledProofs.acceptMeans",
-    "Properties.SampledProofs.bernoulliBoundsNothing",
+    "Properties.SampledProofs.bernoulliBounds",
     "Properties.SampledProofs.digestIsRecord's"
    ]
   },
