@@ -18,11 +18,11 @@ Decision 113 splits the credit in two, and `CircuitCredit` is their composition:
 * (L) `CircuitWork`, the logical layer: an accepted window's run has the noised products' committed words right, all
   but a share `Λ·ln(1/δ_s)` of the work at costs `a, b` (`WorkAt`), for values fixed before their seeds. Its premises
   are the templates' luck, (H-μ) per template (`HMu`, with `Scheme.LuckProved`), the service's draw, sampled (I8)'s
-  pieces as #2466 states them after RT-I8 (`DrawnLayer.Of`, binding per committed position at the coin after its call
-  site, `StageCuts`, joint proof soundness, `Pins`), the modes the run's (`PaidSound`: a paid tile is sound, and the
-  share charges a skipped tile its cone, so it covers every tile that isn't good; decision 119), and E1(c) per tile
-  for the fixed words (`UnitFixedCone`, `UnitFixed` at decision 119's edges) and the fold (`UnitFolded`). No machine
-  model. Its crypto half is #2466's `DrawnRightOff`, one event of probability `δ_bind + δ_ks` off which every drawn
+  pieces as #2466 states them after RT-I8 and decision 119 (`DrawnLayer.Of`, binding per committed position at the
+  coin after its call site, `StageCuts`, each tile's noise at its call site's coin, `StageCoins`, `WriterReads`, joint
+  proof soundness, `Pins`), the modes the run's (`PaidSound`: a paid tile is held and right, and the share charges a
+  skipped tile its late cone, so it covers every tile that isn't good), and E1(c) per tile for the fixed words
+  (`UnitFixed`) and the fold (`UnitFolded`). No machine model. Its crypto half is #2466's `DrawnRightOff`, one event of probability `δ_bind + δ_ks` off which every drawn
   tile is right (RT-I8's `compose_sampled` shape).
 * (P) `CreditOfWork`, the physical layer's step: on the tensor–scalar model of a data sheet, a run with that work takes
   at least `(1 − ε)·T_cred`. Its premises are exactly the machine model's: the model the circuit's on the sheet
@@ -34,8 +34,8 @@ The other guarantees are (L)'s lemmas:
   stage-share bound (W3), with folded and whole shares priced apart (B1);
 * `SplitRateClosed`: `SplitRate` at `Λ = max(a(1 + Kρw_max)/(ρK(1 − p)), b/(ρK))` when whole units are luckless;
 * `SplitRateMerged`: `SplitRate` at `Λ = b(1 + Kρw_max)/(ρK(1 − q))` for any luck at most `q`;
-* `ServiceCovers`: the service's share, a skipped tile's cone, covers every tile that isn't good once a paid tile is
-  sound (#2466's `DrawnLayer.Covers` at decision 119's `Good`, proved for this game);
+* `ServiceCovers`: the service's share, a skipped tile's late cone, covers every tile that isn't good once a paid tile
+  is held and right (#2466's `DrawnLayer.Covers`, proved for this game from `DrawnLayer.covers_of_cone`);
 
 and `CircuitCreditFS` is the composed credit's Fiat–Shamir form, against proofs' `FiatShamirFloor` (decision 112).
 
@@ -80,39 +80,38 @@ def SplitRateMerged : Prop :=
   ∀ (K : ℕ) (ρ p p0 q a b wmax : ℝ), 1 ≤ K → 0 < ρ → 0 ≤ wmax → ρ * wmax ≤ 1 → 0 ≤ q → p ≤ q → p0 ≤ q → q < 1 →
     0 < a → a ≤ b → SplitRate K ρ p p0 a b wmax (b * (1 + K * ρ * wmax) / (ρ * K * (1 - q)))
 
-open Classical in
 /-- **The service's share covers every tile that isn't good** (decision 119). For the window as the service's one round
-at share `1` per unit of a skipped tile's cone (`serviceGame … (tileCone …) 1 1`) and its proofs (`DrawnLayer`, one
-round of the call sites' coins and the draw), if a paid tile is sound (`PaidSound`), then on every accepted path the
-words of the tiles that aren't good (`ConeGood`) are at most the game's deficiency times `N_w`: a tile that isn't good
-is downstream of one that isn't sound, which is folded or whole, and its cone holds it (RT-I8 r2's `covers_of_cone`).
-It is #2466's `DrawnLayer.Covers` at decision 119's `Good`. -/
+at share `1` per unit of a skipped tile's late cone (`serviceGame … (tileCone …) 1 1`) and its proofs (`DrawnLayer`,
+one round of the call sites' coins and the draw), if a paid tile is held and right (`PaidSound`), then on every
+accepted path the words of the tiles that aren't good are at most the game's deficiency times `N_w`
+(`DrawnLayer.Covers`): a tile that isn't good has a tile of its late cone that isn't held and right, which is folded or
+whole, and whose late cone holds it (`DrawnLayer.covers_of_cone`). -/
 def ServiceCovers : Prop :=
   ∀ {ι K T L U C Ξ Q Pos V : Type} [Fintype C] [Fintype Ξ] [Nonempty V] (Sc : Scheme K) (Cd : Declared ι) {Np Kd : ℕ}
     (W : SplitStages C (Fin Np) Cd.calls) (Pl : Play (Paths C Cd.calls × (Equiv.Perm (Fin Np) × Ξ)) 1 K T L U)
     (pf : DrawnLayer C (Equiv.Perm (Fin Np) × Ξ) 1 Cd.calls Kd (Fin Np) Q Pos V),
     Pl.game = serviceGame (Ξ := Ξ) (tileStage Cd Np) W (tileCone Sc Cd pf) 1 1 Kd →
-    PaidSound (tileStage Cd Np) W pf → ∀ x, Pl.accepts x →
-      (∑ t, if ConeGood (tileStage Cd Np) pf x t then 0 else tileWords Sc Cd Np t) ≤
-        Pl.game.deficiency x * (wordsOf Sc Cd : ℝ)
+    PaidSound (tileStage Cd Np) W pf → pf.Covers Pl (fun _ => tileWords Sc Cd Np) (wordsOf Sc Cd : ℝ)
 
 /-- **(L) The circuit's work, live coins** (decision 113's logical layer). For every declared circuit `Cd` and scheme
 `Sc`, run as one window: the circuit's call sites in order, each's noise coin released after its operands are
 committed, then the service's draw of `K_d` of the `N_p ≥ N` grid-padded tiles (`drawOf`, a uniform `K_d`-subset) with
 the proofs' coins `Ξ`, each drawn tile proved with its noise's generation. Under:
 * the logical ranges (`Scope`);
-* every tile at least `ρ` times its cone's share of the `N_p` (`tileCone`, decision 119: `ρ = 1/(F·r)` at the
-  padding's `r = (N_p/N)·(w_max/w̄)`, the coordinator's ruling of 18 Oct 05:52Z, and `F` tiles a chain within a call
-  site), every call site's cones at most `w_max`, and every tile whose cone carries work lucky at most `p` folded and
-  `p0` whole;
+* every tile at least `ρ` times its late cone's share of the `N_p` (`tileCone`, decision 119: `ρ = 1/(F·r)` at the
+  padding's `r = (N_p/N)·(w_max/w̄)`, the coordinator's ruling of 18 Oct 05:52Z, and `F` tiles a late chain within a
+  call site), every call site's cones at most `w_max`, and every tile whose cone carries work lucky at most `p` folded
+  and `p0` whole;
 * costs `a, b ≥ 0`, `Λ > 0` and `SplitRate` at them;
-* the play's ideal game the service's at share `1` per unit of skipped work, its draws the service's, and sampled
-  (I8)'s pieces after RT-I8 (decision 114): the window's proofs with values per committed position (`DrawnLayer` over
-  the call sites' `M` coins and the draw), each position bound before the coin after the call site that wrote it
-  (`StageCuts`), `Of`, binding at `δ_bind` in the round (`MovedIn`; WindowEps: `Σ_c δlink_c`), proof soundness jointly
-  over the draws at `δ_ks` (`JointSound`; WindowEps: `max_c κ_c + coll`) and `Pins`;
-* the modes the run's (`PaidSound`), (H-μ) (`HMu`), and E1(c) per tile for the fixed words (`UnitFixedCone`, at the
-  tiles' words) and the fold (`UnitFolded`);
+* the play's ideal game the service's at share `1` per unit of a skipped tile's late cone, its draws the service's, and
+  sampled (I8)'s pieces after RT-I8 (decisions 114 and 119): the window's proofs with values per
+  committed position (`DrawnLayer` over the call sites' `M` coins and the draw), each position bound before the coin
+  after the call site that wrote it (`StageCuts`), each tile's noise at its call site's coin (`StageCoins`), each
+  position among its writer's slots (`WriterReads`), `Of`, binding at `δ_bind` in the round (`MovedIn`; WindowEps:
+  `Σ_c δlink_c`), proof soundness jointly over the draws at `δ_ks` (`JointSound`; WindowEps: `max_c κ_c + coll`) and
+  `Pins`;
+* the modes the run's (`PaidSound`), (H-μ) (`HMu`), and E1(c) per tile for the fixed words (`UnitFixed`, at the tiles'
+  words) and the fold (`UnitFolded`);
 
 an accepted window's run has all but a share `d_F + d₀` of its committed words fixed right and all but `d₀` folded,
 with `a·d_F + b·d₀ < Λ·ln(1/δ_s)` (`WorkAt`), except with probability `δ_s + δ_bind + δ_ks`. Nothing here reads a
@@ -130,9 +129,9 @@ def CircuitWork : Prop :=
     (∀ t, 0 < tileCone Sc Cd pf t → tileLuck Sc Cd Np t ≤ p ∧ tileLuck0 Sc Cd Np t ≤ p0) →
     0 ≤ a → 0 ≤ b → 0 < Λ → SplitRate Kd ρ p p0 a b wmax Λ →
     Pl.game = serviceGame (Ξ := Ξ) (tileStage Cd Np) W (tileCone Sc Cd pf) 1 1 Kd →
-    pf.draw = drawOf hK → StageCuts (tileStage Cd Np) pf → pf.Of Pl →
-    (∀ w, prob (fun x => pf.MovedIn x w) ≤ δbind) → pf.JointSound δks → pf.Pins →
-    PaidSound (tileStage Cd Np) W pf → HMu Sc Cd W → UnitFixedCone (tileStage Cd Np) Pl pf (tileWords Sc Cd Np) →
+    pf.draw = drawOf hK → StageCuts (tileStage Cd Np) pf → StageCoins (tileStage Cd Np) pf → pf.WriterReads →
+    pf.Of Pl → (∀ w, prob (fun x => pf.MovedIn x w) ≤ δbind) → pf.JointSound δks → pf.Pins →
+    PaidSound (tileStage Cd Np) W pf → HMu Sc Cd W → UnitFixed Pl pf (fun _ => tileWords Sc Cd Np) →
     UnitFolded Sc Cd Pl W folded →
     prob (fun x => Pl.accepts x ∧
       ¬ WorkAt (wordsOf Sc Cd : ℝ) a b (Λ * Real.log (1 / δs)) (Pl.run x).fixed (folded x)) ≤ δs + (δbind + δks)
@@ -181,9 +180,9 @@ def CircuitCredit : Prop :=
     (∀ t, 0 < tileCone Sc Cd pf t → tileLuck Sc Cd Np t ≤ p ∧ tileLuck0 Sc Cd Np t ≤ p0) →
     0 < Λ → SplitRate Kd ρ p p0 (aOf Sc Cd Z lam) (bOf Sc Cd Z lam) wmax Λ →
     Pl.game = serviceGame (Ξ := Ξ) (tileStage Cd Np) W (tileCone Sc Cd pf) 1 1 Kd →
-    pf.draw = drawOf hK → StageCuts (tileStage Cd Np) pf → pf.Of Pl →
-    (∀ w, prob (fun x => pf.MovedIn x w) ≤ δbind) → pf.JointSound δks → pf.Pins →
-    PaidSound (tileStage Cd Np) W pf → HMu Sc Cd W → UnitFixedCone (tileStage Cd Np) Pl pf (tileWords Sc Cd Np) →
+    pf.draw = drawOf hK → StageCuts (tileStage Cd Np) pf → StageCoins (tileStage Cd Np) pf → pf.WriterReads →
+    pf.Of Pl → (∀ w, prob (fun x => pf.MovedIn x w) ≤ δbind) → pf.JointSound δks → pf.Pins →
+    PaidSound (tileStage Cd Np) W pf → HMu Sc Cd W → UnitFixed Pl pf (fun _ => tileWords Sc Cd Np) →
     UnitFolded Sc Cd Pl W folded →
     Fits Sc Cd Sh Z → ModelScope Sc Cd Z lam → (∀ x, (Pl.run x).Split) →
     (∀ x, SheetClock Sh (Pl.run x).run) → (∀ x, SheetDispatch (Pl.run x).run) →

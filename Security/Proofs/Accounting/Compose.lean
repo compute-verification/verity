@@ -6,10 +6,10 @@ import Models.Accounting.Guarantees.Compose
 Every proof here is open (note:compute-accounting/20261018T0618Z-draft-theorem-compose-r2 gives the order), and this
 file doesn't land until none is a `sorry`:
 
-1. `ServiceCovers`: the service's deficiency at `a = b = 1` is the cones of the tiles off `paid`, a tile that isn't
-   sound isn't paid (`PaidSound`), RT-I8 r2's `covers_of_cone` (on `cursor/rt-i8-ea24`, proved) bounds the weight of
-   the tiles that aren't good by the cones of those that aren't sound, and a tile's weight times `N_w` is its words
-   (both `0` at `N_w = 0`).
+1. `ServiceCovers`: `Accounting.SecurityProofs.TS.DrawnLayer.covers_of_cone` (#2466, proved) at the tiles' words, whose
+   hypothesis is the share's: the service's deficiency at `a = b = 1` is the late cones of the tiles off `paid`, a
+   tile that isn't held and right isn't paid (`PaidSound`), and a tile's weight times `N_w` is its words (both `0` at
+   `N_w = 0`), so its late cone's words are its `tileCone` times `N_w`.
 2. `SplitRateClosed`: the folded branch at `W_0 = 0` (`ν = expm1(W_F·a/Λ)/((1 − p)·W_F)`, the exponent concave in
    `W_F` so its endpoints suffice), the whole branch `e^{Ky}(1 − y)^K ≤ 1` at `y = ρ·W_0`, and `L_0 > 0` by convexity
    in `L_0` with `ν₀ = Kρe^K`.
@@ -21,12 +21,13 @@ file doesn't land until none is a `sorry`:
    stages, as `Accounting.SecurityProofs.TS.StageBudget`.
 5. `CircuitWork`: `Accounting.SecurityProofs.TS.DrawnRightOff` at `S = 1` gives one event of probability at most
    `δ_bind + δ_ks` off which every accepted drawn tile is right at its committed slots, so `Of` gives the share game's
-   pass (RT-I8's `compose_sampled` shape); `UnitFixedCone` with step 1 gives the fixed words
+   pass (RT-I8's `compose_sampled` shape); `UnitFixed` (at `WriterReads`) with step 1 gives the fixed words
    `(1 − (d_F + d₀))·N_w`, the tiles' words summing to `N_w`, and `UnitFolded` the folded ones `(1 − d₀)·N_w`, a
    tile's cone being at least its own weight; `ServiceBudget` on `serviceGame` at `a`, `b` and the cones (the same
    coins and pass) and `budget_tail` at `t = ln(1/δ_s)` bound `a·d_F + b·d₀ ≥ Λ·ln(1/δ_s)` by `δ_s`; `WorkAt` holds at
    the run's cone shares `d_F`, `d₀`. `StageCuts` is what makes `δ_bind` the fork form's at every
-   stage coin (`DrawnBindingOfFork`), and the proof doesn't read it.
+   stage coin (`DrawnBindingOfFork`), and `StageCoins` what makes `UnitFixed`'s coin the real one; the proof reads
+   neither.
 6. `CreditOfWork`: `SheetDIdealFloor`'s reduction of (I1)–(I5) to A1–A7 on the one run, then `floor_of_price`'s
    identity with FOLD-OPT at the folded words (`FoldOptFolded`), which prices the deficit at `a·d_F + b·d₀ < r`, and
    `T_cred > 0` (`Model.Wf`) to clear the division.

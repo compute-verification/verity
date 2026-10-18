@@ -47,11 +47,11 @@ The logical layer:
   coins, then the service's one uniform `K`-subset (`Pouw.Window.subsetDraw`, its `Equiv.Perm`) and the proofs' coins
   `Ξ` (W4: `DrawnLayer.JointSound` needs them). Its share is `a·(folded weight) + b·(whole weight)` at the weights it is
   given, the tiles' cones (`tileCone`) in the theorem, and it passes when every drawn tile is right.
-* `StageCuts`, `FeedsAfter`, `coneWt`, `tileCone`, `TileSound`, `ConeGood`, `PaidSound`: the window's proofs
-  (`Accounting.TS.DrawnLayer`, values per committed position) bind each position before the coin after the call site
-  that wrote it (RT-I8's B1, decision 114); a wrong tile spreads only along positions committed after the reader's
-  coin, so a tile is good when every tile upstream along those edges is sound, and the share charges a skipped tile its
-  cone (decision 119, RT-I8 r2's `covers_of_cone`); the modes are the run's: a paid tile is sound.
+* `StageCuts`, `StageCoins`, `tileCone`, `PaidSound`: the window's proofs (`Accounting.TS.DrawnLayer`, values per
+  committed position) bind each position before the coin after the call site that wrote it (RT-I8's B1, decision
+  114), and each tile's noise reads its call site's coin; a wrong tile spreads only along positions committed after
+  the reader's coin (`DrawnLayer.Late`), so the share charges a skipped tile its late cone (`DrawnLayer.coneWt`,
+  decision 119); the modes are the run's: a paid tile is held and right.
 * `SplitRate`: the per-stage condition from which a rate `Λ` bounds the window's saving per unit of detection.
 * `Scope`, `WorkAt`: the logical parameters' ranges, and the logical layer's conclusion on an accepted run: all but a
   share `d` of the committed words fixed right and all but `d₀ ≤ d` folded, with `a·(d − d₀) + b·d₀ < r`.
@@ -164,11 +164,13 @@ noncomputable def LuckForm.value : LuckForm → ℕ → ℝ
   | .unproved, _ => 1
 
 /-- **A scheme's templates**, per kind: one unit's floor `♭_k` over the classes `K`, proved at the worst operands
-(decision 109; `0` where the noise proves none, as one-sided noise proves none; decision 117: H1's attention matmuls
-draw a fresh coin per entry on both operands, so their floor reads no operand and they are credited at it), the
-committed words that floor prices (`0` with it), the span a skip pattern has before the receipt's next checkpoint
-(W6), and for each mode, folded and whole, the form of the luck its template proves and the luck the window is held to
-(`luck`, `luck0`). -/
+(decision 109; `0` where the noise proves none, as one-sided noise proves none), the committed words that floor prices
+(`0` with it), the span a skip pattern has before the receipt's next checkpoint (W6), and for each mode, folded and
+whole, the form of the luck its template proves and the luck the window is held to (`luck`, `luck0`). H1's attention
+matmuls are credited at their floors with no special case (decision 117, ATTN-NOISE r2): `QKᵀ` draws a coin per entry
+on both operands; `P·V`'s `P` carries only the period-32 word `U` and `V` a coin `b` per entry, and its floor is `U·b`'s,
+a cell per `k`, which holds under any salt-independent advice while the kernel commits a prefix word at most every 32
+keys (at one every `C` keys it is `32·k/C`). -/
 structure Scheme (K : Type) where
   floor : Kind → Labelled K
   words : Kind → ℕ
@@ -302,44 +304,30 @@ def StageCuts {C B Q Pos V : Type} {M s N : ℕ} (stg : Fin N → ℕ) (pf : Dra
     Prop :=
   ∀ ℓ, ((pf.cut ℓ).2 : ℕ) = (pf.src ℓ).elim 0 fun u => M - stg u.2
 
-/-- **Tile `u` feeds tile `v` after `v`'s coin** (decision 119): `v` reads a position `u` writes that is committed after
-the coin `v`'s noise reads, its call site's, coin `M − 1 − stg v` of the window's `M`. Only along these edges can a
-wrong tile leave a later one's words adaptive: a position committed before a tile's coin is fixed when its noise is
-drawn. Under `StageCuts` they are the edges within a call site, decision 107's `K`-chunk running sums. -/
-def FeedsAfter {C B Q Pos V : Type} {M s N : ℕ} (stg : Fin N → ℕ) (pf : DrawnLayer C B 1 M s (Fin N) Q Pos V)
-    (u v : Fin N) : Prop :=
-  ∃ k, pf.src (pf.pos 0 v k) = some (0, u) ∧ M - 1 - stg v < ((pf.cut (pf.pos 0 v k)).2 : ℕ)
+/-- **Each tile's noise reads its call site's coin** (decision 119): `DrawnLayer.coin` is coin `M − 1 − stg t` of the
+window's `M`, so a position is late for a tile (`DrawnLayer.Late`) exactly when it is committed after that coin, and
+with `StageCuts` the late edges are those within a call site, decision 107's `K`-chunk running sums. Protocol
+structure, as `StageCuts` is: `UnitFixed` is claimed at the coin each unit's noise really reads, and the proof doesn't
+read it. -/
+def StageCoins {C B Q Pos V : Type} {M s N : ℕ} (stg : Fin N → ℕ) (pf : DrawnLayer C B 1 M s (Fin N) Q Pos V) :
+    Prop :=
+  ∀ t, ((pf.coin 0 t : ℕ)) = M - 1 - stg t
 
-open Classical in
-/-- **Tile `u`'s cone weight** along edges `R`: the weight of every tile `u` reaches, itself included. -/
-noncomputable def coneWt {N : ℕ} (R : Fin N → Fin N → Prop) (w : Fin N → ℝ) (u : Fin N) : ℝ :=
-  ∑ v, if Relation.ReflTransGen R u v then w v else 0
-
-/-- **A tile's share weight** (decision 119): its cone's work weight along `FeedsAfter`, what skipping it can leave
-adaptive. It is at most `F` times its own weight when a call site's chains have at most `F` tiles, each of at most its
-weight (`F` the chunks per coordinate: `1` for a whole coordinate, `4` at `K = 8192`). -/
+/-- **A tile's share weight** (decision 119): its late cone's work weight (`DrawnLayer.coneWt`), every tile skipping it
+can leave adaptive. It is at most `F` times its own weight when a call site's late chains have at most `F` tiles, each
+of at most its weight (`F` the chunks per coordinate: `1` for a whole coordinate, which has no late edges, and `4` at
+`K = 8192`). -/
 noncomputable def tileCone {ι K C B Q Pos V : Type} {s Np : ℕ} (Sc : Scheme K) (Cd : Declared ι)
-    (pf : DrawnLayer C B 1 Cd.calls s (Fin Np) Q Pos V) : Fin Np → ℝ :=
-  coneWt (FeedsAfter (tileStage Cd Np) pf) (tileWeight Sc Cd Np)
+    (pf : DrawnLayer C B 1 Cd.calls s (Fin Np) Q Pos V) (t : Fin Np) : ℝ :=
+  pf.coneWt (fun _ => tileWeight Sc Cd Np) (0, t)
 
-/-- **Tile `t` is sound on `x`**: its slots are held at their committed values, and it is right at them. -/
-def TileSound {C B Q Pos V : Type} [Fintype C] [Fintype B] [Nonempty V] {M s N : ℕ}
-    (pf : DrawnLayer C B 1 M s (Fin N) Q Pos V) (x : Paths (Paths C M × B) 1) (t : Fin N) : Prop :=
-  (∀ k, pf.Held x (pf.pos 0 t k)) ∧ pf.right x 0 t (pf.view x 0 t)
-
-/-- **Tile `t` is good on `x`** (decision 119's `Good`, drawn at each coin boundary): every tile upstream of it along
-`FeedsAfter`, itself included, is sound. #2466's `DrawnLayer.Good` spreads along every edge until it restates `Good`
-this way. -/
-def ConeGood {C B Q Pos V : Type} [Fintype C] [Fintype B] [Nonempty V] {M s N : ℕ} (stg : Fin N → ℕ)
-    (pf : DrawnLayer C B 1 M s (Fin N) Q Pos V) (x : Paths (Paths C M × B) 1) (t : Fin N) : Prop :=
-  ∀ u, Relation.ReflTransGen (FeedsAfter stg pf) u t → TileSound pf x u
-
-/-- **The modes are the run's**: a tile paid along the window's coins is sound, so a tile that isn't is folded or
-whole, and the service's share charges it its cone, which holds every tile that isn't good (`ConeGood`). It asks
-nothing of a tile upstream: a cheater that skips one tile and computes the rest honestly meets it. -/
+/-- **The modes are the run's**: a tile paid along the window's coins is held and right at its committed values
+(`DrawnLayer.HeldRight`), so a tile that isn't is folded or whole, and the service's share charges it its late cone,
+which holds every tile that isn't good (`DrawnLayer.Good`, decision 119; `DrawnLayer.covers_of_cone`). It asks nothing
+of a tile upstream: a cheater that skips one tile and computes the rest honestly meets it. -/
 def PaidSound {C B Q Pos V : Type} [Fintype C] [Fintype B] [Nonempty V] {M s N : ℕ} (stg : Fin N → ℕ)
     (W : SplitStages C (Fin N) M) (pf : DrawnLayer C B 1 M s (Fin N) Q Pos V) : Prop :=
-  ∀ x t, W.modeAt stg (coinAt x 0).1 t = .paid → TileSound pf x t
+  ∀ x t, W.modeAt stg (coinAt x 0).1 t = .paid → pf.HeldRight x (0, t)
 
 /-- **The per-stage rate condition** for `K` draws at weight bound `ρ` (each tile is at least `ρ` times its work share
 of the `N` tiles), luck `p` folded and `p0` whole, costs `a` and `b` per unit of share and stage shares at most
