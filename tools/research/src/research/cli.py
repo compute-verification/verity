@@ -302,6 +302,12 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
         except ValueError as e:
             print(f"research run: --pool: {e}", file=sys.stderr)
             return 2
+        if ns.mem_gb is not None:
+            # the slot's mem= admits and reserves the run; a launch-time reservation too was held through the wait for a slot,
+            # beside the slot's once it ran (INF-61, cpu-3 18 Oct: two waiting runs held 128 GB, admission sat at -89 GB)
+            print(f"research run: --pool {ns.pool}: --mem-gb {ns.mem_gb:g} is dropped; the slot's own mem= admits and reserves the run",
+                  file=sys.stderr)
+            ns.mem_gb = None
         if cwd is None:
             harness_opts = [*harness_opts, "--cwd", "source"]
     if ns.queue:
@@ -932,8 +938,10 @@ AUTO_NODE, AUTO_KIND, AUTO_PROJECT = "vy-nebius-2", "agent-test", "verity"
 
 
 def _auto_placement(ns: argparse.Namespace, harness_opts: list[str]) -> str | None:
-    """`--on auto` is `--queue --on AUTO_NODE --kind AUTO_KIND` from this checkout (its --source) as project AUTO_PROJECT: the kind
-    gives what the run doesn't declare (4 CPUs, 16 GiB, 60 min). Fills `ns` in place; a reason when it can't."""
+    """`--on auto` is `--queue --on AUTO_NODE --kind AUTO_KIND --cwd source` from this checkout (its --source) as project
+    AUTO_PROJECT: the kind gives what the run doesn't declare (4 CPUs, 16 GiB, 60 min), and the workload runs in the shipped tree
+    unless --cwd says otherwise (its environment is the workload's to sync, as suites.py does). Fills `ns` and `harness_opts` in
+    place; a reason when it can't."""
     if ns.queue or ns.pool:
         return "it takes no --queue or --pool: it is the queue itself"
     if not ns.source:
@@ -943,6 +951,8 @@ def _auto_placement(ns: argparse.Namespace, harness_opts: list[str]) -> str | No
         ns.source = top.stdout.strip()
     ns.queue, ns.on, ns.preemptible = True, AUTO_NODE, True      # a guest on node 2 is preemptible; a test reruns from the start
     ns.project = ns.project or AUTO_PROJECT
+    if remote.flag_value(harness_opts, "--cwd") is None:
+        harness_opts += ["--cwd", "source"]                      # a suite or build runs in the tree it tests (INF-65), not its run dir
     if ns.queue_kind == "adhoc":
         ns.queue_kind = AUTO_KIND
     print(f"research run --on auto: queued onto {AUTO_NODE} as {ns.queue_kind}, from {ns.source}", file=sys.stderr)
