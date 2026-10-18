@@ -17,6 +17,7 @@ import urllib.error
 import urllib.parse
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Callable
 
 import pytest
 
@@ -1110,9 +1111,9 @@ def bells(fake, inbox_ts):
     return [m for m in fake.messages.get(COORD, []) if m.get("thread_ts") == inbox_ts and m["ts"] != inbox_ts]
 
 
-def inbox(fake, routes_dirs, name, where="local"):
+def inbox(fake, routes_dirs, name, where="local", **kw):
     root = fake.add(COORD, text=f"{slack.INBOX_HEAD}{name}. pointers", username=name, bot_id=BOT)
-    add_route(routes_dirs[0] if where == "local" else routes_dirs[1], name, root["ts"])
+    add_route(routes_dirs[0] if where == "local" else routes_dirs[1], name, root["ts"], **kw)
     return root["ts"]
 
 
@@ -1568,9 +1569,30 @@ def test_a_clone_holding_a_closed_route_rings_the_reopened_published_one(fake, r
     """console's inbox reopened at 21:38Z on 16 Oct; senders whose clone still held it closed rang no one (17 Oct review)."""
     root = fake.add(COORD, text=f"{slack.INBOX_HEAD}console. pointers", username="console", bot_id=BOT)
     add_route(routes_dirs[0], "console", root["ts"], closed="2026-10-14T22:45Z")                   # this clone: closed
-    add_route(routes_dirs[1], "console", root["ts"], holder="f7772a12-d61f-4bbb-8c4f-e79e8d6d30dc")  # published: reopened
+    add_route(routes_dirs[1], "console", root["ts"], holder="f7772a12-d61f-4bbb-8c4f-e79e8d6d30dc",
+              opened="2026-10-16T21:38Z")                                                         # published: reopened
     rc, _, err = run(capsys, "send", "--as", "ci", "--to", "@console", "--text", "the broker canary fails")
     assert rc == 0 and "route @console: rang" in err and len(bells(fake, root["ts"])) == 1
+
+
+def test_a_clone_holding_an_open_route_follows_the_published_close_and_its_forward(fake, registry, routes_dirs, capsys):
+    """@hash closed into @kernels at 16:47Z on 18 Oct: a clone not pulled since still held it open, an inbox nobody reads."""
+    old, new = inbox(fake, routes_dirs, "hash"), inbox(fake, routes_dirs, "kernels")
+    add_route(routes_dirs[1], "hash", old, closed="2026-10-18T16:47Z", forward_to="kernels")       # published: closed
+    rc, _, err = run(capsys, "send", "--as", "ci", "--to", "@hash", "--text", "is SHA-512 batched yet?")
+    assert rc == 0 and "route @kernels: rang (for @hash, finished)" in err
+    assert (len(bells(fake, old)), len(bells(fake, new))) == (0, 1)
+
+
+def test_of_a_routes_two_copies_the_newer_counts():
+    base = {"schema": slack.ROUTE_SCHEMA, "name": "x", "holder": "bc-a", "inbox_ts": "1.0", "opened": "2026-10-01T17:00Z", "closed": None}
+    reopened = {**base, "holder": "bc-b", "opened": "2026-10-16T21:38Z"}
+    closed = {**base, "closed": "2026-10-02T00:00Z", "forward_to": "y"}
+    assert slack._newer(base, reopened) == reopened and slack._newer(reopened, base) == reopened   # a later opening, either side
+    assert slack._newer(base, closed) == closed and slack._newer(closed, base) == closed            # one opening: its close
+    assert slack._newer(None, base) == base and slack._newer(base, None) == base
+    assert slack._newer({**base, "branch_suffixes": ["aaaa"]}, {**base, "branch_suffixes": ["bbbb"], "posters": ["bc-c"]}) == \
+        {**base, "branch_suffixes": ["aaaa", "bbbb"], "posters": ["bc-c"]}                         # one opening, both open: both's lists
 
 
 def test_traffic_counts_doorbells_and_reports_dropped_names_and_unanswered_asks(fake, registry, routes_dirs, capsys):
@@ -1761,47 +1783,66 @@ def test_origin_groups_reads_the_registry_as_origin_main_has_it(tmp_path):
     assert slack.origin_groups(tmp_path / "nowhere" / "registry.json") == set()
 
 
-def test_stale_routing_counts_origin_mains_routing_commits_the_checkout_lacks(tmp_path, monkeypatch):
-    """Only commits to the registry or slack.py count, the stamp holds the next look off for FRESH_EVERY_S, and where git
-    can't answer it says nothing."""
+def stale_checkout(tmp_path, registry) -> tuple[Path, Callable[[Callable[[dict], None]], None]]:
+    """An upstream repository with `registry` at the registry's place and a clone of it, and a function that commits a
+    change to upstream's registry, which the clone's checkout then lacks: the clone's registry path, and that function."""
     import subprocess
-    monkeypatch.delenv("RESEARCH_SLACK_FRESH_CHECK")
-    monkeypatch.setenv("RESEARCH_SLACK_SEEN", str(tmp_path / "seen"))
     git = lambda cwd, *a: subprocess.run(["git", *a], cwd=cwd, check=True, capture_output=True)  # noqa: E731
-
-    def commit(path: str, text: str):
-        (upstream / path).parent.mkdir(parents=True, exist_ok=True)
-        (upstream / path).write_text(text)
-        git(upstream, "add", "-A")
-        git(upstream, "commit", "-qm", path)
-
-    upstream = tmp_path / "upstream"
-    upstream.mkdir()
+    upstream, clone = tmp_path / "upstream", tmp_path / "clone"
+    (upstream / slack.REGISTRY_REL).parent.mkdir(parents=True)
+    shutil.copy(registry, upstream / slack.REGISTRY_REL)
     git(upstream, "init", "-q", "-b", "main")
-    commit(str(slack.REGISTRY_REL), "{}")
-    clone = tmp_path / "clone"
+    git(upstream, "add", "-A")
+    git(upstream, "commit", "-qm", "registry")
     git(tmp_path, "clone", "-q", str(upstream), str(clone))
-    assert slack.stale_routing(clone, now=1e9) is None
-    commit("README.md", "unrelated")
-    assert slack.stale_routing(clone, now=2e9) is None
-    commit(str(slack.REGISTRY_REL), '{"handles": []}')
-    commit("tools/research/src/research/slack.py", "# routing")
-    assert slack.stale_routing(clone, now=2e9 + 1) is None                      # within FRESH_EVERY_S of the last look
-    why = slack.stale_routing(clone, now=3e9)
-    assert why and "lacks 2 commits" in why and f"`git merge origin/main` in {clone}" in why
-    git(clone, "merge", "-q", "--ff-only", "origin/main")
-    assert slack.stale_routing(clone, now=4e9) is None
-    assert slack.stale_routing(tmp_path / "not-a-repo", now=5e9) is None
+
+    def change(edit: Callable[[dict], None]) -> None:
+        reg = json.loads((upstream / slack.REGISTRY_REL).read_text())
+        edit(reg)
+        (upstream / slack.REGISTRY_REL).write_text(json.dumps(reg))
+        git(upstream, "commit", "-qam", "a registry change")
+    return clone / slack.REGISTRY_REL, change
+
+
+def new_handle(name: str) -> Callable[[dict], None]:
+    return lambda reg: reg["handles"].append({"handle": name, "holder": f"the {name} coordinator", "remit": f"the {name} slice",
+                                          "charter": "x", "owns": []})
+
+
+def test_routing_reads_origin_mains_registry_fetched_at_most_every_30_minutes(registry, tmp_path, monkeypatch):
+    """A handle added upstream routes from a stale checkout; one only the checkout has (its branch adds it) is kept; the
+    stamp holds the next fetch off for FRESH_EVERY_S, while `git show` still reads what was fetched; and where git can't
+    answer, or origin/main's registry doesn't load, or RESEARCH_SLACK_FRESH_CHECK=0, it is the checkout's."""
+    monkeypatch.delenv("RESEARCH_SLACK_FRESH_CHECK")
+    path, change = stale_checkout(tmp_path, registry)
+    handles = lambda reg: [h["handle"] for h in reg["handles"]]  # noqa: E731
+    mine = slack.load_registry(path)
+    new_handle("branchy")(mine)
+    change(new_handle("newbie"))
+    assert handles(slack.routing_registry(mine, path, now=1e9)) == [*HANDLES, "newbie", "branchy"]
+    change(new_handle("later"))
+    assert "later" not in handles(slack.routing_registry(mine, path, now=1e9 + slack.FRESH_EVERY_S - 1))
+    assert "later" in handles(slack.routing_registry(mine, path, now=1e9 + slack.FRESH_EVERY_S))
+    change(lambda reg: reg.update(schema="verity/slack-registry/v0"))
+    assert slack.routing_registry(mine, path, now=1e10) is mine
+    assert slack.routing_registry(mine, tmp_path / "not-a-repo" / "registry.json", now=2e10) is mine
     monkeypatch.setenv("RESEARCH_SLACK_FRESH_CHECK", "0")
-    commit(str(slack.REGISTRY_REL), "[]")
-    assert slack.stale_routing(clone, now=6e9) is None
+    assert slack.routing_registry(mine, path) is mine
 
 
-def test_a_routed_post_warns_when_the_checkouts_routing_is_stale(fake, registry, routes_dirs, capsys, monkeypatch):
-    inbox(fake, routes_dirs, "circuits")
-    monkeypatch.setattr(slack, "stale_routing", lambda: "this checkout lacks 3 commits")
-    rc, _, err = run(capsys, "send", "--as", "infra", "--to", "@circuits", "--text", "node 2 is free")
-    assert rc == 0 and "research msg: this checkout lacks 3 commits" in err and "route @circuits: rang" in err
+def test_a_stale_checkout_and_clone_ring_a_handle_added_and_an_inbox_reopened_since(fake, registry, routes_dirs, tmp_path, capsys, monkeypatch):
+    """18 Oct: senders on old checkouts rang nobody for handles added since; 17 Oct: old notes clones rang nobody for an
+    inbox reopened since.  An announcement to every handle from a checkout without @newbie and a clone without its route,
+    and holding @console's closed, rings both."""
+    monkeypatch.delenv("RESEARCH_SLACK_FRESH_CHECK")
+    path, change = stale_checkout(tmp_path, registry)
+    change(new_handle("newbie"))
+    newbie = inbox(fake, routes_dirs, "newbie", where="published")
+    console = inbox(fake, routes_dirs, "console", closed="2026-10-14T22:45Z")
+    add_route(routes_dirs[1], "console", console, holder="f7772a12-d61f-4bbb-8c4f-e79e8d6d30dc", opened="2026-10-16T21:38Z")
+    rc, _, err = run(capsys, "send", "--registry", str(path), "--kind", "announce", "--as", "infra", "--text", "node 2 reboots at 22:00Z")
+    assert rc == 0 and "route @newbie: rang" in err and "route @console: rang" in err
+    assert (len(bells(fake, newbie)), len(bells(fake, console))) == (1, 1)
 
 
 def test_verify_author_accepts_a_routed_workers_name_and_the_router(fake, registry, routes_dirs, capsys):

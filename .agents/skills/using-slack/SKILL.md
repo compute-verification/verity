@@ -96,7 +96,9 @@ research msg subscriptions --as <your handle>    # prints the subscribe calls to
 ~~~
 
 - **A holder subscribes to its own inbox thread, not to `#agent-coordination`'s top level.** The sender rings the inbox of
-  each handle a post addresses (`routes.d`); no agent forwards, and no holder takes the channel's top level. A doorbell for a
+  each handle a post addresses (`routes.d`); no agent forwards, and no holder takes the channel's top level. It routes by
+  origin/main's registry and the published routes, so a sender on an old checkout or notes clone still rings a handle
+  added, or an inbox reopened or closed, since. A doorbell for a
   post that turns out not to be for you ends the turn silently. **Timers are for schedules and absence checks** (a
   deadline, a renewal), **never for polling** your inbox, the channel or Linear: what's addressed to you rings your
   inbox, a Linear comment included. comms' daily review replays every post against the doorbells rung and chases what

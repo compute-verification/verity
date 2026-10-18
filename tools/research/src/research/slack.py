@@ -45,7 +45,9 @@ Without $SLACK_BOT_TOKEN (or with RESEARCH_SLACK_VIA=broker) every call goes thr
 bot token and allows only BROKER_METHODS; RESEARCH_SLACK_VIA=direct insists on the token.
 
 The sender rings the doorbells right after posting; there is no server-side router (the website has no events route,
-COMM-32). `match` is the older, handle-only test of whether a post is addressed to HANDLE."""
+COMM-32). It routes by origin/main's registry (`routing_registry`) and the published routes (`Routes.refresh`), so an old
+checkout or notes clone still rings a name added, reopened or closed since. `match` is the older, handle-only test of
+whether a post is addressed to HANDLE."""
 from __future__ import annotations
 
 import argparse
@@ -173,49 +175,62 @@ def registry_path(explicit: str | None = None) -> Path:
                      f"verity checkout after `git fetch origin main`, or pass --registry")
 
 
-def origin_groups(path: Path) -> set[str]:
-    """The user-group ids in origin/main's registry (a best-effort fetch, then `git show`): an analysis checkout older than
-    a sender's must not report the sender's group mentions as dropped (three false DROPPED lines on 14 Oct). Empty when git
-    can't answer (no clone, no remote, offline), which keeps `traffic`'s old behavior."""
+def origin_registry(path: Path, fetch: bool = True) -> dict | None:
+    """The registry as origin/main has it at `path`'s place in its checkout (`git show`, after a best-effort fetch), or None
+    where git can't answer (no clone, no remote, offline) or the file isn't JSON."""
+    cwd = path.resolve().parent
+    git = lambda *a: subprocess.run(["git", "-C", str(cwd), *a], capture_output=True, text=True, timeout=15,  # noqa: E731
+                                    env={**os.environ, "GIT_TERMINAL_PROMPT": "0"})
     try:
-        cwd = path.resolve().parent
-        subprocess.run(["git", "fetch", "origin", "main", "-q"], cwd=cwd, timeout=10, check=False, capture_output=True)
-        out = subprocess.run(["git", "show", f"origin/main:./{path.name}"], cwd=cwd, timeout=10,
-                             check=True, capture_output=True, text=True).stdout
-        return {h["usergroup"] for h in json.loads(out).get("handles", []) if h.get("usergroup")}
-    except (OSError, subprocess.SubprocessError, ValueError, TypeError):
+        if fetch:
+            git("fetch", "-q", "origin", "main")
+        out = git("show", f"origin/main:./{path.name}")
+        reg = json.loads(out.stdout) if out.returncode == 0 else None
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return None
+    return reg if isinstance(reg, dict) else None
+
+
+def origin_groups(path: Path) -> set[str]:
+    """The user-group ids in origin/main's registry: an analysis checkout older than a sender's must not report the
+    sender's group mentions as dropped (three false DROPPED lines on 14 Oct). Empty when git can't answer, which keeps
+    `traffic`'s old behavior."""
+    try:
+        return {h["usergroup"] for h in (origin_registry(path) or {}).get("handles", []) if h.get("usergroup")}
+    except (AttributeError, KeyError, TypeError):
         return set()
 
 
-FRESH_FILES = (REGISTRY_REL, Path("tools/research/src/research/slack.py"))   # what routing reads from the checkout
-FRESH_EVERY_S = 1800
+FRESH_EVERY_S = 1800                                             # a routed post fetches origin/main at most this often
+ROUTED = ("send", "ask", "announce", "reply", "close", "deliver", "linear")   # the subcommands that ring doorbells
 
 
-def stale_routing(repo: Path | None = None, now: float | None = None) -> str | None:
-    """Why this checkout's routing may be stale, or None: at most once per FRESH_EVERY_S (a stamp file), fetch origin/main
-    and count its commits to the registry and slack.py that HEAD lacks.  A sender on an old checkout rings no one for a
-    handle added or an inbox reopened since.  Best effort: no git, no remote or no network says nothing, and
-    RESEARCH_SLACK_FRESH_CHECK=0 turns it off."""
+def routing_registry(reg: dict, path: Path, now: float | None = None) -> dict:
+    """The registry a post routes by: origin/main's handles, then those only this checkout has (a branch adding one).  A
+    sender on an old checkout otherwise rings no one for a handle added since (lean missed @console, proofs @hash; 18 Oct).
+    It fetches origin/main at most once per FRESH_EVERY_S (a stamp file) and reads it with `git show`; where git can't
+    answer, or origin/main's registry doesn't load, it is `reg`.  RESEARCH_SLACK_FRESH_CHECK=0 turns it off."""
     if os.environ.get("RESEARCH_SLACK_FRESH_CHECK") == "0":
-        return None
-    stamp = Path(os.environ.get("RESEARCH_SLACK_SEEN") or Path.home() / ".research" / "slack-seen") / ".fresh-check"
+        return reg
+    stamp = Path(os.environ.get("RESEARCH_SLACK_SEEN") or Path.home() / ".research" / "slack-seen") / ".fresh-fetch"
     now = time.time() if now is None else now
     try:
-        if stamp.is_file() and now - stamp.stat().st_mtime < FRESH_EVERY_S:
-            return None
-        stamp.parent.mkdir(parents=True, exist_ok=True)
-        stamp.touch()
-        os.utime(stamp, (now, now))
-        repo = repo or Path(__file__).resolve().parents[4]
-        git = lambda *a: subprocess.run(["git", "-C", str(repo), *a], capture_output=True, text=True, timeout=15,
-                                        env={**os.environ, "GIT_TERMINAL_PROMPT": "0"})
-        git("fetch", "-q", "origin", "main")
-        missing = git("rev-list", "--count", "HEAD..origin/main", "--", *map(str, FRESH_FILES))
-    except (OSError, subprocess.SubprocessError):
-        return None
-    n = int(missing.stdout.strip() or 0) if missing.returncode == 0 else 0
-    return (f"this checkout lacks {n} commit{'s' if n != 1 else ''} of origin/main to the registry or slack.py, so routing "
-            f"may miss handles added or inboxes reopened since: `git merge origin/main` in {repo}") if n else None
+        due = not stamp.is_file() or now - stamp.stat().st_mtime >= FRESH_EVERY_S
+        if due:
+            stamp.parent.mkdir(parents=True, exist_ok=True)
+            stamp.touch()
+            os.utime(stamp, (now, now))
+    except OSError:
+        due = False
+    up = origin_registry(path, fetch=due)
+    try:
+        up = check_registry(up, f"origin/main's {path.name}") if up else None
+    except SlackError:
+        up = None
+    if not up:
+        return reg
+    names = {h["handle"] for h in up["handles"]}
+    return {**reg, **up, "handles": [*up["handles"], *(h for h in reg["handles"] if h["handle"] not in names)]}
 
 
 def load_registry(path: Path) -> dict:
@@ -223,6 +238,10 @@ def load_registry(path: Path) -> dict:
         reg = json.loads(path.read_text())
     except (OSError, ValueError) as e:
         raise SlackError(f"registry {path}: {e}") from e
+    return check_registry(reg, str(path))
+
+
+def check_registry(reg: dict, path: str) -> dict:
     if reg.get("schema") != SCHEMA:
         raise SlackError(f"registry {path}: schema {reg.get('schema')!r}, expected {SCHEMA!r}")
     handles, owned = set(), {}
@@ -587,8 +606,6 @@ def _post(api: Slack, ch: str, handle: str, text: str, thread: str | None = None
         link = "-"
     print(f"{ts} {link}")
     if route and route[1] is not None and not api.dry_run:
-        if why := stale_routing():
-            print(f"research msg: {why}", file=sys.stderr)
         msg = {"text": text, "ts": ts, "thread_ts": thread, "bot_id": route[0].get("bot_id"), "username": handle}
         try:
             deliver(api, route[0], route[1], ch, msg, link)
@@ -939,10 +956,29 @@ def http_get(url: str, timeout: float = 10) -> bytes | None:
         raise SlackError(f"{url}: {getattr(e, 'reason', e)}") from None
 
 
+def _newer(local: dict | None, pub: dict | None) -> dict | None:
+    """Of a name's two copies, the clone's and the published one, the one that says what is true now.  A later `opened`
+    wins (a reopen or a succession stamps it anew: console's reopened inbox, 16 Oct); of one opening, a closed copy wins (a
+    close comes after its open: @hash's forward to @kernels, 18 Oct); otherwise the clone's, with the published copy's
+    `branch_suffixes` and `posters` too (raw.githubusercontent serves it minutes stale, and a holder elsewhere adds them)."""
+    if not local or not pub:
+        return local or pub
+    if local.get("opened") and pub.get("opened") and local["opened"] != pub["opened"]:
+        return pub if pub["opened"] > local["opened"] else local
+    if bool(local.get("closed")) != bool(pub.get("closed")):
+        return local if local.get("closed") else pub
+    out = dict(local)
+    for k in ("branch_suffixes", "posters"):
+        if v := list(dict.fromkeys([*local.get(k, []), *pub.get(k, [])])):
+            out[k] = v
+    return out
+
+
 class Routes:
-    """The routes table, `routes.d/<name>.json` in the notes: the local clone's, and for a name it lacks (a clone not pulled
-    since that agent registered) the published file, read from $RESEARCH_ROUTES_URL (default the notes repo's raw files,
-    with RESEARCH_NOTES_TOKEN)."""
+    """The routes table, `routes.d/<name>.json` in the notes: the local clone's, and the published files, read from
+    $RESEARCH_ROUTES_URL (default the notes repo's raw files, with RESEARCH_NOTES_TOKEN) for a name the clone lacks (a
+    clone not pulled since that agent registered) or when asked to (`fresh`, `refresh`); of a name's two copies, the
+    newer counts (`_newer`)."""
 
     def __init__(self, root: Path | None = None, base: str | None = None, get: Callable[[str], bytes | None] = http_get):
         self.root, self.get = (root or notes_root()), get
@@ -958,24 +994,40 @@ class Routes:
                 self.local[p.stem] = r
         self._fetched: dict[str, dict | None] = {}
 
+    def _fetch(self, name: str) -> dict | None:
+        raw = self.get(f"{self.base}{name}.json")
+        try:
+            r = json.loads(raw) if raw else None
+        except ValueError:
+            r = None
+        self._fetched[name] = r if _route_ok(r, name) else None
+        return self._fetched[name]
+
     def get_route(self, name: str, fresh: bool = False) -> dict | None:
         if not NAME_RE.match(name):
             return None
-        if name in self.local and not fresh:
-            if self.local[name].get("closed") and (pub := self._fetched.get(name)) and not pub.get("closed"):
-                return pub                                           # reopened since this clone was pulled
-            return self.local[name]
-        if name not in self._fetched or fresh:
-            raw = self.get(f"{self.base}{name}.json")
+        if fresh or (name not in self.local and name not in self._fetched):
+            self._fetch(name)
+        return _newer(self.local.get(name), self._fetched.get(name))
+
+    def refresh(self, names: list[str] | set[str]) -> None:
+        """Read the published copy of each name now, side by side; one that can't be read keeps what was known."""
+        names = [n for n in dict.fromkeys(names) if NAME_RE.match(n)]
+
+        def one(name: str) -> None:
             try:
-                r = json.loads(raw) if raw else None
-            except ValueError:
-                r = None
-            self._fetched[name] = r if _route_ok(r, name) else None
-        return self._fetched[name] or self.local.get(name)
+                self._fetch(name)
+            except SlackError:
+                pass
+        if len(names) == 1:
+            one(names[0])
+        elif names:
+            from concurrent.futures import ThreadPoolExecutor  # noqa: PLC0415
+            with ThreadPoolExecutor(max_workers=min(16, len(names))) as pool:
+                list(pool.map(one, names))
 
     def all(self) -> dict[str, dict]:
-        return {**self.local, **{k: v for k, v in self._fetched.items() if v}}
+        return {n: r for n in {**self.local, **self._fetched} if (r := _newer(self.local.get(n), self._fetched.get(n)))}
 
     def inboxes(self) -> set[str]:
         return {r["inbox_ts"] for r in self.all().values()}
@@ -1095,12 +1147,12 @@ def watch_context(api: Slack, ch: str, msg: dict, root: dict | None, now: float,
 def deliver(api: Slack, reg: dict, routes: Routes, ch: str, msg: dict, link: str, *, urgent: bool = False,
             now: float | None = None, log=None) -> list[str]:
     """Deliver the post `msg` (just posted at `link`): ring the doorbell of each name it wakes.  One line per name saying
-    what happened."""
+    what happened.  Every handle's published route and every name's the post starts with is read first, so a clone not
+    pulled since a name opened, reopened, closed or changed holder rings what the published table says (`_newer`)."""
     log = log or sys.stderr
     thread = msg.get("thread_ts") if msg.get("thread_ts") not in (None, msg.get("ts")) else None
     root = api.root(ch, thread) if thread else None
-    for n in lead_names(msg.get("text", ""), reg):
-        routes.get_route(n, fresh=n not in routes.local)            # a name new since the clone was pulled
+    routes.refresh([*lead_names(msg.get("text", ""), reg), *(h["handle"] for h in reg["handles"])])
     reg = with_routes(reg, routes)
     inboxes = routes.inboxes()
     now = _now().timestamp() if now is None else now
@@ -1115,8 +1167,6 @@ def deliver(api: Slack, reg: dict, routes: Routes, ch: str, msg: dict, link: str
     for name in route_targets(msg, root, reg, inboxes, history, branches):
         if name in humans:
             continue                                                 # people read Slack itself
-        if name not in routes.local or routes.local[name].get("closed"):
-            routes.get_route(name, fresh=True)                       # a clone not pulled since the name (re)opened
         to, r = routes.resolve(name)
         if why := unreachable(name, to, r):
             h = next((h for h in reg["handles"] if h["handle"] == name), None)
@@ -2586,6 +2636,8 @@ def main(argv: list[str], prog: str = "research msg") -> int:
         reg = load_registry(path)
         if ns.cmd == "groups":
             return cmd_groups_sync(ns, reg, path)
+        if ns.cmd in ROUTED:
+            reg = routing_registry(reg, path)
         return {"handles": cmd_handles, "owners": cmd_owners, "subscriptions": cmd_subscriptions, "ask": cmd_ask, "announce": cmd_announce, "reply": cmd_reply,
                 "pickup": cmd_pickup, "roster": cmd_roster, "match": cmd_match,
                 "verify-author": cmd_verify_author, "deliver": cmd_deliver, "read": cmd_read, "ask-daniel": cmd_ask_daniel, "names": cmd_inbox,
