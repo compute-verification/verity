@@ -185,6 +185,11 @@ theorem load_files {unit : String} {f : RecCoins.Files} {inn : RecCoins.Inner}
   refine ⟨spec, st, hs, ?_⟩
   dsimp only at h
   repeat' split at h
+  all_goals first
+    | (cases h; done)
+    | skip
+  all_goals obtain ⟨_, -, h⟩ := FlockSoundness.Refine.ebind_ok h
+  all_goals split at h
   all_goals cases h
   all_goals exact ⟨rfl, rfl, rfl⟩
 

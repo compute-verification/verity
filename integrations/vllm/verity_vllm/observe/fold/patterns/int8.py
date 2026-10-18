@@ -6,11 +6,17 @@ registered Definitions (`program.registry.int8_exact`, `ml.circuits.ops.gemm`), 
     verity_int8::scaled_mm(xq[M,K] s8, s_a[M] f32, w[N,K] int8, s_w[N,1] f32) -> y[M,N] bf16
         -> Compute(ScaledMmS8_v1{K,N,DOT=BlackwellS8ImmaDot32_v1}, rows=M, (PerRow(xq), PerRow(s_a), Shared(w), Shared(s_w)), (PerRow(y),))
     vllm.unified_attention_with_output(query, ..., output!, layer) ⊃ per request verity_int8::kv_quant(key_cache, value_cache, blocks, s,
-            k_scales) -> (kq, vq, sv, v0), then verity_int8::window_rows(q, kq, vq, sv, v0, k_scales, scale), copied into output
+            k_scales) -> (kq, vq, sv, v0), then verity_int8::window_rows(q, kq, vq, sv, v0, k_scales, scale), copied into output;
+            or, under a credited read (`engine.int8_window`), the layer's verity_int8::credited_window(kv_cache, .., k!, v!) and
+            per request verity_int8::kv_quant_window(k[o:o+s], v[o:o+s], k_scales) in kv_quant's place, o the earlier windows' rows
         -> per KV head g Compute(Int8KvQuant_v1{s,D}, rows=1, (GatherMany(K slots 0..s-1 of head g), GatherMany(V slots), Const32),
                                  (Shared(kq[g]), Shared(vq[g]), Shared(sv[g]), Shared(v0[g]))), then
            per (row i, head h) Compute(Int8LutAttentionRow_v1{D,pos_i+1,SCALE}, rows=1, (Shared(q[i][h]), Shared(kq[g][:pos_i+1]), Const32,
                                        Shared(vq[g][:pos_i+1]), Shared(sv[g]), Shared(v0[g])), (Shared(output[i][h]),))
+
+A credited read's window rows are its KV slots' plaintext (pg_window's contract, bit-checked against the plain read), so
+kv_quant_window binds the same gathers of the cache credited_window read as kv_quant does; the step's credited_step and the
+layer's credited_window are consumed with the scope.
 
 The K scales are the run header's (`RunHeader.profile["backends"]["int8_k_scales"]`, read back from the layers by
 `kernel_readback.int8_k_scales_of`), never read from device memory; each request's rows write its rows of `output` directly
@@ -147,10 +153,12 @@ class Int8AttentionScope:
     def match(self, node: TreeNode, ctx: StepContext) -> Resolution | None:
         if node.is_triton or op_name(node.op) != "unified_attention_with_output":
             return None
-        kvs = find_descendants(node, lambda n: _is_op(n, "kv_quant"))
+        kvs = find_descendants(node, lambda n: _is_op(n, "kv_quant") or _is_op(n, "kv_quant_window"))
         wrs = find_descendants(node, lambda n: _is_op(n, "window_rows"))
         if not kvs and not wrs:
             return None
+        cws = find_descendants(node, lambda n: _is_op(n, "credited_window"))
+        css = find_descendants(node, lambda n: _is_op(n, "credited_step"))
         from verity_vllm.program.registry import int8_exact
         sa = bound_args(node)
         query, output = sa.get("query"), sa.get("output")
@@ -171,7 +179,11 @@ class Int8AttentionScope:
         copies = {id(w): [c for c in find_descendants(node, lambda n: not n.is_triton and op_name(n.op) == "copy_")
                           if _src_of(c) is not None and _out0(w) is not None and _src_of(c).alloc == _out0(w).alloc] for w in wrs}
         rcs = find_descendants(node, lambda n: not n.is_triton and op_name(n.op) == "reshape_and_cache_flash")
-        keep = {w.id for w in kvs + wrs} | {c.id for cs in copies.values() for c in cs} | {n.id for n in rcs}
+        keep = {w.id for w in kvs + wrs + cws + css} | {c.id for cs in copies.values() for c in cs} | {n.id for n in rcs}
+        credited = _credited_window(node, cws) if any(_is_op(k, "kv_quant_window") for k in kvs) else None
+        if isinstance(credited, Unsupported):
+            return credited
+        row0 = 0
         before, bad = scope_transparents(node, ctx, keep, self.name)
         if bad is not None:
             return bad
@@ -184,7 +196,16 @@ class Int8AttentionScope:
         hint = hint_of(node, str(layer) or "attn")
         for kvn, w in zip(kvs, wrs):
             ka, a = bound_args(kvn), bound_args(w)
-            kc, vc, s = ka.get("key_cache"), ka.get("value_cache"), ka.get("s")
+            if _is_op(kvn, "kv_quant_window"):
+                kc, vc, kbuf, vbuf = credited
+                k, v = ka.get("k"), ka.get("v")
+                s = k.shape[0] if isinstance(k, ViewDesc) and k.rank == 3 else None
+                if s is None or not (_rows_of(k, kbuf, row0, s) and _rows_of(v, vbuf, row0, s)):
+                    return unsupported(node, "kv_quant_window does not read its request's rows of the credited window", k=repr(k), v=repr(v),
+                                       row0=row0, keys=repr(kbuf))
+                row0 += s
+            else:
+                kc, vc, s = ka.get("key_cache"), ka.get("value_cache"), ka.get("s")
             q, scale = a.get("q"), as_float(a.get("scale"))
             kouts = list(kvn.outs or ())
             if not all(isinstance(v, ViewDesc) for v in (q, kc, vc)) or not isinstance(s, int) or scale is None or len(kouts) != 4:
@@ -237,6 +258,30 @@ class Int8AttentionScope:
                                             hint=hint, kernels=("_int_mm", "elementwise_kernel", "reduce_kernel"), attribution=(rows[i],),
                                             pattern=self.name))
         return Group((*before, *computes), tuple(sorted(node.ids())), hint=hint, pattern=self.name)
+
+
+def _credited_window(scope: TreeNode, cws: list[TreeNode]) -> tuple[ViewDesc, ViewDesc, ViewDesc, ViewDesc] | Unsupported:
+    """The (key cache, value cache, K window, V window) of the scope's one credited_window: its kv_cache [pages, G, slots, 2D]
+    as FlashAttention's [pages, slots, G, D] key and value views, and its K and V [rows, G, D]."""
+    if len(cws) != 1:
+        return unsupported(scope, "kv_quant_window without exactly one credited_window in the scope", credited_window=len(cws))
+    a = bound_args(cws[0])
+    kv, k, v = a.get("kv_cache"), a.get("k"), a.get("v")
+    if not all(isinstance(x, ViewDesc) for x in (kv, k, v)) or kv.rank != 4 or kv.shape[3] % 2 or k.rank != 3 or k.shape != v.shape:
+        return unsupported(scope, "credited_window's kv_cache / k / v are not [pages, G, slots, 2D] / [rows, G, D] views",
+                           kv_cache=repr(kv), k=repr(k), v=repr(v))
+    P, Gk, S, D2 = kv.shape
+    D = D2 // 2
+    shape, strides = (P, S, Gk, D), (kv.strides[0], kv.strides[2], kv.strides[1], kv.strides[3])
+    if kv.strides[3] != 1 or k.shape[1:] != (Gk, D) or not (is_row_major(k) and is_row_major(v)) or not k.dtype == v.dtype == "bfloat16":
+        return unsupported(scope, "credited_window's cache or windows are not laid out as the int8 backend's", kv_cache=repr(kv), k=repr(k))
+    return _sub(kv, 0, shape, strides), _sub(kv, D, shape, strides), k, v
+
+
+def _rows_of(x, buf: ViewDesc, row0: int, s: int) -> bool:
+    """`x` is rows row0 .. row0 + s - 1 of the [rows, G, D] buffer `buf`."""
+    return (isinstance(x, ViewDesc) and x.alloc == buf.alloc and x.shape == (s, *buf.shape[1:]) and x.strides == buf.strides
+            and x.offset == buf.offset + row0 * buf.strides[0] and row0 + s <= buf.shape[0])
 
 
 def _out0(node: TreeNode) -> ViewDesc | None:

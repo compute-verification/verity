@@ -54,8 +54,9 @@ def PlainLiveAccAt (Ok : Claims.Msg → List 𝔽 → Prop) {x : Claims.Msg} {sp
           (N : ℕ) (rootB₀ : Array ByteArray)
           (hdec : ∀ j, DecodesTable
             (fun _ cap pend os => tableOutL Refine.H512 Refine.enc512 Refine.leaf512 cap pend os)
-            (fun _ o => o.accepted = true ∧ ¬ Off₀L Refine.H512 Refine.enc512 Refine.leaf512
-              ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (capOf rootB₀ ⟨0, Nat.one_pos⟩) (Claims.Flock.oracleOf C) o)
+            (fun _ o => o.accepted = true ∧ ¬ (Off₀L Refine.H512 Refine.enc512 Refine.leaf512
+              ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (capOf rootB₀ ⟨0, Nat.one_pos⟩) (Claims.Flock.oracleOf C) o ∧
+              ¬ SelfClashL Refine.H512 Refine.enc512 Refine.leaf512 ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ o))
             pL opn dec one fin capOf
             (fun j => repsOf (D := Refine.Dig) execArith
               ([plainTab L m k0 l₀ l₁ rest ext hsch hm ptLocal hlay].get j))

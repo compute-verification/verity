@@ -1,6 +1,6 @@
 """Weights decoded at use (`store.decode_at_use`) on the CPU, under a fake codec: each module's registered weights decoded
 into the shared scratch for its call and pointed back after, a tail past the registered blocks plain, the output the plain
-model's bit for bit."""
+model's bit for bit; the embedding's rows and the LM head's pieces through a scratch smaller than either."""
 from __future__ import annotations
 
 import pytest
@@ -13,11 +13,13 @@ BLOCK, WORD = 4096, 128
 
 
 def _pad(first_word: int, n: int) -> torch.Tensor:
-    return torch.randint(0, 256, (n,), dtype=torch.uint8, generator=torch.Generator().manual_seed(first_word))
+    i = torch.arange(n, dtype=torch.int64)
+    word = first_word + i // WORD
+    return ((word * 1315423911 + (i % WORD) * 2654435761) >> 11).remainder(256).to(torch.uint8)
 
 
 def fake_decode(src: torch.Tensor, dst: torch.Tensor, first: int, stream: int) -> None:
-    """XOR with a pad keyed by the first word's index: its own inverse, so it encodes too."""
+    """XOR with a pad keyed by each word's index: its own inverse, so it encodes too, and any range decodes alone."""
     dst.copy_(src ^ _pad(first, src.numel()))
 
 
@@ -49,7 +51,7 @@ def word_decode(src: torch.Tensor, dst: torch.Tensor, first: int, stream: int) -
         dst[w * WORD:(w + 1) * WORD] = src[w * WORD:(w + 1) * WORD] ^ _pad(first + w, WORD)
 
 
-def _register(model: Model, decode=fake_decode) -> list[EncodedWeight]:
+def _register(model: torch.nn.Module, decode=fake_decode) -> list[EncodedWeight]:
     """Each parameter's whole blocks registered (a tail past them stays plain) and encoded in place, as the store does."""
     regions, first = [], 0
     for name, p in model.named_parameters():
@@ -110,3 +112,76 @@ def test_in_the_sessions_codec_a_weights_words_are_indexed_from_its_store_block(
     own, session = encoded_weights(lay, model), encoded_weights(lay, model, WORD)
     assert [(w.first_word, w.block_words, w.word_bytes) for w in own] == [(0, 64, 64), (384, 64, 64)]
     assert [(w.first_word, w.block_words, w.word_bytes) for w in session] == [(0, 32, WORD), (6 * 32, 32, WORD)]
+
+
+V, H = 40, 2048                     # an embedding / LM head row: 2048 bf16, one block
+
+
+class QuantMethod:
+    """vLLM's unquantized embedding method: `embedding` gathers, `apply` is the linear."""
+
+    def embedding(self, layer, ids):
+        return torch.nn.functional.embedding(ids, layer.weight)
+
+    def apply(self, layer, x, bias=None):
+        return torch.nn.functional.linear(x, layer.weight, bias)
+
+
+def _ints(shape, lo, hi, seed, dtype=torch.bfloat16):
+    return torch.randint(lo, hi, shape, generator=torch.Generator().manual_seed(seed)).to(dtype)
+
+
+class Vocab(torch.nn.Module):
+    """`VocabParallelEmbedding` / `ParallelLMHead` at tp 1 (small integers: every sum exact, in any order)."""
+
+    def __init__(self, seed: int) -> None:
+        super().__init__()
+        self.tp_size, self.quant_method, self.ids = 1, QuantMethod(), []
+        self.weight = torch.nn.Parameter(_ints((V, H), -8, 8, seed), requires_grad=False)
+
+    def forward(self, ids):
+        self.ids.append(ids)
+        return self.quant_method.embedding(self, ids.long())
+
+
+class Logits(torch.nn.Module):
+    def forward(self, lm_head, h):
+        assert lm_head.tp_size == 1
+        return lm_head.quant_method.apply(lm_head, h)
+
+
+class Lm(torch.nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.embed, self.lm_head, self.logits_processor = Vocab(3), Vocab(4), Logits()
+        self.a, self.b = Int8Linear(64, H, 5), Int8Linear(H, 64, 6)
+        for m in (self.a, self.b):
+            m.weight.data = _ints(m.weight.shape, -2, 3, 9, torch.int8)
+            m.weight_scale.data = torch.ones_like(m.weight_scale)
+
+    def forward(self, ids):
+        h = self.b(self.a(self.embed(ids).float())).to(torch.bfloat16)
+        return self.logits_processor(self.lm_head, h)
+
+
+def test_the_embedding_and_lm_head_read_in_pieces_through_a_smaller_scratch():
+    model, ids = Lm(), torch.tensor([7, 3, 7, 8, 39, 0, 9])
+    plain = model(ids)
+    weights = _register(model)
+    assert sorted(w.name for w in weights) == ["a.weight", "b.weight", "b.weight_scale", "embed.weight", "lm_head.weight"]
+    homes = {w.name: w.param.data.data_ptr() for w in weights}
+    hooks = DecodeAtUse(model, weights, fake_decode).install()
+    assert sorted(k for k, _, _ in hooks.pieces.values()) == ["head", "rows"]
+    assert hooks.scratch.numel() == (32 + 2) * BLOCK < V * H * 2      # b's weight and scale, not the vocabulary's 40 blocks
+    model.embed.ids.clear()
+    assert torch.equal(model(ids).view(torch.int16), plain.view(torch.int16)) and hooks.calls == 4
+    assert model.embed.ids[0].tolist() == [2, 1, 2, 3, 5, 0, 4]      # each id's row of the decoded [0, 3, 7, 8, 9, 39] table
+    assert all(w.param.data.data_ptr() == homes[w.name] for w in weights)
+    small = DecodeAtUse(model, weights, fake_decode, scratch_bytes=34 * BLOCK)
+    with pytest.raises(ValueError, match="smaller than"):
+        DecodeAtUse(model, weights, fake_decode, scratch_bytes=33 * BLOCK)
+    hooks.remove()
+    small.install()
+    with pytest.raises(RuntimeError, match="do not fit"):
+        model(torch.arange(35) % V)
+    small.remove()

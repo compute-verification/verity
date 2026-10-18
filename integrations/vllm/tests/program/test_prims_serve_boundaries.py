@@ -16,7 +16,7 @@ REG = "verity_vllm.program.registry"
 FAMILY = ("__init__", "catalog", "prims", "ref_prims", "pad_prims", "lifted", "tables", "value_inputs", "operand_widths", "b1",
           "b1_tp2", "serve3", "spec", "pouw_rows")
 #: the other families' Definition modules this family reads (each family's own split judges its modules)
-OTHER_FAMILIES = {"dense", "fa2_softcap", "fa3_check_inf", "sampling", "topp_geometry", "topp_word_gates"}
+OTHER_FAMILIES = {"dense", "fa2_softcap", "fa3_check_inf", "fp8_moe_experts", "sampling", "topp_geometry", "topp_word_gates"}
 THIRD_PARTY = {"numpy"}
 #: the catalog, where the layout move put core's Definitions and silicon models
 CATALOG = "verity.ml.circuits"

@@ -12,7 +12,10 @@ The code is `audit.py` (the lifecycle), `coins.py` (the coins), `receipts.py` (s
 `codec.py` (the store's encoding), `memory_map.py` (serving's record of the KV blocks it wrote and freed, the audit's
 input from serving) and `timing.py` (the honest schedule, and where the sketch's bound is read). Every byte format below is pinned by
 `tests/vectors.json`. This is a reference implementation: pure Python, with openings checked in the clear. The clear
-checks are the specification of what each zero-knowledge proof unit proves on the deployed path (§8).
+checks are the specification of what each zero-knowledge proof unit proves on the deployed path (§8). The verifier's
+side is also Lean code, `lean/` (`RemoteAudit`: `verifyWindow`, a window's draw and its openings' checks, and
+`RemoteAudit.Session`, the session's bookkeeping call for call), held to `audit.py` by `lean/tests/`' difftest, which
+compares every event's result, the outcome and the record. It refuses a registration that binds PoUW's tiles.
 
 ## 1. What an accepted session certifies
 
@@ -863,7 +866,15 @@ and each window's, from it plus the node's capacities.
     verifier here checks only that each pass names a step above the last.
   - *The timing.* The step says which reads a pass stands for, not when serving made them: nothing yet shows that the
     pass at \(s\) ran while serving executed \(s\). A certifier that stamps each step's record and each pass's root
-    on one clock would.
+    on one clock would. A prover may run serving ahead of its passes (`Ahead` in `benchmarks/remote_session/prover.py`),
+    at most \(k\) steps past the pass in flight, \(k\) its own choice: each pass covers the newest step serving has
+    handed, the steps serving ran past in between have no pass and are credited nothing, and the pass at \(s\) reads
+    the store resident at \(s\) while serving executes later steps. That store must still be in place as the pass
+    reads it, so serving writes into memory whose block was released at step \(r\) only once no pass yet to read is
+    at a step up to \(r\) (the free fence). A write that skips the fence lands over a block a pass has yet to read,
+    and a drawn receipt of it, of other bytes than the opening's block, rejects (§6). The record is memory-map/v1's
+    as before, each pass still starts after the root before it and sends its root once its receipts are made (§5),
+    and the verifier sees the same messages, so what it accepts is unchanged.
 - **The requirement's link.** What the audit credits is the node's reads of its store. Counting them as the served
   circuit's reads needs A1's link (`StoreMatches`, `PlanMatches`, note:20261017T1847Z-draft-a1-requirement), and three
   of its gaps are on the audit's side. `ledger` takes the link as `requirement`, a `RequirementLink`: whether its

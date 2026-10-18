@@ -14,6 +14,13 @@ from typing import Callable
 from verity.ml.circuits.defs import bind as ir_bind
 from verity_vllm.program.registry import act as _act
 from verity_vllm.program.registry import b1, gemm_bias as _gemm_bias
+from verity_vllm.program.registry import dsa as _dsa, dsa_norm as _dsa_norm
+from verity_vllm.program.registry import deepgemm as _deepgemm
+from verity_vllm.program.registry import boolean_rope as _rope
+from verity_vllm.program.registry import cublas_bf16 as _cublas_bf16, ll_bf16 as _ll_bf16
+from verity_vllm.program.registry import cuda_rmsnorm as _cuda_rmsnorm
+from verity_vllm.program.registry import sparse_mla as _sparse_mla, sparse_mla_split as _sparse_mla_split
+from verity_vllm.program.registry import tp_allreduce as _tp_allreduce
 from verity_vllm.program.registry import fa2_check_inf as _f2
 from verity_vllm.program.registry import fa3_check_inf as _f3
 from verity_vllm.program.registry import fp8 as _fp8
@@ -114,6 +121,10 @@ PROFILE_B1_EAGER = Vocabulary(
         "embedding": lambda V, H: ir_bind(b1.Embedding, V=V, H=H),
         "token_select": lambda V: ir_bind(b1.TokenSelect, V=V),
         "residual_add": lambda N: ir_bind(b1.ResidualAdd, N=N),
+        # vLLM's default non-batch-invariant CUDA RMSNorm dispatch, the same kernels at every profile (registry.cuda_rmsnorm;
+        # BLOCK = launch_block(rows, N, fused)): `rules/vllm_bindings/cuda_norm.py` asks for them off batch invariance
+        "rmsnorm_cuda": lambda N, EPS, BLOCK: ir_bind(_cuda_rmsnorm.RMSNormCudaVector8, N=N, EPS=EPS, BLOCK=BLOCK),
+        "rmsnorm_fused_cuda": lambda N, EPS, BLOCK: ir_bind(_cuda_rmsnorm.RMSNormFusedCudaVector8, N=N, EPS=EPS, BLOCK=BLOCK),
         **_VALUE_KINDS,
     },
     notes={
@@ -133,6 +144,12 @@ PROFILE_B1_EAGER = Vocabulary(
         "embedding": "Embedding_v1{V,H}: row gather",
         "token_select": "TokenSelect_v1{V}: greedy argmax, lowest index on ties",
         "residual_add": "ResidualAdd_v1{N}",
+        "rmsnorm_cuda": "RMSNormCudaVector8_v1{N,EPS,BLOCK}: _C.rms_norm's rms_norm_kernel<bf16, 8, 2, true> on one contiguous "
+                        "row -- BLOCK threads each FMA-fold eight-element vectors t, t+BLOCK, ... from +0, CUB block reduce, "
+                        "bf16_rn((f32(x) * rsqrtf(var/N + EPS)) * f32(w)) (registry.cuda_rmsnorm)",
+        "rmsnorm_fused_cuda": "RMSNormFusedCudaVector8_v1{N,EPS,BLOCK}: _C.fused_add_rms_norm's fused_add_rms_norm_kernel"
+                              "<bf16, 8, true> -- the vectorised residual add kept as the second output, then the same "
+                              "BLOCK-thread reduction and epilogue (registry.cuda_rmsnorm)",
     })
 
 # -- reference: NUMERIC's reference kinds (`verity_vllm/program/registry/ref_prims.py`, vocabulary `verity-ref-vocab/1`) ----------
@@ -392,6 +409,13 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            # [lane vllm-tp-n] the WORLD-parametric families for a world > 2 (identities `AllReduce_v2{WORLD,N}` / `AllGather_v1{WORLD,N}`; world 2
            # keeps the `*2` identities above -- `b1_tp2.all_reduce(world, N)` is the selector)
            "all_reduce": lambda WORLD, N: ir_bind(TP2.AllReduce, WORLD=WORLD, N=N),
+           "all_reduce_mnnvl": lambda WORLD, N, SHOT: ir_bind(_tp_allreduce.AllReduceMnnvl, WORLD=WORLD, N=N, SHOT=SHOT),
+           "all_reduce_multimem": lambda WORLD, SIZE, TREES, FTZ:
+               ir_bind(_tp_allreduce.AllReduceMultimem, WORLD=WORLD, SIZE=SIZE, TREES=TREES, FTZ=FTZ),
+           "all_reduce_custom": lambda WORLD, SIZE, STAGE:
+               ir_bind(_tp_allreduce.AllReduceCustom, WORLD=WORLD, SIZE=SIZE, STAGE=STAGE),
+           "all_reduce_rmsnorm_mnnvl": lambda WORLD, N, SHOT, CLUSTER, EPS, FMA:
+               ir_bind(_tp_allreduce.AllReduceRmsNormMnnvl, WORLD=WORLD, N=N, SHOT=SHOT, CLUSTER=CLUSTER, EPS=EPS, FMA=FMA),
            "all_gather": lambda WORLD, N: ir_bind(TP2.AllGather, WORLD=WORLD, N=N),
            "embedding_shard": lambda VS, H, START: ir_bind(TP2.EmbeddingShard, VS=VS, H=H, START=START),
            # [R15 stoch] the seeded temperature + top-p token select (registry.sampling: TemperatureScale -> TopPMask{V} -> GumbelSelectF32,
@@ -409,7 +433,12 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            # SCALE is `TargetProfile.effective_fp8_scale_construction()`; FP8_DOT, given on a target whose blockwise step is not Hopper's
            # (`frontend.targets.fp8_block_dot`), binds the version 3 forms over it (the role and its note stay as they were).
            "fp8_group_quant": lambda K, G: ir_bind(_fp8.Fp8GroupQuant, K=K, G=G),
+           # the same op with `use_ue8m0=True` (power-of-two scales), what `moe_kernel_quantize_input` launches for the block-FP8
+           # Triton experts when DeepGEMM is on (vLLM's sm_90 default): registry.deepgemm's quant, `DeepGemmFp8Linear_v1`'s own
+           "fp8_group_quant_ue8m0": lambda K, G: ir_bind(_deepgemm.Fp8GroupQuantUe8m0, K=K, G=G),
            "scaled_mm_fp8_block": lambda K, N, G, SCALE, FP8_DOT=None: _fp8_vocab.block_gemm(K, N, G, SCALE, FP8_DOT),
+           "flashinfer_fp8_linear": lambda K, N: ir_bind(_deepgemm.FlashInferFp8Linear, K=K, N=N),
+           "deepgemm_fp8_linear": lambda K, N: ir_bind(_deepgemm.DeepGemmFp8Linear, K=K, N=N),
            # GPT-NeoX's nn.LayerNorm (weight + bias): torch's vectorized CUDA kernel, the Definition the eager Match fold binds
            # (`registry/layer_norm.py`, `engine/profiles/gen_ln_patterns.py`).  `rules/vllm_bindings/layer_norm.py` asks for it.
            "layer_norm_aten": lambda N, EPS: ir_bind(_LN.LayerNormAten, N=N, EPS=EPS),
@@ -419,7 +448,31 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "int8_scaled_mm": lambda K, N: _int8().scaled_mm(K, N),
            "int8_kv_quant": lambda S, D: ir_bind(_int8().Int8KvQuant, S=S, D=D),
            "int8_attention_row": lambda D, S, SCALE: ir_bind(_int8().Int8LutAttentionRow, D=D, S=S, SCALE=SCALE),
-           "int8_attention_row_table": lambda D, S, SCALE: ir_bind(_int8().Int8LutAttentionRowV2, D=D, S=S, SCALE=SCALE)},
+           "int8_attention_row_table": lambda D, S, SCALE: ir_bind(_int8().Int8LutAttentionRowV2, D=D, S=S, SCALE=SCALE),
+           # [GLM-5.3] DeepSeek sparse attention on the H200 (registry.dsa, registry.sparse_mla): the indexer's K slot and query, DeepGEMM's
+           # MQA logits, the top-k of a row of at most TOPK keys, and FA3's sparse MLA over the selected rows. `rules/vllm_dsa.py` asks for them.
+           "dsa_indexer_k_row": lambda D, ROPE, EPS: ir_bind(_dsa.DsaIndexerKRow, D=D, ROPE=ROPE, EPS=EPS),
+           "dsa_indexer_q": lambda H, D, ROPE: ir_bind(_dsa.DsaIndexerQ, H=H, D=D, ROPE=ROPE),
+           "dsa_mqa_logits": lambda N, H, D: ir_bind(_dsa.DsaMqaLogitsV3, N=N, H=H, D=D),
+           "dsa_topk_short_row": lambda TOPK: ir_bind(_dsa.DsaTopKShortRow, TOPK=TOPK),
+           "dsa_rmsnorm": lambda N, EPS: ir_bind(_dsa_norm.DsaRMSNorm, N=N, EPS=EPS),
+           "dsa_kv_rope": lambda D: ir_bind(_rope.RoPEHeadGptJV2, D=D),
+           "dsa_q_rope": lambda D: ir_bind(_rope.RoPEHeadGptJV2, D=D),
+           "cublas_splitk_gemm": lambda K, N, SPLIT_K, DOT:
+               ir_bind(_cublas_bf16.CublasSplitKGemmWord, K=K, N=N, SPLIT_K=SPLIT_K, DOT=DOT),
+           "cublas_gemm_f32out": lambda K, N, DOT:
+               ir_bind(_cublas_bf16.GemmF32OutWord, K=K, N=N, DOT=DOT),
+           "cublas_splitk_gemm_f32out": lambda K, N, SPLIT_K, DOT:
+               ir_bind(_cublas_bf16.CublasSplitKGemmF32OutWord, K=K, N=N, SPLIT_K=SPLIT_K, DOT=DOT),
+           "batched_gemm": lambda B, K, N, DOT: ir_bind(_cublas_bf16.BatchedGemmWord, B=B, K=K, N=N, DOT=DOT),
+           "ll_bf16_dotprod": lambda N, K, BS, VEC, FMA:
+               ir_bind(_ll_bf16.LlBf16DotprodGemmWord, N=N, K=K, BS=BS, VEC=VEC, FMA=FMA),
+           "ll_bf16_splitk": lambda N, K, SPLIT_K, TILE_K, WARPS, DOT:
+               ir_bind(_ll_bf16.LlBf16SplitKGemmWord, N=N, K=K, SPLIT_K=SPLIT_K, TILE_K=TILE_K, WARPS=WARPS, DOT=DOT),
+           "sparse_mla": lambda T, NH, DR, DV, BN, DOT, INV, SM_SCALE:
+               ir_bind(_sparse_mla.SparseMla, T=T, NH=NH, DR=DR, DV=DV, BN=BN, DOT=DOT, INV=INV, SCALE=SM_SCALE),
+           "sparse_mla_split": lambda T, NS, NH, DR, DV, BN, DOT, INV, SM_SCALE:
+               ir_bind(_sparse_mla_split.SparseMlaSplit, T=T, NS=NS, NH=NH, DR=DR, DV=DV, BN=BN, DOT=DOT, INV=INV, SCALE=SM_SCALE)},
     notes={**PROFILE_B1_EAGER.notes, **_PAD_NOTES, **_DNN,
            "int8_row_quant": "Int8RowQuant_v1{K}: verity_int8::row_quant on one bf16 token row -> (x_q s8[K], s_a f32): s_a = "
                              "RN32(max(amax, RN32(1e-30))/127), x_q = clamp(rint(RN32(x/s_a)), ±127) (registry.int8_exact)",
@@ -478,18 +531,51 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "all_reduce2": "AllReduce2_v1{N}: pynccl ncclSum bf16 of two ranks' partials = bf16(f32(a)+f32(b)) per element (b1_tp2)",
            "all_gather2": "AllGather2_v1{N}: vllm.all_gather of two [N] shards along the trailing axis = the [2N] concatenation (b1_tp2)",
            "all_reduce": "AllReduce_v2{WORLD,N}: pynccl ncclSum bf16 over WORLD>2 ranks' partials as NCCL's intra-node tree chain of one-rounding bf16 adds (b1_tp2.allreduce_order)",
+           "all_reduce_mnnvl": "AllReduceMnnvl_v1{WORLD,N,SHOT}: FlashInfer MNNVL all-reduce on a captured route",
+           "all_reduce_multimem": "AllReduceMultimem_v1{WORLD,SIZE,TREES,FTZ}: torch symmetric-memory multimem all-reduce on captured trees",
+           "all_reduce_custom": "AllReduceCustom_v1{WORLD,SIZE,STAGE}: vLLM custom all-reduce on a captured route",
+           "all_reduce_rmsnorm_mnnvl": "AllReduceRmsNormMnnvl_v1{WORLD,N,SHOT,CLUSTER,EPS,FMA}: FlashInfer fused all-reduce + RMS norm",
            "all_gather": "AllGather_v1{WORLD,N}: vllm.all_gather of WORLD>2 [N] shards along the trailing axis = the [WORLD*N] concatenation (b1_tp2)",
            "embedding_shard": "EmbeddingShard_v1{VS,H,START}: one rank of VocabParallelEmbedding — shard[id-START] if START<=id<START+VS else 0 (b1_tp2)",
            "fp8_group_quant": "Fp8GroupQuant_v1{K,G}: _C.per_token_group_fp8_quant on one bf16 row -> (x_q e4m3[K], x_s f32[K/G]); per group absmax fmaxf-fold "
                               "from eps 1e-10, s = absmax/448 (div.rn), q = e4m3(clamp(f32(x)/s, ±448)); both outputs computed",
+           "fp8_group_quant_ue8m0": "Fp8GroupQuantUe8m0_v1{K,G}: _C.per_token_group_fp8_quant(use_ue8m0=True) on one bf16 row -> (x_q e4m3[K], "
+                                    "x_s f32[K/G]); s = Fp8Ue8m0Ceil_v1 of the group's absmax/448 (the power of two at or above it), "
+                                    "q = e4m3(clamp(f32(x)/s, ±448)); both outputs computed (registry.deepgemm)",
            "scaled_mm_fp8_block": "ScaledMmFp8BlockSharedScale_v1{K,N,G} (SCALE shared-per-block) or ScaledMmFp8Block_v1{K,N,G} (per-coordinate): blockwise "
                                   "_C.cutlass_scaled_mm on one token row -- per coordinate, ascending 128-tiles: temp = 4x HopperE4m3QgmmaDot32 from +0, "
                                   "acc = FFMA(temp, FMUL(x_s[kb], Ws[n//G][kb]), acc); cvt.rn.bf16.f32; shared-per-block forms each weight block's FMULs "
                                   "once; W e4m3 [N,K] + Ws f32 [N/G,K/G] Inputs",
+           "flashinfer_fp8_linear": "FlashInferFp8Linear_v1{K,N}: vLLM's default Hopper block-FP8 linear for M < 32; FlashInfer "
+                                    "scale_1x128_kernel followed by the TRT-LLM swapAB GEMM",
+           "deepgemm_fp8_linear": "DeepGemmFp8Linear_v1{K,N}: vLLM's default Hopper block-FP8 linear for M >= 32; ue8m0 group quant "
+                                  "followed by DeepGEMM fp8_gemm_nt, returning the materialised q, scale and bf16 output",
            "layer_norm_aten": "LayerNormAten_v1{N,EPS}: aten.layer_norm on a bf16 row with bf16 weight and bias -- torch 2.13 "
                               "vectorized_layer_norm_kernel<bf16, float>: Welford over 128 threads / 4 warps, rsqrtf(var + eps), "
                               "bf16(w * (rstd * (x - mean)) + b)",
-           "layer_norm_aten_value": "LayerNormAten_v2{N}(x, w, b, eps): LayerNormAten_v1's body with eps an input"})
+           "layer_norm_aten_value": "LayerNormAten_v2{N}(x, w, b, eps): LayerNormAten_v1's body with eps an input",
+           "dsa_indexer_k_row": "DsaIndexerKRow_v1{D,ROPE,EPS}: one index-K cache slot of _fused_norm_rope_kernel -- f32 layer norm (w, b f32), "
+                                "the interleaved RoPE of the first ROPE elements, DsaUe8m0Quant_v1{D} -> (e4m3[D], f32 scale)",
+           "dsa_indexer_q": "DsaIndexerQ_v1{H,D,ROPE}: _fused_q_kernel's indexer outputs for one token -- per head the interleaved RoPE, "
+                            "DsaUe8m0Quant_v1{D} and the weight scale(q) * D^-0.5 * H^-0.5 -> (e4m3[H,D], f32[H])",
+           "dsa_mqa_logits": "DsaMqaLogits_v3{N,H,D}: DeepGEMM's Hopper fp8 MQA logits of one query over N index-K slots -- per head D/32 "
+                             "HopperE4m3QgmmaDot32 steps, relu x weight summed per quad lane (the first two heads contracted), x the slot's scale",
+           "dsa_topk_short_row": "DsaTopKShortRow_v1{TOPK}: the top-k of a row of at most TOPK keys (top_k_per_row_prefill, cooperative_topk) "
+                                 "-- slot i = i < len ? i : -1",
+           "dsa_rmsnorm": "DsaRMSNorm_v1{N,EPS}: _fused_norm_rope_kernel's cc 9.0 PTX reduction",
+           "dsa_kv_rope": "RoPEHeadGptJ_v2{D}: _fused_norm_rope_kernel's interleaved k_pe head",
+           "dsa_q_rope": "RoPEHeadGptJ_v2{D}: _fused_q_kernel's interleaved q_pe head",
+           "cublas_splitk_gemm": "CublasSplitKGemm_v1{K,N,SPLIT_K,DOT}: vLLM-default cuBLAS BF16 linear at a captured split count",
+           "cublas_gemm_f32out": "GemmF32Out_v1{K,N,DOT}: vLLM-default cuBLAS BF16-to-F32 MoE gate at a captured non-split route",
+           "cublas_splitk_gemm_f32out": "CublasSplitKGemmF32Out_v1{K,N,SPLIT_K,DOT}: vLLM-default cuBLAS BF16-to-F32 MoE gate "
+                                                "at a captured split count",
+           "batched_gemm": "BatchedGemm_v1{B,K,N,DOT}: vLLM-default cuBLAS batched BF16 MLA absorption",
+           "ll_bf16_dotprod": "LlBf16DotprodGemm_v1{N,K,BS,VEC,FMA}: vLLM-default cuteDSL MoE gate for M <= 4",
+           "ll_bf16_splitk": "LlBf16SplitKGemm_v1{N,K,SPLIT_K,TILE_K,WARPS,DOT}: vLLM-default cuteDSL MoE gate for 5 <= M <= 16",
+           "sparse_mla": "SparseMla_v1{T,NH,DR,DV,BN,DOT,INV,SCALE=SM_SCALE}: FA3's sparse MLA (_vllm_fa3_C.fwd, FLASH_ATTN_MLA_SPARSE) of one "
+                         "query token's NH heads over its T selected [kv_c | k_pe] rows -- the k16 wgmma chain over [q_rope | q_nope], "
+                         "AttnBlock_v4's online softmax over BN-key blocks last to first, AttentionHead_v4's epilogue",
+           "sparse_mla_split": "SparseMlaSplit_v1{T,NS,NH,DR,DV,BN,DOT,INV,SCALE=SM_SCALE}: FA3 sparse MLA at the token's default split count"})
 
 
 def profile_records(vocab: Vocabulary) -> dict | None:

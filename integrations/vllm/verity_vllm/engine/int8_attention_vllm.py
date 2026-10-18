@@ -93,9 +93,8 @@ class Int8AttentionImpl(FlashAttentionImpl):
         self.calls += 1
         ks, md = self.k_scales(layer.layer_name, query.device), attn_metadata
         if (read := self.credited) is not None:
-            st = read.step(md, md.query_start_loc, md.seq_lens, self.num_kv_heads, self.head_size)
-            read.window(st, kv_cache, K.layer_index(layer.layer_name), md.block_table, md.slot_mapping)
-            int8_ops.window_attention(query[:n], st.k, st.v, st.offsets, md.query_start_loc, md.seq_lens, ks, self.scale, output[:n])
+            int8_ops.credited_attention(read, query[:n], kv_cache, K.layer_index(layer.layer_name), md, self.num_kv_heads, ks, self.scale,
+                                        output[:n])
             return output
         key_cache, value_cache = kv_cache.transpose(1, 2).split(self.head_size, dim=-1)
         int8_ops.paged_attention(query[:n], key_cache, value_cache, md.query_start_loc, md.seq_lens, md.block_table, ks, self.scale,

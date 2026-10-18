@@ -20,18 +20,34 @@ WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 mkdir -p "$OUT/sass" "$OUT/chunks"
 
-python3 "$HERE/generate.py" "$@" --emit "$WORK/all.cu" || exit 1
-python3 "$PROBE" build --out "$WORK/b0" "$WORK/all.cu" >/dev/null 2>"$OUT/build0.log" || { cat "$OUT/build0.log" >&2; exit 1; }
-python3 "$PROBE" gate "$WORK/b0/all" --json "$WORK/gate0.json" >"$OUT/gate0.txt" 2>&1
+# FB_JOBS chunks build at once (each is one nvcc): the first gate's chunks and the kept programs' chunks alike
+JOBS=${FB_JOBS:-8}
+# build CHUNK_FILE SRC_DIR BIN_DIR GENERATE_ARGS...: one chunk's source and binary
+build() {
+  local c=$1 src=$2 bin=$3 i=${1##*_}
+  shift 3
+  python3 "$HERE/generate.py" "$@" --only "$c" --emit "$src/fb_$i.cu" &&
+    python3 "$PROBE" build --out "$bin" "$src/fb_$i.cu" >/dev/null 2>"$WORK/build_$(basename "$src")_$i.log"
+}
+export -f build
+export HERE PROBE WORK
+python3 "$HERE/generate.py" "$@" | python3 -c "import json,sys; print('\n'.join(json.loads(l)['name'] for l in sys.stdin))" \
+  >"$WORK/names.txt" || exit 1
+mkdir -p "$WORK/s0" "$WORK/b0"
+split -l 64 -d -a 3 "$WORK/names.txt" "$WORK/pre_"
+ls "$WORK"/pre_* | xargs -P "$JOBS" -I{} bash -c 'build "$@"' _ {} "$WORK/s0" "$WORK/b0" "$@" \
+  || { cat "$WORK"/build_s0_*.log >"$OUT/build0.log"; cat "$OUT/build0.log" >&2; exit 1; }
+python3 "$PROBE" gate "$WORK"/b0/fb_* --json "$WORK/gate0.json" >"$OUT/gate0.txt" 2>&1
 python3 -c "import json,sys; print('\n'.join(v['probe'] for v in json.load(open(sys.argv[1]))['verdicts'] if v['passed']))" \
   "$WORK/gate0.json" >"$OUT/kept.txt"
 echo "kept $(wc -l <"$OUT/kept.txt") of $(grep -c '"probe"' "$WORK/gate0.json") programs"
-split -l 64 -d -a 2 "$OUT/kept.txt" "$WORK/chunk_"
+split -l 64 -d -a 3 "$OUT/kept.txt" "$WORK/chunk_"
+mkdir -p "$WORK/b"
+ls "$WORK"/chunk_* | xargs -P "$JOBS" -I{} bash -c 'build "$@"' _ {} "$OUT" "$WORK/b" "$@" \
+  || { cat "$WORK"/build_*_*.log >"$OUT/build.log"; cat "$OUT/build.log" >&2; exit 1; }
 bins=()
 for c in "$WORK"/chunk_*; do
   i=${c##*_}
-  python3 "$HERE/generate.py" "$@" --only "$c" --emit "$OUT/fb_$i.cu" || exit 1
-  python3 "$PROBE" build --out "$WORK/b" "$OUT/fb_$i.cu" >/dev/null 2>>"$OUT/build.log" || { cat "$OUT/build.log" >&2; exit 1; }
   cuobjdump -sass "$WORK/b/fb_$i" >"$OUT/sass/fb_$i.sass" 2>&1
   bins+=("$WORK/b/fb_$i")
 done

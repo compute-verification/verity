@@ -14,6 +14,8 @@ Schemas (from vllm/csrc/torch_bindings.cpp, `d9105ea80`):
     silu_and_mul(Tensor! result, Tensor input) -> ()
     gelu_tanh_and_mul(Tensor! out, Tensor input) -> ()
     silu_and_mul_per_block_quant(Tensor! out, Tensor input, Tensor! scales, int group_size, Tensor? scale_ub, bool is_scale_transposed) -> ()
+    per_token_group_fp8_quant(Tensor input, Tensor! output_q, Tensor! output_s, int group_size, float eps, float fp8_min,
+                              float fp8_max, bool scale_ue8m0, bool column_major_scales, bool tma_aligned) -> ()
 and of `_moe_C` (vllm/csrc/moe/torch_bindings.cpp; the call `_custom_ops.grouped_topk` makes):
     grouped_topk(Tensor scores, int n_group, int topk_group, int topk, bool renormalize, float routed_scaling_factor, Tensor bias,
                  int scoring_func) -> (Tensor, Tensor)
@@ -50,6 +52,13 @@ _define_once("gelu_tanh_and_mul(Tensor(a!) out, Tensor input) -> ()", "gelu_tanh
 _define_once("silu_and_mul_per_block_quant(Tensor(a!) out, Tensor input, Tensor(b!) scales, int group_size, Tensor? scale_ub, "
              "bool is_scale_transposed) -> ()", "silu_and_mul_per_block_quant",
              lambda out, input, scales, group_size, scale_ub, is_scale_transposed: None)
+# `_C.per_token_group_fp8_quant` (vllm/csrc/torch_bindings.cpp): the per-group activation quant of the block-FP8 linears and the
+# block-FP8 Triton experts' input (`moe_kernel_quantize_input` -> `per_token_group_quant_fp8`, which passes `use_ue8m0 =
+# is_deep_gemm_e8m0_used()`: True at vLLM's sm_90 defaults).
+_define_once("per_token_group_fp8_quant(Tensor input, Tensor(a!) output_q, Tensor(b!) output_s, int group_size, float eps, "
+             "float fp8_min, float fp8_max, bool scale_ue8m0, bool column_major_scales, bool tma_aligned) -> ()",
+             "per_token_group_fp8_quant",
+             lambda input, output_q, output_s, group_size, eps, fp8_min, fp8_max, scale_ue8m0, column_major_scales, tma_aligned: None)
 _define_once("grouped_topk(Tensor scores, int n_group, int topk_group, int topk, bool renormalize, float routed_scaling_factor, "
              "Tensor bias, int scoring_func=0) -> (Tensor, Tensor)", "grouped_topk",
              lambda scores, n_group, topk_group, topk, renormalize, routed_scaling_factor, bias, scoring_func=0:
@@ -81,6 +90,50 @@ _define_once("unified_cache_pad(Tensor live, Tensor zero, int slot) -> ()", "uni
 _define_once("gumbel_topp_token_select(Tensor logits, Tensor seed, float temperature, float top_p, int pos, Tensor? splits, int? S=None) -> Tensor",
              "gumbel_topp_token_select",
              lambda logits, seed, temperature, top_p, pos, splits, S=None: logits.new_empty(tuple(logits.shape[:-1]), dtype=torch.int32))
+
+# vLLM's default Hopper block-FP8 linear.  The real op is registered in
+# `kernels/linear/scaled_mm/flashinfer.py`; this stand-in lets CPU-only derive
+# tests author the same exported node.
+_define_once("dynamic_flashinfer_deepgemm_blockscale_gemm(Tensor input, Tensor weight, Tensor weight_scale, int group_size, "
+             "bool use_deep_gemm_e8m0) -> Tensor", "dynamic_flashinfer_deepgemm_blockscale_gemm",
+             lambda input, weight, weight_scale, group_size, use_deep_gemm_e8m0:
+                 input.new_empty((*input.shape[:-1], weight.shape[0]), dtype=torch.bfloat16))
+
+# [GLM-5.3] DeepSeek sparse attention (vllm/models/deepseek_v32/attention.py) as three ops, the leaves `export_compat.dsa_ops_leaf`
+# puts in place of `fused_norm_rope`, `fused_q` and `_sparse_indexer_and_attn` while exporting.  The served kernels write the MLA and
+# indexer caches through a slot mapping and read them back through the forward context; here the cache rows are the first op's outputs
+# and the third op's operands, and each layer's history is the derive's state keyed by `layer_name` (as `unified_attention_with_output`'s).
+#   dsa_norm_rope -> (q_c normed, index K e4m3 [T, Dk], index K scale f32 [T]); kv_c_out / k_pe_out written (the MLA cache row)
+#   dsa_q         -> (q_pe roped bf16, index q e4m3 [T, H, Dk], index weights f32 [T, H])
+#   dsa_indexer_attn -> the attention rows [T, NH, kv_lora] bf16 (before the W_UV bmm)
+# On a layer without an indexer the index outputs are empty ([T, 0], [T, 0, 0]) and the third op's index operands are None.
+def _dsa_norm_rope_fake(positions, q_c, q_w, q_eps, kv_c, kv_w, kv_eps, k_pe, cos_sin, index_k, index_k_w, index_k_b, index_k_eps,
+                        index_cos_sin, index_rope_interleave, kv_c_out, k_pe_out):
+    T, Dk = q_c.shape[0], (index_k.shape[-1] if index_k is not None else 0)
+    return (q_c.new_empty(q_c.shape), q_c.new_empty((T, Dk), dtype=torch.float8_e4m3fn),
+            q_c.new_empty((T,) if index_k is not None else (T, 0), dtype=torch.float32))
+
+
+def _dsa_q_fake(positions, q_pe, cos_sin, index_q, index_cos_sin, index_weights, softmax_scale, head_scale, index_rope_interleave):
+    T = q_pe.shape[0]
+    iq = index_q.shape if index_q is not None else (T, 0, 0)
+    return (q_pe.new_empty(q_pe.shape), q_pe.new_empty(iq, dtype=torch.float8_e4m3fn), q_pe.new_empty(iq[:2], dtype=torch.float32))
+
+
+_define_once("dsa_norm_rope(Tensor positions, Tensor q_c, Tensor q_w, float q_eps, Tensor kv_c, Tensor kv_w, float kv_eps, Tensor k_pe, "
+             "Tensor cos_sin, Tensor? index_k, Tensor? index_k_w, Tensor? index_k_b, float index_k_eps, Tensor? index_cos_sin, "
+             "bool index_rope_interleave, Tensor(a!) kv_c_out, Tensor(b!) k_pe_out) -> (Tensor, Tensor, Tensor)",
+             "dsa_norm_rope", _dsa_norm_rope_fake)
+_define_once("dsa_q(Tensor positions, Tensor q_pe, Tensor cos_sin, Tensor? index_q, Tensor? index_cos_sin, Tensor? index_weights, "
+             "float softmax_scale, float head_scale, bool index_rope_interleave) -> (Tensor, Tensor, Tensor)", "dsa_q", _dsa_q_fake)
+_define_once("dsa_indexer_attn(Tensor positions, Tensor ql_nope, Tensor q_pe, Tensor kv_c, Tensor k_pe, Tensor? index_q, "
+             "Tensor? index_weights, Tensor? index_k, Tensor? index_k_scale, str layer_name, int topk, float scale) -> Tensor",
+             "dsa_indexer_attn", lambda positions, ql_nope, q_pe, kv_c, k_pe, index_q, index_weights, index_k, index_k_scale, layer_name,
+             topk, scale: ql_nope.new_empty(ql_nope.shape))
+# [GLM-5.3] vLLM's cuteDSL router GEMM `ll_bf16_gemm(x [M, K] bf16, w [N, K] bf16) -> [M, N] f32` (`GateLinear` tier 1, M <= 16 on
+# sm_90+), the leaf `export_compat.moe_gate_leaf` puts in its place while exporting: a CUTLASS DSL kernel that is no dispatcher op
+_define_once("ll_bf16_gemm(Tensor x, Tensor w) -> Tensor", "ll_bf16_gemm",
+             lambda x, w: x.new_empty((x.shape[0], w.shape[0]), dtype=torch.float32))
 
 iface = torch.ops.vllm_iface
 
