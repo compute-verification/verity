@@ -37,7 +37,7 @@ from verity.ml.crypto import blake3 as b3  # noqa: E402
 
 #: the row geometry: 4 KiB rows of 1 KiB segments unless HM96_LEAF / HM96_SEG say otherwise (`check` reads the dump's own);
 #: Verity's row-seg/v1 has 1 KiB segments, so another SEG is a hypothetical format, never held to Verity
-LEAF, SEG = int(os.environ.get("HM96_LEAF", 4096)), int(os.environ.get("HM96_SEG", 1024))
+LEAF, SEG = int(os.environ.get("HM96_LEAF", "4096")), int(os.environ.get("HM96_SEG", "1024"))
 NSEG = LEAF // SEG
 
 

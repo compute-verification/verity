@@ -18,7 +18,7 @@ import random
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import hm96_ref as R  # noqa: E402
+import hm96_ref as R
 
 
 def node_k(f: R.Format, level: int, index: int, children: list[bytes]) -> bytes:
@@ -40,7 +40,7 @@ def check(d: str) -> dict:
         raw = fh.read()
     if len(raw) != 64 * off[-1]:
         return {"ok": False, "error": f"size {len(raw)} for {off[-1]} nodes"}
-    dig = lambda l, i: f.p.digest_of(raw[64 * (off[l] + i):64 * (off[l] + i + 1)])  # noqa: E731
+    dig = lambda l, i: f.p.digest_of(raw[64 * (off[l] + i):64 * (off[l] + i + 1)])
     bad: list[str] = []
     rng = random.Random(n)
     if n <= 2048:
