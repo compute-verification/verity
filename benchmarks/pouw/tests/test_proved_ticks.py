@@ -1,6 +1,7 @@
 """proved_ticks at the hand-checked point, H1 + fx1 on DS-120: ♭ is an IMMA.16832, 1/39 LDSM_X4 and fx1's 8 ALU and
 8 IMAD warp instructions a unit, B_♭ with ε_skip's work is Lean's 17.097571, and a GPU-second of linears at a cycle a
-unit is (1 − 0.599%) · 17.097571 s; QKᵀ counts at 1.25, and a block divides by its GPUs."""
+unit is (1 − 0.599%) · 17.097571 s; QKᵀ counts at 1.25, and a block divides by its GPUs. The rack demo's pinned
+figure is this function's, and its account credits it as each node's `compute` with basis "proved"."""
 
 from __future__ import annotations
 
@@ -54,3 +55,20 @@ def test_work_outside_the_designs_products_is_refused(census):
 def test_a_family_without_a_sheet_clock_is_refused():
     with pytest.raises(ValueError, match="FMAX_MHZ"):
         P.sheet("sm_90")
+
+
+def test_the_rack_demo_credits_each_nodes_compute_at_this_figure_proved(monkeypatch):
+    monkeypatch.syspath_prepend(str(Path(__file__).parents[2] / "datacenter"))
+    from datacenter import FLEET_CLOSED
+    from datacenter.demo import POUW_TICKS, POUW_WINDOW, night
+    from datacenter.examples import rack
+
+    dc = rack(nodes=2)
+    gpus = sum(d.kind == "gpu" for d in dc.block("n0").devices)
+    want = P.proved_block_ticks(POUW_WINDOW, S, P.SHEET_EPS, dc.cadence.seconds(1), gpus=gpus)
+    assert POUW_TICKS == pytest.approx(want, rel=1e-12), \
+        f"set benchmarks/datacenter/datacenter/demo.py's POUW_TICKS = {want!r}"
+    acc = night(assume=(FLEET_CLOSED,))
+    assert acc.sound
+    assert [(c.unit, c.work, c.grade, c.basis) for c in acc.credits if c.resource.startswith("compute")] == [
+        ("n0", pytest.approx(want), "fleet-closed", "proved"), ("n1", pytest.approx(want), "fleet-closed", "proved")]
