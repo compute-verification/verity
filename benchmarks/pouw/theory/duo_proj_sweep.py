@@ -34,7 +34,7 @@ import random
 import subprocess
 import sys
 import tempfile
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -186,8 +186,9 @@ def main() -> None:
         for j in (j for j in jobs if j.get("threads", 1) > 1):
             emit(invoke(exe, j))
         with ThreadPoolExecutor(a.jobs) as pool:
-            for r in pool.map(lambda j: invoke(exe, j), [j for j in jobs if j.get("threads", 1) == 1]):
-                emit(r)
+            futures = [pool.submit(invoke, exe, j) for j in jobs if j.get("threads", 1) == 1]
+            for f in as_completed(futures):
+                emit(f.result())
     print(json.dumps({"set": a.set, "invocations": len(jobs), "configs": total, "hit_configs": hit, "rows": str(rows),
                       "cpus": os.cpu_count()}))
 
