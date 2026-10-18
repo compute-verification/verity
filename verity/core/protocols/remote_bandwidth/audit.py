@@ -126,6 +126,32 @@ windows unless the prover appends it again, which gives it a fresh index and a f
 
 
 @dataclass(frozen=True, slots=True)
+class Pace:
+    """A paced session's schedule (`PROTOCOL.md` §7, "Pacing"): each window is a group of about `k` passes under a live
+    coin of its own, and the windows are taken `groups` at a time, a stretch, then one more, the closing window, whose
+    reads back the credited span's end (`ledger.memory`).  Window t's boundary message is due once t has k − 1 roots,
+    so that the pass in flight is its last (at k = 1, once window t − 1 has its root, and window 0's at once), and
+    leaves at the latest at max(its challenge + (k − 1)·A, D_(t−1)), never sooner than `Params.window_ns` after its
+    challenge (`Session.next_boundary_ns`)."""
+
+    k: int
+    groups: int
+
+    def __post_init__(self) -> None:
+        for name in ("k", "groups"):
+            if type(getattr(self, name)) is not int or getattr(self, name) < 1:
+                raise ValueError(f"a pace's {name} is a positive integer")
+
+    def stretches(self, windows: int) -> list[range]:
+        """The windows of each stretch, in order, the closing window alone last."""
+        return [range(a, min(a + self.groups, windows - 1)) for a in range(0, windows - 1, self.groups)] + [
+            range(windows - 1, windows)]
+
+    def to_json(self) -> dict:
+        return {"groups": self.groups, "k": self.k}
+
+
+@dataclass(frozen=True, slots=True)
 class Params:
     """A session's parameters: the store's size `N`, the allowance `A` from a window's boundary message to its roots'
     deadline, the windows `W`, the openings `s` per window at `delta` (33,273 at 2^-40 by default, 555 a second of the
@@ -135,7 +161,8 @@ class Params:
     registration's, the lifetime cap L on an appended block, in windows (`LIFETIME`), and whether the prover defers an
     appended block's residency to its encode (`deferred`, memory-map/v1's deferred residency), which needs L ≥ 2: a
     block appended in window w is resident from w or w + 1, so its re-key falls at age L − 1, and at L = 1 that is
-    before it may be resident."""
+    before it may be resident.  `pace` paces the session (`Pace`, None for a stated window each): its windows are
+    then `groups` a stretch over one or more stretches, and the closing window."""
 
     blocks: int
     deadline_ns: int
@@ -151,6 +178,7 @@ class Params:
     rows: int | None = None
     lifetime: int = LIFETIME
     deferred: bool = False
+    pace: Pace | None = None
 
     def __post_init__(self) -> None:
         for name in ("blocks", "deadline_ns", "windows", "samples", "min_passes", "window_ns", "lifetime"):
@@ -158,6 +186,10 @@ class Params:
                 raise ValueError(f"{name} is a positive integer")
         if type(self.deferred) is not bool:
             raise ValueError("deferred is a bool")
+        if self.pace is not None and (type(self.pace) is not Pace or self.windows <= self.pace.groups
+                                      or (self.windows - 1) % self.pace.groups):
+            raise ValueError("a paced session's windows are its stretches of `groups` windows each, at least one, and "
+                             f"the closing window: m·groups + 1, m ≥ 1, not {self.windows} under {self.pace!r}")
         if self.deferred and self.lifetime < 2:
             raise ValueError(f"a session that defers residency has a lifetime of at least 2 windows, not "
                              f"{self.lifetime}: a block appended in window w is resident from w or w + 1, so its "
@@ -549,8 +581,10 @@ class WindowRecord:
     """What an accepted window established: chained passes of `lengths` reads of distinct registered blocks each, made
     after its challenge left at `released_ns` and committed by `deadline_ns` on the verifier's clock; its openings coin
     released at `opened_ns`; the openings' law (`profile`); of each pass's reads, `post_seed` of blocks appended
-    after the codec seed (none if empty), which the ledger credits only on the property's verdict; and the step each
-    pass covers, `steps`, strictly increasing (empty in a record no session made, such as `timing.stated`'s model)."""
+    after the codec seed (none if empty), which the ledger credits only on the property's verdict; the step each
+    pass covers, `steps`, strictly increasing; and when each pass's root arrived on the verifier's clock,
+    `arrived_ns`, in `[released_ns, deadline_ns]` and in order (both empty in a record no session made, such as
+    `timing.stated`'s model)."""
 
     window: int
     lengths: tuple[int, ...]
@@ -560,8 +594,14 @@ class WindowRecord:
     profile: IntegrityProfile
     post_seed: tuple[int, ...] = ()
     steps: tuple[int, ...] = ()
+    arrived_ns: tuple[int, ...] = ()
 
     def __post_init__(self) -> None:
+        if self.arrived_ns != () and (
+                len(self.arrived_ns) != len(self.lengths) or any(type(a) is not int for a in self.arrived_ns)
+                or not self.released_ns <= self.arrived_ns[0]
+                or any(a > b for a, b in zip(self.arrived_ns, (*self.arrived_ns[1:], self.deadline_ns)))):
+            raise ValueError("a window's arrivals are each pass's root's, in order, from its challenge to its deadline")
         if self.post_seed == ():
             object.__setattr__(self, "post_seed", (0,) * len(self.lengths))
         if len(self.post_seed) != len(self.lengths) or any(
@@ -606,8 +646,8 @@ class Record:
     and the rows, μ_rebuild on the codec, and which bytes a credited block is on the layout), the blocks the
     session appended after the codec seed and released, the lifetime cap it held them to (`Params.lifetime`, None
     in a record no session made), and the chain over its appends in the order received (`append_head`, None without
-    one), which the memory-map unit's verdict is on (`RequirementLink.mapped`).  `public` is what acceptance makes
-    public;
+    one), which the memory-map unit's verdict is on (`RequirementLink.mapped`), and its pace (`Params.pace`, None
+    unpaced).  `public` is what acceptance makes public;
     `profile` is the protocol's profile, each window's schedule and openings law (the γ terms need the node's
     capacities: `ledger`)."""
 
@@ -625,6 +665,7 @@ class Record:
     released: int = 0
     lifetime: int | None = None
     appends: bytes | None = None
+    pace: Pace | None = None
 
     @property
     def start_ns(self) -> int:
@@ -652,7 +693,8 @@ class Record:
         return {"appended": self.appended, "appends": None if self.appends is None else self.appends.hex(),
                 "bind": self.bind, "block_bytes": self.block_bytes, "blocks": self.blocks,
                 "codec": self.codec.name, "codec_params": self.codec.to_json(), "coins": self.coins.hex(),
-                "layout": self.layout, "lifetime": self.lifetime, "passes": [w.passes for w in self.windows],
+                "layout": self.layout, "lifetime": self.lifetime,
+                "pace": None if self.pace is None else self.pace.to_json(), "passes": [w.passes for w in self.windows],
                 "post_seed": [sum(w.post_seed) for w in self.windows], "protocol": PROTOCOL_ID,
                 "receipt": self.receipt, "receipts": [w.receipts for w in self.windows],
                 "registration": self.registration.hex(), "released": self.released, "rows": self.rows,
@@ -675,6 +717,7 @@ class _Window:
     post: list[int] = field(default_factory=list)
     steps: list[int] = field(default_factory=list)
     heads: list[bytes | None] = field(default_factory=list)
+    arrived: list[int] = field(default_factory=list)
     boundary_ns: int | None = None
     final: bool = False
     draws: tuple[tuple[int, int], ...] | None = None
@@ -794,6 +837,23 @@ class Session:
         self.windows[t].boundary_ns = now
         return self._release(t + 1, now) if t + 1 < self.params.windows else None
 
+    def next_boundary_ns(self) -> int | None:
+        """When the next unended window's boundary message (`boundary`) is to leave on the verifier's clock, given the
+        roots received so far: `window_ns` after its challenge, or in a paced session (`Pace`) then once it is due,
+        and at the latest at max(its challenge + (k − 1)·A, the window before's deadline).  None once every window
+        has ended or before the session starts."""
+        t = next((t for t, w in enumerate(self.windows) if w.boundary_ns is None), None)
+        if t is None:
+            return None
+        w, pace = self.windows[t], self.params.pace
+        soonest = w.released_ns + self.params.window_ns
+        if pace is None:
+            return soonest
+        k = pace.k
+        if len(w.roots) >= k - 1 and (k > 1 or t == 0 or len(self.windows[t - 1].roots) >= 1):
+            return soonest
+        return max(soonest, w.released_ns + (k - 1) * self.params.deadline_ns, self.deadline(t - 1) if t else 0)
+
     def append(self, root: bytes, count: int) -> tuple[int, bytes] | Verdict:
         """The root of an append's payload tree (`append_tree`), `count` blocks written after the codec seed: they take
         the store's next fresh indices, from the first returned, and a plan received after this may hold them, until
@@ -857,8 +917,9 @@ class Session:
         its rejection, `lifetime`, if it holds an appended block that joined a window `Params.lifetime` or more before
         `t`.  `step` is the step of the served circuit whose reads the pass covers, above the previous pass's: the plan
         is to be the blocks the circuit reads at it, which the plan's proof unit checks against the prover's memory map
-        (`PROTOCOL.md` §8); its rejection, `step`, if it is missing or not above.  Returns the rejection they cause, if
-        any."""
+        (`PROTOCOL.md` §8); its rejection, `step`, if it is missing or not above.  A paced session's window holds at
+        most k roots, and a later one is out of turn (`order`).  The root's arrival, the clock now, goes in the record.
+        Returns the rejection they cause, if any."""
         self._live()
         if not self.windows:
             raise SessionError("the session has not started")
@@ -870,6 +931,8 @@ class Session:
             self.filling = t
         elif t != self.filling or i != len(self.windows[t].roots) or self.windows[t].final:
             return self._fail(self.filling, "order")
+        if self.params.pace is not None and i >= self.params.pace.k:
+            return self._fail(t, "order")
         d = self.deadline(t)
         if d is not None and now > d:
             return self._fail(t, "late")
@@ -901,6 +964,7 @@ class Session:
         self.windows[t].post.append(0 if extent == N else sum(max(0, f + c - max(f, N)) for f, c in plan.runs))
         self.windows[t].steps.append(step)
         self.windows[t].heads.append(self._head)
+        self.windows[t].arrived.append(now)
         self._plan, self._step = plan, step
         return None
 
@@ -1020,11 +1084,11 @@ class Session:
             profile = IntegrityProfile(("receipt",), (sum(lengths),), {"receipt": Subset(len(w.draws))},
                                        self.params.delta, drawn={"receipt": len(w.draws)})
             out.append(WindowRecord(t, lengths, w.released_ns, self.deadline(t), w.opened_ns, profile, tuple(w.post),
-                                    tuple(w.steps)))
+                                    tuple(w.steps), tuple(w.arrived)))
         return Record(self.registration.digest, self.commitment.root, self.params.blocks, BLOCK_BYTES, tuple(out),
                       self.registration.receipt, self.registration.bind, self.registration.codec,
                       self.registration.layout, self.registration.rows, self.extent - self.params.blocks, self.released,
-                      self.params.lifetime, self._head)
+                      self.params.lifetime, self._head, self.params.pace)
 
 
 REGISTRY_SCHEMA = "verity/remote-bandwidth/registry/v0"
