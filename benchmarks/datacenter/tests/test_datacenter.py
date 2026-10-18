@@ -9,6 +9,8 @@ from dataclasses import replace
 import pytest
 from verity.core.protocols.sampled_proofs.one_stage import partition as sampled_partition
 from verity.ml.circuits import partition_object
+from verity.ml.circuits.census import census
+from verity.ml.circuits.codec import program_digest
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.ops.gemm import GEMM_SM120_E4M3, GemmCoordinateE4m3
 from verity.ml.circuits.refs import tuple_of
@@ -19,7 +21,7 @@ from datacenter import (FLEET_CLOSED, SALT_CUSTODY, Assumption, Block, Cadence, 
                         Plan, Port, Record, Refused, Store, Wipe, account, audit, check_records, crossings,
                         double_credit, evaluate, names, place, register, run, traffic, values, work)
 from datacenter.binding import hops
-from datacenter.logical import gate_work, gates
+from datacenter.logical import census_of, gate_work, gates
 from datacenter.models import DOT, LINEAR, MAT, VEC, WEIGHTS, X, program, two_stage, words
 from datacenter.observe import digest as frames_digest
 
@@ -81,6 +83,10 @@ def test_a_program_of_registered_definitions_has_census_values_work_and_its_eval
         ("x", 512, (3,), False), ("w1", 16384, (3,), False), ("w2", 16384, (4,), False), ("h", 512, (4,), False),
         ("y", 512, (), True)]
     assert work(PROGRAM) == {3: STAGE, 4: STAGE}
+    doc = census_of(PROGRAM)                                         # the multiply-adds are the census's served MACs
+    nodes = doc["nodes"]
+    assert {k: doc["classes"][doc["callees"][nodes["callee"][k]]]["served_macs"] * nodes["n"][k] for k in (3, 4)} == {
+        k: w["mac:bf16"] for k, w in work(PROGRAM).items()}
     c = PROGRAM.circuit
     assert sum(gate_work(c, g).get("mac:bf16", 0) for g in range(c.size)) == 2048
     t = evaluate(PROGRAM, INPUTS | WEIGHTS)
@@ -122,6 +128,7 @@ def test_pouws_compiled_program_is_placed_with_its_salt_entering_at_the_blocks_c
     assert [p.source(k) for k in range(5)] == ["outside", "registered", "trusted", "outside", "outside"]
     profile = p.public(Plan(EPOCH))
     assert profile.work == {"a": {"cuda:gate": 13250921, "mac:int8": 4 * 16 * 64}, "b": {}}
+    assert census_of(compiled)["totals"]["served_macs"] == 4 * 16 * 64
     assert profile.salt["a"] == profile.forced["a"] == 512 and profile.pinned["a"] == 0
     assert {x.value.name for x in crossings(p) if x.dst == "world"} == {"pouw[0][0:2048]", "pouw[0][2048:2304]"}
 
@@ -196,6 +203,7 @@ def test_the_profile_is_what_audit_and_account_read_of_the_placement(setup):
     assert profile.work == {"a": STAGE, "b": STAGE} and profile.credit("a") == 1056
     assert profile.occupancy[Port("b.cert", "egress")] == {7: 16}     # y's 32 words, at the world's read tick
     assert list(profile.windows) == [0, 1, 2, 3] and profile.registered == REG.root
+    assert profile.census == census(PROGRAM, digest=program_digest(PROGRAM))["digest"]
 
 
 def test_an_honest_run_is_credited_and_its_only_freedom_is_timing_advice(setup):

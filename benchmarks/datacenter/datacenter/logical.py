@@ -98,11 +98,16 @@ def parameters(program: Program) -> list[tuple[str, str]]:
 _census: weakref.WeakKeyDictionary = weakref.WeakKeyDictionary()
 
 
+def census_of(program: Program) -> dict:
+    """The Program's census/v1 (one step), computed once."""
+    if program not in _census:
+        _census[program] = census(program, digest=program_digest(program))
+    return _census[program]
+
+
 def values(program: Program) -> list[Value]:
     """The Program's census values, each named after its node (with its leaves when it is part of the node's output)."""
-    if program not in _census:
-        _census[program] = census(program)
-    doc, ns = _census[program], names(program)
+    doc, ns = census_of(program), names(program)
     v, sel = doc["values"], doc["selects"]
     candidates: dict[int, set[int]] = {}
     for k, vs in zip(sel["call"], sel["values"]):
@@ -238,5 +243,6 @@ def commit(program: Program, transcript: dict[int, int], salts: Sequence[bytes] 
                            width, _binding(b"datacenter/values/v1", program), salts)
 
 
-__all__ = ["PRECISION", "REGISTRATION", "RUN", "Registration", "Value", "bind_inputs", "binding", "calls", "commit",
-           "evaluate", "gate_work", "gates", "names", "nodes", "parameters", "precision", "register", "values", "work"]
+__all__ = ["PRECISION", "REGISTRATION", "RUN", "Registration", "Value", "bind_inputs", "binding", "calls", "census_of",
+           "commit", "evaluate", "gate_work", "gates", "names", "nodes", "parameters", "precision", "register", "values",
+           "work"]

@@ -119,7 +119,8 @@ class Placement:
         stores.update({w.store.name: w.store for w in plan.wipes})
         salt, salt_out, pinned = self._custody(plan.registration, weights or {})
         return Profile(dc, plan, occupancy(self), work, forced, stores, dict(weights or {}), salt, salt_out, pinned,
-                       dict(ticks or {}), self.registration.root if self.registration else None, units)
+                       dict(ticks or {}), self.registration.root if self.registration else None, units,
+                       L.census_of(self.program)["digest"])
 
     def _custody(self, registration: int, weights: dict[str, float]) -> tuple[dict[str, float], ...]:
         """For each block whose own certifier releases a salt into it: the salt's bits, the bits other than timing that
@@ -185,7 +186,8 @@ class Profile:
     each certifier port shows in each bucket (`occupancy`), the work each block is to be credited with, by kind
     (`work`; per-kind counts, as the census gives them), what one unit of each kind is credited (`weights`, W_ref),
     the trusted data each block consumes (`forced`, in bits), the registered stores and the registration's root
-    (`registered`). For a block whose certifier holds a salt for it: the salt's bits (`salt`), what besides timing could
+    (`registered`), and the digest of the census/v1 its values and work are read from (`census`, which names the
+    Program's digest). For a block whose certifier holds a salt for it: the salt's bits (`salt`), what besides timing could
     carry it out before registration (`salt_out`, in bits), and the credit of the block's work that depends on it
     (`pinned`). For a block whose work PoUW timed: its proved bound (`ticks`, in block-ticks), which the account credits
     in place of the per-facet loads, since a prover may route work to another facet than the honest design does. Under a
@@ -204,6 +206,7 @@ class Profile:
     ticks: dict[str, float] = field(default_factory=dict)
     registered: bytes | None = None
     units: dict[str, int] = field(default_factory=dict)
+    census: str | None = None
 
     def credit(self, block: str) -> float:
         """The work `block` is to be credited with: each kind's units at its weight."""
