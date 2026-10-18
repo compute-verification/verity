@@ -2533,9 +2533,8 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     ap = argparse.ArgumentParser(prog=prog, description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
 
-    def cmd(name: str, help: str, *, as_: bool = False, thread: bool = False, body: bool = False,
-            aliases: tuple[str, ...] = ()) -> argparse.ArgumentParser:
-        p = sub.add_parser(name, parents=[c], help=help, aliases=list(aliases))
+    def cmd(name: str, help: str, *, as_: bool = False, thread: bool = False, body: bool = False) -> argparse.ArgumentParser:
+        p = sub.add_parser(name, parents=[c], help=help)
         if as_:
             p.add_argument("--as", dest="handle", required=True, metavar="HANDLE", help="the handle you hold")
         if thread:
