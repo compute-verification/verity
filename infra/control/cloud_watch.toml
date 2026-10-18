@@ -40,7 +40,7 @@ started_by = "/data/console/console-loop.sh"
 file = "/data/console/console.log"
 rotated = ["/data/console/console.log.1"]
 pattern = '^\{"at": "(\S+Z)", "group": "store"'
-period_s = 2700                      # a pass takes 20-32 min, then 10 min of sleep
+period_s = 4500                      # late at 2x = 150 min: a pass may run to its 5,400 s timeout after a failed one, plus 10 min sleeps (console, 21:51Z); until the watch tells an active pass from a dead loop
 
 [[loop]]
 name = "Store index"
