@@ -59,7 +59,7 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm.check import gates as G
-from verity_vllm.config import UsageError, option
+from verity_vllm.config import RowEngine, UsageError, option
 from verity_vllm.observe.fold.supplied import program_registered_values
 from verity_vllm.pipeline import experiment as EXP
 from verity_vllm.program.sampling_event import program_sampler_construction
@@ -177,8 +177,8 @@ class Plan:
     # commands ------------------------------------------------------------------------------------------
 
     def engine_args(self) -> list[str]:
-        """`key=value` engine overrides: the workload's `engine_args_required` first, then the CLI's (an explicit CLI value wins)."""
-        req = _workload_engine_args_required(self.a.workload)
+        """`key=value` engine overrides: the workload's `engine.args` first, then the CLI's (an explicit CLI value wins)."""
+        req = _workload_engine_args(self.a.workload)
         cli = _engine_arg_dict(self.a.engine_arg)
         merged = {**req, **cli}
         return [f"{k}={json.dumps(v)}" for k, v in merged.items()]
@@ -421,7 +421,7 @@ def write_manifest(plan: Plan, a: Options) -> dict:
         "python_gpu": plan.py_gpu, "python_cpu": plan.py_cpu,
         "engine_args_requested": {"max_num_seqs": a.max_num_seqs, "enforce_eager": _workload_enforce_eager(a.workload), **_engine_arg_dict(plan.engine_args())},   # [R15 EXEC-02] from the row's execution
         "declared_execution": _workload_execution(a.workload),
-        "engine_args_required_by_workload": _workload_engine_args_required(a.workload),     # D87 (merged into engine_args_requested)
+        "engine_args_required_by_workload": _workload_engine_args(a.workload),     # D87 (merged into engine_args_requested)
         "snapshot_max_bytes": a.snapshot_max_bytes if a.snapshot_max_bytes is not None else 32 << 20,
         "snapshot_cap_derivation": getattr(a, "snapshot_cap_derivation", None),   # [R16 global F-global-SNAP] None = an explicit CLI cap
         "snapshot_max_bytes_op": a.snapshot_max_bytes_op,       # cov-moe: lower cap at dispatcher-call events (None = the cap above)
@@ -837,15 +837,14 @@ def _workload_expected_steps(path: str | None) -> int | None:
     return _workload_max_tokens(path)
 
 
-def _workload_engine_args_required(path: str | None) -> dict:
-    doc = _workload_doc(path)
-    return dict((doc or {}).get("engine_args_required") or {})
+def _workload_engine_args(path: str | None) -> dict:
+    return dict(RowEngine.of(_workload_doc(path) or {}).args)
 
 
 def snapshot_cap_bytes(doc: dict | None, hf: dict | None, engine_args: dict | None = None) -> tuple[int, dict]:
     """[R16 global, F-global-SNAP (D87 made automatic)] The per-tensor snapshot cap a Match capture needs so that EVERY per-token
     activation of the largest forward the workload can schedule has snapshot evidence: rows x widest row x 2 bytes, never below the
-    32 MiB cap of record.  Rows = the engine's `max_num_batched_tokens` (the workload's `engine_args_required`, then the CLI's engine
+    32 MiB cap of record.  Rows = the engine's `max_num_batched_tokens` (the workload's `engine.args`, then the CLI's engine
     args), else the longest prompt plus one decode row per request; the widest row = max(gate_up 2I, qkv (NH+2KVH)D, hidden H) from
     the checkpoint's config (analytic.config_of keys GU/QKV/H), else 64 KiB.  Why: at 1024/128 the prefill's gate_up output is
     [1024+B, 2I] bf16 = 33.7 MB for Llama-3.2-1B (I 8192) and 36.7 MB for Qwen2.5-1.5B (I 8960) -- over the 32 MiB cap, listed in
@@ -857,7 +856,7 @@ def snapshot_cap_bytes(doc: dict | None, hf: dict | None, engine_args: dict | No
     goes into run.json so a reader sees why the record's cap is what it is."""
     doc = doc or {}
     reqs = doc.get("requests") or []
-    ea = {**dict(doc.get("engine_args_required") or {}), **dict(engine_args or {})}
+    ea = {**dict(RowEngine.of(doc).args), **dict(engine_args or {})}
     rows_src = None
     mnbt = ea.get("max_num_batched_tokens")
     if isinstance(mnbt, (int, float)) and int(mnbt) > 0:
@@ -892,15 +891,14 @@ _EXECUTION_ENFORCE_EAGER = {"bi-eager": True, "bi-eager-fa2": True, "eager": Tru
 
 
 def _workload_moe_construction(path: str | None) -> str | None:
-    """[R17-42 route A (4)] The workload's DECLARED MoE construction (manifest `target.moe_construction`; None = undeclared = the default),
+    """[R17-42 route A (4)] The workload's DECLARED MoE construction (`engine.target.moe_construction`; None = undeclared = the default),
     validated by the frontend's own table so a misspelling fails here by name and is never folded as MOE-01 silently."""
-    doc = _workload_doc(path)
-    mc = ((doc or {}).get("target") or {}).get("moe_construction")
+    mc = (RowEngine.of(_workload_doc(path) or {}).target or {}).get("moe_construction")
     if mc is None:
         return None
     from verity_vllm.program.frontend.target_profile import TargetProfile
     if mc not in TargetProfile.MOE_CONSTRUCTIONS:
-        raise SystemExit(f"workload target.moe_construction {mc!r} is not one of {sorted(TargetProfile.MOE_CONSTRUCTIONS)}")
+        raise SystemExit(f"workload engine.target.moe_construction {mc!r} is not one of {sorted(TargetProfile.MOE_CONSTRUCTIONS)}")
     return str(mc)
 
 
@@ -1104,7 +1102,7 @@ def persist_program(result: Any, run_dir: Path, *, profile_name: str, log_path: 
                            "digest": result.digest, "n_instances": len(result.instances),
                            "note": "root-circuit node of instance k = n_input_nodes + k (program.json)", "requests": reqs_tab,
                            # [R17 mfast F2] how operand_refs items are stored: "runs" = every maximal run ["space", idx, lo, hi]; "progressions" =
-                           # "p" runs as before + node-space progressions ["N", idx, lo, hi, dI, dL, dH, count] (cb_a.compact.runs_from_file_items)
+                           # node- and parameter-space progressions ["N"|"P", idx, lo, hi, dI, dL, dH, count] (cb_a.compact.runs_from_file_items)
                            "operand_refs_form": _form}) + "\n"
         f.write(line)
         _dumps = json.dumps
@@ -1142,8 +1140,8 @@ def persist_program(result: Any, run_dir: Path, *, profile_name: str, log_path: 
                 for k, v in r.items():
                     if k == "view":
                         r2[k] = view(v) if v is not None else None
-                    elif k == "refs":
-                        r2[k] = run_items(v) if v is not None else None
+                    elif k == "refs":     # under `progressions` a Refs is stored compact too (a transposed weight read: ~1e6 runs)
+                        r2[k] = None if v is None else _file_items(v) if _form == "progressions" and not isinstance(v, list) else run_items(v if isinstance(v, list) else runs(v))
                     else:
                         r2[str(k)] = _jsonable(v)
                 f.write(_dumps(r2, separators=(",", ":")) + "\n")

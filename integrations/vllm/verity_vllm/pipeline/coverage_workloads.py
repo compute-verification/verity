@@ -15,13 +15,13 @@ Prompts are natural text (verity_vllm/engine/profiles/corpus_coverage.json: thre
 starting at a different seeded paragraph, tokenized with the served model's tokenizer (add_special_tokens=False) and truncated to
 the drawn prompt length.  `expected_engine_steps` is the upper bound max_r(arrive_r + max_tokens_r) (every request runs to
 max_tokens; a request stopping at EOS earlier shortens the run — gates compare against the control run's realized steps, D87).
-`engine_args_required.max_num_batched_tokens` keeps an 8-request prefill in ONE step (chunked prefill is its own feature column:
+`engine.args.max_num_batched_tokens` keeps an 8-request prefill in ONE step (chunked prefill is its own feature column:
 `--variant chunked=<N>` declares a small budget that FORCES several prefill chunks per request, suffix `_ck<N>`; see the block below).
-`--variant dtype=float16` (the fp16 column): the same requests, plus `engine_args_required.dtype = "float16"` so the harness builds
+`--variant dtype=float16` (the fp16 column): the same requests, plus `engine.args.dtype = "float16"` so the harness builds
 `LLM(dtype="float16")` (file suffix `_f16`; `dtype` / `numerical_format` keys on the document).  Feature variants are `key=value`
 items of one `--variant` (comma-separated or the flag repeated) and compose: `chunked=64,dtype=float16` -> suffix `_ck64_f16`.
 
-Writes <out-dir>/workload_cov_<case-lower>_<profile>_<ctx>[_r<r>][_t1][_ck<N>][_f16].json (schema verity-vllm/workload/v1 + the D87 keys).
+Writes <out-dir>/workload_cov_<case-lower>_<profile>_<ctx>[_r<r>][_t1][_ck<N>][_f16].json (a row file, `config.RowConfig`, + the D87 keys).
 """
 from __future__ import annotations
 
@@ -35,11 +35,10 @@ from pathlib import Path
 import numpy as np
 from dataclasses import dataclass
 
-from verity_vllm.config import CHECKPOINTS, WORKLOADS
-from verity_vllm.config import option
+from verity_vllm.config import CHECKPOINTS, VLLM, WORKLOAD_SCHEMA, WORKLOADS, option
 
 CORPUS = resources.files("verity_vllm") / "engine" / "profiles" / "corpus_coverage.json"
-SCHEMA = "verity-vllm/workload/v1"
+SCHEMA = WORKLOAD_SCHEMA
 PROFILES = ("B1", "B8-static", "B8-mixed")
 CTX = {"C256": {"lo": 32, "cap": 256, "min_out": 2}, "C1024": {"lo": 128, "cap": 1024, "min_out": 4}}
 #: max_num_batched_tokens that keeps the whole 8-request prefill in one engine step (+ decode rows)
@@ -132,7 +131,7 @@ VARIANTS = {"greedy": {"temperature": 0.0, "top_p": 1.0, "top_k": 0},
             "t1": {"temperature": 1.0, "top_p": 1.0, "top_k": 0}}       # temp=1 column: seeded sampling, no truncation
 
 #: `--variant dtype=<vllm dtype>`: the numerical-format column (COVERAGE §1).  The workload then REQUIRES the engine to be built with
-#: `LLM(dtype=<x>)` through `engine_args_required` (run_config passes it as `--engine-arg dtype="float16"`, `vllm_adapter.build_engine`
+#: `LLM(dtype=<x>)` through `engine.args` (run_config passes it as `--engine-arg dtype="float16"`, `vllm_adapter.build_engine`
 #: applies it after the profile's pinned `"dtype": "bfloat16"`, so the served activations / weights / KV cache are that dtype -- no
 #: silent cast).  File suffix per dtype; only the dtypes listed here are accepted (bf16 is the default column, not a variant).
 DTYPE_VARIANTS = {"float16": "f16", "half": "f16"}
@@ -167,7 +166,7 @@ def file_suffix(*, replicate: int, variant: str, dtype: str | None) -> str:
 # =========================================================================================================
 # [chunked owner, window 2026-09-17] feature variant `--variant chunked=<max_num_batched_tokens>`
 #
-# vLLM V1 always has chunked prefill enabled, but the campaign's `engine_args_required.max_num_batched_tokens` (2048+64 /
+# vLLM V1 always has chunked prefill enabled, but the campaign's `engine.args.max_num_batched_tokens` (2048+64 /
 # 8192+64) keeps every prefill in ONE engine step, so no coverage cell so far has exercised partial-prefill attention.  The
 # chunked variant keeps the (profile, ctx, seed) length draws and the prompts of the base cell and FORCES several prefill
 # chunks per request by declaring a small token budget: prompt 155 at budget 64 -> chunks 64 / 64 / 27 (three prefill
@@ -314,7 +313,7 @@ def workload_doc(*, case: str, model: str, tok: Tok, profile: str, ctx: str, see
     """replicate r > 0: same length draws (same structural configuration), prompts from prompt seed seed + 1000 r.  variant "t1":
     the temp=1 column -- every request sampled at temperature 1.0 with `sampling_seed` (vLLM's per-request seeded sampler).
     chunked = N: the chunked-prefill feature variant (max_num_batched_tokens N forces several prefill chunks; see the block above).
-    dtype (`DTYPE_VARIANTS`): the numerical-format column -- `engine_args_required.dtype` makes the harness build `LLM(dtype=...)`;
+    dtype (`DTYPE_VARIANTS`): the numerical-format column -- `engine.args.dtype` makes the harness build `LLM(dtype=...)`;
     the requests (ids, token ids, lengths, arrivals) are identical to the bf16 workload of the same (profile, ctx, seed, replicate).
     [integ 2026-09-17: the two feature variants compose -- `chunked=64,dtype=float16` is one workload with both keys, suffix `_ck64_f16`.]"""
     draws = draw_lengths(profile, ctx, seed)
@@ -338,7 +337,7 @@ def workload_doc(*, case: str, model: str, tok: Tok, profile: str, ctx: str, see
         sim = simulate_schedule_chunked(reqs, int(chunked), DEFAULT_MAX_NUM_SEQS)
         feature = {"chunked": int(chunked)}
     note = (f"coverage D87: {profile} / {ctx}, seed {seed}{f', replicate {replicate} (prompt seed {prompt_seed})' if replicate else ''}"
-            f"{f', dtype {dtype} (engine_args_required.dtype; the same requests as the bf16 workload)' if dtype else ''}: "
+            f"{f', dtype {dtype} (engine.args.dtype; the same requests as the bf16 workload)' if dtype else ''}: "
             f"{len(reqs)} request(s), prompt lens {[r['prompt_len'] for r in reqs]}, "
             f"max_tokens {[r['max_tokens'] for r in reqs]}, arrive steps {[r['arrive_step'] for r in reqs]}; every request to max_tokens => "
             f"{sim['expected_engine_steps']} engine steps, peak {sim['peak_concurrent']} concurrent, {sim['membership_changes']} batch-membership changes, "
@@ -348,7 +347,7 @@ def workload_doc(*, case: str, model: str, tok: Tok, profile: str, ctx: str, see
                f"{sim['prefill_chunks']} (partial-prefill steps {sim['partial_prefill_steps']}: vLLM samples and discards a token at each), "
                f"first served token at steps {sim['first_token_step']}.  " if chunked is not None else "")
             + "The control run's realized step count is the gates' reference (EOS may end a request early).")
-    return {"schema": SCHEMA, "model": model, "case": case, "tokenizer_revision": tokenizer_revision, "seed": 0,
+    return {"schema": SCHEMA, "model": model, "case": case, "engine": {"revision": tokenizer_revision, "vllm": VLLM, "args": eng}, "seed": 0,
             "variants": {"greedy": VARIANTS["greedy"], **({variant: VARIANTS[variant]} if variant != "greedy" else {})}, "seeds": [],
             "sampling": samp,
             "serving_profile": profile, "context_class": ctx, "length_seed": seed, "prompt_seed": prompt_seed if replicate else seed,
@@ -358,7 +357,6 @@ def workload_doc(*, case: str, model: str, tok: Tok, profile: str, ctx: str, see
             "length_rule": {"prompt_len": f"U{{{CTX[ctx]['lo']}..{CTX[ctx]['cap']}}}", "max_tokens": f"max({CTX[ctx]['min_out']}, prompt_len // 10)",
                             "arrive_step": "0 | sorted U{1..round(0.6*cap/10)} (B8-mixed)", "depends_on": "(profile, ctx, seed) only"},
             "expected_engine_steps": sim["expected_engine_steps"], "schedule_if_full_length": sim,
-            "engine_args_required": eng,
             "tokenizer_note": f"prompt_token_ids from {tok.path.name} sha256 {tok.sha256[:16]} (tokenizers, add_special_tokens=False), "
                               f"natural text from {CORPUS.name}, truncated to prompt_len; prompt_text is the decode of the ids (informational)",
             "prompt_lengths": sorted({r["prompt_len"] for r in reqs}), "max_tokens": sorted({r["max_tokens"] for r in reqs}),
@@ -382,7 +380,7 @@ class Options:
     variant: list[str] = option("--variant", action="append", default=[],
                                 help="sampling variant ('greedy' | 't1' = temperature 1.0, file suffix _t1) and/or feature variants key=value, "
                                 f"known: {sorted(FEATURE_VARIANTS)} (e.g. 'chunked=64' -> suffix _ck64, 'dtype=float16' -> suffix _f16: "
-                                "engine_args_required.dtype = float16); comma-separated or repeated; see parse_variant")
+                                "engine.args.dtype = float16); comma-separated or repeated; see parse_variant")
     sampling_seed: int = option("--sampling-seed", type=int, default=20260917,
                                 help="per-request sampler seed for a non-greedy variant")
     dry_run: bool = option("--dry-run", default=False, action="store_true", help="print the draws only")
