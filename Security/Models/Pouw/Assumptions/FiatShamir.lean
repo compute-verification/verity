@@ -10,8 +10,8 @@ drawn unit's own proof (decision 105). The live coins are each round's check.
 * `SeedExtraction`: the random-oracle premise (the card 9cd57182: PoUW only, each use a named premise), gap (4)'s
   `Pouw.WindowWork.StraightLineExtraction` at the seed's domain: the seeds the accepted proofs derive are the oracle's
   answers at the committed inputs, except with probability `ε_id(T, |J|)`.
-* `SteerBound`: a try reaches the premium `π` with probability at most `τ` (decision 101's per-try `μ^m`). `FiatShamirFloor`
-  takes it.
+* `SteerBound`: a try reaches the premium `π` with probability at most `τ` (decision 101's per-try `μ^m`).
+  `FiatShamirFloor` takes it.
 * `SteerMoment`: a try's gain has moment at most `M` at rate `θ`, GRIND's per-query hypothesis
   (`Accounting.Guarantees.TS.GrindPremium`), which gives `SteerBound` at `τ = M·e^{−θπ}` (`SteerBoundOfMoment`).
 * `ServiceSoundStagedFS`: `ServiceSoundStaged` with its stage draws from the oracle, the staged service sound up to its
@@ -70,7 +70,7 @@ hypothesis of `Accounting.Guarantees.TS.GrindPremium`). For every adversary with
 of its own coins, every oracle `H` and every input `x`, over the oracle's answer at `x` alone,
 `𝔼_d[e^{θ·gain(H[x ↦ d], x)}] ≤ M`.
 
-For h1tile's linears it is `Accounting.Guarantees.TS.TemplateMoment` (`M = 1` at `κ = 4`, `θ = 1/(256·r)` a product)
+For h1tile's linears it is `Accounting.Guarantees.TS.TemplateMoment` (`M = 1` at `κₓ = 4`, `θ = 1/(256·r)` a product)
 over a seed group's segments and tiles through `PrivateMoment`, given E3 (the skip is fixed by the query) and that the
 seed group decomposes into independent segments given `U` and the data, which GRIND argues and doesn't state. Other
 templates take `TileLuck` and `LuckMoment`. -/

@@ -5,8 +5,9 @@ import Models.Pouw.Assumptions.FiatShamir
 # Relative security under Fiat–Shamir draws: the grinding premium (trusted)
 
 Decision 102 derives each matmul's seed from SHA-512 of commitments the prover has already made (its operand roots, at
-the epoch's live salt), in place of `ServiceSoundStaged`'s live per-stage coins, so `Accounting.Assumptions.TS.StageLuck`,
-which `Accounting.Guarantees.TS.StageBudget` and `StageIdeal` rest on, no longer holds: the prover can re-roll a root
+the epoch's live salt), in place of `ServiceSoundStaged`'s live per-stage coins, so
+`Accounting.Assumptions.TS.StageLuck`, which `Accounting.Guarantees.TS.StageBudget` and `StageIdeal` rest on, no longer
+holds: the prover can re-roll a root
 and try again. The statement here is its replacement. The grind is priced into the floor, as a premium `π` a seed group
 in `F`; the tries reaching it go into the probability, `T·τ`. With GRIND's per-query moment (`SteerBoundOfMoment`) and
 `π* = ln(T·M/δ)/θ`, that is `δ`. Their proofs are to be `Pouw.SecurityProofs.FiatShamir.FiatShamirFloor :
@@ -21,8 +22,9 @@ Pouw.Guarantees.FiatShamir.FiatShamirFloor` and `Pouw.SecurityProofs.FiatShamir.
   domain-separated for the commitments and the noise. `SeedExtraction` is its `StraightLineExtraction` at the seed's
   domain, on the same random-oracle card, and its `T` is gap (4)'s `q`. The premium enters gap (4) through the work
   step: `TileWork(γ_u)`'s EPS1 instance is gap (3)'s bridge from compute accounting's tensor–scalar model
-  (`CircuitCredit`, not on main), whose sampled proofs rest on `StageLuck`. Under these draws `ε_FS = ε_live + (κ − 3)/4·ε_luck + π*/(units a group)` replaces
-  the live `ε` in `γ_u`, and `coll + ε_id + δ` goes into `TileWork`'s `η(q, N)`. Neither bridge is stated: from this
+  (`CircuitCredit`, not on main), whose sampled proofs rest on `StageLuck`. Under these draws
+  `ε_FS = ε_live + (κₓ − 3)/4·ε_luck + π*/(units a group)` (`κₓ` GRIND's exchange rate) replaces the live `ε` in
+  `γ_u`, and `coll + ε_id + δ` goes into `TileWork`'s `η(q, N)`. Neither bridge is stated: from this
   `Machine`/`QTree` game to `Pouw.Game`'s `CostModel` (RT4's change 4), and from the staged service to the TS model.
 -/
 
