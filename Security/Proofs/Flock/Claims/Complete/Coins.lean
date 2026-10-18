@@ -21,7 +21,8 @@ zerocheck outer coin is `1` (`Bad`), at most `2^-128` per coin element (`pr_slot
   the record carries the statement's `hello`, which JSON escaping can grow sixfold, past `2^64` bytes for a statement
   near it. The verifier sets the statement up against `H` (`setupWith (hOf H)`), and the statement pins digests of
   SHA-512 that this setup recomputes with `H`; the honest prover sets up at SHA-512, so `ready H` asks that the two
-  setups agree. At `sha512` they do, and `ready` asks no more (`ready_sha512`).
+  setups agree. At `sha512` they do, and `ready` asks no more (`ready_sha512`), so a drawn session's `δc` there is
+  below 1 wherever its outer coins number under `2^128` (`δc_sha512_lt_one`).
 * **The composition** (`complete_of`): if the honest prover is accepted at every coin outside `Bad` on every statement in
   scope, ready, with a witness in the relation, then `Claims.Flock.Complete H (deployPlain rel) honestP (δc H)`.
 -/
@@ -160,6 +161,18 @@ theorem ready_sha512 (x : Claims.Msg) :
 
 /-- **Flock's `δc` at the plain verifier** against `H`: `ε` where the verifier can accept, else `1`. -/
 noncomputable def δc (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) : ℝ := if ready H x then ε x else 1
+
+/-- **A drawn session's `δc` at SHA-512 is below 1**: where the statement sets up a session that draws, is under `2^56`
+bytes and has fewer than `2^128` outer coins, `ready` holds (`ready_sha512`), so `δc` is `ε`. -/
+theorem δc_sha512_lt_one {x : Claims.Msg} {s spec sts} (hs : setupOf false x = some (s, spec, sts))
+    (hd : s.read.draw.isSome = true) (hl : x.length < 2 ^ 56) (hε : (outerSlots x).length < 2 ^ 128) :
+    δc sha512 x < 1 := by
+  have hr : ready sha512 x = true := by
+    rw [ready_sha512, hs]
+    simpa using And.intro hd hl
+  have h2 : ((outerSlots x).length : ℝ) < 2 ^ 128 := by exact_mod_cast hε
+  rw [δc, ite_eq_left hr, ε]
+  exact (div_lt_one (by positivity)).2 h2
 
 /-- **`Pr[Bad] ≤ ε`**: the union bound over the outer coins. -/
 theorem pr_bad_le (x : Claims.Msg) {k : ℕ} : Claims.Pr (fun r : Fin k → Coin => Bad x r) ≤ ε x := by
