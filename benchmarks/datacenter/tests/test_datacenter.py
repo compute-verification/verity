@@ -279,7 +279,8 @@ def test_the_joint_ledger_credits_each_units_time_and_memory_once(setup):
     bits read from it and the bit-ticks it held, and `capacity` says what each can give a tick. Two 50 Gbit stores held
     on one 64 Gbit GPU at once is more than it has, so that account is unsound. And the same night entered twice in a
     ledger credits the wiped GPU's memory twice over the wipe, which `joint` refuses, though each account alone is
-    sound."""
+    sound. A block's compute is the block's only as far as attribution places it there (compute's review 3): without
+    an anchor it comes out of the whole datacenter's capacity, and under one it carries that anchor as its grade."""
     c, dc, p = setup
     stores = (Store("s1", 5e10, "a.gpu"), Store("s2", 5e10, "a.gpu"))
     crowded = place(c, dc, "a.gpu", deliver="world", x="world", w2="b.gpu", stores=stores)
@@ -291,7 +292,10 @@ def test_the_joint_ledger_credits_each_units_time_and_memory_once(setup):
     assert account(audit(run(crowded, INPUTS, one), crowded.public(one)), crowded.public(one)).sound
     night = Plan(EPOCH, wipes=wipes("b.gpu"))
     honest = account(audit(run(p, INPUTS, night), p.public(night)), p.public(night))
-    assert honest.sound and {(x.unit, x.resource) for x in honest.credits} == {("a", "compute:gate"), ("b.gpu", "held")}
+    assert honest.sound and {(x.unit, x.resource, x.grade) for x in honest.credits} == {
+        ("dc0", "compute:gate", None), ("b.gpu", "held", None)}        # PoUW credits the prover system: the datacenter
+    closed = account(audit(run(p, INPUTS, night), p.public(night)), p.public(night), assume=(FLEET_CLOSED,))
+    assert {(x.unit, x.grade) for x in closed.credits if x.resource.startswith("compute")} == {("a", "fleet-closed")}
     twice = Ledger().add(honest).add(honest)
     assert not twice.sound and [(u, r, i) for u, r, i, _, _ in twice.joint()] == [("b.gpu", "held", Interval(0, 2))]
 

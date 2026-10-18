@@ -26,8 +26,9 @@ answered its sample by the deadline, and none when the prover could rebuild the 
 advice, timing advice, inputs, every refused port-window charged at its link's full capacity, so it fails closed, and
 everything a block out for maintenance held), and the failure probability (the sum of the claims' deltas).
 
-Every claim's credit is also a `Credit` on a unit: a block's compute in block-ticks of each facet of its devices
-(kinds on one facet add up, kinds on different facets run at once), a store's device the bits read from it and the
+Every claim's credit is also a `Credit` on a unit: compute in block-ticks of each facet (kinds on one facet add up,
+kinds on different facets run at once), on the block as far as attribution places it there and graded by its anchor,
+the rest on the whole datacenter, since PoUW credits the prover system (decision 111); a store's device the bits read from it and the
 bit-ticks it held over the interval the claim proves (a snapshot proves an instant, and carries none). `capacity` gives each unit's resources a tick by the
 declaration, and an account whose credits exceed them anywhere (`overcredited`, by `double_credit`, Horn's interval
 test) is unsound. A `Ledger` joins accounts of successive epochs or of overlapping audits, and applies the same rule
@@ -75,6 +76,8 @@ class BlockAccount:
     custody: float | None = None
     #: each facet's share of the epoch
     loads: dict[str, float] = field(default_factory=dict)
+    #: what places the work on the block: "fleet-closed", "salt-custody" or "forced" (the tightest bound), or None
+    anchor: str | None = None
 
     @property
     def headroom(self) -> float:
@@ -215,22 +218,23 @@ def account(claims: list[Claim], profile: Profile, assume: tuple[Assumption, ...
                       for d in b.devices if d.memory is not None)
         names = [a.name for d in b.devices for a in [*(d.rate.get(k) for k in work), d.memory, d.residual, d.bandwidth,
                                                      d.on_chip] if a is not None]
-        bounds = [float("inf")]
+        bounds: dict[str | None, float] = {None: float("inf")}
         if FLEET_CLOSED.name in premises:
-            bounds.append(0.0)
+            bounds[FLEET_CLOSED.name] = 0.0
             names.append(FLEET_CLOSED.name)
         if profile.forced[b.name]:
-            bounds.append(min(credited[b.name], _boundary_rate(dc, b.name) * seconds * credited[b.name] / profile.forced[b.name]))
+            bounds["forced"] = min(credited[b.name], _boundary_rate(dc, b.name) * seconds * credited[b.name] / profile.forced[b.name])
         k = None
         if profile.salt.get(b.name):
             k = profile.salt_out[b.name] + sum(c.bits for c in claims if isinstance(c, Scheduled)) + sum(
                 c.bits for c in claims if isinstance(c, Carried) and c.port.direction == "egress"
                 and dc.watched(c.port).name == b.name and c.during.start < profile.plan.registration)
             if SALT_CUSTODY.name in premises and k <= float(SALT_CUSTODY) and b.name not in refused_blocks:
-                bounds.append(max(credited[b.name] - profile.pinned[b.name], 0.0))
+                bounds[SALT_CUSTODY.name] = max(credited[b.name] - profile.pinned[b.name], 0.0)
                 names.append(SALT_CUSTODY.name)
-        blocks.append(BlockAccount(b.name, credited[b.name], busy, min(bounds), carried, reads[b.name],
-                                   reads_local[b.name], profile.forced[b.name], names, k, dict(loads)))
+        anchor = min(bounds, key=lambda a: bounds[a])
+        blocks.append(BlockAccount(b.name, credited[b.name], busy, bounds[anchor], carried, reads[b.name],
+                                   reads_local[b.name], profile.forced[b.name], names, k, dict(loads), anchor))
 
     links = {repr(port): dc.uplink(port.certifier) for port in dc.ports}
     window_seconds = dc.cadence.seconds(dc.cadence.window_ticks)
@@ -248,11 +252,19 @@ def account(claims: list[Claim], profile: Profile, assume: tuple[Assumption, ...
 
 
 def _credits(claims: list[Claim], profile: Profile, blocks: list[BlockAccount], inside, refused_stores) -> list[Credit]:
-    """What the claims credit each unit: a block its busy share of the epoch, a store's device the bits read from it and
-    the bit-ticks it held."""
-    epoch, stores = profile.plan.epoch, profile.stores
-    out = [Credit(b.block, f"compute:{f}", epoch, share * epoch.length) for b in blocks if b.credited
-           for f, share in b.loads.items()]
+    """What the claims credit each unit. PoUW credits the prover system, so a block's busy share is the block's only as
+    far as attribution places it there (`local_at_least`, graded by its anchor), and the rest is the whole datacenter's.
+    A store's device is credited the bits read from it and the bit-ticks it held."""
+    epoch, stores, fleet = profile.plan.epoch, profile.stores, profile.datacenter.name
+    out = []
+    for b in blocks:
+        local = b.local_at_least / b.credited if b.credited else 0.0
+        for f, share in b.loads.items():
+            ticks = share * epoch.length
+            if local:
+                out.append(Credit(b.block, f"compute:{f}", epoch, ticks * local, b.anchor))
+            if local < 1:
+                out.append(Credit(fleet, f"compute:{f}", epoch, ticks * (1 - local)))
     for c in claims:
         if isinstance(c, (Read, Held)) and inside(c) and c.store not in refused_stores:
             out.append(Credit(stores[c.store].device, "read", c.during, c.bits) if isinstance(c, Read) else
@@ -311,14 +323,19 @@ class Credit:
     resource: str
     during: Interval
     work: float
+    #: what places it on the unit, for a block's compute (its attribution anchor)
+    grade: str | None = None
 
 
 def capacity(dc: Datacenter) -> dict[tuple[str, str], float]:
     """What each unit can give each resource in one tick, by the declaration: a block one tick of each facet of its
-    devices (`compute:<facet>`, in block-ticks), a device its read bandwidth (`read`, in bits) and its memory (`held`,
-    in bits, so bit-ticks a tick)."""
+    devices (`compute:<facet>`, in block-ticks), and the datacenter its blocks' together, for the compute no anchor
+    places on a block; a device its read bandwidth (`read`, in bits) and its memory (`held`, in bits, so bit-ticks a
+    tick)."""
     tick = dc.cadence.seconds(1)
-    out = {(b.name, f"compute:{facet(k)}"): 1.0 for b in dc.blocks for d in b.devices for k in d.rate}
+    out = {(b.name, f"compute:{f}"): 1.0 for b in dc.blocks for f in {facet(k) for d in b.devices for k in d.rate}}
+    for (b, r) in list(out):
+        out[dc.name, r] = out.get((dc.name, r), 0.0) + 1.0
     for d in dc.devices.values():
         if d.bandwidth is not None:
             out[d.name, "read"] = float(d.bandwidth) * tick
