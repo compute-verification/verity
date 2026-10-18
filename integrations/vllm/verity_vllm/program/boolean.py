@@ -343,7 +343,7 @@ def _word_static(v: Any) -> Any:
     return v
 
 
-def sigma_lift(word: CompositeDefinition, version: int) -> CompositeDefinition:
+def sigma_lift(word: CompositeDefinition, version: int, register: bool = True) -> CompositeDefinition:
     """The Boolean Definition ``{word.name}_v{version}``, σ of the word composite ``word``: at each binding, ``word``'s body at
     that binding with each Call the Boolean version of its Definition (`boolean_version`, so the newest registered one at the
     time the body is built), over the bits each word operand occupies (`lift`'s replay).  A function-valued static binds a
@@ -370,7 +370,7 @@ def sigma_lift(word: CompositeDefinition, version: int) -> CompositeDefinition:
     refuse = (lambda b: word.refuse({k: _word_static(x) for k, x in b.items()})) if word.refuse is not None else None
     d = CompositeDefinition(word.name, version, statics, signature, body,
                             doc=f"σ({word.name}_v{word.version}): its body on bits, each Call the Boolean version of its "
-                                "Definition", conformance=word.conformance, refuse=refuse)
+                                "Definition", conformance=word.conformance, refuse=refuse, register=register)
     word_view = (lambda b: bind(word, **{k: _word_static(x) for k, x in b.items()})) if statics else bind(word)
     d.word = word_view  # type: ignore[attr-defined]
     d.sigma_of = word  # type: ignore[attr-defined]
