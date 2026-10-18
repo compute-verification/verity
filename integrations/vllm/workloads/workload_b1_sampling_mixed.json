@@ -1,8 +1,12 @@
 {
- "schema": "verity-vllm/workload/v1",
+ "schema": "verity-vllm/workload/v2",
  "model": "Qwen/Qwen2.5-1.5B",
- "checkpoint_revision": "8faed761d45a263340a0528343f099c05c9a4323",
  "case": "B1",
+ "engine": {
+  "revision": "8faed761d45a263340a0528343f099c05c9a4323",
+  "vllm": "d9105ea80",
+  "args": {}
+ },
  "variants": {
   "greedy": {
    "temperature": 0.0,
@@ -137,5 +141,5 @@
    "seed": 0
   }
  ],
- "note": "[ov-sampling 2026-09-17] mixed batch: request 0 pins the greedy variant (T=0), request 1 samples at temperature 1.0 with seed 0 \u2014 the sampler kernel is per row. Qwen2.5-1.5B, 32-token prompt, 16 generated tokens. No accepted tokens."
+ "note": "[ov-sampling 2026-09-17] mixed batch: request 0 pins the greedy variant (T=0), request 1 samples at temperature 1.0 with seed 0 — the sampler kernel is per row. Qwen2.5-1.5B, 32-token prompt, 16 generated tokens. No accepted tokens."
 }

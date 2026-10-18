@@ -16,7 +16,9 @@
 //                    a shard under the pass's constants (`rs_subtrees`)
 //   in place         a store where its tensors hold it (vLLM's weights and KV pages, `device.InPlace`): a plan's
 //                    positions mapped to their blocks' device addresses and store indices (`rs_map`), then their
-//                    receipts read through the map (`rs_mapped_receipts`), whose leaves and levels are reader.cu's
+//                    receipts read through the map and the receipt tree hashed behind them as `rs_pass` hashes it, the
+//                    last leaf short and the padding to the tree's width included (`rs_mapped_pass`); an opening's
+//                    subtree is its receipts (`rs_mapped_receipts`) and reader.cu's leaves and levels
 //
 // A store spans the visible GPUs, a contiguous shard of whole chunks on each, and the receipt tree is the one over the
 // whole store in block order (`receipts.tree`): every position, leaf and node index is the store's. One library serves
@@ -604,6 +606,173 @@ __global__ void __launch_bounds__(CONSUMER_THREADS) pass_consumer_kernel(const u
   }
 }
 
+// The in-place pass (`rs_mapped_pass`) counts its tiles in groups of CONSUMER_READY_BLOCKS positions, the last group
+// what is left; mapped_pass_tile is pass_tile through the map.
+constexpr unsigned MAPPED_READY_TILES = CONSUMER_READY_BLOCKS / 32;
+
+__device__ __forceinline__ void mapped_pass_tile(const u64 *__restrict__ addrs, const u64 *__restrict__ js, u64 n,
+                                                 const u32 *sg, int *S, u64 *ys, unsigned *ready, unsigned tile,
+                                                 int lane) {
+  sk16_mapped_tile(addrs, js, n, (u64)tile * 32, sg, S, ys, lane);
+  __threadfence();
+  __syncwarp();
+  if (!lane) atomicAdd(ready + tile / MAPPED_READY_TILES, 1u);
+}
+
+// sketch16_pass_kernel through the map.
+__global__ void __launch_bounds__(32 * SK16_WARPS, 2) mapped16_pass_kernel(const u64 *__restrict__ addrs,
+                                                                           const u64 *__restrict__ js, u64 n,
+                                                                           const u32 *__restrict__ pk,
+                                                                           u64 *__restrict__ ys, unsigned *ctr,
+                                                                           unsigned *started) {
+  __shared__ u32 sg[SK16_PACK];
+  __shared__ __align__(16) int st[SK16_WARPS][32 * SK_ROWS];
+  if (!threadIdx.x) atomicExch(started, 1u);
+  sk16_prologue(sg, pk);
+  const int lane = threadIdx.x & 31, warp = threadIdx.x >> 5;
+  const u64 tiles = (n + 31) / 32;
+  for (;;) {
+    unsigned tile = 0;
+    if (!lane) tile = atomicAdd(ctr, 1u);
+    tile = __shfl_sync(~0u, tile, 0);
+    if (tile >= tiles) break;
+    mapped_pass_tile(addrs, js, n, sg, st[warp], ys, ctr + 1, tile, lane);
+  }
+}
+
+// help_tile through the map, out of line for the same reason.
+__device__ __noinline__ void mapped_help_tile(const u64 *__restrict__ addrs, const u64 *__restrict__ js, u64 n,
+                                              const u32 *pk, int *S, u64 *ys, unsigned *ctr, int lane) {
+  unsigned tile = 0;
+  if (!lane) tile = atomicAdd(ctr, 1u);
+  tile = __shfl_sync(~0u, tile, 0);
+  if (tile < (n + 31) / 32) mapped_pass_tile(addrs, js, n, pk, S, ys, ctr + 1, tile, lane);
+}
+
+// Leaf c of a pass of n positions from its receipts at Y (leaves_kernel's digest, the last leaf short), or past the
+// last leaf the padding leaf c (pads_kernel's). Y is read through the non-coherent cache, as pass_leaf reads it.
+__device__ __forceinline__ void mapped_leaf(const u64 *__restrict__ Y, u64 c, u64 n, u64 (&d)[8]) {
+  const u64 leaves = (n + PER_LEAF - 1) / PER_LEAF;
+  if (c >= leaves) {
+    Msg<32> msg;
+    put_head(msg, HEAD_PAD);
+    put_uint(msg, c);
+    sha512_msg(msg, d);
+    return;
+  }
+  const int m = c + 1 < leaves ? PER_LEAF : (int)(n - PER_LEAF * c);
+  const int words = 8 * m, nb = (64 * m + 17 + 127) / 128;
+  u64 x[8], w[16];
+#pragma unroll
+  for (int i = 0; i < 8; ++i) x[i] = m == PER_LEAF ? kC.row_mid[i] : kC.row_mid_last[i];
+#pragma unroll 1
+  for (int blk = 0; blk < nb; ++blk) {
+#pragma unroll
+    for (int i = 0; i < 16; ++i) {
+      const int q = 16 * blk + i;
+      w[i] = q < words ? __ldg(Y + q) : q == words ? 0x80ULL << 56 : 0;
+    }
+    if (blk == nb - 1) w[15] = (u64)(128 + 64 * m) * 8;
+    sha512_compress(x, w);
+  }
+  hm96_leaf(c, x, d);
+}
+
+// The in-place pass's receipt tree behind its receipts (`rs_mapped_pass`), pass_consumer_kernel's protocol over a
+// pass of n positions, its ⌈n / 16⌉ leaves padded to 2^H. ctr holds the next tile, each group's counted tiles, the next
+// subtree to claim, the receipt grid's started flag and, for each node above level h0, its children done. A CTA claims
+// the next 2^h0-leaf subtree, the padding's first (they wait on nothing), waits as pass_consumer_kernel does until the
+// group holding it is counted, hashes its leaves (`mapped_leaf`) and its levels below h0 in shared memory and keeps
+// its root; then one thread climbs, hashing each node whose other child is done, up to the root. kept is level h at
+// the sum of 2^(H − g) over h0 <= g < h, the root last.
+__global__ void __launch_bounds__(CONSUMER_THREADS) mapped_consumer_kernel(const u64 *__restrict__ addrs,
+                                                                           const u64 *__restrict__ js, u64 n,
+                                                                           const u32 *__restrict__ pk, u64 *ys,
+                                                                           unsigned *ctr, u64 *kept, int h0, int H) {
+  extern __shared__ __align__(16) u64 scratch[];
+  __shared__ unsigned claimed;
+  const u64 leaves = 1ULL << h0, nl = (n + PER_LEAF - 1) / PER_LEAF, width = 1ULL << H;
+  const u64 subtrees = width >> h0, real = (nl + leaves - 1) >> h0, tiles = (n + 31) / 32;
+  unsigned *ready = ctr + 1, *claim = ready + (n + CONSUMER_READY_BLOCKS - 1) / CONSUMER_READY_BLOCKS;
+  const unsigned *started = claim + 1;
+  unsigned *arrived = claim + 2;
+  const int lane = threadIdx.x & 31, warp = threadIdx.x >> 5;
+  bool live = false;   // a receipt CTA has started (lane 0's; it stays set for the pass)
+  for (;;) {
+    if (!threadIdx.x) claimed = atomicAdd(claim, 1u);
+    __syncthreads();
+    const u64 k = claimed;
+    if (k >= subtrees) return;
+    const u64 q = k < subtrees - real ? real + k : k - (subtrees - real), first = q << h0;
+    if (q < real) {
+      const u64 g = first * PER_LEAF / CONSUMER_READY_BLOCKS, left = tiles - g * MAPPED_READY_TILES;
+      const unsigned want = left < MAPPED_READY_TILES ? (unsigned)left : MAPPED_READY_TILES;
+      for (;;) {
+        int act = 0;   // 0: the group is counted, 1: take a tile, 2: wait
+        if (!lane && *(volatile const unsigned *)(ready + g) < want) {
+          live = live || *(volatile const unsigned *)started;
+          act = !live && *(volatile const unsigned *)ctr < tiles ? 1 : 2;
+        }
+        act = __shfl_sync(~0u, act, 0);
+        if (!act) break;
+        if (act == 2) {
+          __nanosleep(256);
+          continue;
+        }
+        mapped_help_tile(addrs, js, n, pk, reinterpret_cast<int *>(scratch) + warp * 32 * SK_ROWS, ys, ctr, lane);
+      }
+    }
+    __threadfence();
+    __syncthreads();   // the staging the warps computed tiles in is the leaves' buffer
+    u64 *in = scratch, *out = scratch + 8 * leaves;
+    for (u64 j = threadIdx.x; j < leaves; j += blockDim.x) {
+      u64 d[8];
+      mapped_leaf(ys + 8 * PER_LEAF * (first + j), first + j, n, d);
+#pragma unroll
+      for (int x = 0; x < 8; ++x) in[8 * j + x] = d[x];
+    }
+    __syncthreads();
+    for (int h = 0; h < h0; ++h) {
+      const u64 m = leaves >> (h + 1), i0 = first >> (h + 1);
+      for (u64 j = threadIdx.x; j < m; j += blockDim.x) {
+        u64 d[8];
+        node_digest(kC.node_mid[h], i0 + j, in + 16 * j, in + 16 * j + 8, d);
+#pragma unroll
+        for (int x = 0; x < 8; ++x) out[8 * j + x] = d[x];
+      }
+      __syncthreads();
+      u64 *tmp = in;
+      in = out;
+      out = tmp;
+    }
+    if (!threadIdx.x) {
+      u64 at = q, d[8];
+#pragma unroll
+      for (int x = 0; x < 8; ++x) d[x] = in[x];
+      for (int h = h0;; ++h) {
+        u64 *node = kept + 8 * (pass_kept_at(width, h0, h) + at);
+#pragma unroll
+        for (int x = 0; x < 8; ++x) node[x] = d[x];
+        if (h == H) break;
+        __threadfence();
+        if (!atomicAdd(arrived + pass_kept_at(width, h0 + 1, h + 1) + (at >> 1), 1u)) break;
+        __threadfence();
+        const u64 *sib = kept + 8 * (pass_kept_at(width, h0, h) + (at ^ 1));
+        u64 L[8], R[8];
+#pragma unroll
+        for (int x = 0; x < 8; ++x) {
+          const u64 o = __ldcg(sib + x);
+          L[x] = at & 1 ? o : d[x];
+          R[x] = at & 1 ? d[x] : o;
+        }
+        at >>= 1;
+        node_digest(kC.node_mid[h], at, L, R, d);
+      }
+    }
+    __syncthreads();   // before the next claim rewrites `claimed` and the staging
+  }
+}
+
 // The receipt tree's levels hc … H on one CTA: level hc is the segments' nodes in order (each shard's chunk roots,
 // then each GPU's share of the padding), read over P2P and copied into top, then each level above it from the one
 // below; top holds level h at the sum of 2^(H − g) over hc <= g < h, the root last, which goes to each of roots.
@@ -909,14 +1078,16 @@ static uint64_t kept_at(uint64_t nl, int h0, int h) {
 }
 
 // The consumer CTAs of a pass beside a receipt grid of ctas CTAs, by both kernels' occupancy (an SM holds occ_p receipt
-// CTAs or occ_c consumer CTAs): `side` as many as fit in what the receipt grid leaves of the device, at least one an SM,
-// and `tail` the rest of a full device, which take the slots the receipt grid frees when it ends. Neither count bounds
-// progress (`pass_consumer_kernel`); together they are what the device holds once the reads are done.
-static int pass_consumers(int ctas, size_t shared, uint64_t subtrees, uint64_t *side, uint64_t *tail) {
+// CTAs of `producer` or occ_c CTAs of `consumer`): `side` as many as fit in what the receipt grid leaves of the device,
+// at least one an SM, and `tail` the rest of a full device, which take the slots the receipt grid frees when it ends.
+// Neither count bounds progress (`pass_consumer_kernel`); together they are what the device holds once the reads are
+// done.
+static int pass_consumers(const void *producer, const void *consumer, int ctas, size_t shared, uint64_t subtrees,
+                          uint64_t *side, uint64_t *tail) {
   int dev, sms, occ_p, occ_c;
   if (cudaGetDevice(&dev) || cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev) ||
-      cudaOccupancyMaxActiveBlocksPerMultiprocessor(&occ_p, sketch16_pass_kernel, 32 * SK16_WARPS, 0) ||
-      cudaOccupancyMaxActiveBlocksPerMultiprocessor(&occ_c, pass_consumer_kernel, CONSUMER_THREADS, shared) ||
+      cudaOccupancyMaxActiveBlocksPerMultiprocessor(&occ_p, producer, 32 * SK16_WARPS, 0) ||
+      cudaOccupancyMaxActiveBlocksPerMultiprocessor(&occ_c, consumer, CONSUMER_THREADS, shared) ||
       occ_p < 1 || occ_c < 1)
     return 4;
   const int64_t all = (int64_t)sms * occ_c, fit = all - ((int64_t)ctas * occ_c + occ_p - 1) / occ_p;
@@ -977,7 +1148,8 @@ int rs_pass(const void *data, uint64_t n, uint64_t base, const uint32_t *pk, uns
   if (fused) {
     if (consumers)
       side = (uint64_t)consumers < groups ? (uint64_t)consumers : groups;
-    else if ((rc = pass_consumers(ctas, shared, groups, &side, &tail)))
+    else if ((rc = pass_consumers((const void *)sketch16_pass_kernel, (const void *)pass_consumer_kernel, ctas, shared,
+                                  groups, &side, &tail)))
       return rc;
     if (groups + side + tail >= (1ULL << 32)) return 1;
   }
@@ -1030,6 +1202,57 @@ int rs_pass(const void *data, uint64_t n, uint64_t base, const uint32_t *pk, uns
   }
   if (cudaEventRecord(end[dev], sb) || cudaStreamWaitEvent(sa, end[dev], 0)) return 4;
   return cudaGetLastError() ? 4 : 0;
+}
+
+// The in-place pass (`InPlace.run_pass`) as rs_pass runs a shard's: positions 0 … n − 1, each read where rs_map's
+// addrs puts it and hashed at its js, their receipts into ys (n × 8 words) by one persistent grid of ctas CTAs on sa
+// (`mapped16_pass_kernel`; 0: one an SM), and the receipt tree behind them by persistent consumer grids
+// (`mapped_consumer_kernel`, `pass_consumers`), one on sb beside the receipt grid and one behind it on sa, so the tree
+// follows the reads with no kernel boundary. The tree is `receipts.tree`'s under the pass's constants set: ⌈n / 16⌉
+// leaves, the last short, padded to 2^H leaves (H the least that holds them). Its levels h0 … H (h0 <= min(H, 8)) go
+// to kept, 2^(H − h0 + 1) − 1 digests, level h at the sum of 2^(H − g) over h0 <= g < h, the root last; levels below
+// h0 are not kept. ctr is scratch of ctr_words >= 2 + ⌈n / CONSUMER_READY_BLOCKS⌉ + 2^(H − h0) words. sa waits for the
+// whole pass before anything queued on it after.
+int rs_mapped_pass(const uint64_t *addrs, const uint64_t *js, uint64_t n, const uint32_t *pk, unsigned *ctr,
+                   uint64_t ctr_words, uint64_t *ys, uint64_t *kept, int h0, int ctas, cudaStream_t sb,
+                   cudaStream_t sa) {
+  constexpr int DEVICES = 64;
+  static cudaEvent_t go[DEVICES], end[DEVICES];
+  static bool made[DEVICES];
+  int dev;
+  if (cudaGetDevice(&dev) || dev < 0 || dev >= DEVICES) return 4;
+  if (!made[dev]) {
+    if (cudaEventCreateWithFlags(&go[dev], cudaEventDisableTiming) ||
+        cudaEventCreateWithFlags(&end[dev], cudaEventDisableTiming))
+      return 4;
+    made[dev] = true;
+  }
+  if (!addrs || !js || !pk || !ctr || !ys || !kept || n < 1 || n >= (1ULL << 36) || h0 < 0 || h0 > 8 || ctas < 0)
+    return 1;
+  const uint64_t nl = (n + PER_LEAF - 1) / PER_LEAF;
+  int H = 0;
+  while ((1ULL << H) < nl) ++H;
+  if (h0 > H) return 1;
+  const uint64_t groups = (n + CONSUMER_READY_BLOCKS - 1) / CONSUMER_READY_BLOCKS, subtrees = 1ULL << (H - h0);
+  const uint64_t words = 2 + groups + subtrees;
+  if (ctr_words < words) return 1;
+  if (!ctas && cudaDeviceGetAttribute(&ctas, cudaDevAttrMultiProcessorCount, dev)) return 4;
+  const size_t tree_shared = 2 * (1ULL << h0) * 8 * sizeof(uint64_t);
+  const size_t shared = tree_shared > CONSUMER_STAGING ? tree_shared : CONSUMER_STAGING;
+  uint64_t side, tail;
+  int rc;
+  if ((rc = pass_consumers((const void *)mapped16_pass_kernel, (const void *)mapped_consumer_kernel, ctas, shared,
+                           subtrees, &side, &tail)))
+    return rc;
+  unsigned *started = ctr + 2 + groups;
+  if (cudaMemsetAsync(ctr, 0, 4 * words, sa) || cudaEventRecord(go[dev], sa) || cudaStreamWaitEvent(sb, go[dev], 0))
+    return 4;
+  mapped16_pass_kernel<<<ctas, 32 * SK16_WARPS, 0, sa>>>(addrs, js, n, pk, ys, ctr, started);
+  mapped_consumer_kernel<<<(unsigned)side, CONSUMER_THREADS, shared, sb>>>(addrs, js, n, pk, ys, ctr, kept, h0, H);
+  if (tail)
+    mapped_consumer_kernel<<<(unsigned)tail, CONSUMER_THREADS, shared, sa>>>(addrs, js, n, pk, ys, ctr, kept, h0, H);
+  if (cudaGetLastError() || cudaEventRecord(end[dev], sb) || cudaStreamWaitEvent(sa, end[dev], 0)) return 4;
+  return 0;
 }
 
 // The receipt tree's levels hc … H on this GPU (`top_kernel`, one CTA on s): level hc is the nsegs segments in order,

@@ -34,7 +34,7 @@ def _wl(row):
     if not p.exists():
         pytest.skip(f"workload {row} not in this checkout")
     wl = json.loads(p.read_text())
-    return wl, (wl.get("engine_args_required") or {}).get("max_num_batched_tokens")
+    return wl, wl["engine"]["args"].get("max_num_batched_tokens")
 
 
 def _cal():

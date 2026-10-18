@@ -20,8 +20,8 @@ BS = 16
 def test_generated_pair_is_the_declared_experiment():
     warm = json.loads((PROFILES / "workload_cov_b0_prefix_c256.json").read_text())
     cold = json.loads((PROFILES / "workload_cov_b0_prefix_c256_cold.json").read_text())
-    assert warm["engine_args_required"] == {"enable_prefix_caching": True}
-    assert cold["engine_args_required"] == {"enable_prefix_caching": False}
+    assert warm["engine"]["args"] == {"enable_prefix_caching": True}
+    assert cold["engine"]["args"] == {"enable_prefix_caching": False}
     # identical requests (ids, tokens, limits, arrivals) -- only the engine arg differs
     strip = lambda d: [{k: v for k, v in r.items() if k != "prefix_role"} for r in d["requests"]]  # noqa: E731
     assert strip(warm) == strip(cold)

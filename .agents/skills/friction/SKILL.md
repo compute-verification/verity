@@ -109,6 +109,17 @@ Only a repeat whose fix needs money, keys or a claim becomes a question for Dani
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-18 (8:47 AM PDT): every ask is a short Notion page in the Asks for Daniel database (the problem explained, LaTeX
+  for the math), where he comments and decides by its Status; the card only notifies him and links it. Template and
+  commands: `.agents/skills/asking-daniel/SKILL.md`.
+- 2026-10-17 (8:20 PM PDT, in proofs' chat; compute accounting's card ba874f45): PoUW's per-matmul noise seeds may be
+  derived by Fiat–Shamir, seed_j = SHA-512(tag ‖ salt ‖ forward ‖ position ‖ root(A_j) ‖ root(B_j)) from the epoch's
+  live salt: "I'm happy to do Fiat-Shamir for this for now because it's going to happen at such a high-frequency that
+  grinding etc. is not a huge problem." This narrows "live coins only" for PoUW's per-call randomness, for now. The
+  roots, positions and shapes are private, so a drawn unit derives the seed and its own noise inside its proof, and
+  the guarantee carries a grinding term (T·μ^m). With it went:
+  noise is generated after each A·B pair is committed, and a sampled unit proves itself and its own noise's
+  generation (18 Oct 02:36–03:06 UTC; compute accounting's decisions 101 and 102).
 - 2026-10-17 (6:18 PM PDT, to memory accounting): no private or trapdoor encoding for KV, such as a trusted device
   computing Rabin–Williams roots of each appended block, because it costs too much. The weights alone keep that
   exception. Credited dynamic memory rests on the public codec, and the stacking bound on the named conjecture
@@ -280,7 +291,7 @@ Newest first. Each is Daniel's unless it names the coordinator.
   statement and each open piece's statement go on the branch before a worker starts, workers prove against them, and
   integration runs continuously; what the deadline leaves open is a gap list of exact lemma names
   (`.agents/skills/lean-proofs/SKILL.md`). The same night: say "private circuit" or "the circuit's description", never
-  "netlist" (the README's Glossary).
+  "netlist" (DESIGN.md's Glossary).
 - 2026-10-08 (7:13 PM PDT, relayed by top): a protocol's verifier of record switches from Python to Lean only on
   evidence. Its gap list shows nothing the Python checks that the Lean doesn't, for the record versions in use, and every
   recorded run in the store, replayed through the Lean, gets the verdict the Python gave, negative controls included. The

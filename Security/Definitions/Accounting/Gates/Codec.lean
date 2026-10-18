@@ -30,11 +30,12 @@ circuit of the model (`Model.lean`) computing its words is:
   For the same reason `ρ(p − x) = p − ρ(x)` (`Guarantees.Gates.RhoPairs`): `ρ` maps the pair `{x, p − x}` to the
   pair `{s, p − s}` of `±x`'s roots and takes the member the symbol names, so the ideal model of a round is a random
   function on such pairs with that sign rule, not a random permutation of `[0, p)`.
-* **Computing.** A circuit computes words `words` on a draw when its inputs and budgeted gates hold their declared
-  intervals there (`DeclaredHold`, which with `Proven` puts it in its window) and its output gates `out i l` hold the
-  targets' bytes (`Encodes`). `encodeCost` is the fewest budgeted units (`budgeted`) of any circuit of the model, with
-  its window proven, at most `B` operand bits a budgeted gate (`Restricted`) and no run input, that computes `q`
-  distinct words on more than `ε` of the draws, and `⊤` when there is none: the cost 6a's `encodeBitsCost` reads.
+* **Computing.** A circuit computes words `words` on a draw when its inputs and budgeted gates but gathers hold
+  their declared intervals there (`DeclaredHold`, which with `Proven` puts it in its window) and its output gates
+  `out i l` hold the targets' bytes (`Encodes`). `encodeCost` is the fewest budgeted units (`budgeted`) of any circuit
+  of the model, with its window proven, at most `B` operand bits a budgeted gate (`Restricted`) and no run input, that
+  computes `q` distinct words on more than `ε` of the draws, and `⊤` when there is none: the cost 6a's
+  `encodeBitsCost` reads.
 -/
 
 namespace Accounting.Gates
@@ -114,8 +115,8 @@ def CodecInputs (F : Field) (C : Dag ι) (D : Finset (Draw k)) (m : ℕ → ℕ)
     ∀ i, (∃ g ∈ C, g.op = .input .coin i) →
       (∃ s : Slot, ∀ d ∈ D, x d i = s.value F d m) ∨ ∀ d ∈ D, ∀ d' ∈ D, x d i = x d' i
 
-/-- On draw `d`, `C`'s inputs and budgeted gates hold their declared intervals and its outputs `out i l` hold the
-bytes of words `words`' encodings, less their parity. -/
+/-- On draw `d`, `C`'s inputs and budgeted gates but gathers hold their declared intervals and its outputs `out i l`
+hold the bytes of words `words`' encodings, less their parity. -/
 def Encodes (F : Field) (C : Dag ι) (x : Draw k → ι → ℤ) (m : ℕ → ℕ) (words : List ℕ) (out : ℕ → ℕ → ℕ)
     (d : Draw k) : Prop :=
   DeclaredHold C (x d) ∧

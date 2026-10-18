@@ -5,7 +5,7 @@
 # the tree:
 #   research run --on M --source . --pool proofs --as LANE --project verity --cwd clone --mem-gb 96 --env A7_MEM_GB=96 -- \
 #     bash benchmarks/one_stage/a7.sh
-# env: A7_MEM_GB (the job's --mem-gb)  A7_K (a7.py's --k)  A7_STEPS (its --steps)  A7_CACHE (the build cache)
+# env: A7_MEM_GB (the job's --mem-gb)  A7_K (a7.py's --k, every unit by default)  A7_STEPS (its --steps)  A7_CACHE (the build cache)
 # Kept in $OUT/a7: a7's records and logs, the public files, the canonical commitments' b || c, the memory map and the sessions
 # (their proofs and records); never a prover's file (inst-*) nor a circuit (its pin is kept), nor a session's archive.
 set -uo pipefail

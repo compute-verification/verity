@@ -220,6 +220,7 @@ class Lib:
         self.so.rs_sketch16_receipts.argtypes = [v, u64, u64, v, v, i, v]
         self.so.rs_map.argtypes = [v, u64, v, i, u64, v, v, v]
         self.so.rs_mapped_receipts.argtypes = [v, v, u64, v, v, i, v]
+        self.so.rs_mapped_pass.argtypes = [v, v, u64, v, v, u64, v, v, i, i, v, v]
         self.so.rs_mapped_read.argtypes = [v, u64, v, i, v]
         self.so.rb_chain_set.argtypes = [b, i, b, b, b, b, b, b, i, i, b, i, i, b, i, b, i, i, u64, v]
         self.so.rb_chain.argtypes = [v, v]
