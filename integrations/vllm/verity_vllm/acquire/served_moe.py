@@ -14,9 +14,9 @@ the serving process commits from inside the op (`ServedCompiledSource._install_m
 The expert GEMMs are the bf16 path's `acc += tl.dot(a, b)`, one carried k16 chain, and on cc 9.0 every k16 step is Hopper's
 (`_v2{DOT=HopperBF16WgmmaDot16}`) whichever config vLLM launched at M rows (`try_get_optimal_moe_config`, recorded per M by the
 source, which must have launched the kernel at M): Triton lowers the dot to wgmma or to MMA v2's `mma.sync m16n8k16`, and on an H100
-the latter's HMMA.16816 is `silicon.HOPPER_BF16_M16N8K16`, the wgmma k16 step's parameters, not the Ampere step (`_v1`, which the
-eager Program binds on cc 9.0 with no correspondence run; r20261018-062333-f1a7 matched it on 27 of 1,344 rows).  Another compute
-capability is refused.
+the latter's HMMA.16816 is `silicon.HOPPER_BF16_M16N8K16`, the wgmma k16 step's parameters, not the Ampere step (`_v1`;
+r20261018-062333-f1a7 matched it on 27 of 1,344 rows), the binding the eager Program shares (`frontend.targets.moe_expert_dot`).
+Another compute capability is refused.
 
 The op takes its layer as an opaque argument: the serving process records the layer each piece's op ran (`moe_pieces`), and that
 layer's facts (`served_match.moe_facts`) give its shapes and confirm it is the block expanded here.  Anything else (a fused or absent
