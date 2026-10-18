@@ -382,7 +382,8 @@ pub fn run_worker<T: Send + 'static>(work: impl FnOnce(WorkerEnd<T>) -> Result<T
                                      wait: &mut dyn FnMut(&Receiver<Ask<T>>) -> Option<Ask<T>>) -> Result<T, String> {
     let (tx, rx) = channel();
     let end = WorkerEnd(tx.clone());
-    std::thread::Builder::new().name("flock-worker".into()).spawn(move || {
+    // the prover's sequential part runs here, as it did on the main thread: a stack as large as the verifier's threads'
+    std::thread::Builder::new().name("flock-worker".into()).stack_size(64 << 20).spawn(move || {
         let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| work(end))).unwrap_or_else(|e| {
             Err(format!("panicked: {}", e.downcast_ref::<String>().cloned().or_else(|| e.downcast_ref::<&str>().map(|s| s.to_string())).unwrap_or_default()))
         });
