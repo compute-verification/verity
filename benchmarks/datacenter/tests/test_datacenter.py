@@ -7,7 +7,7 @@ import struct
 from dataclasses import replace
 
 import pytest
-from verity.core.protocols.sampled_proofs.one_stage import partition as sampled_partition
+from verity.core.protocols.sampled_proofs.one_stage import registration as one_stage
 from verity.ml.circuits import partition_object
 from verity.ml.circuits.census import census
 from verity.ml.circuits.codec import program_digest
@@ -16,7 +16,7 @@ from verity.ml.circuits.ops.gemm import GEMM_SM120_E4M3, GemmCoordinateE4m3
 from verity.ml.circuits.refs import tuple_of
 from verity.ml.circuits.types import Array, Tuple, Value as Word
 
-from datacenter import (FLEET_CLOSED, SALT_CUSTODY, Assumption, Block, Cadence, Carried, Challenge, Computed, Credit,
+from datacenter import (FLEET_CLOSED, SALT_CUSTODY, SERVED_PARTITION, Assumption, Block, Cadence, Carried, Challenge, Computed, Credit,
                         Datacenter, Deviation, Device, Entered, Fleet, Held, Interval, Ledger, Link, Maintenance, On,
                         Plan, Port, Record, Refused, Store, Wipe, account, audit, check_records, crossings,
                         double_credit, evaluate, names, place, register, run, traffic, values, work)
@@ -97,16 +97,26 @@ def test_a_program_of_registered_definitions_has_census_values_work_and_its_eval
     assert y == pytest.approx(ref, abs=0.05)
 
 
-def test_each_blocks_computed_claim_rests_on_its_proof_units_under_the_programs_partition(setup):
-    """The sampled proofs draw proof units from the Program's partition (`verity/partition/v1`), the same Program the
-    placement places: under the served query (Q_word v1 at X = 16) each linear is 32 units, one a coordinate, so each
-    stage's block rests its `Computed` claim on its own 32 of the protocol's 64."""
+def test_each_blocks_computed_claim_rests_on_its_proof_units_under_the_registered_partition(setup):
+    """The sampled proofs draw proof units from the Program's partition, which one-stage registers with the Program (the
+    record names the query's digest, the partition's and the population). A block's proof units are that partition's
+    whose gates run there, read with the verifier's copy of the query and held to the record (proofs, review 4): under
+    Q_word v1 at X = 16 each linear is 32 units, one a coordinate, so each stage's block rests its `Computed` claim on its
+    own 32 of the 64. Without a record they are the served query's, and the account says it assumed it."""
     dc, p = setup
     query = partition_object.query()
-    profile = p.public(Plan(EPOCH), partition=query)
-    assert profile.units == {"a": 32, "b": 32} and sampled_partition.units(PROGRAM, query) == 64
+    rec = one_stage.record(PROGRAM, query, {"law": "subset", "k": 8}, "hm96-sha512", [], {"kind": "stand-in"})
+    profile = p.public(Plan(EPOCH), record=rec, query=query)
+    assert profile.units == {"a": 32, "b": 32} and profile.partition == "registered" and rec["population"] == 64
     claims = audit(run(p, INPUTS, Plan(EPOCH)), profile)
     assert Computed("a", 1056, EPOCH, units=32) in claims and Computed("b", 1056, EPOCH, units=32) in claims
+    assumed = p.public(Plan(EPOCH))
+    assert assumed.units == profile.units and assumed.partition == "assumed"
+    assert [SERVED_PARTITION.name in account(claims, x).blocks[0].assumptions for x in (assumed, profile)] == [True, False]
+    with pytest.raises(ValueError, match="copy of its query"):
+        p.public(Plan(EPOCH), record=rec, query=partition_object.call_query(8))
+    with pytest.raises(ValueError, match="isn't this Program's"):
+        p.public(Plan(EPOCH), record=rec | {"population": 63}, query=query)
 
 
 @pytest.mark.slow
@@ -197,6 +207,26 @@ def test_crossings_are_derived_from_the_placement_including_inputs_and_delivery(
     assert set(traffic(p)) == {Port(c, d) for c in ("a.cert", "b.cert") for d in ("ingress", "egress")}
 
 
+def test_a_registered_value_has_a_copy_in_every_block_that_reads_it_unless_held_in_one():
+    """Memory accounting, review 4: registration puts a copy of a registered value in every block that reads it, as
+    serving holds its weights and the remote audit registers each copy, so a weight both stages read never crosses. Held
+    in one copy instead (named in `place`), it is moved to the other block before it is read, and that crossing is
+    bandwidth like any other: 512 more frames on a's uplink, which the profile declares and the run shows."""
+    def shared(B, x, w):
+        h = B.call(LINEAR, x, w, name="h")
+        return B.call(LINEAR, h, w, name="y")
+
+    c = program("Shared", {"x": VEC, "w": MAT}, VEC, shared, registered=("w",))
+    reg, dc, plan = register(c, {"w": WEIGHTS["w1"]}), datacenter(), Plan(EPOCH)
+    kw = dict(registration=reg, deliver="world", x="world", h="a.gpu", y="b.gpu")
+    copies, held = place(c, dc, "a.gpu", **kw), place(c, dc, "a.gpu", **kw, w="a.gpu")
+    assert {x.value.name for x in crossings(copies)} == {"x", "h", "y"}
+    assert {(x.value.name, x.src, x.dst) for x in crossings(held)} >= {("w", "a.gpu", "b.gpu")}
+    out = Port("a.cert", "egress")
+    assert [sum(q.public(plan).occupancy[out].values()) for q in (copies, held)] == [16, 16 + 512]
+    assert not refusals(audit(run(held, INPUTS, plan), held.public(plan)))
+
+
 def test_the_profile_is_what_audit_and_account_read_of_the_placement(setup):
     dc, p = setup
     profile = p.public(Plan(EPOCH))
@@ -212,7 +242,7 @@ def test_an_honest_run_is_credited_and_its_only_freedom_is_timing_advice(setup):
     profile = p.public(plan)
     claims = audit(run(p, INPUTS, plan), profile)
     assert not refusals(claims)
-    assert Computed("a", 1056, EPOCH) in claims and Computed("b", 1056, EPOCH) in claims
+    assert Computed("a", 1056, EPOCH, units=32) in claims and Computed("b", 1056, EPOCH, units=32) in claims
     assert Held("labels@b.gpu", HBM - RESIDUAL, Interval(0, 2)) in claims
     assert [x for x in claims if isinstance(x, Entered)] == [Entered("x", 512, "outside")]
     carried = [x for x in claims if isinstance(x, Carried)]

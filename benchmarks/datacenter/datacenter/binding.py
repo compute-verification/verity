@@ -2,15 +2,19 @@
 
 A `Placement` puts each root node of the Program on a device at an engine step: each Call where it runs, each run input
 where it enters (the outside world, a block's own device, a trusted device), and each device maps its steps onto ticks of
-the trusted clock (`ticks`, strictly increasing). A registered input needs no device: registration loaded it where its
-first reader runs, so it is there before the epoch. Every gate of a node is placed with it, so this is Lean's
-`Accounting.Placed` (and `Accounting.Requirement.Placement`, in #2399) at the census's grain: a gate's leaf and step are
-its node's. The placement is private and committed. A crossing is a census value produced in one block and read in
-another; crossings are derived, never declared, since moving a value doesn't change it.
+the trusted clock (`ticks`, strictly increasing). A registered input needs no device: registration put a copy of it in
+every block that reads it, before the epoch, as serving holds its weights and as the remote audit registers each copy
+(memory accounting, review 4). A registered value kept in one copy instead (`held`, or a registered parameter named in
+`place`) is moved to its readers in other blocks, and those crossings are bandwidth like any other. Every gate of a node
+is placed with it, so this is Lean's `Accounting.Placed` (and `Accounting.Requirement.Placement`, in #2399) at the
+census's grain: a gate's leaf and step are its node's. The placement is private and committed. A crossing is a census
+value produced in one block and read in another; crossings are derived, never declared, since moving a value doesn't
+change it.
 
 What is public is the placement's `Profile`: the occupancy each certifier port must show, the work each block is to be
-credited with, the trusted data each block consumes, the registered stores and the registration's root. `audit` and
-`account` read the profile; only `audit`, which runs inside the proof, reads the placement itself.
+credited with and the proof units it rests on, the trusted data each block consumes, the registered stores and the
+registration's root. `audit` and `account` read the profile; only `audit`, which runs inside the proof, reads the
+placement itself.
 """
 from __future__ import annotations
 
@@ -48,6 +52,8 @@ class Placement:
     stores: tuple[Store, ...] = ()
     #: the registration of the Program's registered inputs
     registration: Registration | None = None
+    #: registered values (by census value id) kept in one copy, on this device, rather than in every reading block
+    held: dict[int, str] = field(default_factory=dict)
 
     @cached_property
     def values(self) -> list[Value]:
@@ -58,10 +64,11 @@ class Placement:
         return L.names(self.program)
 
     def home(self, v: Value) -> str | None:
-        """The device value `v` is produced on, or stored on before the epoch (a registered value, at its first reader)."""
+        """The one device value `v` is produced on, or held on before the epoch; None for a registered value with a copy
+        in every block that reads it."""
         if v.node in self.device:
             return self.device[v.node]
-        return self.device[min(v.reads)] if v.reads else None
+        return self.held.get(v.id)
 
     def tick(self, k: int) -> int:
         return self.ticks[self.device[k]][self.step[k]]
@@ -91,25 +98,22 @@ class Placement:
         return {}
 
     def public(self, plan: Plan, ticks: dict[str, float] | None = None, weights: dict[str, float] | None = None,
-               partition: Mapping[str, Any] | None = None) -> Profile:
+               record: Mapping[str, Any] | None = None, query: Mapping[str, Any] | None = None) -> Profile:
         """The placement's public properties for the epoch `plan` audits. `ticks` is PoUW's proved bound per block: the
         least block-ticks the block's declared work takes over every route at the data sheet's rates. `weights` is what an
         audit credits for one unit of each kind of work (PoUW's W_ref, a public constant of its scheme), 1 for a kind it
-        doesn't list. `partition` is the Program's partition into proof units, the query of its `verity/partition/v1`
-        object (`partition_object.query()`, Q_word v1 at X = 16, is the served one), which the sampled proofs draw from."""
+        doesn't list. `record` is the sampled proofs' one-stage registration of the Program and `query` the verifier's
+        copy of its partition query: each block's proof units are the units of that partition whose gates run there, and
+        the record must name that query, its partition and its population (proofs, review 4). Without a record they are
+        the served query's (`partition_object.query()`, Q_word v1 at X = 16), which the profile marks as assumed
+        (`Profile.partition`), and none for a Program that query doesn't apply to."""
         dc = self.datacenter
         work: dict[str, dict[str, float]] = {b.name: {} for b in dc.blocks}
         for k, w in L.work(self.program).items():
             if (b := self.block(self.device[k])) is not None:
                 for kind, n in w.items():
                     work[b][kind] = work[b].get(kind, 0.0) + n
-        units: dict[str, int] = {}
-        if partition is not None:
-            from verity.core.protocols.sampled_proofs.one_stage.partition import unit_gates
-            body = self.program.root.body
-            for lo, _hi in unit_gates(self.program, partition):
-                if (b := self.block(self.device.get(body.node_at(lo)))) is not None:
-                    units[b] = units.get(b, 0) + 1
+        units, partition = self._units(record, query)
         forced: dict[str, float] = {b.name: 0.0 for b in dc.blocks}
         for v in self.values:
             if self.source(v.node) == "trusted":
@@ -120,7 +124,35 @@ class Placement:
         salt, salt_out, pinned = self._custody(plan.registration, weights or {})
         return Profile(dc, plan, occupancy(self), work, forced, stores, dict(weights or {}), salt, salt_out, pinned,
                        dict(ticks or {}), self.registration.root if self.registration else None, units,
-                       L.census_of(self.program)["digest"])
+                       L.census_of(self.program)["digest"], partition)
+
+    def _units(self, record: Mapping[str, Any] | None, query: Mapping[str, Any] | None) -> tuple[dict[str, int], str | None]:
+        """Each block's proof units under the registered partition (or the served query's, assumed), and which it was."""
+        from verity.core.protocols.sampled_proofs.one_stage import partition as P
+        from verity.core.protocols.sampled_proofs.one_stage.registration import query_digest
+        from verity.ml.circuits import partition_object
+
+        program = self.program
+        if record is None:
+            query = partition_object.query()
+            try:
+                gates = P.unit_gates(program, query)
+            except (partition_object.QueryRefused, ValueError):
+                return {}, None
+            how = "assumed"
+        else:
+            if query is None or query_digest(query) != record["query"]:
+                raise ValueError("a registration's partition is read with the verifier's copy of its query")
+            if (P.digest(P.partition(program, query)) != record["partition"]
+                    or P.units(program, query) != record["population"]):
+                raise ValueError("the registration's partition isn't this Program's under its query")
+            gates, how = P.unit_gates(program, query), "registered"
+        units: dict[str, int] = {}
+        body = program.root.body
+        for lo, _hi in gates:
+            if (b := self.block(self.device.get(body.node_at(lo)))) is not None:
+                units[b] = units.get(b, 0) + 1
+        return units, how
 
     def _custody(self, registration: int, weights: dict[str, float]) -> tuple[dict[str, float], ...]:
         """For each block whose own certifier releases a salt into it: the salt's bits, the bits other than timing that
@@ -190,8 +222,10 @@ class Profile:
     Program's digest). For a block whose certifier holds a salt for it: the salt's bits (`salt`), what besides timing could
     carry it out before registration (`salt_out`, in bits), and the credit of the block's work that depends on it
     (`pinned`). For a block whose work PoUW timed: its proved bound (`ticks`, in block-ticks), which the account credits
-    in place of the per-facet loads, since a prover may route work to another facet than the honest design does. Under a
-    partition, each block's proof units (`units`): the units whose gates run there, which its `Computed` claim rests on."""
+    in place of the per-facet loads, since a prover may route work to another facet than the honest design does. Each
+    block's proof units (`units`): the units of the Program's partition whose gates run there, which its `Computed` claim
+    rests on, and whether that partition was the one-stage registration's or the served query's, assumed (`partition`:
+    "registered", "assumed", or None when no partition applies)."""
 
     datacenter: Datacenter
     plan: Plan
@@ -207,6 +241,7 @@ class Profile:
     registered: bytes | None = None
     units: dict[str, int] = field(default_factory=dict)
     census: str | None = None
+    partition: str | None = None
 
     def credit(self, block: str) -> float:
         """The work `block` is to be credited with: each kind's units at its weight."""
@@ -224,10 +259,11 @@ def place(program: Program, dc: Datacenter, default: str, *, deliver: str | None
           **where: str) -> Placement:
     """Place `program` on `dc`: each keyword names a root node (a parameter or a named Call) and the device it runs or
     enters on; any other Call or run input goes where its first reader runs, if that is in a block, else on `default`.
-    A registered input goes nowhere unless named: registration loaded it where its first reader runs. A node's step is one
-    past those of the nodes it reads (plus `transfer_steps` when a value crosses a block), and each device's step s begins
-    at tick start + s·ticks_per_step. The outputs are delivered to `deliver`. A Program with registered inputs is placed
-    with their `registration`."""
+    A registered input goes nowhere unless named: registration put a copy in every block that reads it. Named, it is
+    held in one copy on that device and moved to its readers elsewhere. A node's step is one past those of the nodes it
+    reads (plus `transfer_steps` when a value crosses a block), and each device's step s begins at tick
+    start + s·ticks_per_step. The outputs are delivered to `deliver`. A Program with registered inputs is placed with
+    their `registration`."""
     devices, ns = dc.devices, L.names(program)
     named: dict[int, str] = {}
     unknown = [d for d in [default, deliver, *where.values()] if d is not None and d not in devices]
@@ -257,8 +293,7 @@ def place(program: Program, dc: Datacenter, default: str, *, deliver: str | None
         for r in v.reads:
             read.setdefault(r, []).append(v)
     for k in sorted(device):
-        here = dc.block_of(device[k])
-        p.step[k] = 1 + max((p.step.get(v.node, 0) + (transfer_steps if dc.block_of(p.home(v)) is not here else 0)
+        p.step[k] = 1 + max((p.step.get(v.node, 0) + (transfer_steps if crosses(p, v, device[k]) else 0)
                              for v in read.get(k, ())), default=-1)
     horizon = max(p.step.values(), default=0) + 1 + transfer_steps
     used = set(device.values()) | {p.home(v) for v in vals} | ({deliver} if deliver else set())
@@ -316,6 +351,13 @@ def hops(path: tuple[Link, ...], src: str) -> list[tuple[str, str]]:
     return out
 
 
+def crosses(p: Placement, v: Value, dst: str) -> bool:
+    """Whether value `v`, read at device `dst`, comes from another block: never for a registered value with a copy in
+    every block that reads it."""
+    src = p.home(v)
+    return src is not None and p.datacenter.block_of(src) is not p.datacenter.block_of(dst)
+
+
 def crossings(p: Placement) -> list[Crossing]:
     """Every (value, reader device) pair where a value is read in a block other than its own, once each, at its first
     read; and each output the Program returns, at the delivery device the step after it is produced."""
@@ -330,9 +372,8 @@ def crossings(p: Placement) -> list[Crossing]:
     out = []
     for (i, dst), at in first.items():
         v = p.values[i]
-        src = p.home(v)
-        if src is not None and p.datacenter.block_of(src) is not p.datacenter.block_of(dst):
-            out.append(Crossing(v, src, dst, route(p.datacenter, src, dst), at))
+        if crosses(p, v, dst):
+            out.append(Crossing(v, p.home(v), dst, route(p.datacenter, p.home(v), dst), at))
     return out
 
 

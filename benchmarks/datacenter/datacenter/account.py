@@ -53,6 +53,9 @@ FLEET_CLOSED = Assumption("fleet-closed", 1, "premise", "declared")
 #: certifier releases only into it pins the work that depends on it, while k, the bits that could carry it out before
 #: registration, stays at most this many
 SALT_CUSTODY = Assumption("salt-custody", 384, "bits", "declared")
+#: a block's proof units counted under the served query (Q_word v1 at X = 16) because no one-stage registration named the
+#: Program's partition (proofs, review 4)
+SERVED_PARTITION = Assumption("served-partition", 1, "premise", "declared")
 
 
 def facet(kind: str) -> str:
@@ -221,6 +224,8 @@ def account(claims: list[Claim], profile: Profile, assume: tuple[Assumption, ...
                       for d in b.devices if d.memory is not None)
         names = [a.name for d in b.devices for a in [*(d.rate.get(k) for k in work), d.memory, d.residual, d.bandwidth,
                                                      d.on_chip] if a is not None]
+        if profile.partition == "assumed" and profile.units.get(b.name):
+            names.append(SERVED_PARTITION.name)
         bounds: dict[str | None, float] = {None: float("inf")}
         if FLEET_CLOSED.name in premises:
             bounds[FLEET_CLOSED.name] = 0.0
