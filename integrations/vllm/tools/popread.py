@@ -279,9 +279,10 @@ def analyze_descriptor(desc: dict[str, Any], *, units: dict[int, int] | None = N
         f["gates"] += g
         f["units"] += u
         if step is not None:
-            b = by_step.setdefault(step[ordinal], {"s": step[ordinal], "calls": 0, "gates": 0, "units": 0, "families": Counter()})
+            b = by_step.setdefault(step[ordinal], {"s": step[ordinal], "calls": 0, "gates": 0, "units": 0, "families": {}})
             b["calls"], b["gates"], b["units"] = b["calls"] + 1, b["gates"] + g, b["units"] + u
-            b["families"][base(fid)] += u if units is not None else g
+            bf = b["families"].setdefault(base(fid), {"calls": 0, "gates": 0, "units": 0})
+            bf["calls"], bf["gates"], bf["units"] = bf["calls"] + 1, bf["gates"] + g, bf["units"] + u
         if step is not None and step[ordinal] >= 1 + lag:
             for key, v in (("calls", 1), ("gates", g), ("units", u)):
                 f["eos_keyed"][key] += v
@@ -301,8 +302,7 @@ def analyze_descriptor(desc: dict[str, Any], *, units: dict[int, int] | None = N
     out = {"schema": SCHEMA, "adapter": "descriptor/v1", "root": desc["root"][:160],
            "inputs": dict(Counter(input_group(x) for x in names)), "value_bound": value_bound,
            "eos": _eos(lag, step is not None, ignore, why),
-           "by_step": [dict(b, families=dict(b["families"]), per_family="units" if units is not None else "gates")
-                       for _s, b in sorted(by_step.items())]}
+           "by_step": [b for _s, b in sorted(by_step.items())]}
     return _finish(out, fams, value_bound, units is not None)
 
 
