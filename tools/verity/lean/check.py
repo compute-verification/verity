@@ -145,6 +145,7 @@ import tempfile
 import textwrap
 import threading
 import time
+import tomllib
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -282,6 +283,25 @@ def memory_refusal(pkgs: list[Path], have_gib: float, env=os.environ) -> str | N
 
 #: `--artifacts`: the node's Lake artifact cache, which only a passing audit writes (`lean_audit.LakeArtifacts`)
 ARTIFACTS: Path | None = None
+
+
+def plugin_targets(pkg: Path) -> list[str]:
+    """The compiler plugins the package's fetched dependencies load (`plugins` of a `[[lean_lib]]` in their `lakefile.toml`),
+    as targets `@dep/Lib:facet`.  Lake links one twice when two of a package's libraries load it, one under the module system
+    and one not (ArkLib's `ArkLib` and `ArkLibTest` with `ArkLibLintPlugin:shared`), and the two links race on one file, so the
+    build links each alone first, after which both find it up to date (INF-62)."""
+    out: list[str] = []
+    for f in sorted((pkg / ".lake" / "packages").glob("*/lakefile.toml")):
+        try:
+            doc = tomllib.loads(f.read_text())
+        except (OSError, tomllib.TOMLDecodeError):
+            continue
+        name = str(doc.get("name", f.parent.name)).strip("«»")
+        for lib in doc.get("lean_lib", []) if isinstance(doc.get("lean_lib"), list) else []:
+            for t in lib.get("plugins", []) if isinstance(lib, dict) else []:
+                if isinstance(t, str) and (target := t if t.startswith("@") else f"@{name}/{t}") not in out:
+                    out.append(target)
+    return out
 
 
 def lake_env() -> dict[str, str]:
@@ -2181,8 +2201,12 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     if build:
         rep["sandbox"] = sandboxed()
         for step, argv in (("setup", None),
+                           ("build-plugins", lambda: (in_sandbox(pkg, ["lake", "build", *ts]) if (ts := plugin_targets(pkg))
+                                                      else [])),
                            ("build", in_sandbox(pkg, ["lake", "build"])),
                            ("build-roots", in_sandbox(pkg, ["lake", "build", *(f"+{r}" for r in policy["roots"])]))):
+            if callable(argv) and not (argv := argv()):
+                continue
             with contextlib.nullcontext() if argv is None else writing(pkg, log):
                 s = time.monotonic()
                 rc, text = setup(pkg, rep["toolchain"], work / "setup.log") if argv is None else run(argv, pkg, work / f"{step}.log")
