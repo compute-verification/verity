@@ -4445,6 +4445,12 @@
    "assumptions": [],
    "type_hash": "5285cb8cbec9dd6a634d4653607b825be7d9eea4c260b93e29cb3fad67b09cee"
   },
+  "Pouw.SecurityProofs.Eps1.ClassPSlots": {
+   "owner": "@compute-accounting",
+   "signature": ["Pouw.SecurityProofs.Eps1.ClassPSlots : Pouw.Guarantees.Eps1.ClassPSlots"],
+   "assumptions": [],
+   "type_hash": "1dd2b9b43f48e1ad9ca309ed0b523c70dc046a7df3e3e63bda5e4e126a4d5ef4"
+  },
   "Pouw.SecurityProofs.Eps1.WordLocalGeneral": {
    "owner": "@compute-accounting",
    "signature": ["Pouw.SecurityProofs.Eps1.WordLocalGeneral : Pouw.Guarantees.Eps1.WordLocalGeneral"],
@@ -6267,7 +6273,8 @@
    "Accounting.SecurityProofs.TS.GrindUnion": "lemma: the grinding bound T C(G, n) mu^n over any coins, T fresh seeds in the random-oracle model and per-segment noise of point mass at most mu, each query's target independent of its own seed (hypotheses); not a property of a Lean function.",
    "Accounting.SecurityProofs.Gates.DeclaredWindow": "frozen (no-function): The soundness of the gate model's interval analysis over every circuit whose declared bounds are earned (Accounting.Gates.Declared: an input at its type, a budgeted gate at an interval its evaluator keeps) and every input that holds words of its inputs' types (Accounting.Gates.Typed), not a property of a Lean function: ProvenWindow with its hypothesis on run inputs' values discharged.",
    "Accounting.SecurityProofs.Gates.Int8LinearWindow": "frozen (no-function): The window of the gate model's circuit Accounting.Gates.int8Linear (vLLM's served int8 linear: its row quantizer into a satfinite s8·s8 IMMA chain) at every K = 32·S ≤ 131,040, not a property of the served code: vLLM's int8 Definitions (int8_exact.py) have no Lean port.",
-   "Accounting.SecurityProofs.Gates.LutPvWindow": "frozen (no-function): The window of the gate model's circuit Accounting.Gates.lutPv (vLLM's served LUT attention's P·V: LUT index, table gather and low byte into a satfinite s8·s8 IMMA chain) at every 32·S ≤ 132,096 and table of values in [0, 127], not a property of the served code: vLLM's int8 Definitions (int8_exact.py) have no Lean port."
+   "Accounting.SecurityProofs.Gates.LutPvWindow": "frozen (no-function): The window of the gate model's circuit Accounting.Gates.lutPv (vLLM's served LUT attention's P·V: LUT index, table gather and low byte into a satfinite s8·s8 IMMA chain) at every 32·S ≤ 132,096 and table of values in [0, 127], not a property of the served code: vLLM's int8 Definitions (int8_exact.py) have no Lean port.",
+   "Pouw.SecurityProofs.Eps1.ClassPSlots": "frozen (no-function): Theorem C's count of EPS1-QSTAR over issue slots, over every class-P M3 program with its writers' creations a parameter (w), not a Lean function."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
@@ -10246,12 +10253,21 @@
    "guarantees": ["Pouw.SecurityProofs.Dimension.A2WordsIff"]
   },
   "Definitions.Pouw.Eps1.M3": {
-   "digest": "a67b81a16f2b045d3188008e9a925674ee8de25636b0c0f4704e981ea852a74e",
+   "digest": "259596a012c4c09e5fa286a9d20062fc530ad6dc55cc2f7c0f594788543d41f1",
    "definitions": {
+    "Pouw.Eps1.ClassP": "a701827ced69a6601de286c0a09f129a13cb0c797905954636c3ae3ad8bb16d2",
     "Pouw.Eps1.Cols": "ddd2433ba8ded7d37960c6fe6dd23b4f66e5d14cffc795d7dad1fa886eaa440b",
     "Pouw.Eps1.ColsValid": "dd8588c5c8ca89bca32ad7f49e4e8b3288ef73448a382d2f6d4d65c0c7dff962",
+    "Pouw.Eps1.Creates": "417a1d01e5b0264d5792821003b78d7b5de526a86d1dd2c4bb6e6c7a04b023bc",
     "Pouw.Eps1.Dither": "9fddd81cf94ff83c46caaddfe6ad4615561c7d4623d3e25087ef56da13f6e11c",
+    "Pouw.Eps1.Field": "0e82f1248eca0cb501cf334a51da7233a4d5c816c4f5a375936de4e2848aaf9d",
+    "Pouw.Eps1.Field.E": "dd9a7a0b966e462f2d17a25fbb89c12940ff71048fd17bb21658bb99e708d764",
+    "Pouw.Eps1.Field.range": "bb53451fc74b08592d15741a5153a84ccf1efe038d29973f841e5d92be5d6dbe",
+    "Pouw.Eps1.Field.val": "ad7830d4f4c6ee95eab8ae377ff01ce48d8ffe820f08d75f7c0ee1a87e5ae45b",
+    "Pouw.Eps1.Field.β": "499ffab8d6d7b398996a4959a7859300e9e31f8d2c647f573dfd05831587b3a9",
+    "Pouw.Eps1.Field.τ": "dbb7fb660a13c4b0ca794421f62c03c87f4550c77897364c202777864a4295d8",
     "Pouw.Eps1.GCols": "42178af7d97934917ea654c155fff4636d5eedd9d2ccaa72c410a44036e56add",
+    "Pouw.Eps1.Holds": "01f45b6308168cb7598df365d4154138da03a9e707cc7c4090fc7d2da6d586ee",
     "Pouw.Eps1.Int8Valid": "3c4084db5783f85e7c97d3fd14e1ff170607fe359289740c1609f8084aac60d0",
     "Pouw.Eps1.M3": "ac86c8c2429196e11767d29693e97c27dfad981e8397bd55101236366d0283f4",
     "Pouw.Eps1.M3.IsRun": "b4d51e1aed9022ba775b6c6892a54a43203f84c5871f5c924b17f9cd871f628b",
@@ -10259,6 +10275,10 @@
     "Pouw.Eps1.M3.argVal": "51575cbc9d04b5488781fe6be2415ab5949993e4cd88052d16d958078a462215",
     "Pouw.Eps1.M3.earlier": "8fc1ce3ba363d446fa4d4d2844b16805dc485a306455601b17e0446f27451c45",
     "Pouw.Eps1.M3.op": "e83647ae3decddd1f8090a9aaf486ebb9a94aee2fce55f966ee475ed464d28a3",
+    "Pouw.Eps1.Packing": "6553fcd1dd47b06d4a14c6e466006f56b22d0a65af6a88ae3ec76938eb251440",
+    "Pouw.Eps1.Packing.MixedRadix": "eea8ecbb7cbdfaf79a321a048eb4b0794b21b308fd7f76a0a8fbd56c0c44915f",
+    "Pouw.Eps1.Packing.fields": "cdd0be679aeec5c15e3f089fa9069dd80f38ff5c37e3635df8d64b8f22268dce",
+    "Pouw.Eps1.Packing.word": "8655ac24cef8987f18dc11e4a76430f8d0cca294cca3fc9344e9d0fd294c51c6",
     "Pouw.Eps1.Prog": "25af16756c6dd4bca5f7ebd4adaaee42b23516685027fb26b3e58bebe67cdb9f",
     "Pouw.Eps1.Prog.Computes": "ffff66c5bde493310dc6025e78119be1af37edac280dd2d9ab8a0b2d345e0a4a",
     "Pouw.Eps1.Prog.WordLocal": "f3abe9b84f3c126dc7b0b28b2157e4c51160affdf35719dec932891e97319957",
@@ -10271,12 +10291,17 @@
     "Pouw.Eps1.Tau": "d96e7b513de4861347d2defe2a6091077267a1af9ec521b93579e9554cacc7bd",
     "Pouw.Eps1.Tau.prev": "552db547b4b1964ffc506784f262fc7bfa0f07bcfce430971c7420b5377ecb40",
     "Pouw.Eps1.Word": "c416ef647089b3254a4b4d5c9f5723a021030987d77acac2e300c33a8793f0d3",
+    "Pouw.Eps1.created": "01519347e2374bb7944a441b6a3e3b1c585f3b8e7b34a1bf71cf5a73687e2e85",
     "Pouw.Eps1.genOut": "f1a063b97581f11862f5d34b2b965c8753e2493a6f771e058bc37accb7e11e0d",
     "Pouw.Eps1.zeroOut": "7bd1c8dc83823b26d813171e3aa6e93b8239c615504968ca35ae25e20a41a46d",
     "Pouw.Eps1.zeroPrefix": "5e65b6f7d51a63dd5fc41559ec511b591728e0efd66217359d4dc06e8c19f89b",
     "Pouw.Eps1.zeroSeg": "3dd23aad55a841780af33c88c4f8c8847586d596b4e92c51500f1e2dc3a21ba1"
    },
-   "guarantees": ["Pouw.SecurityProofs.Eps1.WordLocalGeneral", "Pouw.SecurityProofs.Eps1.WordLocalZero"]
+   "guarantees": [
+    "Pouw.SecurityProofs.Eps1.ClassPSlots",
+    "Pouw.SecurityProofs.Eps1.WordLocalGeneral",
+    "Pouw.SecurityProofs.Eps1.WordLocalZero"
+   ]
   },
   "Definitions.Pouw.Fp8Atom.Atom": {
    "digest": "ac94661d29300afde0e3a6146a4f199f42d253ec3b64dad58699e2e3e10496ee",
@@ -19992,12 +20017,17 @@
    "guarantees": ["Pouw.SecurityProofs.Dimension.A2WordsIff"]
   },
   "Models.Pouw.Guarantees.Eps1": {
-   "digest": "aa16867d11fcc653ae115f995e369927346d45f04bb50164491a40332af01866",
+   "digest": "57267a69f07e8658ed180d71f752dc72b4f2758e38a2b1884c040a7941b3e709",
    "definitions": {
+    "Pouw.Guarantees.Eps1.ClassPSlots": "5c8ead54d04544607c3df69ac68ed0d14522cdfc86b66ec368255feb0ce66ead",
     "Pouw.Guarantees.Eps1.WordLocalGeneral": "06b1ba2c4f60b3a0a2072cfbddedd342e3660c3110e75667c92473c62c892b4f",
     "Pouw.Guarantees.Eps1.WordLocalZero": "8605a67a07179eaac27dc2366f8f349c0ef6ec8cf34acbe87292092454859e2e"
    },
-   "guarantees": ["Pouw.SecurityProofs.Eps1.WordLocalGeneral", "Pouw.SecurityProofs.Eps1.WordLocalZero"]
+   "guarantees": [
+    "Pouw.SecurityProofs.Eps1.ClassPSlots",
+    "Pouw.SecurityProofs.Eps1.WordLocalGeneral",
+    "Pouw.SecurityProofs.Eps1.WordLocalZero"
+   ]
   },
   "Models.Pouw.Guarantees.Game": {
    "digest": "064ea4e3db6eda646acb0c5d37b084297521cb4a0c034f43ba08118bb232db1a",
