@@ -68,6 +68,8 @@ import Proofs.Flock.Claims.KS.PlainClashLater
 import Proofs.Flock.Claims.KS.ForkSim
 import Proofs.Flock.Claims.KS.PlainFork
 import Proofs.Flock.Claims.KS.PlainForkClash
+import Proofs.Flock.Claims.KS.ForkAlign
+import Proofs.Flock.Claims.KS.PlainAlign
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -310,4 +312,11 @@ opens its deployed later rows, each an `Opening` in the run's log, so one record
 at one position of it collide, and KS at the deployed plain verifier's trimmed record holds from the simulated fork's
 alignment alone (`PlainForkClash`: `FlockDeploy.KS.plain_liveOpening`, `FlockDeploy.KS.capDig_inj`,
 `FlockDeploy.KS.plainForkQ_of`, `FlockDeploy.KS.plainForkClash`, `FlockDeploy.KS.plain_KS_of_forkAlign`).
+A fork at a table node is at most the fork after `j` coins where the strategy reaches that node after `j` coins on every
+path, or forks to nothing on the paths that don't, and the fork event at the node's cap implies the other on the
+outcomes its leaves relate (`ForkAlign`: `FlockSoundness.Game.Lock.SlotAt`, `FlockSoundness.Game.Lock.forkE_le_forkC`). The
+session's leaves record the cap of the entry they hold wherever they open a position at it, so the simulated fork's
+alignment is the coin count alone, and KS at the deployed plain verifier's trimmed record holds where the simulated
+strategy reaches each plain fork slot after `plainJ r ℓ` coins (`PlainAlign`: `FlockDeploy.KS.capAtL_of_sessRelL`,
+`FlockDeploy.KS.advRSL_le_forkC`, `FlockDeploy.KS.PlainSlotAlign`, `FlockDeploy.KS.plain_KS_of_slot`).
 -/

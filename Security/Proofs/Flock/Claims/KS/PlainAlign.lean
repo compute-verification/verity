@@ -1,0 +1,192 @@
+import Proofs.Flock.Claims.KS.ForkAlign
+import Proofs.Flock.Claims.KS.PlainForkClash
+
+/-!
+# The simulated fork's alignment, from the slot's coin count
+
+`PlainAlignQ` compares the fork at rep `r`'s level-`ℓ + 1` table node against the simulated strategy after `Commit`
+(`plainAdvAt`, `Lock.forkE`) with the fork after `plainJ r ℓ` coins of `ForkEvL`. By `Lock.forkE_le_forkC` the
+comparison is the alignment alone, since the session's leaves record the cap of the entry they hold:
+
+* `capAtL_of_sessRelL`: an outcome the session's leaf relation relates to an index holding rep `r`'s level-`ℓ + 1`
+  entry with cap `d`, and which opens a position at `d` there, records `d` as that rep's level-`ℓ + 1` cap
+  (`RecStruct`);
+* `sessFork_le`: so at that entry the session's fork event at the slot (`advRSL`'s) is `ForkEvL`'s;
+* `SlotRSL`, `advRSL_le_forkC`: where the strategy reaches the slot's node after `j` coins (`Lock.SlotAt` at
+  `advRSL`'s lockstep), `advRSL` is at most the fork after `j` coins of `ForkEvL`;
+* `PlainSlotAlign`, `plainForkAlign_of_slot`, `plain_KS_of_slot`: so `PlainForkAlign`, and KS at the deployed plain
+  verifier's trimmed record, hold where the simulated strategy reaches each plain fork slot after `plainJ r ℓ` coins.
+-/
+
+namespace FlockDeploy.KS
+
+open Flock FlockSoundness FlockSoundness.Game FlockSoundness.Refine FlockSoundness.Discharge
+  FlockSoundness.Discharge.Exec FlockSoundness.Discharge.Tables
+open Claims.Bridge.CustodyPlain Claims.Bridge.DecodePlain Claims.Bridge.Custody Claims.Bridge.PlainDraw
+open Claims.Bridge.Live
+open Lean (Json)
+
+local notation "𝔽" => FlockLevel3.GF128
+
+/-- **A leaf records the cap of the entry it holds** where it opens a position at it: an outcome the session's leaf
+relation relates to an index holding rep `r`'s level-`ℓ + 1` entry `(t, d)`, opening a position at `d` at that level,
+has `d` as rep `r`'s recorded level-`ℓ + 1` cap, since the opening is a request at level `ℓ + 1`, which `RecStruct`
+pairs with the entry's cap. -/
+theorem capAtL_of_sessRelL {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [Inhabited Sl]
+    {A : Model.Arith 𝔽 K} {Hc : List UInt8 → D} {E : Merkle.Enc (List 𝔽) D} {Lf : Merkle.Leaf (List 𝔽) Sl D Hc}
+    {S : Model.Statement} {sch : Accounting.Schedule} {C₀ : Model.Oracle 𝔽} {cap₀ : Model.Cap D}
+    {i : IRep 𝔽 D × IRep 𝔽 D} {a b : List (Model.OutCL 𝔽 D Sl)} {r : Fin 2} {ℓ : ℕ} {t : Model.Oracle 𝔽}
+    {d : Model.Cap D} (hR : SessRelL A Hc E Lf S sch C₀ cap₀ 0 i a b)
+    (hg : Lock.getPair (getRep 0) (getRep 1) i (slotOf r.val (ℓ + 1)) = some (t, d))
+    {p : Fin (2 ^ (lvOf sch (ℓ + 1)).logLen)}
+    (hp : (opRL Hc E Lf sch r.val (ℓ + 1) d (b.getD 0 dfltOutL) p).isSome) :
+    CapAtL r.val ℓ (b.getD 0 dfltOutL) d := by
+  obtain ⟨_, _, htop⟩ := hR
+  obtain ⟨-, -, -, -, hs₀, hs₁⟩ := htop
+  obtain ⟨y, hy, -, -⟩ := opRL_eq_some hp
+  have hreq : ∃ req, ((if r.val = 0 then (b.getD 0 dfltOutL).pend.1 else (b.getD 0 dfltOutL).pend.2).reqs.find?
+      fun req => req.level == ℓ + 1) = some req := by
+    unfold slotOpensL at hy
+    split at hy
+    · simp at hy
+    · exact ⟨_, ‹_›⟩
+  obtain ⟨req, hfind⟩ := hreq
+  have hmem := List.mem_of_find?_eq_some hfind
+  have hlev : req.level = ℓ + 1 := by simpa using List.find?_some hfind
+  have key : ∀ (ir : IRep 𝔽 D) (pr : Model.PendL 𝔽 D), RecStruct sch ir pr → req ∈ pr.reqs →
+      ir (ℓ + 1) = some (t, d) → pr.caps[ℓ]? = some d := by
+    intro ir pr hst hm hi
+    have hlt : ℓ + 1 < pr.reqs.length := by
+      have h1 : req.level ∈ pr.reqs.map Model.Req.level := List.mem_map_of_mem hm
+      rw [hst.1, List.mem_range, hlev] at h1
+      exact h1
+    obtain ⟨t', d', hi', hc⟩ := hst.2.2.1 (ℓ + 1) (by omega) hlt
+    rw [hi] at hi'
+    cases hi'
+    simpa using hc
+  obtain ⟨r, hr⟩ := r
+  interval_cases r
+  · have hi : i.1 (ℓ + 1) = some (t, d) := by
+      have e1 : 2 * (ℓ + 1) % 2 = 0 := by omega
+      have e2 : 2 * (ℓ + 1) / 2 = ℓ + 1 := by omega
+      simpa [Lock.getPair, getRep, slotOf, e1, e2] using hg
+    simp only [CapAtL, ↓reduceIte]
+    simp only [↓reduceIte] at hmem
+    exact key _ _ hs₀ hmem hi
+  · obtain ⟨-, hi⟩ : 1 ≤ 2 * (ℓ + 1) ∧ i.2 (ℓ + 1) = some (t, d) := by
+      have e1 : (2 * (ℓ + 1) + 1) % 2 = 1 := by omega
+      have e2 : (2 * (ℓ + 1) + 1) / 2 = ℓ + 1 := by omega
+      simpa [Lock.getPair, getRep, slotOf, e1, e2] using hg
+    simp only [CapAtL, one_ne_zero, ↓reduceIte]
+    simp only [one_ne_zero, ↓reduceIte] at hmem
+    exact key _ _ hs₁ hmem hi
+
+/-- **At the slot's entry the session's fork event is `ForkEvL`**: two outcomes the session relates to indices holding
+rep `r`'s level-`ℓ + 1` entry `(t, d)` and opening a position at `d` there to different rows record `d` as that cap in
+both. -/
+theorem sessFork_le {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [Inhabited Sl]
+    (A : Model.Arith 𝔽 K) (Hc : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf (List 𝔽) Sl D Hc)
+    (S : Model.Statement) (sch : Accounting.Schedule) (C₀ : Model.Oracle 𝔽) (cap₀ : Model.Cap D) (r : Fin 2)
+    (ℓ : ℕ) (t : Model.Oracle 𝔽) (d : Model.Cap D) (i₁ : IRep 𝔽 D × IRep 𝔽 D) (a₁ b₁ : List (Model.OutCL 𝔽 D Sl))
+    (i₂ : IRep 𝔽 D × IRep 𝔽 D) (a₂ b₂ : List (Model.OutCL 𝔽 D Sl))
+    (h₁ : SessRelL A Hc E Lf S sch C₀ cap₀ 0 i₁ a₁ b₁) (h₂ : SessRelL A Hc E Lf S sch C₀ cap₀ 0 i₂ a₂ b₂)
+    (hg₁ : Lock.getPair (getRep 0) (getRep 1) i₁ (slotOf r.val (ℓ + 1)) = some (t, d))
+    (hg₂ : Lock.getPair (getRep 0) (getRep 1) i₂ (slotOf r.val (ℓ + 1)) = some (t, d)) :
+    ind (fun x : List (Model.OutCL 𝔽 D Sl) × List (Model.OutCL 𝔽 D Sl) => ∃ p, Rewinding.ConflictAt
+        (fun outs : List (Model.OutCL 𝔽 D Sl) => opRL Hc E Lf sch r.val (ℓ + 1) d (outs.getD 0 dfltOutL)) x p)
+        (b₁, b₂) ≤
+      ind (fun x : List (Model.OutCL 𝔽 D Sl) × List (Model.OutCL 𝔽 D Sl) =>
+        ForkEvL Hc E Lf sch r.val ℓ x.1 x.2) (b₁, b₂) :=
+  ind_le_ind fun ⟨p, hs₁, hs₂, hne⟩ =>
+    ⟨d, capAtL_of_sessRelL h₁ hg₁ hs₁, capAtL_of_sessRelL h₂ hg₂ hs₂, p, hs₁, hs₂, hne⟩
+
+/-- **The strategy reaches rep `r`'s level-`ℓ + 1` table node after `j` coins** in the session after `Commit`:
+`Lock.SlotAt` at `advRSL`'s chooser, slot, fork event and lockstep. -/
+def SlotRSL {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [Inhabited Sl]
+    (A : Model.Arith 𝔽 K) (Hc : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf (List 𝔽) Sl D Hc)
+    (S : Model.Statement) (m k0 : ℕ) (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
+    (hk0 : l₀.lanes = k0) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (cap₀ : Model.Cap D) (r ℓ j : ℕ)
+    (σ : Strategy (sessAfterL A Hc E Lf S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts [] [] cap₀)) : Prop :=
+  Lock.SlotAt (plurSL Hc E Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ 0) (slotOf r (ℓ + 1))
+    (fun d b b' => ind (fun x : List (Model.OutCL 𝔽 D Sl) × List (Model.OutCL 𝔽 D Sl) => ∃ p, Rewinding.ConflictAt
+      (fun outs : List (Model.OutCL 𝔽 D Sl) =>
+        opRL Hc E Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ r (ℓ + 1) d (outs.getD 0 dfltOutL)) x p) (b, b'))
+    j (lockSessL A Hc E Lf S m k0 l₀ l₁ rest ext hk0 hm ptLocal mPts [] [] default cap₀) σ
+
+/-- **`Adv_{r,ℓ+1}` in the session is at most the fork after `j` coins of `ForkEvL`** where the strategy reaches rep
+`r`'s level-`ℓ + 1` table node after `j` coins. -/
+theorem advRSL_le_forkC {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [Inhabited Sl]
+    (A : Model.Arith 𝔽 K) (Hc : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf (List 𝔽) Sl D Hc)
+    (S : Model.Statement) (m k0 : ℕ) (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
+    (hk0 : l₀.lanes = k0) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (cap₀ : Model.Cap D) (r : Fin 2) (ℓ j : ℕ)
+    (σ : Strategy (sessAfterL A Hc E Lf S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts [] [] cap₀))
+    (h : SlotRSL A Hc E Lf S m k0 l₀ l₁ rest ext hk0 hm ptLocal mPts cap₀ r.val ℓ j σ) :
+    advRSL A Hc E Lf S m k0 l₀ l₁ rest ext hk0 hm ptLocal mPts [] [] cap₀ r.val (ℓ + 1) σ ≤
+      forkC (fun a a' => ind (fun p : List (Model.OutCL 𝔽 D Sl) × List (Model.OutCL 𝔽 D Sl) =>
+        ForkEvL Hc E Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ r.val ℓ p.1 p.2) (a, a')) j _ σ :=
+  Lock.forkE_le_forkC _ _ (fun _ _ => ind_nonneg _ _)
+    (fun t d i₁ a₁ b₁ i₂ a₂ b₂ h₁ h₂ hg₁ hg₂ =>
+      sessFork_le A Hc E Lf S _ default cap₀ r ℓ t d i₁ a₁ b₁ i₂ a₂ b₂ h₁ h₂ hg₁ hg₂) h
+
+/-- **The simulated strategy reaches the plain fork slot after `plainJ r ℓ` coins**, at tape `u`: `SlotRSL` at rep
+`r`'s level-`ℓ + 1` table node against `plainSimAt`. -/
+def PlainSlotQ {spec : SessionSpec} {st : Stmt} (L : Layout st) (m k0 : ℕ) (l₀ l₁ : Accounting.Level)
+    (rest : List Accounting.Level) (ext : ℕ) (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)
+    (hk0 : l₀.lanes = k0) (hm : 13 ≤ (L.model (Refine.regionsOf st)).m)
+    (hlay : (L.model (Refine.regionsOf st)).LinkLayout PT_LOCAL spec.mPts) (I : Exec.Inputs) (d : Json)
+    (x : Claims.Msg) (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8))
+    (hdec : PlainHDec L m k0 l₀ l₁ rest ext hsch hm hlay I d x opn) (hw : 2 * spec.mPts ≤ 65536) {Ω : Type}
+    (P : Claims.Prover Ω) (ω : Ω) (C : Fin (wordLen false x) → List 𝔽) (r : Fin 2)
+    (ℓ : Fin (l₀ :: l₁ :: rest).length) (j : ℕ) (u : plainTape x) : Prop :=
+  SlotRSL execArith Refine.H512 Refine.enc512 Refine.leaf512 (L.model (Refine.regionsOf st)) m k0 l₀ l₁ rest ext hk0
+    hm PT_LOCAL spec.mPts (capOfRoot (plainRoot P x ω)[0]!) r.val ℓ.val j
+    (plainSimAt L m k0 l₀ l₁ rest ext hsch hm hlay I d x opn hdec hw P ω C u)
+
+theorem plainAlignQ_of_slot {spec : SessionSpec} {st : Stmt} {L : Layout st} {m k0 : ℕ} {l₀ l₁ : Accounting.Level}
+    {rest : List Accounting.Level} {ext : ℕ} {hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩}
+    {hk0 : l₀.lanes = k0} {hm : 13 ≤ (L.model (Refine.regionsOf st)).m}
+    {hlay : (L.model (Refine.regionsOf st)).LinkLayout PT_LOCAL spec.mPts} {I : Exec.Inputs} {d : Json}
+    {x : Claims.Msg} {opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8)}
+    {hdec : PlainHDec L m k0 l₀ l₁ rest ext hsch hm hlay I d x opn} {hw : 2 * spec.mPts ≤ 65536} {Ω : Type}
+    {P : Claims.Prover Ω} {ω : Ω} {C : Fin (wordLen false x) → List 𝔽} {r : Fin 2}
+    {ℓ : Fin (l₀ :: l₁ :: rest).length} {j : ℕ} {u : plainTape x}
+    (h : PlainSlotQ L m k0 l₀ l₁ rest ext hsch hk0 hm hlay I d x opn hdec hw P ω C r ℓ j u) :
+    PlainAlignQ L m k0 l₀ l₁ rest ext hsch hk0 hm hlay I d x opn hdec hw P ω C r ℓ j u :=
+  advRSL_le_forkC _ _ _ _ _ m k0 l₀ l₁ rest ext hk0 hm _ _ _ r ℓ.val j _ h
+
+/-- **The simulated strategy reaches each plain fork slot after `plainJ r ℓ` coins**: `PlainForkAlign` with
+`PlainSlotQ` for `PlainAlignQ`, at every plain statement in scope, its one table's `fast100` schedule and the plain
+decoders where the outputs are public and where they are hidden. -/
+def PlainSlotAlign (x : Claims.Msg) : Prop :=
+  ∀ (s : Claims.Flock.Stmt) (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s)
+    (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf false x = some (ins, spec, sts)) (st : Stmt)
+    (h : tables false x = [(spec, st)]) (d : Json) (hd : ins.read.draw = some d) (L : Layout st) (m k0 : ℕ)
+    (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
+    (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hk0 : l₀.lanes = k0)
+    (hm : 13 ≤ (L.model (Refine.regionsOf st)).m)
+    (hlay : (L.model (Refine.regionsOf st)).LinkLayout PT_LOCAL spec.mPts) (Ω : Type) (P : Claims.Prover Ω) (ω : Ω),
+    (∀ hh : ins.read.I.tags.hiddenOutputs = false, ∀ C r ℓ u,
+      PlainSlotQ L m k0 l₀ l₁ rest ext hsch hk0 hm hlay ins.read.I d x
+        (plainOpn (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) ins.read.I d)
+        (plain_hdecAt hs hin hset h hh hd L m k0 l₀ l₁ rest ext hsch hm hlay) (plain_mPts hs hin hset).1 P ω C r ℓ
+        (plainJ (tables_head_one h) hsch r ℓ).val u) ∧
+    (∀ hh : ins.read.I.tags.hiddenOutputs = true, ∀ C r ℓ u,
+      PlainSlotQ L m k0 l₀ l₁ rest ext hsch hk0 hm hlay ins.read.I d x
+        (plainOpnH (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) ins.read.I d)
+        (plain_hdecHAt hs hin hset h hh hd L m k0 l₀ l₁ rest ext hsch hm hlay) (plain_mPts hs hin hset).1 P ω C r ℓ
+        (plainJ (tables_head_one h) hsch r ℓ).val u)
+
+theorem plainForkAlign_of_slot {x : Claims.Msg} (h : PlainSlotAlign x) : PlainForkAlign x :=
+  fun s hs hin ins spec sts hset st ht d hd L m k0 l₀ l₁ rest ext hsch hk0 hm hlay Ω P ω =>
+    ⟨fun hh C r ℓ u => plainAlignQ_of_slot
+        ((h s hs hin ins spec sts hset st ht d hd L m k0 l₀ l₁ rest ext hsch hk0 hm hlay Ω P ω).1 hh C r ℓ u),
+      fun hh C r ℓ u => plainAlignQ_of_slot
+        ((h s hs hin ins spec sts hset st ht d hd L m k0 l₀ l₁ rest ext hsch hk0 hm hlay Ω P ω).2 hh C r ℓ u)⟩
+
+/-- **The deployed plain verifier: KS, from the simulated strategy's slot alignment**, at SHA-512 at the trimmed record
+at the deployed relation: `plain_KS_of_forkAlign` at `plainForkAlign_of_slot`. -/
+theorem plain_KS_of_slot (h : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V false) x → PlainSlotAlign x) :
+    Claims.Flock.KS sha512 (deployPlainTrim Readable.relation) :=
+  plain_KS_of_forkAlign fun x hno => plainForkAlign_of_slot (h x hno)
+
+end FlockDeploy.KS
