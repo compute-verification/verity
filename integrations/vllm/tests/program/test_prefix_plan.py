@@ -70,3 +70,30 @@ def test_a_warm_prefill_launches_its_uncached_suffix_from_row_c():
     b = LC.shape_contexts(w)
     assert b[(168, 9, 128)][0] == [[1, 171], [40, 128]]          # r0 decodes row 171 beside r1's suffix rows 128..167
     assert b[(168, 9)][0] == [[168, 0]]
+
+
+def test_a_warm_request_finds_its_own_program_and_a_cold_one_never_takes_it(tmp_path):
+    from verity_vllm.pipeline import manifest as PM
+    from verity_vllm.query.manifest import format as MF
+    for name, res in (("build_request", {"LP": 168, "T": 9}), ("build_request_LP168_T9_C128", {"LP": 168, "T": 9, "C": 128})):
+        (tmp_path / name).mkdir()
+        (tmp_path / name / "result.json").write_text(json.dumps(dict(res, ok=True)))
+    fx = {"requests": PP.with_cached(_wl([(P + X, 10, 0), (P + Y, 10, 4)]))}
+    want = {"r0": str(tmp_path / "build_request"), "r1": str(tmp_path / "build_request_LP168_T9_C128")}
+    assert MF.program_dirs_for(fx, str(tmp_path)) == want and PM._program_dirs_for(fx, str(tmp_path)) == want
+    (tmp_path / "build_request_LP168_T9_C128").rename(tmp_path / "build_request_warm")      # found by its result.json's C
+    assert MF.program_dirs_for(fx, str(tmp_path))["r1"] == str(tmp_path / "build_request_warm")
+    (tmp_path / "build_request_warm" / "result.json").write_text(json.dumps({"ok": True, "LP": 168, "T": 9}))
+    with pytest.raises(SystemExit, match="r1 .*168,9,128"):
+        MF.program_dirs_for(fx, str(tmp_path))
+    with pytest.raises(SystemExit, match="r1 .*168,9,128"):
+        PM._program_dirs_for(fx, str(tmp_path))
+
+
+def test_a_warm_programs_cached_rows_are_not_token_ids():
+    from types import SimpleNamespace as NS
+    from verity_vllm.query.required import ValueRef, cached_prefix_inputs
+    P_ = NS(params=[NS(id="prompt", port_table=[NS(name="out")]), NS(id="prefix", port_table=[NS(name="out")]),
+                    NS(id="weights", port_table=[NS(name="w0"), NS(name="w1")])])
+    assert cached_prefix_inputs(P_, {"prefix": {"input": 1, "C": 128}}) == {ValueRef("prefix", "out")}
+    assert cached_prefix_inputs(P_, {"LP": 168}) == frozenset()

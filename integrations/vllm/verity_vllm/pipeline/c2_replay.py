@@ -206,7 +206,8 @@ def programs_of_record(s: Site, _rl: dict[str, str]) -> tuple[dict[str, dict], d
                 _of_record.add(str(_c["program_digest"]))
     if getattr(args, "programs_root", None):
         _fx = {"requests": [{"request_id": _rl[str(r.get("request_id"))], "prompt_len": len(r["prompt_token_ids"]),
-                             "max_tokens": int(r.get("max_tokens") or sampling.get("max_tokens") or 1)} for r in reqs]}
+                             "max_tokens": int(r.get("max_tokens") or sampling.get("max_tokens") or 1), "cached": int(r.get("cached") or 0)}
+                            for r in reqs]}
         _loaded = MF.programs_for(_fx, args.programs_root)
     else:
         _l1 = MF.load_program(args.program_dir)

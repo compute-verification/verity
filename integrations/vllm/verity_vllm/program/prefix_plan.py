@@ -76,6 +76,21 @@ def cached_of(workload: dict[str, Any]) -> list[int]:
     return [p["cached"] for p in plan(workload)]
 
 
+def with_cached(workload: dict[str, Any]) -> list[dict[str, Any]]:
+    """`workload["requests"]`, each with its `cached` rows: what a request's Program lookup (`request_shape`) reads."""
+    return [dict(r, cached=c) for r, c in zip(workload.get("requests") or [], cached_of(workload))]
+
+
+def request_shape(r: dict[str, Any]) -> tuple[int, ...]:
+    """The shape of a declared request ({"prompt_len", "max_tokens"[, "cached"]}): its Program's (LP, T[, C])."""
+    return shape(int(r["prompt_len"]), int(r["max_tokens"]) - 1, int(r.get("cached") or 0))
+
+
+def declares(result: dict[str, Any], s: tuple[int, ...]) -> bool:
+    """Whether a derive's result.json declares shape `s`: its LP, T and cached rows C (0 when it records none)."""
+    return (int(result.get("LP", -1)), int(result.get("T", -1)), int(result.get("C") or 0)) == (s[0], s[1], cached_rows(s))
+
+
 def shape(LP: int, T: int, C: int = 0) -> tuple[int, ...]:
     return (int(LP), int(T)) if not C else (int(LP), int(T), int(C))
 

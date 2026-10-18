@@ -569,14 +569,16 @@ def programs_for(fx: dict[str, Any], programs_root: str) -> dict[str, Any]:
 
 
 def program_dirs_for(fx: dict[str, Any], programs_root: str) -> dict[str, str]:
-    """The request Program DIR per declared request: `*LP<prompt_len>_T<max_tokens-1>` under programs_root, else any
-    build_request*/result.json declaring exactly (LP, T) (the row's default request Program); never a near shape.  [R16 reqval] the
-    traversal engine streams these (rows never all in memory: 57 MB vs 1 GB peak on the Llama B8 fold, same digest)."""
+    """The request Program DIR per declared request: `*LP<prompt_len>_T<max_tokens-1>[_C<cached>]` under programs_root, else any
+    build_request*/result.json declaring exactly (LP, T, C) (the row's default request Program); never a near shape, and never a cold
+    request's Program for a warm one (`prefix_plan.request_shape`).  [R16 reqval] the traversal engine streams these (rows never all in
+    memory: 57 MB vs 1 GB peak on the Llama B8 fold, same digest)."""
     import glob
+    from verity_vllm.program import prefix_plan as PP
     progs: dict[str, str] = {}
     for r in fx["requests"]:
-        lp, t = int(r["prompt_len"]), int(r["max_tokens"]) - 1
-        pat = os.path.join(programs_root, f"*LP{lp}_T{t}")
+        sh = PP.request_shape(r)
+        pat = os.path.join(programs_root, f"*{PP.shape_name(sh)}")
         hits = sorted(glob.glob(pat))
         if not hits:
             for cand in sorted(glob.glob(os.path.join(programs_root, "build_request*"))):
@@ -586,10 +588,10 @@ def program_dirs_for(fx: dict[str, Any], programs_root: str) -> dict[str, str]:
                         res = json.load(open(rj))
                     except Exception:  # noqa: BLE001
                         continue
-                    if res.get("ok") and int(res.get("LP", -1)) == lp and int(res.get("T", -1)) == t:
+                    if res.get("ok") and PP.declares(res, sh):
                         hits = [cand]
                         break
         if not hits:
-            raise SystemExit(f"no request Program for {r['request_id']} at {pat} (nor a build_request*/result.json declaring LP={lp} T={t})")
+            raise SystemExit(f"no request Program for {r['request_id']} at {pat} (nor a build_request*/result.json declaring {PP.shape_key(sh)})")
         progs[r["request_id"]] = hits[0]
     return progs
