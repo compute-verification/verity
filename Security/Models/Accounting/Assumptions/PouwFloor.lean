@@ -12,8 +12,9 @@ falsification test that runs. The other three premises are in `Models.Accounting
 
 `PouwFloorAdvice` is compute attribution's floor for a block that isn't isolated: the help that doesn't depend on the
 salt is free (TT, `Pouw.Assumptions.TT`), and the rest costs the chance of finding the salt, taken as a hypothesis by
-`Accounting.Guarantees.PouwBlockCredit`. It is an open conjecture too, scoped to the schemes whose noise is full-rank
-and per-entry, and `verity/core/protocols/pouw/tests/test_pouw_floor_advice.py` is its falsification test.
+`Accounting.Guarantees.PouwBlockCredit`. It is an open conjecture too, scoped to the noise that is full-rank and
+per-entry (H1's per-entry coins included, its period-32 `U` and the peel's clean side not), and
+`verity/core/protocols/pouw/tests/test_pouw_floor_advice.py` is its falsification test.
 -/
 
 namespace Accounting.Assumptions
@@ -39,34 +40,53 @@ def PouwFloorOff (X : Finset L) (π : ∀ r, Fin (S r).A.N → ℕ) (m : ∀ r, 
 /-- **The floor at a block whose outside holds advice about the salt** (conjectured; compute attribution's floor,
 `note:20261018T0730Z-draft-attrib`): on coins split into the window's salt and the later draw, if at every draw what
 the outside of the block `X` and the certifiers `cert` does during the window (`Verdict.window`, `[ts, td)`) takes at
-most `A` values across salts (`Attribution.OutsideAdvice`), and the outside evaluates the noise hash at most `q` times
-in the window (`OutsideQueries`, at the marking `hash`), then for the marking `m` some event `Z` of probability at most
-`δ + q · A / #Ωs` is such that at every coin outside `Z`, `Nmin` blocks right at every coin force the block's own
-credits outside `m` to at least `Wb · Nmin`.
+most `A` values across the salts of the event `B` (`Attribution.OutsideAdvice`), and the outside evaluates the noise
+hash at most `q` times in the window (`OutsideQueries`, at the marking `hash`), then for the marking `m` some event `Z`
+of probability at most `δ + q · A / #Ωs` is such that at every coin of `B` outside `Z`, `Nmin` blocks right at every
+coin force the block's own credits outside `m` to at least `Wb · Nmin`. Meant at `B` the boundary audit's acceptance,
+the event on which the advice is counted; off `B` it says nothing.
 
 It rests on TT (`Pouw.Assumptions.TT`: the floor counts post-salt work, so help that is the same at every salt is
 precomputation delivered late, free at any width) and the random-oracle model of the noise hash, not on A3: A3's
 `ρ · help` term survives help of nonzero width, so no union bound over A3 drops it. `δ` is the floor's failure for an
 outside whose help is the same at every salt. The outside's view is a function of one of `A` advice values and its
 oracle answers, and until one of its `q` calls hits the salt those answers don't depend on it, so it finds the salt
-with probability at most `q · A / #Ωs`: `q · 2^(k − 512)` for a 512-bit salt and `A = 2^k`. The operands are bound
-before the salt (decision 114: each operand root is hashed before the salt's release at `ts` and transmitted at `td`,
-and `E₁`'s rows read `A`'s), so the prover can't steer operands against the salt.
+with probability at most `q · A / #Ωs`: `q · 2^(k − 512)` for a 512-bit salt and `A = 2^k`, at most `2^−64` at
+decision 112's `q = 2^128` when `k ≤ 320`. The operands are bound before the salt (decision 114: each operand root is
+hashed before the salt's release at `ts` and transmitted at `td`, and `E₁`'s rows read `A`'s), so the prover can't
+steer operands against the salt.
 
-Scoped to the schemes whose noise is full-rank and per-entry: each entry of `E₁` and `F₁` its own hash output, so the
-window's noise lies in no salt-independent subspace of lower dimension (`ncp-v1`, `ncp-v1-shift24`, H1). It is false
-for low-rank or structured noise: with `F = Σ_{t < r} c_t(salt) · G_t` for salt-independent `G_t`, a helper ships the
-`r` products `A · G_t`, and the block finishes `A · F` in `r` multiply-adds an output instead of `k`. The Pearl schemes
-(Komargodski–Weinstein noise of rank 32 or 64) are outside it. The marking `hash` is meant to mark every evaluation of
+Scoped to the noise that is full-rank and per-entry: each entry its own hash output, so the window's noise lies in no
+salt-independent subspace of lower dimension. It is false for low-rank or structured noise: with
+`F = Σ_{t < r} c_t(salt) · G_t` for salt-independent `G_t`, a helper ships the `r` products `A · G_t`, and the block
+finishes `A · F` in `r` multiply-adds an output instead of `k`. By scheme:
+
+* `ncp-v1` and `ncp-v1-shift24`: in scope, every entry of `E₁` and `F₁`.
+* `eps1-sm120-h1fx1` (H1 + fx1, the compile pass's scheme on the s8 linears, decision 117): in scope through its
+  per-entry coins, the dither bit `b` on each entry of `X = A + b` and the coin bit `c` on each entry of
+  `W' = B + c + U`, so the products `A · c` and `b · B`. H1's keyed word `U` is not: it has period 32 along the
+  contraction, the same in every segment, so it is rank 32 a row, and `A · U` is 32 multiply-adds an output from `A`'s
+  residue sums, which a helper holding `A` can ship (H1 computes it that way itself).
+* H1's attention, outside the compile pass (`note:20261018T0634Z-draft-attn-noise`): cohalf `QKᵀ`
+  (`Q̃ = Q + c + U`, `K̃ = K + b`) is in scope through `c` and `b`, and not through `U`. Adopted `P · V`
+  (`P̃ = P − 64 + U`, `X = V + b`) is in scope only on `V`'s side, through `b`: `P` carries no per-entry coin, only `U`
+  of period 32, so `U · V` comes from `V`'s residue sums. The peel's clean side (the served `O = Σ P · V`) is
+  bit-affine in the coins and floors nothing at all.
+* The Pearl schemes (Komargodski–Weinstein noise of rank 32 or 64): outside it.
+
+`Wb` is meant at the products against per-entry coins only. The marking `hash` is meant to mark every evaluation of
 the scheme's noise hash, as `PouwFloorOff`'s `m` is meant removable. Its falsification test,
-`verity/core/protocols/pouw/tests/test_pouw_floor_advice.py`, checks that each in-scope scheme's noise fills its noise
-space, that every registered scheme is either in scope or excluded with its reason, and that the low-rank
-counterexample is refused. An open conjecture, not under `shape.premises`. -/
+`verity/core/protocols/pouw/tests/test_pouw_floor_advice.py`, checks that each in-scope scheme's per-entry noise fills
+its noise space, that every scheme in the PoUW registry and in the compile pass's (`compile.SCHEMES`, where it is on
+the tree) is either in scope or excluded with its reason, and that the low-rank counterexample and a period-32 `U`
+alone are refused. An open conjecture, not under `shape.premises`. -/
 def PouwFloorAdvice {Ωs Ωd : Type} [Fintype Ωs] [Fintype Ωd] {L : Type*} [LinearOrder L] [Fintype L]
-    (S : Ωs × Ωd → Actual.Run L) (P : Verdict (Ωs × Ωd) L) (X cert : Finset L) (hash : ∀ r, Finset (Fin (S r).A.N))
-    (π : ∀ r, Fin (S r).A.N → ℕ) (m : ∀ r, Finset (Fin (S r).A.N)) (Wb Nmin q A : ℕ) (δ : ℝ) : Prop :=
-  (∀ d, Attribution.OutsideAdvice (fun s => S (s, d)) cert X P.window A) → OutsideQueries S hash cert X P.window q →
+    (S : Ωs × Ωd → Actual.Run L) (P : Verdict (Ωs × Ωd) L) (B : Ωs × Ωd → Prop) (X cert : Finset L)
+    (hash : ∀ r, Finset (Fin (S r).A.N)) (π : ∀ r, Fin (S r).A.N → ℕ) (m : ∀ r, Finset (Fin (S r).A.N))
+    (Wb Nmin q A : ℕ) (δ : ℝ) : Prop :=
+  (∀ d, Attribution.OutsideAdvice (fun s => S (s, d)) (fun s => B (s, d)) cert X P.window A) →
+  OutsideQueries S hash cert X P.window q →
   ∃ Z : Ωs × Ωd → Prop, Pouw.pr Z ≤ δ + ((q * A : ℕ) : ℝ) / Fintype.card Ωs ∧
-    ∀ r, ¬ Z r → Nmin ≤ goodAll S P → Wb * Nmin ≤ credits S P X π m r
+    ∀ r, ¬ Z r → B r → Nmin ≤ goodAll S P → Wb * Nmin ≤ credits S P X π m r
 
 end Accounting.Assumptions

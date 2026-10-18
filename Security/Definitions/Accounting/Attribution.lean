@@ -15,9 +15,11 @@ without it its help is the same at every salt.
 * `Verdict.window P`: PoUW's window `[ts, td)` as a `Window`, `td - ts` ticks from `ts`.
 * `boundaryCert H X`: the certifiers on `X`'s boundary links, `∂X`'s.
 * `records R cert cells w`: the certifiers' records placed during the window `w`, as seen.
-* `OutsideAdvice S cert X w n`: across the strategy `S`, what the outside `(X ∪ cert)ᶜ` does during the window `w`
-  takes at most `n` values (`Actual.Run.acts`). Under salt custody (the coin reaches the window only through `X`'s
-  secret inputs, `Secrets`) this is `log₂ n` bits of advice about the coin, whatever the outside computes from them.
+* `leak R cert X w`: what `X` sends, up to the window's end, to readers that aren't certifiers.
+* `OutsideAdvice S B cert X w n`: across the coins of the event `B`, what the outside `(X ∪ cert)ᶜ` does during the
+  window `w` takes at most `n` values (`Actual.Run.acts`). Under salt custody (the coin reaches the window only through
+  `X`'s secret inputs, `Secrets`) this is `log₂ n` bits of advice about the coin on `B`, whatever the outside computes
+  from them.
 
 Crossing bytes attribute nothing: a helper holding the weights needs only the salt in and a root out, so ingress
 volume bounds no outsourced work. What bounds it is the outside's advice about the salt, which `∂X`'s records and what
@@ -44,12 +46,20 @@ noncomputable def records {L : Type*} (R : Actual.Run L) (cert : Finset L) (cell
     Set (ℕ × L × ℕ × ℕ × ℕ) :=
   R.seen '' ↑((R.record cert cells).filter fun g => R.A.t g ∈ w.ticks)
 
-/-- **The outside's advice** (across the strategy `S`): what the outside `(X ∪ cert)ᶜ` of the location `X` and the
-certifiers `cert` does during the window `w`, its gates, what it sends and its state (`Actual.Run.acts`), takes at most
-`n` values. When the coins reach the window only through `X`'s secret inputs (`Secrets`), everything the outside does
-with the coins in the window is a function of one of `n` values about them. -/
-def OutsideAdvice {Ω L : Type*} [LinearOrder L] [Fintype L] (S : Ω → Actual.Run L) (cert X : Finset L) (w : Window)
-    (n : ℕ) : Prop :=
-  (Set.range fun r => (S r).acts (X ∪ cert)ᶜ (w.ticks : Set ℕ)).encard ≤ (n : ℕ∞)
+/-- **What the block leaks** in the run `R`: what `X` sends, from the gates it places before the window `w` ends, to
+readers that aren't certifiers (`Actual.Run.sent`, its wires to leaves outside `X ∪ cert`): what crosses its links with
+no certifier on them, each physical channel among them. A wire is keyed by its source's tick, so a value placed before
+`ts` and read in the window is in it. -/
+def leak {L : Type*} (R : Actual.Run L) (cert X : Finset L) (w : Window) : Set (ℕ × L × ℕ × L × ℕ × ℕ × ℕ) :=
+  R.sent (X : Set L) (Set.Iio (w.start + w.len)) ∩ {p | p.2.1 ∉ cert}
+
+/-- **The outside's advice** (across the coins of the event `B`): what the outside `(X ∪ cert)ᶜ` of the location `X` and
+the certifiers `cert` does during the window `w`, its gates, what it sends and its state (`Actual.Run.acts`), takes at
+most `n` values at the coins where `B` holds. When the coins reach the window only through `X`'s secret inputs
+(`Secrets`), everything the outside does with the coins in the window, on `B`, is a function of one of `n` values about
+them. -/
+def OutsideAdvice {Ω L : Type*} [LinearOrder L] [Fintype L] (S : Ω → Actual.Run L) (B : Ω → Prop) (cert X : Finset L)
+    (w : Window) (n : ℕ) : Prop :=
+  ((fun r => (S r).acts (X ∪ cert)ᶜ (w.ticks : Set ℕ)) '' {r | B r}).encard ≤ (n : ℕ∞)
 
 end Accounting.Attribution
