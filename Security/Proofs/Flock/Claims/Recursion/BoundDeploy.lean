@@ -77,15 +77,15 @@ are the code side's. -/
 noncomputable def bdDeployed (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (nextE : Msg → List Msg → List Coin → Claims.OC Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
-    (rowIn : Msg → Msg) (final : Msg → Option (List (List (Msg × (Fin Hm96.sha512.saltBytes → UInt8))) × Msg))
+    (rowIn : Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg))
     (w : Msg → ℝ) : Claims.Recursion.Bound Coin (List FlockLevel3.GF128) Claims.Flock.PlainTrace where
   DE := deE rel nextE colsE wE
   ans c := c.bytes
   join := join
   nAt := nAtSched
-  saltLen := Hm96.sha512.saltBytes
-  saltPrefix := Claims.toMsg Hm96.Default512.saltPrefix
-  mask y i := (Hm96.Default512.mask ⟨Array.ofFn y⟩).get! i.val
+  saltLen := _root_.Flock.Hm96.sha512.saltBytes
+  saltPrefix := Claims.toMsg _root_.Flock.Hm96.Default512.saltPrefix
+  mask y i := (_root_.Flock.Hm96.Default512.mask ⟨Array.ofFn y⟩).get! i.val
   rowIn := rowIn
   final := final
   weight := w
@@ -102,7 +102,7 @@ bound layout (`recBound`), the deployed bound record (`bdDeployed`) and the depl
 def KSBoundDeployed (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
     (L : Claims.Recursion.VStarB.LayoutB) (nextE : Msg → List Msg → List Coin → Claims.OC Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
-    (rowIn : Msg → Msg) (final : Msg → Option (List (List (Msg × (Fin Hm96.sha512.saltBytes → UInt8))) × Msg))
+    (rowIn : Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg))
     (w : Msg → ℝ) : Prop :=
   Claims.Recursion.KSBound FlockDeploy.sha512 (recBound rel b L) (bdDeployed rel nextE colsE wE join rowIn final w)
     (deployZkRec relO)
@@ -111,7 +111,7 @@ def KSBoundDeployed (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.Re
 def KSPrivBoundDeployed (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
     (L : Claims.Recursion.VStarB.LayoutB) (nextE : Msg → List Msg → List Coin → Claims.OC Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
-    (rowIn : Msg → Msg) (final : Msg → Option (List (List (Msg × (Fin Hm96.sha512.saltBytes → UInt8))) × Msg))
+    (rowIn : Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg))
     (w : Msg → ℝ) : Prop :=
   Claims.Recursion.KSPrivBound FlockDeploy.sha512 (recBound rel b L)
     (bdDeployed rel nextE colsE wE join rowIn final w) (deployZkRec relO)

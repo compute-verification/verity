@@ -119,7 +119,7 @@ record. -/
 theorem KSBound_meets (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (nextE : Msg → List Msg → List FlockDeploy.Coin → Claims.OC Claims.Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
-    (rowIn : Msg → Msg) (final : Msg → Option (List (List (Msg × (Fin _root_.Hm96.sha512.saltBytes → UInt8))) × Msg))
+    (rowIn : Msg → Msg) (final : Msg → Option (List (List (Msg × RecDeploy.Salt)) × Msg))
     (w : Msg → ℝ) :
     decOK (RecDeploy.bdDeployed rel nextE colsE wE join rowIn final w).DE Claims.GS.plainDecodeRD ∧
       decOK (FlockDeploy.deployZk rel) Claims.GS.zkDecodeRD :=
@@ -129,7 +129,7 @@ theorem KSBound_meets (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Reada
 theorem KSPrivBound_meets (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (nextE : Msg → List Msg → List FlockDeploy.Coin → Claims.OC Claims.Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
-    (rowIn : Msg → Msg) (final : Msg → Option (List (List (Msg × (Fin _root_.Hm96.sha512.saltBytes → UInt8))) × Msg))
+    (rowIn : Msg → Msg) (final : Msg → Option (List (List (Msg × RecDeploy.Salt)) × Msg))
     (w : Msg → ℝ) :
     decOK (RecDeploy.bdDeployed rel nextE colsE wE join rowIn final w).DE Claims.GS.plainDecodeRD ∧
       decOK (FlockDeploy.deployZk rel) Claims.GS.zkDecodeRD :=
