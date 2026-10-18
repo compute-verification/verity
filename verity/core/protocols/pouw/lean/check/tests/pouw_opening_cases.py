@@ -54,9 +54,10 @@ def honest(rng: random.Random) -> dict:
     shape = [{"m": 16, "n": rng.randint(1, 4), "tile0": rng.randrange(1 << 20)}]
     params.update(shape=shape, range=[1, Wd.shape_tiles(Wd.shape_of(shape)) + rng.randrange(5)])
     entries, sides = [], []
+    rows = random.Random(rng.getrandbits(64))
     for pub in Wd.shape_entries(Wd.shape_of(shape), n)[:2]:
-        bcs = {"a": [rng.randbytes(CC.BC_BYTES) for _ in range(pub.n_a)],
-               "b": [rng.randbytes(CC.BC_BYTES) for _ in range(pub.n_b)]}
+        bcs = {"a": [rows.randbytes(CC.BC_BYTES) for _ in range(pub.n_a)],
+               "b": [rows.randbytes(CC.BC_BYTES) for _ in range(pub.n_b)]}
         trees = {s: _side(Wd.side_domain(dom.domain_id, s), schema, bcs[s]) for s, schema in CC.OPENED}
         zero = bytes(64)
         call = pub.kind == "call"

@@ -1,5 +1,6 @@
 import PouwCheck.Inputs
 import PouwWindow.Record
+import PouwWindow.Shape
 import PouwWindow.Side
 
 /-!
@@ -8,7 +9,8 @@ import PouwWindow.Side
 `opening`: the tile proof's public file opens the unit's rows under the registered window root. The unit is drawn
 (unless it is opened undrawn, the filler's). The registered entries root's domain is one-stage's served domain of the
 registered program and partition over the check's P entries (`windowDomain?`). The opening's entry, under its salt, is
-that root's leaf at its index (`verifyPath`). The unit is one of the entry's tiles (`tileIn?`). The proof's header names one
+that root's leaf at its index (`verifyPath`). The shape alone puts the unit at its entry and rows (`tileAt?`), and the
+opened entry is that entry, its public fields the shape's (`shapeEntries`). The proof's header names one
 instance, over the circuit the verifier pins for the check's template (`tile?`), whose first two rows, in key order (serde's,
 as C-Flock reads it), are an A row and a B row of the fp8-p schemas (`opened`). Each of those rows' b ‖ c, at the head of the body, is the entry's side tree's leaf at the unit's row.
 Python's reading is kept where its outcome depends on it: hex as `bytes.fromhex` reads it, integers as `struct`
@@ -113,9 +115,11 @@ def opening (p : Params) (c : Registration) (units : Option (List Int)) (unit : 
   let leaf ← entryLeaf? dom e.toNat bc
   if !(0 ≤ e && e < dom.count && verifyPath dom root e leaf sibs) then
     return some s!"entry {e} is not the registered window's entry"
-  let (i, j) ← match entry.tileIn? unit with
-    | .ok ij => pure ij
-    | .error x => return some s!"entry {e}: {x}"
+  let (want, i, j) ← match tileAt? p.shape unit with
+    | .ok x => pure x
+    | .error x => return some s!"unit {unit}: {x}"
+  if e != (want : Int) || entry.publicFields != ((shapeEntries p.shape dom.count).getD want { kind := .none }).publicFields then
+    return some s!"entry {e}: it is not the shape's entry {want}, which unit {unit} is in"
   let some (h, body) := header? pub | return some "the proof's public file has no JSON header"
   let some n := (pyGet? h "instances").bind strictInt? | return some "the proof's header has no instance count"
   if n != 1 then return some s!"the proof has {n} instances, not one tile"
