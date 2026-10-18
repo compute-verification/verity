@@ -209,7 +209,8 @@ class Load:
     def step(self) -> dict:
         while len(self.live) < self.concurrency:
             prompt = [self.rng.randrange(1000, 120000) for _ in range(self.prompt)]
-            self.live.add(self.engine.add_request(f"load-{self.n}", {"prompt_token_ids": prompt}, self.params))
+            self.engine.add_request(f"load-{self.n}", {"prompt_token_ids": prompt}, self.params)
+            self.live.add(f"load-{self.n}")
             self.n += 1
         t0 = time.perf_counter()
         outs = self.engine.step()
@@ -237,7 +238,9 @@ def probe(engine, tag: str, prompts: list[list[int]], tokens: int) -> list[list[
     from vllm import SamplingParams
 
     sp = SamplingParams(temperature=0.0, max_tokens=tokens, ignore_eos=True, detokenize=False)
-    ids = [engine.add_request(f"probe-{tag}-{k}", {"prompt_token_ids": p}, sp) for k, p in enumerate(prompts)]
+    ids = [f"probe-{tag}-{k}" for k in range(len(prompts))]
+    for i, p in zip(ids, prompts):
+        engine.add_request(i, {"prompt_token_ids": p}, sp)
     got = {}
     while engine.has_unfinished_requests():
         for o in engine.step():
