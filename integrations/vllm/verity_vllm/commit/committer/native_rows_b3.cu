@@ -1,7 +1,8 @@
 // The rows-blake3 research arm's kernels (verity_vllm.commit.step_rows_b3): native_rows.cu's leaf, pad and node with keyed BLAKE3
 // (archive/pouw-blake3/pearl_c/hash.cuh's compression) in every hash position, bit for bit step_rows_b3 (the hash lane's
 // hypothetical hm96-blake3).  Digests are 32 bytes in byte order (little-endian words), each stored in a 64-byte slot (the digest, then
-// zeros), so native_collect.cpp's windows, trees and roots are rows-sha512's.  The launchers take native_rows.cu's arguments.
+// zeros), so native_collect.cpp's windows, trees and roots are rows-sha512's.  The launchers take native_rows.cu's arguments, and the
+// kernels follow its naming (rows_leaf, rows_level).
 //
 // Per position pos of a domain of n leaves (H = BLAKE3 keyed by the arm's public key, one chunk for every message but the row's):
 //   x    = H(Q(l) || row)                                         row = l bytes at rows + (pos - first) * stride, Q one 64-byte block
@@ -286,7 +287,7 @@ DEV void hm96_mask(const uint8_t* T, const u32* Y, u32* mk) {
 
 // native_rows.cu's rows_leaf_kernel: b || c (64 bytes) into a 128-byte slot of bc, h and the leaf into 64-byte slots; salts 128 B a row.
 __global__ void __launch_bounds__(THREADS)
-    rows_b3_leaf_kernel(const __grid_constant__ B3K K, const uint8_t* __restrict__ rows, u64 stride, u64 n_rows,
+    rows_leaf_b3_kernel(const __grid_constant__ B3K K, const uint8_t* __restrict__ rows, u64 stride, u64 n_rows,
                         const uint8_t* __restrict__ salts, const uint8_t* __restrict__ T, u64 first, u64 m, u64 n_total,
                         uint8_t* __restrict__ out, uint8_t* __restrict__ bc, uint8_t* __restrict__ hs) {
   const u64 i = (u64)blockIdx.x * blockDim.x + threadIdx.x;
@@ -324,7 +325,7 @@ __global__ void __launch_bounds__(THREADS)
   st_slot(out + 64 * i, o);
 }
 
-__global__ void __launch_bounds__(THREADS) rows_b3_level_kernel(const __grid_constant__ B3K K, const uint8_t* __restrict__ in,
+__global__ void __launch_bounds__(THREADS) rows_level_b3_kernel(const __grid_constant__ B3K K, const uint8_t* __restrict__ in,
                                                                 uint8_t* __restrict__ out, u64 n_out, int level, u64 first_index) {
   const u64 i = (u64)blockIdx.x * blockDim.x + threadIdx.x;
   if (i >= n_out) return;
@@ -336,7 +337,7 @@ __global__ void __launch_bounds__(THREADS) rows_b3_level_kernel(const __grid_con
 }
 
 // native_rows.cu's rows_levels_kernel
-__global__ void __launch_bounds__(THREADS) rows_b3_levels_kernel(const __grid_constant__ B3K K, const uint8_t* in, uint8_t* out, u64 n_in,
+__global__ void __launch_bounds__(THREADS) rows_levels_b3_kernel(const __grid_constant__ B3K K, const uint8_t* in, uint8_t* out, u64 n_in,
                                                                  int level, u64 base, int n_levels) {
   const u64 first = (u64)blockIdx.x << n_levels;
   in += 64 * first;
@@ -434,8 +435,8 @@ static int rows_b3_kernel_attributes() {
   if (const cudaError_t rc = cudaGetDevice(&dev)) return static_cast<int>(rc);
   if (dev < 0 || dev >= 64) return static_cast<int>(cudaErrorInvalidDevice);
   if (done[dev]) return 0;
-  for (const void* f : {reinterpret_cast<const void*>(rows_b3_leaf_kernel), reinterpret_cast<const void*>(rows_b3_level_kernel),
-                        reinterpret_cast<const void*>(rows_b3_levels_kernel)})
+  for (const void* f : {reinterpret_cast<const void*>(rows_leaf_b3_kernel), reinterpret_cast<const void*>(rows_level_b3_kernel),
+                        reinterpret_cast<const void*>(rows_levels_b3_kernel)})
     if (const cudaError_t rc = cudaFuncSetAttribute(f, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared))
       return static_cast<int>(rc);
   done[dev] = true;
@@ -450,7 +451,7 @@ extern "C" int verity_rows_b3_leaves_launch(const void* params, const uint8_t* r
   const u64 chunk = max_blocks ? max_blocks * THREADS : m;
   for (u64 c = 0; c < m; c += chunk) {
     const u64 mc = m - c < chunk ? m - c : chunk;
-    rows_b3_leaf_kernel<<<static_cast<unsigned>((mc + THREADS - 1) / THREADS), THREADS, 0, st>>>(
+    rows_leaf_b3_kernel<<<static_cast<unsigned>((mc + THREADS - 1) / THREADS), THREADS, 0, st>>>(
         *p, c < n_rows ? rows + c * stride : rows, stride, c < n_rows ? n_rows - c : 0, salts && c < n_rows ? salts + SALT * c : salts, tn,
         first + c, mc, n_total, out + 64 * c, bc ? bc + 128 * c : bc, hs ? hs + 64 * c : hs);
     if (const cudaError_t rc = cudaGetLastError()) return static_cast<int>(rc);
@@ -467,7 +468,7 @@ extern "C" int verity_rows_b3_level_launch(const void* params, const uint8_t* in
   const u64 chunk = max_blocks ? max_blocks * THREADS : n_out;
   for (u64 c = 0; c < n_out; c += chunk) {
     const u64 nc = n_out - c < chunk ? n_out - c : chunk;
-    rows_b3_level_kernel<<<static_cast<unsigned>((nc + THREADS - 1) / THREADS), THREADS, 0, st>>>(*p, in + 128 * c, out + 64 * c, nc, level,
+    rows_level_b3_kernel<<<static_cast<unsigned>((nc + THREADS - 1) / THREADS), THREADS, 0, st>>>(*p, in + 128 * c, out + 64 * c, nc, level,
                                                                                                   first_index + c);
     if (const cudaError_t rc = cudaGetLastError()) return static_cast<int>(rc);
   }
@@ -481,6 +482,6 @@ extern "C" int verity_rows_b3_levels_launch(const void* params, const uint8_t* i
     return static_cast<int>(cudaErrorInvalidValue);
   const B3K* p = static_cast<const B3K*>(params);
   if (const int rc = rows_b3_kernel_attributes()) return rc;
-  rows_b3_levels_kernel<<<static_cast<unsigned>(n_in >> n_levels), THREADS, 0, st>>>(*p, in, out, n_in, level, base, n_levels);
+  rows_levels_b3_kernel<<<static_cast<unsigned>(n_in >> n_levels), THREADS, 0, st>>>(*p, in, out, n_in, level, base, n_levels);
   return static_cast<int>(cudaGetLastError());
 }
