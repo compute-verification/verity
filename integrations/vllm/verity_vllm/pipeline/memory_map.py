@@ -8,12 +8,16 @@ read as the serving rows read a Program's slices (`serving_rows._operand`: the P
 committed words).  A request whose slots weren't committed is refused by name: no page is assumed.  A Commit whose run a remote
 session audited (``--remote-verifier``) has written the session's record, ``remote_session.json``, by then, and the map
 follows its deferred residency (`commit.memory_map.Deferral`, `deferral`): each block written where its append's encode landed.
+A TP Commit (``tp-commit --memory-map``) writes one map a rank, in the rank's replay (`pipeline.tp.rank_replay.memory_map`),
+from the rank's Programs, committed slots and caches: MLA's latent cache is whole on every rank.
 
 The request (``REQUEST_JSON``)::
 
     {"path": <the map's file>, "registration": <hex of the remote audit's Registration.digest>,
-     "firsts"?: [<layer l's region's first block>], "blocks"?: <N>}
+     "firsts"?: [<layer l's region's first block>], "blocks"?: <N>,
+     "ranks"?: {"<r>": {<any of the above, for TP rank r>}}}
 
+On a TP rank the request is `at_rank`'s: ``ranks[r]`` over the rest, its map at ``<stem>.rank<r><suffix>`` unless that names one.
 ``layout`` beside the map (``<path>.json``) is what the map's structure took (the engine's page, each request's pages) and
 what it holds, in counts, with how many of its blocks the engine's caches still hold as the map's last write left them; the
 map itself is the prover's witness (d_j hashes the served values) and is never published.  A failure is written beside the
@@ -26,7 +30,7 @@ import json
 import re
 import time
 import traceback
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -43,22 +47,36 @@ from verity_vllm.pipeline.serving_rows import _operand
 
 def after_commit(request: str | None, *, loaded: Mapping[str, Mapping[str, Any]], bmap: dict[str, Any], committed: Callable,
                  manifest: Any, arrivals: Mapping[str, int], caches: Mapping[str, Any] | None,
-                 session: str | Path | None = None) -> dict[str, Any] | None:
+                 session: str | Path | None = None, tp: Mapping[str, int] | None = None,
+                 attention_paths: Sequence[str] = ()) -> dict[str, Any] | None:
     """Write the run's memory map as ``request`` asks, from the requests' loaded Programs of record (`c2_replay.programs_of_record`)
     at their engine arrival steps and the KV-slots source's `caches`, under the deferral of the remote session whose record is at
-    ``session`` if there is one; None without a request.  A failure is written beside the map and returned, never raised."""
+    ``session`` if there is one; on TP rank ``tp`` (``{"rank", "world"}``) its rank's map (`at_rank`), the rank Programs read
+    with the implementation paths the Build observed (``attention_paths``).  None without a request.  A failure is written
+    beside the map and returned, never raised."""
     if not request:
         return None
     req = json.loads(Path(request).read_text())
+    if tp and int(tp.get("world", 1)) > 1:
+        req = at_rank(req, int(tp["rank"]))
     out = Path(req["path"])
     out.parent.mkdir(parents=True, exist_ok=True)
     try:
         return write(out, req, loaded=loaded, store=CommittedStore.of_record(bmap, committed, manifest if isinstance(manifest, dict) else None),
-                     arrivals=arrivals, caches=caches, deferral=deferral(session) if session is not None else None)
+                     arrivals=arrivals, caches=caches, deferral=deferral(session) if session is not None else None, tp=tp,
+                     attention_paths=attention_paths)
     except Exception as e:  # noqa: BLE001
         out.with_name(out.name + ".error.txt").write_text(traceback.format_exc())
         print(f"[memory-map] FAILED (no verdict changes): {e!r}"[:400], flush=True)
         return {"error": repr(e)}
+
+
+def at_rank(req: Mapping[str, Any], rank: int) -> dict[str, Any]:
+    """TP rank ``rank``'s request: ``req``'s ``ranks[rank]`` over its other entries, its path ``<stem>.rank<r><suffix>`` unless
+    ``ranks[rank]`` names one."""
+    p = Path(req["path"])
+    own = (req.get("ranks") or {}).get(str(rank)) or {}
+    return {k: v for k, v in req.items() if k != "ranks"} | {"path": str(p.with_name(f"{p.stem}.rank{rank}{p.suffix}"))} | dict(own)
 
 
 #: the Commit's remote session record (`store.remote.CommitSession.end`), in its out dir
@@ -81,17 +99,17 @@ def deferral(path: str | Path) -> MM.Deferral | None:
 
 
 #: beside a request Build's ``descriptor.json.gz``: its Program's census (`MM.census_of`) and KV rows (`MM.rows_doc`), each naming
-#: the Program by digest
+#: the Program by digest; KV rows of another schema are recomputed (v1 refused MLA's latent rows)
 CENSUS, KV_ROWS = "census.json.gz", "kv_rows.json.gz"
-KV_ROWS_SCHEMA = "verity-vllm/kv-rows/v1"
+KV_ROWS_SCHEMA = "verity-vllm/kv-rows/v2"
 
 
-def _read(path: Path, digest: str) -> dict[str, Any] | None:
+def _read(path: Path, digest: str, schema: str | None = None) -> dict[str, Any] | None:
     if not path.is_file():
         return None
     with gzip.open(path, "rt") as f:
         doc = json.load(f)
-    return doc if doc.get("program") == digest else None
+    return doc if doc.get("program") == digest and schema in (None, doc.get("schema")) else None
 
 
 def _put(path: Path, doc: Mapping[str, Any]) -> None:
@@ -133,13 +151,13 @@ def of_build(d: str | Path, digest: str) -> MM.Rows:
     from verity_vllm.program.boolean import load_program
 
     d = Path(d)
-    doc = _read(d / KV_ROWS, digest)
+    doc = _read(d / KV_ROWS, digest, KV_ROWS_SCHEMA)
     if doc is None:
         program, got = load_program(d / "descriptor.json.gz")
         if got != digest:
             raise ValueError(f"{d}: descriptor.json.gz is Program {got[:16]}, its instance rows {str(digest)[:16]}")
         cache(d, program, digest)
-        doc = _read(d / KV_ROWS, digest)
+        doc = _read(d / KV_ROWS, digest, KV_ROWS_SCHEMA)
     if "refused" in doc:
         raise ValueError(f"{d}: {doc['refused']}")
     return MM.rows_of(doc)
@@ -153,10 +171,12 @@ def _layer(name: str) -> int:
 
 
 def write(out: Path, req: Mapping[str, Any], *, loaded: Mapping[str, Mapping[str, Any]], store: Any, arrivals: Mapping[str, int],
-          caches: Mapping[str, Any] | None, deferral: MM.Deferral | None = None) -> dict[str, Any]:
-    """The map of ``req`` into ``out`` and its layout beside it: each request's slots and K and V words read from ``store`` (a
+          caches: Mapping[str, Any] | None, deferral: MM.Deferral | None = None, tp: Mapping[str, int] | None = None,
+          attention_paths: Sequence[str] = ()) -> dict[str, Any]:
+    """The map of ``req`` into ``out`` and its layout beside it: each request's slots and KV words read from ``store`` (a
     `CommittedStore`), its pages laid out as ``caches`` (KV layer name -> the engine's cache tensor) lay them out, its writes
-    where ``deferral`` has their encodes land."""
+    where ``deferral`` has their encodes land; the Programs a TP rank's (``tp``) when given, their members spelt as the
+    ProgramIndex spells them with ``attention_paths``."""
     if not caches:
         raise ValueError("no engine KV cache to lay pages out by: the Commit attached no KV-slots source (commit --memory-map attaches it)")
     t0 = time.perf_counter()
@@ -165,7 +185,8 @@ def write(out: Path, req: Mapping[str, Any], *, loaded: Mapping[str, Mapping[str
     for rid, lp in loaded.items():
         d, digest = str(lp["dir"]), str(lp["instances"].get("digest"))
         if d not in by_dir:
-            by_dir[d] = (of_build(d, digest), ProgramIndex(lp["instances"], program_dir=d), digest)
+            by_dir[d] = (of_build(d, digest), ProgramIndex(lp["instances"], attention_paths=list(attention_paths), tp=dict(tp) if tp else None,
+                                                           program_dir=d), digest)
         rows[rid], index[rid], _ = by_dir[d]
     t_ir = time.perf_counter()
 
@@ -205,7 +226,7 @@ def write(out: Path, req: Mapping[str, Any], *, loaded: Mapping[str, Mapping[str
     out.write_text(dumps(head, steps))
     t_d = time.perf_counter()
     engine = MM.engine_agrees(kv, layout, tables, steps, _engine_blocks([caches[n] for n in layers], tables))
-    doc = {"schema": "verity-vllm/memory-map-layout/v1", "map": out.name, "blocks": head.blocks,
+    doc = {"schema": "verity-vllm/memory-map-layout/v1", "map": out.name, "tp": dict(tp) if tp else None, "blocks": head.blocks,
            "page": {"form": page.form, "pages": page.pages, "block_size": page.block_size, "head_words": page.head_words},
            "requests": {r: {"arrive": int(arrivals[r]), "steps": rs.steps, "positions": rs.positions, "layers": len(rs.layers),
                             "row_bytes": rs.row_bytes, "pages": tables[r], "program_digest": by_dir[str(loaded[r]["dir"])][2]}

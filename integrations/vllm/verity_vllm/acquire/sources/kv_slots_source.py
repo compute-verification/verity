@@ -1,9 +1,11 @@
 """Each attention layer's KV slots as an acquisition source: per layer and step, the slot every token row's KV went to,
 `<layer name>/slot_mapping` (int64 [rows], slot = page * block_size + offset), in the same step stream and run root as the
-run's other values.  Opt-in (commit `--memory-map`), never the record: the memory map (`pipeline.memory_map`) takes each
-block's page from them and assumes none.
+run's other values.  Opt-in (commit and tp-commit `--memory-map`, a TP rank's own layers), never the record: the memory map
+(`pipeline.memory_map`) takes each block's page from them and assumes none.
 
-The layers are the modules the engine bound a KV cache to (`layer_name`, `kv_cache`).  A forward pre-hook on each reads its
+The layers are the modules the engine bound a KV cache to (`layer_name`, `kv_cache`): attention's and MLA's.  DSA's indexer
+cache (`DeepseekV32IndexerCache`, named by `prefix`, no `layer_name`) is none of them: its 132-byte rows pack across 4 KiB
+blocks, and memory accounting has it uncredited until the map packs them.  A forward pre-hook on each layer reads its
 layer's entry of the forward context's `slot_mapping`, the one its cache write reads (FlashAttention's `do_kv_cache_update`,
 MLA's, and the sparse MLA layer's `fused_norm_rope`, which writes the indexer cache at the same slots), and commits a copy,
 one per distinct tensor of the step.  `caches` keeps each layer's cache tensor: its shape and strides are the page layout
@@ -106,4 +108,9 @@ def attach(com: Any, model: Any = None) -> KvSlotsSource:
     return src
 
 
-__all__ = ["MEMBER", "KvSlotsSource", "kv_layers", "attach"]
+def caches_of(com: Any) -> dict[str, Any] | None:
+    """The KV caches of the KV-slots source attached to committer ``com``; None without one."""
+    return next((s.caches for s in getattr(com, "sources", ()) if getattr(s, "short_name", "") == KvSlotsSource.short_name), None)
+
+
+__all__ = ["MEMBER", "KvSlotsSource", "kv_layers", "attach", "caches_of"]

@@ -8,7 +8,8 @@ shards (`weights_of(prefix)`: the engine's parameters, or the checkpoint's shard
 seed is `seed_of`'s: the driver's targeted seed, else the verifier's challenge with the rank's run root, else the run root.
 
 `in_process` and `defer` take the worker's commit state (`TP2CaptureWorkerExtension._tp2_commit`: rank, world, committer, engine,
-binding map, replay config)."""
+binding map, replay config).  Under ``tp-commit --memory-map`` each first writes the rank's memory map from the live committer
+(`memory_map`), which changes no verdict."""
 from __future__ import annotations
 
 import json
@@ -200,6 +201,24 @@ def not_run(rank: int, e: BaseException, trace: str) -> tuple[dict, dict]:
             {"schema": "verity-sweep/boundary-linkage/v1", "result": None, "rank": rank, "why": f"rank {rank}: boundary linkage not run: {e!r}"[:300], "pairs": 0, "linked": 0})
 
 
+def memory_map(st: dict[str, Any], p: Loaded, committed: Any) -> dict[str, Any] | None:
+    """`tp-commit --memory-map`: the rank's memory map (`pipeline.memory_map.after_commit` at the rank) from its Programs of record,
+    its committed slots and KV words (``committed``) and its KV-slots source's caches; what its record keeps of it (counts and the
+    engine's agreement, or the failure), None without a request.  It changes no verdict."""
+    from verity_vllm.acquire.sources.kv_slots_source import caches_of
+    from verity_vllm.pipeline import memory_map as MMP
+
+    request = (st.get("replay") or {}).get("memory_map")
+    if not request:
+        return None
+    try:
+        got = MMP.after_commit(request, loaded=p.loaded, bmap=st["bmap"], committed=committed, manifest=manifest_of_rank(st.get("manifest_doc"), p.rank),
+                               arrivals=p.arrivals, caches=caches_of(st["com"]), tp=p.tp, attention_paths=p.attn_paths)
+    except Exception as e:  # noqa: BLE001
+        return {"error": repr(e)[:400]}
+    return got if "error" in got else {k: got[k] for k in ("map", "tp", "blocks", "page", "steps", "written", "freed", "engine", "seconds")}
+
+
 def no_map() -> dict[str, Any]:
     return {"sampled_replay": {"result": None, "grade": "not-evaluated", "why": "no binding map on this rank (binding skipped / failed)"},
             "boundary_linkage": {"result": None, "why": "no binding map on this rank"}}
@@ -214,6 +233,7 @@ def in_process(st: dict[str, Any], rc: Any) -> dict[str, Any]:
     bmap = st.get("bmap")
     if not bmap:
         return base | no_map()
+    mm = None
     try:
         from verity_vllm.check import oracle_compare as OC
         from verity_vllm.check.replay import driver as SR
@@ -222,6 +242,7 @@ def in_process(st: dict[str, Any], rc: Any) -> dict[str, Any]:
         p = load(cfg, rank, st.get("world"))
         xrank_facts(st, p)
         rd = OC.OpenedReader(com, rc)
+        mm = memory_map(st, p, rd)
         # [O5] the shards the relations consume must be the COMMITTED shards: re-register the live parameters now vs the run's weights root
         try:
             w_saved = getattr(com, "weights", None)
@@ -243,7 +264,7 @@ def in_process(st: dict[str, Any], rc: Any) -> dict[str, Any]:
                           weights_check=wc, run_root=rc.run_root, manifest_doc=st.get("manifest_doc"))
     except Exception as e:  # noqa: BLE001  -- fail closed: an unrunnable replay is 'not evaluated', never PASS
         sr, lk = not_run(rank, e, traceback.format_exc())
-    return base | {"sampled_replay": sr, "boundary_linkage": lk, "wall_s": round(time.perf_counter() - t0, 3)}
+    return base | {"sampled_replay": sr, "boundary_linkage": lk, "wall_s": round(time.perf_counter() - t0, 3)} | ({"memory_map": mm} if mm else {})
 
 
 def defer(st: dict[str, Any], rc: Any, to: dict[str, Any]) -> dict[str, Any]:
@@ -261,11 +282,15 @@ def defer(st: dict[str, Any], rc: Any, to: dict[str, Any]) -> dict[str, Any]:
     bmap = st.get("bmap")
     if not bmap:
         return base | no_map()
+    mm = None
     try:
+        from verity_vllm.check import oracle_compare as OC
         from verity_vllm.check.replay.driver import engine_facts_of_record
 
         p = load(cfg, rank, st.get("world"))
         xrank_facts(st, p)
+        if cfg.get("memory_map"):
+            mm = memory_map(st, p, OC.OpenedReader(st["com"], rc))
         hashed: dict[str, str] = {}
         part = RB.write_store(out, pair, st["com"], rc, digests=hashed, rank=rank)
         (part / "binding_map.json").write_text(json.dumps(bmap, default=str) + "\n")
@@ -276,4 +301,4 @@ def defer(st: dict[str, Any], rc: Any, to: dict[str, Any]) -> dict[str, Any]:
     except Exception as e:  # noqa: BLE001  -- fail closed, as the in-process replay that could not run
         RB.discard(out, pair, rank=rank)
         (sr, lk), bundle = not_run(rank, e, traceback.format_exc()), None
-    return base | {"sampled_replay": sr, "boundary_linkage": lk, "bundle": bundle, "wall_s": round(time.perf_counter() - t0, 3)}
+    return base | {"sampled_replay": sr, "boundary_linkage": lk, "bundle": bundle, "wall_s": round(time.perf_counter() - t0, 3)} | ({"memory_map": mm} if mm else {})

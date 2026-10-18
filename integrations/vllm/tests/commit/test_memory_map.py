@@ -10,15 +10,14 @@ from __future__ import annotations
 import hashlib
 
 import pytest
+import torch
 
 from tests.predict.test_predict import TINY, _phi
 from tests.program import test_dsa_derive as DSA
 from tests.program.test_dsa_derive import served  # noqa: F401  (the DSA stand-in's fixture)
 from verity.core.protocols.remote_bandwidth import codec
 from verity.core.protocols.remote_bandwidth.memory_map import Replay, dumps, parse
-from verity.ml.circuits.census import census
 from verity.ml.circuits.program import is_input
-from verity.ml.circuits.refs import runs
 from verity_vllm.commit import memory_map as MM
 from verity_vllm.predict.build import build_program
 
@@ -299,20 +298,31 @@ def test_refusals(reqs):
 # -- GLM-5.3's MLA: one plane of latent rows --------------------------------------------------------------------------------
 
 
-def dsa_program(model):
-    """The DSA stand-in's Program (`tests/program/test_dsa_derive.py`) with its census at its steps, each closed before the first
-    node reading the next step's inputs."""
-    program = DSA._derive(model, DSA._inputs(model)).program
-    nodes, first = program.root.body.nodes, sum(layer.n_inputs for layer in model.layers)
-    ends = [min(k for k, nd in enumerate(nodes) if not is_input(nd.fn) for a in nd.args for s, j, _, _ in runs(a.refs)
-                if s == "n" and t * first <= j < (t + 1) * first) for t in range(1, len(model.steps))]
-    return program, census(program, ends + [len(nodes)])
+class Sampled(DSA._Model):
+    """The DSA stand-in (`tests/program/test_dsa_derive.py`) with each step closed, as an engine step is, by a greedy sampling event
+    over its last token's output."""
+
+    def forward(self, *xs):
+        outs, k = [], 0
+        for p0, n in self.steps:
+            positions = torch.arange(p0, p0 + n, dtype=torch.int64)
+            for layer in self.layers:
+                outs += list(layer(positions, *xs[k:k + layer.n_inputs]))
+                k += layer.n_inputs
+            outs.append(torch.argmax(outs[-2][-1], dim=-1))
+        return tuple(outs)
+
+
+def dsa_request(steps=DSA.STEPS, topk: int = DSA.TOPK):
+    """The DSA stand-in's request Program over ``steps``: an indexer layer and an IndexShare layer, each step a sampling event's."""
+    model = Sampled(list(DSA._model(topk=topk, steps=steps).layers), steps)
+    return DSA._derive(model, DSA._inputs(model)).program
 
 
 @pytest.fixture
 def dsa(served):  # noqa: F811
-    program, c = dsa_program(DSA._model())
-    return program, MM.rows(program, c)
+    program = dsa_request()
+    return program, MM.rows(program)
 
 
 def test_a_sparse_mla_layers_rows_are_its_latent_rows(dsa):

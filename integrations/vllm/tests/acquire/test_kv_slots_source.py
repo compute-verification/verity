@@ -1,7 +1,8 @@
 """The KV-slots source (`acquire.sources.kv_slots_source`) on CPU tensors with a recording committer and a stand-in forward
 context: it hooks the modules the engine bound a KV cache to (the outermost of a name), commits a copy of each layer's slot mapping
 as `<layer>/slot_mapping` only during a committed step, one copy per distinct tensor of the step, names a layer the context gives
-no slots, and stops at `uninstall`."""
+no slots, and stops at `uninstall`.  In GLM-5.3's tree its layers are the MLA layers, not DSA's indexer caches.  A TP rank attaches
+it through its taps (`taps.for_ranks`) under tp-commit `--memory-map`."""
 from __future__ import annotations
 
 import sys
@@ -83,3 +84,38 @@ def test_the_source_commits_each_layers_slots_during_a_step(context):
 def test_a_model_without_a_kv_cache_is_refused():
     with pytest.raises(ValueError, match="no module with a bound KV cache"):
         S.attach(Recorder(), torch.nn.Linear(2, 2))
+
+
+class IndexerCache(torch.nn.Module):
+    """vLLM's `DeepseekV32IndexerCache`: its bound cache (bytes, 132 a slot) under its `prefix`, no `layer_name`."""
+
+    def __init__(self, prefix: str) -> None:
+        super().__init__()
+        self.prefix, self.kv_cache = prefix, torch.zeros(6, 4, 132, dtype=torch.uint8)
+
+
+def test_glms_kv_layers_are_its_mla_layers_and_not_the_indexer_caches(context):
+    m = torch.nn.Module()
+    m.layers = torch.nn.ModuleList([torch.nn.Module() for _ in range(2)])
+    for i, layer in enumerate(m.layers):
+        layer.self_attn = torch.nn.Module()
+        layer.self_attn.attn = Attn(f"model.layers.{i}.self_attn.attn", 6)
+        layer.self_attn.attn.kv_cache = torch.zeros(6, 4, 576, dtype=torch.bfloat16)        # MLA's, bound squeezed of its one head
+        layer.self_attn.indexer = torch.nn.Module()
+        layer.self_attn.indexer.k_cache = IndexerCache(f"model.layers.{i}.self_attn.indexer.k_cache")
+    com = Recorder()
+    src = S.attach(com, m)
+    assert list(src.layers) == ["model.layers.0.self_attn.attn", "model.layers.1.self_attn.attn"]
+    assert [tuple(t.shape) for t in src.caches.values()] == [(6, 4, 576)] * 2
+    assert S.caches_of(com) is src.caches and S.caches_of(Recorder()) is None
+
+
+def test_a_tp_rank_attaches_it_through_its_taps_under_memory_map():
+    from verity_vllm.acquire.sources import taps as T
+
+    assert "kv_slots" not in T.for_ranks(T.TapSources()).keywords
+    com = Recorder()
+    got = T.for_ranks(T.TapSources(), kv_slots=True)(com, _model(), None, 1)
+    assert got["kv_slots_source"] == {"layers": 2} and S.caches_of(com) is com.sources[-1].caches
+    refused = T.for_ranks(T.TapSources(), kv_slots=True)(Recorder(), torch.nn.Linear(2, 2), None, 0)["kv_slots_source"]
+    assert "no module with a bound KV cache" in refused["error"], "a rank without KV caches names it; its map then fails, no verdict"
