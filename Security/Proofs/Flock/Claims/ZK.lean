@@ -151,8 +151,8 @@ import Proofs.Flock.Claims.ZK.SamplingNonVacuous
   tables' tape read with fibers of one size on `A` (`Flock.zk_server_blind_deployed`).
 * `Release`: the deployed release (`LeanRelease`), the ZK server whose frame is the compiled Lean frame
   (`Masker.answer`, then `Flock.Firewall.Frame.round`: `LeanRelease.release`, `refMsg_toSrv` by definition) at the
-  frame's own draws on the server's tape (`LeanRelease.masker_pads`, `masker_root`, `masker_new`). Its coin stops are
-  the frame's. It stops a session only at its `Finish`, with its scheduled rounds in a failed device's place
+  frame's own configuration from its draws on the server's tape (`LeanRelease.cfg`, `Cfg.ofDraws`: `cfg_pads`,
+  `cfg_root`). Its coin stops are the frame's. It stops a session only at its `Finish`, with its scheduled rounds in a failed device's place
   (`LeanRelease.fillOf`), and every way a worker fails is a failed round (`LeanRelease.pass_of_none`, `nextD_of_fail`).
   Its `RefD` is D8 (a)'s `FirewallComputes` plus the item-stream refinement `LeanRelease.ItemsRefine` (`Reports`,
   `LiveRefine` at the worker's passed rounds, `FillRefine` at the scheduled rounds; `LeanRelease.refD`), so

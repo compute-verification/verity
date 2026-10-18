@@ -192,9 +192,9 @@ def maskRank (points : Array (Array F128)) (m : MaskSlot) (kLog : Nat) : Nat := 
 
 /-! ## The release -/
 
-/-- A rep's masking state: its layout, pads `h`, the absorbed order, the pads' root, where the rep's stream is, and what its
-refusals read. -/
-structure Masker where
+/-- A rep's masking configuration, fixed at its start: its layout, pads `h`, the absorbed order, the pads' root and the mask
+slot. Every step takes it and returns only the rep's `Masker`, so no step changes it. -/
+structure Cfg where
   lay : Zk.PadLayout
   h : Array F128
   order : Array Nat
@@ -204,6 +204,21 @@ structure Masker where
   root : ByteArray
   /-- the mask slot the rank check at the opening's label reads (none: no check) -/
   mask : Option MaskSlot := none
+  deriving Inhabited
+
+/-- The configuration of a rep of layout `l` with the draws `d` and the statement's mask slot: `d`'s pads, and the root the
+frame computes over `d` (`padsRoot`). -/
+def Cfg.ofDraws (l : Zk.PadLayout) (d : Draws) (mask : Option MaskSlot) : Cfg :=
+  { lay := l, h := d.h, order := absorbed l, nPiop := (absorbed l).size - nLig l, lig := l.k0 > 0,
+    root := padsRoot l d, mask }
+
+/-- Whether a rep can start from `c`: a 64-byte root, and every pad of the order among the rep's pads. -/
+def Cfg.check (c : Cfg) : V Unit := do
+  if c.root.size != 64 then throw s!"the pads' root has {c.root.size} bytes, not 64"
+  if let some i := c.order.find? (· ≥ c.h.size) then throw s!"pad {i} is outside the rep's {c.h.size} pads"
+
+/-- A rep's masking state: where its stream is, and what its refusals read. It starts as `{}`. -/
+structure Masker where
   /-- the algebraic phase's coins so far, as the stream answered them -/
   coins : Array F128 := #[]
   /-- the claim points of the table's earlier reps -/
@@ -223,13 +238,6 @@ structure Masker where
   stopped : Bool := false
   deriving Inhabited
 
-/-- The state at a rep's start, for layout `l`, pads `h`, the pads' 64-byte root and the statement's mask slot. -/
-def Masker.new (l : Zk.PadLayout) (h : Array F128) (root : ByteArray) (mask : Option MaskSlot := none) : V Masker := do
-  if root.size != 64 then throw s!"the pads' root has {root.size} bytes, not 64"
-  let order := absorbed l
-  if let some i := order.find? (· ≥ h.size) then throw s!"pad {i} is outside the rep's {h.size} pads"
-  return { lay := l, h, order, nPiop := order.size - nLig l, lig := l.k0 > 0, root, mask }
-
 def labelFrame (b : ByteArray) : ByteArray := header 2 0 b.size ++ padded b
 
 def bytesFrame (b : ByteArray) : ByteArray := header 5 0 b.size ++ padded b
@@ -239,50 +247,50 @@ def isLabel (b : ByteArray) (l : String) : Bool := b.data == l.toUTF8.data
 /-- A label as the masking challenger takes it: the phase it ends, its frame, and the phase it starts (after the
 zerocheck's label, the pads' label and root). At the opening's label, the rank check on the coins so far: a slot short of
 full rank is a stop. -/
-def Masker.label (s : Masker) (l : ByteArray) : V (Masker × ByteArray) := do
+def Masker.label (c : Cfg) (s : Masker) (l : ByteArray) : V (Masker × ByteArray) := do
   let mut s := s
   if isLabel l LABEL_PCS && s.on then
-    if s.pos != s.nPiop then
-      throw s!"the opening began after {s.pos} of the algebraic phase's {s.nPiop} masked values"
+    if s.pos != c.nPiop then
+      throw s!"the opening began after {s.pos} of the algebraic phase's {c.nPiop} masked values"
     s := { s with on := false, done := true }
-    if let some m := s.mask then
-      let all := s.prior ++ (← claimPoints s.lay s.coins)
-      let r := maskRank all m (s.lay.nLc + K_SKIP)
+    if let some m := c.mask then
+      let all := s.prior ++ (← claimPoints c.lay s.coins)
+      let r := maskRank all m (c.lay.nLc + K_SKIP)
       s := { s with rank := some (all.size, m.blocks * m.n, r) }
       if r != 128 * all.size then
         throw s!"{STOP}degenerate coins: the mask slot's weights have rank {r} < {128 * all.size} over {all.size} claim points"
   if isLabel l Zk.LABEL_CLOSE && s.l0 then
-    if s.pos != s.order.size then
-      throw s!"level 0 closed after {s.pos} of the layout's {s.order.size} masked values"
+    if s.pos != c.order.size then
+      throw s!"level 0 closed after {s.pos} of the layout's {c.order.size} masked values"
     s := { s with l0 := false, on := false, doneL0 := true }
   let mut out := labelFrame l
   if isLabel l LABEL_ZC && !s.done then
     s := { s with on := true }
-    out := out ++ labelFrame Zk.LABEL_PADS.toUTF8 ++ bytesFrame s.root
-  if isLabel l Zk.LABEL_OPEN && s.done && s.lig && !s.doneL0 then
+    out := out ++ labelFrame Zk.LABEL_PADS.toUTF8 ++ bytesFrame c.root
+  if isLabel l Zk.LABEL_OPEN && s.done && c.lig && !s.doneL0 then
     s := { s with on := true, l0 := true }
   return (s, out)
 
 /-- An absorbed value: `v + h_i` under the next pad of the order in a masked phase, `v` outside one. In a stopped rep the
 algebraic phase's values are `0`, so each leaves as its pad `h_i`. -/
-def Masker.absorb (s : Masker) (v : F128) : V (Masker × F128) := do
+def Masker.absorb (c : Cfg) (s : Masker) (v : F128) : V (Masker × F128) := do
   if !s.on then return (s, v)
-  let some i := s.order[s.pos]? | throw s!"more masked values than the layout's {s.order.size}"
-  let some p := s.h[i]? | throw s!"pad {i} is outside the rep's pads"
-  let v := if s.stopped && s.pos < s.nPiop then 0 else v
+  let some i := c.order[s.pos]? | throw s!"more masked values than the layout's {c.order.size}"
+  let some p := c.h[i]? | throw s!"pad {i} is outside the rep's pads"
+  let v := if s.stopped && s.pos < c.nPiop then 0 else v
   return ({ s with pos := s.pos + 1 }, v + p)
 
 /-- The coins `c` the stream answered the round last released. The algebraic phase's are kept (the claim points), and a
 zerocheck outer coin `r_j = 1` among them is a stop (`zk_veil::Masking::refuse_outer`): at `r_j = 1` the replay's round `j`
 divides by zero. -/
-def Masker.answer (s : Masker) (c : Array F128) : V Masker := do
+def Masker.answer (cfg : Cfg) (s : Masker) (c : Array F128) : V Masker := do
   let some n := s.owed | throw "coins for no round"
   if c.size != n then throw s!"{c.size} coins for a round that squeezed {n}"
   let s := { s with owed := none }
   if !s.on || s.l0 then return s
   let start := s.coins.size
   let s := { s with coins := s.coins ++ c }
-  let nOuter := s.lay.nMlv - N_INNER
+  let nOuter := cfg.lay.nMlv - N_INNER
   for i in [start:s.coins.size] do
     if K_SKIP ≤ i && i < K_SKIP + nOuter && (s.coins[i]! + 1).isZero then
       throw s!"{STOP}degenerate coin: zerocheck outer coin r_{i - K_SKIP} = 1"
@@ -290,13 +298,15 @@ def Masker.answer (s : Masker) (c : Array F128) : V Masker := do
 
 /-- Whether the rep's stream ended with every masked phase closed, every pad of the order used and every round's coins
 answered. -/
-def Masker.finished (s : Masker) : Bool := s.done && (s.doneL0 || !s.lig) && s.pos == s.order.size && s.owed.isNone
+def Masker.finished (c : Cfg) (s : Masker) : Bool :=
+  s.done && (s.doneL0 || !c.lig) && s.pos == c.order.size && s.owed.isNone
 
-/-- One device round `content` that squeezes `n` coins: the round that leaves, and the state after it, which owes the
+/-- One device round `content` of the rep configured by `c` that squeezes `n` coins: the round that leaves, and the state
+after it, which owes the
 round's coins; or why the round is not a device round (a frame that overruns it, an unknown op, a squeeze before its end or
 of other than `n` coins, a round without its squeeze, more masked values than the layout's, a masked phase closed early),
 or a stop the coins decide. -/
-def round (s : Masker) (content : ByteArray) (n : Nat) : V (ByteArray × Masker) := do
+def round (c : Cfg) (s : Masker) (content : ByteArray) (n : Nat) : V (ByteArray × Masker) := do
   let mut s := s
   let mut out := ByteArray.empty
   let mut pos := 0
@@ -316,7 +326,7 @@ def round (s : Masker) (content : ByteArray) (n : Nat) : V (ByteArray × Masker)
       let _ ← body pad
       pos := pos + pad
     | 2 =>
-      let (s', f) ← s.label (← body len)
+      let (s', f) ← s.label c (← body len)
       s := s'
       out := out ++ f
       pos := pos + pad
@@ -328,7 +338,7 @@ def round (s : Masker) (content : ByteArray) (n : Nat) : V (ByteArray × Masker)
       if !(kind == 2 || (kind == 1 && len == 1)) then throw s!"an observe of kind {kind} and length {len}"
       out := out ++ header 3 kind len
       for i in [0:len] do
-        let (s', v) ← s.absorb ⟨u64OfLE b (16 * i), u64OfLE b (16 * i + 8)⟩
+        let (s', v) ← s.absorb c ⟨u64OfLE b (16 * i), u64OfLE b (16 * i + 8)⟩
         s := s'
         out := F128.pushBytes out v
       pos := pos + 16 * len
@@ -404,11 +414,10 @@ def cmd (_ : List String) : IO UInt32 := do
     | .ok x => pure x
     | .error e => return (← refuse s!"the rep's start: {e}")
   let d := Draws.ofBytes l (← IO.getRandomBytes (drawBytes l).toUSize)
-  let root := padsRoot l d
-  let mut s ← match Masker.new l d.h root mask with
-    | .ok s => pure s
-    | .error e => return (← refuse s!"the rep's start: {e}")
-  let drawn := d.toBytes root
+  let c := Cfg.ofDraws l d mask
+  if let .error e := c.check then return (← refuse s!"the rep's start: {e}")
+  let mut s : Masker := {}
+  let drawn := d.toBytes c.root
   stdout.putStrLn s!"ok {drawn.size}"
   stdout.write drawn
   stdout.flush
@@ -427,7 +436,7 @@ def cmd (_ : List String) : IO UInt32 := do
       if let some k := s.owed then return (← refuse s!"a round before the {k} coins of the last one")
       begun := true
       if fail then s := { s with stopped := true }
-      match round s content n with
+      match round c s content n with
       | .ok (out, s') =>
         if let (none, some (p, w, r)) := (s.rank, s'.rank) then
           stderr.putStrLn s!"FRAMERANK\t\{\"points\": {p}, \"mask_words\": {w}, \"rank\": {r}}"
@@ -444,7 +453,7 @@ def cmd (_ : List String) : IO UInt32 := do
     | ["coins", k] =>
       let some k := k.toNat? | return (← refuse s!"a request `{line}`")
       let b ← readExact stdin (16 * k)
-      match s.answer (words b 0 k) with
+      match s.answer c (words b 0 k) with
       | .ok s' =>
         s := s'
         stdout.putStrLn "ok"
@@ -454,18 +463,18 @@ def cmd (_ : List String) : IO UInt32 := do
       let some k := k.toNat? | return (← refuse s!"a request `{line}`")
       let b ← readExact stdin (16 * k)
       if begun then return (← refuse "an earlier rep's coins after the rep's first round")
-      match claimPoints s.lay (words b 0 k) with
+      match claimPoints c.lay (words b 0 k) with
       | .ok p =>
         s := { s with prior := s.prior ++ p }
         stdout.putStrLn "ok"
         stdout.flush
       | .error e => return (← refuse s!"an earlier rep's coins: {e}")
     | ["finish"] =>
-      if s.finished then
+      if s.finished c then
         stdout.putStrLn (if s.stopped then "stop" else "ok")
         stdout.flush
       else if let some k := s.owed then return (← refuse s!"the rep ended before the {k} coins of its last round")
-      else return (← refuse s!"the rep ended after {s.pos} of the layout's {s.order.size} masked values")
+      else return (← refuse s!"the rep ended after {s.pos} of the layout's {c.order.size} masked values")
     | _ => return (← refuse s!"a request `{line}`")
   return 0
 

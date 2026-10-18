@@ -10,10 +10,11 @@ The outer firewall releases only what each rep's Lean frame returns (`flock-fire
 parses them into the rep's draws (`Flock.Firewall.Frame.Draws.ofBytes`: the pads `h`, `μ`, the inner rows' padding, `τ`'s
 salt and the pads tree's salts) and commits them (`padsRoot`). `LeanRelease` is the ZK server whose release is that frame
 at the draws on the server's tape (`LeanRelease.draws`):
-* the masker after a history (`LeanRelease.masker`) takes the layout, the pads, the absorbed order, the root and the mask
-  slot from the round's rep's draws on the tape (`masker_pads`, `masker_root`; `Masker.new` starts a rep with exactly
-  these, `masker_new`). Only its progress through the stream comes from the transport (`LeanRelease.prog`), a function of
-  the statement and the history, never of the tape;
+* the round's rep's configuration (`LeanRelease.cfg`) is `Cfg.ofDraws` of its draws on the tape, the function
+  `flock-firewall frame` starts the rep with: the layout, the pads, the absorbed order, the root it computes and the mask
+  slot (`cfg_pads`, `cfg_root`). The frame's steps take it and return only the rep's state (`Masker`), so none changes
+  the pads or the root. Only that state comes from the transport (`LeanRelease.prog`): where the rep's stream is, a
+  function of the statement and the history, never of the tape;
 * each round's release (`LeanRelease.release`) is the frame's step: it takes the coins the stream answered the round
   before (`Masker.answer`, which stops at a zerocheck outer coin `1`), then the device round (`Frame.round`, which masks
   every absorbed value under the next pad, inserts the pads' label and root, and stops at a mask slot short of full
@@ -51,7 +52,7 @@ So `Flock.zk_server_blind`'s bound holds at the deployed release, at any worker:
 namespace Claims.ZKServer
 
 open Claims Claims.ZKMal
-open _root_.Flock.Firewall.Frame (Masker Draws MaskSlot absorbed nLig padsRoot)
+open _root_.Flock.Firewall.Frame (Cfg Masker Draws MaskSlot padsRoot)
 
 /-- The value the firewall's transcript `t` reports fixing for `what` by its own computation (`By.recheck`, `By.shadow`,
 `By.own`): the first such item's. -/
@@ -101,22 +102,6 @@ theorem computedOf_eq {spec : String → Option ByteArray} {t : _root_.Flock.Fir
     rw [hs] at this
     rw [hv', this]
 
-/-- **The frame's start fixes its configuration**: where `Masker.new` starts a rep, the masker it returns has the layout
-`l`, the pads `h`, the layout's absorbed order and its count of the algebraic phase's pads, the level-0 flag, the root and
-the mask slot it was given. -/
-theorem masker_new_cfg {l : _root_.Flock.Zk.PadLayout} {h : Array _root_.Flock.F128} {root : ByteArray}
-    {mask : Option MaskSlot} {m : Masker} (hm : Masker.new l h root mask = .ok m) :
-    m.lay = l ∧ m.h = h ∧ m.order = absorbed l ∧ m.nPiop = (absorbed l).size - nLig l ∧
-      m.lig = decide (l.k0 > 0) ∧ m.root = root ∧ m.mask = mask := by
-  unfold Masker.new at hm
-  simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at hm
-  split at hm
-  · cases hm
-  · split at hm
-    · cases hm
-    · cases hm
-      exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
-
 /-- **The deployed release**, for witnesses `W` on the server's tape `R`: at statement `x`, after the history `h`, round
 `h.length` leaves as its rep's Lean frame's release of the device round, at the rep's draws on the tape. -/
 structure LeanRelease (W R : Type) where
@@ -129,9 +114,9 @@ structure LeanRelease (W R : Type) where
   /-- the bytes rep `i`'s frame reads from the operating system at its start (`IO.getRandomBytes`), on the server's
   tape -/
   draws : R → ℕ → ByteArray
-  /-- the transport: the round's rep's frame's progress after the rounds of `h`, owing the coins of the last (its phase,
-  the pads it used, the coins so far and the table's earlier reps' claim points); a function of the statement and the
-  history, never of the tape. Its layout, pads, order, root, mask slot and `stopped` are not read. -/
+  /-- the transport: the round's rep's frame state after the rounds of `h` (`Masker`: where its stream is, owing the
+  coins of the last round); a function of the statement and the history, never of the tape. Its `stopped` is not
+  read. -/
   prog : Msg → List (Msg × Msg) → Masker
   /-- the transport: the coins of the stream's answer to a round, as the frame takes them (`coins N`) -/
   coinsOf : Msg → Array _root_.Flock.F128
@@ -157,49 +142,31 @@ namespace LeanRelease
 def drawsAt {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (i : ℕ) : Draws :=
   Draws.ofBytes (L.lay x i) (L.draws ρ i)
 
-/-- **The masker after `h`**: the round's rep's frame's progress, with the layout, the pads, the absorbed order, the root
-and the mask slot its frame's own, from its draws on the tape. The frame's rounds never change those (`Frame.round`,
-`Masker.label`, `absorb` and `answer` update the progress only), and its start sets them (`masker_new`). -/
-def masker {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg × Msg)) : Masker :=
-  { L.prog x h with
-    lay := L.lay x (L.rep x h.length)
-    h := (L.drawsAt x ρ (L.rep x h.length)).h
-    order := absorbed (L.lay x (L.rep x h.length))
-    nPiop := (absorbed (L.lay x (L.rep x h.length))).size - nLig (L.lay x (L.rep x h.length))
-    lig := (L.lay x (L.rep x h.length)).k0 > 0
-    root := padsRoot (L.lay x (L.rep x h.length)) (L.drawsAt x ρ (L.rep x h.length))
-    mask := L.slot x (L.rep x h.length) }
+/-- **The round's rep's configuration**: `Cfg.ofDraws` of its draws on the tape, as `flock-firewall frame` starts the
+rep. -/
+def cfg {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg × Msg)) : Cfg :=
+  Cfg.ofDraws (L.lay x (L.rep x h.length)) (L.drawsAt x ρ (L.rep x h.length)) (L.slot x (L.rep x h.length))
 
-/-- The masker's pads are the frame's draws on the tape. -/
-theorem masker_pads {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg × Msg)) :
-    (L.masker x ρ h).h = (Draws.ofBytes (L.lay x (L.rep x h.length)) (L.draws ρ (L.rep x h.length))).h :=
+/-- The configuration's pads are the frame's draws on the tape. -/
+theorem cfg_pads {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg × Msg)) :
+    (L.cfg x ρ h).h = (Draws.ofBytes (L.lay x (L.rep x h.length)) (L.draws ρ (L.rep x h.length))).h :=
   rfl
 
 /-- The pads' root the frame inserts is its own commitment to its draws on the tape. -/
-theorem masker_root {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg × Msg)) :
-    (L.masker x ρ h).root = padsRoot (L.lay x (L.rep x h.length)) (L.drawsAt x ρ (L.rep x h.length)) :=
+theorem cfg_root {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg × Msg)) :
+    (L.cfg x ρ h).root = padsRoot (L.lay x (L.rep x h.length)) (L.drawsAt x ρ (L.rep x h.length)) :=
   rfl
 
-/-- **The masker's configuration is the frame's start's**: where the rep's frame starts on its draws on the tape and
-their root, it starts with `masker`'s layout, pads, order, count of the algebraic phase's pads, level-0 flag, root and
-mask slot. -/
-theorem masker_new {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg × Msg)) {m : Masker}
-    (hm : Masker.new (L.lay x (L.rep x h.length)) (L.drawsAt x ρ (L.rep x h.length)).h
-      (padsRoot (L.lay x (L.rep x h.length)) (L.drawsAt x ρ (L.rep x h.length))) (L.slot x (L.rep x h.length)) = .ok m) :
-    m.lay = (L.masker x ρ h).lay ∧ m.h = (L.masker x ρ h).h ∧ m.order = (L.masker x ρ h).order ∧
-      m.nPiop = (L.masker x ρ h).nPiop ∧ m.lig = (L.masker x ρ h).lig ∧ m.root = (L.masker x ρ h).root ∧
-      m.mask = (L.masker x ρ h).mask :=
-  masker_new_cfg hm
-
-/-- **The frame's step** after `h` on the device round `v`, of a stopped rep (`st`) or not: it takes the stream's coins
-for the last round (`Masker.answer`), then the round (`Frame.round`). -/
+/-- **The frame's step** after `h` on the device round `v`, of a stopped rep (`st`) or not: at the rep's configuration,
+it takes the stream's coins for the last round (`Masker.answer`), then the round (`Frame.round`). -/
 def step {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg × Msg)) (st : Bool) (v : Msg) :
     Except String (ByteArray × Masker) := do
-  let m : Masker := { L.masker x ρ h with stopped := st }
+  let c := L.cfg x ρ h
+  let m : Masker := { L.prog x h with stopped := st }
   let m ← match h.getLast? with
-    | some (_, c) => m.answer (L.coinsOf c)
+    | some (_, cs) => m.answer c (L.coinsOf cs)
     | none => pure m
-  _root_.Flock.Firewall.Frame.round m ⟨v.toArray⟩ (L.coins x h.length)
+  _root_.Flock.Firewall.Frame.round c m ⟨v.toArray⟩ (L.coins x h.length)
 
 /-- **The Lean frame's release** after `h` of the device round `v`, of a stopped rep (`st`) or not: the bytes the frame's
 step returns, or `stop` where it refuses. -/
