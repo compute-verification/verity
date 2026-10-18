@@ -948,6 +948,16 @@
     "bears_on": "Gains beyond elicitation need information from outside the base (teacher traces); their U is dataset-sized (MB), not bytes.",
     "from_review": "capability-per-bit",
     "audit": "2026-10-17 sample audit: quote yes, claim yes, quantities n/a"
+   },
+   {
+    "id": "yue-2025-rlvr-boundary/3",
+    "claim": "The gap between the base model's pass@256 and the RL model's pass@1 stays above 40 points across algorithms.",
+    "quote": "we observe that ∆SE remains consistently above 40 points across different algorithms",
+    "location": "Section 4",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "RL leaves much of the base model's coverage unused; its gains lie within that coverage.",
+    "from_review": "capability-measures"
    }
   ]
  },

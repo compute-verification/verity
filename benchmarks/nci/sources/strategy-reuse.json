@@ -1110,6 +1110,26 @@
     "grade": "measured-small",
     "bears_on": "Warm-starting from a registered model can lower m_A below 1 when the new run's data is large.",
     "from_review": "strategy-reuse"
+   },
+   {
+    "id": "hernandez-2021-transfer/3",
+    "claim": "For a 40M transformer fine-tuned on 3e5 characters, the effective transferred data is about 1000x the fine-tuning data.",
+    "quote": "for a 40M parameter transformer fine-tuned on 3e5 characters, DT is approximately 1000x bigger than DF",
+    "location": "Figure 1 caption",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Pretraining multiplies effective fine-tuning data, most at small fine-tuning sizes.",
+    "from_review": "capability-measures"
+   },
+   {
+    "id": "hernandez-2021-transfer/4",
+    "claim": "Pretraining effectively multiplies the fine-tuning dataset size.",
+    "quote": "We find that pre-training effectively multiplies the fine-tuning dataset size.",
+    "location": "Abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "A registered base gives post-training a large data multiplier.",
+    "from_review": "capability-measures"
    }
   ]
  }

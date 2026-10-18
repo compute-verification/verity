@@ -1,1 +1,1135 @@
-[]
+[
+ {
+  "id": "owen-2024-benchmark-predictability",
+  "title": "How predictable is language model benchmark performance?",
+  "authors": "David Owen",
+  "year": 2024,
+  "venue": "arXiv preprint (Epoch AI)",
+  "url": "https://arxiv.org/abs/2401.04757",
+  "topics": [
+   "capability-measures",
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "owen-2024-benchmark-predictability/1",
+    "claim": "Mapping compute to benchmark score works for aggregate benchmarks but not for single tasks: extrapolating one order of magnitude in compute gives ~6 pp average absolute error on BIG-Bench Hard and ~18 pp on individual BIG-Bench tasks.",
+    "quote": "Specifically, when extrapolating BIG-Bench Hard performance across one order of magnitude in compute, we observe average absolute errors of 6 percentage points (pp). By contrast, extrapolation for individual BIG-Bench tasks across an order of magnitude in compute yields higher average errors of 18pp.",
+    "location": "Abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 6,
+      "unit": "percentage points average absolute error",
+      "condition": "extrapolating BIG-Bench Hard aggregate score across 1 OOM of training compute, public base models"
+     },
+     {
+      "param": "other",
+      "value": 18,
+      "unit": "percentage points average absolute error",
+      "condition": "extrapolating individual BIG-Bench tasks across 1 OOM of training compute"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Any 'compute-equivalent' read off one benchmark is noisy; a talk-grade currency must aggregate many benchmarks (as the Epoch Capabilities Index does) before converting score to compute.",
+    "from_review": "capability-measures"
+   },
+   {
+    "id": "owen-2024-benchmark-predictability/2",
+    "claim": "Benchmark scores follow S-curves in scale, so performance cannot be predicted from low-performing models alone.",
+    "quote": "There is a caveat: the S-curve relationship between scale and benchmark performance makes it difficult to predict future benchmark performance from only low-performing models.",
+    "location": "Section 1 (Introduction)",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "Compute-equivalents measured near a benchmark's floor or ceiling are unreliable; CEGs computed from saturated benchmarks inflate or deflate arbitrarily.",
+    "from_review": "capability-measures"
+   }
+  ]
+ },
+ {
+  "id": "jones-2021-scaling-scaling-laws",
+  "title": "Scaling Scaling Laws with Board Games",
+  "authors": "Andy L. Jones",
+  "year": 2021,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2104.03113",
+  "topics": [
+   "capability-measures",
+   "rl-scaling"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "jones-2021-scaling-scaling-laws/1",
+    "claim": "In AlphaZero on Hex, train-time and test-time (tree search) compute trade off linearly in log-compute: each extra 10x of training removes ~15x of test-time compute at equal Elo.",
+    "quote": "the trade-off is linear in log-compute: for each additional 10× of train-time compute, about 15× of test-time compute can be eliminated, down to a floor of a single-node tree search.",
+    "location": "Results, subsection C 'Train-test trade-off'; Figure 9 (fit: log(test) = -1.2 · log(train) + 0.004 · elo + 29, 9x9 board)",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 15,
+      "unit": "x test-time compute eliminated per 10x train-time compute",
+      "condition": "AlphaZero playing Hex on a 9x9 board, at fixed Elo, down to a single-node search floor"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "The original train-test exchange rate: ~1.2 OOM of inference per OOM of training. In a domain with a perfect simulator, frozen weights plus free search buy back about one OOM of training per 1.2 OOM of inference.",
+    "from_review": "capability-measures"
+   }
+  ]
+ },
+ {
+  "id": "villalobos-2023-train-inference-tradeoff",
+  "title": "Trading off compute in training and inference",
+  "authors": "Pablo Villalobos, David Atkinson",
+  "year": 2023,
+  "venue": "Epoch AI report (2023-07-28)",
+  "url": "https://epoch.ai/blog/trading-off-compute-in-training-and-inference",
+  "topics": [
+   "capability-measures",
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "villalobos-2023-train-inference-tradeoff/1",
+    "claim": "Across surveyed techniques (search, repeated sampling, scaffolds), 1-2 OOM more inference compute typically substitutes for ~1 OOM of training compute at equal performance.",
+    "quote": "Increase the amount of compute per inference by 1-2 orders of magnitude (OOM), in exchange for saving ~1 OOM in training compute while maintaining performance.",
+    "location": "Summary",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 1,
+      "unit": "OOM training compute saved per 1-2 OOM inference compute",
+      "condition": "typical technique, most tasks; survey of published trade-off curves"
+     }
+    ],
+    "grade": "extrapolated",
+    "bears_on": "The central exchange rate for pricing free inference in training-compute units: under NCI, inference on a registered model is nearly free, so it buys at most ~1 OOM of training-equivalent at 10-100x inference cost on typical tasks.",
+    "from_review": "capability-measures"
+   },
+   {
+    "id": "villalobos-2023-train-inference-tradeoff/2",
+    "claim": "Where solutions can be verified cheaply and attempts parallelize (coding, formal proofs), 5-6 OOM of inference can replace 3-4 OOM of training.",
+    "quote": "Increase the amount of compute per inference by 5-6 OOM in exchange for saving 3-4 OOM in training compute.",
+    "location": "Summary",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 3.5,
+      "unit": "OOM training compute saved for 5-6 OOM inference compute",
+      "condition": "only tasks with cheap verification and cheap parallel attempts (coding problems, formal mathematics)"
+     }
+    ],
+    "grade": "extrapolated",
+    "bears_on": "With a verifier, free inference can stand in for thousands of times the training compute; the policy's 'inference is free' allowance is largest exactly where RL with verifiable rewards works.",
+    "from_review": "capability-measures"
+   }
+  ]
+ },
+ {
+  "id": "snell-2024-test-time-compute",
+  "title": "Scaling LLM Test-Time Compute Optimally can be More Effective than Scaling Model Parameters",
+  "authors": "Charlie Snell, Jaehoon Lee, Kelvin Xu, Aviral Kumar",
+  "year": 2024,
+  "venue": "ICLR 2025",
+  "url": "https://arxiv.org/abs/2408.03314",
+  "topics": [
+   "capability-measures",
+   "efficiency-metrics"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "snell-2024-test-time-compute/1",
+    "claim": "FLOPs-matched, compute-optimal test-time scaling (revisions, PRM search) lets PaLM 2-S* beat a 14x larger model on MATH problems where it already has non-trivial success.",
+    "quote": "in a FLOPs-matched evaluation, we find that on problems where a smaller base model attains somewhat non-trivial success rates, test-time compute can be used to outperform a 14× larger model.",
+    "location": "Abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 14,
+      "unit": "x model parameters matched by test-time compute",
+      "condition": "PaLM 2-S* on MATH, FLOPs-matched against a 14x larger pretrained model, easy and medium questions only"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Test-time compute on a frozen model is worth roughly an order of magnitude of pretraining, but only inside the model's existing competence.",
+    "from_review": "capability-measures"
+   },
+   {
+    "id": "snell-2024-test-time-compute/2",
+    "claim": "Test-time and pretraining compute are not interchangeable: on hard questions outside the base model's reach, or under high inference load, pretraining wins.",
+    "quote": "Test-time and pretraining compute are not 1-to-1 “exchangeable”. On easy and medium questions, which are within a model’s capabilities, or in settings with small inference requirement, test-time compute can easily cover up for additional pretraining. However, on challenging questions which are outside a given base model’s capabilities or under higher inference requirement, pretraining is likely more effective for improving performance.",
+    "location": "Section 7, 'Takeaways for exchanging pretraining and test-time compute'",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "Negative result for 'inference substitutes for training': free inference on a frozen registered model does not reach capabilities the base lacks, so the policy's throttle on pretraining still binds the frontier.",
+    "from_review": "capability-measures"
+   }
+  ]
+ },
+ {
+  "id": "brown-2024-large-language-monkeys",
+  "title": "Large Language Monkeys: Scaling Inference Compute with Repeated Sampling",
+  "authors": "Bradley Brown, Jordan Juravsky, Ryan Ehrlich, Ronald Clark, Quoc V. Le, Christopher Ré, Azalia Mirhoseini",
+  "year": 2024,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2407.21787",
+  "topics": [
+   "capability-measures",
+   "efficiency-metrics"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "brown-2024-large-language-monkeys/1",
+    "claim": "Without a verifier, repeated sampling barely helps: coverage on MATH rises to 98.44% at 10,000 samples, but majority voting or reward models move accuracy only from 40.50% to 41.41%.",
+    "quote": "When solving MATH [26] problems with Llama-3-8B-Instruct, coverage increases from 82.9% with 100 samples to 98.44% with 10,000 samples. However, when using majority voting or reward models to select final answers, the biggest performance increase is only from 40.50% to 41.41% over the same sample range.",
+    "location": "Section 1 (Introduction)",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 98.44,
+      "unit": "% coverage (pass@10000)",
+      "condition": "Llama-3-8B-Instruct on MATH, 10,000 samples, oracle verifier"
+     },
+     {
+      "param": "other",
+      "value": 41.41,
+      "unit": "% accuracy",
+      "condition": "same model and samples, best of majority voting or reward-model selection"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Pass@k on a frozen model measures latent capability, not deliverable capability; the inference allowance converts to real capability only where a verifier exists. Pass@k-based measures overstate what free inference delivers.",
+    "from_review": "capability-measures"
+   }
+  ]
+ },
+ {
+  "id": "kwa-2025-time-horizon",
+  "title": "Measuring AI Ability to Complete Long Software Tasks",
+  "authors": "Thomas Kwa, Ben West, Joel Becker, Amy Deng, Katharyn Garcia, Max Hasin, Sami Jawhar, Megan Kinniment, Nate Rush, Sydney Von Arx, et al.",
+  "year": 2025,
+  "venue": "arXiv preprint (METR)",
+  "url": "https://arxiv.org/abs/2503.14499",
+  "topics": [
+   "capability-measures",
+   "governance"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "kwa-2025-time-horizon/1",
+    "claim": "The 50% task-completion time horizon of frontier models (the human task length a model completes half the time) doubled every 207 days from 2019 to early 2025.",
+    "quote": "time horizon has doubled every 207 days with a 95% bootstrapped confidence interval 166-240 days (roughly ±19%).",
+    "location": "Section 3.2 'Time horizon vs. release date'; Figure 1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 207,
+      "unit": "days per doubling of 50% time horizon",
+      "condition": "frontier models 2019-2025 on METR's software task suite (HCAST, RE-Bench, SWAA); 95% CI 166-240 days"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "A capability unit that is defined for pretrained, RL-trained and scaffolded models alike, so it does not favour pretraining; it measures agents with their inference budget included.",
+    "from_review": "capability-measures"
+   }
+  ]
+ },
+ {
+  "id": "metr-2026-time-horizon-1-1",
+  "title": "Time Horizon 1.1",
+  "authors": "METR",
+  "year": 2026,
+  "venue": "METR blog (2026-01-29)",
+  "url": "https://metr.org/blog/2026-01-29-time-horizon-1-1/",
+  "topics": [
+   "capability-measures",
+   "governance"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "metr-2026-time-horizon-1-1/1",
+    "claim": "On METR's updated task suite (TH1.1), the post-2023 time-horizon doubling time is 131 days, versus 165 days on the original suite.",
+    "quote": "The post-2023 doubling-time is 131 days under TH1.1, compared to 165 days under TH1, meaning progress is estimated to be 20% more rapid under TH1.1.",
+    "location": "Section on trend estimates (post-2023 fit)",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 131,
+      "unit": "days per doubling of 50% time horizon",
+      "condition": "frontier models since 2023, TH1.1 task suite; 165 days on TH1; overall (all years) 196.5 days"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "The time-horizon trend sped up in the RL-reasoning era; the doubling time itself depends on the task suite, a measurement-validity caveat for any one-currency claim.",
+    "from_review": "capability-measures"
+   },
+   {
+    "id": "metr-2026-time-horizon-1-1/2",
+    "claim": "Since 2024 (the reasoning-model era) the doubling time is 89 days under TH1.1 (109 days under TH1).",
+    "quote": "We also report below the doubling time since 2024: this was at 109 days under TH1, and falls to 89 days under TH1.1.",
+    "location": "Section on trend estimates (since-2024 fit)",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 89,
+      "unit": "days per doubling of 50% time horizon",
+      "condition": "frontier models since 2024, TH1.1 task suite (109 days on TH1); human baselines exist for only 5 of 31 tasks of 8h+"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Recent progress (RL plus inference scaling era) runs roughly twice the 2019-2025 rate; a policy that throttled only pretraining would leave the faster component untouched.",
+    "from_review": "capability-measures"
+   }
+  ]
+ },
+ {
+  "id": "ho-2025-reasoning-ceg",
+  "title": "Quantifying the algorithmic improvement from reasoning models",
+  "authors": "Anson Ho, Arden Berg",
+  "year": 2025,
+  "venue": "Epoch AI Gradient Updates (2025-08-02)",
+  "url": "https://epoch.ai/gradient-updates/quantifying-the-algorithmic-improvement-from-reasoning-models",
+  "topics": [
+   "capability-measures",
+   "rl-scaling"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "ho-2025-reasoning-ceg/1",
+    "claim": "Reading o1's GPQA Diamond score off the compute-to-score curve of non-reasoning models gives a compute-equivalent gain (CEG) of ~9x over GPT-4o.",
+    "quote": "In the case of GPQA diamond, this approach suggests that reasoning training of o1 yielded a CEG of roughly 9x relative to GPT-4o.",
+    "location": "Section on GPT-4o vs o1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 9,
+      "unit": "x pretraining compute (compute-equivalent gain)",
+      "condition": "o1 vs GPT-4o on GPQA Diamond, via a sigmoid fit of score against training compute for non-reasoning models"
+     }
+    ],
+    "grade": "extrapolated",
+    "bears_on": "Direct estimate of reasoning RL's worth in pretraining-compute units: about one OOM, including the test-time thinking it enables.",
+    "from_review": "capability-measures"
+   },
+   {
+    "id": "ho-2025-reasoning-ceg/2",
+    "claim": "For Claude 3.5 Sonnet vs 3.7 Sonnet (thinking), CEGs across benchmarks range 1x to 100x with a central ~10x.",
+    "quote": "In this case we find CEGs that are broadly similar as for GPT-4o and its reasoning-trained counterparts, i.e. between 1x and 100x, with a central estimate of around 10x.",
+    "location": "Section on Claude 3.5 Sonnet vs Claude 3.7 Sonnet",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 10,
+      "unit": "x pretraining compute (compute-equivalent gain), central",
+      "condition": "Claude 3.7 Sonnet with extended thinking vs Claude 3.5 Sonnet, across benchmarks; range 1x-100x"
+     }
+    ],
+    "grade": "extrapolated",
+    "bears_on": "The reasoning-RL CEG is 1-2 OOM wide across benchmarks; a talk should quote ~10x with a range of 1-100x.",
+    "from_review": "capability-measures"
+   },
+   {
+    "id": "ho-2025-reasoning-ceg/3",
+    "claim": "About half of the reasoning CEG (in log terms) comes from the RL training itself and half from test-time scaling (extended thinking).",
+    "quote": "This works out to a roughly even contribution to the CEG from reasoning training and test-time scaling.",
+    "location": "Section on decomposing training vs extended thinking",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.5,
+      "unit": "fraction of log CEG from reasoning training (rest from test-time scaling)",
+      "condition": "Claude 3.7 Sonnet thinking vs no-thinking vs Claude 3.5 Sonnet; depends on the thinking budget used"
+     }
+    ],
+    "grade": "extrapolated",
+    "bears_on": "Roughly sqrt(10) ~ 3x of the 10x reasoning CEG is attributable to the weights change; the rest is inference, which the policy leaves free.",
+    "from_review": "capability-measures"
+   }
+  ]
+ },
+ {
+  "id": "ord-2025-rl-scaling",
+  "title": "How Well Does RL Scale?",
+  "authors": "Toby Ord",
+  "year": 2025,
+  "venue": "Blog post (2025-10-20)",
+  "url": "https://www.tobyord.com/writing/how-well-does-rl-scale",
+  "topics": [
+   "capability-measures",
+   "rl-scaling"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "ord-2025-rl-scaling/1",
+    "claim": "From OpenAI's o1 and o3 scaling plots, 10x of RL training compute buys the same boost as 3x of inference compute, i.e. about two OOM of RL per OOM of inference.",
+    "quote": "a 10x scaling of RL is required to get the same performance boost as a 3x scaling of inference",
+    "location": "Section summarizing RL-scaling vs inference-scaling",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 2,
+      "unit": "OOM RL training compute per OOM inference compute at equal boost",
+      "condition": "derived: 10x RL ~ 3x inference, from OpenAI o1/o3 AIME scaling plots"
+     }
+    ],
+    "grade": "extrapolated",
+    "bears_on": "RL compute is a weak lever per FLOP compared with inference; RL's total CEG is large only because RL compute was tiny relative to pretraining.",
+    "from_review": "capability-measures"
+   },
+   {
+    "id": "ord-2025-rl-scaling/2",
+    "claim": "Chaining 1000x inference ~ 100x training with 2 OOM RL per OOM inference, a GPT-generation jump (100x pretraining) would need ~1,000,000x RL compute.",
+    "quote": "this implies we need something like a 1,000,000x scale-up of total RL compute to give a boost similar to a GPT level.",
+    "location": "Section on what RL scaling implies",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 1000000,
+      "unit": "x RL compute for a boost equal to 100x pretraining compute",
+      "condition": "derived by Ord from 1000x inference ~ 100x training (Jones; Epoch) and 10x RL ~ 3x inference"
+     }
+    ],
+    "grade": "extrapolated",
+    "bears_on": "If RL's marginal CEG is this low, RL cannot cheaply substitute for throttled pretraining at the frontier, which limits the 'small-state RL escapes the policy' worry to the early, cheap part of the RL curve.",
+    "from_review": "capability-measures"
+   }
+  ]
+ },
+ {
+  "id": "ord-2025-mostly-inference-scaling",
+  "title": "Evidence that Recent AI Gains are Mostly from Inference-Scaling",
+  "authors": "Toby Ord",
+  "year": 2025,
+  "venue": "Blog post (2025-10-03)",
+  "url": "https://www.tobyord.com/writing/mostly-inference-scaling",
+  "topics": [
+   "capability-measures",
+   "rl-scaling"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "ord-2025-mostly-inference-scaling/1",
+    "claim": "Splitting Claude 3.7 Sonnet's gain over Claude 3.5 Sonnet on MATH level 5 into an RL boost (at matched tokens) and an inference-scaling boost: 6 pp from RL, 28 pp from 30x longer reasoning; 82% from inference.",
+    "quote": "We can see below that the RL Boost for MATH level 5 is quite small at just 6 percentage points. But the RL training also teaches the model how to productively use reasoning chains up to 30 times as long. This costs 30x as much money every time the model is used, but enables a further boost of 28 percentage points via inference-scaling. So in this case, the total performance boost is 34 percentage points with 82% of this coming from inference-scaling.",
+    "location": "MATH level 5 analysis (Claude 3.7 Sonnet vs Claude 3.5 Sonnet October 2024)",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.82,
+      "unit": "fraction of total benchmark gain from inference scaling",
+      "condition": "MATH level 5; RL boost 6 pp at matched tokens, inference boost 28 pp at up to 30x tokens"
+     }
+    ],
+    "grade": "extrapolated",
+    "bears_on": "Most of the RL-era gain is unlocked inference rather than knowledge in the weights; the weights change (an update NCI meters) is the smaller part.",
+    "from_review": "capability-measures"
+   },
+   {
+    "id": "ord-2025-mostly-inference-scaling/2",
+    "claim": "On OTIS Mock AIME the RL boost is 4 pp and inference scaling 45 pp: 92% of the gain from inference.",
+    "quote": "Here there is just 4 percentage points from the RL Boost and 45 percentage points from inference-scaling, so the inference-scaling is producing 92% of the total gain.",
+    "location": "OTIS Mock AIME analysis (GPQA Diamond: 63% from inference)",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.92,
+      "unit": "fraction of total benchmark gain from inference scaling",
+      "condition": "OTIS Mock AIME, Claude 3.7 Sonnet vs 3.5 Sonnet; GPQA Diamond gives 0.63"
+     }
+    ],
+    "grade": "extrapolated",
+    "bears_on": "Range for the inference share of RL-era gains: 63-92% across three benchmarks.",
+    "from_review": "capability-measures"
+   }
+  ]
+ },
+ {
+  "id": "ord-2025-rl-inefficiency",
+  "title": "The Extreme Inefficiency of RL for Frontier Models",
+  "authors": "Toby Ord",
+  "year": 2025,
+  "venue": "Blog post (2025-09-19)",
+  "url": "https://www.tobyord.com/writing/inefficiency-of-reinforcement-learning",
+  "topics": [
+   "capability-measures",
+   "capability-per-bit"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "ord-2025-rl-inefficiency/1",
+    "claim": "With roughly one reward bit per ~10,000-token episode, RL delivers under 1e-4 bits of information per generated token, against ~16 bits needed to specify a pretraining target token.",
+    "quote": "If so, then they were gaining less than 1 bit of information per 10,000 tokens, or 0.0001 bits per token generated.",
+    "location": "Section on information per token (pretraining comparison: 'specifying a particular token out of all these options requires about 16 bits of information')",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.0001,
+      "unit": "bits per generated token (upper bound)",
+      "condition": "outcome-reward RL with ~10,000-token episodes and a binary reward; an upper bound on what the model can learn per forward pass"
+     },
+     {
+      "param": "other",
+      "value": 16,
+      "unit": "bits per token",
+      "condition": "information to specify a pretraining target token from the vocabulary, Ord's comparison"
+     }
+    ],
+    "grade": "theoretical",
+    "bears_on": "RL's information content is tiny: millions of episodes carry at most millions of bits, below the policy's K of ~2e7 bits per block. Information-based metering cannot see RL; compute-equivalent metering can.",
+    "from_review": "capability-measures"
+   },
+   {
+    "id": "ord-2025-rl-inefficiency/2",
+    "claim": "At current margins RL extracts on the order of a millionth as much information per FLOP as pretraining.",
+    "quote": "So it looks like on the current margins, there is something on the order of a millionth as much information to be gained per FLOP in RL training compared with pre-training.",
+    "location": "Section on information per FLOP",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 1e-06,
+      "unit": "ratio of information per FLOP, RL vs pretraining",
+      "condition": "upper-bound reasoning at current frontier episode lengths"
+     }
+    ],
+    "grade": "theoretical",
+    "bears_on": "Bits learned and capability gained decouple for RL: a small number of bits selects among behaviours the base already represents. Bits are a ceiling on the update's size, not a capability currency.",
+    "from_review": "capability-measures"
+   }
+  ]
+ },
+ {
+  "id": "denain-2026-capabilities-accelerated",
+  "title": "Have AI capabilities accelerated?",
+  "authors": "Jean-Stanislas Denain, Alexander Barry",
+  "year": 2026,
+  "venue": "Epoch AI report (2026-04-16)",
+  "url": "https://epoch.ai/publications/have-ai-capabilities-accelerated",
+  "topics": [
+   "capability-measures",
+   "rl-scaling"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "denain-2026-capabilities-accelerated/1",
+    "claim": "Reasoning models show a one-off jump and a 2-3x faster capability trend than non-reasoning models.",
+    "quote": "Reasoning models show both a one-off jump in performance and a roughly 2-3x faster trend compared to non-reasoning models.",
+    "location": "Section 'Three of four metrics show acceleration, seemingly driven by reasoning models'",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 2.5,
+      "unit": "x faster capability trend (reasoning vs non-reasoning models)",
+      "condition": "ECI, log METR 50% time horizon and an Epoch math index, data from 2023 on; range 2-3x"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "The RL-reasoning era accounts for more than half of recent capability growth by rate; but the paper attributes it to a bundle (inference scaling, RL, reasoning tokens), not to RL alone.",
+    "from_review": "capability-measures"
+   },
+   {
+    "id": "denain-2026-capabilities-accelerated/2",
+    "claim": "Negative result: an index built from WeirdML V2 shows no acceleration.",
+    "quote": "Our fourth metric, an index constructed from WeirdML V2 results, showed no sign of acceleration.",
+    "location": "Results, fourth metric",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "The RL-era speed-up is metric-dependent; on novel ML tasks it is not visible, consistent with RL gains concentrating in verifiable domains.",
+    "from_review": "capability-measures"
+   }
+  ]
+ },
+ {
+  "id": "barry-2026-eci-frontier",
+  "title": "The ECI frontier has advanced by 14 points per year since the introduction of reasoning models",
+  "authors": "Alexander Barry",
+  "year": 2026,
+  "venue": "Epoch AI data insight (2026-09-01)",
+  "url": "https://epoch.ai/data-insights/eci-frontier-trend",
+  "topics": [
+   "capability-measures",
+   "rl-scaling"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "barry-2026-eci-frontier/1",
+    "claim": "Since o1 (September 2024) the Epoch Capabilities Index frontier has advanced 14 points per year, against 6 points per year for non-reasoning models.",
+    "quote": "Following the introduction of the first reasoning models (OpenAI’s o1-mini and o1-preview) in September 2024, the Epoch Capabilities Index (ECI) frontier has advanced linearly by 14 points per year, compared with 6 points per year for non-reasoning models.",
+    "location": "Headline and first paragraph",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 14,
+      "unit": "ECI points per year (frontier)",
+      "condition": "reasoning-model era, September 2024 onward; 6 ECI points per year for non-reasoning models"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "On a benchmark-stitched capability index that covers post-trained models, the reasoning era more than doubled the rate of progress.",
+    "from_review": "capability-measures"
+   }
+  ]
+ },
+ {
+  "id": "ho-2025-rosetta-stone",
+  "title": "A Rosetta Stone for AI Benchmarks",
+  "authors": "Anson Ho, Jean-Stanislas Denain, David Atanasov, Samuel Albanie, Rohin Shah",
+  "year": 2025,
+  "venue": "arXiv preprint (Epoch AI)",
+  "url": "https://arxiv.org/abs/2512.00193",
+  "topics": [
+   "capability-measures",
+   "efficiency-metrics"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "ho-2025-rosetta-stone/1",
+    "claim": "Within the LLaMA, LLaMA 2 and LLaMA 3.1 families, the stitched capability score rises linearly in log training compute with slope k = 0.168 per natural-log unit (0.387 capability units per 10x compute).",
+    "quote": "In practice we have sufficient data on three families of models: LLaMA, LLaMA 2, and LLaMA 3.1 – this yields an average k = 0.168 across the families.",
+    "location": "Section 3.2.2 'Algorithmic progress', Figure 7",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.387,
+      "unit": "capability units per 10x training compute",
+      "condition": "derived: k = 0.168 per e-fold x ln(10); fit over 179 models and 38 benchmarks, slope from three LLaMA families"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "The conversion factor that turns any capability score (pretrained, RL-trained, with or without thinking) into effective pretraining compute: CEG = 10^(delta capability / 0.387).",
+    "from_review": "capability-measures"
+   },
+   {
+    "id": "ho-2025-rosetta-stone/2",
+    "claim": "Algorithmic progress estimated this way is very uncertain: 1x to 50x less training compute per year for the same capability, central ~6x.",
+    "quote": "Across the three families, we end up with a very wide range of numbers, from 1 to 50× reduction in training compute requirements per year.",
+    "location": "Section 3.2.2 'Algorithmic progress'",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 6,
+      "unit": "x reduction in training compute per year at fixed capability, central",
+      "condition": "stated central estimate exp(0.297/0.168); range 1-50x across the three LLaMA families"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "The slope k sets every compute-equivalent; its uncertainty propagates to a 1-2 OOM range on any CEG computed through the index.",
+    "from_review": "capability-measures"
+   },
+   {
+    "id": "ho-2025-rosetta-stone/3",
+    "claim": "The capability index maps to METR time horizon as time horizon = exp(3.69 Cm - 4.58), so 10x training compute is ~4.2x time horizon.",
+    "quote": "The resulting transformation is time horizon = exp(3.69 × Cm − 4.58).",
+    "location": "Section 3.1.1 'Interpreting estimated capabilities and difficulties'",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 4.2,
+      "unit": "x time horizon per 10x effective training compute",
+      "condition": "derived: exp(3.69 x 0.387); fit R^2 = 0.85"
+     }
+    ],
+    "grade": "extrapolated",
+    "bears_on": "Links the two RL-era-friendly metrics: one capability unit, convertible to both effective compute and time horizon, gives a single currency for the talk.",
+    "from_review": "capability-measures"
+   },
+   {
+    "id": "ho-2025-rosetta-stone/4",
+    "claim": "Frontier capability rises ~0.55 units per year (95% CI 0.45-0.67), i.e. ~1.4 OOM of effective compute per year.",
+    "quote": "estimated model capabilities have been increasing at a rate of around 0.55 units per year, with a 95% confidence interval of 0.45 to 0.67 units per year.",
+    "location": "Section 3.2.1 'Forecasting future capabilities'",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 1.4,
+      "unit": "OOM effective training compute per year",
+      "condition": "derived: 0.55 units/year / 0.387 units per OOM; CI 0.45-0.67 units/year"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Baseline against which any single enhancement's CEG can be stated as 'months of frontier progress'.",
+    "from_review": "capability-measures"
+   },
+   {
+    "id": "ho-2025-rosetta-stone/5",
+    "claim": "Central estimate: the training compute needed to reach a given capability falls about 6x per year (distilled models dropped).",
+    "quote": "So as a central estimate, the training compute needed to reach a certain capability has been declining at exp(0.297/0.168)≈6× per year.",
+    "location": "Section 3.2.2",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 6,
+      "unit": "x per year",
+      "condition": "training compute to fixed capability, stitched benchmarks"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "A capability-index measure of algorithmic progress, faster than the loss-based 2-3x because it includes post-training and data.",
+    "from_review": "efficiency-metrics"
+   }
+  ]
+ },
+ {
+  "id": "you-2025-reasoning-scale",
+  "title": "How far can reasoning models scale?",
+  "authors": "Josh You",
+  "year": 2025,
+  "venue": "Epoch AI Gradient Updates (2025-05-09)",
+  "url": "https://epoch.ai/gradient-updates/how-far-can-reasoning-models-scale",
+  "topics": [
+   "capability-measures",
+   "rl-scaling"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "you-2025-reasoning-scale/1",
+    "claim": "DeepSeek-R1's RL reasoning training was ~6e23 FLOP, ~2 trillion generated tokens, about 20% of the cost of pretraining its base DeepSeek-V3.",
+    "quote": "Ege Erdil estimated that DeepSeek-R1 was trained on ~6e23 FLOP (costing ~$1 million) during RL reasoning training, requiring the generation of about 2 trillion tokens. This is about 20% of the cost of pre-training DeepSeek-R1’s base model, DeepSeek-V3.",
+    "location": "Section on current reasoning training compute",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 6e+23,
+      "unit": "FLOP",
+      "condition": "DeepSeek-R1 RL reasoning training, third-party estimate (Ege Erdil)"
+     },
+     {
+      "param": "other",
+      "value": 0.2,
+      "unit": "fraction of base-model pretraining cost",
+      "condition": "DeepSeek-R1 RL vs DeepSeek-V3 pretraining"
+     }
+    ],
+    "grade": "extrapolated",
+    "bears_on": "RL compute is already a sizeable fraction of pretraining in open frontier models; its compute (rollouts on a frozen-ish policy) is mostly inference, which the policy leaves free.",
+    "from_review": "capability-measures"
+   }
+  ]
+ },
+ {
+  "id": "edelman-2025-gpt5-compute",
+  "title": "Why GPT-5 used less training compute than GPT-4.5 (but GPT-6 probably won’t)",
+  "authors": "Yafah Edelman, Jean-Stanislas Denain, Jaime Sevilla, Anson Ho",
+  "year": 2025,
+  "venue": "Epoch AI Gradient Updates (2025-09-26)",
+  "url": "https://epoch.ai/gradient-updates/why-gpt5-used-less-training-compute-than-gpt45-but-gpt6-probably-wont",
+  "topics": [
+   "capability-measures",
+   "rl-scaling"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "edelman-2025-gpt5-compute/1",
+    "claim": "Epoch estimates reasoning post-training lets labs cut pretraining compute ~10x at equal performance, and that tripling post-training was at least as useful as tripling pretraining.",
+    "quote": "Researchers could now triple post-training compute in a way that was at least as useful as tripling pre-training compute. In fact, these reasoning techniques make it possible to reduce pre-training compute by roughly 10× while getting the same performance!",
+    "location": "Section on why GPT-5 used less compute",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 10,
+      "unit": "x pretraining compute saved at equal performance (CEG of reasoning techniques)",
+      "condition": "Epoch estimate for OpenAI's reasoning post-training, mid-2025"
+     }
+    ],
+    "grade": "extrapolated",
+    "bears_on": "Second, independent Epoch figure for reasoning CEG: ~10x, consistent with ho-2025-reasoning-ceg.",
+    "from_review": "capability-measures"
+   }
+  ]
+ },
+ {
+  "id": "openai-2024-o1",
+  "title": "Learning to reason with LLMs",
+  "authors": "OpenAI",
+  "year": 2024,
+  "venue": "OpenAI blog (2024-09-12)",
+  "url": "https://openai.com/index/learning-to-reason-with-llms/",
+  "topics": [
+   "capability-measures",
+   "rl-scaling"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "openai-2024-o1/1",
+    "claim": "o1 on AIME 2024: 74% with one sample, 83% with 64-sample consensus, 93% re-ranking 1000 samples with a learned scorer (GPT-4o: 12%).",
+    "quote": "o1 averaged 74% (11.1/15) with a single sample per problem, 83% (12.5/15) with consensus among 64 samples, and 93% (13.9/15) when re-ranking 1000 samples with a learned scoring function.",
+    "location": "Evals section",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 74,
+      "unit": "% AIME 2024 pass@1",
+      "condition": "o1, single sample; GPT-4o 12%"
+     },
+     {
+      "param": "other",
+      "value": 93,
+      "unit": "% AIME 2024",
+      "condition": "o1, re-ranking 1000 samples with a learned scoring function"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Within one RL-trained model, 1000x samples add ~19 pp on AIME on top of the ~62 pp from GPT-4o to o1 pass@1 (RL training plus o1's default thinking); both levers are large and they compound.",
+    "from_review": "capability-measures"
+   }
+  ]
+ },
+ {
+  "id": "liu-2025-prorl",
+  "title": "ProRL: Prolonged Reinforcement Learning Expands Reasoning Boundaries in Large Language Models",
+  "authors": "Mingjie Liu, Shizhe Diao, Ximing Lu, Jian Hu, Xin Dong, Yejin Choi, Jan Kautz, Yi Dong",
+  "year": 2025,
+  "venue": "arXiv preprint (NVIDIA)",
+  "url": "https://arxiv.org/abs/2505.24864",
+  "topics": [
+   "capability-measures",
+   "rl-scaling"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "liu-2025-prorl/1",
+    "claim": "Prolonged RL (~16k H100 GPU-hours) on DeepSeek-R1-Distill-Qwen-1.5B solves tasks where the base model has zero success at any sampling budget.",
+    "quote": "Most strikingly, we identify many tasks where the base model fails to produce any correct solutions regardless of the amount of sampling, while our RL-trained model achieves 100% pass rates (Figure 4).",
+    "location": "Section 1 (Introduction), Figure 4; compute from the training-details section",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 16000,
+      "unit": "H100 GPU-hours",
+      "condition": "whole ProRL run on DeepSeek-R1-Distill-Qwen-1.5B, 4 nodes of 8 H100-80GB (stated)"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Counter-evidence to 'RL only elicits': long RL can add capabilities the frozen base cannot reach by sampling, so a frozen-base-plus-inference ceiling is not absolute.",
+    "from_review": "capability-measures"
+   },
+   {
+    "id": "liu-2025-prorl/2",
+    "claim": "RL's gain is largest where the base model is weakest: the base model's pass@k boundary is negatively correlated with the RL improvement.",
+    "quote": "we observe a significant negative correlation between the base model’s reasoning boundary and the extent of reasoning improvement after RL training.",
+    "location": "Section 4.1 (the weaker the start, the stronger the RL gain)",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Genuine expansion happens at the edge of the base's competence, so new-capability RL needs many training steps, which is where NCI's per-block update metering would apply.",
+    "from_review": "capability-measures"
+   }
+  ]
+ },
+ {
+  "id": "wu-2025-invisible-leash",
+  "title": "The Invisible Leash? Why RLVR May or May Not Escape Its Origin",
+  "authors": "Fang Wu, Weihao Xuan, Danny Xing, Ximing Lu, Mingjie Liu, Yi Dong, Zaid Harchaoui, Yejin Choi",
+  "year": 2025,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2507.14843",
+  "topics": [
+   "capability-measures",
+   "rl-scaling"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "wu-2025-invisible-leash/1",
+    "claim": "At the stated sampling budgets, RLVR models lose verified success on more questions than they gain; even ProRL-1.5B-v1 expands support on 36 questions and shrinks it on 163.",
+    "quote": "Across the evaluated model-level benchmark aggregates, the shrinkage of observed support outweighs its expansion: more questions lose a verified success than gain one at the stated sampling budgets.",
+    "location": "Abstract; Table 1 (ProRL-1.5B-v1 overall: 2400 preserved, 36 expanded, 163 shrunk, 805 out of support)",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 36,
+      "unit": "questions gaining a verified success (support expansion)",
+      "condition": "ProRL-1.5B-v1 vs its base, all benchmarks, Table 1"
+     },
+     {
+      "param": "other",
+      "value": 163,
+      "unit": "questions losing a verified success (support shrinkage)",
+      "condition": "same comparison"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Even the strongest 'RL expands the boundary' model mostly reweights the base's support: net RL effect on coverage is negative, so RL gains are mostly elicitation.",
+    "from_review": "capability-measures"
+   }
+  ]
+ },
+ {
+  "id": "karan-2025-power-sampling",
+  "title": "Reasoning with Sampling: Your Base Model is Smarter Than You Think",
+  "authors": "Aayush Karan, Yilun Du",
+  "year": 2025,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2510.14901",
+  "topics": [
+   "capability-measures",
+   "capability-per-bit"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "karan-2025-power-sampling/1",
+    "claim": "Training-free MCMC sampling from the base model's power distribution matches GRPO on MATH500 and GPQA and beats it on HumanEval (Qwen2.5-Math-7B: base 49.6, GRPO 78.5, power sampling 74.8 on MATH500).",
+    "quote": "In particular, on MATH500, which is in-domain for RL-posttraining, power sampling achieves accuracies that are on par with those obtained by GRPO. Furthermore, on out-of-domain reasoning, our algorithm again matches GRPO on GPQA and actually outperforms on HumanEval by up to +59.8%.",
+    "location": "Section 5.2 (Results); Figure 1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 74.8,
+      "unit": "% MATH500 accuracy",
+      "condition": "Qwen2.5-Math-7B with power sampling, no training; GRPO 78.5, base 49.6"
+     },
+     {
+      "param": "capability.bits",
+      "value": 0,
+      "unit": "bits",
+      "condition": "new state: power sampling changes no weights and reads no labels"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Most of an RL post-training gain can be had with zero bits of new state and only extra inference on the frozen base: exactly the regime the policy leaves free.",
+    "from_review": "capability-measures"
+   },
+   {
+    "id": "karan-2025-power-sampling/2",
+    "claim": "Power sampling costs ~8.84x the tokens of standard inference, which prices the GRPO gain at under 10x inference on the base.",
+    "quote": "Plugging in our experimental parameters NMCMC = 10, T = 679 (our average output length for MATH500) and B = 192, running inference with power sampling incurs a multiplier of 8.84× the number of tokens as running standard inference.",
+    "location": "Section 5.3 (Analysis), inference cost",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 8.84,
+      "unit": "x inference tokens vs standard sampling",
+      "condition": "N_MCMC = 10, T = 679, B = 192 on MATH500, Qwen2.5-Math-7B"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "An exchange rate between RL and inference: GRPO post-training ~ 9x inference on the base model, in this domain.",
+    "from_review": "capability-measures"
+   }
+  ]
+ },
+ {
+  "id": "yuan-2025-rl-composition",
+  "title": "From f(x) and g(x) to f(g(x)): LLMs Learn New Skills in RL by Composing Old Ones",
+  "authors": "Lifan Yuan, Weize Chen, Yuchen Zhang, Ganqu Cui, Hanbin Wang, Ziming You, Ning Ding, Zhiyuan Liu, Maosong Sun, Hao Peng",
+  "year": 2025,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2509.25123",
+  "topics": [
+   "capability-measures",
+   "rl-scaling"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "yuan-2025-rl-composition/1",
+    "claim": "With atomic skills known, outcome-reward RL on depth-2 compositions teaches composition that generalizes: unseen depth-3 tasks rise from near zero to 30%, depth-4 to 15% (Llama-3.1-8B-Instruct, synthetic string functions).",
+    "quote": "RL on Level-2 problems, receiving only correctness-based outcome rewards without reasoning demonstrations, substantially improves generalization on more difficult problems: performance on unseen Level-3 tasks improves from near-zero to 30%, and Level-4 to 15%.",
+    "location": "Section 1 (Introduction)",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 30,
+      "unit": "% accuracy on unseen Level-3 compositions",
+      "condition": "Llama-3.1-8B-Instruct after RL on Level-2 problems; from near zero before RL"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "RL can create genuinely new (compositional) capability from a small update when the base has the parts; the 'RL only elicits' view fails at the edge of competence.",
+    "from_review": "capability-measures"
+   }
+  ]
+ },
+ {
+  "id": "zhang-2025-interplay",
+  "title": "On the Interplay of Pre-Training, Mid-Training, and RL on Reasoning Language Models",
+  "authors": "Charlie Zhang, Graham Neubig, Xiang Yue",
+  "year": 2025,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2512.07783",
+  "topics": [
+   "capability-measures",
+   "rl-scaling"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "zhang-2025-interplay/1",
+    "claim": "In controlled 100M-parameter experiments, RL gives real pass@128 gains (up to +42%) only for tasks slightly beyond the pretraining range; none for covered or far out-of-distribution tasks.",
+    "quote": "RL yields genuine extrapolative gains only when task difficulty slightly exceeds the pre-training range; gains vanish when tasks are already covered or too out-of-distribution (up to +42% pass@128 when well-calibrated).",
+    "location": "Abstract",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 42,
+      "unit": "% pass@128 improvement (maximum)",
+      "condition": "100M-parameter model pretrained on 10B synthetic tokens; RL data at the edge of competence"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Reconciles Yue vs ProRL: RL adds capability only in a narrow band just past the base, so the frozen registered model bounds what small-state RL can reach.",
+    "from_review": "capability-measures"
+   }
+  ]
+ },
+ {
+  "id": "shen-2026-chess-pretrain-rl",
+  "title": "Understanding Reasoning from Pretraining to Post-Training",
+  "authors": "Jingyan Shen, Ang Li, Salman Rahman, Yifan Sun, Micah Goldblum, Matus Telgarsky, Pavel Izmailov",
+  "year": 2026,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2607.16097",
+  "topics": [
+   "capability-measures",
+   "rl-scaling"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "shen-2026-chess-pretrain-rl/1",
+    "claim": "In chess models of 5M-1B parameters, post-RL performance at fixed RL compute is predicted by pretraining loss, and the RL reward-curve slope grows roughly linearly with pretraining tokens.",
+    "quote": "we establish a scaling law connecting pretraining and RL: the post-RL performance at given RL compute level is well-predicted from the pretraining loss, and slope of the RL reward curves improves approximately linearly with the pretraining tokens.",
+    "location": "Abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Supports pretraining loss as the root currency: RL outcomes are a function of the base's held-out loss, so throttling pretraining also bounds what RL can reach.",
+    "from_review": "capability-measures"
+   },
+   {
+    "id": "shen-2026-chess-pretrain-rl/2",
+    "claim": "Measured at pass@16 rather than pass@1, RL's gains are smaller and more pretraining is often the better use of compute.",
+    "quote": "For pass@16, gains from RL are smaller and additional pretraining is often more effective.",
+    "location": "Section 3 'Scaling Analysis: From Pretraining to Post-Training'",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Metric choice decides RL's CEG: pass@1 favours RL (sharpening), pass@k favours pretraining (coverage).",
+    "from_review": "capability-measures"
+   }
+  ]
+ },
+ {
+  "id": "agarwal-2025-entropy-minimization",
+  "title": "The Unreasonable Effectiveness of Entropy Minimization in LLM Reasoning",
+  "authors": "Shivam Agarwal, Zimin Zhang, Lifan Yuan, Jiawei Han, Hao Peng",
+  "year": 2025,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2505.15134",
+  "topics": [
+   "capability-measures",
+   "capability-per-bit"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "agarwal-2025-entropy-minimization/1",
+    "claim": "RL with negative entropy as the only reward, using no labels, matches or beats GRPO and RLOO trained on 60K labeled examples on Qwen-7B.",
+    "quote": "On Qwen-7B, EM-RL, without any labeled data, achieves comparable or better performance than strong RL baselines such as GRPO [68] and RLOO [1] that are trained on 60K labeled examples.",
+    "location": "Abstract",
+    "quantities": [
+     {
+      "param": "capability.bits",
+      "value": 0,
+      "unit": "bits of external label information",
+      "condition": "EM-RL on Qwen-7B (as the paper names it): reward is the model's own negative entropy; baselines use 60K labeled examples"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "Reasoning-RL gains can come with zero bits of outside information: the capability was latent in the frozen base, and RL sharpened it.",
+    "from_review": "capability-measures"
+   }
+  ]
+ },
+ {
+  "id": "wu-2025-rl-contamination",
+  "title": "Reasoning or Memorization? Unreliable Results of Reinforcement Learning Due to Data Contamination",
+  "authors": "Mingqi Wu, Zhihao Zhang, Qiaole Dong, Zhiheng Xi, Jun Zhao, Senjie Jin, Xiaoran Fan, Yuhao Zhou, Huijie Lv, Ming Zhang, Yanwei Fu, Qin Liu, Songyang Zhang, Qi Zhang",
+  "year": 2025,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2507.10532",
+  "topics": [
+   "capability-measures",
+   "rl-scaling"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "wu-2025-rl-contamination/1",
+    "claim": "On a leakage-free synthetic arithmetic benchmark, only accurate rewards push Qwen2.5 past the base model's boundary; random or incorrect rewards (which 'work' on contaminated MATH-500) do not.",
+    "quote": "Using this leakage-free dataset, we show that only accurate reward signals yield steady improvements that surpass the base model’s performance boundary in mathematical reasoning, whereas random or incorrect rewards do not.",
+    "location": "Abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Spurious-reward results that suggest RL needs no information are partly contamination; on clean tasks reward information matters, so 'bits learned' is not zero for real gains.",
+    "from_review": "capability-measures"
+   }
+  ]
+ },
+ {
+  "id": "petrov-2024-prefix-limits",
+  "title": "When Do Prompting and Prefix-Tuning Work? A Theory of Capabilities and Limitations",
+  "authors": "Aleksandar Petrov, Philip H.S. Torr, Adel Bibi",
+  "year": 2024,
+  "venue": "ICLR 2024",
+  "url": "https://arxiv.org/abs/2310.19698",
+  "topics": [
+   "capability-measures",
+   "capability-per-bit",
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "petrov-2024-prefix-limits/1",
+    "claim": "Context-based tuning (prompting, soft prompts, prefix-tuning) cannot change a layer's relative attention over content, only bias its output in a fixed direction; it elicits skills present in the base but may not learn tasks needing new attention patterns.",
+    "quote": "Concretely, context-based fine-tuning cannot change the relative attention pattern over the content and can only bias the outputs of an attention layer in a fixed direction. This suggests that while techniques like prompting, in-context learning, soft prompting, and prefix-tuning can effectively elicit skills present in the pretrained model, they may not be able to learn novel tasks that require new attention patterns.",
+    "location": "Abstract",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "A structural ceiling on prompt-like new state for a frozen model: it reweights existing skills and cannot add new attention patterns. Weight adapters (LoRA) are not covered by this limit.",
+    "from_review": "capability-measures"
+   }
+  ]
+ },
+ {
+  "id": "petrov-2024-prompt-universal",
+  "title": "Prompting a Pretrained Transformer Can Be a Universal Approximator",
+  "authors": "Aleksandar Petrov, Philip H.S. Torr, Adel Bibi",
+  "year": 2024,
+  "venue": "arXiv preprint",
+  "url": "https://arxiv.org/abs/2402.14753",
+  "topics": [
+   "capability-measures",
+   "theory"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "petrov-2024-prompt-universal/1",
+    "claim": "In contrast, some pretrained transformers can approximate any sequence-to-sequence function given a suitable prefix, with depth linear in sequence length.",
+    "quote": "Moreover, any sequence-to-sequence function can be approximated by prefixing a transformer with depth linear in the sequence length.",
+    "location": "Abstract",
+    "quantities": [],
+    "grade": "theoretical",
+    "bears_on": "There is no expressivity ceiling in principle on frozen model plus prefix; any practical ceiling is about the length of the prefix needed and what a given trained model supports, not a theorem.",
+    "from_review": "capability-measures"
+   }
+  ]
+ }
+]
