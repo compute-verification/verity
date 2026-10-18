@@ -16,9 +16,12 @@ Ligerito level 0, the values between `Zk.LABEL_OPEN` and `Zk.LABEL_CLOSE`. The d
 leaves.
 
 The frame decides the rep's refusals from the verifier's coins alone (`Masker.answer`, the coins the stream answered each
-round it released): a zerocheck outer coin `r_j = 1`, and, at the opening's label, a mask slot whose weights on the claim
+round it released): a zerocheck outer coin `r_j = 1`; at the opening's label, a mask slot whose weights on the claim
 points of the table's reps so far (`prior`'s, then this rep's, each from its coins: `claimPoints`) have less than full rank
-(`maskRank`). Either is a stop the public coins decide (`STOP`): nothing of the round leaves.
+(`maskRank`); level 0's `ρ_0, ρ_1` dependent over F128 (`Zk.rhoIndependent`, the coins after its last masked value); and
+`β = 0` in the inner proof (its third round's coin, counted from `Zk.LABEL_INNER`). Each is a stop the public coins decide
+(`STOP`): nothing of the round leaves. The inner proof is the firewall's own, and its rounds leave through the frame as
+every other round does, unmasked.
 
 Any other stop comes at `Finish`, never before (§10.1): once a round fails the firewall's check, or `round` refuses one, the
 rep is `stopped`. The firewall then sends the statement's scheduled round in the device's place, and every value of the
@@ -48,6 +51,11 @@ def N_INNER : Nat := 7
 def SALT : Nat := 192
 /-- The prefix of a stop the verifier's coins decide (`zk_veil`'s refusals). -/
 def STOP : String := "PROVER-STOPPED: "
+/-- Level 0's combination coins `ρ_0, ρ_1 ∈ F256`, as the stream answers them: four F128 words. -/
+def RHO_COINS : Nat := 4
+/-- The inner proof's rounds (`Zk.verifyInner`: `ε`, the batching coins, `β`, the queries), and `β`'s among them. -/
+def INNER_ROUNDS : Nat := 4
+def INNER_BETA : Nat := 2
 
 /-- How many of the absorbed values belong to a masked Ligerito level 0 (none when `k0 = 0`: level 0 is not masked). -/
 def nLig (l : Zk.PadLayout) : Nat := if l.k0 > 0 then l.nOod0 + 4 * l.k0 + 4 else 0
@@ -233,6 +241,10 @@ structure Masker where
   done : Bool := false
   doneL0 : Bool := false
   l0 : Bool := false
+  /-- level 0's coins after its last masked value, as the stream answered them: `ρ_0`'s words, then `ρ_1`'s -/
+  rho : Array F128 := #[]
+  /-- the inner proof's rounds answered so far, once its label came -/
+  inner : Option Nat := none
   /-- a round failed the firewall's check or was refused: the algebraic phase's values leave as their pads alone, and the
   rep ends in `stop` -/
   stopped : Bool := false
@@ -262,7 +274,13 @@ def Masker.label (c : Cfg) (s : Masker) (l : ByteArray) : V (Masker × ByteArray
   if isLabel l Zk.LABEL_CLOSE && s.l0 then
     if s.pos != c.order.size then
       throw s!"level 0 closed after {s.pos} of the layout's {c.order.size} masked values"
+    if s.rho.size != RHO_COINS then
+      throw s!"level 0 closed after {s.rho.size} of its {RHO_COINS} ρ coins"
     s := { s with l0 := false, on := false, doneL0 := true }
+  if isLabel l Zk.LABEL_INNER then
+    if s.inner.isSome then throw "a second inner proof"
+    if !s.done || s.on || (c.lig && !s.doneL0) then throw "the inner proof began before the opening ended"
+    s := { s with inner := some 0 }
   let mut out := labelFrame l
   if isLabel l LABEL_ZC && !s.done then
     s := { s with on := true }
@@ -280,14 +298,36 @@ def Masker.absorb (c : Cfg) (s : Masker) (v : F128) : V (Masker × F128) := do
   let v := if s.stopped && s.pos < c.nPiop then 0 else v
   return ({ s with pos := s.pos + 1 }, v + p)
 
+/-- The coins `c` of the inner proof's round `k`: `β = 0` at its third is a stop (`zk_veil::prove_inner`,
+`Zk.verifyInner`), at which the simulator would divide by `β`. -/
+def innerCoins (k : Nat) (c : Array F128) : V Unit := do
+  if k == INNER_BETA then
+    if c.size != 1 then throw s!"the inner proof's β round squeezed {c.size} coins, not 1"
+    if c[0]!.isZero then throw s!"{STOP}degenerate coin β = 0"
+
+/-- Level 0's coins `c` after its last masked value, its `ρ` words so far being `r`: once all four are in, `ρ_0, ρ_1`
+dependent over F128 is a stop (`zk::rho_independent`, `Zk.rhoIndependent`), at which `ρ_0 R_0 + ρ_1 R_1` is not uniform. -/
+def rhoCoins (r c : Array F128) : V (Array F128) := do
+  let r' := r ++ c
+  if r.size < RHO_COINS && RHO_COINS ≤ r'.size && !Zk.rhoIndependent (⟨r'[0]!, r'[1]!⟩, ⟨r'[2]!, r'[3]!⟩) then
+    throw s!"{STOP}degenerate coins: rho_0, rho_1 dependent over F128"
+  return r'
+
 /-- The coins `c` the stream answered the round last released. The algebraic phase's are kept (the claim points), and a
 zerocheck outer coin `r_j = 1` among them is a stop (`zk_veil::Masking::refuse_outer`): at `r_j = 1` the replay's round `j`
-divides by zero. -/
+divides by zero. Level 0's after its last masked value are `ρ`'s (`rhoCoins`), and the inner proof's are counted, its
+third being `β` (`innerCoins`). -/
 def Masker.answer (cfg : Cfg) (s : Masker) (c : Array F128) : V Masker := do
   let some n := s.owed | throw "coins for no round"
   if c.size != n then throw s!"{c.size} coins for a round that squeezed {n}"
   let s := { s with owed := none }
-  if !s.on || s.l0 then return s
+  if let some k := s.inner then
+    innerCoins k c
+    return { s with inner := some (k + 1) }
+  if s.l0 then
+    if s.pos != cfg.order.size then return s
+    return { s with rho := ← rhoCoins s.rho c }
+  if !s.on then return s
   let start := s.coins.size
   let s := { s with coins := s.coins ++ c }
   let nOuter := cfg.lay.nMlv - N_INNER
@@ -296,10 +336,15 @@ def Masker.answer (cfg : Cfg) (s : Masker) (c : Array F128) : V Masker := do
       throw s!"{STOP}degenerate coin: zerocheck outer coin r_{i - K_SKIP} = 1"
   return s
 
-/-- Whether the rep's stream ended with every masked phase closed, every pad of the order used and every round's coins
-answered. -/
-def Masker.finished (c : Cfg) (s : Masker) : Bool :=
-  s.done && (s.doneL0 || !c.lig) && s.pos == c.order.size && s.owed.isNone
+/-- Why the rep's stream cannot end here, if it cannot: a round's coins unanswered, a pad of the order unused, a masked
+phase open, or the inner proof's rounds not all released. -/
+def Masker.unfinished (c : Cfg) (s : Masker) : Option String :=
+  if let some k := s.owed then some s!"the rep ended before the {k} coins of its last round"
+  else if s.pos != c.order.size then some s!"the rep ended after {s.pos} of the layout's {c.order.size} masked values"
+  else if !s.done || (c.lig && !s.doneL0) then some "the rep ended inside a masked phase"
+  else if s.inner != some INNER_ROUNDS then
+    some s!"the rep ended after {s.inner.getD 0} of the inner proof's {INNER_ROUNDS} rounds"
+  else none
 
 /-- One device round `content` of the rep configured by `c` that squeezes `n` coins: the round that leaves, and the state
 after it, which owes the
@@ -307,6 +352,7 @@ round's coins; or why the round is not a device round (a frame that overruns it,
 of other than `n` coins, a round without its squeeze, more masked values than the layout's, a masked phase closed early),
 or a stop the coins decide. -/
 def round (c : Cfg) (s : Masker) (content : ByteArray) (n : Nat) : V (ByteArray × Masker) := do
+  if s.inner == some INNER_ROUNDS then throw s!"a round after the inner proof's {INNER_ROUNDS}"
   let mut s := s
   let mut out := ByteArray.empty
   let mut pos := 0
@@ -395,8 +441,9 @@ then `coins N` followed by the `16 N` bytes of the coins the stream answered it 
 the last one's coins. `round N LEN fail` is the statement's scheduled round in place of a device round that failed the
 firewall's check: it stops the rep first. A round `round` refuses is answered `err WHY`, releases nothing and stops the rep,
 which stays open for the scheduled round in its place. A round or coins the refusals stop are answered `stop WHY` (`STOP`),
-nothing of the round leaving, and end the rep. `finish` is answered `ok`, or `stop` for a stopped rep, when every masked
-phase closed with every pad used. Anything else is answered `err WHY` and ends the rep: nothing after it leaves. -/
+nothing of the round leaving, and end the rep. The inner proof's `INNER_ROUNDS` rounds, after the opening's, are rounds
+like any other. `finish` is answered `ok`, or `stop` for a stopped rep, when every masked phase closed with every pad used
+and the inner proof's rounds all left. Anything else is answered `err WHY` and ends the rep: nothing after it leaves. -/
 def cmd (_ : List String) : IO UInt32 := do
   let stdin ← IO.getStdin
   let stdout ← IO.getStdout
@@ -470,11 +517,9 @@ def cmd (_ : List String) : IO UInt32 := do
         stdout.flush
       | .error e => return (← refuse s!"an earlier rep's coins: {e}")
     | ["finish"] =>
-      if s.finished c then
-        stdout.putStrLn (if s.stopped then "stop" else "ok")
-        stdout.flush
-      else if let some k := s.owed then return (← refuse s!"the rep ended before the {k} coins of its last round")
-      else return (← refuse s!"the rep ended after {s.pos} of the layout's {c.order.size} masked values")
+      if let some why := s.unfinished c then return (← refuse why)
+      stdout.putStrLn (if s.stopped then "stop" else "ok")
+      stdout.flush
     | _ => return (← refuse s!"a request `{line}`")
   return 0
 
