@@ -17,5 +17,9 @@ export PYTHONPATH=$PWD:$PWD/integrations/vllm HF_HOME=${HF_HOME:-/workspace/hf} 
 DATA=$("$PY" -c "from huggingface_hub import hf_hub_download as d; print(d('anon8231489123/ShareGPT_Vicuna_unfiltered', 'ShareGPT_V3_unfiltered_cleaned_split.json', repo_type='dataset'))")
 sha256sum "$DATA" > "$O/sharegpt.sha256"
 nvidia-smi --query-gpu=index,name,memory.used,utilization.gpu --format=csv > "$O/gpus.csv" || true
-HF_HUB_OFFLINE=1 "$PY" benchmarks/kv_lifetime/serve.py --out "$O" --sharegpt "$DATA" ${ARGS:-}
+# MODEL (a Hugging Face id) is served from its snapshot in the node's cache, which has no refs to resolve offline
+MODEL=${MODEL:-unsloth/Meta-Llama-3.1-8B-Instruct}
+SNAP=$(ls -d "$HF_HOME/hub/models--${MODEL//\//--}/snapshots/"*/ | head -1)
+[ -n "$SNAP" ] || { echo "no snapshot of $MODEL under $HF_HOME"; exit 3; }
+HF_HUB_OFFLINE=1 "$PY" benchmarks/kv_lifetime/serve.py --out "$O" --sharegpt "$DATA" --model "$SNAP" ${ARGS:-}
 "$PY" benchmarks/kv_lifetime/analyze.py "$O" --warmup "${WARMUP:-120}"
