@@ -609,6 +609,34 @@ def test_a_kernel_wrong_only_on_edge_words_is_caught():
     assert f["name"].startswith("correspondence/kernel-mismatch CircuitCheckKernel_v1 [numpy]")
 
 
+def test_a_word_definition_that_differs_from_its_boolean_definition_is_caught():
+    """The Boolean Definition is the definition: the word Definition it names must equal its gates through the word view, whether
+    or not it is admitted as the accelerator (`verity.ml.circuits.evaluation.accelerate`), and the record says which."""
+    from verity.ml.circuits import boolean as BL
+    from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+    from verity.ml.circuits.evaluation import admit
+    from verity.ml.circuits.refs import Coll, concat
+    from verity.ml.circuits.types import Array, Value
+
+    nib = Array(4, BL.BIT)
+
+    def xor_bits(B, S, x, y):
+        return B.batch(BL.XOR, Coll(Array(4, Array(2, BL.BIT)), concat([c.refs for i in range(4) for c in (x[i], y[i])])), axes=(0,))
+
+    for name, word, admitted in (("CircuitCheckXorBits", lambda x, y: x ^ y, True), ("CircuitCheckOrBits", lambda x, y: x | y, True),
+                                 ("CircuitCheckOrBitsPlain", lambda x, y: x | y, False)):
+        d = CompositeDefinition(name, 1, (), lambda S: ((("x", nib), ("y", nib)), nib), xor_bits, register=False)
+        d.word = PrimitiveDefinition(f"{name}Word", 1, (("x", Value(4)), ("y", Value(4))), Value(4), word, register=False)
+        F = CK.Findings()
+        rec = CK.word_view(bind(admit(d) if admitted else d), OPTS, F)
+        assert rec["via"] == f"accelerator:{name}Word_v1" and rec["admitted"] is admitted and rec["compared"] > 0
+        if name == "CircuitCheckXorBits":
+            assert rec["mismatches"] == 0 and not F.failures
+        else:
+            (f,) = F.failures
+            assert rec["mismatches"] > 0 and f["name"].startswith(f"correspondence/accelerator-mismatch {name}_v1 [{name}Word_v1]: ")
+
+
 def test_a_lowering_that_differs_from_the_ir_is_caught(monkeypatch):
     from verity_flock import ir_lower as IL
     from verity_vllm.program.registry import prims as P

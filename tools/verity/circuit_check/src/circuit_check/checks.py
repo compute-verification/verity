@@ -1,12 +1,13 @@
 """The checks, over one Definition, one subcircuit (a template bound), or one served row's request Program.
 
-    correspondence   the reference (`verity.ml.circuits.evaluation.evaluate`, the IR evaluator; a vLLM Definition's is its registered
-                     evaluator) on the edge and random vectors of `circuit_check.vectors`: it must be total (a Definition whose
-                     reference raises is partial), and every realization of it must equal it bit for bit: every registered
-                     kernel (`verity.ml.circuits.evaluation.self_check`), a template's evaluated target where it is another Definition, and
-                     the C-Flock Boolean lowering (`verity_flock.ir_lower`: the whole Definition when it is small, a template's
-                     proof units otherwise); a Boolean Definition with a word counterpart
-                     (`verity.ml.circuits.boolean.trace.word_of`) also equals that word Definition through its word view.  A
+    correspondence   the reference (`verity.ml.circuits.evaluation.evaluate` on the gates, ``gates=True``, the IR evaluator; a vLLM
+                     Definition's is its registered evaluator) on the edge and random vectors of `circuit_check.vectors`: it must
+                     be total (a Definition whose reference raises is partial), and every realization of it must equal it bit for
+                     bit: every registered kernel (`verity.ml.circuits.evaluation.self_check`), a template's evaluated target where it
+                     is another Definition, and the C-Flock Boolean lowering (`verity_flock.ir_lower`: the whole Definition when it
+                     is small, a template's proof units otherwise); the word Definition a Boolean Definition names
+                     (`verity.ml.circuits.boolean.trace.word_of`, its accelerator) must equal the Boolean gates through the word view
+                     (``accelerator:<word>``, with whether it is admitted).  A
                      registered table a Definition reads (`targets.TABLE_PROBES`) is read lazily and probed at chosen
                      entries (`vectors.table_instances`), recorded under ``table`` with the words the instances read
     ports            a Definition's declared return intervals (`verity.ml.circuits.ports`, PROTOCOL.md §12), which the Build takes
@@ -151,7 +152,7 @@ def reference_outputs(t: Any, params: Sequence, arrays: Sequence[np.ndarray]) ->
     for i in range(n):
         args = instance_args(params, arrays, i)
         try:
-            out.append(tuple(evaluate(t, *args)))
+            out.append(tuple(evaluate(t, *args, gates=True)))
         except Exception as e:  # noqa: BLE001  (a partial reference: the finding)
             out.append(None)
             raised.append({"instance": i, "args": _short(args), "error": f"{type(e).__name__}: {str(e)[:160]}"})
@@ -169,7 +170,7 @@ def _probed_correspondence(t: Any, params: Sequence, probe: Any, opts: Options, 
     raised: list[dict] = []
     for i, args in enumerate(instances):
         try:
-            ref.append(tuple(evaluate(t, *args)))
+            ref.append(tuple(evaluate(t, *args, gates=True)))
         except Exception as e:  # noqa: BLE001  (a partial reference: the finding)
             ref.append(None)
             raised.append({"instance": i, "args": _short(args), "error": f"{type(e).__name__}: {str(e)[:160]}"})
@@ -354,11 +355,13 @@ def _wide_words(t: Any, params: Sequence[Any], ret: Any, arrays: Sequence[np.nda
 
 
 def word_view(t: Any, opts: Options, F: Findings) -> dict | None:
-    """A Boolean Definition against the word Definition it computes (`verity.ml.circuits.boolean.trace.word_of`), through the word view
-    (`verity.ml.circuits.evaluation.bits.evaluate_words`), on the word Definition's edge and random vectors."""
+    """The word Definition a Boolean Definition names (`verity.ml.circuits.boolean.trace.word_of`) against the Boolean one, which is
+    the definition: on the word Definition's edge and random vectors, the word Definition must equal the Boolean gates through the
+    word view (`verity.ml.circuits.evaluation.bits.evaluate_words`, which evaluates the gates).  This is what holds an admitted
+    accelerator (`verity.ml.circuits.evaluation.accelerate`) equal to its Boolean Definition; ``admitted`` says whether it is one."""
     if isinstance(t, (PrimitiveDefinition, ScalarReference)) or not is_boolean(t):
         return None
-    from verity.ml.circuits.evaluation import evaluate_batch
+    from verity.ml.circuits.evaluation import accelerator, evaluate_batch
     from verity.ml.circuits.evaluation.bits import evaluate_words
     from verity.ml.circuits.boolean.trace import word_of
 
@@ -371,17 +374,17 @@ def word_view(t: Any, opts: Options, F: Findings) -> dict | None:
     n = arrays[0].shape[0]
     pb, rb = signature_of(t)
     if max(w for p in (*pb, rb) for w in BL.elements(p)) > 64:
-        want = np.asarray(evaluate_batch(word, *arrays), dtype=object).reshape(n, -1)
-        got = _wide_words(t, pb, rb, arrays, n)
+        boolean = _wide_words(t, pb, rb, arrays, n)
+        got = np.asarray(evaluate_batch(word, *arrays), dtype=object).reshape(n, -1)
     else:
-        want = np.asarray(evaluate_batch(word, *arrays), dtype=np.uint64).reshape(n, -1)
-        got = np.asarray(evaluate_words(t, *arrays), dtype=np.uint64).reshape(n, -1)
-    bad = np.flatnonzero((got != want).any(axis=1)).tolist()
+        boolean = np.asarray(evaluate_words(t, *arrays), dtype=np.uint64).reshape(n, -1)
+        got = np.asarray(evaluate_batch(word, *arrays), dtype=np.uint64).reshape(n, -1)
+    bad = np.flatnonzero((got != boolean).any(axis=1)).tolist()
     if bad:
-        F.fail("correspondence", "word-view-mismatch", t.id, f"[{word.id}]: {len(bad)} of {n} vectors", via=f"word-view:{word.id}",
-               examples=[{"instance": i, "args": _short(instance_args(pw, arrays, i)), "boolean": _short(got[i].tolist()),
-                          "word": _short(want[i].tolist())} for i in bad[:_EXAMPLES]])
-    return {"via": f"word-view:{word.id}", "compared": n, "mismatches": len(bad)}
+        F.fail("correspondence", "accelerator-mismatch", t.id, f"[{word.id}]: {len(bad)} of {n} vectors", via=f"accelerator:{word.id}",
+               examples=[{"instance": i, "args": _short(instance_args(pw, arrays, i)), "word": _short(got[i].tolist()),
+                          "boolean": _short(boolean[i].tolist())} for i in bad[:_EXAMPLES]])
+    return {"via": f"accelerator:{word.id}", "admitted": accelerator(t) is not None, "compared": n, "mismatches": len(bad)}
 
 
 # --- Boolean circuits -------------------------------------------------------------------------------------------------------
