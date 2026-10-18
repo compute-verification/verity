@@ -4,6 +4,7 @@ import Proofs.Accounting.TS.Facets
 import Proofs.Accounting.TS.Tensor
 import Proofs.Accounting.TS.ProofsSound
 import Proofs.Accounting.TS.Fork
+import Proofs.Accounting.TS.Drawn
 import Proofs.Pouw.RelativeSecurity
 
 /-!

@@ -14,6 +14,9 @@ note:20261017T0321Z-draft-eps1-tensor), each `def G : Prop`, proved (or a `sorry
 * `ProofsSoundOfPinned`: (I8) `ProofsSound` from binding at `δ_bind`, proof soundness at `δ_ZK`, the Definitions'
   pinning and E1(c) (`RightFixed`); `BindingOfFork`: binding's failure squared is at most its fork form's, two runs
   off one commitment opening it differently, so `δ_bind = √δ_fork`.
+* `ProofsSoundOfDrawn`: (I8) at `n_π = s` for a sampled window, from its drawn units' proofs (`DrawnLayer`), its event
+  over the drawn units only; `DrawnBindingOfFork`: the drawn units' binding failure squared is at most `|J|²` times the
+  fork form at the draw, so `δ_bind = |J|·√δ_fork`.
 * `FloorCreditD3`: Corollary D3, the credit at the floor, with every term `≥ 0` and `T(H) = γ_♭·T_cred`.
 * `BindingFacetD1`, `VectorThresholdD1`: Corollary D1, one binding facet, and the vector route's threshold
   `q ≥ 32(α + β·φ_del)/(β·ω)`.
@@ -200,6 +203,31 @@ twice from round `w`, is binding at `δ_bind = √δ_fork`. -/
 def BindingOfFork : Prop :=
   ∀ {V : Type} (Ω : Type) [Fintype Ω] (S nπ : ℕ) (pf : ProofLayer Ω S nπ V) (w : Fin S),
     prob (fun x => pf.Moved x w) ^ 2 ≤ prob (fun p : Paths Ω S × Paths Ω S => pf.Forked w p.1 p.2)
+
+/-- **(I8) for a sampled window, from its drawn units' proofs.** In 𝒫_samp over `S` rounds whose coins are `A` before
+the draws and the live draw coin `B`, which names `s` units a round, each proved alone with its own noise's generation
+(`DrawnLayer`), and whose play is its drawn units' proofs' (`Of`): if in every round binding fails for some drawn unit
+with probability at most `δ_bind` (`Moved`: a drawn unit's accepted proof opens values other than those committed
+before the draws), each draw's proof is unsound with probability at most `δ_ZK` (`SoundAt`), each unit's relation pins
+its values (`Pins`) and E1(c) holds with the drawn units right (`RightFixedDrawn`), then (I8) `ProofsSound` holds at
+`n_π = s`, `S·(δ_bind + s·δ_ZK)`. Its event is that in some round binding or the proof fails for a drawn unit, so an
+undrawn unit's values enter only through the ideal game and the share. -/
+def ProofsSoundOfDrawn : Prop :=
+  ∀ {K T L U J V : Type} [Fintype K] [Fintype T] [Fintype L] [Fintype U] (A B : Type) [Fintype A] [Fintype B]
+    (S s : ℕ) (P : Play (A × B) S K T L U) (pf : DrawnLayer A B S s J V) (Nw δbind δzk : ℝ),
+    pf.Of P → (∀ w, prob (fun x => ∃ i, pf.Moved x w (pf.drawnAt x w i)) ≤ δbind) → pf.SoundAt δzk → pf.Pins →
+    RightFixedDrawn P pf Nw → ProofsSound P Nw δbind δzk s
+
+/-- **Binding for the drawn units from the fork form.** For a sampled window's proofs and a round `w`, the probability
+that binding fails for some drawn unit (`Moved`, against the values committed before the draws), squared, is at most
+`|J|²` times the probability that two runs off one commitment, the second continuing from round `w`'s draws on fresh
+coins, accept some unit's proof on both and open it differently (`Forked`). So a bound `δ_fork` on the fork form, which
+`cr/sha-512` gives at a finder that runs the window twice from round `w`'s draws, is binding at `δ_bind = |J|·√δ_fork`. -/
+def DrawnBindingOfFork : Prop :=
+  ∀ {J V : Type} [Fintype J] (A B : Type) [Fintype A] [Fintype B] (S s : ℕ) (pf : DrawnLayer A B S s J V)
+    (w : Fin S),
+    prob (fun x => ∃ i, pf.Moved x w (pf.drawnAt x w i)) ^ 2 ≤
+      (Fintype.card J : ℝ) ^ 2 * prob (fun p : Paths (A × B) S × Paths (A × B) S => ∃ j, pf.Forked w j p.1 p.2)
 
 /-- **Lemma 2 (output count).** In a straight-line program whose class-`k` instances write at most `ω_k` words each,
 the owned committed positions (one per head write their values trace to) are at most `Σ_k ω_k n_k`. -/
