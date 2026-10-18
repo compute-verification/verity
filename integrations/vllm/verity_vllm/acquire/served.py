@@ -85,6 +85,7 @@ _SYM = re.compile(r"^(s\d+) = (\w+)$")
 _ASSERT = re.compile(r"^assert_size_stride\((\w+), \(([^()]*)\), \(([^()]*)\), 'input'\)$")
 _META = re.compile(r"^assert_(?:size_stride|tensor_metadata)\((\w+), \(([^()]*)\), \(([^()]*)\)(?:, torch\.(\w+))?, '([^']*)'\)$")
 _MOE = re.compile(r"^(\w+) = (torch\.ops\.\w+\.moe_forward\.default)\((.*)\)$")
+_ALIAS = re.compile(r"^(\w+) = (\w+)$")
 _ALLOC = re.compile(r"^(\w+) = empty_strided_cuda\(\(([^()]*)\), \(([^()]*)\), torch\.(\w+)\)$")
 _MM = re.compile(r"^extern_kernels\.mm\((.*), out=(\w+)\)$")
 _HOOK = re.compile(r"^run_intermediate_hooks\('verity\|(\w+)\|(\w+)', (\w+)\)$")
@@ -228,6 +229,9 @@ class _Piece:
                 raise self.fail(f"{line!r}: not the {self.shape.get(buf)} bf16 buffer {self.extern.get(buf)} returned")
         elif m := _MOE.match(line):
             self._moe(m.group(1), m.group(2), C._split_args(m.group(3)))
+        elif (m := _ALIAS.match(line)) and m.group(2) in self.extern:
+            new, old = m.groups()                           # an extern op's return renamed; the old name is dead
+            self.shape[new], self.extern[new], self.cur[new] = self.shape.pop(old), self.extern.pop(old), self.cur.pop(old)
         elif m := _ALLOC.match(line):
             if m.group(4) != "bfloat16":
                 raise self.fail(f"{line!r}: a {m.group(4)} buffer")
@@ -281,11 +285,15 @@ class _Piece:
         self.calls.append({"op": "mm", "gemm": [K, N], "reads": [x, w], "writes": [y["value"]]})
 
     def _moe(self, out: str, op: str, args: list[str]) -> None:
-        """`out = moe_forward(x, x, None, None, layer, 0)`: the fused-MoE block on x's rows, its gate inside the op (the router logits
-        argument is x), no shared-expert input or token ids, no unpadded width; `layer` an argument (vLLM's opaque layer name) or a
-        string.  The op returns a new buffer of x's shape and mutates x, which no later line may read."""
-        if len(args) != 6 or args[1] != args[0] or args[2:4] != ["None", "None"] or args[5] != "0" or args[0] not in self.shape:
-            raise self.fail(f"{op}({', '.join(args)}): x, x, None, None, a layer, 0 on a buffer of token rows is modelled")
+        """`out = moe_forward(x, r, None, None, layer, 0)`: the fused-MoE block on x's rows, its gate inside the op on x (the runner
+        holds the gate and rebinds the router-logits argument r to its output, so r is never read: x itself, or a buffer of x's
+        shape that Inductor gives the op beside the x it mutates), no shared-expert input or token ids, no unpadded width; `layer`
+        an argument (vLLM's opaque layer name) or a string.  The op returns a new buffer of x's shape and mutates x, which no later
+        line may read."""
+        if (len(args) != 6 or args[2:4] != ["None", "None"] or args[5] != "0" or args[0] not in self.shape
+                or self.shape.get(args[1]) != self.shape[args[0]]):
+            raise self.fail(f"{op}({', '.join(args)}): x, x or a buffer of its shape, None, None, a layer, 0 on a buffer of token rows "
+                            "is modelled")
         x = self.ref(args[0])
         lit = re.fullmatch(r"'([^']*)'", args[4])
         layer = {"name": lit.group(1)} if lit else self.ref(args[4])

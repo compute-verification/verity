@@ -102,6 +102,11 @@ def KERNEL(in_ptr0, in_ptr1, in_ptr2, out_ptr1, xnumel, r0_numel, XBLOCK : tl.co
         tl.store(out_ptr1 + (r0_1 + {N}*x0), tmp22, r0_mask & xmask)
 """
 
+# ADD_NORM storing its rows twice: the two inputs of an extern op that mutates one of them (the fused-MoE op's hidden states and
+# its router-logits slot), which Inductor gives two buffers
+ADD_NORM_COPY = (ADD_NORM.replace("out_ptr1, xnumel", "out_ptr1, out_ptr2, xnumel", 1)
+                 + "        tl.store(out_ptr2 + (r0_1 + {N}*x0), tmp22, r0_mask & xmask)\n")
+
 ADD2_NORM = """\
 def KERNEL(in_ptr0, in_ptr1, in_ptr2, in_ptr3, out_ptr1, out_ptr2, xnumel, r0_numel, XBLOCK : tl.constexpr, R0_BLOCK : tl.constexpr):
     r0_numel = {N}

@@ -16,6 +16,7 @@ or the row of a table that each element of another parameter indexes) and the pa
 
   EMBED_NORM       Embedding_v1{V, H=N}(in_ptr0 ids, in_ptr1 table) -> out_ptr0; InductorRMSNorm_v1(out_ptr0, in_ptr2) -> out_ptr2
   ADD_NORM         InductorAddRMSNorm_v1(in_ptr0, in_ptr1, in_ptr2) -> out_ptr1
+  ADD_NORM_COPY    ADD_NORM storing its rows twice: InductorAddRMSNorm_v1(in_ptr0, in_ptr1, in_ptr2) -> out_ptr1, and again -> out_ptr2
   ADD2_NORM        InductorAdd2RMSNorm_v1(in_ptr0, in_ptr1, in_ptr2, in_ptr3) -> (out_ptr1, out_ptr2)
   ADD2_NORM_FINAL  InductorAdd2RMSNormFinal_v1(in_out_ptr0, in_ptr0, in_ptr1, in_ptr2) -> in_out_ptr0
   SILU_MUL         InductorSiluMul_v1{I}(in_ptr0) -> out_ptr0
@@ -34,7 +35,8 @@ from typing import Any, Callable
 
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.types import Array, Tuple, Value
-from verity_vllm.acquire.inductor_texts import ADD2_NORM, ADD2_NORM_FINAL, ADD_NORM, EMBED_NORM, QK_NORM_ROPE, ROPE_QK, SILU_MUL
+from verity_vllm.acquire.inductor_texts import (ADD2_NORM, ADD2_NORM_FINAL, ADD_NORM, ADD_NORM_COPY, EMBED_NORM, QK_NORM_ROPE, ROPE_QK,
+                                                SILU_MUL)
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import inductor as IR
 
@@ -143,6 +145,11 @@ TEMPLATES = (
              ADD_NORM, _norm_relations,
              (Call(IR.InductorAddRMSNorm, _norm_statics, (Read("in_ptr0"), Read("in_ptr1"), Read("in_ptr2")), ("out_ptr1",)),), _red_scalars,
              config=True),
+    Template("ADD_NORM_COPY", "reduction",
+             _sig({"in_ptr0": _BF16, "in_ptr1": _BF16, "in_ptr2": _BF16, "out_ptr1": _BF16, "out_ptr2": _BF16}, _RED, _RED_C),
+             ADD_NORM_COPY, _norm_relations,
+             tuple(Call(IR.InductorAddRMSNorm, _norm_statics, (Read("in_ptr0"), Read("in_ptr1"), Read("in_ptr2")), (o,))
+                   for o in ("out_ptr1", "out_ptr2")), _red_scalars, config=True),
     Template("ADD2_NORM", "reduction",
              _sig({"in_ptr0": _BF16, "in_ptr1": _BF16, "in_ptr2": _BF16, "in_ptr3": _BF16, "out_ptr1": _BF16, "out_ptr2": _BF16}, _RED, _RED_C),
              ADD2_NORM, _norm_relations,

@@ -1,5 +1,5 @@
 """The served Build's reading of vLLM's fused-MoE op (`acquire.served`, `acquire.served_moe`): a wrapper line `moe_forward(x, x, None,
-None, layer, 0)` parses into one opaque call; `served_moe.expand` turns it into the Calls the op runs, the eager MoE block's Call
+None, layer, 0)`, or with a router-logits slot of x's shape that the op never reads, parses into one opaque call; `served_moe.expand` turns it into the Calls the op runs, the eager MoE block's Call
 boundaries, with the planes the serving process commits from inside the op, and refuses a block of any other form; each expert
 GEMM's Definition follows the launch config the process recorded at the step's rows."""
 from __future__ import annotations
@@ -60,10 +60,32 @@ def test_a_layer_named_in_the_wrapper_is_a_literal() -> None:
     assert prog["calls"][1]["layer"] == {"name": LAYER}
 
 
+#: the op beside the hidden states it mutates, its router-logits slot another buffer of their rows (which the runner never reads),
+#: and its return renamed, as Inductor emits it when another kernel writes both inputs
+TWO_INPUTS = (WRAPPER.replace("        buf1 = ", f"        buf9 = empty_strided_cuda((s7, {H}), ({H}, 1), torch.bfloat16)\n"
+                                                 f"        extern_kernels.mm(arg1_1, reinterpret_tensor(arg2_1, ({H}, {H}), (1, {H}), 0), out=buf9)\n"
+                                                 "        run_intermediate_hooks('verity|mm|buf9', buf9)\n        buf1 = ")
+              .replace("(buf0, buf0, None", "(buf0, buf9, None")
+              .replace(f"        assert_tensor_metadata(buf1, (s7, {H}), ({H}, 1), torch.bfloat16, '{OP}')\n        assert_alignment(buf1, 16, '{OP}')\n"
+                       "        run_intermediate_hooks('verity|moe_forward|buf1', buf1)\n",
+                       f"        buf6 = buf1\n        assert_size_stride(buf6, (s7, {H}), ({H}, 1), '{OP}')\n        assert_alignment(buf6, 16, '{OP}')\n"
+                       "        del buf1\n        run_intermediate_hooks('verity|extern|buf6', buf6)\n")
+              .replace("return (buf1, )", "return (buf6, buf9, )"))
+
+
+def test_the_router_logits_slot_may_be_another_buffer_never_read() -> None:
+    prog = _piece(TWO_INPUTS).program()
+    assert [v["name"] for v in prog["values"]] == ["mm/buf0", "mm/buf9", "extern/buf6"]
+    assert prog["calls"][2] == {"op": "moe_forward", "layer": {"arg": 3}, "reads": [{"value": 0, "width": H}], "writes": [2]}
+    assert prog["returns"] == [{"value": 2, "width": H}, {"value": 1, "width": H}]
+    with pytest.raises(Unmodelled, match="'buf1' is not a buffer"):
+        _piece(TWO_INPUTS.replace("return (buf6, buf9, )", "return (buf1, buf9, )"))
+
+
 @pytest.mark.parametrize("old,new,why", [
-    ("(buf0, buf0, None", "(buf0, arg1_1, None", "x, x, None, None"),
-    ("None, arg3_1, 0)", "None, arg3_1, 1)", "x, x, None, None"),
-    ("None, None, arg3_1", "arg1_1, None, arg3_1", "x, x, None, None"),
+    ("(buf0, buf0, None", "(buf0, arg2_1, None", "a buffer of its shape"),
+    ("None, arg3_1, 0)", "None, arg3_1, 1)", "a buffer of its shape"),
+    ("None, None, arg3_1", "arg1_1, None, arg3_1", "a buffer of its shape"),
     (f"({H}, 1), torch.bfloat16, '{OP}'", f"({H}, 1), torch.float32, '{OP}'", "bf16 buffer"),
     (f"assert_tensor_metadata(buf1, (s7, {H})", f"assert_tensor_metadata(buf1, (s7, {2 * H})", "bf16 buffer"),
     (f"torch.bfloat16, '{OP}')", "torch.bfloat16, 'torch.ops.vllm.other.default')", "bf16 buffer"),

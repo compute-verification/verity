@@ -9,6 +9,7 @@ from __future__ import annotations
 __models__ = ("unsloth/Llama-3.2-1B",)
 
 import json
+import re
 import shutil
 import tarfile
 from collections import Counter
@@ -17,6 +18,7 @@ from pathlib import Path
 import pytest
 
 from verity_vllm.acquire import compiled as C
+from verity_vllm.acquire import inductor_templates as T
 from verity_vllm.acquire import served as SV
 from verity_vllm.acquire.inductor_templates import Unmodelled
 
@@ -123,6 +125,24 @@ def test_an_autotuned_kernel_binds_the_config_it_ran(art: Path) -> None:
 def test_a_kernel_without_one_executed_config_is_refused(art: Path, executed) -> None:
     with pytest.raises(Unmodelled, match="one config every instance ran is required"):
         _build(art, launch_configs=_autotuned(art, executed))
+
+
+def test_add_norm_storing_its_rows_twice_binds_its_definition_per_buffer(art: Path) -> None:
+    """The add + RMSNorm kernel that Inductor makes store its rows to two buffers (an extern op's two inputs, one of which the op
+    mutates) is the same Definition once per buffer."""
+    configs = json.loads((art / "launch_configs.json").read_text())
+    srcs = [(n, s) for p in sorted((art / "inductor").rglob("*.py")) for n, s in T.kernel_sources(p.read_text()).items()]
+    name, src = next((n, s) for n, s in srcs if T.recognize(n, s, T.launch_config(configs, s))["template"] == "ADD_NORM")
+    cfg = T.launch_config(configs, src)
+    store = re.search(r"\n( +tl\.store\(out_ptr1 \+ [^\n]*\n)", src).group(1)
+    twice = (src.replace("'out_ptr1': '*bf16'", "'out_ptr1': '*bf16', 'out_ptr2': '*bf16'", 1)
+             .replace("out_ptr1, xnumel", "out_ptr1, out_ptr2, xnumel", 1).replace(store, store + store.replace("out_ptr1", "out_ptr2"), 1))
+    one, two = T.recognize(name, src, cfg), T.recognize(name, twice, cfg)
+    assert two["template"] == "ADD_NORM_COPY" and two["literals"] == one["literals"]
+    assert [c["writes"][0]["param"] for c in two["calls"]] == ["out_ptr1", "out_ptr2"]
+    assert all({**c, "writes": None} == {**one["calls"][0], "writes": None} for c in two["calls"])
+    with pytest.raises(Unmodelled, match="none of the templates"):
+        T.recognize(name, twice.replace(store.replace("out_ptr1", "out_ptr2"), store.replace("out_ptr1", "out_ptr2").replace("tmp22", "tmp20")), cfg)
 
 
 @pytest.mark.parametrize("n,uniform,want", [(3, True, ("FULL", 4)), (8, True, ("FULL", 8)), (9, True, ("PIECEWISE", 16)),
