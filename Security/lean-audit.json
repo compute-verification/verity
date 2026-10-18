@@ -2053,6 +2053,12 @@
    "assumptions": [],
    "type_hash": "0ca6f0a275123378314dc43e013a4307202190dedf3d89891121f560de9fd854"
   },
+  "Accounting.SecurityProofs.TS.LiLowBit": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.LiLowBit : Accounting.Guarantees.TS.LiLowBit"],
+   "assumptions": [],
+   "type_hash": "eb372544b82d54f47ff7224758935ec2e5353159ea6f6ac47b65bebdb4d39242"
+  },
   "Accounting.SecurityProofs.TS.LiSegmentsBind": {
    "owner": "@compute-accounting",
    "signature": ["Accounting.SecurityProofs.TS.LiSegmentsBind : Accounting.Guarantees.TS.LiSegmentsBind"],
@@ -2106,6 +2112,12 @@
    "signature": ["Accounting.SecurityProofs.TS.LuckOfReceipt : Accounting.Guarantees.TS.LuckOfReceipt"],
    "assumptions": [],
    "type_hash": "ae399ff4f14b16a994012859adfb2f4af1fa9d30ae7bf2f368d6157b34573189"
+  },
+  "Accounting.SecurityProofs.TS.OneRegisterLowBit": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.OneRegisterLowBit : Accounting.Guarantees.TS.OneRegisterLowBit"],
+   "assumptions": [],
+   "type_hash": "d04435470eff3391510bbc4f6d43f4299b5917a86a55b8d3fd22da9b8d1ec8a9"
   },
   "Accounting.SecurityProofs.TS.OperandLuckCube": {
    "owner": "@compute-accounting",
@@ -6713,6 +6725,10 @@
    "Accounting.SecurityProofs.Gates.Bf16ToF32Affine": {
     "function": ["Accounting.Gates.classOf", "Verity.Prims.bf16ToF32"],
     "outcome": "none"
+   },
+   "Accounting.SecurityProofs.TS.LiLowBit": {
+    "function": "Pouw.Receipt.liChain",
+    "outcome": "none"
    }
   },
   "frozen": {
@@ -7274,7 +7290,8 @@
    "Accounting.SecurityProofs.TS.PrivateMoment": "lemma: exponential moments multiply over private coins whatever the shared ones (Fubini), each bound a hypothesis; not a property of a Lean function.",
    "Accounting.SecurityProofs.TS.TileLuck": "lemma: the deployed tile's exponential moment at most M, n columns sharing coins and r units a column, each unit's dead mass q and alive luck p hypotheses (AM-GM over the columns and over each column's units); not a property of a Lean function.",
    "Accounting.SecurityProofs.TS.TemplateCondition": "lemma: h1tile's segment (32 columns, words of at most 32 skipped products, a one-bit dither) meets TileLuck's condition with M = 1 at κ = 4 and r·θ = 1/256, from elementary bounds on exp; not a property of a Lean function.",
-   "Accounting.SecurityProofs.TS.TemplateMoment": "lemma: TileLuck at h1tile's segment, the gain's moment at most 1 at θ = 1/(256·r) a product and κ = 4; not a property of a Lean function."
+   "Accounting.SecurityProofs.TS.TemplateMoment": "lemma: TileLuck at h1tile's segment, the gain's moment at most 1 at θ = 1/(256·r) a product and κ = 4; not a property of a Lean function.",
+   "Accounting.SecurityProofs.TS.OneRegisterLowBit": "lemma: the barrier to a lower bound read off a fold's low bit, over every one-register fold of binding steps (a definition) whose steps' bit 0 is a function of the state's and the word's bits 0 (a hypothesis): the run's bit 0 is a parity of its words' bits 0; not a property of a Lean function."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
@@ -8946,7 +8963,7 @@
     "Accounting.TS.BindingStep": "c22e666b1e4035abf15886dbdf99fd2528959877bc5022d77ed9b57cb5c62c1c",
     "Accounting.TS.foldRun": "f3251505eafd31ec02c542ba34556238befd8a20f0add7a0c12e73f148c511d0"
    },
-   "guarantees": ["Accounting.SecurityProofs.TS.FoldFanIn"]
+   "guarantees": ["Accounting.SecurityProofs.TS.FoldFanIn", "Accounting.SecurityProofs.TS.OneRegisterLowBit"]
   },
   "Definitions.Accounting.TS.Machine": {
    "digest": "14155d8d7579d0f76acfc5d2bfe15eb21dd222a817df9da2cd141ded2c31c6f0",
@@ -14449,6 +14466,7 @@
     "Accounting.SecurityProofs.TS.DuoSegmentsBind",
     "Accounting.SecurityProofs.TS.Fx1FoldFanIn",
     "Accounting.SecurityProofs.TS.Fx1SegmentsBind",
+    "Accounting.SecurityProofs.TS.LiLowBit",
     "Accounting.SecurityProofs.TS.LiSegmentsBind",
     "Accounting.SecurityProofs.TS.LiWindowUnbound",
     "Accounting.SecurityProofs.TS.LuckCaseA",
@@ -14514,6 +14532,7 @@
     "Pouw.Receipt.liHalf": "14b4abf8590b72949c821f9d279c60b8fe96deb5cc391c7ac0e9649fe625c1bb"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.TS.LiLowBit",
     "Accounting.SecurityProofs.TS.LiSegmentsBind",
     "Accounting.SecurityProofs.TS.LiWindowUnbound",
     "Accounting.SecurityProofs.TS.LuckCaseA",
@@ -20454,6 +20473,14 @@
     "Accounting.SecurityProofs.TS.TemplateMoment",
     "Accounting.SecurityProofs.TS.TileLuck"
    ]
+  },
+  "Models.Accounting.Guarantees.TS.LowBit": {
+   "digest": "821f5f90febb8764f6e9e8825df495dbab11706d0cc211b4b0456d4223a95180",
+   "definitions": {
+    "Accounting.Guarantees.TS.LiLowBit": "9e1ac794149ca24e9d47e3c13ac9353f5f345aec23f40606620f4ac759fd39ba",
+    "Accounting.Guarantees.TS.OneRegisterLowBit": "5ce8e66780bfa2df640703a6d7e615b5529195aaa193df00b7a1d373dfe7b32d"
+   },
+   "guarantees": ["Accounting.SecurityProofs.TS.LiLowBit", "Accounting.SecurityProofs.TS.OneRegisterLowBit"]
   },
   "Models.Accounting.Guarantees.TS.Receipt": {
    "digest": "651e1dea3fd416c5b65434995caf696b4f0489138499787702674ce157cee9bc",
