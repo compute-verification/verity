@@ -19,7 +19,8 @@ from verity.ml.commitments.frame_v3 import FrameV3, Port, RowLeaf
 from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain
-from verity.ml.commitments.rowleaf import ROLE_X, row_leaf, sha512_row_layout
+from verity.ml.commitments.rowleaf import (ROLE_X, SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2, row_leaf,
+                                           sha512_row_layout, sha512_row_seg_digest, sha512_row_v2_digest)
 from verity.ml.circuits.defs import REGISTRY, bind
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registration as R
 from verity_vllm.commit import serving_rows as SR
@@ -225,3 +226,64 @@ def test_a_shared_row_member_commits_its_tables_and_writes_m0s_shared_row_body(t
     got = SR.flock_input_files(tmp_path / "w", 0, "flock-circuit v2\nMETA " + json.dumps(meta) + "\n", tmp_path / "m0")
     head = json.loads(Path(got["pub"]).read_bytes().split(b"\n", 1)[0])
     assert head["shared_rows"] == {"x": 3, "w": 5, "y": 15} and head["instances"] == 15
+
+
+def s8_window(chunks: list[tuple[int, int]], n: int = 5) -> tuple[SR.Window, list[SR.Member]]:
+    """``ScaledMmS8Coordinate_v1{K=64}``'s ``n`` units as bit-row members ``(base, size)``, under ``TemplatePopulations``."""
+    t = bind(REGISTRY["ScaledMmS8Coordinate_v1"], K=64, DOT=REGISTRY["BlackwellS8ImmaDot32_v1"])
+    ms = [SR.Member(P.template_id(t), (("x", 34), ("w", 34)), (("o0", 1),), size, base, name=f"{P.template_id(t)}/c{j}",
+                    schemas=(("x", SEG), ("w", V2), ("o0", V2))) for j, (base, size) in enumerate(chunks)]
+    return SR.Window(*SR.population_program([(t, n)], several=True), D.parse_law("stratified:2"), RUN, tuple(ms)), ms
+
+
+def test_bit_row_chunks_commit_each_port_under_its_schema_and_tile_their_template(tmp_path):
+    w, ms = s8_window([(0, 3), (3, 2)])
+    assert w.query["name"] == "Q_template_instances" and w.population == 5
+    rng = np.random.default_rng(5)
+    d = [{"rows": {p: rng.integers(0, 1 << 16, size=(m.n, 34), dtype=np.uint16) for p in ("x", "w")},
+          "outs": {"o0": rng.integers(0, 1 << 16, size=(m.n, 1), dtype=np.uint16)}} for m in ms]
+    c = SR.commit(w, d, salt_key=bytes(32))
+    inst, key = hm96.SHA512, hm96.SHA512.default_key
+    for m in ms:
+        assert m.out_rows == (("o0", 1),) and m.row_schemas == [[SEG, 544], [V2, 544], [V2, 16]]
+        for p, schema in (("x", SEG), ("w", V2), ("o0", V2)):
+            rows, port = c.rows[m.port(p)], m.port(p)
+            digest = sha512_row_seg_digest if schema == SEG else sha512_row_v2_digest
+            bcs = [inst.commit_string(key, digest(r.astype("<u2").tobytes(), 16 * len(r)), c.salts[port][i * 192:(i + 1) * 192])
+                   for i, r in enumerate(rows)]
+            assert b"".join(bcs) == c.bc[port]
+            dom = c.domains[port]
+            assert dom.binding == w.binding(port, schema, m.n)
+            fv = FrameV3({port: Port(dom, RowLeaf("sha512", ROLE_X, 16, 64))})
+            assert c.roots[port] == fv.root(port, [row_leaf(dom, i, inst.tree_leaf(key, b), schema) for i, b in enumerate(bcs)])
+    win = SR.write(c, tmp_path, {"row": 101}, SR.index_doc(ms, [[], []], RUN))
+    for k, m in enumerate(ms):
+        units = json.loads((tmp_path / f"m{k}-units.json").read_text())
+        assert units["indices"] == list(range(m.base, m.base + m.n)) and units["member"] == m.name
+        assert win["members"][k]["units_sha512"] == hashlib.sha512((tmp_path / f"m{k}-units.json").read_bytes()).hexdigest()
+        assert win["members"][k]["row_schemas"] == m.row_schemas and win["members"][k]["frame_v3"]["schemas"] == {"x": SEG, "w": V2, "o0": V2}
+    rec = json.loads((tmp_path / "registration.json").read_text())
+    mine, _ = s8_window([(0, 3), (3, 2)])
+    publics = {m.name: (tmp_path / f"m{k}-public.bin").read_bytes() for k, m in enumerate(ms)}
+    v = R.check(rec, mine.program, mine.query, mine.law, SR.SCHEME, SR.expected_ports(mine), leaf_layer=SR.leaf_layer(publics))
+    assert v.ok, v.detail
+    meta = {"scheme": SR.SCHEME, "ports": [["x", 34, 1], ["w", 34, 1], ["o0", 1, 1]], "input_ports": 2, "out_ports": [["o0", 1]],
+            "row_schemas": [[SEG, 544], [V2, 544], [V2, 16]], "vus_per_block": 1, "units_per_vu": 1, "subcircuit": "s8/k64"}
+    got = SR.flock_input_files(tmp_path, 1, "flock-circuit v2\nMETA " + json.dumps(meta) + "\n", tmp_path / "m1")
+    assert json.loads(Path(got["pub"]).read_bytes().split(b"\n", 1)[0])["units"]["indices"] == [3, 4]
+    with pytest.raises(ValueError, match="row schemas"):
+        SR.flock_input_files(tmp_path, 1, "flock-circuit v2\nMETA " + json.dumps(dict(meta, row_schemas=[[V2, 544]] * 2 + [[V2, 16]])) + "\n",
+                             tmp_path / "m2")
+
+
+@pytest.mark.parametrize("chunks", [[(0, 3), (4, 1)], [(3, 2), (0, 3)], [(0, 3), (2, 3)], [(0, 3)], [(0, 3), (3, 2), (5, 1)]])
+def test_chunks_that_do_not_tile_their_template_are_refused(chunks):
+    with pytest.raises(ValueError, match="partition's units"):
+        s8_window(chunks)
+
+
+def test_a_bit_row_member_names_a_bit_row_schema_for_every_port():
+    with pytest.raises(ValueError, match="bit-row member"):
+        SR.Member("t", (("x", 2),), (("o0", 1),), 1, schemas=(("x", V2),))
+    with pytest.raises(ValueError, match="bit-row member"):
+        SR.Member("t", (("x", 2),), (("o0", 1),), 1, schemas=(("x", V2), ("o0", SR.ROW_SCHEMA)))
