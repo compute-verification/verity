@@ -16,15 +16,21 @@ them.  Instead:
 * **Units and positions**: the call's units are its T/32 row blocks by N/32 column blocks, at positions
   s·U + off(w) + u.  Here U = Σ_w (T/32)(N_w/32), off(w) is the sum over the linears before w, and u runs row block by row block.
   The units' count, S·U, is fixed by the public parameters.
-* **Receipts**: `h1tile`'s unit on the GPU (`receipts.call_receipts`), on every unit of every call, empty rows included.
-  Seeds come from the salt, the position and the call's (root(A), root(B)).  There is one receipt tree per call.
+* **Selection** (`credit`): slot i is admitted iff its committed A row is not the canonical empty row, the OR of its bytes,
+  a function of the raw row alone.  A call's T admit bits are T/16 16-bit words, each its own hiding leaf of the call's
+  admit tree, written by an always-proved admit unit that reads the 16 rows.
+* **Receipts**: `h1tile`'s unit on the GPU (`receipts.gated_receipts`) on every live unit, one with an admitted slot among
+  its 32 rows.  Seeds come from the salt, the position and the call's (root(A), root(B)), inside the unit.  A dead unit skips
+  the noise and the receipt: its leaf is the canonical empty receipt (zero words), so every receipt tree keeps its shape.
+  There is one receipt tree per call.
 * **Coins** (``--coins``): seeded, the option's one salt, opened at install before serving; or live, a round a step from
   the proof service's challenger (`pouw.window.live_challenger`, `sampled_proofs.challenger.LiveRecord`).  Step s's round
-  root, over its A-table roots, is recorded before round s's coin opens, and the step's receipts take the round's salt
-  (`window.round_key`), so every candidate a round's noise reads is committed before that noise's coin.
-* **Credit**: static (coordinator, 21:38Z): every unit of the S·U is credited as compute, a count fixed by the public
-  parameters, so no selection decides credit.  H1's dither makes an empty row's unit real work (X = wrap8(0 + b)).  The
-  served rows (the slots whose committed scale is nonzero) are usefulness, reported beside the credit and never part of it.
+  root, over its A-table and admit roots, is recorded before round s's coin opens, and the step's units take the round's
+  salt (`h1tile.live_salt`: `window.round_key(...).stream(0, 64)`), so every candidate and every selection a round's noise
+  reads is committed before that noise's coin.
+* **Credit**: only the admitted slots (`credit.tally`, in 16-bit limbs, every tally unit always proved): Cr = Σ admitted
+  rows · N · K, and the published credit point(level(floor_point(Cr))) <= Cr.  The padded compute (the non-admitted rows of
+  live units, noised) is shown and not credited; dead units cost only their emptiness check.
 * **Not covered**: attention (QKᵀ, P·V) and lm_head.
 
 In order, into OUT (`record.json` throughout, `manifest.json` at the end, the option's `pouw-h1-calls.json`):
@@ -34,15 +40,17 @@ In order, into OUT (`record.json` throughout, `manifest.json` at the end, the op
   wrap      the fraction of weights that W' = B + c + U mod 2^8 wraps, per layer and site (`wrap_counts`)
   reference the prompts generated with no option installed
   install   the option: every layer's root(B), the weights' root, the challenger's salt coin opened after it, the salt
-  serve     the prompts again with the option; inside its `record`, each call's A table and receipts; then the empty steps;
-            the token ids must be the reference's
+  serve     the prompts again with the option; inside its `record`, each call's A table, admit words and receipts; then the
+            empty steps; the token ids must be the reference's
   receipts  one receipt tree per call (one leaf per unit, `commit`)
+  credit    the tally's limbs and tree, the credited (admitted) and padded split, the dead units skipped
   prover    the prover's data (the table key, each call's real rows, scales and receipts) as SCRATCH/prover.tar, before the
             gate so a gate failure keeps it; `serve.sh` puts it in the store once the GPU is released, else moves it into
             OUT, which the run's custody uploads
-  gate      drawn units, real and empty, against `h1tile.reference` (receipt) and the served integer product (z); controls: the
-            unit at the next position, a flipped receipt bit, root(A) rebuilt (and a tampered row, real or empty), root(B)
-            rebuilt (and a tampered row), the served rows read back from the committed scales
+  gate      drawn units, live and dead, of real and empty steps, against the gated `h1tile.reference` (receipt) and the
+            served integer product (z); controls: the unit at the next position, a flipped receipt bit, root(A) rebuilt (and
+            a tampered row, real or empty), root(B) rebuilt (and a tampered row), the admit root rebuilt from the rows, a
+            dead unit's rows empty and its skipped noise real work, a tampered empty row admitted, a live unit not empty
 
     cd integrations/vllm; PYTHONPATH=.:../..:../../tools/research/src:../../benchmarks/pouw/served_h1
     $PY ../../benchmarks/pouw/served_h1/serve.py --out OUT --cubin noise.cubin --at 2026-10-18T00:00:00Z --by compute-accounting
@@ -66,6 +74,7 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import commit as CM  # noqa: E402
+import credit as CR  # noqa: E402
 
 SCHEMA = "verity/pouw-h1-pass/v1"
 RECORD = "verity/pouw-served-h1/record/v1"
@@ -292,6 +301,7 @@ def run(a: argparse.Namespace) -> dict:
     round_log: list[dict] = []
     if live:
         from verity.core.protocols.pouw import window as Wd
+        from verity.core.protocols.pouw.circuit import h1tile as HT
         from verity.core.protocols.sampled_proofs import challenger as Ch
         lch = Wd.live_challenger(a.epoch, s_max)
         live_salt = lch.open(Wd.SALT, 0, bytes.fromhex(h1.commits["weights_root"]))
@@ -301,31 +311,34 @@ def run(a: argparse.Namespace) -> dict:
         c = calls[i]
         sync()
         t = time.perf_counter()
-        rc = RC.call_receipts(RC.Call(slots, layers[c["linear"]].weight), salt, c["base"], bytes.fromhex(c["root_a"]),
-                              bytes.fromhex(c["root_b"]), cubin, chunk=chunk_of(c["k"]))
+        rc, lu = RC.gated_receipts(RC.Call(slots, layers[c["linear"]].weight), data[i]["admit"], salt, c["base"],
+                                   bytes.fromhex(c["root_a"]), bytes.fromhex(c["root_b"]), cubin, chunk=chunk_of(c["k"]))
         sync()
-        c.update(units=int(rc.shape[0]), receipt_words=int(rc.shape[1]), receipts_s=round(time.perf_counter() - t, 3),
-                 salt=salt.hex())
-        data[i]["receipts"] = rc
+        c.update(units=int(rc.shape[0]), live_units=len(lu), receipt_words=int(rc.shape[1]),
+                 receipts_s=round(time.perf_counter() - t, 3), salt=salt.hex())
+        data[i]["receipts"], data[i]["live"] = rc, lu
 
-    def round_root(s: int, roots_a: list[bytes]) -> tuple[dict, bytes]:
-        fields = {"window": window, "step": s, "linears": len(roots_a)}
-        return fields, CM.levels(CM.domain(fields, len(roots_a), "round"), roots_a)[-1][0]
+    def round_root(s: int, roots: list[bytes]) -> tuple[dict, bytes]:
+        fields = {"window": window, "step": s, "linears": len(roots) // 2, "leaves": "a-table, admit per linear"}
+        return fields, CM.levels(CM.domain(fields, len(roots), "round"), roots)[-1][0]
+
+    def round_roots(cs: list[dict]) -> list[bytes]:
+        return [bytes.fromhex(c[k]) for c in cs for k in ("root_a", "root_admit")]
 
     def close_round(s: int) -> None:
-        """Round s (step s) under live coins: its root over the step's A-table roots, recorded before its coin opens; then
-        the step's receipts under the round's 64-byte salt, `round_key`'s stream."""
-        fields, root = round_root(s, [bytes.fromhex(calls[i]["root_a"]) for i, _ in pending])
+        """Round s (step s) under live coins: its root over the step's A-table and admit roots, recorded before its coin
+        opens; then the step's receipts under the round's 64-byte salt (`h1tile.live_salt`)."""
+        fields, root = round_root(s, round_roots([calls[i] for i, _ in pending]))
         opening = rounds.record(root)
-        salt = Wd.round_key(lch.commitment, opening.coin, s, root).stream(0, 64)
+        salt = HT.live_salt(lch.commitment, opening.coin, s, root)
         round_log.append({"round": s, "root": root.hex(), "fields": fields, "opening": opening.to_json()})
         for i, slots in pending:
             receipts(i, slots, salt)
         pending.clear()
 
     def table(s: int, w: int, xq, sa: np.ndarray) -> None:
-        """Call (s, w): its T-slot A table from the step's m real rows `xq` [m, K] (on the device) and scales; its receipts
-        now (seeded) or once the step's round closes (live)."""
+        """Call (s, w): its T-slot A table from the step's m real rows `xq` [m, K] (on the device) and scales, its admit
+        words; its receipts now (seeded) or once the step's round closes (live)."""
         m, k = int(xq.shape[0]), int(layers[w].weight.shape[1])
         n = int(layers[w].weight.shape[0])
         name = names[w]
@@ -338,10 +351,17 @@ def run(a: argparse.Namespace) -> dict:
         dom = CM.domain(fields, t_max, "a-table")
         rows = CM.s8_rows(slots.cpu().numpy(), scales)
         lv = CM.levels(dom, [CM.leaf(dom, key, f"a/{s}/{w}", r, bytes(row))[0] for r, row in enumerate(rows)])
+        bits = CR.admit(rows)
+        ws = CR.words(bits)
+        s_fields = {"window": window, "step": s, "linear": w, "module": name, "slots": t_max, "schema": CM.SCHEMA}
+        s_dom = CM.domain(s_fields, len(ws), "admit")
+        s_lv = CM.levels(s_dom, [CM.leaf(s_dom, key, f"s/{s}/{w}", q, x)[0] for q, x in enumerate(CR.word_rows(ws))])
         calls.append({"step": s, "linear": w, "module": name, "layer": layer, "site": site, "k": k, "n": n, "slots": t_max,
                       "base": s * u_step + offs[w], "units": (t_max // 32) * (n // 32), "root_a": lv[-1][0].hex(),
-                      "root_b": h1.weight_roots[w].hex(), "a_domain": dom.domain_id.hex(), "a_fields": fields})
-        data.append({"m": m, "xq": slots[:m].cpu().numpy(), "sa": scales[:m].copy(), "receipts": None})
+                      "root_b": h1.weight_roots[w].hex(), "a_domain": dom.domain_id.hex(), "a_fields": fields,
+                      "root_admit": s_lv[-1][0].hex(), "admit_fields": s_fields, "selected": int(bits.sum())})
+        data.append({"m": m, "xq": slots[:m].cpu().numpy(), "sa": scales[:m].copy(), "receipts": None, "admit": bits,
+                     "words": ws, "s_levels": s_lv, "prefix": bool(np.array_equal(bits, np.arange(t_max) < m))})
         if not live:
             receipts(len(calls) - 1, slots, h1.salt)
             return
@@ -397,17 +417,41 @@ def run(a: argparse.Namespace) -> dict:
     static_ok = ([(c["step"], c["linear"], c["base"], c["units"]) for c in calls]
                  == [(s, w, s * u_step + offs[w], (t_max // 32) * (int(layers[w].weight.shape[0]) // 32))
                      for s in range(s_max) for w in range(len(layers))])
-    credited = {"units": sum(c["units"] for c in calls), "rows": len(calls) * t_max,
-                "macs": sum(t_max * c["n"] * c["k"] for c in calls)}
-    useful = {"rows": sum(d["m"] for d in data), "macs": sum(d["m"] * c["n"] * c["k"] for c, d in zip(calls, data))}
-    useful["frac_of_credited_macs"] = round(useful["macs"] / max(1, credited["macs"]), 6)
+    padded_superset = {"units": sum(c["units"] for c in calls), "rows": len(calls) * t_max,
+                       "macs": sum(t_max * c["n"] * c["k"] for c in calls)}
+    tl = CR.tally(calls, [c["selected"] for c in calls], s_max, SITES)
+    live_u = sum(c["live_units"] for c in calls)
+    noised = {"units": live_u, "rows": sum(32 * len(CR.live_blocks(d["admit"])) for d in data),
+              "macs": sum(c["live_units"] * 32 * 32 * c["k"] for c in calls)}
+    noise_blocks = sum(c["units"] * RC.layout(c["k"]).blocks for c in calls)
+    noise_live = sum(c["live_units"] * RC.layout(c["k"]).blocks for c in calls)
+    noise_masked = sum((c["n"] // 32) * sum(int(d["admit"][32 * ri:32 * ri + 32].sum()) * RC.layout(c["k"]).rb
+                                            + 32 * RC.layout(c["k"]).cb for ri in CR.live_blocks(d["admit"]))
+                       for c, d in zip(calls, data))
+    credit = {"credited": {"rows": tl["rows"], "macs": tl["macs"], **CR.published(tl["macs"]),
+                           "frac_of_padded_macs": round(tl["macs"] / max(1, padded_superset["macs"]), 6)},
+              "padded": {"rows": noised["rows"] - tl["rows"], "macs": noised["macs"] - tl["macs"],
+                         "what": "the non-admitted rows of live units: noised and receipted, shown, never credited"},
+              "dead": {"units": padded_superset["units"] - live_u,
+                       "frac_of_units": round(1 - live_u / max(1, padded_superset["units"]), 6),
+                       "macs": padded_superset["macs"] - noised["macs"],
+                       "what": "units whose 32 slots are all the canonical empty row: no noise, no receipt, an emptiness "
+                               "check (their admit words, always proved) and the canonical empty receipt leaf"},
+              "noise": {"blocks_all_units": noise_blocks, "blocks_live_units": noise_live,
+                        "frac_live": round(noise_live / max(1, noise_blocks), 6),
+                        "blocks_if_rows_masked": noise_masked, "frac_if_rows_masked": round(noise_masked / max(1, noise_blocks), 6),
+                        "rows_masked": "an estimate: a template that skips a non-admitted row's noise blocks inside a live "
+                                       "unit still derives every column's (c (K + 256) bits), so it costs "
+                                       "(admitted rows RB + 32 CB) / (32 RB + 32 CB) of a unit's noise"},
+              "padded_superset": padded_superset, "noised": noised, "tally": tl}
     rec.step("serve", {"steps_served": done, "steps": s_max, "last_step_complete": complete, "order_ok": st["order_ok"],
                        "refused": st["refused"], "calls": len(calls), "units": sum(c["units"] for c in calls),
                        "units_static": s_max * u_step, "static": static_ok, "u_step": u_step, "s": round(serve_s, 1),
                        "empty_steps_s": round(time.perf_counter() - t0, 1), "a_served_vs_recorded": a_check,
-                       "receipts_s": round(sum(c["receipts_s"] for c in calls), 1),
+                       "receipts_s": round(sum(c["receipts_s"] for c in calls), 1), "live_units": live_u,
+                       "admit_is_served_prefix": all(d["prefix"] for d in data),
                        "real_rows_per_step": [max((d["m"] for c, d in zip(calls, data) if c["step"] == s), default=0)
-                                              for s in range(s_max)], "credited": credited, "useful": useful})
+                                              for s in range(s_max)]})
     equal = [s_["token_ids"] == r["token_ids"] for s_, r in zip(served, reference)]
     rec.step("tokens", {"equal": all(equal), "per_prompt": equal, "served": served, "reference": reference})
 
@@ -431,6 +475,18 @@ def run(a: argparse.Namespace) -> dict:
                                "s": round(time.perf_counter() - t0, 1)})
     comp.close()
 
+    limbs = [v for row in tl["step_site"] for v in row] + [tl["site"][x] for x in SITES]
+    limbs.append(credit["credited"]["level"] or 0)
+    t_fields = {"window": window, "steps": s_max, "sites": list(SITES), "limbs": "per (step, site), per site, level",
+                "schema": CM.SCHEMA}
+    t_dom = CM.domain(t_fields, len(limbs), "tally")
+    t_root = CM.levels(t_dom, [CM.leaf(t_dom, key, "t", i, int(v).to_bytes(2, "little"))[0]
+                               for i, v in enumerate(limbs)])[-1][0]
+    credit["tally_tree"] = {"root": t_root.hex(), "fields": t_fields, "limbs": len(limbs),
+                            "max_limb": max(limbs), "limbs_16_bit": max(limbs) < CR.LIMB}
+    credit["proof_plan"] = CR.proof_plan(len(calls), t_max, s_max, SITES, s_max * u_step)
+    rec.step("credit", credit)
+
     coins = {"mode": a.coins, "ok": True}
     if live:
         roots = [bytes.fromhex(r["root"]) for r in round_log]
@@ -439,20 +495,23 @@ def run(a: argparse.Namespace) -> dict:
         by_step: dict[int, list[dict]] = {}
         for c in calls:
             by_step.setdefault(c["step"], []).append(c)
-        recomputed = [round_root(r["round"], [bytes.fromhex(c["root_a"]) for c in by_step[r["round"]]])[1] == root
+        recomputed = [round_root(r["round"], round_roots(by_step[r["round"]]))[1] == root
                       and {c["salt"] for c in by_step[r["round"]]}
                       == {Wd.round_key(commitment, o.coin, r["round"], root).stream(0, 64).hex()}
                       for r, root, o in zip(round_log, roots, openings)]
         coins.update(scheme=Wd.LIVE_SCHEME, commitment=lch.commitment.to_json(), salt_coin=live_salt.to_json(),
                      rounds=round_log, rounds_reason=Wd.rounds_reason(commitment, roots, openings),
                      rounds_cover_steps=[r["round"] for r in round_log] == list(range(s_max)),
-                     roots_and_keys_recomputed=all(recomputed),
-                     rule="round s = step s: its root is the frame-v3-sha512 tree over the step's A-table roots in linear "
-                          "order (domain identity_digest_sha512('verity/pouw/served-h1/round/v0', {window, step, linears})), "
-                          "recorded through sampled_proofs.challenger.LiveRecord before round s's pouw/round coin opens; "
-                          "the step's 64-byte H1 salt is window.round_key(commitment, coin_s, s, root_s).stream(0, 64)")
+                     roots_and_keys_recomputed=all(recomputed), coin_bytes=len(openings[0].coin) if openings else None,
+                     release_log=list(getattr(rounds, "log", ())),
+                     rule="round s = step s: its root is the frame-v3-sha512 tree over the step's (A-table root, admit "
+                          "root) pairs in linear order (domain identity_digest_sha512('verity/pouw/served-h1/round/v0', "
+                          "{window, step, linears, leaves})), recorded through sampled_proofs.challenger.LiveRecord before "
+                          "round s's pouw/round coin opens; the step's 64-byte H1 salt is h1tile.live_salt = "
+                          "window.round_key(commitment, coin_s, s, root_s).stream(0, 64), the tile's coin port; each "
+                          "tile derives its own noise from it, its public position and its roots, inside the tile")
         coins["ok"] = bool(coins["rounds_reason"] is None and coins["rounds_cover_steps"] and all(recomputed))
-        rec.step("coins", {k: v for k, v in coins.items() if k != "rounds"})
+        rec.step("coins", {k: v for k, v in coins.items() if k not in ("rounds", "release_log")})
 
     manifest = {"schema": SCHEMA, "scheme": SCHEME, "tile": [RC.R, RC.C_], "framing": FRAMING, "not_covered": NOT_COVERED,
                 "window": window, "public": public, "epoch": a.epoch, "option": option, "commitment": h1.commits,
@@ -467,17 +526,23 @@ def run(a: argparse.Namespace) -> dict:
                 "positions": "call (s, w) at base s U + off(w), U = sum_w (T / 32)(N_w / 32), off(w) the sum over linears "
                              "before w; unit u = slot rows 32 (u // (N_w / 32)) .., weight rows 32 (u % (N_w / 32)) ..",
                 "u_step": u_step, "offsets": offs, "units": s_max * u_step,
-                "leaves": {"a": "slot row i: K s8 bytes then its f32 scale LE; an empty slot zero bytes and scale 0",
-                           "r": "unit u: its receipt's 2 (KS + m) u32 words LE (per set y then z)",
-                           "schema": CM.SCHEMA, "tree": "frame-v3-sha512, one per call and kind",
-                           "domain": "identity_digest_sha512('verity/pouw/served-h1/<a-table|receipts>/v0', fields), owner "
-                                     "-1, ranks 0 .. count - 1",
+                "leaves": {"a": "slot row i: K s8 bytes then its f32 scale LE; an empty slot (the canonical empty row) "
+                                "zero bytes and scale 0",
+                           "s": "admit word q: slots 16 q .. 16 q + 15's admit bits (bit b slot 16 q + b), u16 LE",
+                           "r": "unit u: its receipt's 2 (KS + m) u32 words LE (per set y then z); a dead unit's the "
+                                "canonical empty receipt, zero words",
+                           "t": "tally limb i: u16 LE, the per (step, site) limbs in step-major order, the per-site limbs, "
+                                "the level",
+                           "schema": CM.SCHEMA, "tree": "frame-v3-sha512, one per call and kind (one tally tree)",
+                           "domain": "identity_digest_sha512('verity/pouw/served-h1/<a-table|admit|receipts|tally>/v0', "
+                                     "fields), owner -1, ranks 0 .. count - 1",
                            "salts": "SHA-512(SALT_TAG || key || u32be len(label) || label || u64be i || u8 c), c = 0..2, "
-                                    "labels a/<s>/<w> and r/<s>/<w>; the key is the prover's"},
-                "credited": {**credited, "rule": "static: every unit of the S U, a count fixed by the public parameters, "
-                                                 "credited as compute; no selection decides credit"},
-                "useful": {**useful, "rule": "the slots whose committed scale is nonzero (a served row's scale is never 0); "
-                                             "reported beside the credit, never part of it"},
+                                    "labels a/<s>/<w>, s/<s>/<w>, r/<s>/<w> and t; the key is the prover's"},
+                "credit": {**{k: v for k, v in credit.items() if k != "tally"},
+                           "rule": "PADCREDIT round 2 with RT10's fixes: only admitted slots are credited; admit is the OR "
+                                   "of the slot's committed A row, written by an always-proved admit unit into its own "
+                                   "leaf, committed (live) in the round root before the round's coin; the tally is "
+                                   "16-bit limbs, every tally unit always proved; Pub = point(level(floor_point(Cr)))"},
                 "calls": calls, "tokens_equal": all(equal)}
     (out / "manifest.json").write_text(json.dumps(manifest, indent=1, default=str) + "\n")
     rec.step("prover", prover(a, out, key, calls, data))
@@ -488,7 +553,8 @@ def run(a: argparse.Namespace) -> dict:
     s = rec.doc["steps"]["serve"]
     rec.doc["ok"] = bool(all(equal) and calls and not a_check["mismatch"] and not a_check["untapped"] and not s["refused"]
                          and s["order_ok"] and s["last_step_complete"] and s["static"] and rec.doc["steps"]["gate"]["ok"]
-                         and coins["ok"])
+                         and coins["ok"] and s["admit_is_served_prefix"] and credit["tally_tree"]["limbs_16_bit"]
+                         and credit["credited"]["pub_macs"] <= credit["credited"]["macs"])
     rec.save()
     pool.close()
     print(f"SERVED-H1 {'OK' if rec.doc['ok'] else 'FAIL'} calls={len(calls)} units={s['units']} steps={done}/{s_max} "
@@ -498,7 +564,8 @@ def run(a: argparse.Namespace) -> dict:
 
 def gate(a, calls: list[dict], data: list[dict], levels: list, layers: list, h1, key: bytes, E, PH, t_max: int,
          done: int) -> dict:
-    """Drawn units against `h1tile.reference`, and the controls: per site real steps' calls, then calls of empty steps."""
+    """Drawn units against the gated `h1tile.reference`, and the controls: per site a live and a dead unit of real steps'
+    calls, then units of empty steps (dead)."""
     import torch
     import receipts as RC
 
@@ -508,13 +575,17 @@ def gate(a, calls: list[dict], data: list[dict], levels: list, layers: list, h1,
         real = [i for i, c in enumerate(calls) if c["site"] == site and c["step"] < done]
         for _ in range(a.gate_per_site if site != "down_proj" else max(1, a.gate_per_site // 2)):
             if real:
-                picks.append(rng.choice(real))
+                i = rng.choice(real)
+                picks.append((i, rng.choice(data[i]["live"])))
+        partly = [i for i in real if 0 < len(data[i]["live"]) < calls[i]["units"]]
+        if partly:
+            i = rng.choice(partly)
+            picks.append((i, rng.choice(sorted(set(range(calls[i]["units"])) - set(data[i]["live"])))))
     empty = [i for i, c in enumerate(calls) if c["step"] >= done]
-    picks += rng.sample(empty, min(2, len(empty)))
+    picks += [(i, rng.randrange(calls[i]["units"])) for i in rng.sample(empty, min(2, len(empty)))]
     units, ok, b_roots = [], True, {}
-    for i in picks:
+    for i, u in picks:
         c, d = calls[i], data[i]
-        u = rng.randrange(c["units"])
         weight = layers[c["linear"]].weight
         slots = padded(torch.from_numpy(d["xq"]), t_max)
         scales = np.zeros(t_max, dtype=np.float32)
@@ -522,12 +593,36 @@ def gate(a, calls: list[dict], data: list[dict], levels: list, layers: list, h1,
         call = RC.Call(slots, weight.cpu())
         root_a, root_b = bytes.fromhex(c["root_a"]), bytes.fromhex(c["root_b"])
         salt = bytes.fromhex(c["salt"])
-        z, want = RC.reference(call, salt, c["base"], root_a, root_b, u)
-        got = [int(v) for v in d["receipts"][u]]
         ri, cj = call.units[u]
+        a_rows = CM.s8_rows(slots.numpy(), scales)
+        bits = CR.admit(a_rows)
+        live = bool(bits[32 * ri:32 * ri + 32].any())
+        z, ungated = RC.reference(call, salt, c["base"], root_a, root_b, u)
+        want = RC.gated_reference(call, bits, salt, c["base"], root_a, root_b, u)
+        got = [int(v) for v in d["receipts"][u]]
         y = E.int_mm(slots[32 * ri:32 * ri + 32].to(weight.device), weight[32 * cj:32 * cj + 32]).cpu().to(torch.int64)
         z_ok = [v & 0xFFFFFFFF for v in y.flatten().tolist()] == z
-        nxt = RC.reference(call, salt, c["base"] + 1, root_a, root_b, u)[1]
+        nxt = RC.reference(call, salt, c["base"] + 1, root_a, root_b, u)[1] if live else None
+        s_dom = CM.domain(c["admit_fields"], t_max // CR.WORD, "admit")
+        s_label = f"s/{c['step']}/{c['linear']}"
+
+        def admit_root(rows) -> bytes:
+            return CM.levels(s_dom, [CM.leaf(s_dom, key, s_label, q, x)[0]
+                                     for q, x in enumerate(CR.word_rows(CR.words(CR.admit(rows))))])[-1][0]
+
+        empty_rows = a_rows.copy()
+        tile_row = 32 * ri + rng.randrange(32)
+        empty_rows[tile_row, rng.randrange(empty_rows.shape[1])] ^= 1
+        sel = {"live": live, "admit_root_rebuilt": admit_root(a_rows) == bytes.fromhex(c["root_admit"]),
+               "admit_words_committed": CR.words(bits) == d["words"]}
+        if live:
+            sel.update(next_position_differs=nxt != got, live_unit_not_empty=bool(a_rows[32 * ri:32 * ri + 32].any()))
+        else:
+            sel.update(dead_receipt_is_empty_receipt=not any(got),
+                       dead_rows_canonical_empty=not a_rows[32 * ri:32 * ri + 32].any(),
+                       skipped_noise_was_work=any(ungated) and ungated != got,
+                       tampered_empty_row_admitted=bool(CR.admit(empty_rows)[tile_row])
+                       and admit_root(empty_rows) != bytes.fromhex(c["root_admit"]))
         dom = CM.domain(c["receipt_fields"], c["units"])
         root_r = bytes.fromhex(c["receipt_root"])
         rows = CM.receipt_rows(d["receipts"][u:u + 1])[0]
@@ -538,12 +633,12 @@ def gate(a, calls: list[dict], data: list[dict], levels: list, layers: list, h1,
         flipped[rng.randrange(len(flipped))] ^= 1 << rng.randrange(8)
         leaf_f = CM.leaf(dom, key, label, u, bytes(flipped))[0]
         a_dom = CM.domain(c["a_fields"], t_max, "a-table")
-        a_rows = CM.s8_rows(slots.numpy(), scales)
         a_label = f"a/{c['step']}/{c['linear']}"
         a_root = CM.levels(a_dom, [CM.leaf(a_dom, key, a_label, r, bytes(x))[0] for r, x in enumerate(a_rows)])[-1][0]
         row = 32 * ri + rng.randrange(32)
-        a_rows[row, rng.randrange(a_rows.shape[1])] ^= 1
-        a_tampered = CM.levels(a_dom, [CM.leaf(a_dom, key, a_label, r, bytes(x))[0] for r, x in enumerate(a_rows)])[-1][0]
+        t_rows = a_rows.copy()
+        t_rows[row, rng.randrange(t_rows.shape[1])] ^= 1
+        a_tampered = CM.levels(a_dom, [CM.leaf(a_dom, key, a_label, r, bytes(x))[0] for r, x in enumerate(t_rows)])[-1][0]
         committed = CM.s8_rows(slots.numpy(), scales)
         useful = sum(int(np.frombuffer(bytes(x[-4:]), "<f4")[0] != 0) for x in committed)
         if c["linear"] not in b_roots:
@@ -553,14 +648,14 @@ def gate(a, calls: list[dict], data: list[dict], levels: list, layers: list, h1,
             b_roots[c["linear"]] = (rebuilt, PH.weight_root(c["linear"], b_rows))
         r = {"step": c["step"], "linear": c["linear"], "module": c["module"], "k": c["k"], "unit": u,
              "position": c["base"] + u, "real_rows_in_tile": max(0, min(32, d["m"] - 32 * ri)),
-             "receipt_equal_reference": got == want, "z_equal_served_product": z_ok, "next_position_differs": nxt != got,
+             "receipt_equal_reference": got == want, "z_equal_served_product": z_ok, **sel,
              "receipt_opens": CM.verify(dom, root_r, u, leaf, sibs),
              "flipped_receipt_refused": not CM.verify(dom, root_r, u, leaf_f, sibs),
              "a_root_rebuilt": a_root == root_a, "tampered_a_row_changes_root": a_tampered != root_a,
              "tampered_row_was_empty": row >= d["m"], "served_rows_from_scales": useful == d["m"],
              "b_root_rebuilt": b_roots[c["linear"]][0] == root_b,
              "tampered_b_row_changes_root": b_roots[c["linear"]][1] != root_b}
-        r["ok"] = all(v for k_, v in r.items() if isinstance(v, bool) and k_ != "tampered_row_was_empty")
+        r["ok"] = all(v for k_, v in r.items() if isinstance(v, bool) and k_ not in ("tampered_row_was_empty", "live"))
         ok &= r["ok"]
         units.append(r)
         print(f"[served-h1] gate {json.dumps(r)}", flush=True)
@@ -568,17 +663,22 @@ def gate(a, calls: list[dict], data: list[dict], levels: list, layers: list, h1,
 
 
 def prover(a, out: Path, key: bytes, calls: list[dict], data: list[dict]) -> dict:
-    """The prover's data: the table key, each call's real rows (the rest of its slots are empty), scales and receipts, as
-    SCRATCH/prover.tar for `serve.sh` to put in the store after the lease (OUT/prover with no --scratch)."""
+    """The prover's data: the table key, each call's real rows (the rest of its slots are empty), scales, admit words, live
+    units and their receipts (a dead unit's is zero words), as SCRATCH/prover.tar for `serve.sh` to put in the store after
+    the lease (OUT/prover with no --scratch)."""
     dest = Path(a.scratch) if a.scratch else out / "prover"
     dest.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(dir=dest) as td:
         p = Path(td) / "prover"
         p.mkdir()
         (p / "prover.json").write_text(json.dumps({"key": key.hex(), "calls": [[c["step"], c["linear"], d["m"]]
-                                                                              for c, d in zip(calls, data)]}) + "\n")
+                                                                              for c, d in zip(calls, data)],
+                                                   "npz": "xq, sa: the real rows; words: admit words; live: live units; "
+                                                          "receipts: the live units' rows, in that order"}) + "\n")
         for c, d in zip(calls, data):
-            np.savez(p / f"s{c['step']:03d}w{c['linear']:03d}.npz", xq=d["xq"], sa=d["sa"], receipts=d["receipts"])
+            np.savez(p / f"s{c['step']:03d}w{c['linear']:03d}.npz", xq=d["xq"], sa=d["sa"],
+                     words=np.array(d["words"], dtype=np.uint16), live=np.array(d["live"], dtype=np.int32),
+                     receipts=d["receipts"][d["live"]])
         tar = dest / "prover.tar"
         with tarfile.open(tar, "w") as t:
             t.add(p, arcname="prover")
