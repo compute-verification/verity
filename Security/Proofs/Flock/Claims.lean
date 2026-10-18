@@ -27,6 +27,7 @@ import Proofs.Flock.Claims.Recursion.DeploySessions
 import Proofs.Flock.Claims.Recursion.DeployScopeRuns
 import Proofs.Flock.Claims.Recursion.DeployMargin
 import Proofs.Flock.Claims.Recursion.DeployPremises
+import Proofs.Flock.Claims.Recursion.DeployHonest
 import Proofs.Flock.Claims.Recursion.DeployZK
 import Proofs.Flock.Claims.Recursion.VStar
 import Proofs.Flock.Claims.Recursion.VStarParts
