@@ -606,8 +606,8 @@ __global__ void __launch_bounds__(CONSUMER_THREADS) pass_consumer_kernel(const u
   }
 }
 
-// The in-place pass's tiles (`rs_mapped_pass`): pass_tile's through the map, counted in groups of
-// CONSUMER_READY_BLOCKS positions, the last group the tiles left.
+// The in-place pass (`rs_mapped_pass`) counts its tiles in groups of CONSUMER_READY_BLOCKS positions, the last group
+// what is left; mapped_pass_tile is pass_tile through the map.
 constexpr unsigned MAPPED_READY_TILES = CONSUMER_READY_BLOCKS / 32;
 
 __device__ __forceinline__ void mapped_pass_tile(const u64 *__restrict__ addrs, const u64 *__restrict__ js, u64 n,
