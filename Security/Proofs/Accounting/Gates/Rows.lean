@@ -202,7 +202,7 @@ def censusOf (matmul : Bool) (N K L : ℕ) (acc u8 tu8 : Bool) (tail : List (ℕ
   let C := censusDag matmul N K L acc u8 tu8 tail regB limbs
   let c := census C fun _ => True
   let steps := (if matmul then 1 else N) + if limbs.isEmpty then 0 else 1
-  (c.family, c.macs, c.servedMacs, c.tailMacs, c.affine, c.carries, c.rounding, c.compareSelect, c.runBits,
+  (c.family, c.dotMacs, c.servedMacs, c.tailMacs, c.affine, c.carries, c.rounding, c.compareSelect, c.runBits,
     c.registeredBits, (List.range steps).map fun s => let d := census C (· = s); (d.servedMacs, d.tailMacs))
 
 /-- Rows `(matmul, N, K, L, acc, u8, tu8, tail, regB, limbs, counts)`: `censusOf` is census/v1's count of the same
