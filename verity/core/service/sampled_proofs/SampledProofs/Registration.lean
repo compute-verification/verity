@@ -10,10 +10,12 @@ digest, and R1–R7 against the verifier's own copies (`check`).
 
 A v2 record (`verity/registration/v2`) adds `"registered": [{"value", "root", "leaves", "words", "domain"}, ...]` (with
 `"word_bits"` for a value whose leaves are not 16 bits), and R7 holds it to the verifier's own entries
-(`Registered.entries`) and each value an earlier record of the log registered to that record's root (`heldRoots`). The
+(`Registered.entries`), a value the verifier pinned before the record to its root (`pinned`: the weights' root recorded
+before the salt), and each value an earlier record of the log registered to that record's root (`heldRoots`). The
 verifier expects a v2 record exactly when it expects values registered. A value it fills itself (`supplied`,
-`Supplied.root`: rows of the record's roots and its own bytes under public salts) is held to the root it recomputes from
-this record instead (`R7-supplied`), never to the log's.
+`Supplied.root`: rows of the record's roots, positions after the log's, its coin bound to the record's window and its own
+bytes, under public salts) is held to the root it recomputes from this record and the log instead (`R7-supplied`), never
+to the log's.
 -/
 import SampledProofs.Draw
 import SampledProofs.Registered
@@ -67,6 +69,8 @@ structure Verifier where
   params : Array Registered.Param := #[]
   /-- of `registered`, the values it fills itself, each one's rows of sources (`Supplied.sources`) -/
   supplied : Array (String × Supplied.Rows) := #[]
+  /-- of `registered`, values it doesn't fill whose roots it held before the record, `(value, root)` each -/
+  pinned : Array (String × String) := #[]
 
 private def optStr : Option String → Json
   | some s => Json.str s
@@ -185,8 +189,9 @@ def check (rec : Json) (v : Verifier) : Array String := Id.run do
   if v.log.any (fun e => jeq (getD e "window") (get "window")) then c := addCode c "R6-window"
   -- R7
   if v2 then
-    c := checkRegistered c (get "registered") (Registered.entries v.program.desc v.params v.registered) (heldRoots v.log)
-      v.supplied (Supplied.root rec v.params (Flock.hexOf v.program.desc.sha512) (v.supplied.map (·.1)))
+    c := checkRegistered c (get "registered") (Registered.entries v.program.desc v.params v.registered)
+      (v.pinned ++ heldRoots v.log) v.supplied
+      (Supplied.root rec v.log v.params (Flock.hexOf v.program.desc.sha512) (v.supplied.map (·.1)))
   return c
 
 end SampledProofs.Registration
