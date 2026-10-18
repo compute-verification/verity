@@ -67,7 +67,8 @@
    "digest": "b15287f80f20515d6d017205278b5209546abfab825e4f5e01da4875e74b2fda"
   },
   "Accounting.Assumptions.TS.OperandHMu": {
-   "owner": "@compute-accounting"
+   "owner": "@compute-accounting",
+   "digest": "c286bfdcb1c3bc358b47cad5625850ef2de3501375d23e554515e939a4fe47dc"
   },
   "Accounting.Assumptions.TS.ProofsSound": {
    "owner": "@compute-accounting",
@@ -8021,7 +8022,10 @@
     "Accounting.SecurityProofs.HMu.LemmaB",
     "Accounting.SecurityProofs.HMu.PersistentOneWord",
     "Accounting.SecurityProofs.HMu.ReceiptLuckOfCoin",
-    "Accounting.SecurityProofs.HMu.ReceiptLuckOfCoins"
+    "Accounting.SecurityProofs.HMu.ReceiptLuckOfCoins",
+    "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
+    "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
+    "Accounting.SecurityProofs.TS.Sm80SheetHeadline"
    ]
   },
   "Definitions.Accounting.Headline.Encoding": {
@@ -9158,6 +9162,17 @@
     "Accounting.SecurityProofs.TS.LuckOfReceipt",
     "Accounting.SecurityProofs.TS.OperandLuckCube",
     "Accounting.SecurityProofs.TS.ReceiptLuckCaseA",
+    "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
+    "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
+    "Accounting.SecurityProofs.TS.Sm80SheetHeadline"
+   ]
+  },
+  "Definitions.Accounting.TS.ReceiptHMu": {
+   "digest": "e22dc98da0997b9b3c729c29fa7f2c12886eab6122019e4978f16bc8b588e169",
+   "definitions": {
+    "Accounting.TS.ReceiptGame.OperandPointMass": "6df5cc888c4948e81cfd63c48efd7e5cb7c956f25c2a3bf31d645fb38dc3aed3"
+   },
+   "guarantees": [
     "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
     "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
     "Accounting.SecurityProofs.TS.Sm80SheetHeadline"
@@ -19830,7 +19845,7 @@
    ]
   },
   "Models.Accounting.Assumptions.TS": {
-   "digest": "27faed5cf20da09ae03f3c60990e5ca20d38ca0e652b9f58b29bfc8f8c7fc919",
+   "digest": "1b8c9a8c003b60be30332c9d1a35be8aff40e5dac04460b8286a9923d655c986",
    "definitions": {
     "Accounting.Assumptions.TS.FacetCeilings": "fa76dfe63e705d955b2dec4c6d8e3b6826c2bf36058b476ef8f1b7a8bb7c0d3b",
     "Accounting.Assumptions.TS.FanIn": "58d244d68b77d25572471c47056a7c4eac1f9e128db1d335c3cf3fc9a8414b71",
@@ -19839,6 +19854,7 @@
     "Accounting.Assumptions.TS.LinSteer": "d35cd62dcdb221885081311e5039c9b69c00ef1cd32a3f539093bc8496a74d5e",
     "Accounting.Assumptions.TS.LuckAt": "28ff53f429206bbd8f8447d74044812a42bfe9123fb10443321873882cb02cac",
     "Accounting.Assumptions.TS.NoSum": "b15287f80f20515d6d017205278b5209546abfab825e4f5e01da4875e74b2fda",
+    "Accounting.Assumptions.TS.OperandHMu": "c286bfdcb1c3bc358b47cad5625850ef2de3501375d23e554515e939a4fe47dc",
     "Accounting.Assumptions.TS.ProofsSound": "2dd67bf94ae505daf300e0b2cf43706a0f4da5f2ed8e6b08a8156cd3abd1d5d3",
     "Accounting.Assumptions.TS.ReceiptLuckAt": "27772d5066118b3fd4e2b40eb32aeb5c2f2cc0c08ff65c1b7a1f603222dc64df",
     "Accounting.Assumptions.TS.RightFixed": "d17ab6dafa91dbbf183e5a1221cd1f8fc26fb93ebb1b21e83117ef2337a454f2",
@@ -20091,11 +20107,11 @@
    ]
   },
   "Models.Accounting.Guarantees.Headline": {
-   "digest": "150f6e9ddfbdd462caad8ff4a6f193b95ce39062b617c4950de9837d5d0988cd",
+   "digest": "def530d5e86be8d418e94b93614a9d05107603fb69b46d904208302f187f83a0",
    "definitions": {
-    "Accounting.Guarantees.TS.Sm120MeasuredHeadline": "b14d14adc5cebe8ddff56e4f4b6ea58deb2edea0a58fe779abc0604c671f3110",
-    "Accounting.Guarantees.TS.Sm120SheetHeadline": "643ab10bc200069d173502f0e0b63282b28386c46e8fe2b44b9e05825a049dae",
-    "Accounting.Guarantees.TS.Sm80SheetHeadline": "66304a247288fcfd408048ccdeb90c85e013e2da7d9cf2e3abc4a13b74050611"
+    "Accounting.Guarantees.TS.Sm120MeasuredHeadline": "758f2abbb4abdb797f1284499b9c12cacfa2193f72e5b9e7a0977e3ba90876db",
+    "Accounting.Guarantees.TS.Sm120SheetHeadline": "ee3c2241e74ab27053a8294ad56c4a3bbc4f18ef467c05ad3030939f31824854",
+    "Accounting.Guarantees.TS.Sm80SheetHeadline": "d66c403cb71ae9974723c66e2a4fe8e5b987521bc6dba5a5a7f6277fdfa94d5b"
    },
    "guarantees": [
     "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
