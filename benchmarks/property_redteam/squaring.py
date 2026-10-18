@@ -10,8 +10,9 @@ word-per-run-bit discount. Its headline is `E = k·S·e`, `e = L − d(ε)` a sq
 **What this module ports.** A scalar (Python-int, so p1024-sized) port of `Security/Definitions/Accounting/Gates/Model.lean`:
 `Op`, `Gate`, `raw`, `out`, `Ok`/`InWindow`, `derive`/`intervals`, `Proven`, `DeclaredHold`, `OperandBits`, `dynamic`,
 `units` and `budgeted`, plus `Restricted` (`Codec.lean`). It carries the units count two ways: `units(..., fixed=False)` is
-Model.lean's as written, `Nat.clog 2 (args.length − 1)` fresh index bits a gather; `fixed=True` is the one-line fix below,
-`Nat.clog 2 args.length`. The difference is the attack.
+Model.lean's as written on #2362/#2363, `Nat.clog 2 (args.length − 1)` fresh index bits a gather; `fixed=True` is
+`Nat.clog 2 args.length`, 6b's fix in #2420 (`cursor/circuit-encode-gather-bits-6cd3` @ 3bafd8aceb). The difference is
+the attack.
 
 **The model bug, and the squarings it buys.** Model.lean's `Gate.indexBits := Nat.clog 2 (g.args.length − 1)`. A gather
 whose column is one word (`args = [idx, c]`, `args.length = 2`) has `indexBits = Nat.clog 2 1 = 0`, and when that word is a
@@ -25,7 +26,10 @@ byte format for the next squaring, and `free_codec.py` builds the whole codec wo
 (no budgeted gate, right on every draw). So `EncodeChainHardness` and `Renormalization` are **false as the Lean reads
 today**, for every `E > 0` and every `ε`, not only below a floor. property/v1's Python already charges a one-word range gather one unit
 (`stacking._BITS["range"] = n.bit_length()`), so the gap is Lean-only; the fix is `indexBits := Nat.clog 2 g.args.length`
-(or `Proven` requiring the index in `[0, V−1]`), which this module measures as `fixed=True`.
+(#2420), which this module measures as `fixed=True`. One Lean-only gap stays after it: `Gate.derive` returns a gather's
+declared interval, so a gather at a fixed index (wiring, 0 units) re-declares its column's value into any interval, an
+unchecked range assumption that `DeclaredHold` only tests on the input; deriving a gather as the hull of its column's
+derived intervals and `0` closes it.
 
 **Under the fix.** The free comparator costs one unit a bit, so `free_square` costs 6,014 — far above `e`. The honest
 constructions, measured here (units, all `Restricted 128`, `Proven`, `DeclaredHold` on their inputs, and right):
@@ -38,17 +42,20 @@ constructions, measured here (units, all `Restricted 128`, `Proven`, `DeclaredHo
   fixup group with no carry; wrong with probability ≈ `105·c_top / 256^8` ≈ 2^−44.
 * `seam_square` **160**, the cheapest reached: group 0's carry is computed first, the pass over limbs 4..127 ends in the
   top carry `c_top`, and limbs 0..3 are emitted last from `f_0 + 105·c_top`, so the fold needs no fixup. Wrong only when
-  `105·c_top` bumps group 0's carry (`seam_fails`): measured 4 in 32,768 inputs (2^−13.0; 2^−12.3 modeled from
-  `c_top`'s mean 8,185), so a 3,063-squaring word is right ≈55% of the time.
+  `105·c_top` bumps group 0's carry (`seam_fails`): measured 25 in 131,072 inputs on a node (2^−12.4, run
+  r20261018-030322-ffbd; 2^−12.3 modeled from `c_top`'s mean 8,193), so a 3,063-squaring word is right ≈55% of the time.
+* `holeb_square` **128**, only while hole B is open: each limb's byte is `T_m − 256·⌊T_m/256⌋`, a free affine map
+  re-declared into `[0, 255]` by a fixed-index gather, so only the 128 carries pay; same seam, same failure set.
 
 160 = 128 byte gates (each output byte of a squaring is an s8-family operand of the next, so a non-derived gate of
-`[0, 255]`, and a budgeted gate is the cheapest such: a gather pays ≥ 1 unit an index bit) + 32 group carries (a carry
-gate reads `T` and three ≈30-bit columns; a fifth column exceeds `B = 128`). Signed limbs shave a bit off each column
-and still need 32 groups (modeled); lazy reduction across squarings can't skip the bytes, since each product's operands
-must be bytes, and the seam already leaves the result non-canonical in `[0, 256^128)`. All sit above `e = 119` and the
-counting floor `⌈(8L − log₂(1/ε))/8⌉` (126 at 2^−20, 123 at 2^−40): the fixed conjecture survives, its `e` about 41
-units below the best construction. Numbers are *measured* by building and running the circuits here unless marked
-modeled.
+`[0, 255]`, and a budgeted gate is the cheapest such once hole B is closed: a gather at a run-dependent index pays ≥ 1
+unit an index bit) + 32 group carries (a carry gate reads `T` and three ≈30-bit columns; a fifth column exceeds
+`B = 128`). With hole B open the bytes are free and each limb still needs its own floor `⌊T_m/256⌋`: an affine map can't
+floor, and joining two limbs affinely (`256·f`, ≈38 bits) leaves s32. Signed limbs shave a bit off each column and
+still need 32 groups (modeled); lazy reduction across squarings can't skip the bytes, since each product's operands must
+be bytes, and the seam already leaves the result non-canonical in `[0, 256^128)`. All sit above `e = 119` (121 at
+2^−20): the conjecture survives #2420's count, by 41 units a squaring with hole B closed and by 9 with it open. Numbers
+are *measured* by building and running the circuits here unless marked modeled.
 """
 
 from __future__ import annotations
@@ -466,10 +473,11 @@ def e_per_squaring(log2_inv_eps: int) -> int:
 
 
 def counting_floor(log2_inv_eps: int) -> int:
-    """The red team's information floor on a squaring's budgeted units, modeled: the 128 output bytes carry `8L` bits, the
-    circuit's dynamic information is its budgeted units' output bits (free affine/mma are deterministic and a fixed gather
-    adds nothing), so on a fraction `ε` of inputs a byte-output squaring needs `U` with `8U ≥ 8L − log₂(1/ε)`, i.e.
-    `U ≥ ⌈(8L − log₂(1/ε))/8⌉`. At `ε = 2^−20` this is 126, at `2^−40` it is 123; both above `e`, so `e` is conservative."""
+    """The byte-gate floor on a squaring's budgeted units, modeled (not a theorem): if every output byte is a budgeted
+    gate or a constant guess (true once hole B is closed: a derived value of width 255 reads only gates that narrow, and a
+    gather at a run-dependent index pays ≥ 1 unit a bit), a squaring right on `ε` of inputs guesses at most
+    `⌊log₂(1/ε)/8⌋` bytes, so `U ≥ ⌈(8L − log₂(1/ε))/8⌉`: 126 at `ε = 2^−20`, 123 at `2^−40`. Hole B breaks its premise
+    (`holeb_square`'s bytes are fixed-index gathers, 0 units), and the measured 128 there is above it anyway."""
     return -(-(8 * N_LIMBS - log2_inv_eps) // 8)
 
 
@@ -700,6 +708,39 @@ def seam_square(b: Builder, a: list[int]) -> tuple[list[int], int]:
     return out, c_top
 
 
+def _holeb_limb(b: Builder, t: int, carry_out: int | None = None) -> tuple[int, int]:
+    """One limb under hole B: the carry `h = ⌊t/256⌋` a budgeted gate (or `carry_out`, already paid), and the byte
+    `t − 256·h`, a free affine map, re-declared `[0, 255]` by a gather at the fixed index 0 (wiring: 0 units, and
+    `derive` returns its declared interval, so the next squaring's `mma` takes it as a u8 operand)."""
+    if carry_out is None:
+        carry_out = b.budgeted(lambda v: v[0] >> 8, [t], 0, _fhi(b, t) >> 8)
+    rem = b.affine(0, [(1, t), (-256, carry_out)])
+    return b.gather(b.const(0), [rem], 0, 255), carry_out
+
+
+def holeb_square(b: Builder, a: list[int]) -> tuple[list[int], int]:
+    """**Hole B** (Lean-only, open after #2420): one budgeted unit a limb, 128 a squaring. Every byte is its limb's
+    `T_m − 256·⌊T_m/256⌋`, free, re-declared into `[0, 255]` by a fixed-index gather, so only the carries pay. The seam
+    is `seam_square`'s: group 0's carry `c_4` first (one gate over `f_0 … f_3`), a ripple over limbs 4..127 to `c_top`,
+    then limbs 0..3 from `f_0 + 105·c_top`, the last of them closed by `c_4` itself (no gate). Wrong exactly when
+    `seam_fails`, where limb 3's re-declared byte leaves `[0, 255]` (DeclaredHold fails). Returns the limbs and `c_top`."""
+    f = column_sums(b, a)
+    out = list(f)
+    weights = tuple(256 ** j for j in range(SEAM_W))
+    vmax = sum(wt * _fhi(b, o) for wt, o in zip(weights, f[:SEAM_W]))
+    carry = b.budgeted(_carry_fn(weights, SEAM_W), f[:SEAM_W], 0, vmax >> (8 * SEAM_W))
+    c4 = carry
+    for m in range(SEAM_W, N_LIMBS):
+        out[m], carry = _holeb_limb(b, b.affine(0, [(1, f[m]), (1, carry)]))
+    c_top = carry
+    t = b.affine(0, [(1, f[0]), (DELTA, c_top)])
+    for m in range(SEAM_W):
+        out[m], h = _holeb_limb(b, t, c4 if m == SEAM_W - 1 else None)
+        if m < SEAM_W - 1:
+            t = b.affine(0, [(1, f[m + 1]), (1, h)])
+    return out, c_top
+
+
 def folded_columns(a: int) -> list[int]:
     """The 128 folded column values `f_m` of `a²` for `a`'s byte limbs, by one big-integer product (the columns are
     below `2^32`, so packing limbs `2^32` apart keeps them apart). Matches `column_sums`'s gates on every input."""
@@ -729,6 +770,7 @@ def output_value(out_vals: list[int]) -> int:
 CONSTRUCTIONS: dict[str, Callable[[Builder, list[int]], tuple[list[int], int]]] = {
     "free_square": free_square, "ripple_square": ripple_square, "lookahead_square": lookahead_square,
     "merged_square": merged_square, "onepass_square": onepass_square, "seam_square": seam_square,
+    "holeb_square": holeb_square,
 }
 
 
@@ -773,9 +815,11 @@ def main() -> None:
     b = Builder()
     f = column_sums(b, [b.inp(i, 0, 255) for i in range(N_LIMBS)])
     _, _, widths = _greedy_pass(b, f, 0, N_LIMBS)
-    best = rows["seam_square"]["lean_units"]
+    best = rows["seam_square"]["fixed_units"]
+    best_b = rows["holeb_square"]["fixed_units"]
     result = {
-        "model": "Security/Definitions/Accounting/Gates/Model.lean @ d6df95f24a (#2363), ported scalar",
+        "model": "Security/Definitions/Accounting/Gates/Model.lean @ d6df95f24a (#2363), ported scalar; fixed_units is "
+                 "#2420 @ 3bafd8aceb's indexBits",
         "constructions": rows,
         "seam": {"samples": args.seam_samples, "fails": fails, "c_top_mean": sum(ctops) / len(ctops),
                  "c_top_max": max(ctops), "model_rate": DELTA * (sum(ctops) / len(ctops)) / 2 ** 32},
@@ -783,12 +827,13 @@ def main() -> None:
         "conjecture": {f"2^-{t}": {"e": e_per_squaring(t), "E": ROUNDS * SQUARINGS * e_per_squaring(t),
                                    "counting_floor": counting_floor(t)} for t in (20, 40)},
         "best": {"per_squaring": best, "per_word_k_S_e": ROUNDS * SQUARINGS * best},
+        "best_hole_b_open": {"per_squaring": best_b, "per_word_k_S_e": ROUNDS * SQUARINGS * best_b},
         "squarings": SQUARINGS, "rounds": ROUNDS,
     }
     with open(args.out, "w") as fh:
         json.dump(result, fh, indent=1)
     print(json.dumps({k: (v["lean_units"], v["fixed_units"], v["right"]) for k, v in rows.items()}))
-    print(json.dumps(result["seam"]), json.dumps(result["best"]))
+    print(json.dumps(result["seam"]), json.dumps(result["best"]), json.dumps(result["best_hole_b_open"]))
 
 
 if __name__ == "__main__":
