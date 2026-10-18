@@ -17,7 +17,9 @@
 set -uo pipefail
 export OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}
 mkdir -p "$OUT"
-export ARMS=${ARMS:-stock,stock-prof,served-commit-rows,served-commit-rows-blake3} REPS=${REPS:-3}
+# served-commit-rows-layer: circuits' per-layer acquisition (each layer's residual, K and V; no scheme's roots) at the committer's
+# 4 KiB rows, their -layer-4k frontier (iteration 1's pinned H200 baseline r20261018-104600-f33a), under the loop's committer
+export ARMS=${ARMS:-stock,stock-prof,served-commit-rows,served-commit-rows-blake3,served-commit-rows-layer} REPS=${REPS:-3}
 PY=${VERITY_BENCH_VENV:?}/bin/python
 HF_HOME=${HF_HOME:-/workspace/hf} "$PY" -c "
 from huggingface_hub import snapshot_download

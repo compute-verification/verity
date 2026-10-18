@@ -38,7 +38,8 @@ import statistics
 import sys
 from pathlib import Path
 
-ARM = {"stock": "stock", "stock-prof": "stock", "served-commit-rows": "sha512", "served-commit-rows-blake3": "blake3"}
+ARM = {"stock": "stock", "stock-prof": "stock", "served-commit-rows": "sha512", "served-commit-rows-blake3": "blake3",
+       "served-commit-rows-layer": "sha512-layer"}
 for _kv in filter(None, os.environ.get("ARM_NAMES", "").split(",")):
     ARM[_kv.split("=", 1)[0]] = _kv.split("=", 1)[1]
 RATIOS = (("tpot_overhead_pct", "time_per_output_token_s", 1), ("throughput_overhead_pct", "tokens_per_s", -1),

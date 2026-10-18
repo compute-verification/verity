@@ -18,7 +18,7 @@ bash benchmarks/hash/loop/iterate.sh N "one-line hypothesis"
 It launches `job.sh` on the three machines through `research run --on M --project verity --campaign hash-loop --source . --cwd
 source`, waits for them, and labels each run and its result (`label.py`): campaign=hash-loop, sweep=iteration, row=N,
 arm=workload (qwen3-8b), label=hypothesis, source=branch@commit, hardware=GPU. A run's result (`result.json`, published as one `bench-result/v1`) holds every
-arm's measures, each measurement naming its `arm` (stock, sha512, blake3). The verdict on an iteration is a label too:
+arm's measures, each measurement naming its `arm` (stock, sha512, blake3, sha512-layer: circuits' per-layer acquisition at 4 KiB rows, no scheme's roots). The verdict on an iteration is a label too:
 `python3 benchmarks/hash/loop/label.py RUN... --row N --hypothesis "..." --outcome kept|dropped --reason "..."`.
 
 - `job.sh`: the workload on one GPU: the model check, then in the lease the committer's GPU byte-identity tests, `check_b3.py` and

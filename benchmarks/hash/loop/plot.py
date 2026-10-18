@@ -26,7 +26,7 @@ MEASURES = ("tpot_overhead_pct", "throughput_overhead_pct", "prefill_step_ms", "
             "decode_hash_gpu_ms", "prefill_serve_rise_pct", "decode_serve_rise_pct", "first_run_rise_pct", "first_run_copy_gb",
             "serve_lost_per_corun_ms")
 WORKLOAD = "qwen3-8b"
-ARMS = ("stock", "sha512", "blake3")   # their order in the table; plot.py draws every arm it finds
+ARMS = ("stock", "sha512", "blake3", "sha512-layer")   # their order in the table; plot.py draws every arm it finds
 HEADLINE = ("tpot_overhead_pct", "throughput_overhead_pct")
 
 
@@ -122,8 +122,8 @@ def main() -> int:
     rows = (len(measures) + cols - 1) // cols
     fig, axes = plt.subplots(rows, cols, figsize=(7 * cols, 3.6 * rows), squeeze=False)
     colors = {"H200": "tab:blue", "B200": "tab:red", "RTX PRO 6000": "tab:green"}
-    styles = {f"{WORKLOAD}:{k}": v for k, v in {"stock": ":", "sha512": "-", "blake3": "--"}.items()}
-    markers = {f"{WORKLOAD}:{k}": v for k, v in {"stock": "s", "sha512": "o", "blake3": "^"}.items()}
+    styles = {f"{WORKLOAD}:{k}": v for k, v in {"stock": ":", "sha512": "-", "blake3": "--", "sha512-layer": "-."}.items()}
+    markers = {f"{WORKLOAD}:{k}": v for k, v in {"stock": "s", "sha512": "o", "blake3": "^", "sha512-layer": "v"}.items()}
     dump = {}
     for ax, measure in zip(axes.flat, measures):
         ser = series(results, measure)
