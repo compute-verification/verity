@@ -29,13 +29,15 @@ named `Prop`:
 (`RecVStar.checkLinkRounds`, `RecVStar.checkTopRows`, `RecCoins.checkLink` at `RecVStar.innerLink`), passed in as
 `linkOk`: they pass at the coin server's transcript of the honest inner rounds and the record the honest prover staged.
 A staged statement holds exactly that transcript (`transcript_honest`), so the checks pass at the statement's own
-inputs.
+inputs. The deployed checks are in `RecIns.setup` (#2405), so at them (`linkOkSetup`) `LinksHonest` holds with no
+premise (`linksHonest_setup`): `vstar_complete_setup` and `vstar_complete_run_setup` are the theorems without it, and
+the link input they pass at is the one `RecVStar.innerLink` reads off the staged transcript (`insO_staged_link`).
 
 The inner verifier is arbitrary here. At the deployed plain inner verifier, at SHA-512, `InnerAccepts` holds only at an
 inner statement that verifier admits (`InnerAdmitted`, `innerAdmitted_of_accepts`): its scope check passes and it
 carries a unit draw. A recursive session's inner statement has plain SHA-512 leaves, which the scope check admits
-without `--zk` only with `ProvedScope.leafOk` in its rules; where the scope check or the draw fails, `InnerAccepts`
-never holds and the theorem says nothing about the statement.
+without `--zk` and with hidden outputs (`ProvedScope.leafOk`, #2411); where the scope check or the draw fails,
+`InnerAccepts` never holds and the theorem says nothing about the statement.
 `InnerAccepts` is a hypothesis about the coins, not a consequence of the relation: at coins in the inner completeness
 error the honest inner proof is refused, and the V\* statements staged there need not have a witness.
 -/
@@ -111,13 +113,103 @@ def LinksHonest (linkOk : RecIns → ByteArray → ByteArray → Array Stmt → 
       setupO (staged b.st x (asRounds v) s) = some (i, spec, sts) →
         linkOk i (b.tr x (asRounds (v.take (IV.k (xIOf x))))) (b.st.record x (asRounds v)) sts = true
 
+/-! ## The deployed link checks -/
+
+/-- **The link checks the recursive setup runs** (#2405's, in `RecIns.setup`), as a `linkOk`:
+`RecVStar.checkLinkRounds` at the inner shape and the link input, then `RecVStar.checkTopRows` and `RecCoins.checkLink`
+on each table. They read the link input `RecRaw.ins` reads (`linkInputOf`: `RecVStar.innerLink` on the statement's own
+inner transcript and record, `insO_staged_link`), not the transcript and record passed in. -/
+def linkOkSetup (i : RecIns) (_ _ : ByteArray) (sts : Array Stmt) : Bool :=
+  (match i.inner, i.link with
+    | some n, some lk => Except.toBool (RecVStar.checkLinkRounds n lk)
+    | _, _ => true) &&
+    Except.toBool (sts.forM (RecVStar.checkTopRows · i.base.registered i.link)) &&
+    Except.toBool (sts.forM (RecCoins.checkLink · i.base.registered (RecCoins.Source.atC3 i.src i.inner i.commits)
+      i.link))
+
+theorem RecIns.setup_linkRounds {s : RecIns} {spec : SessionSpec} {sts : Array Stmt} (h : s.setup = .ok (spec, sts))
+    {n : RecVStar.Inner} {lk : RecVStar.InnerLink} (hn : s.inner = some n) (hl : s.link = some lk) :
+    RecVStar.checkLinkRounds n lk = .ok () := by
+  unfold RecIns.setup at h
+  simp only [bind, Except.bind, pure, Except.pure, hn, hl] at h
+  repeat' split at h
+  all_goals first | (cases h; done) | skip
+  all_goals
+    obtain ⟨-, h2⟩ := Prod.mk.inj (Except.ok.inj h)
+    subst h2
+    assumption
+
+theorem RecIns.setup_topRows {s : RecIns} {spec : SessionSpec} {sts : Array Stmt} (h : s.setup = .ok (spec, sts)) :
+    sts.forM (RecVStar.checkTopRows · s.base.registered s.link) = .ok () := by
+  unfold RecIns.setup at h
+  simp only [bind, Except.bind, pure, Except.pure] at h
+  repeat' split at h
+  all_goals first | (cases h; done) | skip
+  all_goals
+    obtain ⟨-, h2⟩ := Prod.mk.inj (Except.ok.inj h)
+    subst h2
+    assumption
+
+theorem RecIns.setup_checkLink {s : RecIns} {spec : SessionSpec} {sts : Array Stmt} (h : s.setup = .ok (spec, sts)) :
+    sts.forM (RecCoins.checkLink · s.base.registered (RecCoins.Source.atC3 s.src s.inner s.commits) s.link) =
+      .ok () := by
+  unfold RecIns.setup at h
+  simp only [bind, Except.bind, pure, Except.pure] at h
+  repeat' split at h
+  all_goals first | (cases h; done) | skip
+  all_goals
+    obtain ⟨-, h2⟩ := Prod.mk.inj (Except.ok.inj h)
+    subst h2
+    assumption
+
+/-- **A statement that passes the recursive setup passes its link checks**, at any transcript and record. -/
+theorem linkOkSetup_of_setup {i : RecIns} {spec : SessionSpec} {sts : Array Stmt} (h : i.setup = .ok (spec, sts))
+    (t r : ByteArray) : linkOkSetup i t r sts = true := by
+  unfold linkOkSetup
+  rw [RecIns.setup_topRows h, RecIns.setup_checkLink h]
+  rcases hn : i.inner with _ | n <;> rcases hl : i.link with _ | lk
+  · simp [Except.toBool]
+  · simp [Except.toBool]
+  · simp [Except.toBool]
+  · simp [RecIns.setup_linkRounds h hn hl, Except.toBool]
+
+/-- **The deployed link checks pass on an honest run**: `LinksHonest` at `linkOkSetup` holds with no premise, the
+recursive setup running them (`linkOkSetup_of_setup`). -/
+theorem linksHonest_setup (H : Msg → Msg) (IV : Claims.Verifier Coin) (b : Brings) :
+    LinksHonest linkOkSetup H IV b := by
+  intro x w ω cs v hv s hs i spec sts hsu
+  exact linkOkSetup_of_setup (setupO_some hsu).2 _ _
+
+/-- **The link input the reader reads** is `linkInputOf` at the statement's source. -/
+theorem RecRaw.ins_link {w : RecRaw} {s : RecIns} (h : w.ins = .ok s) : linkInputOf w s.src = .ok s.link := by
+  unfold RecRaw.ins at h
+  simp only [bind, Except.bind, pure, Except.pure] at h
+  repeat' split at h
+  all_goals first | (cases h; done) | (cases h; assumption)
+
+/-- **A staged statement's link input is read off its own inner transcript and record**, the stage's: its raw inputs
+carry `Stage.transcript` and `Stage.record` (`partRaw`), and `linkInputOf` reads them. -/
+theorem insO_staged_link {st : Stage} {x : Msg} {ms : List (Msg × Out)} {s : ℕ} {i : RecIns}
+    (h : insO (staged st x ms s) = some i) :
+    ∃ wr, decodeRec (staged st x ms s) = some wr ∧ wr.transcript = some (st.transcript x ms) ∧
+      wr.innerSession = some (st.record x ms) ∧ linkInputOf wr i.src = .ok i.link := by
+  have hne : staged st x ms s ≠ [] := fun he => by rw [he, insO_nil] at h; cases h
+  obtain ⟨r, p, -, -, hd⟩ := staged_decode hne
+  refine ⟨partRaw r st x ms s p, hd, rfl, rfl, ?_⟩
+  unfold insO at h
+  rw [hd] at h
+  simp only [Option.bind_eq_bind, Option.bind_some] at h
+  split_ifs at h
+  · simp at h
+  have h' : (partRaw r st x ms s p).ins.toOption = some i := by simpa using h
+  exact RecRaw.ins_link (toOption_eq_some h')
+
 /-! ## The inner statement an honest inner run is accepted at -/
 
 /-- **The deployed plain verifier admits the inner statement**: it sets up, `verify`'s scope check
 (`ProvedScope.check`) passes on it, and it carries a unit draw (`ProvedScope.drawLaw` refuses a session without one).
-At a recursive session's inner statement, whose leaves are plain SHA-512, the scope check needs `ProvedScope.leafOk` in
-`statementRules`; without it, the check's rules put `hm96-sha512/v1` leaves on every statement
-(`Readable.check_ok_iff`, `Readable.Rules`). -/
+At a recursive session's inner statement, whose leaves are plain SHA-512, the scope check passes only without `--zk`
+and with hidden outputs (`ProvedScope.leafOk`, `Readable.check_ok_iff`, `Readable.Rules`; `inner_check_plain`). -/
 def InnerAdmitted (x : Msg) : Prop :=
   ∃ ins spec sts, FlockDeploy.setupOf false (xIOf x) = some (ins, spec, sts) ∧ ins.read.check = .ok () ∧
     ∃ d, ins.read.draw = some d
@@ -221,6 +313,27 @@ theorem vstar_complete (H : Msg → Msg) (IV : Claims.Verifier Coin) (b : Brings
   refine ⟨he, i, spec, sts, hsu, hR, ?_⟩
   rw [transcript_honest b x hv.length]
   exact hL x w ω cs v hv s hs i spec sts hsu
+
+/-- **Recursion completeness at `deployRec` with the deployed link checks**: `vstar_complete` at `linkOkSetup`, whose
+`LinksHonest` is `linksHonest_setup`. The checks pass at the link input read off the staged statement's inner
+transcript, the coin server's of the honest inner rounds, and its record (`insO_staged_link`). -/
+theorem vstar_complete_setup (H : Msg → Msg) (IV : Claims.Verifier Coin) (b : Brings) (hN : NumsFixed b.st)
+    (hS : StagedSetsUp H IV b) (hW : WitSatisfies H IV b) {x : Msg} {w : Claims.Flock.Wit} {ω : Tape b}
+    {cs : List Coin} {v : List (Msg × Msg)} (hv : HonestPre H IV b w x ω cs v) (hI : InnerAccepts H IV x cs v)
+    {s : ℕ} (hs : s < nS x) :
+    (vstar b.st x (asRounds v)).getD s [] = staged b.st x (asRounds v) s ∧
+      ∃ i spec sts, setupO (staged b.st x (asRounds v) s) = some (i, spec, sts) ∧
+        Claims.Flock.R (deployZkRec Readable.relation).parse (staged b.st x (asRounds v) s)
+          (b.ref.wit w ω.1 (v.take (IV.k (xIOf x))) s) ∧
+        linkOkSetup i (b.st.transcript x (asRounds v)) (b.st.record x (asRounds v)) sts = true ∧
+        ∃ wr, decodeRec (staged b.st x (asRounds v) s) = some wr ∧
+          wr.transcript = some (b.tr x (asRounds (v.take (IV.k (xIOf x))))) ∧
+          wr.innerSession = some (b.st.record x (asRounds v)) ∧ linkInputOf wr i.src = .ok i.link := by
+  obtain ⟨he, i, spec, sts, hsu, hR, hl⟩ :=
+    vstar_complete H IV b linkOkSetup hN hS hW (linksHonest_setup H IV b) hv hI hs
+  obtain ⟨wr, hd, ht, hr, hk⟩ := insO_staged_link (setupO_some hsu).1
+  refine ⟨he, i, spec, sts, hsu, hR, hl, wr, hd, ?_, hr, hk⟩
+  rw [ht, transcript_honest b x hv.length]
 
 /-- **The honest outer witnesses are in the V\* relation at the V\* statements the compiled verifier reads**, in the
 form the recursion's ZK composition takes them (its `hW`), at an honest first part: part `s`'s statement `vstar` reads
@@ -327,7 +440,7 @@ theorem honestPre_run (H : Msg → Msg) (IV : Claims.Verifier Coin) (b : Brings)
     simp only [List.getElem_map, List.getElem_take, histOf, Option.some.inj ha, Claims.Recursion.outMsg, hc]
 
 /-- A statement that parses reads. -/
-theorem readX_of_parse {x : Msg} {s : Claims.Recursion.Stmt} (h : parse x = some s) : ∃ xr, readX x = some xr := by
+theorem readX_some_of_parse {x : Msg} {s : Claims.Recursion.Stmt} (h : parse x = some s) : ∃ xr, readX x = some xr := by
   cases hx : readX x with
   | some xr => exact ⟨xr, rfl⟩
   | none =>
@@ -354,7 +467,7 @@ theorem vstar_complete_run (H : Msg → Msg) (I : Claims.Recursion.Inner Coin Cl
       linkOk i (b.st.transcript x ((run H (refP I.V b w) (V I.V b.st) x ω r).msgs.take (I.V.k (xIOf x) + kS x)))
         (b.st.record x ((run H (refP I.V b w) (V I.V b.st) x ω r).msgs.take (I.V.k (xIOf x) + kS x))) sts = true := by
   obtain ⟨s', hp, -, -⟩ := hR
-  obtain ⟨xr, hx⟩ := readX_of_parse hp
+  obtain ⟨xr, hx⟩ := readX_some_of_parse hp
   have hv := honestPre_run H I.V b w hx ω r
   obtain ⟨he, i, spec, sts, hsu, hrel, hl⟩ := vstar_complete H I.V b linkOk hN hS hW hL hv hI hs
   have hrv : Claims.Recursion.runVstar H (deployRec I.V ivScope b) I (refP I.V b w) x ω r =
@@ -372,5 +485,23 @@ theorem vstar_complete_run (H : Msg → Msg) (I : Claims.Recursion.Inner Coin Cl
     exact hsu
   · rw [hrv, run_take_asRounds H I.V b hx, he]
     exact hrel
+
+/-- **Recursion completeness at `deployRec`, on its runs, with the deployed link checks**: `vstar_complete_run` at
+`linkOkSetup`, whose `LinksHonest` is `linksHonest_setup`. -/
+theorem vstar_complete_run_setup (H : Msg → Msg) (I : Claims.Recursion.Inner Coin Claims.Flock.Wit)
+    (ivScope : Msg → Bool) (b : Brings) (hN : NumsFixed b.st) (hS : StagedSetsUp H I.V b) (hW : WitSatisfies H I.V b)
+    {x : Msg} {w : Claims.Flock.Wit} (hR : Claims.Recursion.R (deployRec I.V ivScope b) I x w) (ω : Tape b)
+    (r : Fin ((V I.V b.st).k x) → Coin)
+    (hI : InnerAccepts H I.V x (runCs (I.V.k (xIOf x) + kS x) r)
+      (((run H (refP I.V b w) (V I.V b.st) x ω r).msgs.take (I.V.k (xIOf x) + kS x)).map histOf))
+    {s : ℕ} (hs : s < nS x) :
+    ∃ i spec sts, setupO ((Claims.Recursion.runVstar H (deployRec I.V ivScope b) I (refP I.V b w) x ω
+        r).getD s []) = some (i, spec, sts) ∧
+      Claims.Flock.R (deployZkRec Readable.relation).parse
+        ((Claims.Recursion.runVstar H (deployRec I.V ivScope b) I (refP I.V b w) x ω r).getD s [])
+        (b.ref.wit w ω.1 (((run H (refP I.V b w) (V I.V b.st) x ω r).msgs.take (I.V.k (xIOf x))).map histOf) s) ∧
+      linkOkSetup i (b.st.transcript x ((run H (refP I.V b w) (V I.V b.st) x ω r).msgs.take (I.V.k (xIOf x) + kS x)))
+        (b.st.record x ((run H (refP I.V b w) (V I.V b.st) x ω r).msgs.take (I.V.k (xIOf x) + kS x))) sts = true :=
+  vstar_complete_run H I ivScope b linkOkSetup hN hS hW (linksHonest_setup H I.V b) hR ω r hI hs
 
 end RecDeploy
