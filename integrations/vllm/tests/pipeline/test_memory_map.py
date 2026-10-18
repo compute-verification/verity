@@ -197,9 +197,18 @@ def test_the_map_reads_and_fills_the_replays_index_memo(tmp_path, monkeypatch):
     kw = {"loaded": {"r0": lp}, "store": _store(rows), "arrivals": {"r0": ARRIVE},
           "caches": _caches(MM.packed(rows), _payload(ProgramIndex(lp["instances"]), rows))}
     memo: dict = {}
-    first, written = PMM.write(out, req, indices=memo, **kw), out.read_text()
+    built_as: list[dict] = []
+
+    def recording(*a, **k):
+        built_as.append(k)
+        return ProgramIndex(*a, **k)
+
+    monkeypatch.setattr(PMM, "ProgramIndex", recording)
+    first = PMM.write(out, req, indices=memo, index_kw={"query": None, "norm_scales": False}, **kw)
+    written = out.read_text()
     ((key, pi),) = memo.items()
     assert key == ("index", id(lp["instances"])) and isinstance(pi, ProgramIndex)
+    assert [(b["program_dir"], b["query"], b["norm_scales"]) for b in built_as] == [(lp["dir"], None, False)]
 
     def built(*a, **k):
         raise AssertionError("an index the memo holds is built again")

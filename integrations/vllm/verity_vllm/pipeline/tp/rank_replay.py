@@ -160,14 +160,22 @@ def manifest_of_rank(doc: Any, rank: int) -> dict[str, Any] | None:
     return dict(doc, identities=[x for x in doc["identities"] if int(x.get("rank", 0) or 0) == rank])
 
 
-def index_memo(p: Loaded, manifest: dict[str, Any] | None) -> dict:
-    """`sampled_replay`'s memo holding `load`'s index of the first Program, when it is the index the replay would build (the manifest's
-    query is the default one, no norm-scale policy); else empty, and the replay builds its own.  A memo that isn't empty is the one
-    the rank's memory map reads and fills (`in_process`), so no index is built twice."""
-    from verity_vllm.check.replay import driver as SR, index as IX
+def index_query(manifest: dict[str, Any] | None) -> dict[str, Any]:
+    """The query and norm-scale policy `sampled_replay` builds a Program's index under for ``manifest`` (`driver.populate`)."""
+    from verity_vllm.check.replay import driver as SR
     from verity_vllm.query import norm_scales
 
-    if (SR.manifest_query(manifest) or IX.DEFAULT_QUERY) != IX.DEFAULT_QUERY or norm_scales.policy_of(manifest):
+    return {"query": SR.manifest_query(manifest), "norm_scales": norm_scales.policy_of(manifest)}
+
+
+def index_memo(p: Loaded, manifest: dict[str, Any] | None) -> dict:
+    """`sampled_replay`'s memo holding `load`'s index of the first Program, when it is the index the replay would build (the manifest's
+    query is the default one, no norm-scale policy); else empty, and the replay builds its own.  The rank's memory map fills it with
+    the rest, built as the replay builds them (`index_query`), so no index is built twice (`in_process`)."""
+    from verity_vllm.check.replay import index as IX
+
+    q = index_query(manifest)
+    if (q["query"] or IX.DEFAULT_QUERY) != IX.DEFAULT_QUERY or q["norm_scales"]:
         return {}
     return {("index", id(p.progs[next(iter(p.progs))])): p.index}
 
@@ -209,11 +217,12 @@ def not_run(rank: int, e: BaseException, trace: str) -> tuple[dict, dict]:
             {"schema": "verity-sweep/boundary-linkage/v1", "result": None, "rank": rank, "why": f"rank {rank}: boundary linkage not run: {e!r}"[:300], "pairs": 0, "linked": 0})
 
 
-def memory_map(st: dict[str, Any], p: Loaded, committed: Any, indices: dict | None = None) -> dict[str, Any] | None:
+def memory_map(st: dict[str, Any], p: Loaded, committed: Any, indices: dict | None = None,
+               index_kw: dict[str, Any] | None = None) -> dict[str, Any] | None:
     """`tp-commit --memory-map`: the rank's memory map (`pipeline.memory_map.after_commit` at the rank) from its Programs of record,
-    its committed slots and KV words (``committed``) and its KV-slots source's caches, its Program indices read from and put in the
-    replay's ``indices`` when given; what its record keeps of it (counts and the engine's agreement, or the failure), None without a
-    request.  It changes no verdict."""
+    its committed slots and KV words (``committed``) and its KV-slots source's caches, its Program indices built under ``index_kw``
+    (`index_query`: the manifest's spelling) and read from and put in the replay's ``indices`` when given; what its record keeps
+    of it (counts and the engine's agreement, or the failure), None without a request.  It changes no verdict."""
     from verity_vllm.acquire.sources.kv_slots_source import caches_of
     from verity_vllm.pipeline import memory_map as MMP
 
@@ -222,7 +231,8 @@ def memory_map(st: dict[str, Any], p: Loaded, committed: Any, indices: dict | No
         return None
     try:
         got = MMP.after_commit(request, loaded=p.loaded, bmap=st["bmap"], committed=committed, manifest=manifest_of_rank(st.get("manifest_doc"), p.rank),
-                               arrivals=p.arrivals, caches=caches_of(st["com"]), tp=p.tp, attention_paths=p.attn_paths, indices=indices)
+                               arrivals=p.arrivals, caches=caches_of(st["com"]), tp=p.tp, attention_paths=p.attn_paths, indices=indices,
+                               index_kw=index_kw)
     except Exception as e:  # noqa: BLE001
         return {"error": repr(e)[:400]}
     return got if "error" in got else {k: got[k] for k in ("map", "tp", "blocks", "page", "steps", "written", "freed", "engine", "seconds")}
@@ -275,8 +285,9 @@ def in_process(st: dict[str, Any], rc: Any) -> dict[str, Any]:
         p = load(cfg, rank, st.get("world"))
         xrank_facts(st, p)
         rd = OC.OpenedReader(com, rc)
-        memo = index_memo(p, manifest_of_rank(st.get("manifest_doc"), rank))
-        mm = memory_map(st, p, rd, memo or None)
+        man = manifest_of_rank(st.get("manifest_doc"), rank)
+        memo = index_memo(p, man)
+        mm = memory_map(st, p, rd, memo, index_query(man))
         # [O5] the shards the relations consume must be the COMMITTED shards: re-register the live parameters now vs the run's weights root
         try:
             w_saved = getattr(com, "weights", None)
@@ -324,7 +335,7 @@ def defer(st: dict[str, Any], rc: Any, to: dict[str, Any]) -> dict[str, Any]:
         p = load(cfg, rank, st.get("world"))
         xrank_facts(st, p)
         if cfg.get("memory_map"):
-            mm = memory_map(st, p, OC.OpenedReader(st["com"], rc))
+            mm = memory_map(st, p, OC.OpenedReader(st["com"], rc), index_kw=index_query(manifest_of_rank(st.get("manifest_doc"), rank)))
         hashed: dict[str, str] = {}
         part = RB.write_store(out, pair, st["com"], rc, digests=hashed, rank=rank)
         (part / "binding_map.json").write_text(json.dumps(bmap, default=str) + "\n")

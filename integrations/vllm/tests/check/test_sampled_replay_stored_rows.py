@@ -89,6 +89,9 @@ def test_rank_evaluate_on_its_loaded_index_decides_what_the_replays_own_index_de
     assert RR.index_memo(p, None) == {("index", id(inst)): p.index}
     assert RR.index_memo(p, {"query": {"query_id": Q_WORD_ID}}) == {}
     assert RR.index_memo(p, {"query": {"norm_scales": {}}}) == {}
+    assert RR.index_query(None) == {"query": None, "norm_scales": False}
+    assert RR.index_query({"query": {"query_id": Q_WORD_ID}}) == {"query": Q_WORD_ID, "norm_scales": False}
+    assert RR.index_query({"query": {"norm_scales": {}}}) == {"query": None, "norm_scales": True}
     bmap, reader = w.bmap_and_reader()
 
     class Committed:
@@ -98,12 +101,16 @@ def test_rank_evaluate_on_its_loaded_index_decides_what_the_replays_own_index_de
         def record(self):
             return {}
 
-    def run():
+    def run(**kw):
         return RR.evaluate(p, {"seed": 5, "per_stratum": 4, "workers": 0}, bmap=bmap, committed=Committed(), weights_of=lambda _prefix: T._weights(w),
-                           weights_check={}, run_root=b"\0" * 32, manifest_doc=None)
+                           weights_check={}, run_root=b"\0" * 32, manifest_doc=None, **kw)
 
     seeded = run()
     monkeypatch.setattr(RR, "index_memo", lambda p, man: {})
     own = run()
     assert seeded[0]["result"] is True and seeded[0]["sample"]["evaluated"] > 0
     assert _strip(seeded[0]) == _strip(own[0]) and seeded[1] == own[1]
+    filled = {("index", id(inst)): IX.ProgramIndex(inst, tp={"rank": 0, "world": 1}, program_dir=d, **RR.index_query(None))}
+    monkeypatch.setattr(SR, "ProgramIndex", lambda *a, **k: pytest.fail("an index the memo holds is built again"))
+    shared = run(memo=filled)
+    assert _strip(shared[0]) == _strip(own[0]) and shared[1] == own[1]
