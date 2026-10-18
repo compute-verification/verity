@@ -1140,13 +1140,17 @@ class TP2CaptureWorkerExtension:
 
     def tp2_commit_xrank_dump(self, *, out_dir: str, seed_hex: str, pair: int, per_stratum: int = 2, max_rows: int = 16) -> dict[str, Any]:
         """[TP-12] THIS rank's picks for the cross-rank collective-output pass, from the COMMITTED bytes (`pipeline.tp.xrank_dump`),
-        each world-8 all-reduce under the route the engine's all-reduce switches take."""
+        each all-reduce on a captured route under the route the engine's all-reduce switches take on this GPU."""
+        import torch
+
         from verity_vllm.engine import env as engine_env
         from verity_vllm.pipeline.tp import xrank_dump as XD
-        from verity_vllm.program.registry.tp_allreduce import settings_of
+        from verity_vllm.program.registry.tp_allreduce import device_of, settings_of
 
         settings = settings_of(self.vllm_config.parallel_config.disable_custom_all_reduce, engine_env.snapshot())
-        return XD.dump(self._tp2_commit, settings=settings, out_dir=out_dir, seed_hex=seed_hex, pair=pair, per_stratum=per_stratum, max_rows=max_rows)
+        p = torch.cuda.get_device_properties(torch.cuda.current_device())
+        return XD.dump(self._tp2_commit, settings=settings, out_dir=out_dir, seed_hex=seed_hex, pair=pair, per_stratum=per_stratum, max_rows=max_rows,
+                       device=device_of((p.major, p.minor), p.multi_processor_count))
 
     def tp2_commit_binding_map_dump(self, *, out_dir: str) -> dict[str, Any]:
         """[R15 TP-04] write THIS rank's binding map of the last finalized run (identity -> commitment location, fixed at finalize before any

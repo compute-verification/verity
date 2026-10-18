@@ -175,6 +175,52 @@ def test_world_8_collective_rules_bind_captured_default_and_custom_off_routes(mo
     assert [n.fn.id for n in derived.program.fn.body.nodes] == [kind]
 
 
+#: the TP4 capture's switches (vLLM's batch invariance, NCCL over SHM) and GPU
+TP4_ENV = {"VLLM_BATCH_INVARIANT": "1", "NCCL_P2P_DISABLE": "1"}
+RTX_PRO_6000 = ((12, 0), 188)
+
+
+def _derive_world4_all_reduce(monkeypatch, *, env: dict, gpu: tuple, M: int, N: int = 8192):
+    torch = pytest.importorskip("torch")
+    from verity_vllm.program.frontend.derive import derive_report
+    from verity_vllm.program.frontend.export_ops import ensure_ops
+    from verity_vllm.program.frontend.rules import vllm_bindings as VB
+    from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
+    from verity_vllm.program.frontend.target_profile import TargetProfile
+    from verity_vllm.program.registry.tp_allreduce import settings_of
+
+    ensure_ops()
+    monkeypatch.setitem(VB._OBSERVED, "allreduce_settings", settings_of(True, env))
+    monkeypatch.setitem(VB._OBSERVED, "target_profile", TargetProfile(compute_capability=gpu[0], num_sms=gpu[1]))
+
+    class Collective(torch.nn.Module):
+        def forward(self, *parts):
+            return torch.ops.verity_tp.all_reduce(list(parts))
+
+    rows = tuple(torch.zeros(M, N, dtype=torch.bfloat16) for _ in range(4))
+    return derive_report(Collective(), rows, mode="profile", profile="b1-eager-v3", rules=vllm_ruleset(),
+                         name="world4-collective", check_registry=True, rank=(4, 0))
+
+
+@pytest.mark.parametrize("M", [1, 256])
+def test_world_4_all_reduce_binds_nccl_s_tree_on_the_rtx_pro_6000_over_shm(monkeypatch, M):
+    """The TP4 capture's route (batch-invariant pynccl over SHM on 4 RTX PRO 6000) is one `AllReduceNcclTree_v1` call over the
+    flattened [M * N] partials, down the capture's chain."""
+    derived = _derive_world4_all_reduce(monkeypatch, env=TP4_ENV, gpu=RTX_PRO_6000, M=M)
+    assert derived.ok, derived.unsupported
+    assert [n.fn.id for n in derived.program.fn.body.nodes] == [f"AllReduceNcclTree_v1{{WORLD=4,SIZE={M * 8192},CHAIN=(0,1,2,3)}}"]
+
+
+@pytest.mark.parametrize("env,gpu,M,N", [(TP4_ENV, ((9, 0), 132), 1, 8192), ({"VLLM_BATCH_INVARIANT": "1"}, RTX_PRO_6000, 1, 8192),
+                                         ({"NCCL_P2P_DISABLE": "1"}, RTX_PRO_6000, 1, 8192), (TP4_ENV, RTX_PRO_6000, 257, 8192),
+                                         (TP4_ENV, RTX_PRO_6000, 1, 4096)],
+                         ids=["h200", "p2p-on", "not-batch-invariant", "M-257", "N-4096"])
+def test_world_4_all_reduce_off_the_captured_route_is_refused_by_name(monkeypatch, env, gpu, M, N):
+    derived = _derive_world4_all_reduce(monkeypatch, env=env, gpu=gpu, M=M, N=N)
+    assert not derived.ok
+    assert "numerics_unregistered" in repr(derived.unsupported) and "world=4" in repr(derived.unsupported), derived.unsupported
+
+
 # --- tp_links.json: v2 schema at world N, v1 files read as v2 ----------------------------------------------------------------
 
 def test_read_tp_links_upgrades_v1_and_accepts_v2(tmp_path):

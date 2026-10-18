@@ -414,6 +414,8 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
                ir_bind(_tp_allreduce.AllReduceMultimem, WORLD=WORLD, SIZE=SIZE, TREES=TREES, FTZ=FTZ),
            "all_reduce_custom": lambda WORLD, SIZE, STAGE:
                ir_bind(_tp_allreduce.AllReduceCustom, WORLD=WORLD, SIZE=SIZE, STAGE=STAGE),
+           "all_reduce_nccl_tree": lambda WORLD, SIZE, CHAIN:
+               ir_bind(_tp_allreduce.AllReduceNcclTree, WORLD=WORLD, SIZE=SIZE, CHAIN=CHAIN),
            "all_reduce_rmsnorm_mnnvl": lambda WORLD, N, SHOT, CLUSTER, EPS, FMA:
                ir_bind(_tp_allreduce.AllReduceRmsNormMnnvl, WORLD=WORLD, N=N, SHOT=SHOT, CLUSTER=CLUSTER, EPS=EPS, FMA=FMA),
            "all_gather": lambda WORLD, N: ir_bind(TP2.AllGather, WORLD=WORLD, N=N),
@@ -554,6 +556,8 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "all_reduce_mnnvl": "AllReduceMnnvl_v1{WORLD,N,SHOT}: FlashInfer MNNVL all-reduce on a captured route",
            "all_reduce_multimem": "AllReduceMultimem_v1{WORLD,SIZE,TREES,FTZ}: torch symmetric-memory multimem all-reduce on captured trees",
            "all_reduce_custom": "AllReduceCustom_v1{WORLD,SIZE,STAGE}: vLLM custom all-reduce on a captured route",
+           "all_reduce_nccl_tree": "AllReduceNcclTree_v1{WORLD,SIZE,CHAIN}: pynccl ncclSum bf16 on NCCL's intra-node tree, a captured "
+                                   "chain of __hadd2 adds (NaN 0x7FFF)",
            "all_reduce_rmsnorm_mnnvl": "AllReduceRmsNormMnnvl_v1{WORLD,N,SHOT,CLUSTER,EPS,FMA}: FlashInfer fused all-reduce + RMS norm",
            "all_gather": "AllGather_v1{WORLD,N}: vllm.all_gather of WORLD>2 [N] shards along the trailing axis = the [WORLD*N] concatenation (b1_tp2)",
            "embedding_shard": "EmbeddingShard_v1{VS,H,START}: one rank of VocabParallelEmbedding — shard[id-START] if START<=id<START+VS else 0 (b1_tp2)",

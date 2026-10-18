@@ -282,7 +282,8 @@ def test_the_capture_s_settings_are_its_recorded_engine_switches_else_no_route()
     from verity_vllm.observe.fold.patterns.collectives import TpCollective, allreduce_settings
 
     facts = {"tp2": {"facts": {"parallel_config": {"disable_custom_all_reduce": True}}}}
-    assert allreduce_settings(_ar_ctx(1, facts).header) == {"custom_all_reduce": False, "symmetric_memory": True, "flashinfer": True}
+    assert allreduce_settings(_ar_ctx(1, facts).header) == {"custom_all_reduce": False, "symmetric_memory": True, "flashinfer": True,
+                                                            "batch_invariant": False, "nccl_transport": None}
     assert allreduce_settings(_ar_ctx(1, facts, {"VLLM_ALLREDUCE_USE_SYMM_MEM": "0"}).header)["symmetric_memory"] is False
     assert allreduce_settings(_ar_ctx(1).header) is None
     pat = TpCollective(world=8)
@@ -293,3 +294,30 @@ def test_the_capture_s_settings_are_its_recorded_engine_switches_else_no_route()
         r = pat.match(node, ctx)
         assert spec_label(r.spec) == f"AllReduce_v2{{WORLD=8,N={node.enter.args[0].shape[1]}}}" and r.rows == M
         assert not r.operands[0].flat
+
+
+def _tp4_ctx(M, *, gpu=("12.0", 188), p2p_off=True):
+    """A batch-invariant world-4 capture's header as the TP4 rank worker records it: the rank's NCCL environment, the manifest's
+    engine flags and the capture's GPU."""
+    ctx = _ar_ctx(M, {"tp2": {"facts": {"parallel_config": {"disable_custom_all_reduce": True},
+                                        "nccl_env": {"NCCL_P2P_DISABLE": "1"} if p2p_off else {}}}}, {"VLLM_BATCH_INVARIANT": "1"})
+    profile = {**ctx.header.profile, "gpu": {"compute_capability": gpu[0], "multi_processor_count": gpu[1]}}
+    return dataclasses.replace(ctx, header=dataclasses.replace(ctx.header, profile=profile))
+
+
+def test_a_batch_invariant_tp4_all_reduce_on_the_rtx_pro_6000_over_shm_folds_to_nccl_s_tree():
+    """The TP4 capture's all-reduce (pynccl, SHM, 4 RTX PRO 6000) is the Build's one `AllReduceNcclTree_v1` call; another GPU, P2P on
+    or another world stays one `AllReduce_v2` per row."""
+    from verity_vllm.observe.fold.patterns.collectives import TpCollective, allreduce_settings, capture_device
+
+    N = 8192
+    assert allreduce_settings(_tp4_ctx(1).header) == {"custom_all_reduce": False, "symmetric_memory": True, "flashinfer": True,
+                                                      "batch_invariant": True, "nccl_transport": "shm"}
+    assert capture_device(_tp4_ctx(1).header) == ("12.0", 188) and capture_device(_ctx(1).header) == ("9.0", 132)
+    for M in (1, 256):
+        r = TpCollective(world=4).match(_ar(M, N), _tp4_ctx(M))
+        assert isinstance(r, Compute) and r.spec.id == f"AllReduceNcclTree_v1{{WORLD=4,SIZE={M * N},CHAIN=(0,1,2,3)}}", r
+        assert r.rows == 1 and r.operands[0].flat and len(r.attribution) == M
+    for world, ctx in ((4, _tp4_ctx(4, gpu=("9.0", 132))), (4, _tp4_ctx(4, p2p_off=False)), (8, _tp4_ctx(4))):
+        r = TpCollective(world=world).match(_ar(4, N), ctx)
+        assert spec_label(r.spec) == f"AllReduce_v2{{WORLD={world},N={N}}}" and r.rows == 4 and not r.operands[0].flat
