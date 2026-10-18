@@ -6,7 +6,8 @@
         a prefill above the decode threshold of at most TOPK keys: the call's cache rows open the layer's history (`vllm_dsa`'s), and
         per query row i and head h `Attention_v4{T=i+1,NH=1,KVH=1,D,BN,DOT,INV,MASKED_FROM}` (FA3's causal varlen prefill, one head
         of it) over the call's own k, v rows 0..i, with q = [q_nope | q_pe] and k = [k_nope | k_pe] (k_pe shared by the heads)
-        assembled as references; no logits or top-k
+        assembled as references; where FA3 splits the sequence, `AttentionSplit_v1{..., PER}` (`fa3_split`: each split's online
+        softmax and end, FlashAttnFwdCombine); no logits or top-k
 """
 
 from __future__ import annotations
@@ -21,6 +22,7 @@ from verity_vllm.program.frontend.rules.vllm_dsa import (BF16, E4M3, F32, _appen
                                                          _observed_sparse_mla, _open_history, _positions, _rows, _static_float,
                                                          _value)
 from verity_vllm.program.frontend.rules.vllm_iface import iface
+from verity_vllm.program.registry import fa3_split
 
 _DENSE = ("positions", "q_nope", "q_pe", "k_nope", "v", "kv_c", "k_pe", "index_k", "index_k_scale", "layer_name", "topk", "scale")
 PREFILL_BACKEND = "vllm.v1.attention.backends.mla.prefill.flash_attn.FlashAttnPrefillBackend"
@@ -52,9 +54,11 @@ class DsaDenseMhaRule(StateRule):
     over q[i, h] and the call's k, v rows 0..i of head h, the tile's `MASKED_FROM` of row i (`targets.fa3_masked_from`).  That is
     `Attention_v4{NH, KVH=NH}`'s own head h (`AttentionHead_v4` at the one tile every head shares), bound per head because a head's
     k row is two parts, [k_nope | k_pe]: one call per row would add 2 NH parts to its key sequence per row, past the alias window
-    of the Program descriptor (`codec.ALIAS_WINDOW`), which would then write every call's whole key sequence.  The indexer selects
-    nothing (vLLM's `sparse_attn_indexer` returns before its logits when the batch has no decode token); the call's cache rows open
-    the layer's history as `DsaIndexerAttn[vllm-dsa]`'s do, for the decode steps after it."""
+    of the Program descriptor (`codec.ALIAS_WINDOW`), which would then write every call's whole key sequence.  Where FA3 runs the
+    sequence as NS > 1 splits (`fa3_model.split_plan`), row i binds `AttentionSplit_v1{..., PER}` instead, PER the blocks a split of
+    its tile (`fa3_split.split_per`): the row's splits, each ended with its partial output and lse, merged by FlashAttnFwdCombine.
+    The indexer selects nothing (vLLM's `sparse_attn_indexer` returns before its logits when the batch has no decode token); the
+    call's cache rows open the layer's history as `DsaIndexerAttn[vllm-dsa]`'s do, for the decode steps after it."""
     modes = frozenset({"profile"})
     info = RuleInfo("DsaDenseMha[vllm-dsa]", 1, "state", applies_to="vllm_iface.dsa_dense_mha(...) (" + ", ".join(_DENSE) + ")",
                     preconditions=("the layer's OBSERVED implementation is FlashAttnMLASparseImpl on a bf16 cache, without context parallelism; "
@@ -65,13 +69,14 @@ class DsaDenseMhaRule(StateRule):
                                    "q's and k's parts q_nope, k_nope [T, NH, P], q_pe [T, NH, R], k_pe [T, R], and v [T, NH, D] bf16 "
                                    "at D = P + R (one head dim, D registered by targets.fa3_kblock_n); kv_c [T, L] bf16; "
                                    "scale == f32(D^-0.5), the word Attention_v4 folds in",
-                                   "FA3 runs the sequence as one split (`fa3_model.split_plan` at the target's SMs, or batch invariance's "
-                                   "num_splits = 1): FlashAttnFwdCombine has no Definition",
+                                   "FA3's split count of the sequence (`fa3_model.split_plan` at the target's SMs, or batch invariance's "
+                                   "num_splits = 1) under a launch bound of at most 32 splits, the FlashAttnFwdCombine instantiation "
+                                   "SparseMlaCombine_v1 states (kLogMaxSplits 5)",
                                    "no declared launch context other than the call's own rows (a varlen launch's split plan reads every "
                                    "sequence's length)",
                                    "the index operands both given (index_k [T, Dk] e4m3, index_k_scale [T] f32) or both None",
                                    "layer_name static and written from one module; not under registered_values"),
-                    evidence_domain="structural; numerics: Attention_v4 (glm53_fa3_prefill_capture)")
+                    evidence_domain="structural; numerics: Attention_v4 and AttentionSplit_v1 (glm53_fa3_prefill_capture)")
 
     def targets(self):
         return {iface.dsa_dense_mha.default}
@@ -127,12 +132,9 @@ class DsaDenseMhaRule(StateRule):
             return (f"numerics_unregistered: a declared launch context of max_seqlen_q {launch_sq} at a {T}-row prefill: FA3's split "
                     f"plan of a varlen launch reads every sequence's length, which the context does not declare")
         try:
-            ns = _dense_splits(tp, T, NH, D)
+            _dense_splits(tp, T, NH, D)
         except ValueError as e:
             return f"numerics_unregistered: FA3's split count of a {T}-row prefill: {e}"
-        if ns > 1:
-            return (f"numerics_unregistered: FA3 runs a {T}-row prefill at {NH} heads, head {D} on {tp.num_sms} SMs as {ns} splits "
-                    f"(fa3_model.split_plan) combined by FlashAttnFwdCombine, which no Definition states")
         ix = (a.get("index_k"), a.get("index_k_scale"))
         if (ix[0] is None) != (ix[1] is None):
             return "the index operands are neither both given nor both None"
@@ -160,15 +162,18 @@ class DsaDenseMhaRule(StateRule):
         _append_rows(ctx, hist, a, has)
         tp = active_target_profile()
         geom = TG.attention_geometry(tp, D, T, NH, NH)
+        BM, ns = TG.fa3_tile_m(D, T, 1), _dense_splits(tp, T, NH, D)
         qn, qp, kn, kpe = (_rows(ctx, a[n], 16) for n in ("q_nope", "q_pe", "k_nope", "k_pe"))
         v = _rows(ctx, a["v"], 16)
         head = Array(1, Array(D, Value(16)))
         klogs, vlogs = [PartLog() for _ in range(NH)], [PartLog() for _ in range(NH)]
-        outs, masked = [], []
+        outs, masked, pers = [], [], []
         for i in range(T):
             masked.append(TG.fa3_masked_from(tp, i + 1, NH, NH, D, T, i))
+            split = {} if ns == 1 else {"PER": fa3_split.split_per(T, i, BM, geom["BN"], ns)}
+            pers += split.values()
             fn = ctx.kind("attention_dot", node, T=i + 1, NH=1, KVH=1, D=D, BN=geom["BN"], DOT=geom["DOT"], INV=geom["INV"],
-                          MASKED_FROM=masked[-1])
+                          MASKED_FROM=masked[-1], **split)
             rows = Array(i + 1, Array(1, Array(D, Value(16))))
             heads = []
             for hd in range(NH):
@@ -182,13 +187,15 @@ class DsaDenseMhaRule(StateRule):
                                       name=f"{h}[t={pos[i]},h={hd}]"))
             outs.append(Coll(Array(NH, Array(D, Value(16))), concat([o.refs for o in heads])))
         ctx.define(node, array_of(outs))
+        kind = "Attention_v4" if ns == 1 else "AttentionSplit_v1"
         ctx.record(self, node, {"layer_name": layer, "positions": [pos[0], pos[-1]], "history_rows_after": T, "NH": NH, "D": D,
-                                "binding": "per head: Attention_v4{NH=1, KVH=1}",
-                                "BN": geom["BN"], "BM": TG.fa3_tile_m(D, T, 1), "DOT": geom["DOT"].name, "INV": geom["INV"].name,
-                                "fa_version": geom["fa_version"], "masked_from": [min(masked), max(masked)], "splits": 1, "scale": scale,
+                                "binding": f"per head: {kind}{{NH=1, KVH=1}}",
+                                "BN": geom["BN"], "BM": BM, "DOT": geom["DOT"].name, "INV": geom["INV"].name,
+                                "fa_version": geom["fa_version"], "masked_from": [min(masked), max(masked)], "splits": ns,
+                                "blocks_per_split": [min(pers), max(pers)] if pers else None, "scale": scale,
                                 "TOPK": TOPK, "indexer": has, "selection": "none (dense MHA reads every row; the indexer returns early)",
                                 "attention_impl_observed": (_OBSERVED["attention_impls"] or {}).get(layer)},
-                   emitted=f"Attention_v4 x{T * NH} (T=1..{T}, one call per head)")
+                   emitted=f"{kind} x{T * NH} (T=1..{T}, one call per head)")
 
 
 def _run(p):
@@ -201,11 +208,15 @@ def _run(p):
 
 def _dense_splits(tp, T: int, NH: int, D: int) -> int:
     """The split count FA3 runs a B1 causal self-attention prefill of T rows at: 1 under batch invariance (`num_splits = 1`), else
-    `fa3_model.split_plan`'s count for the sequence (vLLM passes `num_splits = 0`)."""
+    `fa3_model.split_plan`'s count for the sequence (vLLM passes `num_splits = 0`).  A launch bound past the combine's 32 lanes
+    raises (`fa3_split.check_combine_bound`)."""
     if tp.batch_invariant:
         return 1
     from verity_vllm.program.kernels import fa3_model
-    return fa3_model.split_plan([T], NH, NH, D, num_sms=int(tp.num_sms), Dv=D)[1][0]
+    static, dyn = fa3_model.split_plan([T], NH, NH, D, num_sms=int(tp.num_sms), Dv=D)
+    if dyn[0] > 1:
+        fa3_split.check_combine_bound(static)
+    return dyn[0]
 
 
 VLLM_DSA_DENSE_RULES = [DsaDenseMhaRule()]

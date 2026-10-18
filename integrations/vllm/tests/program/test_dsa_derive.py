@@ -39,7 +39,7 @@ from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
 from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3, PROFILES, Vocabulary
 from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity_vllm.program.kernels.serve3_reference import materialize
-from verity_vllm.program.registry import b1, cublas_bf16, dsa, dsa_norm, fa3_check_inf, hopper, sparse_mla, sparse_mla_split
+from verity_vllm.program.registry import b1, cublas_bf16, dsa, dsa_norm, fa3_check_inf, fa3_split, hopper, sparse_mla, sparse_mla_split
 from verity_vllm.program.registry import bf16_gemm_check as BC
 from verity_vllm.program.registry.boolean_rope import RoPEHeadGptJV2
 from verity_vllm.program.registry.sparse_mla_split import launch_num_splits
@@ -257,16 +257,22 @@ def _dense(layer: _Layer, P0: int, T: int) -> bool:
             and P0 + T <= layer.topk_indices_buffer.shape[-1])
 
 
-def _attention_v4(T: int, row: int, seqlen_q: int, heads: int = NH):
-    return bind(fa3_check_inf.AttentionV4, T=T, NH=heads, KVH=heads, D=P + R, BN=TG.fa3_kblock_n(P + R, seqlen_q, 1), DOT=DOT,
-                INV=hopper.Fa3InvSum, MASKED_FROM=TG.fa3_masked_from(H200, T, NH, NH, P + R, seqlen_q, row))
+def _attention_v4(T: int, row: int, seqlen_q: int, heads: int = NH, splits: int = 1):
+    """Row ``row``'s dense prefill Definition: `Attention_v4`, or `AttentionSplit_v1` at its tile's PER where FA3 runs the
+    sequence as ``splits`` > 1."""
+    BN = TG.fa3_kblock_n(P + R, seqlen_q, 1)
+    st = dict(T=T, NH=heads, KVH=heads, D=P + R, BN=BN, DOT=DOT, INV=hopper.Fa3InvSum,
+              MASKED_FROM=TG.fa3_masked_from(H200, T, NH, NH, P + R, seqlen_q, row))
+    if splits == 1:
+        return bind(fa3_check_inf.AttentionV4, **st)
+    return bind(fa3_split.AttentionSplit, **st, PER=fa3_split.split_per(seqlen_q, row, TG.fa3_tile_m(P + R, seqlen_q, 1), BN, splits))
 
 
-def _reference(model: _Model, inputs) -> list[int]:
+def _reference(model: _Model, inputs, splits: int = 1) -> list[int]:
     """The module's outputs as the Definitions compose them: per token the norms, the RoPEs and the absorptions, and per row
     `SparseMla_v1{T=n}` over the layer's rows 0..n-1 ([kv_c normed | k_pe roped]) and `W_UV`; or on the dense route
-    `Attention_v4{T=i+1}` over [q_nope | q_pe roped] and the call's rows 0..i of k = [k_nope | k_pe roped] and v, k_nope and v each
-    head's halves of the normed latent (the identity `kv_b_proj`)."""
+    `Attention_v4{T=i+1}` (`AttentionSplit_v1` at ``splits`` > 1) over [q_nope | q_pe roped] and the call's rows 0..i of
+    k = [k_nope | k_pe roped] and v, k_nope and v each head's halves of the normed latent (the identity `kv_b_proj`)."""
     qn, rope = bind(b1.RMSNormTriton, N=NQ, EPS=EPS), bind(RoPEHeadGptJV2, D=R)
     hist = {n: [] for n in NAMES}
     out, k = [], 0
@@ -295,7 +301,7 @@ def _reference(model: _Model, inputs) -> list[int]:
                     ks += [w for hd in heads for w in hd[:P] + kr]
                     vs += [w for hd in heads for w in hd[P:]]
                     qrow = [w for j in range(NH) for w in _words(qv[i, j, :P]) + qr[j]]
-                    rows += list(evaluate(_attention_v4(i + 1, i, T), qrow, ks, vs))
+                    rows += list(evaluate(_attention_v4(i + 1, i, T, splits=splits), qrow, ks, vs))
                     continue
                 ql = list(evaluate(up, _words(qv[i, :, :P]), wuk))
                 fn = bind(sparse_mla.SparseMla, T=len(h), NH=NH, DR=R, DV=lat, BN=BN, DOT=DOT, INV=hopper.Fa3InvSum, SCALE=SCALE)
@@ -714,6 +720,25 @@ def test_the_served_dense_prefill_binds_attention_v4_at_the_128_x_80_tile():
     assert TG.fa3_masked_from(H200, 2048, 1, 1, 256, 2048, 2047) == mf
     row = PROFILE_B1_EAGER_V3.kind("attention_dot", T=2048, NH=1, KVH=1, D=256, BN=80, DOT=DOT, INV=hopper.Fa3InvSum, MASKED_FROM=mf)
     assert row.id.startswith("Attention_v4{")
+    assert vllm_dsa_dense._dense_splits(H200, 1024, 8, 256) == 2                        # 321 to 1664 rows: FA3 splits
+
+
+def test_a_prefill_fa3_splits_derives_by_attention_split(dense, monkeypatch):
+    """Where FA3 runs the sequence as NS > 1 splits, row i binds `AttentionSplit_v1{T=i+1, NH=1, KVH=1, ..., PER}` at its tile's
+    PER (`fa3_split.split_per`), and the run is the reference's `AttentionSplit_v1{NH, KVH=NH}` per row.  The fixture's 2 rows sit
+    in one 128-key block, so each row's one split is ended and combined alone: this checks the binding and its plumbing, and
+    `test_fa3_split` the splits."""
+    monkeypatch.setattr(vllm_dsa_dense, "_dense_splits", lambda tp, T, NH, D: 2)
+    model = _model(dense=True)
+    xs = _inputs(model)
+    rep = _derive(model, xs)
+    assert rep.program is not None, rep.unsupported
+    att = [n.fn.id for n in rep.program.fn.body.nodes if n.fn.id.startswith(("Attention_v4{", "AttentionSplit_v1{"))]
+    T = STEPS[0][1]
+    assert att == [_attention_v4(i + 1, i, T, heads=1, splits=2).id for i in range(T) for _ in range(NH)] * len(NAMES)
+    assert _run(rep, model, xs) == _reference(model, xs, splits=2)
+    apps = [a["preconditions_checked"] for a in rep.provenance["applications"] if a["rule"] == "DsaDenseMha[vllm-dsa]_v1"]
+    assert [(a["splits"], a["blocks_per_split"], a["binding"]) for a in apps] == [(2, [1, 1], "per head: AttentionSplit_v1{NH=1, KVH=1}")] * 2
 
 
 @pytest.mark.parametrize("case,needle", [
@@ -723,7 +748,6 @@ def test_the_served_dense_prefill_binds_attention_v4_at_the_128_x_80_tile():
     ("v-padding", "prefill backend pads v to the qk head dim (requires_v_padding)"),
     ("prefill-scale", "prefill backend scale 0.5 is not the call's"),
     ("scale", "scale 0.5 is not f32(D^-0.5) at D=32, the word Attention_v4 folds in"),
-    ("splits", "as 2 splits (fa3_model.split_plan) combined by FlashAttnFwdCombine, which no Definition states"),
     ("head", "FA3's split count of a 2-row prefill: FA3 head dim 32: not modelled"),
     ("target", "Attention_v4 is FA3 at compute capability 9.0 under check-inf-per-iteration; the target is"),
     ("chunked", "a dense-MHA prefill of 2 rows after 1 history rows runs over a chunked context"),
@@ -739,8 +763,8 @@ def test_each_dense_prefill_precondition_refuses_by_name(case, needle, dense, mo
     if case == "scale":
         for layer in model.layers:
             layer.scale = 0.5
-    if case in ("splits", "head"):
-        monkeypatch.setattr(vllm_dsa_dense, "_dense_splits", (lambda tp, T, NH, D: 2) if case == "splits" else DENSE_SPLITS)
+    if case == "head":
+        monkeypatch.setattr(vllm_dsa_dense, "_dense_splits", DENSE_SPLITS)
     if case == "target":
         VB.observe_target_profile(TargetProfile(compute_capability=(8, 0), num_sms=108, batch_invariant=False))
     hint = _hint(_derive(model, _inputs(model)))
