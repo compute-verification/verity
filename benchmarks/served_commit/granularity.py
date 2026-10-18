@@ -17,6 +17,11 @@ Call at one query position).  Each Call's owning module is the Build's runtime c
           value of the MLP block or of the attention child (a residual add after attention), else the attention block's.
   layer   a decoder layer at one token: what crosses is the residual stream between layers and the K and V that later tokens'
           attention reads.
+  layer-folded  the layer unit with the residual stream folded: a layer hands the next layer (or the final norm) one hidden vector
+          per token, the sum of its output and its residual, instead of the two the next layer's fused add-norm reads; per layer
+          and token the larger of what the next layer reads of each producer.  The same values only when every reader of the two
+          reads them through their sum in the stream's dtype (`folded_readers` names the Definitions; vLLM's CUDA fused add-norm
+          rounds the sum and normalizes that, its native one, which Inductor compiles, normalizes the fp32 sum).
 
 A decoder layer is a ModuleList element: a Call's module path up to its first numeric component.  A module outside every layer (the
 embedding, the final norm, the logits, the sampler) is its own unit at each token.  A Call's token is its embedding Call's: a Call
@@ -33,7 +38,8 @@ import re
 from collections import defaultdict
 from pathlib import Path
 
-UNITS = ("call", "block", "layer")
+UNITS = ("call", "block", "layer", "layer-folded")
+FOLDED = ("next layer", "out of layers")
 NUM = re.compile(r"\d+")
 
 
@@ -140,12 +146,20 @@ def analyze(build_dir: str, rates: dict[int, float]) -> dict:
     units = {g: [unit(g, i) for i in range(n)] for g in UNITS}
     kept: dict[str, dict[int, set[tuple[int, int]]]] = {g: defaultdict(set) for g in UNITS}
     why: dict[str, dict[int, set[str]]] = {g: defaultdict(set) for g in UNITS}
+    fold: dict[int, set[tuple[int, int]]] = defaultdict(set)     # layer-folded: what the next layer reads, one vector per layer and token
+    fold_readers: set[str] = set()
     for i in range(n):
         for p, lo, hi in reads[i]:
+            k = kind(p, i)
             for g in UNITS:
-                if units[g][p] != units[g][i]:
+                if units[g][p] == units[g][i]:
+                    continue
+                if g == "layer-folded" and k in FOLDED:
+                    fold[p].add((lo, hi))
+                    fold_readers.add(family[i])
+                else:
                     kept[g][p].add((lo, hi))
-                    why[g][p].add(kind(p, i))
+                    why[g][p].add(k)
     for r in ret:
         if r[0] == "n":
             for g in UNITS:
@@ -192,6 +206,18 @@ def analyze(build_dir: str, rates: dict[int, float]) -> dict:
             e["calls"] += 1
             e["bytes"] += b
             e["producers"].add(p)
+        if g == "layer-folded" and fold:
+            stream: dict[tuple, tuple[int, int]] = {}
+            for p, ivs in fold.items():
+                stream[(layer[p], token[p])] = max(stream.get((layer[p], token[p]), (0, p)), (nbytes(p, ivs), p))
+            e = groups.setdefault(("stream",), {"module": re.sub(r"\.\d+$", ".*", next(iter(stream))[0]), "definition": "residual sum",
+                                                "read_by": sorted({k for p in fold for k in why["layer"][p] if k in FOLDED}),
+                                                "calls": 0, "bytes": 0, "first": min(fold), "producers": set()})
+            for b, p in stream.values():
+                tot["prefill" if token[p] >= 0 and step_of_token[token[p]] == 0 else "decode"] += b
+                e["calls"] += 1
+                e["bytes"] += b
+                e["producers"].add(p)
         total = tot["prefill"] + tot["decode"]
         decode_steps = max(1, len(steps) - 1)
         out["units"][g] = {
@@ -201,6 +227,8 @@ def analyze(build_dir: str, rates: dict[int, float]) -> dict:
             "decode_hash_ms_per_step": {str(row): round(tot["decode"] / decode_steps / rate / 1e6, 4) for row, rate in rates.items()},
             "kept": sorted(groups.values(), key=lambda e: e["first"]),
         }
+        if g == "layer-folded":
+            out["units"][g]["folded_readers"] = sorted(fold_readers)
         for e in out["units"][g]["kept"]:
             e["bytes_per_token"] = round(e["bytes"] / max(1, n_tokens), 1)
             e["layers"] = len({layer[i] for i in e.pop("producers")})
@@ -221,8 +249,10 @@ def render(s: dict) -> str:
         lines.append(f"| {g} | {u['bytes'] / 1e6:.2f} | {u['bytes'] / base:.3f} | {u['prefill_bytes'] / 1e6:.2f} | "
                      f"{u['decode_bytes_per_step'] / 1e3:.1f} | " + " | ".join(f"{u['hash_ms'][r]:.3f}" for r in rows) + " | "
                      + " | ".join(f"{u['decode_hash_ms_per_step'][r]:.4f}" for r in rows) + " |")
-    for g in ("layer", "block"):
-        lines += ["", f"{g}: the Call boundaries kept", "", "| producer module | Definition | read by | Calls | B / token | layers | B / token / layer |",
+    for g in ("layer", "layer-folded", "block"):
+        readers = s["units"][g].get("folded_readers")
+        lines += ["", f"{g}: the Call boundaries kept" + (f" (the residual sum's readers: {', '.join(readers)})" if readers else ""), "",
+                  "| producer module | Definition | read by | Calls | B / token | layers | B / token / layer |",
                   "|---|---|---|---:|---:|---:|---:|"]
         for e in s["units"][g]["kept"]:
             per = f"{e['bytes_per_token'] / e['layers']:.0f}" if e["layers"] and "*" in e["module"] else ""
