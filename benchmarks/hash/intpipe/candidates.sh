@@ -29,7 +29,7 @@ CC=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader | head -1 | tr -d 
 case $CC in 120) SM=120a ;; *) SM=$CC ;; esac
 echo "compute_cap $CC sm_$SM" > "$O/arch.txt"
 # name:kind:rounds:rolled-loop trip (sass_count's inner-loop count in the rolled form)
-CANDS=${CANDS:-sha512:0:80:4 sha512r80:1:80:4 sha512r64:1:64:3 sha512r48:1:48:2 sha512r40:1:40:1 sha512r32:1:32:1 sha512r24:1:24:1 sha256:2:64:3 blake3:3:7:1 blake3chunks:4:7:1}
+CANDS=${CANDS:-sha512:0:80:4 sha512r80:1:80:4 sha512r64:1:64:3 sha512r48:1:48:2 sha512r40:1:40:1 sha512r32:1:32:1 sha512r24:1:24:1 sha256:2:64:3 blake3:3:7:1 blake3chunks:4:7:1 xor:5:0:1}
 FORMS=${FORMS:-1 0}
 for c in $CANDS; do
   IFS=: read -r name kind r _ <<< "$c"

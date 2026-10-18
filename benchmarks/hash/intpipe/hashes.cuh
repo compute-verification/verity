@@ -316,4 +316,40 @@ struct Blake3Chunks : Blake3 {
     }
   }
 };
+// No hash, a control: the XOR of every 32-byte slice of the input, through the same loader and tree, so a leaf rate
+// near it is the loader's memory ceiling, not the hash's
+struct Xor {
+  using W = u32;
+  static constexpr int BLOCK = 64, TPL = 1, STRIDE = LEAF;
+  static __device__ __forceinline__ void iv(u32* s) {
+#pragma unroll
+    for (int i = 0; i < 8; ++i) s[i] = 0;
+  }
+  static __device__ __forceinline__ void comp(u32* s, const u32* w) {
+#pragma unroll
+    for (int i = 0; i < 8; ++i) s[i] ^= w[i] ^ w[i + 8];
+  }
+  static __device__ __forceinline__ void rate_step(u32* s, u32* w, int) {
+#pragma unroll
+    for (int i = 0; i < 8; ++i) w[i] ^= s[i];
+    comp(s, w);
+  }
+  template <class L>
+  static __device__ __forceinline__ void leaf(const L& ld, u64 t, u32* out) {
+    u32 st[8];
+    iv(st);
+#pragma unroll 1
+    for (int blk = 0; blk < LEAF / 64; ++blk) {
+      uint4 v[4];
+      ld.block(blk, v);
+      comp(st, reinterpret_cast<const u32*>(v));
+    }
+#pragma unroll
+    for (int i = 0; i < 8; ++i) out[t * 8 + i] = st[i];
+  }
+  static __device__ __forceinline__ void node(const u32* l, const u32* r, u32* out) {
+#pragma unroll
+    for (int i = 0; i < 8; ++i) out[i] = l[i] ^ r[i];
+  }
+};
 }  // namespace ip

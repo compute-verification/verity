@@ -81,6 +81,8 @@ def ands_per_compression(kind: int, rounds: int) -> int:
         return rounds * (7 * 63 + 2 * 64) + max(0, rounds - 16) * 3 * 63 + 8 * 63
     if kind == 2:
         return 64 * (7 * 31 + 2 * 32) + 48 * 3 * 31 + 8 * 31
+    if kind == 5:
+        return 0
     return 7 * 8 * 6 * 31
 
 
@@ -127,7 +129,7 @@ def hashes(out: str) -> None:
         print(json.dumps(rec))
 
 
-ORDER = ["sha512", "sha512r64", "sha512r48", "sha512r40", "sha512r32", "sha512r24", "sha256", "blake3", "blake3chunks"]
+ORDER = ["sha512", "sha512r64", "sha512r48", "sha512r40", "sha512r32", "sha512r24", "sha256", "blake3", "blake3chunks", "xor"]
 
 
 def table(args: list[str]) -> None:

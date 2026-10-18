@@ -4,7 +4,8 @@
     python3 check.py check DIR OPERAND  one dump against the reference (one JSON line; exit 1 on any difference)
 
 The reference: SHA-512 at R rounds and SHA-256 in plain Python (FIPS 180-4's round and schedule, the constants derived
-from the primes), each first held to hashlib (R = 80, and SHA-256) in the same run; BLAKE3 is verity.ml.crypto.blake3.
+from the primes), each first held to hashlib (R = 80, and SHA-256) in the same run; BLAKE3 is verity.ml.crypto.blake3;
+the Xor control is numpy's XOR of the input's 32-byte slices.
 A dump's raw chains are checked at 64 threads of the timed grid (first, last, warp and block edges, random), every
 compression of each chain; its 4 KiB-leaf tree at every leaf and node. The baseline (full SHA-512, sha512.cuh) is
 checked the same way in every dump. Run from the source tree's root with PYTHONPATH=.
@@ -127,6 +128,18 @@ def hasher(kind: int, rounds: int):
                 cv = b3.compress(tuple(cv), b"".join(x.to_bytes(4, "little") for x in m), k, 64, 0)[:8]
             return cv
         return b3.blake3, chain, 4
+    if kind == 5:
+        def xor(m: bytes) -> bytes:
+            return np.bitwise_xor.reduce(np.frombuffer(m, dtype="<u4").reshape(-1, 8), axis=0).astype("<u4").tobytes()
+
+        def chain(t: int, n: int) -> list[int]:
+            st, w = [0] * 8, [(t * 16 + i) & M32 for i in range(16)]
+            for _ in range(n):
+                for i in range(8):
+                    w[i] ^= st[i]
+                st = [st[i] ^ w[i] ^ w[i + 8] for i in range(8)]
+            return st
+        return xor, chain, 4
     raise ValueError(kind)
 
 
