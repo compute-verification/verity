@@ -57,8 +57,8 @@ flock-verify statement [--statement ID] --circuit F [--comp comp.rows] --public 
   decodes the program and evaluates the query itself (§16.10).
 - `verity/flock-circuit+seed-injection`: the same statement as the circuit prover's (M0) selftest build pins it, for its recorded cases.
 - `verity/flock-circuit+plain-leaves`: the same statement with plain SHA-512 Merkle leaves (`flock-leaf/sha512-unsalted`,
-  §16.16), a recursive session's inner statement (`FLOCK_PLAIN_LEAVES=1`), ZK off. `statement` prints its identity and
-  digest, but `verify` refuses it, with or without `--zk`, until a soundness headline covers plain leaves.
+  §16.16), a recursive session's inner statement (`FLOCK_PLAIN_LEAVES=1`), ZK off. `verify` checks it without `--zk`,
+  under the hidden-output headlines at the plain leaf (`Refine.leafOfId`), and refuses it under `--zk`.
 - `verity/flock-circuit/types` (and `+seed-injection`): the typed statement (§16.11) with hidden outputs (§16.13);
   `verity/flock-circuit/types@210d32e1` is its form with public outputs.
 - `verity/flock-circuit@cec3e347` and `verity/flock-circuit/types@cec3e347` (and `+seed-injection`): the two before, for

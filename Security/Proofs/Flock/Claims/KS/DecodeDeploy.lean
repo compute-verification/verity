@@ -66,6 +66,10 @@ theorem plain_setupH {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false 
   rw [hcirc] at ho
   have hm := parse_m hs hset (by simp)
   simp only [Bool.false_eq_true, ↓reduceIte] at hm₁
+  have hl : ins.read.I.tags.merkleLeaf = "hm96-sha512/v1" := by
+    rcases hl with hl | ⟨-, hho, -⟩
+    · exact hl
+    · simp [hh] at hho
   refine ⟨ht, hc, by simpa using ho, ⟨hh, hrr, hl, hc1⟩, hst, hsp, ?_, ?_⟩
   · simpa [hm] using hm₁
   · simpa [hm] using hm₂
