@@ -64,6 +64,9 @@ LUT_SIZE = 256
 LUT = tuple(int(v) for v in np.rint(127.0 * np.exp2(-np.arange(LUT_SIZE) / 16.0)))
 #: fattn.cu's A is a uint32_t: past it, A saturates
 A_CAP = (1 << 32) - 1
+#: the most padded keys P V' runs over in its window (`Accounting.Guarantees.Gates.LutPvWindow`, 32·S <= 132,096): P in [0, 127]
+#: against V' in [-128, 127] keeps every product in [-16256, 16129], so 4,128 steps stay in s32 where 2^17 does not
+PV_KEY_LIMIT = 132_096
 
 _CONF = ("exact-model-tested; tests/program/test_int8_exact_defs.py: every Definition here against verity_vllm.engine.int8_exact / "
          "int8_attention (the torch the profile serves) on random inputs on the CPU, all words equal; that torch is bit-equal on the "
@@ -271,15 +274,15 @@ def _row_sig(S):
 
 def row_refusal(b: dict) -> str | None:
     """`bind`'s refusal for a Row: Q' K'^T steps over D, so D is a multiple of 32; P V' steps over the keys zero-padded to
-    `padded(S)`, which stays under `GEMM.S8_K_LIMIT` (2^17), past which an s8 sum can leave s32."""
+    `padded(S)`, which stays within `PV_KEY_LIMIT` (132,096, P V' 's own window), past which its s8 sum can leave s32."""
     D, K = b.get("D"), b.get("S")
     if isinstance(D, int) and (D < 32 or D % 32):
         return f"D={D}: Q' K'^T steps 32 channels at a time, so the head dim is a positive multiple of 32"
     if isinstance(K, int) and K < 1:
         return f"S={K}: a row attends to at least its own key"
-    if isinstance(K, int) and padded(K) >= GEMM.S8_K_LIMIT:
-        return (f"S={K}: P V' over {padded(K)} padded keys is at or past {GEMM.S8_K_LIMIT}, where an s8 sum can leave s32; a context "
-                f"of at most {GEMM.S8_K_LIMIT - 32} keys binds")
+    if isinstance(K, int) and padded(K) > PV_KEY_LIMIT:
+        return (f"S={K}: P V' over {padded(K)} padded keys is past its window of {PV_KEY_LIMIT} (LutPvWindow), where its s8 sum can "
+                f"leave s32; a context of at most {PV_KEY_LIMIT} keys binds")
     return None
 
 

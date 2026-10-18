@@ -83,15 +83,15 @@ def test_int8_lut_attention_is_the_served_attention(n, s, h, g_heads, spread, ks
             assert list(got) == _bf16(want[i, hd]), (i, hd)
 
 
-def test_attention_row_binds_up_to_the_s8_k_limit():
-    """P V' steps over the keys zero-padded to 32: any S >= 1 binds while padded(S) < 2^17; past it, and a head dim off the 32-wide
-    step, `bind` refuses by name."""
+def test_attention_row_binds_up_to_the_pv_window():
+    """P V' steps over the keys zero-padded to 32: any S >= 1 binds while padded(S) <= 132,096 (LutPvWindow's 32·S, past the
+    generic s8 cut of 2^17); past it, and a head dim off the 32-wide step, `bind` refuses by name."""
     from verity.ml.circuits.ops.gemm import S8_K_LIMIT
 
     sc = 128 ** -0.5
-    for s in (1, 31, 33, S8_K_LIMIT - 32):
+    for s in (1, 31, 33, S8_K_LIMIT - 31, S8_K_LIMIT, X.PV_KEY_LIMIT):
         assert X.row_refusal({"D": 128, "S": s}) is None
-    for s, why in [(S8_K_LIMIT - 31, "at or past 131072"), (0, "at least its own key")]:
+    for s, why in [(X.PV_KEY_LIMIT + 1, "past its window of 132096"), (0, "at least its own key")]:
         with pytest.raises(ValueError, match=why):
             bind(X.Int8LutAttentionRow, D=128, S=s, SCALE=sc)
     with pytest.raises(ValueError, match="multiple of 32"):
