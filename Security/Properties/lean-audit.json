@@ -1298,6 +1298,9 @@
   },
   "Properties.RemoteAudit.passesChained": {
    "owner": "@memory-accounting"
+  },
+  "Properties.RemoteAudit.releasedStayOut": {
+   "owner": "@memory-accounting"
   }
  },
  "shape": {
@@ -2044,6 +2047,10 @@
    },
    "Properties.RemoteAudit.passesChained": {
     "function": "RemoteAudit.Session.run",
+    "outcome": "accept"
+   },
+   "Properties.RemoteAudit.releasedStayOut": {
+    "function": ["RemoteAudit.Session.run", "RemoteAudit.Session.step"],
     "outcome": "accept"
    }
   },

@@ -41,7 +41,8 @@ The session (`Session.run` from `State.init`, every event's result `.ok`; the re
 * `PassesReadDistinct`: each pass recorded reads distinct blocks of the store as it stands;
 * `AppendsInOrder`: the appends are the store's next indices in order, append `k` answered with append coin `k`;
 * `PassesChained`: the session's head is the chain over its appends, and each pass's head the chain over a prefix of
-  them, so its seed binds the appends received before it.
+  them, so its seed binds the appends received before it;
+* `ReleasedStayOut`: a block released by an accepted release is read by no pass received after it.
 -/
 
 open RemoteAudit
@@ -203,5 +204,20 @@ def PassesChained : Prop :=
       s.head = chainOf s.appends ∧
       ∀ t (ht : t < s.windows.size) i (hi : i < s.windows[t].heads.size),
         ∃ m, m ≤ s.appends.size ∧ s.windows[t].heads[i] = chainOf (s.appends.extract 0 m)
+
+/-- A block released by an accepted release is read by no pass received after it: a run to `s₁`, a release of `runs`
+answered `.ok`, and a run on to `s`; every pass `s` records past `s₁`'s (in a later window, or later in its window)
+reads no block of `runs` (`receive` refuses a plan holding a released block with `plan`). -/
+def ReleasedStayOut : Prop :=
+  ∀ (params : Session.Params) (reg : Registration) (coins appendCoins : Array ByteArray) (notBeforeNs : Nat)
+    (events₁ events₂ : Array Session.Event) (runs : Array (Int × Int)) (rs₁ rs : Array Session.Result)
+    (s₁ s₂ s : Session.State),
+    Session.run (Session.State.init params reg coins appendCoins notBeforeNs) events₁ = .ok (rs₁, s₁) →
+    Session.step s₁ (.release runs) = .ok (.ok, s₂) →
+    Session.run s₂ events₂ = .ok (rs, s) →
+      ∀ r ∈ runs, ∀ t (ht : t < s.windows.size) i (hi : i < s.windows[t].plans.size),
+        (s₁.windows.size ≤ t ∨ s₁.windows[t]!.plans.size ≤ i) →
+        ∀ p, p < s.windows[t].plans[i].length →
+          ¬ (r.1 ≤ (s.windows[t].plans[i].block p : Int) ∧ (s.windows[t].plans[i].block p : Int) < r.1 + r.2)
 
 end Properties.RemoteAudit
