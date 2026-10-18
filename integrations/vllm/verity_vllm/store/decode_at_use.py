@@ -18,13 +18,15 @@ The scratch is the largest other module's weights, rounded to blocks (``scratch_
 when every byte of a weight is registered and its rows are whole blocks, two modules read theirs in pieces.
 
 ~~~text
-embedding  (one shard) only the rows of the call's token ids, decoded into the scratch as a [rows, H] table, and the call
-           handed each id's row in it: the same gather (`VocabParallelEmbedding` at tp 1 is `F.embedding(ids, weight)`)
+embedding  (one shard) handed a stand-in quant method for its call, whose `embedding` decodes only the rows of the call's
+           token ids into the scratch as a [rows, H] table and runs the method's own `embedding` on each id's row in it:
+           the same gather (`VocabParallelEmbedding` at tp 1 is `quant_method.embedding(layer, ids)`, `F.embedding`)
 lm_head    the logits processor handed a stand-in LM head whose `quant_method.apply` decodes the weight a scratch of rows at
            a time and runs the head's own `apply` on each, its logits written into theirs; any other attribute is the head's
 ~~~
 
-The pieces' bits are the whole call's when the GEMM computes each logit alone, as cuBLAS does for these shapes on the RTX PRO
+A module's arguments are never changed: the acquisition's hooks on it commit its call as the model made it (the
+embedding's token ids).  The pieces' bits are the whole call's when the GEMM computes each logit alone, as cuBLAS does for these shapes on the RTX PRO
 6000 (`tests/store/int8_store_gpu.py`).
 """
 from __future__ import annotations
@@ -109,6 +111,35 @@ class _Head:
         return out
 
 
+class _Rows:
+    """The embedding's quant method for one call: `embedding` decodes the rows of its token ids, every other attribute is
+    the method's."""
+
+    def __init__(self, uses: DecodeAtUse, qm: Any, w: EncodedWeight, row: int) -> None:
+        self._uses, self._qm, self._w, self._row = uses, qm, w, row
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._qm, name)
+
+    def embedding(self, layer: Any, ids: Any) -> Any:
+        u, w, row = self._uses, self._w, self._row
+        rows, inv = u.torch.unique(ids, sorted=True, return_inverse=True)
+        if rows.numel() * row > u.scratch.numel():
+            raise RuntimeError(f"decode at use: {rows.numel()} embedding rows of {row} bytes do not fit the {u.scratch.numel()}-byte scratch")
+        src = u.home[id(w.param)]
+        flat, stream, at, ids_h = u._flat(src), u.stream(), 0, rows.tolist()
+        i = 0
+        while i < len(ids_h):
+            j = i + 1
+            while j < len(ids_h) and ids_h[j] == ids_h[j - 1] + 1:
+                j += 1
+            a, n = ids_h[i] * row, (j - i) * row
+            u.decode(flat[a:a + n], u.scratch[at:at + n], w.first_word + a // w.word_bytes, stream)
+            at, i = at + n, j
+        table = u.scratch[:at].view(src.dtype).view(len(ids_h), src.shape[1])
+        return self._qm.embedding(types.SimpleNamespace(weight=table), inv.reshape(ids.shape).to(ids.dtype))
+
+
 class DecodeAtUse:
     """`install` the hooks that serve ``model`` from ``weights`` decoded by ``decode``; `remove` takes them out."""
 
@@ -180,7 +211,7 @@ class DecodeAtUse:
     def install(self) -> DecodeAtUse:
         for mod, ws in self.modules:
             self.handles.append(mod.register_forward_pre_hook(lambda m, a, ws=ws: self.before(m, ws, a)))
-            self.handles.append(mod.register_forward_hook(lambda m, a, o, ws=ws: self.after(ws)))
+            self.handles.append(mod.register_forward_hook(lambda m, a, o, ws=ws: self.after(ws, m)))
         return self
 
     def remove(self) -> None:
@@ -208,32 +239,20 @@ class DecodeAtUse:
             at += self._span(w)
         return None
 
-    def _piece(self, piece: tuple[str, Any, int], w: EncodedWeight, args: tuple) -> tuple:
+    def _piece(self, piece: tuple[str, Any, int], w: EncodedWeight, args: tuple) -> tuple | None:
         kind, mod, row = piece
         if kind == "head":
             if not args or args[0] is not mod:
                 raise RuntimeError("decode at use: the logits processor was not handed the LM head as its first argument")
             return (_Head(self, mod, w, row), *args[1:])
-        ids = args[0]
-        rows, inv = self.torch.unique(ids, sorted=True, return_inverse=True)
-        if rows.numel() * row > self.scratch.numel():
-            raise RuntimeError(f"decode at use: {rows.numel()} embedding rows of {row} bytes do not fit the {self.scratch.numel()}-byte scratch")
-        src = self.home[id(w.param)]
-        flat, stream, at, ids_h = self._flat(src), self.stream(), 0, rows.tolist()
-        i = 0
-        while i < len(ids_h):
-            j = i + 1
-            while j < len(ids_h) and ids_h[j] == ids_h[j - 1] + 1:
-                j += 1
-            a, n = ids_h[i] * row, (j - i) * row
-            self.decode(flat[a:a + n], self.scratch[at:at + n], w.first_word + a // w.word_bytes, stream)
-            at, i = at + n, j
-        w.param.data = self.scratch[:at].view(src.dtype).view(len(ids_h), src.shape[1])
-        return (inv.reshape(ids.shape).to(ids.dtype), *args[1:])
+        mod.quant_method = _Rows(self, mod.quant_method, w, row)
+        return None
 
-    def after(self, ws: Sequence[EncodedWeight]) -> None:
+    def after(self, ws: Sequence[EncodedWeight], mod: Any = None) -> None:
         for w in ws:
             w.param.data = self.home[id(w.param)]
+        if isinstance(getattr(mod, "quant_method", None), _Rows):
+            mod.quant_method = mod.quant_method._qm
         self._active = None
 
     def decode_in_place(self) -> None:

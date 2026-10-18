@@ -174,8 +174,14 @@ def test_the_embedding_and_lm_head_read_in_pieces_through_a_smaller_scratch():
     assert sorted(k for k, _, _ in hooks.pieces.values()) == ["head", "rows"]
     assert hooks.scratch.numel() == (32 + 2) * BLOCK < V * H * 2      # b's weight and scale, not the vocabulary's 40 blocks
     model.embed.ids.clear()
+    seen = []
+    acquired = model.embed.register_forward_pre_hook(lambda m, a: seen.append(a[0].clone()))
+    qm = model.embed.quant_method
     assert torch.equal(model(ids).view(torch.int16), plain.view(torch.int16)) and hooks.calls == 4
-    assert model.embed.ids[0].tolist() == [2, 1, 2, 3, 5, 0, 4]      # each id's row of the decoded [0, 3, 7, 8, 9, 39] table
+    # the call as the model made it, to the module and to a hook after decode at use's (the acquisition's)
+    assert model.embed.ids[0].tolist() == seen[0].tolist() == ids.tolist()
+    assert model.embed.quant_method is qm
+    acquired.remove()
     assert all(w.param.data.data_ptr() == homes[w.name] for w in weights)
     small = DecodeAtUse(model, weights, fake_decode, scratch_bytes=34 * BLOCK)
     with pytest.raises(ValueError, match="smaller than"):
