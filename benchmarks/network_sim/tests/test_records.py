@@ -152,9 +152,13 @@ def test_a_block_down_for_maintenance_is_refused_without_the_plan_and_charged_wh
 
 def test_a_fleet_is_validated_and_stood_up_merged(m, tmp_path):
     """`--fleet` is `two_sites`' fleet merged, its WAN as long as `--wan-latency-us`; a fleet declaration is merged
-    too, and one whose inter-site link doesn't end at a certifier is refused."""
+    too, and one whose inter-site link doesn't end at a certifier is refused. A shape without the fleet's options, as
+    `workload.lab_run.shape_of` builds it, is the default leaf-spine."""
     import argparse
 
+    lab_run = dict(declaration=None, blocks=4, leaves=2, spines=1, fabric_latency_us=2000, fabric_jitter_us=500)
+    default = m.lab(argparse.Namespace(**lab_run))
+    assert default.name == "leaf-spine-4" and len(m.plan_of(argparse.Namespace(**lab_run), default).namespaces) == 12
     shape = dict(declaration=None, fleet=True, blocks=1, leaves=1, spines=0, fabric_latency_us=2000,
                  wan_latency_us=30_000)
     dc = m.lab(argparse.Namespace(**shape))

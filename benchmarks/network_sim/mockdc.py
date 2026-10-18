@@ -91,6 +91,12 @@ STARTUP_S = 3.0
 STRATEGIES = ("honest", "bits", "late", "extra", "maintenance")
 OUTAGE_WINDOW = 1
 RESHAPE = "bring the lab up in this shape (`mockdc.py down`, then `up` with the same declaration and options)"
+# The fleet's options, which a shape built elsewhere (`workload.lab_run.shape_of`) may lack.
+FLEET_OPTIONS = {"fleet": False, "wan_latency_us": 20_000, "wan_jitter_us": 2_000}
+
+
+def option(args, name: str):
+    return getattr(args, name, FLEET_OPTIONS[name])
 
 
 def lab(args) -> Datacenter:
@@ -102,9 +108,9 @@ def lab(args) -> Datacenter:
         spec.loader.exec_module(module)
         dc = getattr(module, name)
         dc = dc() if callable(dc) else dc
-    elif args.fleet:
+    elif option(args, "fleet"):
         dc = two_sites(args.blocks, leaves=args.leaves, spines=args.spines, fabric_latency=args.fabric_latency_us / 1e6,
-                       wan_latency=args.wan_latency_us / 1e6)
+                       wan_latency=option(args, "wan_latency_us") / 1e6)
     else:
         dc = leaf_spine(args.blocks, leaves=args.leaves, spines=args.spines, fabric_latency=args.fabric_latency_us / 1e6)
     if isinstance(dc, Fleet):
@@ -118,7 +124,7 @@ def lab(args) -> Datacenter:
 
 
 def plan_of(args, dc: Datacenter) -> graph.NetnsPlan:
-    return graph.netns_plan(dc, jitter=args.fabric_jitter_us / 1e6, wan_jitter=args.wan_jitter_us / 1e6)
+    return graph.netns_plan(dc, jitter=args.fabric_jitter_us / 1e6, wan_jitter=option(args, "wan_jitter_us") / 1e6)
 
 
 def outside(dc: Datacenter) -> str:
@@ -517,8 +523,10 @@ def main(argv: list[str] | None = None) -> int:
         p.add_argument("--spines", type=int, default=1)
         p.add_argument("--fabric-latency-us", type=int, default=2_000, help="each fabric hop's latency")
         p.add_argument("--fabric-jitter-us", type=int, default=500, help="each fabric hop's delay jitter")
-        p.add_argument("--wan-latency-us", type=int, default=20_000, help="the WAN's one-way latency, with --fleet")
-        p.add_argument("--wan-jitter-us", type=int, default=2_000, help="a WAN link's delay jitter")
+        p.add_argument("--wan-latency-us", type=int, default=FLEET_OPTIONS["wan_latency_us"],
+                       help="the WAN's one-way latency, with --fleet")
+        p.add_argument("--wan-jitter-us", type=int, default=FLEET_OPTIONS["wan_jitter_us"],
+                       help="a WAN link's delay jitter")
         if name == "run":
             p.add_argument("--out", required=True)
             p.add_argument("--block", action="append", default=[], metavar="BLOCK=STRATEGY",
