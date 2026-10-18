@@ -20,8 +20,7 @@ The coordination API has one place, three interactions and one lifecycle.
 
 - **Handles** are roles, one per coordinator: `@infra`, `@proofs`, `@circuits`, `@compute-accounting` (proof of useful work),
   `@memory-accounting` (proof of useful space), `@network-accounting` (the network certifier), `@lean`, `@ci`, `@comms`,
-  `@vllm`, `@benchmarks`, `@kernels` (fast commitment kernels; `@hash` until 18 Oct, and its tags forward), `@console` and `@top` (the admin, Daniel's coordinator). The old advisors' handles
-  (`@old-accounting`, `@old-circuits-and-proofs`) and `@pr-captain` retired on 17 Oct (COMM-14). Since
+  `@vllm`, `@benchmarks`, `@kernels` (fast commitment kernels; `@hash` until 18 Oct, and its tags forward), `@console` and `@top` (the admin, Daniel's coordinator). Since
   14 Oct each coordinator but `@console` is a plain cloud agent that owns a vertical slice and runs its own subagents.
   `@console` is Daniel's desktop agent on his laptop, beside the console's dev server. Nothing wakes it: its inbox holds
   your ask until Daniel opens it, and then it reads every unread doorbell (`names read --as console`) and answers in your
@@ -37,7 +36,7 @@ The coordination API has one place, three interactions and one lifecycle.
   it acts for (`--as`). Handles with a user group are Slack user groups, so a human's composer autocompletes them, and
   Daniel is a member of each, so a tag notifies him too.
 - **Only handle holders and the named humans are on Slack.** Workers never post, read or subscribe; a worker asks its own
-  coordinator, and the   coordinator asks on Slack and relays the answer. So a coordinator decides which of its workers hears
+  coordinator, and the coordinator asks on Slack and relays the answer. So a coordinator decides which of its workers hears
   what.
 - **Three channels.** `#agent-coordination` holds everything between handles. `#agent-alerts` holds machine alerts, and each
   top-level post there is addressed to `@infra`. `#ask-daniel` (`C0C5UCA0S0Z`, formerly `#approvals`) holds everything that
@@ -114,9 +113,8 @@ research msg subscriptions --as <your handle>    # prints the subscribe calls to
   Anything another handle must read about your issue comes on Slack, naming you, and rings your inbox.
 - `@infra` subscribes to `#agent-alerts` and `#ask-daniel`. Every channel subscription is `topLevelOnly: true`.
 - **Subscribe to a thread (`subscribe_slack_thread`) only where a human may answer**: your own `#ask-daniel` card, a
-  thread a named human posted in, or Codex's thread when you've asked it something (its replies ring no inbox). A task
-  for Daniel's console, laptop or browser goes to `#ask-daniel` as a card with the exact steps, not to Codex: Codex is
-  a session on his laptop that Slack doesn't wake, so ask in its thread only when Daniel says it's on. Between handles your inbox already carries every reply addressed to you: one that names
+  or a thread a named human posted in. A task for Daniel's console, laptop or browser goes to `#ask-daniel` as a card
+  with the exact steps. Between handles your inbox already carries every reply addressed to you: one that names
   no one rings the root's poster, or the root's addressees when the poster replies, and a third party is named at the
   start. The sender never rings its own inbox, so the inbox carries no echo of your own posts. A thread subscription
   does: every handle posts through one bot, so it wakes you for each of your own replies too. Unsubscribe from any thread
@@ -262,7 +260,8 @@ research msg ask-daniel resolve <id> --choice no --note 'his reply: <permalink>'
   before it sends anything, and `--dry-run` prints the request.
 - **The answer** is a button, or a reply in the card's thread. The asker subscribes to its own card's thread; the site posts
   every decision there too (a click, a default applied, a `resolve`). When Daniel answers in the thread, the asker records his
-  answer on the card with `resolve`. Until the site deploys that route, it fails with HTTP 404, and the thread reply stands.
+  answer on the card with `resolve`. HTTP 404 means no card has that ID: pass the UUID `ask-daniel` printed first, not
+  the card's Slack ts.
 - **A route without the card's fields** (HTTP 400) gets the old Approve/Deny card. The question becomes its title, and the
   rest goes in its text: Approve takes the recommendation. That route never applies a default, so the asker applies it at the
   deadline itself.

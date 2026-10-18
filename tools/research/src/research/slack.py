@@ -778,10 +778,10 @@ def header_names(text: str, reg: dict) -> list[str]:
 
 def with_routes(reg: dict, routes: "Routes | None") -> dict:
     """`reg` with each handle's roster from its open inbox route: `holder` names the route's holder and `posters` (the
-    other agents that post as it), and `branch_suffixes` are the route's.  The route is the only record of both (`names
-    open` writes it; the registry carried them until 18 Oct, 11 of 13 holders a generation stale on 15 Oct); a registry
-    that still has them keeps them, before the route's.  Every handle gets a `holder`, empty when none is known.  Best
-    effort: a route that can't be read adds nothing."""
+    other agents that post as it), and `branch_suffixes` are the route's.  The route is the record of both (`names open`
+    writes it); the registry's copies are a fallback for readers without the routes (11 of 13 holders a generation stale
+    on 15 Oct), kept before the route's.  Every handle gets a `holder`, empty when none is known.  Best effort: a route
+    that can't be read adds nothing."""
     if routes is None:
         return reg
     routes.refresh([h["handle"] for h in reg["handles"] if h["handle"] not in routes.local and h["handle"] not in routes._fetched])
