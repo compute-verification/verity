@@ -2,32 +2,36 @@
 window are the committed crossing values, framed as the layout committed before the run says. A Boolean Definition,
 which a proof unit of the proof service runs; its one output is the ok bit.
 
-    N3Window_v2{FMT, N, M, SALTED}
+    N3Window_v3{FMT, N, M, SALTED, REC}
         (layout, layout_domain: Digest, at: Array<DL>, record, record_domain: Digest, direction: Array<1>,
          roots, domains: Array<U, Digest>, [salt: Array<72, Byte>],
          frames: Array<N, Array<B, Byte>>,
          descriptors: Array<n, Array<LW>>, descriptor_salts: Array<n, Salt>,
          descriptor_paths: Array<n, Array<DL, Digest>>,
          rows: Array<M, Row>, row_salts: Array<M, Salt>, row_paths: Array<M, Array<DB, Digest>>,
-         record_salt: Salt, record_sibling: Array<1, Digest>, [slot: Array<SB>]) -> Value<1>
+         head: Array<HL, Byte>, record_salt: Salt, record_path: Array<2, Digest>, [slot: Array<SB>]) -> Value<1>
         Digest = Array<8, Array<64, Value<1>>> (SHA-512 words, `sha512.words_be`),
         Salt = Array<24, Array<64, Value<1>>>, Byte = Array<8, Value<1>>, Row = Array<256, Value<1>>,
-        n = N - SALTED, SB = max(1, bitlen(N - 1))
+        n = N - SALTED, SB = max(1, bitlen(N - 1)), HL = 93 + L + 4T
 
 **Statics: the size class.** `FMT` (`Format`) is the run's descriptor format: the frame size B, the widest prefix P
 and suffix Q, the most rows a frame draws from MF, each unit's value-tree depth (`DEPTHS`, U units) and the layout
 tree's depth DL. N is the window's recorded frame count, M its pool of rows (a power of two at least the rows its
-frames draw from), SALTED whether one of the frames is the certifier's salt frame. Nothing else about the layout is
-static.
+frames draw from), SALTED whether one of the frames is the certifier's salt frame. `REC` (`Shape`) is the certified
+record's shape: the UTF-8 length L of the link's name as its certifier writes it, and the grid's T buckets of r slots,
+fixed before the run (N <= T r). Nothing else about the layout or the record is static.
 
 **Public inputs.** `layout` is the layout's root, `layout_domain` its domain id, and `at` the position of the window's
 first descriptor: the port's index times the port's capacity, plus the frames the port recorded in earlier windows
-(less their salt frames), all public occupancy. `record` is the (link, window) record commitment's root,
-`record_domain` its domain id and `direction` the port's end of the link. `roots` and `domains` are the units' value
-commitments and domain ids, `salt` the window number (u64, big-endian) and the revealed salt commitment.
+(less their salt frames), all public occupancy. `record` is the root of N2's commitment to the link-window's certified
+records (`LinkWindows`, `verity.core.protocols.certifier.service`), `record_domain` its domain id (one-stage's served
+domain of the run, the link and the window) and `direction` the port's end of the link (0 egress, 1 ingress). `roots`
+and `domains` are the units' value commitments and domain ids, `salt` the window number (u64, big-endian) and the
+revealed salt commitment.
 
 **Witness.** The frames, the n descriptors (the layout's rows at at, at + 1, ...) with their hiding salts and paths, the
-pool's rows with their salts and paths, the record commitment's salt and sibling, and the salt frame's slot.
+pool's rows with their salts and paths, the record head's bytes before its frames root (`RecordHead.encode`) with its
+leaf's salt and two siblings in N2's tree, and the salt frame's slot.
 
 **What 1 means.** (1) Each descriptor opens at its position in the layout (`N3HidingRead`: its sha512/row/v2 digest,
 hm96's hiding leaf, the frame-v3-sha512 read). (2) With m_i the rows descriptor i draws from and o_i = m_0 + ... +
@@ -35,7 +39,10 @@ m_(i-1), the m's fit the pool (sum <= M); pool row o_i + j (j < m_i) is the row 
 every other pool row is zero. (3) Every pool row opens in its unit's commitment at the position its slot names, or is
 zero for a zero slot (`N3RowRead`). (4) Frame i (the salt frame's slot skipped) is what descriptor i puts on rows
 o_i ... o_i + m_i - 1 (`N3Frame`, `assemble`). (5) The salt frame, when SALTED, is `salt_frame` at the slot. (6) The
-record digest of the N frames (`record_digest`) opens at `direction` in the record commitment.
+head's bytes and N2's frames root of the N frames (`certificate.frames_root`, depth D = bitlen(T r - 1)) are a head
+whose status byte is 0 (complete), and that head opens at leaf 2 + direction of N2's commitment (`N3HidingRead`,
+depth 2), the leaf N2 commits beside each certified record (`service.HEADS`). The head's other fields are N2's to
+check: N2's accepted outcome on the same root says that leaf holds the certified head of (link, direction, window).
 
 **A descriptor** (`Descriptor`, LW bits, `encode`): a mode (RAW 1, BASE64 2; 0 and 3 are invalid, and `NONE` pads the
 tree), m, the text's byte offset p, its data length r, the suffix offset s, the prefix (P bytes) and suffix (Q bytes),
@@ -45,12 +52,11 @@ frame is prefix XOR text << 8p XOR suffix << 8s over B bytes, where the stream i
 
 **Commitments and who registers them.** Each unit registers its values (`values`). The prover registers the layout
 before the run (`register_layout`): one advice tree of the descriptors, one per (port, frame index) at port * CAP +
-index, under the binding SHA-512(`LAYOUT_LABEL` || program || placement root). The record commitment
-(`register_record`) is a two-row advice tree of the link's two directions' record digests, under SHA-512(`RECORD_LABEL`
-|| program || link || window), whose root alone is public; the salts go to the proof service behind the firewall. It
-stands in for N2's commitment to the link-window's certified records (`verity.core.protocols.certifier.service`), which
-the firewall registers. The network_sim README ("N3 in zero knowledge") has what opening N2's leaf would take, and the
-open questions.
+index, under the binding SHA-512(`LAYOUT_LABEL` || program || placement root). The record commitment is N2's, which
+the firewall registers (`LinkWindows.commit`, `registration`): its root alone is public, and the heads, certificates
+and salts stay behind the firewall. Here `Certifier` stands in for the certifier and the firewall: a small LMS key
+signs each head in one certifier session, and the four salts come from a seed. The network_sim README ("N3 in zero
+knowledge") has the sizes and the open questions.
 
     python -m workload.n3_unit sim --out FILE [--tamper UNIT:MODE] [--buckets K] [--frame-bytes B]
     python -m workload.n3_unit lab RUN_DIR --out FILE     every window a lab run's certifiers recorded (lab_run --out)
@@ -64,7 +70,7 @@ import hashlib
 import json
 import sys
 import time
-from collections import defaultdict
+from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
@@ -73,7 +79,11 @@ from typing import Callable, NamedTuple, Sequence
 
 import numpy as np
 
+from verity.core.protocols.certifier import certificate as CT
+from verity.core.protocols.certifier import service as N2
 from verity.core.protocols.certifier.active import DATA, HEADER, LAST, encode_frame
+from verity.core.protocols.certifier.grid import COMPLETE, GridParams, Reason, Status, fill
+from verity.core.protocols.certifier.schedule import SyncSet
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.boolean.forms import ONE, ZERO, add, and_reduce, const_bits, shl_window, sub
@@ -85,10 +95,11 @@ from verity.ml.commitments import advice, hm96
 from verity.ml.commitments.gates.frame_v3 import FrameV3Leaf, FrameV3Node, FrameV3Read, index_bytes, root_ref
 from verity.ml.commitments.gates.hm96 import Hm96Sha512Leaf
 from verity.ml.commitments.gates.lms import Sha512Compress
-from verity.ml.commitments.gates.sha512 import IV, midstate, pad_tail, words_be
+from verity.ml.commitments.gates.sha512 import midstate, pad_tail, words_be
 from verity.ml.commitments.merkle import merkle_depth, tree_levels
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
 from verity.ml.commitments.rowleaf import sha512_row_v2_digest, sha512_row_v2_prefix
+from verity.ml.crypto import lms
 
 from . import framing as F
 from . import model as M
@@ -103,25 +114,11 @@ DIGEST = Array(8, WORD)
 ROW = Array(V.ROW_BITS, BIT)
 SALT_T = Array(hm96.SHA512.salt_bytes // 8, WORD)
 LEVEL = Array(8, BIT)
-DOMAIN = b"network_sim/certifier-record/v1\0"
 LAYOUT_LABEL = b"verity/netsim/n3-layout/v1/"
-RECORD_LABEL = b"verity/netsim/n3-record/v1/"
 RAW, B64 = 1, 2
 B64_ALPHABET = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
 # What base64 adds to a 6-bit value v, mod 256, for v below 26, below 52, below 62, 62 and 63.
 B64_OFFSETS = (65, 71, 252, 237, 240)
-
-
-def record_digest(frames: Sequence[bytes], reason: str = "") -> bytes:
-    h = hashlib.sha512(DOMAIN + reason.encode() + b"\0")
-    for f in frames:
-        h.update(f)
-    return h.digest()
-
-
-def prefix(reason: str) -> bytes:
-    return DOMAIN + reason.encode() + b"\0"
-
 
 SALT, SALT_STREAM = 3, 0xFFFF_FFFF
 SALT_PAYLOAD = 72
@@ -313,6 +310,39 @@ def _format(fmt) -> Format:
     if not isinstance(depths, tuple) or not depths or any(not isinstance(d, int) or not 0 <= d <= 63 for d in depths):
         raise ValueError(f"DEPTHS is a nonempty tuple of depths 0 ... 63, not {f.DEPTHS!r}")
     return f
+
+
+class Shape(NamedTuple):
+    """The certified record's shape, a static of the unit: the UTF-8 length L of the link's name in the head, and the
+    window's T buckets of R slots. The head's bytes before its frames root (HL), its status byte's offset (ST) and the
+    frames tree's depth D follow (`RecordHead.encode`, `certificate.depth`)."""
+
+    L: int
+    T: int
+    R: int
+
+    @property
+    def HL(self) -> int:
+        return 93 + self.L + 4 * self.T
+
+    @property
+    def ST(self) -> int:
+        return 27 + self.L
+
+    @property
+    def D(self) -> int:
+        return (self.T * self.R - 1).bit_length()
+
+
+def _shape(rec) -> Shape:
+    try:
+        s = Shape(*rec)
+    except TypeError:
+        raise ValueError(f"REC is (L, T, R), not {rec!r}") from None
+    if (not all(isinstance(x, int) and not isinstance(x, bool) for x in s) or not 0 <= s.L < 1 << 16
+            or min(s.T, s.R) < 1):
+        raise ValueError(f"a record's shape has 0 <= L < 2^16, T >= 1 and R >= 1, not {rec!r}")
+    return s
 
 
 @dataclass(frozen=True)
@@ -842,6 +872,10 @@ N3SaltEq = _part("N3SaltEq", ("B",), _sig_salteq, _build_salteq,
                  "1 iff the frame is the salt frame of the payload salt (the window and the salt's commitment)")
 
 
+N3IsZero = _part("N3IsZero", ("W",), lambda S: ((("x", Array(S.W, BIT)),), BIT),
+                 lambda C, S, x: [and_reduce(C, [b.inv() for b in x])], "1 iff the W bits are all zero")
+
+
 # --- the circuit: composite parts -------------------------------------------------------------------------------------
 
 class _Consts:
@@ -902,6 +936,38 @@ def _body_rowdigest(B, S, row):
 N3RowDigest = CompositeDefinition(
     "N3RowDigest", 1, ("N_BITS",), _sig_rowdigest, _body_rowdigest, conformance="exact-model-tested", register=False,
     doc="the sha512/row/v2 digest of an N_BITS-bit row: SHA-512 of its 128-byte prefix block and the row's bytes")
+
+
+def _digest_bytes(d: Coll) -> list[list]:
+    w = _refs(d)
+    return _bytes([w[64 * k:64 * k + 64] for k in range(8)])
+
+
+def _sig_froot(S):
+    return (("frames", Array(S.N, Array(S.B, BYTE))),), DIGEST
+
+
+def _body_froot(B, S, frames):
+    K = _Consts(B)
+    fb = _refs(frames)
+    leaf_cv = midstate((CT.FRAME_TAG + S.B.to_bytes(4, "big")).ljust(128, b"\0"))
+    node_cv = midstate(CT.NODE_TAG.ljust(128, b"\0"))
+    leaf_pad = [K.bits(b, 8) for b in pad_tail(128 + S.B)]
+    node_pad = [K.bits(b, 8) for b in pad_tail(256)]
+    level = [_sha512(B, K, leaf_cv, [fb[8 * k:8 * k + 8] for k in range(i * S.B, (i + 1) * S.B)] + leaf_pad)
+             for i in range(S.N)]
+    for lv in range(S.D):
+        if len(level) % 2:
+            level.append(_coll(DIGEST, [x for w in words_be(CT.empty(lv)) for x in K.bits(w, 64)]))
+        level = [_sha512(B, K, node_cv, _digest_bytes(level[i]) + _digest_bytes(level[i + 1]) + node_pad)
+                 for i in range(0, len(level), 2)]
+    return level[0]
+
+
+N3FramesRoot = CompositeDefinition(
+    "N3FramesRoot", 1, ("B", "N", "D"), _sig_froot, _body_froot, conformance="exact-model-tested", register=False,
+    doc="N2's frames root of N B-byte frames in a depth-D tree (`certificate.frames_root`): each frame's tagged leaf, "
+        "each level's odd node paired with the empty subtree's root E_level")
 
 
 def _sig_hread(S):
@@ -1029,9 +1095,11 @@ N3Frame = CompositeDefinition(
 # --- the window -------------------------------------------------------------------------------------------------------
 
 def _window_params(S) -> list[tuple[str, object]]:
-    f = _format(S.FMT)
+    f, rec = _format(S.FMT), _shape(S.REC)
     if S.SALTED not in (0, 1) or not isinstance(S.N, int) or isinstance(S.N, bool) or S.N < 1:
-        raise ValueError(f"N3Window_v2 takes N >= 1 frames and SALTED 0 or 1, not N={S.N!r}, SALTED={S.SALTED!r}")
+        raise ValueError(f"N3Window_v3 takes N >= 1 frames and SALTED 0 or 1, not N={S.N!r}, SALTED={S.SALTED!r}")
+    if S.N > rec.T * rec.R:
+        raise ValueError(f"N = {S.N} frames don't fit a record of {rec.T} buckets of {rec.R} slots")
     if not isinstance(S.M, int) or S.M < 1 or S.M & (S.M - 1):
         raise ValueError(f"M, the pool's size class, is a power of two, not {S.M!r}")
     if S.SALTED and f.B < HEADER.size + SALT_PAYLOAD:
@@ -1047,8 +1115,8 @@ def _window_params(S) -> list[tuple[str, object]]:
         params += [("descriptors", Array(n, Array(f.LW, BIT))), ("descriptor_salts", Array(n, SALT_T)),
                    ("descriptor_paths", Array(n, Array(f.DL, DIGEST)))]
     params += [("rows", Array(S.M, ROW)), ("row_salts", Array(S.M, SALT_T)),
-               ("row_paths", Array(S.M, Array(f.DB, DIGEST))), ("record_salt", SALT_T),
-               ("record_sibling", Array(1, DIGEST))]
+               ("row_paths", Array(S.M, Array(f.DB, DIGEST))), ("head", Array(rec.HL, BYTE)), ("record_salt", SALT_T),
+               ("record_path", Array(2, DIGEST))]
     if S.SALTED:
         params.append(("slot", Array(max(1, (S.N - 1).bit_length()), BIT)))
     return params
@@ -1101,29 +1169,31 @@ def _body_window(B, S, *args):
     if n:
         got = B.batch(bind(N3Gather, MF=f.MF, M=Mp, MB=f.MB), a["rows"], os_, ms, axes=(None, 0, 0))
         oks.append(B.batch(bind(N3Frame, FMT=S.FMT), d, got, data, axes=(0, 0, 0)))
-    fb = _refs(frames)
-    msg = [K.bits(b, 8) for b in prefix("")] + [fb[i:i + 8] for i in range(0, len(fb), 8)]
-    msg += [K.bits(b, 8) for b in pad_tail(len(msg))]
-    digest = _sha512(B, K, IV, msg)
-    words = _refs(digest)
-    row = _coll(Array(512, BIT), [x for byte in _bytes([words[64 * w:64 * w + 64] for w in range(8)]) for x in byte])
-    oks.append(B.call(bind(N3HidingRead, N_BITS=512, D=1), row, a["record_salt"], a["record"], a["record_domain"],
-                      a["direction"], a["record_sibling"]))
+    rec = _shape(S.REC)
+    root = B.call(bind(N3FramesRoot, B=f.B, N=N, D=rec.D), frames)
+    hb = _refs(a["head"])
+    oks.append(B.call(bind(N3IsZero, W=8), _coll(Array(8, BIT), hb[8 * rec.ST:8 * rec.ST + 8])))
+    nh = 8 * (rec.HL + 64)
+    head = _coll(Array(nh, BIT), hb + [x for byte in _digest_bytes(root) for x in byte])
+    # The head of the record at leaf d is leaf N2.HEADS + d = 2 + d: position bits (d, 1).
+    pos = _coll(Array(2, BIT), _refs(a["direction"]) + K.bits(1, 1))
+    oks.append(B.call(bind(N3HidingRead, N_BITS=nh, D=2), head, a["record_salt"], a["record"], a["record_domain"],
+                      pos, a["record_path"]))
     bits = concat([o.refs for o in oks])
     return B.call(BL.and_gate(bits.count), Coll(Array(bits.count, BIT), bits))
 
 
 N3Window = CompositeDefinition(
-    "N3Window", 2, ("FMT", "N", "M", "SALTED"), _sig_window, _body_window, conformance="exact-model-tested",
+    "N3Window", 3, ("FMT", "N", "M", "SALTED", "REC"), _sig_window, _body_window, conformance="exact-model-tested",
     register=False,
     doc="1 iff the descriptors open at at, at + 1, ... in the layout, their slots fit the pool and name its rows, "
         "every pool row opens in its unit (or is zero), every frame (the salt frame's slot skipped) is its "
-        "descriptor's over its rows, the salt frame is the salt's, and the record digest of the frames opens at "
-        "direction in the record commitment")
+        "descriptor's over its rows, the salt frame is the salt's, and the head over the frames' root is complete "
+        "and opens at leaf 2 + direction of N2's commitment")
 
 
-def unit(f: Format, N: int, M_: int, salted: bool):
-    return bind(N3Window, FMT=tuple(f), N=N, M=M_, SALTED=int(salted))
+def unit(f: Format, N: int, M_: int, salted: bool, rec: Shape):
+    return bind(N3Window, FMT=tuple(f), N=N, M=M_, SALTED=int(salted), REC=tuple(rec))
 
 
 # --- the reference and the arguments ----------------------------------------------------------------------------------
@@ -1136,19 +1206,20 @@ class Instance:
     N: int
     M: int
     salted: bool
+    rec: Shape
     args: dict
 
     @property
     def unit(self):
-        return unit(self.fmt, self.N, self.M, self.salted)
+        return unit(self.fmt, self.N, self.M, self.salted, self.rec)
 
     @property
     def key(self) -> tuple:
-        return (tuple(self.fmt), self.N, self.M, self.salted)
+        return (tuple(self.fmt), self.N, self.M, self.salted, tuple(self.rec))
 
 
 def reference(inst: Instance) -> bool:
-    """`N3Window_v2`'s output on the instance, computed from its arguments as the circuit does."""
+    """`N3Window_v3`'s output on the instance, computed from its arguments as the circuit does."""
     f, a, N, Mp = inst.fmt, inst.args, inst.N, inst.M
     n = N - inst.salted
     frames = list(a["frames"])
@@ -1192,8 +1263,12 @@ def reference(inst: Instance) -> bool:
         rows = [a["rows"][o + j] if j < x.m and o + j < Mp else zero for j in range(f.MF)]
         if x.mode not in (RAW, B64) or assemble(f, descs[i], rows) != frames[i]:
             return False
-    value = hiding_value(record_digest(a["frames"]), 512, a["record_salt"])
-    return root_ref(a["record_domain"], SCHEMA, value, a["direction"], [a["record_sibling"]]) == a["record"]
+    rec = inst.rec
+    head = a["head"] + CT.frames_root(a["frames"], GridParams(rec.T, rec.R, f.B))
+    if head[rec.ST]:
+        return False
+    value = hiding_value(head, 8 * len(head), a["record_salt"])
+    return root_ref(a["record_domain"], SCHEMA, value, N2.HEADS + a["direction"], a["record_path"]) == a["record"]
 
 
 def _digest_bits(d: bytes) -> list[int]:
@@ -1223,7 +1298,8 @@ def arguments(inst: Instance) -> list[np.ndarray]:
         "row_salts": [b for s in a["row_salts"] for b in _digest_bits(s)],
         "row_paths": [b for p in a["row_paths"] for s in list(p) + [zero_digest] * (f.DB - len(p))
                       for b in _digest_bits(s)],
-        "record_salt": _digest_bits(a["record_salt"]), "record_sibling": _digest_bits(a["record_sibling"]),
+        "head": _bytes_bits(a["head"], 8 * inst.rec.HL), "record_salt": _digest_bits(a["record_salt"]),
+        "record_path": [b for s in a["record_path"] for b in _digest_bits(s)],
     }
     if inst.salted:
         flat["salt"] = _bytes_bits(a["salt"], 8 * SALT_PAYLOAD)
@@ -1249,7 +1325,8 @@ def evaluate(*insts: Instance) -> list[int]:
     return [int(b) for b in np.asarray(evaluate_bits(insts[0].unit, *args)).reshape(-1)]
 
 
-_GROUPS = {"N3RowRead": "row_reads", "N3Gather": "gather", "N3Frame": "frames", "Sha512Compress": "record_digest"}
+_GROUPS = {"N3RowRead": "row_reads", "N3Gather": "gather", "N3Frame": "frames", "N3FramesRoot": "frames_root",
+           "N3IsZero": "record_opening"}
 
 
 def _times(nd) -> int:
@@ -1268,11 +1345,12 @@ def _ands(fn, memo: dict) -> int:
 
 
 def size(inst_or_unit, memo: dict | None = None) -> dict:
-    """The window unit's ANDs, in total and by part: row reads, descriptor reads, the record's opening, the frames, the
-    rows' gather, the record digest and the rest (the salt, the offsets, the slot identities, the final AND)."""
+    """The window unit's ANDs, in total and by part: row reads, descriptor reads, the head's status and opening, the
+    frames, the rows' gather, the frames root and the rest (the salt, the offsets, the slot identities, the final
+    AND)."""
     target = inst_or_unit.unit if isinstance(inst_or_unit, Instance) else inst_or_unit
     memo = {} if memo is None else memo
-    out = dict.fromkeys(("row_reads", "descriptor_reads", "record_opening", "frames", "gather", "record_digest",
+    out = dict.fromkeys(("row_reads", "descriptor_reads", "record_opening", "frames", "gather", "frames_root",
                          "other"), 0)
     for nd in target.body.nodes:
         name = getattr(nd.fn, "name", "")
@@ -1324,15 +1402,75 @@ def layout_binding(program: bytes, placement: bytes) -> bytes:
     return hashlib.sha512(LAYOUT_LABEL + program + placement).digest()
 
 
-def record_binding(program: bytes, link: str, window: int) -> bytes:
-    return hashlib.sha512(RECORD_LABEL + program + link.encode() + b"\0" + window.to_bytes(8, "big")).digest()
+@dataclass
+class Committed:
+    """N2's commitment to one link-window (`LinkWindows`) and the firewall's opening, with the tree's levels kept."""
+
+    lw: N2.LinkWindows
+    opening: N2.Opening
+    levels: tuple = field(init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        self.levels = tuple(tree_levels(self.lw.domain(self.opening.window), self.lw.leaves(self.opening)))
+
+    @property
+    def root(self) -> bytes:
+        return self.levels[-1][0]
+
+    @property
+    def domain_id(self) -> bytes:
+        return self.lw.domain(self.opening.window).domain_id
+
+    @property
+    def rows(self) -> list[bytes]:
+        return N2.rows(self.opening.records)
+
+    def path(self, i: int) -> list[bytes]:
+        return [level[(i >> k) ^ 1] for k, level in enumerate(self.levels[:-1])]
+
+    def head(self, d: int) -> bytes:
+        """The head of the record at leaf d (0 egress, 1 ingress) less its frames root: the unit's `head`."""
+        return self.opening.records[d].head.encode()[:-CT.DIGEST_BYTES]
 
 
-def register_record(program: bytes, link: str, window: int, digests: Sequence[bytes], seed: bytes) -> Tree:
-    """The certifiers' record commitment for (link, window): the two directions' record digests, 512-bit hiding
-    rows."""
-    return register(digests, 512, record_binding(program, link, window), seed + b"/record/" + link.encode()
-                    + window.to_bytes(8, "big"))
+@lru_cache(maxsize=None)
+def _lms_key(H: int, seed: bytes) -> lms.PrivateKey:
+    return lms.keygen(lms.Params(64, 1, H), hashlib.sha512(seed).digest())
+
+
+@dataclass
+class Certifier:
+    """A stand-in for the network certifier and the firewall: an LMS key of 2^H one-time keys (the deployed N = 64,
+    W = 1) that signs each record head in one certifier session, and N2's commitment to each link-window
+    (`LinkWindows.commit`), its salts drawn from a seed."""
+
+    key: lms.PrivateKey
+    seed: bytes
+    run: str = "n3-unit"
+    session: bytes = bytes(32)
+    used: int = 0
+
+    @classmethod
+    def toy(cls, signatures: int, seed: bytes) -> "Certifier":
+        return cls(_lms_key(max(4, (signatures - 1).bit_length()), seed + b"/lms"), seed)
+
+    @property
+    def public(self) -> CT.LmsKey:
+        return CT.LmsKey(self.key.params, lms.public_key(self.key))
+
+    def certify(self, head: CT.RecordHead) -> CT.CertifiedRecord:
+        digest, key_id = head.digest(), self.public.key_id
+        message = CT.certificate_message(key_id, self.session, head.link, head.direction, head.window, digest)
+        signature = lms.sign_at(self.key, self.used, message).encode()
+        self.used += 1
+        return CT.CertifiedRecord(head, CT.Certificate(key_id, head.link, head.direction, head.window, digest,
+                                                       signature))
+
+    def commit(self, link: str, window: int, heads: Sequence[CT.RecordHead], egress: GridParams, ingress: GridParams,
+               sync_set: SyncSet) -> Committed:
+        lw = N2.LinkWindows(link, egress, sync_set, self.public, self.run, self.session, ingress=ingress)
+        salts = _salts(self.seed + b"/n2/" + link.encode() + b"\0" + window.to_bytes(8, "big"), N2.LEAVES)
+        return Committed(lw, lw.commit(window, *(self.certify(h) for h in heads), salts))
 
 
 @dataclass
@@ -1531,7 +1669,8 @@ EMPTY = "nothing recorded"
 @dataclass
 class Window:
     """One port-window: the frames the record holds, its public counts and status, the revealed salt commitment of a
-    salted window, and the unit's instance; `why` says why no unit runs (refused from public data alone, or `EMPTY`)."""
+    salted window, the record's grid (when not the frames filled by the counts), and the unit's instance; `why` says
+    why no unit runs (refused from public data alone, or `EMPTY`)."""
 
     port: str
     window: int
@@ -1539,6 +1678,7 @@ class Window:
     counts: tuple[int, ...] = ()
     reason: str = ""
     salt: bytes | None = None
+    grid: tuple | None = None
     instance: Instance | None = None
     why: str = ""
 
@@ -1561,33 +1701,66 @@ class Window:
 
 @dataclass
 class Setup:
-    """A run's statement, units, registered layout and the ports' links: what every window's instance is built from."""
+    """A run's statement, units, registered layout, the ports' links (the link-window commitment each records into,
+    and its end), each port's grid, Σ_sync, each port's link as its certifier names it in its heads (when not its
+    commitment's), the certifier, and every link-window's commitment: what every window's instance is built from."""
 
     S: Statement
     units: UnitTable
     layout: Layout
     links: dict[str, tuple[str, int]]
+    grids: dict[str, GridParams]
     seed: bytes
+    sync_set: SyncSet = SyncSet((0,), (1,))
+    named: dict[str, str] = field(default_factory=dict)
+    certifier: Certifier | None = None
+    committed: dict[tuple[str, int], Committed] = field(default_factory=dict)
 
     @classmethod
     def build(cls, S: Statement, declared: dict[str, list[list[tuple]]], ports: list[str],
-              links: dict[str, tuple[str, int]], seed: bytes = b"n3-unit") -> "Setup":
+              links: dict[str, tuple[str, int]], grids: dict[str, GridParams], seed: bytes = b"n3-unit",
+              **kw) -> "Setup":
         units = S.table()
         layout = register_layout(declared, ports, S.phi.frame_bytes, units, S.program, S.placement_root, S.row, seed)
-        return cls(S, units, layout, links, seed)
+        return cls(S, units, layout, links, grids, seed, **kw)
 
     @property
     def fmt(self) -> Format:
         return self.layout.fmt
 
+    def shape(self, port: str) -> Shape:
+        g = self.grids[port]
+        return Shape(len(self.named.get(port, self.links[port][0]).encode()), g.buckets, g.allocation)
+
+    def head(self, port: str, window: int, w: Window | None) -> CT.RecordHead:
+        """The record head the port's certifier signs for the window: an empty complete grid when it recorded
+        nothing."""
+        link, d = self.links[port]
+        g = self.grids[port]
+        if w is None:
+            grid, status = fill([], [0] * g.buckets, g.allocation), COMPLETE
+        else:
+            grid = w.grid if w.grid is not None else fill(w.frames, w.counts, g.allocation)
+            status = Status(Reason(w.reason)) if w.reason else COMPLETE
+        direction = CT.Direction.INGRESS if d else CT.Direction.EGRESS
+        return CT.record_head(self.named.get(port, link), direction, window, grid, status, g,
+                              CT.parameters_digest(g, None if d else self.sync_set))
+
+    def commit(self, link: str, window: int, recorded: dict[tuple[str, int, int], Window]) -> Committed:
+        """N2's commitment to the link-window: both ends' certified records and their heads."""
+        if (link, window) not in self.committed:
+            ports = {v: k for k, v in self.links.items()}
+            heads = [self.head(ports[(link, d)], window, recorded.get((link, d, window))) for d in (0, 1)]
+            self.committed[(link, window)] = self.certifier.commit(  # type: ignore[union-attr]
+                link, window, heads, self.grids[ports[(link, 0)]], self.grids[ports[(link, 1)]], self.sync_set)
+        return self.committed[(link, window)]
+
     def attach(self, windows: list[Window]) -> list[Window]:
         """Each window's instance, its port's earlier frames giving its first descriptor's position; or why none
         runs."""
-        digests: dict[tuple[str, int, int], bytes] = {}
-        for w in windows:
-            link, d = self.links[w.port]
-            digests[(link, w.window, d)] = record_digest(w.frames, w.reason)
-        trees: dict[tuple[str, int], Tree] = {}
+        recorded = {(*self.links[w.port], w.window): w for w in windows}
+        if self.certifier is None:
+            self.certifier = Certifier.toy(2 * len({(link, w) for link, _, w in recorded}), self.seed)
         seen: dict[str, int] = defaultdict(int)
         for w in sorted(windows, key=lambda w: (self.layout.ports.index(w.port), w.window)):
             n = len(w.frames) - (w.salt is not None and len(w.frames) > 0)
@@ -1601,13 +1774,10 @@ class Setup:
                 w.why = f"frames past the port's capacity, {self.layout.cap}"
             else:
                 link, d = self.links[w.port]
-                if (link, w.window) not in trees:
-                    pair = [digests.get((link, w.window, k), record_digest([])) for k in (0, 1)]
-                    trees[(link, w.window)] = register_record(self.S.program, link, w.window, pair, self.seed)
-                w.instance = self.instance(w, a, n, trees[(link, w.window)], d)
+                w.instance = self.instance(w, a, n, self.commit(link, w.window, recorded), d)
         return windows
 
-    def instance(self, w: Window, a: int, n: int, record: Tree, direction: int) -> Instance:
+    def instance(self, w: Window, a: int, n: int, record: Committed, direction: int) -> Instance:
         f, L, U = self.fmt, self.layout, self.units
         positions = [L.position(w.port, a + i) for i in range(n)]
         descs = [L.descriptor(w.port, a + i) for i in range(n)]
@@ -1634,13 +1804,14 @@ class Setup:
                 "descriptors": [L.tree.reg.rows[p] for p in positions],
                 "descriptor_salts": [L.tree.reg.salts[p] for p in positions],
                 "descriptor_paths": [L.tree.path(p) for p in positions],
-                "rows": rows, "row_salts": salts, "row_paths": paths, "record_salt": record.reg.salts[direction],
-                "record_sibling": record.path(direction)[0]}
+                "rows": rows, "row_salts": salts, "row_paths": paths, "head": record.head(direction),
+                "record_salt": record.opening.salts[N2.HEADS + direction],
+                "record_path": record.path(N2.HEADS + direction)}
         salted = w.salt is not None
         if salted:
             args["salt"] = w.window.to_bytes(8, "big") + w.salt
             args["slot"] = next((i for i, fr in enumerate(w.frames) if _is_salt(fr)), 0)
-        return Instance(f, len(w.frames), Mp, salted, args)
+        return Instance(f, len(w.frames), Mp, salted, self.shape(w.port), args)
 
 
 def sim_ports(hw: Hardware) -> dict[str, tuple[str, int]]:
@@ -1656,11 +1827,15 @@ def sim_ports(hw: Hardware) -> dict[str, tuple[str, int]]:
 def sim_windows(public: dict, witness: dict, records: dict[str, list[tuple[int, bytes]]], buckets: int,
                 seed: bytes = b"n3-unit") -> tuple[Setup, list[Window]]:
     """The simulator's windows: per certified link direction, `buckets` buckets a window, the recorded frames in grid
-    order (stably by bucket), against the layout of φ's declared frames, registered before the run."""
+    order (stably by bucket), against the layout of φ's declared frames, registered before the run. Every port's grid
+    is `buckets` buckets of r slots, r the most frames any port declared or recorded in one bucket."""
     S = statement(public, witness)
     links = sim_ports(S.hw)
     declared = sim_declared(S)
-    setup = Setup.build(S, {k: [p for _, p in v] for k, v in declared.items()}, list(links), links, seed)
+    per_bucket = [n for v in (*declared.values(), *records.values()) for n in Counter(b for b, _ in v).values()]
+    grid = GridParams(buckets, max([1] + per_bucket), S.phi.frame_bytes)
+    setup = Setup.build(S, {k: [p for _, p in v] for k, v in declared.items()}, list(links), links,
+                        dict.fromkeys(links, grid), seed)
     windows = []
     for key in links:
         rec = sorted(records.get(key, []), key=lambda x: x[0])
@@ -1673,29 +1848,40 @@ def sim_windows(public: dict, witness: dict, records: dict[str, list[tuple[int, 
 
 
 def lab_windows(public: dict, witness: dict, published: dict[str, Sequence],
-                salts: dict[tuple[str, int], bytes] | None = None,
-                seed: bytes = b"n3-unit") -> tuple[Setup, list[Window]]:
+                salts: dict[tuple[str, int], bytes] | None = None, seed: bytes = b"n3-unit",
+                grids: tuple[GridParams, GridParams] | None = None,
+                sync_set: SyncSet | None = None) -> tuple[Setup, list[Window]]:
     """The lab's windows: per block and link (`lab.EGRESS`, `lab.INGRESS`), each record's released frames, against the
     layout of the declared frames. With `salts`, each salted ingress window's revealed salt commitment by (block,
-    window): one of its frames is then the certifier's salt frame, and the rest are the port's next declared frames."""
+    window): one of its frames is then the certifier's salt frame, and the rest are the port's next declared frames.
+    `grids` are the egress and ingress grids (default: each link's first record's shape) and `sync_set` the egress
+    Σ_sync, as the calibration report gives them. A block's two links share one N2 commitment a window, named for the
+    block, its egress record at leaf 0 and its ingress record at leaf 1."""
     from verity.core.protocols.certifier.grid import occupancy
 
     from . import lab as L
 
     S = statement(public, witness)
+    B = S.phi.frame_bytes
     blocks = sorted(S.hw.units)
-    links = {f"{b}:{k}": (b, d) for b in blocks for d, k in enumerate((L.EGRESS, L.INGRESS))}
+    kinds = (L.EGRESS, L.INGRESS)
+    links = {f"{b}:{k}": (b, d) for b in blocks for d, k in enumerate(kinds)}
+    if grids is None:
+        first = [next((r for rs in published.values() for r in rs if r.link == k), None) for k in kinds]
+        grids = tuple(GridParams(len(r.grid), len(r.grid[0]), B) if r else GridParams(1, 1, B)
+                      for r in first)  # type: ignore[assignment]
     declared = {}
     for b in blocks:
         declared[f"{b}:{L.EGRESS}"], declared[f"{b}:{L.INGRESS}"] = lab_declared(S, b)
-    setup = Setup.build(S, declared, list(links), links, seed)
+    setup = Setup.build(S, declared, list(links), links, {p: grids[d] for p, (_, d) in links.items()}, seed,
+                        named={p: p.split(":")[1] for p in links}, **({"sync_set": sync_set} if sync_set else {}))
     windows = []
     for block in sorted(published):
-        for link in (L.EGRESS, L.INGRESS):
+        for link in kinds:
             for rec in sorted((r for r in published[block] if r.link == link), key=lambda r: r.window):
                 salt = (salts or {}).get((block, rec.window)) if link == L.INGRESS else None
                 windows.append(Window(f"{block}:{link}", rec.window, list(L.released([rec])), occupancy(rec.grid),
-                                      rec.status.reason.value if rec.status.reason else "", salt))
+                                      rec.status.reason.value if rec.status.reason else "", salt, rec.grid))
     return setup, setup.attach(windows)
 
 
@@ -1716,13 +1902,14 @@ event-like frame of base64, and a frame reading one row twice around a zero cons
 class Demo:
     units: UnitTable
     layout: Layout
-    record: Tree
+    record: Committed
     window: Window
+    setup: Setup
 
 
 def demo(seed: bytes = b"n3-demo") -> Demo:
-    """A small run of two units (three rows, depth 2; one row, depth 0) and two ports, and p0's window of DEMO_FRAMES:
-    N = 4, seven pool rows (M = 8)."""
+    """A small run of two units (three rows, depth 2; one row, depth 0) and two ports, the two ends of link "demo", and
+    p0's window of DEMO_FRAMES: N = 4 in two buckets of two slots, seven pool rows (M = 8)."""
     B = 16
     rows = {u: [hashlib.shake_256(seed + u.encode() + bytes([i])).digest(32) for i in range(k)]
             for u, k in (("u0", 3), ("u1", 1))}
@@ -1732,11 +1919,10 @@ def demo(seed: bytes = b"n3-demo") -> Demo:
     layout = register_layout({"p0": DEMO_FRAMES}, ["p0", "p1"], B, units, b"demo", b"",
                              lambda u, pos: rows[u][pos], seed)
     frames = [expand(p, B, lambda k: rows[k[0]][k[1]]) for p in DEMO_FRAMES]
-    setup = Setup(None, units, layout, {"p0": ("demo", 0), "p1": ("demo", 1)}, seed)  # type: ignore[arg-type]
-    record = register_record(b"demo", "demo", 0, [record_digest(frames), record_digest([])], seed)
-    window = Window("p0", 0, frames)
-    window.instance = setup.instance(window, 0, len(frames), record, 0)
-    return Demo(units, layout, record, window)
+    links = {"p0": ("demo", 0), "p1": ("demo", 1)}
+    setup = Setup(None, units, layout, links, dict.fromkeys(links, GridParams(2, 2, B)), seed)  # type: ignore[arg-type]
+    (window,) = setup.attach([Window("p0", 0, frames, (2, 2))])
+    return Demo(units, layout, setup.committed[("demo", 0)], window, setup)
 
 
 # --- the command ------------------------------------------------------------------------------------------------------
@@ -1790,7 +1976,7 @@ def _lab(args) -> dict:
     here = Path(__file__).resolve().parents[1]
     if str(here) not in sys.path:
         sys.path.insert(0, str(here))
-    import records  # noqa: PLC0415  (puts network_traces on the path, for active_replay)
+    import records  # noqa: F401, PLC0415  (puts network_traces on the path, for active_replay)
 
     import active_replay as ar  # noqa: PLC0415
 
@@ -1798,16 +1984,14 @@ def _lab(args) -> dict:
 
     public = json.loads((run / "public.json").read_text())
     witness = json.loads((run / "witness.json").read_text())
+    report = ar.Setup(json.loads((run / "report.json").read_text()))
     B = public["frame_bytes"]
     published = {}
     for block in sorted(p.name for p in run.iterdir() if (p / f"{L.EGRESS}.records").exists()):
         published[block] = [ar.unpack_record(x, B) for f in (L.EGRESS, L.INGRESS)
                             for x in ar.read_blobs(run / block / f"{f}.records")]
-        for r in published[block]:
-            reason = r.status.reason.value if r.status.reason else ""
-            if records.digest(r) != record_digest(list(L.released([r])), reason):
-                raise AssertionError(f"records.digest and record_digest differ on {block} {r.link}[{r.window}]")
-    setup, windows = lab_windows(public, witness, published)
+    setup, windows = lab_windows(public, witness, published, grids=(report.egress_params, report.ingress_params),
+                                 sync_set=report.sync_set)
     results = _sized(windows, not args.reference_only)
     return {"run": str(run), "format": setup.fmt._asdict(), "summary": summarize(results), "windows": results}
 

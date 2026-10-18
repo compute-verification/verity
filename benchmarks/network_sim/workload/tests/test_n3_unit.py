@@ -1,16 +1,19 @@
 """N3's proof unit for one port-window (`n3_unit`): a descriptor puts its declared frame on its rows, every opening the
-unit makes is its tree's, and the circuit equals its Python reference. An honest window gives ok; a flipped bit, an
-extra frame, written fill, a wrong pool row, descriptor salt, position or record salt, or a wrong salt frame gives
-not-ok, on the demo's, the simulator's and the lab's windows."""
+unit makes is its tree's, N2's frames root in gates is N2's, and the circuit equals its Python reference. An honest
+window gives ok; a flipped bit, an extra frame, written fill, a wrong pool row, descriptor salt, position or record
+salt, a head whose status isn't complete, or a wrong salt frame gives not-ok, on the demo's, the simulator's and the
+lab's windows."""
 import base64
 import copy
+import dataclasses
 import random
 
 import numpy as np
 import pytest
 
+from verity.core.protocols.certifier import certificate as CT
 from verity.core.protocols.certifier.active import DATA, HEADER, LAST, encode_frame
-from verity.core.protocols.certifier.grid import Reason, Record, Status
+from verity.core.protocols.certifier.grid import GridParams, Reason, Record, Status
 from verity.ml.circuits.boolean.forms import Circuit
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation.bits import evaluate_bits
@@ -139,12 +142,33 @@ def test_n3frame_is_assemble_on_valid_modes_and_refuses_the_others(demo):
 
 def test_every_row_opens_in_its_tree_at_its_position(demo):
     trees = [(t, V.ROW_BITS) for t in demo.units.trees.values()]
-    trees += [(demo.layout.tree, demo.layout.fmt.LW), (demo.record, 512)]
+    trees += [(demo.layout.tree, demo.layout.fmt.LW)]
     for t, n_bits in trees:
         for i, (row, salt) in enumerate(zip(t.reg.rows, t.reg.salts)):
             assert root_ref(t.domain_id, SCHEMA, U.hiding_value(row, n_bits, salt), i, t.path(i)) == t.root
             other = U.hiding_value(row, n_bits, flip(salt, 0))
             assert root_ref(t.domain_id, SCHEMA, other, i, t.path(i)) != t.root
+
+
+def test_the_record_commitment_is_n2s_and_its_head_leaf_holds_the_frames_root(demo):
+    """The demo's record commitment is `LinkWindows`'s own root over its four leaves, and the egress head leaf is the
+    unit's head bytes followed by N2's frames root of the window's frames."""
+    rc = demo.record
+    assert rc.root.hex() == rc.lw.root(rc.opening)
+    for i, (row, salt) in enumerate(zip(rc.rows, rc.opening.salts)):
+        assert root_ref(rc.domain_id, SCHEMA, U.hiding_value(row, 8 * len(row), salt), i, rc.path(i)) == rc.root
+    root = CT.frames_root(demo.window.frames, GridParams(2, 2, demo.layout.fmt.B))
+    assert rc.rows[U.N2.HEADS] == rc.head(0) + root and rc.rows[U.N2.HEADS + 1].endswith(CT.empty(2))
+
+
+@pytest.mark.parametrize("B, N, T, R", [(16, 1, 1, 1), (16, 3, 2, 2), (24, 5, 3, 3)])
+def test_n3framesroot_is_n2s_frames_root(B, N, T, R):
+    rng = random.Random(N)
+    frames = [rng.randbytes(B) for _ in range(N)]
+    x = np.asarray([[b for f in frames for b in bits(f, 8 * B)]], dtype=np.uint8)
+    out = np.asarray(evaluate_bits(bind(U.N3FramesRoot, B=B, N=N, D=(T * R - 1).bit_length()), x)).reshape(-1)
+    want = U._digest_bits(CT.frames_root(frames, GridParams(T, R, B)))
+    assert out.tolist() == want
 
 
 @pytest.fixture(scope="module")
@@ -159,6 +183,10 @@ def demo_cases(demo):
         return x
 
     fr, rows = a["frames"], a["rows"]
+    s = demo.setup
+    overflow = dataclasses.replace(demo.window, reason=Reason.OVERFLOW.value, instance=None)
+    rc = s.certifier.commit("demo", 0, [s.head("p0", 0, overflow), s.head("p1", 0, None)], s.grids["p0"],
+                            s.grids["p1"], s.sync_set)
     return {
         "honest": inst,
         "frame-bit": edit(frames=[fr[0], flip(fr[1], 9), fr[2], fr[3]]),
@@ -169,37 +197,53 @@ def demo_cases(demo):
         "at": edit(at=a["at"] + 1),
         "record-salt": edit(record_salt=flip(a["record_salt"], 3)),
         "direction": edit(direction=1),
+        "head-count": edit(head=flip(a["head"], len(a["head"]) - 1)),
+        "incomplete": edit(record=rc.root, head=rc.head(0), record_salt=rc.opening.salts[U.N2.HEADS],
+                           record_path=rc.path(U.N2.HEADS)),
     }
 
 
 def test_the_demo_windows_reference_holds_on_the_honest_window_alone(demo, demo_cases):
-    assert demo.window.instance.key == (tuple(demo.layout.fmt), 4, 8, False)
+    assert demo.window.instance.key == (tuple(demo.layout.fmt), 4, 8, False, (4, 2, 2))
     assert [U.reference(x) for x in demo_cases.values()] == [True] + [False] * (len(demo_cases) - 1)
+
+
+def test_an_incomplete_head_opens_and_only_its_status_refuses_it(demo_cases):
+    x = demo_cases["incomplete"]
+    a, rec = x.args, x.rec
+    head = a["head"] + CT.frames_root(a["frames"], GridParams(rec.T, rec.R, x.fmt.B))
+    assert head[rec.ST] == CT.STATUS_CODES[Reason.OVERFLOW]
+    value = U.hiding_value(head, 8 * len(head), a["record_salt"])
+    assert root_ref(a["record_domain"], SCHEMA, value, U.N2.HEADS, a["record_path"]) == a["record"]
 
 
 @pytest.mark.slow
 def test_the_demo_window_is_its_reference(demo_cases):
-    """The whole window at its smallest format (B = 16, four frames, a pool of eight rows), on one honest and eight
+    """The whole window at its smallest format (B = 16, four frames, a pool of eight rows), on one honest and ten
     broken instances. It is the one test of the window's wiring, which the cheaper tests can't catch: the descriptors'
     reads at at, at + 1, ..., the offsets and scatter that place the pool, the pool's row reads (zero rows among them),
-    the gather, and the record digest's SHA-512 and its opening at the port's direction. About 90 s, nearly all of it
-    tracing the openings' SHA-512 compressions."""
+    the gather, N2's frames root, the head's status and its opening at leaf 2 + direction. About 90 s, nearly all of
+    it tracing the openings' SHA-512 compressions."""
     assert U.evaluate(*demo_cases.values()) == [int(U.reference(x)) for x in demo_cases.values()]
     size = U.size(demo_cases["honest"])
     assert size["ands"] == sum(v for k, v in size.items() if k != "ands") and size["row_reads"] > size["frames"]
 
 
-@pytest.mark.parametrize("fmt, N, M, salted", [
-    ((16, 13, 2, 3, (2, 0), 4), 4, 3, 0),
-    ((16, 13, 2, 3, (2, 0), 4), 0, 8, 0),
-    ((16, 13, 2, 3, (2, 0), 4), 2, 8, 1),
-    ((96, 13, 2, 3, (2, 0), 4), 2, 8, 2),
-    ((16, 0, 2, 3, (2, 0), 4), 1, 1, 0),
-    ((16, 13, 2, 3, (), 4), 1, 1, 0),
-], ids=["pool-not-a-power-of-two", "no-frames", "salt-frame-past-B", "salted-not-a-bit", "no-prefix", "no-units"])
-def test_a_size_class_the_unit_doesnt_cover_is_refused(fmt, N, M, salted):
+@pytest.mark.parametrize("fmt, N, M, salted, rec", [
+    ((16, 13, 2, 3, (2, 0), 4), 4, 3, 0, (4, 2, 2)),
+    ((16, 13, 2, 3, (2, 0), 4), 0, 8, 0, (4, 2, 2)),
+    ((16, 13, 2, 3, (2, 0), 4), 2, 8, 1, (4, 2, 2)),
+    ((96, 13, 2, 3, (2, 0), 4), 2, 8, 2, (4, 2, 2)),
+    ((16, 0, 2, 3, (2, 0), 4), 1, 1, 0, (4, 2, 2)),
+    ((16, 13, 2, 3, (), 4), 1, 1, 0, (4, 2, 2)),
+    ((16, 13, 2, 3, (2, 0), 4), 5, 8, 0, (4, 2, 2)),
+    ((16, 13, 2, 3, (2, 0), 4), 1, 1, 0, (4, 0, 2)),
+    ((16, 13, 2, 3, (2, 0), 4), 1, 1, 0, (4, 2)),
+], ids=["pool-not-a-power-of-two", "no-frames", "salt-frame-past-B", "salted-not-a-bit", "no-prefix", "no-units",
+        "frames-past-the-grid", "no-buckets", "no-slots"])
+def test_a_size_class_the_unit_doesnt_cover_is_refused(fmt, N, M, salted, rec):
     with pytest.raises(ValueError):
-        bind(U.N3Window, FMT=fmt, N=N, M=M, SALTED=salted).signature()
+        bind(U.N3Window, FMT=fmt, N=N, M=M, SALTED=salted, REC=rec).signature()
 
 
 # --- the simulator ---------------------------------------------------------------------------------------------------
