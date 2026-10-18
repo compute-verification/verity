@@ -144,6 +144,23 @@ def test_a_background_wait_is_held_only_after_an_hour(tmp_path):
     assert [p for p, _ in api.posts] == ["/v1/agents/bc-a/runs/run-1/cancel", "/v1/agents/bc-a/runs"]
 
 
+def test_a_busy_agent_is_not_counted_as_restarted(tmp_path):
+    """18:21Z: vllm's restart got 409 agent_busy, as one of its own events had just started a run."""
+    api = FakeApi([{"id": "bc-a", "status": "ACTIVE", "latestRunId": "run-1"}], {"run-1": {"status": "ERROR"}})
+    real_post, clock = api.post, Clock()
+    w, started = W.Watch(api, tmp_path / "events.jsonl", clock), []
+
+    def busy(path, body=None):
+        raise W.urllib.error.HTTPError(path, 409, "Conflict", {}, None)
+    api.post = busy
+    w.sweep(started.append)
+    assert records(tmp_path) == [] and "bc-a" not in w.freed and w.errors["bc-a"] == 0
+    api.post = real_post
+    clock.t += 60
+    w.sweep(started.append)
+    assert [p for p, _ in api.posts] == ["/v1/agents/bc-a/runs"] and w.errors["bc-a"] == 1, "tried again at once, counted once"
+
+
 def test_an_error_run_is_restarted_once_an_hour_and_three_times_in_a_row_at_most(tmp_path):
     """vllm, 18 Oct: run after run ended in ERROR within a minute."""
     api, clock, w, started = setup(tmp_path, status="ERROR")

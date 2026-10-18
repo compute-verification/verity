@@ -183,6 +183,13 @@ class Watch:
             new = self.api.post(f"/v1/agents/{a['id']}/runs", {"prompt": {"text": AFTER_ERROR}})
             self.record("crashed", r, status="ERROR", action=f"restarted ({n + 1} of {MAX_RESTARTS})",
                         new_run=((new or {}).get("run") or {}).get("id"))
+        except urllib.error.HTTPError as e:
+            if e.code == 409:                       # agent_busy: one of its own events already started a run; not ours to count
+                self.freed.pop(a["id"], None)
+                self.errors[a["id"]] = n
+                self.crashed.discard(run)
+            else:
+                self.record("crashed", r, status="ERROR", action=f"restart failed: HTTP {e.code}")
         except (urllib.error.URLError, OSError, ValueError) as e:
             self.record("crashed", r, status="ERROR", action=f"restart failed: {type(e).__name__}: {e}")
 
