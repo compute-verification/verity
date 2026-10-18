@@ -83,8 +83,9 @@ it is ``pi[W - L]``, and 0 if W < L or no pass follows t (W = T). A block's appe
 after its write step (each writing instance pins the step, and the record's heads pin the append between the passes
 around it: `remote_bandwidth`'s `RequirementLink.mapped`), so a write step below the cap is an age, counted from the
 first root sent after the append, of at least L windows at the first pass after t, and o is below that pass's stale bound
-(`WindowRecord.stale`): the cap is that bound in step form (`rekey_cap`). It reads the passes' steps only through ``pi``,
-which is bound to the record's passes by its commitment.
+(the blocks whose appends joined a window at least L before it, a value the record doesn't publish): the cap is that
+bound in step form (`rekey_cap`). It reads the passes' steps only through ``pi``, which is bound to the record's passes
+by its commitment.
 
 **Cost.** PlanMatch: one 16-bit comparison of each plan entry with each block t may read, P (NR + G + V) of them, about
 P (NR + G + V) 16 ANDs. MemoryMapStep: each present value against each slot of each written block, K C SLOTS VW ANDs, and the
@@ -547,8 +548,8 @@ def map_inputs(S, req: Requirement, store: Store, t: int, positions: Sequence[in
 def pass_words(S, passes: Sequence[tuple[int, int]]) -> list[int]:
     """The pass row from the session's passes, (window, step) each: window w's word the step of its last pass, the previous
     window's for a window without one, 0 before any. A block written at step s joins the window of the first pass after s,
-    so a write step below `rekey_cap` is an age, at the first pass after the cap's step, of at least L windows: the
-    record's stale bound (`WindowRecord.stale`) in step form."""
+    so a write step below `rekey_cap` is an age, at the first pass after the cap's step, of at least L windows: the stale
+    bound in step form."""
     last: dict[int, int] = {}
     for w, s in passes:
         if not 0 <= w < S.T or not 0 <= s < WORD:
