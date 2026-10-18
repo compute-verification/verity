@@ -17,8 +17,9 @@ import Proofs.Flock.Claims.ZK.MaskTape
   tables' randomness: one `TapeZk.mask` can't carry two statements' independent slot words.
 * `ZKfam`: `Claims.ZKmalRx`'s body at a family of masked records `D x` (the record of statement `x` at `x`, tape
   `(D x).Nonce × (D x).Rest`, simulator `famSim D`). `ZKmalRx (fun x => (D x).Nonce) (fun x => (D x).Rest) H
-  (fun x => (D x).V.k x + 1) (fun w x => (D x).prover w) R (famSim D)` unfolds to it. `zkFam_of` reads it from
-  `Claims.Flock.ZK` at every record, at each record's own statement.
+  (fun x => (D x).V.k x + 1) (fun w x => (D x).prover w) R (famSim D)` unfolds to it, and at one record it is
+  `Claims.Flock.ZK`'s `ZKmalR` (`zkFam_const_iff`). `zkFam_of` reads it from `Claims.Flock.ZK` at every record, at each
+  record's own statement.
 * `Flock.zk_deployZk_masked_atMask_rx`: `ZKfam` at the mask tape of each statement (`TapePlan.atMask x (z x)`, the tape
   of `x`'s tables' randomness), at `ε_zk = 8·n_L·gap + 8t·n_L·gap + 2·3^{-t}` on the masked scope and `1` outside it, with
   no tape premise, under the round plan's `Causal` and the three rounds at each statement.
@@ -145,6 +146,13 @@ def ZKfam (H : Msg → Msg) (D : Msg → Claims.Flock.ZkDeploy Coin Col T) (R : 
     |Pr (fun ω : (D x).Nonce × (D x).Rest => Ev (runStar H ((D x).prover w) Vs x ω θ).msgs) -
         Pr (fun c : (famSim D).C x => Ev ((famSim D).out H Vs θ x c))|
       ≤ εzk x + γ x * (Fork H ((D x).prover w) Vs θ x).Pr H
+
+/-- **At one record, `ZKfam` is `Claims.Flock.ZK`'s `ZKmalR`**: `ZKmalR` is `ZKfam`'s case of one tape at every
+statement. -/
+theorem zkFam_const_iff {H : Msg → Msg} {D : Claims.Flock.ZkDeploy Coin Col T} {εzk γ : Msg → ℝ} :
+    ZKfam H (fun _ => D) (Claims.Flock.R D.parse) εzk γ ↔
+      ZKmalR H (fun x => D.V.k x + 1) D.prover (Claims.Flock.R D.parse) D.S εzk γ :=
+  Iff.rfl
 
 /-- **`Claims.Flock.ZK` at every record gives `ZKfam`**, at each record's `ε_zk` at its own statement: `ZKfam` reads
 the record of `x` at `x` only. -/
