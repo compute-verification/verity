@@ -12,7 +12,8 @@ squares): the slope is an opening's, the intercept the session's. An opening's c
 ``--statement`` units (C-Flock's ceiling, m = 35 at the unit's k_log 26) is (intercept + slope · statement) / statement:
 the device phase alone (the floor: a prover that overlaps every host step), and the cold session's e2e and wall (today's
 prover, one process a statement). A window's ``--openings`` at that cost, in GPU-s, and the GPUs that proves them in
-``--window-s``; then what ``--gpus`` GPUs prove a window, and the ε that buys at δ = 2^-``--delta-log2``: ε = ln(1/δ)/k for
+``--window-s``; then what ``--gpus`` GPUs prove a window (a time the prover doesn't report, the CPU prover's device
+phase, is left out), and the ε that buys at δ = 2^-``--delta-log2``: ε = ln(1/δ)/k for
 the window's k proved openings (each window's own reading), and pooled over ``--horizon`` windows (§10's reading).
 """
 from __future__ import annotations
@@ -47,6 +48,8 @@ def fit(rows: list[dict]) -> dict:
     out = {"points": sorted({r["k"] for r in rows}), "sessions": len(rows)}
     for x in TIMES:
         y = np.array([r[x] for r in rows], dtype=float)
+        if not y.any():
+            continue
         slope, icpt = np.polyfit(ks, y, 1) if len(set(ks)) > 1 else (float("nan"), float(y.mean()))
         out[x] = {"per_opening": float(slope), "fixed": float(icpt)}
     return out
@@ -69,26 +72,27 @@ def main() -> int:
         rows = [r for r in sessions(Path(o)) if r["accepted"]]
         for arm in sorted({r["arm"] for r in rows}):
             f = fit([r for r in rows if r["arm"] == arm])
-            per = {x: (f[x]["fixed"] + f[x]["per_opening"] * a.statement) / a.statement for x in TIMES}
-            window = {x: per[x] * a.openings for x in TIMES}
+            times = [x for x in TIMES if x in f]
+            per = {x: (f[x]["fixed"] + f[x]["per_opening"] * a.statement) / a.statement for x in times}
+            window = {x: per[x] * a.openings for x in times}
             plan = {}
             for g in (int(x) for x in a.gpus.split(",")):
-                k = {x: a.window_s * g / per[x] for x in ("device_s", "e2e_s")}
+                k = {x: a.window_s * g / per[x] for x in ("device_s", "e2e_s") if per.get(x, 0) > 0}
                 plan[g] = {x: {"openings": int(k[x]), "eps": ln / k[x], "eps_pooled": ln / (k[x] * a.horizon)} for x in k}
             report[f"{o}:{arm}"] = {"fit": f, "per_opening_at_statement": per, "window_gpu_s": window,
-                                    "gpus_for_window": {x: window[x] / a.window_s for x in TIMES}, "plan": plan}
+                                    "gpus_for_window": {x: window[x] / a.window_s for x in times}, "plan": plan}
     if a.json:
         print(json.dumps(report, indent=1))
         return 0
     for name, r in report.items():
         f = r["fit"]
         print(f"{name}: points {f['points']} ({f['sessions']} sessions)")
-        for x in TIMES:
+        for x in r["per_opening_at_statement"]:
             print(f"  {x:9s} per opening {f[x]['per_opening']:8.4f} s, fixed {f[x]['fixed']:7.2f} s; "
                   f"an opening at {a.statement} a statement {r['per_opening_at_statement'][x]:.4f} s; "
                   f"{a.openings} a window {r['window_gpu_s'][x]:9.0f} s = {r['gpus_for_window'][x]:7.1f} devices for {a.window_s:.0f} s")
         for g, p in r["plan"].items():
-            print(f"  {g} GPU(s) a window: " + "; ".join(f"{x}: {v['openings']} openings, eps {100 * v['eps']:.2f}% "
+            print(f"  {g} device(s) a window: " + "; ".join(f"{x}: {v['openings']} openings, eps {100 * v['eps']:.2f}% "
                                                          f"({100 * v['eps_pooled']:.3f}% pooled over {a.horizon})" for x, v in p.items()))
     return 0
 
