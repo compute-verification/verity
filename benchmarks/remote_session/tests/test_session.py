@@ -150,7 +150,7 @@ class TickingBackend(prover.CpuBackend):
 def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sessions: int = 1, checks=None,
         read_bytes_per_s: float = 1e20, tiers: dict | None = None, lifetime: int = audit.LIFETIME,
         registry: audit.Registry | None = None, layout: list | None = None, host_bytes: int = 0,
-        verdict: str = verifier.VERDICT, then=None, **kv):
+        verdict: str = verifier.VERDICT, then=None, transcript: Path | None = None, **kv):
     """The verifier's sessions and the prover's over one registration, under `verdict`; `then(v)` once they end."""
     clock = PassClock()
     vconn, pconn = clock.conns()
@@ -169,7 +169,8 @@ def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sess
     th.start()
     v = verifier.Verifier(vconn, source=os.urandom(32), windows=windows, window_ns=20, samples=samples,
                           delta=2.0 ** -40, jitter_ns=10 ** 9, clock=clock, log=lambda m: None,
-                          checks=checks, lifetime=lifetime, registry=registry, host_bytes=host_bytes, verdict=verdict)
+                          checks=checks, lifetime=lifetime, registry=registry, host_bytes=host_bytes, verdict=verdict,
+                          transcript=transcript)
     try:
         v.register()
         allowance = v.allowance(v.ping(4))
@@ -711,6 +712,38 @@ def test_a_window_the_verifiers_judge_differently_is_refused_as_disagreement(mon
     assert not r["accepted"] and not p["accepted"] and r["failure"] == {"t": 1, "failure": "disagreement", "at": None}
     assert r["disagreement"]["event"] == "verify" and r["disagreement"]["python"] == {"accepted": 1}
     assert closed[0]["sessions"] == ["disagreement"] and "python" not in closed[0]
+
+
+@pytest.mark.parametrize("verdict", ["both", "python"])
+def test_a_transcript_replays_each_session_to_its_verdict_through_both_verifiers(tmp_path, monkeypatch, verdict):
+    """`--transcript DIR`: each session's difftest case, written as it runs, which `replay.py transcript` replays
+    through `RemoteAudit.Session` and `audit.Session` alike: the honest session accepted, every window verified, and
+    the prover that dropped half its blocks rejected at the window and draw it was rejected at live, at a receipt,
+    which only a transcript's openings can show. The file is the path, bytes and sha256 verifier.json gives it."""
+    monkeypatch.setattr(prover, "OPENINGS_PART", 4)
+    monkeypatch.syspath_prepend(str(HERE.parents[2] / "verity/core/protocols/remote_bandwidth/lean/tests"))
+    import hashlib
+    import json
+
+    import replay
+
+    (honest, dropping), _ = run("honest,skip:0.5", sessions=2, verdict=verdict, transcript=tmp_path)
+    assert honest["accepted"] and dropping["failure"]["failure"] == "receipt"
+    f = dropping["failure"]
+    rows, verified = [], []
+    with replay.server() as s:
+        for r in (honest, dropping):
+            t = r["transcript"]
+            raw = Path(t["path"]).read_bytes()
+            assert Path(t["path"]).parent == tmp_path and t["bytes"] == len(raw)
+            assert t["sha256"] == hashlib.sha256(raw).hexdigest()
+            case = json.loads(raw)
+            verified.append([e["t"] for e in case["events"] if e["kind"] == "verify"])
+            rows.append(replay.replay(case, s))
+    assert all(row["agree"] for row in rows), rows
+    assert sorted(verified[0]) == [0, 1, 2] and verified[1][-1] == f["t"]
+    assert rows[0]["lean"]["outcome"] == "accepted" and rows[0]["lean"]["rejected"] is None
+    assert rows[1]["lean"]["rejected"] == {"failure": "receipt", "window": f["t"], "at": list(f["at"])}
 
 
 def test_an_event_the_verifiers_answer_differently_is_refused_as_disagreement(monkeypatch):

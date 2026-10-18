@@ -17,6 +17,8 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/core/service/flock/Flock", "verity/core/service/flock/lakefile.toml",
           "verity/core/service/flock/lake-manifest.json", "verity/core/service/flock/lean-toolchain",
           "verity/core/primitives/randomness", "verity/core/difftest/lean",
+          # a transcript replayed through both verifiers (the remote audit's lean/tests/replay.py, over the difftest)
+          "verity/core/difftest/python",
           # test_vllm_serve.py, where vLLM and a GPU are: the integration's store and what it imports
           "verity/core/protocols/bandwidth",
           "integrations/vllm/verity_vllm/__init__.py", "integrations/vllm/verity_vllm/config.py",

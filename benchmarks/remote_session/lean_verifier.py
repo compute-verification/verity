@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import fcntl
 import functools
+import hashlib
 import json
 import queue
 import shutil
@@ -20,6 +21,8 @@ from pathlib import Path
 from typing import Any
 
 from verity.core.protocols.remote_bandwidth import audit, codec, receipts
+
+import wire
 
 ROOT = Path(__file__).resolve().parents[2]
 PACKAGE = ROOT / "verity/core/protocols/remote_bandwidth/lean"
@@ -140,6 +143,13 @@ def receive_event(t: Any, i: Any, root: bytes, change: Any, step: Any) -> dict:
             "step": step if type(step) is int else None}
 
 
+def opening_json(o: audit.Opening) -> dict:
+    return {"block": o.block.hex(), "digest": o.digest.hex(), "leaf": o.leaf.hex(), "leaf_salt": o.leaf_salt.hex(),
+            "pass": o.pass_index, "payload_path": [x.hex() for x in o.payload_path],
+            "payload_salt": o.payload_salt.hex(), "position": o.position,
+            "receipt_path": [x.hex() for x in o.receipt_path], "tile": o.tile.hex()}
+
+
 def verdict_json(v: audit.Verdict) -> dict:
     return {"accepted": v.window} if v.accepted else {
         "at": None if v.at is None else list(v.at), "failure": v.failure, "window": v.window}
@@ -189,3 +199,69 @@ class Tape:
     @property
     def appends(self) -> list[bytes]:
         return self.drawn[self.count:]
+
+
+class Transcript:
+    """A session's difftest case (`ra_cases`: what `replay.py transcript` replays through both verifiers), written to
+    `path` as the session runs, on a thread of its own so the session's loop never waits on the disk: its registration,
+    parameters, committed coins and `not_before_ns`, then each event in the order the verifiers took it (`event`, as
+    the Lean read it), a window's openings (`verify`, the wire's frames) where its verdict was set, and the append
+    coins drawn (`close`, which returns the file's path, bytes and sha256). A frame that doesn't decode adds no
+    openings. Every committed coin is kept, never its salt: the case replays each under a zero salt, and nothing a
+    verifier answers reads the commitment."""
+
+    def __init__(self, path: Path, registration: audit.Registration, params: audit.Params, coins: list[bytes],
+                 not_before_ns: int) -> None:
+        self.path, self.items, self.result = path, queue.Queue(), None
+        head = {"registration": registration_json(registration), "params": params_json(params),
+                "coins": [c.hex() for c in coins], "not_before_ns": not_before_ns}
+        self.thread = threading.Thread(target=self._write, args=(head,), daemon=True)
+        self.thread.start()
+
+    def event(self, ev: dict) -> None:
+        self.items.put(("event", json.dumps(ev, separators=(",", ":"))))
+
+    def verify(self, t: int, frames: list[bytes]) -> None:
+        self.items.put(("verify", t, frames))
+
+    def close(self, append_coins: list[bytes]) -> dict:
+        self.items.put(("close", append_coins))
+        self.thread.join()
+        return self.result
+
+    def _write(self, head: dict) -> None:
+        h, n, events, closed = hashlib.sha256(), 0, 0, False
+        try:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            with open(self.path, "wb") as f:
+                def put(s: str) -> None:
+                    nonlocal n
+                    b = s.encode()
+                    f.write(b)
+                    h.update(b)
+                    n += len(b)
+
+                put(json.dumps(head, separators=(",", ":"))[:-1] + ',"events":[')
+                while True:
+                    item = self.items.get()
+                    if item[0] == "close":
+                        closed = True
+                        put('],"append_coins":' + json.dumps([c.hex() for c in item[1]]) + "}")
+                        break
+                    put("," if events else "")
+                    events += 1
+                    if item[0] == "event":
+                        put(item[1])
+                        continue
+                    put(f'{{"kind":"verify","t":{item[1]},"openings":[')
+                    first = True
+                    for body in item[2]:
+                        for o in wire.decode_openings(body) or ():
+                            put(("" if first else ",") + json.dumps(opening_json(o), separators=(",", ":")))
+                            first = False
+                    put("]}")
+            self.result = {"path": str(self.path), "bytes": n, "sha256": h.hexdigest(), "events": events}
+        except OSError as e:
+            self.result = {"path": str(self.path), "error": f"{type(e).__name__}: {e}"}
+            while not closed:
+                closed = self.items.get()[0] == "close"

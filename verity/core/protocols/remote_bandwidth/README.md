@@ -31,9 +31,10 @@ verdict the Python gave, the Python keeps running beside it as the reference, an
 ## Replay
 
 `lean/tests/replay.py` replays a recorded session through both verifiers and compares their verdicts and reasons: a
-transcript (the difftest's case: every event, its clock and the coins) replays in full, and a remote session's
-`verifier.json`, which keeps no roots, plans, coins or openings, replays as the case its arrivals, steps, draws and
-parameters make (the module's docstring says how it is held to the recorded verdict).
+transcript (the difftest's case: every event, its clock, the coins and each window's openings, which
+`verifier.py --transcript DIR` writes for each session it runs) replays in full, a `receipt`, `codec` or path rejection
+included, and a remote session's `verifier.json`, which keeps no roots, plans, coins or openings, replays as the case
+its arrivals, steps, draws and parameters make (the module's docstring says how it is held to the recorded verdict).
 
 ~~~text
 uv run python verity/core/protocols/remote_bandwidth/lean/tests/replay.py record VERIFIER.json ... --out ROWS.json
