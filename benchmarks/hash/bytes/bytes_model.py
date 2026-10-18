@@ -239,6 +239,8 @@ CHANGES = (
            "stream and KV", "proofs; Daniel", "as two-stage-block", saves=TODAY_BYTES - RU_LAYER, logits=True),
     Change("two-stage-layer+format", "protocol", "two-stage-layer + format", "proofs; Daniel", "as two-stage-block",
            saves=TODAY_BYTES - RU_LAYER, logits=True, fmt=PROPOSED, kv_fmt=KV_FMT),
+    Change("two-stage-block+format", "protocol", "two-stage-block + format", "proofs; Daniel", "as two-stage-block",
+           saves=TODAY_BYTES - RU_BLOCK, logits=True, fmt=PROPOSED, kv_fmt=KV_FMT),
 )
 
 
