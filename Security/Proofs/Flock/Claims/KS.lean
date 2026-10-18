@@ -213,20 +213,16 @@ statement's draw, the event the mixture's first bound reads gives that verdict a
 of each deployed coin on its tape bounds an event of the deployed coins by a mixture of live strategies, the merged
 coins being uniform, and the mixture by an event of the deployed coins the live event implies (`LiveMix`:
 `Claims.Bridge.Live.Pr_mergeC`, `Claims.Bridge.Live.Pr_mergeAt`, `Claims.Bridge.Live.liveMix_eq`,
-`Claims.Bridge.Live.Pr_le_liveMix`, `Claims.Bridge.Live.liveMix_le_Pr`). From a simulation of the deployed prover by a
-live prover on coins of uniform law, and the record's draw on accepting runs, the mixture's first bound holds
-(`PlainFirst`: `FlockDeploy.KS.PlainSim`, `FlockDeploy.KS.RecordDrawVerbatim`, `FlockDeploy.KS.plain_first_of_sim`), and
-at the coins that merge each live coin with the rest of a deployed coin, from the simulation of the runs alone
-(`FlockDeploy.KS.PlainSimRun`, `FlockDeploy.KS.plainCoins`, `FlockDeploy.KS.plainSim_of_run`,
-`FlockDeploy.KS.plain_first_of_run`); the checks compare draws only up to `JsonEquiv`, which holds between different
+`Claims.Bridge.Live.Pr_le_liveMix`, `Claims.Bridge.Live.liveMix_le_Pr`). A live prover simulates the deployed prover on
+coins of uniform law where its live outcome is the run's wherever the run accepts, and at the coins that merge each live
+coin with the rest of a deployed coin the law holds, so the simulation of the runs alone suffices (`PlainFirst`:
+`FlockDeploy.KS.PlainSim`, `FlockDeploy.KS.PlainSimRun`, `FlockDeploy.KS.plainCoins`,
+`FlockDeploy.KS.plainSim_of_run`); the checks compare draws only up to `JsonEquiv`, which holds between different
 terms (`FlockDeploy.KS.drawEq_ne`), so acceptance gives the draw only up to it (`FlockDeploy.KS.RecordDrawEquiv`,
 `FlockDeploy.KS.recordDrawEquiv`). At those coins, a deployed event that the live event implies bounds the mixture, the
-third bound's form (`PlainThird`: `FlockDeploy.KS.plainMix_le_of_run`). With an accepting run or fork with its collision
-as the events, KS at the deployed plain verifier's trimmed record holds from a live prover for each prover, with a
-finite tape and coins of uniform law, that simulates its accepting runs, whose self-clashes give its accepting runs with
-a collision and whose fork bound holds up to a slack, and the record's draw verbatim (`PlainSimW`:
-`FlockDeploy.KS.PlainClashRun`, `FlockDeploy.KS.PlainSimWrPAt`, `FlockDeploy.KS.PlainSimW`,
-`FlockDeploy.KS.plain_tableBoundθAt_of_sim`, `FlockDeploy.KS.plain_KS_of_sim`). The slack is the later rounds' forks and
+third bound's form (`PlainThird`: `FlockDeploy.KS.plainMix_le_of_run`). The simulator's bounds read an accepting run or
+fork with its collision, and its fork bound holds up to a slack (`PlainSimW`: `FlockDeploy.KS.plainEv₁`,
+`FlockDeploy.KS.plainForkEv`, `FlockDeploy.KS.PlainClashRun`). The slack is the later rounds' forks and
 the one-run collision at the chances `δ_t` that a fork's coins at round `t` agree where the simulator's tape reads them,
 `Σ_{j<i<K} Δ_{j,i} Pr[F_i] + Δ_{j,K} Pr[F_K]` with `Δ_{j,i} = Π_{j≤t<i} δ_t` and `F_K` the one-run collision; a coupling
 of the fork's coin law gives it (`ForkSlack`: `Claims.Flock.ForkCoinCoupling`, `Claims.Flock.slack_of_coupling`), and it
