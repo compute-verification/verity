@@ -103,7 +103,7 @@ def floorOf : Labelled K where
 
 /-- **The play is the compiled circuit's**: its ideal game is the stage window's, one stage a subcircuit, at
 work-weighted draws (a uniform ticket names the unit holding its word). -/
-def PlayOf {C : Type} [Fintype C] {s S : ℕ} {T L U : Type}
+def PlayOf {C : Type} {s S : ℕ} {T L U : Type}
     (Pl : Play (Paths C Cd.N × (Fin s → TicketOf Sc Cd)) S K T L U)
     (W : StageWindow C (UnitOf Sc Cd) (TicketOf Sc Cd) Cd.N s S) : Prop :=
   Pl.game = W.game (stageOf Sc Cd) (ticketUnit Sc Cd) (workWeight Sc Cd)

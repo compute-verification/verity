@@ -27,7 +27,8 @@ fresh noise**: in every round, at each unit's stage, whatever the past, the stag
 `bitsOf u` fresh noise bits and the rest, the cheater's decision to skip the unit and its committed receipt are
 functions of the rest, the unit's skipped value is the bits' sum with nonzero integer weights (the other operand's
 entries), and its honest receipt has fibre at most `fibreOf u` there. Rule (b) (`CoinFlow.Program.OneUse`) makes the
-bits the unit's own; that the cheater's view doesn't read them is the claim. -/
+bits the unit's own; that the cheater's view doesn't read them is the claim. The weights being the other operand's
+entries, `Scheme.bits` is a floor on a skipped value's nonzero-weight bits: a zero entry takes its bit out. -/
 def TemplateNoise {κ K C D : Type} {M s n : ℕ} (Sc : Scheme κ K) (Cd : Declared κ)
     (W : StageWindow C (UnitOf Sc Cd) D M s n) : Prop :=
   ∀ u, windowNoise (stageOf Sc Cd) u (bitsOf Sc Cd u) (fibreOf Sc Cd u) W
