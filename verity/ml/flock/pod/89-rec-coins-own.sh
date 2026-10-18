@@ -17,6 +17,9 @@ set -uxo pipefail
 export RI_PINNED=$(python3 -c 'import os; print(",".join(map(str, sorted(os.sched_getaffinity(0)))))')
 export RAYON_NUM_THREADS=$(echo $RI_PINNED | tr ',' '\n' | wc -l)
 export FC_COINS=os
+# the check-slot pods (--pool proofs) don't have /workspace/jobs writable (rec-env.sh's default on an unwritable
+# /workspace); keep the work, scratch and build cache on the research cache's filesystem, which is
+[ -z "${FLOCK_WORK:-}" ] && export FLOCK_WORK=/workspace/research/cache/rec-v0
 . verity/ml/flock/pod/rec-env.sh
 
 N=${N:-64}; D=$S/stage; V=$S/v; mkdir -p $V
