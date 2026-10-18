@@ -86,7 +86,8 @@ Every declaration of the package's audited modules (not a list of theorems), fro
   declarations it comes after): a declaration that skipped the kernel shows no axiom, and only the replay catches it.
   The replay also walks the environment it checked for the axioms the package uses, and the audit fails if they differ
   from the sets the `.olean` files recorded. No `#print axioms` output is parsed anywhere. A replay killed by a signal
-  (out of memory) is reported as a kill, not as a verdict;
+  (out of memory) is reported as a kill, not as a verdict. With `--closure` it checks the whole import closure the
+  same way (below);
 - each test under `runs` passes on the data whose SHA-256 the record holds (below);
 - nothing changes this directory, the toolchain's `lean`, `lake` and `leanchecker`, or the `.olean` files of a package
   audited earlier while the audit runs: the Lean files run from a copy taken before the first build, and everything is
@@ -106,10 +107,29 @@ replay runs at most one thread per `REPLAY_GIB_PER_THREAD` (4 GiB), one such rep
 of Security's replay peaked at 145 GiB. An audit of a spec beside the ArkLib package that proves its guarantees (`Security`)
 is refused below `SPEC_FLOOR_GIB` (64 GiB), for that package's facts.
 
+**The replay cache and the import closure.** Without `--closure` the replay trusts the package's dependencies (the
+toolchain's library, Mathlib, ArkLib) as their `.olean` files state them: a dependency module holding a theorem that
+skipped the kernel passes it. `--closure` closes that gap module by module. Every module of the closure gets a key
+(`replay_keys`): the toolchain, `Replay.lean`, the module's `.olean` files, and the name and key of each module it imports,
+so it covers every `.olean` file under it. With `--replay-cache DIR`, a module whose key `DIR` holds passed the replay
+before, with its imports in the environment, and a module checked is stored there once the replay passes. The replay of
+a package then sends to the kernel each own module and each module of the closure that has not passed (`closure_plan`),
+loads unchecked the modules that passed and import one of those (an import of them would bring the unpassed one in
+unchecked), and imports the rest. By induction over the import DAG every declaration of the closure has been through
+the kernel, with its imports present, under a key that covers them: cold, the whole closure goes through the kernel in
+one process, `leanchecker --fresh`'s check of every root at once; warm, nothing outside the package does, and a change to
+an own module replays it and what imports it, as without `--closure`. The cache is shared between packages, so
+`Security` reuses the Mathlib modules `Security/Proofs` checked. For a module's verdict to be a function of its key,
+`Replay.lean` refuses a declaration that mentions a constant its module neither declares nor imports, checks a theorem
+that two modules each declare (an equation lemma realized in both) once per module, and requires the quotient's
+constants to be the ones the kernel makes. A change to `Replay.lean` changes every key, so the next run is cold.
+The audit prints `closure: N modules checked, M reused` under each package's line.
+
 `--fresh` also runs `leanchecker --fresh` on each root: the root's whole import closure, Mathlib and core included,
-through the kernel into an empty environment. It needs one module per root and a lot of memory, so it is not part of
-every run: the steward runs `check.py --all --build --fresh` nightly on `main`, and `upstream.py --fetch` against
-ArkLib's head weekly, each as a recorded run on a pod (`tool.py`; `[[run]]` in `tools/research/README.md`).
+through the kernel into an empty environment. It needs one module per root and a lot of memory, and checks the closure
+again on every run, so it is not part of every run: the steward runs `check.py --all --build --fresh` nightly on `main`,
+and `upstream.py --fetch` against ArkLib's head weekly, each as a recorded run on a pod (`tool.py`; `[[run]]` in
+`tools/research/README.md`). `--closure` with a kept cache checks the same closure once per change of its `.olean` files.
 
 `--all` first runs the controls (`--no-controls` skips them; `check`'s audit does, and the `tools/verity/lean` suite runs them, only
 when `tools/verity/lean/` changes): `tests/fixtures/control`, built with each audited package's toolchain (`--build`
@@ -123,7 +143,10 @@ installs it first, so a machine without elan works), must pass clean and fail on
   blocks;
 - a docstring that names `debug.skipKernelTC`, which must pass;
 - a fetched dependency (a package at `.lake/packages/dep`) whose module sets `debug.skipKernelTC`, which must fail, and
-  one whose docstring and comments name it, which must pass.
+  one whose docstring and comments name it, which must pass;
+- a dependency that adds a false theorem through `debug.skipKernelTC`, spelled so that no scan finds it, which must pass
+  every check, the replay of the package's own modules included, and fail the replay of the import closure
+  (`--closure`).
 
 ## The policy: `lean-audit.json`, beside the lakefile
 

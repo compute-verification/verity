@@ -68,7 +68,9 @@ environment extension loaded, so none of the package's code runs), and replays t
                  environment differ from those the `.olean` files recorded; a replay killed by a signal is reported as a
                  kill. With `--replay-cache DIR`, a module that passed the replay with the same `.olean` files, every
                  module it imports transitively included, on the same toolchain and `Replay.lean` (`replay_keys`) joins it
-                 unchecked, and its constants are still walked for axioms
+                 unchecked, and its constants are still walked for axioms. With `--closure`, the kernel also rejects a
+                 declaration of a module of the import closure (the toolchain's, Mathlib's, ArkLib's) that has not passed
+                 the replay under its key, each checked with its imports present (`replay_step`, `closure_plan`)
     upstream     a dependency that the policy's `upstream` section scans proves, at the revision `lake-manifest.json` pins,
                  a theorem about a watched assumption or hand proof that the entry's `ack` does not hold (`upstream.py`):
                  a bump that brings such a proof fails until someone has looked at it
