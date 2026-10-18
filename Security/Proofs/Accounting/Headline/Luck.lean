@@ -10,7 +10,7 @@ operands degree 2 on cube bits and its receipt luck at `½`: `OperandLuckCube` g
 
 namespace Accounting.SecurityProofs.TS.Headline
 
-open Accounting.TS Accounting.Assumptions.TS Accounting.SecurityProofs.TS
+open Accounting.TS Accounting.Assumptions.TS Accounting.SecurityProofs.TS Pouw.RelativeSecurity
 
 /-- (I7) at `7/8` from the receipt split: the operand luck at ¾ on cube bits and the receipt luck at `½`. -/
 theorem luck_of_receipt_half {α ι : Type} [Fintype α] [Fintype ι] [DecidableEq ι] (R : Type) [CommRing R] {S : ℕ}
