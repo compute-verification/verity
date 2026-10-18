@@ -92,6 +92,7 @@ import Definitions.Pouw.RelativeSecurity
 import Definitions.Pouw.TileBound.AlignedExactDefs
 import Definitions.Pouw.TileBound.Defs
 import Definitions.Pouw.TileBound.Fp8Defs
+import Definitions.Pouw.Window
 import Definitions.Pouw.Witness.Copy
 import Definitions.Pouw.Witness.Model
 
@@ -162,4 +163,10 @@ are `Models.Pouw.Guarantees.Receipt`, proved in `Proofs.Pouw.Receipt`.
 
 `Defs`: the model over `BLACKWELL_SM120_NVF4`'s tile gate, with per-slot pricing and the rewrite class (trusted
 definitions). `Proofs`: the block-support count and the cost bounds it gives.
+
+## `Window`: a window of calls
+
+One draw that depends on the registration (C1), then the calls' sessions in order, in the form of C-Flock's one-stage
+audit: the game, the laws and their product (M1), each call's analysis, and the premises of the window's composition.
+The window's ε from its calls' (M2) is `Models.Pouw.Guarantees.Window`, stated and not yet proved.
 -/
