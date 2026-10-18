@@ -8,7 +8,7 @@
   },
   "Accounting.Assumptions.KeyBinding": {
    "owner": "@memory-accounting",
-   "digest": "ee1b67a7e0d83cfd5a91eaba777ca60baf098bdeb795f93a0c266987858903b0"
+   "digest": "eb1a8d6d2ea53d5165ef9a744d87458f2090749ae2063b2e3a73fa7d5887a996"
   },
   "Accounting.Assumptions.PouwDetection": {
    "owner": "@compute-accounting",
@@ -6026,7 +6026,7 @@
    "guarantees": ["Accounting.SecurityProofs.CapacityOfStateBound", "Accounting.SecurityProofs.DerivedStateResidual"]
   },
   "Definitions.Accounting.Carrier": {
-   "digest": "ffd2335b004adb915bc53864dd3b730f5dd7ada5eab9f9e1a72c827648faff88",
+   "digest": "adc38ca4cb29744f904d9a951ebce2aefe085197c0b83bd2d1841ad491459025",
    "definitions": {
     "Accounting.Rate.PIChip.linkBitsEven": "664fdfcc22cb307c84e0dced36156f3512a82bd18bac34e67c7f1b1b3020dca6",
     "Accounting.Rate.PassProvenance": "ee44265e1c690be67eb25e35098885dc2a5c05ae23924c5202dbff4731579ede",
@@ -6061,7 +6061,9 @@
     "Accounting.RateSketch.SketchDeployedWindow.readsOn": "9582b9fe872e4468f07cb2ad4ebed9dbea2e8d589a9c747a597e04d40da92e82",
     "Accounting.RateSketch.SketchPrefix": "bc7d444025216fd652270044404eb72ef7443e4bb83aa38cc7b24fad18380e33",
     "Accounting.RateSketch.SketchPrefix.of": "47c5593dde0b838373447a801b4641585b2b445fb5b4c6aa64e9c2185ae2acd7",
-    "Accounting.RateSketch.programmed": "e3c8735da1ff5072d88c9f2791d71824fd41cbceeffc910f09dbff8349e8daae",
+    "Accounting.RateSketch.coinStore": "d28d5837fcb7dbac5beea7b4c4fd18457ff07959f76a4102f144601eb11bdf0f",
+    "Accounting.RateSketch.programmed": "085b9626b60659b90f27f2315c28c0b59e3a0a53f9ec4a7b4fd08f48890fd2df",
+    "Accounting.appendCoinBlocks": "bc4317475084be00b2ce3d53a254399d6817a4f68ca2bb62363dd99a8fd79903",
     "Accounting.encodeBitsCost": "1808f6f6b51023f9cfefb8f7ec75fceaadc53a568568bb6e427dd1fd4cb7f64a"
    },
    "guarantees": [
@@ -17480,9 +17482,9 @@
    ]
   },
   "Models.Accounting.Assumptions.Stacking": {
-   "digest": "58df82e66feedd395b6485c57f670c95af283cd2f139cc8bf294285d9402aa7c",
+   "digest": "b589a81e2fee78e506a7f7166f7e811e70fd350706f1d22241fe43a3d89e005a",
    "definitions": {
-    "Accounting.Assumptions.KeyBinding": "ee1b67a7e0d83cfd5a91eaba777ca60baf098bdeb795f93a0c266987858903b0"
+    "Accounting.Assumptions.KeyBinding": "eb1a8d6d2ea53d5165ef9a744d87458f2090749ae2063b2e3a73fa7d5887a996"
    },
    "guarantees": [
     "Accounting.SecurityProofs.StackedRequirementRelay",
@@ -17976,13 +17978,13 @@
    ]
   },
   "Models.Accounting.Guarantees.Stacking": {
-   "digest": "e17d86385670e3aadc1820237c1f12a0a9f23504071ce2846b168855325c2fc9",
+   "digest": "d6e269fd5febea72adab87a6ae9aeab1f535c92bfe342e209bbf97851ba53369",
    "definitions": {
     "Accounting.Guarantees.CarrierBits": "20428995c2321369af63229df03218efa0f480d915fc3d6b52a08f798f159c97",
-    "Accounting.Guarantees.StackedRequirementRelay": "048080831bcf0dcf4bd699a802662a3842119306aa501ac41ae28a4f9a3e108e",
-    "Accounting.Guarantees.StackedRequirementSketchDeployed": "452f00806c1d588b97d03cd70ff0162ccb42e135c7a26dd256c91b8a04ea7663",
-    "Accounting.Guarantees.StackedSessionConservationRelay": "80e8e5273c40633e2e634223173e0698ef662b45862ccb91f7377b6c4a8ff881",
-    "Accounting.Guarantees.StackedSessionConservationSketchDeployed": "9cfa5295e8487147662d6b68c16f43cc21a20ef7fb73f59abf914f7cf06751f1"
+    "Accounting.Guarantees.StackedRequirementRelay": "d80a1fe5a94d1f7f5eebb709352b05ab7f91f538dabbbc6657f3ba1694ead06d",
+    "Accounting.Guarantees.StackedRequirementSketchDeployed": "497da6c3ab9e8ed9e1b6d5f5126e9dd598775499de36fe11e9d2e57f7be96691",
+    "Accounting.Guarantees.StackedSessionConservationRelay": "54fa5577b3572c5c07606968727baf4b3e76cf3da121752f8bec4d052940141f",
+    "Accounting.Guarantees.StackedSessionConservationSketchDeployed": "429e50221f92a82bf774c075a87ab5594f56c27e673d5fb81e25df7dd44c1202"
    },
    "guarantees": [
     "Accounting.SecurityProofs.CarrierBits",
