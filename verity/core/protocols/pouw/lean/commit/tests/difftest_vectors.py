@@ -18,7 +18,11 @@ refusals and each refusal of the JSON forms; `salt_of` and `Epoch.unverified`'s 
 them), epochs and weights' roots; `Epoch.start`'s salt and `draw_coin`'s coin from honest and tampered openings, and a draw
 with no coin commitment; the audit, draw and replay keys and `draw_after`; and `Sampled.select`'s and `pearl_c_work.draw`'s
 work-weighted draws, each run as written with only its tickets given (`tickets` patched), over ticket lists with zeros,
-totals past 64 bits, none, or all zero.
+totals past 64 bits, none, or all zero. Then the live coins: `layout_problem` and `live_domain` over layouts good and bad;
+live coin openings from a `LiveChallenger`, honest and tampered to hit each of `live_reason`'s refusals and each refusal of
+the JSON forms; a family's openings from a `LiveRecord`, and a live epoch's rounds, honest and tampered (a coin opened twice,
+one opened before its root was recorded, one never opened, swapped, after the wrong root, from a foreign epoch or
+commitment, more roots than coins, a commitment that is not a live epoch's); round keys; and the coin modes of schemes.
 """
 from __future__ import annotations
 
@@ -31,7 +35,8 @@ from types import SimpleNamespace
 from unittest import mock
 
 COUNTS = {"tagged": 1000, "bindings": 500, "domain": 1000, "commit_rows": 1500, "transcript": 500, "verify": 4000, "coins": 100,
-          "salt_of": 400, "unverified_salt": 200, "epoch_salt": 60, "key": 600, "sampled": 300, "pearl_draw": 300}
+          "salt_of": 400, "unverified_salt": 200, "epoch_salt": 60, "key": 600, "sampled": 300, "pearl_draw": 300,
+          "live_layout": 500, "live_coins": 40, "live_order": 60, "rounds": 30, "round_key": 300}
 
 
 def _outcome(f) -> dict:
@@ -354,7 +359,217 @@ def generate(seed: int = 0) -> list[dict]:
                 return [i for i, _ in pcw.draw(None, [], pcw.draw_key(source, tr, rd, salt), t)]
         add("pearl_draw", {"source": source.hex(), "transcript": tr.hex(), "records": rd.hex(), "salt": salt.hex(), "tickets": tk,
                            "t": t}, _outcome(pearl))
+
+    _live_cases(rng, add, flip)
     return cases
+
+
+def _live_cases(rng, add, flip) -> None:
+    """The live coins' cases: layouts, single openings, a family's openings in order, a live epoch's rounds, round keys and
+    coin modes."""
+    from verity.core.protocols.pouw import coins
+
+    def reasoned(f) -> dict:
+        res = _outcome(f)
+        return {"reason": res["ok"]} if res.get("ok") is not None else res
+
+    def refusable(f) -> dict:
+        res = _outcome(f)
+        return res["ok"] if "ok" in res else res
+
+    names = ["salt", "draw", "round", "commit", "a", "x-1", "r2", "0", "-"]
+    schemes = [coins.LIVE_SCHEME, coins.SCHEME, "verity/vllm/commit-coins/v1", "a", "/", "a//b"]
+
+    def epoch() -> int:
+        return rng.choice([0, 1, 5, rng.randrange(2**40), 2**70])
+
+    def families() -> list[list]:
+        return [[lb, rng.choice([1, 1, 2, 3, 5, rng.randrange(1, 12)])] for lb in rng.sample(names, rng.choice([1, 1, 2, 3, 4]))]
+
+    def layout_case(scheme, ep, fams) -> None:
+        def run():
+            fs = tuple(tuple(f) for f in fams) if type(fams) is list and all(type(f) is list for f in fams) else fams
+            why = coins.layout_problem(scheme, ep, fs)
+            return {"reason": why} if why is not None else {"ok": coins.live_domain(scheme, ep, fs).domain_id.hex()}
+        add("live_layout", {"scheme": scheme, "epoch": ep, "families": fams}, refusable(run))
+
+    bad_families = [[], "x", 5, None, {"a": 1}, [["a"]], [["a", 1, 2]], [["a", 0]], [["a", -1]], [["a", True]], [["a", 1.5]],
+                    [["a", "1"]], [[5, 1]], [["A", 1]], [["a/b", 1]], [["", 1]], [["a b", 1]], [["é", 1]], [["a", 1], "b"],
+                    [["a", 1], ["a", 2]], [["a", coins.MAX_COINS], ["b", 1]], [["a", coins.MAX_COINS]], [["a", 2**70]],
+                    [["a", coins.MAX_COINS - 1], ["b", 1]]]
+    for _ in range(COUNTS["live_layout"]):
+        scheme = rng.choice(schemes) if rng.random() < 0.85 else rng.choice(["", "Verity/x", "a b", "é", "a_b", 5, None])
+        ep = epoch() if rng.random() < 0.85 else rng.choice([-1, True, 1.5, "1", None])
+        fams = families() if rng.random() < 0.7 else rng.choice(bad_families)
+        layout_case(scheme, ep, fams)
+
+    def live_case(cj: dict, oj: dict, label: str, index: int, after: str) -> None:
+        def reason():
+            return coins.live_reason(coins.LiveCommitment.from_json(cj), coins.LiveOpening.from_json(oj), label, index,
+                                     bytes.fromhex(after))
+        add("live_coins", {"commitment": cj, "opening": oj, "label": label, "index": index, "after": after}, reasoned(reason))
+
+    for _ in range(COUNTS["live_coins"]):
+        scheme, ep, fams = rng.choice(schemes[:4]), epoch(), families()
+        ch, other = (coins.LiveChallenger(scheme, ep, [tuple(f) for f in fams], rng.randbytes) for _ in range(2))
+        label, n = rng.choice(fams)
+        index, after = rng.randrange(n), rng.randbytes(64)
+        op = ch.open(label, index, after)
+        cj, oj, ah = ch.commitment.to_json(), op.to_json(), after.hex()
+
+        def case(c: dict = cj, o: dict = oj, lb: str = label, i: int = index, a: str = ah) -> None:
+            live_case(c, o, lb, i, a)
+        case()
+        case(o=oj | {"epoch": ep + 1})
+        case(c=cj | {"epoch": ep + 2})
+        case(o=oj | {"epoch": -3})
+        for lb, k in fams:
+            if lb != label:
+                case(lb=lb, i=rng.randrange(k))
+        if n > 1:
+            case(i=(index + 1) % n)
+        case(i=n)
+        case(i=-1)
+        case(lb="nope")
+        case(o=oj | {"index": rng.choice([index + 1, -1, 2**70])})
+        case(o=oj | {"label": rng.choice(["Round", "q'uote", "dq\"", "back\\slash", "tab\tnl\n", "\x00\x7f", "é", "中", "\x85",
+                                          "\xa0", "🙂", ""])})
+        case(o=oj | {"coin": rng.randbytes(rng.choice([31, 33, 0])).hex()})
+        case(o=oj | {"salt": rng.randbytes(rng.choice([191, 193])).hex()})
+        case(o=oj | {"coin": flip(op.coin).hex()})
+        case(o=oj | {"salt": flip(op.salt).hex()})
+        if op.path:
+            case(o=oj | {"path": [flip(op.path[0]).hex()] + oj["path"][1:]})
+            case(o=oj | {"path": oj["path"][1:]})
+            case(o=oj | {"path": [op.path[0][:32].hex()] + oj["path"][1:]})
+            case(o=oj | {"path": [op.path[0][:33].hex()] + oj["path"][1:]})
+        case(o=oj | {"path": oj["path"] + [rng.randbytes(64).hex()]})
+        case(o=oj | {"path": 7})
+        case(a=flip(after).hex())
+        case(c=cj | {"root": flip(ch.commitment.root).hex()})
+        case(c=other.commitment.to_json())
+        case(o=other.open(label, index, after).to_json())
+        case(c=cj | {"root": ch.commitment.root[:63].hex()})
+        case(c=cj | {"scheme": rng.choice([s for s in schemes if s != scheme])})
+        case(c=cj | {"scheme": rng.choice(["Verity/x", "", 5])})
+        case(c=cj | {"families": [[lb, k + 1] if lb == label else [lb, k] for lb, k in fams]})
+        if len(fams) > 1:
+            case(c=cj | {"families": fams[::-1]})
+        case(c=cj | {"families": "x"})
+        case(c=cj | {"families": fams + ["b"]})
+        case(c=cj | {"families": [[label, n], [label, n]]})
+        case(c=cj | {"epoch": rng.choice([-1, True, 1.5, "1", None])})
+        case(c={k: v for k, v in cj.items() if k != rng.choice(list(cj))})
+        case(o={k: v for k, v in oj.items() if k != rng.choice(list(oj))})
+        case(o=oj | {"coin": op.coin.hex().upper()})
+        case(o=oj | {"salt": " ".join(op.salt.hex()[i:i + 2] for i in range(0, 384, 2)) + "\n"})
+        case(o=oj | {"after": ah + "0"})
+        case(o=oj | {"coin": "zz" + op.coin.hex()[2:]})
+        case(c=cj | {"root": 5})
+        case(o=oj | {"label": 5})
+        case(o=oj | {"index": rng.choice([str(index), 1.5, None])})
+        case(o=oj | {"epoch": str(ep)})
+        if ep in (0, 1):
+            case(o=oj | {"epoch": bool(ep)})
+            case(o=oj | {"epoch": float(ep)})
+        if index in (0, 1):
+            case(o=oj | {"index": bool(index)})
+
+    def order_case(kind: str, cj: dict, label: str, roots: list[str], ops: list[dict]) -> None:
+        def reason():
+            c = coins.LiveCommitment.from_json(cj)
+            rs, os_ = [bytes.fromhex(r) for r in roots], [coins.LiveOpening.from_json(o) for o in ops]
+            return coins.order_reason(c, label, rs, os_) if kind == "live_order" else coins.rounds_reason(c, rs, os_)
+        inp = {"commitment": cj, "roots": roots, "openings": ops} | ({"label": label} if kind == "live_order" else {})
+        add(kind, inp, reasoned(reason))
+
+    def record(ch, label: str, k: int) -> tuple[list[str], list[dict]]:
+        rec = coins.LiveRecord(ch, label)
+        for _ in range(k):
+            rec.record(rng.randbytes(rng.choice([64] * 5 + [32])))
+        return [r.hex() for r in rec.roots], [o.to_json() for o in rec.openings]
+
+    def tampered(kind: str, ch, label: str, n: int, roots: list[str], ops: list[dict], foreign) -> None:
+        cj = ch.commitment.to_json()
+
+        def case(rs: list[str] = roots, os_: list[dict] = ops, c: dict = cj, lb: str = label) -> None:
+            order_case(kind, c, lb, rs, os_)
+        k = len(roots)
+        case()
+        if ops:
+            j = rng.randrange(k)
+            case(os_=ops[:j + 1] + [ops[j]] + ops[j + 1:])
+            case(os_=ops[:-1])
+            case(os_=ops[:j] + [ops[j] | {"after": flip(bytes.fromhex(ops[j]["after"])).hex()}] + ops[j + 1:])
+            case(rs=roots[:j] + [flip(bytes.fromhex(roots[j])).hex()] + roots[j + 1:])
+            case(os_=ops[:j] + [ops[j] | {"coin": ops[j]["coin"][:-2]}] + ops[j + 1:])
+            case(os_=ops[:j] + [ops[j] | {"index": "0"}] + ops[j + 1:])
+            case(rs=roots[:-1])
+            case(os_=ops + [ops[0]])
+        if k > 1:
+            case(os_=[ops[1], ops[0]] + ops[2:])
+        if k < n:
+            early = ch.open(label, k, bytes.fromhex(roots[-1]) if roots else rng.randbytes(64))
+            case(os_=ops + [early.to_json()])
+        case(rs=roots + [rng.randbytes(64).hex() for _ in range(n + 1 - k)])
+        frs, fops = foreign
+        case(rs=frs, os_=fops)
+        case(rs=roots[:1], os_=[])
+        case(rs=[], os_=[])
+        case(rs=roots + ["zz"])
+        if kind == "live_order":
+            case(lb="nope")
+            for lb, _ in ch.commitment.families:
+                if lb != label:
+                    case(lb=lb)
+
+    for _ in range(COUNTS["live_order"]):
+        scheme, ep, fams = rng.choice(schemes[:4]), epoch(), families()
+        label, n = rng.choice(fams)
+        layout = [tuple(f) for f in fams]
+        ch = coins.LiveChallenger(scheme, ep, layout, rng.randbytes)
+        k = rng.randrange(n + 1)
+        roots, ops = record(ch, label, k)
+        kk = max(1, k)
+        foreign = rng.choice([coins.LiveChallenger(scheme, ep + 1, layout, rng.randbytes),
+                              coins.LiveChallenger(scheme, ep, layout, rng.randbytes)])
+        tampered("live_order", ch, label, n, roots, ops, record(foreign, label, kk))
+
+    for _ in range(COUNTS["rounds"]):
+        ep, rounds = epoch(), rng.choice([1, 2, 3, 4, 6])
+        ch = coins.live_challenger(ep, rounds, rng.randbytes)
+        k = rng.randrange(rounds + 1)
+        roots, ops = record(ch, coins.ROUND, k)
+        ch.open("salt", 0, rng.randbytes(64))
+        foreign = coins.live_challenger(rng.choice([ep, ep + 1]), rounds, rng.randbytes)
+        tampered("rounds", ch, coins.ROUND, rounds, roots, ops, record(foreign, coins.ROUND, max(1, k)))
+        for scheme, layout in ((coins.LIVE_SCHEME, (("draw", 1), ("salt", 1), (coins.ROUND, rounds))),
+                               (coins.LIVE_SCHEME, (("salt", 1), ("draw", 1), ("rounds", rounds))),
+                               (coins.LIVE_SCHEME, (("salt", 1), ("draw", 2), (coins.ROUND, rounds))),
+                               (coins.LIVE_SCHEME, (("salt", 1), (coins.ROUND, rounds))),
+                               ("verity/vllm/commit-coins/v1", coins.live_families(rounds))):
+            odd = coins.LiveChallenger(scheme, ep, layout, rng.randbytes)
+            if odd.commitment.family(coins.ROUND) is not None:
+                rs, os_ = record(odd, coins.ROUND, 1)
+            else:
+                rs, os_ = [], []
+            order_case("rounds", odd.commitment.to_json(), coins.ROUND, rs, os_)
+        salt_ch = coins.live_challenger(ep, rounds, rng.randbytes)
+        root = rng.randbytes(64)
+        order_case("rounds", salt_ch.commitment.to_json(), coins.ROUND, [root.hex()],
+                   [salt_ch.open("salt", 0, root).to_json()])
+
+    for _ in range(COUNTS["round_key"]):
+        cj = {"epoch": epoch(), "families": families(), "root": rng.randbytes(64).hex(),
+              "scheme": rng.choice([coins.LIVE_SCHEME] * 3 + schemes)}
+        coin, root = rng.randbytes(rng.choice([32] * 8 + [0, 1, 64])), rng.randbytes(rng.choice([64] * 6 + [32, 0]))
+        r = rng.choice([0, 1, 2, rng.randrange(2**32), 2**64 + 3])
+        add("round_key", {"commitment": cj, "coin": coin.hex(), "round": r, "root": root.hex()},
+            _outcome(lambda: coins.round_key(coins.LiveCommitment.from_json(cj), coin, r, root).value.hex()))
+
+    for scheme in [coins.SCHEME, coins.LIVE_SCHEME, "verity/pouw/epoch-coins/v2", "verity/pouw/epoch-coins/live/v2", "",
+                   "verity/vllm/commit-coins/v1", coins.SCHEME + " ", coins.LIVE_SCHEME.upper()]:
+        add("mode", {"scheme": scheme}, _outcome(lambda: coins.mode(scheme)))
 
 
 def write(out: Path, seed: int = 0) -> Path:
