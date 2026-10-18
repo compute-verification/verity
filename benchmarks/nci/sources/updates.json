@@ -479,6 +479,43 @@
     ],
     "grade": "measured-small",
     "bears_on": "Low-rank optimizer updates in pretraining cost about half of compute at 1B against a tuned full-rank baseline (more than 1 against untuned Adam)."
+   },
+   {
+    "id": "glentis-2025-param-efficient-survey/4",
+    "claim": "Their LoRA-for-pretraining baseline replaces the base weights with a frozen random matrix; it reaches perplexity 15.83 at 1B with 609M of 1339M parameters trainable.",
+    "quote": "On the other hand, one can also replace W0 with a randomly initialized matrix, in which case the method will still be referred to as the LoRA approach.",
+    "location": "Section 2",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 15.83,
+      "unit": "validation perplexity",
+      "condition": "1B, frozen random base plus rank-512 adapters, 13.1B tokens (Table 3)"
+     }
+    ],
+    "grade": "measured-small",
+    "bears_on": "The only pretraining point for frozen-base adapters: rank d/4 (45% of parameters updated) gives m about 0.26 against a tuned full-rank baseline.",
+    "from_review": "strategy-lowrank-sparse"
+   },
+   {
+    "id": "glentis-2025-param-efficient-survey/5",
+    "claim": "Their plain AdamW at 1B (perplexity 16.52) is worse than every memory-efficient method because the 1B setting was not fully tuned.",
+    "quote": "Due to limited computational resources, we did not conduct a comprehensive hyperparameter search for the 1B model.",
+    "location": "Section 4",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Low-rank multipliers above 1 at 1B come from an untuned baseline; against spike-stabilized AdamW (13.97) they fall to 0.3-1.0.",
+    "from_review": "strategy-lowrank-sparse"
+   },
+   {
+    "id": "glentis-2025-param-efficient-survey/6",
+    "claim": "With restarts, plain low-rank and SLTrain reach perplexity 15.01 and 14.37 at 1B.",
+    "quote": "Specifically, the low-rank and SLTrain methods can achieve a perplexity of 15.01 and 14.37, respectively, for the same 1B model, after the incorporation of the two proposed techniques (see “Low-Rank-Restarts” and “SLTrain-Restarts” in Table 3).",
+    "location": "Section 4",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Native low-rank with restarts at half the compute is about m = 1 against the tuned baseline.",
+    "from_review": "strategy-lowrank-sparse"
    }
   ]
  },

@@ -3450,6 +3450,26 @@
     ],
     "grade": "measured-small",
     "bears_on": "Pretrained weights can be built from about 58% as many free parameters at no loss, given more tokens; the information in dense weights is below one full parameter per entry."
+   },
+   {
+    "id": "janson-2026-spectron/2",
+    "claim": "Compressing to rank ratio 0.125 substantially degrades learning (perplexity 42.65 vs 20.26 at 0.25).",
+    "quote": "Aggressive compression to 0.125 × n substantially degrades learning.",
+    "location": "Section 5",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Native low-rank models collapse below rank d/4, bounding how small factorized state can be.",
+    "from_review": "strategy-lowrank-sparse"
+   },
+   {
+    "id": "janson-2026-spectron/3",
+    "claim": "Compute-optimal low-rank models are smaller than dense ones at the same budget (parameter exponent 0.479 vs 0.49), needing proportionally more tokens; fit over 39 runs at 2.2e18-3.57e19 FLOPs up to 1.5B.",
+    "quote": "The reduced parameter scaling exponent (0.479 vs. 0.49) indicates that compute-optimal low-rank models are smaller than their dense counterparts at equivalent training budgets, requiring proportionally more training tokens.",
+    "location": "Section 5",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "Factorized models are just smaller models: state and FLOPs fall together, so reads per FLOP don't.",
+    "from_review": "strategy-lowrank-sparse"
    }
   ]
  },

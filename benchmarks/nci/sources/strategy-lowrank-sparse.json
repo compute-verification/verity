@@ -1,1 +1,619 @@
-[]
+[
+  {
+    "id": "chen-2024-fira",
+    "title": "Fira: Can We Achieve Full-rank Training of LLMs Under Low-rank Constraint?",
+    "authors": "Xi Chen, Kaituo Feng, Changsheng Li, Xunhao Lai, Xiangyu Yue, Ye Yuan, Guoren Wang",
+    "year": 2025,
+    "venue": "NeurIPS 2025",
+    "url": "https://arxiv.org/abs/2410.01623",
+    "topics": ["strategy-lowrank-sparse", "updates", "gradients"],
+    "verified": "fetched",
+    "findings": [
+      {
+        "id": "chen-2024-fira/1",
+        "claim": "At LLaMA 1B on 13.1B C4 tokens (rank 512 of width 2048), Fira's low-rank optimizer state with full-rank weight updates reaches validation perplexity 14.31 against 15.56 for full-rank Adam; every baseline number is copied from the GaLore paper, not rerun.",
+        "quote": "Results of all baselines are taken from [47]. r refers to the rank and dmodel is the full-rank dimension of models.",
+        "location": "Section 5.1, pre-training table (1B column)",
+        "quantities": [
+          {"param": "update.rank", "value": 512, "unit": "rank of the optimizer-state projection", "condition": "LLaMA 1B, d_model 2048, 13.1B C4 tokens"},
+          {"param": "other", "value": 14.31, "unit": "C4 validation perplexity", "condition": "Fira, LLaMA 1B, 13.1B tokens; full-rank Adam 15.56 and GaLore 15.64 copied from the GaLore paper"},
+          {"param": "other", "value": -0.084, "unit": "nats of held-out loss against full-rank Adam (negative = Fira better)", "condition": "derived: ln(14.31/15.56); baseline untuned (copied)"}
+        ],
+        "grade": "measured-at-scale",
+        "bears_on": "low-rank-optimizer-state: against the GaLore-paper Adam baseline, low-rank optimizer state beats dense at 1B (m > 1 on that baseline), but every weight is written every step, so the novel updated state per block is still the whole weight set.",
+        "from_review": "strategy-lowrank-sparse"
+      },
+      {
+        "id": "chen-2024-fira/2",
+        "claim": "Fira and GaLore run at one fixed learning rate (0.01) and subspace period (200) with no tuning, and the full-rank baseline they are compared against is not retuned either.",
+        "quote": "In contrast, both Fira and GaLore employ the same learning rate 0.01 and a subspace change frequency T of 200 without tuning.",
+        "location": "Appendix B.1",
+        "quantities": [],
+        "grade": "measured-at-scale",
+        "bears_on": "Baseline-tuning flag for every multiplier read from the GaLore-family 1B table (GaLore, Fira, SLTrain, LoQT, CoLA share the 15.56 Adam number).",
+        "from_review": "strategy-lowrank-sparse"
+      },
+      {
+        "id": "chen-2024-fira/3",
+        "claim": "At LLaMA 7B (19.7B tokens) Fira is compared only with GaLore, not with full-rank training, and beats GaLore while using an 8x smaller rank.",
+        "quote": "Notably, for pre-training LLaMA 7B, our Fira uses 8× smaller memory of optimizer states than Galore, yet outperforms it by a large margin.",
+        "location": "Abstract; Section 5.2, Figure 4",
+        "quantities": [
+          {"param": "other", "value": 8, "unit": "GaLore rank / Fira rank", "condition": "LLaMA 7B pretraining on C4, 150K steps, 19.7B tokens"}
+        ],
+        "grade": "measured-at-scale",
+        "bears_on": "The largest-scale point gives no multiplier against dense: there is no full-rank 7B run.",
+        "from_review": "strategy-lowrank-sparse"
+      }
+    ]
+  },
+  {
+    "id": "han-2024-sltrain",
+    "title": "SLTrain: a sparse plus low-rank approach for parameter and memory efficient pretraining",
+    "authors": "Andi Han, Jiaxiang Li, Wei Huang, Mingyi Hong, Akiko Takeda, Pratik Jawanpuria, Bamdev Mishra",
+    "year": 2024,
+    "venue": "NeurIPS 2024",
+    "url": "https://arxiv.org/abs/2406.02214",
+    "topics": ["strategy-lowrank-sparse", "weights", "updates"],
+    "verified": "fetched",
+    "findings": [
+      {
+        "id": "han-2024-sltrain/1",
+        "claim": "At LLaMA 1B (13.1B tokens), SLTrain (rank-512 factors plus a fixed random sparse matrix of density 0.1) reaches perplexity 15.59 against 15.56 for full-rank training while storing 730M instead of 1339M parameters; at its default density 0.03 it reaches 16.14 with 646M.",
+        "quote": "Notably, at δ = 0.1, SLTrain reduces the parameter size by 42% for the 350M model and 45% for the 1B model.",
+        "location": "Section 5, table varying the sparsity ratio δ",
+        "quantities": [
+          {"param": "update.rank", "value": 512, "unit": "rank", "condition": "LLaMA 1B, d_model 2048"},
+          {"param": "other", "value": 0.545, "unit": "stored (all trainable) parameters / dense parameters", "condition": "derived: 730M / 1339M; δ = 0.1, 1B, perplexity 15.59 vs 15.56"},
+          {"param": "other", "value": 0.0019, "unit": "nats of held-out loss against full-rank (positive = worse)", "condition": "derived: ln(15.59/15.56); baseline copied from the GaLore paper"}
+        ],
+        "grade": "measured-at-scale",
+        "bears_on": "Native factorized low-rank: about half the stored state at near-equal loss against the untuned 15.56 baseline, but every stored parameter is written every step, so the per-block novel state is about 0.55 of dense, not a small fraction.",
+        "from_review": "strategy-lowrank-sparse"
+      },
+      {
+        "id": "han-2024-sltrain/2",
+        "claim": "The baseline table SLTrain reuses has pure low-rank pretraining (W = BA, rank 512) collapsing at 1B to perplexity 142.5 against 15.56; every baseline except at 7B is copied from GaLore without retuning.",
+        "quote": "Except for the 7B model, we directly inherit the perplexity results from [59] and thus do not need to tune the hyperparameters from the baselines.",
+        "location": "Section 5 and Table 2 (1B column)",
+        "quantities": [
+          {"param": "other", "value": 142.5, "unit": "C4 validation perplexity", "condition": "Low-Rank (W = BA, r = 512), LLaMA 1B, 13.1B tokens, number copied from the GaLore paper"}
+        ],
+        "grade": "measured-at-scale",
+        "bears_on": "Low-rank-from-scratch failure numbers are tuning artefacts as much as limits: Glentis et al. reach 18.22 for the same 1B setup after tuning.",
+        "from_review": "strategy-lowrank-sparse"
+      },
+      {
+        "id": "han-2024-sltrain/3",
+        "claim": "At LLaMA 7B, trained on only 1.4B tokens and compared only with GaLore (both with 8-bit Adam), SLTrain is worse: perplexity 27.59 against 26.87, at 46G against 62G memory.",
+        "quote": "For pretraining the LlaMA 7B model, due to the resource constraints, we only compare SLTrain with GaLore, implemented with 8-bit Adam [9] on 4×80G A100 GPUs, without per-layer weight updates nor gradient checkpointing.",
+        "location": "Section 5, Table 4",
+        "quantities": [
+          {"param": "other", "value": 0.026, "unit": "nats of held-out loss against 8-bit GaLore (positive = worse)", "condition": "derived: ln(27.59/26.87); LLaMA 7B, 1.4B tokens (about 0.2 tokens per parameter)"}
+        ],
+        "grade": "measured-at-scale",
+        "bears_on": "Negative result at the largest scale tried: no full-rank 7B comparison, and the sparse-plus-low-rank model trails a full-weight-update method.",
+        "from_review": "strategy-lowrank-sparse"
+      }
+    ]
+  },
+  {
+    "id": "loeschcke-2024-loqt",
+    "title": "LoQT: Low-Rank Adapters for Quantized Pretraining",
+    "authors": "Sebastian Loeschcke, Mads Toftrup, Michael J. Kastoryano, Serge Belongie, Vésteinn Snæbjarnarson",
+    "year": 2024,
+    "venue": "NeurIPS 2024",
+    "url": "https://arxiv.org/abs/2405.16528",
+    "topics": ["strategy-lowrank-sparse", "updates", "weights"],
+    "verified": "fetched",
+    "findings": [
+      {
+        "id": "loeschcke-2024-loqt/1",
+        "claim": "At LLaMA 1B (13.1B tokens, rank 512), LoQT, which trains low-rank adapters and periodically merges them into 4-bit quantized weights, reaches perplexity 15.55 against 15.56 for full-rank training (the GaLore-paper number) on one seed; the unquantized variant reaches 15.20.",
+        "quote": "Only one seed was used for the 1B experiment due to compute constraints.",
+        "location": "Table 1 caption and 1B column",
+        "quantities": [
+          {"param": "update.rank", "value": 512, "unit": "rank", "condition": "LLaMA 1B, d_model 2048, 13.1B tokens"},
+          {"param": "other", "value": 15.55, "unit": "C4 validation perplexity", "condition": "LoQT (4-bit base), 1B, one seed; full-rank 15.56; LoQT-nq 15.20"}
+        ],
+        "grade": "measured-at-scale",
+        "bears_on": "relora (merge-based low-rank): matches the untuned dense baseline at 1B, but each merge writes every (quantized) weight, so the novel state per block is the full weight set at merge boundaries.",
+        "from_review": "strategy-lowrank-sparse"
+      },
+      {
+        "id": "loeschcke-2024-loqt/2",
+        "claim": "LoQT trains nothing above 1B to convergence; its 7B and 13B results are memory feasibility, not loss.",
+        "quote": "While LoQT is capable of training models up to 13 billion parameters on consumer GPUs, compute limits prevent us from training to convergence for sizes above 1B.",
+        "location": "Section 3 (Experiments)",
+        "quantities": [],
+        "grade": "measured-at-scale",
+        "bears_on": "No loss evidence above 1B for merge-based quantized low-rank pretraining.",
+        "from_review": "strategy-lowrank-sparse"
+      }
+    ]
+  },
+  {
+    "id": "zhang-2024-scaling-meets-finetuning",
+    "title": "When Scaling Meets LLM Finetuning: The Effect of Data, Model and Finetuning Method",
+    "authors": "Biao Zhang, Zhongtao Liu, Colin Cherry, Orhan Firat",
+    "year": 2024,
+    "venue": "ICLR 2024",
+    "url": "https://arxiv.org/abs/2402.17193",
+    "topics": ["strategy-lowrank-sparse", "updates", "theory"],
+    "verified": "fetched",
+    "findings": [
+      {
+        "id": "zhang-2024-scaling-meets-finetuning/1",
+        "claim": "Across pretrained bilingual LLMs of 1B-16B, growing the PEFT parameter count (LoRA rank 4-128, prompt length 50-600) gives limited gains in fine-tuning loss.",
+        "quote": "Scaling PET parameters is ineffective, delivering limited gains for both LoRA and Prompt.",
+        "location": "Section 4",
+        "quantities": [
+          {"param": "update.fraction_changed", "value": 0.0019, "unit": "fraction of model parameters trained", "condition": "LoRA r = 4 on attention and FFN of the 1B LLM (0.19%)"},
+          {"param": "update.fraction_changed", "value": 0.00017, "unit": "fraction of model parameters trained", "condition": "prompt tuning, length 100, 1B LLM (0.017%)"}
+        ],
+        "grade": "measured-at-scale",
+        "bears_on": "lora-16 / PEFT: in fine-tuning, adapter size is not the lever; nothing here shows that growing an adapter buys pretraining-style loss reduction.",
+        "from_review": "strategy-lowrank-sparse"
+      },
+      {
+        "id": "zhang-2024-scaling-meets-finetuning/2",
+        "claim": "The fitted fine-tuning law is multiplicative, L(X, D_f) = A X^-alpha D_f^-beta + E, with X the model size, pretraining data or PEFT size; it covers fine-tuning on up to 20M examples, not pretraining.",
+        "quote": "we find that 1) LLM finetuning follows a power-based multiplicative joint scaling law between finetuning data size and each other scaling factor; 2) LLM finetuning benefits more from LLM model scaling than pretraining data scaling, and PET parameter scaling is generally ineffective; and 3) the optimal finetuning method is highly task- and finetuning data-dependent.",
+        "location": "Abstract; Equation 1",
+        "quantities": [],
+        "grade": "measured-at-scale",
+        "bears_on": "The only fitted PEFT scaling law at 1B+ is for fine-tuning; it has no term for adapters doing pretraining, so it gives no m for PEFT-as-pretraining.",
+        "from_review": "strategy-lowrank-sparse"
+      },
+      {
+        "id": "zhang-2024-scaling-meets-finetuning/3",
+        "claim": "The law mispredicts at 16B, especially for LoRA and prompt tuning on En-Zh; the authors attribute it to only four model sizes in the fit and a 16B pretraining instability.",
+        "quote": "We observe high mismatch when extrapolating to 16B, particularly for LoRA and Prompt on WMT19 En-Zh in Figure 2.",
+        "location": "Section 3, Figure 2",
+        "quantities": [],
+        "grade": "measured-at-scale",
+        "bears_on": "PEFT laws miss one size step out of their fit; extrapolating any to 1e24+ FLOP is unsupported.",
+        "from_review": "strategy-lowrank-sparse"
+      }
+    ]
+  },
+  {
+    "id": "evci-2020-rigl",
+    "title": "Rigging the Lottery: Making All Tickets Winners",
+    "authors": "Utku Evci, Trevor Gale, Jacob Menick, Pablo Samuel Castro, Erich Elsen",
+    "year": 2020,
+    "venue": "ICML 2020",
+    "url": "https://arxiv.org/abs/1911.11134",
+    "topics": ["strategy-lowrank-sparse", "weights"],
+    "verified": "fetched",
+    "findings": [
+      {
+        "id": "evci-2020-rigl/1",
+        "claim": "On character-level language modeling (WikiText-103, a GRU), dynamic sparse training with RigL beats other sparse-from-scratch methods but does not match dense-then-prune at the same sparsity.",
+        "quote": "Even though RigL exceeds the performance of the other sparse training approaches it fails to match the performance of pruning in this setting, highlighting an important direction for future work.",
+        "location": "Section 4.2, Character Level Language Modeling",
+        "quantities": [],
+        "grade": "measured-small",
+        "bears_on": "weight-sparsity: the canonical dynamic-sparse method's one language-model result is negative against pruning, and there is no transformer LM at scale.",
+        "from_review": "strategy-lowrank-sparse"
+      }
+    ]
+  },
+  {
+    "id": "abnar-2025-parameters-vs-flops",
+    "title": "Parameters vs FLOPs: Scaling Laws for Optimal Sparsity for Mixture-of-Experts Language Models",
+    "authors": "Samira Abnar, Harshay Shah, Dan Busbridge, Alaaeldin El-Nouby, Josh Susskind, Vimal Thilak",
+    "year": 2025,
+    "venue": "arXiv preprint",
+    "url": "https://arxiv.org/abs/2501.12370",
+    "topics": ["strategy-lowrank-sparse", "theory", "weights"],
+    "verified": "fetched",
+    "findings": [
+      {
+        "id": "abnar-2025-parameters-vs-flops/1",
+        "claim": "Across isoFLOP sweeps at 3e19-1e21 FLOPs, the compute-optimal MoE sparsity approaches 1 when total parameters are unconstrained, and pretraining loss falls monotonically with sparsity at fixed compute.",
+        "quote": "Figure 3c shows that the optimal sparsity level approaches 1 across all compute budgets used in our experiments.",
+        "location": "Section 2.3, Figure 3c and Figure 4",
+        "quantities": [
+          {"param": "other", "value": 1e21, "unit": "largest training budget (FLOPs)", "condition": "isoFLOP budgets 3e19, 6e19, 1e20, 3e20, 1e21"},
+          {"param": "other", "value": 0.98, "unit": "MoE sparsity (inactive / total experts), highest tested", "condition": "loss still falling at the highest sparsity tested"}
+        ],
+        "grade": "measured-at-scale",
+        "bears_on": "fine-grained-moe / switch-top1-moe: active state per token can shrink to a few percent of total with no loss penalty at equal FLOPs, but over a block's tokens nearly every expert is touched, so the per-block novel state is the total, which grows as 1/(1-S).",
+        "from_review": "strategy-lowrank-sparse"
+      },
+      {
+        "id": "abnar-2025-parameters-vs-flops/2",
+        "claim": "The paper fits L(N, D, S) = a/N^alpha + b/D^beta + c/(1-S)^lambda + d/((1-S)^delta N^gamma) + e, a Chinchilla form extended by MoE sparsity S, with held-out validation.",
+        "quote": "By incorporating sparsity into the scaling law equation, we can eliminate the need for parameters specific to MoEs, such as the total and active number of experts.",
+        "location": "Section 5, Equation 6; Appendix F",
+        "quantities": [],
+        "grade": "measured-at-scale",
+        "bears_on": "A fitted MoE law with sparsity as a variable, usable (as extrapolation) past 1e21 FLOP.",
+        "from_review": "strategy-lowrank-sparse"
+      },
+      {
+        "id": "abnar-2025-parameters-vs-flops/3",
+        "claim": "At equal pretraining perplexity, sparser MoEs do worse on reading-comprehension-type downstream tasks.",
+        "quote": "However, on downstream tasks that presumably require more “reasoning”, we observe that for models with the same perplexity on the pretraining data distribution, sparser models, i.e., models with fewer active parameters, perform worse.",
+        "location": "Section 4, Figure 5b",
+        "quantities": [],
+        "grade": "measured-at-scale",
+        "bears_on": "A held-out-loss multiplier overstates the capability gain of very sparse MoEs on reasoning-type tasks.",
+        "from_review": "strategy-lowrank-sparse"
+      },
+      {
+        "id": "abnar-2025-parameters-vs-flops/4",
+        "claim": "The sparsity benefit holds only when memory and communication overheads are ignored.",
+        "quote": "When memory and communication overheads are disregarded, increasing sparsity while proportionally expanding the total number of parameters consistently leads to a lower pretraining loss, even when constrained by a fixed training compute budget",
+        "location": "Section 6 (summary of observations)",
+        "quantities": [],
+        "grade": "measured-at-scale",
+        "bears_on": "Under NCI the disregarded cost is the binding one: total expert state read and updated per block grows as 1/(1-S) at fixed active FLOPs.",
+        "from_review": "strategy-lowrank-sparse"
+      }
+    ]
+  },
+  {
+    "id": "jin-2025-journey-matters",
+    "title": "The Journey Matters: Average Parameter Count over Pre-training Unifies Sparse and Dense Scaling Laws",
+    "authors": "Tian Jin, Ahmed Imtiaz Humayun, Utku Evci, Suvinay Subramanian, Amir Yazdanbakhsh, Dan Alistarh, Gintare Karolina Dziugaite",
+    "year": 2025,
+    "venue": "ICLR 2025",
+    "url": "https://arxiv.org/abs/2501.12486",
+    "topics": ["strategy-lowrank-sparse", "weights", "theory"],
+    "verified": "fetched",
+    "findings": [
+      {
+        "id": "jin-2025-journey-matters/1",
+        "claim": "Sparse pretraining by gradual magnitude pruning (pruning between 25% and 75% of training compute) reaches the same loss as dense pretraining at equal compute when compute counts only non-zero weights; the Chinchilla law fits both once N is the average parameter count over training.",
+        "quote": "Our findings indicate that while sparse pre-training achieves the same final model quality as dense pre-training for equivalent compute budgets, it provides substantial benefits through reduced model size, enabling significant potential computational savings during inference.",
+        "location": "Abstract; Sections 3-5",
+        "quantities": [
+          {"param": "other", "value": 1.0, "unit": "compute multiplier against dense at equal held-out loss", "condition": "derived: equal loss at equal compute, compute counting only non-zero-weight FLOPs (6 x average parameters x tokens)"}
+        ],
+        "grade": "measured-at-scale",
+        "bears_on": "weight-sparsity: m is about 1 with sparse kernels; the gain is a smaller final model, not cheaper training.",
+        "from_review": "strategy-lowrank-sparse"
+      },
+      {
+        "id": "jin-2025-journey-matters/2",
+        "claim": "80% final sparsity gives the largest lossless compression found: average parameters about 40% of the dense start, and a final model 2x smaller than the smallest loss-matched dense model.",
+        "quote": "Within the LLMs we explore, we reach the maximum compression rate at 80% final sparsity, where our sparsity schedule results in an average parameter count of about 40% of the initial dense parameter count, yielding a 2x lossless compression rate.",
+        "location": "Section 5, Compression rate",
+        "quantities": [
+          {"param": "update.fraction_changed", "value": 0.2, "unit": "fraction of initial weights still trained at the end", "condition": "80% final sparsity"},
+          {"param": "other", "value": 0.4, "unit": "average / initial parameter count over training", "condition": "80% final sparsity, schedule pruning from 25% to 75% of compute"}
+        ],
+        "grade": "measured-at-scale",
+        "bears_on": "Sparse pretraining cuts the average updated state to about 0.4 of the initial dense model at equal loss, but the initial model is 2.5x the loss-matched dense model, so the state is the same as that dense model's, not smaller.",
+        "from_review": "strategy-lowrank-sparse"
+      },
+      {
+        "id": "jin-2025-journey-matters/3",
+        "claim": "No real compute saving is shown: unstructured sparsity runs as masked dense matmuls, so actual training FLOPs are those of the initial dense model.",
+        "quote": "We note that, due to the lack of adequate software and hardware support for executing matrix multiplications with unstructured sparsity, we are unable to demonstrate computational savings from sparse pre-training.",
+        "location": "Section 5",
+        "quantities": [
+          {"param": "other", "value": 0.4, "unit": "compute multiplier on dense hardware", "condition": "derived: masked dense matmuls cost 6 x N_init x D against 6 x N_avg x D counted; N_avg/N_init about 0.4 at 80% final sparsity"}
+        ],
+        "grade": "measured-at-scale",
+        "bears_on": "weight-sparsity on dense hardware: m is about N_avg/N_init, below 1.",
+        "from_review": "strategy-lowrank-sparse"
+      },
+      {
+        "id": "jin-2025-journey-matters/4",
+        "claim": "The study is the largest on sparse LLM pretraining: its largest main run uses 4.5e20 FLOPs, over 5x Frantar et al.'s largest, and Appendix C matches a 1.14B 50%-sparse model to its dense pair at 6.8e20 FLOPs (about 5x Chinchilla for 1B).",
+        "quote": "Additionally, our study is the largest-scale investigation of sparsely pretrained LLMs to date, with our largest model using over 5 times the compute of the largest model examined in prior work (Frantar et al., 2024).",
+        "location": "Section 2; Section 3; Appendix C",
+        "quantities": [
+          {"param": "other", "value": 4.5e20, "unit": "training FLOPs, largest main-text run", "condition": "Section 3"},
+          {"param": "other", "value": 6.8e20, "unit": "training FLOPs", "condition": "Appendix C: 1.14B, 50% sparse vs average-parameter-matched dense"}
+        ],
+        "grade": "measured-at-scale",
+        "bears_on": "The compute range for the sparse-pretraining law: up to about 7e20 FLOP; everything at 1e24+ is extrapolation.",
+        "from_review": "strategy-lowrank-sparse"
+      }
+    ]
+  },
+  {
+    "id": "saunshi-2025-looped",
+    "title": "Reasoning with Latent Thoughts: On the Power of Looped Transformers",
+    "authors": "Nikunj Saunshi, Nishanth Dikkala, Zhiyuan Li, Sanjiv Kumar, Sashank J. Reddi",
+    "year": 2025,
+    "venue": "ICLR 2025",
+    "url": "https://arxiv.org/abs/2502.17416",
+    "topics": ["strategy-lowrank-sparse", "weights"],
+    "verified": "fetched",
+    "findings": [
+      {
+        "id": "saunshi-2025-looped/1",
+        "claim": "At 1B parameters on 250B Pile tokens, a 12-layer block looped twice reaches validation perplexity 7.90 against 7.40 for the iso-FLOP 24-layer model and 8.16 for the iso-parameter 12-layer model.",
+        "quote": "While the looped model improves over the iso-param baseline, perhaps unsurprisingly, it ends up with worse perplexity than iso-flop baseline, since perplexity depends strongly on number of parameters.",
+        "location": "Section 3, language-modeling table (12 layers, 12x2)",
+        "quantities": [
+          {"param": "other", "value": 0.065, "unit": "nats of held-out loss against the iso-FLOP model (positive = worse)", "condition": "derived: ln(7.90/7.40); 12x2 looped vs 24x1, 250B tokens"},
+          {"param": "other", "value": 0.5, "unit": "unique parameters / iso-FLOP model parameters", "condition": "12-layer block looped twice"}
+        ],
+        "grade": "measured-at-scale",
+        "bears_on": "looped-recursive: halving unique state costs about 0.065 nats at 1B and equal FLOPs, which is m of roughly 0.5-0.6 by a 0.1-nat-per-e-fold slope.",
+        "from_review": "strategy-lowrank-sparse"
+      },
+      {
+        "id": "saunshi-2025-looped/2",
+        "claim": "Looped models close much more of the iso-param to iso-FLOP gap on reasoning task groups than on perplexity or closed-book QA.",
+        "quote": "Overall the looped models are worse on perplexity and closed book QA (memorization benchmarks), but the % Gap is much higher for task groups that require reasoning (open book QA, math word problems).",
+        "location": "Section 3",
+        "quantities": [],
+        "grade": "measured-at-scale",
+        "bears_on": "On held-out loss looping is a net loss at equal compute; its gain shows only on reasoning benchmarks, not convertible to m.",
+        "from_review": "strategy-lowrank-sparse"
+      }
+    ]
+  },
+  {
+    "id": "csordas-2024-moeut",
+    "title": "MoEUT: Mixture-of-Experts Universal Transformers",
+    "authors": "Róbert Csordás, Kazuki Irie, Jürgen Schmidhuber, Christopher Potts, Christopher D. Manning",
+    "year": 2024,
+    "venue": "NeurIPS 2024",
+    "url": "https://arxiv.org/abs/2405.16039",
+    "topics": ["strategy-lowrank-sparse", "weights"],
+    "verified": "fetched",
+    "findings": [
+      {
+        "id": "csordas-2024-moeut/1",
+        "claim": "MoEUT (a shared-layer universal transformer with sigma-MoE MLP and attention) beats standard transformers at equal compute by a large margin and slightly at equal parameters, up to 1B parameters on C4 (1040M: 10.90 vs 11.15 perplexity, parameter-matched).",
+        "quote": "MoEUTs allow us to build parameter- and resource-efficient UT language models outperforming standard Transformers with less compute and memory requirements on all scales on which we can afford to test (up to 1B parameters).",
+        "location": "Section 1; Figure 4; Table 1 (1040M row)",
+        "quantities": [
+          {"param": "other", "value": -0.023, "unit": "nats of held-out loss against the parameter-matched dense model (negative = MoEUT better)", "condition": "derived: ln(10.90/11.15); C4, 1040M parameters"}
+        ],
+        "grade": "measured-small",
+        "bears_on": "looped-recursive plus MoE: the only shared-layer result claiming better compute efficiency than dense, but undertrained (see /2) and only up to 1B.",
+        "from_review": "strategy-lowrank-sparse"
+      },
+      {
+        "id": "csordas-2024-moeut/2",
+        "claim": "Every MoEUT and baseline model trains for 1e5 steps of 64 x 1024 tokens (6.6B tokens), so the 1B models see about 6 tokens per parameter, far below Chinchilla.",
+        "quote": "All models are trained with batch size 64 and context length 1024, for 10^{5} steps.",
+        "location": "Section 3",
+        "quantities": [
+          {"param": "other", "value": 6.55e9, "unit": "training tokens", "condition": "derived: 64 x 1024 x 1e5, the same for every model size"}
+        ],
+        "grade": "measured-small",
+        "bears_on": "Baseline-regime flag: the dense baselines are not compute-optimal, so MoEUT's equal-compute margin does not convert to m against Chinchilla-optimal dense.",
+        "from_review": "strategy-lowrank-sparse"
+      },
+      {
+        "id": "csordas-2024-moeut/3",
+        "claim": "Plain layer sharing improves loss per parameter but not per FLOP (Kaplan et al.); MoEUT's compute-efficiency claim rests on its MoE layers.",
+        "quote": "Kaplan et al. [19] report that even though Transformer language models with inter-layer parameter-sharing scale better in terms of number of parameters, they fail to achieve compute-efficiency—in contrast, our MoE-based approach is more compute-efficient than the corresponding dense baseline.",
+        "location": "Discussion and Limitations",
+        "quantities": [],
+        "grade": "measured-small",
+        "bears_on": "looped-recursive without MoE has m < 1 per FLOP.",
+        "from_review": "strategy-lowrank-sparse"
+      }
+    ]
+  },
+  {
+    "id": "he-2024-peer",
+    "title": "Mixture of A Million Experts",
+    "authors": "Xu Owen He",
+    "year": 2024,
+    "venue": "arXiv preprint",
+    "url": "https://arxiv.org/abs/2407.04153",
+    "topics": ["strategy-lowrank-sparse", "weights"],
+    "verified": "fetched",
+    "findings": [
+      {
+        "id": "he-2024-peer/1",
+        "claim": "At isoFLOP budgets of 6e18 and 2e19 on C4, PEER (over a million single-neuron experts with product-key routing) gets the lowest compute-optimal perplexity: 20.63 vs 23.84 dense at 6e18 and 16.45 vs 18.31 at 2e19; coarse MoE gets 21.41 and 17.12.",
+        "quote": "Given the same compute budget, a PEER model achieves the lowest compute-optimal perplexity.",
+        "location": "Section 3.1, Figure 1, Table 1 (C4 column)",
+        "quantities": [
+          {"param": "other", "value": 1.9, "unit": "compute multiplier against dense at equal C4 perplexity", "condition": "derived: PEER at 6e18 FLOPs, exp(ln(23.84/20.63)/0.219), 0.219 nats per e-fold being the dense slope between the two budgets in Table 1"},
+          {"param": "other", "value": 1.6, "unit": "compute multiplier against dense at equal C4 perplexity", "condition": "derived: PEER at 2e19 FLOPs, exp(ln(18.31/16.45)/0.219)"},
+          {"param": "other", "value": 1.4, "unit": "compute multiplier against dense at equal C4 perplexity", "condition": "derived: coarse MoE at 2e19 FLOPs, exp(ln(18.31/17.12)/0.219); 1.6 at 6e18"}
+        ],
+        "grade": "measured-small",
+        "bears_on": "fine-grained-moe at the extreme: the gain shrinks from 1.9 to 1.6 between two budgets (two points only), and a block's tokens touch most of the million-expert table, so the per-block novel state is the total.",
+        "from_review": "strategy-lowrank-sparse"
+      }
+    ]
+  },
+  {
+    "id": "berges-2024-memory-layers",
+    "title": "Memory Layers at Scale",
+    "authors": "Vincent-Pierre Berges, Barlas Oğuz, Daniel Haziza, Wen-tau Yih, Luke Zettlemoyer, Gargi Ghosh",
+    "year": 2024,
+    "venue": "arXiv preprint",
+    "url": "https://arxiv.org/abs/2412.09764",
+    "topics": ["strategy-lowrank-sparse", "weights"],
+    "verified": "fetched",
+    "findings": [
+      {
+        "id": "berges-2024-memory-layers/1",
+        "claim": "Memory-layer models beat dense models with more than twice their compute on downstream tasks (mostly factual QA), with base models up to 8B and 1T training tokens; the metric is downstream accuracy, not held-out loss.",
+        "quote": "On downstream tasks, language models augmented with our improved memory layer outperform dense models with more than twice the computation budget, as well as mixture-of-expert models when matched for both compute and parameters.",
+        "location": "Abstract",
+        "quantities": [
+          {"param": "other", "value": 2, "unit": "compute multiplier against dense, downstream accuracy (not held-out loss)", "condition": "factual-QA-heavy suite; base models 134M-8B, up to 1T tokens"}
+        ],
+        "grade": "measured-at-scale",
+        "bears_on": "Sparse-memory capacity: m above 2 on knowledge tasks, flagged as downstream-only; total state grows with the memory table.",
+        "from_review": "strategy-lowrank-sparse"
+      },
+      {
+        "id": "berges-2024-memory-layers/2",
+        "claim": "At an 8B base with 64B memory parameters on 1T tokens, Memory+ beats dense on 7 of 9 tasks but loses on MBPP (42.20 vs 44.20) and PIQA (79.82 vs 80.52); no held-out loss is reported at this scale.",
+        "quote": "Table 2: Results with an 8B base model. Memory+ models have 16 million memory values (64 billion extra parameters).",
+        "location": "Section 5.3, Table 2",
+        "quantities": [
+          {"param": "other", "value": 8, "unit": "memory parameters / base parameters", "condition": "64B memory on an 8B Llama3-style base, 1T tokens"}
+        ],
+        "grade": "measured-at-scale",
+        "bears_on": "Memory layers multiply total state 9x for a mixed downstream gain; each token reads a few rows, but a block's tokens touch most of the 64B table.",
+        "from_review": "strategy-lowrank-sparse"
+      }
+    ]
+  },
+  {
+    "id": "lan-2020-albert",
+    "title": "ALBERT: A Lite BERT for Self-supervised Learning of Language Representations",
+    "authors": "Zhenzhong Lan, Mingda Chen, Sebastian Goodman, Kevin Gimpel, Piyush Sharma, Radu Soricut",
+    "year": 2020,
+    "venue": "ICLR 2020",
+    "url": "https://arxiv.org/abs/1909.11942",
+    "topics": ["strategy-lowrank-sparse", "weights"],
+    "verified": "fetched",
+    "findings": [
+      {
+        "id": "lan-2020-albert/1",
+        "claim": "Cross-layer sharing trades state for compute: ALBERT-large (18M parameters) trains 1.7x faster than BERT-large but scores 82.4 vs 85.2 on average; ALBERT-xlarge (60M) matches BERT-large (85.5) at 0.6x its speed, and xxlarge is 3x slower.",
+        "quote": "If we use BERT-large as the baseline, we observe that ALBERT-large is about 1.7 times faster in iterating through the data while ALBERT-xxlarge is about 3 times slower because of the larger structure.",
+        "location": "Section 4.3, Table 2",
+        "quantities": [
+          {"param": "other", "value": 0.6, "unit": "compute multiplier against BERT-large at matched average dev score", "condition": "derived: ALBERT-xlarge 85.5 vs BERT-large 85.2 at 0.6x data throughput; fine-tuned downstream average, not held-out loss; 125k steps"},
+          {"param": "other", "value": 0.18, "unit": "ALBERT-xlarge parameters / BERT-large parameters", "condition": "derived: 60M / 334M"}
+        ],
+        "grade": "measured-small",
+        "bears_on": "looped-recursive / weight sharing: about 5x less stored state at matched quality costs about 1.7x the compute (m about 0.6).",
+        "from_review": "strategy-lowrank-sparse"
+      }
+    ]
+  },
+  {
+    "id": "weiss-2025-relora-slm",
+    "title": "Investigating ReLoRA: Effects on the Learning Dynamics of Small Language Models",
+    "authors": "Yuval Weiss, David Demitri Africa, Paula Buttery, Richard Diehl Martinez",
+    "year": 2025,
+    "venue": "BlackboxNLP 2025",
+    "url": "https://arxiv.org/abs/2509.12960",
+    "topics": ["strategy-lowrank-sparse", "updates"],
+    "verified": "fetched",
+    "findings": [
+      {
+        "id": "weiss-2025-relora-slm/1",
+        "claim": "In 11M and 66M Llama-style models without a full-rank warm start, ReLoRA underperforms full-rank training on loss, Paloma perplexity and BLiMP, with the gap widening from 11M to 66M.",
+        "quote": "Across loss, Paloma perplexity, and BLiMP, we find that ReLoRA underperforms full-rank training, with gaps widening at larger scales.",
+        "location": "Abstract; Section 4",
+        "quantities": [],
+        "grade": "measured-small",
+        "bears_on": "relora: a negative trend (gap grows with scale) at tiny scale and without warm start, against Lialin et al.'s 1.3B claim that the gap shrinks.",
+        "from_review": "strategy-lowrank-sparse"
+      }
+    ]
+  },
+  {
+    "id": "schwethelm-2026-iso-depth-looped",
+    "title": "How Much Is One Recurrence Worth? Iso-Depth Scaling Laws for Looped Language Models",
+    "authors": "Kristian Schwethelm, Daniel Rückert, Georgios Kaissis",
+    "year": 2026,
+    "venue": "arXiv preprint",
+    "url": "https://arxiv.org/abs/2604.21106",
+    "topics": ["strategy-lowrank-sparse", "weights", "theory"],
+    "verified": "fetched",
+    "findings": [
+      {
+        "id": "schwethelm-2026-iso-depth-looped/1",
+        "claim": "A joint law L = E + A (N_once + r^phi N_rec)^-alpha + B D^-beta, fitted on 116 iso-depth runs with recurrence r in {1, 2, 4, 8} over about 50x of compute (up to 2.15e19 FLOPs, FineWeb-Edu), gives phi = 0.46: a recurrence is worth about half a unique block, so looping raises held-out loss at matched compute.",
+        "quote": "Our φ = 0.46 sits in between, so replacing unique blocks with shared recurrences increases validation loss at matched training compute.",
+        "location": "Abstract; Section 4.3, Table 2",
+        "quantities": [
+          {"param": "other", "value": 0.46, "unit": "recurrence-equivalence exponent phi", "condition": "116 runs, r in {1, 2, 4, 8}, about 50x compute range ending at 2.15e19 FLOPs"}
+        ],
+        "grade": "measured-small",
+        "bears_on": "looped-recursive: the only fitted law for looping; unique state shrinks by r, effective capacity by r^0.46.",
+        "from_review": "strategy-lowrank-sparse"
+      },
+      {
+        "id": "schwethelm-2026-iso-depth-looped/2",
+        "claim": "At r = 4, a 410M looped model matches a 580M non-looped model but costs as much to train as a 1B non-looped one.",
+        "quote": "For example, at r=4 a 410M looped model performs on par with a 580M non-looped model, but incurs the training cost of a 1B non-looped one.",
+        "location": "Abstract; Appendix F.4",
+        "quantities": [
+          {"param": "other", "value": 0.58, "unit": "compute multiplier against non-looped at equal loss", "condition": "derived: 580M-equivalent quality at 1B-equivalent training cost, equal tokens; r = 4"},
+          {"param": "other", "value": 0.41, "unit": "unique parameters / cost-matched non-looped parameters", "condition": "derived: 410M / 1B at r = 4"}
+        ],
+        "grade": "measured-small",
+        "bears_on": "looped-recursive m is about 0.58 at r = 4 with state about 0.41 of the cost-matched dense model.",
+        "from_review": "strategy-lowrank-sparse"
+      },
+      {
+        "id": "schwethelm-2026-iso-depth-looped/3",
+        "claim": "Past the fitted grid, at about 4e20 FLOPs (47B tokens), the r = 4 looped model trails r = 1 by 0.061 nats, inside the 0.05-0.08-nat band of the grid; the gap is not closing.",
+        "quote": "The looped model trails by 0.061 nats in validation loss, inside the [0.05, 0.08] nats r=4 band measured across the grid.",
+        "location": "Section 4.2; Appendix I",
+        "quantities": [
+          {"param": "other", "value": 0.061, "unit": "nats of held-out loss (positive = looped worse)", "condition": "r = 4 vs r = 1 at size s = 34, 47B tokens, about 4e20 FLOPs"}
+        ],
+        "grade": "measured-small",
+        "bears_on": "looped-recursive trend: constant across about 2.5 decades of compute (the gap flattens at the largest grid budgets and holds at 4e20).",
+        "from_review": "strategy-lowrank-sparse"
+      },
+      {
+        "id": "schwethelm-2026-iso-depth-looped/4",
+        "claim": "Hyperconnections (parallel residual streams between loops) raise phi from 0.46 to 0.65.",
+        "quote": "Conversely, hyperconnections raise φ to 0.65, a genuine capacity gain.",
+        "location": "Abstract; Section 5",
+        "quantities": [
+          {"param": "other", "value": 0.65, "unit": "recurrence-equivalence exponent phi", "condition": "with hyperconnections; truncated backpropagation lowers it to 0.38"}
+        ],
+        "grade": "measured-small",
+        "bears_on": "An attacker's best looped recipe: phi 0.65 gives m of about 0.7 at r = 4 by the same law.",
+        "from_review": "strategy-lowrank-sparse"
+      }
+    ]
+  },
+  {
+    "id": "amsel-2026-dion3",
+    "title": "Dion3: Full-stack orthogonal updates",
+    "authors": "Noah Amsel, Jack Zhang, Kwangjun Ahn, Ali Naeimi, Austin Feng, Berlin Chen, Tri Dao, John Langford",
+    "year": 2026,
+    "venue": "arXiv preprint",
+    "url": "https://arxiv.org/abs/2608.11612",
+    "topics": ["strategy-lowrank-sparse", "updates", "gradients"],
+    "verified": "fetched",
+    "findings": [
+      {
+        "id": "amsel-2026-dion3/1",
+        "claim": "Dion3 orthogonalizes and writes only a fraction f of each weight matrix's rows per step (the rows with the largest momentum l1 norm, with error feedback on the rest); f = 1 is Muon/NorMuon.",
+        "quote": "At each step, we select only a fraction of the rows from the momentum matrix and perform the Muon update (including the orthogonalization) as if the other rows did not exist.",
+        "location": "Section 6, Algorithm 4",
+        "quantities": [
+          {"param": "update.fraction_changed", "value": 0.25, "unit": "fraction of each matrix's rows written per step", "condition": "recommended f = 1/4 (or 1/8); selected rows rotate across steps"}
+        ],
+        "grade": "measured-at-scale",
+        "bears_on": "dion-low-rank / row-sparse updates: the per-step written state is f of the weights, but over a block of many steps nearly all rows change.",
+        "from_review": "strategy-lowrank-sparse"
+      },
+      {
+        "id": "amsel-2026-dion3/2",
+        "claim": "At 1B parameters on 100B ClimbMix tokens (about 6e20 FLOPs), Dion3 with f < 1 at its best learning rate beats tuned NorMuon in final validation loss, by about 0.01 nats.",
+        "quote": "Figure 3 contains another remarkable finding: Dion3 with f < 1 actually outperforms NorMuon when tuned correctly.",
+        "location": "Section 7, Figure 3",
+        "quantities": [
+          {"param": "other", "value": -0.012, "unit": "nats of held-out loss against tuned NorMuon (negative = Dion3 better)", "condition": "derived, read from the Figure 3 grid: best f = 1/8 (2.182) vs best NorMuon (2.194); 1B, 100B tokens, learning rates swept for both"}
+        ],
+        "grade": "measured-at-scale",
+        "bears_on": "Row-sparse updates cost nothing in loss at 1B and roughly Chinchilla x5 tokens against a tuned baseline; the baseline is NorMuon, not AdamW.",
+        "from_review": "strategy-lowrank-sparse"
+      },
+      {
+        "id": "amsel-2026-dion3/3",
+        "claim": "At 3B, 4B, 7B and 14B on only 10B tokens, Dion3 (f = 1/4) beats NorMuon in validation loss at every size by 0.011-0.027 nats, the largest gain at 14B (2.162 vs 2.189).",
+        "quote": "In validation loss, Dion3 outperforms NorMuon at every scale, achieving the largest improvement (−0.027) at the largest scale (14B).",
+        "location": "Section 7, Table 2",
+        "quantities": [
+          {"param": "other", "value": -0.027, "unit": "nats of held-out loss against NorMuon (negative = Dion3 better)", "condition": "14B, 10B tokens (0.7 tokens per parameter); learning rates fixed from the 1B sweep"},
+          {"param": "other", "value": -0.012, "unit": "nats of held-out loss against NorMuon (negative = Dion3 better)", "condition": "3B, 10B tokens"}
+        ],
+        "grade": "measured-at-scale",
+        "bears_on": "Trend for row-sparse orthogonal updates: the gain grows with size here, but every run above 1B is far below Chinchilla tokens, so it does not convert to compute-optimal m.",
+        "from_review": "strategy-lowrank-sparse"
+      }
+    ]
+  }
+]
