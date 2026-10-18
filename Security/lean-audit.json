@@ -1436,7 +1436,10 @@
    "type_hash": "5cd9789694c0df8e5c5a09cd026a4f45b7c72ae8be8393f286cb479d9cac04d0"
   },
   "Accounting.SecurityProofs.TS.DuoSegmentsBind": {
-   "owner": "@compute-accounting"
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.DuoSegmentsBind : Accounting.Guarantees.TS.DuoSegmentsBind"],
+   "assumptions": [],
+   "type_hash": "f6a85b032fa3daf1cb90b6693f33ebc1f8e160996e163a97419f35fc0f9ceda0"
   },
   "Accounting.SecurityProofs.TS.FanInCount": {
    "owner": "@compute-accounting",
@@ -1463,7 +1466,10 @@
    "type_hash": "22e2320fa4db7ad6c4182cab5d22d9df1ef0ede2c031c256c59be0e9997c4a1e"
   },
   "Accounting.SecurityProofs.TS.Fx1SegmentsBind": {
-   "owner": "@compute-accounting"
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.Fx1SegmentsBind : Accounting.Guarantees.TS.Fx1SegmentsBind"],
+   "assumptions": [],
+   "type_hash": "aad18a7a2fbca41c4809056d4c3457aa70bea4a8d619583a0b843828d9d9f63f"
   },
   "Accounting.SecurityProofs.TS.LiSegmentsBind": {
    "owner": "@compute-accounting",
@@ -4901,7 +4907,10 @@
    "type_hash": "a236d72e1d9cd1d06b54e7baf0b21e92f7cfd039e84b3c901c5056961c72f88c"
   },
   "Pouw.SecurityProofs.Receipt.DuoReceiptNotInjective": {
-   "owner": "@compute-accounting"
+   "owner": "@compute-accounting",
+   "signature": ["Pouw.SecurityProofs.Receipt.DuoReceiptNotInjective : Pouw.Guarantees.Receipt.DuoReceiptNotInjective"],
+   "assumptions": [],
+   "type_hash": "0eef8a8219c603404d51a23bf68d8b863d5db41699d9dd93467b160bd5b683bd"
   },
   "Pouw.SecurityProofs.Receipt.DuoRunWordInjective": {
    "owner": "@compute-accounting",
@@ -4928,7 +4937,10 @@
    "type_hash": "e750ff080ad0a230437eb91653a6a5efce0853e7ca3347d1aed8e1ae58b7118a"
   },
   "Pouw.SecurityProofs.Receipt.DuoWordProjNoKernel": {
-   "owner": "@compute-accounting"
+   "owner": "@compute-accounting",
+   "signature": ["Pouw.SecurityProofs.Receipt.DuoWordProjNoKernel : Pouw.Guarantees.Receipt.DuoWordProjNoKernel"],
+   "assumptions": [],
+   "type_hash": "32697c6d70d2a04cea3d963c0d8c515cd5463f415900c0af177b6b4442ca6978"
   },
   "Pouw.SecurityProofs.Receipt.Fx1PairNoKernel": {
    "owner": "@compute-accounting",
@@ -7035,8 +7047,22 @@
    ]
   },
   "Definitions.Accounting.TS.Receipt": {
-   "digest": "b75ef312537899445e95572519e9aa5af190842c93d70066b60ca1b67c9b96b4",
+   "digest": "27a8fc1ecb23c951f158e49b706fa9d396ac2fbb4e5e15fdfb341764accd4ad2",
    "definitions": {
+    "Accounting.TS.CPPlace": "6dee7a1d08e10faca382e497be8e70b3e6349a01d4d38217d9f61bcf6fef4d63",
+    "Accounting.TS.DuoCPUnits": "8768ed771f01498df6f5bb3d717cc922c41e6efb8bca9007e13472ab951f0436",
+    "Accounting.TS.DuoCPUnits.a": "2e26e75497fa38b7463dfb845cc0e3c8909d04b5e5cd2d337d36c1754d05659d",
+    "Accounting.TS.DuoCPUnits.checkpoint": "7b38e9b619b712b8be5a1db9aaa2738cccfe714e8f2522e1285ee07462fc01d4",
+    "Accounting.TS.DuoCPUnits.honest": "2f0b1688ab04c345f5d280e44145ec31d3b014f58e65d1363ef1a9f5f4ea62eb",
+    "Accounting.TS.DuoCPUnits.k": "f2d9e61161c188facd92740c4841e134423642db557672ef0976671d1f0b2536",
+    "Accounting.TS.DuoCPUnits.pos": "0fe1f88b18b35ab25659cdd7aaafd1979de34e3e43d2f46e3cea2fe9985c92f0",
+    "Accounting.TS.DuoCPUnits.r": "229df8521d96a05d60f02d1316714473e4e07af5c824dcb0772420b5a14e498b",
+    "Accounting.TS.DuoCPUnits.right": "c63f85f52a923bcc04a48722c48edeb21c9a0bf1e56fdbafdc5718b385a16b8d",
+    "Accounting.TS.DuoCPUnits.same": "359da4c5d7b650831963c3d2783ef86501d64960df3a6a39045f811ba0ba25e3",
+    "Accounting.TS.DuoCPUnits.start": "f3807dbe58454777835d1ecef0197b620c165f1e8f90a39e4d72c23a61508488",
+    "Accounting.TS.DuoCPUnits.state": "98e0e1a4b9605c539dd71b2822bd21428888d9c3d242a73943f6b708ada956ff",
+    "Accounting.TS.DuoCPUnits.value": "c05a1d6a5e916dc78b025d3eb56b477cee714ef8aa0499f96d14a204ee02e9a7",
+    "Accounting.TS.DuoCPUnits.word": "ff879d7fd5b327a20f4c5fb69f5e5be7bb2797f879d660ad6f85874320f3ed65",
     "Accounting.TS.DuoUnits": "d330484da8d2fb119ce2541283d148f900bc4b3854bd8b53ee9e5be2a0b523ec",
     "Accounting.TS.DuoUnits.a": "5d4b4c0b1dc2de8007052fb50e2a1fac16a98ff4b340a8c4448d0dc4085c5416",
     "Accounting.TS.DuoUnits.honest": "64e78fb594ba3d929627f45a2b221226f1700719e12b2ad84dfcf941ed2198f9",
@@ -7048,6 +7074,11 @@
     "Accounting.TS.DuoUnits.start": "7d6ecdca800f57317498336eb8bd1d83b72b4b7ec9dfb4f66351bc3808aa3ec3",
     "Accounting.TS.DuoUnits.value": "b7f3e3ddfa8e19cb007c747b7c202a5a06c4385b2c38320c44893d3d4d9917fd",
     "Accounting.TS.DuoUnits.word": "05a2944f6a2b512133a75455666ae483b5d97bb5c91453c35c51e277e4aca63c",
+    "Accounting.TS.Fx1CPUnits": "9349be2bd85ad438ab59e14ea9c737359a2d55cebf3f3a29702b1680d3541888",
+    "Accounting.TS.Fx1CPUnits.imad": "0fd9df9cedd80826f530bcf21c83362bb298e19148d072ffe23ab4e1bc308269",
+    "Accounting.TS.Fx1CPUnits.m": "4ebb122a870462a4276d9bd20c24d332ebf41d5f3adf1f9d17a8b649c1320932",
+    "Accounting.TS.Fx1CPUnits.same": "82a7e5698384e30bf8b532029b10d1179dba6215cb2340641f7ef12180156839",
+    "Accounting.TS.Fx1CPUnits.toDuoCPUnits": "3e250a4aaf3c862567753a558759df489990501a25f76a91f82cda57dd7db384",
     "Accounting.TS.Fx1Units": "7579f118188f35c1cded661f17a087b0f5b494c631e75c951be41af371847896",
     "Accounting.TS.Fx1Units.m": "a17c0adb613b486fdb12dfa9468efdd24bc5b8a9d6787fcb33273aafbe590c25",
     "Accounting.TS.Fx1Units.same": "abaaa4738eb83ec3bb0ad72b33ca7f3a6872e8ad0568747955730838eba1f2e8",
@@ -7068,7 +7099,7 @@
     "Accounting.TS.LiUnits.value": "11884c078749551ec4c1d6f65715768bc2fe32fefcd6f0c9c23439e57bbb17d9",
     "Accounting.TS.LiUnits.word": "1b1e190a5d09f332fe07a86cb36a8a228c21103abe3828101acb883321e24853",
     "Accounting.TS.ReceiptGame": "2286970ee38b99490080368e7ff9c0e66baadf5fa6f01f3b20cbbfb537797690",
-    "Accounting.TS.ReceiptGame.CaseA": "3e8cb777c37ee0ed45899a3408e29587e6770c3db5b522d94e5c5e00459abf6b",
+    "Accounting.TS.ReceiptGame.CaseA": "ded215c55923eace1574812304acff0243b86dfa9e663f0990a34c5f06748f03",
     "Accounting.TS.ReceiptGame.CubeOperands": "eff46a892aa26753dd82e289642a30757833303f310962553fe7ee39b67c26a4",
     "Accounting.TS.ReceiptGame.OperandLuck": "dd7b63e23469b588ed492a68e2c85f69577d571be0b4b001064d2797a769a32d",
     "Accounting.TS.ReceiptGame.Pinned": "d01f762cd1354d1255f9c53c3b8024f249165dda6e03903593c14f3d799b3cba",
@@ -7081,9 +7112,12 @@
     "Accounting.TS.ReceiptGame.done": "84f1e4fcdda6bee1a0a46719c85077454d656a5d7202f6e5bf947d1e7391b2ff",
     "Accounting.TS.ReceiptGame.game": "f3b781602a30fb67c5b607be5605ce0040772266fbab7e0128981be03d8ecc8e",
     "Accounting.TS.ReceiptGame.rec": "0ef49937d32c5e50b66e1cb3e0ee453b5f0cbb2eaf6ec7d14e83554adf74f3cc",
-    "Accounting.TS.ReceiptGame.round": "7b75fa38de308279d8654e17570a0a508d65d464e465e54d2e116df7a8f2de2b"
+    "Accounting.TS.ReceiptGame.round": "7b75fa38de308279d8654e17570a0a508d65d464e465e54d2e116df7a8f2de2b",
+    "Accounting.TS.xorAll": "e79c7bb80c4a340fa20f2ac319de5139cc27cdb654e1d37262bb86e7309933b9"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.TS.DuoSegmentsBind",
+    "Accounting.SecurityProofs.TS.Fx1SegmentsBind",
     "Accounting.SecurityProofs.TS.LiSegmentsBind",
     "Accounting.SecurityProofs.TS.LiWindowUnbound",
     "Accounting.SecurityProofs.TS.LuckCaseA",
@@ -12133,7 +12167,7 @@
    "guarantees": ["Pouw.SecurityProofs.PearlC.TileCheck4WordsCore"]
   },
   "Definitions.Pouw.Receipt.Duo": {
-   "digest": "67a8518114c0557c9d8f59873a758408306097bbc0cfe0f43127973a3433f948",
+   "digest": "0c159b55748c2d7ce08e4e110ad96f247ed95d082158173c153390e9dc9cfa86",
    "definitions": {
     "Pouw.Receipt.OddKey": "523b501cdd837c78c17f35c23ebc1871830ca45008bbe284975ab20da8d90023",
     "Pouw.Receipt.OddKeyNotNegOne": "31c9ceda208246918d98a8986269a78312a849526081fe826eb2e33adbbc474a",
@@ -12141,11 +12175,15 @@
     "Pouw.Receipt.ShortRotation": "5766ac1e4ce0f1fccec0a23583c926017aab0c241fe51842556f0bc8bdac8911",
     "Pouw.Receipt.duoPair": "0db527ce0a70fb58bcba2efcb9e95bbb12578ea3956093f5343d250dd5d2d032",
     "Pouw.Receipt.duoQuad": "c8cf798e7e63e762cba5c917dcc71dd724ebe4dde1b897d6458f5f780a9a7531",
+    "Pouw.Receipt.duoReceipt": "e54b5ee6146d4b7f45d2c42d3d5ff8aed4bd7bd00e590e3866cc897ffbd3a1ae",
     "Pouw.Receipt.duoRun": "8618a1b49c703cf3480ffe3cac63c3101855ba4299ee5a5e2c7118b784ce523a",
     "Pouw.Receipt.duoTriple": "5a2d96e7a402f773e07fc5d56b4396833148f6a078936f450481a819405448db",
-    "Pouw.Receipt.duoWord": "cbd7aa3d7554fa9b6113932c730b75304b994a68bc15cfb4c5e6955f265142a9"
+    "Pouw.Receipt.duoWord": "cbd7aa3d7554fa9b6113932c730b75304b994a68bc15cfb4c5e6955f265142a9",
+    "Pouw.Receipt.duoWordSpread": "08852613cd3d92f01f7c27540e39090f366c33796dab54ed49c9fb0ceeedf669"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.TS.DuoSegmentsBind",
+    "Accounting.SecurityProofs.TS.Fx1SegmentsBind",
     "Accounting.SecurityProofs.TS.LiSegmentsBind",
     "Accounting.SecurityProofs.TS.LiWindowUnbound",
     "Accounting.SecurityProofs.TS.LuckCaseA",
@@ -12154,10 +12192,12 @@
     "Accounting.SecurityProofs.TS.ReceiptLuckCaseA",
     "Pouw.SecurityProofs.Receipt.DuoPairNoKernel",
     "Pouw.SecurityProofs.Receipt.DuoQuadNoKernel",
+    "Pouw.SecurityProofs.Receipt.DuoReceiptNotInjective",
     "Pouw.SecurityProofs.Receipt.DuoRunWordInjective",
     "Pouw.SecurityProofs.Receipt.DuoStepBijective",
     "Pouw.SecurityProofs.Receipt.DuoTripleNoKernel",
     "Pouw.SecurityProofs.Receipt.DuoWordInjective",
+    "Pouw.SecurityProofs.Receipt.DuoWordProjNoKernel",
     "Pouw.SecurityProofs.Receipt.Fx1PairNoKernel",
     "Pouw.SecurityProofs.Receipt.Fx1QuadNoKernel",
     "Pouw.SecurityProofs.Receipt.Fx1RunWordInjective",
@@ -17730,8 +17770,10 @@
    ]
   },
   "Models.Accounting.Guarantees.TS.Receipt": {
-   "digest": "ccb344d91438d2f4f86d1ee5529cf35eb781c11f3dd2851fe6430137e36c8a72",
+   "digest": "651e1dea3fd416c5b65434995caf696b4f0489138499787702674ce157cee9bc",
    "definitions": {
+    "Accounting.Guarantees.TS.DuoSegmentsBind": "50cf1046b26dd1b856bb76dc4bcf2eb5ee9c8fec1c651ffd3359135d65d03a33",
+    "Accounting.Guarantees.TS.Fx1SegmentsBind": "0baf2f6ae2f911f8c7dbc1c9175183c43a3a07a4c42d2693e6a3001256767563",
     "Accounting.Guarantees.TS.LiSegmentsBind": "b23e64b4e9497e4a58b88525da1b00752ba32f9cc292526e70479f8a93c63daa",
     "Accounting.Guarantees.TS.LiWindowUnbound": "647b1f3468da6180e54bcb482210037e26ab91b121424203d825a97589417474",
     "Accounting.Guarantees.TS.LuckCaseA": "89a5fc4ce0c50e6e494dc5c9f86855cceef42b29ef75fc24048cb1843ce04a2b",
@@ -17742,6 +17784,8 @@
     "Accounting.Guarantees.TS.ReceiptLuckCaseA": "b1e2b795fbef1ea41e889b3121a0b8d6d3b56b007f19a30f43ae436d92ddcb4f"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.TS.DuoSegmentsBind",
+    "Accounting.SecurityProofs.TS.Fx1SegmentsBind",
     "Accounting.SecurityProofs.TS.LiSegmentsBind",
     "Accounting.SecurityProofs.TS.LiWindowUnbound",
     "Accounting.SecurityProofs.TS.LuckCaseA",
@@ -18751,14 +18795,16 @@
    "guarantees": ["Pouw.SecurityProofs.PearlC.TileCheck4WordsCore", "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"]
   },
   "Models.Pouw.Guarantees.Receipt": {
-   "digest": "d88a5c89dbae24f683ccfe15925f8d3384e44042abb0cdb255bf02ef1c8f78c7",
+   "digest": "d3f529c9b4bc91a3af2f4df5548eeaa92c889660c6c2fb5dc798f1ab30833238",
    "definitions": {
     "Pouw.Guarantees.Receipt.DuoPairNoKernel": "1039a7b3dddf68dfa9e864f897ef57aa49bf17ba7765af07a1332595eef247f9",
     "Pouw.Guarantees.Receipt.DuoQuadNoKernel": "298232eb24c7be9f9f65959660fca3aa8d57d2373f9da1fb34470020a5f872f9",
+    "Pouw.Guarantees.Receipt.DuoReceiptNotInjective": "23987edb81eb08f5f48eca3c178776648ed20318a52ad7e6204b8f483e47df87",
     "Pouw.Guarantees.Receipt.DuoRunWordInjective": "c62e3619993c5ddafb8f07e364d2733dc3f57bd60891bb3006e06a6d32a3ae60",
     "Pouw.Guarantees.Receipt.DuoStepBijective": "5fe72ace79835deaebb0f01d6407fb313ad1f57c2a53375318c667f42c27c828",
     "Pouw.Guarantees.Receipt.DuoTripleNoKernel": "e2f1ae4ae008bc102256d3583daf1493f02dd198e27cb904c16905596c78593d",
     "Pouw.Guarantees.Receipt.DuoWordInjective": "8f4f6573010e26ca624a4fb35b780ab09ff86f3e6b7b5c12867efd287dd3688d",
+    "Pouw.Guarantees.Receipt.DuoWordProjNoKernel": "3f76b2cfff750a0195bc6bc92416551ae9e21675b128f85636e8d66b926b7ebd",
     "Pouw.Guarantees.Receipt.Fx1PairNoKernel": "50855c03638c9f1a41b751d04cf419943d70f30b5f9e6634ac87ffae1342cc3a",
     "Pouw.Guarantees.Receipt.Fx1QuadNoKernel": "1e7a490c457375d5bda075d70bc62799fa78664faaec8daf222b10f2ccdef308",
     "Pouw.Guarantees.Receipt.Fx1RunWordInjective": "4d5382df57197db1b1f816b1c410f38a3096de8a8e1e162c3cf9c6109e1b4ab7",
@@ -18772,10 +18818,12 @@
    "guarantees": [
     "Pouw.SecurityProofs.Receipt.DuoPairNoKernel",
     "Pouw.SecurityProofs.Receipt.DuoQuadNoKernel",
+    "Pouw.SecurityProofs.Receipt.DuoReceiptNotInjective",
     "Pouw.SecurityProofs.Receipt.DuoRunWordInjective",
     "Pouw.SecurityProofs.Receipt.DuoStepBijective",
     "Pouw.SecurityProofs.Receipt.DuoTripleNoKernel",
     "Pouw.SecurityProofs.Receipt.DuoWordInjective",
+    "Pouw.SecurityProofs.Receipt.DuoWordProjNoKernel",
     "Pouw.SecurityProofs.Receipt.Fx1PairNoKernel",
     "Pouw.SecurityProofs.Receipt.Fx1QuadNoKernel",
     "Pouw.SecurityProofs.Receipt.Fx1RunWordInjective",
