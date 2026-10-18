@@ -6,7 +6,8 @@ llama8b-int8:<arm> once the run is labeled arm=llama8b-int8.
 
     python3 summarize.py OUT [--verifier VERIFIER_JSON] [--result PATH] [--window-ms 10000]
 
-Arms (engine.py's phase tags; tokens a second are summed over the engines, each over its own steps in the arm):
+Arms (engine.py's phase tags; tokens a second are summed over the engines, each over its own runs of consecutive steps
+in the arm, from steps.jsonl; the latency histograms from engine.<g>.latency.json):
   plain               plain-baseline and plain: the plain weights, before the prover touches a GPU
   codec               decode-only, between and after: the arenas encoded, every weight decoded at use, no pass
   receipts+codec      an unpaced session-K: the audit's passes back to back (sketch-sha512 receipts over every arena)
@@ -63,24 +64,37 @@ def mean(hist: Counter) -> float | None:
 
 
 def arms(out: Path, sessions: dict[int, str]) -> dict:
-    """Each arm's tokens a second (summed over engines), busy fraction, batch, and merged latency histograms."""
+    """Each arm's tokens a second (summed over engines), busy fraction and batch, from every engine's steps.jsonl over
+    the runs of consecutive steps in the arm (between and after recur), and its merged latency histograms."""
     acc: dict[str, dict] = {}
+
+    def arm_acc(arm: str) -> dict:
+        return acc.setdefault(arm, {"phases": set(), "engines": {}, "hist": {k: Counter() for k in ("itl", "ttft", "tpot")}})
+
     for f in sorted(out.glob("engine.*.latency.json")):
         lat = json.loads(f.read_text())
         for phase, p in lat["phases"].items():
-            arm = arm_of(phase, sessions)
-            if arm is None:
-                continue
-            a = acc.setdefault(arm, {"phases": set(), "engines": {}, "hist": {k: Counter() for k in ("itl", "ttft", "tpot")}})
-            a["phases"].add(phase)
-            e = a["engines"].setdefault(lat["gpu"], {"tokens": 0, "span_s": 0.0, "busy_s": 0.0, "steps": 0, "batch_sum": 0})
-            for k in e:
-                e[k] += p[k]
-            for k, h in p["hist"].items():
-                a["hist"][k].update({int(b): c for b, c in h.items()})
+            if (arm := arm_of(phase, sessions)) is not None:
+                for k, h in p["hist"].items():
+                    arm_acc(arm)["hist"][k].update({int(b): c for b, c in h.items()})
+    for f in sorted(out.glob("engine.*.steps.jsonl")):
+        prev = None
+        for line in f.read_text().splitlines():
+            s = json.loads(line)
+            if (arm := arm_of(s.get("phase", ""), sessions)) is not None:
+                a = arm_acc(arm)
+                a["phases"].add(s["phase"])
+                e = a["engines"].setdefault(f.name, {"tokens": 0, "span_s": 0.0, "busy_s": 0.0, "steps": 0, "batch_sum": 0})
+                e["span_s"] += s["t"] - prev[0] if prev and prev[1] == arm else s["ms"] / 1e3
+                e["tokens"] += s["tokens"]
+                e["busy_s"] += s["ms"] / 1e3
+                e["steps"] += 1
+                e["batch_sum"] += s["batch"]
+            prev = (s["t"], arm)
     res = {}
     for arm, a in acc.items():
-        es = a["engines"].values()
+        if not (es := a["engines"].values()):
+            continue
         res[arm] = {
             "phases": sorted(a["phases"]), "engines": len(a["engines"]),
             "tokens_per_s": round(sum(e["tokens"] / e["span_s"] for e in es if e["span_s"]), 2),

@@ -13,7 +13,7 @@ saturation --max-num-seqs caps vLLM's batch below engine.py's --concurrency, so 
 latency    each request's tokens as they come out of the steps (engine.py's DELTA outputs): time to first token from its
            add and every inter-token gap, each by the phase of the step that made it, and its TPOT ((last - first) /
            (n - 1)) once it finishes, only if its first token and its last came in one phase; and each phase's busy
-           fraction (step time over its span) and batch (requests a step).
+           fraction (step time over its span, the sum of its runs of consecutive steps) and batch (requests a step).
            --out/engine.<g>.latency.json at stop, beside engine.py's engine.<g>.json
 ~~~
 
@@ -60,10 +60,10 @@ class Phase:
     def __init__(self) -> None:
         self.itl, self.ttft, self.tpot = Counter(), Counter(), Counter()
         self.steps = self.tokens = self.batch = 0
-        self.busy_s, self.t0, self.t1 = 0.0, None, None
+        self.busy_s = self.span_s = 0.0
 
     def report(self) -> dict:
-        span = (self.t1 - self.t0) if self.t0 is not None else 0.0
+        span = self.span_s
         return {"steps": self.steps, "tokens": self.tokens, "batch_sum": self.batch, "busy_s": round(self.busy_s, 4),
                 "span_s": round(span, 3), "tokens_per_s": round(self.tokens / span, 3) if span else None,
                 "busy": round(self.busy_s / span, 4) if span else None,
@@ -83,7 +83,7 @@ class Saturated(E.Load):
         super().__init__(*a, **kw)
         self.added, self.first, self.last, self.count, self.first_step = {}, {}, {}, {}, {}
         self.phases: dict[str, Phase] = {}
-        self.pending = None
+        self.pending, self.prev = None, None
         Saturated.current = self
 
     def step(self) -> dict:
@@ -140,8 +140,9 @@ class Saturated(E.Load):
         p.tokens += tokens
         p.batch += batch
         p.busy_s += t1 - t0
-        p.t0 = t0 if p.t0 is None else p.t0
-        p.t1 = t1
+        # a phase can recur (between, after each session), so its span is the sum of its runs of consecutive steps
+        p.span_s += t1 - self.prev[1] if self.prev and self.prev[0] == phase else t1 - t0
+        self.prev = (phase, t1)
         whole = [x for x, first in tpot if first.get("phase", "untagged") == phase]
         for hist, xs in ((p.ttft, ttft), (p.itl, itl), (p.tpot, whole)):
             hist.update(int(x * 1e3 / BIN_MS) for x in xs)
