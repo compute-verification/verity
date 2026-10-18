@@ -69,16 +69,16 @@ def OneUse (P : Program m C V) : Prop :=
 def SinkConfined (P : Program m C V) : Prop :=
   ∀ n, ∀ k ∈ P.reads n, P.fold k = true → P.fold n = true
 
-instance (P : Program m C V) : Decidable P.Topological := by
+instance instDecidableTopological (P : Program m C V) : Decidable P.Topological := by
   unfold Topological; infer_instance
 
-instance (P : Program m C V) : Decidable P.CoinFlowRule := by
+instance instDecidableCoinFlowRule (P : Program m C V) : Decidable P.CoinFlowRule := by
   unfold CoinFlowRule; infer_instance
 
-instance [DecidableEq C] (P : Program m C V) : Decidable P.OneUse := by
+instance instDecidableOneUse [DecidableEq C] (P : Program m C V) : Decidable P.OneUse := by
   unfold OneUse; infer_instance
 
-instance (P : Program m C V) : Decidable P.SinkConfined := by
+instance instDecidableSinkConfined (P : Program m C V) : Decidable P.SinkConfined := by
   unfold SinkConfined; infer_instance
 
 /-- The Build's verdict: the nodes are in order, and the coin rules and sink confinement hold. -/
