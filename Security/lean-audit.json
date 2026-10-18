@@ -66,9 +66,41 @@
    "owner": "@compute-accounting",
    "digest": "2dd67bf94ae505daf300e0b2cf43706a0f4da5f2ed8e6b08a8156cd3abd1d5d3"
   },
+  "Accounting.Assumptions.TS.RightFixed": {
+   "owner": "@compute-accounting",
+   "digest": "d17ab6dafa91dbbf183e5a1221cd1f8fc26fb93ebb1b21e83117ef2337a454f2"
+  },
   "Accounting.Assumptions.TS.ScalarRoute": {
    "owner": "@compute-accounting",
    "digest": "414a164b2927884959719a19f4157ef08125017896884da53459996b1212b5bd"
+  },
+  "Accounting.Assumptions.TS.SheetClock": {
+   "owner": "@compute-accounting",
+   "digest": "c27bc92a531574e652f708a8b56724dee41b9f5ac2ddf6a99041454ba111f4ad"
+  },
+  "Accounting.Assumptions.TS.SheetDispatch": {
+   "owner": "@compute-accounting",
+   "digest": "f9634f4244e50365a3d6e8b7819892b9e6b1078e1d48153821f641e7086e5dc8"
+  },
+  "Accounting.Assumptions.TS.SheetPipe": {
+   "owner": "@compute-accounting",
+   "digest": "37651d89ede633ff5ef4bf579cbb463627ca2653e8dcd615665c09a04cf948a3"
+  },
+  "Accounting.Assumptions.TS.SheetSemantics": {
+   "owner": "@compute-accounting",
+   "digest": "3b3d03419951bbb4b2a714f059b4e4edd8420ca7bfb145c8ac4f6dd49f72f425"
+  },
+  "Accounting.Assumptions.TS.SheetSmem": {
+   "owner": "@compute-accounting",
+   "digest": "7fd5d664da6fd8bbe5347c3767cf9a22f3c9cbbd05e7010c0076abf6e89d76ac"
+  },
+  "Accounting.Assumptions.TS.SheetTensor": {
+   "owner": "@compute-accounting",
+   "digest": "f6ecb9bffb0d12d13ecc2daeabcc41ef4cdff64ba928a8485b973207955e01cb"
+  },
+  "Accounting.Assumptions.TS.SheetWords": {
+   "owner": "@compute-accounting",
+   "digest": "318d32c829f132eecfda9d7e485bf9b6051ca679d424dca3f8787d33e605e8e1"
   },
   "Accounting.Assumptions.TS.SideUnits": {
    "owner": "@compute-accounting",
@@ -1231,6 +1263,26 @@
    "assumptions": [],
    "type_hash": "9339b39fc50b0ff51f167aa0adcd15f02a302f90982b000ed84626e29d05c1d3"
   },
+  "Accounting.SecurityProofs.Gates.SquaringCarryNibbles": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.Gates.SquaringCarryNibbles : Accounting.Guarantees.Gates.SquaringCarryNibbles"
+   ],
+   "assumptions": [],
+   "type_hash": "3f193bf405d2240af9bd36d88649260aca62c9c803f1cc7f329aeac4e43d7650"
+  },
+  "Accounting.SecurityProofs.Gates.SquaringUnits": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Gates.SquaringUnits : Accounting.Guarantees.Gates.SquaringUnits"],
+   "assumptions": [],
+   "type_hash": "dea8fd362488ce53327529678e4666c9db0b7ce96c3c2040009b3d101aba7ac5"
+  },
+  "Accounting.SecurityProofs.Gates.UnitsFooling": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Gates.UnitsFooling : Accounting.Guarantees.Gates.UnitsFooling"],
+   "assumptions": [],
+   "type_hash": "5b40f0c5460acaf648aa680d40b856fc259b43c20551db825483644902c6b28a"
+  },
   "Accounting.SecurityProofs.HMu.CoinPointMass": {
    "owner": "@compute-accounting",
    "signature": ["Accounting.SecurityProofs.HMu.CoinPointMass : Accounting.Guarantees.HMu.CoinPointMass"],
@@ -1828,6 +1880,12 @@
    "assumptions": [],
    "type_hash": "12199d162077ce4fc6f237428b788d29d10f95ece558031db6fed753c245cb9f"
   },
+  "Accounting.SecurityProofs.TS.BindingOfFork": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.BindingOfFork : Accounting.Guarantees.TS.BindingOfFork"],
+   "assumptions": [],
+   "type_hash": "35df2fcc55dd37402511f188176a776059b9c8e8cabacb798f5dceb4b3c5d8ff"
+  },
   "Accounting.SecurityProofs.TS.CompilerC": {
    "owner": "@compute-accounting",
    "signature": ["Accounting.SecurityProofs.TS.CompilerC : Accounting.Guarantees.TS.CompilerC"],
@@ -1942,6 +2000,12 @@
    "assumptions": [],
    "type_hash": "f63122b9d09208627838844f85921930911249f025c810b9936cfc84542bef96"
   },
+  "Accounting.SecurityProofs.TS.ProofsSoundOfPinned": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.ProofsSoundOfPinned : Accounting.Guarantees.TS.ProofsSoundOfPinned"],
+   "assumptions": [],
+   "type_hash": "0d86ac02d35b0a45cdccc1e8ace9d5a097be7b41f6ca5997353812461c532783"
+  },
   "Accounting.SecurityProofs.TS.ReceiptLuckCaseA": {
    "owner": "@compute-accounting",
    "signature": ["Accounting.SecurityProofs.TS.ReceiptLuckCaseA : Accounting.Guarantees.TS.ReceiptLuckCaseA"],
@@ -1959,6 +2023,24 @@
    "signature": ["Accounting.SecurityProofs.TS.SeesOfInjective : Accounting.Guarantees.TS.SeesOfInjective"],
    "assumptions": [],
    "type_hash": "c937ea1687f1688063a1c90c1b8da809f1a119c468d6fd44e050ed5cc450bd27"
+  },
+  "Accounting.SecurityProofs.TS.SheetDIdealFloor": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.SheetDIdealFloor : Accounting.Guarantees.TS.SheetDIdealFloor"],
+   "assumptions": [],
+   "type_hash": "d29cef4e0069f10471c37f5b26c752d5c38ac5d170bd76911d94e0f497fb1dc3"
+  },
+  "Accounting.SecurityProofs.TS.SheetFacetCeilings": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.SheetFacetCeilings : Accounting.Guarantees.TS.SheetFacetCeilings"],
+   "assumptions": [],
+   "type_hash": "908b00b3111acd08a19e35369360c096e6d4b6067dd3933a4a0d6d0e12ef8ea2"
+  },
+  "Accounting.SecurityProofs.TS.SheetScalarRouteHalf": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.SheetScalarRouteHalf : Accounting.Guarantees.TS.SheetScalarRouteHalf"],
+   "assumptions": [],
+   "type_hash": "cac0d5f86541bd5206eb1febfe2492aedfd31678311825bd6371970062c982f2"
   },
   "Accounting.SecurityProofs.TS.TensorSlotCount": {
    "owner": "@compute-accounting",
@@ -6951,7 +7033,15 @@
    "Accounting.SecurityProofs.TS.LuckCaseAKeyed": "lemma: LuckCaseA at the operand luck 0 that a share of wrong words (a definition, the keyed rounds' share) gives, (L) at 0 in case (a); not a property of a Lean function.",
    "Accounting.SecurityProofs.FillerLuck.PinnedFillLuckAt": "frozen (no-function): (I7) LuckAt at 0 over every full-checking window of pinned receipts (Accounting.Filler.FullPinnedFill), at any receipt function of the round's committed data and live coins, not a Lean function: the service's filler check has no Lean code yet.",
    "Accounting.SecurityProofs.FillerLuck.PinnedFillBudget": "frozen (no-function): Lemma C's BudgetAt at 1 over every spot-checked window of pinned receipts (Accounting.Filler.SpotPinnedFill), at any receipt function, not a Lean function: the service's spot check has no Lean code yet.",
-   "Accounting.SecurityProofs.FillerLuck.PinnedFillBlocksDeficit": "frozen (no-function): Theorem S with another block's one-draw check beside a pinned receipt's spot check (Accounting.Filler.PinnedFillBlocks), the filler at p = 0, not a Lean function: the service's check has no Lean code yet; the other block's pass bound is part of each round's shape."
+   "Accounting.SecurityProofs.FillerLuck.PinnedFillBlocksDeficit": "frozen (no-function): Theorem S with another block's one-draw check beside a pinned receipt's spot check (Accounting.Filler.PinnedFillBlocks), the filler at p = 0, not a Lean function: the service's check has no Lean code yet; the other block's pass bound is part of each round's shape.",
+   "Accounting.SecurityProofs.TS.ProofsSoundOfPinned": "lemma: (I8) ProofsSound of EPS1-SPEC from its pieces over every play and window of proofs (Accounting.TS.ProofLayer), not a Lean function: binding at delta_bind and proof soundness at delta_ZK as probability hypotheses, the Definitions' pinning (ProofLayer.Pins) and the play being its proofs' (ProofLayer.Of) as definitional hypotheses, and E1(c) as the named assumption RightFixed, not on the premises list; DIdeal and CompilerC, which take ProofsSound, are what it is for.",
+   "Accounting.SecurityProofs.TS.BindingOfFork": "lemma: the rewinding step behind (I8)'s delta_bind over every window of proofs (Accounting.TS.ProofLayer), not a Lean function: binding's failure at a round, squared, is at most its fork form's (two runs off one commitment, both accepted, opening it differently), so a bound on the fork form is binding at its square root; ProofsSoundOfPinned, which takes binding at delta_bind, is what it is for.",
+   "Accounting.SecurityProofs.TS.SheetFacetCeilings": "lemma: (I1) FacetCeilings on the data-sheet machine from A1-A5 (Models.Accounting.Assumptions.Sheet), over any sheet and run with counts >= 0; arithmetic over the machine's rows, not a Lean function.",
+   "Accounting.SecurityProofs.TS.SheetScalarRouteHalf": "lemma: (I3) ScalarRoute at q, q_T <= 1/2 and b_T <= 0 from A6 (two words a lane) and the labelling's split; arithmetic, not a Lean function.",
+   "Accounting.SecurityProofs.TS.SheetDIdealFloor": "frozen (no-function,world-unlisted): Theorem D-ideal (2.7-flat) of EPS1-SPEC on the data-sheet machine, DIdealFloor with (I1)-(I5) replaced by A1-A7 at the 1/2 floor, over every full-checking play and labelled program, not a Lean function; A1-A7 and (I6)-(I8) are not on the premises list.",
+   "Accounting.SecurityProofs.Gates.SquaringCarryNibbles": "frozen (no-function): The carry bound over every circuit of the gate model that squares on the nibble family (Accounting.Gates.nibbles), a counting bound from Fooling at j = 4, not a property of a Lean function.",
+   "Accounting.SecurityProofs.Gates.UnitsFooling": "frozen (no-function): A counting bound in budgeted units over every circuit of the gate model (Security/Definitions/Accounting/Gates/Model.lean) and every set of inputs, not a property of a Lean function: the property's census check has no Lean code yet.",
+   "Accounting.SecurityProofs.Gates.SquaringUnits": "frozen (no-function): The units bound over every circuit of the gate model that squares on the nibble family (Accounting.Gates.nibbles), a counting bound from UnitsFooling, not a property of a Lean function."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
@@ -7417,7 +7507,7 @@
    ]
   },
   "Definitions.Accounting.Gates.Codec": {
-   "digest": "5885d57a3d56cca55a23dd8d3051596b8734056a54890bb47eadd05ee6ce0460",
+   "digest": "802aa9b04e67ec30ccf08189c047af85c88ecf4737bd6bc78ac8b56058c0eb1a",
    "definitions": {
     "Accounting.Gates.CodecInputs": "6524cf356d674b61ff89e4e77fc979bf4fdf415765b98fc7d50cdaa86792d328",
     "Accounting.Gates.ComputesWords": "85f4401b8abbfdaffb2549e6593b93091410d66af43060b81a1e4e35215ba56c",
@@ -7448,6 +7538,7 @@
     "Accounting.Gates.encodeCosts": "cf565cad456cfec121f966f7fc0f13304eea82116e2214f4665d0655e99b8b87",
     "Accounting.Gates.encodeWord": "554d51815728fecb57794d50b9fa8e5af60363cefaa851eb9b4bf664a685222d",
     "Accounting.Gates.lessParity": "31e8614acb1229ac42def0795071f4ba897d3a8e60746ca526ff33e13bcb305b",
+    "Accounting.Gates.nibbles": "c60b1f41d51faa275217f9e6b6a02d6623ed725af591a0f08398faf099670b86",
     "Accounting.Gates.rho": "ef65a85f7c61cfd841f11e14a7b06ecb13fd990b89a3e63f1206f51d7ed0126b",
     "Accounting.Gates.sigma": "1fa89715a668bb55c59206af4defc0f120b6544b444645c7cc756b3364163d38",
     "Accounting.Gates.sparse": "7c1a17c12010cff703689a84ee595aa07cc738e98414387aca0b0db81c4ba6a1"
@@ -7456,11 +7547,13 @@
     "Accounting.SecurityProofs.Gates.EncodeBudget",
     "Accounting.SecurityProofs.Gates.EncodeCost",
     "Accounting.SecurityProofs.Gates.RhoPairs",
-    "Accounting.SecurityProofs.Gates.SquaringCarry"
+    "Accounting.SecurityProofs.Gates.SquaringCarry",
+    "Accounting.SecurityProofs.Gates.SquaringCarryNibbles",
+    "Accounting.SecurityProofs.Gates.SquaringUnits"
    ]
   },
   "Definitions.Accounting.Gates.Model": {
-   "digest": "8e302234ed9dbead5eb7a26f772b5238482c4da323366b5f860a5e7ebd72bc40",
+   "digest": "ea10922fb1e8c6e16701b54513979a77d53a13d0d57f0465a2abe6a7195b5bd3",
    "definitions": {
     "Accounting.Gates.Audit": "fe61c4f5697390b50450c728a1be07af859a208e40eb950dcabcb11d1ec58ce1",
     "Accounting.Gates.Audit.reads": "777cbb0f97dae2e1110f03d6eeaa958843d1e2c9b625cb1a1fcab1c386384c7e",
@@ -7509,7 +7602,7 @@
     "Accounting.Gates.Gate.commit": "43ed11295805091023a47b2fc3450bda67197d59cd4fa268d4705ab04d583390",
     "Accounting.Gates.Gate.derive": "11f670cf47657abf125b7ed338316772ec6bbfd26da475161d9ab8d3ba75bc22",
     "Accounting.Gates.Gate.hi": "98a1a62e76e0723e682b8405233c130f0df4ed36dbe2d9955ca0236aba2a0589",
-    "Accounting.Gates.Gate.indexBits": "63cba9aa93a1a237779b6a84f6bc3a0e81675f4a041d20388c17c2eda6cbd0bb",
+    "Accounting.Gates.Gate.indexBits": "c3a48aa756a390b8960ef567628a7982995da4b9acdfbe1ec41f4e8947a3b82b",
     "Accounting.Gates.Gate.inputBits": "10f2766efc14697c07110cb74f5abd88af47b92e452455d1123d399fe709dab8",
     "Accounting.Gates.Gate.lo": "aca2bca0fcdcf1cdeedb99183570fffe7dd02d40f18eff3d784ee64b8611327e",
     "Accounting.Gates.Gate.macs": "b3bc351d1ca6fc1852cec27d9a7e2c3707e8ccaf198f9046b9b692ec66839f88",
@@ -7622,7 +7715,10 @@
     "Accounting.SecurityProofs.Gates.ProvenWindow",
     "Accounting.SecurityProofs.Gates.QuantRange",
     "Accounting.SecurityProofs.Gates.RzByteRange",
-    "Accounting.SecurityProofs.Gates.SquaringCarry"
+    "Accounting.SecurityProofs.Gates.SquaringCarry",
+    "Accounting.SecurityProofs.Gates.SquaringCarryNibbles",
+    "Accounting.SecurityProofs.Gates.SquaringUnits",
+    "Accounting.SecurityProofs.Gates.UnitsFooling"
    ]
   },
   "Definitions.Accounting.Gates.Ranges": {
@@ -8576,7 +8672,11 @@
     "Accounting.SecurityProofs.TS.FillOptOfFanIn",
     "Accounting.SecurityProofs.TS.FloorCreditD3",
     "Accounting.SecurityProofs.TS.FoldOptOfFanIn",
+    "Accounting.SecurityProofs.TS.ProofsSoundOfPinned",
     "Accounting.SecurityProofs.TS.RoutesOffD2",
+    "Accounting.SecurityProofs.TS.SheetDIdealFloor",
+    "Accounting.SecurityProofs.TS.SheetFacetCeilings",
+    "Accounting.SecurityProofs.TS.SheetScalarRouteHalf",
     "Accounting.SecurityProofs.TS.TimeBound",
     "Accounting.SecurityProofs.TS.VectorThresholdD1"
    ]
@@ -8602,8 +8702,33 @@
     "Accounting.SecurityProofs.TS.LuckCaseA",
     "Accounting.SecurityProofs.TS.LuckCaseACube",
     "Accounting.SecurityProofs.TS.LuckCaseAKeyed",
-    "Accounting.SecurityProofs.TS.LuckOfReceipt"
+    "Accounting.SecurityProofs.TS.LuckOfReceipt",
+    "Accounting.SecurityProofs.TS.ProofsSoundOfPinned",
+    "Accounting.SecurityProofs.TS.SheetDIdealFloor"
    ]
+  },
+  "Definitions.Accounting.TS.ProofLayer": {
+   "digest": "5a4b95c147fb84fdc485c8f4e9aa0dab21cb23635c5d028fff17681f2272780a",
+   "definitions": {
+    "Accounting.TS.ProofLayer": "0ad5bbd9faf85415876e1f65bcb734d01d3010be0bdea6cc42217926bdee2faa",
+    "Accounting.TS.ProofLayer.Forked": "55c58d1754b70e63ed79ff1de36f05715136f8150a822ec042451feacb16a39d",
+    "Accounting.TS.ProofLayer.Moved": "411ca805da2167e51b6ee76740bfca4dae0ba0985ee0e97ce0e5ef12db00c0a6",
+    "Accounting.TS.ProofLayer.Of": "25ac2e4439576c0e21e3314b2c20624bfc66f68352fb86a8bf8838ff47844fa0",
+    "Accounting.TS.ProofLayer.Pins": "51211a807584439401bf71d2c7b8c8d80b9e5d56a9ed7f8c37d2e14fbeaf4840",
+    "Accounting.TS.ProofLayer.Proved": "a777f6e0414e8c731ec605f0fe1980ec94608a5f5f0f8bf982ca86ccd5da2a44",
+    "Accounting.TS.ProofLayer.SoundAt": "176465e170875487d7aefac3c26f2efa881763a0a1b598957e8a02b3a6488be3",
+    "Accounting.TS.ProofLayer.Unsound": "773923d867da4237bc471a9189a99e91f84e4f23f3c9dbf245ee07d09cd2fc4c",
+    "Accounting.TS.ProofLayer.accepted": "5798c39a51753e14dc84c29e68082020233a71fe03974d40ba023bcdd747943f",
+    "Accounting.TS.ProofLayer.committed": "1f3cf57081dd280ef2a3c4c781ab09be307abd3ec0caa039a4b3c8f3a45f04a6",
+    "Accounting.TS.ProofLayer.opened": "16d9397ed5f723e4ed47ef3060b017f9f551d23ff837035d3eb2572744255712",
+    "Accounting.TS.ProofLayer.provedAt": "935b64c8b840e0b59e5a43e370f6b37fdc787b4fe67451a3f8c2a6fedc9500e2",
+    "Accounting.TS.ProofLayer.ref": "5e03b414960aab885fe217633505ae358f7de1c7d7ce9ddbb875dc6208697234",
+    "Accounting.TS.ProofLayer.rel": "83555a91afeb887a656e1adb50b74b7d5f482612e59df9c6d725714ea2045f7f",
+    "Accounting.TS.ProofLayer.right": "3d8dc224098620ff165a220f6424ae98455bffdba161ad01e80ea3894bbc6c89",
+    "Accounting.TS.ProofLayer.weight": "d0fe086d87d743fd1604e6242b936d4959fbc3898ee996c0711bd2118426dea7",
+    "Accounting.TS.splice": "23e1874cde3d6a922d163ccc57a9b970e58ca7e88f6898d154d6764a0e24ecc0"
+   },
+   "guarantees": ["Accounting.SecurityProofs.TS.BindingOfFork", "Accounting.SecurityProofs.TS.ProofsSoundOfPinned"]
   },
   "Definitions.Accounting.TS.Receipt": {
    "digest": "b75ef312537899445e95572519e9aa5af190842c93d70066b60ca1b67c9b96b4",
@@ -8745,8 +8870,36 @@
     "Accounting.SecurityProofs.TS.FillOptOfFanIn",
     "Accounting.SecurityProofs.TS.FloorCreditD3",
     "Accounting.SecurityProofs.TS.FoldOptOfFanIn",
+    "Accounting.SecurityProofs.TS.ProofsSoundOfPinned",
+    "Accounting.SecurityProofs.TS.SheetDIdealFloor",
+    "Accounting.SecurityProofs.TS.SheetScalarRouteHalf",
     "Accounting.SecurityProofs.TS.VectorThresholdD1"
    ]
+  },
+  "Definitions.Accounting.TS.Sheet": {
+   "digest": "64cb041605a930b7b485d8894c2f1026a845b847e28357ebc57b5d9f4a5db67a",
+   "definitions": {
+    "Accounting.TS.Sheet": "e4ac34c1d3a252753762139ebcb218e7f59cb8b7f98b57e34b1be60342fe8bbb",
+    "Accounting.TS.Sheet.fmax": "96206b791af38cbd657f608e98fbb2325a372b4965ead42e95b62dfeb421a758",
+    "Accounting.TS.Sheet.machine": "b9c8ddec6ba9df8d81dc7e59b11dd3233cc35c5e4269e2afa0168c8607fe9167",
+    "Accounting.TS.Sheet.macs": "163c97b08b2add7dd923911d67c1eee6790634e362b1cd2a05dfc015b27ba069",
+    "Accounting.TS.Sheet.peak": "c914cfb2a966b32c4bcad3e23f7f75bf0160b1cf2605d5397f29efa5bfbe6d5f",
+    "Accounting.TS.Sheet.pipe": "3c5b8e9a91567d4c197014f4fd1f6674a8cd4613a4ae82863d85a7d35517b5a0",
+    "Accounting.TS.Sheet.smem": "cfebc3588b873b8ee1393dd1f352680ca11d60c422e589ce588f2a2fdb6872ca",
+    "Accounting.TS.Sheet.width": "190f3ddbbd5e58b38fae4f0b3e654c3bd41e973f9b9dade35615106ccfbf33eb",
+    "Accounting.TS.SheetRow": "63a57f01f0937de08170bd92e2d36e1365cbafdb20828a0595d2f787e1db6d32",
+    "Accounting.TS.SheetRow.casesOn": "6d5ae7e7676550f851432c989a210d0e01c04b8c1c78a3ba4a6208a6bfd69a3b",
+    "Accounting.TS.SheetRow.issue": "d34f0e27b245e34f3f5a8362f839b1d8537e61b2036081d85138395c0783d6c4",
+    "Accounting.TS.SheetRow.pipe": "b6b800e5a547b04d83ca67abf5561ae7ae94a6b0bc54639a5326fa4db59779e2",
+    "Accounting.TS.SheetRow.proxyTypeEquiv": "aeb5d2e7ae32146d663e416573e5fc5232694a52b2f9e3d885b9513fb1d039de",
+    "Accounting.TS.SheetRow.rec": "0f00eb7ee0bf9b1faa0d522f91dc2ecfb6a145886ec24bdbced2985a57b73d82",
+    "Accounting.TS.SheetRow.smem": "366015ce7d4e265e5ce79298d3698590413049c0c4b3ff01c8cb284328f6ee6b",
+    "Accounting.TS.SheetRow.tensor": "48c50f19eac83ff47bac7949c3c94a426790827f1dec8012b7e03c44aa57f26f",
+    "Accounting.TS.instFintypeSheetRow": "3da30af8c579da1302161a47f364b102f812db3a1412a36006a57983085fecfe",
+    "Accounting.TS.instFintypeSheetRow.match_3": "9afbb3d57117ea303b093c1babded32ccfa2876821e4730474ffc427877c80f0",
+    "Accounting.TS.instFintypeSheetRow.match_5": "9d7e13656b63f7e674f8703098a4843c3053a146b71b18edc3ddfe2ae7689ab6"
+   },
+   "guarantees": ["Accounting.SecurityProofs.TS.SheetDIdealFloor", "Accounting.SecurityProofs.TS.SheetFacetCeilings"]
   },
   "Definitions.Accounting.TS.Slots": {
    "digest": "ec7c1aceab4c7e2b3e0ec0184fd98d52326c0b112fac7326ee4cfe94328e51b3",
@@ -14155,6 +14308,7 @@
     "Accounting.SecurityProofs.HMu.LemmaB",
     "Accounting.SecurityProofs.HMu.ReceiptLuckOfCoin",
     "Accounting.SecurityProofs.HMu.ReceiptLuckOfCoins",
+    "Accounting.SecurityProofs.TS.BindingOfFork",
     "Accounting.SecurityProofs.TS.CompilerC",
     "Accounting.SecurityProofs.TS.DIdeal",
     "Accounting.SecurityProofs.TS.DIdealFloor",
@@ -14165,7 +14319,9 @@
     "Accounting.SecurityProofs.TS.LuckCaseAKeyed",
     "Accounting.SecurityProofs.TS.LuckOfReceipt",
     "Accounting.SecurityProofs.TS.OperandLuckCube",
+    "Accounting.SecurityProofs.TS.ProofsSoundOfPinned",
     "Accounting.SecurityProofs.TS.ReceiptLuckCaseA",
+    "Accounting.SecurityProofs.TS.SheetDIdealFloor",
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorK",
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSided",
     "Pouw.SecurityProofs.RelativeSecurity.StagedFloorK",
@@ -19136,8 +19292,25 @@
     "Accounting.SecurityProofs.RemoteWindowRunConservationRelay"
    ]
   },
+  "Models.Accounting.Assumptions.Sheet": {
+   "digest": "e430a97d67e112236beeb55fd27d9e1630ec47ff36f07038c3cb2278412a320b",
+   "definitions": {
+    "Accounting.Assumptions.TS.SheetClock": "c27bc92a531574e652f708a8b56724dee41b9f5ac2ddf6a99041454ba111f4ad",
+    "Accounting.Assumptions.TS.SheetDispatch": "f9634f4244e50365a3d6e8b7819892b9e6b1078e1d48153821f641e7086e5dc8",
+    "Accounting.Assumptions.TS.SheetPipe": "37651d89ede633ff5ef4bf579cbb463627ca2653e8dcd615665c09a04cf948a3",
+    "Accounting.Assumptions.TS.SheetSemantics": "3b3d03419951bbb4b2a714f059b4e4edd8420ca7bfb145c8ac4f6dd49f72f425",
+    "Accounting.Assumptions.TS.SheetSmem": "7fd5d664da6fd8bbe5347c3767cf9a22f3c9cbbd05e7010c0076abf6e89d76ac",
+    "Accounting.Assumptions.TS.SheetTensor": "f6ecb9bffb0d12d13ecc2daeabcc41ef4cdff64ba928a8485b973207955e01cb",
+    "Accounting.Assumptions.TS.SheetWords": "318d32c829f132eecfda9d7e485bf9b6051ca679d424dca3f8787d33e605e8e1"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.TS.SheetDIdealFloor",
+    "Accounting.SecurityProofs.TS.SheetFacetCeilings",
+    "Accounting.SecurityProofs.TS.SheetScalarRouteHalf"
+   ]
+  },
   "Models.Accounting.Assumptions.TS": {
-   "digest": "74ed71873e628be3044e550f2ffaf25438ab059a5344a04ba66d71004660dc8c",
+   "digest": "ecdebe7be802d6af3f3fdae179a445df087ce177e79ab37a46135aa88533207d",
    "definitions": {
     "Accounting.Assumptions.TS.FacetCeilings": "fa76dfe63e705d955b2dec4c6d8e3b6826c2bf36058b476ef8f1b7a8bb7c0d3b",
     "Accounting.Assumptions.TS.FanIn": "58d244d68b77d25572471c47056a7c4eac1f9e128db1d335c3cf3fc9a8414b71",
@@ -19146,6 +19319,7 @@
     "Accounting.Assumptions.TS.LuckAt": "28ff53f429206bbd8f8447d74044812a42bfe9123fb10443321873882cb02cac",
     "Accounting.Assumptions.TS.NoSum": "b15287f80f20515d6d017205278b5209546abfab825e4f5e01da4875e74b2fda",
     "Accounting.Assumptions.TS.ProofsSound": "2dd67bf94ae505daf300e0b2cf43706a0f4da5f2ed8e6b08a8156cd3abd1d5d3",
+    "Accounting.Assumptions.TS.RightFixed": "d17ab6dafa91dbbf183e5a1221cd1f8fc26fb93ebb1b21e83117ef2337a454f2",
     "Accounting.Assumptions.TS.ScalarRoute": "414a164b2927884959719a19f4157ef08125017896884da53459996b1212b5bd",
     "Accounting.Assumptions.TS.SideUnits": "36404ba2e20a614ee48738159240c66e7f023670dba8cf261be8b3b73921e179",
     "Accounting.Assumptions.TS.WordsWritten": "f25002293156695a436d17dbd4ddccf594544b7187a569385947d7dc90dcecf7"
@@ -19164,6 +19338,10 @@
     "Accounting.SecurityProofs.TS.LuckCaseACube",
     "Accounting.SecurityProofs.TS.LuckCaseAKeyed",
     "Accounting.SecurityProofs.TS.LuckOfReceipt",
+    "Accounting.SecurityProofs.TS.ProofsSoundOfPinned",
+    "Accounting.SecurityProofs.TS.SheetDIdealFloor",
+    "Accounting.SecurityProofs.TS.SheetFacetCeilings",
+    "Accounting.SecurityProofs.TS.SheetScalarRouteHalf",
     "Accounting.SecurityProofs.TS.TimeBound"
    ]
   },
@@ -19309,7 +19487,7 @@
    ]
   },
   "Models.Accounting.Guarantees.Gates": {
-   "digest": "32bb3869dfa71001694449d945a326c3f9684742af38cb4b1f3f8c441737c2d2",
+   "digest": "6ff997a6f1353908eef34dd77768f39fff3995f9da05ad4caa6f8f014b235e8d",
    "definitions": {
     "Accounting.Guarantees.Gates.ClampOrWrap": "318ac8e1baab7cf1f890e087111f044112c4815c8348e5c89a0c5551ac132bb6",
     "Accounting.Guarantees.Gates.DitherRange": "75d5cc47e783cf8a5696461c0ac93515fe0e495b8c5e6aa6cf721be61b9587fb",
@@ -19323,7 +19501,10 @@
     "Accounting.Guarantees.Gates.QuantRange": "94bb1a4ebb63f4b7d88fcc922e88fba7226d110bd9acd7b1e9981e3a7fd8510c",
     "Accounting.Guarantees.Gates.RhoPairs": "ad3a678d6605c6b41f91fcba1be9b3080a0ae18f424f88d168346c2c110c4e0a",
     "Accounting.Guarantees.Gates.RzByteRange": "a9cfce7337d3ba85179a1bd173f1f4acbd0f3c008431e6a9440b5f2e64a621b8",
-    "Accounting.Guarantees.Gates.SquaringCarry": "5c28d06eaf7905b44900da1f8165eeb9f9e69641b46faae77f3f69eb08001af3"
+    "Accounting.Guarantees.Gates.SquaringCarry": "5c28d06eaf7905b44900da1f8165eeb9f9e69641b46faae77f3f69eb08001af3",
+    "Accounting.Guarantees.Gates.SquaringCarryNibbles": "e3b6a679bf3f1b9903ef4040d670d3050b865aeb801da49be059f1168dad9e91",
+    "Accounting.Guarantees.Gates.SquaringUnits": "de91b1754dba1704b1603081146c989dba4beac3d204ec4fc65e4484f527e508",
+    "Accounting.Guarantees.Gates.UnitsFooling": "07b28f9ed3ef20e907a1fce3666a02fd99c6707dc19a99811534b3f3d0e1409a"
    },
    "guarantees": [
     "Accounting.SecurityProofs.Gates.ClampOrWrap",
@@ -19338,7 +19519,10 @@
     "Accounting.SecurityProofs.Gates.QuantRange",
     "Accounting.SecurityProofs.Gates.RhoPairs",
     "Accounting.SecurityProofs.Gates.RzByteRange",
-    "Accounting.SecurityProofs.Gates.SquaringCarry"
+    "Accounting.SecurityProofs.Gates.SquaringCarry",
+    "Accounting.SecurityProofs.Gates.SquaringCarryNibbles",
+    "Accounting.SecurityProofs.Gates.SquaringUnits",
+    "Accounting.SecurityProofs.Gates.UnitsFooling"
    ]
   },
   "Models.Accounting.Guarantees.HMu": {
@@ -19653,6 +19837,19 @@
     "Accounting.SecurityProofs.TimelyTicks"
    ]
   },
+  "Models.Accounting.Guarantees.Sheet": {
+   "digest": "58e46b2c2e135fe61b791f31d973eddf337907405f23f2f564a283152cc1f7fc",
+   "definitions": {
+    "Accounting.Guarantees.TS.SheetDIdealFloor": "bbb6d4905523d82982bc355b456a8c2f98fb1b6f81652c6e78e15ac4d70b137e",
+    "Accounting.Guarantees.TS.SheetFacetCeilings": "704461e1cd2845f76fe760c1990e73fac6b7788b528abab6c32b6277e18b24b9",
+    "Accounting.Guarantees.TS.SheetScalarRouteHalf": "d7f04f6876faae85d815c5819970bf581a0964eb63c5976ae8098320c039f506"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.TS.SheetDIdealFloor",
+    "Accounting.SecurityProofs.TS.SheetFacetCeilings",
+    "Accounting.SecurityProofs.TS.SheetScalarRouteHalf"
+   ]
+  },
   "Models.Accounting.Guarantees.Sketch": {
    "digest": "b0f902b6c4a59615f713c7b8e4761a2b41f6505fa1f9612ea7aa985b9b450a0c",
    "definitions": {
@@ -19673,9 +19870,10 @@
    ]
   },
   "Models.Accounting.Guarantees.TS": {
-   "digest": "d7427d3a751c307c29d70366ee74af66d21d29ab46ee8f1bd2f3744c6f4d541b",
+   "digest": "79abb1de6dd96c8baa1f5e89a4d2a5903965d3db357ced066c71c183921058f5",
    "definitions": {
     "Accounting.Guarantees.TS.BindingFacetD1": "a17c578d0bc020c50567b3b8f50848237bddadf7d54aab6ce18ef007d4af1c6e",
+    "Accounting.Guarantees.TS.BindingOfFork": "3eccd9186cd22f86da6fbc02ad9f003aad9cd0f43259388a0dbbd1485039a911",
     "Accounting.Guarantees.TS.CompilerC": "f682a20b0128c7e27115eb3896b65e7979b26b401d5b9b453ec4b33356fe1ac1",
     "Accounting.Guarantees.TS.DIdeal": "77a519583df833db703098e098abccdb8e01aa5370400d7cc7b6f07174790679",
     "Accounting.Guarantees.TS.DIdealFloor": "91de155feb20dd52c94faa3da0da1246fc8d2153a753adc41713ba576fb74de5",
@@ -19685,6 +19883,7 @@
     "Accounting.Guarantees.TS.FloorCreditD3": "012916939463cfd453565042c4696d6cc8fbad47c52bd373d88d9258b3893e54",
     "Accounting.Guarantees.TS.FoldOptOfFanIn": "e64d6ca924502dc29f1552d6a665ea376f37b395b25fc268a33d0b5eb176df8d",
     "Accounting.Guarantees.TS.OutputCount": "aec5f1a001e3ac62af705b8bcbf3a64f9664f671f3b2d0595814c9143f03e3e9",
+    "Accounting.Guarantees.TS.ProofsSoundOfPinned": "bedb754d00b353977e5c40c7e79201a5adae5b170216bf47d9a2c0fc9e8ba1db",
     "Accounting.Guarantees.TS.RoutesOffD2": "8b5d8b812b583f648a13c6890d2c0b70eb09e092f01708ef3945f7f1a0f0b4e7",
     "Accounting.Guarantees.TS.SeesOfInjective": "8c308b249f905c56ff79fef320af48088b1fd2a300d119fafcdb7286f25d263f",
     "Accounting.Guarantees.TS.TensorSlotCount": "749efbc6ec8a01cb4f02f3f2e68d33a67489e518b471a5d8873bbe3d85209045",
@@ -19695,6 +19894,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.TS.BindingFacetD1",
+    "Accounting.SecurityProofs.TS.BindingOfFork",
     "Accounting.SecurityProofs.TS.CompilerC",
     "Accounting.SecurityProofs.TS.DIdeal",
     "Accounting.SecurityProofs.TS.DIdealFloor",
@@ -19704,6 +19904,7 @@
     "Accounting.SecurityProofs.TS.FloorCreditD3",
     "Accounting.SecurityProofs.TS.FoldOptOfFanIn",
     "Accounting.SecurityProofs.TS.OutputCount",
+    "Accounting.SecurityProofs.TS.ProofsSoundOfPinned",
     "Accounting.SecurityProofs.TS.RoutesOffD2",
     "Accounting.SecurityProofs.TS.SeesOfInjective",
     "Accounting.SecurityProofs.TS.TensorSlotCount",
