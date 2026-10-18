@@ -359,7 +359,8 @@ def run(a: argparse.Namespace) -> dict:
         calls.append({"step": s, "linear": w, "module": name, "layer": layer, "site": site, "k": k, "n": n, "slots": t_max,
                       "base": s * u_step + offs[w], "units": (t_max // 32) * (n // 32), "root_a": lv[-1][0].hex(),
                       "root_b": h1.weight_roots[w].hex(), "a_domain": dom.domain_id.hex(), "a_fields": fields,
-                      "root_admit": s_lv[-1][0].hex(), "admit_fields": s_fields, "selected": int(bits.sum())})
+                      "root_admit": s_lv[-1][0].hex(), "admit_fields": s_fields, "selected": int(bits.sum()),
+                      "scale_only": len(CR.scale_only(rows))})
         data.append({"m": m, "xq": slots[:m].cpu().numpy(), "sa": scales[:m].copy(), "receipts": None, "admit": bits,
                      "words": ws, "s_levels": s_lv, "prefix": bool(np.array_equal(bits, np.arange(t_max) < m))})
         if not live:
@@ -450,6 +451,7 @@ def run(a: argparse.Namespace) -> dict:
                        "empty_steps_s": round(time.perf_counter() - t0, 1), "a_served_vs_recorded": a_check,
                        "receipts_s": round(sum(c["receipts_s"] for c in calls), 1), "live_units": live_u,
                        "admit_is_served_prefix": all(d["prefix"] for d in data),
+                       "scale_only_rows": sum(c["scale_only"] for c in calls),
                        "real_rows_per_step": [max((d["m"] for c, d in zip(calls, data) if c["step"] == s), default=0)
                                               for s in range(s_max)]})
     equal = [s_["token_ids"] == r["token_ids"] for s_, r in zip(served, reference)]
@@ -553,7 +555,8 @@ def run(a: argparse.Namespace) -> dict:
     s = rec.doc["steps"]["serve"]
     rec.doc["ok"] = bool(all(equal) and calls and not a_check["mismatch"] and not a_check["untapped"] and not s["refused"]
                          and s["order_ok"] and s["last_step_complete"] and s["static"] and rec.doc["steps"]["gate"]["ok"]
-                         and coins["ok"] and s["admit_is_served_prefix"] and credit["tally_tree"]["limbs_16_bit"]
+                         and coins["ok"] and s["admit_is_served_prefix"] and not s["scale_only_rows"]
+                         and credit["tally_tree"]["limbs_16_bit"]
                          and credit["credited"]["pub_macs"] <= credit["credited"]["macs"])
     rec.save()
     pool.close()
