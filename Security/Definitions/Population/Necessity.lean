@@ -27,6 +27,12 @@ For a population with fixed unit functions (`Dataflow`):
 * `RobustAt P f`: an assignment is determined by its inputs and the writes of any set containing its wrong units,
   for these `f`. `Dataflow.eq_of_writes` proves it from single assignment and acyclicity, for every `f`.
 * `damaged O σ τ`: the egress slots where `σ` and the honest `τ` differ, integrity's damage.
+* `egressWidth f a X O M`: the egress values of the runs whose wrong units write at most `M` slots, control measured
+  at the public write widths.
+
+For a program (`DynPopulation`):
+* `rangeFlow D R`: the static dataflow in which unit `u` reads the public bound `R u`, the range a computed address is
+  confined to.
 -/
 
 namespace Population.Iop
@@ -93,6 +99,21 @@ open Classical in
 /-- **Integrity's damage**: the egress slots where the run `σ` differs from the honest run `τ`. -/
 noncomputable def damaged {V : Type} (O : Finset S) (σ τ : S → V) : Finset S := O.filter fun o => σ o ≠ τ o
 
+open Classical in
+/-- **The egress values within a write budget `M`**: what the assignments that hold the inputs `a` off the secret slots
+`X`, and whose wrong units write at most `M` slots in all, put on the egress `O`. Control at the public widths. -/
+noncomputable def egressWidth [Fintype U] [Fintype S] {V : Type} [Fintype V] (f : P.Fns V) (a : S → V)
+    (X O : Finset S) (M : ℕ) : Finset (O → V) :=
+  (univ.filter fun σ : S → V => P.Holds a X σ ∧ ∑ u ∈ P.wrong f σ, (P.writes u).card ≤ M).image fun σ o => σ o
+
 end Dataflow
+
+/-- **The static dataflow of a public read bound** `R`: a program's inputs and writes, with unit `u` reading `R u`.
+When `R u` holds every slot `u` reads in every admitted run, `R` is a range restriction: addresses may be computed and
+corrupted, but stay inside `R u`. -/
+def rangeFlow {V S : Type} (D : DynPopulation U S V) (R : U → Finset S) : Dataflow U S where
+  input := D.input
+  reads := R
+  writes := D.writes
 
 end Population.Iop
