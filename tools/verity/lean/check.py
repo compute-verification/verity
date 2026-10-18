@@ -2255,8 +2255,10 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
                 return rep
     built()
     files = lean_modules(pkg)
-    background = ThreadPoolExecutor(max_workers=2)
+    background = ThreadPoolExecutor(max_workers=5)
     ran = background.submit(timed, tests, pkg, policy, files, work, repo, update) if runs and policy.get("runs") and not lifts else None
+    upstream = background.submit(timed, sibling("upstream").pinned, pkg, policy["upstream"]) \
+        if "upstream" in policy and not lifts else None
     current = policy
     if moved:
         renames = {}
@@ -2265,18 +2267,23 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
                 renames[renamed(n, moved)] = r
         current = policy | {"guarantees": renames}
     s = time.monotonic()
+    replayed = scanned = digested = None
     try:
         facts = facts_of(pkg, current, work, moved)
+        # these read only the package's own facts, which `proved` leaves as they are, so they overlap its reading
+        if not lifts:
+            replayed = background.submit(timed, replay_step, pkg, policy, facts, rep["toolchain"], work, replay_cache) \
+                if replay else None
+            scanned = background.submit(timed, dependency_scans, pkg, facts["oleans"], policy)
+            digested = background.submit(timed, dependency_digests, pkg, rep["toolchain"], facts["oleans"])
         cross: list[str] = []
         if "proved_in" in policy:
             cross, facts, rep["proved_in"] = proved(pkg, current, facts, work, moved, ready)
     except RuntimeError as e:
         rep["failures"].append(f"lean: {e}")
-        background.shutdown()
+        background.shutdown(cancel_futures=True)
         return rep
     rep["seconds"]["audit"] = round(time.monotonic() - s, 1)
-    replayed = background.submit(timed, replay_step, pkg, policy, facts, rep["toolchain"], work, replay_cache) \
-        if replay and not lifts else None
     if lifts:
         try:
             rep["moved"] = lift(pkg, current, facts, lifts)
@@ -2287,9 +2294,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     fails = cross + fails + dropped(pkg, files, facts) + spec_reads(current, facts, reads_home(pkg, current)) + \
         shape(current, facts)
     rep["unread_spec"] = unread_spec(facts, read_by_dependents(pkg, repo))
-    s = time.monotonic()
-    missed, rep["dependency_sources"] = dependency_scans(pkg, facts["oleans"], policy)
-    rep["seconds"]["dependency-sources"] = round(time.monotonic() - s, 1)
+    (missed, rep["dependency_sources"]), rep["seconds"]["dependency-sources"] = scanned.result()
     fails = scans(pkg, files, policy) + missed + fails
     rep["heartbeats"] = heartbeats(pkg, files, build_seconds([work / "build.log", work / "build-roots.log"] if build else []))
     anonymous = anonymous_instances(pkg, files, facts)
@@ -2304,14 +2309,10 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
               f"type (and, when nothing in the type is the project's own, its project's root): a move or a split renames it, and "
               f"with it every record whose definitions use it. Write `instance {i['id']}` there (`check.py --name-instances` "
               f"writes each one)" for i in anonymous]
-    if "upstream" in policy:
-        s = time.monotonic()
-        rep["upstream"], missed = sibling("upstream").pinned(pkg, policy["upstream"])
+    if upstream:
+        (rep["upstream"], missed), rep["seconds"]["upstream"] = upstream.result()
         fails += missed
-        rep["seconds"]["upstream"] = round(time.monotonic() - s, 1)
-    s = time.monotonic()
-    deps = dependency_digests(pkg, rep["toolchain"], facts["oleans"])
-    rep["seconds"]["dependencies"] = round(time.monotonic() - s, 1)
+    deps, rep["seconds"]["dependencies"] = digested.result()
     if update:
         new["dependencies"] = deps
     elif "dependencies" not in policy:
