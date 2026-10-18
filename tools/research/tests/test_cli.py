@@ -283,31 +283,34 @@ def test_a_tool_package_that_predates_the_queue_is_told_apart(tmp_path):
     assert remote.knows_gpus(None) and remote.knows_gpus(Path(remote.__file__).parent) and not remote.knows_gpus(pkg)
 
 
-def test_on_auto_is_the_queue_from_this_checkout_with_a_test_shape(tmp_path, monkeypatch, capsys):
-    """`research run --on auto` (18 Oct, remote by default): --queue from the checkout it runs in, project verity, 4 CPUs, 16 GB
-    and 60 min where the run declares none of its own."""
+def test_on_auto_is_cpu_1s_research_pool_from_this_checkout(tmp_path, monkeypatch, capsys):
+    """`research run --on auto` (18 Oct, remote by default): the run goes to vy-nebius-cpu-1's research pool (slot.py at nice 19), from
+    the checkout it runs in, as project verity with 16 GB and a 60 min timeout where the run gives none; never node 1."""
     from research import remote
 
-    specs, sources = [], []
+    seen = []
 
-    def place(src, run_id, spec):
-        specs.append(spec)
-        sources.append(src)
-        raise remote.Refused("placement reached")
+    def launch(**kw):
+        seen.append(kw)
+        return {"phase": "launched", "pod_id": "p1", "remote_run_dir": "/r", "launch": {"runner_pid": 1}}
 
-    monkeypatch.setattr(remote, "queue_placement", place)
+    monkeypatch.setattr(remote, "launch", launch)
+    monkeypatch.delenv("RESEARCH_LANE", raising=False)
     repo = tmp_path / "repo"
     repo.mkdir()
     subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
     monkeypatch.chdir(repo)
-    runs = ["run", "--runs-dir", str(tmp_path / "runs"), "--on", "auto"]
-    assert main([*runs, "--", "pytest", "-q"]) == 3
-    assert main([*runs, "--cpus", "8", "--mem-gb", "32", "--timeout", "2h", "--", "pytest"]) == 3
-    assert [(s["project"], s["cpus"], s["mem-gb"], s["max-s"], s["node"]) for s in specs] == [
-        ("verity", 4, 16, 3600, None), ("verity", 8, 32, 7200, None)]
-    assert sources[0].resolve() == repo.resolve()
-    assert "the queue places it from" in capsys.readouterr().err
-    assert main([*runs, "--queue", "--", "true"]) == 2 and "is --queue already" in capsys.readouterr().err
+    runs = ["run", "--runs-dir", str(tmp_path / "runs"), "--no-custody-r2", "--on", "auto"]
+    assert main([*runs, "--", "pytest", "-q"]) == 0
+    assert main([*runs, "--mem-gb", "32", "--timeout", "2h", "--as", "proofs", "--", "pytest"]) == 0
+    assert [(k["machine_name"], k["project"], k["mem_gb"], remote.flag_value(k["harness_args"], "--timeout")) for k in seen] == [
+        ("vy-nebius-cpu-1", "verity", 16.0, "3600"), ("vy-nebius-cpu-1", "verity", 32.0, "7200")]
+    assert Path(seen[0]["source"]).resolve() == repo.resolve()
+    first, second = seen[0]["command"], seen[1]["command"]
+    assert first[:2] == ["env", "CHECK_SLOTS=/workspace/research/locks/research/slots"] and first[-5:] == ["nice", "-n", "19", "pytest", "-q"]
+    assert first[first.index("--by") + 1] == "agent" and second[second.index("--by") + 1] == "proofs"
+    assert "research pool, from" in capsys.readouterr().err
+    assert main([*runs, "--queue", "--", "true"]) == 2 and "takes no --queue or --pool" in capsys.readouterr().err
     monkeypatch.chdir(tmp_path)
     assert main([*runs, "--", "true"]) == 2 and "no git checkout here" in capsys.readouterr().err
 
