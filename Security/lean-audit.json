@@ -1523,6 +1523,12 @@
    "assumptions": [],
    "type_hash": "eb1d71eefdaee8934a9bf238b893b3128bacc151ddc6273bd93b97fa553311ba"
   },
+  "Accounting.SecurityProofs.RequirementHeldLive": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.RequirementHeldLive : Accounting.Guarantees.RequirementHeldLive"],
+   "assumptions": [],
+   "type_hash": "ac5fbd7cb074161194e931f4f16b51f8cb6dc8b6067cdd77cf71c31ebf8edad6"
+  },
   "Accounting.SecurityProofs.RequirementMoved": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.RequirementMoved : Accounting.Guarantees.RequirementMoved"],
@@ -5925,6 +5931,7 @@
    "Accounting.SecurityProofs.Gates.EncodeBudget": "frozen (conjecture,no-function): It is a consequence of the named open conjecture EncodeChainHardness, over every declared circuit of the gate model that satisfies the stacking property, not a property of a Lean function: the property's check has no Lean code yet.",
    "Accounting.SecurityProofs.Gates.EncodeCost": "frozen (conjecture,no-function): It is a consequence of the named open conjecture EncodeChainHardness, a bound on Accounting.Gates.encodeCost (an infimum over every circuit of the gate model), not a property of a Lean function.",
    "Accounting.SecurityProofs.RequirementHeld": "frozen (no-function): A counting bound over a declared circuit's wiring, its execution and the audit's store (Security/Definitions/Accounting/Requirement.lean): once the store is W's block for block (StoreMatches), held blocks hold all of W's live bits but B per resident block not held; about no function of the code.",
+   "Accounting.SecurityProofs.RequirementHeldLive": "frozen (no-function): A counting identity over a declared circuit's wiring, its execution and the audit's store (Security/Definitions/Accounting/Requirement.lean): once the store is W's block for block (StoreMatches), W's live bits are those in the held blocks plus the live bits of each resident block not held; about no function of the code.",
    "Accounting.SecurityProofs.RequirementDense": "frozen (no-function): A counting bound over a declared circuit's wiring, its execution and the audit's store (Security/Definitions/Accounting/Requirement.lean): once the store is W's (StoreMatches), resident blocks holding at least D live bits each number at most liveBits / D; about no function of the code.",
    "Accounting.SecurityProofs.RequirementMoved": "frozen (no-function): A counting bound over a declared circuit's wiring, its execution and a pass's plan (Security/Definitions/Accounting/Requirement.lean): once the plan is the blocks W reads at the step (PlanMatches), moved blocks carry all of W's read bits but B per planned block not moved; about no function of the code.",
    "Accounting.SecurityProofs.TS.FanInCount": "frozen (no-function): the fan-in count over any straight-line dataflow whose outputs see its inputs, not a Lean function.",
@@ -7435,6 +7442,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.RequirementDense",
     "Accounting.SecurityProofs.RequirementHeld",
+    "Accounting.SecurityProofs.RequirementHeldLive",
     "Accounting.SecurityProofs.RequirementMoved"
    ]
   },
@@ -18246,15 +18254,17 @@
    ]
   },
   "Models.Accounting.Guarantees.Requirement": {
-   "digest": "73bfe8651ce6f040a85e8f5f7315c5801333cee4ca7f244503245f0162d1dcb8",
+   "digest": "7b87a0a8bc18b2a1df4cb48285506fa195fdb3503865e3aa8b09cb2f39d851cf",
    "definitions": {
     "Accounting.Guarantees.RequirementDense": "bc0c260f0105455699aef511a58389d289b3ffa932aa16305994e4dbac4f51cd",
     "Accounting.Guarantees.RequirementHeld": "fb24a81856c506c3b2d41c062cd0cfb59c0b4de8d77562979377d2c41f26d4b8",
+    "Accounting.Guarantees.RequirementHeldLive": "28b605bf891e6ec7436f10a9600ba7b61dc69f47ca66f2f93311156f21c4789b",
     "Accounting.Guarantees.RequirementMoved": "4a10e3a792090f532ddcfa01a0e221a20f815cdd43ba694aea268337fe3cbdaf"
    },
    "guarantees": [
     "Accounting.SecurityProofs.RequirementDense",
     "Accounting.SecurityProofs.RequirementHeld",
+    "Accounting.SecurityProofs.RequirementHeldLive",
     "Accounting.SecurityProofs.RequirementMoved"
    ]
   },

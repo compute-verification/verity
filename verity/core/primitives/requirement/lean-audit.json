@@ -1,0 +1,21 @@
+{
+ "roots": ["CircuitRequirement", "CircuitRequirement.Difftest"],
+ "exempt": {
+  "CircuitRequirement.DifftestMain": "the requirement-difftest server's entry point, one line: Difftest.serve of CircuitRequirement.Difftest.table, which tests/test_requirement_difftest.py drives against the Python reference; audited under CircuitRequirement.Difftest"
+ },
+ "layers": {
+  "CircuitRequirement": {
+   "imports": ["Std.Data.HashSet"],
+   "except": ["CircuitRequirement.Difftest"],
+   "why": "the requirement is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct); Properties.Accounting.Requirement holds it to Accounting.Requirement's definitions"
+  },
+  "CircuitRequirement.Difftest": {
+   "imports": ["CircuitRequirement", "Difftest", "Flock.Canon", "Lean.Data.Json"],
+   "except": [],
+   "why": "the difftest's function reaches Lean only through the requirement, the harness and C-Flock's canonical JSON"
+  }
+ },
+ "dependencies": {
+  "toolchain": "edb3687d2a5bfb9d22ee2cacfe649b64a4a3f7b24738119269d0154b188c6c6f"
+ }
+}
