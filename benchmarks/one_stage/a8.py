@@ -225,6 +225,40 @@ def constant_words(spec) -> np.ndarray:
     return _CONSTANTS[spec.id]
 
 
+#: views of vLLM's DSA indexer K cache, by (Definition, outputs | operands, index). The capture describes that cache as 132-byte
+#: token rows ([128 FP8][fp32 scale]); vLLM lays out each block of 64 tokens as their 64 FP8 rows, then their 64 fp32 scales.
+DSA_K_VIEWS = {("DsaIndexerKRow_v1", "out", 0), ("DsaIndexerKRow_v1", "out", 1), ("DsaMqaLogits_v3", "in", 2),
+               ("DsaMqaLogits_v3", "in", 3)}
+DSA_K_BLOCK, DSA_K_ROW = 64, 128
+
+
+def dsa_k_elements(view) -> np.ndarray:
+    """The elements (of the view's dtype, row-major) that a capture view of the DSA indexer K cache names, in vLLM's blocked
+    layout: block b's token s has its FP8 row at byte 8448 b + 128 s and its scale at byte 8448 b + 8192 + 4 s."""
+    from verity_vllm.check.fold_compare import _storage_indices
+    per = DSA_K_ROW + 4
+    el = _storage_indices(view).reshape(-1)
+    if view.dtype == "float8_e4m3fn":
+        g, c = np.divmod(el, per)
+        b, s = np.divmod(g, DSA_K_BLOCK)
+        return b * DSA_K_BLOCK * per + s * DSA_K_ROW + c
+    if view.dtype == "float32":
+        b, s = np.divmod((4 * el - DSA_K_ROW) // per, DSA_K_BLOCK)
+        return (b * DSA_K_BLOCK * per + DSA_K_BLOCK * DSA_K_ROW + 4 * s) // 4
+    raise LookupError(f"{view!r}: not a view of the DSA indexer K cache")
+
+
+def view_words(store, s, view, m: dict, role: str, k: int) -> np.ndarray:
+    """``store.extract(s, view)``, a DSA indexer K cache view (`DSA_K_VIEWS`) read at the elements vLLM's layout holds."""
+    if (K.family(m["_spec"].id), role, k) not in DSA_K_VIEWS:
+        return store.extract(s, view)
+    el, w = dsa_k_elements(view), store._raw(s)
+    base = s.lo if s.spanned else s.view.offset
+    if not (s.spanned or s.contiguous()) or el.min() < base or el.max() - base >= w.size:
+        raise LookupError(f"{view!r}: the snapshot of event {s.event} does not hold its elements in vLLM's layout")
+    return w[el - base]
+
+
 def producer_words(m: dict | None, store, lo: int, hi: int, idx: int) -> np.ndarray:
     """Return leaves [lo, hi) of the Call ``m`` from its output snapshots, its views aligned to its trailing return components
     (as `call_twin`); a Call without parameters is evaluated."""
@@ -246,7 +280,7 @@ def producer_words(m: dict | None, store, lo: int, hi: int, idx: int) -> np.ndar
         s = store.find(view, at=m["event"])
         if s is None:
             raise LookupError(f"node {idx} ({m['name']}): no snapshot of event {m['event']} covers {view!r}")
-        out.append(store.extract(s, view)[max(lo, clo) - clo:min(hi, chi) - clo])
+        out.append(view_words(store, s, view, m, "out", k)[max(lo, clo) - clo:min(hi, chi) - clo])
     w = np.concatenate(out) if out else np.zeros(0, np.uint64)
     if w.size != hi - lo:
         raise LookupError(f"node {idx}: leaves [{lo}, {hi}) outside its outputs")
@@ -270,7 +304,7 @@ def operands(res, store, vals, m: dict, first: str = "snapshot") -> list[np.ndar
             s = store.find(view, before=m["event"] if _in_place(m) else m["event"] + 1)
             if s is None:
                 raise LookupError(f"operand {k}: no snapshot of {view!r} before event {m['event']}")
-            return store.extract(s, view)
+            return view_words(store, s, view, m, "in", k)
 
         a_, b_ = (snap, lambda: vals.of_refs(a.refs)) if first == "snapshot" else (lambda: vals.of_refs(a.refs), snap)
         try:
@@ -298,7 +332,7 @@ def call_twin(store, m: dict, got: list) -> dict:
         s = store.find(view, at=m["event"])
         if s is None:
             continue
-        want = store.extract(s, view)
+        want = view_words(store, s, view, m, "out", k)
         held.append(k)
         for i in range(clo, chi):
             if got[i] is not None:
