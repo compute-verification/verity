@@ -108,21 +108,35 @@ def instance(ref, text: str) -> tuple[dict, dict]:
     return {"program": text, "theta": theta, "owner": owner, "gamma": gates, "alpha": [10**12, 1]}, sizes
 
 
+#: Linux gives a child the high-water RSS of the process it forked from, so a verifier forked from this process would
+#: report this process's peak (gigabytes once B0 is built). It is forked from this launcher instead, a fresh
+#: interpreter, which times it and reports its peak (at least the launcher's own, about 10 MB).
+LAUNCHER = ("import json, os, sys, time\n"
+            "t = time.perf_counter()\n"
+            "pid = os.fork()\n"
+            "if pid == 0:\n"
+            "    try:\n"
+            "        os.execvp(sys.argv[2], sys.argv[2:])\n"
+            "    finally:\n"
+            "        os._exit(127)\n"
+            "_, status, ru = os.wait4(pid, 0)\n"
+            "s = time.perf_counter() - t\n"
+            "with open(sys.argv[1], 'w') as f:\n"
+            "    json.dump({'seconds': s, 'max_rss_kb': ru.ru_maxrss, 'rc': os.waitstatus_to_exitcode(status)}, f)\n")
+
+
 def timed(argv: list[str], stdin: Path | None = None) -> dict:
     """One run of `argv` (reading `stdin`, a file): wall seconds, peak RSS and stdout as JSON."""
     with tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err, \
-            open(stdin or os.devnull, "rb") as inp:
-        t = time.perf_counter()
-        p = subprocess.Popen(argv, stdin=inp, stdout=out, stderr=err)
-        _, status, ru = os.wait4(p.pid, 0)
-        s = time.perf_counter() - t
-        p.returncode = os.waitstatus_to_exitcode(status)
+            open(stdin or os.devnull, "rb") as inp, tempfile.NamedTemporaryFile(suffix=".json") as stats:
+        subprocess.run([sys.executable, "-c", LAUNCHER, stats.name, *argv], stdin=inp, stdout=out, stderr=err, check=True)
+        r = json.loads(Path(stats.name).read_text())
         out.seek(0)
         err.seek(0)
         text, etext = out.read().decode(), err.read().decode()
-    if p.returncode != 0:
-        return {"seconds": s, "max_rss_kb": ru.ru_maxrss, "rc": p.returncode, "stderr": etext[-400:]}
-    return {"seconds": s, "max_rss_kb": ru.ru_maxrss, "rc": 0, "verdict": json.loads(text)}
+    if r["rc"] != 0:
+        return r | {"stderr": etext[-400:]}
+    return r | {"verdict": json.loads(text)}
 
 
 def _digest(v) -> str:
