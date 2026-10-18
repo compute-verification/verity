@@ -17,7 +17,7 @@ import pytest
 from verity_config import Admission
 
 from verity_bench import jobs
-from verity_bench.cli import _parser
+from verity_bench.cli import _parser, main
 from verity_bench.vllm.arms import Arm, resolve_arms
 from verity_bench.vllm.presets import (
     GPUS,
@@ -250,6 +250,22 @@ def test_dispatch_forwards_the_spec_env_and_setup_and_the_point_refuses_any_othe
         jobs.check_point_environment(stock, {"VERITY_BENCH_SETUP": "benchmarks/harness/setup/vllm_encoded.sh"})
 
 
+def test_a_point_refuses_a_local_checkpoint_whose_files_differ_from_the_spec_digest(tmp_path, monkeypatch, capsys):
+    checkpoint = tmp_path / "model"
+    checkpoint.mkdir()
+    (checkpoint / "config.json").write_text("{}")
+    digest = local_checkpoint(load_spec("llama31-8b-fp8-1gpu").preset, checkpoint).model_digest
+    path = _spec_with(tmp_path, "")
+    text = path.read_text().replace('model = "unsloth/Llama-3.1-8B"', f'model = "{checkpoint}"\nmodel_digest = "{digest}"')
+    path.write_text(re.sub(r'(?m)^(revision|case) = .*\n', "", text))
+    monkeypatch.setenv("RESEARCH_SOURCE_SHA", "a" * 40)
+    item = jobs.make_plan(path, lookup=lambda identity, commit: None).points[0]
+    (checkpoint / "config.json").write_text('{"changed": true}')
+    with pytest.raises(SystemExit):
+        main(["_vllm-point", "--spec", str(path), "--point", item.point.id, "--identity", item.identity])
+    assert f"not the spec's model_digest {digest}" in capsys.readouterr().err
+
+
 def test_the_launcher_sources_the_setup_before_the_point_runs(tmp_path):
     root = Path(__file__).resolve().parents[3]
     setup = tmp_path / "setup.sh"
@@ -269,13 +285,51 @@ def test_the_launcher_sources_the_setup_before_the_point_runs(tmp_path):
     assert failed.returncode != 0 and failed.stdout == ""
 
 
+def test_the_bandwidth_setup_builds_once_per_source_key_and_every_point_loads_its_own_copy(tmp_path):
+    root = Path(__file__).resolve().parents[3]
+    bin_dir, calls = tmp_path / "bin", tmp_path / "nvcc-builds"
+    bin_dir.mkdir()
+    nvcc = bin_dir / "nvcc"
+    nvcc.write_text(
+        '#!/bin/bash\n'
+        '[ "$1" = --version ] && { echo "nvcc fake ${FAKE_NVCC_VERSION:-1}"; exit 0; }\n'
+        'case " $* " in *" -MM "*) for a; do src=$a; done; echo "x.o : $src"; exit 0 ;; esac\n'
+        'while [ $# -gt 0 ]; do [ "$1" = -o ] && out=$2; shift; done\n'
+        f'echo "$out" >> {calls}; echo "lib $out" > "$out"\n')
+    nvcc.chmod(0o755)
+    python = tmp_path / "venv312" / "bin" / "python"
+    python.parent.mkdir(parents=True)
+    python.write_text('#!/bin/sh\necho "$VERITY_VLLM_BENCH_WT_LIB $VERITY_VLLM_BENCH_TOPUP_LIB"\n')
+    python.chmod(0o755)
+
+    def point(run: str, **extra: str) -> str:
+        env = {"PATH": f"{bin_dir}:/usr/bin:/bin", "WORK": str(tmp_path), "CUDA_HOME": str(tmp_path),
+               "RESEARCH_RUN_DIR": str(tmp_path / run), **extra,
+               "VERITY_BENCH_SETUP": "benchmarks/harness/setup/vllm_encoded.sh"}
+        ran = subprocess.run(["bash", "benchmarks/harness/run_point.sh"], cwd=root, env=env, capture_output=True,
+                             text=True)
+        assert ran.returncode == 0, ran.stderr
+        wt, topup = ran.stdout.split()
+        assert wt == f"{tmp_path / run}/setup/wt.so" and Path(topup).read_text().startswith("lib ")
+        return (tmp_path / run / "out/setup/build.txt").read_text().splitlines()[-1]
+
+    first = point("r1")
+    assert first.startswith("built ") and len(calls.read_text().splitlines()) == 4
+    second = point("r2")
+    assert second == "reused " + first.split(" ", 1)[1] and len(calls.read_text().splitlines()) == 4
+    other = point("r3", FAKE_NVCC_VERSION="2")
+    assert other.startswith("built ") and other != first and len(calls.read_text().splitlines()) == 8
+
+
 def test_the_bandwidth_spec_runs_memory_accountings_arms_with_receipts_on_and_their_libraries_built():
     spec = resolve_spec("llama31-8b-fp8-1gpu-bandwidth")
     assert spec.arms == ("stock-fp8", "bandwidth-plain", "bandwidth-audit")
     assert spec.arm_modules == ("benchmarks.vllm_encoded.bench_arm:PLAIN", "benchmarks.vllm_encoded.bench_arm:AUDIT")
     assert spec.env["VERITY_VLLM_BENCH_KV_RECEIPTS"] == "on"
     stock = resolve_spec("llama31-8b-fp8-1gpu")
-    assert replace(spec.preset, id=stock.preset.id) == stock.preset
+    bound = dict(id=stock.preset.id, model=stock.preset.model, revision=stock.preset.revision, case=stock.preset.case,
+                 model_digest=None)
+    assert spec.preset.model_digest and replace(spec.preset, **bound) == stock.preset
     root = Path(__file__).resolve().parents[3]
     setup = (root / spec.setup).read_text()
     bench_arm = (root / "benchmarks/vllm_encoded/bench_arm.py").read_text()

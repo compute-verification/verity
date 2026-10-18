@@ -478,6 +478,8 @@ class _DirectLLM:
 
         runner = get_model_runner(llm)
         self.vllm, self.model = llm, runner.get_model()
+        # benchmarks/vllm_encoded/bench_arm.py still reads verity_vllm.LLM's private `_engine.llm`.
+        self._engine = SimpleNamespace(llm=llm, model=self.model)
         self.engine_record = {"engine_overrides": dict(engine_overrides)}
         self.protocols = None
 

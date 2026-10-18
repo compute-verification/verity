@@ -20,7 +20,9 @@ verity-bench vllm --preset SPEC --arms A,B --out DIR   # the same measurement in
 A spec is `benchmarks/specs/<name>.toml` (`verity-bench/vllm-spec/v0`): the preset (model and revision, precision, GPU,
 vLLM pin, engine settings), its arms, its sweep (another file in `benchmarks/specs/`, `verity-bench/vllm-sweep/v0`), reps,
 eager or CUDA graphs, and admission (`max_minutes` and friends, which never enter identity). Loading is strict: an unknown
-key, a wrong type or an unknown GPU id is an error before anything runs.
+key, a wrong type or an unknown GPU id is an error before anything runs. A preset's model is a Hugging Face id at a pinned
+`revision`, or a node-local directory with its `model_digest` (`presets.local_checkpoint`'s hash of its files), which a
+dispatched point recomputes and refuses to run on when it differs.
 
 An experimental arm (`arm_modules`, `pkg.mod:NAME`) may need its own environment. The spec's `[env]` table (upper-case
 names, string values, none of the dispatcher's, queue's or launcher's own) and its `setup`, a script in the source tree

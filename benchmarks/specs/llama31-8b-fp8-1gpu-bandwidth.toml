@@ -16,11 +16,13 @@ FLASHINFER_CUDA_ARCH_LIST = "12.0f"
 # The re-baseline's quoted quick ratios (14 Oct, art:c3ee801d...) are with KV receipts on.
 VERITY_VLLM_BENCH_KV_RECEIPTS = "on"
 
+# The 14 Oct re-baseline's content-bound checkpoint on vy-nebius-2 (a point refuses files that hash otherwise). A
+# revision-pinned model builds through verity_vllm.LLM, which doesn't take block_kv_cache_memory_bytes, so the arms'
+# pools differed (r20261018-193741-fea1: 491376 vs 494064 tokens) and the kv-pool gate failed.
 [preset]
 id = "llama31-8b-fp8-1gpu-bandwidth"
-model = "unsloth/Llama-3.1-8B"
-revision = "3f0d51f8e5640f98f1a96ea9044a0e55c0a83814"
-case = "LLAMA31_8B"
+model = "/workspace/pouw/mvp-e2e/models/llama-3.1-8b-instruct"
+model_digest = "98e25b0ecbb3eff924ea9fad4673feea9ea6457d2f45db5b5b60e88205de1daa"
 precision = "fp8"
 gpu_id = "rtx-pro-6000"
 gpu_count = 1

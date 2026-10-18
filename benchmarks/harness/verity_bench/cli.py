@@ -14,7 +14,7 @@ from verity_bench import jobs
 from verity_bench.vllm import cli as vllm_cli
 from verity_bench.vllm import result
 from verity_bench.vllm.arms import resolve_arms
-from verity_bench.vllm.presets import served
+from verity_bench.vllm.presets import local_checkpoint, served
 from verity_bench.vllm.result import write
 from verity_bench.vllm.runner import ProcessEngineFactory, run_benchmark
 from verity_bench.vllm.table import render
@@ -56,6 +56,11 @@ def _point(args: Any) -> int:
     (run_dir / "result.json").unlink(missing_ok=True)
     spec = plan.spec
     jobs.check_point_environment(spec, os.environ)
+    if spec.preset.model_digest is not None:
+        found = local_checkpoint(spec.preset, spec.preset.model).model_digest
+        if found != spec.preset.model_digest:
+            raise ValueError(f"checkpoint {spec.preset.model} hashes to {found}, not the spec's model_digest "
+                             f"{spec.preset.model_digest}")
     preset, eager = served(spec.preset, spec.eager)
     arms = resolve_arms(spec.arms, spec.arm_modules)
     doc = run_benchmark(
