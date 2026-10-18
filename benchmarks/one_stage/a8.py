@@ -58,7 +58,6 @@ from verity.ml.circuits.defs import PrimitiveDefinition  # noqa: E402
 from verity.ml.circuits.evaluate import evaluate_region  # noqa: E402
 from verity.ml.circuits.program import Program  # noqa: E402
 from verity.ml.circuits.refs import runs  # noqa: E402
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
 from verity_flock import circuit as FC  # noqa: E402
 from verity_flock import class_statement as CS  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
@@ -706,7 +705,7 @@ def main() -> int:
         tag = K.family(uid)
         sdir = out / f"stage-{tag}"
         kv0 = rows_of_kind[tpl["kinds"][0]]
-        st = CS.UnitStager(tpl["defn"], f"unit/a8-{tag}", kv0["rows_spec"], [(V2, tuple(range(len(kv0["outs"]))))],
+        st = CS.UnitStager(tpl["defn"], f"unit/a8-{tag}", kv0["rows_spec"], K.out_rows(len(kv0["outs"])),
                            circuit=sdir / "circuit.txt", bind=bound)
         tpl["stager"], t_build = st, round(time.time() - t0, 1)
         cap = a6.chunk_cap(st.meta)
@@ -860,7 +859,7 @@ def main() -> int:
         (tdir / "partition.json").write_text(json.dumps(tpart, sort_keys=True))
         (tdir / "program.json").write_bytes(canonical_json(encode_program(tprog)))
         tst = CS.UnitStager(tdef, f"unit/a8-tampered-{tm['kind']}", rows_of_kind[tm["kind"]]["rows_spec"],
-                            [(V2, tuple(range(len(rows_of_kind[tm["kind"]]["outs"]))))], circuit=tdir / "circuit.txt",
+                            K.out_rows(len(rows_of_kind[tm["kind"]]["outs"])), circuit=tdir / "circuit.txt",
                             bind={"partition": P.digest(tpart), "program": tpart["program"]})
         d, set_name = tdir / "set", f"{tst.iset.name}-tampered"
         stage_tampered(tst, {r: v[:tn] for r, v in tm["rows"].items()}, d, tm["salt_key"], range(tn), set_name)
