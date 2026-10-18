@@ -459,7 +459,8 @@ structure Stager where
 /-- **What the deployment brings** besides the inner verifier: the coin server's transcript of the inner rounds (`tr`),
 the stager the record's `stage` reads (`hs`) and the number of commit strings it lays out (`nC`), the outer witnesses'
 readers (`rd`), each V* statement's `--zk` leaf counts (`zl`: Flock's `n_L` and `n_B`, which
-`Flock.zk_deployZk_of_models` takes as its parameters) and the reference prover's pieces (`ref`). -/
+`Flock.zk_deployZk_of_models` takes as its parameters), the reference prover's pieces (`ref`), and the inputs of the
+SHA-512 evaluations the V* setup makes outside the oracle at each V* statement (`setup`, which `Br` reads). -/
 structure Brings where
   tr : Claims.Msg → List (Claims.Msg × Claims.Out) → ByteArray
   hs : Stager
@@ -467,6 +468,7 @@ structure Brings where
   rd : Readers
   zl : Claims.Msg → ℕ × ℕ
   ref : RefParts
+  setup : Claims.Msg → List Claims.Msg := fun _ => []
 
 /-- The staged inputs the compiled verifier reads: the staging message's, at the coin server's transcript. -/
 def Brings.st (b : Brings) : Stage := Stage.ofMsg b.tr
@@ -523,7 +525,7 @@ noncomputable def refP (IV : Claims.Verifier Coin) (b : Brings) (w : Claims.Floc
 `hComplete`); on a V* session it runs at the recursive outer record `deployZkRec`, whose statements set up at the
 recursive setup (`setupO`), and is to be complete there, with error `δ`. -/
 def OuterRef (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) (δ : Claims.Msg → ℝ) : Prop :=
-  Claims.Flock.Complete H (deployZkRec rel) FlockComplete.honestPZk δ
+  FlockComplete.CompleteWith H (deployZkRec rel) FlockComplete.honestPZk δ
 
 /-! ## The completeness error -/
 
@@ -614,6 +616,7 @@ noncomputable def deployRec (IV : Claims.Verifier Coin) (ivScope : Claims.Msg �
   Tape := Tape b
   P := refP IV b
   δc := δcRec b.st
+  setup := b.setup
 
 theorem xI_deployRec (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool) (b : Brings) (x : Claims.Msg) :
     Claims.Recursion.xI (deployRec IV ivScope b) x = xIOf x := rfl
