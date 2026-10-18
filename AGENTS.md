@@ -348,7 +348,7 @@ Never print a secret's value.
 If your launch message names you a lane, `~/.research/notes/kb/LANE-CONTRACT.md` is your rulebook.
 
 Each coordinator (a handle's holder in `.agents/skills/using-slack/registry.json`) is a plain Cursor cloud agent on the
-one-repo environment "Verity compute-verification". It owns one vertical slice and runs its own workers as subagents.
+one-repo environment "Verity compute-verification". It owns one vertical slice and runs its own workers as cloud agents.
 There are no Cursor Projects (Daniel, 13 Oct). The admin holds `@top`: it opens handovers, keeps the roster, the
 quiet-lane sweep and Daniel's decisions log, relays to Daniel, and announces and settles; it does no lane work.
 Coordinators are launched, handed over and archived from Daniel's laptop with `infra/cursor/launch_coordinator.py`
@@ -360,6 +360,11 @@ Coordinators are launched, handed over and archived from Daniel's laptop with `i
 - **Keep chatter low** (contract §3a). Every message, and every background shell you start, reaches the coordinator and
   the human. So run long jobs detached on the pod, write one-line checkpoints, and message someone only to unblock them
   or to change their plan.
+- **A coordinator's turn waits on nothing long** (Daniel, 18 Oct). Workers run as cloud agents (`Task` with
+  `environment: cloud`, one VM each) or as detached `research run`s, never as local subagents: a local subagent holds
+  the coordinator's turn open, and Slack, Linear and worker events reach an agent only when its turn is free. No step
+  blocks longer than about 20 minutes, since a long blocking wait trips the activity timeout: launch detached and check
+  back (`research status RUN`). A worker resumed twice is relaunched fresh, from its last checkpoint note.
 - **Reach a running subagent through its next shell command:** `python3 tools/agent-guard/inbox.py send AGENT_ID --text
   '…'`, where AGENT_ID is the `bc-…` id its Task call returned. A subagent never rereads a file mid-run, so don't put
   ownership changes or new requirements in a shared file and hope. The shell hook refuses the agent's next command once,
