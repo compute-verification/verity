@@ -24,8 +24,10 @@
 // first block; PD_PAIR, every serial compression of the critical path paired (`pd_pcmp`): a producer warp computes its
 // message schedule a chunk ahead while the consumer warp runs the rounds (the schedule is a third of a compression's
 // cycles on its thread), the segments' consumers loading each next block during the current one; PD_STAMP, the global
-// timer and the SM's clock at each phase's end of pd_commit and pd_tree into p13 (`pd_stamp`); PD_GROUP, pd_tiles
-// with PD_G tiles a CTA and their folds paired together on one warp.
+// timer and the SM's clock at each phase's end of pd_commit and pd_tree into p13 (`pd_stamp`); PD_WHOLE (the launch's
+// alone, the code unchanged), pd_commit and pd_tree launched with all the dynamic shared memory a CTA may take, so no other
+// CTA (a side lane's tile leaves) shares their SMs, whose single-warp chains an ALU-bound warp beside them would halve;
+// PD_GROUP, pd_tiles with PD_G tiles a CTA and their folds paired together on one warp.
 //
 // The builder (WMsg) writes `merkle._message`'s bytes as big-endian words, the data's 64-byte parts left zero and filled
 // later (wm_put64, at any byte offset).  pd_host.cpp builds this file for the host tests.
@@ -55,8 +57,9 @@ inline uint64_t pd_gtimer() { return (uint64_t)clock64(); }
 inline uint32_t pd_smid() { return 0; }
 #endif
 
-constexpr int PD_ROUNDS = 1, PD_ROLLED = 2, PD_CALL = 4, PD_PREFETCH = 8, PD_PAIR = 16, PD_STAMP = 32, PD_GROUP = 128;
-#define PD_VARIANT_LIST(X) X(1) X(3) X(19) X(51) X(147)
+constexpr int PD_ROUNDS = 1, PD_ROLLED = 2, PD_CALL = 4, PD_PREFETCH = 8, PD_PAIR = 16, PD_STAMP = 32, PD_WHOLE = 64,
+              PD_GROUP = 128;
+#define PD_VARIANT_LIST(X) X(1) X(3) X(19) X(51) X(83) X(147) X(211)
 
 // ---------------------------------------------------------------- tables, once per module (pd_heads)
 enum { PD_SEED_A = 0, PD_NOISE_LINE = 1, PD_LINE = 2 };

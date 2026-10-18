@@ -9,7 +9,7 @@
 #   research run --on vy-nebius-2 --project verity --campaign hash-loop --source . --cwd source \
 #     --env GPU_LEASE_WHO=kernels-pouw-decode -- bash benchmarks/hash/pouw_decode/run.sh
 # REPS (default 30), ROWS (default 32,128), SHAPES (default qkv,o,gate_up,down), PD_SIDE (the variants of the schedules with
-# side lanes, pd_host.SIDE, default 19,147) pass through.  NCU=KERNELS (a regex of launch names, as pd_commit_19) adds,
+# side lanes, pd_host.SIDE, default 19,83,147,211) pass through.  NCU=KERNELS (a regex of launch names, as pd_commit_19) adds,
 # in the same lease after the trace, bench.py at one shape (NCU_SHAPES, NCU_ROWS: default qkv, 32) under ncu
 # (--clock-control none, --set full, the first NCU_COUNT matching launches, default 4; the build with -lineinfo): the
 # details page and each source line's and SASS instruction's samples (ncu_*.csv).
@@ -50,7 +50,7 @@ g++ -O2 -std=c++20 -pthread -shared -fPIC -Wno-unknown-pragmas -o "$SCR/pd_host.
 PYTHONPATH="$ROOT" python3 "$HERE/host_test.py" "$SCR/pd_host.so" > "$OUT/host_test.txt" 2>&1
 tail -3 "$OUT/host_test.txt"
 
-export PD_SIDE=${PD_SIDE:-19,147}
+export PD_SIDE=${PD_SIDE:-19,83,147,211}
 B=(python3 "$HERE/bench.py" "$SCR/pearl_c_sm120.cubin" "$SCR/pd.cubin" --out "$OUT" --reps "$REPS" --rows "$ROWS" --shapes "$SHAPES")
 NCU_B=(python3 "$HERE/bench.py" "$SCR/pearl_c_sm120.cubin" "$SCR/pd.cubin" --out "$SCR/ncu_bench" --reps 1 --rows "${NCU_ROWS:-32}"
        --shapes "${NCU_SHAPES:-qkv}")

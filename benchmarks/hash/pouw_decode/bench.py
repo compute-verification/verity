@@ -62,7 +62,7 @@ GRAPH_API = {"cuStreamCreate": [P(vp), u], "cuStreamBeginCapture_v2": [vp, i32],
              "cuGraphInstantiateWithFlags": [P(vp), vp, C.c_ulonglong], "cuGraphLaunch": [vp, vp],
              "cuStreamSynchronize": [vp], "cuStreamWaitEvent": [vp, vp, u], "cuGraphGetNodes": [vp, P(vp), P(sz)],
              "cuGraphDestroy": [vp], "cuGraphExecDestroy": [vp], "cuModuleLoadData": [P(vp), C.c_char_p],
-             "cuFuncSetAttribute": [vp, i32, i32]}
+             "cuFuncSetAttribute": [vp, i32, i32], "cuFuncGetAttribute": [P(i32), i32, vp]}
 CAPTURE_THREAD_LOCAL = 1
 POISON = 0xA5
 
@@ -453,7 +453,7 @@ def main() -> int:
         sys.path.insert(0, HERE)
         pd = Module(dev, open(a.pd_cubin, "rb").read())
         from pd_host import setup
-        setup(pd)
+        emit(out, {"kind": "pd_setup", "dyn_smem": setup(pd)})
         probe(pd, nv, out)
     lanes = Lanes(dev, [pd] if pd is not None else [])
     dev.stream = None

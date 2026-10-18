@@ -20,7 +20,7 @@ SRC = open(os.path.join(HERE, "pd.cuh")).read()
 #: pd.cuh's PD_VARIANT_LIST: the variants built, a launch each (bits PD_ROUNDS 1, PD_ROLLED 2, PD_CALL 4, PD_PREFETCH 8,
 #: PD_PAIR 16, PD_STAMP 32, PD_GROUP 128)
 VARIANTS = tuple(int(x) for x in re.findall(r"X\((\d+)\)", re.search(r"#define PD_VARIANT_LIST\(X\)(.*)", SRC).group(1)))
-PD_PAIR, PD_STAMP, PD_GROUP = 16, 32, 128
+PD_PAIR, PD_STAMP, PD_WHOLE, PD_GROUP = 16, 32, 64, 128
 #: PD_STAMP's stamps (p13): PD_SLOTS (global timer ns, SM clock) pairs a row, a row per pd_commit CTA and the tail's after
 #: them; a row's slots PS_* and the tail's PT_* (pd.cuh's enums)
 SLOTS, MAX_LEVELS, MAX_ROWS = (int(re.search(rf"{x} = (\d+)", SRC).group(1)) for x in ("PD_SLOTS", "PD_MAX_LEVELS", "PD_MAX_ROWS"))
@@ -33,13 +33,17 @@ PAIR_SMEM = 2 * 8 * int(re.search(r"PD_PAIR_WORDS = (\d+)", SRC).group(1))
 #: PD_GROUP's tiles a CTA (pd.cuh's PD_G)
 GROUP = int(re.search(r"PD_G = (\d+)", SRC).group(1))
 #: the variants of the schedules with side lanes (pd_deferred_V, pd_side_tree_V); every variant gets pd_serial_V
-SIDE = tuple(int(x) for x in os.environ.get("PD_SIDE", "19,147").split(","))
+SIDE = tuple(int(x) for x in os.environ.get("PD_SIDE", "19,83,147,211").split(","))
 assert set(SIDE) <= set(VARIANTS), (SIDE, VARIANTS)
-MAX_DYNAMIC_SHARED = 8   # CU_FUNC_ATTRIBUTE_MAX_DYNAMIC_SHARED_SIZE_BYTES
+# CUfunction_attribute: SHARED_SIZE_BYTES, MAX_DYNAMIC_SHARED_SIZE_BYTES; CUdevice_attribute: the per-block opt-in maximum
+SHARED_SIZE, MAX_DYNAMIC_SHARED, MAX_SHARED_OPTIN = 1, 8, 97
+#: each PD_PAIR launch's dynamic shared memory (`setup`): PAIR_SMEM, or with PD_WHOLE (pd_commit, pd_tree) the per-block
+#: maximum less the launch's static shared memory
+DYN: dict[str, int] = {}
 
 
-def smem(v: int) -> int:
-    return PAIR_SMEM if v & PD_PAIR else 0
+def smem(v: int, f: str = "pd_commit") -> int:
+    return DYN.get(f"{f}_{v}", PAIR_SMEM) if v & PD_PAIR else 0
 
 
 def tiles_launch(v: int, rows: int, cols: int) -> tuple[int, int, int]:
@@ -60,15 +64,22 @@ DOWNSTREAM = ("c", "u", "y")
 COMMITMENT = ("rowdig_a", "tree_a", "seed_a", "line_a", "seeds_a", "lkeys_a")
 
 
-def setup(pd) -> None:
-    """The module's tables, and each PD_PAIR launch's dynamic shared memory allowed past the default 48 KB with its static."""
+def setup(pd) -> dict[str, int]:
+    """The module's tables, and each PD_PAIR launch's dynamic shared memory (DYN) allowed past the default 48 KB with its
+    static; out DYN."""
     pd.launch("s512_heads", R.cdiv(R.RS_MAX_SEGS * (R.RS_MAX_SEGS + 1) // 2 + R.RS_MAX_SEGS + 1, 128), 128)
     pd.launch("pd_heads", 1, 32)
     pd.sync()
+    optin = pd.get("cuDeviceGetAttribute", MAX_SHARED_OPTIN, pd.dev)
     for v in VARIANTS:
         if v & PD_PAIR:
             for f in ("pd_commit", "pd_tree", "pd_probe"):
-                pd.ck("cuFuncSetAttribute", pd.fn(f"{f}_{v}"), MAX_DYNAMIC_SHARED, PAIR_SMEM)
+                fn = pd.fn(f"{f}_{v}")
+                whole = v & PD_WHOLE and f != "pd_probe"
+                DYN[f"{f}_{v}"] = optin - pd.get("cuFuncGetAttribute", SHARED_SIZE, fn) if whole else PAIR_SMEM
+                assert DYN[f"{f}_{v}"] >= PAIR_SMEM, (f, v, DYN)
+                pd.ck("cuFuncSetAttribute", fn, MAX_DYNAMIC_SHARED, DYN[f"{f}_{v}"])
+    return dict(DYN, optin=optin)
 
 
 class PdCall:
@@ -117,10 +128,8 @@ class PdCall:
 
     def tree(self, v: int) -> list:
         b, kk = self.p.b, self.keys
-        return [lambda: self.pd.launch(f"pd_tree_{v}", 1, 128, smem(v), p=(0, 0, b["tree_a"], 0, 0, kk["unit"], kk["dom_a"], 0, 0,
-                                                                          0, b["seed_a"], b["line_a"], b["ea_codes"],
-                                                                          self.stamps),
-                                       i=(self.m, 0, 0, self.lines))]
+        p = (0, 0, b["tree_a"], 0, 0, kk["unit"], kk["dom_a"], 0, 0, 0, b["seed_a"], b["line_a"], b["ea_codes"], self.stamps)
+        return [lambda: self.pd.launch(f"pd_tree_{v}", 1, 128, smem(v, "pd_tree"), p=p, i=(self.m, 0, 0, self.lines))]
 
     def tiles(self, v: int) -> list:
         b = self.p.b
