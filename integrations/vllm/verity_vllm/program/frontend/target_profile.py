@@ -24,6 +24,7 @@ from dataclasses import asdict, dataclass, field, replace
 from typing import Any
 
 from verity_vllm.config import DEFAULT_ROW_PROTOCOLS, parse_protocols
+from verity_vllm.program.frontend.kernel_readback import applied_kernels, fp8_block_gemm_kernel_of, int8_exact_of, moe_experts_class_of  # noqa: F401
 
 SCHEMA = "verity/aot-artifact/v1"
 
@@ -85,6 +86,9 @@ class TargetProfile:
                            kernel class back from the instantiated `Fp8LinearMethod.fp8_linear` and refuse a mismatch; a model without
                            FP8 linears makes a declared kernel a mismatch too (nothing to select — the declaration would be idle).
                            Omitted from `to_json()` when None so every pre-R15 profile digest is unchanged.
+    int8_exact          -> which layers run steps.py's plain int8 steps (`INT8_EXACT_SCOPES`): every linear (`engine.int8_exact`, an offline int8
+                           checkpoint, vLLM quantization `INT8_EXACT_QUANTIZATION`), every attention layer (`engine.int8_attention`, attention backend
+                           `INT8_EXACT_ATTENTION_BACKEND`), or both; read back from every layer (`int8_exact_of`).  Omitted from `to_json()` when None.
     moe_backend         -> `EngineArgs.moe_backend`, the fused-MoE experts kernel (applied to `KernelConfig.moe_backend`; an explicit backend that
                            cannot run raises in vLLM's `select_*_moe_backend`, never falls back).  `"triton"` -> `TritonExperts` (`fused_moe_kernel`,
                            the launch `MoeExpertGemm_v1` and the block-FP8 `MoeExpertFp8Gemm_v1` state); None = vLLM's selection.  Builder and runtime
@@ -180,6 +184,7 @@ class TargetProfile:
                                       "emulate_precision_casts": True,
                                       "attention": "splitting op (vllm::unified_attention_with_output) executed outside the CUDA graphs"}}
     fp8_block_gemm: str | None = None
+    int8_exact: str | None = None        # the layers on exact int8 (None = none; see the doc); applied and read back
     #: the fused-MoE experts kernel (None = vLLM's selection; see the doc); applied and read back
     moe_backend: str | None = None
     #: [R17-1] the resolved async-scheduling configuration the Program is specialized for (None = the pinned resolver's value, see the doc)
@@ -212,6 +217,9 @@ class TargetProfile:
 
     # the registered block-scaled FP8 GEMM selections: value -> the vLLM kernel class the selector must have taken
     FP8_BLOCK_GEMM_KERNELS = {"cutlass": "CutlassFp8BlockScaledMMKernel"}
+    # the exact-int8 scopes (steps.py's plain specs `int8-linears`, `int8-attention`, `int8-all`), and what applies each part
+    INT8_EXACT_SCOPES = {"linears": ("linears",), "attention": ("attention",), "all": ("linears", "attention")}
+    INT8_EXACT_QUANTIZATION, INT8_EXACT_ATTENTION_BACKEND = "verity_int8", "CUSTOM"
     # the registered fused-MoE backends: value -> the experts class every fused-MoE layer must carry
     MOE_BACKEND_KERNELS = {"triton": "TritonExperts"}
 
@@ -272,6 +280,10 @@ class TargetProfile:
         if self.fp8_block_gemm is not None and self.fp8_block_gemm not in self.FP8_BLOCK_GEMM_KERNELS:
             raise ValueError(f"fp8_block_gemm must be None (vLLM's selector) or one of {sorted(self.FP8_BLOCK_GEMM_KERNELS)}; "
                              f"got {self.fp8_block_gemm!r}")
+        if self.int8_exact is not None and self.int8_exact not in self.INT8_EXACT_SCOPES:
+            raise ValueError(f"int8_exact must be None (no int8 layers) or one of {list(self.INT8_EXACT_SCOPES)}; got {self.int8_exact!r}")
+        if "attention" in self.int8_parts and self.attention_backend is not None:
+            raise ValueError(f"int8_exact {self.int8_exact!r} selects the attention backend; attention_backend must be None")
         if self.moe_backend is not None and self.moe_backend not in self.MOE_BACKEND_KERNELS:
             raise ValueError(f"moe_backend must be None (vLLM's selector) or one of {sorted(self.MOE_BACKEND_KERNELS)}; got {self.moe_backend!r}")
         if self.async_scheduling is not None and not isinstance(self.async_scheduling, bool):
@@ -396,6 +408,10 @@ class TargetProfile:
         return f"unregistered:{self.capability_str}"
 
     @property
+    def int8_parts(self) -> tuple[str, ...]:
+        return self.INT8_EXACT_SCOPES.get(self.int8_exact, ())
+
+    @property
     def execution_label(self) -> str:
         """The row's `execution` label: `bi-eager` (batch-invariant eager, vLLM's own attention selection) with the suffix `-fa2`
         when FA2 is FORCED on a capability whose selector would pick another version (Daniel: a separately labelled configuration,
@@ -419,6 +435,10 @@ class TargetProfile:
             kw["attention_config"] = {"flash_attn_version": int(self.flash_attn_version)}
         if self.moe_backend is not None:
             kw["moe_backend"] = self.moe_backend
+        if "linears" in self.int8_parts:
+            kw["quantization"] = self.INT8_EXACT_QUANTIZATION
+        if "attention" in self.int8_parts:
+            kw["attention_backend"] = self.INT8_EXACT_ATTENTION_BACKEND
         if execution and self.compilation is not None:
             c = self.COMPILATIONS[self.compilation]
             kw["enforce_eager"] = False
@@ -456,6 +476,8 @@ class TargetProfile:
             d.pop("compilation", None)
         if d.get("fp8_block_gemm") is None:
             d.pop("fp8_block_gemm", None)     # [R15 fp8] absent = vLLM's selector; keeps every pre-R15 profile's digest
+        if d.get("int8_exact") is None:
+            d.pop("int8_exact", None)         # absent = no int8 linears; every earlier profile digest unchanged
         if d.get("moe_backend") is None:
             d.pop("moe_backend", None)
         if d.get("async_scheduling") is None:
@@ -618,9 +640,9 @@ def profile_mismatches(profile: TargetProfile, applied: dict) -> list[str]:
     vv = applied.get("vllm_version")
     if not isinstance(vv, str) or f"+g{profile.vllm_revision}" not in vv:
         bad.append(f"vllm_revision declared {profile.vllm_revision!r}, running vllm {vv!r}")
-    ab = applied.get("attention_backend", "<absent>")
-    if ab == "<absent>" or (ab or None) != (profile.attention_backend or None):
-        bad.append(f"attention_backend declared {profile.attention_backend!r}, applied {ab!r}")
+    ab, want_ab = applied.get("attention_backend", "<absent>"), profile.engine_args(execution=False).get("attention_backend")
+    if ab == "<absent>" or (ab or None) != (want_ab or None):
+        bad.append(f"attention_backend declared {want_ab!r}, applied {ab!r}")
     # [R13 ampere] the tuned-GEMM arch family vLLM applied for the declared capability must be the one the registered GEMM target
     # (verity_vllm.program.frontend.gemm_targets) requires: another answer means another launch geometry than the Definition was admitted for.
     fam = applied.get("tuned_gemm_arch_family", "<absent>")
@@ -642,6 +664,8 @@ def profile_mismatches(profile: TargetProfile, applied: dict) -> list[str]:
         got = applied.get("fp8_block_gemm_kernel", "<absent>")
         if got != profile.fp8_block_gemm_kernel():
             bad.append(f"fp8_block_gemm declared {profile.fp8_block_gemm!r} ({profile.fp8_block_gemm_kernel()}), applied {got!r}")
+    if profile.int8_exact is not None and applied.get("int8_exact", "<absent>") != profile.int8_exact:
+        bad.append(f"int8_exact declared {profile.int8_exact!r}, applied {applied.get('int8_exact', '<absent>')!r}")
     # a declared MoE backend on a model with no fused-MoE layer is a mismatch too (`moe_experts_class_of` is None there)
     if profile.moe_backend is not None:
         got = applied.get("moe_experts_class", "<absent>")
@@ -649,34 +673,6 @@ def profile_mismatches(profile: TargetProfile, applied: dict) -> list[str]:
             bad.append(f"moe_backend declared {profile.moe_backend!r} ({profile.moe_experts_class()}), applied {got!r}")
     return bad
 
-
-def fp8_block_gemm_kernel_of(model) -> str | None:
-    """[R15 fp8] READ BACK the block-scaled FP8 linear kernel class the instantiated model carries: the class name of
-    `<layer>.quant_method.fp8_linear` (vLLM `Fp8LinearMethod`), one value over all FP8 linear layers; None when no layer has one,
-    '<mixed>' when the layers disagree (both are mismatches against a declared kernel).  Structural scaffolding, no model fact."""
-    return _one_name({type(k).__name__ for k in _quant_attrs(model, "fp8_linear")})
-
-
-def moe_experts_class_of(model) -> str | None:
-    """READ BACK the experts class of every fused-MoE layer: `<layer>.quant_method.experts_cls` (vLLM's `Fp8MoEMethod` and
-    `UnquantizedFusedMoEMethod`), one name over all layers; None when no layer has one, '<mixed>' when they disagree."""
-    return _one_name({getattr(c, "__name__", repr(c)) for c in _quant_attrs(model, "experts_cls")})
-
-
-def applied_kernels(profile: TargetProfile, model) -> dict:
-    """The kernel read-backs `profile_mismatches` judges: the FP8 linears' always, the experts class under a declared `moe_backend`."""
-    out = {"fp8_block_gemm_kernel": fp8_block_gemm_kernel_of(model)}
-    if profile.moe_backend is not None:
-        out["moe_experts_class"] = moe_experts_class_of(model)
-    return out
-
-
-def _quant_attrs(model, attr: str) -> list:
-    return [v for m in model.modules() if (v := getattr(getattr(m, "quant_method", None), attr, None)) is not None]
-
-
-def _one_name(names: set[str]) -> str | None:
-    return None if not names else names.pop() if len(names) == 1 else "<mixed>"
 
 
 # -- the artifact wrapper --------------------------------------------------------------------------------------------------

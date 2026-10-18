@@ -7,6 +7,7 @@ import csv
 import hashlib
 import importlib.util
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -229,8 +230,10 @@ def test_census_sm90_rows(tmp_path):
 
 def test_device_census_is_well_formed():
     """Every device directory's lines are lines machine_model reads (one of rate, cycles and u), each on a row rows.csv
-    states, once a row, naming its runs."""
+    states, once a row, naming its runs; a `datasheet` row and its lines name the note that cites the vendor document
+    instead, since no run measured them."""
     census = _load("census")
+    note = re.compile(r"note:\d{8}T\d{4}Z-[a-z0-9-]+")
     devices = DC.parent / "machine_model" / "data" / "devices"
     dirs = sorted(p for p in devices.iterdir() if p.is_dir()) if devices.exists() else []
     for d in dirs:
@@ -241,8 +244,10 @@ def test_device_census_is_well_formed():
         assert tuple(lines[0]) == census.rowsmod.CENSUS_COLUMNS
         by_row = _census_tables(census, lines, rows)
         assert {"issue", "M", "A", "I", "SHFL"} <= set(by_row), d
+        sheet = {r["row"] for r in rows if r["status"] == "datasheet"}
         for ln in lines + rows:
-            assert ln["runs"] and all(census.rowsmod.RUN_ID.fullmatch(r) for r in ln["runs"].split()), (d, ln)
+            cite = note if ln["row"] in sheet else census.rowsmod.RUN_ID
+            assert ln["runs"] and all(cite.fullmatch(r) for r in ln["runs"].split()), (d, ln)
 
 
 def test_analyze_sm90_pass_line(tmp_path):
@@ -323,6 +328,49 @@ def test_uniform_issue_price_reads_only_saturated_streams(tmp_path):
     assert uv["points"]["uv_32x"]["added"] == 48 and abs(uv["points"]["uv_32x"]["dT"] - 40 / 48) < 1e-12
     assert abs(uw["points"]["uw_64x"]["dT"] - 10 / 96) < 1e-12
     assert s["set_by"] == "uv_32x" and abs(s["price"] - 40 / 48 / 1.02) < 1e-12
+
+
+def test_ldtm_price_drops_the_single_load_restructure():
+    """The LDTM price is the least isolated load cost over the priced points of a read stream: at least two loads, the
+    point still issue-saturated. The single-load point (the loop restructures) and the load-path-bound points above it
+    (issue < 0.95) are dropped, and streams below 0.95 aren't read. Repeats are the price computed from each run."""
+    ld = _load("ldtm")
+
+    def fake(out):
+        return {
+            "mw": {"T0": 1329.0, "issue0": 0.965, "read": True, "tc0": 100.0, "points": {
+                "mw_1": {"K": 1, "T": 1323.0, "loads": 1, "others": 5, "added": {}, "issue": 0.974, "all": -6.0, "ldtm": -11.0},
+                "mw_2": {"K": 2, "T": 1333.0, "loads": 2, "others": 6, "added": {}, "issue": 0.968, "all": 2.0, "ldtm": -1.0},
+                "mw_8": {"K": 8, "T": 1467.0, "loads": 8, "others": 24, "added": {}, "issue": 0.896, "all": 17.0, "ldtm": 14.0}}},
+            "nx": {"T0": 1112.0, "issue0": 0.981, "read": True, "points": {
+                "nx_2": {"K": 2, "T": 1120.0, "loads": 2, "others": 6, "added": {}, "issue": 0.981, "all": 4.0, "ldtm": 1.0}}},
+            "lv": {"T0": 790.0, "issue0": 0.944, "read": False, "points": {
+                "lv_2": {"K": 2, "T": 800.0, "loads": 2, "others": 6, "added": {}, "issue": 0.924, "all": 2.0, "ldtm": -3.0}}},
+        }
+
+    ld.streams = fake
+    assert {n for n, _ in ld.priced(fake(None)["mw"])} == {"mw_2"}          # K=1 and the desaturated K=8 dropped
+    assert {n for n, _ in ld.priced(fake(None)["lv"])} == set()             # below 0.95, not read
+    res = ld.analyze([Path("r1/out"), Path("r2/out")])
+    assert res["set_by"] == "mw_2" and abs(res["least"] + 1.0) < 1e-12      # lv_2 lower but not read; mw_1 excluded
+    assert abs(res["price"] - (-1.0 / 1.02)) < 1e-12 and res["pass"] is False
+    assert res["price_by_run"] == [-1.0 / 1.02, -1.0 / 1.02] and res["price_spread"] == 0.0 and res["repeat_spread"] == 0.0
+
+
+def test_ldtm_loop_counts_takes_the_larger_loop(tmp_path):
+    """An m probe times two loops (the lane stream and the MMA warp's); loop_counts counts the larger, the stream."""
+    ld = _load("ldtm")
+    out = tmp_path / "out"
+    (out / "sass").mkdir(parents=True)
+    body = ["FFMA R1, R1, 1, R1", "LDTM.x128 R4, tmem[UR6]", "@P0 BRA 0x10",      # the stream loop, 0x10..0x30
+            "UTCIMMA gdesc[UR6], gdesc[UR8], tmem[UR5], tmem[UR10], idesc, UPT", "@P1 BRA 0x40"]  # the MMA loop, 0x40..0x50
+    sass = "\t\tFunction : mw_2\n" + "\n".join(f"        /*{16 * (i + 1):04x}*/   {op} ;   /* 0x0 */"
+                                               for i, op in enumerate(body))
+    (out / "sass" / "sm100_ldtm.sass").write_text(sass + "\n")
+    (out / "gate-build.json").write_text(json.dumps({"verdicts": [{"binary": "sm100_ldtm", "probe": "mw_2", "verdict":
+        {"loops": [{"head": "0x0010", "tail": "0x0030", "top": {"FFMA": 1, "LDTM.x128": 1, "BRA": 1}},
+                   {"head": "0x0040", "tail": "0x0050", "top": {"UTCIMMA": 1}}]}}]}))
+    assert ld.loop_counts(out)["mw_2"] == {"FFMA": 1, "LDTM.x128": 1, "BRA": 1}
 
 
 def test_uniform_write_census_is_idempotent(tmp_path):
