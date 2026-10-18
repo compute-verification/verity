@@ -159,7 +159,9 @@ def plan_change(before: rb.Plan, after: rb.Plan) -> tuple[tuple[tuple[int, int],
     """`after` as `before.changed(added, removed, ...)` takes it: (added, removed) runs, from the plans' runs alone
     (each segment between consecutive run boundaries is wholly in or out of each plan)."""
     def bounds(plan: rb.Plan) -> tuple[np.ndarray, np.ndarray]:
-        r = np.frombuffer(plan.encode(), dtype=">u8", offset=4).reshape(-1, 2).astype(np.int64)
+        r = np.frombuffer(plan.encode(), dtype=">u8", offset=4).reshape(-1, 2).astype(np.uint64)   # blocks reach 2^64 - 1
+        if len(r) > 1 and (r[1:, 0] < r[:-1, 0]).any():                                             # a plan in read order
+            r = r[np.argsort(r[:, 0], kind="stable")]
         return r[:, 0], r[:, 0] + r[:, 1]
 
     (a0, a1), (b0, b1) = bounds(before), bounds(after)
@@ -591,7 +593,9 @@ class ProverSide:
                     self.open_enabled.wait()
                 self._open_window(t, draws)
             except Exception as e:  # noqa: BLE001  -- handed to the session's thread, which fails with it
-                self.inbox.put(({"type": "lost", "why": f"openings of window {t}: {type(e).__name__}: {e}"}, b"", 0))
+                why = f"openings of window {t}: {type(e).__name__}: {e}"
+                print(f"prover: {why}", file=sys.stderr, flush=True)       # also after the verifier's end, when no session reads it
+                self.inbox.put(({"type": "lost", "why": why}, b"", 0))
             finally:
                 self.jobs.task_done()
 

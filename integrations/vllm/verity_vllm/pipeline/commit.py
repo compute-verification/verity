@@ -1038,6 +1038,7 @@ class Options:
     remote_kv_lib: str | None = option("--remote-kv-lib", default=None, help="kv.cu built at the codec's field and mask: the store's encode on the GPU (default: the CPU reference)")
     remote_session_lib: str | None = option("--remote-session-lib", default=None, help="session.cu's build (benchmarks/remote_session): the session reads the store where the engine holds it, its weights and KV pool encoded in place by --remote-kv-lib, with no copy (verity_vllm.store.in_place)")
     remote_paged_lib: str | None = option("--remote-paged-lib", default=None, help="paged.cu's build at the codec's field (benchmarks/vllm_encoded): with --remote-session-lib, the int8 attention reads the encoded KV pool through a credited read, each slot decoded under its offset (engine.int8_window, installed by verity_vllm.store.in_place)")
+    memory_map: str | None = option("--memory-map", default=None, metavar="REQUEST_JSON", help="opt-in, not on the record: commit each KV layer's `<layer>/slot_mapping` (acquire.sources.kv_slots_source) and, after pair 0's roots are final, write memory-map/v1 of the run's KV to the request's path, its blocks from each request's Program of record at the pages those slots name, its digests from the committed K and V words (verity_vllm.pipeline.memory_map; the request: path, registration, store layout); the prover's witness, never published")
     plan: str | None = option("--plan", default=None, metavar="JSON", help="the Commit's plan, derived before the GPU (verity_vllm.pipeline.commit_plan; the row's `plan` stage): the producer facts are taken from it when its key (Program digest, manifest, workload, Programs, code identity, vLLM version) equals this Commit's; else derived here and recorded as plan_recomputed with the reason (verdict.json plan)")
     call_boundary_plan: str | None = option("--call-boundary-plan", default=None, metavar="JSON", help="the call-boundary source's host plan, derived at the Build's call-boundary check (verity_vllm.pipeline.boundary_plan): taken when its key (as --plan's) equals this Commit's; else derived here and recorded as plan_recomputed with the reason (verdict.json call_boundary_plan)")
     replay_target: list[str] | None = option("--replay-target", action="append", default=None, metavar="OP_PATH[@STEP]", help="sampled replay: add EVERY VU of a module (at a request-local step) to the sample, outside the cap -- the targeted negatives of record " "(a single-identity fault at a mid-phase step); repeatable; recorded under sample.targeted")
@@ -1372,6 +1373,9 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                       f"({'ONE bounded device buffer; launches above it are split into sequence groups' if _hsrc.tap_cap_bytes else 'OFF: unbounded per-geometry buffers'}); "
                       f"telemetry {_hsrc.telemetry_path}", flush=True)
         required_classes = TAPS.attach(com, required_manifest, required_classes, args.tap_sources, explicit_classes=required_classes_cli, programs=(args.program_dir, args.programs_root), call_boundary_plan=cb_plan)
+        if args.memory_map:
+            from verity_vllm.acquire.sources import kv_slots_source
+            kv_slots_source.attach(com)
         # [R17-42 route A, moe: found on the first padded Commit (cp-moe 04:37Z, rc 139)] the MoE block source stages six planes per MoE layer
         # per step by NAME (moe/L<k>/<plane>); the gather collector lays the arena out from the required-value MANIFEST, so a plane the manifest
         # does not name has no slot and the stage is a wild write (SIGSEGV in Collector::push_desc).  Under the PADDED construction the
@@ -2238,7 +2242,8 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                         _ocr = OC.OpenedReader(com, rc)
                         oc = OC.oracle_compare(_oracle, _bm, _ocr, producers=_prod, workload=_wl,
                                                aliases=(required_manifest.get("op_path_aliases") if isinstance(required_manifest, dict) else None),
-                                               query_families=OC.query_families_of(required_manifest))   # [revb n-2.14-1] identities per Q(P) family
+                                               query_families=OC.query_families_of(required_manifest),   # [revb n-2.14-1] identities per Q(P) family
+                                               own=frozenset().union(*(getattr(s, "own_names", ()) for s in getattr(com, "sources", ()))))
                         oc["producer_facts"] = oracle_producers[1]
                         oc["value_source"] = _ocr.record()
                         print(f"[delta] C2 ORACLE COMPARE opened values (pair {pair}): {OV.filed(row['commit'], 'oracle_compare', oc['value_source'])}", flush=True)
