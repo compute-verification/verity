@@ -91,3 +91,26 @@ certifier verdicts: `r20261018-065536-38c4`, before the declarations, and `r2026
 - `datacenter.Cadence` holds one cadence for both directions. The lab's egress and ingress agree on frame size, bucket
   and window, which `records.cadence` checks, but not on the frames per bucket (2 out, 1 in), which `Cadence` doesn't
   hold.
+
+## Serving a workload on the lab
+
+`workload/lab_run.py` serves verity_vllm's serving Program (`workload/served.py`: 4 layers of a truncated SmolLM2,
+237,846 gates, a pipeline stage a block) on the lab's declaration. Each block's server runs in the block's namespace,
+mockdc's proxy in its certifier's, and the client on `na-ext0`. A block reaches only its certifier, so the client relays
+every message between blocks: it leaves its source as server-sent events of a response and enters its destination in a
+request (`workload/lab.py`). Each block is checked three ways: the certifier's audit (`audit.Audit` in `active_replay`'s
+live mode, on the block's event log), N3 over the certifier's records (`workload.lab.check`), and the answers against
+the Program evaluated in one process. Every window declares the calibration's envelope, δ = 12 buckets of 100 ms. The
+run needs a Python with torch; the recorded one builds it with `uv` in a scratch directory.
+
+Run `r20261018-084303-dae6`, on vy-nebius-cpu-2 with the lab up in its default shape:
+
+| Run | Certifier audit | N3 | Answers |
+|---|---|---|---|
+| honest | accepts all four blocks | holds | equal the reference |
+| `--tamper b1:flip-bit` | accepts all four blocks | refuses b1's responses (`content`) and b2's request, which carried the flipped message | equal the reference: the bit doesn't change the token |
+| `--tamper b2:late` | refuses b2: `responses` window 0, `status:coverage-never-established` | refuses b2 and the blocks it starves (`missing`, `values`) | none |
+
+The latest proxy tick was 4.1 ms late against the 25 ms slack. Each first event left its block at most 186 ms after its
+request, against δ's 1.2 s, and each bucket reached the client a median 5.4 ms after its tick from the blocks on
+`na-leaf0` and 9.8 ms from those behind the spine.
