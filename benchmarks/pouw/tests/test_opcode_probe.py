@@ -85,14 +85,15 @@ def test_macs_a_word_pins():
     assert round(rows.macs_a_word(0.027522, 4), -1) == 68480
 
 
-@pytest.mark.skipif(not (MACHINE_MODEL / "data" / "census.csv").exists(),
-                    reason="machine_model (RS-W′'s cursor/machine-model-ea24) isn't in this tree yet")
 def test_schema_is_machine_models():
-    data = MACHINE_MODEL / "data"
-    with open(data / "census.csv", newline="") as f:
-        r = csv.DictReader(f)
-        assert tuple(r.fieldnames) == rows.CENSUS_COLUMNS
-        lines = list(r)
+    files = sorted((MACHINE_MODEL / "data" / "census").glob("*.csv"))
+    assert files
+    lines = []
+    for p in files:
+        with open(p, newline="") as f:
+            r = csv.DictReader(f)
+            assert tuple(r.fieldnames) == rows.CENSUS_COLUMNS, p.name
+            lines += r
     sys.path.insert(0, str(MACHINE_MODEL))
     try:
         from verity_machine_model import model
@@ -209,6 +210,60 @@ def test_prior_points_give_back_the_published_facets(tmp_path):
     assert {(2.0, 1.96), (15.0, 0.4)} <= got
 
 
+sm89 = _load("opcode_probe_sm89_census", POUW / "opcode_probe" / "sm89" / "census.py")
+
+
+def test_sm89_pipe_rate_counts_the_loops_instructions_on_its_pipe():
+    """An ALU probe's loop counter runs on the ALU pipe, so the pipe's rate counts it; SHFL's doesn't (SHF isn't SHFL)."""
+    loop = lambda pat, n: {"loops": [{"counts": {pat: n}, "top": {pat.rstrip("*"): n, "IADD3": 1, "ISETP.GE.AND": 1,
+                                                                    "BRA": 1}}]}
+    assert sm89.pipe_rate({"rates": {"0:LOP3.LUT": 1.6}}, loop("LOP3.LUT", 16)) == pytest.approx(1.6 * 18 / 16)
+    assert sm89.pipe_rate({"rates": {"0:SHFL.BFLY": 0.5}}, loop("SHFL.BFLY", 16)) == pytest.approx(0.5)
+    assert sm89.pipe_rate({"rates": {"0:IMAD": 1.9}}, loop("IMAD", 16)) == pytest.approx(1.9)
+    fold = {"loops": [{"counts": {"LOP3.LUT": 32, "IMAD": 32, "LEA.HI": 32},
+                       "top": {"LOP3.LUT": 32, "IMAD": 32, "LEA.HI": 32, "IADD3": 1, "ISETP.GE.AND": 1, "BRA": 1}}]}
+    rates = {"0:LOP3.LUT": 0.96, "0:IMAD": 0.96, "0:LEA.HI": 0.96}
+    assert sm89.pipe_rate({"rates": rates}, fold) == pytest.approx(0.96 * 66 / 32)   # LOP3, LEA.HI and the counter
+
+
+def test_sm89_frontier_counts_every_non_mma_instruction_as_x():
+    """A mix's loop overhead could be X in an attacker's program, so the facet points count it."""
+    v = {"loops": [{"counts": {"IMMA.16832.S8.S8": 8, "LOP3.LUT": 4},
+                    "top": {"IMMA.16832.S8.S8": 8, "LOP3.LUT": 4, "IADD3": 1, "ISETP.GE.AND": 1, "BRA": 1}}]}
+    m, x = sm89.loop_rates({"rates": {"0:IMMA.16832.S8.S8": 0.25, "0:LOP3.LUT": 0.125}}, v)
+    assert (m, x) == pytest.approx((0.25, 0.25 * 7 / 8))
+
+
+def test_sm89_uniform_lines(tmp_path):
+    """UNI runs on UP at its fastest alone loop's rate, every uniform instruction counted, and costs issue the least SMSP-
+    cycles a uniform instruction adds beside a base loop, less the margin (JI89 that over SCHED)."""
+    rows_, verdicts = [], []
+
+    def put(name, top, counted, cycles):   # cycles: SMSP-cycles a warp-iteration
+        rows_.append({"probe": name, "run": RUN, "counted": counted, "rates": {f"0:{counted}": 4 / cycles * top[counted]}})
+        verdicts.append({"probe": name, "verdict": {"loops": [{"top": {**top, "IADD3": 1, "BRA": 1}}]}})
+
+    for i, p in enumerate(sm89.UNI_ALONE):
+        put(p, {"ULOP3.LUT": 64}, "ULOP3.LUT", 128 * (1 + i / 100))          # 2.0 a SM-clock at best
+    put("ut_0", {"IMMA.16816.S8.S8": 8}, "IMMA.16816.S8.S8", 64)
+    for p in sm89.UNI_TENSOR[1:]:
+        put(p, {"ULOP3.LUT": 48, "IMMA.16816.S8.S8": 8}, "IMMA.16816.S8.S8", 100)   # UP's 96, 4% over
+    for base, ps in sm89.UNI_BESIDE.items():
+        put(base, {"LOP3.LUT": 32, "IMMA.16816.S8.S8": 8}, "IMMA.16816.S8.S8", 150)
+        for p in ps:
+            put(p, {"ULOP3.LUT": 64, "LOP3.LUT": 32, "IMMA.16816.S8.S8": 8}, "IMMA.16816.S8.S8",
+                150 + 64 * (0.8 if p == "uh_64m" else 1.0))
+    (tmp_path / "rows.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows_))
+    (tmp_path / "gate.json").write_text(json.dumps({"verdicts": verdicts}))
+    rws, cen = [["issue", "measured", "r0", "i"], ["JI89", "joint", "r0", "j"]], []
+    sm89.uniform(tmp_path, rws, cen)
+    c = 0.8 / 1.02
+    assert cen == [["UNI", "UP", "2", "0.02", "", "", "", "", RUN], ["UNI", "issue", "", "", f"{c:.6g}", "", "", "", RUN],
+                   ["UNI", "JI89", "", "", f"{c / sm89.TK.SCHED:.9g}", "", "", "", RUN]]
+    assert rws[0][2] == f"r0 {RUN}" and "least at uh_64m" in rws[0][3] and rws[1][2] == f"r0 {RUN}"
+    assert rws[2][:3] == ["UP", "measured", RUN] and "within 4.2%" in rws[2][3]
+
+
 def test_one_census_line_a_kind_and_row(tmp_path):
     binary = tmp_path / "atom"
     binary.write_bytes(b"\x7fELF")
@@ -257,6 +312,82 @@ def test_uniform_reads_each_loop_from_its_sass(tmp_path, capsys):
     assert "  ux: 1->17:1.000  fit 1.000 over U 1..17" in got
 
 
+def test_ceiling_reads_each_knob_and_names_the_highest_host_clock(tmp_path, capsys):
+    """`eps1.py ceiling`: a row a knob with its rc, what NVML then reports and the clock each kernel reached by the host's
+    clock, and the highest host-timed clock against NVML's max."""
+    out = tmp_path / "out"
+    out.mkdir()
+    (out / "found.json").write_text(json.dumps({"uuid": "GPU-x", "index": "0", "max_mhz": "2430", "max_mem_mhz": "12481",
+                                                "found_pl_w": "600.00", "found_vboost": "0", "max_vboost": "4"}))
+    trials = [{"trial": "lgc-max", "cmd": "nvidia-smi -lgc 2430,2430", "rc": 0, "out": "GPU clocks set to \"(gpcClkMin 2430)\""},
+              {"trial": "gpc-offset+105", "cmd": "clocks.py offset 105", "rc": 0, "out": "{\"rc\": 2, \"error\": \"Invalid Argument\"}"}]
+    (out / "trials.jsonl").write_text("".join(json.dumps(t) + "\n" for t in trials))
+    states = [{"trial": "found", "gpc_vf_offset_range": {"value": [0, 0]}, "mem_vf_offset_range": {"value": [0, 0]},
+               "power_limit_constraints_mw": {"value": [300000, 600000]}, "clock_offsets_p0": {"graphics": {"min": 0, "max": 0}}},
+              {"trial": "lgc-max", "clock_now": {"sm": {"value": [2422]}}, "clock_max": {"sm": {"value": [2430]}},
+               "applications": {"graphics": {"value": [2430]}}}]
+    (out / "states.jsonl").write_text("".join(json.dumps(s) + "\n" for s in states))
+    cal = [{"trial": "lgc-max", "probe": "p_light", "clock_mhz_host": h, "clock_mhz_gt_max": h + 0.2,
+            "clock_mhz_gt_min": h + 0.2, "nvml_sm_mhz": 2422, "nvml_mw": 150000, "throttle": "0x0"} for h in (2429.4, 2429.9)]
+    cal += [{"trial": "gpc-offset+105", "probe": "p_light", "clock_mhz_host": 2101.0, "clock_mhz_gt_max": 2101.1,
+             "nvml_sm_mhz": 2092, "nvml_mw": 140000, "throttle": "0x0"}]
+    (out / "calib.jsonl").write_text("".join(json.dumps(c) + "\n" for c in cal))
+    assert eps1.main(["ceiling", str(out)]) == 0
+    got = capsys.readouterr().out
+    assert "GPC VF offset range [0, 0], memory [0, 0]" in got
+    assert re.search(r"^lgc-max +0 +2422 +2430 +2430 p_light +2429\.9 +2430\.1 +2429\.6 +2422 +150 +0x0 +GPU clocks", got, re.M)
+    assert re.search(r"^gpc-offset\+105 +0 .* p_light +2101\.0", got, re.M)
+    assert "highest host-timed clock: 2429.9 MHz (p_light at lgc-max), -0.004% against NVML's max 2430" in got
+
+
+def test_l2gather_reports_bytes_a_clock_and_mma_kept(tmp_path, capsys):
+    """`eps1.py l2gather`: bytes a SM a clock (rate * words * 4) and TB/s (* nSM * clock) a gather path, the best alone
+    and beside, the MMA kept beside the honest step, and whether any path beats QSTAR's 3.3 TB/s."""
+    out = tmp_path / "out"
+    out.mkdir()
+    imma, ldg = "IMMA.16832.S8.S8", "LDG.E.ENL2.256.STRONG.GPU"
+    jl = [
+        {"probe": "honest", "rate": 2.0, "words": None, "blocks": 100, "sm_mhz": 2000, "rates": {f"0:{imma}": 2.0}},
+        {"probe": "gl_w32", "rate": 0.01, "words": 256, "blocks": 100, "sm_mhz": 2000, "note": "s128",
+         "rates": {f"0:{ldg}": 0.01}},
+        {"probe": "gl_w32_fast", "rate": 0.02, "words": 256, "blocks": 100, "sm_mhz": 2000, "note": "s16",
+         "rates": {f"0:{ldg}": 0.02}},
+        {"probe": "gh_w32", "rate": 0.008, "words": 256, "blocks": 100, "sm_mhz": 2000, "note": "s128 beside",
+         "rates": {f"0:{imma}": 1.0, f"1:{ldg}": 0.008}},
+    ]
+    (out / "rows.jsonl").write_text("".join(json.dumps(r) + "\n" for r in jl))
+    assert eps1.main(["l2gather", str(out)]) == 0
+    got = capsys.readouterr().out
+    assert "honest alone: IMMA 2.00000/SM/clk" in got
+    assert re.search(r"^gl_w32 +s128 +32 +0\.0100 +10\.240 +2\.048 +nan", got, re.M)
+    assert re.search(r"^gh_w32 .* 8\.192 +1\.638 +0\.5000", got, re.M)
+    assert "best alone:  gl_w32_fast 20.480 B/SM/clk = 4.096 TB/s" in got
+    assert "best beside: gh_w32 8.192 B/SM/clk = 1.638 TB/s, MMA kept 0.5000" in got
+    assert "fastest path 4.096 TB/s beats QSTAR's 3.3 TB/s table kernel" in got
+
+
+def test_jitter_reports_host_timing_spread_and_the_gap_to_the_chip(tmp_path, capsys):
+    """`eps1.py jitter`: each (trial, length) group's host-timed SM clock mean, its random spread (rel u%) and the
+    systematic gap below the chip's own timer, and a per-trial u taken at the longest length (the tightest bound)."""
+    out = tmp_path / "out"
+    out.mkdir()
+
+    def rep(trial, ln, host, gt, rep_i):
+        return {"op": "calib", "trial": trial, "ref": "p_mma0", "len_s": ln, "probe": "p_mma0", "rep": rep_i,
+                "clock_mhz_host": host, "clock_mhz_gt_median": gt, "nvml_sm_mhz": 2092, "nvml_mw": 150000,
+                "throttle": "0x0"}
+
+    jl = [rep("locked", 0.002, 2090.0, 2120.0, 0), rep("locked", 0.002, 2110.0, 2120.0, 1),
+          rep("locked", 0.2, 2098.0, 2104.0, 0), rep("locked", 0.2, 2102.0, 2104.0, 1)]
+    (out / "jitter.jsonl").write_text("".join(json.dumps(r) + "\n" for r in jl))
+    assert eps1.main(["jitter", str(out)]) == 0
+    got = capsys.readouterr().out
+    assert re.search(r"^locked +0\.002 +2 +2100\.0 +14\.14 +10\.00 +0\.476 +2120\.0 +0\.943 +2092", got, re.M)
+    assert re.search(r"^locked +0\.200 +2 +2100\.0 +2\.83 +2\.00 +0\.095 +2104\.0 +0\.190 +2092", got, re.M)
+    assert "locked: at 0.200s the host clock pins the SM clock to within 0.095% (random) and sits 0.190% below" in got
+    assert "u ~ 0.285%" in got
+
+
 # ---- the probes themselves -------------------------------------------------------------------------------------------
 
 
@@ -279,3 +410,61 @@ def test_probes_build_and_gate(tmp_path):
     assert not wrong, "\n".join(wrong)
     assert {v["probe"] for v in verdicts if not v["passed"]} == {"bad_ldsm_merged", "bad_stsm_conflict",
                                                                  "dsm_red_add64_self"}
+
+
+ji89 = _load("opcode_probe_sm89_ji", POUW / "opcode_probe" / "sm89" / "ji.py")
+
+
+def test_sm89_ji_pins_only_the_schedule_its_name_says():
+    top = {"FMUL": 112, "IMMA.16816.S8.S8": 8, "MOV": 1, "IADD3": 1, "ISETP.GE.AND": 1, "BRA": 1}
+    assert ji89.exact("j16_fmuli_q112_a2u1_w2", top)
+    assert not ji89.exact("j16_fmuli_q112_a2u1_w2", {**top, "CALL.REL.NOINC": 1})
+    assert not ji89.exact("j16_fmuli_q112_a2u1_w2", {**top, "FMUL": 111})
+    assert not ji89.exact("j16_fmuli_q112_a2u1_w2", {**top, "IMMA.16816.S8.S8": 16})
+    assert ji89.exact("j16_iadd3_q64_a2u1_w2", {"IMAD.IADD": 32, "IADD3": 33, "IMMA.16816.S8.S8": 8, "ISETP.GE.AND": 1})
+    names = [p[0] for p in ji89.grid(32)]
+    assert "j32_fmuli_q112_a2u1_w2" in names and len(names) == len(set(names))
+
+
+def test_sm89_ji_refit_is_the_upper_hull_at_the_margin(tmp_path):
+    """JI89 at ADA-89 is 4.0306 x_IMMA16816 + 0.93458 v <= 1: a program under it leaves the line as it is, one above it
+    (load 1.083) splits it into facets through that program at the margin, each holding every point."""
+    def run(d, progs):
+        d.mkdir()
+        (d / "rows.jsonl").write_text("".join(json.dumps({"probe": p, "run": RUN, "rates": {
+            "0:IMMA.16816.S8.S8": 4 * x, "0:FMUL": 4 * v}}) + "\n" for p, x, v in progs))
+        return d
+
+    under = run(tmp_path / "under", [("j16_a", 0.05, 0.5)])
+    (old,) = ji89.refit([under], "IMMA16816")
+    assert old[:2] == pytest.approx((4.03060164, 0.934579439))
+    beat = run(tmp_path / "beat", [("j16_a", 0.05, 0.5), ("j16_b", 0.06, 0.9)])
+    assert ji89.worst(ji89.loads([beat]))["JI89"] == (pytest.approx(4.03060164 * 0.06 + 0.934579439 * 0.9), "j16_b")
+    fs = ji89.refit([beat], "IMMA16816")
+    assert len(fs) == 2 and all("j16_b" in f[2] for f in fs)
+    for a, b, _ in fs:
+        assert a * 0.06 * 1.02 + b * 0.9 * 1.02 <= 1 + 1e-9
+        assert a * 0.05 * 1.02 + b * 0.5 * 1.02 < 1
+        assert b * 1.07 <= 1 + 1e-9 and a / 4.03060164 <= 1 + 1e-9
+
+
+def test_sm89_ji_points_join_only_their_own_family(tmp_path):
+    """A ji32 program joins the E families its lane beat, as (IMMA.16832, every non-MMA instruction) a SMSP-cycle; one
+    whose adds ptxas split onto the IMAD pipe stays out, and IMMA.16816 programs and IMAD lanes join nothing."""
+    rows_, verdicts = [], []
+    for name, top in (("j32_fmuli_q112_a2u2_w2", {"FMUL": 224, "IMMA.16832.S8.S8": 16, "MOV": 6, "IADD3": 1}),
+                      ("j32_axi_q64_a3u1_w2", {"IADD3": 33, "LOP3.LUT": 32, "IMMA.16832.S8.S8": 8, "IMAD.MOV.U32": 6}),
+                      ("j32_iadd3_q112_a8u1_w2", {"IMAD.IADD": 70, "IADD3": 43, "IMMA.16832.S8.S8": 8}),
+                      ("j32_imadi_q32_a3u1_w2", {"IMAD": 32, "IMMA.16832.S8.S8": 8, "IADD3": 1}),
+                      ("j16_fmuli_q112_a2u1_w2", {"FMUL": 112, "IMMA.16816.S8.S8": 8, "IADD3": 1})):
+        mma = next(op for op in top if op.startswith("IMMA"))
+        top = {**top, "ISETP.GE.AND": 1, "BRA": 1}
+        rows_.append({"probe": name, "run": RUN, "rates": {f"0:{mma}": 0.25 * top[mma] / 8}})
+        verdicts.append({"probe": name, "verdict": {"loops": [{"top": top, "counts": {mma: top[mma]}}]}})
+    (tmp_path / "rows.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows_))
+    (tmp_path / "gate.json").write_text(json.dumps({"verdicts": verdicts}))
+    pts = sm89.ji_points([tmp_path])
+    assert set(pts) == {"ffma", "iadd3", "lop3"}
+    (m, x, name), = pts["ffma"]
+    assert name == f"j32_fmuli_q112_a2u2_w2@{RUN}" and m == pytest.approx(0.125) and x == pytest.approx(0.125 * 233 / 16)
+    assert [n.split("@")[0] for *_, n in pts["iadd3"]] == [n.split("@")[0] for *_, n in pts["lop3"]] == ["j32_axi_q64_a3u1_w2"]

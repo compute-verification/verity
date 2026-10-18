@@ -9,13 +9,14 @@ import json
 import math
 import struct
 import threading
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
 import torch
 import torch.nn.functional as F
 
-from matmul import MM, Run, run_chain
+from matmul import MM, Run, Softmaxed, run_chain
 
 DTYPES = {"BF16": torch.bfloat16, "F16": torch.float16, "F32": torch.float32, "I64": torch.int64, "I32": torch.int32,
           "I8": torch.int8, "U8": torch.uint8}
@@ -187,6 +188,8 @@ class Layer:
         v = self.linear("self_attn.v_proj", x, run, collect).view(B, T, -1, c.head_dim).transpose(1, 2)
         cu, su = cos.unsqueeze(1), sin.unsqueeze(1)
         q, k = (q * cu) + (rotate_half(q) * su), (k * cu) + (rotate_half(k) * su)
+        if collect is not None:
+            collect("keys", k)
         a = self.attention(q, k, v, run).reshape(B, T, -1).contiguous()
         h = res + self.linear("self_attn.o_proj", a, run, collect)
         res = h
@@ -215,9 +218,9 @@ class Layer:
         return self.edited_attention(q, k, v, run)
 
     def edited_attention(self, query, key, value, run: Run) -> torch.Tensor:
-        """Per KV group, in FP32: S = Q K^T through the arm's attention chain, the causal softmax, O = P V through it;
-        query rows in chunks past 8K (the rows are independent). On the check window, the attention's relative error
-        against FP32 attention on the same inputs (a diagnostic)."""
+        """Per KV group, in FP32: S = Q K^T through the arm's attention chain, the causal softmax (or the chain's own,
+        when it returns `Softmaxed`), O = P V through it; query rows in chunks past 8K (the rows are independent). On the
+        check window, the attention's relative error against FP32 attention on the same inputs (a diagnostic)."""
         b, H, s, d = query.shape
         if b != 1:
             raise ValueError("an arm's attention runs one window at a time")
@@ -243,9 +246,13 @@ class Layer:
                     del sc
                 extra = {"group": g, "rows": (r0, r1), "causal": causal, "rep": rep, "s": s, "d": d}
                 scores = run_chain(qk_steps, MM("qk", "qk", run, qg[:, r0:r1], kg, cache=cache, extra=extra))
-                p = torch.softmax((scores * self.scaling).masked_fill(~causal, float("-inf")), dim=-1)
+                if isinstance(scores, Softmaxed):
+                    p, pv_extra = scores.p, {**extra, **scores.extra}
+                else:
+                    p, pv_extra = torch.softmax((scores * self.scaling).masked_fill(~causal, float("-inf")), dim=-1), extra
                 del scores
-                o[:, r0:r1] = run_chain(pv_steps, MM("pv", "pv", run, p, vg, cache=cache, extra=extra)).float()
+                o[:, r0:r1] = run_chain(pv_steps, MM("pv", "pv", run, p, vg, cache=cache, extra=pv_extra)).float()
+                del pv_extra
                 del p, causal
             if ref is not None:
                 run.attn_err[0] += float(((o - ref) ** 2).sum())
@@ -254,16 +261,18 @@ class Layer:
         return out
 
 
-def head(cfg: Config, norm_w: torch.Tensor, head_w: torch.Tensor, h: torch.Tensor, ids: torch.Tensor) -> torch.Tensor:
-    """The NLL of every next token of one window (T - 1 of them): the final norm, the head, the cross entropy, in chunks
-    of LOSS_ROWS tokens past 8K."""
+def head(cfg: Config, norm_w: torch.Tensor, head_w: torch.Tensor, h: torch.Tensor, ids: torch.Tensor,
+         proj: Callable | None = None) -> torch.Tensor:
+    """The NLL of every next token of one window (T - 1 of them): the final norm, the head (`proj(rows, chunk)` in
+    place of rows @ head_w^T when given), the cross entropy, in chunks of LOSS_ROWS tokens past 8K."""
     T = h.shape[0]
+    proj = proj or (lambda x, _c: x @ head_w.T)
     if T <= LOSS_WHOLE:
-        logits = (rms_norm(h, norm_w, cfg.eps) @ head_w.T).float()
+        logits = proj(rms_norm(h, norm_w, cfg.eps), 0).float()
         return F.cross_entropy(logits[:-1], ids[1:], reduction="none")
     n = rms_norm(h, norm_w, cfg.eps)
-    return torch.cat([F.cross_entropy((n[i:min(i + LOSS_ROWS, T - 1)] @ head_w.T).float(), ids[i + 1:i + 1 + LOSS_ROWS],
-                                      reduction="none") for i in range(0, T - 1, LOSS_ROWS)])
+    return torch.cat([F.cross_entropy(proj(n[i:min(i + LOSS_ROWS, T - 1)], c).float(), ids[i + 1:i + 1 + LOSS_ROWS],
+                                      reduction="none") for c, i in enumerate(range(0, T - 1, LOSS_ROWS))])
 
 
 def hf_layer(cfg: Config, snapshot: Path, li: int, layer: Layer):

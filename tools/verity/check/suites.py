@@ -26,6 +26,11 @@ of them, read from git's view of the working tree, so uncommitted edits count. T
 verdict pack (`verdicts.py`; a recorded check gathers one from the newest recorded checks), on any other. A pass names the
 recorded run that earned it (`--run`, which check passes), and a reuse prints that run.
 
+A suite nested in another's directory is its own. The outer suite's directory leaves it out of the outer one's key and inputs
+(`dropped`), unless another of the outer suite's inputs covers it (a path it declares, a dependency's directory), so an edit to
+the nested suite re-runs that suite alone. The guard fails a test of the outer suite that reads one of its files, as it fails any
+read outside the inputs (`VERITY_SUITE_DENY`). The repository's own suite keeps every path: its tests read the whole tree.
+
 The key is content, not location. Whatever is at or under the suite's own directory is keyed by its path from there (`_rel`,
 written `<suite>/...`): the directory's git tree id (which hashes each file's path inside it and its blob, and not the
 directory's own name), the declared inputs, build outputs, fixtures and runner files under it, its test modules, and in
@@ -107,18 +112,21 @@ suite runs in one process.
 still running then has its process group killed and fails as timed out (`timed_out` in --json), so a hung test costs the check
 an hour, not its slot until the run's own timeout.
 
-`--mem-gb GB` (`check` passes its slot's share) bounds a parallel suite to as many xdist workers as GB holds at its `[tool.verity.tests]
-worker_gb`, what one of them may reach, else at `TEST_PROCESS_GB`.
+`--mem-gb GB` (`check` passes its slot's share) is the whole run's: the one-process suites hold `TEST_PROCESS_GB` each, and the
+parallel suites share the rest, each with as many xdist workers as it holds at its `[tool.verity.tests] worker_gb`, what one of
+them may reach, else at `TEST_PROCESS_GB`; one that overlaps another waits for its workers' GB (`wide_gb`).
 """
 from __future__ import annotations
 
 import argparse
 import ast
 import concurrent.futures
+import contextlib
 import hashlib
 import importlib.metadata
 import importlib.util
 import json
+import math
 import os
 import platform
 import re
@@ -130,8 +138,8 @@ import tempfile
 import threading
 import time
 import tomllib
-from contextlib import contextmanager
-from dataclasses import dataclass
+from contextlib import contextmanager, nullcontext
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -235,6 +243,7 @@ class Suite:
     timeout_s: float = 0.0       # [tool.verity.tests] timeout_s: the bound `--timeouts` puts on its run (0: SUITE_TIMEOUT_S)
     inputs_only: bool = False    # [tool.verity.tests] inputs_only: its dependencies' directories are left out (`inputs_of`)
     worker_gb: float = 0.0       # [tool.verity.tests] worker_gb: one xdist worker's peak, which `--mem-gb` divides (0: unbounded)
+    nested: tuple[str, ...] = ()  # the suites under its directory, which its own directory leaves out (`dropped`)
 
 
 def _pyproject(path: str) -> dict:
@@ -362,7 +371,9 @@ def discover() -> list[Suite]:
         suites.append(Suite(name, path, _requires(project, data), tuple(tests.get("inputs", [])), tests.get("parallel", False) is True,
                             tuple(tests.get("artifacts", [])), float(tests.get("timeout_s", 0)), tests.get("inputs_only", False) is True,
                             float(tests.get("worker_gb", 0))))
-    return suites
+    # the repository's own suite keeps every path: its tests (test_repository, test_boundaries, test_doc_paths) read the whole tree
+    return [replace(s, nested=tuple(sorted(t.path for t in suites if t.path != s.path and _under(t.path, [s.path]))))
+            if s.path != "." else s for s in suites]
 
 
 def artifact_ids(suite: Suite) -> dict[str, str]:
@@ -420,23 +431,34 @@ def markdown(suite: Suite) -> bool:
     return any(p.endswith(".md") for p in suite.inputs)
 
 
-_PROSE: dict[tuple[str, str], str] = {}
+_PROSE: dict[tuple[str, str, bool, tuple[str, ...]], str] = {}
 #: each digest `input_ids` wrote -> the git tree it read it from, which `components` keeps beside the key for `--explain`
 _TREES: dict[str, str] = {}
+#: each digest of a directory with nested suites left out -> those suites' paths from the directory, for `--explain`
+_NESTED: dict[str, list[str]] = {}
 
 
-def input_ids(tree: str, paths: list[str], prose: bool = True) -> dict[str, str]:
+def input_ids(tree: str, paths: list[str], prose: bool = True, cut: list[str] = ()) -> dict[str, str]:
     """`object_ids`, with each directory, when not ``prose``, as a digest of its files but its `*.md` (each by its path from the
-    directory, as git's tree id hashes them)."""
+    directory, as git's tree id hashes them), and one that holds suites of ``cut`` (`dropped`) as a digest without their files."""
     ids = object_ids(tree, paths)
-    for p in paths if not prose else ():
-        if ids[p] != "absent" and (ROOT / p).is_dir():
-            if (tree, p) not in _PROSE:
-                cut = "" if p == "." else p + "/"
-                _PROSE[tree, p] = "nomd:" + _digest(sorted((f.removeprefix(cut), i) for f, i in own_ids(tree, p).items()
-                                                           if not f.endswith(".md")))
-            _TREES[_PROSE[tree, p]] = ids[p]
-            ids[p] = _PROSE[tree, p]
+    for p in paths:
+        inner = tuple(sorted(c for c in cut if c != p and _under(c, [p])))
+        if (prose and not inner) or ids[p] == "absent" or not (ROOT / p).is_dir():
+            continue
+        if (tree, p, prose, inner) not in _PROSE:
+            base = "" if p == "." else p + "/"
+            files = sorted((f.removeprefix(base), i) for f, i in own_ids(tree, p).items()
+                           if (prose or not f.endswith(".md")) and not _under(f, list(inner)))
+            if inner:
+                rel = [c.removeprefix(base) for c in inner]
+                d = ("cut+md:" if prose else "cut:") + _digest({"files": files, "nested": rel})
+                _NESTED[d] = rel
+            else:
+                d = "nomd:" + _digest(files)
+            _PROSE[tree, p, prose, inner] = d
+        _TREES[_PROSE[tree, p, prose, inner]] = ids[p]
+        ids[p] = _PROSE[tree, p, prose, inner]
     return ids
 
 
@@ -585,9 +607,27 @@ def _under(path: str, prefixes: list[str]) -> bool:
     return any(p == "." or path == p or path.startswith(p.rstrip("/") + "/") for p in prefixes)
 
 
+def dropped(suite: Suite, paths: list[str]) -> list[str]:
+    """The suites nested in ``suite``'s directory (`Suite.nested`) that none of its other inputs ``paths`` (`inputs_of`) covers,
+    the outermost of them: its own directory leaves them out of its key, and its guard holds its tests to reading none of their
+    files, so an edit to a nested suite re-runs that suite and not the one around it. A path it declares (or a dependency's
+    directory) that covers a nested suite keeps it."""
+    other = [p for p in paths if p != suite.path]
+    out = [n for n in suite.nested if not _under(n, other)]
+    return [n for n in out if not any(m != n and _under(n, [m]) for m in out)]
+
+
+def covered(path: str, paths: list[str], cut: list[str] = ()) -> bool:
+    """Whether ``path`` is under ``paths``, a suite's inputs, with its nested suites ``cut`` (`dropped`) left out of them: under
+    one of those only an input inside it covers it."""
+    inner = [c for c in cut if _under(path, [c])]
+    return _under(path, [p for p in paths if not inner or _under(p, inner)])
+
+
 def touched(suites: list[Suite], pkgs: dict[str, str], rev: str, tree: str, lock: dict[str, dict]) -> list[Suite]:
     """The suites whose key the change from ``rev`` to ``tree`` moves by path: a changed file under their inputs (the repository's
-    own suite keys on all of them) or in the runner, or a changed resolution in `uv.lock`. What their tests read beside the key
+    own suite keys on all of them; a suite nested in another's directory is not the other's, `dropped`) or in the runner, or a
+    changed resolution in `uv.lock`. What their tests read beside the key
     (`used`) is left out, so a suite this skips can still miss its cached pass."""
     files = [f for f in _git("diff", "--no-renames", "--name-only", "-z", rev, tree).split("\0") if f]   # a rename names its source too
     if any(f in RUNNER for f in files):
@@ -596,8 +636,12 @@ def touched(suites: list[Suite], pkgs: dict[str, str], rev: str, tree: str, lock
     if "uv.lock" in files:
         r = subprocess.run(["git", "show", f"{rev}:uv.lock"], cwd=ROOT, capture_output=True, text=True)
         before = locked(r.stdout if r.returncode == 0 else "")
-    return [s for s in suites if any(_under(f, inputs_of(s, pkgs)) for f in files if markdown(s) or not f.endswith(".md"))
-            or resolved(roots(s, pkgs), before, s.path) != resolved(roots(s, pkgs), lock, s.path)]
+
+    def moved(s: Suite) -> bool:
+        paths = inputs_of(s, pkgs)
+        cut = dropped(s, paths)
+        return any(covered(f, paths, cut) for f in files if markdown(s) or not f.endswith(".md"))
+    return [s for s in suites if moved(s) or resolved(roots(s, pkgs), before, s.path) != resolved(roots(s, pkgs), lock, s.path)]
 
 
 def fetched_fixtures(tree: str, paths: set[str]) -> dict[str, str]:
@@ -640,18 +684,22 @@ def components(suite: Suite, ids: dict[str, str], env: dict, args: list[str], de
     """What a suite's key hashes: its name and depth, each input's object id (under its own directory by the path from there:
     `_rel`), the build outputs, the resolved dependencies, the environment and the pytest arguments. A pass keeps them beside it,
     so `--explain` can say what a miss changed; beside them, unhashed, the git tree of each directory keyed without its Markdown
-    (`trees`), which lists the files a change moved."""
+    or its nested suites (`trees`), which lists the files a change moved, and those nested suites (`nested`), whose files it
+    leaves out of that list."""
     inputs = _rel_keys(suite.path, ids)
     out = {"suite": suite.name, "depth": depth(suite), "inputs": inputs,
            "artifacts": _rel_keys(suite.path, artifact_ids(suite)), "resolved": deps or {}, "environment": env, "pytest": args}
     if trees := {q: _TREES[i] for q, i in inputs.items() if i in _TREES}:
         out["trees"] = trees
+    if nested := {q: _NESTED[i] for q, i in inputs.items() if i in _NESTED}:
+        out["nested"] = nested
     return out
 
 
 def key(suite: Suite, ids: dict[str, str], env: dict, args: list[str], deps: dict[str, list] | None = None) -> str:
     c = components(suite, ids, env, args, deps)
     c.pop("trees", None)
+    c.pop("nested", None)
     return _digest(c)
 
 
@@ -672,7 +720,8 @@ def holds(hit: dict, tree: str, lock: dict[str, dict], provided: set[str]) -> bo
 
 def used(r: "Result", paths: list[str], deps: dict[str, list], tree: str, lock: dict[str, dict]) -> dict:
     """What a pass keeps beside its key, for `holds`."""
-    watched = sorted(f for f in r.watched or [] if not _under(f, paths))
+    cut = dropped(r.suite, paths)
+    watched = sorted(f for f in r.watched or [] if not covered(f, paths, cut))
     return {"watched": object_ids(tree, watched) if watched else {},
             "imported": {n: _state(n, lock) for n in sorted({_norm(d) for d in r.distributions or []} - set(deps))},
             "missing": r.missing or []}
@@ -857,7 +906,9 @@ class PerTest:
                  tree: str):
         self.suite, self.tree = suite, tree
         self.dir = per_test_dir(suite)
-        self.own = {f: i for f, i in own_ids(tree, suite.path).items() if markdown(suite) or not f.endswith(".md")}
+        cut = dropped(suite, [p for p in ids if not p.startswith("fixture:")])
+        self.own = {f: i for f, i in own_ids(tree, suite.path).items()
+                    if (markdown(suite) or not f.endswith(".md")) and not _under(f, cut)}
         self.narrow = suite.parallel             # a suite that doesn't declare order independence keys each module on everything
         texts = {}
         for f in self.own if self.narrow else ():
@@ -1173,7 +1224,8 @@ def explain_changes(was: dict, now: dict, own: str = ".") -> list[str]:
             wt, nt = was.get("trees", {}).get(q, wi[q]), now.get("trees", {}).get(q, ni[q])
             files = _changed_files(wt, nt)
             if files is not None and q in now.get("trees", {}):
-                files = [f for f in files if not f.endswith(".md")]
+                nested = now.get("nested", {}).get(q, [])
+                files = [f for f in files if not (f.endswith(".md") and not ni[q].startswith("cut+md:")) and not _under(f, nested)]
             where = "" if files is None else f": {', '.join(f'{p.rstrip(chr(47))}/{f}' if p != '.' else f for f in files[:8])}" + \
                 (f" and {len(files) - 8} more" if len(files) > 8 else "")
             out.append(f"input {p} changed ({wi[q][:12]} -> {ni[q][:12]}){where}")
@@ -1354,7 +1406,8 @@ def run(suite: Suite, allowed: list[str], args: list[str], logs: Path, workers: 
     log, report = logs / f"{slug}.log", logs / f"{slug}.json"
     report.unlink(missing_ok=True)
     env = {k: v for k, v in os.environ.items() if not k.startswith(RUNNER_PREFIX) and k not in RUNNER_ENV}
-    env.update(VERITY_SUITE_ROOT=str(ROOT), VERITY_SUITE_ALLOW=json.dumps(allowed), VERITY_SUITE_REPORT=str(report),
+    env.update(VERITY_SUITE_ROOT=str(ROOT), VERITY_SUITE_ALLOW=json.dumps(allowed), VERITY_SUITE_DENY=json.dumps(dropped(suite, allowed)),
+               VERITY_SUITE_REPORT=str(report),
                VERITY_SUITE_WATCH=json.dumps(list(watch)), VERITY_SUITE_MARKDOWN="1" if markdown(suite) else "0",
                VERITY_SUITE_PROGRAMS=json.dumps(list(suite.artifacts)))
     env.pop("VERITY_SUITE_REUSE", None)
@@ -1511,12 +1564,55 @@ class Slots:
                 self.cond.notify_all()
 
 
+#: the memory a check slot gives the run it holds (`tools/verity/check/slot.py`'s SLOT_MEM_ENV)
+SLOT_MEM_ENV = "CHECK_SLOT_MEM_GB"
+#: after a stop's SIGINT, how long a suite's process group has to end before it is killed
+STOP_GRACE_S = 30.0
+
+
+def slot_mem_gb() -> float | None:
+    """The check slot's memory, when this runs in one (17 Oct: a quick tier in proofs' 480 GB pool slot ran circuit_check's suite
+    on 94 workers, 784 GB, since only `check` passed `--mem-gb`)."""
+    v = os.environ.get(SLOT_MEM_ENV, "")
+    return float(v) if v.replace(".", "", 1).isdigit() else cgroup_mem_gb()
+
+
+def cgroup_mem_gb(root: Path = Path("/")) -> float | None:
+    """The tightest cgroup v2 `memory.max` over this process, in GiB, or None when none is set: a job outside a check slot
+    (the cluster queue's scope, 17 Oct: two `suites.py verity-flock --fresh` runs OOM-killed there) sizes itself to it."""
+    try:
+        rel = next(line[3:].strip() for line in (root / "proc/self/cgroup").read_text().splitlines() if line.startswith("0::"))
+    except (OSError, StopIteration):
+        return None
+    top, limits = root / "sys/fs/cgroup", []
+    d = top / rel.strip("/")
+    for c in (d, *d.parents):
+        if not c.is_relative_to(top):
+            break
+        with contextlib.suppress(OSError):
+            if (m := (c / "memory.max").read_text().strip()).isdigit():
+                limits.append(int(m))
+    return min(limits) / 2**30 if limits else None
+
+
 def wide_workers(s: Suite, n: int, mem_gb: float | None) -> int:
     """A parallel suite's xdist workers on a lane of ``n`` processes: fewer where ``mem_gb`` holds fewer at its `worker_gb`, else
     at `TEST_PROCESS_GB` (16 Oct: verity_core_protocols_pous_check's undeclared workers reached 11 GB each)."""
     if mem_gb is None:
         return n
-    return max(1, min(n, int(mem_gb // (s.worker_gb if s.worker_gb > 0 else TEST_PROCESS_GB))))
+    return max(1, min(n, int(mem_gb // worker_gb(s))))
+
+
+def worker_gb(s: Suite) -> float:
+    return s.worker_gb if s.worker_gb > 0 else TEST_PROCESS_GB
+
+
+def wide_gb(mem_gb: float | None, serial: int) -> float | None:
+    """The GB the parallel suites share: ``mem_gb`` less `TEST_PROCESS_GB` for each of the ``serial`` processes that run the
+    one-process suites beside them. Parallel suites that overlap draw their workers' GB from it in turn, so two side by side can't
+    each size to the whole (17 Oct, note:proofs/20261017T0625Z-friction-suites-mem-gb-concurrent: circuit_check's 53 workers and
+    flock's 30, each sized to all of --mem-gb, reached 800 GB together on cpu-2)."""
+    return None if mem_gb is None else max(0.0, mem_gb - serial * TEST_PROCESS_GB)
 
 
 def serial_slots(seconds: list[float | None], parallel: int, jobs: int) -> int:
@@ -1594,8 +1690,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--jobs", "-j", type=int, default=default_jobs(),
                     help="test processes at once, a parallel suite's xdist workers included (default: the CPUs this process may use, "
                          f"at most one per {TEST_PROCESS_GB} GB of available memory)")
-    ap.add_argument("--mem-gb", type=float, default=None, metavar="GB",
-                    help=f"the memory the tests may use: a parallel suite runs at most GB / worker_gb workers ({TEST_PROCESS_GB} GB undeclared)")
+    ap.add_argument("--mem-gb", type=float, default=slot_mem_gb(), metavar="GB",
+                    help=f"the memory the tests may use: a parallel suite runs at most GB / worker_gb workers ({TEST_PROCESS_GB} GB "
+                         f"undeclared; default: the check slot's ${SLOT_MEM_ENV}, so a quick tier in a slot stays inside it)")
     ap.add_argument("--logs", type=Path, help="write each suite's log and report here (default: under the cache)")
     ap.add_argument("--json", type=Path, help="write the outcome of every selected suite here")
     ap.add_argument("--run", metavar="RUN", help="the recorded run this is (check passes its own): kept with each pass, so a reuse of it "
@@ -1632,20 +1729,21 @@ def main(argv: list[str] | None = None) -> int:
         lean_on_path()
     env = environment()
     inputs = {s: inputs_of(s, pkgs) for s in chosen}
+    cuts = {s: dropped(s, inputs[s]) for s in chosen}
     fixtures = fetched_fixtures(tree, {p for ps in inputs.values() for p in ps})
     logs = a.logs or CACHE / "logs" / f"{time.strftime('%Y%m%dT%H%M%S')}-{os.getpid()}"
     logs.mkdir(parents=True, exist_ok=True)
     if not (a.list or a.explain):
         sweep_basetemps()
     # the repository's own suite keys on the whole tree but reads tracked files only, so it alone never makes a fetch
-    needed = {p: art for p, art in fixtures.items() if any(_under(p, [x for x in ps if x != "."]) for ps in inputs.values())}
+    needed = {p: art for p, art in fixtures.items() if any(covered(p, [x for x in ps if x != "."], cuts[s]) for s, ps in inputs.items())}
     unfetched = set() if a.list or a.explain else fetch_fixtures(needed, logs)
     plan, ids_of = [], {}
     meta, lock, provided = metadata() + list(STORE_READS), locked(), set(importlib.metadata.packages_distributions())
     for s in chosen:
         paths = inputs[s]
-        ids = input_ids(tree, sorted(set(paths) | set(RUNNER)), markdown(s))
-        ids.update({f"fixture:{p}": art for p, art in fixtures.items() if _under(p, paths)})
+        ids = input_ids(tree, sorted(set(paths) | set(RUNNER)), markdown(s), cuts[s])
+        ids.update({f"fixture:{p}": art for p, art in fixtures.items() if covered(p, paths, cuts[s])})
         deps = resolved(roots(s, pkgs), lock, s.path)
         keys = [key(s, ids, env, args, deps)] + ([key(s, ids, env, extra, deps)] if a.quick else [])   # a full pass also covers --quick
         hit = next((c for c in map(cached, keys) if c and holds(c, tree, lock, provided)), None)
@@ -1663,16 +1761,18 @@ def main(argv: list[str] | None = None) -> int:
     if a.list:
         for s, paths, keys, hit, _deps in plan:
             state = f"cached from {_since(hit)}" if hit else "not cached"
-            print(f"{s.name:28} {s.path:28} {state}\n    inputs: {', '.join(paths)}")
+            print(f"{s.name:28} {s.path:28} {state}\n    inputs: {', '.join(paths)}"
+                  + (f"\n    nested suites left out: {', '.join(cuts[s])}" if cuts[s] else ""))
         return 0
 
     head = _git("rev-parse", "HEAD").strip()
     dirty = bool(_git("status", "--porcelain").strip())
     results: list[Result] = [Result(s, "cached", since=hit, key=hit["key"]) for s, _, _, hit, _ in plan if hit and not a.fresh]
-    blocked = [s for s, paths, _, hit, _ in plan if (a.fresh or not hit) and any(_under(p, [x for x in paths if x != "."]) for p in unfetched)]
+    blocked = [s for s, paths, _, hit, _ in plan
+               if (a.fresh or not hit) and any(covered(p, [x for x in paths if x != "."], cuts[s]) for p in unfetched)]
     for s in blocked:
         print(f"failed  {s.name:28} its fixtures could not be fetched: "
-              f"{', '.join(sorted(p for p in unfetched if _under(p, inputs[s])))[:300]} (log: {logs / 'fetch-fixtures.log'})")
+              f"{', '.join(sorted(p for p in unfetched if covered(p, inputs[s], cuts[s])))[:300]} (log: {logs / 'fetch-fixtures.log'})")
         results.append(Result(s, "failed", log=logs / "fetch-fixtures.log"))
     todo = [(s, paths, keys, deps) for s, paths, keys, hit, deps in plan if (a.fresh or not hit) and s not in blocked]
     per = {s: PerTest(s, ids_of[s], env, [args] + ([extra] if a.quick else []), deps, tree)
@@ -1707,6 +1807,8 @@ def main(argv: list[str] | None = None) -> int:
     r = serial_slots([known.get(s.name) for s in one], len(wide), jobs)
     lanes = {False: Slots(r), True: Slots(jobs - r)}
     turns = {s: lane.index(s) for lane in (wide, one) for s in lane}
+    shared_gb = wide_gb(a.mem_gb, r)
+    memory = Slots(int(shared_gb)) if shared_gb is not None else None
     if wide and one:
         print(f"suites: {len(wide)} parallel suites one at a time on {jobs - r} processes, beside {len(one)} others on {r}")
     min_s = a.per_test_min_s if a.per_test_min_s is not None else float(os.environ.get(MIN_S_ENV) or 0)
@@ -1716,12 +1818,13 @@ def main(argv: list[str] | None = None) -> int:
     stopping = threading.Event()
 
     def start(s: Suite, paths: list[str]) -> Result:
-        n = wide_workers(s, jobs - r, a.mem_gb) if s in wide else 1
-        with lanes[s in wide].take(turns[s], n):
+        n = wide_workers(s, jobs - r, shared_gb) if s in wide else 1
+        gb = min(int(shared_gb), math.ceil(n * worker_gb(s))) if memory and s in wide else 0
+        with lanes[s in wide].take(turns[s], n), (memory.take(turns[s], gb) if memory and s in wide else nullcontext()):
             if stopping.is_set():                  # interrupted: start no suite
                 return Result(s, "failed", reported=False)
-            return run(s, paths + meta + list(RUNNER), args, logs, n, [m for m in meta if not _under(m, paths)], reuse.get(s, []),
-                       (s.timeout_s or SUITE_TIMEOUT_S) if a.timeouts else 0.0)
+            return run(s, paths + meta + list(RUNNER), args, logs, n, [m for m in meta if not covered(m, paths, cuts[s])],
+                       reuse.get(s, []), (s.timeout_s or SUITE_TIMEOUT_S) if a.timeouts else 0.0)
 
     def finish(fut) -> None:
         s, k, paths, deps = futures[fut]
@@ -1806,6 +1909,15 @@ def main(argv: list[str] | None = None) -> int:
             with _GROUPS_LOCK:
                 for g in list(_GROUPS):
                     kill_group(g, signal.SIGINT)
+
+            def kill_rest() -> None:                        # a pytest that ignores SIGINT (a node short of memory) would hold
+                with _GROUPS_LOCK:                          # the stop until its run ended (17 Oct, cpu-2: 94 workers)
+                    for g in list(_GROUPS):
+                        kill_group(g, signal.SIGKILL)
+
+            stop = threading.Timer(STOP_GRACE_S, kill_rest)
+            stop.daemon = True
+            stop.start()
             for fut in futures:
                 if fut not in handled:
                     finish(fut)

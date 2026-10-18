@@ -6,6 +6,7 @@ Three kinds of matmul, all written y = x w^T but for P V: `linear` (x the layer'
 from __future__ import annotations
 
 import zlib
+from dataclasses import dataclass, field
 from typing import Callable
 
 import torch
@@ -41,6 +42,14 @@ def exact_mm(a: torch.Tensor, b: torch.Tensor, term: int) -> torch.Tensor:
         part = (a[..., i:i + c] @ b[..., i:i + c, :]).double()
         out = part if out is None else out + part
     return out
+
+
+@dataclass
+class Softmaxed:
+    """What a qk chain returns when its quantizer computes the softmax itself (an integer softmax): `p`, the
+    probabilities, takes the float softmax's place as P V's x, and `extra` joins P V's `mm.extra`."""
+    p: torch.Tensor
+    extra: dict = field(default_factory=dict)
 
 
 class Run:
@@ -156,17 +165,18 @@ class MM:
             self.run.rotations[key] = fn()
         return self.run.rotations[key]
 
-    def coins(self, shape) -> torch.Tensor:
-        """Fresh bits (0. or 1.) of the given shape. Linears: one stream per (seed, layer, linear, window), the tag
-        tonight's `linears_layerwise.py` uses; attention: the (seed, layer, window) stream, in draw order."""
+    def coins(self, shape, levels: int = 2) -> torch.Tensor:
+        """Fresh coins of the given shape, uniform on {0, ..., levels - 1} (bits by default; a b-bit dither takes
+        levels = 2^b). Linears: one stream per (seed, layer, linear, window), the tag tonight's `linears_layerwise.py`
+        uses; attention: the (seed, layer, window) stream, in draw order."""
         if self.kind == "linear":
             n = self._draws[0]
             self._draws[0] += 1
             tag = f"{self.seed}/{self.layer}/{self.name}/{self.window}" + (f"/{n}" if n else "")
             g = torch.Generator(device=self.device)
             g.manual_seed(zlib.crc32(tag.encode()))
-            return torch.randint(0, 2, tuple(shape), generator=g, device=self.device).float()
-        return torch.randint(0, 2, tuple(shape), generator=self.run.gen(self.device), device=self.device).float()
+            return torch.randint(0, levels, tuple(shape), generator=g, device=self.device).float()
+        return torch.randint(0, levels, tuple(shape), generator=self.run.gen(self.device), device=self.device).float()
 
     def gate(self, name: str, ok: bool, detail=None) -> bool:
         return self.run.gates.record(name, ok, self.where, detail)
@@ -177,15 +187,22 @@ class MM:
         return f"{self.run.arm.name}/s{self.seed} layer {self.layer} {self.name}{g} window {self.window}"
 
     def int_product(self, x: torch.Tensor | None = None, w: torch.Tensor | None = None) -> torch.Tensor:
-        """The exact integer product of x and w (default: this matmul's), gated: both within int8 and the accumulator
+        """The exact integer product of x and w (default: this matmul's), gated: both within int8 (or, when the
+        quantizer declared a wider grid with `integer(..., top=T)`, within +-T: `grid_range`) and the accumulator
         within s32 by k max|x| max|w| on every call, and on the check window against float64 on CHECK_ROWS rows."""
         x = self.x if x is None else x
         w = self.weight() if w is None else w
-        self.gate("int8_range", G.int8_ok(x, w))
+        top = self.extra.get("top", 127)
+        if top > 127:
+            self.gate("grid_range", G.within(top, x, w), top)
+        else:
+            self.gate("int8_range", G.int8_ok(x, w))
         k = x.shape[-1]
         bound = k * G.absmax(x) * G.absmax(w)
         self.gate("accumulator", bound <= G.S32, bound)
-        if self.kind == "linear":
+        if self.kind == "linear" and top > 127:
+            acc = exact_mm(x.float(), w.float().T, int(G.absmax(x) * G.absmax(w)))
+        elif self.kind == "linear":
             acc = int_mm(x, w)
         else:
             acc = exact_mm(x, w.transpose(-1, -2) if self.kind == "qk" else w, int(G.absmax(x) * G.absmax(w)))

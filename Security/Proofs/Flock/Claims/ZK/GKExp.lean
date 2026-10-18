@@ -16,13 +16,15 @@ import Proofs.Flock.Soundness.ZK.GK.Theorem
 A rewind that opens one of those coins as another (a binding failure), the cap, and running out of rewinds output the
 empty transcript.
 
-* `Proto.gkE_zk`: it meets `ZKmalR` at `ε_zk = 3·δ_A + 8t·δ_B + 3^{-t} + t/M`, plus the probability of a collision among
-  its own SHA-512 calls: the old `gk_close` on the old `Model`, built from the protocol at each nonce (`Proto.model`),
-  whose `bind_real` is `real_eq_of_not_mism`, `PrefinalClose` is `PrefixHides` and `RewindClose` is `SHVZK`;
+* `Proto.gkE_zk`: it meets `ZKmalR` at `ε_zk = 4·δ_A + 4t·δ_B + 3^{-t} + t/M` and `γ = 4M`: the old hybrids
+  (`sim_hyb₁`, `hyb₁_hyb₂`, `hyb₂_real`) on the old `Model`, built from the protocol at each nonce (`Proto.model`),
+  whose `bind_real` is `real_eq_of_not_mism`, `PrefinalClose` is `PrefixHides` and `RewindClose` is `SHVZK`. Hybrid 1's
+  binding failure is a rewind with the honest prover's messages; `PrefixHides` moves its first run to the real one, where
+  it is a collision of two real runs on one nonce (`rwMism_coll`), `Fork`'s event;
 * `Proto.gkE_costExp`: at most `(1 + 5t)·runBound` calls in expectation over its coins against every verifier, for every
   cap `M` (`SimCost`, the old `sim_runs_ev`); `Proto.gkE_cost`: at most `(1 + 5M)·runBound` on every coin
   (`SimCostLe`, the old `sim_runs_le`);
-* `Proto.gkE_zk_pow`: at the cap `M = t·3^t`, `ε_zk = 3·δ_A + 8t·δ_B + 2·3^{-t}`.
+* `Proto.gkE_zk_pow`: at the cap `M = t·3^t`, `ε_zk = 4·δ_A + 4t·δ_B + 2·3^{-t}` and `γ = 4t·3^t`.
 
 **Why a cap.** A `Claims.Simulator` has finitely many coins and stops on every one, so the uncapped simulator is not
 one. The cap costs `t/M` in `ε_zk` and nothing in the expected cost, which is uniform in `M`; at `M = t·3^t` its term is
@@ -179,6 +181,27 @@ theorem gkT_runs_le {V Cd Cr : Type} (dummy : Cd → V) (rw : V → Cr → V) (c
     omega
   · simp only; omega
   · simp only; omega
+
+theorem rewindsT_bind {V C : Type} (v₀ : V) (rw : C → V) (comp bad : V → Bool) :
+    ∀ (n L : ℕ) (σ : Fin L → C) (a b : V), (rewindsT v₀ rw comp bad n L σ).1 = .bind a b →
+      ∃ i, bad (rw (σ i)) = true
+  | 0, _, _, _, _, h => by simp [rewindsT] at h
+  | _ + 1, 0, _, _, _, h => by simp [rewindsT] at h
+  | n + 1, L + 1, σ, a, b, h => by
+      simp only [rewindsT] at h
+      split_ifs at h with hb hc
+      · exact ⟨0, hb⟩
+      · obtain ⟨i, hi⟩ := rewindsT_bind v₀ rw comp bad n L _ a b h
+        exact ⟨i.succ, hi⟩
+
+/-- **A binding outcome of `gk` on tapes** is a rewind on one of its tapes, from a completed first run. -/
+theorem gkT_bind {V Cd Cr : Type} (dummy : Cd → V) (rw : V → Cr → V) (comp : V → Bool) (bad : V → V → Bool)
+    (t M : ℕ) (ω₀ : Cd) (ωs : Fin M → Cd) (σs : Fin (4 * M) → Cr) (a b : V)
+    (h : (gkT dummy rw comp bad t M ω₀ ωs σs).1 = .bind a b) :
+    comp (dummy ω₀) = true ∧ ∃ i, bad (dummy ω₀) (rw (dummy ω₀) (σs i)) = true := by
+  unfold gkT afterT at h
+  split_ifs at h with hc h2
+  exact ⟨hc, rewindsT_bind _ _ _ _ _ _ σs a b h⟩
 
 end Tape
 
@@ -705,135 +728,75 @@ theorem simE_cost (t M : ℕ) (r₀ : G.Rand) (rs : Fin M → G.Rand) (ss : Fin 
 
 end Cost
 
-/-! ## A binding failure in the simulator is a collision among its calls -/
+/-! ## Hybrid 1's binding failure is a collision in the real game -/
 
-theorem spLog_bind_left {α β : Type} (H : Msg → Msg) (ask : List Msg → Out) (p : SP α) (f : α → SP β) :
-    spLog H ask p ⊆ spLog H ask (spBind p f) := by
-  rw [spBind_log]
-  exact List.subset_append_left _ _
+/-- From the view `v` of a first run that opened `c`, a rewind at `c` with the honest prover's messages on one of the
+tapes `σs` opens one of `c`'s coins as another. -/
+def rwMism (G : Proto W) (H : Msg → Msg) (ask : List Msg → Out) (x : Msg) (w : W) (ν : G.Nonce) {L : ℕ}
+    (v : List (Msg × Out) ⊕ (Fin (G.K x) → G.Coin)) (σs : Fin L → G.Rand) : Prop :=
+  ∃ c, v = .inr c ∧ ∃ i, (G.fRun H ask x ν c (G.realVec H x w ν (σs i) c)).1 = .mism
 
-theorem spLog_bind_right {α β : Type} (H : Msg → Msg) (ask : List Msg → Out) (p : SP α) (f : α → SP β) :
-    spLog H ask (f (SP.eval H ask p).1) ⊆ spLog H ask (spBind p f) := by
-  rw [spBind_log]
-  exact List.subset_append_right _ _
+/-- **Hybrid 1's binding failure, on its tapes**, reads the first run only through its view before `V*`'s final
+message. -/
+theorem hyb₁_bind_rwMism (G : Proto W) (H : Msg → Msg) (ask : List Msg → Out) (x : Msg) (w : W) (ν : G.Nonce)
+    (t M : ℕ) (ω₀ : G.Rand) (ωs : Fin M → G.Rand) (σs : Fin (4 * M) → G.Rand)
+    (h : FlockSoundness.ZK.GK.Out.bindBy (G.badT H x ν)
+      (gkT (G.dumT H ask x ν) (G.rwRT H ask x w ν) (G.compT H x ν) (G.badT H x ν) t M ω₀ ωs σs).1) :
+    G.rwMism H ask x w ν (G.view0 H x ν (G.dumT H ask x ν ω₀)) σs := by
+  obtain ⟨a, b, hab⟩ : ∃ a b,
+      (gkT (G.dumT H ask x ν) (G.rwRT H ask x w ν) (G.compT H x ν) (G.badT H x ν) t M ω₀ ωs σs).1 = .bind a b := by
+    revert h
+    cases (gkT (G.dumT H ask x ν) (G.rwRT H ask x w ν) (G.compT H x ν) (G.badT H x ν) t M ω₀ ωs σs).1 with
+    | view _ => intro h; exact h.elim
+    | bind a b => intro _; exact ⟨a, b, rfl⟩
+    | fail => intro h; exact h.elim
+  obtain ⟨hc, i, hi⟩ := gkT_bind _ _ _ _ t M ω₀ ωs σs a b hab
+  obtain ⟨c, hcls⟩ := Option.isSome_iff_exists.mp hc
+  refine ⟨c, by unfold view0; rw [hcls], i, ?_⟩
+  rw [G.badT_of_cls H x ν hcls, G.rwRT_of_cls H ask x w ν hcls] at hi
+  exact of_decide_eq_true hi
 
-theorem rewSP_bind (G : Proto W) (H : Msg → Msg) (ask : List Msg → Out) (x : Msg) (ν : G.Nonce)
-    (c : Fin (G.K x) → G.Coin) (τ₀ : List (Msg × Out)) : ∀ (n L : ℕ) (ss : Fin L → G.SimRand x) (v₀ v : List (Msg × Out)),
-    (SP.eval H ask (G.rewSP x ν c τ₀ n L ss)).1 = .bind v₀ v →
-      ∃ i : Fin L, (SP.eval H ask (G.rewindSP x ν c (ss i))).1 = (.mism, v) ∧
-        spLog H ask (G.rewindSP x ν c (ss i)) ⊆ spLog H ask (G.rewSP x ν c τ₀ n L ss)
-  | 0, _, _, _, _, h => by simp [rewSP, SP.eval] at h
-  | _ + 1, 0, _, _, _, h => by simp [rewSP, SP.eval] at h
-  | n + 1, L + 1, ss, v₀, v, h => by
-      simp only [rewSP, spBind_eval, spBind_log] at h ⊢
-      generalize hp : (SP.eval H ask (G.rewindSP x ν c (ss 0))).1 = p at h ⊢
-      by_cases hm : p.1 = .mism
-      · simp only [hm, ite_true, SP.eval, FlockSoundness.ZK.GK.Out.bind.injEq] at h
-        obtain ⟨-, rfl⟩ := h
-        exact ⟨0, hp.trans (Prod.ext hm rfl), List.subset_append_left _ _⟩
-      · by_cases hs : p.1 = .succ
-        · simp [hs, SP.eval] at h
-        · simp only [hm, hs, ite_false] at h ⊢
-          obtain ⟨i, h1, h2⟩ := rewSP_bind G H ask x ν c τ₀ n L _ v₀ v h
-          exact ⟨i.succ, h1, List.Subset.trans h2 (List.subset_append_right _ _)⟩
-
-/-- **A binding failure in the simulator is a collision among its own calls**: the first run's check of a coin's
-opening and the failing rewind's check of the other opening, against one commitment. -/
-theorem simE_coll (G : Proto W) (H : Msg → Msg) (t M : ℕ) {Θ : Type} (Vs : VStar Θ) (θ : Θ) (x : Msg) (ν : G.Nonce)
-    (r₀ : G.Rand) (rs : Fin M → G.Rand) (ss : Fin (4 * M) → G.SimRand x) (hC : G.Binding H) (v₀ v : List (Msg × Out))
-    (hb : (gkT (G.dumT H (fun as => ((Vs.next x as θ).eval H).1) x ν)
-      (G.rwST H (fun as => ((Vs.next x as θ).eval H).1) x ν) (G.compT H x ν) (G.badT H x ν) t M r₀ rs ss).1 =
-        .bind v₀ v) :
-    findColl (simLog H (G.simulatorE t M) Vs θ x (ν, r₀, rs, ss)) ≠ none := by
-  set ask : List Msg → Out := fun as => ((Vs.next x as θ).eval H).1 with hask
-  unfold gkT at hb
-  set τD := G.dumT H ask x ν r₀ with hτD
-  cases hcl : G.cls H x ν τD with
-  | none =>
-      have h : G.compT H x ν τD = false := by simp [compT, hcl]
-      rw [ite_eq_right (by simp [h])] at hb
-      cases hb
-  | some c =>
-      have h : G.compT H x ν τD = true := by simp [compT, hcl]
-      rw [ite_eq_left h] at hb
-      unfold afterT at hb
-      set e := estimateT (fun r => G.compT H x ν (G.dumT H ask x ν r)) M t rs with he
-      by_cases h2 : e.2 = true
-      swap
-      · rw [ite_eq_right h2] at hb
-        cases hb
-      rw [ite_eq_left h2] at hb
-      rw [← G.rewSP_eval H ask x ν hcl] at hb
-      obtain ⟨i, hi, hlogi⟩ := G.rewSP_bind H ask x ν c τD _ _ ss v₀ v hb
-      have hlog : ((clsOC (G.K x) (G.chk x ν) G.dec τD).eval H).2 ++
-          spLog H ask (G.rewSP x ν c τD (4 * e.1) (4 * M) ss) ⊆ simLog H (G.simulatorE t M) Vs θ x (ν, r₀, rs, ss) := by
-        have hd : (SP.eval H ask (G.dRunSP x ν r₀)).1 = (τD, some c) := by
-          rw [G.dRunSP_eval H ask x ν r₀, ← hτD, hcl]
-        have he' : (SP.eval H ask (G.estSP x ν M t rs)).1 = e := G.estSP_eval H ask x ν M t rs
-        unfold simLog
-        rw [← hask]
-        refine List.append_subset.mpr ⟨?_, ?_⟩
-        · refine List.Subset.trans ?_ (spLog_bind_left H ask (G.dRunSP x ν r₀) _)
-          unfold dRunSP
-          refine List.Subset.trans ?_ (spLog_bind_right H ask _ _)
-          refine List.Subset.trans ?_ (spLog_bind_left H ask _ _)
-          rw [ocSP_log, spRun_eval]
-          exact List.Subset.refl _
-        · refine List.Subset.trans ?_ (spLog_bind_right H ask (G.dRunSP x ν r₀) _)
-          rw [hd]
-          refine List.Subset.trans ?_ (spLog_bind_right H ask (G.estSP x ν M t rs) _)
-          rw [he', ite_eq_left h2]
-          exact spLog_bind_left H ask _ _
-      rw [rewindSP_eval] at hi
-      set sv := ((G.sim x ν c (ss i)).eval H).1 with hsv
-      set τF := interact ask (G.pmF H x ν c sv) (G.k x) [] with hτF
-      have hmis : G.fcls H x ν c τF = .mism := congrArg Prod.fst hi
-      obtain ⟨ρ', t', m, ht, h0', hr, hb', hc'⟩ := G.fcls_mism_inv H x ν c τF hmis
-      have hlogF : ((fclsOC (G.K x) (G.chk x ν) G.dec c τF).eval H).2 ⊆ spLog H ask (G.rewindSP x ν c (ss i)) := by
-        simp only [rewindSP, spBind_log, ocSP_eval, ocSP_log, spRun_eval]
-        intro p hp
-        simp only [List.mem_append, spLog, List.append_nil]
-        exact Or.inr (Or.inr hp)
-      obtain ⟨ρ, h0, hall⟩ := (G.cls_eq_some_iff H x ν τD c).mp hcl
-      obtain ⟨m₀, e1, e2, e3⟩ := hall t' ht
-      have hρ : ρ' = ρ := by
-        have := resp_zero_eq ask (G.pmF H x ν c sv) (G.pmD H x ν r₀) (G.K x + 1) (by rw [pmF_nil, pmD_nil])
-        have e : resp τF 0 = resp τD 0 := this
-        rw [h0', h0] at e
-        exact Option.some.inj e
-      subst hρ
-      have hlog₀ := G.cls_log H x ν τD c hcl ρ' h0 t' ht m₀ e1
-      have hdec : G.dec m₀ ≠ G.dec m := fun e => hc'.1 (by rw [e3, e])
-      have hcoll := hC x ν ρ' t' m₀ m e2 hb' hdec
-      rw [findColl_ne_none_iff] at hcoll ⊢
-      obtain ⟨p, hp, q, hq, hne, heq⟩ := hcoll
-      have sub : ((G.chk x ν ρ' t' m₀).eval H).2 ++ ((G.chk x ν ρ' t' m).eval H).2 ⊆
-          simLog H (G.simulatorE t M) Vs θ x (ν, r₀, rs, ss) := by
-        refine List.append_subset.mpr ⟨?_, ?_⟩
-        · exact List.Subset.trans hlog₀ (List.Subset.trans (List.subset_append_left _ _) hlog)
-        · exact List.Subset.trans hc'.2 (List.Subset.trans hlogF
-            (List.Subset.trans hlogi (List.Subset.trans (List.subset_append_right _ _) hlog)))
-      exact ⟨p, sub hp, q, sub hq, hne, heq⟩
+/-- **On the real run, it is a collision of two real runs** (`mism_coll`). -/
+theorem rwMism_coll (G : Proto W) (H : Msg → Msg) (hC : G.Binding H) {Θ : Type} (Vs : VStar Θ) (θ : Θ) (x : Msg)
+    (w : W) (ν : G.Nonce) (hk : Vs.k x = G.k x) {L : ℕ} (r : G.Rand) (σs : Fin L → G.Rand)
+    (h : G.rwMism H (fun as => ((Vs.next x as θ).eval H).1) x w ν
+      (G.view0 H x ν (interact (fun as => ((Vs.next x as θ).eval H).1) (G.pmR H x w ν r) (G.k x) [])) σs) :
+    ∃ i, G.collR H Vs θ x w ν r (σs i) := by
+  obtain ⟨c, hv, i, hi⟩ := h
+  have hcls : G.cls H x ν (interact (fun as => ((Vs.next x as θ).eval H).1) (G.pmR H x w ν r) (G.k x) []) =
+      some c := by
+    unfold view0 at hv
+    revert hv
+    cases G.cls H x ν (interact (fun as => ((Vs.next x as θ).eval H).1) (G.pmR H x w ν r) (G.k x) []) with
+    | none => intro hv; cases hv
+    | some c' => intro hv; cases hv; rfl
+  refine ⟨i, G.mism_coll H hC Vs θ x w ν r (σs i) hk c ?_ hi⟩
+  rw [runStar_msgs, hk]
+  exact hcls
 
 /-! ## The theorems -/
 
 /-- **The Goldreich–Kahan simulator with estimation meets `ZKmalR`** at
-`ε_zk(x) = 3·δ_A(x) + 8t·δ_B(x) + 3^{-t} + t/M`, for a protocol whose dummy-witness run hides the witness until the
-last coin, whose messages at a fixed coin vector are simulated and whose opening check binds. -/
+`ε_zk(x) = 4·δ_A(x) + 4t·δ_B(x) + 3^{-t} + t/M` and `γ = 4M`, for a protocol whose dummy-witness run hides the witness
+until the last coin, whose messages at a fixed coin vector are simulated and whose opening check binds. The session
+analysis's hybrids (`sim_hyb₁`, `hyb₁_hyb₂`, `hyb₂_real`) leave hybrid 1's binding failure, a rewind with the honest
+prover's messages; `PrefixHides` moves its first run to the real one (`δ_A`), where it is a collision of two real runs
+on one nonce (`rwMism_coll`) for one of the `4M` tapes. -/
 theorem gkE_zk (G : Proto W) (H : Msg → Msg) (R : Rel W) (t M : ℕ) (hM : 0 < M) (δA δB : Msg → ℝ)
     (hA : G.PrefixHides H R δA) (hB : G.SHVZK H R δB) (hB0 : ∀ x, 0 ≤ δB x) (hC : G.Binding H) :
-    ZKmalR H G.k G.prover R (G.simulatorE t M) fun x => 3 * δA x + 8 * t * δB x + (1 / 3) ^ t + t / M := by
+    ZKmalR H G.k G.prover R (G.simulatorE t M) (fun x => 4 * δA x + 4 * t * δB x + (1 / 3) ^ t + t / M)
+      fun _ => 4 * M := by
   intro x w hR Θ Vs θ hk Ev
   beta_reduce
   set ask : List Msg → Out := fun as => ((Vs.next x as θ).eval H).1 with hask
-  set ε : ℝ := 3 * δA x + 8 * t * δB x + (1 / 3) ^ t + t / M with hε
+  set ε : ℝ := 4 * δA x + 4 * t * δB x + (1 / 3) ^ t + t / M with hε
   have key : ∀ ν : G.Nonce,
       |Pr (fun r : G.Rand => Ev (interact ask (G.pmR H x w ν r) (G.k x) [])) -
           Pr (fun q : G.Rand × (Fin M → G.Rand) × (Fin (4 * M) → G.SimRand x) =>
             Ev ((G.simulatorE t M).out H Vs θ x (ν, q)))| ≤
-        ε + Pr (fun q : G.Rand × (Fin M → G.Rand) × (Fin (4 * M) → G.SimRand x) =>
-          findColl (simLog H (G.simulatorE t M) Vs θ x (ν, q)) ≠ none) := by
+        ε + Pr (fun p : G.Rand × G.Rand => G.collR H Vs θ x w ν p.1 p.2) * (4 * M) := by
     intro ν
+    set PC := Pr (fun p : G.Rand × G.Rand => G.collR H Vs θ x w ν p.1 p.2) with hPC
     set g : G.Rand × (Fin M → G.Rand) × (Fin (4 * M) → G.SimRand x) → GOut (List (Msg × Out)) × ℕ :=
       fun q => gkT (G.dumT H ask x ν) (G.rwST H ask x ν) (G.compT H x ν) (G.badT H x ν) t M q.1 q.2.1 q.2.2 with hg
     have hBm := G.rewindClose_model H ask R δB hB x w hR (hB0 x) ν
@@ -841,12 +804,51 @@ theorem gkE_zk (G : Proto W) (H : Msg → Msg) (R : Rel W) (t M : ℕ) (hM : 0 <
     have hev : ∀ f : GOut (List (Msg × Out)) × ℕ → ℝ,
         FlockSoundness.ZK.GK.Rand.ev f ((G.model H ask x w ν).sim t M) = Ex fun q => f (g q) :=
       fun f => (ev_gkT _ _ _ _ t M f).symm
-    have g1 := (G.model H ask x w ν).gk_close hBm hCm t M hM (FlockSoundness.Game.ind Ev)
-      (FlockSoundness.Game.ind_nonneg _) (FlockSoundness.Game.ind_le_one _)
-    have g2 := (G.model H ask x w ν).gk_close hBm hCm t M hM (FlockSoundness.Game.ind fun τ => ¬ Ev τ)
-      (FlockSoundness.Game.ind_nonneg _) (FlockSoundness.Game.ind_le_one _)
-    unfold FlockSoundness.ZK.GK.Rand.pr at g1 g2
-    rw [hev, hev] at g1 g2
+    have hbind : FlockSoundness.ZK.GK.Rand.pr (fun o => FlockSoundness.ZK.GK.Out.bindBy (G.model H ask x w ν).bad o.1)
+        ((G.model H ask x w ν).hyb₁ t M) ≤ δA x + PC * (4 * M) := by
+      have e1 : FlockSoundness.ZK.GK.Rand.pr
+          (fun o => FlockSoundness.ZK.GK.Out.bindBy (G.model H ask x w ν).bad o.1) ((G.model H ask x w ν).hyb₁ t M) =
+          Pr (fun q : G.Rand × (Fin M → G.Rand) × (Fin (4 * M) → G.Rand) =>
+            FlockSoundness.ZK.GK.Out.bindBy (G.badT H x ν)
+              (gkT (G.dumT H ask x ν) (G.rwRT H ask x w ν) (G.compT H x ν) (G.badT H x ν) t M q.1 q.2.1 q.2.2).1) :=
+        (ev_gkT _ _ _ _ t M _).symm.trans (Ex_ind_comp _ _)
+      have e2 : |Pr (fun q : G.Rand × (Fin M → G.Rand) × (Fin (4 * M) → G.Rand) =>
+            G.rwMism H ask x w ν (G.view0 H x ν (interact ask (G.pmR H x w ν q.1) (G.k x) [])) q.2.2) -
+          Pr (fun q : G.Rand × (Fin M → G.Rand) × (Fin (4 * M) → G.Rand) =>
+            G.rwMism H ask x w ν (G.view0 H x ν (interact ask (G.pmD H x ν q.1) (G.k x) [])) q.2.2)| ≤ δA x :=
+        G.hyb_prefix H R δA hA x w hR Vs θ hk ν (S := (Fin M → G.Rand) × (Fin (4 * M) → G.Rand)) Prod.snd
+          fun v σs => G.rwMism H ask x w ν v σs
+      have e3 : Pr (fun q : G.Rand × (Fin M → G.Rand) × (Fin (4 * M) → G.Rand) =>
+            G.rwMism H ask x w ν (G.view0 H x ν (interact ask (G.pmR H x w ν q.1) (G.k x) [])) q.2.2) ≤
+          PC * (4 * M) := by
+        rw [Pr_mid (β := Fin M → G.Rand)
+          fun r σs => G.rwMism H ask x w ν (G.view0 H x ν (interact ask (G.pmR H x w ν r) (G.k x) [])) σs]
+        refine (Pr_mono fun p h => G.rwMism_coll H hC Vs θ x w ν hk p.1 p.2 h).trans ?_
+        have := Pr_exists_coord_le (4 * M) (G.collR H Vs θ x w ν)
+        push_cast at this
+        linarith
+      rw [e1]
+      refine (Pr_mono (q := fun q : G.Rand × (Fin M → G.Rand) × (Fin (4 * M) → G.Rand) =>
+          G.rwMism H ask x w ν (G.view0 H x ν (interact ask (G.pmD H x ν q.1) (G.k x) [])) q.2.2)
+        fun q h => G.hyb₁_bind_rwMism H ask x w ν t M q.1 q.2.1 q.2.2 h).trans ?_
+      have := abs_le.mp e2
+      linarith [this.1, this.2]
+    have close : ∀ φ : List (Msg × Out) → ℝ, (∀ v, 0 ≤ φ v) → (∀ v, φ v ≤ 1) →
+        |Ex (fun q => FlockSoundness.ZK.GK.Out.val φ (g q).1) -
+          FlockSoundness.ZK.GK.avgR (fun r => φ ((G.model H ask x w ν).real r))| ≤ ε + PC * (4 * M) := by
+      intro φ h0 h1
+      have s1 := (G.model H ask x w ν).sim_hyb₁ hBm t M (fun o => FlockSoundness.ZK.GK.Out.val φ o.1)
+        (fun o => FlockSoundness.ZK.GK.Out.val_nonneg h0 o.1) (fun o => FlockSoundness.ZK.GK.Out.val_le_one h1 o.1)
+      have s2 := (G.model H ask x w ν).hyb₁_hyb₂ t M (fun o => FlockSoundness.ZK.GK.Out.val φ o.1)
+        (fun o => FlockSoundness.ZK.GK.Out.val_nonneg h0 o.1) (fun o => FlockSoundness.ZK.GK.Out.val_le_one h1 o.1)
+      have s3 := (G.model H ask x w ν).hyb₂_real hCm t M hM φ h0 h1
+      rw [hev] at s1
+      rw [abs_le] at s1 s2 s3 ⊢
+      constructor <;> linarith [s1.1, s1.2, s2.1, s2.2, s3.1, s3.2, hbind]
+    have g1 := close (FlockSoundness.Game.ind Ev) (FlockSoundness.Game.ind_nonneg _)
+      (FlockSoundness.Game.ind_le_one _)
+    have g2 := close (FlockSoundness.Game.ind fun τ => ¬ Ev τ) (FlockSoundness.Game.ind_nonneg _)
+      (FlockSoundness.Game.ind_le_one _)
     have eR1 : FlockSoundness.ZK.GK.avgR (fun r => FlockSoundness.Game.ind Ev ((G.model H ask x w ν).real r)) =
         Pr (fun r : G.Rand => Ev (interact ask (G.pmR H x w ν r) (G.k x) [])) := by
       show Ex _ = _
@@ -860,28 +862,11 @@ theorem gkE_zk (G : Proto W) (H : Msg → Msg) (R : Rel W) (t M : ℕ) (hM : 0 <
       rfl
     rw [eR1] at g1
     rw [eR2] at g2
-    have hbind : Ex (fun q => FlockSoundness.Game.ind
-          (fun o => FlockSoundness.ZK.GK.Out.bindBy (G.model H ask x w ν).bad o.1) (g q)) ≤
-        Pr (fun q : G.Rand × (Fin M → G.Rand) × (Fin (4 * M) → G.SimRand x) =>
-          findColl (simLog H (G.simulatorE t M) Vs θ x (ν, q)) ≠ none) := by
-      rw [ind_comp, Ex_ind_eq]
-      refine Pr_mono fun q hq => ?_
-      obtain ⟨v₀, v, hb⟩ : ∃ v₀ v, (g q).1 = .bind v₀ v := by
-        revert hq
-        cases (g q).1 with
-        | view _ => intro hq; exact hq.elim
-        | bind v₀ v => intro _; exact ⟨v₀, v, rfl⟩
-        | fail => intro hq; exact hq.elim
-      exact G.simE_coll H t M Vs θ x ν q.1 q.2.1 q.2.2 hC v₀ v hb
     have eS : Pr (fun q : G.Rand × (Fin M → G.Rand) × (Fin (4 * M) → G.SimRand x) =>
         Ev ((G.simulatorE t M).out H Vs θ x (ν, q))) = Pr fun q => Ev (outT (g q).1) :=
       Pr_congr fun q => Iff.of_eq (congrArg Ev (G.simE_eval H ask x ν t M q.1 q.2.1 q.2.2))
-    have hout := pr_outT_close (fun q => (g q).1) Ev
-      (Pr (fun r : G.Rand => Ev (interact ask (G.pmR H x w ν r) (G.k x) [])))
-      (ε + Ex (fun q => FlockSoundness.Game.ind
-          (fun o => FlockSoundness.ZK.GK.Out.bindBy (G.model H ask x w ν).bad o.1) (g q))) g1 g2
     rw [eS, abs_sub_comm]
-    linarith
+    exact pr_outT_close (fun q => (g q).1) Ev _ _ g1 g2
   have eR : Pr (fun ω : G.Nonce × G.Rand => Ev (runStar H (G.prover w) Vs x ω θ).msgs) =
       Ex fun ν => Pr fun r : G.Rand => Ev (interact ask (G.pmR H x w ν r) (G.k x) []) := by
     rw [Pr_prod_left]
@@ -896,25 +881,25 @@ theorem gkE_zk (G : Proto W) (H : Msg → Msg) (R : Rel W) (t M : ℕ) (hM : 0 <
         Ev ((G.simulatorE t M).out H Vs θ x (ν, q)) :=
     Pr_prod_left (α := G.Nonce) (β := G.Rand × (Fin M → G.Rand) × (Fin (4 * M) → G.SimRand x))
       fun c => Ev ((G.simulatorE t M).out H Vs θ x c)
-  have eC : Pr (fun c : (G.simulatorE t M).C x => findColl (simLog H (G.simulatorE t M) Vs θ x c) ≠ none) =
-      Ex fun ν => Pr fun q : G.Rand × (Fin M → G.Rand) × (Fin (4 * M) → G.SimRand x) =>
-        findColl (simLog H (G.simulatorE t M) Vs θ x (ν, q)) ≠ none :=
-    Pr_prod_left (α := G.Nonce) (β := G.Rand × (Fin M → G.Rand) × (Fin (4 * M) → G.SimRand x))
-      fun c => findColl (simLog H (G.simulatorE t M) Vs θ x c) ≠ none
-  rw [eR, eS, eC, ← Ex_const_add]
-  exact Ex_abs_sub_le key
+  rw [eR, eS]
+  refine (Ex_abs_sub_le key).trans ?_
+  rw [Ex_const_add, Ex_mul_const, mul_comm (Ex _)]
+  exact add_le_add le_rfl (mul_le_mul_of_nonneg_left (G.pr_collR_le H Vs θ x w) (by positivity))
 
-/-- **At the cap `M = t·3^t`**: `ε_zk(x) = 3·δ_A(x) + 8t·δ_B(x) + 2·3^{-t}`. -/
+/-- **At the cap `M = t·3^t`**: `ε_zk(x) = 4·δ_A(x) + 4t·δ_B(x) + 2·3^{-t}` and `γ = 4t·3^t`. -/
 theorem gkE_zk_pow (G : Proto W) (H : Msg → Msg) (R : Rel W) (t : ℕ) (ht : 0 < t) (δA δB : Msg → ℝ)
     (hA : G.PrefixHides H R δA) (hB : G.SHVZK H R δB) (hB0 : ∀ x, 0 ≤ δB x) (hC : G.Binding H) :
-    ZKmalR H G.k G.prover R (G.simulatorE t (t * 3 ^ t)) fun x => 3 * δA x + 8 * t * δB x + 2 * (1 / 3) ^ t := by
+    ZKmalR H G.k G.prover R (G.simulatorE t (t * 3 ^ t)) (fun x => 4 * δA x + 4 * t * δB x + 2 * (1 / 3) ^ t)
+      fun _ => 4 * t * 3 ^ t := by
   have e : ((t : ℝ) / ((t * 3 ^ t : ℕ) : ℝ)) = (1 / 3) ^ t := by
     have : (0 : ℝ) < t := by exact_mod_cast ht
     push_cast
     rw [div_mul_eq_div_div, div_self this.ne', one_div_pow]
+  have e2 : (4 : ℝ) * ((t * 3 ^ t : ℕ) : ℝ) = 4 * t * 3 ^ t := by push_cast; ring
   intro x w hR Θ Vs θ hk Ev
   have := G.gkE_zk H R t (t * 3 ^ t) (by positivity) δA δB hA hB hB0 hC x w hR Θ Vs θ hk Ev
-  simp only [e] at this
+  simp only [e, e2] at this
+  beta_reduce
   linarith
 
 /-- **The simulator's expected cost**: at most `(1 + 5t)·runBound` calls in expectation over its coins, against every

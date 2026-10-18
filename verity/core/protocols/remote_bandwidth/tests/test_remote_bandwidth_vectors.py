@@ -149,6 +149,17 @@ KV_P1024_MASKED = {
     },
 }
 
+# kv.py's bound key (kv_vectors.json's "bound", its "p1024/k3/masked"), under the same seed: the token-layer of slot 3's
+# layer 17, block 3 · 80 + 17, is SHA512(BOUND_LABEL ‖ u32be c) for c = 0 … 63, d its digest, b its offset and the
+# words' SHA-512 that of their 32 little-endian words.
+KV_BOUND_LABEL = b"verity/word-codec/kv/bound-vectors"
+KV_BOUND = {
+    "block": 257,
+    "digest": "f5597dc95882e28736b9d6ea22e7c6f8de38e8299e1072048d913a5f740506544110c9a5a419f7058e9b8a8f6cc1df10c2c4d6e5159b7131d6f6429cbd8719a9",
+    "b": "92e5925319a3cfb7146e7cb4826ac25e88c9c85dce2fa938bde6ca4ac8480b79d2337cd0d18252ab6101c7c2c98008a3e836d6f87121fe9b548cc493a7cbdf05",
+    "words_sha512": "19fd802486f9d44335f474e428159469768fb12670b776684c686ca27840d43f412d18652032671e7db2621411301b1b8788b1ece4ba45c964e3c1309e6c4b99",
+}
+
 
 @pytest.mark.slow
 def test_vectors_are_reproduced() -> None:
@@ -184,6 +195,49 @@ def test_the_registration_and_the_codecs_words_reproduce_the_pinned_ones() -> No
         assert payloads[j][s * w:s * (w + 1)].hex() == v["payload"]
         m = int.from_bytes(payloads[j][s * w:s * (w + 1)], "little")
         assert codec.encode_word(m, f.block_words * j + w, k).to_bytes(s, "little").hex() == v["word"]
+
+
+def test_the_bound_blocks_reproduce_the_pinned_ones() -> None:
+    """Blocks 0 and 20 under their bound keys: the digest is the payload leaf's x_j, and the block decodes with it and
+    differs from the registered (seed's key) block in every word."""
+    pinned = json.loads(rv.PATH.read_text())
+    k = codec.key(bytes.fromhex(pinned["codec"]["seed"]), codec.DEFAULT)
+    s = k.codec.field.word_bytes
+    assert [v["j"] for v in pinned["codec"]["bound"]] == list(rv.BOUND_BLOCKS)
+    for v in pinned["codec"]["bound"]:
+        j, payload = v["j"], rv.payload(v["j"])
+        d = codec.digest(payload)
+        assert j or pinned["payload"]["leaf_0"]["x"] == d.hex()
+        assert d.hex() == v["digest"] and format(codec.binding(d, j, k), "x") == v["b"]
+        block, seeds = codec.encode(payload, j, k, bound=True), codec.encode(payload, j, k)
+        assert block[:s].hex() == v["word_0"] and hashlib.sha512(block).hexdigest() == v["block_sha512"]
+        assert codec.decode(block, j, k, d) == payload and codec.decode(seeds, j, k, d) is None
+        assert all(block[s * w:s * (w + 1)] != seeds[s * w:s * (w + 1)] for w in range(k.codec.field.block_words))
+
+
+def test_the_coin_form_blocks_reproduce_the_pinned_ones() -> None:
+    """Blocks 0 and 20 under the coin form of their bound keys: the digest of the form without a coin, another offset,
+    and the words of the word path at that offset, which is all of the key a device that takes b_j as its input reads
+    (`kv.cu`, `paged.cu`).  Each decodes under its digest and its coin only: not without the coin, not under another
+    coin, and the form without a coin's encoding not under the coin."""
+    pinned = json.loads(rv.PATH.read_text())
+    k = codec.key(bytes.fromhex(pinned["codec"]["seed"]), codec.DEFAULT)
+    f, coin = k.codec.field, bytes.fromhex(pinned["codec"]["coin"]["c_a"])
+    s = f.word_bytes
+    assert coin == rv.APPEND_COIN and pinned["codec"]["coin"]["index"] == codec.COIN_INDEX == (1 << 32) - 4
+    for v, pre in zip(pinned["codec"]["coin"]["bound"], pinned["codec"]["bound"], strict=True):
+        j, payload = v["j"], rv.payload(v["j"])
+        d = codec.digest(payload)
+        b = codec.binding(d, j, k, coin)
+        assert j == pre["j"] and v["digest"] == pre["digest"] == d.hex() and format(b, "x") == v["b"] != pre["b"]
+        block = codec.encode(payload, j, k, bound=True, coin=coin)
+        words = [codec.encode_word(int.from_bytes(payload[s * w:s * (w + 1)], "little"), f.block_words * j + w, k, b)
+                 for w in range(f.block_words)]
+        assert block == b"".join(x.to_bytes(s, "little") for x in words)
+        assert block[:s].hex() == v["word_0"] and hashlib.sha512(block).hexdigest() == v["block_sha512"]
+        assert codec.decode(block, j, k, d, coin) == payload
+        assert codec.decode(block, j, k, d) is None and codec.decode(block, j, k, d, bytes(codec.COIN_BYTES)) is None
+        assert codec.decode(codec.encode(payload, j, k, bound=True), j, k, d, coin) is None
 
 
 def test_vectors_cover_zero_weights_a_short_last_leaf_a_partial_plan_and_the_chain() -> None:
@@ -242,7 +296,7 @@ def test_the_provers_passes_and_the_sessions_draws_reproduce_the_pinned_ones(kin
         passes.append(prover.run(challenge, i, previous, plan))
         ps = passes[-1]
         assert ps.root.hex() == want["root"] and ps.plan.runs == tuple(map(tuple, want["plan"]))
-        assert s.receive(0, i, ps.root, ps.plan.runs) is None
+        assert s.receive(0, i, ps.root, ps.plan.runs, step=i) is None
         previous = ps.root
     clock.now = rv.PARAMS.window_ns
     assert s.boundary() is None
@@ -320,3 +374,12 @@ def test_codec_is_kv_v0_masked_at_p1024(c) -> None:
     for i, m, y in pin["words"][c.rounds]:
         assert codec.encode_word(int(m, 16), i, k) == int(y, 16)
         assert codec.decode_word(int(y, 16), i, k) == int(m, 16)
+
+
+def test_the_bound_key_is_kv_v0s() -> None:
+    k, j = codec.key(bytes.fromhex(KV_SEED)), KV_BOUND["block"]
+    payload = b"".join(hashlib.sha512(KV_BOUND_LABEL + c.to_bytes(4, "big")).digest() for c in range(64))
+    d = codec.digest(payload)
+    assert d.hex() == KV_BOUND["digest"] and format(codec.binding(d, j, k), "x") == KV_BOUND["b"]
+    block = codec.encode(payload, j, k, bound=True)
+    assert hashlib.sha512(block).hexdigest() == KV_BOUND["words_sha512"] and codec.decode(block, j, k, d) == payload

@@ -3,10 +3,13 @@
   python eps1.py facets OUT/rows.jsonl... [--margin 0.02] [--prior rows.csv] [--emit EPOCH]
       # frontier.cu's MMA + X points (every run given) -> facets (SMSP-cycles a warp instruction, x (1 - margin)), with
       # the points each is tight at; --prior adds the points the published K* facets were fitted to (their vertices),
-      # --emit prints the facets as rows.csv and census.csv lines
+      # --emit prints the facets as rows.csv and census/EPOCH.csv lines
   python eps1.py side OUT/rows.jsonl                     # side.cu: honest alone, and each unit alone and beside it
   python eps1.py clock OUT/sustain.jsonl [--skip-s 3]    # power.cu: each kernel's clock, power and work rate a phase
+  python eps1.py ceiling OUT                             # clock_ceiling.sh: each clock knob and the clock it reached
   python eps1.py uniform OUT                             # uniform.cu: issue slots a uniform instruction, each setting
+  python eps1.py l2gather OUT                            # l2gather.cu: bytes a SM a clock and TB/s a gather path, best
+  python eps1.py jitter OUT                              # clock_calib.sh: auditor-side u of host-timing a reference kernel
 
 A facet is a row c_M n_MMA + c_X n_X <= T over warp instructions on one SMSP in T SMSP-cycles: the upper hull of the
 measured points (x_MMA, x_X) in warp instructions a SMSP-cycle (the rows' rate / 4), each alone rate on its axis, with
@@ -111,10 +114,13 @@ def prior_points(rows_csv: Path, prefix: str, kind: str, margin: float) -> tuple
     return pts + [(s / fs[-1][0], 0.0, f"{fs[-1][2]}:axis")], runs
 
 
-OPS = {"imad": "IMAD", "hfma2": "HFMA2*", "lop3": "LOP3.LUT", "shfl": "SHFL.BFLY"}
-#: each family's census kind, its published rows (VF3f, r20261016-093909-ac84) and the rows its facets become
+OPS = {"imad": "IMAD", "hfma2": "HFMA2*", "lop3": "LOP3.LUT", "shfl": "SHFL.BFLY", "iadd3": "IADD3", "ffma": "FFMA",
+       "idp4a": "IDP.4A*", "popc": "POPC"}
+#: each family's census kind, its published rows (VF3f, r20261016-093909-ac84) and the rows its facets become; iadd3,
+#: ffma, idp4a and popc are sm89/scalar.cu's
 FAMILY = {"imad": ("IMAD", "KIMAD", "EIMAD"), "hfma2": ("HFMA2", "KHFMA2", "EHFMA2"), "lop3": ("ALU", "KALU", "EALU"),
-          "shfl": ("SHFL", "KSHFL", "ESHFL")}
+          "shfl": ("SHFL", "KSHFL", "ESHFL"), "iadd3": ("ALU", "KIADD3", "EIADD3"), "ffma": ("FFMA", "KFFMA", "EFFMA"),
+          "idp4a": ("IDP4A", "KIDP4A", "EIDP4A"), "popc": ("XU", "KXU", "EXU")}
 
 
 def cmd_facets(a) -> int:
@@ -143,7 +149,7 @@ def cmd_facets(a) -> int:
                 print(f'rows.csv: {new}{i},joint,{cite},"{desc}"')
                 for k, c in (("MMA", f["MMA"]), (kind, f["X"])):
                     if c > 0:
-                        print(f"census.csv: {k},{new}{i},,,{c:.9g},,{a.emit},,{cite}")
+                        print(f"census/{a.emit}.csv: {k},{new}{i},,,{c:.9g},,{a.emit},,{cite}")
             continue
         print(f"## MMA + {x} ({pat}); points (MMA, {x}) a SMSP-cycle:")
         for m, v, n in sorted(pts):
@@ -201,7 +207,8 @@ def windows(lines: list[dict], skip_s: float) -> dict[tuple[str, str], list[dict
     return split
 
 
-MMAS = {"p_honest": 8, "p_half": 4, "p_mma": 8, "p_mma0": 8, "p_fold": 0, "p_ffma": 0, "p_mixed": 4}
+MMAS = {"p_honest": 8, "p_half": 4, "p_mma": 8, "p_mma0": 8, "p_fold": 0, "p_ffma": 0, "p_mixed": 4, "p_honest16": 8,
+        "p_mma16": 8, "p_mma16z": 8, "p_light": 0}
 
 
 def cmd_clock(a) -> int:
@@ -223,6 +230,58 @@ def cmd_clock(a) -> int:
         per_clk = statistics.median(16 * ln["iters"] * nm / ln["cyc_median"] for ln in ls)
         print(f"{ph:14s} {pr:12s} {mhz:14.1f} {lo:8.1f} {nv:9.0f} {watts:6.1f} {temp:4.0f} {reasons:#8x} {per_clk:11.5f} "
               f"{per_clk * mhz:10.2f}")
+    return 0
+
+
+def _val(d: dict, *path: str) -> object:
+    for k in path:
+        d = d.get(k, {}) if isinstance(d, dict) else {}
+    v = d.get("value", d.get("error", "-")) if isinstance(d, dict) and d else "-"
+    return v[0] if isinstance(v, list) and len(v) == 1 else v
+
+
+def cmd_ceiling(a) -> int:
+    """clock_ceiling.sh: each knob's rc, what NVML then reports, and the clock each kernel ran at by the host's clock."""
+    out = a.out
+    found = json.loads((out / "found.json").read_text())
+    trials = {t["trial"]: t for t in load(out / "trials.jsonl")} if (out / "trials.jsonl").exists() else {}
+    states = {s["trial"]: s for s in load(out / "states.jsonl")} if (out / "states.jsonl").exists() else {}
+    calib: dict[str, dict[str, list[dict]]] = {}
+    for c in load(out / "calib.jsonl") if (out / "calib.jsonl").exists() else []:
+        calib.setdefault(c["trial"], {}).setdefault(c["probe"], []).append(c)
+    fmax = float(found["max_mhz"])
+    print(f"GPU {found['uuid']}: NVML max SM clock {found['max_mhz']} MHz, power limit {found['found_pl_w']} W, "
+          f"vboost {found['found_vboost']} of {found['max_vboost']}")
+    st = states.get("found", {})
+    print(f"  GPC VF offset range {_val(st, 'gpc_vf_offset_range')}, memory {_val(st, 'mem_vf_offset_range')}, "
+          f"P0 graphics offsets {st.get('clock_offsets_p0', {}).get('graphics', '-')}, "
+          f"power limit constraints (mW) {_val(st, 'power_limit_constraints_mw')}")
+    print(f"\n{'trial':26s} {'rc':>3s} {'NVML now':>8s} {'max':>6s} {'app':>6s} {'kernel':9s} {'host MHz':>9s} "
+          f"{'gt MHz':>9s} {'gt min':>9s} {'NVML':>5s} {'W':>5s} {'reasons':>8s}  output")
+    best = (0.0, "", "")
+    for t in dict.fromkeys([*trials, *calib]):
+        tr, s = trials.get(t, {}), states.get(t, {})
+        first = True
+        for k, cs in (calib.get(t) or {"-": []}).items():
+            host = max((c["clock_mhz_host"] for c in cs), default=0.0)
+            gt = max((c["clock_mhz_gt_max"] for c in cs), default=0.0)
+            gt_lo = min((c.get("clock_mhz_gt_min", c["clock_mhz_gt_max"]) for c in cs), default=0.0)
+            if host > best[0]:
+                best = (host, t, k)
+            nvm = max((c["nvml_sm_mhz"] for c in cs), default=0)
+            watts = max((c["nvml_mw"] for c in cs), default=0) / 1e3
+            reasons = 0
+            for c in cs:
+                reasons |= int(c["throttle"], 16)
+            head = (f"{t:26s} {str(tr.get('rc', '')):>3s} {str(_val(s, 'clock_now', 'sm')):>8s} "
+                    f"{str(_val(s, 'clock_max', 'sm')):>6s} {str(_val(s, 'applications', 'graphics')):>6s}") if first \
+                else " " * 54
+            msg = " ".join(tr.get("out", "").split())[:90] if first else ""
+            print(f"{head} {k:9s} {host:9.1f} {gt:9.1f} {gt_lo:9.1f} {nvm:5d} {watts:5.0f} {reasons:#8x}  {msg}")
+            first = False
+    if best[0]:
+        print(f"\nhighest host-timed clock: {best[0]:.1f} MHz ({best[2]} at {best[1]}), "
+              f"{100 * (best[0] / fmax - 1):+.3f}% against NVML's max {fmax:.0f}")
     return 0
 
 
@@ -275,6 +334,86 @@ def cmd_uniform(a) -> int:
     return 0
 
 
+#: QSTAR's fastest table kernel (fr16_c32, benchmarks/pouw/qstar, note:20261017T0344Z-draft-eps1-qstar) sustains this
+QSTAR_TBS = 3.3
+
+
+def cmd_l2gather(a) -> int:
+    """l2gather.cu: data-dependent row gathers from an L2-resident table at fresh random indices (a cheater's). Each
+    probe's sustained bytes a SM a clock (rate * words * 4, the warp instruction moving W*32 bytes) and TB/s (* nSM *
+    clock); alone (gl_/gt_/gn_) for the peak, beside the honest IMMA step (gh_, the gather's rate over the honest stop)
+    for the MMA rate kept. The best sustained of each, and whether any path beats QSTAR's 3.3 TB/s table kernel."""
+    rows = {r["probe"]: r for r in load(a.out / "rows.jsonl")}
+    hmma = loop_rate(rows["honest"], IMMA) if "honest" in rows else float("nan")
+    print(f"honest alone: IMMA {hmma:.5f}/SM/clk")
+
+    def read(r: dict) -> tuple[float, float, float, float]:
+        """gather rate, bytes a SM a clock, TB/s, and MMA kept (nan when alone)."""
+        bpc = r["rate"] * (r["words"] or 0) * 4
+        tbs = bpc * r["blocks"] * (r["sm_mhz"] or 0) / 1e6
+        beside = any(k.split(":", 1)[1] == IMMA for k in r["rates"])
+        kept = loop_rate(r, IMMA) / hmma if beside and hmma else float("nan")
+        return r["rate"], bpc, tbs, kept
+
+    print(f"{'probe':15s} {'note':17s} {'W':>3s} {'rate':>8s} {'B/SM/clk':>9s} {'TB/s':>6s} {'MMA kept':>9s}  tags")
+    best_alone = best_beside = None
+    for name, r in rows.items():
+        if name == "honest":
+            continue
+        rate, bpc, tbs, kept = read(r)
+        w = int(round((r["words"] or 0) / 8))
+        tag = " ".join(r.get("tags") or [])
+        print(f"{name:15s} {r.get('note') or '':17s} {w:3d} {rate:8.4f} {bpc:9.3f} {tbs:6.3f} {kept:9.4f}  {tag}")
+        if kept == kept:  # beside (MMA kept is a number)
+            if best_beside is None or bpc > best_beside[1]:
+                best_beside = (name, bpc, tbs, kept)
+        elif best_alone is None or bpc > best_alone[1]:
+            best_alone = (name, bpc, tbs)
+    if best_alone:
+        print(f"best alone:  {best_alone[0]} {best_alone[1]:.3f} B/SM/clk = {best_alone[2]:.3f} TB/s")
+    if best_beside:
+        print(f"best beside: {best_beside[0]} {best_beside[1]:.3f} B/SM/clk = {best_beside[2]:.3f} TB/s, "
+              f"MMA kept {best_beside[3]:.4f}")
+    peak = max((read(r)[2] for n, r in rows.items() if n != "honest"), default=0.0)
+    verb = "beats" if peak > QSTAR_TBS else "does not beat"
+    print(f"fastest path {peak:.3f} TB/s {verb} QSTAR's {QSTAR_TBS} TB/s table kernel")
+    return 0
+
+
+def cmd_jitter(a) -> int:
+    """clock_calib.sh: the auditor-side uncertainty of timing a known-length reference kernel with the host's own clock,
+    with no trust in the chip (reading C). Each (trial, length) group's host-timed SM clock over the reps: its mean, the
+    random spread (stddev and half-range), and the systematic gap below the chip's own %globaltimer clock, which is the
+    launch latency and shrinks as the kernel runs longer. Timing can only lower-bound the clock (a prover runs slower at
+    will), so u is the floor an auditor quotes for that bound: the random spread plus the residual gap at the longest
+    length."""
+    rows = [r for r in load(a.out / "jitter.jsonl") if r.get("op") == "calib"]
+    groups: dict[tuple[str, float], list[dict]] = {}
+    for r in rows:
+        groups.setdefault((r["trial"], r["len_s"]), []).append(r)
+    print(f"{'trial':8s} {'len_s':>7s} {'reps':>4s} {'host MHz':>9s} {'stddev':>7s} {'half-range':>10s} {'rel u%':>7s} "
+          f"{'gt MHz':>9s} {'gap%':>6s} {'NVML':>5s}")
+    best: dict[str, tuple[float, float, float]] = {}
+    for (t, ln), cs in sorted(groups.items()):
+        host = [c["clock_mhz_host"] for c in cs]
+        gt = [c["clock_mhz_gt_median"] for c in cs]
+        mean = statistics.fmean(host)
+        sd = statistics.stdev(host) if len(host) > 1 else 0.0
+        half = (max(host) - min(host)) / 2
+        rel = 100 * half / mean if mean else 0.0
+        gtm = statistics.fmean(gt)
+        gap = 100 * (gtm - mean) / gtm if gtm else 0.0
+        nvm = statistics.median(c["nvml_sm_mhz"] for c in cs)
+        print(f"{t:8s} {ln:7.3f} {len(cs):4d} {mean:9.1f} {sd:7.2f} {half:10.2f} {rel:7.3f} {gtm:9.1f} {gap:6.3f} "
+              f"{nvm:5.0f}")
+        if t not in best or ln > best[t][0]:
+            best[t] = (ln, rel, gap)
+    for t, (ln, rel, gap) in best.items():
+        print(f"{t}: at {ln:.3f}s the host clock pins the SM clock to within {rel:.3f}% (random) and sits {gap:.3f}% "
+              f"below the chip's timer (launch latency); u ~ {rel + gap:.3f}%")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0], formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -288,10 +427,17 @@ def main(argv: list[str] | None = None) -> int:
     c = sub.add_parser("clock")
     c.add_argument("sustain", type=Path)
     c.add_argument("--skip-s", type=float, default=3.0)
+    ce = sub.add_parser("ceiling")
+    ce.add_argument("out", type=Path, help="a clock_ceiling.sh run's out/ (found.json, trials, states, calib)")
     u = sub.add_parser("uniform")
     u.add_argument("out", type=Path, help="a uniform.cu run's out/ (rows.jsonl, gate.json, sass/)")
+    g = sub.add_parser("l2gather")
+    g.add_argument("out", type=Path, help="an l2gather.cu run's out/ (rows.jsonl)")
+    j = sub.add_parser("jitter")
+    j.add_argument("out", type=Path, help="a clock_calib.sh run's out/ (jitter.jsonl)")
     a = p.parse_args(argv)
-    return {"facets": cmd_facets, "side": cmd_side, "clock": cmd_clock, "uniform": cmd_uniform}[a.cmd](a)
+    return {"facets": cmd_facets, "side": cmd_side, "clock": cmd_clock, "ceiling": cmd_ceiling, "uniform": cmd_uniform,
+            "l2gather": cmd_l2gather, "jitter": cmd_jitter}[a.cmd](a)
 
 
 if __name__ == "__main__":

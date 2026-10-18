@@ -1,4 +1,5 @@
 import SampledProofs.Json
+import SampledProofs.Program
 import SampledProofs.Partition
 import SampledProofs.Draw
 import SampledProofs.Registration
@@ -7,6 +8,10 @@ import SampledProofs.PyJson
 import SampledProofs.Record
 import SampledProofs.OneStage
 import SampledProofs.Select
+import SampledProofs.Slots
 import SampledProofs.Service
+import SampledProofs.Run
+import SampledProofs.TwoStage
 import SampledProofs.Pieces
+import SampledProofs.Hello
 import SampledProofs.DomainAgrees

@@ -1,12 +1,13 @@
-# VF3o-16: VF3n-16 with the uniform datapath on the issue rows (EPS1 P10, r20261017-055801-e051): a UNI instruction takes the SMSP's issue slot (1 on issue; on JI3n_0..2 the largest share of a vector instruction's coefficient that no uniform.cu point beats, 0.872 at JI3n_0, ÷ 1.07 there for the schedule spread), and UP refit to the fastest uniform form alone, 0.766 a SMSP-cycle (USHF/ULEA/ULOP3).
+# VF3o-16: VF3n-16 with M1c's schedule search (r20261017-052102-d832) in the joint issue rows' refit: JI3n_0..2 close for JI3o_0..2, each at the 2% noise margin over M1's and the search's programs, divided by its measured schedule margin (1.0378, 1.0262, 1.0247) in place of 1.07.
 name = "VF3o-16"
 epoch = "VF3o-16"
-summary = "VF3n-16 with the uniform datapath on the issue rows (EPS1 P10, r20261017-055801-e051): a UNI instruction takes the SMSP's issue slot (1 on issue; on JI3n_0..2 the largest share of a vector instruction's coefficient that no uniform.cu point beats, 0.872 at JI3n_0, ÷ 1.07 there for the schedule spread), and UP refit to the fastest uniform form alone, 0.766 a SMSP-cycle (USHF/ULEA/ULOP3)."
-note = "note:20261017T0332Z-draft-eps1-datasheet"
+summary = "VF3n-16 with M1c's schedule search (r20261017-052102-d832) in the joint issue rows' refit: JI3n_0..2 close for JI3o_0..2, each at the 2% noise margin over M1's and the search's programs, divided by its measured schedule margin (1.0378, 1.0262, 1.0247) in place of 1.07."
+note = "note:20261017T0321Z-draft-eps1-tensor"
+superseded_by = "VF3p-16"
 rows = [
     "issue", "M", "R1", "F", "VMNX", "H", "I", "A",
     "F2FS", "XU", "R6r", "LDSi", "R6w", "LDG", "L2red", "UP",
-    "IW", "JI3n_0", "JI3n_1", "JI3n_2", "A64", "DP", "DPM", "ROW_TLD1",
+    "IW", "JI3o_0", "JI3o_1", "JI3o_2", "A64", "DP", "DPM", "ROW_TLD1",
     "ROW_TLD2", "ROW_TLD4w", "ROW_TLD2D1", "ROW_TLD2D4", "ROW_TEX1", "ROW_TEX4", "ROW_TLD4G", "ROW_TEXBIL",
     "ROW_SULD1", "ROW_SULD4", "ROW_LDCUNI", "ROW_SURED", "ROW_LDCDIV", "ROW_LDC64", "ROW_UTMA", "ROW_UTMA8",
     "ROW_UTMA512", "ROW_G4_16", "ROW_G4_32", "ROW_ATOMG32", "ROW_ATOMG64", "ROW_REDG32", "ROW_REDG64", "ROW_ATOMS32",
@@ -42,7 +43,7 @@ credits = [
 ]
 
 [published]  # as `machine-model solve VF3o-16` printed them: τ, τ at 600 W and U/F_low to 4 places, the margin to 3
-tau = 0.0586
-tau_600w = 0.0459
+tau = 0.0588
+tau_600w = 0.0460
 uf_low = 1.1563
 margin = 2.0

@@ -13,17 +13,17 @@ record holds the text from then on.
 namespace Flock.Guarantees
 
 /-- **The sampling claims are stated**: the tuple of the sampling claims (`KS`, `KSCount`, `Binding`, `Universal`,
-`FaultyBoundary`, `Complete`, `ScopeMatches`, `ZK`, `Bits`, `Efficient`, `Nontrivial`), the claims they add (`BitsLin`,
-`ExtractOwnLe`) and the shared ones they instantiate (`Claims.KSLin`, `ZKmalR`, `Flock.ListWithin`, `Complete`,
-`ScopeMatches`, `ExtractRunsLe`, `ExtractRunsExpLe`, `DecoderComplexity`, `Nontrivial`), the named assumptions
-(`StrictBirthday`, `ExpectedCR`) and `trustedBase`, equal to itself. -/
+`FaultyBoundary`, `Complete`, `ScopeMatches`, `ZK`, `Bits`, `Efficient`, `Nontrivial`), the claims they add (`KSLinOn`,
+`BitsLin`, `ExtractOwnLe`) and the shared ones they instantiate (`ZKmalR`, `Flock.ListWithin`, `Complete`,
+`ScopeMatches`, `ExtractRunsLe`, `ExtractRunsExpLe`, `Nontrivial`), the named assumptions (`StrictBirthday`,
+`ExpectedCR`) and `trustedBase`, equal to itself. -/
 def SamplingClaimsStated : Prop :=
   let claims := (@Claims.Sampling.KS, @Claims.Sampling.KSCount, @Claims.Sampling.Binding, @Claims.Sampling.Universal,
     Claims.Sampling.FaultyBoundary, @Claims.Sampling.Complete, @Claims.Sampling.ScopeMatches, @Claims.Sampling.ZK,
     @Claims.Sampling.Bits, @Claims.Sampling.Efficient, @Claims.Sampling.Nontrivial,
-    @Claims.Sampling.BitsLin, @Claims.Sampling.ExtractOwnLe,
-    @Claims.KSLin, @Claims.ZKmalR, @Claims.Flock.ListWithin, @Claims.Complete, @Claims.ScopeMatches,
-    @Claims.ExtractRunsLe, @Claims.ExtractRunsExpLe, @Claims.DecoderComplexity, @Claims.Nontrivial,
+    @Claims.Sampling.KSLinOn, @Claims.Sampling.BitsLin, @Claims.Sampling.ExtractOwnLe,
+    @Claims.ZKmalR, @Claims.Flock.ListWithin, @Claims.Complete, @Claims.ScopeMatches,
+    @Claims.ExtractRunsLe, @Claims.ExtractRunsExpLe, @Claims.Nontrivial,
     @Claims.StrictBirthday, @Claims.ExpectedCR, Claims.trustedBase)
   claims = claims
 

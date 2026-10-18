@@ -92,13 +92,54 @@ def test_the_adopted_design_passes_every_gate(which, request, ids, calib):
     assert 0 < r["attn_rel_err"]["adopted/s0"] < 0.1
 
 
+def test_q_dithered_attention_passes_every_gate(llama, ids, calib):
+    r = evaluate(llama, ids[:4], ["adopted-qkd"], calib=calib)
+    assert passed(r), r["gates"]
+    cfg = M.Config.read(llama)
+    # P's two blocks per (layer, KV group); Q carries no peel
+    assert r["gates"]["peel"]["checked"] == 2 * cfg.layers * cfg.kv_heads
+    assert abs(ppl(r["nll"]["adopted-qkd/s0"]) / ppl(r["nll"]["bf16/s0"]) - 1) < 0.05
+
+
+def test_dithered_weights_pass_every_gate(llama, ids, calib):
+    r = evaluate(llama, ids[:4], ["adopted-bd", "adopted-qkd"], calib=calib)
+    assert passed(r), r["gates"]
+    assert abs(ppl(r["nll"]["adopted-bd/s0"]) / ppl(r["nll"]["bf16/s0"]) - 1) < 0.05
+    assert not np.array_equal(r["nll"]["adopted-bd/s0"], r["nll"]["adopted-qkd/s0"])
+
+
+def test_a_noised_head_passes_every_gate(llama, ids, calib):
+    r = evaluate(llama, ids[:4], ["adopted-bd-lm", "adopted-bd", "co", "ncp", "cb", "co32c", "co32c-pv", "co32c-pv256"], calib=calib)
+    assert passed(r), r["gates"]
+    bf = ppl(r["nll"]["bf16/s0"])
+    for a in ("adopted-bd-lm", "co", "ncp", "cb", "co32c", "co32c-pv", "co32c-pv256"):
+        assert abs(ppl(r["nll"][f"{a}/s0"]) / bf - 1) < 0.05, a
+    assert not np.array_equal(r["nll"]["adopted-bd-lm/s0"], r["nll"]["adopted-bd/s0"])
+
+
+def test_wide_dithers_pass_every_gate(llama, ids, calib):
+    arms = ["adopted-bd-lm", "adopted-bd-lm-d2", "adopted-bd-lm-d4", "co32c-d4"]
+    r = evaluate(llama, ids[:4], arms, calib=calib)
+    assert passed(r), r["gates"]
+    bf = ppl(r["nll"]["bf16/s0"])
+    for a in arms:
+        assert abs(ppl(r["nll"][f"{a}/s0"]) / bf - 1) < 0.1, a
+    assert not np.array_equal(r["nll"]["adopted-bd-lm/s0"], r["nll"]["adopted-bd-lm-d2/s0"])
+
+
 def test_linear_variants_pass_their_gates(llama, ids, calib):
     arms = [spec.parse({"linear": [{"step": "rotate", "kind": "h"}, {"step": "int8", "group": 32}]}, "grouped"),
             spec.parse({"linear": [{"step": "smooth", "alpha": 0.5}, {"step": "rotate"},
                                    {"step": "int8", "weight_top": 63, "gptq": True}]}, "gptq"),
             spec.parse({"linear": [{"step": "int8", "act": "dither", "act_top": 64}],
                         "attention": [{"step": "int8", "p_block": 32, "p_top": 119, "v_scale": "head", "k": "dither"},
-                                      {"step": "peel", "operand": "p", "width": 8}]}, "mixed")]
+                                      {"step": "peel", "operand": "p", "width": 8}]}, "mixed"),
+            spec.parse({"linear": [{"step": "int8", "act": "dither", "weight": "dither", "weight_top": 63},
+                                   {"step": "peel", "alphabet": "bit"}],
+                        "attention": [{"step": "int8", "q": "dither", "k": "dither", "v": "dither"}]}, "dither-peel"),
+            spec.parse({"linear": [{"step": "int8", "act": "dither", "density": 0.5}],
+                        "attention": [{"step": "int8", "q": "dither", "q_top": 63, "k": "dither", "p": "dither",
+                                       "p_sink": True, "v": "dither", "v_top": 63}]}, "thin-q-pv")]
     r = evaluate(llama, ids[:4], arms, calib=calib)
     assert passed(r), r["gates"]
     bf = ppl(r["nll"]["bf16/s0"])

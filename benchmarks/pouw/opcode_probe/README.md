@@ -8,7 +8,7 @@ by the check it names, or nothing is timed at all.
 | File | What |
 |---|---|
 | `probe.cuh` | `OP_KERNEL`, `OP_BEGIN`/`OP_LOOP`/`OP_END`, `OP_SINK`, the `OpProbe` table entry and `op_main` (`--list`: the table as JSON, host only; `--time`: the sink's poisoned pass and control, then `gpu_kit/bench.cuh`'s interleaved items) |
-| `probe.py` | `build` (nvcc, sm_120a), `gate` (CPU only), `run` (gate, time, write the rows) |
+| `probe.py` | `build` (nvcc; `--arch` sm_120a, or sm_90a / sm_100a for `../dc/`'s probes), `gate` (CPU only), `run` (gate, time, write the rows) |
 | `rows.py` | The census line (`kind,row,rate,noise,cycles,u,since,until,runs`), machine_model's `u_of`, and MACs a word |
 | `run.sh` | The job: build and gate outside the lease, then gate and time under one `gpu-lease` |
 | `probes/lm.cu` | LDSM and STSM by register count, LDS.128, STS.128, and the two known-invalid round-7 forms |
@@ -18,8 +18,12 @@ by the check it names, or nothing is timed at all.
 | `probes/mma.cu` | IMMA s8, QMMA E4M3, OMMA MXFP4 and NVFP4, dense and 2:4-sparse, at unit scales, and a `_data` probe a format on the sweep's drawn operands and mix scales (a data-dependent-clock check; joint points, no census line; `../fp_exact/` reads them) |
 | `probes/frontier.cu` | EPS1's joint frontiers: IMMA beside IMAD, HFMA2, LOP3 and SHFL.BFLY at 2 to 128 ops per 8 IMMA in one stream, warp-specialized points, each op alone (joint points, no census line) |
 | `probes/side.cu` | EPS1's side units, each alone (`sa_*`) and beside the honest kernel (`hs_*`, an `until` loop): REDG .32/.64/v4, ATOMG.32, LDGSTS, UBLKRED and UBLKCP (one lane), DSMEM stores and reductions to the peer CTA, TLD and filtered TEX, RED beside UBLKRED; deep roles (more fetches in flight a warp) and 12-warp roles for the latency-bound TLD, TEX and ATOMG |
-| `probes/honest.cuh`, `probes/power.cu` | The honest kernel (8 IMMA on drawn int8 operands, then the duo fold of their words), and EPS1's clock kernels, which `power.sh` (`power_lease.sh` inside the lease) sustains at the node's lock and, given clock permission, at the default clocks |
-| `eps1.py` | EPS1's readings: `facets` (the upper hull of frontier.cu's points with the 2% margin; `--prior` adds machine_model's K rows' vertices, `--emit` prints rows and census lines), `side` (words a clock alone and beside honest, MMA kept), `clock` |
+| `probes/honest.cuh`, `probes/power.cu` | The honest kernel (8 IMMA on drawn int8 operands, m16n8k32 or m16n8k16, then the duo fold of their words), and EPS1's clock kernels, which `power.sh` (`power_lease.sh` inside the lease) sustains at the node's lock and, given clock permission, at the default clocks |
+| `clock_ceiling.sh`, `clock_ceiling_lease.sh`, `clocks.py` | RT-CLOCK's ceiling run: every clock and power knob the driver offers a prover with root (`-lgc` at and above the max, `-ac`, `-cc`, `-pl`, NVML's GPC and memory VF offsets and locked-clock limits through `clocks.py`, the vboost slider), each followed by power.cu's `--calib` launches (clock64 cycles over the host's steady_clock, a clock that reads no timer on the GPU), then the clock kernels sustained at the settings that clock highest; the node's lock, power limit, vboost and offsets put back on exit; `eps1.py ceiling` reads it |
+| `sm89/clock.sh` | power.cu on the L40S: clocks reset (`sudo nvidia-smi -rgc`), every kernel sustained at the power limit as found and at the board's default limit, then `eps1.py clock` |
+| `sm89/scalar.cu`, `sm89/run.sh` | The sm_89 (L40S) census: every scalar pipe alone (IADD3, LOP3, SHF, PRMT, IMAD, IDP.4A, FFMA, HFMA2, IMNMX, SHFL, POPC, FLO), LDSM, LDS and STS.128, IMMA beside eight scalar classes (mixes and warp-specialized points), and the honest step at m16n8k32 and m16n8k16 with its MMAs alone; built for sm_89 by its own `run.sh`, census lines `since` sm89 |
+| `sm89/census.py` | `machine_model/data/devices/sm_89/` from a `sm89/run.sh` run and a tensor_kinds `TK_ARCH=89` run: each pipe row at its pipe's rate (the loop's instructions on the pipe counted), the tensor pipe and joint issue row of every MMA form, and each MMA + X family's facets with every non-MMA loop instruction counted as X |
+| `eps1.py` | EPS1's readings: `facets` (the upper hull of frontier.cu's points with the 2% margin; `--prior` adds machine_model's K rows' vertices, `--emit` prints rows and census lines), `side` (words a clock alone and beside honest, MMA kept), `clock`, `ceiling` |
 
 ## Write a probe
 
@@ -66,7 +70,7 @@ by the check it names, or nothing is timed at all.
    - `expect`: each timed loop's exact opcode counts, `OP=N,OP=N` (fnmatch on the dotted SASS opcode), loops separated
      by `;`. The rate is the `counted` pattern's (the first by default).
    - `kind` and `row`: the census class and row (`row` defaults to `ROW_<kind>`). They must be machine_model's own
-     names, from its `data/census.csv` and `data/rows.csv`. With no `kind` the probe is a joint point: `rows.jsonl` only.
+     names, from its `data/census/` and `data/rows.csv`. With no `kind` the probe is a joint point: `rows.jsonl` only.
    - `words`: the 4-byte words a warp instruction of the counted class moves, for MACs a word.
    - `smem_ops` and `smem`: the loop's shared accesses in order (`LDSM.16.M88*8`) and the offset function.
    - `warps`, `iters`, `dyn_smem`, `cluster`, `blocks` (0: one block on every SM), `fn` (a second probe on one kernel).

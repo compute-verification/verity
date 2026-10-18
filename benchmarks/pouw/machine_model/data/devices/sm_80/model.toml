@@ -1,0 +1,12 @@
+# The A100 (sm_80) as `eps` prices it (README "Devices"): one epoch, the census of EPS1 AMPERE (note:20261017T0700Z-
+# draft-eps1-ampere, with M1c's search on sm_80 as its latest extension, note:20261017T0925Z-draft-eps1-ampere-r2), and
+# no vector solved for prices, so the constants only `solve` reads are left out.
+current = "AMPERE-80"
+epochs = ["AMPERE-80"]
+
+# The CUDA lane classes a word on lanes may use: every lane class the census prices. LOP3 and IADD3 share ALU's pipe
+# row A; FFMA, IMAD and IDP.4A share the FMA pipe's row. No uniform-datapath kind is measured on sm_80.
+cuda = ["FFMA", "IMAD", "IDP4A", "ALU", "XU", "SHFL"]
+
+[constants]
+cycle_u = 300.08          # u in one SMSP-cycle: a unit, the same as data/'s (eps divides it out)

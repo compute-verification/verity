@@ -65,11 +65,11 @@
  },
  "reads_unlocked": {
   "policy": {"meaning": ["Control.Assumptions"]},
-  "fails": "reads: Control.main_thm read Control.double in Control.Defs, a spec module outside `meaning`"
+  "fails": "reads: Control.Small_fails, Control.main_thm read Control.Small, Control.double in Control.Defs, a spec module outside `meaning`"
  },
  "meaning": {
   "replace": {"Control/Defs.lean": ["2 * n", "n + n"]},
-  "fails": "guarantees: definitions in Control.Defs that Control.main_thm read changed"
+  "fails": "guarantees: definitions in Control.Defs that Control.Small_fails, Control.main_thm read changed"
  },
  "kernel_option": {
   "write": {"Control/Bad.lean": "set_option debug.skipKernelTC true in\ntheorem Control.unchecked : True := trivial\n"},
@@ -149,5 +149,21 @@
  "assumption_changed": {
   "replace": {"Control/Assumptions.lean": ["n + 0 = n", "0 + n = n"]},
   "fails": "assumptions: Control.Hyp's definition in Control.Assumptions changed"
+ },
+ "verifier_csimp": {
+  "write": {"Control/Bad.lean": "namespace Control\n\ndef gImpl (n : Nat) : Nat := n\n\n@[implemented_by gImpl] def g (n : Nat) : Nat := n\n\ndef f (n : Nat) : Nat := n + 0\n\n@[csimp] theorem f_eq_g : @f = @g := by funext n; rfl\n\nend Control\n"},
+  "replace": {"Control.lean": ["import Control.Thms", "import Control.Thms\nimport Control.Bad"]},
+  "policy": {"verifier": {"entries": ["Control.f"], "allow": ["module:Init"]}},
+  "fails": "verifier: Control.g (@[implemented_by], in Control.Bad) is on the path from Control.f"
+ },
+ "claim_fails_not_negated": {
+  "replace": {"Control/Thms.lean": ["Small_fails : ∃ n, ¬ Small n := ⟨10, by unfold Small; omega⟩",
+                                    "Small_fails : ∃ n, Small n := ⟨3, by unfold Small; omega⟩"]},
+  "fails": "claims: Control.Small_fails does not state that Control.Small fails"
+ },
+ "claim_without_witnesses": {
+  "replace": {"Control/Defs.lean": ["def Small (n : Nat) : Prop := n < 10",
+                                    "def Small (n : Nat) : Prop := n < 10\n\ndef Big (n : Nat) : Prop := 10 ≤ n"]},
+  "fails": "claims: Control.Big (Control.Defs) is a claim definition with no witnesses"
  }
 }

@@ -38,6 +38,8 @@
 //           linear, so it binds nothing)
 //   5, 3    ram, xor with A made once a tile and reused (a probe of the SHA's cost; its receipts are not dfill_ref's)
 //   6, 7, 8 probes of the fold's pipes, A made once: ram with immediate keys, LEA.HI only, IMAD only (none a receipt)
+//   9  arx  y <- rotl(y ^ d0, 13) + d1;  y <- rotl(y ^ d2, 19) + d3 (LOP3, LEA.HI a word, no IMAD), A by SHA as a receipt
+//           fold's is: the cost of an IMAD-free fold, not a receipt (whether such a fold binds every word is FOLD-OPT's)
 // Keys are the key block's row words in order, the first two that are odd, at least 2^8 + 1 away from 0 mod 2^24 and not
 // ±1 mod 32 (a0, a1), and in an LI or XIN13 build (every fold's keys there) with no a b within 128 of 0 mod 2^30 for
 // b in 1..128 (pf_key_ok_r9); k0, k1 (duo's and LI's) are its rows 14 and 15. A tile's receipt is the XOR over its
@@ -73,6 +75,9 @@
 #ifndef PF_CTAS
 #define PF_CTAS 2  // blocks an SM: 2 x 48 KB, 4 warps an SMSP
 #endif
+#ifndef PF_MINB
+#define PF_MINB PF_CTAS  // the pump's launch-bounds blocks an SM, its register cap; above PF_CTAS, room beside it
+#endif
 #ifndef PF_SHA_ROLL
 #define PF_SHA_ROLL 1  // pf_compress (16 rounds a loop iteration); 0: rs_compress (all 80 unrolled); same digests
 #endif
@@ -81,7 +86,7 @@
 #define PF_PW 8  // the phase filler's warps a block (dfill_p): its tile is PF_PW warps x 128 PF_PW columns
 #endif
 #ifndef PF_PMIN
-#define PF_PMIN (PF_CTAS * PF_W / PF_PW)  // dfill_p's launch-bounds blocks an SM: its register cap, 128 by default
+#define PF_PMIN (PF_MINB * PF_W / PF_PW)  // dfill_p's launch-bounds blocks an SM: its register cap, 128 by default
 #endif
 static_assert(PF_PW == 2 || PF_PW == 4 || PF_PW == 8, "PF_PW is 2, 4 or 8");
 #define DFILL_GATE_W PF_W
@@ -115,6 +120,33 @@ constexpr bool PF_R9 = true;
 #else
 constexpr bool PF_R9 = false;
 #endif
+// FOLD's cost dial (note:20261017T0320Z-draft-eps1-fold): PF_ROUNDS is the number of fold rounds a committed word in the
+// NC 4 (XOR-in / LI / ram) absorb. The default 1 is byte-identical to the fold of record; a build passes -DPF_ROUNDS=R
+// through NVCC_APPEND_FLAGS to measure the cost a word a round beside the saturated noise IMMA.
+#ifndef PF_ROUNDS
+#define PF_ROUNDS 1
+#endif
+static_assert(PF_ROUNDS >= 1 && PF_ROUNDS <= 64, "PF_ROUNDS is 1..64");
+// PF_YIELD: a pump warp yields its SM while a serving CTA marks it (pf_busy[smid] > 0: flin's consumer warps, from
+// griddepcontrol.wait to their flush, or with PF_YIELD_EARLY from the CTA's start), read every PF_YIELD_J B fragments
+// one read ahead. 1 waits until the mark clears (a poll every PF_YIELD_POLL_NS), 2 sleeps PF_YIELD_NS a read while it
+// holds. What a tile computes is unchanged; only when.
+#ifndef PF_YIELD
+#define PF_YIELD 0
+#endif
+#ifndef PF_YIELD_EARLY
+#define PF_YIELD_EARLY 0
+#endif
+#ifndef PF_YIELD_J
+#define PF_YIELD_J 16
+#endif
+#ifndef PF_YIELD_NS
+#define PF_YIELD_NS 256
+#endif
+#ifndef PF_YIELD_POLL_NS
+#define PF_YIELD_POLL_NS 1000
+#endif
+static_assert(PF_YIELD >= 0 && PF_YIELD <= 2 && PF_YIELD_J % 4 == 0, "PF_YIELD is 0, 1 or 2; PF_YIELD_J a multiple of 4");
 __host__ __device__ constexpr uint64_t pf_dom(int kd) {
   return kd == PF_E2M1 ? PF_DOM4 : kd == PF_BITS ? PF_DOM01 : kd == PF_BU ? PF_DOM_BU : PF_DOM;
 }
@@ -173,12 +205,28 @@ template <int NC>
 __host__ __device__ __forceinline__ void pf_absorb(uint32_t& y, uint32_t& z, uint32_t d0, uint32_t d1, uint32_t d2,
                                                    uint32_t d3, const PfKeys& k) {
   if (NC == 4 || NC == 5) {
+#if PF_ROUNDS > 1
+    // FOLD (note:20261017T0320Z-draft-eps1-fold): the R-round weave's cost dial. Each round re-folds the committed words
+    // into the running state with the same XOR-in / LI / ram step, a serial u32 chain of depth PF_ROUNDS a word. The host
+    // dfill_ref shares this loop, so dgate stays bit-exact; only the throughput and the receipt value change.
+#pragma unroll 1
+    for (int rnd = 0; rnd < PF_ROUNDS; rnd++) {
+#if defined(PFILL_LI)
+      y = rf_li_step(y, d0, d1, d2, d3, k.a0, k.a1, k.k0, k.k1);
+#elif defined(PFILL_XIN13)
+      y = rf_xin13_step(y, d0, d1, d2, d3, k.a0, k.a1);
+#else
+      y = rf_ram_step(y, d0, d1, d2, d3, k.a0, k.a1);
+#endif
+    }
+#else
 #if defined(PFILL_LI)
     y = rf_li_step(y, d0, d1, d2, d3, k.a0, k.a1, k.k0, k.k1);
 #elif defined(PFILL_XIN13)
     y = rf_xin13_step(y, d0, d1, d2, d3, k.a0, k.a1);
 #else
     y = rf_ram_step(y, d0, d1, d2, d3, k.a0, k.a1);
+#endif
 #endif
   } else if (NC == 6) {
     y = (pf_rotl(y, 7) + d0) * 0x9E3779B1u + d1;
@@ -187,6 +235,9 @@ __host__ __device__ __forceinline__ void pf_absorb(uint32_t& y, uint32_t& z, uin
     y = pf_rotl(y, 7) + d0; y = pf_rotl(y, 19) + d1; y = pf_rotl(y, 7) + d2; y = pf_rotl(y, 19) + d3;
   } else if (NC == 8) {
     y = y * k.a0 + d0; y = y * k.a1 + d1; y = y * k.a0 + d2; y = y * k.a1 + d3;
+  } else if (NC == 9) {
+    y = pf_rotl(y ^ d0, 13) + d1;
+    y = pf_rotl(y ^ d2, 19) + d3;
   } else if (NC == 2) {
     rf_duo_step(y, z, d0, d1, d2, d3, k.a0, k.a1, k.k0, k.k1);
   } else {
@@ -198,6 +249,15 @@ __host__ __device__ inline uint32_t pf_z0(uint32_t pos) { return rf_pfill_z0(pos
 __host__ __device__ inline uint64_t pf_fold(uint64_t K, uint32_t pos, uint64_t v) { return smix(smix(K ^ pos) ^ v); }
 
 #ifdef __CUDACC__
+#if PF_YIELD
+// one 128-byte line an SM: 188 marks in 8 lines put every poll on a few L2 slices, which decode's loads need too
+__device__ int pf_busy[256 * 32];
+__device__ __forceinline__ int* pf_mark() {
+  unsigned sm;
+  asm volatile("mov.u32 %0, %%smid;" : "=r"(sm));
+  return &pf_busy[(sm & 255) * 32];
+}
+#endif
 // rs_compress's rounds, 16 a loop iteration: a fifth of its code, so the hashing phases fetch fewer instructions
 __device__ __forceinline__ void pf_round(uint64_t& a, uint64_t& b, uint64_t& c, uint64_t& d, uint64_t& e, uint64_t& f,
                                          uint64_t& g, uint64_t& h, uint64_t k, uint64_t wi) {
@@ -258,7 +318,7 @@ __device__ __forceinline__ void pf_omma(uint32_t (&d)[4], const uint32_t (&a)[4]
 template <int NC, int KD, int W = PF_W>
 __device__ __forceinline__ uint64_t pf_tile(uint8_t* Bs, uint32_t (*Ab)[32 * 16], uint64_t c0, uint64_t c1,
                                             unsigned long long tile, int steps) {
-  constexpr bool regen = NC == 1 || NC == 2 || NC == 4, F4 = KD == PF_E2M1;
+  constexpr bool regen = NC == 1 || NC == 2 || NC == 4 || NC == 9, F4 = KD == PF_E2M1;
   constexpr int KH = F4 ? 2 : 1, P = 32 / KH, TN = 128 * W;
   constexpr uint64_t dom = pf_dom(KD);
   const int lane = threadIdx.x & 31, w = threadIdx.x >> 5, g = lane >> 2, t = lane & 3;
@@ -345,6 +405,10 @@ __device__ __forceinline__ uint64_t pf_tile(uint8_t* Bs, uint32_t (*Ab)[32 * 16]
     int f0 = 0, next = (w >> 2) & 1 ? P / 2 : P;
     agen(0);
     const uint8_t* bp = Bs + g * 32 + 8 * t;
+#if PF_YIELD
+    const volatile int* busy = pf_mark();
+    int mark = 0;
+#endif
 #pragma unroll 1
     for (int f = 0; f < S; f += 4) {
       if (f == next) {
@@ -372,6 +436,18 @@ __device__ __forceinline__ uint64_t pf_tile(uint8_t* Bs, uint32_t (*Ab)[32 * 16]
       }
 #pragma unroll 4
       for (int j = 0; j < TN / 8; j++) {
+#if PF_YIELD
+        if (j % PF_YIELD_J == 0) {
+          if (mark > 0) {
+            if (PF_YIELD == 1)
+              while (*busy > 0) __nanosleep(PF_YIELD_POLL_NS);
+            else
+              __nanosleep(PF_YIELD_NS);
+            __syncwarp();
+          }
+          mark = *busy;
+        }
+#endif
         const uint2 b = *(const uint2*)(bp + j * 256);
 #pragma unroll
         for (int c = 0; c < 4; c++) {
@@ -413,7 +489,7 @@ __device__ __forceinline__ void pf_tiles(uint8_t* Bs, uint32_t (*Ab)[32 * 16], u
   }
 }
 template <int NC>
-__global__ void __launch_bounds__(32 * PF_W, PF_CTAS) dfill_k(uint64_t c0, uint64_t c1, unsigned long long tile0, int tiles,
+__global__ void __launch_bounds__(32 * PF_W, PF_MINB) dfill_k(uint64_t c0, uint64_t c1, unsigned long long tile0, int tiles,
                                                        int steps, unsigned long long* __restrict__ rec) {
   __shared__ __align__(16) uint8_t Bs[PF_TN * 32];
   __shared__ __align__(16) uint32_t Ab[PF_W][32 * 16];
@@ -680,22 +756,35 @@ struct DFill {
   long long per() const { return (long long)grid * tiles; }
   double macs() const { return (double)per() * W * S * (PF_TN / 8) * 4096.0; }
 };
+// DFILL_PAD_KB: unused dynamic shared memory a pump block, so that PF_CTAS blocks an SM is all that fits (lfill, or the
+// step's blocks, beside it)
+static size_t g_pf_pad = 0;
 static void dfill_launch(const DFill& f, long long chunk, cudaStream_t st) {
   const unsigned long long t0 = (unsigned long long)chunk * f.per();
   const dim3 gr(f.grid), bl(32 * PF_W);
+  const size_t pad = g_pf_pad;
   switch (f.NC) {
-    case 1: dfill_k<1><<<gr, bl, 0, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
-    case 2: dfill_k<2><<<gr, bl, 0, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
-    case 3: dfill_k<3><<<gr, bl, 0, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
-    case 4: dfill_k<4><<<gr, bl, 0, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
-    case 5: dfill_k<5><<<gr, bl, 0, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
-    case 6: dfill_k<6><<<gr, bl, 0, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
-    case 7: dfill_k<7><<<gr, bl, 0, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
-    case 8: dfill_k<8><<<gr, bl, 0, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
-    default: fprintf(stderr, "pfill: NC must be 1 (xor), 2 (duo), 4 (ram), or the probes 3, 5, 6, 7, 8\n"); exit(1);
+    case 1: dfill_k<1><<<gr, bl, pad, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
+    case 2: dfill_k<2><<<gr, bl, pad, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
+    case 3: dfill_k<3><<<gr, bl, pad, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
+    case 4: dfill_k<4><<<gr, bl, pad, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
+    case 5: dfill_k<5><<<gr, bl, pad, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
+    case 6: dfill_k<6><<<gr, bl, pad, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
+    case 7: dfill_k<7><<<gr, bl, pad, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
+    case 8: dfill_k<8><<<gr, bl, pad, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
+    case 9: dfill_k<9><<<gr, bl, pad, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
+    default: fprintf(stderr, "pfill: NC must be 1 (xor), 2 (duo), 4 (ram), or the probes 3, 5, 6, 7, 8, 9\n"); exit(1);
   }
 }
+template <int NC> static void dfill_pad_attr() {
+  CK(cudaFuncSetAttribute(dfill_k<NC>, cudaFuncAttributeMaxDynamicSharedMemorySize, (int)g_pf_pad));
+}
 static void dfill_prep() {
+  if (getenv("DFILL_PAD_KB")) {
+    g_pf_pad = (size_t)atoi(getenv("DFILL_PAD_KB")) << 10;
+    dfill_pad_attr<1>(); dfill_pad_attr<2>(); dfill_pad_attr<3>(); dfill_pad_attr<4>();
+    dfill_pad_attr<5>(); dfill_pad_attr<6>(); dfill_pad_attr<7>(); dfill_pad_attr<8>(); dfill_pad_attr<9>();
+  }
   CK(cudaFuncSetAttribute(dfill_k<1>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
   CK(cudaFuncSetAttribute(dfill_k<2>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
   CK(cudaFuncSetAttribute(dfill_k<3>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
@@ -704,6 +793,7 @@ static void dfill_prep() {
   CK(cudaFuncSetAttribute(dfill_k<6>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
   CK(cudaFuncSetAttribute(dfill_k<7>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
   CK(cudaFuncSetAttribute(dfill_k<8>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
+  CK(cudaFuncSetAttribute(dfill_k<9>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
 }
 // PF_CTAS blocks for each of `grid` SMs, and tiles a block so that a chunk is about 2^DFILL_CHUNK_LOG2 (default 19) MMAs
 // an SM

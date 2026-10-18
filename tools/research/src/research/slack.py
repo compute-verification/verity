@@ -890,6 +890,8 @@ class Routes:
         if not NAME_RE.match(name):
             return None
         if name in self.local and not fresh:
+            if self.local[name].get("closed") and (pub := self._fetched.get(name)) and not pub.get("closed"):
+                return pub                                           # reopened since this clone was pulled
             return self.local[name]
         if name not in self._fetched or fresh:
             raw = self.get(f"{self.base}{name}.json")
@@ -1017,6 +1019,8 @@ def deliver(api: Slack, reg: dict, routes: Routes, ch: str, msg: dict, link: str
     for name in route_targets(msg, root, reg, inboxes, history, branches):
         if name in humans:
             continue                                                 # people read Slack itself
+        if name not in routes.local or routes.local[name].get("closed"):
+            routes.get_route(name, fresh=True)                       # a clone not pulled since the name (re)opened
         to, r = routes.resolve(name)
         if not r or (r.get("closed") and not r.get("forward_to")):
             h = next((h for h in reg["handles"] if h["handle"] == name), None)
@@ -1024,7 +1028,7 @@ def deliver(api: Slack, reg: dict, routes: Routes, ch: str, msg: dict, link: str
                 lines.append(f"@{name}: no Slack inbox; reach it through its Linear team {h['linear']} (an ask to it files there)")
                 continue
             known = h is not None
-            lines.append(f"@{name}: no inbox" + (" (top-level forwards it)" if known else
+            lines.append(f"@{name}: no inbox" + (f"; its holder opens one with `research msg names open --as {name}`" if known else
                          " -- nobody will see this; check the name (`research msg names list`)") if not r else
                          f"@{name}: finished, with no forward_to: message its coordinator instead")
             continue
@@ -1703,6 +1707,19 @@ def cmd_watch(ns: argparse.Namespace, reg: dict) -> int:
 
 # --- traffic: the monitor ---------------------------------------------------------------------------------------------------
 
+def issue_taken(ident: str, cache: dict[str, bool]) -> bool:
+    """Whether the Linear issue `ident` has left Backlog (accepted, started, done or canceled): an ask taken up on Linear.
+    False when Linear can't say, so a doubtful ask still shows."""
+    if ident not in cache:
+        from . import linear  # noqa: PLC0415
+        try:
+            st = linear.Linear().gql("query($id: String!) { issue(id: $id) { state { type } } }", {"id": ident})["issue"]["state"]
+            cache[ident] = st["type"] != "backlog"
+        except (linear.LinearError, OSError, KeyError, TypeError, ValueError):
+            cache[ident] = False
+    return cache[ident]
+
+
 def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
     """Doorbells per inbox (the most in any one hour), pauses, `@name`s nobody owns (dropped), and asks with no 👀 or reply
     after --stale-h hours, over the last --hours."""
@@ -1725,6 +1742,7 @@ def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
     handles = {h["handle"] for h in reg["handles"]} | {poster({"user": p.get("slack_user")}, reg) for p in reg.get("humans", [])}
     dropped, stale, groups = [], [], {h.get("usergroup") for h in reg["handles"]}
     fresh: set[str] | None = None                                    # origin/main's group ids, fetched on the first unknown
+    taken: dict[str, bool] = {}                                      # Linear issue -> left Backlog
     for m in posts:
         for n in lead_names(m.get("text") or "", reg):
             if not routes.get_route(n) and n not in handles:
@@ -1740,7 +1758,8 @@ def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
             not is_quiet(m.get("text") or "") and kind_of(m) != "fyi"           # older clients tagged an fyi without (quiet)
         answered = m.get("reply_count") or any(x.get("name") in ("eyes", "white_check_mark", "x") for x in m.get("reactions", []))
         if is_ask and not answered and now - float(m["ts"]) > ns.stale_h * 3600:
-            stale.append({"ts": m["ts"], "by": poster(m, reg), "to": lead_names(m.get("text") or "", reg)})
+            if not ((link := LINEAR_LINK_RE.search(m.get("text") or "")) and issue_taken(link[1], taken)):   # taken up on Linear
+                stale.append({"ts": m["ts"], "by": poster(m, reg), "to": lead_names(m.get("text") or "", reg)})
     if ns.json:
         print(json.dumps({"inboxes": rows, "dropped": dropped, "unanswered": stale}, indent=2))
         return 0

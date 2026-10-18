@@ -1,0 +1,13 @@
+# The B200 (sm_100) as `eps` prices it (README "Devices"): one epoch, the census of EPS1 DC
+# (note:20261017T0452Z-draft-eps1-dc), and no vector solved for prices, so the constants only `solve` reads are left
+# out.
+current = "DC-100"
+epochs = ["DC-100"]
+
+# The CUDA lane classes a word on lanes may use: every lane class the census prices. LOP3, SHF and LEA.HI share ALU's
+# pipe row A; FFMA has only the issue rows. No IDP4A or LDS kind is measured on sm_100. The uniform datapath (UNI, on
+# UP and the issue rows) is measured but is not a lane class: it opens the uniform route.
+cuda = ["FFMA", "IMAD", "ALU", "SHFL"]
+
+[constants]
+cycle_u = 300.08          # u in one SMSP-cycle: a unit, the same as data/'s (eps divides it out)

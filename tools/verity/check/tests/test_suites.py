@@ -230,7 +230,7 @@ def _keys(S) -> dict[str, str]:
     out = {}
     for s in S.discover():
         paths = S.inputs_of(s, pkgs)
-        out[s.name] = S.key(s, S.input_ids(tree, sorted(set(paths) | set(S.RUNNER)), S.markdown(s)), env, [],
+        out[s.name] = S.key(s, S.input_ids(tree, sorted(set(paths) | set(S.RUNNER)), S.markdown(s), S.dropped(s, paths)), env, [],
                             S.resolved(S.roots(s, pkgs), lock, s.path))
     return out
 
@@ -359,6 +359,49 @@ def test_markdown_rekeys_and_selects_only_the_suites_that_list_markdown(tmp_path
     (tmp_path / "a" / "README.md").write_text("third prose\n")
     assert touched() == ["b"]                                       # b reads a's README: its edit reaches b alone
     assert _keys(S)["a"] == keys["a"] and _keys(S)["b"] != keys["b"]
+
+
+def test_a_nested_suite_leaves_the_key_of_the_suite_around_it_unless_that_one_declares_it(tmp_path, monkeypatch):
+    """benchmarks/pouw's key held exact_kit, a suite of its own under it (16 Oct), so every edit to the kit re-ran pouw's tests.
+    A suite under another's directory is out of the outer one's key and `--changed` selection until the outer one declares it;
+    the repository's own suite, whose tests read the whole tree, keeps it."""
+    _workspace(tmp_path)
+    (tmp_path / "pyproject.toml").write_text((tmp_path / "pyproject.toml").read_text() + '\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n')
+    (tmp_path / "a" / "sub" / "tests").mkdir(parents=True)
+    (tmp_path / "a" / "sub" / "pyproject.toml").write_text('[project]\nname = "sub"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n')
+    (tmp_path / "a" / "sub" / "tests" / "test_sub.py").write_text("def test_sub():\n    pass\n")
+    (tmp_path / "a" / "data.txt").write_text("a's\n")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "base")
+    S = _suites(monkeypatch, tmp_path)
+    pkgs, base = S.members(), _git(tmp_path, "rev-parse", "HEAD")
+
+    def touched():
+        return [s.name for s in S.touched(S.discover(), pkgs, base, S.worktree(), S.locked())]
+
+    by = {s.name: s for s in S.discover()}
+    assert (by["a"].nested, by["repository"].nested) == (("a/sub",), ())
+    assert S.dropped(by["a"], S.inputs_of(by["a"], pkgs)) == ["a/sub"]
+    keys = _keys(S)
+    (tmp_path / "a" / "sub" / "tests" / "test_sub.py").write_text("def test_sub():\n    assert True\n")
+    (tmp_path / "a" / "sub" / "helper.py").write_text("X = 1\n")
+    now = _keys(S)
+    assert touched() == ["sub", "repository"] and now["a"] == keys["a"]
+    assert now["sub"] != keys["sub"] and now["repository"] != keys["repository"]
+    (tmp_path / "a" / "data.txt").write_text("a's, edited\n")                 # a's own files still key it
+    assert touched() == ["a", "sub", "repository"] and _keys(S)["a"] != keys["a"]
+
+    _git(tmp_path, "checkout", "-q", "--", ".")
+    (tmp_path / "a" / "sub" / "helper.py").unlink()
+    (tmp_path / "a" / "pyproject.toml").write_text((tmp_path / "a" / "pyproject.toml").read_text()
+                                                   + '\n[tool.verity.tests]\ninputs = ["a/sub"]\n')
+    _git(tmp_path, "commit", "-qam", "a declares its nested suite")
+    base = _git(tmp_path, "rev-parse", "HEAD")
+    by = {s.name: s for s in S.discover()}
+    assert S.dropped(by["a"], S.inputs_of(by["a"], pkgs)) == []
+    keys = _keys(S)
+    (tmp_path / "a" / "sub" / "tests" / "test_sub.py").write_text("def test_sub():\n    assert True\n")
+    assert touched() == ["a", "sub", "repository"] and _keys(S)["a"] != keys["a"]
 
 
 def test_changed_selects_the_suite_a_file_is_moved_out_of(tmp_path, monkeypatch):
@@ -1072,6 +1115,49 @@ def test_what_a_child_reads_outside_the_inputs_fails_the_suite_and_names_the_tes
     assert p.returncode == 0 and "cached  pkg" in p.stdout, p.stdout
 
 
+def test_an_edit_to_a_nested_suite_reuses_the_outer_suites_pass_and_reading_it_undeclared_fails(tmp_path):
+    """Through the runner: `pkg/sub`, a suite of its own, is left out of `pkg`'s key, so an edit there reruns `sub` alone; a test
+    of `pkg` that reads `sub`'s files, itself or in a Python it starts, fails `pkg` as a read outside its inputs; once `pkg`
+    declares `pkg/sub`, the read passes and an edit to `sub` reruns `pkg` too."""
+    root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
+    _per_test_workspace(root)
+    (tests / "test_sibling.py").write_text("def test_sibling():\n    assert True\n")
+    sub = root / "pkg" / "sub"
+    (sub / "tests").mkdir(parents=True)
+    (sub / "pyproject.toml").write_text('[project]\nname = "sub"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n')
+    (sub / "tests" / "test_sub.py").write_text("def test_sub():\n    pass\n")
+    (sub / "data.txt").write_text("sub's\n")
+    _git(root, "add", ".")
+    _git(root, "commit", "-q", "-m", "nested")
+    p = _run_suite(root, tmp_path)
+    assert p.returncode == 0 and "passed  pkg" in p.stdout and "passed  sub" in p.stdout, p.stdout
+    assert "nested suites left out: pkg/sub" in _run_suite(root, tmp_path, "--list").stdout
+
+    (sub / "data.txt").write_text("sub's, edited\n")
+    (sub / "tests" / "test_sub.py").write_text("def test_sub():\n    assert True\n")
+    p = _run_suite(root, tmp_path)
+    assert p.returncode == 0 and "cached  pkg" in p.stdout and "passed  sub" in p.stdout, p.stdout
+
+    (tests / "test_reads_sub.py").write_text(
+        "import os, subprocess, sys\nSUB = os.path.join(os.path.dirname(__file__), '..', 'sub')\n\n"
+        "def test_itself():\n    open(os.path.join(SUB, 'data.txt')).read()\n\n"
+        "def test_child():\n    subprocess.run([sys.executable, '-c', 'import sys; open(sys.argv[1]).read()',"
+        " os.path.join(SUB, 'tests', 'test_sub.py')], check=True)\n")
+    p = _run_suite(root, tmp_path)
+    assert p.returncode == 1 and "failed  pkg" in p.stdout and "cached  sub" in p.stdout, p.stdout
+    assert "pkg/sub/data.txt (read by pkg/tests/test_reads_sub.py)" in p.stdout, p.stdout
+    assert "pkg/sub/tests/test_sub.py: read by a process that tests/test_reads_sub.py::test_child started" in p.stdout, p.stdout
+
+    pyproject = root / "pkg" / "pyproject.toml"
+    pyproject.write_text(pyproject.read_text().replace("parallel = true", 'parallel = true\ninputs = ["pkg/sub"]'))
+    p = _run_suite(root, tmp_path)
+    assert p.returncode == 0 and "passed  pkg" in p.stdout and "outside its inputs" not in p.stdout, p.stdout
+    assert "nested suites left out" not in _run_suite(root, tmp_path, "--list").stdout
+    (sub / "data.txt").write_text("sub's, edited again\n")
+    p = _run_suite(root, tmp_path)
+    assert p.returncode == 0 and "passed  pkg" in p.stdout, p.stdout
+
+
 def test_every_suite_may_read_the_fixture_registry_and_a_pass_that_read_it_holds_while_it_is_unchanged(tmp_path):
     """`research data fetch` on an empty local store indexes the remote's manifest, which reads `fixtures/artifacts.json` for
     repo replicas: in the test's process or a child's, that read fails no suite, and the test's own read is watched."""
@@ -1423,6 +1509,16 @@ def test_a_parallel_suite_that_declares_worker_gb_runs_as_many_workers_as_mem_gb
         "no worker_gb: TEST_PROCESS_GB each (r20261016-140947-47fc: pous_check's undeclared workers reached 11 GB)"
 
 
+def test_parallel_suites_share_what_mem_gb_leaves_beside_the_one_process_suites(tmp_path, monkeypatch):
+    """17 Oct, cpu-2 (note:proofs/20261017T0625Z-friction-suites-mem-gb-concurrent): circuit_check's 53 workers and flock's 30
+    ran side by side, each sized to all of --mem-gb, and reached 800 GB together."""
+    S = _suites(monkeypatch, tmp_path)
+    assert S.wide_gb(480, 4) == 480 - 4 * S.TEST_PROCESS_GB and S.wide_gb(20, 4) == 0 and S.wide_gb(None, 4) is None
+    flock = S.Suite("flock", "f", (), (), parallel=True, worker_gb=16)
+    assert S.wide_workers(flock, 69, S.wide_gb(480, 4)) == (480 - 4 * S.TEST_PROCESS_GB) // 16
+    assert S.worker_gb(flock) == 16 and S.worker_gb(S.Suite("light", "l", (), (), parallel=True)) == S.TEST_PROCESS_GB
+
+
 def test_the_suites_in_one_process_get_the_fewest_slots_that_finish_them_with_their_longest(tmp_path, monkeypatch):
     """ee02's pytest step ran its parallel suites one at a time (650 s) before circuit_check's one process (2,730 s) started, and
     its lean-suites ran evaluate (527 s) only after flock (862 s): the suites in one process now run beside the parallel ones."""
@@ -1450,3 +1546,30 @@ def test_a_parallel_suite_runs_beside_the_others_on_the_slots_they_leave(tmp_pat
     assert p.returncode == 0, p.stdout + p.stderr
     assert "1 parallel suites one at a time on 2 processes, beside 1 others on 1" in p.stdout, p.stdout
     assert re.search(r"passed  wide .* on 2 workers", p.stdout) and "passed  one" in p.stdout, p.stdout
+
+
+def test_mem_gb_defaults_to_the_check_slots_memory(tmp_path, monkeypatch):
+    """17 Oct 11:21Z, cpu-2: a quick tier in a 480 GB pool slot ran circuit_check's suite on 94 workers (784 GB), since only
+    `check` passed `--mem-gb`."""
+    S = _suites(monkeypatch, tmp_path)
+    monkeypatch.setenv(S.SLOT_MEM_ENV, "480")
+    assert S.slot_mem_gb() == 480.0
+    monkeypatch.setenv(S.SLOT_MEM_ENV, "")
+    monkeypatch.setattr(S, "cgroup_mem_gb", lambda: None)
+    assert S.slot_mem_gb() is None
+
+
+def test_mem_gb_falls_back_to_the_jobs_cgroup_limit(tmp_path, monkeypatch):
+    """17 Oct 13:02Z, vy-nebius-1: two queued `suites.py verity-flock --fresh` runs, in no check slot, were OOM-killed in
+    their queue scopes."""
+    S = _suites(monkeypatch, tmp_path)
+    root = tmp_path / "fs"
+    (root / "proc/self").mkdir(parents=True)
+    (root / "proc/self/cgroup").write_text("0::/research.slice/job.scope\n")
+    for d, v in (("sys/fs/cgroup/research.slice", str(700 * 2**30)), ("sys/fs/cgroup/research.slice/job.scope", str(64 * 2**30))):
+        (root / d).mkdir(parents=True)
+        (root / d / "memory.max").write_text(v + "\n")
+    assert S.cgroup_mem_gb(root) == 64.0
+    (root / "sys/fs/cgroup/research.slice/job.scope/memory.max").write_text("max\n")
+    assert S.cgroup_mem_gb(root) == 700.0
+    assert S.cgroup_mem_gb(tmp_path / "nowhere") is None

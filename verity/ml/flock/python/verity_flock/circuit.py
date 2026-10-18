@@ -399,9 +399,10 @@ def _wires(low: IL.Lowering, tail) -> list:
             if kind == "cut":
                 producer[k] = ("unit", u, j)
     for si, st in enumerate(tail.stages):
-        for j, tag in enumerate(st.outs):
-            if tag[0] == "cut":
-                producer[tag[1]] = (f"stage{si}", 0, j)
+        for s in range(st.count):
+            for j, tag in enumerate(st.tags(s)[1]):
+                if tag[0] == "cut":
+                    producer[tag[1]] = (f"stage{si}", s, j)
     public = dict(getattr(U, "public", []))
     local, seen = [], {}
     for j, (table, _) in enumerate(tail.lookups):
@@ -414,17 +415,28 @@ def _wires(low: IL.Lowering, tail) -> list:
                 wires.append(["unit", u, j, *producer[k]])
     for i, st in enumerate(tail.stages):
         prev = tail.stages[i - 1] if i else None
-        for j, tag in enumerate(st.ins):
-            if tag[0] in ("pass", "ctx"):
-                wires.append([f"stage{i}", 0, j, f"stage{i - 1}", 0, prev.outs.index(tag)])
-            elif tag[0] == "lookup":
-                wires.append([f"stage{i}", 0, j, f"lookup:{tail.lookups[tag[1]][0]}", local[tag[1]], 0])
-            else:
-                wires.append([f"stage{i}", 0, j, *producer[tag[1]]])
+        for s in range(st.count):
+            for j, tag in enumerate(st.tags(s)[0]):
+                if tag[0] in ("pass", "ctx", "lookup") and (st.count != 1 or (tag[0] != "lookup" and prev.count != 1)):
+                    raise NotImplementedError(f"stage{i}: a repeated stage reads cut words only (no pass, context or lookup port)")
+                if tag[0] in ("pass", "ctx"):
+                    wires.append([f"stage{i}", 0, j, f"stage{i - 1}", 0, prev.outs.index(tag)])
+                elif tag[0] == "lookup":
+                    wires.append([f"stage{i}", 0, j, f"lookup:{tail.lookups[tag[1]][0]}", local[tag[1]], 0])
+                else:
+                    wires.append([f"stage{i}", s, j, *producer[tag[1]]])
     for q, (table, si) in enumerate(tail.lookups):
         wires.append([f"lookup:{table}", local[q], 0, f"stage{si}", 0, tail.stages[si].outs.index(("index", q))])
     del n_ret
     return wires
+
+
+def _ret_ports(st) -> list:
+    """META ``out_net_ports``: each output word's port of the last stage, in output order; a repeated stage's as ``[slot, port]``."""
+    at = {tag[1]: (s, j) for s in range(st.count) for j, tag in enumerate(st.tags(s)[1]) if tag[0] == "ret"}
+    if sorted(at) != list(range(len(at))):
+        raise ValueError("the last stage's returned outputs are not each output word once")
+    return [at[o][1] if st.count == 1 else list(at[o]) for o in range(len(at))]
 
 
 def _row_slots(ports: list[Port]) -> tuple[int, list[list[tuple[int, int]]]]:
@@ -505,7 +517,7 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
             program: str | None = None, statics: dict | None = None, port_bits: list | None = None,
             public_inputs: dict | None = None, seg_ports: frozenset[str] = frozenset(), seg_out_rows: tuple = (),
             v2_out_rows: tuple = (), links: list | None = None, definition: str | None = None,
-            leaf_scheme: dict | None = None, extra_meta: dict | None = None) -> str:
+            leaf_scheme: dict | None = None, extra_meta: dict | None = None, tail=None) -> str:
     """The ``flock-circuit`` text for a template lowered to identical units and, for a cut lowering, its tail in the circuit
     (:mod:`tail`: stage circuits and MUFU lookup slots, wired to the units' cut ports). ``partition``: the caller's
     ``verity/partition/v1`` digest (64-byte hex), else the provisional unit cover; ``program``: the Program's SHA-512 the
@@ -529,7 +541,11 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     commits its writer's output row; the verifiers compare the two rows' ``b || c``. ``definition``: META ``definition``, the
     descriptor id of the Definition the unit lowers, which a template query may list (a unit class's own template id is
     ``unit-class/...``). ``extra_meta``: keys a statement adds to META for its verifier (`rec_residuals.HOLO_KEY`), none of
-    them one META already has."""
+    them one META already has.
+
+    ``tail`` (a :class:`tail.Tail`): the stages as given, in place of :func:`tail.lower_tail`'s, for a lowering whose split is
+    its own (`multi_unit`): a stage of ``count`` slots per VU is a second repeated unit type, wired slot by slot (META
+    ``per_vu``), and returned outputs on a repeated last stage are ``out_net_ports`` of ``[slot, port]``."""
     for name, v in (("partition", partition), ("program", program)):
         if v is not None and (len(v) != 128 or v != v.lower() or any(ch not in "0123456789abcdef" for ch in v)):
             raise ValueError(f"{name}: a SHA-512 digest is 128 lowercase hex digits")
@@ -541,7 +557,8 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
         raise NotImplementedError(f"{low.name}: returned outputs without a cut tail; the statement has no verifier-evaluated form")
     if any(p.dtype != "u16" for p in (*sub.inputs, *sub.outputs)):
         raise ValueError(f"{low.name}: frame-v3 rows here are u16 words")
-    tail = TL.lower_tail(low, forged) if U.cut else None
+    if tail is None:
+        tail = TL.lower_tail(low, forged) if U.cut else None
     stages = [TL.stage_layout(st) for st in tail.stages] if tail else []
     lookups: dict[str, int] = {}
     for table, _ in (tail.lookups if tail else []):
@@ -594,7 +611,7 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
         items = [("unit", SHA_LOG, G * n_sha, {"net": SHA_NET, "packed": True}), ("unit", HM_LOG, G * n_hm, {"net": HM_NET}),
                  ("unit", ul, G * U.n, {"net": "unit", **({"packed": True} if U.tail_rets and not pins else {})})]
         for i, lay in enumerate(stages):
-            items.append(("unit", _slot_log(lay.useful), G, {"net": f"stage{i}"}))
+            items.append(("unit", _slot_log(lay.useful), G * tail.stages[i].count, {"net": f"stage{i}"}))
         for t, c in lookups.items():
             L = lk[t]
             items.append(("unit", _slot_log(lookup_rows(L["in_bits"], L["lo_bits"], L["out_bits"])), G * c, {"net": f"lookup:{t}", "packed": True}))
@@ -610,7 +627,7 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     ranges, k_log = fits(G)
     if k_log > K_MAX:
         raise ValueError(f"{low.name}: an instance needs a block of 2^{k_log} bits (at most 2^{K_MAX})")
-    per_vu = {"unit": U.n, SHA_NET: n_sha, HM_NET: n_hm, **{f"stage{i}": 1 for i in range(len(stages))},
+    per_vu = {"unit": U.n, SHA_NET: n_sha, HM_NET: n_hm, **{f"stage{i}": tail.stages[i].count for i in range(len(stages))},
               **{f"lookup:{t}": c for t, c in lookups.items()}}
     tail_wires = _wires(low, tail) if tail else []
     public = dict(getattr(U, "public", []))
@@ -620,7 +637,7 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
         raise NotImplementedError(f"{low.name}: a cut input read from a public input port")
     leaf_cuts = [[*x[:3], owner[x[3]][1]] for x in leaf_cuts]
     out_net = f"stage{len(stages) - 1}" if U.tail_rets else "unit"
-    out_net_ports = [j for j, tag in enumerate(tail.stages[-1].outs) if tag[0] == "ret"] if U.tail_rets else []
+    out_net_ports = _ret_ports(tail.stages[-1]) if U.tail_rets else []
     programs = program_digests(sub, statics)
     cover = {"program": programs, "query": f"flock-circuit/unit-cover:{low.name}", "version": 0,
              "params": {"unit_sha256": low.sha256, "units_per_vu": U.n, "leaves_in": lv["in"], "leaves_out": lv["out"], "tail_wires": tail_wires,
@@ -682,7 +699,8 @@ def _dummy(low: IL.Lowering, in_ports: list[tuple[str, int]], ins: list[Port], o
     the zero instance). Its public inputs are zero too."""
     n_in = sum(w for _, w in in_ports)
     zero = np.zeros((1, n_in), dtype=np.uint64)
-    outs, _, ok = low.evaluate(zero, IL.cut_words(low, zero) if low.units.cut else None)
+    reads_cut = any(k == "cut" for src in low.units.in_src for k, _ in src)
+    outs, _, ok = low.evaluate(zero, IL.cut_words(low, zero) if low.units.cut and reads_cut else None)
     assert int(ok) & 1, "the all-zero instance does not satisfy the unit rows"
     if low.units.tail_rets:
         ev = sub.evaluate({nm: [np.zeros(w, dtype=np.uint16)] for nm, w in in_ports})
@@ -793,7 +811,7 @@ def write_public_inputs(text: str, words: dict, n: int, path) -> None:
 def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key: bytes | None = None, indices: list | None = None,
           share_rows: bool = False, rows: dict | None = None, outs: dict | None = None, tables: dict | None = None,
           refs: dict | None = None, salts: dict | None = None, registered: dict | None = None,
-          public_words: dict | None = None, identifier: dict | None = None) -> dict:
+          public_words: dict | None = None, identifier: dict | None = None, digests: tuple[str, str] | None = None) -> dict:
     """``flock-circuit-inputs``: one JSON header line (the set's name, the range, each block's unit indices, the composite
     circuit's sha512, the frame-v3-sha512 statement; never the set's content digest, an unsalted hash of its values), then, for
     the prover only, every instance's rows (its input rows, then its output rows: ports in order, u16 LE) and every row's salt
@@ -826,7 +844,10 @@ def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key:
 
     ``identifier``: the header's ``identifier`` (PROTOCOL.md §16.10), a JSON object C-Flock does not read, on which canonical JSON
     is RFC 8785 (``verity.ml.circuits.codec.jcs_domain_error``). The public digest binds it, and the verifier holds it to its own
-    (``--identifier F``)."""
+    (``--identifier F``).
+
+    ``digests``: ``text``'s (:func:`digest`, :func:`class_digest`), from a caller that writes many statements of one circuit
+    (`class_statement.UnitStager`); else computed here."""
     from verity.ml.circuits.codec import jcs_domain_error
 
     if identifier is not None:
@@ -887,10 +908,11 @@ def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key:
     indices = list(range(lo, hi)) if indices is None else [int(u) for u in indices]
     if len(indices) != n or any(a >= b for a, b in zip(indices, indices[1:])) or min(indices, default=0) < 0:
         raise ValueError("unit indices: one global index per instance, ascending")
+    pin, cls = digests or (digest(text), class_digest(text))
     units = {"vus_per_block": G, "units_per_vu": meta.get("units_per_vu", 1), "indices": indices,
-             "blocks": [indices[b:b + G] for b in range(0, n, G)], "classes": [class_digest(text)] * n}
+             "blocks": [indices[b:b + G] for b in range(0, n, G)], "classes": [cls] * n}
     head = {"format": INST_FORMAT, "statement": meta.get("statement", STATEMENT), "scheme": SCHEME, "set": input_set.name, "subcircuit": sub.id,
-            "range": [lo, hi], "instances": n, "circuit_sha512": digest(text), "units": units, "frame_v3": fv, "rows": True}
+            "range": [lo, hi], "instances": n, "circuit_sha512": pin, "units": units, "frame_v3": fv, "rows": True}
     if pins:
         head["public_inputs"] = pins
     if identifier is not None:
