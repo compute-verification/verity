@@ -146,6 +146,58 @@ The first four blocks' verdicts are the earlier runs'. On b4 the records of wind
 the wire is the records. The latest tick was 4.2 ms late against the 25 ms slack. After the run the lab was brought
 back up in its default shape (`mockdc.py down`, then `up`), which `workload/lab_run.py` needs.
 
+### Two sites
+
+`--fleet` stands up `datacenter.examples.two_sites(2)`, many datacenters under one developer
+(`Fleet([east, west], [Link(east.wan.cert, west.wan.cert, wan)])`), merged (`Fleet.merged`): two leaf-spines, `east`
+and `west`, each of two blocks (`east.b0`, …, `west.b1`) and with a certifier of its own on its spine, and one WAN link
+between those two certifiers. The WAN's capacity and one-way latency are declared assumptions, `wan/east-west`
+(100 Gbit/s) and `wan/east-west-latency` (20 ms), and netem gives it 20 ms ± 2 ms (`--wan-latency-us`,
+`--wan-jitter-us`). The outside host is on the west site, so an east block's link runs through its own certifier, the
+two WAN certifiers and the west fabric to `na-ext0`. That makes 17 namespaces and 16 links.
+
+- The WAN ends at certifiers that watch no block. Ending it at a block's certifier would make that certifier forward the
+  other site's traffic past its block's guard. The WAN certifiers route like switches (`graph.routers`), and a block's
+  certifier still forwards nothing.
+- The WAN's certifiers have no port in the model (see Limits), so the fleet's ports are its blocks' eight.
+- The Program is the same, one outside peer per link (see Limits), so what crosses the WAN is the east blocks' traffic
+  with the outside host.
+
+Each block gets both audits, as on one site. Then the record check runs once more, on every block's records together
+against every block's declared ones, over the merged fleet's ports, with the account's charge for the whole run
+(`mockdc.charge` under the whole plan). `run.py` runs the fleet twice, with the first four strategies swapped between
+the sites, so that each is played across the WAN once. Run `r20261018-110501-432f` (the whole night, below):
+
+| Run | Block | Strategy | Certifier audit | Datacenter record check | Wire lag (median) | Worst tick |
+|---|---|---|---|---|---|---|
+| fleet | east.b0 | honest | accepted | 6 port-windows carried | 35.3 ms | 3.3 ms |
+| fleet | east.b1 | late | refused: `responses` window 0 | refused: `port east.b1.cert:out [0, 6000)` | 35.2 ms | 3.4 ms |
+| fleet | west.b0 | bits | accepted, wire identical to east.b0's | 6 port-windows carried | 5.6 ms | 3.8 ms |
+| fleet | west.b1 | extra | refused: `responses` window 2 | refused: `port west.b1.cert:out [12000, 18000)` | 10.0 ms | 3.7 ms |
+| fleet | all 8 ports | | | 22 port-windows carried, the two above refused; not sound: 88 bits + 4.8e12 | | |
+| fleet-swapped | east.b0 | bits | accepted, wire identical to west.b0's | 6 port-windows carried | 35.3 ms | 3.6 ms |
+| fleet-swapped | east.b1 | extra | refused: `responses` window 2 | refused: `port east.b1.cert:out [12000, 18000)` | 35.1 ms | 4.0 ms |
+| fleet-swapped | west.b0 | honest | accepted | 6 port-windows carried | 5.5 ms | 3.8 ms |
+| fleet-swapped | west.b1 | late | refused: `responses` window 0 | refused: `port west.b1.cert:out [0, 6000)` | 9.8 ms | 3.8 ms |
+| fleet-swapped | all 8 ports | | | 22 port-windows carried, the two above refused; not sound: 88 bits + 4.8e12 | | |
+
+The verdicts are the single site's, block for block. What the WAN adds:
+- **To δ, nothing.** A frame's release is counted in buckets from its anchor, the bucket its request entered at the
+  block's own certifier, and the frame is handed at that certifier, so both ends of δ are at the block's uplink and the
+  WAN is outside it. Every block on both sites declared the same sync, δ = 3 buckets at ρ = 1, and was accepted or
+  refused for the same reasons.
+- **To what the peer sees, about 25 ms.** Each bucket reached `na-ext0` a median 35.3 ms after its tick from an east
+  block, against about 5.5 ms from the west block on `west.leaf0` and 9.9 ms from the one behind the spine: the WAN's
+  20 ms, the 2 ms hops to and from the WAN certifiers, and jitter. The fastest of three pings from `na-ext0` took
+  61.4 ms and 63.3 ms to the east certifiers and back, against 7.4 ms and 17.1 ms to the west ones.
+- **To the requests' lead, most of it.** The Program sends each request half a bucket, 50 ms, before the tick that
+  enqueues it. From `na-ext0` to an east certifier is 32 ms one way, plus up to about 5 ms of jitter and at most
+  1.7 ms of the peer's own lateness, which leaves about 11 ms. Every request entered its declared bucket on both sites:
+  every block had the same arrival buckets. Past about 30 ms of WAN one way, requests would land a bucket late and an
+  honest block's ingress records would be refused, unless the Program sent them earlier.
+- **To the proxy's slack, nothing.** The latest tick in the fleet's runs was 4.0 ms late against the 25 ms slack, as on
+  one site. The slack bounds the proxy's own scheduling on its host, which the WAN doesn't touch.
+
 ## Limits
 
 - All the processes share one host's monotonic clock, so one origin times every proxy. Blocks on separate hosts would
@@ -186,9 +238,11 @@ request, against δ's 1.2 s, and each bucket reached the client a median 5.4 ms 
 ## The whole night
 
 `verity bench network_sim --out DIR` runs `run.py`, the night on the lab host in one process tree. `verity` isn't on
-vy-nebius-cpu-2's path, so there it is `python3 benchmarks/network_sim/run.py --out DIR`. It runs four things in turn:
+vy-nebius-cpu-2's path, so there it is `python3 benchmarks/network_sim/run.py --out DIR`. It runs five things in turn:
 - the accounting layer's demo (`python -m datacenter.demo`, `DIR/demo.txt`);
 - the mock datacenter in five blocks, which take the five strategies, once plain and once with the salt;
+- the fleet (`up --fleet --blocks 2`), twice, with the first four strategies swapped between the sites
+  (`run.MOCKDC_RUNS`);
 - with the lab back in its default shape, lab_run's honest, `b1:flip-bit` and `b2:late` runs;
 - the summary.
 
@@ -200,18 +254,20 @@ it leaves the lab up in its default shape.
 - the certifier's verdicts, and the salt check's;
 - the record check's verdicts, or N3's;
 - the account's covert budget;
+- the median lag from a bucket's tick to its bytes reaching the peer;
 - the latest proxy tick against the slack.
 
-The answers and the night's worst tick follow the rows. `DIR/summary.json` has the same. The exit status is 1 if a
-verdict or an answer isn't the expected one (`run.expected_block`, `run.WORKLOAD`), a step exited nonzero, or a tick ran
-past its slack.
+Each mockdc run has one more row, `all`, for its record check on every port. The answers and the night's worst tick
+follow the rows. `DIR/summary.json` has the same. The exit status is 1 if a verdict or an answer isn't the expected one
+(`run.expected_block`, `run.expected_records`, `run.WORKLOAD`), a step exited nonzero, or a tick ran past its slack.
 
 ~~~sh
-research run --on vy-nebius-cpu-2 --project verity --source . --cwd source -- \
+research run --on vy-nebius-cpu-2 --project verity --source . --cwd source --timeout 90m -- \
   bash -c 'python3 -B benchmarks/network_sim/run.py --out "$OUT"'
 ~~~
 
-Run `r20261018-102319-bb80` exited 0. It took 5.5 minutes on vy-nebius-cpu-2, at a load of about 25, and gave every
-expected verdict, the tables above. With the salt, b4's proxy revealed the salts of windows 0 and 2 only. Its record
-check under the plan was unchanged, and the certifier's salt check, like its audit, found nothing for window 1. The
-latest proxy tick was 4.3 ms late against the 25 ms slack.
+Run `r20261018-110501-432f` exited 0. It took 7.5 minutes on vy-nebius-cpu-2, at a load of about 6, and gave every
+expected verdict, the tables above. Each mockdc run's check on every port refused exactly what its blocks' own checks
+refused. With the salt, b4's proxy revealed the salts of windows 0 and 2 only. Its record check under the plan was
+unchanged, and the certifier's salt check, like its audit, found nothing for window 1. The latest proxy tick was 4.4 ms
+late against the 25 ms slack. The night before the fleet was `r20261018-102319-bb80`.
