@@ -69,4 +69,7 @@ theorem LiCheckpointLowBit : Pouw.Guarantees.Receipt.LiCheckpointLowBit :=
 theorem DuoWordProjNoKernel : Pouw.Guarantees.Receipt.DuoWordProjNoKernel :=
   fun _ k a r h => Pouw.ReceiptProofs.duoWordProj_injective k a r h
 
+theorem DuoReceiptNotInjective : Pouw.Guarantees.Receipt.DuoReceiptNotInjective :=
+  fun hinj => (by decide : (0x1632c#32) ≠ 0x2237a#32) (hinj (a₁ := 0x1632c#32) (a₂ := 0x2237a#32) (by decide))
+
 end Pouw.SecurityProofs.Receipt

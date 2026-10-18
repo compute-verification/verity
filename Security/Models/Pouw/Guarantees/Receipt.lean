@@ -51,6 +51,14 @@ group. `duoWordSpread` (the receipt's XOR between two start states) is equal for
 * `DuoWordProjNoKernel`: one word's served receipt has no such kernel, for every odd multiplier, rotation
   `0 < r < n` and receipt rotation `0 < h < n`.
 
+That is the half of binding a constant kernel would break. The other half fails: at a state, the receipt keeps only `n`
+of the state's `2n` bits, so two words can reach one receipt.
+
+* `DuoReceiptNotInjective`: at width 32 with the served word 0's keys, one start state and two words give one receipt.
+
+So a receipt a thread a window is not a full-state commitment, and a chain that absorbed a wrong word can match the honest
+receipt; the checkpoint a segment of the chains' full states (`Accounting.Guarantees.TS.DuoSegmentsBind`) can't.
+
 Three words' receipts can have one: with `r₁ + r₃ ≡ 0 (mod n)`, `a₂ ≡ −1 (mod 2^r₁)` and `a₃ ≡ ±1 (mod 2^(n−r₁))`,
 flipping the top bit of all three words moves the receipt by one constant (`benchmarks/pouw/theory/duo_proj.c`).
 -/
@@ -178,5 +186,12 @@ rotation `0 < r < n` and receipt rotation `0 < h < n`, two words whose receipts 
 constant on every start state (equal `duoWordSpread`s) are equal. -/
 def DuoWordProjNoKernel : Prop :=
   ∀ (n : ℕ) (k : BitVec n) (a : OddKey n) (r h : Rotation n), Function.Injective (duoWordSpread k a.1 r.1 h.1)
+
+/-- **The served receipt is not injective in a word at a state.** At width 32, with the XOR key `0x6d403793`, multiplier
+`0x9e43d96b` and rotation 6 of the served word 0 (`segment_e2e`'s `KK[0]`, `KA[0]`, `ROT[0]`) and receipt rotation 16,
+from the state `(0x247a23f6, 0xc48c9971)` the words `0x1632c` and `0x2237a` give the receipt `0x26d90889`. -/
+def DuoReceiptNotInjective : Prop :=
+  ¬ Function.Injective (fun d : BitVec 32 =>
+    duoReceipt 16 (duoWord (0x6d403793#32) (0x9e43d96b#32) 6 (0x247a23f6#32, 0xc48c9971#32) d))
 
 end Pouw.Guarantees.Receipt
