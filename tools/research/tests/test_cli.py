@@ -303,8 +303,8 @@ def test_on_auto_is_the_queue_from_this_checkout_with_a_test_shape(tmp_path, mon
     runs = ["run", "--runs-dir", str(tmp_path / "runs"), "--on", "auto"]
     assert main([*runs, "--", "pytest", "-q"]) == 3
     assert main([*runs, "--cpus", "8", "--mem-gb", "32", "--timeout", "2h", "--", "pytest"]) == 3
-    assert [(s["project"], s["cpus"], s["mem-gb"], s["max-s"], s["node"]) for s in specs] == [
-        ("verity", 4, 16, 3600, None), ("verity", 8, 32, 7200, None)]
+    assert [(s["project"], s["kind"], s["cpus"], s["mem-gb"], s["max-s"], s["node"]) for s in specs] == [
+        ("verity", "agent-test", 4, 16, 3600, None), ("verity", "agent-test", 8, 32, 7200, None)]
     assert sources[0].resolve() == repo.resolve()
     assert "the queue places it from" in capsys.readouterr().err
     assert main([*runs, "--queue", "--", "true"]) == 2 and "is --queue already" in capsys.readouterr().err
