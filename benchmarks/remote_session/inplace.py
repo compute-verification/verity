@@ -8,11 +8,12 @@ region     store blocks first … first + blocks − 1 (`Region`): a weight tens
            (`PagedBacking.where`)
 map        a pass's plan (any `receipts.Plan` over the regions) to each position's device address and store index
            j = plan[p], on the device from the plan's runs and the regions (`rs_map`)
-pass       its sketch-sha512 receipts on tensor cores, each block read through the map (`rs_mapped_receipts`), then
-           `receipts.tree`'s leaves (the last one short), padding and levels (reader.cu's `rb_leaves`, `rb_pads`,
-           `rb_tree`), leaf c's salt `device.store_salt(key, seed, c)`; the pass keeps its levels from h0 up
+pass       its sketch-sha512 receipts on tensor cores, each block read through the map, and `receipts.tree`'s leaves
+           (the last one short), padding and levels hashed behind them as they are read (`rs_mapped_pass`), leaf c's
+           salt `device.store_salt(key, seed, c)`; the pass keeps its levels from h0 up
 opening    the 2^h0-leaf subtree a drawn position falls in, recomputed under the pass's seed and plan from the store as
-           it is when it opens, and the path's levels from h0 up from the pass
+           it is when it opens (`rs_mapped_receipts`, then reader.cu's `rb_leaves`, `rb_pads` and `rb_tree`), and the
+           path's levels from h0 up from the pass
 ~~~
 
 Every region's tensor is on the current GPU, at a 16-byte-aligned address with 16-byte-aligned strides, and stays
@@ -35,6 +36,12 @@ from device import BLOCK, PACK16_WORDS, PER_LEAF, SALT_DOMAIN, Lib, digests, rb,
 
 ROW = 64
 """rs_gather64's row: a block is BLOCK // ROW of them."""
+
+READY_BLOCKS = 1 << 13
+"""session.cu's CONSUMER_READY_BLOCKS: the positions of a group whose receipts `rs_mapped_pass` counts together."""
+
+FUSED_H0 = 8
+"""The largest h0 `rs_mapped_pass` takes: it hashes each 2^h0-leaf subtree in shared memory."""
 
 
 @dataclass(frozen=True)
@@ -109,13 +116,18 @@ def level_at(width: int, h0: int, h: int) -> int:
 
 class InPlace:
     """Passes over the store `regions` describe (`Region`, in store order from block 0) on the current GPU, read in
-    place, leaf salts under `key`; `kept_from` is h0, and `ctas` the receipts grid's CTAs (0: as many as are resident
-    at once)."""
+    place, leaf salts under `key`; `kept_from` is h0 (at most FUSED_H0), and `ctas` the receipt grids' CTAs (0: an
+    opening's as many as are resident at once, a pass's one an SM). A pass's tree is hashed on a stream of its own
+    beside the caller's."""
 
     def __init__(self, torch, lib: Lib, regions: Sequence[Region], key: bytes, *, kept_from: int = 6,
                  ctas: int = 0) -> None:
+        if not 0 <= kept_from <= FUSED_H0:
+            raise ValueError(f"a pass keeps its levels from h0 = 0 … {FUSED_H0} up, the subtree below h0 hashed in "
+                             f"shared memory: kept_from {kept_from}")
         self.torch, self.lib, self.key, self.kept_from, self.ctas = torch, lib, key, kept_from, ctas
         self.device = torch.device("cuda", torch.cuda.current_device())
+        self.side = torch.cuda.Stream(self.device)
         self.regions: tuple[Region, ...] = ()
         self.blocks = 0
         self.extend(regions)
@@ -211,14 +223,19 @@ class InPlace:
 
     def run_pass(self, seed: bytes, plan: rb.Plan) -> tuple[bytes, Pass]:
         """One pass under `seed` over `plan`: its root and what its openings need (`Pass`)."""
-        n = plan.length
-        leaves = rb.leaves(n)
-        H = (leaves - 1).bit_length()
-        width, h0 = 1 << H, min(self.kept_from, H)
+        torch, n = self.torch, plan.length
+        H = (rb.leaves(n) - 1).bit_length()
+        h0 = min(self.kept_from, H)
+        top = 1 << (H - h0)
         addrs, js = self.map(plan)
-        nodes = self.tree(self.receipts(addrs, js, self.set_pass(seed, plan), 0, n), 0, leaves, width)
-        root = digests(nodes[-1:].cpu())[0]
-        return root, Pass(seed, plan, H, h0, nodes[level_at(width, 0, h0):].clone())
+        pk = self.set_pass(seed, plan)
+        ys = torch.empty((n, 8), dtype=torch.int64, device=self.device)
+        kept = torch.empty((2 * top - 1, 8), dtype=torch.int64, device=self.device)
+        ctr = torch.empty(2 + -(-n // READY_BLOCKS) + top, dtype=torch.int32, device=self.device)
+        self.lib.call("rs_mapped_pass", addrs.data_ptr(), js.data_ptr(), n, pk.data_ptr(), ctr.data_ptr(), len(ctr),
+                      ys.data_ptr(), kept.data_ptr(), h0, self.ctas, self.side.cuda_stream)
+        root = digests(kept[-1:].cpu())[0]
+        return root, Pass(seed, plan, H, h0, kept)
 
     def open(self, handle: Pass, positions: Sequence[int]) -> list[tuple[bytes, bytes, bytes, tuple[bytes, ...]]]:
         """Each position's (block as the store holds it now, its leaf's receipts, the leaf's salt, the leaf's path):

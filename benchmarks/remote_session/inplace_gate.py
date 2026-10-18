@@ -7,7 +7,9 @@ FlashAttention's layout (2, pages, slots, heads, dim) sharing one storage and on
 check is against the driver's reference over each block as the binder reads it (`backing.read`):
 
     plans      every receipt and the root (`receipts.tree`, salts `device.store_salt`) of the whole store, of a mixed
-               plan of weight runs and live pages, of the same blocks out of store order, and of one- and two-leaf plans
+               plan of weight runs and live pages, of the same blocks out of store order, and of one- and two-leaf
+               plans; the fused pass's kept levels equal to the tree hashed after its receipts (`unfused_kept`), at the
+               gate's h0 and at h0 = 0 and FUSED_H0
     openings   every plan's (`receipts.verify_leaf`, each block as stored), paths through kept levels and subtrees
     appended   blocks appended at the store's end at their slots' bytes, a page's and single blocks (`InPlace.append`)
     written    a pass after weights and KV are written in place, nothing re-registered
@@ -18,9 +20,10 @@ check is against the driver's reference over each block as the binder reads it (
 Timing is at Llama-3.1-8B's weights as vLLM holds them in bf16 (the embedding; per layer qkv, o, gate_up, down and two
 norms; the final norm and lm_head: 195 tensors, 16.06 GB), and then with a KV pool beside them (`--pages` pages a layer,
 FlashAttention's layout): the read alone through the map, the receipts alone and the whole pass (map, constants and
-signs, receipts, leaves, padding, levels), against the read and receipts of the contiguous kernels over a copy of the
-weights in store order. The in-place root is checked equal to the contiguous pass's over the copy, and sampled
-receipts to the reference's. Writes OUT/inplace.json.
+signs, receipts and the tree behind them), beside the pass with its tree hashed after its receipts (`unfused_pass`)
+and the read and receipts of the contiguous kernels over a copy of the weights in store order. The in-place root is
+checked equal to the unfused pass's and to the contiguous one's over the copy, and sampled receipts to the
+reference's. Writes OUT/inplace.json.
 
     python inplace_gate.py --lib session.so --out OUT [--reps 10 --pages 2048]
 """
@@ -40,7 +43,7 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1] / "integrations" / "vllm"))
 
 from device import BLOCK, PER_LEAF, Lib, digests, rb, store_salt  # noqa: E402
-from inplace import InPlace, Region  # noqa: E402
+from inplace import FUSED_H0, InPlace, Region, level_at  # noqa: E402
 from verity_vllm.store.binder import PagedBacking, TorchBacking, page_layout, storage_bytes  # noqa: E402
 from verity_vllm.store.interface import IDENTITY, PageLayout  # noqa: E402
 from verity_vllm.store.registry import RemoteBandwidthReceipt, Store  # noqa: E402
@@ -91,6 +94,22 @@ def refused(fn) -> bool:
     return False
 
 
+def unfused_kept(ip: InPlace, ys, handle) -> bool:
+    """Whether a pass's kept levels equal those of the tree hashed after its receipts ys (`InPlace.tree`: reader.cu's
+    leaves, padding and levels), under the pass's constants as set."""
+    width = 1 << handle.H
+    nodes = ip.tree(ys, 0, rb.leaves(handle.plan.length), width)
+    return bool(ip.torch.equal(nodes[level_at(width, 0, handle.h0):], handle.kept))
+
+
+def unfused_pass(ip: InPlace, seed: bytes, plan: rb.Plan) -> bytes:
+    """A pass with its tree hashed after its receipts (`InPlace.receipts`, then `InPlace.tree`): its root."""
+    n, leaves = plan.length, rb.leaves(plan.length)
+    addrs, js = ip.map(plan)
+    nodes = ip.tree(ip.receipts(addrs, js, ip.set_pass(seed, plan), 0, n), 0, leaves, 1 << (leaves - 1).bit_length())
+    return digests(nodes[-1:].cpu())[0]
+
+
 def gate(torch, lib: Lib, rng, log) -> dict:
     dev = torch.device("cuda", torch.cuda.current_device())
     gen = torch.Generator(device=dev)
@@ -119,9 +138,15 @@ def gate(torch, lib: Lib, rng, log) -> dict:
     def check(name: str, plan: rb.Plan, draws: int = 0) -> bool:
         seed = rng.bytes(64)
         ys, want = reference(seed, plan, blocks, key)
-        got = digests(ip.pass_receipts(seed, plan).cpu())
+        mapped = ip.pass_receipts(seed, plan)
+        got = digests(mapped.cpu())
         root, handle = ip.run_pass(seed, plan)
-        r = {"positions": plan.length, "runs": len(plan.runs), "receipts": got == ys, "root": root == want}
+        r = {"positions": plan.length, "runs": len(plan.runs), "receipts": got == ys, "root": root == want,
+             "kept": unfused_kept(ip, mapped, handle)}
+        for h in (0, FUSED_H0):
+            other = InPlace(torch, lib, ip.regions, key, kept_from=h)
+            root_h, handle_h = other.run_pass(seed, plan)
+            r[f"kept_from_{h}"] = root_h == want and unfused_kept(other, mapped, handle_h)
         if draws:
             ps = sorted({0, plan.length - 1, *map(int, rng.integers(0, plan.length, draws))})
             ok = []
@@ -131,7 +156,8 @@ def gate(torch, lib: Lib, rng, log) -> dict:
             r["openings"], r["opened"] = all(ok), len(ok)
         out[name] = r
         log(f"gate {name}: {r}")
-        return r["receipts"] and r["root"] and r.get("openings", True)
+        return bool(r["receipts"] and r["root"] and r["kept"] and r["kept_from_0"] and r[f"kept_from_{FUSED_H0}"]
+                    and r.get("openings", True))
 
     ok = check("whole", rb.Plan.whole(N), 24)
     kv_firsts = [infos[f"kv/{li}"].first for li in range(3)]
@@ -183,6 +209,7 @@ def gate(torch, lib: Lib, rng, log) -> dict:
     phys2 = backs[-1].physical
     out["refusals"] = {
         "misaligned": refused(lambda: InPlace(torch, lib, [Region(0, 1, a0 + 8)], key)),
+        "kept_from_past_fused": refused(lambda: InPlace(torch, lib, [Region(0, 1, a0)], key, kept_from=FUSED_H0 + 1)),
         "gap": refused(lambda: InPlace(torch, lib, [Region(0, 4, a0), Region(5, 4, a0)], key)),
         "past_store": refused(lambda: ip.map(rb.Plan(((0, ip.blocks + 1),), ip.blocks + 1))),
         "part_block_plane": refused(lambda: Region.of_backing(0, PagedBacking(
@@ -269,23 +296,29 @@ def timing(torch, lib: Lib, rng, reps: int, pages: int, log) -> dict:
     leaves = rb.leaves(N)
     width = 1 << (leaves - 1).bit_length()
     t["tree"] = timed(torch, lambda: ip.tree(ys, 0, leaves, width), reps)
+    roots = {}
+    t["pass_unfused"] = timed(torch, lambda: roots.update(unfused=unfused_pass(ip, seed, plan)), reps)
     walls = []
 
     def whole():
         w0 = time.perf_counter_ns()
-        out["root"] = ip.run_pass(seed, plan)[0]
+        roots["fused"] = ip.run_pass(seed, plan)[0]
         walls.append((time.perf_counter_ns() - w0) / 1e6)
 
     t["pass_inplace"] = timed(torch, whole, reps)
     t["pass_inplace_wall"] = sorted(walls)[len(walls) // 2]
+    two = InPlace(torch, lib, regions, key, ctas=2 * sms)
+    t["pass_inplace_2_per_sm"] = timed(torch, lambda: roots.update(two=two.run_pass(seed, plan)[0]), reps)
     plain = ip.tree(ys2, 0, leaves, width)
-    out["root_equal_contiguous"] = out.pop("root") == digests(plain[-1:].cpu())[0]
+    out["root_equal_contiguous"] = roots["fused"] == digests(plain[-1:].cpu())[0]
+    out["root_equal_unfused"] = roots["fused"] == roots["unfused"] == roots["two"]
     r = rb.receipter(rb.SKETCH_SHA512, seed, ROWS)
     host = ys.cpu()
     sample = sorted(map(int, rng.integers(0, N, 64)))
     out["sampled_receipts_reference"] = all(
         digests(host[p:p + 1])[0] == r(p, copy[p * BLOCK:(p + 1) * BLOCK].cpu().numpy().tobytes()) for p in sample)
     out["tau_inplace"] = t["pass_inplace"]["median"] / t["read_contiguous"]["median"]
+    out["tau_unfused"] = t["pass_unfused"]["median"] / t["read_contiguous"]["median"]
     out["read_mapped_over_contiguous"] = t["read_mapped"]["median"] / t["read_contiguous"]["median"]
     out["read_GBps"] = {k: nbytes / (t[k]["median"] / 1e3) / 1e9 for k in ("read_contiguous", "read_mapped")}
     out["ms"] = t
@@ -307,7 +340,8 @@ def timing(torch, lib: Lib, rng, reps: int, pages: int, log) -> dict:
                                                        16 * sms), reps),
           "receipts_mapped": timed(torch, lambda: lib.call("rs_mapped_receipts", addrs2.data_ptr(), js2.data_ptr(), N2,
                                                            pk2.data_ptr(), ys.data_ptr(), 0), reps),
-          "pass_inplace": timed(torch, lambda: ip2.run_pass(seed, plan2), reps)}
+          "pass_unfused": timed(torch, lambda: roots.update(kv_unfused=unfused_pass(ip2, seed, plan2)), reps),
+          "pass_inplace": timed(torch, lambda: roots.update(kv_fused=ip2.run_pass(seed, plan2)[0]), reps)}
     blocks = {}
     kv0 = next(r for r in store2.layout().regions if r.kind == "kv").first
     sample = sorted(map(int, rng.integers(kv0, N2, 48)))
@@ -319,11 +353,13 @@ def timing(torch, lib: Lib, rng, reps: int, pages: int, log) -> dict:
     kvr = {"pages": pages, "kv_bytes": (N2 - N) * BLOCK, "blocks": N2,
            "sampled_kv_receipts_reference": all(digests(host[p:p + 1])[0] == r(p, blocks[p]) for p in sample),
            "read_GBps": N2 * BLOCK / (t2["read_mapped"]["median"] / 1e3) / 1e9,
-           "tau_over_mapped_read": t2["pass_inplace"]["median"] / t2["read_mapped"]["median"], "ms": t2}
+           "tau_over_mapped_read": t2["pass_inplace"]["median"] / t2["read_mapped"]["median"],
+           "root_equal_unfused": roots["kv_fused"] == roots["kv_unfused"], "ms": t2}
     log(f"timing weights+kv: {kvr}")
     out["with_kv"] = kvr
-    out["ok"] = bool(out["receipts_equal"] and out["root_equal_contiguous"] and out["sampled_receipts_reference"]
-                     and kvr["sampled_kv_receipts_reference"])
+    out["ok"] = bool(out["receipts_equal"] and out["root_equal_contiguous"] and out["root_equal_unfused"]
+                     and out["sampled_receipts_reference"] and kvr["sampled_kv_receipts_reference"]
+                     and kvr["root_equal_unfused"])
     return out
 
 
