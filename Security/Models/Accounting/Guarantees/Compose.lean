@@ -1,6 +1,6 @@
 import Models.Accounting.Guarantees.Sheet
 import Models.Accounting.Assumptions.Compose
-import Models.Pouw.Guarantees.FiatShamir
+import Models.Pouw.Assumptions.FiatShamir
 
 /-!
 # PoUW's credit on an arbitrary declared circuit (trusted)
