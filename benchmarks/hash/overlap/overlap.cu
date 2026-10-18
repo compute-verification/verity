@@ -110,6 +110,61 @@ __global__ void silu_mul(const bf16* __restrict__ gu, bf16* __restrict__ act, in
     act[k] = __float2bfloat16(g / (1.0f + __expf(-g)) * u);
   }
 }
+// The non-GEMM stand-ins (memory-bound, as vLLM's fused Triton kernels): fused_add_rms_norm over [m, h] (a block a row, 8 bf16
+// a thread a load) and a vectorized silu(g) u.
+__global__ void __launch_bounds__(512) rms_add(const bf16* __restrict__ x, bf16* __restrict__ res, const bf16* __restrict__ wt,
+                                               bf16* __restrict__ y, int h) {
+  const size_t row = blockIdx.x;
+  float v[8], ss = 0;
+  const int c = threadIdx.x * 8;
+  if (c < h) {
+    const uint4 a = *reinterpret_cast<const uint4*>(x + row * h + c), r = *reinterpret_cast<const uint4*>(res + row * h + c);
+    const bf16* pa = reinterpret_cast<const bf16*>(&a);
+    const bf16* pr = reinterpret_cast<const bf16*>(&r);
+    uint4 o;
+    bf16* po = reinterpret_cast<bf16*>(&o);
+    for (int i = 0; i < 8; ++i) {
+      v[i] = __bfloat162float(pa[i]) + __bfloat162float(pr[i]);
+      po[i] = __float2bfloat16(v[i]);
+      ss += v[i] * v[i];
+    }
+    *reinterpret_cast<uint4*>(res + row * h + c) = o;
+  }
+  __shared__ float red[32];
+  for (int s = 16; s; s >>= 1) ss += __shfl_xor_sync(0xffffffffu, ss, s);
+  if ((threadIdx.x & 31) == 0) red[threadIdx.x >> 5] = ss;
+  __syncthreads();
+  if (threadIdx.x < 32) {
+    float t = threadIdx.x < blockDim.x / 32 ? red[threadIdx.x] : 0;
+    for (int s = 16; s; s >>= 1) t += __shfl_xor_sync(0xffffffffu, t, s);
+    if (threadIdx.x == 0) red[0] = rsqrtf(t / h + 1e-6f);
+  }
+  __syncthreads();
+  if (c < h) {
+    const uint4 g = *reinterpret_cast<const uint4*>(wt + c);
+    const bf16* pg = reinterpret_cast<const bf16*>(&g);
+    uint4 o;
+    bf16* po = reinterpret_cast<bf16*>(&o);
+    for (int i = 0; i < 8; ++i) po[i] = __float2bfloat16(v[i] * red[0] * __bfloat162float(pg[i]));
+    *reinterpret_cast<uint4*>(y + row * h + c) = o;
+  }
+}
+__global__ void silu_mul8(const bf16* __restrict__ gu, bf16* __restrict__ act, int m, int i) {
+  const size_t tot = (size_t)m * i / 8;
+  for (size_t k = (size_t)blockIdx.x * blockDim.x + threadIdx.x; k < tot; k += (size_t)gridDim.x * blockDim.x) {
+    const size_t r = k * 8 / i, c = k * 8 % i;
+    const uint4 g = *reinterpret_cast<const uint4*>(gu + r * 2 * i + c), u = *reinterpret_cast<const uint4*>(gu + r * 2 * i + i + c);
+    const bf16* pg = reinterpret_cast<const bf16*>(&g);
+    const bf16* pu = reinterpret_cast<const bf16*>(&u);
+    uint4 o;
+    bf16* po = reinterpret_cast<bf16*>(&o);
+    for (int j = 0; j < 8; ++j) {
+      const float a = __bfloat162float(pg[j]);
+      po[j] = __float2bfloat16(a / (1.0f + __expf(-a)) * __bfloat162float(pu[j]));
+    }
+    *reinterpret_cast<uint4*>(act + k * 8) = o;
+  }
+}
 __global__ void maxrel(const bf16* a, const bf16* b, size_t n, float* out) {
   float m = 0;
   for (size_t i = (size_t)blockIdx.x * blockDim.x + threadIdx.x; i < n; i += (size_t)gridDim.x * blockDim.x) {
@@ -669,6 +724,64 @@ static int bench(const std::string& pdir, int reps, bool nsys) {
              "\"net_vs_lt_plus_hash\": %.4f, \"exposed_hash_ms\": %.5f, \"bytes_per_layer\": %llu}\n",
              g.c_str(), v.name.c_str(), clt, cg, h1, hn, seq, p1, pn, par, (cg + hn - par) / hn, (clt + hn - par) / hn, par / (clt + hn),
              par - clt, (unsigned long long)(M * (QKV + 9216 + H + I + H) * 2ull));
+    }
+  }
+  // --- the non-GEMM stand-in: a layer's memory-bound kernels (3 fused_add_rms_norm, 1 silu(g) u), R layers of them on A,
+  // beside the chain's separate pass (hN: every call of the L layers on its own stream); R is set so the stand-in alone
+  // lasts about as long as the pass alone. Overlap efficiency (E + hN - par) / min(E, hN): 1 is full overlap, 0 serial.
+  if (!nsys) {
+    int sms;
+    CK(cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, 0));
+    auto elt = [&](int r_) {
+      for (int r = 0; r < r_; ++r) {
+        for (int j = 0; j < 3; ++j) rms_add<<<M, H / 8, 0, w.A>>>(w.X["o"], w.R["o"], w.W["o"], w.out[1], H);
+        silu_mul8<<<8 * sms, 256, 0, w.A>>>(w.out[0], w.out[1], M, I);
+      }
+    };
+    auto hn = [&](const Variant& v) {
+      int k = 0;
+      for (int l = 0; l < L; ++l)
+        for (const char* t : {"qkv", "attn", "res", "act", "res2"}) w.hs[l][t]->run(v, reinterpret_cast<const uint8_t*>(w.T[l][t]), w.P[k++ % NB]);
+    };
+    auto timed = [&](const std::function<void()>& f) {
+      w.nev = 0;
+      w.join_all();
+      CK(cudaEventRecord(c0, w.A));
+      f();
+      w.join_all();
+      CK(cudaEventRecord(c1, w.A));
+      CK(cudaEventSynchronize(c1));
+      float ms;
+      CK(cudaEventElapsedTime(&ms, c0, c1));
+      return (double)ms;
+    };
+    for (int i = 0; i < 3; ++i) timed([&] { elt(1); });
+    std::vector<double> e1;
+    for (int i = 0; i < 9; ++i) e1.push_back(timed([&] { elt(1); }));
+    const double e1m = median(e1);
+    for (const auto& v : vs) {
+      const double hnm = median(cms["chain:hN:" + v.name]) * L;
+      const int R = std::max(1, (int)std::lround(hnm / e1m));
+      std::vector<double> te, th, tp;
+      for (int i = 0; i < 2; ++i) { timed([&] { elt(R); }); timed([&] { hn(v); }); timed([&] { elt(R); hn(v); }); }
+      for (int r = 0; r < reps; ++r) {
+        const int o = r % 3;
+        for (int j = 0; j < 3; ++j) {
+          const int a = (j + o) % 3;
+          if (a == 0) te.push_back(timed([&] { elt(R); }));
+          if (a == 1) th.push_back(timed([&] { hn(v); }));
+          if (a == 2) tp.push_back(timed([&] { hn(v); elt(R); }));
+        }
+      }
+      const double E = median(te), Hn = median(th), Pp = median(tp);
+      printf("{\"nongemm\": \"%s\", \"layer_ms\": %.5f, \"R\": %d, \"elt_ms\": %.5f, \"hN_ms\": %.5f, \"par_ms\": %.5f, "
+             "\"overlap_eff\": %.4f, \"hidden_of_hN\": %.4f, \"elt_ms_all\": [", v.name.c_str(), e1m, R, E, Hn, Pp,
+             (E + Hn - Pp) / std::min(E, Hn), (E + Hn - Pp) / Hn);
+      for (size_t i = 0; i < te.size(); ++i) printf("%s%.5f", i ? ", " : "", te[i]);
+      printf("], \"par_ms_all\": [");
+      for (size_t i = 0; i < tp.size(); ++i) printf("%s%.5f", i ? ", " : "", tp[i]);
+      printf("]}\n");
+      fflush(stdout);
     }
   }
   fflush(stdout);

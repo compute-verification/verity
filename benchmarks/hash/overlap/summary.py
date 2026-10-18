@@ -64,6 +64,13 @@ def main(o: str) -> int:
             print(f"| {r['chain_summary']} | {r['variant']} | {r['lt_ms']:.4f} | {r['gemm_ms']:.4f} | {r['h1_ms']:.4f} | {r['hN_ms']:.4f} | "
                   f"{r['seq_ms']:.4f} | {r['par1_ms']:.4f} | {r['parN_ms']:.4f} | {100 * r['hidden_vs_own_gemm']:.1f}% | "
                   f"{100 * r['hidden_vs_lt']:.1f}% | {r['net_vs_lt_plus_hash']:.3f} | {gbps:,.0f} |")
+    ng = [r for r in b if "nongemm" in r]
+    if ng:
+        print("\nNon-GEMM stand-in (R layers of 3 fused_add_rms_norm + 1 silu(g) u on A) beside the separate pass hN:\n")
+        print("| hash | stand-in layer ms | R | stand-in ms | hN ms | both ms | overlap efficiency | hidden of hN |\n|---|---|---|---|---|---|---|---|")
+        for r in ng:
+            print(f"| {r['nongemm']} | {r['layer_ms']:.4f} | {r['R']} | {r['elt_ms']:.4f} | {r['hN_ms']:.4f} | {r['par_ms']:.4f} | "
+                  f"{r['overlap_eff']:.3f} | {100 * r['hidden_of_hN']:.1f}% |")
     for path in glob.glob(os.path.join(o, "nsys*_cuda_gpu_trace.csv")):
         seen: dict[str, tuple] = {}
         with open(path) as f:
