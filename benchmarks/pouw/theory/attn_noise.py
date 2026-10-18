@@ -16,9 +16,11 @@ Parts:
   instance (`not_chainBound_noNoise`); row dither (U of period r = 1) has rank k/L, one a word. Mutations put each
   premise on the adopted form and are caught by part B's check.
 - G. Per unit (decision 107: one output coordinate), the noise bits a cheat must match per unit of work it saves (h,
-  GRIND, decision 112), from how units share an operand row's noise, and the SHA-512 compressions a drawn unit spends
-  deriving its noise in its proof (decision 105) on the deployed NS 1 patch layout (4 rows × 128 columns a
-  compression; V's over Vᵀ) and on a layout with each unit's operand noise contiguous.
+  GRIND, decision 112), from how units share an operand row's noise: matching one side's noise leaves a unit's words
+  affine in the other side's coins, which have no floor (`crossRankLe_dClean`'s case). Then the SHA-512 compressions
+  a drawn unit spends deriving its noise in its proof (decision 105) on the deployed NS 1 patch layout (4 rows × 128
+  columns a compression; V's over Vᵀ) and on a layout with each unit's operand noise contiguous, and decision 112's
+  grind bound a seed at prefill and at decode.
 
 Run from the repository root: `uv run --no-project --with numpy --with python-sat --with-editable
 benchmarks/pouw/exact_kit python -B benchmarks/pouw/theory/attn_noise.py --mutations`.
@@ -78,6 +80,24 @@ def h_table(L, d=128, u_bits_qk=64 * 5, u_bits_pv=32 * 7):
     a row, or of a column, of one A·B with its own seed), at the worst row (key 0 or query L − 1: L units)."""
     return {"QKᵀ, K row (b)": d / L, "QKᵀ, Q row (c and U)": (d + u_bits_qk) / L,
             "P·V, V column (b)": L / L, "P·V, P row (U)": u_bits_pv / d}
+
+
+def h_decode(L, d=128, u_bits_qk=64 * 5, u_bits_pv=32 * 7):
+    """h at a decode step of one query against L keys, K and V noised afresh by the step's matmuls: Q's row is read by
+    the step's L units, each K row by one, P's row by d units and each V column's L bits by one."""
+    return {"QKᵀ, K row (b)": d, "QKᵀ, Q row (c and U)": (d + u_bits_qk) / L,
+            "P·V, V column (b)": L, "P·V, P row (U)": u_bits_pv / d}
+
+
+def grind_eps(L, delta_log2=40, t_log2=128, d=128):
+    """Decision 112's (iv): a seed's grind premium is at most log₂(T/δ)/h units, so ε_grind ≤ log₂(T/δ)/(h·N) over
+    the N units the seed covers, one seed a matmul (one head). Prefill: QKᵀ covers the causal L(L + 1)/2 scores,
+    P·V L·d outputs; decode: L scores and d outputs."""
+    bits, hp, hd = t_log2 + delta_log2, h_table(L, d), h_decode(L, d)
+    return {"prefill QKᵀ": bits / (min(hp["QKᵀ, K row (b)"], hp["QKᵀ, Q row (c and U)"]) * L * (L + 1) / 2),
+            "prefill P·V": bits / (min(hp["P·V, V column (b)"], hp["P·V, P row (U)"]) * L * d),
+            "decode QKᵀ": bits / (min(hd["QKᵀ, K row (b)"], hd["QKᵀ, Q row (c and U)"]) * L),
+            "decode P·V": bits / (min(hd["P·V, V column (b)"], hd["P·V, P row (U)"]) * d)}
 
 
 def unit_compressions(k, d=128):
@@ -149,6 +169,16 @@ def main():
                  "patch layout over Vᵀ (19, 67, 259 at k = 2K, 8K, 32K) against 2 + ⌈(224 + k)/512⌉ contiguous (7, 19, "
                  "67)", comp["k=2048"] == {"QKᵀ": (5, 4), "P·V": (19, 7)} and comp["k=8192"]["P·V"] == (67, 19)
                  and comp["k=32768"]["P·V"] == (259, 67), str(comp))
+    grind = {f"L={n}": grind_eps(n) for n in (2048, 8192, 32768)}
+    out["grind ε bound a seed (T = 2^128, δ = 2^-40)"] = {key: {f: round(v, 6) for f, v in g.items()}
+                                                          for key, g in grind.items()}
+    checks.check("G3 decision 112's grind bound a seed, one seed a matmul: prefill QKᵀ 2.625/(L + 1) of its work "
+                 "(0.128% at 2K, 0.008% at 32K) and P·V 1.3125/L; at decode one query's Q row and P row bind, "
+                 "37.5% of the step's QKᵀ and 75% of its P·V at any L: decode needs more units a seed",
+                 abs(grind["L=2048"]["prefill QKᵀ"] - 2.625 / 2049) < 1e-6
+                 and abs(grind["L=32768"]["prefill P·V"] - 1.3125 / 32768) < 1e-6
+                 and all(abs(g["decode QKᵀ"] - 0.375) < 1e-9 and abs(g["decode P·V"] - 0.75) < 1e-9
+                         for g in grind.values()), str(out["grind ε bound a seed (T = 2^128, δ = 2^-40)"]))
 
     print("\nRESULTS " + json.dumps(out, default=str, sort_keys=True))
     sys.exit(checks.finish())
