@@ -9,12 +9,16 @@ JSON only; measurement only.
 Categories, from the compiled source's names (`c<piece>.<op>/<buf>`, served_compiled_source.py) and shapes: piece p >= 1 holds
 layer p-1's o_proj, post-attention norm, gate/up, activation, down and post-MLP residual, then layer p's input norm, qkv, the
 rotated q and k (k is what the KV cache stores, with v inside qkv) and, between pieces, layer p's attention output.  A norm
-output is any [T, hidden] (or per-head [T, heads, head_dim]) buffer that is not a GEMM's, a residual or a rotation's.
+output is any [T, hidden] (or per-head [T, heads, head_dim]) buffer that is not a GEMM's, a residual or a rotation's.  An MoE
+layer's block is one extern call (vLLM's fused-MoE custom op, `extern` or `moe_*`): its [T, hidden] output is `moe`, in down's
+place, and its router and experts are inside it.  Where the norm after o_proj comes as a pair of [T, hidden] buffers (a fused
+add + RMSNorm), the first is the post-attention residual, `residual_attn`.
 
 Units (what a proof unit would take as its inputs and outputs, so what is left to commit):
   norm-folded      RMSNorm inside the next GEMM's unit, which recomputes it from the committed residual stream: no norm output.
-  residual-folded  the residual add inside o_proj's and down's units, whose outputs are the sums: down's output is not
-                   committed beside the post-MLP residual (o_proj's output becomes the post-attention residual, same bytes).
+  residual-folded  the residual add inside o_proj's and down's units, whose outputs are the sums: down's (or the MoE block's)
+                   output is not committed beside the post-MLP residual, nor o_proj's beside a post-attention residual (where
+                   none is committed, o_proj's output becomes it, same bytes).
   act-folded       silu(gate) * up inside the gate/up unit: the activation is committed, gate/up's output is not.
   all-three        the three together.
   per-layer        one unit a decoder layer: the residual stream between layers and the KV values (k and v) only.
@@ -27,8 +31,8 @@ import math
 import re
 from collections import defaultdict
 
-CATS = ("inputs", "embedding", "norm", "qkv", "rope_q", "kv_k", "attention", "o_proj", "residual", "gate_up", "activation", "down",
-        "moe", "logits", "sampler", "other")
+CATS = ("inputs", "embedding", "norm", "qkv", "rope_q", "kv_k", "attention", "o_proj", "residual_attn", "residual", "gate_up",
+        "activation", "down", "moe", "logits", "sampler", "other")
 PIECE = re.compile(r"^c(\d+)\.([^/]+)/(.+)$")
 LAYER = re.compile(r"layers\.(\d+)\.")
 
@@ -61,10 +65,10 @@ def classify(step: list) -> list[tuple[int | None, str, int]]:
         phase = "qkv_in" if p == 0 else "attn_out"
         post_mlp = 0
         n_post_mlp = 0
-        for op, shape, nb in bufs:
+        for i, (op, shape, nb) in enumerate(bufs):
             is_mm = op in ("mm", "addmm", "bmm")
             flat = len(shape) == 2 and shape[-1] == hidden and not is_mm
-            if "moe" in op:
+            if _moe_block(op, shape, hidden):
                 out.append((layer, "moe", nb))
                 phase = "post_mlp"
                 n_post_mlp = 0
@@ -87,6 +91,8 @@ def classify(step: list) -> list[tuple[int | None, str, int]]:
                 elif is_mm:
                     out.append((layer, "gate_up", nb))
                     phase = "mlp"
+                elif flat and i + 1 < len(bufs) and _flat(bufs[i + 1], hidden):
+                    out.append((layer, "residual_attn", nb))
                 else:
                     out.append((layer, "norm" if flat else "other", nb))
             elif phase == "mlp":
@@ -111,12 +117,22 @@ def classify(step: list) -> list[tuple[int | None, str, int]]:
     return out
 
 
+def _moe_block(op: str, shape: list, hidden: int) -> bool:
+    return "moe" in op or (op == "extern" and len(shape) == 2 and shape[-1] == hidden)
+
+
+def _flat(buf: tuple, hidden: int) -> bool:
+    """A [T, hidden] buffer that is no GEMM's and no MoE block's: a norm or a residual."""
+    op, shape, _ = buf
+    return len(shape) == 2 and shape[-1] == hidden and op not in ("mm", "addmm", "bmm") and not _moe_block(op, shape, hidden)
+
+
 def _flat_after_mlp(bufs: list, hidden: int) -> int:
     """The [T, hidden] non-GEMM buffers after a piece's down (or MoE) output: the residual, then the next norm."""
     for i in range(len(bufs) - 1, -1, -1):
         op, shape, _ = bufs[i]
-        if "moe" in op or (op in ("mm", "addmm", "bmm") and shape[-1] == hidden and i > 0):
-            return sum(1 for o, s, _ in bufs[i + 1:] if len(s) == 2 and s[-1] == hidden and o not in ("mm", "addmm", "bmm"))
+        if _moe_block(op, shape, hidden) or (op in ("mm", "addmm", "bmm") and shape[-1] == hidden and i > 0):
+            return sum(1 for b in bufs[i + 1:] if _flat(b, hidden))
     return 0
 
 
@@ -134,9 +150,11 @@ def unit_bytes(cls: list[tuple[int | None, str, int]], unit: str, t: int, kv_tok
     total = sum(b for _l, c, b in cls if c not in drop)
     if unit in ("residual-folded", "all-three"):
         res_layers = {lay for lay, c, _b in cls if c == "residual"}
-        total -= sum(b for lay, c, b in cls if c == "down" and lay in res_layers)
+        attn_res_layers = {lay for lay, c, _b in cls if c == "residual_attn"}
+        total -= sum(b for lay, c, b in cls if c in ("down", "moe") and lay in res_layers)
+        total -= sum(b for lay, c, b in cls if c == "o_proj" and lay in attn_res_layers)
     if unit == "per-layer":
-        keep = sum(b for _l, c, b in cls if c in ("inputs", "embedding", "logits", "sampler", "moe"))
+        keep = sum(b for _l, c, b in cls if c in ("inputs", "embedding", "logits", "sampler"))
         total = keep + layers * t * (hidden_bytes + 2 * kv_tok_layer)
     return total
 
