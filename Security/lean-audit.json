@@ -62,10 +62,6 @@
    "owner": "@compute-accounting",
    "digest": "d17ab6dafa91dbbf183e5a1221cd1f8fc26fb93ebb1b21e83117ef2337a454f2"
   },
-  "Accounting.Assumptions.TS.RightFixedDrawn": {
-   "owner": "@compute-accounting",
-   "digest": "211f7b4e809537ea193ee23f95c420c5dbd8a6e91fcab8474f1f11bfcda1c047"
-  },
   "Accounting.Assumptions.TS.ScalarRoute": {
    "owner": "@compute-accounting",
    "digest": "414a164b2927884959719a19f4157ef08125017896884da53459996b1212b5bd"
@@ -73,6 +69,9 @@
   "Accounting.Assumptions.TS.SideUnits": {
    "owner": "@compute-accounting",
    "digest": "36404ba2e20a614ee48738159240c66e7f023670dba8cf261be8b3b73921e179"
+  },
+  "Accounting.Assumptions.TS.UnitFixed": {
+   "owner": "@compute-accounting"
   },
   "Accounting.Assumptions.TS.WordsWritten": {
    "owner": "@compute-accounting",
@@ -1428,10 +1427,10 @@
    "type_hash": "5cd9789694c0df8e5c5a09cd026a4f45b7c72ae8be8393f286cb479d9cac04d0"
   },
   "Accounting.SecurityProofs.TS.DrawnBindingOfFork": {
-   "owner": "@compute-accounting",
-   "signature": ["Accounting.SecurityProofs.TS.DrawnBindingOfFork : Accounting.Guarantees.TS.DrawnBindingOfFork"],
-   "assumptions": [],
-   "type_hash": "fc4ae1010af73e95ee2ac4299cf6aaaad4d267967b850103ad37b012c3648d86"
+   "owner": "@compute-accounting"
+  },
+  "Accounting.SecurityProofs.TS.DrawnRightOff": {
+   "owner": "@compute-accounting"
   },
   "Accounting.SecurityProofs.TS.FloorCreditD3": {
    "owner": "@compute-accounting",
@@ -1446,10 +1445,7 @@
    "type_hash": "f63122b9d09208627838844f85921930911249f025c810b9936cfc84542bef96"
   },
   "Accounting.SecurityProofs.TS.ProofsSoundOfDrawn": {
-   "owner": "@compute-accounting",
-   "signature": ["Accounting.SecurityProofs.TS.ProofsSoundOfDrawn : Accounting.Guarantees.TS.ProofsSoundOfDrawn"],
-   "assumptions": [],
-   "type_hash": "deab04dfcfe2b047967e13801a426edafa0433d2325d2653dfd7a94dab219841"
+   "owner": "@compute-accounting"
   },
   "Accounting.SecurityProofs.TS.ProofsSoundOfPinned": {
    "owner": "@compute-accounting",
@@ -5495,8 +5491,9 @@
    "Accounting.SecurityProofs.TS.CompilerC": "frozen (no-function,world-unlisted): Lemma C (the compiler) of EPS1-SPEC over every sampled play, not a Lean function; its premises are DIdeal's but (L), with (C1)-(C3) in ProofsSound, and it takes Lambda's definition (Accounting.TS.RoundGame.BudgetAt) as a hypothesis.",
    "Accounting.SecurityProofs.TS.ProofsSoundOfPinned": "lemma: (I8) ProofsSound of EPS1-SPEC from its pieces over every play and window of proofs (Accounting.TS.ProofLayer), not a Lean function: binding at delta_bind and proof soundness at delta_ZK as probability hypotheses, the Definitions' pinning (ProofLayer.Pins) and the play being its proofs' (ProofLayer.Of) as definitional hypotheses, and E1(c) as the named assumption RightFixed, not on the premises list; DIdeal and CompilerC, which take ProofsSound, are what it is for.",
    "Accounting.SecurityProofs.TS.BindingOfFork": "lemma: the rewinding step behind (I8)'s delta_bind over every window of proofs (Accounting.TS.ProofLayer), not a Lean function: binding's failure at a round, squared, is at most its fork form's (two runs off one commitment, both accepted, opening it differently), so a bound on the fork form is binding at its square root; ProofsSoundOfPinned, which takes binding at delta_bind, is what it is for.",
-   "Accounting.SecurityProofs.TS.ProofsSoundOfDrawn": "lemma: (I8) ProofsSound of EPS1-SPEC at n_pi = s from its pieces over every sampled play and its drawn units' proofs (Accounting.TS.DrawnLayer), not a Lean function: binding for the drawn units at delta_bind and each draw's proof soundness at delta_ZK as probability hypotheses, each unit's pinning (DrawnLayer.Pins) and the play being its drawn units' proofs' (DrawnLayer.Of) as definitional hypotheses, and E1(c) with the drawn units right as the named assumption RightFixedDrawn, not on the premises list; CompilerC and the composed credit, which take ProofsSound at n_pi = s, are what it is for.",
-   "Accounting.SecurityProofs.TS.DrawnBindingOfFork": "lemma: the rewinding step behind a sampled window's delta_bind over every sampled window of proofs (Accounting.TS.DrawnLayer), not a Lean function: binding's failure for a round's drawn units, squared, is at most |J|^2 times its fork form at the draw (two runs sharing every value committed before the draw, both accepting some unit's proof and opening it differently), so a bound on the fork form is binding at |J| times its square root; ProofsSoundOfDrawn, which takes binding at delta_bind, is what it is for.",
+   "Accounting.SecurityProofs.TS.DrawnRightOff": "lemma: the crypto half of (I8) for a sampled window over every window of drawn units' proofs (Accounting.TS.DrawnLayer), not a Lean function: binding of every committed position before the coin that follows its commitment at delta_bind and the proofs' soundness jointly over a round's draws at delta_ks as probability hypotheses, and each unit's pinning (DrawnLayer.Pins) as a definitional hypothesis, give the drawn units right at their committed values outside S(delta_bind + delta_ks); ProofsSoundOfDrawn and a composition's folded credit, which take the drawn units right, are what it is for.",
+   "Accounting.SecurityProofs.TS.ProofsSoundOfDrawn": "lemma: (I8) ProofsSound of EPS1-SPEC at n_pi = 1, delta_ZK = delta_ks, from its pieces over every sampled play and its drawn units' proofs (Accounting.TS.DrawnLayer), not a Lean function: DrawnRightOff's hypotheses, the play being its drawn units' proofs' (DrawnLayer.Of), the unit weights summing to the window's words and the share covering every unit that isn't good (DrawnLayer.Covers, proved for each game) as definitional hypotheses, and E1(c) per unit as the named assumption UnitFixed, not on the premises list; CompilerC and the composed credit, which take ProofsSound, are what it is for.",
+   "Accounting.SecurityProofs.TS.DrawnBindingOfFork": "lemma: the rewinding step behind a sampled window's delta_bind over every window of drawn units' proofs (Accounting.TS.DrawnLayer), not a Lean function: binding's failure in a round, squared, is at most |L|^2 times its fork form at its positions' cuts, L the positions its units read (two runs sharing every value committed before a position's cut, opening it differently in accepted proofs of drawn units), so a bound on the fork form is binding at |L| times its square root; DrawnRightOff and ProofsSoundOfDrawn, which take binding at delta_bind, are what it is for.",
    "Accounting.SecurityProofs.TS.FloorCreditD3": "lemma: Corollary D3 of EPS1-SPEC, from (Pi), (RD) and (Lk) as hypotheses like DecompositionD, with the terms' signs on a floor program on the known menu and T(H) = gamma_flat T_cred.",
    "Accounting.SecurityProofs.TS.BindingFacetD1": "lemma: Corollary D1 of EPS1-SPEC, epsilon_machine at a binding facet is 0 when every menu costs at least honest's there; arithmetic over the terms' definitions.",
    "Accounting.SecurityProofs.TS.VectorThresholdD1": "lemma: Corollary D1's threshold, S_V(q) costs at least T_kappa with delivery iff q >= 32(alpha + beta phi_del)/(beta omega); arithmetic over the route demands.",

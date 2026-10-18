@@ -34,13 +34,15 @@ Which form each takes:
   `Accounting.Guarantees.TS.ProofsSoundOfPinned` derives it from a window's proofs (`Accounting.TS.ProofLayer`):
   binding at `δ_bind` (at `√δ_fork` from its fork form, `Accounting.Guarantees.TS.BindingOfFork`), proof soundness at
   `δ_ZK`, the Definitions' pinning, and `RightFixed`. For a sampled window, `Accounting.Guarantees.TS.ProofsSoundOfDrawn`
-  derives it at `n_π = s` from the drawn units' proofs (`Accounting.TS.DrawnLayer`): binding for the drawn units against
-  the values committed before the draw (at `|J|·√δ_fork`, `Accounting.Guarantees.TS.DrawnBindingOfFork`), each drawn
-  proof's soundness at `δ_ZK`, each unit's pinning, and `RightFixedDrawn`.
+  derives it at `n_π = 1`, `δ_ZK = δ_ks`, from the drawn units' proofs (`Accounting.TS.DrawnLayer`): binding of every
+  committed position before the coin that follows its commitment (at `|L|·√δ_fork`,
+  `Accounting.Guarantees.TS.DrawnBindingOfFork`), the proofs' soundness jointly over a round's draws at `δ_ks`, each
+  unit's pinning, the share covering every unit that isn't good (`DrawnLayer.Covers`, proved for each game), and
+  `UnitFixed`. Its crypto half, the drawn units right, is `Accounting.Guarantees.TS.DrawnRightOff`.
 * `RightFixed`: E1(c) with the rounds' equal shares, the part of (I8) that is the TS model's accounting rather than the
   proof service's.
-* `RightFixedDrawn`: `RightFixed` for a sampled window, where the proofs vouch for the drawn units only and the share
-  carries the rest.
+* `UnitFixed`: E1(c) per unit, which doesn't read the draw: the good units' words are fixed. A sampled window's proofs
+  vouch for the drawn units only, so `RightFixed`, which asks for every committed value right, says nothing there.
 * `LinSteer`: SAMPLING's LIN-STEER, for the compiler's closure.
 
 The joint-luck premise JL is not used: D-ideal keeps the proved `ε_jl`.
@@ -129,16 +131,17 @@ def RightFixed {Ω : Type} [Fintype Ω] {S nπ : ℕ} {V : Type} (P : Play Ω S 
     (Nw : ℝ) : Prop :=
   ∀ x, P.accepts x → pf.right (pf.committed x) → (1 - P.game.deficiency x / S) * Nw ≤ (P.run x).fixed
 
-/-- `accounting-ts-right-fixed-drawn` (Lemma E1(c), proved on paper; the rounds' equal shares; a sampled window).
-**With the drawn units right, what isn't fixed is in the shares**: on every accepted path whose drawn units' committed
-values (each read before its round's draws, `DrawnLayer.committed`) are right, the run's owned right fixed words per
-unit are at least `(1 − Σ_w d_w / S)·N_w`. In 𝒫_samp a round's share counts its deficient, wrong and adaptive work, so
-a unit outside it has right committed values, drawn or not, and E1(c) puts its words among the fixed ones. `RightFixed`
-asks for every committed value right, which only a fully checked window's proofs give; a sampled window's proofs give
-the drawn units', so the undrawn units' rightness is the share's, never the draw's. -/
-def RightFixedDrawn {A B : Type} [Fintype A] [Fintype B] {S s : ℕ} {J V : Type} (P : Play (A × B) S K T L U)
-    (pf : DrawnLayer A B S s J V) (Nw : ℝ) : Prop :=
-  ∀ x, P.accepts x → (∀ w i, pf.right w (pf.drawnAt x w i) (pf.committed x w (pf.drawnAt x w i))) →
-    (1 - P.game.deficiency x / S) * Nw ≤ (P.run x).fixed
+open Classical in
+/-- `accounting-ts-unit-fixed` (Lemma E1(c) per unit, proved on paper; the rounds' equal shares). **The good units'
+words are fixed**: on every accepted path, the run's owned right fixed words per unit are at least the words `wt w j` of
+the good units (`DrawnLayer.Good`: every unit upstream of unit `j` of round `w`, itself included, has its slots held at
+their committed values and is right at them), over `S`. An adaptive word lies below a committed value wrong for its own
+derivation (E1(c)), so no word of a good unit is adaptive. It reads neither the draw nor the proofs: which units are
+good is a function of the committed values, and the proofs only vouch for the drawn ones
+(`Accounting.Guarantees.TS.DrawnRightOff`). With `Σ wt = S·N_w` and the share covering every unit that isn't good
+(`DrawnLayer.Covers`), it gives `(1 − Σ_w d_w / S)·N_w`. It stays an assumption until the adaptive model is in Lean. -/
+def UnitFixed {C B : Type} [Fintype C] [Fintype B] {S m s : ℕ} {J Q Pos V : Type} [Fintype J] [Nonempty V]
+    (P : Play (Paths C m × B) S K T L U) (pf : DrawnLayer C B S m s J Q Pos V) (wt : Fin S → J → ℝ) : Prop :=
+  ∀ x, P.accepts x → (∑ w, ∑ j, if pf.Good x w j then wt w j else 0) / S ≤ (P.run x).fixed
 
 end Accounting.Assumptions.TS
