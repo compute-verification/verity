@@ -8,8 +8,9 @@
 #     bash -c 'bash "$RESEARCH_RUN_DIR"/inputs/time_branch.sh'
 # ARMS names the arms (default "base arm"): base runs with BASE_ENV (default none, today's -h3 in the same tree), arm with
 # ARM_ENV.  A window runs every arm back to back in one one-GPU preemptible lease (at most LEASE_MIN minutes), in ABBA order
-# across windows, so both arms see the same GPU within minutes.  WINDOWS picks the windows (STEP-SPLIT's names).  An nsys
-# window's analysis (served-profile.json) is kept; its report and SQLite are deleted.
+# across windows, so both arms see the same GPU within minutes.  WINDOWS picks the windows: W4's (r20261018-193331-0f54: eager,
+# whole, eager-nsys, whole-nsys; the default whole eager whole-nsys) or STEP-SPLIT's (eager-8192, whole-8192, eager-2560 and
+# their -nsys).  An nsys window's analysis (served-profile.json) is kept; its report and SQLite are deleted.
 set -uo pipefail
 stamp() { echo "time-branch: $* at $(date -u +%H:%M:%SZ)"; }
 
@@ -33,7 +34,7 @@ fi
 
 D=${RESEARCH_RUN_DIR:?}; OUT=$D/out; mkdir -p "$OUT"
 WORK=${WORK:-/workspace/pouw/mvp-e2e}; PY=$WORK/venv312/bin/python; CUDA=/usr/local/cuda-13.0
-WINDOWS=${WINDOWS:-whole-8192 eager-8192 whole-8192-nsys eager-2560}
+WINDOWS=${WINDOWS:-whole eager whole-nsys}
 ARMS=${ARMS:-base arm}; BASE_ENV=${BASE_ENV:-}; ARM_ENV=${ARM_ENV:-}
 MEM_GB=${MEM_GB:-128}; LEASE_MIN=${LEASE_MIN:-28}
 : "${GPU_LEASE_WHO:?pass --env GPU_LEASE_WHO=<id>}"
@@ -78,6 +79,10 @@ for w in $WINDOWS; do
   if [ $((i % 2)) = 0 ]; then set -- $ARMS; else set -- $(echo "$ARMS" | tr ' ' '\n' | tac); fi
   i=$((i + 1))
   case $w in
+    eager) window "$w" 0 "$@" -- REPS=5 FP8_GRAPHS=1 ;;
+    whole) window "$w" 0 "$@" -- REPS=5 FP8_GRAPHS=1 GRAPHS=1 WHOLE_STEP=1 WHOLE_DEFER=1 ;;
+    eager-nsys) window "$w" 1 "$@" -- REPS=2 FP8_GRAPHS=1 NSYS_ARGS=--cuda-graph-trace=node ;;
+    whole-nsys) window "$w" 1 "$@" -- REPS=2 FP8_GRAPHS=1 GRAPHS=1 WHOLE_STEP=1 WHOLE_DEFER=1 NSYS_ARGS=--cuda-graph-trace=node ;;
     eager-8192) window "$w" 0 "$@" -- REPS=5 ;;
     eager-8192-nsys) window "$w" 1 "$@" -- REPS=2 ;;
     whole-8192-nsys) window "$w" 1 "$@" -- REPS=2 GRAPHS=1 FP8_GRAPHS=1 WHOLE_STEP=1 NSYS_ARGS=--cuda-graph-trace=node ;;
