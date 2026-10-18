@@ -4,7 +4,8 @@ with none.
 * each new Boolean leaf (`ops.boolean.scalar`'s I32/bit/f32 scalars, `ops.boolean.attention`'s GPU-NaN FTZ arithmetic,
   `registry.boolean_scalar`, `registry.boolean_marlin_moe`'s integer division) computes its word primitive on random words and
   on the f32 specials (zeros, subnormals, infinities, NaNs of both kinds), through bit-sliced evaluation against the word's;
-* a word primitive made on demand (`Const<w>[0x..]_v1`, `GatherBf16x{V}_v1`) has a Boolean version made on demand;
+* a word primitive made on demand (`Const<w>[0x..]_v1`, `GatherBf16x{V}_v1`, `GatherI32x{V}_v1`, whole and as a tree of
+  1024-word chunks) has a Boolean version made on demand;
 * `sigma_lift`'s Definitions (`registry.boolean_sigma`) compute their word composites at small statics, are Boolean throughout,
   and are refused, naming every gap, when their word body Calls a Definition with no Boolean version.
 """
@@ -21,7 +22,8 @@ from verity.ml.circuits.ops import prims as MP
 from verity.ml.circuits.ops import scalar as S
 from verity.ml.circuits.types import Array, Value
 from verity_vllm.program import boolean as BB
-from verity_vllm.program.registry import b1, hopper, inductor as I, marlin_moe as MM, moe, prims as P, ref_prims as R
+from verity_vllm.program.registry import b1, dsv4_decode_indices as DI, hopper, inductor as I, marlin_moe as MM, moe
+from verity_vllm.program.registry import prims as P, ref_prims as R
 
 F32 = Value(32)
 SPECIAL32 = [0, 0x80000000, 0x7F800000, 0xFF800000, 0x7FC00000, 0x7FFFFFFF, 0xFFC00001, 0x00000001, 0x807FFFFF, 0x3F800000,
@@ -84,6 +86,17 @@ def test_a_word_primitive_made_on_demand_has_a_boolean_version_made_on_demand():
     assert sum(b << i for i, b in enumerate(evaluate(c))) == 0x3727C5AC
     assert BB.boolean_version(MP.const(1, 1)) is MP.const(1, 1)
     _agrees(P.gather_bf16(16))
+    _agrees(DI.gather_i32(16))
+    word = DI.gather_i32(1100)
+    tree = BB.boolean_version(word)
+    assert tree.id == "GatherI32x1100_v2" and BL.is_boolean(tree) and {n.fn.id for n in tree.body.nodes} == {
+        "GatherI32x1024u10_v1", "GatherI32x76u10_v1", "GatherI32x2u22_v1"}
+    rng = np.random.default_rng(3)
+    tokens = np.array([0, 1, 1023, 1024, 1025, 1099, 1100, 2047, 2048, 0xFFFFFFFF, 0x80000000, *rng.integers(0, 1100, 21)], np.uint64)
+    column = rng.integers(0, 1 << 32, size=(len(tokens), 1100), dtype=np.uint64)
+    want = [c[t] if t < 1100 else 0xFFFFFFFF for t, c in zip(tokens.tolist(), column)]
+    assert evaluate_batch(word, tokens, column).tolist() == want
+    assert evaluate_words(tree, tokens, column).tolist() == want
 
 
 SIGMA = [bind(b1.ResidualAdd, N=4), bind(I.InductorRoPE, NHEADS=1, D=4), bind(I.InductorSiluMul, I=1),
