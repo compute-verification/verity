@@ -233,7 +233,7 @@ def test_the_ledger_credits_post_seed_receipts_only_on_the_property_s_verdict(ho
 @dataclasses.dataclass(frozen=True)
 class Link:
     """A requirement link that holds or not, at `density_bits`, reading `reads[step]` bits at a step (plenty
-    otherwise), its memory-map unit's verdict `maps` on the appends it is asked about, each kept in `asked`, and its
+    otherwise), its memory-map unit's verdict `maps` on the records it is asked about, each kept in `asked`, and its
     units' draw leaving `epsilon` of its credit unproved except with `delta` (every unit proved by default)."""
     holds: bool
     density_bits: int
@@ -246,9 +246,40 @@ class Link:
     def read_bits(self, step: int):
         return self.reads.get(step, 10**9)
 
-    def mapped(self, appends: bytes | None):
-        self.asked.append(appends)
+    def mapped(self, record: audit.Record):
+        self.asked.append(record)
         return self.maps
+
+
+def units_mapped(record: audit.Record, appends, rekeys=()) -> bool:
+    """The memory-map unit's verdict as the record fixes it, for a map whose appends are `appends`, (step, first,
+    count, root) in the map's order, and whose re-keys are `rekeys`, (step, old index): the chain over all of them is
+    the record's, each pass's head is the chain through those of the steps below its own, and each re-key's old index
+    is below the stale bound of the first pass after its step."""
+
+    def chain(below: int) -> bytes | None:
+        head = None
+        for s, first, count, root in appends:
+            if s < below:
+                head = audit.append_head(head, first, count, root)
+        return head
+
+    passes = [(s, h, b) for w in record.windows for s, h, b in zip(w.steps, w.heads, w.stale, strict=True)]
+    if record.appends != chain(audit.STEP_LIMIT) or any(h != chain(s) for s, h, _ in passes):
+        return False
+    return all(next((b for s, _, b in passes if s > r), -1) > old for r, old in rekeys)
+
+
+@dataclasses.dataclass(frozen=True)
+class Units(Link):
+    """A link whose memory-map unit makes `appends` and `rekeys` (`units_mapped`'s), its verdict on a record whether
+    the record is that map's."""
+    appends: tuple = ()
+    rekeys: tuple = ()
+
+    def mapped(self, record: audit.Record):
+        self.asked.append(record)
+        return units_mapped(record, self.appends, self.rekeys)
 
 
 def test_on_a_requirement_link_a_pass_is_credited_at_most_the_circuit_s_reads_at_its_step(honest) -> None:
@@ -286,19 +317,123 @@ def test_a_requirement_link_caps_nothing_unless_its_memory_map_unit_makes_the_re
     """The red team's KB-2: frees, re-keys and append order chosen after the seed cost no encode, so the advice they
     give is zero only if W's memory map fixes them, which the memory-map unit proves.  The record carries the chain
     over the session's appends (public: a hash over hiding roots and their indices), the link's `mapped` is asked
-    about exactly that chain, and a link whose unit doesn't make those appends is refused."""
+    about the record, and a link whose unit doesn't make those appends is refused."""
     r, _ = honest
     rec = r.s.record()
     assert r.head is not None and rec.appends == r.head and rec.public()["appends"] == r.head.hex()
     common = dict(capacity_bytes_per_s=4096 * 10**9 / 10, chip_bytes=0, rebuild=audit.Rebuild(P512, 0.0))
     link = Link(True, 8 * 4096, {})
-    assert audit.ledger(rec, **common, requirement=link).linked and link.asked == [r.head]
+    assert audit.ledger(rec, **common, requirement=link).linked and link.asked == [rec]
     for maps in (False, None, 1):
         with pytest.raises(ValueError, match="memory-map unit"):
             audit.ledger(rec, **common, requirement=Link(True, 8 * 4096, {}, maps))
     none = Link(True, 8 * 4096, {})
     audit.ledger(dataclasses.replace(rec, appends=None), **common, requirement=none)
-    assert none.asked == [None]
+    assert [x.appends for x in none.asked] == [None]
+    other = [(0, a.first, a.count, a.root) for a in r.store.appends]
+    with pytest.raises(ValueError, match="memory-map unit"):
+        audit.ledger(rec, **common, requirement=Units(True, 8 * 4096, {}, appends=tuple(other)))
+
+
+def test_a_record_carries_each_pass_s_head_and_stale_bound(honest) -> None:
+    """Each pass's head is the chain over the appends received before its root, which its seed binds: none before
+    pages 8 … 11, then theirs through window 0, then theirs and 12 … 13's through window 1.  Its stale bound is N
+    throughout, since no block reaches L = 60.  The public record lists both per window (the heads hiding
+    commitments, the bounds protocol structure), and the honest session's map, step 0 appending 8 … 11 and step 2
+    12 … 13, is the units' at every pass."""
+    r, _ = honest
+    rec = r.s.record()
+    first, second = r.store.appends
+    h1 = audit.append_head(None, first.first, first.count, first.root)
+    h2 = audit.append_head(h1, second.first, second.count, second.root)
+    assert [w.heads for w in rec.windows] == [(None, h1, h1), (h2, h2)] and h2 == rec.appends
+    assert [w.stale for w in rec.windows] == [(N, N, N), (N, N)]
+    pub = rec.public()
+    assert pub["heads"] == [[None, h1.hex(), h1.hex()], [h2.hex(), h2.hex()]]
+    assert pub["stale"] == [[N, N, N], [N, N]]
+    assert rec.profile()["windows"][1]["heads"] == [h2.hex(), h2.hex()]
+    assert rec.profile()["windows"][1]["stale"] == [N, N]
+    assert units_mapped(rec, [(0, first.first, first.count, first.root), (2, second.first, second.count, second.root)])
+    assert not units_mapped(rec, [(1, first.first, first.count, first.root),
+                                  (2, second.first, second.count, second.root)])
+    common = dict(capacity_bytes_per_s=4096 * 10**9 / 10, chip_bytes=0, rebuild=audit.Rebuild(P512, 0.0))
+    for shorn in (dict(heads=()), dict(stale=())):
+        bare = dataclasses.replace(rec, windows=(dataclasses.replace(rec.windows[0], **shorn), rec.windows[1]))
+        with pytest.raises(ValueError, match="name none"):
+            audit.ledger(bare, **common, requirement=Link(True, 8 * 4096, {}))
+
+
+def appended_at_step_one(early: bool) -> Run:
+    """Passes at steps 0, 1 and 2 over one window, step 1 appending pages 8 and 9, which step 2's pass reads: sent
+    after step 1's root, or `early`, before it."""
+    r = Run(store(), windows=1)
+    assert r.run(step=0) is None
+    if early:
+        r.append(2)
+    assert r.run(step=1) is None
+    if not early:
+        r.append(2)
+    assert r.run(change=(((N, 2),), ()), step=2) is None
+    r.boundary()
+    assert r.finish() == [audit.Verdict(0, True)]
+    return r
+
+
+def test_mapped_refuses_an_append_sent_before_its_step_s_pass() -> None:
+    """The red team's early append: step 1's append sent before step 1's root binds it into that pass's seed.  The
+    session accepts either order and the chain over the appends is the same, so the chain alone can't tell them
+    apart; step 1's head can, and a units link whose map appends at step 1 refuses the early session.  An append the
+    map dates at step 0 isn't the honest session's either: the heads pin each append between two passes."""
+    common = dict(capacity_bytes_per_s=4096 * 10**9 / 10, chip_bytes=0, rebuild=audit.Rebuild(P512, 0.0))
+    honest, early = appended_at_step_one(False), appended_at_step_one(True)
+    a = honest.store.appends[0]
+    h = audit.append_head(None, a.first, a.count, a.root)
+    assert early.store.appends[0].root == a.root and honest.s.record().appends == early.s.record().appends == h
+    assert [w.heads for w in honest.s.record().windows] == [(None, None, h)]
+    assert [w.heads for w in early.s.record().windows] == [(None, h, h)]
+    units = ((1, a.first, a.count, a.root),)
+    assert audit.ledger(honest.s.record(), **common, requirement=Units(True, 8 * 4096, {}, appends=units)).linked
+    with pytest.raises(ValueError, match="memory-map unit"):
+        audit.ledger(early.s.record(), **common, requirement=Units(True, 8 * 4096, {}, appends=units))
+    assert not units_mapped(honest.s.record(), ((0, a.first, a.count, a.root),))
+    assert units_mapped(early.s.record(), ((0, a.first, a.count, a.root),))
+
+
+@pytest.mark.parametrize("deferred", [False, True], ids=["resident", "deferred"])
+def test_a_re_key_s_old_index_is_below_the_stale_bound_of_the_pass_after_its_step(deferred) -> None:
+    """L = 2, a pass a window at steps 1 … 4.  Step 0 appends pages 8 and 9, which join window 0, and step 1 page 10,
+    which joins window 1; step 2 re-keys 8 and 9 (released, their payloads appended again at 11 and 12, read from
+    window 2, or, deferred, from window 3) and step 3 frees 10.  The stale bounds are N, N, N + 2 and N + 3: step 2's
+    re-key is at the cap, its old indices below the bound of step 3's pass, and so is one of 10 at step 3, but one of
+    10 at step 2 is a window early (10 is not below N + 2), which the units refuse though the session accepts it."""
+    r = Run(store(), windows=4, lifetime=2, deferred=deferred)
+    r.append(2)
+    assert r.run(change=(((N, 2),), ()), step=1) is None
+    r.boundary()
+    r.append(1)
+    assert r.run(change=(((N + 2, 1),), ()), step=2) is None
+    r.boundary()
+    a = r.store.append(pages(N, 2), salts(b"re-keyed", 2))
+    assert r.commit(a.root, a.count) == N + 3 and r.s.release(((N, 2),)) is None
+    landed, late = (((N + 3, 2),), ()) if not deferred else ((), ((N + 3, 2),))
+    assert r.run(change=(landed, ((N, 2),)), step=3) is None
+    r.boundary()
+    assert r.s.release(((N + 2, 1),)) is None
+    assert r.run(change=(late, ((N + 2, 1),)), step=4) is None
+    r.boundary()
+    assert [v.accepted for v in r.finish()] == [True] * 4
+    rec = r.s.record()
+    assert [w.stale for w in rec.windows] == [(N,), (N,), (N + 2,), (N + 3,)]
+    assert rec.public()["stale"] == [[N], [N], [N + 2], [N + 3]]
+    appends = [(s, x.first, x.count, x.root) for s, x in zip((0, 1, 2), r.store.appends)]
+    assert units_mapped(rec, appends) and units_mapped(rec, appends, ((2, N), (2, N + 1)))
+    assert units_mapped(rec, appends, ((2, N), (2, N + 1), (3, N + 2)))
+    assert not units_mapped(rec, appends, ((2, N), (2, N + 1), (2, N + 2)))
+    common = dict(capacity_bytes_per_s=4096 * 10**9 / 10, chip_bytes=0, rebuild=audit.Rebuild(P512, 0.0))
+    at_cap = Units(True, 8 * 4096, {}, appends=tuple(appends), rekeys=((2, N), (2, N + 1)))
+    assert audit.ledger(rec, **common, requirement=at_cap).linked
+    with pytest.raises(ValueError, match="memory-map unit"):
+        audit.ledger(rec, **common, requirement=dataclasses.replace(at_cap, rekeys=((2, N), (2, N + 1), (2, N + 2))))
 
 
 def test_a_link_credits_what_its_units_draw_proved_and_adds_its_delta_to_the_error(honest) -> None:
@@ -334,10 +469,25 @@ def test_a_link_credits_what_its_units_draw_proved_and_adds_its_delta_to_the_err
             audit.ledger(rec, **common, requirement=Link(True, 8 * b, {}, epsilon=epsilon, delta=delta))
 
 
-def synthetic(lengths: tuple[int, ...], post: tuple[int, ...], steps: tuple[int, ...] = ()) -> audit.Record:
+def synthetic(lengths: tuple[int, ...], post: tuple[int, ...], steps: tuple[int, ...] = (), heads: tuple = (),
+              stale: tuple = ()) -> audit.Record:
     w = audit.WindowRecord(0, lengths, 0, 10**9, 10**9, IntegrityProfile(
-        ("receipt",), (sum(lengths),), {"receipt": Subset(1)}, 1e-6, drawn={"receipt": 1}), post, steps)
+        ("receipt",), (sum(lengths),), {"receipt": Subset(1)}, 1e-6, drawn={"receipt": 1}), post, steps, heads, stale)
     return audit.Record(bytes(64), bytes(64), 10, 4096, (w,))
+
+
+def test_a_window_record_s_heads_and_stale_bounds_are_each_pass_s() -> None:
+    h = hashlib.sha512(b"a chain").digest()
+    rec = synthetic((10, 12), (), (3, 8), (None, h), (10, 12))
+    assert rec.windows[0].to_json()["heads"] == [None, h.hex()] and rec.windows[0].to_json()["stale"] == [10, 12]
+    assert rec.public()["heads"] == [[None, h.hex()]] and rec.public()["stale"] == [[10, 12]]
+    assert synthetic((10, 12), ()).windows[0].heads == () and synthetic((10, 12), ()).public()["stale"] == [[]]
+    for bad in ((h,), (h, h, h), (None, h[:63]), (None, h.hex()), (None, bytearray(h))):
+        with pytest.raises(ValueError, match="heads"):
+            synthetic((10, 12), (), heads=bad)
+    for bad in ((10,), (10, -1), (10, True), (10, 10.0)):
+        with pytest.raises(ValueError, match="stale"):
+            synthetic((10, 12), (), stale=bad)
 
 
 def test_a_window_record_s_steps_are_each_pass_s_strictly_increasing() -> None:
