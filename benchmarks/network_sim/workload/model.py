@@ -9,8 +9,8 @@ that is, a ReLU and a requantization. The weights and biases are registered inpu
 activations are run inputs, and the Program holds only gates (`verity/ml/circuits/PROTOCOL.md` §5.3).
 
 One root Call computes `d / groups` rows of one layer for one request (`dense_rows`, a Boolean Definition traced from a
-`forms` builder, so its gates are `And2`, `Xor2` and `Not`). The root body lists the Calls step by step, where request r's
-layer l runs at engine step r + l: the pipeline schedule, so gate order follows time. `CallInfo` records each Call's
+`forms` builder, so its gates are `And2`, `Xor2` and `Not`). The root body lists the Calls round by round, request r's
+layer l in round r + l: the pipeline schedule, so gate order follows time. `CallInfo` records each Call's
 request, layer and group, which is what a placement assigns to a device.
 
 `reference` computes the same MLP on integers, the oracle the circuit's evaluation is checked against.
@@ -76,10 +76,6 @@ class CallInfo:
     group: int
     lo: int
     hi: int
-
-    @property
-    def step(self) -> int:
-        return self.request + self.layer
 
 
 def _signed_bits(bits: list, width: int) -> list:
@@ -170,8 +166,8 @@ class Model:
     def __init__(self, spec: Spec) -> None:
         self.spec = spec
         fn = bind(program_function(spec))
-        names = [n for n, _ in fn.signature()[0]]
-        self.program = Program(fn, registered=tuple(n for n in names if n != "x"))
+        self.params = tuple(n for n, _ in fn.signature()[0])
+        self.program = Program(fn, registered=tuple(n for n in self.params if n != "x"))
         self.circuit: Circuit = self.program.circuit
         calls = list(self.circuit.root_calls())
         order = [(r, step - r, g) for step in range(spec.steps) for r in range(spec.requests)

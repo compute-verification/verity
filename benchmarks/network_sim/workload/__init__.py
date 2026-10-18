@@ -13,6 +13,7 @@ blocks' boundaries. They meet in one place, the consistency relation N3
     block      a block's process: evaluate its gates step by step, send and receive crossing values as framed streams
     n3         the in-the-clear consistency check over what the certified links carried
     run        build, place, run every block (in one process or one process each over TCP) and check
+    accounting the Program, hardware and placement as `benchmarks/datacenter`'s objects, for its audit and account
 
 The circuit stays Boolean and untimed. Transfers are derived, not gates: a crossing edge is a value read by a gate placed in
 another unit, and the frames that carry it are fixed by φ.
