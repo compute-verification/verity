@@ -28,8 +28,8 @@ from verity_vllm.program.registry import ll_bf16 as LL
 __all__ = ["CublasGemv", "CublasGemvDot", "CublasGemvDotWord", "CublasGemvWord"]
 
 BF16 = Array(16, BL.BIT)
-CONFORMANCE = CB.conformance_sm120("`internal::gemvx::kernel` (M 1: LANES 16 at K/N 2048/{2048,3072,16384,128256} and "
-                                   "4096/{4096,6144,151936}, 32 at 4096/24576 and 12288/4096)")
+CONFORMANCE = CB.conformance_cc12("`internal::gemvx::kernel` (M 1: LANES 16 at K/N 2048/{2048,3072,16384,128256} and "
+                                  "4096/{4096,6144,151936}, 32 at 4096/24576 and 12288/4096)")
 
 
 def _check(S) -> None:

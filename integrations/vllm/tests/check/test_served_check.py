@@ -265,7 +265,7 @@ def test_each_cublas_route_binds_a_definition_whose_twin_is_the_routes(route):
     """A device pin's route, the Definition `gemm_definition` binds for it and that Definition's twin here compute one function
     (`bf16_gemm_check.cublas_route_rows`) on the route probe's spread and cancelling rows."""
     d = SV.gemm_definition(route, 256, 5, H200.dot)
-    for x, w in BC.route_probe_rows(3, 256, 5):
+    for x, w in BC.route_probe_rows(3, 256, 5, np.random.default_rng(3)):
         assert np.array_equal(SC.GEMMS[d["base"]](d["statics"], x, w), BC.cublas_route_rows(route, x, w))
 
 

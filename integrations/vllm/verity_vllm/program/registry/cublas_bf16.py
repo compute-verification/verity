@@ -59,7 +59,7 @@ __all__ = ["BatchedGemm", "BatchedGemmWord", "ChainStep", "CublasSerialSplitKGem
            "CublasSplitKGemmBf16PartialsWord", "CublasSplitKGemmF32Out", "CublasSplitKGemmF32OutWord", "CublasSplitKGemmWord",
            "GemmF32Out", "GemmF32OutWord", "HOPPER_STEP",
            "HopperBf16Dot16Step", "HopperBf16Dot16StepFirst", "HopperBf16Dot16StepFirstX", "HopperBf16Dot16StepX", "chain_step",
-           "conformance_sm120", "dot_step", "split_bounds"]
+           "conformance_cc12", "dot_step", "split_bounds"]
 
 BF16, F32 = Array(16, BL.BIT), Array(32, BL.BIT)
 CONFORMANCE = ("exact-model-tested: every output word at K/N statics 6144/{19360,160,256}, 7168/{16160,64,384,2048,1024,512}, "
@@ -69,19 +69,19 @@ CONFORMANCE = ("exact-model-tested: every output word at K/N statics 6144/{19360
                "glm53_bf16_gemm_capture, run r20261016-234133-bbc8, record c0e09902b0a2057a, "
                "art:5fcc5a4937ac75ceec31bd22abc11194ec0c55d27e77ffd3690b1ad8976feeaf "
                "(tests/properties/glm53_bf16_gemm_capture_gpu.py)")
-SM120_PROBES = "runs r20261018-193726-ac32, r20261018-195453-7c31 and r20261018-200645-a453"
+CC12_PROBES = "runs r20261018-193726-ac32, r20261018-195453-7c31 and r20261018-200645-a453"
 
 
-def conformance_sm120(launch: str) -> str:
+def conformance_cc12(launch: str) -> str:
     """The cc 12.0 routes' conformance: the probes that read cuBLAS's words where it makes ``launch``."""
     return (f"exact-model-tested: every probed output word of torch.mm on cc 12.0 with 188 SMs (torch 2.13.0+cu129 on its "
             f"libcublas.so.12) at the served linears' (M, K, N) where cuBLAS launches {launch}, on spread, cancelling and class-edge "
-            f"words (specials, any exponent, subnormal products), fitting only this hypothesis among its alternatives: {SM120_PROBES}")
+            f"words (specials, any exponent, subnormal products), fitting only this hypothesis among its alternatives: {CC12_PROBES}")
 
 
-CONFORMANCE_SM120 = conformance_sm120("`splitKreduce_kernel` with a bf16 workspace (M 1 to 303, split counts 2 to 16)")
-CONFORMANCE_SM120_SERIAL = conformance_sm120("a cutlass kernel whose grid.z slices meet through the bf16 output, no reduction kernel "
-                                             "(M 303, K 12288, 5 slices)")
+CONFORMANCE_CC12 = conformance_cc12("`splitKreduce_kernel` with a bf16 workspace (M 1 to 303, split counts 2 to 16)")
+CONFORMANCE_CC12_SERIAL = conformance_cc12("a cutlass kernel whose grid.z slices meet through the bf16 output, no reduction kernel "
+                                           "(M 303, K 12288, 5 slices)")
 
 
 class ChainStep(NamedTuple):
@@ -251,18 +251,18 @@ CublasSplitKGemm = CompositeDefinition(
 CublasSplitKGemmBf16PartialsWord = CompositeDefinition(
     "CublasSplitKGemmBf16Partials", 1, ("K", "N", "SPLIT_K", "DOT"), _gemm_f32_type(P.BF16, P.BF16),
     _splitk(GemmF32OutWord, F.F32Add, P.F2fpBf16, (P.F2fpBf16, P.Bf16ToF32)), doc=SPLITK_BF16_DOC,
-    conformance=CONFORMANCE_SM120)
+    conformance=CONFORMANCE_CC12)
 CublasSplitKGemmBf16Partials = CompositeDefinition(
     "CublasSplitKGemmBf16Partials", 2, ("K", "N", "SPLIT_K", "DOT"), _gemm_f32_type(BF16, BF16),
     _splitk(GemmF32Out, EW.F32Add, BG.F2fpBf16, (BG.F2fpBf16, BCAST.Bf16ToF32)), doc=f"{SPLITK_BF16_DOC}, on bits",
-    conformance=CONFORMANCE_SM120)
+    conformance=CONFORMANCE_CC12)
 CublasSerialSplitKGemmWord = CompositeDefinition(
     "CublasSerialSplitKGemm", 1, ("K", "N", "SPLIT_K", "DOT"), _gemm_f32_type(P.BF16, P.BF16),
-    _serial_splitk(GemmF32OutWord, F.F32Add, P.F2fpBf16, P.Bf16ToF32), doc=SERIAL_SPLITK_DOC, conformance=CONFORMANCE_SM120_SERIAL)
+    _serial_splitk(GemmF32OutWord, F.F32Add, P.F2fpBf16, P.Bf16ToF32), doc=SERIAL_SPLITK_DOC, conformance=CONFORMANCE_CC12_SERIAL)
 CublasSerialSplitKGemm = CompositeDefinition(
     "CublasSerialSplitKGemm", 2, ("K", "N", "SPLIT_K", "DOT"), _gemm_f32_type(BF16, BF16),
     _serial_splitk(GemmF32Out, EW.F32Add, BG.F2fpBf16, BCAST.Bf16ToF32), doc=f"{SERIAL_SPLITK_DOC}, on bits",
-    conformance=CONFORMANCE_SM120_SERIAL)
+    conformance=CONFORMANCE_CC12_SERIAL)
 GemmF32Out.word = lambda b: bind(GemmF32OutWord, K=b["K"], N=b["N"], DOT=word_of(b["DOT"]))  # type: ignore[attr-defined]
 BatchedGemm.word = lambda b: bind(BatchedGemmWord, B=b["B"], K=b["K"], N=b["N"], DOT=word_of(b["DOT"]))  # type: ignore[attr-defined]
 CublasSplitKGemmF32Out.word = lambda b: bind(CublasSplitKGemmF32OutWord, K=b["K"], N=b["N"], SPLIT_K=b["SPLIT_K"],  # type: ignore[attr-defined]

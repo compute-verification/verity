@@ -325,12 +325,10 @@ def cublas_routes_at(fits: list[int]) -> list[dict[str, Any]]:
                                          {"kernel": "serialk", "SPLIT_K": s})])
 
 
-def route_probe_rows(M: int, K: int, C: int, seed: int = 0) -> list[tuple[np.ndarray, np.ndarray]]:
-    """Two probes of a route at (M, K), each (x (M, K), w (C, K)) bf16 words: spread rows (x of exponents -6 to 6, w of -10 to 2),
-    and cancelling rows (x all ones; each W row small words and one +-2^8..2^13 pair, so which chain each product lands in decides
-    what the chains absorb, and the small sum shows it through the bf16 rounding)."""
-    rng = np.random.default_rng(seed)
-
+def route_probe_rows(M: int, K: int, C: int, rng: np.random.Generator) -> list[tuple[np.ndarray, np.ndarray]]:
+    """Two probes of a route at (M, K), each (x (M, K), w (C, K)) bf16 words drawn from `rng`: spread rows (x of exponents -6 to 6,
+    w of -10 to 2), and cancelling rows (x all ones; each W row small words and one +-2^8..2^13 pair, so which chain each product
+    lands in decides what the chains absorb, and the small sum shows it through the bf16 rounding)."""
     def words(shape, lo, hi):
         f = rng.standard_normal(shape, dtype=np.float32) * np.exp2(rng.integers(lo, hi, shape)).astype(np.float32)
         return (f.view(U32) >> 16).astype(np.uint16)
