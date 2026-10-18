@@ -1,6 +1,6 @@
 # Commitment hash
 
-The hash lane's workspace (`@hash`): candidate commitment hashes for served inference, each measured on our GPUs and
+The kernels lane's workspace (`@kernels`): candidate commitment hashes for served inference, each measured on our GPUs and
 judged against the binding notion it is proved to meet in Lean.
 
 The goal is a hash, or a binding commitment under named assumptions, that brings vLLM's commit time down from today's
