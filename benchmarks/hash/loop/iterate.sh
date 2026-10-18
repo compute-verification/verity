@@ -40,6 +40,7 @@ for m in ${MACHINES:-vy-dc-h200 vy-dc-b200 vy-nebius-2}; do
   [ -n "${ARMS:-}" ] && envs+=(--env "ARMS=$ARMS")
   [ -n "${REPS:-}" ] && envs+=(--env "REPS=$REPS")
   [ -n "${ARM_NAMES:-}" ] && envs+=(--env "ARM_NAMES=$ARM_NAMES")
+  [ -n "${CHECK_TESTS+x}" ] && envs+=(--env "CHECK_TESTS=$CHECK_TESTS")
   read -r -a launch <<< "${LAUNCH[$m]}"
   [[ " ${launch[*]} " == *" --queue "* ]] && launch+=(--question "$QUESTION")
   research run --on "$m" --project verity --campaign hash-loop --source . --cwd source --timeout 7200 --wait "${launch[@]}" \

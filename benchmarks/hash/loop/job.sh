@@ -4,7 +4,9 @@
 # + 64 decode steps, arms interleaved, under nsys), then collect.py's measures into $RESEARCH_RUN_DIR/result.json.
 #
 # Env: ROW (the iteration), HYP (its hypothesis), ARMS (default below), REPS (3), WORK, VERITY_BENCH_VENV,
-# NATIVE_COLLECT_BUILD, HF_HOME (the node's, as iterate.sh's tables set them), LEASE (gpu-lease's flags, default "--max-min 75").
+# NATIVE_COLLECT_BUILD, HF_HOME (the node's, as iterate.sh's tables set them), LEASE (gpu-lease's flags, default "--max-min 75"),
+# CHECK_TESTS (the committer's GPU byte-identity tests, run in the lease before timing; a failure is exit 7 and no timing; empty
+# skips them).
 # On a dc VM the GPU is held only for the timed bench; a queued job (vy-nebius-2) already runs inside the queue's lease, which
 # it reuses.
 set -uo pipefail
@@ -16,7 +18,13 @@ HF_HOME=${HF_HOME:-/workspace/hf} "$PY" -c "
 from huggingface_hub import snapshot_download
 print(snapshot_download('Qwen/Qwen3-8B', revision='b968826d9c46dd6066d109eabc6255188de91218',
       allow_patterns=['*.json', '*.safetensors', '*.txt', '*.model', '*.py'], cache_dir='$HF_HOME/hub'))" || exit 8
+export CHECK_TESTS=${CHECK_TESTS-integrations/vllm/tests/commit/test_rows_cuda.py integrations/vllm/tests/commit/test_windowed_rows_sha512.py}
 bench='
+  if [ -n "$CHECK_TESTS" ]; then
+    OUT="$OUT/check" TESTS="$CHECK_TESTS" bash benchmarks/served_commit/gpu_tests.sh > "$OUT/check.log" 2>&1
+    tail -3 "$OUT/check.log"
+    grep -q "^pytest rc 0$" "$OUT/check.log" || { echo "byte-identity tests failed ($OUT/check.log): not timed"; exit 7; }
+  fi
   q=clocks.sm,clocks.max.sm,clocks.mem,temperature.gpu,power.draw,name,uuid
   nvidia-smi -i "$GPU_LEASE_UUID" --query-gpu=$q --format=csv > "$OUT/clocks.before.csv"
   NSYS=1 NSYS_EACH=1 SWEEP=b32 SPEC=qwen3-8b-bf16-h200-served bash benchmarks/served_commit/prof.sh
