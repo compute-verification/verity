@@ -1,6 +1,6 @@
 """SASS instruction counts of one kernel, by opcode and by issue pipe, per iteration of its main loop.
 
-    python3 sass_count.py BINARY FUNCTION [--trip N] [--per K]    (one JSON line on stdout)
+    python3 sass_count.py BINARY FUNCTION [--trip N] [--per K] [--sass TEXT]    (one JSON line on stdout)
 
 FUNCTION is a substring of the kernel's mangled name. The main loop is the backward branch whose body holds the most
 instructions; a loop nested in it counts N times (--trip, default 1: the straight-line forms have none), so the count is
@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import collections
+import gzip
 import json
 import re
 import subprocess
@@ -25,8 +26,7 @@ CTRL = {"BRA", "EXIT", "BAR", "NOP", "S2R", "CS2R", "BSSY", "BSYNC", "WARPSYNC",
         "JMP", "BRX", "ACQBULK", "ELECT", "VOTE", "VOTEU"}
 
 INST = re.compile(r"/\*([0-9a-f]{4,})\*/\s+(@!?U?P\w+\s+)?([A-Z][A-Z0-9_.]*)\s*([^;]*);")
-LABEL = re.compile(r"^\s*(\.L_x_\d+):")
-TARGET = re.compile(r"`\((\.L_x_\d+)\)")
+TARGET = re.compile(r"0x([0-9a-f]+)\s*$")
 
 
 def opcode(tok: str) -> str:
@@ -50,8 +50,9 @@ def pipe(op: str) -> str:
     return "other"
 
 
-def function_sass(binary: str, name: str) -> list[str]:
-    out = subprocess.run(["cuobjdump", "-sass", binary], check=True, capture_output=True, text=True).stdout
+def function_sass(binary: str, name: str, text: str | None = None) -> list[str]:
+    out = text if text is not None else subprocess.run(["cuobjdump", "-sass", binary], check=True, capture_output=True,
+                                                       text=True).stdout
     lines, keep, found = [], False, []
     for line in out.splitlines():
         m = re.match(r"\s*Function : (\S+)", line)
@@ -67,27 +68,18 @@ def function_sass(binary: str, name: str) -> list[str]:
     return lines
 
 
-def count(binary: str, name: str, trip: int, per: float) -> dict:
-    insts, labels, pending = [], {}, []
-    for line in function_sass(binary, name):
-        lm = LABEL.match(line)
-        if lm:
-            pending.append(lm.group(1))
-            continue
+def count(binary: str, name: str, trip: int, per: float, text: str | None = None) -> dict:
+    insts = []
+    for line in function_sass(binary, name, text):
         m = INST.search(line)
-        if not m:
-            continue
-        addr = int(m.group(1), 16)
-        for lab in pending:
-            labels[lab] = addr
-        pending = []
-        insts.append((addr, opcode(m.group(3)), m.group(4)))
+        if m:
+            insts.append((int(m.group(1), 16), opcode(m.group(3)), m.group(4).strip()))
     index = {a: i for i, (a, _, _) in enumerate(insts)}
     loops = []
     for i, (addr, op, args) in enumerate(insts):
         t = TARGET.search(args)
-        if op == "BRA" and t and t.group(1) in labels and labels[t.group(1)] <= addr:
-            loops.append((index[labels[t.group(1)]], i))
+        if op == "BRA" and t and int(t.group(1), 16) < addr and int(t.group(1), 16) in index:
+            loops.append((index[int(t.group(1), 16)], i))
     static = collections.Counter(op for _, op, _ in insts)
     if not loops:
         body, inner = (0, len(insts) - 1), []
@@ -120,8 +112,12 @@ def main() -> None:
     ap.add_argument("function")
     ap.add_argument("--trip", type=int, default=1)
     ap.add_argument("--per", type=float, default=1.0)
+    ap.add_argument("--sass", help="read this cuobjdump -sass text (gzip if .gz) instead of running cuobjdump on BINARY")
     a = ap.parse_args()
-    print(json.dumps(count(a.binary, a.function, a.trip, a.per)))
+    text = None
+    if a.sass:
+        text = (gzip.open(a.sass, "rt") if a.sass.endswith(".gz") else open(a.sass)).read()
+    print(json.dumps(count(a.binary, a.function, a.trip, a.per, text)))
 
 
 if __name__ == "__main__":
