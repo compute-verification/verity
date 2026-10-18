@@ -829,6 +829,13 @@ struct Mine {
     const u32 cnt = (u32)std::min<u64>(width, TPB);
     sr_data<TPB, MINB, PF, DG, NU><<<(unsigned)(width / cnt), cnt, 0, st>>>(rows, n, width, depth, S, F, levels, bc, ctr);
   }
+  // v3's fused leaf (no fold), then commit_gpu's tree schedule
+  template <int ORDER>
+  void leaf_cg(const uint8_t* rows, cudaStream_t st, u64* bc = nullptr) {
+    const u32 cnt = (u32)std::min<u64>(width, 256);
+    sr_leaf3<256, 2, ORDER, false><<<(unsigned)(width / cnt), cnt, 0, st>>>(rows, Tn, n, width, depth, levels, ctr, bc);
+    nodes_cg(st);
+  }
   // v1's salt and leaf kernels (every compression inlined), the leaves unfolded, then commit_gpu's tree schedule
   void v1_cg(const uint8_t* rows, cudaStream_t st, u64* bc = nullptr) {
     salts(st);
@@ -979,6 +986,8 @@ static int check(int argc, char** argv) {
       case 14: me.v1_cg(d, 0, bc); break;
       case 15: me.salts(0); me.data<256, 2, false, sr::FULL, 2>(d, 0, bc); break;
       case 16: me.v4<256, 2>(d, 0, bc); break;
+      case 17: me.leaf_cg<0>(d, 0, bc); break;
+      case 18: me.leaf_cg<2>(d, 0, bc); break;
       case 12: {
         static cudaStream_t s2;
         static cudaEvent_t e2[2];
@@ -1073,6 +1082,8 @@ static int bench(int argc, char** argv, bool nsys_mode) {
   cudaEvent_t ovev[2];
   CK(cudaEventCreateWithFlags(&ovev[0], cudaEventDisableTiming));
   CK(cudaEventCreateWithFlags(&ovev[1], cudaEventDisableTiming));
+  arms.push_back({"lf0_cg", true, [&](cudaStream_t s) { me.leaf_cg<0>(src, s); }, comps});
+  arms.push_back({"lf2_cg", true, [&](cudaStream_t s) { me.leaf_cg<2>(src, s); }, comps});
   arms.push_back({"v1_cg", true, [&](cudaStream_t s) { me.v1_cg(src, s); }, comps});
   arms.push_back({"v3s_cg", true, [&](cudaStream_t s) { me.v3s_cg(src, s); }, comps});
   arms.push_back({"v3s_cg_ov", true, [&](cudaStream_t s) { me.v3s_cg(src, s, 2, st2, ovev); }, comps});
@@ -1273,6 +1284,23 @@ static int bench(int argc, char** argv, bool nsys_mode) {
       }
       printf("{\"split\": \"v3s_cg\", \"parts\": {\"sr_salt3\": %.4f, \"sr_data3\": %.4f, \"tree\": %.4f}}\n", median(seg[0]),
              median(seg[1]), median(seg[2]));
+    }
+    {   // lf0_cg: the fused leaf, commit_gpu's tree schedule
+      for (auto& x : seg) x.clear();
+      const u32 cnt = (u32)std::min<u64>(width, 256);
+      for (int r = 0; r < reps; ++r) {
+        spin<<<1, 1, 0, st>>>(SPIN);
+        CK(cudaEventRecord(e0, st));
+        sr::sr_leaf3<256, 2, 0, false><<<(unsigned)(width / cnt), cnt, 0, st>>>(src, me.Tn, n, width, depth, me.levels, me.ctr,
+                                                                                nullptr);
+        CK(cudaEventRecord(ev[0], st));
+        me.nodes_cg(st);
+        CK(cudaEventRecord(ev[1], st));
+        CK(cudaEventSynchronize(ev[1]));
+        seg[0].push_back(ms(e0, ev[0]));
+        seg[1].push_back(ms(ev[0], ev[1]));
+      }
+      printf("{\"split\": \"lf0_cg\", \"parts\": {\"sr_leaf3\": %.4f, \"tree\": %.4f}}\n", median(seg[0]), median(seg[1]));
     }
     std::vector<Arm> sp = diags;
     sp.insert(sp.begin(), arms[0]);
