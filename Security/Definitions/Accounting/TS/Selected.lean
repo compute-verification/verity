@@ -8,7 +8,7 @@ credited its words. A padded static window (Daniel, 18 Oct, 20:52Z) credits only
 circuit shaped by public parameters, a static superset of units, and which of them are credited is a value, a selection
 (a mask, a forming's `ok`, a done flag) that a unit computes from committed values, or that the weights' registration
 proved once, and that is committed like any value. A wrong unit can emit a wrong selection; it can't rewire. This is
-the credit rule of note:20261018T2200Z-draft-padded-credit-rule (round 3, after
+the credit rule of note:20261018T2200Z-draft-padded-credit-rule (round 3.1, after
 note:20261018T2207Z-report-redteam-padded-credit and note:proofs/20261018T2230Z-report-rt10-padded-credit), on the
 conditions of note:20261018T2125Z-report-format-table-r4-r5
 (C4's ✓):
@@ -22,6 +22,10 @@ conditions of note:20261018T2125Z-report-format-table-r4-r5
 * no selection is committed after the coin its unit's noise reads (`NoLateSelection`): `ok_A` is committed with the
   raw activation row, before the noise is derived, and `ok_B` with the raw weight row at registration, before the
   salt, each a function of its raw row alone; so there is no grinding;
+* every unit writing a value the noise of more than one credited unit depends on is always proved, every noise slot
+  is a unit's output or an anchor the verifier recomputes, and a credited unit with a floor reads noise or derives it
+  inside itself (`NoiseProved`, round 3.1, Daniel's 22:39Z condition (e)): a noise step is a unit of fan-out `F`, the
+  credited units its noise reaches, and a wrong one chosen to cancel makes each of them right and cheap;
 * each selection unit outside the always-proved set is charged the cone it gates: a unit is good only if the run paid
   for every unit that feeds it, along late edges and along gates from units outside that set (`Feeds`, `SelGood`), and
   a share charging each unpaid unit its cone (`selConeWt`) covers every selected unit that isn't good (`SelCovers`);
@@ -44,8 +48,9 @@ partition.
   charge; the cone factor of the selection units outside the always-proved set.
 * `AfterCoin`, `NoLateSelection`: a position committed after a unit's coin; no gate position is.
 * `ReadsPos`: a unit has a position among its slots.
-* `SelectionsSourced`, `SelectionsProved`, `CertifiedOperands`, `AlwaysProved`, `TallyIn`, `GatesTallied`,
-  `TallyReads`: protocol structure, checked by the window's shape check.
+* `NoiseIn`: a unit writes a value another unit's noise reads.
+* `SelectionsSourced`, `SelectionsProved`, `CertifiedOperands`, `NoiseProved`, `AlwaysProved`, `TallyIn`,
+  `GatesTallied`, `TallyReads`: protocol structure, checked by the window's shape check.
 * `RegisteredRight`: every registration record's certificate is right, the registration's own guarantee.
 * `TallyComputes`: a property of the tally's Definition, proved for each window.
 * `SelCovers`: the share covers every selected unit that isn't good, a property of the share's definition, proved for
@@ -74,7 +79,8 @@ open Pouw.RelativeSecurity
   raw row they read;
 * `one v`: the committed value `v` of a selection position reads as selected;
 * `proved`: the always-proved units (the A rows' ok units and formings, the B rows' per-epoch formings, the tally's limb
-  units, chained selections), each in every draw of its round;
+  units, chained selections, any noise unit whose noise reaches more than one credited unit), each in every draw of its
+  round;
 * `tally ⊆ proved`: the units computing the published credit, each output at most 16 bits (limbs, with carries
   committed between them);
 * `regd ℓ`: the weights' registration record `ℓ` belongs to, if any (a raw weight row `B_j` and its `ok_B,j` share
@@ -83,7 +89,15 @@ open Pouw.RelativeSecurity
 * `regRight r`: record `r`'s certificate is its raw row's forming verdict (finite, `ρ·α ≥ 1`, at most `k/64` dead lanes),
   at the record's committed values;
 * `out`, `credOf`: the tally's output position, and the credit its value reads (`point(level)` tiles' words, at most
-  16 bits of output). -/
+  16 bits of output);
+* `noise w j`: the slots carrying unit `j` of round `w`'s noise or the values it is derived from, read off its
+  Definition's ports by id: a forming's line and factors (`Pc8RowA`'s `e`, `fa`, `fb`; `Pc8RowB`'s `e`, `fb`, `fa`,
+  `g`), a tile's noised operands (`Pc8Tile`'s `ac`, `pa`, `bc`, `pb`), a noise unit's seed;
+* `anchor ℓ`: position `ℓ` is a public input region the verifier recomputes from public seeds under its derivation's
+  id and refuses otherwise (`pc8.DERIVATIONS`: `verity/pouw/anchor/pearl-c/{ea,eb,fa,fb,g}/v1`, from `seed_a`,
+  `seed_b`, each a hash of the salt and hiding roots);
+* `noiseSelf`: the units whose Definition derives its noise in its own body from its coin and its public position,
+  told apart by Definition id (none on `main`: every Pc8 noise line is an anchor). -/
 structure SelectLayer (C B : Type) (S m s : ℕ) (J Q Pos V : Type) extends DrawnLayer C B S m s J Q Pos V where
   gates : Fin S → J → Finset Pos
   floor : Fin S → J → Finset Q
@@ -96,6 +110,9 @@ structure SelectLayer (C B : Type) (S m s : ℕ) (J Q Pos V : Type) extends Draw
   regRight : ℕ → Prop
   out : Pos
   credOf : V → ℝ
+  noise : Fin S → J → Finset Q
+  anchor : Pos → Prop
+  noiseSelf : Finset (Fin S × J)
 
 namespace SelectLayer
 
@@ -189,6 +206,33 @@ def CertifiedOperands : Prop :=
     g ∈ sl.forms ∧ sl.src (sl.pos w j k) = some g ∧ sl.ReadsPos g (sl.certRow ℓ) ∧
       ((∃ c, sl.src ℓ = some c ∧ sl.ReadsPos c (sl.certRow ℓ)) ∨
         (∃ r, sl.regd ℓ = some r ∧ sl.regd (sl.certRow ℓ) = some r))
+
+/-- **Unit `u` writes a value unit `v`'s noise reads**: a noise slot of `v` (a line, a factor, a seed, a noised operand)
+whose writer is `u`. -/
+def NoiseIn (u v : Fin S × J) : Prop := ∃ k ∈ sl.noise v.1 v.2, sl.src (sl.pos v.1 v.2 k) = some u
+
+/-- **Every noise step that fans out is proved** (Daniel's 22:39Z condition (e)):
+* every noise slot is a unit's output, or an anchor (`anchor`) the verifier recomputes: never a value the prover fills;
+* every unit of positive weight with a hardness floor reads noise, or derives it in its own body (`noiseSelf`);
+* every unit that writes a value the noise of more than one unit of positive weight depends on, along noise slots
+  (`NoiseIn`, transitively: a seed, a line, a forming), is always proved.
+
+A noise step's late cone is every credited unit its noise reaches, so at uniform draws its factor is that fan-out: a
+wrong line, factor or seed chosen to cancel (a forming of zero codes and zero `P`) makes each tile it reaches right and
+`+0` at one unit's draw rate. Always proved, it is right outside the proofs' failures; derived in-unit, it is the unit's
+own proof (`F = 1`); an anchor no unit writes. A noise writer reaching one credited unit may stay outside `proved`: its
+late edge charges that unit's cone, as any late edge. The shape check reads the noise slots off each Definition's ports
+by id and refuses a noise port that is neither an anchor nor an always-proved unit's output when its writer reaches
+more than one credited unit (`window-form: unproved-noise`), and a credited Definition with a floor, no noise port and
+no in-body derivation (`window-form: unnoised-unit`). On `main` every Pc8 line and factor is an anchor (h0's `seed_a`,
+`seed_b`; h3's row seeds over committed leaves), and the formings that write the tiles' noised operands are always
+proved. Protocol structure. -/
+def NoiseProved (wt : Fin S → J → ℝ) : Prop :=
+  (∀ w j, ∀ k ∈ sl.noise w j, (∃ g, sl.src (sl.pos w j k) = some g) ∨
+      (sl.src (sl.pos w j k) = none ∧ sl.anchor (sl.pos w j k))) ∧
+    (∀ w j, 0 < wt w j → (sl.floor w j).Nonempty → (sl.noise w j).Nonempty ∨ (w, j) ∈ sl.noiseSelf) ∧
+    ∀ g v v' : Fin S × J, 0 < wt v.1 v.2 → 0 < wt v'.1 v'.2 → v ≠ v' →
+      Relation.TransGen sl.NoiseIn g v → Relation.TransGen sl.NoiseIn g v' → g ∈ sl.proved
 
 /-- **The always-proved units are in every draw**: each is named by every draw of its round. Protocol structure. -/
 def AlwaysProved : Prop := ∀ t ∈ sl.proved, ∀ b : B, ∃ i, sl.draw b i = t.2

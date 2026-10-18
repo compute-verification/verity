@@ -4,7 +4,7 @@ import Models.Accounting.Assumptions.TSSelected
 # A padded window's guarantee statements (trusted)
 
 `ProofsSoundOfDrawn`'s and `CompilerC`'s counterparts for a window that credits only its selected units
-(`Accounting.TS.SelectLayer`, note:20261018T2200Z-draft-padded-credit-rule, round 3). Statement drafts, no proof: they
+(`Accounting.TS.SelectLayer`, note:20261018T2200Z-draft-padded-credit-rule, round 3.1). Statement drafts, no proof: they
 go to a red team, then to a decision, before they are listed in `lean-audit.json` and proved as
 `Accounting.SecurityProofs.TS.G`.
 
@@ -23,8 +23,9 @@ open Accounting.TS Accounting.Assumptions.TS Pouw.RelativeSecurity
 /-- **(I8) for a padded window, at its published credit.** Over a sampled window's proofs with selections
 (`SelectLayer`) with nonnegative unit weights, whose positions' writers read them (`WriterReads`), whose selections have
 sources (`SelectionsSourced`), whose floor operands are written by their certificates' writers (`CertifiedOperands`),
-whose selections are committed before their units' coins (`NoLateSelection`), whose always-proved units are in every
-draw (`AlwaysProved`), with the tally among them (`TallyIn`: every limb unit), reading every gate position
+whose selections are committed before their units' coins (`NoLateSelection`), whose noise steps reaching more than
+one credited unit are always proved and whose noise slots are units' outputs or anchors (`NoiseProved`), whose
+always-proved units are in every draw (`AlwaysProved`), with the tally among them (`TallyIn`: every limb unit), reading every gate position
 (`GatesTallied`) and publishing at most the selected weight when right (`TallyComputes`, provable from the tally's
 Program when it reads only the gates and its own limbs and carries, `TallyReads`), whose registration's certificates are right
 (`RegisteredRight`, the registration's own guarantee at its `δ_reg`, which a composition adds), with a play that is its
@@ -39,14 +40,16 @@ What it rules out: a wrong always-proved unit (the tally, an A row's forming, a 
 is unsound (`JointSound`), so outside the event the published credit is at most the selected weight and every gate
 from the set is honest; a wrong forming of a certified row (A or B) is likewise unsound; a padding unit counts only
 when selected, and a wrong selection unit outside the set leaves every unit it gates not good, in the share; an
-operand rewritten after its certificate, and a selection committed after its unit's noise, are refused by structure. -/
+operand rewritten after its certificate, and a selection committed after its unit's noise, are refused by structure;
+a wrong noise step (a seed, a line, a factor chosen to cancel) reaching more than one credited unit is an always-proved
+unit's unsound proof, and a noise value the prover fills is refused by structure. -/
 def ProofsSoundOfSelected : Prop :=
   ∀ {K T L U J Q Pos V : Type} [Fintype K] [Fintype T] [Fintype L] [Fintype U] [Fintype J] [Nonempty V]
     (C B : Type) [Fintype C] [Fintype B] (S m s : ℕ) (P : Play (Paths C m × B) S K T L U)
     (sl : SelectLayer C B S m s J Q Pos V) (mode : Paths (Paths C m × B) S → Fin S × J → Mode)
     (wt : Fin S → J → ℝ) (folded : Paths (Paths C m × B) S → ℝ) (Nw δbind δks : ℝ),
     0 < S → (∀ w j, 0 ≤ wt w j) → sl.toDrawnLayer.WriterReads → sl.SelectionsSourced → sl.CertifiedOperands →
-    sl.NoLateSelection → sl.AlwaysProved → sl.TallyIn → sl.GatesTallied → sl.TallyComputes wt →
+    sl.NoLateSelection → sl.NoiseProved wt → sl.AlwaysProved → sl.TallyIn → sl.GatesTallied → sl.TallyComputes wt →
     sl.RegisteredRight → sl.toDrawnLayer.Of P → (∀ w, prob (fun x => sl.toDrawnLayer.MovedIn x w) ≤ δbind) →
     sl.toDrawnLayer.JointSound δks → sl.toDrawnLayer.Pins → sl.SelCovers P mode wt Nw →
     SelectedFixed P sl mode wt folded →
