@@ -186,7 +186,10 @@ Beside its names, a design file has these keys:
 
 - `[noise]`: a leaf for each of `linears`, `lm_head`, `qk` and `pv`.
 - `honest`, `L`, `work` and `plain`.
-- `[fold]` and `[filler]`: lane instructions a word by class. A filler runs on lanes (decision 73).
+- `[fold]` and `[filler]`: lane instructions a word by class. A filler runs on lanes (decision 73). A filler states
+  `p`, the probability a deficient block of it passes its check, and `luck`, the theorem that proves it: 0 for a
+  receipt the check recomputes (`Accounting.Guarantees.FillerLuck.PinnedFillBlocksDeficit`), 0.854 for pfill's cells
+  (`FillerBlocksDeficit`), or `p = 1` with no `luck`, no luck credit.
 - `[operands]`: the noise's floor φ_del.
 - `unit`: a table of `data/adapt.toml`. It is whole dot products (decision 72).
 - `[coins]`: `bits`, the width of a noised entry's coin, one σ a request.
@@ -256,8 +259,8 @@ The cheater is every route at q*. Its operand delivery is free by default (SPEC'
 `--operands floor` prices it at the noise's floor φ_del, the design's `[operands]`: 1/39 a MMA where B̃ stays resident
 at the zero instance, 0.20 where both operands are fresh (SPEC §3.4). `--operands honest` prices it at honest's.
 The LP's duals are the certificate π*. ε_luck is the same LP with Theorem S's budget spent on unwritten words (still
-folded) and undone filler, each deficient block weighted by 1 − p (¾ a word, 0.854 a filler block; SPEC §5), so the
-terms add up to its time exactly.
+folded) and undone filler, each deficient block weighted by 1 − p (¾ a word, the filler's own `p` a filler block), so
+the terms add up to its time exactly. At `p = 1` the cheater leaves the filler undone even with every block checked.
 
 Under `--credit model` or `--credit floor`, honest's time above the credit leaves ε for γ, which is printed beside it.
 `floor` is the floor program ♭ of SPEC §0.7a (Corollary D3): the tensor route at φ_del, the fold, the fillers and the

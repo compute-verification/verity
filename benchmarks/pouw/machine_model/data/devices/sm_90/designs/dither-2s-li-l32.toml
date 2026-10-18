@@ -29,6 +29,8 @@ per_word = 0.02
 mix = { FFMA = 1 }
 route = "lanes"
 source = "DC-DESIGN (note:20261017T0805Z-draft-dc-design §3): LI's ALU ½ + IMAD ½ leaves the ALU pipe 1.5% short of half issue on the H200, so 0.02 verified FFMA a word puts honest on JI90_0, whose lane threshold is 0.4999 at L = 32; FILL-OPT is its named assumption"
+p = 0.0
+luck = "Accounting.Guarantees.FillerLuck.PinnedFillBlocksDeficit, once the filler's receipt is recomputed bit for bit: FFMA is IEEE 754 binary32 fused multiply-add, rounded once (round to nearest even), so with its FTZ mode and NaN's encoding pinned the verifier reproduces every word exactly and a wrong receipt fails whenever its tile is drawn. No FFMA filler kernel or check exists yet; FILL-OPT is where an FFMA chain is weak (with fixed operands it reaches a fixed point or overflows, after which its receipt costs nothing), so the kernel must feed each step fresh operands"
 
 [skip.served]
 eps = 0.00611
