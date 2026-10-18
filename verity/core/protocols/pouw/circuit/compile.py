@@ -224,6 +224,20 @@ class Scheme:
 #: the schemes the pass compiles to, by name (protocol structure, keyed by silicon target in the registration). Separate from
 #: `circuit.SCHEMES`, whose names the vLLM integration serves as ncp-v2-style traced schemes.
 SCHEMES: dict[str, Scheme] = {}
+#: this package's modules that register its own schemes (`h1tile`: eps1-sm120-h1fx1), imported at the first name not yet in
+#: `SCHEMES`
+BUILTIN = ("h1tile",)
+
+
+def _scheme(name: str) -> Scheme:
+    if name not in SCHEMES:
+        import importlib
+
+        for m in BUILTIN:
+            importlib.import_module(f"{__package__}.{m}")
+    if name not in SCHEMES:
+        raise CompileError("scheme", f"no scheme {name!r} is registered ({', '.join(SCHEMES) or 'none'})")
+    return SCHEMES[name]
 
 
 def register(scheme: Scheme) -> Scheme:
@@ -1168,8 +1182,7 @@ def compile(program: Program, scheme: str, groups: Callable[[Site], Any] | Seque
     """`program` with every registered matmul's dots in `scheme`'s tile units (the module docstring), checked. `groups` names
     the calls committed together, each group one seed group (one slot of `pouw.roots`): a key per site, or a function of the
     `Site` to its key; None is a group per site."""
-    if scheme not in SCHEMES:
-        raise CompileError("scheme", f"no scheme {scheme!r} is registered ({', '.join(SCHEMES) or 'none'})")
+    least = _scheme(scheme).cover
     why = _reads_coin(program)
     if why is not None:
         raise CompileError("coin-read", f"the served Program reads a coin ({why}); the salt enters only through compile")
@@ -1184,7 +1197,6 @@ def compile(program: Program, scheme: str, groups: Callable[[Site], Any] | Seque
     cover = [0] * (max(group_of) + 1)
     for sp, g in zip(plan.sites, group_of):
         cover[g] += len(sp.units)
-    least = SCHEMES[scheme].cover
     if min(cover) < least:
         g = cover.index(min(cover))
         raise CompileError("cover", f"seed group {g} (sites {[s for s, k in enumerate(group_of) if k == g]}) covers "
@@ -1209,6 +1221,6 @@ def rebuild(served: Program, scheme: str, descriptor: dict,
     return c
 
 
-__all__ = ["ANY", "CompileError", "Compiled", "Dot", "GateCheck", "MATMULS", "Matmul", "POSITIONS", "PouwCall", "PouwCompiled",
+__all__ = ["ANY", "BUILTIN", "CompileError", "Compiled", "Dot", "GateCheck", "MATMULS", "Matmul", "POSITIONS", "PouwCall", "PouwCompiled",
            "PouwRest", "ROOTS", "SALT", "SCHEMES", "STEP", "Scheme", "Site", "Tile", "Unit", "Z", "compile", "rebuild",
            "register", "seed"]
