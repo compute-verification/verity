@@ -9,7 +9,8 @@ follow them into the spec:
 
 * uniform probability (`prob`), `R` rounds of fresh coins (`Paths`), a prover's play (`RoundGame`, its acceptance
   and deficiency) and a round's stages (`StageGame`);
-* the machine model (`Machine`, a run's `charge`), the service (`Service`) and its adversary floor (`ServiceFloor`);
+* the machine model (`Machine`, a run's `charge`), the service (`Service`) and its adversary floor (`ServiceFloor`;
+  adversary by adversary, `ServiceFloorPerProver`);
 * Theorem K's runs (`BitAff`, `bitInd`, `Slp`, `SlpG`), the re-encoded design's prefix words (`DBits`, `dPrefix`,
   `wRe`, `DCells`), affine products (`AffProd`), degree-2 errors (`CubeQuad`, `pairDiff`) and the spot check's
   deficiency (`spotDef`);
@@ -172,6 +173,17 @@ def ServiceFloor (Mc : Machine) (S : Service) (F κ : ℝ) : Prop :=
   ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (S.Seed × Ω) (S.Com × S.Ans)),
     (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) →
     prob (fun ω : S.Seed × Ω => S.verify (Mc.eval M ω).1 ω.1 (Mc.eval M ω).2 = true ∧ Mc.charge M ω < F) ≤ κ
+
+/-- **The service's adversary floor, adversary by adversary**: every adversary `M` that commits first has its accepted
+runs charged below `F` with probability at most `κ Ω M`, a bound of its own, `⊤` where there is none. `ServiceFloor` is
+one bound for every adversary, which a service on SHA-512 commitments meets only at 1: an adversary that hard-codes a
+collision opens a leaf two ways. -/
+def ServiceFloorPerProver (Mc : Machine) (S : Service) (F : ℝ)
+    (κ : ∀ (Ω : Type) [Fintype Ω], Mc.Alg (S.Seed × Ω) (S.Com × S.Ans) → ENNReal) : Prop :=
+  ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (S.Seed × Ω) (S.Com × S.Ans)),
+    (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) →
+    ENNReal.ofReal (prob fun ω : S.Seed × Ω => S.verify (Mc.eval M ω).1 ω.1 (Mc.eval M ω).2 = true ∧
+      Mc.charge M ω < F) ≤ κ Ω M
 
 end Service
 
