@@ -136,10 +136,14 @@ __global__ void __launch_bounds__(128) pack16_kernel(const int8_t *__restrict__ 
   pk[q] = w;
 }
 
-// σ of a warp's 32 blocks into acc, under the packed signs sg in shared memory: load(d, p) puts lane (g, t)'s 16 bytes
-// at p of the tile's blocks 16 mt + g (+ 8 for hi) in d[mt][hi], zero past the blocks (sk64_load's).
-template <class Load>
-__device__ __forceinline__ void sk16_sigma(int (&acc)[2][2][4], Load load, const u32 *sg, int lane) {
+// The receipts of the warp's 32 positions b0 … b0 + 31 (of n) into ys, S the warp's staging (32 · SK_ROWS int32) and sg
+// the packed signs in shared memory: load(d, p) puts lane (g, t)'s 16 bytes at p of the tile's blocks 16 mt + g (+ 8
+// for hi) in d[mt][hi], zero past the blocks (sk64_load's), and index(q) is position q's store index.
+template <class Load, class Index>
+__device__ __forceinline__ void sk16_tile_of(Load load, Index index, u64 n, u64 b0, const u32 *sg, int *S,
+                                             u64 *__restrict__ ys, int lane) {
+  const int g = lane >> 2, t = lane & 3;
+  int acc[2][2][4];
 #pragma unroll
   for (int mt = 0; mt < 2; ++mt)
 #pragma unroll
@@ -164,13 +168,6 @@ __device__ __forceinline__ void sk16_sigma(int (&acc)[2][2][4], Load load, const
 #pragma unroll
     for (int mt = 0; mt < 2; ++mt) cur[mt][0] = nxt[mt][0], cur[mt][1] = nxt[mt][1];
   }
-}
-
-// Lane's own block's receipt at store index j into y if live, from the warp's σ (acc), staged in S (32 · SK_ROWS
-// int32) so each lane hashes one block's.
-__device__ __forceinline__ void sk16_receipt(const int (&acc)[2][2][4], int *S, u64 j, bool live, u64 *__restrict__ y,
-                                             int lane) {
-  const int g = lane >> 2, t = lane & 3;
 #pragma unroll
   for (int mt = 0; mt < 2; ++mt) {
     const int blk = 16 * mt + g;
@@ -181,12 +178,13 @@ __device__ __forceinline__ void sk16_receipt(const int (&acc)[2][2][4], int *S, 
     }
   }
   __syncwarp();
-  if (live) {
+  const u64 q = b0 + lane;
+  if (q < n) {
     const uint4 *V = (const uint4 *)(S + lane * SK_ROWS);
     u64 w[16], s[8];
 #pragma unroll
     for (int i = 0; i < 16; ++i) w[i] = 0;
-    w[0] = j;
+    w[0] = index(q);
 #pragma unroll
     for (int i = 0; i < 4; ++i) {
       const uint4 v = V[i];
@@ -197,7 +195,7 @@ __device__ __forceinline__ void sk16_receipt(const int (&acc)[2][2][4], int *S, 
     for (int i = 0; i < 8; ++i) s[i] = kSketchMid[i];
     sha512_compress(s, w);
 #pragma unroll
-    for (int i = 0; i < 8; ++i) y[i] = s[i];
+    for (int i = 0; i < 8; ++i) ys[8 * q + i] = s[i];
   }
   __syncwarp();
 }
@@ -207,10 +205,8 @@ __device__ __forceinline__ void sk16_receipt(const int (&acc)[2][2][4], int *S, 
 __device__ __forceinline__ void sk16_tile(const uint4 *__restrict__ data, u64 j0, u64 n, u64 b0, const u32 *sg, int *S,
                                           u64 *__restrict__ ys, int lane) {
   const int g = lane >> 2, t = lane & 3;
-  int acc[2][2][4];
-  sk16_sigma(acc, [&](uint4 (&d)[2][2], int p) { sk64_load<false, 2>(d, data, nullptr, b0, n, p, g, t); }, sg, lane);
-  const u64 q = b0 + lane;
-  sk16_receipt(acc, S, j0 + q, q < n, ys + 8 * q, lane);
+  sk16_tile_of([&](uint4 (&d)[2][2], int p) { sk64_load<false, 2>(d, data, nullptr, b0, n, p, g, t); },
+               [&](u64 q) { return j0 + q; }, n, b0, sg, S, ys, lane);
 }
 
 // sk16_tile over positions b0 … b0 + 31 of n, position q's block read at addrs[q] and hashed at store index js[q]
@@ -225,15 +221,13 @@ __device__ __forceinline__ void sk16_mapped_tile(const u64 *__restrict__ addrs, 
 #pragma unroll
     for (int hi = 0; hi < 2; ++hi)
       at[mt][hi] = reinterpret_cast<const uint4 *>(__shfl_sync(~0u, mine, 16 * mt + 8 * hi + g));
-  int acc[2][2][4];
-  sk16_sigma(acc, [&](uint4 (&d)[2][2], int p) {
+  sk16_tile_of([&](uint4 (&d)[2][2], int p) {
 #pragma unroll
     for (int mt = 0; mt < 2; ++mt)
 #pragma unroll
       for (int hi = 0; hi < 2; ++hi)
         d[mt][hi] = at[mt][hi] ? ld_l2_256(at[mt][hi] + 4 * p + t) : make_uint4(0, 0, 0, 0);
-  }, sg, lane);
-  sk16_receipt(acc, S, q < n ? __ldg(js + q) : 0, q < n, ys + 8 * q, lane);
+  }, [&](u64 x) { return __ldg(js + x); }, n, b0, sg, S, ys, lane);
 }
 
 __device__ __forceinline__ void sk16_prologue(u32 *sg, const u32 *__restrict__ pk) {
