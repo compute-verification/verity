@@ -16,8 +16,9 @@ record and the coin server's transcript). `RecDeploy.V` is that as one `Claims.V
   statement's bytes (a `FlockDeploy.Raw` encoding: its circuit, public and partition files), the verifier's own inner
   shape (`--rec-inner`) and bindings (`--rec-bindings`), the circuit registration, and per V* part its Flock statement
   and `--rec-rows`. `parse` and `scopeCheck` are the deployed parser's (`Flock.RecScope.parseOf`, `scopeCheckOf`) at
-  `decodeR`: what `readX` reads (it refuses unless the inner statement's dimensions read, `RecVStar.innerOf`, and
-  there is one part per V* statement of the verifier's inner shape, `RecVStar.statements`), as the verifier's inner
+  `decodeR`: what `readX` reads (it refuses unless the inner statement's dimensions read, `RecVStar.innerOf`, Flock's
+  plain verifier sets the inner statement up and its statement check passes, `innerOk`, and there is one part per V*
+  statement of the verifier's inner shape, `RecVStar.statements`), as the verifier's inner
   shape and the inner statement's files with no records (`readOf`), where the setup's checks accept that shape
   (`RecScope.accepts`). The V* records are run messages, so the statement carries no draws, and `scopeCheck` reads
   only the inner scope check: the compiled verifier refuses the draw and shape conditions at each session's decision
@@ -140,14 +141,26 @@ structure XR where
   shape : RecVStar.Inner
   dims : RecVStar.Inner
 
-/-- **The compiled statement's reader**: its bytes decode, the inner statement's decode and set up (`RecVStar.innerOf`),
-the verifier's own inner shape reads (`RecVStar.Inner.ofJson`), and there is one part per V* statement of that shape. -/
+/-- **Flock's own checks on the inner statement**: Flock's plain verifier sets it up (`FlockDeploy.setupOf false`) and
+its statement check passes (`Readable.Read.check`, `ProvedScope.check`). Its draw is not asked for: the recursion's inner
+session holds none. -/
+def innerOk (inner : Claims.Msg) : Except String Unit :=
+  match FlockDeploy.setupOf false inner with
+  | some (s, _, _) => s.read.check
+  | none => .error "rec: Flock's verifier does not set the inner statement up"
+
+/-- **The compiled statement's reader**: its bytes decode, the inner statement's decode and set up (`RecVStar.innerOf`)
+and pass Flock's own setup and statement check (`innerOk`), the verifier's own inner shape reads
+(`RecVStar.Inner.ofJson`), and there is one part per V* statement of that shape. -/
 def readX (x : Claims.Msg) : Option XR := do
   let w ← decodeX x
   let ri ← FlockDeploy.decode w.inner
   let shape ← (do RecVStar.Inner.ofJson (← jsonOf "rec-inner" w.recInner)).toOption
   let partition ← (ri.partition.mapM (jsonOf "partition")).toOption
-  let dims ← (RecVStar.innerOf ri.circuit ri.publicFile partition ri.program).toOption
+  let dims ← (do
+    let dims ← RecVStar.innerOf ri.circuit ri.publicFile partition ri.program
+    innerOk w.inner
+    pure dims).toOption
   let vs ← (RecVStar.statements shape).toOption
   if w.parts.length ≠ vs.size then none
   pure ⟨w, ri, partition, shape, dims⟩
