@@ -4,9 +4,10 @@ model's config.json (`engine/profiles/hf_configs/`), its served pin (`verity_vll
 The pinned digests are the served Builds of record on vy-glm53-s1 (one H200: cc 9.0, 132 SMs) over SCHEDULE (prompts of 100, 37, 9 and
 300 tokens capped at 14, 9, 8 and 6, arriving at steps 0, 0, 3 and 6): Llama-3.2-1B r20261018-062949-a32b, Qwen3-8B
 r20261018-062957-da83, Qwen3-30B-A3B r20261018-084657-c7f6, each Matched and Committed at that Build.  The served Commit with the
-predicted Build as Build of record passes for each: r20261018-105743-72a0, r20261018-115551-2b64 and r20261018-124350-5c89.  A library
-change that moves a Definition moves the traced digest too: trace the Build again (`served-match`), write its pin (`predict
-compiled-pin`) and pin both.
+predicted Build as Build of record passes for each: r20261018-105743-72a0, r20261018-115551-2b64 and r20261018-124350-5c89.  On
+vy-nebius-2 (one RTX PRO 6000: cc 12.0, 188 SMs) over the same SCHEDULE: Llama-3.2-1B r20261018-203256-0665, Matched and Committed
+at that Build.  A library change that moves a Definition moves the traced digest too: trace the Build again (`served-match`), write
+its pin (`predict compiled-pin`) and pin both.
 """
 
 from __future__ import annotations
@@ -21,20 +22,23 @@ from verity_vllm.engine.profiles.dense_generic import find_hf_config
 from verity_vllm.predict import compiled as PC
 
 H200 = "NVIDIA H200"
+RTX = "NVIDIA RTX PRO 6000 Blackwell Server Edition"
 SCHEDULE = [{"request_id": f"r{i}", "arrive": a, "prompt_tokens": n, "max_tokens": t}
             for i, (n, t, a) in enumerate(((100, 14, 0), (37, 9, 0), (9, 8, 3), (300, 6, 6)))]
 
 
-@pytest.mark.parametrize("role,program,manifest,artifact", [
-    ("LLAMA32_1B", "1f2df5e1029f878debf647a562314108b4e15159e90c5a852adefe9ade1987077c2b4cbf5621209148cdafbdc1113f15cbafd7a9c3f38d11a70659c291062a6b",
+@pytest.mark.parametrize("role,device,program,manifest,artifact", [
+    ("LLAMA32_1B", H200, "1f2df5e1029f878debf647a562314108b4e15159e90c5a852adefe9ade1987077c2b4cbf5621209148cdafbdc1113f15cbafd7a9c3f38d11a70659c291062a6b",
      "f2862dbc43dbeb61bd7e6be2c60cefbd756e04d754a193875e4b3fa64d747071", "0a169ef67dd55fb6"),
-    ("QWEN3_8B", "beed60d6bb75d7d9d39b7adf154b0b458b981e76ff2a6aed29c5f73046f0194b44b221b20ff86e0e5a7cb6a41a465592beecf3ea81a8add0b3d5d165c79f960c",
+    ("QWEN3_8B", H200, "beed60d6bb75d7d9d39b7adf154b0b458b981e76ff2a6aed29c5f73046f0194b44b221b20ff86e0e5a7cb6a41a465592beecf3ea81a8add0b3d5d165c79f960c",
      "3d1368d361d6c1a6", "3bd5dcb11c2004ca"),
-    ("QWEN3_30B_A3B", "763ff762378d085d78977b341aab0b38bf7047507cf9887f51a4bcedcbe36dac87faeefd68e957a914d6a70147f912c31b4ffe3dc7c44f5cb86c477f9cd662b4",
+    ("QWEN3_30B_A3B", H200, "763ff762378d085d78977b341aab0b38bf7047507cf9887f51a4bcedcbe36dac87faeefd68e957a914d6a70147f912c31b4ffe3dc7c44f5cb86c477f9cd662b4",
      "8564ceaa69e105bf", "970c4d99d29792e3"),
+    ("LLAMA32_1B", RTX, "c98f0b6b62bf8ea5a06333f828df1c09ebae314bac4c438ca4f84d8206b3595c5f8bf1b7333a62e5f264ee2f8377bd61939ff4f13765bb9eca99e5cd145c47cf",
+     "ee8896c9db33aac5", "fba557acf341db86"),
 ])
-def test_the_predicted_served_build_is_the_traced_one(role, program, manifest, artifact):
-    b = PC.predict(role, H200, SCHEDULE, 14)
+def test_the_predicted_served_build_is_the_traced_one(role, device, program, manifest, artifact):
+    b = PC.predict(role, device, SCHEDULE, 14)
     assert b["program_digest"] == program
     assert b["manifest_digest"].startswith(manifest) and b["artifact"]["digest"].startswith(artifact)
     assert b["complete"] and not b["routes_missing"]
