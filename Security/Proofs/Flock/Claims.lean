@@ -15,7 +15,32 @@ import Proofs.Flock.Claims.NumbersNMin
 import Proofs.Flock.Claims.Recursion
 import Proofs.Flock.Claims.NumbersDeploy
 import Proofs.Flock.Claims.NumbersRadius
+import Proofs.Flock.Claims.Recursion.InnerAccepts
+import Proofs.Flock.Claims.Recursion.InnerAcceptsKS
+import Proofs.Flock.Claims.Recursion.DeployInputs
+import Proofs.Flock.Claims.Recursion.DeployOuter
+import Proofs.Flock.Claims.Recursion.Deploy
+import Proofs.Flock.Claims.Recursion.DeployComplete
+import Proofs.Flock.Claims.Recursion.DeployScope
+import Proofs.Flock.Claims.Recursion.DeployFacts
+import Proofs.Flock.Claims.Recursion.DeploySessions
+import Proofs.Flock.Claims.Recursion.DeployScopeRuns
+import Proofs.Flock.Claims.Recursion.DeployMargin
+import Proofs.Flock.Claims.Recursion.DeployPremises
+import Proofs.Flock.Claims.Recursion.DeployZK
+import Proofs.Flock.Claims.Recursion.Seq
+import Proofs.Flock.Claims.Recursion.VStar
+import Proofs.Flock.Claims.Recursion.VStarKS
+import Proofs.Flock.Claims.Recursion.VStarParts
+import Proofs.Flock.Claims.Recursion.VStarPartsHolo
+import Proofs.Flock.Claims.Recursion.VStarPartsDense
+import Proofs.Flock.Claims.Recursion.DeployReg
+import Proofs.Flock.Claims.Recursion.VStarPartsSparse
+import Proofs.Flock.Claims.Recursion.VStarPartsSparseDeploy
+import Proofs.Flock.Claims.Recursion.VStarLinks
+import Proofs.Flock.Claims.Recursion.VStarCross
 import Proofs.Flock.Claims.Counted
+import Proofs.Flock.Claims.Recursion
 import Proofs.Flock.Claims.Decode
 import Proofs.Flock.Claims.DecodeFlock
 import Proofs.Flock.Claims.ZkDecode
@@ -27,6 +52,7 @@ import Proofs.Flock.Claims.Scope
 import Proofs.Flock.Claims.DeployOC
 import Proofs.Flock.Claims.DeployInputs
 import Proofs.Flock.Claims.JsonEq
+import Proofs.Flock.Claims.CanonEq
 import Proofs.Flock.Claims.Deploy
 import Proofs.Flock.Claims.DeployPlainCode
 import Proofs.Flock.Claims.DeployCode
@@ -39,8 +65,9 @@ import Proofs.Flock.Claims.DeployRoundsZk
 import Proofs.Flock.Claims.DeployK
 import Proofs.Flock.Claims.DeployEfficient
 import Proofs.Flock.Claims.Assembled
-import Proofs.Flock.Claims.Sampling
 import Proofs.Flock.Claims.ZK
+import Proofs.Flock.Claims.CompleteFails
+import Proofs.Flock.Claims.Sampling
 import Proofs.Flock.Claims.Witnesses
 
 /-! `Flock.SecurityProofs.ClaimsStated : Flock.Guarantees.ClaimsStated`, by reflexivity: the guarantee is there for its

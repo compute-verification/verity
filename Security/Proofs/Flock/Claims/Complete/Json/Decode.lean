@@ -4,7 +4,7 @@ import Proofs.Flock.Claims.Complete.Json.Record
 # The honest record decodes (S1–S14)
 
 `decode_recordObj`: under the JSON library's specification (`JsonSpec`), `Record.decodeWith` through
-`Hashes.ofSha512 h` reads the printed honest record (`recordObj`'s `compress`) back as `sessOf`, its every check passing,
+`Hashes.ofSha512 h` reads the printed honest record (`printJ` of `recordObj`) back as `sessOf`, its every check passing,
 for one table, no keyed coin tree, a printable draw that decodes (`DrawOk`), a non-empty `Σ` and `root_B`, the
 configured point shape, one recorded stream per rep stream and well-formed rounds, with `h`'s outputs 64 bytes (S12
 compares each round's digest length with the empty message's).
@@ -96,15 +96,16 @@ def sessOf (spec : SessionSpec) (h : ByteArray → ByteArray) (rootB : Array Byt
 /-- **The honest record decodes** (S1–S14) as `sessOf`: one table `t`, no keyed coin tree, the statement's draw
 `DrawOk`, a non-empty `Σ` and `root_B`, the configured points, one recorded stream per rep stream, each with rounds of
 `1 ≤ n ≤ 65536` coins, and `h`'s outputs 64 bytes. -/
-theorem decode_recordObj (S : JsonSpec) {h : ByteArray → ByteArray} (h64 : ∀ b, (h b).size = 64)
-    {spec : SessionSpec} {t : String} (ht : spec.tables = #[t]) (hct : spec.coinTree = none)
+theorem decode_recordObj (S : Claims.JsonSpec printJ Flock.canon) {h : ByteArray → ByteArray}
+    (h64 : ∀ b, (h b).size = 64) {spec : SessionSpec} {t : String} (ht : spec.tables = #[t])
+    (hct : spec.coinTree = none)
     (hdraw : DrawOk spec) (hsig : 0 < spec.sigma.size)
     {rb : ByteArray} (hrb : 0 < rb.size)
     {points : Array (Array F128)} (hpts : points.size = spec.points) (hpm : ∀ p ∈ points, p.size = spec.mPts)
     {streams : Array (Array Round)} (hss : streams.size = spec.repStreams.size)
     (hrs : ∀ rs ∈ streams, 0 < rs.size ∧ ∀ r ∈ rs, 1 ≤ r.n ∧ r.n ≤ 65536 ∧ r.coins.size = r.n)
     (proofs : Array ByteArray) :
-    Record.decodeWith (Hashes.ofSha512 h : Hashes V) spec (recordObj spec h #[rb] points streams proofs).compress =
+    Record.decodeWith (Hashes.ofSha512 h : Hashes V) spec (printJ (recordObj spec h #[rb] points streams proofs)) =
       .ok (sessOf spec h #[rb] points streams proofs) := by
   have hgood := good_recordObj ht h rb points streams proofs (by
     unfold DrawOk at hdraw
@@ -112,7 +113,7 @@ theorem decode_recordObj (S : JsonSpec) {h : ByteArray → ByteArray} (h64 : ∀
     cases spec.unitDraw with
     | none => exact fun _ => .null
     | some d => exact fun hd => hd.2.1)
-  obtain ⟨j, hp, hs⟩ := S.parse_compress _ hgood
+  obtain ⟨j, hp, hs⟩ := S.parse_print _ hgood
   have gR : ∀ {k v}, (k, v) ∈ recordList spec h #[rb] points streams proofs →
       (recordObj spec h #[rb] points streams proofs).getObjVal? k = .ok v :=
     fun hm => getObjVal?_mkObj (recordList_distinct ..) hm
