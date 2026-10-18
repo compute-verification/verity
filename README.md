@@ -91,8 +91,8 @@ Every accounting protocol (PoUW, PoUS, network accounting) uses one proof servic
 
 The logical layer is the cryptography: PoUW, PoUS and the bandwidth audits prove lower bounds on what the prover system did, with no device premise. The physical layer reads them against declared hardware, named assumptions and trusted devices' measurements, in seven components: (1) the device graph, whose blocks (a node to start) are spatial units; (2) placement; (3) the timebase; (4) trusted observers; (5) boundary bounds; (6) attribution; (7) the joint ledger.
 
-- **Compute.** PoUW proves the noised products were computed, at least 1 − ε of them right. Attribution credits a block with the right words that left through its certifiers, less its ingress bytes times the work an output byte stands for. A GPU hidden in a block is a named assumption.
-- **Memory.** The bandwidth audits prove bits read, and PoUS bits held. The memory challenger's deadlines and data-sheet rates place reads in a tier.
+- **Compute.** PoUW proves the noised products were computed, at least 1 − ε of them right. Traffic alone attributes nothing: a block is credited only through an anchor, fresh trusted data it must consume (bounded by its egress), or the named premise that the fleet is closed.
+- **Memory.** The bandwidth audits prove bits read, and PoUS bits held, at no location. Attribution places them in tiers, less what boundary links carry in.
 - **Network.** It proves no work. Its certifiers bound what crosses a block's boundary.
 
 The joint ledger charges each device's time once. Without attribution, it subtracts only from the whole fleet's capacity, if no undeclared hardware helped.
