@@ -12,7 +12,8 @@ O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"
 WORK=${WORK:-/workspace/jobs}; PY=$WORK/venv312/bin/python
 [ -x "$PY" ] || { echo "no python at $PY"; exit 3; }
 export PYTHONPATH=$PWD:$PWD/integrations/vllm HF_HOME=${HF_HOME:-/workspace/hf} CUDA_DEVICE_ORDER=PCI_BUS_ID \
-  VLLM_ENABLE_V1_MULTIPROCESSING=0 FLASHINFER_CUDA_ARCH_LIST=12.0f
+  VLLM_ENABLE_V1_MULTIPROCESSING=0 FLASHINFER_CUDA_ARCH_LIST=12.0f CUDA_HOME=${CUDA_HOME:-/usr/local/cuda-13.0} \
+  PATH=$(dirname "$PY"):/usr/local/cuda-13.0/bin:$PATH
 . benchmarks/pouw/pearl_c_vllm/flashinfer_env.sh
 DATA=$("$PY" -c "from huggingface_hub import hf_hub_download as d; print(d('anon8231489123/ShareGPT_Vicuna_unfiltered', 'ShareGPT_V3_unfiltered_cleaned_split.json', repo_type='dataset'))")
 sha256sum "$DATA" > "$O/sharegpt.sha256"
