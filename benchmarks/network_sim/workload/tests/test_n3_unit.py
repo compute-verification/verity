@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 
 from verity.core.protocols.certifier.active import DATA, HEADER, LAST, encode_frame
-from verity.core.protocols.certifier.grid import Record, Status
+from verity.core.protocols.certifier.grid import Reason, Record, Status
 from verity.ml.circuits.boolean.forms import Circuit
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation.bits import evaluate_bits
@@ -368,6 +368,16 @@ def test_an_extra_lab_frame_shifts_every_window_after_it_onto_the_wrong_descript
     last = next(w for w in windows if w.port == EGRESS and w.window == egress[-1])
     assert last.instance is not None and declared + 1 <= setup.layout.cap
     assert setup.layout.descriptor(EGRESS, declared) == U.NONE
+
+
+def test_a_lab_record_whose_coverage_wasnt_established_is_refused_with_no_frames(lab):
+    public, witness, frames, B = lab
+    published = {b: lab_records(b, e, i, B, False) for b, (e, i) in frames.items()}
+    lost = Record(L.EGRESS, 0, ((None, None), (None, None)), Status(Reason.COVERAGE_NEVER_ESTABLISHED))
+    published[BLOCK] = [lost if (r.link, r.window) == (L.EGRESS, 0) else r for r in published[BLOCK]]
+    w = next(w for w in U.lab_windows(public, witness, published)[1] if (w.port, w.window) == (EGRESS, 0))
+    assert w.instance is None and not w.check(circuit=False)["ok"]
+    assert w.why == "the record's status is coverage-never-established"
 
 
 def revealed(lab) -> dict[tuple[str, int], bytes]:

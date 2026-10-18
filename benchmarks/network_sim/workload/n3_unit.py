@@ -1592,10 +1592,10 @@ class Setup:
             n = len(w.frames) - (w.salt is not None and len(w.frames) > 0)
             a = seen[w.port]
             seen[w.port] += n
-            if not w.frames:
-                w.why = EMPTY
-            elif w.reason:
+            if w.reason:
                 w.why = f"the record's status is {w.reason}"
+            elif not w.frames:
+                w.why = EMPTY
             elif a + n > self.layout.cap:
                 w.why = f"frames past the port's capacity, {self.layout.cap}"
             else:
