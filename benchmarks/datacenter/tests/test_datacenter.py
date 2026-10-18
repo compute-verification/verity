@@ -65,23 +65,31 @@ def test_a_traced_circuit_evaluates_as_python_does():
 def test_work_counts_by_kind_is_credited_at_its_weight_and_takes_time_at_its_rate():
     """Compute's review 2: PoUW credits W_ref, multiply-adds weighted by kind (sm_120's cohalf QKᵀ at 1.25), and a
     device's rate depends on the operand format. So an adapted circuit's gates bring their semantics, their work and its
-    kind; the profile carries per-kind counts, the audit credits them at their weights, and the account adds up the time
-    each kind takes at the block's declared rate for it."""
+    kind; the profile carries per-kind counts, the audit credits them at their weights, and the account times each kind
+    at the block's declared rate for it. Kinds on one facet (the tensor cores' `mac:*`) add up; an ALU filler on its own
+    facet runs beside them (compute's review 3), so the block's busy share is the busiest facet's, and the ledger credits
+    and caps each facet."""
     from datacenter.logical import Circuit, Gate
     c = Circuit([Gate("input", (), 16, input=Input(16)), Gate("input", (), 16, input=Input(16, "registered")),
                  Gate("Fp8Matmul", (0, 1), 16, fn=lambda a, b: a * b + 1, size=4000),
-                 Gate("QkCohalf", (2, 1), 16, fn=lambda a, b: a ^ b, size=1000, unit="mac:qk")],
+                 Gate("QkCohalf", (2, 1), 16, fn=lambda a, b: a ^ b, size=1000, unit="mac:qk"),
+                 Gate("Filler", (1,), 16, fn=lambda a: a, size=6000, unit="alu:fx1")],
                 (3,), {0: "x", 1: "w"}, unit="mac:fp8", weights={"mac:qk": 1.25})
-    assert c.evaluate({"x": 3, "w": 4})[3] == 13 ^ 4 and c.work == 4000 + 1.25 * 1000
+    assert c.evaluate({"x": 3, "w": 4})[3] == 13 ^ 4 and c.work == 4000 + 1.25 * 1000 + 6000
     dc = datacenter()
-    rates = {"mac:fp8": Assumption("a.gpu.fp8", 1e6, "MAC/s"), "mac:qk": Assumption("a.gpu.qk", 5e5, "MAC/s")}
+    rates = {"mac:fp8": Assumption("a.gpu.fp8", 1e6, "MAC/s"), "mac:qk": Assumption("a.gpu.qk", 5e5, "MAC/s"),
+             "alu:fx1": Assumption("a.gpu.alu", 1e6, "op/s")}
     dc.blocks[0] = Block("a", [replace(dc.blocks[0].devices[0], rate=rates)])
     p = place(c, dc, "a.gpu", deliver="world", x="world")
     profile = p.public(Plan(EPOCH))
-    assert profile.work == {"a": {"mac:fp8": 4000, "mac:qk": 1000}, "b": {}}
-    a = account(audit(run(p, {"x": 3, "w": 4}, Plan(EPOCH)), profile), profile).blocks[0]
-    assert a.credited == 5250 and a.busy == pytest.approx((4000 / 1e6 + 1000 / 5e5) / 16e-3)
-    assert {"a.gpu.fp8", "a.gpu.qk"} <= set(a.assumptions)
+    assert profile.work == {"a": {"mac:fp8": 4000, "mac:qk": 1000, "alu:fx1": 6000}, "b": {}}
+    acc = account(audit(run(p, {"x": 3, "w": 4}, Plan(EPOCH)), profile), profile)
+    a = acc.blocks[0]
+    mac = (4000 / 1e6 + 1000 / 5e5) / 16e-3
+    assert a.credited == 11250 and a.loads == pytest.approx({"mac": mac, "alu": 6000 / 1e6 / 16e-3})
+    assert a.busy == pytest.approx(max(a.loads.values())) and a.busy < sum(a.loads.values())
+    assert acc.sound and {x.resource for x in acc.credits} == {"compute:mac", "compute:alu"}
+    assert {"a.gpu.fp8", "a.gpu.qk", "a.gpu.alu"} <= set(a.assumptions)
 
 
 def test_a_boundary_link_without_a_certifier_breaks_coverage():
@@ -283,7 +291,7 @@ def test_the_joint_ledger_credits_each_units_time_and_memory_once(setup):
     assert account(audit(run(crowded, INPUTS, one), crowded.public(one)), crowded.public(one)).sound
     night = Plan(EPOCH, wipes=wipes("b.gpu"))
     honest = account(audit(run(p, INPUTS, night), p.public(night)), p.public(night))
-    assert honest.sound and {(x.unit, x.resource) for x in honest.credits} == {("a", "compute"), ("b.gpu", "held")}
+    assert honest.sound and {(x.unit, x.resource) for x in honest.credits} == {("a", "compute:gate"), ("b.gpu", "held")}
     twice = Ledger().add(honest).add(honest)
     assert not twice.sound and [(u, r, i) for u, r, i, _, _ in twice.joint()] == [("b.gpu", "held", Interval(0, 2))]
 

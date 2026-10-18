@@ -26,8 +26,9 @@ answered its sample by the deadline, and none when the prover could rebuild the 
 advice, timing advice, inputs, every refused port-window charged at its link's full capacity, so it fails closed, and
 everything a block out for maintenance held), and the failure probability (the sum of the claims' deltas).
 
-Every claim's credit is also a `Credit` on a unit: a block's compute in block-ticks of its devices' time, a store's
-device the bits read from it and the bit-ticks it held. `capacity` gives each unit's resources a tick by the
+Every claim's credit is also a `Credit` on a unit: a block's compute in block-ticks of each facet of its devices
+(kinds on one facet add up, kinds on different facets run at once), a store's device the bits read from it and the
+bit-ticks it held over the interval the claim proves (a snapshot proves an instant, and carries none). `capacity` gives each unit's resources a tick by the
 declaration, and an account whose credits exceed them anywhere (`overcredited`, by `double_credit`, Horn's interval
 test) is unsound. A `Ledger` joins accounts of successive epochs or of overlapping audits, and applies the same rule
 across them (`joint`): one device's time, bandwidth and memory are credited once.
@@ -51,11 +52,18 @@ FLEET_CLOSED = Assumption("fleet-closed", 1, "premise", "declared")
 SALT_CUSTODY = Assumption("salt-custody", 384, "bits", "declared")
 
 
+def facet(kind: str) -> str:
+    """The part of a device a kind of work runs on: a kind is `<facet>:<detail>`, so `mac:fp8` and `mac:bf16` share
+    the tensor cores and add up, while kinds on different facets (an ALU filler beside them) run at once."""
+    return kind.split(":")[0]
+
+
 @dataclass
 class BlockAccount:
     block: str
     credited: float
-    #: the share of the epoch the credited work needs on the block's devices, at their declared rates for each kind
+    #: the share of the epoch the credited work needs on the block's devices: each facet's kinds at their declared rates
+    #: added up, and the busiest facet's share (`loads` has each)
     busy: float
     outsourceable: float
     carried: float
@@ -65,6 +73,8 @@ class BlockAccount:
     assumptions: list[str] = field(default_factory=list)
     #: for a block with a salt in its certifier's custody, k: the bits that could carry it out before registration
     custody: float | None = None
+    #: each facet's share of the epoch
+    loads: dict[str, float] = field(default_factory=dict)
 
     @property
     def headroom(self) -> float:
@@ -197,7 +207,10 @@ def account(claims: list[Claim], profile: Profile, assume: tuple[Assumption, ...
     for b in dc.blocks:
         work = profile.work[b.name] if credited[b.name] else {}
         rates = {k: sum(float(d.rate[k]) for d in b.devices if k in d.rate) for k in work}
-        busy = sum(n / rates[k] if rates[k] else float("inf") for k, n in work.items()) / seconds
+        loads: dict[str, float] = defaultdict(float)
+        for k, n in work.items():
+            loads[facet(k)] += (n / rates[k] if rates[k] else float("inf")) / seconds
+        busy = max(loads.values(), default=0.0)
         carried = sum(max(float(d.residual) if d.residual else 0.0, float(d.memory) - filled[d.name])
                       for d in b.devices if d.memory is not None)
         names = [a.name for d in b.devices for a in [*(d.rate.get(k) for k in work), d.memory, d.residual, d.bandwidth,
@@ -217,7 +230,7 @@ def account(claims: list[Claim], profile: Profile, assume: tuple[Assumption, ...
                 bounds.append(max(credited[b.name] - profile.pinned[b.name], 0.0))
                 names.append(SALT_CUSTODY.name)
         blocks.append(BlockAccount(b.name, credited[b.name], busy, min(bounds), carried, reads[b.name],
-                                   reads_local[b.name], profile.forced[b.name], names, k))
+                                   reads_local[b.name], profile.forced[b.name], names, k, dict(loads)))
 
     links = {repr(port): dc.uplink(port.certifier) for port in dc.ports}
     window_seconds = dc.cadence.seconds(dc.cadence.window_ticks)
@@ -238,7 +251,8 @@ def _credits(claims: list[Claim], profile: Profile, blocks: list[BlockAccount], 
     """What the claims credit each unit: a block its busy share of the epoch, a store's device the bits read from it and
     the bit-ticks it held."""
     epoch, stores = profile.plan.epoch, profile.stores
-    out = [Credit(b.block, "compute", epoch, b.busy * epoch.length) for b in blocks if b.credited]
+    out = [Credit(b.block, f"compute:{f}", epoch, share * epoch.length) for b in blocks if b.credited
+           for f, share in b.loads.items()]
     for c in claims:
         if isinstance(c, (Read, Held)) and inside(c) and c.store not in refused_stores:
             out.append(Credit(stores[c.store].device, "read", c.during, c.bits) if isinstance(c, Read) else
@@ -289,8 +303,9 @@ class Ledger:
 
 @dataclass(frozen=True)
 class Credit:
-    """Work `work` of `resource` an audit credits to `unit` within `during`: a block's `compute` in block-ticks, a
-    device's `read` in bits and its `held` in bit-ticks (`capacity` gives each per tick)."""
+    """Work `work` of `resource` an audit credits to `unit` within `during`: a block's `compute:<facet>` in block-ticks,
+    a device's `read` in bits and its `held` in bit-ticks over the interval the claim proves (`capacity` gives each per
+    tick; a unit with no capacity for a resource can give it nothing)."""
 
     unit: str
     resource: str
@@ -299,11 +314,11 @@ class Credit:
 
 
 def capacity(dc: Datacenter) -> dict[tuple[str, str], float]:
-    """What each unit can give each resource in one tick, by the declaration: a block one tick of its devices' time
-    (`compute`, in block-ticks), a device its read bandwidth (`read`, in bits) and its memory (`held`, in bits, so
-    bit-ticks a tick)."""
+    """What each unit can give each resource in one tick, by the declaration: a block one tick of each facet of its
+    devices (`compute:<facet>`, in block-ticks), a device its read bandwidth (`read`, in bits) and its memory (`held`,
+    in bits, so bit-ticks a tick)."""
     tick = dc.cadence.seconds(1)
-    out = {(b.name, "compute"): 1.0 for b in dc.blocks}
+    out = {(b.name, f"compute:{facet(k)}"): 1.0 for b in dc.blocks for d in b.devices for k in d.rate}
     for d in dc.devices.values():
         if d.bandwidth is not None:
             out[d.name, "read"] = float(d.bandwidth) * tick
@@ -328,6 +343,7 @@ def double_credit(credits: list[Credit], capacity: dict[tuple[str, str], float])
                 if b <= a:
                     continue
                 inside = sum(c.work for c in cs if a <= c.during.start and c.during.end <= b)
-                if inside > capacity[u, r] * (b - a):
-                    out.append((u, r, Interval(a, b), inside, capacity[u, r] * (b - a)))
+                possible = capacity.get((u, r), 0.0) * (b - a)
+                if inside > possible:
+                    out.append((u, r, Interval(a, b), inside, possible))
     return out
