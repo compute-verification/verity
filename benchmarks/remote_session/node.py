@@ -87,7 +87,8 @@ class _Pointer:
     """A device range as `torch.as_tensor` takes it (`__cuda_array_interface__`)."""
 
     def __init__(self, ptr: int, n: int) -> None:
-        self.__cuda_array_interface__ = {"shape": (n,), "typestr": "|u1", "data": (ptr, False), "version": 2}
+        self.__cuda_array_interface__ = {"shape": (n,), "typestr": "|u1", "data": (ptr, False), "strides": None,
+                                         "version": 2}
 
 
 def open_arena(torch, export: dict, index: int):
