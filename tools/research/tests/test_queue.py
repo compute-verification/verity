@@ -830,13 +830,16 @@ def test_the_preflight_marks_a_head_that_merges_onto_next_cleanly_and_a_failure_
     there, a fixture this machine never fetched) isn't the PR's."""
     from research.queue import MarkOnly, StoreLabels, ready
 
-    _preflight_main(world, {"BROKEN_DOC_PATH": ""})
+    h1 = _preflight_main(world, {"BROKEN_DOC_PATH": ""})
     world.gh.put(2, h2 := world.change({"pkg/tests/test_more.py": "def test_more():\n    pass\n"}), ready=False)
     assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=_preflight(world)) == 0, capsys.readouterr().err
     said = next(s for s in world.logs if "preflight" in s)
     assert f"#2 at {h2[:12]} merged onto `next` at" in said and "nothing refused" in said and "collected 2 suite(s)" in said
     assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is True
     assert _no_worktree_left(world)
+    world.logs.clear()                                         # #1, already on `next`, merges onto what's below its merge there
+    assert ready(world.gh, world.store, 1, "lane-1", MarkOnly(), preflight=_preflight(world)) == 0, capsys.readouterr().err
+    assert f"merged onto `next` below its merge of #1 at {h1[:8]}" in next(s for s in world.logs if "preflight" in s)
 
 
 def test_the_preflight_refuses_a_head_that_conflicts_with_next_naming_the_paths_and_the_pr_that_touched_them(world, capsys):
@@ -889,7 +892,6 @@ def test_the_preflight_refuses_a_head_containing_an_open_pr_that_isnt_admitted_a
     from research.queue import MarkOnly, ready
 
     world.with_store_remote()
-    _move_main(world, PREFLIGHT_FILES)
     world.gh.put(5, parent := world.change({"x.txt": "x\n"}), ready=False)
     world.gh.put(4, world.change({"y.txt": "y\n"}, base=parent), ready=False)
     pre = _preflight(world)

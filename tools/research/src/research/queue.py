@@ -1199,7 +1199,7 @@ class Preflight:
         members = chain_of(self.repo, main, tip)
         if own := next((m for m in members if m.pr == pr.number), None):
             below = _out(self.repo, "rev-parse", f"{own.commit}^1")
-            return below, f"`{BRANCH}` below #{pr.number}'s old head {own.head[:8]} ({below[:12]})", members[:members.index(own)]
+            return below, f"`{BRANCH}` below its merge of #{pr.number} at {own.head[:8]} ({below[:12]})", members[:members.index(own)]
         return tip, f"`{BRANCH}` at {tip[:12]}", members
 
     def _contained(self, pr: PR, prs: list[PR]) -> list[str]:
