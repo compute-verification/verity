@@ -7,7 +7,8 @@ JSON lines on stdout, one a case ({"case", "ok", ...}), then a summary; exit sta
 hashlib (SHA-512 and its compression), ``rowleaf`` (sha512/row/v2, sha512/row-seg/v1), ``hm96.SHA512`` and ``merkle``
 (the hm96 leaf, frame-v3-sha512's leaf, pad, node, empty root and levels), ``audit`` (A's tree, the transcript tree and
 their ChaCha20 salts), ``pearl_c`` (row digests, row seeds, tile leaves), commit_gpu's ``reference.prf_salt`` (the PRF salt
-source) and verity_vllm's ``serving_rows.salts`` (RFC 8439 salts; the audit identity below when it doesn't import).
+source) and verity_vllm's ``serving_rows.salts`` (RFC 8439 salts; the audit identity below when it doesn't import). Openings
+are checked by ``merkle.verify_opening`` and ``multiproof.verify_multiproof``, and against ``MerkleTree.open`` and ``multiproof``.
 """
 from __future__ import annotations
 
@@ -29,11 +30,16 @@ import vclib  # noqa: E402
 from verity.core.protocols.pouw import audit  # noqa: E402
 from verity.core.protocols.pouw.schemes import pearl_c  # noqa: E402
 from verity.ml.commitments import RangeIndexedDomain, hm96  # noqa: E402
-from verity.ml.commitments.merkle import CommitmentDomain, _message, _uint, tree_levels  # noqa: E402
-from verity.ml.commitments.rowleaf import sha512_row_seg_digest, sha512_row_v2_digest  # noqa: E402
+from verity.ml.commitments.limits import VerificationLimits  # noqa: E402
+from verity.ml.commitments.merkle import CommitmentDomain, MerkleTree, _message, _uint, tree_levels, verify_opening  # noqa: E402
+from verity.ml.commitments.merkle import Opening as MerkleOpening  # noqa: E402
+from verity.ml.commitments.multiproof import multiproof, multiproof_from_paths, verify_multiproof  # noqa: E402
+from verity.ml.commitments.rowleaf import (ROLE_X, SCHEMA_HM96_SHA512_ROW, row_bytes, sha512_row_digest,  # noqa: E402
+                                           sha512_row_seg_digest, sha512_row_v2_digest)
 
 KEY = hm96.SHA512.default_key
 SALT = hm96.SHA512.salt_bytes
+LIMITS = VerificationLimits()
 
 
 def _load(name: str, path: Path):
@@ -46,16 +52,20 @@ def _load(name: str, path: Path):
 CG_REF = _load("commit_gpu_reference", ROOT / "benchmarks/pouw/commit_gpu/reference.py")
 
 
+def rfc_salts_identity(key: bytes, nonce: int, n: int) -> bytes:
+    """RFC 8439's block (32-bit counter, 12-byte nonce n0 n1 n2) is audit's (64-bit counter, 64-bit nonce) at counter = ctr +
+    2^32 n0, nonce = n1 + 2^32 n2: the n salts of serving_rows.salts(key, nonce, n) from audit.chacha20_block."""
+    n0, n1 = nonce & 0xFFFFFFFF, nonce >> 32
+    return b"".join(audit.chacha20_block(key, b + (n0 << 32), n1) for b in range(3 * n))
+
+
 def rfc_salts(key: bytes, nonce: int, n: int) -> tuple[bytes, str]:
     try:
         sys.path.insert(0, str(ROOT / "integrations/vllm"))
         from verity_vllm.commit.serving_rows import salts
         return salts(key, nonce, n), "serving_rows.salts"
     except Exception:  # noqa: BLE001 - its numpy-side dependencies may be absent on a node
-        # RFC 8439's block (32-bit counter, 12-byte nonce n0 n1 n2) is audit's (64-bit counter, 64-bit nonce) at
-        # counter = ctr + 2^32 n0, nonce = n1 + 2^32 n2
-        n0, n1 = nonce & 0xFFFFFFFF, nonce >> 32
-        return b"".join(audit.chacha20_block(key, b + (n0 << 32), n1) for b in range(3 * n)), "audit.chacha20_block identity"
+        return rfc_salts_identity(key, nonce, n), "audit.chacha20_block identity"
 
 
 class Dev:
@@ -271,11 +281,13 @@ def case_hm96_rows(d: Dev, rng: random.Random, quick: bool) -> None:
             width = d.lib.tree_width(n)
             for form, fname in ((vclib.FORM_SPLIT, "split"), (vclib.FORM_FUSED, "fused")):
                 lv = d.buf(d.lib.tree_bytes(n))
-                scratch = d.buf(d.lib.commit_scratch_bytes(n))
+                scratch, bc = d.buf(d.lib.commit_scratch_bytes(n)), d.buf(128 * n)
                 for _ in range(2):   # twice: the second call must not depend on the first's leftovers
-                    d.lib.commit_rows_launch(plan.ptr, tab, rp, st, sp, n, lv, scratch, form, d.s)
+                    d.lib.commit_rows_launch(plan.ptr, tab, rp, st, sp, n, lv, bc, scratch, form, d.s)
                 ok, where = same_levels(levels_of(d.down(lv, d.lib.tree_bytes(n)), width), want)
-                report("hm96/row-v2/commit", ok, salt=src[0], salt_ref=ref, n=n, form=fname, where=where)
+                got_bc = chunks(d.down(bc, 128 * n), 128)
+                report("hm96/row-v2/commit", ok and got_bc == want_bc, salt=src[0], salt_ref=ref, n=n, form=fname, where=where,
+                       bc_diff=first_diff(got_bc, want_bc))
             # the phases one by one, with b || c and h
             lv, scratch = d.buf(d.lib.tree_bytes(n)), d.buf(d.lib.salt_scratch_bytes(width))
             bc, hs = d.buf(128 * n), d.buf(64 * n)
@@ -488,7 +500,7 @@ def case_graph(d: Dev, rng: random.Random, quick: bool) -> None:
     ys = [CG_REF.prf_salt(ks, p) for p in range(n)]
     for form, fname in ((vclib.FORM_SPLIT, "split"), (vclib.FORM_FUSED, "fused")):
         lv, sc = d.buf(d.lib.tree_bytes(n)), d.buf(d.lib.commit_scratch_bytes(n))
-        graph = d.cuda.capture(d.s, lambda s: d.lib.commit_rows_launch(plan.ptr, tab, rp, st, None, n, lv, sc, form, s))
+        graph = d.cuda.capture(d.s, lambda s: d.lib.commit_rows_launch(plan.ptr, tab, rp, st, None, n, lv, None, sc, form, s))
         ok_all = True
         for _ in range(2):
             rows = rows_of(rng, n, n_bits)
@@ -499,7 +511,125 @@ def case_graph(d: Dev, rng: random.Random, quick: bool) -> None:
         report("graph/commit-replay", ok_all, form=fname, n=n, replays=2)
 
 
-CASES = [case_sha512, case_compress, case_rows, case_frame, case_arity, case_hm96_x, case_hm96_rows, case_pearl, case_graph]
+# --- openings --------------------------------------------------------------------------------------------------------
+
+
+def open_records(d: Dev, plan: vclib.Plan, tab, x, bc, sp, lv: int, n: int, positions: list[int], graph: bool = False) -> list[vclib.Opening]:
+    m, size = len(positions), d.lib.open_bytes(n)
+    pp, out = d.up(struct.pack(f"<{m}I", *positions)), d.buf(size * m)
+
+    def launch(s: int) -> None:
+        d.lib.open_launch(plan.ptr, tab, x, bc, sp, lv, n, pp, m, out, s)
+    if graph:
+        d.cuda.replay(d.cuda.capture(d.s, launch), d.s)
+    else:
+        launch(d.s)
+    return vclib.parse_openings(d.down(out, size * m), n, m)
+
+
+def check_openings(dom: CommitmentDomain, commitment, schema: str, recs: list[vclib.Opening], n: int, want_leaves, want_salt, want_bc,
+                   value_of) -> dict:
+    """Each record against the reference; verify_opening on it, and on it with a sibling or the value changed; the paths
+    gathered into a multiproof verify_multiproof accepts. What failed, by check (the first position each)."""
+    bad: dict = {}
+    paths, leaves = {}, {}
+    for r in recs:
+        p = r.position
+        if p >= n:
+            if r.offset is not None or any(r.salt + r.bc + r.leaf + b"".join(r.path)):
+                bad.setdefault("outside", p)
+            continue
+        if r.offset != 64 * p:
+            bad.setdefault("offset", p)
+        if (r.salt != want_salt(p)) if want_salt else any(r.salt):
+            bad.setdefault("salt", p)
+        if (r.bc != want_bc(p)) if want_bc else any(r.bc):
+            bad.setdefault("bc", p)
+        if r.leaf != want_leaves[p]:
+            bad.setdefault("leaf", p)
+        v = value_of(r)
+        if not verify_opening(dom, commitment, MerkleOpening(p, v, r.path), schema, LIMITS):
+            bad.setdefault("verify_opening", p)
+        if verify_opening(dom, commitment, MerkleOpening(p, bytes([v[0] ^ 1]) + v[1:], r.path), schema, LIMITS):
+            bad.setdefault("changed value accepted", p)
+        if r.path and verify_opening(dom, commitment, MerkleOpening(p, v, (bytes([r.path[0][0] ^ 1]) + r.path[0][1:],) + r.path[1:]),
+                                     schema, LIMITS):
+            bad.setdefault("changed sibling accepted", p)
+        paths[p], leaves[p] = r.path, r.leaf
+    if paths and not verify_multiproof(commitment.root, n, dom.domain_id, leaves, multiproof_from_paths(n, paths), hash="sha512"):
+        bad["verify_multiproof"] = True
+    return bad
+
+
+def opened_positions(rng: random.Random, n: int) -> list[int]:
+    return sorted({0, n - 1, *(rng.randrange(n) for _ in range(6))}) + [n]
+
+
+def case_open(d: Dev, rng: random.Random, quick: bool) -> None:
+    """vc_open_launch over trees the library committed: verity_vllm's serving rows (u16 words, sha512/row/v1, hm96-sha512/row/v1;
+    RFC 8439 salts given as serving_rows expands them, or keyed, and b || c retained by the commit), A's tree (b || c from x and
+    y in the open kernel) and a frame-only tree. One position past the tree is asked for each time and must come back flagged."""
+    n_words, schema = 2048, SCHEMA_HM96_SHA512_ROW
+    for n in ((1, 2, 300) if quick else (1, 2, 3, 300, 1025)):
+        dom = CommitmentDomain(rng.randbytes(64), -1, RangeIndexedDomain(0, n), hash="sha512")
+        words = [[rng.getrandbits(16) for _ in range(n_words)] for _ in range(n)]
+        rows = [row_bytes(w, 16) for w in words]
+        xs = [sha512_row_digest(w, 16, ROLE_X) for w in words]
+        key, port = rng.randbytes(32), rng.randrange(1 << 20)
+        raw, ref = rfc_salts(key, port, n)
+        ys = chunks(raw, SALT)
+        bcs = [hm96.SHA512.commit_string(KEY, x, y) for x, y in zip(xs, ys)]
+        tree = MerkleTree(dom, {i: hm96.SHA512.tree_leaf(KEY, b) for i, b in enumerate(bcs)}, lambda _: schema)
+        positions = opened_positions(rng, n)
+        for src in (("given",), ("chacha-rfc", key, port)):
+            plan = d.lib.plan(vclib.served_rows(dom.domain_id, n_words, salt=src))
+            tab = d.tables(plan)
+            sp = d.up(raw) if src[0] == "given" else None
+            lv, bc = d.buf(d.lib.tree_bytes(n)), d.buf(128 * n)
+            d.lib.commit_rows_launch(plan.ptr, tab, d.up(b"".join(rows)), 2 * n_words, sp, n, lv, bc, d.buf(d.lib.commit_scratch_bytes(n)),
+                                     vclib.FORM_SPLIT, d.s)
+            ok_tree, where = same_levels(levels_of(d.down(lv, d.lib.tree_bytes(n)), d.lib.tree_width(n)), tree._levels)
+            recs = open_records(d, plan, tab, None, bc, sp, lv, n, positions, graph=src[0] != "given")
+            bad = check_openings(dom, tree.commitment, schema, recs, n, tree._levels[0], lambda p: ys[p], lambda p: bcs[p],
+                                 lambda r: hm96.SHA512.tree_leaf(KEY, r.bc))
+            inside = [r for r in recs if r.offset is not None]
+            same_mp = multiproof(tree, [r.position for r in inside]) == multiproof_from_paths(n, {r.position: r.path for r in inside})
+            report("open/served-rows", ok_tree and not bad and same_mp, salt=src[0], salt_ref=ref, n=n, opened=len(positions),
+                   graph=src[0] != "given", where=where, bad=bad or None, multiproof_is_reference=same_mp)
+    for k, n in ((256, 5), (1024, 40 if quick else 300)):
+        binding, unit, key = rng.randbytes(64), rng.randrange(1 << 20), rng.randbytes(32)
+        rows = f32_rows(rng, n, k)
+        tree = audit.commit_rows(binding, unit, rows, hash=audit.HM96, salt_key=key, nonce=unit)
+        plan = d.lib.plan(vclib.hm96_digests(tree.domain.domain_id, salt=("chacha64", key, unit), row_bits=32 * k))
+        tab, width = d.tables(plan), d.lib.tree_width(n)
+        x, lv, sc = d.buf(64 * n), d.buf(d.lib.tree_bytes(n)), d.buf(d.lib.salt_scratch_bytes(width))
+        d.lib.rows_launch(plan.ptr, tab, d.up(b"".join(rows)), 4 * k, n, x, d.buf(d.lib.rows_scratch_bytes(plan.ptr, n)), d.s)
+        d.lib.salts_launch(plan.ptr, tab, None, 0, width, n, sc, lv, d.s)
+        d.lib.leaves_x_launch(plan.ptr, x, 0, n, n, sc, lv, None, None, d.s)
+        d.lib.tree_launch(plan.ptr, lv, n, d.s)
+        recs = open_records(d, plan, tab, x, None, None, lv, n, opened_positions(rng, n))
+        ys = {r.position: audit.hm96_salt(key, unit, r.position) for r in recs if r.offset is not None}
+        bad = check_openings(tree.domain, tree.commitment, audit.ROW_SCHEMA, recs, n, tree._levels[0], lambda p: ys[p],
+                             lambda p: hm96.SHA512.commit_string(KEY, sha512_row_seg_digest(rows[p], 32 * k), ys[p]),
+                             lambda r: rows[r.position] + r.salt)
+        same = all(tree.open(r.position) == MerkleOpening(r.position, rows[r.position] + r.salt, r.path) for r in recs if r.offset is not None)
+        report("open/A-tree", not bad and same, k=k, n=n, bad=bad or None, same_as_tree_open=same)
+    for n in (1, 70):
+        schema = "hm96-sha512/row/v2"
+        dom = domain(rng, n)
+        vals = [rng.randbytes(64) for _ in range(n)]
+        tree = MerkleTree(dom, dict(enumerate(vals)), lambda _: schema)
+        plan = d.lib.plan(vclib.frame_spec(dom.domain_id, schema))
+        width = d.lib.tree_width(n)
+        lv = d.buf(d.lib.tree_bytes(n))
+        d.lib.frame_leaves_launch(plan.ptr, d.up(b"".join(vals)), 0, width, n, lv, d.s)
+        d.lib.tree_launch(plan.ptr, lv, n, d.s)
+        recs = open_records(d, plan, None, None, None, None, lv, n, opened_positions(rng, n))
+        bad = check_openings(dom, tree.commitment, schema, recs, n, tree._levels[0], None, None, lambda r: vals[r.position])
+        report("open/frame", not bad, n=n, bad=bad or None)
+
+
+CASES = [case_sha512, case_compress, case_rows, case_frame, case_arity, case_hm96_x, case_hm96_rows, case_pearl, case_graph, case_open]
 
 
 def main() -> int:

@@ -111,6 +111,13 @@ def hm96_rows(domain_id: bytes, row_bits: int, salt: tuple = ("given",), schema:
     return Spec(**row_v2_spec(domain_id, row_bits, schema=schema.encode(), **_hm96(), **_salt(salt)))
 
 
+def served_rows(domain_id: bytes, n_words: int, salt: tuple = ("given",)) -> Spec:
+    """verity_vllm's serving rows: u16 words, x their sha512/row/v1 digest (role x), hm96-sha512/row/v1 leaves."""
+    from verity.ml.commitments.rowleaf import ROLE_X, SCHEMA_HM96_SHA512_ROW, sha512_row_prefix
+    return Spec(domain_id=domain_id, row_scheme=ROW_V2, row_bits=16 * n_words, row_prefix=sha512_row_prefix(ROLE_X, 16, n_words),
+                schema=SCHEMA_HM96_SHA512_ROW.encode(), **_hm96(), **_salt(salt))
+
+
 def hm96_digests(domain_id: bytes, salt: tuple = ("given",), schema: str = "hm96-sha512/row-seg/v1", row_bits: int = 0) -> Spec:
     """hm96-sha512 leaves over given 64-byte inner digests x; with row_bits, the plan also digests sha512/row-seg/v1 rows (A's tree)."""
     rows = row_seg_spec(domain_id, row_bits) if row_bits else {"domain_id": domain_id}
@@ -180,8 +187,39 @@ _SIGS = {
     "vc_tree_arity_width": (_U64, [_U64, _I]),
     "vc_tree_arity_launch": (_I, [_P, _P, _U64, _I, _P]),
     "vc_commit_scratch_bytes": (_U64, [_U64]),
-    "vc_commit_rows_launch": (_I, [_P, _P, _P, _U64, _P, _U64, _P, _P, _I, _P]),
+    "vc_commit_rows_launch": (_I, [_P, _P, _P, _U64, _P, _U64, _P, _P, _P, _I, _P]),
+    "vc_open_bytes": (_U64, [_U64]),
+    "vc_open_launch": (_I, [_P, _P, _P, _P, _P, _P, _U64, _P, _U64, _P, _P]),
 }
+
+OPEN_HEAD = 16 + 192 + 128 + 64
+
+
+@dataclass(frozen=True)
+class Opening:
+    """One vc_open_launch record: ``offset`` is the leaf's byte offset in the levels (None outside the tree)."""
+
+    position: int
+    offset: int | None
+    salt: bytes
+    bc: bytes
+    leaf: bytes
+    path: tuple[bytes, ...]
+
+
+def parse_openings(raw: bytes, n_leaves: int, m: int) -> list[Opening]:
+    """vc_open_launch's m records, read back from the device (``raw``: m * vc_open_bytes(n_leaves) bytes)."""
+    depth = (n_leaves - 1).bit_length() if n_leaves > 1 else 0
+    size = OPEN_HEAD + 64 * depth
+    if len(raw) != size * m:
+        raise ValueError(f"{m} openings of a {n_leaves}-leaf tree are {size * m} bytes, not {len(raw)}")
+    out = []
+    for i in range(m):
+        r = raw[size * i:size * (i + 1)]
+        pos, off = int.from_bytes(r[:8], "little"), int.from_bytes(r[8:16], "little")
+        out.append(Opening(pos, None if off == (1 << 64) - 1 else off, r[16:208], r[208:336], r[336:400],
+                           tuple(r[OPEN_HEAD + 64 * k:OPEN_HEAD + 64 * (k + 1)] for k in range(depth))))
+    return out
 
 
 class LaunchError(RuntimeError):

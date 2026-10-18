@@ -761,6 +761,65 @@ __global__ void __launch_bounds__(THREADS) k_frame_leaves(const __grid_constant_
   st_be(out + 64 * i, o, 8);
 }
 
+constexpr u64 OPEN_HEAD = 16 + 192 + 128 + 64;   // position, leaf offset, y, b || c, the leaf; the path follows
+
+DEV void cp16(uint8_t* d, const uint8_t* s, int n16) {
+  for (int k = 0; k < n16; ++k) reinterpret_cast<uint4*>(d)[k] = ldg16(s + 16 * k);
+}
+DEV void zero16(uint8_t* d, u64 n16) {
+  for (u64 k = 0; k < n16; ++k) reinterpret_cast<uint4*>(d)[k] = make_uint4(0, 0, 0, 0);
+}
+
+// An opening a thread (vc_open_launch's record): the salt from the plan's source, b || c, the leaf and its path from the levels.
+__global__ void __launch_bounds__(64) k_open(const __grid_constant__ LeafK K, int hm, const uint8_t* __restrict__ tab,
+                                             const uint8_t* __restrict__ x, const uint8_t* __restrict__ bc,
+                                             const uint8_t* __restrict__ salts, const uint8_t* __restrict__ levels, u64 n, int depth,
+                                             const u32* __restrict__ positions, u64 m, uint8_t* __restrict__ out) {
+  const u64 i = (u64)blockIdx.x * blockDim.x + threadIdx.x;
+  if (i >= m) return;
+  const u64 pos = positions[i], rec = OPEN_HEAD + 64ull * depth;
+  uint8_t* r = out + rec * i;
+  reinterpret_cast<u64*>(r)[0] = pos;
+  reinterpret_cast<u64*>(r)[1] = pos < n ? 64 * pos : ~0ull;
+  if (pos >= n) {
+    zero16(r + 16, (rec - 16) / 16);
+    return;
+  }
+  if (hm) {
+    u64 Y[24];
+    salt_of(K, salts, pos, pos, Y);
+    st_be(r + 16, Y, 24);
+    if (bc) {
+      cp16(r + 208, bc + 128 * pos, 8);
+    } else if (x) {
+      u64 xs[8], my[8], c[8], B[16];
+      u32 mk[16];
+      ld_be(x + 64 * pos, xs, 8);
+      mask_nib(tab, Y, mk);
+      salt_digest(K, Y, c);
+      mask_words(mk, my);
+#pragma unroll
+      for (int w = 0; w < 8; ++w) {
+        B[w] = xs[w] ^ my[w];
+        B[8 + w] = c[w];
+      }
+      st_be(r + 208, B, 16);
+    } else {
+      zero16(r + 208, 8);
+    }
+  } else {
+    zero16(r + 16, 20);
+  }
+  cp16(r + 336, levels + 64 * pos, 4);
+  u64 off = 0, w = 1ull << depth, cur = pos;
+  for (int l = 0; l < depth; ++l) {
+    cp16(r + OPEN_HEAD + 64 * l, levels + 64 * (off + (cur ^ 1)), 4);
+    off += w;
+    w >>= 1;
+    cur >>= 1;
+  }
+}
+
 // level `level` + 1 from level `level`, a thread a parent
 __global__ void __launch_bounds__(NODE_THREADS) k_level(const __grid_constant__ NodeK N, const uint8_t* __restrict__ in,
                                                         uint8_t* __restrict__ out, u64 n_out, int level, u64 first_index) {
@@ -1269,7 +1328,7 @@ int vc_tree_arity_launch(const void* plan, uint8_t* levels, uint64_t n_leaves, i
 uint64_t vc_commit_scratch_bytes(uint64_t n) { return REC * n; }
 
 int vc_commit_rows_launch(const void* plan, const void* tables, const uint8_t* rows, uint64_t stride, const uint8_t* salts,
-                          uint64_t n, uint8_t* levels, void* scratch, int form, cudaStream_t st) {
+                          uint64_t n, uint8_t* levels, uint8_t* bc, void* scratch, int form, cudaStream_t st) {
   const Plan* p = plan_of(plan);
   if (!p || !p->has_hm96 || p->row.scheme != VC_ROW_V2) return -1;
   if (!n) return vc_tree_launch(plan, levels, 0, st);
@@ -1277,13 +1336,28 @@ int vc_commit_rows_launch(const void* plan, const void* tables, const uint8_t* r
   if (form == VC_FORM_AUTO) form = VC_FORM_SPLIT;
   int e;
   if (form == VC_FORM_FUSED) {
-    e = vc_leaves_fused_launch(plan, tables, rows, stride, nullptr, salts, 0, width, n, levels, nullptr, nullptr, st);
+    e = vc_leaves_fused_launch(plan, tables, rows, stride, nullptr, salts, 0, width, n, levels, bc, nullptr, st);
   } else {
     e = vc_salts_launch(plan, tables, salts, 0, width, n, scratch, levels, st);
-    if (!e) e = vc_leaves_rows_launch(plan, rows, stride, 0, n, n, scratch, levels, nullptr, nullptr, st);
+    if (!e) e = vc_leaves_rows_launch(plan, rows, stride, 0, n, n, scratch, levels, bc, nullptr, st);
   }
   if (e) return e;
   return vc_tree_launch(plan, levels, n, st);
+}
+
+uint64_t vc_open_bytes(uint64_t n_leaves) { return OPEN_HEAD + 64ull * (n_leaves ? depth_of(n_leaves) : 0); }
+
+int vc_open_launch(const void* plan, const void* tables, const uint8_t* x, const uint8_t* bc, const uint8_t* salts,
+                   const uint8_t* levels, uint64_t n_leaves, const uint32_t* positions, uint64_t m, uint8_t* out, cudaStream_t st) {
+  const Plan* p = plan_of(plan);
+  if (!p || !levels || !positions || !out || n_leaves > (1ull << 32)) return -1;
+  if (p->has_hm96 && p->leaf.salt_src == VC_SALT_GIVEN && !salts) return -1;
+  if (p->has_hm96 && !bc && x && !tables) return -1;
+  if (!m) return 0;
+  const int depth = n_leaves ? depth_of(n_leaves) : 0;
+  k_open<<<blocks(m, 64), 64, 0, st>>>(p->leaf, p->has_hm96, static_cast<const uint8_t*>(tables), x, bc, salts, levels, n_leaves,
+                                       depth, positions, m, out);
+  return rc();
 }
 
 }  // extern "C"
