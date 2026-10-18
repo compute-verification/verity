@@ -3,7 +3,8 @@ import Models.Accounting.Guarantees.DeclaredCircuit
 import Proofs.Accounting.Stacking
 
 /-! The proof of `Accounting.Guarantees.DeclaredCircuitRequirement`, from its pieces: a carrier of a declared
-circuit's is within its census over its life (`Provenance.OfCircuit.budget`), a uniform function restricted along an
+circuit's is within its census over its life (`Provenance.OfCircuit.budget`), which the stacking property bounds by its
+caps a certified byte and its run-input bytes a window, a uniform function restricted along an
 injection is uniform (`pr_comp_embedding`), and key binding moves a store whose layout is steered after the coins to
 uniform blocks at `2^a` times their event, `δ` once (`KeyBinding.pr_steered_le`). -/
 

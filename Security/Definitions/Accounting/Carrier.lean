@@ -1,6 +1,7 @@
 import Definitions.Accounting.RateAuditSketchDeployed
 import Definitions.Accounting.RateAuditDeployed
 import Definitions.Accounting.Gates.Codec
+import Definitions.Accounting.Requirement
 import Mathlib.Data.ENat.Lattice
 
 /-!
@@ -45,6 +46,13 @@ read of that circuit's data.
 
 **A steered layout.** `steeredStore` is `coinStore` on a layout that reads the codec and the append coins as well as
 the prefix: the memory map's schedule when inputs chosen after those coins move it.
+
+**A pass on the devices' clocks.** A pass is bound to an engine step (#2378), and a placed execution
+(`Requirement.Placement`) says at which tick each device begins each step. Pass `j` of window `w` on device `d` is
+the `τ` ticks from the one at which `d` begins the pass's step (`Placement.passTicks`), and window `w` on `d` is its
+passes' ticks (`Placement.windowTicks`). On one clock with a placed execution's other windows (compute accounting's
+`region` over ticks), they say which of a device's ticks a pass and a window take. `Placement.Deadlines` asks that no
+device tick be in two windows or in two passes of one window.
 
 **The encode cost.** An `encode` step of `x` bits is charged `encodeBitsCost`: the gate model's `Gates.encodeCost`
 (`Definitions/Accounting/Gates`) of the codec words `x` bits fill, `⊤` when no circuit of the model's restricted class
@@ -299,3 +307,25 @@ noncomputable def encodeBitsCost (F : Gates.Field) (k B εnum εden x : ℕ) : �
   Gates.encodeCost F k B εnum εden ((x + 8 * F.bytes - 1) / (8 * F.bytes))
 
 end Accounting
+
+namespace Accounting.Requirement
+
+variable {L G : Type} {n P : ℕ}
+
+/-- **Pass `j` of window `w` on device `d`'s clock**: the `τ` ticks from the one at which `d` begins the engine step the
+pass is bound to (`bind w j`), the pass's deadline. -/
+def Placement.passTicks (p : Placement L G) (bind : Fin n → Fin P → ℕ) (τ : ℕ) (w : Fin n) (j : Fin P) (d : L) :
+    Finset ℕ :=
+  Finset.Ico (p.ticks d (bind w j)) (p.ticks d (bind w j) + τ)
+
+/-- **Window `w` on device `d`'s clock**: the ticks of its passes. -/
+def Placement.windowTicks (p : Placement L G) (bind : Fin n → Fin P → ℕ) (τ : ℕ) (w : Fin n) (d : L) : Finset ℕ :=
+  Finset.univ.biUnion fun j => p.passTicks bind τ w j d
+
+/-- **The passes keep their deadlines on every device's clock**: on each device, no tick is in two windows or in two
+passes of one window, so each of a device's ticks is taken by at most one pass. -/
+def Placement.Deadlines (p : Placement L G) (bind : Fin n → Fin P → ℕ) (τ : ℕ) : Prop :=
+  ∀ d, (Pairwise fun w w' => Disjoint (p.windowTicks bind τ w d) (p.windowTicks bind τ w' d)) ∧
+    ∀ w, Pairwise fun j j' => Disjoint (p.passTicks bind τ w j d) (p.passTicks bind τ w j' d)
+
+end Accounting.Requirement
