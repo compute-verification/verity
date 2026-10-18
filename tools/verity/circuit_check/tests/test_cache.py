@@ -1057,29 +1057,3 @@ def test_the_task_list_is_reused_only_while_nothing_its_build_could_depend_on_ch
     out = _run(root)
     assert out["hits"] == ["SynOther_v1"] and "task_list" not in out["stats"] and out["stats"]["stored"] == 1
     assert _run(root)["stats"]["task_list"]
-
-
-#: the harness with the checker a copy inside the tree (``checker/circuit_check``), as `src/circuit_check/` is inside the
-#: repository, whose scheduler's peaks the process has read before the checks (`cli.heavy`, as a run of the parallel path does)
-CHECKER = (HARNESS.replace("sys.path.insert(0, str(root))", "sys.path.insert(0, str(root))\nsys.path.insert(0, str(root / 'checker'))")
-           .replace("rep = cli.run(", "cli.heavy()\nrep = cli.run(")
-           .replace('"hits": hits}', '"hits": hits, "checker": cli.__file__}'))
-
-
-def test_the_scheduler_s_peaks_are_in_no_key(tmp_path):
-    """`heavy.json` (`cli.HEAVY`) says only which targets may run beside which (`cli.run`'s scheduler), never what a check
-    computes: an edit to it reuses every target and the task list (17 Oct: `PousSha512Head_v1`'s 161.8 GiB peak was left out
-    of it because adding it made `circuit-check --all` run cold), while an edit to the checker's code still reruns them all."""
-    import shutil
-
-    root = _tree(tmp_path)
-    checker = root / "checker" / "circuit_check"
-    shutil.copytree(REPO / "tools/verity/circuit_check/src/circuit_check", checker,
-                    ignore=shutil.ignore_patterns("__pycache__", "heavy.json"))
-    (checker / "heavy.json").write_text(json.dumps({"SynOther_v1": 20.0}))
-    assert _run(root, CHECKER)["checker"] == str(checker / "cli.py")
-    (checker / "heavy.json").write_text(json.dumps({"SynOther_v1": 20.0, "SynTop_v1": 161.8}))
-    out = _run(root, CHECKER)
-    assert out["hits"] == ["SynOther_v1", "SynTop_v1"] and out["stats"]["task_list"]
-    (checker / "checks.py").write_text((checker / "checks.py").read_text() + "\n# another version of the checker\n")
-    assert _run(root, CHECKER)["hits"] == []

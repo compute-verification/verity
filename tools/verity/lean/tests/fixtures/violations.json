@@ -150,12 +150,6 @@
   "replace": {"Control/Assumptions.lean": ["n + 0 = n", "0 + n = n"]},
   "fails": "assumptions: Control.Hyp's definition in Control.Assumptions changed"
  },
- "verifier_csimp": {
-  "write": {"Control/Bad.lean": "namespace Control\n\ndef gImpl (n : Nat) : Nat := n\n\n@[implemented_by gImpl] def g (n : Nat) : Nat := n\n\ndef f (n : Nat) : Nat := n + 0\n\n@[csimp] theorem f_eq_g : @f = @g := by funext n; rfl\n\nend Control\n"},
-  "replace": {"Control.lean": ["import Control.Thms", "import Control.Thms\nimport Control.Bad"]},
-  "policy": {"verifier": {"entries": ["Control.f"], "allow": ["module:Init"]}},
-  "fails": "verifier: Control.g (@[implemented_by], in Control.Bad) is on the path from Control.f"
- },
  "claim_fails_not_negated": {
   "replace": {"Control/Thms.lean": ["Small_fails : ∃ n, ¬ Small n := ⟨10, by unfold Small; omega⟩",
                                     "Small_fails : ∃ n, Small n := ⟨3, by unfold Small; omega⟩"]},

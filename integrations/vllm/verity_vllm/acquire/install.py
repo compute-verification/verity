@@ -82,8 +82,7 @@ class Installation:
 
 
 class OccurrenceSink:
-    """Counts runtime occurrences per site and records (shape, dtype) of what was seen -- each tensor of a tuple, as a module's whole
-    return (slot `out`) is when it returns several; never reads a value."""
+    """Counts runtime occurrences per site and records (shape, dtype, device) of what was seen; never reads a value."""
 
     def __init__(self) -> None:
         self.counts: dict[tuple[str, str, str], int] = {}
@@ -93,16 +92,15 @@ class OccurrenceSink:
 
     def __call__(self, key: tuple[str, str, str], t: Any) -> None:
         self.counts[key] = self.counts.get(key, 0) + 1
-        ts = [x for x in (t if isinstance(t, (tuple, list)) else (t,)) if getattr(x, "shape", None) is not None]
-        if not ts:
+        shape = getattr(t, "shape", None)
+        if shape is None:
             self.non_tensor[key] = self.non_tensor.get(key, 0) + 1
             return
+        sh = [int(x) for x in shape]
         lst = self.shapes.setdefault(key, [])
-        for x in ts:
-            sh = [int(n) for n in x.shape]
-            if sh not in lst and len(lst) < 64:
-                lst.append(sh)
-            self.dtypes.setdefault(key, set()).add(str(getattr(x, "dtype", "?")).replace("torch.", ""))
+        if sh not in lst and len(lst) < 64:
+            lst.append(sh)
+        self.dtypes.setdefault(key, set()).add(str(getattr(t, "dtype", "?")).replace("torch.", ""))
 
     def to_json(self) -> dict[str, Any]:
         keys = sorted(set(self.counts) | set(self.non_tensor))
@@ -204,8 +202,8 @@ def _values_at(plan: AcquisitionPlan | Mapping[str, Any], site: Site) -> list[st
 
 def apply_plan_to_committer(committer: Any, plan: AcquisitionPlan | Mapping[str, Any]) -> dict[str, Any]:
     """The committer's selection from the plan (`plan_selection`): `_modules` = the producer_output sites' modules
-    (runtime order), `plan_inputs` = the consumer_input sites' modules.  The promoted-member arming (`acquire_inputs` bytes per token)
-    stays the manifest's (commit_delta sets it); the plan must name every armed consumer, else the plan is refused.
+    (runtime order), `plan_inputs` = the consumer_input sites' modules.  The promoted-member arming (`acquire_inputs` bytes per token,
+    `promoted_input_bindings`) stays the manifest's (commit_delta sets it); the plan must name every armed consumer, else the plan is refused.
     A VERITY_SKIP ablation (`committer.skip_classes`) is applied to THIS selection (`apply_skip`, refused by name when it cannot be); the
     record names the dropped modules and the Values left unacquired.  Returns a record."""
     hooks, deferred, _unsupported = _sites_of(plan)

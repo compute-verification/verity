@@ -16,9 +16,9 @@ def row(op, member, hi, *, step=0, spec="X_v1", family="instance_outputs", bound
 def test_classes():
     v1 = [row("m.a", "out", 4), row("m.b", "0", 4), row("m.c", "out", 4), row("m.d", "out", 8), row("fa2.m1/L0", "g1", 9, family="fa2_hidden_m1_stream", rid="*", step="*")]
     v2 = [row("m.a", "out", 4),                                                                           # common
-          row("m.b", "out", 4, boundary={"crossing_rows": 1, "returned_rows": 0}),   # member rename
-          row("m.d", "out", 6, boundary={"crossing_rows": 1, "returned_rows": 0}),   # range
-          row("m.e", "out", 4, boundary={"crossing_rows": 2, "returned_rows": 0}),   # only v2 (crossing)
+          row("m.b", "out", 4, boundary={"structural_member": "out", "crossing_rows": 1, "returned_rows": 0}),   # member rename
+          row("m.d", "out", 6, boundary={"structural_member": "out", "crossing_rows": 1, "returned_rows": 0}),   # range
+          row("m.e", "out", 4, boundary={"structural_member": "out", "crossing_rows": 2, "returned_rows": 0}),   # only v2 (crossing)
           row("fa2.m1/L0", "g1", 9, family="fa2_hidden_m1_stream", rid="*", step="*"),
           row("fa2.m1/L0", "g1", 9, family="fa2_hidden_m1_stream", rid="*", step="*")]                    # same key twice: multiplicity
     c = compare(v1, v2)
@@ -36,7 +36,7 @@ def test_classes():
 
 def test_layer_index_folds_in_summary():
     v1 = []
-    v2 = [row(f"m.layers.{k}.x", "out", 4, boundary={"crossing_rows": 1, "returned_rows": 0}) for k in range(5)]
+    v2 = [row(f"m.layers.{k}.x", "out", 4, boundary={"structural_member": "out", "crossing_rows": 1, "returned_rows": 0}) for k in range(5)]
     s = summarize(compare(v1, v2))
     assert len(s["only_v2"]) == 1 and s["only_v2"][0]["n"] == 5 and s["only_v2"][0]["op_path"] == "m.layers.<k>.x"
 

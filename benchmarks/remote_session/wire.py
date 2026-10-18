@@ -3,8 +3,7 @@
 ~~~text
 frame     u32be len(head) ‖ u32be len(body) ‖ head ‖ body: head a JSON object with its "type", body raw bytes
 opening   u32be pass ‖ u64be position ‖ block (4096) ‖ u16be len(leaf) ‖ leaf ‖ leaf salt (192) ‖ payload salt (192)
-          ‖ u8 receipt path's length ‖ its digests (64 each) ‖ u8 payload path's ‖ its digests ‖ u8 1 ‖ d_j (64) for a
-          block appended after the codec seed, u8 0 for a registered one: no tile (bind off)
+          ‖ u8 receipt path's length ‖ its digests (64 each) ‖ u8 payload path's ‖ its digests: no tile (bind off)
 ~~~
 
 Every byte each side sends and receives is counted (`Conn.sent`, `Conn.received`, by message type). Decoding an
@@ -144,11 +143,9 @@ BLOCK = rcodec.BLOCK_BYTES
 def encode_opening(o: audit.Opening) -> bytes:
     if o.tile:
         raise ValueError("the wire carries no tile evidence: the registration does not bind z")
-    if len(o.digest) not in (0, DIGEST):
-        raise ValueError(f"an opening's d_j is {DIGEST} bytes, or none for a registered block")
     return b"".join((_OPEN_HEAD.pack(o.pass_index, o.position), o.block, struct.pack(">H", len(o.leaf)), o.leaf,
                      o.leaf_salt, o.payload_salt, bytes((len(o.receipt_path),)), *o.receipt_path,
-                     bytes((len(o.payload_path),)), *o.payload_path, bytes((len(o.digest) // DIGEST,)), o.digest))
+                     bytes((len(o.payload_path),)), *o.payload_path))
 
 
 def encode_openings(openings) -> bytes:
@@ -175,14 +172,9 @@ def decode_openings(body: bytes) -> list[audit.Opening] | None:
                 at += 1
                 paths.append(tuple(body[at + DIGEST * k:at + DIGEST * (k + 1)] for k in range(d)))
                 at += DIGEST * d
-            bound = body[at]
-            if bound > 1:
-                return None
-            digest = body[at + 1:at + 1 + DIGEST * bound]
-            at += 1 + DIGEST * bound
             if at > len(body):
                 return None
-            out.append(audit.Opening(i, p, block, leaf, leaf_salt, paths[0], payload_salt, paths[1], b"", digest))
+            out.append(audit.Opening(i, p, block, leaf, leaf_salt, paths[0], payload_salt, paths[1], b""))
         return out if at == len(body) else None
     except (struct.error, IndexError):
         return None

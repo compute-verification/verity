@@ -127,7 +127,7 @@ def _tp_record(P: ProgramView, rank: int) -> dict:
 
 def test_a_rank_programs_collective_sites_are_the_same_identities_under_the_record_and_the_fallback():
     """Row #70 (OLMoE TP2, a Build with the record): the record owns the q / k gathers by `self_attn` and spells a collective's kind as
-    its member; the manifest must not see either -- both gathers at (self_attn, 0 / 1) with their shards, o_proj's all-reduce its `out`,
+    its member; the manifest must not see either -- both gathers at (self_attn, 0 / 1) with their shards, o_proj's all-reduce at slot 0,
     identity for identity the fallback's."""
     P = tp_attention_program()
     merged = []
@@ -146,7 +146,7 @@ def test_a_rank_programs_collective_sites_are_the_same_identities_under_the_reco
         assert {r[0:1] + r[2:] for r in rows if r[1] == ATTN} == {
             ("instance_outputs", 0, "out", (0, 8)), ("instance_outputs", 1, "out", (0, 8)),
             ("tp_rank_partials", 0, f"shard_rank{rank}", (0, 4)), ("tp_rank_partials", 1, f"shard_rank{rank}", (0, 4))}
-        assert ("instance_outputs", f"{ATTN}.o_proj", 0, "out", (0, 4)) in rows
+        assert ("instance_outputs", f"{ATTN}.o_proj", 0, "0", (0, 4)) in rows
         merged.append(ma)
     g = merge_ranks(merged)
     assert g["complete"] and g["tp_peer_binding"]["n_unbound"] == 0 and g["tp_peer_binding"]["bound"] == 6

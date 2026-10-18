@@ -40,7 +40,7 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm.config import option
-from verity_vllm.engine import engine_profile as prof, env as engine_env
+from verity_vllm.engine import engine_profile as prof
 
 prof.apply_env()
 
@@ -117,7 +117,7 @@ def main(args: Options) -> None:
     wl = va.load_workload(args.workload, args.max_tokens)
     TPL.acquire()        # a leased row's Match leg: every GPU of the task from here to the exit (`row_tp.TpRow.match`); nothing reads the device before
     target = va.target_of_workload(wl)
-    target_env, target_kw = TT.apply(target, wl["execution"])       # its env knobs before vLLM reads them; its engine args under the CLI's
+    target_env, target_kw = TT.apply(target)       # its env knobs before vLLM reads them; its engine args under the CLI's
     case = va.case_of(wl, args.case)
     revision = args.adapter_revision
     if revision is None:
@@ -126,7 +126,6 @@ def main(args: Options) -> None:
         except Exception:  # noqa: BLE001
             revision = "unknown"
     env_flags = {**prof.apply_env(), **target_env}
-    engine_env.step_timeout(args.rpc_timeout)
     cp = prof.checkpoint_for(case, args.checkpoints)
     if args.verify_weights:
         prof.verify_local_weights(cp)

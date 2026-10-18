@@ -231,7 +231,7 @@
     {"file": "verity_vllm/observe/prefix_cache.py", "kind": "seed-default", "symbol": "prefix_requests", "detail": "seed"},
     {"file": "verity_vllm/observe/prefix_cache.py", "kind": "seed-default", "symbol": "prefix_workload_docs", "detail": "seed"},
     {"file": "verity_vllm/engine/profiles/dense_generic.py", "kind": "broad-except", "symbol": "checkpoint_entry", "detail": "except Exception"},
-    {"file": "verity_vllm/engine/profiles/dense_generic.py", "kind": "environ", "symbol": "hf_snapshot", "detail": "HF_HOME"},
+    {"file": "verity_vllm/engine/profiles/dense_generic.py", "kind": "environ", "symbol": "find_hf_config", "detail": "HF_HOME"},
     {"file": "verity_vllm/observe/storage.py", "kind": "broad-except", "symbol": "_probe_weakrefs", "detail": "except Exception", "count": 2},
     {"file": "verity_vllm/observe/triton_adapter.py", "kind": "broad-except", "symbol": "constexpr_names", "detail": "except Exception"},
     {"file": "verity_vllm/observe/triton_adapter.py", "kind": "broad-except", "symbol": "src_sha", "detail": "except Exception"},

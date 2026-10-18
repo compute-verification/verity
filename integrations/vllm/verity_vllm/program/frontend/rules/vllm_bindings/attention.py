@@ -188,7 +188,7 @@ class UnifiedAttentionWithOutputRule(StateRule):
         # [R15 hopper HOP-03, M-0225] the tile rule reads the LAUNCH's max_seqlen_q, not this request's rows: under varlen every sequence of
         # the launch runs the tile of the longest one.  The request's step index: 0 when this call opens the layer's history (prefill,
         # own rows = T), else P0 - LP + 1 (decode, own rows = 1; LP = the rows the history was opened with).  The declared launch context
-        # (`observe_launch_context`, build --launch-context, from the workload's co-scheduled prompts) raises it; absent, own rows.
+        # (`observe_launch_context`, derive_step --launch-max-seqlen-q, from the workload's co-scheduled prompts) raises it; absent, own rows.
         lp_of = ctx.state.setdefault("launch_LP", {})
         if P0 == 0:
             lp_of[layer_name] = T

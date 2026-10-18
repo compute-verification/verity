@@ -29,8 +29,6 @@ art:<sha256 hex of the canonical artifact manifest>     the manifest embeds payl
 drv:<sha256 hex of the canonical derivation document>   no source revision inside (see §6)
 reuse_key = sha256 hex of canon({"derivation": drv_id, "source": <source identity>})   None for dirty trees and undeclared runs
 attempt id = run id (r20260922-105905-2021)
-pr:<number>@<40-hex commit>                             a pull request at one head; only labels target it
-ckpt:<HF repo id>@<40-hex revision>                     a checkpoint at one revision; only labels target it
 ~~~
 
 Two agents freezing the same member set produce the same snapshot id (members are sorted and de-duplicated; `name`, `note`
@@ -76,7 +74,7 @@ Local store root: `~/.research/store` (or `$RESEARCH_STORE`). Remote uses the sa
 objects/sha256/<hex>                 blobs (content-addressed; write temp + hard-link, mode 0444; never overwritten)
 manifests/<hex>.json                 artifact manifests (canonical bytes; hex == art id hex)
 attempts/<run id>.json               attempt manifests (canonical bytes; immutable once published)
-labels/<target>/<ts>-<by>.json       one immutable file per assertion; <target> = id with ':' -> '_' and '/' -> '--'
+labels/<target>/<ts>-<by>.json       one immutable file per assertion; <target> = id with ':' -> '_'
 snapshots are ordinary artifacts (kind dataset-snapshot/v1)
 trees/<hex>/                         LOCAL ONLY: where `fetch ART` (no --to) materialises a tree payload
 catalog.sqlite                       LOCAL ONLY: rebuildable index (§5); never uploaded
@@ -411,8 +409,7 @@ prints the table; the groups are:
   spelling of `verified` — accepted by every reader, deprecated for new writes; `verified_by` is a ledger row's free text and
   carries no verdict — ignored.
 - **evidence** — probe captures and input sets: `instruction`, `model`, `model_agrees` (bool), `model_status`,
-  `model_rejected`, `evidence`, `family`, `instances_dataset`, `instances_tier`, `mismatches`, `target`, `component`, `jobs`, `dtype`;
-  `staged` on `ckpt:<repo>@<revision>`, when a host finished staging a checkpoint's weights (`verity-vllm records staged`).
+  `model_rejected`, `evidence`, `family`, `instances_dataset`, `instances_tier`, `mismatches`, `target`, `component`, `jobs`, `dtype`.
 - **approach** — the registry's labels on `approach/v1` records (`research/approaches.py`; `tools/research/README.md`).
 
 Enum and bool values are compared as the catalog stores them (`scalar_text`: strings raw, everything else JSON), so `true` and

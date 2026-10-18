@@ -18,7 +18,7 @@ from typing import Any
 
 import torch
 
-from verity_vllm.engine import env as engine_env, served
+from verity_vllm.engine import env as engine_env
 
 
 CASE = "B0"                       # default checkpoint role (SmolLM2-135M); [M6] `build_engine(case="B1")` serves Qwen2.5-1.5B
@@ -47,7 +47,7 @@ class Engine:
 
 # [R15 EXEC-02 / COORD M-0063 (2)] the row's execution label decides `enforce_eager`; it is never a literal of the harness.  Labels are the
 # row-id vocabulary (`…__bi-eager`, `…__bi-eager-fa2`, `…__bi-compiled`); a label this table does not know fails closed (no guessing).
-EXECUTION_ENFORCE_EAGER: dict[str, bool] = served.ENFORCE_EAGER
+EXECUTION_ENFORCE_EAGER: dict[str, bool] = {"bi-eager": True, "bi-eager-fa2": True, "eager": True, "bi-compiled": False, "compiled": False}
 
 
 def execution_label_of(enforce_eager: bool | None) -> str | None:
@@ -148,15 +148,14 @@ def engine_kwargs_for(checkpoints: str | Path = "manifests/checkpoints.json", *,
     same environment knobs as `build_engine` (idempotent).  Refusals (unknown execution, contradicting enforce_eager) are the same."""
     from verity_vllm.engine import engine_profile as prof
 
-    if execution is not None and execution not in EXECUTION_ENFORCE_EAGER:
-        raise RuntimeError(f"execution label {execution!r} is not modelled by the harness (known: {sorted(EXECUTION_ENFORCE_EAGER)}); refusing to build an engine")
-    # the execution label's batch invariance (`served.apply`), then [R15 fp8] the declared target's ENVIRONMENT knobs (`TargetProfile.env()`:
-    # VLLM_BATCH_INVARIANT, VLLM_USE_DEEP_GEMM for `fp8_block_gemm`), applied before vLLM reads them -- the same object the builder
-    # applied; the header records them (`target_env`) and `target_mismatches` reads the selected FP8 kernel back
-    env_flags = served.apply(execution)
     if target is not None:
-        env_flags.update(engine_env.apply_target(target.env()))
-    env_flags = {**prof.apply_env(), **env_flags}
+        # [R15 fp8] the declared target's ENVIRONMENT knobs (`TargetProfile.env()`: VLLM_BATCH_INVARIANT, VLLM_USE_DEEP_GEMM for
+        # `fp8_block_gemm`) are applied before vLLM reads them -- the same object the builder applied; the header records them
+        # (`target_env`) and `target_mismatches` reads the selected FP8 kernel back
+        target_env = engine_env.apply_target(target.env())
+    env_flags = prof.apply_env()
+    if target is not None:
+        env_flags = {**env_flags, **target_env}
     if "linears" in getattr(target, "int8_parts", ()):
         from verity_vllm.engine import int8_vllm   # vLLM's own registry, in this process, before LLM() resolves `quantization`
         int8_vllm.register()
@@ -164,7 +163,9 @@ def engine_kwargs_for(checkpoints: str | Path = "manifests/checkpoints.json", *,
         from verity_vllm.engine import int8_attention_vllm   # vLLM's CUSTOM attention slot, before LLM() selects the backend
         int8_attention_vllm.register()
     cp = prof.checkpoint_for(case, checkpoints)
-    want_eager = served.execution(execution)[0]["enforce_eager"]
+    if execution is not None and execution not in EXECUTION_ENFORCE_EAGER:
+        raise RuntimeError(f"execution label {execution!r} is not modelled by the harness (known: {sorted(EXECUTION_ENFORCE_EAGER)}); refusing to build an engine")
+    want_eager = EXECUTION_ENFORCE_EAGER[execution] if execution is not None else True
     kw = prof.engine_kwargs(cp, replay=False, enforce_eager=want_eager)
     kw["enforce_eager"] = want_eager
     kw["enable_prefix_caching"] = False

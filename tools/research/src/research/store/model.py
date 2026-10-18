@@ -235,7 +235,7 @@ class Label:
         if self.schema != LABEL_SCHEMA:
             errs.append(f"schema must be {LABEL_SCHEMA!r}")
         if ids.kind_of_id(self.target) == "unknown":
-            errs.append(f"target must be an art:, drv:, run, pr: or ckpt: id, got {self.target!r}")
+            errs.append(f"target must be an art:, drv:, run or pr: id, got {self.target!r}")
         for name in ("key", "by", "ts"):
             if not isinstance(getattr(self, name), str) or not getattr(self, name):
                 errs.append(f"{name} must be a non-empty string")

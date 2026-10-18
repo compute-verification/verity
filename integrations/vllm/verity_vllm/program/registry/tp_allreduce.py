@@ -72,8 +72,6 @@ is 0x7FFF.
 """
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 from typing import NamedTuple
 
 import numpy as np
@@ -90,7 +88,7 @@ __all__ = ["AllReduceCustom", "AllReduceCustomCoordinate", "AllReduceMnnvl", "Al
            "CUSTOM_SYMM_MAX_BYTES", "Captured", "FI_MAX_BYTES", "MNNVL_ONE_SHOT_BYTES", "SETTINGS",
            "SYMM_MEM_MAX_BYTES", "WARP", "chain", "covered", "custom_order", "custom_owners", "custom_stage", "eps_bits",
            "fused_max_tokens", "mnnvl_grid", "mnnvl_shot", "multimem_owners", "multimem_runs", "multimem_tree", "multimem_trees",
-           "offset_free", "ranks", "route_binding", "served_route", "settings_of", "strategy", "tree_clusters", "tree_from_clusters", "tree_leaves"]
+           "ranks", "route_binding", "served_route", "settings_of", "strategy", "tree_clusters", "tree_from_clusters", "tree_leaves"]
 
 WARP = 32
 #: FlashInfer `MNNVL_ONE_SHOT_THRESHOLD`: the one-shot kernel up to this many bytes of M * H * WORLD
@@ -567,25 +565,9 @@ def served_route(settings: dict, M: int, N: int) -> tuple[str | None, str]:
     return setting, route
 
 
-def offset_free(c: Captured, world: int) -> bool:
-    """Whether every element of the covered route is reduced the same way wherever it sits in the call: MNNVL's per-element sum,
-    multimem with one tree for every owner, the custom all-reduce's 1-stage kernel (`custom_owners`)."""
-    if c.definition == "AllReduceMnnvl_v1":
-        return True
-    if c.definition == "AllReduceMultimem_v1":
-        return len(set(multimem_trees(c.statics["TREES"], world))) == 1
-    return c.definition == "AllReduceCustom_v1" and int(c.statics["STAGE"]) == 1
-
-
-def route_binding(c: Captured, world: int, M: int, N: int, rows: int | None = None) -> tuple[object, dict]:
-    """The Definition and statics of one covered communicator all-reduce of [M,N] over `world` ranks: one call over the `rows` * N
-    words of this request's rows among the launch's M tokens (default all M).  The launch's M picks the kernel; a call of fewer
-    rows than the launch is only stated for an `offset_free` route, since the others reduce an element by its offset in the launch."""
-    rows = M if rows is None else int(rows)
-    if rows != M and not offset_free(c, world):
-        raise ValueError(f"route {c.route!r} ({c.definition} {c.statics}) reduces an element by its offset among the launch's {M} "
-                         f"tokens, which a call of this request's {rows} rows does not know")
-    size = rows * N
+def route_binding(c: Captured, world: int, M: int, N: int) -> tuple[object, dict]:
+    """The Definition and statics of one covered communicator all-reduce of [M,N] over `world` ranks: one call over the M * N words."""
+    size = M * N
     if c.definition == "AllReduceMnnvl_v1":
         return AllReduceMnnvl, {"WORLD": world, "N": size, "SHOT": mnnvl_shot(M, N, world)}
     if c.definition == "AllReduceMultimem_v1":

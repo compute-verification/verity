@@ -18,7 +18,6 @@
 #include <chrono>
 #include <dlfcn.h>
 #include <string>
-#include <thread>
 
 #include "../probe.cuh"
 #include "honest.cuh"
@@ -65,11 +64,7 @@ __device__ __forceinline__ void body(const OpArgs& a) {
   }
   OP_END
   const unsigned long long t1 = gtime();
-  if (threadIdx.x == 0) {
-    a.rec[blockIdx.x].stop = (long long)(t1 - t0);
-    reinterpret_cast<unsigned long long*>(a.g)[2 * blockIdx.x] = t0;
-    reinterpret_cast<unsigned long long*>(a.g)[2 * blockIdx.x + 1] = t1;
-  }
+  if (threadIdx.x == 0) a.rec[blockIdx.x].stop = (long long)(t1 - t0);
   uint32_t s = h.fold() ^ f.fold();
 #pragma unroll
   for (int c = 0; c < 8; c++) s ^= (uint32_t)h.d[c][0];
@@ -183,84 +178,8 @@ static int sustain(const std::string& name, double seconds, double scale) {
   return 0;
 }
 
-// `--calib NAME SECONDS [REPS]`: REPS launches, each sized to last about SECONDS, timed three ways: every block's clock64
-// cycles, its %globaltimer span, and the host's steady_clock around the launch and its synchronize. The longest block's
-// cycles over the host span is a lower bound on the SM clock that reads no timer on the GPU (the host span adds the
-// launch's latency, tens of microseconds); over the block's own %globaltimer span it is the clock power.cu reports.
-static int calib(const std::string& name, double seconds, int reps) {
-  const OpProbe* q = nullptr;
-  for (const OpProbe& p : PROBES)
-    if (name == p.name) q = &p;
-  if (!q) {
-    fprintf(stderr, "ERR no probe %s\n", name.c_str());
-    return 2;
-  }
-  GK_CK(cudaSetDevice(0));
-  cudaDeviceProp prop;
-  GK_CK(cudaGetDeviceProperties(&prop, 0));
-  gk::Nvml nv(0);
-  Power pw(nv.uuid());
-  const int blocks = prop.multiProcessorCount;
-  OpClk* rec;
-  unsigned* sink;
-  unsigned char* g;
-  GK_CK(cudaMalloc(&rec, sizeof(OpClk) * blocks));
-  GK_CK(cudaMalloc(&sink, sizeof(unsigned) * blocks * q->tpb));
-  GK_CK(cudaMalloc(&g, 1 << 20));
-  OpArgs args{rec, sink, g, 1 << 20, q->iters * 16, 0};
-  void* kargs[] = {&args};
-  std::vector<OpClk> h(blocks);
-  auto launch = [&]() {
-    const auto t0 = std::chrono::steady_clock::now();
-    GK_CK(cudaLaunchKernel(q->kernel, dim3(blocks), dim3(q->tpb), kargs, 0, 0));
-    GK_CK(cudaDeviceSynchronize());
-    return std::chrono::duration<double, std::nano>(std::chrono::steady_clock::now() - t0).count();
-  };
-  launch();
-  const double pilot_ns = launch();
-  args.iters = (int)std::min(2.0e9, args.iters * seconds * 1e9 / pilot_ns);
-  for (int rep = 0; rep < reps; rep++) {
-    const auto t0 = std::chrono::steady_clock::now();
-    GK_CK(cudaLaunchKernel(q->kernel, dim3(blocks), dim3(q->tpb), kargs, 0, 0));
-    std::this_thread::sleep_for(std::chrono::duration<double>(seconds / 2));
-    const gk::Sample during = nv.sample();
-    const unsigned mw = pw.mw();
-    GK_CK(cudaDeviceSynchronize());
-    const double host_ns = std::chrono::duration<double, std::nano>(std::chrono::steady_clock::now() - t0).count();
-    GK_CK(cudaMemcpy(h.data(), rec, sizeof(OpClk) * blocks, cudaMemcpyDeviceToHost));
-    std::vector<unsigned long long> ts(2 * blocks);
-    GK_CK(cudaMemcpy(ts.data(), g, sizeof(unsigned long long) * 2 * blocks, cudaMemcpyDeviceToHost));
-    long long cyc_max = 0, cyc_min = h[0].cyc, gt_max = 0, gt_of_cyc_max = 0;
-    unsigned long long t0_min = ts[0], t0_max = ts[0], t1_min = ts[1], t1_max = ts[1];
-    std::vector<double> mhz;
-    for (int b = 0; b < blocks; b++) {
-      const OpClk& r = h[b];
-      if (r.cyc > cyc_max) cyc_max = r.cyc, gt_of_cyc_max = r.stop;
-      cyc_min = std::min(cyc_min, r.cyc);
-      gt_max = std::max(gt_max, r.stop);
-      if (r.stop > 0) mhz.push_back(1e3 * (double)r.cyc / (double)r.stop);
-      t0_min = std::min(t0_min, ts[2 * b]), t0_max = std::max(t0_max, ts[2 * b]);
-      t1_min = std::min(t1_min, ts[2 * b + 1]), t1_max = std::max(t1_max, ts[2 * b + 1]);
-    }
-    printf("{\"op\": \"calib\", \"probe\": \"%s\", \"rep\": %d, \"iters\": %d, \"blocks\": %d, \"host_ns\": %.0f, "
-           "\"gt_ns_max\": %lld, \"gt_kernel_ns\": %llu, \"gt_start_spread_ns\": %llu, \"gt_end_spread_ns\": %llu, "
-           "\"cyc_max\": %lld, \"cyc_min\": %lld, \"gt_ns_of_cyc_max\": %lld, \"clock_mhz_host\": %.3f, "
-           "\"clock_mhz_gt_min\": %.3f, \"clock_mhz_gt_median\": %.3f, \"clock_mhz_gt_max\": %.3f, "
-           "\"gt_over_host\": %.7f, \"nvml_sm_mhz\": %u, \"nvml_mw\": %u, \"temp_c\": %u, \"throttle\": \"0x%llx\"}\n",
-           q->name, rep, args.iters, blocks, host_ns, gt_max, t1_max - t0_min, t0_max - t0_min, t1_max - t1_min, cyc_max,
-           cyc_min, gt_of_cyc_max, 1e3 * (double)cyc_max / host_ns,
-           mhz.empty() ? 0.0 : *std::min_element(mhz.begin(), mhz.end()), mhz.empty() ? 0.0 : gk::median(mhz),
-           mhz.empty() ? 0.0 : *std::max_element(mhz.begin(), mhz.end()), (double)(t1_max - t0_min) / host_ns,
-           during.sm_mhz, mw, pw.celsius(), during.throttle);
-    fflush(stdout);
-  }
-  return 0;
-}
-
 int main(int argc, char** argv) {
   if (argc >= 4 && std::string(argv[1]) == "--sustain")
     return sustain(argv[2], atof(argv[3]), argc >= 5 ? atof(argv[4]) : 1.0);
-  if (argc >= 4 && std::string(argv[1]) == "--calib")
-    return calib(argv[2], atof(argv[3]), argc >= 5 ? atoi(argv[4]) : 3);
   return op_main(argc, argv, PROBES);
 }

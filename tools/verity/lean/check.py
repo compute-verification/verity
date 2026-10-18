@@ -1095,8 +1095,7 @@ def verifier_failures(rule: dict | None, found: dict | None) -> list[str]:
     `stop`, and the `hash` namespace): every `@[implemented_by]` or `@[extern]` constant the entries reach is compiled code
     no proof sees, so one fails unless `allow` names it (a name, or a name prefix; `module:M` for every constant of a module
     under `M`), and the entries reach the `hash` namespace only through `stop`, so the verifier hashes through its
-    parameter (Daniel's checks (a) and (b), LEAN-18). The walk follows `@[csimp]` replacements, so the code compiled in
-    place of a constant is on the path; the rewrite itself is a theorem the replay checks, listed and never refused."""
+    parameter (Daniel's checks (a) and (b), LEAN-18)."""
     if not rule:
         return []
     if found is None:

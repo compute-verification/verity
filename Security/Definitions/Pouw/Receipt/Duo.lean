@@ -50,12 +50,4 @@ def duoQuad {n : ℕ} (k₁ a₁ : BitVec n) (r₁ : ℕ) (k₂ a₂ : BitVec n)
     BitVec n × BitVec n :=
   duoTriple k₂ a₂ r₂ k₃ a₃ r₃ k₄ a₄ r₄ d.2 (duoWord k₁ a₁ r₁ s d.1)
 
-/-- A run of `L` words `w` from the state `s`, word `i` with keys `(k i, a i, r i)`: the first word, then the rest
-(`duoPair`, `duoTriple` and `duoQuad` at `L = 2, 3, 4`). -/
-def duoRun {n : ℕ} : {L : ℕ} → (k a : Fin L → BitVec n) → (r : Fin L → ℕ) → (w : Fin L → BitVec n) →
-    BitVec n × BitVec n → BitVec n × BitVec n
-  | 0, _, _, _, _, s => s
-  | _ + 1, k, a, r, w, s =>
-      duoRun (Fin.tail k) (Fin.tail a) (Fin.tail r) (Fin.tail w) (duoWord (k 0) (a 0) (r 0) s (w 0))
-
 end Pouw.Receipt

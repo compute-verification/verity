@@ -6,9 +6,6 @@ Nothing is timed before its gate passed, in this order:
   `GATE_BASES` (below 2^32, across it within a warp, and past it: the tweak's high word or none), device decode of the
   reference's words equals their payloads, and `--gate-words` random words
   go through the device's encode and decode unchanged, the decode's checksum mode giving the payloads' XOR;
-- `gate_bound`: the bound key's launchers (`kv_encode_bound`, `kv_decode_bound`) against `tests/kv_vectors.json`'s
-  "bound" at the keys of the library's field and mask, and against `kv.py` over token-layers across index 2^32;
-  `--gates-only` stops here;
 - `read`: the read rate R over a store of `--store-gib`, the best of a few grids;
 - `rates`: compute-only squarings (ILP 1 and 2 words a thread), decodes and encodes of k rounds, words/s;
 - `store`: the store's random words encoded on the device at each k (the encode's rate through memory), then its
@@ -52,8 +49,6 @@ SHAPES_70B = {"qkv": (10240, 8192), "o": (8192, 8192), "gate_up": (57344, 8192),
 E_70B = K.LAYERS * sum(n * kd for n, kd in SHAPES_70B.values())
 CONTEXTS = (512, 2048, 8192)
 GATE_BASES = (77, (1 << 32) - 20, (1 << 33) + 77)
-BOUND_VECTORS = HERE / "tests" / "kv_vectors.json"
-BOUND_BLOCKS = 6
 ATTN_CYCLE_BYTES = 1 << 30  # a cell's layers cover this much plain KV, 8x the L2
 ATTN_MAX_LAYERS = 256       # and at most this many, so a pass's launches queue behind one spin
 ATTN_SPIN_CYCLES = 60_000_000
@@ -75,8 +70,6 @@ class Lib:
         so.kv_set_key.argtypes = [v, i, v]
         so.kv_encode.argtypes = [v, v, q, q, i, i, v]
         so.kv_decode.argtypes = [v, v, q, q, i, i, v, v]
-        so.kv_encode_bound.argtypes = [v, v, q, q, i, v, i, v]
-        so.kv_decode_bound.argtypes = [v, v, q, q, i, v, i, v]
         so.kv_read.argtypes = [v, q, v, i, v]
         so.kv_chain.argtypes = [i, i, i, q, i, v, v]
         so.kv_spin.argtypes = [ctypes.c_longlong, v]
@@ -217,68 +210,6 @@ def gate(lib: Lib, torch, ks, n_ref: int, n_words: int, log) -> dict:
                   "round_trip": round_trip, "checksum": checksum, "ok": ok}
         log(f"gate {lib.name} k={k}: {'ok' if ok else 'FAIL'} ({len(payloads)} words against kv.py at each of indices "
             f"{', '.join(map(str, GATE_BASES))} on; {n_words} round trip)")
-    return out
-
-
-def offsets(torch, values: list[int], f: K.Field):
-    """Bound offsets as `kv_encode_bound` takes them: one a token-layer, NL little-endian limbs, on the device."""
-    return to_device(torch, values, f)
-
-
-def gate_bound(lib: Lib, torch, log) -> dict:
-    """`kv_encode_bound` and `kv_decode_bound` at each key of `kv_vectors.json`'s "bound" the library takes (its field and
-    mask): the pinned token-layer encoded under its bound key equals the pinned words (their SHA-512 and first word) and
-    decodes back, and not under another digest's offset; encoded at another block's indices with the index difference
-    folded into its offset (tau W (block − there)) it gives the same words, as a page written at a slot that is not its
-    store index does; and BOUND_BLOCKS token-layers across index 2^32, a random offset each, equal `kv.py` word for word
-    and decode back."""
-    pinned = json.loads(BOUND_VECTORS.read_text())
-    seed, bv = bytes.fromhex(pinned["seed"]), pinned["bound"]
-    f, w, st = lib.field, K.token_layer_words(lib.field), stream(torch)
-    data = b"".join(hashlib.sha512(bv["label"].encode() + c.to_bytes(4, "big")).digest() for c in range(64))
-    d, block = K.digest(data), bv["block"]
-    out = {}
-    for name, want in bv["keys"].items():
-        field_name, rounds, *masked = name.split("/")
-        k, mask = int(rounds[1:]), bool(masked)
-        if field_name != f.name or mask != lib.mask or k > lib.kmax:
-            continue
-        key = K.key(f.name, seed, k, mask=mask)
-        set_key(lib, key)
-        b = K.binding(d, block, key)
-        pay = to_device(torch, K.payloads(data, f), f)
-        enc, back, other, moved = (torch.empty_like(pay) for _ in range(4))
-        ob = offsets(torch, [b], f)
-        lib.call("kv_encode_bound", ptr(pay), ptr(enc), w, block * w, k, ptr(ob), 0, st)
-        lib.call("kv_decode_bound", ptr(enc), ptr(back), w, block * w, k, ptr(ob), 0, st)
-        wrong = offsets(torch, [K.binding(K.digest(bytes(K.TOKEN_LAYER_BYTES)), block, key)], f)
-        lib.call("kv_decode_bound", ptr(enc), ptr(other), w, block * w, k, ptr(wrong), 0, st)
-        there = block + 1000
-        folded = offsets(torch, [(b + key.tau * w * (block - there)) % f.p], f)
-        lib.call("kv_encode_bound", ptr(pay), ptr(moved), w, there * w, k, ptr(folded), 0, st)
-        rng = random.Random(f"{name}/bound")
-        first = (1 << 32) // w - BOUND_BLOCKS // 2
-        offs = [rng.randrange(f.p) for _ in range(BOUND_BLOCKS)]
-        many = [rng.randrange(f.p) for _ in range(BOUND_BLOCKS * w)]
-        mp, mo = to_device(torch, many, f), offsets(torch, offs, f)
-        me, mb = torch.empty_like(mp), torch.empty_like(mp)
-        lib.call("kv_encode_bound", ptr(mp), ptr(me), len(many), first * w, k, ptr(mo), 0, st)
-        lib.call("kv_decode_bound", ptr(me), ptr(mb), len(many), first * w, k, ptr(mo), 0, st)
-        torch.cuda.synchronize()
-        words = from_device(enc, f)
-        raw = enc.cpu().numpy().tobytes()
-        ref = [K.encode_word(m, first * w + i, key, offs[i // w]) for i, m in enumerate(many)]
-        r = {"b": format(b, "x") == want["b"], "words_sha512": hashlib.sha512(raw).hexdigest() == want["words_sha512"],
-             "word_0": format(words[0], "x") == want["word_0"], "decode": bool(torch.equal(back, pay)),
-             "other_digest_refused": not torch.equal(other, pay), "folded_index": bool(torch.equal(moved, enc)),
-             "blocks": BOUND_BLOCKS, "first_index": first * w,
-             "kv_py": from_device(me, f) == ref, "round_trip": bool(torch.equal(mb, mp))}
-        r["ok"] = all(v for v in r.values() if type(v) is bool)
-        out[name] = r
-        log(f"bound {lib.name} {name}: {'ok' if r['ok'] else 'FAIL ' + str(r)} (block {block} against kv_vectors.json, "
-            f"at block {there} folded; {BOUND_BLOCKS} blocks from index {first * w} against kv.py)")
-    if not out:
-        log(f"bound {lib.name}: kv_vectors.json pins no bound key of {f.name}{'/masked' if lib.mask else ''}")
     return out
 
 
@@ -669,7 +600,6 @@ def main() -> int:
     ap.add_argument("--gate-words", type=int, default=1 << 16)
     ap.add_argument("--reps", type=int, default=7)
     ap.add_argument("--no-native", action="store_true")
-    ap.add_argument("--gates-only", action="store_true", help="`gate` and `gate_bound` only, nothing timed")
     a = ap.parse_args()
     out_dir = Path(a.out)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -695,14 +625,11 @@ def main() -> int:
     log(f"{props.name}: {sms} SMs; libs " + ", ".join(f"{l.name} ({l.field.n} bits, kmax {l.kmax})" for l in libs))
     for lib in libs:
         g = gate(lib, torch, ks, a.gate_ref, a.gate_words, log)
-        gb = gate_bound(lib, torch, log)
-        res["libs"][lib.name] = {"gate": g, "bound": gb}
-        if not all(v["ok"] for v in g.values()) or not all(v["ok"] for v in gb.values()):
+        res["libs"][lib.name] = {"gate": g}
+        if not all(v["ok"] for v in g.values()):
             res["ok"] = False
     if not res["ok"]:
         log("a gate failed: nothing timed")
-    elif a.gates_only:
-        log("gates only: nothing timed")
     else:
         rbuf = torch.empty(int(a.store_gib * (1 << 30)) // 64 * 64, dtype=torch.uint8, device="cuda")
         rbuf.random_(0, 256)

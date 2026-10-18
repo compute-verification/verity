@@ -17,8 +17,6 @@ holds.
 """
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import importlib
 import importlib.abc
 import importlib.machinery

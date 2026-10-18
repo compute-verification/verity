@@ -95,8 +95,7 @@ TARGETS: dict[str, tuple[int, int]] = {
 #: Row-id target token -> the device class's SM count, for the classes where it is fixed by the class: such a row declares its whole
 #: Build target (capability + SM count) by its id, so its Build derives for it on any host, a GPU-free one included.  A class whose SM
 #: count varies by part (h100 SXM 132 / PCIe 114) is not listed: its Build target is the host GPU's unless the workload declares one.
-#: The H200 is 132 SMs as SXM and as NVL.
-TARGET_NUM_SMS: dict[str, int] = {"rtxpro6000": 188, "h200": 132}
+TARGET_NUM_SMS: dict[str, int] = {"rtxpro6000": 188}
 
 ROW_FIELDS = ("model", "dtype", "target", "world", "batch", "max_input", "max_output", "arrivals", "sampling", "execution")
 _ROW_INT_PREFIX = {"world": "tp", "batch": "b", "max_input": "i", "max_output": "o"}
@@ -289,16 +288,14 @@ _V1_KEYS = {"engine_args_required": "args", "env_required": "env", "target": "ta
 class RowEngine:
     """What, besides its requests, determines a row's circuit and its run: the checkpoint's full ``revision`` (its repo is the row's
     ``model``), the ``vllm`` commit, the engine ``args``, the ``env`` its engines run under (kernel selection: ``VLLM_BATCH_INVARIANT``,
-    ``NCCL_P2P_DISABLE``), the declared ``target`` (``TargetProfile`` fields; None: the device's) and ``reasons``: why the row sets a
-    switch away from vLLM's default, by the switch's name (``engine.served.DEFAULTS``; a served Commit refuses one without).  The κ
-    profile a Match folds with is the role's (``engine.profiles.generic.module_name``), never a field."""
+    ``NCCL_P2P_DISABLE``) and the declared ``target`` (``TargetProfile`` fields; None: the device's).  The κ profile a Match folds
+    with is the role's (``engine.profiles.generic.module_name``), never a field."""
 
     revision: str | None = None
     vllm: str = VLLM
     args: Mapping[str, Any] = field(default_factory=dict)
     env: Mapping[str, str] = field(default_factory=dict)
     target: Mapping[str, Any] | None = None
-    reasons: Mapping[str, str] = field(default_factory=dict)
 
     @classmethod
     def of(cls, doc: Mapping[str, Any]) -> RowEngine:
@@ -312,8 +309,7 @@ class RowEngine:
         if unknown:
             raise ValueError(f"engine block: unknown field(s) {', '.join(unknown)} (known: {', '.join(f.name for f in fields(cls))})")
         eng = cls(revision=e.get("revision"), vllm=str(e.get("vllm", VLLM)), args=dict(e.get("args") or {}),
-                  env={str(k): str(v) for k, v in (e.get("env") or {}).items()}, target=dict(e["target"]) if e.get("target") else None,
-                  reasons={str(k): str(v) for k, v in (e.get("reasons") or {}).items()})
+                  env={str(k): str(v) for k, v in (e.get("env") or {}).items()}, target=dict(e["target"]) if e.get("target") else None)
         if eng.vllm != VLLM:
             raise ValueError(f"engine.vllm {eng.vllm!r}: this tree derives and serves on vLLM {VLLM} only (config.VLLM)")
         if eng.target and eng.target.get("vllm_revision", eng.vllm) != eng.vllm:
@@ -326,8 +322,6 @@ class RowEngine:
             out["env"] = dict(self.env)
         if self.target:
             out["target"] = dict(self.target)
-        if self.reasons:
-            out["reasons"] = dict(self.reasons)
         return out
 
 
@@ -414,10 +408,9 @@ class MatchConfig:
 
     match_impl: str = option("--match-impl", env="MATCH_IMPL", default="fast", help="global match checker: fast or record (the audit)")
     match_pipeline: str = option("--match-pipeline", env="MATCH_PIPELINE", default="shared",
-                                 help="shared = one batch decomposition inside the global match (a TP row's: per rank)")
-    match_phase: str = option("--match-phase", env="MATCH_PHASE", default="all", choices=("all", "gpu", "cpu"),
-                              help="cpu = resume the CPU half over the capture already on disk; gpu (TP) = the capture and control alone, "
-                                   "which need no Build, then the row stops")
+                                 help="shared = one batch decomposition inside the global match")
+    match_phase: str = option("--match-phase", env="MATCH_PHASE", default="all", choices=("all", "cpu"),
+                              help="cpu = resume the CPU half over the capture already on disk")
     snapshot_steps: str | None = option("--snapshot-steps", env="MATCH_SNAP_STEPS", default=None,
                                         help="0,1 | all; default 0,1 greedy, all stochastic or when form (B) must be complete")
     snapshot_max_bytes: str | None = option("--snapshot-max-bytes", env="MATCH_SNAP_MAX_BYTES", default=None,
@@ -432,15 +425,7 @@ class MatchConfig:
     compare_timeout: int | None = option("--compare-timeout", env="COMPARE_TIMEOUT", type=int, default=None,
                                          help="seconds per comparator (default scales with B and the envelope)")
     fold_timeout: int | None = option("--fold-timeout", env="FOLD_TIMEOUT", type=int, default=None,
-                                      help="TP: seconds for each leg of the per-rank fold Match (fold, compare, GM-01; default 7200); "
-                                           "tp-fold-match as a whole gets four legs' worth, the cross-rank leg included")
-    fold_rank_workers: int = option("--fold-rank-workers", env="FOLD_RANK_WORKERS", type=int, default=0,
-                                    help="TP: ranks whose fold Match legs run at once (0 = every rank; a GLM-5.3 B8 rank's X-09 compare "
-                                         "passes 200 GB, so 8 at once overfill a 1.5 TB host)")
-    match_reuse: str = option("--match-reuse", env="MATCH_REUSE", default="off", choices=("off", "fold", "legs"),
-                              help="TP, --match-phase cpu, rerunning a CPU half that stopped part way under the same code: fold = keep each "
-                                   "rank's persisted fold of the capture in place; legs = also each rank's written compare and GM-01 "
-                                   "documents, so only the missing legs and the cross-rank leg run")
+                                      help="TP: seconds for the per-rank fold Match (default 7200)")
     fold_profile: str | None = option("--fold-profile", env="FOLD_PROFILE", env_empty=True, default=None,
                                       help="TP: rank profile module (default derived_<ROLE>_tp<W>; empty = collective-level Match only)")
 

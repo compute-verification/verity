@@ -89,10 +89,6 @@ def test_ids():
     assert ids.is_run_id("r20260922-105905-2021") and not ids.is_run_id("r2026-1-1") and not ids.is_run_id("r20260922-105905-ZZZZ")
     assert ids.target_dirname("art:ab") == "art_ab" and ids.target_dirname("r20260922-105905-2021") == "r20260922-105905-2021"
     assert ids.kind_of_id(DRV) == "drv" and ids.kind_of_id("nope") == "unknown"
-    ckpt = "ckpt:zai-org/GLM-5.3@" + "a" * 40
-    assert ids.kind_of_id(ckpt) == "ckpt" and ids.target_dirname(ckpt) == "ckpt_zai-org--GLM-5.3@" + "a" * 40
-    assert not any(ids.is_ckpt(x) for x in ("ckpt:GLM-5.3@" + "a" * 40, "ckpt:zai-org/GLM-5.3@main", "ckpt:a--b/c@" + "a" * 40,
-                                            "ckpt:a/b/c@" + "a" * 40))
 
 
 # ---- model ------------------------------------------------------------------------------------------------------------------------------

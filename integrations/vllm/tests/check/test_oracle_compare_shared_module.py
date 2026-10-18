@@ -35,7 +35,7 @@ POS = 2                     # r0's rows at step 0
 
 
 def _rows(L: int, member: str) -> np.ndarray:
-    return (np.arange(POS * H, dtype=np.uint16).reshape(POS, H) + 1000 * L + (500 if member == "key" else 0)).astype("<u2")
+    return (np.arange(POS * H, dtype=np.uint16).reshape(POS, H) + 1000 * L + (500 if member == "1" else 0)).astype("<u2")
 
 
 def make_match(tmp: str) -> str:
@@ -46,12 +46,12 @@ def make_match(tmp: str) -> str:
     entries, insts = [], []
     ev = 100
     for L in range(N_LAYERS):
-        for j, (member, suf) in enumerate((("query", "rope.q"), ("key", "rope.k"))):
+        for member, suf in (("0", "rope.q"), ("1", "rope.k")):
             data = _rows(L, member).tobytes()
             sha = hashlib.sha256(data).hexdigest()
             fn = f"values/0/{sha[:16]}.bin"
             open(os.path.join(d, "capture", fn), "wb").write(data)
-            alloc = 10 + 2 * L + j
+            alloc = 10 + 2 * L + int(member)
             entries.append({"event": ev, "path": "outs", "view": {"$v": [alloc, 0, [POS, H], [H, 1], "bfloat16", "cuda:0"]}, "dtype": "bfloat16",
                             "shape": [POS, H], "strides": [H, 1], "byte_offset": 0, "nbytes": len(data), "layout": "spanned-storage-bytes",
                             "sha256": sha, "file": fn, "step": 0})
@@ -82,7 +82,7 @@ def make_committed(layer_of_invocation=None):
     tensors, entries = [], []
     ordinal = 0
     for k in range(N_LAYERS):
-        for member in ("query", "key"):
+        for member in ("0", "1"):
             tensors.append((f"{ROT}/{member}", _rows(who(k), member).tobytes()))
             entries.append({"identity": {"program_digest": "p" * 64, "request_id": "r0", "step": 0, "invocation": k, "op_path": ROT, "output_member": member,
                                          "element_range": [0, POS * H], "rank": 0},
@@ -123,7 +123,7 @@ def test_the_false_equal_of_int5_int6_int7_is_gone_a_layer_zero_read_for_every_i
     res = OC.oracle_compare(OC.MatchOracle(d), bmap, rd, aliases=ALIASES)
     assert res["result"] is False and res["mismatch_n"] == (N_LAYERS - 1) * 2 and res["equal"] == 2, res
     assert all(m["identity"]["invocation"] >= 1 and m["identity"]["op_path"] == ROT and m["why"].startswith("bytes differ (first element 0") for m in res["mismatch"])
-    assert res["why"].startswith(f"C2 oracle mismatch: {(N_LAYERS - 1) * 2} identities differ from the Match oracle (first: step 0 {ROT}/query inv 1 req r0")
+    assert res["why"].startswith(f"C2 oracle mismatch: {(N_LAYERS - 1) * 2} identities differ from the Match oracle (first: step 0 {ROT}/0 inv 1 req r0")
     # ... and the honest record whose layer-2 meta holds layer 1's words: exactly that invocation, named
     rd2, bmap2 = make_committed(layer_of_invocation=lambda k: 1 if k == 2 else k)
     res2 = OC.oracle_compare(OC.MatchOracle(d), bmap2, rd2, aliases=ALIASES)

@@ -1,6 +1,5 @@
-"""Identifier syntax (README §1): `art:<sha256 hex>`, `drv:<sha256 hex>`, attempt id == run id (`r20260922-105905-2021`), a
-pull request at one head, `pr:<number>@<40-hex commit>` (the merge queue's grants), and a checkpoint at one revision,
-`ckpt:<HF repo id>@<40-hex revision>` (its weights' staging), which only labels target.
+"""Identifier syntax (README §1): `art:<sha256 hex>`, `drv:<sha256 hex>`, attempt id == run id (`r20260922-105905-2021`), and a
+pull request at one head, `pr:<number>@<40-hex commit>`, which only labels target (the merge queue's grants).
 
 The store checks syntax, never existence: a ref may name an artifact that lives only remotely.
 """
@@ -18,7 +17,6 @@ SHORT_ART_RE = re.compile(rf"^art:[0-9a-f]{{{SHORT_ART_MIN_HEX},63}}$")
 DRV_RE = re.compile(rf"^drv:{HEX64}$")
 RUN_RE = re.compile(r"^r\d{8}-\d{6}-[0-9a-f]{4}$")
 PR_RE = re.compile(r"^pr:[1-9]\d*@[0-9a-f]{40}$")
-CKPT_RE = re.compile(r"^ckpt:[A-Za-z0-9][\w.-]*/[\w.-]+@[0-9a-f]{40}$")
 SHA_RE = re.compile(rf"^{HEX64}$")
 
 
@@ -54,10 +52,6 @@ def is_pr(s: Any) -> bool:
     return isinstance(s, str) and bool(PR_RE.match(s))
 
 
-def is_ckpt(s: Any) -> bool:
-    return isinstance(s, str) and bool(CKPT_RE.match(s)) and "--" not in s
-
-
 def is_sha256(s: Any) -> bool:
     return isinstance(s, str) and bool(SHA_RE.match(s))
 
@@ -68,13 +62,12 @@ def hex_of(art_or_drv: str) -> str:
 
 
 def target_dirname(target: str) -> str:
-    """Label directory name for a target id: ':' -> '_' (art:abc -> art_abc; run ids are unchanged), and a checkpoint's '/' -> '--',
-    the hub cache's spelling, which a repo id never contains (ckpt:org/m@rev -> ckpt_org--m@rev)."""
-    return target.replace(":", "_").replace("/", "--")
+    """Label directory name for a target id: ':' -> '_' (art:abc -> art_abc; run ids are unchanged)."""
+    return target.replace(":", "_")
 
 
 def kind_of_id(s: str) -> str:
-    """'art' | 'drv' | 'run' | 'pr' | 'ckpt' | 'unknown'."""
+    """'art' | 'drv' | 'run' | 'pr' | 'unknown'."""
     if is_art(s):
         return "art"
     if is_drv(s):
@@ -83,6 +76,4 @@ def kind_of_id(s: str) -> str:
         return "run"
     if is_pr(s):
         return "pr"
-    if is_ckpt(s):
-        return "ckpt"
     return "unknown"

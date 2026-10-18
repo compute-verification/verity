@@ -6,10 +6,7 @@
 // is contiguous: head g of slot s of block b, its 256 bytes of K then 256 of V, is HW words at physical word offset
 // b sb + g sh + s ss. The codec index is independent of that physical layout: after the weights at store_base, physical
 // slot u and layer l are the store-order/v0 block u layers + l, whose words are K of every head then V of every head.
-// Thus a token-layer is exactly one registered 4 KiB block and all three paths agree on its codec indices. A token-layer
-// written after the codec seed is encoded under its bound key: each path takes the layer's offsets bj, [physical
-// slot][NL] (null: the seed's key), slot u's the remote audit's b_j (`codec.binding` of the token-layer's digest d_j and
-// its store index j), plus tau (j TLW - store_base - (u layers + l) TLW) mod p when j is not the slot's own block.
+// Thus a token-layer is exactly one registered 4 KiB block and all three paths agree on its codec indices.
 //
 // pg_attn is kv.cu's warp-specialized tensor-core form (attn_mma_ws_kernel) over pages: MDW decoder warps, a lane a
 // word of every tile, load the tile's words of one KV head from the pages (the block table), decode them (encoded) or
@@ -46,7 +43,6 @@ struct Pg {
   int *rc_sk;               // sparse [physical slot][KV head][16] shares, nullptr: no receipts
   int *used;                // sparse physical-slot epochs
   const int *epoch;
-  const u32 *bj;            // [physical slot][NL] this layer's token-layers' bound offsets, nullptr: the seed's key
 };
 
 __device__ __forceinline__ u64 pg_word(const Pg &pg, const int *btr, int p, int g, int j) {
@@ -157,7 +153,7 @@ __global__ void __launch_bounds__(MWT, 2) pg_attn_kernel(const uint8_t *__restri
         if constexpr (ENC) {
           if (cur && !mine) {
             u32 tw[NL];
-            tweak_at(pg_store_word(pg, sl, g, j), pg.bj ? pg.bj + sl * NL : nullptr, tw);
+            tweak(pg_store_word(pg, sl, g, j), tw);
             decode_word_t<true>(x, tw, k);
           }
         }
@@ -293,14 +289,12 @@ __device__ __forceinline__ void store_warp(u32 *dst, const u32 (&x)[NL]) {
 }
 
 // A step's new tokens into the cache: token i's head g, K then V, as HW words at slot slots[i] (vLLM's slot mapping,
-// block bs slots; negative: padding, skipped), encoded at k rounds (ENC) or as they are, under the slot's bound offset
-// bj + slot NL (nullptr: the seed's key). A thread a word.
+// block bs slots; negative: padding, skipped), encoded at k rounds (ENC) or as they are. A thread a word.
 template <bool ENC>
 __global__ void __launch_bounds__(128) pg_append_kernel(const uint16_t *__restrict__ key, const uint16_t *__restrict__ val,
                                                         size_t kstride, size_t vstride, const long long *__restrict__ slots,
                                                         int n, u32 *__restrict__ cache, int bs, int sb, int sh, int ss,
-                                                        u64 store_base, int layers, int layer, int k,
-                                                        const u32 *__restrict__ bj) {
+                                                        u64 store_base, int layers, int layer, int k) {
   const u64 u = (u64)blockIdx.x * 128 + threadIdx.x;
   u32 x[NL] = {};
   u32 *dst = nullptr;
@@ -313,7 +307,7 @@ __global__ void __launch_bounds__(128) pg_append_kernel(const uint16_t *__restri
       load(reinterpret_cast<const u32 *>(src), x);
       const u64 wl = (u64)(slot / bs) * sb + (u64)g * sh + (u64)(slot % bs) * ss + j;
       if constexpr (ENC)
-        encode_word(x, store_base + ((u64)slot * layers + layer) * TLW + pg_wi(g, j), k, bj ? bj + slot * NL : nullptr);
+        encode_word(x, store_base + ((u64)slot * layers + layer) * TLW + pg_wi(g, j), k);
       dst = cache + wl * NL;
     }
   }
@@ -321,9 +315,7 @@ __global__ void __launch_bounds__(128) pg_append_kernel(const uint16_t *__restri
 }
 
 // pg_append_kernel over layers: layer l's row i of rows at u = (l rows + i) KV_HEADS HW + g HW + j; its table entry
-// (PG_TAB words): key, value, their row strides, slots, rows used, cache, store base, layer count, layer index and the
-// layer's bound offsets (0: the seed's key).
-constexpr int PG_TAB = 11;
+// (10 words): key, value, their row strides, slots, rows used, cache, store base, layer count and layer index.
 template <bool ENC>
 __global__ void __launch_bounds__(128) pg_append_multi_kernel(const u64 *__restrict__ tab, int layers, int rows, int bs,
                                                               int sb, int sh, int ss, int k) {
@@ -332,7 +324,7 @@ __global__ void __launch_bounds__(128) pg_append_multi_kernel(const u64 *__restr
   u32 x[NL] = {};
   u32 *dst = nullptr;
   if (u < (u64)layers * per) {
-    const u64 *e = tab + PG_TAB * (u / per);
+    const u64 *e = tab + 10 * (u / per);
     const u64 r = u % per;
     const int j = (int)(r % HW), g = (int)(r / HW % KV_HEADS), i = (int)(r / ((u64)HW * KV_HEADS));
     const long long slot = i < (int)e[5] ? reinterpret_cast<const long long *>(e[4])[i] : -1;
@@ -342,10 +334,7 @@ __global__ void __launch_bounds__(128) pg_append_multi_kernel(const u64 *__restr
                             (size_t)g * HEAD_DIM + (size_t)(j % (HW / 2)) * (WB / 2);
       load(reinterpret_cast<const u32 *>(src), x);
       const u64 wl = (u64)(slot / bs) * sb + (u64)g * sh + (u64)(slot % bs) * ss + j;
-      if constexpr (ENC) {
-        const u32 *bj = reinterpret_cast<const u32 *>(e[10]);
-        encode_word(x, e[7] + ((u64)slot * e[8] + e[9]) * TLW + pg_wi(g, j), k, bj ? bj + slot * NL : nullptr);
-      }
+      if constexpr (ENC) encode_word(x, e[7] + ((u64)slot * e[8] + e[9]) * TLW + pg_wi(g, j), k);
       dst = reinterpret_cast<u32 *>(e[6]) + wl * NL;
     }
   }
@@ -353,12 +342,11 @@ __global__ void __launch_bounds__(128) pg_append_multi_kernel(const u64 *__restr
 }
 
 // nb whole blocks (blocks[b], bw words each, contiguous) of a layer's cache into out, block b at word b bw: decoded
-// (ENC, under each slot's bound offset in bj, nullptr: the seed's key) or copied. A thread a word.
+// (ENC) or copied. A thread a word.
 template <bool ENC>
 __global__ void __launch_bounds__(128) pg_gather_kernel(const u32 *__restrict__ cache, const int *__restrict__ blocks,
                                                         int nb, int bw, int bs, int sh, int ss, u32 *__restrict__ out,
-                                                        u64 store_base, int layers, int layer, int k,
-                                                        const u32 *__restrict__ bj) {
+                                                        u64 store_base, int layers, int layer, int k) {
   const u64 u = (u64)blockIdx.x * 128 + threadIdx.x;
   u32 x[NL] = {};
   u32 *dst = nullptr;
@@ -370,8 +358,7 @@ __global__ void __launch_bounds__(128) pg_gather_kernel(const u32 *__restrict__ 
     const int so = sh < ss ? w / ss : (w % sh) / ss;
     const int j = w - g * sh - so * ss;
     const u64 slot = (u64)blocks[b] * bs + so;
-    if constexpr (ENC)
-      decode_word(x, store_base + (slot * layers + layer) * TLW + pg_wi(g, j), k, bj ? bj + slot * NL : nullptr);
+    if constexpr (ENC) decode_word(x, store_base + (slot * layers + layer) * TLW + pg_wi(g, j), k);
     dst = out + ((u64)blockIdx.x * 128 + threadIdx.x) * NL;   // u again, not held across the decode (ptxas spills it)
   }
   store_warp(dst, x);
@@ -383,7 +370,7 @@ template <bool ENC>
 __global__ void __launch_bounds__(32 * KV_HEADS) pg_gather_rc_kernel(
     const u32 *__restrict__ cache, const int *__restrict__ blocks, int nb, int bs, int sb, int sh, int ss,
     u32 *__restrict__ out, u64 store_base, int layers, int layer, int k, int *__restrict__ rc_sk,
-    int *__restrict__ used, const int *__restrict__ epoch, const u32 *__restrict__ bj) {
+    int *__restrict__ used, const int *__restrict__ epoch) {
   const int g = threadIdx.x >> 5, lane = threadIdx.x & 31, t = lane >> 2, j = lane & 3;
   const u64 q = (u64)blockIdx.x * 8 + t;
   u32 x[NL] = {};
@@ -409,8 +396,7 @@ __global__ void __launch_bounds__(32 * KV_HEADS) pg_gather_rc_kernel(
       }
     }
     if (g == 0 && j == 0) atomicExch(used + slot, *epoch);
-    if constexpr (ENC)
-      decode_word(x, store_base + (slot * layers + layer) * TLW + pg_wi(g, j), k, bj ? bj + slot * NL : nullptr);
+    if constexpr (ENC) decode_word(x, store_base + (slot * layers + layer) * TLW + pg_wi(g, j), k);
     const u64 ow = (u64)bo * sb + (u64)g * sh + (u64)so * ss + j;
     dst = out + ow * NL;
   }
@@ -466,17 +452,17 @@ void pg_shape(int *out) {
 // ostride; a sequence's row qrow[i], or i with qrow null, rows past batch zeroed), q's row likewise (row stride
 // qstride); part holds batch splits MW partials (pg_shape's out[6] floats each). encoded = 0 plain, 1 its words at k
 // rounds (the same output). ck, cv (row strides cks, cvs): each sequence's last token's K and V, at its row of q (null:
-// from the pages). bj (encoded only): [physical slot][NL] the layer's bound offsets (null: the seed's key).
+// from the pages).
 int pg_attn(const void *kv_, int encoded, const uint16_t *q, size_t qstride, float qscale, uint16_t *out,
             size_t ostride, int nrows, float *part, const int *lens, const int *bt, const int *qrow, int bstride,
             int bs, int sb, int sh, int ss, unsigned long long store_base, int layers, int layer,
             int batch, int splits, int k, const uint16_t *ck, const uint16_t *cv, size_t cks, size_t cvs,
-            int *rc_sk, int *used, const int *epoch, const uint32_t *bj, cudaStream_t s) {
+            int *rc_sk, int *used, const int *epoch, cudaStream_t s) {
   if (!kv::MMA_OK) return -2;
   const bool rc = rc_sk || used || epoch;
   if (batch < 0 || nrows < batch || splits < 1 || bs < 1 || (encoded && (k < 1 || k > kv::KMAX)) || encoded < 0 ||
       encoded > 1 || (qrow && nrows != batch) || (!ck != !cv) || layers < 1 || layer < 0 || layer >= layers ||
-      (rc && (!encoded || !rc_sk || !used || !epoch)) || (bj && !encoded))
+      (rc && (!encoded || !rc_sk || !used || !epoch)))
     return -1;
   static bool set = false;
   if (!set) {
@@ -486,7 +472,7 @@ int pg_attn(const void *kv_, int encoded, const uint16_t *q, size_t qstride, flo
     set = true;
   }
   const kv::Pg pg{lens, bt, qrow, bstride, bs, sb, sh, ss, store_base, layers, layer, ck, cv, cks, cvs,
-                  rc_sk, used, epoch, bj};
+                  rc_sk, used, epoch};
   if (batch) {
     const int grid = batch * splits * kv::KV_HEADS;
     if (rc)
@@ -504,23 +490,20 @@ int pg_attn(const void *kv_, int encoded, const uint16_t *q, size_t qstride, flo
   return launched();
 }
 
-// bj (encoded only): [physical slot][NL] the layer's bound offsets, each appended token-layer encoded under its slot's
-// (null: the seed's key).
 int pg_append(const uint16_t *key, const uint16_t *val, size_t kstride, size_t vstride, const long long *slots, int n,
               void *cache, int bs, int sb, int sh, int ss, unsigned long long store_base, int layers, int layer,
-              int encoded, int k, const uint32_t *bj, cudaStream_t s) {
+              int encoded, int k, cudaStream_t s) {
   if (n < 0 || bs < 1 || layers < 1 || layer < 0 || layer >= layers ||
-      (encoded && (k < 1 || k > kv::KMAX)) || (bj && !encoded) || !kv::MMA_OK) return -1;
+      (encoded && (k < 1 || k > kv::KMAX)) || !kv::MMA_OK) return -1;
   if (!n) return 0;
   const unsigned long long words = (unsigned long long)n * kv::KV_HEADS * kv::HW;
   const unsigned grid = (unsigned)((words + 127) / 128);
   (encoded ? kv::pg_append_kernel<true> : kv::pg_append_kernel<false>)<<<grid, 128, 0, s>>>(
-      key, val, kstride, vstride, slots, n, static_cast<uint32_t *>(cache), bs, sb, sh, ss, store_base, layers, layer, k,
-      bj);
+      key, val, kstride, vstride, slots, n, static_cast<uint32_t *>(cache), bs, sb, sh, ss, store_base, layers, layer, k);
   return launched();
 }
 
-// layers layers' appends in one launch: tab (device) holds each layer's PG_TAB words (pg_append_multi_kernel), rows its
+// layers layers' appends in one launch: tab (device) holds each layer's 10 words (pg_append_multi_kernel), rows its
 // most rows; every layer's cache in one layout (bs, sb, sh, ss).
 int pg_append_multi(const unsigned long long *tab, int layers, int rows, int bs, int sb, int sh, int ss, int encoded,
                     int k, cudaStream_t s) {
@@ -533,29 +516,28 @@ int pg_append_multi(const unsigned long long *tab, int layers, int rows, int bs,
   return launched();
 }
 
-// bj (encoded only): [physical slot][NL] the layer's bound offsets (null: the seed's key).
 int pg_gather(const void *cache, const int *blocks, int nb, int bw, int bs, int sb, int sh, int ss, void *out,
               unsigned long long store_base, int layers, int layer, int encoded, int k, int *rc_sk, int *used,
-              const int *epoch, const uint32_t *bj, cudaStream_t s) {
+              const int *epoch, cudaStream_t s) {
   const bool rc = rc_sk || used || epoch;
   if (nb < 0 || bw < 1 || bs < 1 || layers < 1 || layer < 0 || layer >= layers ||
       (unsigned long long)nb * bw >= 1ull << 32 || (encoded && (k < 1 || k > kv::KMAX)) ||
-      (rc && (!encoded || !rc_sk || !used || !epoch)) || (bj && !encoded)) return -1;
+      (rc && (!encoded || !rc_sk || !used || !epoch))) return -1;
   if (!nb) return 0;
   if (rc) {
     kv::pg_gather_rc_kernel<true><<<(unsigned)(((unsigned long long)nb * bs + 7) / 8), 32 * kv::KV_HEADS, 0, s>>>(
         static_cast<const uint32_t *>(cache), blocks, nb, bs, sb, sh, ss, static_cast<uint32_t *>(out), store_base,
-        layers, layer, k, rc_sk, used, epoch, bj);
+        layers, layer, k, rc_sk, used, epoch);
   } else {
     const unsigned long long words = (unsigned long long)nb * bw;
     if (encoded)
       kv::pg_gather_kernel<true><<<(unsigned)((words + 127) / 128), 128, 0, s>>>(
           static_cast<const uint32_t *>(cache), blocks, nb, bw, bs, sh, ss, static_cast<uint32_t *>(out), store_base,
-          layers, layer, k, bj);
+          layers, layer, k);
     else
       kv::pg_gather_kernel<false><<<(unsigned)((words + 127) / 128), 128, 0, s>>>(
           static_cast<const uint32_t *>(cache), blocks, nb, bw, bs, sh, ss, static_cast<uint32_t *>(out), store_base,
-          layers, layer, k, nullptr);
+          layers, layer, k);
   }
   return launched();
 }

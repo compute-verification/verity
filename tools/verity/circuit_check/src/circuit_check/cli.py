@@ -412,9 +412,8 @@ def update_pins(rep: dict) -> dict:
 #: the targets that peak over `HEAVY_GB`, each with its peak in GiB (`run`'s scheduling; ``peak_gb``, which counts the 9.6 GiB
 #: task list each process is forked with), from the isolated cold `--all` run r20261009-170758-f674 on vy-cpu-1: its first 239
 #: targets, every one an earlier list held among them, peaked at 125-151 GiB (these six) or at most 10.6 GiB (the rest; the
-#: earlier 29.4 and 104.2 GiB entries were what a long-lived worker kept from a previous target); its other targets confirm it.
-#: No key holds it (`cache.HEAVY`), so a new entry reruns no target
-HEAVY = CC.HEAVY
+#: earlier 29.4 and 104.2 GiB entries were what a long-lived worker kept from a previous target); its other targets confirm it
+HEAVY = Path(__file__).with_name("heavy.json")
 HEAVY_GB = 16
 PEAKS_REPORTED = 50
 
@@ -439,8 +438,7 @@ def budget_gb(mem_gb: int | None) -> float:
 
 
 def heavy() -> dict[str, float]:
-    with CC.internal():
-        return json.loads(HEAVY.read_text()) if HEAVY.exists() else {}
+    return json.loads(HEAVY.read_text()) if HEAVY.exists() else {}
 
 
 #: the memory a worker counts on: a cold `--all` grew six of 23 workers on vy-nebius-cpu-1 to 40-136 GiB (7 Oct), and two

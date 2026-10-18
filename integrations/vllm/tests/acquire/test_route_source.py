@@ -6,8 +6,6 @@ prints for its routes, and the committer's identity check passes on them with th
 other route, a missing one, an unlisted hook name or a layer without a route fails the step."""
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import types
 from typing import Any
 

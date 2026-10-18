@@ -521,25 +521,18 @@ def names (j : Json) (k : String) : Array Name :=
 end LeanAudit
 
 open LeanAudit in
-/-- The verifier's path: the constants its `entries` reach through definitions' values, `implemented_by` targets and
-`@[csimp]` replacements (the constant compiled code runs in place of one, by a theorem `@f = @g`), in every imported
-module, expanding nothing in `stop`. Reported: each reached `@[implemented_by]` and `@[extern]` constant, each reached
-`@[csimp]` rewrite with its replacement and theorem, and each constant of the `hash` namespace the walk enters from
-outside it, with the path from an entry. -/
+/-- The verifier's path: the constants its `entries` reach through definitions' values and `implemented_by` targets, in
+every imported module, expanding nothing in `stop`. Reported: each reached `@[implemented_by]` and `@[extern]` constant,
+and each constant of the `hash` namespace the walk enters from outside it, with the path from an entry. -/
 unsafe def verifierInfo (env : Environment) (entries stop : Array Name) (hash : Name) : Json := Id.run do
   let moduleOf (c : Name) : Option Name := (env.getModuleIdxFor? c).map fun i => moduleName env i
   let mut impl : Std.HashMap Name Name := {}
   let mut ext : NameSet := {}
-  let mut csimp : Std.HashMap Name Compiler.CSimp.Entry := {}
   for data in env.header.moduleData do
     for (n, t) in entriesOf Name data Compiler.implementedByAttr.ext.name do
       impl := impl.insert n t
     for (n, _) in entriesOf Unit data externAttr.ext.name do
       ext := ext.insert n
-    if let some (_, es) := data.entries.find? (·.1 == Compiler.CSimp.ext.ext.name) then
-      for e in es do
-        match (unsafeCast e : ScopedEnvExtension.Entry Compiler.CSimp.Entry) with
-        | .global c | .scoped _ c => csimp := csimp.insert c.fromDeclName c
   let stops := stop.foldl NameSet.insert {}
   let mut seen : NameSet := {}
   let mut parent : Std.HashMap Name Name := {}
@@ -555,7 +548,7 @@ unsafe def verifierInfo (env : Environment) (entries stop : Array Name) (hash : 
     let next := (match env.find? n with
       | some (.defnInfo d) => d.value.getUsedConstants
       | some (.opaqueInfo d) => d.value.getUsedConstants
-      | _ => #[]) ++ (impl[n]?.toArray) ++ ((csimp[n]?.map (·.toDeclName)).toArray)
+      | _ => #[]) ++ (impl[n]?.toArray)
     for c in next do
       if !seen.contains c then
         seen := seen.insert c
@@ -575,8 +568,6 @@ unsafe def verifierInfo (env : Environment) (entries stop : Array Name) (hash : 
     ("missing", toJson ((entries.filter (!env.contains ·)).map toString)), ("reached", toJson reached.size),
     ("implemented_by", toJson (reached.filterMap fun c => impl[c]?.map fun t => Json.mkObj (locOf c ++ [("by", toJson t.toString)]))),
     ("extern", toJson (reached.filter ext.contains |>.map fun c => Json.mkObj (locOf c))),
-    ("csimp", toJson (reached.filterMap fun c => csimp[c]?.map fun e =>
-      Json.mkObj (locOf c ++ [("to", toJson e.toDeclName.toString), ("by", toJson e.thmName.toString)]))),
     ("hash", toJson (reached.filter (fun c => hash.isPrefixOf c && !(parent[c]?.map hash.isPrefixOf).getD true)
       |>.map fun c => Json.mkObj (locOf c ++ [("path", toJson (pathTo c))])))]
 

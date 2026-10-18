@@ -30,10 +30,10 @@ class PagedLib(KB.Lib):
         so = self.so
         so.pg_shape.argtypes = [v]
         so.pg_attn.argtypes = [v, i, v, z, ctypes.c_float, v, z, i, v, v, v, v, i, i, i, i, i, u, i, i, i, i, i,
-                               v, v, z, z, v, v, v, v, v]
+                               v, v, z, z, v, v, v, v]
         so.pg_append_multi.argtypes = [v, i, i, i, i, i, i, i, i, v]
-        so.pg_append.argtypes = [v, v, z, z, v, i, v, i, i, i, i, u, i, i, i, i, v, v]
-        so.pg_gather.argtypes = [v, v, i, i, i, i, i, i, v, u, i, i, i, i, v, v, v, v, v]
+        so.pg_append.argtypes = [v, v, z, z, v, i, v, i, i, i, i, u, i, i, i, i, v]
+        so.pg_gather.argtypes = [v, v, i, i, i, i, i, i, v, u, i, i, i, i, v, v, v, v]
         so.pg_receipts_sparse.argtypes = [v, v, v, v, u, i, i, u, v]
         so.pg_rc_gate_pass.argtypes = [v, v, v]
         so.kv_rc_pass.argtypes = [v, v, v]
@@ -85,27 +85,13 @@ def stream(torch) -> int:
     return torch.cuda.current_stream().cuda_stream
 
 
-def _ptr(t) -> int:
-    return 0 if t is None else t.data_ptr()
-
-
-def offsets(torch, values: list[int], f: K.Field):
-    """Bound offsets as `paged.cu` takes them: [len(values)][NL] int32 on the device, value u's little-endian limbs (each
-    canonical, below p: `codec.binding`, or 0 for a slot under the seed's key)."""
-    if any(not 0 <= b < f.p for b in values):
-        raise ValueError("a bound offset is canonical, below p")
-    raw = bytearray(b"".join(b.to_bytes(f.word_bytes, "little") for b in values))
-    return torch.frombuffer(raw, dtype=torch.int32).reshape(len(values), f.limbs).cuda()
-
-
 def attn(lib: PagedLib, torch, cache, lay: Layout, store_base: int, layers: int, layer: int, encoded: int, k: int,
          q, out, part, lens, bt, batch: int, splits: int, nrows: int | None = None, qrow=None, ck=None, cv=None,
-         receipts=None, bj=None) -> None:
+         receipts=None) -> None:
     """Decode attention of batch sequences (lens [≥ batch] int32, bt [≥ batch][bstride] int32) over one layer: q and out
     are [rows][heads · head_dim] bf16 (any row stride), sequence i's at row qrow[i] (or i); rows batch … nrows − 1
     zeroed (nrows default q's rows); part holds batch · splits · MW partials. ck, cv ([rows][KV heads · head_dim] bf16,
-    any row stride): each sequence's last token's K and V at its row, in place of its pages'. bj (`offsets`, one a
-    physical slot): the layer's bound offsets, an encoded cache's token-layers decoded under them."""
+    any row stride): each sequence's last token's K and V at its row, in place of its pages'."""
     nrows = q.shape[0] if nrows is None else nrows
     if (ck is None) != (cv is None):
         raise ValueError("ck and cv go together")
@@ -119,24 +105,22 @@ def attn(lib: PagedLib, torch, cache, lay: Layout, store_base: int, layers: int,
              0 if ck is None else ck.data_ptr(), 0 if cv is None else cv.data_ptr(),
              0 if ck is None else ck.stride(0), 0 if cv is None else cv.stride(0),
              0 if rc_sk is None else rc_sk.data_ptr(), 0 if used is None else used.data_ptr(),
-             0 if epoch is None else epoch.data_ptr(), _ptr(bj), stream(torch))
+             0 if epoch is None else epoch.data_ptr(), stream(torch))
 
 
 def append(lib: PagedLib, torch, cache, lay: Layout, store_base: int, layers: int, layer: int, encoded: int, k: int,
-           key, val, slots, bj=None) -> None:
-    """Tokens key[i], val[i] ([tokens][KV heads · head_dim] bf16, any row stride) at slot slots[i] (int64; < 0 skipped),
-    encoded under their slots' bound offsets bj (`offsets`, one a physical slot; None: the seed's key)."""
+           key, val, slots) -> None:
+    """Tokens key[i], val[i] ([tokens][KV heads · head_dim] bf16, any row stride) at slot slots[i] (int64; < 0 skipped)."""
     lib.call("pg_append", key.data_ptr(), val.data_ptr(), key.stride(0), val.stride(0), slots.data_ptr(),
              slots.shape[0], cache.data_ptr(), lay.bs, lay.sb, lay.sh, lay.ss, store_base, layers, layer, encoded, k,
-             _ptr(bj), stream(torch))
+             stream(torch))
 
 
 def table(torch, entries):
-    """pg_append_multi's host table: (key, value, slots, rows, cache, store base, layer count, layer index[, bound
-    offsets]) each, the offsets as `append`'s bj (absent or None: the seed's key)."""
+    """pg_append_multi's host table: (key, value, slots, rows, cache, store base, layer count, layer index) each."""
     rows = [[key.data_ptr(), val.data_ptr(), key.stride(0), val.stride(0), slots.data_ptr(), n, cache.data_ptr(),
-             store_base, layers, layer, _ptr(bj[0] if bj else None)]
-            for key, val, slots, n, cache, store_base, layers, layer, *bj in entries]
+             store_base, layers, layer]
+            for key, val, slots, n, cache, store_base, layers, layer in entries]
     return torch.tensor(rows, dtype=torch.int64).reshape(-1)
 
 
@@ -147,13 +131,12 @@ def append_multi(lib: PagedLib, torch, tab, layers: int, rows: int, lay: Layout,
 
 
 def gather(lib: PagedLib, torch, cache, lay: Layout, store_base: int, layers: int, layer: int, encoded: int, k: int,
-           blocks, out, receipts=None, bj=None) -> None:
-    """Blocks blocks[b] (int32) of the layer into out's block b, decoded (encoded, under bj as `attn` takes it) or
-    copied."""
+           blocks, out, receipts=None) -> None:
+    """Blocks blocks[b] (int32) of the layer into out's block b, decoded (encoded) or copied."""
     rc_sk, used, epoch = receipts or (None, None, None)
     lib.call("pg_gather", cache.data_ptr(), blocks.data_ptr(), blocks.shape[0], lay.sb, lay.bs, lay.sb, lay.sh, lay.ss,
              out.data_ptr(), store_base, layers, layer, encoded, k, 0 if rc_sk is None else rc_sk.data_ptr(),
-             0 if used is None else used.data_ptr(), 0 if epoch is None else epoch.data_ptr(), _ptr(bj), stream(torch))
+             0 if used is None else used.data_ptr(), 0 if epoch is None else epoch.data_ptr(), stream(torch))
 
 
 def receipts_sparse(lib: PagedLib, torch, rc_sk, tags, used, epoch, slots: int, layers: int, layer: int,

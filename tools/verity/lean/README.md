@@ -70,9 +70,7 @@ Every declaration of the package's audited modules (not a list of theorems), fro
   record whose definitions use it changes. `--name-instances` writes each current name into its declaration;
 - the guarantees say what their records say, and each names its owner (below);
 - with a `verifier` section, nothing the verifier's `entries` reach is `@[implemented_by]` or `@[extern]` outside `allow`,
-  and they reach the `hash` namespace only through `stop` (`verifier_failures`). The walk follows definitions' values,
-  `implemented_by` targets and `@[csimp]` replacements, the code compiled in place of a constant; a csimp rewrite itself
-  is a theorem the replay checks, so it is listed (`csimp` in the facts) and not refused;
+  and they reach the `hash` namespace only through `stop` (`verifier_failures`);
 - with a `claims` section, every predicate the spec declares under `claims.modules` (a named assumption aside) has its
   witnesses under `claims.witnesses`, or a reason under `claims.not`: a guarantee `fails`, stated `¬ C …` past its `∀`
   and `∃` binders with the claim `C` at the head, and guarantees `meets`, one per deployed record, that state the claim's

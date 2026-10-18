@@ -5,8 +5,6 @@ replay index addresses each row at its plane, and the MoE source binds the same 
 that reads another pair's quant is named, never read."""
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import copy
 
 import numpy as np

@@ -49,10 +49,15 @@ def scale_calls(P: Any, literals: frozenset[int] = frozenset()) -> list[Any]:
 @lru_cache(maxsize=None)
 def _population_class() -> type:
     from verity_vllm.query.units import Policy, RequiredValues, ValueRef
-    from verity_vllm.query.required import DTYPE_OF_WIDTH, CallMember, Population
+    from verity_vllm.query.required import DTYPE_OF_WIDTH, CallMember, Population, Residual
+
+    residual = Residual("*", "<norm scale>", MEMBER, "a norm's scale is the one f32 per row its rsqrt produces inside the norm's module "
+                        "body; under the norm-scale policy it is required as `<norm module>/norm_scale`, family norm_scales", kind="encoding")
 
     class NormScalePopulation(Population):
         """`Population` under the norm-scale policy: the outputs of `scale_calls` are protocol-required and spelt `norm_scale`."""
+
+        RESIDUAL = residual
 
         def __init__(self, P: Any, corr: Any, **kw: Any) -> None:
             super().__init__(P, corr, **kw)
@@ -68,7 +73,8 @@ def _population_class() -> type:
             if v not in self.norm_scale_values:
                 return super().member(v)
             port = self.P.call(v.call).port(v.port)
-            return CallMember(port.name, MEMBER, port.elems, DTYPE_OF_WIDTH.get(port.width, f"w{port.width}"), FAMILY)
+            return CallMember(port.name, MEMBER, port.elems, DTYPE_OF_WIDTH.get(port.width, f"w{port.width}"), residual.structural,
+                              residual, FAMILY)
 
     return NormScalePopulation
 
@@ -108,6 +114,7 @@ def header(q: dict[str, Any], stats: Mapping[str, Any] | None) -> dict[str, Any]
     text = f"{q['query_text']}; {POLICY_TEXT}"
     out = dict(q, query_text=text, query_id_digest=hashlib.sha256(text.encode()).hexdigest(),
                required_families=[*q.get("required_families", []), FAMILY])
+    out["named_residuals"] = [*q.get("named_residuals", []), _population_class().RESIDUAL.as_dict()]
     out["norm_scales"] = {"family": FAMILY, "member": MEMBER, "kernel_scales": dict(KERNEL_SCALES), "call_scales": dict(CALL_SCALES), **stats}
     return out
 

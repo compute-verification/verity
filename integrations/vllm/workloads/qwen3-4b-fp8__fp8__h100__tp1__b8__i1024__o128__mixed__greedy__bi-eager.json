@@ -16,9 +16,6 @@
    ],
    "num_sms": 132,
    "fp8_block_gemm": "cutlass"
-  },
-  "reasons": {
-   "VLLM_USE_DEEP_GEMM": "the target's fp8_block_gemm cutlass: with both DeepGEMM kernels excluded the cc 9.x selector takes CutlassFp8BlockScaledMMKernel, whose arithmetic is the registered ScaledMmFp8Block_v1 (DeepGEMM has no registered Definition)"
   }
  },
  "seed": 0,

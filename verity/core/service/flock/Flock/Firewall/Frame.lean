@@ -9,11 +9,6 @@ of the layout's absorbed order (`absorbed`). The masked phases are the algebraic
 opening's, and, with a masked Ligerito level 0, the values between `Zk.LABEL_OPEN` and `Zk.LABEL_CLOSE`. The domain frame
 is the stream's own and never leaves.
 
-A rep stops at `Finish`, never before (§10.1): once a round fails the firewall's check, or `round` refuses one, the rep is
-`stopped`. The firewall then sends the statement's scheduled round in the device's place, and every value of the algebraic
-phase leaves as its pad alone (`0 + h_i`), whatever value the round carries, so what leaves before `Finish` has the same
-form and distribution as an honest rep's. A stopped rep's `finish` is `stop`.
-
 `flock-firewall frame` serves `round` to the firewall (`cmd`), which releases only what it returns; Rust's
 `zk_veil::Masking` is its speed reference, held to it on every round the firewall passes.
 -/
@@ -65,9 +60,6 @@ structure Masker where
   done : Bool := false
   doneL0 : Bool := false
   l0 : Bool := false
-  /-- a round failed the firewall's check or was refused: the algebraic phase's values leave as their pads alone, and the
-  rep ends in `stop` -/
-  stopped : Bool := false
   deriving Inhabited
 
 /-- The state at a rep's start, for layout `l`, pads `h` and the pads' 64-byte root. -/
@@ -103,13 +95,11 @@ def Masker.label (s : Masker) (l : ByteArray) : V (Masker × ByteArray) := do
     s := { s with on := true, l0 := true }
   return (s, out)
 
-/-- An absorbed value: `v + h_i` under the next pad of the order in a masked phase, `v` outside one. In a stopped rep the
-algebraic phase's values are `0`, so each leaves as its pad `h_i`. -/
+/-- An absorbed value: `v + h_i` under the next pad of the order in a masked phase, `v` outside one. -/
 def Masker.absorb (s : Masker) (v : F128) : V (Masker × F128) := do
   if !s.on then return (s, v)
   let some i := s.order[s.pos]? | throw s!"more masked values than the layout's {s.order.size}"
   let some p := s.h[i]? | throw s!"pad {i} is outside the rep's pads"
-  let v := if s.stopped && s.pos < s.nPiop then 0 else v
   return ({ s with pos := s.pos + 1 }, v + p)
 
 /-- Whether the rep's stream ended with every masked phase closed and every pad of the order used. -/
@@ -193,11 +183,8 @@ where
 
 /-- `flock-firewall frame`: one rep's release, served on stdin and stdout. The first line starts the rep
 (`Masker.ofJson`) and is answered `ok`; then `round N LEN` followed by the device round's `LEN` bytes is answered
-`ok LEN'` followed by the `LEN'` bytes that leave. `round N LEN fail` is the statement's scheduled round in place of a device
-round that failed the firewall's check: it stops the rep first. A round `round` refuses is answered `err WHY`, releases
-nothing and stops the rep, which stays open for the scheduled round in its place. `finish` is answered `ok`, or `stop` for a
-stopped rep, when every masked phase closed with every pad used. Anything else is answered `err WHY` and ends the rep:
-nothing after it leaves. -/
+`ok LEN'` followed by the `LEN'` bytes that leave, and `finish` is answered `ok` when every masked phase closed with every
+pad used. Anything else, or a round `round` refuses, is answered `err WHY` and ends the rep: nothing after it leaves. -/
 def cmd (_ : List String) : IO UInt32 := do
   let stdin ← IO.getStdin
   let stdout ← IO.getStdout
@@ -215,27 +202,19 @@ def cmd (_ : List String) : IO UInt32 := do
     let line := (← stdin.getLine).replace "\n" ""
     if line.isEmpty then break
     match line.splitOn " " with
-    | "round" :: n :: len :: flag =>
+    | ["round", n, len] =>
       let (some n, some len) := (n.toNat?, len.toNat?) | return (← refuse s!"a request `{line}`")
-      let fail ← match flag with
-        | [] => pure false
-        | ["fail"] => pure true
-        | _ => return (← refuse s!"a request `{line}`")
       let content ← readExact stdin len
-      if fail then s := { s with stopped := true }
       match round s content n with
       | .ok (out, s') =>
         s := s'
         stdout.putStrLn s!"ok {out.size}"
         stdout.write out
         stdout.flush
-      | .error e =>
-        s := { s with stopped := true }
-        stdout.putStrLn s!"err {e.replace "\n" " "}"
-        stdout.flush
+      | .error e => return (← refuse e)
     | ["finish"] =>
       if s.finished then
-        stdout.putStrLn (if s.stopped then "stop" else "ok")
+        stdout.putStrLn "ok"
         stdout.flush
       else return (← refuse s!"the rep ended after {s.pos} of the layout's {s.order.size} masked values")
     | _ => return (← refuse s!"a request `{line}`")

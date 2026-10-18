@@ -3,8 +3,6 @@ takes the kernel's words and finds a flipped one (the attention job names the sp
 the verdict and `main` end to end (the GPU run is `tests/properties/glm53_fa3_split_capture_gpu.py --out ...` on an H200)."""
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import copy
 import json
 

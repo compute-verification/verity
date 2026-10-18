@@ -21,7 +21,7 @@ import test_rec_live_firewall as G
 HONEST = [RL.encode_req(RL.REQ_REGISTER), RL.encode_req(RL.REQ_HELLO, "{}"), RL.encode_req(RL.REQ_ROUND, "circuit/rep0", b"m", 1),
           RL.encode_req(RL.REQ_PROOF, "circuit", 0, b"p0"), RL.encode_req(RL.REQ_PROOF, "circuit", 1, b"p1"),
           RL.encode_req(RL.REQ_FINISH)]
-#: what flock-circuit sends after its send check refuses: every round of the schedule, then Finish without proofs
+#: what flock-circuit sends after its send check refuses: Finish at once, no proofs
 REFUSED = HONEST[:3] + [RL.encode_req(RL.REQ_FINISH)]
 #: a recursive session's V* statements in their order
 PARTS = ["L0", "L1", "L2", "L3", "alg"]

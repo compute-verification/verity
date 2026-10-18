@@ -78,10 +78,7 @@ def test_the_match_of_record_is_the_default_and_the_caller_can_choose_the_audit(
     assert (o.match.match_impl, o.match.match_pipeline) == ("record", "standalone")
     assert _opts(tmp_path, "--match-impl", "record").match.match_impl == "record"
     with pytest.raises(SystemExit):
-        _opts(tmp_path, "--match-phase", "fold")
-    with pytest.raises(Stop) as e:
-        _row(tmp_path, "--match-phase", "gpu").match()
-    assert e.value.rc == 12
+        _opts(tmp_path, "--match-phase", "gpu")
 
 
 def test_machine_paths_are_defaults_that_the_environment_and_flags_override(tmp_path):
@@ -122,14 +119,6 @@ def test_a_foreign_verity_tree_is_refused_by_name(tmp_path, capsys):
     with pytest.raises(Stop) as e:
         r.setup({})
     assert e.value.rc == 3 and "PRECHECK_FAIL_SOURCE_IDENTITY" in capsys.readouterr().err
-
-
-@pytest.mark.parametrize("row, execution, bi", [(ROW, "bi-eager", "1"), ("glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager", "eager", "0")])
-def test_a_rows_stages_run_batch_invariant_exactly_when_its_execution_is(tmp_path, monkeypatch, row, execution, bi):
-    monkeypatch.delenv("TRITON_CACHE_DIR", raising=False)
-    r = _row(tmp_path, row=row)
-    r.setup({})
-    assert (r.execution(), r.child_env["VLLM_BATCH_INVARIANT"], r.bi_eager()) == (execution, bi, execution == "bi-eager")
 
 
 # ---------------------------------------------------------------------------------------------------------------- cancel
@@ -653,24 +642,6 @@ def test_a_manifest_of_an_older_query_another_program_or_no_partition_is_moved_a
     assert R.manifest_not_of_record(R.load_json(f"{r.d}/manifest.json"), PD, r.ck_) == ("", "")
 
 
-def test_a_passing_commit_verifies_the_manifest_its_preparation_named(tmp_path, monkeypatch):
-    """The Commit read the manifest of record out of `commit_prepare`'s scope, which it no longer shares: every passing single-GPU
-    Commit ended in a NameError (art:aef64aa6d6aa26bfa8e89a3ebdf2904507ae051ea6ad9045e48bbddf8509d81d)."""
-    r = _row(tmp_path)
-    verified: list[str] = []
-
-    def verify(man):
-        verified.append(man)
-        raise Stop(0)
-    monkeypatch.setattr(r, "commit_prepare", lambda: (600, ["commit"], f"{r.d}/manifest.json"))
-    monkeypatch.setattr(r, "gpu_exclusive", lambda stage: None)
-    monkeypatch.setattr(r, "run_gpu", lambda stage, to, log, cmd: 0)
-    monkeypatch.setattr(r, "manifest_verify", verify)
-    with pytest.raises(Stop):
-        r.commit()
-    assert verified == [f"{r.d}/manifest.json"]
-
-
 @pytest.mark.parametrize("kw, why", [({}, ""), ({"complete": False}, "not complete"), ({"query_id": "Q_module_body_v1"}, "query of record"),
                                      ({"partition": False}, "query of record"), ({"word_check": False}, "no word check recorded")])
 def test_a_tp_rows_complete_word_checked_manifest_is_reused_not_rebuilt_on_the_gpu_host(tmp_path, kw, why):
@@ -781,149 +752,6 @@ def _engines_custom_all_reduce_off(t, monkeypatch) -> tuple[object, object]:
     def parsed(cmd: list[str]) -> object:
         return parse_engine_args([cmd[i + 1] for i, a in enumerate(cmd) if a == "--engine-arg"])["disable_custom_all_reduce"]
     return parsed(seen[0]), parsed(t.commit_cmd([]))
-
-
-def test_a_tp_match_splits_into_its_gpu_legs_before_the_build_and_the_cpu_rest_after(tmp_path, monkeypatch):
-    """`--match-phase gpu` runs the capture and control with no Build and stops the row; `cpu` runs the check over the legs they recorded."""
-    gpu, cpu = _tp_row(tmp_path, GLM53, "--match-phase", "gpu"), _tp_row(tmp_path, GLM53, "--match-phase", "cpu")
-    os.makedirs(gpu.M)
-    monkeypatch.setattr(R, "derived_ok", lambda p: True)
-    with pytest.raises(Stop) as e:
-        cpu.match()
-    assert e.value.rc == 11 and "gpu_legs.json" in open(f"{cpu.d}/stages.txt").read()
-    ran: list[str] = []
-    monkeypatch.setattr(R, "derived_ok", lambda p: False)
-    monkeypatch.setattr(gpu, "run_gpu", lambda stage, to, log, cmd, **kw: ran.append(stage) or 0)
-    monkeypatch.setattr(gpu, "run_tl", lambda stage, *a: ran.append(stage) or 0)
-    with pytest.raises(Stop) as e:
-        gpu.match()
-    assert e.value.rc == 0 and ran == ["match.capture", "match.control"]
-    assert json.loads(Path(gpu.M, "gpu_legs.json").read_text()) == {"capture_rc": 0, "control_rc": 0}
-    assert open(f"{gpu.d}/stages.txt").read().splitlines()[-1].startswith("match-gpu PASS")
-    ran.clear()
-    monkeypatch.setattr(R, "derived_ok", lambda p: True)
-    monkeypatch.setattr(R, "tp_passed", lambda p: True)
-
-    monkeypatch.setattr(cpu, "run_gpu", lambda *a, **kw: pytest.fail("a GPU leg in the cpu phase"))
-    monkeypatch.setattr(cpu, "run_tl", lambda stage, *a: ran.append(stage) or 0)
-    cpu.match()
-    last = open(f"{cpu.d}/stages.txt").read().splitlines()[-1].split()
-    assert ran == ["match.check"] and last[:2] == ["match", "PASS"] and last[3] == "rc=0/0/0/-1"
-
-
-@pytest.mark.parametrize("argv, leg", [((), 7200), (("--fold-timeout", "100"), 100)])
-def test_a_tp_fold_match_bounds_each_leg_and_gives_the_whole_four_legs(tmp_path, monkeypatch, argv, leg):
-    """tp-fold-match's ``--timeout`` bounds each subprocess, and a rank runs three in turn before the cross-rank leg: one leg's limit
-    on the whole would stop a fold that fits its own (a GLM-5.3 B8 rank folds for ~100 min of the default 120)."""
-    t = _tp_row(tmp_path, GLM53, "--match-phase", "cpu", *argv)
-    t.fold_profile = "derived_GLM53_tp8"
-    os.makedirs(t.M)
-    Path(t.M, "gpu_legs.json").write_text(json.dumps({"capture_rc": 0, "control_rc": 0}))
-    monkeypatch.setattr(R, "derived_ok", lambda p: True)
-    monkeypatch.setattr(R, "tp_passed", lambda p: True)
-    seen: dict[str, tuple[int, list[str]]] = {}
-    monkeypatch.setattr(t, "run_tl", lambda stage, to, log, cmd: seen.setdefault(stage, (to, cmd)) and 0)
-    t.match()
-    to, cmd = seen["match.fold_match"]
-    assert int(cmd[cmd.index("--timeout") + 1]) == leg and to == 4 * leg
-
-
-@pytest.mark.parametrize("argv, workers, reuse, shared", [((), "0", [], True), (("--fold-rank-workers", "2", "--match-reuse", "fold"), "2", ["--reuse-fold"], True),
-                                                          (("--match-reuse", "legs", "--match-pipeline", "standalone"), "0", ["--reuse-fold", "--reuse-legs"], False)])
-def test_a_cpu_half_rerun_keeps_its_captures_folds_with_bounded_ranks(tmp_path, monkeypatch, argv, workers, reuse, shared):
-    """A GLM-5.3 B8 CPU half whose eight X-09 compares (200+ GB each) ran out of host memory reruns over the folds it persisted
-    (`--match-reuse fold`, and with `legs` the compares and GM-01s it wrote), `--fold-rank-workers` ranks at a time; a capture removes
-    the folds and legs of any earlier one, so none is ever kept.  Under the row's `--match-pipeline shared` (the default) each rank's
-    X-09 is its GM-01's (`--shared-x09`), as a single-GPU row's is."""
-    t = _tp_row(tmp_path, GLM53, "--match-phase", "cpu", *argv)
-    t.fold_profile = "derived_GLM53_tp8"
-    os.makedirs(t.M)
-    Path(t.M, "gpu_legs.json").write_text(json.dumps({"capture_rc": 0, "control_rc": 0}))
-    monkeypatch.setattr(R, "derived_ok", lambda p: True)
-    monkeypatch.setattr(R, "tp_passed", lambda p: True)
-    seen: dict[str, list[str]] = {}
-    monkeypatch.setattr(t, "run_tl", lambda stage, to, log, cmd: seen.setdefault(stage, cmd) and 0)
-    t.match()
-    cmd = seen["match.fold_match"]
-    assert cmd[cmd.index("--rank-workers") + 1] == workers and [a for a in cmd if a.startswith("--reuse-")] == reuse
-    assert ("--shared-x09" in cmd) is shared
-    gpu = _tp_row(tmp_path, GLM53, "--match-phase", "gpu", *argv)
-    os.makedirs(f"{gpu.M}/fold_match/rank0", exist_ok=True)
-    monkeypatch.setattr(gpu, "run_gpu", lambda stage, to, log, cmd, **kw: 0)
-    with pytest.raises(Stop):
-        gpu.match()
-    assert not os.path.exists(f"{gpu.M}/fold_match")
-
-
-def test_reused_legs_keep_a_b8_ranks_x09_compare_and_rerun_one_cut_short(tmp_path):
-    """Under --reuse-legs a B>1 rank's written X-09 document (`match_decomp.json`) is its compare, as cb_a.compare's is at B1; one a
-    killed batch-decomp left unparseable runs again (here `/bin/false`, so a leg that runs fails)."""
-    from verity_vllm.pipeline.tp import fold_match as FM
-    doc = tmp_path / "match_decomp.json"
-    for text, reuse, verdict in (('{"verdict": "PASS", "requests": []}', True, "PASS"), ('{"verdict": "PASS", "requests": []}', False, "FAIL"),
-                                 ('{"verdict": "PA', True, "FAIL")):
-        doc.write_text(text)
-        got = FM.compare_rank("/bin/false", tmp_path, tmp_path / "build", ["derived"], "dag", None, reuse=reuse)
-        assert got["verdict"].split()[0] == verdict, (text, reuse, got)
-
-
-def test_a_b8_tp_ranks_x09_is_the_one_its_gm01_writes(tmp_path, monkeypatch):
-    """Under --shared-x09 a B>1 rank decomposes its fold once: GM-01 runs with --decomp-out and the rank's request Programs as --derived,
-    and the compare reads that document (rc as batch_decomp's CLI returns it) without a batch-decomp process; under --reuse-legs a
-    written global_match.json beside no X-09 document (a GM-01 run without --decomp-out) runs again."""
-    from verity_vllm.pipeline.tp import fold_match as FM
-    ran: list[list[str]] = []
-
-    def run(cmd, log, timeout=None):
-        ran.append(cmd)
-        (tmp_path / "global_match.json").write_text(json.dumps({"verdict": "PASS"}))
-        (tmp_path / "match_decomp.json").write_text(json.dumps({"verdict": "PASS", "requests": [{"canonical_equal": True}]}))
-        return 0
-
-    monkeypatch.setattr(FM, "_run", run)
-    (tmp_path / "global_match.json").write_text(json.dumps({"verdict": "PASS"}))
-    g = FM.global_match_rank("py", tmp_path, tmp_path / "gp.json", tmp_path / "wl.json", "dag", None, reuse=True, x09=["b0", "b1"])
-    assert g["ok"] and len(ran) == 1
-    cmd = ran[0]
-    assert cmd[cmd.index("--decomp-out") + 1] == str(tmp_path / "match_decomp.json")
-    assert [cmd[i + 1] for i, a in enumerate(cmd) if a == "--derived"] == ["b0", "b1"]
-    FM.global_match_rank("py", tmp_path, tmp_path / "gp.json", tmp_path / "wl.json", "dag", None, reuse=True, x09=["b0", "b1"])
-    assert len(ran) == 1
-    c = FM.compare_rank("/bin/false", tmp_path, tmp_path / "b0", ["b1"], "dag", None, shared=True)
-    assert (c["verdict"], c["rc"], c["comparator"]) == ("PASS", 0, "cb_a.global_match --decomp-out (X-09)") and len(ran) == 1
-    for doc, rc in (({"verdict": "MISSING_DERIVED"}, 4), (None, 3)):
-        p = tmp_path / "match_decomp.json"
-        p.write_text(json.dumps(doc)) if doc else p.unlink()
-        c = FM.compare_rank("/bin/false", tmp_path, tmp_path / "b0", ["b1"], "dag", None, shared=True)
-        assert c["verdict"].startswith("FAIL") and c["rc"] == rc
-
-
-def test_a_single_and_a_tp_rows_folds_store_the_instances_form_of_record(tmp_path, monkeypatch):
-    """Every child of either row (a TP row's per-rank folds under tp-fold-match among them) stores instances.jsonl in `--instances-form`,
-    progressions by default, not the fold library's run-by-run default (a transposed weight's operand is ~1e6 runs per instance)."""
-    def precheck_reached(*a, **kw):
-        raise Stop(99)
-    for argv, form in (((), "progressions"), (("--instances-form", "runs"), "runs")):
-        single, tp = _row(tmp_path, *argv), _tp_row(tmp_path, GLM53, *argv)
-        monkeypatch.setattr(single, "release_line", precheck_reached)
-        monkeypatch.setattr(tp, "hidden_build", precheck_reached)
-        for r in (single, tp):
-            with pytest.raises(Stop):
-                r.prepare()
-            assert r.child_env["VERITY_INSTANCES_FORM"] == form
-
-
-def test_a_row_declaring_prefix_caching_is_refused_before_any_stage(tmp_path, monkeypatch):
-    """Every stage's engine runs with prefix caching off, so a row whose file declares it is refused at its precheck, by either row."""
-    prefix = "glm53__fp8__h200__tp8__b8__i256__o32__prefix-arrivals__greedy__eager"
-    single, tp = _row(tmp_path, row=prefix), _tp_row(tmp_path, prefix)
-    monkeypatch.setattr(tp, "hidden_build", lambda: "/x/verity_fa2_matReqG.so")
-    for r in (single, tp):
-        monkeypatch.setattr(r, "release_line", lambda *a: pytest.fail("a stage after the precheck"))
-        with pytest.raises(Stop) as e:
-            r.prepare()
-        last = open(f"{r.d}/stages.txt").read().splitlines()[-1].split(" ", 3)
-        assert e.value.rc == 3 and last[:2] == ["precheck", "FAIL"] and "enable_prefix_caching" in last[3]
 
 
 @pytest.mark.parametrize("row, off", [

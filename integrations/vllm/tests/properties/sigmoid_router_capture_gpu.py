@@ -31,8 +31,6 @@ It lives under tests/ because it seeds random generators and sets VLLM_BATCH_INV
 """
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import argparse
 import hashlib
 import json

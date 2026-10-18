@@ -26,9 +26,7 @@ bound=True)`), with d kept beside it and given to `decode_token_layer`.  Under t
 pick its encoding (all zeros, or another block's) and write the token-layer that decodes from it, holding nothing for
 it; under the bound key a chosen encoding decodes to a token-layer with the digest it was decoded under only by a
 search over SHA-512.  The bound key is `verity.core.protocols.remote_bandwidth.codec`'s for block slot · LAYERS + layer,
-byte for byte.  `kv.cu` takes it as each token-layer's offset b (`kv_encode_bound`, `kv_decode_bound`, and
-`benchmarks/vllm_encoded/paged.cu`'s paths), gated against these vectors (`kv_bench.py`'s `gate_bound`); `kv_twin.py`
-takes the seed's key only.
+byte for byte; `kv.cu` and `kv_twin.py` take the seed's key only.
 
 The derivation is `benchmarks/codec_tensor/wide.py`'s (ra-codec-tensor) under a domain of its own, at the fields
 ra-codec-theory chose (2^1536 − 3453 its operating point), whose words have no slack. A payload is any word below p. For p = 2^n − c

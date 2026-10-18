@@ -50,9 +50,8 @@ package an enumerator listed (`targets.load_registries`, the vLLM registry's ``c
 `_ENUMERATORS`: each imports every module it lists and names any that fails, nothing else) is held by its listing, the modules
 it lists by their names, each module's content used only to follow a move (`_children`), and the modules it imported are not
 pinned to their names.  A module whose source `inspect` looked for is held by its name and content (``present``).  The checker's
-own version is the digest of this package's sources less `targets.py`, ``pins/`` and `heavy.json` (`HEAVY`: the scheduler's
-peaks, which decide which targets run beside which, never what a check computes, and which no recording holds either,
-`cli.heavy`).  Beside them the key holds the interpreter and its optimization level, the platform, the request (the target, its options, whether the partition invariant applies to it, as the catalog resolved it, and for
+own version is the digest of this package's sources less `targets.py` and ``pins/``.  Beside them the key holds the
+interpreter and its optimization level, the platform, the request (the target, its options, whether the partition invariant applies to it, as the catalog resolved it, and for
 a Definition the digest of every primitive and specialization it reaches, each by its descriptor id and canonical descriptor
 entry, `descriptor`), the modules the registries import for having a sidecar (`registries`: a new or removed sidecar, or a
 moved module that has one, reruns every target, as a new import line in `targets.py` would) and the ``VERITY_*`` /
@@ -136,9 +135,6 @@ _INTERNAL: list[bool] = []
 _HERE = Path(__file__).resolve().parent
 #: the checker's files that are no input of every target: each target holds its own parts of them
 TARGETS, PINS = _HERE / "targets.py", _HERE / "pins"
-#: the targets' measured peaks `cli.run` schedules by: no input of any target, since they decide only which targets run beside
-#: which, and a target whose process the OOM killer took is never stored
-HEAVY = _HERE / "heavy.json"
 #: a sidecar's name beside its module's (`sidecars`): ``fp8.circuit-check.py`` and ``.json`` of ``fp8.py``
 SUFFIX = ".circuit-check"
 #: the binding files beside `targets.py` (each Definition module's sidecar, `sidecars`), absolute; the pins files (``pins/``'s
@@ -1600,12 +1596,12 @@ def _dist(root: Path, top: str) -> str | None:
 
 def version() -> str:
     """The checker's own version: the digest of this package's sources, less `targets.py` and ``pins/`` (each target holds
-    its own parts of them) and `HEAVY` (no target's input)."""
+    its own parts of them)."""
     h = hashlib.sha512()
     _INTERNAL.append(True)
     try:
         for p in sorted(_HERE.rglob("*")):
-            if p.is_file() and "__pycache__" not in p.parts and p not in (TARGETS, HEAVY) and PINS not in p.parents:
+            if p.is_file() and "__pycache__" not in p.parts and p != TARGETS and PINS not in p.parents:
                 h.update(p.relative_to(_HERE).as_posix().encode() + b"\0" + p.read_bytes() + b"\0")
     finally:
         _INTERNAL.pop()

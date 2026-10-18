@@ -13,8 +13,6 @@ edge, a block's edge and random), and for each k of `--ks`:
 - `append_multi`: both layers' appends in one launch (more rows than tokens) equal the layer-by-layer appends;
 - `gather`: whole blocks decoded (encoded) or copied (plain) equal the plain cache's blocks.
 
-Then `bound`, the bound key (`bound_gate`): token-layers written after the codec seed, each under its slot's offset.
-
 Writes `paged-gate.json` and `paged-gate.log` under `--out`; exits nonzero if any gate fails."""
 from __future__ import annotations
 
@@ -38,143 +36,9 @@ from paged import K, KB  # noqa: E402
 import sketch_receipt as SR  # noqa: E402
 import sketching as SKT  # noqa: E402
 
-sys.path[:0] = [str(HERE.parents[1]), str(HERE.parents[1] / "verity" / "core" / "protocols" / "remote_bandwidth" / "tests")]
-import remote_bandwidth_vectors as RV  # noqa: E402
-from verity.core.protocols.remote_bandwidth import codec as RC  # noqa: E402
-
 RTOL = 8e-3  # step.py's for the tensor-core form, which rounds P (and here the output) to bf16
 BLOCKS, BS, LAYERS = 96, 16, 2
 LENS = (0, 1, 15, 16, 17, 63, 64, 65, 300, 511)
-BOUND_LENS = (1, 17, 64, 300, 511)
-BOUND_SPLITS = (1, 4)
-
-
-def bound_gate(lib: P.PagedLib, torch, ks: list[int], log) -> dict:
-    """The bound key on every path, in two parts.
-
-    - `pinned` (a library at the remote audit's codec, `codec.DEFAULT`): `vectors.json`'s `codec.bound` blocks
-      (the remote audit's payloads j = 0 and 20 under their bound keys), each appended as one token's K and V at the
-      slot and layer whose store-order block is j (store base 0) under b_j, and at another slot with the index
-      difference folded into its offset (b_j + tau W (j − there)): the token-layer's words equal the pinned block (its
-      SHA-512 and first word) both times, so a page encodes at its store index whatever slot holds it.
-    - `random` (any library): every slot of both layers under a random offset of its own. The appended cache equals
-      `kv.py` on a few words. `pg_append_multi` with the offsets in its table equals it. Decode attention over it
-      (BOUND_LENS, at each of BOUND_SPLITS) equals the plain cache's output bit for bit, and decoded under the seed's
-      key it does not. The gather, with receipts and without, equals the plain blocks."""
-    G, D, WB, f = lib.shape["kv_heads"], lib.shape["head_dim"], lib.shape["wb"], lib.field
-    W, nslots = K.token_layer_words(f), BLOCKS * BS
-    out = {"ok": True}
-    st = P.stream(torch)
-    rc = RC.DEFAULT
-    pinned = json.loads(RV.PATH.read_text())["codec"]
-    if (f.name, lib.mask, pinned["name"]) == (rc.field.name, rc.masked, rc.name) and rc.rounds <= lib.kmax:
-        seed = bytes.fromhex(pinned["seed"])
-        key, dev = RC.key(seed, rc), K.key(f.name, seed, rc.rounds, mask=rc.masked)
-        if (dev.c, dev.tau, dev.mask) != (key.c, key.tau, key.mask):
-            raise RuntimeError("kv.py's key is not the remote audit's codec key")
-        KB.set_key(lib, dev)
-        cache = torch.zeros(BLOCKS, G, BS, 2 * D, dtype=torch.bfloat16, device="cuda")
-        lay = P.layout(cache, G, WB)
-        pins = []
-        for v in pinned["bound"]:
-            j = v["j"]
-            pay = RV.payload(j)
-            d = RC.digest(pay)
-            b = RC.binding(d, j, key)
-            kr = torch.frombuffer(bytearray(pay[:2048]), dtype=torch.bfloat16).view(1, G * D).cuda()
-            vr = torch.frombuffer(bytearray(pay[2048:]), dtype=torch.bfloat16).view(1, G * D).cuda()
-            there = (nslots - 1 - j // LAYERS) * LAYERS + j % LAYERS
-            for slot, layer, off in ((j // LAYERS, j % LAYERS, b),
-                                     (there // LAYERS, there % LAYERS, (b + key.tau * W * (j - there)) % f.p)):
-                bj = P.offsets(torch, [off if s == slot else 0 for s in range(nslots)], f)
-                P.append(lib, torch, cache, lay, 0, LAYERS, layer, 1, rc.rounds, kr, vr,
-                         torch.tensor([slot], dtype=torch.int64, device="cuda"), bj=bj)
-                torch.cuda.synchronize()
-                bo, so = divmod(slot, BS)
-                got = torch.cat((cache[bo, :, so, :D].reshape(-1), cache[bo, :, so, D:].reshape(-1))).view(
-                    torch.uint8).cpu().numpy().tobytes()
-                pins.append({"j": j, "slot": slot, "layer": layer, "folded": slot * LAYERS + layer != j,
-                             "digest": d.hex() == v["digest"], "b": format(b, "x") == v["b"],
-                             "word_0": got[:WB].hex() == v["word_0"],
-                             "block_sha512": hashlib.sha512(got).hexdigest() == v["block_sha512"]})
-        pins_ok = all(p["digest"] and p["b"] and p["word_0"] and p["block_sha512"] for p in pins)
-        out["pinned"] = {"codec": rc.name, "blocks": pins, "ok": pins_ok}
-        out["ok"] &= pins_ok
-        log(f"bound pinned {rc.name}: {'ok' if pins_ok else 'FAIL ' + str(pins)} ({len(pins)} appends against "
-            "vectors.json's codec.bound, at the block's own slot and folded at another)")
-        k, dev_key = rc.rounds, dev
-    else:
-        out["pinned"] = {"skipped": f"the library is {f.name}{'/masked' if lib.mask else ''}, not {rc.name}"}
-        log(f"bound pinned: skipped, {out['pinned']['skipped']}")
-        k = ks[0]
-        dev_key = KB.lib_key(lib, k)
-        KB.set_key(lib, dev_key)
-    rng = random.Random(7)
-    offs = [[rng.randrange(f.p) for _ in range(nslots)] for _ in range(LAYERS)]
-    bjs = [P.offsets(torch, o, f) for o in offs]
-    plain = [(torch.randn(BLOCKS, G, BS, 2 * D, device="cuda") * 2).to(torch.bfloat16) for _ in range(LAYERS)]
-    lay = P.layout(plain[0], G, WB)
-    all_slots = torch.arange(nslots, dtype=torch.int64, device="cuda")
-    rows = [(p[:, :, :, :D].permute(0, 2, 1, 3).reshape(nslots, G * D).contiguous(),
-             p[:, :, :, D:].permute(0, 2, 1, 3).reshape(nslots, G * D).contiguous()) for p in plain]
-    enc = [torch.empty_like(p) for p in plain]
-    for l in range(LAYERS):
-        P.append(lib, torch, enc[l], lay, 0, LAYERS, l, 1, k, *rows[l], all_slots, bj=bjs[l])
-    multi = [torch.empty_like(p) for p in plain]
-    tab = P.table(torch, [(*rows[l], all_slots, nslots, multi[l], 0, LAYERS, l, bjs[l]) for l in range(LAYERS)]).cuda()
-    P.append_multi(lib, torch, tab, LAYERS, nslots, lay, 1, k)
-    torch.cuda.synchronize()
-    multi_ok = all(torch.equal(multi[l].view(torch.int16), enc[l].view(torch.int16)) for l in range(LAYERS))
-    w8, e8 = plain[1].view(torch.uint8).view(-1, WB), enc[1].view(torch.uint8).view(-1, WB)
-    hw = lib.shape["hw"]
-    py_ok = True
-    for i in [0, 1, lay.words - 1] + rng.sample(range(lay.words), 5):
-        b, r = divmod(i, lay.sb)
-        g, r = divmod(r, lay.sh)
-        s, j = divmod(r, lay.ss)
-        slot = b * BS + s
-        wi = (j if j < hw // 2 else (2048 // WB) + j - hw // 2) + g * (hw // 2)
-        m = int.from_bytes(bytes(w8[i].cpu().tolist()), "little")
-        py_ok &= K.encode_word(m, (slot * LAYERS + 1) * W + wi, dev_key, offs[1][slot]) == int.from_bytes(
-            bytes(e8[i].cpu().tolist()), "little")
-    batch, H = len(BOUND_LENS), lib.shape["heads"]
-    bt = torch.zeros(batch, 32, dtype=torch.int32)
-    perm = rng.sample(range(BLOCKS), BLOCKS)
-    for i, n in enumerate(BOUND_LENS):
-        nb = -(-n // BS)
-        bt[i, :nb] = torch.tensor(perm[2 * i:2 * i + nb] if 2 * i + nb <= BLOCKS else perm[:nb], dtype=torch.int32)
-    btd, lens = bt.cuda(), torch.tensor(BOUND_LENS, dtype=torch.int32, device="cuda")
-    q = torch.randn(batch, H * D, device="cuda").to(torch.bfloat16)
-    att = []
-    for layer in range(LAYERS):
-        for sp in BOUND_SPLITS:
-            part = torch.empty(P.part_floats(lib, batch, sp), dtype=torch.float32, device="cuda")
-            o_p, o_b, o_s = (torch.full((batch, H * D), c, dtype=torch.bfloat16, device="cuda") for c in (7.0, -3.0, 5.0))
-            P.attn(lib, torch, plain[layer], lay, 0, LAYERS, layer, 0, k, q, o_p, part, lens, btd, batch, sp)
-            P.attn(lib, torch, enc[layer], lay, 0, LAYERS, layer, 1, k, q, o_b, part, lens, btd, batch, sp, bj=bjs[layer])
-            P.attn(lib, torch, enc[layer], lay, 0, LAYERS, layer, 1, k, q, o_s, part, lens, btd, batch, sp)
-            torch.cuda.synchronize()
-            att.append({"layer": layer, "splits": sp, "equal": bool(torch.equal(o_p.view(torch.int16), o_b.view(torch.int16))),
-                        "seed_key_differs": not torch.equal(o_p.view(torch.int16), o_s.view(torch.int16))})
-    att_ok = all(c["equal"] and c["seed_key_differs"] for c in att)
-    blocks = torch.tensor(rng.sample(range(BLOCKS), 20), dtype=torch.int32, device="cuda")
-    rc_sk = torch.empty((nslots, G, SR.ROWS), dtype=torch.int32, device="cuda")
-    used = torch.full((nslots,), -1, dtype=torch.int32, device="cuda")
-    epoch = torch.ones(1, dtype=torch.int32, device="cuda")
-    gather_ok = True
-    for l in range(LAYERS):
-        for receipts in (None, (rc_sk, used, epoch)):
-            o = torch.empty(20, *plain[l].shape[1:], dtype=torch.bfloat16, device="cuda")
-            P.gather(lib, torch, enc[l], lay, 0, LAYERS, l, 1, k, blocks, o, receipts=receipts, bj=bjs[l])
-            torch.cuda.synchronize()
-            gather_ok &= bool(torch.equal(o.view(torch.int16), plain[l][blocks.long()].view(torch.int16)))
-    rand_ok = multi_ok and py_ok and att_ok and gather_ok
-    out["random"] = {"k": k, "slots": nslots, "layers": LAYERS, "append_multi": multi_ok, "kv_py": py_ok,
-                     "attention": att, "gather": gather_ok, "ok": rand_ok}
-    out["ok"] &= rand_ok
-    log(f"bound random k={k}: {'ok' if rand_ok else 'FAIL'} (append_multi {multi_ok}, kv.py {py_ok}, attention "
-        f"{sum(c['equal'] and c['seed_key_differs'] for c in att)}/{len(att)}, gather {gather_ok})")
-    return out
 
 
 def main() -> int:
@@ -457,8 +321,6 @@ def main() -> int:
             f"({len(att['cells'])} cells, max rel err {max(errs):.1e}), gather {'ok' if ok_g else 'FAIL'}")
     res["receipt_sets"] = receipt_sets
     res["plan_of"] = plan_checked
-    res["bound"] = bound_gate(lib, torch, [int(v) for v in a.ks.split(",")], log)
-    res["ok"] &= res["bound"]["ok"]
     (out_dir / "paged-gate.json").write_text(json.dumps(res, indent=1))
     log("paged gate " + ("passed" if res["ok"] else "FAILED"))
     return 0 if res["ok"] else 1

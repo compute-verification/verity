@@ -220,6 +220,7 @@
     {"file": "verity_vllm/commit/binding.py", "kind": "doc-board-id", "symbol": "require_build_program_digest", "detail": "M-nnnn"},
     {"file": "verity_vllm/commit/binding.py", "kind": "doc-round", "symbol": "<module>", "detail": "R1N"},
     {"file": "verity_vllm/commit/binding.py", "kind": "doc-round", "symbol": "_op_key_index", "detail": "R1N"},
+    {"file": "verity_vllm/commit/binding.py", "kind": "doc-round", "symbol": "build_binding_map", "detail": "R1N"},
     {"file": "verity_vllm/commit/binding.py", "kind": "doc-round", "symbol": "composition_check", "detail": "R1N", "count": 2},
     {"file": "verity_vllm/commit/binding.py", "kind": "doc-round", "symbol": "coverage_check", "detail": "R1N"},
     {"file": "verity_vllm/commit/binding.py", "kind": "doc-round", "symbol": "load_required_manifest", "detail": "R1N"},

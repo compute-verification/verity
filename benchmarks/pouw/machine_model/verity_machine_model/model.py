@@ -22,7 +22,7 @@ DEVICES = DATA / "devices"
 DEVICE = "sm_120"   # data/ itself, the RTX PRO 6000: the default device
 
 Census = dict[str, dict[str, float]]  # instruction class: {row: u one warp instruction holds the row alone}
-STATUSES = ("measured", "ASSUMED", "provisional", "joint", "datasheet")
+STATUSES = ("measured", "ASSUMED", "provisional", "joint")
 
 
 @dataclass(frozen=True)

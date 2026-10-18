@@ -13,8 +13,6 @@ once.
 """
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.ops.boolean import attention as BA
 from verity.ml.circuits.ops.boolean import gemm as BG

@@ -25,7 +25,6 @@ from dataclasses import dataclass
 
 from verity_vllm.config import RowConfig, option
 from verity_vllm.engine import env as engine_env, hooks
-from verity_vllm.pipeline import launch_context as LC
 from verity_vllm.program.boolean import derived
 from verity_vllm.program.frontend.inputs_trace import InputsTrace
 from verity_vllm.pipeline.tp.links import module_in_model_vocabulary, read_tp_links, same_module_path, write_tp_links  # noqa: F401 (read through here)
@@ -362,8 +361,7 @@ def applicability_conditions(profile, applied: dict, attention_impls: dict, expo
         # [R15 hopper HOP-03] a request Program built under a declared launch context is reusable only for a batch that co-schedules it the same
         # way (FA3's tile reads the launch's max_seqlen_q).  Key present ONLY when a context was declared: B1 / undeclared identities are unchanged.
         cond["launch_context"] = {"max_seqlen_q_by_step": {str(k): v for k, v in sorted((launch.get("max_seqlen_q_by_step") or {}).items())},
-                                  "conflict": bool(launch.get("conflict")),
-                                  **({"batch_by_step": {str(k): [list(q) for q in v] for k, v in sorted(launch["batch_by_step"].items())}} if launch.get("batch_by_step") else {})}
+                                  "conflict": bool(launch.get("conflict"))}
     return cond
 
 
@@ -377,10 +375,10 @@ def _cuda_available() -> bool:
 
 def run(out: str, M: int, pos0: int, profile: str, backend: str, intercept: bool = True, wrapper: str = "step", LP: int = 8, T: int = 4, eos: int = 0, model_id: str | None = None, revision: str | None = None, max_model_len: int = 2048,
         target=None, sampling: dict | None = None, tp: int = 1, rank: int = 0, launch: dict | None = None, emit=None,
-        engine_args: dict | None = None, device_name: str | None = None, batch_dispatch: bool = False) -> dict:
+        engine_args: dict | None = None, device_name: str | None = None) -> dict:
     """`emit`: an `emit_ranks.Emit` (`--emit-ranks`): the other ranks' files are written from this rank's derivation.  `engine_args`:
     the row's engine arguments the meta config takes (`workload_engine_args`).  `device_name`: the name the declared target's GPU
-    reports, answered on a GPU-free host (`engine.profiles.devices`, `export_compat.select_cuda_platform`).  `batch_dispatch`: see `LC.missing_batch`."""
+    reports, answered on a GPU-free host (`engine.profiles.devices`, `export_compat.select_cuda_platform`)."""
     from verity_vllm.program.frontend.target_profile import TargetProfile
     os.makedirs(out, exist_ok=True)
     t_start = time.time()
@@ -426,11 +424,9 @@ def run(out: str, M: int, pos0: int, profile: str, backend: str, intercept: bool
                                              "missing": ["TopPMask (F-dense-02)", "wrapper authoring of the stochastic select (Bet A)",
                                                          "eager resolver patterns for _temperature_kernel / stochastic _gumbel_sample_kernel"]}}
             raise _Refused()
-        # the request's launch batch where the row's kernels read it; [R15 stoch] the stochastic policy's Definition coverage and launch
-        # geometry (S), refused with the reason when not a static
-        geo_refusal = ((wrapper == "request" and batch_dispatch and LC.missing_batch(launch, LP, T))
-                       or sampler_geometry(sampling, target, LP=LP if wrapper == "request" else None, T=T if wrapper == "request" else None))
-        if geo_refusal:
+        # [R15 stoch] the stochastic policy's Definition coverage and launch geometry (S), refused with the reason when not a static
+        geo_refusal = sampler_geometry(sampling, target, LP=LP if wrapper == "request" else None, T=T if wrapper == "request" else None)
+        if geo_refusal is not None:
             res["unsupported"] = geo_refusal
             raise _Refused()
         res["sampling"] = sampling
@@ -762,13 +758,12 @@ class Options:
     emit_ranks: str | None = option("--emit-ranks", default=None,
                                     help="other ranks (comma list) whose files are written from this rank's derivation (pipeline.tp.emit_ranks)")
     emit_root: str | None = option("--emit-root", default=None, help="with --emit-ranks: rank r's files go to <root>/rank<r>/<name of --out>")
-    launch_context: str | None = option("--launch-context", default=None,
-                                        help="[R15 hopper HOP-03] the LAUNCH CONTEXT this request Program is built under (structural input): the varlen launch's "
-                                        "max_seqlen_q over every co-scheduled sequence, per request step -- int N (step 0 = a prefill launch whose longest prompt has N "
-                                        "rows), JSON list [n0, n1, ...] (per step), or 'conflict' (requests of this shape are co-scheduled differently: refused under FA3, "
-                                        "whose tile reads it; inert under FA2); without batch invariance the batch itself, '{\"batch\": [[[rows, start], ...] per step]}', "
-                                        "which every token-count-dependent kernel choice reads (required then).  Omitted = own rows (a batch of one).  The row derives it "
-                                        "from the workload (verity_vllm.pipeline.launch_context) for B >= 2.")
+    launch_max_seqlen_q: str | None = option("--launch-max-seqlen-q", default=None,
+                                             help="[R15 hopper HOP-03] the LAUNCH CONTEXT this request Program is built under (structural input): the varlen launch's "
+                                             "max_seqlen_q over every co-scheduled sequence, per request step -- int N (step 0 = a prefill launch whose longest prompt "
+                                             "has N rows), JSON list [n0, n1, ...] (per step), or 'conflict' (requests of this shape are co-scheduled differently: "
+                                             "refused under FA3, whose tile reads it; recorded and inert under FA2).  Omitted = own rows (a batch of one).  "
+                                             "row_pod.sh derives it from the workload (verity_vllm.pipeline.launch_context) for B >= 2.")
 
 
 def main(a: Options) -> int:
@@ -782,8 +777,8 @@ def main(a: Options) -> int:
         emit = parse_ranks(a.emit_ranks, a.tp, a.rank, a.emit_root) if a.emit_ranks else None
         res = run(a.out, a.M, a.pos0, a.profile, a.backend, wrapper=a.wrapper, LP=a.LP, T=a.T, eos=a.eos, model_id=a.model, revision=a.revision,
                   max_model_len=a.max_model_len, target=parse_target_arg(a.target) if a.target else None, sampling=sampling_policy(a.sampling, a.workload),
-                  tp=a.tp, rank=a.rank, launch=parse_launch_context(a.launch_context), emit=emit,
-                  engine_args=workload_engine_args(a.workload, a.tp), device_name=device_name(a.workload), batch_dispatch=LC.batch_dispatch_of(a.workload))
+                  tp=a.tp, rank=a.rank, launch=parse_launch_context(a.launch_max_seqlen_q), emit=emit,
+                  engine_args=workload_engine_args(a.workload, a.tp), device_name=device_name(a.workload))
     except BaseException as e:  # noqa: BLE001
         tb = traceback.format_exc()
         os.makedirs(a.out, exist_ok=True)

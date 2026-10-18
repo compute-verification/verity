@@ -2,7 +2,6 @@ import Proofs.Accounting.TS.FanIn
 import Proofs.Accounting.TS.Price
 import Proofs.Accounting.TS.Rounds
 import Proofs.Accounting.TS.Facets
-import Proofs.Accounting.TS.Receipt
 import Proofs.Accounting.TS.Tensor
 import Proofs.Pouw.RelativeSecurity
 
