@@ -1,7 +1,8 @@
 """`WeightField` and `Witness` operands on the toy profile of `test_fold_synthetic`: the embedding table read as its weights field whole
 is the same Program as its root read through memory; a witness read takes the next leaves of its request's parameter, which is sized
 to the reads and recorded as `witness_layout`; a read the profile declares no parameter for, and a declared parameter no read takes,
-are refused."""
+are refused.  Under a batch, a launch several requests share takes the run's `launch_<name>` parameter and reserves each member's
+linked words in its own, in issue order beside its keys."""
 
 from __future__ import annotations
 
@@ -9,8 +10,10 @@ import pytest
 
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.types import Array, Value
+from verity_vllm.engine.profiles.gen_marlin_moe_patterns import launch_members
 from verity_vllm.observe.fold.fold import FoldError, fold
 from verity_vllm.observe.fold.resolver import Compute, PerRow, Profile, Shared, WeightField, Witness
+from verity_vllm.observe.fold.witnesses import WitnessInputs
 from verity_vllm.program.registry import b1
 from tests.observe import test_fold_synthetic as T
 from tests.observe.test_fold_synthetic import memory  # noqa: F401  (the real memory model, or the stub while it is a skeleton)
@@ -65,3 +68,33 @@ def test_a_witness_read_without_its_parameter_is_refused(memory):
 def test_a_witness_parameter_no_read_takes_is_refused(memory):
     with pytest.raises(FoldError, match="witness parameter, which would be empty"):
         fold(T.toy_log(), _profile(_embedding(lambda idx, ctx: PerRow(idx), Shared), ("schedule",)), strict=True, with_program=False)
+
+
+def test_a_shared_launch_takes_the_launch_parameter_and_reserves_its_members_linked_words():
+    W, params = WitnessInputs(), [("prompt_0", Array(2, Value(32))), ("prompt_1", Array(1, Value(32)))]
+    W.declare(params, ("schedule",), 2, ("schedule",))
+    assert [n for n, _ in params] == ["prompt_0", "prompt_1", "schedule_0", "schedule_1", "launch_schedule"]
+    req, read = {"a": 0, "b": 1}, {"step": 3, "event": 7, "spec": "S", "hint": "h"}
+    solo = W.leaves(Witness("schedule", ("a",)), 0, Array(2, Value(32)), "solo", req, read)
+    shared = W.leaves(Witness("schedule", ("e3.0",), (("a", 0, 2), ("b", 2, 4))), 0, Array(6, Value(32)), "launch", req, read)
+    assert [(r.idx, r.base, r.count) for r in (solo, shared)] == [(2, 0, 2), (4, 0, 6)]
+    sized, empty = W.finalise(tuple(params), [{"request_id": "a"}, {"request_id": "b"}])
+    assert not empty and [t for _, t in sized[2:]] == [Array(5, Value(32)), Array(5, Value(32)), Array(6, Value(32))]
+    lay = {e["name"]: e for e in W.layout(sized, [{"request_id": "a"}, {"request_id": "b"}])}
+    assert (lay["launch_schedule"]["request"], lay["launch_schedule"]["request_index"]) == (None, None)
+    assert [(f["offset"], f["leaves"], f.get("form"), f.get("slot")) for f in lay["schedule_0"]["fields"]] == [(0, 2, None, None),
+                                                                                                           (2, 3, "linked", 0)]
+    assert [(f["offset"], f["leaves"], f["launch"], f["slot"], f["pairs"]) for f in lay["schedule_1"]["fields"]] == [(0, 5, "e3.0", 2, 4)]
+
+
+def test_a_launch_member_without_its_parameter_is_refused():
+    W, params = WitnessInputs(), []
+    W.declare(params, ("schedule",), 2, ("schedule",))
+    with pytest.raises(ValueError, match="launch member 'c' has no 'schedule'"):
+        W.leaves(Witness("schedule", ("e0.0",), (("a", 0, 1), ("c", 1, 1))), 0, Array(2, Value(32)), "launch", {"a": 0, "b": 1}, {})
+
+
+def test_launch_members_are_the_requests_in_launch_order_at_their_slots():
+    assert launch_members([("b", 7), ("a", 3), ("a", 4), ("c", 0)], 6) == (("b", 0, 6), ("a", 6, 12), ("c", 18, 6))
+    assert launch_members([("a", 3)], 6) == (("a", 0, 6),)
+    assert "not contiguous" in launch_members([("a", 3), ("b", 7), ("a", 4)], 6)

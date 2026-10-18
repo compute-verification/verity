@@ -21,8 +21,9 @@ def weights_input_nodes(B: "C.Prog", n_request_params: int, n_seed_params: int =
     Refuses by name a Prog whose Input nodes cannot hold the header's parameters or whose request-owned Inputs are not the leading ones.
     A tensor-parallel rank fold adds ONE `peers_<i>` Record per request (homogeneous bf16 -> one Input node each) after the seeds
     and before the weights: `n_peer_params` of them, request-owned.
-    A profile's witness parameters (`schedule_<i>`, one Array of 32-bit words per request and name: `compare.Prog.witness_index`) follow
-    the peers, one Input node each: `n_witness_params` of them, request-owned.
+    A profile's witness parameters (`schedule_<i>`, one Array of 32-bit words per request and name: `compare.Prog.witness_index`, then
+    under a batch the shared launches' `launch_schedule`: `compare.Prog.launch_witness`) follow the peers, one Input node each:
+    `n_witness_params` of them, owned by a request or a launch.
     A `registered_values` fold's supplied Input nodes (`run_<i>`, `values`: `compare.Prog.supplied_fields`) sit between the witnesses
     and the weights and are neither: they are left out of both counts, and the weights follow them."""
     n_owned = n_request_params + n_seed_params + n_peer_params + n_witness_params
@@ -71,4 +72,5 @@ def request_inputs(B: "C.Prog", reqs: list[dict]) -> tuple[dict[str, int], dict[
     if peer_node_of and len(peer_node_of) != len(reqs):
         raise ValueError(f"program has {len(peer_node_of)} peers input nodes for {len(reqs)} requests (a TP rank fold declares one per request)")
     witnesses = owners(getattr(B, "witness_index", {}), "witness")
-    return seed_node_of, peer_node_of, witnesses, weights_input_nodes(B, len(reqs), len(seed_node_of), len(peer_node_of), len(witnesses))
+    n_witness = len(witnesses) + len(getattr(B, "launch_witness", {}))
+    return seed_node_of, peer_node_of, witnesses, weights_input_nodes(B, len(reqs), len(seed_node_of), len(peer_node_of), n_witness)

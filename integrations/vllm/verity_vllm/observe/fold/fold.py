@@ -445,7 +445,8 @@ class _Fold:
                 self.peers_fields[i] = []
                 self.peers_leaves[i] = 0
                 params.append(("peers" if len(reqs) == 1 else f"peers_{i}", Record()))   # placeholder type: fields finalised at _finish
-        self.witness_inputs.declare(params, tuple(getattr(self.profile, "witnesses", ())), len(reqs))
+        self.witness_inputs.declare(params, tuple(getattr(self.profile, "witnesses", ())), len(reqs),
+                                    tuple(getattr(self.profile, "launch_witnesses", ())))
         if getattr(self.profile, "registered_values", False):
             self.supplied_inputs.declare(params, len(reqs))
         params.append(("weights", self.weights_type))
@@ -813,7 +814,7 @@ class _Fold:
         if op.shared:
             if self.shared_consts[0] != self.cur_resolution:
                 self.shared_consts = (self.cur_resolution, {})
-            cache, key = self.shared_consts[1], (int(op.width), int(op.bits))
+            cache, key = self.shared_consts[1], (int(op.width), int(op.bits), c.launch)
             if key not in cache:
                 cache[key] = self._const(dataclasses.replace(op, shared=False), ptype, c, pname)
             return cache[key]
@@ -827,7 +828,8 @@ class _Fold:
         self.instances.append({"step": self.cur_step, "event": event, "resolution": self.cur_resolution, "node": k, "spec": prim.id,
                                "row": 0, "rows": 1, "name": name, "hint": f"{c.hint}: {tail}", "request": rp[0] if rp else None,
                                "position": rp[1] if rp else None, "pattern": c.pattern, "operand_views": [], "output_views": [],
-                               "const": {"width": int(op.width), "bits": f"0x{int(op.bits):0{int(op.width) // 4}x}"}})
+                               "const": {"width": int(op.width), "bits": f"0x{int(op.bits):0{int(op.width) // 4}x}"},
+                               **({"launch": c.launch} if c.launch else {})})
         return out
 
     def _param(self, op: Param, i: int, ptype: Type, c: Compute, pname: str) -> Coll:
@@ -957,7 +959,7 @@ class _Fold:
                     # `_name`'s `t=<pos>`; None when the row count identifies nothing (the comparator then attributes by data flow)
                     "request": req_pos[0] if req_pos else None, "position": req_pos[1] if req_pos else None,
                     "pattern": c.pattern, "operand_views": [operand_view(op, i) for op in c.operands],
-                    "output_views": []}
+                    "output_views": [], **({"launch": c.launch} if c.launch else {})}
             if getattr(c, "roots", ()):
                 meta["operand_roots"] = list(c.roots)     # [R15 fp8] per-operand weight names (multi-weight Computes)
             held = self._coll_prep.get(id(c))
@@ -1073,7 +1075,10 @@ class _Fold:
     # naming ----------------------------------------------------------------------------------------
 
     def _attribution(self, c: Compute, i: int) -> tuple[str, int] | None:
-        """(request_id, position) of row `i`: the pattern's attribution, else the step's token rows / logits rows by row count."""
+        """(request_id, position) of row `i`: the pattern's attribution, else the step's token rows / logits rows by row count; none for
+        a launch's unit."""
+        if c.launch:
+            return None
         start = self.cur_start
         if c.attribution and i < len(c.attribution):
             return (str(c.attribution[i][0]), int(c.attribution[i][1]))
