@@ -20,6 +20,10 @@ a stop rule with ignore_eos no request stops early, and the counts say what an E
     python tools/popread.py served BUILD.json [--units] [--ignore-eos] [--lag N] --out OUT.json   (a served-compiled P_served)
     python tools/popread.py plan WORKLOAD.json [...] --planner prefix_plan.py --out OUT.json
     python tools/popread.py table OUT.json [...] [--md OUT.md]
+
+`--units` counts Q_word units per Definition (`Units`): from `--rules` (a manifest's unit-rule directory, or an earlier
+`--units-log`) by content digest, else cut on a `LeanGraph` by core's `cut_word` in `--jobs` forked processes, with
+`--verify-below G` also cutting small Definitions by the reference and `--recut-cached` checking cached rules.
 """
 from __future__ import annotations
 
@@ -244,13 +248,252 @@ def step_of_calls(wp: dict[str, Any], n_calls: int) -> tuple[list[int] | None, i
     return step, lag, None
 
 
-def q_word_units(path: str | Path) -> tuple[dict[int, int], int]:
-    """Q_word{X=16, W=32} v1's units per Call (root node index), and the population."""
+#: (circuit, the Call's activation, its gate count, wiring) for `_gate_chunk`'s workers, set before they fork
+_GATES: list[Any] = []
+#: gates per `_gate_chunk`, and the fewest gates `LeanGraph` resolves in forked workers
+CHUNK_GATES = 1 << 16
+
+
+def _gate_chunk(a: int, b: int) -> tuple[bytes, bytes, bytes, bytes]:
+    """Gates a..b-1 of the Call: per gate its declared width, flags (1: a constant, no parameters; 2: wiring; 4: reads outside
+    the Call), and the in-Call operands it reads (CSR: end offsets, operands), as `CallGraph` enumerates them."""
+    from array import array
+    from verity.ml.circuits.cut import WIDE_FAN_IN, _wide_operands
+    c, call, n, wiring = _GATES
+    lo = call.offset
+    hi = lo + n
+    width, flags, end, ops = array("q"), bytearray(), array("q"), array("q")
+    for j in range(a, b):
+        g = c.gate(lo + j)
+        p, o = g.prim, g.operands
+        if len(o) > WIDE_FAN_IN:
+            mine, ext = [x - lo for x in _wide_operands(g, call) if lo <= x < hi], True
+        else:
+            mine = [x - lo for x in o if lo <= x < hi]
+            ext = len(mine) != len(o)
+        width.append(p.ret.w)
+        flags.append((not p.params) | (p.id in wiring) << 1 | ext << 2)
+        ops.extend(mine)
+        end.append(len(ops))
+    return width.tobytes(), bytes(flags), end.tobytes(), ops.tobytes()
+
+
+class LeanGraph:
+    """What core's `cut.cut_word` reads of a `cut.CallGraph` (`n`, `src`, `dst`, `outputs`, `width`), built without the
+    reference's per-gate operand lists, Call-input reads and recompute keys: a 384-way expert gather makes those tens of KB a
+    gate, hundreds of GB for one MoE expert Gemm.  The operands are resolved in `jobs` forked workers over ranges of gates
+    (`_gate_chunk`), then one pass in order does what `CallGraph` does with them.  `same_as` holds it to the reference."""
+
+    def __init__(self, fn: Any, wiring: frozenset[str] | None = None, jobs: int = 1) -> None:
+        import multiprocessing
+        from array import array
+        from concurrent.futures import ProcessPoolExecutor
+        from verity.ml.circuits.cut import WIRING, QueryInapplicable, call_scope
+        from verity.ml.circuits.layout import resolve
+        c, call = call_scope(fn)
+        lo, n = call.offset, fn.gates
+        spans = [(a, min(a + CHUNK_GATES, n)) for a in range(0, n, CHUNK_GATES)]
+        _GATES[:] = [c, call, n, WIRING if wiring is None else wiring]
+        try:
+            if jobs > 1 and len(spans) > 1:
+                with ProcessPoolExecutor(min(jobs, len(spans)), mp_context=multiprocessing.get_context("fork")) as ex:
+                    chunks = list(ex.map(_gate_chunk, *zip(*spans)))
+            else:
+                chunks = [_gate_chunk(a, b) for a, b in spans]
+        finally:
+            _GATES.clear()
+        free, const = bytearray(n), bytearray(n)
+        idx = array("q", [-1]) * n
+        srcs: dict[int, tuple[int, ...]] = {}
+        self.width, self.src, self.dst = array("q"), array("q"), array("q")
+        k = 0
+        for (a, _b), (wb, flags, eb, ob) in zip(spans, chunks):
+            width, end, ops = array("q"), array("q"), array("q")
+            width.frombytes(wb), end.frombytes(eb), ops.frombytes(ob)
+            start = 0
+            for i, fl in enumerate(flags):
+                j = a + i
+                mine = ops[start:end[i]]
+                start = end[i]
+                if mine and max(mine) >= j:
+                    raise QueryInapplicable(f"{fn.id}: gate {j} reads gate {max(mine)}, not before it (the layout is not topological)",
+                                            {"definition": fn.id, "gate": j, "reads": max(mine), "why": "not topological"})
+                cj, fj = bool(fl & 1), bool(fl & 3)
+                if not fj and not fl & 4 and mine and all(const[o] for o in mine):
+                    cj = fj = True
+                const[j], free[j] = cj, fj
+                if fj:
+                    s: set[int] = set()
+                    for o in mine:
+                        s.update(srcs.get(o, ()) if free[o] else (o,))
+                    if s:
+                        srcs[j] = tuple(sorted(s))
+                    continue
+                idx[j] = k
+                self.width.append(width[i])
+                seen: set[int] = set()
+                for o in mine:
+                    for u in (srcs.get(o, ()) if free[o] else (o,)):
+                        if u not in seen:
+                            seen.add(u)
+                            self.src.append(idx[u])
+                            self.dst.append(k)
+                k += 1
+        self.n = k
+        self.outputs: list[int] = []
+        for g in ([0] if not hasattr(fn, "body") else (resolve(call, r) - lo for r in fn.body.ret)):
+            if 0 <= g < n:
+                self.outputs.extend(idx[u] for u in (srcs.get(g, ()) if free[g] else (g,)))
+
+    def same_as(self, ref: Any) -> bool:
+        return (self.n, list(self.src), list(self.dst), list(self.outputs), list(self.width)) == (
+            ref.n, list(ref.src), list(ref.dst), list(ref.outputs), list(ref.width))
+
+
+def lean_units(fn: Any, memo: dict[str, int], jobs: int = 1) -> int:
+    """`cut.evaluate_definition(fn, 16).units`, each body cut as a whole cut by core's `cut_word` on its `LeanGraph`."""
+    from verity.ml.circuits.cut import WIRING, cut_word, separable
+    got = memo.get(fn.id)
+    if got is not None:
+        return got
+    if not hasattr(fn, "body"):
+        u = 0 if (not fn.params or fn.id in WIRING) else 1
+    elif (sep := separable(fn)) is not None:
+        u = sum(lean_units(callee, memo, jobs) * m for callee, m in sep)
+    else:
+        u = len(cut_word(LeanGraph(fn, jobs=jobs), UNIT_BITS)[1])
+    memo[fn.id] = u
+    return u
+
+
+#: the Definitions a `Units` pool cuts, set before its workers fork (a Definition need not pickle)
+_PENDING: list[Any] = []
+
+
+#: the fewest gates a `Units` cuts alone, its gates resolved by all its jobs; smaller Definitions are cut one per job
+BIG_GATES = 1_000_000
+
+
+def _cut_pending(i: int, verify_below: int, jobs: int = 1) -> dict[str, Any]:
+    import time
+    from verity.ml.circuits.cut import CallGraph, evaluate_definition, separable
+    fn = _PENDING[i]
+    t = time.monotonic()
+    out = {"definition": fn.id, "gates": fn.gates, "units": lean_units(fn, {}, jobs), "seconds": round(time.monotonic() - t, 1)}
+    if fn.gates <= verify_below:
+        out["reference_units"] = evaluate_definition(fn, UNIT_BITS, {}).units
+        if hasattr(fn, "body") and separable(fn) is None:
+            out["graph_same"] = LeanGraph(fn).same_as(CallGraph(fn))
+    return out
+
+
+class Units:
+    """Q_word{X=16} units per activation of each Definition: a unit rule cached under the Definition's content digest
+    (`verity_vllm.query.word`'s rule directories, whose cut code is core's `cut_word`, or this tool's JSONL `log`), else cut by
+    `lean_units` in `jobs` forked processes, largest first, each result appended to `log` as it lands.  A Definition of at most
+    `verify_below` gates is also cut by the reference (`evaluate_definition`, `CallGraph`); `recut` recuts cached ones too.
+    Any disagreement is listed in `summary()["mismatches"]`."""
+
+    def __init__(self, rules: Iterable[str | Path] = (), log: str | Path | None = None, jobs: int = 1, verify_below: int = 0,
+                 recut: bool = False) -> None:
+        self.cache: dict[str, tuple[int, str]] = {}
+        for r in rules:
+            self._load(Path(r))
+        self.log, self.jobs, self.verify_below, self.recut = log, jobs, verify_below, recut
+        self.counts = Counter()
+        self.mismatches: list[dict[str, Any]] = []
+
+    def _load(self, p: Path) -> None:
+        for f in (sorted(p.glob("*/*.json")) if p.is_dir() else [p]):
+            text = f.read_text()
+            for d in ([json.loads(x) for x in text.splitlines() if x.strip()] if f.suffix == ".jsonl" else [json.loads(text)]):
+                if "key" in d:
+                    k, rule = d["key"], d["rule"]
+                    too_large = any(v.get("class") == "too-large" for v in rule.get("violations") or ())
+                    if k.get("query") != [UNIT_BITS, 32, 0] or too_large:
+                        continue
+                    self.cache.setdefault(k["digest"], (int(rule["units_per_call"]), str(p)))
+                elif "digest" in d:
+                    self.cache.setdefault(d["digest"], (int(d["units"]), str(p)))
+
+    def of(self, fns: dict[str, Any]) -> dict[str, int]:
+        """name -> units per activation of `fns[name]`."""
+        from verity_vllm.query.word import definition_digest
+        digest = {fn.id: definition_digest(fn) for fn in fns.values()}
+        by_id: dict[str, int] = {}
+        todo: dict[str, Any] = {}
+        for fn in fns.values():
+            hit = self.cache.get(digest[fn.id])
+            if hit is not None:
+                by_id[fn.id] = hit[0]
+                self.counts["cached"] += 1
+            if hit is None or self.recut:
+                todo[fn.id] = fn
+        for r in self._cut(sorted(todo.values(), key=lambda fn: -fn.gates)):
+            i = r["definition"]
+            r["digest"] = digest[i]
+            self.counts["cut"] += 1
+            if "reference_units" in r:
+                self.counts["verified_units"] += 1
+                if r["reference_units"] != r["units"]:
+                    self.mismatches.append({"definition": i, "lean": r["units"], "reference": r["reference_units"]})
+            if "graph_same" in r:
+                self.counts["verified_graphs"] += 1
+                if not r["graph_same"]:
+                    self.mismatches.append({"definition": i, "graph": "LeanGraph differs from CallGraph"})
+            if i in by_id:
+                self.counts["recut_cached"] += 1
+                if by_id[i] != r["units"]:
+                    self.mismatches.append({"definition": i, "lean": r["units"], "cached": by_id[i]})
+            by_id[i] = r["units"]
+            self.cache[r["digest"]] = (r["units"], "cut")
+            if self.log:
+                with open(self.log, "a") as f:
+                    f.write(json.dumps(r) + "\n")
+            print(f"popread units: {r['units']:>10,} {r['gates']:>12,} gates {r['seconds']:>8}s {i[:120]}", file=sys.stderr,
+                  flush=True)
+        return {name: by_id[fn.id] for name, fn in fns.items()}
+
+    def _cut(self, todo: list[Any]) -> Iterator[dict[str, Any]]:
+        import multiprocessing
+        from concurrent.futures import ProcessPoolExecutor, as_completed
+        big = [fn for fn in todo if fn.gates >= BIG_GATES]
+        small = [fn for fn in todo if fn.gates < BIG_GATES]
+        try:
+            for fn in big:
+                _PENDING[:] = [fn]
+                yield _cut_pending(0, self.verify_below, self.jobs)
+            _PENDING[:] = small
+            if self.jobs <= 1 or len(small) <= 1:
+                for i in range(len(small)):
+                    yield _cut_pending(i, self.verify_below)
+                return
+            with ProcessPoolExecutor(min(self.jobs, len(small)), mp_context=multiprocessing.get_context("fork")) as ex:
+                for f in as_completed([ex.submit(_cut_pending, i, self.verify_below) for i in range(len(small))]):
+                    yield f.result()
+        finally:
+            _PENDING.clear()
+
+    def summary(self) -> dict[str, Any]:
+        return {"cached": self.counts["cached"], "cut": self.counts["cut"], "recut_cached": self.counts["recut_cached"],
+                "verified_units": self.counts["verified_units"], "verified_graphs": self.counts["verified_graphs"],
+                "verify_below_gates": self.verify_below, "rules": sorted({src for _u, src in self.cache.values() if src != "cut"}),
+                "mismatches": self.mismatches}
+
+
+def q_word_units(path: str | Path, units: Units | None = None) -> tuple[dict[int, int], int]:
+    """Q_word{X=16, W=32} v1's units per Call (root node index), and the population (`partition_object.Partition`'s)."""
     from verity.ml.circuits import partition_object as PO
+    from verity.ml.circuits.cut import QueryInapplicable
     from verity_vllm.program.boolean import load_program
     program, _digest = load_program(Path(path))
-    part = PO.evaluate(program, PO.query(X=UNIT_BITS))
-    return {k: c.units for k, c in part.calls}, part.population
+    calls = PO.calls(program)
+    for k, fn in calls:
+        if program.root.body.nodes[k].form not in ("call", "primitive"):
+            raise QueryInapplicable(f"root node {k} is not a call or primitive node", {"call": k, "definition": fn.id})
+    per = (units or Units()).of({fn.id: fn for _k, fn in calls})
+    out = {k: per[fn.id] for k, fn in calls}
+    return out, sum(out.values())
 
 
 def analyze_descriptor(desc: dict[str, Any], *, units: dict[int, int] | None = None, workload_program: dict | None = None,
@@ -322,7 +565,15 @@ def _value_label(r: dict[str, Any], producer: dict[str, str]) -> str:
     return f"input:{v.split('/', 1)[1]}" if v.startswith("c00.input/") else f"call:{producer.get(v, '?')}"
 
 
-def analyze_served(build: dict[str, Any], *, units: bool = False, ignore_eos: bool = False, lag: int = 0) -> dict[str, Any]:
+def _call_spec(c: dict[str, Any], plan: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    """A P_served Call's Definition at one step: its own, or the step plan's for its Gemm shape or its MoE key."""
+    if "definition" in c:
+        return c["definition"], c["statics"]
+    g = plan["moe"][c["moe"]] if "moe" in c else plan["gemms"][",".join(str(x) for x in c["gemm"])]
+    return g["definition"], g["statics"]
+
+
+def analyze_served(build: dict[str, Any], *, units: "Units | bool" = False, ignore_eos: bool = False, lag: int = 0) -> dict[str, Any]:
     """A served-compiled Build's P_served: per step, each Call's Definition applied written width / its return leaves times per
     token row, attention once per query row and layer, the logits and the sampled id once per request.  The plan runs every
     request to max_tokens, so a request's rows from its own step 1 + LAG on are the activity an EOS stop would key
@@ -330,7 +581,6 @@ def analyze_served(build: dict[str, Any], *, units: bool = False, ignore_eos: bo
     (`eos_step_keyed`: the step's tokens, padding, capture mode, Gemm M and attention splits).  `ignore_eos`: the row serves
     with it (the Build doesn't record the sampling), so no stop happens and both counts are what one would key."""
     from verity.ml.circuits.codec import encode_program
-    from verity.ml.circuits.cut import evaluate_definition
     from verity.ml.circuits.program import Program
     from verity_vllm.query.call_scope import specialization
 
@@ -341,17 +591,22 @@ def analyze_served(build: dict[str, Any], *, units: bool = False, ignore_eos: bo
         producer[a["name"]] = "Attention"
     producer["logits"] = base(P["logits"].get("name") or "logits")
     arrive = {r["request_id"]: int(r["arrive"]) for r in (build.get("workload") or {}).get("schedule") or ()}
+    specs: dict[str, dict[str, Any]] = {P["sampled"]["definition"]: P["sampled"]["statics"]}
+    for plan in build["steps_plan"]:
+        specs.update(dict([_call_spec(c, plan) for c in P["calls"]]))
+        specs.update({a["definition"]: a["statics"] for r in plan["requests"] for a in r["attention"]})
+        specs[plan["logits"]["definition"]] = plan["logits"]["statics"]
+    defs = {spec: specialization(base(spec), statics) for spec, statics in specs.items()}
+    helper = (units if isinstance(units, Units) else Units()) if units else None
+    unit_of = helper.of(defs) if helper else {}
     memo: dict[str, Any] = {}
-    cut_memo: dict = {}
 
     def info(spec: str, statics: dict[str, Any]) -> dict[str, Any]:
         got = memo.get(spec)
         if got is None:
-            d = specialization(base(spec), statics)
-            sel = root_selects(encode_program(Program(d)))
-            ret = d.signature()[1]
-            got = memo[spec] = {"gates": d.gates, "ret": ret.leaves, "selects": sel,
-                                "units": evaluate_definition(d, UNIT_BITS, cut_memo).units if units else 0}
+            d = defs[spec]
+            got = memo[spec] = {"gates": d.gates, "ret": d.signature()[1].leaves, "selects": root_selects(encode_program(Program(d))),
+                                "units": unit_of.get(spec, 0)}
         return got
 
     fams: dict[str, dict[str, Any]] = {}
@@ -382,11 +637,7 @@ def analyze_served(build: dict[str, Any], *, units: bool = False, ignore_eos: bo
         eos_rows = sum(int(r["tokens"]) for r in plan["requests"] if keyed[r["request_id"]])
         any_keyed = any(keyed.values())
         for c in P["calls"]:
-            if "definition" in c:
-                spec, statics = c["definition"], c["statics"]
-            else:
-                g = plan["gemms"][",".join(str(x) for x in c["gemm"])]
-                spec, statics = g["definition"], g["statics"]
+            spec, statics = _call_spec(c, plan)
             per_row = max(width[c["writes"][0]] // info(spec, statics)["ret"], 1)
             add(base(spec), spec, statics, tokens * per_row, c["reads"], eos_rows * per_row, any_keyed)
         for r in plan["requests"]:
@@ -404,7 +655,9 @@ def analyze_served(build: dict[str, Any], *, units: bool = False, ignore_eos: bo
            "plan_inputs": "steps_plan reads the declared schedule only (arrive, prompt_tokens, max_tokens) and the dispatch "
                           "(capture sizes, max_num_seqs, split_cap, sms): no token value",
            "eos": _eos(lag, True, ignore_eos, None)}
-    return _finish(out, fams, VALUE_BOUND, units)
+    if helper:
+        out["units_source"] = helper.summary()
+    return _finish(out, fams, VALUE_BOUND, bool(units))
 
 
 def load_planner(path: str | Path, name: str = "plan") -> Callable[[dict], Any]:
@@ -451,6 +704,9 @@ def render(reports: Iterable[dict[str, Any]]) -> str:
         t, s = r["totals"], r["summary"]
         out.append(f"### {r.get('name', '?')}\n\n{t['calls']:,} Calls, {t['gates']:,} gates"
                    + (f", {t['units']:,} Q_word units" if t["units"] is not None else "") + "\n")
+        if u := r.get("units_source"):
+            out.append(f"Units: {u['cached']} Definitions from cached rules, {u['cut']} cut ({u['recut_cached']} of them recut "
+                       f"against their rule); {u['verified_units']} also cut by the reference, {len(u['mismatches'])} disagree.\n")
         out.append("| family | calls | units | share units | gates | share gates | cross-unit reads | in-unit selection (index) |")
         out.append("|---|---:|---:|---:|---:|---:|---|---|")
         for f in r["families"]:
@@ -500,6 +756,14 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--lag", type=int, default=0, help="the engine's LAG: steps a request runs past its EOS")
     s.add_argument("--name", default=None)
     s.add_argument("--out", required=True)
+    for x in (d, s):
+        x.add_argument("--rules", action="append", default=[], metavar="PATH",
+                       help="cached unit rules: a `verity_vllm.query.word` rule directory or a --units-log JSONL (repeatable)")
+        x.add_argument("--units-log", default=None, help="append each Definition's cut here (JSONL) as it lands")
+        x.add_argument("--jobs", type=int, default=1, help="forked processes cutting Definitions, largest first")
+        x.add_argument("--verify-below", type=int, default=0, metavar="GATES",
+                       help="also cut Definitions of at most GATES gates by the reference (evaluate_definition, CallGraph)")
+        x.add_argument("--recut-cached", action="store_true", help="recut cached Definitions too and compare")
     p = sub.add_parser("plan")
     p.add_argument("workload", nargs="+")
     p.add_argument("--planner", required=True, help="a planner module's path, PATH[:FUNC] (default FUNC plan)")
@@ -508,19 +772,21 @@ def main(argv: list[str] | None = None) -> int:
     t.add_argument("reports", nargs="+")
     t.add_argument("--md", default=None)
     a = ap.parse_args(argv)
+    helper = Units(a.rules, a.units_log, a.jobs, a.verify_below, a.recut_cached) if a.cmd in ("descriptor", "served") else None
     if a.cmd == "descriptor":
         desc = load(a.descriptor)
         units = None
         if a.units:
-            units, population = q_word_units(a.descriptor)
+            units, population = q_word_units(a.descriptor, helper)
         r = analyze_descriptor(desc, units=units, value_bound=_bound(a.value_bound),
                                workload_program=json.loads(Path(a.workload_program).read_text()) if a.workload_program else None)
         r["name"] = a.name or a.descriptor
         if units is not None:
-            r["population"] = population
+            r["population"], r["units_source"] = population, helper.summary()
         Path(a.out).write_text(json.dumps(r, indent=1, default=sorted))
     elif a.cmd == "served":
-        r = analyze_served(json.loads(Path(a.build).read_text()), units=a.units, ignore_eos=a.ignore_eos, lag=a.lag)
+        r = analyze_served(json.loads(Path(a.build).read_text()), units=helper if a.units else False, ignore_eos=a.ignore_eos,
+                           lag=a.lag)
         r["name"] = a.name or a.build
         Path(a.out).write_text(json.dumps(r, indent=1, default=sorted))
     elif a.cmd == "plan":
@@ -537,6 +803,9 @@ def main(argv: list[str] | None = None) -> int:
         if a.md:
             Path(a.md).write_text(md)
         print(md)
+    if helper is not None and helper.mismatches:
+        print(f"popread: {len(helper.mismatches)} unit count(s) disagree: {helper.mismatches[:4]}", file=sys.stderr)
+        return 1
     return 0
 
 
