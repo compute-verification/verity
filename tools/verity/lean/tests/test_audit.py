@@ -301,7 +301,13 @@ def test_only_record_differences_are_regenerated_and_the_regenerated_record_pass
     group = pol["reads"]["P.Defs"]
     hyp = [{"name": "P.f", "module": "P.Defs", "kind": "def", "hash": "1" * 32},
            {"name": "P.Hyp", "module": "P.Assumptions", "kind": "def", "hash": "8" * 32}]
+    applied = [{"binder": "h", "type": "P.Premises.Hyp n", "closed": False, "named": None, "module": None}]
+    premised = fact(signature="P.t (n : Nat) (h : P.Premises.Hyp n) : P.f n = n", hyps=applied)
+    premised["premises"] = [{"binder": "h", "head": "P.Hyp", "module": "P.Assumptions"}]
     for policy, now in [
+            (POLICY, facts()),                                                      # owned, no record yet
+            ({**A.judge(POLICY, facts(pins={"P.t": premised}), FILES, update=True)[1], "assumptions": {}},
+             facts(pins={"P.t": premised})),                                        # a premise the lock doesn't list
             (pol, facts(pins={"P.t": fact(signature="P.t (h : P.Hyp) (n : Nat) : P.f n ≤ n", h="00000000000000bb")})),
             (pol, facts(pins={"P.t": fact(reads=fact()["reads"] + [{"name": "P.g", "module": "P.More", "kind": "def",
                                                                     "hash": "4" * 32}])})),
@@ -315,7 +321,7 @@ def test_only_record_differences_are_regenerated_and_the_regenerated_record_pass
         "assumptions: P.Hyp's definition in P.Assumptions changed;")
     signed = facts(pins={"P.t": fact(signature="P.t (h : P.Hyp) (n : Nat) : P.f n ≤ n", h="00000000000000bb")})
     for policy, now, files in [(pol, facts(), FILES),                                      # passes
-                               (POLICY, facts(), FILES),                                   # no record yet
+                               ({**POLICY, "guarantees": {"P.t": {}}}, facts(), FILES),    # no record and no owner
                                (pol, facts(pins={}), FILES),                               # renamed or gone: `--moved`
                                (pol | {"guarantees": {"P.t": pol["guarantees"]["P.t"] | {"owner": "lean"}}}, facts(), FILES),
                                (pol, signed, FILES | {"Scratch": "Scratch.lean"})]:        # a difference beside an orphan
@@ -1263,6 +1269,35 @@ def test_a_job_pinned_to_one_cpu_runs_lean_on_one_thread(monkeypatch):
             "A = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(A)\nprint(A.lake_env()['LEAN_NUM_THREADS'])\n")
     r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)
     assert r.stdout.strip() == "1"
+
+
+def test_a_trains_audit_passes_record_differences_and_names_the_records_to_commit(tmp_path, monkeypatch):
+    """`--regenerate` (a train's lean-audit step): a package whose every failure is a record difference, so the audit wrote
+    the record `--update` would, passes, and `audit.json` names that record for the train to commit; one with any other
+    failure fails as before, and the packages' own locks are never written."""
+    a, b = tmp_path / "a", tmp_path / "b"
+    for p in (a, b):
+        p.mkdir()
+        (p / A.POLICY).write_text("{}")
+
+    def fake(pkg, out, *args, **_):
+        rec = out / f"audit-{pkg.name}" / A.POLICY
+        rec.parent.mkdir(parents=True, exist_ok=True)
+        rec.write_text("{}")
+        regen = {"regenerated": str(rec)} if pkg.name == "a" else {}
+        return {"package": str(pkg), "seconds": {}, "failures": ["guarantees: they no longer read P.Defs"]} | regen
+
+    monkeypatch.setattr(A, "audit", fake)
+    out = tmp_path / "out"
+    assert A.main([str(a), "--out", str(out), "--repo", str(tmp_path)]) == 1
+    assert A.main([str(a), "--regenerate", "--out", str(out), "--repo", str(tmp_path)]) == 0
+    rep = json.loads((out / "audit.json").read_text())
+    assert rep["regenerated"] == {"a": str(out / "audit-a" / A.POLICY)} and rep["packages"][0]["settled"]
+    assert A.main([str(a), str(b), "--regenerate", "--out", str(out), "--repo", str(tmp_path)]) == 1
+    assert json.loads((out / "audit.json").read_text())["failed"] == [str(b)]
+    assert (a / A.POLICY).read_text() == "{}"
+    with pytest.raises(SystemExit):
+        A.main([str(a), "--regenerate", "--update"])
 
 
 def test_packages_are_audited_side_by_side_and_a_build_waits_for_the_builds_it_requires(tmp_path, monkeypatch):
