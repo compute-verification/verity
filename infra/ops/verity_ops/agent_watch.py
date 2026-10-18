@@ -55,8 +55,9 @@ refused with 409 agent_busy is recorded and counts as the hour's (zombie CREATIN
 Each finding is a line of JSON in `--log`; each sweep ends by replacing `status.json` beside it atomically, in the schema
 `verity/agent-watch-status/v1` (`snapshot`: its time `t`, `poll_s`, and per agent read its id, the run the watch judges,
 statuses, watch state, since and restart count, in categories only), so a reader can tell a quiet watch from a dead one; a
-sweep that fails leaves the last one. With `$AGENT_WATCH_PG_URL` set, the same bytes then go to Neon's
-`store_private.agent_watch_status` (`Publisher`, through `psql`; the newest `STATUS_ROWS` kept), for readers off the pod. `state.json` beside it keeps what must outlive a restart (the watch restarts on every
+sweep that fails leaves the last one. With `$AGENT_WATCH_PG_URL` set, the same bytes are then inserted, never
+overwriting, into Neon's `store_private.agent_watch_status` (`Publisher`, through `psql`; the newest `STATUS_ROWS` kept), for
+readers off the pod. `state.json` beside it keeps what must outlive a restart (the watch restarts on every
 deploy): when it last cancelled or restarted each agent, and recorded it ready to wake, the restart counts, the continue runs still to start and the runs
 already recorded. `watch.lock` beside it keeps a second watch from running. The control pod holds no Slack credential, so
 infra's relay reads the findings over ssh and posts each in #agent-alerts. Cancelling and restarting don't wait for it.
@@ -715,21 +716,24 @@ def pg_env(url: str) -> dict[str, str]:
 
 
 class Publisher:
-    """Each sweep's `status.json` bytes upserted into Neon's `STATUS_TABLE` (by its `t`), keeping the newest `STATUS_ROWS`,
-    through `psql` in one transaction. The table is created on first use. A failure is printed at most once an hour and never
-    stops a sweep; the next sweep publishes its own snapshot."""
+    """Each sweep's `status.json` bytes inserted into Neon's `STATUS_TABLE` at its `t`, never overwriting: a row already at that
+    `t` stays, and one whose body differs is printed as a FAULT, once per `t` (console reads a row as final once written). The
+    newest `STATUS_ROWS` are kept, all through `psql` in one transaction. The table is created on first use. A failure is
+    printed at most once an hour and never stops a sweep; the next sweep publishes its own snapshot."""
 
     def __init__(self, url: str, psql: str = "psql"):
         self.url, self.psql, self.created, self.said = url, psql, False, -RECANCEL_S
+        self.faulted: dict[str, None] = {}          # the t of each differing body already printed, the newest STATUS_ROWS
 
     def __call__(self, body: bytes, t: float) -> None:
-        lit = "'" + body.decode().replace("'", "''") + "'"
+        lit, at = "'" + body.decode().replace("'", "''") + "'", iso(t)
         script = ((PUBLISH_DDL if not self.created else "")
-                  + f"INSERT INTO {STATUS_TABLE} (t, body) VALUES ('{iso(t)}', {lit}) ON CONFLICT (t) DO UPDATE SET body = "
-                    f"EXCLUDED.body;\nDELETE FROM {STATUS_TABLE} WHERE t NOT IN (SELECT t FROM {STATUS_TABLE} ORDER BY t DESC "
+                  + f"INSERT INTO {STATUS_TABLE} (t, body) VALUES ('{at}', {lit}) ON CONFLICT (t) DO NOTHING;\n"
+                    f"SELECT CASE WHEN body = {lit} THEN 'same' ELSE 'differs' END FROM {STATUS_TABLE} WHERE t = '{at}';\n"
+                    f"DELETE FROM {STATUS_TABLE} WHERE t NOT IN (SELECT t FROM {STATUS_TABLE} ORDER BY t DESC "
                     f"LIMIT {STATUS_ROWS});\n")
         try:
-            r = subprocess.run([self.psql, "-X", "-q", "-1", "-v", "ON_ERROR_STOP=1", "-f", "-"], input=script,
+            r = subprocess.run([self.psql, "-X", "-q", "-A", "-t", "-1", "-v", "ON_ERROR_STOP=1", "-f", "-"], input=script,
                                env={**os.environ, **pg_env(self.url)}, capture_output=True, text=True, timeout=60)
             if r.returncode != 0:
                 raise RuntimeError(f"psql exited {r.returncode}: {r.stderr.strip()[-500:]}")
@@ -739,6 +743,13 @@ class Publisher:
                 self.said = t
                 print(f"{iso(t)} status not published to {STATUS_TABLE} (said at most once an hour): {type(e).__name__}: {e}",
                       file=sys.stderr, flush=True)
+            return
+        if (r.stdout or "").split() != ["same"] and at not in self.faulted:
+            self.faulted[at] = None
+            while len(self.faulted) > STATUS_ROWS:
+                self.faulted.pop(next(iter(self.faulted)))
+            print(f"{at} FAULT: {STATUS_TABLE} already holds a different body at t={at}; left as it was, this sweep's not "
+                  f"published (psql read {(r.stdout or '').strip()[:40]!r})", file=sys.stderr, flush=True)
 
 
 def pump(watch: Watch, r: Run) -> None:

@@ -806,13 +806,23 @@ def test_status_carries_no_prompt_error_text_name_branch_slack_or_key(tmp_path):
         assert bit not in raw, bit
 
 
-PSQL = """#!/bin/sh
-n=$(ls "$PSQL_OUT" | grep -c 'sql$')
-cat > "$PSQL_OUT/$n.sql"
-printf '%s\\n' "$*" > "$PSQL_OUT/$n.args"
-[ -n "$PGPASSWORD" ] && [ "$PGHOST" = db.example ] && [ "$PGSSLMODE" = require ] && echo env-ok >> "$PSQL_OUT/$n.args"
-[ -f "$PSQL_OUT/../fail" ] && { echo 'psql: error: connection refused' >&2; exit 2; }
-exit 0
+PSQL = r"""#!/usr/bin/env python3
+import json, os, pathlib, re, sys
+out = pathlib.Path(os.environ["PSQL_OUT"])
+n, script = len(list(out.glob("*.sql"))), sys.stdin.read()
+(out / f"{n}.sql").write_text(script)
+env_ok = bool(os.environ.get("PGPASSWORD")) and os.environ.get("PGHOST") == "db.example" and os.environ.get("PGSSLMODE") == "require"
+(out / f"{n}.args").write_text(" ".join(sys.argv[1:]) + "\n" + ("env-ok\n" if env_ok else ""))
+if (out.parent / "fail").exists():
+    sys.exit(print("psql: error: connection refused", file=sys.stderr) or 2)
+db = out.parent / "rows.json"
+rows = json.loads(db.read_text()) if db.exists() else {}
+lit = "'((?:[^']|'')*)'"
+t, body = re.search(rf"VALUES \({lit}, {lit}\) ON CONFLICT \(t\) DO NOTHING;", script).groups()
+rows.setdefault(t, body.replace("''", "'"))
+sel = re.search(rf"SELECT CASE WHEN body = {lit} THEN 'same' ELSE 'differs' END FROM \S+ WHERE t = {lit};", script)
+print("same" if rows[sel[2]] == sel[1].replace("''", "'") else "differs")
+db.write_text(json.dumps(dict(sorted(rows.items())[-int(re.search(r"LIMIT (\d+)\);", script)[1]):])))
 """
 PG_URL = "postgresql://watch:dummy-not-a-secret@db.example/store?sslmode=require"
 
@@ -820,7 +830,8 @@ PG_URL = "postgresql://watch:dummy-not-a-secret@db.example/store?sslmode=require
 @pytest.fixture
 def psql(tmp_path, monkeypatch):
     """A fake `psql` first on PATH: each call's script as `out/N.sql`, its argv (and whether libpq's env was set) as `N.args`;
-    it fails while `fail` exists."""
+    it fails while `fail` exists. Otherwise it keeps the rows (`rows.json`, t -> body) as the script's INSERT ... ON CONFLICT
+    DO NOTHING, SELECT and pruning DELETE would, and prints the SELECT's `same` or `differs` as `psql -A -t` does."""
     bin_, out = tmp_path / "bin", tmp_path / "psql-out"
     bin_.mkdir()
     out.mkdir()
@@ -846,14 +857,37 @@ def test_each_sweeps_status_bytes_go_to_neon_the_table_created_once(tmp_path, ps
     (first, args), (second, _) = calls(psql)
     assert first.startswith(W.PUBLISH_DDL) and "CREATE" not in second
     for script, body, t in ((first, sent[0], clock.t - 120), (second, sent[1], clock.t - 60)):
-        assert f"VALUES ('{W.iso(t)}', '{body.decode()}') ON CONFLICT (t) DO UPDATE" in script, "the exact v1 bytes, by t"
+        assert f"VALUES ('{W.iso(t)}', '{body.decode()}') ON CONFLICT (t) DO NOTHING;" in script, "the exact v1 bytes, by t"
         assert f"ORDER BY t DESC LIMIT {W.STATUS_ROWS})" in script
     assert "-1" in args.split() and "env-ok" in args and "dummy-not-a-secret" not in args, "the URL only in libpq's env"
 
 
+def test_a_published_t_is_never_overwritten_and_a_different_body_there_is_a_fault(tmp_path, psql, capsys, monkeypatch):
+    """console reads a row as final once written (20:52Z, 18 Oct): a second publish at the same t keeps the first body, and one
+    that differs is printed as a FAULT, once per t; the same body again is silent."""
+    pub = W.Publisher(PG_URL)
+    first, other = b'{"schema":"verity/agent-watch-status/v1","n":1}\n', b'{"schema":"verity/agent-watch-status/v1","n":2}\n'
+    pub(first, 0.0)
+    pub(first, 0.0)
+    assert capsys.readouterr().err == "", "the same body twice is silent"
+    pub(other, 0.0)
+    pub(other, 0.0)
+    rows = json.loads((tmp_path / "rows.json").read_text())
+    assert rows == {W.iso(0.0): first.decode()}, "the first body stays"
+    (fault,) = [ln for ln in capsys.readouterr().err.splitlines()]
+    assert f"FAULT: {W.STATUS_TABLE} already holds a different body at t={W.iso(0.0)}" in fault
+    assert all("UPDATE" not in s for s, _ in calls(psql))
+    monkeypatch.setattr(W, "STATUS_ROWS", 3)
+    for i in range(5):
+        pub(first, 60.0 * (i + 1))
+    assert list(json.loads((tmp_path / "rows.json").read_text())) == [W.iso(60.0 * i) for i in (3, 4, 5)], "the newest kept"
+    assert capsys.readouterr().err == ""
+
+
 def test_a_quote_in_the_status_is_doubled(monkeypatch):
     seen = []
-    monkeypatch.setattr(W.subprocess, "run", lambda argv, input, **k: seen.append(input) or W.subprocess.CompletedProcess(argv, 0))
+    monkeypatch.setattr(W.subprocess, "run",
+                        lambda argv, input, **k: seen.append(input) or W.subprocess.CompletedProcess(argv, 0, "same\n"))
     W.Publisher(PG_URL)(b'{"x":"it\'s"}\n', 0.0)
     assert "'{\"x\":\"it''s\"}\n')" in seen[0]
 
@@ -862,10 +896,10 @@ def test_a_failed_publish_is_said_once_an_hour_and_never_stops_a_sweep(tmp_path,
     (tmp_path / "fail").touch()
     api, clock = FakeApi([{"id": "bc-a", "status": "ACTIVE", "latestRunId": "run-1"}], {"run-1": {"status": "RUNNING"}}), Clock()
     w = W.Watch(api, tmp_path / "events.jsonl", clock, publish=W.Publisher(PG_URL))
-    for _ in range(61):
+    for _ in range(3):
         w.sweep(lambda r: None)
         assert status(tmp_path)["bc-a"]["watch_state"] == "followed"
-        clock.t += 60
+        clock.t += W.RECANCEL_S / 2
     said = [ln for ln in capsys.readouterr().err.splitlines() if "not published" in ln]
     assert len(said) == 2 and "connection refused" in said[0] and "dummy-not-a-secret" not in "".join(said)
     assert all(s.startswith(W.PUBLISH_DDL) for s, _ in calls(psql)), "the table is created until a publish succeeds"
