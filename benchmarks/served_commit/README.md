@@ -5,9 +5,10 @@ the shared harness (`benchmarks/harness`): throughput, time to first token, and 
 and batch, under continuous batching with staggered arrivals, greedy and seeded stochastic.
 
 - `arm.py`: the two Commit arms, `served-commit` (values retained in host memory, each run's linkage checked) and
-  `served-commit-noretain` (authentication state only; openings by replay). Its docstring has what a run does.
+  `served-commit-noretain` (authentication state only; openings by replay), both on the collector's default staging. Its
+  docstring has what a run does, and which runs its gate accepts without a root (declared warm-ups, named in the verdict).
 - `run.sh`: `verity bench served_commit`, one spec's sweep in one process. Its header has the recorded form.
-- Measurement: `prof.sh` runs a sweep with the arms of `prof_arm.py` (bounded staging, no levels, native drain, the
+- Measurement: `prof.sh` runs a sweep with the arms of `prof_arm.py` (roots and plans per run, native drain, rows-sha512, the
   finalize profile, NVTX ranges), optionally under nsys, summarized by `nsys_summary.py`; `gather_bench.py` times the
   gather kernel alone; `gpu_tests.sh` runs the committer's GPU byte-identity tests on a node.
 - The specs: `benchmarks/specs/qwen3-8b-bf16-h200-served.toml` (the default) and

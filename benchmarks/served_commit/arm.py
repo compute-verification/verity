@@ -19,12 +19,11 @@ Two arms differ in what the Commit keeps for openings: ``served-commit`` copies 
 opening reads, and what `linkage` checks); ``served-commit-noretain`` keeps only the authentication state, so its values
 open by replay and its runs are checked by the collector's errors alone.
 
-Under bounded staging (``VERITY_STAGING_BOUNDED=1``: a step whose plan is new copies at most ``VERITY_LEARN_HOST_BUDGET_MB`` to
-host to re-hash) the harness's gate and warm-up runs are learn-only passes: a new-plan step over that budget is discarded, which
-leaves the run without a root. The custom gate accepts such a run only as a declared warm-up, named by its phase and sweep point in
-the verdict's ``warmups``; a measured run without a root fails it.
-
-Env: ``VERITY_WINDOW_MB`` (default 256) and ``VERITY_WINDOW_SLOTS`` (default 8), the collector's device window ring.
+Staging is the collector's default: a ring of 256 MiB device windows, bounded (a step whose plan is new copies at most
+``VERITY_LEARN_HOST_BUDGET_MB`` to host to re-hash), and tree levels only when values are kept. The harness's gate and warm-up
+runs are learn-only passes: a new-plan step over that budget is discarded, which leaves the run without a root. The custom gate
+accepts such a run only as a declared warm-up, named by its phase and sweep point in the verdict's ``warmups``; a measured run
+without a root fails it.
 """
 from __future__ import annotations
 
@@ -61,8 +60,6 @@ class ServedCommitArm:
         from verity_vllm.commit.committer.native_collect import NativeCollectCommitter
 
         os.environ["VERITY_RETAIN"] = self.retain
-        os.environ.setdefault("VERITY_WINDOW_MB", "256")
-        os.environ.setdefault("VERITY_WINDOW_SLOTS", "8")
         engine = target.engine._engine
         self.source.note_engine(engine.model)
         com = NativeCollectCommitter(engine, run_id=f"bench:{self.id}", arena_bytes=None, wrap=True, gather=True,

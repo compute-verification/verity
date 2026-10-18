@@ -158,9 +158,9 @@ def test_e2e_windowed_roots(tmp_path: Path):
         base += ["--hidden-so", os.environ["VERITY_E2E_HIDDEN_SO"]]
     roots = []
     win = ["--window-mb", os.environ.get("VERITY_E2E_WINDOW_MB", "256"), "--window-slots", "8"]
-    arms = [("block", []), ("win", win)]
+    arms = [("block", ["--window-mb", "0"]), ("win", win + ["--no-bounded-staging"])]
     if os.environ.get("VERITY_E2E_BOUNDED", "1") != "0":
-        # [R17 fp8] the BOUNDED staging arms (flag): same roots as the retained implementation -- (a) retain=host with the hidden family's
+        # [R17 fp8] the BOUNDED staging arms: same roots as the retained implementation -- (a) retain=host with the hidden family's
         # interior chunks excluded from host (they open by replay), (b) retain=none (everything by replay); both with openings after release
         fam = os.environ.get("VERITY_E2E_EXCLUDE", "fa3_hidden_m1")
         arms += [("win-bounded-x", win + ["--bounded-staging", "--retain-exclude", fam, "--open-after-release", "--learn-budget-mb", os.environ.get("VERITY_E2E_LEARN_MB", "4096")]),

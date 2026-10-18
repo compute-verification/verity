@@ -70,9 +70,10 @@ class ProfArm(ServedCommitArm):
 class RootsArm(ProfArm):
     """Each finished run's root, bounded-staging record and per-step (plan key, predicted length, bytes) appended to
     $RESEARCH_RUN_DIR/out/roots.jsonl, and each distinct run layout (every step's (name, dtype, shape, bytes), once per process) to
-    out/layouts.jsonl. Every RootsArm commits under one run id, so their roots compare across arms."""
+    out/layouts.jsonl. Every RootsArm commits under one run id, so their roots compare across arms. ``retain_levels`` None is the
+    committer's default (no levels under retain=none)."""
 
-    retain_levels = True
+    retain_levels: bool | None = None
     dumped: ClassVar[set[str]] = set()
 
     def ready(self, target: Any) -> None:
@@ -82,7 +83,8 @@ class RootsArm(ProfArm):
         com, self.plan_log = self.committer, []
         com.run_id = "bench:roots"
         com.program_digest = hashlib.sha256(b"cmt-integ/no-program-digest/" + com.run_id.encode()).digest()
-        com.retain_levels = self.retain_levels
+        if self.retain_levels is not None:
+            com.retain_levels = self.retain_levels
         orig = com._begin_step
 
         def begin_step() -> None:
@@ -125,24 +127,6 @@ class RootsArm(ProfArm):
                 f.write(json.dumps({"arm": self.id, "run": len(self.runs), "sig": sig, "steps": steps}) + "\n")
 
 
-class BoundedArm(RootsArm):
-    """Bounded staging (VERITY_STAGING_BOUNDED=1): a step whose plan is learned hashes in place with no host hedge copy; every run is
-    learn-only, so a step whose plan is new is discarded (counted in roots.jsonl: a measured run must show none)."""
-
-    def ready(self, target: Any) -> None:
-        import os
-
-        os.environ["VERITY_STAGING_BOUNDED"] = "1"
-        super().ready(target)
-        self.committer.learn_only = True
-
-
-class NoLevelsArm(BoundedArm):
-    """Bounded staging with retain_levels=False: no tree level leaves the device, no host sync per window."""
-
-    retain_levels = False
-
-
 class StockProfArm:
     """The stock engine with ProfArm's exec/sample and run ranges and nothing else: the control's own per-step times."""
 
@@ -178,8 +162,8 @@ class StockProfArm:
             f.write(json.dumps({"arm": self.id, "thread_cpu_s": _cpu_delta(self.cpu0, _thread_cpu())}) + "\n")
 
 
-class SwitchArm(NoLevelsArm):
-    """The nolevels arm with a 0.5 ms GIL switch interval (default 5 ms) in its engine's process: if the serving thread waits for the
+class SwitchArm(RootsArm):
+    """The prof arm with a 0.5 ms GIL switch interval (default 5 ms) in its engine's process: if the serving thread waits for the
     worker's Python, its step time falls."""
 
     def ready(self, target: Any) -> None:
@@ -189,8 +173,8 @@ class SwitchArm(NoLevelsArm):
         super().ready(target)
 
 
-class NativeDrainArm(NoLevelsArm):
-    """The nolevels arm whose compiled source drains a replayed step's slots through the committer's slot plans (one native call)."""
+class NativeDrainArm(RootsArm):
+    """The prof arm whose compiled source drains a replayed step's slots through the committer's slot plans (one native call)."""
 
     def ready(self, target: Any) -> None:
         super().ready(target)
@@ -262,8 +246,6 @@ class NoMemoArm(NativeDrainArm):
 
 
 SERVED_COMMIT_PROF = RootsArm("served-commit-prof", retain="none")
-SERVED_COMMIT_BOUNDED = BoundedArm("served-commit-bounded", retain="none")
-SERVED_COMMIT_NOLEVELS = NoLevelsArm("served-commit-nolevels", retain="none")
 SERVED_COMMIT_SWITCH = SwitchArm("served-commit-switch", retain="none")
 SERVED_COMMIT_NATIVEDRAIN = NativeDrainArm("served-commit-nativedrain", retain="none")
 SERVED_COMMIT_ROWS = RowsArm("served-commit-rows", retain="none")

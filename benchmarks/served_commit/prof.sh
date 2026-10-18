@@ -10,8 +10,6 @@ mods=()
 for a in ${ARMS//,/ }; do
   case "$a" in
     served-commit-prof) mods+=(--arm-module served_commit.prof_arm:SERVED_COMMIT_PROF);;
-    served-commit-bounded) mods+=(--arm-module served_commit.prof_arm:SERVED_COMMIT_BOUNDED);;
-    served-commit-nolevels) mods+=(--arm-module served_commit.prof_arm:SERVED_COMMIT_NOLEVELS);;
     stock-prof) mods+=(--arm-module served_commit.prof_arm:STOCK_PROF);;
     served-commit-switch) mods+=(--arm-module served_commit.prof_arm:SERVED_COMMIT_SWITCH);;
     served-commit-nativedrain) mods+=(--arm-module served_commit.prof_arm:SERVED_COMMIT_NATIVEDRAIN);;

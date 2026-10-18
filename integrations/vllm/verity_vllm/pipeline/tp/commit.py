@@ -109,6 +109,15 @@ def schedule(pairs: int, only_arm: str | None) -> list[tuple[int, str]]:
     return [(p, a) for p in range(pairs) for a in (("control", "instrumented") if p % 2 == 0 else ("instrumented", "control")) if only_arm in (None, a)]
 
 
+def ring_slots(committer: str, window_mb: str | None, window_slots: str | None, retain: str | None) -> int | None:
+    """The ranks' window ring slots as their committers read VERITY_WINDOW_MB / VERITY_WINDOW_SLOTS / VERITY_RETAIN (an unset window
+    is `native_collect.window_mb_default`), None when they stage in per-step blocks."""
+    from verity_vllm.commit.committer.native_collect import WINDOW_SLOTS, window_mb_default
+
+    window = (window_mb or "").strip() or window_mb_default(committer == "native_collect_v2b", retain or "device")
+    return int(window_slots or WINDOW_SLOTS) if float(window) > 0 else None
+
+
 def build_program_digest(d: str | None) -> tuple[str | None, str | None]:
     """A rank's Program digest FROM ITS BUILD dir ``d`` (never from the manifest), and which Program it is: a one-request row = the
     request Program's digest (result.json); a B>=2 row = the rank's GP-01 workload Program digest (build_workload/workload_program.json)
@@ -313,6 +322,7 @@ def main(args: Options) -> int:
     # (B1: the request Program itself) and, at B>=2, the component digests the GP-01 workload_program of that rank composed (its workload
     # digest is the manifest's per-rank digest, checked above) -- the worker refuses any loaded Program outside this set BY NAME
     replay_cfg = None
+    retain_env = os.environ.get("VERITY_RETAIN")
     if args.required_manifest and not args.no_sampled_replay:
         import re as _re
         of_record: dict[str, list[str]] = {}
@@ -336,7 +346,7 @@ def main(args: Options) -> int:
                       "requests": [{"request_id": request_ids[str(r.get("request_id"))], "arrive_step": int(r.get("arrive_step") or 0), "prompt_len": len(r["prompt_token_ids"]),
                                     "max_tokens": int(r.get("max_tokens") or sampling.get("max_tokens") or 1), "prompt_token_ids": [int(t) for t in r["prompt_token_ids"]], "seed": int(r["seed"]) if r.get("seed") is not None else (int(sampling["seed"]) if sampling.get("seed") is not None else None)} for r in reqs],
                       "per_stratum": int(args.replay_per_stratum), "max_evaluate": int(args.replay_max), "seed": args.replay_seed, "workers": args.replay_workers,
-                      "challenge": args.replay_challenge, "targets": list(args.replay_target or []), "ring_slots": (int(os.environ["VERITY_WINDOW_SLOTS"]) if os.environ.get("VERITY_WINDOW_SLOTS") and os.environ.get("VERITY_WINDOW_MB") else None)}
+                      "challenge": args.replay_challenge, "targets": list(args.replay_target or []), "ring_slots": ring_slots(args.committer, os.environ.get("VERITY_WINDOW_MB"), os.environ.get("VERITY_WINDOW_SLOTS"), retain_env)}
         versions["sampled_replay"] = {"of_record": of_record, "per_stratum": replay_cfg["per_stratum"], "max_evaluate": replay_cfg["max_evaluate"], "seed": args.replay_seed,
                                       "challenge": args.replay_challenge, "rule": "manbind MAN-06 O1-O6 per rank: the rank's Programs of record x the rank's map x the rank's committed members + weight shards"}
         if args.replay_k:
@@ -661,7 +671,7 @@ def main(args: Options) -> int:
                                "attribution_per_rank": {r: ({k2: (c.get("attribution") or {}).get(k2) for k2 in ("ok", "steps_checked", "rows_checked", "mismatches_n", "why", "swap_requests_negative")}
                                                             if c.get("attribution") is not None else None) for r, c in per_rank.items()},
                                "attribution_reference": versions.get("match_record"),
-                               "openings_after_release": True, "collector_variant": "windowed", "retention": os.environ.get("VERITY_RETAIN", "host"),
+                               "openings_after_release": True, "collector_variant": "windowed", "retention": retain_env or "host",
                                "negatives_suite": "tp2_commit --omit-rank / --omit-rank-partials <r> / --omit-partial-site r:site / --flip-partial r:site (TP-12) / --serve-shard-from r:param:from (TP-10) / --relabel-rank a:b / --wrong-root-rank <r> / --no-tp-partials / --swap-requests r:ra:rb (this lane) + bind test_binding_negatives.py (BIND-01, TP1)",
                                "negatives": versions["negatives"],
                                "reason": "; ".join(reasons) if reasons else None, "replay_pending_ranks": [int(r_) for r_ in pending] or None}

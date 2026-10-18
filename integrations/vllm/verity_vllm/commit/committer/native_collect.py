@@ -410,6 +410,15 @@ class NativeHiddenM1SourceFA3(HiddenM1SourceFA3):
         self.sync_stats()
 
 
+WINDOW_MB, WINDOW_SLOTS = 256, 8
+
+
+def window_mb_default(windowed_worker: bool, retain: str) -> int:
+    """VERITY_WINDOW_MB when it is unset: a ring of WINDOW_MB windows on the windowed worker (native worker + gather) unless it retains
+    on the device, whose footprint is the per-step blocks; per-step blocks (0) on every other collector."""
+    return WINDOW_MB if windowed_worker and retain != "device" else 0
+
+
 class NativeCollectCommitter(NativeHostCommitter):
     """Arm 3.  Inherits the whole R9 complete path; replaces the serving-thread acquisition (see module docstring).
 
@@ -419,7 +428,7 @@ class NativeCollectCommitter(NativeHostCommitter):
 
     def __init__(self, engine: Any, *, wrap: bool = True, profile: bool = False, build_dir: str | None = None, check_sizes: bool = True,
                  gather: bool = False, native_hooks: bool = False, auto_blocks: bool = False, native_worker: bool = False,
-                 layout: str = "chunk-leaf-v1", retain_levels: bool = True, commit_scheme: str | None = None, **kw: Any) -> None:
+                 layout: str = "chunk-leaf-v1", retain_levels: bool | None = None, commit_scheme: str | None = None, **kw: Any) -> None:
         kw.setdefault("fast_copy", True)
         kw.setdefault("gpu_tree", True)
         super().__init__(engine, **kw)
@@ -436,10 +445,12 @@ class NativeCollectCommitter(NativeHostCommitter):
         self.auto_blocks = bool(auto_blocks) and self.gather
         self.native_worker = bool(native_worker)
         self._hasher = ext(build_dir).StepHasher() if self.native_worker else None
-        # P0 (R13) windowed staging: VERITY_WINDOW_MB=<W> (0 = off) lays the packed step stream over a ring of VERITY_WINDOW_SLOTS device
-        # windows and absorbs each window as soon as the serving thread has filled it (see native_collect.cpp "WINDOWED staging ring")
-        self.win_bytes = int(float(os.environ.get("VERITY_WINDOW_MB", "0")) * (1 << 20)) // 256 * 256
-        self.win_slots_req = int(os.environ.get("VERITY_WINDOW_SLOTS", "8"))
+        # P0 (R13) windowed staging: VERITY_WINDOW_MB=<W> (0 = off; unset = `window_mb_default`) lays the packed step stream over a ring of
+        # VERITY_WINDOW_SLOTS device windows and absorbs each window as soon as the serving thread has filled it (see native_collect.cpp
+        # "WINDOWED staging ring")
+        win_mb = os.environ.get("VERITY_WINDOW_MB", "").strip() or window_mb_default(self.native_worker and self.gather, self.retain)
+        self.win_bytes = int(float(win_mb) * (1 << 20)) // 256 * 256
+        self.win_slots_req = int(os.environ.get("VERITY_WINDOW_SLOTS", WINDOW_SLOTS))
         self.windowed = self.win_bytes > 0 and self.native_worker and self.gather
         if self.win_bytes > 0 and not self.windowed:
             raise ValueError("windowed staging needs native_collect_v2b (native worker + gather)")
@@ -453,8 +464,9 @@ class NativeCollectCommitter(NativeHostCommitter):
             raise ValueError("chunk-leaf-v2 is implemented on the windowed path only (--window-mb > 0)")   # header M := 0 (coordinator decision)
         # `retain_levels=False`: no tree level of a step is kept (on the windowed path each window's subtree stays on the device, no host
         # copy and no host sync per window); the roots are the same, and an opening takes its value and path from a replay
-        # (`open(values_from=, paths_from_replay=True)`), which `verify` holds to this run's roots
-        self.retain_levels = bool(retain_levels)
+        # (`open(values_from=, paths_from_replay=True)`), which `verify` holds to this run's roots.  Unset, a windowed run that keeps no
+        # values (retain=none, whose openings are replayed anyway) keeps no levels; every other run keeps them
+        self.retain_levels = bool(retain_levels) if retain_levels is not None else not (self.windowed and self.retain == "none")
         if not self.retain_levels and not self.windowed:
             raise ValueError("retain_levels=False is implemented on the windowed path only (--window-mb > 0)")
         # the commitment scheme (`commit_scheme`, unset = vllm-v1): vllm-v1 (the record), or rows-sha512 (`step_rows`: every
@@ -473,7 +485,7 @@ class NativeCollectCommitter(NativeHostCommitter):
         self._row_tn: Any | None = None
         self._row_consts = (step_rows.row_prefix(8 * step_rows.ROW_BYTES), step_rows.INST.salt_prefix,
                             step_rows.INST.leaf_prefix(step_rows.KEY)) if self.rows else None
-        # [R17 fp8, F-fp8-B8MEM] BOUNDED staging (VERITY_STAGING_BOUNDED=1; flag until root parity is on record): under chunk-leaf-v1 the
+        # [R17 fp8, F-fp8-B8MEM] BOUNDED staging (VERITY_STAGING_BOUNDED; unset = on whenever staging is windowed): under chunk-leaf-v1 the
         # leaf header binds the step length M, which a LEARNING step (plan not yet known) only knows at step end -- the windowed path
         # therefore copied EVERY window of every step to pinned host (the learning re-hash source; the hit-plan "hedge" copy) and
         # returned none of it before the run's reset: the 3,545-token prefill of the B8 FP8 row is 138 GiB of `fa3_hidden_m1` host
@@ -486,7 +498,7 @@ class NativeCollectCommitter(NativeHostCommitter):
         #   * retain=host + VERITY_RETAIN_EXCLUDE=<family,...> keeps every chunk EXCEPT the chunk-aligned interior of the excluded
         #     families (`_HostRanges`): those leaves open by replay against the original root (R17-5), all others from host (C2's
         #     module outputs stay on host).
-        self.bounded = os.environ.get("VERITY_STAGING_BOUNDED", "0").strip() in ("1", "true", "yes")
+        self.bounded = (os.environ.get("VERITY_STAGING_BOUNDED", "").strip() or ("1" if self.windowed else "0")) in ("1", "true", "yes")
         self.learn_only = False                                  # set by the harness around the warm-up instrumented run
         self.learn_budget_bytes = int(float(os.environ.get("VERITY_LEARN_HOST_BUDGET_MB", "4096")) * (1 << 20))
         self.retain_exclude: set[str] = retain_exclude_families(os.environ.get("VERITY_RETAIN_EXCLUDE", ""))
