@@ -760,6 +760,44 @@ def test_openings_round_trip_on_the_wire_and_a_short_body_is_none():
                                             o.payload_path, b"", b"\6" * 63)])
 
 
+def test_a_reader_apart_hands_on_each_frame_in_order_and_ends_with_the_stream_or_the_prover():
+    """The prover's reader in its own process: frames come through its pipe as sent, each with its stamp; a frame over
+    the limits is refused as on a reader thread; the stream's close is `Closed`; and the reader exits once the
+    prover's end of its pipe closes, so it never holds the stream open past the prover."""
+    a, b = socket.socketpair()
+    side, apart = wire.Conn(a), wire.Conn(b)
+    apart.read_apart()
+    sent = [({"type": "coin", "t": 1}, b""), ({"type": "draws", "t": 1}, os.urandom(1 << 20)),
+            ({"type": "close"}, b"x")]
+    for head, body in sent:
+        side.send(head, body)
+    got = [apart.recv() for _ in sent]
+    assert [(h, body) for h, body, _ in got] == sent and all(type(s) is int for _, _, s in got)
+    assert apart.received == side.sent
+    a.sendall(wire.HEADER.pack(wire.MAX_HEAD + 1, 0))
+    with pytest.raises(ValueError, match="over the limit"):
+        apart.recv()
+    assert apart.reader.wait() == 0
+
+    a, b = socket.socketpair()
+    side, apart = wire.Conn(a), wire.Conn(b)
+    apart.read_apart()
+    a.close()
+    with pytest.raises(wire.Closed):
+        apart.recv()
+    assert apart.reader.wait() == 0
+
+    a, b = socket.socketpair()
+    apart = wire.Conn(b)
+    apart.read_apart()
+    os.close(apart._pipe)
+    assert apart.reader.wait() == 0
+    with pytest.raises(ValueError, match="monotonic"):
+        wire.Conn(a, clock=lambda: 0).read_apart()
+    a.close()
+    b.close()
+
+
 @pytest.mark.parametrize("name", ["p1024/k3/masked", "p1024/k2/masked", "p512/k2"])
 def test_codec_names_round_trip(name):
     assert wire.codec_named(name).name == name

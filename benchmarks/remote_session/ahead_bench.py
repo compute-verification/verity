@@ -10,7 +10,9 @@ H page steps are fewer than serving's lead. A row's slowdown is its serving's me
 alone. The CPU reference's pass and append encode (each timed once, `pass_ms` and `encode_ms`) take the session
 thread's time, and a pass carries the encodes of the page steps it covers. A row's reader delay is each boundary's
 (the next window's coin, the close) from the verifier's send to the prover's reader stamping it, the stamp the
-prover's boundary rule compares. Writes OUT/ahead_bench.json.
+prover's boundary rule compares; its notice delay is from the send to the session's taking the boundary into its
+pending messages, where the rule reads it. The reader runs in a process of its own (`wire.Conn.read_apart`), or with
+--reader thread on a thread of the prover's process, as before it had one. Writes OUT/ahead_bench.json.
 
     python ahead_bench.py --out OUT [--regimes 200:1:0,20:8:0,2:64:0:lock/0/16/128 --ks lock,0,1,2,4,8,16]
 """
@@ -104,11 +106,28 @@ def alone(p: prover.ProverSide, regime: dict, steps: int) -> float:
     return interval_ms(tr.starts)
 
 
+def noticing(p: prover.ProverSide) -> list:
+    """The monotonic ns at which the session takes each boundary into its pending messages (`_drain`, `_appended`)."""
+    noticed = []
+
+    def watch(f):
+        def taking(pending):
+            n = len(pending)
+            try:
+                return f(pending)
+            finally:
+                now = time.monotonic_ns()
+                noticed.extend(now for item in list(pending)[n:] if item[0]["type"] in ("coin", "close"))
+        return taking
+    p._drain, p._appended = watch(p._drain), watch(p._appended)
+    return noticed
+
+
 def session(p: prover.ProverSide, regime: dict, k: int | None, headroom: int, alone_ms: float,
-            boundaries: list) -> dict:
+            boundaries: list, noticed: list) -> dict:
     Engine.regime, p.ahead, p.kv_headroom = regime, k, headroom
     head, _, _ = p.expect("session")
-    first = len(boundaries)
+    first, seen = len(boundaries), len(noticed)
     gc.collect()
     gc.freeze()
     gc.disable()
@@ -126,7 +145,7 @@ def session(p: prover.ProverSide, regime: dict, k: int | None, headroom: int, al
            "pass_ms_mean": sum(r["pass_host_ns"]) / max(1, len(r["pass_host_ns"])) / 1e6,
            "pass_ms_max": max(r["pass_host_ns"], default=0) / 1e6, "gap_ms_p50": (median(r["gap_host_ns"]) or 0) / 1e6,
            "appended": r["kv"]["appended"], "released": r["kv"]["released"], "misread": len(r["misread"]),
-           "boundary_stamps_ns": [stamp for _, stamp in boundaries[first:]][1:]}
+           "boundary_stamps_ns": [stamp for _, stamp in boundaries[first:]][1:], "noticed_ns": noticed[seen:]}
     if ahead is not None:
         row.update({"leads": dict(sorted(Counter(ahead["leads"]).items())), "bound_waits": ahead["bound_waits"],
                     "fence_waits": ahead["fence_waits"], "held_ms": ahead["held_ms"]})
@@ -154,6 +173,8 @@ def main() -> int:
     ap.add_argument("--jitter-ms", type=float, default=1000.0, help="covers a CPU pass with its encodes")
     ap.add_argument("--samples", type=int, default=16)
     ap.add_argument("--check-workers", type=int, default=2)
+    ap.add_argument("--reader", choices=("process", "thread"), default="process",
+                    help="the prover's reader in a process of its own, or on a thread of the prover's")
     a = ap.parse_args()
     a.out.mkdir(parents=True, exist_ok=True)
     sys.setswitchinterval(2e-4)
@@ -178,7 +199,7 @@ def main() -> int:
         if "listening" in line:
             break
     threading.Thread(target=lambda: [log.write(x) or log.flush() for x in v.stdout], daemon=True).start()
-    conn = wire.connect("127.0.0.1", port)
+    conn = wire.connect("127.0.0.1", port, apart=a.reader == "process")
     boundaries, recv = [], conn.recv
 
     def stamped():
@@ -190,6 +211,7 @@ def main() -> int:
     backend = prover.CpuBackend(a.blocks, random.Random(20261018))
     p = prover.ProverSide(conn, backend, b"ahead-bench", [("kv", 1.0)] * len(configs), kv_every=1,
                           kv_pool=a.kv_pool, log=lambda m: print(m, flush=True))
+    noticed = noticing(p)
     p.register(codec=wire.codec_named(a.codec))
     t0 = time.perf_counter_ns()
     rcodec.encode(backend.payloads[0], a.blocks, p.registration.key, bound=True, coin=bytes(32))
@@ -197,7 +219,7 @@ def main() -> int:
     t0 = time.perf_counter_ns()
     backend.run_pass(rb.seed(bytes(32), 0, bytes(64)))
     pass_ms = (time.perf_counter_ns() - t0) / 1e6
-    out = {"schema": "verity/remote-session/ahead-bench/v0", "blocks": a.blocks, "codec": a.codec,
+    out = {"schema": "verity/remote-session/ahead-bench/v0", "reader": a.reader, "blocks": a.blocks, "codec": a.codec,
            "kv_pool": a.kv_pool, "windows": a.windows, "window_ms": a.window_ms, "jitter_ms": a.jitter_ms,
            "samples": a.samples, "encode_ms": encode_ms, "pass_ms": pass_ms, "alone_ms": {}, "rows": []}
     print(f"ahead_bench: encode {encode_ms:.1f} ms, pass {pass_ms:.1f} ms over {a.blocks} blocks", flush=True)
@@ -207,7 +229,7 @@ def main() -> int:
         print(f"ahead_bench: {key} alone {out['alone_ms'][key]:.2f} ms a step", flush=True)
     for g, k, h in configs:
         key = f"{g['step_ms']:g}:{g['every']}:{g['busy']:g}"
-        row = session(p, g, k, h, out["alone_ms"][key], boundaries)
+        row = session(p, g, k, h, out["alone_ms"][key], boundaries, noticed)
         out["rows"].append(row)
         print("ahead_bench: " + json.dumps(row), flush=True)
         (a.out / "ahead_bench.json").write_text(json.dumps(out, indent=1))
@@ -217,17 +239,19 @@ def main() -> int:
     seen = json.loads((vout / "verifier.json").read_text())["sessions"]
     for r, vs in zip(out["rows"], seen):
         sent = [w["boundary_ns"] for w in vs["windows_seen"] if w["boundary_ns"] is not None]
-        d = sorted((s - b) / 1e6 for s, b in zip(r.pop("boundary_stamps_ns"), sent))
-        r["reader_ms"] = {"n": len(d), "p50": median(d), "max": d[-1] if d else None}
+        for name, stamps in (("reader_ms", r.pop("boundary_stamps_ns")), ("notice_ms", r.pop("noticed_ns"))):
+            d = sorted((s - b) / 1e6 for s, b in zip(stamps, sent))
+            r[name] = {"n": len(d), "p50": median(d), "max": d[-1] if d else None}
     (a.out / "ahead_bench.json").write_text(json.dumps(out, indent=1))
     print(f"{'regime':>12} {'k':>5} {'h':>4} {'steps':>6} {'step ms':>8} {'slowdown':>8} {'pass ms':>8} "
-          f"{'max ms':>7} {'passes':>6} {'bound ms':>9} {'fence ms':>9} {'reader ms':>9} accepted", flush=True)
+          f"{'max ms':>7} {'passes':>6} {'bound ms':>9} {'fence ms':>9} {'reader ms':>9} {'notice ms':>9} accepted",
+          flush=True)
     for r in out["rows"]:
         held, regime = r.get("held_ms", {}), f"{r['step_ms']:g}:{r['every']}:{r['busy']:g}"
         print(f"{regime:>12} {'lock' if r['ahead'] is None else r['ahead']:>5} {r['headroom']:>4} {r['steps']:>6} "
               f"{r['step_interval_ms'] or 0:>8.2f} {r['slowdown'] or 0:>8.2f} {r['pass_ms_mean']:>8.1f} "
               f"{r['pass_ms_max']:>7.1f} {r['passes']:>6} {held.get('bound', 0):>9.0f} {held.get('fence', 0):>9.0f} "
-              f"{r['reader_ms']['max'] or 0:>9.3f} {r['accepted']}", flush=True)
+              f"{r['reader_ms']['max'] or 0:>9.3f} {r['notice_ms']['max'] or 0:>9.3f} {r['accepted']}", flush=True)
     sys.stdout.flush()
     return 0 if all(r["accepted"] and not r["misread"] for r in out["rows"]) else 1
 
