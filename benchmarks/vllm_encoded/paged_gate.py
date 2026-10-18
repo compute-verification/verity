@@ -52,7 +52,7 @@ BOUND_LENS = (1, 17, 64, 300, 511)
 BOUND_SPLITS = (1, 4)
 
 
-def bound_gate(lib: P.PagedLib, torch, ks: list[int], log, rc) -> dict:
+def bound_gate(lib: P.PagedLib, torch, ks: list[int], log, main_rc) -> dict:
     """The bound key on every path, in three parts.
 
     - `pinned` (a library at the remote audit's codec, `codec.DEFAULT`): `vectors.json`'s `codec.bound` blocks
@@ -67,8 +67,8 @@ def bound_gate(lib: P.PagedLib, torch, ks: list[int], log, rc) -> dict:
       `kv.py` on a few words. `pg_append_multi` with the offsets in its table equals it. Decode attention over it
       (BOUND_LENS, at each of BOUND_SPLITS) equals the plain cache's output bit for bit, and decoded under the seed's
       key it does not. The gather, with receipts and without, equals the plain blocks.
-    - `deferred`: plaintext and encoded slots mixed in one cache (`deferred_gate`), rc being main's receipt buffers
-      and its `receipt_gate`."""
+    - `deferred`: plaintext and encoded slots mixed in one cache (`deferred_gate`), main_rc being main's receipt
+      buffers and its `receipt_gate`."""
     G, D, WB, f = lib.shape["kv_heads"], lib.shape["head_dim"], lib.shape["wb"], lib.field
     W, nslots = K.token_layer_words(f), BLOCKS * BS
     out = {"ok": True}
@@ -209,13 +209,13 @@ def bound_gate(lib: P.PagedLib, torch, ks: list[int], log, rc) -> dict:
     out["ok"] &= rand_ok
     log(f"bound random k={k}: {'ok' if rand_ok else 'FAIL'} (append_multi {multi_ok}, kv.py {py_ok}, attention "
         f"{sum(c['equal'] and c['seed_key_differs'] for c in att)}/{len(att)}, gather {gather_ok})")
-    out["deferred"] = deferred_gate(lib, torch, k, plain, enc, bjs, rows, lay, bt, btd, lens, q, rng, rc, log)
+    out["deferred"] = deferred_gate(lib, torch, k, plain, enc, bjs, rows, lay, bt, btd, lens, q, rng, main_rc, log)
     out["ok"] &= out["deferred"]["ok"]
     return out
 
 
 def deferred_gate(lib: P.PagedLib, torch, k: int, plain, enc, bjs, rows, lay: P.Layout, bt, btd, lens, q, rng,
-                  rc, log) -> dict:
+                  main_rc, log) -> dict:
     """The plaintext flag (deferred residency, remote_bandwidth's PROTOCOL.md §4) on `bound_gate`'s random caches: each
     slot of both layers appended as it is (its flag set) or encoded under its offset (flag clear), at random, so every
     decode's tiles mix both.
@@ -233,7 +233,7 @@ def deferred_gate(lib: P.PagedLib, torch, k: int, plain, enc, bjs, rows, lay: P.
     - flags on a plain cache are refused."""
     D, H = lib.shape["head_dim"], lib.shape["heads"]
     nslots, batch = BLOCKS * BS, len(BOUND_LENS)
-    rc_sk, used, epoch, receipt_gate = rc
+    rc_sk, used, epoch, receipt_gate = main_rc
 
     def eq(a, b) -> bool:
         return bool(torch.equal(a.view(torch.int16), b.view(torch.int16)))
