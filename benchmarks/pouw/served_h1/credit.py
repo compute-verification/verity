@@ -2,7 +2,9 @@
 only the selected slots, from selections that always-proved units compute from the raw committed rows.
 
     admit     slot i of a call is selected iff its committed A row is not the canonical empty row (K zero bytes, scale 0):
-              the OR of the row's K + 4 bytes, a function of the raw row alone, no noise
+              the OR of the row's K + 4 bytes, a function of the raw row alone, no noise; the admit unit refuses a row of
+              zero bytes under a nonzero scale (`scale_only`), so a tile, which reads only the bytes, sees a dead row as
+              an all-zero row
     words     a call's T admit bits as T / 16 words of 16 bits (bit b of word q is slot 16 q + b), one admit unit each: a
               proof unit's outputs are at most 16 bits; each word is its own hiding leaf, in the call's admit tree
     dead      a unit (32 slot rows by 32 weight rows) is dead iff its 32 slots' admit bits are all 0: its rows are the
@@ -30,6 +32,13 @@ LIMB = 1 << 16
 def admit(rows: np.ndarray) -> np.ndarray:
     """(T,) bool: slot i is selected iff its committed row (K s8 bytes ‖ f32 scale, `commit.s8_rows`) has a nonzero byte."""
     return np.asarray(rows, dtype=np.uint8).reshape(rows.shape[0], -1).any(axis=1)
+
+
+def scale_only(rows: np.ndarray) -> list[int]:
+    """The slots the admit unit refuses: zero s8 bytes under a nonzero scale.  A tile reads only the s8 bytes, so it can
+    tell a dead row only as all-zero bytes; with these refused, a row's bytes are zero iff it is the canonical empty row."""
+    r = np.asarray(rows, dtype=np.uint8).reshape(rows.shape[0], -1)
+    return [int(i) for i in np.flatnonzero(~r[:, :-4].any(axis=1) & r[:, -4:].any(axis=1))]
 
 
 def words(bits: np.ndarray) -> list[int]:
@@ -108,4 +117,5 @@ def proof_plan(n_calls: int, t: int, steps: int, sites: Sequence[str], populatio
                       "prefix [1] * m + [0] * (T - m) in every call)"}
 
 
-__all__ = ["admit", "bits_of", "live_blocks", "live_units", "proof_plan", "published", "tally", "word_rows", "words"]
+__all__ = ["admit", "bits_of", "live_blocks", "live_units", "proof_plan", "published", "scale_only", "tally", "word_rows",
+           "words"]

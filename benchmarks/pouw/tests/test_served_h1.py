@@ -98,7 +98,8 @@ def test_dead_units_skip_noise_and_receipt():
     for u in range(len(call.units)):
         want = RC.gated_reference(call, bits, SALT, 9, RA, RB, u)
         assert list(got[u]) == want
-        ungated = RC.reference(call, SALT, 9, RA, RB, u)[1]
+        assert want == RC.reference(call, SALT, 9, RA, RB, u)[1]
+        ungated = RC.reference(call, SALT, 9, RA, RB, u, gated=False)[1]
         assert (want == ungated) if u in live else (not any(want) and any(ungated))
 
 
@@ -111,6 +112,9 @@ def test_admit_words_and_tally():
     assert ws == [0b1001, 0b10, 0, 1 << 15] and list(CR.bits_of(ws)) == list(bits)
     assert CR.word_rows(ws)[3] == (1 << 15).to_bytes(2, "little")
     assert CR.live_blocks(bits) == [0, 1] and CR.live_units(bits, 96) == [0, 1, 2, 3, 4, 5]
+    rows = np.zeros((3, 8 + 4), dtype=np.uint8)
+    rows[0, 2], rows[1, -1], rows[2, [1, -2]] = 1, 0x3F, (5, 0x40)
+    assert list(CR.admit(rows)) == [True, True, True] and CR.scale_only(rows) == [1]
     calls = [{"step": s, "site": site, "n": n, "k": k} for s in range(2) for site, n, k in (("a", 64, 32), ("b", 32, 64))]
     tl = CR.tally(calls, [5, 1, 3, 0], 2, ("a", "b"))
     assert tl["step_site"] == [[5, 1], [3, 0]] and tl["site"] == {"a": 8, "b": 1}

@@ -250,12 +250,13 @@ def call_receipts(call: Call, salt: bytes, base: int, root_a: bytes, root_b: byt
     return out
 
 
-def reference(call: Call, salt: bytes, base: int, root_a: bytes, root_b: bytes, u: int) -> tuple[list[int], list[int]]:
-    """`h1tile.reference` on unit u of the call: (z, receipt)."""
+def reference(call: Call, salt: bytes, base: int, root_a: bytes, root_b: bytes, u: int,
+              gated: bool = True) -> tuple[list[int], list[int]]:
+    """`h1tile.reference` on unit u of the call: (z, receipt); `gated=False`, a dead tile's receipt as its noise gives it."""
     i, j = call.units[u]
     a = (call.a[R * i:R * i + R].to(torch.int64).cpu() & 0xFF).tolist()
     b = (call.b[C_ * j:C_ * j + C_].to(torch.int64).cpu() & 0xFF).tolist()
-    return HT.reference(a, b, salt, base + u, (root_a, root_b))
+    return HT.reference(a, b, salt, base + u, (root_a, root_b), gated=gated)
 
 
 def gated_receipts(call: Call, admit, salt: bytes, base: int, root_a: bytes, root_b: bytes, cubin: Cubin | None = None,
@@ -271,7 +272,8 @@ def gated_receipts(call: Call, admit, salt: bytes, base: int, root_a: bytes, roo
 
 
 def gated_reference(call: Call, admit, salt: bytes, base: int, root_a: bytes, root_b: bytes, u: int) -> list[int]:
-    """The gated template's receipt on unit u: `h1tile.reference`'s when a slot of its rows is selected, else zero words."""
+    """Unit u's receipt under the call's admit bits: `h1tile.reference`'s when a slot of its rows is selected, else zero
+    words (which `PouwH1Tile_v2` gives a tile of all-zero rows, the canonical empty rows)."""
     i, _ = call.units[u]
     if bool(np.asarray(admit[R * i:R * i + R]).any()):
         return reference(call, salt, base, root_a, root_b, u)[1]

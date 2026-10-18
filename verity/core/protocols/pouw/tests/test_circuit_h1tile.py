@@ -1,6 +1,7 @@
 """`circuit.h1tile`: H1 + fx1 as a compile-pass tile unit under CP-W. Its lanes are the tile's cells once each, its noise is
-seed_j's stream in counter mode and its fold keys σ_R's, its receipt is #2438's warp checkpoint (two words a set), and on a
-compiled grid its gates are its word reference (`segment.call_words`, fx1's fold), with the served outputs unchanged."""
+seed_j's stream in counter mode and its fold keys σ_R's, its receipt is #2438's warp checkpoint (two words a set), a dead
+tile's (all-zero A) is zero words, and on a compiled grid its gates are its word reference (`segment.call_words`, fx1's
+fold), with the served outputs unchanged."""
 from __future__ import annotations
 
 import hashlib
@@ -137,6 +138,22 @@ def test_u129_on_bits_is_the_word():
         assert evaluate(H.PouwU129Word, x) == (want,)
 
 
+def test_dead_tile_bits_are_the_words():
+    """`PouwAnyByte_v2`, `PouwOrBit_v2` and `PouwMask32_v2` are their `_v1` words: any nonzero byte of 32, a bit's OR, and a
+    word masked by a bit."""
+    rng = random.Random(6)
+    for x in ([0] * 32, [0] * 31 + [0x80], [rng.randrange(256) for _ in range(32)], [1] + [0] * 31):
+        want = int(any(x))
+        assert list(evaluate(H.PouwAnyByte, _bits(x))) == [want] and evaluate(H.PouwAnyByteWord, *x) == (want,)
+    for a in (0, 1):
+        for b in (0, 1):
+            assert list(evaluate(H.PouwOrBit, [a], [b])) == [a | b] == list(evaluate(H.PouwOrBitWord, a, b))
+    w = rng.getrandbits(32)
+    for live in (0, 1):
+        got = list(evaluate(H.PouwMask32, [(w >> i) & 1 for i in range(32)], [live]))
+        assert _words(got) == [w * live] == list(evaluate(H.PouwMask32Word, w, live))
+
+
 def test_unit_signature():
     grid = C.Tile(4, 8, tuple((i, j) for i in range(4) for j in range(8)))
     params, ret = bind(H.PouwH1Tile, EXACT=_acc(64), R=4, C=8, PAIRS=grid.pairs).signature()
@@ -168,6 +185,12 @@ def test_reference_follows_the_seed():
     for other in (H.reference(a, b, SALT, 1, ROOTS), H.reference(a, b, hashlib.sha512(b"x").digest(), 0, ROOTS),
                   H.reference(a, b, SALT, 0, (ROOTS[1], ROOTS[0]))):
         assert other[0] == z and all(x != y for x, y in zip(other[1], rc))
+    dead = [[0] * 64 for _ in range(4)]
+    zd, rd = H.reference(dead, b, SALT, 0, ROOTS)
+    assert zd == [0] * 64 and rd == [0] * 8 and any(H.reference(dead, b, SALT, 0, ROOTS, gated=False)[1])
+    one = [row[:] for row in dead]
+    one[3][63] = 1
+    assert H.reference(one, b, SALT, 0, ROOTS)[1] == H.reference(one, b, SALT, 0, ROOTS, gated=False)[1]
 
 
 def test_live_salt_is_the_round_key_stream():
@@ -198,19 +221,20 @@ def test_live_salt_is_the_round_key_stream():
 def test_h1_tile_is_its_reference():
     """A 4 × 16 grid at K = 64 compiles to one H1 tile unit of two lanes; on random rows its served outputs are the served
     Program's, and its receipt is `reference`'s (E2E-120's `call_words` and fx1 fold from σ_R's keys, then the lanes' XOR a
-    set). Slow: the two seeds' and 22 noise blocks' SHA-512 in gates and 64 exact s8 dots on bits; it is the only test of
-    the unit's gates."""
+    set); on all-zero rows of A (a dead tile) its receipt is zero words. Slow: the two seeds' and 22 noise blocks' SHA-512
+    in gates and 64 exact s8 dots on bits, twice; it is the only test of the unit's gates."""
     served = Program(bind(GRID, R=4, C=16, K=64))
     c = C.compile(served, H.SCHEME)
     (u,) = c.units
-    assert u.tile.grid and (u.tile.r, u.tile.c) == (4, 16) and u.defn.base_id == "PouwH1Tile_v1"
+    assert u.tile.grid and (u.tile.r, u.tile.c) == (4, 16) and u.defn.base_id == "PouwH1Tile_v2"
     rng = random.Random(9)
-    a, b = _rows(rng, 4, 64, -127, 127), _rows(rng, 16, 64, -60, 60)
-    args = [[v for row in a for v in _bits(row)], [v for row in b for v in _bits(row)]]
-    want = list(evaluate(served.fn, *args))
-    got = list(evaluate(c.program.fn, *args, *c.inputs(SALT, [ROOTS])))
-    S = c.served_leaves
-    assert got[:S] == want
-    z, rc = H.reference(a, b, SALT, 0, ROOTS)
-    assert _words(want) == z
-    assert _words(got[S:]) == rc
+    b = _rows(rng, 16, 64, -60, 60)
+    for a in (_rows(rng, 4, 64, -127, 127), [[0] * 64 for _ in range(4)]):
+        args = [[v for row in a for v in _bits(row)], [v for row in b for v in _bits(row)]]
+        want = list(evaluate(served.fn, *args))
+        got = list(evaluate(c.program.fn, *args, *c.inputs(SALT, [ROOTS])))
+        S = c.served_leaves
+        assert got[:S] == want
+        z, rc = H.reference(a, b, SALT, 0, ROOTS)
+        assert _words(want) == z
+        assert _words(got[S:]) == rc and any(rc) == any(v for row in a for v in row)

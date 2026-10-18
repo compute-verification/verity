@@ -359,7 +359,8 @@ def run(a: argparse.Namespace) -> dict:
         calls.append({"step": s, "linear": w, "module": name, "layer": layer, "site": site, "k": k, "n": n, "slots": t_max,
                       "base": s * u_step + offs[w], "units": (t_max // 32) * (n // 32), "root_a": lv[-1][0].hex(),
                       "root_b": h1.weight_roots[w].hex(), "a_domain": dom.domain_id.hex(), "a_fields": fields,
-                      "root_admit": s_lv[-1][0].hex(), "admit_fields": s_fields, "selected": int(bits.sum())})
+                      "root_admit": s_lv[-1][0].hex(), "admit_fields": s_fields, "selected": int(bits.sum()),
+                      "scale_only": len(CR.scale_only(rows))})
         data.append({"m": m, "xq": slots[:m].cpu().numpy(), "sa": scales[:m].copy(), "receipts": None, "admit": bits,
                      "words": ws, "s_levels": s_lv, "prefix": bool(np.array_equal(bits, np.arange(t_max) < m))})
         if not live:
@@ -450,6 +451,7 @@ def run(a: argparse.Namespace) -> dict:
                        "empty_steps_s": round(time.perf_counter() - t0, 1), "a_served_vs_recorded": a_check,
                        "receipts_s": round(sum(c["receipts_s"] for c in calls), 1), "live_units": live_u,
                        "admit_is_served_prefix": all(d["prefix"] for d in data),
+                       "scale_only_rows": sum(c["scale_only"] for c in calls),
                        "real_rows_per_step": [max((d["m"] for c, d in zip(calls, data) if c["step"] == s), default=0)
                                               for s in range(s_max)]})
     equal = [s_["token_ids"] == r["token_ids"] for s_, r in zip(served, reference)]
@@ -553,7 +555,8 @@ def run(a: argparse.Namespace) -> dict:
     s = rec.doc["steps"]["serve"]
     rec.doc["ok"] = bool(all(equal) and calls and not a_check["mismatch"] and not a_check["untapped"] and not s["refused"]
                          and s["order_ok"] and s["last_step_complete"] and s["static"] and rec.doc["steps"]["gate"]["ok"]
-                         and coins["ok"] and s["admit_is_served_prefix"] and credit["tally_tree"]["limbs_16_bit"]
+                         and coins["ok"] and s["admit_is_served_prefix"] and not s["scale_only_rows"]
+                         and credit["tally_tree"]["limbs_16_bit"]
                          and credit["credited"]["pub_macs"] <= credit["credited"]["macs"])
     rec.save()
     pool.close()
@@ -597,7 +600,8 @@ def gate(a, calls: list[dict], data: list[dict], levels: list, layers: list, h1,
         a_rows = CM.s8_rows(slots.numpy(), scales)
         bits = CR.admit(a_rows)
         live = bool(bits[32 * ri:32 * ri + 32].any())
-        z, ungated = RC.reference(call, salt, c["base"], root_a, root_b, u)
+        z, template = RC.reference(call, salt, c["base"], root_a, root_b, u)
+        ungated = template if live else RC.reference(call, salt, c["base"], root_a, root_b, u, gated=False)[1]
         want = RC.gated_reference(call, bits, salt, c["base"], root_a, root_b, u)
         got = [int(v) for v in d["receipts"][u]]
         y = E.int_mm(slots[32 * ri:32 * ri + 32].to(weight.device), weight[32 * cj:32 * cj + 32]).cpu().to(torch.int64)
@@ -648,7 +652,8 @@ def gate(a, calls: list[dict], data: list[dict], levels: list, layers: list, h1,
             b_roots[c["linear"]] = (rebuilt, PH.weight_root(c["linear"], b_rows))
         r = {"step": c["step"], "linear": c["linear"], "module": c["module"], "k": c["k"], "unit": u,
              "position": c["base"] + u, "real_rows_in_tile": max(0, min(32, d["m"] - 32 * ri)),
-             "receipt_equal_reference": got == want, "z_equal_served_product": z_ok, **sel,
+             "receipt_equal_reference": got == want, "receipt_equal_template": got == template,
+             "z_equal_served_product": z_ok, **sel,
              "receipt_opens": CM.verify(dom, root_r, u, leaf, sibs),
              "flipped_receipt_refused": not CM.verify(dom, root_r, u, leaf_f, sibs),
              "a_root_rebuilt": a_root == root_a, "tampered_a_row_changes_root": a_tampered != root_a,
