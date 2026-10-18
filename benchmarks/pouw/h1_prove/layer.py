@@ -8,7 +8,10 @@
   A = floor(x / s), clamped to [-126, 125], so the unit's dithered X = A + b (b a noise bit) is an s8 code in [-126, 126].
 * **The checkpoint** is read with numpy alone (safetensors' header and raw little-endian bf16), from the HF cache.
 
-    python layer.py MODEL_DIR OUT.npz [--tokens 16] [--layer 0] [--seed-tokens HEX]
+    python layer.py MODEL_DIR OUT.npz [--tokens 16] [--layer 0] [--seed-tokens HEX] [--fetch REPO]
+
+``--fetch REPO`` (a node without the checkpoint): MODEL_DIR gets REPO's index, tokenizer and only the shards holding the
+embedding and layer L's tensors, from huggingface.co, where they are not there already.
 """
 from __future__ import annotations
 
@@ -65,6 +68,29 @@ def find_model(hub: Path) -> Path:
     raise SystemExit(f"no Llama-3.1-8B bf16 checkpoint under {hub}")
 
 
+def fetch(repo: str, root: Path, layer: int, calls: list[str]) -> None:
+    import urllib.request
+    root.mkdir(parents=True, exist_ok=True)
+
+    def get(name: str) -> Path:
+        f = root / name
+        if not f.exists():
+            tmp = f.with_suffix(f.suffix + ".part")
+            with urllib.request.urlopen(f"https://huggingface.co/{repo}/resolve/main/{name}") as r, open(tmp, "wb") as out:
+                while chunk := r.read(1 << 24):
+                    out.write(chunk)
+            tmp.rename(f)
+        return f
+
+    where = json.loads(get("model.safetensors.index.json").read_text())["weight_map"]
+    get("tokenizer.json")
+    names = ["model.embed_tokens.weight", f"model.layers.{layer}.input_layernorm.weight"] + [
+        f"model.layers.{layer}.{'self_attn' if c.endswith(('q_proj', 'k_proj', 'v_proj', 'o_proj')) else 'mlp'}.{c}.weight"
+        for c in calls]
+    for shard in sorted({where[n] for n in names}):
+        get(shard)
+
+
 def quant_w(w: np.ndarray) -> np.ndarray:
     amax = np.maximum(np.abs(w).max(axis=1, keepdims=True), 1e-30)
     return np.clip(np.rint(w * (W_TOP / amax)), -W_TOP, W_TOP).astype(np.int8)
@@ -105,8 +131,11 @@ def main() -> int:
     ap.add_argument("--layer", type=int, default=0)
     ap.add_argument("--seed-tokens", default="")
     ap.add_argument("--calls", default=",".join(CALLS))
+    ap.add_argument("--fetch", default="")
     a = ap.parse_args()
     root = Path(a.model)
+    if a.fetch:
+        fetch(a.fetch, root, a.layer, a.calls.split(","))
     if not list(root.glob("*.safetensors")) and not (root / "model.safetensors.index.json").exists():
         root = find_model(root)
     ck = Checkpoint(root)
