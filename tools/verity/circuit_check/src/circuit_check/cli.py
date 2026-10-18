@@ -297,13 +297,13 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
     so a run that is itself killed still leaves them.
 
     Isolated, circuit-check's memory stays under ``mem_gb`` GiB (default: what `memory_gb` leaves this process) as long as every
-    target that peaks over `HEAVY_GB` is listed in `HEAVY` with its peak: a target starts only while the peaks of those running
-    and its own add up to at most `budget_gb` (``mem_gb`` less this process's RSS), counting an unlisted target as `HEAVY_GB`;
-    one heavier than that still runs, alone, and the log says it does not fit; the
-    listed targets go first, heaviest first.  The sum counts each process's copy of the task list, which they share, so the bound
-    is conservative by that much per process.  An unlisted target that peaks well over `HEAVY_GB` can still break it: the process
-    it gets killed in is reported as that target's failure (``circuit-check/killed``, with its peak), the other targets run on,
-    and its peak belongs in `HEAVY`.
+    target that grows more than `HEAVY_GB` past the task list it is forked with (``peak_gb - rss_start_gb``) is listed in `HEAVY`
+    with its peak: a target starts only while the peaks of those running and its own add up to at most `budget_gb` (``mem_gb``
+    less this process's RSS), counting an unlisted target as `HEAVY_GB`; one heavier than that still runs, alone, and the log
+    says it does not fit; the listed targets go first, heaviest first.  The sum counts each listed process's copy of the task
+    list, which they share, so the bound is conservative by that much per process.  An unlisted target that grows well past
+    `HEAVY_GB` can still break it: the process it gets killed in is reported as that target's failure (``circuit-check/killed``,
+    with its peak), the other targets run on, and its peak belongs in `HEAVY`.
 
     The task list (each target and its key) is a cache entry too, under the catalog's own key: while everything its build
     could depend on is unchanged (`cache.task_list_reads`), a run whose every target is reused as it was recorded builds no
@@ -409,12 +409,9 @@ def update_pins(rep: dict) -> dict:
     return CK.load_pins()
 
 
-#: the targets that peak over `HEAVY_GB`, each with its peak in GiB (`run`'s scheduling; ``peak_gb``, which counts the 9.6 GiB
-#: task list each process of `--all` is forked with).  The commit that writes a peak names the run it was measured in; the
-#: first six are from the isolated cold `--all` run r20261009-170758-f674 on vy-cpu-1, whose first 239 targets, every one an
-#: earlier list held among them, peaked at 125-151 GiB (these six) or at most 10.6 GiB (the rest; the earlier 29.4 and 104.2 GiB
-#: entries were what a long-lived worker kept from a previous target).  No key holds it (`cache.HEAVY`), so a new peak reruns
-#: no target and needs no edit here
+#: the targets that grow more than `HEAVY_GB` past the task list they are forked with, each with its ``peak_gb`` in GiB in an
+#: isolated `--all` run (`run`'s scheduling; it counts that task list, 26.7 GiB on 17 Oct).  The commit that writes a peak
+#: names the run it was measured in.  No key holds it (`cache.HEAVY`), so a new peak reruns no target and needs no edit here
 HEAVY = CC.HEAVY
 HEAVY_GB = 16
 PEAKS_REPORTED = 50
