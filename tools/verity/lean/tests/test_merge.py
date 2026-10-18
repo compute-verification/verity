@@ -290,3 +290,83 @@ def test_git_merges_two_branches_that_each_import_a_new_module_with_the_installe
     subprocess.run([sys.executable, "tools/verity/lean/merge.py", "--install"], cwd=repo, check=True, capture_output=True)
     git(repo, "merge", "--no-edit", "b")
     assert g.read_text() == "import G.Actual\nimport G.Memory\nimport G.Joint\n"
+
+
+LAKEFILE = '''# Properties: the code's properties.
+name = "security_properties"
+
+[[require]]
+name = "security"
+path = ".."
+
+[[require]]
+name = "pouw_window"
+path = "../../pouw/window"
+
+[[lean_lib]]
+name = "Properties"
+roots = ["Properties.Pouw", "Properties.Proofs.Pouw",
+  "Properties.Nci", "Properties.Proofs.Nci"]
+'''
+
+
+def _lakefile(tmp: Path, base: str, ours: str, theirs: str) -> tuple[str, int]:
+    for n, t in (("base", base), ("ours", ours), ("theirs", theirs)):
+        (tmp / n).write_text(t)
+    return M.lakefile(tmp / "base", tmp / "ours", tmp / "theirs")
+
+
+def test_a_lakefile_whose_sides_each_require_a_package_and_add_roots_merges():
+    """#1541 against #1573 and the Properties lakefile's other conflicts (Oct): each side required a package after the same
+    block and appended roots to the same line; the merge keeps both, wrapped as ours wraps, and stays TOML."""
+    import tempfile
+    import tomllib
+    tmp = Path(tempfile.mkdtemp())
+    req = lambda n: f'\n[[require]]\nname = "{n}"\npath = "../../{n}"\n'
+    anchor = 'path = "../../pouw/window"\n'
+    tail = '"Properties.Proofs.Nci"]'
+    ours = LAKEFILE.replace(anchor, anchor + req("pous_check")).replace(tail, '"Properties.Proofs.Nci", "Properties.Pous"]')
+    theirs = LAKEFILE.replace(anchor, anchor + req("network_check")).replace(
+        tail, '"Properties.Proofs.Nci", "Properties.Network"]')
+    text, left = _lakefile(tmp, LAKEFILE, ours, theirs)
+    assert left == 0, text
+    doc = tomllib.loads(text)
+    assert [r["name"] for r in doc["require"]] == ["security", "pouw_window", "pous_check", "network_check"]
+    assert doc["lean_lib"][0]["roots"] == ["Properties.Pouw", "Properties.Proofs.Pouw", "Properties.Nci",
+                                           "Properties.Proofs.Nci", "Properties.Network", "Properties.Pous"]
+    assert text.startswith("# Properties: the code's properties.\n") and all(len(s) <= M.WIDTH for s in text.splitlines())
+    gone = LAKEFILE.replace(', "Properties.Proofs.Pouw"', "")
+    text, left = _lakefile(tmp, LAKEFILE, gone.replace(tail, '"Properties.Proofs.Nci", "Properties.Pous"]'), theirs)
+    assert left == 0 and tomllib.loads(text)["lean_lib"][0]["roots"] == [
+        "Properties.Pouw", "Properties.Nci", "Properties.Proofs.Nci", "Properties.Network", "Properties.Pous"], text
+    comment = lambda s: LAKEFILE.replace("the code's properties.", s)
+    text, left = _lakefile(tmp, LAKEFILE, comment("ours."), comment("theirs."))
+    assert left == 1 and "<<<<<<< ours" in text, "a comment both sides changed stays git's"
+    text, left = _lakefile(tmp, LAKEFILE, LAKEFILE.replace('"security_properties"', '"a"'),
+                           LAKEFILE.replace('"security_properties"', '"b"'))
+    assert left == 1, "so does a value"
+
+
+def test_git_merges_two_branches_that_each_require_a_package_with_the_installed_driver(tmp_path, monkeypatch):
+    for k, v in {"HOME": str(tmp_path), "GIT_CONFIG_NOSYSTEM": "1", "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com",
+                 "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.com"}.items():
+        monkeypatch.setenv(k, v)
+    repo = tmp_path / "repo"
+    (repo / "tools" / "verity" / "lean").mkdir(parents=True)
+    for f in ("merge.py", "check.py"):
+        shutil.copy(HERE.parent / f, repo / "tools" / "verity" / "lean" / f)
+    (repo / ".gitattributes").write_text(f"lakefile.toml merge={M.LAKEFILE}\n")
+    lf = repo / "lakefile.toml"
+    anchor = 'path = "../../pouw/window"\n'
+    git(repo, "init", "-q", "-b", "main")
+    for name, extra in (("main", ""), ("a", '\n[[require]]\nname = "x"\npath = "x"\n'),
+                        ("b", '\n[[require]]\nname = "y"\npath = "y"\n')):
+        if name != "main":
+            git(repo, "checkout", "-q", "-b", name, "main")
+        lf.write_text(LAKEFILE.replace(anchor, anchor + extra))
+        git(repo, "add", "-A")
+        git(repo, "commit", "-q", "-m", name)
+    git(repo, "checkout", "-q", "a")
+    subprocess.run([sys.executable, "tools/verity/lean/merge.py", "--install"], cwd=repo, check=True, capture_output=True)
+    git(repo, "merge", "--no-edit", "b")
+    assert 'name = "x"\npath = "x"\n\n[[require]]\nname = "y"\npath = "y"\n' in lf.read_text()

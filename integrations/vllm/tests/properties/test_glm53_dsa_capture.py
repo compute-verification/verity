@@ -17,6 +17,7 @@ from tests.properties import glm53_dsa_capture_gpu as X
 from verity.ml.circuits.evaluation import evaluate
 from verity.ml.circuits.defs import bind
 from verity_vllm.program.kernels import derived_rows as DR
+from verity_vllm.program.kernels import sparse_mla_split_twins as TW
 from verity_vllm.program.registry import dsa
 from verity_vllm.program.registry import ref_prims as RP
 from verity_vllm.program.registry import sparse_mla as M
@@ -268,18 +269,36 @@ def test_the_logits_rerun_compares_the_words_each_row_writes() -> None:
 
 # ------------------------------------------------------------------------------------------------------------- attention
 def test_the_attn_jobs_take_the_kernel_words(tmp_path) -> None:
+    """A token in one split against `SparseMlaHead_v1`, one in two against `SparseMlaHeadSplit_v1` (the kernel's words the
+    twin's): a flipped word is one mismatch, and a head whose words two splits change (none at T = 65 to 100 here), read as one
+    split, mismatches by exactly the words the twins differ in."""
     rng = np.random.default_rng(10)
-    T = 3
-    qn, qr = _bf16(rng, X.NH, X.DV), _bf16(rng, X.NH, X.DR)
-    kv = _bf16(rng, T, X.DV + X.DR, scale=0.3)
-    fn = bind(M.SparseMlaHead, T=T, **{k: v for k, v in M.SPARSE_MLA_GLM53.items() if k != "NH"})
-    out = np.array([evaluate(fn, qn[h].tolist(), qr[h].tolist(), kv.reshape(-1).tolist()) for h in range(2)], dtype=np.uint16)
-    out = np.concatenate([out, np.zeros((X.NH - 2, X.DV), np.uint16)])
-    out[1, 300] ^= 1
-    paths = X._save(tmp_path / "attn", qn=qn, qr=qr, kv=kv, out=out)
-    res = [X.compare({"phase": "attn", "case": "token7", "kind": "attn", "paths": paths, "T": T, "head": h}) for h in (0, 1)]
-    assert [r["mismatch"] for r in res] == [0, 1] and res[1]["first_mismatch"]["word"] == 300
-    assert _total(res)["words"] == 2 * X.DV and _total(res)["reference"] == 2
+    res, differ = {}, {}
+    for T, NS in ((130, 2), (3, 1)):
+        qn, qr = _bf16(rng, X.NH, X.DV), _bf16(rng, X.NH, X.DR)
+        kv = _bf16(rng, T, X.DV + X.DR, scale=0.3)
+        out = TW.head_split_rows(qn, qr, kv, T=T, NS=NS, scale=X.SCALE)[0]
+        one = TW.head_split_rows(qn, qr, kv, T=T, NS=1, scale=X.SCALE)[0]
+        h1 = int(np.flatnonzero((one != out).any(axis=1))[0]) if NS > 1 else 0
+        differ[T] = int((one[h1] != out[h1]).sum())
+        out[1, 300] ^= 1
+        paths = X._save(tmp_path / f"attn{T}", qn=qn, qr=qr, kv=kv, out=out)
+        res[T] = [X.compare({"phase": "attn", "case": "token7", "kind": "attn", "paths": paths, "T": T, "NS": ns, "head": h})
+                  for ns, h in ((NS, 1), (1, h1))]
+    for T, NS in ((130, 2), (3, 1)):
+        assert res[T][0]["mismatch"] == 1 and res[T][0]["first_mismatch"]["word"] == 300 and res[T][0]["first_mismatch"]["NS"] == NS
+        assert res[T][1]["mismatch"] == differ[T] and _total(res[T])["words"] == _total(res[T])["reference"] * X.DV == 2 * X.DV
+    assert differ[3] == 0 and differ[130] > 0
+
+
+def test_the_split_counts_are_the_launchs() -> None:
+    """ATTN_TOKENS' valid counts min(t + 1, 2048) in one launch at 132 SMs: vLLM's call (no num_splits) splits the 130-key rows
+    in 2, the 1001-key row in 8 and the 2048-key rows in 16 (the H200's first disagreement was token 129's); a given count of 1
+    leaves every row whole."""
+    valid = [min(t + 1, X.TOPK) for t in X.ATTN_TOKENS]
+    assert X.split_counts(valid, 132) == [1, 1, 1, 1, 1, 1, 1, 2, 2, 8, 16, 16, 16, 16]
+    assert X.split_counts(valid, 132, 1) == [1] * len(valid)
+    assert X.split_counts([min(t + 1, X.TOPK) for t in X.QUICK_ATTN_TOKENS], 132) == [1, 2, 28]
 
 
 def test_the_index_conversion_compacts_valid_entries_in_order() -> None:

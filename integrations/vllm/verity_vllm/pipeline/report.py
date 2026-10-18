@@ -24,6 +24,7 @@ from typing import Any
 
 from verity_vllm.check import gates as G
 from verity_vllm.check.gates import GateResult, RunArtifacts
+from verity_vllm.config import RowEngine
 
 CARD_SCHEMA = "verity-gen/card/v1"
 
@@ -200,7 +201,7 @@ def workload_summary(path: str | Path | None) -> dict:
             # [coverage D87] serving-regime dimensions of the coverage campaign (None for the older hand-authored workloads)
             "serving_profile": doc.get("serving_profile"), "context_class": doc.get("context_class"),
             "length_seed": doc.get("length_seed"), "arrive_steps": [r["arrive_step"] for r in reqs],
-            "expected_engine_steps": doc.get("expected_engine_steps"), "engine_args_required": doc.get("engine_args_required") or {}}
+            "expected_engine_steps": doc.get("expected_engine_steps"), "engine_args_required": dict(RowEngine.of(doc).args)}
 
 
 def engine_args_of(run: RunArtifacts) -> dict:

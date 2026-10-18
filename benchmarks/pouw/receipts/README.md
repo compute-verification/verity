@@ -36,10 +36,16 @@ All words are uint32 and arithmetic wraps. An MMA gives a lane four words (d0, d
   key_ok rejects such keys, and neither schedule has r_t + r_(t+2) ≡ 0 (mod 32). At four words, any kernel needs
   a2 ≡ −1 (mod 2^r1), for odd a1, a2, a3, rotations 0 < r2, r3 < n and 0 < r1 ≤ n − 3 (Lean:
   `Pouw.SecurityProofs.Receipt.DuoQuadNoKernel`). key_ok rejects a ≡ −1 (mod 32) and pfill's rotations are 5 to 29,
-  and no served position t has SERVED_KA[(t + 2) mod 8] ≡ −1 (mod 2^SERVED_ROT[t]), whose rotations are 4 to 27. So
+  and no served position t has SERVED_KA[(t + 2) mod 8] ≡ −1 (mod 2^SERVED_ROT[t]), whose rotations are 3 to 27. So
   both schedules bind every four-word run of the whole state. `benchmarks/pouw/theory/duo_kernel.c` finds every
   four-word kernel at width 4 to be the top-bit family, and every kernel it has found at widths 6 and 8 is too.
-  Still open: five or more words, and the served receipt's form (equal up to one constant) at any length.
+  In a run of any length, four words with those keys have no kernel whatever the words before and after them (Lean
+  `Pouw.SecurityProofs.Receipt.DuoWindowNoKernel`), so two runs of either schedule with the same final states differ,
+  if at all, at two words at least four positions apart; and a run whose state after every four words is committed
+  has no kernel at any length (`Pouw.SecurityProofs.Receipt.DuoCheckpointNoKernel`). No schedule binds every length:
+  every run of more than 2·4^n words has a kernel, by counting (`Pouw.SecurityProofs.Receipt.DuoLongRunKernel`), so
+  the deployed schedules' first kernel lies between five words and 2·4^32 + 1. Still open: five or more words for the
+  deployed keys, and the served receipt's form (equal up to one constant) at any length.
 - **(RT) and (G₃).** RS-E-REF Part IX (note:20261015T1931Z-draft-theorem-e-referee) says (RT) is open and that no lemma
   removes it, and that (G₃) suffices for (G₄).
 - **r11's results.** P2-FF r11 (note:20261016T1549Z-draft-fullfloor-s-r11) finds that pricing can't replace (RT). It

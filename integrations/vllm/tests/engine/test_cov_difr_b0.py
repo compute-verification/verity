@@ -21,7 +21,7 @@ PROFILES = Path(__file__).resolve().parents[2] / "workloads"
 
 def test_b0_profile_is_the_pinned_profile_plus_the_sampler_recognizer():
     p = OVB0.PROFILE
-    # [P6] `derived_B0_ovs`: the configuration-derived B0 profile (== the pinned module's, `profiles/expected/derived_B0.json`) + the recognizer
+    # [P6] `derived_B0_ovs`: the configuration-derived B0 profile + the recognizer
     assert p.id == OVB0.PROFILE_ID == "vllm-d9105ea80-sm89-eager-bf16-b0+ov-sampling" and p.id != BASE.PROFILE.id and p.id != OVB1.PROFILE.id
     assert p.accepted is False
     assert p.notes["case"] == "B0" and {k: p.config[k] for k in ("H", "NL", "NH", "KVH", "D", "I", "V", "BN")} == {k: BASE.C[k] for k in ("H", "NL", "NH", "KVH", "D", "I", "V", "BN")}
