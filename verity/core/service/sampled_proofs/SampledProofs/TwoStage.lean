@@ -12,7 +12,7 @@ coins, read in order as `OwnRandomness` reads them (`Draw.take`), with the numbe
 An error where the Python raises: a law that isn't one (`Stage`), an RU index twice, a class the law has no stage for, a
 one-stage law the class's RUs don't admit, or coins that run out.
 -/
-import SampledProofs.Draw
+import SampledProofs.Record
 
 namespace SampledProofs.TwoStage
 
@@ -157,5 +157,107 @@ def selectProofUnits (src : ByteArray) (law : Array (String × Stage)) (selected
     let k := ((← stage law u.cls).k.map (min · u.nv)).getD u.nv
     return (u.index, ← if k < u.nv then subset src k u.nv else pure (Array.range u.nv))
   go.run 0
+
+/-- The profile's only level: the replay units. -/
+def REPLAY : String := "replay"
+
+/-- `Stage.p`: the probability each RU is drawn under a Bernoulli first stage (a probability, or a `bernoulli` law),
+in lowest terms; `none` for a subset, stratified or work law. -/
+def Stage.p (s : Stage) : Option Core.Ratio :=
+  match s.first with
+  | .rate num den => Core.Ratio.mk' num den
+  | .law l => match getD l "law", getD l "p" with
+    | .str "bernoulli", .str p => (Draw.probability? p).bind fun (a, b) => Core.Ratio.mk' a b
+    | _, _ => none
+
+private def kindOf (s : Stage) : String :=
+  match s.first with
+  | .law l => match getD l "law" with | .str k => k | _ => ""
+  | .rate _ _ => "bernoulli"
+
+/-- `Stage.checked`: the proof units checked of a drawn RU of `nv`. -/
+def Stage.checked (s : Stage) (nv : Nat) : Nat := (s.k.map (min · nv)).getD nv
+
+/-- `TwoStageLaw.profile`'s exhaustively checked fields: `programs`, `prescribed`, `linked`, `covered`, and `drawn`
+({`replay`: RUs drawn}), as `IntegrityProfile` takes them. -/
+structure Facts where
+  programs : Array String := #[]
+  prescribed : Array String := #[]
+  linked : Bool := false
+  covered : Array String := #[]
+  drawn : Array (String × Int) := #[]
+
+/-- `TwoStageLaw.profile`: the profile an accepted transcript leaves over the RUs of class `cls`, one level `replay` of
+the class's `n_r` RUs, the only level committed before the first draw.
+
+* Under a Bernoulli first stage a wrong RU of `n_v` proof units is caught only when it is drawn and a wrong proof unit is
+  among the `k` checked, so it escapes with probability at most `1 - p k / n_v`, more often the larger it is: the level
+  is drawn `Bernoulli(p k / n_v)` at the class's largest RU (`k = n_v` when every proof unit is checked).
+* Under a subset, stratified or work first stage every proof unit of a drawn RU is checked, so the level is drawn as the
+  one-stage law draws it: `Subset(k)`, or its strata (a work law's at its sizes, `Record.profileDraw`).
+
+`units` are the class's RUs (others ignored, all distinct): `n_r` is their count and `n_v` their largest proof-unit
+count, a caller's `n_r` equal to it and its `n_v` no smaller. Without them `n_r` is needed, and `n_v` under a Bernoulli
+first stage. Then `IntegrityProfile`'s own checks: `drawn` keyed by `replay` and at least 0, and `0 < δ < 1`. An error
+where Python raises. -/
+def profile (law : Array (String × Stage)) (cls : String) (units : Option (Array RU)) (nr nv : Option Nat)
+    (delta : Core.Ratio) (facts : Facts) : Except String Core.Integrity := do
+  let s ← stage law cls
+  let (nr, nv) ← match units with
+    | none => pure (nr, nv)
+    | some us => do
+      distinct us
+      let mine := us.filter (·.cls == cls)
+      if mine.isEmpty then throw s!"no replay unit of class {pyRepr cls}"
+      if let some n := nr then
+        if n != mine.size then throw s!"n_r = {n}, but the class has {mine.size} RUs"
+      let largest := mine.foldl (fun m u => max m u.nv) 0
+      if let some n := nv then
+        if n < largest then
+          throw (s!"n_v = {n} is smaller than the class's largest RU ({largest} proof units): " ++
+            "the profile would overstate detection")
+      pure (some mine.size, some (max largest (nv.getD 0)))
+  let draw ← match s.p, s.first with
+    | none, .law l => do
+      let some n := nr | throw "pass the class's RUs, or n_r"
+      if jeq (getD l "law") "subset" then
+        let k := (nat? (getD l "k")).getD 0
+        if k > n then throw s!"a subset first stage of {k} exceeds the class's {n} RUs"
+        pure (Core.Draw.subset k)
+      else
+        if let some why := Draw.strataMessage l n then
+          throw s!"the class's {kindOf s} first stage over its {n} RUs: {why}"
+        let some d := Record.profileDraw l | throw "the first stage's law has no profile"
+        pure d
+    | some p, _ => do
+      let (some _, some v) := (nr, nv) | throw "pass the class's RUs, or n_r and n_v (its largest RU's proof-unit count)"
+      if v < 1 then throw "an RU holds at least one proof unit"
+      let some rate := Core.Ratio.mk' (p.num * s.checked v) (p.den * v) | throw "an RU holds at least one proof unit"
+      pure (Core.Draw.bernoulli rate)
+    | none, .rate _ _ => throw "a stage's p is NUM/DEN"
+  let some n := nr | throw "pass the class's RUs, or n_r"
+  if facts.drawn.any (·.1 != REPLAY) then throw "draws and drawn counts are keyed by level names"
+  if facts.drawn.any (·.2 < 0) then throw "drawn counts are >= 0"
+  if let .stratified ss := draw then
+    if ss.any fun t => t.name.isEmpty || t.size < t.k then
+      throw "a stratum needs a name, size >= 0 and 0 <= k <= size"
+    let held := ss.foldl (· + ·.size) 0
+    if held != n then throw s!"the strata hold {held} units, the checked level {n}"
+  if delta.num == 0 || delta.den ≤ delta.num then throw "a profile needs 0 < delta < 1"
+  return { programs := facts.programs, prescribed := facts.prescribed.toList.eraseDups.toArray, linked := facts.linked,
+           covered := facts.covered.toList.eraseDups.toArray,
+           levels := #[{ name := REPLAY, query := none, size := n, draw := some draw }], delta,
+           drawn := facts.drawn.map fun (k, v) => (k, v.toNat) }
+
+/-- `check_probability`: the marginal probability that one given proof unit of an RU of class `cls` holding `n_v` proof
+units is checked, under a Bernoulli first stage, `p · checked(n_v) / n_v` (0 for an empty RU); an error for a subset,
+stratified or work first stage, whose marginal depends on the population. -/
+def checkProbability (law : Array (String × Stage)) (cls : String) (nv : Nat) : Except String Core.Ratio := do
+  let s ← stage law cls
+  let some p := s.p
+    | throw s!"class {pyRepr cls}: a {kindOf s} first stage's marginal depends on the population"
+  if nv == 0 then return Core.Ratio.ofNat 0
+  let some r := Core.Ratio.mk' (p.num * s.checked nv) (p.den * nv) | throw "unreachable: n_v > 0"
+  return r
 
 end SampledProofs.TwoStage
