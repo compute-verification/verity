@@ -187,7 +187,8 @@ TEMPLATE = {t.name: t for t in TEMPLATES}
 
 _BLOCK = re.compile(r"^\w+ = async_compile\.triton\('(\w+)', '''(.*?)''', device_str='cuda'\)$", re.M | re.S)
 _JIT = re.compile(r"^@triton\.jit\ndef (\w+)\(", re.M)
-_FLAGS = ("'enable_fp_fusion': True", "'disable_ftz': False", "cc=90")
+#: the triton_meta a kernel of each compute capability carries; a cc not here has no binding
+FLAGS = {cc: ("'enable_fp_fusion': True", "'disable_ftz': False", f"cc={cc[0]}{cc[1]}") for cc in ((9, 0), (12, 0))}
 
 
 def kernel_sources(wrapper_src: str) -> dict[str, str]:
@@ -221,8 +222,11 @@ def _function_text(rest: str) -> str:
     return "\n".join(lines[:end]).rstrip()
 
 
-def recognize(name: str, source: str, config: dict[str, Any] | None = None) -> dict[str, Any]:
-    """The template a generated kernel source is, its literals, and its calls with bound Definition ids; `Unmodelled` otherwise."""
+def recognize(name: str, source: str, config: dict[str, Any] | None = None, *, cc: tuple[int, int]) -> dict[str, Any]:
+    """The template a generated kernel source of compute capability `cc` is, its literals, and its calls with bound Definition ids;
+    `Unmodelled` otherwise."""
+    if cc not in FLAGS:
+        raise Unmodelled(f"{name}: Triton kernels for cc={cc[0]}{cc[1]} have no binding (FLAGS: cc {sorted(FLAGS)})")
     m = _JIT.search(source)
     if m is None:
         raise Unmodelled(f"{name}: no @triton.jit def")
@@ -236,7 +240,7 @@ def recognize(name: str, source: str, config: dict[str, Any] | None = None) -> d
         raise Unmodelled(f"{name} ({t.name}): heuristic {heur and heur.group(1)}, the template's is {t.heuristic}")
     if sig is None or ast.literal_eval(sig.group(1)) != t.signature:
         raise Unmodelled(f"{name} ({t.name}): signature {sig and sig.group(1)} is not {t.signature}")
-    missing = [f for f in _FLAGS if f not in head]
+    missing = [f for f in FLAGS[cc] if f not in head]
     if missing:
         raise Unmodelled(f"{name} ({t.name}): its triton_meta lacks {missing}")
     return {**instantiate(name, t, {k: _num(v) for k, v in got.groupdict().items()}, config), "source_sha256": source_sha256(source)}

@@ -11,6 +11,7 @@ import numpy as np
 import pytest
 
 from verity_vllm.acquire import served as SV
+from verity_vllm.acquire import served_device as SD
 from verity_vllm.check import c2_rules
 from verity_vllm.check.replay import served_check as SC
 from verity_vllm.program.kernels import inductor_rows as TW
@@ -27,6 +28,7 @@ SCHEDULE = [{"request_id": "r0", "arrive": 0, "prompt_tokens": 3, "max_tokens": 
             {"request_id": "r1", "arrive": 1, "prompt_tokens": 2, "max_tokens": 3},
             {"request_id": "r2", "arrive": 2, "prompt_tokens": 200, "max_tokens": 2}]
 STEPS = 4
+H200 = SD.device_of((9, 0), 132)
 
 EMB, N0, QKVV, Q, K, ATT, O, N1, GU, ACT, DOWN, RES, OUT = (
     "c00.embedding/buf0", "c00.rms_norm/buf1", "c00.mm/buf2", "c00.rope/buf3", "c00.rope/buf4", "c01.attention/layers.0.attn",
@@ -75,7 +77,7 @@ def _route(M: int) -> dict:
 def _build() -> dict:
     gemms = sorted({tuple(c["gemm"]) for c in PRE + POST if c["op"] == "mm"})
     args = (SCHEDULE, STEPS, gemms, (H, V), (NH, KVH, D))
-    kw = dict(capture_sizes=[1, 2, 4, 8], max_num_seqs=8, split_cap=SV.SPLIT_CAP, sms=132)
+    kw = dict(capture_sizes=[1, 2, 4, 8], max_num_seqs=8, split_cap=SV.SPLIT_CAP, device=H200)
     _plans, missing = SV.step_plans(*args, {}, **kw)
     plans, missing = SV.step_plans(*args, {f"{M},{K_},{N}": _route(M) for M, K_, N in missing}, **kw)
     assert not missing
@@ -251,7 +253,7 @@ def test_the_gemm_is_the_plans_cublas_route(served, step):
     build = copy.deepcopy(served[0])
     plan = build["steps_plan"][step]
     other = {"kernel": "nosplit"} if _route(plan["gemm_m"])["kernel"] == "splitk" else {"kernel": "splitk", "SPLIT_K": 2}
-    plan["gemms"][f"{H},{QKV}"] = SV.gemm_definition(other, H, QKV)
+    plan["gemms"][f"{H},{QKV}"] = SV.gemm_definition(other, H, QKV, H200.dot)
     assert (step, QKVV) in _failed(_check(served, steps, build=build, weight=W.__getitem__))
 
 

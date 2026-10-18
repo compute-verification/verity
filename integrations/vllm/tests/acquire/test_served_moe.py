@@ -10,6 +10,7 @@ import pytest
 
 from verity.ml.circuits.ops.prims import HopperBF16WgmmaDot16
 from verity_vllm.acquire import served as SV
+from verity_vllm.acquire import served_device as SD
 from verity_vllm.acquire import served_moe as SM
 from verity_vllm.acquire.inductor_templates import Unmodelled
 from verity_vllm.program.registry import act
@@ -167,7 +168,7 @@ def test_the_expert_gemms_are_hoppers_k16_chain_at_every_launched_config() -> No
 
 def test_step_plans_carry_the_expert_gemms_only_with_moe() -> None:
     sched = [{"request_id": "r0", "arrive": 0, "prompt_tokens": 3, "max_tokens": 2}]
-    kw = dict(capture_sizes=[1, 2, 4, 8], max_num_seqs=8, split_cap=SV.SPLIT_CAP, sms=132)
+    kw = dict(capture_sizes=[1, 2, 4, 8], max_num_seqs=8, split_cap=SV.SPLIT_CAP, device=SD.device_of((9, 0), 132))
     dense, _ = SV.step_plans(sched, 2, [(H, H)], (H, 64), (2, 1, 64), {}, **kw)
     assert all("moe" not in p for p in dense)
     plan = SM.expand(_wired(), {**RECORD, "configs": {"4": {"False": WIDE, "True": WIDE}, "1": {"False": SMALL, "True": SMALL}}})[1]

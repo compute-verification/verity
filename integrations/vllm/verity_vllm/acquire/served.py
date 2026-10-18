@@ -10,8 +10,9 @@ values committed from inside the op); the buffer each writes is a committed valu
 (`computation_graph.py`) wires the pieces: a piece argument is another piece's return, an attention op's output, a served weight
 (its placeholder's module path under the backbone), the token ids or the positions (`c00.input/ids`, `c00.input/positions`).
 After the piece whose RoPE (or q/k norm-RoPE) wrote its query, each attention
-op is FA3 over its request's cached keys and values (the committed k and v rows of all its tokens so far), named
-`c<piece>.attention/<layer>` with the layer the module path of the GEMM its query was projected by.  The backbone's output feeds
+op is the device's attention kernel (`served_device`: FA3 on cc 9.0, FA2 on cc 12.0) over its request's cached keys and values (the
+committed k and v rows of all its tokens so far), named `c<piece>.attention/<layer>` with the layer the module path of the GEMM its
+query was projected by.  The backbone's output feeds
 the logits, a cuBLAS GEMM of each request's last row against the lm_head (`logits_processor`), and `TokenSelect_v1`
 (`runner.sampler/sampled_token_ids`).
 
@@ -21,11 +22,13 @@ its capture sizes; another step of at most the largest capture size replays PIEC
 uncaptured.  Each step names the Definitions its batch selects:
 
   * a GEMM of M rows (the padded size under a graph, the step's tokens without; the logits' M is the step's requests) is the
-    cuBLAS route the serving device takes at (M, K, N) (`routes`): `Gemm_v2` unsplit, `CublasSplitKGemm_v1` split-K;
-  * a query row i of a request's qlen rows over klen keys sees T = klen - qlen + 1 + i keys in FA3's tile (kBlockM, kBlockN) for
-    the batch's max query length; FA3's scheduler (vllm-flash-attn's `num_splits_heuristic` and its varlen split, statically capped
-    at `split_cap` when the step has at most the largest capture size's tokens) splits it NS ways: NS = 1 is `Attention_v4` with
-    the tile's MASKED_FROM, NS > 1 (decode only) `Fa3AttentionSplit_v1`.
+    cuBLAS route the serving device takes at (M, K, N) (`routes`): `Gemm_v2` unsplit, `CublasSplitKGemm_v1` split-K, with the
+    device's k16 step;
+  * a query row i of a request's qlen rows over klen keys sees T = klen - qlen + 1 + i keys in the device's attention launch
+    (`served_device.launch`).  FA3's tile (kBlockM, kBlockN) is the batch's max query length's; its scheduler (vllm-flash-attn's
+    `num_splits_heuristic` and its varlen split, statically capped at `split_cap` when the step has at most the largest capture
+    size's tokens) splits it NS ways: NS = 1 is `Attention_v4` with the tile's MASKED_FROM, NS > 1 (decode only)
+    `Fa3AttentionSplit_v1`.  FA2 splits a decode step `fa2_num_splits` ways (`Attention_v5`, `Fa2AttentionSplit_v1`).
 
 The manifest's identities are compiled.build's: one per (step, request, committed value), the request's rows of the value
 (element_range [0, tokens x width); the logits and the sampled id one row per request), `step` request-relative.  program_digest
@@ -33,7 +36,7 @@ is over the Program (every piece's calls with their Definitions and operands, th
 The Build carries the compile artifact it read (`artifact`, `served_artifact.record`), the row's pin.
 
     verity-vllm served build --inductor-dir DIR --split-graph computation_graph.py --launch-configs launch_configs.json \\
-        --routes routes.json --workload workload.json --capture-sizes 1,2,4,8,16 --max-num-seqs 8 --sms 132 --out manifest.json
+        --routes routes.json --workload workload.json --capture-sizes 1,2,4,8,16 --max-num-seqs 8 --cc 9.0 --sms 132 --out manifest.json
     verity-vllm served routes --needs manifest.json --out routes.json          (on the serving GPU: the GEMM routes a Build lacks)
     verity-vllm compiled verify --manifest USED --rebuilt REBUILT --out verify.json     (MAN-05)
 """
@@ -49,19 +52,15 @@ from typing import Any
 
 import numpy as np
 
-from verity.ml.circuits.ops.prims import HopperBF16WgmmaDot16
 from verity_vllm.acquire import compiled as C
 from verity_vllm.acquire import inductor_templates as T
 from verity_vllm.acquire import served_artifact as SA
+from verity_vllm.acquire import served_device as SD
 from verity_vllm.acquire import served_moe as SM
 from verity_vllm.acquire.inductor_templates import Unmodelled, bound
 from verity_vllm.config import UsageError, option
-from verity_vllm.program.kernels import derived_rows as DR
-from verity_vllm.program.kernels import fa3_model as FA3
-from verity_vllm.program.registry import attention_vocab, b1, cublas_bf16
-from verity_vllm.program.registry import fa3_check_inf as F3
+from verity_vllm.program.registry import b1, cublas_bf16
 from verity_vllm.program.registry import inductor as IR
-from verity_vllm.program.registry.hopper import Fa3InvSum
 from verity_vllm.query.manifest.bind import split_name
 from verity_vllm.query.manifest.format import SCHEMA, manifest_digest
 from verity_vllm.query.manifest.format import SERVED_FAMILY, SERVED_IDS as IDS, SERVED_LOGITS as LOGITS
@@ -69,7 +68,6 @@ from verity_vllm.query.manifest.format import SERVED_POSITIONS as POSITIONS, SER
 
 KIND = "verity/served-required-manifest/v1"
 FAMILY = SERVED_FAMILY
-DOT = HopperBF16WgmmaDot16
 #: vllm-flash-attn's `_DEFAULT_MAX_NUM_SPLITS_FOR_CUDA_GRAPH`: the static split count of a step a full graph may hold
 SPLIT_CAP = 32
 #: the Definitions whose output an attention op reads as its query and keys (statics NHEADS, D)
@@ -123,8 +121,8 @@ class _Piece:
     buffer without a token dimension), and "cols" [lo, hi) (a column range of each row), "t" (a weight read transposed) or
     "row_of" (the row of a table each element of another ref indexes)."""
 
-    def __init__(self, src: str, configs: dict[str, Any] | None, where: str) -> None:
-        self.where, self.configs = where, configs
+    def __init__(self, src: str, configs: dict[str, Any] | None, where: str, cc: tuple[int, int]) -> None:
+        self.where, self.configs, self.cc = where, configs, cc
         self.kernels = T.kernel_sources(src)
         self.args: list[str] = []
         self.syms: dict[str, str] = {}
@@ -310,7 +308,7 @@ class _Piece:
         if src is None:
             raise self.fail(f"{name}.run: no async_compile.triton block defines it")
         cfg = T.launch_config(self.configs, src) if self.configs is not None and T.source_sha256(src) in self.configs else None
-        rec = T.recognize(name, src, cfg)
+        rec = T.recognize(name, src, cfg, cc=self.cc)
         self.kernel_records[name] = {k: rec[k] for k in ("source_sha256", "template", "literals", "config")}
         if len(args) != len(rec["params"]):
             raise self.fail(f"{name}.run with {len(args)} arguments, its source takes {rec['params']}")
@@ -357,9 +355,10 @@ class _Piece:
                 "returns": self.returns, "kernels": self.kernel_records}
 
 
-def parse_piece(path: str, configs: dict[str, Any] | None) -> dict[str, Any]:
-    """One Inductor wrapper's `call()` as a piece program (`_Piece`); `Unmodelled` names the first line or launch no form models."""
-    return _Piece(open(path).read(), configs, os.path.basename(path)).program()
+def parse_piece(path: str, configs: dict[str, Any] | None, cc: tuple[int, int]) -> dict[str, Any]:
+    """One Inductor wrapper's `call()` (its kernels compiled for compute capability `cc`) as a piece program (`_Piece`); `Unmodelled`
+    names the first line or launch no form models."""
+    return _Piece(open(path).read(), configs, os.path.basename(path), cc).program()
 
 
 # ------------------------------------------------------------------------------------------------------------- the pieces, wired
@@ -504,11 +503,11 @@ def _layer_of(value: str, producer: dict[str, dict[str, Any]]) -> str:
 
 
 # ------------------------------------------------------------------------------------------------------------- the steps
-def gemm_definition(route: dict[str, Any], K: int, N: int) -> dict[str, Any]:
+def gemm_definition(route: dict[str, Any], K: int, N: int, dot: Any) -> dict[str, Any]:
     if route["kernel"] == "nosplit":
-        return bound(b1.GemmV2, K=K, N=N, DOT=DOT)
+        return bound(b1.GemmV2, K=K, N=N, DOT=dot)
     if route["kernel"] == "splitk":
-        return bound(cublas_bf16.CublasSplitKGemmWord, K=K, N=N, SPLIT_K=int(route["SPLIT_K"]), DOT=DOT)
+        return bound(cublas_bf16.CublasSplitKGemmWord, K=K, N=N, SPLIT_K=int(route["SPLIT_K"]), DOT=dot)
     raise Unmodelled(f"cuBLAS route {route}")
 
 
@@ -522,49 +521,11 @@ def dispatch(n: int, uniform_decode: bool, capture_sizes: list[int], max_num_seq
     return "NONE", n
 
 
-def fa3_splits(qlens: list[int], klens: list[int], *, NH: int, KVH: int, D: int, split_cap: int, sms: int) -> dict[str, Any]:
-    """FA3's tile and per-request split count for one varlen launch (vllm-flash-attn 506341a1: `tile_size_fwd_sm90`, the
-    static `num_splits_heuristic` (or the static cap a full graph fixes) and `prepare_varlen_num_blocks`' dynamic split,
-    blocks per split = ceil(total m x n blocks x 1.1 x KVH / SMs) in f32 with div.full)."""
-    g = NH // KVH
-    max_q, max_k = max(qlens), max(klens)
-    BM, BN = FA3.kblock_m_for(D, max_q, g), FA3.kblock_n_for(D, max_q, g)
-    nmb = [-(-(q * g) // BM) for q in qlens]
-    nnb = [-(-k // BN) for k in klens]
-    if split_cap > 0:
-        static = split_cap
-    else:
-        nmb_s, nnb_s = -(-(max_q * g) // BM), -(-max_k // BN)
-        static = FA3.num_splits_heuristic(KVH * nmb_s, sms, nnb_s, nmb_s, max_k * 2 * D * 2, True, 128)
-    if static <= 1:
-        return {"BM": BM, "BN": BN, "static": static, "NS": [1] * len(qlens)}
-    f = np.float32
-    total = sum(m * n for m, n in zip(nmb, nnb))
-    a = np.array([f(f(f(total) * f(1.1)) * f(KVH))], f).view(np.uint32)
-    b = np.array([f(sms)], f).view(np.uint32)
-    bps = int(np.ceil(DR.as_f32(DR.mul_ftz(DR.div_full_scale_a(a, b), DR.div_full_rcp(b)))[0]))
-    return {"BM": BM, "BN": BN, "static": static, "NS": [max(min(-(-n // bps), static), 1) for n in nnb]}
-
-
-def attention_rows(qlen: int, klen: int, NS: int, *, NH: int, KVH: int, D: int, BM: int, BN: int) -> list[dict[str, Any]]:
-    """The Definition of each of a request's query rows in one launch."""
-    g = NH // KVH
-    if NS == 1:
-        return [bound(F3.AttentionV4, T=T_, NH=NH, KVH=KVH, D=D, BN=BN, DOT=DOT, INV=Fa3InvSum,
-                      MASKED_FROM=attention_vocab.fa3_masked_from(T_, BN, i, BM, g))
-                for i, T_ in enumerate(range(klen - qlen + 1, klen + 1))]
-    if qlen != 1:
-        raise Unmodelled(f"FA3 splits a prefill chunk of {qlen} rows {NS} ways: a split prefill is not modelled")
-    return [bound(IR.Fa3AttentionSplit, T=klen, NS=NS, NH=NH, KVH=KVH, D=D, BN=BN, DOT=DOT, INV=Fa3InvSum,
-                  MASKED_FROM=attention_vocab.fa3_masked_from(klen, BN, 0, BM, g))]
-
-
 def step_plans(schedule: list[dict[str, Any]], steps: int, gemms: list[tuple[int, int]], logits_kn: tuple[int, int], heads: tuple[int, int, int],
-               routes: dict[str, Any], *, capture_sizes: list[int], max_num_seqs: int, split_cap: int, sms: int,
+               routes: dict[str, Any], *, capture_sizes: list[int], max_num_seqs: int, split_cap: int, device: SD.Device,
                moe: Any = None) -> tuple[list[dict[str, Any]], list[list[int]]]:
-    """Each engine step's batch, CUDA-graph mode and the Definitions it selects (`moe`(M): the fused-MoE expert GEMMs' at M rows,
-    `served_moe.expert_plans`); and the (M, K, N) GEMM routes `routes` lacks."""
-    NH, KVH, D = heads
+    """Each engine step's batch, CUDA-graph mode and the Definitions it selects on `device` (`moe`(M): the fused-MoE expert GEMMs' at M
+    rows, `served_moe.expert_plans`); and the (M, K, N) GEMM routes `routes` lacks."""
     arrive = {r["request_id"]: r["arrive"] for r in schedule}
     prompt = {r["request_id"]: r["prompt_tokens"] for r in schedule}
     plans, missing = [], set()
@@ -574,7 +535,7 @@ def step_plans(schedule: list[dict[str, Any]], steps: int, gemms: list[tuple[int
         if r is None:
             missing.add((M, K, N))
             return None
-        return gemm_definition(r, K, N)
+        return gemm_definition(r, K, N, device.dot)
 
     for step in range(steps):
         reqs = C.tokens_at(schedule, step)
@@ -584,14 +545,12 @@ def step_plans(schedule: list[dict[str, Any]], steps: int, gemms: list[tuple[int
         mode, padded = dispatch(n, all(t == 1 for _r, t in reqs), capture_sizes, max_num_seqs)
         M = padded if mode != "NONE" else n
         klens = [prompt[r] + (step - arrive[r]) if step > arrive[r] else prompt[r] for r, _t in reqs]
-        sp = fa3_splits([t for _r, t in reqs], klens, NH=NH, KVH=KVH, D=D,
-                        split_cap=split_cap if capture_sizes and n <= max(capture_sizes) else 0, sms=sms)
+        ns, rows, launch = SD.launch(device, [t for _r, t in reqs], klens, heads, mode=mode, padded=padded, split_cap=split_cap,
+                                     capture_sizes=capture_sizes)
         plans.append({"step": step, "tokens": n, "mode": mode, "padded": padded, "gemm_m": M,
-                      "requests": [{"request_id": r, "tokens": t, "klen": k, "NS": ns,
-                                    "attention": attention_rows(t, k, ns, NH=NH, KVH=KVH, D=D, BM=sp["BM"], BN=sp["BN"])}
-                                   for (r, t), k, ns in zip(reqs, klens, sp["NS"])],
-                      "fa3": {"BM": sp["BM"], "BN": sp["BN"], "static_splits": sp["static"]},
-                      "gemms": {f"{K},{N}": route(M, K, N) for K, N in gemms},
+                      "requests": [{"request_id": r, "tokens": t, "klen": k, "NS": s, "attention": a}
+                                   for (r, t), k, s, a in zip(reqs, klens, ns, rows)],
+                      **launch, "gemms": {f"{K},{N}": route(M, K, N) for K, N in gemms},
                       "logits": route(len(reqs), *logits_kn), **({"moe": moe(M)} if moe else {})})
     return plans, sorted(map(list, missing))
 
@@ -621,10 +580,10 @@ def identities_of(plans: list[dict[str, Any]], values: dict[str, dict[str, Any]]
 
 
 def build(inductor_dir: str, *, split_graph: str, launch_configs: dict[str, Any], routes: dict[str, Any], schedule: list[dict[str, Any]],
-          steps: int, capture_sizes: list[int], max_num_seqs: int, sms: int, split_cap: int = SPLIT_CAP, backbone: str = "model",
+          steps: int, capture_sizes: list[int], max_num_seqs: int, device: SD.Device, split_cap: int = SPLIT_CAP, backbone: str = "model",
           lm_head: str = "lm_head.weight", rank: int = 0, moe: dict[str, Any] | None = None) -> dict[str, Any]:
-    """The served Build (module docstring); `moe` the serving process's fused-MoE record (`served_moe.expand`), required when a piece
-    calls the fused-MoE op."""
+    """The served Build (module docstring) on `device` (`served_device.device_of`); `moe` the serving process's fused-MoE record
+    (`served_moe.expand`), required when a piece calls the fused-MoE op."""
     graph = C.split_graph_wiring(split_graph)
     wrappers = []
     for path in sorted(glob.glob(os.path.join(inductor_dir, "*", "*.py"))):
@@ -637,10 +596,10 @@ def build(inductor_dir: str, *, split_graph: str, launch_configs: dict[str, Any]
     parsed: dict[str, dict[str, Any]] = {}
     for w in chosen:
         if w["path"] not in parsed:
-            parsed[w["path"]] = parse_piece(w["path"], launch_configs)
+            parsed[w["path"]] = parse_piece(w["path"], launch_configs, device.cc)
             for other in wrappers:                          # every wrapper of the piece's compiled code computes the same program
                 if other["path"] != w["path"] and C._sig(other["launches"]) == C._sig(w["launches"]) and \
-                        parse_piece(other["path"], launch_configs) != parsed[w["path"]]:
+                        parse_piece(other["path"], launch_configs, device.cc) != parsed[w["path"]]:
                     raise Unmodelled(f"{os.path.basename(other['path'])} and {os.path.basename(w['path'])}: one launch signature, two programs")
     programs = [parsed[w["path"]] for w in chosen]
     wired, moe_plans = SM.expand(wire(programs, graph, backbone=backbone), moe)
@@ -649,12 +608,12 @@ def build(inductor_dir: str, *, split_graph: str, launch_configs: dict[str, Any]
                     source={"inductor_dir": inductor_dir, "split_graph": split_graph,
                             "piece_wrappers": [os.path.relpath(w["path"], inductor_dir) for w in chosen]},
                     schedule=schedule, steps=steps, routes=routes.get("routes") or {}, capture_sizes=capture_sizes,
-                    max_num_seqs=max_num_seqs, sms=sms, split_cap=split_cap, lm_head=lm_head, rank=rank)
+                    max_num_seqs=max_num_seqs, device=device, split_cap=split_cap, lm_head=lm_head, rank=rank)
 
 
 def assemble(wired: dict[str, Any], moe_plans: Any, final: dict[str, Any], kernels: dict[str, dict[str, Any]], won: dict[str, Any], *,
              source: dict[str, Any], schedule: list[dict[str, Any]], steps: int, routes: dict[str, Any], capture_sizes: list[int],
-             max_num_seqs: int, sms: int, split_cap: int, lm_head: str, rank: int) -> dict[str, Any]:
+             max_num_seqs: int, device: SD.Device, split_cap: int, lm_head: str, rank: int) -> dict[str, Any]:
     """The Build of a wired Program (`wire`, `served_moe.expand`) with its kernel records and autotune winners `won`: its step plans,
     identities and artifact; `source` says what the Program was read from (the trace's wrappers, or `predict.compiled`'s pins)."""
     if not wired["attention"]:
@@ -669,12 +628,12 @@ def assemble(wired: dict[str, Any], moe_plans: Any, final: dict[str, Any], kerne
     V, H = embed["statics"]["V"], wired["values"][final["value"]]["width"]
     gemms = sorted({tuple(c["gemm"]) for c in wired["calls"] if c["op"] == "mm"})
     plans, missing = step_plans(schedule, steps, gemms, (H, V), heads, routes, capture_sizes=capture_sizes,
-                                max_num_seqs=max_num_seqs, split_cap=split_cap, sms=sms, moe=moe_plans)
+                                max_num_seqs=max_num_seqs, split_cap=split_cap, device=device, moe=moe_plans)
     program = {"calls": wired["calls"], "attention": wired["attention"], "final": final,
                "logits": {"name": LOGITS, "x": final, "w": {"weight": lm_head, "shape": [V, H]}, "gemm": [H, V]},
                "sampled": {"name": SAMPLED, **bound(b1.TokenSelect, V=V)},
                "kernels": dict(sorted(kernels.items())), "values": wired["values"],
-               "dispatch": {"capture_sizes": capture_sizes, "max_num_seqs": max_num_seqs, "split_cap": split_cap, "sms": sms}}
+               "dispatch": device.dispatch(capture_sizes, max_num_seqs, split_cap)}
     pdig = hashlib.sha512(json.dumps({"program": program, "steps": plans}, sort_keys=True).encode()).hexdigest()
     names = list(wired["values"])
     identities = identities_of(plans, wired["values"], V, schedule, pdig, rank)
@@ -750,7 +709,9 @@ class BuildOptions:
     steps: int | None = option("--steps", type=int, default=None, help="engine steps (default: the workload's expected_engine_steps)")
     capture_sizes: str = option("--capture-sizes", help="compilation_config.cudagraph_capture_sizes, comma-separated")
     max_num_seqs: int = option("--max-num-seqs", type=int)
-    sms: int = option("--sms", type=int, help="the GPU's multiprocessor count (FA3's scheduler)")
+    cc: str = option("--cc", help="the GPU's compute capability, e.g. 12.0 (served_device: its bindings)")
+    sms: int = option("--sms", type=int, help="the GPU's multiprocessor count (the attention scheduler's)")
+    max_model_len: int | None = option("--max-model-len", type=int, default=None, help="the engine's max_model_len (FA2's full-graph split count)")
     split_cap: int = option("--split-cap", type=int, default=SPLIT_CAP, help="FA3's static split count under a full graph")
     backbone: str = option("--backbone", default="model", help="the compiled backbone's module path (the served weights' prefix)")
     lm_head: str = option("--lm-head", default="lm_head.weight")
@@ -781,9 +742,10 @@ def main(a: BuildOptions | RoutesOptions) -> int:
     if not steps:
         raise UsageError("--steps (or the workload's expected_engine_steps) is required")
     try:
+        device = SD.device_of(a.cc.split("."), a.sms, max_model_len=a.max_model_len)
         m = build(a.inductor_dir, split_graph=a.split_graph, launch_configs=json.load(open(a.launch_configs)),
                   routes=json.load(open(a.routes)) if a.routes else {}, schedule=C.schedule_of_workload(wl), steps=steps,
-                  capture_sizes=_ints(a.capture_sizes), max_num_seqs=a.max_num_seqs, sms=a.sms, split_cap=a.split_cap,
+                  capture_sizes=_ints(a.capture_sizes), max_num_seqs=a.max_num_seqs, device=device, split_cap=a.split_cap,
                   backbone=a.backbone, lm_head=a.lm_head, moe=json.load(open(a.moe)) if a.moe else None)
     except Unmodelled as e:
         print(f"[served build] refused: {e}")
