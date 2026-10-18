@@ -4,12 +4,12 @@ checkpoint receipt CP-W (decision 104, #2438's `PouwWarpCheck_v2` body).
 
 The unit is ``(a: r rows of X, b: c rows of W, salt, position, roots) -> {z, receipt}`` (`compile.Scheme`), on bits:
 
-* **Seed and noise.** seed_j is `seeds.PouwSeed` on the unit's salt, position and roots, and its noise is seed_j's stream in
-  counter mode, each row's, column's and lane's from a block of its own (`Layout`): row i of X takes blocks
-  ``[i RB, (i + 1) RB)``, its dither bits b (K) then its digit coins z (32 (m - 1)); column j of W blocks
+* **Seed and noise.** seed_j and σ_R are one call of `seeds.PouwUnitSeeds` on the unit's salt, position and roots. The
+  noise is seed_j's stream in counter mode, each row's and column's from blocks of its own (`Layout`): row i of X takes
+  blocks ``[i RB, (i + 1) RB)``, its dither bits b (K) then its digit coins z (32 (m - 1)); column j of W blocks
   ``r RB + [j CB, (j + 1) CB)``, its coin bits c (K) then U's 32 bytes (`PouwU129`: -64 + byte mod 129, H1's keyed word in
-  ±64); lane l block ``r RB + c CB + l``, its fold keys (duo's y_0..7, z_0..7). A kernel derives any row's or column's
-  noise from seed_j alone.
+  ±64). Lane l's fold keys (duo's y_0..7, z_0..7), its chain's start, are block l of σ_R's stream (decision 121): no key
+  is a function of seed_j. A kernel derives any row's or column's noise from seed_j alone, and any lane's keys from σ_R.
 * **Lanes.** The tile is G × Q lanes, G = r / 4 and Q = c / 8 (at 32 × 32 a warp of cgemm.cu, lane 4 g + q): lane
   (g, q) holds rows ``g + G s`` (row slot s < 4) and columns ``2 q + 2 Q (s >> 1) + (s & 1)`` (column slot s < 8), and its
   entry e at row slot `segment.row_slot`(e) and column slot `segment.col_slot`(e), so the lanes' entries are the tile's
@@ -67,7 +67,7 @@ KEY_BITS = 512
 
 @dataclass(frozen=True)
 class Layout:
-    """One r × c tile at contraction K: its lanes, and the noise stream's blocks in counter mode."""
+    """One r × c tile at contraction K: its lanes, seed_j's noise blocks in counter mode, and σ_R's key blocks."""
 
     r: int
     c: int
@@ -108,7 +108,8 @@ class Layout:
 
     @property
     def blocks(self) -> int:
-        return self.r * self.rb + self.c * self.cb + self.lanes
+        """seed_j's noise blocks: the rows' and the columns'."""
+        return self.r * self.rb + self.c * self.cb
 
     def row(self, i: int) -> int:
         """Row i's first block."""
@@ -118,7 +119,8 @@ class Layout:
         return self.r * self.rb + j * self.cb
 
     def lane(self, ln: int) -> int:
-        return self.r * self.rb + self.c * self.cb + ln
+        """Lane ln's block of σ_R's stream: its fold keys."""
+        return ln
 
     def rows(self, ln: int) -> tuple[int, ...]:
         """Lane ln's tile rows, by row slot."""
@@ -166,9 +168,8 @@ def _value(bits: Sequence[int]) -> int:
     return sum((b & 1) << i for i, b in enumerate(bits))
 
 
-def noise(seed_j: bytes, lay: Layout) -> tuple[list, list, list]:
-    """The unit's noise from seed_j: per row (dither bits, digit coins), per column (coin bits, U's int8 encodings), per lane
-    its 16 fold keys."""
+def noise(seed_j: bytes, lay: Layout) -> tuple[list, list]:
+    """The unit's noise from seed_j: per row (dither bits, digit coins), per column (coin bits, U's int8 encodings)."""
     k, m = lay.k, lay.m
     rows = []
     for i in range(lay.r):
@@ -178,11 +179,16 @@ def noise(seed_j: bytes, lay: Layout) -> tuple[list, list, list]:
     for j in range(lay.c):
         s = _stream(seed_j, lay.col(j), lay.col_bits)
         cols.append((s[:k], [u129(_value(s[k + 8 * t:k + 8 * t + 8])) for t in range(32)]))
+    return rows, cols
+
+
+def fold_keys(sigma_r: bytes, lay: Layout) -> list[list[int]]:
+    """Each lane's 16 fold keys, its chain's start, from σ_R (`seeds.receipt_seed`)."""
     keys = []
     for ln in range(lay.lanes):
-        s = _stream(seed_j, lay.lane(ln), KEY_BITS)
+        s = _stream(sigma_r, lay.lane(ln), KEY_BITS)
         keys.append([_value(s[32 * w:32 * w + 32]) for w in range(16)])
-    return rows, cols, keys
+    return keys
 
 
 def reference(a: Sequence[Sequence[int]], b: Sequence[Sequence[int]], salt: bytes, position: int,
@@ -190,7 +196,8 @@ def reference(a: Sequence[Sequence[int]], b: Sequence[Sequence[int]], salt: byte
     """The unit on words: (z, receipt) for A's r rows and B's c rows (int8 encodings), its salt, position and roots, z at
     `pairs` (the full grid in row-major order by default)."""
     lay = Layout(len(a), len(b), len(a[0]))
-    rows, cols, keys = noise(SD.seed(salt, position, *roots), lay)
+    rows, cols = noise(SD.seed(salt, position, *roots), lay)
+    keys = fold_keys(SD.receipt_seed(salt, position, *roots), lay)
     ks, m = lay.ks, lay.m
     cp = [[0, 0] for _ in range(lay.sets)]
     for ln in range(lay.lanes):
@@ -249,7 +256,9 @@ def _xor(B: Any, words: list[Coll]) -> Coll:
 def _body(B: Any, S: Any, a: Coll, b: Coll, salt: Coll, position: Coll, roots: Coll) -> Coll:
     lay = _layout(S)
     k, ks = lay.k, lay.ks
-    blocks = SD.noise_blocks(B, SD.seed_call(B, salt, position, roots, True), lay.blocks, True)
+    seed_j, sigma_r = SD.unit_seeds_call(B, salt, position, roots, True)
+    blocks = SD.noise_blocks(B, seed_j, lay.blocks, True)
+    keys = SD.noise_blocks(B, sigma_r, lay.lanes, True)
 
     def bits(first: int, n: int) -> Coll:
         return Coll(Array(n, BIT), concat([blocks[first + t].refs for t in range(-(-n // SD.BLOCK_BITS))]).slice(0, n))
@@ -279,7 +288,7 @@ def _body(B: Any, S: Any, a: Coll, b: Coll, salt: Coll, position: Coll, roots: C
             T.append(prev)
         op = [B.call(SG.PouwSegDot, T[-1][e], NU[Cs[cs[e]]], A[R[rs[e]]][0]) for e in range(32)]
         D = [[B.call(SG.PouwSegDot0, U[Cs[cs[e]]], A[R[rs[e]]][d]) for e in range(32)] for d in range(1, lay.m)]
-        state = Coll(Array(KEY_BITS, BIT), blocks[lay.lane(ln)].refs)
+        state = Coll(Array(KEY_BITS, BIT), keys[lay.lane(ln)].refs)
         for s, p in enumerate([*T, op, *D]):
             state = B.call(SG.PouwFx1Absorb, state, array_of(p))
             cps[s].append((B.call(SG.PouwXinFinal, state[0:256]), B.call(SG.PouwXinFinal, state[256:512])))
@@ -329,5 +338,5 @@ def scheme(tile: tuple[int, int] = (32, 32), name: str = SCHEME) -> C.Scheme:
 if SG is not None:
     C.register(scheme())
 
-__all__ = ["FOLD", "KINDS", "Layout", "PouwH1Tile", "PouwU129", "PouwU129Word", "SCHEME", "noise", "reference", "scheme",
-           "u129"]
+__all__ = ["FOLD", "KINDS", "Layout", "PouwH1Tile", "PouwU129", "PouwU129Word", "SCHEME", "fold_keys", "noise", "reference",
+           "scheme", "u129"]

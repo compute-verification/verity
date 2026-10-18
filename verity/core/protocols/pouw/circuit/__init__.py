@@ -24,7 +24,8 @@
   groups)` replaces every registered matmul's dots (`MATMULS`) with the scheme's r × c tile units, each deriving its seed
   and noise in its own proof from the one coin, the salt (decisions 105, 106), and checks the result; `rebuild` is the
   verifier's side. Its schemes are its own `SCHEMES`, not this module's.
-* `seeds`: the seed and the noise blocks a unit derives (`PouwSeed`, `PouwNoiseBlock`, on words and on bits).
+* `seeds`: the seed and the noise blocks a unit derives (`PouwSeed`, `PouwNoiseBlock`, on words and on bits), and its two
+  seeds where its receipt folds take keys (`PouwUnitSeeds`: seed_j and σ_R, decision 121).
 * `h1tile`: `eps1-sm120-h1fx1` as a compile-pass scheme, H1 + fx1 on a warp's tile under CP-W (decision 104).
 
 `traced_as(scheme, m, k, n)` is what a composition (the vLLM integration's protocol options) calls: for a scheme whose circuit

@@ -4,6 +4,7 @@ A drawn unit's noise is neither a public nor a coin input: the unit computes its
 its position and its operands' roots, all inputs of the unit bound before the draw, and its noise from the seed, in gates.
 
     seed_j  = SHA-512(u64(j) ‖ (SEED_TAG ‖ salt ‖ root(A_j) ‖ root(B_j)) ⊕ u64(j)*)        `PouwSeed`
+    σ_R     = SHA-512(u64(j) ‖ (RECEIPT_TAG ‖ salt ‖ root(A_j) ‖ root(B_j)) ⊕ u64(j)*)     `PouwUnitSeeds`, with seed_j
     block_t = SHA-512(NOISE_TAG ‖ seed_j ‖ u64(t))                                          `PouwNoiseBlock`
 
 ``⊕ u64(j)*`` XORs every 64-bit word of the message after the first with the position: an injective encoding of (tag, salt,
@@ -11,6 +12,10 @@ position, roots), which makes every gate of the seed read the unit's own positio
 (the gate-level cut) although they share the salt and a site's units share its roots. The noise stream is the blocks
 ``block_0, block_1, ...`` in order, each as 16 big-endian 32-bit halves, bit β the bit β mod 32 (least significant first) of
 half (β mod 512) // 32 of block β // 512 (`stream`); a Boolean unit reads it as the leaves of its blocks.
+
+σ_R keys a unit's receipt folds and starts their chains (decision 121): a hash of its own tag, never the noise seed, so no
+fold key is a function of seed_j. A unit with receipt keys calls `PouwUnitSeeds` once, for both, rather than two seeds at
+one position.
 
 Each Definition has a word form (`_v1`, over `Value<32>` halves, with `hashes.Sha512Compress`) and a Boolean twin (`_v2`, over
 32-bit elements, with `commitments.gates.sha512.compress_gadget`) whose word view it is. The salt port is `In(kind="coin")`
@@ -38,11 +43,14 @@ except ImportError:  # port types (circuits PROTOCOL.md §12) are not on this tr
     _ports = None
 
 SEED_TAG = b"verity/pouw/seed/v2".ljust(24, b"\0")
+RECEIPT_TAG = b"verity/pouw/receipt/v1".ljust(24, b"\0")
 NOISE_TAG = b"verity/pouw/noise/v1".ljust(24, b"\0")
 M32 = W.M32
 #: a digest (the salt, a root, a seed, a noise block) as 16 big-endian halves; a position or a block counter as 2
 DIGEST = Array(16, W.U32)
 POS = Array(2, W.U32)
+#: `PouwUnitSeeds`' return: seed_j, then σ_R
+SEED_PAIR = Array(2, DIGEST)
 DIGEST_BITS = BL.bit_type(DIGEST)
 POS_BITS = BL.bit_type(POS)
 BLOCK_BITS = 512
@@ -61,14 +69,23 @@ def _u64(x: int) -> bytes:
     return x.to_bytes(8, "big")
 
 
-def seed(salt: bytes, position: int, root_a: bytes, root_b: bytes) -> bytes:
-    """seed_j of the unit at `position` whose operands commit to `root_a` and `root_b`, under the epoch's `salt`."""
+def _tagged(tag: bytes, salt: bytes, position: int, root_a: bytes, root_b: bytes) -> bytes:
     for what, v in (("salt", salt), ("root_a", root_a), ("root_b", root_b)):
         if len(v) != 64:
             raise ValueError(f"{what} is a 64-byte digest, not {len(v)} bytes")
     p = _u64(position)
-    data = SEED_TAG + bytes(salt) + bytes(root_a) + bytes(root_b)
+    data = tag + bytes(salt) + bytes(root_a) + bytes(root_b)
     return hashlib.sha512(p + bytes(x ^ p[i % 8] for i, x in enumerate(data))).digest()
+
+
+def seed(salt: bytes, position: int, root_a: bytes, root_b: bytes) -> bytes:
+    """seed_j of the unit at `position` whose operands commit to `root_a` and `root_b`, under the epoch's `salt`."""
+    return _tagged(SEED_TAG, salt, position, root_a, root_b)
+
+
+def receipt_seed(salt: bytes, position: int, root_a: bytes, root_b: bytes) -> bytes:
+    """σ_R of the unit at `position` (decision 121): seed_j's message under `RECEIPT_TAG`, its receipt folds' keys."""
+    return _tagged(RECEIPT_TAG, salt, position, root_a, root_b)
 
 
 def noise_block(seed_j: bytes, t: int) -> bytes:
@@ -118,6 +135,17 @@ def _seed_body(B, S, salt, position, roots):
     return e.array(H.sha512(e, [p] + [(e.call(W.PouwXor32, hi, p[0]), e.call(W.PouwXor32, lo, p[1])) for hi, lo in data]))
 
 
+def _unit_seeds_body(B, S, salt, position, roots):
+    e = H.Emit(B)
+    p = (position[0], position[1])
+
+    def masked(words):
+        return [(e.call(W.PouwXor32, hi, p[0]), e.call(W.PouwXor32, lo, p[1])) for hi, lo in words]
+
+    rest = masked(_pairs(salt, 8) + _pairs(roots[0], 8) + _pairs(roots[1], 8))
+    return array_of([e.array(H.sha512(e, [p] + masked(H.sha_words(tag)) + rest)) for tag in (SEED_TAG, RECEIPT_TAG)])
+
+
 def _block_body(B, S, seed_j, t):
     e = H.Emit(B)
     return e.array(H.sha512(e, H.sha_words(NOISE_TAG) + _pairs(seed_j, 8) + [(t[0], t[1])]))
@@ -128,9 +156,9 @@ def _coin_salt(S):
     return _ports.Ports(params={"salt": _ports.In(kind="coin"), **position})
 
 
-def _word_def(name: str, params, body, doc: str, ports=None) -> CompositeDefinition:
+def _word_def(name: str, params, body, doc: str, ports=None, ret=DIGEST) -> CompositeDefinition:
     kw = {"ports": ports} if _ports is not None and ports is not None else {}
-    return CompositeDefinition(name, 1, (), lambda S: (params, DIGEST), body, doc=doc, conformance="protocol-defined", **kw)
+    return CompositeDefinition(name, 1, (), lambda S: (params, ret), body, doc=doc, conformance="protocol-defined", **kw)
 
 
 _SEED_PARAMS = (("salt", DIGEST), ("position", POS), ("roots", Array(2, DIGEST)))
@@ -138,6 +166,9 @@ _BLOCK_PARAMS = (("seed", DIGEST), ("t", POS))
 PouwSeed = _word_def("PouwSeed", _SEED_PARAMS, _seed_body, "seed_j from the salt (a coin), the unit's position and its "
                      "operands' roots (A's, then B's): `seeds.seed`, the message words after the first XORed with the position.",
                      ports=_coin_salt)
+PouwUnitSeeds = _word_def("PouwUnitSeeds", _SEED_PARAMS, _unit_seeds_body, "A unit's two seeds, one seed role: [seed_j, "
+                          "σ_R], `seeds.seed` and `seeds.receipt_seed` (decision 121: σ_R keys the receipt folds, under a "
+                          "tag of its own), the masked salt and roots shared.", ports=_coin_salt, ret=SEED_PAIR)
 PouwNoiseBlock = _word_def("PouwNoiseBlock", _BLOCK_PARAMS, _block_body, "Block t of seed_j's noise stream: "
                            "SHA-512(NOISE_TAG ‖ seed ‖ u64(t)), `seeds.noise_block`.")
 
@@ -167,6 +198,22 @@ def _seed_bits(C, *el):
     return _out(_sha512_bits(C, msg))
 
 
+def _unit_seeds_bits(C, *el):
+    salt, pos, roots = el[:16], el[16:18], el[18:]
+    p = _w64(*pos)
+
+    def masked(words):
+        return [[a ^ b for a, b in zip(w, p)] for w in words]
+
+    rest = masked([_w64(salt[2 * i], salt[2 * i + 1]) for i in range(8)] + [_w64(roots[2 * i], roots[2 * i + 1])
+                                                                             for i in range(16)])
+    out = []
+    for tag in (SEED_TAG, RECEIPT_TAG):
+        data = masked([const_bits(v, 64) for v in words_be(tag)]) + rest
+        out += _out(_sha512_bits(C, [p] + data + [const_bits(v, 64) for v in words_be(pad_tail(8 + 8 * len(data)))]))
+    return out
+
+
 def _block_bits(C, *el):
     seed_j, t = el[:16], el[16:18]
     data = [const_bits(v, 64) for v in words_be(NOISE_TAG)] + [_w64(seed_j[2 * i], seed_j[2 * i + 1]) for i in range(8)]
@@ -177,23 +224,33 @@ def _block_bits(C, *el):
 PouwSeedBits = definition("PouwSeed", 2, _seed_bits, tuple((n, BL.bit_type(t)) for n, t in _SEED_PARAMS), DIGEST_BITS,
                           word=bind(PouwSeed), conformance="protocol-defined",
                           doc="seed_j on bits (two SHA-512 compressions): PouwSeed_v1")
+PouwUnitSeedsBits = definition("PouwUnitSeeds", 2, _unit_seeds_bits, tuple((n, BL.bit_type(t)) for n, t in _SEED_PARAMS),
+                               BL.bit_type(SEED_PAIR), word=bind(PouwUnitSeeds), conformance="protocol-defined",
+                               doc="[seed_j, σ_R] on bits (four SHA-512 compressions): PouwUnitSeeds_v1")
 PouwNoiseBlockBits = definition("PouwNoiseBlock", 2, _block_bits, tuple((n, BL.bit_type(t)) for n, t in _BLOCK_PARAMS),
                                 DIGEST_BITS, word=bind(PouwNoiseBlock), conformance="protocol-defined",
                                 doc="Block t of seed_j's noise stream on bits (one SHA-512 compression): PouwNoiseBlock_v1")
 if _ports is not None:
     PouwSeedBits.ports = _coin_salt
+    PouwUnitSeedsBits.ports = _coin_salt
 
-SEEDS = (PouwSeed, PouwSeedBits)
+SEEDS = (PouwSeed, PouwSeedBits, PouwUnitSeeds, PouwUnitSeedsBits)
 
 
 def is_seed(fn) -> bool:
-    """Whether `fn` (a node's Definition) is the seed, at either level."""
+    """Whether `fn` (a node's Definition) is a seed, `PouwSeed` or `PouwUnitSeeds`, at either level."""
     return getattr(fn, "defn", None) in SEEDS
 
 
 def seed_call(B, salt: Coll, position: Coll, roots: Coll, boolean: bool) -> Coll:
     """The unit's seed, in its body `B`: one call of `PouwSeed` (`_v2` on bits) on its salt, position and roots parameters."""
     return B.call(PouwSeedBits if boolean else PouwSeed, salt, position, roots)
+
+
+def unit_seeds_call(B, salt: Coll, position: Coll, roots: Coll, boolean: bool) -> tuple[Coll, Coll]:
+    """(seed_j, σ_R) in the body `B`: one call of `PouwUnitSeeds` (`_v2` on bits), for a unit whose receipt folds take keys."""
+    both = B.call(PouwUnitSeedsBits if boolean else PouwUnitSeeds, salt, position, roots)
+    return both[0], both[1]
 
 
 def noise_blocks(B, seed_j: Coll, n: int, boolean: bool) -> list[Coll]:
@@ -221,5 +278,6 @@ def stream_bits(B, seed_j: Coll, n_bits: int) -> Coll:
 
 
 __all__ = ["BLOCK_BITS", "DIGEST", "DIGEST_BITS", "NOISE_TAG", "POS", "POS_BITS", "PouwNoiseBlock", "PouwNoiseBlockBits",
-           "PouwSeed", "PouwSeedBits", "SEEDS", "SEED_TAG", "halves", "is_seed", "leaves", "noise_block", "noise_blocks",
-           "position_leaves", "seed", "seed_call", "stream", "stream_bits"]
+           "PouwSeed", "PouwSeedBits", "PouwUnitSeeds", "PouwUnitSeedsBits", "RECEIPT_TAG", "SEEDS", "SEED_PAIR", "SEED_TAG",
+           "halves", "is_seed", "leaves", "noise_block", "noise_blocks", "position_leaves", "receipt_seed", "seed",
+           "seed_call", "stream", "stream_bits", "unit_seeds_call"]

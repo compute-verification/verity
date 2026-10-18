@@ -15,8 +15,8 @@
 * **Replace.** Each tile is one unit of the scheme, its dot kind's (`Scheme.unit(dot, tile)`: per kind a factory, which
   carries that kind's noise form; `Scheme.plug` sets one), self-contained (decision 106): ``(a: its A rows, b: its B rows,
   salt, position, roots) -> {z: its cells' exact products, receipt}``. The unit derives its seed in its own proof from the
-  salt, its position and its seed group's roots (`seeds.PouwSeed`, decision 105), and its noise from the seed; nothing else
-  reads the salt. The salt `pouw.salt` is the Program's one coin (`In(kind="coin")` where ports.py is on the tree);
+  salt, its position and its seed group's roots (`seeds.PouwSeed`, decision 105, or `seeds.PouwUnitSeeds` for a unit whose
+  receipt folds take keys: seed_j and σ_R, decision 121), and its noise from the seed; nothing else reads the salt. The salt `pouw.salt` is the Program's one coin (`In(kind="coin")` where ports.py is on the tree);
   `pouw.positions` and `pouw.roots` are inputs bound before the draw, unit u reading position slot u (`Compiled.positions`)
   and its seed group's (root(A), root(B)). A seed group is the calls committed together (`groups`; by default a site): one
   commitment fixes the noise of every unit it covers, so the units a group covers are the grinding premium's divisor
@@ -200,9 +200,11 @@ class Scheme:
 
     A unit, ``units[kind](dot, tile)``, is ``(a: Array(tile.r, dot.a), b: Array(tile.c, dot.b), salt, position, roots:
     Array(2, digest)) -> Record(z: Array(len(tile.pairs), dot.z), receipt: R)``, the digest and position types
-    `seeds.types(dot.boolean)`'s. It calls `seeds.PouwSeed` once on its salt, position and roots (`seeds.seed_call`), derives
-    its noise from the seed (`seeds.noise_blocks`), holds the noised arm, the receipt fold and the spot check, and returns its
-    cells' exact products as z. A factory may raise `CompileError` ("scheme") for a dot or tile it doesn't take."""
+    `seeds.types(dot.boolean)`'s. It calls one seed once on its salt, position and roots: `seeds.PouwSeed`
+    (`seeds.seed_call`), or `seeds.PouwUnitSeeds` (`seeds.unit_seeds_call`) where its receipt folds take keys, which come
+    from σ_R, never from seed_j (decision 121). It derives its noise from seed_j (`seeds.noise_blocks`), holds the noised
+    arm, the receipt fold and the spot check, and returns its cells' exact products as z. A factory may raise
+    `CompileError` ("scheme") for a dot or tile it doesn't take."""
 
     name: str
     tile: tuple[int, int]
@@ -1074,7 +1076,7 @@ def _check_unit(U: Any, boolean: bool) -> None:
     at = [k for k, nd in enumerate(body.nodes) if SD.is_seed(nd.fn)]
     if len(at) != 1 or body.nodes[at[0]].form != "call":
         raise CompileError("seed", f"{U.id} calls the seed {len(at)} times at its top level: a unit derives its noise from one "
-                                   f"call of `seeds.PouwSeed`")
+                                   f"call of `seeds.PouwSeed`, or of `seeds.PouwUnitSeeds` for its noise and its fold keys")
     ks = at[0]
     D, P = SD.types(boolean)
     args = body.nodes[ks].args

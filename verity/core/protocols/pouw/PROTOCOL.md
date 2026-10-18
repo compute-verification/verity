@@ -1297,6 +1297,7 @@ derives its seed in its own proof, and its noise from the seed:
 
 ~~~text
 seed_j  = SHA-512(u64(j) ‖ (SEED_TAG ‖ salt ‖ root(A_j) ‖ root(B_j)) ⊕ u64(j)*)        PouwSeed
+σ_R     = SHA-512(u64(j) ‖ (RECEIPT_TAG ‖ salt ‖ root(A_j) ‖ root(B_j)) ⊕ u64(j)*)     PouwUnitSeeds, with seed_j
 block_t = SHA-512(NOISE_TAG ‖ seed_j ‖ u64(t))                                          PouwNoiseBlock
 ~~~
 
@@ -1305,6 +1306,10 @@ first with the position, an injective encoding that makes every gate of a seed r
 a common value. Positions (`pouw.positions`, unit u at slot u, `Compiled.positions(base)`) and roots (`pouw.roots`) are inputs
 bound before the draw; a verifier that runs the Program more than once under one salt gives each run its own range of
 positions, so each (salt, position) seeds one unit.
+
+A unit's receipt keys and chain starts come from σ_R, a hash of its own tag, never from the noise seed (decision 121). A unit
+whose folds take keys calls `PouwUnitSeeds` once for both, [seed_j, σ_R] with the masked salt and roots shared, since two
+seeds at one position are one seed (COIN-RULES' `E_COIN_REUSE`).
 
 **Seed groups** (decision 112). `groups` names the calls committed together: sites of one key share a slot of `pouw.roots`
 (all heads of a layer's QKᵀ, a decode step's batch), each unit still at its own position. One commitment fixes the noise of
@@ -1337,13 +1342,16 @@ name not registered.
 - `eps1-sm120-h1fx1` (`circuit/h1tile.py`, where `circuit/segment.py` is on the tree): sm_120's H1 + fx1 on a warp's 32 × 32
   tile, for the s8 kinds on bits, under CP-W (decision 104, #2438's `PouwWarpCheck_v2` body). Each lane folds H1's sets over
   X = A + b and W' = B + c + U with fx1 from its keys, and receipt words 2 s and 2 s + 1 are the warp's XOR of y and of z
-  after set s: 2 (KS + m) words, 8,320 bits at K = 4096. Its noise is counter mode (`h1tile.Layout`): each row's, column's
-  and lane's from blocks of its own. Whether a tile is a legal proof unit under the 16-bit output rule, or the warp check
-  must be a unit kind of its own aggregating coordinates, is decision 107's, still open.
+  after set s: 2 (KS + m) words, 8,320 bits at K = 4096. Its noise is counter mode (`h1tile.Layout`): each row's and
+  column's from blocks of seed_j's own, and each lane's fold keys, its chain's start, a block of σ_R's (`h1tile.fold_keys`).
+  The edited GEMM kernel still starts its chains from the noise seed (`benchmarks/pouw/edited_gemm/cgemm.cu`'s
+  ``ch[e].y = mix32(a.seed ^ …)``), which decision 121 retires: a kernel follow-up keys them from σ_R. Whether a tile is a
+  legal proof unit under the 16-bit output rule, or the warp check must be a unit kind of its own aggregating coordinates, is
+  decision 107's, still open.
 
-The seed and the noise block (`_v1` on words, `_v2` on bits), `PouwU129` and `PouwH1Tile` are registered Definitions, each
-checked by circuit-check at its sidecar's binding (`seeds.circuit-check.py`, `h1tile.circuit-check.py`); `PouwH1Tile` only
-where `circuit/segment.py` is on the tree, at one lane (4 × 8, K = 64).
+The seed, the unit's two seeds and the noise block (`_v1` on words, `_v2` on bits), `PouwU129` and `PouwH1Tile` are
+registered Definitions, each checked by circuit-check at its sidecar's binding (`seeds.circuit-check.py`,
+`h1tile.circuit-check.py`); `PouwH1Tile` only where `circuit/segment.py` is on the tree, at one lane (4 × 8, K = 64).
 
 Not here yet: P·V as a registered Call, and a staged split for a dot whose operands its holder computes; a padded tile for a
 site that fills none (decode's few tokens); the vLLM integration serving the compiled Program.

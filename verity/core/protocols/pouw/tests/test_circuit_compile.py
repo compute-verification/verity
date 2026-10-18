@@ -735,16 +735,22 @@ def test_positions_and_inputs():
 
 
 def test_seed_reads_every_field():
+    """seed_j and σ_R each move with every field, and no σ_R is a seed_j (decision 121: σ_R's tag is its own)."""
     d = [hashlib.sha512(bytes([i])).digest() for i in range(6)]
     base = (d[0], 0, d[1], d[2])
-    seeds = {SD.seed(*base)}
-    for i, v in enumerate((d[3], 1, d[4], d[5])):
-        seeds.add(SD.seed(*base[:i], v, *base[i + 1:]))
-    seeds.add(SD.seed(d[0], 0, d[2], d[1]))
-    assert len(seeds) == 6
+    out = []
+    for f in (SD.seed, SD.receipt_seed):
+        got = {f(*base)}
+        for i, v in enumerate((d[3], 1, d[4], d[5])):
+            got.add(f(*base[:i], v, *base[i + 1:]))
+        got.add(f(d[0], 0, d[2], d[1]))
+        assert len(got) == 6
+        out.append(got)
+    assert not out[0] & out[1]
     assert C.seed is SD.seed
-    with pytest.raises(ValueError):
-        SD.seed(b"short", 0, d[1], d[2])
+    for f in (SD.seed, SD.receipt_seed):
+        with pytest.raises(ValueError):
+            f(b"short", 0, d[1], d[2])
 
 
 def _seed_args(boolean, salt, position, roots):
@@ -753,10 +759,13 @@ def _seed_args(boolean, salt, position, roots):
 
 @compiles
 def test_seed_in_gates_is_the_reference():
-    """`PouwSeed_v1` and `PouwNoiseBlock_v1` on words are `seeds.seed` and `seeds.noise_block`."""
+    """`PouwSeed_v1`, `PouwUnitSeeds_v1` and `PouwNoiseBlock_v1` on words are `seeds.seed`, [`seeds.seed`,
+    `seeds.receipt_seed`] and `seeds.noise_block`."""
     roots = (hashlib.sha512(b"ra").digest(), hashlib.sha512(b"rb").digest())
     want = SD.seed(SALT, 5, *roots)
     assert list(evaluate(bind(SD.PouwSeed), *_seed_args(False, SALT, 5, roots))) == SD.halves(want)
+    assert list(evaluate(bind(SD.PouwUnitSeeds), *_seed_args(False, SALT, 5, roots))) == \
+        SD.halves(want) + SD.halves(SD.receipt_seed(SALT, 5, *roots))
     assert list(evaluate(bind(SD.PouwNoiseBlock), SD.halves(want), SD.position_leaves(3, False))) == \
         SD.halves(SD.noise_block(want, 3))
 
@@ -764,13 +773,23 @@ def test_seed_in_gates_is_the_reference():
 @compiles
 @pytest.mark.slow
 def test_seed_on_bits_is_the_reference():
-    """`PouwSeed_v2` and `PouwNoiseBlock_v2` on bits (three SHA-512 compressions, a few seconds) are the reference."""
+    """`PouwSeed_v2` and `PouwNoiseBlock_v2` on bits (three SHA-512 compressions) are the reference."""
     roots = (hashlib.sha512(b"ra").digest(), hashlib.sha512(b"rb").digest())
     want = SD.seed(SALT, 1 << 40, *roots)
     assert list(evaluate(SD.PouwSeedBits, *_seed_args(True, SALT, 1 << 40, roots))) == SD.leaves(want, True)
     assert list(evaluate(SD.PouwNoiseBlockBits, SD.leaves(want, True), SD.position_leaves(2, True))) == \
         SD.leaves(SD.noise_block(want, 2), True)
     assert SD.stream(want, 600) == SD.leaves(SD.noise_block(want, 0), True) + SD.leaves(SD.noise_block(want, 1), True)[:88]
+
+
+@compiles
+@pytest.mark.slow
+def test_unit_seeds_on_bits_is_the_reference():
+    """`PouwUnitSeeds_v2` on bits (four SHA-512 compressions) is [seed_j, σ_R]: the only test of its gates, which share the
+    masked salt and roots between the two hashes."""
+    roots = (hashlib.sha512(b"ra").digest(), hashlib.sha512(b"rb").digest())
+    got = list(evaluate(SD.PouwUnitSeedsBits, *_seed_args(True, SALT, 1 << 40, roots)))
+    assert got == SD.leaves(SD.seed(SALT, 1 << 40, *roots), True) + SD.leaves(SD.receipt_seed(SALT, 1 << 40, *roots), True)
 
 
 @compiles
