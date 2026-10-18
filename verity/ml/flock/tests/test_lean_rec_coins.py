@@ -184,17 +184,32 @@ def test_the_honest_level_is_refused_without_the_inner_session(forged, shape, tm
     assert v["why"].startswith(f"setup: rec-coins: {UNIT}: the verifier holds no inner session"), v["why"]
 
 
-def test_an_inner_record_that_keeps_a_unit_draw_is_refused(forged, shape, tmp_path):
-    """`Record.decode`'s U1 (`Draw.check`): the inner statement never carries a draw (`Inner.load` refuses one in its
-    header), so an honest inner record given a `unit_draw` is refused by U1 alone; nothing else reads the record's draw."""
+def _inner_drawn(tmp_path: Path, draw: dict) -> Path:
+    """The honest inner session, its record given `draw` as its `unit_draw`."""
     inner = shutil.copytree(SET / "inner-honest", tmp_path / "inner-drawn")
     s = json.loads((inner / "session" / "session.json").read_text())
-    s["unit_draw"] = {"law": "subset", "units": [0]}
+    s["unit_draw"] = draw
     (inner / "session" / "session.json").write_text(json.dumps(s))
+    return inner
+
+
+def test_an_inner_record_whose_draw_leaves_a_unit_out_is_refused(forged, shape, tmp_path):
+    """`RecCoins.drawnSpec`: V* recurses on an inner session that proves every unit, so a record whose draw is a well
+    formed sample of the 64 units is refused before its record is read."""
+    inner = _inner_drawn(tmp_path, {"law": "subset", "population": 64, "k": 1, "units": [0]})
     v = _verify(forged, SET / "L3" / "pub.bin", SET / "L3" / "registered.json", shape, inner,
                 rows=_acc_rows(tmp_path / "rows.json", SET / "L3"))
-    assert v["why"] == (f"setup: rec-coins: {UNIT}: the inner session's record: U1: the record keeps a unit draw the "
-                        "statement does not carry"), v["why"]
+    assert v["why"] == (f"setup: rec-coins: {UNIT}: the inner session's draw: the session's draw proves 1 units, not "
+                        "every one of the statement's 64 in order"), v["why"]
+
+
+def test_an_inner_record_given_the_full_draw_is_read_at_the_drawn_statement(forged, shape, tmp_path):
+    """`RecCoins.drawnSpec`: a record whose draw is every unit is decoded against the drawn statement's spec, whose
+    header carries the draw. The honest session ran without one, so its record is refused there, at its parameters."""
+    inner = _inner_drawn(tmp_path, {"law": "subset", "population": 64, "k": 64, "units": list(range(64))})
+    v = _verify(forged, SET / "L3" / "pub.bin", SET / "L3" / "registered.json", shape, inner,
+                rows=_acc_rows(tmp_path / "rows.json", SET / "L3"))
+    assert v["why"] == f"setup: rec-coins: {UNIT}: the inner session's record: {S2_R7}", v["why"]
 
 
 def test_a_coef_registered_one_bit_off_is_refused_at_its_opening(forged, shape, tmp_path):
