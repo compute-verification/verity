@@ -103,6 +103,9 @@ class Collective:
     #: one Compute row over the whole [M,N] partial as M*N words (`Array<W, Array<M*N>>`), the Build's one call per communicator
     #: all-reduce (`vllm_bindings.AllReduceRule`); the peers fields stay one per (request, peer rank)
     flat: bool = False
+    #: the whole call's [M,N] partial when `own` is the row slice of it one request reduces (the Build's one call per request of a
+    #: multi-request launch): the call keeps one (step, k) and one record, which its parts continue in row order
+    call: ViewDesc | None = None
 
 
 @dataclass(frozen=True)

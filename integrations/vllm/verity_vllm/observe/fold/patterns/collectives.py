@@ -22,7 +22,7 @@ from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns.geometry import is_row_major
 from verity_vllm.observe.fold.patterns.ops import base_op, bound_args
 from verity_vllm.observe.fold.patterns.resolutions import attribution_for, hint_of, unsupported
-from verity_vllm.observe.fold.resolver import Collective, Compute, PerRow, Resolution, Shared, StepContext
+from verity_vllm.observe.fold.resolver import Collective, Compute, Group, PerRow, Resolution, Shared, StepContext
 from verity_vllm.observe.fold.tree import TreeNode
 
 ALL_REDUCE_OP = "vllm.all_reduce"
@@ -35,7 +35,8 @@ class TpCollective:
     `vllm.all_gather(tensor [M,N] bf16, dim, world, group) -> [M, world*N]` -> `Compute(AllGather2_v1{N}, rows=M, (Collective(own, "all_gather", site),), (PerRow(out),))`.
     [lane vllm-tp-n] `world` is the profile's communicator size: 2 binds the `*2` identities above, > 2 binds `AllReduce_v2{WORLD,N}` /
     `AllGather_v1{WORLD,N}` (`b1_tp2.all_reduce` / `all_gather`); the `parts` operand is `Array<world, Array<N, bf16>>` in rank order and
-    the fold fills every peer rank's row from the request's `peers` root (one field per (collective, peer rank))."""
+    the fold fills every peer rank's row from the request's `peers` root (one field per (collective, peer rank)).  A world-8 all-reduce
+    on a captured route is the Build's one flat call per request (`_per_request`), the parts of one call (step, k)."""
 
     name: str = "tp.collective"
 
@@ -79,13 +80,47 @@ class TpCollective:
             spec = b1_tp2.all_reduce(self.world, N)      # [lane vllm-tp-n] AllReduce2_v1{N} at world 2, AllReduce_v2{WORLD,N} beyond
         if out.alloc == x.alloc:
             return unsupported(node, f"{kind}: in-place collective (received storage is the partial's); the fold states a fresh received storage", partial=repr(x), received=repr(out))
-        routed = served_route_spec(ctx.header, self.world, M, N) if kind == "all_reduce" and self.world > 2 else None
+        attribution = attribution_for(ctx, M, node.phase)
+        routed = covered_route(ctx.header, self.world, M, N) if kind == "all_reduce" and self.world > 2 else None
         if routed is not None:
-            flat = ViewDesc(out.alloc, out.offset, (1, M * N), (M * N, 1), out.dtype, out.device)
-            return Compute(routed, 1, (Collective(x, kind, site, flat=True),), (PerRow(flat),), tuple(sorted(node.ids())),
-                           hint=hint_of(node, kind), kernels=(), attribution=attribution_for(ctx, M, node.phase), pattern=self.name)
+            return self._per_request(node, routed, x, out, site, attribution)
         return Compute(spec, M, (Collective(x, kind, site),), (PerRow(out),), tuple(sorted(node.ids())),
-                       hint=hint_of(node, kind), kernels=(), attribution=attribution_for(ctx, M, node.phase), pattern=self.name)
+                       hint=hint_of(node, kind), kernels=(), attribution=attribution, pattern=self.name)
+
+    def _per_request(self, node: TreeNode, routed: T.Captured, x: ViewDesc, out: ViewDesc, site: str, attribution) -> Resolution:
+        """The routed all-reduce as the Build binds it: one call per request over its run of rows, each `rows * N` words on the route
+        the launch's M picks (`route_binding`; refused where the route reduces an element by its offset in the launch)."""
+        from verity.ml.circuits.defs import bind
+
+        (M, N), parts = x.shape, []
+        try:
+            spans = request_spans(attribution) or [(0, M)]
+            for lo, n in spans:
+                defn, statics = T.route_binding(routed, self.world, M, N, n)
+                own = ViewDesc(x.alloc, x.offset + lo * N, (n, N), (N, 1), x.dtype, x.device)
+                flat = ViewDesc(out.alloc, out.offset + lo * N, (1, n * N), (n * N, 1), out.dtype, out.device)
+                parts.append(Compute(bind(defn, **statics), 1, (Collective(own, "all_reduce", site, flat=True, call=x),), (PerRow(flat),),
+                                     tuple(sorted(node.ids())), hint=hint_of(node, "all_reduce"), kernels=(),
+                                     attribution=attribution[lo:lo + n], pattern=self.name))
+        except ValueError as e:
+            return unsupported(node, f"all_reduce: {e}", M=M, N=N)
+        if len(parts) == 1:
+            return parts[0]
+        return Group(tuple(parts), tuple(sorted(node.ids())), hint=hint_of(node, "all_reduce"), pattern=self.name)
+
+
+def request_spans(attribution) -> list[tuple[int, int]]:
+    """(first row, rows) of each request's run of rows in a launch's attribution, in row order; [] when the rows name no requests.
+    A request whose rows are not one run is refused (`ValueError`): the Build reduces each request's rows as one call."""
+    spans: list[tuple[str, int, int]] = []
+    for i, (rid, _pos) in enumerate(attribution):
+        if spans and spans[-1][0] == rid:
+            spans[-1] = (rid, spans[-1][1], spans[-1][2] + 1)
+        elif any(s[0] == rid for s in spans):
+            raise ValueError(f"request {rid!r} owns rows apart from its run at {next(s[1] for s in spans if s[0] == rid)}")
+        else:
+            spans.append((rid, i, 1))
+    return [(lo, n) for _rid, lo, n in spans]
 
 
 def allreduce_settings(header) -> dict | None:
@@ -101,20 +136,15 @@ def allreduce_settings(header) -> dict | None:
     return T.settings_of(pc["disable_custom_all_reduce"], (getattr(header, "profile", None) or {}).get("engine_flags") or {})
 
 
-def served_route_spec(header, world: int, M: int, N: int):
-    """The Build's Definition for one communicator all-reduce of [M,N] (`vllm_bindings.AllReduceRule`: one call over M * N words on the
-    route vLLM takes at the capture's settings), or None when the capture's settings or `tp_allreduce.covered` name no route."""
-    from verity.ml.circuits.defs import bind
-
+def covered_route(header, world: int, M: int, N: int) -> T.Captured | None:
+    """The captured route vLLM takes for one communicator all-reduce of [M,N] at the capture's settings, which the Build binds as one
+    call per request (`vllm_bindings.AllReduceRule`, `tp_allreduce.route_binding`), or None when the capture's settings or
+    `tp_allreduce.covered` name no route."""
     settings = allreduce_settings(header)
     if settings is None or world != 8:
         return None
     setting, route = T.served_route(settings, M, N)
-    c = T.covered(setting, N, route, M) if setting is not None else None
-    if c is None:
-        return None
-    defn, statics = T.route_binding(c, world, M, N)
-    return bind(defn, **statics)
+    return T.covered(setting, N, route, M) if setting is not None else None
 
 
 FUSED_AR_NORM_OP = "vllm.flashinfer_trtllm_fused_allreduce_norm"

@@ -306,6 +306,7 @@ class _Fold:
         self.supplied_inputs = SuppliedInputs()   # a `registered_values` profile's run and registered values
         self.collectives: list[dict] = []
         self.cur_coll_k: int = 0
+        self._open_call: tuple[dict, int] | None = None          # (record, next row) of a call whose per-request parts are still due
         self._coll_prep: dict[int, tuple[Compute, dict]] = {}   # id(c) -> (c, prep); c held so an id() reuse cannot alias a stale prep
         self.sampled: dict[tuple[str, int], int] = {}
         self.outputs: dict[tuple[str, int], Refs] = {}
@@ -810,8 +811,8 @@ class _Fold:
             raise FoldError(f"{what}: unknown collective kind {op.kind!r}")
         if not op.site:
             raise FoldError(f"{what}: collective without an issuing module (site); refused (fail closed)")
-        step, k = self.cur_step, self.cur_coll_k
-        self.cur_coll_k += 1
+        rec = self._collective_call(op, M, N, min(c.consumed) if c.consumed else self.cur_event, what)
+        step, k = rec["step"], rec["k"]
         by_req: dict[int, list[int]] = {}
         for i in range(M):
             rp = self._attribution(c, i)
@@ -842,10 +843,30 @@ class _Fold:
                 fields.append({"request": fld["request"], "param": pidx, "field": name, "ordinal": fld["ordinal"], "rows": len(rws), "offset": base, "peer_rank": pr})
             for j, row in enumerate(rws):
                 row_map[row] = (pidx, base_of, j, f"s{step}_k{k}")
-        event = min(c.consumed) if c.consumed else self.cur_event
-        self.collectives.append({"step": step, "k": k, "kind": op.kind, "site": op.site, "rows": M, "N": N, "rank": rank, "world": world,
-                                 "event": event, "own_view": own, "fields": fields, **({"flat": True} if op.flat else {})})
+        rec["fields"].extend(fields)
         return {"step": step, "k": k, "N": N, "M": M, "rank": rank, "world": world, "kind": op.kind, "site": op.site, "row_map": row_map}
+
+    def _collective_call(self, op: Collective, M: int, N: int, event: int, what: str) -> dict:
+        """The record of the call `op` reduces rows of: a fresh (step, k) for a whole partial or a call's first rows, else the open
+        call it continues (`Collective.call`: the next rows of the same call, at the same step and site)."""
+        own, call = op.own, op.call or op.own
+        lo, rem = divmod(own.offset - call.offset, N)
+        if call.alloc != own.alloc or call.rank != 2 or call.shape[1] != N or tuple(call.strides) != (N, 1) or rem or not 0 <= lo <= call.shape[0] - M:
+            raise FoldError(f"{what}: own partial {own!r} is not a row slice of the call's partial {call!r}")
+        held, self._open_call = self._open_call, None
+        if lo == 0:
+            rec = {"step": self.cur_step, "k": self.cur_coll_k, "kind": op.kind, "site": op.site, "rows": int(call.shape[0]), "N": N,
+                   "rank": self.tp["rank"], "world": self.tp["world"], "event": event, "own_view": call, "fields": [],
+                   **({"flat": True} if op.flat else {})}
+            self.cur_coll_k += 1
+            self.collectives.append(rec)
+        elif held is not None and held[1] == lo and (held[0]["step"], held[0]["own_view"], held[0]["site"]) == (self.cur_step, call, op.site):
+            rec = held[0]
+        else:
+            raise FoldError(f"{what}: rows {lo}.. of the call {call!r} at {op.site!r} follow no open part of that call")
+        if lo + M < call.shape[0]:
+            self._open_call = (rec, lo + M)
+        return rec
 
     def _collective_parts(self, prep: dict, op: Collective, i: int, ptype: Type, c: Compute, pname: str) -> Coll:
         """Row i's `parts`: [own row, peer row] in RANK order.  The own row is read from memory (its producer must have written it: a
