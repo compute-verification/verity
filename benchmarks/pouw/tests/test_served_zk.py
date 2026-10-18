@@ -595,20 +595,32 @@ def test_r1_r6_of_a_window_are_leans(served):
     record.close()
 
 
+def test_the_record_follows_the_switch(monkeypatch):
+    """`Record()` takes its side of record from `pouw.verifier.RECORD_VERDICT`, and an explicit `lean` overrides it."""
+    assert OR.Record().lean is (OR.V.RECORD_VERDICT == "lean")
+    monkeypatch.setattr(OR.V, "RECORD_VERDICT", "python")
+    assert OR.Record().lean is False and OR.Record(lean=True).lean is True
+    monkeypatch.setattr(OR.V, "RECORD_VERDICT", "lean")
+    assert OR.Record().lean is True and OR.Record(lean=False).lean is False
+
+
 @LEAN
-def test_the_public_items_rule_refuses_only_what_r1_r6_refuse(served):
-    """`service.check_public` has no Lean form: R1-R6 decide what it reads of a PoUW registration, so on generated
-    registrations (keys added and dropped, roots renamed, repeated, dropped or given fields, the scheme, query, leaf layer,
-    anchors and registered values changed, several at once) it refuses only what Lean's R1-R6 refuse, and refuses some."""
+def test_the_public_items_rule_of_a_window_is_leans(served):
+    """The service's public-items rule over a window's Spec is Lean's (`Service.checkPublic`): on generated registrations
+    (keys added and dropped, roots renamed, repeated, dropped or given fields, the scheme, query, leaf layer, anchors and
+    registered values changed, several at once) `service.check_public` gives exactly its verdict, codes and detail, none
+    for the honest record and some for many of the changed ones."""
     *_, words = served
     params, public, _, _ = _window(words)
     rec = _register(params, public)
     ell, n = SC.level_of(rec), rec["population"]
     spec = SC.spec_of(params, ell)
-    prog, q = SC.PT.population_program(SC.template(K), n), SC.PT.template_instance_query(SC.template(K))
-    law, ports = SC.law_of(params, ell), SC.ports(params, ell)
-    p = OR.registration_params(prog, q, law, S.SCHEME, ports, [], params["delta"])
-    record = OR.Record()
+    record = OR.Record(lean=True)
+
+    def verdict(r: dict) -> dict:
+        return record.public(OR.public_params(spec, r, S.SCHEME), lambda: S.check_public(spec, r).to_json())
+
+    assert verdict(rec) == {"ok": True, "codes": [], "detail": {}}
 
     def mutate(rng: random.Random, r: dict) -> None:
         roots = r.get("roots")
@@ -639,19 +651,17 @@ def test_the_public_items_rule_refuses_only_what_r1_r6_refuse(served):
             case _:
                 r["population"] = rng.choice((n, n + 1, 0))
 
-    refused = both = 0
+    refused = 0
     for seed in range(300):
         rng = random.Random(seed)
         r = json.loads(json.dumps(rec))
         for _ in range(rng.choice((1, 1, 2, 3))):
             mutate(rng, r)
-        py = list(S.check_public(spec, r).codes)
-        lean = record.registration(p, r, lambda r=r: R.check(r, prog, q, law, S.SCHEME, ports, None, (), [], None, None,
-                                                             None).codes)
-        assert record.public(py, lean) == lean, (seed, py, lean)
-        refused += bool(py)
-        both += bool(lean)
-    assert refused >= 100 and both >= refused, (refused, both)
+        try:
+            refused += not verdict(r).get("ok")
+        except OR.Disagree as e:
+            raise AssertionError(f"seed {seed}: Python {e.python} where the Lean, of record, gives {e.lean}") from None
+    assert refused >= 100, refused
     assert all(e["same"] for e in record.witness)
     record.close()
 
