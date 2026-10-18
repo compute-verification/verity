@@ -80,6 +80,12 @@ class Rule:
         parameter under `registered_values`, for the exported graph `ep`: each a parameter after the `values`. Default: none."""
         return ()
 
+    def run_inputs(self, ep, mode: str) -> bool:
+        """Whether this rule reads values the served run decides (`Ctx.run_value`) for the exported graph `ep`: values no circuit
+        computes, which the Program takes as fields of its `run` parameter and checks in gates (`Ctx.check`), as the top-k order of
+        a DSA row past TOPK. Default: none."""
+        return False
+
     @property
     def rule_id(self) -> str:
         return self.info.rule_id
