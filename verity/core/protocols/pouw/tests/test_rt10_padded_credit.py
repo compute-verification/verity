@@ -1,6 +1,6 @@
 """RT10's repro against compute-accounting's padded-window credit rule (note:20261018T2200Z-draft-padded-credit-rule,
-its Lean statement on cursor/padded-credit-stmt-ea24 at 5d09a7396, and its 21:58Z revision in thread 1792358147.145339).
-Red-team evidence for note:proofs/20261018T2245Z-report-rt10-padded-credit, not a test of record: each test pins one
+its Lean statement on cursor/padded-credit-stmt-ea24 at 5d09a7396, and its 21:52Z revision in thread 1792358147.145339).
+Red-team evidence for note:proofs/20261018T2230Z-report-rt10-padded-credit, not a test of record: each test pins one
 of its findings with the real Pearl-C v1 scheme or with exact draw probabilities.
 
 * A padding slot's honest row is the zero row. The forming refuses it (ok 0), and every checked word of a tile over it
@@ -107,7 +107,7 @@ def _weighted(ok_a: list[int], ok_b: list[int], admit: list[int], w: int = 1) ->
 
 
 def test_the_revisions_weighted_draw_never_draws_a_slot_marked_dead():
-    """(a) and (b) under the 21:58Z revision: row 0 is live and admitted, and the prover commits its ok_A as 0 (one wrong
+    """(a) and (b) under the 21:52Z revision: row 0 is live and admitted, and the prover commits its ok_A as 0 (one wrong
     forming unit). At the committed values its tiles weigh 0 and so does its annotation unit, so neither is drawn with
     any number of draws. A selection that gates only egress weighs 0 too. A static annotation weight (the credit it
     would gate at ok 1) draws it."""
