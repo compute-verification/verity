@@ -866,7 +866,15 @@ and each window's, from it plus the node's capacities.
     verifier here checks only that each pass names a step above the last.
   - *The timing.* The step says which reads a pass stands for, not when serving made them: nothing yet shows that the
     pass at \(s\) ran while serving executed \(s\). A certifier that stamps each step's record and each pass's root
-    on one clock would.
+    on one clock would. A prover may run serving ahead of its passes (`Ahead` in `benchmarks/remote_session/prover.py`),
+    at most \(k\) steps past the pass in flight, \(k\) its own choice: each pass covers the newest step serving has
+    handed, the steps serving ran past in between have no pass and are credited nothing, and the pass at \(s\) reads
+    the store resident at \(s\) while serving executes later steps. That store must still be in place as the pass
+    reads it, so serving writes into memory whose block was released at step \(r\) only once no pass yet to read is
+    at a step up to \(r\) (the free fence). A write that skips the fence lands over a block a pass has yet to read,
+    and a drawn receipt of it, of other bytes than the opening's block, rejects (§6). The record is memory-map/v1's
+    as before, each pass still starts after the root before it and sends its root once its receipts are made (§5),
+    and the verifier sees the same messages, so what it accepts is unchanged.
 - **The requirement's link.** What the audit credits is the node's reads of its store. Counting them as the served
   circuit's reads needs A1's link (`StoreMatches`, `PlanMatches`, note:20261017T1847Z-draft-a1-requirement), and three
   of its gaps are on the audit's side. `ledger` takes the link as `requirement`, a `RequirementLink`: whether its
