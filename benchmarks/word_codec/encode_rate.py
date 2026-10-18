@@ -16,7 +16,8 @@ each over the reference (`kv.cu` before FOLD 6, 1.499e10) and the stated ceiling
 through memory (`kv_encode_bound` of --blocks blocks, each under an offset of its own, in place) alone and on a
 low-priority stream beside a bf16 GEMM loop (--gemm M,K,N) on a high-priority one, at grids of two CTAs an SM, one, and
 a word a thread (CTAs that end after one word each, so the GEMM's take the SMs as they free): the encode's rate under a
-GEMM loop that outlasts it, and the GEMM's time under an encode that outlasts it. Writes OUT/encode-rate.json.
+GEMM loop queued to outlast it, and the GEMM's time a call over the GEMMs done while the encode ran. Writes
+OUT/encode-rate.json.
 `--ncu` instead launches each timed chain once (square, encode at the largest k, products, fold), for Nsight Compute.
 
     python encode_rate.py --lib p1024=kv.so --out OUT [--ks 2,3 --blocks 65536 --gemm 2048,4096,14336] [--ncu]
@@ -161,16 +162,40 @@ def memory(lib, torch, a, sms: int, W: int, log) -> dict:
         return statistics.median(ts[1:])
 
     def together(enc, cnt):
+        """The encode's time beside cnt GEMMs queued with it, and each GEMM's end, from when both may start."""
         torch.cuda.synchronize()
         lib.call("kv_spin", SPIN_CYCLES, KB.stream(torch))
-        ev = torch.cuda.Event()
+        ev = torch.cuda.Event(enable_timing=True)
         ev.record()
         s_lo.wait_event(ev)
         s_hi.wait_event(ev)
-        r = on(s_lo, enc)
-        g = on(s_hi, gemms(cnt))
+        r1 = torch.cuda.Event(enable_timing=True)
+        enc()
+        r1.record(s_lo)
+        ends = []
+        with torch.cuda.stream(s_hi):
+            for _ in range(cnt):
+                torch.matmul(ga, gb, out=gc)
+                ends.append(torch.cuda.Event(enable_timing=True))
+                ends[-1].record(s_hi)
         torch.cuda.synchronize()
-        return r[0].elapsed_time(r[1]) / 1e3, g[0].elapsed_time(g[1]) / 1e3
+        return ev.elapsed_time(r1) / 1e3, [ev.elapsed_time(e) / 1e3 for e in ends]
+
+    def beside(enc, t):
+        """The encode beside a GEMM loop queued to outlast it (doubled up to 3 times if it doesn't), and the GEMM's time
+        a call while the encode runs, over the GEMMs done before it ends (None if a run had none)."""
+        cnt = max(4, math.ceil(1.5 * t / g1))
+        for _ in range(3):
+            tr, ends = together(enc, cnt)
+            if ends[-1] >= tr:
+                break
+            cnt *= 2
+        runs = [(tr, ends)] + [together(enc, cnt) for _ in range(a.reps - 1)]
+        done = [sum(e <= tr for e in ends) for tr, ends in runs]
+        gm = [ends[d - 1] / d for (_, ends), d in zip(runs, done) if d]
+        return {"s": statistics.median(tr for tr, _ in runs),
+                "gemm_s": statistics.median(gm) if len(gm) == len(runs) else None, "gemms_queued": cnt,
+                "gemms_done_during": done, "gemm_loop_ended_first": sum(ends[-1] < tr for tr, ends in runs)}
 
     g1 = alone(s_hi, gemms(10)) / 10
     out["gemm"]["alone_ms"] = round(g1 * 1e3, 4)
@@ -187,17 +212,21 @@ def memory(lib, torch, a, sms: int, W: int, log) -> dict:
                          s_lo.cuda_stream)
 
             t = alone(s_lo, enc)
-            outlast, under = max(4, math.ceil(1.5 * t / g1)), max(1, math.floor(0.5 * t / g1))
-            tb = statistics.median(together(enc, outlast)[0] for _ in range(a.reps))
-            gm = statistics.median(together(enc, under)[1] for _ in range(a.reps)) / under
+            b = beside(enc, t)
+            tb, gm = b["s"], b["gemm_s"]
             c = {"grid": grid or -(-n // 128), "alone_s": round(t, 5), "blocks_s": round(a.blocks / t),
-                 "squarings_s": a.blocks / t * sq, "beside_blocks_s": round(a.blocks / tb), "beside_squarings_s": a.blocks / tb * sq,
-                 "beside_over_alone": round(tb / t, 3), "gemm_beside_ms": round(gm * 1e3, 4),
-                 "gemm_slowdown": round(gm / g1, 3), "gemms": {"outlasting": outlast, "under": under}}
+                 "squarings_s": a.blocks / t * sq, "beside_blocks_s": round(a.blocks / tb),
+                 "beside_squarings_s": a.blocks / tb * sq, "beside_over_alone": round(tb / t, 3),
+                 "gemm_beside_ms": gm and round(gm * 1e3, 4), "gemm_slowdown": gm and round(gm / g1, 3),
+                 **{x: b[x] for x in b if x.startswith("gemm") and x != "gemm_s"}}
             cell[name] = c
+            gemm = f"{c['gemm_beside_ms']} ms a call ({c['gemm_slowdown']}x)" if gm else "starved (a run had none done)"
+            first = b["gemm_loop_ended_first"]
             log(f"memory k={k} {name} ({c['grid']} CTAs): alone {c['blocks_s']:.4g} blocks/s "
-                f"({c['squarings_s']:.4g} sq/s); beside the GEMM {c['beside_blocks_s']:.4g} blocks/s ({c['beside_over_alone']}x the time), the GEMM "
-                f"{c['gemm_beside_ms']} ms ({c['gemm_slowdown']}x)")
+                f"({c['squarings_s']:.4g} sq/s); beside the GEMM {c['beside_blocks_s']:.4g} blocks/s "
+                f"({c['beside_over_alone']}x the time), the GEMM while it runs {gemm}, GEMMs done in it "
+                f"{b['gemms_done_during']} of {b['gemms_queued']} queued"
+                + (f", the GEMM loop ended first in {first} runs" if first else ""))
         out["ks"][k] = cell
     return out
 
