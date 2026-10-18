@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # commit_gpu on one leased GPU, sm_120 unless GENCODE names another (cwd = the source tree's root). Outside the lease:
-# builds (by default the fastest measured form; BUILDS names others, a nomask tag a timing-only build without M_key y, a merged tag one without h's
-# two compressions, the timing of a one-hash leaf format, and a quad tag one with a 4-ary tree) and reference.py's cases on
+# builds (by default the fastest measured form; BUILDS names others, a nomask tag a timing-only build without M_key y, a
+# merged tag one without h's two compressions, the timing of a one-hash leaf format, and a quad tag one with a 4-ary tree) and reference.py's cases on
 # the CPU. Under one lease: the selftest, each build's bit-exactness check against the reference (a build is timed only if
 # its check passed), the raw
 # compression rate, the e2e slice's o_proj operand A (8192 x 4096 int8, 2^20 leaves) committed alone and beside cuBLASLt's
