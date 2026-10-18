@@ -1,6 +1,6 @@
 """The falsification test of `Accounting.Assumptions.EncodeChainHardness` (Security/Models/Accounting/Assumptions/
 EncodeChain.lean): every known construction of a squaring mod p1024 in the circuit model costs at least the conjectured
-`e = L − d(ε)` budgeted units, `L = n/8` and `d(ε) = d₀ + log₂(1/ε)/8` with `d₀ = 4`.
+`e = L − d(ε)` budgeted units, `L = n/8` and `d(ε) = d₀ + log₂(1/ε)/8` with `d₀ = 4`, at every `ε ≥ 2^−64`.
 
 A squaring here is the step an exponentiation chain repeats: 128 s8 limbs in, 128 s8 limbs out, congruent to the square
 mod p. Products are free (s8-family steps from `C = 0`, their operands proven bytes by their producers' declared
@@ -11,11 +11,18 @@ Each construction is run on seeded inputs and checked against `pow(a, 2, p)` on 
 a cheaper one, added here, fails the test and falsifies the conjecture at `e`. It is also the test of the per-squaring
 statement `Accounting.Guarantees.Gates.Renormalization` at `c = 0`: its outputs are limbs congruent to the square.
 
+`Renormalization` has a floor on `ε` because circuits with no budgeted gate refute it below one: on the `a` whose
+squares' column sums don't carry, the column sums (s8-family steps, folded mod `p`) are the square's bytes. The red
+team's families (note:20261017T1859Z-report-property-redteam R4.1) and a sampled one at p1024 are kept here as
+regressions the stated form must survive: each refutes the form with no floor, and sits below the floor `2^−64`.
+
 `Accounting.Guarantees.Gates.RhoPairs`, stated for every prime `p ≡ 3 mod 4`, is sampled on `codec.rho` at p1024.
 """
 
 from __future__ import annotations
 
+import itertools
+import math
 import random
 
 from verity.core.protocols.remote_bandwidth import codec
@@ -25,6 +32,8 @@ P = F.p
 N_LIMBS = F.word_bytes
 OPERAND_BITS = 128
 D0 = 4
+FLOOR = 64
+HEADLINE = 40
 LOOKAHEAD = 3
 
 
@@ -144,9 +153,96 @@ def test_encode_chain_hardness_e_at_p1024_k3() -> None:
     squarings = ((P + 1) // 4).bit_length() - 1
     assert squarings == 1021
     assert codec.DEFAULT.encode_squarings == F.block_words * 3 * squarings
-    assert e_per_squaring(0) == 124 and e_per_squaring(20) == 121
+    assert e_per_squaring(0) == 124 and e_per_squaring(20) == 121 and e_per_squaring(FLOOR) == 116
+    assert e_per_squaring(HEADLINE) == 119
+    assert 3 * squarings * e_per_squaring(HEADLINE) == 364_497
+    assert F.block_words * 3 * squarings * e_per_squaring(HEADLINE) == 11_663_904
     assert 3 * squarings * e_per_squaring(20) == 370_623
-    assert F.block_words * 3 * squarings * e_per_squaring(20) == 11_859_936
+
+
+def folded_sums(d: list[int], p: int) -> list[int]:
+    """The outputs of the circuit with no budgeted gate on `a = Σ d_l 256^l`: `a²`'s column sums, the top ones folded
+    into the bottom by `256^L ≡ 256^L − p`."""
+    L = len(d)
+    t = [0] * (2 * L - 1)
+    nz = [(i, v) for i, v in enumerate(d) if v]
+    for i, u in nz:
+        for j, v in nz:
+            t[i + j] += u * v
+    return [t[m] + ((256 ** L - p) * t[m + L] if m + L < 2 * L - 1 else 0) for m in range(L)]
+
+
+def renormalization(L: int, eps_num: int, eps_den: int, budgeted: int, floor: int | None) -> bool:
+    """`Renormalization`'s conclusion at `c = 0`, `d₀ = 4` and `ε = εnum/εden`, true where its floor `2^−floor`
+    excludes `ε` (`floor=None`: the form with no floor)."""
+    if floor is not None and eps_den > 2 ** floor * eps_num:
+        return True
+    return eps_num * 2 ** (8 * L) <= eps_den * 2 ** (8 * (budgeted + D0))
+
+
+def test_renormalization_survives_non_carrying_families() -> None:
+    """The red team's product families `{a : a_l ≤ D_l}`, from its greedy search: the all-max member's folded column
+    sums bound every member's, so if they are bytes and their value is below `p`, the circuit with no budgeted gate
+    outputs every member's canonical bytes (and is proven: its derived intervals are those sums)."""
+    rng = random.Random(27)
+    for p, top, log2_size in ((256 ** 27 - 377, [5] * 3 + [4] * 11 + [0] * 13, 33.30),
+                              (P, [2] * 63 + [1] * 2 + [0] * 63, 101.85)):
+        L = len(top)
+        s = folded_sums(top, p)
+        assert max(s) <= 255 and value(s) < p
+        members = math.prod(v + 1 for v in top)
+        assert round(math.log2(members), 2) == log2_size
+        for _ in range(16):
+            d = [rng.randint(0, v) for v in top]
+            a = value(d)
+            assert folded_sums(d, p) == list((a * a % p).to_bytes(L, "little"))
+        assert not renormalization(L, members - 1, p, 0, None)
+        assert renormalization(L, members - 1, p, 0, FLOOR)
+
+
+def non_carrying(d: list[int]) -> bool:
+    """Whether `a = Σ d_l 256^l` (digits below 2^8, at most 64 of them) squares with no carry: packed 16 bits apart,
+    `a²`'s column sums don't overlap, and each must be a byte."""
+    A = 0
+    for i, v in enumerate(d):
+        A |= v << (16 * i)
+    S = A * A
+    while S:
+        if S & 0xFFFF > 255:
+            return False
+        S >>= 16
+    return True
+
+
+def test_slope_seven_refuted_below_the_floor() -> None:
+    """A larger family at p1024, sampled: 64 digits, each from a geometric law truncated at 12 (means 1.75 to 2.75,
+    higher at the edges, whose columns sum fewer products), kept where the square doesn't carry. Every member of
+    `T = {d : −log₂ q(d) ≥ t, non-carrying}` has `q(d) ≤ 2^−t`, so `|T| ≥ q(T) · 2^t`, with `q(T)` bounded below by
+    the hits less three standard deviations: `|T| ≥ 2^159.4`. It refutes the slope `1/7` (`d = 4 + log₂(1/ε)/7` allows a
+    circuit with no budgeted gate at most `2^156` inputs) and every fixed `d₀` below 19.9 at slope `1/8`, and it sits
+    far below the floor: its digits are at most 12, so `|T| ≤ 13^64`."""
+    K, positions, draws = 12, 64, 10_000
+    laws = []
+    for i in range(positions):
+        mu = 1.75 + math.exp(-min(i, positions - 1 - i) / 5)
+        w = [(mu / (1 + mu)) ** k for k in range(K + 1)]
+        laws.append([v / sum(w) for v in w])
+    t = sum(-sum(v * math.log2(v) for v in q) for q in laws) - 4
+    cum = [list(itertools.accumulate(q)) for q in laws]
+    rng = random.Random(7)
+    hits = []
+    for _ in range(draws):
+        d = [rng.choices(range(K + 1), cum_weights=c)[0] for c in cum]
+        if -sum(math.log2(q[v]) for q, v in zip(laws, d)) >= t and non_carrying(d):
+            hits.append(d)
+    for d in hits[:8]:
+        a = value(d)
+        assert folded_sums(d + [0] * (N_LIMBS - positions), P) == list((a * a % P).to_bytes(N_LIMBS, "little"))
+    log2_members = t + math.log2((len(hits) - 3 * math.sqrt(len(hits))) / draws)
+    assert log2_members > 159.4
+    assert 7 * (N_LIMBS - D0) > math.log2(P) - log2_members
+    assert N_LIMBS - (math.log2(P) - log2_members) / 8 > 19.9
+    assert P > 2 ** FLOOR * 13 ** positions
 
 
 def test_rho_pairs_at_p1024() -> None:
