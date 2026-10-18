@@ -141,7 +141,8 @@ def per_layer(com: Any, model: Any) -> dict[str, Any]:
         s.names = {t: v for t, v in s.names.items() if t in (AS.MLA_ROWS, AS.INDEX_ROWS, AS.INDEX_SCALE)}
     stream = LayerStreamSource(com, model)
     com.sources = [*attn, stream]
-    com.name = f"{com.name.split('+', 1)[0]}+layer_stream+attention_rows"
+    com.name = "+".join([com.name.split("+", 1)[0], *([com.commit_scheme] if f"+{com.commit_scheme}+" in f"{com.name}+" else []),
+                         "layer_stream", "attention_rows"])
     return {"modules": [n for n, _m in com._modules], "taps": {t: len(v) for s in attn for t, v in s.names.items()}, "layers": len(stream.norms)}
 
 
