@@ -89,14 +89,16 @@ error is below 1, some coins accept the prover's run (`exists_of_pr_pos`), and r
 accepted (`run_replay_out`), so `InnerAccSha` holds there (`innerAcc_of_run`, `innerAcc_sha512_iff`). -/
 theorem innerAccSha_of_complete {Ω : Type} [Nonempty Ω] {rel : Flock.Readable.Parsed → Flock.Readable.Relation}
     {P : Claims.Flock.Wit → Prover Ω} {δc : Msg → ℝ}
-    (hC : Claims.Flock.Complete FlockDeploy.sha512 (FlockDeploy.deployPlain rel) P δc) {x : Msg}
+    (hC : Claims.Complete FlockDeploy.sha512 (FlockDeploy.V false) P
+      (Claims.Flock.R (FlockDeploy.deployPlain rel).parse) (Claims.Flock.Scope (FlockDeploy.deployPlain rel)) δc)
+    (h64 : Claims.Out64 FlockDeploy.sha512) {x : Msg}
     {w : Claims.Flock.Wit} (hS : Claims.Flock.Scope (FlockDeploy.deployPlain rel) x)
     (hR : Claims.Flock.R (FlockDeploy.deployPlain rel).parse x w) (hδ : δc x < 1) :
     ∃ (c : ℕ → Coin) (ms : List Msg), InnerAccSha x c ms := by
   obtain ⟨ω⟩ := ‹Nonempty Ω›
   obtain ⟨r, hr⟩ : ∃ r : Fin ((FlockDeploy.V false).k x) → Coin,
       (run FlockDeploy.sha512 (P w) (FlockDeploy.V false) x ω r).out = .acc :=
-    exists_of_pr_pos (lt_of_lt_of_le (by linarith) (hC x w hS hR ω))
+    exists_of_pr_pos (lt_of_lt_of_le (by linarith) (hC h64 x w hS hR ω))
   refine ⟨Claims.coinSeq r, (run FlockDeploy.sha512 (P w) (FlockDeploy.V false) x ω r).msgs.map Prod.fst, ?_⟩
   rw [← innerAcc_sha512_iff]
   apply innerAcc_of_run
@@ -136,13 +138,14 @@ theorem parse_innerOk {x : Msg} {st : Claims.Recursion.Stmt} (hst : parse x = so
 /-- **Flock admits a plain-leaves statement of the inner shape** (what #2411 and #2468 make possible): some inner
 statement passes every check the checked reader makes of it (it decodes, its partition reads, the inner setup at the
 recursion's inner tags accepts it, `RecVStar.innerOf`, and Flock's plain verifier sets it up and its statement check
-passes, `innerOk`), carries a draw, is under `2^56` bytes with fewer than `2^128` zerocheck outer coins (so Flock's
-completeness error is below 1 there, `FlockComplete.δc_sha512_lt_one`), is in Flock's scope, where its soundness
-headline holds (`Claims.Flock.Scope`), and is true (`Claims.Flock.R`). Every conjunct is a fact about one concrete inner
-statement and its witness: #2468's inner session is one, as its run `r20261018-053343-99cf` measured (Lean `verify`
-without `--zk` accepts it, its record holding the full stratified draw), and none is proved here. Only an inner
-statement whose public file holds each instance's own rows can be one: without `--zk` Flock's statement check refuses a
-shared-row public file (`ProvedScope.sharedRowsOk`), which `RecVStar.innerOf` sets up. -/
+passes, `innerOk`), carries a draw, is under `2^56` bytes with fewer than `2^128` zerocheck outer coins, has tables
+whose regions fit (`FlockComplete.RegionsFit`) and an honest record that fits (`FlockComplete.RecordFitsAt`) (so
+Flock's completeness error is below 1 there, `FlockComplete.δc_sha512_lt_one`), is in Flock's scope, where its
+soundness headline holds (`Claims.Flock.Scope`), and is true (`Claims.Flock.R`). Every conjunct is a fact about one
+concrete inner statement and its witness: #2468's inner session is one, as its run `r20261018-053343-99cf` measured
+(Lean `verify` without `--zk` accepts it, its record holding the full stratified draw), and none is proved here. Only
+an inner statement whose public file holds each instance's own rows can be one: without `--zk` Flock's statement check
+refuses a shared-row public file (`ProvedScope.sharedRowsOk`), which `RecVStar.innerOf` sets up. -/
 def PlainLeavesAdmitted (rel : Flock.Readable.Parsed → Flock.Readable.Relation) : Prop :=
   ∃ (inner : Msg) (ri : FlockDeploy.Raw) (partition : Option Json) (dims : Flock.RecVStar.Inner)
     (w : Claims.Flock.Wit) (s : FlockDeploy.Ins) (spec : Flock.SessionSpec) (sts : Array Flock.Stmt),
@@ -150,35 +153,34 @@ def PlainLeavesAdmitted (rel : Flock.Readable.Parsed → Flock.Readable.Relation
       Flock.RecVStar.innerOf ri.circuit ri.publicFile partition ri.program = .ok dims ∧
       FlockDeploy.setupOf false inner = some (s, spec, sts) ∧ s.read.check = .ok () ∧ s.read.draw.isSome = true ∧
       inner.length < 2 ^ 56 ∧ (FlockComplete.outerSlots inner).length < 2 ^ 128 ∧
+      (∀ st ∈ sts, FlockComplete.RegionsFit st) ∧ FlockComplete.RecordFitsAt FlockDeploy.sha512 inner spec sts ∧
       Claims.Flock.Scope (FlockDeploy.deployPlain rel) inner ∧ Claims.Flock.R (FlockDeploy.deployPlain rel).parse inner w
 
 /-- **Under the Prop, the inner verifier's acceptance is satisfiable at an inner statement the checked reader
 admits**, wherever Flock's honest prover is complete (`innerAccSha_of_complete`, at `δc < 1` from the draw and the
 sizes, `FlockComplete.δc_sha512_lt_one`). -/
 theorem admitted_acc {rel : Flock.Readable.Parsed → Flock.Readable.Relation} (hA : PlainLeavesAdmitted rel)
-    (hC : Claims.Flock.Complete FlockDeploy.sha512 (FlockDeploy.deployPlain rel) FlockComplete.honestP
-      (FlockComplete.δc FlockDeploy.sha512)) :
+    (hC : Claims.Flock.Complete FlockDeploy.sha512 (FlockDeploy.deployPlain rel))
+    (h64 : Claims.Out64 FlockDeploy.sha512) :
     ∃ (inner : Msg) (ri : FlockDeploy.Raw) (partition : Option Json) (dims : Flock.RecVStar.Inner),
       FlockDeploy.decode inner = some ri ∧ (ri.partition.mapM (FlockDeploy.jsonOf "partition")).toOption = some partition ∧
         Flock.RecVStar.innerOf ri.circuit ri.publicFile partition ri.program = .ok dims ∧ innerOk inner = .ok () ∧
         ∃ (c : ℕ → Coin) (ms : List Msg), InnerAccSha inner c ms := by
-  obtain ⟨inner, ri, partition, dims, w, s, spec, sts, hri, hpa, hdims, hs, hck, hd, hl, hε, hS, hR⟩ := hA
+  obtain ⟨inner, ri, partition, dims, w, s, spec, sts, hri, hpa, hdims, hs, hck, hd, hl, hε, hreg, hrec, hS, hR⟩ := hA
   exact ⟨inner, ri, partition, dims, hri, hpa, hdims, innerOk_iff.2 ⟨s, spec, sts, hs, hck⟩,
-    innerAccSha_of_complete hC hS hR (FlockComplete.δc_sha512_lt_one hs hd hl hε)⟩
+    innerAccSha_of_complete hC h64 hS hR
+      (FlockComplete.δc_sha512_lt_one hs hd (hl.trans (by norm_num)) hreg hrec hε)⟩
 
 /-- **`admitted_acc` at `Readable.relation`**, where Flock's completeness is `FlockComplete.Replay.complete_plain`, under its
 hypotheses. -/
-theorem admitted_acc_plain (hA : PlainLeavesAdmitted Flock.Readable.relation) (S : FlockComplete.JsonRT.JsonSpec)
-    (h64 : FlockComplete.JsonRT.Out64 FlockDeploy.sha512) (hS : FlockComplete.JsonRT.StmtOk FlockDeploy.sha512 Flock.Readable.relation)
-    (hPR : FlockComplete.JsonRT.ProverRuns FlockDeploy.sha512 Flock.Readable.relation)
-    (hR : FlockComplete.JsonRT.RepShaped FlockDeploy.sha512 Flock.Readable.relation)
-    (hF : FlockComplete.JsonRT.RecordFits FlockDeploy.sha512 Flock.Readable.relation)
+theorem admitted_acc_plain (hA : PlainLeavesAdmitted Flock.Readable.relation)
+    (S : Claims.JsonSpec FlockComplete.printJ Flock.canon) (h64 : Claims.Out64 FlockDeploy.sha512)
     (hfin : FlockComplete.Replay.LgFinal FlockDeploy.sha512 Flock.Readable.relation) :
     ∃ (inner : Msg) (ri : FlockDeploy.Raw) (partition : Option Json) (dims : Flock.RecVStar.Inner),
       FlockDeploy.decode inner = some ri ∧ (ri.partition.mapM (FlockDeploy.jsonOf "partition")).toOption = some partition ∧
         Flock.RecVStar.innerOf ri.circuit ri.publicFile partition ri.program = .ok dims ∧ innerOk inner = .ok () ∧
         ∃ (c : ℕ → Coin) (ms : List Msg), InnerAccSha inner c ms :=
-  admitted_acc hA (FlockComplete.Replay.complete_plain FlockDeploy.sha512 S h64 hS hPR hR hF hfin)
+  admitted_acc hA (FlockComplete.Replay.complete_plain FlockDeploy.sha512 S h64 hfin) h64
 
 /-! ## `Decomp` at the checked reader -/
 
