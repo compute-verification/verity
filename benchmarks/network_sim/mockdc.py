@@ -10,7 +10,7 @@ a WAN between a certifier on each, `--wan-latency-us` one way, with the outside 
 blocks' links cross the WAN. `up` creates the namespaces of its netns plan (`graph.netns_plan`), all named `na-*`, with
 netem on the fabric links (`--wan-jitter-us` of jitter on a WAN link). `down` stops every process in an `na-` namespace
 and deletes the namespaces, and their veths with them; the root namespace never holds a veth. `status` lists them and
-checks what can reach what, with each ping's round trip. All three run `ip` through `sudo -n`.
+checks what can reach what, and in how long a round trip. All three run `ip` through `sudo -n`.
 
 `run` runs one configuration on every block at once, each block with its own strategy (by default the blocks take
 `honest`, `bits`, `late`, `extra` and `maintenance` in turn, so the default four blocks take the first four;
@@ -177,9 +177,10 @@ def down(args) -> None:
 
 
 def status(args) -> None:
-    """Each namespace's interfaces and netem, then reachability, with each ping's round trip: the outside host reaches
-    each certifier (across the WAN, in a fleet, for the far site's) and no block, a certifier reaches its block, and a
-    block reaches nothing, its certifier included, since the certifier's guard drops whatever the block opens."""
+    """Each namespace's interfaces and netem, then reachability, with the fastest round trip of a reachable address's
+    three pings: the outside host reaches each certifier (across the WAN, in a fleet, for the far site's) and no block,
+    a certifier reaches its block, and a block reaches nothing, its certifier included, since the certifier's guard
+    drops whatever the block opens."""
     dc = lab(args)
     plan = plan_of(args, dc)
     width = max(len(n.name) for n in plan.namespaces)
@@ -198,8 +199,10 @@ def status(args) -> None:
                    (cert, plan.address(b, cert), True), (b, plan.address(cert, b), False), (b, ext_address, False)]
     bad, width = 0, max(len(src) for src, _, _ in checks)
     for src, dst, want in checks:
-        r = sudo(["ip", "netns", "exec", graph.netns_name(src), "ping", "-c1", "-W1", dst], check=False)
-        got, rtt = r.returncode == 0, re.search(r"time=([\d.]+) ms", r.stdout)
+        # The first packet's round trip includes resolving each hop's neighbour, so a reachable one gets three.
+        r = sudo(["ip", "netns", "exec", graph.netns_name(src), "ping", "-c3" if want else "-c1", "-i0.2", "-W1", dst],
+                 check=False)
+        got, rtt = r.returncode == 0, re.search(r"= ([\d.]+)/", r.stdout)
         bad += got != want
         print(f"ping {src:{width}} -> {dst:12} {'reaches' if got else 'dropped'}"
               + (f" in {rtt[1]} ms" if got and rtt else "") + ("" if got == want else "  (WRONG)"))
