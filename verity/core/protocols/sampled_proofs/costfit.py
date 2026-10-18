@@ -4,8 +4,8 @@ Three regressions on a template's features (`FEATURES`: one, ands, ands staged, 
 relative error with non-negative coefficients over the observations that measure it:
 
     prove   GPU-s a session      = f0 + f1 ands + f2 ands staged + b ands drawn
-    verify  CPU-s a statement    = v0 + v1 ands staged + v2 ands drawn
-    stage   CPU-s a statement    = s0 + s1 ands staged
+    verify  CPU-s a statement    = v0 + v1 ands + v2 ands staged + v3 ands drawn
+    stage   CPU-s a statement    = s0 + s1 ands + s2 ands staged
 
 each on the features its caller gives.  `ands` is one unit's in-circuit ANDs, its rows' openings included
 (`optimize.row_ands`), `staged` the statement's units and `drawn` the session's.  A coefficient another fit measures
