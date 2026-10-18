@@ -761,7 +761,8 @@ the same way at the second table:
 | `cut-decode` | returns output that does not decode, from the rep that holds that round | `FIREWALL-REFUSED: the device failed: the device's output does not decode: …` |
 | `cut-tree` | draws its first tree at or after that round one leaf larger than the statement's (the CPU device: its trees draw through the salt context) | `FIREWALL-REFUSED: opening round …` |
 
-`FC_FIREWALL_CUT_AT` counts the table's device rounds over both reps (default 0), and a `cut-` control fires once a table.
+`FC_FIREWALL_CUT_AT` counts the table's device rounds over both reps (default 0; a rep's bucket has the count so far as
+`firewall_device_rounds`, which leaves out the rounds the host's inner proof sends), and a `cut-` control fires once a table.
 The selftest's `zk_worker_cut_MODE` holds each `cut-` control to the rule on the CPU path, beside an honest firewalled
 session: cut at the table's third, half-way and last device round (`cut-tree` at its first and half-way round), the verifier
 gets the honest session's every request up to its `Finish`, in the same order and at the same sizes, with no proof. It
