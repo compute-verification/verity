@@ -8,16 +8,26 @@
 #
 #   research run --on vy-dc-h200 --project verity --campaign hash --source . --cwd source --env GPU_LEASE_WHO=hash-intpipe \
 #     -- bash benchmarks/hash/intpipe/hm96.sh
-# LEASE_ARGS (default "--max-min 14"; on vy-nebius-2 "--preemptible --max-min 20"), REPS (15), N (34668,262144: 142 MB and
-# 1 GiB), CHECK_N (700), FETCH (128), ASYNC (0), WARPS (4: warps a segment CTA), LEAF (4096) and SEGB (1024): the leaf's
+# PHASE (all; prep: the builds and parameter files only; gpu: the rest, from HM96_W's), HM96_W (the work dir, kept),
+# LEASE_ARGS (default "--max-min 14"; on vy-nebius-2 "--preemptible --max-min 20"; inside a caller's lease none is taken),
+# REPS (15), N (34668,262144: 142 MB and 1 GiB), CHECK_N (700), FETCH (128), ASYNC (0), WARPS (4: warps a segment CTA), LEAF (4096) and SEGB (1024): the leaf's
 # bytes and its segments' (Verity's row-seg/v1 fixes 1024-byte segments; any other SEGB is a FORMAT CHANGE).
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda/bin:$PATH
 export I=benchmarks/hash/intpipe PY=python3 PYTHONPATH=.
-W=$(mktemp -d /dev/shm/intpipe-hm96.XXXXXX)
+if [ -n "${HM96_W:-}" ]; then
+  W=$HM96_W
+  mkdir -p "$W"
+else
+  W=$(mktemp -d /dev/shm/intpipe-hm96.XXXXXX)
+  trap 'rm -rf "$W"' EXIT
+fi
 export W
-trap 'rm -rf "$W"' EXIT
+# a lease of its own, or the caller's when it already holds one
+lease() {
+  if [ -n "${GPU_LEASE_UUID:-}" ]; then bash -c "$1"; else gpu-lease 1 --wait ${LEASE_ARGS:---max-min 14} -- bash -c "$1"; fi
+}
 git rev-parse HEAD > "$O/commit.txt" 2>&1
 CC=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader | head -1 | tr -d .)
 case $CC in 120) SM=120a ;; *) SM=$CC ;; esac
@@ -28,7 +38,8 @@ export HM96_LEAF=${LEAF:-4096} HM96_SEG=${SEGB:-1024}
 export N=${N:-34668,262144} CHECK_N=${CHECK_N:-700} REPS=${REPS:-15}
 SIZES="$CHECK_N ${N//,/ }"
 export SIZES
-for c in $CANDS; do
+PHASE=${PHASE:-all}
+[ "$PHASE" != gpu ] && for c in $CANDS; do
   IFS=: read -r name kind r <<< "$c"
   ( nvcc -O3 -std=c++17 -gencode arch=compute_$SM,code=sm_$SM -Xptxas -v -DCAND_KIND="$kind" -DCAND_R="$r" -DSHA_ROLL=1 \
       -DFETCH="${FETCH:-128}" -DLOADER_ASYNC="${ASYNC:-0}" -DSEG_WARPS="${WARPS:-4}" \
@@ -42,6 +53,7 @@ for c in $CANDS; do
   done
 done
 wait
+[ "$PHASE" = prep ] && exit 0
 BINS=""
 for c in $CANDS; do
   IFS=: read -r name _ <<< "$c"
@@ -50,7 +62,7 @@ done
 export BINS
 cat "$O/rc.txt"
 # shellcheck disable=SC2086,SC2016
-gpu-lease 1 --wait ${LEASE_ARGS:---max-min 14} -- bash -c '
+lease '
   nvidia-smi --query-gpu=index,uuid,name,driver_version,compute_cap,clocks.sm,clocks.max.sm,power.limit --format=csv \
     -i "$GPU_LEASE_UUID" > "$O/gpu.txt" 2>&1
   for b in $BINS; do
@@ -78,7 +90,7 @@ done
 echo "checked:$CHECKED" >> "$O/rc.txt"
 export CHECKED
 # shellcheck disable=SC2086,SC2016
-[ -n "$CHECKED" ] && gpu-lease 1 --wait ${LEASE_ARGS:---max-min 14} -- bash -c '
+[ -n "$CHECKED" ] && lease '
   nvidia-smi --query-gpu=index,uuid,name,driver_version,compute_cap,clocks.sm,clocks.max.sm,power.limit --format=csv \
     -i "$GPU_LEASE_UUID" >> "$O/gpu.txt" 2>&1
   nvidia-smi --query-gpu=timestamp,clocks.sm,clocks.mem,power.draw,temperature.gpu,clocks_throttle_reasons.active \
