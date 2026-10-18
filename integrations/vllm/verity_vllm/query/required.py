@@ -366,7 +366,7 @@ class Population:
             del self.site[cid]
         for cid in refused:
             self.tp_faults.append(f"{self.P.call(cid).family} at {self.corr.implementation_path(self.site[cid])}: not one norm's collective "
-                                  f"(one `<norm>.weight` read, and no other collective of the step for that norm, expected)")
+                                  f"(one `<norm>.weight` read, and no other collective of the step for that norm unless all are fused, expected)")
 
     def _partial(self, port: str, kind: str, width: int, dtype: str) -> CallMember:
         member = (fmt.TP_SHARD_MEMBER if kind == "all_gather" else fmt.TP_PARTIAL_MEMBER).format(rank=self.rank)
