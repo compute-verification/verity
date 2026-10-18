@@ -119,4 +119,5 @@ masked prover's Ligerito against that model (`mid_lv0Z`), and `Level0HonestRun` 
 transcript and meets the model's final identity (`honestZ`); `Level0Opens` its openings passing the masked Merkle
 checks, level 0's over rows `EXTRA_LANES` wider (`ligeritoPZk_opens`, `merkleOkZ_of_opens`); `Level0Verifier` the last
 premise, the verifier returning the prover's record at its transcript (`verifier`); `Level0Complete` the four in
-`complete_jsonT_of_level0`, leaving the JSON specification and `MaskRankBound` (`complete_jsonT_closed`). -/
+`complete_jsonT_of_level0`, leaving the JSON specification and `MaskRankBound` (`complete_jsonT_closed`), at the
+record's prover `ZkTables.honestPR` (`complete_jsonT_honestPR`). -/
