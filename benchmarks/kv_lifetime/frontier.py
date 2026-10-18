@@ -129,9 +129,11 @@ def main() -> int:
     models = json.loads(a.models.read_text())["models"][a.model_name]
     rc = r_cap(models[a.lever], ph)
     r_engine = a.r_cap_node / a.engines if a.r_cap_node else rc["peak"]
-    # the engine's KV bytes re-prefilled a second, a GPU's share of them (the engine re-prefills on all its GPUs)
-    recompute = (ph.get("prefill_rows_per_s") or 0.0) * an["serve"]["kv_bytes_per_token"] * a.kv_scale \
-        / a.gpus_per_engine
+    # the engine's KV bytes re-prefilled a second, a GPU's share of them (the engine re-prefills on all its GPUs); a
+    # phase too light to batch a big prefill reads the engine's rate from the run's other phases
+    prefill = ph.get("prefill_rows_per_s") or max((p.get("prefill_rows_per_s") or 0.0 for p in an["phases"]),
+                                                  default=0.0)
+    recompute = prefill * an["serve"]["kv_bytes_per_token"] * a.kv_scale / a.gpus_per_engine
     if a.clock == "origin" and not (ph.get("frontier_origin") and recompute):
         raise SystemExit(f"{a.analysis} has no origin-clock frontier or prefill rate: rerun serve.py and analyze.py")
     rows = table(ph, pool, r_engine, a.r_in_node / a.engines, a.encode_Bps, a.clock, recompute or None, a.tau,
