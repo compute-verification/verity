@@ -91,9 +91,19 @@ endpoint_env = ["RESEARCH_EXPORT_ENDPOINT", "R2_ENDPOINT"]
 key_env = "AWS_ACCESS_KEY_ID"        # r2.env's pair lists it (fixtures_export.sh writes it with that pair); the export's
 secret_env = "AWS_SECRET_ACCESS_KEY" # read-only RESEARCH_EXPORT_ACCESS_KEY_ID gets 401 on ListObjectsV2
 
+[[r2.bucket]]
+label = "lean cache"
+bucket_env = "LEAN_CACHE_BUCKET"     # a name, not a secret: r2.env's pair lists it (same account and endpoint, 18 Oct)
+endpoint_env = ["LEAN_CACHE_R2_ENDPOINT", "R2_ENDPOINT"]
+key_env = "AWS_ACCESS_KEY_ID"
+secret_env = "AWS_SECRET_ACCESS_KEY"
+stale_after_h = 36                   # vy-lean-cache-daily publishes at 06:15Z each day
+writer = "Publisher: `vy-lean-cache-daily` on vy-nebius-1 (lean)."
+
 [neon]
 url_env = "STORE_INDEXER_DATABASE_URL"
 schemas = ["store_private"]
+report_schemas = ["store_public"]    # store_index.sh builds it only once /root/.config/verity/store-export.env exists
 size_alert_gib = 8                   # the plan's storage limit isn't recorded anywhere this lane reads; 1.25 GB on 18 Oct
 connections_share = 0.8
 index_stale_s = 1800                 # the store index writes `listings` every pass (~6 min)
@@ -103,7 +113,8 @@ budgets = ["/workspace/steward/research-notes/budgets.toml", "~/.research/notes/
 guard_state = "/root/.research/pods/guard-budgets.json"
 steward_log = "/data/steward/watch.log"   # its `ACCOUNT $B at $R/h` lines: RunPod's own rate for every pod and volume
 line_alert_share = 0.8               # a RunPod line at 80% of its cap (the guard itself terminates at 100%)
-runpod_runway_alert_h = 72           # the balance reaches the guard's balance_floor within 3 days
+runpod_runway_alert_h = 168          # the balance reaches the guard's balance_floor within 7 days: a top-up is Daniel's, and an
+                                     # empty balance stops this pod and can take its /data volume
 r2_alert_usd_per_month = 100         # no budget line covers R2; this is an alert line only
 
 # The keys that would close a gap no check here can cover, each said once in the digest while it is missing.
@@ -144,6 +155,12 @@ machines_d = ["/workspace/steward/research-notes/machines.d", "~/.research/notes
 [github]
 token_env = "GH_TOKEN"
 remaining_share = 0.1
+
+[jobs]
+url = "https://website-docs-sage.vercel.app"   # research.jobs.client's DEFAULT_URL
+token_env = "JOBS_TOKEN"             # `research jobs`' token (read here, never written)
+limit = 200
+stale_queued_h = 24                  # 18 Oct: 20 of audit-main's daily cron jobs queued, none ever claimed
 
 # Public endpoints, unauthenticated: an answer of 500 or more, or none, is an anomaly.
 [[http]]

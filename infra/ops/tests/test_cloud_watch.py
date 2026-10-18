@@ -139,10 +139,11 @@ def test_tail_match_reads_back_across_chunks(tmp_path):
 
 
 class FakeBucket:
-    """A ListObjectsV2 endpoint over `objects` (key -> size) that answers at most `page` keys after `start-after`."""
+    """A ListObjectsV2 endpoint over `objects` (key -> size) that answers at most `page` keys after `start-after`; `modified`
+    gives a key's LastModified."""
 
-    def __init__(self, objects: dict[str, int], page: int = 2):
-        self.objects, self.page, self.calls = objects, page, []
+    def __init__(self, objects: dict[str, int], page: int = 2, modified: dict[str, float] | None = None):
+        self.objects, self.page, self.calls, self.modified = objects, page, [], modified or {}
 
     def __call__(self, method, url, headers=None, body=None, timeout=30):
         assert method == "GET" and headers["Authorization"].startswith("AWS4-HMAC-SHA256 Credential=dummy-id/")
@@ -150,7 +151,9 @@ class FakeBucket:
         q = {k: v[0] for k, v in urllib.parse.parse_qs(url.split("?", 1)[1]).items()}
         keys = sorted(k for k in self.objects if k > q.get("start-after", ""))
         got, more = keys[:self.page], len(keys) > self.page
-        items = "".join(f"<Contents><Key>{su.escape(k)}</Key><Size>{self.objects[k]}</Size></Contents>" for k in got)
+        items = "".join(f"<Contents><Key>{su.escape(k)}</Key><Size>{self.objects[k]}</Size>"
+                        + (f"<LastModified>{W.iso(self.modified[k])[:-1]}.000Z</LastModified>" if k in self.modified else "")
+                        + "</Contents>" for k in got)
         return 200, (f'<ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">{items}'
                      f"<IsTruncated>{'true' if more else 'false'}</IsTruncated></ListBucketResult>").encode()
 
@@ -187,12 +190,50 @@ def test_r2_sweeps_a_bounded_number_of_pages_a_pass_and_names_the_biggest_writer
     assert state["r2"]["store"]["list_ops"]["2026-10"] == 2 + 1 + 2 + 2 + 2, "one class-A op a page"
 
 
+def test_a_bucket_with_no_new_object_within_its_stale_after_h_is_an_anomaly(tmp_path):
+    cfg = config(tmp_path)
+    cfg["r2"] = {**cfg["r2"], "bucket": [b for b in cfg["r2"]["bucket"] if b["label"] == "lean cache"]}
+    env = {**R2_ENV, "LEAN_CACHE_BUCKET": "dummy-lean"}
+    bucket = FakeBucket({"a.sha256.json": 10, "b.tar": 20}, page=1000, modified={"a.sha256.json": T0 - 12 * 86400, "b.tar": T0 - 13 * 86400})
+    state, rep = {}, W.Report()
+    W.check_r2(ctx(cfg, state, T0, env, http=bucket, clock=lambda: T0), rep)
+    (f,) = rep.findings
+    assert f.key == "r2|lean cache|stale" and "no new object for 12.0 d" in f.text and "`vy-lean-cache-daily`" in f.text
+    assert "newest write 2026-10-06T12:00:00Z" in rep.lines[0]
+    bucket.objects["c.sha256.json"], bucket.modified["c.sha256.json"] = 5, T0 + 600
+    rep = W.Report()
+    W.check_r2(ctx(cfg, state, T0 + 900, env, http=bucket, clock=lambda: T0 + 900), rep)
+    assert not [f for f in rep.findings if f.key.endswith("|stale")]
+
+
+def test_jobs_queued_past_a_day_are_one_anomaly_by_kind(tmp_path):
+    jobs = [{"id": 4, "kind": "audit-main", "enqueued_at": W.iso(T0 - 3600), "not_before": None},
+            {"id": 3, "kind": "check", "enqueued_at": W.iso(T0 - 3 * 86400), "not_before": W.iso(T0 + 3600)},
+            {"id": 2, "kind": "audit-main", "enqueued_at": W.iso(T0 - 2 * 86400), "not_before": W.iso(T0 - 2 * 86400)},
+            {"id": 1, "kind": "audit-main", "enqueued_at": W.iso(T0 - 3 * 86400), "not_before": None}]
+    seen = []
+
+    def http(method, url, headers=None, body=None, timeout=30):
+        seen.append((url, headers["Authorization"]))
+        return 200, json.dumps({"jobs": jobs}).encode()
+
+    rep = W.Report()
+    W.check_jobs(ctx(config(tmp_path), {}, T0, {"JOBS_TOKEN": "dummy"}, http=http), rep)
+    assert seen == [("https://website-docs-sage.vercel.app/api/jobs?state=queued&limit=200", "Bearer dummy")]
+    (f,) = rep.findings
+    assert f.key == "jobs|stale" and f.text.startswith("*2 jobs queued over 24 h") and "(2 `audit-main`); oldest #1 since 2026-10-15T12:00:00Z" in f.text
+    assert rep.lines == ["Job queue: 4 queued, oldest waiting 72.0 h"]
+    rep = W.Report()
+    W.check_jobs(ctx(config(tmp_path), {}, T0), rep)
+    assert rep.gaps == ["needs JOBS_TOKEN: the Job queue's queued jobs no worker claims"] and not rep.findings
+
+
 def test_neon_reads_through_psql_with_the_url_only_in_the_environment(tmp_path, monkeypatch):
     seen = {}
 
     def run(argv, env, stdin=""):
         seen.update(argv=argv, env=env, sql=stdin)
-        return 0, f"{9 * W.GIB}\t90\t100\t{T0 - 7200}\n", ""
+        return 0, f"{9 * W.GIB}\t90\t100\t{T0 - 7200}\t0\n", ""
 
     monkeypatch.setattr(W.shutil, "which", lambda name, path=None: "/usr/bin/psql")
     url = "postgresql://indexer:" + "pw-dummy" + "@ep-x.neon.example/store?sslmode=require&channel_binding=require"
@@ -202,7 +243,9 @@ def test_neon_reads_through_psql_with_the_url_only_in_the_environment(tmp_path, 
     assert seen["env"]["PGPASSWORD"] == "pw-dummy" and seen["env"]["PGCHANNELBINDING"] == "require"
     assert "store_private.listings" in seen["sql"]
     assert sorted(f.key for f in rep.findings) == ["neon|connections", "neon|size", "neon|store_private|stale"]
-    assert rep.lines == ["Neon: 9.00 GiB, 90 of 100 connections; store index last write `store_private` 2.0 h ago"]
+    assert "schemaname = 'store_public'" in seen["sql"]
+    assert rep.lines == [("Neon: 9.00 GiB, 90 of 100 connections; store index last write `store_private` 2.0 h ago; "
+                          "`store_public` has no tables (never built)")]
 
 
 def test_a_neon_failure_names_no_host_address_or_user(tmp_path, monkeypatch):

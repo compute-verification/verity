@@ -20,12 +20,15 @@ The checks (cloud_watch.toml holds every threshold, price and path):
   mtime). One with no success in twice its period is an anomaly.
 - **r2**: an incremental ListObjectsV2 sweep of each bucket, at most `page_cap` pages (1000 keys, one class-A op) a pass, resumed
   from the last key, so a complete sweep's totals per top-level prefix come every few passes at a bounded cost. Growth between
-  the last two sweeps above `max_gib_per_day`, or `mean_ratio` times the 7-day mean, is an anomaly naming the prefix that grew most.
-- **neon**: database size, connections against max_connections, and the store index's last write (max `listed_at`).
+  the last two sweeps above `max_gib_per_day`, or `mean_ratio` times the 7-day mean, is an anomaly naming the prefix that grew most;
+  so is a bucket with `stale_after_h` whose newest object is older than that (the Lean cache's daily publisher).
+- **neon**: database size, connections against max_connections, the store index's last write (max `listed_at`), and how many
+  tables each of `report_schemas` has (`store_public` is built only once the export's credential is on the pod).
 - **spend**: the budgets guard's state (RunPod balance, rate and each line's spend) against budgets.toml's live lines, the
   RunPod runway to the guard's balance floor, R2's month at Cloudflare's list price, and, when Nebius credentials and an
   instance list are available, each running VM's line: one on no line, on an expired line, or burning past its line is an anomaly.
-- **github**: the token's core rate limit; **http**: the public endpoints (Vercel's site, the Slack broker) answer below 500.
+- **github**: the token's core rate limit; **jobs**: Control's Job queue, where a job queued past `stale_queued_h` (from its
+  `not_before`) means no worker claims its kind; **http**: the public endpoints (Vercel's site, the Slack broker) answer below 500.
 """
 from __future__ import annotations
 
@@ -203,8 +206,8 @@ def sign(method: str, host: str, path: str, query: dict[str, str], key: str, sec
     return {**h, "Authorization": f"AWS4-HMAC-SHA256 Credential={key}/{scope},SignedHeaders={signed},Signature={sig}"}
 
 
-def list_page(ctx: Ctx, b: dict, after: str | None) -> tuple[list[tuple[str, int]], bool]:
-    """One ListObjectsV2 page of bucket `b` after key `after`: (key, size) pairs and whether more follow."""
+def list_page(ctx: Ctx, b: dict, after: str | None) -> tuple[list[tuple[str, int, float]], bool]:
+    """One ListObjectsV2 page of bucket `b` after key `after`: (key, size, last modified) and whether more follow."""
     u = urllib.parse.urlsplit(b["endpoint"])
     query = {"list-type": "2", "max-keys": "1000", **({"start-after": after} if after else {})}
     path = f"/{b['bucket']}"
@@ -213,7 +216,8 @@ def list_page(ctx: Ctx, b: dict, after: str | None) -> tuple[list[tuple[str, int
     if status != 200:
         raise Unreadable(f"R2 {b['label']}: ListObjectsV2 answered HTTP {status}")
     root = ET.fromstring(body)
-    keys = [(c.findtext(f"{S3_NS}Key"), int(c.findtext(f"{S3_NS}Size") or 0)) for c in root.iter(f"{S3_NS}Contents")]
+    keys = [(c.findtext(f"{S3_NS}Key"), int(c.findtext(f"{S3_NS}Size") or 0), epoch(c.findtext(f"{S3_NS}LastModified") or "1970-01-01T00:00:00Z"))
+            for c in root.iter(f"{S3_NS}Contents")]
     return keys, root.findtext(f"{S3_NS}IsTruncated") == "true"
 
 
@@ -228,10 +232,12 @@ def buckets(ctx: Ctx, rep: Report) -> list[dict]:
         endpoint = next((ctx.env[e] for e in b["endpoint_env"] if ctx.env.get(e)), None)
         missing = [e for e in need if not ctx.env.get(e)] + ([] if endpoint else [" or ".join(b["endpoint_env"])])
         if missing:
-            rep.gaps.append(f"needs {', '.join(missing)}: R2 bucket `{b['label']}`'s size and growth")
+            rep.gaps.append(f"needs {', '.join(missing)}: R2 bucket `{b['label']}`'s size and growth"
+                            + (f", and its newest object within {b['stale_after_h']} h" if b.get("stale_after_h") else ""))
             continue
         out.append({"label": b["label"], "bucket": ctx.env[b["bucket_env"]], "key": ctx.env[b["key_env"]],
-                    "secret": ctx.env[b["secret_env"]], "endpoint": endpoint})
+                    "secret": ctx.env[b["secret_env"]], "endpoint": endpoint, "stale_after_h": b.get("stale_after_h"),
+                    "writer": b.get("writer", "")})
     return out
 
 
@@ -263,10 +269,11 @@ def check_r2(ctx: Ctx, rep: Report) -> None:
         while pages < (ctx.pages or cfg["page_cap"]):
             keys, more = list_page(ctx, b, st["after"])
             pages += 1
-            for k, size in keys:
+            for k, size, modified in keys:
                 acc = st["partial"].setdefault(top(k), [0, 0])
                 acc[0] += size
                 acc[1] += 1
+                st["newest"] = max(st.get("newest") or 0, modified)
             if keys:
                 st["after"] = keys[-1][0]
             if not more:
@@ -276,8 +283,9 @@ def check_r2(ctx: Ctx, rep: Report) -> None:
         month = iso(ctx.now)[:7]
         st["list_ops"][month] = st["list_ops"].get(month, 0) + pages
         if done:
-            st["sweeps"] = (st["sweeps"] + [{"t": ctx.now, "started": st["started"], "prefixes": st["partial"]}])[-cfg["keep_sweeps"]:]
-            st.update(after=None, partial={}, started=ctx.now)
+            st["sweeps"] = (st["sweeps"] + [{"t": ctx.now, "started": st["started"], "prefixes": st["partial"],
+                                             "newest": st.get("newest")}])[-cfg["keep_sweeps"]:]
+            st.update(after=None, partial={}, started=ctx.now, newest=None)
         if not st["sweeps"]:
             n = sum(v[1] for v in st["partial"].values())
             rep.lines.append(f"R2 `{b['label']}`: first sweep in progress, {n:,} objects listed so far")
@@ -285,8 +293,14 @@ def check_r2(ctx: Ctx, rep: Report) -> None:
         last = st["sweeps"][-1]
         size, count = sum(v[0] for v in last["prefixes"].values()), sum(v[1] for v in last["prefixes"].values())
         biggest = sorted(last["prefixes"].items(), key=lambda kv: -kv[1][0])[:5]
-        rep.lines.append(f"R2 `{b['label']}`: {size / GIB:,.1f} GiB in {count:,} objects (sweep of {iso(last['t'])}); largest "
+        newest = last.get("newest")
+        rep.lines.append(f"R2 `{b['label']}`: {size / GIB:,.1f} GiB in {count:,} objects (sweep of {iso(last['t'])}"
+                         + (f", newest write {iso(newest)}" if newest else "") + "); largest "
                          + ", ".join(f"`{p}` {v[0] / GIB:,.1f} GiB" for p, v in biggest))
+        if b["stale_after_h"] and newest and last["t"] - newest > b["stale_after_h"] * 3600:
+            rep.findings.append(Finding(f"r2|{b['label']}|stale", f"*R2 `{b['label']}` has had no new object for {ago(last['t'] - newest)}* "
+                                                                   f"(newest {iso(newest)}; expected within {b['stale_after_h']} h). "
+                                                                   + b["writer"]))
         g = growth(st["sweeps"])
         if g is None:
             continue
@@ -336,16 +350,21 @@ def check_neon(ctx: Ctx, rep: Report) -> None:
         return
     sql = ("select pg_database_size(current_database()), (select count(*) from pg_stat_activity), "
            "(select setting from pg_settings where name = 'max_connections')"
-           + "".join(f", (select extract(epoch from max(listed_at)) from {s}.listings)" for s in cfg["schemas"]) + ";")
+           + "".join(f", (select extract(epoch from max(listed_at)) from {s}.listings)" for s in cfg["schemas"])
+           + "".join(f", (select count(*) from pg_stat_user_tables where schemaname = '{s}')" for s in cfg.get("report_schemas", []))
+           + ";")
     pg = pg_env(url)
     env = {"PATH": ctx.env.get("PATH", "/usr/bin:/bin"), "PGCONNECT_TIMEOUT": "20", **pg}
     rc, out, err = ctx.run([cfg.get("psql", "psql"), "-X", "-q", "-A", "-t", "-F", "\t", "-v", "ON_ERROR_STOP=1", "-f", "-"], env, sql)
     if rc != 0:
         raise Unreadable(f"Neon: psql exited {rc}: {scrub(err, pg)}")
-    size, conns, maxconn, *writes = out.strip().split("\t")
+    size, conns, maxconn, *rest = out.strip().split("\t")
     size, conns, maxconn = int(size), int(conns), int(maxconn)
+    writes, tables = rest[:len(cfg["schemas"])], rest[len(cfg["schemas"]):]
     rep.lines.append(f"Neon: {size / GIB:,.2f} GiB, {conns} of {maxconn} connections; store index last write "
-                     + ", ".join(f"`{s}` {ago(ctx.now - float(w)) + ' ago' if w else 'never'}" for s, w in zip(cfg["schemas"], writes)))
+                     + ", ".join(f"`{s}` {ago(ctx.now - float(w)) + ' ago' if w else 'never'}" for s, w in zip(cfg["schemas"], writes))
+                     + "".join(f"; `{s}` has {n} tables" if int(n) else f"; `{s}` has no tables (never built)"
+                               for s, n in zip(cfg.get("report_schemas", []), tables)))
     if size > cfg["size_alert_gib"] * GIB:
         rep.findings.append(Finding("neon|size", f"*Neon database at {size / GIB:,.2f} GiB*, over the {cfg['size_alert_gib']} GiB alert line."))
     if conns > cfg["connections_share"] * maxconn:
@@ -575,6 +594,32 @@ def check_github(ctx: Ctx, rep: Report) -> None:
                                                    f"for `{cfg['token_env']}` until {iso(core['reset'])}."))
 
 
+def check_jobs(ctx: Ctx, rep: Report) -> None:
+    cfg = ctx.cfg["jobs"]
+    token = ctx.env.get(cfg["token_env"])
+    if not token:
+        rep.gaps.append(f"needs {cfg['token_env']}: the Job queue's queued jobs no worker claims")
+        return
+    status, body = ctx.http("GET", f"{cfg['url']}/api/jobs?state=queued&limit={cfg['limit']}",
+                            {"Authorization": f"Bearer {token}", "User-Agent": "verity-cloud-watch"})
+    if status != 200:
+        raise Unreadable(f"Job queue answered HTTP {status}")
+    jobs = json.loads(body)["jobs"]
+    waiting = sorted(((ctx.now - max(epoch(j["enqueued_at"]), epoch(j["not_before"]) if j.get("not_before") else 0), j) for j in jobs),
+                     key=lambda aj: aj[0])
+    old = [(age, j) for age, j in waiting if age > cfg["stale_queued_h"] * 3600]
+    rep.lines.append(f"Job queue: {len(jobs)}{'+' if len(jobs) >= cfg['limit'] else ''} queued"
+                     + (f", oldest waiting {ago(waiting[-1][0])}" if waiting else ""))
+    if old:
+        kinds: dict[str, int] = {}
+        for _, j in old:
+            kinds[j["kind"]] = kinds.get(j["kind"], 0) + 1
+        age, j = old[-1]
+        rep.findings.append(Finding("jobs|stale", f"*{len(old)} jobs queued over {cfg['stale_queued_h']} h with no worker claiming them* ("
+                                                  + ", ".join(f"{n} `{k}`" for k, n in sorted(kinds.items())) + f"); oldest #{j['id']} "
+                                                  f"since {iso(ctx.now - age)}. `research jobs list --state queued`."))
+
+
 def check_http(ctx: Ctx, rep: Report) -> None:
     for ep in ctx.cfg.get("http", []):
         try:
@@ -591,7 +636,7 @@ def check_http(ctx: Ctx, rep: Report) -> None:
 
 KEY_PREFIX = {"loops": "loop"}
 CHECKS: dict[str, Callable[[Ctx, Report], None]] = {"loops": check_loops, "r2": check_r2, "neon": check_neon, "spend": check_spend,
-                                                    "github": check_github, "http": check_http}
+                                                    "github": check_github, "jobs": check_jobs, "http": check_http}
 
 
 # ---- the pass --------------------------------------------------------------------------------------------------------------------
