@@ -35,17 +35,15 @@ def parseLaw (text : String) : V Json := do
       return Json.mkObj [("law", "bernoulli"), ("p", Json.str s!"{num.toNat!}/{den.toNat!}")]
   throw s!"a law is subset:K, stratified:K, work:K or bernoulli:NUM/DEN, not {pyRepr text}"
 
-/-- The selection rules a `Stream` runs: every unit (`All`), a one-stage law in `parseLaw`'s syntax (`Law`), and a
-two-stage rule's replay law with every proof unit of a drawn RU checked (`TwoStage` at `check` `"all"`, each RU one
-instance of the check's unit). -/
+/-- The selection rules: every unit (`All`) and a one-stage law in `parseLaw`'s syntax (`Law`). `twoStage`, a two-stage
+rule's replay law, is retired: `Rule.ofJson` never reads it, and it stays only while the claims' proofs still name it. -/
 inductive Rule where
   | all
   | law (text : String)
   | twoStage (replay : String)
 
-/-- A rule as `to_json` writes it, exactly its keys: `{rule: all}`, `{rule: law, law}` or
-`{rule: two-stage, replay, check: all}`, its law text one `parseLaw` reads, as `service.Law` refuses any other when it is
-made. A stream refuses a two-stage rule's count and a sequential rule. -/
+/-- A rule as `to_json` writes it, exactly its keys: `{rule: all}` or `{rule: law, law}`, its law text one `parseLaw`
+reads, as `service.Law` refuses any other when it is made. A stream refuses a sequential rule. -/
 def Rule.ofJson (j : Json) : V Rule := do
   match getD j "rule" with
   | .str "all" => if keys? j == some #["rule"] then return .all
@@ -54,13 +52,8 @@ def Rule.ofJson (j : Json) : V Rule := do
       if let .str t := getD j "law" then
         let _ ← parseLaw t
         return .law t
-  | .str "two-stage" =>
-    if keys? j == some #["check", "replay", "rule"] && jeq (getD j "check") "all" then
-      if let .str t := getD j "replay" then
-        let _ ← parseLaw t
-        return .twoStage t
   | _ => pure ()
-  throw "a selection rule the stream runs is {rule: all}, {rule: law, law} or {rule: two-stage, replay, check: all}"
+  throw "a selection rule the stream runs is {rule: all} or {rule: law, law}"
 
 /-- `service.selection_law`: the law a rule names over `n` units, before `Draw.derive` expands it. -/
 def Rule.lawOver : Rule → Nat → V Json

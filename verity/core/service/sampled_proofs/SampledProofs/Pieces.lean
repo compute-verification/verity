@@ -22,8 +22,6 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 * `check_public`: the proof service's public-items rule on a registration record (`Service.checkPublic`);
 * `check_verdicts`: the verdicts' share of a proof service outcome (`Service.checkVerdicts`);
 * `run`: the stream's run of one registration from its public check through its verdict (`Run.run`);
-* `replay_units`, `proof_units`: the two-stage law's samplers on given bytes of the verifier's own coins
-  (`TwoStage.selectReplayUnits`, `TwoStage.selectProofUnits`);
 * `hello`: the run's Hello on its record, its coin tree at run scope (`Hello.check`).
 
 `sampled-proofs-verifier` serves those the verifier of record runs (`verifier`): `registration`, `matches_public`,
@@ -34,7 +32,6 @@ import SampledProofs.OneStage
 import SampledProofs.Slots
 import SampledProofs.Service
 import SampledProofs.Run
-import SampledProofs.TwoStage
 import SampledProofs.Hello
 
 namespace SampledProofs.Pieces
@@ -102,7 +99,7 @@ def checkDraw (j : Json) : V Json := do
   return (Draw.checkDrawFull (getD j "draw") (getD j "population") (getD j "law")).toJson
 
 /-- `{"law", "population", "source"}`, the law an object, the population a natural number and the source hex, to the draw
-`two_stage.draw_first` samples from the source's bytes; refused where it raises. -/
+`coins.draw_first` samples from the source's bytes; refused where it raises. -/
 def draw (j : Json) : V Json := do
   if !(getD j "law" matches .obj _) then throw "law is not an object"
   let some n := nat? (getD j "population") | throw "population is not a natural number"
@@ -268,25 +265,16 @@ private def valuesOf (j : Json) (what : String) : V (Array Service.Value) := do
     | .str name, .bool registered => pure ({ name, registered } : Service.Value)
     | _, _ => throw "a value is not a string name with a boolean"
 
-/-- `{"params", "record", "rule", "values", "interior_values", "public", "challenger", "received", "source", "closure",
-"interior", "sessions", "verdicts", "outputs", "statement", "delta", "proved_units", "instances", "served",
-"session_roots"}` to the stream's run of one registration (`Run.run`): `registration`'s parameters, the record,
-`select`'s rule, closure map and hex source, `check_public`'s boundary and interior values and declared items, the
-challenger's name and the log's length at the receipt (strings), the interiors' registration (null, or `{"params",
-"record", "received"}`), `check_verdicts`' sessions, verdicts and outputs, and `record`'s statement, δ, served units and
-session roots, with the proved units and instances null for the draw's own. -/
+/-- `{"params", "record", "rule", "values", "public", "challenger", "received", "source", "closure", "sessions",
+"verdicts", "outputs", "statement", "delta", "proved_units", "instances", "served", "session_roots"}` to the stream's run
+of one registration (`Run.run`): `registration`'s parameters, the record, `select`'s rule, closure map and hex source,
+`check_public`'s values and declared items, the challenger's name and the log's length at the receipt (strings),
+`check_verdicts`' sessions, verdicts and outputs, and `record`'s statement, δ, served units and session roots, with the
+proved units and instances null for the draw's own. -/
 def run (j : Json) : V Json := do
   let p ← params (getD j "params")
   let rule ← Select.Rule.ofJson (getD j "rule")
   let values ← valuesOf (getD j "values") "values"
-  let innerValues ← match getD j "interior_values" with
-    | .null => pure #[]
-    | vs => valuesOf vs "interior_values"
-  let interior ← match getD j "interior" with
-    | .null => pure none
-    | ir => do
-      let .str received := getD ir "received" | throw "the interior's received is not a string"
-      pure (some ({ params := ← params (getD ir "params"), record := getD ir "record", received } : Run.Interior))
   let .arr ps := getD j "public" | throw "public is not a list"
   let declared ← ps.mapM fun
     | .str s => pure s
@@ -313,26 +301,10 @@ def run (j : Json) : V Json := do
     | x => match int? x with
       | some n => pure (some n)
       | none => throw "instances is not an integer"
-  Run.run { params := p, record := getD j "record", rule, values, innerValues, declared, challenger, received,
-            source := ← Flock.unhex (← Flock.J.str j "source" "the run"), closure, interior, sessions, verdicts, outputs,
+  Run.run { params := p, record := getD j "record", rule, values, declared, challenger, received,
+            source := ← Flock.unhex (← Flock.J.str j "source" "the run"), closure, sessions, verdicts, outputs,
             statement := getD j "statement", delta := getD j "delta", provedUnits, instances,
             served := getD j "served", sessionRoots := getD j "session_roots" }
-
-/-- `{"law", "units", "source"}` (a `TwoStageLaw.to_json`, RUs as `[index, class, n_v]`, hex coins) to the first stage's
-`{"units": the drawn RUs' indices, "read"}`. -/
-def replayUnits (j : Json) : V Json := do
-  let law ← TwoStage.lawOfJson (getD j "law")
-  let units ← TwoStage.rusOfJson (getD j "units")
-  let (drawn, read) ← TwoStage.selectReplayUnits (← Flock.unhex (← Flock.J.str j "source" "the draw")) law units
-  return Json.mkObj [("units", intsJson drawn), ("read", Lean.toJson read)]
-
-/-- `{"law", "selected", "source"}` to the second stage's `{"units": [[index, positions]], "read"}`. -/
-def proofUnits (j : Json) : V Json := do
-  let law ← TwoStage.lawOfJson (getD j "law")
-  let selected ← TwoStage.rusOfJson (getD j "selected")
-  let (picks, read) ← TwoStage.selectProofUnits (← Flock.unhex (← Flock.J.str j "source" "the draw")) law selected
-  return Json.mkObj [("units", Json.arr (picks.map fun (i, ps) => Json.arr #[Lean.toJson i, natsJson ps])),
-    ("read", Lean.toJson read)]
 
 def table : List (String × (Json → V Json)) :=
   [("decode", decode), ("partition", partition), ("registration", registration), ("registered", registered),
@@ -340,8 +312,7 @@ def table : List (String × (Json → V Json)) :=
    ("check_proved", checkProved),
    ("bound", bound),
    ("verdict", verdict), ("matches_public", matchesPublic), ("session_registered", sessionRegistered), ("record", record),
-   ("check_public", checkPublic), ("check_verdicts", checkVerdicts), ("run", run), ("replay_units", replayUnits),
-   ("proof_units", proofUnits), ("hello", Hello.check)]
+   ("check_public", checkPublic), ("check_verdicts", checkVerdicts), ("run", run), ("hello", Hello.check)]
 
 def verifier : List (String × (Json → V Json)) :=
   [("registration", registration), ("matches_public", matchesPublic), ("select", select), ("check_draw", checkDraw),

@@ -4,7 +4,7 @@ on drawn programs, laws, records, draws and verdicts, valid ones and one or two 
 
 The reference is `one_stage` itself (`registration.check`, `draw.derive`, `check_draw`, `audit.audit_record`, `profile`,
 `wrong_units`, `registered.registered_entries` and `domain`) behind the protocol's decoders, which this file writes as the
-Lean reads them (`OneStage.paramsOfJson`, `commitmentOf`, `evidenceOf`), for the `draw` piece `two_stage.draw_first` on
+Lean reads them (`OneStage.paramsOfJson`, `commitmentOf`, `evidenceOf`), for the `draw` piece `coins.draw_first` on
 `OwnRandomness` over the given bytes, for the `select` piece the challenger's draw from a Spec's selection rule on
 (`service.selection_law`, `draw.derive` and `service.select_draw` on fixed coins, with the bytes it read), for the
 `slots` piece that draw in the claims' slots, read off `partition.strata`, `partition.unit_gates` and the root's input
@@ -45,8 +45,7 @@ from verity.core.protocols.profile import Stratified, Stratum
 from verity.core.protocols.sampled_proofs import service
 from verity.core.protocols.sampled_proofs.one_stage import (audit, draw as DR, hello as H, partition as P, registered as G,
                                                             registration as R)
-from verity.core.protocols.sampled_proofs.two_stage import (OwnRandomness, ReplayUnit, Stage, TwoStageLaw, draw_first,
-                                                            select_proof_units, select_replay_units)
+from verity.core.protocols.sampled_proofs.coins import OwnRandomness, draw_first
 from verity.ml.circuits import codec, partition_object as PO
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.program import Program, input_id, is_input
@@ -224,19 +223,6 @@ def _population(members: tuple[tuple[int, int], ...]) -> str:
     program = P.mixed_population_program([(MEMBERS[t], n) for t, n in members])
     PROGRAMS[PO.program_sha512(program)] = program
     return D.canonical(codec.encode_program(program))
-
-
-@functools.cache
-def _interior_setup(n: int, query: str) -> Setup:
-    """`PAIR`'s population over K = `n` proved RUs under the run's `query` (canonical JSON), its program put among
-    `PROGRAMS`, with the ports of the values a two-stage Spec commits after the draw (`y` and `z`, which no boundary
-    has)."""
-    s = Setup(P.population_program(PAIR, n), json.loads(query))
-    PROGRAMS[s.sha512] = s.program
-    part = P.partition(s.program, s.query)
-    s.ports = {q: {"domain": R.served_domain(s.sha512, P.digest(part), q, schema, leaves * n, "r-test"), "leaves": leaves * n}
-               for q, schema, leaves in (("y", "u16", 2), ("z", "hm96-sha512/row/v1", 1))}
-    return s
 
 
 @functools.cache
@@ -611,18 +597,13 @@ def draw(j):
 
 
 def _rule(j) -> service.Selection:
-    """`Select.Rule.ofJson`: a selection rule as `to_json` writes it, exactly its keys, of the kinds a `Stream` runs (a
-    two-stage rule at `check="all"`)."""
+    """`Select.Rule.ofJson`: a selection rule as `to_json` writes it, exactly its keys, of the kinds a `Stream` runs."""
     kind = j.get("rule") if isinstance(j, dict) else None
     try:
         if kind == "all" and set(j) == {"rule"}:
             return service.All()
         if kind == "law" and set(j) == {"law", "rule"} and isinstance(j["law"], str):
             return service.Law(j["law"])
-        if kind == "two-stage" and set(j) == {"check", "replay", "rule"} and isinstance(j["replay"], str):
-            rule = service.TwoStage(service.Law(j["replay"]), j["check"])
-            if rule.check == "all":
-                return rule
     except ValueError as e:
         raise D.Reject(str(e)) from None
     raise D.Reject("not a selection rule the stream runs")
@@ -890,15 +871,11 @@ def _receipt(rec, challenger: str, received: str) -> dict:
 
 def run(j):
     """`Run.run`: a `Stream`'s run of one registration from its public check through its verdict, the pieces above in its
-    order. `register`: `check_public` on the boundary values and declared items, the population, R1-R7 under
+    order. `register`: `check_public` on the values and declared items, the population, R1-R7 under
     `service.selection_law` over it, a law whose drawn count varies (`service.count_varies`: `shapes`), and the
-    receipt; `select`: the draw from the source's bytes (`select`); `interior`
-    (`register_interiors`): a two-stage rule that drew some RU, `check_public` on the interior values, the K proved RUs'
-    population, R1-R7 on the interiors' copies under the run's query and `subset:K`, and the receipt; `deliver`: one or
-    more sessions, each matching `service._DIGEST`, and the interiors registered first when a two-stage rule drew some RU;
-    `outcome`: `check_verdicts`, then the audit record (`record`) over the draw's proved units unless given, with the
-    interiors' over theirs and the sessions' roots split between the two by the interior values' names, their acceptance
-    the symbol and the first verdict of record's public outputs shown on an accept. A step that refuses gives `{"step",
+    receipt; `select`: the draw from the source's bytes (`select`); `deliver`: one or more sessions, each matching
+    `service._DIGEST`; `outcome`: `check_verdicts`, then the audit record (`record`) over the draw's proved units unless
+    given, its acceptance the symbol and the first verdict of record's public outputs shown on an accept. A step that refuses gives `{"step",
     "codes"}`; inputs the Lean decodes before the run (`Pieces.run`) are refused up front."""
     j = _json(j)
     if not isinstance(j, dict):
@@ -906,12 +883,6 @@ def run(j):
     p = _params_of(j)
     rule = _rule(j.get("rule"))
     vs, ps = _values_of(j.get("values")), j.get("public")
-    ivs = [] if j.get("interior_values") is None else _values_of(j["interior_values"])
-    ir = j.get("interior")
-    if ir is not None:
-        if not (isinstance(ir, dict) and isinstance(ir.get("received"), str)):
-            raise D.Reject("the interior's received is not a string")
-        ip = _params_of(ir)
     if not (isinstance(ps, list) and all(isinstance(i, str) for i in ps)):
         raise D.Reject("a declared item is not a string")
     if not (isinstance(j.get("challenger"), str) and isinstance(j.get("received"), str)):
@@ -954,29 +925,8 @@ def run(j):
     codes = DR.check_draw(drawn["draw"], rec, derived).codes
     if codes:
         return {"codes": list(codes), "step": "select"}
-    size, staged = len(DR.proved(drawn["draw"])), isinstance(rule, service.TwoStage)
-    inner = None
-    if ir is not None:
-        if not staged:
-            return {"codes": ["rule"], "step": "interior"}
-        if not size:
-            return {"codes": ["interior-empty"], "step": "interior"}
-        irec = ir.get("record")
-        pub = check_public({"public": ps, "query": j["params"]["query"], "record": irec, "scheme": p["scheme"], "values": ivs})
-        if pub["codes"]:
-            return {"codes": pub["codes"], "step": "interior"}
-        if not (isinstance(irec, dict) and _int(irec.get("population")) and irec["population"] == size):
-            return {"codes": ["interior-population"], "step": "interior"}
-        ilaw = {"k": size, "law": "subset"}
-        codes = _registration({**ip, "law": ilaw, "query": p["query"]}, irec)
-        if codes:
-            return {"codes": list(codes), "step": "interior"}
-        inner = (irec, _receipt(irec, j["challenger"], ir["received"]), ilaw,
-                 {**ilaw, "population": size, "units": list(range(size))})
     if not sessions or not all(isinstance(s, str) and service._DIGEST.match(s) for s in sessions):
         return {"codes": ["sessions"], "step": "deliver"}
-    if staged and size and inner is None:
-        return {"codes": ["interior"], "step": "deliver"}
     held = check_verdicts({"outputs": outputs, "sessions": sessions, "verdicts": verdicts})
     if held["codes"]:
         return {"codes": held["codes"], "step": "outcome"}
@@ -984,97 +934,14 @@ def run(j):
     shown = dict(verdicts[of_record[0]]["public"]) if outputs else {}
     proved = proved if proved is not None else DR.proved(drawn["draw"])
     instances = len(proved) if instances is None else instances
-    roots, inner_roots = j.get("session_roots"), None
-    if staged and roots is not None:
-        if not isinstance(roots, dict):
-            raise D.Reject("session_roots is not an object")
-        names = {v["name"] for v in ivs}
-        roots, inner_roots = ({q: r for q, r in roots.items() if (q in names) is side} for side in (False, True))
-    common = {"delta": j.get("delta"), "instances": instances, "sessions": sessions, "statement": j.get("statement"),
-              "verdicts": verdicts}
-    out = audit_record_of({**common, "draw": drawn["draw"], "law": derived, "proved_units": proved, "receipt": receipt,
-                           "registration": rec, "served": j.get("served"), "session_roots": roots})
+    out = audit_record_of({"delta": j.get("delta"), "draw": drawn["draw"], "instances": instances, "law": derived,
+                           "proved_units": proved, "receipt": receipt, "registration": rec, "served": j.get("served"),
+                           "session_roots": j.get("session_roots"), "sessions": sessions, "statement": j.get("statement"),
+                           "verdicts": verdicts})
     accepted = out["accepted"] is True
-    interior = None
-    if inner is not None:
-        irec, ireceipt, ilaw, idraw = inner
-        iout = audit_record_of({**common, "draw": idraw, "law": ilaw, "proved_units": list(range(size)), "receipt": ireceipt,
-                                "registration": irec, "served": None, "session_roots": inner_roots})
-        accepted = accepted and iout["accepted"] is True
-        interior = {"audit": codec.canonical_json(iout).decode(), "receipt": ireceipt}
-    return {"audit": codec.canonical_json(out).decode(), "draw": drawn["draw"], "interior": interior,
+    return {"audit": codec.canonical_json(out).decode(), "draw": drawn["draw"],
             "public": shown if accepted else {}, "read": drawn["read"], "receipt": receipt,
             "symbol": "accept" if accepted else "reject"}
-
-
-def _two_stage_law(j) -> TwoStageLaw:
-    """`TwoStage.lawOfJson`: `{class: stage}` as `TwoStageLaw.to_json` writes it, each stage exactly `{"p", "k"}` (`p`
-    NUM/DEN or NUM) or `{"law", "k"}` (a one-stage law object), `k` null or a natural number, and refused where `Stage`
-    refuses it."""
-    if not isinstance(j, dict):
-        raise D.Reject("a two-stage law is an object of stages")
-    stages = {}
-    for cls, s in j.items():
-        if not (isinstance(s, dict) and set(s) in ({"k", "p"}, {"k", "law"})):
-            raise D.Reject("a stage is {p, k} or {law, k}")
-        if not (s["k"] is None or _nat(s["k"])):
-            raise D.Reject("a stage needs k >= 0")
-        if "p" in s:
-            num, sep, den = s["p"].partition("/") if isinstance(s["p"], str) else ("", "", "")
-            if not (DR.digits(num) and (not sep or DR.digits(den) and int(den) > 0)):
-                raise D.Reject("a stage's p is NUM/DEN")
-            first = Fraction(int(num), int(den) if sep else 1)
-        elif isinstance(s["law"], dict):
-            first = s["law"]
-        else:
-            raise D.Reject("a stage's law is a one-stage law object")
-        try:
-            stages[cls] = Stage(first, s["k"])
-        except (ValueError, TypeError) as e:
-            raise D.Reject(str(e)) from None
-    return TwoStageLaw(stages)
-
-
-def _rus(j) -> list[ReplayUnit]:
-    if not (isinstance(j, list) and all(isinstance(u, list) and len(u) == 3 and _int(u[0]) and isinstance(u[1], str)
-                                        and _nat(u[2]) for u in j)):
-        raise D.Reject("replay units are a list of [index, class, n_v]")
-    return [ReplayUnit(*u) for u in j]
-
-
-def _two_stage_draw(j, units: str, sample):
-    """`sample` on the case's law and RUs, the source's bytes read in order (`OwnRandomness` raises `ValueError` when they
-    run out), with the number read; it raises `ValueError` and `KeyError` where Lean refuses."""
-    j = _json(j)
-    if not isinstance(j, dict):
-        raise D.Reject("not an object")
-    law, rus = _two_stage_law(j.get("law")), _rus(j.get(units))
-    if not isinstance(j.get("source"), str):
-        raise D.Reject("source is not hex")
-    src, at = PR.unhex(j["source"]), 0
-
-    def coins(n: int) -> bytes:
-        nonlocal at
-        b = src[at:at + n]
-        at += len(b)
-        return b
-    try:
-        out = sample(OwnRandomness(coins), law, rus)
-    except (ValueError, KeyError) as e:
-        raise D.Reject(str(e)) from None
-    return out, at
-
-
-def replay_units(j):
-    """`select_replay_units`: the drawn RUs' indices in the given order, and the bytes read."""
-    out, read = _two_stage_draw(j, "units", select_replay_units)
-    return {"read": read, "units": [u.index for u in out]}
-
-
-def proof_units(j):
-    """`select_proof_units`: each selected RU's index and the positions checked in it, in order, and the bytes read."""
-    out, read = _two_stage_draw(j, "selected", select_proof_units)
-    return {"read": read, "units": [[i, list(ps)] for i, ps in out.items()]}
 
 
 def hello(j):
@@ -1623,7 +1490,8 @@ LAW_TEXTS = st.one_of(
     st.builds(lambda num, den: f"bernoulli:{num}/{den}", st.integers(0, 12), st.integers(0, 12)),
     st.sampled_from(ODD_LAW_TEXTS))
 #: Rules a stream doesn't run, or that aren't rules as `to_json` writes them.
-ODD_RULES = [{"check": 2, "replay": "subset:1", "rule": "two-stage"}, {"check": "some", "replay": "subset:1", "rule": "two-stage"},
+ODD_RULES = [{"check": "all", "replay": "subset:1", "rule": "two-stage"},
+             {"check": 2, "replay": "subset:1", "rule": "two-stage"}, {"check": "some", "replay": "subset:1", "rule": "two-stage"},
              {"check": True, "replay": "subset:1", "rule": "two-stage"}, {"replay": "subset:1", "rule": "two-stage"},
              {"law": "uniform:3", "population": "n", "rule": "sequential"}, {"rule": "all", "x": 1}, {"law": 5, "rule": "law"},
              {"rule": "law"}, {"law": "subset:1", "rule": "law", "x": 1}, {"law": ["subset:1"], "rule": "law"},
@@ -1645,7 +1513,7 @@ def closure_maps(draw, n: int) -> list:
 @st.composite
 def selections(draw) -> dict:
     """The select piece's input on a random partition: a rule of each kind the stream runs (its k within the population),
-    a two-stage rule's replay law as often as a law, the work table naming every template for a work law (sometimes
+    the work table naming every template for a work law (sometimes
     with a template's work 0, or a bad entry), mostly a closure map for a work law, and the coins."""
     desc, query, n = draw(partitions())
     kind = draw(st.sampled_from(["work", "stratified", "subset", "bernoulli", "work", "all"]))
@@ -1655,7 +1523,7 @@ def selections(draw) -> dict:
         den = draw(st.integers(1, 12))
         text = (f"bernoulli:{draw(st.integers(0, den))}/{den}" if kind == "bernoulli"
                 else f"{kind}:{draw(st.integers(1, max(n, 1)))}")
-        rule = draw(st.sampled_from([{"law": text, "rule": "law"}, {"check": "all", "replay": text, "rule": "two-stage"}]))
+        rule = {"law": text, "rule": "law"}
     table = None
     if kind == "work":
         table = {t: draw(st.integers(1, 4) | WORK_ENTRY) for t in WORK_IDS}
@@ -1673,8 +1541,7 @@ def _with(field: str, values):
 #: junk), the work table (none, empty, junk), the closure map (any law's, malformed, a unit twice), the query, the
 #: program, the coins (short, junk) or a field missing.
 SELECT_CHANGES = [
-    (_with("rule", None), st.one_of(LAW_TEXTS.map(lambda t: {"law": t, "rule": "law"}),
-                                    LAW_TEXTS.map(lambda t: {"check": "all", "replay": t, "rule": "two-stage"}))),
+    (_with("rule", None), LAW_TEXTS.map(lambda t: {"law": t, "rule": "law"})),
     (_with("rule", None), st.sampled_from(ODD_RULES) | JSON),
     (_with("work_table", None), st.sampled_from([None, {}, 5, [], {PAIR.id: 1}]) | JSON),
     (_with("closure", None), st.sampled_from([[], [[0, []]], [[0, [1]], [0, [2]]], [[0, 1]], [[0]], [["0", [1]]], [[0, [True]]],
@@ -1893,14 +1760,13 @@ def _law_text(law) -> str | None:
     return f"bernoulli:{law.get('p')}" if law.get("law") == "bernoulli" else f"{law.get('law')}:{law.get('k')}"
 
 
-def _run_case(a: dict, source: str, sessions: int, outputs: list, two_stage: bool) -> dict:
-    """`run`'s input from an audit: the rule naming the verifier's law (or its replay law, two-stage), every item
+def _run_case(a: dict, source: str, sessions: int, outputs: list) -> dict:
+    """`run`'s input from an audit: the rule naming the verifier's law, every item
     `_public_items` declares, the challenger's name and place, the coins, and the evidence's statement and verdicts, each
     verdict of record about the delivered sessions and reporting the public outputs."""
     p, e = a["params"], a["evidence"]
     text = _law_text(p.get("law"))
-    rule = ({"rule": "all"} if text is None else
-            {"check": "all", "replay": text, "rule": "two-stage"} if two_stage else {"law": text, "rule": "law"})
+    rule = {"rule": "all"} if text is None else {"law": text, "rule": "law"}
     try:
         pub = _public_items(a, PUBLIC_ITEMS[0], 0)
     except (AttributeError, KeyError, TypeError):
@@ -1914,66 +1780,6 @@ def _run_case(a: dict, source: str, sessions: int, outputs: list, two_stage: boo
             "params": p, "proved_units": None, "public": pub["public"], "received": RECEIVED, "record": a["record"],
             "rule": rule, "served": None, "session_roots": e.get("session_roots"), "sessions": delivered,
             "source": source, "statement": e.get("statement"), "values": pub["values"], "verdicts": verdicts}
-
-
-INTERIOR_ROOTS = {"y": "c1" * 64, "z": "c2" * 64}
-
-
-def _with_interior(c: dict) -> dict:
-    """A two-stage run's case with the interiors `Stream.register_interiors` takes for the draw its coins make: the K proved
-    RUs' record under `subset:K` after the boundary's (its `previous`, and a window of its own), on copies of their own,
-    their values `y` and `z` declared and the sessions' roots holding theirs. A case whose draw the reference refuses, or
-    that draws no RU, is unchanged."""
-    if not isinstance(c["record"], dict):
-        return c
-    try:
-        drawn = select({"closure": c["closure"], "program": c["params"]["program"], "query": c["params"]["query"],
-                        "rule": c["rule"], "source": c["source"], "work_table": c["params"].get("work_table")})
-    except D.Reject:
-        return c
-    n = len(DR.proved(drawn["draw"]))
-    if not n:
-        return c
-    p = c["params"]
-    try:
-        s = _interior_setup(n, D.canonical(p["query"]))
-    except (P.QueryRefused, ValueError):
-        return c
-    law = {"k": n, "law": "subset"}
-    if not (isinstance(p.get("log"), list) and isinstance(p.get("anchors"), list)):
-        return c
-    try:
-        rec = R.record(s.program, s.query, law, SCHEME, [{"port": q, "root": INTERIOR_ROOTS[q], **s.ports[q]} for q in s.ports],
-                       {**WINDOW, "stage": "interior"}, leaf_layer=p.get("leaf_layer"), anchors=p["anchors"],
-                       previous=R.digest(c["record"]))
-    except (TypeError, ValueError):
-        return c
-    params = {**{k: v for k, v in p.items() if k != "parameters"}, "law": law, "log": [*p["log"], c["record"]],
-              "partition": None, "ports": s.ports, "program": s.desc, "registered": None, "work_table": None}
-    roots = c["session_roots"]
-    return _json({**c, "interior": {"params": params, "received": "1", "record": rec},
-                  "interior_values": [{"name": q, "registered": False} for q in s.ports],
-                  "public": [*c["public"], *(f"{k}:{q}" for q in s.ports for k in ("leaves", "domain"))],
-                  "session_roots": {**roots, **INTERIOR_ROOTS} if isinstance(roots, dict) else roots})
-
-
-def _interior_change(f):
-    """A change to the case's interiors, where it has them as `_with_interior` makes them."""
-    def apply(c, x):
-        ir = c.get("interior")
-        if not (isinstance(ir, dict) and isinstance(ir.get("record"), dict) and isinstance(ir.get("params"), dict)):
-            return c
-        return {**c, "interior": f(ir, x)}
-    return apply
-
-
-def _interior_record(f):
-    return _interior_change(lambda ir, x: {**ir, "record": f(ir["record"], x)})
-
-
-def _interior_leaves(ir, x):
-    ports = ir["params"]["ports"]
-    return {**ir, "params": {**ir["params"], "ports": {**ports, "y": {**ports["y"], "leaves": ports["y"]["leaves"] + 1}}}}
 
 
 def _public_change(change):
@@ -1994,27 +1800,6 @@ def _verdict_change(f):
         return _one_verdict(f)(c, x)
     return apply
 
-
-#: One change each to a two-stage run's interiors: none or junk, the rule made its replay law's, their population, R6's
-#: previous or window, a root dropped, a record that is not one, a port's leaves, the receipt's place, the interior
-#: values, or the sessions' roots.
-INTERIOR_CHANGES = [
-    (_with("interior", None), st.sampled_from([None, 5, [], {}, {"received": "1"}, {"params": None, "received": "1"}])),
-    (lambda c, x: {**c, "rule": {"law": c["rule"]["replay"], "rule": "law"}} if c["rule"].get("rule") == "two-stage" else c,
-     st.just(0)),
-    (_interior_record(lambda r, x: {**r, "population": [r["population"] + 1, True, 0, "1", None][x % 5]}),
-     st.integers(0, 63)),
-    (_interior_record(lambda r, x: {**r, ["previous", "window"][x % 2]: ["11" * 64, WINDOW][x % 2]}), st.integers(0, 63)),
-    (_interior_record(lambda r, x: {**r, "roots": r["roots"][1:]}), st.integers(0, 63)),
-    (_interior_record(lambda r, x: [None, "a record", 5][x % 3]), st.integers(0, 63)),
-    (_interior_change(_interior_leaves), st.integers(0, 63)),
-    (_interior_change(lambda ir, x: {**ir, "received": [5, None, ""][x % 3]}), st.integers(0, 63)),
-    (_with("interior_values", None), st.sampled_from([None, [], [{"name": "y", "registered": False}],
-                                                      [{"name": "x", "registered": False}, {"name": "y", "registered": False},
-                                                       {"name": "z", "registered": False}], [5], "v"])),
-    (_with("session_roots", None), st.sampled_from([dict(ROOTS), {**ROOTS, **INTERIOR_ROOTS, "y": "00" * 64},
-                                                    {**ROOTS, "z": INTERIOR_ROOTS["z"]}, None])),
-]
 
 #: One change each to the run's own inputs: the rule, the declared items and values, the challenger's name and place,
 #: the closure map, the coins, the sessions, a verdict, the outputs, the statement, δ, the proved units and instances,
@@ -2042,102 +1827,30 @@ RUN_CHANGES = [
     (_with("proved_units", None), st.sampled_from([[], [0], [0, 1, 2], "u", [True], [0, 0]])),
     (_with("instances", None), st.sampled_from([0, 1, 5, "1", True, -1])),
     (_with("served", None), st.sampled_from([[], [0], [0, 1], "s", [True]])),
-    (_with("session_roots", None), st.sampled_from([{}, {"x": "00" * 64}, dict(ROOTS), {**ROOTS, **INTERIOR_ROOTS},
-                                                    {**ROOTS, **INTERIOR_ROOTS, "y": "00" * 64}, 5, None])),
-    *INTERIOR_CHANGES,
+    (_with("session_roots", None), st.sampled_from([{}, {"x": "00" * 64}, dict(ROOTS), {**ROOTS, "y": "00" * 64}, 5,
+                                                    None])),
     (lambda c, k: {kk: v for kk, v in c.items() if kk != k},
-     st.sampled_from(["challenger", "closure", "delta", "instances", "interior", "interior_values", "outputs", "params",
-                      "proved_units", "public", "received", "record", "rule", "served", "session_roots", "sessions",
-                      "source", "statement", "values", "verdicts"])),
+     st.sampled_from(["challenger", "closure", "delta", "instances", "outputs", "params", "proved_units", "public",
+                      "received", "record", "rule", "served", "session_roots", "sessions", "source", "statement",
+                      "values", "verdicts"])),
 ]
 
 
 @st.composite
-def runs(draw, groups=(), most: int = 0, changes: int = 0, staged: bool = False) -> dict:
-    """A run's input from an audit with up to `most` changes from `groups`, then `changes` of the run's own; `staged`, a
-    two-stage run with its interiors and `changes` of theirs."""
+def runs(draw, groups=(), most: int = 0, changes: int = 0) -> dict:
+    """A run's input from an audit with up to `most` changes from `groups`, then `changes` of the run's own."""
     a = draw(changed_audits(list(groups), most=most, least=min(most, 1))) if groups else draw(changed_audits(most=0))
-    c = _run_case(a, draw(SOURCE), draw(st.integers(1, 2)), draw(st.sampled_from([[], [], ["credited"]])),
-                  staged or draw(st.integers(0, 3)) == 0)
-    if c["rule"].get("rule") == "two-stage" and (staged or draw(st.integers(0, 3))):
-        c = _with_interior(c)
+    c = _run_case(a, draw(SOURCE), draw(st.integers(1, 2)), draw(st.sampled_from([[], [], ["credited"]])))
     for _ in range(changes):
-        change, values = draw(st.sampled_from(INTERIOR_CHANGES if staged else RUN_CHANGES))
+        change, values = draw(st.sampled_from(RUN_CHANGES))
         c = change(c, draw(values))
     return c
 
 
 RUN = D.Port(PIECES, "run", run, st.one_of(
-    runs(), runs(), runs(changes=1), runs(changes=1), runs(changes=2), runs(staged=True, changes=1),
-    runs(staged=True, changes=1),
+    runs(), runs(), runs(changes=1), runs(changes=1), runs(changes=2),
     runs([RECORD], 1), runs([PARAMS], 1), runs([ENTRIES, REGISTERED_PARAMS], 1), runs([EVIDENCE, VERDICTS_OF], 1),
     JSON), package=PACKAGE)
-
-RU_CLASSES = ["decode", "prefill", "tile"]
-
-
-@functools.cache
-def _expanded(kind: str, a: int, b: int, k: int) -> dict | None:
-    """A `stratified` or `work` law of `k` expanded over `a` PAIRs then `b` TRIPLEs (`draw.derive`), or None where it
-    refuses."""
-    members = [(PAIR, a), (TRIPLE, b)] if b else [(PAIR, a)]
-    query = P.template_instances_query([t.id for t, _ in members])
-    table = {PAIR.id: 2, TRIPLE.id: {"floor": 1, "work": 1}} if b else {PAIR.id: 2}
-    try:
-        return DR.derive(P.mixed_population_program(members), query, {"k": k, "law": kind}, table if kind == "work" else None)
-    except (P.QueryRefused, ValueError):
-        return None
-
-
-@st.composite
-def two_stage_stages(draw, n: int, bad: bool):
-    """A class of `n` RUs' stage: a probability, or a one-stage law over them (a subset, a Bernoulli law, or a stratified
-    or work law expanded over two templates), mostly checking every proof unit; with `bad`, one the stage refuses (`k`,
-    `p` or the law) or junk."""
-    kind = draw(st.integers(0, 6))
-    k = draw(st.sampled_from([-1, True, "1"]) if bad and kind % 3 == 0 else st.sampled_from([None, None, 0, 1, 2, 3, 7]))
-    if kind < 3:
-        den = draw(st.integers(1, 9))
-        p = draw(st.sampled_from(["5/4", "1/0", "a", "1/2/3", "01/2", "", "/2", "1/", 5]) if bad and kind == 1 else
-                 st.sampled_from([f"{draw(st.integers(0, den))}/{den}", "0", "1", f"{2 * den}/{4 * den}"]))
-        return {"k": k, "p": p}
-    if kind < 6:
-        a = draw(st.integers(1, max(n, 1)))
-        law = draw(st.sampled_from([{"k": draw(st.integers(0, n + 1 if bad else n)), "law": "subset"},
-                                    {"law": "bernoulli", "p": f"{draw(st.integers(0, 4))}/4"},
-                                    _expanded("stratified", a, max(n - a, 0), draw(st.integers(1, max(n, 1)))),
-                                    _expanded("work", a, max(n - a, 0), draw(st.integers(1, max(n, 1))))]))
-        law = law or {"k": min(1, n), "law": "subset"}
-        return {"k": k if law["law"] == "bernoulli" or bad and kind == 3 else None, "law": law}
-    return draw(st.just({"k": None, "law": {"k": 1, "law": "subset", "x": 1}}) | JSON) if bad else {"k": None, "p": "1/2"}
-
-
-@st.composite
-def two_stage_cases(draw, units: str) -> dict:
-    """RUs of up to three classes in a shuffled order, indices distinct but sometimes repeated, with each class's stage
-    and the coins; sometimes one change: a stage refused, a class without one, a law or RUs that aren't, or short coins."""
-    n = draw(st.integers(0, 12))
-    order = draw(st.permutations(range(n)))
-    change = draw(st.integers(0, 15))
-    rus = [[draw(st.integers(-2, 40)) if change == 0 else 3 * i - 5, draw(st.sampled_from(RU_CLASSES)),
-            draw(st.integers(0, 6))] for i in order]
-    sizes = {c: sum(u[1] == c for u in rus) for c in RU_CLASSES}
-    bad = draw(st.sampled_from(RU_CLASSES)) if change == 1 else None
-    law = {c: draw(two_stage_stages(sizes[c], c == bad)) for c in RU_CLASSES if sizes[c] or draw(st.booleans())}
-    if rus and change == 2:
-        law.pop(rus[0][1], None)
-    if change == 3:
-        law = draw(JSON)
-    if change == 4:
-        rus = draw(st.sampled_from([[[0, "decode", -1]], [[0, 5, 1]], [[True, "decode", 1]], [[0, "decode"]], "u", None]))
-    return {"law": law, "source": draw(SHORT_SOURCE if change == 5 else SOURCE), units: rus}
-
-
-REPLAY_UNITS = D.Port(PIECES, "replay_units", replay_units, st.one_of(*[two_stage_cases("units")] * 5, JSON),
-                      package=PACKAGE)
-PROOF_UNITS = D.Port(PIECES, "proof_units", proof_units, st.one_of(*[two_stage_cases("selected")] * 5, JSON),
-                     package=PACKAGE)
-
 
 def _key(tag: bytes) -> str:
     """A 256-byte key with bit 2047 zero."""
@@ -2207,7 +1920,7 @@ pieces = D.server_fixture(DECODE)
 PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (REGISTRATION, 700), (REGISTERED_ENTRIES, 300), (DOMAIN, 300),
               (CHECK_DRAW, 500), (DRAW, 500), (SELECT, 600), (SLOTS, 400), (CHECK_PROVED, 300), (BOUND, 500), (VERDICT, 300),
               (MATCHES_PUBLIC, 400), (SESSION_REGISTERED, 400), (RECORD_PORT, 600), (CHECK_PUBLIC, 500), (CHECK_VERDICTS, 400),
-              (RUN, 500), (REPLAY_UNITS, 500), (PROOF_UNITS, 400), (HELLO, 500)]
+              (RUN, 500), (HELLO, 500)]
 
 
 @pytest.mark.parametrize("port, examples", PIECE_RUNS, ids=[p.fn for p, _ in PIECE_RUNS])
@@ -2240,43 +1953,18 @@ def test_the_runs_hello_and_its_one_tree(pieces, name, change, code):
     assert out["codes"] == ([] if code is None else [code]) and out["ok"] == (code is None), (name, out)
 
 
-def test_the_two_stage_samplers_read_the_coins_in_order(pieces):
-    """Both stages on one stream of coins, Lean's the Python's whole: RUs in a shuffled order, a class drawn at a rate RU by
-    RU (and one at p = 1, which reads nothing) around two classes drawn together under a stratified and a work law when
-    their first RU comes up, then the drawn RUs' proof units on the bytes after them, a `k`-subset of the larger RUs and
-    every position of the rest."""
-    law = {"decode": {"k": 2, "p": "1/2"}, "prefill": {"k": None, "law": _expanded("stratified", 3, 2, 2)},
-           "tile": {"k": None, "law": _expanded("work", 2, 2, 2)}, "cap": {"k": 1, "p": "1"}}
-    rus = [[11, "decode", 5], [7, "prefill", 3], [3, "tile", 4], [1, "decode", 1], [9, "prefill", 2], [0, "cap", 3],
-           [4, "tile", 2], [2, "prefill", 1], [8, "decode", 3], [6, "tile", 6], [5, "prefill", 4], [10, "prefill", 2],
-           [12, "tile", 1], [13, "decode", 4]]
-    source = hashlib.shake_256(b"two-stage").hexdigest(800)
-    case = {"law": law, "source": source, "units": rus}
-    first = replay_units(copy.deepcopy(case))
-    assert D.replay(REPLAY_UNITS, case, pieces) == ("output", D.canonical(first))
-    drawn = [u for u in rus if u[0] in first["units"]]
-    assert [u[0] for u in drawn] == first["units"] and {"cap", "prefill", "tile"} <= {u[1] for u in drawn}
-    second = {"law": law, "selected": drawn, "source": source[2 * first["read"]:]}
-    picks = proof_units(copy.deepcopy(second))
-    assert D.replay(PROOF_UNITS, second, pieces) == ("output", D.canonical(picks))
-    assert picks["read"] > 0 and all(len(ps) == (min(2 if c == "decode" else 1, n) if c in ("decode", "cap") else n)
-                                     for (i, ps), (_, c, n) in zip(picks["units"], drawn))
-
-
 def test_the_select_piece_draws_every_rule(pieces):
     """One draw under each rule the stream runs, on a partition whose `PAIR` stratum is two ranges apart, Lean's the
     Python's whole: `All` every unit, reading no coins, and each law's draw (a work law's with its closure) reading them,
     each stratum's count its k, which the drawn runs reach only probably. Then the same with every non-ASCII digit
-    `str.isdigit` admits in place of an ASCII one, which both refuse."""
+    `str.isdigit` admits in place of an ASCII one, and the retired two-stage rule, which both refuse."""
     desc = json.loads(_population(((0, 2), (1, 3), (0, 4), (2, 1))))
     query = _json(P.template_instances_query([t.id for t in TEMPLATES]))
     table = {PAIR.id: 2, TRIPLE.id: {"floor": 2, "work": 1}, QUAD.id: 0}
     closure = [[u, [(u + 1) % 10, (u + 5) % 10]] for u in range(10)]
     source = hashlib.shake_256(b"select").hexdigest(1500)
     rules = [({"rule": "all"}, None), ({"law": "subset:4", "rule": "law"}, None), ({"law": "bernoulli:1/3", "rule": "law"}, None),
-             ({"law": "stratified:5", "rule": "law"}, None), ({"law": "work:4", "rule": "law"}, closure),
-             ({"check": "all", "replay": "stratified:5", "rule": "two-stage"}, None),
-             ({"check": "all", "replay": "work:4", "rule": "two-stage"}, closure)]
+             ({"law": "stratified:5", "rule": "law"}, None), ({"law": "work:4", "rule": "law"}, closure)]
     for rule, cm in rules:
         case = {"closure": cm, "program": desc, "query": query, "rule": rule, "source": source,
                 "work_table": table if "work" in str(rule) else None}
@@ -2285,10 +1973,11 @@ def test_the_select_piece_draws_every_rule(pieces):
         assert (out["read"] == 0) == (rule["rule"] == "all") and bool(cm) == ("closure" in out["draw"]), (rule, out)
         for s in out["draw"].get("strata", []):
             assert sum(any(lo <= u < hi for lo, hi in s["units"]) for u in out["draw"]["units"]) == s["k"] >= 1
-    for text in ("subset:\u0663", "stratified:\u0665", "work:\u0664", "bernoulli:\u0661/3", "bernoulli:1/\u0663"):
-        case = {"closure": None, "program": desc, "query": query, "rule": {"law": text, "rule": "law"}, "source": source,
-                "work_table": table}
-        assert D.replay(SELECT, case, pieces)[0] == "reject", text
+    retired = {"check": "all", "replay": "subset:4", "rule": "two-stage"}
+    for rule in [*({"law": text, "rule": "law"} for text in ("subset:\u0663", "stratified:\u0665", "work:\u0664",
+                                                              "bernoulli:\u0661/3", "bernoulli:1/\u0663")), retired]:
+        case = {"closure": None, "program": desc, "query": query, "rule": rule, "source": source, "work_table": table}
+        assert D.replay(SELECT, case, pieces)[0] == "reject", rule
         with pytest.raises(D.Reject):
             select(case)
 
@@ -2501,8 +2190,8 @@ def _v1_audit(kind: str, s: Setup = SETUPS[3], p: str = "1/1") -> dict:
 
 
 def test_the_run_reaches_every_step(pieces):
-    """A registration's run under each law, one-stage and (one unit's population, with its interiors) two-stage, and a v2
-    registration's, Lean's the Python's whole: each accepts, on the draw from the coins, showing the verdicts' public
+    """A registration's run under each law, over one unit's population and over three, and a v2 registration's, Lean's
+    the Python's whole: each accepts, on the draw from the coins, showing the verdicts' public
     outputs. The same runs refused at each step (a
     declared item missing, a record R1-R7 refuses, no session, a verdict of record about other sessions) and rejected (a
     verdict that ran and did not accept), which the drawn runs reach only probably."""
@@ -2511,64 +2200,29 @@ def test_the_run_reaches_every_step(pieces):
     v2["evidence"]["verdicts"]["upstream"] = {"accepted": True, "of_record": False}
     seen = []
     laws = ("subset", "bernoulli", "stratified", "work")
-    for a, stages in [*((_v1_audit(k), (False,)) for k in laws), *((_v1_audit(k, SETUPS[2]), (False, True)) for k in laws),
-                      (v2, (False, True))]:
-        for two_stage in stages:
-            case = _run_case(a, source, 2, ["credited"], two_stage)
-            if two_stage:
-                case = _with_interior(case)
-            other = {**case["verdicts"]["lean"], "sessions": RUN_SESSIONS[::-1]}
-            for changed in (case, {**case, "public": case["public"][1:]},
-                            {**case, "record": {**case["record"], "previous": "11" * 64}}, {**case, "sessions": []},
-                            {**case, "verdicts": {**case["verdicts"], "lean": other}},
-                            {**case, "verdicts": {**case["verdicts"], "upstream": {"accepted": False, "of_record": False}}}):
-                out = run(copy.deepcopy(changed))
-                assert D.replay(RUN, changed, pieces) == ("output", D.canonical(out)), (a["params"]["law"], out)
-                seen.append(out.get("step") or out["symbol"])
-            assert run(copy.deepcopy(case))["public"] == {"credited": 12} and run(copy.deepcopy(case))["read"] > 0
-    assert seen == ["accept", "register", "register", "deliver", "outcome", "reject"] * 14
-
-
-def test_the_run_holds_the_interiors(pieces):
-    """A two-stage run's interiors, Lean's the Python's whole: registered after the draw, they accept with the boundary and
-    their audit record is the run's. They are refused at their own step (under a one-stage rule, a population other than
-    the proved RUs', a value missing, R6's previous), the proof is refused without them, and a wrong root of theirs
-    rejects; the drawn runs reach each only probably."""
-    source = hashlib.shake_256(b"run").hexdigest(600)
-    seen = []
-    for kind in ("subset", "stratified", "work"):
-        case = _with_interior(_run_case(_v1_audit(kind, SETUPS[2]), source, 2, ["credited"], True))
-        ir, rec = case["interior"], case["interior"]["record"]
-        one = _run_case(_v1_audit(kind, SETUPS[2]), source, 2, ["credited"], False)
-        for changed in (case, {**one, "interior": ir, "interior_values": case["interior_values"]},
-                        {**case, "interior": {**ir, "record": {**rec, "population": rec["population"] + 1}}},
-                        {**case, "interior_values": case["interior_values"][1:]},
-                        {**case, "interior": {**ir, "record": {**rec, "previous": "11" * 64}}},
-                        {**case, "interior": None},
-                        {**case, "session_roots": {**case["session_roots"], "y": "00" * 64}}):
+    for a in [*(_v1_audit(k) for k in laws), *(_v1_audit(k, SETUPS[2]) for k in laws), v2]:
+        case = _run_case(a, source, 2, ["credited"])
+        other = {**case["verdicts"]["lean"], "sessions": RUN_SESSIONS[::-1]}
+        for changed in (case, {**case, "public": case["public"][1:]},
+                        {**case, "record": {**case["record"], "previous": "11" * 64}}, {**case, "sessions": []},
+                        {**case, "verdicts": {**case["verdicts"], "lean": other}},
+                        {**case, "verdicts": {**case["verdicts"], "upstream": {"accepted": False, "of_record": False}}}):
             out = run(copy.deepcopy(changed))
-            assert D.replay(RUN, changed, pieces) == ("output", D.canonical(out)), (kind, out)
+            assert D.replay(RUN, changed, pieces) == ("output", D.canonical(out)), (a["params"]["law"], out)
             seen.append(out.get("step") or out["symbol"])
-        assert json.loads(run(copy.deepcopy(case))["interior"]["audit"])["accepted"] is True
-    assert seen == ["accept", "interior", "interior", "interior", "interior", "deliver", "reject"] * 3
-    none = _run_case(_v1_audit("bernoulli", SETUPS[2], "0/1"), source, 2, ["credited"], True)
-    for changed in (none, {**none, "interior": ir, "interior_values": case["interior_values"]}):
-        out = run(copy.deepcopy(changed))
-        assert D.replay(RUN, changed, pieces) == ("output", D.canonical(out))
-        seen.append(out.get("codes") or out["symbol"])
-    assert seen[-2:] == ["accept", ["interior-empty"]]
+        assert run(copy.deepcopy(case))["public"] == {"credited": 12} and run(copy.deepcopy(case))["read"] > 0
+    assert seen == ["accept", "register", "register", "deliver", "outcome", "reject"] * 9
 
 
 def test_the_run_refuses_a_count_that_varies(pieces):
-    """A registration whose law draws a count that varies, a Bernoulli one at 0 < p < 1, one-stage or as a two-stage
-    rule's replay, is refused at its registration (`shapes`), Lean's the Python's whole: its sessions would set up tables
+    """A registration whose law draws a count that varies, a Bernoulli one at 0 < p < 1, is refused at its registration
+    (`shapes`), Lean's the Python's whole: its sessions would set up tables
     of different shapes. At p = 0 or 1, and under subset, stratified and work, the run goes on; R1-R7 come first."""
     source = hashlib.shake_256(b"run").hexdigest(600)
     seen = []
-    for s, p, two_stage in [(SETUPS[3], "1/2", False), (SETUPS[3], "2/3", False), (SETUPS[3], "2/4", False),
-                            (SETUPS[2], "1/2", True), (SETUPS[3], "0/1", False), (SETUPS[3], "1/1", False),
-                            (SETUPS[3], "3/3", False), (SETUPS[2], "0/1", True)]:
-        case = _run_case(_v1_audit("bernoulli", s, p), source, 2, ["credited"], two_stage)
+    for s, p in [(SETUPS[3], "1/2"), (SETUPS[3], "2/3"), (SETUPS[3], "2/4"), (SETUPS[2], "1/2"), (SETUPS[3], "0/1"),
+                 (SETUPS[3], "1/1"), (SETUPS[3], "3/3"), (SETUPS[2], "0/1")]:
+        case = _run_case(_v1_audit("bernoulli", s, p), source, 2, ["credited"])
         for changed in (case, {**case, "record": {**case["record"], "previous": "11" * 64}}):
             out = run(copy.deepcopy(changed))
             assert D.replay(RUN, changed, pieces) == ("output", D.canonical(out)), (p, out)
@@ -2576,7 +2230,7 @@ def test_the_run_refuses_a_count_that_varies(pieces):
     assert [c for _, c in seen[0:8:2]] == [["shapes"]] * 4
     assert all(c != ["shapes"] for _, c in seen[8::2]) and all(c != ["shapes"] for _, c in seen[1::2])
     for kind in ("subset", "stratified", "work"):
-        out = run(copy.deepcopy(_run_case(_v1_audit(kind), source, 2, ["credited"], False)))
+        out = run(copy.deepcopy(_run_case(_v1_audit(kind), source, 2, ["credited"])))
         assert out["symbol"] == "accept"
     assert service.count_varies({"law": "bernoulli", "p": "1/2"})
     assert not any(service.count_varies(law) for law in ({"law": "bernoulli", "p": "0/1"}, {"law": "bernoulli", "p": "1/1"},
