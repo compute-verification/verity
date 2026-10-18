@@ -11,7 +11,9 @@ and batch, under continuous batching with staggered arrivals, greedy and seeded 
 - Measurement: `prof.sh` runs a sweep with the arms of `prof_arm.py` (roots and plans per run, native drain, rows-sha512,
   serving on a high-priority stream over the worker's hashing, the finalize profile, NVTX ranges), optionally under nsys,
   summarized by `nsys_summary.py`; `gather_bench.py` times the
-  gather kernel alone; `gpu_tests.sh` runs the committer's GPU byte-identity tests on a node.
+  gather kernel alone; `gpu_tests.sh` runs the committer's GPU byte-identity tests on a node; `granularity.py` lists, from
+  a Build's request Programs, the Call boundaries a per-block or per-layer proof unit would keep, with their bytes and
+  hashing time (an estimate; no scheme).
 - The specs: `benchmarks/specs/qwen3-8b-bf16-h200-served.toml` (the default) and
   `benchmarks/specs/llama32-1b-bf16-h200-served.toml`, each on the sweep `benchmarks/specs/served.toml` (B1, B8, B32 and
   B64, 512-token prompts, mixed traffic, greedy and stochastic).
