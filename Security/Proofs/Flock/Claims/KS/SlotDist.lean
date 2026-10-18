@@ -151,7 +151,7 @@ theorem coinsK_append : ∀ σ τ : List Kind, coinsK (σ ++ τ) = coinsK σ + c
 theorem Dist.bind {T D I α β α₂ β₂ : Type} {get : I → ℕ → Option (T × D)} {R : I → α → β → Prop}
     {R₂ : I → α₂ → β₂ → Prop} {f : α → Game α₂} {f' : β → Game β₂} {slot j : ℕ}
     {h : ∀ i a b, R i a b → Lock T D get R₂ i (f a) (f' b)} (hK : ∀ i a b (hr : R i a b), Dist slot j (h i a b hr))
-    {i : I} {g : Game α} {g' : Game β} {L : Lock T D get R i g g'} (hL : NoSlot slot L) {σ : List Kind}
+    {i : I} {g : Game α} {g' : Game β} {L : Lock T D get R i g g'} (hL : NoSlot slot L) (σ : List Kind)
     (hσ : Exact g' σ) : Dist slot (j + coinsK σ) (Lock.bind h L) := by
   induction hL generalizing σ with
   | ret hr =>
@@ -161,23 +161,28 @@ theorem Dist.bind {T D I α β α₂ β₂ : Type} {get : I → ℕ → Option (
       cases hσ with
       | coin hk =>
           simp only [coinsK, ← Nat.add_assoc]
-          exact .coin C fun c => ih c (hk c)
+          exact .coin C fun c => ih c _ (hk c)
   | send M _ ih =>
       cases hσ with
       | send hk =>
           simp only [coinsK]
-          exact .send M fun m => ih m (hk m)
+          exact .send M fun m => ih m _ (hk m)
   | table s hne _ ih =>
       cases hσ with
       | send hk =>
           simp only [coinsK]
-          exact .other s hne fun t d => ih t d (hk d)
+          exact .other s hne fun t d => ih t d _ (hk d)
 
 theorem Dist.bind_eq {T D I α β α₂ β₂ : Type} {get : I → ℕ → Option (T × D)} {R : I → α → β → Prop}
     {R₂ : I → α₂ → β₂ → Prop} {f : α → Game α₂} {f' : β → Game β₂} {slot j j' : ℕ}
     {h : ∀ i a b, R i a b → Lock T D get R₂ i (f a) (f' b)} (hK : ∀ i a b (hr : R i a b), Dist slot j (h i a b hr))
     {i : I} {g : Game α} {g' : Game β} {L : Lock T D get R i g g'} (hL : NoSlot slot L) {σ : List Kind}
     (hσ : Exact g' σ) (hj : j' = j + coinsK σ) : Dist slot j' (Lock.bind h L) :=
-  hj ▸ Dist.bind hK hL hσ
+  hj ▸ Dist.bind hK hL σ hσ
+
+theorem Dist.slot_eq {T D I α β : Type} {get : I → ℕ → Option (T × D)} {R : I → α → β → Prop}
+    {slot slot' j : ℕ} {i : I} {g : Game α} {g' : Game β} {L : Lock T D get R i g g'} (h : slot = slot')
+    (hL : Dist slot j L) : Dist slot' j L :=
+  h ▸ hL
 
 end FlockSoundness.Game.Lock
