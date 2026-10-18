@@ -323,6 +323,14 @@ class RowsLayer4kArm(RowsLayerArm, Rows4kArm):
     """The per-layer rows arm at 4 KiB rows."""
 
 
+class Rows4kCapArm(RowsCapArm, Rows4kArm):
+    """The capped rows arm at 4 KiB rows."""
+
+
+class RowsLayerCapArm(RowsCapArm, RowsLayerArm):
+    """The capped per-layer rows arm."""
+
+
 class HiPrioArm(NativeDrainArm):
     """The nativedrain arm with each engine step on a high-priority stream (the committer's VERITY_HI_PRIO): the worker's hashing,
     on its side stream at the default priority (CUDA's lowest), gets a block slot only when no serving block waits for one."""
@@ -417,6 +425,8 @@ SERVED_COMMIT_ROWS_RING8_CAP = RowsRing8CapArm("served-commit-rows-ring8-cap", r
 SERVED_COMMIT_ROWS_4K = Rows4kArm("served-commit-rows-4k", retain="none")
 SERVED_COMMIT_ROWS_LAYER = RowsLayerArm("served-commit-rows-layer", retain="none")
 SERVED_COMMIT_ROWS_LAYER_4K = RowsLayer4kArm("served-commit-rows-layer-4k", retain="none")
+SERVED_COMMIT_ROWS_4K_CAP = Rows4kCapArm("served-commit-rows-4k-cap", retain="none")
+SERVED_COMMIT_ROWS_LAYER_CAP = RowsLayerCapArm("served-commit-rows-layer-cap", retain="none")
 SERVED_COMMIT_HIPRIO = HiPrioArm("served-commit-hiprio", retain="none")
 SERVED_COMMIT_ROWS_HIPRIO = RowsHiPrioArm("served-commit-rows-hiprio", retain="none")
 SERVED_COMMIT_FPROF = FinalizeProfArm("served-commit-fprof", retain="none")

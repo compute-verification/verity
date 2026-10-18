@@ -6,7 +6,8 @@ root of a small padded domain is checked against step_rows before it is timed.  
 
     bash benchmarks/served_commit/rows_floor.sh     (ROWS: row bytes, default 256 1024 4096; WINDOW_MB, default 256; REPS, default 9;
                                                      MINB: the leaf kernel's min blocks per SM, default 1 2 3;
-                                                     CAPS: blocks per launch to time, default none)
+                                                     CAPS: blocks per launch to time, default none; BESIDE: the row
+                                                     sizes timed beside the busy loops, default the worker's)
 """
 from __future__ import annotations
 
@@ -171,6 +172,7 @@ def main() -> None:
     sizes = [int(x) for x in os.environ.get("ROWS", "256 1024 4096").split()]
     forms = [int(x) for x in os.environ.get("MINB", "1 2 3").split()]
     caps = [int(x) for x in os.environ.get("CAPS", "").split()]
+    beside_rows = [int(x) for x in os.environ.get("BESIDE", str(step_rows.ROW_BYTES)).split()]
     prop = torch.cuda.get_device_properties(0)
     arch = f"{prop.major}{prop.minor}"
     res: dict[str, Any] = {"device": prop.name, "sms": prop.multi_processor_count, "arch": arch, "window_bytes": window,
@@ -204,15 +206,15 @@ def main() -> None:
         R = Rows(so)
         form["sizes"] = {}
         for rb in sizes:
-            form["sizes"][rb] = entry = size_floor(R, rb, data, reps, (hs, hs_hi, bs), busy, busy_ms, caps)
+            form["sizes"][rb] = entry = size_floor(R, rb, data, reps, (hs, hs_hi, bs), busy, busy_ms, caps, beside_rows)
             print(f"minb{minb} rows {rb}", json.dumps(entry), flush=True)
     (out_dir / "rows_floor.json").write_text(json.dumps(res, indent=1))
 
 
 def size_floor(R: Rows, rb: int, data: torch.Tensor, reps: int, streams: tuple, busy: dict, busy_ms: dict,
-               caps: list[int]) -> dict[str, Any]:
-    """One window of rb-byte rows: its leaves, its tree and both, alone and in launches of at most each cap's blocks; at the worker's
-    row size also all-pad leaves and the commit (whole-grid at both priorities, and capped) beside each busy loop."""
+               caps: list[int], beside_rows: list[int]) -> dict[str, Any]:
+    """One window of rb-byte rows: its leaves, its tree and both, alone and in launches of at most each cap's blocks; at the row
+    sizes of beside_rows also all-pad leaves and the commit (whole-grid at both priorities, and capped) beside each busy loop."""
     hs, hs_hi, bs = streams
     window = data.numel()
     m = window // rb
@@ -235,7 +237,7 @@ def size_floor(R: Rows, rb: int, data: torch.Tensor, reps: int, streams: tuple, 
                  gb_per_s=round(window / total_ms * 1e-6, 2), ns_per_leaf=round(total_ms * 1e6 / m, 3),
                  compressions=comps, gcomp_per_s=round(comps / total_ms * 1e-6, 3))
     entry["capped_ms"] = {c: round(timed(lambda s, c=c: commit(s, c), reps, hs), 4) for c in caps}
-    if rb != step_rows.ROW_BYTES:
+    if rb not in beside_rows:
         return entry
     entry["pads_ms"] = round(timed(lambda s: leaves(s, 0), reps, hs), 4)
     entry["beside"] = {}
