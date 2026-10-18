@@ -119,7 +119,17 @@
   "description": "Workers each run ordinary backprop on a full replica and average pseudo-gradients every H steps.",
   "sources": [
    "douillard-2023-diloco",
-   "charles-2025-diloco-scaling"
+   "charles-2025-diloco-scaling",
+   "kale-2025-eager-diloco",
+   "kolehmainen-2025-noloco",
+   "douillard-2026-decoupled-diloco",
+   "qi-2025-dilocox",
+   "he-2024-localsgd-scaling",
+   "iacob-2025-desloc",
+   "liu-2024-async-localsgd",
+   "woodworth-2020-localsgd",
+   "stich-2018-localsgd",
+   "ortiz-2021-localsgd-tradeoffs"
   ],
   "traits": {
    "theorem_applies": true,
@@ -157,18 +167,6 @@
    },
    {
     "evidence": [
-     "charles-2025-diloco-scaling/1",
-     "charles-2025-diloco-scaling/6"
-    ],
-    "metric": "loss vs data-parallel, 4B and 10B",
-    "compute_range_flop": null,
-    "multiplier": 1.0,
-    "trend": "grows-with-scale",
-    "exponent_change": null,
-    "note": "Outperforms data-parallel with over 100x less communication."
-   },
-   {
-    "evidence": [
      "douillard-2023-diloco/1"
     ],
     "metric": "quality vs synchronous, 8 workers",
@@ -188,16 +186,111 @@
     "trend": "grows-with-scale",
     "exponent_change": null,
     "note": "Matches."
+   },
+   {
+    "evidence": [
+     "charles-2025-diloco-scaling/2",
+     "charles-2025-diloco-scaling/6"
+    ],
+    "metric": "C4 eval loss vs data-parallel at 20 tokens/param, M = 4",
+    "compute_range_flop": [
+     6.9e+20,
+     1.2e+22
+    ],
+    "multiplier": 0.94,
+    "trend": "constant",
+    "exponent_change": null,
+    "note": "Derived with the data-parallel law's slope (d ln L/d ln C about -0.0477): M = 4 0.947 (2.4B), 0.945 (4B), 0.942 (10B); M = 2 1.03, 1.04, 1.04. The replica penalty stopped shrinking above 2.4B."
+   },
+   {
+    "evidence": [
+     "kale-2025-eager-diloco/1",
+     "kale-2025-eager-diloco/2"
+    ],
+    "metric": "C4 eval loss vs data-parallel at Chinchilla budgets, H = 30",
+    "compute_range_flop": [
+     9.4e+17,
+     1.9e+20
+    ],
+    "multiplier": 1.0,
+    "trend": "grows-with-scale",
+    "exponent_change": null,
+    "note": "Derived: 0.87 at 100M, 0.92-0.93 at 200M-500M, 1.0 at 1B; losses given to 0.01."
+   },
+   {
+    "evidence": [
+     "kolehmainen-2025-noloco/1",
+     "kolehmainen-2025-noloco/2"
+    ],
+    "metric": "C4 validation perplexity vs FSDP, 6.8B, 16 replicas x 4 pipeline stages",
+    "compute_range_flop": null,
+    "multiplier": 0.48,
+    "trend": "grows-with-scale",
+    "exponent_change": null,
+    "note": "Derived from 17.3 vs 15.7; NoLoCo 0.66; token budget not Chinchilla-matched; 16 replicas."
+   },
+   {
+    "evidence": [
+     "douillard-2026-decoupled-diloco/1",
+     "douillard-2026-decoupled-diloco/2"
+    ],
+    "metric": "downstream average vs data-parallel, asynchronous M = 8, 2B-9B",
+    "compute_range_flop": [
+     3.1e+20,
+     7.6e+21
+    ],
+    "multiplier": 1.0,
+    "trend": "constant",
+    "exponent_change": null,
+    "note": "Matches at 2B/5B/9B; downstream, not loss."
+   },
+   {
+    "evidence": [
+     "qi-2025-dilocox/1",
+     "qi-2025-dilocox/2"
+    ],
+    "metric": "training loss vs AllReduce, 107B, 4,000 steps",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "0.30 nats worse; not converged; not convertible."
+   },
+   {
+    "evidence": [
+     "he-2024-localsgd-scaling/1",
+     "he-2024-localsgd-scaling/2"
+    ],
+    "metric": "fitted loss law vs DDP in parameters, 8 nodes, to 3B",
+    "compute_range_flop": null,
+    "multiplier": 1.11,
+    "trend": "grows-with-scale",
+    "exponent_change": null,
+    "note": "A ratio in parameters (about 1.23 in compute) extrapolated past 3B; token budgets not Chinchilla-matched; kept out of the multiplier."
+   },
+   {
+    "evidence": [
+     "charles-2025-diloco-scaling/8"
+    ],
+    "metric": "EXTRAPOLATION of Table 7's independent power laws in N, M = 4",
+    "compute_range_flop": [
+     1e+24,
+     1e+26
+    ],
+    "multiplier": 1.29,
+    "trend": "grows-with-scale",
+    "exponent_change": null,
+    "note": "EXTRAPOLATION, do not use as multiplier: the same fit predicts 1.08 at 10B where 0.94 was measured, and its leave-one-out residual (charles-2025-diloco-scaling/9) exceeds the gaps it extrapolates."
    }
   ],
   "multiplier": {
-   "value": 0.95,
-   "trend": "grows-with-scale",
+   "value": 0.94,
+   "trend": "constant",
    "evidence": [
-    "charles-2025-diloco-scaling/4",
-    "charles-2025-diloco-scaling/7"
+    "charles-2025-diloco-scaling/2",
+    "charles-2025-diloco-scaling/6"
    ],
-   "metric": "loss vs data-parallel, M = 4"
+   "metric": "C4 eval loss vs data-parallel, M = 4, 10B (1.2e22 FLOP)"
   },
   "convention": "attacker"
  },
@@ -206,7 +299,9 @@
   "name": "Greedy layer-wise (local) learning",
   "family": "local-learning",
   "description": "Each layer is trained with a local loss on the frozen prefix's outputs; no gradient crosses a layer boundary.",
-  "sources": [],
+  "sources": [
+   "belilovsky-2018-greedy-imagenet"
+  ],
   "traits": {
    "theorem_applies": false,
    "updated_fraction": 1.0,
@@ -224,8 +319,22 @@
    "entry_fee_override": null,
    "fanout_override": null
   },
-  "notes": "No source in the index yet. Activations still cross forward; the thread theorem does not cover it, since it is not end-to-end backprop.",
-  "convention": "attacker"
+  "notes": "No source in the index yet. Activations still cross forward; the thread theorem does not cover it, since it is not end-to-end backprop. One vision source, no LM evidence. Activations still cross forward; the thread theorem does not cover it, since it is not end-to-end backprop.",
+  "convention": "attacker",
+  "scaling": [
+   {
+    "evidence": [
+     "belilovsky-2018-greedy-imagenet/1",
+     "belilovsky-2019-dgl/1"
+    ],
+    "metric": "ImageNet top-1 vs end-to-end (CNN)",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "VGG-11 layer-wise -0.3 points; per-layer DGL (K = 10) on VGG-13 -2.2; total compute not reported; no LM result at any scale."
+   }
+  ]
  },
  {
   "id": "full-finetune",
@@ -3654,7 +3763,8 @@
   "family": "parallel-communication",
   "description": "Synchronize parameter fragments on a staggered schedule, overlapped with compute, in 4-bit.",
   "sources": [
-   "douillard-2025-streamingdiloco"
+   "douillard-2025-streamingdiloco",
+   "kale-2025-eager-diloco"
   ],
   "traits": {
    "theorem_applies": true,
@@ -3686,16 +3796,30 @@
     "trend": "unknown",
     "exponent_change": null,
     "note": "Slightly better with 400x fewer bits exchanged."
+   },
+   {
+    "evidence": [
+     "kale-2025-eager-diloco/1",
+     "kale-2025-eager-diloco/2"
+    ],
+    "metric": "C4 eval loss vs data-parallel at Chinchilla budgets, one-inner-step overlap, H = 30",
+    "compute_range_flop": [
+     9.4e+17,
+     1.9e+20
+    ],
+    "multiplier": 1.0,
+    "trend": "grows-with-scale",
+    "exponent_change": null,
+    "note": "2.48 vs 2.49 at 1B; 3.21 vs 3.19 at 100M (0.87). Eager outer-step overlap: 0.58 at 100M to 0.92 at 1B, 0.77 at H = 100."
    }
   ],
   "multiplier": {
    "value": 1.0,
-   "trend": "unknown",
+   "trend": "grows-with-scale",
    "evidence": [
-    "douillard-2025-streamingdiloco/4",
-    "douillard-2025-streamingdiloco/5"
+    "kale-2025-eager-diloco/1"
    ],
-   "metric": "loss vs data-parallel, 1B"
+   "metric": "C4 eval loss vs data-parallel at Chinchilla budget, 1B (1.9e20 FLOP)"
   },
   "confidence": "medium",
   "convention": "as-published"
@@ -3756,7 +3880,8 @@
   "family": "parallel-communication",
   "description": "DiLoCo with error feedback, top-k sparsification and 2-bit quantization of the outer update.",
   "sources": [
-   "sarfi-2025-sparseloco"
+   "sarfi-2025-sparseloco",
+   "lidin-2026-covenant72b"
   ],
   "traits": {
    "theorem_applies": true,
@@ -3787,6 +3912,20 @@
     "trend": "constant",
     "exponent_change": null,
     "note": "Lower loss at 97-99% sparsity."
+   },
+   {
+    "evidence": [
+     "lidin-2026-covenant72b/5"
+    ],
+    "metric": "zero-shot benchmarks vs LLaMA-2-70B (2T tokens), 72B on 1.1T tokens",
+    "compute_range_flop": [
+     4.8e+23,
+     4.8e+23
+    ],
+    "multiplier": null,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "No matched baseline: MMLU 67.1 vs 65.6, HellaSwag 80.6 vs 84.3, ARC-C 56.8 vs 57.4; not convertible. The existing multiplier is against DiLoCo; against data-parallel multiply by about 0.94."
    }
   ],
   "multiplier": {
@@ -3858,7 +3997,11 @@
   "family": "parallel-communication",
   "description": "Train domain expert LMs independently from a shared seed model and ensemble or average them.",
   "sources": [
-   "li-2022-btm"
+   "li-2022-btm",
+   "gururangan-2023-cbtm",
+   "sukhbaatar-2024-btx",
+   "filippova-2024-smalltalk",
+   "wortsman-2022-lofi"
   ],
   "traits": {
    "theorem_applies": true,
@@ -3877,7 +4020,7 @@
    "entry_fee_override": null,
    "fanout_override": null
   },
-  "notes": "Perplexity m_A about 2.5 for an ensemble; inference cost differs. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. No synchronization during expert training.",
+  "notes": "Perplexity m_A about 2.5 for an ensemble; inference cost differs. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. No synchronization during expert training. Shrinking the replica belongs in the model shape (n_active = expert size), not the traits. Confidence low; the earlier 2.5 is against a reference that is not compute-optimal.",
   "scaling": [
    {
     "evidence": [
@@ -3889,15 +4032,55 @@
     "trend": "grows-with-scale",
     "exponent_change": null,
     "note": "22.4B total parameters vs a Transformer with 2.5x the compute; gains grow with domain count."
+   },
+   {
+    "evidence": [
+     "filippova-2024-smalltalk/1",
+     "filippova-2024-smalltalk/2"
+    ],
+    "metric": "test perplexity at equal training FLOPs vs dense 1.3B, 32 x 335M experts",
+    "compute_range_flop": [
+     2.2e+21,
+     2.5e+21
+    ],
+    "multiplier": 1.0,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "9.07 vs 9.1 at 2.5e21 vs 2.2e21 FLOP; the 1.3B baseline is 10x overtrained, so 0.9-1.0 against a compute-optimal reference (derived)."
+   },
+   {
+    "evidence": [
+     "gururangan-2023-cbtm/1",
+     "gururangan-2023-cbtm/2"
+    ],
+    "metric": "C4 perplexity, training FLOPs incl. OPT seed, vs OPT-6.7B continued",
+    "compute_range_flop": null,
+    "multiplier": 3.5,
+    "trend": "grows-with-scale",
+    "exponent_change": null,
+    "note": "Reference not compute-optimal."
+   },
+   {
+    "evidence": [
+     "sukhbaatar-2024-btx/1",
+     "sukhbaatar-2024-btx/2"
+    ],
+    "metric": "downstream average vs dense, Llama-2 7B seed, same data",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "BTM top-2 43.4 vs dense 44.5 (negative); BTX with a joint MoE finetune 47.9."
    }
   ],
   "multiplier": {
-   "value": 2.5,
-   "trend": "grows-with-scale",
+   "value": 1.0,
+   "trend": "unknown",
    "evidence": [
-    "li-2022-btm/1"
+    "filippova-2024-smalltalk/1",
+    "filippova-2024-smalltalk/2"
    ],
-   "metric": "compute to equal perplexity, 64 domains"
+   "metric": "test perplexity at equal training FLOPs, Chinchilla-adjusted, 2.2e21 FLOP"
   },
   "confidence": "low",
   "convention": "as-published"
@@ -3909,7 +4092,9 @@
   "description": "Split the network into K gradient-isolated blocks, each trained by its own auxiliary loss.",
   "sources": [
    "moon-2026-greedy-local",
-   "siddiqui-2023-blockwise-ssl"
+   "siddiqui-2023-blockwise-ssl",
+   "belilovsky-2019-dgl",
+   "wang-2021-infopro"
   ],
   "traits": {
    "theorem_applies": true,
@@ -3969,6 +4154,28 @@
     "trend": "unknown",
     "exponent_change": null,
     "note": "Vision: 1.1% below end-to-end."
+   },
+   {
+    "evidence": [
+     "belilovsky-2019-dgl/1"
+    ],
+    "metric": "ImageNet top-1 vs backprop, K = 2-4 modules (CNN)",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Vision: VGG-13 K = 4 +1.2, VGG-19 K = 2 +1.1, ResNet-152 K = 2 +0.1 points."
+   },
+   {
+    "evidence": [
+     "wang-2021-infopro/1"
+    ],
+    "metric": "CIFAR-10 test error vs end-to-end, ResNet-32, K = 2-16",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Vision: 7.37% to 10.30/16.07/21.19/24.59% at K = 2/4/8/16; the gap grows steeply with K."
    }
   ],
   "multiplier": {
@@ -5709,5 +5916,153 @@
   ],
   "multiplier": null,
   "convention": "as-published"
+ },
+ {
+  "id": "path-composition",
+  "name": "DiPaCo path composition (256 paths of 150M)",
+  "family": "parallel-communication",
+  "description": "Paths through a shared pool of modules train mostly independently; each path is a small model.",
+  "sources": [
+   "douillard-2024-dipaco"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 2.5,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 4.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "Per-block traits match backprop's inside a path; what shrinks is the replica, which belongs in the model shape. Confidence low.",
+  "scaling": [
+   {
+    "evidence": [
+     "douillard-2024-dipaco/1",
+     "douillard-2024-dipaco/2",
+     "douillard-2024-dipaco/3"
+    ],
+    "metric": "C4 validation perplexity vs dense 1.3B, compute-matched (derived)",
+    "compute_range_flop": [
+     7.7e+21,
+     7.7e+21
+    ],
+    "multiplier": 0.05,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "256 paths of 150M match a dense 1.3B at about 21.5x its FLOPs; the authors call it significantly less FLOP-efficient and did not study its scaling."
+   }
+  ],
+  "multiplier": {
+   "value": 0.05,
+   "trend": "unknown",
+   "evidence": [
+    "douillard-2024-dipaco/1"
+   ],
+   "metric": "C4 validation perplexity vs dense, compute-matched (derived)"
+  },
+  "convention": "attacker"
+ },
+ {
+  "id": "diffusion-blocks",
+  "name": "DiffusionBlocks (block-independent denoising objectives)",
+  "family": "local-learning",
+  "description": "Each block is trained as an independent denoiser; no activation or gradient crosses between blocks in training.",
+  "sources": [
+   "shing-2025-diffusionblocks"
+  ],
+  "traits": {
+   "theorem_applies": false,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 2.5,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 0.0,
+   "boundary_bits": 4.0,
+   "crossings": 0,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "No activation crosses a block boundary during training and every block reads the whole token stream: its construction is about 1,500x cheaper than backprop's. One paper at about 100M with generation metrics only. Confidence low.",
+  "scaling": [
+   {
+    "evidence": [
+     "shing-2025-diffusionblocks/2",
+     "shing-2025-diffusionblocks/3"
+    ],
+    "metric": "MAUVE and generative perplexity vs end-to-end AR, 12 layers, 4 blocks",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "LM1B MAUVE 0.71 vs 0.50, OpenWebText 0.82 vs 0.85; perplexity is non-trivial to compute, so no held-out loss."
+   }
+  ],
+  "multiplier": null,
+  "convention": "attacker"
+ },
+ {
+  "id": "async-pipeline",
+  "name": "Asynchronous pipeline parallelism (stale weights)",
+  "family": "parallel-communication",
+  "description": "Pipeline stages update without waiting, using stale weights.",
+  "sources": [
+   "ajanthan-2025-async-pp",
+   "chen-2016-sync-sgd"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 2.5,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 4.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "Same bits cross per block, just stale. Confidence low.",
+  "scaling": [
+   {
+    "evidence": [
+     "ajanthan-2025-async-pp/1",
+     "ajanthan-2025-async-pp/2"
+    ],
+    "metric": "validation perplexity vs synchronous GPipe at equal iterations, 8 stages, 134M-1B",
+    "compute_range_flop": null,
+    "multiplier": 1.0,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "27.72 vs 30.63 WikiText perplexity at 134M; iteration-matched, not compute-optimal."
+   }
+  ],
+  "multiplier": {
+   "value": 1.0,
+   "trend": "unknown",
+   "evidence": [
+    "ajanthan-2025-async-pp/1"
+   ],
+   "metric": "validation perplexity vs synchronous pipeline at equal iterations"
+  },
+  "convention": "attacker"
  }
 ]

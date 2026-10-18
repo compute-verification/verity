@@ -198,6 +198,20 @@
      "koohpayegani-2024-nola/4",
      "qiu-2025-es-at-scale/2"
     ]
+   },
+   {
+    "id": "update.bits_total/frontier-agentic-rl",
+    "context": "agentic coding RL on a frontier-size model, smallest parametrization demonstrated to work",
+    "low": 2700000000.0,
+    "central": 26000000000.0,
+    "high": 16000000000000.0,
+    "confidence": "low",
+    "merge": "Low: Mehta's rank-32 LoRA if only attention and shared experts carry adapters. Central: TRACE's 1.6B-parameter adapter in bf16, and Mehta's mid reading. High: full-parameter RL on a 1T model in bf16, which Kimi K2 does.",
+    "evidence": [
+     "mehta-2026-agentic-coding-rl-transfer/1",
+     "kang-2026-trace/1",
+     "kimiteam-2025-kimi-k2/2"
+    ]
    }
   ]
  },
@@ -666,6 +680,132 @@
      "panferov-2025-unified-compressed/2",
      "panferov-2025-quest/3",
      "kumar-2024-precision-scaling/7"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "rl.compute_share",
+  "symbol": "s_RL",
+  "unit": "fraction of pretraining compute",
+  "meaning": "Compute spent on RL post-training divided by the base model's pretraining compute.",
+  "estimates": [
+   {
+    "id": "rl.compute_share/frontier-2025",
+    "context": "reasoning and agentic RL on frontier and near-frontier models, 2025",
+    "low": 0.01,
+    "central": 0.1,
+    "high": 1.0,
+    "confidence": "low",
+    "merge": "Low: smallest disclosed share for a competitive reasoning model (Llama-Nemotron Ultra <1%; DeepSeek-R1-Zero 3.8%). Central: the largest first-party measurement, DeepSeek-V3.2 'already exceeds 10%'. High: stated frontier practice without numbers, Grok 4 RL 'at pretraining scale', o3 at 10x o1. Epoch's 20% for R1 is set aside: it implies about 5x the GPU-hours DeepSeek reported.",
+    "evidence": [
+     "deepseek-2025-r1-nature/1",
+     "deepseek-2025-v32/1",
+     "xai-2025-grok4/1",
+     "openai-2025-o3/1",
+     "khatri-2025-scalerl/6",
+     "erdil-2025-epoch-r1/1",
+     "minimax-2025-m1/1",
+     "you-2025-reasoning-scale/1"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "rl.gain_share",
+  "symbol": "g_RL",
+  "unit": "fraction",
+  "meaning": "Fraction of a model's measured gain over its pretrained base that RL training accounts for.",
+  "estimates": [
+   {
+    "id": "rl.gain_share/same-base-pure-rl",
+    "context": "share of DeepSeek-R1's gain over DeepSeek-V3 reproduced by pure RL (R1-Zero) on the same 671B base, per benchmark",
+    "low": 0.17,
+    "central": 0.46,
+    "high": 0.95,
+    "confidence": "medium",
+    "merge": "Supplementary Table 9: SWE-bench Verified (43.2-42.0)/(49.2-42.0)=0.17; MMLU (88.8-87.1)/(90.8-87.1)=0.46; AIME 2024 (77.9-39.2)/(79.8-39.2)=0.95.",
+    "evidence": [
+     "deepseek-2025-r1-nature/4",
+     "deepseek-2025-r1-nature/3",
+     "deepseek-2025-r1/1"
+    ]
+   },
+   {
+    "id": "rl.gain_share/matched-tokens",
+    "context": "RL's own boost at matched output tokens as a share of a reasoning model's total gain over its base (Claude 3.7 vs 3.5 Sonnet)",
+    "low": 0.08,
+    "central": 0.18,
+    "high": 0.37,
+    "confidence": "low",
+    "merge": "Ord: OTIS Mock AIME 4/49, MATH level 5 6/34, GPQA Diamond 9/24; the remainder is inference scaling that RL unlocks. Consistent with Epoch's even log split of a ~10x CEG.",
+    "evidence": [
+     "ord-2025-mostly-inference-scaling/1",
+     "ord-2025-mostly-inference-scaling/2",
+     "ho-2025-reasoning-ceg/3"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "rl.small_state_retention",
+  "symbol": "r_K",
+  "unit": "fraction of full-weight RL's gain",
+  "meaning": "Fraction of full-weight RL's measured gain kept when RL's trainable state is at most about 2e7 bits.",
+  "estimates": [
+   {
+    "id": "rl.small_state_retention/math-rlvr",
+    "context": "RLVR on math, 1.5B-32B bases",
+    "low": 0.0,
+    "central": 0.9,
+    "high": 0.99,
+    "confidence": "medium",
+    "merge": "Retention favours the attacker, so high is the attacker's best. Low: rank-1 LoRA (about 1.8e7 bits) on DeepSeek-R1-Distill-Qwen-1.5B keeps 0%. Central: TinyLoRA keeps about 90% with 1000x fewer parameters at 7-8B; rank-1 LoRA (about 4e7 bits at 8B) matches full RL. High: AlphaRL's post-hoc rank-1 truncation keeps 99% at 7-32B (about 1e8 bits at 32B).",
+    "evidence": [
+     "morris-2026-tinylora/2",
+     "schulman-2025-lora-without-regret/8",
+     "cai-2025-alpharl/1",
+     "yin-2025-peft-rlvr/1"
+    ]
+   },
+   {
+    "id": "rl.small_state_retention/agentic-frontier",
+    "context": "agentic coding and SWE RL on a 100B-1T model",
+    "low": 0.1,
+    "central": 0.5,
+    "high": 0.9,
+    "confidence": "low",
+    "merge": "No measurement at about 2e7 bits exists above 32B or for agentic RL. The smallest state shown to work at 1T is a rank-32 LoRA of at least 2.7e9 bits, with no full-weight baseline; TRACE uses 2.6e10 bits per adapter at 30B; Yin's retention rises with rank (0 at rank 1, 0.77 at rank 16); Kimi K2 itself uses full-parameter RL. Central splits the elicitation reading from the rank-floor reading.",
+    "evidence": [
+     "mehta-2026-agentic-coding-rl-transfer/1",
+     "mehta-2026-agentic-coding-rl-transfer/2",
+     "kang-2026-trace/1",
+     "yin-2025-peft-rlvr/1",
+     "morris-2026-tinylora/5",
+     "kimiteam-2025-kimi-k2/2"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "rl.saturation_multiple",
+  "symbol": "C90/Cmid",
+  "unit": "x RL compute",
+  "meaning": "RL compute at 90% of the fitted asymptotic gain divided by the compute at half the gain, for a fixed base and task set.",
+  "estimates": [
+   {
+    "id": "rl.saturation_multiple/scalerl",
+    "context": "ScaleRL sigmoid fits, 8B dense and 17Bx16 MoE, math RLVR",
+    "low": 3.1,
+    "central": 3.2,
+    "high": 3.8,
+    "confidence": "medium",
+    "merge": "9^(1/B) with fitted B = 1.92 (8B, 14k), 1.89 (8B, 32k), 1.65 (Scout). Not a cap on total frontier RL: adding environments raises the asymptote.",
+    "evidence": [
+     "khatri-2025-scalerl/2",
+     "khatri-2025-scalerl/3",
+     "khatri-2025-scalerl/4",
+     "khatri-2025-scalerl/5"
     ]
    }
   ]
