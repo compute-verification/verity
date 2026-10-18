@@ -589,6 +589,8 @@ def main() -> int:
     ap.add_argument("--steps", default="1,0", help="steps to take a kind's Call from, in preference order")
     ap.add_argument("--layers", default="0,3")
     ap.add_argument("--only", default=None, help="comma-separated kinds")
+    ap.add_argument("--try", dest="try_kinds", default=None,
+                    help="comma-separated kinds staged though the table records no lowering for them (the stager's build is the test)")
     ap.add_argument("--k", type=int, default=None, help="the stratified rule's k (default: one unit a template)")
     ap.add_argument("--tries", type=int, default=4, help="Calls tried per kind")
     ap.add_argument("--unit-gates", type=int, default=4096)
@@ -608,7 +610,9 @@ def main() -> int:
 
     table = json.loads(Path(a.kinds).read_text())
     kinds = {f: r for f, r in table["kinds"].items() if r.get("gates", 0) > 0 and not f.startswith("Const")}
-    lowers = [f for f, r in kinds.items() if r.get("outcome") == "lowers" and (not a.only or f in a.only.split(","))]
+    tries = set(a.try_kinds.split(",")) if a.try_kinds else set()
+    lowers = [f for f, r in kinds.items() if (r.get("outcome") == "lowers" or f in tries) and (not a.only or f in a.only.split(","))]
+    summary["tried"] = sorted(tries & set(lowers))
     if a.load_values:
         staged, rows_of_kind, notes = load_values(Path(a.load_values), lowers)
         summary["values_from"] = {"dir": a.load_values, **notes["from"]}
