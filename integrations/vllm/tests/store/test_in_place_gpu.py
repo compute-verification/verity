@@ -13,7 +13,6 @@ from __future__ import annotations
 import os
 import random
 import threading
-import types
 
 import numpy as np
 import pytest
@@ -265,10 +264,9 @@ def int8_store() -> tuple[Store, list]:
 
 def windows(read, cache, layer: int, lens: list[int], table, slot_mapping=None):
     """One prefill step's windows of ``layer`` through ``read``: K and V [rows][KV heads][128]."""
-    qsl = torch.tensor([0, *np.cumsum(lens).tolist()], dtype=torch.int32, device="cuda")
-    st = read.step(types.SimpleNamespace(), qsl, torch.tensor(lens, dtype=torch.int32, device="cuda"), I8_HEADS, DIM)
-    read.window(st, cache, layer, table, slot_mapping)
-    return st.k, st.v
+    n, wo, k, v = read.buffers(torch.tensor(lens, dtype=torch.int32, device="cuda"), len(lens), I8_HEADS, DIM)
+    read.read(cache, layer, table, slot_mapping, n, wo, k, v)
+    return k, v
 
 
 def plain_windows(cache, lens: list[int], table):
