@@ -21,6 +21,9 @@ cannot both pass.
   (`ProvedScope.circuitOf`).
 * `check_refused_of_innerOf`: so `ProvedScope.check` refuses, at every tags, flags, public file and tables, every circuit
   file `RecVStar.innerOf` sets up.
+
+`check_metaLeaf` and `check_refused_of_innerOf` hold while `ProvedScope.check` passes only hm96 leaves. Flock's
+plain-leaves change (`cursor/flock-plain-leaves-sound-c7a9`) admits plain leaves outside `--zk`, and they go with it.
 -/
 
 namespace FlockSoundness.Discharge.InnerLeaf
@@ -227,7 +230,7 @@ theorem check_metaLeaf {t : Tags} {zk : Bool} {cf pf : ByteArray} {tables : List
     intro r hr
     simpa using hf r hr
   simp only [ProvedScope.statementRules, List.mem_cons, List.mem_nil_iff, or_false, forall_eq_or_imp, forall_eq,
-    Bool.not_eq_true', Bool.or_eq_true, decide_eq_true_eq, beq_iff_eq] at hall
+    Bool.not_eq_true', decide_eq_true_eq, beq_iff_eq] at hall
   obtain ⟨-, htyped, -, hleaf, -⟩ := hall
   split at h
   · cases h
