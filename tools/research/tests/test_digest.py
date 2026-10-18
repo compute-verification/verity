@@ -20,6 +20,7 @@ class Fake:
         self.bells: list[dict] = []
         self.replies: dict[str, list[dict]] = {}
         self.main = ("m1", [])
+        self.landing_times: list[float] = []
         self.rows: list[dict] = []
         self.states: dict[int, str] = {}
         self.note_files: tuple[str, list[str]] = ("n1", [])
@@ -41,7 +42,8 @@ class Fake:
             self._check("landings")
             return self.main
 
-        return D.Sources(doorbells=bells, thread=thread, landings=landings, queue=lambda: self.rows,
+        return D.Sources(doorbells=bells, thread=thread, landings=landings,
+                         landed_since=lambda t: sum(1 for x in self.landing_times if x >= t), queue=lambda: self.rows,
                          pr_state=lambda n: self.states.get(n, ""), notes=lambda last: self.note_files, now=lambda: NOW)
 
 
@@ -84,10 +86,13 @@ def test_landings_name_the_queue_merges_and_a_lane_pr_that_left_the_queue_says_w
     assert s["main"] == "m2" and s["queue"] == {}
 
 
-def test_a_watched_pr_triggers_when_it_lands_or_its_state_changes_but_not_when_first_seen():
+def test_a_watched_pr_triggers_when_it_lands_or_its_state_changes_but_not_when_first_seen_or_only_its_head_moves():
     f, s = Fake(), D.load(D.state_path(LANE, "/nonexistent/x.json"))
     s["watch"] = {"20": "merge main into #21", "30": "re-mark #31"}
     f.rows = [row(20, "queued", owner="ci"), row(30, "queued", owner="ci")]
+    out, _ = D.digest(LANE, s, f.sources())
+    assert not any("TRIGGER" in x for x in out)
+    f.rows = [row(20, "queued", owner="ci", head="b" * 40), row(30, "queued", owner="ci", head="c" * 40)]
     out, _ = D.digest(LANE, s, f.sources())
     assert not any("TRIGGER" in x for x in out)
     f.rows = [row(30, "refused", owner="ci", why="conflicts with next")]
@@ -95,6 +100,17 @@ def test_a_watched_pr_triggers_when_it_lands_or_its_state_changes_but_not_when_f
     out, _ = D.digest(LANE, s, f.sources())
     assert "- TRIGGER #20 landed: merge main into #21" in out
     assert any(x.startswith("- TRIGGER #30 is now refused") and "re-mark #31" in x for x in out)
+
+
+def test_the_queue_line_counts_every_lane_by_state_with_the_landings_of_the_last_six_hours():
+    f, s = Fake(), D.load(D.state_path(LANE, "/nonexistent/x.json"))
+    f.rows = [row(10, "queued"), row(11, "queued", owner="ci"), row(12, "waiting", owner="vllm")]
+    f.landing_times = [NOW - 600, NOW - 5 * 3600, NOW - 7 * 3600]
+    out, _ = D.digest(LANE, s, f.sources())
+    assert "## Queue: 2 queued, 1 waiting; 2 landed in the last 6 h" in out
+    f.rows = [row(10, "queued", head="d" * 40)]
+    out, _ = D.digest(LANE, s, f.sources())
+    assert any(x.startswith("- #10 dddddddd queued (new head)") for x in out)
 
 
 def test_a_failing_source_is_reported_keeps_its_cursor_and_hides_nothing_else():

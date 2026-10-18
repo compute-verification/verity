@@ -3,11 +3,12 @@ regular sync. It shows:
 
 - the lane's doorbells, marked read;
 - other handles' new replies in the threads the lane watches;
-- what landed on `main`;
-- the lane's PRs whose queue state changed;
+- what landed on `main`, and how many landed in the last 6 h;
+- the queue's length by state, over every lane;
+- the lane's PRs whose queue state or head changed;
 - new or changed notes under lanes/LANE;
-- a TRIGGER line for each watched PR that landed or changed its queue state, with the step the lane wrote for that
-  moment.
+- a TRIGGER line for each watched PR that landed or changed its queue state (not merely its head), with the step the
+  lane wrote for that moment.
 
   research digest --as LANE                          the digest
   research digest --as LANE --watch N 'TODO'         print TODO as a TRIGGER when #N lands or its queue state changes
@@ -36,6 +37,8 @@ from typing import Callable
 
 #: How far back a first digest reads doorbells and threads.
 FIRST_LOOKBACK_S = 3600
+#: The landing rate's window.
+RATE_WINDOW_H = 6
 CHANNEL = "agent-coordination"
 QUEUE_SUBJECT = re.compile(r"^Queue: #(\d+)")
 
@@ -45,6 +48,7 @@ class Sources:
     doorbells: Callable[[str], list[dict]]            # since ts -> the lane's doorbells after it, marked read
     thread: Callable[[str, str, str], list[dict]]     # channel, thread ts, since ts -> its replies after it
     landings: Callable[[str | None], tuple[str, list[str]]]   # last main tip -> (tip, first-parent subjects, oldest first)
+    landed_since: Callable[[float], int]              # unix time -> drive's landings on main since then
     queue: Callable[[], list[dict]]                   # `research queue status --json`
     pr_state: Callable[[int], str]                    # OPEN, MERGED, CLOSED, or "" when unknown
     notes: Callable[[str | None], tuple[str, list[str]]]      # last notes tip -> (tip, changed paths under lanes/LANE)
@@ -125,8 +129,20 @@ def _landings(s: dict, src: Sources, out: list[str]) -> set[int]:
     return {int(QUEUE_SUBJECT.match(x)[1]) for x in queued}
 
 
+def _summary(src: Sources, rows: list[dict], out: list[str]) -> None:
+    """Every lane's queue by state and the landing rate: what a sweep of the whole queue reads."""
+    counts: dict[str, int] = {}
+    for r in rows:
+        counts[r["state"]] = counts.get(r["state"], 0) + 1
+    n = src.landed_since(src.now() - RATE_WINDOW_H * 3600)
+    out.append(f"## Queue: {', '.join(f'{c} {st}' for st, c in sorted(counts.items())) or 'empty'}; "
+               f"{n} landed in the last {RATE_WINDOW_H} h")
+
+
 def _queue(lane: str, s: dict, src: Sources, landed: set[int], out: list[str]) -> None:
-    rows = {str(r["pr"]): r for r in src.queue()}
+    listed = src.queue()
+    _summary(src, listed, out)
+    rows = {str(r["pr"]): r for r in listed}
     ours = {k: r for k, r in rows.items() if r.get("owner") == lane}
     old = s["queue"]
     lines = []
@@ -134,7 +150,8 @@ def _queue(lane: str, s: dict, src: Sources, landed: set[int], out: list[str]) -
         cur = [r["head"][:8], r["state"], why(r)]
         if old.get(k) != cur:
             pos = f" at {r['position']}" if r.get("position") else ""
-            was = f" (was {old[k][1]})" if k in old else " (new)"
+            was = (" (new)" if k not in old else f" (was {old[k][1]})" if old[k][1] != cur[1] else
+                   " (new head)" if old[k][0] != cur[0] else "")
             lines.append(f"- #{k} {cur[0]} {cur[1]}{pos}{was}{': ' + plain(cur[2], 200) if cur[2] else ''}")
     for k in sorted(set(old) - set(ours), key=int):
         lines.append(f"- #{k} landed" if int(k) in landed else f"- #{k} left the queue ({src.pr_state(int(k)) or 'state unknown'})")
@@ -145,10 +162,11 @@ def _queue(lane: str, s: dict, src: Sources, landed: set[int], out: list[str]) -
     out += lines
     s["queue"] = {k: [r["head"][:8], r["state"], why(r)] for k, r in ours.items()}
 
+    # A watched PR triggers on its state, not its head: a waiting PR's new head is its owner's news, not the watcher's.
     triggers = []
     for k, todo in s["watch"].items():
         r = rows.get(k)
-        cur = f"{r['state']}:{r['head'][:8]}" if r else None
+        cur = r["state"] if r else None
         prev = s["watch_seen"].get(k)
         if int(k) in landed:
             triggers.append(f"- TRIGGER #{k} landed: {todo}")
@@ -216,6 +234,11 @@ def real_sources(lane: str, repo: Path, notes_root: Path) -> Sources:
             return tip, []
         return tip, _git(repo, "log", "--first-parent", "--reverse", "--format=%s", f"{last}..{tip}").splitlines()
 
+    def landed_since(t: float) -> int:
+        since = datetime.fromtimestamp(t, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        log = _git(repo, "log", "--first-parent", f"--since={since}", "--format=%s", "origin/main").splitlines()
+        return sum(1 for x in log if QUEUE_SUBJECT.match(x))
+
     def pr_state(n: int) -> str:
         try:
             r = subprocess.run(["gh", "pr", "view", str(n), "--json", "state", "-q", ".state"], cwd=repo, capture_output=True,
@@ -240,6 +263,7 @@ def real_sources(lane: str, repo: Path, notes_root: Path) -> Sources:
         thread=lambda ch, ts, since: json.loads(
             _research("msg", "read", "--channel", ch, "--thread", ts, "--since", since, "--json", cwd=repo) or "[]"),
         landings=landings,
+        landed_since=landed_since,
         queue=lambda: json.loads(_research("queue", "status", "--json", cwd=repo)),
         pr_state=pr_state,
         notes=notes,
