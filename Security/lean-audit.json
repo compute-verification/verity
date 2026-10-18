@@ -958,6 +958,42 @@
    "assumptions": [],
    "type_hash": "5b40f0c5460acaf648aa680d40b856fc259b43c20551db825483644902c6b28a"
   },
+  "Accounting.SecurityProofs.HMu.CoinPointMass": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.HMu.CoinPointMass : Accounting.Guarantees.HMu.CoinPointMass"],
+   "assumptions": [],
+   "type_hash": "4c215cc30591baa08fcc77170ed8662c11347c76e15be83d4b290314b59809b6"
+  },
+  "Accounting.SecurityProofs.HMu.CoinPointMassHalf": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.HMu.CoinPointMassHalf : Accounting.Guarantees.HMu.CoinPointMassHalf"],
+   "assumptions": [],
+   "type_hash": "62c6bc60e20cae196ae16d97c7da612924ed7f2881b086692c140b727d725972"
+  },
+  "Accounting.SecurityProofs.HMu.LemmaB": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.HMu.LemmaB : Accounting.Guarantees.HMu.LemmaB"],
+   "assumptions": [],
+   "type_hash": "990ddd8ec1528b35bcbf12eea8f91dd75c2784a3a69e2a9e1d7f9066093e52d6"
+  },
+  "Accounting.SecurityProofs.HMu.PersistentOneWord": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.HMu.PersistentOneWord : Accounting.Guarantees.HMu.PersistentOneWord"],
+   "assumptions": [],
+   "type_hash": "468c43a6861f9e517e67ee49bd626878f2f909484391efd590f1f8c0f6dc1b71"
+  },
+  "Accounting.SecurityProofs.HMu.ReceiptLuckOfCoin": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.HMu.ReceiptLuckOfCoin : Accounting.Guarantees.HMu.ReceiptLuckOfCoin"],
+   "assumptions": [],
+   "type_hash": "41cd9d72084d751ecf53d60b8e4434d695012e4ce54860bc98eb37d1838dd108"
+  },
+  "Accounting.SecurityProofs.HMu.ReceiptLuckOfCoins": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.HMu.ReceiptLuckOfCoins : Accounting.Guarantees.HMu.ReceiptLuckOfCoins"],
+   "assumptions": [],
+   "type_hash": "fb99de71127106ae6cdd65099fe49b291b6cbcf99c4b328c6701bafe267957db"
+  },
   "Accounting.SecurityProofs.HorizonSampling": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.HorizonSampling : Accounting.Guarantees.HorizonSampling"],
@@ -5340,6 +5376,22 @@
    "Accounting.SecurityProofs.Gates.LutSoftmaxRange": {
     "function": "Accounting.Gates.lutSoftmax",
     "outcome": "none"
+   },
+   "Accounting.SecurityProofs.HMu.CoinPointMass": {
+    "function": "Accounting.HMu.coinSum",
+    "outcome": "none"
+   },
+   "Accounting.SecurityProofs.HMu.CoinPointMassHalf": {
+    "function": "Accounting.HMu.coinSum",
+    "outcome": "none"
+   },
+   "Accounting.SecurityProofs.HMu.ReceiptLuckOfCoins": {
+    "function": "Accounting.HMu.CoinRound.lucky",
+    "outcome": "none"
+   },
+   "Accounting.SecurityProofs.HMu.ReceiptLuckOfCoin": {
+    "function": "Accounting.HMu.CoinRound.lucky",
+    "outcome": "none"
    }
   },
   "frozen": {
@@ -5856,7 +5908,9 @@
    "Accounting.SecurityProofs.TS.LuckCaseAKeyed": "lemma: LuckCaseA at the operand luck 0 that a share of wrong words (a definition, the keyed rounds' share) gives, (L) at 0 in case (a); not a property of a Lean function.",
    "Accounting.SecurityProofs.Gates.SquaringCarryNibbles": "frozen (no-function): The carry bound over every circuit of the gate model that squares on the nibble family (Accounting.Gates.nibbles), a counting bound from Fooling at j = 4, not a property of a Lean function.",
    "Accounting.SecurityProofs.Gates.UnitsFooling": "frozen (no-function): A counting bound in budgeted units over every circuit of the gate model (Security/Definitions/Accounting/Gates/Model.lean) and every set of inputs, not a property of a Lean function: the property's census check has no Lean code yet.",
-   "Accounting.SecurityProofs.Gates.SquaringUnits": "frozen (no-function): The units bound over every circuit of the gate model that squares on the nibble family (Accounting.Gates.nibbles), a counting bound from UnitsFooling, not a property of a Lean function."
+   "Accounting.SecurityProofs.Gates.SquaringUnits": "frozen (no-function): The units bound over every circuit of the gate model that squares on the nibble family (Accounting.Gates.nibbles), a counting bound from UnitsFooling, not a property of a Lean function.",
+   "Accounting.SecurityProofs.HMu.LemmaB": "lemma: Lemma B of the receipt-aggregate binding note (decisions 22 and 48), receipt luck at most Z*mu times the deficiency under (H-mu+) taken as a hypothesis (SkipRound.HMuPlus, a definition, not a named assumption); ReceiptLuckOfCoins and ReceiptLuckOfCoin are what it is for.",
+   "Accounting.SecurityProofs.HMu.PersistentOneWord": "lemma: Lemma B' for a persistent pattern with one word before the checkpoint, a fold's checkpoint state injective in the skipped value from the step's injectivity in state and word and the pattern's positions, taken as hypotheses; it gives SkipRound.Inj with Z = 1."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
@@ -6533,6 +6587,41 @@
     "Accounting.SecurityProofs.Gates.LutSoftmaxRange",
     "Accounting.SecurityProofs.Gates.QuantRange",
     "Accounting.SecurityProofs.Gates.RzByteRange"
+   ]
+  },
+  "Definitions.Accounting.HMu": {
+   "digest": "b769a47b858342f26e4405da532dd500ff345516e706a63a4405a726057fd98b",
+   "definitions": {
+    "Accounting.HMu.CoinRound": "cf8cbc4850a4386b90b5e80ede8d6e43324857c6ba7183325c984ad4b8c6eb71",
+    "Accounting.HMu.CoinRound.Inj": "30a1bf5fa406a44acecdcf3b2169355647f25ec5ca99ee645813772a9b136894",
+    "Accounting.HMu.CoinRound.base": "97c76016df982c4d468ea3e1f8edc7c6f93901adb96c53d7346e16c9c892ca29",
+    "Accounting.HMu.CoinRound.committed": "2bbc8ee0f1f3ecdfdfe9a046e814f46e173d2c99c0af810746e2b2a797aa146b",
+    "Accounting.HMu.CoinRound.d": "62ec0784a932731df6a22d6708ed2c2f2bad27bd569e28c9787fa5b3c2a83bbb",
+    "Accounting.HMu.CoinRound.honest": "a106427a9e264767a2d96a25954c7033f11d26f45dc015657a84cf136da4961b",
+    "Accounting.HMu.CoinRound.lucky": "f3aa8a03c04ceeff457571ee249f2aa6690bef277a640ff1236361142bfafbce",
+    "Accounting.HMu.CoinRound.skipped": "cbd481c45ee1928abfeb1e8fff2b93cac4d9cc738592db5c454a112c46879840",
+    "Accounting.HMu.CoinRound.weight": "af3dd2fb033ebfaefe948dc08dd07e64a1e972e04f4c615ea514ff5f7529b938",
+    "Accounting.HMu.SkipRound": "8390732f289217d622a124a873406756a6d29ace45985c75d84313c2edca2f2c",
+    "Accounting.HMu.SkipRound.HMuPlus": "03c95eb45c91d0972a010eba55f2dab9afe4252555ec0176320f116cd9a01592",
+    "Accounting.HMu.SkipRound.Inj": "7d32afde0c25032a8ffe35d58dfca676b2c5b96a56058a949bdfea44b7797794",
+    "Accounting.HMu.SkipRound.PointMass": "d37ce8587f2ae4e1ef2014e0a12d792295addafb6c4b5d7b5a6b89a7f7f7bd0f",
+    "Accounting.HMu.SkipRound.committed": "c6682b0588b42994e2851433e4cf6e8a187a9a53770215486d3445f444be7496",
+    "Accounting.HMu.SkipRound.d": "e69aa8b317114192de76f842049f67c3945e971312a6d7299861ee505a18937f",
+    "Accounting.HMu.SkipRound.honest": "5e39ae0c75a04be40cc58a082182f2f473aa38b22b6065263d13e8a7e834bdab",
+    "Accounting.HMu.SkipRound.lucky": "a89560458661b6022105413100df7bbc2788cc7aa45d0494ebe796b1f4b223df",
+    "Accounting.HMu.SkipRound.skipped": "f3f8c97ceecf872fa25d23b85e69cdfb51860773dd5de8a68789b1b8ce5f47f4",
+    "Accounting.HMu.SkipRound.view": "336a757f801eb0e8f1ad29c41a89e1a13952a2edeeb03b719c89ca0e80a498bc",
+    "Accounting.HMu.chain": "c07092b2bc5d88a358af3aaa340b9689e5874178c96df4d572440650c3c59433",
+    "Accounting.HMu.coinSum": "5b87efa06e773c2b599ce1eea655913b6b059fbab5ba16f5d9815a71b29a85c1",
+    "Accounting.HMu.persist": "d25d873c34651c851b94e9e79a1e17865fcdba8cd0aea86da832ab0037f776ad"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.HMu.CoinPointMass",
+    "Accounting.SecurityProofs.HMu.CoinPointMassHalf",
+    "Accounting.SecurityProofs.HMu.LemmaB",
+    "Accounting.SecurityProofs.HMu.PersistentOneWord",
+    "Accounting.SecurityProofs.HMu.ReceiptLuckOfCoin",
+    "Accounting.SecurityProofs.HMu.ReceiptLuckOfCoins"
    ]
   },
   "Definitions.Accounting.Joint": {
@@ -12763,6 +12852,11 @@
     "Pouw.RelativeSecurity.wRe": "8111c43d37e7e41182d2ee61f0d6d86d9c6f2991686898fc9e1ea46a14ebac70"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.HMu.CoinPointMass",
+    "Accounting.SecurityProofs.HMu.CoinPointMassHalf",
+    "Accounting.SecurityProofs.HMu.LemmaB",
+    "Accounting.SecurityProofs.HMu.ReceiptLuckOfCoin",
+    "Accounting.SecurityProofs.HMu.ReceiptLuckOfCoins",
     "Accounting.SecurityProofs.TS.CompilerC",
     "Accounting.SecurityProofs.TS.DIdeal",
     "Accounting.SecurityProofs.TS.DIdealFloor",
@@ -17951,6 +18045,25 @@
     "Accounting.SecurityProofs.Gates.SquaringCarryNibbles",
     "Accounting.SecurityProofs.Gates.SquaringUnits",
     "Accounting.SecurityProofs.Gates.UnitsFooling"
+   ]
+  },
+  "Models.Accounting.Guarantees.HMu": {
+   "digest": "b08f25418b8b3ef93f63d5d8f7b9c510362dcaae40b3dd50eac0975a13776b68",
+   "definitions": {
+    "Accounting.Guarantees.HMu.CoinPointMass": "74f5bde5c7271dec88f68e21bead1150117f4872e35831ebab498f512aa2ea6b",
+    "Accounting.Guarantees.HMu.CoinPointMassHalf": "add310934e2ed29badfed09aca2c88d25b5e33efad83e767bca53de7ba74627a",
+    "Accounting.Guarantees.HMu.LemmaB": "7804e57e65e15be1deda23636a7a29ed248a19ee438a06b50e145f37fa91ae5c",
+    "Accounting.Guarantees.HMu.PersistentOneWord": "e5f53d46475f73a84bb18c7d81fdff7b451a86d5effebd38231225351d041ff1",
+    "Accounting.Guarantees.HMu.ReceiptLuckOfCoin": "29d5648a19ef2051135e059266fd26c90279c9ea0cc0d2d6353b317299febaaf",
+    "Accounting.Guarantees.HMu.ReceiptLuckOfCoins": "78d0c7091b102a336213d73f0b05e245ae63d36a790b0adf9454d31d8bc007f0"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.HMu.CoinPointMass",
+    "Accounting.SecurityProofs.HMu.CoinPointMassHalf",
+    "Accounting.SecurityProofs.HMu.LemmaB",
+    "Accounting.SecurityProofs.HMu.PersistentOneWord",
+    "Accounting.SecurityProofs.HMu.ReceiptLuckOfCoin",
+    "Accounting.SecurityProofs.HMu.ReceiptLuckOfCoins"
    ]
   },
   "Models.Accounting.Guarantees.Joint": {
