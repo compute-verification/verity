@@ -65,6 +65,8 @@ P_ALIVE = 0.5                        # an alive word's luck over its column's co
 Q_BIT = 0.5                          # a one-bit dither's dead mass a product
 Q_KEYED = 1 / 129                    # a keyed word's (PouwU129's ±64 range): the lever "raise h"
 KAPPA_LIVE = BU.P_PASS / (1 - BU.P_PASS)
+#: (κ, r·θ) that `Accounting.SecurityProofs.TS.TemplateCondition` proves in Lean for 32 columns and a one-bit dither
+PROVED = (4.0, 1 / 256)
 KAPPAS = tuple(round(3 + 0.05 * i, 2) for i in range(181))   # 3 … 12
 H_BITS = (0.415, 1.44, 6.0, 16.0)    # sensitivities, bits a tile
 FLAG = 1e-3                          # a cell over 0.1% is flagged
@@ -138,20 +140,24 @@ def sites(shape: EB.Shape, regime: str, n: int, ctx: int) -> list[Site]:
     return out
 
 
-def premium(site: Site, t_bits: int, kappa: float, q: float = Q_BIT) -> float:
-    """π* in products for one seed group at the template's θ (inf when θ = 0)."""
-    y = y_star(site.c, kappa, q)
+def premium(site: Site, t_bits: int, kappa: float, q: float = Q_BIT, y: float | None = None) -> float:
+    """π* in products for one seed group at the template's θ = y/r (y = y* unless given; inf when θ = 0)."""
+    if y is None:
+        y = y_star(site.c, kappa, q)
+    else:
+        assert site.c == TILE[1] and kappa == PROVED[0] and q == Q_BIT, "the proved point is for 32 columns, κ = 4"
     return math.inf if y == 0 else ln_t_over_delta(t_bits) * site.r / y
 
 
-def eps_by_kind(ss: list[Site], t_bits: int, kappa: float, q: float = Q_BIT) -> dict[str, float]:
+def eps_by_kind(ss: list[Site], t_bits: int, kappa: float, q: float = Q_BIT,
+                y: float | None = None) -> dict[str, float]:
     """ε_grind per kind and for the whole layer (the model's, since layers repeat): Σ π* / Σ products."""
     out = {}
     for kind in ("linears", "qk", "pv"):
         ks = [s for s in ss if s.kind == kind]
-        out[kind] = sum(premium(s, t_bits, kappa, q) for s in ks) / sum(s.macs for s in ks)
-    out["all"] = sum(premium(s, t_bits, kappa, q) for s in ss) / sum(s.macs for s in ss)
-    out["worst_site"] = max(premium(s, t_bits, kappa, q) / s.macs for s in ss)
+        out[kind] = sum(premium(s, t_bits, kappa, q, y) for s in ks) / sum(s.macs for s in ks)
+    out["all"] = sum(premium(s, t_bits, kappa, q, y) for s in ss) / sum(s.macs for s in ss)
+    out["worst_site"] = max(premium(s, t_bits, kappa, q, y) / s.macs for s in ss)
     return out
 
 
@@ -277,7 +283,7 @@ def label(regime: str, n: int, ctx: int) -> str:
 
 def table() -> dict:
     fams = {f.name: BU.today(f) for f in BU.FAMILIES}
-    rows, sens, h1, templ = [], [], [], {}
+    rows, proved, sens, h1, templ = [], [], [], [], {}
     for kappa in (3, 3.25, 3.5, 4, 5, 6, 8, 12):
         templ[f"c={TILE[1]} κ={kappa}"] = {"y_star": y_star(TILE[1], kappa),
                                            "y_star_keyed": y_star(TILE[1], kappa, Q_KEYED)}
@@ -294,13 +300,17 @@ def table() -> dict:
                                  "eps_luck": pt.eps_luck, "eps_sample": pt.eps_sample,
                                  "keyed": {"kappa": k_kappa, "kappa_excess": k_extra, "all": k_g},
                                  "flag": [k for k in ("linears", "qk", "pv") if e[k] > FLAG]})
+                p = eps_by_kind(ss, t, PROVED[0], y=PROVED[1])
+                proved.append({"model": model, "regime": label(regime, n, ctx), "T_bits": t, **p,
+                               "flag": [k for k in ("linears", "qk", "pv") if p[k] > FLAG]})
                 sens.append({"model": model, "regime": label(regime, n, ctx), "T_bits": t,
                              **{f"h={h}": eps_at_h(ss, t, h) for h in H_BITS}})
                 h1.append({"model": model, "regime": label(regime, n, ctx), "T_bits": t,
                            "head": h1_attention(shape, regime, n, ctx, t, "head"),
                            "call": h1_attention(shape, regime, n, ctx, t, "call")})
-    return {"rows": rows, "sensitivity": sens, "h1_attention": h1, "template": templ, "levers": levers(),
-            "decode_levers": decode_levers()}
+    excess = {fam: (PROVED[0] - KAPPA_LIVE) / 4 * pt.eps_luck for fam, pt in fams.items()}
+    return {"rows": rows, "proved": {"rows": proved, "kappa_excess": excess}, "sensitivity": sens,
+            "h1_attention": h1, "template": templ, "levers": levers(), "decode_levers": decode_levers()}
 
 
 def levers() -> dict:
@@ -308,13 +318,13 @@ def levers() -> dict:
     hashes as the log factors they are."""
     out = {"cover_at_template": {}, "cover_at_h": {}, "log_factors": {}}
     c = TILE[1]
-    for kappa in (4, 6):
+    for kappa, how in ((4, "y*"), (6, "y*"), (PROVED[0], "proved")):
         for name, k in {"linear K=4096": 4096, "linear K=14336": 14336, "QKᵀ K=d=128": 128, "P·V K=2048": 2048,
                         "P·V K=32768": 32768}.items():
-            y = y_star(c, kappa)
+            y = y_star(c, kappa) if how == "y*" else PROVED[1]
             pi_tiles = ln_t_over_delta(128) / (y * c * k)
-            out["cover_at_template"][f"{name}, κ={kappa}"] = {"pi_star_tiles": pi_tiles, "cover": pi_tiles / FLAG,
-                                                             "h_tile_bits": y * c * k / LN2}
+            out["cover_at_template"][f"{name}, κ={kappa:g}, {how}"] = {
+                "pi_star_tiles": pi_tiles, "cover": pi_tiles / FLAG, "h_tile_bits": y * c * k / LN2}
     for h in H_BITS:
         out["cover_at_h"][f"h={h}"] = {t: (t + DELTA_BITS) / h / FLAG for t in T_BITS}
     base = 128 + DELTA_BITS
@@ -348,6 +358,14 @@ def render(t: dict) -> str:
                      f"{_pct(r['kappa_excess'])} | {_cell(r['linears'])} | {_cell(r['qk'])} | {_cell(r['pv'])} | "
                      f"{_cell(r['all'])} | {_cell(r['worst_site'])} | "
                      f"{k['kappa']}, {_pct(k['kappa_excess'])}, {_cell(k['all'])} |")
+    pr = t["proved"]
+    lines += ["", f"## At the point Lean proves (`TemplateMoment`: κ = {PROVED[0]:g}, r·θ = 1/{1 / PROVED[1]:.0f})", "",
+              "κ = 4's excess (κ − 3)/4·ε_luck: "
+              + ", ".join(f"{fam} {_pct(x)}" for fam, x in pr["kappa_excess"].items()) + ".", "",
+              "| model | regime | T | linears | QKᵀ | P·V | all kinds | worst site |", "|---|---|---|---|---|---|---|---|"]
+    for r in pr["rows"]:
+        lines.append(f"| {r['model']} | {r['regime']} | 2^{r['T_bits']} | {_cell(r['linears'])} | {_cell(r['qk'])} | "
+                     f"{_cell(r['pv'])} | {_cell(r['all'])} | {_cell(r['worst_site'])} |")
     lines += ["", "## Sensitivity: h bits a tile (log₂(T/δ)/h tiles a seed group)", "",
               "| model | regime | T | " + " | ".join(f"h={h}: lin / QKᵀ / P·V" for h in H_BITS) + " |",
               "|---|---|---|" + "---|" * len(H_BITS)]

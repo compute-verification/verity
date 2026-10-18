@@ -35,6 +35,12 @@ def test_y_star_meets_tile_lucks_condition_at_every_word_size_and_is_tight(kappa
     assert any(G._log_f(w, y * 1.001, C, kappa, q) > 0 for w in W)
 
 
+def test_the_point_lean_proves_meets_the_condition_inside_the_optimum():
+    kappa, y = G.PROVED
+    assert all(G._log_f(w, y, C, kappa, G.Q_BIT) <= 0 for w in W)
+    assert 2 < G.y_star(C, kappa) / y < 3
+
+
 def test_y_star_grows_with_kappa_and_with_the_keyed_dither():
     ys = [G.y_star(C, k) for k in G.KAPPAS[1:]]
     assert ys == sorted(ys)
@@ -46,7 +52,7 @@ def test_the_premium_is_ln_t_over_delta_over_theta_and_infinite_without_slack():
     s = G.Site("linears", "x", 32 * C * 4096 * 10, 32, C, 4096)
     assert G.premium(s, 128, 4.0) == pytest.approx(G.ln_t_over_delta(128) * s.r / G.y_star(C, 4.0))
     assert G.premium(s, 128, G.KAPPA_LIVE) == math.inf
-    assert G.levers()["cover_at_template"]["linear K=4096, κ=4"]["pi_star_tiles"] == pytest.approx(
+    assert G.levers()["cover_at_template"]["linear K=4096, κ=4, y*"]["pi_star_tiles"] == pytest.approx(
         G.premium(s, 128, 4.0) / s.tile_macs)
 
 
