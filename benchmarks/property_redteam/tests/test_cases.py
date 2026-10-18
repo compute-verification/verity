@@ -142,11 +142,20 @@ def test_an_oracle_of_the_ruling_passes_every_case():
 
 
 def test_accept_all_is_unsound_on_every_attack():
+    """Every attack the IR builds is unsound under accept-all; one it refuses at build (the reinterpretations, `E_REINTERPRET`)
+    never reaches the check, and the runner grades it as refused."""
     report = R.run(R.accept_all)
     assert not report["passed"]
+    at_build = set()
     for row in report["rows"]:
-        if row["outcome"] != "skipped":
+        if row["outcome"] == "skipped":
+            continue
+        if row.get("note", "").startswith("the IR refuses it at build"):
+            at_build.add(row["id"])
+            assert row["kind"] == "attack" and row["outcome"] == R.grade(C.BY_ID[row["id"]], True, {}), row
+        else:
             assert row["outcome"] == ("ok" if row["kind"] == "honest" else "unsound"), row
+    assert {"pun-s32-as-e4m3", "pun-s32-as-s8"} <= at_build
 
 
 def test_refuse_all_is_sound_and_over_strict():

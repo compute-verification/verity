@@ -9,6 +9,11 @@
                      (`verity.ml.circuits.boolean.trace.word_of`) also equals that word Definition through its word view.  A
                      registered table a Definition reads (`targets.TABLE_PROBES`) is read lazily and probed at chosen
                      entries (`vectors.table_instances`), recorded under ``table`` with the words the instances read
+    ports            a Definition's declared return intervals (`verity.ml.circuits.ports`, PROTOCOL.md §12), which the Build takes
+                     as facts about a primitive: its reference on edge and random operands, each leaf of a bounded parameter
+                     folded into its bound, returns every leaf within its interval; and a primitive's transfer, on drawn
+                     operand intervals within its bounds with every operand leaf folded into its interval, returns within the
+                     interval the transfer gives; recorded only for a Definition that declares either
     redundant gates  a value computed twice inside one unit: the IR gates `verity_vllm.query.word.Graph` finds recomputed (same
                      primitive, same operands by value) that `word.units` puts in one unit, and the ANDs of a Boolean unit on
                      identical operands; counted, with where (primitive @ activation, or the named subcircuit)
@@ -34,6 +39,7 @@ is a warning.
 """
 from __future__ import annotations
 
+import random
 from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -215,6 +221,93 @@ def correspondence(t: Any, opts: Options, F: Findings) -> tuple[dict, list[np.nd
             F.fail("correspondence", "kernel-mismatch", t.id, f"[{name}]: {len(sc.mismatches)} of {sc.n} vectors", via=f"kernel:{name}",
                    examples=[{"instance": i, "args": _short(a), "kernel": _short(k), "reference": _short(r)} for i, a, k, r in sc.mismatches[:_EXAMPLES]])
     return rec, arrays, ref
+
+
+#: the operand intervals a primitive's transfer is checked on (`port_intervals`)
+TRANSFER_DRAWS = 8
+
+
+def _one_width(t: Any) -> int | None:
+    ws = t.width_set()
+    return next(iter(ws)) if len(ws) == 1 else None
+
+
+def _bounds(rs: Sequence, full: Callable) -> list:
+    return [(lo, hi, p.bound, w) for lo, hi, p, w in rs if p.bound is not None and not full(p.bound, w)]
+
+
+def _folded(arrays: list, params: Sequence, pt: Any, n: int, draw: Sequence[tuple[int, int] | None] = ()) -> list:
+    """`arrays` with each parameter's leaves folded into its drawn interval (`draw[j]`), else each leaf of a bounded parameter
+    into its bound: an interval's two ends first, then the vectors' values within it."""
+    from verity.ml.circuits import ports as P
+
+    out = list(arrays)
+    for j, rs in enumerate(pt.params):
+        a = np.array(out[j]).reshape(n, -1)
+        iv = draw[j] if j < len(draw) else None
+        runs = [(0, a.shape[1], iv, _one_width(params[j]))] if iv is not None else _bounds(rs, P.full)
+        for lo, hi, (b0, b1), w in runs:
+            for i in range(n):
+                for c in range(lo, hi):
+                    v = (b0, b1)[i] if i < 2 else b0 + int(a[i, c]) % (b1 - b0 + 1)
+                    a[i, c] = v & ((1 << w) - 1)
+        out[j] = a.reshape(out[j].shape)
+    return out
+
+
+def port_intervals(t: Any, opts: Options, F: Findings) -> dict | None:
+    """The reference against what `t` declares of its return's intervals (`verity.ml.circuits.ports`): its declared intervals,
+    on `vectors` with each leaf of a bounded parameter folded into its bound; a primitive's transfer, on `TRANSFER_DRAWS`
+    operand intervals (within the bounds), every leaf of an operand folded into its interval. None when it declares neither."""
+    from verity.ml.circuits import ports as P
+
+    pt = P.port_types(t)
+    outs = [(lo, hi, o.interval, w) for lo, hi, o, w in (pt.ret if pt is not None else ()) if o.interval is not None]
+    if not outs and (pt is None or pt.transfer is None):
+        return None
+    params, ret = signature_of(t)
+    n = _n_vectors(t, opts)
+    rec: dict[str, Any] = {}
+    if outs:
+        ref, _raised = reference_outputs(t, params, _folded(vectors(params, n, opts.seed), params, pt, n))
+        outside = [{"instance": i, "leaf": leaf, "value": out[leaf], "interval": list(iv)}
+                   for i, out in enumerate(ref) if out is not None
+                   for lo, hi, iv, w in outs for leaf in range(lo, hi) if not P.holds(iv, w, out[leaf])]
+        if outside:
+            F.fail("ports", "interval", t.id, f"{len(outside)} returned leaves outside their declared interval on {n} vectors",
+                   examples=outside[:_EXAMPLES])
+        rec = {"vectors": n, "intervals": [[lo, hi, list(iv)] for lo, hi, iv, _w in outs], "outside": len(outside)}
+    if pt.transfer is not None:
+        r, w_ret = random.Random(opts.seed), _one_width(ret)
+        drawn = outside_t = 0
+        for d in range(TRANSFER_DRAWS):
+            draw: list[tuple[int, int] | None] = []
+            for pty, rs in zip(params, pt.params):
+                w, bs = _one_width(pty), _bounds(rs, P.full)
+                whole = bs[0][2] if len(bs) == 1 and bs[0][:2] == (0, pty.leaves) else None
+                if w is None or (bs and whole is None) or (not bs and r.random() < 0.25):
+                    draw.append(None)
+                    continue
+                lo, hi = whole or ((-(1 << (w - 1)), (1 << (w - 1)) - 1) if r.random() < 0.5 else (0, (1 << w) - 1))
+                x = r.randint(lo, hi)
+                y = r.randint(lo, hi) if r.random() < 0.5 else min(hi, x + r.randint(0, 255))
+                draw.append((min(x, y), max(x, y)))
+            iv = pt.transfer(*draw)
+            if iv is None:
+                continue
+            drawn += 1
+            if not (isinstance(iv, (tuple, list)) and len(iv) == 2 and iv[0] <= iv[1] and P.reading(tuple(iv), w_ret) == tuple(iv)):
+                F.fail("ports", "transfer", t.id, f"its transfer gives {iv!r} on {draw}, no interval of a Value<{w_ret}>")
+                continue
+            ref, _raised = reference_outputs(t, params, _folded(vectors(params, n, opts.seed + 1 + d), params, pt, n, draw))
+            bad = [{"instance": i, "operands": draw, "value": out[0], "interval": list(iv)}
+                   for i, out in enumerate(ref) if out is not None and not P.holds(iv, w_ret, out[0])]
+            outside_t += len(bad)
+            if bad:
+                F.fail("ports", "transfer", t.id, f"{len(bad)} of {n} returns outside the interval its transfer gives on {draw}",
+                       examples=bad[:_EXAMPLES])
+        rec["transfer"] = {"draws": TRANSFER_DRAWS, "vectors": n, "intervals": drawn, "outside": outside_t}
+    return rec
 
 
 def target_equivalence(target: Any, definition: Any, opts: Options, F: Findings) -> dict | None:
@@ -660,6 +753,9 @@ def check_definition(fn: Any, opts: Options = Options(), *, memo: dict | None = 
     if wv is not None:
         corr["realizations"].append(wv)
     entry["correspondence"] = corr
+    ports = port_intervals(t, opts, F)
+    if ports is not None:
+        entry["ports"] = ports
     leaves = 0 if kind == "reference" else sum(pt.leaves for pt in params)
     if kind != "reference" and leaves > opts.partition_max_leaves:
         why = (f"its parameters' {leaves} leaves are over the partition's leaf budget {opts.partition_max_leaves}: the word query "
