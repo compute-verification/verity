@@ -188,8 +188,9 @@ def DuoWordProjNoKernel : Prop :=
   ∀ (n : ℕ) (k : BitVec n) (a : OddKey n) (r h : Rotation n), Function.Injective (duoWordSpread k a.1 r.1 h.1)
 
 /-- **The served receipt is not injective in a word at a state.** At width 32, with the XOR key `0x6d403793`, multiplier
-`0x9e43d96b` and rotation 6 of the served word 0 (`segment_e2e`'s `KK[0]`, `KA[0]`, `ROT[0]`) and receipt rotation 16,
-from the state `(0x247a23f6, 0xc48c9971)` the words `0x1632c` and `0x2237a` give the receipt `0x26d90889`. -/
+`0x9e43d96b` and rotation 6 of the served word 0 (`fgemm.cu`'s `key_xor(0, 0)`, `key_mul(0, 0)`, `rot_of(DUO, 0, 0)`) and
+receipt rotation 16, from the state `(0x247a23f6, 0xc48c9971)` the words `0x1632c` and `0x2237a` give the receipt
+`0x26d90889`. -/
 def DuoReceiptNotInjective : Prop :=
   ¬ Function.Injective (fun d : BitVec 32 =>
     duoReceipt 16 (duoWord (0x6d403793#32) (0x9e43d96b#32) 6 (0x247a23f6#32, 0xc48c9971#32) d))
