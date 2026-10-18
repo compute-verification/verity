@@ -74,8 +74,11 @@ def reading() -> dict[str, Any]:
         usage, _ = _int_or_kind(*_read(d / ("memory.current" if v2 else "memory.usage_in_bytes")))
         if limit is None or usage is None:
             continue
-        inactive = _kv_file(_read(d / "memory.stat")[0]).get("inactive_file" if v2 else "total_inactive_file", 0)
-        in_use = max(0, usage - inactive)
+        stat = _kv_file(_read(d / "memory.stat")[0])
+        # File-backed page cache, active or not, is reclaimable (shmem sits on the anon lists): 17 Oct, vy-glm53-eu counted 454 GB
+        # of active_file (checkpoint weights already read) as used and refused a run with all 8 GPUs idle (INF-54).
+        cache = sum(stat.get(k, 0) for k in (("inactive_file", "active_file") if v2 else ("total_inactive_file", "total_active_file")))
+        in_use = max(0, usage - cache)
         if best is None or limit - in_use < best["limit"] - best["in_use"]:
             best = {"limit": limit, "in_use": in_use, "source": str(d), "cgroup": "v2" if v2 else "v1"}
     if best is not None:

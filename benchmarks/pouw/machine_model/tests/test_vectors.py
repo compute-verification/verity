@@ -21,9 +21,9 @@ def solved(name):
 
 
 def test_every_named_vector_is_here():
-    assert NAMES[0] == "VF" and NAMES[-9:] == ["VF3l-16-copy16", "VF3l-16-copy16-fan32", "VF3l-16-copy32",
-                                              "VF3l-16-copy32-fan16", "VF3m-16", "VF3n-16", "VF3o-16", "VF3p-16",
-                                              "VF3q-16"]
+    assert NAMES[0] == "VF" and NAMES[-10:] == ["VF3l-16-copy16-fan32", "VF3l-16-copy32", "VF3l-16-copy32-fan16",
+                                               "VF3m-16", "VF3n-16", "VF3o-16", "VF3p-16", "VF3q-16", "VF3r-16",
+                                               "VF3s-16"]
     assert {"VF2", "VF3", "VF3c", "VF3d", "VF3e", "VF3f", "VF3g", "VF3h", "VF3i", "VF3i-strict", "VF3j", "VF3j-8",
             "VF3j-16", "VF3k-16"} < set(NAMES)
 
@@ -45,6 +45,8 @@ PUBLISHED = {
     "VF3o-16": (0.0588, 0.0460, 1.1563, 2.000),
     "VF3p-16": (0.0588, 0.0460, 1.1563, 2.000),       # note:20261017T0332Z-draft-eps1-datasheet
     "VF3q-16": (0.0564, 0.0441, 1.1563, 2.000),       # note:20261017T0524Z-draft-eps1-facet-break
+    "VF3r-16": (0.0556, 0.0435, 1.1563, 2.000),
+    "VF3s-16": (0.0556, 0.0435, 1.1563, 2.000),       # note:20261017T1930Z-draft-rt-facet
 }
 
 

@@ -28,6 +28,8 @@ T is the row's valid count (at most `index_topk`), kv its selected rows in order
 """
 from __future__ import annotations
 
+__models__ = ("zai-org/GLM-5.3",)
+
 import numpy as np
 
 from verity.ml.circuits.defs import bind, composite
@@ -140,6 +142,7 @@ def SparseMlaBlock(B, S, q, kv, m_prev=None, l_prev=None, o_prev=None):
     [q_rope | q_nope] . [k_pe | kv_c] of row c (`DotBf16_v2{K = DR + DV}`), the row max, the running max guarded
     (`GuardNegInfZero`) only in the first visited block (FIRST: the one `Check_inf` iteration), the rescale, P = `ex2(s * scale -
     max * scale)`, the per-lane sums, and O = O * rescale + bf16(P) kv_c over BN/16 ascending k-steps (`DOT`)."""
+    check_block_statics(S.DR, S.DV, S.NVIS, S.BN)
     return block(word_steps(B), S, bind(DotBf16V2, K=S.DR + S.DV, DOT=S.DOT), S.DOT, q, kv, m_prev, l_prev, o_prev)
 
 

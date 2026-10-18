@@ -113,11 +113,31 @@ src = "tools/research/src/research/pods/nebius/peers"
 nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1"]
 owner = "infra"
 
-[[file]]
+[[file]]  # a oneshot each minute (vy-slot-only.timer on cpu-1, vy-direct-nice.timer on node 1) reads it fresh: nothing to restart
 path = "/usr/local/lib/vy-monitoring/slot_only.py"
 src = "tools/research/src/research/pods/nebius/slot_only.py"
-nodes = ["vy-nebius-cpu-1"]
-run = ["systemd:vy-slot-only.timer"]
+nodes = ["vy-nebius-cpu-1", "vy-nebius-1"]
+owner = "infra"
+
+# ---- node 1: a research run that did not come through a check slot runs at nice 19, so the train checks win the cores (top,
+# 18 Oct); after installing, `sudo systemctl enable --now vy-direct-nice.timer`
+
+[[file]]
+path = "/etc/vy/direct-runs-nice"
+src = "tools/research/src/research/pods/nebius/direct-runs-nice"
+nodes = ["vy-nebius-1"]
+owner = "infra"
+
+[[file]]
+path = "/etc/systemd/system/vy-direct-nice.service"
+src = "tools/research/src/research/pods/nebius/vy-direct-nice.service"
+nodes = ["vy-nebius-1"]
+owner = "infra"
+
+[[file]]
+path = "/etc/systemd/system/vy-direct-nice.timer"
+src = "tools/research/src/research/pods/nebius/vy-direct-nice.timer"
+nodes = ["vy-nebius-1"]
 owner = "infra"
 
 [[file]]

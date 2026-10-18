@@ -13,7 +13,7 @@
   = collective-level only, named), the per-rank fold Match (``tp-fold-match``).  A leased item's capture and control each hold the
   task's GPUs from right before their engine to their exit (``Row.run_gpu``); everything after them runs on the CPU, unleased.
 * **Commit**: the manifest over the W ranks, complete, then ``tp-commit`` with the windowed staging in its environment
-  (``VERITY_WINDOW_MB`` / ``VERITY_WINDOW_SLOTS`` / ``VERITY_RETAIN``, and a config run's ``VERITY_STAGING_BOUNDED``: flags it does not have) and ``--require-fold-match``
+  (``VERITY_WINDOW_MB`` / ``VERITY_WINDOW_SLOTS`` / ``VERITY_RETAIN``, and ``VERITY_STAGING_BOUNDED``, on in a config run only: flags it does not have) and ``--require-fold-match``
   when a fold Match is on disk.  The ranks run the guarded-max FA2 tap build and every tap the manifest names the family of
   (``row_records.applicable_taps``), as the single-GPU row does.  Each rank's weights registration hashes on its GPU
   (``VERITY_WEIGHTS_HASH=device`` unless the item sets ``host`` or ``device-checked``).  A leased item's ``tp-commit`` holds the task's
@@ -46,7 +46,6 @@ from verity_vllm.pipeline import row_records as R
 from verity_vllm.pipeline.row_driver import Row, Stop, stage_on
 
 TP_UTIL = "0.6"
-MATCH_LEG_KEPT = "a Match leg holds its GPUs to its exit: its engine is its last work"
 
 
 def _tail_bytes(path: str, n: int = 200) -> str:
@@ -327,11 +326,11 @@ class TpRow(Row):
         t0 = int(time.time())
         self.tl("stage.match", "start")
         rc_cap = self.run_gpu("match.capture", to_m, f"{M}/capture.log", [*cap, "--record-collectives", "--out", f"{M}/capture"],
-                              lease_dir=f"{M}/lease/capture", kept=MATCH_LEG_KEPT)
+                              lease_dir=f"{M}/lease/capture", kept=GL.MATCH_LEG_KEPT)
         ranks = " ".join(_grep(f"{M}/capture.log", lambda s: s.startswith("[tp2] rank ") and s[11:].split(":", 1)[0].isdigit() and ":" in s[11:]))
         self.log(f"match capture rc={rc_cap} {(ranks + ' ' if ranks else '')[:300]}")
         rc_ctl = self.run_gpu("match.control", to_m, f"{M}/control.log", [*cap, "--no-observer", "--out", f"{M}/control"],
-                              lease_dir=f"{M}/lease/control", kept=MATCH_LEG_KEPT)
+                              lease_dir=f"{M}/lease/control", kept=GL.MATCH_LEG_KEPT)
         rc_chk = self.run_tl("match.check", to_m, f"{M}/check.log", self.cli("tp-match", "--arm", "check", "--out", M, *br))
         chk = R.tp_check_line(M)
         self.log(f"match check rc={rc_chk}: {chk or 'no tp2_match.json'}")
@@ -415,11 +414,9 @@ class TpRow(Row):
             self.verdict("commit", "FAIL", why)
             raise Stop(12)
         self.log(f"taps: {', '.join(taps) or 'none'} (on, and the manifest names their families); guarded max {'on' if ck.guarded_max_tap == '1' else 'off'}")
-        if ck.window_mb > 0:
-            self.child_env.update({"VERITY_WINDOW_MB": str(ck.window_mb), "VERITY_WINDOW_SLOTS": str(ck.window_slots)})
+        self.child_env.update({"VERITY_WINDOW_MB": str(ck.window_mb), "VERITY_WINDOW_SLOTS": str(ck.window_slots)})
         self.child_env["VERITY_RETAIN"] = ck.retain
-        if self.config_run:
-            self.child_env["VERITY_STAGING_BOUNDED"] = "1"
+        self.child_env["VERITY_STAGING_BOUNDED"] = "1" if self.config_run else "0"
         self.child_env.setdefault(GL.WEIGHTS_HASH, "device")
         self.log(f"commit staging: window_mb={ck.window_mb} slots={ck.window_slots} retain={ck.retain}{' bounded' if self.config_run else ''}; "
                  f"weights hash {self.child_env[GL.WEIGHTS_HASH]}")
@@ -463,6 +460,8 @@ class TpRow(Row):
             cmd.append("--replay-deferred")
         if ck.serving_rows:
             cmd += ["--serving-rows", self.serving_rows_request(ck.serving_rows)]
+        if ck.remote_verifier:
+            raise SystemExit("REMOTE_VERIFIER: the remote bandwidth session is a single-GPU Commit's (one store per node)")
         return cmd + R.tap_source_args(taps, self.env) + (ck.extra_commit_args or "").split()
 
     def commit_pending(self, rck: int, wall: int) -> bool:

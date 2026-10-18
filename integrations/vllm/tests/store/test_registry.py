@@ -10,7 +10,8 @@ import pytest
 
 from verity.core.protocols.remote_bandwidth import receipts as rb
 from verity_vllm.store.interface import IDENTITY, Append, Lifecycle, PageLayout, Stale, StoreView
-from verity_vllm.store.registry import ArrayBacking, RemoteBandwidthReceipt, Store, TagReceipt, chain, verify_opening
+from verity_vllm.store.registry import ArrayBacking, RemoteBandwidthReceipt, Store, TagReceipt, chain
+from verity_vllm.store.verify import verify_opening
 
 WORD = 64
 BLOCK = 256

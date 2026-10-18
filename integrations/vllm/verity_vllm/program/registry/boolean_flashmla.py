@@ -20,6 +20,8 @@ and `-x` one NOT gate on x's sign bit.  No table or lookup gate.  Each composite
 """
 from __future__ import annotations
 
+__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
+
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.boolean.forms import NOT, ONE, OR, ZERO, and_reduce, or_reduce, sub
 from verity.ml.circuits.boolean.trace import definition, trace
@@ -167,6 +169,7 @@ FlashMlaKvRowV2 = flat("FlashMlaKvRow", 2, ["DN", "DR", "QT"], lambda S: F._row_
 
 def _block(B, S, q, k, nm_prev=None, l_prev=None, o_prev=None):
     """`FlashMlaBlock_v1`'s body on bits: the score chain `DotBf16_v3{K = D, DOT}`, the P V step `DOT`."""
+    F.check_block_statics(S.D, S.BN)
     return F.block(bit_ops(B), S, bind(BG.DotBf16, K=S.D, DOT=S.DOT), q, k, nm_prev, l_prev, o_prev)
 
 

@@ -79,7 +79,7 @@ def window(store: audit.Store, prover_store: audit.Store, passes: int = 2) -> tu
     challenge, previous, out = s.start(), reg.digest, []
     for i in range(passes):
         out.append(prover.run(challenge, i, previous))
-        assert s.receive(0, i, out[-1].root) is None
+        assert s.receive(0, i, out[-1].root, step=i) is None
         previous = out[-1].root
     clock.now = p.window_ns
     assert s.boundary() is None
@@ -135,6 +135,33 @@ def test_a_bound_block_round_trips_under_the_digest_kept_beside_it(c) -> None:
         codec.decode(e, KV, k, d[:-1])
     with pytest.raises(ValueError, match="codec seed"):
         codec.binding(d, KV, dataclasses.replace(k, seed=None))
+
+
+def test_an_append_s_coin_keys_a_bound_block_under_a_derivation_index_of_its_own() -> None:
+    """The coin form: `K_j = H(seed ‖ j ‖ d_j ‖ c_a)`, the codec's framing at derivation index 2^32 − 4, then j, d_j
+    and the coin, so no key of the form without a coin (2^32 − 3) is one of its keys.  Each coin gives another key,
+    and a block decodes only under the coin it was encoded under.  A coin that isn't 32 bytes, a coin on a block under
+    the seed's key, or one decoded without its digest is refused, and a codec's rounds stay below every derivation
+    index."""
+    k, m = codec.key(SEED, P512), weights()
+    d, coin = codec.digest(m), hashlib.sha512(b"an append's coin").digest()[:codec.COIN_BYTES]
+    message = (codec.DOMAIN + b"\4p512" + SEED + ((1 << 32) - 4).to_bytes(4, "big") + KV.to_bytes(8, "big") + d
+               + coin + bytes(4))
+    assert codec.binding(d, KV, k, coin) == int.from_bytes(hashlib.sha512(message).digest(), "little") % P512.field.p
+    other = bytes(codec.COIN_BYTES)
+    assert len({codec.binding(d, KV, k), codec.binding(d, KV, k, coin), codec.binding(d, KV, k, other)}) == 3
+    e = codec.encode(m, KV, k, bound=True, coin=coin)
+    assert codec.decode(e, KV, k, d, coin) == m
+    assert codec.decode(e, KV, k, d) is None and codec.decode(e, KV, k, d, other) is None
+    with pytest.raises(ValueError, match="coin is 32 bytes"):
+        codec.binding(d, KV, k, coin[:-1])
+    with pytest.raises(ValueError, match="bound block"):
+        codec.encode(m, KV, k, coin=coin)
+    with pytest.raises(ValueError, match="under its digest"):
+        codec.decode(e, KV, k, coin=coin)
+    assert codec.Codec(codec.P512, codec.COIN_INDEX - 1, False).rounds == (1 << 32) - 5
+    with pytest.raises(ValueError, match="at least"):
+        codec.Codec(codec.P512, codec.COIN_INDEX, False)
 
 
 def test_under_the_bound_key_a_picked_encoding_has_no_payload_without_a_search() -> None:

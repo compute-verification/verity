@@ -1,0 +1,59 @@
+"""pods/nebius/fleet.py (INF-60): the fleet's usage record and daily compute report, the H200s included, and the quota watch."""
+from __future__ import annotations
+
+import json
+
+from research.pods.nebius import fleet as F
+
+
+def test_a_probe_reads_gpus_load_cores_and_memory_and_a_cpu_vm_has_no_gpus():
+    got = F.parse_probe("gpu=0,37,0,\ncores=128\nload=28.86\nmem=1185,1574\n")
+    assert got == {"gpu_util": [0, 37, 0], "cores": 128, "load": 28.86, "mem_used_gib": 1185, "mem_total_gib": 1574}
+    assert F.parse_probe("gpu=\ncores=192\nload=3.5\nmem=68,755\n")["gpu_util"] == []
+
+
+def test_the_report_prices_hours_seen_running_and_counts_idle_hours_and_unread_samples(tmp_path, monkeypatch):
+    """vy-nebius-1's GPUs sat ~0% busy for a week unseen (18 Oct): the report puts each VM's dollars beside its GPU busy share and
+    idle hours, most expensive first; a sample that couldn't be read is never idle."""
+    monkeypatch.setattr(F, "FLEET_DIR", tmp_path)
+    t0 = 1_800_000_000
+
+    def row(i, name, rate, read=True, gpu=(), load=0.0, cores=128):
+        return {"t": F.utc(t0 + i * F.INTERVAL_S), "name": name, "preset": "p", "rate_usd_per_hour": rate, "read": read,
+                **({"gpu_util": list(gpu), "load": load, "cores": cores, "mem_used_gib": 100, "mem_total_gib": 1000} if read else {})}
+
+    rows = [row(i, "h200", 43.2, gpu=[0] * 8, load=1.0) for i in range(12)]                                  # 1 h, all idle
+    rows += [row(i, "cpu", 6.34, gpu=[], load=64.0) for i in range(12)]                                      # 1 h, busy CPU
+    rows += [row(i, "n2", 14.4, gpu=[50] + [0] * 7, load=2.0) for i in range(6)] + [row(6, "n2", 14.4, read=False)]
+    rows += [row(0, "new", None, gpu=[], load=0.0)]
+    (tmp_path / f"samples-{F.utc(t0)[:10].replace('-', '')}.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
+    rep = F.report(F.load_samples(t0, t0 + 3600), 1)
+    by = {r["name"]: r for r in rep}
+    assert [r["name"] for r in rep][:3] == ["h200", "n2", "cpu"]
+    assert by["h200"]["usd"] == 43.2 and by["h200"]["idle_hours"] == 1.0 and by["h200"]["gpu_busy_pct"] == 0.0
+    assert by["cpu"]["idle_hours"] == 0.0 and by["cpu"]["gpus"] == 0 and by["cpu"]["load_per_core"] == 0.5
+    assert by["n2"]["gpu_busy_pct"] == 12.5 and by["n2"]["unread_samples"] == 1 and by["n2"]["hours"] == 0.6
+    assert by["new"]["usd"] is None
+    text = F.render(rep, 1, t0 + 3600)
+    assert text.startswith("Compute, the 1 h to") and "$43 of it on idle hours" in text and "$? (no rate registered)" in text
+
+
+def test_the_card_alerts_at_80_percent_of_its_daily_limit_only_when_one_is_set(monkeypatch):
+    rows = [{"rate_usd_per_hour": 120.0}] * 100                                  # 100 samples of 5 min at $120/h: $1,000
+    monkeypatch.delenv("FLEET_CARD_DAILY_USD", raising=False)
+    assert F.card_finding(rows) is None
+    monkeypatch.setenv("FLEET_CARD_DAILY_USD", "1200")
+    assert F.card_finding(rows) == {"spent": 1000.0, "cap": 1200.0}
+    monkeypatch.setenv("FLEET_CARD_DAILY_USD", "2000")
+    assert F.card_finding(rows) is None
+
+
+def test_a_quota_at_80_percent_of_its_limit_is_a_finding(monkeypatch):
+    items = [{"metadata": {"name": "compute.instance.non-gpu.vcpu"}, "spec": {"limit": "600", "region": "uk-south2"},
+              "status": {"usage": "576"}},
+             {"metadata": {"name": "vpc.ipv4-address.public.count"}, "spec": {"limit": "6", "region": "eu-north1"},
+              "status": {"usage": "3"}},
+             {"metadata": {"name": "compute.disk.count"}, "spec": {"limit": "0", "region": "eu-north2"}, "status": {}}]
+    monkeypatch.setattr(F, "nb", lambda *a, **k: {"items": items})
+    assert F.quota_findings() == [{"quota": "compute.instance.non-gpu.vcpu", "region": "uk-south2", "usage": 576, "limit": 600,
+                                   "share": 0.96}]

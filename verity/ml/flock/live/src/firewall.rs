@@ -1,7 +1,9 @@
 //! The firewall's send check on the outer `--zk` prover (PROTOCOL.md §10.1): every live round the device frames is held to
 //! the statement's skeleton in the algebraic phase, and byte for byte to an opening the firewall computes itself (the shadow,
-//! in lock-step on the same coins) in the opening phase, before the masking challenger sends any of it. A refusal is a
-//! `FIREWALL-REFUSED: <what>` message, raised before anything that depends on the refused round leaves.
+//! in lock-step on the same coins) in the opening phase, before the masking challenger sends any of it. A failed check is a
+//! `FIREWALL-REFUSED: <what>` reason, and nothing of the refused round leaves: the rep goes on releasing the statement's
+//! schedule in the device's place ([`Checker::scheduled`], the shadow's rounds) and the session stops at its `Finish`. So does
+//! a worker that fails ([`run_worker`]: an error, a panic, silence past the deadline): a rep's end never depends on its worker.
 
 use std::sync::mpsc::{Receiver, Sender, channel};
 
@@ -154,13 +156,15 @@ pub fn skeleton(domain: &[u8], label_r1cs: &[u8], digest: &[u8], cap: &[u8], lab
 pub struct Checker {
     items: Vec<Item>,
     at: usize,
+    /// where the last round began
+    start: usize,
     round: usize,
     pub values: Vec<Option<F128>>,
 }
 
 impl Checker {
     pub fn new(items: Vec<Item>, n_values: usize) -> Self {
-        Checker { items, at: 0, round: 0, values: vec![None; n_values] }
+        Checker { items, at: 0, start: 0, round: 0, values: vec![None; n_values] }
     }
 
     /// Whether every item of the algebraic phase has passed (the next round is the opening's).
@@ -168,7 +172,58 @@ impl Checker {
         self.at == self.items.len()
     }
 
+    /// A round, refused unless it is the skeleton's next one; a refused round leaves the checker where it was.
     pub fn round(&mut self, content: &[u8], n: usize) -> Result<(), String> {
+        let (at, round) = (self.at, self.round);
+        let res = self.round_items(content, n);
+        if res.is_err() {
+            (self.at, self.round) = (at, round);
+        }
+        self.start = at;
+        res
+    }
+
+    /// Undoes the last round, which passed here and was refused downstream: [`Checker::scheduled`] gives it again.
+    pub fn rewind(&mut self) {
+        self.at = self.start;
+        self.round -= 1;
+    }
+
+    /// The skeleton's next round as an honest device frames it, every observed value zero, which it logs as the values the
+    /// firewall passed: what a failed rep releases in the device's place. None once the algebraic phase has ended.
+    pub fn scheduled(&mut self) -> Option<(Vec<u8>, usize)> {
+        if self.done() {
+            return None;
+        }
+        (self.start, self.round) = (self.at, self.round + 1);
+        let mut out = Vec::new();
+        while let Some(it) = self.items.get(self.at) {
+            self.at += 1;
+            match it {
+                Item::Domain(b) | Item::Label(b) | Item::Bytes(b) => {
+                    push_header(&mut out, match it { Item::Domain(_) => OP_DOMAIN, Item::Label(_) => OP_LABEL, _ => OP_BYTES }, 0, b.len() as u64);
+                    push_padded(&mut out, b);
+                }
+                Item::Obs { kind, vals } => {
+                    push_header(&mut out, OP_OBSERVE, *kind, vals.len() as u64);
+                    out.resize(out.len() + 16 * vals.len(), 0);
+                    let nv = self.values.len();
+                    for i in vals.iter().filter(|i| i.hi == TAG && (i.lo as usize) < nv) {
+                        self.values[i.lo as usize] = Some(F128::ZERO);
+                    }
+                }
+                Item::Squeeze { kind, n } => {
+                    push_header(&mut out, OP_SQUEEZE, *kind, *n as u64);
+                    if *n > 0 {
+                        return Some((out, *n));
+                    }
+                }
+            }
+        }
+        Some((out, 0))
+    }
+
+    fn round_items(&mut self, content: &[u8], n: usize) -> Result<(), String> {
         let got = parse(content)?;
         let r = self.round;
         self.round += 1;
@@ -205,6 +260,8 @@ pub struct ShadowLink {
     rx: Receiver<(Vec<u8>, usize)>,
     tx: Option<Sender<Vec<F128>>>,
     pub round: usize,
+    /// the shadow's round a device round was refused against, which leaves in its place
+    pub last: Option<(Vec<u8>, usize)>,
 }
 
 pub struct ShadowEnd {
@@ -215,7 +272,7 @@ pub struct ShadowEnd {
 pub fn shadow_pair() -> (ShadowLink, ShadowEnd) {
     let (tx_r, rx_r) = channel();
     let (tx_c, rx_c) = channel();
-    (ShadowLink { rx: rx_r, tx: Some(tx_c), round: 0 }, ShadowEnd { tx: tx_r, rx: rx_c })
+    (ShadowLink { rx: rx_r, tx: Some(tx_c), round: 0, last: None }, ShadowEnd { tx: tx_r, rx: rx_c })
 }
 
 impl ShadowEnd {
@@ -227,7 +284,15 @@ impl ShadowEnd {
 }
 
 impl ShadowLink {
-    /// The device's opening round against the shadow's next one: refused unless the two are byte for byte the same.
+    /// The shadow's next round, or None once its opening has ended (it then has no firewall to wait on).
+    pub fn next(&mut self) -> Option<(Vec<u8>, usize)> {
+        let x = self.rx.recv().ok()?;
+        self.round += 1;
+        Some(x)
+    }
+
+    /// The device's opening round against the shadow's next one: refused unless the two are byte for byte the same, the
+    /// shadow's round then kept in `last`.
     pub fn check(&mut self, content: &[u8], n: usize) -> Result<(), String> {
         let r = self.round;
         self.round += 1;
@@ -237,6 +302,12 @@ impl ShadowLink {
         if want == content && k == n {
             return Ok(());
         }
+        let res = Self::differ(r, content, n, &want, k);
+        self.last = Some((want, k));
+        res
+    }
+
+    fn differ(r: usize, content: &[u8], n: usize, want: &[u8], k: usize) -> Result<(), String> {
         let (g, w) = (parse(content)?, parse(&want).map_err(|e| format!("the shadow's round: {e}"))?);
         let show = |x: Option<&Item>| x.map_or("nothing".into(), |x| x.to_string());
         match (0..g.len().max(w.len())).find(|&i| g.get(i) != w.get(i)) {
@@ -254,14 +325,81 @@ impl ShadowLink {
         }
     }
 
-    /// Whether the shadow has a round the device never sent (checked once the device has returned).
-    pub fn pending(&self) -> bool {
-        self.rx.try_recv().is_ok()
-    }
-
     /// Stop the shadow: its next round finds no firewall.
     pub fn close(&mut self) {
         self.tx = None;
+    }
+}
+
+/// What a firewalled rep's worker (the device prover, on a thread of its own: [`run_worker`]) asks the firewall, which serves it
+/// on the session's thread.
+pub enum Ask<T> {
+    /// a round at its squeeze, and where its coins go
+    Round(Vec<u8>, usize, Sender<Vec<F128>>),
+    /// the level-0 root at the session's `Commit`, and where the extra claims' points go
+    Hook(Vec<u8>, Sender<Vec<Vec<F128>>>),
+    /// the deadline passed: a silent worker's control sends it as it falls silent, the injected clock's tick, so no test reads
+    /// the wall clock
+    Tick,
+    Done(Result<T, String>),
+}
+
+/// The worker's end of [`run_worker`]: each call waits for the firewall's answer. Once the firewall has given the worker up
+/// (it failed, or fell silent past the deadline), every call panics and unwinds the worker: nothing it does reaches the stream.
+pub struct WorkerEnd<T>(Sender<Ask<T>>);
+
+impl<T> WorkerEnd<T> {
+    pub fn round(&self, content: &[u8], n: usize) -> Vec<F128> {
+        let (tx, rx) = channel();
+        let _ = self.0.send(Ask::Round(content.to_vec(), n, tx));
+        rx.recv().unwrap_or_else(|_| panic!("the firewall gave this worker up"))
+    }
+
+    pub fn hook(&self, root: &[u8]) -> Vec<Vec<F128>> {
+        let (tx, rx) = channel();
+        let _ = self.0.send(Ask::Hook(root.to_vec(), tx));
+        rx.recv().unwrap_or_else(|_| panic!("the firewall gave this worker up"))
+    }
+
+    pub fn tick(&self) {
+        let _ = self.0.send(Ask::Tick);
+    }
+}
+
+/// The wall clock's wait for a worker's next ask: `secs` an ask, `None` once they pass.
+pub fn deadline<T>(secs: f64) -> impl FnMut(&Receiver<Ask<T>>) -> Option<Ask<T>> {
+    let d = std::time::Duration::from_secs_f64(secs);
+    move |rx| rx.recv_timeout(d).ok()
+}
+
+/// Runs a firewalled rep's worker on a thread of its own and serves its rounds and its hook here, on the session's thread,
+/// until it returns. Every way the worker can fail is `Err`, which the firewall answers by releasing the rest of the schedule
+/// itself: an error it returns (a nonzero return code, output that does not decode), a panic, or silence past the deadline
+/// (`wait` gives `None`, or the worker's control ticks). A worker given up may still run; whatever it asks later finds no
+/// firewall. A stop of the firewall's own (a coin refusal, the verifier's) panics in `round` or `hook`, on this thread.
+pub fn run_worker<T: Send + 'static>(work: impl FnOnce(WorkerEnd<T>) -> Result<T, String> + Send + 'static,
+                                     round: &mut dyn FnMut(&[u8], usize) -> Vec<F128>, hook: &mut dyn FnMut(&[u8]) -> Vec<Vec<F128>>,
+                                     wait: &mut dyn FnMut(&Receiver<Ask<T>>) -> Option<Ask<T>>) -> Result<T, String> {
+    let (tx, rx) = channel();
+    let end = WorkerEnd(tx.clone());
+    // the prover's sequential part runs here, as it did on the main thread: a stack as large as the verifier's threads'
+    std::thread::Builder::new().name("flock-worker".into()).stack_size(64 << 20).spawn(move || {
+        let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| work(end))).unwrap_or_else(|e| {
+            Err(format!("panicked: {}", e.downcast_ref::<String>().cloned().or_else(|| e.downcast_ref::<&str>().map(|s| s.to_string())).unwrap_or_default()))
+        });
+        let _ = tx.send(Ask::Done(r));
+    }).map_err(|e| format!("its thread did not start: {e}"))?;
+    loop {
+        match wait(&rx) {
+            Some(Ask::Round(c, n, back)) => {
+                let _ = back.send(round(&c, n));
+            }
+            Some(Ask::Hook(root, back)) => {
+                let _ = back.send(hook(&root));
+            }
+            Some(Ask::Done(r)) => return r,
+            Some(Ask::Tick) | None => return Err("silent past the firewall's deadline".into()),
+        }
     }
 }
 
@@ -373,10 +511,13 @@ impl LeanFrame {
         Err(refused(format!("the Lean frame: {}", line.strip_prefix("err ").unwrap_or(if line.is_empty() { "no answer" } else { line }))))
     }
 
-    /// The round that leaves for the device's round `content` (which squeezes `n` coins), or the Lean frame's refusal.
-    pub fn round(&mut self, content: &[u8], n: usize) -> Result<Vec<u8>, String> {
+    /// The round that leaves for the round `content` (which squeezes `n` coins), or the Lean frame's refusal, after which the
+    /// rep is stopped. `fail`: `content` is the statement's scheduled round in place of a device round that failed the
+    /// firewall's check, and the rep stops before it.
+    pub fn round(&mut self, content: &[u8], n: usize, fail: bool) -> Result<Vec<u8>, String> {
         use std::io::{Read, Write};
-        write!(self.stdin, "round {n} {}\n", content.len()).and_then(|_| self.stdin.write_all(content)).and_then(|_| self.stdin.flush())
+        write!(self.stdin, "round {n} {}{}\n", content.len(), if fail { " fail" } else { "" })
+            .and_then(|_| self.stdin.write_all(content)).and_then(|_| self.stdin.flush())
             .map_err(|e| refused(format!("the Lean frame's round: {e}")))?;
         let len = self.reply()?.ok_or_else(|| refused("the Lean frame answered a round without its length"))?;
         let mut out = vec![0u8; len];
@@ -384,11 +525,17 @@ impl LeanFrame {
         Ok(out)
     }
 
-    /// Whether the rep ended with every masked phase closed and every pad of the layout used.
-    pub fn finish(&mut self) -> Result<(), String> {
-        use std::io::Write;
+    /// Whether the rep ended with every masked phase closed and every pad of the layout used, and if so whether it is stopped.
+    pub fn finish(&mut self) -> Result<bool, String> {
+        use std::io::{BufRead, Write};
         writeln!(self.stdin, "finish").and_then(|_| self.stdin.flush()).map_err(|e| refused(format!("the Lean frame's finish: {e}")))?;
-        self.reply().map(|_| ())
+        let mut line = String::new();
+        self.stdout.read_line(&mut line).map_err(|e| refused(format!("the Lean frame's finish: {e}")))?;
+        match line.trim_end() {
+            "ok" => Ok(false),
+            "stop" => Ok(true),
+            l => Err(refused(format!("the Lean frame: {}", l.strip_prefix("err ").unwrap_or(if l.is_empty() { "no answer" } else { l })))),
+        }
     }
 }
 
@@ -561,6 +708,29 @@ mod tests {
         assert!(e.contains("squeeze slice of 2 where the statement has squeeze slice of 3"), "{e}");
     }
 
+    #[test]
+    fn a_failed_rep_goes_on_with_the_skeletons_rounds_as_an_honest_device_frames_them_with_zero_values() {
+        let v = [F128::new(10, 0), F128::new(11, 0), F128::new(12, 0)];
+        let honest = framed(|f| phase(f, &v));
+        let zero = framed(|f| phase(f, &[F128::ZERO; 3]));
+        assert_ne!(honest[1], zero[1]);
+        let mut c = checker();
+        let mut bad = honest[0].0.clone();
+        bad[48] ^= 1; // the first label's payload, after the domain frame's 32 bytes and the label's header
+        assert!(c.round(&bad, honest[0].1).is_err());
+        assert_eq!(c.scheduled(), Some(zero[0].clone()), "a refused round leaves the checker at its start");
+        assert_eq!(c.scheduled(), Some(zero[1].clone()));
+        assert_eq!((c.scheduled(), c.done()), (None, true));
+        assert_eq!(c.values, vec![Some(F128::ZERO); 3], "the values passed are the scheduled ones");
+        let mut c = checker();
+        c.round(&honest[0].0, honest[0].1).unwrap();
+        c.round(&honest[1].0, honest[1].1).unwrap();
+        assert_eq!(c.values, v.map(Some).to_vec());
+        c.rewind();
+        assert_eq!(c.scheduled(), Some(zero[1].clone()), "a round refused downstream is scheduled again");
+        assert_eq!(c.values, vec![Some(F128::ZERO); 3]);
+    }
+
     /// A round as the masking challenger hands it on: two observes and a zero-length squeeze inside, then its coin.
     fn masked_round(ch: &mut impl Challenger, v: u64) -> F128 {
         ch.observe_label(b"zc");
@@ -617,11 +787,104 @@ mod tests {
             f.observe_f128(F128::new(6, 0));
             f.sample_f128();
         });
+        let shadow = framed(|f| {
+            f.pending.clear();
+            f.observe_bytes(&[3; 64]);
+            f.sample_f128();
+            f.observe_f128(F128::new(5, 0));
+            f.sample_f128();
+        });
         link.check(&dev[0].0, dev[0].1).unwrap();
+        assert_eq!(link.last, None);
         link.answer(&[F128::ONE]);
         let e = link.check(&dev[1].0, dev[1].1).unwrap_err();
         assert_eq!(e, "FIREWALL-REFUSED: opening round 1, frame 0: the device's observe scalar of 1 differs from the firewall's in its payload");
+        assert_eq!(link.last, Some(shadow[1].clone()), "the shadow's round leaves in the refused one's place");
+        link.answer(&[F128::ONE]);
+        assert_eq!(link.next(), None, "the shadow's opening has ended");
+        assert!(t.join().is_ok());
+        let (mut link, mut end) = shadow_pair();
+        let t = std::thread::spawn(move || {
+            let mut rounds = |c: &[u8], n: usize| end.round(c, n);
+            let mut fr = Framer { pending: Vec::new(), rounds: &mut rounds };
+            fr.sample_f128();
+        });
+        assert!(link.next().is_some());
         link.close();
         assert!(t.join().is_err(), "the shadow stops when the firewall closes");
+    }
+
+    /// The firewall's side of [`run_worker`] for a test: every ask served in order into `log`, round `k`'s coins `[k]`.
+    fn serve<T: Send + 'static>(work: impl FnOnce(WorkerEnd<T>) -> Result<T, String> + Send + 'static,
+                                wait: &mut dyn FnMut(&Receiver<Ask<T>>) -> Option<Ask<T>>) -> (Result<T, String>, Vec<String>) {
+        let log = std::cell::RefCell::new(Vec::new());
+        let r = {
+            let mut round = |c: &[u8], n: usize| {
+                log.borrow_mut().push(format!("round {} {n}", c[0]));
+                vec![F128::new(c[0] as u64, 0); n]
+            };
+            let mut hook = |root: &[u8]| {
+                log.borrow_mut().push(format!("hook {}", root[0]));
+                vec![vec![F128::ONE]]
+            };
+            run_worker(work, &mut round, &mut hook, wait)
+        };
+        (r, log.into_inner())
+    }
+
+    fn served<T>(rx: &Receiver<Ask<T>>) -> Option<Ask<T>> {
+        rx.recv().ok()
+    }
+
+    #[test]
+    fn a_worker_is_served_on_the_firewalls_thread_until_it_returns() {
+        let (r, log) = serve(|end| {
+            assert_eq!(end.hook(&[9]), vec![vec![F128::ONE]]);
+            let coins: Vec<F128> = (0..3u8).flat_map(|k| end.round(&[k], 2)).collect();
+            Ok(coins)
+        }, &mut served);
+        assert_eq!(r.unwrap(), [0, 0, 1, 1, 2, 2].map(|k| F128::new(k, 0)).to_vec());
+        assert_eq!(log, ["hook 9", "round 0 2", "round 1 2", "round 2 2"]);
+    }
+
+    /// Each way a worker fails is the firewall's `Err` after the rounds it asked, never a panic on the firewall's thread: an
+    /// error it returns, a panic, silence (the injected clock: `wait` says the deadline passed at the third ask), and its control's
+    /// tick. A worker given up gets nothing more: its next round panics on its own thread.
+    #[test]
+    fn every_worker_failure_is_an_error_after_the_rounds_it_asked() {
+        let (r, log) = serve(|end| {
+            end.round(&[0], 1);
+            Err::<(), _>("CUDA circuit prover returned error 3".into())
+        }, &mut served);
+        assert_eq!((r.unwrap_err().as_str(), log), ("CUDA circuit prover returned error 3", vec!["round 0 1".to_string()]));
+        let (r, log) = serve(|end: WorkerEnd<()>| {
+            end.round(&[0], 1);
+            end.round(&[1], 1);
+            panic!("the device's output does not decode")
+        }, &mut served);
+        assert_eq!((r.unwrap_err().as_str(), log.len()), ("panicked: the device's output does not decode", 2));
+        let (hold, held) = channel::<()>();
+        let (late_tx, late) = channel();
+        let mut asks = 0;
+        let mut clock = |rx: &Receiver<Ask<()>>| {
+            asks += 1;
+            if asks == 3 { None } else { rx.recv().ok() }
+        };
+        let (r, log) = serve(move |end| {
+            end.hook(&[4]);
+            end.round(&[0], 1);
+            let _ = held.recv();
+            let _ = late_tx.send(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| end.round(&[1], 1))).is_err());
+            Ok(())
+        }, &mut clock);
+        assert_eq!((r.unwrap_err().as_str(), log), ("silent past the firewall's deadline", vec!["hook 4".to_string(), "round 0 1".to_string()]));
+        drop(hold);
+        assert_eq!(late.recv(), Ok(true), "a worker given up gets no coins");
+        let (r, log) = serve(|end| {
+            end.round(&[0], 1);
+            end.tick();
+            Ok(())
+        }, &mut served);
+        assert_eq!((r.unwrap_err().as_str(), log.len()), ("silent past the firewall's deadline", 1));
     }
 }

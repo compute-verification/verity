@@ -13,31 +13,43 @@ import tempfile
 from collections.abc import Mapping
 from typing import Any
 
-#: The engine's execution profile (CONTRACT.md §2 / §2.1), shared by production and replay.
+#: The engine's execution profile (CONTRACT.md §2 / §2.1), shared by production and replay: vLLM's defaults but for these, each
+#: with its reason in `REASONS`.  Batch invariance is the row's execution label's (`engine.served.EXECUTIONS`), not the profile's.
 ENGINE = {
-    "VLLM_BATCH_INVARIANT": "1",
     "VLLM_USE_V2_MODEL_RUNNER": "1",
     "VLLM_ENABLE_V1_MULTIPROCESSING": "0",
-    # The FlashInfer top-k/top-p sampler JIT-compiles at warm-up (needs ninja + nvcc matching the
-    # cu130 torch; the pod has neither). Inert for our workloads: the V2 sampler never uses it for
-    # greedy or explicitly seeded requests (sampler.py: any_greedy / any_explicit_seed), so the
-    # torch path (apply_top_k_top_p + gumbel_sample) that W3 re-derives is the one that runs.
     "VLLM_USE_FLASHINFER_SAMPLER": "0",
-    # A shared expert runs on the main stream, in the order a Build (`EXPORT`) gives it. Otherwise vLLM moves it to an aux stream
-    # at <= VLLM_SHARED_EXPERTS_STREAM_TOKEN_THRESHOLD (256) tokens, and the log's order is no longer the execution order that
-    # operand_provenance (G5) takes it to be. Costs the shared/routed overlap there, on shared-expert models only.
     "VLLM_DISABLE_SHARED_EXPERTS_STREAM": "1",
 }
+#: Why `ENGINE` sets each switch (a served Commit's record carries it: `engine.served`).
+REASONS = {
+    "VLLM_USE_V2_MODEL_RUNNER": "trace replay requires Model Runner V2, which vLLM selects by default only for "
+                                "DEFAULT_V2_MODEL_RUNNER_ARCHITECTURES (vllm/config/vllm.py)",
+    "VLLM_ENABLE_V1_MULTIPROCESSING": "the engine core runs in-process, so the recorder reads the scheduler's step trace and replay "
+                                      "intercepts the model runner; it changes the process topology, not the kernels",
+    "VLLM_USE_FLASHINFER_SAMPLER": "the FlashInfer top-k/top-p sampler JIT-compiles at warm-up (ninja and an nvcc matching torch's CUDA; "
+                                   "the pods have neither); the V2 sampler never uses it for greedy or explicitly seeded requests "
+                                   "(sampler.py: any_greedy / any_explicit_seed), so the torch path W3 re-derives is the one that runs",
+    "VLLM_DISABLE_SHARED_EXPERTS_STREAM": "a shared expert runs on the main stream, in the order a Build (EXPORT) gives it; otherwise vLLM "
+                                          "moves it to an aux stream at <= VLLM_SHARED_EXPERTS_STREAM_TOKEN_THRESHOLD (256) tokens and the "
+                                          "log's order is no longer the execution order operand_provenance (G5) takes it to be; costs the "
+                                          "shared/routed overlap there, on shared-expert models only; value- and Program-neutral",
+}
 
-#: The meta-device instantiation of the pinned model class (``program/frontend/vllm_meta.py``).
+#: The meta-device instantiation of the pinned model class (``program/frontend/vllm_meta.py``).  Batch invariance is the Build
+#: target's (``TargetProfile.env()``, applied before vLLM is imported), which is the row's execution label's, not the profile's.
 EXPORT = {
-    "VLLM_BATCH_INVARIANT": "1",
     "VLLM_USE_LAYERNAME": "0",
     "VLLM_DISABLE_SHARED_EXPERTS_STREAM": "1",
     "HF_HUB_OFFLINE": "1",
     "VLLM_LOGGING_LEVEL": "WARNING",
     "TOKENIZERS_PARALLELISM": "false",
 }
+
+#: No compile cache of any layer (vLLM's, Inductor's FX graphs, AOTAutograd's): every compiled engine generates its wrappers
+#: in-process, so hooks installed before the build are in them (``served_compiled_source``), and an engine compared with
+#: one compiles the same way. Inductor's autotuning results (TORCHINDUCTOR_CACHE_DIR) stay shared.
+COMPILE_FRESH = {"VLLM_DISABLE_COMPILE_CACHE": "1", "TORCHINDUCTOR_FX_GRAPH_CACHE": "0", "TORCHINDUCTOR_AUTOGRAD_CACHE": "0"}
 
 #: Set by whoever gave this process its own TORCHINDUCTOR_CACHE_DIR (``prepare_compiled_process_cache``,
 #: ``ops/compiled_commit.sh``).
@@ -63,6 +75,11 @@ def apply_target(env: Mapping[str, str]) -> dict[str, str]:
     """A ``TargetProfile.env()``: the profile's values replace whatever the process had."""
     os.environ.update(env)
     return {k: os.environ[k] for k in env}
+
+
+def apply_compile_fresh() -> dict[str, str]:
+    """``COMPILE_FRESH`` as overrides, before vLLM and torch read them."""
+    return apply_target(COMPILE_FRESH)
 
 
 def hide_devices() -> None:

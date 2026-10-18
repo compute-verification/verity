@@ -69,6 +69,8 @@ D = DN + DR; a row is a staged row (D bf16, valid bit); N = SPLITS[-1] * BN (the
 """
 from __future__ import annotations
 
+__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
+
 import struct
 
 import numpy as np
@@ -332,6 +334,7 @@ def FlashMlaBlock(B, S, q, k, nm_prev=None, l_prev=None, o_prev=None):
     wgmmas, :253-258 and :398-404): the module docstring's step 2.  The first block of a split (FIRST) starts from the constant
     state m = -1e30, l = 0, o = 0 and takes no state.  The state carries the running max negated, -m (the -m' every exponent
     of the block reads), so the split's sink term reads its last block's -m' rather than negating m again."""
+    check_block_statics(S.D, S.BN)
     return block(word_ops(B), S, bind(DotBf16V2, K=S.D, DOT=S.DOT), q, k, nm_prev, l_prev, o_prev)
 
 

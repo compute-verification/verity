@@ -8,8 +8,8 @@ import re
 import pytest
 
 from verity_machine_model.model import (CLAIMS, COPIES, DATA, DEVICES, STATUSES, all_attacks, attacks, census,
-                                        census_files, census_lines, entries, floors, holds, model, rows, run_lists,
-                                        u_of, vector, vectors)
+                                        census_files, census_lines, entries, floors, holds, kind_lists, model, rows,
+                                        run_lists, u_of, vector, vectors)
 
 M = model()
 ROWS = rows()
@@ -37,10 +37,10 @@ def test_census_is_a_file_per_epoch():
     """data/census/ is EPOCH.csv for each epoch that brought lines, each line's since its file's, and runs.toml; no file
     comes near the repository's cap, so the census grows by files, not by one file growing."""
     files = census_files(M)
-    assert {p.name for p in (DATA / "census").iterdir()} == {p.name for p in files} | {"runs.toml"}, (
-        "data/census/ holds EPOCH.csv for epochs in model.toml's epochs, and runs.toml")
-    named = run_lists()
-    used = set()
+    assert {p.name for p in (DATA / "census").iterdir()} == {p.name for p in files} | {"runs.toml", "kinds.toml"}, (
+        "data/census/ holds EPOCH.csv for epochs in model.toml's epochs, runs.toml and kinds.toml")
+    named, kinds = run_lists(), kind_lists()
+    used, used_kinds = set(), set()
     for p in files:
         with open(p, newline="") as f:
             r = csv.DictReader(f)
@@ -48,12 +48,17 @@ def test_census_is_a_file_per_epoch():
             for d in r:
                 assert d["since"] == p.stem, f"census/{p.name}: {d['kind']} on {d['row']} is from {d['since']!r}"
                 used |= {c[1:] for c in d["runs"].split() if c.startswith("@")}
-    for p in [*files, DATA / "census" / "runs.toml"]:
+                used_kinds |= {d["kind"][1:]} if d["kind"].startswith("@") else set()
+    for p in [*files, DATA / "census" / "runs.toml", DATA / "census" / "kinds.toml"]:
         assert p.stat().st_size <= BLOB_LIMIT // 4, (
             f"census/{p.name} is {p.stat().st_size} bytes, past a quarter of the {BLOB_LIMIT}-byte cap: name a run list "
-            f"its lines share in census/runs.toml and cite it as @NAME")
+            f"its lines share in census/runs.toml and cite it as @NAME, or a kind list a row prices at one value in "
+            f"census/kinds.toml and write its line as kind @NAME")
     assert used == set(named), f"runs.toml: {sorted(set(named) - used)} cited by no line; {sorted(used - set(named))} not in it"
     assert all(xs and all(CITE.fullmatch(x) for x in xs) for xs in named.values())
+    assert used_kinds == set(kinds), (f"kinds.toml: {sorted(set(kinds) - used_kinds)} written by no line; "
+                                      f"{sorted(used_kinds - set(kinds))} not in it")
+    assert all(xs and len(set(xs)) == len(xs) and not any(x.startswith("@") for x in xs) for xs in kinds.values())
 
 
 def test_census_lines_are_well_formed():
@@ -70,7 +75,8 @@ def test_census_lines_are_well_formed():
             assert M.epochs.index(d["since"]) <= M.epochs.index(d["until"]), where
         assert d["runs"] and all(CITE.fullmatch(x) or x.startswith("@") and x[1:] in named for x in d["runs"].split()), (
             f"{where}: cite its runs or note, or a run list of census/runs.toml as @NAME")
-    assert len(entries(M)) == len(lines)
+    kinds = kind_lists()
+    assert len(entries(M)) == sum(len(kinds[d["kind"][1:]]) if d["kind"].startswith("@") else 1 for d in lines)
 
 
 @pytest.mark.parametrize("epoch", M.epochs)
@@ -202,6 +208,43 @@ def test_sm89_census_is_well_formed():
     assert all(u > 0 for v in c.values() for u in v.values())
     assert all({"issue", "JI89"} <= set(v) for v in c.values())
     assert {r for v in c.values() for r in v} == set(rs)
+
+
+@pytest.mark.parametrize("d", sorted(p for p in DEVICES.glob("sm_*") if (p / "model.toml").is_file()),
+                         ids=lambda p: p.name)
+def test_datasheet_vector(d):
+    """A device's DS-NN reads its datasheet rows alone, every kind on DS_issue at one SMSP-cycle, and no data-sheet line
+    prices a kind above what its measured rate alone does by more than decision 76's 2% (a peak the chip beats is a wrong
+    peak, a wrong form's MACs or a wrong pipe)."""
+    rs, m = rows(d), model(d)
+    v = vector(f"DS-{d.name[3:]}", d)
+    assert {r for r in rs if rs[r].status == "datasheet"} == set(v.rows) and "DS_issue" in v.rows
+    c = census(m, m.epochs[-1], d)
+    assert all(row["DS_issue"] == pytest.approx(m.cycle_u) for row in c.values())
+    with open(d / "census.csv", newline="") as f:
+        alone = {}
+        for x in csv.DictReader(f):
+            if x["rate"]:
+                alone[x["kind"]] = max(alone.get(x["kind"], 0.0), u_of(m.cycle_u, x["rate"], "", "", ""))
+    over = {(k, r): round(u / alone[k], 4) for k, row in c.items() for r, u in row.items()
+            if r in v.rows and k in alone and u > 1.02 * alone[k]}
+    assert not over, f"data-sheet lines above the kind's measured rate alone: {over}"
+
+
+def test_datasheet_vector_sm120():
+    """DS-120 reads data/'s datasheet rows alone at its own epoch, whose lines close where they open; every kind there is
+    on DS_issue at one SMSP-cycle and every MMA form on DS_tensor, and no data-sheet line prices a kind above its time
+    alone on the current vector's census by more than decision 76's 2%."""
+    v = vector("DS-120")
+    assert {r for r in ROWS if ROWS[r].status == "datasheet"} == set(v.rows) and v.epoch == "DS-120"
+    assert all(d["since"] == d["until"] == "DS-120" for d in census_lines(M) if d["row"] in v.rows)
+    c, cur = census(M, "DS-120"), census(M, vector(M.current).epoch)
+    assert all(row.get("DS_issue") == pytest.approx(M.cycle_u) for row in c.values())
+    assert all("DS_tensor" in c[k] for k, row in cur.items() if "M" in row)
+    alone = {k: max(row.values()) for k, row in cur.items()}
+    over = {(k, r): round(u / alone[k], 4) for k, row in c.items() for r, u in row.items()
+            if r in v.rows and k in alone and u > 1.02 * alone[k]}
+    assert not over, f"data-sheet lines above the kind's time alone: {over}"
 
 
 def test_violated_rows_close():
