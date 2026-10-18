@@ -140,8 +140,14 @@ def run_class():
                                                size=size["tree_a"], nonce=COMMIT_NONCE + w)
             return self.cm[key]
 
-        def commit_buffers(self) -> list:
-            return [t for c in self.cm.values() for t in (c.tree, c.rowdig)]
+        def poison_commit(self, value: int = 0xA5) -> None:
+            """The Commit-style trees and row digests filled with `value`, under inference mode as `poison` (they are made
+            in a call)."""
+            import torch
+            with torch.inference_mode():
+                for c in self.cm.values():
+                    c.tree.fill_(value)
+                    c.rowdig.fill_(value)
 
         def _gemm(self, w, x, weight, bias):
             omit, on = self.omit, self.hashing and self.mode is not None and self.role[w] in self.arm_roles
@@ -338,8 +344,7 @@ def check(run, forward, x0, W: dict, fixture, m: int, keep: frozenset) -> dict:
     import torch
     out: dict = {"m": m}
     passes = {}
-    for t in run.commit_buffers():
-        t.fill_(0xA5)
+    run.poison_commit()
     for arm in ("inline", "pre", "inline-od", "pre-od", "h3", "tree"):
         run.keep = keep if arm in ("inline", "h3", "tree") else frozenset()
         passes[arm] = eager_pass(run, forward, x0, arm)
@@ -347,8 +352,7 @@ def check(run, forward, x0, W: dict, fixture, m: int, keep: frozenset) -> dict:
             run.keep = frozenset()
             passes["inline-again"] = eager_pass(run, forward, x0, "inline")
     run.keep = frozenset()
-    for t in run.commit_buffers():
-        t.fill_(0xA5)
+    run.poison_commit()
     passes["pre-poisoned"] = eager_pass(run, forward, x0, "pre")
     passes["inline-restore"] = eager_pass(run, forward, x0, "inline")
     passes["inline-od-restore"] = eager_pass(run, forward, x0, "inline-od")
