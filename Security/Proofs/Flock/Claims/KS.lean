@@ -74,6 +74,7 @@ import Proofs.Flock.Claims.KS.RepDist
 import Proofs.Flock.Claims.KS.RepDistDeploy
 import Proofs.Flock.Claims.KS.SlotLead
 import Proofs.Flock.Claims.KS.PlainAlign
+import Proofs.Flock.Claims.KS.PlainSched
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -328,4 +329,11 @@ verifier's trimmed record holds where the simulated strategy reaches each plain 
 `FlockDeploy.KS.PlainSlotAlign`, `FlockDeploy.KS.plain_KS_of_slot`). A dead branch answers the openings with
 `nulOp`, so two of its runs open only the empty row, never conflict, and fork to nothing at any chooser
 (`FlockSoundness.Game.Lock.forkE_answerWith`, `FlockDeploy.KS.slotAt_answerWith_nul`).
+Under a schedule that steps the first of two interleaved games until it ends, after `n` coins, except below a part of
+the run whose every reached outcome is dead, a slot of the first lockstep is met after its own count and a slot of the
+second after `n` more (`SlotLead`: `FlockSoundness.Game.Lock.Lead`, `FlockSoundness.Game.Lock.SlotAt.lead_fst`,
+`FlockSoundness.Game.Lock.SlotAt.lead_snd`), so the plain slot alignment holds where the simulated strategy submits
+rep 0's `repRounds` coins before rep 1's at every link point, with outcomes that open only the empty row as the dead
+ones (`PlainSched`: `FlockDeploy.KS.LeadsAfter`, `FlockDeploy.KS.slotRSL_lead`, `FlockDeploy.KS.PlainSchedAlign`,
+`FlockDeploy.KS.plain_KS_of_sched`).
 -/
