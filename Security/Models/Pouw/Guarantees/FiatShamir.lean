@@ -16,9 +16,9 @@ Pouw.Guarantees.FiatShamir.FiatShamirFloor` and `Pouw.SecurityProofs.FiatShamir.
 **Composition.**
 * The live floors per prover (`Models.Pouw.Guarantees.RelativeSecurity`, `StagedFloorKPerProver` and its siblings)
   bound each adversary's error by `breakBound`: constants plus weights times its collision finders, read through
-  `ecr/sha-512` (`Claims.ecrBound`). The fixed-oracle premises here (`LiveFloorUnsteered`, `ServiceSoundStagedFS`) have
-  that form at each oracle (`FindersFS`), and the floor reads them through the same `Claims.ecrBound`
-  (`breakBoundFS`): one break term, two statements. Gap (6)'s `Pouw.Guarantees.Window.WindowEps` (branch
+  `ecr/sha-512` (`Claims.ecrBound`) at budgets computed from the adversary's time. The fixed-oracle premises here
+  (`LiveFloorUnsteered`, `ServiceSoundStagedFS`) have that form at each oracle (`FindersFS`), and the floor reads them
+  through the same `Claims.ecrBound` at the same budgets (`breakBoundFS`): one break term, two statements. Gap (6)'s `Pouw.Guarantees.Window.WindowEps` (branch
   `cursor/pouw-window-eps-stmt-c7a9`) bounds the window audit's failure by `κ + coll(R, τ)` at the window's state; its
   `coll` is to be read the same way. The Fiat–Shamir terms compose after it.
 * Gap (4)'s `Pouw.Guarantees.EndToEndWindow` (branch `cursor/pouw-work-bound-stmt-c7a9`) reads one oracle `H`, SHA-512
@@ -48,13 +48,18 @@ realizes less than `π` by `κ + βb · Σ_k Pr[fb finds] + βz · Σ_k Pr[fz fi
 statement with the premium priced into `F`). Then every adversary `M` within `T` oracle calls, the inputs its
 commitment names counted, has its accepted runs charged below `F` with probability at most
 
-  `𝔼_{H,r}[min(1, κ + βb · Σ_k ecr(fb M r H k) + βz · Σ_k ecr(fz M r H k))] + ε_id(T, |J|) + T·τ`
+  `𝔼_{H,r}[min(1, κ + βb · Σ_k ecr(fb M r H k, qb) + βz · Σ_k ecr(fz M r H k, qz))] + ε_id(T, |J|) + T·τ`
 
-over the oracle, the live coins and its own coins (`ServiceFloorFS`), `ecr(F)` the finder's expected SHA-512 calls over
-`2^256` where it meets `ecr/sha-512` and `⊤` where it doesn't (`breakBoundFS`, `Claims.ecrBound`, the break term of the
-live floors per prover). With a free state term `g` in the finders' place the statement said nothing, since `g = 1`
-satisfies the premise; through the finders, a machine that hard-codes a collision gets about 1 and every other
-adversary its own finders' bound.
+over the oracle, the live coins and its own coins (`ServiceFloorFS`), `ecr(F, q)` equal to `q / 2^256` where the finder
+meets `ecr/sha-512` within `q` SHA-512 calls in expectation and `⊤` where it doesn't (`breakBoundFS`,
+`Claims.ecrBound`, the break term of the live floors per prover). The budgets are computed from the adversary, never
+the finders' declared costs: `qb = cb · time M + db` for the binding finders and `qz = cz · time M + dz` for the
+zero-knowledge ones, at constants the analysis states (the fork finder's two runs and the verifier's checks for `cb`,
+`db`; the link finders' `2(1 + k)` runs and the extractor's calls for `cz`, `dz`), with `time M` the machine's worst
+case, which `M` can't set low. A finder that declares a large cost to meet `ecr/sha-512` trivially exceeds the budget
+and reads `⊤`. With a free state term `g` in the finders' place the statement said nothing, since `g = 1` satisfies the
+premise; through the finders at computed budgets, a machine that hard-codes a collision gets about 1 and every other
+adversary `K (βb qb + βz qz) / 2^256` on top of `κ`.
 
 At GRIND's instance (`SteerBoundOfMoment`: `τ = M·e^{−θπ}`) and the premium `π* = ln(T·M/δ)/θ`, the tries cost
 `T·τ = δ`, and the grind sits in `F`, at `π*` a seed group. The live floor's accumulation over stages is kept in the
@@ -67,10 +72,10 @@ statement's own terms are `ε_id(|J|, |J|) + |J|·τ`. -/
 def FiatShamirFloor : Prop :=
   ∀ (J N Live : Type) [Fintype J] [Fintype N] [Fintype Live] (K : ℕ) (Mc : Machine) (S : FSService J N Live)
     (T : ℕ) (εid : ℕ → ℕ → ℝ) (gain : GainMap Mc S) (sha : Claims.Msg → Claims.Msg) (fb fz : FindersFS Mc S K)
-    (π τ F κ βb βz : ℝ),
+    (cb db cz dz π τ F κ βb βz : ℝ),
     SeedExtraction Mc S T εid → SteerBound Mc S T gain π τ → LiveFloorUnsteered Mc S T gain π F κ sha fb fz βb βz →
       ServiceFloorFS Mc S T F (fun (Ω : Type) [Fintype Ω] (M : FSAdv Mc S Ω) =>
-        breakBoundFS sha fb fz κ βb βz Ω M + ENNReal.ofReal (εid T (Fintype.card J) + T * τ))
+        breakBoundFS sha fb fz cb db cz dz κ βb βz Ω M + ENNReal.ofReal (εid T (Fintype.card J) + T * τ))
 
 /-- **GRIND's moment is `SteerBound`'s instance** (`Accounting.Guarantees.TS.ExchangeTail` at each try): if a try's
 gain has moment at most `M ≥ 0` at rate `θ ≥ 0` (`SteerMoment`), a try reaches every premium `π` with probability at

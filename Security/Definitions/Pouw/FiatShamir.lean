@@ -25,8 +25,9 @@ oracle only.
   inputs counted;
 * `FindersFS`, `finderTermFS`, `breakBoundFS`: the analysis's collision finders, adversary by adversary, at each value
   of its coins and each oracle, their `ecr/sha-512` bounds (`Claims.ecrBound`, the break term the live floors per
-  prover read, `breakBound`), and an adversary's error, capped at 1 at each oracle and value of its coins, then
-  averaged. They replace a free state term `g`, which `g = 1` satisfies, so that a statement over it said nothing;
+  prover read, `breakBound`) at budgets computed from the adversary's time, and an adversary's error, capped at 1 at
+  each oracle and value of its coins, then averaged. They replace a free state term `g`, which `g = 1` satisfies, so
+  that a statement over it said nothing;
 * `ServiceFloorFS`: `ServiceFloor` over such adversaries, over the oracle, the live coins and the adversary's coins, its
   bound a function of the adversary in `ℝ≥0∞`, as `ServiceFloorPerProver`'s;
 * `GainMap`, `LiveFloorUnsteered`: an analysis's gain through each try (relative to the stage's savings, GRIND's `R q`),
@@ -92,28 +93,33 @@ cost counts everything it computes, the runs of `M` it plays and whatever else i
 table the analysis fixes from a commitment. No constant bounds a fixed-oracle break for every adversary: one that holds
 a collision of SHA-512 in its commitment tree equivocates an opening at every live coin. So the statements'
 fixed-oracle premises bound their breaks by a constant plus weights times these finders' success, and their conclusion
-reads the finders through `ecr/sha-512` (`finderTermFS`). -/
+reads the finders through `ecr/sha-512` (`finderTermFS`), at budgets computed from the adversary's time, never at the
+finders' declared costs (`breakBoundFS`). -/
 abbrev FindersFS (Mc : Machine) (S : FSService J N Live) (K : ℕ) : Type 1 :=
   ∀ (Ω : Type) [Fintype Ω], FSAdv Mc S Ω → Ω → (S.Q → N) → Fin K → Claims.Finder
 
-/-- **An adversary's finder term at one value of its coins and one oracle**: the `ecr/sha-512` bounds of its finders
-for every break (`Claims.ecrBound` at the commitments' hash `sha`), summed; `⊤` when one of them fails the assumption.
-`finderTerm` at the oracle `H`. -/
+/-- **An adversary's finder term at one value of its coins and one oracle, at the budget `q`**: the `ecr/sha-512`
+bounds of its finders for every break (`Claims.ecrBound` at the commitments' hash `sha` and the budget), summed:
+`K · q / 2^256` where every finder meets the assumption within `q` calls in expectation, `⊤` otherwise. `finderTerm`
+at the oracle `H`. -/
 noncomputable def finderTermFS {Mc : Machine} {S : FSService J N Live} {K : ℕ} (sha : Claims.Msg → Claims.Msg)
-    (fd : FindersFS Mc S K) (Ω : Type) [Fintype Ω] (M : FSAdv Mc S Ω) (r : Ω) (H : S.Q → N) : ENNReal :=
-  ∑ k, Claims.ecrBound sha (fd Ω M r H k)
+    (fd : FindersFS Mc S K) (q : ℝ) (Ω : Type) [Fintype Ω] (M : FSAdv Mc S Ω) (r : Ω) (H : S.Q → N) : ENNReal :=
+  ∑ k, Claims.ecrBound sha (fd Ω M r H k) q
 
 /-- **An adversary's error under Fiat–Shamir draws**: at each oracle `H` and value `r` of its coins, the constant `κ`
 and its binding and zero-knowledge finder terms at `(r, H)` (`finderTermFS`) at the weights `βb` and `βz`, capped at
 1, a probability; then averaged over the oracle and its coins. `breakBound`'s form at the oracle, with `Claims.ecrBound`
-the one break term both read: a machine that hard-codes a collision gets about 1 under either draw, and an adversary
-whose finders meet `ecr/sha-512` keeps their expected calls over `2^256` at its weights. -/
+the one break term both read, at the same budgets computed from the adversary: `cb · time M + db` SHA-512 calls for
+the binding finders and `cz · time M + dz` for the zero-knowledge ones, at constants the analysis states, with `M`'s
+time the machine's worst case (`Machine.time`), which `M` can't set low. A machine that hard-codes a collision gets 1
+under either draw, and an adversary whose finders meet `ecr/sha-512` within the budgets keeps
+`K (βb (cb · time M + db) + βz (cz · time M + dz)) / 2^256` on top of `κ`. -/
 noncomputable def breakBoundFS [Fintype N] {Mc : Machine} {S : FSService J N Live} {K : ℕ}
-    (sha : Claims.Msg → Claims.Msg) (fb fz : FindersFS Mc S K) (κ βb βz : ℝ) (Ω : Type) [Fintype Ω]
-    (M : FSAdv Mc S Ω) : ENNReal :=
+    (sha : Claims.Msg → Claims.Msg) (fb fz : FindersFS Mc S K) (cb db cz dz : ℝ) (κ βb βz : ℝ) (Ω : Type)
+    [Fintype Ω] (M : FSAdv Mc S Ω) : ENNReal :=
   ∑ x : (S.Q → N) × Ω, (Fintype.card ((S.Q → N) × Ω) : ENNReal)⁻¹ *
-    min 1 (ENNReal.ofReal κ + ENNReal.ofReal βb * finderTermFS sha fb Ω M x.2 x.1 +
-      ENNReal.ofReal βz * finderTermFS sha fz Ω M x.2 x.1)
+    min 1 (ENNReal.ofReal κ + ENNReal.ofReal βb * finderTermFS sha fb (cb * Mc.time M + db) Ω M x.2 x.1 +
+      ENNReal.ofReal βz * finderTermFS sha fz (cz * Mc.time M + dz) Ω M x.2 x.1)
 
 /-- **The service's adversary floor under Fiat–Shamir draws**: every adversary `M` within `T` oracle calls has its
 accepted runs charged (`max(|M|, cost)`) below `F` with probability at most `b Ω M`, a bound of its own in `ℝ≥0∞`, `⊤`
@@ -143,7 +149,8 @@ oracle's draws, charged below `F`, with every committed input's gain below the p
 plus the analysis's collision finders for that adversary at their weights (`FindersFS`). The oracle is fixed here, and
 with it the commitment and its draws, so only the live coins (each round's check) are random: this is the live
 analysis at draws chosen by the adversary among those whose every seed realizes less than `π`. It assumes nothing of
-SHA-512; `ecr/sha-512` enters only the floor's bound (`breakBoundFS`).
+SHA-512; `ecr/sha-512` enters only the floor's bound (`breakBoundFS`), at budgets computed from the adversary's time,
+so the finders' declared costs never lower it.
 
 `F` is where the premium goes. At such draws a run's savings are at most `(1 + κₓ)·U` plus `π` a seed group, `U`
 its unlucky savings, which the checks catch at the zero-luck rate, so the staged instance's `F` is the live floor less

@@ -16,7 +16,8 @@ drawn unit's own proof (decision 105). The live coins are each round's check.
   (`Accounting.Guarantees.TS.GrindPremium`), which gives `SteerBound` at `τ = M·e^{−θπ}` (`SteerBoundOfMoment`).
 * `ServiceSoundStagedFS`: `ServiceSoundStagedPerProver` with its stage draws from the oracle, the staged service sound
   up to its proof layer at every oracle, its binding and zero-knowledge breaks bounded by a constant `κ` plus weights
-  times the success of the analysis's collision finders for that adversary (`FindersFS`). It is the premise from
+  times the success of the analysis's collision finders for that adversary (`FindersFS`), binding at the draw, not at
+  the circuit's cuts (Fiat–Shamir fixes nothing before a round's seed). It is the premise from
   which the staged service's live statement at unsteered draws (`LiveFloorUnsteered`) is to be derived with K's scope
   and the machine's charge; no guarantee reads it yet.
 -/
@@ -88,21 +89,33 @@ variable {R St n L np B n' : ℕ} {Ar : Type} [CommRing Ar]
 layer.** `ServiceSoundStaged` with decision 102's seeds: stage `(w, s)`'s draw is the oracle's answer at the input its
 commitment names (`pre`), and each round's check is live (S4, round protocol with C1 per stage and C4 per draw; S5's
 live coins now the checks only, on `trusted-nebius-host`). For every adversary within `T` oracle calls, every value
-`r` of its own coins and every oracle `H`, its run's play fixes each stage's error table at the stage's operand
-commitment, which the stage's seed input hashes (`root(A_j)`, `root(B_j)`), so before its draw (the play's form,
-`StagedPlay`; a re-rolled root is a new input and a new draw, which `SteerBound` prices). Every run accepted at the
-oracle's draws is accepted by the play's game at its realized coins (`stagedCoins`), or breaks binding or zero
-knowledge in some round (N1, X-RO commitments; F1 and F2, C-Flock's binding and zero knowledge). Some round breaks with
-probability at most `κ + βb · Σ_w Pr[fb M r H w finds a collision of sha] + βz · Σ_w Pr[fz M r H w …]` over the live
-coins: `κ` the rounds' constants, which read no prover, and the analysis's binding and zero-knowledge finders for that
-adversary at their weights, since no constant bounds a break for an adversary holding a collision.
+`r` of its own coins and every oracle `H`, its run's play reads each stage's error table off the stage's operand
+commitment, which the stage's seed input hashes (`root(A_j)`, `root(B_j)`) (the play's form, `StagedPlay`; a re-rolled
+root is a new input and a new draw, which `SteerBound` prices). Every run accepted at the oracle's draws is accepted by
+the play's game at its realized coins (`stagedCoins`), or breaks binding or zero knowledge in some round (N1, X-RO
+commitments; F1 and F2, C-Flock's binding and zero knowledge). Some round breaks with probability at most
+`κ + βb · Σ_w Pr[fb M r H w finds a collision of sha] + βz · Σ_w Pr[fz M r H w …]` over the live coins: `κ` the rounds'
+constants, which read no prover, and the analysis's binding and zero-knowledge finders for that adversary at their
+weights, since no constant bounds a break for an adversary holding a collision.
+
+Binding is at the draw, not at the circuit's cuts. Fiat–Shamir fixes nothing before a round's seed, since the prover
+evaluates the hash before it commits, so the breaks are measured at a fixed oracle, every seed answered and the
+commitment fixed, over the live checks alone. At the cuts, binding would fail with no collision: a cheater that writes
+two candidate operands, queries both seeds and keeps the first favorable one opens a value that departs from the cut's
+plurality value with probability `1/4` (RT-COMPOSE r5's toy, one round, two queries), and a fork at the cut reselects a
+query instead of finding a collision. That grinding is the premium's (`SteerBound`), not a break's.
 
 A free state term in place of the finders (`κ + g(M, r, H)`) would carry no number: `g = 1` satisfies the premise, and
 the floor's bound is then at least 1. Through the finders, the floor reads `ecr/sha-512` at each adversary's own
-finders (`breakBoundFS`, `Claims.ecrBound`, the record the live floors per prover read), a machine that hard-codes a
-collision gets about 1, and every other adversary keeps its finders' expected calls over `2^256` at its weights. The
-instances are `ServiceSoundStagedPerProver`'s, round by round: the fork finder for binding (cost about `2T`, its
-square root folded in by AM–GM, `δ' + |L|² x/(4δ')`), and C-Flock's knowledge bound for zero knowledge. -/
+finders (`breakBoundFS`, `Claims.ecrBound`, the record the live floors per prover read), at budgets computed from the
+adversary's time (`cb · time M + db` SHA-512 calls for binding, `cz · time M + dz` for zero knowledge), never at the
+finders' declared costs. So a machine that hard-codes a collision gets 1, a finder that declares a large cost to meet
+`ecr/sha-512` exceeds the budget, and every other adversary keeps the budgets over `2^256` at its weights. The
+instances are `ServiceSoundStagedPerProver`'s, round by round:
+- binding: the fork finder, two runs of `M` and the verifier's checks (`cb` about twice the calls a unit of time buys),
+  its square root folded in by AM–GM, `δ' + |L|² x/(4δ')`;
+- zero knowledge: C-Flock's knowledge bound, whose finder extracts the openings first (its link finders, about
+  `2(1 + k)` runs, `linkBoundZC`). -/
 def ServiceSoundStagedFS (Mc : Machine) (S : StagedFS R St n L np B n') (T : ℕ) (run : RunMapFS Mc S Ar)
     (κ : ℝ) (sha : Claims.Msg → Claims.Msg) (fb fz : FindersFS Mc S R) (βb βz : ℝ) : Prop :=
   ∀ (Ω : Type) [Fintype Ω] (M : FSAdv Mc S Ω), FSWithin Mc S M T →
