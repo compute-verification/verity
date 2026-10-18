@@ -312,11 +312,5 @@ class Identity:
     def decode(self, stored: bytes, index: int) -> bytes:
         return stored
 
-    def encode_tensor_(self, tensor: Any, index: int) -> None:
-        return None
-
-    def encode_slots_(self, cache: Any, slot_mapping: Any, layer: int) -> None:
-        return None
-
 
 IDENTITY = Identity()
