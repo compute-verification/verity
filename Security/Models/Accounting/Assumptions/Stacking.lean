@@ -6,9 +6,9 @@ import Definitions.Accounting.Carrier
 What the stacking guarantees (`Models/Accounting/Guarantees/Stacking.lean`) assume beyond the remote audit's own and
 `Accounting.Assumptions.EncodeChainHardness`, a named `Prop` taken as a hypothesis, never an `axiom`:
 
-* `KeyBinding δ view`: for each index (the writers' choices, and in the session forms the coins drawn before the pass),
-  the store the writers make, its blocks written after the seed encoded under bound keys, is on every event at most `δ`
-  likelier than a uniform store (claim `key-binding`).
+* `KeyBinding T M δ enc`: under the append-coin rule (`Accounting.appendCoinBlocks`), whatever the writers choose for
+  each append from the codec and the coins of the appends before it, the blocks a pass reads at any layout fixed apart
+  from the encodings are on every event at most `δ` likelier than uniform blocks (claim `key-binding`).
 -/
 
 namespace Accounting.Assumptions
@@ -16,45 +16,47 @@ namespace Accounting.Assumptions
 open Pous (pr)
 open scoped ENNReal
 
-/-- **`key-binding`: a store whose blocks written after the seed are under bound keys is, at each index, a uniform
-store but for `δ`.** For every index `α` and every set `ev` of stores, the store `view α ω` the writers make at `α`, at a
-uniform `ω`, is in `ev` with probability at most `δ` more than a uniform store:
+/-- **`key-binding`: under the append-coin rule, the blocks a pass reads are uniform but for `δ`.** For the codec
+`enc` of `T` appends of `M` block positions each, every way `choose` the writers make each append's choices from the
+codec and the coins of the appends before it, every layout `slot` of `N` distinct positions, and every set `ev` of the
+`N` blocks' encodings, the blocks at a uniform codec `ω` and uniform coins `κ` are in `ev` with probability at most
+`δ` more than uniform blocks:
 
-  `Pr_ω[view α ω ∈ ev] ≤ Pr_E[E ∈ ev] + δ`.
+  `Pr_{ω,κ}[appendCoinBlocks enc choose slot (ω, κ) ∈ ev] ≤ Pr_E[E ∈ ev] + δ`.
 
-`ω` is the codec and its seed, drawn once at the node's one live registration, and everything else the store's contents
-depend on but the index. A block registered before the seed is its payload encoded under the seed's key. A block
-written after it (a KV page: its payload is a circuit's value, which may depend on other blocks' encodings) is its
-payload `p_j` encoded with the bound tweak `b_j = H(seed ‖ j ‖ d_j)`, `d_j = sha512/row/v2(p_j)`, added to every round,
-and it decodes only under the digest it was written with. The index is everything the store depends on besides `ω`:
-
-* **the coins seen so far.** In the session forms the index holds the session's coins drawn before the pass, so a page
-  written from earlier passes' receipts is in the view; the pass's own coins are not, which the audit rule secures (a
-  block appended after a pass's seed is in no plan of that pass);
-* **the writers' choices** made by looking at encodings: a writer that encodes `T` candidate payloads and keeps one
-  chooses `log₂ T` bits. The guarantees count these choices (`2^a` of them) and pay for them. When the memory map is
-  the declared circuit's at every step (`Requirement.StoreMatches`, with the schedule and layout fixed before the seed),
-  frees, append order, indices and dummy appends are not choices: what is left is the payload bits outside live values
-  (padding, dead values) and run inputs chosen by their encodings, re-key times, and a schedule chosen after the seed.
-
-Given the index, a payload may be any function of other blocks' encodings and of the coins seen, but no writer keeps a
-payload for its encoding beyond the index.
+`ω` is the codec in the ideal encoding model (its rounds' random function, below). The coins are the appends'
+(remote_bandwidth's PROTOCOL.md §3–§4), drawn at the node's one live registration and after: the registration is
+append `0`, whose coin is the seed, drawn after its payload root; every other append's coin `c_a` is 32 bytes, drawn
+once, when the append's root arrives, after that root has committed every digest. A registered block is its payload
+encoded under the seed's key. An appended block is its payload `p_j` encoded with the bound tweak
+`b_j(c_a) = H(DOMAIN ‖ seed ‖ j ‖ d_j ‖ c_a)`, `d_j = sha512/row/v2(p_j)`, added to every round, and it decodes only
+under the digest and the coin it was written with. The writers' choices for an append (its payloads, which may be a
+circuit's values over other blocks' encodings, their padding, the run inputs behind them, how many blocks, the
+schedule up to it) are any function of `ω` and the coins before its own: the game fixes them before its coin, as the
+protocol does, and no writer is indexed or counted. The layout is any embedding, chosen apart from the encodings: in
+the stacked guarantees it is the memory map's schedule at the session's coins before the pass.
 
 **Why it should hold.** The ideal-encoding step. A round `x ↦ ρ((x + c_r + t) mod p)` is not a random permutation:
 `ρ(p − x) = p − ρ(x)`, and the parity of `ρ(x)` is the Legendre symbol of `x` (`p ≡ 3 mod 4`). The ideal model is a
 random function on pairs `{x, p − x}` to even residues `e`, the round's output `e` or `p − e` by the sign of its input.
 Under it a word's encoding, given its key, tweak and payload, is uniform on `[0, p)`: its last round's input lies in a
 fresh pair, which takes a fresh value `e`, and its sign is uniform given the pair. Two words' encodings are independent
-unless some round's inputs agree up to sign. A bound block's tweak is fresh for each payload in the tweak space (`b_j`
-is 64 bytes, so `2^512` of the `p` values), so a payload chosen from other blocks and from the coins seen leaves its
-block uniform and independent of them, and what the payload carries about other blocks is a carrier
-(`RateSketch.Carrier`), charged apart. Making two inputs agree up to sign, or choosing a block's encoding, needs a
-payload whose digest gives the tweak it was chosen for, a SHA-512 search. So `δ` is the writers' searches over `2^512`,
-the chance that inputs agree up to sign, and the words' values `p` and above (`2^n − p` of `2^n`, at `p = 2^n − c`). A
-second registration redraws `ω`, a choice of `log₂` the registrations, which the one live registration rules out.
-Under the seed's key the writer picks the encoding by writing its decoding: measured in
-`verity/core/protocols/remote_bandwidth/tests/test_key_binding.py`, which also fails 64 tries under the bound key. -/
-def KeyBinding {St Ω Ch : Type} [Fintype St] [Fintype Ω] (δ : ℝ≥0∞) (view : Ch → Ω → St) : Prop :=
-  ∀ (α : Ch) (ev : Set St), pr (fun ω => view α ω ∈ ev) ≤ pr (fun E : St => E ∈ ev) + δ
+unless some round's inputs agree up to sign. An appended block's tweak reads its append's coin, uniform over `2^256`
+values and drawn after its payload: whatever the writers chose from `ω` and the earlier coins, the tweak is one they
+could not aim at (it is 64 bytes, so `2^512` of the `p` values), and the block is uniform and independent of the other
+blocks and of the earlier coins. What its payload carries about other blocks is a carrier (`RateSketch.Carrier`),
+charged apart. So `δ` is the writers' advantage at anticipating an append's tweak before its coin (an unbounded writer
+gains about the bits it chooses over `2^256`), the chance that some round's inputs agree up to sign, and the words'
+values `p` and above (`2^n − p` of `2^n`, at `p = 2^n − c`). Not covered: a second registration redraws the seed, a
+choice among the registrations, which the one live registration rules out; and a layout chosen from the encodings
+after the coins, which the stacked guarantees fix before. Under the seed's key alone a writer picks an appended
+block's encoding by writing its decoding: measured in
+`verity/core/protocols/remote_bandwidth/tests/test_key_binding.py`, which also fails 64 tries under the bound key and
+keys a block under each coin apart. -/
+def KeyBinding {Ω Ca Ch B : Type} [Fintype Ω] [Fintype Ca] [Fintype B] (T M : ℕ) (δ : ℝ≥0∞)
+    (enc : Ω → Fin T → Ch → (Fin T → Ca) → Fin M → B) : Prop :=
+  ∀ (choose : Ω → (a : Fin T) → ({b : Fin T // b < a} → Ca) → Ch) (N : ℕ) (slot : Fin N ↪ Fin T × Fin M)
+    (ev : Set (Fin N → B)),
+    pr (fun y : Ω × (Fin T → Ca) => appendCoinBlocks enc choose slot y ∈ ev) ≤ pr (fun E : Fin N → B => E ∈ ev) + δ
 
 end Accounting.Assumptions

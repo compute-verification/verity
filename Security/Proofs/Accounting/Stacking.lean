@@ -16,20 +16,21 @@ sectors at every store, which take every value, so its sectors are at most `n` b
 (`encodeBitsCost_ge`, with `⊤` where the gate model has no circuit), so a gate budget bounds the encoded bits
 (`Provenance.encoded_mul_le`).
 
-`KeyBinding` moves an event of the store made at an index read from the coins, and of the coins, to a uniform store at a
-cost of `δ` (`KeyBinding.pr_le_of`), fiber by fiber over the coins, and an event of the store made with the writers'
-choices to `|Ch|` times that (`KeyBinding.pr_le_advice`), by a union over the choices.
+`KeyBinding` makes a pass's store uniform but for `δ` at each prefix of the session's coins (`UniformBut`): at the
+prefix the writers' choices and the layout are fixed, so the blocks are `KeyBinding`'s, and the tiles' sectors are a
+uniform store's when the blocks are uniform (`KeyBinding.uniformBut_coinStore`; the general class's one store,
+`KeyBinding.uniformBut_blocks`). A store uniform but for `δ` at an index read from the coins moves an event of the
+store and the coins to a uniform store at a cost of `δ` (`UniformBut.pr_le_of`), fiber by fiber over the coins.
 
 `Accounting.SecurityProofs.StackedSessionConservationSketchDeployed` charges each carrier's sectors in the pass's
 rebuilds, so every pass rebuilds at most `X + C` bits, and bounds the session with a store per pass. A window that
 doesn't pay for its correct receipts has a sign matrix of low rank, paid once a window, or a pass whose kept candidate
-is unpaid on its own store (`SketchDeployedWindow.exists_unpaidOn`). At the writers' choice that pass is unpaid at
-some choice; at each choice its store is `view` at an index read from the coins before the pass, which `KeyBinding`
-moves to a uniform store independent of the session's coins, where the deployed guarantee's one-pass family bound
-holds (`SketchDeployedSession.pr_pass_le`). So the unpaid windows cost `n·ε + n·P·|Ch|·(G·N/2^h + qtot/2^(8r) + δ)`
-(`SketchDeployedSession.pr_unpaidOn_le`). The passes' correct receipts are a causal family of the windows' draws,
-whatever stores they are on (`pr_draws_causal_le`), so the draws' terms are the deployed guarantee's
-(`pr_deployed_of_unpaid_causal`).
+is unpaid on its own store (`SketchDeployedWindow.exists_unpaidOn`). That store is the append-coin rule's at the
+prefix before the pass, which `KeyBinding` moves to a uniform store independent of the session's coins, where the
+deployed guarantee's one-pass family bound holds (`SketchDeployedSession.pr_pass_le`). So the unpaid windows cost
+`n·ε + n·P·(G·N/2^h + qtot/2^(8r) + δ)` (`SketchDeployedSession.pr_unpaidOn_le`). The passes' correct receipts are a
+causal family of the windows' draws, whatever stores they are on (`pr_draws_causal_le`), so the draws' terms are the
+deployed guarantee's (`pr_deployed_of_unpaid_causal`).
 
 `Accounting.SecurityProofs.StackedSessionConservationRelay` simulates each pass device by one that reruns its carrier's
 circuit first, reading every step's bits over the side link at odd addresses (`PIChip.walk`, within `C` bits), and then
@@ -215,14 +216,25 @@ theorem pr_prod_eq_sum_div {X Y : Type} [Fintype X] [Fintype Y] (Q : X × Y → 
   rw [ENNReal.mul_inv (Or.inr (ENNReal.natCast_ne_top _)) (Or.inl (ENNReal.natCast_ne_top _))]
   ring
 
-/-- **Key binding moves an event to a uniform store, at a cost of `δ`, at an index read from the coins**: an event of
-the store made at index `f c` and of coins `c` independent of `ω` is at most as likely as on a uniform store
-independent of them, plus `δ`. -/
-theorem KeyBinding.pr_le_of {St Ω Ch C : Type} [Fintype St] [Fintype Ω] [Fintype C] {δ : ℝ≥0∞}
-    {view : Ch → Ω → St} (h : KeyBinding δ view) (f : C → Ch) (P : St → C → Prop) :
+end Accounting.Assumptions
+
+namespace Accounting
+
+open Pous (pr)
+open scoped ENNReal
+
+/-- A family of stores, one at each index `α`, each a uniform store but for `δ` on every event. -/
+def UniformBut {St Ω I : Type} [Fintype St] [Fintype Ω] (δ : ℝ≥0∞) (view : I → Ω → St) : Prop :=
+  ∀ (α : I) (ev : Set St), pr (fun ω => view α ω ∈ ev) ≤ pr (fun E : St => E ∈ ev) + δ
+
+/-- **A store uniform but for `δ` at each index moves an event to a uniform store, at a cost of `δ`, at an index read
+from the coins**: an event of the store at index `f c` and of coins `c` independent of `ω` is at most as likely as on
+a uniform store independent of them, plus `δ`. -/
+theorem UniformBut.pr_le_of {St Ω I C : Type} [Fintype St] [Fintype Ω] [Fintype C] {δ : ℝ≥0∞}
+    {view : I → Ω → St} (h : UniformBut δ view) (f : C → I) (P : St → C → Prop) :
     pr (fun x : Ω × C => P (view (f x.2) x.1) x.2) ≤ pr (fun y : St × C => P y.1 y.2) + δ := by
-  rw [pr_prod_eq_sum_div (fun x : Ω × C => P (view (f x.2) x.1) x.2),
-    pr_prod_eq_sum_div (fun y : St × C => P y.1 y.2)]
+  rw [Assumptions.pr_prod_eq_sum_div (fun x : Ω × C => P (view (f x.2) x.1) x.2),
+    Assumptions.pr_prod_eq_sum_div (fun y : St × C => P y.1 y.2)]
   calc (∑ c, pr fun ω => P (view (f c) ω) c) / Fintype.card C
       ≤ (∑ c, (pr (fun E => P E c) + δ)) / Fintype.card C :=
         ENNReal.div_le_div_right (Finset.sum_le_sum fun c _ => h (f c) {E | P E c}) _
@@ -231,28 +243,45 @@ theorem KeyBinding.pr_le_of {St Ω Ch C : Type} [Fintype St] [Fintype Ω] [Finty
     _ ≤ (∑ c, pr fun E => P E c) / Fintype.card C + δ :=
         add_le_add le_rfl (ENNReal.div_le_of_le_mul (le_of_eq (mul_comm _ _)))
 
-/-- **Key binding moves an event to a uniform store, at a cost of `δ`**: for each choice `α`, an event of the store
-made with `α` and of independent coins `C` is at most as likely as on a uniform store, plus `δ`. -/
-theorem KeyBinding.pr_le {St Ω Ch C : Type} [Fintype St] [Fintype Ω] [Fintype C] {δ : ℝ≥0∞} {view : Ch → Ω → St}
-    (h : KeyBinding δ view) (α : Ch) (P : St → C → Prop) :
+/-- **A store uniform but for `δ` moves an event to a uniform store, at a cost of `δ`**: at each index `α`, an event
+of the store and of independent coins `C` is at most as likely as on a uniform store, plus `δ`. -/
+theorem UniformBut.pr_le {St Ω I C : Type} [Fintype St] [Fintype Ω] [Fintype C] {δ : ℝ≥0∞} {view : I → Ω → St}
+    (h : UniformBut δ view) (α : I) (P : St → C → Prop) :
     pr (fun x : Ω × C => P (view α x.1) x.2) ≤ pr (fun y : St × C => P y.1 y.2) + δ :=
   h.pr_le_of (fun _ => α) P
 
-/-- **The writers' choices are advice**: an event of the store made with the choices `choice ω` and of independent
-coins `C` is at most `|Ch|` times as likely as on a uniform store, plus `δ`. -/
-theorem KeyBinding.pr_le_advice {St Ω Ch C : Type} [Fintype St] [Fintype Ω] [Fintype Ch] [Fintype C] {δ : ℝ≥0∞}
-    {view : Ch → Ω → St} (h : KeyBinding δ view) (choice : Ω → Ch) (P : St → C → Prop) :
-    pr (fun x : Ω × C => P (view (choice x.1) x.1) x.2) ≤
-      Fintype.card Ch * (pr (fun y : St × C => P y.1 y.2) + δ) :=
-  calc pr (fun x : Ω × C => P (view (choice x.1) x.1) x.2)
-      ≤ pr (fun x : Ω × C => ∃ α, P (view α x.1) x.2) := Bandwidth.pr_mono fun _ hx => ⟨_, hx⟩
-    _ ≤ ∑ α, pr (fun x : Ω × C => P (view α x.1) x.2) :=
-        Bandwidth.pr_exists_le fun α (x : Ω × C) => P (view α x.1) x.2
-    _ ≤ ∑ _α : Ch, (pr (fun y : St × C => P y.1 y.2) + δ) := Finset.sum_le_sum fun α _ => h.pr_le α P
-    _ = Fintype.card Ch * (pr (fun y : St × C => P y.1 y.2) + δ) := by
-        rw [Finset.sum_const, Finset.card_univ, nsmul_eq_mul]
+/-- **Under key binding the general class's store is uniform but for `δ`**: the blocks at the layout `slot`, the
+writers choosing each append before its coin. -/
+theorem Assumptions.KeyBinding.uniformBut_blocks {Ω Ca Ch B : Type} [Fintype Ω] [Fintype Ca] [Fintype B] {T M N : ℕ}
+    {δ : ℝ≥0∞} {enc : Ω → Fin T → Ch → (Fin T → Ca) → Fin M → B} (h : Assumptions.KeyBinding T M δ enc)
+    (choose : Ω → (a : Fin T) → ({b : Fin T // b < a} → Ca) → Ch) (slot : Fin N ↪ Fin T × Fin M) :
+    UniformBut δ (fun (_ : Unit) (y : Ω × (Fin T → Ca)) => appendCoinBlocks enc choose slot y) :=
+  fun _ ev => h choose N slot ev
 
-end Accounting.Assumptions
+/-- **Under key binding a pass's store is uniform but for `δ` at each prefix**: at the prefix `c`, the writers'
+choices `choose c` and the layout `slot c` are fixed, and the tiles' sectors are a uniform store's when the blocks
+are uniform. -/
+theorem Assumptions.KeyBinding.uniformBut_coinStore {n P N m ρ h ks G d T M : ℕ} {Ω Ca Ch : Type} [Fintype Ω]
+    [Fintype Ca] {δ : ℝ≥0∞} {enc : Ω → Fin T → Ch → (Fin T → Ca) → Fin M → (Fin m → RateSketch.Sector)}
+    (hKB : Assumptions.KeyBinding T M δ enc)
+    (choose : RateSketch.SketchPrefix n P N m ρ h ks G d → Ω → (a : Fin T) → ({b : Fin T // b < a} → Ca) → Ch)
+    (slot : RateSketch.SketchPrefix n P N m ρ h ks G d → Fin N ↪ Fin T × Fin M) :
+    UniformBut δ (RateSketch.coinStore enc choose slot) := by
+  intro c ev
+  have h1 := hKB (choose c) N (slot c) {E | (fun p => E p.1 p.2) ∈ ev}
+  have e := Rate.pr_equiv (Equiv.curry (Fin N) (Fin m) RateSketch.Sector).symm
+    fun E : Fin N → Fin m → RateSketch.Sector => E ∈ {E | (fun p => E p.1 p.2) ∈ ev}
+  have hl : pr (fun y : Ω × (Fin T → Ca) => RateSketch.coinStore enc choose slot c y ∈ ev) =
+      pr (fun y : Ω × (Fin T → Ca) =>
+        appendCoinBlocks enc (choose c) (slot c) y ∈ {E | (fun p => E p.1 p.2) ∈ ev}) := rfl
+  have hr : pr (fun E : Fin N → Fin m → RateSketch.Sector => E ∈ {E | (fun p => E p.1 p.2) ∈ ev}) =
+      pr (fun E : RateSketch.SketchStore N m => E ∈ ev) := by
+    rw [e]
+    rfl
+  rw [hl, ← hr]
+  exact h1
+
+end Accounting
 
 namespace Accounting.Rate
 
@@ -791,14 +820,12 @@ theorem pr_rank_le {Ω : Type} [Fintype Ω] (r : ℕ) (ε : ℝ≥0∞) (hRank :
   push Not at hσ
   exact hσ
 
-/-- **A session's unpaid windows with a store per pass**: when every pass's store is the writers' `view` at their
-choice and the prefix before the pass, some window fails to pay for its correct receipts with probability at most
-`n·ε + n·P·|Ch|·(G·N/2^h + qtot/2^(8r) + δ)`: the rank tail once a window, and each pass's family bound and `δ` once
-for each choice. -/
-theorem pr_unpaidOn_le {Ω Ch : Type} [Fintype Ω] [Fintype Ch] (A : SketchDeployedSession n P N m ρ h S L q ks G d)
-    (view : Ch × SketchPrefix n P N m ρ h ks G d → Ω → SketchStore N m)
-    (choice : Ω → SketchPrefix n P N m ρ h ks G d → Ch) (δ : ℝ≥0∞)
-    (hKB : Accounting.Assumptions.KeyBinding δ view) (r X qtot : ℕ) (ε : ℝ≥0∞) (hr32 : r ≤ 32)
+/-- **A session's unpaid windows with a store per pass**: when every pass's store is `view` at the prefix before the
+pass, a uniform store but for `δ` at each prefix, some window fails to pay for its correct receipts with probability at
+most `n·ε + n·P·(G·N/2^h + qtot/2^(8r) + δ)`: the rank tail once a window, and each pass's family bound and `δ`. -/
+theorem pr_unpaidOn_le {Ω : Type} [Fintype Ω] (A : SketchDeployedSession n P N m ρ h S L q ks G d)
+    (view : SketchPrefix n P N m ρ h ks G d → Ω → SketchStore N m) (δ : ℝ≥0∞)
+    (hKB : Accounting.UniformBut δ view) (r X qtot : ℕ) (ε : ℝ≥0∞) (hr32 : r ≤ 32)
     (hRank : Accounting.Assumptions.SketchRank ks m r ε)
     (hX : ∀ w η j ι c E σ R O,
       let B := (A.window w η).device j ι c
@@ -806,28 +833,28 @@ theorem pr_unpaidOn_le {Ω Ch : Type} [Fintype Ω] [Fintype Ch] (A : SketchDeplo
       (B.prog σ D).rebuilds O D * 256 ≤ X)
     (hq : ∀ w η j ι, Accounting.Assumptions.SketchHashBudget ((A.window w η).device j ι) qtot) :
     pr (fun x : Ω × (Fin n → SketchWindowCoins P N m ρ h ks G d) =>
-      ∃ w, (A.win w x.2).readsOn (programmed view choice x.1 x.2 w) (x.2 w).1 (x.2 w).2.1 +
+      ∃ w, (A.win w x.2).readsOn (programmed view x.1 x.2 w) (x.2 w).1 (x.2 w).2.1 +
           P * (S + (L - ρ * 256) + X) <
-        ((A.win w x.2).correctOn (programmed view choice x.1 x.2 w) (x.2 w).1 (x.2 w).2.1).card * (m * 256))
+        ((A.win w x.2).correctOn (programmed view x.1 x.2 w) (x.2 w).1 (x.2 w).2.1).card * (m * 256))
       ≤ (n : ℝ≥0∞) * ε + (n * P : ℝ≥0∞) *
-        (Fintype.card Ch * ((G : ℝ≥0∞) * ((N : ℝ≥0∞) / 2 ^ h) + (qtot : ℝ≥0∞) / 2 ^ (8 * r) + δ)) := by
+        ((G : ℝ≥0∞) * ((N : ℝ≥0∞) / 2 ^ h) + (qtot : ℝ≥0∞) / 2 ^ (8 * r) + δ) := by
   classical
-  let pass : Fin n → Fin P → Ch → Ω × (Fin n → SketchWindowCoins P N m ρ h ks G d) → Prop := fun w j α x =>
+  let pass : Fin n → Fin P → Ω × (Fin n → SketchWindowCoins P N m ρ h ks G d) → Prop := fun w j x =>
     RankGood r (x.2 w).1 ∧ ∃ c, SketchDeployedWindow.UnpaidAt (A.win w x.2) (x.2 w).1 (S + (L - ρ * 256) + X) j c
-      (view (α, .of x.2 w j) x.1, (x.2 w).2.1)
+      (view (.of x.2 w j) x.1, (x.2 w).2.1)
   have hsub : ∀ x : Ω × (Fin n → SketchWindowCoins P N m ρ h ks G d),
-      (∃ w, (A.win w x.2).readsOn (programmed view choice x.1 x.2 w) (x.2 w).1 (x.2 w).2.1 +
+      (∃ w, (A.win w x.2).readsOn (programmed view x.1 x.2 w) (x.2 w).1 (x.2 w).2.1 +
           P * (S + (L - ρ * 256) + X) <
-        ((A.win w x.2).correctOn (programmed view choice x.1 x.2 w) (x.2 w).1 (x.2 w).2.1).card * (m * 256)) →
-      (∃ w, ¬ RankGood r (x.2 w).1) ∨ ∃ w j α, pass w j α x := by
+        ((A.win w x.2).correctOn (programmed view x.1 x.2 w) (x.2 w).1 (x.2 w).2.1).card * (m * 256)) →
+      (∃ w, ¬ RankGood r (x.2 w).1) ∨ ∃ w j, pass w j x := by
     rintro x ⟨w, hw⟩
     by_cases hr : RankGood r (x.2 w).1
     · obtain ⟨j, c, hc⟩ := SketchDeployedWindow.exists_unpaidOn _ _ _ _ _ hw
-      exact Or.inr ⟨w, j, choice x.1 (.of x.2 w j), hr, c, hc⟩
+      exact Or.inr ⟨w, j, hr, c, hc⟩
     · exact Or.inl ⟨w, hr⟩
   let hash := (G : ℝ≥0∞) * ((N : ℝ≥0∞) / 2 ^ h) + (qtot : ℝ≥0∞) / 2 ^ (8 * r)
-  have hpass : ∀ w j α, pr (pass w j α) ≤ hash + δ := fun w j α =>
-    (hKB.pr_le_of (fun x : Fin n → SketchWindowCoins P N m ρ h ks G d => (α, SketchPrefix.of x w j))
+  have hpass : ∀ w j, pr (pass w j) ≤ hash + δ := fun w j =>
+    (hKB.pr_le_of (fun x : Fin n → SketchWindowCoins P N m ρ h ks G d => SketchPrefix.of x w j)
       (fun E x => RankGood r (x w).1 ∧
         ∃ c, SketchDeployedWindow.UnpaidAt (A.win w x) (x w).1 (S + (L - ρ * 256) + X) j c (E, (x w).2.1))).trans
       (add_le_add (pr_pass_le A r X qtot hr32 hX hq w j) le_rfl)
@@ -837,12 +864,11 @@ theorem pr_unpaidOn_le {Ω Ch : Type} [Fintype Ω] [Fintype Ch] (A : SketchDeplo
         ≤ ∑ _w : Fin n, ε := Finset.sum_le_sum fun w _ => pr_rank_le r ε hRank w
       _ = (n : ℝ≥0∞) * ε := by simp [Finset.sum_const, Finset.card_univ, nsmul_eq_mul]
   · refine (pr_exists_le _).trans ?_
-    calc ∑ w, pr (fun x => ∃ j α, pass w j α x)
-        ≤ ∑ w, ∑ j, ∑ α, pr (pass w j α) :=
-          Finset.sum_le_sum fun w _ => (pr_exists_le _).trans (Finset.sum_le_sum fun j _ => pr_exists_le _)
-      _ ≤ ∑ _w : Fin n, ∑ _j : Fin P, ∑ _α : Ch, (hash + δ) :=
-          Finset.sum_le_sum fun w _ => Finset.sum_le_sum fun j _ => Finset.sum_le_sum fun α _ => hpass w j α
-      _ = (n * P : ℝ≥0∞) * (Fintype.card Ch * (hash + δ)) := by
+    calc ∑ w, pr (fun x => ∃ j, pass w j x)
+        ≤ ∑ w, ∑ j, pr (pass w j) := Finset.sum_le_sum fun w _ => pr_exists_le _
+      _ ≤ ∑ _w : Fin n, ∑ _j : Fin P, (hash + δ) :=
+          Finset.sum_le_sum fun w _ => Finset.sum_le_sum fun j _ => hpass w j
+      _ = (n * P : ℝ≥0∞) * (hash + δ) := by
           simp only [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
           ring
 
@@ -1064,7 +1090,7 @@ theorem CarrierBits : Accounting.Guarantees.CarrierBits := by
 `Accounting.Guarantees.StackedSessionConservationSketchDeployed`. -/
 theorem StackedSessionConservationSketchDeployed :
     Accounting.Guarantees.StackedSessionConservationSketchDeployed := by
-  intro n P N ρ S L q G X qtot Rin cρ reads life E B εnum εden a ε δ Ω Ch _ _ view choice A hn hP hN hE0 hCh
+  intro n P N ρ S L q G X qtot Rin cρ reads life E B εnum εden T M ε δ Ω Ca Ch _ _ enc choose slot A hn hP hN hE0
     hrank hKB hE hB hK C
   have hX : ∀ w η j ι c Es σ R O,
       let dv := (A.window w η).device j ι c
@@ -1077,10 +1103,11 @@ theorem StackedSessionConservationSketchDeployed :
     dsimp only at h1 ⊢
     calc _ ≤ X + K.carried.card * 256 := h1
       _ ≤ X + C := Nat.add_le_add_left h2 X
-  have hcor : ∀ (o : Ω) (x x' : Fin n → SketchWindowCoins P N 128 ρ 512 16 G 2773) (w : Fin n),
+  let view := coinStore enc choose slot
+  have hcor : ∀ (o : Ω × (Fin T → Ca)) (x x' : Fin n → SketchWindowCoins P N 128 ρ 512 16 G 2773) (w : Fin n),
       (∀ v, v < w → x v = x' v) → (x w).1 = (x' w).1 → (x w).2.1 = (x' w).2.1 →
-      (A.win w x).correctOn (programmed view choice o x w) (x w).1 (x w).2.1 =
-        (A.win w x').correctOn (programmed view choice o x' w) (x' w).1 (x' w).2.1 := by
+      (A.win w x).correctOn (programmed view o x w) (x w).1 (x w).2.1 =
+        (A.win w x').correctOn (programmed view o x' w) (x' w).1 (x' w).2.1 := by
     intro o x x' w hlt hσ hp
     have hη : (fun v : {v : Fin n // v < w} => x v.1) = fun v => x' v.1 := funext fun v => hlt v.1 v.2
     have hwin : A.win w x = A.win w x' := by
@@ -1089,25 +1116,24 @@ theorem StackedSessionConservationSketchDeployed :
     have hpre : ∀ j, SketchPrefix.of x w j = SketchPrefix.of x' w j := fun j => by
       simp only [SketchPrefix.of]
       rw [hη, hσ, hp]
-    have hprog : programmed view choice o x w = programmed view choice o x' w := funext fun j => by
+    have hprog : programmed view o x w = programmed view o x' w := funext fun j => by
       simp only [programmed]
       rw [hpre j]
     rw [hwin, hprog, hσ, hp]
-  have hu := SketchDeployedSession.pr_unpaidOn_le A view choice δ hKB 12 (X + C) qtot ε (by norm_num) hrank hX hB
-  have hCh' : (Fintype.card Ch : ℝ≥0∞) ≤ 2 ^ a := by exact_mod_cast hCh
+  have hu := SketchDeployedSession.pr_unpaidOn_le A view δ (hKB.uniformBut_coinStore choose slot) 12 (X + C) qtot ε
+    (by norm_num) hrank hX hB
   refine (SketchDeployedSession.pr_deployed_of_unpaid_causal
-    (fun o x w => (A.win w x).correctOn (programmed view choice o x w) (x w).1 (x w).2.1)
-    (fun o x w => (A.win w x).readsOn (programmed view choice o x w) (x w).1 (x w).2.1)
-    hcor (X + C) hn hP hN _ hu).trans
-    (le_of_le_of_eq (add_le_add le_rfl (add_le_add le_rfl (mul_le_mul_right (mul_le_mul_left hCh' _) _))) ?_)
+    (fun o x w => (A.win w x).correctOn (programmed view o x w) (x w).1 (x w).2.1)
+    (fun o x w => (A.win w x).readsOn (programmed view o x w) (x w).1 (x w).2.1)
+    hcor (X + C) hn hP hN _ hu).trans (le_of_eq ?_)
   rw [show 8 * 12 = 96 from rfl]
   ring
 
 /-- **The remote audit with relaying side sources on a programmed store, with stacking**,
 `Accounting.Guarantees.StackedSessionConservationRelay`. -/
 theorem StackedSessionConservationRelay : Accounting.Guarantees.StackedSessionConservationRelay := by
-  intro n P N b h ρ S Lall L q r s d G lam m τ rounds cRoot F Rin cρ reads life E a cost Fc k B εnum εden tier δ
-    Ω Ch _ _ view choice A dbar dw hn hP hN hb hrc hdw hE0 hbytes hCh hKB hW hF hE hK C
+  intro n P N b h ρ S Lall L q r s d G lam m τ rounds cRoot F Rin cρ reads life E T M cost Fc k B εnum εden tier δ
+    Ω Ca Ch _ _ enc choose slot A dbar dw hn hP hN hb hrc hdw hE0 hbytes hKB hW hF hE hK C
   choose K hside hL hbud using hK
   have hC : ∀ w η j ι c Es R O, (K w η j ι c).inputs Es R O + (K w η j ι c).encoded Es R O ≤ C := by
     intro w η j ι c Es R O
@@ -1118,32 +1144,32 @@ theorem StackedSessionConservationRelay : Accounting.Guarantees.StackedSessionCo
         (mul_le_mul_right (hbud w η j ι c Es R O).2 _)
       exact_mod_cast h
     exact Nat.add_le_add h1 h2
-  have hu := hKB.pr_le_advice choice fun (Es : Rate.Store N b) (ω : Fin n → Rate.WindowCoins P N b h ρ r s d) =>
-    ∃ w, ((A.stack L C K hL).win w ω).reads tier Es (ω w).1 +
-        P * (S + (L + C - ρ) + Rate.Deployed.rebuildBits b rounds cRoot F + (lam + m * b)) <
-      (((A.stack L C K hL).win w ω).correctAll Es (ω w).1).card * b
+  have hu := (hKB.uniformBut_blocks choose slot).pr_le ()
+    fun (Es : Rate.Store N b) (ω : Fin n → Rate.WindowCoins P N b h ρ r s d) =>
+      ∃ w, ((A.stack L C K hL).win w ω).reads tier Es (ω w).1 +
+          P * (S + (L + C - ρ) + Rate.Deployed.rebuildBits b rounds cRoot F + (lam + m * b)) <
+        (((A.stack L C K hL).win w ω).correctAll Es (ω w).1).card * b
   have hunif := Rate.DeployedSession.pr_unpaid_le (A.stack L C K hL) tier _ _
     (Remote.window_relay_le (lam := lam) (m := m) (A.stack L C K hL) tier hrc hW
       (fun w η j ι c => Rate.PIDevice.stack_ceiling _ L C (K w η j ι c) (hL w η j ι c) (hF w η j ι c)))
-  have base := Remote.session_relay_of_unpaid (fun ω => view (choice ω) ω) (A.stack L C K hL) tier lam m rounds
-    cRoot F dbar dw hn hP hN hb hdw _ (hu.trans (mul_le_mul_right (add_le_add hunif le_rfl) _))
-  have hCh' : (Fintype.card Ch : ℝ≥0∞) ≤ 2 ^ a := by exact_mod_cast hCh
-  refine ((Bandwidth.pr_mono fun y hy => ?_).trans base).trans
-    (le_of_le_of_eq (add_le_add le_rfl (mul_le_mul_left hCh' _)) ?_)
-  · have e := fun w => Rate.DeployedSession.stack_win A L C K hL hside hC tier w y.2 (view (choice y.1) y.1) (y.2 w).1
+  have base := Remote.session_relay_of_unpaid (fun y => appendCoinBlocks enc choose slot y) (A.stack L C K hL) tier
+    lam m rounds cRoot F dbar dw hn hP hN hb hdw _ (hu.trans (add_le_add hunif le_rfl))
+  refine ((Bandwidth.pr_mono fun y hy => ?_).trans base).trans (le_of_eq ?_)
+  · have e := fun w => Rate.DeployedSession.stack_win A L C K hL hside hC tier w y.2
+      (appendCoinBlocks enc choose slot y.1) (y.2 w).1
     simp only [fun w => (e w).1, fun w => (e w).2]
     exact hy
-  · simp only [div_eq_mul_inv, pow_add]
+  · simp only [div_eq_mul_inv]
     ring
 
 /-- **The stacked remote audit at the deployed parameters, read against a declared circuit's requirement**,
 `Accounting.Guarantees.StackedRequirementSketchDeployed`. -/
 theorem StackedRequirementSketchDeployed : Accounting.Guarantees.StackedRequirementSketchDeployed := by
-  intro n P N ρ S L q G X qtot Rin cρ reads life E B εnum εden a ε δ Ω Ch _ _ view choice A V _ W e ℓ mm plan
-    win hn hP hN hE0 hCh hrank hKB hE hB hK hwin hm C γ
+  intro n P N ρ S L q G X qtot Rin cρ reads life E B εnum εden T M ε δ Ω Ca Ch _ _ enc choose slot A V _ W e ℓ mm
+    plan win hn hP hN hE0 hrank hKB hE hB hK hwin hm C γ
   have hcap := Requirement.cap_of_matches W e ℓ mm plan 32768 N (n * P) win hwin hm
   have base := StackedSessionConservationSketchDeployed n P N ρ S L q G X qtot Rin cρ reads life E B εnum εden
-    a ε δ view choice A hn hP hN hE0 hCh hrank hKB hE hB hK
+    T M ε δ enc choose slot A hn hP hN hE0 hrank hKB hE hB hK
   dsimp only at base
   refine (Bandwidth.pr_mono fun x hx => ⟨hx.1, Or.inl ?_⟩).trans base
   have h := Requirement.lt_of_cap hcap.1 hcap.2 hx.2
@@ -1153,12 +1179,12 @@ theorem StackedRequirementSketchDeployed : Accounting.Guarantees.StackedRequirem
 /-- **The stacked remote audit with relaying side sources, read against a declared circuit's requirement**,
 `Accounting.Guarantees.StackedRequirementRelay`. -/
 theorem StackedRequirementRelay : Accounting.Guarantees.StackedRequirementRelay := by
-  intro n P N b h ρ S Lall L q r s d G lam m τ rounds cRoot F Rin cρ reads life E a cost Fc k B εnum εden tier δ
-    Ω Ch _ _ view choice A dbar dw V _ W e ℓ mm plan win hn hP hN hb hrc hdw hE0 hbytes hCh hKB hW hF hE hK hwin hm
+  intro n P N b h ρ S Lall L q r s d G lam m τ rounds cRoot F Rin cρ reads life E T M cost Fc k B εnum εden tier δ
+    Ω Ca Ch _ _ enc choose slot A dbar dw V _ W e ℓ mm plan win hn hP hN hb hrc hdw hE0 hbytes hKB hW hF hE hK hwin hm
     C γ
   have hcap := Requirement.cap_of_matches W e ℓ mm plan b N (n * P) win hwin hm
   have base := StackedSessionConservationRelay n P N b h ρ S Lall L q r s d G lam m τ rounds cRoot F Rin cρ reads life
-    E a cost Fc k B εnum εden tier δ view choice A dbar dw hn hP hN hb hrc hdw hE0 hbytes hCh hKB hW hF hE hK
+    E T M cost Fc k B εnum εden tier δ enc choose slot A dbar dw hn hP hN hb hrc hdw hE0 hbytes hKB hW hF hE hK
   dsimp only at base
   refine (Bandwidth.pr_mono fun x hx => ⟨hx.1, Or.inl ?_⟩).trans base
   have h := Requirement.lt_of_cap hcap.1 hcap.2 hx.2

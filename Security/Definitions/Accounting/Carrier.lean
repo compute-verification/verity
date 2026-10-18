@@ -38,14 +38,40 @@ sources at odd addresses, which cost it no link: `PIChip.linkBitsEven` counts th
 (`Definitions/Accounting/Gates`) of the codec words `x` bits fill, `⊤` when no circuit of the model's restricted class
 computes them, so that such a step exceeds every budget. The provenances' `gates` count them.
 
-**A store per pass.** The audit appends blocks during a session (a KV page), so the store a pass certifies is the one
-resident going into the step the pass is bound to, and it may depend on the session's coins drawn before it. A pass's
-`SketchPrefix` is those coins: every earlier window's, its own window's signs, and the window's earlier passes. The
-writers make pass `j`'s store from its prefix and their choices (`programmed`), and a window's correct receipts and
-reads are counted pass by pass, each on its own store (`correctOn`, `readsOn`). With one store for every pass they are
-`correctAll` and `reads`. The audit rule behind it: a block appended after a pass's seed is in no plan of that pass, so
-a pass's store doesn't depend on its own coins.
+**The append-coin rule.** The audit appends blocks during a session (a KV page), and remote_bandwidth's PROTOCOL.md
+(§3–§4) orders each append's choices before its encoding. The append's root commits its blocks' digests `d_j`, and only
+then does the verifier draw the append's coin `c_a`, once, which each block's key reads: `b_j(c_a) = H(seed ‖ j ‖ d_j ‖
+c_a)`. The registration is the first append, and its coin is the codec seed. So the writers' choices for an append
+(its payloads, their padding, the run inputs behind them, how many blocks, the schedule up to it) are a function of the
+codec and the coins of the appends before it, and the codec encodes its blocks from those choices and the coins
+(`appendCoinBlocks`). Which blocks a pass reads, its plan, is a layout of positions that no encoding chooses: the
+memory map's schedule, which may depend on the session's coins before the pass.
+
+**A store per pass.** The store a pass certifies is the one resident going into the step the pass is bound to, and it
+may depend on the session's coins drawn before it. A pass's `SketchPrefix` is those coins: every earlier window's, its
+own window's signs, and the window's earlier passes. Pass `j`'s store is the append-coin rule's at its prefix
+(`coinStore`, `programmed`), and a window's correct receipts and reads are counted pass by pass, each on its own store
+(`correctOn`, `readsOn`). With one store for every pass they are `correctAll` and `reads`. The audit rule behind the
+prefix: a block appended after a pass's seed is in no plan of that pass, so a pass's store doesn't depend on its own
+coins.
 -/
+
+namespace Accounting
+
+/-- **The blocks a pass reads under the append-coin rule** (remote_bandwidth's PROTOCOL.md §3–§4). The store is made by
+`T` appends in order, each of `M` block positions: the registration first, whose coin is the codec seed, then the
+appends of blocks written after it. Append `a`'s choices `choose ω a κ_<a` (its payloads, their padding, the run inputs
+behind them, how many blocks, the schedule up to it) read `ω` and the coins of the appends before it only, since its
+own coin `κ a` is drawn once its root has committed every digest. The codec `enc` encodes each of its blocks from those
+choices and the coins: a registered block under the seed's key, an appended one under `b_j(κ a)`. The pass reads the
+blocks at the distinct positions `slot`, which no encoding chooses: block `u` of the pass is position `(slot u).2` of
+append `(slot u).1`. -/
+def appendCoinBlocks {Ω Ca Ch B : Type} {T M N : ℕ} (enc : Ω → Fin T → Ch → (Fin T → Ca) → Fin M → B)
+    (choose : Ω → (a : Fin T) → ({b : Fin T // b < a} → Ca) → Ch) (slot : Fin N ↪ Fin T × Fin M)
+    (y : Ω × (Fin T → Ca)) : Fin N → B :=
+  fun u => enc y.1 (slot u).1 (choose y.1 (slot u).1 fun b => y.2 b.1) y.2 (slot u).2
+
+end Accounting
 
 namespace Accounting.RateSketch
 
@@ -112,13 +138,23 @@ def SketchPrefix.of {n P N m ρ h ks G d : ℕ} (x : Fin n → SketchWindowCoins
     (j : Fin P) : SketchPrefix n P N m ρ h ks G d :=
   ⟨w, fun v => x v.1, (x w).1, j, fun i => (x w).2.1 i.1⟩
 
-/-- **The stores the writers make for window `w`'s passes**: pass `j`'s is `view (choice ω c, c) ω` at the prefix `c`
-before it, `ω` being drawn before the session and `choice ω c` the writers' choices there. -/
-def programmed {n P N m ρ h ks G d : ℕ} {Ω Ch : Type}
-    (view : Ch × SketchPrefix n P N m ρ h ks G d → Ω → SketchStore N m)
-    (choice : Ω → SketchPrefix n P N m ρ h ks G d → Ch) (ω : Ω)
-    (x : Fin n → SketchWindowCoins P N m ρ h ks G d) (w : Fin n) : Fin P → SketchStore N m :=
-  fun j => view (choice ω (.of x w j), .of x w j) ω
+/-- **A pass's store under the append-coin rule**, at the prefix `c` of the session's coins before it: the blocks at
+the layout `slot c` (`appendCoinBlocks`), the writers' choices `choose c` reading the prefix too, each tile's `m`
+sectors its block's. `y` is the codec and every append's coin. The append coins are drawn during the session, but
+independently of its coins, so they are drawn with the codec here; their order is `choose`'s, each append's choices
+reading only the coins before it. -/
+def coinStore {n P N m ρ h ks G d T M : ℕ} {Ω Ca Ch : Type}
+    (enc : Ω → Fin T → Ch → (Fin T → Ca) → Fin M → (Fin m → Sector))
+    (choose : SketchPrefix n P N m ρ h ks G d → Ω → (a : Fin T) → ({b : Fin T // b < a} → Ca) → Ch)
+    (slot : SketchPrefix n P N m ρ h ks G d → Fin N ↪ Fin T × Fin M) (c : SketchPrefix n P N m ρ h ks G d)
+    (y : Ω × (Fin T → Ca)) : SketchStore N m :=
+  fun p => appendCoinBlocks enc (choose c) (slot c) y p.1 p.2
+
+/-- **The stores window `w`'s passes certify**: pass `j`'s is `view c ω` at the prefix `c` before it, `ω` drawn
+independently of the session's coins (in the stacked guarantees, `coinStore` at the codec and the append coins). -/
+def programmed {n P N m ρ h ks G d : ℕ} {Ω : Type} (view : SketchPrefix n P N m ρ h ks G d → Ω → SketchStore N m)
+    (ω : Ω) (x : Fin n → SketchWindowCoins P N m ρ h ks G d) (w : Fin n) : Fin P → SketchStore N m :=
+  fun j => view (.of x w j) ω
 
 namespace SketchDeployedWindow
 
