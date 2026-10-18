@@ -55,7 +55,7 @@ from .softmax import _eq_const
 from verity.ml.circuits.boolean.trace import definition
 
 __all__ = ["QUADRATIC", "TANH_QUADRATIC", "DivFullRcp", "DivFullScaleA", "Fit", "MufuEx2Ftz", "MufuRcpFtz", "MufuSqrtFtz",
-           "MufuTanh", "RsqrtApprox", "TanhFit", "fit", "overrides", "table_word", "tanh_fit", "tanh_table"]
+           "MufuTanh", "RsqrtApprox", "TanhFit", "div_full_scale_a_gpu", "fit", "overrides", "table_word", "tanh_fit", "tanh_table"]
 
 F32 = Array(32, BL.BIT)
 QUADRATIC = "mufu_quadratic.json"
@@ -413,6 +413,20 @@ def div_full_scale_a(C, a, b):
     big = C.AND(NOT(_ult_const(C, mag, 0x7E800001)), _ult_const(C, mag, 0x7F800001))
     small = _ult_const(C, mag, 0x00800000)
     return mux(C, big, _quarter_rn(C, a), mux(C, small, _times_2_24_rn(C, a), list(a)))
+
+
+def div_full_scale_a_gpu(C, a, b):
+    """``DivFullScaleA_v2`` (`verity_vllm`'s, beside its word primitive): `div_full_scale_a` with each scaling an FMUL whose NaN
+    result is 0x7FFFFFFF; neither scaling makes a NaN of a non-NaN a, so that is a NaN a's word on a scaled path, and an unscaled
+    a passes through untouched, a NaN's payload included."""
+    mag = b[:31]
+    big = C.AND(NOT(_ult_const(C, mag, 0x7E800001)), _ult_const(C, mag, 0x7F800001))
+    small = _ult_const(C, mag, 0x00800000)
+    nan = C.AND(and_reduce(C, a[23:31]), or_reduce(C, a[:23]))
+
+    def gpu(r):
+        return mux(C, nan, const_bits(0x7FFFFFFF, 32), r)
+    return mux(C, big, gpu(_quarter_rn(C, a)), mux(C, small, gpu(_times_2_24_rn(C, a)), list(a)))
 
 
 # --- MUFU.TANH -------------------------------------------------------------------------------------------------------------------

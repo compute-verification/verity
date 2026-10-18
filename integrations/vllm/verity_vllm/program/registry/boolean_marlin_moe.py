@@ -8,6 +8,7 @@ so each one's word view is its `_v1` at the same statics (`elementwise.on_bits`)
     MarlinMxfp4Coordinate(W)_v2{K,TK,DOT}
     GatherE2m1x{E}_v2, GatherE8m0x{E}_v2, MoeExpertE2m1Row_v2{E,K}, MoeExpertE8m0Row_v2{E,K}
     MarlinMoeExpertCoordinate(W)_v2{E,K,TK,DOT}, MarlinMoeExpertGemm(W)_v2{E,K,N,TK,TN,GRID,DOT}
+    I32Div_v2, I32Rem_v2                             (a, b: i32) -> i32                      word view: I32Div_v1, I32Rem_v1
 
     MarlinMxfp4Step(FromZero)Activation_v1{DOT}      (x: bf16) -> 20 1-bit words             the step's gates that read only x[j]
     MarlinMxfp4Step(FromZero)Column_v1{DOT}          ([acc], x, q, s, xd: 32 of them) -> f32 the rest, from them
@@ -157,6 +158,12 @@ def divrem(C, a, b):
     zero = NOT(or_reduce(C, b))
     q = _neg_if(C, sa ^ sb, q)
     return [x ^ C.AND(zero, NOT(x)) for x in q], _neg_if(C, sa, r)
+
+
+I32Div = definition("I32Div", 2, lambda C, a, b: divrem(C, a, b)[0], (("a", I32), ("b", I32)), I32, word=MM.I32Div,
+                    doc="div.s32 on bits: I32Div_v1, `divrem`'s quotient")
+I32Rem = definition("I32Rem", 2, lambda C, a, b: divrem(C, a, b)[1], (("a", I32), ("b", I32)), I32, word=MM.I32Rem,
+                    doc="rem.s32 on bits: I32Rem_v1, `divrem`'s remainder")
 
 
 class BitInt:
