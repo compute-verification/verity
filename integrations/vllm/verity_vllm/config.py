@@ -33,6 +33,8 @@ ROOT = Path(str(resources.files("verity_vllm"))).resolve().parent
 MANIFESTS = ROOT / "manifests"
 WORKLOADS = ROOT / "workloads"
 CHECKPOINTS = MANIFESTS / "checkpoints.json"
+#: The remote bandwidth session's processes (not a package), whose prover runs in the Commit's (`store.remote`).
+REMOTE_SESSION = ROOT.parent.parent / "benchmarks" / "remote_session"
 
 
 def checkpoints_hf_home() -> str | None:
@@ -490,6 +492,9 @@ class CommitConfig:
                                            "in M0's serving row format (verity_vllm.pipeline.serving_rows), fixed before serving; a "
                                            "deferred Commit's come from its bundle (verity-vllm serving-rows); a TP row's, one window per "
                                            "rank, from tp-commit itself (verity_vllm.pipeline.tp.serving_rows; needs REPLAY_DEFERRED=1)")
+    remote_verifier: str | None = option("--remote-verifier", env="REMOTE_VERIFIER", default=None, metavar="HOST:PORT",
+                                         help="the remote bandwidth session's verifier: the Commit proves its store to it while "
+                                              "serving (verity_vllm.store.remote; single-GPU rows)")
     norm_tap: str = option("--norm-tap", env="NORM_TAP", default="1",
                            help="0 opts out, for A/B only: by default the row commits one scale per norm Call row (verity_vllm.query."
                                 "norm_scales) through the norm-scale tap (acquire.sources.norm_scale_source) when its manifest names norm scales")

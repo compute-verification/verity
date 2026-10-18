@@ -17,7 +17,8 @@ negatives.
 - `a7.sh`: run A7's entry point, on the same builds. A7 is the requirement's plan and memory-map units
   (`verity.ml.circuits.requirement_units`), one of each per step of a stand-in decoder's requirement, under the stratified
   law, their witness rows bound to canonical commitments, then wired to the remote bandwidth audit's ledger as its
-  requirement link (`audit.RequirementLink`).
+  requirement link (`audit.RequirementLink`), its ε the most share of the linked credit the units its draw leaves
+  unproved can carry and its δ the draw's.
 
 C-Flock's circuit prover (M0, `verity_flock.circuit`) is on `main`, but a run does not take it from its checkout:
 `pod.sh` takes `git archive`s of M0's tree and the Lean verifier's tree at pinned commits, and a captured input set, as

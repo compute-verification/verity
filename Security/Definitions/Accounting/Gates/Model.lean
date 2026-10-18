@@ -49,9 +49,10 @@ floor. It follows the IR (`verity/ml/circuits/PROTOCOL.md`) gate for gate, so th
 * **Units** (property/v1's count, `units`). A budgeted gate is one unit when it reads a value that depends on a run or
   coin input (`dynamic`), and none otherwise: a gate of constants and registered values computes the same value at
   registration. A gather whose index depends on one is the index bits no earlier gather of that index paid (fresh index
-  bits, `⌈log₂ V⌉` for a column of `V` words), and one more when its column holds such a value too: a selection among
-  run-time values is a `V`-way select. Without that unit a tree of gathers that share indices, over constant leaves,
-  would compute any function of `b` index bits for `b` units. A gather at a fixed index is wiring.
+  bits, `⌈log₂ (V + 1)⌉` for a column of `V` words and the `0` outside it, so a one-word column's `[i ≤ 0]` pays as a
+  comparison does), and one more when its column holds such a value too: a selection among run-time values is a
+  `V`-way select. Without that unit a tree of gathers that share indices, over constant leaves, would compute any
+  function of `b` index bits for `b` units. A gather at a fixed index is wiring.
 * **Cost.** The census (`census`) counts the units of a set of steps by class, the s8 family's MACs (served and tail
   apart), the limb splits' carries, the committed outputs and the inputs' bits. The counting bounds charge each
   budgeted gate and each run input the size of its declared interval (`volume`, `chargedBits`).
@@ -279,8 +280,9 @@ variable {ι : Type} (g : Gate ι)
 /-- Its role: its primitive's and site's (`roleOf`). -/
 def role : Role := roleOf g.prim g.site
 
-/-- A gather's index bits: `⌈log₂ V⌉` for its column of `V` words. -/
-def indexBits : ℕ := Nat.clog 2 (g.args.length - 1)
+/-- A gather's index bits: `⌈log₂ (V + 1)⌉` for its column of `V` words, the bits that tell its `V + 1` outcomes apart:
+a word of the column, or `0` for an index outside it. A one-word column is a comparison (`[i ≤ 0]`), one bit. -/
+def indexBits : ℕ := Nat.clog 2 g.args.length
 
 /-- The gate's operand values, read from the values `vs` of the gates before it. -/
 def operands (vs : List ℤ) : List ℤ := g.args.map fun j => vs.getD j 0

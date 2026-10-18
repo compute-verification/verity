@@ -21,6 +21,10 @@ kv:P            honest, beside a serving node's KV writes (`ServingTrace`): befo
                 in; every pass reads every live block, registered and appended
 kvdrop:P        kv:P, but the appended pages are not held: each pass's receipts for them are of zeros, and an
                 opening of one carries the true page, as skip's do
+serve           honest, beside the backend's own serving (`backend.serving`: a node's `Store`, whose engine steps
+                write, free and re-key its KV, `verity_vllm.store.remote`): before each pass the backend's engine runs
+                its next step, and the pass reads every live block at it
+servedrop:K     serve, but the first K blocks appended (1 by default) are not held, as kvdrop's
 ~~~
 
 With a serving trace, the appends a pass's step made go out after the root before it and before the pass is computed,
@@ -74,7 +78,7 @@ OPENINGS_PART = 128
 DROPPED_LISTED = 4096
 """A session's result lists its dropped blocks up to this many, and counts them always."""
 BOUNDARIES = ("coin", "close", "end")
-MODES = ("honest", "skip", "kv", "kvdrop")
+MODES = ("honest", "skip", "kv", "kvdrop", "serve", "servedrop")
 
 
 @dataclass
@@ -103,9 +107,11 @@ def parse_plan(plan: str) -> list[tuple[str, float]]:
     out = []
     for part in plan.split(","):
         mode, _, f = part.partition(":")
-        if mode not in MODES or (mode in ("kv", "kvdrop") and (not f.isdigit() or int(f) < 1)):
-            raise ValueError(f"a session's mode is honest, skip:F, kv:P or kvdrop:P (P pages a step), not {part!r}")
-        out.append((mode, float(f) if f else 0.0))
+        if mode not in MODES or (mode in ("kv", "kvdrop") and (not f.isdigit() or int(f) < 1)) or (
+                mode == "serve" and f) or (mode == "servedrop" and f and (not f.isdigit() or int(f) < 1)):
+            raise ValueError(f"a session's mode is honest, skip:F, kv:P, kvdrop:P (P pages a step), serve or "
+                             f"servedrop:K (K blocks withheld), not {part!r}")
+        out.append((mode, float(f) if f else 1.0 if mode == "servedrop" else 0.0))
     return out
 
 
@@ -394,6 +400,10 @@ class ProverSide:
                 raise ValueError(f"a {mode} session needs a backend that appends blocks after the codec seed (--cpu)")
             trace = ServingTrace(self.backend, self.registration, int(fraction), self.kv_pool,
                                  random.Random(self.rng.getrandbits(64)), head.get("lifetime", audit.LIFETIME))
+        elif mode in ("serve", "servedrop"):
+            if not hasattr(self.backend, "serving"):
+                raise ValueError(f"a {mode} session needs a backend that serves (a Store's: verity_vllm.store.remote)")
+            trace = self.backend.serving(self.registration, head.get("lifetime", audit.LIFETIME))
         if mode == "skip":
             pick = np.random.default_rng(self.rng.getrandbits(64))
             dropped = np.sort(pick.choice(N, size=round(fraction * N), replace=False)).astype(np.int64)
@@ -424,20 +434,26 @@ class ProverSide:
         launched, sent_plan, sent_released, sent_appends = 0, rb.Plan.whole(N), 0, 0
 
         def launch(t: int, i: int, after, start: int | None) -> _Pass:
-            """Pass i of window t; with a serving trace, after the trace's step if one falls due, over every live
-            block."""
+            """Pass i of window t; with a serving trace, after the trace's step if one falls due (the backend's next
+            engine step, serving), over every live block."""
             nonlocal launched
             n, launched = launched, launched + 1
             if trace is None:
                 ticket = backend.launch(i, after)
                 return _Pass(t, i, ticket, start, step=step_of(ticket) if step_of is not None else n)
-            due = n > 0 and n % self.kv_every == 0
-            if due or (n > 0 and trace.stale(t)):
-                trace.step(n - 1, t, due)
-                if mode == "kvdrop":
-                    backend.arm(trace.appended)
+            if mode in ("serve", "servedrop"):
+                trace.advance(t)
+                if mode == "servedrop":
+                    backend.arm(trace.appended[:int(fraction)])
+            else:
+                due = n > 0 and n % self.kv_every == 0
+                if due or (n > 0 and trace.stale(t)):
+                    trace.step(n - 1, t, due)
+                    if mode == "kvdrop":
+                        backend.arm(trace.appended)
             plan = trace.plan()
-            return _Pass(t, i, backend.launch(i, after, plan), start, step=n, plan=plan,
+            ticket = backend.launch(i, after, plan)
+            return _Pass(t, i, ticket, start, step=step_of(ticket) if step_of is not None else n, plan=plan,
                          upto=(len(trace.appends), len(trace.released)))
 
         backend.begin_window(take(wire.coin_of(head["coin"])), self.registration.digest)
@@ -523,8 +539,9 @@ class ProverSide:
             backend.begin_window(take(wire.coin_of(msg["coin"])), None)
             inflight.append(launch(t, 0, last.ticket if last else None, None if inflight else clock()))
             nxt = 1
-        if mode == "kvdrop":
-            dropped = self.dropped = np.array(sorted(trace.appended), dtype=np.int64)
+        if mode in ("kvdrop", "servedrop"):
+            held = trace.appended if mode == "kvdrop" else trace.appended[:int(fraction)]
+            dropped = self.dropped = np.array(sorted(held), dtype=np.int64)
         self.conn.send({"type": "closed", "k": k})
         self.open_enabled.set()
         if ended is None:
@@ -549,7 +566,8 @@ class ProverSide:
                "opened": self.opened, "warmup": self.warmup, "device": device}
         if trace is not None:
             sent = [self.plans[tt, i] for tt, i, *_ in passes]
-            out["kv"] = {"pages": trace.pages, "every": self.kv_every, "pool_slots": len(trace.slots),
+            out["kv"] = {"pages": getattr(trace, "pages", None), "every": self.kv_every,
+                         "pool_slots": len(getattr(trace, "slots", ())),
                          "steps": trace.steps, "rekeyed": trace.rekeyed, "lifetime": trace.lifetime,
                          "appended": len(trace.appended), "released": len(trace.released),
                          "sent_appended": sum(a.count for a in trace.appends[:sent_appends]),
