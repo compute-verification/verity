@@ -35,6 +35,8 @@ FP8_COORDS = [bind(BG.GemmCoordinateE4m3, K=64, **BG.GEMM_HOPPER_E4M3), bind(BG.
 FP4 = [(bind(BG.BlackwellNvf4OmmaDot64), K.BLACKWELL_SM120_NVF4), (bind(BG.BlackwellMxf4OmmaDot64), K.BLACKWELL_SM120_MXF4),
        (bind(BG.GemmCoordinateNvf4, K=128, **BG.GEMM_SM120_NVF4), K.BLACKWELL_SM120_NVF4),
        (bind(BG.GemmCoordinateMxf4, K=128, **BG.GEMM_SM120_MXF4), K.BLACKWELL_SM120_MXF4)]
+S8 = [bind(BG.BlackwellS8ImmaDot32), bind(BG.S32ToF32Rn), bind(BG.GemmAccumulatorS8, K=64, **BG.GEMM_SM120_S8),
+      bind(BG.ScaledMmS8Coordinate, K=64, **BG.GEMM_SM120_S8)]
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {
@@ -58,9 +60,13 @@ PINS = {
     "BlackwellMxf4OmmaDot64_v2": (5917, 12058, 605, "f067a7bc2f6718102469b2306b2110a7b3298d4625d47a71ed96af36cf1351b36b619c70df54e916640e6291d118d3d74495eb1e3ba701e311ce10875ea1b653"),
     FP4[2][0].id: (13794, 27996, 1247, "7c16a0433a10a7d45cefc550b28185239cba6387572e75f5a96f2934d0b2456c1e565fd65a89cc673c0cf5892b4854becbaeabeadc977d2990a57bb47c2d37ba"),
     FP4[3][0].id: (11900, 24214, 1225, "c32627d98e0ae22977797a995f9a29f42916bbc8c54255d9d4f64418650a4808fec676a7a26edc0b4fb4295d1c5ee231b17cf9a00f723dc7f55606d406c03f90"),
+    "BlackwellS8ImmaDot32_v2": (4158, 10373, 474, "344df7d41dd450167b60d3696056942401f5559f029e746aaead23d03ffef532749da7135dd03c605e3491045b487669268bad46ea431a8d1aabe25037853dc5"),
+    "S32ToF32Rn_v2": (368, 532, 43, "94fffccc7430d2311246e7ebe1a58f94679ad5873ca1c79a3df13092b990618c8b5984c9f497a18615302242f009b1f9f89ca91fa2cc4b6c7bfacffa7e89f848"),
+    S8[2].id: (8316, 20746, 948, "cea9d903df4c752fd2eed0cad1182358692211e0b91b66ff1aa0786cfe29701a5b74c864b205ee329d67a5b7964d458ebc958f55c2112314fd552070ccd18139"),
+    S8[3].id: (13546, 30500, 1286, "dcfc7b4b1c49380afa07a808563fbed0708769e10392614c43ee53429d8886c8dd9f4e263b2174784219a6f39c8e1d038aab290659b95a2ec1ec151d379f7fa2"),
 }
 TARGETS = [bind(BG.F2fpBf16), *STEPS, AMPERE_K64, HOPPER_K64, *DOTS, *GEMMS, *FP8_STEPS, *FP8_COORDS, bind(BG.BlackwellE5m2QmmaDot32),
-           *(t for t, _ in FP4)]
+           *(t for t, _ in FP4), *S8]
 
 
 @pytest.mark.parametrize("target", TARGETS, ids=[t.id for t in TARGETS])
@@ -89,15 +95,17 @@ def test_a_k_its_step_does_not_divide_is_refused_before_any_body(coord, binding,
 
 @pytest.mark.parametrize("d", [BG.F2fpBf16, BG.AmpereBF16TcDot16, BG.HopperBF16WgmmaDot16, BG.HopperE4m3QgmmaDot32,
                                BG.HopperE4m3MmaV2Dot32, BG.BlackwellE4m3QmmaDot32, BG.BlackwellE5m2QmmaDot32, BG.BlackwellNvf4OmmaDot64,
-                               BG.BlackwellMxf4OmmaDot64], ids=lambda d: d.name)
+                               BG.BlackwellMxf4OmmaDot64, BG.BlackwellS8ImmaDot32, BG.S32ToF32Rn], ids=lambda d: d.name)
 def test_the_ands_are_the_builders_live_ands(d) -> None:
-    """The traced circuit has one And gate per AND the builder keeps live, with common ANDs shared (`Circuit(cse=True)`)."""
+    """The traced circuit has one And gate per AND the builder keeps live, with common ANDs shared (`Circuit(cse=True)`),
+    but for its commits (`Circuit.commit`, a row with B = 1 and no gate; `AND` folds every other constant operand)."""
     T = d.traced()
     params = [t for _, t in d.signature(None)[0]]
     C = Circuit(cse=True)
     ins = TR._elements_in(C, params)
     C.output("out", TR._flat_out(d.build(C, *ins), d.signature(None)[1]))
-    assert T.counts["and"] == C.counts()["ands"] == PINS[f"{d.name}_v{d.version}"][0]
+    commits = sum(k == "and" and v[1].is_const() for k, v in zip(C.kind, C.data))
+    assert T.counts["and"] == C.counts()["ands"] - commits == PINS[f"{d.name}_v{d.version}"][0]
 
 
 def _agree(target, inputs) -> None:
@@ -165,6 +173,53 @@ def test_the_fp4_steps_and_coordinates_agree_with_their_word_definitions(target,
     _agree(target, [rng.integers(0, 1 << 32, a.shape, dtype=np.uint64).astype(np.uint32) if a.dtype == np.uint32 else
                     rng.integers(0, 256 if j >= len(sampled) - n_scales else 16, a.shape, dtype=np.uint64).astype(np.uint8)
                     for j, a in enumerate(sampled)])
+
+
+def _s8_operands(rng, n: int, k: int) -> tuple[np.ndarray, np.ndarray]:
+    """Uniform s8 bytes; every fourth instance's operands are drawn from {-128, -127, 127} (the largest products)."""
+    a = rng.integers(0, 256, (n, k), dtype=np.uint16).astype(np.uint8)
+    b = rng.integers(0, 256, (n, k), dtype=np.uint16).astype(np.uint8)
+    big = np.array([0x80, 0x81, 0x7F], np.uint8)
+    a[::4], b[::4] = rng.choice(big, a[::4].shape), rng.choice(big, b[::4].shape)
+    return a, b
+
+
+def test_the_s8_step_agrees_with_its_word_step_and_clamps_at_d() -> None:
+    """On uniform accumulators and on accumulators within 2^16 of either s32 edge, where the sum often leaves s32 (the clamp)."""
+    rng = np.random.default_rng(21)
+    n = 20_000
+    acc = rng.integers(0, 1 << 32, n, dtype=np.uint64).astype(np.uint32)
+    edge = rng.integers(0, 1 << 16, n // 2, dtype=np.uint64).astype(np.uint32)
+    acc[: n // 4] = 0x7FFFFFFF - edge[: n // 4]
+    acc[n // 4: n // 2] = 0x80000000 + edge[n // 4:]
+    a, b = _s8_operands(rng, n, 32)
+    _agree(S8[0], [acc, a, b])
+    exact = acc.view(np.int32).astype(np.int64) + (a.view(np.int8).astype(np.int64) * b.view(np.int8)).sum(1)
+    got = BS.evaluate_words(S8[0], acc, a, b).astype(np.uint32).view(np.int32)
+    assert np.array_equal(got, np.clip(exact, -(1 << 31), (1 << 31) - 1))
+    assert ((exact > (1 << 31) - 1).sum() > 500) and ((exact < -(1 << 31)).sum() > 500)
+
+
+def test_the_s32_cast_agrees_with_its_word_cast_and_numpy() -> None:
+    rng = np.random.default_rng(22)
+    words = np.concatenate([rng.integers(0, 1 << 32, 100_000, dtype=np.uint64).astype(np.uint32),
+                            (np.uint32(1) << np.arange(32, dtype=np.uint32)) + np.uint32(1),
+                            np.array([0, 1, 0x7FFFFFFF, 0x80000000, 0xFFFFFFFF, 0x01000001, 0x01000003], np.uint32)])
+    _agree(S8[1], [words])
+    assert np.array_equal(BS.evaluate_words(S8[1], words).astype(np.uint32), words.view(np.int32).astype(np.float32).view(np.uint32))
+
+
+def test_the_s8_accumulator_and_coordinate_agree_with_their_word_definitions() -> None:
+    """On s8 rows, with per-token and per-channel scales of an int8 linear's range and with uniform f32 scale words."""
+    rng = np.random.default_rng(23)
+    n = 2000
+    x, w = _s8_operands(rng, n, 64)
+    _agree(S8[2], [x, w])
+    sx = (np.abs(rng.standard_normal(n)) / 127).astype(np.float32).view(np.uint32)
+    sw = (np.abs(rng.standard_normal(n)) * 0.02 / 127).astype(np.float32).view(np.uint32)
+    _agree(S8[3], [x, sx, w, sw])
+    u = rng.integers(0, 1 << 32, (2, n), dtype=np.uint64).astype(np.uint32)
+    _agree(S8[3], [x, u[0], w, u[1]])
 
 
 @pytest.mark.parametrize("target", DOTS, ids=lambda t: t.id)

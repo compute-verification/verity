@@ -15,6 +15,16 @@ one `F2fpBf16`:
     GemmCoordinateNvf4_v1{K, DOT}   (x, wrow: e2m1[K], sx, sw: ue4m3[K/16]) -> bf16; k = 64   GEMM_SM120_NVF4: BlackwellNvf4OmmaDot64_v1
     GemmCoordinateMxf4_v1{K, DOT}   (x, wrow: e2m1[K], sx, sw: ue8m0[K/32]) -> bf16; k = 64   GEMM_SM120_MXF4: BlackwellMxf4OmmaDot64_v1
 
+and over the sm_120 s8 step (`GEMM_SM120_S8`: `BlackwellS8ImmaDot32_v1`), whose sum is exact while it stays in s32, so the
+word does not depend on the order the k steps run in:
+
+    GemmAccumulatorS8_v1{K, DOT}      (x, wrow: s8[K]) -> s32: K/32 `DOT` steps from a zero accumulator
+    ScaledMmS8Coordinate_v1{K, DOT}   (x: s8[K], sx: f32, wrow: s8[K], sw: f32) -> bf16: the accumulator scaled as
+                                      `benchmarks/ppl/steps.py`'s `int8_linear` (sx per token, sw per channel):
+                                      cvt.rn.bf16.f32((cvt.rn.f32.s32(acc) * sx) * sw)
+    ScaledMmS8_v1{K, N, DOT}          (x: s8[K], sx: f32, w: s8[N][K], sw: f32[N]) -> bf16[N]: the linear on one token row,
+                                      `ScaledMmS8Coordinate_v1` over W's rows (each coordinate a `Q_word` unit)
+
 Each refuses a K its step doesn't divide (`checked_k`): its body is K/k whole steps, and a remainder's products would
 drop without a word.
 
@@ -28,11 +38,13 @@ from __future__ import annotations
 from verity.ml.circuits.defs import bind, composite
 from verity.ml.circuits.types import Array, Value
 
+from . import fp32 as F
 from . import prims as P
-from .prims import BF16, E2M1, E4M3, F32, ZERO32
+from .prims import BF16, E2M1, E4M3, F32, S8, S32, ZERO32
 
-__all__ = ["DotBf16", "GEMM_AMPERE", "GEMM_HOPPER", "GEMM_SM120_E4M3", "GEMM_SM120_MXF4", "GEMM_SM120_NVF4", "Gemm",
-           "GemmCoordinate", "GemmCoordinateE4m3", "GemmCoordinateMxf4", "GemmCoordinateNvf4", "checked_k"]
+__all__ = ["DotBf16", "GEMM_AMPERE", "GEMM_HOPPER", "GEMM_SM120_E4M3", "GEMM_SM120_MXF4", "GEMM_SM120_NVF4", "GEMM_SM120_S8", "Gemm",
+           "GemmAccumulatorS8", "GemmCoordinate", "GemmCoordinateE4m3", "GemmCoordinateMxf4", "GemmCoordinateNvf4", "ScaledMmS8",
+           "ScaledMmS8Coordinate", "checked_k"]
 
 _SCALE = Value(8)
 
@@ -112,12 +124,47 @@ def GemmCoordinateMxf4(B, S, x, wrow, sx, sw):
     return _block_scaled_coordinate(B, S, x, wrow, sx, sw, 2)
 
 
+@composite("GemmAccumulatorS8", 1, ["K", "DOT"], lambda S: ((("x", Array(S.K, S8)), ("wrow", Array(S.K, S8))), S32),
+           conformance="exact-model-tested")
+def GemmAccumulatorS8(B, S, x, wrow):
+    """The s32 accumulator of an s8 `x @ W^T` coordinate: K/32 `DOT` steps in ascending k from a zero accumulator."""
+    acc = B.call(ZERO32)
+    for s in range(S.K // 32):
+        acc = B.call(S.DOT, acc, x[32 * s:32 * s + 32], wrow[32 * s:32 * s + 32])
+    return acc
+
+
+@composite("ScaledMmS8Coordinate", 1, ["K", "DOT"],
+           lambda S: ((("x", Array(S.K, S8)), ("sx", F32), ("wrow", Array(S.K, S8)), ("sw", F32)), BF16),
+           conformance="model-untested: the epilogue is benchmarks/ppl/steps.py's int8_linear, the int8 step vLLM's "
+                       "int8 profile serves through torch._int_mm: Y.float() * s_a[:, None] * s_w[None, :] (two f32 "
+                       "multiplies, the token's scale first), then the bf16 cast; the sum is exact for K < 2^17 whatever "
+                       "the kernel's k order; the k step pinned (BlackwellS8ImmaDot32_v1)")
+def ScaledMmS8Coordinate(B, S, x, sx, wrow, sw):
+    """One output word of a W8A8 linear: `cvt.rn.bf16.f32((cvt.rn.f32.s32(acc) * sx) * sw)`, `acc` the
+    `GemmAccumulatorS8_v1{K, DOT}` sum, `sx` the token's scale and `sw` the output channel's. Multiplying the two scales
+    first, or `sw` first (CUTLASS c2x's `ScaledEpilogue`), rounds differently."""
+    acc = B.call(P.S32ToF32Rn, B.call(bind(GemmAccumulatorS8, K=S.K, DOT=S.DOT), x, wrow))
+    return B.call(P.F2fpBf16, B.call(F.F32MulV2, B.call(F.F32MulV2, acc, sx), sw))
+
+
+@composite("ScaledMmS8", 1, ["K", "N", "DOT"],
+           lambda S: ((("x", Array(S.K, S8)), ("sx", F32), ("w", Array(S.N, Array(S.K, S8))), ("sw", Array(S.N, F32))),
+                      Array(S.N, BF16)),
+           conformance=ScaledMmS8Coordinate.conformance)
+def ScaledMmS8(B, S, x, sx, w, sw):
+    """A W8A8 linear on one token row: the N output coordinates (`ScaledMmS8Coordinate_v1`) over the s8 row `x` with its scale
+    `sx`, the s8 weight rows and their per-channel scales."""
+    return B.batch(bind(ScaledMmS8Coordinate, K=S.K, DOT=S.DOT), x, sx, w, sw, axes=(None, None, 0, 0))
+
+
 #: Binding records for the measured architectures.
 GEMM_AMPERE: dict = {"DOT": P.AmpereBF16TcDot16}
 GEMM_HOPPER: dict = {"DOT": P.HopperBF16WgmmaDot16}
 GEMM_SM120_E4M3: dict = {"DOT": P.BlackwellE4m3QmmaDot32}
 GEMM_SM120_NVF4: dict = {"DOT": P.BlackwellNvf4OmmaDot64}
 GEMM_SM120_MXF4: dict = {"DOT": P.BlackwellMxf4OmmaDot64}
+GEMM_SM120_S8: dict = {"DOT": P.BlackwellS8ImmaDot32}
 
 
 def _register_kernels() -> None:
