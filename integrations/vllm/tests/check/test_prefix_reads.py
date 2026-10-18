@@ -14,6 +14,7 @@ from verity_vllm.check.match import batch_decomp as BD
 from verity_vllm.check.match import prefix_reads as PX
 from verity_vllm.check.match import program_compare as C
 from verity_vllm.program import compact as K
+from verity_vllm.program import prefix_layout as PL
 
 L, C_ROWS, RL, LP = 2, 2, 4, 3                # layers, cached rows, KVH*D, the warm request's prompt rows
 ATT = f"Attention_v3{{T={LP},NH=1,KVH=1,D={RL}}}"
@@ -205,6 +206,115 @@ def test_the_served_rows_are_the_first_scheduled_position_under_prefix_caching_o
     assert [PX.cached_rows(on, steps, r) for r in ("r0", "r1")] == [0, 2]
     for off in ({"profile": {"engine_kwargs": {"enable_prefix_caching": False}}}, {}):
         assert PX.cached_rows(off, steps, "r1") == 0
+
+
+DV, DR, D, WQ = 4, 2, 3, 2      # MLA: the latent's normed and rope leaves per row, the index-K width, the query's leaves
+W = DV + DR
+SMLA, LOGITS = f"SparseMlaSplit_v1{{T={LP},NS=1,NH=1,DR={DR},DV={DV}}}", f"DsaMqaLogits_v3{{N={LP},H=1,D={D}}}"
+MLA_PARTS = (("q", WQ), ("kv_a_layernorm", DV), ("k_pe", DR), ("indexer_k", D + 1))   # a position's rows: the index-K row holds D slots then its scale
+
+
+def _gemms(k: int, tok: int, pos: int, parts) -> list[dict]:
+    return [{"k": k + j, "spec": f"Gemm_v1{{M=1,N={n},K=1,J={j}}}", "form": "call", "args": [[("n", tok, pos, pos + 1)], [("n", 2, 0, RL)]],
+             "out": f"bf16[{n}]"} for j, (_name, n) in enumerate(parts)]
+
+
+def _mla_calls(k: int, q: int, lat: list, ik: list, iks: list) -> list[dict]:
+    """One query row's indexer logits (q, weights, index-K slots, scales) and sparse MLA (q_nope, q_pe, latent rows)."""
+    return [{"k": k, "spec": LOGITS, "form": "call", "args": [[("n", q, 0, WQ)], [("n", q, 0, 1)], ik, iks], "out": f"f32[{LP}]"},
+            {"k": k + 1, "spec": SMLA, "form": "call", "args": [[("n", q, 0, WQ)], [("n", q, 0, 1)], lat], "out": f"bf16[{RL}]"}]
+
+
+def warm_mla_program(tmp_path, compact: bool = False) -> C.Prog:
+    """The warm request's MLA Program: prompt, latent [L, C, DV+DR], weights, index-K [L, C, D], scales [L, C]; each layer computes row C
+    and its logits and sparse MLA read the C cached rows of each kind (one run of each input) then its own row."""
+    P = _blank("derived", {0: ("Input32_v1", LP), 1: ("Input16_v1", L * C_ROWS * W), 2: ("Input16_v1", RL), 3: ("Input8_v1", L * C_ROWS * D),
+                           4: ("Input32_v1", L * C_ROWS)})
+    P.tok_node, P.weight_fields = 0, {2: WNAME}
+    inst, k = [], 5
+    for l in range(L):
+        inst += _gemms(k, 0, C_ROWS, MLA_PARTS)
+        q, nrm, kpe, ikr = k, k + 1, k + 2, k + 3
+        inst += _mla_calls(k + 4, q, [("n", 1, l * C_ROWS * W, (l + 1) * C_ROWS * W), ("n", nrm, 0, DV), ("n", kpe, 0, DR)],
+                           [("n", 3, l * C_ROWS * D, (l + 1) * C_ROWS * D), ("n", ikr, 0, D)],
+                           [("n", 4, l * C_ROWS, (l + 1) * C_ROWS), ("n", ikr, D, D + 1)])
+        k += 6
+    inst.append(_select(k, k - 1))
+    _finish(P, inst, compact)
+    d = tmp_path / "derived_mla"
+    d.mkdir(exist_ok=True)
+    (d / PX.PREFIX_FILE).write_text(json.dumps({"kind": "mla", "input": 1, "inputs": [1, 3, 4], "C": C_ROWS, "row_leaves": W, "index_d": D,
+                                                "layers": LAYERS, "indexer_layers": LAYERS}))
+    PX.load_layout(P, str(d))
+    return P
+
+
+def mla_projection(compact: bool = False, read_row=lambda l, j: (l, j), rope_row=None) -> BD.Projection:
+    """r0 computes every layer's rows 0..C-1 (normed latent, rope key, index-K row); r1 (warm) computes row C and reads r0's as its first
+    C rows, a latent row as two runs (the normed part, then the rope part) as the engine's fold records it.  `read_row` / `rope_row`:
+    the (layer, position) of r0's row r1 reads for its row j of layer l (the rope part's apart)."""
+    F = _blank("fold", {0: ("Input32_v1", LP), 1: ("Input32_v1", LP), 2: ("Input16_v1", RL)})
+    F.tok_node, F.weight_fields = 0, {}
+    F.oracle_wmap, F._wlos, F.oracle_wmap_overlaps, F.input_base = [(0, RL, WNAME)], [0], [], {}
+    F.n_input_nodes = 3
+    inst, meta, k, r0 = [], [], 3, {}
+    for l in range(L):
+        for j in range(C_ROWS):
+            rows = _gemms(k, 0, j, MLA_PARTS[1:])
+            inst += rows
+            meta += [_meta(r["k"], "r0", j, f"model.layers.{l}.self_attn/{name}") for r, (name, _n) in zip(rows, MLA_PARTS[1:])]
+            r0[(l, j)] = k
+            k += 3
+    mine = []
+    for l in range(L):
+        rows = _gemms(k, 1, C_ROWS, MLA_PARTS)
+        q, nrm, kpe, ikr = k, k + 1, k + 2, k + 3
+        at = [(r0[read_row(l, j)], r0[(rope_row or read_row)(l, j)]) for j in range(C_ROWS)]
+        lat = [run for p, pr in at for run in (("n", p, 0, DV), ("n", pr + 1, 0, DR))] + [("n", nrm, 0, DV), ("n", kpe, 0, DR)]
+        calls = _mla_calls(k + 4, q, lat, [("n", p + 2, 0, D) for p, _ in at] + [("n", ikr, 0, D)],
+                           [("n", p + 2, D, D + 1) for p, _ in at] + [("n", ikr, D, D + 1)])
+        hints = [f"model.layers.{l}.self_attn/{name}" for name, _n in MLA_PARTS] + [f"model.layers.{l}.self_attn/mqa[t={C_ROWS}]",
+                                                                                      f"model.layers.{l}.self_attn/sparse_mla[t={C_ROWS},splits=1]"]
+        for r, h in zip(rows + calls, hints):
+            mine.append(len(inst))
+            inst.append(r)
+            meta.append(_meta(r["k"], "r1", C_ROWS, h))
+        k += 6
+    mine.append(len(inst))
+    inst.append(_select(k, k - 1))
+    meta.append(_meta(k, "r1", C_ROWS, "sampler"))
+    F.oracle_rows = meta
+    P = BD.Projection(_finish(F, inst, compact), "oracle[r1]", mine, tok_node=1, weights_node=2)
+    P.cached_rows = C_ROWS
+    return P
+
+
+@pytest.mark.parametrize("compact", [False, True])
+def test_an_mla_warm_requests_latent_and_index_k_rows_compare_as_its_prefix_inputs(tmp_path, compact):
+    A, P = warm_mla_program(tmp_path, compact), mla_projection(compact)
+    for spec, ops in ((SMLA, {2: (PL.LATENT, W)}), (LOGITS, {2: (PL.INDEX_K, D), 3: (PL.INDEX_K_SCALE, 1)})):
+        for l in range(L):
+            for ai, (kind, rl) in ops.items():
+                got = [Q.canon([i for i, r in enumerate(Q.inst) if r["spec"] == spec][l])[ai] for Q in (A, P)]
+                got = [K.expand_mixed(g) if compact else g for g in got]
+                assert got[0] == got[1] and got[0][0] == ("PFX", l, kind, 0, C_ROWS * rl), (spec, l, ai, got)
+    res = C.compare_steps(A, P)
+    assert res["totals"].get("operands_different", 0) == 0 and res["canonical_sha256"]["equal"], res["steps"][0].get("wiring")
+    assert not P.xreq and P.prefix_producers() == {j: {"r0"} for j in range(C_ROWS)}
+    why, hit = PX.check_hits({"request_id": "r1", "prefix": {"rows": C_ROWS, "producers": ["r0"]}}, P)
+    assert why == [] and hit["read_from"] == [["r0"]]
+
+
+@pytest.mark.parametrize("compact", [False, True])
+@pytest.mark.parametrize("name, kw", [
+    ("rows_swapped", {"read_row": lambda l, j: (l, C_ROWS - 1 - j)}),
+    ("other_layer", {"read_row": lambda l, j: (1 - l, j)}),
+    ("rope_part_elsewhere", {"rope_row": lambda l, j: (l, C_ROWS - 1 - j)}),   # a latent row's normed part and rope part from two positions
+])
+def test_a_misplaced_mla_row_is_a_cross_request_read(tmp_path, compact, name, kw):
+    A, P = warm_mla_program(tmp_path, compact), mla_projection(compact, **kw)
+    res = C.compare_steps(A, P)
+    assert P.xreq and not res["canonical_sha256"]["equal"], name
 
 
 def test_contiguous_prefix_reads_merge_in_both_forms():

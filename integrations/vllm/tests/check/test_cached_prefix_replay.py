@@ -1,6 +1,7 @@
-"""The Commit's reading of a prefix-cache hit: a warm request's `prefix` reads resolve to the key / value rows its producers committed
-(`check.replay.cached_prefix`, through the producer's own attention operands), its prompt reads to the ids its arrival step embedded
-(prompt[C:]), and the boundary linkage holds that step to the declared uncached suffix."""
+"""The Commit's reading of a prefix-cache hit: a warm request's prefix reads resolve to the history rows its producers committed
+(`check.replay.cached_prefix`, through the producer's own attention operands: dense key / value, or MLA's latent and the indexer's
+index-K slots and scales), its prompt reads to the ids its arrival step embedded (prompt[C:]), and the boundary linkage holds that step
+to the declared uncached suffix."""
 from __future__ import annotations
 
 import json
@@ -10,11 +11,21 @@ import pytest
 
 from verity_vllm.check.replay import cached_prefix as CP, evaluate as EV, linkage as LK
 from verity_vllm.pipeline import c2_replay as C2
+from verity_vllm.pipeline.tp import rank_replay as RR
+from verity_vllm.program import prefix_layout as PL
 from verity_vllm.program.kernels.kernel_registry import Declined
 
 C, RL, BS = 4, 4, 2          # cached rows, key / value leaves per row (KVH*D), block size
 ROPE, QKV = "model.layers.{l}.self_attn.rotary_emb", "model.layers.{l}.self_attn.qkv_proj"
 LAYOUT = {"input": 1, "C": C, "row_leaves": RL, "layers": [f"model.layers.{l}.self_attn.attn" for l in (0, 1)]}
+DV, DR, D = 4, 2, 3          # MLA: the latent's normed and rope leaves per row, the index-K width
+NORM, KPE, IDXK = "model.layers.{l}.self_attn.kv_a_layernorm", "model.layers.{l}.self_attn.k_pe", "model.layers.{l}.self_attn.indexer_k"
+MLA = {"kind": "mla", "input": 1, "inputs": [1, 3, 4], "C": C, "row_leaves": DV + DR, "index_d": D,
+       "layers": [f"model.layers.{l}.self_attn.attn" for l in (0, 1)], "indexer_layers": ["model.layers.1.self_attn.attn"]}
+
+
+def _layout(doc=LAYOUT) -> dict:
+    return {"C": int(doc["C"]), "inputs": PL.inputs_of(doc)}
 
 
 class _Producer:
@@ -46,31 +57,71 @@ class _Producer:
         return (d, name, lo, hi, dt) if 0 <= lo < hi <= width else None
 
 
-def _src(producers=("r0", "r0"), arrivals=None, **kw):
-    idx = {q: _Producer(**kw) for q in set(producers)}
-    return CP.CachedPrefix(LAYOUT, list(producers), idx, arrivals or {q: 0 for q in producers})
+class _MlaProducer(_Producer):
+    """A cold request's MLA Program: per layer and history row its normed latent (`out`, DV), its rope key (`k_pe`, DR) and, on the
+    indexer layer, its index-K row (`out`, D slots then the scale), and per history length T a sparse MLA reading the latent rows as
+    the normed part then the rope part, and on the indexer layer the logits reading the index-K slots and scales."""
+
+    def __init__(self, n=6):
+        self.rows, self.by_i, self._d = [], {}, {}
+        for l in (0, 1):
+            for t in range(n):
+                self._d[1000 * l + t] = {"members": [("out", DV, "bf16")], "step": 0, "row": t, "op_path": NORM.format(l=l)}
+                self._d[1000 * l + 100 + t] = {"members": [("k_pe", DR, "bf16")], "step": 0, "row": t, "op_path": KPE.format(l=l)}
+                self._d[1000 * l + 200 + t] = {"members": [("out", D + 1, "f32")], "step": 0, "row": t, "op_path": IDXK.format(l=l)}
+            for T in range(1, n + 1):
+                name = f"model.model.layers.{l}.self_attn.attn/dsa_indexer_attn[t={T - 1}]"
+                lat = [r for t in range(T) for r in (["n", 1000 * l + t, 0, DV], ["n", 1000 * l + 100 + t, 0, DR])]
+                rows = [{"i": 1000 * l + 500 + T, "spec": f"SparseMlaSplit_v1{{T={T},NS=1,NH=2,DR={DR},DV={DV}}}", "name": name,
+                         "args": [[["n", 0, 0, 2 * DV]], [["n", 0, 0, 2 * DR]], lat]}]
+                if l == 1:
+                    rows.append({"i": 1000 * l + 700 + T, "spec": f"DsaMqaLogits_v3{{N={T},H=2,D={D}}}", "name": name,
+                                 "args": [[["n", 0, 0, 2 * D]], [["n", 0, 0, 2]], [["n", 1000 * l + 200 + t, 0, D] for t in range(T)],
+                                          [["n", 1000 * l + 200 + t, D, D + 1] for t in range(T)]]})
+                for r in rows:
+                    self.rows.append(r)
+                    self.by_i[r["i"]] = r
+
+
+def _src(producers=("r0", "r0"), arrivals=None, doc=LAYOUT, producer=_Producer, **kw):
+    idx = {q: producer(**kw) for q in set(producers)}
+    return CP.CachedPrefix(_layout(doc), list(producers), idx, arrivals or {q: 0 for q in producers})
 
 
 def test_a_cached_key_or_value_row_is_the_row_its_producer_committed():
     src = _src()
-    assert src.identities(0, C * RL) == [("r0", 0, ROPE.format(l=0), "key", j * RL, (j + 1) * RL) for j in range(C)]
-    assert src.identities(C * RL, 2 * C * RL) == [("r0", 0, QKV.format(l=0), "out", 3 * RL * j + 2 * RL, 3 * RL * j + 3 * RL) for j in range(C)]
-    assert src.identities(3 * C * RL + RL + 1, 3 * C * RL + 2 * RL) == [("r0", 0, QKV.format(l=1), "out", 3 * RL + 2 * RL + 1, 3 * RL + 3 * RL)]
+    assert src.identities(1, 0, C * RL) == [("r0", 0, ROPE.format(l=0), "key", j * RL, (j + 1) * RL) for j in range(C)]
+    assert src.identities(1, C * RL, 2 * C * RL) == [("r0", 0, QKV.format(l=0), "out", 3 * RL * j + 2 * RL, 3 * RL * j + 3 * RL) for j in range(C)]
+    assert src.identities(1, 3 * C * RL + RL + 1, 3 * C * RL + 2 * RL) == [("r0", 0, QKV.format(l=1), "out", 3 * RL + 2 * RL + 1, 3 * RL + 3 * RL)]
+
+
+def test_a_cached_latent_or_index_k_row_is_the_rows_its_producer_committed():
+    """MLA: a latent row is the producer's normed latent row then its rope key row (two members), an index-K slot and its scale are
+    the leading D leaves and the last leaf of its indexer's row; each input's planes follow its own layer list."""
+    src, W = _src(doc=MLA, producer=_MlaProducer), DV + DR
+    assert src.identities(1, W * C, W * C + W + 1) == [("r0", 0, NORM.format(l=1), "out", 0, DV), ("r0", 0, KPE.format(l=1), "k_pe", 0, DR),
+                                                     ("r0", 0, NORM.format(l=1), "out", DV, DV + 1)]
+    assert src.identities(3, 0, C * D) == [("r0", 0, IDXK.format(l=1), "out", j * (D + 1), j * (D + 1) + D) for j in range(C)]
+    assert src.identities(4, 1, 3) == [("r0", 0, IDXK.format(l=1), "out", j * (D + 1) + D, (j + 1) * (D + 1)) for j in (1, 2)]
+    with pytest.raises(Declined, match="not inside one plane"):
+        src.identities(4, C - 1, C + 1)                       # the scale input holds one plane: the one indexer layer's
 
 
 def test_each_block_is_read_from_its_own_producer_at_its_arrival():
     src = _src(("r0", "r2"), arrivals={"r0": 0, "r2": 3})
-    got = src.identities(0, C * RL)
+    got = src.identities(1, 0, C * RL)
     assert [(q, s) for q, s, *_ in got] == [("r0", 0), ("r0", 0), ("r2", 3), ("r2", 3)]
 
 
 def test_a_read_across_two_planes_or_from_a_producer_that_was_itself_served_is_declined():
-    with pytest.raises(Declined, match="not inside one layer"):
-        _src().identities(C * RL - 1, C * RL + 1)
+    with pytest.raises(Declined, match="not inside one plane"):
+        _src().identities(1, C * RL - 1, C * RL + 1)
+    with pytest.raises(Declined, match="not inside one plane"):
+        _src().identities(0, 0, RL)                           # not a prefix input
     with pytest.raises(Declined, match="did not compute it"):
-        _src(own_prefix=True).identities(0, RL)
+        _src(own_prefix=True).identities(1, 0, RL)
     with pytest.raises(Declined, match="does not hold"):
-        CP.CachedPrefix(LAYOUT, ["r0", "r0"], {}, {}).identities(0, RL)
+        CP.CachedPrefix(_layout(), ["r0", "r0"], {}, {}).identities(1, 0, RL)
 
 
 def test_the_warm_prefix_input_resolves_and_the_prompt_reads_the_uncached_suffix():
@@ -83,7 +134,7 @@ def test_the_warm_prefix_input_resolves_and_the_prompt_reads_the_uncached_suffix
             return np.zeros(a[5] - a[4], dtype=np.uint16), None
 
     class Warm:
-        pnames, supplied, kv_prefix, by_i = ["prompt", "prefix", "weights"], {}, dict(LAYOUT), {}
+        pnames, supplied, kv_prefix, by_i = ["prompt", "prefix", "weights"], {}, _layout(), {}
         cached_prefix = {"r1": _src()}
 
         def describe(self, r):
@@ -105,15 +156,57 @@ def test_the_warm_prefix_input_resolves_and_the_prompt_reads_the_uncached_suffix
         EV._evaluate_row(cold, st, None, {"i": 9, "spec": "X_v1", "args": [[["p", 1, 0, RL]]]}, "r1", 5, [], depth=0, plan=True)
 
 
+def test_a_warm_mla_programs_three_prefix_inputs_resolve_and_none_is_read_as_prompt_ids():
+    from types import SimpleNamespace
+
+    from verity_vllm.check.replay import index as IX
+
+    class Store:
+        def __init__(self):
+            self.reads = []
+
+        def words(self, *a):
+            self.reads.append(a)
+            return np.zeros(a[5] - a[4], dtype=np.uint16), None
+
+    pi = SimpleNamespace(pnames=["prompt", "latent", "weights", "index_k", "index_k_scale"], supplied={}, kv_prefix=_layout(MLA), by_i={},
+                         cached_prefix={"r1": _src(doc=MLA, producer=_MlaProducer)}, embed_op_path=lambda: "model.embed_tokens",
+                         describe=lambda r: {"family": "X_v1", "statics": {}, "step": 0, "row": 0, "op_path": "x", "members": []})
+    assert IX.ProgramIndex.ids_params(pi) == {0}
+    st = Store()
+    EV._evaluate_row(pi, st, None, {"i": 9, "spec": "X_v1", "args": [[["p", 3, 0, D]], [["p", 4, 0, 1]], [["p", 1, 0, DV]]]}, "r1", 5, [],
+                     depth=0, plan=True)
+    assert st.reads == [("r0", 0, IDXK.format(l=1), "out", 0, D), ("r0", 0, IDXK.format(l=1), "out", D, D + 1), ("r0", 0, NORM.format(l=0), "out", 0, DV)]
+
+
 def test_the_layout_is_the_derives_prefix_file(tmp_path):
     assert CP.layout_of(str(tmp_path)) is None and CP.layout_of(None) is None
     (tmp_path / CP.PREFIX_FILE).write_text(json.dumps(dict(LAYOUT, input="1")))
-    assert CP.layout_of(str(tmp_path)) == LAYOUT
+    assert CP.layout_of(str(tmp_path)) == {"C": C, "inputs": {1: PL.Input(1, C, RL, ((0, PL.KEY), (0, PL.VALUE), (1, PL.KEY), (1, PL.VALUE)))}}
+    (tmp_path / CP.PREFIX_FILE).write_text(json.dumps(MLA))
+    got = CP.layout_of(str(tmp_path))["inputs"]
+    assert {k: (v.row_leaves, v.planes) for k, v in got.items()} == {1: (DV + DR, ((0, PL.LATENT), (1, PL.LATENT))), 3: (D, ((1, PL.INDEX_K),)),
+                                                                     4: (1, ((1, PL.INDEX_K_SCALE),))}
+    (tmp_path / CP.PREFIX_FILE).write_text(json.dumps(dict(MLA, indexer_layers=["model.norm"])))
+    with pytest.raises(ValueError, match="names no layer number"):
+        CP.layout_of(str(tmp_path))
+
+
+def test_the_attention_operands_holding_history_rows_by_kind():
+    assert PL.kv_operands(f"Attention_v4{{T=3,NH=2,KVH=2,D={RL}}}") == {1: (PL.KEY, 2 * RL), 2: (PL.VALUE, 2 * RL)}
+    assert PL.kv_operands("SparseMlaSplit_v1{T=3,NS=1,NH=8,DR=64,DV=512,BN=64,DOT=HopperBF16WgmmaDot16_v1,INV=Fa3InvSum_v1,SCALE=0.0625}") \
+        == {2: (PL.LATENT, 576)}
+    assert PL.kv_operands("SparseMla_v1{T=3,NH=8,DR=64,DV=512,DOT=Dot_v1{D=16}}") == {2: (PL.LATENT, 576)}
+    assert PL.kv_operands("DsaMqaLogits_v3{N=2,H=32,D=128}") == {2: (PL.INDEX_K, 128), 3: (PL.INDEX_K_SCALE, 1)}
+    assert PL.kv_operands("RoPEHeadGptJ_v2{D=64}") == {} and PL.kv_operands("Gemm_v1{K=4,N=4,DOT=X_v1{KVH=1,D=2}}") == {}
+    assert PL.history_rows("DsaMqaLogits_v3{N=2,H=32,D=128}") == 2 and PL.history_rows("SparseMla_v1{T=3,DR=1,DV=1}") == 3
 
 
 def test_the_commit_hands_each_warm_request_its_producers_by_label():
     reqs = [{"request_id": "a", "cached": 0, "cached_from": []}, {"request_id": "b", "cached": 128, "cached_from": ["a"] * 8}]
     assert C2.cached_prefixes(reqs, {"a": "r0", "b": "r1"}) == {"r1": {"cached": 128, "producers": ["r0"] * 8}}
+    tp_reqs = [{"request_id": "r0", "cached": 0, "cached_from": []}, {"request_id": "r1", "cached": 128, "cached_from": ["r0", "r0"]}]
+    assert RR.cached_prefixes(tp_reqs) == {"r1": {"cached": 128, "producers": ["r0", "r0"]}}   # a TP rank's replay requests are labels already
 
 
 def test_the_linkage_holds_a_warm_arrival_to_the_declared_uncached_suffix():

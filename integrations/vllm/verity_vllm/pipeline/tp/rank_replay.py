@@ -180,18 +180,28 @@ def evaluate(p: Loaded, cfg: dict[str, Any], *, bmap: dict[str, Any], committed:
                            seed=seed, seed_source=seed_src, max_evaluate=int(cfg.get("max_evaluate") or 2000), weights_check=weights_check,
                            targets=list(cfg.get("targets") or []), workers=cfg.get("workers"), worker_peak=worker_peak,
                            ring_slots=(int(ring) if ring else None), attention_paths=p.attn_paths, tp=p.tp,
-                           manifest=man, program_dirs=p.dirs, replay_k=(cfg.get("k_per_rank") or {}).get(str(rank)), memo=index_memo(p, man))
+                           manifest=man, program_dirs=p.dirs, replay_k=(cfg.get("k_per_rank") or {}).get(str(rank)), memo=index_memo(p, man),
+                           cached_prefixes=cached_prefixes(p.reqs))
     sr["wrapper_prefix"] = p.index.prefix
     sr["tp_context"] = p.tp
     sr["programs"] = {k: {"dir": p.loaded[k].get("dir"), "program_digest": p.digs[k]} for k in p.loaded}
     sr["rank"] = rank                    # [MAN-06c] the strata carry this rank's label (a per-rank map: every entry identity.rank == rank)
     arr = p.arrivals
     wreq = [{"request_id": str(r["request_id"]), "arrive_step": arr[str(r["request_id"])], "prompt_token_ids": list(r.get("prompt_token_ids") or []), "seed": r.get("seed"),
-             "steps": list(range(arr[str(r["request_id"])], arr[str(r["request_id"])] + int(r.get("max_tokens") or 1)))} for r in p.reqs]
+             "steps": list(range(arr[str(r["request_id"])], arr[str(r["request_id"])] + int(r.get("max_tokens") or 1))), "cached": int(r.get("cached") or 0)}
+            for r in p.reqs]
     lk = SR.boundary_linkage(bmap, committed, wreq, embed_op_path=p.index.embed_op_path(), splits_of_record=SR.splits_of_record(p.loaded))
     lk["rank"] = rank
     sr["value_source"] = dict(committed.record(), forked_children=sr.pop("value_reads_in_children", None))
     return sr, lk
+
+
+def cached_prefixes(reqs: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """Each warm request's cached rows and the label of the request that computed each cached block (the Commit's replay requests:
+    `cached`, `cached_from`), what the rank's replay resolves its prefix reads to (`driver.populate`).  MLA's latent and index-K rows
+    are replicated over the world, so every rank resolves all of them through its own producers' Programs."""
+    return {str(r["request_id"]): {"cached": int(r["cached"]), "producers": [str(q) for q in r.get("cached_from") or ()]}
+            for r in reqs if int(r.get("cached") or 0)}
 
 
 def not_run(rank: int, e: BaseException, trace: str) -> tuple[dict, dict]:

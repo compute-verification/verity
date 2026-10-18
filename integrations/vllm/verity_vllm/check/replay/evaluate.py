@@ -204,11 +204,11 @@ def _evaluate_row(pi: ProgramIndex, store: CommittedStore, weights: Callable[[st
                         raise _Unresolved(why)
                     words.append(w)
                     inputs_rec.append({"kind": "committed", "identity": [rid, arrive + step, SAMPLER_OP, pname, [0, 1]]})
-                elif pi.kv_prefix and a == pi.kv_prefix["input"]:                # a warm request's cached rows: what its producers committed
+                elif pi.kv_prefix and a in pi.kv_prefix["inputs"]:              # a warm request's cached rows: what its producers committed
                     src = pi.cached_prefix.get(rid)
                     if src is None:
                         raise _Unresolved(f"{pname} slice [{lo}, {hi}): no producing requests of record for {rid}'s cached rows")
-                    for q, qstep, qop, qmem, qlo, qhi in src.identities(lo, hi):
+                    for q, qstep, qop, qmem, qlo, qhi in src.identities(a, lo, hi):
                         w, why = store.words(q, qstep, qop, qmem, qlo, qhi)
                         if w is None:
                             raise _Unresolved(why)
