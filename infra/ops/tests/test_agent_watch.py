@@ -28,7 +28,9 @@ class FakeApi:
         if parts[-1] == "runs":
             a = next(a for a in self._agents if a["id"] == parts[-2])
             ids = [a["latestRunId"], *self.older.get(a["id"], [])]
-            return {"items": [{"id": i, **self._runs[i]} for i in ids if i in self._runs]}
+            items = [{"id": i, **self._runs[i]} for i in ids if i in self._runs]
+            at, n = int(params.get("cursor") or 0), int(params.get("limit") or len(items))
+            return {"items": items[at:at + n], **({"nextCursor": str(at + n)} if at + n < len(items) else {})}
         if parts[-1].startswith("run-goal"):
             raise W.urllib.error.HTTPError(path, 400, "Bad Request", {}, None)
         return self._runs[parts[-1]]
@@ -452,6 +454,26 @@ def test_a_run_creating_behind_a_followed_run_is_queued_not_stuck(tmp_path):
     w, started = W.Watch(api, tmp_path / "events.jsonl", clock), []
     w.sweep(started.append)
     assert records(tmp_path) == [] and [r.run for r in started] == ["run-r"]
+
+
+def test_a_run_behind_a_full_page_of_runs_cancelled_on_arrival_is_still_followed(tmp_path):
+    """memory-accounting, 20:40Z 18 Oct: run-84157683 WAITING from 19:50:47Z sat third on the second page of its runs, behind 49
+    runs cancelled on arrival and a CREATING one; the watch read one page, lost the run and recorded the CREATING one stuck."""
+    clock = Clock(W.epoch("2026-10-18T20:40:30Z"))
+    arrivals = [f"run-x{i}" for i in range(60)]
+    runs = {i: {"status": "CANCELLED", "updatedAt": "2026-10-18T20:30:00.000Z"} for i in arrivals}
+    runs.update({"run-c": {"status": "CREATING", "updatedAt": "2026-10-18T20:29:28.614Z"},
+                 "run-w": {"status": "WAITING_FOR_BACKGROUND_WORK", "updatedAt": "2026-10-18T20:39:00.000Z"},
+                 "run-f": {"status": "FINISHED", "durationMs": 32532}, "run-old": {"status": "RUNNING"}})
+    api = FakeApi([{"id": "bc-m", "name": "memory-accounting", "status": "ACTIVE", "latestRunId": arrivals[0]}], runs,
+                  older={"bc-m": [*arrivals[1:30], "run-c", *arrivals[30:], "run-w", "run-f", "run-old"]})
+    reads = []
+    get = api.get
+    api.get = lambda path, **p: reads.append(p.get("cursor")) or get(path, **p)
+    w, started = W.Watch(api, tmp_path / "events.jsonl", clock), []
+    w.sweep(started.append)
+    assert [r.run for r in started] == ["run-w"] and records(tmp_path) == []
+    assert reads == [None, "50"], "it pages until a run that started, and no further"
 
 
 def test_a_stream_that_ends_is_followed_again(tmp_path):

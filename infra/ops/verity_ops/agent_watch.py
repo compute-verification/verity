@@ -5,9 +5,9 @@
 An agent hears Slack, Linear and timer events only between runs, and a run can hang after a tool call returns: proofs from
 05:29 to 15:33Z and circuits from 09:49Z on 18 Oct, three coordinators at once about 15:26Z on 15 Oct. Until now only Daniel
 pressing Stop freed one. Every `POLL_S` the watch lists the team's agents (`GET /v1/agents`; ACTIVE ones, and IDLE ones changed
-in the last `IDLE_RECENT_S`, since an ERROR leaves an agent IDLE). For each ACTIVE agent it lists its newest runs
-(`GET .../runs`): its `latestRunId` is often a run cancelled on arrival, created and cancelled within half a second while the
-run doing the work is older (memory-accounting, 19:32Z 18 Oct). It follows the event stream (`GET .../runs/{run}/stream`,
+in the last `IDLE_RECENT_S`, since an ERROR leaves an agent IDLE). For each ACTIVE agent it lists its runs (`GET .../runs`),
+page by page back to the newest that started: its `latestRunId` is often a run cancelled on arrival, created and cancelled
+within half a second while the run doing the work is older (memory-accounting, 19:32Z 18 Oct; 52 such runs in 50 min by 20:40Z). It follows the event stream (`GET .../runs/{run}/stream`,
 server-sent events) of the agent's newest run that is RUNNING or WAITING_FOR_BACKGROUND_WORK, until that run ends or another
 takes its place. Events carry no time, so it times them as they arrive. A heartbeat counts as nothing, and so does the `status`
 the API re-sends on every reconnection. Each simple event (`assistant`, `thinking`, `tool_call`) has an `interaction_update`
@@ -71,7 +71,8 @@ CONTINUE_RETRY_S = 30 * 60  # how long a refused continue run is tried again bef
 REFUSED_S = 5 * 60          # a run whose cancel got 409 still read as going this long after is left for a person
 MAX_RESTARTS = 3            # ERROR runs in a row the watch restarts before leaving the agent for a person
 IDLE_RECENT_S = 6 * 3600    # an IDLE agent is read only if it changed this recently (an ERROR leaves an agent IDLE)
-RUNS_PAGE = 50              # an ACTIVE agent's newest runs read each sweep (proofs had 25 runs cancelled on arrival in 7 h)
+RUNS_PAGE = 50              # an ACTIVE agent's runs are read a page at a time, back to the newest that started
+RUNS_PAGES = 10             # (memory-accounting had 52 runs cancelled on arrival in 50 min, 18 Oct), at most this many pages
 FOLLOW = {"RUNNING": HELD_S, "WAITING_FOR_BACKGROUND_WORK": HELD_BG_S}
 TERMINAL = {"FINISHED", "ERROR", "CANCELLED", "EXPIRED"}
 # recorded once, never cancelled: a run CREATING this long by its `updatedAt`, a followed background wait with nothing streamed
@@ -95,6 +96,11 @@ def epoch(s: str | None) -> float | None:
         return calendar.timegm(time.strptime(str(s)[:19], "%Y-%m-%dT%H:%M:%S"))
     except (ValueError, TypeError):
         return None
+
+
+def started(x: dict) -> bool:
+    """Whether a run record ever ran: a run cancelled on arrival reads CANCELLED with no `durationMs`."""
+    return x.get("status") not in ("CREATING", "CANCELLED") or bool(x.get("durationMs"))
 
 
 class Api:
@@ -413,7 +419,13 @@ class Watch:
             latest = a["latestRunId"]
             if a.get("status") == "ACTIVE":
                 try:
-                    runs = list(self.api.get(f"/v1/agents/{a['id']}/runs", limit=RUNS_PAGE).get("items") or [])
+                    runs, cursor = [], None
+                    for _ in range(RUNS_PAGES):
+                        page = self.api.get(f"/v1/agents/{a['id']}/runs", limit=RUNS_PAGE, cursor=cursor)
+                        runs += page.get("items") or []
+                        cursor = page.get("nextCursor")
+                        if not cursor or any(started(x) for x in runs):
+                            break
                 except (urllib.error.URLError, OSError, ValueError) as e:
                     print(f"{iso(t)} runs of {a['id']}: {type(e).__name__}: {e}", file=sys.stderr, flush=True)
                     continue
@@ -431,7 +443,7 @@ class Watch:
                         and t - since >= STUCK["CREATING"] and self.once(x["id"], t)):
                     self.record("stuck", Run(a["id"], x["id"], a.get("name") or ""), status="CREATING", since=iso(since),
                                 minutes=int((t - since) // 60))
-                newer_started |= x.get("status") not in ("CREATING", "CANCELLED") or bool(x.get("durationMs"))
+                newer_started |= started(x)
             last = next((x for x in runs if x.get("id") == latest), None)
             if follow:
                 current[follow["id"]] = (a, follow)
