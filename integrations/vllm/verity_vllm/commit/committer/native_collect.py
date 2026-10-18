@@ -424,7 +424,7 @@ class NativeCollectCommitter(NativeHostCommitter):
 
     R11 `native_hooks=True` (collector v2, `native_collect_v2`): the module.forward wrappers are C++ callables (`HookFwd`) and the FA2
     M1 glue is `Fa2Wrap` -- no Python frame per producer; gather windows (P0/P1/P2 + step end) with 32 blocks per descriptor by default
-    (size-adaptive, `auto_blocks`: up to 1024)."""
+    (size-adaptive, `auto_blocks`: 8 KiB a block, up to 8192)."""
 
     def __init__(self, engine: Any, *, wrap: bool = True, profile: bool = False, build_dir: str | None = None, check_sizes: bool = True,
                  gather: bool = False, native_hooks: bool = False, auto_blocks: bool = False, native_worker: bool = False,
@@ -548,12 +548,14 @@ class NativeCollectCommitter(NativeHostCommitter):
         if self.gather:
             self._nc.enable_gather(65536)
             # thread blocks per staged descriptor in the gather kernel (R10 default 4; 32 = R10's labelled-extra Llama geometry, the R11 default).
-            # Size-adaptive, it is only a cap, 1024: a 256 MB prefill window holds a handful of descriptors, and at 32 blocks each the copy
-            # filled a fraction of the SMs (B32 compiled prefill gather 12.2 -> 8.3 ms/step, r20261017-205629-7b49 vs r20261017-205439-5d0c)
-            self._nc.blocks_per_desc = int(os.environ.get("NATIVE_GATHER_BLOCKS", "1024" if self.auto_blocks else "32" if self.native_hooks else "4"))
+            # Size-adaptive, it is only a cap (was 1024): a 256 MB prefill window holds a handful of descriptors, and at 32 blocks each the copy
+            # filled a fraction of the SMs (B32 compiled prefill gather 12.2 -> 8.3 ms/step, r20261017-205629-7b49 vs r20261017-205439-5d0c).
+            # 8 KiB a block, cap 8192: a launch is several waves of short blocks, so SMs that share no hash block take more of them; one wave
+            # of 32 KiB blocks ended with its slowest block, on an SM beside a SHA block (H200 prefill gather 475 GB/s, 1.6 TB/s alone)
+            self._nc.blocks_per_desc = int(os.environ.get("NATIVE_GATHER_BLOCKS", "8192" if self.auto_blocks else "32" if self.native_hooks else "4"))
             # R11 candidate B: size-adaptive blocks per window (cap = blocks_per_desc; ceil(max staged bytes / auto_bytes_per_block) otherwise)
             self._nc.auto_blocks = self.auto_blocks
-            self._nc.auto_bytes_per_block = int(os.environ.get("NATIVE_GATHER_AUTO_BYTES", "32768"))
+            self._nc.auto_bytes_per_block = int(os.environ.get("NATIVE_GATHER_AUTO_BYTES", "8192"))
         self._names: list[str] = []
         self._name_ids: dict[str, int] = {}
         self._metas_cache = PlanCache()                          # (plan key, version) -> PlanMetas, for this run's and the previous run's plans
