@@ -8,8 +8,8 @@ import Proofs.Flock.Claims.Recursion.InnerLeaf
 
 `VStarParts` (`VStar.lean`) asks, besides each part's own facts, for four facts across the parts: the staged V*
 statements show the run (`Staged`), the parts' checks are the inner verifier (`Decomp`), its calls are theirs
-(`LogDecomp`), and some part holds each inner round (`Held`). This file proves what of them holds at `deployRec` with no
-appeal to V*'s circuits, at every shape.
+(`LogDecomp`), and each inner round before the last is public, fixed or held by some part (`HeldPub`). This file proves
+what of them holds at `deployRec` with no appeal to V*'s circuits, at every shape.
 
 * **The staged statements read back** (`staged_ne_nil`): on an accepted run every V* session ends on a decision
   (`run_decides`), which the outer verifier makes only at a statement that sets up, so every part's staged statement is
@@ -23,9 +23,8 @@ appeal to V*'s circuits, at every shape.
   `VstarShows` does not hold at `deployRec`:
   a V* statement staged at rounds where its numbers aren't the part's is the one staged at `pick`, which shows `pick`'s
   coins.
-* **`Held` at `deployRec` is the layout's alone** (`held_deployRec_iff`). With `Staged`'s span it pins the layout's
-  rounds to the inner verifier's (`rounds_eq_of_held`), and over Flock's deployed verifier, which takes a round at every
-  statement, it needs a part at each compiled statement of the shape (`nS_pos_of_held`).
+* **`HeldPub` at `deployRec` is the layout's alone** (`heldPub_deployRec_iff`). With `Staged`'s span it pins the
+  layout's rounds to the inner verifier's (`rounds_eq_of_heldPub`).
 * **`Decomp` over Flock's deployed verifier is a cut** (`decomp_iff_cut`, `decomp_deployed_iff`): Flock's deployed
   verifier accepts replayed inner messages exactly where `InnerAcc` says (`run_replay_acc`, `innerAcc_of_run`): the
   first `N` of tag `0`, the first the link message, the `N`-th `Final`, the setup, the shipped verdict and the checks
@@ -52,8 +51,8 @@ appeal to V*'s circuits, at every shape.
   the V* setup's own evaluations, `VStar.PubReg`), it is the verdict's calls alone that must be the parts'
   (`VerdictCut`, `logDecompPub_of_cut`).
 * **At the registered ports' layout** (`layoutOf`, `DeployLayout.lean`): `Staged` needs only `b.tr x` injective
-  (`staged_layoutOf`), since the layout spans exactly the inner verifier's rounds. `Held` holds exactly at a shape no
-  compiled statement parses at (`held_layoutOf_iff`). The layout records no call, so `PartLogs` leaves each part no
+  (`staged_layoutOf`), since the layout spans exactly the inner verifier's rounds. `HeldPub` holds where the registered
+  ports cover the message rounds (`heldPub_layoutOf`). The layout records no call, so `PartLogs` leaves each part no
   inner call at its own points (`partLogs_layoutOf_nil`), and with `LogDecomp` the inner setup makes none at an
   accepted inner replay there (`setupLog_nil_layoutOf`), off a collision among the V* setup's own evaluations. The
   inner setup always hashes (its digest and sigma), so off such a collision no inner replay at the parts' points accepts
@@ -197,37 +196,28 @@ theorem staged_deployRec {W : Type} (H : Msg → Msg) (I : Claims.Recursion.Inne
     rw [List.getD_eq_getElem?_getD, List.getD_eq_getElem?_getD, List.getElem?_map, List.getElem?_map,
       List.getElem?_take_of_lt hi']
 
-/-! ## Some part holds each inner round -/
+/-! ## Each inner round before the last is public, fixed or held -/
 
-/-- **`Held` at `deployRec` is a fact about the layout alone**: at each compiled statement of the shape, the layout spans
-the inner verifier's rounds at its inner statement, and some part holds each round it spans. -/
-theorem held_deployRec_iff {W : Type} (I : Claims.Recursion.Inner Coin W) (ivScope : Msg → Bool) (b : Brings)
+/-- **`HeldPub` at `deployRec` is a fact about the layout alone**: at each compiled statement of the shape, the layout
+spans the inner verifier's rounds at its inner statement, and each round before the last is public, fixed or held by
+some part. -/
+theorem heldPub_deployRec_iff {W : Type} (I : Claims.Recursion.Inner Coin W) (ivScope : Msg → Bool) (b : Brings)
     (L : Claims.Recursion.VStar.Layout) (shape : Claims.Recursion.Form → Prop) :
-    Claims.Recursion.VStar.Held (deployRec I.V ivScope b) I L shape ↔
+    Claims.Recursion.VStar.HeldPub (deployRec I.V ivScope b) I L shape ↔
       ∀ x st, parse x = some st → shape st.form →
-        I.V.k (xIOf x) ≤ L.rounds x ∧ ∀ i < L.rounds x, ∃ s < nS x, (L.msgAt x s i).isSome :=
+        I.V.k (xIOf x) ≤ L.rounds x ∧ ∀ i, i + 1 < I.V.k (xIOf x) →
+          L.pubAt x i = true ∨ (L.fixedAt x i).isSome ∨ ∃ s < nS x, (L.msgAt x s i).isSome :=
   Iff.rfl
 
-/-- **`Held` with `Staged`'s span pins the layout's rounds** to the inner verifier's: `staged_deployRec` asks the layout
-to span no more of them, and `Held` no fewer. -/
-theorem rounds_eq_of_held {W : Type} {I : Claims.Recursion.Inner Coin W} {ivScope : Msg → Bool} {b : Brings}
+/-- **`HeldPub` with `Staged`'s span pins the layout's rounds** to the inner verifier's: `staged_deployRec` asks the
+layout to span no more of them, and `HeldPub` no fewer. -/
+theorem rounds_eq_of_heldPub {W : Type} {I : Claims.Recursion.Inner Coin W} {ivScope : Msg → Bool} {b : Brings}
     {L : Claims.Recursion.VStar.Layout} {shape : Claims.Recursion.Form → Prop}
-    (hH : Claims.Recursion.VStar.Held (deployRec I.V ivScope b) I L shape)
+    (hH : Claims.Recursion.VStar.HeldPub (deployRec I.V ivScope b) I L shape)
     (hL : ∀ x st, parse x = some st → shape st.form → L.rounds x ≤ I.V.k (xIOf x))
     {x : Msg} {st : Claims.Recursion.Stmt} (hst : parse x = some st) (hf : shape st.form) :
     L.rounds x = I.V.k (xIOf x) :=
-  le_antisymm (hL x st hst hf) ((held_deployRec_iff I ivScope b L shape).1 hH x st hst hf).1
-
-/-- **`Held` over Flock's deployed verifier needs a part** at each compiled statement of the shape: that verifier takes
-a round at every statement (`V_k_pos_flock`), which some part must hold. -/
-theorem nS_pos_of_held {W : Type} {zk : Bool} {I : Claims.Recursion.Inner Coin W} (hI : I.V = FlockDeploy.V zk)
-    {ivScope : Msg → Bool} {b : Brings} {L : Claims.Recursion.VStar.Layout} {shape : Claims.Recursion.Form → Prop}
-    (hH : Claims.Recursion.VStar.Held (deployRec I.V ivScope b) I L shape)
-    {x : Msg} {st : Claims.Recursion.Stmt} (hst : parse x = some st) (hf : shape st.form) : 0 < nS x := by
-  obtain ⟨hk, hall⟩ := (held_deployRec_iff I ivScope b L shape).1 hH x st hst hf
-  have h0 : 0 < L.rounds x := lt_of_lt_of_le (hI ▸ V_k_pos_flock zk (xIOf x)) hk
-  obtain ⟨s, hs, -⟩ := hall 0 h0
-  omega
+  le_antisymm (hL x st hst hf) ((heldPub_deployRec_iff I ivScope b L shape).1 hH x st hst hf).1
 
 /-! ## The inner verifier's accepting step -/
 
@@ -833,13 +823,6 @@ theorem staged_layoutOf (H : Msg → Msg) (rel : Flock.Readable.Parsed → Flock
       (cmtTr b.atPorts) :=
   staged_deployRec H (Claims.Recursion.Inner.ofFlock (FlockDeploy.deployPlain rel) decI) ivScope b.atPorts layoutOf
     shape htr fun _ _ _ _ => le_rfl
-
-/-- **`Held` at `layoutOf` holds exactly at a shape no compiled statement parses at** (`not_held_layoutOf`): no part
-holds the link message. -/
-theorem held_layoutOf_iff {W : Type} (D : Claims.Recursion.Deploy Coin) (I : Claims.Recursion.Inner Coin W)
-    (shape : Claims.Recursion.Form → Prop) :
-    Claims.Recursion.VStar.Held D I layoutOf shape ↔ ∀ x st, D.parse x = some st → ¬ shape st.form :=
-  ⟨not_held_layoutOf, fun h x st hst hf => absurd hf (h x st hst)⟩
 
 /-- **`PartLogs` at `layoutOf` leaves the part no inner calls**: the layout records none, so wherever the part's outer
 relation holds at a V* statement showing the coins, its inner check makes no call on messages agreeing with what it

@@ -38,7 +38,8 @@ variable {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 /-- **A draw is bad at most as `√(k_I·k(x)·(Pr[Be] + Pr[Br]))`**: `Pr_bad_le`, with the played rounds' openings
 (`sum_opensDiffer_le_played`). -/
 theorem Pr_bad_le_played {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
-    {opening : Opening} (hV : InnerViewRun H D I DO) (hO : CallsOpenPlayed H D I DO opening)
+    {opening : Opening} {fixed : Msg → ℕ → Option Msg} {pub : Msg → ℕ → Bool} (hV : InnerViewRun H D I DO)
+    (hO : CallsOpenPlayed H D I DO opening fixed pub)
     (hT : CallsTrue H D I DO) (hR : InnerRounds D I) (decO : List (ℕ × Col) → List T) (x : Msg) {Ω : Type}
     [Fintype Ω] [Nonempty Ω] (P : Prover Ω) :
     Pr (fun t : Ω × (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x => Bad H D I DO decO P x t.1 t.2) ≤
@@ -86,7 +87,8 @@ theorem Pr_bad_le_played {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} 
 /-- **A draw is bad at most as `√(k_I·Σ_{j<k_I} Pr[forkReg j])`**: `Pr_bad_le_fork`, with the played rounds'
 openings (`forkColl_of_openingPlayed`), each fork charging `Be`'s collision or `Br`'s registered tie. -/
 theorem Pr_bad_le_fork_played {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
-    {opening : Opening} (hV : InnerViewRun H D I DO) (hO : CallsOpenPlayed H D I DO opening)
+    {opening : Opening} {fixed : Msg → ℕ → Option Msg} {pub : Msg → ℕ → Bool} (hV : InnerViewRun H D I DO)
+    (hO : CallsOpenPlayed H D I DO opening fixed pub)
     (hT : CallsTrue H D I DO) (decO : List (ℕ × Col) → List T) (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω]
     (P : Prover Ω) :
     Pr (fun t : Ω × (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x => Bad H D I DO decO P x t.1 t.2) ≤
@@ -158,7 +160,8 @@ the played rounds' openings and `CallsTrue` (`Pr_bad_le_played`, `Pr_bad_le_fork
 `Pr_innerRejects_le_fork_true`), the forks' charges summing to at most `k(x)·(Pr[Be] + Pr[Br])`
 (`sum_forkReg_le`). -/
 theorem bad_rej_le_played {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
-    {opening : Opening} (hV : InnerViewRun H D I DO) (hO : CallsOpenPlayed H D I DO opening)
+    {opening : Opening} {fixed : Msg → ℕ → Option Msg} {pub : Msg → ℕ → Bool} (hV : InnerViewRun H D I DO)
+    (hO : CallsOpenPlayed H D I DO opening fixed pub)
     (hT : CallsTrue H D I DO) (hR : InnerRounds D I) (hA : InnerAcceptsR H D I DO) (hN0 : CallsNil H D)
     (hM : RoundsMargin H D I) (decO : List (ℕ × Col) → List T) (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω]
     (P : Prover Ω) :
@@ -235,9 +238,10 @@ def InnerKSR [DecidableEq Col] [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I
 rounds' openings, `CallsTrue` and the inner verifier's calls off a collision or a registered tie (`PrBAbort_le_reg`,
 `bad_rej_le_played`). -/
 theorem innerKSR_of_KSAbort [DecidableEq Col] [Zero Col] {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W}
-    {DO : Flock.Deploy Coin Col T} {opening : Opening} {decC : Msg → Msg → Coin} (hKS : I.KSAbort H)
+    {DO : Flock.Deploy Coin Col T} {opening : Opening} {fixed : Msg → ℕ → Option Msg} {pub : Msg → ℕ → Bool}
+    {decC : Msg → Msg → Coin} (hKS : I.KSAbort H)
     (hR : InnerRounds D I) (hV : InnerViewRun H D I DO) (hT : CallsTrue H D I DO) (hLC : CallsLogColl H D I DO)
-    (hO : CallsOpenPlayed H D I DO opening) (hA : InnerAcceptsR H D I DO) (hM : RoundsMargin H D I)
+    (hO : CallsOpenPlayed H D I DO opening fixed pub) (hA : InnerAcceptsR H D I DO) (hM : RoundsMargin H D I)
     (hpc : PublicCoin H I decC) (hN0 : CallsNil H D) : InnerKSR H D I DO := by
   intro decO _ x Ω _ _ P
   have h1 := PrBadGood_le_abort_rej hV hpc hR decO x P
@@ -339,11 +343,12 @@ abort, where V* meets `InnerAcceptsR`**: `KS_of_flockKS_coll`, from the played r
 (`CallsOpenPlayed`), the recorded calls' truth (`CallsTrue`) and the inner verifier's calls off a collision or a
 registered tie (`CallsLogColl`) in place of `CallsOpen` and `CallsRecord`, at `KS_of_reg`. -/
 theorem KS_of_flockKS_played [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W)
-    (DO : Flock.Deploy Coin Col T) (opening : Opening) (decC : Msg → Msg → Coin) (hF : Flock.KS H DO)
+    (DO : Flock.Deploy Coin Col T) (opening : Opening) (decC : Msg → Msg → Coin) {fixed : Msg → ℕ → Option Msg}
+    {pub : Msg → ℕ → Bool} (hF : Flock.KS H DO)
     (hKS : I.KSAbort H) (hRef : Refuses H D) (hRounds : InnerRounds D I) (hN : SessionNums D DO)
     (hε : TableErrNonneg D) (hRd : SessionRounds D I DO) (hS : SessionAccepts D) (hR : SessionRuns H D I DO)
     (hV : InnerViewRun H D I DO) (hT : CallsTrue H D I DO) (hLC : CallsLogColl H D I DO)
-    (hO : CallsOpenPlayed H D I DO opening) (hA : InnerAcceptsR H D I DO) (hM : RoundsMargin H D I)
+    (hO : CallsOpenPlayed H D I DO opening fixed pub) (hA : InnerAcceptsR H D I DO) (hM : RoundsMargin H D I)
     (hpc : PublicCoin H I decC) (hN0 : CallsNil H D) : KSA H D I DO :=
   KS_of_reg H D I DO hRef (outerKS_of_flockKS hF hN hε hRd hS hR)
     (innerKSR_of_KSAbort hKS hRounds hV hT hLC hO hA hM hpc hN0)
@@ -351,18 +356,20 @@ theorem KS_of_flockKS_played [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I :
 /-- **The recursion's KS from V\*'s parts**: `KS_of_flockKS_played`, with every code fact about the readers and V\*
 from V*'s parts at the deployed readers (`codeFacts_of_staging`): the compiled verifier reads through them
 (`ReadsThrough`), its V* statements number at least `D.nS` (`VstarLen`), every part's SHA-512 gadgets compute `H`
-(`PartCallsTrue`), an accepted run's first pairs show its coins (`RunPairs`), the layout spans no more than the inner
+(`PartCallsTrue`), an accepted run's first pairs show its coins (`RunPairs`), the readers read the layout's public
+rounds off the run (`ReadsPub`), the last inner round opens (`FinalOpens`), the layout spans no more than the inner
 and staging rounds, and V*'s parts meet `VStarPartsStaging` at the dense, holo and sparse shapes. -/
 theorem KS_of_parts [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (L : Layout) (opening : Opening) (decC decS : Msg → Msg → Coin) (hF : Flock.KS H DO) (hKS : I.KSAbort H)
     (hRef : Refuses H D) (hRounds : InnerRounds D I) (hN : SessionNums D DO) (hε : TableErrNonneg D)
     (hRd : SessionRounds D I DO) (hS : SessionAccepts D) (hR : SessionRuns H D I DO) (hM : RoundsMargin H D I)
     (hpc : PublicCoin H I decC) (hRT : ReadsThrough H D I.V L.msgs L.calls) (hVL : VstarLen D)
-    (hT : ∀ s, PartCallsTrue H D DO L s) (hP : RunPairs H D I decS) (hL : ∀ x, L.rounds x ≤ I.V.k (xI D x) + D.kS x)
+    (hT : ∀ s, PartCallsTrue H D DO L s) (hP : RunPairs H D I decS) (hPub : ReadsPub H D I DO L)
+    (hFin : FinalOpens H D I DO opening) (hL : ∀ x, L.rounds x ≤ I.V.k (xI D x) + D.kS x)
     (hD : VStarPartsStaging D I DO H L opening decS Form.Dense)
     (hH : VStarPartsStaging D I DO H L opening decS Form.Holo)
     (hSp : VStarPartsStaging D I DO H L opening decS Form.Sparse) : KSA H D I DO := by
-  obtain ⟨hV, hN0, hTr, hO, hLC, hA⟩ := codeFacts_of_staging hRef hRT hVL hT hP hL hD hH hSp
+  obtain ⟨hV, hN0, hTr, hO, hLC, hA⟩ := codeFacts_of_staging hRef hRT hVL hT hP hPub hFin hL hD hH hSp
   exact KS_of_flockKS_played H D I DO opening decC hF hKS hRef hRounds hN hε hRd hS hR hV hTr hLC hO hA hM hpc hN0
 
 end RecursionKS

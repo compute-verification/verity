@@ -70,7 +70,7 @@ theorem vstarParts_sparse_deployZkRec {H : Msg → Msg} {IV : Verifier FlockDepl
     (hD : Decomp H (RecDeploy.deployRec IV ivScope b) I.V Form.Sparse chk)
     {pub : Msg → List (Msg × Msg)} (hLD : LogDecompPub H (RecDeploy.deployRec IV ivScope b) I.V Form.Sparse logs pub)
     (hPR : PubReg H (RecDeploy.deployRec IV ivScope b) Form.Sparse pub)
-    (hH : Held (RecDeploy.deployRec IV ivScope b) I L Form.Sparse) :
+    (hH : HeldPub (RecDeploy.deployRec IV ivScope b) I L Form.Sparse) :
     VStarParts H (RecDeploy.deployRec IV ivScope b) I (RecDeploy.deployZkRec Flock.Readable.relation) L opening
       Form.Sparse :=
   vstarParts_sparse rfl hC hL hO hRC hS hD hLD hPR hH

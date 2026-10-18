@@ -139,13 +139,15 @@ theorem callsLogCollR {W Col T : Type} (H : Msg → Msg) (I : Claims.Recursion.I
   rw [hrun]
   exact (hL x _ _ ws hl hc ho (hT x _ _ ws hl hc ho)).imp_left fun h e he => Or.inl (h e he)
 
-/-- **`VStar.CallsOpenPlayed` at `deployRec`** from the readers' facts: the inner view is the inner verifier's run of
-the readers' messages, which plays at most the inner rounds (`run_length_le`). -/
+/-- **`VStar.CallsOpenPlayed` at `deployRec`** from the readers' facts, with no fixed or public round: the inner view
+is the inner verifier's run of the readers' messages, which plays at most the inner rounds (`run_length_le`). -/
 theorem callsOpenPlayedR {W Col T : Type} (H : Msg → Msg) (I : Claims.Recursion.Inner Coin W) (ivScope : Msg → Bool)
     (b : Brings) (DO : Claims.Flock.Deploy Coin Col T) (opening : Claims.Recursion.Opening)
     (hT : ReadersTrue H I.V b DO) (hO : ReadersOpenPlayedR H I.V b DO opening) :
-    Claims.Recursion.VStar.CallsOpenPlayed H (deployRec I.V ivScope b) I DO opening := by
+    Claims.Recursion.VStar.CallsOpenPlayed H (deployRec I.V ivScope b) I DO opening (fun _ _ => none)
+      (fun _ _ => false) := by
   intro decO x Ω P ω r c ws hg j hj
+  refine ⟨fun m hm => by simp at hm, fun hp => by simp at hp, fun _ _ => ?_⟩
   have ho := Claims.Recursion.eoGives_outerHolds hg
   rw [runVstar_staged H I ivScope b P ω r hg.1] at ho ⊢
   have hl := runAs_length H I.V b x P ω r hg.1
@@ -255,7 +257,8 @@ theorem ksFlock_deployed_reg (rel relO : Flock.Readable.Parsed → Flock.Readabl
 /-- **The recursion's KS at `deployRec` from V\*'s parts at a layout**: `ksA_deployed_reg`'s chain with every code fact
 about the readers and V* from V*'s parts (`VStar.codeFacts_of_parts`), where `deployRec` brings the layout's readers
 (`readsThrough_deployRec`), its V* statements number `nS` (`vstarLen_deployRec`), every part's SHA-512 gadgets compute
-SHA-512 (`PartCallsTrue`), and V*'s parts meet `VStarParts` at the dense, holo and sparse shapes. -/
+SHA-512 (`PartCallsTrue`), the readers read the layout's public rounds off the run (`ReadsPub`), the last inner round
+opens (`FinalOpens`), and V*'s parts meet `VStarParts` at the dense, holo and sparse shapes. -/
 theorem ksA_deployed_parts (rel relO : Flock.Readable.Parsed → Flock.Readable.Relation) (ivScope : Msg → Bool)
     (b : Brings) (L : Claims.Recursion.VStar.Layout) (hb : b.rd = readersOf L) (opening : Claims.Recursion.Opening)
     (hF : Claims.Flock.KS FlockDeploy.sha512 (deployZkRec relO))
@@ -267,6 +270,10 @@ theorem ksA_deployed_parts (rel relO : Flock.Readable.Parsed → Flock.Readable.
     (hdec : Claims.Recursion.decOK (FlockDeploy.deployPlain rel) decI)
     (hT : ∀ s, Claims.Recursion.VStar.PartCallsTrue FlockDeploy.sha512 (deployRec (FlockDeploy.V false) ivScope b)
       (deployZkRec relO) L s)
+    (hPub : Claims.Recursion.VStar.ReadsPub FlockDeploy.sha512 (deployRec (FlockDeploy.V false) ivScope b)
+      (Claims.Recursion.Inner.ofFlock (FlockDeploy.deployPlain rel) decI) (deployZkRec relO) L)
+    (hFin : Claims.Recursion.VStar.FinalOpens FlockDeploy.sha512 (deployRec (FlockDeploy.V false) ivScope b)
+      (Claims.Recursion.Inner.ofFlock (FlockDeploy.deployPlain rel) decI) (deployZkRec relO) opening)
     (hD : Claims.Recursion.VStar.VStarParts FlockDeploy.sha512 (deployRec (FlockDeploy.V false) ivScope b)
       (Claims.Recursion.Inner.ofFlock (FlockDeploy.deployPlain rel) decI) (deployZkRec relO) L opening
       Claims.Recursion.Form.Dense)
@@ -281,7 +288,7 @@ theorem ksA_deployed_parts (rel relO : Flock.Readable.Parsed → Flock.Readable.
   let I := Claims.Recursion.Inner.ofFlock (FlockDeploy.deployPlain rel) decI
   have hR := readsThrough_deployRec FlockDeploy.sha512 I.V ivScope b L hb
   have hcf := Claims.Recursion.VStar.codeFacts_of_parts (refuses I.V ivScope b FlockDeploy.sha512) hR
-    (vstarLen_deployRec I.V ivScope b) hT hD hH hS
+    (vstarLen_deployRec I.V ivScope b) hT hPub hFin hD hH hS
   Claims.Recursion.VStar.KS_of_flockKS_played FlockDeploy.sha512 (deployRec I.V ivScope b) I (deployZkRec relO)
     opening FlockDeploy.decCoin hF (FlockDeploy.KS.plain_KSAbort rel hext htab decI hdec)
     (refuses I.V ivScope b FlockDeploy.sha512) (innerRounds I ivScope b) (sessionNums I.V ivScope b relO)
