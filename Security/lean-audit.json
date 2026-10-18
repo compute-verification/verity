@@ -5316,6 +5316,14 @@
    "assumptions": [],
    "type_hash": "df345e2612752aa9ec8b5e914373440a3144dee1268a1312a57876723def0d9a"
   },
+  "Pouw.SecurityProofs.Receipt.DuoPairAtStateNotInjective": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Pouw.SecurityProofs.Receipt.DuoPairAtStateNotInjective : Pouw.Guarantees.Receipt.DuoPairAtStateNotInjective"
+   ],
+   "assumptions": [],
+   "type_hash": "574b570981922872c2779a182e07ef3ece74b49100d22f41f189290113baeb14"
+  },
   "Pouw.SecurityProofs.Receipt.DuoPairNoKernel": {
    "owner": "@compute-accounting",
    "signature": ["Pouw.SecurityProofs.Receipt.DuoPairNoKernel : Pouw.Guarantees.Receipt.DuoPairNoKernel"],
@@ -5333,6 +5341,14 @@
    "signature": ["Pouw.SecurityProofs.Receipt.DuoReceiptNotInjective : Pouw.Guarantees.Receipt.DuoReceiptNotInjective"],
    "assumptions": [],
    "type_hash": "0eef8a8219c603404d51a23bf68d8b863d5db41699d9dd93467b160bd5b683bd"
+  },
+  "Pouw.SecurityProofs.Receipt.DuoRunAtStateNotInjective": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Pouw.SecurityProofs.Receipt.DuoRunAtStateNotInjective : Pouw.Guarantees.Receipt.DuoRunAtStateNotInjective"
+   ],
+   "assumptions": [],
+   "type_hash": "092d7bbd8d65a070e558e0195332421103ab2a0e5c10e9fdd7c319bf0e8df77b"
   },
   "Pouw.SecurityProofs.Receipt.DuoRunWordInjective": {
    "owner": "@compute-accounting",
@@ -5723,6 +5739,10 @@
    },
    "Accounting.SecurityProofs.Gates.S32LowByteRange": {
     "function": "Accounting.Gates.s32LowByte",
+    "outcome": "none"
+   },
+   "Pouw.SecurityProofs.Receipt.DuoRunAtStateNotInjective": {
+    "function": "Pouw.Receipt.duoRun",
     "outcome": "none"
    }
   },
@@ -6274,7 +6294,8 @@
    "Accounting.SecurityProofs.Gates.DeclaredWindow": "frozen (no-function): The soundness of the gate model's interval analysis over every circuit whose declared bounds are earned (Accounting.Gates.Declared: an input at its type, a budgeted gate at an interval its evaluator keeps) and every input that holds words of its inputs' types (Accounting.Gates.Typed), not a property of a Lean function: ProvenWindow with its hypothesis on run inputs' values discharged.",
    "Accounting.SecurityProofs.Gates.Int8LinearWindow": "frozen (no-function): The window of the gate model's circuit Accounting.Gates.int8Linear (vLLM's served int8 linear: its row quantizer into a satfinite s8·s8 IMMA chain) at every K = 32·S ≤ 131,040, not a property of the served code: vLLM's int8 Definitions (int8_exact.py) have no Lean port.",
    "Accounting.SecurityProofs.Gates.LutPvWindow": "frozen (no-function): The window of the gate model's circuit Accounting.Gates.lutPv (vLLM's served LUT attention's P·V: LUT index, table gather and low byte into a satfinite s8·s8 IMMA chain) at every 32·S ≤ 132,096 and table of values in [0, 127], not a property of the served code: vLLM's int8 Definitions (int8_exact.py) have no Lean port.",
-   "Pouw.SecurityProofs.Eps1.ClassPSlots": "frozen (no-function): Theorem C's count of EPS1-QSTAR over issue slots, over every class-P M3 program with its writers' creations a parameter (w), not a Lean function."
+   "Pouw.SecurityProofs.Eps1.ClassPSlots": "frozen (no-function): Theorem C's count of EPS1-QSTAR over issue slots, over every class-P M3 program with its writers' creations a parameter (w), not a Lean function.",
+   "Pouw.SecurityProofs.Receipt.DuoPairAtStateNotInjective": "lemma: the counterexample to two words' binding at a state (two word pairs, one full state at the served chain 0's first two words' keys); a statement about one concrete run, not a property of a Lean function."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
@@ -13305,9 +13326,11 @@
     "Accounting.SecurityProofs.TS.ReceiptLuckCaseA",
     "Pouw.SecurityProofs.Receipt.DuoCheckpointNoKernel",
     "Pouw.SecurityProofs.Receipt.DuoLongRunKernel",
+    "Pouw.SecurityProofs.Receipt.DuoPairAtStateNotInjective",
     "Pouw.SecurityProofs.Receipt.DuoPairNoKernel",
     "Pouw.SecurityProofs.Receipt.DuoQuadNoKernel",
     "Pouw.SecurityProofs.Receipt.DuoReceiptNotInjective",
+    "Pouw.SecurityProofs.Receipt.DuoRunAtStateNotInjective",
     "Pouw.SecurityProofs.Receipt.DuoRunWordInjective",
     "Pouw.SecurityProofs.Receipt.DuoStepBijective",
     "Pouw.SecurityProofs.Receipt.DuoTripleNoKernel",
@@ -20277,13 +20300,15 @@
    "guarantees": ["Pouw.SecurityProofs.PearlC.TileCheck4WordsCore", "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"]
   },
   "Models.Pouw.Guarantees.Receipt": {
-   "digest": "7acfa71ad220cd7f4ba8157239211c794d63c136f3e33872423e1de73bf2bab5",
+   "digest": "e85e2cec63b18cbc37406e937e887825472670c2e0187e55b6d6e4efbf476ab8",
    "definitions": {
     "Pouw.Guarantees.Receipt.DuoCheckpointNoKernel": "b5b6672f049f845a232bc54e68f32566d77d40b9f6e2110d038b9a60578ff390",
     "Pouw.Guarantees.Receipt.DuoLongRunKernel": "3abfe6c2d5b475b734b6ffde0dc0a5c06a23a551f0eba92cf798912930a4c8c1",
+    "Pouw.Guarantees.Receipt.DuoPairAtStateNotInjective": "da36146359025bb0f7a742f556f73a16592e101a9dd699bf46bb02c485b42f06",
     "Pouw.Guarantees.Receipt.DuoPairNoKernel": "1039a7b3dddf68dfa9e864f897ef57aa49bf17ba7765af07a1332595eef247f9",
     "Pouw.Guarantees.Receipt.DuoQuadNoKernel": "298232eb24c7be9f9f65959660fca3aa8d57d2373f9da1fb34470020a5f872f9",
     "Pouw.Guarantees.Receipt.DuoReceiptNotInjective": "23987edb81eb08f5f48eca3c178776648ed20318a52ad7e6204b8f483e47df87",
+    "Pouw.Guarantees.Receipt.DuoRunAtStateNotInjective": "8d0966afc9a0a6d4580b9fc698e26dc35a5dd3e938bd827375422d862af0216e",
     "Pouw.Guarantees.Receipt.DuoRunWordInjective": "c62e3619993c5ddafb8f07e364d2733dc3f57bd60891bb3006e06a6d32a3ae60",
     "Pouw.Guarantees.Receipt.DuoStepBijective": "5fe72ace79835deaebb0f01d6407fb313ad1f57c2a53375318c667f42c27c828",
     "Pouw.Guarantees.Receipt.DuoTripleNoKernel": "e2f1ae4ae008bc102256d3583daf1493f02dd198e27cb904c16905596c78593d",
@@ -20303,9 +20328,11 @@
    "guarantees": [
     "Pouw.SecurityProofs.Receipt.DuoCheckpointNoKernel",
     "Pouw.SecurityProofs.Receipt.DuoLongRunKernel",
+    "Pouw.SecurityProofs.Receipt.DuoPairAtStateNotInjective",
     "Pouw.SecurityProofs.Receipt.DuoPairNoKernel",
     "Pouw.SecurityProofs.Receipt.DuoQuadNoKernel",
     "Pouw.SecurityProofs.Receipt.DuoReceiptNotInjective",
+    "Pouw.SecurityProofs.Receipt.DuoRunAtStateNotInjective",
     "Pouw.SecurityProofs.Receipt.DuoRunWordInjective",
     "Pouw.SecurityProofs.Receipt.DuoStepBijective",
     "Pouw.SecurityProofs.Receipt.DuoTripleNoKernel",
