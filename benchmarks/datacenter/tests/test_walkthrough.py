@@ -5,7 +5,7 @@ in order, and `python tests/test_walkthrough.py` prints what the guide prints.
 """
 from __future__ import annotations
 
-from datacenter import (Assumption, Block, Clock, Credit, Datacenter, Deviation, Device, Fleet, Input, Interval, Link,
+from datacenter import (Assumption, Block, Carried, Clock, Credit, Datacenter, Deviation, Device, Fleet, Input, Interval, Link,
                         Offramp, Refused, Wipe, account, audit, commit, crossings, occupancy, place, run, schedulable,
                         trace)
 
@@ -89,15 +89,19 @@ def section_6(p):
 def section_8(p):
     t = run(p, INPUTS, window=4, wipes=[Wipe("b.gpu", Interval(0, 2))])
     for r in t.records:
-        print(r.link, r.window, r.counts)
+        if any(r.counts):
+            print(r.link, r.window, r.counts)
     return t
 
 
 # §9 The audit: the logical layer
 def section_9(t, profile, p):
     claims = audit(t, profile, syncs=128)
+    carried = [x for x in claims if isinstance(x, Carried)]
+    print(len(carried), "link-windows carried only committed crossings, at", carried[0].bits, "bits of timing advice each")
     for x in claims:
-        print(x)
+        if not isinstance(x, Carried):
+            print(x)
     cheat = run(p, INPUTS, window=4, deviation=Deviation(extra={(("a.gpu", "a.cert"), 2): 1}))
     print([x for x in audit(cheat, profile, syncs=128) if isinstance(x, Refused)])
     return claims
