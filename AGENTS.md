@@ -23,7 +23,8 @@ Top-level directories (a grouping, not an import name, except `verity/`):
       (`verity/core/protocols/network/nci/`).
     - `claims`: the ids of security claims.
     - The Lean ports in `primitives`, `devices`, `service` and `protocols`. A port is held to the Python it replaces by
-      `difftest` (`verity_difftest`, with its Lake package `verity_difftest`).
+      `difftest` (`verity_difftest`, with its Lake package `verity_difftest`), except the remote audit's, which is the
+      definition its Python is held to (Daniel, 18 Oct: Lean becomes the definition, remote audit first).
     - `service/flock/`: C-Flock's executable verifier of record (no dependencies).
   - `verity/ml/` (`verity.ml`): Python and CUDA. These units are on the soundness path, because core's verifiers read
     them: `ml.circuits`, `ml.circuits.ops`, `ml.circuits.silicon`, `ml.circuits.targets`, `ml.kernels`,
