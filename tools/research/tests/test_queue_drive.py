@@ -935,3 +935,17 @@ def test_a_failure_ejects_no_pr_that_a_running_train_below_it_still_checks(world
     h.tick()
     (kept,) = h.d.q.load_state()["drive"]["launched"][low]["ids"]
     assert [m.pr for m in h.q.chain()] == [1] and h.q.chain()[0].commit == low and kept not in h.cancelled
+
+
+def test_pre_warms_run_one_at_a_time_and_count_against_the_running_checks(world, monkeypatch):
+    """18 Oct 00:43Z: with circuit-check back in the gate, drive launched four pre-warms in one tick (16 runs) beside four train
+    checks, against six check slots, and no new train could start."""
+    h = Harness(world, monkeypatch)
+    h.d.train_size, h.d.max_running = 6, 4
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.tick()
+    assert len(h.launched) == 1                                           # #1's train
+    for n in (2, 3, 4, 5):
+        world.gh.put(n, world.change({f"verity/ml/circuits/x{n}.py": f"{n}\n"}))
+    h.tick()
+    assert len(h.launched) == 2 and sum("pre-warming #" in x for x in world.logs) == 1, world.logs
