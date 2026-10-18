@@ -8,12 +8,17 @@
 Exit status 1 when a check fails that `circuit_check.known` does not list (failures are named in the summary; ``--strict`` fails
 on the known ones too), and with ``--all`` when a known entry no longer fails; 0 otherwise.  Redundant and dead gates are
 warnings with counts, printed and in the report (``--fail-on-warnings`` makes them fail too).
+
+Outside a check slot, a machine that leaves circuit-check less than `floor_gb` (`LOCAL_FLOOR_GB`, or the heaviest `HEAVY` peak
+among the targets) is refused before anything is built, exit 2, with the `research run --on` line that runs the same arguments
+on a node; ``--local-anyway`` runs it here regardless.
 """
 from __future__ import annotations
 
 import argparse
 import json
 import os
+import shlex
 import subprocess
 import sys
 import time
@@ -473,6 +478,38 @@ def auto_jobs(root: Path = Path("/")) -> int:
     return max(1, min(len(os.sched_getaffinity(0)), gb // GB_PER_JOB))
 
 
+#: what a run needs `memory_gb` to leave it outside a check slot, in GiB, when no target of it is in `HEAVY`: the parent and the
+#: zygote each hold a copy of the task list, so no target is light on a small VM.  `circuit-check F32Add_v1` alone grew past
+#: 11 GiB in 13 minutes on a 16 GB agent VM and was killed before it finished, and circuit-check processes peaked at 24 GB there
+#: (18 Oct, memory accounting's thread in #agent-coordination)
+LOCAL_FLOOR_GB = 32
+#: where the refusal sends a run that doesn't fit, as a plain `research run` (not in a check slot)
+NODE = "vy-nebius-1"
+
+
+def floor_gb(targets: list[str], everything: bool) -> float:
+    """The memory a run of ``targets`` (every registered one with ``everything``) needs, in GiB: `LOCAL_FLOOR_GB`, or the heaviest
+    `HEAVY` peak among them when that is larger."""
+    return max([LOCAL_FLOOR_GB, *(gb for t, gb in heavy().items() if everything or t in targets)])
+
+
+def refusal(argv: list[str], targets: list[str], everything: bool, root: Path = Path("/")) -> str | None:
+    """Why this machine refuses the run, with the line that runs the same ``argv`` on `NODE`; None in a check slot (`slot_gb`:
+    the slot's mem= is the budget) or when `memory_gb` leaves at least `floor_gb`."""
+    if slot_gb() is not None:
+        return None
+    need, have = floor_gb(targets, everything), memory_gb(root)
+    if have >= need:
+        return None
+    line = shlex.join(["uv", "run", "research", "run", "--on", NODE, "--project", "verity", "--source", ".", "--cwd", "source",
+                       "--", "uv", "run", "circuit-check", *argv])
+    out = ("\n  (write the report under $OUT, which the run keeps: `--out \"$OUT/report.json\"` inside `bash -c '…'`)"
+           if "--out" in argv or any(x.startswith("--out=") for x in argv) else "")
+    return (f"circuit-check: refused here: this machine leaves {have} GiB (`memory_gb`), under the {need:g} GiB these targets need "
+            f"outside a check slot (`floor_gb`). Run it on a node, from the repository's top:\n  {line}{out}\n"
+            f"(`--local-anyway` runs it here regardless)")
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="circuit-check", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("targets", nargs="*", help="Definition ids, template or subcircuit ids, request Program paths")
@@ -496,7 +533,16 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--cache", type=Path, default=None, metavar="DIR",
                     help="reuse a report whose every input is unchanged (circuit_check.cache), else run and record one")
     ap.add_argument("-q", "--quiet", action="store_true")
+    ap.add_argument("--local-anyway", action="store_true", help=f"run here even when this machine, outside a check slot, leaves "
+                    f"less than the floor (`floor_gb`: {LOCAL_FLOOR_GB} GiB, or the heaviest HEAVY peak among the targets), "
+                    f"which is otherwise refused with the `research run --on {NODE}` line")
+    argv = sys.argv[1:] if argv is None else list(argv)
     a = ap.parse_args(argv)
+    if not a.targets and not a.all:
+        ap.error("give a target or --all")
+    if not a.local_anyway and (why := refusal(argv, a.targets, a.all)):
+        print(why, file=sys.stderr)
+        return 2
     if a.cache and not a.update_pins:
         # the registries build their C++ twins on first use (g++, untraceable): once, in a process of its own, before tracing
         prebuild = ("from circuit_check import targets; targets.load_registries()\n"
@@ -504,8 +550,6 @@ def main(argv: list[str] | None = None) -> int:
                     "if twins:\n    twins.preload()        # the three C++ models, which checks otherwise compile on first use\n")
         subprocess.run([sys.executable, "-c", prebuild], cwd=REPO, capture_output=True)
         CC.trace(REPO)
-    if not a.targets and not a.all:
-        ap.error("give a target or --all")
     jobs = a.jobs or auto_jobs()
     opts = _options(a)
     rep = run(a.targets, opts, everything=a.all, as_call=True if a.as_call else None,

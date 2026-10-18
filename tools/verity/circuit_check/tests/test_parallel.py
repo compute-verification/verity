@@ -1,5 +1,5 @@
-"""`cli.parallel`, the per-target processes behind `circuit-check --jobs`, on its own: `test_circuit_check` builds every target at
-collection, which this needs none of."""
+"""`cli.parallel`, the per-target processes behind `circuit-check --jobs`, and the memory they budget, on their own:
+`test_circuit_check` builds every target at collection, which this needs none of."""
 from __future__ import annotations
 
 import os
@@ -116,3 +116,44 @@ def test_without_mem_gb_a_run_in_a_check_slot_keeps_to_the_slot(monkeypatch):
     assert cli.auto_jobs() == min(2, len(os.sched_getaffinity(0)))
     monkeypatch.delenv(cli.SLOT_MEM_ENV)
     assert cli.budget_gb(None) == 1500
+
+
+def _no_check(monkeypatch) -> list:
+    """`run` replaced: the targets each `main` would check, and nothing built."""
+    ran: list = []
+    monkeypatch.setattr(cli, "run", lambda specs, opts, **kw: ran.append(specs) or
+                        {"targets": [], "summary": {"new_failures": [], "known_failures": [], "warnings": {}}})
+    return ran
+
+
+def test_outside_a_check_slot_a_machine_under_the_floor_is_refused_with_the_node_line(monkeypatch, capsys):
+    """A 16 GB agent VM (14 GiB left), where a lone `circuit-check F32Add_v1` outgrew 11 GiB and circuit-check processes reached
+    24 GB, is refused before anything is built, with the `research run` line for the same arguments."""
+    monkeypatch.delenv(cli.SLOT_MEM_ENV, raising=False)
+    monkeypatch.setattr(cli, "memory_gb", lambda root=None: 14)
+    ran = _no_check(monkeypatch)
+    assert cli.main(["F32Add_v1", "-j", "2", "--out", "r.json"]) == 2 and ran == []
+    err = capsys.readouterr().err
+    assert ("\n  uv run research run --on vy-nebius-1 --project verity --source . --cwd source -- uv run circuit-check F32Add_v1 "
+            "-j 2 --out r.json\n") in err
+    assert "leaves 14 GiB" in err and f"under the {cli.LOCAL_FLOOR_GB} GiB" in err and '--out "$OUT/report.json"' in err
+    monkeypatch.setattr(cli, "memory_gb", lambda root=None: 100)        # a HEAVY target's floor is its peak
+    assert cli.main(["LmsMessage_v1{N=8,W=1}"]) == 2 and ran == []
+    err = capsys.readouterr().err
+    assert "under the 137.81 GiB" in err and "-- uv run circuit-check 'LmsMessage_v1{N=8,W=1}'\n" in err and "$OUT" not in err
+    assert cli.main(["--all"]) == 2 and "under the 151.02 GiB" in capsys.readouterr().err
+
+
+def test_local_anyway_a_check_slot_or_the_floor_free_runs_it(monkeypatch, capsys):
+    """`--local-anyway` overrides the floor; in a check slot its mem= is the budget (CIR-21) and no floor applies; a machine with
+    the floor free runs it."""
+    monkeypatch.delenv(cli.SLOT_MEM_ENV, raising=False)
+    monkeypatch.setattr(cli, "memory_gb", lambda root=None: 14)
+    ran = _no_check(monkeypatch)
+    assert cli.main(["F32Add_v1", "--local-anyway"]) == 0 and ran == [["F32Add_v1"]]
+    monkeypatch.setenv(cli.SLOT_MEM_ENV, "16")
+    assert cli.main(["F32Add_v1"]) == 0 and ran[-1] == ["F32Add_v1"]
+    monkeypatch.delenv(cli.SLOT_MEM_ENV)
+    monkeypatch.setattr(cli, "memory_gb", lambda root=None: 200)
+    assert cli.main(["LmsMessage_v1{N=8,W=1}"]) == 0 and ran[-1] == ["LmsMessage_v1{N=8,W=1}"]
+    assert "refused" not in capsys.readouterr().err
