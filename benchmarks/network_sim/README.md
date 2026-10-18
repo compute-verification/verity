@@ -17,9 +17,12 @@ outside every block.
   `python -m workload.lab_run run --out DIR`, from this directory in a Python with torch, serves verity_vllm's serving
   Program on the lab, each block in its namespace behind its certifier's proxy and the client on the outside host, then
   checks the certifiers' audit, N3 and the answers.
+- `run.py`: the whole night on the lab host, `verity bench network_sim --out DIR` (below), checked against its expected
+  verdicts.
 - `tests/`: the exports' tests, the declarations' values pinned against memory accounting's constants
-  (`verity.core.protocols.remote_bandwidth.timing`) and the census, and the records adapter's tests on an injected clock
-  (`uv run tools/verity/check/suites.py verity-network-sim`). The mock datacenter is a script, not a test: it runs in real time.
+  (`verity.core.protocols.remote_bandwidth.timing`) and the census, the records adapter's tests on an injected clock, and
+  `run.py`'s summary and expected verdicts (`uv run tools/verity/check/suites.py verity-network-sim`). The mock
+  datacenter is a script, not a test: it runs in real time.
 
 ## The mock datacenter
 
@@ -170,3 +173,36 @@ Run `r20261018-084303-dae6`, on vy-nebius-cpu-2 with the lab up in its default s
 The latest proxy tick was 4.1 ms late against the 25 ms slack. Each first event left its block at most 186 ms after its
 request, against δ's 1.2 s, and each bucket reached the client a median 5.4 ms after its tick from the blocks on
 `na-leaf0` and 9.8 ms from those behind the spine.
+
+## The whole night
+
+`verity bench network_sim --out DIR` runs `run.py`, the night on the lab host in one process tree. `verity` isn't on
+vy-nebius-cpu-2's path, so there it is `python3 benchmarks/network_sim/run.py --out DIR`. It runs four things in turn:
+- the accounting layer's demo (`python -m datacenter.demo`, `DIR/demo.txt`);
+- the mock datacenter in five blocks, which take the five strategies, once plain and once with the salt;
+- with the lab back in its default shape, lab_run's honest, `b1:flip-bit` and `b2:late` runs;
+- the summary.
+
+lab_run runs in a Python with torch: the one `--python` names, else `run.py`'s own if it has torch, else one built
+with `uv` in a scratch directory. `run.py` refuses to start while a process runs in a lab namespace. However it ends,
+it leaves the lab up in its default shape.
+
+`DIR/summary.txt` has a row per block of each run with:
+- the certifier's verdicts, and the salt check's;
+- the record check's verdicts, or N3's;
+- the account's covert budget;
+- the latest proxy tick against the slack.
+
+The answers and the night's worst tick follow the rows. `DIR/summary.json` has the same. The exit status is 1 if a
+verdict or an answer isn't the expected one (`run.expected_block`, `run.WORKLOAD`), a step exited nonzero, or a tick ran
+past its slack.
+
+~~~sh
+research run --on vy-nebius-cpu-2 --project verity --source . --cwd source -- \
+  bash -c 'python3 -B benchmarks/network_sim/run.py --out "$OUT"'
+~~~
+
+Run `r20261018-102319-bb80` exited 0. It took 5.5 minutes on vy-nebius-cpu-2, at a load of about 25, and gave every
+expected verdict, the tables above. With the salt, b4's proxy revealed the salts of windows 0 and 2 only. Its record
+check under the plan was unchanged, and the certifier's salt check, like its audit, found nothing for window 1. The
+latest proxy tick was 4.3 ms late against the 25 ms slack.
