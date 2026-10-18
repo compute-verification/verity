@@ -26,8 +26,8 @@ from typing import Literal
 from .binding import Profile, traffic
 from .logical import commit, digest as content_digest
 from .memory import Challenge, Reads, Wipe
-from .observe import Trace, digest
-from .physical import Port
+from .observe import Record, Trace, digest
+from .physical import Grid, Port
 from .time import Interval
 
 
@@ -100,6 +100,24 @@ class Refused:
 Claim = Computed | Carried | Entered | Scheduled | Held | Read | Refused
 
 
+def check_records(records: list[Record], declared: dict[tuple[Port, int], Record], grid: Grid) -> list[Carried | Refused]:
+    """The certifiers' records against the ones an honest run publishes (`declared`, by port and window): each declared
+    port-window needs a record, with the declared counts and content digest, and is then carried with log2 of the sync
+    set's size bits of timing advice. Records of other windows are other epochs' to check. The digest is whatever the
+    certifier signs (here `observe.digest` of the committed crossings; in the mock datacenter, the real certifier's)."""
+    per = grid.bucket * grid.window
+    have = {(r.port, r.window): r for r in records}
+    out: list[Carried | Refused] = []
+    for (port, w), d in declared.items():
+        on = On("port", repr(port), Interval(w * per, (w + 1) * per))
+        r = have.get((port, w))
+        problems = (["no record: the certifier was down or its record was withheld"] if r is None else
+                    ["occupancy differs from the declared profile"] * (r.counts != d.counts)
+                    + ["a frame is not a committed crossing"] * (r.digest != d.digest))
+        out += [Refused(on, why) for why in problems] or [Carried(port, math.log2(grid.syncs), on.during)]
+    return out
+
+
 def audit(trace: Trace, profile: Profile) -> list[Claim]:
     """The claims `trace` supports against the public `profile`."""
     p, out = trace.placement, []
@@ -118,29 +136,14 @@ def audit(trace: Trace, profile: Profile) -> list[Claim]:
     if plan.profiles > 1:
         out.append(Scheduled(math.log2(plan.profiles)))
 
-    per = g.bucket * g.window
-    expected: dict[tuple[Port, int], list[tuple[int, int]]] = {}
+    content: dict[tuple[Port, int], list[tuple[int, int]]] = {}
     for port, row in traffic(p).items():
         for b, vs in row.items():
-            expected.setdefault((port, b // g.window), []).extend((v.id, reference[v.id]) for v in vs)
-    have = {(r.port, r.window) for r in trace.records}
-    for port in profile.datacenter.ports:
-        for w in profile.windows:
-            if (port, w) not in have:
-                out.append(Refused(On("port", repr(port), Interval(w * per, (w + 1) * per)),
-                                   "no record: the certifier was down or its record was withheld"))
-    for r in trace.records:
-        during = Interval(r.window * per, (r.window + 1) * per)
-        declared = tuple(profile.occupancy.get(r.port, {}).get(r.window * g.window + t, 0) for t in range(g.window))
-        problems = []
-        if r.counts != declared:
-            problems.append("occupancy differs from the declared profile")
-        if r.digest != digest(expected.get((r.port, r.window), [])):
-            problems.append("a frame is not a committed crossing")
-        if problems:
-            out += [Refused(On("port", repr(r.port), during), why) for why in problems]
-        elif r.window in profile.windows:
-            out.append(Carried(r.port, math.log2(g.syncs), during))
+            content.setdefault((port, b // g.window), []).extend((v.id, reference[v.id]) for v in vs)
+    declared = {(port, w): Record(port, w, tuple(profile.occupancy.get(port, {}).get(w * g.window + t, 0)
+                                                 for t in range(g.window)), digest(content.get((port, w), [])))
+                for port in profile.datacenter.ports for w in profile.windows}
+    out += check_records(trace.records, declared, g)
 
     for a in trace.answers:
         q = a.request

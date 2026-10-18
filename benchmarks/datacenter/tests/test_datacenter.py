@@ -7,8 +7,8 @@ from dataclasses import replace
 import pytest
 
 from datacenter import (FLEET_CLOSED, Assumption, Block, Carried, Computed, Credit, Datacenter, Deviation, Device,
-                        Entered, Fleet, Grid, Held, Input, Interval, Ledger, Link, On, Plan, Port, Refused, Wipe,
-                        account, audit, crossings, digest, double_credit, place, run, trace, traffic)
+                        Entered, Fleet, Grid, Held, Input, Interval, Ledger, Link, On, Plan, Port, Record, Refused, Wipe,
+                        account, audit, check_records, crossings, digest, double_credit, place, run, trace, traffic)
 from datacenter.binding import hops
 from datacenter.observe import digest as frames_digest
 
@@ -140,6 +140,17 @@ def test_a_frame_that_is_not_a_committed_crossing_is_refused_even_at_the_declare
     t.records = [replace(r, digest=forged) if (r.port, r.window) == (port, 1) else r for r in t.records]
     assert refusals(audit(t, p.public(plan))) == [Refused(On("port", "a.cert:out", Interval(4, 8)),
                                                           "a frame is not a committed crossing")]
+
+
+def test_records_are_checked_against_the_declared_ones_whatever_the_certifier_signs():
+    """The mock datacenter's records carry the real certifier's digest, not `observe.digest`: `check_records` compares
+    whatever the certifier signs with what an honest run would have it sign."""
+    grid, port = datacenter().grid, Port("a.cert", "egress")
+    declared = {(port, 0): Record(port, 0, (1, 0, 0, 0), b"one frame"), (port, 1): Record(port, 1, (0, 0, 0, 0), b"none")}
+    assert [type(x) for x in check_records(list(declared.values()), declared, grid)] == [Carried, Carried]
+    late = [Record(port, 0, (0, 1, 0, 0), b"one frame"), Record(port, 5, (0, 0, 0, 0), b"another epoch's")]
+    assert [x.why for x in check_records(late, declared, grid)] == [
+        "occupancy differs from the declared profile", "no record: the certifier was down or its record was withheld"]
 
 
 def test_a_refused_window_is_charged_at_its_links_full_capacity(setup):
