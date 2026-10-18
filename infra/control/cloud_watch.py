@@ -12,7 +12,7 @@ raised) and posts once in #agent-alerts naming @infra; it clears once it has bee
 clear is a reply in the open post's thread. A post Slack refuses is tried again next pass. At `digest_hour_utc` each day the
 digest posts every check's lines: loop liveness, R2's size by top-level prefix, Neon, spend month to date and projected, the
 GitHub rate limit and the public endpoints. A check whose credential isn't in the environment is skipped, and the digest says
-once per check which key would close the gap (`unmonitored: needs KEY`). State: `state` in the config.
+once per check which key would close the gap (under *Unmonitored*: `needs KEY: what it would watch`). State: `state` in the config.
 
 The checks (cloud_watch.toml holds every threshold, price and path):
 
@@ -482,7 +482,7 @@ def spend_nebius(ctx: Ctx, rep: Report, lines: dict) -> None:
     if vms is None:
         return
     running = [v for v in vms if v.get("state") == "RUNNING"]
-    rate_of, cfg = rates(ctx), ctx.cfg["spend"]
+    rate_of = rates(ctx)
     burn: dict[str, float] = {}
     unknown = []
     for v in running:
@@ -605,7 +605,7 @@ def evaluate(ctx: Ctx) -> tuple[dict[str, Report], dict[str, Finding]]:
         try:
             check(ctx, rep)
             fails.pop(name, None)
-        except (Unreadable, OSError, ValueError, KeyError, ET.ParseError, subprocess.SubprocessError) as e:
+        except Exception as e:  # noqa: BLE001  (any check's failure is that check unreadable, never a silent watch)
             fails[name] = fails.get(name, 0) + 1
             rep.lines.append(f"{name}: unreadable ({e if isinstance(e, Unreadable) else type(e).__name__})")
             if fails[name] >= ctx.cfg["unreadable_passes"]:
@@ -647,7 +647,8 @@ def digest(ctx: Ctx, reports: dict[str, Report]) -> str:
     gaps = sorted({g for r in reports.values() for g in r.gaps})
     return "\n".join([head, *(f"• {ln}" for ln in body),
                       *([f"*Open* ({len(open_)}):"] + [f"• {t}" for t in open_] if open_ else ["Nothing open."]),
-                      *(f"• unmonitored: {g}" for g in gaps)])
+                      *([f"*Unmonitored* ({len(gaps)}), each until its key is in the pod's environment:"] if gaps else []),
+                      *(f"• {g}" for g in gaps)])
 
 
 def post(cfg: dict, env: dict, text: str, thread: str | None, dry: bool, out=None) -> str | None:
