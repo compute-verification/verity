@@ -6,7 +6,7 @@ import Models.Accounting.Assumptions.TS
 
 The premises the composed theorem (`Models.Accounting.Guarantees.Compose`,
 note:compute-accounting/20261018T0618Z-draft-theorem-compose-r2) adds to the tensor–scalar model's, the data sheet's and
-sampled (I8)'s (`UnitFixed`), each a `Prop` taken as a hypothesis, never an `axiom`. None is about a hash: under live
+sampled (I8)'s, each a `Prop` taken as a hypothesis, never an `axiom`. None is about a hash: under live
 coins the statement has no random-oracle premise, binding is charged to `δ_bind` per committed position (RT-I8's B1,
 decision 114), and its Fiat–Shamir form reads proofs' `FiatShamirFloor`, stated in the random-oracle model (decision
 112).
@@ -15,8 +15,10 @@ The logical layer's (decision 113; `CircuitWork`):
 
 * `HMu`: (H-μ), per template, the one computational claim (decision 110). It replaces round 1's `TemplateNoise`, which
   restricted the cheater's play and was false at the deployed degree-2 template (RT-COMPOSE B2).
-* `UnitFolded`: Lemma E1(c) for the fold, per tile, `UnitFixed`'s companion (B1: a whole tile's skip costs its fold
-  too). Like `UnitFixed` it reads neither the draw nor the proofs.
+* `UnitFixedCone`: sampled (I8)'s `UnitFixed` at decision 119's edges, which #2466 is restating; until it lands this
+  statement states it here, and then reads #2466's.
+* `UnitFolded`: Lemma E1(c) for the fold, per tile, `UnitFixedCone`'s companion (B1: a whole tile's skip costs its
+  fold too). Like it, it reads neither the draw nor the proofs.
 
 The physical layer's (`CreditOfWork`):
 
@@ -34,7 +36,9 @@ window's stages, at each tile's stage, whatever the past, a folded tile is right
 `luck` times that of being folded, and a whole one with its `luck0` (`SplitStages.LuckAt`). A tile that carries no
 work is held to `1`, so this asks nothing of a filler or of a kind credited `0` (decision 109: a kind whose noise proves
 no floor, as one-sided noise proves none, is credited `0` and is never lucky against it; decision 117: H1's attention
-matmuls draw fresh coins on both operands and are credited at their operand-independent floor).
+matmuls draw fresh coins on both operands and are credited at their operand-independent floor). It is per tile and
+unchanged by decision 119: the share charges a skipped tile its cone, so a tile computed honestly downstream of a
+skipped one is paid, and this asks nothing of it.
 
 What the template's coins give is proved, and `Scheme.LuckProved` holds the luck to at least it: `¾` for degree-2 cube
 operands within the receipt's binding (`Accounting.Guarantees.TS.LuckCaseACube`, `OperandLuckCube`, #2447's
@@ -58,6 +62,21 @@ def UnitFolded {ι K T L U C B : Type} [Fintype C] {Np M : ℕ} (Sc : Scheme K) 
     Prop :=
   ∀ x, P.accepts x →
     (∑ t, if W.modeAt (tileStage Cd Np) (coinAt x 0).1 t = .whole then 0 else tileWords Sc Cd Np t) ≤ folded x
+
+open Classical in
+/-- `accounting-ts-unit-fixed` at decision 119's edges (Lemma E1(c) per unit, proved on paper; on a card to Daniel).
+**The good tiles' words are fixed**: on every accepted path, the run's owned right fixed words are at least the words
+`wt t` of the good tiles (`ConeGood`: every tile upstream of it along a position committed after the reader's coin,
+itself included, held at its committed values and right at them). An adaptive word lies below a committed value
+wrong for its own derivation, and a value committed before a tile's coin is fixed when its noise is drawn, so no word
+of a good tile is adaptive. It is #2466's `Accounting.Assumptions.TS.UnitFixed` at one round with `Good` drawn at each
+coin boundary, which #2466 is restating (decision 119), and this statement reads that one once it lands: it is no new
+claim. With fewer edges more tiles are good, so it implies `UnitFixed` at every edge (RT-I8 r2's `unitFixed_mono`). It
+reads neither the draw nor the proofs. -/
+def UnitFixedCone {C B : Type} [Fintype C] [Fintype B] {M s Np : ℕ} {Q Pos V : Type} [Nonempty V] {K T L U : Type}
+    (stg : Fin Np → ℕ) (P : Play (Paths C M × B) 1 K T L U) (pf : DrawnLayer C B 1 M s (Fin Np) Q Pos V)
+    (wt : Fin Np → ℝ) : Prop :=
+  ∀ x, P.accepts x → (∑ t, if ConeGood stg pf x t then wt t else 0) ≤ (P.run x).fixed
 
 /-- `accounting-compose-fold-opt` (assumed; FOLD-OPT(fx1)'s mechanical fact, at least 4 issue slots a word folded).
 **FOLD-OPT_μ per word folded**: at every certificate, a run that folds `folded` committed words has its fold priced at

@@ -9,7 +9,7 @@ import Definitions.Pouw.Window
 The vocabulary of `Models.Accounting.Guarantees.Compose`
 (note:compute-accounting/20261018T0618Z-draft-theorem-compose-r2), restated after RT-COMPOSE
 (note:compute-accounting/20261018T0501Z-draft-rt-compose) and RT-I8 (note:compute-accounting/20261018T0728Z-draft-rt-i8)
-under decisions 107, 109–114 and 117. The compile pass `C → C′`
+under decisions 107, 109–114, 117 and 119. The compile pass `C → C′`
 replaces each credited unit of a declared circuit by its kind's template, with its noise drawn after its operands are
 committed, one seed a Definition call site (decisions 101 and 102). The service then draws one uniform subset of the
 window's grid-padded tiles and proves each drawn tile with the generation of its own noise.
@@ -45,11 +45,13 @@ The logical layer:
   guessed fold state is right).
 * `serviceGame`, `drawOf`: the window as one round on coins `Paths C M × (Equiv.Perm (Fin N) × Ξ)`: the call sites'
   coins, then the service's one uniform `K`-subset (`Pouw.Window.subsetDraw`, its `Equiv.Perm`) and the proofs' coins
-  `Ξ` (W4: `DrawnLayer.JointSound` needs them). Its share is `a·(folded work) + b·(whole work)`, and it passes when
-  every drawn tile is right.
-* `StageCuts`, `PaidGood`: the window's proofs (`Accounting.TS.DrawnLayer`, values per committed position) bind each
-  position before the coin after the call site that wrote it (RT-I8's B1, decision 114), and the modes are the run's: a
-  paid tile is good, so the share counts every tile that isn't (`DrawnLayer.Covers`).
+  `Ξ` (W4: `DrawnLayer.JointSound` needs them). Its share is `a·(folded weight) + b·(whole weight)` at the weights it is
+  given, the tiles' cones (`tileCone`) in the theorem, and it passes when every drawn tile is right.
+* `StageCuts`, `FeedsAfter`, `coneWt`, `tileCone`, `TileSound`, `ConeGood`, `PaidSound`: the window's proofs
+  (`Accounting.TS.DrawnLayer`, values per committed position) bind each position before the coin after the call site
+  that wrote it (RT-I8's B1, decision 114); a wrong tile spreads only along positions committed after the reader's
+  coin, so a tile is good when every tile upstream along those edges is sound, and the share charges a skipped tile its
+  cone (decision 119, RT-I8 r2's `covers_of_cone`); the modes are the run's: a paid tile is sound.
 * `SplitRate`: the per-stage condition from which a rate `Λ` bounds the window's saving per unit of detection.
 * `Scope`, `WorkAt`: the logical parameters' ranges, and the logical layer's conclusion on an accepted run: all but a
   share `d` of the committed words fixed right and all but `d₀ ≤ d` folded, with `a·(d − d₀) + b·d₀ < r`.
@@ -300,12 +302,44 @@ def StageCuts {C B Q Pos V : Type} {M s N : ℕ} (stg : Fin N → ℕ) (pf : Dra
     Prop :=
   ∀ ℓ, ((pf.cut ℓ).2 : ℕ) = (pf.src ℓ).elim 0 fun u => M - stg u.2
 
-/-- **The modes are the run's**: a tile paid along the window's coins is good (`DrawnLayer.Good`: it and every tile
-upstream of it held and right at their committed values), so a tile that isn't good is folded or whole, and the
-service's share counts it. -/
-def PaidGood {C B Q Pos V : Type} [Fintype C] [Fintype B] [Nonempty V] {M s N : ℕ} (stg : Fin N → ℕ)
+/-- **Tile `u` feeds tile `v` after `v`'s coin** (decision 119): `v` reads a position `u` writes that is committed after
+the coin `v`'s noise reads, its call site's, coin `M − 1 − stg v` of the window's `M`. Only along these edges can a
+wrong tile leave a later one's words adaptive: a position committed before a tile's coin is fixed when its noise is
+drawn. Under `StageCuts` they are the edges within a call site, decision 107's `K`-chunk running sums. -/
+def FeedsAfter {C B Q Pos V : Type} {M s N : ℕ} (stg : Fin N → ℕ) (pf : DrawnLayer C B 1 M s (Fin N) Q Pos V)
+    (u v : Fin N) : Prop :=
+  ∃ k, pf.src (pf.pos 0 v k) = some (0, u) ∧ M - 1 - stg v < ((pf.cut (pf.pos 0 v k)).2 : ℕ)
+
+open Classical in
+/-- **Tile `u`'s cone weight** along edges `R`: the weight of every tile `u` reaches, itself included. -/
+noncomputable def coneWt {N : ℕ} (R : Fin N → Fin N → Prop) (w : Fin N → ℝ) (u : Fin N) : ℝ :=
+  ∑ v, if Relation.ReflTransGen R u v then w v else 0
+
+/-- **A tile's share weight** (decision 119): its cone's work weight along `FeedsAfter`, what skipping it can leave
+adaptive. It is at most `F` times its own weight when a call site's chains have at most `F` tiles, each of at most its
+weight (`F` the chunks per coordinate: `1` for a whole coordinate, `4` at `K = 8192`). -/
+noncomputable def tileCone {ι K C B Q Pos V : Type} {s Np : ℕ} (Sc : Scheme K) (Cd : Declared ι)
+    (pf : DrawnLayer C B 1 Cd.calls s (Fin Np) Q Pos V) : Fin Np → ℝ :=
+  coneWt (FeedsAfter (tileStage Cd Np) pf) (tileWeight Sc Cd Np)
+
+/-- **Tile `t` is sound on `x`**: its slots are held at their committed values, and it is right at them. -/
+def TileSound {C B Q Pos V : Type} [Fintype C] [Fintype B] [Nonempty V] {M s N : ℕ}
+    (pf : DrawnLayer C B 1 M s (Fin N) Q Pos V) (x : Paths (Paths C M × B) 1) (t : Fin N) : Prop :=
+  (∀ k, pf.Held x (pf.pos 0 t k)) ∧ pf.right x 0 t (pf.view x 0 t)
+
+/-- **Tile `t` is good on `x`** (decision 119's `Good`, drawn at each coin boundary): every tile upstream of it along
+`FeedsAfter`, itself included, is sound. #2466's `DrawnLayer.Good` spreads along every edge until it restates `Good`
+this way. -/
+def ConeGood {C B Q Pos V : Type} [Fintype C] [Fintype B] [Nonempty V] {M s N : ℕ} (stg : Fin N → ℕ)
+    (pf : DrawnLayer C B 1 M s (Fin N) Q Pos V) (x : Paths (Paths C M × B) 1) (t : Fin N) : Prop :=
+  ∀ u, Relation.ReflTransGen (FeedsAfter stg pf) u t → TileSound pf x u
+
+/-- **The modes are the run's**: a tile paid along the window's coins is sound, so a tile that isn't is folded or
+whole, and the service's share charges it its cone, which holds every tile that isn't good (`ConeGood`). It asks
+nothing of a tile upstream: a cheater that skips one tile and computes the rest honestly meets it. -/
+def PaidSound {C B Q Pos V : Type} [Fintype C] [Fintype B] [Nonempty V] {M s N : ℕ} (stg : Fin N → ℕ)
     (W : SplitStages C (Fin N) M) (pf : DrawnLayer C B 1 M s (Fin N) Q Pos V) : Prop :=
-  ∀ x t, W.modeAt stg (coinAt x 0).1 t = .paid → pf.Good x 0 t
+  ∀ x t, W.modeAt stg (coinAt x 0).1 t = .paid → TileSound pf x t
 
 /-- **The per-stage rate condition** for `K` draws at weight bound `ρ` (each tile is at least `ρ` times its work share
 of the `N` tiles), luck `p` folded and `p0` whole, costs `a` and `b` per unit of share and stage shares at most
