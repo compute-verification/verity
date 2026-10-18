@@ -18,16 +18,23 @@ class Clock:
 
 class FakeApi:
     """`older[agent]` lists an agent's runs before its latest, newest first; `GET .../runs` lists the latest, then those.
-    A goal run's id (run-goal-...) is listed but can't be read on its own, as on the API."""
+    A goal run's id (run-goal-...) is listed but can't be read on its own, as on the API. `workers` (Task subagents) aren't
+    listed but are read by id (`GET /v1/agents/{id}`; 404 for any other id); `gets` counts each read."""
 
-    def __init__(self, agents, runs, older=None):
+    def __init__(self, agents, runs, older=None, workers=None):
         self._agents, self._runs, self.older, self.posts = agents, runs, older or {}, []
+        self.workers, self.gets = workers if workers is not None else {}, []
 
     def agents(self):
         return iter(self._agents)
 
     def get(self, path, **params):
         parts = path.split("/")
+        self.gets.append(path)
+        if len(parts) == 4:
+            if parts[-1] not in self.workers:
+                raise W.urllib.error.HTTPError(path, 404, "Not Found", {}, None)
+            return dict(self.workers[parts[-1]])
         if parts[-1] == "runs":
             a = next(a for a in self._agents if a["id"] == parts[-2])
             ids = [a["latestRunId"], *self.older.get(a["id"], [])]
@@ -923,7 +930,7 @@ CO, LANE, OLD, NEW = (f"bc-{c * 8}-{c * 4}-{c * 4}-{c * 4}-{c * 12}" for c in "c
 FINISHED = {"status": "FINISHED", "createdAt": "2026-10-18T19:10:00Z", "updatedAt": "2026-10-18T19:20:00Z"}
 
 
-def coordinators(tmp_path, agents, runs, wake=False, bells=None, older=None):
+def coordinators(tmp_path, agents, runs, wake=False, bells=None, older=None, workers=None, **kw):
     """The registry: CO holds @circuits (its lane LANE posts as it), and @vllm still names OLD, though NEW holds vllm's inbox
     (routes.d), as on 18 Oct. The watch over `agents` (`older` as in FakeApi)."""
     reg, routes = tmp_path / "registry.json", tmp_path / "routes.d"
@@ -937,8 +944,8 @@ def coordinators(tmp_path, agents, runs, wake=False, bells=None, older=None):
     (routes / "kernels.json").write_text(json.dumps({"name": "kernels", "holder": LANE, "closed": None}))
     if bells is not None:
         (tmp_path / "doorbells.json").write_text(json.dumps(bells))
-    api, clock = FakeApi(agents, runs, older), Clock(T0)
-    return api, clock, W.Watch(api, tmp_path / "events.jsonl", clock, registry=reg, routes=routes, wake=wake)
+    api, clock = FakeApi(agents, runs, older, workers), Clock(T0)
+    return api, clock, W.Watch(api, tmp_path / "events.jsonl", clock, registry=reg, routes=routes, wake=wake, **kw)
 
 
 def test_a_handle_is_held_by_its_open_inbox_else_by_the_registry(tmp_path):
@@ -1159,3 +1166,144 @@ def test_a_terminal_run_is_read_once(tmp_path):
     for _ in range(3):
         w.sweep(lambda r: None)
     assert reads == [f"/v1/agents/{CO}/runs/run-f"]
+
+
+W1_, W2_, W3_, W4_, W5_, W6_ = (f"bc-{c * 8}-{c * 4}-{c * 4}-{c * 4}-{c * 12}" for c in "123456")
+
+
+def note(notes, lane, name, origin, age_s=60, lane_field=True):
+    """A note in the notes clone, `age_s` old by its mtime."""
+    p = notes / "lanes" / lane / name
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(f"---\nid: {name[:-3]}\n" + (f"lane: {lane}\n" if lane_field else "") + f"kind: report\norigin: {origin}\n"
+                 f"---\n\n# a note\n\norigin: {W4_} in the body is not front-matter\n")
+    W.os.utime(p, (T0 - age_s, T0 - age_s))
+    return p
+
+
+def worker(status, updated, name="ZKS10"):
+    return {"id": "?", "name": name, "status": status, "createdAt": "2026-10-18T12:00:00Z", "updatedAt": updated}
+
+
+def test_workers_are_found_in_recent_notes_and_workers_d_minus_the_coordinators(tmp_path):
+    """Tonight's proofs workers wrote notes whose origin names them (`ZKS10, bc-...; for LOR1 (bc-...)`); a coordinator's own
+    notes, a note older than 12 h, and an id in a note's body name no worker."""
+    coordinators(tmp_path, [], {})
+    notes = tmp_path / "notes"
+    note(notes, "proofs", "a.md", f"ZKS10, {W1_}, for LOR1 ({W2_}); code cursor/zk-frame-lean-decides-c7a9")
+    note(notes, "hash", "b.md", f"red-team-hash (started by circuits {CO}), {W3_}")
+    note(notes, "circuits", "c.md", f"circuits (@circuits, {CO})")
+    note(notes, "proofs", "d.md", f"proofs worker ({W4_})", age_s=W.WORKER_NOTES_S)
+    note(notes, "zk", "e.md", f"https://cursor.com/agents/{W6_}", lane_field=False)
+    (tmp_path / "workers.d").mkdir()
+    (tmp_path / "workers.d" / "w5.json").write_text(json.dumps({"agent_id": W5_, "lane": "zk-port", "launched_by": NEW}))
+    (tmp_path / "workers.d" / "co.json").write_text(json.dumps({"agent_id": CO, "lane": "circuits", "launched_by": CO}))
+    coords = W.holders(tmp_path / "registry.json", tmp_path / "routes.d")
+    found = W.workers(notes, tmp_path / "workers.d", tmp_path / "registry.json", coords, T0)
+    assert {a: (d["lane"], d["handle"]) for a, d in found.items()} == {
+        W1_: ("proofs", None), W2_: ("proofs", None), W3_: ("hash", "circuits"), W5_: ("zk-port", "vllm"), W6_: ("zk", None)}, \
+        "proofs isn't a handle of this registry; hash's worker goes to the coordinator that started it; W5 to its launcher's; " \
+        "a note with no lane: its directory's"
+    assert found[W1_]["heard"] == T0 - 60
+
+
+def test_a_worker_that_goes_idle_is_recorded_once_per_transition(tmp_path):
+    """20:06-20:47Z, 18 Oct: all 20 of proofs' workers stopped mid-step and nobody noticed until 23:08Z. A worker's updatedAt
+    moves on a status change, so the IDLE read gives when it stopped."""
+    notes = tmp_path / "notes"
+    note(notes, "circuits", "a.md", f"circuits worker W3 ({W1_})")
+    api, clock, w = coordinators(tmp_path, [], {}, workers={W1_: worker("ACTIVE", "2026-10-18T19:31:00Z")}, notes=notes)
+    w.sweep(lambda r: None)
+    assert records(tmp_path) == [] and status(tmp_path)[W1_] == {
+        "agent_id": W1_, "run_id": "", "agent_status": "ACTIVE", "run_status": "unknown", "watch_state": "ok", "since": None,
+        "restart_count": 0}
+    api.workers[W1_] = worker("IDLE", "2026-10-18T20:06:00Z")
+    for _ in range(3):
+        clock.t += 60
+        w.sweep(lambda r: None)
+    (rec,) = records(tmp_path)
+    assert {k: rec[k] for k in ("kind", "agent", "name", "run", "lane", "handle", "at")} == {
+        "kind": "worker_idle", "agent": W1_, "name": "ZKS10", "run": "", "lane": "circuits", "handle": "circuits",
+        "at": "2026-10-18T20:06:00Z"}
+    assert {k: status(tmp_path)[W1_][k] for k in ("agent_status", "watch_state", "since")} == {
+        "agent_status": "IDLE", "watch_state": "worker_idle", "since": "2026-10-18T20:06:00Z"}
+    api.workers[W1_] = worker("ACTIVE", "2026-10-18T20:10:00Z")
+    w.sweep(lambda r: None)
+    assert status(tmp_path)[W1_]["watch_state"] == "ok", "resumed with Task"
+    again = W.Watch(api, tmp_path / "events.jsonl", clock, registry=tmp_path / "registry.json", routes=tmp_path / "routes.d",
+                    notes=notes)
+    api.workers[W1_] = worker("IDLE", "2026-10-18T20:30:00Z")
+    again.sweep(lambda r: None)
+    assert [r["at"] for r in records(tmp_path)] == ["2026-10-18T20:06:00Z", "2026-10-18T20:30:00Z"], \
+        "the ACTIVE read before a restart of the watch counts (state.json)"
+
+
+def test_a_worker_first_seen_idle_is_not_recorded(tmp_path):
+    """Idle before the watch knew it: it may have reported back hours ago."""
+    notes = tmp_path / "notes"
+    note(notes, "circuits", "a.md", f"circuits worker ({W1_})")
+    api, clock, w = coordinators(tmp_path, [], {}, workers={W1_: worker("IDLE", "2026-10-18T19:00:00Z")}, notes=notes)
+    w.sweep(lambda r: None)
+    w.sweep(lambda r: None)
+    assert records(tmp_path) == [] and status(tmp_path)[W1_]["watch_state"] == "ok"
+
+
+def test_a_worker_active_past_the_limit_is_recorded_once(tmp_path):
+    """W3 read ACTIVE at 23:30Z with updatedAt 19:31Z: its updatedAt doesn't move while it works."""
+    notes = tmp_path / "notes"
+    note(notes, "circuits", "a.md", f"circuits worker W3 ({W1_})")
+    since = W.iso(T0 - 6 * 3600 + 120)
+    api, clock, w = coordinators(tmp_path, [], {}, workers={W1_: worker("ACTIVE", since)}, notes=notes)
+    w.sweep(lambda r: None)
+    clock.t += 60
+    w.sweep(lambda r: None)
+    assert records(tmp_path) == []
+    for _ in range(5):
+        clock.t += 60
+        w.sweep(lambda r: None)
+    (rec,) = records(tmp_path)
+    assert (rec["kind"], rec["since"], rec["hours"], rec["handle"]) == ("worker_long", since, 6, "circuits")
+    assert {k: status(tmp_path)[W1_][k] for k in ("watch_state", "since")} == {"watch_state": "worker_long", "since": since}
+    short = W.Watch(api, tmp_path / "other" / "events.jsonl", clock, registry=tmp_path / "registry.json",
+                    routes=tmp_path / "routes.d", notes=notes, worker_long_s=3600)
+    (tmp_path / "other").mkdir()
+    short.sweep(lambda r: None)
+    assert [r["kind"] for r in records(tmp_path / "other")] == ["worker_long"], "--worker-long-h"
+
+
+def test_a_worker_the_api_answers_404_is_not_read_again_and_the_sweep_goes_on(tmp_path):
+    notes = tmp_path / "notes"
+    note(notes, "circuits", "a.md", f"circuits workers ({W1_}, {W2_})")
+    api, clock, w = coordinators(tmp_path, [], {}, workers={W2_: worker("ACTIVE", W.iso(T0))}, notes=notes)
+    for _ in range(3):
+        w.sweep(lambda r: None)
+        clock.t += 60
+    assert api.gets.count(f"/v1/agents/{W1_}") == 1 and api.gets.count(f"/v1/agents/{W2_}") == 3
+    assert set(status(tmp_path)) == {W2_}
+
+
+def test_worker_reads_are_bounded_and_a_long_idle_worker_is_read_only_when_a_note_of_its_changes(tmp_path):
+    notes = tmp_path / "notes"
+    ids = [f"bc-{i:08x}-0000-0000-0000-{i:012x}" for i in range(50)]
+    for i, a in enumerate(ids):
+        note(notes, "circuits", f"{i}.md", f"circuits worker ({a})")
+    long_idle = W.iso(T0 - W.WORKER_IDLE_S)
+    api, clock, w = coordinators(tmp_path, [{"id": ids[0], "status": "IDLE", "latestRunId": "run-f"}], {"run-f": dict(FINISHED)},
+                                 workers={a: worker("IDLE", long_idle) for a in ids}, notes=notes)
+    reads = []
+    for _ in range(4):
+        before = len(api.gets)
+        w.sweep(lambda r: None)
+        reads.append([g for g in api.gets[before:] if g.count("/") == 3])
+        clock.t += 60
+    assert [len(r) for r in reads] == [W.WORKERS_NEW, W.WORKERS_NEW, 9, 0], \
+        "20 first reads a sweep; a listed agent is no worker; one IDLE for 12 h isn't read again"
+    assert all(len(set(r)) == len(r) for r in reads), "at most one read per worker a sweep"
+    p = note(notes, "circuits", "7.md", f"circuits worker ({ids[7]}), back at work", age_s=0)
+    W.os.utime(p, (clock.t, clock.t))
+    w.sweep(lambda r: None)
+    assert [g for g in api.gets if g.count("/") == 3][-1:] == [f"/v1/agents/{ids[7]}"]
+    clock.t += 60
+    before = len(api.gets)
+    w.sweep(lambda r: None)
+    assert api.gets[before:] == [], "read once for the note"

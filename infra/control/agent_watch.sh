@@ -7,6 +7,7 @@
 # (synced every 2 min); their doorbells from the relay's doorbells.json. Each sweep's status.json also goes to Neon's
 # store_private.agent_watch_status as AGENT_WATCH_PG_URL, the store indexer's URL, read from store-index.env with
 # store_index.sh's sed (its URL has `&`); without that file the watch publishes nothing.
+# Workers (Task subagents) come from the same notes clone's recent notes and $DIR/workers.d/*.json.
 # While $DIR/wake exists the watch starts a run on a coordinator ready to wake (--wake); remove the file to go back to recording.
 DIR=/data/agent-watch
 LOG=$DIR/watch.log
@@ -25,7 +26,7 @@ while :; do
      fi
      exec python3.12 /data/infra/agent_watch.py loop --log "$DIR/events.jsonl" \
       --registry /data/infra/fixtures-export-repo/.agents/skills/using-slack/registry.json \
-      --routes /data/steward/research-notes/routes.d $([ -f "$DIR/wake" ] && echo --wake)) >> "$LOG" 2>&1
+      --routes /data/steward/research-notes/routes.d --notes /data/steward/research-notes $([ -f "$DIR/wake" ] && echo --wake)) >> "$LOG" 2>&1
     echo "$(date -u +%FT%TZ) watch exited rc=$?" >> "$LOG"
   elif [ -z "$said" ]; then
     echo "$(date -u +%FT%TZ) no $DIR/cursor.env yet: waiting" >> "$LOG"; said=1
