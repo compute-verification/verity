@@ -3406,3 +3406,12 @@ def test_a_run_on_a_stopped_nebius_vm_starts_it_and_waits_for_its_ssh(monkeypatc
 
     with pytest.raises(remote.Refused, match="ask @infra to start computeinstance-x"):
         remote.wake(m, ["ssh"], nebius=no_creds)
+
+
+def test_a_run_names_the_agent_that_sent_it_a_worker_its_own_conversation():
+    """INF-50: OOM and lost-check alerts name a run's sender from its request; workers never set RESEARCH_AGENT_URL, and a worker
+    that inherits its coordinator's would be reported as the coordinator. Every agent's shell carries its own conversation id."""
+    assert remote.sender({"CURSOR_CONVERSATION_ID": "bc-worker", "RESEARCH_AGENT_URL": "https://cursor.com/agents/bc-coord"}) == \
+        "https://cursor.com/agents/bc-worker"
+    assert remote.sender({"RESEARCH_AGENT_URL": "https://cursor.com/agents/bc-coord"}) == "https://cursor.com/agents/bc-coord"
+    assert remote.sender({}) is None

@@ -313,6 +313,16 @@ def ssh_argv(host: str, port: int, *, user: str = "root", connect_timeout: int =
     return [*base[:-1], "-o", "BatchMode=yes", "-o", f"ConnectTimeout={connect_timeout}", base[-1]]
 
 
+def sender(environ: dict[str, str] | None = None) -> str | None:
+    """Who sends a run, recorded in its request (`submitted_by`), where the node's alerts read it (INF-50): the sending agent's own
+    Cursor conversation (`CURSOR_CONVERSATION_ID`, which every agent's shell carries, a worker its own rather than its
+    coordinator's), else $RESEARCH_AGENT_URL."""
+    env = os.environ if environ is None else environ
+    if cid := env.get("CURSOR_CONVERSATION_ID", "").strip():
+        return f"https://cursor.com/agents/{cid}"
+    return env.get("RESEARCH_AGENT_URL") or None
+
+
 WAKE_WAIT_S, WAKE_POLL_S = 900.0, 15.0
 
 
@@ -1773,7 +1783,7 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
                    "guard": {"idle_min": guard_min} if guard_min else None,
                    "lease_extend_s": lease_extend_s(harness_args),
                    **({"custody": custody_pub} if custody_pub else {}),
-                   **({"submitted_by": by} if (by := os.environ.get("RESEARCH_AGENT_URL")) else {}),
+                   **({"submitted_by": by} if (by := sender()) else {}),
                    **({"preflight_tool": preflight_tool} if preflight_tool else {}),
                    **({"job_user": job_user} if job_user else {}),
                    **({"gpus": gpus} if gpus else {}),
