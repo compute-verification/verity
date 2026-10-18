@@ -93,7 +93,8 @@ DEV void leaf_at(const Geo& g, u64 br, u64 bc) {
 // (tile (t % tiles_m, t / tiles_m)).
 template <int HW>
 __global__ void __launch_bounds__(MMA_THREADS + 32 * HW, 1) gemm_kernel(Geo g) {
-  extern __shared__ __align__(128) uint8_t smem[];
+  extern __shared__ uint4 smem[];   // commit_gpu.cuh's salt_kernel declares the same array
+  uint8_t* const sm8 = reinterpret_cast<uint8_t*>(smem);
   __shared__ volatile int done;
   const int tid = threadIdx.x, lane = tid & 31, warp = tid >> 5;
   const int my_tiles = blockIdx.x < g.tiles ? (g.tiles - blockIdx.x + gridDim.x - 1) / gridDim.x : 0;
@@ -116,7 +117,7 @@ __global__ void __launch_bounds__(MMA_THREADS + 32 * HW, 1) gemm_kernel(Geo g) {
   for (int k = 0; k < my_tiles; ++k) {
     const int t = blockIdx.x + k * gridDim.x, m0 = (t % g.tiles_m) * BM, n0 = (t / g.tiles_m) * BN;
     auto load = [&](int stage, int kt) {
-      uint8_t* base = smem + stage * STAGE_BYTES;
+      uint8_t* base = sm8 + stage * STAGE_BYTES;
 #pragma unroll
       for (int i = 0; i < 2; ++i) {
         const int idx = tid + MMA_THREADS * i, r = idx >> 2, c = idx & 3;
@@ -142,7 +143,7 @@ __global__ void __launch_bounds__(MMA_THREADS + 32 * HW, 1) gemm_kernel(Geo g) {
       bar_mma();
       if (kt + STAGES - 1 < kt_n) load((kt + STAGES - 1) % STAGES, kt + STAGES - 1);
       cp_commit();
-      const uint8_t* sa = smem + (kt % STAGES) * STAGE_BYTES;
+      const uint8_t* sa = sm8 + (kt % STAGES) * STAGE_BYTES;
       const uint8_t* sb = sa + BM * BK;
 #pragma unroll
       for (int ks = 0; ks < 2; ++ks) {
