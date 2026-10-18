@@ -1084,7 +1084,7 @@ def _analyse(root: Any, order: list, typed: bool) -> Facts:
         if sp is root:
             root_env, root_ret = env, R
     if any(p.kind == "coin" for _k, _lo, _hi, p, _w in (rpt.inputs if rpt is not None else ())):
-        _Uses(root, rpt).check()
+        _Uses(root, rpt, harness_).check()
     return Facts(root, typed, root_env, root_ret, params_out)
 
 
@@ -1141,10 +1141,11 @@ class _Uses:
     seed operand that reads it, once per member, step and instance, through every call. A seed instance's output, and every
     value a primitive or a composite computes from it, is ("s", inst) (("s", None) in a callee it is passed to), followed to
     the return of the Definition that called the seed. A composite's activation is summarized once per pattern of tracked
-    parameter leaves, so a batch or scan of one body costs one simulation and a count per tracked leaf per member."""
+    parameter leaves, so a batch or scan of one body costs one simulation and a count per tracked leaf per member. A
+    harness's outputs are its Definition's, so a harness of a seed returns the seed."""
 
-    def __init__(self, root: Any, rpt: PortTypes) -> None:
-        self.root, self.rpt = root, rpt
+    def __init__(self, root: Any, rpt: PortTypes, harness: bool = False) -> None:
+        self.root, self.rpt, self.harness = root, rpt, harness
         self.memo: dict[tuple, _Summary] = {}
         self.coins: dict[tuple, list] = {}
         self.made: dict[tuple, list] = {}
@@ -1346,7 +1347,7 @@ class _Uses:
             if s[0] == "s":
                 if s[1] is None:
                     ret[j] = ("s",)
-                elif _covered(sinks, j, j + 1) is not None:
+                elif _covered(sinks, j, j + 1) is not None and not (root and self.harness):
                     where = "the program's outputs" if root else "its other returns"
                     raise PortError("E_COIN_FLOW", f"{sp.id} return leaf {j}: returns the seed of {self.labels[s[1]]}, or a "
                                     f"value computed from it (its noise), at a leaf it doesn't declare Out(sink=True). A "

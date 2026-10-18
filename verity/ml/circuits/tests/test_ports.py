@@ -607,7 +607,8 @@ COIN_SALT = Ports(params={"salt": In(kind="coin")})
 Seed = comp("PortsTestSeed", [("salt", V32), ("position", V32)], V32, lambda B, S, salt, position: B.call(Add32, salt, position),
             ports=SEED)
 UNIT_IN = [("a", V8), ("b", V8), ("salt", V32), ("position", V32)]
-UNIT_PORTS = Ports(params={"salt": In(kind="coin")}, ret=(None, Out(sink=True)))
+#: a unit takes the coin and its position, and returns a sink: no seed
+UNIT_PORTS = Ports(params={"salt": In(kind="coin"), "position": In(kind="position")}, ret=(None, Out(sink=True)))
 #: a unit's noise from its seed, computed in a callee of the unit
 noise_of = comp("PortsTestNoiseOf", [("s", V32)], V8, lambda B, S, s: B.call(Byte, s))
 
@@ -693,6 +694,11 @@ def test_a_seed_and_its_noise_reach_only_the_receipt():
     refused("E_COIN_FLOW", lambda: Program(comp("PortsTestSeedOut", [("salt", V32), ("position", V32)], V32,
                                                 lambda B, S, salt, position: B.call(Seed, salt, position), ports=SEED)),
             "return leaf 0: returns the seed of", "never the program's outputs")
+
+
+def test_a_harness_evaluates_a_seed():
+    assert evaluate(bind(Seed), 5, 7) == (12,)
+    assert evaluate(bind(Unit), 1, 2, 5, 7) == (3, Fold.evaluate((24 + 13) & 0xFFFFFFFF))
 
 
 # --- the descriptor -----------------------------------------------------------------------------------------------------------
