@@ -158,7 +158,8 @@ def test_the_walkthrough_runs_as_shown(capsys):
     t = section_8(p)
     claims = section_9(t, profile, p)
     acc = section_10(claims, p)
-    assert acc.sound and acc.blocks[0].credited == c.boolean_size
+    assert acc.sound and sum(b.credited for b in acc.blocks) == c.boolean_size
+    assert all(b.credited > 0 for b in acc.blocks)        # each stage is credited to the block it ran on
     acc11 = section_11(c, dc)
     assert acc11.offramp_bits == {"telemetry": 128}
     section_12()
