@@ -91,6 +91,7 @@ import Proofs.Flock.Claims.KS.ZkClashL
 import Proofs.Flock.Claims.KS.ZkFork0
 import Proofs.Flock.Claims.KS.ZkFork
 import Proofs.Flock.Claims.KS.ZkAlign
+import Proofs.Flock.Claims.KS.RepDistZ
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -453,5 +454,7 @@ runs recording one cap and opening a position of it to different rows (`FlockDep
 accepting runs whose live outcomes decode to that collide in their logs (`FlockDeploy.KS.ZkForkClash`;
 `FlockDeploy.KS.zkSimForkLeCap_of`, `FlockDeploy.KS.zk_KS_of_align`). The first is the fork after the slot's coins
 (`ZkAlign`: `FlockDeploy.KS.ZkSlotAlign`, `FlockDeploy.KS.zkForkAlign_of_slot`, `FlockDeploy.KS.zk_KS_of_slot`), since
-pushing a table's answer does not change a fork (`FlockSoundness.Discharge.ZkLink.forkC_pushStrat`). `τ` has no such
+pushing a table's answer does not change a fork (`FlockSoundness.Discharge.ZkLink.forkC_pushStrat`). A masked rep
+meets each cap's slot after a count fixed by the statement and the schedule (`RepDistZ`:
+`FlockSoundness.Discharge.ZkLink.dist_lockRepZ`), plain's past level 0's lane rounds and extra draws. `τ` has no such
 split: the dead branches' `τ` opening `(0, default)` opens under some commitments. -/
