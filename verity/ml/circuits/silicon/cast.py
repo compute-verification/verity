@@ -15,7 +15,7 @@ E4M3_NAN = 0x7F              # OCP E4M3 (float8_e4m3fn): NaN 0x7F / 0xFF, max fi
 
 __all__ = ["BF16_NAN_HARDWARE", "BF16_NAN_SOFTWARE", "E2M1_UP", "E4M3_NAN", "F32_NAN_CANONICAL", "bf16_is_nan", "bf16_to_f32_word",
            "e4m3_to_f32_word", "f32_is_nan", "f32_to_bf16_hw_word", "f32_to_bf16_rn_word", "f32_to_bf16_word", "f32_to_e2m1_sat_word",
-           "f32_to_e4m3_sat_word"]
+           "f32_to_e4m3_sat_word", "s32_to_f32_rn_word"]
 
 
 def f32_is_nan(u: int) -> bool:
@@ -49,6 +49,29 @@ def f32_to_bf16_word(u: int) -> int:
 def f32_to_bf16_hw_word(u: int) -> int:
     """``cvt.rn.bf16.f32`` as the A100 and RTX 4090 compute it: NaN -> ``0x7FFF`` (equal to ``total.cvt_rn_bf16_f32``)."""
     return f32_to_bf16_rn_word(u, BF16_NAN_HARDWARE)
+
+
+def s32_to_f32_rn_word(w: int) -> int:
+    """``cvt.rn.f32.s32`` (SASS ``I2FP.F32.S32``): the 32-bit two's-complement word ``w`` as the nearest FP32 word, ties to
+    even. Exact below 2^24 in magnitude; never overflows (|w| <= 2^31); zero is +0."""
+    w &= 0xFFFFFFFF
+    v = w - (1 << 32) if w >> 31 else w
+    if v == 0:
+        return 0
+    sign, m = (1 << 31 if v < 0 else 0), abs(v)
+    e = m.bit_length() - 1
+    if e <= 23:
+        q = m << (23 - e)
+    else:
+        sh = e - 23
+        q, r = m >> sh, m & ((1 << sh) - 1)
+        half = 1 << (sh - 1)
+        if r > half or (r == half and q & 1):
+            q += 1
+            if q >> 24:
+                q >>= 1
+                e += 1
+    return sign | ((e + 127) << 23) | (q & 0x7FFFFF)
 
 
 def f32_to_e4m3_sat_word(u: int) -> int:

@@ -110,6 +110,18 @@ def test_registration_from_a_runner(shared, interleaved):
     assert s.pool.ids.shape == (PAGES, 4) and s.pool.ids[1].tolist() == [4, 5, 6, 7]
 
 
+@pytest.mark.parametrize("budget, registered", [(8, 64 * 32 * 4), (7, 0)])
+def test_a_weight_block_budget_registers_the_tensors_that_fit_and_counts_the_rest(budget, registered):
+    s = Store()
+    b = Binder(s, block_bytes=1024, weight_blocks=budget)
+    r = runner()
+    b.on_load(r)
+    b.on_kv(r, SimpleNamespace(num_blocks=PAGES))
+    st = b.stats()
+    assert st["bytes_by_kind"].get("weights", 0) == registered and st["bytes_by_kind"]["kv"] == 3 * 2 * PAGES * 2048
+    assert st["unregistered_bytes"] == 2 * 32 * 4 + 64 * 32 * 4 - registered
+
+
 def test_steps_append_the_scheduled_slots_and_reuse_freed_pages_fifo():
     s = Store()
     b = Binder(s, block_bytes=1024)

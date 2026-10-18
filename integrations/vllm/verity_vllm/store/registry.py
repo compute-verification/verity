@@ -441,11 +441,15 @@ class Store:
         return r.codec.decode(r.backing.read(b * bb, bb), r.info.word_index(b))
 
     def record_memory_map(self, path: Any = None, registration: bytes | None = None, lifetime: int = LIFETIME,
-                          on_line: Any = None) -> mm.MemoryMap:
+                          on_line: Any = None, on_append: Any = None) -> mm.MemoryMap:
         """Record each step's KV blocks as memory-map/v1 into ``path`` (the prover's own file) or kept, beside
         ``registration``, the remote audit's `Registration.digest`, which the session's first window chains from, under
-        the session's lifetime cap of ``lifetime`` windows, each closed line to ``on_line`` (`memory_map.record`)."""
-        return mm.record(self, path, registration, lifetime, on_line)
+        the session's lifetime cap of ``lifetime`` windows, each append to ``on_append`` and each closed line to
+        ``on_line`` (`memory_map.record`).  The registration took every block as its bytes are, so none is dirty now."""
+        m = mm.record(self, path, registration, lifetime, on_line, on_append)
+        if self._pool is not None:
+            self._pool.dirty[:] = False
+        return m
 
     def end_step(self) -> None:
         """The step's forward has written its KV (`Scheduler.update_from_output`): a memory map takes its digests."""
@@ -486,7 +490,7 @@ class Store:
     def kv_append(self, appends: Sequence[Append], step: int) -> None:
         """The step's KV writes: each block a write reaches turns dirty, and each it completes is registered again
         (epoch + 1, under ``step``).  One registration record for the step.  A memory map closes the last step's line and
-        opens this one's: its completed blocks written, its reached registered ones freed (`memory_map`)."""
+        opens this one's: its completed blocks to append, its reached live ones freed (`memory_map`)."""
         t = time.perf_counter()
         p, m = self.pool, self.memory_map
         if m is not None:
@@ -514,7 +518,7 @@ class Store:
             self._log({"event": "kv-append", "step": step, "appends": n, "registered": len(key)},
                       hashlib.sha512(np.stack([pg, first, end]).astype(">i8").tobytes()).digest())
         if m is not None:
-            m.open(step, np.setdiff1d(reached, key), key)
+            m.open(step, reached, key)
         self.counters.add("kv_append", time.perf_counter() - t)
 
     def kv_write_reference(self, appends: Sequence[Append], payload: Callable[[int, int, int], bytes],
