@@ -164,35 +164,86 @@ def ivsOf (qs : Array Piece) : Array (Nat × Nat) := Id.run do
   if let some c := cur then out := emit out c
   return out
 
-/-- A sequence of pieces with each one's first position. -/
-structure PS where
+/-- `reps` copies of one member's pieces `ps` (`len` positions), copy `m`'s gates `m * shift` after copy 0's: the output
+of a batch whose members' return isn't one run, read by whole members. Only gates repeat: `ps` names no leaf when
+`reps > 1`. -/
+structure Seg where
   ps : Array Piece
+  len : Nat
+  reps : Nat := 1
+  shift : Int := 0
+  deriving Inhabited
+
+def Seg.one (q : Piece) : Seg := { ps := #[q], len := q.count }
+
+def Seg.count (s : Seg) : Nat := s.reps * s.len
+
+def shiftGates (δ : Int) (ps : Array Piece) : Array Piece :=
+  ps.map fun q => match q.tgt with
+    | .gate _ => { q with base := q.base + δ }
+    | _ => q
+
+/-- Copy `m`'s pieces. -/
+def Seg.copy (s : Seg) (m : Nat) : Array Piece := shiftGates (m * s.shift) s.ps
+
+/-- Positions `[a, b)` of the pieces `ps` laid end to end. -/
+def slicePieces (ps : Array Piece) (a b : Nat) : Array Piece := Id.run do
+  let mut out := #[]
+  let mut st := 0
+  for q in ps do
+    if st ≥ b then break
+    let en := st + q.count
+    if en > a then out := out ++ q.slice (max a st - st) (min b en - st)
+    st := en
+  return out
+
+/-- Positions `[a, b)` of `s`: part of a copy, the whole copies, part of a copy. -/
+def Seg.slice (s : Seg) (a b : Nat) : Array Seg :=
+  if b ≤ a then #[]
+  else if s.reps ≤ 1 then (slicePieces s.ps a b).map Seg.one
+  else
+    let part (m x y : Nat) : Array Seg := (slicePieces (s.copy m) x y).map Seg.one
+    let (m0, t0, m1, t1) := (a / s.len, a % s.len, b / s.len, b % s.len)
+    if m0 == m1 then part m0 t0 t1
+    else
+      let first := if t0 == 0 then #[] else part m0 t0 s.len
+      let lo := if t0 == 0 then m0 else m0 + 1
+      let mid : Array Seg := if lo < m1 then #[{ s with ps := s.copy lo, reps := m1 - lo }] else #[]
+      first ++ mid ++ part m1 0 t1
+
+/-- A sequence of segments with each one's first position. -/
+structure PS where
+  segs : Array Seg
   starts : Array Nat
   count : Nat
   deriving Inhabited
 
-def PS.of (ps : Array Piece) : PS :=
-  let ps := ps.filter (·.count > 0)
-  let (starts, count) := ps.foldl (fun (acc : Array Nat × Nat) q => (acc.1.push acc.2, acc.2 + q.count)) (#[], 0)
-  { ps, starts, count }
+def PS.of (segs : Array Seg) : PS :=
+  let segs := segs.filter (·.count > 0)
+  let (starts, count) := segs.foldl (fun (acc : Array Nat × Nat) s => (acc.1.push acc.2, acc.2 + s.count)) (#[], 0)
+  { segs, starts, count }
 
-/-- Positions `[lo, hi)`: the first piece by bisection over the starts, then the pieces it spans. -/
-def PS.slice (s : PS) (lo hi : Nat) : Array Piece := Id.run do
-  if lo ≥ hi || s.ps.isEmpty then return #[]
+/-- Positions `[lo, hi)`: the first segment by bisection over the starts, then the segments it spans. -/
+def PS.slice (s : PS) (lo hi : Nat) : Array Seg := Id.run do
+  if lo ≥ hi || s.segs.isEmpty then return #[]
   let mut a := 0
-  let mut b := s.ps.size
-  for _ in [0:s.ps.size] do
+  let mut b := s.segs.size
+  for _ in [0:s.segs.size] do
     if b - a ≤ 1 then break
     let mid := (a + b) / 2
     if s.starts[mid]! ≤ lo then a := mid else b := mid
   let mut out := #[]
-  for i in [a:s.ps.size] do
+  for i in [a:s.segs.size] do
     let st := s.starts[i]!
     if st ≥ hi then break
-    let q := s.ps[i]!
-    let en := st + q.count
-    if en > lo then out := out ++ q.slice (max lo st - st) (min hi en - st)
+    let g := s.segs[i]!
+    let en := st + g.count
+    if en > lo then out := out ++ g.slice (max lo st - st) (min hi en - st)
   return out
+
+/-- Positions `[lo, hi)` as pieces, copy by copy. -/
+def PS.pieces (s : PS) (lo hi : Nat) : Array Piece :=
+  (s.slice lo hi).flatMap fun g => (Array.range g.reps).flatMap g.copy
 
 /-- A reference part as pieces: an affine part is one, a strided part its whole rows as one and a part of a row. -/
 def ofPart : Part → Array Piece
@@ -212,7 +263,7 @@ def ofPart : Part → Array Piece
       else acc.push one
     | none => acc.push one
 
-def ofSeq (s : Seq) : PS := PS.of (s.parts.foldl (fun acc q => acc ++ ofPart q) #[])
+def ofSeq (s : Seq) : PS := PS.of ((s.parts.foldl (fun acc q => acc ++ ofPart q) #[]).map Seg.one)
 
 /-! ## The summaries -/
 
@@ -257,44 +308,56 @@ mutual
 
 /-- The pieces of body references `q`, resolved (§7) down through the nodes they name until a gate of the activation or a
 parameter leaf. -/
-def down (c : Ctx) : Nat → Piece → Except String (Array Piece)
+def down (c : Ctx) : Nat → Piece → Except String (Array Seg)
   | 0, _ => throw "references nest deeper than this verifier follows"
   | fuel + 1, q => do
     match q.tgt with
-    | .gate _ | .ref true _ => return #[q]
+    | .gate _ | .ref true _ => return #[.one q]
     | .ref false k =>
       if q.count == 0 then return #[]
       let node ← c.node k
       let o : Int := c.body.offsets[k]!
       let callee := c.P.defs[node.fn]!
-      let byRow (_ : Unit) : Except String (Array Piece) := do
+      let byRow (_ : Unit) : Except String (Array Seg) := do
         let mut out := #[]
         for x in q.rowsOf do out := out ++ (← down c fuel x)
         return out
       match node.form with
       | .prim =>
         let .value w := callee.ret | throw "program"
-        return #[{ tgt := .gate w, base := o, stride := 0, len := q.count }]
+        return #[.one { tgt := .gate w, base := o, stride := 0, len := q.count }]
       | .batch =>
         if callee.prim then
           let .value w := callee.ret | throw "program"
-          return #[{ q with tgt := .gate w, base := o + q.base }]
+          return #[.one { q with tgt := .gate w, base := o + q.base }]
         let L := callee.outLeaves
         let G : Int := callee.gates
         let r := (c.memo[node.fn]!).ret
         if L == 0 then throw "program"
         -- every member returns one run of its gates, and the members' runs make one: leaf `e` is gate `A + e * F`
-        if r.ps.size == 1 then
-          let g := r.ps[0]!
+        if r.segs.size == 1 && r.segs[0]!.reps ≤ 1 && r.segs[0]!.ps.size == 1 then
+          let g := r.segs[0]!.ps[0]!
           if let .gate w := g.tgt then
             if g.rows ≤ 1 && g.len == L && (L == 1 || G == L * g.stride) then
               let F : Int := if L == 1 then G else g.stride
               let A : Int := o + g.base
-              return #[{ q with tgt := .gate w, base := A + q.base * F, stride := q.stride * F, rowStride := q.rowStride * F }]
+              return #[.one { q with tgt := .gate w, base := A + q.base * F, stride := q.stride * F,
+                                     rowStride := q.rowStride * F }]
         if q.rows > 1 then byRow ()
         else if q.stride == 1 then
           let a := q.base.toNat
           let b := a + q.len
+          -- the whole members between `m0` and `m1` as copies of one member's return, when it names gates only
+          let (m0, m1) := ((a + L - 1) / L, b / L)
+          let gatesOnly := r.segs.all fun s => s.reps ≤ 1 && s.ps.all fun g => match g.tgt with
+            | .gate _ => true
+            | _ => false
+          if gatesOnly && m0 + 1 < m1 then
+            let mut out := #[]
+            if a < m0 * L then out := out ++ (← fromCallee c fuel k (a / L) (a % L) L)
+            out := out.push { ps := shiftGates (o + m0 * G) (r.segs.flatMap (·.ps)), len := L, reps := m1 - m0, shift := G }
+            if m1 * L < b then out := out ++ (← fromCallee c fuel k m1 0 (b - m1 * L))
+            return out
           let mut out := #[]
           for m in [a / L:(b - 1) / L + 1] do
             out := out ++ (← fromCallee c fuel k m (max a (m * L) - m * L) (min b ((m + 1) * L) - m * L))
@@ -328,32 +391,35 @@ termination_by structural fuel _ => fuel
 
 /-- Return leaves `[a, b)` of member (or iteration) `m` of node `k`, a composite's: its gates offset to the member's, and
 its pass-throughs taken back through the node's arguments and resolved in the body. -/
-def fromCallee (c : Ctx) : Nat → Nat → Nat → Nat → Nat → Except String (Array Piece)
+def fromCallee (c : Ctx) : Nat → Nat → Nat → Nat → Nat → Except String (Array Seg)
   | 0, _, _, _, _ => throw "references nest deeper than this verifier follows"
   | fuel + 1, k, m, a, b => do
     let node ← c.node k
     let callee := c.P.defs[node.fn]!
     let o : Int := c.body.offsets[k]! + m * callee.gates
     let mut out := #[]
-    for g in (c.memo[node.fn]!).ret.slice a b do
-      match g.tgt with
-      | .gate _ => out := out.push { g with base := o + g.base }
-      | .ref false _ => throw "program"
-      | .ref true i => out := out ++ (← throughArg c fuel k m i g)
+    for s in (c.memo[node.fn]!).ret.slice a b do
+      if s.reps > 1 then out := out.push { s with ps := shiftGates o s.ps }
+      else
+        for g in s.ps do
+          match g.tgt with
+          | .gate _ => out := out.push (.one { g with base := o + g.base })
+          | .ref false _ => throw "program"
+          | .ref true i => out := out ++ (← throughArg c fuel k m i g)
     return out
 termination_by structural fuel _ _ _ _ => fuel
 
 /-- Parameter leaves `g` of member (or iteration) `m` of node `k`'s callee, as what node `k`'s arguments name in the body
 (§7, up through a parameter), resolved there. -/
-def throughArg (c : Ctx) : Nat → Nat → Nat → Nat → Piece → Except String (Array Piece)
+def throughArg (c : Ctx) : Nat → Nat → Nat → Nat → Piece → Except String (Array Seg)
   | 0, _, _, _, _ => throw "references nest deeper than this verifier follows"
   | fuel + 1, k, m, i, g => do
     let node ← c.node k
     let some a := node.args[i]? | throw "program"
     let ap := c.arg k i
-    let one (lo hi : Nat) : Except String (Array Piece) := do
+    let one (lo hi : Nat) : Except String (Array Seg) := do
       let mut out := #[]
-      for q in ap.slice lo hi do out := out ++ (← down c fuel q)
+      for q in ap.pieces lo hi do out := out ++ (← down c fuel q)
       return out
     let elems : Array (Nat × Nat) := g.rowsOf.flatMap fun g =>
       if g.stride == 1 then #[(g.base.toNat, g.base.toNat + g.len)]
@@ -393,15 +459,15 @@ def argSpans (node : Node) (i m : Nat) (used : Ivs) : Array (Nat × Nat) :=
 /-- What node `k`'s gates read outside the node, resolved in the body: every argument of a primitive (or of a batch of one
 with members); for a composite callee, the positions its `used` names, member by member unless every member reads its
 whole argument; and for a scan, an iteration's carry read from the one before it, through that one's pass-throughs. -/
-def nodeReads (c : Ctx) (k : Nat) : Except String (Array Piece) := do
+def nodeReads (c : Ctx) (k : Nat) : Except String (Array Seg) := do
   let node ← c.node k
   let callee := c.P.defs[node.fn]!
   let fuel := Flock.Steps.FUEL
-  let resolve (i : Nat) (spans : Array (Nat × Nat)) : Except String (Array Piece) := do
+  let resolve (i : Nat) (spans : Array (Nat × Nat)) : Except String (Array Seg) := do
     let ap := c.arg k i
     let mut out := #[]
     for (lo, hi) in spans do
-      for q in ap.slice lo hi do out := out ++ (← down c fuel q)
+      for q in ap.pieces lo hi do out := out ++ (← down c fuel q)
     return out
   let whole (i : Nat) : Array (Nat × Nat) := #[(0, (c.arg k i).count)]
   let mut out := #[]
@@ -429,9 +495,12 @@ def nodeReads (c : Ctx) (k : Nat) : Except String (Array Piece) := do
       for (lo, hi) in used[0]?.getD #[] do out := out ++ (← fromCallee c fuel k (m - 1) lo hi)
   let lo : Int := c.body.offsets[k]!
   let hi : Int := c.body.offsets[k + 1]!
-  return out.filter fun q => match q.tgt with
-    | .gate _ => !(lo ≤ q.base && q.base < hi)
-    | _ => true
+  -- a segment's gates are one node's
+  return out.filter fun s => match s.ps[0]? with
+    | some q => match q.tgt with
+      | .gate _ => !(lo ≤ q.base && q.base < hi)
+      | _ => true
+    | none => false
 
 /-- Definition `d`'s summary, its callees' in `memo`. -/
 def summarize (P : Prog) (memo : Array Summary) (d : Nat) : Except String Summary := do
@@ -440,12 +509,15 @@ def summarize (P : Prog) (memo : Array Summary) (d : Nat) : Except String Summar
   let body := defn.body
   let c : Ctx := { P, memo, d, args := body.nodes.map fun n => n.args.map (ofSeq ·.seq) }
   let mut ret := #[]
-  for q in (ofSeq body.ret).ps do ret := ret ++ (← down c Flock.Steps.FUEL q)
+  for s in (ofSeq body.ret).segs do
+    for q in s.ps do ret := ret ++ (← down c Flock.Steps.FUEL q)
   let mut acc : Array (Array Piece) := Array.replicate body.params.size #[]
   for k in [0:body.nodes.size] do
-    for q in ← nodeReads c k do
-      if let .ref true i := q.tgt then
-        acc := acc.modify i (·.push q)
+    for s in ← nodeReads c k do
+      if s.reps > 1 then continue
+      for q in s.ps do
+        if let .ref true i := q.tgt then
+          acc := acc.modify i (·.push q)
   return { ret := PS.of ret, used := acc.map fun qs => Ivs.norm (ivsOf qs) }
 
 /-- The Definitions the root reaches, each once. -/
@@ -461,7 +533,7 @@ def reached (P : Prog) : Array Bool := Id.run do
   return seen
 
 /-- Every reached Definition's summary, callees first, and what each root node reads outside itself, as gates. -/
-def analyze (P : Prog) : Except String (Array (Array Piece)) := do
+def analyze (P : Prog) : Except String (Array (Array Seg)) := do
   let seen := reached P
   let mut memo : Array Summary := #[]
   for d in [0:P.defs.size] do
@@ -471,7 +543,7 @@ def analyze (P : Prog) : Except String (Array (Array Piece)) := do
   let mut reads := #[]
   for k in [0:body.nodes.size] do
     let rs ← nodeReads c k
-    if rs.any fun q => match q.tgt with | .gate _ => false | _ => true then throw "program"
+    if rs.any (·.ps.any fun q => match q.tgt with | .gate _ => false | _ => true) then throw "program"
     reads := reads.push rs
   return reads
 
@@ -492,6 +564,72 @@ def distinctWidth (ivs : Array (Nat × Nat × Nat)) : Nat :=
   let s := ivs.qsort fun x y => x.1 < y.1
   (s.foldl (init := (0, 0)) fun (tot, cover) (lo, hi, w) =>
     if hi ≤ cover then (tot, cover) else (tot + (hi - max lo cover) * w, hi)).1
+
+/-- The gates of `qs` as intervals with their widths. -/
+def gateIvs (qs : Array Piece) : Array (Nat × Nat × Nat) :=
+  let ws := (qs.filterMap fun q => match q.tgt with | .gate w => some w | _ => none).qsort (· < ·) |>.toList.eraseDups
+  ws.toArray.flatMap fun w => (ivsOf (qs.filter (·.tgt == .gate w))).map fun (lo, hi) => (lo, hi, w)
+
+/-- Gates `cnt` copies, `period` apart, of `res` (each `(lo, hi, w)` from `lo`, none past `span ≤ period`). -/
+structure Cl where
+  lo : Nat
+  period : Nat
+  cnt : Nat
+  span : Nat
+  res : Array (Nat × Nat × Nat)
+  deriving Inhabited
+
+/-- The total width of the distinct gates of `segs`. A segment of copies is copies of one frame; copies of one frame are
+counted as copies times one copy's width, alone in their span, and with what else meets their span as gates. -/
+def novelWidth (segs : Array Seg) : Nat := Id.run do
+  let mut ivs := gateIvs (segs.filter (·.reps ≤ 1) |>.flatMap (·.ps))
+  let mut cls : Array Cl := #[]
+  for s in segs do
+    if s.reps ≤ 1 then continue
+    let r := gateIvs s.ps
+    if r.isEmpty then continue
+    let lo := r.foldl (fun m (a, _, _) => min m a) r[0]!.1
+    let hi := r.foldl (fun m (_, b, _) => max m b) 0
+    if s.shift ≤ 0 || hi - lo > s.shift.toNat then
+      ivs := ivs ++ (Array.range s.reps).flatMap fun m => gateIvs (s.copy m)
+    else
+      cls := cls.push { lo, period := s.shift.toNat, cnt := s.reps, span := hi - lo,
+                        res := r.map fun (a, b, w) => (a - lo, b - lo, w) }
+  let cs := cls.qsort fun x y =>
+    x.lo < y.lo || (x.lo == y.lo && (x.period < y.period || (x.period == y.period && x.cnt < y.cnt)))
+  let mut frames : Array Cl := #[]
+  for x in cs do
+    match frames.back? with
+    | some y =>
+      if y.lo == x.lo && y.period == x.period && y.cnt == x.cnt then
+        frames := frames.pop.push { y with span := max y.span x.span, res := y.res ++ x.res }
+      else frames := frames.push x
+    | none => frames := frames.push x
+  let n := ivs.size
+  let items := (ivs.mapIdx fun i (lo, hi, _) => (lo, hi, i)) ++
+    (frames.mapIdx fun i x => (x.lo, x.lo + (x.cnt - 1) * x.period + x.span, n + i))
+  let expand (j : Nat) : Array (Nat × Nat × Nat) :=
+    if j < n then #[ivs[j]!]
+    else
+      let x := frames[j - n]!
+      (Array.range x.cnt).flatMap fun m => x.res.map fun (a, b, w) => (x.lo + m * x.period + a, x.lo + m * x.period + b, w)
+  let width (comp : Array Nat) : Nat :=
+    if comp.size == 1 && comp[0]! ≥ n then
+      let x := frames[comp[0]! - n]!
+      x.cnt * distinctWidth x.res
+    else distinctWidth (comp.flatMap expand)
+  let mut total := 0
+  let mut comp : Array Nat := #[]
+  let mut reach := 0
+  for (st, en, j) in items.qsort fun x y => x.1 < y.1 do
+    if !comp.isEmpty && st ≥ reach then
+      total := total + width comp
+      comp := #[]
+      reach := 0
+    comp := comp.push j
+    reach := max reach en
+  if !comp.isEmpty then total := total + width comp
+  return total
 
 def isInputNode (P : Prog) (n : Node) : Bool := isInputId (P.defs[n.fn]!).key
 
@@ -532,21 +670,17 @@ def evaluate (j : Json) : Except String Json := do
   let used := usedOf own
   if !(List.range n).all used.contains then throw "empty-iu"
   let mut size := Array.replicate n 0
-  let mut into : Array (Array (Nat × Piece)) := Array.replicate n #[]
+  let mut into : Array (Array Seg) := Array.replicate n #[]
   for k in [0:K] do
     let some u := own[k]! | continue
     size := size.modify u (· + gatesOf k)
-    for q in reads[k]! do
-      let .gate w := q.tgt | continue
-      if q.count == 0 then continue
+    for s in reads[k]! do
+      let some q := s.ps[0]? | continue
+      if s.count == 0 then continue
       let k' := nodeOf offs q.base.toNat
       if own[k']! == some u || theta[k']! then continue
-      into := into.modify u (·.push (w, q))
-  let novel (qs : Array (Nat × Piece)) : Nat :=
-    let ws := (qs.map (·.1)).qsort (· < ·) |>.toList.eraseDups
-    distinctWidth (ws.toArray.flatMap fun w => (ivsOf (qs.filterMap fun (w', q) => if w' == w then some q else none)).map
-      fun (lo, hi) => (lo, hi, w))
-  let r := (Array.range n).map fun u => (size[u]!, novel into[u]!)
+      into := into.modify u (·.push s)
+  let r := (Array.range n).map fun u => (size[u]!, novelWidth into[u]!)
   return verdict (P.defs[P.root]!).gates r (failure i.gamma i.num i.den r)
 
 /-- `evaluate`, with a refusal as `{"error": code}`. -/
