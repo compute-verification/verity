@@ -273,6 +273,16 @@ def failed_suites(run_dir: Path) -> list[dict]:
     return done or _docs(run_dir, *PROGRESS[1:])
 
 
+def touched_report(run_dir: Path) -> list[dict] | None:
+    """A touched-suites run's `TOUCHED_REPORT` (suites.py's `--json`, which it writes whenever it ends), None when it isn't
+    there or doesn't parse."""
+    try:
+        doc = json.loads((run_dir / TOUCHED_REPORT).read_text())
+    except (OSError, ValueError):
+        return None
+    return [x for x in doc if isinstance(x, dict)] if isinstance(doc, list) else None
+
+
 def _fetch(repo: Path, rid: str, names: list[str]) -> Path | None:
     also = [x for n in names for x in ("--also", n)]
     r = subprocess.run([sys.executable, "-m", "research", "status", rid, "--json", *also], cwd=repo, capture_output=True, text=True)
@@ -448,7 +458,7 @@ class Driver:
         self.launch_touched: Callable[[Path, str, str, str], tuple[list[str], str]] = (
             lambda repo, commit, machine, base: touched_launch(repo, commit, base, q.auth))
         self.launch, self.states, self.post, self.now, self.cancel, self.evidence = launch, states, post, now, cancel, evidence
-        self.repo, self.dry_run, self._seen, self._prs, self._ev = q.workdir, False, {}, None, {}
+        self.repo, self.dry_run, self._seen, self._prs, self._ev, self._relaunched = q.workdir, False, {}, None, {}, set()
         self._drive: dict | None = None
         q.warming = self.warming
 
@@ -506,7 +516,7 @@ class Driver:
         if any(st in ACTIVE for st, *_ in states.values()):
             # `main`'s own check lands nothing, and only its deferred steps may clear it
             if self.defer and commit not in drive.get("base", {}) and (rid := self._passed_but_deferred(launch["ids"])):
-                if (held := self._touched(launch)) is not None:
+                if (held := self._touched(commit, base, drive, launch)) is not None:
                     return held
                 return Verdict("passed", rid, f"{DEFERRED} ({', '.join(sorted(self.defer))} run on `main` after landing)")
             return Verdict("running", " ".join(launch["ids"]))
@@ -519,20 +529,71 @@ class Driver:
                        f"{' '.join(launch['ids'])} ended ({', '.join(f'{s} rc={rc}' for s, rc, *_ in states.values())}) "
                        f"and no attempt reached the store in {PUBLISH_GRACE_S // 60} min")
 
-    def _touched(self, launch: dict) -> Verdict | None:
-        """What a train's touched-suites run (`launch["touched"]`) says before a deferred landing: running, or failed (its suites'
-        reports name what failed, as a check's do); None once it passed, or when it never ran (the deferred pytest still runs)."""
-        if not (ids := launch.get("touched")):
+    def _touched(self, commit: str, base: str, drive: dict, launch: dict) -> Verdict | None:
+        """What a train's touched-suites run (`launch["touched"]`) says before a deferred landing.  None, the gate passed, only
+        for an exit 0 whose `TOUCHED_REPORT` reached drive with no failed row; failed for one with a failed row, or another
+        exit (the report names what failed, as a check's suites do); else the landing is held ("running").  A run that never
+        started (every twin 75), or a launch that registered none, runs again (`_relaunch_touched`).  A killed one (a signal or
+        128+N, the cap's 143 among them; a cancel; no exit at all) runs again once beside the same check, and killed again is
+        told to `CI` and stays held, for the check's own pytest to decide when it ends.  Drive's own cancels of a touched-suites
+        run never read as kills: it cancels one only once no live record holds it (`resend` replaces the record first; a train
+        off the chain drops it)."""
+        if "pytest" not in self.defer:
             return None
+        if not (ids := launch.get("touched")):
+            return self._relaunch_touched(commit, base, drive, launch, "its touched suites have no run")
         states = self._states(ids)
+        said = ", ".join(f"{rid} {st} rc={rc}" for rid, (st, rc, *_) in states.items())
         if any(st in ACTIVE for st, *_ in states.values()):
             return Verdict("running", " ".join(ids), "its touched suites are running")
-        if all(rc in (NOT_STARTED, SIGTERM_RC) for _, rc, *_ in states.values()):
-            return None
-        if any(rc == 0 for _, rc, *_ in states.values()):
-            return None
-        return Verdict("failed", " ".join(ids), f"its touched suites failed ({' '.join(ids)}: "
-                                                f"{', '.join(f'rc={rc}' for _, rc, *_ in states.values())})")
+        if ran := [rid for rid, (_, rc, *_) in states.items() if rc == 0]:
+            reports = [r for d in self._evidence(Verdict("passed", " ".join(ran))) if (r := touched_report(d)) is not None]
+            if any(s.get("status") == "failed" for r in reports for s in r):
+                return Verdict("failed", " ".join(ran), f"its touched suites failed ({said}; {TOUCHED_REPORT} has a failed row)")
+            if reports:
+                return None
+            ended = max((_utc(e) or launch["at"] for _, _, e, *_ in states.values()), default=launch["at"])
+            if self.now() - ended >= PUBLISH_GRACE_S:
+                self.refuse(drive, f"touched-report:{commit}", f"{commit[:12]} on `{self.q.branch}`: its touched-suites run "
+                                                               f"({said}) exited 0, but no {TOUCHED_REPORT} of it reached drive "
+                                                               f"in {PUBLISH_GRACE_S // 60} min. Held, not landed: find why")
+            return Verdict("running", " ".join(ids), f"its touched suites exited 0 with no {TOUCHED_REPORT} yet: held")
+        if all(rc == NOT_STARTED for _, rc, *_ in states.values()):
+            return self._relaunch_touched(commit, base, drive, launch, f"its touched suites never started ({said})")
+        if all(rc == NOT_STARTED or st == "cancelled" or rc is None or (isinstance(rc, int) and (rc < 0 or rc > 128))
+               for st, rc, *_ in states.values()):
+            if not launch.get("touched_killed"):
+                return self._relaunch_touched(commit, base, drive, launch, f"its touched suites were killed ({said})", killed=True)
+            self.refuse(drive, f"touched-killed:{commit}", f"{commit[:12]} on `{self.q.branch}`: its touched-suites run {said} "
+                                                           f"was killed again on its relaunch (the first: "
+                                                           f"{' '.join(launch['touched_killed'])}), a machine's fault. Held, "
+                                                           "not landed: its check's own pytest decides when it ends")
+            return Verdict("running", " ".join(ids), f"its touched suites were killed twice ({said}): held")
+        return Verdict("failed", " ".join(ids), f"its touched suites failed ({said})")
+
+    def _relaunch_touched(self, commit: str, base: str, drive: dict, launch: dict, why: str, killed: bool = False) -> Verdict:
+        """Run ``commit``'s touched suites again beside its check (at most once a tick: a tick reads a verdict several times),
+        recording the run a kill ended (``killed``) in `touched_killed`, and hold its landing."""
+        old = launch.get("touched") or []
+        held = Verdict("running", " ".join(old or launch["ids"]), f"{why}: held")
+        if commit in self._relaunched:
+            return held
+        self._relaunched.add(commit)
+        if self.q.shadow or self.dry_run:
+            self.q.log(f"research queue drive: would run {commit[:12]}'s touched suites again: {why}")
+            return held
+        ids, out = self.launch_touched(self.repo, commit, self.on, base)
+        launch["touched"] = ids
+        if killed:
+            launch["touched_killed"] = old
+        if not ids:
+            self.refuse(drive, f"touched-launch:{commit}", f"{commit[:12]} on `{self.q.branch}`: {why}, and its touched-suites "
+                                                           f"run registered no run ({out[-200:]}). Held, not landed: drive "
+                                                           "launches it again each tick")
+            return held
+        self.q.log(f"research queue drive: {commit[:12]}: {why}: its touched suites run again as {' '.join(ids)}, and its "
+                   "landing waits on them")
+        return Verdict("running", " ".join(ids), f"{why}: running again")
 
     def _passed_but_deferred(self, ids: list[str]) -> str | None:
         """The running check among ``ids`` whose every step but the deferred ones has passed (or was skipped), none failed."""
@@ -1310,7 +1371,7 @@ class Driver:
             drive["launched"][m.commit]["touched"] = touched
             if not touched:
                 self.q.log(f"research queue drive: {m.commit[:12]}'s touched-suites run registered no run ({out[-200:]}); its "
-                           "deferred pytest still runs after landing")
+                           "landing waits until one passes")
         return ids, tail
 
     def resend(self, drive: dict, m: Member, prs: str, v: Verdict,
@@ -1402,7 +1463,7 @@ class Driver:
 
     def tick(self, dry_run: bool = False) -> str:
         q = self.q
-        self.dry_run, self._seen, self._prs, self._ev = dry_run, {}, None, {}
+        self.dry_run, self._seen, self._prs, self._ev, self._relaunched = dry_run, {}, None, {}, set()
         q._clone()
         q.fetch()
         if q.store is not None and q.store.remote is not None:

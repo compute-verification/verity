@@ -994,6 +994,8 @@ def test_with_pytest_deferred_a_train_lands_only_once_its_touched_suites_pass(wo
     h.tick()
     assert _git(world.origin, "rev-parse", "main") != tip                         # its touched suites still run
     h.run_state["r-touched"] = ("done", 0, None)
+    (h.evidence[0] / "out").mkdir()
+    (h.evidence[0] / "out" / "suites.json").write_text("[]")                     # their report, with no failed row
     h.tick()
     assert _git(world.origin, "rev-parse", "main") == tip
 
