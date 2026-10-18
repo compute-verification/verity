@@ -8,10 +8,11 @@ A record is one of two kinds:
   outcome and record. The outcome is the verdict, and a rejection's failure, window and draw are its reason.
 * A remote session's `verifier.json` (`verity/remote-session/verifier/v0`). Per session it keeps the registration,
   the parameters, each window's challenge release, boundary and pass arrivals on the verifier's clock, its draws, and
-  for an accepted session each pass's length and step. It keeps no roots, plans, appends, coins or openings.
-  `case_of` makes a case of what it keeps: each pass a root (synthetic) at its arrival, the registered store its plan
-  (an accepted pass's recorded length when that is shorter) and its step the recorded one (else its count in the
-  session), each boundary at its time and each window drawn at its time, under synthetic coins and with no openings.
+  for an accepted session each pass's length and step. It keeps no roots, plans, coins or openings, and of appends and
+  releases only their counts. `case_of` makes a case of what it keeps: each pass a root (synthetic) at its arrival, the
+  registered store its plan (an accepted pass's recorded length when that is shorter) and its step the recorded one
+  (else its count in the session), each boundary at its time and each window drawn at its time, under synthetic coins
+  and with no appends, releases or openings.
   Both verifiers replay that case as above, and `held` holds their verdict to the recorded one:
   - an accepted session draws every window, each as many receipts as recorded;
   - one rejected for a failure the record keeps the cause of (`KEPT`: too few passes in a window) is rejected the same
@@ -140,6 +141,7 @@ def case_of(reg: dict, session: dict) -> tuple[dict, dict]:
     drawn = {int(t) for t in session.get("draws") or {}}
     failure = session.get("failure") or {}
     made = {"plans": "registered store", "steps": "recorded" if profile and "steps" in profile[0] else "counted"}
+    made |= {k: f"{session[k]} recorded, none replayed" for k in ("appended", "released") if session.get(k)}
     timed: list[tuple[int, int, int, int, dict]] = []
     step = 0
     for t, w in enumerate(seen):
