@@ -716,6 +716,98 @@ __global__ void __launch_bounds__(TPB, 512 / TPB)
   fold_climb<UF>(o, pos, 0, width, depth, levels, ctr, cnt);
 }
 
+// v5: v4's CTA (row warps beside salt warps) with v1's tree: the R leaves fold in shared memory (SF, once read, holds the
+// fold), then thread 0 climbs. Every thread stays to the end, so each __syncthreads counts the whole CTA.
+template <int TPB, int NU>
+__global__ void __launch_bounds__(TPB, 512 / TPB)
+    sr_leaf5(const uint8_t* __restrict__ rows, const uint4* __restrict__ Tn, u64 n, u64 width, int depth, u64* levels, u32* ctr,
+             u64* __restrict__ bc) {
+  constexpr int R = TPB / 2;
+  __shared__ uint4 T[512];
+  __shared__ u64 SF[R * 24];
+  const u32 cnt = blockDim.x / 2, t = threadIdx.x;
+  for (int i = t; i < 512; i += blockDim.x) T[i] = Tn[i];
+  __syncthreads();
+  const bool rower = t < cnt;
+  const u32 j = rower ? t : t - cnt;
+  const u64 pos = (u64)blockIdx.x * cnt + j;
+  u64 x[8], o[8];
+  if (rower) {
+    if (pos < n) row3(rows + pos * LB, x);
+  } else {
+    u64* s = SF + 24 * j;
+    if (pos < n) {
+      u64 my[8], c[8], f[8];
+      salt3(pos, T, my, c);
+      f_first3(pos, f);
+      cpy8(s, my); cpy8(s + 8, c); cpy8(s + 16, f);
+    } else {
+      pad3(pos, o);
+      cpy8(s + 16, o);
+    }
+  }
+  __syncthreads();
+  if (rower) {
+    const u64* s = SF + 24 * j;
+    if (pos < n) {
+      u64 B[16], h[8];
+#pragma unroll
+      for (int k = 0; k < 8; ++k) { B[k] = x[k] ^ s[k]; B[8 + k] = s[8 + k]; }
+      if (bc) {
+        st8(bc + 16 * pos, B);
+        st8(bc + 16 * pos + 8, B + 8);
+      }
+      cpy8(h, C.mid_leaf);
+      cmp(h, B);
+      cmp_kw(h, C.kw_leafpad);
+      cpy8(o, s + 16);
+      f_second3(pos, h, o);
+    } else {
+      cpy8(o, s + 16);
+    }
+    st8(levels + 8 * pos, o);
+  }
+  __syncthreads();
+  u64* sm = SF;
+  if (rower) cpy8(sm + 8 * t, o);
+  int L = 0;
+  while ((1u << L) < cnt) ++L;
+  for (int l = 1; l <= L; ++l) {
+    __syncthreads();
+    const u32 m = cnt >> l;
+    u64 r[8];
+    if (t < m) {
+      u64 a[8], b[8];
+      cpy8(a, sm + 16 * t);
+      cpy8(b, sm + 16 * t + 8);
+      node_any<NU>(l - 1, (u64)blockIdx.x * m + t, a, b, r);
+    }
+    __syncthreads();
+    if (t < m) {
+      cpy8(sm + 8 * t, r);
+      st8(level_at(levels, width, l) + 8 * ((u64)blockIdx.x * m + t), r);
+    }
+  }
+  if (t != 0 || L >= depth) return;
+  u64 cur[8], idx = blockIdx.x;
+  cpy8(cur, sm);
+  const u64 nL = width >> L;
+  for (int l = L; l < depth; ++l) {
+    const u64 p = idx >> 1;
+    u32* c = ctr + (nL - (width >> l)) + p;
+    __threadfence();
+    if (atomicAdd(c, 1u) == 0) return;
+    *c = 0;
+    __threadfence();
+    u64 sib[8], r[8];
+    ld8cg(level_at(levels, width, l) + 8 * (idx ^ 1), sib);
+    node_lr<NU>(l, p, idx & 1, cur, sib, r);
+    st8(level_at(levels, width, l + 1) + 8 * p, r);
+    cpy8(cur, r);
+    idx = p;
+  }
+}
+
 struct Mine {
   u64 n = 0, width = 0;
   int depth = 0;
@@ -828,6 +920,11 @@ struct Mine {
   void data(const uint8_t* rows, cudaStream_t st, u64* bc = nullptr) {
     const u32 cnt = (u32)std::min<u64>(width, TPB);
     sr_data<TPB, MINB, PF, DG, NU><<<(unsigned)(width / cnt), cnt, 0, st>>>(rows, n, width, depth, S, F, levels, bc, ctr);
+  }
+  template <int TPB, int NU>
+  void v5(const uint8_t* rows, cudaStream_t st, u64* bc = nullptr) {
+    const u32 cnt = (u32)std::min<u64>(width, TPB / 2);
+    sr_leaf5<TPB, NU><<<(unsigned)(width / cnt), 2 * cnt, 0, st>>>(rows, Tn, n, width, depth, levels, ctr, bc);
   }
   // v3's fused leaf (no fold), then commit_gpu's tree schedule
   template <int ORDER>
@@ -988,6 +1085,9 @@ static int check(int argc, char** argv) {
       case 16: me.v4<256, 2>(d, 0, bc); break;
       case 17: me.leaf_cg<0>(d, 0, bc); break;
       case 18: me.leaf_cg<2>(d, 0, bc); break;
+      case 19: me.v5<256, 0>(d, 0, bc); break;
+      case 20: me.v5<256, 2>(d, 0, bc); break;
+      case 21: me.v5<128, 0>(d, 0, bc); break;
       case 12: {
         static cudaStream_t s2;
         static cudaEvent_t e2[2];
@@ -1091,6 +1191,9 @@ static int bench(int argc, char** argv, bool nsys_mode) {
   arms.push_back({"v4_128", true, [&](cudaStream_t s) { me.v4<256>(src, s); }, comps});
   arms.push_back({"v1n", true, [&](cudaStream_t s) { me.salts(s); me.data<256, 2, false, sr::FULL, 2>(src, s); }, comps});
   arms.push_back({"v4n_128", true, [&](cudaStream_t s) { me.v4<256, 2>(src, s); }, comps});
+  arms.push_back({"v5_128", true, [&](cudaStream_t s) { me.v5<256, 0>(src, s); }, comps});
+  arms.push_back({"v5n_128", true, [&](cudaStream_t s) { me.v5<256, 2>(src, s); }, comps});
+  arms.push_back({"v5_64", true, [&](cudaStream_t s) { me.v5<128, 0>(src, s); }, comps});
 #undef V2
   u64* io;
   const int rt = 256, rb = prop.multiProcessorCount * 8, chain = 256;
