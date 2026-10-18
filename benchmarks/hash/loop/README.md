@@ -29,7 +29,8 @@ arm's measures, each measurement naming its `arm` (stock, sha512, blake3). The v
   `benchmarks/hash/intpipe/` at `cursor/verity-hash-15ad` 4369ae628.
 - `collect.py`: the run's measures per arm (its docstring defines them): TPOT and throughput overhead against stock with their 95%
   intervals (the headline), prefill and decode step time, the model's own GPU time per step and its rise over stock, hash GPU time
-  per step, and the noise (stock's TPOT spread over its interleaved reps).
+  per step, the noise (stock's TPOT spread over its interleaved reps), and the first profiled run's wall-time rise and bytes
+  copied: the timed runs replay its requests and hit its plans, so only that run takes the learning path every live step takes.
 - `label.py`: the labels, idempotent; rerun it on runs whose launching VM stopped waiting.
 - `plot.py`: iteration against each measure, one line per (GPU, arm), from the evidence store only
   (`research data select --label campaign=hash-loop --kind bench-result/v1`, after `research data refresh`, since each run

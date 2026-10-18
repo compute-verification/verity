@@ -17,6 +17,11 @@ bench arm's own id. Measures (stock's step times are stock-prof's, the same engi
   {prefill,decode}_hash_gpu_ms GPU time of the hash kernels (leaves + tree) launched per step
   {prefill,decode}_serve_rise_pct  100 (serve_arm / serve_stock - 1): the model's kernels slowed by sharing the GPU
   noise_tpot_cv_pct        (stock only) the coefficient of variation of stock's TPOT over its interleaved reps
+  first_run_ms             wall time of the arm's first profiled run (the gate run, the same steps): no plan is learned yet, so every
+                           step is a learning step, as every step is under live serving, where a batch's shape never repeats; the
+                           timed runs replay its requests and hit its plans
+  first_run_rise_pct       100 (first_run_arm / first_run_stock - 1)
+  first_run_copy_gb        GB copied D2H plus H2D in that run (memcpy.DtoH.GB + memcpy.HtoD.GB)
 The step measures need a one-point sweep: nsys_summary's runs carry no sweep point, so a wider sweep reports the ratios only.
 """
 from __future__ import annotations
@@ -74,6 +79,11 @@ def step_means(summary: list[dict], reps: int) -> dict[str, float]:
         out[f"{phase}_step_ms"] = mean(lambda r: r.get("step_ms", 0.0))
         out[f"{phase}_serve_ms"] = mean(lambda r: r.get("serve", 0.0))
         out[f"{phase}_hash_gpu_ms"] = mean(lambda r: r.get("hash.leaves", 0.0) + r.get("hash.tree", 0.0))
+    first = summary[0] if len(summary) > reps else {}
+    if "run_wall_ms" in first:
+        out["first_run_ms"] = round(first["run_wall_ms"], 3)
+        cat = first.get("gpu_ms_by_category", {})
+        out["first_run_copy_gb"] = round(sum(cat.get(k, (0.0,))[0] for k in ("memcpy.DtoH.GB", "memcpy.HtoD.GB")), 3)
     return out
 
 
@@ -108,7 +118,10 @@ def main() -> int:
     base = steps.get("stock", {})
     for arm, s in steps.items():
         for k, v in s.items():
-            meas.append({"name": k, "arm": arm, "value": v, "unit": "ms"})
+            meas.append({"name": k, "arm": arm, "value": v, "unit": "GB" if k.endswith("_gb") else "ms"})
+        if arm != "stock" and base.get("first_run_ms") and "first_run_ms" in s:
+            rise = round(100 * (s["first_run_ms"] / base["first_run_ms"] - 1), 3)
+            meas.append({"name": "first_run_rise_pct", "arm": arm, "value": rise, "unit": "%"})
         if arm != "stock":
             for phase in ("prefill", "decode"):
                 b, x = base.get(f"{phase}_serve_ms"), s.get(f"{phase}_serve_ms")

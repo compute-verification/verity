@@ -21,7 +21,7 @@ from collections import defaultdict
 from pathlib import Path
 
 MEASURES = ("tpot_overhead_pct", "throughput_overhead_pct", "prefill_step_ms", "decode_step_ms", "prefill_hash_gpu_ms",
-            "decode_hash_gpu_ms", "prefill_serve_rise_pct", "decode_serve_rise_pct")
+            "decode_hash_gpu_ms", "prefill_serve_rise_pct", "decode_serve_rise_pct", "first_run_rise_pct", "first_run_copy_gb")
 ARMS = ("stock", "sha512", "blake3")   # their order in the table; plot.py draws every arm it finds
 HEADLINE = ("tpot_overhead_pct", "throughput_overhead_pct")
 
