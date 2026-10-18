@@ -111,3 +111,47 @@ def test_stratum_picks_takes_a_seed_or_a_key():
     assert CH.stratum_picks([[1, 2], [3]], 5, None, key=CH.replay_key(AUDITOR_KEY, ROOT)) == [[1, 2], [3]]
     with pytest.raises(ValueError):
         CH.stratum_picks([[1, 2]], -1, None, key=CH.replay_key(AUDITOR_KEY, ROOT))
+
+
+# --- a run of record (`commit.record`): live draws only --------------------------------------------------------------------
+
+class _Run:
+    def __init__(self, root: bytes, leaves: list[int]):
+        self.run_root, self.extra = root, {}
+        self.steps = [type("S", (), {"n_leaves": n})() for n in leaves]
+
+
+RECORD_ROOT = hashlib.sha512(b"record").digest()
+
+
+def test_a_run_of_record_draws_only_from_its_live_source():
+    run = _Run(RECORD_ROOT, [5, 0, 9, 3])
+    with pytest.raises(ValueError, match="no live key"):
+        CH.positions_of(run, 8)
+    key = CH.draw_live(run, AUDITOR_KEY.hex())
+    assert key == AUDITOR_KEY and run.extra["challenge"] == {"key": AUDITOR_KEY.hex(), "origin": "auditor", "after_run_root": RECORD_ROOT.hex()}
+    want = derive(AUDITOR_KEY, CH.POSITIONS_DOMAIN, {"run_root": RECORD_ROOT, "salt": b"p", "layout": "5,0,9,3"})
+    cum = [5, 5, 14, 17]
+    got = CH.positions_of(run, 40, b"p")
+    assert [(cum[s - 1] if s else 0) + i for s, i in got] == [want.uniform(17, j) for j in range(40)]
+    assert CH.identities_kw(run) == {"legacy": False, "source": AUDITOR_KEY}
+    assert CH.kernel_seed_of(run) == derive(AUDITOR_KEY, CH.KERNEL_CHECK_DOMAIN, {"run_root": RECORD_ROOT}).uniform(1 << 32)
+
+
+def test_own_coins_are_fresh_and_bound_to_the_root_they_follow():
+    a, b = _Run(RECORD_ROOT, [4]), _Run(RECORD_ROOT, [4])
+    assert CH.draw_live(a) != CH.draw_live(b) and a.extra["challenge"]["origin"] == "own"
+    a.run_root = hashlib.sha512(b"another root").digest()
+    with pytest.raises(ValueError, match="no live key"):
+        CH.positions_of(a, 2)
+    with pytest.raises(ValueError, match="at least 16 bytes"):
+        CH.live_source("00" * 8)
+
+
+def test_a_recorded_vllm_v1_run_reads_the_legacy_draws():
+    run = _Run(ROOT, [7, 2])
+    assert CH.draw_live(run) is None and "challenge" not in run.extra
+    assert CH.positions_of(run, 12, b"s") == CH.challenge_positions(ROOT, [7, 2], 12, b"s")
+    assert CH.identities_kw(run) == {} and CH.kernel_seed_of(run) == CH.kernel_check_seed(ROOT)
+    with pytest.raises(ValueError, match="64 bytes"):
+        CH.record_positions(ROOT, [7, 2], 3, source=AUDITOR_KEY)

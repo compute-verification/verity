@@ -10,6 +10,12 @@ and the draw's other bindings as context:
 * the replay sample (`replay_key`): `verity/sampled-proofs/vu-sample/v1`, the domain of sampled proofs' former derived
   proof-unit draw, with `per_stratum` units of each stratum drawn uniformly at the stratum's index (`stratum_picks`).
 
+A run of record (`commit.record`: a 64-byte root of ``frame-v3-sha512`` / ``hm96-sha512`` rows) has no legacy draw.  Its source is
+drawn once its root is fixed (`draw_live`: the auditor's key, else this process's own coins) and recorded with the run, and every draw
+over it is a non-legacy form from that source: `record_positions`, `identity_picker(legacy=False)`, `replay_key` and
+`record_kernel_check_seed`, through `positions_of`, `identities_kw` and `kernel_seed_of`, which read a recorded ``vllm-v1`` run with
+the legacy forms.
+
 The legacy seeds of the other drivers (replay's tiers, the compiled-kernel check, recompute's reference rows,
 difftest, the relation checkers) are here too (`root_seed` .. `case_seed`), with the only generator constructors
 (`stream`, `generator`): changing one moves every sample drawn from it.
@@ -17,6 +23,7 @@ difftest, the relation checkers) are here too (`root_seed` .. `case_seed`), with
 from __future__ import annotations
 
 import hashlib
+import os
 import random
 from bisect import bisect_right
 from collections.abc import Callable, Sequence
@@ -157,3 +164,95 @@ def stream(seed: Any) -> random.Random:
 def generator(seed: Any) -> np.random.Generator:
     """A numpy ``Generator`` over ``seed``, as given."""
     return np.random.default_rng(seed)
+
+
+# --- draws over a run of record (`commit.record`): live coins only ---------------------------------------------------------
+
+RECORD_ROOT_BYTES = 64
+KERNEL_CHECK_DOMAIN = "verity/vllm-commit/kernel-check-steps/v1"
+
+
+def of_record(run_root: bytes) -> bool:
+    """A run of record has the record's 64-byte root; a run recorded before it, a 32-byte ``vllm-v1`` root (read with the legacy
+    derivations above)."""
+    return len(run_root) == RECORD_ROOT_BYTES
+
+
+def live_source(given: str | bytes | None = None) -> tuple[bytes, str]:
+    """The source of every draw over a run of record, taken once its root is fixed: ``(key, origin)``.  The auditor's key when one is
+    ``given`` (hex or bytes; origin ``auditor``), else 32 fresh OS bytes this process draws as the run's own auditor (origin ``own``,
+    the Commit's rule for PoUW's coins: ``protocol_options.own_auditor``).  Never derived from the run root."""
+    if given:
+        key = bytes.fromhex(given) if isinstance(given, str) else bytes(given)
+        if len(key) < 16:
+            raise ValueError(f"a challenge key is at least 16 bytes, not {len(key)}")
+        return key, "auditor"
+    return os.urandom(32), "own"
+
+
+def record_positions(record_root: bytes, leaves_per_step: Sequence[int], k: int, salt: bytes = b"", *, source: bytes) -> list[tuple[int, int]]:
+    """`challenge_positions` off legacy over a root of record: `k` leaves uniform over all leaves with replacement, drawn from
+    ``derive(source, POSITIONS_DOMAIN, {run_root, salt, layout})``."""
+    _source(False, source)
+    if not of_record(record_root):
+        raise ValueError(f"a root of record is {RECORD_ROOT_BYTES} bytes, not {len(record_root)}")
+    total = sum(leaves_per_step)
+    if total == 0 or k <= 0:
+        return []
+    cum = list(accumulate(leaves_per_step))
+    key = derive(source, POSITIONS_DOMAIN, {"run_root": bytes(record_root), "salt": salt, "layout": ",".join(map(str, leaves_per_step))})
+    out = []
+    for i in range(k):
+        g = key.uniform(total, i)
+        s = bisect_right(cum, g)
+        out.append((s, g - (cum[s - 1] if s else 0)))
+    return out
+
+
+def record_kernel_check_seed(record_root: bytes, *, source: bytes) -> int:
+    """`kernel_check_seed` over a root of record: a 32-bit seed drawn from ``derive(source, KERNEL_CHECK_DOMAIN, {run_root})``."""
+    _source(False, source)
+    return derive(source, KERNEL_CHECK_DOMAIN, {"run_root": bytes(record_root)}).uniform(1 << 32)
+
+
+def draw_live(run: Any, given: str | bytes | None = None) -> bytes | None:
+    """Draw a run of record's live source (`live_source`) once its root is fixed, and put it on the run's record (``run.extra
+    ["challenge"]``: the key, its origin and the root it was drawn after; a verifier's coins are public once drawn).  None for a run
+    recorded before the record, whose draws stay the legacy ones."""
+    if not of_record(bytes(run.run_root)):
+        return None
+    key, origin = live_source(given)
+    run.extra["challenge"] = {"key": key.hex(), "origin": origin, "after_run_root": bytes(run.run_root).hex()}
+    return key
+
+
+def source_of(run: Any) -> bytes:
+    """The live source a run of record drew (`draw_live`), from a `RunCommitment` or a row's ``commit`` record; refused by name when it
+    drew none or drew it after another root."""
+    extra = run.extra if hasattr(run, "extra") else (run.get("extra") or {})
+    root = bytes(run.run_root).hex() if hasattr(run, "run_root") else str(run.get("run_root"))
+    ch = (extra or {}).get("challenge") or {}
+    if not ch.get("key") or ch.get("after_run_root") != root:
+        raise ValueError(f"run of record {root[:16]}: no live key drawn after its root (draw_live) -- no challenge without one")
+    return bytes.fromhex(ch["key"])
+
+
+def positions_of(run: Any, k: int, salt: bytes = b"") -> list[tuple[int, int]]:
+    """``k`` opening positions of ``run``: `record_positions` from its live source over a root of record, else the recorded legacy
+    `challenge_positions` over its ``vllm-v1`` root."""
+    leaves = [s.n_leaves for s in run.steps]
+    if of_record(bytes(run.run_root)):
+        return record_positions(bytes(run.run_root), leaves, k, salt, source=source_of(run))
+    return challenge_positions(bytes(run.run_root), leaves, k, salt)
+
+
+def identities_kw(run: Any) -> dict[str, Any]:
+    """`identity_picker`'s (and `binding.challenge_identities`') keywords for ``run``: off legacy with its live source over a root of
+    record, else none (the recorded legacy form)."""
+    return {"legacy": False, "source": source_of(run)} if of_record(bytes(run.run_root)) else {}
+
+
+def kernel_seed_of(run: Any) -> int:
+    """The compiled-kernel check's step seed for ``run``: `record_kernel_check_seed` over a root of record, else `kernel_check_seed`."""
+    root = bytes(run.run_root)
+    return record_kernel_check_seed(root, source=source_of(run)) if of_record(root) else kernel_check_seed(root)
