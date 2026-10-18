@@ -24,9 +24,13 @@ guarantee `audit_window_split_of_record` is stated over), on its own so that a g
 * `auditReg`: the registration, then the coin of the law at that registration, then the session on its draw (C1);
 * `WUnit`, `slice`, `seqCalls`, `windowSession`: a window's units (a call and a unit of that call), a call's share of a
   draw, and the calls' sessions in order;
+* `SeedIn`, `UnitStmts`: a unit's seed inputs (tag, salt, position, root(A_j), root(B_j)) and the units' statements, each
+  a self-contained tile (decision 106) whose position is its place in the registered partition (`UnitStmts.seedIn`), and
+  `UnitStmts.wrong`, the units whose committed outputs aren't their function of their inputs;
+* `harmSets`: PoUW's harm family, the wrong-unit sets holding a share of the window's work by the scheme's work table;
 * `CallAnalysis`: what the analysis of one call fixes, in the randomized-extraction form: from each state of the call's
   session, the probabilities that it accepts while a drawn unit's extraction fails (`ks`) or succeeds but disagrees with
-  a transcript on the unit's wires (`link`). The transcripts and their wrong units are the window's;
+  a transcript on the unit's wires (`link`). The transcripts and the units' statements are the window's;
 * `thenExp`, `along`: a quantity of each call's session state, summed over the calls along the window's run;
 * the premises of the window's composition: `EscapesWithin` (the draw's escapes within `η` of the product law's at every
   registration), `CallAnalysis.KnowledgeSound` (a call's extraction, from every state of its session) and
@@ -147,10 +151,69 @@ def cont (σ : Strategy (auditReg L session)) : Cont L session (reg σ) :=
 
 end Audit
 
-/-! ## The window -/
+/-! ## A window's units, their statements and PoUW's harm family -/
 
 /-- A window's units: a call `c < C` and one of its `n c` units. -/
 abbrev WUnit {C : ℕ} (n : Fin C → ℕ) := (c : Fin C) × Fin (n c)
+
+/-- **A unit's seed inputs** (decisions 101, 106): what the seed of the noise it reads hashes,
+`SHA-512(tag ‖ salt ‖ position ‖ root(A_j) ‖ root(B_j))` for a unit of matmul `j`. -/
+structure SeedIn (Tag Salt Pos Root : Type) where
+  tag : Tag
+  salt : Salt
+  pos : Pos
+  rootA : Root
+  rootB : Root
+
+/-- **The window's units, as their statements read them** (decision 106). A unit is a self-contained `r × c` tile of its
+call's matmul `A_c·B_cᵀ`: it checks its seed, derives from it the noise it reads, and computes its `r·c` dots. Every seed
+input is a public or committed input of the unit, bound before the draw:
+* `tag` (protocol structure) and `salt` (the epoch's live coin, opened before the window) are public, one each for the
+  window;
+* `rootA X c` and `rootB X c`, call `c`'s operand roots, are committed: read from the committed transcript `X`, which is
+  fixed at registration, and bound by the unit's proof through its rows' opening path to the window root;
+* the position is the unit's place `⟨c, u⟩` in the registered partition (`seedIn`), so no message of a session sets it:
+  a prover that could pick a position inside a unit could pick its seed.
+
+`computes v s X`: `X`'s committed outputs at `v` are `v`'s function of its inputs, `X`'s values at `v`'s input wires
+and the noise of the seed inputs `s`. -/
+structure UnitStmts (Tr : Type) {C : ℕ} (n : Fin C → ℕ) where
+  Tag : Type
+  Salt : Type
+  Root : Type
+  tag : Tag
+  salt : Salt
+  rootA : Tr → Fin C → Root
+  rootB : Tr → Fin C → Root
+  computes : WUnit n → SeedIn Tag Salt (WUnit n) Root → Tr → Prop
+
+namespace UnitStmts
+
+variable {Tr : Type} {C : ℕ} {n : Fin C → ℕ}
+
+/-- Unit `v`'s seed inputs in the transcript `X`: the window's tag and salt, its place `v` as its position, and its
+call's operand roots in `X`. -/
+def seedIn (U : UnitStmts Tr n) (X : Tr) (v : WUnit n) : SeedIn U.Tag U.Salt (WUnit n) U.Root :=
+  ⟨U.tag, U.salt, v, U.rootA X v.1, U.rootB X v.1⟩
+
+open Classical in
+/-- **The wrong units of a transcript**: those whose committed outputs in `X` aren't their function of their inputs at
+their seed inputs. Wrong is about values, not work: a deficient unit whose committed outputs came out right by luck isn't
+wrong. -/
+noncomputable def wrong (U : UnitStmts Tr n) (X : Tr) : Finset (WUnit n) :=
+  Finset.univ.filter fun v => ¬ U.computes v (U.seedIn X v) X
+
+end UnitStmts
+
+/-- **PoUW's harm family** (the `𝓑` the window audit reads for compute): the wrong-unit sets whose work is at least the
+share `ε` of the window's, `∑_{v ∈ B} W_ref(v) ≥ ε · W` with `W = ∑_v W_ref(v)`, where `Wref` is the scheme's work
+table read at each unit's template. Under decision 106 a unit is a self-contained `r × c` tile (`UnitStmts`), so its
+harm is its own `W_ref(tile)`, `r·c` dots. That is fan 1, since a wrong tile is charged its own work and no other
+unit's, and there is no steering term, since no unit sets the noise another reads. -/
+def harmSets {C : ℕ} {n : Fin C → ℕ} (Wref : WUnit n → ℕ) (ε : ℝ≥0∞) (B : Finset (WUnit n)) : Prop :=
+  ε * ((∑ v, Wref v : ℕ) : ℝ≥0∞) ≤ ((∑ v ∈ B, Wref v : ℕ) : ℝ≥0∞)
+
+/-! ## The window -/
 
 section Window
 
@@ -209,31 +272,37 @@ noncomputable def along (sess : Fin C → Game Bool) (F : (c : Fin C) → Strate
 `Proofs/Flock/Soundness/Audit/Extraction.lean`): from each state `τ` of call `c`'s session on its share `S` of the draw,
 * `ks S R τ u`: `Pr[the session accepts ∧ extraction of the drawn unit u fails]`;
 * `link S R τ u X`: `Pr[it accepts ∧ extraction of u succeeds but differs from the transcript X on u's wires]`;
-* `cover`: when `u` is drawn and wrong in `X`, `Pr[accept] ≤ ks + link`.
-The transcripts `Tr` and their wrong units `wrong` are the window's. -/
-structure CallAnalysis {Reg Tr : Type} (wrong : Tr → Finset (WUnit n)) (c : Fin C)
+* `cover`: when `u` is drawn and wrong in `X` (`UnitStmts.wrong`), `Pr[accept] ≤ ks + link`.
+
+Extraction is against `u`'s statement at its place `⟨c, u⟩`: its relation derives the seed with `⟨c, u⟩` as the
+position and the roots its witness opens to the window root, as `UnitStmts.wrong` reads them. So `cover` can hold only
+for a session that checks unit `u` at that position, never at one the prover picks. The transcripts `Tr` and the units'
+statements `U` are the window's. -/
+structure CallAnalysis {Reg Tr : Type} (U : UnitStmts Tr n) (c : Fin C)
     (sess : Finset (Fin (n c)) → Reg → Game Bool) where
   ks : (S : Finset (Fin (n c))) → (R : Reg) → Strategy (sess S R) → Fin (n c) → ℝ≥0∞
   link : (S : Finset (Fin (n c))) → (R : Reg) → Strategy (sess S R) → Fin (n c) → Tr → ℝ≥0∞
-  cover : ∀ S R (τ : Strategy (sess S R)) u X, u ∈ S → (⟨c, u⟩ : WUnit n) ∈ wrong X →
+  cover : ∀ S R (τ : Strategy (sess S R)) u X, u ∈ S → (⟨c, u⟩ : WUnit n) ∈ U.wrong X →
     prob (· = true) (sess S R) τ ≤ ks S R τ u + link S R τ u X
 
 /-- **A call's knowledge soundness, from every state of its session** (premise `ε_c`): whatever the draw, the
 registration and the state the prover brings to the session, `Pr[accept ∧ extraction of a drawn unit fails] ≤ ε_c`.
 This is a per-unit proof system's knowledge soundness, which holds for every prover; in the window the state is the one
 the calls before and the whole draw left. -/
-def CallAnalysis.KnowledgeSound {Reg Tr : Type} {wrong : Tr → Finset (WUnit n)} {c : Fin C}
-    {sess : Finset (Fin (n c)) → Reg → Game Bool} (A : CallAnalysis wrong c sess) (ε : ℝ≥0∞) : Prop :=
+def CallAnalysis.KnowledgeSound {Reg Tr : Type} {U : UnitStmts Tr n} {c : Fin C}
+    {sess : Finset (Fin (n c)) → Reg → Game Bool} (A : CallAnalysis U c sess) (ε : ℝ≥0∞) : Prop :=
   ∀ S R (τ : Strategy (sess S R)) u, u ∈ S → A.ks S R τ u ≤ ε
 
 /-- **A call's link term in the window** (premise `δ_c`): for every window prover state after registration and every
 rule that picks a drawn unit before the sessions' first coin, the average over the draw of call `c`'s `link` at the
 picked unit if it is one of `c`'s, at the state the window's run brings to `c`'s session (`along`), against the window's
 committed transcript, is at most `δ_c`. The committed transcript is a function of the prover's state at registration, so
-it is the same for every call and every draw. -/
-def LinkSoundIn {Reg Tr : Type} {wrong : Tr → Finset (WUnit n)} (Lw : Reg → Law (WUnit n))
+it is the same for every call and every draw. The picked unit's `link` is at its place `⟨c, u⟩`, the position its
+statement carries (`CallAnalysis`): no state or rule sets a unit's position, and the roots its seed reads are the
+committed transcript's, fixed before the draw. -/
+def LinkSoundIn {Reg Tr : Type} {U : UnitStmts Tr n} (Lw : Reg → Law (WUnit n))
     (sess : (c : Fin C) → Finset (Fin (n c)) → Reg → Game Bool)
-    (committed : (R : Reg) → Cont Lw (windowSession sess) R → Tr) (A : (c : Fin C) → CallAnalysis wrong c (sess c))
+    (committed : (R : Reg) → Cont Lw (windowSession sess) R → Tr) (A : (c : Fin C) → CallAnalysis U c (sess c))
     (c : Fin C) (δ : ℝ≥0∞) : Prop :=
   ∀ (R : Reg) (τ : Cont Lw (windowSession sess) R) (tgt : (Lw R).Ω → Option (WUnit n)),
     avg (fun ω => along (fun c' => sess c' (slice ((Lw R).draw ω) c') R)
