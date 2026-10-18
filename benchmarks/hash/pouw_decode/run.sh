@@ -9,7 +9,7 @@
 #   research run --on vy-nebius-2 --project verity --campaign hash-loop --source . --cwd source \
 #     --env GPU_LEASE_WHO=kernels-pouw-decode -- bash benchmarks/hash/pouw_decode/run.sh
 # REPS (default 30), ROWS (default 32,128), SHAPES (default qkv,o,gate_up,down), PD_SIDE (the variants of the schedules with
-# side lanes, pd_host.SIDE, default 3,19) pass through.  NCU=KERNELS (a regex of launch names, as pd_commit_19)
+# side lanes, pd_host.SIDE, default 19,147) pass through.  NCU=KERNELS (a regex of launch names, as pd_commit_19)
 # replaces the timing and the trace with bench.py under ncu (--clock-control none, --set full, the first NCU_COUNT
 # matching launches, default 4, built with -lineinfo): the details page and each source line's and SASS instruction's
 # samples (ncu_*.csv).
@@ -49,7 +49,7 @@ g++ -O2 -std=c++20 -pthread -shared -fPIC -Wno-unknown-pragmas -o "$SCR/pd_host.
 PYTHONPATH="$ROOT" python3 "$HERE/host_test.py" "$SCR/pd_host.so" > "$OUT/host_test.txt" 2>&1
 tail -3 "$OUT/host_test.txt"
 
-export PD_SIDE=${PD_SIDE:-3,19}
+export PD_SIDE=${PD_SIDE:-19,147}
 B=(python3 "$HERE/bench.py" "$SCR/pearl_c_sm120.cubin" "$SCR/pd.cubin" --out "$OUT" --reps "$REPS" --rows "$ROWS" --shapes "$SHAPES")
 if [[ -n "${NCU:-}" ]]; then
   gpu-lease 1 --wait --preemptible --max-min 25 -- "$CUDA/bin/ncu" --clock-control none --set full --import-source yes \

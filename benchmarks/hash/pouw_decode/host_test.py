@@ -25,10 +25,12 @@ sys.path.insert(0, HERE)
 import refs  # noqa: E402
 from verity.core.protocols.pouw.audit import hm96_kernel_constants  # noqa: E402
 
-RS_MAX_SEGS, POISON, INDEX, PD_PAIR = 128, 0xA5, 5, 16
+RS_MAX_SEGS, POISON, INDEX, PD_PAIR, PD_GROUP = 128, 0xA5, 5, 16, 128
+SRC = open(os.path.join(HERE, "pd.cuh")).read()
 #: pd.cuh's PD_VARIANT_LIST, a launch each
-VARIANTS = tuple(int(x) for x in re.findall(r"X\((\d+)\)", re.search(r"#define PD_VARIANT_LIST\(X\)(.*)",
-                                                                       open(os.path.join(HERE, "pd.cuh")).read()).group(1)))
+VARIANTS = tuple(int(x) for x in re.findall(r"X\((\d+)\)", re.search(r"#define PD_VARIANT_LIST\(X\)(.*)", SRC).group(1)))
+#: PD_GROUP's tiles a CTA (pd.cuh's PD_G)
+GROUP = int(re.search(r"PD_G = (\d+)", SRC).group(1))
 
 
 class Args(C.Structure):
@@ -150,7 +152,7 @@ def main(argv: list[str]) -> int:
                 if (e := diff(f"m16={m16} k={k} mode {mode} variant {variant} {name}", got[name], want)):
                     fails.append(e)
         print(f"commit m16={m16} k={k}: done, {len(fails)} failures so far", flush=True)
-    for rows_, cols in ((32, 128), (48, 128), (64, 192), (128, 128), (16, 64)):
+    for rows_, cols in ((32, 128), (48, 128), (64, 192), (128, 128), (16, 64), (80, 384)):
         c = rng.integers(0, 1 << 32, (rows_, cols), dtype=np.uint32)
         u = rng.integers(0, 1 << 32, (rows_, cols), dtype=np.uint32)
         cb, ub = h.buf(c.tobytes()), h.buf(u.tobytes())
@@ -164,7 +166,10 @@ def main(argv: list[str]) -> int:
             fails.append(e)
         for variant in VARIANTS:
             out = h.buf(64 * tiles, POISON)
-            h.run(f"pd_tiles_{variant}", tiles, 32, p=(cb, ub, out), i=(rows_, cols))
+            if variant & PD_GROUP:
+                h.run(f"pd_tiles_{variant}", -(-rows_ // 64) * -(-tn // GROUP), 32 * GROUP, p=(cb, ub, out), i=(rows_, cols))
+            else:
+                h.run(f"pd_tiles_{variant}", tiles, 32, p=(cb, ub, out), i=(rows_, cols))
             cases += 1
             if (e := diff(f"tiles {rows_}x{cols} variant {variant}", out.tobytes(), want)):
                 fails.append(e)

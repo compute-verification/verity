@@ -22,7 +22,8 @@
 // fetched cold costs about as much again as the compression); PD_PREFETCH, a segment's 8 lines prefetched into L1 before its
 // first block; PD_PAIR, every serial compression of the critical path paired (`pd_pcmp`): a producer warp computes its
 // message schedule a chunk ahead while the consumer warp runs the rounds (the schedule is a third of a compression's
-// cycles on its thread), the segments' consumers loading each next block during the current one.
+// cycles on its thread), the segments' consumers loading each next block during the current one; PD_GROUP, pd_tiles
+// with PD_G tiles a CTA and their folds paired together on one warp.
 //
 // The builder (WMsg) writes `merkle._message`'s bytes as big-endian words, the data's 64-byte parts left zero and filled
 // later (wm_put64, at any byte offset).  pd_host.cpp builds this file for the host tests.
@@ -40,8 +41,8 @@ DEV uint8_t pd_e4m3(float f) { return (uint8_t)__nv_cvt_float_to_fp8(f, __NV_SAT
 #define PD_LDCG(p) (*(p))
 #endif
 
-constexpr int PD_ROUNDS = 1, PD_ROLLED = 2, PD_CALL = 4, PD_PREFETCH = 8, PD_PAIR = 16;
-#define PD_VARIANT_LIST(X) X(1) X(3) X(19)
+constexpr int PD_ROUNDS = 1, PD_ROLLED = 2, PD_CALL = 4, PD_PREFETCH = 8, PD_PAIR = 16, PD_GROUP = 128;
+#define PD_VARIANT_LIST(X) X(1) X(3) X(19) X(147)
 
 // ---------------------------------------------------------------- tables, once per module (pd_heads)
 enum { PD_SEED_A = 0, PD_NOISE_LINE = 1, PD_LINE = 2 };
@@ -874,37 +875,70 @@ template <int V> DEV void pd_tree_t(const Args a) {
   pd_tail<V>(a, tm, count, width, nodes, root, lk, 1, 2, 3, 0);
 }
 
-// pd_tiles_V: the tile leaves (s512_tile_leaves' bytes), a CTA of 32 threads a tile (row-major; a last row block of R = 16,
-// 32 or 48 rows partial), lane j < s = R / 2 its segment j from the header table, then pd_fold.  p0 C~ (rows x cols), p1 U,
-// p2 out (64 B a tile); i0 rows (a multiple of 16), i1 cols (a multiple of 64)
-template <int V> DEV void pd_tiles_t(const Args a) {
-  __shared__ uint64_t dig[32 * 8], kw[17 * 80];
-  const int cols = a.i[1], tn = cols / 64, t = blockIdx.x, j = threadIdx.x;
-  const int ti = t / tn, tj = t % tn, R = min(64, a.i[0] - 64 * ti), s = R / 2;
-  if (j < s) {
-    uint64_t st[8], w[16];
-    rs_seg_head(st, j, s);
-    const auto blk = [&](int c) {
-      const size_t row = 64 * (size_t)ti + 2 * j + c / 4;
-      return reinterpret_cast<const uint4*>(a.p[c & 1]) + (row * cols + 64 * tj + 32 * (c >> 1 & 1)) / 4;
-    };
-    if constexpr ((V & PD_PREFETCH) != 0) {
+// tile (ti, tj)'s segment j of s, its digest state into dig (8 words at 8 j)
+template <int V> DEV void pd_tile_seg(const Args& a, int cols, int ti, int tj, int j, int s, uint64_t* dig) {
+  uint64_t st[8], w[16];
+  rs_seg_head(st, j, s);
+  const auto blk = [&](int c) {
+    const size_t row = 64 * (size_t)ti + 2 * j + c / 4;
+    return reinterpret_cast<const uint4*>(a.p[c & 1]) + (row * cols + 64 * tj + 32 * (c >> 1 & 1)) / 4;
+  };
+  if constexpr ((V & PD_PREFETCH) != 0) {
 #pragma unroll
-      for (int c = 0; c < RS_SEG / 128; c++) pd_prefetch(blk(c));
-    }
-#pragma unroll 1
-    for (int c = 0; c < RS_SEG / 128; c++) {
-      pd_words(w, blk(c));
-      pd_cmp<V>(st, w);
-    }
-    pd_padc<V>(st, 128 + RS_SEG);
-#pragma unroll
-    for (int q = 0; q < 8; q++) dig[8 * j + q] = st[q];
+    for (int c = 0; c < RS_SEG / 128; c++) pd_prefetch(blk(c));
   }
-  __syncthreads();
-  uint64_t st[8];
-  pd_fold<V>(RS_Q_HEADS + 8 * s, dig, s, st, j, kw);
-  if (j == 0) s512_store(a.p[2] + 64ull * t, st, 8);
+#pragma unroll 1
+  for (int c = 0; c < RS_SEG / 128; c++) {
+    pd_words(w, blk(c));
+    pd_cmp<V>(st, w);
+  }
+  pd_padc<V>(st, 128 + RS_SEG);
+#pragma unroll
+  for (int q = 0; q < 8; q++) dig[8 * j + q] = st[q];
+}
+// pd_tiles_V: the tile leaves (s512_tile_leaves' bytes), a CTA of 32 threads a tile (row-major; a last row block of R = 16,
+// 32 or 48 rows partial), lane j < s = R / 2 its segment j from the header table, then pd_fold.  With PD_GROUP (and
+// PD_PAIR) a CTA of 32 PD_G threads takes PD_G tiles of a row block (cdiv(cols / 64, PD_G) CTAs a row block, the last
+// partial), tile g's segment j on thread g s + j, and the tiles' folds run together on warp 0, lane g tile g's, paired with
+// warp 1 (8 PD_PAIR_WORDS bytes of dynamic shared memory): a fold's lone lane no longer holds a warp's issue to itself.
+// p0 C~ (rows x cols), p1 U, p2 out (64 B a tile); i0 rows (a multiple of 16), i1 cols (a multiple of 64)
+constexpr int PD_G = 4, PD_GDIG = 32 * 8 + 1;   // a tile's digests, a word apart so the folds' lanes miss each other's banks
+template <int V> DEV void pd_tiles_t(const Args a) {
+  const int cols = a.i[1], tn = cols / 64;
+  if constexpr ((V & PD_GROUP) != 0) {
+    static_assert((V & PD_PAIR) != 0, "PD_GROUP's folds are paired");
+    __shared__ uint64_t dig[PD_G * PD_GDIG];
+    if (blockDim.x != 32 * PD_G || pd_dyn_bytes() < 8u * PD_PAIR_WORDS) __trap();
+    const int gn = (tn + PD_G - 1) / PD_G, ti = blockIdx.x / gn, tj0 = PD_G * (blockIdx.x % gn);
+    const int R = min(64, a.i[0] - 64 * ti), s = R / 2, gs = min(PD_G, tn - tj0), tid = threadIdx.x, lane = tid % 32;
+    if (tid < gs * s) pd_tile_seg<V>(a, cols, ti, tj0 + tid / s, tid % s, s, dig + PD_GDIG * (tid / s));
+    __syncthreads();
+    if (tid / 32 == 1) {
+      pd_pserve(0);
+      return;
+    }
+    if (tid >= 32) return;
+    const bool on = lane < gs;
+    const uint64_t* dg = dig + PD_GDIG * (on ? lane : 0);
+    uint64_t st[8], w[16];
+#pragma unroll
+    for (int q = 0; q < 8; q++) st[q] = RS_Q_HEADS[8 * s + q];
+#pragma unroll 1
+    for (int b = 0; b < s / 2 + 1; b++) {
+      pd_fold_block(dg, s, b, w);
+      pd_cmp<V, 1>(st, w);
+    }
+    pd_pstop();
+    if (on) s512_store(a.p[2] + 64ull * (ti * tn + tj0 + lane), st, 8);
+  } else {
+    __shared__ uint64_t dig[32 * 8], kw[17 * 80];
+    const int t = blockIdx.x, j = threadIdx.x, ti = t / tn, tj = t % tn, s = min(64, a.i[0] - 64 * ti) / 2;
+    if (j < s) pd_tile_seg<V>(a, cols, ti, tj, j, s, dig);
+    __syncthreads();
+    uint64_t st[8];
+    pd_fold<V>(RS_Q_HEADS + 8 * s, dig, s, st, j, kw);
+    if (j == 0) s512_store(a.p[2] + 64ull * t, st, 8);
+  }
 }
 
 // pd_probe_V: a compression's cost on one warp, alone on its SM: i0 compressions chained, each fed the last one's state; i1
@@ -958,6 +992,8 @@ template <int V> DEV void pd_probe_t(const Args a) {
 #define PD_INSTANCE(V)                                                                                                    \
   extern "C" __global__ void __launch_bounds__(192) pd_commit_##V(const Args a) { pd_commit_t<V>(a); }                  \
   extern "C" __global__ void __launch_bounds__(128) pd_tree_##V(const Args a) { pd_tree_t<V>(a); }                      \
-  extern "C" __global__ void __launch_bounds__(32) pd_tiles_##V(const Args a) { pd_tiles_t<V>(a); }                     \
+  extern "C" __global__ void __launch_bounds__((V & PD_GROUP) ? 32 * PD_G : 32) pd_tiles_##V(const Args a) {            \
+    pd_tiles_t<V>(a);                                                                                                     \
+  }                                                                                                                       \
   extern "C" __global__ void __launch_bounds__(64) pd_probe_##V(const Args a) { pd_probe_t<V>(a); }
 PD_VARIANT_LIST(PD_INSTANCE)
