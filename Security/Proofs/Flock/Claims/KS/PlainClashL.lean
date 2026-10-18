@@ -20,14 +20,14 @@ namespace FlockDeploy.KS
 
 open Flock FlockSoundness FlockSoundness.Discharge.Tables Claims.Bridge.Live
 
-/-- **Two openings of one position to different rows, against one root, in one log**, at a level `lv`. -/
-def PlainLevelClash (lv : Flock.Level) (lanes : ℕ) (L : List (Claims.Msg × Claims.Msg)) : Prop :=
-  ∃ (root : ByteArray) (q : ℕ) (row row' : Array F128), row ≠ row' ∧ Opening lv lanes root L q row ∧
-    Opening lv lanes root L q row'
+/-- **Two openings of one position to different rows, against one root, in one log**, under `ms` at a level `lv`. -/
+def PlainLevelClash (ms : MerkleScheme) (lv : Flock.Level) (lanes : ℕ) (L : List (Claims.Msg × Claims.Msg)) : Prop :=
+  ∃ (root : ByteArray) (q : ℕ) (row row' : Array F128), row ≠ row' ∧ Opening ms lv lanes root L q row ∧
+    Opening ms lv lanes root L q row'
 
 /-- **A clash at any level collides in the log.** -/
-theorem plainLevelClash_tied {lv : Flock.Level} {lanes : ℕ} {L : List (Claims.Msg × Claims.Msg)}
-    (h : PlainLevelClash lv lanes L) : Claims.TiedColl sha512 L := by
+theorem plainLevelClash_tied {ms : MerkleScheme} {lv : Flock.Level} {lanes : ℕ} {L : List (Claims.Msg × Claims.Msg)}
+    (h : PlainLevelClash ms lv lanes L) : Claims.TiedColl sha512 L := by
   obtain ⟨_, _, _, _, hne, h₁, h₂⟩ := h
   exact tiedColl_of_append_self (tiedColl_of_openings h₁ h₂ hne)
 
@@ -42,8 +42,8 @@ def PlainRawClashRunL {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : 
       ((∃ (q : ℕ) (a b : List FlockLevel3.GF128),
         (q, a) ∈ plainRawCols (Claims.run sha512 P (V false) x ω (Φ (u, r'))).seen ∧
         (q, b) ∈ plainRawCols (Claims.run sha512 P (V false) x ω (Φ (u, r'))).seen ∧ a ≠ b) ∨
-        (∃ (lv : Flock.Level) (lanes : ℕ),
-          PlainLevelClash lv lanes (Claims.run sha512 P (V false) x ω (Φ (u, r'))).vLog) ∨
+        (∃ (ms : MerkleScheme) (lv : Flock.Level) (lanes : ℕ),
+          PlainLevelClash ms lv lanes (Claims.run sha512 P (V false) x ω (Φ (u, r'))).vLog) ∨
         Claims.TiedColl sha512 (Claims.run sha512 P (V false) x ω (Φ (u, r'))).vLog)
 
 /-- **The clash at any level gives the collision**, so `PlainRawClashRunL` gives `PlainClashRun`. -/
@@ -52,7 +52,7 @@ theorem plainClashRun_of_rawL {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg
     {P' : Claims.Prover (Ω × τ)} {Φ : τ × (Fin (N x + 2) → LCoin 65536) → Fin ((V false).k x) → Coin}
     {pL : LiveOutJ 1 mPts → Prop} (h : PlainRawClashRunL P x ω mPts N dg w P' Φ pL) :
     PlainClashRun P x ω mPts N dg w P' Φ pL := fun u r' hp => by
-  obtain ⟨hacc, ⟨q, a, b, ha, hb, hab⟩ | ⟨_, _, hc⟩ | ht⟩ := h u r' hp
+  obtain ⟨hacc, ⟨q, a, b, ha, hb, hab⟩ | ⟨_, _, _, hc⟩ | ht⟩ := h u r' hp
   · exact ⟨hacc, plain_selfClash_tied hacc ha hb hab⟩
   · exact ⟨hacc, plainLevelClash_tied hc⟩
   · exact ⟨hacc, ht⟩

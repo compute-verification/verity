@@ -38,7 +38,8 @@ def PlainRawClashL {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω)
     Prop :=
   (∃ (q : ℕ) (a b : List 𝔽), (q, a) ∈ plainRawCols (Claims.run sha512 P (V false) x ω c).seen ∧
       (q, b) ∈ plainRawCols (Claims.run sha512 P (V false) x ω c).seen ∧ a ≠ b) ∨
-    (∃ (lv : Flock.Level) (lanes : ℕ), PlainLevelClash lv lanes (Claims.run sha512 P (V false) x ω c).vLog) ∨
+    (∃ (ms : MerkleScheme) (lv : Flock.Level) (lanes : ℕ),
+      PlainLevelClash ms lv lanes (Claims.run sha512 P (V false) x ω c).vLog) ∨
     Claims.TiedColl sha512 (Claims.run sha512 P (V false) x ω c).vLog
 
 /-- **The raw clash at any level from the abort and the accepting runs' clash**: `PlainRawClashRunL` where `P'`

@@ -54,7 +54,7 @@ theorem plain_liveOpening {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse f
         ∃ row : Array F128, v = row.toList.map FlockLevel3.GF128.of ∧
           p.ligerito.recursiveCaps[ℓ - 1]!.size = 2 ^ (sch'.levels.getD ℓ default).cap ∧
           (∀ b ∈ p.ligerito.recursiveCaps[ℓ - 1]!.toList, b.size = 64) ∧
-          Opening (sch'.levels.getD ℓ default) (2 ^ (sch'.levels.getD ℓ default).lanes)
+          Opening (Setup.ofCircuit st').merkle (sch'.levels.getD ℓ default) (2 ^ (sch'.levels.getD ℓ default).lanes)
             (p.ligerito.recursiveCaps[ℓ - 1]!.foldl (· ++ ·) ByteArray.empty)
             (Claims.run sha512 P (V false) x ω (plainΦ x spec st (u, r'))).vLog q row := by
   have hw := (plain_mPts hs hin hset).1
