@@ -8,7 +8,12 @@ links are the one table this module reads: `boolean_version(fn)` is the register
 looked up among every module of `verity.ml.circuits.ops.boolean` and of `verity_vllm.program.registry` (`registry.catalog`), and
 `NoBooleanVersion` names each Definition it finds none for.  A function-valued static is bound to its own Boolean version; a
 static the word has no counterpart for, to the Boolean version of the word Definition the Boolean Definition's ``word_statics``
-names for it.
+names for it.  A word primitive made on demand (`prims.const`'s `Const<w>[0x..]`, `prims.gather_bf16`'s `GatherBf16x{V}`) has its
+Boolean version made on demand too (`_families`), since no module can register one per constant or vocabulary size ahead.
+
+`sigma_lift(word, version)` is a word composite as a registered Boolean Definition: at each binding, its word body with each Call
+the Boolean version of its Definition, over the bits each word operand occupies (`lift`'s replay); `boolean_version` serves it
+only where every Definition that body Calls has one (`registry.boolean_sigma`).
 
 `lift(fn)` is a derived Program's function (`frontend.derive`'s flat `Derived[...]`) on bits: the same Calls in the same order,
 each of the Boolean version of its Definition, over parameters and values whose every w-bit word is an element
@@ -29,6 +34,7 @@ import gzip
 import importlib
 import json
 import pkgutil
+import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -134,9 +140,32 @@ def _statics_on_bits(kw: dict) -> dict:
     return {k: on_bits(v) for k, v in kw.items()}
 
 
+def _families() -> tuple:
+    """The Boolean versions made on demand, as their word Definitions are (a family by id): (word id pattern, its Boolean
+    version's factory)."""
+    if not _FAMILIES:
+        from verity.ml.circuits.ops.boolean import scalar as SC
+        from verity_vllm.program.registry import boolean_gather as BGA
+        _FAMILIES.extend([
+            (re.compile(r"^Const([1-9][0-9]*)\[0x([0-9a-f]+)\]_v1$"), lambda m: SC.const_word(int(m[1]), int(m[2], 16))),
+            (re.compile(r"^GatherBf16x(\d+)_v1$"), lambda m: BGA.gather_bf16(int(m[1]))),
+        ])
+    return tuple(_FAMILIES)
+
+
+_FAMILIES: list = []
+
+
 def _find(fn: FunctionDefinition, fid: str) -> FunctionDefinition:
+    if isinstance(fn, PrimitiveDefinition) and BL.is_boolean(fn):
+        return fn
     exact, by_name, errors = _load()
     cands = [bind(d) for d in exact.get(fid, ())]
+    if not cands:
+        for pat, make in _families():
+            if (m := pat.match(fid)) is not None:
+                d = make(m)
+                cands.append(bind(d) if isinstance(d, CompositeDefinition) else d)
     bindings = getattr(fn, "bindings", None) or {}
     notes: list[str] = []
     if isinstance(fn, SpecializedDefinition) and bindings:
@@ -176,6 +205,12 @@ def _find(fn: FunctionDefinition, fid: str) -> FunctionDefinition:
     if (tuple(t for _, t in bparams), bret) != want:
         raise NoBooleanVersion({fid: f"{_fid(best)}'s signature {[t for _, t in bparams]} -> {bret!r} is not the bit form "
                                      f"{list(want[0])} -> {want[1]!r} of the word signature"})
+    if getattr(getattr(best, "defn", best), "sigma_of", None) is not None:
+        _, missing = _sigma_callees(fn)
+        if missing:
+            names = ", ".join(sorted({_base(k) for k in missing}))
+            raise NoBooleanVersion({fid: f"{_fid(best)} is σ of it, and its body Calls {names} with no Boolean version",
+                                    **missing})
     return best
 
 
@@ -264,13 +299,11 @@ def _bit_replayer(body: Body, ptypes: list[Type], callee: dict[int, FunctionDefi
     return replay
 
 
-def lift(fn: SpecializedDefinition) -> SpecializedDefinition:
-    """``fn`` (a derived function: an unregistered composite whose body Calls registered Definitions) on bits, with the static
-    ``IR="boolean"`` beside its own.  `NoBooleanVersion` names every Definition its body Calls that has no Boolean version."""
-    body = fn.body
+def _sigma_callees(fn: FunctionDefinition) -> tuple[dict[int, FunctionDefinition], dict[str, str]]:
+    """σ on ``fn``'s body: each Definition it Calls -> its Boolean version (by id of the callee object), and the gaps."""
     callee: dict[int, FunctionDefinition] = {}
     missing: dict[str, str] = {}
-    for n in body.nodes:
+    for n in fn.body.nodes:
         if id(n.fn) in callee:
             continue
         try:
@@ -278,15 +311,70 @@ def lift(fn: SpecializedDefinition) -> SpecializedDefinition:
         except NoBooleanVersion as e:
             missing.update(e.missing)
             callee[id(n.fn)] = n.fn
+    return callee, missing
+
+
+def lift(fn: SpecializedDefinition) -> SpecializedDefinition:
+    """``fn`` (a derived function: an unregistered composite whose body Calls registered Definitions) on bits, with the static
+    ``IR="boolean"`` beside its own.  `NoBooleanVersion` names every Definition its body Calls that has no Boolean version."""
+    callee, missing = _sigma_callees(fn)
     if missing:
         raise NoBooleanVersion(missing)
     params, ret = fn.signature()
     bparams, bret = tuple((n, BL.bit_type(t)) for n, t in params), BL.bit_type(ret)
     defn = CompositeDefinition(fn.name, fn.version, (*fn.defn.statics, "IR"), lambda S: (bparams, bret),
-                               _bit_replayer(body, [t for _, t in params], callee),
+                               _bit_replayer(fn.body, [t for _, t in params], callee),
                                doc=f"{fn.defn.doc}; on bits (each Call the Boolean version of its Definition)",
                                conformance=fn.defn.conformance, register=False)
     return bind(defn, **fn.bindings, IR="boolean")
+
+
+def _word_static(v: Any) -> Any:
+    """A Boolean Definition's binding as its word's: a Boolean Definition as the word Definition it computes (`trace.word_of`)."""
+    from verity.ml.circuits.boolean.trace import word_of
+    if isinstance(v, CompositeDefinition):
+        v = bind(v)
+    if isinstance(v, FunctionDefinition) and getattr(getattr(v, "defn", v), "word", None) is not None:
+        return word_of(v)
+    if isinstance(v, (list, tuple)):
+        return type(v)(_word_static(x) for x in v)
+    if isinstance(v, dict):
+        return {k: _word_static(x) for k, x in v.items()}
+    return v
+
+
+def sigma_lift(word: CompositeDefinition, version: int) -> CompositeDefinition:
+    """The Boolean Definition ``{word.name}_v{version}``, σ of the word composite ``word``: at each binding, ``word``'s body at
+    that binding with each Call the Boolean version of its Definition (`boolean_version`, so the newest registered one at the
+    time the body is built), over the bits each word operand occupies (`lift`'s replay).  A function-valued static binds a
+    Boolean Definition (`_statics_on_bits`) and is read as its word (`trace.word_of`); the word view is ``word`` at the bindings
+    so read.  `boolean_version` serves it only where every Definition the word body Calls has a Boolean version, and names
+    those that have none otherwise."""
+    statics = tuple(word.statics)
+
+    def at(S) -> SpecializedDefinition:
+        return bind(word, **{k: _word_static(getattr(S, k)) for k in statics})
+
+    def signature(S):
+        params, ret = at(S).signature()
+        return tuple((n, BL.bit_type(t)) for n, t in params), BL.bit_type(ret)
+
+    def body(B: Builder, S, *args: Coll) -> Coll:
+        w = at(S)
+        callee, missing = _sigma_callees(w)
+        if missing:
+            raise NoBooleanVersion(missing)
+        params, _ = w.signature()
+        return _bit_replayer(w.body, [t for _, t in params], callee)(B, S, *args)
+
+    refuse = (lambda b: word.refuse({k: _word_static(x) for k, x in b.items()})) if word.refuse is not None else None
+    d = CompositeDefinition(word.name, version, statics, signature, body,
+                            doc=f"σ({word.name}_v{word.version}): its body on bits, each Call the Boolean version of its "
+                                "Definition", conformance=word.conformance, refuse=refuse)
+    word_view = (lambda b: bind(word, **{k: _word_static(x) for k, x in b.items()})) if statics else bind(word)
+    d.word = word_view  # type: ignore[attr-defined]
+    d.sigma_of = word  # type: ignore[attr-defined]
+    return d
 
 
 def _merged(rs, offs: dict | None = None) -> list[tuple[str, int, int, int]]:
@@ -506,5 +594,5 @@ def main(a: Options) -> int:
     return 0
 
 
-__all__ = ["NoBooleanVersion", "boolean_version", "bit_offsets", "lift", "sigma_check", "boolean_function", "derived", "purity",
-           "dry_run", "derived_calls", "Options", "main"]
+__all__ = ["NoBooleanVersion", "boolean_version", "bit_offsets", "lift", "sigma_lift", "sigma_check", "boolean_function", "derived",
+           "purity", "dry_run", "derived_calls", "Options", "main"]

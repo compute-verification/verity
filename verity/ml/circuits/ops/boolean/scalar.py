@@ -8,6 +8,13 @@ operations of the served FP8 linear, around its tensor-core steps, and of NVFP4 
     SelectF32_v2      (c: Value<1>, a, b: Array<32, Value<1>>) -> Array<32, Value<1>>    word view: SelectF32_v1
     F32Eq_v2          (a, b: Array<32, Value<1>>) -> Value<1>                            word view: F32Eq_v1
     BitAnd_v2         (a, b: Value<1>) -> Value<1>                                      word view: BitAnd_v1
+    BitOr_v2          (a, b: Value<1>) -> Value<1>                                      word view: BitOr_v1
+    BitNot_v2         (a: Value<1>) -> Value<1>                                         word view: BitNot_v1
+    I32Le_v2, I32Eq_v2                 (a, b: Array<32, Value<1>>) -> Value<1>                 word view: their _v1
+    F32Neg_v2, F32Sat_v2, F32BitsShl23_v2   (a: Array<32, Value<1>>) -> Array<32, Value<1>>    word view: their _v1
+    F32IsFinite_v2                     (a: Array<32, Value<1>>) -> Value<1>                    word view: F32IsFinite_v1
+    Const<w>[0x..]_v2                  () -> Array<w, Value<1>>                                word view: Const<w>[0x..]_v1,
+                                       made on demand (`const_word`), as the word constant is
     F32Add_v3, F32Mul_v3, F32Div_v3    (a, b: Array<32, Value<1>>) -> Array<32, Value<1>>      word view: their _v1
     F32Fma_v3                          (a, b, c: Array<32, Value<1>>) -> Array<32, Value<1>>   word view: F32Fma_v1
     F32Fabs_v2                         (x: Array<32, Value<1>>) -> Array<32, Value<1>>         word view: F32Fabs_v1
@@ -41,9 +48,10 @@ from verity.ml.circuits.boolean.forms import NOT, ONE, OR, ZERO, add, and_reduce
 from .softmax import _eq_const, _is_nan, f32_gt
 from verity.ml.circuits.boolean.trace import definition
 
-__all__ = ["BitAnd", "Bf16GtStrict", "Bf16ToF32", "E4m3ToF32", "F32Add", "F32Div", "F32Eq", "F32Fabs", "F32Fma", "F32Fmaxf",
-           "F32Fminf", "F32Mul", "F32ToE2m1Sat", "F32ToE4m3Sat", "SelectBf16", "SelectF32", "SelectI32", "bf16_gt_strict", "bf16_key",
-           "e4m3_to_f32", "f32_eq", "f32_key", "f32_to_e2m1_sat", "gt_u", "select"]
+__all__ = ["BitAnd", "BitNot", "BitOr", "Bf16GtStrict", "Bf16ToF32", "E4m3ToF32", "F32Add", "F32BitsShl23", "F32Div", "F32Eq",
+           "F32Fabs", "F32Fma", "F32Fmaxf", "F32Fminf", "F32IsFinite", "F32Mul", "F32Neg", "F32Sat", "F32ToE2m1Sat", "F32ToE4m3Sat",
+           "I32Eq", "I32Le", "SelectBf16", "SelectF32", "SelectI32", "bf16_gt_strict", "bf16_key", "const_word", "e4m3_to_f32",
+           "f32_eq", "f32_key", "f32_sat", "f32_to_e2m1_sat", "gt_u", "i32_le", "select"]
 
 BIT = BL.BIT
 BF16 = Array(16, BIT)
@@ -214,3 +222,54 @@ F32ToE2m1Sat = definition("F32ToE2m1Sat", 2, f32_to_e2m1_sat, (("x", F32),), E2M
                           doc="cvt.rn.satfinite.e2m1x2.f32 on bits: F32ToE2m1Sat_v1, NaN E2M1_NAN_CODE")
 BitAnd = definition("BitAnd", 2, lambda C, a, b: [C.AND(a[0], b[0])], (("a", BIT), ("b", BIT)), BIT, word=S.BitAnd,
                     doc="a & b on one bit: BitAnd_v1")
+
+
+def i32_le(C, a, b):
+    """``I32Le_v1``: signed a <= b, not a > b in the unsigned order of the words with their sign bits flipped."""
+    def flip(x):
+        return list(x[:31]) + [NOT(x[31])]
+    return [NOT(gt_u(C, flip(a), flip(b)))]
+
+
+def f32_sat(C, a):
+    """``F32Sat_v1`` (``cvt.sat.f32.f32``): a NaN or a word with its sign set (-0 included) is +0, a word at or above 1.0's
+    encoding is 1.0, any other word itself."""
+    zero = OR(C, a[31], _is_nan(C, a))
+    r = mux(C, _ult_const(C, a[:31], ONE_F), list(a[:31]), const_bits(ONE_F, 31))
+    return [C.AND(NOT(zero), x) for x in r] + [ZERO]
+
+
+#: f32 1.0
+ONE_F = 0x3F800000
+_I32_AB = (("a", I32), ("b", I32))
+
+I32Le = definition("I32Le", 2, i32_le, _I32_AB, BIT, word=S.I32Le, doc="signed 32-bit a <= b on bits: I32Le_v1")
+I32Eq = definition("I32Eq", 2, lambda C, a, b: [and_reduce(C, [NOT(x ^ y) for x, y in zip(a, b)])], _I32_AB, BIT, word=S.I32Eq,
+                   doc="a == b on i32 bits: I32Eq_v1")
+BitNot = definition("BitNot", 2, lambda C, a: [NOT(a[0])], (("a", BIT),), BIT, word=S.BitNot, doc="not on one bit: BitNot_v1")
+BitOr = definition("BitOr", 2, lambda C, a, b: [OR(C, a[0], b[0])], (("a", BIT), ("b", BIT)), BIT, word=S.BitOr,
+                   doc="a | b on one bit: BitOr_v1")
+F32Neg = definition("F32Neg", 2, lambda C, a: list(a[:31]) + [NOT(a[31])], (("a", F32),), F32, word=S.F32Neg,
+                    doc="neg.f32 on bits: F32Neg_v1, the sign bit flipped (a NaN's payload kept)")
+F32Sat = definition("F32Sat", 2, f32_sat, (("a", F32),), F32, word=S.F32Sat,
+                    doc="cvt.sat.f32.f32 on bits: F32Sat_v1, clamp to [+0, 1.0], NaN +0")
+F32BitsShl23 = definition("F32BitsShl23", 2, lambda C, a: [ZERO] * 23 + list(a[:9]), (("a", F32),), F32, word=S.F32BitsShl23,
+                          doc="the encoding shifted left by 23 on bits: F32BitsShl23_v1, 23 zero bits below a's low 9")
+F32IsFinite = definition("F32IsFinite", 2, lambda C, a: [NOT(and_reduce(C, a[23:31]))], (("a", F32),), BIT, word=S.F32IsFinite,
+                         doc="isfinite on f32 bits: F32IsFinite_v1, not every exponent bit set")
+
+_CONSTS: dict[tuple[int, int], object] = {}
+
+
+def const_word(w: int, bits: int):
+    """`Const<w>[0x..]_v2`: the constant `prims.const(w, bits)` on bits, its w constant bits LSB first, made on demand as the
+    word constant is; for w = 1 the constant bit itself."""
+    word = P.const(w, bits)
+    if w == 1:
+        return word
+    d = _CONSTS.get((w, bits))
+    if d is None:
+        d = _CONSTS[(w, bits)] = definition(word.name, 2, lambda C, _b=bits, _w=w: const_bits(_b, _w), (), Array(w, BIT),
+                                            word=word,
+                                            doc=f"{word.id} on bits: the constant {w}-bit encoding 0x{bits:0{w // 4}x}, LSB first")
+    return d

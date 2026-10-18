@@ -60,6 +60,31 @@ def f32_fma_sub_ftz(C, a, b, c):
     return ftz(C, fp.f32_fma(C, ftz(C, a), ftz(C, b), fp.f32_neg(ftz(C, c))))
 
 
+def f32_add_ftz_gpu(C, a, b):
+    """``F32AddFtz_v2``: ftz(RN(ftz(a) + ftz(b))), every NaN result `F32_NAN_PTX`."""
+    return ftz(C, fp.f32_add(C, ftz(C, a), ftz(C, b), nan_word=fp.F32_NAN_PTX))
+
+
+def f32_sub_ftz_gpu(C, a, b):
+    """``F32SubFtz_v2``: ftz(RN(ftz(a) - ftz(b))), every NaN result `F32_NAN_PTX` (so no NaN's payload or sign survives)."""
+    return ftz(C, fp.f32_add(C, ftz(C, a), fp.f32_neg(ftz(C, b)), nan_word=fp.F32_NAN_PTX))
+
+
+def f32_mul_ftz_gpu(C, a, b):
+    """``F32MulFtz_v2``: ftz(RN(ftz(a) * ftz(b))), every NaN result `F32_NAN_PTX`."""
+    return ftz(C, fp.f32_mul(C, ftz(C, a), ftz(C, b), nan_word=fp.F32_NAN_PTX))
+
+
+def f32_fma_ftz_gpu(C, a, b, c):
+    """``F32FmaFtz_v2``: ftz(RN(ftz(a) * ftz(b) + ftz(c))), every NaN result `F32_NAN_PTX`."""
+    return ftz(C, fp.f32_fma(C, ftz(C, a), ftz(C, b), ftz(C, c), nan_word=fp.F32_NAN_PTX))
+
+
+def f32_fma_sub_ftz_gpu(C, a, b, c):
+    """``F32FmaSubFtz_v2``: ftz(RN(ftz(a) * ftz(b) - ftz(c))), every NaN result `F32_NAN_PTX`."""
+    return ftz(C, fp.f32_fma(C, ftz(C, a), ftz(C, b), fp.f32_neg(ftz(C, c)), nan_word=fp.F32_NAN_PTX))
+
+
 def f32_gt(C, a, b):
     """``F32GtStrict_v1``: a > b on f32 values (NaN false, +0 == -0)."""
     _, mag_gt = sub(C, b[:31], a[:31], 31)
