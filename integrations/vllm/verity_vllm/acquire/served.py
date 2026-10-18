@@ -644,7 +644,19 @@ def build(inductor_dir: str, *, split_graph: str, launch_configs: dict[str, Any]
                     raise Unmodelled(f"{os.path.basename(other['path'])} and {os.path.basename(w['path'])}: one launch signature, two programs")
     programs = [parsed[w["path"]] for w in chosen]
     wired, moe_plans = SM.expand(wire(programs, graph, backbone=backbone), moe)
-    final = _final_value(split_graph, graph, wired)
+    kernels = {rec["source_sha256"]: rec for prog in programs for rec in prog["kernels"].values()}
+    return assemble(wired, moe_plans, _final_value(split_graph, graph, wired), kernels, SA.winners(inductor_dir),
+                    source={"inductor_dir": inductor_dir, "split_graph": split_graph,
+                            "piece_wrappers": [os.path.relpath(w["path"], inductor_dir) for w in chosen]},
+                    schedule=schedule, steps=steps, routes=routes.get("routes") or {}, capture_sizes=capture_sizes,
+                    max_num_seqs=max_num_seqs, sms=sms, split_cap=split_cap, lm_head=lm_head, rank=rank)
+
+
+def assemble(wired: dict[str, Any], moe_plans: Any, final: dict[str, Any], kernels: dict[str, dict[str, Any]], won: dict[str, Any], *,
+             source: dict[str, Any], schedule: list[dict[str, Any]], steps: int, routes: dict[str, Any], capture_sizes: list[int],
+             max_num_seqs: int, sms: int, split_cap: int, lm_head: str, rank: int) -> dict[str, Any]:
+    """The Build of a wired Program (`wire`, `served_moe.expand`) with its kernel records and autotune winners `won`: its step plans,
+    identities and artifact; `source` says what the Program was read from (the trace's wrappers, or `predict.compiled`'s pins)."""
     if not wired["attention"]:
         raise Unmodelled("the split graph has no attention op")
     a0 = wired["attention"][0]
@@ -656,12 +668,8 @@ def build(inductor_dir: str, *, split_graph: str, launch_configs: dict[str, Any]
         raise Unmodelled("no embedding call: the vocabulary is unknown")
     V, H = embed["statics"]["V"], wired["values"][final["value"]]["width"]
     gemms = sorted({tuple(c["gemm"]) for c in wired["calls"] if c["op"] == "mm"})
-    plans, missing = step_plans(schedule, steps, gemms, (H, V), heads, routes.get("routes") or {}, capture_sizes=capture_sizes,
+    plans, missing = step_plans(schedule, steps, gemms, (H, V), heads, routes, capture_sizes=capture_sizes,
                                 max_num_seqs=max_num_seqs, split_cap=split_cap, sms=sms, moe=moe_plans)
-    kernels = {}
-    for prog in programs:
-        for rec in prog["kernels"].values():
-            kernels[rec["source_sha256"]] = rec
     program = {"calls": wired["calls"], "attention": wired["attention"], "final": final,
                "logits": {"name": LOGITS, "x": final, "w": {"weight": lm_head, "shape": [V, H]}, "gemm": [H, V]},
                "sampled": {"name": SAMPLED, **bound(b1.TokenSelect, V=V)},
@@ -671,8 +679,7 @@ def build(inductor_dir: str, *, split_graph: str, launch_configs: dict[str, Any]
     names = list(wired["values"])
     identities = identities_of(plans, wired["values"], V, schedule, pdig, rank)
     return {"schema": SCHEMA, "kind": KIND, "identity_key": list(C.IDENTITY_KEY), "program_digest": pdig,
-            "program": {"kind": "P_served (the served-compiled computation)", "inductor_dir": inductor_dir, "split_graph": split_graph,
-                        "piece_wrappers": [os.path.relpath(w["path"], inductor_dir) for w in chosen], **program},
+            "program": {"kind": "P_served (the served-compiled computation)", **source, **program},
             "steps_plan": plans, "routes_missing": missing,
             "workload": {"schedule": schedule, "steps": steps,
                          "step_basis": "request-relative (engine step = step + arrive; binding.load_required_manifest)"},
@@ -680,7 +687,7 @@ def build(inductor_dir: str, *, split_graph: str, launch_configs: dict[str, Any]
             "populations": {"identities": len(identities), "by_family": {FAMILY: len(identities)}, "steps": steps,
                             "values_per_request_step": len(names) + 2},
             "complete": not missing, "unmodelled": {"routes_missing": len(missing)} if missing else {},
-            "artifact": SA.record(inductor_dir, program["kernels"]), "manifest_digest": manifest_digest(identities), "identities": identities}
+            "artifact": SA.artifact_of(program["kernels"], won), "manifest_digest": manifest_digest(identities), "identities": identities}
 
 
 def _final_value(split_graph: str, graph: dict[str, Any], wired: dict[str, Any]) -> dict[str, Any]:

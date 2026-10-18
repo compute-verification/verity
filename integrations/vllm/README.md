@@ -29,6 +29,7 @@ verity_vllm/
   properties/         property harnesses noninterference.py census.py kernel_allowlist.py golden.py holdout.py admission.py ...
   collectives/        collectives        collective_record.py collective_sites.py embedding_shard.py
   config.py target_family.py             run-definition locations; the target-family preflight
+  pins/               measured pins      <DEVICE>.json (cuBLAS routes, SMs) served/<ROLE>.<DEVICE>.json (a served Build's artifact, dispatch, MoE launches)
   ops/                pod operations     pod_bootstrap.sh pod_gate.sh pod_*_tap.sh canary.sh *_negatives.sh known_roots.json
 tests/<subpackage>/   mirrors the package; tests/regression = the R19 reference harness (opt in with VERITY_REGRESSION=1)
 workloads/ manifests/ fixtures/ data/ docs/    records of the qualification table; never rewritten by the tool

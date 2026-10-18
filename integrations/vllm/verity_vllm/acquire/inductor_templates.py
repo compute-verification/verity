@@ -183,6 +183,7 @@ TEMPLATES = (
                     Read("in_ptr3", row_of="in_ptr2")), ("out_ptr3",))),
              lambda lit: {"xnumel_0": ("tokens", lit["H"]), "xnumel_1": ("tokens", lit["KVH"])}, config=True),
 )
+TEMPLATE = {t.name: t for t in TEMPLATES}
 
 _BLOCK = re.compile(r"^\w+ = async_compile\.triton\('(\w+)', '''(.*?)''', device_str='cuda'\)$", re.M | re.S)
 _JIT = re.compile(r"^@triton\.jit\ndef (\w+)\(", re.M)
@@ -229,7 +230,6 @@ def recognize(name: str, source: str, config: dict[str, Any] | None = None) -> d
     t, got = next(((t, g) for t in TEMPLATES if (g := t.pattern.fullmatch(body))), (None, None))
     if t is None:
         raise Unmodelled(f"{name}: its source is none of the templates {[t.name for t in TEMPLATES]}")
-    lit = {k: _num(v) for k, v in got.groupdict().items()}
     heur = re.search(r"^@triton_heuristics\.(\w+)\(", head, re.M)
     sig = re.search(r"'signature': (\{[^{}]*\})", head)
     if heur is None or heur.group(1) != t.heuristic:
@@ -239,6 +239,18 @@ def recognize(name: str, source: str, config: dict[str, Any] | None = None) -> d
     missing = [f for f in _FLAGS if f not in head]
     if missing:
         raise Unmodelled(f"{name} ({t.name}): its triton_meta lacks {missing}")
+    return {**instantiate(name, t, {k: _num(v) for k, v in got.groupdict().items()}, config), "source_sha256": source_sha256(source)}
+
+
+def holes(t: Template) -> list[str]:
+    """The template's literal names, in the order its text first names them."""
+    return list(dict.fromkeys(m.group(1) for m in _HOLE.finditer(t.text)))
+
+
+def instantiate(name: str, t: Template, lit: dict[str, Any], config: dict[str, Any] | None) -> dict[str, Any]:
+    """Template `t` at literals `lit` (its holes) and launch config: its calls with bound Definition ids (`recognize` less the source,
+    which `predict.compiled` reads from a model's config)."""
+    lit = dict(lit)
     if not t.relations(lit):
         raise Unmodelled(f"{name} ({t.name}): literals {lit} break the template's relations")
     if t.config:
@@ -269,7 +281,7 @@ def recognize(name: str, source: str, config: dict[str, Any] | None = None) -> d
                              f"reads {len(c.reads)} and writes {len(c.writes)}")
         calls.append({"definition": spec.id, "base": spec.base_id, "statics": c.statics(lit), "reads": reads,
                       "writes": [{"param": p, "numel": numel(ty)} for p, ty in zip(c.writes, outs)]})
-    return {"template": t.name, "literals": lit, "config": config, "source_sha256": source_sha256(source),
+    return {"template": t.name, "literals": lit, "config": config,
             "params": [p for p, ty in t.signature.items() if ty != "constexpr"],
             "scalars": {p: list(v) for p, v in t.scalars(lit).items()}, "calls": calls}
 

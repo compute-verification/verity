@@ -39,7 +39,12 @@ def winners(inductor_dir: str) -> dict[str, dict[str, Any]]:
 def record(inductor_dir: str, kernels: dict[str, dict[str, Any]]) -> dict[str, Any]:
     """The artifact a Build read: its kernels' launched configs (`kernels`: source sha256 -> the Build's kernel record), the dir's
     winners, and their digest."""
-    body = {"kernels": {sha: kernels[sha]["config"] for sha in sorted(kernels)}, "winners": winners(inductor_dir)}
+    return artifact_of(kernels, winners(inductor_dir))
+
+
+def artifact_of(kernels: dict[str, dict[str, Any]], won: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    """`record` of kernels and winners `won` (`winners`' form)."""
+    body = {"kernels": {sha: kernels[sha]["config"] for sha in sorted(kernels)}, "winners": won}
     return {"digest": hashlib.sha512(json.dumps(body, sort_keys=True).encode()).hexdigest(), **body}
 
 

@@ -13,7 +13,9 @@
 #                  from its own artifact -> build_rebuilt.json, after the warm-ups; it refuses (rc 3) before the measured runs when the
 #                  artifact it loaded is not the Build of record's -> artifact_check.json)
 # then compiled_merge pairs them by run index -> $D/commit/{summary.json,summary.md,runs.jsonl,verdict.json}, and `compiled verify` holds
-# the Build of record (its Program and its artifact) to the rebuilt one -> $D/commit/manifest_verify.json.
+# the Build of record (its Program and its artifact) to the rebuilt one -> $D/commit/manifest_verify.json.  Exit: the merge's rc, else the
+# first nonzero rc of the control, the treatment and the verify (compiled_merge pairs the runs an arm finished, so an arm cut short by
+# COMMIT_TIMEOUT, rc 124, would otherwise pass on fewer pairs).
 #
 # Usage: served_commit.sh CASE WORKLOAD BUILD PROGRAM_DIGEST CHECKPOINT_DIR OUT
 #        PROGRAM_DIGEST: the Build's program digest of record (the Match's match.json build.program_digest; the treatment refuses a
@@ -66,6 +68,6 @@ else
   echo "no build_rebuilt.json from the treatment" > "$D/manifest_verify.log"; rcv=1
 fi
 log "manifest verify (the Build of record vs the treatment's own) rc=$rcv: $(tail -n 1 "$D/manifest_verify.log")"
-[ $rcv -ne 0 ] && [ $rcm -eq 0 ] && rcm=$rcv
+for rc in $rcc $rct $rcv; do [ "$rc" -ne 0 ] && [ $rcm -eq 0 ] && rcm=$rc; done
 log "merge rc=$rcm -> $D/commit (control rc=$rcc treatment rc=$rct)"
 exit $rcm
