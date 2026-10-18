@@ -18,6 +18,10 @@ cap=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader | head -1 | tr -d
 case $cap in 120) arch=compute_120a,code=sm_120a ;; 90) arch=compute_90a,code=sm_90a ;; *) arch=compute_${cap},code=sm_${cap} ;; esac
 nvcc -O3 -std=c++17 -gencode arch=$arch -Xptxas -v -I$CG -o "$W/fuse" $S/fuse.cu -lcublasLt -lnvidia-ml > "$O/build-fuse.log" 2>&1
 [ -x "$W/fuse" ] || { echo "build fuse FAILED"; tail -30 "$O/build-fuse.log"; exit 1; }
+for k in _Z11gemm_kernelILi0EEv3Geo _Z11gemm_kernelILi4EEv3Geo _Z11gemm_kernelILi8EEv3Geo; do
+  cuobjdump -sass -fun "$k" "$W/fuse" > "$W/sass.txt" 2>/dev/null
+  echo "$k IMMA $(grep -c IMMA "$W/sass.txt") NOP $(grep -c ' NOP ' "$W/sass.txt") lines $(wc -l < "$W/sass.txt")" >> "$O/sass-gemm.txt"
+done
 params() { $PY $CG/reference.py params "$W/p-$1-$2-$3.bin" $(( ($1 + $3 - 1) / $3 * (2 * $2 / 32) )) $((256 * $3)) --ks-seed 7; }
 export CHECKS="200 384 128 64|4096 4096 4096 64|32 512 256 32" RUNS="4096 24576 4096 64|4096 4096 4096 64|4096 6144 4096 64|4096 4096 12288 64|4096 24576 4096 32"
 IFS='|'; for c in $CHECKS $RUNS; do IFS=' '; set -- $c; [ -e "$W/p-$1-$2-$4.bin" ] || params "$1" "$2" "$4"; done; IFS=' '

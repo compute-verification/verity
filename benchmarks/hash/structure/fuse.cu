@@ -87,6 +87,8 @@ struct Geo {
   int diag;          // timing only (wrong levels): bit 0 the MMA warps skip the k-loop, bit 1 the hash warps exit, bit 2
                      // no tile handoff (with bit 1 only)
   bool gpu_fence;    // the tile handoff's fences at GPU scope (the first design) instead of CTA scope
+  u32* flags;        // when set, the GEMM marks each tile t done by flags[t] = epoch (for hash_kernel)
+  u32 epoch;
 };
 
 DEV void leaf_at(const Geo& g, u64 br, u64 bc) {
@@ -95,6 +97,37 @@ DEV void leaf_at(const Geo& g, u64 br, u64 bc) {
   u64 x[8];
   hash_after_block(C.mid_P, src, 32 * g.R, x, g.pf);
   leaf_from_digest<0>(0, pos, x, g.S, g.lv0 + 8 * pos, nullptr);
+}
+
+// The hash warps' loop over the leaves of the tiles t = cta + k ctas: a warp takes 32 consecutive leaves and waits,
+// uniformly, for the last tile they reach (lanes waiting on different tiles would diverge, and a sleeping path stalls the
+// hashing one). Tile k is ready when *done > k (FLAGS false: the GEMM's own CTA) or flags[t] = epoch (FLAGS: a separate
+// persistent kernel). Not inlined: inlined, it changes how ptxas schedules the GEMM's main loop (IMMAs serialized).
+template <int HW, bool FLAGS>
+__device__ __noinline__ void hash_loop(const Geo& g, int hw, int lane, int cta, int ctas, volatile int* done) {
+  const int my_tiles = cta < g.tiles ? (g.tiles - cta + ctas - 1) / ctas : 0;
+  const int rbs = BM / g.R, L = rbs * (2 * BN / 32);
+  const u64 total = (u64)my_tiles * L;
+  for (u64 s0 = 32ull * hw; s0 < total; s0 += 32 * HW) {
+    const int kmax = (int)((s0 + 31 < total ? s0 + 31 : total - 1) / L);
+    if (lane == 0) {
+      if (FLAGS) {
+        const volatile u32* f = g.flags + cta + kmax * ctas;
+        while (*f != g.epoch) __nanosleep(128);
+      } else {
+        while (*done <= kmax) __nanosleep(64);
+      }
+    }
+    __syncwarp();
+    if (FLAGS || g.gpu_fence) __threadfence();
+    else __threadfence_block();
+    const u64 s = s0 + lane;
+    if (s >= total) continue;
+    const int k = (int)(s / L), l = (int)(s % L);
+    const int t = cta + k * ctas, tm = t % g.tiles_m, tn = t / g.tiles_m;
+    const u64 br = (u64)tm * rbs + l % rbs, bc = (u64)tn * (2 * BN / 32) + l / rbs;
+    if (br < g.mr) leaf_at(g, br, bc);
+  }
 }
 
 // HW hash warps beside 8 MMA warps (HW = 0: the plain GEMM). One CTA an SM, persistent over tiles t = blockIdx.x + k gridDim.x
@@ -108,27 +141,11 @@ __global__ void __launch_bounds__(MMA_THREADS + 32 * HW, 1) gemm_kernel(Geo g) {
   const int my_tiles = blockIdx.x < g.tiles ? (g.tiles - blockIdx.x + gridDim.x - 1) / gridDim.x : 0;
   if (HW && tid == 0) done = 0;
   if (HW) __syncthreads();
-  if (HW && tid >= MMA_THREADS) {
-    if (g.diag & 2) return;
-    // A warp takes 32 consecutive leaves and waits, uniformly, for the last tile they reach: lanes waiting on different
-    // tiles would diverge, and a sleeping path stalls the hashing one.
-    const int hw = (tid - MMA_THREADS) >> 5, rbs = BM / g.R, L = rbs * (2 * BN / 32);
-    const u64 total = (u64)my_tiles * L;
-    for (u64 s0 = 32ull * hw; s0 < total; s0 += 32 * HW) {
-      const int kmax = (int)((s0 + 31 < total ? s0 + 31 : total - 1) / L);
-      if (lane == 0)
-        while (done <= kmax) __nanosleep(64);
-      __syncwarp();
-      if (g.gpu_fence) __threadfence();
-      else __threadfence_block();
-      const u64 s = s0 + lane;
-      if (s >= total) continue;
-      const int k = (int)(s / L), l = (int)(s % L);
-      const int t = blockIdx.x + k * gridDim.x, tm = t % g.tiles_m, tn = t / g.tiles_m;
-      const u64 br = (u64)tm * rbs + l % rbs, bc = (u64)tn * (2 * BN / 32) + l / rbs;
-      if (br < g.mr) leaf_at(g, br, bc);
+  if constexpr (HW > 0) {
+    if (tid >= MMA_THREADS) {
+      if (!(g.diag & 2)) hash_loop<HW, false>(g, (tid - MMA_THREADS) >> 5, lane, blockIdx.x, gridDim.x, &done);
+      return;
     }
-    return;
   }
   const int wm = warp >> 2, wn = warp & 3;
   const int kt_n = (g.diag & 1) ? 0 : g.K / BK;
@@ -200,7 +217,17 @@ __global__ void __launch_bounds__(MMA_THREADS + 32 * HW, 1) gemm_kernel(Geo g) {
       else __threadfence_block();
       done = k + 1;
     }
+    if (g.flags && tid == 0) {
+      __threadfence();
+      *reinterpret_cast<volatile u32*>(g.flags + t) = g.epoch;
+    }
   }
+}
+
+// The persistent consumer: CTA b hashes the leaves of the GEMM CTA b's tiles as their flags turn (ctas = the GEMM's grid).
+template <int HW>
+__global__ void __launch_bounds__(32 * HW) hash_kernel(Geo g, int ctas) {
+  hash_loop<HW, true>(g, threadIdx.x >> 5, threadIdx.x & 31, blockIdx.x, ctas, nullptr);
 }
 
 // The separate data phase: a thread a leaf, the same leaf code (pads are written once, ahead: they hold no data).
@@ -479,6 +506,30 @@ struct Setup {
     else if (hw == 4) gemm_kernel<4><<<grid, MMA_THREADS + 128, SMEM_GEMM, st>>>(q);
     else gemm_kernel<8><<<grid, MMA_THREADS + 256, SMEM_GEMM, st>>>(q);
   }
+  // the plain GEMM on st and hash_kernel<hw> beside it on a second stream, joined back into st
+  u32* flags = nullptr;
+  u32 epoch = 0;
+  cudaStream_t st2{};
+  cudaEvent_t fork{}, join{};
+  void persist(int hw, cudaStream_t st) {
+    if (!flags) {
+      CK(cudaMalloc(&flags, (size_t)g.tiles * 4));
+      CK(cudaMemset(flags, 0, (size_t)g.tiles * 4));
+      CK(cudaStreamCreateWithFlags(&st2, cudaStreamNonBlocking));
+      CK(cudaEventCreateWithFlags(&fork, cudaEventDisableTiming));
+      CK(cudaEventCreateWithFlags(&join, cudaEventDisableTiming));
+    }
+    Geo q = g;
+    q.flags = flags;
+    q.epoch = ++epoch;
+    CK(cudaEventRecord(fork, st));
+    gemm_kernel<0><<<grid, MMA_THREADS, SMEM_GEMM, st>>>(q);
+    CK(cudaStreamWaitEvent(st2, fork));
+    if (hw == 4) hash_kernel<4><<<grid, 128, 0, st2>>>(q, grid);
+    else hash_kernel<8><<<grid, 256, 0, st2>>>(q, grid);
+    CK(cudaEventRecord(join, st2));
+    CK(cudaStreamWaitEvent(st, join));
+  }
   void sep(cudaStream_t st) { sep_leaves<<<(unsigned)((n + 255) / 256), 256, 0, st>>>(g, n); }
   void rec(cudaStream_t st) { cm.tiles(Cb, M, 2ull * N, R, false, st); }
   std::vector<uint8_t> levels() {
@@ -510,10 +561,10 @@ static int check(int argc, char** argv) {
   std::vector<uint8_t> want(cbytes), got(cbytes);
   CK(cudaMemcpy(want.data(), ref, cbytes, cudaMemcpyDeviceToHost));
   // each arm from poisoned levels and C: its levels must equal the first arm's
-  const char* arms[] = {"g+sep", "g+rec", "f4", "f8", "f4pf", "f8pf"};
+  const char* arms[] = {"g+sep", "g+rec", "f4", "f8", "f4pf", "f8pf", "p4", "p8"};
   std::vector<uint8_t> first;
   bool ok = true;
-  for (int a = 0; a < 6; ++a) {
+  for (int a = 0; a < 8; ++a) {
     s.clear_levels();
     CK(cudaMemset(s.Cb, 0xA5, cbytes));
     if (s.cm.width > s.n) pad_fill<<<(unsigned)((s.cm.width - s.n + 255) / 256), 256>>>(s.cm.lv[0], s.n, s.cm.width);
@@ -523,6 +574,8 @@ static int check(int argc, char** argv) {
     if (a == 3) s.gemm(8, 0);
     if (a == 4) s.gemm(4, 0, true);
     if (a == 5) s.gemm(8, 0, true);
+    if (a == 6) s.persist(4, 0);
+    if (a == 7) s.persist(8, 0);
     s.cm.nodes(0);
     CK(cudaDeviceSynchronize());
     CK(cudaGetLastError());
@@ -613,7 +666,8 @@ static int bench(int argc, char** argv) {
 
 // The fused kernel taken apart (timing only; the _nohash and _nomma arms' levels are wrong by design): the GEMM alone, the
 // separate leaves alone (and with the L2 prefetch), and the fused kernel at 4 and 8 hash warps: whole, with the prefetch,
-// with its hash warps exiting at once, and with its MMA warps skipping the k-loop (the hash warps' own rate in the CTA).
+// with its hash warps exiting at once, and with its MMA warps skipping the k-loop (the hash warps' own rate in the CTA);
+// the handoff at GPU scope, or none; and p4 / p8, the plain GEMM beside the persistent hash_kernel.
 static int diag(int argc, char** argv) {
   if (argc < 8) { fprintf(stderr, "diag PARAMS M N K R REPS\n"); return 2; }
   const Params p = read_params(argv[2]);
@@ -625,8 +679,8 @@ static int diag(int argc, char** argv) {
   cudaEvent_t e0, e1;
   CK(cudaEventCreate(&e0)); CK(cudaEventCreate(&e1));
   const char* names[] = {"g", "sep", "seppf", "f4", "f4pf", "f4_nohash", "f4_nomma", "f8", "f8pf", "f8_nohash", "f8_nomma",
-                         "f4gf", "f4gf_nohash", "f4_nohash_nosig", "f8gf"};
-  constexpr int NA = 15;
+                         "f4gf", "f4gf_nohash", "f4_nohash_nosig", "f8gf", "p4", "p8"};
+  constexpr int NA = 17;
   auto body = [&](int a) {
     if (a == 0) s.gemm(0, st);
     if (a == 1) s.sep(st);
@@ -639,6 +693,8 @@ static int diag(int argc, char** argv) {
     if (a == 12) s.gemm(4, st, false, 2, true);
     if (a == 13) s.gemm(4, st, false, 6);
     if (a == 14) s.gemm(8, st, false, 0, true);
+    if (a == 15) s.persist(4, st);
+    if (a == 16) s.persist(8, st);
   };
   std::vector<double> t[NA], mz;
   Nv nv;
