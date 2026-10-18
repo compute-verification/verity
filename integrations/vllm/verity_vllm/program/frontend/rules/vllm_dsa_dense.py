@@ -4,9 +4,9 @@
     dsa_dense_mha(positions, q_nope, q_pe, k_nope, v, kv_c, k_pe, index_k?, index_k_scale?, layer_name, topk, scale)
         -> attention rows [T, NH, DV]
         a prefill above the decode threshold of at most TOPK keys: the call's cache rows open the layer's history (`vllm_dsa`'s), and
-        per query row i `Attention_v4{T=i+1,NH,KVH=NH,D,BN,DOT,INV,MASKED_FROM}` (FA3's causal varlen prefill) over the call's own k, v
-        rows 0..i, with q = [q_nope | q_pe] and k = [k_nope | k_pe] per head (k_pe shared by the heads) assembled as references;
-        no logits or top-k
+        per query row i and head h `Attention_v4{T=i+1,NH=1,KVH=1,D,BN,DOT,INV,MASKED_FROM}` (FA3's causal varlen prefill, one head
+        of it) over the call's own k, v rows 0..i, with q = [q_nope | q_pe] and k = [k_nope | k_pe] (k_pe shared by the heads)
+        assembled as references; no logits or top-k
 """
 
 from __future__ import annotations
@@ -48,10 +48,13 @@ def _observed_prefill_backend(layer_name: str, scale: float) -> str | None:
 class DsaDenseMhaRule(StateRule):
     """`vllm_iface.dsa_dense_mha` (`SparseMLACommonImpl.forward_mha` -> `FlashAttnPrefillBackend.run_prefill_new_tokens`): a prefill the
     layer serves by dense MHA, FA3's causal varlen self-attention over the call's own rows (`flash_attn_varlen_func`, `FlashAttnFwdSm90`
-    at the 128 x 80 tile of head 256), per query row i `Attention_v4{T=i+1, NH, KVH=NH, D, BN, DOT, INV, MASKED_FROM}` over q[i] and the
-    call's k, v rows 0..i, the tile's `MASKED_FROM` of row i (`targets.fa3_masked_from`).  The indexer selects nothing (vLLM's
-    `sparse_attn_indexer` returns before its logits when the batch has no decode token); the call's cache rows open the layer's history
-    as `DsaIndexerAttn[vllm-dsa]`'s do, for the decode steps after it."""
+    at the 128 x 80 tile of head 256), per query row i and head h `Attention_v4{T=i+1, NH=1, KVH=1, D, BN, DOT, INV, MASKED_FROM}`
+    over q[i, h] and the call's k, v rows 0..i of head h, the tile's `MASKED_FROM` of row i (`targets.fa3_masked_from`).  That is
+    `Attention_v4{NH, KVH=NH}`'s own head h (`AttentionHead_v4` at the one tile every head shares), bound per head because a head's
+    k row is two parts, [k_nope | k_pe]: one call per row would add 2 NH parts to its key sequence per row, past the alias window
+    of the Program descriptor (`codec.ALIAS_WINDOW`), which would then write every call's whole key sequence.  The indexer selects
+    nothing (vLLM's `sparse_attn_indexer` returns before its logits when the batch has no decode token); the call's cache rows open
+    the layer's history as `DsaIndexerAttn[vllm-dsa]`'s do, for the decode steps after it."""
     modes = frozenset({"profile"})
     info = RuleInfo("DsaDenseMha[vllm-dsa]", 1, "state", applies_to="vllm_iface.dsa_dense_mha(...) (" + ", ".join(_DENSE) + ")",
                     preconditions=("the layer's OBSERVED implementation is FlashAttnMLASparseImpl on a bf16 cache, without context parallelism; "
@@ -159,30 +162,33 @@ class DsaDenseMhaRule(StateRule):
         geom = TG.attention_geometry(tp, D, T, NH, NH)
         qn, qp, kn, kpe = (_rows(ctx, a[n], 16) for n in ("q_nope", "q_pe", "k_nope", "k_pe"))
         v = _rows(ctx, a["v"], 16)
-        qrow = Array(NH, Array(D, Value(16)))
-        klog, vlog = PartLog(), PartLog()
+        head = Array(1, Array(D, Value(16)))
+        klogs, vlogs = [PartLog() for _ in range(NH)], [PartLog() for _ in range(NH)]
         outs, masked = [], []
         for i in range(T):
-            q = Coll(qrow, concat([r for hd in range(NH) for r in (qn[i][hd].refs, qp[i][hd].refs)]))
-            kp = kpe[i].refs
+            masked.append(TG.fa3_masked_from(tp, i + 1, NH, NH, D, T, i))
+            fn = ctx.kind("attention_dot", node, T=i + 1, NH=1, KVH=1, D=D, BN=geom["BN"], DOT=geom["DOT"], INV=geom["INV"],
+                          MASKED_FROM=masked[-1])
+            rows = Array(i + 1, Array(1, Array(D, Value(16))))
+            heads = []
             for hd in range(NH):
-                for r in (kn[i][hd].refs, kp):
+                klog, vlog = klogs[hd], vlogs[hd]
+                for r in (kn[i][hd].refs, kpe[i].refs):
                     for p in (r.parts if isinstance(r, Concat) else (r,)):
                         klog.append(p)
-            vlog.append(v[i].refs)
-            masked.append(TG.fa3_masked_from(tp, i + 1, NH, NH, D, T, i))
-            fn = ctx.kind("attention_dot", node, T=i + 1, NH=NH, KVH=NH, D=D, BN=geom["BN"], DOT=geom["DOT"], INV=geom["INV"],
-                          MASKED_FROM=masked[-1])
-            rows = Array(i + 1, Array(NH, Array(D, Value(16))))
-            outs.append(ctx.call(fn, q, Coll(rows, klog.cut(len(klog))), Coll(rows, vlog.cut(i + 1)), node=node, rule=self,
-                                 name=f"{h}[t={pos[i]}]"))
+                vlog.append(v[i][hd].refs)
+                q = Coll(head, concat([qn[i][hd].refs, qp[i][hd].refs]))
+                heads.append(ctx.call(fn, q, Coll(rows, klog.cut(len(klog))), Coll(rows, vlog.cut(i + 1)), node=node, rule=self,
+                                      name=f"{h}[t={pos[i]},h={hd}]"))
+            outs.append(Coll(Array(NH, Array(D, Value(16))), concat([o.refs for o in heads])))
         ctx.define(node, array_of(outs))
         ctx.record(self, node, {"layer_name": layer, "positions": [pos[0], pos[-1]], "history_rows_after": T, "NH": NH, "D": D,
+                                "binding": "per head: Attention_v4{NH=1, KVH=1}",
                                 "BN": geom["BN"], "BM": TG.fa3_tile_m(D, T, 1), "DOT": geom["DOT"].name, "INV": geom["INV"].name,
                                 "fa_version": geom["fa_version"], "masked_from": [min(masked), max(masked)], "splits": 1, "scale": scale,
                                 "TOPK": TOPK, "indexer": has, "selection": "none (dense MHA reads every row; the indexer returns early)",
                                 "attention_impl_observed": (_OBSERVED["attention_impls"] or {}).get(layer)},
-                   emitted=f"Attention_v4 x{T} (T=1..{T})")
+                   emitted=f"Attention_v4 x{T * NH} (T=1..{T}, one call per head)")
 
 
 def _dense_splits(tp, T: int, NH: int, D: int) -> int:

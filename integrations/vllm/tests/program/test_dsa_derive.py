@@ -26,6 +26,7 @@ import pytest
 import torch
 import torch.nn as nn
 
+from verity.ml.circuits import codec
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate
 from verity_vllm.program.frontend import targets as TG
@@ -255,8 +256,8 @@ def _dense(layer: _Layer, P0: int, T: int) -> bool:
             and P0 + T <= layer.topk_indices_buffer.shape[-1])
 
 
-def _attention_v4(T: int, row: int, seqlen_q: int):
-    return bind(fa3_check_inf.AttentionV4, T=T, NH=NH, KVH=NH, D=P + R, BN=TG.fa3_kblock_n(P + R, seqlen_q, 1), DOT=DOT,
+def _attention_v4(T: int, row: int, seqlen_q: int, heads: int = NH):
+    return bind(fa3_check_inf.AttentionV4, T=T, NH=heads, KVH=heads, D=P + R, BN=TG.fa3_kblock_n(P + R, seqlen_q, 1), DOT=DOT,
                 INV=hopper.Fa3InvSum, MASKED_FROM=TG.fa3_masked_from(H200, T, NH, NH, P + R, seqlen_q, row))
 
 
@@ -619,9 +620,9 @@ def dense(served, monkeypatch):
 
 
 def test_a_prefill_of_at_most_topk_keys_derives_by_dense_mha_and_the_decode_after_it_reads_its_rows(dense):
-    """vLLM d9105ea80 `_sparse_indexer_and_attn` -> `forward_impl` -> `forward_mha` on the prefill: per row `Attention_v4{T=i+1}` at
-    FA3's tile for head P + R, the indexer's logits and top-k not run; the decode step's sparse MQA then reads the prefill's latent and
-    index-K rows."""
+    """vLLM d9105ea80 `_sparse_indexer_and_attn` -> `forward_impl` -> `forward_mha` on the prefill: per row and head
+    `Attention_v4{T=i+1,NH=1,KVH=1}` at FA3's tile for head P + R, whose outputs are the reference's `Attention_v4{NH,KVH=NH}` per
+    row, the indexer's logits and top-k not run; the decode step's sparse MQA then reads the prefill's latent and index-K rows."""
     model = _model(dense=True)
     xs = _inputs(model)
     rep = _derive(model, xs)
@@ -639,7 +640,7 @@ def test_a_prefill_of_at_most_topk_keys_derives_by_dense_mha_and_the_decode_afte
             want += [norm_q] * T + [norm_kv] * T + [kr] * T + ([krow] * T if indexer else []) + [up] * T + [qr] * (T * NH)
             want += [iq] * T if indexer else []
             if T > 1:
-                want += [_attention_v4(i + 1, i, T).id for i in range(T)]
+                want += [_attention_v4(i + 1, i, T, heads=1).id for i in range(T) for _ in range(NH)]
                 continue
             for p in pos if indexer else ():
                 want += [bind(dsa.DsaMqaLogitsV3, N=p + 1, H=H, D=D).id, f"Const32[0x{p + 1:08x}]_v1", sel]
@@ -647,6 +648,13 @@ def test_a_prefill_of_at_most_topk_keys_derives_by_dense_mha_and_the_decode_afte
                      for p in pos] + [down] * T
     assert _ids(rep) == want
     assert _run(rep, model, xs) == _reference(model, xs)
+    # a head's key sequence grows by its two parts a row and its value sequence by one, whatever NH: within the descriptor's alias
+    # window, so each call's sequences encode as the row before's plus its own parts (one call per row grew by 2 NH)
+    att = [n for n in rep.program.fn.body.nodes if n.fn.id.startswith("Attention_v4{")]
+    assert att and codec.ALIAS_WINDOW >= 2
+    for n in att:
+        rows = n.args[1].type.n
+        assert (len(codec._flat_parts(n.args[1].refs)), len(codec._flat_parts(n.args[2].refs))) == (2 * rows, rows), n.fn.id
     apps = [a["preconditions_checked"] for a in rep.provenance["applications"] if a["rule"] == "DsaDenseMha[vllm-dsa]_v1"]
     assert [(a["layer_name"], a["indexer"], a["BN"], a["BM"], a["splits"], a["history_rows_after"]) for a in apps] == [
         (NAMES[0], True, 128, 192, 1, 2), (NAMES[1], False, 128, 192, 1, 2)]
@@ -665,12 +673,15 @@ def test_the_dense_route_exports_q_and_k_as_their_parts(dense):
 
 
 def test_the_served_dense_prefill_binds_attention_v4_at_the_128_x_80_tile():
-    """GLM-5.3 TP8's dense prefill: qk and v head 256 at 8 heads per rank on the H200, `glm53_fa3_prefill_capture`'s geometry."""
+    """GLM-5.3 TP8's dense prefill: qk and v head 256 at 8 heads per rank on the H200, `glm53_fa3_prefill_capture`'s geometry, bound
+    one head a call: the launch's tile at 8 heads is a head's at 1 (one KV head per query head either way)."""
     geom = TG.attention_geometry(H200, 256, 2048, 8, 8)
     assert (geom["BN"], geom["fa_version"], TG.fa3_tile_m(256, 2048, 1), TG.fa3_check_inf(H200)) == (80, 3, 128, True)
+    assert TG.attention_geometry(H200, 256, 2048, 1, 1) == geom
     assert vllm_dsa_dense._dense_splits(H200, 2048, 8, 256) == 1
-    row = PROFILE_B1_EAGER_V3.kind("attention_dot", T=2048, NH=8, KVH=8, D=256, BN=80, DOT=DOT, INV=hopper.Fa3InvSum,
-                                   MASKED_FROM=TG.fa3_masked_from(H200, 2048, 8, 8, 256, 2048, 2047))
+    mf = TG.fa3_masked_from(H200, 2048, 8, 8, 256, 2048, 2047)
+    assert TG.fa3_masked_from(H200, 2048, 1, 1, 256, 2048, 2047) == mf
+    row = PROFILE_B1_EAGER_V3.kind("attention_dot", T=2048, NH=1, KVH=1, D=256, BN=80, DOT=DOT, INV=hopper.Fa3InvSum, MASKED_FROM=mf)
     assert row.id.startswith("Attention_v4{")
 
 
