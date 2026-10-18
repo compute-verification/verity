@@ -1,5 +1,6 @@
 import Models.Accounting.Guarantees.TS.Receipt
 import Proofs.Accounting.TS.Rounds
+import Proofs.Accounting.TS.ReceiptLi
 import Proofs.Pouw.Receipt.Fx1
 
 /-!
@@ -12,7 +13,8 @@ The bridge (`luck_of_receipt`), round by round: with `A = Pr[right ∧ d > 0]`, 
 
 Lemma B in case (a) (`receiptLuck_caseA`): in each unit the run's words are the honest ones with one replaced, so equal
 final states from the pinned start give the replaced word right (`duoRun_update_injective`, and for fx1
-`fx1Run_update_injective`); the event `same ∧ ¬right` is empty.
+`fx1Run_update_injective`); for li units, equal checkpoints segment by segment give each segment's word right
+(`LiLemmas.right_of_same`). The event `same ∧ ¬right` is empty.
 
 The operand luck at ¾ for degree-2 operands (`operandLuck_cube`): conditioned on the coins before the bits, a deficient
 round's error is a nonzero degree-2 function, which vanishes at uniform bits with probability at most ¾ (`luck_quad`).
@@ -75,9 +77,10 @@ theorem receiptLuck_caseA {Ω : Type} [Fintype Ω] :
     obtain ⟨hA, hAN⟩ := h
     refine And.intro ?_ fun ω => receiptLuck_caseA (next ω) (hAN ω)
     have hsr : ∀ ω, same ω → right ω := by
-      rcases hA with ⟨U, w, L, D, hD⟩ | ⟨U, w, L, D, hD⟩
+      rcases hA with ⟨U, w, L, D, hD⟩ | ⟨U, w, L, D, hD⟩ | ⟨U, w, S, W, C, H, D, hD⟩
       · exact fun ω h => (hD ω).1.mpr (DuoUnits.right_of_same D ω ((hD ω).2.mp h))
       · exact fun ω h => (hD ω).1.mpr (Fx1Units.right_of_same D ω ((hD ω).2.mp h))
+      · exact fun ω h => (hD ω).1.mpr (LiLemmas.right_of_same D ω ((hD ω).2.mp h))
     rw [zero_mul]
     exact (prob_mono (q := fun _ => False) fun ω h => h.2.1 (hsr ω h.1)).trans Rounds.prob_false.le
 
@@ -130,5 +133,11 @@ theorem OperandLuckCube : Accounting.Guarantees.TS.OperandLuckCube :=
 
 theorem LuckCaseACube : Accounting.Guarantees.TS.LuckCaseACube :=
   fun R _ _ _ _ _ _ _ G hpin hA hcube => LuckCaseA G (3 / 4) hpin hA (operandLuck_cube R G hcube)
+
+theorem LiSegmentsBind : Accounting.Guarantees.TS.LiSegmentsBind :=
+  fun D ω => LiLemmas.right_of_same D ω
+
+theorem LiWindowUnbound : Accounting.Guarantees.TS.LiWindowUnbound :=
+  fun n D ω => LiLemmas.windowUnbound n D ω
 
 end Accounting.SecurityProofs.TS
