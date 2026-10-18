@@ -85,19 +85,15 @@ def arms(out: Path) -> dict:
 
 
 def step_ms(out: Path) -> dict:
-    """Each arm's engine step time, p50 and p99, as the median over engines of engine.py's per-phase percentiles."""
-    by: dict[str, dict[str, list]] = {}
-    for f in sorted(out.glob("engine.[0-9]*.json")):
-        if f.name.endswith(".latency.json"):
-            continue
-        for phase, p in json.loads(f.read_text()).get("phases", {}).items():
-            arm = arm_of(phase)
-            if arm:
-                x = by.setdefault(arm, {"p50": [], "p99": []})
-                x["p50"].append(p["step_ms"]["p50"])
-                x["p99"].append(p["step_ms"]["p99"])
-    med = lambda xs: round(sorted(xs)[len(xs) // 2], 2) if xs else None
-    return {arm: {"step_ms_p50": med(x["p50"]), "step_ms_p99": med(x["p99"])} for arm, x in by.items()}
+    """Each arm's engine step time, p50 and p99, over every step of every engine in the arm (engine.py's steps.jsonl)."""
+    by: dict[str, list[float]] = {}
+    for f in sorted(out.glob("engine.*.steps.jsonl")):
+        for line in f.read_text().splitlines():
+            s = json.loads(line)
+            if arm := arm_of(s.get("phase", "")):
+                by.setdefault(arm, []).append(s["ms"])
+    q = lambda xs, p: round(sorted(xs)[min(len(xs) - 1, int(p * len(xs)))], 2)
+    return {arm: {"step_ms_p50": q(xs, 0.5), "step_ms_p99": q(xs, 0.99)} for arm, xs in by.items() if xs}
 
 
 def passes(prover: dict, window_ms: float | None) -> dict:
