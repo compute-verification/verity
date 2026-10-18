@@ -1975,6 +1975,12 @@
    "assumptions": [],
    "type_hash": "f6a85b032fa3daf1cb90b6693f33ebc1f8e160996e163a97419f35fc0f9ceda0"
   },
+  "Accounting.SecurityProofs.TS.ExchangeTail": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.ExchangeTail : Accounting.Guarantees.TS.ExchangeTail"],
+   "assumptions": [],
+   "type_hash": "ba03954a0ab6e08c7e67b4dd088307b4a9c461b705a1c582626247a9e2cc835e"
+  },
   "Accounting.SecurityProofs.TS.FanInCount": {
    "owner": "@compute-accounting",
    "signature": ["Accounting.SecurityProofs.TS.FanInCount : Accounting.Guarantees.TS.FanInCount"],
@@ -2016,6 +2022,30 @@
    "signature": ["Accounting.SecurityProofs.TS.Fx1SegmentsBind : Accounting.Guarantees.TS.Fx1SegmentsBind"],
    "assumptions": [],
    "type_hash": "aad18a7a2fbca41c4809056d4c3457aa70bea4a8d619583a0b843828d9d9f63f"
+  },
+  "Accounting.SecurityProofs.TS.GrindMass": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.GrindMass : Accounting.Guarantees.TS.GrindMass"],
+   "assumptions": [],
+   "type_hash": "3062c28c48308e3366d0dd72296df30fa56357ebf7403ff54b7741c42440f161"
+  },
+  "Accounting.SecurityProofs.TS.GrindPremium": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.GrindPremium : Accounting.Guarantees.TS.GrindPremium"],
+   "assumptions": [],
+   "type_hash": "5dcfdda27bc23284f8f304a5e71cbc2c4839b8ba516ef761bebfe81bb5e7d441"
+  },
+  "Accounting.SecurityProofs.TS.GrindPremiumAt": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.GrindPremiumAt : Accounting.Guarantees.TS.GrindPremiumAt"],
+   "assumptions": [],
+   "type_hash": "e1dd8d1a85ea18fdecc61a69515f43aa1cd85901327e29d54accb78f800fb0b9"
+  },
+  "Accounting.SecurityProofs.TS.GrindTail": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.GrindTail : Accounting.Guarantees.TS.GrindTail"],
+   "assumptions": [],
+   "type_hash": "fc15875a2bb37504bad2728ec4d6e8281df1a2d0a30552e1159052da102397c3"
   },
   "Accounting.SecurityProofs.TS.GrindUnion": {
    "owner": "@compute-accounting",
@@ -2065,6 +2095,12 @@
    "assumptions": [],
    "type_hash": "d843adb387677d7f782ea44db601e82ebfecf578d72fbe57b4598a2dad87c6e3"
   },
+  "Accounting.SecurityProofs.TS.LuckMoment": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.LuckMoment : Accounting.Guarantees.TS.LuckMoment"],
+   "assumptions": [],
+   "type_hash": "c7fbbf37ab40d73452c41ba40ad9c630a71fc3eeedf1c7186c2e3edb12548975"
+  },
   "Accounting.SecurityProofs.TS.LuckOfReceipt": {
    "owner": "@compute-accounting",
    "signature": ["Accounting.SecurityProofs.TS.LuckOfReceipt : Accounting.Guarantees.TS.LuckOfReceipt"],
@@ -2082,6 +2118,12 @@
    "signature": ["Accounting.SecurityProofs.TS.OutputCount : Accounting.Guarantees.TS.OutputCount"],
    "assumptions": [],
    "type_hash": "f63122b9d09208627838844f85921930911249f025c810b9936cfc84542bef96"
+  },
+  "Accounting.SecurityProofs.TS.PrivateMoment": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.PrivateMoment : Accounting.Guarantees.TS.PrivateMoment"],
+   "assumptions": [],
+   "type_hash": "bd75f1515987b5d82b349a4a6d544c88b9f7e74abe51fd3c5af932d7425b5fdc"
   },
   "Accounting.SecurityProofs.TS.ProofsSoundOfPinned": {
    "owner": "@compute-accounting",
@@ -2155,6 +2197,18 @@
    "assumptions": [],
    "type_hash": "5803510fd92c96e4606036e0695794c6210805a328862135c17ec7fd7f5544e8"
   },
+  "Accounting.SecurityProofs.TS.TemplateCondition": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.TemplateCondition : Accounting.Guarantees.TS.TemplateCondition"],
+   "assumptions": [],
+   "type_hash": "ac9e57bcaab6682fc07f07a3d1ca7e2d1406bce586002eb6e46dbf6d8449df06"
+  },
+  "Accounting.SecurityProofs.TS.TemplateMoment": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.TemplateMoment : Accounting.Guarantees.TS.TemplateMoment"],
+   "assumptions": [],
+   "type_hash": "6026dad870d26691d02086fcffbf934131c8beb1122dab5f8216fa9129bb3347"
+  },
   "Accounting.SecurityProofs.TS.TensorSlotCount": {
    "owner": "@compute-accounting",
    "signature": ["Accounting.SecurityProofs.TS.TensorSlotCount : Accounting.Guarantees.TS.TensorSlotCount"],
@@ -2172,6 +2226,12 @@
    "signature": ["Accounting.SecurityProofs.TS.ThinFoldInjective : Accounting.Guarantees.TS.ThinFoldInjective"],
    "assumptions": [],
    "type_hash": "05c11dc008c2a2607af95ee24298aeb442207dd73f0dc17980a992372e1e94ef"
+  },
+  "Accounting.SecurityProofs.TS.TileLuck": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.TileLuck : Accounting.Guarantees.TS.TileLuck"],
+   "assumptions": [],
+   "type_hash": "cf8e0fefb25830e7e36b520d9afbda42ca3c6f38cc08f3fcbeabf060ac37d763"
   },
   "Accounting.SecurityProofs.TS.TimeBound": {
    "owner": "@compute-accounting",
@@ -7204,7 +7264,17 @@
    "Accounting.SecurityProofs.Gates.Int8LinearWindow": "frozen (no-function): The window of the gate model's circuit Accounting.Gates.int8Linear (vLLM's served int8 linear: its row quantizer into a satfinite s8·s8 IMMA chain) at every K = 32·S ≤ 131,040, not a property of the served code: vLLM's int8 Definitions (int8_exact.py) have no Lean port.",
    "Accounting.SecurityProofs.Gates.LutPvWindow": "frozen (no-function): The window of the gate model's circuit Accounting.Gates.lutPv (vLLM's served LUT attention's P·V: LUT index, table gather and low byte into a satfinite s8·s8 IMMA chain) at every 32·S ≤ 132,096 and table of values in [0, 127], not a property of the served code: vLLM's int8 Definitions (int8_exact.py) have no Lean port.",
    "Pouw.SecurityProofs.Eps1.ClassPSlots": "frozen (no-function): Theorem C's count of EPS1-QSTAR over issue slots, over every class-P M3 program with its writers' creations a parameter (w), not a Lean function.",
-   "Pouw.SecurityProofs.Receipt.DuoPairAtStateNotInjective": "lemma: the counterexample to two words' binding at a state (two word pairs, one full state at the served chain 0's first two words' keys); a statement about one concrete run, not a property of a Lean function."
+   "Pouw.SecurityProofs.Receipt.DuoPairAtStateNotInjective": "lemma: the counterexample to two words' binding at a state (two word pairs, one full state at the served chain 0's first two words' keys); a statement about one concrete run, not a property of a Lean function.",
+   "Accounting.SecurityProofs.TS.ExchangeTail": "lemma: the Chernoff tail M e^{-theta pi} of a gain whose exponential moment at rate theta is at most M (a hypothesis), one query; not a property of a Lean function.",
+   "Accounting.SecurityProofs.TS.GrindTail": "lemma: the union T tau over T random-oracle queries, each query's bad event of probability at most tau over its own answer with every other answer fixed (a hypothesis); not a property of a Lean function.",
+   "Accounting.SecurityProofs.TS.GrindPremium": "lemma: the grinding premium T M e^{-theta pi} + delta_b over T random-oracle queries, each query's gain of moment at most M over its own answer (a hypothesis), the commitment's binding break delta_b a parameter; not a property of a Lean function.",
+   "Accounting.SecurityProofs.TS.GrindPremiumAt": "lemma: GrindPremium at pi* = ln(T M / delta) / theta, the premium priced into epsilon outside delta + delta_b; not a property of a Lean function.",
+   "Accounting.SecurityProofs.TS.GrindMass": "lemma: the expectation form, the T queries' exponential moments summing to at most T M in mean under GrindPremium's per-query moment (a hypothesis); not a property of a Lean function.",
+   "Accounting.SecurityProofs.TS.LuckMoment": "lemma: one unit's exponential moment p e^{theta w} + (1 - p) e^{-kappa theta w} at exchange rate kappa, its luck at most p (a hypothesis); not a property of a Lean function.",
+   "Accounting.SecurityProofs.TS.PrivateMoment": "lemma: exponential moments multiply over private coins whatever the shared ones (Fubini), each bound a hypothesis; not a property of a Lean function.",
+   "Accounting.SecurityProofs.TS.TileLuck": "lemma: the deployed tile's exponential moment at most M, n columns sharing coins and r units a column, each unit's dead mass q and alive luck p hypotheses (AM-GM over the columns and over each column's units); not a property of a Lean function.",
+   "Accounting.SecurityProofs.TS.TemplateCondition": "lemma: h1tile's segment (32 columns, words of at most 32 skipped products, a one-bit dither) meets TileLuck's condition with M = 1 at κ = 4 and r·θ = 1/256, from elementary bounds on exp; not a property of a Lean function.",
+   "Accounting.SecurityProofs.TS.TemplateMoment": "lemma: TileLuck at h1tile's segment, the gain's moment at most 1 at θ = 1/(256·r) a product and κ = 4; not a property of a Lean function."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
@@ -14616,11 +14686,16 @@
     "Accounting.SecurityProofs.TS.DIdeal",
     "Accounting.SecurityProofs.TS.DIdealFloor",
     "Accounting.SecurityProofs.TS.DecompositionD",
+    "Accounting.SecurityProofs.TS.ExchangeTail",
     "Accounting.SecurityProofs.TS.FloorCreditD3",
+    "Accounting.SecurityProofs.TS.GrindPremium",
+    "Accounting.SecurityProofs.TS.GrindPremiumAt",
+    "Accounting.SecurityProofs.TS.GrindTail",
     "Accounting.SecurityProofs.TS.GrindUnion",
     "Accounting.SecurityProofs.TS.LuckCaseA",
     "Accounting.SecurityProofs.TS.LuckCaseACube",
     "Accounting.SecurityProofs.TS.LuckCaseAKeyed",
+    "Accounting.SecurityProofs.TS.LuckMoment",
     "Accounting.SecurityProofs.TS.LuckOfReceipt",
     "Accounting.SecurityProofs.TS.OperandLuckCube",
     "Accounting.SecurityProofs.TS.ProofsSoundOfPinned",
@@ -14630,6 +14705,8 @@
     "Accounting.SecurityProofs.TS.StageBudget",
     "Accounting.SecurityProofs.TS.StageIdeal",
     "Accounting.SecurityProofs.TS.SteerUnion",
+    "Accounting.SecurityProofs.TS.TemplateMoment",
+    "Accounting.SecurityProofs.TS.TileLuck",
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorK",
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSided",
     "Pouw.SecurityProofs.RelativeSecurity.StagedFloorK",
@@ -20349,6 +20426,33 @@
     "Accounting.SecurityProofs.TS.DuoFoldFanIn",
     "Accounting.SecurityProofs.TS.FoldFanIn",
     "Accounting.SecurityProofs.TS.Fx1FoldFanIn"
+   ]
+  },
+  "Models.Accounting.Guarantees.TS.Grind": {
+   "digest": "1e8eaa8f6aefa25e9b41a4ce55a36f037aaabdd86bc3c0f664b7b42a16f5c811",
+   "definitions": {
+    "Accounting.Guarantees.TS.ExchangeTail": "05121f965b48d60a609591311cc6bdf837caf60d64a9b0ae332f21ecab0bd9a1",
+    "Accounting.Guarantees.TS.GrindMass": "6c0771509d945a8073237af7b9ed7d7f92bd728bc73942c6ea6dc82085b9ac41",
+    "Accounting.Guarantees.TS.GrindPremium": "6e463ba487a23cba9042bf8bc9e779ebd1e85321a24b6402646dc5d9e91c276c",
+    "Accounting.Guarantees.TS.GrindPremiumAt": "be54699c6526dda578aa3134f2405410d0e09a1f3dba4ca813bc7000fc2a57d9",
+    "Accounting.Guarantees.TS.GrindTail": "eeed11b6685efd2a686e030461eacf6e7744e8c0e614626f68846e5b54be02e9",
+    "Accounting.Guarantees.TS.LuckMoment": "310172cf7885c798713c55e9b13fed3c902b6e1f2ea1019eb797cbaded7a7c1d",
+    "Accounting.Guarantees.TS.PrivateMoment": "78eaf96a7e98c0b4b6602ee3f97cb6b392a44a029d46d7759346766584555918",
+    "Accounting.Guarantees.TS.TemplateCondition": "c2c9e4f72510283b3c848a52d48b885355ca11fd3a243d6f402662558ccd70c4",
+    "Accounting.Guarantees.TS.TemplateMoment": "bde268590a7e623401d9553be57e6ce158c8a7dc45fa5985d09ca1da0367110b",
+    "Accounting.Guarantees.TS.TileLuck": "bd43f76f648e6cdf360572662fb48b637b904f1061ce8d73076f346575c4d0ee"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.TS.ExchangeTail",
+    "Accounting.SecurityProofs.TS.GrindMass",
+    "Accounting.SecurityProofs.TS.GrindPremium",
+    "Accounting.SecurityProofs.TS.GrindPremiumAt",
+    "Accounting.SecurityProofs.TS.GrindTail",
+    "Accounting.SecurityProofs.TS.LuckMoment",
+    "Accounting.SecurityProofs.TS.PrivateMoment",
+    "Accounting.SecurityProofs.TS.TemplateCondition",
+    "Accounting.SecurityProofs.TS.TemplateMoment",
+    "Accounting.SecurityProofs.TS.TileLuck"
    ]
   },
   "Models.Accounting.Guarantees.TS.Receipt": {
