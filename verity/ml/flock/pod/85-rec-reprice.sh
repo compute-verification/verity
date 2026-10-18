@@ -9,7 +9,8 @@
 #                (STAGE_FROM=DIR: another job's data/$TAG, both stagings)
 #   STEP=inner   (GPU leases) the plain inner statement proved with ZK off (M0, FC_COINS=os) against the rec proxy
 #                (verity_flock.rec_live, the inner phase's firewall: salted tree tops, the schedule of the statement's public
-#                shape, rec_live --schedule-for; WARM + RUNS sessions), upstream's replay of the last one and V*'s hashing
+#                shape, rec_live --schedule-for; Register answered with the verifier's draw of every instance, flock-verify
+#                draw into data/$TAG/stage/draw.json; WARM + RUNS sessions), upstream's replay of the last one and V*'s hashing
 #                reference (rec_vstar) over it, and over two forged copies of its private.json (a round's top: one node one
 #                bit off, one salt one bit off), which it must refuse (CHECKS=0: STEP=icheck's); then (INNER_LOOPBACK=1) the
 #                hm96 statement on loopback, M0 and --zk, WARM + RUNS sessions each (today's numbers)
@@ -199,12 +200,12 @@ loopback() {
   return $rc
 }
 
-# proxied: the rec proxy (WARM + RUNS sessions, each to $DD/inner/s<k>, held to $O/inner/schedule.json) and prove_live
-# against it; the prover's status
+# proxied: the rec proxy (WARM + RUNS sessions, each to $DD/inner/s<k>, held to $O/inner/schedule.json, Register answered
+# with $DD/stage/draw.json) and prove_live against it; the prover's status
 proxied() {
   rm -rf $DD/inner; mkdir -p $DD/inner
   taskset -c $VCPU python3 -m verity_flock.rec_live --listen 127.0.0.1:0 --out $DD/inner --sessions $NS --schedule $O/inner/schedule.json \
-    > $O/inner/proxy/proxy.log 2>&1 &
+    --draw $DD/stage/draw.json > $O/inner/proxy/proxy.log 2>&1 &
   local PP=$!
   wait_serving $O/inner/proxy/proxy.log $PP || { cat $O/inner/proxy/proxy.log; return 1; }
   prove_live proxy $(awk '/^SERVING/ {print $2}' $O/inner/proxy/proxy.log) $D/inst-$N.bin $D/circuit.txt; local rc=$?
@@ -429,6 +430,14 @@ inner)
   taskset -c $VCPU $B statement --instances $D/pub-$N.bin --circuit $D/circuit.txt > $O/inner/statement.txt 2>&1 \
     || { tail -5 $O/inner/statement.txt; exit 1; }
   python3 -m verity_flock.rec_live --schedule-for $O/inner/statement.txt > $O/inner/schedule.json || exit 1
+  # the verifier's draw, every instance (flock-verify draw: subset at k = the statement's instances, as a --zk loopback's),
+  # since verify refuses a session over an undrawn inner session (RecSetup.innerDrawn) and check 5 holds the draw to every
+  # unit of the inner statement, which the q-word partition's population (rec_live.full_draw's) is not
+  [ -x $LEAN_BIN ] || lean_build > $O/build-lean.log 2>&1 || { tail -20 $O/build-lean.log; exit 1; }
+  NI=$(python3 -c 'import json, sys; print(json.loads(open(sys.argv[1], "rb").readline())["instances"])' $D/pub-$N.bin)
+  $LEAN_BIN draw --population $NI --k $NI | sed -n 's/^DRAW //p' > $D/draw.json
+  [ -s $D/draw.json ] || { echo "no draw from flock-verify draw"; exit 1; }
+  cp $D/draw.json $O/inner/
   again proxied
   SESS=$DD/inner/s$((NS - 1))
   [ -f $SESS/session/session.json ] || { tail -20 $O/inner/proxy/proxy.log $O/inner/proxy/prove.err; exit 1; }
