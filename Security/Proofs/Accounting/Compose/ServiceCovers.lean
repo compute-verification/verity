@@ -124,13 +124,13 @@ theorem coneWt_le {K : Type} (Sc : Scheme K) (hw : Cd.Wf) (hc : LayerCommitted C
   simp only [DrawnLayer.coneWt, tileCone, Fintype.sum_prod_type, Fin.sum_univ_one, Finset.sum_mul]
   refine Finset.sum_le_sum fun t' _ => ?_
   by_cases hR : Relation.ReflTransGen (Cd.layer hr hK pr).Late (0, t) (0, t')
-  · rw [if_pos hR, if_pos (reaches_of_rtg Cd hr hK pr hw hc hR)]
+  · rw [ite_eq_left hR, ite_eq_left (reaches_of_rtg Cd hr hK pr hw hc hR)]
     unfold tileWeight
     rcases Nat.eq_zero_or_pos (wordsOf Sc Cd) with h0 | hpos
     · have h00 : tileWords Sc Cd Np t' = 0 := Nat.le_zero.mp (h0 ▸ tileWords_le_wordsOf Sc Cd Np t')
       simp [h0, h00]
     · exact (div_mul_cancel₀ _ (Nat.cast_pos.mpr hpos).ne').ge
-  · rw [if_neg hR]
+  · rw [ite_eq_right hR]
     refine mul_nonneg ?_ (Nat.cast_nonneg _)
     split_ifs
     · exact div_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _)
