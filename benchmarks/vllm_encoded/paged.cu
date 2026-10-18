@@ -761,10 +761,10 @@ int pg_rekey_ctas() {
 // words and flag are left as they are, its offset moved too. tab (device) holds each layer's PG_REKEY words
 // (pg_rekey_kernel), rows its most rows; every layer's cache in one layout. A layer's listed slots are distinct, and
 // nothing reads them until it is done: the caller orders it after their last read under the old offsets and before
-// their first under the new. It reads and writes nothing else. ctas is the grid: 0 a word a thread, CTAs that end after
-// one word each, so on a low-priority stream beside serving each SM goes to the serving kernels' CTAs as it frees; a
-// count is a grid of that many CTAs striding over the words, which hold their SMs until the re-key ends (at
-// pg_rekey_ctas(), every SM's resident CTAs, an SM holds no other kernel's CTAs).
+// their first under the new. It reads and writes nothing else. ctas is the grid: 0 a word a thread (CTAs that end after
+// one word each), a count that many CTAs striding over the words. A low-priority stream preempts no CTA, and the room a
+// finished CTA frees seldom fits a serving kernel's, so beside serving a caller caps the grid and serving keeps the
+// room the cap leaves (pg_rekey_ctas(), every SM's resident CTAs, leaves none).
 int pg_rekey(const unsigned long long *tab, int layers, int rows, int bs, int sb, int sh, int ss, int k, int ctas,
              cudaStream_t s) {
   if (layers < 0 || rows < 0 || bs < 1 || k < 1 || k > kv::KMAX || ctas < 0 || !kv::MMA_OK || (layers && rows && !tab))
