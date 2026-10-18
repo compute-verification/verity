@@ -1741,7 +1741,8 @@ def counts(rep: dict) -> tuple[int, int]:
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_a_replay_reuses_only_modules_whose_olean_files_and_imports_passed_it(tmp_path):
     """On a real build: a second audit reuses every module's replay; a change to `Control.Defs` replays it and what imports
-    it; a declaration that skipped the kernel is still rejected beside reused modules, and a failed replay stores nothing."""
+    it; a declaration that skipped the kernel is still rejected beside reused modules, and a failed replay stores the
+    modules the kernel accepted (`Control`, which imports the bad one) and never the rejected one, which fails again."""
     pkg, cache = tmp_path / "control", tmp_path / "replay-cache"
     shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
     build = lambda: subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
@@ -1768,7 +1769,10 @@ def test_a_replay_reuses_only_modules_whose_olean_files_and_imports_passed_it(tm
     rep = audit()
     assert counts(rep) == (2, 3), "Bad and Control"
     assert any(f.startswith(kernel["fails"]) for f in rep["failures"]), rep["failures"]
-    assert set(cache.glob("*.json")) == stored
+    assert len(set(cache.glob("*.json")) - stored) == 1
+    rep = audit()
+    assert counts(rep) == (1, 4), "Bad alone"
+    assert any(f.startswith(kernel["fails"]) for f in rep["failures"]), rep["failures"]
 
 
 def test_the_closure_plan_joins_every_module_above_one_that_has_not_passed():

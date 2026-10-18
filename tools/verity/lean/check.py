@@ -2117,17 +2117,28 @@ def replay_step(pkg: Path, policy: dict, facts: dict, toolchain: str, work: Path
     found.unlink(missing_ok=True)
     keys = replay_keys(facts, toolchain) if replay_cache else {}
     passed = lambda m: m in keys and (replay_cache / f"{keys[m]}.json").is_file()
-    reused = [m for m in facts["modules"] if passed(m)]
-    checked = [m for m in facts["modules"] if m not in reused]
-    deps_checked, deps_reused = closure_plan(facts, passed) if closure else ([], [])
     n = replay_threads(pkg)
     _peak.bytes = 0
+    # what passed is read once the replay may start, so a package audited beside one that shares its closure reuses it
     with _HEAVY_REPLAY if n is not None else contextlib.nullcontext():
+        reused = [m for m in facts["modules"] if passed(m)]
+        checked = [m for m in facts["modules"] if m not in reused]
+        deps_checked, deps_reused = closure_plan(facts, passed) if closure else ([], [])
         rc, text = run([*([] if n is None else ["env", f"LEAN_NUM_THREADS={n}"]), "lake", "env", "lean", "--run",
                         str(TOOL / "Replay.lean"), str(found), *checked, *(["--reused", *reused] if reused else []),
                         *(["--closure", *deps_checked] if deps_checked else []),
                         *(["--closure-reused", *deps_reused] if deps_reused else [])],
                        pkg, work / "replay.log", timeout=CLOSURE_TIMEOUT if closure else REPLAY_TIMEOUT)
+        doc = json.loads(found.read_text()) if found.exists() and not killed(rc) else {}
+        # a module's entry says its declarations passed with its imports present: one rejected elsewhere takes nothing from it
+        accepted = [m for m in checked + deps_checked if m not in set(doc.get("rejected", []))] \
+            if keys and (rc == 0 or (rc == 1 and "rejected" in doc)) else []
+        if accepted:
+            replay_cache.mkdir(parents=True, exist_ok=True)
+            for m in accepted:
+                tmp = replay_cache / f".{keys[m]}.{os.getpid()}.tmp"
+                tmp.write_text(json.dumps({"schema": REPLAY_SCHEMA, "module": m, "key": keys[m]}))
+                os.replace(tmp, replay_cache / f"{keys[m]}.json")
     stats = {"checked": len(checked), "reused": len(reused), "peak_gib": round(_peak.bytes / 2**30, 1)}
     if closure:
         stats["closure"] = {"modules": len(facts["graph"]) - len(facts["modules"]), "checked": len(deps_checked),
@@ -2137,17 +2148,11 @@ def replay_step(pkg: Path, policy: dict, facts: dict, toolchain: str, work: Path
     where = f"in the import closure of {', '.join(policy['roots'])}" if closure else f"under {', '.join(policy['roots'])}"
     if killed(rc):
         fails.append(f"replay: killed (exit {rc}; out of memory?), which is not a kernel verdict: rerun it alone\n{text[-1000:]}")
-    elif rc or not found.exists():
+    elif rc or "axioms" not in doc:
         fails.append(f"replay: the kernel rejected a declaration {where} (exit {rc}):\n{text[-2000:]}")
-    elif (walked := sorted(json.loads(found.read_text())["axioms"])) != sorted(facts["axioms"]):
+    elif (walked := sorted(doc["axioms"])) != sorted(facts["axioms"]):
         fails.append(f"replay: the replayed environment uses the axioms {', '.join(walked) or 'none'}, the .olean files "
                      f"record {', '.join(sorted(facts['axioms'])) or 'none'}")
-    elif keys:
-        replay_cache.mkdir(parents=True, exist_ok=True)
-        for m in checked + deps_checked:
-            tmp = replay_cache / f".{keys[m]}.{os.getpid()}.tmp"
-            tmp.write_text(json.dumps({"schema": REPLAY_SCHEMA, "module": m, "key": keys[m]}))
-            os.replace(tmp, replay_cache / f"{keys[m]}.json")
     return fails, stats
 
 

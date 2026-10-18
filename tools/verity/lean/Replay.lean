@@ -33,7 +33,8 @@ kernel makes.
 
 It then writes to `OUT` the axioms the package's own constants (the `Mᵢ` and `Rᵢ`) use, found by walking their bodies
 (the ones the kernel accepted, not the axiom sets each `.olean` recorded when it was built), so `check.py` can compare the
-two. Exit 0 when every constant is accepted, 1 when the kernel rejects one.
+two. Exit 0 when every constant is accepted, 1 when the kernel rejects one, after writing to `OUT` the modules of the
+rejected declarations.
 -/
 
 open Lean Elab Term
@@ -271,7 +272,7 @@ unsafe def main (args : List String) : IO UInt32 := do
       return 1
   let mut tasks : Array (Name × Task (Except IO.Error Nat)) := #[]
   let mut took : Array (Nat × Name) := #[]
-  let mut rejected := false
+  let mut rejected : NameSet := {}
   let mut waited := 0
   let mut checkedModules : NameSet := {}
   for d in order do
@@ -309,15 +310,17 @@ unsafe def main (args : List String) : IO UInt32 := do
       | .ok ms => took := took.push (ms, d')
       | .error e =>
         IO.eprintln s!"replay: the kernel rejects {d'} (in {moduleOfDecl d'}):\n{e}"
-        rejected := true
+        rejected := rejected.insert (moduleOfDecl d')
       waited := waited + 1
   for (d, t) in tasks.extract waited tasks.size do
     match ← IO.wait t with
     | .ok ms => took := took.push (ms, d)
     | .error e =>
       IO.eprintln s!"replay: the kernel rejects {d} (in {moduleOfDecl d}):\n{e}"
-      rejected := true
-  if rejected then
+      rejected := rejected.insert (moduleOfDecl d)
+  if !rejected.isEmpty then
+    -- every other module's declarations passed with its imports present, which is what a module's cache entry says
+    IO.FS.writeFile out <| (Json.mkObj [("rejected", toJson (rejected.toArray.qsort Name.lt |>.map toString))]).compress
     return 1
   let ownConstants := (constants.toArray.filter fun (n, _) => ownSet.contains moduleOf[n]!).map (·.1)
   let names := axiomsIn kenv ownConstants |>.map toString
