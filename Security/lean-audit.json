@@ -809,9 +809,9 @@
    "why": "the protocol's definitions are trusted text: they import no assumption, guarantee or proof"
   },
   "Definitions.Population": {
-   "imports": ["Mathlib", "Definitions.Population"],
+   "imports": ["Mathlib", "Definitions.Core", "Definitions.Population"],
    "except": [],
-   "why": "populations' definitions are trusted text: they import no assumption, guarantee or proof"
+   "why": "populations' definitions are trusted text: they import no assumption, guarantee or proof; a partition of a core circuit is a population"
   },
   "Models.NetworkCertifier.Assumptions": {
    "imports": ["Mathlib", "Definitions.NetworkCertifier", "Models.NetworkCertifier.Assumptions"],
