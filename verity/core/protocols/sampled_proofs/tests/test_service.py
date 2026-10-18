@@ -12,7 +12,7 @@ import verity.ml.circuits.ops.scalar  # noqa: F401
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.types import Array, Value as Bits
-from verity.core.protocols.sampled_proofs import service as S, two_stage as T
+from verity.core.protocols.sampled_proofs import coins as T, service as S
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registration as R
 
 XOR8 = PrimitiveDefinition("ServiceTestXor8", 1, (("a", Bits(8)), ("b", Bits(8))), Bits(8), lambda a, b: a ^ b,
@@ -67,32 +67,6 @@ def _record(n: int = 6, law=None, row: int = 0, previous: str | None = None, wor
     rec = R.record(P.population_program(PAIR, n), QUERY, law or {"law": "subset", "k": 2}, S.SCHEME, roots,
                    {"kind": "served", "run": RUN, "row": row}, previous=previous, work_table=work_table)
     return {**rec, **change}
-
-
-#: A two-stage Spec's values: the RU boundary `x`, committed by serve time, and the interior `out`, after the draw.
-TWO = (S.Value("x", SCHEMA, "serve"), S.Value("out", SCHEMA, "interior"))
-ROOTS = {"x": "01" * 64, "out": "02" * 64}
-
-
-def _two_spec(replay: str = "subset:2", check="all", **kw) -> S.Spec:
-    return _spec(S.TwoStage(S.Law(replay), check), values=TWO, **kw)
-
-
-def _half(port: str, n: int, law=None, row: int = 0, previous: str | None = None, root: str | None = None,
-          work_table=None) -> tuple[dict, dict]:
-    """One stage's record and the challenger's copy of its port: the boundary's (`x`, on serve's window) or the
-    interiors' (`out`, over the proved RUs, on a window of its own: R6 refuses a window logged before)."""
-    ports = {port: _ports(n)[port]}
-    roots = [{"port": port, "root": root or ROOTS[port], **ports[port]}]
-    window = {"kind": "served", "run": RUN, "row": row, **({} if port == "x" else {"stage": "interior"})}
-    rec = R.record(P.population_program(PAIR, n), QUERY, law or {"law": "subset", "k": 2}, S.SCHEME, roots, window,
-                   previous=previous, work_table=work_table)
-    return rec, ports
-
-
-def _interiors(draw: S.Draw, row: int = 0, **kw) -> tuple[dict, dict]:
-    n = len(draw.proved)
-    return _half("out", n, {"law": "subset", "k": n}, row=row, previous=draw.registration.digest, **kw)
 
 
 def _lean(accepted=True, sessions=(SESSION,), **extra) -> dict:
@@ -237,20 +211,11 @@ def test_a_spec_states_each_public_item_once_with_its_reason():
     with pytest.raises(ValueError, match="positive"):
         _spec(proof_deadline=0)
     assert _spec().digest() == _spec().digest() != _spec(S.Law("subset:3")).digest()
-    for values in (VALUES, tuple(S.Value(v.name, SCHEMA, "interior") for v in VALUES),
-                   (*TWO, S.Value("answer", SCHEMA, "in-deadline"))):
-        with pytest.raises(ValueError, match="interiors"):
-            _spec(S.TwoStage(S.Law("subset:2"), "all"), values=values)
-    with pytest.raises(ValueError, match="registered"):
-        _spec(S.TwoStage(S.Law("subset:2"), "all"), values=(*TWO, S.Value("W", None, "interior", registered=True)))
-    assert _two_spec().digest() != _spec().digest()
 
 
 def test_a_stream_refuses_what_isnt_built_and_another_unit():
     with pytest.raises(ValueError, match="Sequential"):
         _stream(_spec(S.Sequential("uniform:4", "population")))
-    with pytest.raises(ValueError, match="every proof unit"):
-        _stream(_two_spec(check=2))
     with pytest.raises(ValueError, match="unit"):
         S.Stream(_spec(), OTHER, budget=1, delta=DELTA, challenger="c")
     with pytest.raises(ValueError, match="proof deadline"):
@@ -275,16 +240,12 @@ def test_one_stage_refusals_come_through_register():
 
 def test_a_law_whose_count_varies_is_refused_at_register():
     """A Bernoulli law at 0 < p < 1 draws a count that varies, so one registration's sessions would set up tables of
-    different shapes: `register` refuses it (`shapes`) after R1-R7, one-stage or as a two-stage rule's replay, and logs
-    nothing. At p = 0 or 1 it registers."""
+    different shapes: `register` refuses it (`shapes`) after R1-R7, and logs nothing. At p = 0 or 1 it registers."""
     for p in ("1/2", "2/3", "2/4"):
-        law = {"law": "bernoulli", "p": p}
-        for stream, args, subset in ((_stream(_spec(S.Law(f"bernoulli:{p}"))), (_record(law=law), _ports(6)),
-                                      (_record(), _ports(6))),
-                                     (_stream(_two_spec(f"bernoulli:{p}")), _half("x", 6, law), _half("x", 6))):
-            assert _refused(lambda: stream.register(*args)) == ("shapes",)
-            assert "R1-law" in _refused(lambda: stream.register(*subset))
-            assert stream.log == () and stream.records == ()
+        stream = _stream(_spec(S.Law(f"bernoulli:{p}")))
+        assert _refused(lambda: stream.register(_record(law={"law": "bernoulli", "p": p}), _ports(6))) == ("shapes",)
+        assert "R1-law" in _refused(lambda: stream.register(_record(), _ports(6)))
+        assert stream.log == () and stream.records == ()
     for p in ("0/1", "1/1", "3/3"):
         stream = _stream(_spec(S.Law(f"bernoulli:{p}")))
         assert stream.register(_record(law={"law": "bernoulli", "p": p}), _ports(6)).order == 0
@@ -385,8 +346,7 @@ def test_a_proof_that_never_arrives_ends_late():
     assert stream.register(_record(row=1, previous=draw.registration.digest), _ports(6)).order == 1
 
 
-OUTCOME_KEYS = {"format", "stream", "order", "registration", "receipt", "draw", "sessions", "symbol", "public", "audit",
-                "interior"}
+OUTCOME_KEYS = {"format", "stream", "order", "registration", "receipt", "draw", "sessions", "symbol", "public", "audit"}
 
 
 def test_a_late_registration_is_refused_and_ends_the_epoch():
@@ -494,21 +454,6 @@ def test_no_registration_deadline_changes_nothing():
     for bad in (0, -1.0, True, "30", float("nan")):
         with pytest.raises(ValueError, match="registration deadline is a positive number"):
             _spec(registration_deadline=bad)
-
-
-def test_the_interiors_are_not_held_to_the_registration_deadline():
-    clock = Clock()
-    stream = _stream(_two_spec(registration_deadline=30.0), clock=clock)
-    stream.salt()
-    clock.now = 10.0
-    reg = stream.register(*_half("x", 6))
-    draw = stream.select(reg)
-    clock.now = 35.0
-    ireg = stream.register_interiors(draw, *_interiors(draw))
-    assert (ireg.salted_at, ireg.received_at) == (None, None) and not stream.ended
-    assert [e["event"] for e in stream.epoch_log] == ["salt", "registration"]
-    stream.deliver(draw, [SESSION])
-    assert stream.outcome(draw, _lean(), {}, session_roots=dict(ROOTS)).accepted
 
 
 def test_a_salt_released_elsewhere_counts_the_deadline_from_its_release():
@@ -642,122 +587,6 @@ def _refused(call) -> tuple[str, ...]:
     return e.value.verdict.codes
 
 
-def test_two_stage_round_trip_registers_the_interiors_between_the_draw_and_the_proof():
-    stream = _stream(_two_spec())
-    rec, ports = _half("x", 6)
-    reg = stream.register(rec, ports)
-    assert reg.order == 0 and reg.receipt["received"] == "0" and reg.digest == R.digest(rec)
-    draw = stream.select(reg)
-    assert len(draw.units) == 2 and draw.proved == draw.units
-    inner, iports = _interiors(draw)
-    ireg = stream.register_interiors(draw, inner, iports)
-    assert ireg.order == 0 and ireg.receipt["received"] == "1" and ireg.digest == R.digest(inner)
-    assert inner["population"] == 2 and inner["previous"] == reg.digest
-    assert stream.deliver(draw, [SESSION]) is None
-    out = stream.outcome(draw, _lean(), {"statement": "stub"}, session_roots=dict(ROOTS))
-    assert out.accepted and out.verdict.codes == () and out.profile is not None and out.profile.bound() == 4
-    assert out.exhaustive is None and stream.symbols == ("accept",)
-    body = stream.records[0]
-    assert S._sha512(body) == out.record and body["registration"] == reg.digest and body["audit"]["accepted"]
-    assert body["interior"]["registration"] == ireg.digest and body["interior"]["receipt"] == S._sha512(dict(ireg.receipt))
-    assert body["interior"]["audit"]["accepted"] and body["interior"]["audit"]["proved_units"] == [0, 1]
-    # The log runs boundary, interiors, next boundary: the next registration chains to the interiors.
-    assert _refused(lambda: stream.register(_half("x", 6, row=1, previous=reg.digest)[0], ports)) == ("R6-previous",)
-    nxt = stream.register(_half("x", 6, row=1, previous=ireg.digest)[0], ports)
-    assert nxt.order == 1 and nxt.receipt["received"] == "2"
-
-
-def test_the_interiors_are_registered_once_after_select_before_deliver_over_the_proved_rus():
-    stream = _stream(_two_spec())
-    rec, ports = _half("x", 6)
-    reg = stream.register(rec, ports)
-    forged = S.Draw(reg, {"law": "subset", "k": 2}, {"law": "subset", "k": 2, "population": 6, "units": [0, 1]})
-    assert _refused(lambda: stream.register_interiors(forged, *_interiors(forged))) == ("not-drawn",)
-    draw = stream.select(reg)
-    assert _refused(lambda: stream.deliver(draw, [SESSION])) == ("interior",)
-    for n in (1, 3, 6):
-        other = _half("out", n, {"law": "subset", "k": n}, previous=reg.digest)
-        assert _refused(lambda: stream.register_interiors(draw, *other)) == ("interior-population",)
-    assert _refused(lambda: stream.register_interiors(draw, *_half("x", 2, previous=reg.digest))) == ("roots",)
-    assert _refused(lambda: stream.register_interiors(draw, *_half("out", 2, previous=None))) == ("R6-previous",)
-    inner, iports = _interiors(draw)
-    assert _refused(lambda: stream.register_interiors(draw, {**inner, "window": rec["window"]}, iports)) == ("R6-window",)
-    assert "R3-leaves" in _refused(lambda: stream.register_interiors(draw, inner, {"out": {**iports["out"], "leaves": 5}}))
-    ireg = stream.register_interiors(draw, inner, iports)
-    assert _refused(lambda: stream.register_interiors(draw, inner, iports)) == ("interior-registered",)
-    stream.deliver(draw, [SESSION])
-    assert _refused(lambda: stream.register_interiors(draw, inner, iports)) == ("delivered",)
-    stream.outcome(draw, _lean(), {})
-    assert _refused(lambda: stream.register_interiors(draw, inner, iports)) == ("final",)
-    assert stream.records[0]["interior"]["registration"] == ireg.digest and len(stream._log) == 2
-
-
-def test_a_two_stage_registration_holds_each_stage_to_its_own_values():
-    stream = _stream(_two_spec())
-    assert _refused(lambda: stream.register(*_half("out", 6))) == ("roots",)
-    assert _refused(lambda: stream.register(_record(), _ports(6))) == ("roots",)
-    plain = _stream()
-    draw = plain.select(plain.register(_record(), _ports(6)))
-    assert _refused(lambda: plain.register_interiors(draw, *_interiors(draw))) == ("rule",)
-    assert stream._log == [] and plain._log == [_record()]
-
-
-def test_a_two_stage_outcome_accepts_only_when_both_audits_do():
-    stream = _stream(_two_spec(), budget=3)
-
-    def staged(row: int, previous: str | None) -> tuple[S.Draw, S.Registration]:
-        reg = stream.register(_half("x", 6, row=row, previous=previous)[0], {"x": _ports(6)["x"]})
-        draw = stream.select(reg)
-        ireg = stream.register_interiors(draw, *_interiors(draw, row=row))
-        stream.deliver(draw, [SESSION])
-        return draw, ireg
-
-    draw, ireg = staged(0, None)
-    out = stream.outcome(draw, _lean(), {}, session_roots={**ROOTS, "out": "ee" * 64})
-    why = out.verdict.detail["reject"]
-    assert not out.accepted and out.verdict.codes == ("reject",) and why["checks"] == []
-    assert why["interior"] == {"accepted": False, "checks": ["roots"]} and stream.records[0]["audit"]["accepted"]
-    draw, ireg = staged(1, ireg.digest)
-    out = stream.outcome(draw, _lean(), {}, session_roots={**ROOTS, "x": "ee" * 64})
-    why = out.verdict.detail["reject"]
-    assert not out.accepted and why["checks"] == ["roots"] and why["interior"] == {"accepted": True, "checks": []}
-    draw, ireg = staged(2, ireg.digest)
-    assert stream.outcome(draw, _lean(), {}, session_roots=dict(ROOTS)).accepted
-    assert stream.symbols == ("reject", "reject", "accept")
-
-
-def test_a_two_stage_draw_of_no_rus_has_no_interiors():
-    stream = _stream(_two_spec("bernoulli:0/1"), sampler=lambda law, n: [])
-    reg = stream.register(*_half("x", 6, {"law": "bernoulli", "p": "0/1"}))
-    draw = stream.select(reg)
-    assert draw.units == [] == draw.proved
-    assert _refused(lambda: stream.register_interiors(draw, *_half("out", 1, {"law": "subset", "k": 1},
-                                                                    previous=reg.digest))) == ("interior-empty",)
-    assert stream.deliver(draw, [SESSION]) is None
-    assert stream.outcome(draw, _lean(), {}).accepted and stream.records[0]["interior"] is None
-
-
-def test_a_late_two_stage_proof_is_a_reject_with_or_without_interiors():
-    clock = Clock()
-    stream = _stream(_two_spec(proof_deadline=60.0), budget=3, clock=clock)
-    reg = stream.register(*_half("x", 6))
-    draw = stream.select(reg)
-    clock.now = 30.0
-    ireg = stream.register_interiors(draw, *_interiors(draw))
-    clock.now = 60.5
-    out = stream.deliver(draw, [SESSION])
-    assert out is not None and out.verdict.codes == ("late",)
-    assert stream.records[0]["interior"] == {"registration": ireg.digest, "receipt": S._sha512(dict(ireg.receipt)),
-                                             "audit": None}
-    draw = stream.select(stream.register(*_half("x", 6, row=1, previous=ireg.digest)))
-    clock.now = 121.0
-    assert stream.deliver(draw, [SESSION]).verdict.codes == ("late",)
-    draw = stream.select(stream.register(*_half("x", 6, row=2, previous=draw.registration.digest)))
-    clock.now = 182.0
-    assert stream.outcome(draw, _lean(), {}).verdict.codes == ("late",)
-    assert stream.symbols == ("late",) * 3 and [r["interior"] is None for r in stream.records] == [False, True, True]
-
-
 WORK = {PAIR.id: 10}
 STRATUM = S.Public(f"population:{PAIR.id}", "structure", "the work law's one stratum")
 #: The challenger's closure map: each unit is proved with the next.
@@ -796,24 +625,9 @@ def test_a_closure_widens_a_work_draw_only_and_stays_in_range():
     assert "closure" not in stream.select(reg, closure={}).draw and reads
 
 
-def test_two_stage_interiors_cover_a_work_draws_closure():
-    stream = _stream(_two_spec("work:2", public=(*STEP0, STRATUM)))
-    reg = stream.register(*_half("x", 6, {"law": "work", "k": 2}, work_table=WORK), work_table=WORK)
-    draw = stream.select(reg, closure=NEXT)
-    assert len(draw.proved) > len(draw.units)
-    n = len(draw.units)
-    assert _refused(lambda: stream.register_interiors(draw, *_half("out", n, {"law": "subset", "k": n},
-                                                                    previous=reg.digest))) == ("interior-population",)
-    ireg = stream.register_interiors(draw, *_interiors(draw))
-    assert ireg.record["population"] == len(draw.proved)
-    stream.deliver(draw, [SESSION])
-    out = stream.outcome(draw, _lean(), {}, session_roots=dict(ROOTS))
-    assert out.accepted and stream.records[0]["interior"]["audit"]["proved_units"] == list(range(len(draw.proved)))
-
-
 @pytest.mark.parametrize("text", ["subset:2", "bernoulli:3/3", "stratified:2", "work:2"])
 def test_the_default_draw_is_draw_first_on_the_challengers_bytes(text):
-    """The draw is Lean's `drawWith` on the coins (`two_stage.draw_first`), so `flock-verify draw` on the same bytes
+    """The draw is Lean's `drawWith` on the coins (`coins.draw_first`), so `flock-verify draw` on the same bytes
     draws the same units; a work draw's closure is the same too."""
     table = WORK if text.startswith("work") else None
     closure = NEXT if table else None

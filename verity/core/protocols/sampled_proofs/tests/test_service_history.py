@@ -10,7 +10,7 @@ from verity.core.protocols.sampled_proofs import service as S
 from verity.core.protocols.sampled_proofs.one_stage import registration as R, verifier as V
 
 from test_registered import LAW, Q, SCHEME, SERVED, _program, _registered, _record as _registered_record
-from test_service import DELTA, PAIR, RUN, SESSION, Clock, _half, _interiors, _lean, _ports, _record, _spec, _two_spec
+from test_service import DELTA, PAIR, RUN, SESSION, Clock, _lean, _ports, _record, _spec
 
 
 class _Whole(S.Stream):
@@ -146,35 +146,6 @@ def test_the_verdicts_log_and_records_are_the_whole_logs():
     assert set(symbols) == {"accept", "reject", "late"} and stream.failures == sum(s != "accept" for s in symbols)
     forgetful = _one_stage(_Forgetful)[0]
     assert 25 not in {c[5] for c in forgetful if c[0] == "refused"} and forgetful != want[0]
-
-
-def _two_stage(cls) -> tuple[list, tuple, tuple, tuple]:
-    """12 two-stage rounds, where every third round's interiors first repeat an earlier round's window (refused, R6) and
-    are then registered on their own."""
-    clock = Clock()
-    stream = _stream(cls, _two_spec(proof_deadline=60.0), clock=clock)
-    calls, prev = [], None
-    for i in range(12):
-        clock.now = 100.0 * i
-        reg = stream.register(*_half("x", 6, row=i, previous=prev))
-        draw = stream.select(reg)
-        if i % 3 == 2:
-            try:
-                stream.register_interiors(draw, *_interiors(draw, row=i - 2))
-            except S.Refused as e:
-                calls.append(_refusal(e))
-        ireg = stream.register_interiors(draw, *_interiors(draw, row=i))
-        assert stream.deliver(draw, [SESSION]) is None
-        out = stream.outcome(draw, _lean(accepted=i % 4 != 1), {"statement": "stub"})
-        calls += [("registered", reg.digest, ireg.digest, ireg.receipt), ("outcome", out.accepted, out.record)]
-        prev = ireg.digest
-    return calls, stream.log, stream.records, stream.symbols
-
-
-def test_two_stage_interiors_read_the_records_the_whole_log_gives():
-    got = _two_stage(S.Stream)
-    assert got == _two_stage(_Whole)
-    assert [c[2] for c in got[0] if c[0] == "refused"] == [("R6-window",)] * 4 and len(got[1]) == 24
 
 
 def test_r7_reads_each_values_first_registration():

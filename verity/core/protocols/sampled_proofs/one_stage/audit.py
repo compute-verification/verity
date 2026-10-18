@@ -103,8 +103,7 @@ def session_registered(verdicts: Mapping[str, Mapping[str, Any]],
     """`audit_record`'s `session_registered` from the verdicts alone: the `{value: root}` that the verifiers of record report
     (the Lean verdict's `registered`, `{port: {"value", "root"}}`) on the sessions they accepted, a value two of them
     report under different roots mapped to None. None when no accepted verdict of record reports registered reads. With
-    `registration`, only its own values (its roots' ports and its registered values), as the service splits the sessions'
-    roots between a boundary registration and its interiors."""
+    `registration`, only its own values (its roots' ports and its registered values)."""
     out: dict[str, str | None] | None = None
     for v in verdicts.values():
         if v.get("of_record") and v.get("accepted") is True and isinstance(v.get("registered"), Mapping):
