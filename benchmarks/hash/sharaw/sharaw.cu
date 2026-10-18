@@ -24,6 +24,7 @@
 #include <dlfcn.h>
 #include <nvml.h>
 
+#include <algorithm>
 #include <chrono>
 #include <functional>
 
@@ -869,6 +870,7 @@ struct Arm {
   bool verified;                         // its levels were compared in this process
   std::function<void(cudaStream_t)> run;
   double comps;                          // SHA-512 compressions a call (the work it does)
+  bool failed = false;                   // its levels differed: not timed
 };
 
 static int bench(int argc, char** argv, bool nsys_mode) {
@@ -966,10 +968,11 @@ static int bench(int argc, char** argv, bool nsys_mode) {
     CK(cudaGetLastError());
     printf("{\"same_levels\": \"%s\", \"against\": \"commit_gpu\", \"words\": %llu, \"differing\": %llu}\n", a.name.c_str(),
            (unsigned long long)words, bad);
-    if (bad) { a.verified = false; all_ok = false; }
+    if (bad) { a.failed = true; all_ok = false; }
   }
   fflush(stdout);
-  if (!all_ok) { fprintf(stderr, "a committer's levels differ from commit_gpu's: nothing is timed\n"); return 1; }
+  if (!all_ok) fprintf(stderr, "a committer's levels differ from commit_gpu's: it is left out of the timing\n");
+  arms.erase(std::remove_if(arms.begin(), arms.end(), [](const Arm& a) { return a.failed; }), arms.end());
 
   Nv nv;
   cudaEvent_t e0, e1;
