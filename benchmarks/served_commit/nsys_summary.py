@@ -1,7 +1,7 @@
 """Summarize an nsys sqlite export of a served_commit profiling run (prof_arm.py): the last `run:` NVTX range of the profiled arm,
 its GPU time by category, its host ranges, CUDA API time per thread, and per engine step (exec:<tokens>).  Measurement only.
 
-    python nsys_summary.py OUT/served.sqlite [--json OUT/summary.json]
+    python nsys_summary.py OUT/served.sqlite [--run run:ARM] [--each] [--json OUT/summary.json]
 """
 from __future__ import annotations
 
@@ -38,6 +38,8 @@ def main() -> None:
     ap.add_argument("db")
     ap.add_argument("--json")
     ap.add_argument("--run", default="run:served-commit-prof")
+    ap.add_argument("--each", action="store_true", help="every run range of the arm, not only the last: per run its step count, "
+                    "prefill_mean and decode_mean on one line, and the full summaries as a JSON list")
     a = ap.parse_args()
     db = sqlite3.connect(a.db)
     q = lambda s, *p: db.execute(s, p).fetchall()  # noqa: E731
@@ -47,7 +49,32 @@ def main() -> None:
     runs = sorted((r for r in nvtx if r[2] == a.run), key=lambda r: r[0])
     if not runs:
         raise SystemExit(f"no NVTX range {a.run}")
-    r0, r1, _, gtid = runs[-1]
+    if not a.each:
+        out = summarize(q, strings, nvtx, runs[-1], a.run)
+        js = json.dumps(out, indent=1)
+        if a.json:
+            open(a.json, "w").write(js)
+        for k, v in out.items():
+            if k != "steps":
+                print(k, json.dumps(v)[:3000])
+        return
+    outs = []
+    for i, r in enumerate(runs):
+        out = summarize(q, strings, nvtx, r, a.run)
+        outs.append(out)
+        toks = [p["tokens"] for p in out["steps"]]
+        print(json.dumps({"run": i, "steps": len(toks), "max_tokens": max(toks, default=0),
+                          "run_wall_ms": round(out["run_wall_ms"], 3), "gpu_busy_serve_ms": round(out["gpu_busy_serve_ms"], 3),
+                          "gpu_busy_hash_ms": round(out["gpu_busy_hash_ms"], 3), "prefill_mean": out.get("prefill_mean"),
+                          "decode_mean": out.get("decode_mean")}))
+    if a.json:
+        with open(a.json, "w") as f:
+            json.dump(outs, f, indent=1)
+
+
+def summarize(q, strings: dict, nvtx: list, run: tuple, run_label: str) -> dict:
+    """One run range's summary: GPU time by category, host ranges, CUDA API per thread, and per engine step."""
+    r0, r1, _, gtid = run
     pid = gtid >> 24
     names = {g: strings.get(n, str(n)) for n, g in q("SELECT nameId, globalTid FROM ThreadNames")}
     rt = {c: (s, e, strings.get(n, str(n)), g) for s, e, n, g, c in
@@ -101,7 +128,7 @@ def main() -> None:
     rng = defaultdict(lambda: [0, 0])
     steps = []
     for s, e, t, g in nvtx:
-        if g >> 24 == pid and r0 <= s <= r1 and t and t != a.run:
+        if g >> 24 == pid and r0 <= s <= r1 and t and t != run_label:
             key = t.split(":")[0]
             rng[key][0] += e - s
             rng[key][1] += 1
@@ -135,12 +162,7 @@ def main() -> None:
             continue
         keys = sorted({k for p in ps for k in p if k != "tokens"})
         out[f"{label}_mean"] = {"n": len(ps), **{k: round(statistics.fmean(p.get(k, 0.0) for p in ps), 3) for k in keys}}
-    js = json.dumps(out, indent=1)
-    if a.json:
-        open(a.json, "w").write(js)
-    for k, v in out.items():
-        if k != "steps":
-            print(k, json.dumps(v)[:3000])
+    return out
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # One served_commit sweep with the measurement arms of prof_arm.py (ARMS, default stock + the NVTX-ranged noretain arm), under nsys
-# when NSYS=1 (then nsys_summary.py over the last profiled run). Measurement only.
+# when NSYS=1 (then nsys_summary.py over the last profiled run of each arm, or over every run with NSYS_EACH=1). Measurement only.
 set -uo pipefail
 . benchmarks/harness/env.sh
 OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}
@@ -32,7 +32,8 @@ if [ "${NSYS:-1}" = 1 ]; then
   echo "export rc $?"
   for a in ${ARMS//,/ }; do
     [ "$a" = stock ] && continue
-    python3 benchmarks/served_commit/nsys_summary.py "$OUT/served.sqlite" --run "run:$a" --json "$OUT/summary.$a.json" | tee "$OUT/summary.$a.txt"
+    python3 benchmarks/served_commit/nsys_summary.py "$OUT/served.sqlite" --run "run:$a" ${NSYS_EACH:+--each} --json "$OUT/summary.$a.json" \
+      | tee "$OUT/summary.$a.txt"
   done
   rm -f "$OUT/served.sqlite"
 else
