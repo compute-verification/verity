@@ -196,6 +196,7 @@ def _prepare_requests(run: MatchRun, att: Attribution, param_of: dict, proj: dic
             P = ops.projection(B, f"oracle[{rid}]", idxs, tok_node=pidx, weights_node=weights_nodes, seed_node=my_seed, peer_node=my_peers)
         P._all_seed_nodes = set(seed_index)
         P.cached_rows = PX.cached_rows(run.header, run.steps, rid)
+        P.block_size = PX.served_block_size(run.steps, rid) if P.cached_rows else None
         proj[rid] = P
         cd = (g.get("component") or {}).get("dir")
         A = None

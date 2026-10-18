@@ -21,7 +21,9 @@ from __future__ import annotations
 
 from typing import Any
 
-#: vLLM's block size when the row does not set `engine.args.block_size` (the FlashAttention backends).
+#: vLLM's block size when the row does not set `engine.args.block_size` (the FlashAttention backends).  A backend that supports other
+#: sizes only (the sparse MLA backends: 64) gets its own from vLLM unless the row declares one, so its prefix row declares it; GM-01 (G5,
+#: `check.match.prefix_reads.check_hits`) holds the block size the engine served at to the plan's.
 DEFAULT_BLOCK_SIZE = 16
 
 

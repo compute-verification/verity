@@ -183,6 +183,22 @@ def test_the_fold_rows_global_match_loads_keep_what_a_link_reads(tmp_path):
     assert all(PX.FOLD_META <= r.keys() for r in rows) and any(r["position"] for r in rows)
 
 
+def test_g5_holds_the_served_block_size_to_the_plans():
+    """The plan hashed the prompt in blocks of C_ROWS; an engine whose backend cached blocks of another size (a sparse MLA backend serves
+    64 unless the row declares it) fails G5 even where its rows happen to agree, and names the declaration that fixes the plan."""
+    steps = {0: {"rows": [("r0", 0)], "block_size": 16}, 3: {"rows": [("r1", C_ROWS)], "block_size": C_ROWS}}
+    assert PX.served_block_size(steps, "r1") == C_ROWS and PX.served_block_size({0: {"rows": [("r1", 0)]}}, "r1") is None
+    decl = {"request_id": "r1", "prefix": {"rows": C_ROWS, "producers": ["r0"]}}
+    P = warm_projection()
+    P.block_size = C_ROWS
+    why, hit = PX.check_hits(decl, P)
+    assert why == [] and hit["served_block_size"] == C_ROWS
+    P.block_size = 64
+    why, hit = PX.check_hits(decl, P)
+    assert why == [f"r1: the engine hashed its prompt in blocks of 64 tokens (StepStart.block_size), the Program's plan in blocks of {C_ROWS}: "
+                   "the row declares its attention backend's block size, engine.args.block_size: 64"]
+
+
 def test_the_served_rows_are_the_first_scheduled_position_under_prefix_caching_only():
     steps = {0: {"rows": [("r0", 0), ("r0", 1), ("r0", 2)]}, 4: {"rows": [("r0", 7), ("r1", 2)]}, 5: {"rows": [("r0", 8), ("r1", 3)]}}
     on = {"profile": {"engine_kwargs": {"enable_prefix_caching": True}}}

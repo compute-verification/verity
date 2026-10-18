@@ -50,6 +50,14 @@ def cached_rows(header: dict, steps: dict, rid: str) -> int:
     return min((p for st in steps.values() for r, p in st["rows"] if r == rid), default=0)
 
 
+def served_block_size(steps: dict, rid: str) -> int | None:
+    """The KV block size of the engine step that first scheduled `rid` (StepStart.block_size, its first KV group's spec), None when the
+    record carries none: the blocks the prefix cache hashed its prompt in."""
+    first = min((s for s, st in steps.items() if any(r == rid for r, _ in st["rows"])), default=None)
+    bs = steps[first].get("block_size") if first is not None else None
+    return int(bs) if bs else None
+
+
 # ------------------------------------------------------------------------------------------------ the Program's prefix input
 
 
@@ -200,8 +208,9 @@ class CachedKv:
 
 
 def check_hits(g: dict, P) -> tuple[list[str], dict | None]:
-    """GM-01 (G5) for one request: the engine served the Program's declared prefix rows, and every cached block's rows were read from the
-    request the Program declares for it.  (problems, the request's `prefix` entry | None for a cold request on both sides)."""
+    """GM-01 (G5) for one request: the engine served the Program's declared prefix rows, in blocks of the plan's size, and every cached
+    block's rows were read from the request the Program declares for it.  (problems, the request's `prefix` entry | None for a cold
+    request on both sides)."""
     decl = g.get("prefix") or {}
     C_decl, C_obs = int(decl.get("rows") or 0), int(getattr(P, "cached_rows", 0) or 0)
     if not C_decl and not C_obs:
@@ -214,9 +223,13 @@ def check_hits(g: dict, P) -> tuple[list[str], dict | None]:
         why.append(f"{rid}: {C_obs - len(rows)} of its {C_obs} cached rows are read from no other request's row of the same layer and position")
     want = list(decl.get("producers") or [])
     bs = C_decl // len(want) if want else 0   # the plan caches whole blocks: one declared producer per block
+    served = getattr(P, "block_size", None)
+    if bs and served and served != bs:
+        why.append(f"{rid}: the engine hashed its prompt in blocks of {served} tokens (StepStart.block_size), the Program's plan in blocks of {bs}: "
+                   f"the row declares its attention backend's block size, engine.args.block_size: {served}")
     got = [sorted(set().union(*(rows.get(j, set()) for j in range(b * bs, min((b + 1) * bs, C_obs))))) for b in range(len(want))] if bs else []
     bad = [b for b, (w, h) in enumerate(zip(want, got)) if h != [w]]
     if bs and bad:
         why.append(f"{rid}: cached block {bad[0]} was read from {got[bad[0]]}, the Program declares {want[bad[0]]!r} ({len(bad)} block(s) differ)")
-    return why, {"rows": C_obs, "declared_rows": C_decl, "block_size": bs or None, "declared_producers": want, "read_from": got,
-                 "linked_rows": len(rows)}
+    return why, {"rows": C_obs, "declared_rows": C_decl, "block_size": bs or None, "served_block_size": served, "declared_producers": want,
+                 "read_from": got, "linked_rows": len(rows)}
