@@ -717,6 +717,18 @@ def test_dry_run_renders_the_cloud_init_and_vm_spec_without_credentials():
     assert s["resources"] == {"platform": "gpu-rtx6000-a", "preset": "8gpu-192vcpu-1744gb"}
     nic = s["network_interfaces"][0]
     assert nic["public_ip_address"] == {"static": True} and nic["security_groups"] and s["secondary_disks"][0]["device_id"] == "data"
+    assert "# data disk vy-nebius-1-data: attached as it is if it exists, else created (5022 GiB" in ud
+
+
+def test_a_vm_can_boot_on_another_ones_kept_data_disk():
+    """n1's replacement (INF-57) may boot on vy-nebius-1-data: launch.sh and teardown.sh look the data disk up by this name."""
+    r = launch("--dry-run", NEBIUS_SSH_PUBKEY="ssh-ed25519 dummy", NEBIUS_VM_NAME="vy-nebius-cpu-4", NEBIUS_PLATFORM_PREFIX="cpu-d3",
+               NEBIUS_PRESET="192vcpu-768gb", NEBIUS_DATA_DISK="vy-nebius-1-data")
+    assert r.returncode == 0, r.stderr
+    assert "# data disk vy-nebius-1-data: attached as it is if it exists" in r.stdout
+    assert json.loads(r.stdout.split("(ids are placeholders)\n")[1])["metadata"]["name"] == "vy-nebius-cpu-4"
+    for script in ("launch.sh", "teardown.sh"):
+        assert 'disk_id "$DATA_NAME"' in (NEBIUS / script).read_text() and '"$VM_NAME-data"' not in (NEBIUS / script).read_text()
 
 
 def test_launch_refuses_to_spend_without_yes_and_a_lease():

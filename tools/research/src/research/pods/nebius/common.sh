@@ -23,6 +23,7 @@ BOOT_GIB=${NEBIUS_BOOT_GIB:-256}
 BOOT_TYPE=network_ssd
 DATA_GIB=${NEBIUS_DATA_GIB:-5022}                  # 54 x 93 GiB (non-replicated disks come in 93 GiB units) = 4.90 TiB
 DATA_TYPE=${NEBIUS_DATA_TYPE:-network_ssd_non_replicated}
+DATA_NAME=${NEBIUS_DATA_DISK:-$VM_NAME-data}       # another VM's kept data disk (detached), to boot on its /workspace as it is
 DATA_DEVICE_ID=data                                # the guest sees /dev/disk/by-id/virtio-data
 SG_NAME=${VM_NAME}-ssh
 SSH_CIDRS=${NEBIUS_SSH_CIDRS:-0.0.0.0/0}           # comma-separated, at most 8; port 22 only either way
