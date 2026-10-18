@@ -160,12 +160,19 @@ const RANK_POINTS: usize = 4;
 /// Mask words beyond the rank check's `128 · RANK_POINTS`. For uniformly random rows the rank falls short with probability
 /// below `2^(128 · RANK_POINTS − N)` at `N` words; a shortfall is a refused coin at an opening, which costs completeness only.
 const RANK_SLACK: usize = 64;
+/// The least mask slot `--zk` takes, `2^13` bits per block (the deployed `mask_log` is 14): the bound on the rank check
+/// refusing a coin, its completeness loss, covers no smaller slot.
+const SLOT_LOG_MIN: usize = 13;
 
-/// A statement `--zk` can prove: level 0's query count ([`zk_queries0`]), and mask words enough for the rank check (§6) to be
-/// reachable. A table of a split session has fewer blocks, so fewer mask words. Checked when the statement is built, before
-/// `Hello`, never at an opening.
+/// A statement `--zk` can prove: level 0's query count ([`zk_queries0`]), a mask slot of at least `2^SLOT_LOG_MIN`
+/// bits, and mask words enough for the rank check (§6) to be reachable. A table of a split session has fewer blocks, so
+/// fewer mask words. Checked when the statement is built, before `Hello`, never at an opening.
 fn zk_shape_ok(st: &Stmt) -> Result<(), String> {
     zk_queries0(st.m)?;
+    let r = st.c.ranges.iter().find(|r| r.kind == Kind::Mask).ok_or("zk: the circuit has no mask slot")?;
+    if r.slot_log < SLOT_LOG_MIN {
+        return Err(format!("slot_log = {}: --zk needs a mask slot of slot_log >= {SLOT_LOG_MIN}", r.slot_log));
+    }
     let (words, need) = (mask_words(st).len(), 128 * RANK_POINTS);
     if words < need + RANK_SLACK {
         return Err(format!("{words} mask words: the rank check needs {need} for its {RANK_POINTS} claim points, and {RANK_SLACK} more"));
