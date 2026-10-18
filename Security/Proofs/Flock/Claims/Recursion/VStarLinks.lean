@@ -27,10 +27,12 @@ that link once for every kind and every shape, with what is the circuit's own pr
 * **A level's SHA-512 calls** (`LevelCalls`, in `LevelOuts`): every copy of a level, under either name, has gadgets
   whose forms carry its climb's calls, the leaf's and then each level's (`rowCalls`). The builder with its gadgets
   (`recOpenC`, `climbRowC`, `climbFromC`) builds the verifier's rows (`recOpenNetC_state`), which force the calls
-  (`sound_climbFromC`, `laid_recOpen_calls`, `laid_unit_calls`). Above the leaf a gadget's input is an XOR of columns,
-  not a run of them, so the calls read off the witness at affine forms over its hidden values (`copyForm`, `readLin`;
-  a position is a one-wire form, `readAt_eq_readLin`), where they are the climb's calls (`levelCalls_read`), recorded
-  wherever the layout records the gadgets (`levelCalls_recorded`).
+  (`sound_climbFromC`, `laid_recOpen_calls`, `laid_unit_calls`). Every gadget's output is the compression's
+  feed-forward sum (`HmNets.compress`'s `add2`, whose sum bits are uncommitted XORs), and above the leaf its input is
+  the swap's `a ⊕ t`: neither is a run of hidden values, with or without a constant prefix. So the calls read off the
+  witness at affine forms over its hidden values (`copyForm`, `readLin`; a position is a one-wire form,
+  `readAt_eq_readLin`), where they are the climb's calls (`levelCalls_read`), recorded wherever the layout records the
+  gadgets (`levelCalls_recorded`).
 * **A part's links** (`PartReads` at one V* statement, `PartReadsTo` at every V* statement the part's coins are shown
   on, with `PartChecks`' fallback): the staging, and every V* copy's read outputs (`AllOuts`) giving the goal on every
   list of messages agreeing with what the part holds; a goal read off one copy is `partReads_of_copy`.
