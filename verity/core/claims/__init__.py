@@ -325,6 +325,10 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "The receipt luck at pr: given the past, a deficient round whose deficient words are not all right keeps the "
           "honest committed value with probability at most pr (½ at LEDGER case (b), two or more wrong places a set)",
           "TS receipt luck at pr", "conjectured"),
+    Entry("accounting-ts-operand-h-mu", "assumption",
+          "(H-μ) at the receipt's operands: given the past, a round's deficient words take any one value with "
+          "probability at most μ given a view of the cheater that decides the round's share (¾ in the headlines)",
+          "TS operand H-μ at μ", "conjectured"),
 )}
 
 
