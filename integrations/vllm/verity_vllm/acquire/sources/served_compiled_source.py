@@ -34,6 +34,7 @@ Faults (negatives): `compiled_omit:<substring>` -- tensors whose name contains i
 """
 from __future__ import annotations
 
+import os
 import re
 import time
 from typing import Any
@@ -484,45 +485,38 @@ class ServedCompiledSource:
 
     @staticmethod
     def launch_configs() -> dict[str, Any]:
-        """Each Triton kernel this process loaded, by the sha256 of its text (`inductor_templates.source_sha256`, the wrapper's
-        `async_compile.triton` block): the configs its autotuners compiled (``candidates``) and the config of each autotuner
-        that holds one launcher (``executed``: its only config, or the winner its first run timed).  A wrapper's globals hold the
-        autotuners its call() runs, which can be other instances than the kernel module's own.  The served Build binds each
-        launch to its one executed config (`acquire.served`)."""
+        """Each Triton kernel this process holds an autotuner of, by the sha256 of its kernel module's text (the wrapper's
+        `async_compile.triton` block, `inductor_templates.source_sha256`): the configs its autotuners compiled (``candidates``)
+        and the config of each autotuner that holds one launcher (``executed``: its only config, or the winner its first run
+        timed).  Every live autotuner counts, wherever it is held: the one a wrapper's call() runs need not be any module's global
+        (a combo kernel's is not), and Inductor's compile-time tuning run holds its own.  The served Build binds each launch to its
+        one executed config (`acquire.served`) and refuses a kernel whose autotuners settled on two."""
+        import gc
         import hashlib
 
-        from torch._inductor.codecache import PyCodeCache
         from torch._inductor.runtime.triton_heuristics import CachingAutotuner
-
-        from verity_vllm.acquire.inductor_templates import kernel_sources
 
         def cfg(c: Any) -> dict[str, Any]:
             return {"kwargs": {str(k): v for k, v in (getattr(c, "kwargs", None) or {}).items()},
                     "num_warps": getattr(c, "num_warps", None), "num_stages": getattr(c, "num_stages", None)}
 
         out: dict[str, Any] = {}
-        mods = [m for name in ("modules", "modules_no_attr", "cache") for coll in [getattr(PyCodeCache, name, None) or {}]
-                for m in (coll.values() if isinstance(coll, dict) else coll)]
-        for m in {id(m): m for m in mods}.values():
-            path, g = getattr(m, "__file__", None), vars(m)
-            if not path or not any(isinstance(o, CachingAutotuner) for o in g.values()):
+        sha: dict[str, str] = {}
+        for t in [o for o in gc.get_objects() if isinstance(o, CachingAutotuner)]:
+            path = getattr(t, "filename", None)
+            if not path or not os.path.isfile(path):
                 continue
-            with open(path) as f:
-                text = f.read()
-            if "    def call(self, args):" in text:
-                tuners = [(src, g.get(name)) for name, src in kernel_sources(text).items()]
-            else:
-                tuners = [(text, o) for o in g.values()]
-            for src, t in tuners:
-                if not isinstance(t, CachingAutotuner):
-                    continue
-                rec = out.setdefault(hashlib.sha256(src.encode()).hexdigest(), {"candidates": [], "executed": []})
-                for c in [cfg(r.config) for r in getattr(t, "compile_results", None) or []]:
-                    if c not in rec["candidates"]:
-                        rec["candidates"].append(c)
-                launchers = getattr(t, "launchers", None) or []
-                if len(launchers) == 1 and (c := cfg(launchers[0].config)) not in rec["executed"]:
-                    rec["executed"].append(c)
+            if path not in sha:
+                with open(path, "rb") as f:
+                    sha[path] = hashlib.sha256(f.read()).hexdigest()
+            rec = out.setdefault(sha[path], {"candidates": [], "executed": [], "autotuners": 0})
+            rec["autotuners"] += 1
+            for c in [cfg(r.config) for r in getattr(t, "compile_results", None) or []]:
+                if c not in rec["candidates"]:
+                    rec["candidates"].append(c)
+            launchers = getattr(t, "launchers", None) or []
+            if len(launchers) == 1 and (c := cfg(launchers[0].config)) not in rec["executed"]:
+                rec["executed"].append(c)
         return dict(sorted(out.items()))
 
     def summary(self) -> dict[str, Any]:
