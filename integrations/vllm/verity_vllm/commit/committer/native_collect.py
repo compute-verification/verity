@@ -517,6 +517,12 @@ class NativeCollectCommitter(NativeHostCommitter):
         # boundary (the FA2 tap, the gather flushes and the step event all follow the current stream, so nothing else changes)
         self.hi_prio = bool(native_hooks) and os.environ.get("VERITY_HI_PRIO", "0") == "1"
         self._hi = torch.cuda.Stream(priority=-1) if self.hi_prio else None
+        # the serving thread's step end as one native call (`end_step_full`; no step event on the windowed path, whose worker waits on the
+        # windows' own), and on the windowed path a snapshot of the step's row order that the worker expands into `step_rows` unless a
+        # source reads them at the step's end (`step_rows_at_step_end`); both leave the bytes and roots as they were
+        self.native_end = True
+        self.rows_off_thread = True
+        self._rows_at_step_end = False
         if self.native_hooks:
             self.name = ("native_collect_v2" + ("" if self.gather else "_memcpy") + ("_auto" if self.auto_blocks else "") + ("_nw" if self.native_worker else "")
                          + ("_hp" if self.hi_prio else ""))
@@ -571,6 +577,7 @@ class NativeCollectCommitter(NativeHostCommitter):
         self._check_skip()
         self._start_worker()
         self.gc_pauses.install()
+        self._rows_at_step_end = any(getattr(src, "step_rows_at_step_end", False) for src in self.sources)
         for src in self.sources:
             src.install()
         if getattr(self, "external_acquisition", False):
@@ -893,10 +900,11 @@ class NativeCollectCommitter(NativeHostCommitter):
 
     # ------------------------------------------------------------------ step boundaries (serving thread)
 
-    def _record_step_rows(self, job: _StepJob) -> None:
+    def _record_step_rows(self, job: _StepJob, defer: bool = False) -> None:
         """R14 BIND-01 (B>1 binding): the engine's row order of this step -- `InputBatch.req_ids` (the persistent batch after the step's
         `_update_states`) x `scheduler_output.num_scheduled_tokens` -> [(request_id, token_row_lo, token_row_hi)] in the flattened token
-        order every per-token member uses; request-indexed members (logits, sampled ids) use the list index.  -> `self.step_rows[step]`."""
+        order every per-token member uses; request-indexed members (logits, sampled ids) use the list index.  -> `self.step_rows[step]`.
+        `defer`: only copy what the expansion reads (the batch's lists are reused by the next step) into `job.rows_snapshot`."""
         so = getattr(self, "_cur_sched", None)
         # Row-order source, in preference order: (a) the BatchReqState the new `vllm.v1.worker.gpu` runner builds per step
         # (`gather_batch_req_state`, captured by our wrapper -- rows sorted by the runner, NOT scheduler order); (b) the runner's
@@ -918,6 +926,20 @@ class NativeCollectCommitter(NativeHostCommitter):
         req_ids = list(getattr(ib, "req_ids", []) or [])
         n = int(getattr(ib, "num_reqs", len(req_ids)) or len(req_ids))
         per_row = getattr(ib, "num_scheduled_tokens", None)
+        self.step_rows_src = src
+        if not hasattr(self, "step_rows"):
+            self.step_rows = {}
+        if defer:
+            if per_row is not None and not isinstance(per_row, dict):
+                try:
+                    per_row = per_row.tolist() if hasattr(per_row, "tolist") else list(per_row)
+                except TypeError:
+                    per_row = None
+            job.rows_snapshot = (req_ids, n, per_row, nst)                  # type: ignore[attr-defined]
+            return
+        self._expand_step_rows(int(job.step), req_ids, n, per_row, nst)
+
+    def _expand_step_rows(self, step: int, req_ids: list, n: int, per_row: Any, nst: dict) -> None:
         try:
             per_row = [int(x) for x in per_row] if per_row is not None and not isinstance(per_row, dict) else None
         except TypeError:
@@ -931,10 +953,7 @@ class NativeCollectCommitter(NativeHostCommitter):
                 continue
             rows.append((str(rid), lo, lo + k))
             lo += k
-        self.step_rows_src = src
-        if not hasattr(self, "step_rows"):
-            self.step_rows = {}
-        self.step_rows[int(job.step)] = rows
+        self.step_rows[step] = rows
 
     def _begin_step(self) -> None:
         job = _StepJob(self._step_index, [], None)
@@ -976,8 +995,10 @@ class NativeCollectCommitter(NativeHostCommitter):
         if job is None:
             return
         self._cur = None
+        windowed = getattr(job, "windowed", False)
         try:
-            self._record_step_rows(job)      # R14 BIND-01: the step's request row order (InputBatch after this step's _update_states; before the next)
+            # R14 BIND-01: the step's request row order (InputBatch after this step's _update_states; before the next)
+            self._record_step_rows(job, defer=windowed and self.rows_off_thread and not self._rows_at_step_end)
         except Exception as e:  # noqa: BLE001
             self.errors.append(f"step rows: {e!r}"[:200])
         t0 = time.perf_counter()
@@ -988,31 +1009,39 @@ class NativeCollectCommitter(NativeHostCommitter):
                     fn(job)                  # R15 `compiled`: drain the graph-written staging ring into this step (before the final flush)
                 except Exception as e:  # noqa: BLE001
                     self.errors.append(f"{getattr(src, 'short_name', type(src).__name__)} on_step_end: {e!r}"[:300])
-        if self.gather:
-            self._nc.flush()                 # P3 (step end): final norm outputs, logits, sampled ids -- before the step event is recorded
-        used, n, changed, version = self._nc.end_step()
-        if getattr(self._nc, "win_dead", False):
-            self._nc.progress()                 # F-stoch-03 dead-watchdog liveness: the serving thread still ends steps (fail-closed run in flight)
-        if self.native_hooks:
-            errs = self._nc.drain_errors()
+        if self.native_end:
+            # P3 (step end) flush of the final norm outputs, logits and sampled ids, end_step, the dead-watchdog's progress, the hook errors
+            used, n, changed, version, nbytes, issue_s, waits, wait_s, errs = self._nc.end_step_full(self.gather, self.native_hooks)
             if errs:
                 self.errors.extend(str(e)[:300] for e in errs)
+        else:
+            if self.gather:
+                self._nc.flush()                 # P3 (step end): final norm outputs, logits, sampled ids -- before the step event is recorded
+            used, n, changed, version = self._nc.end_step()
+            if getattr(self._nc, "win_dead", False):
+                self._nc.progress()                 # F-stoch-03 dead-watchdog liveness: the serving thread still ends steps (fail-closed run in flight)
+            if self.native_hooks:
+                errs = self._nc.drain_errors()
+                if errs:
+                    self.errors.extend(str(e)[:300] for e in errs)
+            st = self._nc.step_stats()
+            nbytes, issue_s, waits, wait_s = st["bytes"], st["issue_s"], st.get("window_waits"), st.get("window_wait_s")
         job.cursor = int(used)
         key = self._plan_key
         # a learning step, or a hit on a plan the worker does not hold (not yet absorbed, or its step failed: plan_cache)
         entries = self._nc.export_plan(key) if changed or (key, int(version)) not in self._metas_cache else None
         job.plan = (key, int(version), entries)                         # type: ignore[attr-defined]
-        st = self._nc.step_stats()
-        job.acq_bytes = int(st["bytes"])
-        job.event = torch.cuda.Event()
-        job.event.record(torch.cuda.current_stream())
+        job.acq_bytes = int(nbytes)
+        if not (windowed and self.native_end):
+            job.event = torch.cuda.Event()
+            job.event.record(torch.cuda.current_stream())
         job.t_step_end = time.perf_counter()
         job.backlog = self._q.qsize()
-        self.spans.add("movement", float(st["issue_s"]), step=job.step, nbytes=job.acq_bytes)   # native issue time (memcpy/memset calls) -- measured
-        if st.get("window_waits"):
-            self.spans.add("wait", float(st["window_wait_s"]), step=job.step)   # blocked for a free window slot (the ring was full)
+        self.spans.add("movement", float(issue_s), step=job.step, nbytes=job.acq_bytes)   # native issue time (memcpy/memset calls) -- measured
+        if waits:
+            self.spans.add("wait", float(wait_s), step=job.step)   # blocked for a free window slot (the ring was full)
         if self.profile:
-            self.spans.add("acquisition", self._prof_s - float(st["issue_s"]), step=job.step)  # Python wrapper + pybind overhead above the issue
+            self.spans.add("acquisition", self._prof_s - float(issue_s), step=job.step)  # Python wrapper + pybind overhead above the issue
         self.spans.add("acquisition", time.perf_counter() - t0, step=job.step)
         if self.footprint is not None:
             # [coord R17-16 (i)] the host side of the curve beside the device side: the pinned pool (total / in use) and this process's RSS
@@ -1027,7 +1056,7 @@ class NativeCollectCommitter(NativeHostCommitter):
             self.footprint.event("end_step", step=job.step, used=int(job.cursor), staged_bytes=job.acq_bytes, backlog=job.backlog, tensors=int(n),
                                  pinned_pool_bytes=(int(_pool.bytes_total) if _pool is not None else None),
                                  pinned_pool_in_use=(int(_pool.bytes_in_use) if _pool is not None else None), rss_bytes=_rss)
-        if getattr(job, "windowed", False):
+        if windowed:
             job.done_evt.set()                                                  # type: ignore[attr-defined]  (queued at step begin)
         else:
             self._q.put(job)
@@ -1478,6 +1507,12 @@ class NativeCollectCommitter(NativeHostCommitter):
         tw = time.perf_counter()
         job.done_evt.wait()                                                     # type: ignore[attr-defined]  plan / cursor / metas known
         idle += time.perf_counter() - tw
+        snap = getattr(job, "rows_snapshot", None)
+        if snap is not None:
+            try:
+                self._expand_step_rows(int(job.step), *snap)
+            except Exception as e:  # noqa: BLE001
+                self.errors.append(f"step rows: {e!r}"[:200])
         job.metas = self._metas_for(job)
         used = int(job.cursor)
         padded = -(-used // C) * C
