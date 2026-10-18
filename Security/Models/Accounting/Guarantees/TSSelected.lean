@@ -4,7 +4,7 @@ import Models.Accounting.Assumptions.TSSelected
 # A padded window's guarantee statements (trusted)
 
 `ProofsSoundOfDrawn`'s and `CompilerC`'s counterparts for a window that credits only its selected units
-(`Accounting.TS.SelectLayer`, note:20261018T2200Z-draft-padded-credit-rule, round 3.1). Statement drafts, no proof: they
+(`Accounting.TS.SelectLayer`, note:20261018T2200Z-draft-padded-credit-rule, round 4). Statement drafts, no proof: they
 go to a red team, then to a decision, before they are listed in `lean-audit.json` and proved as
 `Accounting.SecurityProofs.TS.G`.
 
@@ -22,19 +22,22 @@ open Accounting.TS Accounting.Assumptions.TS Pouw.RelativeSecurity
 
 /-- **(I8) for a padded window, at its published credit.** Over a sampled window's proofs with selections
 (`SelectLayer`) with nonnegative unit weights, whose positions' writers read them (`WriterReads`), whose selections have
-sources (`SelectionsSourced`), whose floor operands are written by their certificates' writers (`CertifiedOperands`),
+sources (`SelectionsSourced`), whose floor operands are formings of their certificates' raw rows, each forming reading
+only its raw row, its noise and formings (`CertifiedOperands`, `FormingClosed`),
 whose selections are committed before their units' coins (`NoLateSelection`), whose noise steps reaching more than
-one credited unit are always proved and whose noise slots are units' outputs or anchors (`NoiseProved`), whose
-always-proved units are in every draw (`AlwaysProved`), with the tally among them (`TallyIn`: every limb unit), reading every gate position
-(`GatesTallied`) and publishing at most the selected weight when right (`TallyComputes`, provable from the tally's
-Program when it reads only the gates and its own limbs and carries, `TallyReads`), whose registration's certificates are right
-(`RegisteredRight`, the registration's own guarantee at its `δ_reg`, which a composition adds), with a play that is its
-drawn units' proofs' (`Of`), the run's modes `mode` and folded words `folded`, a share covering every selected unit
-that isn't good with its selections (`SelCovers`: a property of the share's definition, proved for each game; a share
-charging each unpaid unit its `selConeWt`, so each selection unit outside the always-proved set the cone it gates, has
-it) and E1(c) per selected unit (`SelectedFixed`): if binding, joint soundness and pinning hold as in `DrawnRightOff`,
-then outside an event of probability at most `S·(δ_bind + δ_ks)` every accepted window is accepted by the ideal game
-and its fixed words per round are at least its published credit less `d·N_w`, over `S` (`CreditSound`).
+one credited unit are always proved or weighted and whose noise slots are units' outputs or anchors (`NoiseProved`),
+whose anchors are the verifier's own (`AnchorsPinned`), whose always-proved units are in every draw (`AlwaysProved`),
+with the tally among them (`TallyIn`: every limb unit), reading every gate position (`GatesTallied`) and publishing at
+most the selected weight when right (`TallyComputes`, provable from the tally's Program when it reads only the gates
+and its own limbs and carries, `TallyReads`), whose registration's certificates are right (`RegisteredRight`, the
+registration's own guarantee at its `δ_reg`, which a composition adds), whose epoch records are right
+(`EpochFormedRight`, the per-salt forming proofs' guarantee at its `δ_salt`, which a composition adds too), with a play
+that is its drawn units' proofs' (`Of`), the run's modes `mode` and folded words `folded`, a share covering every
+selected unit that isn't good with its selections (`SelCovers`: a property of the share's definition, proved for each
+game; a share charging each unpaid unit its `selConeWt`, so each selection unit outside the always-proved set the cone
+it gates, has it) and E1(c) per selected unit (`SelectedFixed`): if binding, joint soundness and pinning hold as in
+`DrawnRightOff`, then outside an event of probability at most `S·(δ_bind + δ_ks)` every accepted window is accepted by
+the ideal game and its fixed words per round are at least its published credit less `d·N_w`, over `S` (`CreditSound`).
 
 What it rules out: a wrong always-proved unit (the tally, an A row's forming, a done flag) is a drawn unit whose proof
 is unsound (`JointSound`), so outside the event the published credit is at most the selected weight and every gate
@@ -42,15 +45,17 @@ from the set is honest; a wrong forming of a certified row (A or B) is likewise 
 when selected, and a wrong selection unit outside the set leaves every unit it gates not good, in the share; an
 operand rewritten after its certificate, and a selection committed after its unit's noise, are refused by structure;
 a wrong noise step (a seed, a line, a factor chosen to cancel) reaching more than one credited unit is an always-proved
-unit's unsound proof, and a noise value the prover fills is refused by structure. -/
+unit's unsound proof or a weighted unit's charged cone, a noise value the prover fills is refused by structure, and an
+input moved into a forming from outside it is refused (`FormingClosed`). -/
 def ProofsSoundOfSelected : Prop :=
   ∀ {K T L U J Q Pos V : Type} [Fintype K] [Fintype T] [Fintype L] [Fintype U] [Fintype J] [Nonempty V]
     (C B : Type) [Fintype C] [Fintype B] (S m s : ℕ) (P : Play (Paths C m × B) S K T L U)
     (sl : SelectLayer C B S m s J Q Pos V) (mode : Paths (Paths C m × B) S → Fin S × J → Mode)
     (wt : Fin S → J → ℝ) (folded : Paths (Paths C m × B) S → ℝ) (Nw δbind δks : ℝ),
     0 < S → (∀ w j, 0 ≤ wt w j) → sl.toDrawnLayer.WriterReads → sl.SelectionsSourced → sl.CertifiedOperands →
-    sl.NoLateSelection → sl.NoiseProved wt → sl.AlwaysProved → sl.TallyIn → sl.GatesTallied → sl.TallyComputes wt →
-    sl.RegisteredRight → sl.toDrawnLayer.Of P → (∀ w, prob (fun x => sl.toDrawnLayer.MovedIn x w) ≤ δbind) →
+    sl.FormingClosed → sl.NoLateSelection → sl.NoiseProved wt → sl.AnchorsPinned → sl.AlwaysProved → sl.TallyIn →
+    sl.GatesTallied → sl.TallyComputes wt → sl.RegisteredRight → sl.EpochFormedRight → sl.toDrawnLayer.Of P →
+    (∀ w, prob (fun x => sl.toDrawnLayer.MovedIn x w) ≤ δbind) →
     sl.toDrawnLayer.JointSound δks → sl.toDrawnLayer.Pins → sl.SelCovers P mode wt Nw →
     SelectedFixed P sl mode wt folded →
       CreditSound P sl.published Nw (S * (δbind + δks))
