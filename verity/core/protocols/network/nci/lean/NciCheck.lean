@@ -1,5 +1,7 @@
 import NciCheck.Check
 import NciCheck.Difftest
+import NciCheck.Desc
+import NciCheck.DescDifftest
 
 /-!
 # The NCI policy's check
