@@ -16873,7 +16873,7 @@
    ]
   },
   "Flock.Zk": {
-   "digest": "f3f3956edb6d0142ba27acf9c240de5c7b15f0d52816c9c9f49b33de700f3259",
+   "digest": "cc2c6b4210856b30959f2133253c44b685d9d08499d6b129a762665698a1d164",
    "definitions": {
     "Flock.Zk.INNER_LOG_INV_RATE": "d6ad9e7298bfa7fda1765c25e4b21bcf2d7ea35b7fb92014546242e462c35658",
     "Flock.Zk.K_PAD": "fb9b4b1b8bba3910fa6eb2a70efdb8cd80445d165fd5bcb81b641f1a8e459b54",
@@ -16919,6 +16919,7 @@
     "Flock.Zk.Replayed.cValue": "19acb3064aa37077d6aa33aefcaac4aebf2eac4694e26ce10cb085d3708aefb2",
     "Flock.Zk.Replayed.claims": "4499d80795190489c60a21631379efe4b752c7e23813b6bdc8542156ebb0b055",
     "Flock.Zk.Replayed.cons": "693784e8945022d9df2f991962241738210adfc4ffd448dc5e52489eed3645b8",
+    "Flock.Zk.SLOT_LOG_MIN": "5d5a2f4e69b5a15164b37c6f50088cdc1253ac2e9df233c1207f299b153fc72c",
     "Flock.Zk.TAU_SALT_BYTES": "105b5781e579b4c177d80f71b2b8aeb2fcef2f1e4daa5bdc21ac3279c1e8481f",
     "Flock.Zk.TAU_TAG": "5abd313a9f4b013b2076057d03fbd5d1ce54e348a761f00079553a03eb858002",
     "Flock.Zk.claimCheck": "0229769c0f97aa8015f36299532fde1139c1bc49abfdeafe4680cfbc6724beec",
@@ -16938,7 +16939,7 @@
     "Flock.Zk.replay": "54411fb0a40fb1107ffe88ed19360c4aee12ca27492a4883deca8e9deb96ea02",
     "Flock.Zk.schedule": "83fa9c4b25bc7d08d35755b385cbad2f614d24335758bc1164b3b89bf8963829",
     "Flock.Zk.schedule._sparseCasesOn_1": "ea9dcf3ca747ac78c64b1586828bd6055a721eb75d905bf577cf8a9d74465a43",
-    "Flock.Zk.shapeOk": "07caba7ec94f66835f204e211932b15b09f04a654a7202c9bc184a2459433d08",
+    "Flock.Zk.shapeOk": "04717688486970c2cddfc56142de7298b6d6cb1f809453ee0de65aa79536d538",
     "Flock.Zk.tags": "79a571778457736c3371f3a7efa48822ceb7f95fb875cffcd6d5780f781ab2ac",
     "Flock.Zk.tauCommitment": "7659c733b39bd50117a878725822e101b545e7cbcdd31d02673a28dc185d86e9",
     "Flock.Zk.triple": "d0e0c9fc6e6663a70f566a55608b593a802795563221b2b525b836e426af920b",
