@@ -3717,7 +3717,10 @@
    "type_hash": "e68eb3b88c65d2f37e9f5f41402a589d574ad22ab95867ac9f47a796660fcbbe"
   },
   "Hash.SecurityProofs.Stated": {
-   "owner": "@hash"
+   "owner": "@hash",
+   "signature": ["Hash.SecurityProofs.Stated : Hash.Guarantees.Stated"],
+   "assumptions": [],
+   "type_hash": "f2427bb0d064a77600f917fdfb62cfe489cbcb68556322ce1d0ecea2380f62c5"
   },
   "Nci.SecurityProofs.FullPositions": {
    "owner": "@lean",
@@ -7997,7 +8000,8 @@
    "guarantees": [
     "Flock.SecurityProofs.ClaimsStated",
     "Flock.SecurityProofs.RecursionClaimsStated",
-    "Flock.SecurityProofs.SamplingClaimsStated"
+    "Flock.SecurityProofs.SamplingClaimsStated",
+    "Hash.SecurityProofs.Stated"
    ]
   },
   "Definitions.Claims.Hm96": {
@@ -8528,6 +8532,91 @@
     "Verity.TC.Spec.instDecidableEqCls": "3a9f2d9f9dd81a3082dd77b3999150e40665f3ac40f43fa48d032affd3c94223"
    },
    "guarantees": ["Pouw.SecurityProofs.PearlC.TileCheck4WordsCore", "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"]
+  },
+  "Definitions.Hash.Basic": {
+   "digest": "96dda4920f1b085b6c1eda9a8476c4dfe121a69c8b18083e26957e1bf2dfae7c",
+   "definitions": {
+    "Hash.CollisionIn": "7711d3fffe8ceadfd2ce498a071fae3b7186f2f53363fe313d7f6c78eebabfde",
+    "Hash.Digest": "a3a4861f5c9384356dd44dcb1a1623b55cad6aff8357834eff6f630b8d92cf71",
+    "Hash.Digest.bytes": "cbf08272cef6a88eb3e022030b115bd1f6b97035993ec4315520e92648dc7dea",
+    "Hash.Msg": "81eca31647a9aa78d4098f30c178d66a70a7539fadaaa91672868ff3b690c99f",
+    "Hash.be": "1f945d5d60fb165788d157937623ac5e53f53bbe2a91810626dc2d5f9c4e2cd4",
+    "Hash.cstr": "cc8a9d2799527c9325f6d52d1f4af04631d52ef3849529d96cd70def0f45ab7b",
+    "Hash.padTo": "d13d242f6c91872c3dc574789e9f2fd063e15ae64aa08096b9dee20717d00477",
+    "Hash.uint": "54f1380cede20ece799c577d798408019afc86701c15097bc10064e1b29ac7bf",
+    "Hash.utf8": "ef81714f5482b6ab1df3203d386a5f234d14a69049d33735cee24064152636c6"
+   },
+   "guarantees": ["Hash.SecurityProofs.Stated"]
+  },
+  "Definitions.Hash.Hm96": {
+   "digest": "a25e93ee3e42e5c6fb4928fcbc844fa373b338928a514b95d66128aac4291dc7",
+   "definitions": {
+    "Hash.Hm96.SALT_BYTES": "10351bca00020e94f2f9c2b83958088e1fa493c563e3343be363674c63680e0c",
+    "Hash.Hm96.bit": "2cdac8a70d48c963a454f52d3e9662f9e4ae5d9cc26221ddaaa92e69f486e0f4",
+    "Hash.Hm96.commitString": "0411449cecc908d4b0682e3ba9764b86da7c76aac7dc27bfacab6595f655dac5",
+    "Hash.Hm96.hashed": "a98aeccee2816061c5a0edaa1d6cacec5fa5c5ee19a7410f7c1c0a0e05b17605",
+    "Hash.Hm96.leaf": "175c156add4ccd92f10da7a595c96eedcb665edfe92e25526e1209256df242ef",
+    "Hash.Hm96.leafPrefix": "b5e6ca6c80c777bcff43dd55cc45fc3a0663c7eb4ea20db85d748a010c234b1d",
+    "Hash.Hm96.mask": "ecce38ff967416b0d2d548778d673c24c6a3e3538dad6f08e7e699e7ad2a161f",
+    "Hash.Hm96.maskBit": "84c9847922cdabdcf8f9e4803039807462219e01b65429a93936bed110e7fbac",
+    "Hash.Hm96.saltPrefix": "74d72964af334edfdb91fc4be5b5e9a07fbb5c930ebc4b745ab2246293d83aa6"
+   },
+   "guarantees": ["Hash.SecurityProofs.Stated"]
+  },
+  "Definitions.Hash.RowLeaf": {
+   "digest": "59daabfc3d76dc4c3b6cd697813f2fa94b4a358f586e509ad4f4770e29572b8c",
+   "definitions": {
+    "Hash.RowLeaf.Opening": "8910cb507cf436e6164cb88b22689f4689fbc98df5d1969eb9ead98b84b72cbe",
+    "Hash.RowLeaf.Opening.row": "1a7f3e8cb436f751b4c19bb2ba565ea5e78c6bfb137833818fb458c31c37e74a",
+    "Hash.RowLeaf.Opening.salt": "a54029a04dad6dcf74412db8e6504e4b945bc41b2f9ba56ef50d01bd4e0486b6",
+    "Hash.RowLeaf.Opening.sibs": "0cc8c9953660890823876ca2dce96218c76b37e219bf6a2217cdd68b07d5736d",
+    "Hash.RowLeaf.SCHEMA": "3c73c778fbe68db97bb8a859022c2106fa7def566576eeba62d04dc8359ff732",
+    "Hash.RowLeaf.Verifier": "70f344e30a234ac192ce808e5b92481561696f80ee984f5db34c125dd6200c50",
+    "Hash.RowLeaf.Verifier.domain": "4479c28106a028df16b1f30df58372370ba5dd780d55d4a71388b47aad3c46a2",
+    "Hash.RowLeaf.Verifier.key": "543756473d4ccec741c25fd709e743fdcb1fd596ef49e4828d2ee92e1b8893bf",
+    "Hash.RowLeaf.accepts": "263fd6e9a4a0df8f6ad4ed23bf92236e58354b1007cca6fe6e818d1fa4862cde",
+    "Hash.RowLeaf.innerHashed": "28932fa064239d1e3c2c2ee132f45679e891b73af65f71dba7008ced7ebcbb44",
+    "Hash.RowLeaf.leafMsg": "6a298fe332784d47c3541c0b347f8b230a2a89f0feea2d98fe945d85950624e5",
+    "Hash.RowLeaf.outerHashed": "5cd7ce5aba7869151a792451bd9cdfed618ae5d327304620785aa3a82225c262"
+   },
+   "guarantees": ["Hash.SecurityProofs.Stated"]
+  },
+  "Definitions.Hash.RowSeg": {
+   "digest": "90bfdb254a02577fb455c429e2b39538b1096a953cb4aa4b3a604bec66068775",
+   "definitions": {
+    "Hash.Row": "8bc49110352d431ea03235bbb82cae3ebc8a0683ec869d66fc10074010221436",
+    "Hash.RowSeg.SEG_BITS": "df5da141c4d9ab6eb03d0296ed625063a140337f56fd64b1c0c725ec83774ebd",
+    "Hash.RowSeg.bitsVal": "637d2b85028346dd0c3868244689396b465ee4e4e7a4898e35fd737ec698d0e1",
+    "Hash.RowSeg.digest": "d68793eb4523442c82e65267cd947a5740652ac3680ca1b7d03172b765251926",
+    "Hash.RowSeg.hashed": "784c2b8d57267a0efdb32f0afc50d1d51cbd804cc696af750f8b564a0c285e63",
+    "Hash.RowSeg.outerMsg": "15c6e58ada42553f0ea568334171deb321a2b6dc3e24cffe84b6d8dcb275d2dc",
+    "Hash.RowSeg.outerPrefix": "344a8487dde4dd96fb2834191b3ab49753553076a26a7abd5eb31899a89574fa",
+    "Hash.RowSeg.packBits": "00defa063bcf1f453f411856eed06df08c617a33b1b472294c9e067dbba5ef49",
+    "Hash.RowSeg.segCount": "2e96d45476de80079021b9deb70bc13d55e3adbbd59c3a33873a65b7df1da123",
+    "Hash.RowSeg.segment": "0d7b76c8b3ace1c7725f7e7d79e7159ceaf4d7242e1bfd2bdc8532b442fb8a79",
+    "Hash.RowSeg.segmentMsg": "4cddf759310c04a6c81641ec0e1eb5bb6f011dc786e42ee759b43ad7b50b2c2c",
+    "Hash.RowSeg.segmentMsgs": "06d9f0294b3435c558727cf0fcbb49bae36cc32a705d683476e81cb81c8cb10a",
+    "Hash.RowSeg.segmentPrefix": "17d166519a13a99d5f75b079467ff2419a10f206a6767e6f65027a12a05c0152"
+   },
+   "guarantees": ["Hash.SecurityProofs.Stated"]
+  },
+  "Definitions.Hash.Tree": {
+   "digest": "c4b8c7ea14f3c9a159c9a52d84b0b56922af0b7ecce92dc113116c019277fdc5",
+   "definitions": {
+    "Hash.Tree.Domain": "18d820d66ef66eabf62aed06754b17984ce78ef1c996d29e01c125ae38453c85",
+    "Hash.Tree.Domain.count": "c7812871a6e03a1a9b88abf30238ba383cab05ec0dd67f385b4c35790c066f53",
+    "Hash.Tree.Domain.id": "c0c05c227c6ba6fc414b7621fb030d2194ad1ce0a44558588da39115dc490a6a",
+    "Hash.Tree.Domain.position": "c65f7b2d58c42f39e01b1d8180f87aa25c7590dfd996399acb4117dc9620c10c",
+    "Hash.Tree.FRAME": "4130405b343d06fadfa665b8b20013788c7d9ec8200a9402f85bf571aac2ffd4",
+    "Hash.Tree.accepts": "3f74d9fed34e2079842ae3580468d60b2c8665410cae66f630120abc695a2c61",
+    "Hash.Tree.climb": "c29b2ce70f8981112e083f789bb3c30021af1156925ce10c21c1e66db8b8d6bb",
+    "Hash.Tree.depth": "fae7624f67ea840b85336f50ef04f61fd932ef6b34c921874243d1950a7ede3f",
+    "Hash.Tree.frame": "13959de8be69faa822b6eea50bee86deef490427851d98c9f0d68743a83d0ec1",
+    "Hash.Tree.hashed": "fec49be19e09a6d3d55132d1b89cb886058710ca1084dadca1bbf710b6239da0",
+    "Hash.Tree.leafMsg": "c03f78eb03c50bae57d161e89fa7af3fe26e1c1584952f654cf4057b3f4b2d77",
+    "Hash.Tree.nodeMsg": "f0246edca6110f84d6a81bbf1e435afe3a2e8da1f97e4b4ee3a97741dff654a8"
+   },
+   "guarantees": ["Hash.SecurityProofs.Stated"]
   },
   "Definitions.Nci": {
    "digest": "cb17b875c510656446a000071eb88c8642b91ee75ceba126abdbf87bbe46f15d",
@@ -18523,6 +18612,15 @@
     "Flock.Guarantees.SamplingClaimsStated": "1e0fc5c38949339e91de0405310b1ab3387f6310c860ba6841f745ce4dc16309"
    },
    "guarantees": ["Flock.SecurityProofs.SamplingClaimsStated"]
+  },
+  "Models.Hash.Guarantees": {
+   "digest": "6c2584c904a5dff93f2875bde664ff00bf4603d98e68237987ce6521d0999c76",
+   "definitions": {
+    "Hash.Guarantees.RowBinding": "a5f3d22ed07d19252f31e6e2087a0289c6f629a1631b4c00a4f8e272d652820e",
+    "Hash.Guarantees.Stated": "d6ec0d5bf438d5563dd1f1f18ef063e5d036efe021df874888fea7c94d357569",
+    "Hash.Guarantees.TreeBinding": "5a6ac8239b2f217ee43962de29f8aca8baceb9c73ebc5f095fa328da95bd9d1a"
+   },
+   "guarantees": ["Hash.SecurityProofs.Stated"]
   },
   "Models.Nci.Assumptions": {
    "digest": "77db2b40d39cc8b6bc5517178d1ef001594f5057e5465c9e134f7555db16b5f3",
