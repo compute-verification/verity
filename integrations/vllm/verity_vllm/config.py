@@ -34,6 +34,8 @@ WORKLOADS = ROOT / "workloads"
 CHECKPOINTS = MANIFESTS / "checkpoints.json"
 #: The remote bandwidth session's processes (not a package), whose prover runs in the Commit's (`store.remote`).
 REMOTE_SESSION = ROOT.parent.parent / "benchmarks" / "remote_session"
+#: kv.cu's launchers over torch (``paged.py``, with ``word_codec/kv_bench.py``), the remote session's device encode.
+VLLM_ENCODED = ROOT.parent.parent / "benchmarks" / "vllm_encoded"
 
 
 def checkpoints_hf_home() -> str | None:

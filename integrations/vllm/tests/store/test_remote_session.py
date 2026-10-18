@@ -142,14 +142,16 @@ def tampering(monkeypatch, tamper) -> None:
     monkeypatch.setattr(wire, "connect", lambda host, port: Tampering(connect(host, port), tamper))
 
 
-def engine(s: Store):
+def engine(s: Store, at: int = 0):
     """A serving trace in the binder's order: pages 0 to 2 in turn, each a request's for three steps (slots 0 to 3 at
     its first, 4 to 7 at its second, read at its third), freed before the step that reuses it, which is after the
-    forward of its last step, its last read; page 3 a request's that never finishes, written at steps 0 and 1."""
+    forward of its last step, its last read; page 3 a request's that never finishes, written at steps 0 and 1.  The
+    engine numbers its steps from ``at`` (one whose binder numbered steps before the session)."""
 
-    lives = {3: 0}
+    lives, n = {3: 0}, [0]
 
-    def step(k: int) -> None:
+    def step(_: int) -> None:
+        k, n[0] = n[0], n[0] + 1
         p = k % 3
         if k >= 3:
             s.kv_free([p])
@@ -157,16 +159,17 @@ def engine(s: Store):
         lives[p] = k
         appends = [Append(p, 0, 4)] + ([Append((k - 1) % 3, 4, 4)] if k >= 1 else []) + (
             [Append(3, 4 * k, 4)] if k < 2 else [])
-        s.kv_write_reference(appends, lambda li, page, x: kv_payload(li, page, x, lives[page]), k)
+        s.kv_write_reference(appends, lambda li, page, x: kv_payload(li, page, x, lives[page]), k + at)
     return step
 
 
 def run(plan: str, *, windows: int = 2, window_ns: int = 5, samples: int = 4096, lifetime: int = 1,
-        backend=TickingBackend):
-    """One session of ``plan``, every receipt of a window drawn at the default ``samples``."""
+        backend=TickingBackend, at: int = 0, **kw):
+    """One session of ``plan``, every receipt of a window drawn at the default ``samples``; the backend keeps the
+    regions the verifier read from its hello (``backend.regions``)."""
     clock = PassClock()
     s = store()
-    backend = backend(clock, s, engine(s), randbytes=random.Random(7).randbytes)
+    backend = backend(clock, s, engine(s, at), randbytes=random.Random(7).randbytes, **kw)
     lsock = wire.listen("127.0.0.1", 0)
     results = []
     th = threading.Thread(target=lambda: results.extend(remote.prove(
@@ -179,6 +182,7 @@ def run(plan: str, *, windows: int = 2, window_ns: int = 5, samples: int = 4096,
                           samples=samples, delta=2.0 ** -40, jitter_ns=10 ** 9, clock=clock, log=lambda m: None,
                           lifetime=lifetime)
     v.register()
+    backend.regions = v.regions
     r = v.session(0, v.allowance(v.ping(4)), None)
     th.join()
     sock.close()
@@ -188,6 +192,8 @@ def run(plan: str, *, windows: int = 2, window_ns: int = 5, samples: int = 4096,
 def test_an_honest_store_session_is_accepted_with_its_frees_re_keys_and_steps():
     r, p, s, backend = run("serve")
     assert r["accepted"] and p["accepted"] and r["failure"] is None
+    # the hello carries the store's layout, which the verifier takes as the memory line's labels
+    assert backend.regions == (("weights", "hbm", 0, 1), ("kv", "hbm", 1, 16), ("filler", "host", 17, 1))
     # pass 0 has no append before it (step 0's line closes when step 1 opens), so its seed is the unchained one; every
     # later pass's seed chains the head of the appends sent before its root (`audit.chained`)
     assert backend.heads[0] is None and len(backend.heads) > 2 and all(h is not None for h in backend.heads[1:])
@@ -211,6 +217,72 @@ def test_an_honest_store_session_is_accepted_with_its_frees_re_keys_and_steps():
     # old; its first writes were split, so every line that writes all four of its blocks is a re-key
     rekeys = [x.step for x in lines if {13, 14, 15, 16} <= {w.slot for w in x.written}]
     assert rekeys and min(rekeys) > 1 and kv["rekeyed"] >= 4 * len(rekeys)
+    # the map, replayed, holds the session's live blocks, its writes are the appends' digests, and the store holds them
+    agree = remote.agreement(backend)
+    assert agree["agrees"] and agree["held_appended"] > 0 and agree["held_wrong"] == []
+
+
+def test_a_session_on_an_engine_whose_steps_were_numbered_before_it_adopts_its_first_step():
+    """The Commit's binder numbers the engine's steps from its first run; a session after its runs takes the next."""
+    r, p, s, backend = run("serve", at=40)
+    assert r["accepted"] and p["accepted"]
+    head, lines = memory_map.parse(s.memory_map.text().splitlines())
+    steps = [x.step for x in lines]
+    assert steps[0] >= 40 and steps == sorted(set(steps))
+    assert all(x >= 40 for w in r["record"]["profile"]["windows"] for x in w["steps"])
+
+
+class Device:
+    """kv.cu's encode on the host (`remote.KvDevice`'s interface): each word by `codec.encode_word` under the key
+    set and the offset handed in for its block, so `remote.DeviceEncoded`'s plumbing runs without a GPU.  ``shift``
+    moves every offset (a device that keys appends wrongly)."""
+
+    def __init__(self, shift: int = 0) -> None:
+        self.shift, self.key, self.calls = shift, None, []
+
+    def set_key(self, key: rcodec.Key) -> None:
+        self.key = key
+
+    def encode(self, payloads, first: int, offsets=None) -> list[bytes]:
+        self.calls.append((first, len(payloads), offsets is not None))
+        k, f = self.key, self.key.codec.field
+        out = []
+        for u, m in enumerate(payloads):
+            i0, b = f.block_words * rcodec._index(first + u, k.codec), 0 if offsets is None else offsets[u] + self.shift
+            out.append(rcodec._block([rcodec.encode_word(x, i0 + w, k, b) for w, x in enumerate(rcodec._words(m, f))], f))
+        return out
+
+
+def test_a_session_whose_store_is_encoded_on_the_device_is_accepted_and_each_encode_gated():
+    r, p, _, backend = run("serve", device=(d := Device()))
+    assert r["accepted"] and p["accepted"]
+    appends = len(backend.coins)
+    assert backend.gates["device_encode"] == {"registered": 18, "appends": appends, "blocks_checked": 2 + appends}
+    assert d.calls[0] == (0, 18, False) and [c[0] for c in d.calls[1:]] == [f for f, _ in backend.coins]
+    assert all(c[2] for c in d.calls[1:])
+
+
+def test_a_device_that_keys_an_append_off_its_bound_offset_fails_its_gate():
+    s = store()
+    b = remote.StoreBackend(s, engine(s), device=Device(shift=1))
+    reg = audit.register(bytes(32), b"n", b.blocks, b.payload_root(b"n"), P512, nonce=bytes(32))
+    b.encode(reg)
+    a = b.audit.append([b"\x01" * rcodec.BLOCK_BYTES], [bytes(192)])
+    with pytest.raises(RuntimeError, match="not codec.encode's"):
+        b.audit.encode(a.first, bytes(range(32)))
+
+
+def test_the_commits_session_refuses_engines_it_does_not_serve_and_sets_the_rest():
+    cs = remote.CommitSession("127.0.0.1:7781", kv_pages=8)
+    assert cs.engine_args({"max_model_len": 128}) == {"max_model_len": 128, "async_scheduling": False,
+                                                       "enable_prefix_caching": False, "num_gpu_blocks_override": 8}
+    for bad, why in [({"tensor_parallel_size": 2}, "parallelism"), ({"kv_cache_dtype": "fp8"}, "kv_cache_dtype"),
+                     ({"async_scheduling": True}, "async"), ({"enable_prefix_caching": True}, "prefix caching")]:
+        with pytest.raises(SystemExit, match=why):
+            cs.engine_args(bad)
+    for kw, err in [({"plan": "serve,serve"}, "one mode"), ({"kv_pages": 0}, "a page"), ({"plan": "nope"}, "a session's mode")]:
+        with pytest.raises(Exception, match=err):
+            remote.CommitSession("127.0.0.1:7781", **kw)
 
 
 def test_a_store_session_whose_prover_seeds_without_the_appends_head_is_rejected():
