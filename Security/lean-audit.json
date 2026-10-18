@@ -6513,7 +6513,6 @@
     "Accounting.SecurityProofs.RateOfAuditInteractiveRO",
     "Accounting.SecurityProofs.RateOfAuditPartial",
     "Accounting.SecurityProofs.RateOfAuditPartialPasses",
-    "Accounting.SecurityProofs.RequirementSteps",
     "Accounting.SecurityProofs.StackedRequirementRelay",
     "Accounting.SecurityProofs.StackedRequirementSketchDeployed"
    ]
@@ -18069,13 +18068,6 @@
     "Accounting.Guarantees.Fit": "3dad2744dedc3335f643260612186bf5c3ce25104fde75630f3a0b405302b605"
    },
    "guarantees": ["Accounting.SecurityProofs.Composition", "Accounting.SecurityProofs.Fit"]
-  },
-  "Models.Accounting.Guarantees.DeclaredCircuit": {
-   "digest": "47bba1146dd7f001bedb0a5c182d6a1bd442b1a5bb946d5c1ca250ca22715b0c",
-   "definitions": {
-    "Accounting.Guarantees.DeclaredCircuitRequirement": "59fbd873c1bbac4c7620ac1903ec885b191ec95a4539a4bed62d0c7b23dbf811"
-   },
-   "guarantees": []
   },
   "Models.Accounting.Guarantees.Gates": {
    "digest": "d20ddf0d7abd1ab2df5b1c34e472b48f14800097eb60425b2dd6a7ba6aeb2ebc",
