@@ -17,13 +17,13 @@ claims nothing. The residuals of a GPU and of a socket's host DRAM are declared,
 measured stores and wipe coverage (amododesign.com/notes/2026-10-02-dpu-memory-wipes): what a wipe can't reach on them is
 each device's residual. `leaf_spine` puts nodes behind a leaf-spine fabric, each through its own certifier, with hosts
 outside every block and challengers on the leaves. `rack` is the demo's: nodes with DPUs on one leaf, a challenger, and
-the outside world over a WAN.
+the outside world over a WAN. `two_sites` is a fleet: two leaf-spines joined by a WAN between their spines.
 """
 from __future__ import annotations
 
 import math
 
-from .physical import Assumption, Block, Cadence, Datacenter, Device, Link
+from .physical import Assumption, Block, Cadence, Datacenter, Device, Fleet, Link
 
 GB = 8e9
 INF = math.inf
@@ -139,3 +139,21 @@ def rack(nodes: int = 2, dpus: bool = True, cadence: Cadence | None = None) -> D
                       fabric_latency=1e-6, outside_latency=1e-3,
                       cadence=cadence or Cadence(frame_bits=32, bucket_ticks=1, buckets=4, jitter_classes=128,
                                                  tick=Assumption("tick", 1e-4, "s", "declared")))
+
+
+def two_sites(blocks: int = 2, *, leaves: int = 2, spines: int = 1, fabric_latency: float = 2e-6,
+              wan_latency: float = 20e-3, wan_gbps: int = 100, outside: str = "ext0",
+              cadence: Cadence | None = None) -> Fleet:
+    """Two sites under one developer, `east` and `west`, each a `leaf_spine` of `blocks` nodes, named `east.b0`, ….
+    One WAN link joins the two sites' spines (`east.spine0`, `west.spine0`; their leaves when they have no spine), of
+    `wan_gbps` and `wan_latency` one way, both declared. The WAN is fabric: every block is behind its own certifier
+    already. The one host outside every block, `outside`, is on the west site, so the east blocks reach it across the
+    WAN, through their own certifiers and both sites' fabric."""
+    top = "spine0" if spines else "leaf0"
+    sites = [leaf_spine(blocks, leaves=leaves, spines=spines, outside=(outside,) if name == "west" else (),
+                        fabric_latency=fabric_latency, cadence=cadence).prefixed(name, keep=frozenset({outside}))
+             for name in ("east", "west")]
+    wan = Link(f"east.{top}", f"west.{top}",
+               Assumption("wan/east-west", wan_gbps * 1_000_000_000, "bit/s", "declared"),
+               Assumption("wan/east-west-latency", wan_latency, "s", "declared"), "wan")
+    return Fleet(sites, [wan])

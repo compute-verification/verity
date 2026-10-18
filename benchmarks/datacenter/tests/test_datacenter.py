@@ -335,23 +335,37 @@ def test_choosing_the_profile_from_a_registered_set_costs_its_log(setup):
 
 def test_a_circuit_placed_across_a_fleet_crosses_the_inter_datacenter_link():
     fleet = Fleet([datacenter().prefixed("east"), datacenter().prefixed("west")],
-                  [Link("east.a.cert", "west.a.cert", Assumption("wan", 1e10, "bit/s"), kind="wan")])
+                  [Link("east.leaf", "west.leaf", Assumption("wan", 1e10, "bit/s"), kind="wan")])
     assert fleet.validate() == []
     c = trace(two_layer, x=Input(16), w1=Input(16, "registered"), w2=Input(16, "registered"))
     p = place(c, fleet.merged(), "west.a.gpu", deliver="world", x="world", w2="east.b.gpu")
     w2 = next(x for x in crossings(p) if x.value.name == "w2")
-    assert any(l.kind == "wan" for l in w2.path)
+    assert [(l.a, l.b) for l in w2.path] == [("east.b.cert", "east.b.gpu"), ("east.leaf", "east.b.cert"),
+                                            ("east.leaf", "west.leaf"), ("west.a.cert", "west.leaf"),
+                                            ("west.a.gpu", "west.a.cert")]
     profile = p.public(Plan(EPOCH))
     assert not refusals(audit(run(p, INPUTS, Plan(EPOCH)), profile))
 
 
-def test_a_fleet_links_datacenters_only_through_certifiers():
+def test_a_link_between_datacenters_is_fabric_and_coverage_is_per_block():
+    """A link between datacenters may join any two fabric devices, a certifier included: each block's boundary is
+    already certified. What the fleet refuses is each datacenter's own problems, a device in two of them, a link naming
+    no device, and one that leaves a block without passing a certifier."""
     east, west = datacenter().prefixed("east"), datacenter().prefixed("west")
     wan = Assumption("wan", 1e9, "bit/s")
-    assert Fleet([east, west], [Link("east.a.cert", "west.a.cert", wan, kind="wan")]).validate() == []
-    bad = Fleet([east, west], [Link("east.a.gpu", "west.a.cert", wan, kind="wan")])
-    assert any("not a certifier" in p for p in bad.validate())
-    assert any("is in both" in p for p in Fleet([datacenter(), datacenter()]).validate())
+    for a, b in (("east.leaf", "west.leaf"), ("east.leaf", "west.a.cert"), ("east.challenger", "world")):
+        assert Fleet([east, west], [Link(a, b, wan, kind="wan")]).validate() == [], (a, b)
+    merged = Fleet([east, west], [Link("east.leaf", "west.leaf", wan, kind="wan")]).merged()
+    assert [repr(p) for p in merged.ports] == [f"{s}.{b}.cert:{d}" for s in ("east", "west") for b in "ab"
+                                               for d in ("in", "out")]
+    assert Fleet([east, west], [Link("east.a.gpu", "west.leaf", wan)]).validate() == [
+        "inter-datacenter link east.a.gpu-west.leaf passes no certifier (coverage)"]
+    assert Fleet([east, west], [Link("east.leaf", "west.spine", wan)]).validate() == [
+        "inter-datacenter link east.leaf-west.spine names an unknown device 'west.spine'"]
+    assert Fleet([datacenter(), datacenter()]).validate() == [f"device {d!r} is in both dc0 and dc0" for d in
+                                                              ("a.gpu", "b.gpu", "a.cert", "b.cert", "leaf", "challenger")]
+    leaky = replace(east, links=[*east.links, Link("east.a.gpu", "east.leaf", wan)])
+    assert Fleet([leaky, west]).validate() == ["east: boundary link east.a.gpu-east.leaf passes no certifier (coverage)"]
 
 
 def test_a_ledger_adds_covert_bits_across_nights_and_wipes_bound_what_each_night_carries(setup):

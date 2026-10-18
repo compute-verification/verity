@@ -389,7 +389,7 @@ shaping delay (hand time minus ready time, over every frame), the capacity per d
 ## The active certifier (`active`)
 
 `active.Proxy` runs the certifiers on one boundary link of a live byte stream. It is an asyncio TCP proxy, the I/O shell
-around `grid.Certifier`, `schedule`'s handing rule, `commitment` and `audit`, and it adds no format. Its records are
+around `grid.Certifier`, `schedule`'s handing rule, `commitment` and `audit`, and it adds no record format. Its records are
 `grid.Record`s, published raw or through `commitment.commit`, and `Audit.check_link` and `check_ingress_link` read
 them.
 
@@ -407,6 +407,50 @@ them.
     frames follow them on the wire.
 - **Ingress:** a frame read at time s is enqueued at bucket ⌈s/τ_in⌉ and released by the ingress `Certifier` at r_in
   (`Bucketer`, `calibration.size_ingress_ms`'s model).
+- **The salt** (`Proxy(salt=…)`) is off by default, and with it off every record, wire and verdict is as above.
+  - **What.** 512 bits per window from the certifier's own randomness (`fresh_salt`), drawn at the window's first
+    ingress tick. A source of coins handed to the certifier, such as the memory challenger's, takes the same place: a
+    function from the window to 64 bytes.
+  - **Into the block only.** At that tick the certifier enqueues one salt frame ahead of the bucket's arrivals, and
+    behind any queue carried from the window before (`Bucketer(first=…)`). It is kind `SALT` (3) on `SALT_STREAM`
+    (2^32 − 1), and its payload is u64be w ‖ `salt_commitment(salt)`, where
+    `salt_commitment(s) = tagged_sha512("verity-network-certifier/salt/v1", s)`. It takes one of the window's ingress
+    slots like any crossing, so r_in carries honest ingress plus one frame per window. When the ingress certifier
+    releases it, the proxy writes the frame's header, w and the salt (`SALT_FRAME_BYTES`, 81 bytes, no fill) on a
+    server connection of its own. The proxy never reads that connection, so nothing the server writes there reaches
+    egress. The egress side never holds the salt, its commitment or anything drawn from them: the egress grid, its
+    padding and the wire are the unsalted run's. A frame of kind `SALT` read from the link is never taken for the
+    certifier's.
+  - **In the record.** The window's ingress record holds the salt frame, so it holds the commitment and not the salt.
+    The record's formats are unchanged: the v1 digest and the v2 frame tree bind the salt frame like any other frame,
+    so a certified record signs the commitment. Neither the Lean analysis nor the Lean ports change.
+  - **Revealed after registration.** `Proxy.reveal(w)` gives window w's salt. The verifier calls it once the prover
+    has registered window w, and the certifier refuses it while w's ingress record is unpublished. Nothing else
+    publishes the salt.
+  - **The audit's read** (`check_salts(audit, link, records, windows, salts)`). An ingress link-window is accepted if it
+    has exactly one raw record, which holds exactly one salt frame of its window, and that frame's commitment is the
+    revealed salt's. Anything else, a missing salt included, is a `salt` violation, recorded with the audit's
+    verdicts. A committed or certified record doesn't show its frames, so there a proof opens the salt frame.
+  - **What it costs.** The protocol fixes the salt frame's place in the queue, so it adds nothing to the ingress
+    count `(r_in + 1)^T`. Its content is the certifier's coins, which no outside party chooses and nothing X sends
+    can change, so it costs 0 bits by the argument the trusted text makes for the challenger's coins (D7,
+    `Security/Models/NetworkCertifier/Guarantees.lean`). That text states the exemption for coin openings on a coin
+    link, and doesn't name the certifier's salt yet.
+- **Back from maintenance** (`Proxy(start=k, position=p)`) is off by default, and with it off every record, wire and
+  verdict is as above.
+  - **What.** A certifier that was down serves from window k of the trusted clock on: each grid's first tick is window
+    k's first bucket, its first records are window k's, and the first egress frame it takes is the Program's at
+    position p, the frames before p being the earlier windows'. It carries nothing from before it went down: no queue,
+    stream, fault or salt.
+  - **The windows it was down for** have no record, and the audit gives each of their link-windows `no-verdict`, as for
+    any missing record. The certifier's audit has no maintenance: excusing those windows is the verifier's plan's, in
+    the accounting layer (`benchmarks/datacenter`'s `Maintenance`), which charges everything the block held instead.
+  - **Going down.** `windows` ends a proxy's run early: `Proxy(windows=w)` serves windows 0 … w − 1, publishes their
+    records and closes the link. A run whose window w is the outage is then `Proxy(windows=w)`, nothing for window w,
+    and `Proxy(start=w + 1, position=p)`. Its later windows are the full run's if nothing crosses into window w.
+  - **Its limits.** An online prover declares from window 0's frames on, so a proxy back from maintenance takes its
+    syncs. The certifier's Lean device port (`verity/core/devices/certifier/lean/`) models a proxy from window 0 with
+    the salt off.
 - **Advice:** the declared syncs, one per window, are given before the run, or an online prover (`Proxy(prover=…)`,
   lag 1 … T − 1) declares each at its window's first tick, before anything is handed, from the frames the shaper has
   taken. The proxy never chooses on a tick: right after tick w·T − lag (window 0's before the first tick) it hands
@@ -419,7 +463,7 @@ them.
   |---|---|
   | A tick that runs more than `slack` after its boundary. Its bucket is still emitted, as padding, so no bucket slips into the next | `monitor-unavailable` |
   | More than a bucket left unwritten on the link at a tick | `delivery-refused` |
-  | A server that refuses a stream | `delivery-refused` (ingress) |
+  | A server that refuses a stream, or the salt's connection | `delivery-refused` (ingress) |
   | A released request not written to its server connection by `slack` after its release tick, nor by the end of its anchor's egress bucket | `delivery-refused`: ingress, on its window if still open; egress, from the check until the stream has ended and every frame that arrived before its end is handed |
   | The shaper's buffer or the queue past Q | `overflow` |
   | A declared sync outside Σ_sync | `coverage-never-established` |
@@ -507,6 +551,14 @@ and seven lemmas, and three more proved lemmas:
   - a frame held past every sync is a mismatch;
   - a late tick, an ingress tick read early (the online prover's refusal), an overrun, a refused stream, a request
     forwarded a bucket late, a fault that drops a carried queue and out-of-set advice each fail closed;
+  - with the salt on, each window's salt reaches the server on its own connection and nothing else carries it: the
+    wire and the egress records are the unsalted run's, and each ingress record holds one salt frame, with the
+    salt's commitment, at the window's first bucket. `reveal` refuses a window until its ingress record is published,
+    and `check_salts` accepts the revealed salts and rejects a wrong or missing one. The bucketer puts the certifier's
+    own frame first in each window, behind the carried queue;
+  - back from maintenance at window 2 of a Program with nothing in window 1, a proxy publishes exactly the full run's
+    window-2 records and wire, and hands each frame when the full run does; so do a shaper and a bucketer on random
+    instances. A proxy can't start past its windows or with an online prover;
 
 No test mirrors the other eight statements of Theorems 1(b) and 3 (`SecurityProofs.EncardAcceptedRunsLe`,
 `SecurityProofs.EncardDecodableLe`, `SecurityProofs.NoFaultOfAccepted`, `SecurityProofs.RecordedRowEqFill`,

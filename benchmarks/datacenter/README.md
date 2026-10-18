@@ -17,8 +17,10 @@ trusted devices see.
 
 `examples` is the one place hardware is declared, every number with its source: `rtx_node` (one of our measured
 nodes), `with_dpu` (a BlueField-3 between its NIC and its certifier, with its BMC behind it), `leaf_spine` (nodes behind
-their certifiers on a leaf-spine fabric) and `rack` (the demo's). `benchmarks/network_sim/graph.py` exports them as a
-network, a netns plan or a GML graph, and its tests pin their values against `verity` and the census.
+their certifiers on a leaf-spine fabric), `rack` (the demo's) and `two_sites` (a `Fleet` of two leaf-spines joined by
+a WAN between their spines). A link between datacenters is fabric, as a switch is: coverage is per block, every block's
+boundary is certified already, and the outside world is everything off every block. `benchmarks/network_sim/graph.py`
+exports them as a network, a netns plan or a GML graph, and its tests pin their values against `verity` and the census.
 
 ~~~python
 from datacenter import *

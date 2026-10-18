@@ -3,23 +3,27 @@
 The device graph, and a mock datacenter of Linux network namespaces that runs the real network certifier. Both read the
 accounting layer's declarations, `datacenter.Datacenter`, which `datacenter.examples` (`benchmarks/datacenter`) declares:
 `rtx_node` is the measured node (8 GPUs on two sockets, each GPU on a PCIe root port of its own, one NIC on socket 1) as
-one block, and `leaf_spine` puts such nodes behind a leaf-spine fabric, each through its block's certifier, with hosts
-outside every block.
+one block, `leaf_spine` puts such nodes behind a leaf-spine fabric, each through its block's certifier, with hosts
+outside every block, and `two_sites` joins two leaf-spines by a WAN between their spines.
 
-- `graph.py`: the exports, which read any `Datacenter` that validates: the netns plan `mockdc.py` stands up, and
-  Shadow's GML. `python graph.py --blocks 2 --netns` prints `leaf_spine(2)`'s plan.
+- `graph.py`: the exports, which read any `Datacenter` that validates, a fleet's merged one included: the netns plan
+  `mockdc.py` stands up, and Shadow's GML. `python graph.py --blocks 2 --netns` prints `leaf_spine(2)`'s plan, and
+  `--fleet` `two_sites(2)`'s.
 - `records.py`: the certifier's published records as `datacenter.observe.Record`s (port, window, counts, digest), the
   records an honest run declares by port and window, and the certifiers' parameters as the declaration's `Cadence`;
   `datacenter.check_records` audits them.
-- `mockdc.py`: a declaration's netns plan stood up on one host, the certifier's proxy on each block's uplink, and both
-  audits.
+- `mockdc.py`: a declaration's netns plan stood up on one host, the certifier's proxy on each block's uplink, both
+  audits, and the account's charge for each block.
 - `workload/`: what runs on the blocks, with its own suite (its modules are listed in `workload/__init__.py`).
   `python -m workload.lab_run run --out DIR`, from this directory in a Python with torch, serves verity_vllm's serving
   Program on the lab, each block in its namespace behind its certifier's proxy and the client on the outside host, then
   checks the certifiers' audit, N3 and the answers.
+- `run.py`: the whole night on the lab host, `verity bench network_sim --out DIR` (below), checked against its expected
+  verdicts.
 - `tests/`: the exports' tests, the declarations' values pinned against memory accounting's constants
-  (`verity.core.protocols.remote_bandwidth.timing`) and the census, and the records adapter's tests on an injected clock
-  (`uv run tools/verity/check/suites.py verity-network-sim`). The mock datacenter is a script, not a test: it runs in real time.
+  (`verity.core.protocols.remote_bandwidth.timing`) and the census, the records adapter's tests on an injected clock, and
+  `run.py`'s summary and expected verdicts (`uv run tools/verity/check/suites.py verity-network-sim`). The mock
+  datacenter is a script, not a test: it runs in real time.
 
 ## The mock datacenter
 
@@ -27,22 +31,23 @@ Every namespace is named `na-*`. Each block (`na-b0`, standing in for a node of 
 certifier's namespace (`na-b0-cert`), whose other interface goes to a leaf switch. By default there are four blocks, two
 leaves joined by a spine (`na-spine0`), and one host outside every block (`na-ext0`, on `na-leaf0`). Only the switches
 forward IP. A certifier forwards nothing: a block reaches the fabric only through the connections the proxy makes and
-accepts, and an iptables rule in the certifier's namespace drops whatever the block opens. Each fabric link has netem,
-2 ms ± 0.5 ms per hop at 400 Gbit/s by default. Nothing in the root namespace changes: each veth is created inside its
-namespaces, and deleting the namespaces deletes them.
+accepts, and an iptables rule in the certifier's namespace drops whatever the block opens. Each fabric link has netem, 2 ms ± 0.5 ms per
+hop at 400 Gbit/s by default. Nothing in the root namespace changes: each veth is created inside its namespaces, and
+deleting the namespaces deletes them.
 
 That layout is `datacenter.examples.leaf_spine(4, leaves=2, spines=1)`'s. Any other declaration works whose blocks each have one
 boundary link, to a certifier, and which has a device of kind `outside`: `--declaration FILE.py:NAME` names a
-`Datacenter`, or a function returning one.
+`Datacenter` or a `Fleet`, or a function returning one. A fleet is validated (`Fleet.validate`) and stood up merged
+(`Fleet.merged`). `--fleet` is `two_sites` (below).
 
 It needs Linux with iproute2, iptables, setpriv and passwordless sudo, and a Python with numpy. Run it on
 vy-nebius-cpu-2 (its system `python3` has numpy), not on an agent VM. Every command takes the same `--declaration`, or
-`--blocks`, `--leaves` and `--spines`, and `run` refuses a lab that is up in another shape.
+`--fleet`, `--blocks`, `--leaves` and `--spines`, and `run` refuses a lab that is up in another shape.
 
 ~~~sh
 python3 benchmarks/network_sim/mockdc.py up       # create the namespaces, then `status`
-python3 benchmarks/network_sim/mockdc.py status   # list them, and check what reaches what
-python3 benchmarks/network_sim/mockdc.py run --out DIR [--block b1=late ...]
+python3 benchmarks/network_sim/mockdc.py status   # list them, and check what reaches what, with each round trip
+python3 benchmarks/network_sim/mockdc.py run --out DIR [--salt] [--block b1=late ...]
 python3 benchmarks/network_sim/mockdc.py down     # stop their processes, and delete every na-* namespace and veth
 ~~~
 
@@ -59,8 +64,8 @@ research run --on vy-nebius-cpu-2 --project verity --source . --cwd source -- \
 100 ms, on every block at once. In each block runs the server (`active_replay.Server`), in its certifier's namespace the
 proxy (`verity.core.protocols.certifier.active.Proxy`, unmodified), and on the outside host the peer, whose connection
 crosses the fabric. Each block's server plays one strategy: `honest`; `bits`, whose write times carry a random bit per
-session; `late`, which holds a session in window 0 past every sync; or `extra`, which writes one event at a position the
-Program doesn't have. Each block is audited twice. The certifier's audit is `audit.Audit`'s `check_link` and
+session; `late`, which holds a session in window 0 past every sync; `extra`, which writes one event at a position the
+Program doesn't have; or `maintenance`, honest with its certifier down for window 1 (below). Each block is audited twice. The certifier's audit is `audit.Audit`'s `check_link` and
 `check_ingress_link` on its raw and committed records. The datacenter record check is `datacenter.check_records` on its
 records as `datacenter.observe.Record`s against the ones an honest run of the Program publishes: each port (`b0.cert:out`
 for what leaves the block, `b0.cert:in` for what enters it) needs a record for each window, with the declared counts
@@ -84,6 +89,119 @@ from the blocks on `na-leaf0`, and about 9.8 ms after it from those behind the s
 certifier verdicts: `r20261018-065536-38c4`, before the declarations, and `r20261018-071731-392a`, on the first
 `datacenter` API.
 
+### With the salt
+
+`run --salt` turns each certifier's per-window salt on (`Proxy(salt=active.fresh_salt)`, the certifier's
+`PROTOCOL.md`): at each window's first bucket the ingress side puts one salt frame, which carries the window and the
+salt's commitment, in the block's ingress record, and sends the salt itself to the block's server on a connection of
+its own. Once a block's run is over, `run` makes the verifier's "reveal" call to its proxy and keeps the salts in
+`DIR/b0/salts.json`. The record check declares each ingress window with its salt frame first, and the certifier's audit
+(`active_replay.audit_salt`) reads each commitment against the revealed salt and counts the salt frames in each
+ingress window and in egress. The salt takes one of the ingress side's frames in each window's first bucket, so a
+request enqueued in that bucket can go out a bucket later.
+
+Run `r20261018-092640-66bf` (`run --salt`), on vy-nebius-cpu-2 at a load of about 35, gave the table's verdicts on
+every block, under both audits. On every block, each ingress window held one salt frame and egress none, no egress
+frame held a salt or its commitment, the certifier's audit accepted each window's commitment against the revealed
+salt, and the block's server received every salt. The latest tick was 4.3 ms late against the 25 ms slack.
+
+### Maintenance
+
+The fifth strategy, `maintenance`, takes a block's certifier down for window 1. The default four blocks take the first
+four strategies, so it needs `up --blocks 5` and `run --blocks 5`. The block is drained for that window
+(`active_replay.outage_plan`): no request is enqueued in it, and the plan is refused if anything of window 0 would still
+be in flight there. Its proxy serves window 0, then closes the link and stops listening, so for window 1 the link is
+dead and no record is published. Half a window before window 2, a proxy back from maintenance
+(`Proxy(start=2, position=p)`, the certifier's `PROTOCOL.md`) listens on the same port, and the peer connects again. The
+proxy process stays up through the outage, but the proxy back from it is a new `Proxy` with fresh certifiers, so it
+carries nothing from window 0. The block's records are declared from its own drained plan, the Program its prover
+registers.
+
+The record check runs twice on that block, each time with the account's charge for its claims (`mockdc.charge`:
+`datacenter.account` on a profile that credits no work and registers no store, under the verifier's plan for that
+block):
+- **Without a declared maintenance**, the plan is the epoch alone. Both of window 1's port-windows are refused "no
+  record", and the account charges each at the uplink's full capacity, 400 Gbit/s for 6 s.
+- **With `Plan(maintenance=[Maintenance(b4, [6000, 12000))])`** (`mockdc.verifier_plan`), the declared records leave
+  window 1 out (`records.declared(..., verifier=plan)`, as `datacenter.audit` does), and the other four port-windows are
+  carried. The account is sound, but it charges everything the block's devices hold. The plan has no wipe, so nothing
+  bounds what the block holds once it is back.
+
+The certifier's own audit has no verdict for window 1 on either link (`no-verdict`). It has no notion of maintenance:
+excusing a window is the accounting layer's.
+
+Run `r20261018-100310-685b` (`up --blocks 5`, `run --blocks 5`), on vy-nebius-cpu-2 at a load of about 45:
+
+| Block | Strategy | Certifier audit | Datacenter record check | Account's charge (covert budget) |
+|---|---|---|---|---|
+| b0 | honest | accepted | 6 port-windows carried | sound: 24 bits of timing advice |
+| b1 | bits | accepted, wire identical to b0's | 6 port-windows carried | sound: 24 bits |
+| b2 | late | refused: `responses` window 0, `status:coverage-never-established` | refused: `port b2.cert:out [0, 6000)`, occupancy and content | not sound: 20 bits + 2.4e12 on the refused window |
+| b3 | extra | refused: `responses` window 2, `mismatch` | refused: `port b3.cert:out [12000, 18000)`, occupancy and content | not sound: 20 bits + 2.4e12 |
+| b4 | maintenance, no plan | no verdict for window 1 on either link; windows 0 and 2 accepted | refused: `port b4.cert:out` and `port b4.cert:in` `[6000, 12000)`, "no record" | not sound: 16 bits + 4.8e12 on refused windows |
+| b4 | maintenance, planned | the same | 4 port-windows carried, nothing refused | sound: 16 bits + 2.16e13 held in maintenance |
+
+The first four blocks' verdicts are the earlier runs'. On b4 the records of windows 0 and 2 are `run_shaper`'s, and
+the wire is the records. The latest tick was 4.2 ms late against the 25 ms slack. After the run the lab was brought
+back up in its default shape (`mockdc.py down`, then `up`), which `workload/lab_run.py` needs.
+
+### Two sites
+
+`--fleet` stands up `datacenter.examples.two_sites(2)`, many datacenters under one developer
+(`Fleet([east, west], [Link(east.spine0, west.spine0, wan)])`), merged (`Fleet.merged`): two leaf-spines, `east` and
+`west`, each of two blocks (`east.b0`, …, `west.b1`), and one WAN link between their spines. The WAN's capacity and
+one-way latency are declared assumptions, `wan/east-west` (100 Gbit/s) and `wan/east-west-latency` (20 ms), and netem
+gives it 20 ms ± 2 ms (`--wan-latency-us`, `--wan-jitter-us`). The outside host is on the west site, so an east block's
+link runs through its own certifier, the east fabric, the WAN and the west fabric to `na-ext0`. That makes 15 namespaces
+and 14 links.
+
+- The WAN is fabric, as a switch is. Blocks are the only units the account credits, and every block's boundary is
+  certified already, so a link between datacenters is no boundary (`Fleet`): a certifier on it would have no port and
+  publish no record. The spines route across it, and every certifier still forwards nothing.
+- The fleet's ports are its blocks' eight.
+- The Program is the same, one outside peer per link (see Limits), so what crosses the WAN is the east blocks' traffic
+  with the outside host.
+
+Each block gets both audits, as on one site. Then the record check runs once more, on every block's records together
+against every block's declared ones, over the merged fleet's ports, with the account's charge for the whole run
+(`mockdc.charge` under the whole plan). `run.py` runs the fleet twice, with the first four strategies swapped between
+the sites, so that each is played across the WAN once. Run `r20261018-112635-7b3b` (the whole night, below):
+
+| Run | Block | Strategy | Certifier audit | Datacenter record check | Wire lag (median) | Worst tick |
+|---|---|---|---|---|---|---|
+| fleet | east.b0 | honest | accepted | 6 port-windows carried | 31.1 ms | 4.3 ms |
+| fleet | east.b1 | late | refused: `responses` window 0 | refused: `port east.b1.cert:out [0, 6000)` | 31.1 ms | 3.5 ms |
+| fleet | west.b0 | bits | accepted, wire identical to east.b0's | 6 port-windows carried | 5.5 ms | 4.0 ms |
+| fleet | west.b1 | extra | refused: `responses` window 2 | refused: `port west.b1.cert:out [12000, 18000)` | 9.8 ms | 3.4 ms |
+| fleet | all 8 ports | | | 22 port-windows carried, the two above refused; not sound: 88 bits + 4.8e12 | | |
+| fleet-swapped | east.b0 | bits | accepted, wire identical to west.b0's | 6 port-windows carried | 31.1 ms | 4.2 ms |
+| fleet-swapped | east.b1 | extra | refused: `responses` window 2 | refused: `port east.b1.cert:out [12000, 18000)` | 31.0 ms | 4.2 ms |
+| fleet-swapped | west.b0 | honest | accepted | 6 port-windows carried | 5.4 ms | 4.3 ms |
+| fleet-swapped | west.b1 | late | refused: `responses` window 0 | refused: `port west.b1.cert:out [0, 6000)` | 9.8 ms | 3.6 ms |
+| fleet-swapped | all 8 ports | | | 22 port-windows carried, the two above refused; not sound: 88 bits + 4.8e12 | | |
+
+The verdicts are the single site's, block for block. What the WAN adds:
+- **To δ, nothing.** A frame's release is counted in buckets from its anchor, the bucket its request entered at the
+  block's own certifier, and the frame is handed at that certifier, so both ends of δ are at the block's uplink and the
+  WAN is outside it. Every block on both sites declared the same sync, δ = 3 buckets at ρ = 1, and was accepted or
+  refused for the same reasons.
+- **To what the peer sees, the WAN's 20 ms and the far site's hops.** Each bucket reached `na-ext0` a median 31.1 ms
+  after its tick from an east block, against 5.5 ms from the west block on `west.leaf0` and 9.8 ms from the one behind
+  the spine: from an east certifier the path is the WAN and four 2 ms fabric hops, 28 ms, against the west ones' 4 ms
+  and 8 ms. The fastest of three pings from `na-ext0` took 57.0 ms and 55.0 ms to the east certifiers and back, against
+  7.9 ms and 16.1 ms to the west ones.
+- **To the requests' lead, most of it.** The Program sends each request half a bucket, 50 ms, before the tick that
+  enqueues it. From `na-ext0` to an east certifier is 28 ms one way, plus up to 4 ms of jitter and at most 1.65 ms of
+  the peer's own lateness, which leaves about 16 ms. Every request entered its declared bucket on both sites, since
+  every honest and `bits` block's ingress records were carried. Past about 35 ms of WAN one way, requests would land a
+  bucket late and an honest block's ingress records would be refused, unless the Program sent them earlier.
+- **To the proxy's slack, nothing.** The latest tick in the fleet's runs was 4.3 ms late against the 25 ms slack, as on
+  one site. The slack bounds the proxy's own scheduling on its host, which the WAN doesn't touch.
+
+The night before, `r20261018-110501-432f`, ran the same fleet with the WAN between two certifiers of their own, one on
+each spine, that watched no block: the same verdicts, and each east path 4 ms longer for the two hops to and from them
+(a median wire lag of 35.3 ms).
+
 ## Limits
 
 - All the processes share one host's monotonic clock, so one origin times every proxy. Blocks on separate hosts would
@@ -91,6 +209,9 @@ certifier verdicts: `r20261018-065536-38c4`, before the declarations, and `r2026
 - `datacenter.Cadence` holds one cadence for both directions. The lab's egress and ingress agree on frame size, bucket
   and window, which `records.cadence` checks, but not on the frames per bucket (2 out, 1 in), which `Cadence` doesn't
   hold.
+- `active_replay`'s Program has one outside peer per link, so a fleet's traffic between sites is a block and the
+  outside host, across the WAN. A Program in which a block on one site talks to a block on the other would need the
+  far block, behind its own certifier, as a link's peer.
 
 ## Serving a workload on the lab
 
@@ -114,3 +235,41 @@ Run `r20261018-084303-dae6`, on vy-nebius-cpu-2 with the lab up in its default s
 The latest proxy tick was 4.1 ms late against the 25 ms slack. Each first event left its block at most 186 ms after its
 request, against δ's 1.2 s, and each bucket reached the client a median 5.4 ms after its tick from the blocks on
 `na-leaf0` and 9.8 ms from those behind the spine.
+
+## The whole night
+
+`verity bench network_sim --out DIR` runs `run.py`, the night on the lab host in one process tree. `verity` isn't on
+vy-nebius-cpu-2's path, so there it is `python3 benchmarks/network_sim/run.py --out DIR`. It runs five things in turn:
+- the accounting layer's demo (`python -m datacenter.demo`, `DIR/demo.txt`);
+- the mock datacenter in five blocks, which take the five strategies, once plain and once with the salt;
+- the fleet (`up --fleet --blocks 2`), twice, with the first four strategies swapped between the sites
+  (`run.MOCKDC_RUNS`);
+- with the lab back in its default shape, lab_run's honest, `b1:flip-bit` and `b2:late` runs;
+- the summary.
+
+lab_run runs in a Python with torch: the one `--python` names, else `run.py`'s own if it has torch, else one built
+with `uv` in a scratch directory. `run.py` refuses to start while a process runs in a lab namespace. However it ends,
+it leaves the lab up in its default shape.
+
+`DIR/summary.txt` has a row per block of each run with:
+- the certifier's verdicts, and the salt check's;
+- the record check's verdicts, or N3's;
+- the account's covert budget;
+- the median lag from a bucket's tick to its bytes reaching the peer;
+- the latest proxy tick against the slack.
+
+Each mockdc run has one more row, `all`, for its record check on every port. The answers and the night's worst tick
+follow the rows. `DIR/summary.json` has the same. The exit status is 1 if a verdict or an answer isn't the expected one
+(`run.expected_block`, `run.expected_records`, `run.WORKLOAD`), a step exited nonzero, or a tick ran past its slack.
+
+~~~sh
+research run --on vy-nebius-cpu-2 --project verity --source . --cwd source --timeout 90m -- \
+  bash -c 'python3 -B benchmarks/network_sim/run.py --out "$OUT"'
+~~~
+
+Run `r20261018-112635-7b3b` exited 0. It took 6.5 minutes on vy-nebius-cpu-2 and gave every expected verdict, the
+tables above. Each mockdc run's check on every port refused exactly what its blocks' own checks refused. With the
+salt, b4's proxy revealed the salts of windows 0 and 2 only. Its record check under the plan was unchanged, and the
+certifier's salt check, like its audit, found nothing for window 1. The latest proxy tick was 4.4 ms late against the
+25 ms slack. `run.py`'s tests render the summary of `r20261018-110501-432f`, the night before, and the night before
+the fleet was `r20261018-102319-bb80`.
