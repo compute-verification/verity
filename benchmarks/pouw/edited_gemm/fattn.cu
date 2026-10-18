@@ -147,9 +147,10 @@ template <bool H1> DEV void hm_body(const FaArgs& a) {
     else htail<L>(ml, acc, ch);
     const int row0 = tm * 128 + wm * 32 + g, col0 = tn * 128 + wn * 32 + 2 * q;
     // any-s (s a multiple of 256, not only a power of 2): a query column's position is col mod s, and the column's rep
-    // block is 128-aligned, so pos = (tn mod tiles per block) 128 + the column's offset in the tile, reusing the causal
-    // tile test's one modulo (no per-column & (s - 1), which only holds for a power-of-2 s)
-    const int tnm = tn % (a.s / 128), posb = tnm * 128 + wn * 32 + 2 * q;
+    // block is 128-aligned, so pos = (tn mod tiles per block) 128 + the column's offset in the tile. The table carries
+    // that (tn mod tiles per block) in .w (host-side), so the device does no modulo (no per-column & (s - 1), which only
+    // holds for a power-of-2 s, and no runtime integer division, which the SASS gate's int seed doesn't always match)
+    const int tnm = te.w, posb = tnm * 128 + wn * 32 + 2 * q;
     int* mc = a.M + (size_t)kvh * a.rep * a.s + col0;
     // a tile strictly below the diagonal needs no key <= pos test (EDGE: the tiles that do)
     auto colmax = [&](auto edge_t) {
@@ -203,7 +204,7 @@ __global__ void __launch_bounds__(MLW::NT, 1) hsm(const __grid_constant__ FaArgs
     const int4 te = __ldg(a.tab + t);
     const int tm = te.x, tn = te.y, kvh = te.z;
     const int qr0 = tn * 128 + wm * 32 + g, k0 = tm * 128 + wn * 32 + 2 * q;
-    const int tnm = tn % (a.s / 128), posb = tnm * 128 + wm * 32 + g;   // any-s: query row position is col mod s, division-free
+    const int tnm = te.w, posb = tnm * 128 + wm * 32 + g;   // any-s: the query tile's rep-block position from the table (.w), so the device needs no modulo (SASS-clean)
     const size_t qb = (size_t)kvh * a.rep * a.s;
     int m[MI][2];
 #pragma unroll
@@ -345,8 +346,8 @@ static void fasetup(FA& F, int s, int H, int rep, uint32_t seed, bool gate, bool
   for (int k = 0; k < F.kvh; k++)
     for (int n = 0; n < tn; n++)
       for (int m = 0; m < tq; m++) {
-        hf.push_back(make_int4(m, n, k, 0));
-        if (m <= n % tq) F.htc.push_back(make_int4(m, n, k, 0));
+        hf.push_back(make_int4(m, n, k, n % tq));   // .w = the query tile's position within its rep block (any-s: so the device needs no modulo)
+        if (m <= n % tq) F.htc.push_back(make_int4(m, n, k, n % tq));
       }
   F.ntc = (int)F.htc.size(); F.ntf = (int)hf.size();
   int nsm;
