@@ -55,7 +55,8 @@
    "digest": "68ce0cf852f288923e7ba2879c1a6ecb92a012defbe6b431c1b6ebb6ffbbe3b3"
   },
   "Accounting.Assumptions.TS.FoldOptFolded": {
-   "owner": "@compute-accounting"
+   "owner": "@compute-accounting",
+   "digest": "38db890701f3ab49efb94b1b5ec5c4f7ab3eb9f577a3f6f1c9c97d4842d4e80b"
   },
   "Accounting.Assumptions.TS.LinSteer": {
    "owner": "@compute-accounting",
@@ -126,7 +127,8 @@
    "digest": "3a5cf6fec99a82206ca55ce1040805252587d207a2fad7f3d74e9cabf33b83e7"
   },
   "Accounting.Assumptions.TS.WholeLuckAt": {
-   "owner": "@compute-accounting"
+   "owner": "@compute-accounting",
+   "digest": "1e851edb0f896c3309adb12243fdcf80b215f4b90c1fe171da3489f24dac14bd"
   },
   "Accounting.Assumptions.TS.WordsWritten": {
    "owner": "@compute-accounting",
@@ -9597,6 +9599,26 @@
     "Accounting.SecurityProofs.TS.LinSteerFalse",
     "Accounting.SecurityProofs.TS.LinSteerSegments",
     "Accounting.SecurityProofs.TS.SegmentSteer"
+   ]
+  },
+  "Definitions.Accounting.TS.Unfolded": {
+   "digest": "db560d83d2af1e9493ba8784c7419e0683e495dee551d7f46b85c73d985293b9",
+   "definitions": {
+    "Accounting.TS.ReceiptGame.WholeLuck": "0fb26594c15b8d1762accc0966bed20f6c49edbfbf47555738dea92dfe950b1b",
+    "Accounting.TS.Unfolded": "18f50cc35425f194dd6c741f04e1a37fb1fa987adce501602f34c1643259c7f3",
+    "Accounting.TS.Unfolded.below": "fb0bf2f6cac9316770d83c85d945374b1a7cec4cee81eadfa5153a85b966ec3a",
+    "Accounting.TS.Unfolded.brecOn": "07bdb8dabf47e3097caaa1e26492b2029785baa0205ac65fbb5b9afb0850702d",
+    "Accounting.TS.Unfolded.brecOn.go": "c03d5b2ec2a629743f46156746aad3931a993da9228b9087007949c048d84e86",
+    "Accounting.TS.Unfolded.casesOn": "959aebf46603f06e92de62c1f0366ccaee8dae1cad6c3115b46967dc248aba42",
+    "Accounting.TS.Unfolded.done": "8a82b6f9e28adc63f0029cf2618157d69f424a2770807c7fe8b8a831d5b82681",
+    "Accounting.TS.Unfolded.rec": "bb7c868ff6b06c922d8ffe2e35efdbbe95cfc1e5e47678cb1d321464049f3ece",
+    "Accounting.TS.Unfolded.round": "7d37232d94dabc302c97bc664c8b1e986e5ee1578f7e8e582682e288e324bb86",
+    "Accounting.TS.Unfolded.share": "378870a4b597b08fc1c4a5ae28c39f9eb10c60ab9486286b57d4b2e25804b50d"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
+    "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
+    "Accounting.SecurityProofs.TS.Sm80SheetHeadline"
    ]
   },
   "Definitions.Accounting.Tag.PolyHash": {
@@ -20080,12 +20102,13 @@
    ]
   },
   "Models.Accounting.Assumptions.TS": {
-   "digest": "1b8c9a8c003b60be30332c9d1a35be8aff40e5dac04460b8286a9923d655c986",
+   "digest": "44f77b5adb859560f6e338d52baf3cf9039ddb4f2e2ddcdf460755f7269ec41d",
    "definitions": {
     "Accounting.Assumptions.TS.FacetCeilings": "fa76dfe63e705d955b2dec4c6d8e3b6826c2bf36058b476ef8f1b7a8bb7c0d3b",
     "Accounting.Assumptions.TS.FanIn": "58d244d68b77d25572471c47056a7c4eac1f9e128db1d335c3cf3fc9a8414b71",
     "Accounting.Assumptions.TS.FillOpt": "32e6f1ad9b1cd5704affa13c87dae03fad67a20aa3acd62efdde326a1702a503",
     "Accounting.Assumptions.TS.FoldOpt": "68ce0cf852f288923e7ba2879c1a6ecb92a012defbe6b431c1b6ebb6ffbbe3b3",
+    "Accounting.Assumptions.TS.FoldOptFolded": "38db890701f3ab49efb94b1b5ec5c4f7ab3eb9f577a3f6f1c9c97d4842d4e80b",
     "Accounting.Assumptions.TS.LinSteer": "d35cd62dcdb221885081311e5039c9b69c00ef1cd32a3f539093bc8496a74d5e",
     "Accounting.Assumptions.TS.LuckAt": "28ff53f429206bbd8f8447d74044812a42bfe9123fb10443321873882cb02cac",
     "Accounting.Assumptions.TS.NoSum": "b15287f80f20515d6d017205278b5209546abfab825e4f5e01da4875e74b2fda",
@@ -20095,6 +20118,7 @@
     "Accounting.Assumptions.TS.RightFixed": "d17ab6dafa91dbbf183e5a1221cd1f8fc26fb93ebb1b21e83117ef2337a454f2",
     "Accounting.Assumptions.TS.ScalarRoute": "414a164b2927884959719a19f4157ef08125017896884da53459996b1212b5bd",
     "Accounting.Assumptions.TS.SideUnits": "36404ba2e20a614ee48738159240c66e7f023670dba8cf261be8b3b73921e179",
+    "Accounting.Assumptions.TS.WholeLuckAt": "1e851edb0f896c3309adb12243fdcf80b215f4b90c1fe171da3489f24dac14bd",
     "Accounting.Assumptions.TS.WordsWritten": "f25002293156695a436d17dbd4ddccf594544b7187a569385947d7dc90dcecf7"
    },
    "guarantees": [
@@ -20359,11 +20383,11 @@
    ]
   },
   "Models.Accounting.Guarantees.Headline": {
-   "digest": "def530d5e86be8d418e94b93614a9d05107603fb69b46d904208302f187f83a0",
+   "digest": "1f40c9982f9efe13b8c9286ec22dcbadb54cf96ecdad3ebdc9e2b5cf5f81c838",
    "definitions": {
-    "Accounting.Guarantees.TS.Sm120MeasuredHeadline": "758f2abbb4abdb797f1284499b9c12cacfa2193f72e5b9e7a0977e3ba90876db",
-    "Accounting.Guarantees.TS.Sm120SheetHeadline": "ee3c2241e74ab27053a8294ad56c4a3bbc4f18ef467c05ad3030939f31824854",
-    "Accounting.Guarantees.TS.Sm80SheetHeadline": "d66c403cb71ae9974723c66e2a4fe8e5b987521bc6dba5a5a7f6277fdfa94d5b"
+    "Accounting.Guarantees.TS.Sm120MeasuredHeadline": "4a7d7964f9280bd0f273288ca4a3b9400cf6ec47a250e7ade7a8bf384e8bf31e",
+    "Accounting.Guarantees.TS.Sm120SheetHeadline": "a80270e62833e53ab17071e6afadc2d374dea015c28002039c8a62821d9015d1",
+    "Accounting.Guarantees.TS.Sm80SheetHeadline": "056df789b45040b17b1f6cc755e2f4fb718687751ad2d2d212be873e9bd0c89b"
    },
    "guarantees": [
     "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
