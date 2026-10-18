@@ -9,6 +9,8 @@ For each library and each k of `--ks`:
            b_j(c_a), which a re-key draws afresh)
   rekey    `kv_encode_bound` in place over `--pages` scattered pages of `--page-blocks` token-layers each, one call a
            page (a vLLM block of 16 tokens is 16 token-layers a layer; the re-key encodes a page where it is)
+  rekey_streams  the same calls spread round-robin over `--streams` CUDA streams: a page's call is too small to fill
+           the GPU (each word is one serial chain of squarings), so one stream runs at the chain's latency
 each checked first: the bound encode decodes back under its offsets. Writes encode_rate.json under `--out`.
 """
 from __future__ import annotations
@@ -40,6 +42,7 @@ def main() -> int:
     ap.add_argument("--pages", type=int, default=2048)
     ap.add_argument("--page-blocks", type=int, default=16)
     ap.add_argument("--reps", type=int, default=5)
+    ap.add_argument("--streams", type=int, default=32)
     a = ap.parse_args()
     import torch
 
@@ -85,7 +88,21 @@ def main() -> int:
                     p = B.ptr(out) + s * block_bytes
                     lib.call("kv_encode_bound", p, p, pw, s * w, k, B.ptr(offs) + s * f.word_bytes, 0, st)
 
+            side = [torch.cuda.Stream() for _ in range(a.streams)]
+
+            def rekey_streams() -> None:
+                cur = torch.cuda.current_stream()
+                for sd in side:
+                    sd.wait_stream(cur)
+                for i, s in enumerate(starts):
+                    p = B.ptr(out) + s * block_bytes
+                    lib.call("kv_encode_bound", p, p, pw, s * w, k, B.ptr(offs) + s * f.word_bytes, 0,
+                             side[i % len(side)].cuda_stream)
+                for sd in side:
+                    cur.wait_stream(sd)
+
             t_rekey = statistics.median(B.timed(torch, rekey, a.reps))
+            t_streams = statistics.median(B.timed(torch, rekey_streams, a.reps))
             rk_blocks = len(starts) * pg
             chain = r["rates"]["encode"][k]["per_s"]
             r["k"][k] = {"bound_round_trip": ok,
@@ -93,10 +110,11 @@ def main() -> int:
                          "store_blocks_s": n_blocks / t_store, "store_GBps": n_blocks * block_bytes / t_store / 1e9,
                          "bound_blocks_s": n_blocks / t_bound, "bound_GBps": n_blocks * block_bytes / t_bound / 1e9,
                          "rekey_blocks_s": rk_blocks / t_rekey, "rekey_GBps": rk_blocks * block_bytes / t_rekey / 1e9,
+                         "rekey_streams_blocks_s": rk_blocks / t_streams, "rekey_streams": a.streams,
                          "rekey_pages": len(starts), "rekey_page_blocks": pg}
             log(f"{name} k={k}: bound round trip {'ok' if ok else 'FAIL'}; blocks/s chain {chain / w:.3e}, store "
                 f"{n_blocks / t_store:.3e}, bound {n_blocks / t_bound:.3e}, re-key in place {rk_blocks / t_rekey:.3e} "
-                f"({len(starts)} pages of {pg})")
+                f"({len(starts)} pages of {pg}), on {a.streams} streams {rk_blocks / t_streams:.3e}")
         res["libs"][name] = r
         del store, out, back, offs
         torch.cuda.empty_cache()
