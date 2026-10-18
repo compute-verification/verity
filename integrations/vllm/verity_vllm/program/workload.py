@@ -31,7 +31,8 @@ from verity.ml.circuits.defs import Body, CompositeDefinition, Node, Specialized
 from verity.ml.circuits.constants import REGISTRATION
 from verity.ml.circuits.program import Program, is_input
 from verity.ml.circuits.refs import Affine, Coll, Concat, Explicit, PartLog, Refs, Strided, coll_concat, concat
-from verity.ml.circuits.types import Tuple as TupleT, Type
+from verity.ml.circuits.types import Array, Tuple as TupleT, Type
+from verity_vllm.program import launch_units as LU
 from verity_vllm.program.sampling_event import is_sampling_event
 
 SCHEMA = "verity/workload-program/v1"
@@ -137,6 +138,7 @@ class RequestComponent:
     step_nodes: tuple[tuple[int, int], ...] = ()  # request-relative step s -> body node range [lo, hi) (segments ending at TokenSelect_v1, X-09's unit)
     step_gates: tuple[tuple[int, int], ...] = ()  # the same in component-local gates
     bindings: tuple[str, ...] = ()  # each component parameter's binding time (`verity.ml.circuits.constants`: registration or run)
+    schedule: tuple[dict, ...] = ()  # its align calls' `schedule` records (the Build's `tp.schedule.record`; `launch_units`)
 
     def to_json(self) -> dict:
         return {"specialization": _spec_id(self.fn), "program_digest": self.program_digest, "program_fn": self.program_fn,
@@ -343,34 +345,51 @@ def _shared_positions(S) -> list[tuple[int, ...]]:
 
 def _workload_signature(S):
     """params = the shared group's Input batches ONCE (`shared.<name>`, from request 0 — all requests agree by construction),
-    then every request's non-shared batches (`request[<id>].<name>`), manifest order; ret = tuple of the requests' outputs."""
+    then every request's non-shared batches (`request[<id>].<name>`), manifest order, then the launch units' ids and keys
+    (`launch_units.launch_params`); ret = tuple of the requests' outputs.  A request with linked align calls keeps only the key words
+    of its `schedule` as a root input (none when it has no keys): the rest are its units' outputs."""
     reqs = S.requests
     pos = _shared_positions(S)
+    units = getattr(S, "launches", ())
+    segs = LU.linked_segments(units)
     p0 = reqs[0]["fn"].signature()[0]
     params = [(f"shared.{p0[j][0]}", p0[j][1]) for j in pos[0]]
     rets = []
-    for r, sh in zip(reqs, pos):
+    for i, (r, sh) in enumerate(zip(reqs, pos)):
         ps, ret = r["fn"].signature()
         shared = set(sh)
         for j, (pn, pt) in enumerate(ps):
-            if j not in shared:
+            if j in shared:
+                continue
+            if pn == LU.SCHEDULE and i in segs:
+                pt = Array(LU.key_words(pt.n, segs[i]), pt.elem) if LU.key_words(pt.n, segs[i]) else None
+            if pt is not None:
                 params.append((f"request[{r['request_id']}].{pn}", pt))
         rets.append(ret)
-    return tuple(params), TupleT(rets)
+    return tuple(params) + tuple(LU.launch_params(units)), TupleT(rets)
 
 
 def _workload_body(B, S, *args):
     reqs = S.requests
     pos = _shared_positions(S)
+    units = getattr(S, "launches", ())
+    segs = LU.linked_segments(units)
+    lo = len(args) - 2 * len(units)
+    blocks = [LU.unit_blocks(B, u, args[lo + 2 * n], args[lo + 2 * n + 1]) for n, u in enumerate(units)]
     k = len(pos[0])
     outs = []
-    for r, sh in zip(reqs, pos):
+    for i, (r, sh) in enumerate(zip(reqs, pos)):
         ps, _ = r["fn"].signature()
         shared = {j: args[m] for m, j in enumerate(sh)}   # the m-th shared position of THIS request -> the m-th shared Input batch
         a = []
-        for j in range(len(ps)):
+        for j, (pn, pt) in enumerate(ps):
             if j in shared:
                 a.append(shared[j])
+            elif pn == LU.SCHEDULE and i in segs:
+                keys = None
+                if LU.key_words(pt.n, segs[i]):
+                    keys, k = args[k], k + 1
+                a.append(LU.schedule_arg(pt.n, keys, segs[i], blocks))
             else:
                 a.append(args[k])
                 k += 1
@@ -392,6 +411,11 @@ WORKLOAD = CompositeDefinition("Workload", 1, ("requests", "shared", "lag"), _wo
                                    "(request Programs as components, manifest order); output = tuple of the requests' bounded "
                                    "output interfaces; `lag` = the declared scheduler's post-EOS rows (R17-1: served output length "
                                    "a_r, executed prefix a_r + lag on an EOS stop before the cap)", conformance="exact-model-tested", register=False)
+WORKLOAD_V2 = CompositeDefinition("Workload", 2, ("requests", "shared", "lag", "launches"), _workload_signature, _workload_body,
+                                  doc="Workload_v1 with its shared MoE align launches computed once (`launch_units`): each unit's "
+                                      "MoeAlignRanks_v1 and MoeAlignBlocks_v1 over every pair of the launch, before the request calls, "
+                                      "its blocks and block count wired into each member's `schedule` at the member's slots",
+                                  conformance="exact-model-tested", register=False)
 
 
 def served_lengths_rule(lag: int) -> dict:
@@ -458,18 +482,23 @@ class WorkloadProgram:
         self.manifest_digest = manifest_digest
         self.ordering = ordering
         self.lag = int(lag)
+        self.launches = LU.launch_units(self.requests)
         # the static keeps the historical ONE-tuple form when uniform (every existing workload digest unchanged) and becomes one
         # tuple per request only when the positions differ (a distinct, self-describing encoding); `lag` [R17-1] is the third static:
-        # every workload digest differs per declared value (and from every pre-R17-1 digest: those Programs declared no lag)
-        self.fn = WORKLOAD.bind(requests=tuple(r.static() for r in self.requests), shared=shared_idx if uniform else tuple(idx), lag=self.lag)
+        # every workload digest differs per declared value (and from every pre-R17-1 digest: those Programs declared no lag); a workload
+        # with shared align launches is Workload_v2, the units its fourth static
+        statics = {"requests": tuple(r.static() for r in self.requests), "shared": shared_idx if uniform else tuple(idx), "lag": self.lag}
+        self.fn = WORKLOAD_V2.bind(**statics, launches=self.launches) if self.launches else WORKLOAD.bind(**statics)
         self.program = Program(self.fn, annotations={"schema": SCHEMA, "manifest_digest": manifest_digest}, registered=self.registered)
         self.descriptor = encode_program(self.program)  # encoded ONCE (every component definition is re-encoded: the dominant cost)
         self.digest = program_digest(self.descriptor)
-        # sanity: hierarchical — one call node per request, in manifest order, after the Input nodes
+        # sanity: hierarchical — one call node per request, in manifest order, after the Input nodes and the launch units' nodes
         body = self.program.root.body
         self._K = sum(1 for nd in body.nodes if _is_input_node(nd))
-        calls = body.nodes[self._K:]
-        assert len(calls) == len(self.requests) and all(nd.form == "call" for nd in calls), "workload root is not [inputs..., call per request]"
+        self._C = len(body.nodes) - len(self.requests)
+        calls = body.nodes[self._C:]
+        assert self._C - self._K == sum(u["P"] + 2 for u in self.launches) and all(nd.form == "call" for nd in calls), \
+            "workload root is not [inputs..., launch units..., call per request]"
         for r, nd in zip(self.requests, calls):
             assert nd.fn is r.component.fn
             if nd.fn.gates != r.component.body_gates:
@@ -490,23 +519,28 @@ class WorkloadProgram:
         S = len(self.shared)
         inputs = []
         for j in range(self._K):
-            owner = "shared" if j < S else params[j][0].split("].", 1)[0][len("request["):]
+            owner = "shared" if j < S else "launch" if params[j][0].startswith("launch[") else params[j][0].split("].", 1)[0][len("request["):]
             inputs.append({"root_node": j, "param": params[j][0], "type": str(params[j][1]), "gates": [body.offsets[j], body.offsets[j + 1]], "owner": owner})
         shared_gates = [body.offsets[0], body.offsets[S]]
         reqs = []
         pi = S
+        segs = LU.linked_segments(self.launches)
         for r_i, r in enumerate(self.requests):
-            k = self._K + r_i
+            k = self._C + r_i
             G = body.offsets[k]
             c = r.component
             local_inputs = []
             sh_r = self.shared_by_request[r_i]
             for j, (pn, pt) in enumerate(c.params):
+                linked = {"linked": [{"word": off, "unit": u, "slot": slot, "pairs": pairs} for off, u, slot, pairs in segs[r_i]]} \
+                    if pn == LU.SCHEDULE and r_i in segs else {}
                 if j in sh_r:
                     s = sh_r.index(j)
                     local_inputs.append({"local_param": j, "name": pn, "global": params[s][0], "root_node": s, "gates": [body.offsets[s], body.offsets[s + 1]]})
+                elif linked and not LU.key_words(pt.n, segs[r_i]):
+                    local_inputs.append({"local_param": j, "name": pn, "global": None, **linked})
                 else:
-                    local_inputs.append({"local_param": j, "name": pn, "global": params[pi][0], "root_node": pi, "gates": [body.offsets[pi], body.offsets[pi + 1]]})
+                    local_inputs.append({"local_param": j, "name": pn, "global": params[pi][0], "root_node": pi, "gates": [body.offsets[pi], body.offsets[pi + 1]], **linked})
                     pi += 1
             reqs.append({"request_id": r.request_id, "index": r.index, "root_node": k, "specialization": _spec_id(c.fn),
                          "program_digest": c.program_digest, "gates": [G, G + c.body_gates], "local_input_gates": c.input_gates,
@@ -521,7 +555,21 @@ class WorkloadProgram:
                 "convention": "gate index in the canonical layout of the workload root (verity.ml.circuits.layout.Circuit); hierarchical path "
                               "root/node[k]/node[i]... for instances; Input gates first in root-parameter order (the shared group once, "
                               "then each request's own), then one call node per request in manifest order",
-                "inputs": inputs, "requests": reqs}
+                "inputs": inputs, "requests": reqs,
+                **({"launches": self.launch_map()} if self.launches else {})}
+
+    def launch_map(self) -> list[dict]:
+        """Each launch unit (`launch_units`): its statics, root nodes and gates, and its members' slots and `schedule` words.  The
+        link records bind its `ids` input at a member's slots to that member's router ids at its align call `k`."""
+        body, out, n = self.program.root.body, [], self._K
+        for u_i, u in enumerate(self.launches):
+            m = u["P"] + 2
+            out.append({"unit": u_i, "e": u["e"], "j": u["j"], "E": u["E"], "BM": u["BM"], "P": u["P"], "root_nodes": [n, n + m],
+                        "gates": [body.offsets[n], body.offsets[n + m]],
+                        "members": [{"request_id": self.requests[i].request_id, "align_call": k, "word": off, "slot": slot, "pairs": pairs}
+                                    for i, k, off, slot, pairs in u["members"]]})
+            n += m
+        return out
 
     # -- chronology: declared, programmed, bounded --------------------------------------------------
     def chronology(self) -> dict:
@@ -553,7 +601,7 @@ class WorkloadProgram:
                 s = e - r.arrive_step
                 if 0 <= s <= r.cap - 1:
                     c = r.component
-                    G = body.offsets[self._K + r_i]
+                    G = body.offsets[self._C + r_i]
                     seg = c.step_nodes[s] if s < len(c.step_nodes) else None
                     members.append({"request_id": r.request_id, "s": s, "phase": "prefill" if s == 0 else "decode",
                                     "nodes": list(seg) if seg else None,
@@ -598,17 +646,22 @@ class WorkloadProgram:
     def population(self) -> dict:
         """G-population, Program side (COORD 17:36Z §3): the global gate population = the shared/request prescribed inputs + the
         request subcircuits' populations, and nothing else; the component intervals partition the non-input gates exactly, every
-        gate has one global address, and the only genuinely global computation is the (gate-free) output tuple wiring."""
+        gate has one global address, and the only genuinely global computation is the (gate-free) output tuple wiring.  A workload
+        with shared align launches adds their units' gates between the inputs and the components, and nothing else."""
         body = self.program.root.body
-        K = self._K
-        comp = [(body.offsets[K + i], body.offsets[K + i + 1]) for i in range(len(self.requests))]
-        contiguous = all(comp[i][1] == comp[i + 1][0] for i in range(len(comp) - 1)) and (not comp or comp[0][0] == body.offsets[K]) \
+        K, C = self._K, self._C
+        comp = [(body.offsets[C + i], body.offsets[C + i + 1]) for i in range(len(self.requests))]
+        contiguous = all(comp[i][1] == comp[i + 1][0] for i in range(len(comp) - 1)) and (not comp or comp[0][0] == body.offsets[C]) \
             and (not comp or comp[-1][1] == body.gates)
-        return {"root_nodes": len(body.nodes), "input_batches": K, "component_calls": len(self.requests), "other_root_nodes": len(body.nodes) - K - len(self.requests),
+        launch = body.offsets[C] - body.offsets[K]
+        return {"root_nodes": len(body.nodes), "input_batches": K, "component_calls": len(self.requests), "other_root_nodes": C - K,
                 "gates": body.gates, "input_gates": body.offsets[K], "component_gates": sum(b - a for a, b in comp),
-                "sum_equals_total": body.offsets[K] + sum(b - a for a, b in comp) == body.gates, "components_partition_non_input_gates": contiguous,
+                "sum_equals_total": body.offsets[K] + launch + sum(b - a for a, b in comp) == body.gates, "components_partition_non_input_gates": contiguous,
                 "component_intervals": comp, "shared_input_gates": [body.offsets[0], body.offsets[len(self.shared)]],
-                "global_control_computation": "none with gates: the output interface is the tuple of the components' outputs (reference wiring only)",
+                "global_control_computation": "none with gates: the output interface is the tuple of the components' outputs (reference wiring only)"
+                if not self.launches else f"the {len(self.launches)} shared align launches' units ({launch} gates, `launch_map`), whose "
+                                          f"blocks and block counts the member requests read; the output interface is reference wiring only",
+                **({"launch_gates": launch} if self.launches else {}),
                 "unique_addresses": "every gate index in [0, gates) belongs to exactly one root node (canonical layout)"}
 
     def artifact(self) -> dict:
