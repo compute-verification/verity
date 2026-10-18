@@ -20,9 +20,10 @@ enum { VC_ROW_NONE = 0, VC_ROW_V2 = 1, VC_ROW_SEG = 2, VC_ROW_TILE = 3 };
 // CHACHA64: ChaCha20 blocks 3 pos .. 3 pos + 2, 64-bit counter and 64-bit nonce (audit.hm96_salt). CHACHA_RFC: RFC 8439's
 // 32-bit counter and 12-byte nonce (verity_vllm's serving_rows.salts), the stream at 192 pos.
 enum { VC_SALT_GIVEN = 0, VC_SALT_PRF = 1, VC_SALT_CHACHA64 = 2, VC_SALT_CHACHA_RFC = 3 };
-// vc_commit_rows_launch's forms: AUTO picks by device and size; SPLIT is the salt kernel then the data kernel; FUSED one kernel
-// a leaf (salt, mask from the nibble table through L1, row, leaf).
-enum { VC_FORM_AUTO = 0, VC_FORM_SPLIT = 1, VC_FORM_FUSED = 2 };
+// vc_commit_rows_launch's forms: AUTO picks by device and size; SPLIT is the salt kernel, the data kernel, then the tree's level
+// launches; FUSED one kernel a leaf (salt, mask from the nibble table through L1, row, leaf), then the tree; FOLD the salt kernel
+// then one data kernel that also folds the tree (each CTA its 256 leaves' subtree, the last of two siblings climbing on).
+enum { VC_FORM_AUTO = 0, VC_FORM_SPLIT = 1, VC_FORM_FUSED = 2, VC_FORM_FOLD = 3 };
 
 typedef struct {
   const uint8_t* domain_id;     // 64 bytes: CommitmentDomain.domain_id of a frame-v3-sha512 domain

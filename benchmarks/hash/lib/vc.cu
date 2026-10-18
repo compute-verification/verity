@@ -121,6 +121,15 @@ DEV void ld_be_written(const uint8_t* p, u64* d, int n) {
     d[2 * i + 1] = be64(v.z, v.w);
   }
 }
+// ld_be through L2 only, for what another CTA of this launch wrote before a fence
+DEV void ld_be_cg(const uint8_t* p, u64* d, int n) {
+#pragma unroll
+  for (int i = 0; i < n / 2; ++i) {
+    const uint4 v = __ldcg(reinterpret_cast<const uint4*>(p) + i);
+    d[2 * i] = be64(v.x, v.y);
+    d[2 * i + 1] = be64(v.z, v.w);
+  }
+}
 DEV void st_be(uint8_t* p, const u64* d, int n) {
   uint4* o = reinterpret_cast<uint4*>(p);
 #pragma unroll
@@ -662,11 +671,11 @@ __global__ void __launch_bounds__(THREADS) k_row_seeds(const __grid_constant__ S
 }
 
 // The salt phase, a thread a position (sharaw's sr_salt8): M_key y from the byte table each CTA builds in shared memory from Tn,
-// c, the frame leaf's first block; a pad for n_total <= pos.
+// c, the frame leaf's first block; a pad for n_total <= pos. Thread i < n_ctr zeroes k_leaf_fold's counter i.
 template <int SX>
 __global__ void __launch_bounds__(256, 2) k_salt8(const __grid_constant__ LeafK K, const uint8_t* __restrict__ tab,
                                                   const uint8_t* __restrict__ salts, u64 first, u64 m, u64 n_total, u64* __restrict__ rec,
-                                                  uint8_t* __restrict__ lv0) {
+                                                  uint8_t* __restrict__ lv0, u32* __restrict__ ctr, u64 n_ctr) {
   extern __shared__ uint4 T8[];
   const uint4* Tn = reinterpret_cast<const uint4*>(tab);
   for (int k = threadIdx.x; k < 256 * 16; k += blockDim.x) {
@@ -676,6 +685,7 @@ __global__ void __launch_bounds__(256, 2) k_salt8(const __grid_constant__ LeafK 
   }
   __syncthreads();
   const u64 i = (u64)blockIdx.x * blockDim.x + threadIdx.x;
+  if (i < n_ctr) ctr[i] = 0;
   if (i >= m) return;
   const u64 pos = first + i;
   if (pos < n_total) {
@@ -716,6 +726,69 @@ __global__ void __launch_bounds__(THREADS, VC_LEAF_MIN_BLOCKS)
   finish_leaf<SX>(K, pos, x, my, c, f, bc ? bc + 128 * i : nullptr, hs ? hs + 64 * i : nullptr);
   st_be(lv0 + 64 * i, f, 8);
 }
+
+// The data phase from the rows over the whole tree, its levels folded in (sharaw's sr_data): a CTA's cnt = min(width, THREADS)
+// leaves (the salt phase's pads past n), their subtree through shared memory, then thread 0 climbs while its CTA is the second
+// of two siblings to finish. ctr: a count a node above the CTAs' level (level L + 1's first), zeroed by the salt phase.
+template <int SX>
+__global__ void __launch_bounds__(THREADS, VC_LEAF_MIN_BLOCKS)
+    k_leaf_fold(const __grid_constant__ LeafK K, const __grid_constant__ NodeK N, const uint8_t* __restrict__ rows, u64 stride,
+                u64 n, u64 width, int depth, const u64* __restrict__ rec, uint8_t* levels, uint8_t* __restrict__ bc, u32* ctr) {
+  __shared__ u64 sm[THREADS * 8];
+  const u32 t = threadIdx.x, cnt = blockDim.x;
+  const u64 pos = (u64)blockIdx.x * cnt + t;
+  u64 o[8];
+  if (pos < n) {
+    u64 x[8], my[8], c[8];
+    hash_tail(K.mid_P, 128, rows + pos * stride, K.lb, x, K.xpad ? K.kw_xpad : nullptr);
+    const u64* r = rec + (REC / 8) * pos;
+    ld_w(r, my, 8);
+    ld_w(r + 8, c, 8);
+    ld_w(r + 16, o, 8);
+    finish_leaf<SX>(K, pos, x, my, c, o, bc ? bc + 128 * pos : nullptr, nullptr);
+    st_be(levels + 64 * pos, o, 8);
+  } else {
+    ld_be(levels + 64 * pos, o, 8);
+  }
+  cpy8(sm + 8 * t, o);
+  int L = 0;
+  while ((1u << L) < cnt) ++L;
+  u64 off = 0;   // level l's first node in levels
+  for (int l = 1; l <= L; ++l) {
+    off += width >> (l - 1);
+    __syncthreads();
+    const u32 m = cnt >> l;
+    u64 r[8];
+    if (t < m) node(N, l - 1, (u64)blockIdx.x * m + t, sm + 16 * t, sm + 16 * t + 8, r);
+    __syncthreads();
+    if (t < m) {
+      cpy8(sm + 8 * t, r);
+      st_be(levels + 64 * (off + (u64)blockIdx.x * m + t), r, 8);
+    }
+  }
+  if (t != 0 || L >= depth) return;
+  u64 cur[8], idx = blockIdx.x;
+  cpy8(cur, sm);
+  const u64 nL = width >> L;
+  for (int l = L; l < depth; ++l) {
+    const u64 p = idx >> 1;
+    u32* c = ctr + (nL - (width >> l)) + p;
+    __threadfence();
+    if (atomicAdd(c, 1u) == 0) return;   // the sibling's subtree isn't done: its CTA climbs on
+    __threadfence();
+    u64 sib[8], a[8], b[8], r[8];
+    ld_be_cg(levels + 64 * (off + (idx ^ 1)), sib, 8);
+    const bool right = idx & 1;
+#pragma unroll
+    for (int k = 0; k < 8; ++k) { a[k] = right ? sib[k] : cur[k]; b[k] = right ? cur[k] : sib[k]; }
+    node(N, l, p, a, b, r);
+    off += width >> l;
+    st_be(levels + 64 * (off + p), r, 8);
+    cpy8(cur, r);
+    idx = p;
+  }
+}
+u64 fold_ctrs(u64 width) { return width > THREADS ? width / THREADS - 1 : 0; }
 
 // Both phases a thread (native_rows' rows_leaf_kernel): the mask from the nibble table through L1.
 template <int SX, bool ROWS>
@@ -1198,8 +1271,8 @@ int vc_salts_launch(const void* plan, const void* tables, const uint8_t* salts, 
   if (!m) return 0;
   const auto t = static_cast<const uint8_t*>(tables);
   u64* r = static_cast<u64*>(scratch);
-  if (p->leaf.sx) k_salt8<4><<<blocks(m, 256), 256, T8_BYTES, st>>>(p->leaf, t, salts, first, m, n_total, r, lv0);
-  else k_salt8<0><<<blocks(m, 256), 256, T8_BYTES, st>>>(p->leaf, t, salts, first, m, n_total, r, lv0);
+  if (p->leaf.sx) k_salt8<4><<<blocks(m, 256), 256, T8_BYTES, st>>>(p->leaf, t, salts, first, m, n_total, r, lv0, nullptr, 0);
+  else k_salt8<0><<<blocks(m, 256), 256, T8_BYTES, st>>>(p->leaf, t, salts, first, m, n_total, r, lv0, nullptr, 0);
   return rc();
 }
 
@@ -1325,15 +1398,35 @@ int vc_tree_arity_launch(const void* plan, uint8_t* levels, uint64_t n_leaves, i
   return 0;
 }
 
-uint64_t vc_commit_scratch_bytes(uint64_t n) { return REC * n; }
+uint64_t vc_commit_scratch_bytes(uint64_t n) { return REC * n + (4 * fold_ctrs(vc_tree_width(n)) + 15) / 16 * 16; }
 
 int vc_commit_rows_launch(const void* plan, const void* tables, const uint8_t* rows, uint64_t stride, const uint8_t* salts,
                           uint64_t n, uint8_t* levels, uint8_t* bc, void* scratch, int form, cudaStream_t st) {
   const Plan* p = plan_of(plan);
-  if (!p || !p->has_hm96 || p->row.scheme != VC_ROW_V2) return -1;
+  if (!p || !p->has_hm96 || p->row.scheme != VC_ROW_V2 || n > (1ull << 32)) return -1;
+  if (form < VC_FORM_AUTO || form > VC_FORM_FOLD) return -1;
   if (!n) return vc_tree_launch(plan, levels, 0, st);
   const u64 width = vc_tree_width(n);
-  if (form == VC_FORM_AUTO) form = VC_FORM_SPLIT;
+  if (form == VC_FORM_AUTO) form = VC_FORM_FOLD;
+  if (form == VC_FORM_FOLD) {
+    if (!tables || !scratch) return -1;
+    const auto t = static_cast<const uint8_t*>(tables);
+    u64* r = static_cast<u64*>(scratch);
+    u32* ctr = reinterpret_cast<u32*>(static_cast<uint8_t*>(scratch) + REC * n);
+    const u64 nc = fold_ctrs(width);
+    const u32 cnt = (u32)(width < THREADS ? width : THREADS);
+    const int depth = depth_of(n);
+    if (p->leaf.sx) {
+      k_salt8<4><<<blocks(width, 256), 256, T8_BYTES, st>>>(p->leaf, t, salts, 0, width, n, r, levels, ctr, nc);
+      if (int e = rc()) return e;
+      k_leaf_fold<4><<<(unsigned)(width / cnt), cnt, 0, st>>>(p->leaf, p->node, rows, stride, n, width, depth, r, levels, bc, ctr);
+    } else {
+      k_salt8<0><<<blocks(width, 256), 256, T8_BYTES, st>>>(p->leaf, t, salts, 0, width, n, r, levels, ctr, nc);
+      if (int e = rc()) return e;
+      k_leaf_fold<0><<<(unsigned)(width / cnt), cnt, 0, st>>>(p->leaf, p->node, rows, stride, n, width, depth, r, levels, bc, ctr);
+    }
+    return rc();
+  }
   int e;
   if (form == VC_FORM_FUSED) {
     e = vc_leaves_fused_launch(plan, tables, rows, stride, nullptr, salts, 0, width, n, levels, bc, nullptr, st);

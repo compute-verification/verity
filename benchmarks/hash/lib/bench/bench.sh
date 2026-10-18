@@ -24,8 +24,10 @@ mkdir -p "$B/sr" "$B/nr"
   echo "fetch native_rows rc $?"
 } >> "$O/rc.txt" 2>&1
 sha256sum "$B/sr/benchmarks/hash/sharaw/sharaw.cu" "$B/sr/benchmarks/pouw/commit_gpu/commit_gpu.cuh" "$B/nr/native_rows.cu" > "$O/bench-sources.sha256" 2>&1
-nvcc -O3 --use_fast_math -std=c++17 -shared -Xcompiler -fPIC $GEN -Xptxas -v -DVERITY_ROWS_MIN_BLOCKS=2 "$B/nr/native_rows.cu" \
-  -o "$B/native_rows.so" > "$O/build-native.log" 2>&1 &
+# sharaw's flags, with the shared runtime: one CUDA runtime in the process with libvc's (a static one in the .so beside the
+# shared one segfaults once the arms are timed)
+nvcc -O3 --use_fast_math -std=c++17 -shared -Xcompiler -fPIC $GEN -cudart shared -Xptxas -v -DVERITY_ROWS_MIN_BLOCKS=2 \
+  "$B/nr/native_rows.cu" -o "$B/native_rows.so" > "$O/build-native.log" 2>&1 &
 nvcc -O3 -std=c++17 $GEN -cudart shared -Xptxas -v -DSHARAW_CU="\"$B/sr/benchmarks/hash/sharaw/sharaw.cu\"" $D/bench/rows.cu \
   -o "$B/vc_rows" -L"$LIBDIR" -lvc -Xlinker -rpath="$LIBDIR" -lnvidia-ml -ldl > "$O/build-bench-rows.log" 2>&1 &
 nvcc -O3 -std=c++17 $GEN -cudart shared -Xptxas -v $D/bench/pearl.cu -o "$B/vc_pearl" -L"$LIBDIR" -lvc -Xlinker -rpath="$LIBDIR" \

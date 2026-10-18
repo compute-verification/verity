@@ -259,6 +259,9 @@ def same_levels(got: list[list[bytes]], want) -> tuple[bool, str | None]:
     return True, None
 
 
+FORMS = ((vclib.FORM_SPLIT, "split"), (vclib.FORM_FUSED, "fused"), (vclib.FORM_FOLD, "fold"), (vclib.FORM_AUTO, "auto"))
+
+
 def case_hm96_rows(d: Dev, rng: random.Random, quick: bool) -> None:
     n_bits, schema = 32768, "hm96-sha512/row/v2"
     sources = [("prf", rng.randbytes(64)), ("given",), ("chacha64", rng.randbytes(32), rng.randrange(1 << 64)),
@@ -279,7 +282,7 @@ def case_hm96_rows(d: Dev, rng: random.Random, quick: bool) -> None:
             rp = d.up(packed(rows, st))
             sp = d.up(b"".join(ys)) if src[0] == "given" else None
             width = d.lib.tree_width(n)
-            for form, fname in ((vclib.FORM_SPLIT, "split"), (vclib.FORM_FUSED, "fused")):
+            for form, fname in FORMS:
                 lv = d.buf(d.lib.tree_bytes(n))
                 scratch, bc = d.buf(d.lib.commit_scratch_bytes(n)), d.buf(128 * n)
                 for _ in range(2):   # twice: the second call must not depend on the first's leftovers
@@ -298,6 +301,31 @@ def case_hm96_rows(d: Dev, rng: random.Random, quick: bool) -> None:
             got_bc, got_h = chunks(d.down(bc, 128 * n), 128), chunks(d.down(hs, 64 * n), 64)
             report("hm96/row-v2/phases", ok and got_bc == want_bc and got_h == want_h, salt=src[0], n=n, where=where,
                    bc_diff=first_diff(got_bc, want_bc), h_diff=first_diff(got_h, want_h))
+
+
+def case_fold_wide(d: Dev, rng: random.Random, quick: bool) -> None:
+    """The commit over trees of many CTAs (the fold's climb over 7 levels above its 256-leaf subtrees, siblings racing), short
+    rows to keep the reference cheap, from levels and scratch full of 0xFF, twice in a row."""
+    n_bits, schema = 1024, "hm96-sha512/row/v2"
+    for n in ((5000,) if quick else (20000, 32768)):
+        dom = domain(rng, n)
+        rows = rows_of(rng, n, n_bits)
+        ks = rng.randbytes(64)
+        leaves = [hm_leaf(dom, i, schema, sha512_row_v2_digest(r, n_bits), CG_REF.prf_salt(ks, i))[0] for i, r in enumerate(rows)]
+        want = tree_levels(dom, leaves)
+        plan = d.lib.plan(vclib.hm96_rows(dom.domain_id, n_bits, salt=("prf", ks), schema=schema))
+        tab = d.tables(plan)
+        st = stride_of(n_bits // 8)
+        rp = d.up(packed(rows, st))
+        width, size = d.lib.tree_width(n), d.lib.tree_bytes(n)
+        for form, fname in ((vclib.FORM_FOLD, "fold"), (vclib.FORM_SPLIT, "split")):
+            lv, sc = d.buf(size, 0xFF), d.buf(d.lib.commit_scratch_bytes(n), 0xFF)
+            ok_all, where = True, None
+            for _ in range(2):
+                d.lib.commit_rows_launch(plan.ptr, tab, rp, st, None, n, lv, None, sc, form, d.s)
+                ok, w = same_levels(levels_of(d.down(lv, size), width), want)
+                ok_all, where = ok_all and ok, where or w
+            report("hm96/row-v2/wide", ok_all, form=fname, n=n, width=width, where=where)
 
 
 def case_hm96_x(d: Dev, rng: random.Random, quick: bool) -> None:
@@ -498,7 +526,7 @@ def case_graph(d: Dev, rng: random.Random, quick: bool) -> None:
     rp = d.buf(st * n)
     width = d.lib.tree_width(n)
     ys = [CG_REF.prf_salt(ks, p) for p in range(n)]
-    for form, fname in ((vclib.FORM_SPLIT, "split"), (vclib.FORM_FUSED, "fused")):
+    for form, fname in FORMS:
         lv, sc = d.buf(d.lib.tree_bytes(n)), d.buf(d.lib.commit_scratch_bytes(n))
         graph = d.cuda.capture(d.s, lambda s: d.lib.commit_rows_launch(plan.ptr, tab, rp, st, None, n, lv, None, sc, form, s))
         ok_all = True
@@ -587,7 +615,7 @@ def case_open(d: Dev, rng: random.Random, quick: bool) -> None:
             sp = d.up(raw) if src[0] == "given" else None
             lv, bc = d.buf(d.lib.tree_bytes(n)), d.buf(128 * n)
             d.lib.commit_rows_launch(plan.ptr, tab, d.up(b"".join(rows)), 2 * n_words, sp, n, lv, bc, d.buf(d.lib.commit_scratch_bytes(n)),
-                                     vclib.FORM_SPLIT, d.s)
+                                     vclib.FORM_AUTO, d.s)
             ok_tree, where = same_levels(levels_of(d.down(lv, d.lib.tree_bytes(n)), d.lib.tree_width(n)), tree._levels)
             recs = open_records(d, plan, tab, None, bc, sp, lv, n, positions, graph=src[0] != "given")
             bad = check_openings(dom, tree.commitment, schema, recs, n, tree._levels[0], lambda p: ys[p], lambda p: bcs[p],
@@ -629,7 +657,8 @@ def case_open(d: Dev, rng: random.Random, quick: bool) -> None:
         report("open/frame", not bad, n=n, bad=bad or None)
 
 
-CASES = [case_sha512, case_compress, case_rows, case_frame, case_arity, case_hm96_x, case_hm96_rows, case_pearl, case_graph, case_open]
+CASES = [case_sha512, case_compress, case_rows, case_frame, case_arity, case_hm96_x, case_hm96_rows, case_fold_wide, case_pearl, case_graph,
+         case_open]
 
 
 def main() -> int:
