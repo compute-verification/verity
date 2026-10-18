@@ -2,8 +2,8 @@
 
 * the mHC's TileLang kernels leave no event, so each wrapper's allocations resolve to its Calls: layer 0's pre_broadcast to
   `MhcPreBroadcast_v1` and `MhcResidualBroadcast_v1`, each fused post_pre to the path and split count the step's tokens select, the
-  final call to `MhcPost_v1` and `HcHead_v1`; inputs are the previous call's outputs and the last all-reduce's, weights the
-  sublayer's by name;
+  final call's streams to `MhcPost_v1` and its head's allocation to `HcHead_v1`; inputs are the previous call's outputs and the last
+  all-reduce's, weights the sublayer's by name;
 * a call whose split buffer disagrees with the dispatch's NS, or whose weights the capture has no root for, is refused;
 * the KV compressors' `aten.mm.dtype` is the Build's f32-output cuBLAS GEMM on its captured route;
 * the fused q / kv RMSNorm launch is a `TritonBlockRMSNorm_v1` of each token's q row and of its kv row, refused off the wrapper's
@@ -138,13 +138,14 @@ def test_a_fused_post_pre_runs_the_path_and_splits_of_the_steps_tokens(T, NS, la
     assert [o.view.alloc for o in g.parts[0].operands] == [311, 402, 403, 404] + [ALLOC[n] for n, _, _ in _weights(1, "attn")]
 
 
-def test_the_final_call_is_the_post_then_the_head():
+def test_the_final_call_is_the_post_at_streams_then_the_head_at_its_allocation():
     ctx = _ctx(1)
     _run(_pre_broadcast(1), ctx)
     _run(_post_pre(1, 4, 400), ctx)
-    g = _run([_all_reduce(601, 1, "model.layers.0.ffn.experts"), *_empties("model", [view(700, (1, HC, H)), view(701, (1, H))])], ctx)
-    post, head = g.parts
+    post = _run([_all_reduce(601, 1, "model.layers.0.ffn.experts"), *_empties("model", [view(700, (1, HC, H))])], ctx)
     assert spec_label(post.spec) == "MhcPost_v1{HC=4,N=7168}" and [o.view.alloc for o in post.operands] == [601, 402, 403, 404]
+    assert [o.view.alloc for o in post.outputs] == [700]
+    head = _run(_empties("model", [view(701, (1, H))]), ctx)
     assert spec_label(head.spec) == "HcHead_v1{HC=4,H=7168,TH=128,EPS=1e-06,HC_EPS=1e-06}"
     assert [o.view.alloc for o in head.operands] == [700, ALLOC["model.hc_head_fn"], ALLOC["model.hc_head_scale"], ALLOC["model.hc_head_base"]]
     assert [o.view.alloc for o in head.outputs] == [701]

@@ -16,8 +16,11 @@ from dataclasses import dataclass
 
 from verity_vllm.observe.events import Root, ViewDesc
 from verity_vllm.observe.fold.patterns.collectives import ALL_REDUCE_OP
+from verity_vllm.observe.fold.patterns.cublas import CublasLinear, CublasMmF32Out
+from verity_vllm.observe.fold.patterns.fp8 import DynamicDeepGemmFp8Linear
 from verity_vllm.observe.fold.patterns.geometry import GeometryError, is_int, sub_rows
 from verity_vllm.observe.fold.patterns.kv_cache import kv_group_of
+from verity_vllm.observe.fold.patterns.norms import CudaRmsNorm
 from verity_vllm.observe.fold.patterns.ops import as_float, base_op, bound_args, op_name, triton_name
 from verity_vllm.observe.fold.patterns.resolutions import attribution_for, unsupported
 from verity_vllm.observe.fold.patterns.rotary import step_positions
@@ -118,8 +121,10 @@ class Mhc:
         fused post_pre            the splits' [NS,T,OUT] and [NS,T], then streams, post, comb, layer input
         the final mhc_post        streams, then hc_head's [T,H]
 
-    A call's last allocation resolves to its Computes, which write its outputs there.  Its inputs are the previous call's outputs and
-    the sublayer's output, the last all-reduce's received storage: the pattern runs ahead of `TpCollective`, records it and declines.
+    A call's last allocation resolves to its Computes, which write its outputs there, except the final call's: mhc_post resolves at
+    streams and hc_head at the head's, since the model drops the sublayer's output between them.  A call's inputs are the previous
+    call's outputs and the sublayer's output, the last all-reduce's received storage: the pattern runs ahead of `TpCollective`, records
+    it and declines.
     Layer L's first call is its attention's pre (`hc_attn_*`, `attn_norm`), its second the FFN's, each reading the sublayer's weights by
     name.  NS is the dispatch's at the step's tokens and must be the leading extent of the split buffer the wrapper allocated."""
 
@@ -141,10 +146,11 @@ class Mhc:
         if pend and pend[0][0] != mod:
             pend.clear()
         pend.append((mod, outs[0] if len(outs) == 1 else None))
-        if len(pend) < (2 if mod == "model" else 6):
+        if len(pend) < (1 if mod == "model" else 6):
             return None
         views = [v for _, v in pend]
-        pend.clear()
+        if len(pend) == (2 if mod == "model" else 6):
+            pend.clear()
         if not all(isinstance(v, ViewDesc) for v in views):
             return unsupported(node, "an mHC allocation has no single output view")
         C = ctx.config
@@ -196,23 +202,25 @@ class Mhc:
         return Group(tuple(parts), tuple(sorted(node.ids())), hint=mod, pattern=self.name)
 
     def _final(self, node: TreeNode, ctx: StepContext, st: dict, views: list, x: ViewDesc, S: dict, g: dict, rows: tuple) -> Resolution:
-        streams, head = views
         HC, H = S["HC"], S["H"]
-        if st["prev"] is None or not _is(streams, (len(rows), HC, H), "bfloat16") or not _is(head, (len(rows), H), "bfloat16"):
-            return unsupported(node, "the final mHC call's allocations are not streams [T,HC,H] and the head's [T,H] after the layers",
-                               views=[repr(v) for v in views])
+        if len(views) == 1:
+            streams = views[0]
+            if st["prev"] is None or not _is(streams, (len(rows), HC, H), "bfloat16"):
+                return unsupported(node, "the final mHC call's first allocation is not streams [T,HC,H] after the layers", streams=repr(streams))
+            res, post, comb = st["prev"]
+            st["prev"] = None
+            return Compute(vocab_kind(ctx, "mhc_post", HC=HC, N=H), len(rows), (PerRow(x), PerRow(res), PerRow(post), PerRow(comb)),
+                           (PerRow(streams),), tuple(sorted(node.ids())), hint="model/post", attribution=rows, pattern=self.name)
+        streams, head = views
+        if not _is(head, (len(rows), H), "bfloat16"):
+            return unsupported(node, "the final mHC call's second allocation is not the head's [T,H]", head=repr(head))
         names = ("model.hc_head_fn", "model.hc_head_scale", "model.hc_head_base")
         ws = _weights(node, ctx, names)
         if isinstance(ws, Unsupported):
             return ws
-        res, post, comb = st["prev"]
         head_spec = vocab_kind(ctx, "hc_head", HC=HC, H=H, TH=g["TH_HEAD"], EPS=S["EPS"], HC_EPS=S["HC_EPS"])
-        parts = (Compute(vocab_kind(ctx, "mhc_post", HC=HC, N=H), len(rows), (PerRow(x), PerRow(res), PerRow(post), PerRow(comb)),
-                         (PerRow(streams),), (node.id,), hint="model/post", attribution=rows, pattern=self.name),
-                 Compute(head_spec, len(rows), (PerRow(streams), *ws), (PerRow(head),), (), hint="model/hc_head", attribution=rows,
-                         pattern=self.name, roots=(None, *names)))
-        st["prev"] = None
-        return Group(parts, tuple(sorted(node.ids())), hint="model", pattern=self.name)
+        return Compute(head_spec, len(rows), (PerRow(streams), *ws), (PerRow(head),), tuple(sorted(node.ids())), hint="model/hc_head",
+                       attribution=rows, pattern=self.name, roots=(None, *names))
 
 
 @dataclass
@@ -883,9 +891,10 @@ class SparsePrefill:
 
 
 def dsv4_patterns() -> list:
-    """The DeepSeek-V4 patterns, ahead of the rank's collectives (`Mhc` records the all-reduces they resolve)."""
+    """The DeepSeek-V4 patterns, ahead of the rank's collectives (`Mhc` records the all-reduces they resolve); with them vLLM's default
+    Hopper block-FP8 linear, the cuBLAS GEMMs (the f32-output one is the KV compressors') and the final `_C.rms_norm`."""
     return [Mhc(), QKvRmsNorm(), QNormRopeKvInsert(), SavePartialStates(), IndexerCompress(), InvRopeQuant(), Fp8Einsum(), SparseDecode(),
-            SparsePrefill()]
+            SparsePrefill(), DynamicDeepGemmFp8Linear(), CublasLinear(), CublasMmF32Out(), CudaRmsNorm()]
 
 
 __all__ = ["Fp8Einsum", "IndexerCompress", "InvRopeQuant", "Mhc", "QKvRmsNorm", "QNormRopeKvInsert", "SavePartialStates", "SparseDecode",
