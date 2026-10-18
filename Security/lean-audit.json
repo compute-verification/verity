@@ -1633,6 +1633,11 @@
    "assumptions": [],
    "type_hash": "cac0d5f86541bd5206eb1febfe2492aedfd31678311825bd6371970062c982f2"
   },
+  "Accounting.SecurityProofs.TS.Sm120SheetHeadline": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.Sm120SheetHeadline : Accounting.Guarantees.TS.Sm120SheetHeadline"],
+   "assumptions": []
+  },
   "Accounting.SecurityProofs.TS.TensorSlotCount": {
    "owner": "@compute-accounting",
    "signature": ["Accounting.SecurityProofs.TS.TensorSlotCount : Accounting.Guarantees.TS.TensorSlotCount"],
@@ -5817,6 +5822,7 @@
    "Accounting.SecurityProofs.TS.SheetFacetCeilings": "lemma: (I1) FacetCeilings on the data-sheet machine from A1-A5 (Models.Accounting.Assumptions.Sheet), over any sheet and run with counts >= 0; arithmetic over the machine's rows, not a Lean function.",
    "Accounting.SecurityProofs.TS.SheetScalarRouteHalf": "lemma: (I3) ScalarRoute at q, q_T <= 1/2 and b_T <= 0 from A6 (two words a lane) and the labelling's split; arithmetic, not a Lean function.",
    "Accounting.SecurityProofs.TS.SheetDIdealFloor": "frozen (no-function,world-unlisted): Theorem D-ideal (2.7-flat) of EPS1-SPEC on the data-sheet machine, DIdealFloor with (I1)-(I5) replaced by A1-A7 at the 1/2 floor, over every full-checking play and labelled program, not a Lean function; A1-A7 and (I6)-(I8) are not on the premises list.",
+   "Accounting.SecurityProofs.TS.Sm120SheetHeadline": "frozen (no-function,world-unlisted): sm_120's headline, SheetDIdealFloor at the exact data of DS-120 and H1 + fx1 (Definitions.Accounting.Headline.Sm120) with pi* the issue facet, p = 3/4, S = 48,000 and delta = 2^-40, over every play and window of proofs, not a Lean function; A1-A7, FOLD-OPT, the luck bound, binding at delta_bind, proof soundness at delta_ZK, the Definitions' pinning (ProofLayer.Pins), the play being its proofs' (ProofLayer.Of) and RightFixed are not on the premises list.",
    "Accounting.SecurityProofs.TS.ProofsSoundOfPinned": "lemma: (I8) ProofsSound of EPS1-SPEC from its pieces over every play and window of proofs (Accounting.TS.ProofLayer), not a Lean function: binding at delta_bind and proof soundness at delta_ZK as probability hypotheses, the Definitions' pinning (ProofLayer.Pins) and the play being its proofs' (ProofLayer.Of) as definitional hypotheses, and E1(c) as the named assumption RightFixed, not on the premises list; DIdeal and CompilerC, which take ProofsSound, are what it is for.",
    "Accounting.SecurityProofs.TS.BindingOfFork": "lemma: the rewinding step behind (I8)'s delta_bind over every window of proofs (Accounting.TS.ProofLayer), not a Lean function: binding's failure at a round, squared, is at most its fork form's (two runs off one commitment, both accepted, opening it differently), so a bound on the fork form is binding at its square root; ProofsSoundOfPinned, which takes binding at delta_bind, is what it is for."
   },
