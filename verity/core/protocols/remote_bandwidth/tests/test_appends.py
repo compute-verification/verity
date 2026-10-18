@@ -80,10 +80,11 @@ class Run:
     before the pass's root (`head`).  With a `registry`, the session is its next over the store's registration."""
 
     def __init__(self, store: audit.Store, prover_store: audit.Store | None = None, windows: int = 2,
-                 samples: int = 10**6, lifetime: int = audit.LIFETIME, registry: audit.Registry | None = None) -> None:
+                 samples: int = 10**6, lifetime: int = audit.LIFETIME, registry: audit.Registry | None = None,
+                 deferred: bool = False) -> None:
         reg = store.registration
         self.p = Params(blocks=reg.blocks, deadline_ns=10**6, windows=windows, samples=samples, delta=1e-6,
-                        window_ns=10, codec=reg.codec, lifetime=lifetime)
+                        window_ns=10, codec=reg.codec, lifetime=lifetime, deferred=deferred)
         self.clock = Clock()
         if registry is None:
             self.s = Session(self.p, reg, None, coins.Challenger(reg.digest, 0, self.p.coins, entropy=Entropy(b"coins")),
