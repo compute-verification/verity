@@ -1,7 +1,7 @@
 [project]
 name = "verity-difftest"
 version = "0.1.0"
-description = "The differential test of a Lean port against today's Python: Hypothesis drives the Python reference and the port's Lean executable on the same inputs."
+description = "The differential test of core's Lean, the verifier of record, against the Python that mirrors it: Hypothesis drives the Python and the Lean executable on the same inputs."
 requires-python = ">=3.12"
 dependencies = ["hypothesis>=6.100"]
 
