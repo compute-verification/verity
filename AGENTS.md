@@ -347,7 +347,7 @@ Never print a secret's value.
 
 If your launch message names you a lane, `~/.research/notes/kb/LANE-CONTRACT.md` is your rulebook.
 
-Each coordinator (a handle's holder in `.agents/skills/using-slack/registry.json`) is a plain Cursor cloud agent on the
+Each coordinator (a handle's holder, which its inbox route records: `research msg handles`) is a plain Cursor cloud agent on the
 one-repo environment "Verity compute-verification". It owns one vertical slice and runs its own workers as subagents.
 There are no Cursor Projects (Daniel, 13 Oct). The admin holds `@top`: it opens handovers, keeps the roster, the
 quiet-lane sweep and Daniel's decisions log, relays to Daniel, and announces and settles; it does no lane work.

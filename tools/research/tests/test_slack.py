@@ -188,6 +188,9 @@ def match(capsys, handle, ev) -> tuple[int, str]:
 def test_the_repository_registry_loads_and_seeds_every_handle_and_channel():
     reg = slack.load_registry(REAL_REGISTRY)
     assert [h["handle"] for h in reg["handles"]] == HANDLES
+    roster = {h["handle"]: k for h in reg["handles"] for k in ("holder", "branch_suffixes", "posters") if k in h}
+    assert not roster, (f"{roster}: who holds a handle and its branch suffixes are its inbox route's, which `research msg "
+                        "names open --as HANDLE [--succeeds] [--poster BC_ID]` writes; drop them from the registry")
     assert set(reg["channels"]) == {"agent-coordination", "agent-alerts", "ask-daniel"}
     assert slack.subscribers(reg, "agent-coordination") == []
     assert slack.subscribers(reg, "agent-alerts") == slack.subscribers(reg, "ask-daniel") == ["infra"]
@@ -212,9 +215,17 @@ def test_a_remit_longer_than_a_user_group_description_is_refused(registry):
         slack.load_registry(registry)
 
 
-def test_handles_and_subscriptions(registry, capsys):
+def test_handles_and_subscriptions(registry, routes_dirs, capsys):
+    add_route(routes_dirs[0], "infra", "1.0", holder="bc-5a69647d-04f7-5d94-9ff1-56593e2e1037", branch_suffixes=["558b", "9e59"])
+    add_route(routes_dirs[1], "proofs", "2.0", holder="bc-8f4b652b-17bc-5055-a120-b56940b7c7a9", posters=["bc-8ece7cde"])
     rc, out, _ = run(capsys, "handles")
     assert rc == 0 and "@infra" in out and "SINFRA" in out and "#agent-alerts" in out
+    assert "@infra      SINFRA       bc-5a69647d-04f7-5d94-9ff1-56593e2e1037\n" in out               # holders are the routes'
+    assert "@proofs     -            bc-8f4b652b-17bc-5055-a120-b56940b7c7a9, bc-8ece7cde\n" in out    # a published one too
+    assert "@ci         -            no holder: its inbox is not open\n" in out
+    rc, out, _ = run(capsys, "handles", "--json")
+    infra = next(h for h in json.loads(out)["handles"] if h["handle"] == "infra")
+    assert rc == 0 and (infra["holder"], infra["branch_suffixes"]) == ("bc-5a69647d-04f7-5d94-9ff1-56593e2e1037", ["558b", "9e59"])
     rc, out, _ = run(capsys, "subscriptions", "--as", "infra")
     assert rc == 0 and f'channelId="{ALERTS}", topLevelOnly=true' in out and COORD not in out
     assert 'subscribe_linear_issue(options={"scope": "team", "teamId": "INF"}' in out        # a human's filing rings no inbox
@@ -1202,7 +1213,7 @@ def test_an_ask_rings_the_owners_doorbell_once_and_the_doorbell_cannot_route(fak
 
 def test_a_reply_in_the_merge_thread_rings_the_owners_of_the_prs_it_names_and_no_one_else(fake, registry, routes_dirs, capsys, tmp_path, monkeypatch):
     monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(1700000100, timezone.utc))
-    boxes = {n: inbox(fake, routes_dirs, n) for n in ("circuits", "proofs", "compute-accounting")}
+    boxes = {n: inbox(fake, routes_dirs, n, branch_suffixes=["8c79"] if n == "circuits" else []) for n in ("circuits", "proofs", "compute-accounting")}
     (tmp_path / "pr-branches.json").write_text(json.dumps({"1585": "cursor/gemm-rows-8c79"}))
     root = fake.add(COORD, text="\U0001f4e3 *Announcement* from @infra to every handle\nmerge thread", username="infra", bot_id=BOT)
     fake.add(COORD, text="#1600 is ready for the next train", username="proofs", bot_id=BOT, thread_ts=root["ts"])
@@ -1256,6 +1267,32 @@ def test_names_open_keeps_a_suffix_the_published_route_doesnt_show_yet(fake, reg
     assert json.loads((routes_dirs[0] / "memory-accounting.json").read_text())["branch_suffixes"] == ["93c1", "6cd3"]
 
 
+def test_names_open_poster_lets_another_agent_post_as_it_and_a_successor_keeps_it(fake, registry, routes_dirs, tmp_path, capsys, monkeypatch):
+    """compute-accounting's research lane posts as it, which the registry's holder line said until 18 Oct: its route's
+    `posters` say it now, so it may post `--as` it and its PRs find their owner by its id, and a successor keeps it."""
+    notes_clone(tmp_path)
+    monkeypatch.setenv("RESEARCH_NOTES_CITE_CHECK", "0")
+    monkeypatch.setattr(slack, "_branch_suffix", lambda: None)
+    path = routes_dirs[0] / "compute-accounting.json"
+    holder, lane = "bc-1f5fcd84-768c-5ac6-a73e-0e3a950e61ef", "bc-ebc09a9a-ce64-52b5-b3b6-2c8862c7e9ac"
+    box = inbox(fake, routes_dirs, "compute-accounting", holder=holder)
+    rc, _, err = run(capsys, "names", "open", "--as", "compute-accounting", "--holder", holder, "--poster", "lane-7")
+    assert rc == 2 and "--poster 'lane-7': an agent id" in err
+    rc, out, _ = run(capsys, "names", "open", "--as", "compute-accounting", "--holder", holder, "--poster", lane)
+    r = json.loads(path.read_text())
+    assert rc == 0 and "pushed" in out and (r["holder"], r["posters"], r["inbox_ts"]) == (holder, [lane], box)
+    monkeypatch.setattr(slack, "acting_as", ACTING_AS)
+    monkeypatch.setenv("RESEARCH_AGENT_URL", f"https://cursor.com/agents/{lane}")
+    assert run(capsys, "send", "--as", "compute-accounting", "--text", "the sweep is done")[0] == 0
+    assert run(capsys, "send", "--as", "infra", "--text", "x")[0] == 2
+    reg = slack.with_routes(json.loads(registry.read_text()), slack.Routes())
+    assert slack.branch_owners("cursor/relative-security-e9ac", reg) == ["compute-accounting"]
+    successor = "bc-99999999-2222-3333-4444-666666666666"
+    assert run(capsys, "names", "open", "--as", "compute-accounting", "--holder", successor, "--succeeds")[0] == 0
+    r = json.loads(path.read_text())
+    assert (r["holder"], r["posters"], r["succeeds"], r["branch_suffixes"]) == (successor, [lane], holder, ["61ef"])
+
+
 def test_pr_branches_asks_gh_once_per_unknown_number_and_keeps_its_answers(tmp_path, monkeypatch):
     import sys
     calls = tmp_path / "calls"
@@ -1275,9 +1312,12 @@ def test_pr_branches_asks_gh_once_per_unknown_number_and_keeps_its_answers(tmp_p
 
 
 def test_as_takes_only_a_name_this_agent_holds(fake, registry, routes_dirs, capsys, monkeypatch):
+    """Who holds a name is its route's: the holder, and the `posters` its holder added (`names open --poster`)."""
     monkeypatch.setattr(slack, "acting_as", ACTING_AS)
-    reg = json.loads(registry.read_text())
-    held = {h["handle"]: slack.AGENT_ID_RE.findall(h["holder"]) for h in reg["handles"]}
+    held = {"infra": ["bc-5a69647d-04f7-5d94-9ff1-56593e2e1037"], "ci": ["bc-8d3a66f8-f3da-5dae-9fb0-4a5b381b3d4e"],
+            "proofs": ["bc-8f4b652b-17bc-5055-a120-b56940b7c7a9", "bc-8ece7cde"], "console": ["f7772a12-d61f-4bbb-8c4f-e79e8d6d30dc"]}
+    for name, (holder, *posters) in held.items():
+        add_route(routes_dirs[1], name, f"1700000900.00010{len(posters)}", holder=holder, **({"posters": posters} if posters else {}))
     monkeypatch.setenv("RESEARCH_AGENT_URL", f"https://cursor.com/agents/{held['infra'][0]}")
     assert run(capsys, "send", "--as", "infra", "--text", "node 2 is free")[0] == 0
     before = len(fake.messages[COORD])
@@ -1805,8 +1845,7 @@ def stale_checkout(tmp_path, registry) -> tuple[Path, Callable[[Callable[[dict],
 
 
 def new_handle(name: str) -> Callable[[dict], None]:
-    return lambda reg: reg["handles"].append({"handle": name, "holder": f"the {name} coordinator", "remit": f"the {name} slice",
-                                          "charter": "x", "owns": []})
+    return lambda reg: reg["handles"].append({"handle": name, "remit": f"the {name} slice", "charter": "x", "owns": []})
 
 
 def test_routing_reads_origin_mains_registry_fetched_at_most_every_30_minutes(registry, tmp_path, monkeypatch):

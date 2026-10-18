@@ -54,6 +54,8 @@ def _isolated_store(monkeypatch, tmp_path_factory):
     monkeypatch.setenv("CURSOR_AGENT_SOCKET", str(tmp_path_factory.mktemp("cursor") / "absent.sock"))
     # ... nor does a routed post fetch origin/main to read its registry
     monkeypatch.setenv("RESEARCH_SLACK_FRESH_CHECK", "0")
+    # ... nor does anything that folds in the inbox routes (holders: research msg, drive's PR owners) read the published ones
+    monkeypatch.setenv("RESEARCH_ROUTES_URL", f"file://{tmp_path_factory.mktemp('routes') / 'absent'}")
 
 
 @pytest.fixture(autouse=True)

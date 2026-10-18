@@ -12,14 +12,14 @@ Notes are records, never messages.
                     [--verify CMD] [--ships URL#sha256=HEX | git:SHA]...     # prints `<ts> <permalink>`; --kind announce: an announcement
   research msg close --as NAME --thread TS [--link URL] [--note T] [--declined WHY]   # ✅ or ❌: a status line, and the reaction on an ask
   research msg read --thread TS [--since TS] | --since TS | --as NAME [--peek] [--urgent] [--json]  # --as: NAME's unread doorbells
-  research msg names open|read|close|list [--as NAME] [--forward-to @NAME] [--succeeds]  # the names you answer to
+  research msg names open|read|close|list [--as NAME] [--forward-to @NAME] [--succeeds] [--poster BC_ID]  # the names you answer to
   research msg traffic [--hours H] [--replay] [--json]             # the monitor: doorbells, pauses, dropped names, unanswered asks
   research msg traffic --latency [--hours H] [--json]              # per lane: asks, answered (Slack or Linear), median and p90 minutes
   research msg watch --as NAME [--every S] [--polls N]             # block until a new doorbell; the hook a wake script runs
   research msg pickup --thread TS                                  # 👀 on an ask you own
   research msg retract --as NAME --ts TS [--thread ROOT] [--why W] # blank a post NAME sent (needs SLACK_BOT_TOKEN)
   research msg roster --thread TS [--json]                         # an announcement's status lines; exit 0 when all are done
-  research msg handles [--json] | subscriptions --as HANDLE        # the registry; the subscribe calls a handle's holder makes
+  research msg handles [--json] | subscriptions --as HANDLE        # the registry, holders from routes; the subscribe calls a holder makes
   research msg owners [PATH...]                                    # who owns each path (stdin: `git diff --name-only main... |`)
   research msg match --as HANDLE --event JSON|TEXT|@PATH|- [--why] # exit 0 addressed, 1 not, 2 error
   research msg verify-author --event JSON|@PATH|- [--why]          # exit 0 only for our bot, a channel's bot or a named human
@@ -46,8 +46,9 @@ bot token and allows only BROKER_METHODS; RESEARCH_SLACK_VIA=direct insists on t
 
 The sender rings the doorbells right after posting; there is no server-side router (the website has no events route,
 COMM-32). It routes by origin/main's registry (`routing_registry`) and the published routes (`Routes.refresh`), so an old
-checkout or notes clone still rings a name added, reopened or closed since. `match` is the older, handle-only test of
-whether a post is addressed to HANDLE."""
+checkout or notes clone still rings a name added, reopened or closed since. Who holds a handle, who else posts as it and
+which branch suffixes its PRs carry is its route's (`names open`), never the registry's. `match` is the older,
+handle-only test of whether a post is addressed to HANDLE."""
 from __future__ import annotations
 
 import argparse
@@ -250,7 +251,7 @@ def check_registry(reg: dict, path: str) -> dict:
         if not NAME_RE.match(name) or name in handles:
             raise SlackError(f"registry {path}: bad or duplicate handle {name!r}")
         handles.add(name)
-        for k in ("holder", "remit", "charter"):
+        for k in ("remit", "charter"):
             if not isinstance(h.get(k), str) or not h[k]:
                 raise SlackError(f"registry {path}: @{name} has no {k}")
         if len(h["remit"]) > DESCRIPTION_MAX:
@@ -776,18 +777,25 @@ def header_names(text: str, reg: dict) -> list[str]:
 
 
 def with_routes(reg: dict, routes: "Routes | None") -> dict:
-    """`reg` with each handle's open inbox route folded in: its holder's id joins `holder`, and the route's
-    `branch_suffixes` join the handle's.  A successor's `names open --succeeds` records both, so its PRs and runs find
-    their owner with no registry edit (11 of 13 registry holders were a generation stale on 15 Oct)."""
+    """`reg` with each handle's roster from its open inbox route: `holder` names the route's holder and `posters` (the
+    other agents that post as it), and `branch_suffixes` are the route's.  The route is the only record of both (`names
+    open` writes it; the registry carried them until 18 Oct, 11 of 13 holders a generation stale on 15 Oct); a registry
+    that still has them keeps them, before the route's.  Every handle gets a `holder`, empty when none is known.  Best
+    effort: a route that can't be read adds nothing."""
     if routes is None:
         return reg
+    routes.refresh([h["handle"] for h in reg["handles"] if h["handle"] not in routes.local and h["handle"] not in routes._fetched])
     handles = []
     for h in reg["handles"]:
-        r = routes.get_route(h["handle"])
-        if r and not r.get("closed") and r.get("holder"):
-            sfx = list(dict.fromkeys([*h.get("branch_suffixes", []), *r.get("branch_suffixes", [])]))
-            h = {**h, "holder": f"{h.get('holder') or ''}; its inbox's holder ({r['holder']})", "branch_suffixes": sfx}
-        handles.append(h)
+        try:
+            r = routes.get_route(h["handle"])
+        except SlackError:
+            r = None
+        ids = [r["holder"], *r.get("posters", [])] if r and not r.get("closed") and r.get("holder") else []
+        sfx = list(dict.fromkeys([*h.get("branch_suffixes", []), *(r.get("branch_suffixes", []) if ids else [])]))
+        held = ", ".join(ids)
+        holder = f"{h['holder']}; its inbox's holder ({held})" if h.get("holder") and held else h.get("holder") or held
+        handles.append({**h, "holder": holder, **({"branch_suffixes": sfx} if sfx else {})})
     return {**reg, "handles": handles}
 
 
@@ -802,8 +810,8 @@ def _branch_suffix() -> str | None:
 
 
 def branch_owners(branch: str, reg: dict) -> list[str]:
-    """The handles whose agent made `branch`: its last 4 characters are the last 4 of the holder's agent id, or one of the
-    handle's `branch_suffixes` (a holder whose PRs another agent of its own opens)."""
+    """The handles whose agent made `branch`, in `reg` as `with_routes` folds it: its last 4 characters are the last 4 of
+    a holder's agent id, or one of the handle's `branch_suffixes` (its earlier holders', and its holder's other branches)."""
     suffix = branch.rsplit("-", 1)[-1]
     return [h["handle"] for h in reg["handles"] if len(suffix) == 4 and
             suffix in [a[-4:] for a in AGENT_ID_RE.findall(h.get("holder") or "") if len(a) > 11] + h.get("branch_suffixes", [])]
@@ -1254,6 +1262,8 @@ def _body(ns: argparse.Namespace) -> str:
 
 
 def cmd_handles(ns: argparse.Namespace, reg: dict) -> int:
+    """The registry, each handle with its holder and branch suffixes from its inbox route (`with_routes`)."""
+    reg = with_routes(reg, routes_of(ns))
     if ns.json:
         print(json.dumps(reg, indent=2, ensure_ascii=False))
         return 0
@@ -1262,7 +1272,8 @@ def cmd_handles(ns: argparse.Namespace, reg: dict) -> int:
         subs = ch["subscribers"] if ch["subscribers"] == EVERY else ", ".join("@" + s for s in ch["subscribers"])
         print(f"#{key:<20} {ch.get('id') or 'id not recorded':<12} subscribers: {subs}\n  {ch['purpose']}")
     for h in reg["handles"]:
-        print(f"@{h['handle']:<10} {h.get('usergroup') or '-':<12} {h['holder']}\n  {h['remit']}\n  charter: {h['charter']}")
+        print(f"@{h['handle']:<10} {h.get('usergroup') or '-':<12} {h['holder'] or 'no holder: its inbox is not open'}\n"
+              f"  {h['remit']}\n  charter: {h['charter']}")
     for p in reg.get("humans", []):
         print(f"human {p['name']} ({p.get('slack_user') or 'user id not recorded'})")
     return 0
@@ -1319,13 +1330,12 @@ def name_entry(ns: argparse.Namespace, reg: dict, name: str, person_ok: bool = F
 
 
 def holder_ids(ns: argparse.Namespace, reg: dict, name: str) -> list[str]:
-    """The agents that hold `name`: the ids in its registry `holder`, and its open inbox's route holder (a successor's)."""
+    """The agents that hold `name`: its open inbox route's holder and `posters` (`with_routes`)."""
     try:
-        ids = AGENT_ID_RE.findall(entry(reg, name).get("holder") or "")
+        h = entry(reg, name)
     except SlackError:
-        ids = []
-    r = routes_of(ns).get_route(name.lstrip("@"))
-    return list(dict.fromkeys(ids + ([r["holder"]] if r and r.get("holder") and not r.get("closed") else [])))
+        h = {"handle": name.lstrip("@")}
+    return list(dict.fromkeys(AGENT_ID_RE.findall(with_routes({"handles": [h]}, routes_of(ns))["handles"][0]["holder"])))
 
 
 def acting_as(ns: argparse.Namespace, reg: dict, name: str) -> dict:
@@ -1338,10 +1348,11 @@ def acting_as(ns: argparse.Namespace, reg: dict, name: str) -> dict:
     if not me and ns.dry_run:
         print(f"dry-run: no agent id (set RESEARCH_AGENT_URL), so a real --as {h['handle']} would be refused", file=sys.stderr)
         return h
-    held = f"held by {', '.join(ids)}" if ids else "held by no agent the registry or its route names"
+    held = f"held by {', '.join(ids)}" if ids else "held by no agent: it has no open inbox"
     raise SlackError(f"--as {h['handle']}: @{h['handle']} is {held}, and this agent is {me or 'unknown (set RESEARCH_AGENT_URL)'}; "
                      f"post as your own handle (a successor takes a name over with `research msg names open --as "
-                     f"{h['handle']} --succeeds`)")
+                     f"{h['handle']} --succeeds`, and its holder lets another agent post as it with `names open --as "
+                     f"{h['handle']} --poster BC_ID`)")
 
 
 def _route(ns: argparse.Namespace, reg: dict, ch: str) -> tuple[dict, Routes | None] | None:
@@ -1751,19 +1762,31 @@ def cmd_inbox(ns: argparse.Namespace, reg: dict) -> int:
 
 def inbox_open(ns: argparse.Namespace, reg: dict, routes: Routes, name: str) -> int:
     """Open `name`'s inbox, or say it is open already.  An open inbox held by another agent is refused unless --succeeds names
-    it: the successor takes the same thread over, unread doorbells and all."""
+    it: the successor takes the same thread over, unread doorbells and all.  The route is the handle's roster: its holder,
+    the `posters` (--poster: other agents that post as it, kept across a succession) and the `branch_suffixes` its PRs
+    carry (this checkout's branch's, and each earlier holder's)."""
     holder = ns.holder or (None if ns.dry_run else self_agent_id())
     if not holder and not ns.dry_run:
         raise SlackError("no agent id: pass --holder bc-... (or set RESEARCH_AGENT_URL)")
+    for p in getattr(ns, "poster", None) or []:
+        if not AGENT_ID_RE.fullmatch(p):
+            raise SlackError(f"--poster {p!r}: an agent id (bc-<8 hex>, its full form, or a desktop agent's UUID)")
     old = routes.get_route(name, fresh=True)
     if old and (mine := routes.local.get(name)) and mine.get("holder") == old.get("holder"):
-        old = {**old, "branch_suffixes": list(dict.fromkeys([*old.get("branch_suffixes", []), *mine.get("branch_suffixes", [])]))}
-    ch = channel_id(ns, reg, FRONT_DOOR)                           # the published copy lags the clone by minutes: keep both's suffixes
+        old = {**old, **{k: v for k in ("branch_suffixes", "posters")
+                         if (v := list(dict.fromkeys([*old.get(k, []), *mine.get(k, [])])))}}
+    ch = channel_id(ns, reg, FRONT_DOOR)                           # the published copy lags the clone by minutes: keep both's lists
+    posters = list(dict.fromkeys([*(old or {}).get("posters", []), *(getattr(ns, "poster", None) or [])]))
     if old and not old.get("closed") and old.get("holder") == holder:
         print(f"@{name} is open already: inbox {old['inbox_ts']}")
-        if (s := _branch_suffix()) and s not in old.get("branch_suffixes", []) and not ns.dry_run:
-            old = {**old, "branch_suffixes": [*old.get("branch_suffixes", []), s]}
-            print(publish_route(routes.root, old, f"routes.d: @{name} holder's branch suffix {s}"))
+        new = {**old, **({"posters": posters} if posters else {})}
+        if (s := _branch_suffix()) and s not in old.get("branch_suffixes", []):
+            new["branch_suffixes"] = [*old.get("branch_suffixes", []), s]
+        if new != old and not ns.dry_run:
+            what = [*([f"branch suffix {s}"] if new.get("branch_suffixes") != old.get("branch_suffixes") else []),
+                    *([f"posters {', '.join(posters)}"] if posters != old.get("posters", []) else [])]
+            print(publish_route(routes.root, new, f"routes.d: @{name} holder's {' and '.join(what)}"))
+        old = new
     else:
         if old and not old.get("closed") and not ns.succeeds:
             raise SlackError(f"@{name}'s inbox is held by {old.get('holder')}; a successor passes --succeeds")
@@ -1778,6 +1801,7 @@ def inbox_open(ns: argparse.Namespace, reg: dict, routes: Routes, name: str) -> 
         sfx = list(dict.fromkeys([*(old or {}).get("branch_suffixes", []), *prev, *([s] if (s := _branch_suffix()) else [])]))
         r = {"schema": ROUTE_SCHEMA, "name": name, "holder": holder, "channel": ch, "inbox_ts": ts, "opened": _now_stamp(),
              "closed": None, "forward_to": None, **({"remit": remit} if remit else {}), **({"branch_suffixes": sfx} if sfx else {}),
+             **({"posters": posters} if posters else {}),
              **({"succeeds": old.get("holder")} if old and old.get("holder") != holder else {})}
         if not ns.dry_run:
             print(publish_route(routes.root, r, f"routes.d: open @{name} for {holder}"))
@@ -2567,6 +2591,8 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--as", dest="handle", default=None, metavar="NAME", help="the inbox's name: your handle")
     p.add_argument("--holder", default=None, metavar="BC_ID", help="open: the agent that holds it (default: this agent)")
     p.add_argument("--succeeds", action="store_true", help="open: take over an inbox another agent holds (a successor)")
+    p.add_argument("--poster", action="append", default=[], metavar="BC_ID",
+                   help="open: another agent that posts as this name (`--as`), such as a lane of its holder's; repeatable")
     p.add_argument("--remit", default=None, metavar="TEXT", help="open: what the name is for, one line (a successor keeps it)")
     p.add_argument("--forward-to", default=None, metavar="@NAME", help="close: whose doorbell rings instead")
     p.add_argument("--peek", action="store_true", help="read: don't mark them read")

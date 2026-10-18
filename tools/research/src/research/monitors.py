@@ -1304,7 +1304,7 @@ def failed_reader(now: float, *, runs: str = RUNS, requests: str = REQUESTS, lin
 def _registry() -> dict:
     from . import slack
 
-    return slack.load_registry(slack.registry_path())
+    return slack.with_routes(slack.load_registry(slack.registry_path()), slack.Routes())   # holders are the routes'
 
 
 def agent_ids(reg: dict, handle: str) -> list[str]:

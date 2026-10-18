@@ -26,11 +26,13 @@ The coordination API has one place, three interactions and one lifecycle.
   `@console` is Daniel's desktop agent on his laptop, beside the console's dev server. Nothing wakes it: its inbox holds
   your ask until Daniel opens it, and then it reads every unread doorbell (`names read --as console`) and answers in your
   thread. So put the whole brief in the ask, since it can't open Linear, and card `#ask-daniel` when it can't wait for
-  him to open console. A handle's current holder is its
-  inbox's holder: `names open --succeeds` records the successor's agent id and its working branch's suffix in the route,
-  and routing reads them (`--as`, the owners of PRs and runs). Run `names open --as HANDLE` again on a new branch: it
-  adds that branch's suffix. A second agent working under a handle (a lane that posts as it) subscribes to that handle's
-  inbox thread itself: the holder has no channel to relay to it. So a handover edits nothing in the repo; the registry's `holder` is a description. One agent may hold several handles, and posts as whichever
+  him to open console. A handle's holder is its
+  inbox route's holder, and the route is the only record of it: `names open --succeeds` records the successor's agent id
+  and its working branch's suffix in the route, and routing reads them (`--as`, the owners of PRs and runs; `research msg
+  handles` shows each handle's). Run `names open --as HANDLE` again on a new branch: it adds that branch's suffix. A
+  second agent working under a handle (a lane that posts as it) is one its holder adds with `names open --as HANDLE
+  --poster BC_ID`; it subscribes to that handle's inbox thread itself: the holder has no channel to relay to it. So a
+  handover edits nothing in the repo. One agent may hold several handles, and posts as whichever
   it acts for (`--as`). Handles with a user group are Slack user groups, so a human's composer autocompletes them, and
   Daniel is a member of each, so a tag notifies him too.
 - **Only handle holders and the named humans are on Slack.** Workers never post, read or subscribe; a worker asks its own
@@ -60,8 +62,8 @@ with, and everyone else reads it in the thread when they look.
 A reply under an announcement that names someone rings only the names it starts with, whatever PRs and runs its body
 mentions; so a landing or a prep post names each owner it needs at its start. One that names no one (quiet or not, a status
 line aside) also rings the owner of each PR it names, by number (`#1585`, or the numbers in a `train-prep-...` branch) or by
-its `cursor/` branch: the owner is the handle whose holder's agent id ends in the branch's last 4 characters (or that lists
-them in `branch_suffixes`). It also rings a handle that, earlier in the thread, named a run id (`dd21`) beside one of its own
+its `cursor/` branch: the owner is the handle whose holder's (or poster's) agent id ends in the branch's last 4 characters
+(or whose route lists them in `branch_suffixes`). It also rings a handle that, earlier in the thread, named a run id (`dd21`) beside one of its own
 PRs, when the post names that run. A PR whose owner can't be found rings the handle that named it in the thread. Everything
 else there stays in `research msg read`.
 
@@ -69,13 +71,13 @@ Only the names a post starts with ring anyone. So `send`, `reply` and `ask` refu
 its start, or writes `handle:` after its leading names, at the start of a later line or of a sentence (`@top ci: rebuild`).
 Move the name to the start (or `--to`) to ring it, or drop the `@` to mention it without a doorbell.
 
-`registry.json` (beside this file) names every handle (holder, remit, charter, user-group id, the paths it `owns`), the
-channels and the named humans; `research msg handles` prints it. `research msg owners PATH...` names who owns each path (the
+`registry.json` (beside this file) names every handle (remit, charter, user-group id, the paths it `owns`), the
+channels and the named humans; `research msg handles` prints it, with each handle's holder from its route. `research msg owners PATH...` names who owns each path (the
 longest `owns` prefix wins), so a question about a file goes to its owner; a PR that moves files updates its owners' entries. The tool is `research msg` (`tools/research/src/research/slack.py`); every
 subcommand takes `--dry-run`, which sends nothing and prints each request it would make.
 
 `--as NAME` on anything that posts or changes NAME's route takes only a name you hold: your agent id (`$RESEARCH_AGENT_URL`,
-else your Cursor identity) is in its registry `holder`, or holds its open inbox (a successor's `names open --succeeds`).
+else your Cursor identity) holds its open inbox (a successor's `names open --succeeds`) or is one of the route's posters.
 A post sent by mistake comes back with `research msg retract --as NAME --ts TS [--thread ROOT] [--why W]`, which blanks
 your own post and needs `SLACK_BOT_TOKEN`; the doorbells it rang keep their copy.
 
@@ -294,7 +296,8 @@ research msg ask-daniel resolve <id> --choice no --note 'his reply: <permalink>'
 
 ## Changing the registry
 
-Add or change a handle in `registry.json` (the tests check it loads). Then, with a token that has `usergroups:write`:
+Add or change a handle in `registry.json` (the tests check it loads, and that it says nothing of who holds the handle:
+its holder's `names open --as HANDLE` records that in the route). Then, with a token that has `usergroups:write`:
 
 ~~~bash
 research msg groups sync            # the plan: which user groups it would create, update, re-enable, or disable (a retired name's)

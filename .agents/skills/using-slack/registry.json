@@ -42,7 +42,6 @@
   "handles": [
     {
       "handle": "infra",
-      "holder": "the infra coordinator (bc-5a69647d-04f7-5d94-9ff1-56593e2e1037)",
       "remit": "Machines and task infra: utilization, the scheduler, buying compute, alerts, and one API for agents' jobs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-infra",
       "usergroup": "S0C5APDSYF9",
@@ -54,16 +53,10 @@
         "tools/research/",
         "benchmarks/judge.py",
         ".cursor/"
-      ],
-      "branch_suffixes": [
-        "558b",
-        "9e59",
-        "98f5"
       ]
     },
     {
       "handle": "proofs",
-      "holder": "the proofs coordinator (bc-8f4b652b-17bc-5055-a120-b56940b7c7a9); the research coordinator (bc-8ece7cde) keeps running the merge trains",
       "remit": "Proofs: Lean, red team, C-Flock, backend sweeps, consolidation and the merge trains.",
       "charter": "/cursor/stores/bc-36415049-30db-4fff-a34b-81f0afc0124d/docs/restructure/ (proof)",
       "usergroup": "S0C5Q6KJZTQ",
@@ -82,16 +75,10 @@
         "benchmarks/proof_throughput/",
         "benchmarks/sampling_plan/",
         "integrations/vllm/verity_vllm/protocol_options/sampled_proofs.py"
-      ],
-      "branch_suffixes": [
-        "95d4",
-        "9b2a",
-        "f39a"
       ]
     },
     {
       "handle": "circuits",
-      "holder": "the circuits coordinator (bc-21f3d3de-28db-5e5d-964b-d357187449aa)",
       "remit": "Circuits of real workloads: the vLLM integration, the epoch run, sm_120 GEMM, TP2.",
       "charter": "/cursor/stores/bc-36415049-30db-4fff-a34b-81f0afc0124d/docs/restructure/ (circuit)",
       "usergroup": "S0C5U3LHMFT",
@@ -121,16 +108,10 @@
         "integrations/vllm/tests/properties/",
         "integrations/vllm/tests/check/test_capture_map.py",
         "integrations/vllm/tests/check/test_capture_map_versions.py"
-      ],
-      "branch_suffixes": [
-        "8c79",
-        "c491",
-        "6f04"
       ]
     },
     {
       "handle": "compute-accounting",
-      "holder": "the compute-accounting coordinator (bc-1f5fcd84-768c-5ac6-a73e-0e3a950e61ef); its research lane (bc-ebc09a9a-ce64-52b5-b3b6-2c8862c7e9ac), which runs PoUW's relative-security work, posts as it too",
       "remit": "Proof of useful work: verity/core/protocols/pouw, its schemes and their runs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
       "usergroup": "S0C5U3Q04JD",
@@ -162,17 +143,10 @@
         "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_screen.py",
         "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_triton.py",
         "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_whole.py"
-      ],
-      "branch_suffixes": [
-        "e3fa",
-        "e9ac",
-        "ea24",
-        "1de3"
       ]
     },
     {
       "handle": "memory-accounting",
-      "holder": "the memory-accounting coordinator (bc-d7be0308-38ba-5176-93d1-9169ce7d6cd3)",
       "remit": "Proof of useful space: verity/core/protocols/pous, its Lean package and its runs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
       "usergroup": "S0C5VRGBZFE",
@@ -209,16 +183,10 @@
         "verity/core/protocols/bandwidth/",
         "verity/core/protocols/pous/",
         "verity/core/protocols/remote_bandwidth/"
-      ],
-      "branch_suffixes": [
-        "3cf5",
-        "b0c1",
-        "93c1"
       ]
     },
     {
       "handle": "network-accounting",
-      "holder": "the network-accounting coordinator (bc-5c916421-64a5-5c38-94ba-2e28fe629237)",
       "remit": "Network accounting: the network certifier (verity/core/protocols/certifier) and its timing-channel proofs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
       "usergroup": "S0C6LGGSY6L",
@@ -232,23 +200,16 @@
         "benchmarks/network_traces/",
         "benchmarks/datacenter/",
         "benchmarks/network_sim/"
-      ],
-      "branch_suffixes": [
-        "728f",
-        "a190",
-        "061a"
       ]
     },
     {
       "handle": "console",
-      "holder": "Daniel's desktop agent (f7772a12-d61f-4bbb-8c4f-e79e8d6d30dc), on his laptop beside the console's dev server: it reads its Slack inbox whenever Daniel opens it, so asks queue there, and nothing wakes it (Daniel, 2026-10-16 2:37 PM PDT)",
       "remit": "The live console and docs site: panels, formats, frontends, and what agents publish to them.",
       "charter": "Daniel, 2026-10-11 (via top)",
       "usergroup": "S0C5LSDENA1"
     },
     {
       "handle": "ci",
-      "holder": "the ci coordinator (bc-8d3a66f8-f3da-5dae-9fb0-4a5b381b3d4e)",
       "remit": "Open PRs: shepherds each to a passing check and into the merge trains.",
       "charter": "Daniel, 2026-10-01 10:56 AM PDT (leads get handles); named ci, not pr-captain (Daniel, 1:07 PM PDT)",
       "usergroup": "S0C93AFCRT8",
@@ -261,16 +222,10 @@
         "tools/research/src/research/queue.py",
         "tools/research/src/research/quick_tier.py",
         "tools/research/src/research/merge.py"
-      ],
-      "branch_suffixes": [
-        "4292",
-        "2a98",
-        "1518"
       ]
     },
     {
       "handle": "lean",
-      "holder": "the lean coordinator (bc-cfe6af97-18be-5d48-90c9-a9de869d43e5)",
       "remit": "Lean: the Lean audit and its tooling; a change to a Lean guarantee DMs Daniel when it lands.",
       "charter": "Daniel, 2026-10-01 10:18 AM PDT",
       "usergroup": "S0C93AE54K0",
@@ -280,16 +235,10 @@
         "tools/lean/",
         ".agents/skills/lean-proofs/",
         "Security/"
-      ],
-      "branch_suffixes": [
-        "741b",
-        "6f1e",
-        "fc8d"
       ]
     },
     {
       "handle": "comms",
-      "holder": "the comms coordinator (bc-e6e381a1-2be0-5d80-819c-c2bf4d318fee)",
       "remit": "Agent-to-agent messages: research msg, the names directory, routing, and its traffic.",
       "charter": "Daniel, 2026-10-01 9:12 AM PDT",
       "usergroup": "S0C8PTRMVV5",
@@ -299,26 +248,14 @@
         "tools/research/src/research/slack.py",
         "tools/research/tests/test_slack.py",
         "tools/research/tests/slack_routing_vectors.json"
-      ],
-      "branch_suffixes": [
-        "b252",
-        "38e0",
-        "e34f"
       ]
     },
     {
       "handle": "top",
-      "holder": "the admin, Daniel's coordinator (bc-af075d78-d5b9-590b-acbb-eb47d6f88f39)",
       "remit": "Top-level: Daniel's coordinator across every lead.",
       "charter": "Daniel",
       "usergroup": "S0C977GL9R7",
       "linear": "TOP",
-      "branch_suffixes": [
-        "c3b2",
-        "7308",
-        "8589",
-        "4db4"
-      ],
       "owns": [
         "AGENTS.md",
         "README.md",
@@ -335,23 +272,16 @@
     },
     {
       "handle": "vllm",
-      "holder": "the vLLM coordinator (bc-0bd3928c-87e8-56f5-aa82-41779608718d, generation 3, succeeding bc-bfa78636 on 18 Oct)",
       "remit": "The vLLM integration: what the served model runs under verification, and its hookup to the protocols.",
       "charter": "Daniel, 2026-10-13 (a new slice, in architecture's rollout)",
       "usergroup": "S0C954BELSW",
       "owns": [
         "integrations/vllm/"
       ],
-      "linear": "VLLM",
-      "branch_suffixes": [
-        "9411",
-        "8350",
-        "718d"
-      ]
+      "linear": "VLLM"
     },
     {
       "handle": "benchmarks",
-      "holder": "the benchmarks coordinator (bc-7449b20e-c769-56a1-9ba2-ceacd3cecfc9)",
       "remit": "Benchmarks: the overhead and throughput measurements across backends, and the tables rendered from them.",
       "charter": "Daniel, 2026-10-13 (a new slice, in architecture's rollout)",
       "usergroup": "S0C9ZLL7T88",
@@ -359,23 +289,15 @@
       "owns": [
         "benchmarks/harness/",
         "benchmarks/specs/"
-      ],
-      "branch_suffixes": [
-        "47e4",
-        "6193"
       ]
     },
     {
       "handle": "kernels",
-      "holder": "the kernels coordinator (bc-0104b328-7489-5a12-a90e-2a15e14ff08a), a new slice launched from top's charter",
       "remit": "Fast commitment kernels: one GPU library for every served-path commitment, its vLLM integration, the commit-overhead benchmark.",
       "charter": "Daniel, 2026-10-17 10:46 PM PDT (a new slice, via top); renamed from @hash by Daniel, 2026-10-18 9:40 AM PDT",
       "usergroup": "S0CAYGG5BDW",
       "owns": [
         "benchmarks/hash/"
-      ],
-      "branch_suffixes": [
-        "15ad"
       ]
     }
   ]
