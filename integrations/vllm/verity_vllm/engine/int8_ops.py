@@ -18,6 +18,8 @@ values the linear's two Calls exchange (`call_boundaries`), never as a second re
     verity_int8::window_rows(Tensor q, Tensor kq, Tensor vq, Tensor sv, Tensor v0, Tensor k_scales, float scale) -> Tensor out
         that request's last n query rows q bf16 [n, H, d] over kv_quant's results (`registry.int8_exact.Int8LutAttentionRow_v1{d,
         pos+1,scale}` per (row, head))
+    verity_int8::kv_quant_window(Tensor k, Tensor v, Tensor k_scales) -> (Tensor kq, Tensor vq, Tensor sv, Tensor v0)
+        kv_quant of one request's window already read, k and v bf16 [s, G, d] (a credited read's rows, `engine.int8_window`)
 
 Importing this module defines them (once per process).
 """
@@ -82,17 +84,44 @@ def _window_rows_fake(q, kq, vq, sv, v0, k_scales, scale) -> torch.Tensor:
     return torch.empty_like(q)
 
 
-def paged_attention(query: torch.Tensor, key_cache: torch.Tensor, value_cache: torch.Tensor, query_start_loc: torch.Tensor,
-                    seq_lens: torch.Tensor, block_table: torch.Tensor, k_scales: torch.Tensor, scale: float, output: torch.Tensor) -> None:
-    """Every request of a batch, one window each, into output [T, H, d]: request r's query rows query[qsl[r]:qsl[r+1]] are its
-    window's last rows, its window its first seq_lens[r] tokens in the caches (vLLM's FlashAttention metadata and layout), one
-    ``verity_int8::kv_quant`` and one ``verity_int8::window_rows`` call each.  A request whose rows are neither its whole window nor one row (a chunked prefill's later chunk) is refused."""
+@torch.library.custom_op(f"{LIBRARY}::kv_quant_window", mutates_args=())
+def kv_quant_window(k: torch.Tensor, v: torch.Tensor, k_scales: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    return A.kv_quant(k, v, k_scales)
+
+
+@kv_quant_window.register_fake
+def _kv_quant_window_fake(k, v, k_scales):
+    s, g, d = k.shape
+    q8 = k.new_empty((g, s, d), dtype=torch.int8)
+    return q8, torch.empty_like(q8), k.new_empty((g, d), dtype=torch.float32), k.new_empty((g, d), dtype=torch.float32)
+
+
+def _requests(query: torch.Tensor, query_start_loc: torch.Tensor, seq_lens: torch.Tensor, kv_of, k_scales: torch.Tensor,
+              scale: float, output: torch.Tensor) -> None:
     qsl, lens = query_start_loc.tolist(), seq_lens.tolist()
-    for r, s in enumerate(lens):
+    for r, s in enumerate(lens[:len(qsl) - 1]):
         q0, q1 = qsl[r], qsl[r + 1]
         if q1 == q0:
             continue
         if q1 - q0 not in (1, s):
             raise ValueError(f"int8 attention: request {r} brings {q1 - q0} rows of a {s}-token window (a chunked prefill)")
-        kv = kv_quant(key_cache, value_cache, block_table[r], s, k_scales)
-        output[q0:q1] = window_rows(query[q0:q1], *kv, k_scales, float(scale))
+        output[q0:q1] = window_rows(query[q0:q1], *kv_of(r, s), k_scales, float(scale))
+
+
+def paged_attention(query: torch.Tensor, key_cache: torch.Tensor, value_cache: torch.Tensor, query_start_loc: torch.Tensor,
+                    seq_lens: torch.Tensor, block_table: torch.Tensor, k_scales: torch.Tensor, scale: float, output: torch.Tensor) -> None:
+    """Every request of a batch, one window each, into output [T, H, d]: request r's query rows query[qsl[r]:qsl[r+1]] are its
+    window's last rows, its window its first seq_lens[r] tokens in the caches (vLLM's FlashAttention metadata and layout), one
+    ``verity_int8::kv_quant`` and one ``verity_int8::window_rows`` call each.  A request whose rows are neither its whole window nor one row (a chunked prefill's later chunk) is refused."""
+    _requests(query, query_start_loc, seq_lens, lambda r, s: kv_quant(key_cache, value_cache, block_table[r], s, k_scales), k_scales,
+              scale, output)
+
+
+def window_attention(query: torch.Tensor, keys: torch.Tensor, values: torch.Tensor, offsets: list[int], query_start_loc: torch.Tensor,
+                     seq_lens: torch.Tensor, k_scales: torch.Tensor, scale: float, output: torch.Tensor) -> None:
+    """`paged_attention` over a step's windows already read (`engine.int8_window`): request r's window is rows
+    offsets[r] .. offsets[r] + seq_lens[r] - 1 of keys and values [rows, G, d] bf16, one ``verity_int8::kv_quant_window`` and one
+    ``verity_int8::window_rows`` call each."""
+    _requests(query, query_start_loc, seq_lens,
+              lambda r, s: kv_quant_window(keys[offsets[r]:offsets[r] + s], values[offsets[r]:offsets[r] + s], k_scales), k_scales,
+              scale, output)

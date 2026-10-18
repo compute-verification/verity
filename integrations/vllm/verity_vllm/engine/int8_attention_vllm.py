@@ -13,7 +13,9 @@ paged KV cache (block sizes, `reshape_and_cache_flash` writing K after RoPE and 
 bf16 on every window: K's per-token scales could be stored with an int8 K (a cache spec of its own, more than a backend), but V's
 per-channel scale reads the whole window, so an int8 V would have to be requantized as the window grows.
 
-`Int8AttentionImpl.forward` runs `engine.int8_ops.paged_attention` on the cache, with its layer's K scales (the served
+`Int8AttentionImpl.forward` runs `engine.int8_ops.paged_attention` on the cache (or, once the store's session installs a credited
+read, `install_credited_read`, `engine.int8_window`'s windows decoded from the encoded cache by pg_window and
+`int8_ops.window_attention` on them, the same bits), with its layer's K scales (the served
 checkpoint's `engine.int8_k_scales` table, looked up by the model's revision when the impl is built and by the layer's name in each
 call), and counts its calls (`int8_arm` and `calls`, read back by `kernel_readback.int8_exact_of` and `int8_attention.applied_record`).  It refuses what the step does not define:
 ALiBi, a sliding window, a logit soft cap, sinks, non-decoder attention, a quantized KV cache, cascade attention, decode context
@@ -34,6 +36,7 @@ from vllm.v1.kv_cache_layout import KVCacheLayout
 from verity_vllm.engine import int8_attention as A
 from verity_vllm.engine import int8_k_scales as K
 from verity_vllm.engine import int8_ops
+from verity_vllm.engine.int8_window import CreditedRead
 from verity_vllm.program.frontend.target_profile import TargetProfile
 
 NAME = TargetProfile.INT8_EXACT_ATTENTION_BACKEND
@@ -45,6 +48,8 @@ class Int8AttentionImpl(FlashAttentionImpl):
     """One attention layer on `engine.int8_attention` (FlashAttention's construction, cache and metadata)."""
 
     int8_arm = A.ARM
+    #: the store session's cache read (`install_credited_read`); None reads the cache as it is
+    credited: CreditedRead | None = None
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
@@ -85,10 +90,16 @@ class Int8AttentionImpl(FlashAttentionImpl):
         if why := A.page_layout_refusal(kv_cache, self.head_size):
             raise ValueError(f"int8 attention: the KV cache's {why}")
         n = attn_metadata.num_actual_tokens
-        key_cache, value_cache = kv_cache.transpose(1, 2).split(self.head_size, dim=-1)
         self.calls += 1
-        int8_ops.paged_attention(query[:n], key_cache, value_cache, attn_metadata.query_start_loc, attn_metadata.seq_lens,
-                          attn_metadata.block_table, self.k_scales(layer.layer_name, query.device), self.scale, output[:n])
+        ks, md = self.k_scales(layer.layer_name, query.device), attn_metadata
+        if (read := self.credited) is not None:
+            st = read.step(md, md.query_start_loc, md.seq_lens, self.num_kv_heads, self.head_size)
+            read.window(st, kv_cache, K.layer_index(layer.layer_name), md.block_table, md.slot_mapping)
+            int8_ops.window_attention(query[:n], st.k, st.v, st.offsets, md.query_start_loc, md.seq_lens, ks, self.scale, output[:n])
+            return output
+        key_cache, value_cache = kv_cache.transpose(1, 2).split(self.head_size, dim=-1)
+        int8_ops.paged_attention(query[:n], key_cache, value_cache, md.query_start_loc, md.seq_lens, md.block_table, ks, self.scale,
+                                 output[:n])
         return output
 
 
@@ -115,6 +126,20 @@ class Int8AttentionBackend(FlashAttentionBackend):
     @classmethod
     def supported_kv_cache_layouts(cls) -> tuple[KVCacheLayout, ...]:
         return (KV_LAYOUT,)
+
+
+def install_credited_read(model: torch.nn.Module, read: CreditedRead | None) -> list[str]:
+    """Every int8 attention layer of ``model`` reads its cache through ``read`` from its next call (None: as it is again);
+    their layer names, in module order.  Refuses a model with none."""
+    names = []
+    for _, m in model.named_modules():
+        impl = getattr(m, "impl", None)
+        if isinstance(impl, Int8AttentionImpl):
+            impl.credited = read
+            names.append(m.layer_name)
+    if not names:
+        raise ValueError("the model has no int8 attention layer (attention_backend CUSTOM, engine.int8_attention_vllm)")
+    return names
 
 
 @cache
