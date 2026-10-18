@@ -25,7 +25,7 @@ import re
 import sys
 from fractions import Fraction
 
-from verity_machine_model.model import census_lines, device, devices, holds, model
+from verity_machine_model.model import census, device, devices, model
 
 WORD_CAP = 65
 
@@ -71,7 +71,7 @@ def floor(kappa: int, w: int) -> Fraction:
 def count(name: str) -> dict:
     data = device(name)
     m = model(data)
-    kinds = sorted({d["kind"] for d in census_lines(m, data) if holds(m, d["since"], d["until"], m.current)})
+    kinds = sorted(census(m, m.current, data))
     table = {k: dict(zip(("class", "words"), classify(k))) for k in kinds}
     for v in table.values():
         v["kappa"] = WORD_CAP * v["words"] if v["class"] in ("lane", "load", "uniform") else None
