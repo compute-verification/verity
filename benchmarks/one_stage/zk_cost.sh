@@ -4,7 +4,7 @@
 # from the verity tree on a GPU node, as a GPU host job (the GPU taken by gpu-lease around the sessions only):
 #   research run --queue --on vy-nebius-1 --gpu-host --project verity --source . --cwd clone --mem-gb 96 --cpus 32 \
 #     --max-min 240 -- bash benchmarks/one_stage/zk_cost.sh
-# (on vy-nebius-2 a guest job adds --preemptible; one arm a run, ZK_ARMS=fw, takes about 5 h with its verification)
+# (on vy-nebius-2 a guest job adds --preemptible; one arm a run, ZK_ARMS=fw, takes about 3.5 h with its verification, the builds cached)
 # env: ZK_KS=4096,14336  ZK_SIZES=1,8,64,512  ZK_ARMS=fw,nofw  ZK_COLD=2  ZK_RUNS=3  ZK_WARM=1  LEASE_MAX_MIN=120
 #      FLOCK_WORK=/workspace/jobs/proof-throughput (the CUDA prover's build and venv, as proof_throughput's job.sh keeps them)
 #      PT_WORK=/workspace/cache/proof-throughput (the Lean verifier's build, as its verify.sh keeps it)
