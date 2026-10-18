@@ -3,28 +3,20 @@
 # rec_inner.py stage, own rows, the full stratified draw), for test_lean_rec_coins and test_lean_rec_inner_streams once
 # the inner statement is read at Flock's statement check (RecSetup.innerScope). Pod 80's inner side with --plain-leaves and
 # the draw recorded (rec_live --draw), then V*'s side over it on the CPU (rec_vstage points, InnerFold.lean's fold, the
-# running sums' salts and level 3), the tree assembled under $S/fixture (u/stage the inner statement; inner-honest the
-# session's records and session; fold-honest.json, points-honest.json, acc-salts.bin; L3/ pub.bin and registered.json; and
-# outer-L3/ reused from the old shared-row fixture, whose session is refused at S2/R7 whatever the level's circuit, so it
-# needs no reproof). The tree goes to the store (research data put --kind fixture/v1), its art id and every test constant in
-# out/ (ART:, CIRCUIT_SHA512:, REPS:, L3_ACC_READS:, ...). Run from the verity tree (research run --cwd clone).
-# env: N=64  CPUS=32  FLOCK_WORK (as 80-rec-inner.sh)
+# running sums' salts and level 3), the tree assembled under out/fixture (u/stage the inner statement; inner-honest the
+# session's records and session; fold-honest.json, points-honest.json, acc-salts.bin; L3/ pub.bin and registered.json).
+# outer-L3/ (reused verbatim from the old shared-row fixture, whose session is refused at S2/R7 whatever the level's
+# circuit, so it needs no reproof) is added, and the tree registered (research data put --kind fixture/v1), on the
+# launching VM, which has the old fixture and the store. Every test constant is in out/constants.txt (CIRCUIT_SHA512:,
+# REPS_LINE:, L3_ACC_READS:, ...). Launched through a check slot, which pins it to the slot's cores:
+#   research run --as proofs --project verity --on vy-nebius-cpu-3 --source . --pool proofs --cwd clone --mem-gb 96 -- bash $0 N=64
+# env: N=64  FLOCK_WORK (as 88-rec-c3-inner.sh)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
-# research/uv captured before rec-env.sh rewrites PATH to the job's minimal venv
-RESEARCH_BIN=$(command -v research || true)
-UV_BIN=$(command -v uv || true)
-rcli() { if [ -n "$RESEARCH_BIN" ]; then "$RESEARCH_BIN" "$@"; elif [ -n "$UV_BIN" ]; then "$UV_BIN" run --extra torch-cpu research "$@"; else research "$@"; fi; }
-if [ -z "${RI_PINNED:-}" ]; then
-  . verity/ml/flock/pod/cpu-slices.sh
-  hold_slices "" "${CPUS:-32}" || exit 1
-  export RI_PINNED=$SLICE_CPUS RAYON_NUM_THREADS=$(echo $SLICE_CPUS | tr ',' '\n' | wc -l)
-  exec taskset -c $SLICE_CPUS bash "$0" "$@"
-fi
+# launched through a check slot (--pool proofs), which pins this process to the slot's cores (slot.py); read them, as 88 does
+export RI_PINNED=$(python3 -c 'import os; print(",".join(map(str, sorted(os.sched_getaffinity(0)))))')
+export RAYON_NUM_THREADS=$(echo $RI_PINNED | tr ',' '\n' | wc -l)
 export FC_COINS=os
-# the old shared-row fixture, for its outer-L3 session (fetched before rec-env.sh's PATH change)
-OLDFIX=verity/ml/flock/tests/fixtures/rec-coins/16-16-8-n64
-rcli data fetch-fixtures verity/ml/flock/tests/fixtures/rec-coins > /tmp/fetch-old.log 2>&1 || { echo "fetch old fixture failed"; tail -20 /tmp/fetch-old.log; }
 . verity/ml/flock/pod/rec-env.sh
 
 N=${N:-64}; D=$S/stage; V=$S/v; mkdir -p $V
@@ -83,8 +75,10 @@ python3 -m verity_flock.rec_vstage stage $O/inner $V/fold.json $V --points $V/po
 [ -f $V/L3/pub.bin ] || { tail -20 $O/L3.err; exit 1; }
 
 # 5. the fixture tree: u/stage {circuit.txt, pub-N.bin, partition.json}; inner-honest {session, public.json, private.json};
-# fold-honest.json, points-honest.json, acc-salts.bin; L3 {pub.bin, registered.json}; outer-L3 reused from the old fixture
-FX=$S/fixture/16-16-8-n64; mkdir -p $FX/u/stage $FX/inner-honest $FX/L3
+# fold-honest.json, points-honest.json, acc-salts.bin; L3 {pub.bin, registered.json}. outer-L3 is the old fixture's,
+# reused verbatim (its session is refused at S2/R7 whatever the level's circuit); it is added, and the tree registered
+# (research data put), on the launching VM, which has the old fixture and the store.
+FX=$OUTDIR/fixture/16-16-8-n64; mkdir -p $FX/u/stage $FX/inner-honest $FX/L3
 cp $D/circuit.txt $D/pub-$N.bin $D/partition.json $FX/u/stage/
 cp -r $SESS $FX/inner-honest/session
 cp $O/inner/public.json $O/inner/private.json $FX/inner-honest/
@@ -92,10 +86,7 @@ cp $V/points.json $FX/points-honest.json
 cp $V/fold.json $FX/fold-honest.json
 cp $V/acc-salts.bin $FX/acc-salts.bin
 cp $V/L3/pub.bin $V/L3/registered.json $FX/L3/
-if [ -d $OLDFIX/outer-L3 ]; then cp -r $OLDFIX/outer-L3 $FX/outer-L3; else echo "NO OLD outer-L3 ($OLDFIX)"; fi
 du -sb $FX $FX/* > $O/fixture-sizes.txt; cat $O/fixture-sizes.txt
-# a copy to $OUT, uploaded by custody as a fallback if research data put fails on the pod
-cp -r $S/fixture $OUTDIR/fixture 2>/dev/null || true
 
 # 6. the test constants, derived from the build (greppable, one per line)
 L3_SHA=$(sha512sum $V/L3/circuit.txt | cut -d' ' -f1)
@@ -111,9 +102,5 @@ $LEAN_BIN rec-transcript --rec-inner-transcript $O/inner/public.json --rec-inner
 echo "REPS_LINE: $(grep -h RECTRANSCRIPT $O/reps.txt | head -1)" | tee -a $OUTDIR/constants.txt
 cat $OUTDIR/constants.txt
 
-# 7. the fixture to the store
-ART=$( rcli data put --kind fixture/v1 --tree $S/fixture --preserve 2> $O/put.err )
-PUTRC=$?
-echo "ART: $ART (put rc $PUTRC)" | tee $OUTDIR/art.txt
-[ $PUTRC = 0 ] || { echo "research data put failed; $OUT/fixture holds the tree"; tail -20 $O/put.err; }
-echo "done"
+# 7. the tree is under $OUTDIR/fixture, uploaded by custody; the launching VM adds outer-L3 and runs research data put
+echo "done: fixture tree at out/fixture/16-16-8-n64 (outer-L3 and research data put run on the VM)"
