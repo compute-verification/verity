@@ -3,7 +3,9 @@
 A config run is one job over one vLLM configuration: the Build (the Programs and the `Q_word` manifest, with the strict word check), ONE
 instrumented Commit (no pairs; a control arm only as the slowdown's baseline) and a k-unit random replay.  Its record is small (kB) and
 keyed by the config (the row id): the Build's Program digests and manifest, the word check, the Commit's run root, openings and verdict,
-the replay's result with the units that differed, and the timing per arm.  Everything is read from the files the stages write in the row
+the replay's result with the units that differed, and the timing per arm.  Beside each request Program's digest is its census/v1 digest
+(`census_digests`), the census the Build cached: a function of the Program alone, so it adds no trust, and a reader binds the census
+and the memory map's structure to the Program without recomputing them.  Everything is read from the files the stages write in the row
 dir; nothing here runs a stage.  A TP row's record has the same parts, each with `per_rank` beside the total: the ranks' Program and
 workload digests, run roots, openings and replays, the global manifest, the combined run root and the replay summed over the ranks.
 
@@ -167,13 +169,18 @@ def build_stage(stage: dict[str, str] | None, programs_ok: bool, manifest: str |
     return out
 
 
+def census_digests(parts: dict[str, Any]) -> dict[str, str]:
+    """Each Build part's census/v1 digest beside its Program digest (`row_records.census_digest`): the request Programs'."""
+    return {k: v["census_digest"] for k, v in sorted(parts.items()) if isinstance(v, dict) and v.get("census_digest")}
+
+
 def build_part(d: Path) -> dict[str, Any]:
     bs = _json(d / "build_summary.json") or {}
     programs = {k: (v or {}).get("program_digest") for k, v in sorted(bs.items()) if k not in ("workload",) and isinstance(v, dict)}
     man = _json(d / "manifest_header.json") or _json(d / "manifest.json") or {}
     q = man.get("query") or {}
     return {"ok": bool(bs) and all((v or {}).get("ok") for v in bs.values() if isinstance(v, dict)),
-            "programs": programs, "workload_digest": (bs.get("workload") or {}).get("workload_digest"),
+            "programs": programs, "census_digests": census_digests(bs), "workload_digest": (bs.get("workload") or {}).get("workload_digest"),
             "manifest_digest": man.get("manifest_digest"), "query_id": q.get("query_id")}
 
 
@@ -220,7 +227,7 @@ def tp_build_part(d: Path, world: int) -> dict[str, Any]:
         rk = ranks.get(f"rank{r}") or {}
         per[str(r)] = {"ok": bool(rk) and all((v or {}).get("ok") for v in rk.values() if isinstance(v, dict)),
                        "programs": {k: (v or {}).get("program_digest") for k, v in sorted(rk.items()) if k != "workload" and isinstance(v, dict)},
-                       "workload_digest": (rk.get("workload") or {}).get("workload_digest")}
+                       "census_digests": census_digests(rk), "workload_digest": (rk.get("workload") or {}).get("workload_digest")}
     man = _json(d / "manifest_header.json") or _json(d / "manifest.json") or {}
     return {"ok": all(p["ok"] for p in per.values()), "world": world, "per_rank": per, "manifest_digest": man.get("manifest_digest"),
             "query_id": (man.get("query") or {}).get("query_id"), "program_digest_per_rank": man.get("program_digest_per_rank")}

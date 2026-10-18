@@ -422,7 +422,8 @@ def test_a_clean_tp2_config_run_s_record_is_per_rank_and_in_total(tmp_path):
     rec = CR.write(_tp_row_dir(tmp_path), ROW_TP2, tree="abc")
     assert rec["outcome"] == "PASS" and rec["why"] is None and rec["config"]["tp"] == 2
     b = rec["build"]
-    assert b["per_rank"]["1"] == {"ok": True, "programs": {"build_request_LP256_T31": "q1", "build_step": "s1"}, "workload_digest": "w1"}
+    assert b["per_rank"]["1"] == {"ok": True, "programs": {"build_request_LP256_T31": "q1", "build_step": "s1"}, "census_digests": {},
+                                  "workload_digest": "w1"}
     assert (b["manifest_digest"], b["program_digest_per_rank"]) == ("mm", {"0": "w0", "1": "w1"})
     c = rec["commit"]
     assert (c["run_root"], c["reason"], c["openings"]) == ("tproot", None, {"n": 128, "verified": 128})
