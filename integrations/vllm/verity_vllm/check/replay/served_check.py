@@ -4,7 +4,7 @@ Every value the Build names is committed at every step it runs, and each is chec
 reads and the served weights, by the twin of the Definition the Build bound (`kernels.inductor_rows`, `bf16_gemm_check`,
 `rows.token_select_first_max`):
 
-  * a call of a piece (`program.calls`): the Embedding, Inductor's norms, SiLU-and-mul and RoPE on every row; a GEMM (``mm``) is
+  * a call of a piece (`program.calls`): the Embedding, Inductor's norms, SiLU-and-mul, RoPE and q/k norm-RoPE on every row; a GEMM (``mm``) is
     the Definition the step's plan names at (K, N) for the step's M, on `ROWS` sampled rows of each request;
   * an attention op: FA3 over the request's cached keys and values, the committed k and v rows of every step it ran so far, by the
     Definition the plan names for each sampled query row (`Attention_v4`, or `Fa3AttentionSplit_v1` with the split count);
@@ -81,6 +81,8 @@ TWINS: dict[str, Callable[..., list[np.ndarray]]] = {
     IR.InductorAdd2RMSNormFinal.id: _norm(TW.residual_rows),
     IR.InductorSiluMul.id: lambda S, gu: [TW.silu_mul_rows(gu)],
     IR.InductorRoPE.id: lambda S, x, cs: [TW.rope_rows(x.reshape(len(x), S["NHEADS"], S["D"]), cs).reshape(len(x), -1)],
+    IR.InductorQKNormRoPE.id: lambda S, x, w, cs: [TW.qk_norm_rope_rows(x.reshape(len(x), S["NHEADS"], S["D"]), w, cs, **S)
+                                                   .reshape(len(x), -1)],
 }
 #: each GEMM Definition's twin by family: twin(statics, x (M, K), w (N, K)) -> (M, N)
 GEMMS: dict[str, Callable[..., np.ndarray]] = {

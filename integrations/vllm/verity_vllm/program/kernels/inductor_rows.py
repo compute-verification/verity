@@ -1,5 +1,6 @@
 """Numpy twins of `registry.inductor`'s Definitions, vectorised over rows: the RMSNorm forms (`residual_rows`, `norm_rows`),
-`InductorSiluMul_v1` (`silu_mul_rows`), `InductorRoPE_v1` (`derived_rows.rope_rows` with the `f2fp_bf16` store) and FA3's split
+`InductorSiluMul_v1` (`silu_mul_rows`), `InductorRoPE_v1` (`derived_rows.rope_rows` with the `f2fp_bf16` store),
+`InductorQKNormRoPE_v1` (`qk_norm_rope_rows`: `rstd_rows` and `derived_rows.rope_f32_rows`) and FA3's split
 decode (`fa3_head_split_rows`, `fa3_attention_rows`, over `derived_rows.attn_block` and `sparse_mla_split_twins`' split end and
 combine).  The Match's fast path, checked word for word against the Definitions in `tests/program/test_inductor.py`.  A
 row whose dot reads a non-finite operand is flagged and never claimed exact (`attn_block`'s ``nonfinite``)."""
@@ -25,25 +26,38 @@ def residual_rows(x, *rs) -> np.ndarray:
     return DR.add_rn(xf, rf[0]) if rf else xf
 
 
-def norm_rows(r, w, *, N: int, EPS: float, XBLOCK: int, R0_BLOCK: int, NUM_WARPS: int) -> np.ndarray:
-    """`registry.inductor._norm` over rows: r (R, N) f32 words, w (N,) bf16 words -> (R, N) bf16 words."""
-    wpr, chunks = I.norm_layout(N, EPS, XBLOCK, R0_BLOCK, NUM_WARPS)
+def rstd_rows(r, *, N: int, EPS: float, XBLOCK: int, R0_BLOCK: int, NUM_WARPS: int) -> np.ndarray:
+    """`registry.inductor._rstd` over rows: r (R, N) f32 words -> (R,) f32 words."""
+    wpr, chunks, vec = I.norm_layout(N, EPS, XBLOCK, R0_BLOCK, NUM_WARPS)
     r = np.asarray(r, dtype=U32)
     R = r.shape[0]
     acc = np.zeros((R, R0_BLOCK), dtype=U32)
     for k in range(chunks):
         lo, hi = k * R0_BLOCK, min(N, (k + 1) * R0_BLOCK)
         acc[:, :hi - lo] = DR.fma_rn(r[:, lo:hi], r[:, lo:hi], acc[:, :hi - lo])
-    cols = acc.reshape(R, I.WARP * wpr, I.VEC)
+    cols = acc.reshape(R, I.WARP * wpr, vec)
     s = cols[:, :, 0]
-    for i in range(1, I.VEC):
+    for i in range(1, vec):
         s = DR.add_rn(s, cols[:, :, i])
     warps = SMT._lane0(DR.add_rn, s.reshape(R * wpr, I.WARP)).reshape(R, wpr)
     total = SMT._lane0(DR.add_rn, warps)
     nf = np.full(R, bits_of(np.float32(N)), dtype=U32)
     mean = DR.mul_rn(DR.div_full_scale_a(total, nf), DR.div_full_rcp(nf))
-    rstd = DR.rsqrt_approx(DR.add_rn(mean, np.full(R, bits_of(np.float32(EPS)), dtype=U32)))
-    return DR.f2fp_bf16(DR.mul_rn(DR.mul_rn(r, rstd[:, None]), DR.bf16_to_f32_words(w)))
+    return DR.rsqrt_approx(DR.add_rn(mean, np.full(R, bits_of(np.float32(EPS)), dtype=U32)))
+
+
+def norm_rows(r, w, **S) -> np.ndarray:
+    """`registry.inductor._norm` over rows: r (R, N) f32 words, w (N,) bf16 words -> (R, N) bf16 words."""
+    r = np.asarray(r, dtype=U32)
+    return DR.f2fp_bf16(DR.mul_rn(DR.mul_rn(r, rstd_rows(r, **S)[:, None]), DR.bf16_to_f32_words(w)))
+
+
+def qk_norm_rope_rows(x, w, cs, *, NHEADS: int, D: int, **S) -> np.ndarray:
+    """`InductorQKNormRoPE_v1` over rows: x (R, NHEADS, D), w (D,), cs (R, D) bf16 words -> (R, NHEADS, D) bf16 words."""
+    x = np.asarray(x, dtype=np.uint16)
+    xf = DR.bf16_to_f32_words(x.reshape(-1, D))
+    y = DR.mul_rn(DR.mul_rn(xf, rstd_rows(xf, N=D, **S)[:, None]), DR.bf16_to_f32_words(w))
+    return DR.rope_f32_rows(y.reshape(x.shape[0], NHEADS, D), cs, store=DR.f2fp_bf16)
 
 
 def _sat(u) -> np.ndarray:

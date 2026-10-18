@@ -1,9 +1,9 @@
 """The served Build (`acquire.served`) from a served-compiled process's own artifact: Llama-3.2-1B served at vLLM's defaults on an
 H200 (`fixtures/served_llama.tar.gz`: the three Inductor wrappers its 17 pieces run, vLLM's split graph, the kernels' launch configs,
 the cuBLAS routes probed on that GPU, and the four-request mixed workload).  The Build reads every wrapper line, binds every launch
-to a Definition, and reproduces the CUDA-graph mode, padding and FA3 split count of each of the 14 steps the process served; a
-line, a kernel source, a hook or a launch config it does not model is refused by name, and a GEMM route it lacks leaves it
-incomplete."""
+to a Definition, and reproduces the CUDA-graph mode, padding and FA3 split count of each of the 14 steps the process served; an
+autotuned kernel binds the one config its autotuners ran; a line, a kernel source, a hook or a launch config it does not model is
+refused by name, and a GEMM route it lacks leaves it incomplete."""
 from __future__ import annotations
 
 __models__ = ("unsloth/Llama-3.2-1B",)
@@ -105,12 +105,23 @@ def test_an_unhooked_buffer_is_refused(art: Path, tmp_path: Path) -> None:
         _build(art, inductor=ind)
 
 
-def test_an_autotuned_kernel_is_refused(art: Path) -> None:
+def _autotuned(art: Path, executed) -> dict:
     lc = json.loads((art / "launch_configs.json").read_text())
     key, rec = next((k, v) for k, v in lc.items() if v["candidates"][0]["kwargs"].get("R0_BLOCK"))
-    other = {**rec["candidates"][0], "num_warps": 8}
-    with pytest.raises(Unmodelled, match="one candidate is required"):
-        _build(art, launch_configs={**lc, key: {"candidates": [rec["candidates"][0], other], "executed": rec["executed"]}})
+    other = {**rec["candidates"][0], "kwargs": {**rec["candidates"][0]["kwargs"], "R0_BLOCK": 1024}}
+    return {**lc, key: {"candidates": [rec["candidates"][0], other], "executed": executed(rec["candidates"][0], other)}}
+
+
+def test_an_autotuned_kernel_binds_the_config_it_ran(art: Path) -> None:
+    assert _build(art, launch_configs=_autotuned(art, lambda won, _lost: [won]))["program_digest"] == _build(art)["program_digest"]
+    lost = _build(art, launch_configs=_autotuned(art, lambda _won, lost: [lost]))
+    assert lost["program_digest"] != _build(art)["program_digest"]
+
+
+@pytest.mark.parametrize("executed", [lambda won, lost: [won, lost], lambda won, lost: []], ids=["two", "none"])
+def test_a_kernel_without_one_executed_config_is_refused(art: Path, executed) -> None:
+    with pytest.raises(Unmodelled, match="one config every instance ran is required"):
+        _build(art, launch_configs=_autotuned(art, executed))
 
 
 @pytest.mark.parametrize("n,uniform,want", [(3, True, ("FULL", 4)), (8, True, ("FULL", 8)), (9, True, ("PIECEWISE", 16)),

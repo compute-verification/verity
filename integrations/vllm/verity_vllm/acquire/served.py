@@ -3,11 +3,12 @@ Inductor, FULL_AND_PIECEWISE CUDA graphs, no batch invariance), read from the se
 
 Each compiled piece is its Inductor wrapper's `call()`, read line by line: a line is one of the forms `_parse_piece` names or the
 Build refuses it.  A Triton launch binds through `acquire.inductor_templates` (its generated source is a template, its launch
-config the one candidate the process ran); an `extern_kernels.mm` is a cuBLAS GEMM of an activation against a served weight; the
-buffer each writes is a committed value, `run_intermediate_hooks('verity|<op>|<buf>')` (`ServedCompiledSource`), named
-`c<piece>.<op>/<buf>`, and a write no hook names is refused.  vLLM's split graph (`computation_graph.py`) wires the pieces: a piece
-argument is another piece's return, an attention op's output, a served weight (its placeholder's module path under the backbone),
-the token ids or the positions (`c00.input/ids`, `c00.input/positions`).  After the piece whose RoPE wrote its query, each attention
+config the one config the process ran, an autotune's winner included); an `extern_kernels.mm` is a cuBLAS GEMM of an activation
+against a served weight; the buffer each writes is a committed value, `run_intermediate_hooks('verity|<op>|<buf>')`
+(`ServedCompiledSource`), named `c<piece>.<op>/<buf>`, and a write no hook names is refused.  vLLM's split graph
+(`computation_graph.py`) wires the pieces: a piece argument is another piece's return, an attention op's output, a served weight
+(its placeholder's module path under the backbone), the token ids or the positions (`c00.input/ids`, `c00.input/positions`).
+After the piece whose RoPE (or q/k norm-RoPE) wrote its query, each attention
 op is FA3 over its request's cached keys and values (the committed k and v rows of all its tokens so far), named
 `c<piece>.attention/<layer>` with the layer the module path of the GEMM its query was projected by.  The backbone's output feeds
 the logits, a cuBLAS GEMM of each request's last row against the lm_head (`logits_processor`), and `TokenSelect_v1`
@@ -68,6 +69,8 @@ FAMILY = SERVED_FAMILY
 DOT = HopperBF16WgmmaDot16
 #: vllm-flash-attn's `_DEFAULT_MAX_NUM_SPLITS_FOR_CUDA_GRAPH`: the static split count of a step a full graph may hold
 SPLIT_CAP = 32
+#: the Definitions whose output an attention op reads as its query and keys (statics NHEADS, D)
+ROPES = (IR.InductorRoPE.id, IR.InductorQKNormRoPE.id)
 
 
 # ------------------------------------------------------------------------------------------------------------- one wrapper
@@ -432,7 +435,7 @@ def wire(programs: list[dict[str, Any]], graph: dict[str, Any], *, backbone: str
             heads = {}
             for k in ("q", "k"):
                 rope = producer.get(ops[k]["value"])
-                if rope is None or rope.get("base") != IR.InductorRoPE.id:
+                if rope is None or rope.get("base") not in ROPES:
                     raise Unmodelled(f"attention {a['layer']}: its {k} is not a RoPE's output")
                 heads[k] = rope["statics"]
             NH, KVH, D = heads["q"]["NHEADS"], heads["k"]["NHEADS"], heads["q"]["D"]

@@ -484,13 +484,17 @@ class ServedCompiledSource:
 
     @staticmethod
     def launch_configs() -> dict[str, Any]:
-        """Each Triton kernel module this process loaded, by the sha256 of its text (`inductor_templates.source_sha256`, the
-        wrapper's `async_compile.triton` block): the configs its autotuner compiled (``candidates``) and launched (``executed``).
-        The served Build binds each launch to its one candidate (`acquire.served`)."""
+        """Each Triton kernel this process loaded, by the sha256 of its text (`inductor_templates.source_sha256`, the wrapper's
+        `async_compile.triton` block): the configs its autotuners compiled (``candidates``) and the config of each autotuner
+        that holds one launcher (``executed``: its only config, or the winner its first run timed).  A wrapper's globals hold the
+        autotuners its call() runs, which can be other instances than the kernel module's own.  The served Build binds each
+        launch to its one executed config (`acquire.served`)."""
         import hashlib
 
         from torch._inductor.codecache import PyCodeCache
         from torch._inductor.runtime.triton_heuristics import CachingAutotuner
+
+        from verity_vllm.acquire.inductor_templates import kernel_sources
 
         def cfg(c: Any) -> dict[str, Any]:
             return {"kwargs": {str(k): v for k, v in (getattr(c, "kwargs", None) or {}).items()},
@@ -500,18 +504,25 @@ class ServedCompiledSource:
         mods = [m for name in ("modules", "modules_no_attr", "cache") for coll in [getattr(PyCodeCache, name, None) or {}]
                 for m in (coll.values() if isinstance(coll, dict) else coll)]
         for m in {id(m): m for m in mods}.values():
-            path = getattr(m, "__file__", None)
-            tuners = [o for o in vars(m).values() if isinstance(o, CachingAutotuner)]
-            if not path or not tuners:
+            path, g = getattr(m, "__file__", None), vars(m)
+            if not path or not any(isinstance(o, CachingAutotuner) for o in g.values()):
                 continue
             with open(path) as f:
                 text = f.read()
-            if "    def call(self, args):" in text:            # a wrapper module: its kernels' own modules carry them
-                continue
-            for t in tuners:
-                out[hashlib.sha256(text.encode()).hexdigest()] = {
-                    "candidates": [cfg(r.config) for r in getattr(t, "compile_results", None) or []],
-                    "executed": [cfg(launcher.config) for launcher in getattr(t, "launchers", None) or []]}
+            if "    def call(self, args):" in text:
+                tuners = [(src, g.get(name)) for name, src in kernel_sources(text).items()]
+            else:
+                tuners = [(text, o) for o in g.values()]
+            for src, t in tuners:
+                if not isinstance(t, CachingAutotuner):
+                    continue
+                rec = out.setdefault(hashlib.sha256(src.encode()).hexdigest(), {"candidates": [], "executed": []})
+                for c in [cfg(r.config) for r in getattr(t, "compile_results", None) or []]:
+                    if c not in rec["candidates"]:
+                        rec["candidates"].append(c)
+                launchers = getattr(t, "launchers", None) or []
+                if len(launchers) == 1 and (c := cfg(launchers[0].config)) not in rec["executed"]:
+                    rec["executed"].append(c)
         return dict(sorted(out.items()))
 
     def summary(self) -> dict[str, Any]:

@@ -502,18 +502,22 @@ def rope_rows(x: np.ndarray, cs: np.ndarray, store=None) -> np.ndarray:
     """`RoPE_v1{NHEADS, D}` vectorised: x (..., NHEADS, D) bf16 words, cs (..., D) bf16 words (one cache row per leading index,
     broadcast over heads) -> (..., NHEADS, D) bf16 words.  ``store`` rounds the f32 results (default `bf16_rn_torch`; `f2fp_bf16`
     is `inductor.InductorRoPE_v1`'s)."""
+    return rope_f32_rows(bf16_to_f32_words(np.asarray(x, dtype=np.uint16)), cs, store=store)
+
+
+def rope_f32_rows(xf: np.ndarray, cs: np.ndarray, store=None) -> np.ndarray:
+    """`rope_rows` of f32 words xf (..., NHEADS, D), a rotation whose input no bf16 store rounded (`inductor.InductorQKNormRoPE_v1`)."""
     store = bf16_rn_torch if store is None else store
-    x = np.asarray(x, dtype=np.uint16)
+    xf = np.asarray(xf, dtype=np.uint32)
     cs = np.asarray(cs, dtype=np.uint16)
-    D = x.shape[-1]
+    D = xf.shape[-1]
     if D % 2 or cs.shape[-1] != D:
         raise ValueError(f"RoPE_v1: head dim {D} / cache row width {cs.shape[-1]} (need even D, cache row == D)")
     R = D // 2
-    xf = bf16_to_f32_words(x)
     c = bf16_to_f32_words(cs[..., None, :R])                                    # (..., 1, R) broadcast over heads
     s = bf16_to_f32_words(cs[..., None, R:])
     x1, x2 = xf[..., :R], xf[..., R:]
-    lo = fma_rn(x1, c, mul_rn(x2, s) ^ np.uint32(0x80000000))                    # x*c - y*s  (y*s exact, so one rounding)
+    lo = fma_rn(x1, c, mul_rn(x2, s) ^ np.uint32(0x80000000))                    # x*c - y*s  (y*s exact for bf16 x, so one rounding)
     hi = fma_rn(x2, c, mul_rn(x1, s))                                            # y*c + x*s
     return np.concatenate([store(lo), store(hi)], axis=-1)
 

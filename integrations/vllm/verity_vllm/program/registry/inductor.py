@@ -3,13 +3,17 @@ Inductor's fused Triton kernels and FA3's split decode, each with its launch con
 
 Inductor's RMSNorm.  The four fused forms (`triton_red_fused_*rms_norm*`) differ only in how the row r is formed in f32: the row
 itself (after the embedding gather), x + res, or x + (r1 + r2) with no bf16 rounding of r1 + r2 (`InductorAdd2RMSNorm_v1` also
-stores bf16(r)).  The reduction is the launch's: a row has NUM_WARPS / XBLOCK warps and thread t of the row holds columns
-[8t, 8t + 8) of each R0_BLOCK chunk (one 16-byte load); across chunks each column's accumulator is `fma(r, r, acc)` from +0; the
-thread adds its eight in order, each warp butterflies its lanes (xor 16 .. 1, `ld.shared` after), and the row's warp sums are
-butterflied (xor wpr/2 .. 1) through shared memory.  Then mean = `div.full.f32(sum, N)` (`F32Mul_v2(DivFullScaleA_v2, DivFullRcp)`),
-`mean + EPS` (add.f32, not contracted), `rsqrt.approx.ftz.f32` (`RsqrtApprox_v1`: its argument is at least EPS, a positive normal
-static, so the flush never applies), and out = bf16((r * rstd) * w).  A layout other than one 8-column chunk per thread per
-iteration is refused: its register order is unverified.
+stores bf16(r)).  The reduction is the launch's: a row has wpr = NUM_WARPS / XBLOCK warps and thread t of the row holds columns
+[VEC t, VEC t + VEC) of each R0_BLOCK chunk, VEC = R0_BLOCK / (32 wpr) of 2, 4 or 8 (one 4-, 8- or 16-byte load); across chunks
+each column's accumulator is `fma(r, r, acc)` from +0; the thread adds its VEC in order, each warp butterflies its lanes (xor
+16 .. 1, `ld.shared` after), and the row's warp sums are butterflied (xor wpr/2 .. 1) through shared memory.  Then mean =
+`div.full.f32(sum, N)` (`F32Mul_v2(DivFullScaleA_v2, DivFullRcp)`), `mean + EPS` (add.f32, not contracted),
+`rsqrt.approx.ftz.f32` (`RsqrtApprox_v1`: its argument is at least EPS, a positive normal static, so the flush never applies),
+and out = bf16((r * rstd) * w).  Any other layout is refused: its register order is unverified.
+
+Inductor's per-head q/k norm fused with NeoX RoPE (Qwen3's attention, the combo kernel `triton_red_fused_*` over the qkv buffer,
+the head norms' weights and the cos/sin cache row): each head's RMSNorm reduction as above at N = D, then the rotation of
+y = (x * rstd) * w in f32, no bf16 store between them: `fma(y_lo, c, -(y_hi * s))` and `fma(y_hi, c, y_lo * s)`, `F2fpBf16`.
 
 Inductor's SiLU-and-mul (`triton_poi_fused_mul_silu_slice_*`): n = 0 - g (sub.f32), libdevice's `expf` with ftz in its range
 reduction (as Triton links it: `fma.rn.ftz`, `cvt.ftz.sat`, `fma.rm.ftz`, `ex2.approx.ftz`), whose final scaling by 2^j is
@@ -36,6 +40,8 @@ Registered functions (all `Name_v1`):
   InductorSiluMulElem                                        (g: bf16, u: bf16) -> bf16
   InductorSiluMul{I}                                         (gu: 2I bf16) -> I bf16
   InductorRoPEHead{D}, InductorRoPE{NHEADS,D}                (x: [NHEADS x] D bf16, cs: D bf16) -> [NHEADS x] D bf16
+  InductorQKNormRoPEHead{D,EPS,XBLOCK,R0_BLOCK,NUM_WARPS}    (x: D bf16, w: D bf16, cs: D bf16) -> D bf16
+  InductorQKNormRoPE{NHEADS,D,EPS,XBLOCK,R0_BLOCK,NUM_WARPS} (x: NHEADS x D bf16, w: D bf16, cs: D bf16) -> NHEADS x D bf16
   Fa3AttentionHeadSplit{T,NS,D,BN,DOT,INV,MASKED_FROM}       (q: D, k: T x D, v: T x D) -> D bf16
   Fa3AttentionSplit{T,NS,NH,KVH,D,BN,DOT,INV,MASKED_FROM}    (q: NH x D, kc: T x KVH x D, vc: T x KVH x D) -> NH x D bf16
 """
@@ -56,8 +62,8 @@ from verity_vllm.program.registry.moe import (C_252, C_HALF, C_LOG2E_HI, C_LOG2E
                                               ONE32, F32FmaRm)
 from verity_vllm.program.registry.prims import BF16, F32
 
-#: bf16 columns per thread per chunk: one 16-byte vector load
-VEC = 8
+#: bf16 columns per thread per chunk the PTX was read at: one 4-, 8- or 16-byte vector load
+VECS = (2, 4, 8)
 WARP = 32
 _CONF = ("model-untested: read from the generated Triton kernels' PTX at cc 9.0 (the module docstring); "
          "tests/properties/served_compiled_kernels_gpu.py is its hardware check")
@@ -65,16 +71,18 @@ _CONF = ("model-untested: read from the generated Triton kernels' PTX at cc 9.0 
 
 # --- RMSNorm ------------------------------------------------------------------------------------------------------------------
 
-def norm_layout(N: int, EPS: float, XBLOCK: int, R0_BLOCK: int, NUM_WARPS: int) -> tuple[int, int]:
-    """(warps per row, chunks per row) of a reduction launch; refuses a layout this module has not read from PTX."""
+def norm_layout(N: int, EPS: float, XBLOCK: int, R0_BLOCK: int, NUM_WARPS: int) -> tuple[int, int, int]:
+    """(warps per row, chunks per row, columns per thread per chunk) of a reduction launch; refuses a layout this module has not
+    read from PTX."""
     wpr = NUM_WARPS // XBLOCK if XBLOCK >= 1 and NUM_WARPS % XBLOCK == 0 else 0
-    if wpr < 1 or wpr & (wpr - 1) or R0_BLOCK != WARP * wpr * VEC or N < 1 or N % VEC:
-        raise ValueError(f"InductorRMSNorm_v1: N={N} XBLOCK={XBLOCK} R0_BLOCK={R0_BLOCK} NUM_WARPS={NUM_WARPS} is not one {VEC}-column "
-                         f"chunk per thread over a power-of-two count of warps per row")
+    vec = R0_BLOCK // (WARP * wpr) if wpr >= 1 and R0_BLOCK % (WARP * wpr) == 0 else 0
+    if wpr < 1 or wpr & (wpr - 1) or vec not in VECS or N < 1 or N % vec:
+        raise ValueError(f"Inductor norm: N={N} XBLOCK={XBLOCK} R0_BLOCK={R0_BLOCK} NUM_WARPS={NUM_WARPS} is not one chunk of "
+                         f"{'/'.join(map(str, VECS))} columns per thread over a power-of-two count of warps per row")
     e = np.float32(EPS)
     if not (np.isfinite(e) and e >= np.finfo(np.float32).tiny):
-        raise ValueError(f"InductorRMSNorm_v1: EPS={EPS} is not a positive normal f32 (rsqrt.approx.ftz reads mean + EPS)")
-    return wpr, -(-N // R0_BLOCK)
+        raise ValueError(f"Inductor norm: EPS={EPS} is not a positive normal f32 (rsqrt.approx.ftz reads mean + EPS)")
+    return wpr, -(-N // R0_BLOCK), vec
 
 
 def _lane0(B, vals):
@@ -86,11 +94,10 @@ def _lane0(B, vals):
     return vals[0]
 
 
-def _norm(B, S, r, w):
-    """The normed row of r (N f32 values, a Python list) under the launch's reduction; a column slot no chunk reaches keeps the
+def _rstd(B, S, r, N):
+    """rstd of the row r (N f32 values, a Python list) under the launch's reduction; a column slot no chunk reaches keeps the
     kernel's +0 accumulator and is added like any other."""
-    N = S.N
-    wpr, chunks = norm_layout(N, S.EPS, S.XBLOCK, S.R0_BLOCK, S.NUM_WARPS)
+    wpr, chunks, vec = norm_layout(N, S.EPS, S.XBLOCK, S.R0_BLOCK, S.NUM_WARPS)
     zero = B.call(ZERO32)
     acc = []
     for c in range(S.R0_BLOCK):
@@ -102,17 +109,25 @@ def _norm(B, S, r, w):
         acc.append(a)
     threads = []
     for t in range(WARP * wpr):
-        s = acc[VEC * t]
-        for x in acc[VEC * t + 1:VEC * t + VEC]:
+        s = acc[vec * t]
+        for x in acc[vec * t + 1:vec * t + vec]:
             s = B.call(P.F32AddV2, s, x)
         threads.append(s)
     total = _lane0(B, [_lane0(B, threads[WARP * i:WARP * i + WARP]) for i in range(wpr)])
     nf = B.call(f32c(float(N)))
     mean = B.call(P.F32MulV2, B.call(P.DivFullScaleAV2, total, nf), B.call(P.DivFullRcp, nf))
-    rstd = B.call(P.RsqrtApprox, B.call(P.F32AddV2, mean, B.call(f32c(S.EPS))))
+    return B.call(P.RsqrtApprox, B.call(P.F32AddV2, mean, B.call(f32c(S.EPS))))
+
+
+def _scaled(B, r, rstd, w):
+    """(r * rstd) * w in f32."""
     wf = B.batch(P.Bf16ToF32, w, axes=(0,))
-    y = B.batch(P.F32MulV2, B.batch(P.F32MulV2, array_of(r), rstd, axes=(0, None)), wf, axes=(0, 0))
-    return B.batch(P.F2fpBf16, y, axes=(0,))
+    return B.batch(P.F32MulV2, B.batch(P.F32MulV2, array_of(r), rstd, axes=(0, None)), wf, axes=(0, 0))
+
+
+def _norm(B, S, r, w):
+    """The normed row of r (N f32 values, a Python list): bf16((r * rstd) * w)."""
+    return B.batch(P.F2fpBf16, _scaled(B, r, _rstd(B, S, r, S.N), w), axes=(0,))
 
 
 def _rows(B, *xs):
@@ -198,6 +213,11 @@ def InductorRoPEHead(B, S, x, cs):
     sin[i]))), out[i+R] = bf16(fma(x[i+R], cos[i], x[i] * sin[i])), `F2fpBf16` stores."""
     R, D = S.D // 2, S.D
     lo, hi, cos, sin = (B.batch(P.Bf16ToF32, a, axes=(0,)) for a in (x[0:R], x[R:D], cs[0:R], cs[R:D]))
+    return _rope(B, D, lo, hi, cos, sin)
+
+
+def _rope(B, D, lo, hi, cos, sin):
+    """The rotation of f32 halves lo, hi: [bf16(fma(lo, cos, -(hi * sin))) | bf16(fma(hi, cos, lo * sin))]."""
     mul, fma, cvt = (lambda a, b: B.batch(P.F32MulV2, a, b, axes=(0, 0))), P.F32FmaV2, P.F2fpBf16
     first = B.batch(fma, lo, cos, B.batch(F32Neg, mul(hi, sin), axes=(0,)), axes=(0, 0, 0))
     second = B.batch(fma, hi, cos, mul(lo, sin), axes=(0, 0, 0))
@@ -209,6 +229,33 @@ def InductorRoPEHead(B, S, x, cs):
            conformance=_CONF)
 def InductorRoPE(B, S, x, cs):
     return B.batch(bind(InductorRoPEHead, D=S.D), x, cs, axes=(0, None))
+
+
+_HEAD_NORM_STATICS = ["D", "EPS", "XBLOCK", "R0_BLOCK", "NUM_WARPS"]
+
+
+@composite("InductorQKNormRoPEHead", 1, _HEAD_NORM_STATICS,
+           lambda S: ((("x", Array(S.D, BF16)), ("w", Array(S.D, BF16)), ("cs", Array(S.D, BF16))), Array(S.D, BF16)),
+           conformance=_CONF)
+def InductorQKNormRoPEHead(B, S, x, w, cs):
+    """One head's RMSNorm (the launch's reduction at N = D) and NeoX rotation of y = (x * rstd) * w, unrounded, by the cache row
+    cs = [cos | sin]: out[i] = bf16(fma(y[i], cos[i], -(y[i+R] * sin[i]))), out[i+R] = bf16(fma(y[i+R], cos[i], y[i] * sin[i]))."""
+    R, D = S.D // 2, S.D
+    xf, = _rows(B, x)
+    r = [xf[j] for j in range(D)]
+    y = _scaled(B, r, _rstd(B, S, r, D), w)
+    cos, sin = (B.batch(P.Bf16ToF32, a, axes=(0,)) for a in (cs[0:R], cs[R:D]))
+    return _rope(B, D, y[0:R], y[R:D], cos, sin)
+
+
+@composite("InductorQKNormRoPE", 1, ["NHEADS"] + _HEAD_NORM_STATICS,
+           lambda S: ((("x", Array(S.NHEADS, Array(S.D, BF16))), ("w", Array(S.D, BF16)), ("cs", Array(S.D, BF16))),
+                      Array(S.NHEADS, Array(S.D, BF16))),
+           conformance=_CONF)
+def InductorQKNormRoPE(B, S, x, w, cs):
+    """`InductorQKNormRoPEHead_v1` on each of NHEADS heads, one norm weight and one cache row."""
+    head = bind(InductorQKNormRoPEHead, D=S.D, EPS=S.EPS, XBLOCK=S.XBLOCK, R0_BLOCK=S.R0_BLOCK, NUM_WARPS=S.NUM_WARPS)
+    return B.batch(head, x, w, cs, axes=(0, None, None))
 
 
 # --- FA3 split decode ---------------------------------------------------------------------------------------------------------
@@ -276,4 +323,5 @@ def Fa3AttentionSplit(B, S, q, kc, vc):
 
 
 INDUCTOR_COMPOSITES = [InductorRMSNorm, InductorAddRMSNorm, InductorAdd2RMSNorm, InductorAdd2RMSNormFinal, InductorSiluMulElem,
-                       InductorSiluMul, InductorRoPEHead, InductorRoPE, Fa3AttentionHeadSplit, Fa3AttentionSplit]
+                       InductorSiluMul, InductorRoPEHead, InductorRoPE, InductorQKNormRoPEHead, InductorQKNormRoPE,
+                       Fa3AttentionHeadSplit, Fa3AttentionSplit]
