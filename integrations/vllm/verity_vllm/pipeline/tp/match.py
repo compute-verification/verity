@@ -36,15 +36,17 @@ from verity_vllm.collectives import fused_norm as FN
 from verity_vllm.config import option
 from verity_vllm.pipeline.build import read_tp_links, same_module_path
 from verity_vllm.pipeline.launch_context import rows_at
+from verity_vllm.program import prefix_plan as PP
 
 
-def step_rows(tok: dict) -> dict[int, tuple[int, int]]:
+def step_rows(tok: dict, cached: dict[str, int] | None = None) -> dict[int, tuple[int, int]]:
     """{engine step: (tokens, sampled rows)} of the schedule a capture's `tokens.json` realized: each request from the forward that ran
     its prefill (`timing.requests[rid].first_step`, 0 without one) for one forward per generated token, as `launch_context.rows_at`
-    schedules a declared request (a chunked prefill is not modelled: its steps' rows differ and fail)."""
+    schedules a declared request (a chunked prefill is not modelled: its steps' rows differ and fail); a warm request's prefill
+    computes its uncached rows only, LP - C, C its plan's cached rows (``cached``: request id -> C, `prefix_plan.cached_by_id`)."""
     timing = (tok.get("timing") or {}).get("requests") or {}
     reqs = [{"arrive_step": int((timing.get(str(q["request_id"])) or {}).get("first_step") or 0), "prompt_len": len(q["prompt_token_ids"]),
-             "max_tokens": len(q["generated_token_ids"])} for q in tok["requests"]]
+             "cached": (cached or {}).get(str(q["request_id"]), 0), "max_tokens": len(q["generated_token_ids"])} for q in tok["requests"]]
     last = max((q["arrive_step"] + max(1, q["max_tokens"]) for q in reqs), default=0)
     return {e: (sum(rows_at(q, e) for q in reqs), sum(1 for q in reqs if rows_at(q, e))) for e in range(last)}
 
@@ -56,7 +58,7 @@ def _engine_main(args) -> None:
     from vllm import LLM
 
     from verity_vllm.engine import served, vllm_adapter as va
-    from verity_vllm.pipeline.tp.capture import parse_engine_args
+    from verity_vllm.pipeline.tp.capture import stage_engine_kwargs
     from verity_vllm.engine.rank_worker import EXTENSION
 
     out = Path(args.out)
@@ -66,10 +68,7 @@ def _engine_main(args) -> None:
     env_flags = {**prof.apply_env(), **served.apply(wl["execution"])}
     engine_env.step_timeout(args.rpc_timeout)
     cp = prof.checkpoint_for(case, args.checkpoints)
-    kw = prof.engine_kwargs(cp, replay=False, enforce_eager=True, tensor_parallel_size=args.tp)
-    kw["enable_prefix_caching"] = False
-    kw["max_num_seqs"] = int(args.max_num_seqs)
-    kw.update(parse_engine_args(args.engine_arg))
+    kw = stage_engine_kwargs(cp, args.tp, args.max_num_seqs, wl, args.engine_arg)
     instrumented = args.arm == "capture"
     if instrumented:
         kw["worker_extension_cls"] = EXTENSION
@@ -131,7 +130,8 @@ def _check_main(args) -> int:
     recorder_sha = {str(r): hashlib.sha256((cap / f"coll.rank{r}.jsonl").read_bytes()).hexdigest() for r in ranks}
     steps = sorted({x["step"] for r in ranks for x in recs[r]})
     tok = json.load(open(cap / "tokens.json"))
-    sched = step_rows(tok)
+    wl = getattr(args, "workload", None)
+    sched = step_rows(tok, PP.cached_by_id(json.load(open(wl))) if wl else None)
     gens = [len(q["generated_token_ids"]) for q in tok["requests"]]
     # ---- 1. structure vs each rank's Build peer-input signature
     struct = {"pass": True, "per_rank": {}}

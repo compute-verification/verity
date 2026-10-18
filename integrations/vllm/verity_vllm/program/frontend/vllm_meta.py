@@ -96,13 +96,32 @@ class SplitsWithPeers(WithPeers):
         return self._run((prompt, seed, splits), peers)
 
 
+class CachedWithPeers(WithPeers):
+    """`WithPeers` over a greedy request with a dense cached prefix (`cached_request.CachedGreedyRequest`): `forward(prompt, prefix,
+    *peers)`."""
+
+    def forward(self, prompt: torch.Tensor, prefix: torch.Tensor, *peers: torch.Tensor):
+        return self._run((prompt, prefix), peers)
+
+
+class MlaCachedWithPeers(WithPeers):
+    """`WithPeers` over a greedy request with an MLA cached prefix (`cached_request.CachedMlaGreedyRequest`): `forward(prompt, latent, index_k,
+    index_k_scale, *peers)`.  MLA's latent and index-K caches are replicated across the ranks, so each rank's prefix is all of it."""
+
+    def forward(self, prompt: torch.Tensor, latent: torch.Tensor, index_k: torch.Tensor, index_k_scale: torch.Tensor, *peers: torch.Tensor):
+        return self._run((prompt, latent, index_k, index_k_scale), peers)
+
+
 def with_peers(inner: nn.Module, inputs: tuple, bus) -> tuple[nn.Module, tuple]:
     """A tensor-parallel rank's traced wrapper over `inner` (a `make_wrapper` module) and its example inputs: `inner`'s own inputs (the
-    prompt, and a stochastic wrapper's `seed` and `splits`), then the bus's example peers in collective order."""
-    forms = {1: WithPeers, 2: SeededWithPeers, 3: SplitsWithPeers}
-    if len(inputs) not in forms:
-        raise ValueError(f"with_peers: a wrapper takes 1 to 3 inputs of its own (prompt, seed, splits), {type(inner).__name__} takes {len(inputs)}")
-    return forms[len(inputs)](inner, bus), tuple(inputs) + tuple(bus.example_peers())
+    prompt, a stochastic wrapper's `seed` and `splits`, a cached request's prefix), then the bus's example peers in collective order."""
+    forms = {(1, 0): WithPeers, (2, 0): SeededWithPeers, (3, 0): SplitsWithPeers, (1, 1): CachedWithPeers, (1, 3): MlaCachedWithPeers}
+    n_prefix = getattr(inner, "n_prefix", 0)
+    form = forms.get((len(inputs) - n_prefix, n_prefix))
+    if form is None:
+        raise ValueError(f"with_peers: no peer form for {type(inner).__name__} with {len(inputs) - n_prefix} inputs of its own and {n_prefix} "
+                         f"prefix inputs (forms: {sorted(forms)})")
+    return form(inner, bus), tuple(inputs) + tuple(bus.example_peers())
 
 
 def probe_collectives(inner: nn.Module, inputs: tuple, vllm_config, num_tokens: int, bus, profile=None) -> list[dict]:
@@ -325,7 +344,9 @@ class GreedyRequest(nn.Module):
             return torch.argmax(logits, dim=-1).to(torch.int32)
 
     def forward(self, prompt: torch.Tensor) -> torch.Tensor:
-        tok = self._step(prompt, 0, 0)
+        return self._decode(self._step(prompt, 0, 0))
+
+    def _decode(self, tok: torch.Tensor) -> torch.Tensor:
         toks = [tok]
         for s in range(self.T):
             tok = self._step(tok, self.LP + s, s + 1)
@@ -441,8 +462,11 @@ class StochasticRequest(nn.Module):
             return iface.gumbel_topp_token_select(logits, seed, self.temperature, self.top_p, pos0 + ids.shape[0] - 1, splits, S=self.S)
 
     def forward(self, prompt: torch.Tensor, seed: torch.Tensor, splits: torch.Tensor | None = None) -> torch.Tensor:
+        return self._request(prompt, 0, seed, splits)
+
+    def _request(self, prompt: torch.Tensor, C: int, seed: torch.Tensor, splits: torch.Tensor | None) -> torch.Tensor:
         entry = (lambda s: None) if self.S is not None else (lambda s: splits[s:s + 1])   # noqa: E731
-        tok = self._step(prompt, 0, seed, entry(0), 0)
+        tok = self._step(prompt[C:] if C else prompt, C, seed, entry(0), 0)
         toks = [tok]
         for s in range(self.T):
             tok = self._step(tok, self.LP + s, seed, entry(s + 1), s + 1)
@@ -462,8 +486,8 @@ def single_request_splits(sampling: dict) -> int | None:
 
 def make_wrapper(kind: str, model: nn.Module, *, pos0: int = 8, M: int = 1, LP: int = 8, T: int = 4, eos_id: int = 0,
                  sampling: dict | None = None) -> tuple[nn.Module, tuple]:
-    """(module, example inputs on meta) for `kind` in {step, request, padded}.  [X-05] `sampling` is the row's declared policy: the greedy
-    wrappers author `torch.argmax`; [R15 stoch] `{"kind": "stochastic", "temperature", "top_p", "top_k": 0, "seeded": True, "splits": "derived"}`
+    """(module, example inputs on meta) for `kind` in {step, request, padded} (a cached request's: `cached_request.cached_wrapper` over it).
+    [X-05] `sampling` is the row's declared policy: the greedy wrappers author `torch.argmax`; [R15 stoch] `{"kind": "stochastic", "temperature", "top_p", "top_k": 0, "seeded": True, "splits": "derived"}`
     authors `vllm_iface.gumbel_topp_token_select` with the seed as a second forward input and [R16, coord M-0169] the derived split
     count `splits` (int32, one entry per sampling event: [1] for the step wrapper, [T+1] for the request wrapper) as a third (step /
     request wrappers; padded is greedy-only).  [single-request workloads] A numeric `splits` is the single-request constant S =
@@ -597,7 +621,7 @@ def op_histogram(ep) -> dict[str, int]:
 
 
 __all__ = ["PIN", "make_vllm_config", "ensure_distributed", "instantiate_meta", "fake_forward_context", "EngineStep", "GreedyRequest",
-           "PaddedGreedyRequest", "make_wrapper", "export_module", "export_step", "op_histogram", "consulted_facts",
+           "CachedWithPeers", "MlaCachedWithPeers", "with_peers", "PaddedGreedyRequest", "make_wrapper", "export_module", "export_step", "op_histogram", "consulted_facts",
            "attention_impls", "export_facts", "BI_TRITON_KERNELS", "retie_lm_head_as_the_loader_does",
            "mla_absorbed_weights_as_the_loader_does"]
 
@@ -610,7 +634,9 @@ def attention_impls(model: nn.Module) -> dict:
     `MLAAttention` layer has an entry with `"kind": "mla"`: its impl, backend name, kv dtype, heads, scale, context-parallel sizes,
     dense-MHA prefill backend, the FA3 split count its impl's module calls `flash_attn_varlen_func` with (`num_splits`: the one
     `engine.sparse_mla`'s pin marks, None for vLLM's heuristic), and from the layer's vLLM config the query heads per rank its
-    metadata builder keys the decode threshold on and `sparse_mla_force_mqa`, what `rules/vllm_dsa.py` reads."""
+    metadata builder keys the decode threshold on and `sparse_mla_force_mqa`, what `rules/vllm_dsa.py` reads; and whether the layer
+    runs a sparse indexer (`DeepseekV32Attention.forward`'s `indexer is not None and not skip_topk`) and its head dim, the index-K
+    width a cached prefix holds (`cached_request.prefix_input`)."""
     from vllm.model_executor.layers.attention import Attention, MLAAttention
     out = {}
     for name, mod in model.named_modules():
@@ -636,6 +662,8 @@ def attention_impls(model: nn.Module) -> dict:
         pb = getattr(mod, "prefill_backend", None)
         fa = getattr(sys.modules.get(type(impl).__module__), "flash_attn_varlen_func", None)
         vc = mod._vllm_config
+        ix = getattr(mod, "indexer", None)
+        indexer = ix is not None and not getattr(mod, "skip_topk", False)
         out[getattr(mod, "layer_name", name)] = {
             "prefill_backend": None if pb is None else f"{type(pb).__module__}.{type(pb).__qualname__}",
             "kind": "mla", "impl": f"{type(impl).__module__}.{type(impl).__qualname__}",
@@ -646,7 +674,8 @@ def attention_impls(model: nn.Module) -> dict:
             "dcp_world_size": getattr(impl, "dcp_world_size", None), "use_pcp": getattr(mod, "use_pcp", None),
             "use_sparse": getattr(mod, "use_sparse", None), "num_splits": getattr(fa, "verity_sparse_mla_splits", None),
             "q_heads_per_rank": vc.model_config.get_num_attention_heads(vc.parallel_config),
-            "sparse_mla_force_mqa": bool(vc.attention_config.sparse_mla_force_mqa)}
+            "sparse_mla_force_mqa": bool(vc.attention_config.sparse_mla_force_mqa),
+            "indexer": indexer, "index_head_dim": getattr(ix, "head_dim", None) if indexer else None}
     return out
 
 

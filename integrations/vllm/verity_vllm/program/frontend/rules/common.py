@@ -10,6 +10,7 @@ import torch
 
 from verity.ml.circuits.refs import Coll, PartLog, array_of
 from verity.ml.circuits.types import Array
+from verity_vllm.program.frontend.outcomes import refuse
 from verity_vllm.program.frontend.torch_frontend import _tensor_type, shape_of
 
 
@@ -27,6 +28,27 @@ def kv_logs(ctx, layer_name: str, krow_list: list[Coll], vrow_list: list[Coll]) 
         out.append(log)
     logs[layer_name] = (out[0], out[1])
     return out[0], out[1]
+
+
+#: `ctx.state` keys of a pending cached prefix: a dense attention cache's (`vllm_bindings.kv_prefix.KvPrefixRule`) and MLA's latent and
+#: index-K caches (`vllm_dsa.MlaPrefixRule`)
+CACHED_PREFIX, CACHED_MLA_PREFIX = "kv_prefix", "mla_prefix"
+_PREFIX_READERS = {CACHED_PREFIX: ("dense", "the dense unified_attention_with_output rule (KvPrefix[vllm])"),
+                   CACHED_MLA_PREFIX: ("MLA", "the sparse MLA attention rule (MlaPrefix[vllm-dsa])")}
+
+
+def refuse_cached_prefix(ctx, node, what: str, reads: str | None = None) -> None:
+    """Refuse an attention rule while a cached prefix it does not read is pending; `reads` is the state key of the one it reads."""
+    for key, (kind, reader) in _PREFIX_READERS.items():
+        if key != reads and ctx.state.get(key):
+            refuse("numerics_unregistered", node, ctx.module_path(node), f"{what} does not read a cached {kind} prefix; only {reader} does")
+
+
+def user_input_index(ctx, a) -> int | None:
+    """The index of `a` among the wrapper's user inputs (the Program's parameters), when `a` is one; else None."""
+    if not isinstance(a, torch.fx.Node) or a.op != "placeholder" or a.name not in ctx.user_inputs:
+        return None
+    return list(ctx.user_inputs).index(a.name)
 
 
 def norm_kind(ctx, role: str, node, N: int, eps: float, **statics) -> tuple[object, tuple[Coll, ...]]:
@@ -102,4 +124,4 @@ def shape(ctx, a) -> tuple[int, ...] | None:
     return ctx.shape_of_node(a) if isinstance(a, torch.fx.Node) else None
 
 
-__all__ = ["rows_of", "from_rows", "dtype_is", "shape"]
+__all__ = ["rows_of", "from_rows", "dtype_is", "shape", "user_input_index"]

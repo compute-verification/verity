@@ -24,7 +24,7 @@ def read_record(log_path: str) -> dict:
                 if s in steps:
                     raise ValueError(f"two StepStart records for step {s}")
                 steps[s] = {"rows": [(r, int(p)) for r, p in d["rows"]], "input_token_ids": [int(x) for x in d.get("input_token_ids") or []],
-                            "logits_rows": [(r, int(p)) for r, p in d["logits_rows"]]}
+                            "logits_rows": [(r, int(p)) for r, p in d["logits_rows"]], "block_size": d.get("block_size")}
             elif tag == "SampleEnd":
                 d = json.loads(line)
                 samples[int(d["step"])] = [int(x) for x in d["sampled_token_ids"]]

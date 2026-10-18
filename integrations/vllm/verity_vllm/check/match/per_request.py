@@ -8,6 +8,7 @@ import functools
 
 from verity_vllm.check.match import batch_decomp as BD
 from verity_vllm.check.match import global_match_fast as GMF
+from verity_vllm.check.match import prefix_reads as PX
 from verity_vllm.check.match import program_compare as C
 from verity_vllm.check.match.attribution import Attribution
 from verity_vllm.check.match.match_run import MatchRun, NamedCheck
@@ -55,7 +56,8 @@ def check_requests(run: MatchRun, att: Attribution, param_of: dict) -> RequestFa
                                                                        att.shared_gi)
     c3 = NamedCheck(res, "G3", "subcircuits_x09: each request's projection canonical-equal to its component over the executed steps (eos-truncated labelled)")
     c4 = NamedCheck(res, "G4", "identity_map: (request, local step, local index) <-> global node is a bijection over the attributed fold")
-    c5 = NamedCheck(res, "G5", "shared_state: one weights input for all requests (no overlapping fields); node operands same-request, producer step <= consumer step")
+    c5 = NamedCheck(res, "G5", "shared_state: one weights input for all requests (no overlapping fields); node operands same-request, producer step <= consumer step; "
+                               "a warm request's cached rows (the engine's first scheduled position) and their producers are the Program's declared prefix-cache hit")
     glob2loc: dict[int, tuple[str, int, int]] = {}
     shared_loc: dict[int, dict[str, tuple[str, int, int]]] = {}   # [F-r19-int-15] weight-only instance -> {request: its local identity}
     loc_count = 0
@@ -193,6 +195,8 @@ def _prepare_requests(run: MatchRun, att: Attribution, param_of: dict, proj: dic
         else:
             P = ops.projection(B, f"oracle[{rid}]", idxs, tok_node=pidx, weights_node=weights_nodes, seed_node=my_seed, peer_node=my_peers)
         P._all_seed_nodes = set(seed_index)
+        P.cached_rows = PX.cached_rows(run.header, run.steps, rid)
+        P.block_size = PX.served_block_size(run.steps, rid) if P.cached_rows else None
         proj[rid] = P
         cd = (g.get("component") or {}).get("dir")
         A = None
@@ -224,8 +228,12 @@ def _request_leg(steps: dict, B: C.Prog, fast: bool, ops: BD.Ops, within_step: s
     chunks = max(1, len(prefill_steps))
     T_obs = n_ts - chunks
     ent.update({"n_instances": len(idxs), "local_steps": len(P.steps), "token_selects": n_ts, "prefill_chunks": chunks, "T_observed": T_obs})
+    why, hit = PX.check_hits(g, P)
     if P.xreq:
-        fails.append(("G5", f"{rid}: {sum(P.xreq.values())} cross-request operand reads {dict(P.xreq)}"))
+        why.insert(0, f"{rid}: {sum(P.xreq.values())} cross-request operand reads {dict(P.xreq)}")
+    fails.extend(("G5", w) for w in why)
+    if hit:
+        ent["prefix"] = hit
     # G8's dependency-order facts of THIS request (DECISION M-0021 (4): every producer emitted before its consumer inside a request
     # step) -- the same scan G8 made over every request's projection, done here, AFTER the G5 count above:
     # every canon() call of the record counts cross-request sources again, and the record's count is the first pass's

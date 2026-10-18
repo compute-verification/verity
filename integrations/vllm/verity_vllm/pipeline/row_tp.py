@@ -1,7 +1,7 @@
 """A tensor-parallel row's stages under `verity-vllm row` (any world size >= 2): precheck -> Build -> Match -> Commit.
 
-* **Build** (CPU): per rank the step Program and one request Program per declared (prompt_len, cap - 1) shape
-  (``build --tp W --rank r``), the requests first, then GP-01 per rank; ``--build-jobs`` wide (auto, the default: as many derives as the
+* **Build** (CPU): per rank the step Program and one request Program per declared (prompt_len, cap - 1[, cached rows]) shape
+  (``build --tp W --rank r [--cached C]``, `program.prefix_plan`), the requests first, then GP-01 per rank; ``--build-jobs`` wide (auto, the default: as many derives as the
   memory holds, at most ranks x (shapes + 1), as the single-GPU Build sizes them; the composes likewise, at most one per rank).  A PASS Build
   also builds the required-value manifest over the W ranks (``manifest build-global --programs-root build/rank<r>``), and
   the row stops (exit 21) when it names call boundaries (``Row.call_boundaries``: a TP Commit attaches no call-boundary source).
@@ -46,6 +46,7 @@ from verity_vllm.pipeline import gpu_lease as GL
 from verity_vllm.pipeline import row_config as RC
 from verity_vllm.pipeline import row_records as R
 from verity_vllm.pipeline.row_driver import Row, Stop, stage_on
+from verity_vllm.program import prefix_plan as PP
 
 TP_UTIL = "0.6"
 
@@ -129,7 +130,6 @@ class TpRow(Row):
         self.bdir, self.M = f"{self.d}/build", f"{self.d}/match"
         for p in (self.d, self.bdir, self.M, self.ncb):
             os.makedirs(p, exist_ok=True)
-        self.refuse_unserved_engine()
         self.trap = True
         rel_line, _ = self.release_line("")
         tag, bar, rest = rel_line.partition("|")
@@ -156,7 +156,7 @@ class TpRow(Row):
         self.fold_profile = f"derived_{self.role}_tp{self.W}" if fp is None else fp
         self.engine = self.engine_args()
         code9 = self.code9 = sha[:9]
-        shapes = " ".join(f"{lp},{t}" for lp, t in self.shapes)
+        shapes = " ".join(PP.shape_key(s) for s in self.shapes)
         self.log(f"start tp={self.W} B={self.B} I={self.I} O={self.O} MML={self.MML} mnbt={self.MNBT} shapes=[{shapes}] ckpt={self.ck or '-'} "
                  f"stages={self.stages} fold_profile={self.fold_profile or 'none'} gpu_util={self.gpu_util} hidden_so={self.hidden_so} code={code9} "
                  f"NCCL_P2P_DISABLE={self.nccl or 'unset'} {self.engine[-1]}")
@@ -220,20 +220,27 @@ class TpRow(Row):
     def step(self, r: int, out: str | None = None) -> tuple[Any, ...]:
         return (r, out or f"{self.rank(r)}/build_step", "--wrapper", "step", "--M", str(self.B), "--pos0", "8")
 
-    def request(self, r: int, lp: int, t: int) -> tuple[Any, ...]:
-        out = f"{self.rank(r)}/build_request_LP{lp}_T{t}"
-        shutil.rmtree(out, ignore_errors=True)
-        return (r, out, "--wrapper", "request", "--LP", str(lp), "--T", str(t), *self.launch_of(lp, t))
+    def request_dir(self, r: int, s: tuple[int, ...]) -> str:
+        """Rank `r`'s request Program of shape `s` = (LP, T[, C]): `build_request_LP<lp>_T<t>[_C<c>]`."""
+        return f"{self.rank(r)}/build_request_{PP.shape_name(s)}"
 
-    def launch_of(self, lp: int, t: int) -> list[str]:
+    def request(self, r: int, s: tuple[int, ...]) -> tuple[Any, ...]:
+        """Rank `r`'s derive of shape `s`; a warm shape's Program takes its C cached rows as inputs (`build --cached`), every layer's
+        whole cache rows on every rank (an MLA latent cache is replicated over the world)."""
+        out = self.request_dir(r, s)
+        shutil.rmtree(out, ignore_errors=True)
+        C = PP.cached_rows(s)
+        return (r, out, "--wrapper", "request", "--LP", str(s[0]), "--T", str(s[1]), *(["--cached", str(C)] if C else []), *self.launch_of(s))
+
+    def launch_of(self, s: tuple[int, ...]) -> list[str]:
         """The shape's `Row.launch_args`, read once for every rank; one that does not read fails the Build."""
-        if (lp, t) not in self.lctx:
-            self.lctx[(lp, t)] = self.launch_args(lp, t)
-        if self.lctx[(lp, t)] is None:
-            self.verdict("build", "FAIL", f"rc=1 the launch context of shape LP{lp} T{t} did not read (row.log)")
+        if s not in self.lctx:
+            self.lctx[s] = self.launch_args(*s)
+        if self.lctx[s] is None:
+            self.verdict("build", "FAIL", f"rc=1 the launch context of shape {PP.shape_name(s)} did not read (row.log)")
             self.tl("row", "end", ("ok", "false"), ("stopped_at", "build"))
             raise Stop(10)
-        return self.lctx[(lp, t)]
+        return self.lctx[s]
 
     def compose(self, r: int) -> None:
         """GP-01's workload Program of rank ``r`` over its request Programs."""
@@ -277,8 +284,7 @@ class TpRow(Row):
             os.makedirs(self.rank(r), exist_ok=True)
             if not R.derived_ok(f"{self.rank(r)}/build_step"):
                 steps.append(self.step(r))
-        requests = [self.request(r, lp, t) for lp, t in R.longest_first(self.shapes) for r in range(self.W)
-                    if not R.derived_ok(f"{self.rank(r)}/build_request_LP{lp}_T{t}")]
+        requests = [self.request(r, s) for s in R.longest_first(self.shapes) for r in range(self.W) if not R.derived_ok(self.request_dir(r, s))]
         return requests + steps
 
     def build(self) -> None:
@@ -363,19 +369,18 @@ class TpRow(Row):
             self.verdict("match-gpu", ok, f"rc={rc_cap}/{rc_ctl} wall={wall}s: the check and the fold Match run with --match-phase cpu")
             self.tl("stage.match", "end", ("ok", ok), ("wall_s", wall))
             raise Stop(0 if ok == "PASS" else 11)
-        rc_chk = self.run_tl("match.check", to_m, f"{M}/check.log", self.cli("tp-match", "--arm", "check", "--out", M, *br))
+        rc_chk = self.run_tl("match.check", to_m, f"{M}/check.log", self.cli("tp-match", "--arm", "check", "--workload", self.wl, "--out", M, *br))
         chk = R.tp_check_line(M)
         self.log(f"match check rc={rc_chk}: {chk or 'no tp2_match.json'}")
-        need = R.tp_served_shapes(M)
-        missing = [sh for sh in need for r in range(self.W) if not R.derived_ok(f"{self.rank(r)}/build_request_LP{sh.replace(',', '_T')}")]
+        need = R.tp_served_shapes(M, self.path(self.wl))
+        missing = [s for s in need for r in range(self.W) if not R.derived_ok(self.request_dir(r, s))]
         if missing:
-            declared = " ".join(f"{lp},{t}" for lp, t in self.shapes)
-            miss = "".join(" " + sh for sh in missing)
-            self.verdict("eos-truncated", f"served=[{' '.join(need)}]", f"declared=[{declared}]: request(s) stopped before the cap; deriving the served-shape "
-                         f"Program(s) [{miss}] per rank and recomposing GP-01 (MOE-05)", quiet=True)
-            served = R.longest_first({tuple(map(int, sh.split(","))) for sh in missing})
-            todo = [self.request(r, lp, t) for lp, t in served for r in range(self.W)
-                    if not R.derived_ok(f"{self.rank(r)}/build_request_LP{lp}_T{t}")]
+            declared = " ".join(PP.shape_key(s) for s in self.shapes)
+            miss = "".join(" " + PP.shape_key(s) for s in missing)
+            self.verdict("eos-truncated", f"served=[{' '.join(PP.shape_key(s) for s in need)}]", f"declared=[{declared}]: request(s) stopped before "
+                         f"the cap; deriving the served-shape Program(s) [{miss}] per rank and recomposing GP-01 (MOE-05)", quiet=True)
+            served = R.longest_first(set(missing))
+            todo = [self.request(r, s) for s in served for r in range(self.W) if not R.derived_ok(self.request_dir(r, s))]
             self.derive_all(todo, self.derive_jobs(served, len(todo)))
             self.compose_all(list(range(self.W)))
             self.guarded_summary()

@@ -16,7 +16,8 @@ over the three leaves `export_compat.dsa_leaves` exports in place of its kernels
         explicitly pinned `SparseMla_v1{T=n,...}` or default `SparseMlaSplit_v1{T=n,NS,...}` over the history's first n rows
 
 and two ops around them: the latent absorptions `bmm(q_nope^T, W_UK_T)` and `bmm(attn^T, W_UV)` (`batched_gemm{B,K,N,DOT}` per token)
-and `output.copy_(rows)` (an allocation written whole).  A role the vocabulary lacks refuses by name.
+and `output.copy_(rows)` (an allocation written whole).  A request whose first C rows vLLM's prefix cache serves opens every history
+with them (`vllm_iface.mla_prefix`, the wrapper's inputs).  A role the vocabulary lacks refuses by name.
 """
 
 from __future__ import annotations
@@ -30,7 +31,7 @@ from verity.ml.circuits.refs import Coll, PartLog, array_of, concat
 from verity.ml.circuits.types import Array, Value
 from verity_vllm.program.frontend.derive import Alloc, StaticIndex, refuse
 from verity_vllm.program.frontend.rules.base import InPlaceRule, OpRule, RuleInfo, StateRule
-from verity_vllm.program.frontend.rules.common import shape
+from verity_vllm.program.frontend.rules.common import CACHED_MLA_PREFIX, CACHED_PREFIX, refuse_cached_prefix, shape, user_input_index
 from verity_vllm.program.frontend.rules.patterns import Consumed
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import _OBSERVED, active_target_profile, launch_keys_of
 from verity_vllm.program.frontend.rules.vllm_iface import iface
@@ -383,10 +384,94 @@ def _prefill_by_dense_mha(layer_name: str, T: int) -> str | None:
             f"heads per rank), which its dense-MHA prefill backend {pb!r} serves, and no Definition states it")
 
 
+class MlaPrefixRule(StateRule):
+    """`vllm_iface.mla_prefix(latent, index_k, index_k_scale)`: rows 0..C-1 of every MLA layer's latent cache (`latent` bf16 [NL, C, L+R])
+    and of every indexer layer's index-K cache (`index_k` e4m3 [NI, C, D], `index_k_scale` f32 [NI, C]), read from the prefix cache
+    (never computed by this request).  Recorded as pending: a layer's history, when it opens, starts with its C rows (`_seed_prefix`),
+    latent layer l being the l-th layer to open and index-K layer i the i-th indexer layer; the request's rows follow at positions C...
+    No gates."""
+    modes = frozenset({"profile"})
+    info = RuleInfo("MlaPrefix[vllm-dsa]", 1, "state", applies_to="vllm_iface.mla_prefix(latent, index_k, index_k_scale) -> ()",
+                    preconditions=("latent, index_k, index_k_scale are the wrapper's inputs, values bf16 [NL, C, W], e4m3 [NI, C, D] and "
+                                   "f32 [NI, C] with C >= 1 and NI >= 1",
+                                   "no history exists yet and no prefix is pending (the prefix precedes every attention)",
+                                   "each of the NL layers opens its history with it, the NI indexer layers their index-K rows too, and only "
+                                   "the DSA attention rule reads it"),
+                    evidence_domain="structural: the cached rows are the Program's inputs, bound by Match to the producing request's rows")
+
+    def targets(self):
+        return {iface.mla_prefix.default}
+
+    def applies(self, node, ctx):
+        lat, ik, iks = node.args[:3]
+        for a, dt, rank, what in ((lat, BF16, 3, "latent"), (ik, E4M3, 3, "index_k"), (iks, F32, 2, "index_k_scale")):
+            if (r := _value(ctx, a, dt, (None,) * rank, what)):
+                return r
+            if user_input_index(ctx, a) is None:
+                return f"{what} is not one of the wrapper's inputs"
+        (NL, C, _), (NI, Ci, _), si = shape(ctx, lat), shape(ctx, ik), tuple(shape(ctx, iks))
+        if C < 1 or NI < 1 or Ci != C or si != (NI, C):
+            return (f"latent {list(shape(ctx, lat))}, index_k {list(shape(ctx, ik))}, index_k_scale {list(si)} are not [NL, C >= 1, W], "
+                    f"[NI >= 1, C, D], [NI, C]")
+        if any(ctx.state.get(k) for k in ("kv_history", "dsa_history", CACHED_PREFIX, CACHED_MLA_PREFIX)):
+            return "a history or another prefix exists: the cached prefix opens every history"
+        return True
+
+    def emit(self, node, ctx):
+        lat, ik, iks = node.args[:3]
+        (NL, C, W), (NI, _, D) = shape(ctx, lat), shape(ctx, ik)
+        ins = [user_input_index(ctx, a) for a in (lat, ik, iks)]
+        ctx.record(self, node, {"layers": NL, "indexer_layers": NI, "rows": C, "row_leaves": W, "index_d": D, "inputs": ins},
+                   emitted="(pending cached prefix; no gates)",
+                   cached_prefix={"kind": "mla", "input": ins[0], "inputs": ins, "C": C, "row_leaves": W, "index_d": D, "layers": [],
+                                  "indexer_layers": []})
+        rec = ctx.applications[-1]["cached_prefix"]   # the provenance's lists, which `_seed_prefix` fills (`kv_prefix.layout_of`)
+        ctx.state[CACHED_MLA_PREFIX] = {"latent": ctx.coll(lat).reshape(Array(NL, Array(C, Array(W, Value(16))))),
+                                        "ik": ctx.coll(ik).reshape(Array(NI, Array(C, Array(D, Value(8))))),
+                                        "iks": ctx.coll(iks).reshape(Array(NI, Array(C, Value(32)))),
+                                        "NL": NL, "NI": NI, "C": C, "W": W, "D": D, "layers": rec["layers"], "indexer_layers": rec["indexer_layers"]}
+
+
+def _seed_prefix(ctx, node, layer: str, hist: dict, W: int, D: int | None) -> None:
+    """Open `layer`'s history with its rows of the pending MLA prefix: the next latent layer's C rows, and on an indexer layer (`D`
+    its index-K width) the next index-K layer's C slots and scales.  Nothing without a prefix."""
+    p = ctx.state.get(CACHED_MLA_PREFIX)
+    if not p:
+        return
+    mp = ctx.module_path(node)
+    l, i = len(p["layers"]), len(p["indexer_layers"])
+    if l >= p["NL"]:
+        refuse("side_input", node, mp, f"{layer!r} is MLA layer {l + 1} of the forward, the cached prefix holds {p['NL']}")
+    if p["W"] != W:
+        refuse("shape", node, mp, f"the cached prefix's latent rows hold {p['W']} values, {layer!r} writes L + R = {W}")
+    if D is not None and i >= p["NI"]:
+        refuse("side_input", node, mp, f"{layer!r} is indexer layer {i + 1} of the forward, the cached prefix holds {p['NI']}")
+    if D is not None and p["D"] != D:
+        refuse("shape", node, mp, f"the cached prefix's index-K rows hold {p['D']} values, {layer!r} writes D = {D}")
+    for j in range(p["C"]):
+        hist["latent"].append(p["latent"][l][j])
+        if D is not None:
+            hist["ik"].append(p["ik"][i][j])
+            hist["iks"].append(p["iks"][i][j])
+    p["layers"].append(layer)
+    if D is not None:
+        p["indexer_layers"].append(layer)
+    hist["next"] = p["C"]
+
+
+def _require_prefix_consumed(ctx, node) -> None:
+    """Refuse when the prefill opened fewer layers than the pending MLA prefix holds (called on every call that continues a history)."""
+    p = ctx.state.get(CACHED_MLA_PREFIX)
+    if p and (len(p["layers"]), len(p["indexer_layers"])) != (p["NL"], p["NI"]):
+        refuse("side_input", node, ctx.module_path(node), f"the cached prefix holds {p['NL']} MLA layers ({p['NI']} indexer layers), the "
+                                                          f"prefill opened {len(p['layers'])} ({len(p['indexer_layers'])})")
+
+
 class DsaIndexerAttnRule(StateRule):
     """`vllm_iface.dsa_indexer_attn` (the sparse indexer and FA3's sparse MLA of one layer): the layer's MLA and index-K caches are
     implicit state keyed by `layer_name`, made explicit as histories.  A layer's history opens at its first call, at whatever position
-    (the step wrapper's `pos0`, as the dense attention rule's `kv_history` opens), and every later call continues it; row i of a call
+    (the step wrapper's `pos0`, as the dense attention rule's `kv_history` opens), or with a pending cached prefix's C rows at position C
+    (`MlaPrefixRule`), and every later call continues it; row i of a call
     that finds P0 rows reads the first n = P0 + i + 1 rows.  An indexer layer emits the row's logits and its top-k, an IndexShare layer takes the top-k the last indexer layer selected for
     the same positions, and both the pinned one-split or default split sparse MLA over the selected rows: with n <= TOPK the
     selection is rows 0..n-1 in order."""
@@ -455,6 +540,7 @@ class DsaIndexerAttnRule(StateRule):
         return True
 
     def emit(self, node, ctx):
+        refuse_cached_prefix(ctx, node, self.rule_id, reads=CACHED_MLA_PREFIX)
         a = _args(node, _ATTN)
         has = a.get("index_q") is not None
         layer, TOPK, scale = a["layer_name"], a["topk"], float(a["scale"])
@@ -466,7 +552,13 @@ class DsaIndexerAttnRule(StateRule):
         owner = ctx.state.setdefault("dsa_owner", {})
         if owner.setdefault(layer, mp) != mp:
             refuse("side_input", node, mp, f"the caches of {layer!r} are written from two modules ({owner[layer]} and {mp})")
-        hist = ctx.state.setdefault("dsa_history", {}).setdefault(layer, {"latent": [], "ik": [], "iks": [], "next": None})
+        histories = ctx.state.setdefault("dsa_history", {})
+        opened = layer not in histories
+        hist = histories.setdefault(layer, {"latent": [], "ik": [], "iks": [], "next": None})
+        if opened:
+            _seed_prefix(ctx, node, layer, hist, L + R, shape(ctx, a["index_k"])[1] if has else None)
+        else:
+            _require_prefix_consumed(ctx, node)
         P0 = len(hist["latent"])
         if pos != list(range(pos[0], pos[0] + T)) or (P0 and pos[0] != hist["next"]):
             refuse("shape", node, mp, f"positions {pos[0]}..{pos[-1]} do not continue {layer!r}'s history"
@@ -691,7 +783,7 @@ class MlaAbsorbTransposePatternRule(OpRule):
 
 
 VLLM_DSA_PATTERN_RULES = [MlaAbsorbTransposePatternRule()]
-VLLM_DSA_RULES = [CopyIntoAllocRule(), DsaNormRopeRule(), DsaQRule(), DsaIndexerAttnRule(), MlaAbsorbBmmRule()]
+VLLM_DSA_RULES = [CopyIntoAllocRule(), DsaNormRopeRule(), DsaQRule(), MlaPrefixRule(), DsaIndexerAttnRule(), MlaAbsorbBmmRule()]
 
 __all__ = ["CopyIntoAllocRule", "DsaIndexerAttnRule", "DsaNormRopeRule", "DsaQRule", "FA3_SPARSE_GEOMETRY", "MlaAbsorbBmmRule",
-           "MlaAbsorbTransposePatternRule", "VLLM_DSA_PATTERN_RULES", "VLLM_DSA_RULES"]
+           "MlaAbsorbTransposePatternRule", "MlaPrefixRule", "VLLM_DSA_PATTERN_RULES", "VLLM_DSA_RULES"]

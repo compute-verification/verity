@@ -16,6 +16,7 @@ from typing import Any
 
 from verity_vllm.commit.partition import word_check_refusal
 from verity_vllm.config import RowConfig, checkpoint_dir
+from verity_vllm.program import prefix_plan as PP
 
 
 def load_json(path: str) -> Any:
@@ -57,23 +58,25 @@ def declared_target(wl: str, protocols: tuple[str, ...] | None = None, row: str 
     return json.dumps(t, sort_keys=True) if t else ""
 
 
-def request_shapes(wl: str) -> set[tuple[int, int]]:
-    """Every distinct (prompt length, cap - 1) of the manifest's requests: the shapes the workload Program composes."""
-    s = json.load(open(wl))["sweep"]
-    return {(int(p), int(c) - 1) for p, c in zip(s["input_lengths"], s["output_caps"])}
+def request_shapes(wl: str) -> set[tuple[int, ...]]:
+    """Every distinct (prompt length, cap - 1) of the manifest's requests, with the cached prefix C of a request vLLM's prefix cache
+    serves from row C (`program.prefix_plan.shape`): the shapes the workload Program composes."""
+    w = json.load(open(wl)); s = w["sweep"]
+    cached = PP.cached_of(w) if PP.prefix_caching(w) else [0] * len(s["input_lengths"])
+    return {PP.shape(int(p), int(c) - 1, k) for p, c, k in zip(s["input_lengths"], s["output_caps"], cached)}
 
 
-def extra_shapes(wl: str, lp: int, t: int) -> list[tuple[int, int]]:
-    """The batch's other request shapes: every distinct (prompt length, cap - 1) of the manifest but the (LP, T) the
-    request wrapper was derived for, largest first (a derive's cost grows with LP + T, so parallel derives start with the
-    longest)."""
+def extra_shapes(wl: str, lp: int, t: int) -> list[tuple[int, ...]]:
+    """The batch's other request shapes: every distinct shape of the manifest but the (LP, T) the request wrapper was derived for,
+    largest first (a derive's cost grows with LP + T, so parallel derives start with the longest)."""
     main = (int(lp), int(t))
-    return [(p, c) for p, c in longest_first(request_shapes(wl)) if (p, c) != main]
+    return [s for s in longest_first(request_shapes(wl)) if s != main]
 
 
-def longest_first(shapes: Any) -> list[tuple[int, int]]:
-    """(prompt length, decode steps) shapes, the longest LP + T first (then the longest prompt): a derive's cost grows with LP + T."""
-    return sorted(shapes, key=lambda pc: (-(pc[0] + pc[1]), -pc[0]))
+def longest_first(shapes: Any) -> list[tuple[int, ...]]:
+    """(prompt length, decode steps[, cached rows]) shapes, the longest LP + T first (then the longest prompt): a derive's cost grows
+    with LP + T."""
+    return sorted(shapes, key=lambda pc: (-(pc[0] + pc[1]), -pc[0], tuple(pc[2:])))
 
 
 def derived_ok(d: str) -> bool:
@@ -148,7 +151,7 @@ def build_jobs_auto(shapes: list[tuple[int, int]] | None = None, layers: int | N
         head = min(head, int(budget_gb * (1 << 30)))
     if not shapes or not layers:
         return max(1, min(8, derives or 8, head // int(peak_ratio * (20 << 30))))
-    per = int(peak_ratio * max(derive_bytes(lp, t, layers) for lp, t in shapes))
+    per = int(peak_ratio * max(derive_bytes(s[0], s[1], layers) for s in shapes))
     n = len(shapes) + 1 if derives is None else derives
     return max(1, min(_cpus() if cpus is None else cpus, n, int(0.8 * head) // per))
 
@@ -220,9 +223,9 @@ def build_line(d: str) -> tuple[str, str]:
     return digest, man
 
 
-def missing_derived(d: str) -> list[tuple[int, int]]:
-    """The request shapes X-09 named as not derived (``match_decomp.json`` missing_derived)."""
-    return [(int(lp), int(t)) for lp, t in json.load(open(f"{d}/match_decomp.json"))["missing_derived"]]
+def missing_derived(d: str) -> list[tuple[int, ...]]:
+    """The request shapes X-09 named as not derived (``match_decomp.json`` missing_derived): (LP, T), or (LP, T, C) for a cached prefix."""
+    return [PP.shape(*(int(x) for x in s)) for s in json.load(open(f"{d}/match_decomp.json"))["missing_derived"]]
 
 
 def decomp_rc(d: str) -> int:
@@ -573,7 +576,8 @@ def _field(path: str, fn: Any) -> str:
 
 
 def tp_shape(wl: str, checkpoints: str, hf_home: str) -> dict[str, Any]:
-    """A tensor-parallel row's batch, envelope, declared request shapes (LP, cap - 1), engine lengths and checkpoint dir.
+    """A tensor-parallel row's batch, envelope, declared request shapes (LP, cap - 1[, C]: `request_shapes`), engine lengths and
+    checkpoint dir.
 
     ``MNBT`` is at most ``B * MML``: no step can schedule more tokens than ``max_num_seqs`` requests of ``max_model_len``, so the cap
     changes no schedule, but vLLM's warm-up forward (`kernel_warmup.flashinfer_autotune`'s dummy run) packs the full budget into
@@ -585,8 +589,7 @@ def tp_shape(wl: str, checkpoints: str, hf_home: str) -> dict[str, Any]:
     req = cfg.engine.args
     mml = req.get("max_model_len") or int(s["max_input"]) + int(s["max_output"])
     batch = int(s["batch"])
-    return {"B": batch, "I": int(s["max_input"]), "O": int(s["max_output"]),
-            "shapes": sorted({(int(a), int(b) - 1) for a, b in zip(s["input_lengths"], s["output_caps"])}),
+    return {"B": batch, "I": int(s["max_input"]), "O": int(s["max_output"]), "shapes": sorted(request_shapes(wl)),
             "MML": mml, "MNBT": min(int(req.get("max_num_batched_tokens") or mml), batch * int(mml)),
             "ck": checkpoint_dir(cfg.model, cfg.engine.revision, hf_home, checkpoints) or ""}
 
@@ -667,10 +670,15 @@ def tp_passed(path: str) -> bool:
     return _field(path, lambda d: d["pass"]) == "True"
 
 
-def tp_served_shapes(m: str) -> list[str]:
-    """``LP,T`` of every captured request (prompt length, generated - 1)."""
-    s = _field(f"{m}/capture/tokens.json", lambda d: " ".join(f"{len(q['prompt_token_ids'])},{len(q['generated_token_ids']) - 1}" for q in d["requests"]))
-    return s.split()
+def tp_served_shapes(m: str, wl: str) -> list[tuple[int, ...]]:
+    """The shape every captured request was served at: (prompt length, generated - 1[, C]), C the cached rows the workload's plan
+    declares for it (`program.prefix_plan`; GM-01 holds the engine's to it)."""
+    try:
+        tok, w = json.load(open(f"{m}/capture/tokens.json")), json.load(open(wl))
+    except _READ:
+        return []
+    cached = PP.cached_by_id(w)
+    return [PP.shape(len(q["prompt_token_ids"]), len(q["generated_token_ids"]) - 1, cached.get(str(q["request_id"]), 0)) for q in tok["requests"]]
 
 
 def tp_fold_line(m: str) -> str:

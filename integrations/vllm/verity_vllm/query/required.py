@@ -480,6 +480,17 @@ def query_header(profile: str, hidden_family: str | None, *, return_slots: bool,
                         if return_slots else [])}}
 
 
+def cached_prefix_inputs(P: ProgramView, res: Mapping[str, Any]) -> frozenset[ValueRef]:
+    """A warm request Program's prefix inputs (its derive's `res["prefix"]["inputs"]`, the wrapper's input indices; `["input"]` alone in
+    a dense layout before it): rows 0..C-1 of every layer's cache, the producing requests' committed rows (no identity of this request
+    names them)."""
+    pfx = res.get("prefix")
+    if not isinstance(pfx, Mapping):
+        return frozenset()
+    params = [P.params[int(k)] for k in pfx.get("inputs") or [pfx["input"]]]
+    return frozenset(ValueRef(p.id, port.name) for p in params for port in p.port_table)
+
+
 def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any], *, request_id: str | int | None = None,
                      workload: Mapping[str, Any] | None = None, artifact: Mapping[str, Any] | None = None, program_dir: str | None = None,
                      rank: int = 0, ranks: int = 1, profile: str | None = None, return_slots: bool = True, norm_scales: Any = None, taps: Sequence[Any] = (), query: str = QUERY_OF_RECORD, program_digest: str | None = None) -> BridgeResult:
@@ -575,7 +586,7 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
     # --- the token ids a module body consumes: prompt input or a sampling event's output -------------------------------------------
     ids_rows: Counter = Counter()
     event_set = frozenset(events)
-    non_ids = pop.peer_inputs                                   # a rank Program's received peer partials are not token ids
+    non_ids = pop.peer_inputs | cached_prefix_inputs(P, res)    # a rank Program's received peer partials, a warm one's cached rows
     for c in P.calls:
         m = corr.module_of(c.id)
         if not m or c.family in SAMPLING_EVENTS:            # a selector's runtime inputs are the sampler's (above), wherever it sits (TP: `inner`)

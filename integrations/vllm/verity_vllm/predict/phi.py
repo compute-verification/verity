@@ -5,7 +5,8 @@
     Phi.tp        {"world", "rank"}
     Phi.sampling  the row's declared sampling policy (`pipeline.build.sampling_policy` shape: greedy | stochastic)
     Phi.engine    scheduler facts (block_size, max_num_seqs, max_num_batched_tokens, chunked prefill, prefix caching)
-    Phi.workload  the workload manifest's requests (request_id, prompt length, max_tokens, arrive_step, seed, n)
+    Phi.workload  the workload manifest's requests (request_id, prompt length, max_tokens, arrive_step, seed, n; under the prefix
+                  cache a warm request's `cached` rows and their `producers`, `program.prefix_plan` over the declared prompts)
     Phi.execution the row's execution label (`bi-eager`)
 
 `score.phi_of(row)` reads φ from a Build row's DECLARED inputs only: the row id, its workload manifest and the pinned
@@ -65,11 +66,13 @@ class Phi:
                                                        if k in TargetProfile.default().to_json()})
         return tp if tp.numerics_profile == self.profile else tp.with_overrides(numerics_profile=self.profile)
 
-    def request_shapes(self) -> list[tuple[int, int]]:
-        """The distinct (LP, T) request shapes of the workload in first-occurrence order (T = max_tokens - 1 decode steps)."""
-        seen: list[tuple[int, int]] = []
+    def request_shapes(self) -> list[tuple[int, ...]]:
+        """The distinct request shapes of the workload in first-occurrence order: (LP, T), or (LP, T, C) for a request whose first C
+        prompt rows the prefix cache serves (its `cached`; `program.prefix_plan.shape`); T = max_tokens - 1 decode steps."""
+        from verity_vllm.program.prefix_plan import shape
+        seen: list[tuple[int, ...]] = []
         for r in self.requests:
-            s = (_prompt_len(r), _cap(r) - 1)
+            s = shape(_prompt_len(r), _cap(r) - 1, int(r.get("cached") or 0))
             if s not in seen:
                 seen.append(s)
         return seen

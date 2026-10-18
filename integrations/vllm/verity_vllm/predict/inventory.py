@@ -1,12 +1,13 @@
 """The traced facts of every Build row under a rows root, compact: what `score` compares predictions against.
 
-    verity-vllm predict inventory --rows ROWS_ROOT --out inventory.json.gz      # read-only; the module itself is stdlib only
+    verity-vllm predict inventory --rows ROWS_ROOT --out inventory.json.gz      # read-only; stdlib and `program.prefix_plan` only
 
 A row is `<ROWS_ROOT>/<job>/<row id>/` holding `build_summary.json`.  Per row: the Build summary's verdicts, per `build_*` dir (a
 tensor-parallel row's `build/rank<r>/build_*`, named `rank<r>/build_*`) the
 shape it derived (`result.json`: wrapper, M, pos0, LP, T, sampling, declared target) and its Program (digest, function, node count,
 descriptor size), the workload Program's digest, and the row's declared workload manifest (`workloads/<row>.json` in the source tree
-the row ran from, `source_identity.json` `requested_root`) without its prompt text.  Nothing is written beside the rows.
+the row ran from, `source_identity.json` `requested_root`) without its prompt text, a warm request's planned `cached` rows and
+`producers` in their place (`program.prefix_plan`, read from the prompts here).  Nothing is written beside the rows.
 """
 
 from __future__ import annotations
@@ -16,6 +17,8 @@ import gzip
 import hashlib
 import json
 import os
+
+from verity_vllm.program import prefix_plan as PP
 
 SCHEMA = "verity-predict/inventory/v1"
 
@@ -36,7 +39,7 @@ def _build_dir(bd: str) -> dict:
     r = _j(os.path.join(bd, "result.json"))
     prog = r.get("program") or {}
     desc = os.path.join(bd, "descriptor.json.gz")
-    out = {k: _short(r.get(k)) for k in ("wrapper", "M", "pos0", "LP", "T", "profile", "ok", "model_class", "_error", "unsupported",
+    out = {k: _short(r.get(k)) for k in ("wrapper", "M", "pos0", "LP", "T", "C", "profile", "ok", "model_class", "_error", "unsupported",
                                           "exception", "message", "refusal", "error")}
     out["tp"] = {k: r["tp"].get(k) for k in ("world", "rank")} if isinstance(r.get("tp"), dict) else r.get("tp")
     out["sampling"] = {k: (r.get("sampling") or {}).get(k) for k in ("kind", "label", "temperature", "top_p", "top_k", "seeded")}
@@ -88,8 +91,13 @@ def row_record(rd: str) -> dict:
         w = json.loads(raw)
         rec["workload_sha256"] = hashlib.sha256(raw).hexdigest()
         rec["workload"] = {k: v for k, v in w.items() if k != "requests"}
-        rec["workload"]["requests"] = [{k: (len(v) if k == "prompt_token_ids" else v) for k, v in q.items() if k not in ("prompt_text", "origin")}
-                                       for q in w.get("requests") or []]
+        try:
+            plan = PP.plan(w)
+        except ValueError as e:
+            plan, rec["workload"]["prefix_plan_error"] = [], str(e)[:400]
+        rec["workload"]["requests"] = [{**{k: (len(v) if k == "prompt_token_ids" else v) for k, v in q.items() if k not in ("prompt_text", "origin")},
+                                        **({"cached": p["cached"], "producers": p["producers"]} if p["cached"] else {})}
+                                       for q, p in zip(w.get("requests") or [], plan or [{"cached": 0}] * len(w.get("requests") or []))]
     return rec
 
 

@@ -30,6 +30,7 @@ from collections import Counter
 from dataclasses import dataclass
 
 from verity_vllm.config import UsageError, option
+from verity_vllm.program import prefix_plan as PP
 
 from . import inventory as INV
 from .build import Unexpressible, _check_phi, build_program, model_shape
@@ -67,8 +68,11 @@ def phi_of(rec: dict, *, hf_home: str, checkpoints: dict | None = None) -> Phi:
         raise Unexpressible(f"no config.json for {repo}@{rev} under {hf_home}")
     hf = json.load(open(cp))
     reqs = [{"request_id": q.get("request_id"), "index": q.get("index", i), "prompt_len": q.get("prompt_len") or q.get("prompt_token_ids"),
-             "max_tokens": q.get("max_tokens"), "arrive_step": q.get("arrive_step", 0), "n": q.get("n"), "seed": q.get("seed")}
+             "max_tokens": q.get("max_tokens"), "arrive_step": q.get("arrive_step", 0), "n": q.get("n"), "seed": q.get("seed"),
+             **({"cached": int(q["cached"]), "producers": list(q["producers"])} if q.get("cached") else {})}
             for i, q in enumerate(w.get("requests") or [])]
+    if w.get("prefix_plan_error"):
+        raise Unexpressible(f"row {rec['row']}: no cached prefix plan: {w['prefix_plan_error']}")
     target = declared_profile(rec["row"], w)
     phi = Phi(model={"repo": repo, "revision": rev, "hf_config": hf, "dtype": DTYPES.get(rid.dtype, rid.dtype)}, target=target,
               tp={"world": rid.world, "rank": 0}, engine=dict(RowEngine.of(w).args),
@@ -116,21 +120,22 @@ def _of_rank(phi: Phi | None, pk: str | None, rank: int | None) -> tuple:
 
 
 def unit_shape(b: dict) -> tuple:
+    """A Build dir's (wrapper, M, pos0, LP, T), with its cached prompt rows C appended for a warm request's."""
     if b.get("wrapper") == "step":
         return ("step", b.get("M"), b.get("pos0"), None, None)
-    return (b.get("wrapper"), None, None, b.get("LP"), b.get("T"))
+    return (b.get("wrapper"), None, None, b.get("LP"), b.get("T"), *([int(b["C"])] if b.get("C") else []))
 
 
 def unit_rows(shape: tuple) -> int:
-    wrapper, M, _pos0, LP, T = shape
+    wrapper, M, _pos0, LP, T = shape[:5]
     return int(M or 1) if wrapper == "step" else int(LP or 0) + int(T or 0)
 
 
 def _build(phi: Phi, shape: tuple, with_desc: bool = True):
-    wrapper, M, pos0, LP, T = shape
+    wrapper, M, pos0, LP, T, *cached = shape
     if wrapper == "step":
         return build_program(phi, "step", M=int(M), pos0=int(pos0), with_desc=with_desc)
-    return build_program(phi, wrapper, LP=int(LP), T=int(T), with_desc=with_desc)
+    return build_program(phi, wrapper, LP=int(LP), T=int(T), cached=int(cached[0]) if cached else 0, with_desc=with_desc)
 
 
 def _predict_task(task: dict) -> dict:
@@ -174,14 +179,15 @@ def predict_workload(phi: Phi) -> dict:
         raise Unexpressible("a request with n > 1 (parallel sampling) in the workload")
     canon: dict = {}
     comps = {}
-    for LP, T in phi.request_shapes():
-        r = build_program(phi, "request", LP=LP, T=T)
+    for s in phi.request_shapes():
+        r = build_program(phi, "request", LP=s[0], T=s[1], cached=PP.cached_rows(s))
         params = [(name, repr(t)) for name, t in r.program.fn.signature()[0]]
-        comps[(LP, T)] = W.request_component(r.desc, REGISTRY, params, canon=canon, digest=r.digest)
+        comps[s] = W.request_component(r.desc, REGISTRY, params, canon=canon, digest=r.digest)
     wreqs = []
     for i, q in enumerate(reqs):
-        lp, cap = int(q["prompt_len"]), int(q["max_tokens"])
-        wreqs.append(W.WorkloadRequest(request_id_of(i), i, lp, cap, int(q.get("arrive_step") or 0), comps[(lp, cap - 1)], T=cap - 1))
+        lp, cap, c = int(q["prompt_len"]), int(q["max_tokens"]), int(q.get("cached") or 0)
+        wreqs.append(W.WorkloadRequest(request_id_of(i), i, lp, cap, int(q.get("arrive_step") or 0), comps[PP.shape(lp, cap - 1, c)], T=cap - 1,
+                                       prefix={"rows": c, "producers": [request_id_of(p) for p in q["producers"]]} if c else None))
     wl = W.WorkloadProgram(wreqs, manifest_digest=None, lag=int(phi.target_profile().lag()))
     return {"digest": wl.digest, "function": wl.fn.id[:300], "n_root_nodes": len(wl.program.root.body.nodes), "lag": wl.lag}
 
@@ -453,7 +459,7 @@ def plan(inv: dict, *, hf_home: str, checkpoints: dict | None, max_rows: int, ro
                  "traced_function": (b.get("program") or {}).get("function"), "traced_n_root_nodes": (b.get("program") or {}).get("n_root_nodes"),
                  "descriptor": b.get("descriptor"), "descriptor_gz_bytes": b.get("descriptor_gz_bytes")}
             if shape[0] == "request":
-                traced_req.add((shape[3], shape[4]))
+                traced_req.add(PP.shape(*shape[3:]))
             if b.get("ok") is not True or not u["traced_digest"]:
                 u.update(status="no_trace", reason=str(b.get("message") or b.get("exception") or b.get("unsupported") or b.get("_error") or "Build dir has no Program")[:300])
             elif pre is not None:
@@ -477,7 +483,7 @@ def plan(inv: dict, *, hf_home: str, checkpoints: dict | None, max_rows: int, ro
                 continue
             uphi, _ = _of_rank(phi, pk, INV.unit_rank(name))
             u = {"unit": name, "traced_digest": wb.get("workload_digest"), "traced_lag": wb.get("lag"), "n_requests": wb.get("n_requests")}
-            total = sum(int(lp) + int(t) for lp, t in phi.request_shapes()) if phi is not None else None
+            total = sum(int(s[0]) + int(s[1]) for s in phi.request_shapes()) if phi is not None else None
             u["rows"] = total
             if wb.get("ok") is not True or not wb.get("workload_digest"):
                 u.update(status="no_trace", reason=str(wb.get("message") or wb.get("reason") or "no workload Program")[:300])
@@ -485,13 +491,13 @@ def plan(inv: dict, *, hf_home: str, checkpoints: dict | None, max_rows: int, ro
                 u.update(status="unexpressible", reason=pre)
             elif total > max_rows:
                 u.update(status="over_budget", reason=f"sum of request LP+T = {total} > max_rows {max_rows}")
-            elif max_mem_mb is not None and (mem := mem_estimate_mb(C, [int(lp) + int(t) for lp, t in phi.request_shapes()])) > max_mem_mb:
+            elif max_mem_mb is not None and (mem := mem_estimate_mb(C, [int(s[0]) + int(s[1]) for s in phi.request_shapes()])) > max_mem_mb:
                 u.update(status="over_budget", reason=f"estimated peak {mem} MB > max_mem_mb {max_mem_mb}")
             else:
                 key = f"W:{uphi.digest()[:16]}"
                 u["key"] = key
                 wtasks.setdefault(key, {"key": key, "phi": uphi.to_json(), "rows": total,
-                                        "mem_mb": mem_estimate_mb(C, [int(lp) + int(t) for lp, t in phi.request_shapes()])})
+                                        "mem_mb": mem_estimate_mb(C, [int(s[0]) + int(s[1]) for s in phi.request_shapes()])})
             row["units"].append(u)
         rows.append(row)
     return {"rows": rows, "tasks": tasks, "wtasks": wtasks}

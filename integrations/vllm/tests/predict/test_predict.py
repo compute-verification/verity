@@ -9,6 +9,9 @@ step --M 1 --pos0 8`, CPU only) and pin the new digest with the predictor's.
 `SiluMul_v2{I}` as the `silu_mul` kind moved every pin but Gemma-2's (GeGLU): each is the Build's re-trace of its unit from the
 same checkpoints on the declared rtxpro6000 target (run r20261002-123618-cee3, CPU only), and with `SiluMul_v1{I}` in its place
 the predictor gives the rows' traced digests.
+Llama-3.2-1B's cold and warm request Programs (16 of 24 prompt rows from the prefix cache) are the Build's traces on rtxpro6000
+(`verity-vllm build --wrapper request --LP 24 --T 3 --cached C`, run r20261018-104850-8038, CPU only); the H200 warm one is the
+prefix row's warm request (r20261018-085700-75d0).
 """
 
 from __future__ import annotations
@@ -19,21 +22,26 @@ from pathlib import Path
 
 import pytest
 
+from verity.ml.circuits.refs import runs
 from verity_vllm.config import UsageError
+from verity_vllm.predict import inventory as INV
 from verity_vllm.predict import score as S
 from verity_vllm.predict.build import Unexpressible, build_program, weight_leaves, model_shape
 from verity_vllm.predict.phi import Phi
 
 FIX = Path(__file__).parent / "fixtures"
+TREE = Path(__file__).resolve().parents[4]
 RTXPRO6000 = {"compute_capability": [12, 0], "num_sms": 188}
+H200 = {"compute_capability": [9, 0], "num_sms": 132}
+PREFIX_ROW = "llama32-1b__bf16__h200__tp1__b2__i168__o10__prefix__greedy__bi-eager"
 TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 64, "intermediate_size": 128, "num_attention_heads": 4,
         "num_key_value_heads": 2, "num_hidden_layers": 2, "vocab_size": 256, "rms_norm_eps": 1e-5, "tie_word_embeddings": True,
         "max_position_embeddings": 64, "hidden_act": "silu"}
 STOCH = {"kind": "stochastic", "temperature": 0.8, "top_p": 0.95, "top_k": 0, "seeded": True, "splits": "derived"}
 
 
-def _phi(cfg: dict, requests: list[dict] | None = None, **kw) -> Phi:
-    return Phi(model={"repo": "org/m", "revision": "r", "hf_config": cfg}, target=dict(RTXPRO6000), workload={"requests": requests or []}, **kw)
+def _phi(cfg: dict, requests: list[dict] | None = None, target: dict = RTXPRO6000, **kw) -> Phi:
+    return Phi(model={"repo": "org/m", "revision": "r", "hf_config": cfg}, target=dict(target), workload={"requests": requests or []}, **kw)
 
 
 @pytest.mark.parametrize("model,digest", [
@@ -106,6 +114,75 @@ def test_stochastic_step_program_equals_the_traced_build(sampling, M, digest):
     single request's constant S = 32 on 188 SMs, cov-g253-2)."""
     r = build_program(_phi(json.loads((FIX / "smollm2-135m.config.json").read_text()), sampling=sampling), "step", M=M, pos0=8)
     assert r.digest == digest
+
+
+@pytest.mark.parametrize("target,LP,T,cached,src,digest,nodes", [
+    (RTXPRO6000, 24, 3, 0, "c2c392bcb606", "9dfb8cfaa3867f2b04263763756a3eab3587b439ea55fda88169b1f470b5b634240838a4abf8388f3d5704abcd93ed61c0af54c535ee5a29e74a6989970f0900", 4382),
+    (RTXPRO6000, 24, 3, 16, "8c388012c7cf", "56399cd3a834393359127714c30184b87d5d157cff13393172b0cdfb650e2f0ad7f05f03076e33d5dbacb12cdec068d18ca666ca5de27572340975d0ede31408", 1790),
+    (H200, 168, 9, 128, "0ece6b985b60", "bc2247ecb9d0e8f72f1ceb7f23c18fe9693a98c98c57d4df1ae977665569405dacb814dd646862e70397cf92bfc91623c6eb306429dab37c5d19070a2f3b5e93", 7958),
+])
+def test_warm_request_program_equals_the_traced_build(target, LP, T, cached, src, digest, nodes):
+    """Llama-3.2-1B's request Program with its first C prompt rows served by the prefix cache: the cached request wrapper's source,
+    the `prefix` input after the prompt, and a prefill of rows C..LP-1."""
+    r = build_program(_phi(json.loads((FIX / "llama32-1b.config.json").read_text()), target=target), "request", LP=LP, T=T, cached=cached)
+    assert r.function == f"Derived[vLLMRequest[LlamaForCausalLM]]_v1{{SRC={{{src}}}}}"
+    assert (r.digest, r.n_root_nodes) == (digest, nodes)
+
+
+def test_a_warm_requests_history_opens_with_its_prefix_input():
+    """Input 1 is [layer, K | V, C, KVH*D]: each layer's first attention reads its C cached key and value rows from there, then its
+    own; the prefill embeds prompt rows C..LP-1 only."""
+    r = build_program(_phi(TINY), "request", LP=24, T=3, cached=16)
+    params = r.program.fn.signature()[0]
+    assert [n for n, _ in params] == ["prompt", "prefix", "weights"]
+    assert repr(params[1][1]) == "Array<2,Array<2,Array<16,Array<32,Value<16>>>>>"
+    nodes = r.program.fn.body.nodes
+    emb = [nd for nd in nodes if getattr(nd.fn, "id", "").startswith("Embedding")]
+    att = [nd for nd in nodes if getattr(nd.fn, "id", "").startswith("Attention")]
+    assert len(emb) == 8 + 3 and list(runs(emb[0].args[0].refs)) == [("p", 0, 16, 17)]
+    plane = 16 * 32
+    for layer in (0, 1):
+        first = att[8 * layer]
+        assert "T=17," in first.fn.id
+        assert list(runs(first.args[1].refs))[0] == ("p", 1, 2 * layer * plane, (2 * layer + 1) * plane)
+        assert list(runs(first.args[2].refs))[0] == ("p", 1, (2 * layer + 1) * plane, (2 * layer + 2) * plane)
+    assert "T=27," in att[-1].fn.id
+
+
+@pytest.mark.parametrize("wrapper,kw", [("step", {"cached": 16}), ("request", {"LP": 24, "T": 3, "cached": 24})])
+def test_a_cached_prefix_is_a_requests_with_rows_left_to_prefill(wrapper, kw):
+    with pytest.raises(Unexpressible, match="a cached prefix of"):
+        build_program(_phi(TINY), wrapper, **kw)
+
+
+def test_a_prefix_rows_warm_request_is_predicted_from_its_declared_prompts(tmp_path):
+    """The prefix row's inventory record carries the warm request's planned cached rows and producers (from the declared prompts,
+    never a Build output); φ reads its shape as (LP, T, C), and the predicted unit is the traced warm request."""
+    rd = tmp_path / "rows" / "job" / PREFIX_ROW
+    rd.mkdir(parents=True)
+    (rd / "build_summary.json").write_text("{}")
+    (rd / "source_identity.json").write_text(json.dumps({"requested_root": str(TREE)}))
+    rec = INV.row_record(str(rd))
+    assert [(q.get("cached"), q.get("producers")) for q in rec["workload"]["requests"]] == [(None, None), (128, [0] * 8)]
+    rev = rec["workload"]["engine"]["revision"]
+    cp = Path(S.hf_config_path(str(tmp_path / "hf"), rec["workload"]["model"], rev))
+    cp.parent.mkdir(parents=True)
+    cp.write_text((FIX / "llama32-1b.config.json").read_text())
+    phi = S.phi_of(rec, hf_home=str(tmp_path / "hf"))
+    assert phi.request_shapes() == [(168, 9), (168, 9, 128)]
+    shape = S.unit_shape({"wrapper": "request", "LP": 168, "T": 9, "C": 128})
+    assert shape == ("request", None, None, 168, 9, 128) and S.unit_rows(shape) == 177
+    assert S._build(phi, shape).digest.startswith("bc2247ecb9d0e8f7")
+
+
+def test_a_workload_composes_a_warm_requests_component():
+    reqs = [{"request_id": "u0", "index": 0, "prompt_len": 24, "max_tokens": 4, "arrive_step": 0},
+            {"request_id": "u1", "index": 1, "prompt_len": 20, "max_tokens": 4, "arrive_step": 4, "cached": 16, "producers": [0]}]
+    phi = _phi(TINY, reqs)
+    assert phi.request_shapes() == [(24, 3), (20, 3, 16)]
+    warm = S.predict_workload(phi)
+    assert warm["function"].startswith("Workload_v1{requests=({") and warm["function"].count("},{") == 1
+    assert warm["digest"] != S.predict_workload(_phi(TINY, [reqs[0], {**reqs[1], "cached": 0}]))["digest"]
 
 
 def test_sampling_follows_the_builds_policy():

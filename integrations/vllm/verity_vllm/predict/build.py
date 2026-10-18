@@ -50,6 +50,8 @@ WRAPPERS = {("step", "greedy"): ("verity-vllm/engine-step/v1", "vLLMStep"),
             ("request", "greedy"): ("verity-vllm/greedy-request/v1", "vLLMRequest"),
             ("step", "stochastic"): ("verity-vllm/stochastic-engine-step/v1", "vLLMStep"),
             ("request", "stochastic"): ("verity-vllm/stochastic-request/v1", "vLLMRequest")}
+#: a request wrapper's DERIVE_SOURCE when the prefix cache serves its first C prompt rows (`frontend.cached_request.cached_wrapper`)
+CACHED_SOURCES = {"greedy": "verity-vllm/cached-greedy-request/v1", "stochastic": "verity-vllm/cached-stochastic-request/v1"}
 I64 = Value(64)
 
 
@@ -423,7 +425,8 @@ class _Model:
     (the implicit KV cache the attention rule makes explicit).  C is one rank's shape (`rank_shape`); a tensor-parallel rank's
     collectives read `peers`, the other rank's partials, one Input per collective in call order."""
 
-    def __init__(self, B: Builder, specs: _Specs, W: Coll, C: ModelShape, peers: list[Coll] = (), rank: int = 0) -> None:
+    def __init__(self, B: Builder, specs: _Specs, W: Coll, C: ModelShape, peers: list[Coll] = (), rank: int = 0,
+                 prefix: Coll | None = None, cached: int = 0) -> None:
         self.B, self.S, self.W, self.C = B, specs, W, C
         self.peers, self.rank, self.n_peer = list(peers), rank, 0
         n = 0
@@ -444,6 +447,11 @@ class _Model:
         n += 1 if C.embed_scale else 0
         self.cos_sin = W[n]
         self.hist: list[tuple[list, list]] = [([], []) for _ in range(C.NL)]
+        rl = C.KVH * C.D
+        for L, kv in enumerate(self.hist):
+            for plane, rows in enumerate(kv):
+                at = (2 * L + plane) * cached * rl
+                rows += [prefix.refs.slice(at + j * rl, at + (j + 1) * rl) for j in range(cached)]
         self.lp_of: dict[int, int] = {}
         self.plus_one: dict[int, Coll] = {}
 
@@ -506,10 +514,10 @@ class _Model:
             q = [self.call(S.rope_q, Coll(prq[0], q_in[i]), cs[i]) for i in range(M)]
             k = [self.call(S.rope_k, Coll(prk[0], k_in[i]), Coll(prk[1], cs[i].refs)) for i in range(M)]
             kh, vh = self.hist[L]
-            P0 = len(kh)
-            if P0 == 0:
-                self.lp_of[L] = M
-            own_rows = M if P0 == 0 else 1
+            P0, prefill = len(kh), L not in self.lp_of
+            if prefill:
+                self.lp_of[L] = P0 + M
+            own_rows = M if prefill else 1
             launch_sq = own_rows
             for i in range(M):
                 kh.append(k[i].refs)
@@ -517,7 +525,7 @@ class _Model:
             attn = []
             for i in range(M):
                 P = P0 + i + 1
-                fn = S.attention(P, i if P0 == 0 else 0, own_rows, launch_sq)
+                fn = S.attention(P, i if prefill else 0, own_rows, launch_sq)
                 pa = _ptypes(fn)
                 attn.append(self.call(fn, Coll(pa[0], q[i].refs), Coll(pa[1], concat(kh[:P])), Coll(pa[2], concat(vh[:P]))))
             o = self.collective(S.all_reduce, [self.call(S.o, Coll(po[0], attn[i].refs), Coll(po[1], lw["o"].refs)) for i in range(M)])
@@ -649,15 +657,21 @@ def _check_phi(phi: Phi) -> None:
         raise Unexpressible("vocabulary cannot express: " + "; ".join(facts))
 
 
-def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | None = None, M: int = 1, pos0: int = 8,
+def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | None = None, cached: int = 0, M: int = 1, pos0: int = 8,
                   with_desc: bool = True) -> BuildResult:
     """The Program of the Build's `wrapper` for φ: `step` (one engine step, M token rows at pos0.., the last row sampled) or
-    `request` (prefill of LP rows, then T decode steps each fed the previous greedy sample; returns the T+1 samples)."""
+    `request` (prefill of LP rows, then T decode steps each fed the previous greedy sample; returns the T+1 samples).  A request
+    whose first `cached` prompt rows the prefix cache serves (the Build's ``--cached C``) takes them as its `prefix` input, bf16
+    [L, 2, C, KVH*D] after its own inputs: each layer's history opens with its C key and value rows, and the prefill is prompt rows
+    C..LP-1 at positions C.."""
     t0 = time.time()
     _check_phi(phi)
     kind = (phi.sampling or {}).get("kind", "greedy")
     if (wrapper, kind) not in WRAPPERS:
         raise Unexpressible(f"wrapper {wrapper!r} (have {sorted({w for w, _ in WRAPPERS})})")
+    cached = int(cached or 0)
+    if cached and (wrapper != "request" or not 0 < cached < int(LP)):
+        raise Unexpressible(f"a cached prefix of {cached} rows on wrapper {wrapper!r} (a request's, 0 < C < LP = {LP})")
     C = model_shape(phi.hf_config)
     history = pos0 + M if wrapper == "step" else int(LP) + int(T)
     if C.window is not None and history > C.window:
@@ -674,11 +688,13 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
         params.append(("seed", Array(1, I64)))
         if phi.sampling["splits"] == "derived":
             params.append(("splits", Array(events, I32)))
+    if cached:
+        params.append(("prefix", _arr((C.NL, 2, cached, specs.C.KVH * C.D), 16)))
     n_user = len(params)
     if world > 1:
         # `vllm_meta.WithPeers`: per forward pass the embedding's all-reduce, each layer's q / k all-gathers (a norm over all heads)
         # and o / down all-reduces over its rows, then the sampled row's logits all-gather
-        R, passes = specs.C, [n] + [1] * (events - 1)
+        R, passes = specs.C, [n - cached] + [1] * (events - 1)
         layer = lambda r: ([(r, R.NH * R.D), (r, R.KVH * R.D)] if R.qk_norm == "all" else []) + [(r, C.H)] * 2  # noqa: E731
         shapes = [s for r in passes for s in [(r, C.H)] + layer(r) * C.NL + [(1, C.V // world)]]
         params += [(f"peers_{k}", _arr(s, 16)) for k, s in enumerate(shapes)]
@@ -694,14 +710,15 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
         s = phi.sampling
         policy = _Stochastic(seed=Coll(I64, Affine("p", 1, 0, 1)), splits=Coll(params[2][1], Affine("p", 2, 0, events)) if s["splits"] == "derived" else None,
                              S=s["splits"], temperature_bits=f32_bits(s["temperature"]), top_p_bits=f32_bits(s.get("top_p", 1.0)))
-    model = _Model(B, specs, W, specs.C, peers, rank)
-    rows = [Coll(I32, ids.refs.slice(i, i + 1)) for i in range(n)]
+    prefix = Coll(params[n_user - 1][1], Affine("p", n_user - 1, 0, params[n_user - 1][1].leaves)) if cached else None
+    model = _Model(B, specs, W, specs.C, peers, rank, prefix, cached)
+    rows = [Coll(I32, ids.refs.slice(i, i + 1)) for i in range(cached, n)]
     if wrapper == "step":
         hid = model.forward(rows, pos0)
         tok = model.sample(hid[-1], 0, pos0 + M - 1, policy)
         out = Coll(Array(1, I32), tok.refs)
     else:
-        hid = model.forward(rows, 0)
+        hid = model.forward(rows, cached)
         toks = [model.sample(hid[-1], 0, int(LP) - 1, policy)]
         for s in range(int(T)):
             hid = model.forward([Coll(I32, toks[-1].refs)], int(LP) + s)
@@ -713,6 +730,8 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     body = B.finish(out)
     t_body = time.time()
     src_class, derive_name = WRAPPERS[(wrapper, kind)]
+    if cached:
+        src_class = CACHED_SOURCES[kind]
     if world > 1:
         src_class = f"verity-vllm/with-peers/v1[{src_class}]"
     name = f"{derive_name}[{C.model_class}]"

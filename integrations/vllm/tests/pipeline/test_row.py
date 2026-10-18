@@ -937,17 +937,35 @@ def test_a_single_and_a_tp_rows_folds_store_the_instances_form_of_record(tmp_pat
             assert r.child_env["VERITY_INSTANCES_FORM"] == form
 
 
-def test_a_row_declaring_prefix_caching_is_refused_before_any_stage(tmp_path, monkeypatch):
-    """Every stage's engine runs with prefix caching off, so a row whose file declares it is refused at its precheck, by either row."""
-    prefix = "glm53__fp8__h200__tp8__b8__i256__o32__prefix-arrivals__greedy__eager"
-    single, tp = _row(tmp_path, row=prefix), _tp_row(tmp_path, prefix)
-    monkeypatch.setattr(tp, "hidden_build", lambda: "/x/verity_fa2_matReqG.so")
-    for r in (single, tp):
-        monkeypatch.setattr(r, "release_line", lambda *a: pytest.fail("a stage after the precheck"))
+def test_a_row_declaring_prefix_caching_passes_its_precheck_at_any_world(tmp_path, monkeypatch):
+    """Every stage of a single-GPU or a tensor-parallel row serves the prefix cache its file declares, and a warm request's Program (each
+    rank's, under TP) reads its cached rows as inputs, so neither row is refused before its stages."""
+    def past_precheck(*a):
+        raise Stop(99)
+    tps = [_tp_row(tmp_path, f"glm53__fp8__h200__tp8__{c}__greedy__eager") for c in ("b8__i256__o32__prefix-arrivals", "b1__i256__o16__prefix")]
+    for tp in tps:
+        monkeypatch.setattr(tp, "hidden_build", lambda: "/x/verity_fa2_matReqG.so")
+    single = _row(tmp_path, row="llama32-1b__bf16__h200__tp1__b2__i168__o10__prefix__greedy__bi-eager")
+    for r in (*tps, single):
+        monkeypatch.setattr(r, "release_line", past_precheck)
         with pytest.raises(Stop) as e:
             r.prepare()
-        last = open(f"{r.d}/stages.txt").read().splitlines()[-1].split(" ", 3)
-        assert e.value.rc == 3 and last[:2] == ["precheck", "FAIL"] and "enable_prefix_caching" in last[3]
+        assert e.value.rc == 99
+
+
+def test_a_b1_row_of_sequential_requests_without_batch_invariance_builds_each_shape_under_its_launch_batch(tmp_path):
+    """The derive refuses such a row's request Program without its batch (`launch_context.missing_batch`), so the row passes it: one
+    sequence per launch, the warm request's prefill its LP - C uncached rows from position C."""
+    t = _tp_row(tmp_path, "glm53__fp8__h200__tp8__b1__i256__o16__prefix__greedy__eager")
+    t.B, t.child_env = 1, {**os.environ, "PYTHONPATH": os.pathsep.join([str(TREE), os.environ.get("PYTHONPATH", "")])}
+    os.makedirs(t.d, exist_ok=True)
+    cold, warm = t.launch_args(256, 15), t.launch_args(199, 15, 128)
+    assert cold[0] == warm[0] == "--launch-context"
+    assert json.loads(cold[1]) == {"batch": [[[256, 0]], *[[[1, 256 + s]] for s in range(15)]]}
+    assert json.loads(warm[1]) == {"batch": [[[71, 128]], *[[[1, 199 + s]] for s in range(15)]]}
+    single = _row(tmp_path)
+    single.B = 1
+    assert single.launch_args(256, 31) == []
 
 
 @pytest.mark.parametrize("row, off", [
