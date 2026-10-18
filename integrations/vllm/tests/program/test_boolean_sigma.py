@@ -99,7 +99,7 @@ def test_a_word_primitive_made_on_demand_has_a_boolean_version_made_on_demand():
     assert evaluate_words(tree, tokens, column).tolist() == want
 
 
-SIGMA = [bind(b1.ResidualAdd, N=4), bind(I.InductorRoPE, NHEADS=1, D=4), bind(I.InductorSiluMul, I=1),
+SIGMA = [bind(b1.ResidualAdd, N=4), bind(b1.Gemm, K=32, N=2), bind(I.InductorRoPE, NHEADS=1, D=4), bind(I.InductorSiluMul, I=1),
          bind(moe.MoeRouterTopKNorm, E=4, TOPK=2, VPT=4), bind(moe.MoeExpertGemmWV2, E=2, K=16, N=2, DOT=hopper.HopperBF16WgmmaDot16),
          bind(MM.MoeAlignRanks, E=3, P=4, BM=2), bind(MM.MoeAlignBlocks, P=4, BM=2)]
 
