@@ -351,9 +351,15 @@ struct Collector {
         }
         win_wait_s += now_s() - t0;
         step_win_wait_s += now_s() - t0;
-        // the worker may abandon the step while this thread waits for a slot or for the GIL back (abandon_step: `sw` erased)
+        // the worker may abandon the step while this thread waits for a slot or for the GIL back (abandon_step: `sw` erased).  A slot taken
+        // here whose last occupant was one of the step's windows went back with the step's: it must not go back twice (two windows of a
+        // later step would share it)
         if (failed || !sw) {
-          if (slot >= 0) { std::lock_guard<std::mutex> g(win_mu); win_free.push_back(slot); win_cv.notify_all(); }
+          if (slot >= 0) {
+            std::lock_guard<std::mutex> g(win_mu);
+            if (std::find(win_free.begin(), win_free.end(), slot) == win_free.end()) win_free.push_back(slot);
+            win_cv.notify_all();
+          }
           refuse_windows();
         }
       }
@@ -432,7 +438,9 @@ struct Collector {
   }
   // the worker gave up on `step_id` (exception): the run fails by name (`why`), and every slot the step still holds goes back to the ring,
   // once, after the worker's reads queued on `stream_ptr` (0: none), so the serving thread stops waiting for a release that would never
-  // come.  A slot the worker already released, or that a later step has taken since, stays where it is.
+  // come.  A slot the worker already released, or that a later step has taken since, stays where it is; one the serving thread took off
+  // the free list and has not recorded yet goes back here if its last occupant was one of this step's windows (ensure_windows then
+  // leaves it).
   void abandon_step(int64_t step_id, const std::string& why, int64_t stream_ptr) {
     std::lock_guard<std::mutex> g(win_mu);
     if (!failed) {

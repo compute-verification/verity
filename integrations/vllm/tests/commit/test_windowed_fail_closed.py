@@ -11,6 +11,8 @@ once and left no failure behind.
 from __future__ import annotations
 
 import os
+import sys
+import threading
 from types import SimpleNamespace
 
 import pytest
@@ -67,4 +69,40 @@ def test_a_step_past_the_learn_budget_fails_the_run_by_name(monkeypatch, scheme)
         else:
             RS.check_run(rec, com.row_keys)
     finally:
+        com.close()
+
+
+def test_a_slot_taken_while_the_worker_abandons_goes_back_once(monkeypatch):
+    """The interleaving that broke the recovery above, forced: the serving thread, out of slots, takes the slot the worker just released
+    and waits for the GIL, which the worker keeps until it has abandoned the step.  abandon_step hands that slot back (its last occupant
+    was the step's window 0), so the serving thread refuses without handing it back again: the ring holds each of its four slots once."""
+    com = WR.committer(monkeypatch, retain_levels=False)
+    nc, side = com._nc, torch.cuda.Stream()
+    t = torch.arange(40 * 1024 // 4, dtype=torch.int32, device="cuda")          # five 8 KiB windows over a ring of four
+    seen: dict[str, object] = {}
+
+    def worker() -> None:
+        seen["window"] = nc.wait_window(0, 0, side.cuda_stream)                  # marked when the serving thread runs out of slots
+        nc.release_slot(int(seen["window"][2]), side.cuda_stream)
+        while nc.free_slots():                                                   # the serving thread took it; the GIL stays here
+            pass
+        nc.abandon_step(0, "forced abandon", side.cuda_stream)
+
+    interval = sys.getswitchinterval()
+    sys.setswitchinterval(60.0)                                                  # no forced GIL hand-off between release and abandon
+    try:
+        com.reset()
+        nc.begin_step(1, 0, 0, True, 0)
+        th = threading.Thread(target=worker)
+        th.start()
+        with pytest.raises(RuntimeError, match="the collector failed earlier in this run: forced abandon"):
+            nc.stage(com._intern("t"), t)
+        th.join()
+        assert seen["window"][0] and nc.free_slots() == 4, (seen, nc.free_slots())
+        nc.flush()
+        nc.end_step()
+        nc.end_run()
+        assert nc.failure == "" and nc.free_slots() == 4
+    finally:
+        sys.setswitchinterval(interval)
         com.close()
