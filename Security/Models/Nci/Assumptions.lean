@@ -83,4 +83,22 @@ def PartialSumsIncompressible (D : Declaration) (c : Chain D.D) (Γ : ℕ) (K b_
       ∑ x : (ℓ : Fin c.L) × Fin c.N × Fin (c.e ℓ), (c.spread P x.1 x.2.1 x.2.2 - 1) ≤ ∑ u, s u ∧
       ∀ u, b_w * (c.weightsUsed (P.gates u)).card + b_a * s u ≤ novelReads D (P.gates u)
 
+/-- **Incompressibility of partial sums, in support form**: `PartialSumsIncompressible` restated over what values
+determine rather than over wiring. For every division `P` of `D` into IUs of at most `Γ` gates, each reading at most `K`
+bits of novel information, the partial sums passed between IUs can be charged to the IUs that receive them, `s u` to IU
+`u`, so that an entry whose products lie in `m` IUs is charged at least `m − 1` in total, and the gates of each IU take
+at least `2^(b_w · #(weight entries it uses) + b_a · s u)` distinct values over the runs of `D` with the baseline at its
+committed values `θv`.
+
+Like `ActivationsSupport`, wiring cannot falsify it, and `b_w` and `b_a` are rates in bits of support per entry, below an
+entry's width by whatever the updated weights and the partial sums compress to. It is meant for a reference training
+circuit, the one a declared circuit contains (`Nci.Guarantees.ContainedMatMul`), where it is a claim about how
+compressible training is. An IU's values are functions of the values on its novel reads, so it gives
+`PartialSumsIncompressible` at the same caps (`partialSumsIncompressible_of_support`). -/
+def PartialSumsSupport (D : Declaration) (θv : D.D.Transcript) (c : Chain D.D) (Γ : ℕ) (K b_w b_a : ℝ) : Prop :=
+  ∀ (n : ℕ) (P : Partition D.D n), (∀ u, D.D.size (P.gates u) ≤ Γ ∧ (novelReads D (P.gates u) : ℝ) ≤ K) →
+    ∃ s : Fin n → ℕ,
+      ∑ x : (ℓ : Fin c.L) × Fin c.N × Fin (c.e ℓ), (c.spread P x.1 x.2.1 x.2.2 - 1) ≤ ∑ u, s u ∧
+      ∀ u, (2 : ℝ) ^ (b_w * (c.weightsUsed (P.gates u)).card + b_a * s u) ≤ support D θv (P.gates u)
+
 end Nci.Assumptions

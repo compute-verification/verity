@@ -8,6 +8,7 @@ import Proofs.Nci.Support
 import Proofs.Nci.Reads
 import Proofs.Nci.Pull
 import Proofs.Nci.Threads
+import Proofs.Nci.Contained
 
 /-!
 # Proofs of NCI's guarantees

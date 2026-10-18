@@ -138,6 +138,9 @@
    "owner": "@lean",
    "digest": "3e12dadef8d8457e3aa1179212599e1eabeef158cb25d3d51bab61e7668f6374"
   },
+  "Nci.Assumptions.PartialSumsSupport": {
+   "owner": "@lean"
+  },
   "NetTiming.Allocated": {
    "owner": "@network-accounting",
    "digest": "a414edcfc0295b87863d6548e751f60b429bf55d55cdcd9791ef92d93c02ea94"
@@ -3506,6 +3509,16 @@
    "assumptions": [],
    "type_hash": "94a41bae5d919600ef987d2aa38945b9d18acdc52c8f6dc7e75ebfacf6d1b3e6"
   },
+  "Nci.SecurityProofs.ContainedMatMul": {
+   "owner": "@lean",
+   "signature": ["Nci.SecurityProofs.ContainedMatMul : Nci.Guarantees.ContainedMatMul"],
+   "assumptions": []
+  },
+  "Nci.SecurityProofs.ContainedTraining": {
+   "owner": "@lean",
+   "signature": ["Nci.SecurityProofs.ContainedTraining : Nci.Guarantees.ContainedTraining"],
+   "assumptions": []
+  },
   "Nci.SecurityProofs.Training": {
    "owner": "@lean",
    "signature": ["Nci.SecurityProofs.Training : Nci.Guarantees.Training"],
@@ -5205,6 +5218,8 @@
    "Nci.SecurityProofs.ThreadedReads": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains it, under the named WeightsIncompressible (Security/Models/Nci/Assumptions/Threads.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Nci.SecurityProofs.ThreadedThrottled": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains it, under the named WeightsIncompressible (Security/Models/Nci/Assumptions/Threads.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Nci.SecurityProofs.ThreadedTraining": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains it, under the named WeightsIncompressible (Security/Models/Nci/Assumptions/Threads.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
+   "Nci.SecurityProofs.ContainedMatMul": "frozen (no-function): It is about an arbitrary reference circuit, a chain it runs and a declaration that contains it, under the named ActivationsSupport and PartialSumsSupport on the reference circuit (Security/Models/Nci/Assumptions.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
+   "Nci.SecurityProofs.ContainedTraining": "frozen (no-function): It is about an arbitrary reference circuit, a chain it runs and a declaration that contains it, under the named ActivationsSupport and PartialSumsSupport on the reference circuit (Security/Models/Nci/Assumptions.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Nci.SecurityProofs.Training": "falsified (conjecture,no-function): It rests on ActivationsIncompressible and PartialSumsIncompressible, an analysis simplification, known false (Daniel 7:46 PM PDT (02:46Z)); lean restates it.",
    "Nci.SecurityProofs.UpdatedMatMul": "falsified (conjecture,no-function): It rests on ActivationsIncompressible and PartialSumsIncompressible, an analysis simplification, known false (Daniel 7:46 PM PDT (02:46Z)); lean restates it.",
    "Nci.SecurityProofs.UpdatedMatMulReads": "falsified (conjecture,no-function): It is UpdatedMatMul before its division by alpha, so it rests on ActivationsIncompressible and PartialSumsIncompressible, an analysis simplification, known false (Daniel 7:46 PM PDT (02:46Z)); lean restates it.",
