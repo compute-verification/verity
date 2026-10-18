@@ -1,12 +1,14 @@
 import Proofs.Accounting.Headline.Encoding
 import Proofs.Accounting.Headline.Luck
+import Proofs.Accounting.Headline.Whole
 import Models.Accounting.Guarantees.Headline
 
 /-!
 # sm_120's headline at the data sheet
 
-`Sm120SheetHeadline` is `SheetDIdealFloor` at sm_120's data (`Definitions.Accounting.Headline.Sm120`), with the data's
-hypotheses discharged and the terms bounded:
+`Sm120SheetHeadline` is `Whole.sheetDIdealFloor_whole` (`SheetDIdealFloor` with fold skippers charged) at sm_120's
+data (`Definitions.Accounting.Headline.Sm120`), `p = 7/8`, `p₀ = ½` and `Λ = max(κ/ln(8/7), (κ + f)/ln 2)`, with the
+data's hypotheses discharged and the terms bounded:
 
 * the data, by `decide`: issue is the floor program's largest facet (`sm120_max`), so `B_♭` is its issue count
   `B_♭ ≈ 17.098` (`sm120_bnd`); every writer kind's `ω ≤ 128` and IMMA16832's is `128`, so `w* = 1/128`
@@ -16,7 +18,9 @@ hypotheses discharged and the terms bounded:
 * `identity` at `d̄ = ā = 0` gives `ε_skip + ε_cert + ε_route + ε_mand ≤ 1 − (N_w w* + N_w φ*)/B_♭ ≤ 1 − 17/B_♭`, and
   `ε_jl ≤ (1/B_♭)·41 ln 2/(48,000 · ⅛)` at `p = 7/8` from `δ′ ≥ 2^-41`, `ln 2 < 0.6931471808` and `ln(8/7) ≥ ⅛`
   (`sm120_jl`);
-* their sum is below `599/100000`, by `decide` on the rationals (`sm120_final`);
+* their sum, the folded branch, is below `599/100000`, by `decide` on the rationals (`sm120_final`);
+* the unfolded branch is at most `1 − (N_w w* + N_w φ*)/B_♭ · (1 − 41/48000) ≤ 1 − 17/B_♭ · (1 − 41/48000)`
+  (`Whole.unfolded_floor`), below `656/100000` by `decide` (`sm120_unfolded`), and it binds;
 * (I7) at `7/8` is the receipt split's (`luck_of_receipt_half`).
 -/
 
@@ -50,6 +54,9 @@ theorem sm120_fold :
 
 theorem sm120_final_q :
     (1 - 17 / Bq + 1 / Bq * (41 * (6931471808 / 10000000000) / 6000) : ℚ) ≤ 599 / 100000 := by
+  decide +kernel
+
+theorem sm120_unfolded_q : (1 - 17 / Bq * (1 - 41 / 48000) : ℚ) ≤ 656 / 100000 := by
   decide +kernel
 
 theorem sm120_hG : ∀ r k, Sm120.model.G.a r k = (sheetCoef Sm120.ds120 r k.val : ℝ) := sheet_a Sm120.ds120 122
@@ -224,6 +231,31 @@ theorem sm120_eps_le (δ' : ℝ) (hδ' : (1 / 2 : ℝ) ^ 41 ≤ δ') :
   have hfin := sm120_final
   linarith
 
+/-- The unfolded branch's floor at `π*`: `(N_w w* + N_w φ*)/B_♭ · (1 − 41/48000) ≥ 1 − 656/100000`, since
+`N_w w* + N_w φ* ≥ 1 + 16`. -/
+theorem sm120_unfolded :
+    1 - 656 / 100000 ≤ (Sm120.model.Nw * Sm120.model.wStar (onFacet Sm120.piStar) +
+      (1 - Sm120.model.muF) * Sm120.model.Nw * Sm120.model.phiStar (onFacet Sm120.piStar)) /
+        Sm120.model.bnd Sm120.flat * (1 - 41 / 48000) := by
+  have hBpos : (0 : ℝ) < Bq := by exact_mod_cast sm120_Bpos
+  have hY : 17 / (Bq : ℝ) ≤ (Sm120.model.Nw * Sm120.model.wStar (onFacet Sm120.piStar) +
+      (1 - Sm120.model.muF) * Sm120.model.Nw * Sm120.model.phiStar (onFacet Sm120.piStar)) /
+        Sm120.model.bnd Sm120.flat := by
+    rw [sm120_bnd]
+    refine div_le_div_of_nonneg_right ?_ hBpos.le
+    rw [sm120_Nw, sm120_wStar, show Sm120.model.muF = 0 from rfl]
+    have hφ := sm120_phiStar
+    linarith
+  have hq : ((1 - 17 / Bq * (1 - 41 / 48000) : ℚ) : ℝ) ≤ ((656 / 100000 : ℚ) : ℝ) :=
+    Rat.cast_le.mpr sm120_unfolded_q
+  push_cast at hq
+  have hm := mul_le_mul_of_nonneg_right hY (by norm_num : (0 : ℝ) ≤ 1 - 41 / 48000)
+  linarith
+
+theorem sm120_S : ((Sm120.checks : ℕ) : ℝ) = 48000 := by
+  show ((48000 : ℕ) : ℝ) = 48000
+  norm_num
+
 end Accounting.SecurityProofs.TS.Headline
 
 namespace Accounting.SecurityProofs.TS
@@ -231,11 +263,12 @@ namespace Accounting.SecurityProofs.TS
 open Accounting.TS Accounting.TS.Headline Accounting.Assumptions.TS Pouw.RelativeSecurity
   Accounting.SecurityProofs.TS.Headline
 
-/-- sm_120's headline at the data sheet: `SheetDIdealFloor` at `π*`, `p = 7/8`, `S = 48,000` and `δ = 2^-40`, (I7)
-from the receipt split (`luck_of_receipt_half`), (I8) from its pieces (`ProofsSoundOfPinned`), FILL-OPT from the data,
-and the terms bounded by `sm120_eps_le`. -/
+/-- sm_120's headline at the data sheet: `Whole.sheetDIdealFloor_whole` at `π*`, `p = 7/8`, `p₀ = ½`,
+`Λ = max(κ/ln(8/7), (κ + f)/ln 2)`, `S = 48,000` and `δ = 2^-40`, (I7) from the receipt split
+(`luck_of_receipt_half`), (I8) from its pieces (`ProofsSoundOfPinned`), FILL-OPT from the data, and the terms bounded
+by `Whole.headline_of_branches`: the folded branch by `sm120_eps_le`, the unfolded one by `sm120_unfolded`. -/
 theorem Sm120SheetHeadline : Accounting.Guarantees.TS.Sm120SheetHeadline := by
-  intro Ω _ Pl G V nπ pf δbind δzk hδ hSplit h1 h2 h3 h4 h5 h6 h7 hF hG hPinG hOp hRL hOf hB hZK hPin hRF
+  intro Ω _ Pl G Uf V nπ pf δbind δzk hδ hSplit h1 h2 h3 h4 h5 h6 h7 hF hG hPinG hOp hRL hWL hOf hB hZK hPin hRF
   have hL := luck_of_receipt_half Pl.game G hG hPinG hOp hRL
   have hPS :=
     ProofsSoundOfPinned Ω Sm120.checks nπ Pl pf Sm120.model.Nw δbind δzk hOf hB hZK hPin hRF
@@ -244,12 +277,21 @@ theorem Sm120SheetHeadline : Accounting.Guarantees.TS.Sm120SheetHeadline := by
     linarith
   have hδpos : 0 < (1 / 2 : ℝ) ^ 40 - (Sm120.checks : ℝ) * (δbind + nπ * δzk) :=
     lt_of_lt_of_le (by positivity) hδlo
-  have hmain := SheetDIdealFloor Sm120.sheet Sm120.model Sm120.flat Ω Sm120.checks Pl
-    (onFacet Sm120.piStar) (7 / 8) ((1 / 2) ^ 40) δbind δzk nπ rfl (isCert_onFacet _) sm120_wf (by decide)
-    (by norm_num) (by norm_num) hδpos hSplit (le_of_eq sm120_q) (le_of_eq sm120_qT) le_rfl h1 h2 h3 h4 h5 h6 h7 hF
-    (sm120_fillOpt Pl hSplit) hL hPS
+  obtain ⟨hκ0, -⟩ :=
+    Whole.kappa_f_nonneg Sm120.model Sm120.flat (onFacet Sm120.piStar) (isCert_onFacet _) sm120_wf
+  obtain ⟨hΛ, hΛ1, hΛ2⟩ := Whole.max_budget
+    (f := (1 - Sm120.model.muF) * Sm120.model.Nw * Sm120.model.phiStar (onFacet Sm120.piStar) /
+      Sm120.model.bnd Sm120.flat) hκ0
+    (Real.log_pos (by norm_num) : 0 < Real.log (1 / (7 / 8 : ℝ)))
+    (Real.log_pos (by norm_num) : 0 < Real.log (1 / (1 / 2 : ℝ)))
+  have hmain := Whole.sheetDIdealFloor_whole Sm120.sheet Sm120.model Sm120.flat Pl G Uf
+    (onFacet Sm120.piStar) (7 / 8) (1 / 2) _ ((1 / 2) ^ 40) δbind δzk nπ rfl (isCert_onFacet _) sm120_wf
+    (by decide) (by norm_num) (by norm_num) hΛ hΛ1 hΛ2 hδpos hSplit (le_of_eq sm120_q) (le_of_eq sm120_qT) le_rfl
+    h1 h2 h3 h4 h5 h6 h7 hF (sm120_fillOpt Pl hSplit) hG hPinG hL hWL hPS
   refine le_trans (prob_mono ?_) hmain
   rintro x ⟨ha, hlt⟩
-  exact ⟨ha, lt_of_lt_of_le hlt (sm120_eps_le _ hδlo)⟩
+  exact ⟨ha, lt_of_lt_of_le hlt (Whole.headline_of_branches Sm120.model Sm120.flat (onFacet Sm120.piStar)
+    (isCert_onFacet _) sm120_wf Sm120.checks sm120_S _ hδlo _ (le_trans (by norm_num) (sm120_eps_le _ hδlo))
+    sm120_unfolded)⟩
 
 end Accounting.SecurityProofs.TS

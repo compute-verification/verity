@@ -326,7 +326,9 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "derivations, every word that isn't fixed is in its round's share", "TS right fixed", "proven"),
     Entry("accounting-ts-receipt-luck", "assumption",
           "The receipt luck at pr: given the past, a deficient round whose deficient words are not all right keeps the "
-          "honest committed value with probability at most pr (½ at LEDGER case (b), two or more wrong places a set)",
+          "honest committed value with probability at most pr (½ at LEDGER case (b), two or more wrong places a set), "
+          "and a round at a unit whose fold the run skips passes with probability at most p₀ (½, B′'s value, per live "
+          "coin; the whole-unit guess bound 2^-64 is not granted)",
           "TS receipt luck at pr", "conjectured"),
     Entry("accounting-ts-operand-h-mu", "assumption",
           "(H-μ) at the receipt's operands: given the past, a round's deficient words take any one value with "
