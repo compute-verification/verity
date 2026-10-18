@@ -53,23 +53,28 @@ theorem computedOf_spec {spec : String → Option ByteArray} {t : _root_.Flock.F
   | _ => cases hf
 
 /-- **The Lean frame's release** of the device round `v` (transcript-v2 frames, as the device frames them) with `n` coins
-from the masker `m`: the bytes `Flock.Firewall.Frame.round` returns, or `stop` where it refuses. -/
-def frameOut (stop : Msg) (m : _root_.Flock.Firewall.Frame.Masker) (v : Msg) (n : ℕ) : Msg :=
-  match _root_.Flock.Firewall.Frame.round m ⟨v.toArray⟩ n with
+at the rep's configuration `c` and masking state `m`: the bytes `Flock.Firewall.Frame.round` returns, or `stop` where it
+refuses. -/
+def frameOut (stop : Msg) (c : _root_.Flock.Firewall.Frame.Cfg) (m : _root_.Flock.Firewall.Frame.Masker) (v : Msg)
+    (n : ℕ) : Msg :=
+  match _root_.Flock.Firewall.Frame.round c m ⟨v.toArray⟩ n with
   | .ok (out, _) => out.data.toList
   | .error _ => stop
 
 /-- Whether the Lean frame takes the device round `v`. -/
-def frameTakes (m : _root_.Flock.Firewall.Frame.Masker) (v : Msg) (n : ℕ) : Bool :=
-  match _root_.Flock.Firewall.Frame.round m ⟨v.toArray⟩ n with
+def frameTakes (c : _root_.Flock.Firewall.Frame.Cfg) (m : _root_.Flock.Firewall.Frame.Masker) (v : Msg) (n : ℕ) :
+    Bool :=
+  match _root_.Flock.Firewall.Frame.round c m ⟨v.toArray⟩ n with
   | .ok _ => true
   | .error _ => false
 
 /-- **The deployed release**, for witnesses `W` on the server's tape `R`: at statement `x`, after the history `h`, round
 `h.length` leaves as the Lean frame's round of the device round, from the rep's masker. -/
 structure LeanRelease (W R : Type) where
-  /-- the rep's masker after the rounds of `h`: `Masker.new` of the layout, the pads and the pads' root on the server's
-  tape, advanced by `Frame.round` over the rounds so far -/
+  /-- the rep's masking configuration, fixed at its start: `Cfg.ofDraws` of the layout, the draws on the server's tape and
+  the statement's mask slot -/
+  cfg : Msg → R → _root_.Flock.Firewall.Frame.Cfg
+  /-- the rep's masking state after the rounds of `h`: `{}`, advanced by `Frame.round` over the rounds so far -/
   masker : Msg → R → List (Msg × Msg) → _root_.Flock.Firewall.Frame.Masker
   /-- the device round at honest worker values, given the values the firewall fixes by its own computation, by name -/
   device : Msg → W → R → List (Msg × Msg) → (String → Option ByteArray) → Msg
@@ -95,8 +100,8 @@ def toSrv {W R : Type} (L : LeanRelease W R) : ZkServer W R where
   cst := fun _ _ _ => []
   own := fun _ _ _ _ _ => []
   recomp := fun _ _ _ _ _ _ _ => []
-  mask := fun x j _ ρ h v => frameOut L.stop (L.masker x ρ h) v (L.coins x j)
-  rel := fun x j _ w ρ h _ _ v => L.pass x j w ρ h v && frameTakes (L.masker x ρ h) v (L.coins x j)
+  mask := fun x j _ ρ h v => frameOut L.stop (L.cfg x ρ) (L.masker x ρ h) v (L.coins x j)
+  rel := fun x j _ w ρ h _ _ v => L.pass x j w ρ h v && frameTakes (L.cfg x ρ) (L.masker x ρ h) v (L.coins x j)
   honest := fun x _ _ w ρ h => L.device x w ρ h (computedOf (L.computed x w ρ h))
   frame := fun _ _ vs => vs ⟨0, Nat.zero_lt_one⟩
   stop := L.stop
@@ -105,7 +110,8 @@ def toSrv {W R : Type} (L : LeanRelease W R) : ZkServer W R where
 /-- **The server's frame at honest workers is the Lean frame** of the honest device round, by definition. -/
 theorem refMsg_toSrv {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) (ρ : R) (h : List (Msg × Msg)) :
     L.toSrv.refMsg x w ρ h =
-      frameOut L.stop (L.masker x ρ h) (L.device x w ρ h (computedOf (L.computed x w ρ h))) (L.coins x h.length) :=
+      frameOut L.stop (L.cfg x ρ) (L.masker x ρ h) (L.device x w ρ h (computedOf (L.computed x w ρ h)))
+        (L.coins x h.length) :=
   rfl
 
 /-- **The item-stream refinement** at `(x, w)` and the specified values `spec`: after every history, at honest worker
@@ -114,7 +120,8 @@ frame of the device round is `P`'s message. -/
 def ItemsRefine {W R : Type} (L : LeanRelease W R) (H : Msg → Msg) (P : W → Prover R) (x : Msg) (w : W)
     (spec : String → Option ByteArray) : Prop :=
   ∀ ρ h (fix : String → Option ByteArray), (∀ what v, fix what = some v → spec what = some v) →
-    (((P w).next x h ρ).eval H).1 = frameOut L.stop (L.masker x ρ h) (L.device x w ρ h fix) (L.coins x h.length)
+    (((P w).next x h ρ).eval H).1 =
+      frameOut L.stop (L.cfg x ρ) (L.masker x ρ h) (L.device x w ρ h fix) (L.coins x h.length)
 
 /-- **`hRef` at the Lean release**: D8 (a) on every transcript the firewall keeps, and the item-stream refinement, give
 `ZkServer.Ref`. -/

@@ -21,9 +21,10 @@ sends `abort`. `Sampled c` is that protocol's data at the code `c`, and `Sampled
   verifier sends at `cs` (`ans`), its own earlier messages replayed on its tape (`replay`); the dummy-witness messages
   are the same at the dummy witness of the leaf layer `lx` (`dw x lx`), and the SHVZK simulator is given `lx` (`sim`).
 
-`zk_sampled` is `Claims.Sampling.ZK` at the deployed record and `P_zk = (Sampled.leaky S).G.prover`, at the key's
-hiding gap, from `HelloRounds` and the four models' Props at each leaf layer; `sampling_deployed_sampled` is
-`sampling_deployed` with it.
+`zk_sampled` is `ZKAt` at the deployed record and `P = (Sampled.leaky S).G.prover`, at the key's hiding gap, from
+`HelloRounds` and the four models' Props at each leaf layer; `zk_sampled_mask` is `Claims.Sampling.ZK` at the record
+masked at `tapeOf`, where the code's reference prover on the masked tape is that protocol's (`Honest`); and
+`sampling_deployed_sampled` is `sampling_deployed` with it.
 -/
 
 namespace SamplingDeploy
@@ -135,7 +136,7 @@ variable (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
 
 /-- **Sampling's zero knowledge at the deployed record, of the sampled masked protocol**: `zk_deploy_of_models_gap` at
 `L = Sampled.leaky S`, its rounds from `HelloRounds` and its coin check by definition; what remains is the four models'
-Props at each leaf layer. -/
+Props at each leaf layer. It is `ZKAt`, of `L`'s prover. -/
 theorem zk_sampled (H : Msg → Msg) (S : Sampled c) (hR : HelloRounds c) (t : ℕ) (ht : 0 < t) {Salt B Cc : Type}
     [AddCommGroup Salt] [AddCommGroup B] [Fintype Salt] [DecidableEq Salt] [Fintype B] [DecidableEq B]
     [DecidableEq Cc] (My : Salt → B) (cs : Salt → Cc)
@@ -146,24 +147,47 @@ theorem zk_sampled (H : Msg → Msg) (S : Sampled c) (hR : HelloRounds c) (t : �
     (hL : ∀ lx, (S.leaky.proto lx).MsgLink H (RAt H (deploy rel c) lx) My cs (Mp lx) (Mc lx))
     (hS : ∀ lx, (S.leaky.proto lx).SimLink H (Mc lx)) (hN : ∀ lx, (S.leaky.proto lx).NonDegenerate (Mc lx))
     (hI : ∀ lx, (S.leaky.proto lx).InnerHolds (RAt H (deploy rel c) lx) (Mc lx)) :
-    ZK H (deploy rel c) S.leaky.G.prover (S.leaky.simLeakE t (t * 3 ^ t))
+    ZKAt H (deploy rel c) S.leaky.G.prover (S.leaky.simLeakE t (t * 3 ^ t))
       (fun x => 8 * nL x * (ENNReal.ofReal (FlockSoundness.CROnly.hidingGap My cs)).toReal +
         8 * t * nB x * (ENNReal.ofReal (FlockSoundness.CROnly.hidingGap My cs)).toReal + 2 * (1 / 3) ^ t)
       fun _ => 4 * t * 3 ^ t :=
   zk_deploy_of_models_gap rel c H S.leaky t ht (S.rounds hR) My cs Mp Mc nL nB hnL hnB hL hS hN hI S.coinCheck
 
+/-- **Sampling's zero knowledge at the deployed record masked at the sampled masked protocol's tapes**:
+`zk_deploy_mask_of_models_gap` at `L = Sampled.leaky S`, where the code's reference prover on the masked tape `tapeOf ω`
+is `L`'s (`Honest`); what remains is that and the four models' Props at each leaf layer. -/
+theorem zk_sampled_mask (H : Msg → Msg) (S : Sampled c) (hR : HelloRounds c) (t : ℕ) (ht : 0 < t)
+    {Salt B Cc : Type} [AddCommGroup Salt] [AddCommGroup B] [Fintype Salt] [DecidableEq Salt] [Fintype B]
+    [DecidableEq B] [DecidableEq Cc] (My : Salt → B) (cs : Salt → Cc)
+    (tapeOf : S.leaky.G.Nonce × S.leaky.G.Rand → c.Tape) (hP : Honest c H S.leaky.G tapeOf)
+    (Mp : ∀ lx x, S.leaky.G.Nonce → (S.leaky.proto lx).PreModel x Salt B Cc)
+    (Mc : ∀ lx x, S.leaky.G.Nonce → (Fin (S.leaky.G.K x) → S.leaky.G.Coin) → (S.leaky.proto lx).CoinModel x Salt B Cc)
+    (nL nB : Msg → ℕ) (hnL : ∀ lx x ν, Fintype.card (Mp lx x ν).L ≤ nL x)
+    (hnB : ∀ lx x ν c, (Mc lx x ν c).size ≤ nB x)
+    (hL : ∀ lx, (S.leaky.proto lx).MsgLink H (RAt H (deploy rel c) lx) My cs (Mp lx) (Mc lx))
+    (hS : ∀ lx, (S.leaky.proto lx).SimLink H (Mc lx)) (hN : ∀ lx, (S.leaky.proto lx).NonDegenerate (Mc lx))
+    (hI : ∀ lx, (S.leaky.proto lx).InnerHolds (RAt H (deploy rel c) lx) (Mc lx)) :
+    ZK H ((deploy rel c).mask S.leaky.G.Nonce S.leaky.G.Rand tapeOf (S.leaky.simLeakE t (t * 3 ^ t)))
+      (fun x => 8 * nL x * (ENNReal.ofReal (FlockSoundness.CROnly.hidingGap My cs)).toReal +
+        8 * t * nB x * (ENNReal.ofReal (FlockSoundness.CROnly.hidingGap My cs)).toReal + 2 * (1 / 3) ^ t)
+      fun _ => 4 * t * 3 ^ t :=
+  zk_deploy_mask_of_models_gap rel c H S.leaky t ht (S.rounds hR) My cs tapeOf hP Mp Mc nL nB hnL hnB hL hS hN hI
+    S.coinCheck
+
 set_option synthInstance.maxSize 1024 in
 /-- **The sampling claims at the deployed record, with zero knowledge of the sampled masked protocol**:
-`sampling_deployed_models` at `L = Sampled.leaky S`, its rounds from `HelloRounds` and its coin check by definition. -/
+`sampling_deployed_models` at `L = Sampled.leaky S`, its rounds from `HelloRounds` and its coin check by definition, at
+the record masked at `tapeOf` where the code's reference prover is `L`'s (`Honest`). -/
 theorem sampling_deployed_sampled (H : Msg → Msg) (hKS : Claims.Flock.KS H (FlockDeploy.deployZk rel))
     (hfixed : DrawFixed (deploy rel c)) (hsessions : SessionRuns H (deploy rel c)) (hnum : SessionsIn c)
     (hslots : DrawSlots (deploy rel c)) (iroots : Msg → Seen → ℕ → List Msg)
     (hopens : SessionOpens H (deploy rel c) iroots) (hfix : InteriorFixed H (deploy rel c) iroots)
     (hprog : ProgramScope (deploy rel c)) (hchecks : ChecksScope H (deploy rel c)) (hreveals : RevealsLe c)
-    {Ω : Type} (P : Wit → Prover Ω) (δc : Msg → ℝ) (hComplete : Complete H (deploy rel c) P δc)
-    (S : Sampled c) (hR : HelloRounds c) (t : ℕ) (ht : 0 < t) {Salt B Cc : Type} [AddCommGroup Salt]
-    [AddCommGroup B] [Fintype Salt] [DecidableEq Salt] [Fintype B] [DecidableEq B] [DecidableEq Cc] (My : Salt → B)
-    (cs : Salt → Cc) (Mp : ∀ lx x, S.leaky.G.Nonce → (S.leaky.proto lx).PreModel x Salt B Cc)
+    (hComplete : Complete H (deploy rel c)) (S : Sampled c) (hR : HelloRounds c) (t : ℕ) (ht : 0 < t)
+    {Salt B Cc : Type} [AddCommGroup Salt] [AddCommGroup B] [Fintype Salt] [DecidableEq Salt] [Fintype B]
+    [DecidableEq B] [DecidableEq Cc] (My : Salt → B) (cs : Salt → Cc)
+    (tapeOf : S.leaky.G.Nonce × S.leaky.G.Rand → c.Tape) (hP : Honest c H S.leaky.G tapeOf)
+    (Mp : ∀ lx x, S.leaky.G.Nonce → (S.leaky.proto lx).PreModel x Salt B Cc)
     (Mc : ∀ lx x, S.leaky.G.Nonce → (Fin (S.leaky.G.K x) → S.leaky.G.Coin) → (S.leaky.proto lx).CoinModel x Salt B Cc)
     (nL nB : Msg → ℕ) (hnL : ∀ lx x ν, Fintype.card (Mp lx x ν).L ≤ nL x)
     (hnB : ∀ lx x ν c, (Mc lx x ν c).size ≤ nB x)
@@ -172,12 +196,12 @@ theorem sampling_deployed_sampled (H : Msg → Msg) (hKS : Claims.Flock.KS H (Fl
     (hI : ∀ lx, (S.leaky.proto lx).InnerHolds (RAt H (deploy rel c) lx) (Mc lx)) :
     ScopeMatches (deploy rel c) ∧ Binding (deploy rel c) ∧ Universal (deploy rel c) ∧ FaultyBoundary ∧
       KS H (deploy rel c) ∧ KSCount H (deploy rel c) ∧ Bits H (deploy rel c) ∧
-      Efficient H (deploy rel c) FlockDeploy.zkStepPoly ∧ Complete H (deploy rel c) P δc ∧
-      ZK H (deploy rel c) S.leaky.G.prover (S.leaky.simLeakE t (t * 3 ^ t))
+      Efficient H (deploy rel c) FlockDeploy.zkStepPoly ∧ Complete H (deploy rel c) ∧
+      ZK H ((deploy rel c).mask S.leaky.G.Nonce S.leaky.G.Rand tapeOf (S.leaky.simLeakE t (t * 3 ^ t)))
         (fun x => 8 * nL x * (ENNReal.ofReal (FlockSoundness.CROnly.hidingGap My cs)).toReal +
           8 * t * nB x * (ENNReal.ofReal (FlockSoundness.CROnly.hidingGap My cs)).toReal + 2 * (1 / 3) ^ t)
         fun _ => 4 * t * 3 ^ t :=
-  sampling_deployed_models rel c H hKS hfixed hsessions hnum hslots iroots hopens hfix hprog hchecks hreveals P δc
-    hComplete S.leaky t ht (S.rounds hR) My cs Mp Mc nL nB hnL hnB hL hS hN hI S.coinCheck
+  sampling_deployed_models rel c H hKS hfixed hsessions hnum hslots iroots hopens hfix hprog hchecks hreveals
+    hComplete S.leaky t ht (S.rounds hR) My cs tapeOf hP Mp Mc nL nB hnL hnB hL hS hN hI S.coinCheck
 
 end SamplingDeploy
