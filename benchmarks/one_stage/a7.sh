@@ -3,9 +3,10 @@
 # the remote bandwidth audit's ledger (a7.py), whose check 3 on each drawn receipt is proved by the check-3 units
 # (a7_check3.py), on hidden_zk's builds (its job.sh, sourced: C-Flock's flock-circuit and the Lean flock-verify, cached
 # under $A7_CACHE). From a clone, since the verifier of record builds the sampled-proofs Lean in the tree:
-#   research run --on M --source . --pool proofs --as LANE --project verity --cwd clone --mem-gb 96 --env A7_MEM_GB=96 -- \
+#   research run --on M --source . --pool proofs --as LANE --project verity --cwd clone --env A7_MEM_GB=96 -- \
 #     bash benchmarks/one_stage/a7.sh
-# env: A7_MEM_GB (the job's --mem-gb)  A7_K (a7.py's --k, every unit by default)  A7_STEPS (its --steps)
+# (no --mem-gb: the pool's slot holds the memory, and --mem-gb beside it waits outside the slot line for free memory)
+# env: A7_MEM_GB (what job.sh's stages may take, within the slot's)  A7_K (a7.py's --k, every unit by default)  A7_STEPS (its --steps)
 #      A7_SAMPLES (its --samples, the remote session's draws a window)  A7_CACHE (the build cache)
 # Kept in $OUT/a7: a7's records and logs, the public files, the canonical commitments' b || c, the memory map and the sessions
 # (their proofs and records); never a prover's file (inst-*) nor a circuit (its pin is kept), nor a session's archive.
