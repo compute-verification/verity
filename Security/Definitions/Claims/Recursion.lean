@@ -22,9 +22,10 @@ eight items:
    RecSparse phase at `T_LOG = 0` with `6 ≤ ℓ ≤ k_log`, the inner statement's dimensions the form's and its unit range
    inside a block, and R at `table_m` with two claims. Every V* session draws every unit of its population
    (`Draw.Full`). There is no recursion-level scope refusal: `ScopeMatches` states that this is the compiled
-   verifier's own scope check, its setup's checks of the inner shape and its refusal of a V* session whose draw is not
-   every unit. Where the V* records are run messages, the statement carries no draws, and the compiled verifier
-   refuses a session whose draw is not every unit when that session decides.
+   verifier's own scope check, its setup's checks of the inner shape, its refusal of a V* session whose draw is not
+   every unit, and its refusal of a session over an inner session whose record holds no draw. Where the V* records are
+   run messages, the statement carries no draws, and the compiled verifier refuses a session whose draw is not every
+   unit when that session decides.
 5. **Named pieces.** A run is the inner session's rounds, the prover's staging rounds (`Deploy.kS`), at which it stages
    the V* statements, then the V* sessions. `E*` (`E`): the outer extractor `E_O` (`EO`: per V* session, `E^rep` over
    forks of the judged run at the session's first round, with the outer Flock's assemble and check), then the inner one
