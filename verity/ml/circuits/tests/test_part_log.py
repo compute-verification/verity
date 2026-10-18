@@ -87,6 +87,44 @@ def test_rows_of_distinct_values_are_cut_without_copying_part_by_part():
     _same(merged, Affine("n", 0, 0, 12))
 
 
+def test_a_cut_is_the_same_sequence_whatever_is_appended_to_its_log_later():
+    """A cut's `parts` and `starts` read as the lists `concat` builds (index, slice, iterate, reverse, compare), and parts appended
+    to the log afterwards are not in them."""
+    rng = random.Random(3)
+    rows = [Affine("n", i, 0, 4) for i in range(9)]
+    log = PartLog(rows[:6])
+    cuts = [(j, extra, log.raw_cut(j, extra)) for j in range(7) for extra in ([], [Affine("p", 0, j, 2)], [Affine("p", 1, 0, 3)] * 2)]
+    for r in rows[6:]:
+        log.append(r)
+    for j, extra, c in cuts:
+        parts, starts = rows[:j] + extra, Concat(rows[:j] + extra).starts
+        for got, want in ((c.parts, parts), (c.starts, starts)):
+            assert len(got) == len(want) and list(got) == want and got == want and want == got and list(reversed(got)) == want[::-1]
+            assert got != want + [0] and [got[i] for i in range(-len(want), len(want))] == want + want
+            for _ in range(8):
+                lo, hi = rng.randrange(-2, len(want) + 2), rng.randrange(-2, len(want) + 2)
+                assert got[lo:hi] == want[lo:hi] and got[lo:] == want[lo:] and got[::2] == want[::2]
+        assert c.count == sum(p.count for p in parts) and [c[i] for i in range(c.count)] == [x for p in parts for x in p]
+        assert c.slice(3, c.count - 2).to_json() == Concat(parts).slice(3, c.count - 2).to_json()
+
+
+def test_a_cut_costs_the_same_memory_at_any_length():
+    """A cut shares its log's prefix: cutting at row 2000 allocates what cutting at row 20 does (copied, it was 100 times more)."""
+    import tracemalloc
+    log = PartLog([Affine("n", i, 0, 4) for i in range(2001)])
+
+    def cost(j):
+        tracemalloc.start()
+        keep = [log.cut(j, [Affine("p", 0, 0, 1)]) for _ in range(50)]
+        size = tracemalloc.get_traced_memory()[0]
+        tracemalloc.stop()
+        assert len(keep) == 50
+        return size
+
+    small, large = cost(20), cost(2000)
+    assert large < 1.2 * small, (small, large)
+
+
 Neg16 = PrimitiveDefinition("TPLNeg16", 1, (("a", V16),), V16, lambda a: -a & 0xFFFF, register=False)
 Add16 = PrimitiveDefinition("TPLAdd16", 1, (("a", V16), ("b", V16)), V16, lambda a, b: (a + b) & 0xFFFF, register=False)
 
