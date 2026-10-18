@@ -335,8 +335,8 @@ ROOT_ERRORS: list[tuple[str, str]] = []
 
 
 def _served_kind_statics() -> dict[str, dict[str, Any]]:
-    """The kinds no small table binds (launch blocks, collective routes, split counts, the DSA and sparse-MLA shapes), each at a
-    binding its Definition module's sidecar already checks, so they add no task."""
+    """The kinds no small table binds (launch blocks, collective routes, split counts, the DSA and sparse-MLA shapes, the int8
+    attention row's 32-channel head dim), each at a binding its Definition module's sidecar already checks, so they add no task."""
     from verity.ml.circuits.boolean.trace import word_of
     from verity.ml.circuits.ops.boolean import gemm as BG
     from verity_vllm.program.registry import sparse_mla as SM
@@ -345,6 +345,7 @@ def _served_kind_statics() -> dict[str, dict[str, Any]]:
     hop = word_of(BG.HopperBF16WgmmaDot16)
     mla = {k: SM.SPARSE_MLA_GLM53[k] for k in ("NH", "DR", "DV", "BN", "DOT", "INV")} | {"SM_SCALE": SM.SPARSE_MLA_GLM53["SCALE"]}
     trees = (TA.chain(8),) * 4 + ((((0, 1), (2, 3)), ((4, 5), (6, 7))),) * 4
+    int8_row = {"D": 32, "S": 33, "SCALE": 32 ** -0.5}
     return {"rmsnorm_cuda": {"N": 6144, "EPS": 1e-5, "BLOCK": 256}, "rmsnorm_fused_cuda": {"N": 6144, "EPS": 1e-5, "BLOCK": 256},
             "all_reduce_mnnvl": {"WORLD": 8, "N": 8, "SHOT": 2},
             "all_reduce_rmsnorm_mnnvl": {"WORLD": 8, "N": 512, "SHOT": 1, "CLUSTER": 2, "EPS": 1e-5, "FMA": False},
@@ -357,7 +358,8 @@ def _served_kind_statics() -> dict[str, dict[str, Any]]:
             "batched_gemm": {"B": 2, "K": 32, "N": 3, "DOT": hop},
             "ll_bf16_dotprod": {"N": 2, "K": 256, "BS": 64, "VEC": 2, "FMA": 1},
             "ll_bf16_splitk": {"N": 2, "K": 128, "SPLIT_K": 2, "TILE_K": 32, "WARPS": 2, "DOT": hop},
-            "sparse_mla": {"T": 65, **mla}, "sparse_mla_split": {"T": 130, "NS": 2, **mla}}
+            "sparse_mla": {"T": 65, **mla}, "sparse_mla_split": {"T": 130, "NS": 2, **mla},
+            "int8_attention_row": int8_row, "int8_attention_row_table": int8_row}
 
 
 def _vocabulary_bindings() -> list[tuple[str, Any]]:
