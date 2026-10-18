@@ -19,7 +19,11 @@ import Models.Accounting.Guarantees.Gates
 `Iv.mul` are sound), and `ClampOrWrap` from it (in the window a clamp and a wrap are both the identity); `Fooling` by
 induction over the gates (every free gate is 2-adically triangular in its window) and a count of the
 charged gates' joint values; `SquaringCarry` from it at `j = 1` on the sparse family, whose squares have no carries
-between bytes; `EncodeBudget` and `EncodeCost` from `EncodeChainHardness` by summing the census's units over the
+between bytes; `SquaringCarryNibbles` from it at `j = 4` on the nibble family, whose squares first differ two bytes
+above their first differing nibble (`a² − a'² = (a − a')(a + a')`); `UnitsFooling` by the same induction, the
+trace being each dynamic run input's and budgeted gate's value and each dynamic index's class at its gathers' most
+index bits, which the fresh index bits pay for; `SquaringUnits` from it on the nibble family; `EncodeBudget` and
+`EncodeCost` from `EncodeChainHardness` by summing the census's units over the
 windows and classes; `RhoPairs` from Fermat's little theorem (`s² = x · x^((p−1)/2) = ±x`).
 -/
 
@@ -591,6 +595,178 @@ theorem SquaringCarry : Accounting.Guarantees.Gates.SquaringCarry := by
       rw [ite_eq_left h'] at h2
       omega
 
+/-! ## The nibble family -/
+
+/-- `a_t`'s base-256 digits: byte 0 is `8`, byte `i + 1` is `16·t_i + 8`, and none above byte `s`. -/
+def nibDigit {s : ℕ} (t : Fin s → Fin 16) (m : ℕ) : ℕ :=
+  if m = 0 then 8 else if h : m - 1 < s then 16 * (t ⟨m - 1, h⟩ : ℕ) + 8 else 0
+
+lemma nibDigit_le {s : ℕ} (t : Fin s → Fin 16) (m : ℕ) : nibDigit t m ≤ 248 := by
+  unfold nibDigit
+  split_ifs with h0 h1
+  · norm_num
+  · have := (t ⟨m - 1, h1⟩).isLt; omega
+  · norm_num
+
+lemma nibbles_eq (s : ℕ) (t : Fin s → Fin 16) :
+    nibbles s t = ∑ m ∈ Finset.range (s + 1), nibDigit t m * 256 ^ m := by
+  rw [Finset.sum_range_succ', Finset.sum_range, nibbles, add_comm]
+  congr 1
+  apply Finset.sum_congr rfl
+  intro i _
+  simp [nibDigit, i.isLt]
+
+/-- Every byte of `a_t` is `8 mod 16` up to byte `s`, and `0` above it. -/
+lemma byte_nibbles (s : ℕ) (t : Fin s → Fin 16) (l : ℕ) :
+    byte (nibbles s t) l % 16 = if l ≤ s then 8 else 0 := by
+  rw [nibbles_eq, byte_sum (s + 1) (nibDigit t) (fun m => by have := nibDigit_le t m; omega)]
+  unfold nibDigit
+  split_ifs <;> omega
+
+lemma nibbles_lt (s : ℕ) (t : Fin s → Fin 16) : nibbles s t < 249 * 256 ^ s := by
+  have hg := geom_sum_mul_add 255 (s + 1)
+  norm_num at hg
+  have hle : nibbles s t ≤ 248 * ∑ m ∈ Finset.range (s + 1), 256 ^ m := by
+    rw [nibbles_eq, Finset.mul_sum]
+    exact Finset.sum_le_sum fun m _ => Nat.mul_le_mul_right _ (nibDigit_le t m)
+  rw [pow_succ] at hg
+  omega
+
+lemma nibbles_mod (p s : ℕ) (hp : (249 * 256 ^ s) ^ 2 ≤ p) (t : Fin s → Fin 16) :
+    nibbles s t ^ 2 % p = nibbles s t ^ 2 :=
+  Nat.mod_eq_of_lt (lt_of_lt_of_le (Nat.pow_lt_pow_left (nibbles_lt s t) (by norm_num)) hp)
+
+/-- Two numbers `256^k·D` apart, `D ≢ 0 mod 16`, differ mod 16 in byte `k`. -/
+lemma byte_mod16_ne (N N' k : ℕ) (D : ℤ) (h : (N : ℤ) - N' = 256 ^ k * D) (hD : ¬ (16 : ℤ) ∣ D) :
+    byte N k % 16 ≠ byte N' k % 16 := by
+  have hP : 0 < 256 ^ k := by positivity
+  have hbyte : ∀ q r, r < 256 ^ k → byte (256 ^ k * q + r) k % 16 = q % 16 := by
+    intro q r hr
+    unfold byte
+    rw [show (256 ^ k * q + r) / 256 ^ k = q by
+      rw [add_comm, Nat.add_mul_div_left _ _ hP, Nat.div_eq_of_lt hr, zero_add],
+      Nat.mod_mod_of_dvd _ (by norm_num : 16 ∣ 256)]
+  obtain ⟨q, r, hr, rfl⟩ : ∃ q r, r < 256 ^ k ∧ N = 256 ^ k * q + r :=
+    ⟨N / 256 ^ k, N % 256 ^ k, Nat.mod_lt _ hP, (Nat.div_add_mod N _).symm⟩
+  obtain ⟨q', r', hr', rfl⟩ : ∃ q r, r < 256 ^ k ∧ N' = 256 ^ k * q + r :=
+    ⟨N' / 256 ^ k, N' % 256 ^ k, Nat.mod_lt _ hP, (Nat.div_add_mod N' _).symm⟩
+  rw [hbyte q r hr, hbyte q' r' hr']
+  push_cast at h
+  have hrz : (r : ℤ) < 256 ^ k := by exact_mod_cast hr
+  have hrz' : (r' : ℤ) < 256 ^ k := by exact_mod_cast hr'
+  have hdvd : (256 : ℤ) ^ k ∣ (r : ℤ) - r' := ⟨D - q + q', by linear_combination h⟩
+  have hrr : (r : ℤ) - r' = 0 := by
+    apply Int.eq_zero_of_abs_lt_dvd hdvd
+    rw [abs_lt]
+    constructor <;> linarith [(Nat.cast_nonneg r : (0 : ℤ) ≤ r), (Nat.cast_nonneg r' : (0 : ℤ) ≤ r')]
+  have hq : (256 : ℤ) ^ k * ((q : ℤ) - q' - D) = 0 := by linear_combination h - hrr
+  rcases mul_eq_zero.mp hq with h0 | h0
+  · exact absurd h0 (by positivity)
+  · intro heq
+    apply hD
+    omega
+
+/-- `Σ_{i<s} e_i·256^(i+1)` with `e` zero below `m < s` is `256^(m+1)·(e_m + 256·γ)`. -/
+lemma sum_split (e : ℕ → ℤ) (m : ℕ) (h0 : ∀ i < m, e i = 0) (s : ℕ) (hs : m + 1 ≤ s) :
+    ∃ γ : ℤ, ∑ i ∈ Finset.range s, e i * 256 ^ (i + 1) = 256 ^ (m + 1) * (e m + 256 * γ) := by
+  induction s, hs using Nat.le_induction with
+  | base =>
+    refine ⟨0, ?_⟩
+    rw [Finset.sum_range_succ, Finset.sum_eq_zero fun i hi => by rw [h0 i (Finset.mem_range.mp hi), zero_mul]]
+    ring
+  | succ s hs ih =>
+    obtain ⟨γ, hγ⟩ := ih
+    obtain ⟨d, rfl⟩ : ∃ d, s = m + 1 + d := ⟨s - m - 1, by omega⟩
+    refine ⟨γ + e (m + 1 + d) * 256 ^ d, ?_⟩
+    rw [Finset.sum_range_succ, hγ]
+    ring
+
+/-- The squares of two members of the nibble family first apart at nibble `m` differ mod 16 in byte `m + 2`:
+`a_t² − a_t'² = (a_t − a_t')(a_t + a_t') = 16·256^(m+1)·(d + 256γ) · 16·(1 + 256β)`, with `0 < |d| < 16`. -/
+lemma nibbles_sq_ne (s : ℕ) (t t' : Fin s → Fin 16) (hne : t ≠ t') :
+    ∃ m < s, byte (nibbles s t ^ 2) (m + 2) % 16 ≠ byte (nibbles s t' ^ 2) (m + 2) % 16 := by
+  classical
+  have hex : ∃ m, ∃ h : m < s, t ⟨m, h⟩ ≠ t' ⟨m, h⟩ := by
+    by_contra hc
+    push Not at hc
+    exact hne (funext fun i => hc i.1 i.2)
+  obtain ⟨hm, hmne⟩ := Nat.find_spec hex
+  set m := Nat.find hex
+  have hlt : ∀ i (h : i < s), i < m → t ⟨i, h⟩ = t' ⟨i, h⟩ := fun i h hi => by
+    have := Nat.find_min hex hi
+    push Not at this
+    exact this h
+  let e : ℕ → ℤ := fun i => if h : i < s then ((t ⟨i, h⟩ : ℕ) : ℤ) - (t' ⟨i, h⟩ : ℕ) else 0
+  have h0 : ∀ i < m, e i = 0 := fun i hi => by
+    simp only [e]
+    split_ifs with h
+    · rw [hlt i h hi, sub_self]
+    · rfl
+  obtain ⟨γ, hγ⟩ := sum_split e m h0 s hm
+  have hdiff : (nibbles s t : ℤ) - nibbles s t' = 16 * (256 ^ (m + 1) * (e m + 256 * γ)) := by
+    rw [← hγ, Finset.sum_range, Finset.mul_sum]
+    simp only [nibbles]
+    push_cast
+    rw [add_sub_add_left_eq_sub, ← Finset.sum_sub_distrib]
+    apply Finset.sum_congr rfl
+    intro i _
+    simp only [e, i.isLt, ↓reduceDIte, Fin.eta]
+    ring
+  have hsum : (nibbles s t : ℤ) + nibbles s t' =
+      16 * (1 + 256 * ∑ i : Fin s, (((t i : ℕ) : ℤ) + (t' i : ℕ) + 1) * 256 ^ i.1) := by
+    simp only [nibbles]
+    push_cast
+    rw [mul_add, mul_one, Finset.mul_sum, Finset.mul_sum, add_add_add_comm, ← Finset.sum_add_distrib]
+    norm_num only
+    congr 1
+    apply Finset.sum_congr rfl
+    intro i _
+    ring
+  set β := ∑ i : Fin s, (((t i : ℕ) : ℤ) + (t' i : ℕ) + 1) * 256 ^ i.1
+  refine ⟨m, hm, byte_mod16_ne _ _ _ ((e m + 256 * γ) * (1 + 256 * β)) ?_ ?_⟩
+  · push_cast
+    rw [show (nibbles s t : ℤ) ^ 2 - (nibbles s t' : ℤ) ^ 2 =
+      ((nibbles s t : ℤ) - nibbles s t') * ((nibbles s t : ℤ) + nibbles s t') by ring, hdiff, hsum]
+    ring
+  · have hem : e m = ((t ⟨m, hm⟩ : ℕ) : ℤ) - (t' ⟨m, hm⟩ : ℕ) := by simp [e, hm]
+    have h1 := (t ⟨m, hm⟩).isLt
+    have h2 := (t' ⟨m, hm⟩).isLt
+    have h3 : (t ⟨m, hm⟩ : ℕ) ≠ t' ⟨m, hm⟩ := fun h => hmne (Fin.ext h)
+    rw [show (e m + 256 * γ) * (1 + 256 * β) = e m + 256 * (γ + e m * β + 256 * γ * β) by ring]
+    generalize γ + e m * β + 256 * γ * β = K
+    rw [hem]
+    omega
+
+/-- On the nibble family, the squares' bytes tell members apart mod 16. -/
+lemma nibbles_out (C : Dag ι) (p n s : ℕ) (G : Finset (Fin s → Fin 16)) (x : (Fin s → Fin 16) → ι → ℤ)
+    (out : ℕ → ℕ) (hp : (249 * 256 ^ s) ^ 2 ≤ p) (hn : s + 2 ≤ n)
+    (hout : ∀ t ∈ G, ∀ l < n, val C (x t) (out l) = byte (nibbles s t ^ 2 % p) l) :
+    ∀ t ∈ G, ∀ t' ∈ G, t ≠ t' → ∃ o ∈ (List.range n).map out, ¬ val C (x t) o ≡ val C (x t') o [ZMOD 2 ^ 4] := by
+  intro t ht t' ht' hne
+  obtain ⟨m, hm, hb⟩ := nibbles_sq_ne s t t' hne
+  refine ⟨out (m + 2), List.mem_map.mpr ⟨m + 2, List.mem_range.mpr (by omega), rfl⟩, ?_⟩
+  rw [hout t ht _ (by omega), hout t' ht' _ (by omega), nibbles_mod p s hp, nibbles_mod p s hp]
+  unfold Int.ModEq
+  norm_num
+  omega
+
+/-- A byte of a member of the nibble family, mod 16, is the same on every member. -/
+lemma nibbles_byte_congr (s : ℕ) (t t' : Fin s → Fin 16) (l : ℕ) :
+    ((byte (nibbles s t) l : ℕ) : ℤ) ≡ (byte (nibbles s t') l : ℕ) [ZMOD 2 ^ 4] := by
+  have h1 := byte_nibbles s t l
+  have h2 := byte_nibbles s t' l
+  unfold Int.ModEq
+  norm_num
+  split_ifs at h1 h2 <;> omega
+
+theorem SquaringCarryNibbles : Accounting.Guarantees.Gates.SquaringCarryNibbles := by
+  intro ι C p n s G x slot out hp hn hreg hout
+  refine Fooling C G x 4 ((List.range n).map out) (fun t ht => (hout t ht).1) ?_
+    (nibbles_out C p n s G x out hp hn fun t ht => (hout t ht).2)
+  intro t ht t' ht' i hi
+  rw [hreg t ht i hi, hreg t' ht' i hi]
+  exact nibbles_byte_congr s t t' (slot i)
+
 /-! ## The encode budget -/
 
 lemma countAt_cons (g : Gate ι) (C : Dag ι) (s : ℕ → Prop) [DecidablePred s] (p : Gate ι → ℕ) :
@@ -614,6 +790,9 @@ lemma units_of_budget_none (C : Dag ι) (i : ℕ) (g : Gate ι) (hg : C[i]? = so
     units C i = 0 := by
   simp only [units, hg]
   split <;> simp_all [Op.budget]
+
+/-- A gather's outcomes, its column's `V` words and the `0` outside it, fit its index bits. -/
+lemma indexBits_outcomes (g : Gate ι) : g.args.length ≤ 2 ^ g.indexBits := Nat.le_pow_clog (by norm_num) _
 
 /-- Summing the census's units over the windows and classes: each gate's units are in its window's census, under its
 class. -/
@@ -657,6 +836,453 @@ theorem EncodeCost : Accounting.Guarantees.Gates.EncodeCost := by
   have h := H C m x words out hR hci hnd hlt hcw
   rw [hrb, zero_mul, add_zero, hlen] at h
   exact_mod_cast Nat.le_of_mul_le_mul_right h (by omega)
+
+/-! ## The fooling bound in units -/
+
+/-- Gate `i` depends on a run or coin input. -/
+abbrev dynAt (C : Dag ι) (i : ℕ) : Bool := (dynamic C).getD i false
+
+/-- The most index bits a gather of index `j` in `C` reads. -/
+def maxIdx (C : Dag ι) (j : ℕ) : ℕ :=
+  ((C.filter fun h => h.op.isGather && h.args.head? == some j).map Gate.indexBits).foldl max 0
+
+/-- `dynamic`'s step at a gate, from the flags of the gates before it. -/
+def dynStep (ds : List Bool) (g : Gate ι) : Bool :=
+  match g.op with
+  | .input b _ => b != .registered
+  | _ => g.args.any fun j => ds.getD j false
+
+/-- A run input or a budgeted gate but a gather: the gates whose values the units bound reads off. -/
+def traced (g : Gate ι) : Bool :=
+  match g.op with
+  | .input .run _ => true
+  | .budgeted _ _ => true
+  | _ => false
+
+/-- A budgeted gate but a gather. -/
+def isBudg (g : Gate ι) : Bool :=
+  match g.op with
+  | .budgeted _ _ => true
+  | _ => false
+
+/-- The fresh index bits a gather at `i` pays when its index depends on a run or coin input. -/
+def freshAt (C : Dag ι) (i : ℕ) (g : Gate ι) : ℕ :=
+  match g.op, g.args with
+  | .gather, j :: _ => if dynAt C j then g.indexBits - maxIdx (C.take i) j else 0
+  | _, _ => 0
+
+lemma dynamic_eq (C : Dag ι) : dynamic C = C.foldl (fun ds g => ds ++ [dynStep ds g]) [] := rfl
+
+lemma scan_append {α : Type} (f : List α → Gate ι → α) (L : Dag ι) (vs : List α) :
+    ∃ r, L.foldl (fun vs g => vs ++ [f vs g]) vs = vs ++ r := by
+  induction L generalizing vs with
+  | nil => exact ⟨[], by simp⟩
+  | cons g L ih =>
+    obtain ⟨r, hr⟩ := ih (vs ++ [f vs g])
+    exact ⟨f vs g :: r, by simp [List.foldl_cons, hr]⟩
+
+lemma scan_length {α : Type} (f : List α → Gate ι → α) (L : Dag ι) (vs : List α) :
+    (L.foldl (fun vs g => vs ++ [f vs g]) vs).length = vs.length + L.length := by
+  induction L generalizing vs with
+  | nil => simp
+  | cons g L ih => simp [List.foldl_cons, ih]; omega
+
+lemma dynamic_length (C : Dag ι) : (dynamic C).length = C.length := by
+  simp [dynamic_eq, scan_length]
+
+lemma getD_dynamic_take (C : Dag ι) (n i : ℕ) (hn : n ≤ C.length) :
+    (dynamic (C.take n)).getD i false = if i < n then dynAt C i else false := by
+  have hlen : (dynamic (C.take n)).length = n := by rw [dynamic_length, List.length_take]; omega
+  split_ifs with hi
+  · obtain ⟨r, hr⟩ := scan_append dynStep (C.drop n) (dynamic (C.take n))
+    have hC : dynamic C = dynamic (C.take n) ++ r := by
+      conv_lhs => rw [← List.take_append_drop n C]
+      rw [dynamic_eq, List.foldl_append, ← dynamic_eq, hr]
+    rw [dynAt, hC, List.getD_append _ _ _ _ (by omega)]
+  · exact List.getD_eq_default _ _ (by omega)
+
+lemma lt_of_dynAt (C : Dag ι) (j : ℕ) (h : dynAt C j = true) : j < C.length := by
+  by_contra hj
+  rw [dynAt, List.getD_eq_default _ _ (by rw [dynamic_length]; omega)] at h
+  exact Bool.false_ne_true h
+
+lemma dynAt_eq (C : Dag ι) (n : ℕ) (h : n < C.length) : dynAt C n = dynStep (dynamic (C.take n)) C[n] := by
+  have := getD_dynamic_take C (n + 1) n h
+  rw [ite_eq_left (by omega)] at this
+  rw [← this, List.take_add_one, List.getElem?_eq_getElem h, Option.toList_some, dynamic_eq, List.foldl_append,
+    ← dynamic_eq]
+  simp only [List.foldl_cons, List.foldl_nil]
+  rw [List.getD_append_right _ _ _ _ (by rw [dynamic_length, List.length_take]; omega), dynamic_length,
+    List.length_take, min_eq_left h.le, Nat.sub_self, List.getD_cons_zero]
+
+/-- A gate but an input depends on a run or coin input when one of its operands does. -/
+lemma dynAt_of_op (C : Dag ι) (n : ℕ) (h : n < C.length) (hop : ∀ b i, C[n].op ≠ .input b i) :
+    dynAt C n = C[n].args.any fun j => (dynamic (C.take n)).getD j false := by
+  rw [dynAt_eq C n h]
+  unfold dynStep
+  cases hopn : C[n].op with
+  | input b i => exact absurd hopn (hop b i)
+  | _ => rfl
+
+/-- A gate but an input that depends on no run or coin input reads only gates that don't either. -/
+lemma args_static (C : Dag ι) (n : ℕ) (h : n < C.length) (hop : ∀ b i, C[n].op ≠ .input b i)
+    (hd : dynAt C n = false) : ∀ j ∈ C[n].args, j < n → dynAt C j = false := by
+  intro j hj hjn
+  rw [dynAt_of_op C n h hop, List.any_eq_false] at hd
+  have := hd j hj
+  rw [getD_dynamic_take C n j h.le, ite_eq_left hjn] at this
+  simpa using this
+
+/-- A gate but an input that depends on a run or coin input reads one that does. -/
+lemma any_dyn (C : Dag ι) (n : ℕ) (h : n < C.length) (hop : ∀ b i, C[n].op ≠ .input b i)
+    (hd : dynAt C n = true) : (C[n].args.any fun j => (dynamic C).getD j false) = true := by
+  rw [dynAt_of_op C n h hop, List.any_eq_true] at hd
+  rw [List.any_eq_true]
+  obtain ⟨j, hj, hjd⟩ := hd
+  rw [getD_dynamic_take C n j h.le] at hjd
+  split_ifs at hjd
+  · exact ⟨j, hj, hjd⟩
+
+/-- A gate but an input takes one value on operands that agree. -/
+lemma value_eq_of_operands (g : Gate ι) (x x' : ι → ℤ) (vs vs' : List ℤ) (hop : ∀ b i, g.op ≠ .input b i)
+    (h : ∀ j ∈ g.args, vs.getD j 0 = vs'.getD j 0) : g.value x vs = g.value x' vs' := by
+  have ho : g.operands vs = g.operands vs' := List.map_congr_left h
+  unfold Gate.value Gate.raw
+  rw [ho]
+  cases hg : g.op with
+  | input b i => exact absurd hg (hop b i)
+  | _ => rfl
+
+/-- A gather's word, from columns that agree mod `m`, at indices of one class among the column's words and the `0`
+outside it. -/
+lemma getD_map_congr {m : ℤ} (col : List ℕ) (vs vs' : List ℤ) (hv : ∀ j, vs.getD j 0 ≡ vs'.getD j 0 [ZMOD m])
+    (K k k' : ℕ) (hK : col.length ≤ K) (hk : min k K = min k' K) :
+    (col.map fun c => vs.getD c 0).getD k 0 ≡ (col.map fun c => vs'.getD c 0).getD k' 0 [ZMOD m] := by
+  rcases Nat.lt_or_ge k col.length with h | h
+  · have hkk : k' = k := by
+      rcases Nat.lt_or_ge k' K with h' | h'
+      · rw [min_eq_left (by omega), min_eq_left (by omega)] at hk; omega
+      · rw [min_eq_left (by omega), min_eq_right h'] at hk; omega
+    subst hkk
+    rw [List.getD_eq_getElem _ _ (by simpa using h), List.getD_eq_getElem _ _ (by simpa using h)]
+    simp only [List.getElem_map]
+    exact hv _
+  · have hk' : col.length ≤ k' := by
+      by_contra h'
+      rw [min_eq_left (show k' ≤ K by omega)] at hk
+      have : col.length ≤ min k K := le_min h hK
+      omega
+    rw [List.getD_eq_default _ _ (by simpa using h), List.getD_eq_default _ _ (by simpa using hk')]
+
+lemma le_foldl_max (l : List ℕ) : ∀ b : ℕ, b ≤ l.foldl max b ∧ ∀ a ∈ l, a ≤ l.foldl max b := by
+  induction l with
+  | nil => intro b; simp
+  | cons y l ih =>
+    intro b
+    simp only [List.foldl_cons, List.mem_cons, forall_eq_or_imp]
+    obtain ⟨h1, h2⟩ := ih (max b y)
+    exact ⟨le_trans (le_max_left _ _) h1, le_trans (le_max_right _ _) h1, h2⟩
+
+lemma indexBits_le_maxIdx (C : Dag ι) (n : ℕ) (h : n < C.length) (j : ℕ) (col : List ℕ) (hop : C[n].op = .gather)
+    (hargs : C[n].args = j :: col) : C[n].indexBits ≤ maxIdx C j :=
+  (le_foldl_max _ 0).2 _ (List.mem_map.mpr ⟨C[n], List.mem_filter.mpr ⟨List.getElem_mem h,
+    by simp [hop, hargs, Op.isGather]⟩, rfl⟩)
+
+/-- Two inputs on which `C` is in its window, that agree in every registered input and mod `m` in every coin input,
+on which each run input and each budgeted gate but a gather that depends on a run or coin input takes one value, and
+each gate that does takes one class `min(v, 2^b − 1)` at the most index bits `b` a gather of it reads: every gate's
+values agree mod `m`, and those of the gates that depend on no run or coin input agree. -/
+lemma values_congr_units {m : ℤ} (C : Dag ι) (x x' : ι → ℤ) (hw : InWindow C x) (hw' : InWindow C x')
+    (hreg : ∀ i, (∃ g ∈ C, g.op = .input .registered i) → x i = x' i)
+    (hcoin : ∀ i, (∃ g ∈ C, g.op = .input .coin i) → x i ≡ x' i [ZMOD m])
+    (htr : ∀ i (h : i < C.length), traced C[i] = true → dynAt C i = true → val C x i = val C x' i)
+    (hidx : ∀ i, i < C.length → dynAt C i = true →
+      min (val C x i).toNat (2 ^ maxIdx C i - 1) = min (val C x' i).toNat (2 ^ maxIdx C i - 1)) :
+    ∀ n, n ≤ C.length → ∀ o, (values (C.take n) x).getD o 0 ≡ (values (C.take n) x').getD o 0 [ZMOD m] ∧
+      ((o < n → dynAt C o = false) → (values (C.take n) x).getD o 0 = (values (C.take n) x').getD o 0) := by
+  intro n
+  induction n with
+  | zero => intro _ o; simp [values, Int.ModEq.refl]
+  | succ n ih =>
+    intro hn o
+    have hn' : n < C.length := hn
+    have hlen := values_take_length C x n (by omega)
+    have hlen' := values_take_length C x' n (by omega)
+    have hv : ∀ j, (values (C.take n) x).getD j 0 ≡ (values (C.take n) x').getD j 0 [ZMOD m] :=
+      fun j => (ih (by omega) j).1
+    have he : ∀ j, (j < n → dynAt C j = false) →
+        (values (C.take n) x).getD j 0 = (values (C.take n) x').getD j 0 :=
+      fun j => (ih (by omega) j).2
+    rw [values_take_succ C x n hn', values_take_succ C x' n hn']
+    rcases Nat.lt_trichotomy o n with ho | ho | ho
+    · rw [List.getD_append _ _ _ _ (by rw [hlen]; exact ho), List.getD_append _ _ _ _ (by rw [hlen']; exact ho)]
+      exact ⟨hv o, fun h => he o fun _ => h (by omega)⟩
+    · subst ho
+      rw [List.getD_append_right _ _ _ _ (by rw [hlen]), List.getD_append_right _ _ _ _ (by rw [hlen']), hlen,
+        hlen', Nat.sub_self, List.getD_cons_zero, List.getD_cons_zero]
+      have hargs : (∀ b i, C[o].op ≠ .input b i) → dynAt C o = false →
+          ∀ j ∈ C[o].args, (values (C.take o) x).getD j 0 = (values (C.take o) x').getD j 0 :=
+        fun hop hd j hj => he j fun hjo => args_static C o hn' hop hd j hj hjo
+      have hval := val_eq C x o hn'
+      have hval' := val_eq C x' o hn'
+      have key : C[o].value x (values (C.take o) x) = C[o].value x' (values (C.take o) x') ∨
+          (dynAt C o = true ∧
+            C[o].value x (values (C.take o) x) ≡ C[o].value x' (values (C.take o) x') [ZMOD m]) := by
+        have hdyn : ∀ b i, C[o].op = .input b i → dynAt C o = (b != .registered) := fun b i hop => by
+          rw [dynAt_eq C o hn']; unfold dynStep; rw [hop]
+        cases hop : C[o].op with
+        | input b i =>
+          cases b with
+          | registered =>
+            left
+            simp only [Gate.value, Gate.raw, hop, Op.raw, Op.out]
+            exact hreg i ⟨C[o], List.getElem_mem hn', hop⟩
+          | coin =>
+            right
+            refine ⟨by rw [hdyn _ i hop]; rfl, ?_⟩
+            simp only [Gate.value, Gate.raw, hop, Op.raw, Op.out]
+            exact hcoin i ⟨C[o], List.getElem_mem hn', hop⟩
+          | run =>
+            left
+            rw [← hval, ← hval']
+            exact htr o hn' (by simp [traced, hop]) (by rw [hdyn _ i hop]; rfl)
+        | const c => left; simp [Gate.value, Gate.raw, hop, Op.raw, Op.out]
+        | affine c₀ cs =>
+          have hni : ∀ b i, C[o].op ≠ .input b i := by intro b i; rw [hop]; simp
+          by_cases hd : dynAt C o = true
+          · exact .inr ⟨hd, value_congr _ x x' _ _ hv (by simp [hop, Op.charged])
+              (fun b i _ h => absurd h (hni b i)) (hw o hn') (hw' o hn')⟩
+          · exact .inl (value_eq_of_operands _ x x' _ _ hni (hargs hni (by simpa using hd)))
+        | mma a b k sat =>
+          have hni : ∀ b i, C[o].op ≠ .input b i := by intro b i; rw [hop]; simp
+          by_cases hd : dynAt C o = true
+          · exact .inr ⟨hd, value_congr _ x x' _ _ hv (by simp [hop, Op.charged])
+              (fun b i _ h => absurd h (hni b i)) (hw o hn') (hw' o hn')⟩
+          · exact .inl (value_eq_of_operands _ x x' _ _ hni (hargs hni (by simpa using hd)))
+        | budgeted cls f =>
+          have hni : ∀ b i, C[o].op ≠ .input b i := by intro b i; rw [hop]; simp
+          by_cases hd : dynAt C o = true
+          · left
+            rw [← hval, ← hval']
+            exact htr o hn' (by simp [traced, hop]) hd
+          · exact .inl (value_eq_of_operands _ x x' _ _ hni (hargs hni (by simpa using hd)))
+        | gather =>
+          have hni : ∀ b i, C[o].op ≠ .input b i := by intro b i; rw [hop]; simp
+          by_cases hd : dynAt C o = true
+          · right
+            refine ⟨hd, ?_⟩
+            rw [value_eq_raw _ x _ (hw o hn'), value_eq_raw _ x' _ (hw' o hn')]
+            unfold Gate.raw Gate.operands
+            rw [hop]
+            cases hga : C[o].args with
+            | nil => simp [Op.raw, Int.ModEq.refl]
+            | cons j col =>
+              simp only [Op.raw, List.map_cons, List.headD_cons, List.tail_cons]
+              have hK : col.length ≤ 2 ^ maxIdx C j - 1 := by
+                have h1 := indexBits_outcomes C[o]
+                have h2 := Nat.pow_le_pow_right (by norm_num : 0 < 2) (indexBits_le_maxIdx C o hn' j col hop hga)
+                rw [hga, List.length_cons] at h1
+                omega
+              refine getD_map_congr col _ _ hv _ _ _ hK ?_
+              by_cases hj : j < o ∧ dynAt C j = true
+              · have hjL : j < C.length := by omega
+                rw [getD_values_take C x j hjL o hj.1 hn'.le, getD_values_take C x' j hjL o hj.1 hn'.le,
+                  ← val_eq C x j hjL, ← val_eq C x' j hjL]
+                exact hidx j hjL hj.2
+              · rw [he j fun hjo => by simpa [hjo] using hj]
+          · exact .inl (value_eq_of_operands _ x x' _ _ hni (hargs hni (by simpa using hd)))
+      rcases key with hk | ⟨hd, hk⟩
+      · exact ⟨by unfold Int.ModEq; rw [hk], fun _ => hk⟩
+      · exact ⟨hk, fun h => by rw [h (by omega)] at hd; exact absurd hd Bool.false_ne_true⟩
+    · rw [List.getD_append_right _ _ _ _ (by rw [hlen]; omega), List.getD_append_right _ _ _ _ (by rw [hlen']; omega),
+        hlen, hlen']
+      obtain ⟨k, hk⟩ : ∃ k, o - n = k + 1 := ⟨o - n - 1, by omega⟩
+      rw [hk]
+      simp [Int.ModEq.refl]
+
+/-- Each gate's units are at least its unit as a budgeted gate but a gather and its fresh index bits as a gather. -/
+lemma units_ge (C : Dag ι) (i : ℕ) (h : i < C.length) :
+    (if (isBudg C[i] && dynAt C i) = true then 1 else 0) + freshAt C i C[i] ≤ units C i := by
+  have hg : C[i]? = some C[i] := List.getElem?_eq_getElem h
+  have hd := any_dyn C i h
+  simp only [units, hg]
+  cases hop : C[i].op with
+  | budgeted cls f =>
+    simp only [isBudg, freshAt, hop, Bool.true_and, add_zero]
+    have := hd (by intro b k; rw [hop]; simp)
+    split_ifs <;> simp_all
+  | gather =>
+    cases hargs : C[i].args with
+    | nil => simp [isBudg, freshAt, hop, hargs]
+    | cons j col =>
+      simp only [isBudg, freshAt, hop, hargs, maxIdx, dynAt, Bool.false_and, Bool.false_eq_true, ↓reduceIte, zero_add]
+      split_ifs <;> omega
+  | _ => simp [isBudg, freshAt, hop]
+
+lemma maxIdx_take_succ (C : Dag ι) (n : ℕ) (h : n < C.length) (j : ℕ) :
+    maxIdx (C.take (n + 1)) j = max (maxIdx (C.take n) j)
+      (if (C[n].op.isGather && C[n].args.head? == some j) = true then C[n].indexBits else 0) := by
+  unfold maxIdx
+  rw [List.take_add_one, List.getElem?_eq_getElem h, Option.toList_some, List.filter_append, List.map_append,
+    List.foldl_append]
+  split_ifs with hp <;> simp [hp]
+
+/-- The fresh index bits telescope: over the gathers of each index, they sum to the most that index's gathers read. -/
+lemma sum_freshAt (C : Dag ι) : ∀ n, n ≤ C.length →
+    ∑ i ∈ Finset.range n, (if h : i < C.length then freshAt C i C[i] else 0) =
+      ∑ j ∈ Finset.range C.length, if dynAt C j = true then maxIdx (C.take n) j else 0 := by
+  intro n
+  induction n with
+  | zero => intro _; simp [maxIdx]
+  | succ n ih =>
+    intro hn
+    have hnL : n < C.length := hn
+    rw [Finset.sum_range_succ, ih (by omega), dite_eq_left hnL]
+    simp only [maxIdx_take_succ C n hnL]
+    have hsplit : ∀ j, (if dynAt C j = true then max (maxIdx (C.take n) j)
+        (if (C[n].op.isGather && C[n].args.head? == some j) = true then C[n].indexBits else 0) else 0) =
+        (if dynAt C j = true then maxIdx (C.take n) j else 0) +
+        (if dynAt C j = true then
+          (if (C[n].op.isGather && C[n].args.head? == some j) = true then
+            C[n].indexBits - maxIdx (C.take n) j else 0) else 0) := by
+      intro j
+      split_ifs <;> omega
+    simp only [hsplit, Finset.sum_add_distrib]
+    congr 1
+    unfold freshAt
+    cases hop : C[n].op with
+    | gather =>
+      cases hargs : C[n].args with
+      | nil => simp [Op.isGather]
+      | cons j0 col =>
+        simp only [Op.isGather, Bool.true_and, List.head?_cons, Option.some_beq_some, beq_iff_eq]
+        rw [Finset.sum_congr rfl fun j _ => (show (if dynAt C j = true then
+          (if j0 = j then C[n].indexBits - maxIdx (C.take n) j else 0) else 0) =
+          if j0 = j then (if dynAt C j = true then C[n].indexBits - maxIdx (C.take n) j else 0) else 0 by
+            split_ifs <;> rfl), Finset.sum_ite_eq]
+        by_cases hd : dynAt C j0 = true
+        · rw [ite_eq_left (Finset.mem_range.mpr (lt_of_dynAt C j0 hd))]
+        · simp only [hd, Bool.false_eq_true, ↓reduceIte, ite_self]
+    | _ => simp [Op.isGather]
+
+theorem UnitsFooling : Accounting.Guarantees.Gates.UnitsFooling := by
+  intro ι κ C F x j w out hw1 hsize hwin hreg hcoin hdist
+  classical
+  let T : κ → Fin C.length → ℤ × ℕ := fun s i =>
+    (if (traced C[i.1] && dynAt C i.1) = true then val C (x s) i.1 else 0,
+      if dynAt C i.1 = true then min (val C (x s) i.1).toNat (2 ^ maxIdx C i.1 - 1) else 0)
+  let A : Fin C.length → Finset ℤ := fun i =>
+    if (traced C[i.1] && dynAt C i.1) = true then Finset.Icc C[i.1].lo C[i.1].hi else {0}
+  let B : Fin C.length → Finset ℕ := fun i =>
+    if dynAt C i.1 = true then Finset.range (2 ^ maxIdx C i.1) else {0}
+  have hmaps : Set.MapsTo T F (Fintype.piFinset fun i => A i ×ˢ B i) := by
+    intro s hs
+    simp only [Finset.mem_coe] at hs
+    simp only [Finset.mem_coe, Fintype.mem_piFinset, Finset.mem_product]
+    intro i
+    constructor
+    · simp only [T, A]
+      split_ifs
+      · have hok := hwin s hs i.1 i.2
+        rw [Finset.mem_Icc, val_eq C (x s) i.1 i.2, value_eq_raw _ _ _ hok]
+        exact ⟨hok.1, hok.2.1⟩
+      · simp
+    · simp only [T, B]
+      split_ifs
+      · rw [Finset.mem_range]
+        have : 0 < 2 ^ maxIdx C i.1 := by positivity
+        generalize 2 ^ maxIdx C i.1 = P at *
+        omega
+      · simp
+  have hinj : Set.InjOn T F := by
+    intro s hs s' hs' hT
+    simp only [Finset.mem_coe] at hs hs'
+    by_contra hne
+    obtain ⟨o, -, ho⟩ := hdist s hs s' hs' hne
+    apply ho
+    have hcomp : ∀ i (h : i < C.length), T s ⟨i, h⟩ = T s' ⟨i, h⟩ := fun i h => congrFun hT ⟨i, h⟩
+    have h := values_congr_units C (x s) (x s') (hwin s hs) (hwin s' hs')
+      (fun i hi => hreg s hs s' hs' i hi) (fun i hi => hcoin s hs s' hs' i hi)
+      (fun i h ht hd => by
+        have hc : (traced C[i] && dynAt C i) = true := by rw [ht, hd]; rfl
+        have := congrArg Prod.fst (hcomp i h)
+        simp only [T] at this
+        rwa [ite_eq_left hc, ite_eq_left hc] at this)
+      (fun i h hd => by
+        have := congrArg Prod.snd (hcomp i h)
+        simp only [T] at this
+        rwa [ite_eq_left hd, ite_eq_left hd] at this)
+      C.length le_rfl o
+    rw [List.take_length] at h
+    exact h.1
+  have hA : ∀ i : Fin C.length,
+      (A i).card ≤ 2 ^ (C[i.1].inputBits .run + if (isBudg C[i.1] && dynAt C i.1) = true then w else 0) := by
+    intro i
+    simp only [A]
+    split_ifs with ht hb hb
+    · rw [Int.card_Icc]
+      change C[i.1].size ≤ _
+      cases hop : C[i.1].op with
+      | budgeted cls f =>
+        simp only [Gate.inputBits, hop, zero_add]
+        exact hsize _ (List.getElem_mem i.2) cls f hop
+      | _ => simp [isBudg, hop] at hb
+    · rw [Int.card_Icc]
+      change C[i.1].size ≤ _
+      cases hop : C[i.1].op with
+      | input b k =>
+        cases b with
+        | run => simp only [Gate.inputBits, hop, ite_true, add_zero]; exact Nat.le_pow_clog (by norm_num) _
+        | _ => simp [traced, hop] at ht
+      | budgeted cls f => simp [isBudg, hop] at hb; simp_all
+      | _ => simp [traced, hop] at ht
+    · simp only [Finset.card_singleton]; exact Nat.one_le_two_pow
+    · simp only [Finset.card_singleton]; exact Nat.one_le_two_pow
+  have hB : ∀ i : Fin C.length, (B i).card = 2 ^ (if dynAt C i.1 = true then maxIdx C i.1 else 0) := by
+    intro i
+    simp only [B]
+    split_ifs <;> simp
+  have hunits : ∑ i : Fin C.length, (if (isBudg C[i.1] && dynAt C i.1) = true then 1 else 0) +
+      ∑ i : Fin C.length, (if dynAt C i.1 = true then maxIdx C i.1 else 0) ≤ budgeted C := by
+    have hf := sum_freshAt C C.length le_rfl
+    rw [List.take_length, ← Fin.sum_univ_eq_sum_range, ← Fin.sum_univ_eq_sum_range] at hf
+    simp only [Fin.is_lt, dite_true] at hf
+    rw [← hf, ← Finset.sum_add_distrib, budgeted, ← Fin.sum_univ_eq_sum_range]
+    exact Finset.sum_le_sum fun i _ => units_ge C i.1 i.2
+  have hrun : ∑ i : Fin C.length, C[i.1].inputBits .run = runBits C := by
+    rw [runBits, ← Fin.sum_univ_fun_getElem C (Gate.inputBits .run)]
+  calc F.card ≤ (Fintype.piFinset fun i => A i ×ˢ B i).card := Finset.card_le_card_of_injOn T hmaps hinj
+    _ = (∏ i, (A i).card) * ∏ i, (B i).card := by
+      rw [Fintype.card_piFinset, ← Finset.prod_mul_distrib]
+      simp [Finset.card_product]
+    _ ≤ (∏ i : Fin C.length,
+          2 ^ (C[i.1].inputBits .run + if (isBudg C[i.1] && dynAt C i.1) = true then w else 0)) *
+        ∏ i : Fin C.length, 2 ^ (if dynAt C i.1 = true then maxIdx C i.1 else 0) := by
+      apply Nat.mul_le_mul (Finset.prod_le_prod fun i _ => hA i)
+      rw [Finset.prod_congr rfl fun i _ => hB i]
+    _ ≤ 2 ^ (runBits C + w * budgeted C) := by
+      rw [Finset.prod_pow_eq_pow_sum, Finset.prod_pow_eq_pow_sum, ← pow_add]
+      apply Nat.pow_le_pow_right (by norm_num)
+      rw [Finset.sum_add_distrib, hrun]
+      have hw : ∑ i : Fin C.length, (if (isBudg C[i.1] && dynAt C i.1) = true then w else 0) =
+          w * ∑ i : Fin C.length, (if (isBudg C[i.1] && dynAt C i.1) = true then 1 else 0) := by
+        rw [Finset.mul_sum]
+        exact Finset.sum_congr rfl fun i _ => by split_ifs <;> simp
+      rw [hw]
+      generalize ∑ i : Fin C.length, (if (isBudg C[i.1] && dynAt C i.1) = true then 1 else 0) = NB at hunits ⊢
+      generalize ∑ i : Fin C.length, (if dynAt C i.1 = true then maxIdx C i.1 else 0) = MI at hunits ⊢
+      have h1 : MI ≤ w * MI := Nat.le_mul_of_pos_left MI hw1
+      have h2 : w * (NB + MI) ≤ w * budgeted C := Nat.mul_le_mul_left w hunits
+      rw [mul_add] at h2
+      omega
+
+theorem SquaringUnits : Accounting.Guarantees.Gates.SquaringUnits := by
+  intro ι C p n s w G x slot out hp hn hw1 hsize hreg hcoin hout
+  refine UnitsFooling C G x 4 w ((List.range n).map out) hw1 hsize (fun t ht => (hout t ht).1) hreg ?_
+    (nibbles_out C p n s G x out hp hn fun t ht => (hout t ht).2)
+  intro t ht t' ht' i hi
+  rw [hcoin t ht i hi, hcoin t' ht' i hi]
+  exact nibbles_byte_congr s t t' (slot i)
 
 /-! ## `ρ` on pairs -/
 
