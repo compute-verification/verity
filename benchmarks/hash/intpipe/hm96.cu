@@ -11,7 +11,9 @@
 //   hm96 dump PARAMS DIR N          both arms' levels and b || c over N leaves of the fill operand (for hm96_ref.py check)
 //   hm96 bench PDIR REPS N[,N...]   JSON lines (PDIR/params-N.bin): REPS reps over each N, base and candidate back to back
 //                                   (order alternating), each its data phase alone ("pre": salts precomputed) and its
-//                                   whole step (salt phase + data phase), with SM clocks
+//                                   whole step (salt phase + data phase), each launched kernel by kernel from the host
+//                                   and as one CUDA graph ("_graph"), then the data phase split by kernel (segments,
+//                                   leaves, level launches, the top CTA) on a pre-filled queue, with SM clocks
 //
 // Two phases, as commit_gpu splits them: the salt phase (y, M_key y, c, the frame leaf's first blocks F, the pads and every
 // node above pads only) reads no data; the data phase (segments, x, b, h, the frame leaf, the data's nodes) is the rest.
@@ -449,6 +451,13 @@ __global__ void fill(uint8_t* p, size_t n, uint32_t seed) {
   }
 }
 
+// holds the stream for ns so the host has queued what follows before it runs: the split then times the GPU alone
+__global__ void spin(u64 ns) {
+  u64 t0, t;
+  asm volatile("mov.u64 %0, %%globaltimer;" : "=l"(t0));
+  do asm volatile("mov.u64 %0, %%globaltimer;" : "=l"(t)); while (t - t0 < ns);
+}
+
 // --- host ------------------------------------------------------------------------------------------------------------
 static std::vector<uint8_t> readf(const std::string& path) {
   FILE* f = fopen(path.c_str(), "rb");
@@ -475,6 +484,7 @@ struct Arm {
   static constexpr int SEG_SMEM = SEG_WARPS * ip::WarpLoader<P::BLOCK, SEGB>::SMEM;
   u64 n = 0, width = 0;
   int depth = 0;
+  cudaStream_t st = 0;
   uint4* T = nullptr;
   W *S = nullptr, *F = nullptr, *D = nullptr, *lv = nullptr, *bc = nullptr;
   void init(u64 n_, const uint8_t* t, bool with_bc) {
@@ -496,24 +506,38 @@ struct Arm {
   void free_all() {
     for (void* p : {(void*)T, (void*)S, (void*)F, (void*)D, (void*)lv, (void*)bc}) if (p) CK(cudaFree(p));
   }
-  void tree(bool pads) {
+  // the levels below the top run a launch each (the count is returned), the rest one CTA (top_from() on)
+  int top_from() const {
     int l = 1;
-    for (; l <= depth && (width >> l) > (u64)TOP; ++l) {
+    while (l <= depth && (width >> l) > (u64)TOP) ++l;
+    return l;
+  }
+  int tree(bool pads, cudaEvent_t before_top = nullptr) {
+    int l = 1, launches = 0;
+    for (; l < top_from(); ++l) {
       const u64 c = cdiv_pow2(n, l), lo = pads ? c : 0, hi = pads ? (width >> l) : c;
-      if (hi > lo) level_kernel<P, A><<<(unsigned)((hi - lo + THREADS - 1) / THREADS), THREADS>>>(lv + level_off(width, l - 1), lv + level_off(width, l), lo, hi, l - 1);
+      if (hi > lo) {
+        level_kernel<P, A><<<(unsigned)((hi - lo + THREADS - 1) / THREADS), THREADS, 0, st>>>(lv + level_off(width, l - 1), lv + level_off(width, l), lo, hi, l - 1);
+        ++launches;
+      }
     }
-    if (l <= depth) top_kernel<P, A><<<1, THREADS>>>(lv, width, n, l, depth, pads ? 1 : 0);
+    if (before_top) CK(cudaEventRecord(before_top, st));
+    if (l <= depth) top_kernel<P, A><<<1, THREADS, 0, st>>>(lv, width, n, l, depth, pads ? 1 : 0);
+    return launches;
   }
   void salt() {
-    salt_kernel<P, A><<<(unsigned)((n + THREADS - 1) / THREADS), THREADS, TSMEM>>>(T, n, S, F);
-    if (width > n) pad_kernel<P, A><<<(unsigned)((width - n + THREADS - 1) / THREADS), THREADS>>>(n, width, lv);
+    salt_kernel<P, A><<<(unsigned)((n + THREADS - 1) / THREADS), THREADS, TSMEM, st>>>(T, n, S, F);
+    if (width > n) pad_kernel<P, A><<<(unsigned)((width - n + THREADS - 1) / THREADS), THREADS, 0, st>>>(n, width, lv);
     tree(true);
   }
-  void data(const uint8_t* src) {
+  // ev (optional): ev[0] after the segments, ev[1] after the leaves, ev[2] before the top CTA; returns the level launches
+  int data(const uint8_t* src, cudaEvent_t* ev = nullptr) {
     const u64 segs = n * NSEG, grid = (segs + SEG_THREADS - 1) / SEG_THREADS;
-    seg_kernel<P, A><<<(unsigned)grid, SEG_THREADS, SEG_SMEM>>>(src, segs, D);
-    leaf_kernel<P, A><<<(unsigned)((n + THREADS - 1) / THREADS), THREADS>>>(n, D, S, F, lv, bc);
-    tree(false);
+    seg_kernel<P, A><<<(unsigned)grid, SEG_THREADS, SEG_SMEM, st>>>(src, segs, D);
+    if (ev) CK(cudaEventRecord(ev[0], st));
+    leaf_kernel<P, A><<<(unsigned)((n + THREADS - 1) / THREADS), THREADS, 0, st>>>(n, D, S, F, lv, bc);
+    if (ev) CK(cudaEventRecord(ev[1], st));
+    return tree(false, ev ? ev[2] : nullptr);
   }
 };
 
@@ -596,43 +620,77 @@ static int dump(const std::string& params, const std::string& dir, u64 n) {
 static int bench(const std::string& pdir, int reps, const std::vector<u64>& sizes) {
   int dev; cudaDeviceProp prop;
   CK(cudaGetDevice(&dev)); CK(cudaGetDeviceProperties(&prop, dev));
-  cudaEvent_t e[3];
+  cudaEvent_t e[6];
   for (auto& x : e) CK(cudaEventCreate(&x));
+  cudaStream_t s;
+  CK(cudaStreamCreateWithFlags(&s, cudaStreamNonBlocking));
   Nv nv;
   auto ms = [&](cudaEvent_t a, cudaEvent_t z) { float t; CK(cudaEventElapsedTime(&t, a, z)); return (double)t; };
+  auto capture = [&](auto&& f) {
+    cudaGraph_t g;
+    cudaGraphExec_t x;
+    CK(cudaStreamBeginCapture(s, cudaStreamCaptureModeThreadLocal));
+    f();
+    CK(cudaStreamEndCapture(s, &g));
+    CK(cudaGraphInstantiate(&x, g, 0));
+    CK(cudaGraphDestroy(g));
+    return x;
+  };
+  const char* K[] = {"pre_ms", "step_ms", "salt_ms", "mhz", "pre_graph_ms", "step_graph_ms", "seg_ms", "leaf_ms", "levels_ms",
+                     "top_ms"};
+  constexpr int NK = sizeof K / sizeof *K;
   for (u64 n : sizes) {
     Params p = load_params(pdir + "/params-" + std::to_string(n) + ".bin");
     uint8_t* src = operand(n);
     Arm<Base, 0> b; Arm<Cand, 1> c;
     b.init(n, p.t0, false); c.init(n, p.t1, false);
-    // (pre ms, step ms, salt ms, MHz): the data phase alone, then a whole step
-    auto run = [&](auto& arm) {
-      double r[4];
-      CK(cudaEventRecord(e[0])); arm.data(src); CK(cudaEventRecord(e[1])); CK(cudaEventSynchronize(e[1]));
+    b.st = c.st = s;
+    CK(cudaDeviceSynchronize());
+    cudaGraphExec_t gb[2] = {capture([&] { b.data(src); }), capture([&] { b.salt(); b.data(src); })};
+    cudaGraphExec_t gc[2] = {capture([&] { c.data(src); }), capture([&] { c.salt(); c.data(src); })};
+    // eager (each kernel launched from the host as it is reached): the data phase alone (salts precomputed), then a whole
+    // step; the same two as CUDA graphs queued behind a spin (GPU time alone, as inside a step's own graph); then the data
+    // phase split by kernel, queued the same way
+    auto run = [&](auto& arm, cudaGraphExec_t* g) {
+      std::vector<double> r(NK);
+      CK(cudaEventRecord(e[0], s)); arm.data(src); CK(cudaEventRecord(e[1], s)); CK(cudaEventSynchronize(e[1]));
       r[0] = ms(e[0], e[1]);
-      CK(cudaEventRecord(e[0])); arm.salt(); CK(cudaEventRecord(e[1])); arm.data(src); CK(cudaEventRecord(e[2]));
+      CK(cudaEventRecord(e[0], s)); arm.salt(); CK(cudaEventRecord(e[1], s)); arm.data(src); CK(cudaEventRecord(e[2], s));
       CK(cudaEventSynchronize(e[2]));
       r[1] = ms(e[0], e[2]); r[2] = ms(e[0], e[1]); r[3] = nv.sm();
-      return std::vector<double>(r, r + 4);
+      for (int m = 0; m < 2; ++m) {
+        spin<<<1, 1, 0, s>>>(200000);
+        CK(cudaEventRecord(e[0], s)); CK(cudaGraphLaunch(g[m], s)); CK(cudaEventRecord(e[1], s)); CK(cudaEventSynchronize(e[1]));
+        r[4 + m] = ms(e[0], e[1]);
+      }
+      spin<<<1, 1, 0, s>>>(200000);
+      CK(cudaEventRecord(e[0], s)); arm.data(src, e + 1); CK(cudaEventRecord(e[4], s)); CK(cudaEventSynchronize(e[4]));
+      for (int k = 0; k < 4; ++k) r[6 + k] = ms(e[k], e[k + 1]);
+      return r;
     };
-    for (int w = 0; w < 2; ++w) { b.salt(); run(b); c.salt(); run(c); }
+    for (int w = 0; w < 3; ++w) { run(b, gb); run(c, gc); }
     CK(cudaDeviceSynchronize());
     CK(cudaGetLastError());
     const double bytes = (double)n * LEAF;
+    const int launches = 2 + (b.top_from() - 1) + (b.top_from() <= b.depth);
     for (int r = 0; r < reps; ++r) {
       std::vector<double> x, y;
-      if (r % 2 == 0) { x = run(b); y = run(c); }
-      else { y = run(c); x = run(b); }
+      if (r % 2 == 0) { x = run(b, gb); y = run(c, gc); }
+      else { y = run(c, gc); x = run(b, gb); }
       printf("{");
       meta(stdout, prop);
-      printf(", \"mode\": \"hm96\", \"rep\": %d, \"leaves\": %llu, \"bytes\": %.0f, \"pre_ms\": %.5f, \"step_ms\": %.5f, "
-             "\"salt_ms\": %.5f, \"mhz\": %.0f, \"pre_gb_per_s\": %.3f, \"step_gb_per_s\": %.3f, \"base_pre_ms\": %.5f, "
-             "\"base_step_ms\": %.5f, \"base_salt_ms\": %.5f, \"base_mhz\": %.0f, \"base_pre_gb_per_s\": %.3f, "
-             "\"base_step_gb_per_s\": %.3f}\n",
-             r, (unsigned long long)n, bytes, y[0], y[1], y[2], y[3], bytes / y[0] * 1e-6, bytes / y[1] * 1e-6, x[0], x[1], x[2],
-             x[3], bytes / x[0] * 1e-6, bytes / x[1] * 1e-6);
+      printf(", \"mode\": \"hm96\", \"rep\": %d, \"leaves\": %llu, \"bytes\": %.0f, \"depth\": %d, \"top_from\": %d, "
+             "\"data_launches\": %d",
+             r, (unsigned long long)n, bytes, b.depth, b.top_from(), launches);
+      for (int k = 0; k < NK; ++k) printf(", \"%s\": %.5f, \"base_%s\": %.5f", K[k], y[k], K[k], x[k]);
+      for (const char* m : {"pre", "step", "pre_graph", "step_graph"}) {
+        const int k = std::find_if(K, K + NK, [&](const char* q) { return std::string(q) == std::string(m) + "_ms"; }) - K;
+        printf(", \"%s_gb_per_s\": %.3f, \"base_%s_gb_per_s\": %.3f", m, bytes / y[k] * 1e-6, m, bytes / x[k] * 1e-6);
+      }
+      printf("}\n");
       fflush(stdout);
     }
+    for (auto g : {gb[0], gb[1], gc[0], gc[1]}) CK(cudaGraphExecDestroy(g));
     b.free_all(); c.free_all(); CK(cudaFree(src));
   }
   return 0;

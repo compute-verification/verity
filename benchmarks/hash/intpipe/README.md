@@ -65,6 +65,10 @@ one chunk.
 The salt phase (y, M_key y, c, the frame leaf's blocks before h, the pads and every node over pads only) reads no data;
 the data phase (segments, x, b, h, the frame leaf's last block, the data's nodes) is the rest. `hm96 bench` times each arm
 two ways each rep: **pre**, the data phase alone (salts precomputed), and **step**, the salt phase then the data phase.
+Each is timed launched kernel by kernel from the host (`pre_ms`, `step_ms`) and as one CUDA graph queued behind a 200 µs
+spin kernel (`pre_graph_ms`, `step_graph_ms`: GPU time alone, as inside a step's own graph); then the data phase is split
+by kernel on a queue filled the same way (`seg_ms`, `leaf_ms`, `levels_ms` for the level launches, `top_ms` for the one
+CTA that runs the last levels from 256 nodes up). `summary.py hm96windows` tabulates small windows from these.
 Sizes: 34668 leaves (142,000,128 bytes) and 262144 (1 GiB). `hm96.sh` checks a whole 700-leaf tree (both the level kernel
 and the one-CTA top run) and, at each timed size, sampled leaves (the three-byte positions among them), pads, and sampled
 nodes of every level from the dump's own children, before timing.

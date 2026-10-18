@@ -191,12 +191,19 @@ def hm96(out: str) -> None:
         m = rs[0]
         rec = {"candidate": cand, "gpu": m["gpu"], "sms": m["sms"], "leaves": n, "bytes": m["bytes"], "reps": len(rs),
                "fetch": m["fetch"], "loader_async": m["loader_async"], "seg_warps": m["seg_warps"]}
-        for k in ("pre_gb_per_s", "step_gb_per_s", "salt_ms", "mhz"):
-            rec[k] = med([r[k] for r in rs])
-            rec["base_" + k] = med([r["base_" + k] for r in rs])
-        rec["pre_ratio"] = med([r["pre_gb_per_s"] / r["base_pre_gb_per_s"] for r in rs])
-        rec["step_ratio"] = med([r["step_gb_per_s"] / r["base_step_gb_per_s"] for r in rs])
+        rec.update({k: m[k] for k in ("depth", "top_from", "data_launches") if k in m})
+        for k in HM96_KEYS:
+            if k in m:
+                rec[k] = med([r[k] for r in rs])
+                rec["base_" + k] = med([r["base_" + k] for r in rs])
+        for mode in ("pre", "step", "pre_graph", "step_graph"):
+            if mode + "_gb_per_s" in m:
+                rec[mode + "_ratio"] = med([r[mode + "_gb_per_s"] / r["base_" + mode + "_gb_per_s"] for r in rs])
         print(json.dumps(rec))
+
+
+HM96_KEYS = ("pre_gb_per_s", "step_gb_per_s", "pre_graph_gb_per_s", "step_graph_gb_per_s", "pre_ms", "step_ms", "salt_ms",
+             "pre_graph_ms", "step_graph_ms", "seg_ms", "leaf_ms", "levels_ms", "top_ms", "mhz")
 
 
 HM96_ORDER = ["sha512", "sha512r32", "sha512r24", "blake3k"]
@@ -250,8 +257,51 @@ def hm96table(args: list[str]) -> None:
         print(f"| {short(g)} | " + " | ".join(cells) + " |")
 
 
+def hm96windows(args: list[str]) -> None:
+    """Fetched hm96.sh runs at small windows: per (GPU, window, arm) GB/s and latency, launched kernel by kernel and as one
+    CUDA graph, salts precomputed (pre) and on the step; the ratio over SHA-512 rep by rep; then the data phase by kernel."""
+    rec: dict[tuple[str, str, int], tuple[dict, str]] = {}
+    for d in args:
+        run = os.path.basename(os.path.normpath(d))
+        for root, _, files in os.walk(d):
+            if "summary.jsonl" in files:
+                for r in lines(os.path.join(root, "summary.jsonl")):
+                    rec[(r["candidate"], r["gpu"], r["leaves"])] = (r, run)
+    gpus = sorted({g for _, g, _ in rec}, key=lambda g: ("B200" not in g, "H200" not in g, g))
+    sizes = sorted({n for _, _, n in rec})
+    us = lambda r, k: f"{1e3 * r[k]:.0f}"
+    print("| GPU | window | arm | GB/s pre / step | latency µs pre / step | x SHA-512 pre / step | graph: GB/s pre / step "
+          "| graph: latency µs pre / step | graph: x SHA-512 pre / step | run |")
+    print("|---|---|---|---|---|---|---|---|---|---|")
+    for g in gpus:
+        for n in sizes:
+            for c in HM96_ORDER:
+                r, run = rec.get((c, g, n), ({}, ""))
+                if not r:
+                    continue
+                print(f"| {short(g)} | {r['bytes'] / 1e6:.1f} MB | {c} | {r['pre_gb_per_s']:.0f} / {r['step_gb_per_s']:.0f} | "
+                      f"{us(r, 'pre_ms')} / {us(r, 'step_ms')} | {r['pre_ratio']:.2f} / {r['step_ratio']:.2f} | "
+                      f"{r['pre_graph_gb_per_s']:.0f} / {r['step_graph_gb_per_s']:.0f} | "
+                      f"{us(r, 'pre_graph_ms')} / {us(r, 'step_graph_ms')} | "
+                      f"{r['pre_graph_ratio']:.2f} / {r['step_graph_ratio']:.2f} | {run} |")
+    print()
+    print("| GPU | window | arm | leaves (depth, level launches + top from) | segments µs | leaves µs | level launches µs "
+          "| top CTA µs | data phase on the GPU µs | MHz |")
+    print("|---|---|---|---|---|---|---|---|---|---|")
+    for g in gpus:
+        for n in sizes:
+            for c in HM96_ORDER:
+                r = rec.get((c, g, n), ({}, ""))[0]
+                if not r:
+                    continue
+                tot = sum(r[k] for k in ("seg_ms", "leaf_ms", "levels_ms", "top_ms"))
+                print(f"| {short(g)} | {r['bytes'] / 1e6:.1f} MB | {c} | {n} ({r['depth']}, {r['top_from'] - 1} + "
+                      f"{r['top_from']}) | {us(r, 'seg_ms')} | {us(r, 'leaf_ms')} | {us(r, 'levels_ms')} | {us(r, 'top_ms')} | "
+                      f"{1e3 * tot:.0f} | {r['mhz']:.0f} |")
+
+
 if __name__ == "__main__":
-    if sys.argv[1] in ("table", "hm96table"):
-        {"table": table, "hm96table": hm96table}[sys.argv[1]](sys.argv[2:])
+    if sys.argv[1] in ("table", "hm96table", "hm96windows"):
+        {"table": table, "hm96table": hm96table, "hm96windows": hm96windows}[sys.argv[1]](sys.argv[2:])
     else:
         {"sha512": sha512, "hashes": hashes, "hm96": hm96}[sys.argv[1]](sys.argv[2])
