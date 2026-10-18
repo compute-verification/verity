@@ -233,6 +233,7 @@ def tableReadDigits (id : String) : Option ℕ :=
     (if (digitsAfter id).isEmpty then none else some (Nat.ofDigitChars 10 (digitsAfter id) 0)).filter (0 < ·)
   else none
 
+/-- A slice's `takeWhile` of a character predicate is its characters' `takeWhile`. -/
 theorem toList_copy_takeWhile (s : String.Slice) (p : Char → Bool) :
     (s.takeWhile p).copy.toList = s.copy.toList.takeWhile p := by
   have hall : ∀ c ∈ (s.takeWhile p).copy.toList, p c = true := by
@@ -248,6 +249,7 @@ theorem toList_copy_takeWhile (s : String.Slice) (p : Char → Bool) :
     simp [hd] at hstop
     simp [hstop]
 
+/-- A string of digits reads as their value, and the empty string as none. -/
 theorem toNat?_of_digits (t : String) (h : ∀ c ∈ t.toList, c.isDigit = true) :
     t.toNat? = if t.toList.isEmpty then none else some (Nat.ofDigitChars 10 t.toList 0) := by
   cases he : t.toList.isEmpty
@@ -266,6 +268,7 @@ theorem toNat?_of_digits (t : String) (h : ∀ c ∈ t.toList, c.isDigit = true)
     · rfl
     · exact absurd (String.toList_eq_nil_iff.1 (List.isEmpty_iff.1 he)) (String.isNat_iff.1 hn).1
 
+/-- `tableReadBits` is `tableReadDigits` on every id. -/
 theorem tableReadBits_eq : tableReadBits = tableReadDigits := by
   funext id
   unfold tableReadBits tableReadDigits digitsAfter
@@ -285,6 +288,7 @@ def classOfDigits (id : String) : Option Class :=
   (registry.lookup id).orElse fun _ => ((tableReadDigits id).map fun n => .gather (some n) 0).orElse fun _ =>
     (families.find? fun e => id.startsWith e.1).map Prod.snd
 
+/-- `classOf` is `classOfDigits` on every id. -/
 theorem classOf_eq : classOf = classOfDigits := by
   funext id
   unfold classOf classOfDigits
