@@ -739,8 +739,7 @@ int rs_gather64(const uint64_t *addrs, uint64_t n, uint64_t *out, cudaStream_t s
 
 // A receipts grid over n blocks: ctas CTAs of kernel k, or with ctas 0 as many as are resident at once, and no more
 // than the blocks fill.
-template <class K>
-static int receipts_grid(K k, uint64_t n, int ctas, unsigned *g) {
+static int receipts_grid(const void *k, uint64_t n, int ctas, unsigned *g) {
   if (!ctas) {
     int dev, sms, per;
     if (cudaGetDevice(&dev) || cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev) ||
@@ -759,7 +758,7 @@ static int sketch16_receipts(const void *data, uint64_t j0, uint64_t n, const ui
                              cudaStream_t s) {
   if (!data || !pk || !ys || n < 1 || ctas < 0) return 1;
   unsigned g;
-  if (receipts_grid(sketch16_receipts_kernel, n, ctas, &g)) return 4;
+  if (receipts_grid((const void *)sketch16_receipts_kernel, n, ctas, &g)) return 4;
   sketch16_receipts_kernel<<<g, 32 * SK16_WARPS, 0, s>>>((const uint4 *)data, j0, n, pk, ys);
   return cudaGetLastError() ? 4 : 0;
 }
@@ -888,7 +887,7 @@ int rs_mapped_receipts(const uint64_t *addrs, const uint64_t *js, uint64_t n, co
                        int ctas, cudaStream_t s) {
   if (!addrs || !js || !pk || !ys || n < 1 || ctas < 0) return 1;
   unsigned g;
-  if (receipts_grid(mapped16_receipts_kernel, n, ctas, &g)) return 4;
+  if (receipts_grid((const void *)mapped16_receipts_kernel, n, ctas, &g)) return 4;
   mapped16_receipts_kernel<<<g, 32 * SK16_WARPS, 0, s>>>(addrs, js, n, pk, ys);
   return cudaGetLastError() ? 4 : 0;
 }
