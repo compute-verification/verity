@@ -97,7 +97,8 @@ TARGETS: dict[str, tuple[int, int]] = {
 #: Row-id target token -> the device class's SM count, for the classes where it is fixed by the class: such a row declares its whole
 #: Build target (capability + SM count) by its id, so its Build derives for it on any host, a GPU-free one included.  A class whose SM
 #: count varies by part (h100 SXM 132 / PCIe 114) is not listed: its Build target is the host GPU's unless the workload declares one.
-TARGET_NUM_SMS: dict[str, int] = {"rtxpro6000": 188}
+#: The H200 is 132 SMs as SXM and as NVL.
+TARGET_NUM_SMS: dict[str, int] = {"rtxpro6000": 188, "h200": 132}
 
 ROW_FIELDS = ("model", "dtype", "target", "world", "batch", "max_input", "max_output", "arrivals", "sampling", "execution")
 _ROW_INT_PREFIX = {"world": "tp", "batch": "b", "max_input": "i", "max_output": "o"}
@@ -290,14 +291,16 @@ _V1_KEYS = {"engine_args_required": "args", "env_required": "env", "target": "ta
 class RowEngine:
     """What, besides its requests, determines a row's circuit and its run: the checkpoint's full ``revision`` (its repo is the row's
     ``model``), the ``vllm`` commit, the engine ``args``, the ``env`` its engines run under (kernel selection: ``VLLM_BATCH_INVARIANT``,
-    ``NCCL_P2P_DISABLE``) and the declared ``target`` (``TargetProfile`` fields; None: the device's).  The κ profile a Match folds
-    with is the role's (``engine.profiles.generic.module_name``), never a field."""
+    ``NCCL_P2P_DISABLE``), the declared ``target`` (``TargetProfile`` fields; None: the device's) and ``reasons``: why the row sets a
+    switch away from vLLM's default, by the switch's name (``engine.served.DEFAULTS``; a served Commit refuses one without).  The κ
+    profile a Match folds with is the role's (``engine.profiles.generic.module_name``), never a field."""
 
     revision: str | None = None
     vllm: str = VLLM
     args: Mapping[str, Any] = field(default_factory=dict)
     env: Mapping[str, str] = field(default_factory=dict)
     target: Mapping[str, Any] | None = None
+    reasons: Mapping[str, str] = field(default_factory=dict)
 
     @classmethod
     def of(cls, doc: Mapping[str, Any]) -> RowEngine:
@@ -311,7 +314,8 @@ class RowEngine:
         if unknown:
             raise ValueError(f"engine block: unknown field(s) {', '.join(unknown)} (known: {', '.join(f.name for f in fields(cls))})")
         eng = cls(revision=e.get("revision"), vllm=str(e.get("vllm", VLLM)), args=dict(e.get("args") or {}),
-                  env={str(k): str(v) for k, v in (e.get("env") or {}).items()}, target=dict(e["target"]) if e.get("target") else None)
+                  env={str(k): str(v) for k, v in (e.get("env") or {}).items()}, target=dict(e["target"]) if e.get("target") else None,
+                  reasons={str(k): str(v) for k, v in (e.get("reasons") or {}).items()})
         if eng.vllm != VLLM:
             raise ValueError(f"engine.vllm {eng.vllm!r}: this tree derives and serves on vLLM {VLLM} only (config.VLLM)")
         if eng.target and eng.target.get("vllm_revision", eng.vllm) != eng.vllm:
@@ -324,6 +328,8 @@ class RowEngine:
             out["env"] = dict(self.env)
         if self.target:
             out["target"] = dict(self.target)
+        if self.reasons:
+            out["reasons"] = dict(self.reasons)
         return out
 
 

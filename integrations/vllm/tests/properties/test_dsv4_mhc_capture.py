@@ -4,6 +4,8 @@ the reference pieces are the Definitions at the job's statics, the spy, the sour
 to end (the GPU run is `tests/properties/dsv4_mhc_capture_gpu.py --out ...` on an H200)."""
 from __future__ import annotations
 
+__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
+
 import copy
 import hashlib
 import json

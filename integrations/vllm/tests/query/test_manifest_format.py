@@ -10,7 +10,8 @@ import json
 import pytest
 
 from verity_vllm.commit import binding as B
-from verity_vllm.query.manifest.format import canonical_identity, coverage_check, manifest_digest, spec_statics, split_name
+from verity_vllm.query.manifest.bind import coverage_check
+from verity_vllm.query.manifest.format import canonical_identity, manifest_digest, spec_statics, split_name
 from tests.check.test_sampled_replay import _program, v2_manifest
 
 EPS = 'EPS={"f64":"0x1.4f8b588e368f1p-17"}'
@@ -69,15 +70,17 @@ def test_coverage_positive_and_negatives():
     r2 = coverage_check(man, {s: ms for s, ms in lay.items() if s != last})
     assert not r2["ok"] and r2["steps_with_missing"] == [last] and r2["missing_n"] == sum(1 for r in checked if r["step"] == last)
 
-    # (3) drop one output member of a two-member module and bind the other twice: same count, same module set -> coverage failure on it
+    # (3) drop one output member of a two-member module and commit the other twice: same count, same module set -> coverage failure on
+    # it.  The members are the fused norm's ports `0` / `1`, committed as tuple slots: one slot for two members places neither
+    # (`verity_vllm.query.manifest.bind`), so both are missing and both tensors are extras
     two = next((s, op, sorted(ms)) for (s, op), ms in _members_by_step_op(checked).items() if len(ms) >= 2)
     s3, op3, (keep, drop) = two[0], two[1], two[2][:2]
     lay3 = copy.deepcopy(lay)
     k = next(i for i, m in enumerate(lay3[s3]) if m["name"] == f"{op3}/{drop}")
     lay3[s3][k] = dict(lay3[s3][k], name=f"{op3}/{keep}")
     r3 = coverage_check(man, lay3)
-    assert not r3["ok"] and r3["missing_n"] == 1 and r3["missing"][0]["output_member"] == drop and r3["missing"][0]["step"] == s3
-    assert r3["committed_unmatched_n"] == 1                               # the duplicate binds nothing required (invocation 1 is not expected)
+    assert not r3["ok"] and r3["missing_n"] == 2 and {(m["output_member"], m["step"]) for m in r3["missing"]} == {(keep, s3), (drop, s3)}
+    assert r3["committed_extras_n"] == 2 and r3["committed_unmatched_n"] == 0
 
     # (4) a member committed SHORT (wrong element range: one row fewer) -> coverage failure (containment)
     tall = next(r for r in checked if r["family"] == "instance_outputs" and int(r.get("rows") or 1) > 1)

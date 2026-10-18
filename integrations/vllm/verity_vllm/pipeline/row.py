@@ -4,7 +4,9 @@
     verity-vllm row stage STAGE ROW ROLE REPO REV [stage flags]           one stage as one research Attempt
                                                                           (plan: the Commit's plan, on CPU, before the GPU;
                                                                           replay: a config run's deferred C2, on CPU)
-    verity-vllm row chain ROW ROLE REPO REV [--stages ...] [--campaign C] [--project P] [stage flags]
+    verity-vllm row chain ROW ROLE REPO REV [--stages ...] [--build-run RUN] [--campaign C] [--project P] [--ref REF] [--by LANE]
+                          [--tier T] [--no-publish] [stage flags]         a row whose Build, Match and Commit pass publishes
+                                                                          its record (`pipeline.research.chain`)
     verity-vllm row shed  [--force]
 
 A row id with ``__tp<N>__``, N >= 2, runs the tensor-parallel stages (``row_tp``; world ``--world``, else the manifest's
@@ -29,6 +31,7 @@ from typing import Any
 from verity_vllm import protocol_options as PO
 from verity_vllm.config import (WORKLOADS, BuildConfig, CommitConfig, MatchConfig, RowConfig, RunEnv, UsageError, group, option,
                                 row_world)
+from verity_vllm.pipeline import config_record as CR
 from verity_vllm.pipeline import research
 
 STAGES = "build,match,commit"
@@ -84,15 +87,24 @@ class Stage(_Row, _Research, _StageName):
 
 @dataclass(frozen=True, kw_only=True)
 class Chain(_Research):
-    """One research Attempt per stage, each citing the earlier stages' artifacts."""
+    """One research Attempt per stage, each citing the earlier stages' artifacts; a row whose Build, Match and Commit pass publishes
+    its record in the circuit database."""
 
     row: str = option("row")
     role: str = option("role")
     repo: str = option("repo")
     rev: str = option("rev")
     stages: str = option("--stages", default=STAGES)
+    build_run: str | None = option("--build-run", default=None,
+                                   help="a passing Build Attempt the chain cites in place of its build stage (--stages without build); "
+                                        "its row dir must be the chain's, whose Match precheck holds it to the cited Program digest")
     campaign: str | None = option("--campaign", env="RESEARCH_CAMPAIGN", default=None)
     project: str = option("--project", env="RESEARCH_PROJECT", default="verity")
+    publish: bool = option("--publish", action="boolean_optional", default=True,
+                           help="publish the row's record once its Build, Match and Commit pass (`verity-vllm records publish`)")
+    ref: str | None = option("--ref", default=None, help="the branch of the record's tree REF@SHA (default the tree's EXPORT.json or git branch)")
+    by: str | None = option("--by", env="RESEARCH_LANE", default=None, help="the lane the record's row label is by")
+    tier: str | None = option("--tier", choices=CR.TIERS, default=None, help="the tier of the row's rebuild; a row new to records.json needs one")
     flags: list[str] = option("flags", nargs="...", default=[], help="stage flags, passed to every stage")
     env: RunEnv = group(RunEnv)
 
@@ -198,7 +210,8 @@ def main(o: Any) -> int:
     if isinstance(o, Run):
         return run_row(o, o.stages)
     if isinstance(o, Chain):
-        stray = [f for f in ("--stages", "--campaign", "--project") if f in o.flags]
+        stray = [f for f in ("--stages", "--build-run", "--campaign", "--project", "--publish", "--no-publish", "--ref", "--by", "--tier")
+                 if f in o.flags]
         if stray:
             raise UsageError(f"{', '.join(stray)} must come before ROW (the flags after the positionals go to every stage)")
         from verity_vllm.pipeline import cli

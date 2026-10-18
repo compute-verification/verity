@@ -13,16 +13,22 @@ set (note:20261017T1859Z-report-property-redteam), 210 ids: the 194 of `verity/m
 * **free:** the s8-family steps (`family`, with their operand formats, `k` and clamp or wrap), whose window
   property/v1 proves from derived ranges: the two IMMA steps (s8·s8 clamped, u8·s8 wrapped, `k = 32`), PIN's
   `PouwSegDot_v1` (s8·s8 wrapped, `k = 32`) and route U's `PouwDot16U8S8_v1` (u8·s8 wrapped, `k = 16`), each the exact
-  dot mod `2^32`, so in the window the exact sum; `I32Add_v1` and `I32Sub_v1` (`affine`), proven not to wrap; the
-  constants (`const`). An exact integer multiply by a constant is an affine gate only where it is proven in window
-  (`I32Mul_v1` by a constant, translated so); an FP multiply by a constant rounds, and is a rounding.
-* **gathers** (`gather`, an `Op.gather` and never any other function): the kernel-level gathers and table reads, by
-  family, counted in fresh index bits (`units`).
+  dot mod `2^32`, so in the window the exact sum; `I32Add_v1` and `I32Sub_v1` (`affine`), proven not to wrap;
+  `Bf16ToF32_v1` (`affine`, `bf16ToF32Op`: `×2^16` from the bf16 word's s16 reading to the f32 word's s32 reading,
+  which never wraps, `Guarantees.Gates.Bf16ToF32Affine`); the constants (`const`). An exact integer multiply by a
+  constant is an affine gate only where it is proven in window (`I32Mul_v1` by a constant, translated so); an FP
+  multiply by a constant rounds, and is a rounding.
+* **gathers** (`gather`, an `Op.gather` and never any other function), counted in fresh index bits (`units`): the
+  kernel-level gathers by family (`Gather{Bf16,F32,I32,E4m3,E2m1,E8m0}x{V}`), at their index, `⌈log₂ (V + 1)⌉` bits,
+  each with its family's out-of-range constant, its evaluator's, read signed at its width (`0x7FFF`, `0x7FC00000`,
+  `−1`, `0x7F`, `0`, `0xFF` read as `−1`), for a token outside `[0, V)`; and the table reads (`TableRead{n}x{w}`,
+  `tableReadBits`), at their index's low `n` bits, `n` bits, which never leave their `2^n` entries: property/v1's
+  `range` and `low` kinds. Its `lifted` kind (`LGatherRow`) is not listed, so refused.
 * **budgeted**, in units: `compareSelect` (comparisons, selections, min, max and clamps, `F32Sat_v1` and `S32ClampS8`
   among them, the 1-bit logic ops `And2`, `Xor2`, `BitAnd`, `BitOr`, `BitXor`, `BitNot`, `Not`, the salt-dead tests
   and PIN's `PouwSel32_v1` and `PouwWinOk_v1`); `fold` (the receipt fold's step, `PouwDuoAbsorb_v1`); and `rounding`,
-  every other primitive: FP arithmetic and casts (`Bf16ToF32_v1`, `E4m3ToF32_v1` and `F32Neg_v1` among them), the
-  exact widenings and packings, the FP and FP8 dots, integer division, remainder and narrowing, integer products
+  every other primitive: FP arithmetic and casts (`E4m3ToF32_v1` and `F32Neg_v1` among them), the exact widenings
+  and packings but `Bf16ToF32_v1`, the FP and FP8 dots, integer division, remainder and narrowing, integer products
   reduced mod `2^w` (`I32Mul_v1`, `NcpDot16I7_v1`, `PouwSqAcc_v1`: a wrap drops a carry), bit operations on words,
   field extractions (`PouwWindowWord_v1` and the family `BitAtx`: a field of one runtime word, not a column, so never
   a gather, whose constant index would cost nothing), LimbSplit's limb steps (the carries `Gate.role` gives), and
@@ -34,8 +40,9 @@ set (note:20261017T1859Z-report-property-redteam), 210 ids: the 194 of `verity/m
 
 `classOf` is what property/v1's closed table is to agree with, id for id. It agrees with the red team's closed table
 (art:d013436943c9bd70e44e92a229805087ac531a2f59023750030d78353e7bb784) on every id but `PouwDot16U8S8_v1`, free here
-under `Proven` as the u8·s8 IMMA step is, and the table's ten `other` ids, roundings here: the ruling caps three
-classes and no fourth, and both are budgeted the same.
+under `Proven` as the u8·s8 IMMA step is, `Bf16ToF32_v1`, free-affine here as property/v1 counts it (`×65536` on the
+s16 reading, no wrap: the coordinator's ruling of 18 Oct, 03:30Z), and the table's nine other `other` ids, roundings
+here: the ruling caps three classes and no fourth, and both are budgeted the same.
 -/
 
 namespace Accounting.Gates
@@ -47,8 +54,9 @@ inductive Class
   | affine
   /-- an s8-family step: `Op.mma a b k satfinite` -/
   | family (a b : Int8Fmt) (k : ℕ) (satfinite : Bool)
-  /-- a gather: `Op.gather`, its column's word at its index, never any other function -/
-  | gather
+  /-- a gather: `Op.gather low fill`, its column's word at its index or `fill` outside it (or a table read's word at
+  its index's low bits), never any other function -/
+  | gather (low : Option ℕ) (fill : ℤ)
   | budgeted (cls : Budget)
   deriving DecidableEq, Repr
 
@@ -61,7 +69,7 @@ def registry : List (String × Class) := [
   ("Bf16GtStrict_v1", .budgeted .compareSelect),
   ("Bf16MulBf16_v1", .budgeted .rounding),
   ("Bf16MulF32_v1", .budgeted .rounding),
-  ("Bf16ToF32_v1", .budgeted .rounding),
+  ("Bf16ToF32_v1", .affine),
   ("BitAnd_v1", .budgeted .compareSelect),
   ("BitNot_v1", .budgeted .compareSelect),
   ("BitOr_v1", .budgeted .compareSelect),
@@ -265,19 +273,35 @@ def registry : List (String × Class) := [
   ("Ue8m0InvScale_v1", .budgeted .rounding),
   ("Xor2_v1", .budgeted .compareSelect)]
 
-/-- The kernel-level families, by their id's prefix. -/
+/-- The kernel-level families, by their id's prefix, each gather with its out-of-range constant read signed at its
+width: bf16's NaN `0x7FFF` and f32's `0x7FC00000` (`Evaluate.Act.gather`), i32's `−1`, e4m3's NaN `0x7F`, e2m1's
+zero code and e8m0's NaN `0xFF` (`fp8_moe_experts._gather`). -/
 def families : List (String × Class) := [
   ("Input", .input .run),
   ("RegisteredInput", .input .registered),
-  ("GatherBf16x", .gather),
-  ("GatherF32x", .gather),
-  ("TableRead", .gather),
+  ("GatherBf16x", .gather none 0x7FFF),
+  ("GatherF32x", .gather none 0x7FC00000),
+  ("GatherI32x", .gather none (-1)),
+  ("GatherE4m3x", .gather none 0x7F),
+  ("GatherE2m1x", .gather none 0),
+  ("GatherE8m0x", .gather none (-1)),
   ("BitAtx", .budgeted .rounding),
   ("TopPMaskWordx", .budgeted .compareSelect)]
 
-/-- A primitive id's class: the registry's entry, else its family's, else none (refused). -/
+/-- A table read's index bits, the `n ≥ 1` of `TableRead{n}x{w}_v1`: it reads its table at its index's low `n` bits. -/
+def tableReadBits (id : String) : Option ℕ :=
+  if id.startsWith "TableRead" then
+    (((id.drop 9).takeWhile Char.isDigit).toString.toNat?).filter (0 < ·)
+  else none
+
+/-- A primitive id's class: the registry's entry, else a table read's (fill 0, never read: its table has `2^n`
+entries), else its family's, else none (refused). -/
 def classOf (id : String) : Option Class :=
-  (registry.lookup id).orElse fun _ => (families.find? fun e => id.startsWith e.1).map Prod.snd
+  (registry.lookup id).orElse fun _ => ((tableReadBits id).map fun n => .gather (some n) 0).orElse fun _ =>
+    (families.find? fun e => id.startsWith e.1).map Prod.snd
+
+/-- `Bf16ToF32_v1`'s operation: `×2^16`, from the bf16 word's s16 reading to the f32 word's s32 reading. -/
+def bf16ToF32Op {ι : Type} : Op ι := .affine 0 [2 ^ 16]
 
 /-- The class of a gate's operation. -/
 def Op.cls {ι : Type} : Op ι → Class
@@ -285,7 +309,7 @@ def Op.cls {ι : Type} : Op ι → Class
   | .const _ => .const
   | .affine .. => .affine
   | .mma a b k sat => .family a b k sat
-  | .gather => .gather
+  | .gather low d => .gather low d
   | .budgeted cls _ => .budgeted cls
 
 /-- **Every gate is its primitive's** (what the census checks, refusing the circuit otherwise): its primitive is

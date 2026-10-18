@@ -6,6 +6,8 @@ to the map's, the verdict, and `main` end to end (the GPU run is `tests/properti
 H200)."""
 from __future__ import annotations
 
+__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
+
 import copy
 import hashlib
 import struct

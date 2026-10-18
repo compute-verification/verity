@@ -757,7 +757,8 @@ def from_instances(path_or_doc: str | dict[str, Any]) -> ProgramView:
 
 
 def from_descriptor(desc: dict[str, Any] | str, registry=None) -> ProgramView:
-    """A Program descriptor (dict, or a path to `descriptor.json[.gz]`) -> ProgramView of its `program_fn` body.  Names from
+    """A Program descriptor (dict, or a path to `descriptor.json[.gz]`) -> ProgramView of its `program_fn` body, or of the root's body
+    when the program function is inlined into the root (a request Build's descriptor).  Names from
     `annotations["node_hints"]` (node index -> hint); ports from each node's own output type; outputs from the body's `ret`."""
     if isinstance(desc, str):
         with gzip.open(desc, "rt") if desc.endswith(".gz") else open(desc) as f:
@@ -766,15 +767,29 @@ def from_descriptor(desc: dict[str, Any] | str, registry=None) -> ProgramView:
     from verity.ml.circuits.refs import runs
     if registry is None:
         registry, _errors = _registry()
+    from verity.ml.circuits.program import is_input
     decoded = decode_program(desc, registry)
-    fn = decoded.defs[desc["program_fn"]]
-    body = fn.body
-    params = _params_view((n, t) for n, t in body.params)
     hints = {int(k): str(v) for k, v in (desc.get("annotations") or {}).get("node_hints", {}).items()}
+    fn = decoded.defs.get(desc["program_fn"])
+    if fn is not None:
+        body = fn.body
+        params = _params_view((n, t) for n, t in body.params)
+        rows, remap = list(enumerate(body.nodes)), (lambda r: r)
+    else:
+        # the program function is inlined into the root (`codec.encode_program`): its Input nodes are the view's parameters
+        body = decoded.root.body
+        inputs = {k: j for j, k in enumerate(k for k, n in enumerate(body.nodes) if is_input(n.fn))}
+        params = _params_view((hints.get(k) or getattr(body.nodes[k], "name", "") or f"input{j}", body.nodes[k].out)
+                              for k, j in inputs.items())
+        calls = [k for k in range(len(body.nodes)) if k not in inputs]
+        pos = {k: i for i, k in enumerate(calls)}
+        rows = [(k, body.nodes[k]) for k in calls]
+        remap = lambda r: (("p", inputs[r[1]], *r[2:]) if r[1] in inputs else ("n", pos[r[1]], *r[2:])) if r[0] == "n" else r  # noqa: E731
     b = _Builder(params)
-    for k, n in enumerate(body.nodes):
-        b.add(k, _spec_id(n.fn), n.form, hints.get(k, getattr(n, "name", "") or ""), ports_of_type(n.out), (runs(a.refs) for a in n.args))
-    outs = b.outputs(runs(body.ret))
+    for i, (k, n) in enumerate(rows):
+        b.add(i, _spec_id(n.fn), n.form, hints.get(k, getattr(n, "name", "") or ""), ports_of_type(n.out),
+              ([remap(r) for r in runs(a.refs)] for a in n.args))
+    outs = b.outputs([remap(r) for r in runs(body.ret)])
     from verity.ml.circuits.codec import program_digest
     return b.view(outs, program_digest(desc), "descriptor")
 

@@ -18,17 +18,24 @@ runs the same runner as its pytest step.
 
 ## Run tests
 
+Suites run remotely, never on an agent VM (AGENTS.md "Tests"): `research run --on auto` queues an `agent-test` job
+(4 CPUs, 16 GiB, 60 min) outside the check slots. Give it `--cwd source`, so the job runs in the shipped tree rather than
+its run directory, and `uv sync` that tree first: `suites.py` refuses another checkout's environment.
+
 ~~~sh
-uv run tools/verity/check/suites.py                        # every suite whose inputs changed since it last passed on this machine
-uv run tools/verity/check/suites.py flock verity           # these suites (a package name, a directory, or a unique part of one)
-uv run tools/verity/check/suites.py flock -- -k tanh -x    # arguments after -- go to pytest
-uv run tools/verity/check/suites.py --quick                # without the tests marked slow
-uv run tools/verity/check/suites.py --fresh                # ignore the cache
-uv run tools/verity/check/suites.py --list                 # each suite's inputs, and whether a pass is cached
+R="research run --on auto --cwd source --wait -- bash -lc"
+S="uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py"
+$R "$S"                         # every suite whose inputs changed since it last passed there
+$R "$S flock verity"            # these suites (a package name, a directory, or a unique part of one)
+$R "$S flock -- -k tanh -x"     # arguments after -- go to pytest
+$R "$S --quick"                 # without the tests marked slow
+$R "$S --fresh"                 # ignore the cache
+uv run tools/verity/check/suites.py --list                    # each suite's inputs, and whether a pass is cached (local: reads only)
 ~~~
 
-Inside one package, plain pytest works too: `cd verity/ml/flock && uv run pytest -m "not slow" -k tanh`. It doesn't cache and
-doesn't load the read guard.
+Locally, while editing, one named test file or `-k` selection of under about a minute and 1 GB is fine:
+`cd verity/ml/flock && uv run pytest tests/test_layouts.py -k typed`. It doesn't cache and doesn't load the read guard. The shell
+hook refuses a local pytest that names no file or `-k`; `AGENT_GUARD_LOCAL_OK=1` is the opt-in.
 
 A pass is cached under a hash of the suite's inputs: its directory, the directories of the workspace packages it depends on,
 the paths it declares, the workspace's metadata (every `pyproject.toml` and `uv.lock`), the installed distributions, Python,
@@ -82,6 +89,15 @@ a `sys.path` entry another test file added: every suite runs alone.
 - **Minutes-long or machine-bound checks are opt-in:** they skip unless a variable asks for them, as `VERITY_POUS_SLOW`,
   `FLOCK_IR_SLOW`, `VERITY_BENCH_FULL` and `VERITY_REGRESSION` do. Name the variable `VERITY_{PACKAGE}_...` and say in the skip
   reason how long it takes.
+- **Checks outside `check`.** `check` has no tier that runs after landing yet (AGENTS.md, "Checking and merging": ci and infra
+  build it), so a check far past ten minutes cold runs as a recorded run on the change that needs it. integrations/vllm's heavy
+  circuit-neutrality tier is one: it rebuilds GLM-5.3's 8 ranks to GP-01 and fails when a Program digest that
+  `integrations/vllm/manifests/records.json` pins moved, in about 50 minutes on a 256-CPU pod. Run it on a change under
+  `integrations/vllm/verity_vllm/program/` or `integrations/vllm/verity_vllm/engine/`, or to its `pipeline/build.py`, that is
+  meant to leave the circuits alone: `verity-vllm neutrality --tier heavy` as a `research run --on` a CPU pod (vy-nebius-cpu-2),
+  set up as `integrations/vllm/verity_vllm/pipeline/neutrality.py`'s docstring says (the pinned vLLM from
+  `ops/pod_bootstrap.sh --cpu`). It is the post-landing tier's first job once that exists; the suite's fast stand-in is
+  `integrations/vllm/tests/program/test_derive_neutrality.py`.
 - **GPU, pod and vLLM tests skip themselves** when the hardware or the runtime is absent. Their real runs are recorded runs
   on a pod (`research run --on ...`), never a laptop.
 - **A test that needs the evidence store** skips where it can't reach it with a reason containing `the evidence store is not
