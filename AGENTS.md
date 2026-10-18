@@ -348,6 +348,10 @@ Coordinators are launched, handed over and archived from Daniel's laptop with `i
   (`research notes claim`).
 - **Work toward outcomes.** A lane's night is one or two outcomes, each with a done-condition anyone can check, which its
   lead proposed and Daniel approved.
+- **Work in a checkout no other agent uses:** your own VM (a cloud agent), or your own `git worktree add /tmp/NAME REF`
+  with its own environment (`uv sync` there; never link another tree's `.venv`). Never check out or switch a branch in a
+  tree another agent works in, and leave the queue's clone and its train worktrees to drive. Read another ref's file
+  with `git show REF:PATH`. Push only to branches you created or were handed. Remove a worktree when its PR lands.
 - **Push your branch after every commit** (never `main`, never `--force`). A push to a PR in a train being checked waits
   for that train to end (Checking and merging). Only drive and the lander move `main`.
 - **Landing is drive's.** Push your PR, mark it ready and go back to research; you hear back only if your PR fails. A
