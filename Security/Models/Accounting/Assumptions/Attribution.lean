@@ -15,8 +15,11 @@ the prover only after the deadline, so at a fixed draw the salt is the window's 
 * `EgressAdvice`: at each draw, the certifiers' records placed during `[ts, td)` take at most `2^k` values across
   salts. Deployed, it is what egress records bound to committed crossings (N3), a declared scheduler (NET-5) and the
   coin-cone rule give together: nothing in the salt's cone crosses a block's boundary before registration, so each
-  record's content is the same at every salt, and only its timing, at most the scheduler's choice and the grid's bits a
-  window, can vary.
+  record's content is the same at every salt, and only its timing can vary: the scheduler's choice once and
+  `log₂ #Σ_sync` bits a link-window at jitter below 1 (`NetworkCertifier.Guarantees.EncardAccSeqsLeConstantRatePerWindow`,
+  7 bits at 16 × 8 sync values). It counts every certifier's records, not only the block's: at a fixed draw the rest of
+  the datacenter's records are a function of the block's, so the block's link bits are meant to suffice, by a lemma
+  the proof owes.
 -/
 
 namespace Accounting.Assumptions

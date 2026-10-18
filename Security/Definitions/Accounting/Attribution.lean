@@ -33,7 +33,7 @@ def OutsideAdvice {Ω L : Type*} [LinearOrder L] [Fintype L] (S : Ω → Actual.
 
 /-- **The advice bits B4 charges** a spatial unit of `H` during `[a, b)`: `krec` bits for the certifiers' records placed
 in the interval, and `jitter` bits for each certifier on each bucket of ticks the interval meets. -/
-noncomputable def advice {L E : Type*} (H : Hardware L E) (krec a b : ℕ) : ℕ :=
+def advice {L E : Type*} (H : Hardware L E) (krec a b : ℕ) : ℕ :=
   krec + H.jitter * ((Finset.Ico a b).image H.bucket).card * H.cert.card
 
 end Accounting.Attribution
