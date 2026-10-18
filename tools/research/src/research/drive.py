@@ -467,7 +467,7 @@ class Driver:
             rid, st, rc = ran[-1]
             why = refused(store, rid, kinds, "check", commit, command, self.repo) if st == "done" and rc == 0 else f"rc={rc}"
             return Verdict("failed", rid, f"{rid} {st} {why}")
-        launch = drive["launched"].get(commit)
+        launch = drive["launched"].get(commit) or drive.get("base", {}).get(commit)
         if not launch:
             return Verdict("none")
         states = self._states(launch["ids"])
@@ -476,7 +476,8 @@ class Driver:
             return Verdict("failed", " ".join(launch["ids"]), f"{' '.join(launch['ids'])} is still running (`--keep-going`, for "
                                                               f"the full picture) and has already failed: {early}")
         if any(st in ACTIVE for st, *_ in states.values()):
-            if self.defer and (rid := self._passed_but_deferred(launch["ids"])):
+            # `main`'s own check lands nothing, and only its deferred steps may clear it
+            if self.defer and commit not in drive.get("base", {}) and (rid := self._passed_but_deferred(launch["ids"])):
                 if (held := self._touched(launch)) is not None:
                     return held
                 return Verdict("passed", rid, f"{DEFERRED} ({', '.join(sorted(self.defer))} run on after landing)")
@@ -831,6 +832,8 @@ class Driver:
                 self.resend(drive, m, prs, v, f"bisection alone names #{above[0].pr}, on this one run's word: it runs again "
                                                "before anyone is ejected")
                 return
+            if passed < 0 and above[0] not in hit and self._main_red(drive, key, head, m, main):
+                return
             low = f"{members[passed].commit[:12]}, whose check passed" if passed >= 0 else f"`main` {main[:12]}"
             on = "it failed again on its resend, naming no file a change touches" if what == UNTOUCHED else f"the failure is in {what}"
             self._eject(drive, key, head, m, prs, v, above, f"it is the only PR above {low}; {on}")
@@ -900,6 +903,46 @@ class Driver:
         q.log(f"research queue drive: bisecting {m.commit[:12]}: it failed on {what} and its cause is among {among}, whose "
               f"changes name none of it: checking {mid.commit[:12]} (through #{mid.pr}) as {' '.join(ids)}")
 
+    def _main_red(self, drive: dict, key: str, head: str, m: Member, main: str) -> bool:
+        """Whether ``m``'s ejection on bisection alone, the lowest member's with no lower prefix passed, waits on a check of
+        `main` itself or is refused by it: bisection narrows a failure `main` shares to the lowest member, which is innocent
+        (18 Oct 17:00Z: a revert left benchmarks/stacked_share red on `main`, and every train failed that suite).  `main` is
+        checked once (`drive["base"]`), unless a check of it passed; failed, `CI` hears `main` is red and nobody is ejected."""
+        q = self.q
+        if main in drive.get("deferred", {}):
+            q.log(f"research queue drive: {m.commit[:12]} failed with no lower prefix passed: waiting on the deferred steps of "
+                  f"`main` {main[:12]}'s own landing before ejecting #{m.pr}")
+            return True
+        v = self.verdict(main, main, drive)
+        if v.state == "passed":
+            return False
+        if v.state == "running":
+            q.log(f"research queue drive: {m.commit[:12]} failed with no lower prefix passed: waiting on the check of `main` "
+                  f"{main[:12]} ({v.attempt}) before ejecting #{m.pr}")
+            return True
+        if v.state == "failed":
+            self.refuse(drive, f"red:{main}", f"{head}. Not ejected: `main` {main[:12]} is red: its own check failed too "
+                                              f"({v.why}), so no PR on `{q.branch}` is the cause. Land a fix with `--first`, or "
+                                              "revert what broke `main`; every train fails until it moves")
+            if f"red:{main}" in drive["told"]:
+                drive["told"].append(key)
+            return True
+        if q.shadow or self.dry_run:
+            q.log(f"research queue drive: would check `main` {main[:12]} before ejecting #{m.pr} ({m.commit[:12]} failed)")
+            return True
+        if (running := self._running(drive, main)) >= self.max_running:
+            q.log(f"research queue drive: checking `main` {main[:12]} before ejecting #{m.pr} waits: {running} checks running")
+            return True
+        ids, tail = self.launch(self.repo, main, self.on, False)
+        if not ids:
+            self.refuse(drive, f"launch:{main}", f"train.sh {main[:12]} {self.on} registered no run (checking `main` before "
+                                                 f"ejecting #{m.pr}): {tail}")
+            return True
+        drive.setdefault("base", {})[main] = {"ids": ids, "at": self.now(), "for": m.commit}
+        q.log(f"research queue drive: {m.commit[:12]} failed with no lower prefix passed, and no check of `main` {main[:12]} "
+              f"passed: checking `main` as {' '.join(ids)} before ejecting #{m.pr}")
+        return True
+
     def _signature(self, v: Verdict) -> list[str]:
         """What a failed check failed: its failed suites, and its failed steps other than the suites' own (pytest, lean-suites)."""
         out: set[str] = set()
@@ -918,7 +961,7 @@ class Driver:
         """The checks counted against `max_running`: drive's launches still running, and its pre-warms."""
         warm = sum(1 for r in drive.get("prewarm", {}).values() if not r.get("done") and r.get("ids")
                    and any(st in ACTIVE for st, *_ in self._states(r["ids"]).values()))
-        return warm + sum(self.verdict(c, main, drive).state == "running" for c in drive["launched"])
+        return warm + sum(self.verdict(c, main, drive).state == "running" for c in [*drive["launched"], *drive.get("base", {})])
 
     def _launch(self, drive: dict, m: Member, main: str) -> tuple[list[str], str]:
         """Check ``m``'s commit (`train.sh`), with the suites its change reaches beside it when pytest is deferred, and record
@@ -1083,12 +1126,18 @@ class Driver:
                                                            # train's (17 Oct 14:41Z: two held slots 40 min with 32 PRs queued)
                     self.cancel(self.repo, live, f"drive: {c[:12]} is no longer on `{q.branch}` (rebuilt); no check of it lands")
                     q.log(f"research queue drive: cancelled {' '.join(live)}: {c[:12]} is no longer on `{q.branch}`")
+        for c, v in drive.get("base", {}).items():
+            if (c != main or v["for"] not in on_chain) and not dry_run:
+                if live := [rid for rid, (st, *_) in self._states(v["ids"]).items() if st in ACTIVE and st != "unknown"]:
+                    self.cancel(self.repo, live, f"drive: `main` moved from {c[:12]}, or the train its check was for left "
+                                                 f"`{q.branch}`")
         drive["launched"] = {c: v for c, v in drive["launched"].items() if c in on_chain}
         drive["resent"] = {c: v for c, v in drive.get("resent", {}).items() if c in on_chain}
         drive["bisect"] = {c: v for c, v in drive.get("bisect", {}).items() if c in on_chain}
+        drive["base"] = {c: v for c, v in drive.get("base", {}).items() if c == main and v["for"] in on_chain}
         what = [f"landed #{landed.pr}"] if landed else []
         main = _out(self.repo, "rev-parse", "origin/main")
-        running = sum(self.verdict(c, main, drive).state == "running" for c in drive["launched"])
+        running = sum(self.verdict(c, main, drive).state == "running" for c in [*drive["launched"], *drive["base"]])
         running += self.prewarm(drive, running)
         for i in self.trains(len(members), self._cold(members)):
             m, prs = members[i], " ".join(f"#{x.pr}" for x in members[: i + 1])

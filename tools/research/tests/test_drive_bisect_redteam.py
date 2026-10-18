@@ -109,7 +109,7 @@ def test_a_bisect_check_that_fails_as_its_tip_did_is_not_resent(world, monkeypat
     h.evidence = [_failed_run(tmp_path, *FAILURE)]
     _run(h, world, monkeypatch, lambda c: not _has(world, c, "src1/f.py"), until=lambda: bool(h.posts))
     assert "Ejected #1" in h.posts[0], h.posts
-    assert [c for c, *_ in h.launched] == [tip, tip, members[1].commit, members[0].commit, main]
+    assert [c for c, *_ in h.launched][:5] == [tip, tip, members[1].commit, members[0].commit, main]   # then the rebuilt train
 
 
 # -- 2. a flake
