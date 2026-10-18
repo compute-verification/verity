@@ -32,17 +32,31 @@ def test_the_mock_blocks_are_covered_and_routes_cross_both_uplinks():
     assert Hardware.from_json(hw.to_json()) == hw
 
 
-def test_a_device_graph_reads_as_blocks_of_gpus_behind_their_uplinks(graph):
-    hw = Hardware.from_graph(graph())
+def test_a_declaration_reads_as_blocks_of_gpus_behind_their_uplinks(datacenter):
+    dc = datacenter()
+    hw = Hardware.from_datacenter(dc)
     assert hw.leaves[hw.client] == "ext0" and hw.bucket_ticks == 10
     assert {u: sorted(hw.leaves[x] for x in xs) for u, xs in hw.units.items()} == {
-        "b0": ["b0.gpu0", "b0.hbm0", "b0.nic0"], "b1": ["b1.gpu0", "b1.hbm0", "b1.nic0"]}
-    assert [hw.leaves[x] for x in hw.devices("b1")] == ["b1.gpu0"]
+        b.name: sorted(d.name for d in b.devices) for b in dc.blocks}
+    assert [hw.leaves[x] for x in hw.devices("b1")] == [f"b1.gpu{k}" for k in range(8)]
+    assert {hw.leaves[x] for x in hw.cert} == {"b0.cert", "b1.cert"}
     assert all(hw.covered(u) for u in hw.units)
-    assert hw.cross_latency == 1 + 2 + 2 + 1
+    assert hw.cross_latency == 2 + 2 + 1  # ext0 to the leaf, to b0's certifier, to its NIC
+    uplink = next(k for k in hw.links if k.name == "b0.nic0-b0.cert")
+    assert uplink.beta == 400e9 * 1e-6
     src, dst = hw.leaf("b0.gpu0"), hw.leaf("b1.gpu0")
-    assert [hw.key(e, to) for e, to in hw.watched(src, dst)] == ["b0.uplink>b0.cert", "b1.uplink>b1.nic0"]
+    assert [hw.key(e, to) for e, to in hw.watched(src, dst)] == ["b0.nic0-b0.cert>b0.cert", "b1.nic0-b1.cert>b1.nic0"]
     assert Hardware.from_json(hw.to_json()) == hw
+
+
+def test_a_declaration_with_no_outside_device_has_no_client(datacenter):
+    dc = datacenter()
+    dc.fabric = [d for d in dc.fabric if d.kind != "outside"]
+    dc.links = [k for k in dc.links if "ext0" not in (k.a, k.b)]
+    with pytest.raises(ValueError, match="outside"):
+        Hardware.from_datacenter(dc)
+    hw = Hardware.from_datacenter(dc, client="leaf0")
+    assert hw.leaves[hw.client] == "leaf0"
 
 
 def test_an_uncertified_boundary_is_not_covered():

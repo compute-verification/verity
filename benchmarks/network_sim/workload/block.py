@@ -2,8 +2,8 @@
 streams. The client is the same process for `OUTSIDE`: it holds the requests and reads the answers.
 
 **What a block derives** (`Context`, from the run's config, so every process of one run derives the same): the Program
-(`config["workload"]`: the MLP, or verity_vllm's serving Program, `served`), the hardware (`config["hardware"]`, a device
-graph `config["graph"]` read by `Hardware.from_graph`, or `mock`), the placement (one engine step every `step_ticks`
+(`config["workload"]`: the MLP, or verity_vllm's serving Program, `served`), the hardware (`config["hardware"]`, a
+`Hardware`'s JSON, as `Hardware.from_datacenter` reads a declaration, or `mock`), the placement (one engine step every `step_ticks`
 ticks, one bucket by default) and φ. The prover runs every block, so the private placement is shared among them. A block
 holds the values the placement puts at its leaves: the registered inputs from the weights' seed, the client the run inputs
 from the requests' seed. Every block has every constant, an operation's own bits.
@@ -72,8 +72,6 @@ class Context:
         self.spec = self.model.spec
         if "hardware" in config:
             self.hw = Hardware.from_json(config["hardware"])
-        elif "graph" in config:
-            self.hw = Hardware.from_graph(config["graph"])
         else:
             self.hw = mock(config["blocks"], config.get("devices", 1), bucket_ticks=config.get("bucket_ticks", 1))
         self.placement = P.place(self.model, self.hw, P.PLANS[config.get("plan", "pipeline")](self.model, self.hw),

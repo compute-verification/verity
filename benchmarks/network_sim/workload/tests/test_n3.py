@@ -8,7 +8,7 @@ from verity.core.protocols.certifier.active import decode_frame
 from workload import model as M
 from workload import n3
 from workload.block import Context, MemoryNet
-from workload.hardware import OUTSIDE
+from workload.hardware import OUTSIDE, Hardware
 from workload.run import statement
 
 CONFIG = {"spec": {"d": 2, "layers": 3, "requests": 2}, "blocks": 3, "devices": 2, "frame_bytes": 16, "seed": 1}
@@ -125,12 +125,13 @@ def test_two_logs_of_one_link_direction_must_agree(honest):
     assert [(v.code, v.where) for v in bad] == [("records", key)]
 
 
-def test_a_run_on_a_device_graph_holds_with_one_step_a_bucket(graph):
-    ctx, results, public, witness, records = serve({"spec": CONFIG["spec"], "graph": graph(3), "frame_bytes": 16,
+def test_a_run_on_a_declaration_holds_with_one_step_a_bucket(datacenter):
+    hw = Hardware.from_datacenter(datacenter(3))
+    ctx, results, public, witness, records = serve({"spec": CONFIG["spec"], "hardware": hw.to_json(), "frame_bytes": 16,
                                                     "seed": 1})
     assert ctx.placement.ticks[0][:3] == (0, 10, 20)
     assert n3.check(public, witness, records).ok
-    assert public["occupancy"]["b1.uplink>b1.nic0"] == [0, 0, 2, 1]
+    assert public["occupancy"]["b1.nic0-b1.cert>b1.nic0"] == [0, 0, 2, 1]
 
 
 def test_a_block_with_no_values_commits_nothing():

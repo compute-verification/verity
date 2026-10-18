@@ -3,7 +3,7 @@
     python -m workload.run --out /tmp/netsim-run                        # the MLP on 3 blocks of 2 devices, in one process
     python -m workload.run --out /tmp/netsim-run --transport tcp        # one localhost TCP process per unit
     python -m workload.run --out /tmp/netsim-run --tamper b0:fill       # a block writes into a frame's zero fill
-    python -m workload.run --out /tmp/netsim-run --graph g.json         # on `graph.py --blocks 2 --json > g.json`
+    python -m workload.run --out /tmp/netsim-run --graph leaf_spine:2   # on `datacenter.examples.leaf_spine(2)`
     python -m workload.run --out /tmp/netsim-run --workload served --devices 1 --frame-bytes 1024
                                                                         # verity_vllm's serving Program, a stage a block
 
@@ -29,9 +29,24 @@ from verity.ml.circuits.codec import program_digest
 from . import model as M
 from . import n3
 from .block import TAMPERS, Context, MemoryNet
-from .hardware import OUTSIDE
+from .hardware import OUTSIDE, Hardware
 
 HERE = Path(__file__).resolve().parent
+DATACENTER = str(HERE.parents[1] / "datacenter")
+
+
+def declaration(spec: str):
+    """`NAME[:ARG,…]`: the `datacenter.Datacenter` that `datacenter.examples.NAME` declares with those integer arguments,
+    e.g. `leaf_spine:2`."""
+    if DATACENTER not in sys.path:
+        sys.path.insert(0, DATACENTER)
+    from datacenter import examples
+
+    name, _, args = spec.partition(":")
+    fn = getattr(examples, name, None) if not name.startswith("_") else None
+    if not callable(fn):
+        raise SystemExit(f"--graph is NAME[:ARG,…], NAME a declaration of datacenter.examples, not {spec!r}")
+    return fn(*(int(a) for a in args.split(",") if a))
 
 
 def statement(ctx: Context, results: dict[str, dict]) -> tuple[dict, dict]:
@@ -121,7 +136,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--frame-bytes", type=int, default=64)
     ap.add_argument("--bucket-ticks", type=int, default=1, help="the mock's bucket, in ticks")
     ap.add_argument("--step-ticks", type=int, help="ticks between engine steps (default: one bucket)")
-    ap.add_argument("--graph", type=Path, help="a device graph (`graph.py --json`) to run on instead of the mock")
+    ap.add_argument("--graph", metavar="NAME[:ARG,…]",
+                    help="a declaration of datacenter.examples to run on instead of the mock, e.g. leaf_spine:2")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--transport", choices=("memory", "tcp"), default="memory")
     ap.add_argument("--tamper", help=f"UNIT:MODE, MODE one of {', '.join(TAMPERS)}")
@@ -133,7 +149,7 @@ def main(argv: list[str] | None = None) -> int:
     config = {"workload": args.workload, "spec": spec, "blocks": args.blocks, "devices": args.devices, "plan": args.plan,
               "frame_bytes": args.frame_bytes, "bucket_ticks": args.bucket_ticks, "seed": args.seed}
     if args.graph:
-        config["graph"] = json.loads(args.graph.read_text())
+        config["hardware"] = Hardware.from_datacenter(declaration(args.graph)).to_json()
     if args.step_ticks:
         config["step_ticks"] = args.step_ticks
     if args.tamper:

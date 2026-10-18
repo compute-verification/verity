@@ -14,13 +14,14 @@ leaf of the unit when `compute` is empty).
 `b<b>.gpu0`, whose uplink goes to the block's certifier `b<b>.cert`; each certifier's wire and the client's go to one
 switch. Every route between two blocks therefore crosses the source block's uplink and the destination block's uplink.
 
-`Hardware.from_graph` reads the device graph of `benchmarks/network_sim/graph.py` (its `Hardware.to_dict`, as
-`graph.py --json` prints it): its blocks are the units and its GPUs compute.
+`Hardware.from_datacenter` reads a declaration of `benchmarks/datacenter` (a `datacenter.Datacenter`, as
+`datacenter.examples` declares them and `mockdc.py` stands them up): its blocks are the units and its GPUs compute.
 """
 from __future__ import annotations
 
 import dataclasses
 import heapq
+import math
 from collections import deque
 from dataclasses import dataclass, field
 from functools import cached_property
@@ -32,7 +33,7 @@ OUTSIDE = "outside"
 class Link:
     name: str
     ends: tuple[int, int]
-    beta: int
+    beta: float  # bits a tick each way; infinite while unmeasured
 
 
 @dataclass(frozen=True)
@@ -165,28 +166,29 @@ class Hardware:
                    j["bucket_ticks"], j["cross_latency"], j["client"], frozenset(j.get("compute", ())))
 
     @classmethod
-    def from_graph(cls, g: dict, client: str | None = None) -> "Hardware":
-        """A `graph.Hardware.to_dict()`: leaves in its order, its blocks as the units, its GPUs as `compute`, the client
-        at `client` or its first host outside every block, a pending capacity as 0, and `cross_latency` the least
-        latency from a unit's compute leaves (or the client) to another's, a pending latency counted as 0 as
-        `graph.Hardware.ell` counts it."""
-        leaves = g["leaves"]
+    def from_datacenter(cls, dc, client: str | None = None) -> "Hardware":
+        """A `datacenter.Datacenter`: its devices as the leaves (the blocks', then the fabric's), its blocks as the units,
+        its GPUs as `compute`, its certifiers as `cert`, the client at `client` or its device of kind `outside`, and its
+        cadence's `bucket_ticks`. Link `a-b` carries its capacity times the cadence's tick, and `cross_latency` is the
+        least latency in whole ticks, rounded down, from a unit's compute leaves (or the client) to another's, a link
+        with no latency counting 0."""
+        devices = dc.devices
+        leaves = tuple(devices)
         index = {x: i for i, x in enumerate(leaves)}
-        blocks: dict[str, set[int]] = {}
-        for x, leaf in leaves.items():
-            if leaf["block"] is not None:
-                blocks.setdefault(leaf["block"], set()).add(index[x])
-        links = tuple(Link(e["id"], (index[e["ends"][0]], index[e["ends"][1]]), e["beta"]["value"] or 0)
-                      for e in g["links"].values())
+        tick = float(dc.cadence.tick)
         if client is None:
-            client = next(x for x, leaf in leaves.items() if leaf["kind"] == "host" and leaf["block"] is None)
-        hw = cls(tuple(leaves), {b: frozenset(xs) for b, xs in blocks.items()}, links,
-                 frozenset(index[c] for c in g["cert"]), g["bucket_ticks"], 1, index[client],
-                 frozenset(index[x] for x, leaf in leaves.items() if leaf["kind"] == "gpu"))
-        ell = [e["ell"]["value"] or 0 for e in g["links"].values()]
-        return dataclasses.replace(hw, cross_latency=hw.least_latency_across(ell))
+            client = next((x for x, d in devices.items() if d.kind == "outside"), None)
+            if client is None:
+                raise ValueError(f"{dc.name} has no device of kind `outside` for the client")
+        hw = cls(leaves, {b.name: frozenset(index[d.name] for d in b.devices) for b in dc.blocks},
+                 tuple(Link(f"{k.a}-{k.b}", (index[k.a], index[k.b]), float(k.capacity) * tick) for k in dc.links),
+                 frozenset(index[x] for x, d in devices.items() if d.kind == "certifier"), dc.cadence.bucket_ticks, 1,
+                 index[client], frozenset(index[x] for x, d in devices.items() if d.kind == "gpu"))
+        # The delays are floats in seconds, so a path of whole ticks can come out a hair under its count.
+        ell = hw.least_latency_across([k.delay / tick for k in dc.links])
+        return dataclasses.replace(hw, cross_latency=math.floor(ell + 1e-9))
 
-    def least_latency_across(self, ell: list[int]) -> int:
+    def least_latency_across(self, ell: list[float]) -> float:
         """The least latency, over paths weighted by `ell` (ticks a link), from a unit's compute leaves to another unit's
         or the client's, or from the client to a unit's."""
         readers = {u: set(self.devices(u)) for u in self.units} | {OUTSIDE: {self.client}}
