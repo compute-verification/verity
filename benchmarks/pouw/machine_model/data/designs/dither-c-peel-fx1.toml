@@ -1,7 +1,7 @@
 # H1 + fx1, CALC r10's sm_120 headline (#2325): dither-c-peel with SAT-120's fx1 fold (decision 83: one keyed IMAD a word
 # chained in front of duo, so ALU 2 + IMAD 2 lane instructions a word) on BC-KERNEL r5's measured c-fx1 profile. Its
 # ε_skip is its own, at its own ♭ (decision 90), with the base's vfold sums. benchmarks/pouw/lean_headline.py writes its
-# Lean instance on DS-120 (Security/Definitions/Accounting/Headline/Sm120.lean).
+# Lean instances on DS-120 and VF3r-16 (Security/Definitions/Accounting/Headline/Sm120.lean, Sm120Measured.lean).
 base = "dither-c-peel"
 name = "dither-c-peel-fx1"
 title = "Dither-C, peel P·V, fx1"

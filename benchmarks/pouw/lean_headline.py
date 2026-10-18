@@ -1,16 +1,23 @@
-"""`lean_headline`: a family's headline instance as exact Lean data, the file its headline guarantee reads.
+"""`lean_headline`: a family's headline instances as exact Lean data, the files its headline guarantees read.
 
-    python benchmarks/pouw/lean_headline.py           write Security/Definitions/Accounting/Headline/Sm120.lean
-    python benchmarks/pouw/lean_headline.py --check   exit 1 when the committed file is not what it would write
+    python benchmarks/pouw/lean_headline.py           write Security/Definitions/Accounting/Headline/Sm120*.lean
+    python benchmarks/pouw/lean_headline.py --check   exit 1 when a committed file is not what it would write
 
-sm_120's instance (`Accounting.TS.Headline.Sm120`, read by `Accounting.Guarantees.TS.Sm120SheetHeadline`): the RTX PRO
-6000's data sheet (DS-120) as `Accounting.TS.Sheet` data, H1 + fx1 (`dither-c-peel-fx1`) as a TS model on it, its floor
-program ♭ with ε_skip's skippable work, and π*, the certificate the machine model's LP finds at q* = ½. Every number is
-exact: a census value or a TOML value read as its decimal, and eps_budget's ε_skip as the decimal Python prints.
+sm_120's data-sheet instance (`Accounting.TS.Headline.Sm120`, read by `Accounting.Guarantees.TS.Sm120SheetHeadline`):
+the RTX PRO 6000's data sheet (DS-120) as `Accounting.TS.Sheet` data, H1 + fx1 (`dither-c-peel-fx1`) as a TS model on
+it, its floor program ♭ with ε_skip's skippable work, and π*, the certificate the machine model's LP finds at q* = ½.
+Every number is exact: a census value or a TOML value read as its decimal, and eps_budget's ε_skip as the decimal
+Python prints.
 
 `instance()` derives it and checks it against Python's own numbers: the sheet reproduces every DS-120 coefficient, ♭ is
 `setup`'s floor program at ω's words, π* is one facet, and the bound the Lean proof reads off the identity (w* and φ*
 at π*, ln 2 < 0.6931471808, ln(4/3) ≥ 1/4) is below the headline's 0.585%.
+
+sm_120's measured instance (`Accounting.TS.Headline.Sm120Measured`, read by
+`Accounting.Guarantees.TS.Sm120MeasuredHeadline`): the same design and ♭ on the measured vector (VF3r-16, its rows
+sparse), the writer kinds at forms.toml's per-word count (`ω = m·n·k_dense/(L·split)`, rounded up), the scalar routes
+at `q = q_T = 9/8`, ♭'s skippable work at VF3r-16's ε_skip, and π* at q* = 9/8. `measured()` checks it the same way,
+against 0.540%.
 """
 from __future__ import annotations
 
@@ -27,6 +34,7 @@ from verity_machine_model import eps as E
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 OUT = ROOT / "Security" / "Definitions" / "Accounting" / "Headline" / "Sm120.lean"
+OUT_M = OUT.with_name("Sm120Measured.lean")
 
 DEVICE = "DS-120"
 DESIGN = "dither-c-peel-fx1"
@@ -41,6 +49,10 @@ SKIP = "NOROW"                     # the class ♭'s skippable work is counted i
 EPS = Fraction(117, 20000)         # the headline: 0.585%
 LN2 = Fraction(6931471808, 10**10)  # Mathlib's Real.log_two_lt_d9
 LN_P = Fraction(1, 4)              # 1 − 3/4 ≤ ln(4/3) (Real.one_sub_inv_le_log_of_pos)
+VECTOR = "VF3r-16"                 # the measured reading's vector
+Q_M = Fraction(9, 8)               # its scalar floors: q*₀ is 1.120 (operands free), FLOORS's lane floor ≥ 9/8 at w ≤ 15
+EPS_M = Fraction(27, 5000)         # the measured reading: 0.540%
+OFF_MENU = ("MMA", "UNI64")        # census lines no writer kind is: the forms' fallback line, and UNI64 (on UP alone)
 
 
 def _eps_budget():
@@ -177,7 +189,78 @@ def instance() -> Instance:
                     eps_skip, B, kappa, bound)
 
 
-def exact_logs(i: Instance) -> float:
+@dataclass(frozen=True)
+class Measured:
+    rows: list[str]
+    c: dict[str, dict[str, Fraction]]       # VF3r-16's coefficients, class by row
+    writers: list[tuple[str, int]]
+    ns: dict[str, Fraction]
+    eps_skip: Fraction
+    pistar: str
+    wstar: str                              # the writer kind w* is at π*
+    B: Fraction
+    kappa: Fraction
+    bound: Fraction
+    checks: int
+
+
+def mload(m: Measured, row: str, n: dict[str, Fraction]) -> Fraction:
+    return sum((m.c[k].get(row, Fraction(0)) * v for k, v in n.items()), Fraction(0))
+
+
+def measured(i: Instance | None = None) -> Measured:
+    """sm_120's measured instance: H1 + fx1 and ♭ (`i`'s word and fold counts) on VF3r-16 at q = q_T = 9/8."""
+    i = i or instance()
+    B_ = _eps_budget()
+    pi = E.machine(VECTOR)
+    d = E.design(DESIGN)
+    h = E.honest(d.honest)
+    if sorted(pi.c) != i.classes or list(pi.cuda) != i.vec:
+        raise SystemExit(f"{VECTOR}: its classes or CUDA lane classes are not {DEVICE}'s, which ♭'s counts index")
+    c = {k: {r: exact(v) for r, v in pi.c[k].items() if v} for k in i.classes}
+    writers = []
+    for k in sorted(E.forms(), key=lambda f: f.kind):
+        if k.kind in pi.c and k.kind not in OFF_MENU:
+            writers.append((k.kind, math.ceil(Fraction(k.words) * Fraction(round(k.depth * k.split), k.split) / d.L)))
+    writers += [(k, w) for k, w in UNIFORM.items() if k in pi.c and k not in OFF_MENU]
+    eps_skip = exact(B_.design_skip(d, vector=VECTOR).eps_time)
+    n0 = {k: i.nw.get(k, 0) + i.nf.get(k, 0) for k in {*i.nw, *i.nf}}
+    e = E.eps(d, pi, float(Q_M), operands="free", credit="floor")
+    star = {r: w for r, w in e.cheat.pi.items() if w > 1e-9}
+    if len(star) != 1 or abs(next(iter(star.values())) - 1) > 1e-9:
+        raise SystemExit(f"{DESIGN} on {VECTOR} at q* = {Q_M}: π* is {star}, not one facet")
+    pistar = next(iter(star))
+    m = Measured(list(pi.rows), c, writers, {}, eps_skip, pistar, "", Fraction(0), Fraction(0), Fraction(0),
+                 i.checks)
+    B0 = mload(m, pistar, n0)
+    if max(mload(m, r, n0) for r in pi.rows) != B0:
+        raise SystemExit(f"{DESIGN} on {VECTOR}: ♭'s bound is not on π*'s facet {pistar}")
+    ns = {SKIP: eps_skip / (1 - eps_skip) * B0 / c[SKIP][pistar]}
+    n = {k: n0.get(k, 0) + ns.get(k, 0) for k in {*n0, *ns}}
+    B = mload(m, pistar, n)
+    if max(mload(m, r, n) for r in pi.rows) != B:
+        raise SystemExit(f"{DESIGN} on {VECTOR}: ♭'s bound with its skip is not on {pistar}")
+    s = E.setup(d, pi, operands="free", credit="floor")
+    if abs(s.baseline.T * i.Nw - float(B0)) > 1e-9:
+        raise SystemExit(f"{DESIGN} on {VECTOR}: ♭ is not setup's floor program (T {s.baseline.T})")
+    demand = {k: c[k].get(pistar, Fraction(0)) / om for k, om in writers}
+    wk = min(demand, key=demand.get)
+    vec = Q_M / E.LANES * min(c[k].get(pistar, Fraction(0)) for k in i.vec)
+    if wk != h.form or demand[wk] > vec:
+        raise SystemExit(f"{DESIGN} on {VECTOR}: w* at {pistar} is {wk} ({float(demand[wk])}), not honest's "
+                         f"{h.form} below the vector route's {float(vec)}")
+    w = demand[wk]
+    phi = min(mload(m, pistar, f) for f in i.folds)
+    kappa = i.Nw * w / B
+    bound = 1 - (i.Nw * w + i.Nw * phi) / B + kappa * 41 * LN2 / (LN_P * i.checks)
+    if bound >= EPS_M:
+        raise SystemExit(f"{DESIGN} on {VECTOR}: the Lean bound {float(bound):.6%} is not below {float(EPS_M):.4%}")
+    if abs(float(1 - (i.Nw * w + i.Nw * phi) / B) - (e.machine_eps * (1 - float(eps_skip)) + float(eps_skip))) > 1e-9:
+        raise SystemExit(f"{DESIGN} on {VECTOR}: the terms at π* are not ε_machine and ε_skip over ♭ with its skip")
+    return Measured(list(pi.rows), c, writers, ns, eps_skip, pistar, wk, B, kappa, bound, i.checks)
+
+
+def exact_logs(i: Instance | Measured) -> float:
     """The bound with ln 2 and ln(4/3) exact, for the record."""
     return float(i.bound) - float(i.kappa * 41) * (float(LN2) / (float(LN_P) * i.checks)
                                                    - math.log(2) / (math.log(4 / 3) * i.checks))
@@ -310,22 +393,107 @@ end Accounting.TS.Headline.Sm120
 '''
 
 
+def render_measured(i: Instance, m: Measured) -> str:
+    ix = i.classes.index
+    rows = []
+    for j, r in enumerate(m.rows):
+        entries = [f"({ix(k)}, {m.c[k][r].numerator}, {m.c[k][r].denominator})" for k in i.classes if r in m.c[k]]
+        body = _wrap(entries, "   ", 116)[3:] if entries else ""
+        rows.append(f"  -- {j}: {r}\n  [{body}]{',' if j + 1 < len(m.rows) else ''}")
+    writer_lines = "\n".join(f"    ({ix(k)}, {om}){',' if j + 1 < len(m.writers) else ''}  -- {k}"
+                             for j, (k, om) in enumerate(m.writers))
+    nt = len(m.writers)
+    return f'''import Definitions.Accounting.Headline.Sm120
+
+/-!
+# sm_120's measured headline instance: {VECTOR} and H1 + fx1 (trusted; generated)
+
+Written by `benchmarks/pouw/lean_headline.py` from the machine model's data (`benchmarks/pouw/machine_model/data`), and
+checked against it by `benchmarks/pouw/tests/test_lean_headline.py`: edit the data and rerun the exporter, never this
+file. `Accounting.Guarantees.TS.Sm120MeasuredHeadline` reads it.
+
+* `rowNames`, `vf3r16`, `machine`: the measured vector {VECTOR}, {len(m.rows)} rows of SMSP-cycles a warp
+  instruction at its epoch's census, each sparse over `Sm120.classes`; every facet SM-clocked, f_max {FMAX} MHz.
+* `h1fx1`, `model`: H1 + fx1 (`{DESIGN}`) on that machine. Its writer kinds are the census's MMA forms, each at
+  the committed words an instruction of it writes (forms.toml: `m·n·k_dense/(L·split)` at L = {E.design(DESIGN).L},
+  rounded up), and the uniform `UNI` (1); `MMA` (the forms' fallback line) and `UNI64` ({VECTOR} prices it on the
+  uniform pipe alone) are not on the menu. `Sm120.h1fx1`'s vector classes, fold routes and `N_w`; SCALAR-ROUTE's
+  floors `q = q_T = {Q_M.numerator}/{Q_M.denominator}`, `b_T = 0`.
+* `flatSkip`, `flat`: ♭ is `Sm120.flat`'s word production and fold, with ε_skip's skippable work at {VECTOR}'s
+  {float(m.eps_skip):.6%} (`eps_budget.design_skip` on {VECTOR}), at {SKIP}'s price on π*.
+* `piStar`, `wStarKind`: π*, the facet ({m.pistar}) the machine model's LP certificate sits on at
+  q* = {Q_M.numerator}/{Q_M.denominator}, and the writer kind (honest's {m.wstar}) that is the cheapest word route there.
+-/
+
+namespace Accounting.TS.Headline.Sm120Measured
+
+open Accounting.TS
+
+/-- {VECTOR}'s rows, in index order. -/
+def rowNames : List String := {_list([f'"{r}"' for r in m.rows], "  ")}
+
+/-- {VECTOR}'s coefficients, row by row: `(class index, numerator, denominator)`. -/
+def vf3r16 : List Sparse := [
+{chr(10).join(rows)}]
+
+/-- The measured machine: {VECTOR}'s rows over `Sm120.classes`. -/
+noncomputable def machine : Machine (Fin {len(i.classes)}) (Fin {len(m.rows)}) :=
+  rowsMachine {len(i.classes)} {len(m.rows)} vf3r16 {FMAX}
+
+/-- H1 + fx1's design data on {VECTOR}: writer kinds as (class, ω), and `Sm120.h1fx1`'s routes. -/
+def h1fx1 : DesignData where
+  writers := [
+{writer_lines}
+  ]
+  vec := Sm120.h1fx1.vec
+  folds := Sm120.h1fx1.folds
+  bytes := Sm120.h1fx1.bytes
+  q := {Q_M.numerator} / {Q_M.denominator}
+  qT := {Q_M.numerator} / {Q_M.denominator}
+  Nw := Sm120.h1fx1.Nw
+
+/-- H1 + fx1's TS model on the measured machine. -/
+noncomputable def model : Model (Fin {len(i.classes)}) (Fin {len(m.rows)}) (Fin {nt}) Unit Empty (Fin {len(i.folds)}) Unit :=
+  h1fx1.model {len(i.classes)} {nt} {len(i.folds)} machine
+
+/-- ♭'s skippable work a unit on {VECTOR}, at its {SKIP} price. -/
+def flatSkip : Sparse := {_sparse(i, m.ns)}
+
+/-- The floor program ♭ on {VECTOR}, labelled. -/
+noncomputable def flat : Labelled (Fin {len(i.classes)}) :=
+  labelled {len(i.classes)} Sm120.flatWords Sm120.flatFold [] flatSkip
+
+/-- π*: the machine model's certificate at q* = {Q_M.numerator}/{Q_M.denominator}, {m.pistar}. -/
+def piStar : Fin {len(m.rows)} := {m.rows.index(m.pistar)}
+
+/-- The writer kind of w* at π*: {m.wstar}. -/
+def wStarKind : Fin {nt} := {[k for k, _ in m.writers].index(m.wstar)}
+
+end Accounting.TS.Headline.Sm120Measured
+'''
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--check", action="store_true", help="exit 1 when the committed file differs")
+    ap.add_argument("--check", action="store_true", help="exit 1 when a committed file differs")
     a = ap.parse_args(argv)
     i = instance()
-    text = render(i)
+    m = measured(i)
     print(f"{DESIGN} on {DEVICE}: π* {i.pistar}, ♭'s bound {float(i.B):.6f} a unit, ε_skip {float(i.eps_skip):.6%}; "
           f"the Lean bound {float(i.bound):.5%} (exact logs {exact_logs(i):.5%}) < {float(EPS):.4%}")
+    print(f"{DESIGN} on {VECTOR}: π* {m.pistar}, w* {m.wstar}, ♭'s bound {float(m.B):.6f} a unit, "
+          f"ε_skip {float(m.eps_skip):.6%}; the Lean bound {float(m.bound):.5%} (exact logs {exact_logs(m):.5%}) "
+          f"< {float(EPS_M):.4%}")
+    out = {OUT: render(i), OUT_M: render_measured(i, m)}
     if a.check:
-        if not OUT.is_file() or OUT.read_text() != text:
-            print(f"{OUT.relative_to(ROOT)} is not what lean_headline.py writes: rerun it", file=sys.stderr)
-            return 1
-        return 0
-    OUT.parent.mkdir(parents=True, exist_ok=True)
-    OUT.write_text(text)
-    print(f"wrote {OUT.relative_to(ROOT)}")
+        stale = [p for p, text in out.items() if not p.is_file() or p.read_text() != text]
+        for p in stale:
+            print(f"{p.relative_to(ROOT)} is not what lean_headline.py writes: rerun it", file=sys.stderr)
+        return 1 if stale else 0
+    for p, text in out.items():
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(text)
+        print(f"wrote {p.relative_to(ROOT)}")
     return 0
 
 
