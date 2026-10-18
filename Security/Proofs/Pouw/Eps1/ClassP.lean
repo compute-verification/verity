@@ -29,7 +29,9 @@ theorem g_step (a e : ℕ) (he : e ≤ 32) : g (a + e) ≤ g a * (128 * e + 1) :
     have h2 : (a + e) % 32 = a % 32 + e := by omega
     rw [h1, h2, mul_assoc]
     apply Nat.mul_le_mul_left
-    nlinarith
+    have hx : (128 * (a % 32) + 1) * (128 * e + 1) = 128 * (a % 32 + e) + 1 + 16384 * (a % 32 * e) := by ring
+    rw [hx]
+    exact Nat.le_add_right _ _
   · have h1 : (a + e) / 32 = a / 32 + 1 := by omega
     obtain ⟨k, hk⟩ : ∃ k, a % 32 + e = 32 + k := ⟨a % 32 + e - 32, by omega⟩
     have h2 : (a + e) % 32 = k := by omega
@@ -115,7 +117,7 @@ theorem Icc_sub_range (φ : Field m n Lseg) :
     fun j p => ?_, ?_⟩
   · by_cases h : c p = 0
     · simp [h]
-    · simp only [h, if_false]
+    · simp only [h, ite_false]
       exact ⟨Int.one_le_abs h, hc p⟩
   · have hpre : zeroPrefix (fun i l p => decide (i = φ.τ.2.1 ∧ l = φ.τ.1 ∧ c p ≠ 0))
         (fun _ p => if c p = 0 then 1 else c p) φ.τ = 0 := by
@@ -146,7 +148,7 @@ theorem range_finite (φ : Field m n Lseg) : φ.range.Finite := by
     calc |zeroSeg R U l φ.τ.2.1 φ.τ.2.2|
         ≤ ∑ p, |(if R φ.τ.2.1 l p then U φ.τ.2.2 p else 0)| := abs_sum_le_sum_abs _ _
       _ ≤ ∑ _p : Fin 32, (64 : ℤ) := sum_le_sum fun p _ => hterm _ _ l p
-      _ = 64 * 32 := by simp; norm_num
+      _ = 64 * 32 := by simp
   have hpre : |zeroPrefix R U φ.τ| ≤ 64 * 32 * Lseg := by
     calc |zeroPrefix R U φ.τ| ≤ ∑ l ∈ univ.filter (· < φ.τ.1), |zeroSeg R U l φ.τ.2.1 φ.τ.2.2| :=
           abs_sum_le_sum_abs _ _
@@ -159,7 +161,7 @@ theorem range_finite (φ : Field m n Lseg) : φ.range.Finite := by
       _ ≤ ∑ p : Fin 32, |(if R φ.τ.2.1 φ.τ.1 p then U φ.τ.2.2 p else 0)| :=
           sum_le_sum_of_subset_of_nonneg (subset_univ _) fun _ _ _ => abs_nonneg _
       _ ≤ ∑ _p : Fin 32, (64 : ℤ) := sum_le_sum fun p _ => hterm _ _ _ p
-      _ = 64 * 32 := by simp; norm_num
+      _ = 64 * 32 := by simp
   have hb : |(if φ.β then zeroPrefix R U φ.τ else 0)| ≤ 64 * 32 * Lseg := by
     split_ifs
     · exact hpre
@@ -188,7 +190,7 @@ theorem fields_card_le (π : Packing m n Lseg) (h : π.MixedRadix) :
         (π.fields.map fun f => f.1.range.ncard).prod := by
       rw [List.map_map]
       exact List.prod_le_prod fun f _ => range_ncard f.1
-    have h2 : ((π.fields.map fun f => f.1.range.ncard).prod : ℝ) ≤ 2 ^ 32 := by
+    have h2 : (((π.fields.map fun f => f.1.range.ncard).prod : ℕ) : ℝ) ≤ 2 ^ 32 := by
       rw [Nat.cast_list_prod, List.map_map]
       exact hprod
     have h3 : (π.fields.map fun f => f.1.range.ncard).prod ≤ 2 ^ 32 := by exact_mod_cast h2
