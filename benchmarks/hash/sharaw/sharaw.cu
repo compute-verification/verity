@@ -791,7 +791,7 @@ __global__ void __launch_bounds__(R + R / K, 512 / (R + R / K))
              u64* __restrict__ bc) {
   __shared__ uint4 T[512];
   __shared__ u64 SF[R * 24];
-  const u32 t = threadIdx.x, cnt = (u32)min<u64>(width, R), ns = blockDim.x - cnt;
+  const u32 t = threadIdx.x, cnt = (u32)(width < (u64)R ? width : (u64)R), ns = blockDim.x - cnt;
   for (int i = t; i < 512; i += blockDim.x) T[i] = Tn[i];
   __syncthreads();
   const bool rower = t < cnt;
