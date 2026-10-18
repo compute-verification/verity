@@ -5,8 +5,14 @@ the size of the circuit that description unrolls to (README.md).
       Serve_v1 at each config, word-level and on bits (`lift.on_bits`), as an NCI instance (θ its registered inputs, one
       IU per Call), checked by `nci-check` (`NciCheck.Desc`) and, where the unrolled circuit has at most GATES gates, by
       `nci-check --unrolled` (`NciCheck.check`) on the instance expanded gate by gate; DIR/results.json.
+  partition --out DIR [--config NAME ...] [--ir word|boolean ...] [--unrolled-max GATES] [--exe PATH]
+      the one-stage verifier's partition (`sampled-proofs-difftest`'s `partition`: `Partition.units`, `strata`, the law
+      and the digest) on Serve_v1 under the template query of its Calls, and under `Q_word` v1 and `Q_call` v1 at X = 16
+      where its Calls' distinct Definitions have at most GATES gates in all; and on the served shape, the population
+      program of Serve_v1's largest Definition at N instances (`Q_template_instance`); DIR/partition.json.
   plot ART --to PNG
-      the results of `art:ART` (a results.json in the store), time against description bytes and against unrolled gates.
+      the results of `art:ART` (a results.json or partition.json in the store), time against description bytes and
+      against unrolled gates.
 """
 from __future__ import annotations
 
@@ -51,11 +57,10 @@ def _reference():
     return ref
 
 
-def program(name: str, ir: str) -> str:
-    """Serve_v1 at config `name` as descriptor text, word-level or on bits."""
+def serve(name: str, ir: str):
+    """Serve_v1 at config `name` as a Program, word-level or on bits."""
     from workload.served import Config, _derive
 
-    from verity.ml.circuits import codec
     from verity.ml.circuits.program import Program
 
     c = CONFIGS[name]
@@ -65,7 +70,18 @@ def program(name: str, ir: str) -> str:
         import lift
 
         fn = lift.on_bits(fn)
-    return codec.canonical_json(codec.encode_program(Program(fn, registered=("weights",)))).decode()
+    return Program(fn, registered=("weights",))
+
+
+def text_of(prog) -> str:
+    from verity.ml.circuits import codec
+
+    return codec.canonical_json(codec.encode_program(prog)).decode()
+
+
+def program(name: str, ir: str) -> str:
+    """Serve_v1 at config `name` as descriptor text, word-level or on bits."""
+    return text_of(serve(name, ir))
 
 
 def instance(ref, text: str) -> tuple[dict, dict]:
@@ -89,11 +105,12 @@ def instance(ref, text: str) -> tuple[dict, dict]:
     return {"program": text, "theta": theta, "owner": owner, "gamma": gates, "alpha": [10**12, 1]}, sizes
 
 
-def timed(argv: list[str]) -> dict:
-    """One run of `argv`: wall seconds, peak RSS and stdout as JSON."""
-    with tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err:
+def timed(argv: list[str], stdin: Path | None = None) -> dict:
+    """One run of `argv` (reading `stdin`, a file): wall seconds, peak RSS and stdout as JSON."""
+    with tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err, \
+            open(stdin or os.devnull, "rb") as inp:
         t = time.perf_counter()
-        p = subprocess.Popen(argv, stdout=out, stderr=err)
+        p = subprocess.Popen(argv, stdin=inp, stdout=out, stderr=err)
         _, status, ru = os.wait4(p.pid, 0)
         s = time.perf_counter() - t
         p.returncode = os.waitstatus_to_exitcode(status)
@@ -157,6 +174,87 @@ def measure(args) -> int:
     return 0
 
 
+PIECES = ROOT / "verity/core/service/sampled_proofs/.lake/build/bin/sampled-proofs-difftest"
+PARTITION_SCHEMA = "verity/verifier-cost-partition/v1"
+POPULATION = (1, 30, 1000, 1_000_000)
+
+
+def _partition_case(desc: dict, query: dict) -> dict:
+    params = {"anchors": [], "delta": "1/10", "law": {"law": "subset", "k": 1}, "leaf_layer": None, "log": [],
+              "partition": None, "ports": {}, "program": desc, "query": query, "registered": None,
+              "scheme": "verifier_cost", "work_table": None}
+    return {"fn": "partition", "input": {"params": params}}
+
+
+def _partition_row(exe: Path, tmp: str, prog, query: dict, repeat: int) -> dict:
+    """The `partition` piece on `prog` under `query`, best of `repeat`, with the sizes it is measured against."""
+    from verity.ml.circuits import partition_object as PO
+
+    text = text_of(prog)
+    path = Path(tmp) / "case.jsonl"
+    path.write_text(json.dumps(_partition_case(json.loads(text), query)) + "\n")
+    runs = [timed([str(exe)], stdin=path) for _ in range(repeat)]
+    path.unlink()
+    best = min(runs, key=lambda r: r["seconds"])
+    line = best.pop("verdict", None) or {}
+    out = line.get("output") or {}
+    distinct = {PO.template_id(fn): fn.gates for _, fn in PO.calls(prog)}
+    return {"description_bytes": len(text.encode()), "unrolled_gates": prog.root.gates,
+            "call_definition_gates": sum(distinct.values()), **best, "population": out.get("population"),
+            "strata": len(out.get("strata") or []), "refused": line.get("reject") or ("population" if out and
+                                                                                       out.get("population") is None else None)}
+
+
+def partition(args) -> int:
+    from verity.core.protocols.sampled_proofs.one_stage import partition as P
+    from verity.ml.circuits import partition_object as PO
+
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    rows = []
+
+    def add(row: dict) -> None:
+        rows.append(row)
+        print(json.dumps({k: row.get(k) for k in ("config", "ir", "shape", "query", "n", "description_bytes",
+                                                  "unrolled_gates", "call_definition_gates", "seconds", "population",
+                                                  "refused", "skipped") if k in row}), flush=True)
+
+    with tempfile.TemporaryDirectory() as tmp:
+        for name in args.config or list(CONFIGS):
+            for ir in args.ir or ("word", "boolean"):
+                if ir == "boolean" and not args.config and name not in BOOLEAN:
+                    continue
+                t = time.perf_counter()
+                prog = serve(name, ir)
+                distinct = {PO.template_id(fn): fn for _, fn in PO.calls(prog)}
+                head = {"config": name, "ir": ir, "build_seconds": round(time.perf_counter() - t, 3)}
+                add(head | {"shape": "serve", "query": "template", "n": None}
+                    | _partition_row(args.exe, tmp, prog, PO.template_instances_query(list(distinct.values())),
+                                     args.repeat))
+                for label, q in (("Q_word v1", PO.query(16, 32)), ("Q_call v1", PO.call_query(16))):
+                    row = head | {"shape": "serve", "query": label, "n": None}
+                    walked = sum(fn.gates for fn in distinct.values())
+                    if walked > args.unrolled_max:
+                        add(row | {"call_definition_gates": walked, "unrolled_gates": prog.root.gates,
+                                   "skipped": f"more than --unrolled-max {args.unrolled_max} gates in its Calls' Definitions"})
+                        continue
+                    add(row | _partition_row(args.exe, tmp, prog, q, args.repeat))
+                largest = max(distinct.values(), key=lambda fn: fn.gates)
+                for n in POPULATION:
+                    add(head | {"shape": "population", "query": "template", "n": n, "template": largest.id}
+                        | _partition_row(args.exe, tmp, P.population_program(largest, n),
+                                         PO.template_instance_query(largest), args.repeat))
+    result = {"schema": PARTITION_SCHEMA, "verifier": "sampled-proofs partition", "workload": "Serve_v1",
+              "repeat": args.repeat, "unrolled_max": args.unrolled_max, "rows": rows}
+    (out / "partition.json").write_text(json.dumps(result, indent=1) + "\n")
+    bad = [f"{r['config']}/{r['ir']}/{r['shape']}/{r['n']}" for r in rows
+           if r["query"] == "template" and (r.get("rc") != 0 or r.get("refused"))]
+    if bad:
+        print("template query failures:", ", ".join(bad), file=sys.stderr)
+        return 1
+    return 0
+
+
 def plot(args) -> int:
     import matplotlib
 
@@ -165,9 +263,19 @@ def plot(args) -> int:
 
     path = subprocess.run(["research", "data", "fetch", args.art], check=True, capture_output=True, text=True).stdout.strip()
     res = json.loads(Path(path).read_text())
+    nci = res["schema"] == SCHEMA
     fig, axes = plt.subplots(1, 2, figsize=(12, 4.8))
     for ax, x, label in ((axes[0], "description_bytes", "description (bytes)"), (axes[1], "unrolled_gates", "unrolled circuit (gates)")):
         for ir, marker in (("word", "o"), ("boolean", "s")):
+            if not nci:
+                for shape, query, style in (("serve", "template", "-"), ("population", "template", ":"),
+                                            ("serve", "Q_word v1", "--"), ("serve", "Q_call v1", "-.")):
+                    rs = sorted((r for r in res["rows"] if r["ir"] == ir and r["shape"] == shape and r["query"] == query
+                                 and "seconds" in r), key=lambda r: r[x])
+                    if rs:
+                        ax.plot([r[x] for r in rs], [r["seconds"] for r in rs], marker=marker, linestyle=style,
+                                label=f"{query}, {'population program' if shape == 'population' else 'Serve_v1'}, {ir}")
+                continue
             rs = sorted((r for r in res["rows"] if r["ir"] == ir), key=lambda r: r[x])
             ax.plot([r[x] for r in rs], [r["desc"]["seconds"] for r in rs], marker=marker, label=f"NciCheck.Desc, {ir}")
             us = [r for r in rs if "seconds" in r["unrolled"]]
@@ -180,7 +288,7 @@ def plot(args) -> int:
         ax.set_ylabel("verifier wall time (s)")
         ax.grid(True, which="both", alpha=0.3)
     axes[1].legend(fontsize=8)
-    fig.suptitle(f"NCI check on Serve_v1 ({args.art})", fontsize=10)
+    fig.suptitle(f"{'NCI check' if nci else 'one-stage partition'} on Serve_v1 ({args.art})", fontsize=10)
     fig.tight_layout()
     fig.savefig(args.to, dpi=130)
     print(args.to)
@@ -197,11 +305,18 @@ def main(argv: list[str] | None = None) -> int:
     m.add_argument("--unrolled-max", type=int, default=5_000_000)
     m.add_argument("--repeat", type=int, default=3)
     m.add_argument("--exe", type=Path, default=EXE)
+    q = sub.add_parser("partition")
+    q.add_argument("--out", required=True)
+    q.add_argument("--config", action="append", choices=list(CONFIGS))
+    q.add_argument("--ir", action="append", choices=("word", "boolean"))
+    q.add_argument("--unrolled-max", type=int, default=5_000_000)
+    q.add_argument("--repeat", type=int, default=3)
+    q.add_argument("--exe", type=Path, default=PIECES)
     p = sub.add_parser("plot")
     p.add_argument("art")
     p.add_argument("--to", required=True)
     args = ap.parse_args(argv)
-    return measure(args) if args.cmd == "measure" else plot(args)
+    return {"measure": measure, "partition": partition, "plot": plot}[args.cmd](args)
 
 
 if __name__ == "__main__":
