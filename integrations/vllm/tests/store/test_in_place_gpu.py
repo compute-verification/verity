@@ -156,6 +156,59 @@ def test_calibration_reports_the_passes_in_place_and_the_bare_read_as_the_verifi
     assert b.warmup(10 ** 6)["passes"] >= 1
 
 
+class Tiny(torch.nn.Module):
+    """vLLM's shape in small: an embedding tied to an LM head that only a logits processor reads, and linears, one
+    with a bias too small to register; the embedding's last 2304 bytes past its whole block stay plain."""
+
+    class Logits(torch.nn.Module):
+        def __init__(self, head) -> None:
+            super().__init__()
+            self.head = [head]
+
+        def forward(self, h):
+            return h @ self.head[0].weight.t()
+
+    def __init__(self) -> None:
+        super().__init__()
+        kw = {"dtype": torch.bfloat16, "device": "cuda"}
+        self.embed = torch.nn.Embedding(50, 64, **kw)
+        self.up = torch.nn.Linear(64, 96, bias=False, **kw)
+        self.down = torch.nn.Linear(96, 64, **kw)
+        self.lm_head = torch.nn.Module()
+        self.lm_head.weight = self.embed.weight
+        self.logits_processor = Tiny.Logits(self.lm_head)
+
+    def forward(self, ids):
+        return self.logits_processor(self.down(torch.relu(self.up(self.embed(ids)))))
+
+
+def test_weights_are_decoded_at_use_so_the_forward_is_the_models_and_decoded_back_where_they_are_at_close():
+    torch.manual_seed(3)
+    model, s, weights = Tiny(), Store(), {}
+    for name, p in model.named_parameters():
+        b = TorchBacking.of_tensor(p.data, BLOCK)
+        if b is not None:
+            s.register(name, "hbm", "weights", b, block_bytes=BLOCK, codec=IDENTITY, receipt=RECEIPT, source=name,
+                       encode=False)
+            weights[name] = p
+    assert sorted(weights) == ["down.weight", "embed.weight", "up.weight"]
+    plain = {n: p.detach().clone() for n, p in weights.items()}
+    ids = torch.arange(50, device="cuda")
+    want, where = model(ids), {n: p.data_ptr() for n, p in weights.items()}
+    b = InPlaceBackend(s, lambda _: None, [s.backing(r.name) for r in s.layout().regions], session_lib=SESSION_SO,
+                       kv_lib=KV_SO, randbytes=random.Random(7).randbytes, model=model, weights=weights)
+    b.payload_root(b"n")
+    b.encode(audit.register(bytes(32), b"n", b.blocks, bytes(64), nonce=bytes(32)))
+    assert not torch.equal(model.up.weight, plain["up.weight"])
+    assert b.gates["decode_at_use"]["modules"] == 4
+    assert torch.equal(model(ids), want) and b.decoded.calls == 4
+    assert {n: p.data_ptr() for n, p in weights.items()} == where
+    b.close()
+    assert all(torch.equal(weights[n], plain[n]) for n in weights)
+    assert b.gates["decode_at_use"]["decoded_back"] is True and not b.decoded.handles
+    assert torch.equal(model(ids), want) and b.decoded.calls == 4
+
+
 def test_an_honest_in_place_session_is_accepted_reading_rewritten_blocks_from_their_copies():
     r, p, s, b = run("serve")
     assert r["accepted"] and p["accepted"], (r.get("failure"), p)

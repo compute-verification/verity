@@ -407,6 +407,12 @@ class KvDevice:
                 b = self.paged.offsets(torch, list(offsets[u:u + c]), self.field)
                 self.lib.call("kv_encode_bound", ptr, ptr, c * w, (first + u) * w, k, b.data_ptr(), 0, stream)
 
+    def decode(self, src: int, dst: int, blocks: int, first: int) -> None:
+        """``blocks`` blocks at device address ``src``, the store's blocks ``first`` … encoded under the seed's key,
+        decoded to ``dst`` (which may be ``src``) on the current stream."""
+        w, stream = self.codec.field.block_words, self.torch.cuda.current_stream().cuda_stream
+        self.lib.call("kv_decode", src, dst, blocks * w, first * w, self.codec.rounds, 0, None, stream)
+
 
 class DeviceEncoded(audit.Store):
     """`audit.Store` with its encodes on a `KvDevice`: the registered blocks at once, an append's once its coin

@@ -264,11 +264,13 @@ class Binder:
         self.unregistered: dict[str, int] = {}
         self.slots = 0
         self.tensors: list[tuple[str, Callable[[], Any], tuple]] = []
+        self.model: Any = None
+        self.params: dict[str, Any] = {}
 
     # --- registration -----------------------------------------------------------------------------------------------
 
     def on_load(self, runner: Any) -> None:
-        room = self.weight_blocks
+        room, self.model = self.weight_blocks, _unwrap(runner.model)
         for w in self.weights(runner):
             b = TorchBacking.of_tensor(w.tensor, self.block_bytes)
             nbytes = w.tensor.numel() * w.tensor.element_size()
@@ -282,6 +284,8 @@ class Binder:
             self.store.register(w.name, "hbm", "weights", b, block_bytes=self.block_bytes, codec=w.codec,
                                 receipt=w.receipt or self.receipt, source=w.source, encode=w.encode)
             self._held(w.name, lambda t=w.tensor if w.live is None else w.live: t)
+            if w.live is not None:
+                self.params[w.name] = w.live
 
     def on_kv(self, runner: Any, kv_cache_config: Any) -> None:
         """Register the KV pool: each attention layer's pages a region (`PagedBacking`, so layers that share one

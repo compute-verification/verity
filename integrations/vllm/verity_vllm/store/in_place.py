@@ -20,9 +20,11 @@ opening       its subtree recomputed from the store under the same map, a block 
 ~~~
 
 A registered tensor stays where it is for the session (`Binder.moved`, checked before every pass: a tensor moved
-fails the session by name).  The tensors hold the codec's encoding from registration on, so the engine's kernels read
-encoded weights and KV: until they decode what they read (a per-layer transient for the weights, paged.cu's decoded
-windows for attention), the model's output under a session is not the model's.  A re-key would append a block whose
+fails the session by name).  The tensors hold the codec's encoding from registration on.  The weights are decoded at
+use (`DecodeAtUse`: each module's into a scratch for its forward) and decoded back where they are when the session
+closes, so the Commit's replay reads the weights it committed.  Attention still reads the KV pool encoded (an appended
+block once its coin is in): until it decodes what it reads (paged.cu's decoded windows), the model's output under a
+session is not the model's after the first encoded append.  A re-key would append a block whose
 payload the map reads from its slot, which holds its encoding: the in-place session refuses it, so its lifetime cap
 must outlast its windows.
 """
@@ -89,6 +91,84 @@ class Appends:
         return self.appends[bisect.bisect_right(self.firsts, j) - 1]
 
 
+class DecodeAtUse:
+    """The weights decoded at use (`benchmarks/remote_session/engine.py`'s ``Hooks``): before its forward, each module
+    holding a registered weight decodes the weight's registered blocks into one reused ``scratch`` (kv.cu,
+    `KvDevice.decode`), the tensor's bytes past its last whole block copied as they are (unregistered, so plain), and
+    points the parameter at it; after, back at the store's encoded bytes.  The LM head goes through the logits
+    processor's forward, which reads it without calling it.  ``weights`` are (parameter, its backing, first store
+    block, registered blocks)."""
+
+    def __init__(self, torch, device: KvDevice, model: Any, weights: Sequence[tuple[Any, Any, int, int]]) -> None:
+        self.torch, self.device, self.handles, self.calls = torch, device, [], 0
+        self.weights = [(p, b.flat, first, blocks, p.data) for p, b, first, blocks in weights]
+        by_param = {id(w[0]): w for w in self.weights}
+        names = {id(m): n for n, m in model.named_modules()}
+        lm_head, by_module = getattr(model, "lm_head", None), {}
+        for mname, mod in model.named_modules():
+            for p in mod._parameters.values():
+                if p is None or id(p) not in by_param:
+                    continue
+                target = getattr(model, "logits_processor", None) if mod is lm_head else mod
+                if target is None:
+                    raise ValueError(f"{mname} holds a registered weight and no module reads it")
+                items = by_module.setdefault(id(target), (target, names.get(id(target), mname), []))[2]
+                if all(x[0] is not p for x in items):
+                    items.append(by_param[id(p)])
+        held = {id(x[0]) for _, _, items in by_module.values() for x in items}
+        if missing := [id(w[0]) for w in self.weights if id(w[0]) not in held]:
+            raise ValueError(f"{len(missing)} registered weights no module of the model holds")
+        hooked = sorted(n for _, n, _ in by_module.values())
+        if nested := [(a, b) for a in hooked for b in hooked if b.startswith(a + ".")]:
+            raise ValueError(f"module {nested[0][1]} decodes its weights inside {nested[0][0]}'s forward, into the "
+                             "same scratch")
+        self.modules = list(by_module.values())
+        size = lambda items: sum(-(-x[1].numel() // BLOCK) * BLOCK for x in items)
+        self.scratch = torch.empty(max(size(items) for _, _, items in self.modules), dtype=torch.uint8,
+                                   device=self.weights[0][1].device)
+
+    def install(self) -> None:
+        for mod, _, items in self.modules:
+            self.handles.append(mod.register_forward_pre_hook(lambda m, a, items=items: self.before(items)))
+            self.handles.append(mod.register_forward_hook(lambda m, a, o, items=items: self.after(items)))
+
+    def uninstall(self) -> None:
+        for h in self.handles:
+            h.remove()
+        self.handles = []
+
+    def _decode(self, flat, first: int, blocks: int, dst) -> None:
+        if blocks:
+            self.device.decode(flat.data_ptr(), dst.data_ptr(), blocks, first)
+        if flat.numel() > blocks * BLOCK:
+            dst[blocks * BLOCK:flat.numel()].copy_(flat[blocks * BLOCK:])
+
+    def before(self, items) -> None:
+        at = 0
+        for p, flat, first, blocks, enc in items:
+            dst = self.scratch[at:at + flat.numel()]
+            self._decode(flat, first, blocks, dst)
+            p.data = dst.view(enc.dtype).as_strided(enc.shape, enc.stride())
+            at += -(-flat.numel() // BLOCK) * BLOCK
+        self.calls += 1
+
+    def after(self, items) -> None:
+        for p, _, _, _, enc in items:
+            p.data = enc
+
+    def decode_in_place(self) -> None:
+        """Every registered weight decoded back where it is, through the scratch a chunk at a time: the session is
+        over and the model's weights are its own again."""
+        span = self.scratch.numel() // BLOCK
+        for p, flat, first, blocks, enc in self.weights:
+            p.data = enc
+            for u in range(0, blocks, span):
+                c = min(span, blocks - u)
+                self.device.decode(flat.data_ptr() + u * BLOCK, self.scratch.data_ptr(), c, first + u)
+                flat[u * BLOCK:(u + c) * BLOCK].copy_(self.scratch[:c * BLOCK])
+        self.torch.cuda.synchronize()
+
+
 class InPlaceBackend(StoreBackend):
     """`StoreBackend` over the store's tensors in place (the module's docstring): ``backings`` are the registered
     regions' backings in store order (`Store.backing`), ``session_lib`` session.cu's build and ``kv_lib`` kv.cu's at
@@ -97,7 +177,8 @@ class InPlaceBackend(StoreBackend):
     def __init__(self, store: Store, engine: Callable[[int], None], backings: Sequence[Any], *, session_lib: str,
                  kv_lib: str, codec: rcodec.Codec = rcodec.DEFAULT, moved: Callable[[], list[str]] = list,
                  path: Any = None, randbytes: Callable[[int], bytes] = os.urandom, kept_from: int = 6,
-                 calibration_passes: int = 256, calibration_warm: int = 16, warmup_ms: float = 500.0) -> None:
+                 calibration_passes: int = 256, calibration_warm: int = 16, warmup_ms: float = 500.0,
+                 model: Any = None, weights: dict[str, Any] | None = None) -> None:
         import torch
 
         super().__init__(store, engine, randbytes=randbytes, path=path, device=KvDevice(kv_lib, codec))
@@ -106,6 +187,8 @@ class InPlaceBackend(StoreBackend):
         ipm = session_module("inplace", config.REMOTE_SESSION)
         self.torch, self.codec, self.moved = torch, codec, moved
         self.calibration_passes, self.calibration_warm, self.warmup_ms = calibration_passes, calibration_warm, warmup_ms
+        self.model, self.weights, self.decoded = model, weights or {}, None
+        self._plain: dict[int, bytes] = {}
         self.lib = self.dev.Lib(str(session_lib), torch)
         self.key = randbytes(32)
         lay = store.layout()
@@ -250,7 +333,22 @@ class InPlaceBackend(StoreBackend):
         self.gates["device_encode"] = {"registered": N, "appends": 0, "blocks_checked": len(sample) + 1,
                                        "in_place": True, "bound": "a scratch block at registration"}
         self.audit = Appends(registration)
+        self._plain = {j: m.tobytes() for j, m in zip(sample.tolist(), before)}
+        self._decode_at_use()
         return {"encode_bytes_per_s": N * BLOCK / secs}
+
+    def _decode_at_use(self) -> None:
+        if self.model is None:
+            return
+        regions = [r for r in self.store.layout().regions if r.kind == "weights" and r.name in self.weights]
+        if not regions:
+            return
+        self.decoded = DecodeAtUse(self.torch, self.device, self.model,
+                                   [(self.weights[r.name], self.store.backing(r.name), r.first, r.blocks)
+                                    for r in regions])
+        self.decoded.install()
+        self.gates["decode_at_use"] = {"weights": len(regions), "modules": len(self.decoded.modules),
+                                       "scratch_bytes": self.decoded.scratch.numel(), "decoded_back": None}
 
     def _gate_bound(self, key: rcodec.Key) -> None:
         """kv.cu's encode under an append's bound offset, in place, against `codec.encode`'s, on a scratch block at
@@ -520,10 +618,27 @@ class InPlaceBackend(StoreBackend):
         return a.salts[j - a.first], a.tree.open(j).path, a.digests[j - a.first]
 
     def close(self) -> None:
-        """The session is over: the engine's later writes are copied no more."""
+        """The session is over: the engine's later writes are copied no more, and the weights are decoded back where
+        they are (what the Commit's replay reads), checked at each weight region's first block against its bytes at
+        registration."""
         if self.store.on_write == self._before_write:
             self.store.on_write = None
         self.saved, self._windex = [], None
+        if self.decoded is not None and self.decoded.handles:
+            self.decoded.uninstall()
+            self.decoded.decode_in_place()
+            firsts = np.array([j for j in sorted(self._plain) if j < self.blocks and self._is_weight(j)], np.int64)
+            got = self._gather(firsts).cpu().numpy()
+            bad = [int(j) for j, g in zip(firsts, got) if g.tobytes() != self._plain[int(j)]]
+            self.gates["decode_at_use"].update(decoded_back=not bad, blocks_checked=len(firsts),
+                                               calls=self.decoded.calls)
+            if bad:
+                raise RuntimeError(f"weight block {bad[0]}, decoded back after the session, is not its bytes at "
+                                   "registration")
+
+    def _is_weight(self, j: int) -> bool:
+        r = self.store.layout().regions[int(np.searchsorted(self._firsts, j, side="right")) - 1]
+        return r.kind == "weights" and r.name in self.weights
 
     @classmethod
     def for_commit(cls, session_lib: str) -> Callable[[Any, Any], InPlaceBackend]:
@@ -531,7 +646,7 @@ class InPlaceBackend(StoreBackend):
         def build(cs, path) -> InPlaceBackend:
             backings = [cs.store.backing(r.name) for r in cs.store.layout().regions]
             return cls(cs.store, cs.lockstep, backings, session_lib=session_lib, kv_lib=cs.kv_lib, codec=cs.codec,
-                       moved=cs.binder.moved, path=path)
+                       moved=cs.binder.moved, path=path, model=cs.binder.model, weights=cs.binder.params)
         return build
 
     def session_stats(self) -> dict:
