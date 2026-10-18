@@ -16,7 +16,7 @@ COMPILED_ROW = "llama32-1b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-
 
 
 def _wl(tmp_path, row_id: str | None, execution: str | None = None) -> str:
-    doc = {"schema": "verity-vllm/workload/v1", "requests": [], "sampling": {"variant": "greedy"}, "variants": {"greedy": {"temperature": 0.0}}}
+    doc = {"schema": "verity-vllm/workload/v2", "requests": [], "sampling": {"variant": "greedy"}, "variants": {"greedy": {"temperature": 0.0}}}
     if row_id:
         doc["sweep"] = {"row_id": row_id}
     if execution:

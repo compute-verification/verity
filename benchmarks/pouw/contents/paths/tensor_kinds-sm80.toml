@@ -1,0 +1,4 @@
+order = 70
+path = "`tensor_kinds/sm80.cu`"
+runs_on = "A100"
+what = "`tensor_kinds/` on sm_80: every native mma.sync form alone and beside a scalar lane, the scalar pipes alone, in pairs and beside a saturated MMA, duo beside IMMA and each integer form's exact s32 word (`run_sm80.sh`, gated per kernel by `gpu_kit/sass_gate.py`); `sm80.py census OUT... --extension OUT... --to machine_model/data/devices/sm_80` writes its census"

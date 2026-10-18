@@ -6,6 +6,7 @@ import json
 import random
 
 from verity_vllm.program import compact as K
+from verity_vllm.observe.fold.memory import access_runs
 from verity.ml.circuits.refs import refs_from_json, runs
 
 
@@ -97,6 +98,8 @@ def test_alias_splices_the_aliased_operand_like_the_codec():
         a = K.from_json({"concat": [j1, {"alias": [0, 0]}, j2]}, alias=lambda k, a_: node0)
         R = runs(refs_from_json({"concat": [j1, j0, j2]}))
         assert a == K.from_runs(R) and K.expand(a) == R
+        for j, plain in (({"alias": [0, 0]}, j0), ({"concat": [{"alias": [0, 0]}, j2]}, {"concat": [j0, j2]})):   # spliced: empty accumulator
+            assert K.from_json(j, alias=lambda k, a_: node0) == K.from_runs(runs(refs_from_json(plain)))
 
 
 def test_rle_of_mapped_progressions_equals_rle_of_the_mapped_runs():
@@ -112,6 +115,16 @@ def test_rle_of_mapped_progressions_equals_rle_of_the_mapped_runs():
         m = K.rle_mapped(items)
         assert m == K.rle_runs(K.expand(items), 3), (items, m)
         assert K.expand(m) == K.expand(items)
+
+
+def test_an_operand_past_the_hash_limit_hashes_as_its_normal_form():
+    # GLM-5.3's W_UV^T read: every element its own run, 512 at the row stride per (head, column)
+    big = [("W", "w_uv", (k, k + 1), (3584, 3584), 512) for k in range(256)]
+    assert K.n_runs(big) > K.HASH_RLE_RUNS and K.rle_mapped(big) == big
+    assert K.hash_operand(big) == {"rle": [list(t) for t in big]}
+    assert K.hash_operand(big[:-1] + [big[-1][:-1] + (511,)]) != K.hash_operand(big)
+    small = big[:100]
+    assert K.hash_operand(small) == [list(t) for t in K.expand(small)]
 
 
 def test_the_real_shapes_are_one_progression_each():
@@ -130,6 +143,15 @@ def test_the_real_shapes_are_one_progression_each():
     # contiguous rows collapse to one run, as the record's push does; a broadcast keeps its multiplicity
     assert K.from_json({"strided": ["n", 7, 0, D, D, 1, 5 * D]}) == [("n", (7, 0, 5 * D), (0, 0, 0), 1)]
     assert K.from_json({"strided": ["n", 3, 11, 1, 0, 0, 9]}) == [("n", (3, 11, 12), (0, 0, 0), 9)]
+    # [GLM-5.3] a transposed weight block (the MLA-absorb BatchedGemm read, ~1e6 leaves per operand at full scale): one progression of
+    # unit runs per row -- O(rows) progressions and O(rows) work, never the per-leaf O(count)
+    Kd, Nd = 512, 16
+    a = K.from_json({"strided": ["p", 2, 40, Kd, 1, Nd, Kd * Nd]})
+    assert a == [("p", (2, 40 + q, 41 + q), (0, Nd, Nd), Kd) for q in range(Nd)]
+    assert K.n_runs(a) == Kd * Nd
+    j = {"strided": ["p", 2, 40, Kd, 1, Nd, Kd * Nd - 3]}   # partial last row
+    assert K.from_json(j) == K.from_runs(runs(refs_from_json(j)))
+    assert K.file_items_from_refs_json(j) == [["P", 2, 40 + q, 41 + q, 0, Nd, Nd, Kd if q < Nd - 1 else Kd - 3] for q in range(Nd)]
 
 
 def test_bind_splits_counts_readers_per_progression_exactly_as_the_record_counts_runs():
@@ -358,11 +380,11 @@ def test_record_document_states_the_stored_form_it_loaded_like_the_fast_one(tmp_
 
 
 def test_stored_form_progressions_is_lossless_over_the_records_run_lists():
-    """[R17 mfast F2, COORD R17-34 (2) / M-0496] instances.jsonl v2: node-space references stored as progressions ["N", idx, lo, hi, dI, dL,
-    dH, count], parameter-space runs as before.  Over random Refs JSON (every fold shape incl. the attention gather and broadcasts):
-    (1) runs_from_file_items(file_items_from_refs_json(j)) == refs.runs(j) -- the stored form expands to the record's runs exactly;
-    (2) the same items from the run list (the converter's path) -- from_runs is the reference from_json equals; (3) no "n" run survives
-    un-compacted, every "p" item is a run."""
+    """[R17 mfast F2, COORD R17-34 (2) / M-0496; GLM-5.3 "P"] instances.jsonl v2: node- and parameter-space references stored as
+    progressions ["N"|"P", idx, lo, hi, dI, dL, dH, count].  Over random Refs JSON (every fold shape incl. the attention gather,
+    broadcasts and the scattered strideds): (1) runs_from_file_items(file_items_from_refs_json(j)) == refs.runs(j) -- the stored form
+    expands to the record's runs exactly; (2) the same items from the run list (the converter's path) -- from_runs is the reference
+    from_json equals; (3) no "n"/"p" run sequence survives un-compacted."""
     rng = random.Random(17)
     n_items = n_runs = 0
     for _ in range(3000):
@@ -371,9 +393,12 @@ def test_stored_form_progressions_is_lossless_over_the_records_run_lists():
         items = K.file_items_from_refs_json(j)
         assert [tuple(x) for x in K.runs_from_file_items(items)] == r, (j, items, r)
         assert items == K.file_items_from_runs(r), (j, items)
-        assert all((it[0] == "N" and len(it) == 8 and it[7] >= 2) or len(it) == 4 for it in items), items
-        assert not any(it[0] == "N" and it[4:7] == [0, 0, 0] and it[7] == 1 for it in items)
+        assert all((it[0] in ("N", "P") and len(it) == 8 and it[7] >= 2) or len(it) == 4 for it in items), items
+        assert not any(it[0] in ("N", "P") and it[4:7] == [0, 0, 0] and it[7] == 1 for it in items)
         assert [tuple(x) for x in K.runs_from_file_items([list(x) for x in r])] == r   # a v1 file passes through
+        v1 = [list(x) for x in r]
+        assert K.expanded_file_args([items, v1]) == [v1, v1]                           # the readers' choke point: v1 out, either way in
+        assert K.expanded_file_args([v1])[0] is v1                                     # a v1 operand passes through as the same object
         n_items += len(items); n_runs += len(r)
     assert n_items < n_runs
 
@@ -476,11 +501,14 @@ def test_persist_program_writer_is_byte_identical_to_the_generic_conversion(tmp_
             out.append(json.dumps(RC._jsonable(rec), separators=(",", ":")))
         return out
 
-    def generic_journal():
+    def generic_journal(form):     # under `progressions` a journal Refs is stored compact too, as an operand is
         out = []
         for r in res.accesses:
             r2 = dict(r)
             r2["view"] = generic_view(r2["view"]) if r2.get("view") is not None else None
+            v = r2["refs"]
+            r2["refs"] = (file_items_from_refs_json(v.to_json()) if form == "progressions" and v is not None and not isinstance(v, list)
+                          else access_runs(v))
             out.append(json.dumps(RC._jsonable(r2), separators=(",", ":")))
         return out
 
@@ -493,5 +521,23 @@ def test_persist_program_writer_is_byte_identical_to_the_generic_conversion(tmp_
         rows = open(os.path.join(d, "instances.jsonl")).read().split("\n")[1:-1]
         assert rows == generic_rows(form) and len(rows) == len(res.instances)
         lines = gzip.open(os.path.join(d, "accesses.jsonl.gz"), "rt").read().split("\n")[:-1]
-        assert lines == generic_journal() and len(lines) == len(res.accesses)
+        assert lines == generic_journal(form) and len(lines) == len(res.accesses)
         assert any('"operand_views":[{"alloc":' in r for r in rows) and any('"view":{"alloc":' in l for l in lines)   # the shape path ran
+
+
+def test_the_within_step_dag_criterion_holds_on_equal_programs_and_fails_on_a_wrong_one(tmp_path):
+    """`program-dag`'s live-cone DAG multiset (the within-step criterion of record) over tp's D90 fixture, compact form: equal where
+    the sequence is, unequal on a compare negative."""
+    import pytest
+    from verity_vllm.check.match import global_match_fast as GMF
+    try:
+        from tests.check import test_tp2_d90_fixture as T
+    except ImportError as e:   # pragma: no cover
+        pytest.skip(f"tp2 D90 fixture unavailable: {e}")
+    for sub, prog_kw, want in (("pos", {}, True), ("wrong_op", {"wrong_op_k": 0}, False), ("swapped", {"swap_parts": True}, False)):
+        d = tmp_path / sub
+        d.mkdir()
+        res, A, B = T.compare_rank(d, 0, T.fold_rank(0), T.rank_program(0, **prog_kw), compact=True)
+        assert res["ok"] is want
+        dm = GMF.dag_multiset(A, B)
+        assert dm["equal"] is want and (dm["only_a"] == dm["only_b"] == 0) is want, (sub, dm)

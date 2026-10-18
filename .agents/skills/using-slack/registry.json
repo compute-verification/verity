@@ -12,10 +12,7 @@
     "agent-coordination": {
       "id": "C0C5RCXL66N",
       "purpose": "Everything between handle holders: asks (tag one handle), announcements (tag some, or none for all), their threads.",
-      "subscribers": [
-        "old-accounting",
-        "old-circuits-and-proofs"
-      ],
+      "subscribers": [],
       "routed_by": "each sender: `research msg` rings the addressed handles' inbox threads (routes.d), and every holder subscribes to its own inbox thread; no agent forwards"
     },
     "agent-alerts": {
@@ -83,6 +80,7 @@
         "benchmarks/latency_compare.py",
         "benchmarks/private_circuit/",
         "benchmarks/proof_throughput/",
+        "benchmarks/sampling_plan/",
         "integrations/vllm/verity_vllm/protocol_options/sampled_proofs.py"
       ],
       "branch_suffixes": [
@@ -191,15 +189,18 @@
         "benchmarks/host_tier/",
         "benchmarks/host_tiles/",
         "benchmarks/kv_filler/",
+        "benchmarks/kv_lifetime/",
         "benchmarks/link_pricing/",
         "benchmarks/overhead_frontier/",
         "benchmarks/pous/",
+        "benchmarks/property_redteam/",
         "benchmarks/rate_redteam/",
         "benchmarks/rate_squaring/",
         "benchmarks/remote_session/",
         "benchmarks/resource_accounting/",
         "benchmarks/serve_bandwidth/",
         "benchmarks/sketch_tag/",
+        "benchmarks/stacked_share/",
         "benchmarks/tag_fast/",
         "benchmarks/vllm_encoded/",
         "benchmarks/word_codec/",
@@ -228,7 +229,9 @@
         "Security/Definitions/NetworkCertifier/",
         "Security/Models/NetworkCertifier/",
         "Security/Proofs/NetworkCertifier/",
-        "benchmarks/network_traces/"
+        "benchmarks/network_traces/",
+        "benchmarks/datacenter/",
+        "benchmarks/network_sim/"
       ],
       "branch_suffixes": [
         "728f",
@@ -319,6 +322,7 @@
       "owns": [
         "AGENTS.md",
         "README.md",
+        "DESIGN.md",
         ".agents/skills/",
         "tests/",
         "fixtures/",
@@ -361,19 +365,17 @@
       ]
     },
     {
-      "handle": "old-accounting",
-      "holder": "the old pous coordinator (bc-b729c175-2ef6-418e-98fe-10896709028b)",
-      "remit": "Advising its successor, the accounting coordinator: handing off to it and relaying the old pous workers' results.",
-      "charter": "note:20260930T1955Z-handoff-from-infra-slack-advisor-accounting",
-      "usergroup": "S0C5WBQ3A76"
-    },
-    {
-      "handle": "old-circuits-and-proofs",
-      "holder": "the lander: the research coordinator (bc-8ece7cde-78d8-5ed9-84b0-a0a81b19f628), which runs the merge trains",
-      "remit": "The lander: runs the merge trains, and advises @circuits and @proofs, its successors.",
-      "charter": "note:20260930T1955Z-handoff-from-infra-slack-advisor-circuits, note:20260930T1955Z-handoff-from-infra-slack-advisor-proofs",
-      "usergroup": "S0C5MCG1A2Z",
-      "linear": "LAND"
+      "handle": "hash",
+      "holder": "the hash coordinator (bc-0104b328-7489-5a12-a90e-2a15e14ff08a), a new slice launched from top's charter",
+      "remit": "A fast commitment hash for served inference: tensor-core friendly, binding proved in Lean, to cut vLLM commit time.",
+      "charter": "Daniel, 2026-10-17 10:46 PM PDT (a new slice, via top)",
+      "usergroup": "S0CAYGG5BDW",
+      "owns": [
+        "benchmarks/hash/"
+      ],
+      "branch_suffixes": [
+        "15ad"
+      ]
     }
   ]
 }

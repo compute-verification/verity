@@ -1,7 +1,9 @@
 """A stand-in for one rank of a W-rank vLLM model, built on the construction's own `CollectiveBus`: a vocab-parallel embedding
-(`verity_tp::embedding_shard` + all-reduce), a column- then row-parallel MLP (all-reduce) and column-parallel logits (all-gather).
-Its rank enters the graph where a vLLM rank's does (the own partial's index in each collective, the shard's START/END), so a test can
-derive any rank of it on CPU without vLLM."""
+(`verity_tp::embedding_shard` + a cross-rank reduce), a column- then row-parallel MLP (reduce) and column-parallel logits (all-gather).
+At world 2 the reduce is the bus's all-reduce (`AllReduce2`'s recorded identity); a wider world's all-reduce binds only captured
+world-8 routes (`registry.tp_allreduce.CAPTURED`), which the toy's shapes are not, so the reduce is an all-gather and one summing
+linear.  Its rank enters the graph where a vLLM rank's does (the own partial's index in each collective, the shard's START/END), so a
+test can derive any rank of it on CPU without vLLM."""
 from __future__ import annotations
 
 import torch
@@ -33,11 +35,18 @@ class ToyRank(nn.Module):
         self.up = _param(FF // W, H)
         self.down = _param(H, FF // W)
         self.lm_head = _param(V // W, H)
+        if W > 2:
+            self.sum_ranks = _param(H, W * H)
+
+    def _reduce(self, x):
+        if self.bus.world == 2:
+            return self.bus.all_reduce(x)
+        return F.linear(self.bus.all_gather(x), self.sum_ranks)
 
     def forward(self, prompt):
         x = torch.ops.verity_tp.embedding_shard(prompt.reshape(-1), self.embed, self.start, self.end)
-        x = self.bus.all_reduce(x.view(*prompt.shape, H))
-        h = self.bus.all_reduce(F.linear(F.linear(x, self.up), self.down))
+        x = self._reduce(x.view(*prompt.shape, H))
+        h = self._reduce(F.linear(F.linear(x, self.up), self.down))
         return self.bus.all_gather(F.linear(h, self.lm_head))
 
 

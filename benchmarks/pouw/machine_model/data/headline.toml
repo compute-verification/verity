@@ -1,0 +1,56 @@
+# The per-family headline (`machine-model headline`, headline.py): each GPU family's design of record, the vector each
+# reading prices it on, and the conditions its rows are stated under. Every number is computed from the design files
+# and the vectors; what is written here is only which design, which vector, and the conditions no computation shows.
+# The floor a row needs (½ or 1.22 slots) and its fillers' credit are computed and printed beside these.
+capacity = "ε is relative to the declared capacity, the reading's Π (decision 100): an error in Π is no term of ε"
+
+[floor]             # (I3) ScalarRoute, the floor a vector- or table-headed word pays; a row names the one it needs
+half = "the ½-slot floor ((I3) at q* = ½: Lean Accounting.SecurityProofs.TS.SheetScalarRouteHalf, from A6)"
+issue = "the 1.22-slot issue floor (Theorem C, unproved in Lean: ClassPPacked is a stub, the per-opcode κ count not run)"
+
+[reading.sheet]
+title = "data sheet"
+q = 0.5
+conditions = ["Π the data sheet's peaks (DS vectors, A1–A5; decision 96)"]
+
+[reading.measured]
+title = "decision 89's measured reading"
+q = 1.22
+conditions = ["Π the measured census rows, the -ri vectors where they exist (decision 98; `current` stays DC-90 and DC-100)"]
+
+[family.sm_120]
+gpu = "RTX PRO 6000"
+design = "dither-c-peel-fx1"
+conditions = ["fx1 at 4 lane instructions a word is the cheapest fold (FOLD-OPT; ASSUME r2, #2289)"]
+sheet = { vector = "DS-120" }
+measured = { vector = "VF3r-16" }
+
+[family.sm_90]
+gpu = "H200"
+design = "dither-2s-licpw-redux-l32"
+p1 = "dither-2s-licpw-redux-p1-l32"
+conditions = ["ffill's p = 0 rests on its bit-exact check, ffill_ref.receipt (benchmarks/pouw/dc; decision 99, DC r12): ffill.cu's conformance to it on the H200 (ffill.sh) has not run",
+              "LI-CP-W's receipt luck 0 needs every absorbed word pinned (PIN, decision 97)"]
+sheet = { vector = "DS-90" }
+measured = { vector = "DC-90-ri" }
+
+[family.sm_100]
+gpu = "B200"
+design = "dither-2s-licpw-redux-heavy-l32"
+conditions = ["LI-CP-W's receipt luck 0 needs every absorbed word pinned (PIN, decision 97)"]
+sheet = { vector = "DS-100" }
+measured = { vector = "DC-100-ri" }
+
+[family.sm_89]
+gpu = "L40S"
+design = "dither-2s-l16"
+conditions = []
+sheet = { vector = "DS-89", conditions = ["A2u: a uniform instruction takes an issue slot (in no vendor document; decision 84)"] }
+measured = { vector = "ADA-89" }
+
+[family.sm_80]
+gpu = "A100"
+design = "dither-2s-l16"
+conditions = ["no uniform route in Π: sm_80's uniform datapath is unmeasured (EPS1 AMPERE; RT-DC r2)"]
+sheet = { vector = "DS-80" }
+measured = { vector = "AMPERE-80" }

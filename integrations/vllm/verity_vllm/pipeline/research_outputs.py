@@ -9,7 +9,8 @@ from the evidence dir into `$RESEARCH_RUN_DIR/outputs/<name>/` and declared in `
 
     plan    -> vllm-commit-plan/v1    plan/commit_plan.json (the Commit's plan: its key and the producer facts), plan.log,
                                       weights_of_record.log, manifest.log; meta {row, stage, program_digest, plan_key, stage_status}; refs.build
-    build   -> vllm-build/v1          build_summary.json, build_workload/workload_program.json, build_request*/ descriptor files (never
+    build   -> vllm-build/v1          build_summary.json, build_workload/{workload_program.json, descriptor.json.gz} (the workload
+                                      Program), build_step/ and build_request*/ descriptor files (never
                                       instances.json.gz), manifest.json (the required-value manifest, when built), target_family / admission /
                                       source_identity / tree / release records; meta {row, stage, program_digest, workload_digest,
                                       correspondence_digest?, required_manifest, stage_status}
@@ -30,7 +31,8 @@ from the evidence dir into `$RESEARCH_RUN_DIR/outputs/<name>/` and declared in `
     (all)   -> run-files/v1 `logs`    row.log and every top-level *.log of the evidence dir
 
 A tensor-parallel row (tp_stage.sh; build_summary.json carries `tp.world` and `ranks`) keeps its Build per rank under build/rank<r>/:
-the build entry takes each rank's build_step/, build_request*/ and build_workload/workload_program.json, the match entry tp.match's
+the build entry takes each rank's build_step/, build_request*/ and build_workload/{workload_program.json, descriptor.json.gz} (every
+Program a rank serves, so `verity_vllm.records.programs` decodes the row from this artifact alone), the match entry tp.match's
 match/tp2_match.json (+ the fold Match's), the verdict entry tp.commit's commit/ (its decision document is commit/summary.json: a TP
 Commit writes no verdict.json), and `program_digest` is the TP manifest's key digest -- the `tp-ranks` fold of the rank workload
 digests (the manifest's rank merge), with `rank_workload_digests` beside it.  A Commit stage that reported PASS without its decision
@@ -64,14 +66,16 @@ SLIM_KIND = "vllm-replay-slim/v1"
 KEPT_APART = ("replay_bundle_p", "replay_slim_p")
 SLIM_META = ("pair", "run_root", "program_digest", "picked", "bytes", "dump_sha256", "commit_pass")
 
-BUILD_FILES = ["build_summary.json", "build_workload/workload_program.json", "manifest.json", "target_family.build.json", "target_family.json",
+BUILD_FILES = ["build_summary.json", "build_workload/workload_program.json", "build_workload/descriptor.json.gz", "manifest.json",
+               "target_family.build.json", "target_family.json",
                "admission.json", "source_identity.json", "tree.json", "release.json", "build_request/digest.txt"]
 MATCH_FILES = ["match/instances.jsonl", "match/program.json", "match/run.json", "match/versions.json", "match/control/tokens.json",
                "match/capture/tokens.json", "global_match.json", "match_summary.json", "match_compare.json", "match_decomp.json",
                "match_shape.json", "match/fold_summary.json", "match_stoch.json",
                "match/tp2_match.json", "match/fold_match/tp2_fold_match.json", "match/capture/topology.json", "match/control/topology.json",
                "match/capture/versions.json", "match/control/versions.json"]
-TP_BUILD_GLOBS = ["build/rank*/build_step", "build/rank*/build_request*", "build/rank*/build_workload/workload_program.json"]
+TP_BUILD_GLOBS = ["build/rank*/build_step", "build/rank*/build_request*", "build/rank*/build_workload/workload_program.json",
+                  "build/rank*/build_workload/descriptor.json.gz"]
 TP_LOG_GLOBS = ["build/rank*/*.log", "match/*.log"]
 PLAN_FILES = ["plan/commit_plan.json", "plan.log", "weights_of_record.log", "manifest.log"]
 COMMIT_FILES = ["verdict.json", "config_record.json", "weights_of_record.log", "manifest.log", "manifest_verify.log"]

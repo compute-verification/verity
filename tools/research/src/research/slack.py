@@ -13,7 +13,7 @@ Notes are records, never messages.
   research msg close --as NAME --thread TS [--link URL] [--note T] [--declined WHY]   # ✅ or ❌: a status line, and the reaction on an ask
   research msg read --thread TS [--since TS] | --since TS | --as NAME [--peek] [--urgent] [--json]  # --as: NAME's unread doorbells
   research msg names open|read|close|list [--as NAME] [--forward-to @NAME] [--succeeds]  # the names you answer to
-  research msg traffic [--hours H] [--json]                        # the monitor: doorbells, pauses, dropped names, unanswered asks
+  research msg traffic [--hours H] [--replay] [--json]             # the monitor: doorbells, pauses, dropped names, unanswered asks
   research msg watch --as NAME [--every S] [--polls N]             # block until a new doorbell; the hook a wake script runs
   research msg pickup --thread TS                                  # 👀 on an ask you own
   research msg retract --as NAME --ts TS [--thread ROOT] [--why W] # blank a post NAME sent (needs SLACK_BOT_TOKEN)
@@ -460,6 +460,8 @@ class Slack:
         return self._oidc.send(lambda t: self.transport(BROKER, body, {"Authorization": f"Bearer {t}", "Content-Type": "application/json"}))
 
     def paged(self, method: str, key: str, limit: int | None = None, **params: Any) -> list[dict]:
+        if method == "conversations.replies":
+            return self._replies(key, limit, **params)
         items: list[dict] = []
         cursor = None
         while True:
@@ -467,6 +469,28 @@ class Slack:
             items += out.get(key, [])
             cursor = (out.get("response_metadata") or {}).get("next_cursor")
             if not cursor or (limit and len(items) >= limit):
+                return items[:limit] if limit else items
+
+    def _replies(self, key: str, limit: int | None, **params: Any) -> list[dict]:
+        """A thread's replies, paged by moving `oldest` past the last one seen: Slack's cursor for conversations.replies
+        drops the message at each page boundary (a doorbell lost from a 204-reply inbox read, 18 Oct)."""
+        items: list[dict] = []
+        seen: set[str] = set()
+        while True:
+            out = self.call("conversations.replies", limit=PAGE, **params)
+            page = [m for m in out.get(key, []) if m.get("ts") not in seen]
+            seen.update(m.get("ts") for m in page)
+            items += page
+            cursor = (out.get("response_metadata") or {}).get("next_cursor")
+            if not (out.get("has_more") or cursor) or (limit and len(items) >= limit):
+                return items[:limit] if limit else items
+            newest = max((m["ts"] for m in page if m.get("ts") and m["ts"] != params.get("ts")), key=float, default=None)
+            if newest is not None and float(newest) > float(params.get("oldest") or 0):
+                params.pop("cursor", None)
+                params["oldest"] = newest
+            elif cursor and cursor != params.get("cursor"):
+                params["cursor"] = cursor                                # no progress by `oldest` (a tiny page): one by cursor
+            else:
                 return items[:limit] if limit else items
 
     def root(self, channel: str, thread: str) -> dict | None:
@@ -1028,7 +1052,7 @@ def deliver(api: Slack, reg: dict, routes: Routes, ch: str, msg: dict, link: str
                 lines.append(f"@{name}: no Slack inbox; reach it through its Linear team {h['linear']} (an ask to it files there)")
                 continue
             known = h is not None
-            lines.append(f"@{name}: no inbox" + (" (top-level forwards it)" if known else
+            lines.append(f"@{name}: no inbox" + (f"; its holder opens one with `research msg names open --as {name}`" if known else
                          " -- nobody will see this; check the name (`research msg names list`)") if not r else
                          f"@{name}: finished, with no forward_to: message its coordinator instead")
             continue
@@ -1369,7 +1393,7 @@ def cmd_send(ns: argparse.Namespace, reg: dict) -> int:
         if kind == "ask" and not ns.thread and len(to) == 1:
             body = linear_ask(ns, to[0], h["handle"], body)
         text = " ".join([*(tag(t) for t in to), body])
-    ch = channel_id(ns, reg, FRONT_DOOR) if not ns.thread else channel_id(ns, reg)
+    ch = channel_id(ns, reg, FRONT_DOOR) if not (ns.thread or ns.channel) else channel_id(ns, reg)   # --channel: a machine's alert
     quiet = ns.quiet or kind == "fyi"                                # an fyi wants no reply, so it wakes only its --to names
     tags = tuple(t for t in (kind if kind not in ("announce", "reply") else "", QUIET if quiet else "") if t)
     _post(client(ns), ch, h["handle"], text, ns.thread, route=_route(ns, reg, ch), urgent=ns.urgent, tags=tags)
@@ -1707,17 +1731,81 @@ def cmd_watch(ns: argparse.Namespace, reg: dict) -> int:
 
 # --- traffic: the monitor ---------------------------------------------------------------------------------------------------
 
-def issue_taken(ident: str, cache: dict[str, bool]) -> bool:
-    """Whether the Linear issue `ident` has left Backlog (accepted, started, done or canceled): an ask taken up on Linear.
-    False when Linear can't say, so a doubtful ask still shows."""
+def issue_taken(ident: str, asker: str | None, cache: dict[str, bool]) -> bool:
+    """Whether the Linear issue `ident` was taken up there: it left Backlog (accepted, started, done or canceled), or
+    someone other than `asker` commented on it.  False when Linear can't say, so a doubtful ask still shows."""
     if ident not in cache:
         from . import linear  # noqa: PLC0415
+        q = "query($id: String!) { issue(id: $id) { state { type } comments { nodes { botActor { userDisplayName } user { name } } } } }"
         try:
-            st = linear.Linear().gql("query($id: String!) { issue(id: $id) { state { type } } }", {"id": ident})["issue"]["state"]
-            cache[ident] = st["type"] != "backlog"
+            i = linear.Linear().gql(q, {"id": ident})["issue"]
+            who = [(c.get("botActor") or {}).get("userDisplayName") or (c.get("user") or {}).get("name") for c in i["comments"]["nodes"]]
+            cache[ident] = i["state"]["type"] != "backlog" or any(w and w != asker for w in who)
         except (linear.LinearError, OSError, KeyError, TypeError, ValueError):
             cache[ident] = False
     return cache[ident]
+
+
+def _stamp_epoch(stamp: str | None) -> float | None:
+    try:
+        return datetime.strptime(stamp, "%Y-%m-%dT%H:%MZ").replace(tzinfo=timezone.utc).timestamp() if stamp else None
+    except ValueError:
+        return None
+
+
+def replay(api: Slack, reg: dict, routes: Routes, ch: str, since: float, log=None) -> list[dict]:
+    """Each post in `ch` since `since` whose doorbells differ from what `route_targets` says it should have rung: the
+    names `missed` (expected, no doorbell in their inbox) and `extra` (a doorbell nothing called for).  A name is expected
+    when its inbox existed then and wasn't closed yet (or forwards); a route closed and reopened inside the window can
+    show false misses for the span it was closed, since routes keep no history."""
+    posts, threads = [], {}
+    for m in api.paged("conversations.history", "messages", channel=ch, oldest=f"{since - HISTORY_S:.6f}"):
+        if (m.get("text") or "").startswith(INBOX_HEAD):
+            continue
+        if float(m["ts"]) > since:
+            posts.append((m, None))
+        if m.get("reply_count") and float(m.get("latest_reply") or 0) > since:
+            threads[m["ts"]] = [x for x in api.paged("conversations.replies", "messages", channel=ch, ts=m["ts"],
+                                                     oldest=f"{since - HISTORY_S:.6f}") if x.get("ts") != m["ts"]]
+            posts += [(x, m) for x in threads[m["ts"]] if float(x["ts"]) > since]
+    for n in {n for m, _ in posts for n in lead_names(m.get("text") or "", reg)}:
+        routes.get_route(n)                                          # a name this clone lacks: its published route
+    reg = with_routes(reg, routes)
+    book, inboxes = routes.all(), routes.inboxes()
+    by_inbox = {r["inbox_ts"]: n for n, r in sorted(book.items(), key=lambda kv: not kv[1].get("closed"))}
+    rang: dict[str, set[str]] = {}
+    for its, name in by_inbox.items():
+        for m in api.paged("conversations.replies", "messages", channel=ch, ts=its, oldest=f"{since:.6f}"):
+            if m.get("ts") != its and (d := DOORBELL_RE.match(m.get("text") or "")):
+                rang.setdefault(d[4] or d[3], set()).add(name)
+    posts = [(m, root) for m, root in posts if (root or m)["ts"] not in inboxes and m["ts"] not in inboxes]
+    humans = {poster({"user": p.get("slack_user")}, reg) for p in reg.get("humans", [])}
+
+    def expected(name: str, t: float) -> str | None:
+        to, r = routes.resolve(name)
+        own = routes.get_route(name)
+        if not own or float(own.get("inbox_ts") or 0) > t:
+            return None
+        closed = _stamp_epoch(own.get("closed"))
+        if closed is None or closed > t:
+            return name
+        return to if r and not r.get("closed") else None
+
+    out = []
+    for m, root in posts:
+        t, author = float(m["ts"]), poster(m, reg)
+        history, branches = [], {}
+        if root and is_announcement(root):
+            history = [x for x in threads.get(root["ts"], []) if t - HISTORY_S <= float(x["ts"]) < t]
+            nums = {n for x in [m, *history] for n in named_prs(x.get("text") or "")[0]}
+            branches = pr_branches(nums, log) if nums else {}
+        want = {e for n in route_targets(m, root, reg, inboxes, history, branches) if n not in humans and (e := expected(n, t))}
+        got = rang.get(m["ts"], set())
+        missed, extra = sorted(want - got - {author}), sorted(got - want)
+        if missed or extra:
+            out.append({"ts": m["ts"], "by": author, "missed": missed, "extra": extra,
+                        "first": " ".join(plain(m.get("text") or "").split())[:80]})
+    return out
 
 
 def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
@@ -1758,10 +1846,12 @@ def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
             not is_quiet(m.get("text") or "") and kind_of(m) != "fyi"           # older clients tagged an fyi without (quiet)
         answered = m.get("reply_count") or any(x.get("name") in ("eyes", "white_check_mark", "x") for x in m.get("reactions", []))
         if is_ask and not answered and now - float(m["ts"]) > ns.stale_h * 3600:
-            if not ((link := LINEAR_LINK_RE.search(m.get("text") or "")) and issue_taken(link[1], taken)):   # taken up on Linear
+            if not ((link := LINEAR_LINK_RE.search(m.get("text") or "")) and issue_taken(link[1], poster(m, reg), taken)):
                 stale.append({"ts": m["ts"], "by": poster(m, reg), "to": lead_names(m.get("text") or "", reg)})
+    replayed = replay(api, reg, routes, ch, since) if ns.replay else None
     if ns.json:
-        print(json.dumps({"inboxes": rows, "dropped": dropped, "unanswered": stale}, indent=2))
+        print(json.dumps({"inboxes": rows, "dropped": dropped, "unanswered": stale,
+                          **({"replay": replayed} if replayed is not None else {})}, indent=2))
         return 0
     print(f"traffic over the last {ns.hours:g} h (to {both(now)})")
     for x in rows:
@@ -1771,6 +1861,11 @@ def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
         print(f"  DROPPED @{d['name']}: {d['ts']} by @{d['by']} (no inbox and no handle)")
     for s in stale:
         print(f"  UNANSWERED {s['ts']} by @{s['by']} to {' '.join('@' + t for t in s['to']) or 'no one it can ring'} ({both(s['ts'])})")
+    for x in replayed or []:
+        what = "; ".join(f"{k} {' '.join('@' + n for n in x[k])}" for k in ("missed", "extra") if x[k])
+        print(f"  REPLAY {x['ts']} by @{x['by']}: {what}: {x['first']}")
+    if replayed is not None:
+        print(f"  replayed: {len(replayed)} post(s) whose doorbells differ from route_targets")
     return 0
 
 
@@ -2000,6 +2095,37 @@ def wait_for(get: Callable[[], dict], *, sleep: Callable[[float], None], every: 
     return out
 
 
+def ring_decision(ns: argparse.Namespace, reg: dict, cid: str, out: dict) -> None:
+    """Once a card is decided, ring @top's inbox with its question, outcome and asker, so the decision reaches Daniel's
+    log without a TOP issue filed for it (COMM-34).  Once per card: a ring already in the inbox isn't repeated."""
+    if out.get("status") not in DECIDED or ns.dry_run:
+        return
+    to, r = routes_of(ns).resolve("top")
+    if not r or r.get("closed"):
+        return
+    api, ch = client(ns), r.get("channel") or channel_id(ns, reg, FRONT_DOOR)
+    mark = f"card `{cid}` decided"
+    if any(mark in (m.get("text") or "") for m in api.paged("conversations.replies", "messages", channel=ch, ts=r["inbox_ts"],
+                                                             oldest=f"{_now().timestamp() - 14 * 86400:.6f}")):
+        return
+    question, asker, link = "", "", ""
+    if out.get("ts") and (card_ch := out.get("channel") or channel_id_for(reg, ASK_CHANNEL)):
+        try:
+            card = fetch_message(api, card_ch, out["ts"], None) or {}
+            blocks = json.dumps(card.get("blocks") or [])
+            if m := re.search(r'"text": "(?:`[A-Z]+` )?\*(.+?)\*"', blocks):
+                question = m[1]
+            if m := re.search(r"asked by <[^|>]*\|([a-z0-9._-]+)>", blocks):
+                asker = m[1]
+            link = permalink(reg, card_ch, out["ts"])
+        except SlackError:
+            pass
+    text = (f"from ask-daniel, {mark}: `{out.get('choice') or '-'}` ({out.get('source') or '-'}, {out.get('decided_at') or '-'})"
+            + (f" on: {question}" if question else "") + (f"; asked by {asker}" if asker else "") + (f" {link}" if link else ""))
+    api.call("chat.postMessage", channel=ch, thread_ts=r["inbox_ts"], username="router", unfurl_links="false", text=text)
+    print(f"route @{to}: rang with the decision", file=sys.stderr)
+
+
 def _show(out: dict, as_json: bool) -> int:
     if as_json:
         print(json.dumps(out, indent=2, ensure_ascii=False))
@@ -2033,7 +2159,9 @@ def cmd_ask_daniel(ns: argparse.Namespace, reg: dict) -> int:
                 print(f"dry-run: POST {ASK_DANIEL}{path}/resolve {json.dumps(body, sort_keys=True)}", file=sys.stderr)
                 return 0
             try:
-                return _show(AskDaniel().call("POST", f"{path}/resolve", body), ns.json)
+                out = AskDaniel().call("POST", f"{path}/resolve", body)
+                ring_decision(ns, reg, str(ns.id), out)
+                return _show(out, ns.json)
             except RouteError as e:
                 if e.status == 404:
                     raise SlackError(no_such_card("resolve", ns.id)) from None
@@ -2044,7 +2172,9 @@ def cmd_ask_daniel(ns: argparse.Namespace, reg: dict) -> int:
         route = AskDaniel()
         polls = math.ceil((DEADLINE_MAX + WAIT_GRACE).total_seconds() / ns.every) if ns.wait else 1
         try:
-            return _show(wait_for(lambda: route.call("GET", path), sleep=_sleep, every=ns.every, polls=polls), ns.json)
+            out = wait_for(lambda: route.call("GET", path), sleep=_sleep, every=ns.every, polls=polls)
+            ring_decision(ns, reg, str(ns.id), out)
+            return _show(out, ns.json)
         except RouteError as e:
             if e.status == 404:
                 raise SlackError(no_such_card("status", ns.id)) from None
@@ -2090,8 +2220,9 @@ def cmd_ask_daniel(ns: argparse.Namespace, reg: dict) -> int:
     if not ns.wait:
         return 0
     polls = math.ceil((datetime.fromisoformat(body["deadline"]) - now + WAIT_GRACE).total_seconds() / ns.every)
-    return _show(wait_for(lambda: route.call("GET", f"/{urllib.parse.quote(str(cid), safe='')}"), sleep=_sleep, every=ns.every,
-                          polls=polls), ns.json)
+    out = wait_for(lambda: route.call("GET", f"/{urllib.parse.quote(str(cid), safe='')}"), sleep=_sleep, every=ns.every, polls=polls)
+    ring_decision(ns, reg, str(cid), out)
+    return _show(out, ns.json)
 
 
 def main(argv: list[str], prog: str = "research msg") -> int:
@@ -2175,6 +2306,7 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p = cmd("traffic", "the monitor: doorbells per inbox, pauses, dropped names, unanswered asks")
     p.add_argument("--hours", type=float, default=24)
     p.add_argument("--stale-h", type=float, default=2, help="an ask with no 👀, ✅, ❌ or reply after this many hours is unanswered")
+    p.add_argument("--replay", action="store_true", help="also compare each post's doorbells with what route_targets says it rings")
     p.add_argument("--now", default=None, help=argparse.SUPPRESS)
     p.add_argument("--json", action="store_true")
     cmd("pickup", "\U0001f440 on an ask or alert you own", thread=True)

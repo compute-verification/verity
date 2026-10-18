@@ -11,7 +11,8 @@ finalize has fixed every rank's root and taken off its hooks, and before any che
 4. the driver resets its own context, sees nvidia-smi list nothing on any leased GPU, and lets go of every lock at once.
 
 The binding and manifest coverage, the attribution, the sampled replay and its boundary linkage, the openings and the cross-rank pass
-that follow read host memory only, and no rank is reset for another run (``reset``).  A rank that keeps, or a step that fails or
+that follow read host memory only, and no rank is reset for another run (``reset``).  A Commit that stops after a failed run gives
+the GPUs back the same way there (``stop``).  A rank that keeps, or a step that fails or
 leaves a context behind, keeps the lease to the Commit's exit and ``gpu_lease.released`` says why; the holder then ends the lease once
 nothing is left on the leased GPUs.  Without a lease ``finalize`` is the ranks' finalize and nothing else changes."""
 from __future__ import annotations
@@ -190,10 +191,17 @@ def finalize(llm: Any, rpc_timeout: float, after: str, *, last: bool, wait: Call
     return llm.collective_rpc("tp2_commit_finalize", timeout=rpc_timeout, **({"kwargs": kw} if kw else {}))
 
 
+def stop(llm: Any, rpc_timeout: float, after: str, *, wait: Callable[[float], Any] = time.sleep) -> None:
+    """The Commit stops after run ``after`` (a failed run, `tp.commit`'s fail-fast), which was its last device work: under a lease
+    whose ranks are still on their devices, the GPUs go back now (``release``), as after the last run's finalize."""
+    if GL._HELD and not _OFF.is_set():
+        release(llm, rpc_timeout, after, wait=wait)
+
+
 def reset(llm: Any, rpc_timeout: float) -> None:
     """The ranks' committers recycled for the next run; not once the ranks were asked off their devices."""
     if not _OFF.is_set():
         llm.collective_rpc("tp2_commit_reset", timeout=rpc_timeout)
 
 
-__all__ = ["acquire", "finalize", "release", "reset", "rank_kept", "rank_off", "rank_reset"]
+__all__ = ["acquire", "finalize", "release", "reset", "stop", "rank_kept", "rank_off", "rank_reset"]

@@ -36,13 +36,13 @@ local notation "𝕂" => FlockLevel3.GF256
 /-- **The masked replay refines the model's masked zerocheck and lincheck** (live PROTOCOL.md §1, §4). When
 `Zk.replay` succeeds from `t` to `t'` on well-formed rounds, at a statement whose `m` (at least 15) and `k_log` are the
 executable's, then at any pads and triple the model's masked zerocheck and lincheck, played with the proof's messages,
-run on the coins of the rounds consumed, split at some round `k₁`; and the replay's two claims have the model's points:
-`ab`'s is the lincheck's claim's, `c`'s is `(L_s(z), r)` at the zerocheck's coins. -/
+run on the coins of the `m + (k_log − 6)` rounds consumed, split at some round `k₁`; and the replay's two claims have
+the model's points: `ab`'s is the lincheck's claim's, `c`'s is `(L_s(z), r)` at the zerocheck's coins. -/
 def ZkReplayPlays : Prop :=
   ∀ (st : Setup) (lay : Zk.PadLayout) (p : Proof) (root : ByteArray) (t t' : Flock.Transcript) (rp : Zk.Replayed)
     (S : Model.Statement), st.m = S.m → st.kLog = S.kLog → 15 ≤ S.m → RoundsWF t.rounds →
     Zk.replay st lay p root t = .ok (rp, t') →
-    t'.rounds = t.rounds ∧ t.k ≤ t'.k ∧
+    t'.rounds = t.rounds ∧ t'.k = t.k + (S.m + (S.kLog - 6)) ∧
       ∀ {np : ℕ} (P : ZkSession.PadsA np) (tr : ZkSession.Triple np), ∃ (k₁ : ℕ) (zc : ZkSession.ZcZK 𝔽 np S.m)
         (row : ZkSession.LinF 𝔽 np) (ab : ZkSession.ClaimZK 𝔽 np S.m) (row' : ZkSession.LinF 𝔽 np),
         t.k ≤ k₁ ∧ k₁ ≤ t'.k ∧

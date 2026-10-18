@@ -1,0 +1,26 @@
+# A declared circuit's requirement as code: `Accounting.Requirement`'s live and read values, their bits and blocks, the
+# store's resident blocks and the link (`StoreMatches`, `PlanMatches`), computed on one instance (`CircuitRequirement`),
+# and `requirement-difftest`, which serves them to the difftest against `verity.ml.circuits.requirement`. Lean core,
+# C-Flock's canonical JSON and the harness only; `Properties.Accounting.Requirement` states that each function is the
+# definition it computes.
+name = "core_requirement"
+defaultTargets = ["CircuitRequirement", "requirement-difftest"]
+
+[leanOptions]
+autoImplicit = false
+relaxedAutoImplicit = false
+
+[[require]]
+name = "flock_verifier"
+path = "../../service/flock"
+
+[[require]]
+name = "verity_difftest"
+path = "../../difftest/lean"
+
+[[lean_lib]]
+name = "CircuitRequirement"
+
+[[lean_exe]]
+name = "requirement-difftest"
+root = "CircuitRequirement.DifftestMain"
