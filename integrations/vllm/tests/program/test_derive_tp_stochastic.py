@@ -152,5 +152,5 @@ def test_the_greedy_rank_program_is_the_with_peers_one():
 @pytest.mark.parametrize("n", [0, 4])
 def test_with_peers_refuses_a_wrapper_it_does_not_know(n):
     bus = CollectiveBus(rank=0, world=2)
-    with pytest.raises(ValueError, match="1 to 3 inputs of its own"):
+    with pytest.raises(ValueError, match=f"no peer form for Identity with {n} inputs of its own and 0 prefix inputs"):
         vm.with_peers(nn.Identity(), tuple(torch.empty(1, device="meta") for _ in range(n)), bus)

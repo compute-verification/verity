@@ -81,6 +81,11 @@ _define_once("unified_cache_pad(Tensor live, Tensor zero, int slot) -> ()", "uni
 # value, row, leaf): the request wrapper's input, called before its prefill; each layer's history opens with its C rows.  Not a vLLM
 # op: a stand-in with an explicit schema like `unified_cache_pad` (rule `KvPrefix[vllm]`).
 _define_once("kv_prefix(Tensor prefix) -> ()", "kv_prefix", lambda prefix: None)
+# [GLM-5.3] The same for DeepSeek sparse attention's caches: rows 0..C-1 of every MLA layer's latent cache (`latent` bf16 [NL, C, L+R],
+# [kv_c normed | k_pe roped] as `dsa_norm_rope` writes them, layers in forward order) and of every indexer layer's index-K cache
+# (`index_k` e4m3 [NI, C, D] and `index_k_scale` f32 [NI, C], indexer layers in forward order).  Rule `MlaPrefix[vllm-dsa]`.
+_define_once("mla_prefix(Tensor latent, Tensor index_k, Tensor index_k_scale) -> ()", "mla_prefix",
+             lambda latent, index_k, index_k_scale: None)
 # [R15 stoch] The stochastic token select of vLLM d9105ea80's sampler for ONE request with temperature + top-p (no top-k / penalties /
 # logit bias / min_p), as one op the wrapper authors per sampled step: `Sampler.sample` = f32 widening -> `_temperature_kernel` ->
 # `apply_top_k_top_p_triton` (`_apply_topp_split`, `splits` splits) -> `_gumbel_sample_kernel` (Gumbel-max with the stream key

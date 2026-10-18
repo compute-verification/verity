@@ -96,7 +96,7 @@ _CONSTRUCTION_SOURCES = ("verity_vllm/program/frontend/export_compat.py", "verit
                          "verity_vllm/program/frontend/rules/vllm_bindings/kv_prefix.py", "verity_vllm/program/frontend/rules/vllm_bindings/norm_chain.py",
                          "verity_vllm/program/frontend/rules/vllm_bindings/observations.py", "verity_vllm/program/frontend/rules/vllm_bindings/operands.py",
                          "verity_vllm/program/frontend/rules/vllm_bindings/pins.py", "verity_vllm/program/frontend/rules/vllm_bindings/triton_launches.py",
-                         "verity_vllm/program/frontend/rules/vllm_bindings/views.py",
+                         "verity_vllm/program/frontend/rules/vllm_bindings/views.py", "verity_vllm/program/frontend/cached_request.py",
                          "verity_vllm/program/frontend/rules/vocab.py", "verity_vllm/program/frontend/rules/triton_iface.py",
                          "verity_vllm/program/frontend/rules/vllm_iface.py", "verity_vllm/program/frontend/derive.py", "verity_vllm/program/frontend/target_profile.py",
                          "verity_vllm/program/frontend/targets.py",
@@ -376,7 +376,7 @@ def run(out: str, M: int, pos0: int, profile: str, backend: str, intercept: bool
     """`emit`: an `emit_ranks.Emit` (`--emit-ranks`): the other ranks' files are written from this rank's derivation.  `engine_args`:
     the row's engine arguments the meta config takes (`workload_engine_args`).  `device_name`: the name the declared target's GPU
     reports, answered on a GPU-free host (`engine.profiles.devices`, `export_compat.select_cuda_platform`).  `batch_dispatch`: see `LC.missing_batch`.
-    `cached`: the request's prefix-cached rows C (`vllm_meta.CachedGreedyRequest`; `prefix_cache.json`, `program.prefix_plan`)."""
+    `cached`: the request's prefix-cached rows C (`cached_request.cached_wrapper`; `prefix_cache.json`, `program.prefix_plan`)."""
     from verity_vllm.program.frontend.target_profile import TargetProfile
     os.makedirs(out, exist_ok=True)
     t_start = time.time()
@@ -455,7 +455,7 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
                tp: int = 1, rank: int = 0, launch: dict | None = None, emit=None, engine_args: dict | None = None, C: int = 0) -> None:
     from verity_vllm.program.frontend.target_profile import ArtifactIdentity, profile_mismatches
     with InputsTrace(os.path.join(out, "inputs.json")), contextlib.ExitStack() as tp_stack:
-        from verity_vllm.program.frontend import vllm_meta as vm
+        from verity_vllm.program.frontend import cached_request as CR, vllm_meta as vm
         from verity_vllm.program.frontend.export_compat import apply_target_profile, host_facts, read_back_applied
         from verity_vllm.program.frontend.triton_capture import TritonLaunchLog
         import torch
@@ -533,7 +533,7 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
                 raise _Refused()
             observe_attention_impls(res["attention_impls_observed"])
             log = TritonLaunchLog()
-            mod, inputs = vm.make_wrapper(wrapper, model, pos0=pos0, M=M, LP=LP, T=T, eos_id=eos, sampling=sampling, C=C)
+            mod, inputs = CR.cached_wrapper(*vm.make_wrapper(wrapper, model, pos0=pos0, M=M, LP=LP, T=T, eos_id=eos, sampling=sampling), model, C)
             ntok = M if wrapper == "step" else LP - C
             if tp > 1:
                 # [R13 tp] probe: one meta forward records the rank's collectives in call order -> the PEER INPUTS of the Program (the other

@@ -31,8 +31,9 @@ from verity_vllm.program.frontend.derive import derive_report
 from verity_vllm.program.frontend.export_compat import dsa_leaves
 from verity_vllm.program.frontend.rules import vllm_bindings as VB
 from verity_vllm.program.frontend.rules import vllm_dsa
-from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
+from verity_vllm.program.frontend.rules.vllm_bindings import kv_prefix as KP, vllm_ruleset
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import launch_region
+from verity_vllm.program.frontend.rules.vllm_iface import iface
 from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3, PROFILES, Vocabulary
 from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity_vllm.program.kernels.serve3_reference import materialize
@@ -218,6 +219,8 @@ def _ids(rep) -> list[str]:
 def _words(t: torch.Tensor) -> list[int]:
     if t.dtype == torch.bfloat16:
         return t.contiguous().view(torch.int16).numpy().reshape(-1).astype(np.uint16).tolist()
+    if t.dtype == torch.float8_e4m3fn:
+        return t.contiguous().view(torch.uint8).numpy().reshape(-1).tolist()
     return t.contiguous().view(torch.int32).numpy().reshape(-1).astype(np.uint32).tolist()
 
 
@@ -228,14 +231,14 @@ def _run(rep, model: _Model, inputs) -> list[int]:
     return [int(t[g]) for g in rep.program.circuit.root_outputs()]
 
 
-def _reference(model: _Model, inputs) -> list[int]:
+def _reference(model: _Model, inputs, latent: torch.Tensor | None = None) -> list[int]:
     """The module's outputs as the Definitions compose them: per token the norms, the RoPEs and the absorptions, and per row
-    `SparseMla_v1{T=n}` over the layer's rows 0..n-1 ([kv_c normed | k_pe roped])."""
+    `SparseMla_v1{T=n}` over the layer's rows 0..n-1 ([kv_c normed | k_pe roped]), the first C of them a cached prefix's `latent`."""
     qn, kn = bind(b1.RMSNormTriton, N=NQ, EPS=EPS), bind(b1.RMSNormTriton, N=L, EPS=EPS)
     rope1 = ropeh = bind(RoPEHeadGptJV2, D=R)
     up = bind(cublas_bf16.BatchedGemmWord, B=NH, K=P, N=L, DOT=DOT)
     down = bind(cublas_bf16.BatchedGemmWord, B=NH, K=L, N=V, DOT=DOT)
-    hist = {n: [] for n in NAMES}
+    hist = {n: [] if latent is None else [_words(row) for row in latent[l]] for l, n in enumerate(NAMES)}
     out, k = [], 0
     for p0, T in model.steps:
         for layer in model.layers:
@@ -594,3 +597,124 @@ def test_a_layer_with_a_prefill_backend_derives_where_every_call_takes_the_mqa_p
     assert rep.program is not None, rep.unsupported
     assert _ids(rep) == plain and _run(rep, model, xs) == _reference(model, xs)
     assert vllm_dsa.DECODE_THRESHOLD_DEFAULT == 256 and vllm_dsa.DECODE_THRESHOLD.get(8, vllm_dsa.DECODE_THRESHOLD_DEFAULT) == 256
+
+
+# -- a cached prefix ----------------------------------------------------------------------------------------------------------
+
+C_ROWS = 2
+
+
+class _CachedModel(_Model):
+    """`_Model` for a request whose first `C_ROWS` rows the prefix cache serves: the MLA prefix inputs come first and open every
+    history (`vllm_iface.mla_prefix`), then the steps from position C (`cached_request.CachedMlaGreedyRequest`)."""
+
+    def forward(self, latent, index_k, index_k_scale, *xs):
+        iface.mla_prefix(latent, index_k, index_k_scale)
+        return super().forward(*xs)
+
+
+def _cached(order=(True, False), steps=((C_ROWS, 2), (C_ROWS + 2, 1)), nl: int | None = None, ni: int | None = None, seed: int = 4):
+    model = _CachedModel([_Layer(NAMES[i], indexer, seed=10 + i, topk=8) for i, indexer in enumerate(order)], steps)
+    rng = np.random.default_rng(seed)
+    nl, ni = len(order) if nl is None else nl, sum(order) if ni is None else ni
+    prefix = (_bf16(rng, nl, C_ROWS, L + R), _bf16(rng, ni, C_ROWS, D).float().to(torch.float8_e4m3fn),
+              torch.from_numpy(rng.uniform(0.5, 2.0, (ni, C_ROWS)).astype(np.float32)))
+    return model, prefix, _inputs(model)
+
+
+def test_a_cached_prefix_opens_every_history_at_its_rows(served):
+    """Each layer's history opens with its C cached latent rows, and the indexer layer's with its C index-K slots and scales: row i of
+    the prefill at position C + i reads C + i + 1 keys, the first C of them the prefix's inputs; the layout names the inputs and the
+    layers in the order they opened."""
+    model, prefix, xs = _cached()
+    rep = _derive(model, prefix + xs)
+    assert rep.program is not None, rep.unsupported
+    ids = _ids(rep)
+    assert [i for i in ids if i.startswith("DsaMqaLogits")] == [bind(dsa.DsaMqaLogitsV3, N=n, H=H, D=D).id for n in (3, 4, 5)]
+    assert [i for i in ids if i.startswith("SparseMla")] == [
+        bind(sparse_mla.SparseMla, T=n, NH=NH, DR=R, DV=L, BN=BN, DOT=DOT, INV=hopper.Fa3InvSum, SCALE=SCALE).id for n in (3, 4, 3, 4, 5, 5)]
+    assert _run(rep, model, prefix + xs) == _reference(model, xs, latent=prefix[0])
+    assert KP.layout_of(rep.provenance) == {"kind": "mla", "input": 0, "inputs": [0, 1, 2], "C": C_ROWS, "row_leaves": L + R, "index_d": D,
+                                            "layers": list(NAMES), "indexer_layers": [NAMES[0]]}
+    (logits,) = [n for n in rep.program.fn.body.nodes if n.fn.id == bind(dsa.DsaMqaLogitsV3, N=3, H=H, D=D).id]
+    k, s = logits.args[2].refs, logits.args[3].refs                     # rows 0..C-1 the cached index K and its scales, row C this request's
+    assert [k[0], k[C_ROWS * D - 1], s[0], s[C_ROWS - 1]] == [("p", 1, 0), ("p", 1, C_ROWS * D - 1), ("p", 2, 0), ("p", 2, C_ROWS - 1)]
+    assert k[C_ROWS * D][0] == "n" and s[C_ROWS][0] == "n"
+
+
+def test_another_attention_refuses_a_pending_mla_prefix_and_the_dsa_rule_a_dense_one(served):
+    class DensePrefixed(_Model):
+        def forward(self, prefix, *xs):
+            iface.kv_prefix(prefix)
+            return super().forward(*xs)
+
+    model = DensePrefixed([_Layer(NAMES[i], indexer, seed=10 + i) for i, indexer in enumerate((True, False))], ((C_ROWS, 1),))
+    hint = _hint(_derive(model, (torch.zeros(2, 2, C_ROWS, 8, dtype=torch.bfloat16),) + _inputs(model)))
+    assert "DsaIndexerAttn[vllm-dsa]_v1 does not read a cached dense prefix; only the dense unified_attention_with_output rule" in hint, hint
+    with pytest.raises(Exception, match="does not read a cached MLA prefix"):
+        from verity_vllm.program.frontend.rules.common import CACHED_MLA_PREFIX, refuse_cached_prefix
+        ctx = types.SimpleNamespace(state={CACHED_MLA_PREFIX: {"C": 1}}, module_path=lambda n: "m")
+        refuse_cached_prefix(ctx, None, "UnifiedAttentionWithOutput[vllm]_v2", reads="kv_prefix")
+
+
+@pytest.mark.parametrize("case,needle", [
+    ("start", f"positions 0..1 do not continue {NAMES[0]!r}'s history of 2 rows (next position 2)"),
+    ("layers", f"{NAMES[1]!r} is MLA layer 2 of the forward, the cached prefix holds 1"),
+    ("indexers", f"{NAMES[1]!r} is indexer layer 2 of the forward, the cached prefix holds 1"),
+    ("unconsumed", "the cached prefix holds 3 MLA layers (1 indexer layers), the prefill opened 2 (1)"),
+    ("scales", "index_k_scale [1, 3] are not [NL, C >= 1, W], [NI >= 1, C, D], [NI, C]"),
+])
+def test_a_cached_prefix_that_does_not_fit_the_forward_refuses(case, needle, served):
+    kw = {"start": {"steps": ((0, 2), (2, 1))}, "layers": {"nl": 1}, "indexers": {"order": (True, True), "ni": 1},
+          "unconsumed": {"nl": 3}}.get(case, {})
+    model, prefix, xs = _cached(**kw)
+    if case == "scales":
+        prefix = prefix[:2] + (torch.ones(1, C_ROWS + 1),)
+    hint = _hint(_derive(model, prefix + xs))
+    assert needle in hint, hint
+
+
+def test_the_cached_wrappers_take_the_mla_prefix_before_the_peers(monkeypatch):
+    """`cached_request.prefix_input` over an all-MLA model is the latent rows of every layer and the index-K rows of its indexer layers;
+    `cached_wrapper` takes them after the prompt, and a TP rank's peer form keeps them before its peers, whose inputs stay `peers_<k>`."""
+    from verity_vllm.program.frontend import cached_request as CR, vllm_meta as vm
+
+    class Toy(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.emb = nn.Embedding(16, 4)
+
+        def forward(self, ids, positions):
+            return self.emb(ids)
+
+        def compute_logits(self, h):
+            return h
+
+    class Bus:
+        rank, world, cursor = 0, 2, 0
+
+        def reset(self, mode, peers):
+            self.cursor = len(peers)
+
+        def example_peers(self):
+            return [torch.zeros(4, dtype=torch.bfloat16)]
+
+    impls = {n: _observation(kv_lora_rank=L, qk_rope_head_dim=R, indexer=ix, index_head_dim=D if ix else None)
+             for n, ix in zip(NAMES + ("layers.2.self_attn.attn",), (True, False, True))}
+    toy, LP, T, C = Toy(), 6, 2, 4
+    monkeypatch.setattr(vm, "attention_impls", lambda model: impls)
+    mod, inputs = CR.cached_wrapper(*vm.make_wrapper("request", toy, LP=LP, T=T), toy, C)
+    assert type(mod) is CR.CachedMlaGreedyRequest and mod.n_prefix == 3
+    assert [(tuple(x.shape), x.dtype) for x in inputs] == [((LP,), torch.int32), ((3, C, L + R), torch.bfloat16),
+                                                           ((2, C, D), torch.float8_e4m3fn), ((2, C), torch.float32)]
+    stoch, sin = CR.cached_wrapper(vm.StochasticRequest(toy, LP, T, 1.0, 0.9), inputs[:1] + (torch.zeros(1, dtype=torch.int64),), toy, C)
+    assert stoch.n_prefix == 3 and len(sin) == 5
+    with pytest.raises(ValueError, match="no peer form for CachedStochasticRequest with 2 inputs of its own and 3 prefix inputs"):
+        vm.with_peers(stoch, sin, Bus())
+    wrapped, win = vm.with_peers(mod, inputs, Bus())
+    assert type(wrapped) is vm.MlaCachedWithPeers and len(win) == 5
+    cpu = (torch.zeros(LP, dtype=torch.int32), torch.zeros(3, C, L + R, dtype=torch.bfloat16),
+           torch.zeros(2, C, D).to(torch.float8_e4m3fn), torch.zeros(2, C), torch.zeros(4, dtype=torch.bfloat16))
+    ep = torch.export.export(wrapped, cpu, strict=False)
+    assert list(ep.graph_signature.user_inputs) == ["prompt", "latent", "index_k", "index_k_scale", "peers_0"]
+    assert [str(n.target) for n in ep.graph.nodes if n.op == "call_function"][0] == "vllm_iface.mla_prefix.default"

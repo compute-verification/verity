@@ -9,7 +9,7 @@ from verity.ml.circuits.types import Array, Value
 from verity_vllm.program.frontend.derive import Alloc, refuse
 from verity_vllm.program.frontend.torch_frontend import _tensor_type, shape_of
 from verity_vllm.program.frontend.rules.base import RuleInfo, StateRule
-from verity_vllm.program.frontend.rules.common import attention_scale, kv_logs, shape
+from verity_vllm.program.frontend.rules.common import CACHED_PREFIX, attention_scale, kv_logs, refuse_cached_prefix, shape
 from verity_vllm.program.frontend.rules.vllm_bindings import kv_prefix as KP
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import (ATTN_PINS, _OBSERVED, _attn_pins_ok, active_launch_context,
                                                                            active_target_profile, attn_kind_for, attn_lookup_key)
@@ -131,6 +131,7 @@ class UnifiedAttentionWithOutputRule(StateRule):
         return True
 
     def emit(self, node, ctx):
+        refuse_cached_prefix(ctx, node, self.rule_id, reads=CACHED_PREFIX)
         q, k, v, out, layer_name, _, _, dep = self._args(node)
         qc, kc, vc = ctx.coll(q), ctx.coll(k), ctx.coll(v)
         D = ctx.config.get("D") or ctx.allowed_dims.get("D")

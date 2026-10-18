@@ -8,7 +8,7 @@ from verity.ml.circuits.refs import Coll
 from verity.ml.circuits.types import Array, Value
 from verity_vllm.program.frontend.derive import refuse
 from verity_vllm.program.frontend.rules.base import RuleInfo, StateRule
-from verity_vllm.program.frontend.rules.common import CACHED_PREFIX as STATE, dtype_is, shape
+from verity_vllm.program.frontend.rules.common import CACHED_MLA_PREFIX, CACHED_PREFIX as STATE, dtype_is, shape, user_input_index
 from verity_vllm.program.frontend.rules.vllm_bindings.operands import BF16
 
 
@@ -19,7 +19,7 @@ class KvPrefixRule(StateRule):
     No gates."""
     modes = frozenset({"profile"})
     info = RuleInfo("KvPrefix[vllm]", 1, "state", applies_to="vllm_iface.kv_prefix(prefix) -> ()",
-                    preconditions=("prefix is a bf16 value collection [L, 2, C, KVH*D] with C >= 1",
+                    preconditions=("prefix is one of the wrapper's inputs, a bf16 value collection [L, 2, C, KVH*D] with C >= 1",
                                    "no KV history exists yet and no prefix is pending (the prefix precedes every attention)",
                                    "every one of the L layers opens its history with it, and only the dense attention rule reads it"),
                     evidence_domain="structural: the cached rows are the Program's input, bound by Match to the producing request's rows")
@@ -32,28 +32,29 @@ class KvPrefixRule(StateRule):
         prefix = node.args[0]
         if not isinstance(prefix, torch.fx.Node) or not isinstance(ctx.val(prefix), Coll) or not dtype_is(ctx, prefix, BF16):
             return "prefix is not a bf16 value collection"
+        if user_input_index(ctx, prefix) is None:
+            return "prefix is not one of the wrapper's inputs"
         s = shape(ctx, prefix)
         if len(s) != 4 or s[1] != 2 or s[2] < 1:
             return f"prefix has shape {s}, not [L, 2, C >= 1, KVH*D]"
-        if ctx.state.get("kv_history") or ctx.state.get(STATE):
+        if any(ctx.state.get(k) for k in ("kv_history", "dsa_history", STATE, CACHED_MLA_PREFIX)):
             return "a KV history or another prefix exists: the cached prefix opens every history"
         return True
 
     def emit(self, node, ctx):
         L, _, C, rl = shape(ctx, node.args[0])
         coll = ctx.coll(node.args[0]).reshape(Array(L, Array(2, Array(C, Array(rl, Value(16))))))
-        ctx.record(self, node, {"layers": L, "rows": C, "row_leaves": rl}, emitted="(pending cached prefix; no gates)",
-                   cached_prefix={"C": C, "row_leaves": rl, "layers": []})
+        k = user_input_index(ctx, node.args[0])
+        ctx.record(self, node, {"layers": L, "rows": C, "row_leaves": rl, "input": k}, emitted="(pending cached prefix; no gates)",
+                   cached_prefix={"input": k, "inputs": [k], "C": C, "row_leaves": rl, "layers": []})
         ctx.state[STATE] = {"coll": coll, "L": L, "C": C, "row_leaves": rl, "layers": ctx.applications[-1]["cached_prefix"]["layers"]}
 
 
 def layout_of(provenance: dict) -> dict | None:
-    """The cached prefix a derive read, from its provenance: `{"input": the prefix's user-input index (the wrapper's last input), "C",
-    "row_leaves", "layers": attention layer names in the prefix's layer order}`; None for a Program without one."""
-    rec = next((a["cached_prefix"] for a in provenance.get("applications") or () if "cached_prefix" in a), None)
-    if rec is None:
-        return None
-    return {"input": len((provenance.get("source") or {}).get("example_inputs") or ()) - 1, **rec}
+    """The cached prefix a derive read, from its provenance: the rule's `cached_prefix` record (`"input"`, the prefix's user-input index;
+    `"inputs"`, every user input it reads; `"C"`; the layer names in the prefix's layer order; and its kind's row geometry: the dense
+    `"row_leaves"`, or `vllm_dsa.MlaPrefixRule`'s `"kind": "mla"` form); None for a Program without one."""
+    return next((dict(a["cached_prefix"]) for a in provenance.get("applications") or () if "cached_prefix" in a), None)
 
 
 def seed(ctx, node, layer_name: str, krow_list: list, vrow_list: list, KVH: int, D: int) -> int:

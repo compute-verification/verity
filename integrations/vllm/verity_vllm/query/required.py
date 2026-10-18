@@ -481,13 +481,14 @@ def query_header(profile: str, hidden_family: str | None, *, return_slots: bool,
 
 
 def cached_prefix_inputs(P: ProgramView, res: Mapping[str, Any]) -> frozenset[ValueRef]:
-    """A warm request Program's `prefix` input (its derive's `res["prefix"]["input"]`, the wrapper's input index): rows 0..C-1 of every
-    layer's key and value, the producing requests' committed rows (no identity of this request names them)."""
+    """A warm request Program's prefix inputs (its derive's `res["prefix"]["inputs"]`, the wrapper's input indices; `["input"]` alone in
+    a dense layout before it): rows 0..C-1 of every layer's cache, the producing requests' committed rows (no identity of this request
+    names them)."""
     pfx = res.get("prefix")
     if not isinstance(pfx, Mapping):
         return frozenset()
-    p = P.params[int(pfx["input"])]
-    return frozenset(ValueRef(p.id, port.name) for port in p.port_table)
+    params = [P.params[int(k)] for k in pfx.get("inputs") or [pfx["input"]]]
+    return frozenset(ValueRef(p.id, port.name) for p in params for port in p.port_table)
 
 
 def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any], *, request_id: str | int | None = None,
