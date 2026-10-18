@@ -19,10 +19,11 @@
 #        env: PY (its directory has `verity-vllm`), PAIRS (2), MAX_NUM_SEQS (8), GPU_UTIL (0.3), KV_GIB (4: the KV cache, kv_cache_memory_bytes), COMMIT_TIMEOUT (2400),
 #             FAULT (VERITY_FAULT for the treatment), EXTRA_COMMIT_ARGS
 set -uo pipefail
-CASE=$1; WL=$2; BUILD=$3; PDIG=$4; CKPT=$5; D=$6
+CASE=$1; WL=$(realpath "$2"); BUILD=$(realpath "$3"); PDIG=$4; CKPT=$5; D=$(realpath -m "$6")
 PY=${PY:-/workspace/venv-cu129/bin/python}
 export HF_HOME=${HF_HOME:-/workspace/hf} HF_HUB_OFFLINE=1 TOKENIZERS_PARALLELISM=false
 export CUDA_HOME=${CUDA_HOME:-/usr/local/cuda} PATH=$(dirname "$PY"):/usr/local/cuda/bin:$PATH
+cd "$(dirname "${BASH_SOURCE[0]}")/../.." || exit 1               # the integration's root: the commit's manifests/ defaults
 mkdir -p "$D"
 PAIRS=${PAIRS:-2}; TO=${COMMIT_TIMEOUT:-2400}
 log() { echo "[$(date -u +%FT%TZ)] served_commit $CASE: $*" | tee -a "$D/stages.txt"; }
