@@ -30,7 +30,9 @@ file opens the unit's rows under the registered window root, through its entry a
 its manifest re-starts its epoch under the challenger's own coin commitment, and the window's context names it.
 `draw` is the rule on the window's draw (`Challenger.select`'s): the epoch's draw coin opens after the registration,
 and the drawn units are Lean's ``Draw.subset`` of the key it derives.  Both read the coin versions in `COIN_VERSIONS`,
-and a replay of a recorded draw `COIN_EARLY` too.
+and a replay of a recorded draw `COIN_EARLY` too.  `rounds` is the rule on a live window's round coins
+(`coins.rounds_reason`): under the challenger's live coin commitment, round r's coin opened once, after the r-th round
+root the verifier recorded.
 
 Every refusal has one reason, the first rule it breaks in the order below; the Lean port writes the same strings.
 """
@@ -950,6 +952,62 @@ def draw(coins: Any, recorded: bool, opening: Any, stream: Any, registration: An
     return None
 
 
+# ---- a live window's round coins ---------------------------------------------------------------------------------------
+
+_LIVE = "a live coin commitment is {epoch, families, root, scheme}: a list of [label, count] and a hex root"
+_LIVE_OPENING = ("a live coin opening is {after, coin, epoch, index, label, path, salt}: integers, a string, hex, and SHA-512 "
+                 "digests")
+
+
+def live_coins_of(j: Any) -> Co.LiveCommitment:
+    """A live coin commitment ``{"epoch", "families", "root", "scheme"}`` (`LiveCommitment.from_json`)."""
+    families = j.get("families") if isinstance(j, dict) else None
+    root = _hex(j.get("root")) if isinstance(j, dict) else None
+    if not (isinstance(families, list) and all(isinstance(f, list) for f in families)) or root is None:
+        raise Refused(_LIVE)
+    layout = tuple(tuple(f) for f in families)
+    why = Co.layout_problem(j.get("scheme"), j.get("epoch"), layout)
+    if why is not None:
+        raise Refused(why)
+    if len(root) != 64:
+        raise Refused("a coin commitment's root is 64 bytes")
+    return Co.LiveCommitment(j["scheme"], j["epoch"], layout, root)
+
+
+def live_opening_of(j: Any) -> Co.LiveOpening:
+    """A live coin's opening (`LiveOpening.from_json`), its path of SHA-512 digests."""
+    if not isinstance(j, dict) or not _int(j.get("epoch")) or not _int(j.get("index")) or not _str(j.get("label")):
+        raise Refused(_LIVE_OPENING)
+    hexes = [_hex(j.get(k)) for k in ("after", "coin", "salt")]
+    path = [_hex(p) for p in j["path"]] if isinstance(j.get("path"), list) else None
+    if None in hexes or path is None or any(p is None or len(p) != 64 for p in path):
+        raise Refused(_LIVE_OPENING)
+    return Co.LiveOpening(j["epoch"], j["label"], j["index"], *hexes, tuple(path))
+
+
+def rounds(coins: Any, roots: Any, openings: Any) -> tuple[str, str] | None:
+    """None when `openings` are a live window's round coins (`coins.rounds_reason`): under `coins`, the challenger's live
+    coin commitment (its JSON), round r's coin opened once, after `roots[r]`, the r-th round root the verifier recorded
+    (hex), and every recorded round's coin opened; else the refusal (``coin`` or ``rounds``, and why)."""
+    try:
+        c = live_coins_of(coins)
+    except Refused as e:
+        return "coin", f"the verifier's coins are malformed: {e}"
+    rs = [_hex(r) for r in roots] if isinstance(roots, list) else None
+    if rs is None or any(r is None or len(r) != 64 for r in rs):
+        return "rounds", "the round roots are not a list of SHA-512 digests"
+    if not isinstance(openings, list):
+        return "rounds", "the round coins are not a list"
+    os_ = []
+    for i, o in enumerate(openings):
+        try:
+            os_.append(live_opening_of(o))
+        except Refused as e:
+            return "coin", f"round coin {i}: {e}"
+    why = Co.rounds_reason(c, rs, os_)
+    return None if why is None else ("coin", why)
+
+
 def answer(params_b: bytes, commitment_b: bytes, evidence_b: bytes) -> dict:
     """`Core.Protocol.answer`: every input gets a verdict, a decoding failure being a rejection naming its input."""
     def out(verdict: str, reason: str | None, d: bytes | None, pub: Any = None, prof: Any = None) -> dict:
@@ -993,4 +1051,4 @@ def line(a: dict) -> str:
 
 __all__ = ["ANSWER_KEYS", "FORMATS", "ID", "LEVEL", "ONE_STAGE", "Refused", "SCHEME", "answer", "answer_of", "canonical",
            "case", "check", "commitment", "digest", "draw", "evidence", "integrity", "integrity_json", "law_name", "line",
-           "opening", "params", "pass_epoch", "ratio", "registered", "unit_draw", "verify_path", "window_domain"]
+           "opening", "params", "pass_epoch", "ratio", "registered", "rounds", "unit_draw", "verify_path", "window_domain"]

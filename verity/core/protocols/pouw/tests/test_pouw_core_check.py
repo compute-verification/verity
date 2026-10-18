@@ -32,6 +32,9 @@ _spec.loader.exec_module(openings)
 _spec = importlib.util.spec_from_file_location("pouw_pass_cases", PKG / "tests/pouw_pass_cases.py")
 passes = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(passes)
+_spec = importlib.util.spec_from_file_location("pouw_rounds_cases", PKG / "tests/pouw_rounds_cases.py")
+rounds_cases = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(rounds_cases)
 
 #: the refusal each mutation aims at: the reason's start
 EXPECT = {
@@ -353,6 +356,36 @@ def test_every_draw_mutation_hits_its_refusal():
         for seed in range(6):
             got = CC.draw(*passes.draw_args(passes.draw_instance(random.Random(f"{name}/{seed}"), name)))
             assert (got is None) if want is None else (got is not None and got[0] == want[0] and got[1].startswith(want[1])), \
+                (name, seed, got)
+
+
+#: the refusal each rounds mutation aims at: its code and a part of its reason
+ROUNDS_EXPECT = {
+    "honest": None, "verifier-coins": ("coin", "the verifier's coins are malformed: "),
+    "seeded-coins": ("coin", "the verifier's coins are malformed: a live coin commitment is"),
+    "not-live": ("coin", "the coin commitment's "), "roots-form": ("rounds", "the round roots are not"),
+    "openings-list": ("rounds", "the round coins are not a list"), "openings-form": ("coin", ": a live coin opening is"),
+    "twice": ("coin", "is opened twice: a retry never redraws"), "early": ("coin", "was opened before its root was recorded"),
+    "early-root": ("coin", "was opened before its root was recorded"), "never": ("coin", "was never opened"),
+    "swapped": ("coin", ": coin is the epoch's 'round' coin 1, not its 'round' coin 0"),
+    "after": ("coin", ": coin was not opened after what the verifier recorded"),
+    "root": ("coin", ": coin was not opened after what the verifier recorded"),
+    "foreign-epoch": ("coin", ": coin is epoch "), "foreign": ("coin", ": coin does not open against"),
+    "tampered": ("coin", ": coin does not open against"), "malformed": ("coin", ": coin opening is malformed"),
+    "too-many": ("coin", "roots recorded, more than the epoch's"),
+    "label": ("coin", "'round' coin 0: coin is the epoch's 'salt' coin 0, not its 'round' coin 0"),
+}
+
+
+def test_every_rounds_mutation_hits_its_refusal():
+    """`core_check.rounds` accepts an honest live window's round coins and refuses each mutation (a coin opened twice, one
+    opened before its round's root was recorded, a foreign epoch's, …), over a few cases each, with the refusal it aims
+    at."""
+    assert set(ROUNDS_EXPECT) == set(rounds_cases.ROUNDS_NAMES) | {"honest"}
+    for name, want in ROUNDS_EXPECT.items():
+        for seed in range(6):
+            got = CC.rounds(*rounds_cases.rounds_args(rounds_cases.rounds_instance(random.Random(f"{name}/{seed}"), name)))
+            assert (got is None) if want is None else (got is not None and got[0] == want[0] and want[1] in got[1]), \
                 (name, seed, got)
 
 
