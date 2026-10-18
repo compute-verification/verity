@@ -1483,6 +1483,9 @@
    "assumptions": [],
    "type_hash": "ae399ff4f14b16a994012859adfb2f4af1fa9d30ae7bf2f368d6157b34573189"
   },
+  "Accounting.SecurityProofs.TS.LuckCaseAKeyed": {
+   "owner": "@compute-accounting"
+  },
   "Accounting.SecurityProofs.TS.OperandLuckCube": {
    "owner": "@compute-accounting",
    "signature": ["Accounting.SecurityProofs.TS.OperandLuckCube : Accounting.Guarantees.TS.OperandLuckCube"],
@@ -5684,6 +5687,7 @@
    "Accounting.SecurityProofs.TS.ReceiptLuckCaseA": "lemma: Lemma B of LEDGER 1.3 in case (a), the receipt luck 0 over every game whose rounds are committed duo, fx1 or li units (a definition), from DuoRunWordInjective, Fx1RunWordInjective and LiSegmentsBind; not a property of a Lean function.",
    "Accounting.SecurityProofs.TS.LiSegmentsBind": "lemma: Lemma B for li units (a definition: a warp's window, a checkpoint a segment, one deficient word a segment), from LiCheckpointWordInjective segment by segment; not a property of a Lean function.",
    "Accounting.SecurityProofs.TS.LiWindowUnbound": "lemma: the counterexample to LiSegmentsBind with the window's last checkpoint alone (two top-bit flips cancel whatever the keys); a statement about li units (a definition), not a property of a Lean function.",
+   "Accounting.SecurityProofs.TS.LuckCaseAKeyed": "lemma: LuckCaseA at the operand luck 0 that a share of wrong words (a definition, the keyed rounds' share) gives, (L) at 0 in case (a); not a property of a Lean function.",
    "Accounting.SecurityProofs.TS.LuckCaseA": "lemma: LuckOfReceipt at the receipt luck ReceiptLuckCaseA gives, (L) at the operand luck in case (a); not a property of a Lean function.",
    "Accounting.SecurityProofs.TS.OperandLuckCube": "lemma: the operand luck at 3/4 over every game whose rounds draw uniform cube bits against a degree-2 operand error (a definition), luck_quad as a probability; not a property of a Lean function.",
    "Accounting.SecurityProofs.TS.LuckCaseACube": "lemma: LuckCaseA at OperandLuckCube's 3/4, (L) at 3/4 in case (a) with degree-2 operands and no luck hypothesis; not a property of a Lean function."

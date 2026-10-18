@@ -20,6 +20,8 @@ The luck premise (I7) `LuckAt` split at the receipt (LEDGER §1.3–§1.5, note:
   segment's deficient word is right (`Pouw.Guarantees.Receipt.LiCheckpointWordInjective`, segment by segment).
 * `LiWindowUnbound`: without the checkpoint a segment it fails: the window's last checkpoint alone keeps the honest
   value when a persistent skip flips the top bit of a word in two segments, whatever the keys.
+* `LuckCaseAKeyed`: case (a) when each round's share counts wrong words only (the B200 heavy design's keyed rounds in
+  the li fold), (I7) at 0.
 -/
 
 namespace Accounting.Guarantees.TS
@@ -80,5 +82,13 @@ def LiWindowUnbound : Prop :=
     (∀ u, ∀ s < 2, D.pos ω u s = 0 ∧ D.value ω u s = D.honest ω u s 0 ^^^ BitVec.twoPow (n + 1) n) →
       D.sameWindow ω ∧ ∀ u, (∀ s < 2, D.value ω u s ≠ D.honest ω u s (D.pos ω u s)) ∧
         D.checkpoint ω u (D.word ω u) 0 ≠ D.checkpoint ω u (D.honest ω u) 0
+
+/-- **(I7) at 0 in case (a) for keyed rounds.** For every ideal game split at the receipt whose openings are pinned,
+whose rounds commit the full state of duo or fx1 units, one deficient word a unit, or li units' warp checkpoint a
+segment, one deficient word a segment, and whose share is positive only where a deficient word is wrong (the B200 heavy
+design's keyed rounds `y ← (y ⊕ k)·a + c` in the li fold, a round the run skipped being a wrong word), (L) holds at 0:
+a deficient round never passes. -/
+def LuckCaseAKeyed : Prop :=
+  ∀ {Ω : Type} [Fintype Ω] {S : ℕ} (G : ReceiptGame Ω S), G.Pinned → G.CaseA → G.WrongWords → LuckAt 0 G.game
 
 end Accounting.Guarantees.TS

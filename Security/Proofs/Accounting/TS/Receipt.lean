@@ -16,6 +16,9 @@ final states from the pinned start give the replaced word right (`duoRun_update_
 `fx1Run_update_injective`); for li units, equal checkpoints segment by segment give each segment's word right
 (`LiLemmas.right_of_same`). The event `same ∧ ¬right` is empty.
 
+The keyed rounds (`operandLuck_wrongWords`): a share positive only where a deficient word is wrong makes
+`right ∧ d > 0` empty, the operand luck at 0.
+
 The operand luck at ¾ for degree-2 operands (`operandLuck_cube`): conditioned on the coins before the bits, a deficient
 round's error is a nonzero degree-2 function, which vanishes at uniform bits with probability at most ¾ (`luck_quad`).
 -/
@@ -118,6 +121,16 @@ theorem operandLuck_cube (R : Type) [CommRing R] {α V : Type} [Fintype α] [Fin
       _ = 3 / 4 * prob (fun a => 0 < δ a) := by
           rw [expect_mul_left, prob_eq_expect]
 
+/-- The keyed rounds' share: a share positive only where a deficient word is wrong gives the operand luck at 0. -/
+theorem operandLuck_wrongWords {Ω : Type} [Fintype Ω] :
+    ∀ {S : ℕ} (G : ReceiptGame Ω S), G.WrongWords → G.OperandLuck 0
+  | _, .done, _ => trivial
+  | _, .round d _ right _ next, h => by
+    obtain ⟨hd, hw, hN⟩ := h
+    refine And.intro hd (And.intro ?_ fun ω => operandLuck_wrongWords (next ω) (hN ω))
+    rw [zero_mul]
+    exact (prob_mono (q := fun _ => False) fun ω h => hw ω h.2 h.1).trans Rounds.prob_false.le
+
 theorem LuckOfReceipt : Accounting.Guarantees.TS.LuckOfReceipt :=
   fun G p pr => luck_of_receipt G p pr
 
@@ -139,5 +152,8 @@ theorem LiSegmentsBind : Accounting.Guarantees.TS.LiSegmentsBind :=
 
 theorem LiWindowUnbound : Accounting.Guarantees.TS.LiWindowUnbound :=
   fun n D ω => LiLemmas.windowUnbound n D ω
+
+theorem LuckCaseAKeyed : Accounting.Guarantees.TS.LuckCaseAKeyed :=
+  fun G hpin hA hw => LuckCaseA G 0 hpin hA (operandLuck_wrongWords G hw)
 
 end Accounting.SecurityProofs.TS
