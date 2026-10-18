@@ -23,8 +23,8 @@ The device gate runs first and nothing else runs when it fails (exit 3):
            the twin flags non-finite takes the reference evaluator's words.
 
 GO = the gate, the selection, MUFU, every launch, every backend launch's words the served launch's, and every row of the pinned
-launches and of the served sequences the plan runs as one split equal to the twin, with every sampled check.  Served sequences the plan splits run `FlashAttnFwdCombine`, which no Program
-models: they are reported apart (`classes.served_split`) and do not count.
+launches and of the served sequences the plan runs as one split equal to the twin, with every sampled check.  Served sequences the
+plan splits run `FlashAttnFwdCombine`, which no Program models: they are reported apart (`classes.served_split`) and do not count.
 
     cd integrations/vllm; PY=/workspace/venv312/bin/python     # PYTHONPATH as pod_bootstrap.sh sets it
     $PY tests/properties/glm53_fa3_prefill_capture_gpu.py --out DIR --scratch /tmp --want-cc 9.0 --want-sms 132 --min-driver 575
