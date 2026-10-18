@@ -509,7 +509,7 @@ def _registered(p: dict, c: dict) -> tuple[str | None, Any]:
     if not _nat(ell):
         return "level: the registration names no work level", None
     n = Wd.shape_tiles(p["shape"])
-    if ell > Wd.level(Wd.floor_point(n - 1, bits), bits) or Wd.point(ell, bits) < lo:
+    if ell > Wd.level(Wd.floor_point(n - 1, bits), bits) or Wd.point(ell, bits) > n - 1 or Wd.point(ell, bits) < lo:
         return f"level: level {ell} is outside the window's credit range {lo}..{n - 1}", None
     w = Wd.Work.at(ell, n, bits)
     tw = p["check"]["tile_work"]

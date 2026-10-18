@@ -80,7 +80,8 @@ def registered (p : Params) (c : Registration) : Except String Fixed :=
   else match levelOf win.items with
   | none => .error "level: the registration names no work level"
   | some ell =>
-    if PouwWindow.level bits (PouwWindow.floorPoint bits (n - 1)) < ell ∨ PouwWindow.point bits ell < p.lo then
+    if PouwWindow.level bits (PouwWindow.floorPoint bits (n - 1)) < ell ∨ n - 1 < PouwWindow.point bits ell ∨
+        PouwWindow.point bits ell < p.lo then
       .error s!"level: level {ell} is outside the window's credit range {p.lo}..{n - 1}"
     else
       let work := Work.at bits ell n
