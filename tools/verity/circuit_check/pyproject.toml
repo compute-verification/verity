@@ -36,7 +36,8 @@ parallel = true
 # one xdist worker's share, which `--mem-gb` (else the cgroup's memory.max) divides by. A worker's peak is circuit-check's whole
 # catalog, which every worker builds when it collects `test_circuit_check.py` (its SUITE), and which grows with the catalog:
 # 24.6 GiB on 17 Oct (r20261017-062239-a835), 25.3 GiB on 18 Oct, when 37 workers sized at 24 outgrew vy-nebius-1's 900 GiB
-# scope (r20261018-024149-8607). A circuit-check a test starts keeps to this share too (conftest.py's `worker_slot_gb`).
+# scope (r20261018-024149-8607). At 32, a 300 GiB scope ran 9 workers at 25.2-25.4 GiB each, descendants included, and peaked
+# at 222.8 GiB (r20261018-042056-2885). A circuit-check a test starts keeps to this share too (conftest.py's `worker_slot_gb`).
 worker_gb = 32
 # In place of its dependencies' directories (`inputs_only`; `verity`'s brings the root's dev group, the whole workspace): the
 # packages that define Definitions and templates, with their sidecars (`sidecars.discover` searches every package root, so a
