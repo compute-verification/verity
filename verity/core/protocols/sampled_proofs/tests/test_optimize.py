@@ -8,17 +8,17 @@ from __future__ import annotations
 import random
 from dataclasses import replace
 from itertools import combinations, product
-from math import ceil, exp, fsum, log, log1p, ulp
+from math import ceil, exp, fsum, inf, log, log1p, ulp
 
 import pytest
 
 from verity.core.protocols.profile import Stratified, Stratum
 from verity.core.protocols.sampled_proofs.one_stage.draw import work_k, work_table
 from verity.core.protocols.sampled_proofs.optimize import (Candidate, Commitment, CostModel, Objective, Policy,
-                                                           ReplayDomain, TemplateCost, _hit, _miss, certify, density_bound, for_budget,
-                                                           for_target, frontier, needs_benchmark, overlaps, perturb,
-                                                           replay_cost, row_ands, sensitivity, template_cost, touched,
-                                                           weigh, work_law)
+                                                           ReplayDomain, TemplateCost, _hit, _log_miss, _miss, certify,
+                                                           density_bound, for_budget, for_target, frontier,
+                                                           needs_benchmark, overlaps, perturb, replay_cost, row_ands,
+                                                           sensitivity, template_cost, touched, weigh, work_law)
 
 SLACK = 1 + 2.0 ** -18
 
@@ -424,6 +424,16 @@ def test_miss_holds_its_digits_on_huge_populations():
         for m, k in ((1, 1), (4096, 27_713), (10 ** 6, 100), (64, 10 ** 6)):
             t, s = min(m, k), max(m, k)
             assert _miss(n, m, k) == pytest.approx(exp(fsum(log1p(-s / (n - i)) for i in range(t))), rel=1e-6)
+
+
+def test_near_full_draws_past_two_to_the_53_keep_their_digits():
+    """Past 2^53 units a near-full draw's s / (n - i) rounds to 1: missing 3 given units with all but 3 drawn is
+    3! / (n (n - 1) (n - 2)), and with a dense draw over 100 the midpoint stays finite and below a sparse one."""
+    n = 2 ** 60
+    assert _log_miss(n, 3, n - 3) == pytest.approx(log(6) - log(n) - log(n - 1) - log(n - 2), rel=1e-12)
+    assert _log_miss(n, 1, n - 1) == pytest.approx(-log(n), rel=1e-12)
+    assert -inf < _log_miss(n, 100, n - 100) < _log_miss(n, 100, n // 2) < 0
+    assert touched(n, 1024, n - 1) == pytest.approx(n / 1024, rel=1e-12)
 
 
 def test_sparse_draws_on_huge_populations_still_touch_statements_and_replay_units():

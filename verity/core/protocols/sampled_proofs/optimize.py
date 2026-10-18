@@ -309,10 +309,16 @@ def _log_miss(n: int, m: int, k: int) -> float:
         return 0.0
     t, s = min(m, k), max(m, k)
     if t <= 64:
-        return fsum(log1p(-s / (n - i)) for i in range(t))
+        return fsum(_log_rest(n - i - s, n - i) for i in range(t))
     if n <= 1 << 25:
         return lgamma(n - m + 1) - lgamma(n - m - k + 1) - lgamma(n + 1) + lgamma(n - k + 1)
-    return t * log1p(-s / (n - (t - 1) / 2))
+    return t * _log_rest(n - s - (t - 1) / 2, n - (t - 1) / 2)
+
+
+def _log_rest(rest: float, whole: float) -> float:
+    """log(rest / whole) for 0 < rest <= whole, by `log1p` unless rest is under half of whole, where the ratio rounds to 0
+    (and 1 - ratio to 1) past 2^53 units."""
+    return log1p((rest - whole) / whole) if 2 * rest >= whole else log(rest) - log(whole)
 
 
 def _miss(n: int, m: int, k: int) -> float:
