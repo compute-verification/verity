@@ -18,6 +18,7 @@ bucket of the read tick, and keys each direction of a link.
 
     python -m workload.accounting                  # audit and account an honest run of the MLP on the mock
     python -m workload.accounting --extra-frame    # one covert frame on b0's uplink: refused
+    python -m workload.accounting --assume fleet-closed   # attribute the credited work to its blocks under the premise
 """
 from __future__ import annotations
 
@@ -116,6 +117,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--tick", type=float, default=1e-3, help="seconds a tick")
     ap.add_argument("--rate", type=float, default=1e9, help="each GPU's declared scalar ops a second")
     ap.add_argument("--extra-frame", action="store_true", help="add one covert frame on b0's uplink")
+    ap.add_argument("--assume", action="append", default=[], help="a named premise for `account` (fleet-closed)")
     args = ap.parse_args(argv)
 
     ctx = Context({"spec": {"d": args.d, "layers": args.layers, "requests": args.requests, "groups": args.groups},
@@ -148,7 +150,7 @@ def main(argv: list[str] | None = None) -> int:
     kinds = Counter(type(k).__name__ for k in claims)
     print("claims: " + ", ".join(f"{n} {k}" for k, n in sorted(kinds.items())))
     horizon = max(t for ts in dp.ticks.values() for t in ts) + 1
-    acc = D.account(claims, dp, clock, D.Interval(0, horizon))
+    acc = D.account(claims, dp, clock, D.Interval(0, horizon), assume=set(args.assume))
     print(acc)
     return 0 if acc.sound else 1
 
