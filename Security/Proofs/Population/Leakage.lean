@@ -15,6 +15,8 @@ number of egress values the observer can tell apart is the leakage, in bits its 
   `E(B)` the egress slots in `B`'s cone (`coneEgress`), and `E(B) ≤ Σ_{u ∈ B} E(u)` (`card_coneEgress_le`).
   `card_leak_le_coneEgress` is Daniel's form: at most `m` wrong units and `E(u) ≤ E_max` give
   `#honest · C(|U|, m) · |V| ^ (m E_max)`, that is `log₂ C(|U|, m) + m · E_max · log₂ |V|` bits beyond the honest egress.
+  `card_leak_le_coneEgress_sum` is the weighted form: a draw that bounds `Σ_{u ∈ B} E(u) ≤ M` gives `|V| ^ M` times the
+  number of wrong sets within that budget.
   Amplification needs no hypothesis: a correct unit that routes secrets to the egress does so inside the cone, which
   `E` prices. `scale_coneEgress` and `scale_amp` show the bound is attained, and `vmStatic_coneEgress` that a machine's
   step reaches the whole egress, where the bound says nothing.
@@ -209,6 +211,26 @@ theorem card_leak_le_coneEgress [Fintype U] (hc : P.Covered) (ha : P.Acyclic) {V
     _ = (Fintype.card U).choose m * Fintype.card V ^ (m * E) := by
         rw [sum_const, card_powersetCard, card_univ]
         simp
+
+/-- **Weighted by cone egress**: when the draw bounds the wrong units' total cone egress `Σ_{u ∈ B} E(u) ≤ M` instead of
+their number, the egress takes at most `#honest · #𝓑 · |V| ^ M` values, `𝓑` the wrong sets within that budget. -/
+theorem card_leak_le_coneEgress_sum [Fintype U] (hc : P.Covered) (ha : P.Acyclic) {V : Type} [Fintype V]
+    [DecidableEq V] [Nonempty V] (f : P.Fns V) (O : Finset S) (M : ℕ) {ι : Type} (Cl : Finset ι)
+    (σ honest : ι → S → V) (hin : ∀ i ∈ Cl, ∀ t ∈ P.input, σ i t = honest i t)
+    (hh : ∀ i ∈ Cl, ∀ u, P.Correct f (honest i) u)
+    (hM : ∀ i ∈ Cl, ∑ u ∈ P.wrong f (σ i), (P.coneEgress O {u}).card ≤ M) :
+    (Cl.image fun i (o : O) => σ i o).card ≤ (Cl.image fun i (o : O) => honest i o).card *
+      ((univ : Finset (Finset U)).filter fun B => ∑ u ∈ B, (P.coneEgress O {u}).card ≤ M).card *
+        Fintype.card V ^ M := by
+  classical
+  refine (P.card_leak_le_cone hc ha f O ((univ : Finset (Finset U)).filter fun B =>
+    ∑ u ∈ B, (P.coneEgress O {u}).card ≤ M) Cl σ honest hin hh fun i hi =>
+      ⟨_, mem_filter.2 ⟨mem_univ _, hM i hi⟩, Subset.refl _⟩).trans ?_
+  rw [Nat.mul_assoc]
+  refine Nat.mul_le_mul_left _ ((sum_le_sum fun B hB => Nat.pow_le_pow_right Fintype.card_pos
+    ((P.card_coneEgress_le O B).trans (mem_filter.1 hB).2)).trans (le_of_eq ?_))
+  rw [sum_const]
+  simp
 
 end Population.Dataflow
 
