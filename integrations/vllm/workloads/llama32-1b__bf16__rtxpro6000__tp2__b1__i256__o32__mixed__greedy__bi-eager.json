@@ -1,8 +1,21 @@
 {
- "schema": "verity-vllm/workload/v1",
+ "schema": "verity-vllm/workload/v2",
  "model": "unsloth/Llama-3.2-1B",
  "case": "LLAMA32_1B",
- "tokenizer_revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da",
+ "engine": {
+  "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da",
+  "vllm": "d9105ea80",
+  "args": {
+   "max_num_batched_tokens": 257,
+   "max_model_len": 288,
+   "tensor_parallel_size": 2,
+   "disable_custom_all_reduce": true
+  },
+  "env": {
+   "NCCL_P2P_DISABLE": "1",
+   "VLLM_BATCH_INVARIANT": "1"
+  }
+ },
  "seed": 0,
  "variants": {
   "greedy": {
@@ -28,12 +41,6 @@
   "depends_on": "SHA256(row_id) only"
  },
  "expected_engine_steps": 32,
- "engine_args_required": {
-  "max_num_batched_tokens": 257,
-  "max_model_len": 288,
-  "tensor_parallel_size": 2,
-  "disable_custom_all_reduce": true
- },
  "tokenizer_note": "prompt_token_ids from tokenizer.json sha256 6b9e4e7fb171f92f (tokenizers, add_special_tokens=False), natural text from corpus_coverage.json, truncated to prompt_len; prompt_text is the decode of the ids (informational)",
  "prompt_lengths": [
   256
@@ -362,9 +369,5 @@
   "tp": 2,
   "notes_tp": "vy-nebius-1 (RTX PRO 6000): TP2 exact with NCCL_P2P_DISABLE=1 (live engine 25/25); custom all-reduce disabled (needs P2P)"
  },
- "note": "R12 sweep llama32-1b__bf16__rtxpro6000__tp2__b1__i256__o32__mixed__greedy__bi-eager: B=1 I<=256 O<=32 greedy arrivals=none; prompt lens [256], caps [32], arrive steps [0]; every request to max_tokens => 32 engine steps; max_num_batched_tokens keeps the whole admitted prefill in one step; max_model_len = I + O.  EOS untouched.",
- "env_required": {
-  "NCCL_P2P_DISABLE": "1",
-  "VLLM_BATCH_INVARIANT": "1"
- }
+ "note": "R12 sweep llama32-1b__bf16__rtxpro6000__tp2__b1__i256__o32__mixed__greedy__bi-eager: B=1 I<=256 O<=32 greedy arrivals=none; prompt lens [256], caps [32], arrive steps [0]; every request to max_tokens => 32 engine steps; max_num_batched_tokens keeps the whole admitted prefill in one step; max_model_len = I + O.  EOS untouched."
 }

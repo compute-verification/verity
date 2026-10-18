@@ -116,8 +116,10 @@ def FanIn {ι W J : Type} [DecidableEq J] (D : Dataflow ι W) (ins : Fin D.n →
     Prop :=
   ∀ j, (D.issued ins j : ℝ) ≤ m (cls j)
 
-/-- `accounting-ts-luck` ([P+R] per noise; ¾ in Lean for affine operands). **(L) at `p`, with freshness (F1)–(F2)**:
-the ideal game is one bet a round, a deficient round passing with probability at most `p` given the past. -/
+/-- `accounting-ts-luck` ([P+R] per noise; ¾ in Lean for affine operands; 0.854 in Lean for the pfill filler's cells
+(`Accounting.Guarantees.FillerLuck.FillerLuckAt`), 0 for a filler's pinned receipts (`PinnedFillLuckAt`)). **(L) at
+`p`, with freshness (F1)–(F2)**: the ideal game is one bet a round, a deficient round passing with probability at most
+`p` given the past. -/
 def LuckAt {Ω : Type} [Fintype Ω] {S : ℕ} (p : ℝ) (g : RoundGame Ω S) : Prop := RoundGame.LuckAt p g
 
 /-- `accounting-ts-proofs-sound` (binding H-μ⁺, proof soundness, the protocol's order, Lemma E1(c)). **The proofs are

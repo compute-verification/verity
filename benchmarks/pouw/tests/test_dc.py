@@ -193,13 +193,28 @@ def _sm90_run(d: Path, sync_rate: float) -> Path:
     return d
 
 
-def _census_tables(census, lines, rows):
+def _census_tables(census, lines, rows, epochs=(), every_row=True):
+    """A row's table of u by kind, from the lines open at the last epoch. A kind has several lines on a row only in
+    disjoint epochs (`since` through `until`, in `epochs`' order, as machine_model's `holds` reads them). Every line is
+    on a stated row; with `every_row`, every stated row has a line (a measured facet no class loads, like TMAB, has
+    none)."""
     by_row: dict[str, dict[str, float]] = {}
+    spans: dict[tuple[str, str], list[tuple[int, int]]] = {}
+    last = max(len(epochs) - 1, 0)
     for ln in lines:
-        assert (ln["kind"] not in by_row.get(ln["row"], {})), f"two lines for {ln['kind']} on {ln['row']}"
+        since, until = ln.get("since", ""), ln.get("until", "")
+        span = (epochs.index(since) if since else 0, epochs.index(until) if until else last)
+        key = (ln["kind"], ln["row"])
+        assert all(span[1] < s[0] or s[1] < span[0] for s in spans.get(key, [])), \
+            f"two lines for {ln['kind']} on {ln['row']}"
+        spans.setdefault(key, []).append(span)
+        if until:
+            continue
         by_row.setdefault(ln["row"], {})[ln["kind"]] = census.rowsmod.u_of(
             census.rowsmod.CYCLE_U, ln["rate"], ln["noise"], ln["cycles"], ln["u"])
-    assert set(by_row) == {r["row"] for r in rows}
+    stated = {r["row"] for r in rows}
+    assert {ln["row"] for ln in lines} <= stated
+    assert set(by_row) == stated if every_row else set(by_row) <= stated
     return by_row
 
 
@@ -228,10 +243,33 @@ def test_census_sm90_rows(tmp_path):
     assert "IMMA16816_S8" in by_row["MS"] and "IMMA16816_S8" not in by_row["M"]
 
 
+def test_census_tables_take_one_line_an_epoch():
+    """A refit closes a line at one epoch and opens its successor at the next; two lines open in one epoch are
+    refused."""
+    census = _load("census")
+    rows = [{"row": "JI100_0"}]
+
+    def line(u, since="", until=""):
+        return {"kind": "UNI", "row": "JI100_0", "rate": "", "noise": "", "cycles": "", "u": u, "since": since,
+                "until": until}
+
+    epochs = ["DC-100", "DC-100-ri"]
+    refit = [line("0.906", until="DC-100"), line("0.0008624", since="DC-100-ri")]
+    assert _census_tables(census, refit, rows, epochs)["JI100_0"]["UNI"] == census.rowsmod.u_of(
+        census.rowsmod.CYCLE_U, "", "", "", "0.0008624")
+    for bad in ([line("0.906"), line("0.0008624", since="DC-100-ri")], [line("0.906"), line("0.0008624")]):
+        try:
+            _census_tables(census, bad, rows, epochs)
+        except AssertionError as e:
+            assert "two lines for UNI on JI100_0" in str(e)
+        else:
+            raise AssertionError("overlapping lines accepted")
+
+
 def test_device_census_is_well_formed():
     """Every device directory's lines are lines machine_model reads (one of rate, cycles and u), each on a row rows.csv
-    states, once a row, naming its runs; a `datasheet` row and its lines name the note that cites the vendor document
-    instead, since no run measured them."""
+    states, once a row in each epoch of model.toml, naming its runs; a `datasheet` row and its lines name the note that
+    cites the vendor document instead, since no run measured them."""
     census = _load("census")
     note = re.compile(r"note:\d{8}T\d{4}Z-[a-z0-9-]+")
     devices = DC.parent / "machine_model" / "data" / "devices"
@@ -242,7 +280,9 @@ def test_device_census_is_well_formed():
         with open(d / "rows.csv", newline="") as f:
             rows = list(csv.DictReader(f))
         assert tuple(lines[0]) == census.rowsmod.CENSUS_COLUMNS
-        by_row = _census_tables(census, lines, rows)
+        import tomllib
+        epochs = tomllib.loads((d / "model.toml").read_text())["epochs"]
+        by_row = _census_tables(census, lines, rows, epochs, every_row=False)
         assert {"issue", "M", "A", "I", "SHFL"} <= set(by_row), d
         sheet = {r["row"] for r in rows if r["status"] == "datasheet"}
         for ln in lines + rows:
@@ -328,6 +368,49 @@ def test_uniform_issue_price_reads_only_saturated_streams(tmp_path):
     assert uv["points"]["uv_32x"]["added"] == 48 and abs(uv["points"]["uv_32x"]["dT"] - 40 / 48) < 1e-12
     assert abs(uw["points"]["uw_64x"]["dT"] - 10 / 96) < 1e-12
     assert s["set_by"] == "uv_32x" and abs(s["price"] - 40 / 48 / 1.02) < 1e-12
+
+
+def test_ldtm_price_drops_the_single_load_restructure():
+    """The LDTM price is the least isolated load cost over the priced points of a read stream: at least two loads, the
+    point still issue-saturated. The single-load point (the loop restructures) and the load-path-bound points above it
+    (issue < 0.95) are dropped, and streams below 0.95 aren't read. Repeats are the price computed from each run."""
+    ld = _load("ldtm")
+
+    def fake(out):
+        return {
+            "mw": {"T0": 1329.0, "issue0": 0.965, "read": True, "tc0": 100.0, "points": {
+                "mw_1": {"K": 1, "T": 1323.0, "loads": 1, "others": 5, "added": {}, "issue": 0.974, "all": -6.0, "ldtm": -11.0},
+                "mw_2": {"K": 2, "T": 1333.0, "loads": 2, "others": 6, "added": {}, "issue": 0.968, "all": 2.0, "ldtm": -1.0},
+                "mw_8": {"K": 8, "T": 1467.0, "loads": 8, "others": 24, "added": {}, "issue": 0.896, "all": 17.0, "ldtm": 14.0}}},
+            "nx": {"T0": 1112.0, "issue0": 0.981, "read": True, "points": {
+                "nx_2": {"K": 2, "T": 1120.0, "loads": 2, "others": 6, "added": {}, "issue": 0.981, "all": 4.0, "ldtm": 1.0}}},
+            "lv": {"T0": 790.0, "issue0": 0.944, "read": False, "points": {
+                "lv_2": {"K": 2, "T": 800.0, "loads": 2, "others": 6, "added": {}, "issue": 0.924, "all": 2.0, "ldtm": -3.0}}},
+        }
+
+    ld.streams = fake
+    assert {n for n, _ in ld.priced(fake(None)["mw"])} == {"mw_2"}          # K=1 and the desaturated K=8 dropped
+    assert {n for n, _ in ld.priced(fake(None)["lv"])} == set()             # below 0.95, not read
+    res = ld.analyze([Path("r1/out"), Path("r2/out")])
+    assert res["set_by"] == "mw_2" and abs(res["least"] + 1.0) < 1e-12      # lv_2 lower but not read; mw_1 excluded
+    assert abs(res["price"] - (-1.0 / 1.02)) < 1e-12 and res["pass"] is False
+    assert res["price_by_run"] == [-1.0 / 1.02, -1.0 / 1.02] and res["price_spread"] == 0.0 and res["repeat_spread"] == 0.0
+
+
+def test_ldtm_loop_counts_takes_the_larger_loop(tmp_path):
+    """An m probe times two loops (the lane stream and the MMA warp's); loop_counts counts the larger, the stream."""
+    ld = _load("ldtm")
+    out = tmp_path / "out"
+    (out / "sass").mkdir(parents=True)
+    body = ["FFMA R1, R1, 1, R1", "LDTM.x128 R4, tmem[UR6]", "@P0 BRA 0x10",      # the stream loop, 0x10..0x30
+            "UTCIMMA gdesc[UR6], gdesc[UR8], tmem[UR5], tmem[UR10], idesc, UPT", "@P1 BRA 0x40"]  # the MMA loop, 0x40..0x50
+    sass = "\t\tFunction : mw_2\n" + "\n".join(f"        /*{16 * (i + 1):04x}*/   {op} ;   /* 0x0 */"
+                                               for i, op in enumerate(body))
+    (out / "sass" / "sm100_ldtm.sass").write_text(sass + "\n")
+    (out / "gate-build.json").write_text(json.dumps({"verdicts": [{"binary": "sm100_ldtm", "probe": "mw_2", "verdict":
+        {"loops": [{"head": "0x0010", "tail": "0x0030", "top": {"FFMA": 1, "LDTM.x128": 1, "BRA": 1}},
+                   {"head": "0x0040", "tail": "0x0050", "top": {"UTCIMMA": 1}}]}}]}))
+    assert ld.loop_counts(out)["mw_2"] == {"FFMA": 1, "LDTM.x128": 1, "BRA": 1}
 
 
 def test_uniform_write_census_is_idempotent(tmp_path):

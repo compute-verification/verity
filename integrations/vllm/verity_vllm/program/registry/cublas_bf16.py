@@ -50,8 +50,12 @@ __all__ = ["BatchedGemm", "BatchedGemmWord", "ChainStep", "CublasSplitKGemm", "C
            "dot_step", "split_bounds"]
 
 BF16, F32 = Array(16, BL.BIT), Array(32, BL.BIT)
-CONFORMANCE = ("not-yet-established: K/N statics 6144/{19360,160,256}, 7168/{16160,64,384,2048,1024,512}, "
-               "and batched 192/512 and 512/256 on cc 9.0 with 132 SMs "
+CONFORMANCE = ("exact-model-tested: every output word at K/N statics 6144/{19360,160,256}, 7168/{16160,64,384,2048,1024,512}, "
+               "and batched (B 8) 192/512 and 512/256, at the captured M (1, 4, 16, 128, 256; the gates' cuBLAS tier 17, 32, 128, "
+               "256), on cc 9.0 with 132 SMs (torch 2.13.0+cu129 on its libcublas.so.12), under vLLM's served default (split counts "
+               "2 to 5 each fitting only the stated hypothesis; the absorbs never split) and the split-K-off variant: property "
+               "glm53_bf16_gemm_capture, run r20261016-234133-bbc8, record c0e09902b0a2057a, "
+               "art:5fcc5a4937ac75ceec31bd22abc11194ec0c55d27e77ffd3690b1ad8976feeaf "
                "(tests/properties/glm53_bf16_gemm_capture_gpu.py)")
 
 
