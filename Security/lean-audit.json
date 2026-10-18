@@ -711,9 +711,9 @@
    "why": "a guarantee is a Prop over the protocol and the assumptions, never a proof"
   },
   "Models.Pouw.Assumptions": {
-   "imports": ["Mathlib", "Definitions.Core", "Definitions.Pouw", "Models.Pouw.Assumptions"],
+   "imports": ["Mathlib", "Definitions.Core", "Definitions.Claims", "Definitions.Pouw", "Models.Pouw.Assumptions"],
    "except": [],
-   "why": "a named assumption, and a definition or statement over named assumptions, reads the protocol's definitions, never a guarantee or a proof"
+   "why": "a named assumption, and a definition or statement over named assumptions, reads the protocol's definitions, never a guarantee or a proof; the service premises per prover read the claims' collision finders and ecr/sha-512 (Claims.Finder, Claims.ExpectedCR), as C-Flock's guarantees do"
   },
   "Models.Pouw.Guarantees": {
    "imports": ["Mathlib", "Definitions.Core", "Definitions.Pouw", "Models.Pouw.Assumptions", "Models.Pouw.Guarantees"],
@@ -721,9 +721,9 @@
    "why": "a guarantee is stated over the protocol's definitions with named assumptions as hypotheses, never over a proof"
   },
   "Definitions.Pouw": {
-   "imports": ["Mathlib", "Definitions.Core", "Definitions.Pouw"],
+   "imports": ["Mathlib", "Definitions.Core", "Definitions.Claims", "Definitions.Pouw"],
    "except": ["Definitions.Pouw.PearlC.Defs"],
-   "why": "the protocol's definitions are trusted text: they import no assumption, guarantee or proof"
+   "why": "the protocol's definitions are trusted text: they import no assumption, guarantee or proof; relative security's per-prover break term reads the claims' collision finders and ecr/sha-512 (Claims.Finder, Claims.ecrBound), the one break term the areas share"
   },
   "Definitions.Pouw.Basic": {
    "imports": ["Mathlib", "Definitions.Pouw.Basic"],
@@ -6941,6 +6941,10 @@
    "Pouw.Guarantees.PearlCSm120Rev1Cap1000ByDeadline_8192": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
    "Pouw.Guarantees.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
    "Pouw.Guarantees.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
+   "Pouw.Guarantees.RelativeSecurity.OverlapFloorKOneSidedPerProver": "unstated: OverlapFloorKOneSided restated on ServiceSoundOverlapPerProver, each adversary's error its own (breakBound, ecr/sha-512 at its collision finders); stated for compute-accounting's review (CMP-33), not proved yet (note:proofs/20261018T1626Z-draft-pouw-service-sound-per-prover)",
+   "Pouw.Guarantees.RelativeSecurity.OverlapFloorKPerProver": "unstated: OverlapFloorK restated on ServiceSoundOverlapPerProver, each adversary's error its own (breakBound, ecr/sha-512 at its collision finders); stated for compute-accounting's review (CMP-33), not proved yet (note:proofs/20261018T1626Z-draft-pouw-service-sound-per-prover)",
+   "Pouw.Guarantees.RelativeSecurity.StagedFloorKOneSidedPerProver": "unstated: StagedFloorKOneSided restated on ServiceSoundStagedPerProver, each adversary's error its own (breakBound, ecr/sha-512 at its collision finders); stated for compute-accounting's review (CMP-33), not proved yet (note:proofs/20261018T1626Z-draft-pouw-service-sound-per-prover)",
+   "Pouw.Guarantees.RelativeSecurity.StagedFloorKPerProver": "unstated: StagedFloorK restated on ServiceSoundStagedPerProver, each adversary's error its own (breakBound, ecr/sha-512 at its collision finders); stated for compute-accounting's review (CMP-33), not proved yet (note:proofs/20261018T1626Z-draft-pouw-service-sound-per-prover)",
    "Pouw.Guarantees.SpareCapacityAtDeadline": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
    "Pouw.Guarantees.WorkBetweenSaltAndDeadline": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
    "Pouw.NCP.GameProofs.gammaFromTTNCP": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTNCP, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",

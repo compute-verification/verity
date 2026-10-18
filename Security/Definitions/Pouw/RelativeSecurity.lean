@@ -1,4 +1,5 @@
 import Mathlib
+import Definitions.Claims
 
 /-!
 # Relative security for matmul PoUW: the vocabulary its guarantees read (trusted)
@@ -9,7 +10,9 @@ follow them into the spec:
 
 * uniform probability (`prob`), `R` rounds of fresh coins (`Paths`), a prover's play (`RoundGame`, its acceptance
   and deficiency) and a round's stages (`StageGame`);
-* the machine model (`Machine`, a run's `charge`), the service (`Service`) and its adversary floor (`ServiceFloor`);
+* the machine model (`Machine`, a run's `charge`), the service (`Service`) and its adversary floor (`ServiceFloor`;
+  adversary by adversary, `ServiceFloorPerProver`, at an adversary's error `breakBound`, read through the analysis's
+  collision finders, `Finders` and `finderTerm`, and `ecr/sha-512`'s `Claims.ecrBound`);
 * Theorem K's runs (`BitAff`, `bitInd`, `Slp`, `SlpG`), the re-encoded design's prefix words (`DBits`, `dPrefix`,
   `wRe`, `DCells`), affine products (`AffProd`), degree-2 errors (`CubeQuad`, `pairDiff`) and the spot check's
   deficiency (`spotDef`);
@@ -172,6 +175,44 @@ def ServiceFloor (Mc : Machine) (S : Service) (F κ : ℝ) : Prop :=
   ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (S.Seed × Ω) (S.Com × S.Ans)),
     (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) →
     prob (fun ω : S.Seed × Ω => S.verify (Mc.eval M ω).1 ω.1 (Mc.eval M ω).2 = true ∧ Mc.charge M ω < F) ≤ κ
+
+/-- **The service's adversary floor, adversary by adversary**: every adversary `M` that commits first has its accepted
+runs charged below `F` with probability at most `κ Ω M`, a bound of its own, `⊤` where there is none. `ServiceFloor` is
+one bound for every adversary, which a service on SHA-512 commitments meets only at 1: an adversary that hard-codes a
+collision opens a leaf two ways. -/
+def ServiceFloorPerProver (Mc : Machine) (S : Service) (F : ℝ)
+    (κ : ∀ (Ω : Type) [Fintype Ω], Mc.Alg (S.Seed × Ω) (S.Com × S.Ans) → ENNReal) : Prop :=
+  ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (S.Seed × Ω) (S.Com × S.Ans)),
+    (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) →
+    ENNReal.ofReal (prob fun ω : S.Seed × Ω => S.verify (Mc.eval M ω).1 ω.1 (Mc.eval M ω).2 = true ∧
+      Mc.charge M ω < F) ≤ κ Ω M
+
+/-- **The analysis's collision finders, adversary by adversary**: for each adversary `M` in `Mc` against `S`, each
+value `r` of its own coins and each round `w`, the finder the analysis builds from `M` at `r` to turn round `w`'s break
+into a collision of the commitments' hash (`Claims.Finder`: its coins, its output, and its SHA-512 calls on each coin).
+Its cost counts everything it computes, the runs of `M` it plays and whatever else it reads off them, such as the error
+table the analysis fixes from a commitment. Like `RunMap`, it is the analysis's; a service premise per prover takes one
+for the binding breaks and one for the zero-knowledge breaks. -/
+abbrev Finders (Mc : Machine) (S : Service) (R : ℕ) : Type 1 :=
+  ∀ (Ω' : Type) [Fintype Ω'], Mc.Alg (S.Seed × Ω') (S.Com × S.Ans) → Ω' → Fin R → Claims.Finder
+
+/-- **An adversary's finder term at one value of its coins**: the `ecr/sha-512` bounds of its finders for every
+round (`Claims.ecrBound` at the hash `sha`), summed; `⊤` when one of them fails the assumption. -/
+noncomputable def finderTerm {Mc : Machine} {S : Service} {R : ℕ} (sha : Claims.Msg → Claims.Msg)
+    (fd : Finders Mc S R) (Ω : Type) [Fintype Ω] (M : Mc.Alg (S.Seed × Ω) (S.Com × S.Ans)) (r : Ω) : ENNReal :=
+  ∑ w, Claims.ecrBound sha (fd Ω M r w)
+
+/-- **An adversary's error in the floors per prover**: at each value `r` of its coins, the luck term `ε`, the
+constants `δb` and `δz` of each of the `R` rounds' binding and zero-knowledge breaks, and its binding and
+zero-knowledge finder terms at `r` (`finderTerm`) at the weights `βb` and `βz`, capped at 1, a probability; then
+averaged over `r`. The cap keeps one value of the coins whose finder fails `ecr/sha-512` (a prover that merely tries
+its coins as a collision) from sending the whole bound to `⊤`: that value adds its share of the coins, `1/|Ω|`. -/
+noncomputable def breakBound {Mc : Machine} {S : Service} {R : ℕ} (sha : Claims.Msg → Claims.Msg)
+    (fb fz : Finders Mc S R) (ε δb βb δz βz : ℝ) (Ω : Type) [Fintype Ω] (M : Mc.Alg (S.Seed × Ω) (S.Com × S.Ans)) :
+    ENNReal :=
+  ∑ r : Ω, (Fintype.card Ω : ENNReal)⁻¹ *
+    min 1 (ENNReal.ofReal (ε + R * (δb + δz)) + ENNReal.ofReal βb * finderTerm sha fb Ω M r +
+      ENNReal.ofReal βz * finderTerm sha fz Ω M r)
 
 end Service
 
