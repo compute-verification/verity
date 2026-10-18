@@ -112,3 +112,25 @@ def test_gp01_reads_an_sm120_component_as_the_declared_indexed_construction(tmp_
                                                "target": {"declared": {"compute_capability": [12, 0], "num_sms": 188}}}))
     out = GP.workload_moe_construction({}, {(256, 31): str(d)})
     assert out["refusal"] is None and out["value"] == "indexed-read-ordered" and out["moe_block_present"] is True
+
+
+def test_the_static_pair_forms_are_the_dot_forms():
+    """`verity.ml.circuits.ops.moe`'s `MoePairGemm(W)_v1` (the word view of the padded static MoE form's Boolean pair units,
+    `ops.boolean.moe`) is `MoeExpertGemm(W)_v2` at the same statics, on every expert id and on ids outside [0, E), through the
+    pair forms' kernels and the registry's reference."""
+    from verity.ml.circuits.evaluation import evaluate_batch
+    from verity.ml.circuits.ops import moe as SM
+    from verity.ml.circuits.ops.prims import AmpereBF16TcDot16
+
+    rng = np.random.default_rng(9)
+    ids = np.asarray([*range(E), E, 1 << 31, (1 << 32) - 1], np.uint32)
+    n = len(ids)
+    x = np.stack([_bf16(rng, K, wide=True) for _ in range(n)])
+    w = np.stack([_bf16(rng, E * N * K, wide=True) for _ in range(n)]).reshape(n, E, N, K)
+    g = np.concatenate([rng.standard_normal(n - 1).astype(np.float32), [np.float32("nan")]]).view(np.uint32)
+    for dot in (HopperBF16WgmmaDot16, AmpereBF16TcDot16):
+        st = {"E": E, "K": K, "N": N, "DOT": dot}
+        assert (evaluate_batch(bind(SM.MoePairGemm, **st), x, ids, w) ==
+                evaluate_batch(bind(M.MoeExpertGemmV2, **st), x, ids, w, kernel="reference")).all()
+        assert (evaluate_batch(bind(SM.MoePairGemmW, **st), x, ids, g, w) ==
+                evaluate_batch(bind(M.MoeExpertGemmWV2, **st), x, ids, g, w, kernel="reference")).all()
