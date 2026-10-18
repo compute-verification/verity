@@ -1,0 +1,23 @@
+# H1 + fx1, CALC r10's sm_120 headline (#2325): dither-c-peel with SAT-120's fx1 fold (decision 83: one keyed IMAD a word
+# chained in front of duo, so ALU 2 + IMAD 2 lane instructions a word) on BC-KERNEL r5's measured c-fx1 profile. Its
+# ε_skip is its own, at its own ♭ (decision 90), with the base's vfold sums. benchmarks/pouw/lean_headline.py writes its
+# Lean instance on DS-120 (Security/Definitions/Accounting/Headline/Sm120.lean).
+base = "dither-c-peel"
+name = "dither-c-peel-fx1"
+title = "Dither-C, peel P·V, fx1"
+aliases = ["h1-fx1"]
+summary = "dither-c-peel with fx1's keyed IMAD in front of duo (f = 4), on the measured c-fx1 profile"
+honest = "c-fx1"
+
+[fold]
+name = "fx1"
+ALU = 2
+IMAD = 2
+
+[mand.fold]
+eps = 0.0
+source = "named assumption: fx1 at 4 lane instructions a word is the cheapest implementation of the fold (FOLD-OPT; its per-word kernel is mechanical, benchmarks/pouw/theory/fold_opt_fx.py)"
+
+[skip.served]
+eps = 0.00363
+source = "eps_budget.py (benchmarks/pouw, `design_skip`, `floor_skip`): Corollary D3's ε_skip, the skippable work at its issue-model price over the floor program's bound B_♭ (SPEC §2.9), ♭ 19.757 SMSP-cycles a 4096-MAC MMA on VF3r-16 (binding JI3s_0); the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode (decode's ♭ its compute alone), every served output free. At 8B 2K prefill: the linears' co32c recombination 0.0742%; lm_head's co32c recombination 1.75e-07%; QKᵀ's cohalf sums 0.00630%; P·V's peel 0.282%. Skip terms as dither-c-peel's (note:20261017T0320Z-draft-eps1-calc Round 10), at this ♭ (decision 90)"
