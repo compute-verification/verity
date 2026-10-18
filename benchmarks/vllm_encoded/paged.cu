@@ -16,6 +16,9 @@
 // the layer's flags plain, [physical slot] bytes (null: none), nonzero for a slot whose token-layer is still plaintext,
 // which it reads as it is and gives no receipt (no record holds it yet). pg_append records in plain how it wrote each
 // slot; pg_encode encodes listed plaintext slots in place under their bound offsets b_j(c_a) and clears their flags.
+// A token-layer kept past the lifetime cap L is re-keyed in its slot (§4: appended again at a fresh index j' under a fresh
+// coin): pg_rekey decodes listed slots under their old offsets and encodes them under their new ones b_j'(c_a') in place,
+// then writes the new offsets over the old.
 //
 // pg_attn is kv.cu's warp-specialized tensor-core form (attn_mma_ws_kernel) over pages: MDW decoder warps, a lane a
 // word of every tile, load the tile's words of one KV head from the pages (the block table), decode them (encoded) or
@@ -410,6 +413,53 @@ __global__ void __launch_bounds__(128) pg_settle_kernel(const u64 *__restrict__ 
   if (e[7] && slot >= 0) reinterpret_cast<uint8_t *>(e[7])[slot] = 0;
 }
 
+// The lifetime cap's re-key in place: layer l's row i of rows at u = (l rows + i) KV_HEADS HW + g HW + j; its table
+// entry (PG_REKEY words): slots, rows used, cache, store base, layer count, layer index, the layer's bound offsets
+// ([physical slot][NL], a listed slot's its old b_j; 0: the layer is under the seed's key and left as it is), the new
+// offsets b_j'(c_a') ([row][NL]) and the plaintext flags (0: none). A listed slot's words are decoded under the old
+// offset and encoded under the new one in place unless its flag is set (plaintext, left as it is with its flag). The
+// CTAs stride over the words, so a grid of fewer than every SM's resident CTAs leaves the rest of each SM to serving;
+// pg_rekey_settle_kernel writes the new offsets over the old after.
+constexpr int PG_REKEY = 9;
+__global__ void __launch_bounds__(128) pg_rekey_kernel(const u64 *__restrict__ tab, int layers, int rows, int bs, int sb,
+                                                       int sh, int ss, int k) {
+  const u64 per = (u64)rows * KV_HEADS * HW, words = (u64)layers * per;
+  for (u64 u0 = (u64)blockIdx.x * 128; u0 < words; u0 += (u64)gridDim.x * 128) {
+    const u64 u = u0 + threadIdx.x;
+    u32 x[NL] = {};
+    u32 *dst = nullptr;
+    if (u < words) {
+      const u64 *e = tab + PG_REKEY * (u / per);
+      const u64 r = u % per;
+      const int j = (int)(r % HW), g = (int)(r / HW % KV_HEADS), i = (int)(r / ((u64)HW * KV_HEADS));
+      const long long slot = i < (int)e[1] ? reinterpret_cast<const long long *>(e[0])[i] : -1;
+      const u32 *bj = reinterpret_cast<const u32 *>(e[6]);
+      if (slot >= 0 && bj && !pg_plain(reinterpret_cast<const uint8_t *>(e[8]), slot)) {
+        u32 *w = reinterpret_cast<u32 *>(e[2]) + ((u64)(slot / bs) * sb + (u64)g * sh + (u64)(slot % bs) * ss + j) * NL;
+        load(w, x);
+        const u64 at = e[3] + ((u64)slot * e[4] + e[5]) * TLW + pg_wi(g, j);
+        decode_word(x, at, k, bj + slot * NL);
+        encode_word(x, at, k, reinterpret_cast<const u32 *>(e[7]) + (u64)i * NL);
+        dst = w;
+      }
+    }
+    store_warp<4>(dst, x);
+  }
+}
+
+// Each listed slot's new offset into the layer's bound offsets, its flag set or not, so a plaintext slot's later
+// pg_encode takes its slot's current key. A thread a (layer, row, 16 bytes).
+__global__ void __launch_bounds__(128) pg_rekey_settle_kernel(const u64 *__restrict__ tab, int layers, int rows) {
+  constexpr int Q = NL / 4;
+  const u64 u = (u64)blockIdx.x * 128 + threadIdx.x;
+  if (u >= (u64)layers * rows * Q) return;
+  const u64 *e = tab + PG_REKEY * (u / ((u64)rows * Q));
+  const int i = (int)(u / Q % rows), q = (int)(u % Q);
+  const long long slot = i < (int)e[1] ? reinterpret_cast<const long long *>(e[0])[i] : -1;
+  if (e[6] && slot >= 0)
+    reinterpret_cast<uint4 *>(e[6])[slot * Q + q] = reinterpret_cast<const uint4 *>(e[7])[(u64)i * Q + q];
+}
+
 // nb whole blocks (blocks[b], bw words each, contiguous) of a layer's cache into out, block b at word b bw: decoded
 // (ENC, under each slot's bound offset in bj, nullptr: the seed's key; a plaintext slot copied) or copied. A thread a
 // word.
@@ -693,6 +743,40 @@ int pg_encode(const unsigned long long *tab, int layers, int rows, int bs, int s
   const unsigned long long words = (unsigned long long)layers * rows * kv::KV_HEADS * kv::HW;
   kv::pg_encode_kernel<<<(unsigned)((words + 127) / 128), 128, 0, s>>>(t, layers, rows, bs, sb, sh, ss, k);
   kv::pg_settle_kernel<<<(unsigned)(((unsigned long long)layers * rows + 127) / 128), 128, 0, s>>>(t, layers, rows);
+  return launched();
+}
+
+// pg_rekey's default grid: every SM's resident CTAs.
+int pg_rekey_ctas() {
+  int dev = 0, sms = 0, per = 0;
+  cudaGetDevice(&dev);
+  cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev);
+  cudaOccupancyMaxActiveBlocksPerMultiprocessor(&per, kv::pg_rekey_kernel, 128, 0);
+  return std::max(1, sms * per);
+}
+
+// The lifetime cap's re-key (remote_bandwidth's PROTOCOL.md §4: a block kept past L windows is appended again at a
+// fresh index under a fresh coin, in its slot), in place: layers layers' listed slots decoded under their old bound
+// offsets and encoded under their new ones at k rounds, then the new offsets written over the old; a plaintext slot's
+// words and flag are left as they are, its offset moved too. tab (device) holds each layer's PG_REKEY words
+// (pg_rekey_kernel), rows its most rows; every layer's cache in one layout. A layer's listed slots are distinct, and
+// nothing reads them until it is done: the caller orders it after their last read under the old offsets and before
+// their first under the new. It reads and writes nothing else, so on a low-priority stream with ctas below
+// pg_rekey_ctas() it runs beside serving. ctas: the grid (0: pg_rekey_ctas()).
+int pg_rekey(const unsigned long long *tab, int layers, int rows, int bs, int sb, int sh, int ss, int k, int ctas,
+             cudaStream_t s) {
+  if (layers < 0 || rows < 0 || bs < 1 || k < 1 || k > kv::KMAX || ctas < 0 || !kv::MMA_OK || (layers && rows && !tab))
+    return -1;
+  if (!layers || !rows) return 0;
+  static int resident = 0;
+  if (!ctas) {
+    if (!resident) resident = pg_rekey_ctas();
+    ctas = resident;
+  }
+  const auto *t = reinterpret_cast<const kv::u64 *>(tab);
+  kv::pg_rekey_kernel<<<ctas, 128, 0, s>>>(t, layers, rows, bs, sb, sh, ss, k);
+  const unsigned long long limbs = (unsigned long long)layers * rows * (kv::NL / 4);
+  kv::pg_rekey_settle_kernel<<<(unsigned)((limbs + 127) / 128), 128, 0, s>>>(t, layers, rows);
   return launched();
 }
 
