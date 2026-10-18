@@ -61,7 +61,7 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm import protocol_options as PO
-from verity_vllm.acquire.sources import taps as TAPS
+from verity_vllm.acquire.sources import hidden_source as HS, taps as TAPS
 from verity_vllm.config import group, option
 from verity_vllm.engine import engine_profile as prof  # noqa: F401
 
@@ -243,9 +243,9 @@ COMPILED_REPLAY_SEED_SOURCE = "run root (first 4 bytes, after commitment): int(r
 
 
 def admission_lag(wl: dict) -> int:
-    """The lag rows the host admission counts: the declared LAG of the manifest target (`global_program.workload_target`)."""
+    """The lag rows the host admission counts: the declared LAG of the loaded workload's target (`global_program.workload_target`)."""
     from verity_vllm.pipeline import global_program as _GP
-    return int(_GP.workload_target(wl).lag())
+    return int(_GP.workload_target(wl.get("target")).lag())
 
 
 def stop_rule_of_record(eng, wl: dict, versions: dict) -> dict[str, Any]:
@@ -262,7 +262,7 @@ def stop_rule_of_record(eng, wl: dict, versions: dict) -> dict[str, Any]:
         _srule = _GP.stop_rule(eng.cp.get("local_path"), None, wl)
         out["srule"] = {k: _srule.get(k) for k in ("eos_token_ids", "source", "refusal") if k in _srule}
         out["eos"] = None if _srule.get("refusal") else _srule.get("eos_token_ids")
-        _decl_lag = _GP.workload_target(wl).lag()
+        _decl_lag = _GP.workload_target(wl.get("target")).lag()
         _eng_async = (versions.get("engine_kwargs") or {}).get("async_scheduling")
         # one field, one reader (padrev M-0517): GP-01's eos_lag_rows_declared over the engine's resolved read-back
         _eng_lag = _GP.eos_lag_rows_declared({"async_scheduling": (versions.get("engine_kwargs") or {}).get("async_scheduling")})
@@ -1219,7 +1219,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     # R13 hopper: the attention implementation the engine executes (FA2 / FA3) -- selects the hidden class the verdict requires and the tap class
     fa_version = va.observed_flash_attn_version(eng.model)
     if not required_classes_cli:
-        required_classes = required_classes_default(fa_version)
+        required_classes = HS.with_hidden_class(required_classes_default(fa_version), hidden_family := HS.attention_hidden(required_manifest, eng.model)["family"])
         if compiled_kernels is not None:
             # [R15 compiled S3] the execution's leaf class is P_compiled's kernel buffers, not the eager module outputs (never fired: not wrapped)
             required_classes = tuple("compiled_kernel_buffers" if c == "instance_outputs_native" else c for c in required_classes)
@@ -1318,7 +1318,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 raise SystemExit(f"--compiled-taps on needs the native_collect committer (got {kind})")
             compiled_src.attach(com)                         # sets com.external_acquisition: the committer does not wrap the compiled forwards
             print(f"[delta] compiled source attached -> committer {com.name}", flush=True)
-        if args.hidden_so:
+        if args.hidden_so and (required_classes_cli or hidden_family):     # MLA / DSA sparse MLA: no hidden class, no FA2 source
             from verity_vllm.acquire.sources.hidden_source import HiddenM1Source, make_hidden_source
             # R11 collector-meas: the op namespace defaults to the .so stem (verity_fa2_matReq | verity_fa2_matAll), as e2e_commit_run.py does.
             # R13 hopper: the source class follows the tap build (FA2 v7/v8 -> HiddenM1Source, FA3 v9 -> HiddenM1SourceFA3) and must agree with
@@ -2235,7 +2235,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                     else:
                         # [rev-cb M-0655 W2] the record must be the one of THIS Program and THIS checkpoint: its program_digest against the
                         # Build digest of record (--program-digest) / the manifest's component digests, its checkpoints.json entry against
-                        # the workload's (model, tokenizer_revision) pin -- a record built for another Program/checkpoint is refused by name
+                        # the workload's (model, engine.revision) pin -- a record built for another Program/checkpoint is refused by name
                         _pdr: set[str] = set()
                         if getattr(args, "program_digest", None):
                             _pdr.add(str(args.program_digest))
@@ -2245,7 +2245,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                                 if isinstance(_c, dict) and _c.get("program_digest"):
                                     _pdr.add(str(_c["program_digest"]))
                         _wp = WR.check(_wor_rec, _live_wd, program_digests_of_record=(_pdr or None),
-                                       checkpoint_of_record={"repo": wl.get("model"), "revision": wl.get("tokenizer_revision")},
+                                       checkpoint_of_record={"repo": wl.get("model"), "revision": wl.get("revision")},
                                        kv_cache_dtype=str(engine_args.get("kv_cache_dtype") or "auto"))
                     _wp["source"] = (_wor_rec or {}).get("source")
                     _wp["committed_weights_root"] = (rc.weight_registration or {}).get("root") if isinstance(rc.weight_registration, dict) else None

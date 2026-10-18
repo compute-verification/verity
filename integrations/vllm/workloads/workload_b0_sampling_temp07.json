@@ -1,8 +1,12 @@
 {
- "schema": "verity-vllm/workload/v1",
+ "schema": "verity-vllm/workload/v2",
  "model": "HuggingFaceTB/SmolLM2-135M",
  "case": "B0",
- "tokenizer_revision": "93efa2f097d58c2a74874c7e644dbc9b0cee75a2",
+ "engine": {
+  "revision": "93efa2f097d58c2a74874c7e644dbc9b0cee75a2",
+  "vllm": "d9105ea80",
+  "args": {}
+ },
  "variants": {
   "greedy": {
    "temperature": 0.0,
@@ -80,5 +84,5 @@
    "origin": "workload_32x16_1req.json request 7cc7c3bb-adf5-58cd-87fc-9f1b8e7c34d6 (same 32 prompt tokens; fresh id: no accepted tokens apply)"
   }
  ],
- "note": "GEN sampling variant 1: random sampling, temperature 0.7, explicit per-request seed 0, 1 request (32x16). vLLM d9105ea80 V2 sampler: fp32 copy of the logits, _temperature_kernel (in-place /0.7), _gumbel_sample_kernel with Philox Gumbel noise seeded by (seed, position). No accepted tokens: the clean control run is the reference (RULES \u00a75)."
+ "note": "GEN sampling variant 1: random sampling, temperature 0.7, explicit per-request seed 0, 1 request (32x16). vLLM d9105ea80 V2 sampler: fp32 copy of the logits, _temperature_kernel (in-place /0.7), _gumbel_sample_kernel with Philox Gumbel noise seeded by (seed, position). No accepted tokens: the clean control run is the reference (RULES §5)."
 }

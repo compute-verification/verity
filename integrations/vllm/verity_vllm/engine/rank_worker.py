@@ -198,7 +198,7 @@ class TP2CaptureWorkerExtension:
     def tp2_install(self, *, out_dir: str, workload: dict, case: str, cp: dict, engine_kwargs: dict, env_flags: dict,
                     snapshot_steps: list[int], snapshot_max_bytes: int, adapter_revision: str, wheel_sha256: str | None,
                     vllm_commit: str | None, reenter: bool = True, triton: bool = True, module_hooks: bool = True,
-                    weights_verified: bool = False, argv: list[str] | None = None) -> dict[str, Any]:
+                    weights_verified: bool = False, argv: list[str] | None = None, target: Any = None) -> dict[str, Any]:
         import torch
 
         from verity_vllm.engine import vllm_adapter as va
@@ -212,7 +212,7 @@ class TP2CaptureWorkerExtension:
         runner = self.model_runner
         model = runner.get_model()
         engine = va.Engine(llm=_LLMShim(self), runner=runner, model=model, cp=dict(cp), kwargs=dict(engine_kwargs),
-                           env_flags=dict(env_flags), build_s=0.0, case=case)
+                           env_flags=dict(env_flags), build_s=0.0, case=case, target=target)
         header = va.make_header(engine, workload, adapter_revision=adapter_revision, wheel_sha256=wheel_sha256, vllm_commit=vllm_commit,
                                 extra_notes={"tp2": {"rank": rank, "world_size": world, "log": f"log.rank{rank}.jsonl.gz",
                                                      "seam": "worker_extension_cls " + EXTENSION, "facts": facts},
@@ -595,7 +595,7 @@ class TP2CaptureWorkerExtension:
                         weights_pin: dict | None = None, flip_weight: dict | None = None, tp_partials_flip_site: dict | None = None,
                         serve_shard_from: dict | None = None, tap_sources: Any = None) -> dict[str, Any]:
         """Construct THIS rank's committer (`commit_delta.make_committer` on a per-rank engine shim: this worker's model runner + model,
-        the rank's loaded weight SHARDS), attach the FA2 hidden source, size the arena from the workload envelope, register the rank's
+        the rank's loaded weight SHARDS), attach the FA hidden source (none for MLA), size the arena from the workload envelope, register the rank's
         weights.  The rank's root binds its own values (its shards' roots, its partial GEMMs, its FA2 hidden stream for its heads); the
         driver (`pipeline/tp/commit.py`) combines the ranks' roots deterministically and fails closed on a missing rank."""
         from types import SimpleNamespace
@@ -609,9 +609,9 @@ class TP2CaptureWorkerExtension:
         args = SimpleNamespace(arena_mb=arena_mb, chunk=None, hash_threads=None, profile_hooks=False, fast_copy=True, gpu_tree=True)
         com = make_committer(kind, eng, args, f"{run_id}/rank{rank}")
         res: dict[str, Any] = {"rank": rank, "committer": com.name}
-        if hidden_so:
-            from verity_vllm.acquire.sources.hidden_source import HiddenM1Source, make_hidden_source
-            man = json.loads(Path(required_manifest).read_text()) if required_manifest else None      # its ROW word 3 / MS class must be the build's
+        from verity_vllm.acquire.sources.hidden_source import HiddenM1Source, attention_hidden, make_hidden_source
+        man = json.loads(Path(required_manifest).read_text()) if required_manifest else None      # its ROW word 3 / MS class must be the build's
+        if (res.setdefault("attention_hidden", attention_hidden(man, model))["family"] and hidden_so):   # MLA / DSA: no hidden class, no FA2 source
             com.attach_source(make_hidden_source(com, hidden_so, ns=(hidden_ns or Path(hidden_so).stem), manifest=man,
                                                  fa2_cls=getattr(com, "hidden_source_cls", HiddenM1Source), fa3_cls=getattr(com, "hidden_source_cls_fa3", None)))
             res["hidden_source"] = hidden_so
@@ -622,7 +622,7 @@ class TP2CaptureWorkerExtension:
         try:
             from verity_vllm.acquire.sources.moe_source import MoeBlockSource
 
-            msrc = MoeBlockSource(com, model)
+            msrc = MoeBlockSource(com, model, world=int((facts.get("tp") or {}).get("world_size") or 1))
             if msrc.layers:
                 com.attach_source(msrc)
                 res["moe_source"] = {"layers": len(msrc.layers), "tensors_per_layer": msrc.stats.get("tensors_per_layer"),
@@ -656,7 +656,7 @@ class TP2CaptureWorkerExtension:
         else:
             res["tp_partial_source"] = None      # negative: collective outputs only (the R13 state) -- must fail the required classes
         if hasattr(com, "size_arena") and getattr(com, "arena", None) is not None:
-            res["arena_sizing"] = _jsonable(com.size_arena(envelope, hidden_m1=bool(hidden_so)))
+            res["arena_sizing"] = _jsonable(com.size_arena(envelope, hidden_m1="hidden_source" in res))
             if getattr(com, "windowed", False):
                 # [R13 tp / P0-01 parity] windowed staging (VERITY_WINDOW_MB > 0): the ring replaces the per-step blocks -- the same call
                 # commit_delta makes after size_arena; without it every windowed step fails closed (`win_log2_chunks` unset -> 0 tensors).
@@ -737,7 +737,7 @@ class TP2CaptureWorkerExtension:
                         raise RuntimeError(f"rank {rank}: no rank Program (instances.json.gz) under {pdir}")
                     pdir = subs[0]
                 rec = WR.build_record(str(pdir), str(weights_pin["checkpoint_dir"]), checkpoints_manifest=weights_pin.get("checkpoints_manifest"),
-                                      model=weights_pin.get("model"))
+                                      model=weights_pin.get("model"), shard_pin=weights_pin.get("shard_pin"))
                 rtp = (rec.get("tp") or {})
                 world_ = int(facts["tp"]["world_size"])
                 if int(rtp.get("world") or 1) != world_ or int(rtp.get("rank") or 0) != int(rank):
@@ -1018,7 +1018,7 @@ class TP2CaptureWorkerExtension:
         if n_req > 1 and not step_rows:
             return {"skipped": f"B={n_req} > 1 but the rank's collector recorded no step_rows ({getattr(com, 'step_rows_why', None)}) -- no coverage verdict"}
         try:
-            bmap = bd.build_binding_map(com._layouts, rc.steps, rc.run_root, pd, rank=rank, weight_registration=rc.weight_registration, request_rows=request_rows,
+            bmap = bd.build_binding_map(com._layouts, rc.steps, rc.run_root, pd, rank=rank, weight_registration=rc.weight_registration, request_rows=request_rows, name_bindings=bd.source_name_bindings(com.sources),
                                         collector={"committer": com.name, "layout": "chunk-leaf-v1", "retain": getattr(com, "retain", None), "windowed": bool(getattr(com, "windowed", False))})
             struct = bd.structure_of(com)
             tps = st.get("tps")
@@ -1118,101 +1118,14 @@ class TP2CaptureWorkerExtension:
         return dict(repo_modules_loaded(), rank=int(self._tp2_commit["rank"]) if getattr(self, "_tp2_commit", None) else None)
 
     def tp2_commit_xrank_dump(self, *, out_dir: str, seed_hex: str, pair: int, per_stratum: int = 2, max_rows: int = 16) -> dict[str, Any]:
-        """[R16 tp TP-12, rev F-r16-18] THIS rank's picks for the cross-rank collective-output pass, from the COMMITTED bytes (every member opened
-        and verified against this rank's run root, the same reader as the value check and the sampled replay; a member that does not verify
-        is a pick without bytes, named -> the driver's check FAILs it): per pick the rank's partial rows and the
-        rows of the received collective output as this rank committed it (`<site>/0` dense module output, `<site>/out` MoE block).  Picks are
-        drawn identically on every rank from the pair's combined root (fixed after commitment) -> xrank_pair<k>_rank<r>.pt; the driver pairs
-        the ranks and evaluates the definition (xrank_collectives.check_picks)."""
-        import time as _t
+        """[TP-12] THIS rank's picks for the cross-rank collective-output pass, from the COMMITTED bytes (`pipeline.tp.xrank_dump`),
+        each world-8 all-reduce under the route the engine's all-reduce switches take."""
+        from verity_vllm.engine import env as engine_env
+        from verity_vllm.pipeline.tp import xrank_dump as XD
+        from verity_vllm.program.registry.tp_allreduce import settings_of
 
-        import torch
-
-        from verity_vllm.check import oracle_compare as OC
-        from verity_vllm.check.match import xrank_collectives as XC
-        from verity_vllm.acquire.sources.partial_source import _committed
-
-        st = self._tp2_commit
-        com, rank = st["com"], int(st["rank"])
-        t0 = _t.perf_counter()
-        layouts = {int(s): [(m.name, tuple(m.shape)) for m in ms] for s, ms in getattr(com, "_layouts", {}).items()}
-        plan = XC.pick_strata(layouts, rank, bytes.fromhex(seed_hex), per_stratum=int(per_stratum), max_rows=int(max_rows), world=int(st["world"]))
-        picks, missing, nbytes = [], 0, 0
-        rd = OC.OpenedReader(com, st["rc"]) if st.get("rc") is not None else None
-        unverified: dict[tuple[int, str], str] = {}
-
-        def tensor_of(step: int, meta) -> Any:
-            if rd is None:
-                unverified[(step, meta.name)] = "no run commitment on this rank (not finalized)"
-                return None
-            try:
-                b = _committed(rd, step, meta)
-            except OC.OpeningNotVerified as e:
-                unverified[(step, meta.name)] = f"opened value not verified: {e}"[:200]
-                return None
-            if b is None:
-                return None
-            dt = getattr(torch, str(meta.dtype).replace("torch.", ""))
-            return torch.frombuffer(bytearray(b), dtype=dt).reshape(tuple(meta.shape)).clone()
-
-        for pk in plan["picks"]:
-            step = int(pk["step"])
-            metas = {m.name: m for m in com._layouts.get(step, [])}
-            pm = metas.get(pk["member"])
-            rname = next((n for n in pk["recv_candidates"] if n in metas), None)
-            rm = metas.get(rname) if rname else None
-            rows = torch.tensor(pk["rows"], dtype=torch.long)
-            part = tensor_of(step, pm) if pm is not None else None
-            recv = tensor_of(step, rm) if rm is not None else None
-            why = None
-            if part is None or recv is None:
-                def _gone(meta) -> str:
-                    return unverified.get((step, meta.name), "bytes not retained")
-                why = ("partial " + ("not in this step's layout" if pm is None else _gone(pm)) if part is None else "") + \
-                      ("; " if part is None and recv is None else "") + \
-                      (("received output " + ("not committed under any of " + "/".join(pk["recv_candidates"]) if rm is None else _gone(rm))) if recv is None else "")
-                missing += 1
-            else:
-                if part.dim() >= 2 and recv.dim() >= 2 and part.shape[0] == recv.shape[0] == pk["rows_total"]:
-                    part, recv = part[rows], recv[rows]
-                elif part.dim() >= 2 and recv.dim() >= 2 and part.shape[0] != recv.shape[0]:
-                    why = f"row counts differ: partial {tuple(part.shape)} vs received {tuple(recv.shape)}"
-                nbytes += part.numel() * part.element_size() + recv.numel() * recv.element_size()
-            emb = None
-            if pk["kind"] == "all_reduce" and XC.is_embedding_site(pk["site"]):
-                # EmbeddingShard_v1 leg (ruling 27): this rank's committed partial rows == masked gather of the committed ids from ITS vocab shard
-                # (the live parameter, which the per-rank weights pin ties to the checkpoint of record); rows outside the rank's range are zero
-                try:
-                    im = metas.get(f"{pk['site']}/in")
-                    ids_t = tensor_of(step, im) if im is not None else None
-                    mod = dict(st["eng"].model.named_modules()).get(pk["site"])
-                    si = getattr(mod, "shard_indices", None)
-                    if ids_t is None or mod is None or si is None or part is None:
-                        emb = {"ok": None, "why": (((unverified.get((step, im.name)) if im is not None else None) or "no committed ids member <site>/in") if ids_t is None
-                                                   else "no VocabParallelEmbedding shard_indices on the module" if si is None else "partial not committed")}
-                    else:
-                        lo, hi = int(si.org_vocab_start_index), int(si.org_vocab_end_index)
-                        idx = ids_t.reshape(-1)
-                        idx = idx[rows] if (idx.numel() == pk["rows_total"] and part.shape[0] == len(pk["rows"])) else idx
-                        mask = (idx >= lo) & (idx < hi)
-                        local = torch.where(mask, idx - lo, torch.zeros_like(idx)).long()
-                        W = mod.weight
-                        exp = W[local.to(W.device)].masked_fill((~mask).unsqueeze(-1).to(W.device), 0).to("cpu")
-                        ok = bool(exp.shape == part.shape and exp.dtype == part.dtype and torch.equal(exp, part))
-                        emb = {"ok": ok, "n_diff": (int((exp.view(torch.int16) != part.view(torch.int16)).sum()) if (exp.shape == part.shape and exp.dtype == torch.bfloat16) else None),
-                               "vocab_range": [lo, hi], "masked_rows": int((~mask).sum()), "rows": int(idx.numel()), "why": None if ok else "committed partial != masked gather from this rank's shard"}
-                except Exception as e:  # noqa: BLE001
-                    emb = {"ok": None, "why": f"embedding-shard leg error: {e!r}"[:200]}
-            picks.append(dict(pk, part=part, recv=recv, recv_member=rname, why=why, emb=emb))
-        rec = {"schema": "verity/tp2/xrank-picks/v1", "rank": rank, "pair": int(pair), "seed": seed_hex, "strata": plan["strata"], "picks": picks,
-               "per_stratum": int(per_stratum), "max_rows": int(max_rows), "steps_in_layout": len(layouts)}
-        fn = Path(out_dir) / f"xrank_pair{int(pair)}_rank{rank}.pt"
-        torch.save(rec, fn)
-        return {"rank": rank, "file": str(fn), "picks": len(picks), "strata": len(plan["strata"]), "missing": missing, "bytes": nbytes,
-                "value_source": rd.record() if rd is not None else {"source": "opened", "reads": 0, "why": "no run commitment on this rank"},
-                "unreplayable_sites": st.get("xrank_unreplayable_sites"), "strata_sites": sorted({v["site"] for v in plan["strata"].values()}),
-                "families": sorted({p["family"] for p in picks}), "flipped_collective_inputs": int(getattr(st.get("tps"), "flipped", 0) or 0),
-                "wall_s": round(_t.perf_counter() - t0, 3)}
+        settings = settings_of(self.vllm_config.parallel_config.disable_custom_all_reduce, engine_env.snapshot())
+        return XD.dump(self._tp2_commit, settings=settings, out_dir=out_dir, seed_hex=seed_hex, pair=pair, per_stratum=per_stratum, max_rows=max_rows)
 
     def tp2_commit_binding_map_dump(self, *, out_dir: str) -> dict[str, Any]:
         """[R15 TP-04] write THIS rank's binding map of the last finalized run (identity -> commitment location, fixed at finalize before any
