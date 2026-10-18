@@ -169,9 +169,9 @@ def session(a, pt: dict, arm: str, mode: str, rep: int, out: Path) -> dict:
                     if (key.startswith("t.firewall") or key.startswith("cpu.firewall")) and isinstance(x, (int, float)):
                         fw[key] = fw.get(key, 0.0) + float(x)
             lives.append({"t_emit_s": round(t, 3), "firewall": fw, "proof_bytes": sum(v.get("proof_bytes") or [0]),
-                          **{x: v.get(x) for x in ("run", "warm", "accepted", "why", "e2e_s", "witness_s", "witness_prebuilt_s",
-                                                   "prove_total_s", "wait_s", "wire_sent", "wire_recv", "k_log", "dense_m",
-                                                   "instances", "gpu", "prover")}})
+                          **{x: v.get(x) for x in ("run", "warm", "accepted", "why", "prover_stopped", "e2e_s", "witness_s",
+                                                   "witness_prebuilt_s", "prove_total_s", "wait_s", "wire_sent", "wire_recv",
+                                                   "k_log", "dense_m", "instances", "gpu", "prover")}})
     built = next((float(x.rsplit("built in ", 1)[1].rstrip("s")) for x in (o / "prove.err").read_text().splitlines()
                   if x.startswith("statement ") and " built in " in x), None)
     sessions = sorted((o / "sessions").glob("*/session.json"), key=lambda f: f.stat().st_mtime)
@@ -193,16 +193,18 @@ def prove(a) -> int:
     q = "name,uuid,driver_version,memory.total,compute_cap,clocks.max.sm,power.limit"
     (out / "records" / "gpu.csv").write_text(subprocess.run(["nvidia-smi", f"--query-gpu={q}", "--format=csv"],
                                                              capture_output=True, text=True).stdout)
-    ok = True
+    ok, arms, tried = True, a.arms.split(","), set()
     for pt in plan:
-        for arm in a.arms.split(","):
-            for rep in range(a.cold):
-                rec = session(a, pt, arm, "cold", rep, out / "points")
+        for arm in list(arms):
+            recs = [session(a, pt, arm, "cold", rep, out / "points") for rep in range(a.cold)]
+            recs.append(session(a, pt, arm, "warm", 0, out / "points"))
+            for rec in recs:
                 jsonl(out / "records" / "prove.jsonl", rec)
                 ok &= rec["accepted"]
-            rec = session(a, pt, arm, "warm", 0, out / "points")
-            jsonl(out / "records" / "prove.jsonl", rec)
-            ok &= rec["accepted"]
+            if arm not in tried and not any(r["accepted"] for r in recs):
+                print(f"ZKCOST arm {arm} dropped: every session of its first point failed", flush=True)
+                arms.remove(arm)
+            tried.add(arm)
     return 0 if ok else 1
 
 

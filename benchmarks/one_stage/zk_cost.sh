@@ -38,8 +38,17 @@ if [ ! -x "$PY" ]; then
   (exec 8>"$FLOCK_WORK/flock-circuit/venv.lock"; flock 8; [ -x "$PY" ] || { "$UV" venv -q --python 3.12 "$FLOCK_WORK/flock-circuit/py" \
     && "$UV" pip install -q --python "$PY" numpy blake3; })
 fi
-for p in "$BIN" "$LEAN" "$PY"; do [ -x "$p" ] || { log "missing: '$p'"; tail -20 "$O/build.txt" "$O/lean-build.txt"; exit 1; }; done
-sha256sum "$BIN" "$LEAN" | tee "$O/binaries.sha256" | tee -a "$O/job.log"
+# the firewall's Lean frame (FC_FIREWALL=1 spawns it per rep), built in the same package as flock-verify
+export FC_FIREWALL_LEAN=${LEAN%/*}/flock-firewall
+if [ -x "$LEAN" ] && [ ! -x "$FC_FIREWALL_LEAN" ]; then
+  command -v lake > /dev/null || export PATH="$HOME/.elan/bin:$PATH"
+  (exec 8>"$PT_WORK/lean.lock"; flock 8; [ -x "$FC_FIREWALL_LEAN" ] || (cd "${LEAN%/.lake/*}" && lake build flock-firewall)) \
+    > "$O/lake-firewall.log" 2>&1
+fi
+for p in "$BIN" "$LEAN" "$FC_FIREWALL_LEAN" "$PY"; do
+  [ -x "$p" ] || { log "missing: '$p'"; tail -20 "$O/build.txt" "$O/lean-build.txt" "$O/lake-firewall.log"; exit 1; }
+done
+sha256sum "$BIN" "$LEAN" "$FC_FIREWALL_LEAN" | tee "$O/binaries.sha256" | tee -a "$O/job.log"
 export PYTHONPATH=$REPO:$REPO/verity/ml/flock/python:$REPO/integrations/vllm:$REPO/tools/verity/circuit_check/src:$REPO/benchmarks/numerical/python
 Z=$S/zk
 ZK() { "$PY" benchmarks/one_stage/zk_cost.py "$@" --out "$Z"; }
