@@ -10,7 +10,7 @@ import pytest
 
 from research.drive import CHECK_STEPS
 from test_queue import World, _git
-from test_queue_drive import Harness, _check, _failed_run, _steps_run, _tip
+from test_queue_drive import Harness, _check, _failed_run, _killed_run, _steps_run, _tip
 
 DEFER = frozenset({"circuit-check", "flock-rust-tests"})
 
@@ -107,27 +107,68 @@ def test_a_failed_post_landing_run_reverts_only_the_pr_it_implicates_and_tells_i
     assert "pkg/tests/test_x.py" not in _git(world.origin, "ls-tree", "-r", "--name-only", main)
     (post,) = h.posts
     assert post.startswith("@ci @lane-2 queue: #2 reverted on `main`") and "#1 #2 #3" in post, post
+    assert "#1 #3 stay on `main`" in post, post
     assert h.posted[-1][0] == main and len(h.posted) == 2                                # the next run checks the new tip
     h.run_state["r-post-1"] = ("done", 0, None)
     h.tick()
     assert h.postland()["verified"] == main and h.postland()["pending"] == []
 
 
-def test_a_post_landing_failure_no_pr_is_implicated_in_reverts_nothing_and_tells_ci(world, monkeypatch, tmp_path):
+def _tree(world: World, ref: str) -> str:
+    return _git(world.origin, "rev-parse", f"{ref}^{{tree}}")
+
+
+def test_a_post_landing_failure_no_pr_is_implicated_in_reverts_every_landing_since_verified(world, monkeypatch, tmp_path):
+    """Daniel, 11 Oct: a failure there reverts the landing at once, so `main` doesn't stay red when no single PR is to blame."""
+    _registry(world, "lane-1", "lane-2")
+    h = Postland(world, monkeypatch, tmp_path)
+    h.d.train_size = 2
+    base = _git(world.origin, "rev-parse", "main")
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    world.gh.put(2, world.change({"b.txt": "2\n"}))
+    _, tip = h.land_deferred()
+    h.run_state["r-post-0"] = ("done", 1, None)
+    h.evidence = [_failed_run(tmp_path, "tests/test_x.py::test_y", "tests/test_x.py:2")]     # in pkg, which neither touches
+    h.tick()
+    main = _git(world.origin, "rev-parse", "main")
+    assert _tree(world, main) == _tree(world, base) and _git(world.origin, "rev-list", "--count", f"{tip}..{main}") == "2"
+    (post,) = h.posts
+    assert post.startswith(f"@ci @lane-1 @lane-2 queue: Every landing since {base[:12]} reverted on `main` (#1 #2)"), post
+    assert "No single PR is implicated" in post, post
+    assert h.posted[-1][0] == main and len(h.posted) == 2                                # the next run checks the new tip
+
+
+def test_a_post_landing_failure_several_prs_are_implicated_in_reverts_every_landing_since_verified(world, monkeypatch, tmp_path):
+    h = Postland(world, monkeypatch, tmp_path)
+    h.d.train_size = 3
+    base = _git(world.origin, "rev-parse", "main")
+    world.gh.put(1, world.change({"pkg/helpers.py": "X = 2\n"}))
+    world.gh.put(2, world.change({"pkg/tests/test_x.py": "def test_y():\n    pass\n"}))
+    world.gh.put(3, world.change({"b.txt": "3\n"}))
+    h.land_deferred()
+    h.run_state["r-post-0"] = ("done", 1, None)
+    h.evidence = [_failed_run(tmp_path, "tests/test_x.py::test_y", 'File "/workspace/research/src/abc/pkg/helpers.py", line 1')]
+    h.tick()
+    assert _tree(world, "main") == _tree(world, base)
+    (post,) = h.posts
+    assert "Every landing since" in post and "which #1 #2 change" in post, post
+
+
+def test_a_post_landing_run_the_machine_killed_runs_again_once_and_killed_again_is_told(world, monkeypatch, tmp_path):
     h = Postland(world, monkeypatch, tmp_path)
     world.gh.put(1, world.change({"a.txt": "1\n"}))
     _, tip = h.land_deferred()
-    h.run_state["r-post-0"] = ("done", 1, None)
-    h.evidence = [_failed_run(tmp_path, "tests/test_x.py::test_y", "tests/test_x.py:2")]     # in pkg, which #1 doesn't touch
+    h.run_state["r-post-0"] = ("done", 137, None)                                      # an OOM kill, and no report
     h.tick()
-    assert _git(world.origin, "rev-parse", "main") == tip
+    assert h.posted == [(tip, "circuit-check,flock-rust-tests")] * 2 and not h.posts
+    assert h.postland()["run"]["resend"] is True and _git(world.origin, "rev-parse", "main") == tip
+    h.run_state["r-post-1"] = ("done", 1, None)
+    h.evidence = [_killed_run(tmp_path, "again")]                                      # circuit-check -9, naming no file
+    h.tick()
     (post,) = h.posts
-    assert post.startswith("@ci queue: the post-landing run r-post-0 of `main`") and "Reverted nothing" in post, post
+    assert post.startswith("@ci queue: the post-landing run r-post-1") and "killed again on its resend" in post, post
     h.tick()
-    assert len(h.posted) == 1 and len(h.posts) == 1                                      # that tip isn't checked again
-    world.gh.put(2, world.change({"b.txt": "2\n"}))
-    _, two = h.land_deferred()
-    assert h.posted[-1][0] == two                                                        # a new landing is
+    assert len(h.posted) == 2 and _git(world.origin, "rev-parse", "main") == tip
 
 
 def test_a_post_landing_run_that_has_already_failed_is_acted_on_and_cancelled(world, monkeypatch, tmp_path):

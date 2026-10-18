@@ -20,7 +20,8 @@ PR of the train changes (`implicated`) ejects that PR itself (`research queue ej
 With `--defer`, a train lands once every step but the deferred ones passed, and drive cancels the rest of its check.  One
 post-landing run at a time (`train.sh MAIN MACHINE --deferred STEPS`, in a slot `max_running` doesn't count) checks the deferred
 steps on `main`'s tip while a landing awaits it (`drive["postland"]`).  A pass verifies that tip; a failure reverts the one PR
-landed since the last verified `main` that it implicates (`culprit`), and tells its owner, or tells `@ci` and reverts nothing.
+landed since the last verified `main` that it implicates (`culprit`), else every landing since, and tells `@ci` and the owners;
+a run the machine killed runs again once.
 
 `--shadow` drives `queue-shadow`: it lands nothing, launches nothing and posts nothing, and logs what it would do.
 
@@ -411,7 +412,8 @@ class Driver:
         #: commit the locks a train's Lean check regenerated onto it as it lands (CI-64: Daniel through top, 18 Oct)
         self.regenerate_locks = regenerate_locks
         #: steps a train lands without (Daniel through top, 17 Oct; CI-30): the post-landing run checks them on `main`
-        #: (`postland`), and one that fails reverts the PR it implicates.  The Lean check's steps are never deferred.
+        #: (`postland`), and one that fails reverts the PR it implicates, else every landing since the last verified tip.  The
+        #: Lean check's steps are never deferred.
         defer = {x for x in defer if not x.startswith("lean")}
         self.defer = frozenset(defer | ({"flock-rust-tests"} if "circuit-check" in defer else set()))  # it runs after it
         #: the post-landing run of the deferred steps on `main`'s tip (`postland`): `train.sh COMMIT MACHINE --deferred STEPS`; an
@@ -563,8 +565,8 @@ class Driver:
 
     # -- the post-landing run (CI-30): a train lands once its steps but the deferred ones passed, and one run at a time checks
     #    those on `main`'s tip.  `drive["postland"]`: {"verified": the newest `main` whose deferred steps passed, "pending": the
-    #    tips landed since, "run": the run of them, or None, "steps": the deferred steps, "failed": a tip whose run failed and
-    #    reverted nothing, which no run checks again}
+    #    tips landed since, "run": the run of them, or None, "steps": the deferred steps, "resend": the next run is the one resend
+    #    of a run the machine killed, "failed": a tip whose run failed with nothing drive could revert, which no run checks again}
 
     def _hand_over(self, drive: dict, m: Member, prs: str, tip: str, base: str, v: Verdict) -> None:
         """A train landed at ``tip`` on ``base`` with its deferred steps still running: cancel its check, whose slot goes to the
@@ -623,42 +625,80 @@ class Driver:
                         f"drive: the post-landing run of {tip[:12]} has failed ({early}); drive acted on it")
         why = (f"it has already failed, still running: {early}" if early
                else ", ".join(f"{st} rc={rc}" for st, rc, *_ in states.values()))
-        self._postland_failed(drive, pl, run, why)
+        # not SIGTERM: a twin a sibling won the slot from, or a cancel (all of them: launched again above)
+        signalled = not early and any(isinstance(rc, int) and (rc < 0 or (rc > 128 and rc != SIGTERM_RC))
+                                      for _, rc, *_ in states.values())
+        self._postland_failed(drive, pl, run, why, signalled)
         pl["run"] = None
 
-    def _postland_failed(self, drive: dict, pl: dict, run: dict, why: str) -> None:
-        """A post-landing run of ``run["tip"]`` that failed: the one PR landed since `verified` whose change touches what failed
-        (`culprit`) is reverted on `main` (`git revert -m 1` of its merge onto `next`) and its owner told; else `CI` is told and
-        nothing is reverted, and no run checks that tip again.  Either way the next run checks `main`'s new tip."""
-        tip, ids = run["tip"], " ".join(run["ids"])
-        members = self.landed_since(pl["verified"], tip)
+    def _postland_failed(self, drive: dict, pl: dict, run: dict, why: str, signalled: bool = False) -> None:
+        """A post-landing run of ``run["tip"]`` that failed.  Killed by the machine (``signalled``: by a signal or 128+N, or
+        `culprit` says `KILLED`), it runs again once, on `main`'s tip then, and killed again is told to `CI`.  Else the one PR
+        landed since `verified` whose change touches what failed (`culprit`) is reverted on `main` (`git revert -m 1` of its
+        merge onto `next`), the rest staying; with no single such PR, every landing since `verified` is (Daniel, 11 Oct: a
+        failure there reverts the landing at once), so `main` doesn't stay red.  `CI` and the owners are told, and the next
+        run checks `main`'s new tip."""
+        tip, ids, base = run["tip"], " ".join(run["ids"]), pl["verified"]
+        members = self.landed_since(base, tip)
         one, hit, what = (self.culprit(members, Verdict("failed", ids, why)) if members
-                          else (None, [], f"no PR the queue landed since {pl['verified'][:12]} is in it"))
+                          else (None, [], f"no PR the queue landed since {base[:12]} is in it"))
         since = " ".join(f"#{x.pr}" for x in members) or "none"
         head = (f"the post-landing run {ids} of `main` {tip[:12]} ({', '.join(pl.get('steps') or ())}) failed ({why}); PRs "
-                f"landed since {pl['verified'][:12]}, its last verified `main`: {since}")
+                f"landed since {base[:12]}, its last verified `main`: {since}")
         key = f"postland:{tip}"
-        if one is None:
+        if signalled or what == KILLED:
+            if not run.get("resend"):
+                pl["resend"] = True
+                self.q.log(f"research queue drive: {head}. It was killed, a machine's fault: it runs again once, on `main`'s tip")
+                return
             pl["failed"] = tip
-            blame = (f"the failure is in {what}, which {' '.join(f'#{x.pr}' for x in hit)} change: revert the one that broke it "
-                     "(`git revert -m 1` of its merge)") if hit else what
-            self.refuse(drive, key, f"{head}. Reverted nothing: {blame}")
+            self.refuse(drive, key, f"{head}. Reverted nothing: it was killed again on its resend, a machine's fault")
             return
         if self.dry_run or self.q.shadow:
-            self.q.log(f"research queue drive: would revert #{one.pr} ({one.commit[:12]}) on `main`: {head}")
+            self.q.log(f"research queue drive: would revert {f'#{one.pr}' if one else f'every landing since {base[:12]}'} on "
+                       f"`main`: {head}")
             return
-        if self._revert([one.commit]):
-            self.refuse(drive, key, f"#{one.pr} reverted on `main`: {head}. The failure is in {what}, which of those only "
-                                    f"#{one.pr}'s change touches. Fix and re-mark", self._owner(one))
+        if one is not None:
+            rest = " ".join(f"#{x.pr}" for x in members if x is not one)
+            if self._revert([one.commit]):
+                self.refuse(drive, key, f"#{one.pr} reverted on `main`: {head}. The failure is in {what}, which of those only "
+                                        f"#{one.pr}'s change touches" + (f"; {rest} stay on `main`" if rest else "")
+                                        + ". Fix and re-mark", self._owner(one))
+            else:
+                pl["failed"] = tip
+                self.refuse(drive, key, f"#{one.pr} must be reverted by hand (`git revert -m 1 {one.commit[:12]}`): {head}. The "
+                                        f"failure is in {what}, which of those only #{one.pr}'s change touches, and the revert "
+                                        "didn't apply or push", self._owner(one))
+            return
+        blame = f"the failure is in {what}, which {' '.join(f'#{x.pr}' for x in hit)} change" if hit else what
+        owners = [self._owner(x) for x in members]
+        if not (commits := self.landings_since(base, tip)):
+            pl["failed"] = tip
+            self.refuse(drive, key, f"{head}. No single PR is implicated ({blame}), and no landing since {base[:12]} is left "
+                                    "to revert", *owners)
+        elif self._revert(commits):
+            self.refuse(drive, key, f"Every landing since {base[:12]} reverted on `main` ({since}): {head}. No single PR is "
+                                    f"implicated: {blame}. Fix and re-mark", *owners)
         else:
             pl["failed"] = tip
-            self.refuse(drive, key, f"#{one.pr} must be reverted by hand (`git revert -m 1 {one.commit[:12]}`): {head}. The "
-                                    f"failure is in {what}, which of those only #{one.pr}'s change touches, and the revert didn't "
-                                    "apply or push", self._owner(one))
+            self.refuse(drive, key, f"Every landing since {base[:12]} ({since}) must be reverted by hand: {head}. No single PR "
+                                    f"is implicated ({blame}), and the revert didn't apply or push", *owners)
+
+    def landings_since(self, base: str, tip: str) -> list[str]:
+        """The first-parent commits of ``base``..``tip``, newest first (each landing's merge, or its lock commit), but reverts and
+        the commits a revert in that range undid."""
+        undone = set(REVERTS_RE.findall(_out(self.repo, "log", "--format=%B", f"{base}..{tip}")))
+        out = []
+        for rec in filter(None, (x.strip() for x in _out(self.repo, "log", "--first-parent", "--format=%H%x00%B%x1e",
+                                                          f"{base}..{tip}").split("\x1e"))):
+            commit, body = rec.split("\x00", 1)
+            if commit not in undone and not REVERTS_RE.search(body):
+                out.append(commit)
+        return out
 
     def start_postland(self, drive: dict) -> None:
         """Launch the one post-landing run, on `main`'s tip, when none runs, a landing awaits it, and that tip is neither verified
-        nor one whose run failed and reverted nothing."""
+        nor one whose run failed with nothing drive could revert."""
         if not (pl := drive.get("postland")) or pl.get("run"):
             return
         q, main = self.q, _out(self.repo, "rev-parse", "origin/main")
@@ -673,7 +713,7 @@ class Driver:
         if not ids:
             self.refuse(drive, f"launch:postland:{main}", f"train.sh {main[:12]} {self.on} --deferred {steps} registered no run: {tail}")
             return
-        pl["run"] = {"ids": ids, "tip": main, "at": self.now()}
+        pl["run"] = {"ids": ids, "tip": main, "at": self.now(), **({"resend": True} if pl.pop("resend", False) else {})}
         q.log(f"research queue drive: post-landing run of `main` {main[:12]} ({steps}): {' '.join(ids)}; "
               f"{len(pl['pending'])} landing(s) since {pl['verified'][:12]}")
 
