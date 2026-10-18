@@ -463,13 +463,36 @@ impl Challenger for Framer<'_> {
 }
 
 /// The outer firewall's release (PROTOCOL.md §10.1): one rep's `flock-firewall frame` process (`Flock.Firewall.Frame` in the
-/// Lean verifier), which computes each round that leaves from the device's unmasked round the firewall passed, the rep's
-/// pads and the pads' root.
+/// Lean verifier), which draws the rep's prover randomness from the OS and commits it, computes each round that leaves from
+/// the device's unmasked round the firewall passed, and decides the rep's refusals from the coins the stream answered.
 #[cfg(feature = "sha512")]
 pub struct LeanFrame {
     child: std::process::Child,
     stdin: std::process::ChildStdin,
     stdout: std::io::BufReader<std::process::ChildStdout>,
+}
+
+/// What a Lean frame drew at its start (`Flock.Firewall.Frame.Draws`): the rep's pads, mask, paddings and `τ`'s salt, the
+/// pads tree's leaf salts, and the root it computed over them.
+#[cfg(feature = "sha512")]
+pub struct Drawn {
+    pub pads: crate::zk_veil::Pads,
+    pub salts: Vec<u8>,
+    pub root: [u8; 64],
+}
+
+/// The statement's mask slot as the frame's rank check reads it (`flock-circuit`'s `mask_words`): `n` words from word `w0`
+/// of each of `blocks` blocks.
+#[derive(Clone, Copy, Debug)]
+pub struct MaskSlot {
+    pub w0: usize,
+    pub n: usize,
+    pub blocks: usize,
+}
+
+#[cfg(feature = "sha512")]
+fn f128_wire(v: &[F128]) -> Vec<u8> {
+    v.iter().flat_map(|x| [x.lo.to_le_bytes(), x.hi.to_le_bytes()].concat()).collect()
 }
 
 /// The `flock-firewall` the firewall releases through: `FC_FIREWALL_LEAN`, else the Lean verifier's build in this checkout.
@@ -481,27 +504,51 @@ pub fn lean_frame_exe() -> std::path::PathBuf {
 
 #[cfg(feature = "sha512")]
 impl LeanFrame {
-    /// Starts the rep's release on layout `lay`, pads `h` and the pads' root.
-    pub fn start(exe: &std::path::Path, lay: &crate::zk_veil::Layout, h: &[F128], root: &[u8]) -> Result<Self, String> {
-        use std::io::Write;
+    /// Starts a rep on layout `lay` and the statement's mask slot: the frame draws the rep's randomness and commits it, and
+    /// returns its draws, which the rep proves with.
+    pub fn start(exe: &std::path::Path, lay: &crate::zk_veil::Layout, mask: MaskSlot) -> Result<(Self, Drawn), String> {
+        use crate::zk_veil::{Code, K_PAD, TAU_SALT_BYTES};
+        use std::io::{Read, Write};
         use std::process::{Command, Stdio};
         let mut child = Command::new(exe).arg("frame").stdin(Stdio::piped()).stdout(Stdio::piped()).spawn()
             .map_err(|e| refused(format!("the Lean frame {} does not start ({e}): `lake build flock-firewall` in verity/core/service/flock, or FC_FIREWALL_LEAN", exe.display())))?;
         let (stdin, stdout) = (child.stdin.take().expect("piped stdin"), std::io::BufReader::new(child.stdout.take().expect("piped stdout")));
         let mut f = LeanFrame { child, stdin, stdout };
-        let pads: Vec<String> = h.iter().map(|v| crate::hex(&[v.lo.to_le_bytes(), v.hi.to_le_bytes()].concat())).collect();
         let start = serde_json::json!({"layout": {"n_mlv": lay.n_mlv, "n_lc": lay.n_lc, "n_ood0": lay.n_ood0, "k0": lay.k0},
-                                       "pads": pads, "root": crate::hex(root)});
+                                       "mask": {"w0": mask.w0, "n": mask.n, "blocks": mask.blocks}});
         writeln!(f.stdin, "{start}").and_then(|_| f.stdin.flush()).map_err(|e| refused(format!("the Lean frame's start: {e}")))?;
-        f.reply()?;
-        Ok(f)
+        let len = f.reply()?.ok_or_else(|| refused("the Lean frame's start answered without its draws"))?;
+        let (s, leaves) = (lay.len(), Code::new(lay.len() + K_PAD).n);
+        let tau = 32 * s + 32 * K_PAD;
+        let want = tau + TAU_SALT_BYTES + crate::zk_hooks::SALT_BYTES * leaves + 64;
+        if len != want {
+            return Err(refused(format!("the Lean frame drew {len} bytes where the layout takes {want}")));
+        }
+        let mut b = vec![0u8; len];
+        f.stdout.read_exact(&mut b).map_err(|e| refused(format!("the Lean frame's draws: {e}")))?;
+        let words = |o: usize, n: usize| -> Vec<F128> {
+            (0..n).map(|i| F128::new(u64::from_le_bytes(b[o + 16 * i..o + 16 * i + 8].try_into().unwrap()),
+                                     u64::from_le_bytes(b[o + 16 * i + 8..o + 16 * i + 16].try_into().unwrap()))).collect()
+        };
+        let pads = crate::zk_veil::Pads { h: words(0, s), mu: words(16 * s, s), pad_h: words(32 * s, K_PAD), pad_mu: words(32 * s + 16 * K_PAD, K_PAD),
+                                          tau_salt: b[tau..tau + TAU_SALT_BYTES].to_vec() };
+        let drawn = Drawn { pads, salts: b[tau + TAU_SALT_BYTES..len - 64].to_vec(), root: b[len - 64..].try_into().unwrap() };
+        Ok((f, drawn))
     }
 
-    fn reply(&mut self) -> Result<Option<usize>, String> {
+    fn line(&mut self) -> Result<String, String> {
         use std::io::BufRead;
         let mut line = String::new();
         self.stdout.read_line(&mut line).map_err(|e| refused(format!("the Lean frame's answer: {e}")))?;
-        let line = line.trim_end();
+        Ok(line.trim_end().to_string())
+    }
+
+    fn reply(&mut self) -> Result<Option<usize>, String> {
+        let line = self.line()?;
+        Self::parse(&line)
+    }
+
+    fn parse(line: &str) -> Result<Option<usize>, String> {
         if line == "ok" {
             return Ok(None);
         }
@@ -511,18 +558,45 @@ impl LeanFrame {
         Err(refused(format!("the Lean frame: {}", line.strip_prefix("err ").unwrap_or(if line.is_empty() { "no answer" } else { line }))))
     }
 
+    /// The table's earlier rep's algebraic-phase coins, before this rep's first round: the rank check covers its claim
+    /// points too.
+    pub fn prior(&mut self, coins: &[F128]) -> Result<(), String> {
+        use std::io::Write;
+        write!(self.stdin, "prior {}\n", coins.len()).and_then(|_| self.stdin.write_all(&f128_wire(coins))).and_then(|_| self.stdin.flush())
+            .map_err(|e| refused(format!("the Lean frame's prior coins: {e}")))?;
+        self.reply().map(|_| ())
+    }
+
     /// The round that leaves for the round `content` (which squeezes `n` coins), or the Lean frame's refusal, after which the
     /// rep is stopped. `fail`: `content` is the statement's scheduled round in place of a device round that failed the
-    /// firewall's check, and the rep stops before it.
+    /// firewall's check, and the rep stops before it. A round the frame's rank check stops (`stop WHY`) panics with its
+    /// reason, before anything of it leaves.
     pub fn round(&mut self, content: &[u8], n: usize, fail: bool) -> Result<Vec<u8>, String> {
         use std::io::{Read, Write};
         write!(self.stdin, "round {n} {}{}\n", content.len(), if fail { " fail" } else { "" })
             .and_then(|_| self.stdin.write_all(content)).and_then(|_| self.stdin.flush())
             .map_err(|e| refused(format!("the Lean frame's round: {e}")))?;
-        let len = self.reply()?.ok_or_else(|| refused("the Lean frame answered a round without its length"))?;
+        let line = self.line()?;
+        if let Some(why) = line.strip_prefix("stop ") {
+            panic!("{why}");
+        }
+        let len = Self::parse(&line)?.ok_or_else(|| refused("the Lean frame answered a round without its length"))?;
         let mut out = vec![0u8; len];
         self.stdout.read_exact(&mut out).map_err(|e| refused(format!("the Lean frame's round: {e}")))?;
         Ok(out)
+    }
+
+    /// The coins the stream answered the round last released: `Ok(Some(why))` when the frame's refusals stop the rep on them
+    /// (a zerocheck outer coin `r_j = 1`).
+    pub fn coins(&mut self, coins: &[F128]) -> Result<Option<String>, String> {
+        use std::io::Write;
+        write!(self.stdin, "coins {}\n", coins.len()).and_then(|_| self.stdin.write_all(&f128_wire(coins))).and_then(|_| self.stdin.flush())
+            .map_err(|e| refused(format!("the Lean frame's coins: {e}")))?;
+        let line = self.line()?;
+        if let Some(why) = line.strip_prefix("stop ") {
+            return Ok(Some(why.to_string()));
+        }
+        Self::parse(&line).map(|_| None)
     }
 
     /// Whether the rep ended with every masked phase closed and every pad of the layout used, and if so whether it is stopped.
