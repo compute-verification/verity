@@ -14,7 +14,7 @@ import pytest
 from tests.predict.test_predict import FIX, TINY, _phi
 from verity.ml.circuits.census import census, step_ends
 from verity.ml.circuits.program import Program
-from verity.ml.circuits.requirement import census_gates, census_schedule, from_census, requirement
+from verity.ml.circuits.requirement import census_gates, census_schedule, from_census, upper_bound
 from verity_vllm.predict.build import build_program, model_shape
 from verity_vllm.query.required import SAMPLING_EVENTS
 
@@ -83,8 +83,11 @@ def test_the_census_path_is_the_expansion_on_tiny(wrapper, kw):
     """`TINY`'s step and a request of four prompt rows and three decode steps (105 k and 181 k gates): `from_census` gives the
     explicit expansion's live gates and bounded reads at every step."""
     P, c = _registered(build_program(_phi(TINY), wrapper, **kw))
-    by_census, by_gates = from_census(c), requirement(P, census_schedule(c))
+    by_census, by_gates = from_census(c), upper_bound(P, census_schedule(c))
     for t in range(by_gates.steps):
         assert census_gates(P, c, by_census.live(t)) == by_gates.live(t)
-        assert census_gates(P, c, by_census.reads_upper(t)) == by_gates.reads_upper(t)
-    assert by_census.to_json() == by_gates.to_json()
+        assert census_gates(P, c, by_census.reads_upper(t)) == by_gates.reads(t)
+    want = by_gates.to_json()
+    if not all(by_census.resolved(t) for t in range(by_census.steps)):
+        want["read_bits_upper"] = want.pop("read_bits")
+    assert by_census.to_json() == want
