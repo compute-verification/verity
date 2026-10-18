@@ -49,6 +49,7 @@ class RunCommitment:
     temporary_bytes_peak: int           # arena / staging peak, measured
     weight_registration: dict | None = None
     extra: dict = field(default_factory=dict)
+    record: Any = None                  # `commit.record.RunRecord`: the root of record's trees (run_root is its root); None on a vllm-v1 run
 
 
 @dataclass
@@ -56,9 +57,9 @@ class Opening:
     step: int
     index: int                  # leaf rank in the step tree
     value: bytes
-    path: tuple                 # siblings (None for lifts) — production `commit.path_shape` shape
+    path: tuple                 # siblings: the record's frame path (`commit.record`), or a recorded vllm-v1 run's (None for lifts)
     identity: dict              # verifier-derivable (tensor ordinal, name, dtype, shape, byte offset)
-    salt: bytes = b""           # the leaf's 128-byte salt under hm96-sha256/v1 leaves; empty under vllm-v1
+    salt: bytes = b""           # the leaf's salt: the record's 192 bytes, or 128 under hm96-sha256/v1 leaves; empty under a recorded vllm-v1 run
 
 
 class Committer(Protocol):

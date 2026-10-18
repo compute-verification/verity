@@ -13,6 +13,7 @@ from typing import Any
 
 from verity_vllm.commit import scheme
 from verity_vllm.commit.merkle import fold_range, range_path_shape
+from verity_vllm.commit.record import RecordRule, of_record
 
 
 @dataclass
@@ -21,8 +22,8 @@ class RangeOpening:
     lo: int                     # leaves [lo, hi) of the step tree
     hi: int
     value: bytes                # the leaves' bytes, concatenated in leaf order
-    path: tuple                 # per level (left sibling | None, right sibling | None) — `merkle.range_path_shape` shape
-    salts: bytes = b""          # the leaves' salts, concatenated, under hm96-sha256/v1 leaves; empty under vllm-v1
+    path: tuple                 # per level (left sibling | None, right sibling | None): the record's range path, or `merkle.range_path_shape`'s
+    salts: bytes = b""          # the leaves' salts, concatenated: the record's, or hm96-sha256/v1 leaves'; empty under a recorded vllm-v1 run
 
 
 def open_levels(levels: list, index: int) -> tuple:
@@ -70,10 +71,14 @@ def level_sizes(leaf_count: int, levels: int) -> list[int]:
     return [-(-leaf_count // (1 << L)) for L in range(min(levels, height) + 1)]
 
 
-class NativeRangeOpenings:
-    """Range openings over the committer's retained copies (`_gpu_blocks`, `_streams`, per-tensor `host`, padding streams) and levels."""
+class NativeRangeOpenings(RecordRule):
+    """Range openings over the committer's retained copies (`_gpu_blocks`, `_streams`, per-tensor `host`, padding streams) and levels,
+    against the root of record (`record.RecordRule`) or a recorded run's ``vllm-v1`` levels."""
 
     def _run_root(self, run: Any) -> bytes | None:
+        if of_record(run):
+            rec = getattr(run, "record", None)
+            return None if rec is None else rec.root
         roots = [s.root for s in run.steps]                     # None over a placeholder step root (b""): equal to no run root, the empty one included
         return scheme.run_root(self.program_digest, self._geo_digest, roots) if all(len(r) == 32 for r in roots) else None
 
@@ -143,31 +148,26 @@ class NativeRangeOpenings:
                 return None
             value = bytes(m.host[(lo - m.first_leaf) * m.chunk:(hi - m.first_leaf) * m.chunk])
             levels = self._levels[step]
+        if self.record is not None:
+            return RangeOpening(step, lo, hi, value, *self._record_opened(step, lo, hi))
         return RangeOpening(step, lo, hi, value, open_range_levels(levels, lo, hi), self._salts_of(step, lo, hi))
 
-    def _range_leaves(self, step: int, lo: int, hi: int, value: bytes, salts: bytes = b"") -> list[bytes] | None:
-        """The leaf digests of leaves [lo, hi) of `step` recomputed from their concatenated bytes (and salts) under `verify`'s leaf rules;
+    def _range_values(self, step: int, lo: int, hi: int, value: bytes) -> tuple[str, list[memoryview]] | None:
+        """Leaves [lo, hi) of `step` cut from their concatenated bytes, with the kind of leaf they are (``padding``, ``gpu``, ``host``);
         None when the bytes do not tile the leaves or the run mixes executed and padding leaves."""
-        if salts and self.hiding is None:
-            return None
         C, mv = self.chunk, memoryview(value)
         ps = self._padding_leaf(step, lo)
         if ps is not None or self._padding_leaf(step, hi - 1) is not None:
             if ps is None:
                 return None
-            from verity_vllm.commit import padding_steps as PSm
-
             end = ps.stream_base + ps.n_bytes - lo * C
             if len(value) != min((hi - lo) * C, end):
                 return None
-            return [PSm.leaf_digest_of(ps, mv[k * C:min((k + 1) * C, end)], lo + k - ps.leaf_base) for k in range(hi - lo)]
+            return "padding", [mv[k * C:min((k + 1) * C, end)] for k in range(hi - lo)]
         if step in self._gpu_blocks:
             if len(value) != (hi - lo) * C:
                 return None
-            padded = -(-self._gpu_blocks[step][1] // C) * C
-            layout = self._gpu_layout(step, padded // 4)
-            return [scheme.chunk_leaf(scheme.chunk_header(layout, step, lo + k, C // 4, self.GPU_TREE_SRC), mv[k * C:(k + 1) * C])
-                    for k in range(hi - lo)]
+            return "gpu", [mv[k * C:(k + 1) * C] for k in range(hi - lo)]
         if step in self._streams:
             end = len(self._streams[step]) - lo * C
         else:
@@ -178,15 +178,39 @@ class NativeRangeOpenings:
             end = m.nbytes - (lo - m.first_leaf) * C
         if len(value) != min((hi - lo) * C, end):
             return None
-        return self._leaf_rule([scheme.pos_leaf(mv[k * C:min((k + 1) * C, end)]) for k in range(hi - lo)], salts)
+        return "host", [mv[k * C:min((k + 1) * C, end)] for k in range(hi - lo)]
+
+    def _range_leaves(self, step: int, lo: int, hi: int, value: bytes, salts: bytes = b"") -> list[bytes] | None:
+        """The ``vllm-v1`` leaf digests of leaves [lo, hi) of `step` recomputed from their concatenated bytes (and salts) under `verify`'s
+        leaf rules; None when the bytes do not tile the leaves or the run mixes executed and padding leaves."""
+        if salts and self.hiding is None:
+            return None
+        cut = self._range_values(step, lo, hi, value)
+        if cut is None:
+            return None
+        kind, pieces = cut
+        if kind == "padding":
+            from verity_vllm.commit import padding_steps as PSm
+
+            ps = self._padding_leaf(step, lo)
+            return [PSm.leaf_digest_of(ps, p, lo + k - ps.leaf_base) for k, p in enumerate(pieces)]
+        if kind == "gpu":
+            C = self.chunk
+            padded = -(-self._gpu_blocks[step][1] // C) * C
+            layout = self._gpu_layout(step, padded // 4)
+            return [scheme.chunk_leaf(scheme.chunk_header(layout, step, lo + k, C // 4, self.GPU_TREE_SRC), p) for k, p in enumerate(pieces)]
+        return self._leaf_rule([scheme.pos_leaf(p) for p in pieces], salts)
 
     def verify_range(self, run: Any, ro: RangeOpening, roots: dict[int, bytes] | None = None) -> bool:
         """`verify` for a range opening: every leaf digest recomputed from the opening's bytes, the run folded with its boundary siblings to
-        the bare root, which must bind to the step's ORIGINAL root, and the step roots must fold to the run root.  `roots` (step -> bare root
+        the bare root, which must bind to the step's ORIGINAL root, and the step roots must fold to the run root (of record: `RecordRule`).  `roots` (step -> bare root
         already verified against this `run`) lets a caller pay the binding once per step."""
         if not 0 <= ro.step < len(run.steps):
             return False
         sc = run.steps[ro.step]
+        if of_record(run):
+            cut = self._range_values(ro.step, ro.lo, ro.hi, ro.value) if 0 <= ro.lo < ro.hi <= sc.n_leaves else None
+            return cut is not None and self._record_verify(run, ro.step, ro.lo, [bytes(p) for p in cut[1]], ro.salts, ro.path, roots)
         if not 0 <= ro.lo < ro.hi <= sc.n_leaves or self._unsalted(ro.step, sc.n_leaves):
             return False
         try:

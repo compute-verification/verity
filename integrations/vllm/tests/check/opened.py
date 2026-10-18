@@ -48,10 +48,12 @@ def committer(retain: str = "host", run_id: str = "opened-test") -> NativeHostCo
             os.environ["VERITY_RETAIN"] = saved
 
 
-def commit_steps(steps: dict[int, list[tuple]], *, retain: str = "host", run_id: str = "opened-test"):
+def commit_steps(steps: dict[int, list[tuple]], *, retain: str = "host", run_id: str = "opened-test", of_record: bool = False):
     """Commit `steps[s]` (tensors in acquisition order) as packed step blocks -> (committer, run commitment).  Tensors sit at 4-byte-aligned
-    offsets of the step block; a step missing below the last one is a one-tensor placeholder (steps are numbered densely)."""
+    offsets of the step block; a step missing below the last one is a one-tensor placeholder (steps are numbered densely).  `of_record`:
+    the run root is the record's (`commit.record`)."""
     com = committer(retain, run_id)
+    com.of_record = of_record
     C = GPU_CHUNK_BYTES
     for s in range(max(steps) + 1 if steps else 0):
         metas, buf = [], bytearray()
@@ -67,9 +69,10 @@ def commit_steps(steps: dict[int, list[tuple]], *, retain: str = "host", run_id:
     return com, com.finalize()
 
 
-def commit_host_steps(steps: dict[int, list[tuple]], *, run_id: str = "opened-test", chunk: int = 64):
+def commit_host_steps(steps: dict[int, list[tuple]], *, run_id: str = "opened-test", chunk: int = 64, of_record: bool = False):
     """Commit `steps[s]` on the per-tensor host path -> (committer, run commitment); missing steps below the last are placeholders."""
     com = NativeHostCommitter(None, run_id=run_id, chunk=chunk, hash_threads=1, program_digest=hashlib.sha256(b"program").digest())
+    com.of_record = of_record
     stream = []
     for s in range(max(steps) + 1 if steps else 0):
         tensors = []

@@ -7,7 +7,7 @@ Component names are fixed (`COMPONENTS`) so every committer reports the same bre
   movement           moving bytes to where they are hashed (host: D2H issue time; device: bytes are recorded, the GPU-side copy time
                      is measured by CUDA events where the committer uses a side stream, else calculated from an isolated D2H microbench)
   hashing            leaf hashing + tree folding (SHA-256 here)
-  root_finalisation  context binding of the per-step root, run-root fold
+  root_finalisation  context binding of the per-step root, run-root fold, the root of record (also its own stage, `record`)
   opening_generation generating openings for sampled positions (after the run; never on the serving path)
   wait               time the SERVING thread spent blocked on the committer (backpressure) — must be ~0 in steady state
 

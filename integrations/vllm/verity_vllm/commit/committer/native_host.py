@@ -40,6 +40,7 @@ import ctypes
 import os
 import threading
 import time
+import dataclasses
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Any
@@ -49,7 +50,7 @@ try:
 except ImportError:                      # the offline core (tests, CPU cross-checks) needs no torch
     torch = None  # type: ignore[assignment]
 
-from verity_vllm.commit import hiding, scheme
+from verity_vllm.commit import hiding, record as record_mod, scheme
 from verity_vllm.commit.committer.input_classes import TOKEN_IDS_INPUT, weights_class
 from verity_vllm.commit.committer.pinned_pool import PINNED_EXACT, PinnedPool
 from verity_vllm.commit.native_ranges import NativeRangeOpenings, open_levels
@@ -1148,6 +1149,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         self._gpu_levels = {}
         self._padding = {}
         self.padding_stats = None
+        self.record = None
         self._step_index = 0
         self.spans = Spans(scheme.NAME)
         self.pool.reset()
@@ -1881,16 +1883,21 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                 "hook_wall_s": t_hook - t1, "apply_wall_s": time.perf_counter() - t_hook,
                 "padding_bytes_over_executed": (sum(ps.n_bytes for ps in pads) / ex_bytes) if ex_bytes else None}
         step_roots = [s.root for s in steps]    # b"": a placeholder step (a learn-only warm-up pass, or a failed step whose error is recorded)
-        run_root = scheme.run_root(self.program_digest, self._geo_digest, step_roots) if all(len(r) == 32 for r in step_roots) else b""
+        committer_root = scheme.run_root(self.program_digest, self._geo_digest, step_roots) if all(len(r) == 32 for r in step_roots) else b""
+        t_rec = time.perf_counter()
+        run_root, record = self._record_finalize(steps, committer_root)
         t2 = time.perf_counter()
+        if record is not None:
+            self.spans.add("record", t2 - t_rec, nbytes=sum(s.n_bytes for s in steps), leaves=sum(s.n_leaves for s in steps))
         self.spans.add("root_finalisation", t2 - t1)
         last_end = max((s.t_step_end for s in steps), default=t0)
         persistent = sum(32 * len(lv) for lvls in self._levels.values() for lv in lvls) + 32 * len(steps) + sum(map(len, self._salts.values())) + sum(
             len(json.dumps(metas.summary() if hasattr(metas, "scan") else [[m.ordinal, m.name, m.dtype, list(m.shape), m.nbytes] for m in metas])) for metas in self._layouts.values())
         return RunCommitment(run_root=run_root, steps=steps, spans=self.spans.snapshot(), root_ready_delay_s=t2 - last_end,
                              t_finalize_s=t2 - t0, persistent_bytes=persistent, temporary_bytes_peak=self.pool.bytes_in_use,
-                             weight_registration=self.weights,
-                             extra={"values_retained_bytes": sum(s.n_bytes for s in steps), "pinned_pool_bytes": self.pool.bytes_total,
+                             weight_registration=self.weights, record=record,
+                             extra={**({"committer_root": committer_root.hex(), "record": record.doc()} if record is not None else {}),
+                                    "values_retained_bytes": sum(s.n_bytes for s in steps), "pinned_pool_bytes": self.pool.bytes_total,
                                     "pinned_allocs": self.pool.allocs, "pinned_alloc_s": self.pool.alloc_s, "pinned_pool_mode": self.pool.mode,
                                     "pinned_populate_s": self.pool.times.get("populate_s", 0.0),
                                     "pinned_register_s": self.pool.times.get("register_s", 0.0), "pinned_populate_threads": self.pool.populate_threads,
@@ -2252,17 +2259,27 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                     value = bytes(m.host[ident["byte_lo"]:ident["byte_hi"]])
                 path = scheme.path_in_levels(self._levels[step], index)
                 out.append(Opening(step, index, value, path, ident, self._salts_of(step, index, index + 1)))
+            if self.record is not None:                              # of record: the record's path and salt, whichever copy gave the bytes
+                out = [dataclasses.replace(o, **dict(zip(("path", "salt"), self._record_opened(o.step, o.index)))) for o in out]
         return out
 
     def verify(self, run: RunCommitment, opening: Opening) -> bool:
         """Production verifier core: shape rule + fold to the bare root, then the context binding to the ORIGINAL step root, then the
-        step root's membership in the run root."""
+        step root's membership in the run root.  A run of record (`record.of_record`) checks the leaf's bytes and identity here and its
+        row against the record (`record.RecordRule`)."""
         try:
             sc = run.steps[opening.step]
         except IndexError:
             return False
         if not 0 <= opening.index < sc.n_leaves:
             return False
+        if record_mod.of_record(run):
+            ident = self.identity_of(opening.step, opening.index)
+            gpu = opening.step in self._gpu_blocks and self._padding_leaf(opening.step, opening.index) is None
+            size = self.chunk if gpu else ident["byte_hi"] - ident["byte_lo"]
+            return (ident == opening.identity and len(opening.value) == size
+                    and self._record_verify(run, opening.step, opening.index, [opening.value], opening.salt,
+                                            record_mod.path_pairs(opening.index, opening.path)))
         try:
             shape = scheme.path_shape(sc.n_leaves, opening.index)
         except Exception:  # noqa: BLE001
