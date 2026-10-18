@@ -271,13 +271,15 @@ noncomputable def along (sess : Fin C → Game Bool) (F : (c : Fin C) → Strate
 /-- **What the analysis of one call fixes**, in the randomized-extraction form (`ExtractionAnalysis` in
 `Proofs/Flock/Soundness/Audit/Extraction.lean`): from each state `τ` of call `c`'s session on its share `S` of the draw,
 * `ks S R τ u`: `Pr[the session accepts ∧ extraction of the drawn unit u fails]`;
-* `link S R τ u X`: `Pr[it accepts ∧ extraction of u succeeds but differs from the transcript X on u's wires]`;
+* `link S R τ u X`: `Pr[it accepts ∧ extraction of u succeeds but differs from the transcript X on u's wires]`, the
+  roots its seed reads among them;
 * `cover`: when `u` is drawn and wrong in `X` (`UnitStmts.wrong`), `Pr[accept] ≤ ks + link`.
 
 Extraction is against `u`'s statement at its place `⟨c, u⟩`: its relation derives the seed with `⟨c, u⟩` as the
-position and the roots its witness opens to the window root, as `UnitStmts.wrong` reads them. So `cover` can hold only
-for a session that checks unit `u` at that position, never at one the prover picks. The transcripts `Tr` and the units'
-statements `U` are the window's. -/
+position, from the roots its witness opens to the window root. A witness whose roots aren't `X`'s differs from `X` on
+`u`'s wires, which `link` counts, and `UnitStmts.wrong` reads the same position. So `cover` can hold only for a session
+that checks unit `u` at that position, never at one the prover picks. The transcripts `Tr` and the units' statements `U`
+are the window's. -/
 structure CallAnalysis {Reg Tr : Type} (U : UnitStmts Tr n) (c : Fin C)
     (sess : Finset (Fin (n c)) → Reg → Game Bool) where
   ks : (S : Finset (Fin (n c))) → (R : Reg) → Strategy (sess S R) → Fin (n c) → ℝ≥0∞
