@@ -143,6 +143,42 @@ def test_a_pass_covers_the_blocks_resident_at_its_step() -> None:
     assert r.apply(Step(2, (), ())).step == 2
 
 
+def test_a_block_whose_write_is_recorded_two_steps_after_it_completed_is_resident_from_the_pass_after() -> None:
+    """Deferred residency: step 1 completes a block in slot 4 (registered filler, freed at step 1, which reached it),
+    and its append goes out at once; the device encodes it in place once the coin is back, and step 4 is the first
+    whose attention reads it encoded, so its write is recorded at step 3, two steps after it was completed.  Until then
+    it is in no record: the passes at steps 2 and 3 don't hold it, and the pass at step 4 adds it.  The verifier takes
+    the append before the record writes the block, the record's write names the append's index and digest, and every
+    pass is accepted with every receipt drawn."""
+    st = store()
+    head = Header(st.registration.digest, N)
+    replay, run = Replay(head, st.registration), Run(st)
+    assert run.run(change=replay.take(0), step=0) is None
+    freed = replay.apply(Step(1, (4,), ()))
+    assert (freed.count, freed.released, replay.holds(4)) == (0, ((4, 1),), None)
+    assert run.s.release(freed.released) is None
+    a = st.append([page(4, 1)], salts(b"deferred page", 1))
+    assert run.commit(a.root, a.count) == N
+    assert replay.take(2) == ((), ((4, 1),))
+    assert run.run(change=((), ((4, 1),)), step=2) is None
+    assert replay.take(3) == ((), ())
+    assert run.run(change=((), ()), step=3) is None
+    wrote = replay.apply(Step(3, (), written(1, [4], N)))
+    assert (wrote.first, wrote.digests, wrote.released) == (a.first, a.digests, ())
+    assert replay.holds(4) == N
+    assert replay.take(4) == (((N, 1),), ())
+    assert run.run(change=(((N, 1),), ()), step=4) is None
+    run.boundary()
+    assert run.run(change=replay.take(5), step=5) is None
+    run.boundary()
+    assert run.finish() == [audit.Verdict(0, True), audit.Verdict(1, True)]
+    rec = run.s.record()
+    assert [w.steps for w in rec.windows] == [(0, 2, 3, 4), (5,)]
+    assert [w.lengths for w in rec.windows] == [(8, 7, 7, 8), (8,)]
+    assert [w.post_seed for w in rec.windows] == [(0, 0, 0, 1), (1,)]
+    assert (rec.appended, rec.released) == (1, 1)
+
+
 @pytest.mark.parametrize("steps, match", [
     ([Step(0, (), ()), Step(0, (), ())], "strictly increase"),
     ([Step(1, (100,), ())], "frees slot 100, which holds no block"),

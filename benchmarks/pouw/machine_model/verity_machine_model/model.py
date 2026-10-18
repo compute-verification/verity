@@ -38,6 +38,7 @@ class Model:
     x_min: float
     epochs: tuple[str, ...]
     current: str = ""                   # the vector `solve` re-solves by default
+    uniform_forms: tuple[str, ...] | None = None   # the lane classes with a uniform-datapath form; None: every one
 
 
 @dataclass(frozen=True)
@@ -122,7 +123,8 @@ def model(data: Path = DATA) -> Model:
                  honest_real_600w=c.get("honest_real_600w", math.nan), cuda=tuple(t["cuda"]),
                  honest=dict(t.get("honest", {})), adopted=t.get("adopted", ""), rho=lp.get("rho", math.nan),
                  tie=lp.get("tie", math.nan), x_min=lp.get("x_min", math.nan), epochs=tuple(t["epochs"]),
-                 current=t["current"])
+                 current=t["current"],
+                 uniform_forms=tuple(t["uniform_forms"]) if "uniform_forms" in t else None)
 
 
 def device(name: str = DEVICE) -> Path:
