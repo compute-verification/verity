@@ -58,8 +58,10 @@ ALLOWED = {
     "core.protocols.bandwidth": {"ml.crypto", "ml.randomness", "core.protocols.pous"},
     # 2026-10-12 (memory accounting's remote bandwidth program): the remote audit commits receipts in frame-v3-sha512
     # trees, draws from the verifier's secret, and records its openings as an integrity profile.  A KV pass's plan of
-    # 10^5 runs is checked and encoded in numpy (`ml.kernels.plans`), which a protocol can't import itself.
-    "core.protocols.remote_bandwidth": {"ml.commitments", "ml.kernels", "ml.randomness", "core.protocols.profile"},
+    # 10^5 runs is checked and encoded in numpy (`ml.kernels.plans`), which a protocol can't import itself.  Cut 1's
+    # verifier runs property/v1 (`stacking.check`) on public W; `ml.circuits` is already on `SOUNDNESS_PATH`.
+    "core.protocols.remote_bandwidth": {"ml.circuits", "ml.commitments", "ml.kernels", "ml.randomness",
+                                        "core.protocols.profile"},
     # 2026-10-03 (Daniel, `.agents/skills/friction/SKILL.md`): PoUW's tile check is a sampled proof.  Its schemes and
     # circuits are stated over the catalog's silicon models and Definitions (the tensor-core steps, FP32 and the casts its
     # verifier recomputes): the one edge into the catalog.
