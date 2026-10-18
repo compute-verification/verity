@@ -24,6 +24,7 @@ import Proofs.Flock.Claims.ZK.Capacity
 import Proofs.Flock.Claims.ZK.Session
 import Proofs.Flock.Claims.ZK.MaskedTables
 import Proofs.Flock.Claims.ZK.Masked
+import Proofs.Flock.Claims.ZK.MaskTape
 import Proofs.Flock.Claims.ZK.Worker
 import Proofs.Flock.Claims.ZK.Switched
 import Proofs.Flock.Claims.ZK.Server
@@ -137,6 +138,9 @@ import Proofs.Flock.Claims.ZK.SamplingNonVacuous
   there at `ε_zk` on the masked scope, under the round plan's `Causal`, the tape plan read with fibers of one size on
   `Live`, and the three rounds; `Flock.zk_deployZk_masked_at`, at one statement's tape (`TapePlan.at`), without the
   tape premise; each at the pinned key's hiding gap with no hiding premise (`…_gap`).
+* `MaskTape`: the tape plan whose masked prover's tape carries the tables' mask words (`Masked.TapePlan.atMask`,
+  `TapeZk.mask` the packing of each table's base's slot bits), at which each table's share of `ZkTables.honestPR`'s
+  witness is the tables' `zWith` (`Masked.zOf_maskOf`); `Flock.zk_deployZk_masked_atMask_gap` at it.
 * `Worker`: Lemma B at any clear values a worker supplies, which never read the pads: the switched prover (`p`'s view
   where its rows hold, else the honest prover's on the pads Lemma A moves) has `S_shvzk`'s distribution on the honest
   `InnerHolds` alone (`sw_shvzk`, `worker_shvzk`), and differs from `p`'s view only in `Y₁`, `C_h` and the pads tree

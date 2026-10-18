@@ -35,8 +35,9 @@ The reference prover is `flock-circuit --zk`'s (`ZkTables.honestPR`): each table
 (`TapeZk.mask`, `STREAM_MASK`), and, before the round that would show them, a stop at a zerocheck outer coin `1` and at
 claim points at which the mask slot's weights have rank below `128` per point (`refuse_outer`, `mask_rank_ok`). The
 rounds compare it with the plans' encodings: they ask a tape plan whose `tapeZk` puts the tables' mask words (the
-tables' `zWith` at the base's first component) in `TapeZk.mask`, and a round plan whose coins and encodings are
-`sessionPZk`'s. Both plans are parameters here, so the three rounds are premises.
+tables' `zWith` at the base's first component) in `TapeZk.mask`, which `MaskTape`'s `TapePlan.atMask` does
+(`zOf_maskOf`), and a round plan whose coins and encodings are `sessionPZk`'s. The round plan is a parameter here, so
+the three rounds are premises.
 -/
 
 namespace Claims.ZKMal
