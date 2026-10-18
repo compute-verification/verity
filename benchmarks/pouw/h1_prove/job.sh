@@ -9,11 +9,15 @@
 #      serves, draws, opens, checks the openings and has the drawn units staged
 #   3. one loopback --zk session per statement (the drawn units; the other window's unit), every instance drawn
 #   4. the Lean checks of run.py's plan (honest ACCEPT; flipped-z, wrong-receipt, other-window REJECT; other-window-own
-#      ACCEPT), and the selftest build's controls on the drawn units' statement (H1_CONTROLS)
+#      ACCEPT), one at a time at K = 4096 (each about 5x the circuit text resident), and the selftest build's controls on
+#      the drawn units' statement (H1_CONTROLS; at K = 4096 a selftest, prover and verifier in one process, peaks past
+#      170 GB)
 #   5. run.py summarize: out/summary.json
 # env: H1_MEM_GB (the job's --mem-gb)  H1_K (4096; a smaller K truncates every row: a smoke)  H1_COLS (each call's first
 #      N weight rows; 0 all)  H1_DRAW (8)  H1_TOKENS (16)  H1_LAYER (0)  H1_HUB (/workspace/hf/hub)
-#      H1_CONTROLS ("honest output_row_committed_false")  HZ_RUNS (1)  HZ_WARM (0)  HZ_CACHE, HZ_STAGE: hidden_zk's
+#      H1_CONTROLS ("honest output_row_committed_false" below K = 4096, else none)  H1_SERVE_PCT (42) and H1_PROVE_PCT (52):
+#      a session's serve and prove caps, % of H1_MEM_GB (they run side by side, the stager gone; at K = 4096 the serve
+#      outgrew hidden_zk's 30%)  HZ_RUNS (1)  HZ_WARM (0)  HZ_CACHE, HZ_STAGE: hidden_zk's
 set -uo pipefail
 export HZ_CONFIGS=h1 HZ_MEM_GB=${H1_MEM_GB:?} HZ_RUNS=${HZ_RUNS:-1} HZ_WARM=${HZ_WARM:-0}
 export HZ_CACHE=${HZ_CACHE:-/workspace/research/cache/pouw-hidden-zk}
@@ -22,7 +26,9 @@ export HZ_CACHE=${HZ_CACHE:-/workspace/research/cache/pouw-hidden-zk}
 export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/benchmarks/pouw/hidden_zk
 H=$SRC/benchmarks/pouw/h1_prove
 K=${H1_K:-4096} COLS=${H1_COLS:-0} DRAW=${H1_DRAW:-8} TOKENS=${H1_TOKENS:-16} LAYER=${H1_LAYER:-0}
-HUB=${H1_HUB:-/workspace/hf/hub} CONTROLS=${H1_CONTROLS:-honest output_row_committed_false}
+HUB=${H1_HUB:-/workspace/hf/hub}
+if [ "$K" = 4096 ]; then CONTROLS=${H1_CONTROLS:-}; else CONTROLS=${H1_CONTROLS:-honest output_row_committed_false}; fi
+SERVE_GB=$(( MEM_GB * ${H1_SERVE_PCT:-42} / 100 )) PROVE_GB=$(( MEM_GB * ${H1_PROVE_PCT:-52} / 100 ))
 SW=$W/stage WK=$W/work
 mkdir -p "$OUT/lean"
 
@@ -82,7 +88,7 @@ wait
 HD=$(awk -F'\t' '$1 == "S" && $2 == "honest" {print $3}' "$WK/plan.tsv")
 N=$(awk -F'\t' '$1 == "S" && $2 == "honest" {print $4}' "$WK/plan.tsv")
 if [ -n "$CONTROLS" ] && [ -e "$HD/inst.bin" ]; then
-  CASES=$CONTROLS
+  CASES=$CONTROLS PROVE_GB=$STAGE_GB
   controls "$HD" "$OUT/honest" tile
   for s in "$HD"/st/*/; do
     [ -d "$s" ] || continue
