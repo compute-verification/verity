@@ -165,20 +165,19 @@ and 14 links.
 Each block gets both audits, as on one site. Then the record check runs once more, on every block's records together
 against every block's declared ones, over the merged fleet's ports, with the account's charge for the whole run
 (`mockdc.charge` under the whole plan). `run.py` runs the fleet twice, with the first four strategies swapped between
-the sites, so that each is played across the WAN once. Run `r20261018-110501-432f` (the whole night, below), when the
-WAN still ran between two certifiers of its own, one on each spine, which watched no block:
+the sites, so that each is played across the WAN once. Run `r20261018-112635-7b3b` (the whole night, below):
 
 | Run | Block | Strategy | Certifier audit | Datacenter record check | Wire lag (median) | Worst tick |
 |---|---|---|---|---|---|---|
-| fleet | east.b0 | honest | accepted | 6 port-windows carried | 35.3 ms | 3.3 ms |
-| fleet | east.b1 | late | refused: `responses` window 0 | refused: `port east.b1.cert:out [0, 6000)` | 35.2 ms | 3.4 ms |
-| fleet | west.b0 | bits | accepted, wire identical to east.b0's | 6 port-windows carried | 5.6 ms | 3.8 ms |
-| fleet | west.b1 | extra | refused: `responses` window 2 | refused: `port west.b1.cert:out [12000, 18000)` | 10.0 ms | 3.7 ms |
+| fleet | east.b0 | honest | accepted | 6 port-windows carried | 31.1 ms | 4.3 ms |
+| fleet | east.b1 | late | refused: `responses` window 0 | refused: `port east.b1.cert:out [0, 6000)` | 31.1 ms | 3.5 ms |
+| fleet | west.b0 | bits | accepted, wire identical to east.b0's | 6 port-windows carried | 5.5 ms | 4.0 ms |
+| fleet | west.b1 | extra | refused: `responses` window 2 | refused: `port west.b1.cert:out [12000, 18000)` | 9.8 ms | 3.4 ms |
 | fleet | all 8 ports | | | 22 port-windows carried, the two above refused; not sound: 88 bits + 4.8e12 | | |
-| fleet-swapped | east.b0 | bits | accepted, wire identical to west.b0's | 6 port-windows carried | 35.3 ms | 3.6 ms |
-| fleet-swapped | east.b1 | extra | refused: `responses` window 2 | refused: `port east.b1.cert:out [12000, 18000)` | 35.1 ms | 4.0 ms |
-| fleet-swapped | west.b0 | honest | accepted | 6 port-windows carried | 5.5 ms | 3.8 ms |
-| fleet-swapped | west.b1 | late | refused: `responses` window 0 | refused: `port west.b1.cert:out [0, 6000)` | 9.8 ms | 3.8 ms |
+| fleet-swapped | east.b0 | bits | accepted, wire identical to west.b0's | 6 port-windows carried | 31.1 ms | 4.2 ms |
+| fleet-swapped | east.b1 | extra | refused: `responses` window 2 | refused: `port east.b1.cert:out [12000, 18000)` | 31.0 ms | 4.2 ms |
+| fleet-swapped | west.b0 | honest | accepted | 6 port-windows carried | 5.4 ms | 4.3 ms |
+| fleet-swapped | west.b1 | late | refused: `responses` window 0 | refused: `port west.b1.cert:out [0, 6000)` | 9.8 ms | 3.6 ms |
 | fleet-swapped | all 8 ports | | | 22 port-windows carried, the two above refused; not sound: 88 bits + 4.8e12 | | |
 
 The verdicts are the single site's, block for block. What the WAN adds:
@@ -186,17 +185,22 @@ The verdicts are the single site's, block for block. What the WAN adds:
   block's own certifier, and the frame is handed at that certifier, so both ends of δ are at the block's uplink and the
   WAN is outside it. Every block on both sites declared the same sync, δ = 3 buckets at ρ = 1, and was accepted or
   refused for the same reasons.
-- **To what the peer sees, about 25 ms.** Each bucket reached `na-ext0` a median 35.3 ms after its tick from an east
-  block, against about 5.5 ms from the west block on `west.leaf0` and 9.9 ms from the one behind the spine: the WAN's
-  20 ms, the 2 ms hops to and from the WAN certifiers, and jitter. The fastest of three pings from `na-ext0` took
-  61.4 ms and 63.3 ms to the east certifiers and back, against 7.4 ms and 17.1 ms to the west ones.
+- **To what the peer sees, the WAN's 20 ms and the far site's hops.** Each bucket reached `na-ext0` a median 31.1 ms
+  after its tick from an east block, against 5.5 ms from the west block on `west.leaf0` and 9.8 ms from the one behind
+  the spine: from an east certifier the path is the WAN and four 2 ms fabric hops, 28 ms, against the west ones' 4 ms
+  and 8 ms. The fastest of three pings from `na-ext0` took 57.0 ms and 55.0 ms to the east certifiers and back, against
+  7.9 ms and 16.1 ms to the west ones.
 - **To the requests' lead, most of it.** The Program sends each request half a bucket, 50 ms, before the tick that
-  enqueues it. From `na-ext0` to an east certifier is 32 ms one way, plus up to about 5 ms of jitter and at most
-  1.7 ms of the peer's own lateness, which leaves about 11 ms. Every request entered its declared bucket on both sites:
-  every block had the same arrival buckets. Past about 30 ms of WAN one way, requests would land a bucket late and an
-  honest block's ingress records would be refused, unless the Program sent them earlier.
-- **To the proxy's slack, nothing.** The latest tick in the fleet's runs was 4.0 ms late against the 25 ms slack, as on
+  enqueues it. From `na-ext0` to an east certifier is 28 ms one way, plus up to 4 ms of jitter and at most 1.65 ms of
+  the peer's own lateness, which leaves about 16 ms. Every request entered its declared bucket on both sites, since
+  every honest and `bits` block's ingress records were carried. Past about 35 ms of WAN one way, requests would land a
+  bucket late and an honest block's ingress records would be refused, unless the Program sent them earlier.
+- **To the proxy's slack, nothing.** The latest tick in the fleet's runs was 4.3 ms late against the 25 ms slack, as on
   one site. The slack bounds the proxy's own scheduling on its host, which the WAN doesn't touch.
+
+The night before, `r20261018-110501-432f`, ran the same fleet with the WAN between two certifiers of their own, one on
+each spine, that watched no block: the same verdicts, and each east path 4 ms longer for the two hops to and from them
+(a median wire lag of 35.3 ms).
 
 ## Limits
 
@@ -263,8 +267,9 @@ research run --on vy-nebius-cpu-2 --project verity --source . --cwd source --tim
   bash -c 'python3 -B benchmarks/network_sim/run.py --out "$OUT"'
 ~~~
 
-Run `r20261018-110501-432f` exited 0. It took 7.5 minutes on vy-nebius-cpu-2, at a load of about 6, and gave every
-expected verdict, the tables above. Each mockdc run's check on every port refused exactly what its blocks' own checks
-refused. With the salt, b4's proxy revealed the salts of windows 0 and 2 only. Its record check under the plan was
-unchanged, and the certifier's salt check, like its audit, found nothing for window 1. The latest proxy tick was 4.4 ms
-late against the 25 ms slack. The night before the fleet was `r20261018-102319-bb80`.
+Run `r20261018-112635-7b3b` exited 0. It took 6.5 minutes on vy-nebius-cpu-2 and gave every expected verdict, the
+tables above. Each mockdc run's check on every port refused exactly what its blocks' own checks refused. With the
+salt, b4's proxy revealed the salts of windows 0 and 2 only. Its record check under the plan was unchanged, and the
+certifier's salt check, like its audit, found nothing for window 1. The latest proxy tick was 4.4 ms late against the
+25 ms slack. `run.py`'s tests render the summary of `r20261018-110501-432f`, the night before, and the night before
+the fleet was `r20261018-102319-bb80`.
