@@ -45,15 +45,13 @@ From that round on, below the last round, the release is the frame's release of 
 and at the last round it is the stop (`LeanRelease.nextD_of_fail`), as the fixed firewall does.
 
 The device round and the scheduled round read, by name, the values the firewall fixes by its own computation, as its
-transcript reports them (`computedOf`): its level-0 recheck, its opening, `final_c'` and the inner proof. Five Props give
-`ZkServer.RefD` at the deferred release (`LeanRelease.refD`):
-* `FirewallComputes` (D8 (a), still a named assumption): each reported value is the specified one;
-* `Reports`: the transcript reports every specified value;
+transcript reports them (`computedOf`): its level-0 recheck, its opening, `final_c'` and the inner proof. Three Props give
+`ZkServer.RefD` at the deferred release (`LeanRelease.refD`), with no assumption on what the firewall computes:
 * `LeanRelease.LiveRefine`: on every history whose rounds all passed and whose last coins the frame takes, the frame's
   release of the worker's round is the prover's message;
 * `LeanRelease.FillRefine`: on every history below the last round on which a round failed and whose last coins the
-  frame takes, the frame's release of the firewall's scheduled round, with the specified values, is the prover's
-  message;
+  frame takes, the frame's release of the firewall's scheduled round, at the values the transcript reports there, is
+  the prover's message;
 * `LeanRelease.StopRefine`: on every history whose last coins the frame refuses, the prover's message is the stop. It
   reads no worker value and nothing the firewall computes.
 
@@ -73,46 +71,6 @@ def computedOf (t : _root_.Flock.Firewall.Contract.Transcript) (what : String) :
     | .fixed w .recheck want _ _ | .fixed w .shadow want _ _ | .fixed w .own want _ _ =>
       if w = what then some want else none
     | _ => none
-
-/-- Under D8 (a), every value the transcript reports fixing by the firewall's own computation is `spec`'s. -/
-theorem computedOf_spec {spec : String → Option ByteArray} {t : _root_.Flock.Firewall.Contract.Transcript}
-    (hc : _root_.Flock.Firewall.Contract.FirewallComputes spec t) {what : String} {v : ByteArray}
-    (hv : computedOf t what = some v) : spec what = some v := by
-  obtain ⟨a, ha, hf⟩ := List.exists_of_findSome?_eq_some hv
-  cases a with
-  | fixed w src want sent ps =>
-    cases src
-    case recheck | shadow | own =>
-      dsimp only at hf
-      split at hf
-      · cases hf
-        subst_vars
-        exact hc _ _ _ sent ps ha (by decide)
-      · cases hf
-    all_goals cases hf
-  | _ => cases hf
-
-/-- The transcript `t` reports a value for every name `spec` fixes. -/
-def Reports (spec : String → Option ByteArray) (t : _root_.Flock.Firewall.Contract.Transcript) : Prop :=
-  ∀ what v, spec what = some v → (computedOf t what).isSome
-
-/-- Under D8 (a), a transcript that reports every name `spec` fixes reports exactly `spec`. -/
-theorem computedOf_eq {spec : String → Option ByteArray} {t : _root_.Flock.Firewall.Contract.Transcript}
-    (hc : _root_.Flock.Firewall.Contract.FirewallComputes spec t) (hr : Reports spec t) : computedOf t = spec := by
-  funext what
-  cases hs : spec what with
-  | none =>
-    cases hv : computedOf t what with
-    | none => rfl
-    | some v =>
-      have := computedOf_spec hc hv
-      rw [hs] at this
-      cases this
-  | some v =>
-    obtain ⟨v', hv'⟩ := Option.isSome_iff_exists.mp (hr what v hs)
-    have := computedOf_spec hc hv'
-    rw [hs] at this
-    rw [hv', this]
 
 /-! ## The frame's coin stops
 
@@ -515,12 +473,12 @@ def LiveRefine {W R : Type} (L : LeanRelease W R) (H : Msg → Msg) (P : W → P
     (((P w).next x h ρ).eval H).1 = L.release x ρ h false v
 
 /-- **The stand-in rounds**: after every history below the last round `n x - 1` on which a round failed and whose last
-coins the frame takes, the Lean frame's release of the firewall's scheduled round, with the values `spec`, as a stopped
-rep's, is `P`'s message. -/
+coins the frame takes, the Lean frame's release of the firewall's scheduled round, at the values the firewall's
+transcript reports fixing there (`computedOf`), as a stopped rep's, is `P`'s message. -/
 def FillRefine {W R : Type} (L : LeanRelease W R) (H : Msg → Msg) (P : W → Prover R) (n : Msg → ℕ)
-    (wk : L.toSrv.Worker) (x : Msg) (w : W) (spec : String → Option ByteArray) : Prop :=
+    (wk : L.toSrv.Worker) (x : Msg) (w : W) : Prop :=
   ∀ ρ κ h, h.length + 1 < n x → L.toSrv.live wk x w ρ κ h = false → L.refusesCoins x ρ h = false →
-    (((P w).next x h ρ).eval H).1 = L.release x ρ h true (L.scheduled x w ρ h spec)
+    (((P w).next x h ρ).eval H).1 = L.release x ρ h true (L.scheduled x w ρ h (computedOf (L.computed x w ρ h)))
 
 /-- **The coin stops**: after every history whose last coins the frame refuses (`refusesCoins`), at a round the
 deferred release releases, `P`'s message is the stop. It reads no worker value and nothing the firewall computes: the
@@ -531,22 +489,19 @@ def StopRefine {W R : Type} (L : LeanRelease W R) (H : Msg → Msg) (P : W → P
   ∀ ρ κ h, (h.length + 1 < n x ∨ L.toSrv.live wk x w ρ κ h = true) → L.refusesCoins x ρ h = true →
     (((P w).next x h ρ).eval H).1 = L.stop
 
-/-- **The item-stream refinement** at `(x, w)`, the worker `wk`, the last round `n` and the specified values `spec`: after
-every history the firewall's transcript reports every value `spec` fixes, and wherever the deferred release releases a
-frame it is `P`'s message: where the frame takes the stream's last coins, at the worker's rounds while they pass
-(`LiveRefine`) and at the firewall's scheduled rounds after one failed (`FillRefine`), and where it refuses them, the
-stop (`StopRefine`). -/
+/-- **The item-stream refinement** at `(x, w)`, the worker `wk` and the last round `n`: wherever the deferred release
+releases a frame it is `P`'s message: where the frame takes the stream's last coins, at the worker's rounds while they
+pass (`LiveRefine`) and at the firewall's scheduled rounds after one failed, at the values its transcript reports
+(`FillRefine`), and where it refuses them, the stop (`StopRefine`). -/
 def ItemsRefine {W R : Type} (L : LeanRelease W R) (H : Msg → Msg) (P : W → Prover R) (n : Msg → ℕ)
-    (wk : L.toSrv.Worker) (x : Msg) (w : W) (spec : String → Option ByteArray) : Prop :=
-  (∀ ρ h, Reports spec (L.computed x w ρ h)) ∧ L.LiveRefine H P wk x w ∧ L.FillRefine H P n wk x w spec ∧
-    L.StopRefine H P n wk x w
+    (wk : L.toSrv.Worker) (x : Msg) (w : W) : Prop :=
+  L.LiveRefine H P wk x w ∧ L.FillRefine H P n wk x w ∧ L.StopRefine H P n wk x w
 
-/-- **`hRef` at the deferred Lean release**: D8 (a) on every transcript the firewall keeps, and the item-stream
-refinement, give `ZkServer.RefD` at the stand-in `fillOf`. -/
+/-- **`hRef` at the deferred Lean release**: the item-stream refinement gives `ZkServer.RefD` at the stand-in
+`fillOf`. -/
 theorem refD {W R : Type} (L : LeanRelease W R) (H : Msg → Msg) (P : W → Prover R) (n : Msg → ℕ)
-    (wk : L.toSrv.Worker) (x : Msg) (w : W) (spec : String → Option ByteArray)
-    (hc : ∀ ρ h, _root_.Flock.Firewall.Contract.FirewallComputes spec (L.computed x w ρ h))
-    (hI : L.ItemsRefine H P n wk x w spec) : L.toSrv.RefD H P L.fillOf n wk x w := fun ρ κ h hcond => by
+    (wk : L.toSrv.Worker) (x : Msg) (w : W)
+    (hI : L.ItemsRefine H P n wk x w) : L.toSrv.RefD H P L.fillOf n wk x w := fun ρ κ h hcond => by
   cases hl : L.toSrv.live wk x w ρ κ h with
   | true =>
     obtain ⟨v, hv, -, -, -⟩ := L.live_some wk x w ρ κ h hl
@@ -557,8 +512,8 @@ theorem refD {W R : Type} (L : LeanRelease W R) (H : Msg → Msg) (P : W → Pro
     cases hs : L.refusesCoins x ρ h with
     | true =>
       rw [L.release_of_refusesCoins x ρ h _ _ hs]
-      exact hI.2.2.2 ρ κ h hcond hs
-    | false => exact hI.2.1 ρ κ h v hl hs hv
+      exact hI.2.2 ρ κ h hcond hs
+    | false => exact hI.1 ρ κ h v hl hs hv
   | false =>
     have hlt : h.length + 1 < n x := hcond.resolve_right (by rw [hl]; exact Bool.false_ne_true)
     have hu : L.toSrv.wkD L.fillOf wk κ x w ρ h 0 = some (L.fillOf x h.length 0 w ρ h) := by
@@ -567,11 +522,8 @@ theorem refD {W R : Type} (L : LeanRelease W R) (H : Msg → Msg) (P : W → Pro
     cases hs : L.refusesCoins x ρ h with
     | true =>
       rw [L.release_of_refusesCoins x ρ h _ _ hs]
-      exact hI.2.2.2 ρ κ h hcond hs
-    | false =>
-      show _ = L.release x ρ h true (L.scheduled x w ρ h (computedOf (L.computed x w ρ h)))
-      rw [computedOf_eq (hc ρ h) (hI.1 ρ h)]
-      exact hI.2.2.1 ρ κ h hlt hl hs
+      exact hI.2.2 ρ κ h hcond hs
+    | false => exact hI.2.1 ρ κ h hlt hl hs
 
 end LeanRelease
 
@@ -586,10 +538,9 @@ are the frames', and which stops a session only at its `Finish` (`ZkServer.nextD
 failure is a failed round, `LeanRelease.nextD_of_fail`), at any worker `wk` and any values `vs` whose round encoding is
 causal, releases, on every event, at most twice the probability at the simulator that guesses whether the session stops
 (`leaky1`, at `Flock.zk_server_ref`'s simulator, `refP`'s), plus `ε_zk + γ·Fork`, with no term for the firewall's checks.
-It holds under `Claims.Hm96Hiding`, the session's six Props, D8 (a) on the firewall's transcripts (`FirewallComputes`)
-and the item-stream refinement at `swP vs` (`LeanRelease.ItemsRefine`: `Reports`, `LiveRefine`, `FillRefine` and
-`StopRefine`). The
-stop leaks one bit a session; over a stream of `m` sessions with at most `b` stops, `log₂ ∑_{i ≤ b} C(m, i)` bits
+It holds under `Claims.Hm96Hiding`, the session's six Props and the item-stream refinement at `swP vs`
+(`LeanRelease.ItemsRefine`: `LiveRefine`, `FillRefine` at the values the firewall's transcript reports, and `StopRefine`),
+with no assumption on what the firewall computes. The stop leaks one bit a session; over a stream of `m` sessions with at most `b` stops, `log₂ ∑_{i ≤ b} C(m, i)` bits
 (`stream_leak_deferred`). -/
 theorem Flock.zk_server_lean (H : Msg → Msg) (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (S : RefSession) (vs : S.SwVals) (t : ℕ) (ht : 0 < t) {δ₁ : ENNReal}
@@ -597,9 +548,7 @@ theorem Flock.zk_server_lean (H : Msg → Msg) (rel : _root_.Flock.Readable.Pars
     (hV : S.Complete (Flock.R (FlockDeploy.deployZk rel).parse)) (hD : S.DummyReg) (hc : S.Causal)
     (hsc : S.SwCausal vs) (hT : S.TapeOK) (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand))
     (wk : L.toSrv.Worker) (x : Msg) (w : Flock.Wit) (hR : Flock.R (FlockDeploy.deployZk rel).parse x w)
-    (spec : String → Option ByteArray)
-    (hFC : ∀ ρ h, _root_.Flock.Firewall.Contract.FirewallComputes spec (L.computed x w ρ h))
-    (hI : L.ItemsRefine H (S.swP vs).prover (fun x => (FlockDeploy.deployZk rel).V.k x + 1) wk x w spec) {Θ : Type}
+    (hI : L.ItemsRefine H (S.swP vs).prover (fun x => (FlockDeploy.deployZk rel).V.k x + 1) wk x w) {Θ : Type}
     (Vs : VStar Θ) (θ : Θ) (hk : Vs.k x = (FlockDeploy.deployZk rel).V.k x + 1)
     (Ev : List ((Msg × Out) × ℕ) → Prop) :
     Pr (fun ω : (S.refP.Nonce × S.refP.Rand) × L.toSrv.Chk =>
@@ -612,7 +561,7 @@ theorem Flock.zk_server_lean (H : Msg → Msg) (rel : _root_.Flock.Readable.Pars
           4 * t * 3 ^ t * (Fork H ((S.swP vs).prover w) Vs θ x).Pr H) := by
   have h := L.toSrv.zk_deferred L.fillOf H (fun x => (FlockDeploy.deployZk rel).V.k x + 1) (S.swP vs).prover _ _ _ _
     (Flock.zk_deployZk_sw H rel S vs t ht hT1 hδ₁ hS hV hD hc hsc hT).2 x w hR wk
-    (L.refD H _ _ wk x w spec hFC hI) Vs θ hk Ev
+    (L.refD H _ _ wk x w hI) Vs θ hk Ev
   exact h
 
 end Claims.ZKServer

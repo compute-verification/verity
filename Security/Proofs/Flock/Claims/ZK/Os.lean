@@ -189,8 +189,8 @@ theorem zkServerBlindOs : ZkServerBlindOs := by
 (`O.release L`), whose rep `i`'s frame reads stream `i` of the tape at its start and whose tap serves every other
 stream, at the bytes of a byte source, read one for one (`O.dec`), which passes the event's test up to `η` (A3 per
 test); the bound plus `η`. Its premises are `Flock.zk_server_lean`'s at `O.release L` and A3 per test:
-`Claims.Hm96Hiding`, the session's six Props, D8 (a) on the firewall's transcripts (`FirewallComputes`), and the
-item-stream refinement at `swP vs` (`LeanRelease.ItemsRefine`). -/
+`Claims.Hm96Hiding`, the session's six Props and the item-stream refinement at `swP vs` (`LeanRelease.ItemsRefine`), with
+no assumption on what the firewall computes. -/
 def ZkServerLeanOs : Prop :=
   ∀ (H : Msg → Msg) (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (S : RefSession)
     (vs : S.SwVals) (t : ℕ), 0 < t → ∀ {δ₁ : ENNReal}, Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁ → δ₁ ≠ ⊤ →
@@ -199,9 +199,7 @@ def ZkServerLeanOs : Prop :=
     ∀ (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand)) (x : Msg)
       (O : OsTape (S.refP.Nonce × S.refP.Rand) (L.lay x)) (wk : (O.release L).toSrv.Worker) (w : Flock.Wit),
       Flock.R (FlockDeploy.deployZk rel).parse x w →
-    ∀ (spec : String → Option ByteArray),
-      (∀ ρ h, _root_.Flock.Firewall.Contract.FirewallComputes spec ((O.release L).computed x w ρ h)) →
-      (O.release L).ItemsRefine H (S.swP vs).prover (fun x => (FlockDeploy.deployZk rel).V.k x + 1) wk x w spec →
+      (O.release L).ItemsRefine H (S.swP vs).prover (fun x => (FlockDeploy.deployZk rel).V.k x + 1) wk x w →
     ∀ {Θ : Type} (Vs : VStar Θ) (θ : Θ), Vs.k x = (FlockDeploy.deployZk rel).V.k x + 1 →
     ∀ (Ev : List ((Msg × Out) × ℕ) → Prop) {Ωos : Type} [Fintype Ωos]
       (src : Ωos → (k : Fin O.reps ⊕ Fin O.taps) → Fin (O.Ls k) → Fin 256) {η : ENNReal}, η ≠ ⊤ →
@@ -219,11 +217,11 @@ def ZkServerLeanOs : Prop :=
             4 * t * 3 ^ t * (Fork H ((S.swP vs).prover w) Vs θ x).Pr H) + η.toReal
 
 theorem zkServerLeanOs : ZkServerLeanOs := by
-  intro H rel S vs t ht δ₁ hT1 hδ₁ hS hV hD hc hsc hT L x O wk w hR spec hFC hI Θ Vs θ hk Ev Ωos _ src η hη hA3
+  intro H rel S vs t ht δ₁ hT1 hδ₁ hS hV hD hc hsc hT L x O wk w hR hI Θ Vs θ hk Ev Ωos _ src η hη hA3
   exact (Pr_os_prod O.dec (fun p : (S.refP.Nonce × S.refP.Rand) × (O.release L).toSrv.Chk =>
       Ev ((O.release L).toSrv.timed x (runStar H ((O.release L).toSrv.proverD (O.release L).fillOf
         (fun x => (FlockDeploy.deployZk rel).V.k x + 1) wk w) Vs x p θ).msgs)) hη hA3).trans
-    (add_le_add (Flock.zk_server_lean H rel S vs t ht hT1 hδ₁ hS hV hD hc hsc hT (O.release L) wk x w hR spec hFC hI
+    (add_le_add (Flock.zk_server_lean H rel S vs t ht hT1 hδ₁ hS hV hD hc hsc hT (O.release L) wk x w hR hI
       Vs θ hk Ev) le_rfl)
 
 end Claims.ZKServer

@@ -160,9 +160,10 @@ import Proofs.Flock.Claims.ZK.SamplingNonVacuous
   scheduled round in its place; Rust's own checks only fail a round more (`LeanRelease.cross`). Any other stop comes at its
   `Finish`, with its scheduled rounds in a failed device's place
   (`LeanRelease.fillOf`), and every way a worker fails is a failed round (`LeanRelease.pass_of_none`, `nextD_of_fail`).
-  Its `RefD` is D8 (a)'s `FirewallComputes` plus the item-stream refinement `LeanRelease.ItemsRefine` (`Reports`,
-  `LiveRefine` at the worker's passed rounds and `FillRefine` at the scheduled rounds, where the frame takes the coins,
-  and `StopRefine`, the stop where it refuses them; `LeanRelease.refD`), so
+  Its `RefD` is the item-stream refinement `LeanRelease.ItemsRefine` alone, with no assumption on what the firewall
+  computes (`LiveRefine` at the worker's passed rounds and `FillRefine` at the scheduled rounds, read at the values the
+  firewall's transcript reports, where the frame takes the coins, and `StopRefine`, the stop where it refuses them;
+  `LeanRelease.refD`), so
   **`Flock.zk_server_lean`** is `ZkServer.zk_deferred` at it, at any worker: one bit a session.
 * `Os`: the server's tape as the operating system's bytes (`OsTape`: a stream of exactly `drawBytes` bytes for each rep's
   frame and the tap's streams, one for one), the frame's read proved to be the release's draws (`frame_draws`, with a read
