@@ -1,7 +1,7 @@
 """ffill, the H200's FFMA filler (dc/ffill_ref.py, dc/ffill.cuh): the reference rounds once where float64-then-cast
 rounds twice, agrees with the integer FP32 pipe on finite words and pins sm_90's NaN and subnormals; the operand map,
-the coins and the chains; the pinned receipts; ffill_ref's checks of ffill.cu's dumps; and the header's host build
-against the reference. The GPU side needs an H200 (dc/ffill.sh)."""
+the coins and the chains; the pinned receipts; ffill_ref's checks of ffill.cu's dumps; the header's host build against
+the reference; and the design that prices it. The GPU side needs an H200 (dc/ffill.sh)."""
 from __future__ import annotations
 
 import importlib.util
@@ -17,6 +17,8 @@ import numpy as np
 import pytest
 
 from verity.ml.circuits.silicon import fp32 as silicon
+from verity_machine_model.eps import design
+from verity_machine_model.model import device
 
 DC = Path(__file__).resolve().parents[1] / "dc"
 
@@ -212,3 +214,9 @@ def test_the_headers_coins_on_the_host(tmp_path):
     for (a, b, c), line in zip(keys, out):
         assert tuple(int(v) for v in line.split()) == F.coins(a, b, c), (a, b, c)
 
+
+def test_the_design_prices_ffill():
+    f, = design("dither-2s-licpw-redux-l32", device("sm_90")).filler
+    assert f.per_word == F.PER_WORD == 9 / 128 and f.mix == F.MIX and f.route == "lanes" and f.p == 0.0
+    assert f.luck.startswith("Accounting.Guarantees.FillerLuck.PinnedFillBlocksDeficit:")
+    assert "ffill" in f.luck and "F32FmaV2" in f.luck

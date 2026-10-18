@@ -1,13 +1,14 @@
 # LI-CP-W: the checkpoint XOR-reduced across the warp before the store (5 SHFL.BFLY and 5 LOP3 a lane a segment), so
 # one 4-byte word a warp a segment leaves the SM instead of one a lane: receipt bytes 32x fewer
 # Dither-2S with the LI fold at L = 32 on the H200 (sm_90): two-sided dither serving the last checked word and P·V's
-# peel, LI receipts on every committed word and 0.02 verified FFMA a word. The noise is dither-2s-l32's, and ε_skip is
-# this design's own at its ♭ (eps_budget's `design_skip`); the fold, honest and ε_mand are DC-DESIGN's
+# peel, LI receipts on every committed word and ffill's filler (benchmarks/pouw/dc/ffill.cuh: an IMAD and two FFMA on 3
+# of a thread's 128 words a MMA, 0.0703 a word, its receipt recomputed bit for bit). The noise is dither-2s-l32's, and
+# ε_skip is this design's own at its ♭ (eps_budget's `design_skip`); the fold, honest and ε_mand are DC-DESIGN's
 # (note:20261017T0805Z-draft-dc-design §3, §4): LI binds honest on the H200's lane facet, so output counting closes the
 # lane route.
 name = "dither-2s-licpw-redux-l32"
-title = "Dither-2S, LI-CP-W redux, 0.07 FFMA, L = 32"
-summary = "Dither-2S on the H200 at L = 32: two-sided dither serving the last checked word, LI-CP-W receipts (a warp's checkpoint a segment), 0.07 FFMA, P·V's peel"
+title = "Dither-2S, LI-CP-W redux, ffill (0.0703 a word), L = 32"
+summary = "Dither-2S on the H200 at L = 32: two-sided dither serving the last checked word, LI-CP-W receipts (a warp's checkpoint a segment), ffill's FFMA chains (0.0703 lane instructions a word, recomputed bit for bit), P·V's peel"
 honest = "dc90-licpw-redux-l32"
 L = 32
 work = 1.0
@@ -30,16 +31,16 @@ IMAD = 0.5
 SHFL = 0.0234375
 
 [filler]
-per_word = 0.07
-mix = { FFMA = 1 }
+per_word = 0.0703125
+mix = { FFMA = 2, IMAD = 1 }
 route = "lanes"
-source = "LI-ALT: LI-CP's checkpoint adds ALU work, so 0.05 FFMA a word no longer holds decision 76's 2% margin at the floor (core 0.723% under it); 0.07 does (0.08 holds 3%), at the DC r8 margin audit's method; FILL-OPT is its named assumption"
+source = "ffill (benchmarks/pouw/dc/ffill.cuh, ffill_ref.py): a thread's IMAD and two FFMA on 3 of its 128 accumulator words a MMA, 9/128 a committed word. At credit floor, operands free, q* 1.22: DC-90 core 0.449%, ε_luck 0.073%, γ 1.717, binding JI90_0, and decision 76's 2% margin holds (worst 0.449%, redteam's margin; least_filler's least is 0.07); DC-90-ri core 0.500%, ε_luck 0.097%, and the margin fails (worst 0.564%, JI90_0). At q* ½ (the data-sheet reading) it fails on both (worst 1.420% and 1.442%, JI90_0). Where it fails, no filler in this mix up to 0.30 a word restores it. The integer step on ALU instead (IADD3 or LOP3) prices worse (DC-90 at 1.22: core 0.479%, worst 1.449%; JPA90_0 binds beside the fold's LOP3). FILL-OPT is its named assumption: a step's three instructions are an issue slot each and JI90_0 prices them alike; no sm_90 instruction does two exact binary32 FMAs in one issue (FFMA2 is sm_100's), wgmma's FP32 accumulation doesn't round each step to nearest even, FMUL then FADD rounds twice, DFMA then F2F costs two issues a step, and sm_90's uniform datapath has no FFMA (model.toml's uniform_forms). Open there: a last checkpoint guessed without the chains passes with probability 2^-32, and past |w| = 2^22 a step one lane absorbs saves an issue only if its whole warp absorbs it (ffill_ref.py)"
 p = 0.0
-luck = "Accounting.Guarantees.FillerLuck.PinnedFillBlocksDeficit, once the filler's receipt is recomputed bit for bit: FFMA is IEEE 754 binary32 fused multiply-add, rounded once (round to nearest even), so with its FTZ mode and NaN's encoding pinned the verifier reproduces every word exactly and a wrong receipt fails whenever its tile is drawn. No FFMA filler kernel or check exists yet; FILL-OPT is where an FFMA chain is weak (with fixed operands it reaches a fixed point or overflows, after which its receipt costs nothing), so the kernel must feed each step fresh operands"
+luck = "Accounting.Guarantees.FillerLuck.PinnedFillBlocksDeficit: the receipt F(D, C, τ) is ffill_ref.receipt, a thread's two FFMA chains over its tile's committed words from the round's coins and the tile, which LI-CP-W's last checkpoint absorbs; every FMA is F32FmaV2 (fma.rn.f32: the exact a·b + c rounded once to nearest even, subnormals kept, every NaN 0x7FFFFFFF, the word sm_90's FFMA writes without .FTZ), so the check recomputes the drawn tile's receipt bit for bit and a wrong one fails whenever its tile is drawn. That holds whatever the GPU computes; ffill.sh's conformance on the H200 (ffill.cu's dumps against ffill_ref.py) is what an honest prover needs to pass, and has not run yet"
 
 [skip.served]
-eps = 0.004489
-source = "eps_budget.py (benchmarks/pouw, `design_skip`, `floor_skip`): Corollary D3's ε_skip, the skippable work at its issue-model price over the floor program's bound B_♭ (SPEC §2.9), ♭ 6.311 SMSP-cycles a 4096-MAC MMA on DC-90 (LI-CP and 0.07 FFMA); the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode (decode's ♭ its compute alone), every served output free. At 8B 2K prefill: P·V's peel 0.498%: its tail 0.231%, the sums DG, S and X(0) 0.225%, the served epilogue 0.0425%. With P·V's served output checked it is 0.446% (8B) / 0.174% (70B) there. Skip terms: the peel's tail at the larger of 1.57 of ♭'s MACs a strip product and Π's price of BC-KERNEL r2's tail instructions (4 mma.sync m16n8k32, 4 IMAD, 11.5 other), its sums by vfold (#2300, decision 91) and served epilogue at one an issue cycle, on sm_120's instruction counts for the same kernel source, on this device's Π (note:20261017T0320Z-draft-eps1-calc Round 10)"
+eps = 0.004488
+source = "eps_budget.py (benchmarks/pouw, `design_skip`, `floor_skip`): Corollary D3's ε_skip, the skippable work at its issue-model price over the floor program's bound B_♭ (SPEC §2.9), ♭ 6.312 SMSP-cycles a 4096-MAC MMA on DC-90 (LI-CP and ffill: 0.07 FFMA's 6.311 times the machine model's floor bound at ffill over 0.07 FFMA, 1.0002); the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode (decode's ♭ its compute alone), every served output free. At 8B 2K prefill: P·V's peel 0.498%: its tail 0.231%, the sums DG, S and X(0) 0.225%, the served epilogue 0.0425%. With P·V's served output checked it is 0.446% (8B) / 0.174% (70B) there. Skip terms: the peel's tail at the larger of 1.57 of ♭'s MACs a strip product and Π's price of BC-KERNEL r2's tail instructions (4 mma.sync m16n8k32, 4 IMAD, 11.5 other), its sums by vfold (#2300, decision 91) and served epilogue at one an issue cycle, on sm_120's instruction counts for the same kernel source, on this device's Π (note:20261017T0320Z-draft-eps1-calc Round 10)"
 
 [mand.fold]
 eps = 0.0
