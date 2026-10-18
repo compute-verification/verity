@@ -327,7 +327,7 @@ theorem honestPre_run (H : Msg → Msg) (IV : Claims.Verifier Coin) (b : Brings)
     simp only [List.getElem_map, List.getElem_take, histOf, Option.some.inj ha, Claims.Recursion.outMsg, hc]
 
 /-- A statement that parses reads. -/
-theorem readX_of_parse {x : Msg} {s : Claims.Recursion.Stmt} (h : parse x = some s) : ∃ xr, readX x = some xr := by
+theorem readX_some_of_parse {x : Msg} {s : Claims.Recursion.Stmt} (h : parse x = some s) : ∃ xr, readX x = some xr := by
   cases hx : readX x with
   | some xr => exact ⟨xr, rfl⟩
   | none =>
@@ -354,7 +354,7 @@ theorem vstar_complete_run (H : Msg → Msg) (I : Claims.Recursion.Inner Coin Cl
       linkOk i (b.st.transcript x ((run H (refP I.V b w) (V I.V b.st) x ω r).msgs.take (I.V.k (xIOf x) + kS x)))
         (b.st.record x ((run H (refP I.V b w) (V I.V b.st) x ω r).msgs.take (I.V.k (xIOf x) + kS x))) sts = true := by
   obtain ⟨s', hp, -, -⟩ := hR
-  obtain ⟨xr, hx⟩ := readX_of_parse hp
+  obtain ⟨xr, hx⟩ := readX_some_of_parse hp
   have hv := honestPre_run H I.V b w hx ω r
   obtain ⟨he, i, spec, sts, hsu, hrel, hl⟩ := vstar_complete H I.V b linkOk hN hS hW hL hv hI hs
   have hrv : Claims.Recursion.runVstar H (deployRec I.V ivScope b) I (refP I.V b w) x ω r =

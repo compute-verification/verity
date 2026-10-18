@@ -5,17 +5,15 @@ import Proofs.Flock.Claims.Complete.Walk
 # The checked reader: `Decomp` under Flock's admission of plain leaves
 
 `readX` requires Flock's own setup and statement check on the inner statement (`innerOk`), besides the inner setup at
-the recursion's inner tags (`RecVStar.innerOf`). Today the two never both pass: `innerOf` reads plain leaves off the
-circuit file and `ProvedScope.check` passes only `hm96-sha512/v1` leaves (`check_refused_of_decode`), so the checked
-reader parses nothing (`parse_none_today`). Flock's plain-leaves change (`cursor/flock-plain-leaves-sound-c7a9`) extends
-its soundness headline to plain-leaves statements and has its verifier admit them outside `--zk`. This file states what
-the recursion needs of that change as one Prop and proves what follows from it.
+the recursion's inner tags (`RecVStar.innerOf`). `innerOf` reads plain leaves off the circuit file, and since #2411
+`ProvedScope.check` passes them at hidden outputs without `--zk` (`inner_check_plain`), under Flock's soundness headline
+at the statement's leaf. This file states what the recursion needs of an inner statement as one Prop and proves what
+follows from it.
 
 * **`PlainLeavesAdmitted rel`**: some inner statement passes every check the reader makes of it (it decodes, its
   partition reads, `RecVStar.innerOf` sets it up and `innerOk` passes), is in Flock's scope, where Flock's soundness
   headline holds (`Claims.Flock.Scope`), is true (`Claims.Flock.R`), and has Flock's completeness error below 1
-  (`FlockComplete.δc`: a drawn session). Its first four conditions are those `check_refused_of_decode` refutes together
-  today (`plainLeavesAdmitted_false`).
+  (`FlockComplete.δc`: a drawn session).
 * **`Decomp` at the checked reader** (`decomp_checked_iff`): at every statement the reader parses, the inner statement
   passes Flock's statement check (`parse_innerOk`), so the cut `decomp_deployed_iff` asks of the parts is the inner
   run's conditions (`InnerRun`, `RunCut`: the link and last messages, the verdict, the record's statement and draw, the
@@ -130,19 +128,9 @@ theorem parse_innerOk {x : Msg} {st : Claims.Recursion.Stmt} (hst : parse x = so
   rw [hx]
   exact innerOk_iff.1 (readX_inner hr).2.2
 
-/-- **Today the checked reader parses nothing**: it requires Flock's statement check on the inner statement
-(`parse_innerOk`), which refuses the plain leaves the inner setup reads (`inner_check_refused`). -/
-theorem parse_none_today (x : Msg) : parse x = none := by
-  cases hp : parse x with
-  | none => rfl
-  | some st =>
-    obtain ⟨s, spec, sts, hs, hc⟩ := parse_innerOk hp
-    exact absurd hc (inner_check_refused hp (FlockDeploy.setupOf_some hs).1)
-
 /-! ## Flock's admission of plain leaves -/
 
-/-- **Flock admits a plain-leaves statement of the inner shape** (the contribution of
-`cursor/flock-plain-leaves-sound-c7a9`): some inner statement passes every check the checked reader makes of it (it
+/-- **Flock admits a plain-leaves statement of the inner shape** (what #2411 makes possible): some inner statement passes every check the checked reader makes of it (it
 decodes, its partition reads, the inner setup at the recursion's inner tags accepts it, `RecVStar.innerOf`, and Flock's
 plain verifier sets it up and its statement check passes, `innerOk`), is in Flock's scope, where its soundness headline
 holds (`Claims.Flock.Scope`), is true (`Claims.Flock.R`), and has Flock's completeness error below 1 there
@@ -156,14 +144,6 @@ def PlainLeavesAdmitted (rel : Flock.Readable.Parsed → Flock.Readable.Relation
       Flock.RecVStar.innerOf ri.circuit ri.publicFile partition ri.program = .ok dims ∧ innerOk inner = .ok () ∧
       Claims.Flock.Scope (FlockDeploy.deployPlain rel) inner ∧
       Claims.Flock.R (FlockDeploy.deployPlain rel).parse inner w ∧ FlockComplete.δc FlockDeploy.sha512 inner < 1
-
-/-- **Today Flock admits no plain-leaves statement of the inner shape**: its statement check refuses every circuit file
-the inner setup accepts (`check_refused_of_decode`). -/
-theorem plainLeavesAdmitted_false (rel : Flock.Readable.Parsed → Flock.Readable.Relation) :
-    ¬ PlainLeavesAdmitted rel := by
-  rintro ⟨inner, ri, partition, dims, w, hri, -, hdims, hok, -⟩
-  obtain ⟨s, spec, sts, hs, hc⟩ := innerOk_iff.1 hok
-  exact check_refused_of_decode hri hdims (FlockDeploy.setupOf_some hs).1 hc
 
 /-- **Under the Prop, the inner verifier's acceptance is satisfiable at an inner statement the checked reader
 admits**, wherever Flock's honest prover is complete (`innerAccSha_of_complete`). -/
