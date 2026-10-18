@@ -62,7 +62,7 @@ many reads of a node's registered blocks the node made in each window, from rece
    each γ term over the session's span and over each window's own (`WindowLedger`), μ_sample read per window and
    pooled over the session's horizon (`pooled`, `floors`).  It credits a receipt of a block appended after the seed
    only on the property's verdict on the circuits that wrote it (`credit_post_seed`, I2's: the verifier runs property/v1
-   on their public Program itself and binds it to the session, `post_seed`), and then charges what their carriers may
+   on their public Program and binds it to the session, `post_seed`, in its Lean definition), and then charges what their carriers may
    hold (μ_carrier); without one, those receipts are certified but not credited.  On the served
    circuit's requirement linked to the passes (`requirement`, a `RequirementLink`: I4's plan and memory-map units and
    the census's layout rule, the memory-map unit's verdict on the record's appends among them, `mapped`), each pass's
@@ -90,15 +90,11 @@ from fractions import Fraction
 from typing import Protocol
 
 from verity.core.protocols.profile import IntegrityProfile, Subset
-from verity.ml.circuits import stacking
-from verity.ml.circuits.census import census as program_census
-from verity.ml.circuits.codec import program_digest
-from verity.ml.circuits.requirement_units import map_value_leaves
 from verity.ml.commitments import Commitment, CommitmentDomain, MerkleTree, Opening as MerkleOpening, RangeIndexedDomain
 from verity.ml.commitments import verify_opening
 from verity.ml.randomness import derive, frame
 
-from . import codec, coins, receipts
+from . import codec, coins, lean_verdict, receipts
 from .codec import BLOCK_BYTES, SEED_BYTES, Codec
 from .receipts import DIGEST_BYTES, LIMITS, SALT_BYTES, Plan
 
@@ -1197,10 +1193,10 @@ class PostSeedVerdict(Protocol):
     """The property's verdict on the circuits that wrote a session's post-seed blocks (I2, property/v1: P(c, R_in, L)),
     as `ledger` reads it: whether it `holds`, and `carrier_bytes(read_bytes)`, the most the carriers among a window's
     post-seed blocks can hold when its certified reads are `read_bytes`, R_in·L + (c_ρ·read_bytes·L/E)·b, the side
-    capacity the guarantee adds to c.  The verifier computes it (`post_seed`, a `PostSeed`): property/v1 on the writers'
-    public Program, bound to the one-stage audit's Program, the memory-map units' value rows and this session's
-    appends.  `ledger` holds a `PostSeed`'s windows and lifetime cap to the record's, and takes any other verdict as
-    given."""
+    capacity the guarantee adds to c.  The verifier computes it (`post_seed`, a `PostSeed`, by its Lean definition):
+    property/v1 on the writers' public Program, bound to the one-stage audit's Program, the memory-map units' value rows
+    and this session's appends.  `ledger` holds a `PostSeed`'s windows and lifetime cap to the record's
+    (`property_reading`), and takes any other verdict as given."""
 
     @property
     def holds(self) -> bool: ...
@@ -1243,86 +1239,98 @@ class RequirementLink(Protocol):
     def mapped(self, appends: bytes | None) -> bool: ...
 
 
-POST_SEED_BINDINGS = ("program", "census", "values", "mapped", "property")
-OPEN_READING = ("open, memory-accounting's: how the record's lifetime cap, in windows, converts to property/v1's L, in "
-                "census steps, and how each pass's one step converts to a window's contiguous range of census steps")
+POST_SEED_BINDINGS = ("program", "values", "mapped", "property")
+OPEN_CARRIER = ("open: R_in·L + (c_ρ·read_bytes·L/E)·b reads L as the carriers' lifetime in seconds (R_in is bytes a "
+                "second), and the verdict's L is census steps (`property_reading`)")
+
+
+@dataclass(frozen=True, slots=True)
+class StepWindow:
+    """A window as property/v1 reads it: census steps `[start, stop)`, the bytes the audit certified as read in it
+    (U_t·b) and its span in seconds."""
+
+    start: int
+    stop: int
+    reads: int
+    seconds: Fraction
 
 
 @dataclass(frozen=True, slots=True)
 class PostSeed:
-    """The verifier's own `PostSeedVerdict` (`post_seed`): property/v1 run on the writers' Program W, and the bindings
-    that tie it to the session.  It `holds` when nothing is `refused`, each check named in `POST_SEED_BINDINGS`.  It
-    carries W's digest (`program`), the L it was judged at (`lifetime`, in census steps), its `windows` and property/v1's
-    own verdict (`checked`, None when the census isn't W's); `ledger` holds the lifetime and windows to the record's
-    (binding 4, `property_reading`)."""
+    """The verifier's own `PostSeedVerdict` (`post_seed`, its Lean definition `RemoteAudit.PostSeed.verdict`):
+    property/v1 run on the writers' Program W at its own step ends, and the bindings that tie it to the session.  It
+    `holds` when nothing is `refused`, each check named in `POST_SEED_BINDINGS`.  It carries W's digest (`program`),
+    its census's step count (`census_steps`), the L it was judged at (`lifetime`, in census steps), its `windows` and
+    property/v1's own verdict (`checked`); `ledger` holds the lifetime and windows to the record's (binding 4,
+    `property_reading`)."""
 
     refused: tuple[str, ...]
     program: str
+    census_steps: int
     lifetime: int
-    windows: tuple[stacking.Window, ...]
-    checked: stacking.Verdict | None
+    windows: tuple[StepWindow, ...]
+    checked: Mapping
 
     @property
     def holds(self) -> bool:
         return not self.refused
 
     def carrier_bytes(self, read_bytes: int) -> float:
-        """R_in·L + (c_ρ·read_bytes·L/E)·b reads L as the carriers' lifetime, in the record cap's units."""
-        raise NotImplementedError(OPEN_READING)
+        raise NotImplementedError(OPEN_CARRIER)
 
 
-def property_reading(record: Record) -> tuple[tuple[stacking.Window, ...], int]:
-    """`record`'s windows and lifetime cap as property/v1 reads them: each window a contiguous range of the census's
-    steps with its certified reads U_t·b and its seconds, and the cap L in census steps.  A `PostSeed` must carry
-    exactly these (binding 4)."""
-    raise NotImplementedError(OPEN_READING)
+def property_reading(record: Record, census_steps: int, *, paced: bool = False) -> tuple[tuple[StepWindow, ...], int]:
+    """`record`'s windows and lifetime cap as property/v1 reads them over a census of `census_steps` steps (MEM-38):
+    pass i, in order, names step s_i (s_0 = −1) and covers the census steps (s_{i−1}, s_i], so a window covers its
+    passes' steps, each with its certified reads U_t·b and its seconds; the steps after the last pass are the closing
+    window's pass's when the session is `paced`, and an unpaced session whose last pass is before the census's last step
+    is refused.  The cap L_w (`Record.lifetime`, windows) is L_steps = max over w of the census steps in windows
+    w … w + L_w, rounding up.  A `PostSeed` must carry exactly these (binding 4)."""
+    if type(census_steps) is not int or census_steps < 1:
+        raise ValueError("a census has one or more steps")
+    if not record.windows or any(not w.steps for w in record.windows):
+        raise ValueError("a window's passes name no steps: read a session's own record")
+    steps = [s for w in record.windows for s in w.steps]
+    if any(a >= b for a, b in zip(steps, steps[1:])) or steps[-1] >= census_steps:
+        raise ValueError(f"the passes' steps strictly increase below the census's {census_steps}")
+    if steps[-1] < census_steps - 1 and not paced:
+        raise ValueError("steps after the last pass are uncovered")
+    out, start = [], 0
+    for i, w in enumerate(record.windows):
+        stop = census_steps if i == len(record.windows) - 1 else w.steps[-1] + 1
+        out.append(StepWindow(start, stop, w.receipts * record.block_bytes, Fraction(w.span_ns, 10**9)))
+        start = stop
+    held = max(out[min(i + record.lifetime, len(out) - 1)].stop - w.start for i, w in enumerate(out))
+    return tuple(out), held
 
 
-def _reading(windows: Sequence[stacking.Window], lifetime: int) -> tuple:
-    return tuple((w.steps, w.reads, Fraction(w.seconds)) for w in windows), lifetime
-
-
-def post_seed(record: Record, program: object, census: Mapping, *, audited: str, values: Sequence[bytes],
-              map_statics: object, map_public: Sequence[Mapping], map_rows: Sequence[Mapping[str, bytes]],
-              link: RequirementLink, c: Mapping[str, object], windows: Sequence[stacking.Window], lifetime: int,
-              R_in: object = stacking.R_IN, B: int = stacking.OPERAND_BITS) -> PostSeed:
-    """The property's verdict on the circuits that wrote `record`'s appends, computed by the verifier (PROTOCOL.md §8,
-    "The verdict's binding").  Everything property/v1 reads is public: the writers' Program W (`program`), its census,
-    the windows and the parameters.  So the verifier runs `stacking.check` itself, and what is left is binding, each an
-    equality between public things, refused by name:
-
-    1. ``program``: W's digest (`codec.program_digest`) is `audited`, the one-stage audit's `program` (the Program its
-       sampled proofs prove the values of); ``census``: `census` is W's census at its own steps, naming W's digest;
-    2. ``values``: each memory-map unit's ``val{k}`` row is W's value leaf at ``pos[k]`` (`map_value_leaves` of its
-       public row `map_public[i]` under `map_statics`), `map_rows[i]` its rows' commit strings and `values` the
-       one-stage value commitments' leaves;
-    3. ``mapped``: the session's appends are the map units' payloads, `link.mapped(record.appends)`;
-
-    and ``property``: `stacking.check(program, census, c=c, windows=windows, R_in=R_in, L=lifetime, B=B)` holds, run
-    only on W's census.  The verdict carries W's digest, `lifetime` and `windows`; that they are the record's (4) is
-    `ledger`'s check."""
-    if type(lifetime) is not int or lifetime < 0:
-        raise ValueError("a verdict's L is a whole number of census steps, the record's cap read in them")
-    if len(map_rows) != len(map_public):
-        raise ValueError(f"{len(map_rows)} memory-map units' rows for {len(map_public)} public rows")
-    digest, refused = program_digest(program), []
-    if digest != audited:
-        refused.append("program")
-    try:
-        own = census.get("program") == digest and program_census(program, census["steps"]["ends"], digest) == census
-    except ValueError:
-        own = False
-    if not own:
-        refused.append("census")
-    if any(at >= len(values) or rows.get(r) != values[at] for pub, rows in zip(map_public, map_rows)
-           for r, (kind, at) in map_value_leaves(map_statics, pub).items() if kind == "value"):
-        refused.append("values")
-    if link.mapped(record.appends) is not True:
-        refused.append("mapped")
-    checked = stacking.check(program, census, c=c, windows=windows, R_in=R_in, L=lifetime, B=B) if own else None
-    if checked is not None and not checked.ok:
-        refused.append("property")
-    return PostSeed(tuple(refused), digest, lifetime, tuple(windows), checked)
+def post_seed(record: Record, descriptor: Mapping, ends: Sequence[int], *, audited: str, values: Sequence[bytes],
+              map_statics: Mapping[str, int], map_public: Sequence[Mapping], map_rows: Sequence[Mapping[str, bytes]],
+              link: RequirementLink, c: Mapping[str, object], R_in: object = 100_000, B: int = 128,
+              paced: bool = False) -> PostSeed:
+    """The property's verdict on the circuits that wrote `record`'s appends (PROTOCOL.md §8, "The verdict's binding"),
+    as its Lean definition computes it (`RemoteAudit.PostSeed.verdict`, through `lean_verdict`): property/v1 on the
+    writers' Program W (`descriptor`, its descriptor) at its step `ends`, under `record`'s windows and lifetime cap read
+    in census steps (`property_reading`, at `paced`), and the bindings, refused by name (`POST_SEED_BINDINGS`):
+    ``program``, W's digest is `audited`, the one-stage audit's `program`; ``values``, each memory-map unit's
+    ``val{k}`` row (`map_rows[i]`, under its public row `map_public[i]` and `map_statics`' C, K and V) is W's value leaf
+    at ``pos[k]`` of `values`; ``mapped``, `link.mapped(record.appends)`; and ``property``, P(c, R_in, L) at B operand
+    bits.  The census it judges is W's by construction: the Lean reads W and its ends, never a census.  What the Lean
+    refuses (ends that aren't W's steps, a malformed row, steps after an unpaced session's last pass) raises
+    ValueError."""
+    kind, out = lean_verdict.call("post_seed", {
+        "program": dict(descriptor), "ends": list(ends), "audited": audited, "values": [v.hex() for v in values],
+        "map": {k: map_statics[k] for k in ("C", "K", "V")},
+        "map_public": [{k: p[k] for k in ("first", "count", "present", "pos")} for p in map_public],
+        "map_rows": [{r: v.hex() for r, v in rows.items()} for rows in map_rows],
+        "mapped": link.mapped(record.appends) is True, "c": {k: str(Fraction(v)) for k, v in c.items()},
+        "R_in": str(Fraction(R_in)), "B": B, "block_bytes": record.block_bytes, "lifetime": record.lifetime,
+        "paced": paced, "windows": [{"steps": list(w.steps), "receipts": w.receipts, "span_ns": w.span_ns}
+                                    for w in record.windows]})
+    if kind == "reject":
+        raise ValueError(out)
+    windows = tuple(StepWindow(a, b, r, Fraction(s)) for a, b, r, s in out["windows"])
+    return PostSeed(tuple(out["refused"]), out["program"], out["census_steps"], out["L"], windows, out["verdict"])
 
 
 class _Terms:
@@ -1505,8 +1513,8 @@ def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebu
     `error_horizon`."""
     if credit_post_seed is not None and credit_post_seed.holds is not True:
         raise ValueError("a verdict that the property fails credits nothing after the seed: pass None")
-    if type(credit_post_seed) is PostSeed and (_reading(credit_post_seed.windows, credit_post_seed.lifetime)
-                                               != _reading(*property_reading(record))):
+    if type(credit_post_seed) is PostSeed and ((credit_post_seed.windows, credit_post_seed.lifetime)
+                                               != property_reading(record, credit_post_seed.census_steps)):
         raise ValueError("a verdict judged at other windows or another lifetime cap than this record's credits nothing "
                          "after the seed (binding 4)")
     density, epsilon, link_delta = 8 * record.block_bytes, 0.0, 0.0
