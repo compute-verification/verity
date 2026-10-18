@@ -31,7 +31,9 @@
   "Properties.Proofs.Pous.TimedAudit",
   "Properties.Proofs.Pous.MemoryChallenger",
   "Properties.Pous.EndToEnd",
-  "Properties.Proofs.Pous.Run"
+  "Properties.Proofs.Pous.Run",
+  "Properties.RemoteAudit",
+  "Properties.Proofs.RemoteAudit"
  ],
  "proved_in": ["../Proofs"],
  "assumptions": {
@@ -104,7 +106,9 @@
   "Properties.Pous.MemoryChallenger",
   "MemoryChallenger",
   "Definitions.Pous",
-  "Models.Pous.Assumptions"
+  "Models.Pous.Assumptions",
+  "Properties.RemoteAudit",
+  "RemoteAudit"
  ],
  "layers": {
   "Properties.Pouw": {
@@ -175,11 +179,16 @@
    ],
    "except": [],
    "why": "the guarantees join the device's statements and the check's, with the network lane's premise (`Definitions.NetworkCertifier.Premises`) and the reference Program they are read against: stated over their definitions, never a proof"
+  },
+  "Properties.RemoteAudit": {
+   "imports": ["RemoteAudit"],
+   "except": [],
+   "why": "the properties are stated against the verifier's own functions, on Lean core: nothing of Mathlib or of `security`"
   }
  },
  "reads_exempt": {
   "Flock": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT): PoUW's check reads its `V`, `canon`, `hexOf` and `Sha512.hash`, the NCI check decodes its Program with C-Flock's decoder, and the network check reads its SHA-512, bytes and canonical JSON",
-  "Randomness": "core's randomness (`core_randomness`), read through PouwCommit: its lock declares no spec layer yet (draft #1499), so its definitions are recorded here as read rather than as a spec"
+  "Randomness": "core's randomness (`core_randomness`), read through PouwCommit and RemoteAudit's draws: its lock declares no spec layer yet (draft #1499), so its definitions are recorded here as read rather than as a spec"
  },
  "guarantees": {
   "MemoryChallenger.Properties.SecurityProofs.judgeAccepts": {
@@ -1259,6 +1268,36 @@
    "signature": ["Properties.SampledProofs.digestIsRecord's : Properties.SampledProofs.DigestIsRecord's"],
    "assumptions": [],
    "type_hash": "abc4bf9e307d0d767e4b2403ff93ed0054962649127800445a602b2468868d70"
+  },
+  "Properties.RemoteAudit.acceptChecksOpenings": {
+   "owner": "@memory-accounting"
+  },
+  "Properties.RemoteAudit.acceptOpensDraws": {
+   "owner": "@memory-accounting"
+  },
+  "Properties.RemoteAudit.drawIsSubset": {
+   "owner": "@memory-accounting"
+  },
+  "Properties.RemoteAudit.planReadsDistinct": {
+   "owner": "@memory-accounting"
+  },
+  "Properties.RemoteAudit.changedReadsDistinct": {
+   "owner": "@memory-accounting"
+  },
+  "Properties.RemoteAudit.acceptedMinPasses": {
+   "owner": "@memory-accounting"
+  },
+  "Properties.RemoteAudit.passesStepped": {
+   "owner": "@memory-accounting"
+  },
+  "Properties.RemoteAudit.passesReadDistinct": {
+   "owner": "@memory-accounting"
+  },
+  "Properties.RemoteAudit.appendsInOrder": {
+   "owner": "@memory-accounting"
+  },
+  "Properties.RemoteAudit.passesChained": {
+   "owner": "@memory-accounting"
   }
  },
  "shape": {
@@ -1966,6 +2005,46 @@
    "Properties.NetworkCertifier.undecidedPending": {
     "function": "NetworkCheck.Check.protocol.check",
     "outcome": "undecided"
+   },
+   "Properties.RemoteAudit.acceptChecksOpenings": {
+    "function": "RemoteAudit.verifyWindow",
+    "outcome": "accept"
+   },
+   "Properties.RemoteAudit.acceptOpensDraws": {
+    "function": "RemoteAudit.verifyWindow",
+    "outcome": "accept"
+   },
+   "Properties.RemoteAudit.drawIsSubset": {
+    "function": "RemoteAudit.draws",
+    "outcome": "accept"
+   },
+   "Properties.RemoteAudit.planReadsDistinct": {
+    "function": "RemoteAudit.Plan.make?",
+    "outcome": "accept"
+   },
+   "Properties.RemoteAudit.changedReadsDistinct": {
+    "function": "RemoteAudit.Plan.changed",
+    "outcome": "accept"
+   },
+   "Properties.RemoteAudit.acceptedMinPasses": {
+    "function": ["RemoteAudit.Session.run", "RemoteAudit.Session.State.outcome"],
+    "outcome": "accept"
+   },
+   "Properties.RemoteAudit.passesStepped": {
+    "function": "RemoteAudit.Session.run",
+    "outcome": "accept"
+   },
+   "Properties.RemoteAudit.passesReadDistinct": {
+    "function": "RemoteAudit.Session.run",
+    "outcome": "accept"
+   },
+   "Properties.RemoteAudit.appendsInOrder": {
+    "function": "RemoteAudit.Session.run",
+    "outcome": "accept"
+   },
+   "Properties.RemoteAudit.passesChained": {
+    "function": "RemoteAudit.Session.run",
+    "outcome": "accept"
    }
   },
   "frozen": {

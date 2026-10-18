@@ -32,6 +32,16 @@ A pass's plan (`Plan.make?`, `Plan.changed`):
 
 * `PlanReadsDistinct`, `ChangedReadsDistinct`: a plan the code accepts (whole, as runs, or as a change of the previous
   pass's) reads `L` distinct blocks of the store at its positions `0 … L − 1`.
+
+The session (`Session.run` from `State.init`, every event's result `.ok`; the refusals and rejections included):
+
+* `AcceptedMinPasses`: an accepted session has its `W` windows, each with at least `min_passes` passes;
+* `PassesStepped`: each pass recorded has one plan, one step and one chain head, and the steps strictly increase in
+  arrival order (window, then pass) below `2^64`;
+* `PassesReadDistinct`: each pass recorded reads distinct blocks of the store as it stands;
+* `AppendsInOrder`: the appends are the store's next indices in order, append `k` answered with append coin `k`;
+* `PassesChained`: the session's head is the chain over its appends, and each pass's head the chain over a prefix of
+  them, so its seed binds the appends received before it.
 -/
 
 open RemoteAudit
