@@ -75,8 +75,11 @@ and `frame-b3s` that -h1, -h2 and BLAKE3 -h3 named are in `archive/pouw-blake3/`
 in `.agents/skills/friction/SKILL.md`.
 
 **Randomness.** The protocol owns the outer coins, the salt and the draw, and both are the challenger's epoch coins, never
-a public beacon and never Fiat-Shamir over the prover's roots. A scheme's noise is its own derivation from the salt and the
-prover's roots, Fiat-Shamir inside the scheme, whose grinding is inside the conjecture's error term.
+a public beacon and never Fiat-Shamir over the prover's roots. An epoch's coin commitment says its coin mode (`coins.mode`,
+Compose's `CoinMode`). In a seeded epoch (`coins.SCHEME`, Pearl-C's served path) a scheme's noise is its own derivation
+from the salt and the prover's roots, Fiat-Shamir inside the scheme, whose grinding is inside the conjecture's error
+term. In a live epoch (`coins.LIVE_SCHEME`, "Live epochs" below) round r's noise is keyed by round r's coin, opened only
+after the verifier recorded round r's root (decision 36).
 
 ## Epoch coins (`coins`)
 
@@ -102,6 +105,33 @@ asked for, that is malformed, that does not open against the epoch's root, or wh
 (`coin_reason`). A second request for an opened coin is refused, so a retry never redraws. The coins are the designated
 verifier's: an outcome convinces the auditor, who trusts its own challenger, and no third party (claim `live-verifier`).
 Vectors: `tests/vectors/epoch_coins_v1.json`.
+
+**Live coins** (`LiveChallenger`, `live_reason`, `order_reason`; Lean `PouwCommit.Live`). The challenger's live coins are
+indexed by label and index and named by no protocol, so any client of the proof service uses the same form: a layout is
+a scheme and its families `(label, count)` in order, coin `(label, i)` at its family's offset plus i, at most 2^20 coins.
+Before the epoch the challenger draws every coin and publishes
+
+~~~text
+x_p     = SHA-512(scheme || 0x00 || coin_p)
+value_p = hm96-sha512 tree_leaf(key, commit_string(key, x_p, salt_p))     salt_p: 192 fresh bytes, key the pinned default
+root    = MerkleTree over value_0 … value_(K−1) at positions 0 … K−1, binding tagged(scheme, e, label_0, count_0, …), owner -1
+~~~
+
+and opens coin `(label, i)` once, after the root the verifier recorded for it. `live_reason` checks one opening (its epoch,
+label and index, its form, the path against the root, and `after`); `order_reason` checks a family's openings against the
+roots the verifier recorded, in order: coin i opened after root i, none twice ("a retry never redraws"), none before its
+root is recorded, and every recorded root's coin opened. `LiveRecord` is the verifier's side: it records a root and only
+then asks the challenger for that root's coin.
+
+**Live epochs** (`live_challenger`, `rounds_reason`, `round_key`). A live PoUW epoch's coins are the layout
+`live_families(R)` under `LIVE_SCHEME` (`"verity/pouw/epoch-coins/live/v1"`): its salt coin, its draw coin and R round coins
+(`"round"`, rounds numbered from 0 as Compose's `Declared.round` numbers them), R the most rounds a window of the epoch
+takes, fixed when the challenger commits. Round r's coin opens after the verifier recorded round r's root, the root of
+the values round r commits, and round r's noise key is
+`derive(coin_r, "verity/pouw/round-noise/v1", {coins: root, epoch: e, root: root_r, round: r})`: the deferred noised
+products, keyed by a coin the prover could not see when it committed. `core_check.rounds` (Lean `PouwCheck.roundsCheck`)
+is the rule on a window's round coins. A seeded epoch's commitment is unchanged (`SCHEME`, salt and draw only), and the
+commitment's scheme is the epoch's mode.
 
 ## Registered weights (`registration`)
 
@@ -1320,7 +1350,8 @@ is one site, so one seed covers the call, not one head.
 GRIND (decision 122) sets the attention kinds' cover in (head, request) pairs (`Scheme.pair_cover`, `Compiled.pair_cover`):
 385 for QKᵀ (`QK_PAIRS`, on `DotBf16_v1 .. v3`) and 791 for P·V (`PV_PAIRS`, for the kind ATTN-NOISE plugs), which hold
 the decode grind term under 0.1% at T = 2^128. At one seed a call that is 8B's decode at batch ≥ 13 for QKᵀ and ≥ 25 for
-P·V. Below it the pass refuses the seed group (`cover`): its noise is the live per-round coin of decision 36, not a seed's.
+P·V. Below it the pass refuses the seed group (`cover`): its noise is the live per-round coin of decision 36, not a seed's
+("Live epochs").
 A pair is a connected component of the group's dots of the kind, its rows joined through the dots they share: at decode
 one (head, request), a query and its keys. Query heads that read one KV head's keys (GQA) are one pair by this count, so
 for a GQA model it refuses more than GRIND's per-query-head table does (8B: batch ≥ 49 for QKᵀ). A bf16 linear on

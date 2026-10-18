@@ -23,7 +23,8 @@ Python reference held to it.
 | `PouwCheck.Protocol` | the `Core.Protocol` value |
 | `PouwCheck.Opening` | `opening`, `window_domain`, `verify_path`: one unit's opening beside the check (`served_commit.check`'s rule) |
 | `PouwCheck.Pass` | `pass_epoch` and `draw`, with `coins_of`, `opening_of`, `coin_reason` and `weights_root` under `COIN_VERSIONS`: the window's pass and its draw (`served_commit.Challenger`'s rules) |
-| `PouwCheck.Difftest` | the difftest's functions behind `pouw-check-difftest` (`opening`, `pass`, `draw`) |
+| `PouwCheck.Rounds` | `rounds`, with `live_coins_of` and `live_opening_of`: a live window's round coins, each opened once after its recorded round root (`coins.rounds_reason`'s rules, `PouwCommit.Live`) |
+| `PouwCheck.Difftest` | the difftest's functions behind `pouw-check-difftest` (`opening`, `pass`, `draw`, `rounds`) |
 
 `opening` holds a tile proof's public file to the registered window: the unit drawn (or opened undrawn, the filler's),
 the entries root's domain one-stage's served domain of the registered program and partition, the opening's entry under
@@ -57,7 +58,9 @@ reasons, over `tests/pouw_opening_cases.py`: honest openings and one mutation pe
 share: hex as `bytes.fromhex` reads it, the header's keys sorted), every mutation also replayed over a few seeds, and
 every reason reached. Its `pass` and `draw` go against `core_check.pass_epoch` and `core_check.draw` the same way, over
 `tests/pouw_pass_cases.py`: honest passes of each coin version and a recorded beacon's, honest draws, and one mutation
-per refusal. `verity/core/protocols/pouw/tests/test_pouw_core_check.py` checks that every mutation reaches the refusal it
+per refusal. Its `rounds` goes against `core_check.rounds` over `tests/pouw_rounds_cases.py`: an honest live window's
+round roots and coins, and one mutation per refusal (a coin opened twice, one opened before its round's root, a foreign
+epoch's). `verity/core/protocols/pouw/tests/test_pouw_core_check.py` checks that every mutation reaches the refusal it
 aims at.
 
 ~~~text
