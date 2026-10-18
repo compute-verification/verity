@@ -25,6 +25,9 @@ word does not depend on the order the k steps run in:
     ScaledMmS8_v1{K, N, DOT}          (x: s8[K], sx: f32, w: s8[N][K], sw: f32[N]) -> bf16[N]: the linear on one token row,
                                       `ScaledMmS8Coordinate_v1` over W's rows (each coordinate a `Q_word` unit)
 
+Each refuses a K its step doesn't divide (`checked_k`): its body is K/k whole steps, and a remainder's products would
+drop without a word.
+
 Provenance: veritor `verity.ir/registry/b1.py` `DotBf16V2` / `GemmCoordinateV2` / `GemmV2` and the binding records
 `GEMM_AMPERE` (b1.py) / `GEMM_HOPPER` (hopper.py).  The `_v1` forms, which named the Ampere step in their bodies, were not
 carried over: the static form is the definition the proof work targets, and their bodies would now name a different
@@ -41,12 +44,22 @@ from .prims import BF16, E2M1, E4M3, F32, S8, S32, ZERO32
 
 __all__ = ["DotBf16", "GEMM_AMPERE", "GEMM_HOPPER", "GEMM_SM120_E4M3", "GEMM_SM120_MXF4", "GEMM_SM120_NVF4", "GEMM_SM120_S8", "Gemm",
            "GemmAccumulatorS8", "GemmCoordinate", "GemmCoordinateE4m3", "GemmCoordinateMxf4", "GemmCoordinateNvf4", "ScaledMmS8",
-           "ScaledMmS8Coordinate"]
+           "ScaledMmS8Coordinate", "checked_k"]
 
 _SCALE = Value(8)
 
 
-@composite("DotBf16", 2, ["K", "DOT"], lambda S: ((("x", Array(S.K, BF16)), ("w", Array(S.K, BF16))), F32),
+def checked_k(S, step: int) -> int:
+    """`S.K`, for a coordinate whose `DOT` consumes `step` products: ValueError, raised from the signature and so before any
+    body or digest exists, unless `step` divides it."""
+    K = S.K
+    if isinstance(K, bool) or not isinstance(K, int) or K % step:
+        raise ValueError(f"K is a multiple of the DOT step {step}, not {K!r}: the coordinate runs K/{step} whole steps, so a "
+                         f"remainder's products would drop silently. Pad K to a multiple of {step} with zero products")
+    return K
+
+
+@composite("DotBf16", 2, ["K", "DOT"], lambda S: ((("x", Array(checked_k(S, 16), BF16)), ("w", Array(S.K, BF16))), F32),
            conformance="exact-model-tested")
 def DotBf16(B, S, x, w):
     """f32 accumulator after K/16 `DOT` steps in ascending k from a zero accumulator (the Triton
@@ -57,21 +70,24 @@ def DotBf16(B, S, x, w):
     return acc
 
 
-@composite("GemmCoordinate", 2, ["K", "DOT"], lambda S: ((("x", Array(S.K, BF16)), ("wrow", Array(S.K, BF16))), BF16),
+@composite("GemmCoordinate", 2, ["K", "DOT"],
+           lambda S: ((("x", Array(checked_k(S, 16), BF16)), ("wrow", Array(S.K, BF16))), BF16),
            conformance="exact-model-tested")
 def GemmCoordinate(B, S, x, wrow):
     """One output word of `x @ W^T`: bf16_rne(DotBf16{K, DOT}(x, W[j, :])) (`cvt.rn.bf16.f32`)."""
     return B.call(P.F2fpBf16, B.call(bind(DotBf16, K=S.K, DOT=S.DOT), x, wrow))
 
 
-@composite("Gemm", 2, ["K", "N", "DOT"], lambda S: ((("x", Array(S.K, BF16)), ("w", Array(S.N, Array(S.K, BF16)))), Array(S.N, BF16)),
+@composite("Gemm", 2, ["K", "N", "DOT"],
+           lambda S: ((("x", Array(checked_k(S, 16), BF16)), ("w", Array(S.N, Array(S.K, BF16)))), Array(S.N, BF16)),
            conformance="exact-model-tested")
 def Gemm(B, S, x, w):
     """`x[K] @ W[N,K]^T -> [N]`, no epilogue (a bias is a separate node)."""
     return B.batch(bind(GemmCoordinate, K=S.K, DOT=S.DOT), x, w, axes=(None, 0))
 
 
-@composite("GemmCoordinateE4m3", 1, ["K", "DOT"], lambda S: ((("x", Array(S.K, E4M3)), ("wrow", Array(S.K, E4M3))), BF16),
+@composite("GemmCoordinateE4m3", 1, ["K", "DOT"],
+           lambda S: ((("x", Array(checked_k(S, 32), E4M3)), ("wrow", Array(S.K, E4M3))), BF16),
            conformance="exact-model-tested")
 def GemmCoordinateE4m3(B, S, x, wrow):
     """One output word of an E4M3 `x @ W^T`: K/32 `DOT` steps in ascending k from a zero accumulator, then `cvt.rn.bf16.f32`."""
@@ -89,7 +105,7 @@ def _block_scaled_coordinate(B, S, x, wrow, sx, sw, ns: int):
 
 
 @composite("GemmCoordinateNvf4", 1, ["K", "DOT"],
-           lambda S: ((("x", Array(S.K, E2M1)), ("wrow", Array(S.K, E2M1)), ("sx", Array(S.K // 16, _SCALE)),
+           lambda S: ((("x", Array(checked_k(S, 64), E2M1)), ("wrow", Array(S.K, E2M1)), ("sx", Array(S.K // 16, _SCALE)),
                        ("sw", Array(S.K // 16, _SCALE))), BF16),
            conformance="exact-model-tested")
 def GemmCoordinateNvf4(B, S, x, wrow, sx, sw):
@@ -99,7 +115,7 @@ def GemmCoordinateNvf4(B, S, x, wrow, sx, sw):
 
 
 @composite("GemmCoordinateMxf4", 1, ["K", "DOT"],
-           lambda S: ((("x", Array(S.K, E2M1)), ("wrow", Array(S.K, E2M1)), ("sx", Array(S.K // 32, _SCALE)),
+           lambda S: ((("x", Array(checked_k(S, 64), E2M1)), ("wrow", Array(S.K, E2M1)), ("sx", Array(S.K // 32, _SCALE)),
                        ("sw", Array(S.K // 32, _SCALE))), BF16),
            conformance="exact-model-tested")
 def GemmCoordinateMxf4(B, S, x, wrow, sx, sw):

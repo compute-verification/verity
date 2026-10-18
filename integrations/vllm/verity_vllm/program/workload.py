@@ -451,6 +451,8 @@ class WorkloadProgram:
         self.shared_group = shared
         self.registered = tuple(f"shared.{requests[0].component.params[j][0]}" for j in shared_idx
                                 if requests[0].component.groups[j] in reg[0])   # the root parameters bound at registration
+        self.theta = tuple(f"shared.{requests[0].component.params[j][0]}" for j in shared_idx
+                           if requests[0].component.groups[j] == shared)        # the model's weights (`Program(theta=)`)
         self.shared = shared_idx                       # request 0's positions = the shared Input batches' order
         self.shared_by_request = tuple(idx)            # per request (== shared_idx everywhere in the uniform/TP1 case)
         self.shared_positions_uniform = uniform
@@ -461,7 +463,8 @@ class WorkloadProgram:
         # tuple per request only when the positions differ (a distinct, self-describing encoding); `lag` [R17-1] is the third static:
         # every workload digest differs per declared value (and from every pre-R17-1 digest: those Programs declared no lag)
         self.fn = WORKLOAD.bind(requests=tuple(r.static() for r in self.requests), shared=shared_idx if uniform else tuple(idx), lag=self.lag)
-        self.program = Program(self.fn, annotations={"schema": SCHEMA, "manifest_digest": manifest_digest}, registered=self.registered)
+        self.program = Program(self.fn, annotations={"schema": SCHEMA, "manifest_digest": manifest_digest}, registered=self.registered,
+                               theta=self.theta)
         self.descriptor = encode_program(self.program)  # encoded ONCE (every component definition is re-encoded: the dominant cost)
         self.digest = program_digest(self.descriptor)
         # sanity: hierarchical — one call node per request, in manifest order, after the Input nodes
