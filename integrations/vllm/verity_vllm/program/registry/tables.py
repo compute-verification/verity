@@ -10,9 +10,9 @@ A table of 2^IB entries of EW u16 words (an entry's low word first) is the regis
     exp2_lut127      2^8 entries, two words each (8 rows): fattn's LUT[t] = rint(127 2^(-t/16)) as a 32-bit word
                      (`int8_exact.exp2_lut127_words`)
 
-    TableRead{IB}x{EW}_v1  (index: Value<8> if IB <= 8, Value<16> if IB <= 16, else Value<32>;
-                            table: Array<2^IB EW / 64, Array<64, Value<16>>>)
-                           -> Value<16 EW>: the entry at the index's low IB bits, its words joined low first; total
+    TableRead{IB}x{EW}_v1  (index: Value<16> if IB <= 16 else Value<32>, table: Array<2^IB EW / 64, Array<64, Value<16>>>)
+                           -> Value<16 EW>: the entry at the index's low IB bits, its words joined low first; total;
+                           the signature the Lean evaluator decodes (`Evaluate.Prims.lazyFamily?`)
 
 `GeluTanhMulBf16_v3` / `GeluTanhMul_v3{I}` are `GeluTanhMulBf16_v1` / `GeluTanhMul_v1{I}` with the activation read from the
 registered `gelu_tanh_bf16` rather than computed by the primitive's evaluator.  `TanhF32Rn_v2` is `TanhF32Rn_v1` with |x| in
@@ -70,7 +70,7 @@ def table_read(index_bits: int, entry_words: int) -> PrimitiveDefinition:
             return sum((get(e + k) & 0xFFFF) << (16 * k) for k in range(_ew))
 
         rows = (ew << ib) // ROW_WORDS
-        p = PrimitiveDefinition(f"TableRead{ib}x{ew}", 1, (("index", Value(8 if ib <= 8 else 16 if ib <= 16 else 32)),
+        p = PrimitiveDefinition(f"TableRead{ib}x{ew}", 1, (("index", Value(16 if ib <= 16 else 32)),
                                                           ("table", Array(rows, Array(ROW_WORDS, Value(WORD_BITS))))),
                                 Value(16 * ew), ev, doc=table_read.__doc__ or "",
                                 conformance="exact by construction: an index into the operand")

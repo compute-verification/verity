@@ -267,14 +267,15 @@ def test_lut_softmax_is_the_served_softmax():
 
 
 def test_the_registered_table_forms_are_v1_reading_exp2_lut127():
-    """`Exp2Lut127_v2` reads LUT[t] from the registered `exp2_lut127` (`TableRead8x2_v1`, a u8 index): every byte gives v1's word.
+    """`Exp2Lut127_v2` reads LUT[t] from the registered `exp2_lut127` (`TableRead8x2_v1` at the byte zero-extended, the 16-bit index
+    the Lean evaluator decodes for every read of at most 16 index bits): every byte gives v1's word.
     `Int8LutSoftmax_v2` and `Int8LutAttentionRow_v2` compute v1's words, and a Program of them holds no table."""
     from verity.ml.circuits import operations as O
     from verity.ml.circuits.program import Program
     from verity_vllm.program.registry import tables as T
 
     table = X.exp2_lut127_words()
-    assert len(table) == X.EXP2_LUT127_TABLE.leaves == 512 and T.table_read(8, 2).params[0][1].w == 8
+    assert len(table) == X.EXP2_LUT127_TABLE.leaves == 512 and T.table_read(8, 2).params[0][1].w == 16
     assert [evaluate(X.Exp2Lut127V2, t, table) for t in range(256)] == [(X.Exp2Lut127.evaluate(t),) for t in range(256)]
     g = torch.Generator().manual_seed(8)
     sc = [int(v) & 0xFFFFFFFF for v in torch.randint(-20000, 20000, (37,), generator=g).tolist()]
