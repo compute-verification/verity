@@ -1,6 +1,7 @@
 import Proofs.Accounting.Compose.ServiceCovers
 import Models.Accounting.Guarantees.Compose
 import Proofs.Accounting.TS
+import Proofs.Accounting.Compose.ServiceBudget
 import Proofs.Pouw.RelativeSecurity
 
 /-!
@@ -219,7 +220,7 @@ theorem SplitRateMerged : Accounting.Guarantees.Compose.SplitRateMerged := by
   sorry
 
 theorem ServiceBudget : Accounting.Guarantees.Compose.ServiceBudget := by
-  sorry
+  exact Budget.serviceBudget
 
 theorem ServiceCovers : Accounting.Guarantees.Compose.ServiceCovers := by
   exact CoversProof.serviceCovers
