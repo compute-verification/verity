@@ -218,5 +218,5 @@ def test_the_headers_coins_on_the_host(tmp_path):
 def test_the_design_prices_ffill():
     f, = design("dither-2s-licpw-redux-l32", device("sm_90")).filler
     assert f.per_word == F.PER_WORD == 9 / 128 and f.mix == F.MIX and f.route == "lanes" and f.p == 0.0
-    assert f.luck.startswith("Accounting.Guarantees.FillerLuck.PinnedFillBlocksDeficit:")
+    assert f.luck.startswith("Accounting.Guarantees.FillerLuck.PinnedFillBlocksDeficit,")
     assert "ffill" in f.luck and "F32FmaV2" in f.luck
