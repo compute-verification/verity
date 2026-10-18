@@ -159,11 +159,14 @@ import Proofs.Flock.Claims.ZK.Layout
   `stream_leak_deferred`), with no term for the masked checks, and at a
   statement of a class `A` with `TapeOK` on `A` only (`Flock.zk_server_blind_on`), at the deployed coin layer with the
   tables' tape read with fibers of one size on `A` (`Flock.zk_server_blind_deployed`).
-* `Release`: the deployed release (`LeanRelease`), the ZK server whose frame is the compiled `Flock.Firewall.Frame.round`
-  (`LeanRelease.refMsg_toSrv`, by definition), stopping a session only at its `Finish` with its scheduled rounds in a
-  failed device's place (`LeanRelease.fillOf`). Its `RefD` is D8 (a)'s `FirewallComputes` plus the item-stream
-  refinement `LeanRelease.ItemsRefine` (`LeanRelease.refD`), so **`Flock.zk_server_lean`** is `ZkServer.zk_deferred` at
-  it, at any worker: one bit a session.
+* `Release`: the deployed release (`LeanRelease`), the ZK server whose frame is the compiled Lean frame
+  (`Masker.answer`, then `Flock.Firewall.Frame.round`: `LeanRelease.release`, `refMsg_toSrv` by definition) at the
+  frame's own configuration from its draws on the server's tape (`LeanRelease.cfg`, `Cfg.ofDraws`: `cfg_pads`,
+  `cfg_root`). Its coin stops are the frame's. It stops a session only at its `Finish`, with its scheduled rounds in a failed device's place
+  (`LeanRelease.fillOf`), and every way a worker fails is a failed round (`LeanRelease.pass_of_none`, `nextD_of_fail`).
+  Its `RefD` is D8 (a)'s `FirewallComputes` plus the item-stream refinement `LeanRelease.ItemsRefine` (`Reports`,
+  `LiveRefine` at the worker's passed rounds, `FillRefine` at the scheduled rounds; `LeanRelease.refD`), so
+  **`Flock.zk_server_lean`** is `ZkServer.zk_deferred` at it, at any worker: one bit a session.
 * `NonVacuous`: the claim is not vacuous. A prover that makes no calls has `Fork.Pr = 0`, so the simulator that hashes a
   collision and outputs the empty transcript fails `ZKmalR` at every `ε_zk < 1` and every `γ` (`not_zkmalR_collSim`),
   a prover that sends its witness has no simulator at `ε_zk < 1/2` (`not_zkmalR_leak`), and both fail `ZKAt` at
