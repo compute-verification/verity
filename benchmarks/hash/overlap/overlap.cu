@@ -108,6 +108,8 @@ struct SrvJob {
 struct SrvCtl {
   u32 next;        // the queue's head
   u32 done[64];    // chunks finished, per job
+  u32 cta[1024];   // a CTA's current chunk, and whether it folds its job's top (no shared memory: the server must fit in
+  u32 last[1024];  // the reserved KiB a CTA leaves beside a GEMM's CTA)
 };
 DEV void row4k_cg(const uint8_t* __restrict__ p, u64* x) {
   cpy8(x, C.mid_P);
@@ -131,25 +133,29 @@ DEV void srv_node(int dom, int d, u64 i, u64* const* lv) {   // level d+1's node
   node(dom, d, i, L, R, o);
   st8(lv[d + 1] + 8 * i, o);
 }
-__global__ void __launch_bounds__(SRV_T, 4) server(const SrvJob* __restrict__ jobs, int njobs, u32 total, const u32* ready, u32 epoch,
-                                                   SrvCtl* ctl) {
-  __shared__ u32 sc;
-  __shared__ int sj, last;
+template <int MINB>
+__global__ void __launch_bounds__(SRV_T, MINB) server(const SrvJob* __restrict__ jobs, int njobs, u32 total, const u32* ready, u32 epoch,
+                                                      SrvCtl* ctl) {
+  volatile u32* my = ctl->cta + blockIdx.x;
+  volatile u32* myl = ctl->last + blockIdx.x;
   for (;;) {
     if (threadIdx.x == 0) {
       const u32 c = atomicAdd(&ctl->next, 1u);
-      int j = 0;
-      while (j + 1 < njobs && c >= jobs[j + 1].chunk0) ++j;
-      sc = c; sj = j;
+      *my = c;
       if (c < total) {
+        int j = 0;
+        while (j + 1 < njobs && c >= jobs[j + 1].chunk0) ++j;
         const volatile u32* f = ready + j;
         while (*f < epoch) __nanosleep(200);
         __threadfence();
       }
     }
     __syncthreads();
-    const u32 c = sc;
+    const u32 c = *my;
+    __syncthreads();
     if (c >= total) return;
+    int sj = 0;
+    while (sj + 1 < njobs && c >= jobs[sj + 1].chunk0) ++sj;
     const SrvJob& J = jobs[sj];
     const u64 base = (u64)(c - J.chunk0) * SRV_T;
     const u64 pos = base + threadIdx.x;
@@ -166,9 +172,11 @@ __global__ void __launch_bounds__(SRV_T, 4) server(const SrvJob* __restrict__ jo
     }
     if (threadIdx.x == 0) {
       __threadfence();
-      last = atomicAdd(&ctl->done[sj], 1u) == J.chunks - 1;
+      *myl = atomicAdd(&ctl->done[sj], 1u) == J.chunks - 1;
       __threadfence();
     }
+    __syncthreads();
+    const bool last = *myl;
     __syncthreads();
     if (last) {
       for (int d = SRV_LG; d < J.depth; ++d) {
@@ -462,12 +470,22 @@ struct World {
   SrvCtl* ctl = nullptr;
   u32* ready = nullptr;
   u32 epoch = 0, total = 0;
-  int sms = 0, srv_regs = 0;
+  int sms = 0;
+  // the server's variants: at most 128 registers a thread (4 CTAs an SM's worth), or 80 (6)
+  static constexpr int SRV_MINB[2] = {4, 6};
+  int srv_regs[2] = {0, 0};
   void srv_init(int L) {
     CK(cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, 0));
+    if (sms > 1024) { fprintf(stderr, "server: too many SMs\n"); exit(6); }
     cudaFuncAttributes fa;
-    CK(cudaFuncGetAttributes(&fa, server));
-    srv_regs = fa.numRegs;
+    CK(cudaFuncGetAttributes(&fa, server<4>));
+    srv_regs[0] = fa.numRegs;
+    printf("{\"kernel\": \"srv4\", \"regs\": %d, \"smem\": %zu, \"local\": %zu, \"max_threads\": %d}\n", fa.numRegs, fa.sharedSizeBytes,
+           fa.localSizeBytes, fa.maxThreadsPerBlock);
+    CK(cudaFuncGetAttributes(&fa, server<6>));
+    srv_regs[1] = fa.numRegs;
+    printf("{\"kernel\": \"srv6\", \"regs\": %d, \"smem\": %zu, \"local\": %zu, \"max_threads\": %d}\n", fa.numRegs, fa.sharedSizeBytes,
+           fa.localSizeBytes, fa.maxThreadsPerBlock);
     jobs.clear();
     total = 0;
     for (int l = 0; l < L; ++l)
@@ -497,20 +515,21 @@ struct World {
     return -1;
   }
   // ep 0: every job is ready at once (the server alone)
-  void srv_launch(u32 ep, cudaStream_t st) {
+  void srv_launch(int var, u32 ep, cudaStream_t st) {
     CK(cudaMemsetAsync(ctl, 0, sizeof(SrvCtl), st));
-    server<<<sms, SRV_T, 0, st>>>(djobs, (int)jobs.size(), total, ready, ep, ctl);
+    if (var == 0) server<4><<<sms, SRV_T, 0, st>>>(djobs, (int)jobs.size(), total, ready, ep, ctl);
+    else server<6><<<sms, SRV_T, 0, st>>>(djobs, (int)jobs.size(), total, ready, ep, ctl);
   }
   void sig(int j, u32 ep) { srv_signal<<<1, 1, 0, A>>>(ready + j, ep); }
   // the server fits on every SM beside a CTA of this GEMM (else the step would wait on it, and it on the step)
-  bool srv_fits(const ExtGemm& g) const {
+  bool srv_fits(const ExtGemm& g, int var) const {
     int regs_sm, smem_sm, rsv;
     CK(cudaDeviceGetAttribute(&regs_sm, cudaDevAttrMaxRegistersPerMultiprocessor, 0));
     CK(cudaDeviceGetAttribute(&smem_sm, cudaDevAttrMaxSharedMemoryPerMultiprocessor, 0));
     CK(cudaDeviceGetAttribute(&rsv, cudaDevAttrReservedSharedMemoryPerBlock, 0));
     auto warp_regs = [](int r) { return ((r * 32 + 255) / 256) * 256; };
-    const int need_regs = warp_regs(g.regs) * ((g.threads + 31) / 32) + warp_regs(srv_regs) * (SRV_T / 32);
-    const int need_smem = g.smem + rsv + 128 + rsv;
+    const int need_regs = warp_regs(g.regs) * ((g.threads + 31) / 32) + warp_regs(srv_regs[var]) * (SRV_T / 32);
+    const int need_smem = g.smem + rsv + rsv;
     return g.threads > 0 && need_regs <= regs_sm && need_smem <= smem_sm && g.threads + SRV_T <= 2048;
   }
   // the committed tensor a shape's unit outputs, from its GEMM's output (gate_up: silu(g) u; else the output itself)
@@ -674,7 +693,7 @@ static int dump(const std::string& pdir, const std::string& outd) {
   srv_poison(w);
   w.nev = 0;
   w.join_all();
-  w.srv_launch(0, w.B);
+  w.srv_launch(0, 0, w.B);
   w.join_all();
   CK(cudaStreamSynchronize(w.A));
   World::sync("server");
@@ -866,17 +885,23 @@ static int bench(const std::string& pdir, int reps, bool nsys) {
     }
   }
   w.srv_init(L);
-  std::vector<std::string> sg;   // the GEMMs the server fits beside on every SM
-  for (const auto& g : gnames) {
-    if (g == "lt") continue;
-    bool fits = true;
-    for (const auto& s : SHAPES)
-      for (const auto& e : w.ext[s.name]) if (e.name == g) fits &= w.srv_fits(e);
-    printf("{\"server_fits\": \"%s\", \"fits\": %s, \"server_regs\": %d}\n", g.c_str(), fits ? "true" : "false", w.srv_regs);
-    if (fits) sg.push_back(g);
+  std::vector<std::pair<std::string, std::string>> sg;   // (server variant, GEMM): the server fits beside the GEMM on every SM
+  for (int sv = 0; sv < 2; ++sv) {
+    const std::string sn = "srv" + std::to_string(World::SRV_MINB[sv]);
+    chains.push_back({"chain:" + sn, "", sn, 7});
+    for (const auto& g : gnames) {
+      if (g == "lt") continue;
+      bool fits = true;
+      for (const auto& s : SHAPES)
+        for (const auto& e : w.ext[s.name]) if (e.name == g) fits &= w.srv_fits(e, sv);
+      printf("{\"server_fits\": \"%s\", \"server\": \"%s\", \"fits\": %s, \"server_regs\": %d}\n", g.c_str(), sn.c_str(),
+             fits ? "true" : "false", w.srv_regs[sv]);
+      if (fits) {
+        sg.push_back({sn, g});
+        chains.push_back({"chain:" + sn + ":" + g, g, sn, 6});
+      }
+    }
   }
-  chains.push_back({"chain:srv", "", "srv", 7});
-  for (const auto& g : sg) chains.push_back({"chain:srv:" + g, g, "srv", 6});
   std::map<std::string, std::vector<GemmArm>> gas;
   for (const auto& s : SHAPES) gas[s.name] = gemm_arms(w, s);
   auto garm = [&](const std::string& shape, const std::string& g) -> const GemmArm& {
@@ -897,7 +922,7 @@ static int bench(const std::string& pdir, int reps, bool nsys) {
     u32 ep = 0;
     if (c.mode >= 6) {
       ep = c.mode == 6 ? ++w.epoch : 0;
-      w.srv_launch(ep, w.B);
+      w.srv_launch(c.var == "srv4" ? 0 : 1, ep, w.B);
     }
     int k = 0;   // the chain's call index
     for (int l = 0; l < L; ++l) {
@@ -973,17 +998,19 @@ static int bench(const std::string& pdir, int reps, bool nsys) {
     }
   }
   // the server: against cuBLASLt alone plus the better separate pass (hN of the best variant, or the server alone)
-  if (cms.count("chain:srv")) {
-    double hb = median(cms["chain:srv"]);
-    std::string hbn = "srv";
+  {
+    double hb = 1e30;
+    std::string hbn;
+    for (const char* sn : {"srv4", "srv6"})
+      if (cms.count(std::string("chain:") + sn) && median(cms[std::string("chain:") + sn]) < hb) { hb = median(cms[std::string("chain:") + sn]); hbn = sn; }
     for (const auto& v : vs) if (median(cms["chain:hN:" + v.name]) < hb) { hb = median(cms["chain:hN:" + v.name]); hbn = "hN:" + v.name; }
-    for (const auto& g : sg) {
-      if (!cms.count("chain:srv:" + g)) continue;
-      const double cg = median(cms["chain:" + g]), sa = median(cms["chain:srv"]), sb = median(cms["chain:srv:" + g]);
-      printf("{\"srv_summary\": \"%s\", \"lt_ms\": %.5f, \"gemm_ms\": %.5f, \"srv_alone_ms\": %.5f, \"sep_ms\": %.5f, \"sep\": \"%s\", "
+    for (const auto& [sn, g] : sg) {
+      if (!cms.count("chain:" + sn + ":" + g) || !cms.count("chain:" + sn)) continue;
+      const double cg = median(cms["chain:" + g]), sa = median(cms["chain:" + sn]), sb = median(cms["chain:" + sn + ":" + g]);
+      printf("{\"srv_summary\": \"%s\", \"server\": \"%s\", \"lt_ms\": %.5f, \"gemm_ms\": %.5f, \"srv_alone_ms\": %.5f, \"sep_ms\": %.5f, \"sep\": \"%s\", "
              "\"par_ms\": %.5f, \"hidden_vs_own_gemm\": %.4f, \"hidden_vs_lt\": %.4f, \"net_vs_lt_plus_hash\": %.4f, \"exposed_hash_ms\": %.5f, "
              "\"bytes_per_layer\": %llu}\n",
-             g.c_str(), clt, cg, sa, hb, hbn.c_str(), sb, (cg + sa - sb) / sa, (clt + hb - sb) / hb, sb / (clt + hb), sb - clt,
+             g.c_str(), sn.c_str(), clt, cg, sa, hb, hbn.c_str(), sb, (cg + sa - sb) / sa, (clt + hb - sb) / hb, sb / (clt + hb), sb - clt,
              (unsigned long long)(M * (QKV + 9216 + H + I + H) * 2ull));
     }
   }

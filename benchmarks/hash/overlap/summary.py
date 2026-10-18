@@ -66,7 +66,7 @@ def main(o: str) -> int:
                   f"{100 * r['hidden_vs_lt']:.1f}% | {r['net_vs_lt_plus_hash']:.3f} | {gbps:,.0f} |")
     for r in b:
         if "server_fits" in r:
-            print(f"server ({r['server_regs']} regs) fits beside {r['server_fits']}: {r['fits']}")
+            print(f"server {r.get('server', 'srv')} ({r['server_regs']} regs) fits beside {r['server_fits']}: {r['fits']}")
         if "server_gate" in r:
             print(f"server gate {r['server_gate']}: {r['jobs']} jobs, {r['bad_words']} bad words, ok {r['ok']}")
     sv = [r for r in b if "srv_summary" in r]
@@ -78,7 +78,7 @@ def main(o: str) -> int:
         for r in sv:
             exp = r["exposed_hash_ms"]
             gbps = r["bytes_per_layer"] / (exp * 1e-3) / 1e9 if exp > 0 else float("inf")
-            print(f"| {r['srv_summary']} | {r['lt_ms']:.4f} | {r['gemm_ms']:.4f} | {r['srv_alone_ms']:.4f} | {r['sep_ms']:.4f} ({r['sep']}) | "
+            print(f"| {r['srv_summary']} ({r.get('server', 'srv')}) | {r['lt_ms']:.4f} | {r['gemm_ms']:.4f} | {r['srv_alone_ms']:.4f} | {r['sep_ms']:.4f} ({r['sep']}) | "
                   f"{r['par_ms']:.4f} | {100 * r['hidden_vs_own_gemm']:.1f}% | {100 * r['hidden_vs_lt']:.1f}% | "
                   f"{r['net_vs_lt_plus_hash']:.3f} | {gbps:,.0f} |")
     ng = [r for r in b if "nongemm" in r]
