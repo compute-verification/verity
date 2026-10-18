@@ -76,16 +76,20 @@ def pages(first: int, count: int) -> list[bytes]:
 class Run:
     """One session over `store`, the verifier's side and the prover's in step, every receipt drawn by default.  The
     prover computes its passes from `prover_store` (`store` by default) and commits `store`'s appends, each pass's
-    seed binding every append it sent before the pass's root (`head`)."""
+    seed binding every append it sent before the pass's root (`head`).  With a `registry`, the session is its next
+    over the store's registration."""
 
     def __init__(self, store: audit.Store, prover_store: audit.Store | None = None, windows: int = 2,
-                 samples: int = 10**6, lifetime: int = audit.LIFETIME) -> None:
+                 samples: int = 10**6, lifetime: int = audit.LIFETIME, registry: audit.Registry | None = None) -> None:
         reg = store.registration
         self.p = Params(blocks=reg.blocks, deadline_ns=10**6, windows=windows, samples=samples, delta=1e-6,
                         window_ns=10, codec=reg.codec, lifetime=lifetime)
         self.clock = Clock()
-        self.s = Session(self.p, reg, None, coins.Challenger(reg.digest, 0, self.p.coins, entropy=Entropy(b"coins")),
-                         not_before_ns=0, clock=self.clock)
+        if registry is None:
+            self.s = Session(self.p, reg, None, coins.Challenger(reg.digest, 0, self.p.coins, entropy=Entropy(b"coins")),
+                             not_before_ns=0, clock=self.clock)
+        else:
+            self.s = registry.session(self.p, reg, None, not_before_ns=0, clock=self.clock, entropy=Entropy(b"coins"))
         self.store = store
         self.prover = audit.Prover(prover_store or store, None, self.s.commitment, entropy=Entropy(b"receipt salts"))
         self.challenges = [self.s.start()]
