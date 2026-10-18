@@ -72,6 +72,11 @@
       "usergroup": "S0C5Q6KJZTQ",
       "linear": "PRF",
       "owns": [
+        "fixtures/typed-obligation-v0/",
+        "fixtures/proof-format-v3/",
+        "Security/Proofs/Flock/",
+        "Security/Proofs/Core/",
+        "Security/Definitions/Core/",
         "verity/",
         "verity/core/protocols/sampled_proofs/",
         "archive/",
@@ -84,12 +89,7 @@
         "benchmarks/private_circuit/",
         "benchmarks/proof_throughput/",
         "benchmarks/sampling_plan/",
-        "integrations/vllm/verity_vllm/protocol_options/sampled_proofs.py",
-        "fixtures/typed-obligation-v0/",
-        "fixtures/proof-format-v3/",
-        "Security/Proofs/Flock/",
-        "Security/Proofs/Core/",
-        "Security/Definitions/Core/"
+        "integrations/vllm/verity_vllm/protocol_options/sampled_proofs.py"
       ],
       "branch_suffixes": [
         "95d4",
