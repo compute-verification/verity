@@ -109,6 +109,10 @@ Only a repeat whose fix needs money, keys or a claim becomes a question for Dani
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-17 (6:18 PM PDT, to memory accounting): no private or trapdoor encoding for KV, such as a trusted device
+  computing Rabin–Williams roots of each appended block, because it costs too much. The weights alone keep that
+  exception. Credited dynamic memory rests on the public codec, and the stacking bound on the named conjecture
+  `EncodeChainHardness`, which he approved as a premise at 6:08 PM PDT, with claims resting on it listed as conditional.
 - 2026-10-17 (12:32–12:43 AM PDT, in memory accounting's stacking campaign): the prover controls the audited circuit's
   inputs as well as the circuit (precommitted, its architecture secret) and knows every coin as soon as it is issued, so
   no defense may assume the circuit can't learn a coin: the prover passes it in, disguised as a prompt. Verifier coins

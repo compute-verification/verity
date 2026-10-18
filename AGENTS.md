@@ -147,6 +147,11 @@ pytest-xdist workers), cached by input. The repository's own suite (`tests/`) ho
 testing skill, `.agents/skills/testing/SKILL.md`, says how to run them, what a suite may read (`[tool.verity.tests]
 inputs`), and the rules for slow tests, fixtures and dummy credentials.
 
+Heavy work runs on a node, never on an agent VM (16 GB, shared by every agent on it): circuit-check (24 GB a
+process), a Lean build of `Security/Proofs` (ArkLib), and the circuit_check and vLLM suites. Run them with `research run
+--on vy-nebius-1 --project verity --source . --cwd source -- …` (the writing-runs skill), or through the quick tier
+(`research queue ready N --on vy-nebius-1`).
+
 No test depends on wall-clock time: no sleeps, clock readings or timeouts. Wait on the event itself or inject the clock.
 `tests/test_no_wall_clock.py` enforces it, and its `ALLOWED` list, one reason per entry, holds the exceptions.
 
@@ -343,6 +348,11 @@ Coordinators are launched, handed over and archived from Daniel's laptop with `i
 - **Keep chatter low** (contract §3a). Every message, and every background shell you start, reaches the coordinator and
   the human. So run long jobs detached on the pod, write one-line checkpoints, and message someone only to unblock them
   or to change their plan.
+- **Reach a running subagent through its next shell command:** `python3 tools/agent-guard/inbox.py send AGENT_ID --text
+  '…'`, where AGENT_ID is the `bc-…` id its Task call returned. A subagent never rereads a file mid-run, so don't put
+  ownership changes or new requirements in a shared file and hope. The shell hook refuses the agent's next command once,
+  with your message as the refusal's text, and the agent re-runs it. Agents on other VMs: through their coordinator on
+  Slack.
 - **Check what's being tried.** Before starting work another agent could plausibly be doing, read the notes'
   `kb/onboarding.md`, check `research notes approaches`, and claim yours at your first checkpoint
   (`research notes claim`).
