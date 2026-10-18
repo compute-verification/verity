@@ -1259,6 +1259,89 @@ written `+0`. The `pc4` table registers the high half itself (`rows4`), and a ro
 `RowAdmit4` refuses the row, as the circuit's flag (`β ≤ F32_MAX`) does. `pc8Sem`'s forming value is `D_t`'s,
 and its `e4m3` is the code wherever `F32ToE4m3Sat_v1` agrees with `e4m3Word` and `D_t` is not NaN.
 
+## `compile`: PoUW as one pass over the served Program (`circuit/compile.py`)
+
+Decision 102's shape: the served Program is the model's own, and PoUW is one compile pass over it. `compile(program, scheme,
+groups)` returns a `Compiled` (the compiled `Program`, the served one, the scheme, its `Site`s and `Unit`s, and each site's
+seed group); `rebuild(served, scheme, descriptor, groups)` is the verifier's side, which compiles itself and refuses any other
+descriptor (`traced_as` at Program level).
+
+**Find.** `MATMULS` registers each family's A and B ports, (m, k, n) per Call and the arm it is registered at:
+
+~~~text
+family                  A     B      per Call     arm
+S8Dot_v1, S8Dot_v2      a     b      1 × K × 1    the plain arm: NOISE "none", T0 "zero", COMMIT "final", no tail, LIMBS "none"
+S8Matmul_v1             a     b      1 × K × N    the same; each of b's N rows is a dot
+GemmAccumulatorS8_v1    x     wrow   1 × K × 1    any (#2365's W8A8 accumulator, ScaledMmS8Coordinate_v1's node 0)
+GemmAccumulatorS8_v2    x     wrow   1 × K × 1    any (on bits)
+DotBf16_v1 .. v3        x     w      1 × K × 1    any (bf16 linears, and attention's QKᵀ: decision 109)
+~~~
+
+A Call nested in a Definition is found through it when its operands are that Definition's parameters, at any depth; a
+Program whose root is the matmul is served as one Call of it (`PouwCall_v1{FN}`). Attention is credited like every A·B
+(decision 109), but P·V as `AttnBlock_v3` serves it, tensor-core steps on a P the block computes, is no Call of a registered
+family, so it is refused (`uncovered`) until it is one.
+
+**Tile and replace.** A site is a root node's dots of one kind, and its distinct A rows and B rows, first use first, are its
+operands. Its A rows go in blocks of the scheme's r, each block's B rows in chunks of c (r × c is a scheme parameter, decision
+106), and a tile is the site's dots in one block and chunk. Each tile is one self-contained unit of its kind
+(`Scheme.units`: per kind a factory, which carries that kind's noise form; `Scheme.plug` sets one, as ATTN-NOISE will for
+P·V): `(a: its A rows, b: its B rows, salt, position, roots) -> {z, receipt}`. z, its cells' exact products, feeds the Call's
+consumers in the Call's place, so served values don't change; the receipt is a sink only the Program's outputs read. The units
+sit at the root, one batch per site and tile shape, ahead of the node that read them; that node's Definition F becomes
+`PouwRest_v1{FN=F}`, F without its dots, reading their z. The compiled Program is `PouwCompiled_v1{SERVED, SCHEME, GROUPS}`:
+the served parameters, `pouw.salt`, `pouw.positions` and `pouw.roots` to `{served: the served return, receipts}`.
+
+**Seeds and noise** (decision 105, `circuit/seeds.py`). The salt is the Program's one coin (`In(kind="coin")`). A unit
+derives its seed in its own proof, and its noise from the seed:
+
+~~~text
+seed_j  = SHA-512(u64(j) ‖ (SEED_TAG ‖ salt ‖ root(A_j) ‖ root(B_j)) ⊕ u64(j)*)        PouwSeed
+block_t = SHA-512(NOISE_TAG ‖ seed_j ‖ u64(t))                                          PouwNoiseBlock
+~~~
+
+j is the unit's position and (root(A_j), root(B_j)) its seed group's roots. ``⊕ u64(j)*`` XORs every message word after the
+first with the position, an injective encoding that makes every gate of a seed read its own position, so no two units compute
+a common value. Positions (`pouw.positions`, unit u at slot u, `Compiled.positions(base)`) and roots (`pouw.roots`) are inputs
+bound before the draw; a verifier that runs the Program more than once under one salt gives each run its own range of
+positions, so each (salt, position) seeds one unit.
+
+**Seed groups** (decision 112). `groups` names the calls committed together: sites of one key share a slot of `pouw.roots`
+(all heads of a layer's QKᵀ, a decode step's batch), each unit still at its own position. One commitment fixes the noise of
+every unit it covers, so the grinding premium is a constant number of units per group (`Compiled.cover`), and the scheme's
+`cover` is the fewest a group may cover, GRIND/BUDGET's to set. By default each site is a group.
+
+**Check** (`CompileError.code`):
+
+- `coin-read`: the served Program reads a coin (a coin parameter, a seed of its own, or it is already compiled);
+- `edited-arm`, `arm`: a Call isn't the registered arm; `scan`, `operand-inside`: a matmul inside a scan, or on an operand
+  computed inside its Definition;
+- `uncovered`: a registered Call or a matmul step left outside every unit;
+- `cover`: a seed group covers fewer units than the scheme's `cover`;
+- `salt-flow`: the salt reaches anything but a unit's seed;
+- `position`: a unit's seed reads a position or roots other than its own parameters, or at the root a unit batch reads slots
+  other than its own: no unit chooses its position, and no two share one;
+- `seed`: a unit derives no seed, or more than one; `noise-in-z`: its z reads a node the seed reaches;
+- `separator`: a unit read past its z; `width`: a node outside the units that commits more than the width rule allows;
+- `name`, `scheme`: a parameter already named `pouw.*`, or a scheme or kind that isn't registered.
+
+`Compiled.check_gates` adds the gate-level cut (no value computed in two units), the separator and the width rule by
+reachability, for a Program small enough to flatten. COIN-RULES (`ports.py`'s `E_COIN_FLOW`) lets a coin reach only a noise
+primitive's or a receipt fold's coin port, so it refuses the salt's flow into the seed's gates until it gives the seed a role
+(the seed's salt port the coin's terminal, and many seeds reading one salt at distinct positions).
+
+**Schemes.** The pass's own `compile.SCHEMES`, separate from `circuit.SCHEMES`; `BUILTIN` loads this package's at the first
+name not registered.
+
+- `eps1-sm120-h1fx1` (`circuit/h1tile.py`, where `circuit/segment.py` is on the tree): sm_120's H1 + fx1 on a warp's 32 × 32
+  tile, for the s8 kinds on bits, under CP-W (decision 104, #2438's `PouwWarpCheck_v2` body). Each lane folds H1's sets over
+  X = A + b and W' = B + c + U with fx1 from its keys, and receipt words 2 s and 2 s + 1 are the warp's XOR of y and of z
+  after set s: 2 (KS + m) words, 8,320 bits at K = 4096. Its noise is counter mode (`h1tile.Layout`): each row's, column's
+  and lane's from blocks of its own.
+
+Not here yet: P·V as a registered Call, and a staged split for a dot whose operands its holder computes; a padded tile for a
+site that fills none (decode's few tokens); the vLLM integration serving the compiled Program.
+
 ## Not here yet
 
 - The fast implementations: the RTX 4090 kernels and the vLLM adapter (`integrations/vllm/verity_vllm/protocol_options/pouw.py`)

@@ -204,6 +204,27 @@ def test_sm89_census_is_well_formed():
     assert {r for v in c.values() for r in v} == set(rs)
 
 
+@pytest.mark.parametrize("d", sorted(p for p in DEVICES.glob("sm_*") if (p / "model.toml").is_file()),
+                         ids=lambda p: p.name)
+def test_datasheet_vector(d):
+    """A device's DS-NN reads its datasheet rows alone, every kind on DS_issue at one SMSP-cycle, and no data-sheet line
+    prices a kind above what its measured rate alone does by more than decision 76's 2% (a peak the chip beats is a wrong
+    peak, a wrong form's MACs or a wrong pipe)."""
+    rs, m = rows(d), model(d)
+    v = vector(f"DS-{d.name[3:]}", d)
+    assert {r for r in rs if rs[r].status == "datasheet"} == set(v.rows) and "DS_issue" in v.rows
+    c = census(m, m.epochs[-1], d)
+    assert all(row["DS_issue"] == pytest.approx(m.cycle_u) for row in c.values())
+    with open(d / "census.csv", newline="") as f:
+        alone = {}
+        for x in csv.DictReader(f):
+            if x["rate"]:
+                alone[x["kind"]] = max(alone.get(x["kind"], 0.0), u_of(m.cycle_u, x["rate"], "", "", ""))
+    over = {(k, r): round(u / alone[k], 4) for k, row in c.items() for r, u in row.items()
+            if r in v.rows and k in alone and u > 1.02 * alone[k]}
+    assert not over, f"data-sheet lines above the kind's measured rate alone: {over}"
+
+
 def test_violated_rows_close():
     """VF3m-16 closes every joint row EPS1's frontiers put a point past (r20261017-034143-b1de, r20261017-035229-7c35):
     R2-R4, the KIMAD, KHFMA2 and KSHFL vertices, and the ASSUMED SHFL; KALU holds and stays."""
