@@ -48,6 +48,17 @@ import Proofs.Flock.Claims.Complete.Zk.RankDual
 import Proofs.Flock.Claims.Complete.Zk.RankPrimal
 import Proofs.Flock.Claims.Complete.Zk.RankDeployed
 import Proofs.Flock.Claims.Complete.Zk.Complete
+import Proofs.Flock.Claims.Complete.Zk.Level0Pad
+import Proofs.Flock.Claims.Complete.Zk.Level0Run
+import Proofs.Flock.Claims.Complete.Zk.Level0Lanes
+import Proofs.Flock.Claims.Complete.Zk.Level0Shape
+import Proofs.Flock.Claims.Complete.Zk.Level0Premises
+import Proofs.Flock.Claims.Complete.Zk.Level0Model
+import Proofs.Flock.Claims.Complete.Zk.Level0Honest
+import Proofs.Flock.Claims.Complete.Zk.Level0HonestRun
+import Proofs.Flock.Claims.Complete.Zk.Level0Opens
+import Proofs.Flock.Claims.Complete.Zk.Level0Verifier
+import Proofs.Flock.Claims.Complete.Zk.Level0Complete
 
 /-! Flock's completeness at the deployed masked (`--zk`) verifier at one table (`ZkTables` lifts it to any number, at
 the masked record's prover `ZkTables.honestP`): the honest masked prover (`Honest`: `honestPZk`, on
@@ -102,4 +113,15 @@ side, the deficient coins summed over the killing functionals' supports (`card_d
 side, the spans' sizes step by step (`sum_env_le`, `chain`); `RankDeployed` `DeployedRankBound` from the two
 (`deployedRankBound`), so `MaskRankBound` from `SmallSlotBound` alone (`maskRankBound_of_small`); `Complete`
 assembles them into `complete_zk`, from those premises and the goals not yet proved, and `complete_zk_relation` at
-the deployed relation. -/
+the deployed relation.
+`Level0Pad` is level 0's masked query identity: a row's padded lanes combine to the blinded table's, the padding
+cancelling (`row_comb`, `consE0_honestZk`); `Level0Run` the masked Ligerito prover returning where its pair's coins are
+independent (`ligeritoPZk_ret`); `Level0Lanes` its lane phase in closed form (`ligeritoPZk_lanes`); `Level0Shape` its
+proof's lengths (`ligeritoPZk_shape`); `Level0Premises` the premises of `ZkTables.Level0` proved (`proverRuns`,
+`proverShape`, `lanes`); `Level0Model` the masked verifier's Ligerito returning on rounds carrying its closed-form
+model, given its openings and final identity at the model's values (`ligeritoWithZ_of`); `Level0Honest` the honest
+masked prover's Ligerito against that model (`mid_lv0Z`), and `Level0HonestRun` its whole walk: it ends at the model's
+transcript and meets the model's final identity (`honestZ`); `Level0Opens` its openings passing the masked Merkle
+checks, level 0's over rows `EXTRA_LANES` wider (`ligeritoPZk_opens`, `merkleOkZ_of_opens`); `Level0Verifier` the last
+premise, the verifier returning the prover's record at its transcript (`verifier`); `Level0Complete` the four in
+`complete_jsonT_of_level0`, leaving the JSON specification and `MaskRankBound` (`complete_jsonT_closed`). -/
