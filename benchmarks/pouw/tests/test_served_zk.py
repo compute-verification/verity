@@ -896,3 +896,57 @@ def test_a_staged_unit_opens_under_the_window_root(served, tmp_path):
         op = json.loads((out / "opening.json").read_text())
         assert SC.check(params, rec, draw, t, (out / "pub.bin").read_bytes(), op) is None, t
     assert json.loads((tmp_path / "u25" / "stage.json").read_text())["kind"] == "filler"
+
+
+def _recorded(words, root: Path, units=(1, 13)) -> Path:
+    """A committed window laid out as a served_zk run records it (`job.sh`): the request's advice, params and
+    registration, the draw, and each drawn unit's and the filler unit's opening."""
+    params, public, advice, priv = _window(words)
+    rec = _register(params, public)
+    out = root / "r-window" / "out"
+    (out / "request").mkdir(parents=True)
+    for name, x in (("advice", advice), ("params", params), ("registration", rec)):
+        (out / "request" / f"{name}.json").write_text(json.dumps(x))
+    filler = next(e.lo for e in SC.entries_of(advice) if e.kind == "filler")
+    (out / "draw.json").write_text(json.dumps({"units": list(units)}))
+    (out / "summary.json").write_text(json.dumps({"units": list(units), "filler_unit": filler}))
+    for t, d in [*((t, f"u{t}") for t in units), (filler, "filler")]:
+        (out / d).mkdir()
+        (out / d / "opening.json").write_text(json.dumps(SC.opening(advice, priv, params, t)))
+    return root / "r-window"
+
+
+def test_replay_window_holds_a_recorded_window_and_refuses_its_breaks(served, tmp_path):
+    """`replay_window` on a recorded window of entry rows: its statement, rows, records, root, draws and registered items
+    are the recorded values and every negative control is refused; a tampered salt fails the window's root."""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "served_zk"))
+    import replay_window as RW
+    *_, words = served
+    run = _recorded(words, tmp_path)
+    rep = RW.replay(RW.Sides(lean=False), [run])
+    t = rep["totals"]
+    assert RW.passed(rep) and (t["entry_rows"], t["draws"]) == (1, 3), t
+    w = rep["runs"]["r-window"]["request"]
+    assert {c["control"] for c in w["controls"]} >= {f"window-{k}" for k in RW.REASONS} | {"root-salt", "tile-at-past"}
+    adv = run / "out" / "request" / "advice.json"
+    a = json.loads(adv.read_text())
+    a["entry_salts"][1] = "00" * (len(a["entry_salts"][1]) // 2)
+    adv.write_text(json.dumps(a))
+    bad = RW.replay(RW.Sides(lean=False), [run])
+    assert not RW.passed(bad) and [c["check"] for c in bad["runs"]["r-window"]["request"]["checks"] if not c["ok"]] == ["root-1"]
+
+
+@LEAN
+def test_replay_window_lean_is_the_python(served, tmp_path):
+    """Every input `replay_window` makes of a recorded window, the controls' included, gives Lean's
+    `pouw-window-difftest` the outcome Python gives."""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "served_zk"))
+    import replay_window as RW
+    *_, words = served
+    sides = RW.Sides()
+    try:
+        rep = RW.replay(sides, [_recorded(words, tmp_path)])
+    finally:
+        sides.close()
+    t = rep["totals"]
+    assert RW.passed(rep) and t["compared"] >= 40 and t["lean_same"] == t["compared"], rep["apart"][:3]
