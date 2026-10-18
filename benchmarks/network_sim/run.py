@@ -5,7 +5,10 @@ process tree it runs:
 1. the accounting layer's demo, `python -m datacenter.demo` (`DIR/demo.txt`);
 2. the mock datacenter in five blocks (`mockdc.py down`, then `up --blocks 5`), whose blocks take its five strategies,
    run once (`DIR/mockdc/`) and once with the certifiers' salt on (`DIR/mockdc-salt/`);
-3. the lab back in its default four blocks, and the workload's three runs of `python -m workload.lab_run run`: honest,
+3. the fleet (`up --fleet --blocks 2`, `datacenter.examples.two_sites`): two sites of two blocks joined by a 20 ms WAN
+   between a certifier on each, the outside host on the west site, run twice with the strategies swapped between the
+   sites, so that each of the first four is played across the WAN once (`DIR/fleet/`, `DIR/fleet-swapped/`);
+4. the lab back in its default four blocks, and the workload's three runs of `python -m workload.lab_run run`: honest,
    `--tamper b1:flip-bit` and `--tamper b2:late` (`DIR/workload/<run>/`). They need a Python with torch: `--python`,
    else this one if it has torch, else one that `uv` builds in a scratch directory, as the workload's recorded run does.
 
@@ -14,9 +17,10 @@ as lab_run does, and however it ends it leaves the lab up in its default shape w
 
 Then it reads each step's `summary.json` and writes `DIR/summary.json` and the table `DIR/summary.txt`: each block's
 verdicts under the certifier's audit and the second audit (mockdc's datacenter record check, with the account's charge,
-or lab_run's N3), the answers, and the worst proxy tick against its slack. The verdicts are compared with the expected
-ones (`expected_block` and `WORKLOAD`), and the exit status is 1 if any differs, a step exited nonzero or a proxy tick ran
-past its slack, so the night is its own regression check.
+or lab_run's N3), the median wire lag, the worst proxy tick against its slack, and for each mockdc run its record check
+on every port of the declaration (a fleet's merged ones), and the answers. The verdicts are compared with the expected
+ones (`expected_block`, `expected_records` and `WORKLOAD`), and the exit status is 1 if any differs, a step exited
+nonzero or a proxy tick ran past its slack, so the night is its own regression check.
 
     python3 benchmarks/network_sim/run.py --out DIR [--python PY]
 """
@@ -38,6 +42,15 @@ MOCKDC = [sys.executable, "-B", str(HERE / "mockdc.py")]
 
 STRATEGIES = ("honest", "bits", "late", "extra", "maintenance")  # mockdc's, which its blocks take in turn
 WINDOW = 6000  # ticks: mockdc's windows are 60 buckets of 100 ms
+FIVE, FLEET = ("--blocks", "5"), ("--fleet", "--blocks", "2")
+# mockdc's runs: the lab's shape, whether the certifiers' salt is on, and each block's strategy. The fleet's two runs
+# put each strategy on each site once.
+MOCKDC_RUNS = {
+    "mockdc": (FIVE, False, {f"b{k}": s for k, s in enumerate(STRATEGIES)}),
+    "mockdc-salt": (FIVE, True, {f"b{k}": s for k, s in enumerate(STRATEGIES)}),
+    "fleet": (FLEET, False, {"east.b0": "honest", "east.b1": "late", "west.b0": "bits", "west.b1": "extra"}),
+    "fleet-swapped": (FLEET, False, {"east.b0": "bits", "east.b1": "extra", "west.b0": "honest", "west.b1": "late"}),
+}
 COVERAGE = "status:coverage-never-established"
 CHEATED = ("occupancy differs from the declared profile", "a frame is not a committed crossing")
 DOWN = "no record: the certifier was down or its record was withheld"
@@ -82,6 +95,17 @@ def expected_block(strategy: str, block: str, salt: bool) -> dict:
     return e
 
 
+def expected_records(strategies: dict[str, str]) -> dict:
+    """What mockdc's record check on every block's records together says, in `records_verdicts`' shape: it covers each
+    block's two ports, which are all of the declaration's, and refuses what each block's own check refuses, in block
+    order; the account for the whole run charges timing advice, the refused port-windows and what a block down for
+    maintenance holds."""
+    refused = [r for b, s in strategies.items() for r in expected_block(s, b, False)["datacenter"]]
+    return {"ports": sorted(f"{b}.cert:{d}" for b in strategies for d in ("in", "out")), "of": 2 * len(strategies),
+            "refused": refused, "sound": not refused,
+            "charged": ["timing"] + ["refused"] * bool(refused) + ["serviced"] * ("maintenance" in strategies.values())}
+
+
 def refused_rows(rows: list) -> list[list]:
     return [list(r) for r in rows if r[2] or r[3]]
 
@@ -105,6 +129,12 @@ def mockdc_verdicts(entry: dict) -> dict:
     return out
 
 
+def records_verdicts(records: dict) -> dict:
+    """The record check on every port in mockdc's `summary.json`."""
+    return {"ports": records["ports"], "of": records["of"], "refused": records["refused"],
+            "sound": records["account"]["sound"], "charged": charged(records["account"])}
+
+
 def workload_verdicts(block: dict) -> dict:
     """A block's verdicts in lab_run's `summary.json`: N3's as its violations' codes."""
     return {"certifier": refused_rows(block["certifier"]["verdicts"]),
@@ -112,8 +142,11 @@ def workload_verdicts(block: dict) -> dict:
 
 
 def tick(block: dict) -> dict:
+    """The block's worst proxy tick against its slack, and the median lag from a bucket's start to its bytes reaching
+    the peer, which holds the path's latency, the WAN's included."""
     late = [v for v in block["tick_late_ms_max"].values() if v is not None]
-    return {"late_ms": max(late, default=0.0), "slack_ms": block["slack_ms"], "over": sum(block["ticks_over_slack"].values())}
+    return {"late_ms": max(late, default=0.0), "slack_ms": block["slack_ms"],
+            "over": sum(block["ticks_over_slack"].values()), "lag_ms": block.get("wire_bucket_lag_ms", {}).get("p50")}
 
 
 def differences(where: str, expected: dict, observed: dict) -> list[str]:
@@ -139,21 +172,29 @@ def summarize(out: Path, exits: dict[str, int]) -> dict:
         mismatches.extend(bad)
         return {"case": case, "verdicts": got, **more, "tick": t, "ok": not bad}
 
-    for run, salt in (("mockdc", False), ("mockdc-salt", True)):
+    for run, (_, salt, strategies) in MOCKDC_RUNS.items():
         if (s := read(out / run / "summary.json")) is None:
             mismatches.append(f"{run}: no summary.json")
             continue
-        names = [f"b{k}" for k in range(len(STRATEGIES))]
-        if list(s["blocks"]) != names:
-            mismatches.append(f"{run}: blocks {list(s['blocks'])}, not {names}")
+        if list(s["blocks"]) != list(strategies):
+            mismatches.append(f"{run}: blocks {list(s['blocks'])}, not {list(strategies)}")
         blocks = {}
-        for k, (b, entry) in enumerate(s["blocks"].items()):
+        for b, entry in s["blocks"].items():
+            if b not in strategies:
+                continue
             d = entry["datacenter"]
             accounts = {"account": d["account"]} | ({"unplanned_account": d["unplanned"]["account"]}
                                                     if "unplanned" in d else {})
-            blocks[b] = block(run, b, entry["strategy"], expected_block(STRATEGIES[k % len(STRATEGIES)], b, salt),
-                              mockdc_verdicts(entry), entry, **accounts)
-        runs[run] = {"blocks": blocks, "plan": s.get("plan")}
+            blocks[b] = block(run, b, entry["strategy"], expected_block(strategies[b], b, salt), mockdc_verdicts(entry),
+                              entry, **accounts)
+        runs[run] = {"declaration": s.get("declaration"), "wan": s.get("wan"), "blocks": blocks, "plan": s.get("plan")}
+        if (r := s.get("records")) is None:
+            mismatches.append(f"{run}: no record check on every port")
+            continue
+        got = records_verdicts(r)
+        bad = differences(f"{run} every port", expected_records(strategies), got)
+        mismatches.extend(bad)
+        runs[run]["records"] = {"verdicts": got, "account": r["account"], "ok": not bad}
     for name, (_, refused, answers) in WORKLOAD.items():
         run = f"workload/{name}"
         if (s := read(out / run / "summary.json")) is None:
@@ -178,7 +219,8 @@ def summarize(out: Path, exits: dict[str, int]) -> dict:
 
 
 def render(summary: dict) -> str:
-    """`summary.txt`: a row per block of each run, then the answers, the worst tick and the mismatches."""
+    """`summary.txt`: a row per block of each run, and for a mockdc run one more for its record check on every port
+    (`all`), then the answers, the worst tick and the mismatches."""
     def certifier(v: dict) -> str:
         rows = v["certifier"]
         text = "accepted" if not rows else "refused " + ", ".join(f"{link}[{w}] {raw or com}" for link, w, raw, com in rows)
@@ -186,17 +228,20 @@ def render(summary: dict) -> str:
             text += "; salt " + ("accepted" if s["accepted"] else "refused " + ", ".join(f"[{w}]" for w, _ in s["violations"]))
         return text
 
-    def records(refused: list[str]) -> str:
-        by: dict[str, dict[str, None]] = {}
+    def records(refused: list[str], by_block: bool = False) -> str:
+        by: dict[tuple[str, str], dict[str, None]] = {}
         for r in refused:
-            direction, during = r.split(": ")[0].split(".cert:")[1].split(" ", 1)
-            by.setdefault(during, {})[direction] = None
-        return "accepted" if not refused else "refused " + "; ".join(f"{', '.join(d)} {w}" for w, d in by.items())
+            block, rest = r.split(": ")[0].removeprefix("port ").split(".cert:")
+            direction, during = rest.split(" ", 1)
+            by.setdefault((block if by_block else "", during), {})[direction] = None
+        return "accepted" if not refused else "refused " + "; ".join(
+            f"{b + ' ' if b else ''}{', '.join(d)} {w}" for (b, w), d in by.items())
 
     def account(a: dict) -> str:
         return f"{a['covert_bits']:.3g} {'sound' if a['sound'] else 'NOT sound'}"
 
-    rows = [("run", "block", "case", "certifier audit", "records / N3", "covert budget (bits)", "worst tick", "")]
+    rows = [("run", "block", "case", "certifier audit", "records / N3", "covert budget (bits)", "wire lag",
+             "worst tick", "")]
     for run, r in summary["runs"].items():
         for b, x in r["blocks"].items():
             v = x["verdicts"]
@@ -209,8 +254,13 @@ def render(summary: dict) -> str:
                     charge += f"; unplanned {account(x['unplanned_account'])}"
             t = x["tick"]
             rows.append((run, b, x["case"], certifier(v), second, charge,
+                         "" if t["lag_ms"] is None else f"{t['lag_ms']:.1f} ms",
                          f"{t['late_ms']:.1f}/{t['slack_ms']:g} ms" + (f", {t['over']} over" if t["over"] else ""),
                          "ok" if x["ok"] else "MISMATCH"))
+        if (a := r.get("records")) is not None:
+            v = a["verdicts"]
+            rows.append((run, "all", f"{len(v['ports'])} ports", "", "records " + records(v["refused"], by_block=True),
+                         account(a["account"]), "", "", "ok" if a["ok"] else "MISMATCH"))
     widths = [max(len(row[k]) for row in rows) for k in range(len(rows[0]))]
     lines = ["  ".join(c.ljust(w) for c, w in zip(row, widths)).rstrip() for row in rows]
     answers = [f"{run.split('/')[1]} " + ("none" if r["answers"] is None else
@@ -286,11 +336,14 @@ def torch_python(given: str | None, scratch: Path, out: Path) -> tuple[str | Non
 def night(out: Path, python: str | None, exits: dict[str, int]) -> None:
     """The steps, each step's exit code in `exits` as it ends."""
     exits["demo"] = step("demo", [sys.executable, "-B", "-m", "datacenter.demo"], out, ROOT / "benchmarks" / "datacenter")
-    exits["lab --blocks 5"] = shape(out, "--blocks", "5")
-    if not exits["lab --blocks 5"]:
-        exits["mockdc"] = step("mockdc", [*MOCKDC, "run", "--blocks", "5", "--out", str(out / "mockdc")], out)
-        exits["mockdc-salt"] = step("mockdc-salt", [*MOCKDC, "run", "--blocks", "5", "--salt", "--out",
-                                                    str(out / "mockdc-salt")], out)
+    for options in dict.fromkeys(o for o, _, _ in MOCKDC_RUNS.values()):
+        lab = " ".join(("lab", *options))
+        exits[lab] = shape(out, *options)
+        for run, (o, salt, strategies) in MOCKDC_RUNS.items():
+            if o == options and not exits[lab]:
+                blocks = [x for b, s in strategies.items() for x in ("--block", f"{b}={s}")]
+                exits[run] = step(run, [*MOCKDC, "run", *options, *["--salt"] * salt, *blocks, "--out", str(out / run)],
+                                  out)
     exits["lab default"] = shape(out)
     with tempfile.TemporaryDirectory() as scratch:
         py, exits["python"] = torch_python(python, Path(scratch), out)
