@@ -146,7 +146,9 @@ theorem parse_none_today (x : Msg) : parse x = none := by
 decodes, its partition reads, the inner setup at the recursion's inner tags accepts it, `RecVStar.innerOf`, and Flock's
 plain verifier sets it up and its statement check passes, `innerOk`), is in Flock's scope, where its soundness headline
 holds (`Claims.Flock.Scope`), is true (`Claims.Flock.R`), and has Flock's completeness error below 1 there
-(`FlockComplete.δc`, which asks for a drawn session). -/
+(`FlockComplete.δc`, which asks for a drawn session). Only an inner statement whose public file holds each instance's
+own rows can be one: without `--zk` Flock's statement check refuses a shared-row public file (`ProvedScope.sharedRowsOk`),
+which `RecVStar.innerOf` sets up. -/
 def PlainLeavesAdmitted (rel : Flock.Readable.Parsed → Flock.Readable.Relation) : Prop :=
   ∃ (inner : Msg) (ri : FlockDeploy.Raw) (partition : Option Json) (dims : Flock.RecVStar.Inner)
     (w : Claims.Flock.Wit),
