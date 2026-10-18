@@ -19,9 +19,11 @@ from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate_batch
 from verity.ml.commitments.gates import block_check as BC
 
-P512 = SimpleNamespace(N=512, C=569, K=2, MASKED=0, BYTES=4096)
-P1024 = SimpleNamespace(N=1024, C=105, K=3, MASKED=1, BYTES=4096)
-TOY = SimpleNamespace(N=32, C=5, K=2, MASKED=0, BYTES=64)
+P512 = SimpleNamespace(N=512, C=569, K=2, MASKED=0, BYTES=4096, WORDS=64)
+P512_SLICED = SimpleNamespace(N=512, C=569, K=2, MASKED=0, BYTES=4096, WORDS=16)
+P1024 = SimpleNamespace(N=1024, C=105, K=3, MASKED=1, BYTES=4096, WORDS=32)
+TOY = SimpleNamespace(N=32, C=5, K=2, MASKED=0, BYTES=64, WORDS=16)
+TOY_SLICED = SimpleNamespace(N=32, C=5, K=2, MASKED=1, BYTES=64, WORDS=4)
 TOY_RECEIPT = SimpleNamespace(ROWS=2, LEAF=3, P=4, BYTES=64)
 #: (part, its statics) -> (And, Xor, Not) gates of its traced circuit
 PARTS = {
@@ -32,6 +34,7 @@ PARTS = {
     ("CodecRound", (512, 569, 0)): (104912, 303366, 8202),
     ("CodecRound", (1024, 105, 1)): (310507, 901490, 23798),
     ("CodecMatch", (512,)): (512, 512, 512),
+    ("CodecPick", (512, 16, 4)): (32795, 24576, 16),
     ("SketchRow", (4096,)): (36863, 214292, 4099),
     ("LeafMatch", (16, 32)): (9493, 8890, 561),
 }
@@ -71,24 +74,32 @@ def _toy_encode(S, seed: bytes, j: int, payload: bytes, coin: bytes | None) -> b
 
 def _decode_cases(rng: random.Random, S, encode) -> tuple[list[dict], list[str]]:
     """An appended block (bound under its coin) and a registered one (the seed's key), each honest, then with one thing
-    wrong."""
+    wrong, at a slice q drawn at random (the block whole when WORDS is W); a sliced unit's honest instances are every slice."""
     rows, names = [], []
+    slices = BC._words_of(S) // S.WORDS
     for coin in (rng.randbytes(32), None):
-        seed, j = rng.randbytes(32), rng.randrange(1 << 20)
+        seed, j, q = rng.randbytes(32), rng.randrange(1 << 20), rng.randrange(slices)
         pay = _payload(rng, S)
         blk = encode(S, seed, j, pay, coin)
-        a = BC.decode_args(S, seed, j, blk, pay, coin)
+        a = BC.decode_args(S, seed, j, blk, pay, coin, q)
+        at, w = q * S.WORDS * S.N // 16, S.N // 8
         top = BC._p(S) + rng.randrange(S.C)
-        over = top.to_bytes(S.N // 8, "little") + blk[S.N // 8:]
-        cases = {"honest": a, "tampered block": dict(a, block=_flip(a["block"], 3)),
-                 "other payload": dict(a, payload=_flip(a["payload"], 5, 4)),
+        over = blk[:w * q * S.WORDS] + top.to_bytes(w, "little") + blk[w * (q * S.WORDS + 1):]
+        cases = {"honest": a, "tampered block": dict(a, block=_flip(a["block"], at + 3)),
+                 "other payload": dict(a, payload=_flip(a["payload"], at + 1, 4)),
                  "word at or above p": dict(a, block=BC._u16s(over)),
-                 "other block index": BC.decode_args(S, seed, j + 1, blk, pay, coin)}
+                 "other block index": BC.decode_args(S, seed, j + 1, blk, pay, coin, q),
+                 "slice past the block": dict(a, q=[slices])}
         if coin is not None:
             cases["wrong coin"] = dict(a, coin=_flip(a["coin"], 7))
             cases["unbound"] = dict(a, bound=[0])
         else:
-            cases["bound"] = BC.decode_args(S, seed, j, blk, pay, bytes(32))
+            cases["bound"] = BC.decode_args(S, seed, j, blk, pay, bytes(32), q)
+        if slices > 1:
+            cases["another slice's tweak"] = dict(a, t0=BC.decode_args(S, seed, j, blk, pay, coin, (q + 1) % slices)["t0"])
+            for r in range(slices):
+                if r != q:
+                    cases[f"honest slice {r}"] = BC.decode_args(S, seed, j, blk, pay, coin, r)
         tag = "appended" if coin is not None else "registered"
         for name, args in cases.items():
             rows.append(args)
@@ -104,10 +115,11 @@ def test_the_key_is_the_codecs() -> None:
         assert BC.key(S, seed) == (k.c, k.tau, k.mask)
 
 
-@pytest.mark.parametrize("S", [P512, P1024], ids=["p512-k2", "p1024-k3-masked"])
+@pytest.mark.parametrize("S", [P512, P512_SLICED, P1024], ids=["p512-k2", "p512-k2-sliced", "p1024-k3-masked"])
 def test_the_decode_reference_is_the_audits_decode(S) -> None:
     """On random blocks the reference accepts exactly what `codec.decode` decodes to the instance's payload, under the
-    payload's own digest and the append's coin (an appended block) or the seed's key (a registered one)."""
+    payload's own digest and the append's coin (an appended block) or the seed's key (a registered one), slice by slice;
+    each negative alters the instance's own slice."""
     rng = random.Random(S.N)
 
     def encode(S, seed, j, pay, coin):
@@ -122,7 +134,9 @@ def test_the_decode_reference_is_the_audits_decode(S) -> None:
             got = CO.decode(blk, j, k, CO.digest(pay), BC._bytes_of(a["coin"]))
         else:
             got = CO.decode(blk, j, k)
-        assert BC.decode_check(S, a) == int(got == pay) == int(name.endswith("honest")), name
+        assert BC.decode_check(S, a) == int("honest" in name), name
+        if name.partition(": ")[2] not in ("another slice's tweak", "slice past the block"):
+            assert int(got == pay) == int("honest" in name), name
 
 
 def test_the_receipt_reference_is_the_sketch_receipter() -> None:
@@ -153,6 +167,7 @@ def test_the_receipt_reference_is_the_sketch_receipter() -> None:
 
 def test_the_rows_hold_every_parameter() -> None:
     for S, sig, rows in ((P512, BC._decode_signature, BC.decode_rows), (P1024, BC._decode_signature, BC.decode_rows),
+                         (P512_SLICED, BC._decode_signature, BC.decode_rows),
                          (TOY_RECEIPT, BC._receipt_signature, BC.receipt_rows)):
         params, _ = sig(S)
         laid = rows(S)
@@ -160,7 +175,8 @@ def test_the_rows_hold_every_parameter() -> None:
         assert sum(b for _r, b, _ps in laid) == sum(t.leaves for _, t in params)
 
 
-@pytest.mark.parametrize("bad", [dict(N=64, C=59), dict(BYTES=64), dict(K=1), dict(MASKED=2), dict(BYTES=96)])
+@pytest.mark.parametrize("bad", [dict(N=64, C=59), dict(BYTES=64), dict(K=1), dict(MASKED=2), dict(BYTES=96), dict(WORDS=24),
+                                 dict(WORDS=0)])
 def test_a_decode_off_the_codec_is_refused(bad) -> None:
     S = SimpleNamespace(**{**vars(P512), **bad})
     with pytest.raises(ValueError):
@@ -181,14 +197,14 @@ def _gates(defn, rows: list[dict]) -> list[int]:
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize("masked", [0, 1])
-def test_the_toy_decode_unit_is_its_reference(masked) -> None:
-    """About 25 s (the compressions' first trace): the only evaluation of the unit's wiring, the tweak chain, rounds and
-    masks, the payload's digest and the binding's message, which the deployed fields' parts never reach."""
-    S = SimpleNamespace(**{**vars(TOY), "MASKED": masked})
-    rows, names = _decode_cases(random.Random(10 + masked), S, _toy_encode)
+@pytest.mark.parametrize("S", [TOY, TOY_SLICED], ids=["whole", "sliced-masked"])
+def test_the_toy_decode_unit_is_its_reference(S) -> None:
+    """About 25 s (the compressions' first trace): the only evaluation of the unit's wiring, the slice picked by q, the
+    tweak chain, rounds and masks, the payload's digest and the binding's message, which the deployed fields' parts never
+    reach."""
+    rows, names = _decode_cases(random.Random(10 + S.WORDS), S, _toy_encode)
     want = [BC.decode_check(S, a) for a in rows]
-    assert want == [int(n.endswith("honest")) for n in names]
+    assert want == [int("honest" in n) for n in names]
     assert _gates(bind(BC.BlockDecodeCheck, **vars(S)), rows) == want
 
 

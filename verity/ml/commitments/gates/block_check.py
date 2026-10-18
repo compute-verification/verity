@@ -2,8 +2,8 @@
 what a proof runs on a drawn receipt's block in place of opening it, so the verifier holds the block, its payload and its
 receipts only as hiding commitments, and a unit's verdict.
 
-    BlockDecodeCheck_v1{N, C, K, MASKED, BYTES}
-        (j: Array<4, U16>, bound: U16, seed: Array<16, U16>, coin: Array<16, U16>, tau: F, t0: F, c: Array<K, F>,
+    BlockDecodeCheck_v1{N, C, K, MASKED, BYTES, WORDS}
+        (j: Array<4, U16>, q: U16, bound: U16, seed: Array<16, U16>, coin: Array<16, U16>, tau: F, t0: F, c: Array<K, F>,
          [mask: F,] block: Array<BYTES / 2, U16>, payload: Array<BYTES / 2, U16>) -> U16
     BlockReceiptCheck_v1{ROWS, LEAF, P, BYTES}
         (mid: Array<32, U16>, j: Array<4, U16>, k: U16, pos: U16, signs: Array<ROWS, Array<BYTES / 16, U16>>,
@@ -11,15 +11,17 @@ receipts only as hiding commitments, and a unit's verdict.
         U16 = Array<16, Value<1>>, F = Array<N / 16, U16>: an integer little-endian, a byte string in order (bit t is bit
         t & 7 of byte t >> 3); each returns one ok word, bit 0 the verdict, bits 1-15 zero in gates
 
-**The decode.** ``BlockDecodeCheck`` is 1 iff every word of ``block`` (word w its bytes [S w, S (w + 1)), S = N / 8, of
-the W = BYTES / S) is below p = 2^N - C and decodes to ``payload``'s word w (`codec.decode_word`): x -> rho^-1(x) - c_r -
-t_w mod p for r = K - 1 ... 0, and, ``MASKED``, x -> sigma_K(x) after each round r >= 1, with t_w = t0 + w tau + b mod p and
-b = 0 unless ``bound``'s bit 0, then b_j(c_a), derived in the unit from the payload it holds: LE(SHA-512(DOMAIN || u8
+**The decode.** ``BlockDecodeCheck`` is 1 iff q is below W / WORDS and every word w of slice q of ``block`` (q WORDS <= w
+< (q + 1) WORDS, word w its bytes [S w, S (w + 1)), S = N / 8, of the W = BYTES / S) is below p = 2^N - C and decodes to
+``payload``'s word w (`codec.decode_word`): x -> rho^-1(x) - c_r - t_w mod p for r = K - 1 ... 0, and, ``MASKED``, x ->
+sigma_K(x) after each round r >= 1, with t_w = t0 + (w - q WORDS) tau + b mod p and b = 0 unless ``bound``'s bit 0, then b_j(c_a), derived in the unit from the payload it holds: LE(SHA-512(DOMAIN || u8
 len(name) || name || seed || u32be 2^32 - 4 || u64be j || d || coin || u32be 0)) mod p, d = sha512/row/v2 of the payload
-(`codec.binding` with its coin, `codec.digest`). So at ``bound`` it is ``codec.decode(block, j, key, d, coin) == payload``,
-d the payload's own digest, and without it ``codec.decode(block, j, key) == payload`` (a registered block, under the seed's
-key). The public row (j, bound, seed, coin, tau, t0, c, mask) is the verifier's own: the codec key of the registration's
-seed (`codec.key`), t0 = tau W j mod p, the append's coin (zero bytes under the seed's key). A field's name is kv/v0's
+(`codec.binding` with its coin, `codec.digest`). So at ``bound`` the W / WORDS slices are
+``codec.decode(block, j, key, d, coin) == payload``, d the payload's own digest, and without it ``codec.decode(block, j, key)
+== payload`` (a registered block, under the seed's key). A slice is a unit of its own, so a block's decode is lowered once at
+any size (WORDS = W: the whole block, one unit); each slice's unit holds the whole block and payload rows, and recomputes d
+and b. The public row (j, q, bound, seed, coin, tau, t0, c, mask) is the verifier's own: the codec key of the
+registration's seed (`codec.key`), t0 = tau (W j + q WORDS) mod p, the append's coin (zero bytes under the seed's key). A field's name is kv/v0's
 (p512 = 2^512 - 569, p1024 = 2^1024 - 105); ``toy32`` (2^32 - 5) is circuit-check's and the tests' binding with a short
 block (``BYTES`` below 4,096), the same circuit on small words, never deployed.
 
@@ -48,14 +50,16 @@ commits and the Definition the trace's ANDs:
     CodecRound_v1{N, C, MASK}       (x, c, t[, mask]) -> rho^-1(x) - c - t mod p, then sigma_K if MASK
     CodecMatch_v1{N}                (x, y, a) -> a and x = y
     CodecWord_v1{N, C, K, MASKED}   (y, t, c: Array<K, Array<N>>[, mask], want) -> y < p and its decode is want
-    BlockOk_v1{W}                   (oks: Array<W>) -> U16
+    CodecPick_v1{N, WORDS, SLICES}  (q: U16, words: Array<WORDS SLICES, Array<N>>) -> slice q, WORDS words
+    BlockOk_v1{W, SLICES}           (oks: Array<W>, q: U16) -> U16
     SketchRow_v1{BYTES}             (block: Array<8 BYTES>, signs: Array<BYTES>) -> Array<32>, one row of sigma
     LeafMatch_v1{LEAF, P}           (y: Array<8, Word>, leaf, k, plan, pos, j) -> U16
     Word = Array<64, Value<1>>, a SHA-512 word LSB first; Array<n> = Array<n, Value<1>>
 
 **Cost.** A squaring mod p is a Karatsuba square down to 32-bit schoolbook squares (about 96,000 ANDs at N = 512) and two
-folds of the high half by C; a round adds about 9 N for its additions, negation and selections. ``BlockDecodeCheck`` is W K
-rounds and 2 + ceil((BYTES + 17) / 128) compressions: about 15.6 M ANDs at p512/k2, about 32 M at p1024/k3/masked.
+folds of the high half by C; a round adds about 9 N for its additions, negation and selections. ``BlockDecodeCheck`` is WORDS
+K rounds and 2 + ceil((BYTES + 17) / 128) compressions: whole, about 15.6 M ANDs at p512/k2 (13.4 M of rounds, 2.0 M of the
+digest and binding) and about 32 M at p1024/k3/masked; in four slices about 5.4 M ANDs each at p512/k2.
 ``BlockReceiptCheck`` is ROWS sketch rows of about 9 BYTES ANDs each (a carry-save count of the block's sign-flipped bits)
 and one compression at 16 rows: about 0.66 M ANDs.
 
@@ -118,6 +122,9 @@ def _check_decode(S) -> None:
     _check_bytes(S, True)
     if isinstance(S.K, bool) or not isinstance(S.K, int) or not 2 <= S.K <= 8 or S.MASKED not in (0, 1):
         raise ValueError(f"K is 2 to 8 rounds and MASKED 0 or 1, not K = {S.K!r}, MASKED = {S.MASKED!r}")
+    W = _words_of(S)
+    if isinstance(S.WORDS, bool) or not isinstance(S.WORDS, int) or not 1 <= S.WORDS <= W or W % S.WORDS:
+        raise ValueError(f"WORDS divides the block's {W} words, not {S.WORDS!r}")
 
 
 def _check_receipt(S) -> None:
@@ -326,7 +333,8 @@ def _part(name: str, statics: tuple[str, ...], signature: Callable, build: Calla
         return TR.emit(traced(*(getattr(S, k) for k in statics)), [t for _, t in params], ret, B, *colls)
 
     d = CompositeDefinition(name, 1, statics, signature, body, conformance="exact-model-tested", doc=doc)
-    d.build = build  # type: ignore[attr-defined]
+    # a lowering passes the statics only to a Definition that has some (`ir_lower._boolean_activation`)
+    d.build = build if statics else (lambda C, *e: build(C, SimpleNamespace(), *e))  # type: ignore[attr-defined]
     d.traced = traced  # type: ignore[attr-defined]
     return d
 
@@ -424,13 +432,38 @@ CodecWord = CompositeDefinition(
         "word's tweak t, sigma_K after each round r >= 1 if MASKED (codec.decode_word)")
 
 
+def _sig_pick(S):
+    if S.N not in {n for n, _c in FIELDS}:
+        raise ValueError(f"N is a codec field's width, one of {sorted({n for n, _c in FIELDS})}, not {S.N!r}")
+    _check_ints(S, ("WORDS", BLOCK_BYTES), ("SLICES", BLOCK_BYTES))
+    return (("q", U16), ("words", Array(S.WORDS * S.SLICES, _f(S)))), Array(S.WORDS, _f(S))
+
+
+def _build_pick(C, S, q, *words):
+    if S.SLICES == 1:
+        return [list(w) for w in words]
+    hot = [_eqc(C, q, k) for k in range(S.SLICES)]
+    out = []
+    for i in range(S.WORDS):
+        acc = [ZERO] * S.N
+        for k, h in enumerate(hot):
+            acc = [a ^ C.AND(h, x) for a, x in zip(acc, words[k * S.WORDS + i])]
+        out.append(acc)
+    return out
+
+
+CodecPick = _part("CodecPick", ("N", "WORDS", "SLICES"), _sig_pick, _build_pick,
+                  "Slice q of a block's words: words [q WORDS, (q + 1) WORDS), zero for q at or past SLICES")
+
+
 def _sig_ok(S):
-    _check_ints(S, ("W", BLOCK_BYTES))
-    return (("oks", Array(S.W, BIT)),), U16
+    _check_ints(S, ("W", BLOCK_BYTES), ("SLICES", BLOCK_BYTES))
+    return (("oks", Array(S.W, BIT)), ("q", U16)), U16
 
 
-BlockOk = _part("BlockOk", ("W",), _sig_ok, lambda C, S, oks: [and_reduce(C, list(oks))] + [ZERO] * 15,
-                "The ok word: bit 0 the AND of W verdicts, bits 1-15 zero")
+BlockOk = _part("BlockOk", ("W", "SLICES"), _sig_ok,
+                lambda C, S, oks, q: [and_reduce(C, list(oks) + [or_reduce(C, [_eqc(C, q, k) for k in range(S.SLICES)])])]
+                + [ZERO] * 15, "The ok word: bit 0 the AND of W verdicts and q < SLICES, bits 1-15 zero")
 
 
 def _sig_sketch(S):
@@ -513,7 +546,8 @@ def _uwords(n_bits: int):
 def _decode_signature(S):
     _check_decode(S)
     F = _uwords(S.N)
-    return (((("j", Array(4, U16)), ("bound", U16), ("seed", Array(16, U16)), ("coin", Array(16, U16)), ("tau", F), ("t0", F),
+    return (((("j", Array(4, U16)), ("q", U16), ("bound", U16), ("seed", Array(16, U16)), ("coin", Array(16, U16)), ("tau", F),
+              ("t0", F),
               ("c", Array(S.K, F))) + ((("mask", F),) if S.MASKED else ())
              + (("block", _uwords(8 * S.BYTES)), ("payload", _uwords(8 * S.BYTES)))), U16)
 
@@ -529,34 +563,38 @@ def _decode_body(B, S, *colls):
     params, _ret = _decode_signature(S)
     a = dict(zip([n for n, _ in params], colls))
     X = _Wires(B)
-    F, W = _f(S), _words_of(S)
+    F, W, WS = _f(S), _words_of(S), S.WORDS
     pay = X.refs(a["payload"])
     prefix = sha512_row_v2_prefix(8 * S.BYTES)
     cv = X.coll(DIGEST, [b for v in midstate(prefix) for b in X.const(v, 64)])
     d = _compress(B, X, cv, _octets(pay) + [X.const(b, 8) for b in pad_tail(len(prefix) + S.BYTES)])
+    pick = bind(CodecPick, N=S.N, WORDS=WS, SLICES=W // WS)
+    block = B.call(pick, a["q"], X.coll(Array(W, F), X.refs(a["block"])))
+    want = B.call(pick, a["q"], X.coll(Array(W, F), pay))
     b = B.call(bind(CodecBinding, N=S.N, C=S.C), a["bound"][0], X.coll(Array(256, BIT), X.refs(a["seed"])),
                X.coll(Array(64, BIT), X.refs(a["j"])), d, X.coll(Array(256, BIT), X.refs(a["coin"])))
     add = bind(CodecModAdd, N=S.N, C=S.C)
     tau = X.coll(F, X.refs(a["tau"]))
     t = B.call(add, X.coll(F, X.refs(a["t0"])), b)
     ts = [t]
-    for _w in range(1, W):
+    for _w in range(1, WS):
         t = B.call(add, t, tau)
         ts.append(t)
-    args = [X.coll(Array(W, F), X.refs(a["block"])), X.coll(Array(W, F), _join(X.refs(x) for x in ts)),
-            X.coll(Array(S.K, F), X.refs(a["c"]))]
+    args = [block, X.coll(Array(WS, F), _join(X.refs(x) for x in ts)), X.coll(Array(S.K, F), X.refs(a["c"]))]
     axes: tuple = (0, 0, None)
     if S.MASKED:
         args.append(X.coll(F, X.refs(a["mask"])))
         axes += (None,)
-    oks = B.batch(bind(CodecWord, N=S.N, C=S.C, K=S.K, MASKED=S.MASKED), *args, X.coll(Array(W, F), pay), axes=axes + (0,))
-    return B.call(bind(BlockOk, W=W), oks)
+    oks = B.batch(bind(CodecWord, N=S.N, C=S.C, K=S.K, MASKED=S.MASKED), *args, want, axes=axes + (0,))
+    return B.call(bind(BlockOk, W=WS, SLICES=W // WS), oks, a["q"])
 
 
 BlockDecodeCheck = CompositeDefinition(
-    "BlockDecodeCheck", 1, ("N", "C", "K", "MASKED", "BYTES"), _decode_signature, _decode_body, conformance="exact-model-tested",
-    doc="1 iff every word of block is below p and the block decodes to payload under the codec key (tau, c, mask) at block j "
-        "(t0 = tau W j mod p), with b_j(c_a) of the payload's own digest and coin if bound (codec.decode)")
+    "BlockDecodeCheck", 1, ("N", "C", "K", "MASKED", "BYTES", "WORDS"), _decode_signature, _decode_body,
+    conformance="exact-model-tested",
+    doc="1 iff every word of slice q (WORDS words) of block is below p and decodes to payload's under the codec key (tau, c, "
+        "mask) at block j (t0 = tau (W j + q WORDS) mod p), with b_j(c_a) of the payload's own digest and coin if bound "
+        "(codec.decode)")
 
 
 def _receipt_signature(S):
@@ -647,10 +685,13 @@ def decode_check(S, a: dict) -> int:
     """`BlockDecodeCheck`'s reference on an instance's u16 words (``a[param]``, as `decode_args` gives them), its public
     field elements below p."""
     _check_decode(S)
-    p, w, fw = _p(S), S.N // 8, S.N // 16
+    p, w, fw, q = _p(S), S.N // 8, S.N // 16, a["q"][0]
+    if q >= _words_of(S) // S.WORDS:
+        return 0
     block, payload = _bytes_of(a["block"]), _bytes_of(a["payload"])
-    ys = [int.from_bytes(block[w * i:w * (i + 1)], "little") for i in range(_words_of(S))]
-    ms = [int.from_bytes(payload[w * i:w * (i + 1)], "little") for i in range(_words_of(S))]
+    at = range(q * S.WORDS, (q + 1) * S.WORDS)
+    ys = [int.from_bytes(block[w * i:w * (i + 1)], "little") for i in at]
+    ms = [int.from_bytes(payload[w * i:w * (i + 1)], "little") for i in at]
     tau, t0 = _int(a["tau"]), _int(a["t0"])
     c = [_int(a["c"][fw * r:fw * (r + 1)]) for r in range(S.K)]
     mask = _int(a["mask"]) if S.MASKED else None
@@ -661,18 +702,20 @@ def decode_check(S, a: dict) -> int:
     return int(all(y < p and _decode_word(S, y, (t0 + i * tau + b) % p, c, mask) == m for i, (y, m) in enumerate(zip(ys, ms))))
 
 
-def decode_args(S, seed: bytes, j: int, block: bytes, payload: bytes, coin: bytes | None = None) -> dict[str, list[int]]:
-    """An instance's u16 words: block j's encoding and its payload, under the codec key of ``seed``, bound under its append's
-    ``coin`` if one is given (an appended block), else the seed's key (a registered block)."""
+def decode_args(S, seed: bytes, j: int, block: bytes, payload: bytes, coin: bytes | None = None, q: int = 0
+                ) -> dict[str, list[int]]:
+    """An instance's u16 words: slice q of block j's encoding and its payload, under the codec key of ``seed``, bound under its
+    append's ``coin`` if one is given (an appended block), else the seed's key (a registered block)."""
     _check_decode(S)
-    if len(block) != S.BYTES or len(payload) != S.BYTES or not 0 <= j < 1 << 64:
-        raise ValueError(f"a block and its payload are {S.BYTES} bytes and j a u64")
+    if len(block) != S.BYTES or len(payload) != S.BYTES or not 0 <= j < 1 << 64 or not 0 <= q < 1 << 16:
+        raise ValueError(f"a block and its payload are {S.BYTES} bytes, j a u64 and q a u16")
     if coin is not None and (type(coin) is not bytes or len(coin) != COIN_BYTES):
         raise ValueError(f"an append's coin is {COIN_BYTES} bytes")
     c, tau, mask = key(S, seed)
     fw = S.N // 16
-    out = {"j": _u16s(j, 4), "bound": [int(coin is not None)], "seed": _u16s(seed), "coin": _u16s(coin or bytes(COIN_BYTES)),
-           "tau": _u16s(tau, fw), "t0": _u16s(tau * _words_of(S) * j % _p(S), fw), "c": [x for r in c for x in _u16s(r, fw)]}
+    out = {"j": _u16s(j, 4), "q": [q], "bound": [int(coin is not None)], "seed": _u16s(seed),
+           "coin": _u16s(coin or bytes(COIN_BYTES)), "tau": _u16s(tau, fw),
+           "t0": _u16s(tau * (_words_of(S) * j + q * S.WORDS) % _p(S), fw), "c": [x for r in c for x in _u16s(r, fw)]}
     if S.MASKED:
         out["mask"] = _u16s(mask, fw)
     out.update(block=_u16s(block), payload=_u16s(payload))
@@ -735,8 +778,8 @@ def receipt_args(S, prefix: bytes, signs: Sequence[bytes], j: int, k: int, pos: 
 def decode_rows(S) -> list[tuple[str, int, list[str]]]:
     """BlockDecodeCheck's rows: (row, bits, params), the public row first."""
     _check_decode(S)
-    pub = ["j", "bound", "seed", "coin", "tau", "t0", "c"] + (["mask"] if S.MASKED else [])
-    bits = 16 * (4 + 1 + 16 + 16) + S.N * (2 + S.K + int(bool(S.MASKED)))
+    pub = ["j", "q", "bound", "seed", "coin", "tau", "t0", "c"] + (["mask"] if S.MASKED else [])
+    bits = 16 * (4 + 1 + 1 + 16 + 16) + S.N * (2 + S.K + int(bool(S.MASKED)))
     return [("pub", bits, pub), ("block", 8 * S.BYTES, ["block"]), ("payload", 8 * S.BYTES, ["payload"])]
 
 
