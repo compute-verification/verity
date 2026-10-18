@@ -114,7 +114,14 @@ def MoePairCoordinateW(B, S, x, e, g, slab):
     return B.call(P.F2fpBf16, B.call(F.F32MulV2, acc, g))
 
 
-@composite("MoePairGemm", 1, ["E", "K", "N", "DOT"], _gemm_sig(False), conformance="exact-model-tested",
+#: the served capture both pair GEMMs were replayed against (`MoePairGemm(W)_v1{E=128, ..., DOT=HopperBF16WgmmaDot16_v1}`)
+_SERVED = ("vLLM's Triton fused_moe_kernel serving Qwen3-30B-A3B (bf16) on the RTX PRO 6000, layers 0, 24 and 47 at M = 1..256 "
+          "(naive and sorted schedules, BLOCK_SIZE_M 16 and 64; capture r20261018-221222-7a0d, replays r20261018-224659-0b31, "
+          "r20261018-224733-4220, r20261018-224800-5a66)")
+
+
+@composite("MoePairGemm", 1, ["E", "K", "N", "DOT"], _gemm_sig(False),
+           conformance=f"exact-model-tested; {_SERVED}: 11,612,160/11,612,160 w13 output words bit-exact",
            refuse=G.GemmCoordinate.refuse)
 def MoePairGemm(B, S, x, e, w):
     """``y = x @ w[e]^T`` for one pair: `MoePairCoordinate_v1` over each output coordinate's [E][K] slab."""
@@ -122,7 +129,8 @@ def MoePairGemm(B, S, x, e, w):
                    axes=(None, None, 0))
 
 
-@composite("MoePairGemmW", 1, ["E", "K", "N", "DOT"], _gemm_sig(True), conformance="exact-model-tested",
+@composite("MoePairGemmW", 1, ["E", "K", "N", "DOT"], _gemm_sig(True),
+           conformance=f"exact-model-tested; {_SERVED}: 15,482,880/15,482,880 w2 output words bit-exact",
            refuse=G.GemmCoordinate.refuse)
 def MoePairGemmW(B, S, x, e, g, w):
     """``y = g * (x @ w[e]^T)`` for one pair: `MoePairCoordinateW_v1` over each output coordinate's [E][K] slab."""
