@@ -92,8 +92,8 @@ requires, `verity check tests|lean|circuits` runs only those parts, and `verity 
 
 ~~~text
 uv sync --all-packages --extra torch-cpu  # the whole workspace, editable, with CPU-only torch (GPU work: a member's `torch` extra)
-research run --on auto --wait -- uv run tools/verity/check/suites.py   # suites whose inputs changed; --quick: no slow tests
-research run --on auto --wait -- uv run --extra torch-cpu verity check  # the check a merge requires; --record: an Attempt
+research run --on auto --cwd source --wait -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py'  # suites whose inputs changed; --quick: no slow tests
+research run --on auto --cwd source --wait -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run --extra torch-cpu verity check'  # the merge check; --record: an Attempt
 ~~~
 
 ## Design rules
@@ -157,7 +157,7 @@ An agent VM does no work beyond editing (Daniel, 18 Oct): it is 16 GB, shared by
 out-of-memory kill takes all of them down. Locally, run only git (`git merge-tree` included), reading and editing,
 messaging and the notes, one named test file or `-k` selection of under about a minute and 1 GB, `lake env lean` on one
 file in an already-built tree, a Lean package with no Mathlib or ArkLib, and the lock fast path. Everything else runs
-remotely through `research run --on auto [--wait] -- CMD`, on the cluster queue as an `agent-test` job (4 CPUs, 16 GiB,
+remotely through `research run --on auto --cwd source [--wait] -- CMD` (the shipped tree needs its own `uv sync`), on the cluster queue as an `agent-test` job (4 CPUs, 16 GiB,
 60 min unless `--cpus`, `--mem-gb` or `--timeout` say otherwise), outside the check slots: every suite (`suites.py`),
 `verity check` and `check.py`, circuit-check (24 GB a process), any build of `Security` or `Security/Proofs`, cargo, nvcc, every e2e run
 and every GPU job (the writing-runs skill). The shell hook refuses those commands locally and names the remote one;

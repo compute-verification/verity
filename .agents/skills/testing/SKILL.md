@@ -18,16 +18,18 @@ runs the same runner as its pytest step.
 
 ## Run tests
 
-Suites run remotely, never on an agent VM (AGENTS.md "Tests"): prefix the runner with `research run --on auto --wait --`,
-which queues an `agent-test` job (4 CPUs, 16 GiB, 60 min) outside the check slots.
+Suites run remotely, never on an agent VM (AGENTS.md "Tests"): `research run --on auto` queues an `agent-test` job
+(4 CPUs, 16 GiB, 60 min) outside the check slots. Give it `--cwd source`, so the job runs in the shipped tree rather than
+its run directory, and `uv sync` that tree first: `suites.py` refuses another checkout's environment.
 
 ~~~sh
-R="research run --on auto --wait --"
-$R uv run tools/verity/check/suites.py                        # every suite whose inputs changed since it last passed there
-$R uv run tools/verity/check/suites.py flock verity           # these suites (a package name, a directory, or a unique part of one)
-$R uv run tools/verity/check/suites.py flock -- -k tanh -x    # arguments after -- go to pytest
-$R uv run tools/verity/check/suites.py --quick                # without the tests marked slow
-$R uv run tools/verity/check/suites.py --fresh                # ignore the cache
+R="research run --on auto --cwd source --wait -- bash -lc"
+S="uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py"
+$R "$S"                         # every suite whose inputs changed since it last passed there
+$R "$S flock verity"            # these suites (a package name, a directory, or a unique part of one)
+$R "$S flock -- -k tanh -x"     # arguments after -- go to pytest
+$R "$S --quick"                 # without the tests marked slow
+$R "$S --fresh"                 # ignore the cache
 uv run tools/verity/check/suites.py --list                    # each suite's inputs, and whether a pass is cached (local: reads only)
 ~~~
 
