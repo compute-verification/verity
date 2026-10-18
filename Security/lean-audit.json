@@ -1898,10 +1898,25 @@
    "type_hash": "3428d76d26a41b9769df906e67d3204996cb5d716c1cc06a05fb84453a6749a4"
   },
   "Claims.Witness.Recursion.KSBound_fails": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Witness.Recursion.KSBound_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]",
+    "  (H : Claims.Msg → Claims.Msg) :",
+    "  Not",
+    "    (Claims.Recursion.KSBound H (Claims.Witness.Recursion.ksR Coin) (Claims.Witness.Recursion.ksB Coin)",
+    "      (Claims.Witness.Flock.ksD Coin))"
+   ],
+   "assumptions": [],
+   "type_hash": "a91be831d543785e3004c29a2e9a9b96da880b1c2e7ae69c78e568500be6846f"
   },
   "Claims.Witness.Recursion.KSBound_meets": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Witness.Recursion.KSBound_meets (rel : Flock.Readable.Parsed → Flock.Readable.Relation) :",
+    "  Claims.Recursion.decOK (FlockDeploy.deployZk rel) Claims.GS.zkDecodeRD"
+   ],
+   "assumptions": [],
+   "type_hash": "e4655e7ef0e7d660f42d55e0ba0124101fe461ff107517fe014a4d6f1302e59f"
   },
   "Claims.Witness.Recursion.KSFlock_fails": {
    "owner": "@proofs",
@@ -1926,10 +1941,25 @@
    "type_hash": "6afb69b897bceb3bdd88e1855ba6c429314dcecb98e84ae3ea2f6f590deb740c"
   },
   "Claims.Witness.Recursion.KSPrivBound_fails": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Witness.Recursion.KSPrivBound_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]",
+    "  (H : Claims.Msg → Claims.Msg) :",
+    "  Not",
+    "    (Claims.Recursion.KSPrivBound H (Claims.Witness.Recursion.ksR Coin) (Claims.Witness.Recursion.ksB Coin)",
+    "      (Claims.Witness.Flock.ksD Coin))"
+   ],
+   "assumptions": [],
+   "type_hash": "d3e8cdc1cccbf203012f8538459def8357110f62f0957b734f35cf187993746f"
   },
   "Claims.Witness.Recursion.KSPrivBound_meets": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Witness.Recursion.KSPrivBound_meets (rel : Flock.Readable.Parsed → Flock.Readable.Relation) :",
+    "  Claims.Recursion.decOK (FlockDeploy.deployZk rel) Claims.GS.zkDecodeRD"
+   ],
+   "assumptions": [],
+   "type_hash": "e4655e7ef0e7d660f42d55e0ba0124101fe461ff107517fe014a4d6f1302e59f"
   },
   "Claims.Witness.Recursion.KSPriv_fails": {
    "owner": "@proofs",
@@ -7674,8 +7704,12 @@
     "Claims.Witness.Recursion.Inner.KSAbort_meets",
     "Claims.Witness.Recursion.Inner.KS_fails",
     "Claims.Witness.Recursion.Inner.KS_meets",
+    "Claims.Witness.Recursion.KSBound_fails",
+    "Claims.Witness.Recursion.KSBound_meets",
     "Claims.Witness.Recursion.KSFlock_fails",
     "Claims.Witness.Recursion.KSFlock_meets",
+    "Claims.Witness.Recursion.KSPrivBound_fails",
+    "Claims.Witness.Recursion.KSPrivBound_meets",
     "Claims.Witness.Recursion.KSPriv_fails",
     "Claims.Witness.Recursion.KSPriv_meets",
     "Claims.Witness.Recursion.KS_fails",
@@ -7887,8 +7921,12 @@
     "Claims.Witness.Recursion.Inner.KSAbort_meets",
     "Claims.Witness.Recursion.Inner.KS_fails",
     "Claims.Witness.Recursion.Inner.KS_meets",
+    "Claims.Witness.Recursion.KSBound_fails",
+    "Claims.Witness.Recursion.KSBound_meets",
     "Claims.Witness.Recursion.KSFlock_fails",
     "Claims.Witness.Recursion.KSFlock_meets",
+    "Claims.Witness.Recursion.KSPrivBound_fails",
+    "Claims.Witness.Recursion.KSPrivBound_meets",
     "Claims.Witness.Recursion.KSPriv_fails",
     "Claims.Witness.Recursion.KSPriv_meets",
     "Claims.Witness.Recursion.KS_fails",
@@ -13623,7 +13661,9 @@
     "Claims.Witness.Recursion.Efficient_meets",
     "Claims.Witness.Recursion.Inner.KSAbort_meets",
     "Claims.Witness.Recursion.Inner.KS_meets",
+    "Claims.Witness.Recursion.KSBound_meets",
     "Claims.Witness.Recursion.KSFlock_meets",
+    "Claims.Witness.Recursion.KSPrivBound_meets",
     "Claims.Witness.Recursion.KSPriv_meets",
     "Claims.Witness.Recursion.KS_meets",
     "Claims.Witness.Recursion.ScopeMatches_meets",
@@ -19077,7 +19117,9 @@
     "Claims.Witness.Recursion.Efficient_meets",
     "Claims.Witness.Recursion.Inner.KSAbort_meets",
     "Claims.Witness.Recursion.Inner.KS_meets",
+    "Claims.Witness.Recursion.KSBound_meets",
     "Claims.Witness.Recursion.KSFlock_meets",
+    "Claims.Witness.Recursion.KSPrivBound_meets",
     "Claims.Witness.Recursion.KSPriv_meets",
     "Claims.Witness.Recursion.KS_meets",
     "Flock.SecurityProofs.EndToEnd",
@@ -19204,7 +19246,9 @@
     "Claims.Witness.Recursion.Efficient_meets",
     "Claims.Witness.Recursion.Inner.KSAbort_meets",
     "Claims.Witness.Recursion.Inner.KS_meets",
+    "Claims.Witness.Recursion.KSBound_meets",
     "Claims.Witness.Recursion.KSFlock_meets",
+    "Claims.Witness.Recursion.KSPrivBound_meets",
     "Claims.Witness.Recursion.KSPriv_meets",
     "Claims.Witness.Recursion.KS_meets",
     "Claims.Witness.Recursion.ScopeMatches_meets",
