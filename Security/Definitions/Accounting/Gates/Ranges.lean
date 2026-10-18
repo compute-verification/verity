@@ -7,8 +7,9 @@ import Definitions.Accounting.Gates.Model
 The evaluators of the budgeted primitives whose value's interval property/v1 derives from its operands' (`RANGES` in
 `verity/ml/circuits/stacking.py`: P's producers), with those rules, of the quantizers and the LUT softmax, whose
 interval is their own (`benchmarks/ppl/steps.py`), and of the exact-int8 profile's primitives (vLLM's served int8
-linear and LUT attention, `verity_vllm/program/registry/int8_exact.py`). An f32 value is its encoding read as s32, as property/v1 reads it:
-`+0 … +inf` is `[0, 0x7F800000]`, ordered as the floats, and a negative float or `−0` reads below 0.
+linear and LUT attention, `verity_vllm/program/registry/int8_exact.py`). An f32 value is its encoding read as s32, as
+property/v1 reads it: `+0 … +inf` is `[0, 0x7F800000]`, ordered as the floats, and a negative float or `−0` reads below
+0.
 `Guarantees.Gates` states that each interval holds its evaluator's value.
 -/
 

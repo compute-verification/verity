@@ -55,6 +55,15 @@ on, from the most general to the one 6a's carrier lemma takes as its `q`:
 * `QuantRange`, `DitherRange`, `LutSoftmaxRange`: the quantizers', the dither's and the LUT softmax's values lie in
   their own intervals: `[lo, lo + w]` for a clamp, `[lo − m, lo + w + m + 1]` for a dither, and the hull of the table
   and 0 for the LUT.
+* `F32ToS8RziRange`, `Int8ClampRange`, `LutIndexRange`, `Exp2Lut127Range`, `S32LowByteRange`: the exact-int8
+  profile's primitives' intervals: the cast's `[−128, 127]`, the quantizer's clamp chain's `[−127, 127]`, the LUT
+  index's `[0, 255]`, the table's 256 values in `[0, 127]`, and a low byte's `[−128, 127]`, the identity on `[0, 127]`.
+* `DeclaredWindow`: `ProvenWindow` with no hypothesis on a run input's value but its type (`Typed`). A circuit whose
+  declarations are earned (`Declared`: an input declared at its type, a budgeted gate at an interval its evaluator
+  provably keeps) holds them (`DeclaredHold`), and so is in its window.
+* `Int8LinearWindow`, `LutPvWindow`: vLLM's served int8 linear (row quantizer into a satfinite s8·s8 IMMA chain, `K ≤
+  131,040`) and P·V (LUT index, table gather, low byte into the same chain, `32·S ≤ 132,096`) are proven and declared,
+  so they're in their window on every typed input.
 -/
 
 namespace Accounting.Guarantees.Gates
@@ -249,8 +258,8 @@ def F32ToS8RziRange : Prop :=
 /-- **The int8 quantizer's clamp.** `Int8QuantElement`'s `s8(clamp(r, −127, 127))` (`F32Fmaxf` against `−127.0`,
 `F32Fminf` against `127.0`, `F32ToS8Rzi`) of any s32 reading `r`, a NaN included, lies in `[−127, 127]`: the s8
 family's static `A = (−127, 127)`. The interval analysis over s32 readings can't carry it from the clamp to the cast
-(a float in `[−127.0, 127.0]` reads as two s32 intervals), so a gate-by-gate window takes the cast's type, `[−128, 127]`,
-as property/v1 does. -/
+(a float in `[−127.0, 127.0]` reads as two s32 intervals), so a gate-by-gate window takes the cast's type,
+`[−128, 127]`, as property/v1 does. -/
 def Int8ClampRange : Prop :=
   ∀ r, S32 r → Iv.Mem (-127, 127) (int8Clamp r)
 

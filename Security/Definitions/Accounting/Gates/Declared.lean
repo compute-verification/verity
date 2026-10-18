@@ -42,7 +42,8 @@ def Typed (C : Dag ι) (x : ι → ℤ) : Prop := ∀ g ∈ C, ∀ b s, g.op = .
 def word32 (f : List ℤ → ℤ) : Op ι := .budgeted .rounding fun v => wrapS32 (f v)
 
 /-- A gate of no particular place, at engine step 0, uncommitted. -/
-def plainGate (op : Op ι) (args : List ℕ) (lo hi : ℤ) (prim : String) : Gate ι := ⟨op, args, lo, hi, 0, prim, .other, false⟩
+def plainGate (op : Op ι) (args : List ℕ) (lo hi : ℤ) (prim : String) : Gate ι :=
+  ⟨op, args, lo, hi, 0, prim, .other, false⟩
 
 /-- **An s8-family dot chain** on top of the gates `pre`: the accumulator's constant 0 at `pre.length`, then step `s`
 of `S` (32 products each, `K = 32·S`, committed once at `T_1`) at `pre.length + 1 + s`, reading the accumulator before
