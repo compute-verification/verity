@@ -10,11 +10,12 @@ a page of 64 slots, rows straddling blocks.
 from __future__ import annotations
 
 import hashlib
+import json
 
 import pytest
 import torch
 
-from tests.predict.test_predict import TINY, _phi
+from tests.predict.test_predict import FIX, H200, PREFIX_ROW, TINY, TREE, _phi
 from tests.program import test_dsa_derive as DSA
 from tests.program.test_dsa_derive import served  # noqa: F401  (the DSA stand-in's fixture)
 from verity.core.protocols.remote_bandwidth import codec
@@ -22,6 +23,7 @@ from verity.core.protocols.remote_bandwidth.memory_map import Replay, dumps, par
 from verity.ml.circuits.program import is_input
 from verity_vllm.commit import memory_map as MM
 from verity_vllm.predict.build import build_program
+from verity_vllm.program import prefix_plan as PP
 
 WIDE = TINY | {"hidden_size": 512, "num_key_value_heads": 4}
 LAYOUT = MM.Layout(block_size=4)
@@ -355,6 +357,7 @@ def test_a_cached_block_its_producer_did_not_hold_is_refused(warm):
                   producers=PRODUCERS)
 
 
+
 # -- GLM-5.3's MLA: one plane of latent rows --------------------------------------------------------------------------------
 
 
@@ -444,3 +447,36 @@ def test_a_latent_page_of_64_slots_is_18_blocks_its_rows_straddle():
     got_head, got = parse(dumps(head, steps).splitlines())
     assert _replayed(got_head, got).extent == head.blocks + 2 * (18 + 4)
     assert MM.engine_agrees(rs, layout, tables, steps, _engine(rs, tables, bs=64, payload=_latent_payload)) == {"compared": 44, "equal": 44}
+
+
+# -- the prefix row: Llama-3.2-1B's two requests sharing 128 prompt rows ----------------------------------------------------
+
+def test_the_prefix_rows_warm_request_holds_its_producers_pages_to_its_last_read():
+    """T8b's prefix row (`PREFIX_ROW`, r20261018-085700-75d0): Llama-3.2-1B's two requests of 168 prompt rows and 10 tokens from
+    steps 0 and 4 on H200, the second's first 128 rows (8 pages of 16) the first's by `program.prefix_plan`.  Its Programs are the
+    predicted ones (the warm one the row's), its pages any the engine could have given: the warm request's first 8 are the first
+    request's, it writes from position 128, and those pages' blocks, written at step 0, are freed at its last read, step 13."""
+    wl = json.loads((TREE / "integrations" / "vllm" / "workloads" / f"{PREFIX_ROW}.json").read_text())
+    cfg, plan, names = json.loads((FIX / "llama32-1b.config.json").read_text()), PP.plan(wl), ["r0", "r1"]
+    built = {n: build_program(_phi(cfg, target=H200), "request", LP=r["prompt_len"], T=r["max_tokens"] - 1, cached=p["cached"])
+             for n, r, p in zip(names, wl["requests"], plan, strict=True)}
+    assert built["r1"].digest.startswith("bc2247ecb9d0e8f7")
+    reqs = {n: MM.rows(b.program) for n, b in built.items()}
+    arrive = {n: r["arrive_step"] for n, r in zip(names, wl["requests"], strict=True)}
+    producers = {n: [names[q] for q in p["producers"]] for n, p in zip(names, plan, strict=True) if p["producers"]}
+    assert (arrive, producers, reqs["r1"].cached, reqs["r1"].positions) == ({"r0": 0, "r1": 4}, {"r1": ["r0"] * 8}, 128, 177)
+    bs, observed = PP.block_size(wl), {"r0": list(range(1, 13)), "r1": list(range(1, 9)) + list(range(13, 17))}
+    tables = MM.tables(reqs, arrive, _slots(reqs, observed, arrive, bs), bs, producers)
+    assert tables == observed
+    layout = MM.Layout(block_size=bs, pages=17)
+    head, steps = MM.record(reqs, arrive, _payload, REGISTRATION, layout, tables, producers=producers)
+    region = head.blocks // 16                                       # a layer's 17 pages of a 16 KiB K plane and V plane
+
+    def at(pages, freed):
+        return {s.step for s in steps for x in (s.freed if freed else [w.slot for w in s.written]) if x % region // 8 in pages}
+    assert (at(range(1, 9), False), at(range(1, 9), True)) == ({0}, {13})       # r0 alone would free them at its last read, 9
+    assert (at((9, 10), False), at((9, 10), True), at((13, 14), False), at((13, 14), True)) == ({0}, {9}, {4}, {13})
+    got_head, got = parse(dumps(head, steps).splitlines())
+    assert _replayed(got_head, got).extent == head.blocks + sum(len(s.written) for s in steps)
+    n = len({w.slot for s in steps for w in s.written})
+    assert MM.engine_agrees(reqs, layout, tables, steps, _engine(reqs, tables, bs=bs)) == {"compared": n, "equal": n}

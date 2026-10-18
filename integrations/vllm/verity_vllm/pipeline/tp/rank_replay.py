@@ -224,7 +224,8 @@ def memory_map(st: dict[str, Any], p: Loaded, committed: Any) -> dict[str, Any] 
         return None
     try:
         got = MMP.after_commit(request, loaded=p.loaded, bmap=st["bmap"], committed=committed, manifest=manifest_of_rank(st.get("manifest_doc"), p.rank),
-                               arrivals=p.arrivals, caches=caches_of(st["com"]), tp=p.tp, attention_paths=p.attn_paths)
+                               arrivals=p.arrivals, caches=caches_of(st["com"]), tp=p.tp, attention_paths=p.attn_paths,
+                               prefixes=cached_prefixes(p.reqs))
     except Exception as e:  # noqa: BLE001
         return {"error": repr(e)[:400]}
     return got if "error" in got else {k: got[k] for k in ("map", "tp", "blocks", "page", "steps", "written", "freed", "engine", "seconds")}
