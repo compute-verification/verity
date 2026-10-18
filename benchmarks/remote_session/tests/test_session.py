@@ -474,7 +474,7 @@ def test_held_over_time_charges_what_a_burst_frees_in_one_groups_slack_and_the_s
     snapshot's only by the rebuilds its longer reads allow; a block in from the disks or a link counts as a rebuild."""
     N, b = 1000, 4096
     held = {"weights": 600 * b, "hbm": N * b, "host": 0}
-    mem = {"windows": [{"average": {"held": held}} for _ in range(12)]}
+    mem = {"windows": [{"held": held, "average": {"held": held}} for _ in range(12)]}
 
     def seen(stretch: int) -> list[dict]:
         out, t = [], 0
@@ -500,6 +500,35 @@ def test_held_over_time_charges_what_a_burst_frees_in_one_groups_slack_and_the_s
     assert linked["ingress_blocks"] == pytest.approx(2e-3 * (120 + 180))
     assert linked["rebuild_absent_blocks"] == pytest.approx(2 * 90 * 3e-3 * (120 + 180) / 120)
     assert linked[verifier.AVERAGE]["lost_blocks"] == pytest.approx((50 + 3e-3 * 300) / 8)
+
+
+def test_the_paced_line_refuses_a_session_any_of_whose_passes_leaves_a_registered_block_out():
+    """The paced line pays each absent stretch with a wrong read or a rebuild, which needs every pass to read every
+    registered block: a group whose least pass leaves one out, in either tier and in the closing stretch too, is
+    refused with the group and its count, and a paced session whose KV steps free registered slots carries that
+    refusal in its ledger."""
+    N, b = 1000, 4096
+    seen = [{"released_ns": 10 * g, "passes": 2, "arrivals_ns": [10 * g + 5, 10 * g + 10]} for g in range(12)]
+    whole = {"weights": 600 * b, "hbm": 700 * b, "host": 300 * b}
+
+    def line(at: int = 0, short: dict | None = None, groups: int = 12) -> dict:
+        held = [whole | (short or {}) if g == at else whole for g in range(groups)]
+        return verifier.paced_line({"windows": [{"held": h, "average": {"held": h}} for h in held]}, seen, groups=4,
+                                   wrong=0.0, blocks=N, rebuild_per_ns=0.0, chip_bytes=0, block_bytes=b,
+                                   node_bytes=10 * N * b)
+
+    assert line()["time"]["weights_bytes"] == line()["snapshot"]["weights_bytes"] == 600 * b
+    with pytest.raises(ValueError, match="group 2's least pass read 990 of the 1000 registered blocks"):
+        line(2, {"hbm": 690 * b})
+    with pytest.raises(ValueError, match="group 10's least pass read 999 of the 1000 registered blocks"):
+        line(10, {"host": 299 * b})
+    with pytest.raises(ValueError, match="a memory window for each group: 11 for 12"):
+        line(groups=11)
+
+    (r,), (p,) = run("kv:2", paces=[verifier.pace_of("1:4:40:2", 1.0)], kv_every=1, kv_pool=8)
+    assert r["accepted"] and p["accepted"] and r["released"] > 0
+    assert min(x["held"]["hbm"] for x in r["ledger"]["memory"]["windows"]) < 16 * rcodec.BLOCK_BYTES
+    assert "least pass read" in r["ledger"]["paced"]["refused"]
 
 
 def test_an_engines_arena_puts_each_weight_at_a_block_boundary_and_refuses_what_does_not_fit():

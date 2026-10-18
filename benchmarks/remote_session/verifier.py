@@ -349,8 +349,19 @@ def paced_line(mem: dict, seen: list[dict], *, groups: int, wrong: float, blocks
     A block also comes back into node memory, or onto the chip, without a rebuild from the node's own disks, which
     Identity leaves in (they are inside the node), and over its boundary links, which Identity takes as carrying no
     block.  `ingress_per_ns`, those routes' read ceiling in blocks a ns, counts as rebuilds in both forms: in the
-    time-held one each such block ends an absent stretch of up to 2·L_max, not the τ of the snapshot."""
+    time-held one each such block ends an absent stretch of up to 2·L_max, not the τ of the snapshot.
+
+    Both forms need every pass to read every registered block: a block a pass leaves out can be absent across that
+    pass with neither a wrong read nor a rebuild.  A session any of whose passes leaves one out (a group's least pass,
+    `memory`'s `held`, short of the store) is refused."""
     b, N, chip = block_bytes, blocks, chip_bytes / block_bytes
+    if len(mem["windows"]) != len(seen):
+        raise ValueError(f"a memory window for each group: {len(mem['windows'])} for {len(seen)} groups")
+    for g, x in enumerate(mem["windows"]):
+        if (read := x["held"]["hbm"] + x["held"]["host"]) != N * b:
+            raise ValueError(f"group {g}'s least pass read {read / b:.0f} of the {N} registered blocks: the paced line "
+                             "needs every pass to read every registered block, since a block a pass leaves out can be "
+                             "absent across it with neither a wrong read nor a rebuild")
     s, n = [w["released_ns"] for w in seen], [w["passes"] for w in seen]
     ends = [max(w["arrivals_ns"][-1] if w["arrivals_ns"] else s[g], s[g + 1] if g + 1 < len(s) else 0)
             for g, w in enumerate(seen)]
@@ -715,12 +726,16 @@ class Verifier:
             out["ledger"] = self.ledgers(record, arrivals, [w.plans for w in session.windows])
             if pace is not None:
                 rebuild = audit.Rebuild(record.codec, timing.SQUARINGS_PER_S[record.codec.field.name])
-                out["ledger"]["paced"] = paced_line(
-                    out["ledger"]["memory"], out["windows_seen"], groups=pace["groups"], wrong=audit.pooled(record)[0],
-                    blocks=reg.blocks, rebuild_per_ns=rebuild.squarings_per_s / record.codec.encode_squarings / 1e9,
-                    chip_bytes=timing.CHIP_BYTES, block_bytes=record.block_bytes,
-                    node_bytes=self.hbm_bytes + self.host_bytes,
-                    ingress_per_ns=self.ingress_bytes_per_s / record.block_bytes / 1e9)
+                try:
+                    out["ledger"]["paced"] = paced_line(
+                        out["ledger"]["memory"], out["windows_seen"], groups=pace["groups"],
+                        wrong=audit.pooled(record)[0], blocks=reg.blocks,
+                        rebuild_per_ns=rebuild.squarings_per_s / record.codec.encode_squarings / 1e9,
+                        chip_bytes=timing.CHIP_BYTES, block_bytes=record.block_bytes,
+                        node_bytes=self.hbm_bytes + self.host_bytes,
+                        ingress_per_ns=self.ingress_bytes_per_s / record.block_bytes / 1e9)
+                except ValueError as e:
+                    out["ledger"]["paced"] = {"refused": str(e)}
         return out
 
     @staticmethod
@@ -940,8 +955,10 @@ def main() -> int:
             lg, pub = r.get("ledger", {}).get("spec", {}), r.get("record", {}).get("public", {})
             mem = r.get("ledger", {}).get("memory", {})
             if (pl := r.get("ledger", {}).get("paced")) is not None:
-                print(f"verifier: session {k} paced {json.dumps(r['pace'])}: snapshot {pl['snapshot']['share']:.4%} "
-                      f"time {pl['time']['share']:.4%} gamma horizon {lg.get('horizon', {}).get('gamma')}", flush=True)
+                line = f"refused: {pl['refused']}" if "refused" in pl else \
+                    f"snapshot {pl['snapshot']['share']:.4%} time {pl['time']['share']:.4%}"
+                print(f"verifier: session {k} paced {json.dumps(r['pace'])}: {line} "
+                      f"gamma horizon {lg.get('horizon', {}).get('gamma')}", flush=True)
             passes = [w["passes"] for w in r["windows_seen"]]
             print(f"verifier: session {k}: accepted={r['accepted']} failure={r['failure']} "
                   f"passes={passes if r.get('pace') is None else sum(passes)} gamma={lg.get('gamma')} "
