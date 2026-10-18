@@ -42,3 +42,17 @@ Not in the model:
   that the profile sets.
 
 The rule each row touches and its owner are in the table.
+
+## PRF-70
+
+- `attention_prologue.py` counts the attention element unit's ANDs a key with and without q/k norm and RoPE recomputed in
+  the unit, from `compile_bits` of the repo's circuits (`--check` recomputes them). It then runs the sampling optimizer's
+  Qwen3-8B plan at proofs' budgets for each variant: `baseline`, `prologue`, `kv-credited` and `q-prologue`.
+- `two_stage.py` gives two-stage sampling's serve bytes and SHA-512 overhead per GPU, with K and V kept at the boundary
+  (condition (c)). It also gives the replay cost of a drawn layer or block: recompute plus interior commit, per draw and
+  per GPU-week.
+
+~~~text
+uv run python benchmarks/hash/bytes/attention_prologue.py [--check|--json]
+uv run python benchmarks/hash/bytes/two_stage.py [--json]
+~~~
