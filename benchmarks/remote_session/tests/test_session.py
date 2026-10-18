@@ -375,6 +375,14 @@ def test_an_engines_arena_puts_each_weight_at_a_block_boundary_and_refuses_what_
         engine.pack([1, 4096, 4097, 10], 5 * 4096 - 1)
 
 
+def test_aligned_engines_step_at_one_instant_of_the_host_clock_whatever_their_perf_counters_read():
+    import engine
+
+    due = [clock + engine.aligned(perf, clock, 0.5) - perf for perf, clock in ((3.0, 1000.12), (77.25, 1000.31))]
+    assert due == [pytest.approx(1000.5)] * 2
+    assert engine.aligned(10.0, 1001.0, 0.5) == pytest.approx(10.5)
+
+
 @pytest.mark.parametrize("layout", [
     [{"kind": "weights", "tier": "hbm", "first": 0, "blocks": 8}],
     [{"kind": "weights", "tier": "hbm", "first": 0, "blocks": 8},
