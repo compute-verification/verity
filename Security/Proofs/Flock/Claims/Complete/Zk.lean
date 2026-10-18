@@ -39,11 +39,12 @@ import Proofs.Flock.Claims.Complete.Zk.InnerGo
 import Proofs.Flock.Claims.Complete.Zk.ConsZerocheck
 import Proofs.Flock.Claims.Complete.Zk.Complete
 
-/-! Flock's completeness at the deployed masked (`--zk`) verifier: the honest masked prover (`Honest`: `honestPZk`, on
+/-! Flock's completeness at the deployed masked (`--zk`) verifier at one table (`ZkTables` lifts it to any number, at
+the masked record's prover `ZkTables.honestP`): the honest masked prover (`Honest`: `honestPZk`, on
 the masked tape `TapeZk` and pads `padsOf` of `Tape`, the masked zerocheck and lincheck of `Piop`, level 0's masked
 Ligerito of `Ligerito`, the pads' commitment and inner proof of `Inner`, the session of `Session`), its run against
 `V true` (`Run`: `run_acc_of_zk`), that run as a pure session (`Sim`: `honestRunZk_eq`), `δcZk H` with the composition
-into `Claims.Flock.Complete` (`Coins`: `pr_badZk_le`, `complete_zk_of`), and the masked verdict accepting when each of
+into `Claims.Flock.Complete`'s statement at `honestPZk` (`CompleteWith`; `Coins`: `pr_badZk_le`, `complete_zk_of`), and the masked verdict accepting when each of
 its checks passes (`Verdict`: `zk_verifyRepWith_ok`, `zk_verifyWith_ok`). The skeleton (`Skeleton`:
 `complete_zk_of_goals`) composes them from one named goal per check (`GoalsZk`), proving the keyed coin tree from
 `readyZk` (`coinTree_goal`); `Discharge` proves those that follow
@@ -53,7 +54,8 @@ and coin-tree checks passing on it (`checkHello_ok`, `checkRecord_ok`, with `Jso
 which it decodes as the plain record of `specZ` (`decodeWith_specZ`); `Json.Decode` reads it back: decoded, live, and
 its draw (`decode_recordObjZk`, `live_recordObjZk`, `recordDraw_recordObjZk`); `Json.Session` is what the one-table
 masked session returns and sends (`sessionPZk_facts`), its reps' rounds their sends (`repPZk_rec`); `Json.Goals` proves
-the record's goals from `StmtOkZk` and `ProverOkZk` (`RunZk.json`, `decodesZk_goal`, …, `repExtrasZk_goal`);
+the record's goals from `StmtOkZk` and `ProverOkZk` (`RunZk.json`, `decodesZk_goal`, …, `repExtrasZk_goal`), and
+`Json.Stmt` `StmtOkZk` from the case's setup (`stmtOkZk`, with `Same.good` and `good_subset`);
 `Json.Files` the proof files' goals, given `RepShapedZk` (`RunZk.rep`, `repDecodesZk_goal`, `repParamsZk_goal`,
 `padsRoot_goal`, `capCommittedZk_goal`, and `finalFitsZk_goal`, the record's length from `readyZk`); `Json.Runs` the
 session running, given `ProverRunsZk` (`sessionRunsZk_goal`); `Count` the sends fitting the rounds (`sendCountZk_goal`);
