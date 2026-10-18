@@ -31,9 +31,9 @@ what of them holds at `deployRec` with no appeal to V*'s circuits, at every shap
   passing on it (`InnerAccSha` at SHA-512). So `Decomp` holds at a shape exactly where the parts' inner checks together
   give that (`InnerCut`), a fact about how the compiled statement cuts the inner verifier into V*'s parts.
 * **`Decomp` refuses out-of-scope inner statements** (`innerAcc_public`, `decomp_public`): the inner checks run the
-  inner statement's scope check and refuse it without a draw. `readX` runs the scope check (`innerOk`), and neither it
-  nor V*'s setup asks for the draw. So at a compiled statement whose inner statement holds no draw, `Decomp` holds only
-  where no coins and inner messages pass all the parts' checks.
+  inner statement's scope check and refuse it without a draw. `readX` runs the scope check and refuses an inner
+  statement without a draw (`innerOk`), so at a statement the reader parses the inner statement holds one
+  (`innerDrawn_checked`, in `DeployChecked`).
 * **Flock's statement check passes the inner statement only in the plain-leaves form** (`check_plain_of_decode`,
   `inner_check_plain`): `RecVStar.innerOf` reads plain leaves off the circuit file (§16.16), and since #2411
   `ProvedScope.check` passes them at hidden outputs without `--zk` (`InnerLeaf.check_of_innerOf`). The reader requires
@@ -870,7 +870,7 @@ The inner statement as `readX` reads it, and Flock's statement check on it, whic
 hidden outputs without `--zk`, the one form the inner setup's circuit file can take (`InnerLeaf.check_of_innerOf`). -/
 
 /-- What `readX` read of the inner statement: its decoding, its circuit file set up at the inner tags
-(`RecVStar.innerOf`), and Flock's own setup and statement check on it (`innerOk`). -/
+(`RecVStar.innerOf`), and Flock's own setup and statement check on it, with a draw (`innerOk`). -/
 theorem readX_inner {x : Msg} {r : XR} (h : readX x = some r) :
     FlockDeploy.decode r.w.inner = some r.innerRaw ∧
       Flock.RecVStar.innerOf r.innerRaw.circuit r.innerRaw.publicFile r.partition r.innerRaw.program = .ok r.dims ∧
