@@ -2,8 +2,9 @@
 drawn inputs that include what both sides must refuse: the codec's decode (`codec.decode`, under the seed's key, a bound key
 and an append's coin), a plan (`receipts.Plan`: its length, digest and blocks) and its change (`Plan.changed`), a receipt
 (`receipts.receipter`, both kinds and both row counts), a frame-v3-sha512 opening (`verity.ml.commitments.verify_opening`
-over a range domain), a leaf's receipt (`receipts.leaf_receipt`), a window's draws (`Session.close`'s), and a
-registration's digest (`audit.Registration.digest`). `test_session.py` holds the whole verifier."""
+over a range domain), a leaf's receipt (`receipts.leaf_receipt`), a window's draws (`Session.close`'s), a
+registration's digest (`audit.Registration.digest`), and the registration `audit.register` makes, its codec seed drawn
+from the verifier's secret and a nonce. `test_session.py` holds the whole verifier."""
 
 from __future__ import annotations
 
@@ -383,6 +384,48 @@ def registration_inputs(draw) -> dict:
 def test_registration_digest(server) -> None:
     stats = D.run(port("registration_digest", registration_digest, registration_inputs()), examples=200, server=server)
     assert stats.outputs > 80, stats
+
+
+def register(v) -> dict:
+    """`registerFn`: `audit.register` on the input's source and nonce, `bind` refused as the Lean refuses it."""
+    with M.decoding():
+        source, node, root, nonce = (M.hex_(v, k) for k in ("source", "node", "payload_root", "nonce"))
+        c, kind, layout = M.codec_of(M._get(v, "codec")), M._str(v, "receipt"), M._str(v, "layout")
+        blocks, rows = M.nat(v, "blocks"), M.nat(v, "rows")
+        if M._bool(v, "bind"):
+            raise D.Reject("a registration that binds PoUW's tile outputs is not covered: the Lean refuses it")
+        r = audit.register(source, node, blocks, root, c, kind, layout=layout, rows=rows, nonce=nonce)
+    return {"codec_seed": r.codec_seed.hex(), "digest": r.digest.hex()}
+
+
+@st.composite
+def register_inputs(draw) -> dict:
+    v = draw(registration_inputs())
+    v.pop("codec_seed", None)
+    v["source"] = expand(draw(st.binary(max_size=8)), draw(st.sampled_from([1, 21, 64]))).hex()
+    v["nonce"] = expand(draw(st.binary(max_size=8)), audit.NONCE_BYTES).hex()
+    edit = fault(draw, 3)
+    if edit == 1:
+        v["source"] = ""
+    elif edit == 2:
+        v["nonce"] = draw(st.sampled_from(["", "00" * 31, "00" * 33]))
+    elif edit == 3:
+        del v[draw(st.sampled_from(["source", "nonce"]))]
+    return v
+
+
+def test_register(server) -> None:
+    stats = D.run(port("register", register, register_inputs()), examples=200, server=server)
+    assert stats.outputs > 40, stats
+
+
+def test_a_recorded_store_s_registration_is_the_leans(server) -> None:
+    """The scenarios' store is registered by `audit.register` under `ra_cases.SOURCE` and a zero nonce."""
+    reg = M.Run().store.registration
+    v = M.registration_json(reg) | {"source": M.SOURCE.hex(), "nonce": "00" * audit.NONCE_BYTES}
+    del v["codec_seed"]
+    assert D.replay(port("register", register, st.nothing()), v, server) == (
+        "output", D.canonical({"codec_seed": reg.codec_seed.hex(), "digest": reg.digest.hex()}))
 
 
 def test_a_recorded_registration_s_digest_is_its_session_s(server) -> None:
