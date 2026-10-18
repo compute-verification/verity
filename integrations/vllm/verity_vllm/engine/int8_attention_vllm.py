@@ -5,8 +5,11 @@
 `engine.build` calls it before `LLM()` when the target's `int8_exact` covers attention, whose engine args then select
 `attention_backend = "CUSTOM"`.  The engine core is in-process (`VLLM_ENABLE_V1_MULTIPROCESSING=0`), so the selector sees it.
 
-The backend is vLLM's FlashAttention backend in all but the forward: its validation, metadata builder and paged KV cache (layout,
-block sizes, `reshape_and_cache_flash` writing K after RoPE and V as bf16).  The cache stays bf16 because the step quantizes from
+The backend is vLLM's FlashAttention backend in all but the forward and the cache's layout: its validation, metadata builder and
+paged KV cache (block sizes, `reshape_and_cache_flash` writing K after RoPE and V as bf16).  The layout is the one it declares,
+`KV_LAYOUT` (vLLM's `LBNHC`): each layer one region of [pages][slots][KV heads][K‖V], 4 KiB a token-layer at the 8B (8 heads x
+2 x 128 bf16), the order memory accounting's `pg_window` reads at word order 1; the forward refuses a cache in any other
+(`int8_attention.page_layout_refusal`).  The cache stays bf16 because the step quantizes from
 bf16 on every window: K's per-token scales could be stored with an int8 K (a cache spec of its own, more than a backend), but V's
 per-channel scale reads the whole window, so an int8 V would have to be requantized as the window grows.
 
@@ -26,6 +29,7 @@ from vllm.utils.torch_utils import is_quantized_kv_cache
 from vllm.v1.attention.backend import AttentionType
 from vllm.v1.attention.backends.flash_attn import FlashAttentionBackend, FlashAttentionImpl
 from vllm.v1.attention.backends.registry import AttentionBackendEnum, register_backend
+from vllm.v1.kv_cache_layout import KVCacheLayout
 
 from verity_vllm.engine import int8_attention as A
 from verity_vllm.engine import int8_k_scales as K
@@ -33,6 +37,8 @@ from verity_vllm.engine import int8_ops
 from verity_vllm.program.frontend.target_profile import TargetProfile
 
 NAME = TargetProfile.INT8_EXACT_ATTENTION_BACKEND
+#: [layers][pages][slots][KV heads][K‖V]: a layer's pages one region, a token's heads one run
+KV_LAYOUT = KVCacheLayout.LBNHC
 
 
 class Int8AttentionImpl(FlashAttentionImpl):
@@ -76,6 +82,8 @@ class Int8AttentionImpl(FlashAttentionImpl):
             raise ValueError("int8 attention: cascade attention, decode context parallelism and non-causal metadata are refused")
         if query.dtype != torch.bfloat16:
             raise ValueError(f"int8 attention: queries are {query.dtype}, the step quantizes bf16")
+        if why := A.page_layout_refusal(kv_cache, self.head_size):
+            raise ValueError(f"int8 attention: the KV cache's {why}")
         n = attn_metadata.num_actual_tokens
         key_cache, value_cache = kv_cache.transpose(1, 2).split(self.head_size, dim=-1)
         self.calls += 1
@@ -103,6 +111,10 @@ class Int8AttentionBackend(FlashAttentionBackend):
     @staticmethod
     def get_impl_cls() -> type[Int8AttentionImpl]:
         return Int8AttentionImpl
+
+    @classmethod
+    def supported_kv_cache_layouts(cls) -> tuple[KVCacheLayout, ...]:
+        return (KV_LAYOUT,)
 
 
 @cache

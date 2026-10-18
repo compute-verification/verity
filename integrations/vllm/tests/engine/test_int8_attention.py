@@ -190,3 +190,16 @@ def test_refusals():
     with pytest.raises(ValueError, match="chunked prefill"):
         int8_ops.paged_attention(q[:3], kc, vc, torch.tensor([0, 3], dtype=torch.int32), torch.tensor([8], dtype=torch.int32), table,
                           torch.ones(2), 0.25, torch.empty_like(q[:3]))
+
+
+def test_the_cache_is_pages_slots_heads_k_then_v():
+    """vLLM hands the backend a layer's cache as the logical [pages, KV heads, slots, 2D]; the int8 backend's (`LBNHC`) is laid out
+    [pages][slots][KV heads][K‖V], 4 KiB a token-layer at the 8B; head-major pages, a split K and V, or a padded page are refused."""
+    pages, g, n, d = 3, 8, 16, 128
+    cache = torch.empty(pages, n, g, 2 * d, dtype=torch.bfloat16).transpose(1, 2)
+    assert A.page_layout_refusal(cache, d) is None and g * 2 * d * cache.element_size() == 4096
+    kc, vc = cache.transpose(1, 2).split(d, dim=-1)
+    assert kc.stride() == vc.stride() == (n * g * 2 * d, g * 2 * d, 2 * d, 1) and vc.data_ptr() - kc.data_ptr() == d * 2
+    assert "strides" in A.page_layout_refusal(torch.empty(pages, g, n, 2 * d, dtype=torch.bfloat16), d)
+    assert "strides" in A.page_layout_refusal(torch.empty(pages, n + 1, g, 2 * d, dtype=torch.bfloat16)[:, :n].transpose(1, 2), d)
+    assert "shape" in A.page_layout_refusal(torch.empty(pages, g, n, d, dtype=torch.bfloat16), d)

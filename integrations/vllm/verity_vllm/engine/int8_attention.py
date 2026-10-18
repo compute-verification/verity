@@ -148,6 +148,18 @@ def window_of(key_cache: torch.Tensor, value_cache: torch.Tensor, blocks: torch.
     return key_cache[slot, pos % bs], value_cache[slot, pos % bs]
 
 
+def page_layout_refusal(kv_cache: torch.Tensor, head_size: int) -> str | None:
+    """Why a layer's cache, vLLM's logical view [pages, KV heads, slots, 2 head_size], is not [pages][slots][KV heads][K‖V] in memory:
+    each page its slots in order, each slot its heads, each head its K then its V (None: it is)."""
+    if kv_cache.dim() != 4 or kv_cache.shape[-1] != 2 * head_size:
+        return f"shape {tuple(kv_cache.shape)} is not [pages, KV heads, slots, 2 x {head_size}]"
+    _, g, n, c = kv_cache.shape
+    want = (n * g * c, c, g * c, 1)
+    if tuple(kv_cache.stride()) != want:
+        return f"strides {tuple(kv_cache.stride())} are not [pages][slots][KV heads][K‖V]'s {want}"
+    return None
+
+
 def applied_record(model: Any) -> dict[str, dict[str, Any]]:
     """What every attention layer ran, by module name: its impl's class, int8 arm (None for an impl without one) and the calls it
     served (None for an impl that does not count them).  Structural, as `kernel_readback.int8_exact_of`."""
