@@ -152,8 +152,8 @@ What the proof service does per window:
 The unit is the match, one AND per compared bit and 22 per base64 character, plus SHA-512 over the record's prefix and
 the frames, 57,947 ANDs per compression. `DEMO` (3 frames of 16 bytes, 2 rows) is 58,944 ANDs: 485 for the match, one
 compression, 511 to compare the digest and the final AND. The simulator's windows (64-byte frames) take at most 3
-compressions. The lab's (4,096-byte frames) take 33 for a window of one frame and up to 193, about 11.2M ANDs over 426
-rows, for one of six; about four fifths of the bytes they hash are the frames' zero fill.
+compressions. The lab's (4,096-byte frames) take 33 for a window of one frame (2.0M ANDs) and up to 193 for one of six
+(11.5M ANDs over 426 rows, 0.35M of them the match); about four fifths of the bytes they hash are the frames' zero fill.
 
 The tests (`workload/tests/test_n3_unit.py`) check the circuit against its Python reference on `DEMO`, the simulator's
 windows and synthetic lab windows: an honest window gives ok, and a flipped bit, an extra frame, written fill or a wrong
