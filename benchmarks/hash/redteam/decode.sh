@@ -23,7 +23,7 @@ mkdir -p "$S" && git -C "$S" init -q && git -C "$S" remote add origin https://gi
 if ! git -C "$S" fetch -q --depth=1 --filter=blob:none origin "$SHA" 2> "$O/fetch.err"; then
   git -C "$S" fetch -q --depth=1 origin "$SHA" 2>> "$O/fetch.err" || { echo "fetch failed" >> "$O/rc.txt"; exit 1; }
 fi
-git -C "$S" sparse-checkout set --no-cone /benchmarks/hash/intpipe /verity >> "$O/fetch.err" 2>&1
+git -C "$S" sparse-checkout set --no-cone /benchmarks/hash/intpipe /benchmarks/pouw/commit_gpu /archive/pouw-blake3/pearl_c /verity >> "$O/fetch.err" 2>&1
 git -C "$S" checkout -q FETCH_HEAD 2>> "$O/fetch.err"
 [ "$(git -C "$S" rev-parse HEAD)" = "$SHA" ] || { echo "checkout is not $SHA" >> "$O/rc.txt"; exit 1; }
 echo "$SHA" > "$O/intpipe_commit.txt"
