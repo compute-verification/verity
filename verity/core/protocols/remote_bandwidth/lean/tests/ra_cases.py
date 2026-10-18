@@ -185,7 +185,7 @@ def event_of(v: Any) -> tuple:
     if kind == "append":
         return kind, hex_(v, "root"), int_(v, "count")
     if kind == "release":
-        return kind, runs_of(_get(v, "runs"), "runs")
+        return kind, runs_of(_get(v, "runs"), "runs"), runs_of(_get(v, "withdrawn"), "withdrawn")
     if kind == "receive":
         runs = _get(v, "runs")
         change = _get(v, "change")
@@ -253,7 +253,7 @@ def apply(s: Session, clock: Clock, e: tuple) -> dict:
             out = s.append(e[1], e[2])
             return verdict_json(out) if isinstance(out, audit.Verdict) else {"coin": out[1].hex(), "first": out[0]}
         if kind == "release":
-            return _done(s.release(e[1]))
+            return _done(s.release(e[1], e[2]))
         if kind == "receive":
             _, t, i, root, runs, change, step, now = e
             clock.now = now
@@ -291,7 +291,8 @@ def session(v: Any) -> dict:
         p = _get(v, "params")
         params = Params(reg.blocks, _positive(p, "deadline_ns"), _positive(p, "windows"), samples=_positive(p, "samples"),
                         min_passes=_positive(p, "min_passes"), window_ns=_positive(p, "window_ns"), codec=reg.codec,
-                        receipt=reg.receipt, layout=reg.layout, rows=reg.rows, lifetime=_positive(p, "lifetime"))
+                        receipt=reg.receipt, layout=reg.layout, rows=reg.rows, lifetime=_positive(p, "lifetime"),
+                        deferred=_bool(p, "deferred"))
         committed = hexes(v, "coins")
         if len(committed) != params.coins or any(len(c) != coins.COIN_BYTES for c in committed):
             raise D.Reject("2W coins of 32 bytes")
@@ -380,12 +381,13 @@ class Run:
     clock moves one tick an event unless a call needs more. Every receipt is drawn unless `samples` says fewer."""
 
     def __init__(self, world: World = World(), *, windows: int = 2, samples: int = 10**6, min_passes: int = 1,
-                 lifetime: int = audit.LIFETIME, deadline_ns: int = 100, window_ns: int = 10, not_before_ns: int = 0,
-                 cheat: Callable[[audit.Store], audit.Store] | None = None) -> None:
+                 lifetime: int = audit.LIFETIME, deferred: bool = False, deadline_ns: int = 100, window_ns: int = 10,
+                 not_before_ns: int = 0, cheat: Callable[[audit.Store], audit.Store] | None = None) -> None:
         self.store = store(world)
         reg = self.store.registration
         self.params = Params(reg.blocks, deadline_ns, windows, samples=samples, min_passes=min_passes,
-                             window_ns=window_ns, codec=reg.codec, receipt=reg.receipt, rows=reg.rows, lifetime=lifetime)
+                             window_ns=window_ns, codec=reg.codec, receipt=reg.receipt, rows=reg.rows, lifetime=lifetime,
+                             deferred=deferred)
         self.clock = Clock()
         self.clock.now = not_before_ns
         self.not_before_ns = not_before_ns
@@ -447,8 +449,9 @@ class Run:
         self.commit(a.root, a.count)
         return a
 
-    def release(self, runs) -> Any:
-        return self._call({"kind": "release", "runs": _runs_json(runs)}, lambda: self.s.release(runs))
+    def release(self, runs, withdrawn=()) -> Any:
+        return self._call({"kind": "release", "runs": _runs_json(runs), "withdrawn": _runs_json(withdrawn)},
+                          lambda: self.s.release(runs, withdrawn))
 
     def receive(self, t: int, i: int, root: bytes, runs=None, change=None, step=None, at: int | None = None) -> Any:
         event = {"kind": "receive", "t": t, "i": i, "root": root.hex(), "runs": _runs_json(runs),
@@ -509,8 +512,9 @@ class Run:
         return {"append_coins": [c.hex() for c in self.append_coins],
                 "coins": [c.hex() for c, _ in self.challenger._coins], "events": self.events,
                 "not_before_ns": self.not_before_ns,
-                "params": {"deadline_ns": p.deadline_ns, "lifetime": p.lifetime, "min_passes": p.min_passes,
-                           "samples": p.samples, "window_ns": p.window_ns, "windows": p.windows},
+                "params": {"deadline_ns": p.deadline_ns, "deferred": p.deferred, "lifetime": p.lifetime,
+                           "min_passes": p.min_passes, "samples": p.samples, "window_ns": p.window_ns,
+                           "windows": p.windows},
                 "registration": registration_json(self.store.registration)}
 
 
@@ -814,6 +818,61 @@ def release(r: Run, runs) -> None:
     r.release(runs)
 
 
+def honest_withdraw(r: Run) -> None:
+    """Deferred residency: three pages appended, a pass holds the first and third, whose encodes landed, and the second,
+    freed before its encode landed, is released and named withdrawn (memory-map/v1's `withdrawn`)."""
+    N = r.store.registration.blocks
+    r.start()
+    r.run()
+    r.append(3)
+    r.run(change=(((N, 1), (N + 2, 1)), ()))
+    r.release(((N + 1, 1),), ((N + 1, 1),))
+    r.run(change=((), ((N, 1),)))
+    r.boundary()
+    r.release(((N, 1),))
+    r.run(Plan(((0, 2), (N + 2, 1)), r.store.extent))
+    r.boundary()
+    r.finish()
+
+
+def honest_deferred_rekey(r: Run) -> None:
+    """Deferred residency at lifetime 2: a page appended in window 0 is resident from window 1 (its encode landed after
+    the boundary) and re-keyed before window 2's first pass, at age L − 1, its new index resident from there."""
+    N = r.store.registration.blocks
+    r.start()
+    r.run()
+    r.append(1)
+    r.run(change=((), ()))
+    r.boundary()
+    r.run(change=(((N, 1),), ()))
+    r.boundary()
+    r.release(((N, 1),))
+    again = r.store.append(pages(N, 1), salts(b"page salts again", 1))
+    r.commit(again.root, again.count)
+    r.run(change=(((N + 1, 1),), ((N, 1),)))
+    r.boundary()
+    r.finish()
+
+
+def withdraw(r: Run, runs, withdrawn) -> None:
+    """Three pages appended and a pass holding the first and third; then a release of `runs` naming `withdrawn`."""
+    N = r.store.registration.blocks
+    r.start()
+    r.append(3)
+    r.run(change=(((N, 1), (N + 2, 1)), ()))
+    r.release(runs, withdrawn)
+
+
+def withdraw_held_earlier(r: Run) -> None:
+    """The second page was in the first pass's plan (sent whole) and left it at the next (a change): it was written."""
+    N = r.store.registration.blocks
+    r.start()
+    r.append(3)
+    r.run(Plan(((0, N + 2),), r.store.extent))
+    r.run(change=((), ((N, 2),)))
+    r.release(((N + 1, 1),), ((N + 1, 1),))
+
+
 def lifetime(r: Run) -> None:
     """Lifetime 1: a page appended in window 0 still in window 1's plan."""
     N = r.store.registration.blocks
@@ -892,6 +951,7 @@ def refusals(r: Run) -> None:
 
 
 W1 = dict(windows=1)
+DEFERRED = dict(lifetime=2, deferred=True)
 P1024 = World(codec.DEFAULT, blocks=3)
 BLOCK = World(receipt=receipts.BLOCK_SHA512)
 ROWS64 = World(rows=64)
@@ -957,6 +1017,12 @@ SCENARIOS: dict[str, tuple[World, dict, Callable[[Run], None], str | None]] = {
     "release-malformed": (World(), {}, lambda r: release(r, ((5, 3),)), "release"),
     "release-adjacent": (World(), W1, lambda r: (release(r, ((3, 1),)), r.run(Plan(((0, 1), (4, 2)), 6)),
                                                  r.boundary(), r.finish()), "accepted"),
+    "honest-withdraw": (World(), DEFERRED, honest_withdraw, "accepted"),
+    "honest-deferred-rekey": (World(), dict(DEFERRED, windows=3), honest_deferred_rekey, "accepted"),
+    "withdraw-planned": (World(), {}, lambda r: withdraw(r, ((6, 1),), ((6, 1),)), "release"),
+    "withdraw-registered": (World(), {}, lambda r: withdraw(r, ((2, 1),), ((2, 1),)), "release"),
+    "withdraw-outside": (World(), {}, lambda r: withdraw(r, ((2, 1),), ((7, 1),)), "release"),
+    "withdraw-held-earlier": (World(), {}, withdraw_held_earlier, "release"),
     "lifetime": (World(), dict(lifetime=1), lifetime, "lifetime"),
     "few": (World(), dict(W1, min_passes=2), few, "few"),
     "malformed-root": (World(), {}, malformed_root, "malformed"),

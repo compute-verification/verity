@@ -1,16 +1,16 @@
-# dither-2s-licpw-redux-l32 with its FFMA filler at p = 1, no luck credit (decision 99: a filler's credit is the theorem
-# its check meets, and no bit-exact FFMA check exists yet, DC r12 is building it). Honest still runs the filler, so γ
-# counts it; the floor program ♭ and the cheater leave it out, so ε_skip is this design's own at that ♭.
+# dither-2s-licpw-redux-l32 with ffill at p = 1, no luck credit (decision 99: a filler's credit is the theorem its check
+# meets): the H200's reading without ffill's check (ffill_ref.receipt). Honest still runs the filler, so γ counts it; the
+# floor program ♭ and the cheater leave it out, so ε_skip is this design's own at that ♭.
 base = "dither-2s-licpw-redux-l32"
 name = "dither-2s-licpw-redux-p1-l32"
-title = "Dither-2S, LI-CP-W redux, 0.07 FFMA at p = 1, L = 32"
-summary = "dither-2s-licpw-redux-l32 with its 0.07 FFMA a word at p = 1 (no FFMA check yet, decision 99): honest runs the filler, the cheater and ♭ leave it out"
+title = "Dither-2S, LI-CP-W redux, ffill at p = 1, L = 32"
+summary = "dither-2s-licpw-redux-l32 with ffill (0.0703 a word) at p = 1, no luck credit (decision 99): honest runs the filler, the cheater and ♭ leave it out"
 
 [filler]
-per_word = 0.07
-mix = { FFMA = 1 }
+per_word = 0.0703125
+mix = { FFMA = 2, IMAD = 1 }
 route = "lanes"
-source = "dither-2s-licpw-redux-l32's filler (LI-ALT, FILL-OPT), with no check that meets a luck theorem (decision 99)"
+source = "dither-2s-licpw-redux-l32's filler (ffill, FILL-OPT), credited as if no check met a luck theorem (decision 99)"
 p = 1.0
 
 [skip.served]

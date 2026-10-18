@@ -1297,6 +1297,7 @@ derives its seed in its own proof, and its noise from the seed:
 
 ~~~text
 seed_j  = SHA-512(u64(j) ‖ (SEED_TAG ‖ salt ‖ root(A_j) ‖ root(B_j)) ⊕ u64(j)*)        PouwSeed
+σ_R     = SHA-512(u64(j) ‖ (RECEIPT_TAG ‖ salt ‖ root(A_j) ‖ root(B_j)) ⊕ u64(j)*)     PouwUnitSeeds, with seed_j
 block_t = SHA-512(NOISE_TAG ‖ seed_j ‖ u64(t))                                          PouwNoiseBlock
 ~~~
 
@@ -1306,10 +1307,26 @@ a common value. Positions (`pouw.positions`, unit u at slot u, `Compiled.positio
 bound before the draw; a verifier that runs the Program more than once under one salt gives each run its own range of
 positions, so each (salt, position) seeds one unit.
 
-**Seed groups** (decision 112). `groups` names the calls committed together: sites of one key share a slot of `pouw.roots`
-(all heads of a layer's QKᵀ, a decode step's batch), each unit still at its own position. One commitment fixes the noise of
-every unit it covers, so the grinding premium is a constant number of units per group (`Compiled.cover`), and the scheme's
-`cover` is the fewest a group may cover, GRIND/BUDGET's to set. By default each site is a group.
+A unit's receipt keys and chain starts come from σ_R, a hash of its own tag, never from the noise seed (decision 121). A unit
+whose folds take keys calls `PouwUnitSeeds` once for both, [seed_j, σ_R] with the masked salt and roots shared, since two
+seeds at one position are one seed (COIN-RULES' `E_COIN_REUSE`).
+
+**Seed groups** (decisions 112 and 122). `groups` names the calls committed together: sites of one key share a slot of
+`pouw.roots`, each unit still at its own position. One commitment fixes the noise of every unit it covers, so the grinding
+premium is a constant number of units per group (`Compiled.cover`), and the scheme's `cover` is the fewest a group may
+cover. By default each site is a group, and a site is one call: a layer's QKᵀ batched over its heads and the step's batch
+is one site, so one seed covers the call, not one head.
+
+GRIND (decision 122) sets the attention kinds' cover in (head, request) pairs (`Scheme.pair_cover`, `Compiled.pair_cover`):
+385 for QKᵀ (`QK_PAIRS`, on `DotBf16_v1 .. v3`) and 791 for P·V (`PV_PAIRS`, for the kind ATTN-NOISE plugs), which hold
+the decode grind term under 0.1% at T = 2^128. At one seed a call that is 8B's decode at batch ≥ 13 for QKᵀ and ≥ 25 for
+P·V. Below it the pass refuses the seed group (`cover`): its noise is the live per-round coin of decision 36, not a seed's.
+A pair is a connected component of the group's dots of the kind, its rows joined through the dots they share: at decode
+one (head, request), a query and its keys. Query heads that read one KV head's keys (GQA) are one pair by this count, so
+for a GQA model it refuses more than GRIND's per-query-head table does (8B: batch ≥ 49 for QKᵀ). A bf16 linear on
+`DotBf16` is one pair a call, so it is refused under a scheme that keeps QKᵀ's cover for its family. A seed group never
+spans calls run one after another (`span`): a seed binds its calls' operand roots, and layer ℓ + 1's operands exist only
+after layer ℓ has run.
 
 **Check** (`CompileError.code`):
 
@@ -1317,7 +1334,9 @@ every unit it covers, so the grinding premium is a constant number of units per 
 - `edited-arm`, `arm`: a Call isn't the registered arm; `scan`, `operand-inside`: a matmul inside a scan, or on an operand
   computed inside its Definition;
 - `uncovered`: a registered Call or a matmul step left outside every unit;
-- `cover`: a seed group covers fewer units than the scheme's `cover`;
+- `cover`: a seed group covers fewer units than the scheme's `cover`, or fewer (head, request) pairs of a kind than its
+  `pair_cover`;
+- `span`: a seed group holds a call and a call that reads its output;
 - `salt-flow`: the salt reaches anything but a unit's seed;
 - `position`: a unit's seed reads a position or roots other than its own parameters, or at the root a unit batch reads slots
   other than its own: no unit chooses its position, and no two share one;
@@ -1326,9 +1345,10 @@ every unit it covers, so the grinding premium is a constant number of units per 
 - `name`, `scheme`: a parameter already named `pouw.*`, or a scheme or kind that isn't registered.
 
 `Compiled.check_gates` adds the gate-level cut (no value computed in two units), the separator and the width rule by
-reachability, for a Program small enough to flatten. COIN-RULES (`ports.py`'s `E_COIN_FLOW`) lets a coin reach only a noise
-primitive's or a receipt fold's coin port, so it refuses the salt's flow into the seed's gates until it gives the seed a role
-(the seed's salt port the coin's terminal, and many seeds reading one salt at distinct positions).
+reachability, for a Program small enough to flatten. Where COIN-RULES has its seed role (`ports.py`), the seed, each unit and
+the compiled Program declare their position `In(kind="position")` beside the salt's coin port, and its Build check refuses
+some units before compile's own checks do: two seeds at one position (`E_COIN_REUSE`), a position the unit computes
+(`E_PORT_KIND`), a seed's noise reaching z or past the unit's sinks (`E_COIN_FLOW`).
 
 **Schemes.** The pass's own `compile.SCHEMES`, separate from `circuit.SCHEMES`; `BUILTIN` loads this package's at the first
 name not registered.
@@ -1336,8 +1356,16 @@ name not registered.
 - `eps1-sm120-h1fx1` (`circuit/h1tile.py`, where `circuit/segment.py` is on the tree): sm_120's H1 + fx1 on a warp's 32 × 32
   tile, for the s8 kinds on bits, under CP-W (decision 104, #2438's `PouwWarpCheck_v2` body). Each lane folds H1's sets over
   X = A + b and W' = B + c + U with fx1 from its keys, and receipt words 2 s and 2 s + 1 are the warp's XOR of y and of z
-  after set s: 2 (KS + m) words, 8,320 bits at K = 4096. Its noise is counter mode (`h1tile.Layout`): each row's, column's
-  and lane's from blocks of its own.
+  after set s: 2 (KS + m) words, 8,320 bits at K = 4096. Its noise is counter mode (`h1tile.Layout`): each row's and
+  column's from blocks of seed_j's own, and each lane's fold keys, its chain's start, a block of σ_R's (`h1tile.fold_keys`).
+  The edited GEMM kernel still starts its chains from the noise seed (`benchmarks/pouw/edited_gemm/cgemm.cu`'s
+  ``ch[e].y = mix32(a.seed ^ …)``), which decision 121 retires: a kernel follow-up keys them from σ_R. Whether a tile is a
+  legal proof unit under the 16-bit output rule, or the warp check must be a unit kind of its own aggregating coordinates, is
+  decision 107's, still open.
+
+The seed, the unit's two seeds and the noise block (`_v1` on words, `_v2` on bits), `PouwU129` and `PouwH1Tile` are
+registered Definitions, each checked by circuit-check at its sidecar's binding (`seeds.circuit-check.py`,
+`h1tile.circuit-check.py`); `PouwH1Tile` only where `circuit/segment.py` is on the tree, at one lane (4 × 8, K = 64).
 
 Not here yet: P·V as a registered Call, and a staged split for a dot whose operands its holder computes; a padded tile for a
 site that fills none (decode's few tokens); the vLLM integration serving the compiled Program.

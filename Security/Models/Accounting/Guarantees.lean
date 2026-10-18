@@ -6,6 +6,7 @@ import Models.Accounting.Guarantees.BoundReceipt
 import Models.Accounting.Guarantees.BoundSketch
 import Models.Accounting.Guarantees.Bridges
 import Models.Accounting.Guarantees.Capacity
+import Models.Accounting.Guarantees.CoinFlow
 import Models.Accounting.Guarantees.Confidence
 import Models.Accounting.Guarantees.FillerLuck
 import Models.Accounting.Guarantees.HMu
@@ -31,9 +32,11 @@ import Models.Accounting.Guarantees.Tag
 import Models.Accounting.Guarantees.TS
 import Models.Accounting.Guarantees.Sheet
 import Models.Accounting.Guarantees.TS.Receipt
+import Models.Accounting.Guarantees.TS.Grind
 import Models.Accounting.Guarantees.TS.Stages
 import Models.Accounting.Guarantees.TS.Steer
 import Models.Accounting.Guarantees.TS.FoldFanIn
+import Models.Accounting.Guarantees.TS.LowBit
 
 /-! Resource accounting's guarantee statements: the joint guarantee and its covert residual, PoUW's and the bandwidth
 audit's guarantees as a joint run's compute and bandwidth guarantees, the filler's per-check luck, a state-bounded
@@ -44,6 +47,7 @@ tiers and chained passes, the causal horizon bound on its samples and its conser
 composed guarantee for the remote bandwidth audit as deployed and its deployed instance, the remote
 bandwidth audit's conservation and node-level guarantees on the actual-circuit model, the actual circuit's capacity
 theorem, runtime corollary, localization, composition and fit, the obligations B1, B2 and B4, the tag and sketch
-guarantees, Lemma B with (H-μ⁺) derived from fresh coins and Lemma B′ for a persistent pattern, co-location and the link relay for receipts bound to the matmul, what a relay of the deployed bound
+guarantees, Lemma B with (H-μ⁺) derived from fresh coins and Lemma B′ for a persistent pattern, the view independence the Build's coin rules give it, co-location and the link relay for receipts bound to the matmul, what a relay of the deployed bound
 receipt's sketch must exchange, the bandwidth audit's guarantee, their per-run forms, PoUW's work lower bound on an isolated node,
-and a declared circuit's live and read bits from the blocks the audit credits. -/
+a declared circuit's live and read bits from the blocks the audit credits, and the grinding premium under hashed seeds
+and the deployed tile's moment. -/

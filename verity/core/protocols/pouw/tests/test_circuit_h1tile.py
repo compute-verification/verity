@@ -1,6 +1,6 @@
 """`circuit.h1tile`: H1 + fx1 as a compile-pass tile unit under CP-W. Its lanes are the tile's cells once each, its noise is
-seed_j's stream in counter mode, its receipt is #2438's warp checkpoint (two words a set), and on a compiled grid its gates
-are its word reference (`segment.call_words`, fx1's fold), with the served outputs unchanged."""
+seed_j's stream in counter mode and its fold keys σ_R's, its receipt is #2438's warp checkpoint (two words a set), and on a
+compiled grid its gates are its word reference (`segment.call_words`, fx1's fold), with the served outputs unchanged."""
 from __future__ import annotations
 
 import hashlib
@@ -14,14 +14,14 @@ from verity.ml.circuits.evaluation import evaluate
 from verity.ml.circuits.ops import gemm as G
 from verity.ml.circuits.ops.boolean import gemm as BG
 from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import Coll, concat
+from verity.ml.circuits.refs import Coll, concat, runs
 from verity.ml.circuits.types import Array
 from verity.core.protocols.pouw.circuit import compile as C
 from verity.core.protocols.pouw.circuit import h1tile as H
 from verity.core.protocols.pouw.circuit import seeds as SD
 
 pytestmark = pytest.mark.skipif(H.SG is None, reason="H1's receipts (circuit.segment, E2E-120) are not on this tree")
-COIN_RULES = C._ports is not None and hasattr(C._ports, "_coin_role")
+COIN_RULES = C._ports is not None and hasattr(C._ports, "_coin_role") and "position" not in C._ports.KINDS
 compiles = pytest.mark.skipif(COIN_RULES, reason="COIN-RULES refuses the salt's flow into PouwSeed: E_COIN_FLOW")
 BIT = BL.BIT
 I8 = Array(8, BIT)
@@ -86,23 +86,46 @@ def test_lanes_are_the_tile_once(r, c):
 
 
 def test_noise_is_counter_mode():
-    """Every row's, column's and lane's noise is its own blocks of seed_j's stream, so a kernel derives any of them alone;
-    at a warp and K = 4096 the receipt is #2438's 8,320 bits a warp a call (2 (KS + m) words, KS = 128, m = 2)."""
+    """Every row's and column's noise is its own blocks of seed_j's stream, and every lane's fold keys a block of σ_R's
+    (decision 121), so a kernel derives any of them alone; at a warp and K = 4096 the receipt is #2438's 8,320 bits a warp a
+    call (2 (KS + m) words, KS = 128, m = 2)."""
     lay = H.Layout(32, 32, 4096)
-    assert (lay.ks, lay.m, lay.rb, lay.cb, lay.lanes, lay.blocks) == (128, 2, 9, 9, 32, 608)
+    assert (lay.ks, lay.m, lay.rb, lay.cb, lay.lanes, lay.blocks) == (128, 2, 9, 9, 32, 576)
     assert 2 * lay.sets * 32 == 8320
-    firsts = [lay.row(i) for i in range(32)] + [lay.col(j) for j in range(32)] + [lay.lane(ln) for ln in range(32)]
-    spans = [lay.rb] * 32 + [lay.cb] * 32 + [1] * 32
+    firsts = [lay.row(i) for i in range(32)] + [lay.col(j) for j in range(32)]
+    spans = [lay.rb] * 32 + [lay.cb] * 32
     assert sorted(b for f, n in zip(firsts, spans) for b in range(f, f + n)) == list(range(lay.blocks))
+    assert [lay.lane(ln) for ln in range(32)] == list(range(32))
     small = H.Layout(4, 8, 64)
-    seed_j = SD.seed(SALT, 3, *ROOTS)
-    rows, cols, keys = H.noise(seed_j, small)
+    seed_j, sigma_r = SD.seed(SALT, 3, *ROOTS), SD.receipt_seed(SALT, 3, *ROOTS)
+    rows, cols = H.noise(seed_j, small)
     block = SD.leaves(SD.noise_block(seed_j, small.row(2)), True)
     assert rows[2] == (block[:64], [block[64:96]])
     col = SD.noise_block(seed_j, small.col(5))
     assert cols[5][0] == SD.leaves(col, True)[:64]
     assert cols[5][1] == [H.u129(x) for h in SD.halves(col)[2:10] for x in (h & 0xFF, h >> 8 & 0xFF, h >> 16 & 0xFF, h >> 24)]
-    assert keys[0] == SD.halves(SD.noise_block(seed_j, small.lane(0)))
+    assert H.fold_keys(sigma_r, small)[0] == SD.halves(SD.noise_block(sigma_r, small.lane(0)))
+
+
+def test_fold_chains_start_from_sigma_r():
+    """Decision 121: the unit's one seed call is `PouwUnitSeeds` (seed_j, σ_R); each lane's fold chain starts from a block
+    of σ_R's stream, and every other noise block reads seed_j, so no fold key is a function of the noise seed."""
+    grid = C.Tile(4, 16, tuple((i, j) for i in range(4) for j in range(16)))
+    body = bind(H.PouwH1Tile, EXACT=_acc(64), R=4, C=16, PAIRS=grid.pairs).body
+    defn = [getattr(nd.fn, "defn", nd.fn) for nd in body.nodes]
+    (us,) = [k for k, d in enumerate(defn) if d in SD.SEEDS]
+    assert defn[us] is SD.PouwUnitSeedsBits
+    D = SD.DIGEST_BITS.leaves
+    seed_j, sigma_r = [("n", us, 0, D)], [("n", us, D, 2 * D)]
+    blocks = {k: runs(body.nodes[k].args[0].refs) for k, d in enumerate(defn) if d is SD.PouwNoiseBlockBits}
+    lay = H.Layout(4, 16, 64)
+    assert sorted(map(str, blocks.values())) == sorted(map(str, [seed_j] * lay.blocks + [sigma_r] * lay.lanes))
+    absorbs = {k for k, d in enumerate(defn) if d is H.SG.PouwFx1Absorb}
+    starts = [runs(body.nodes[k].args[0].refs) for k in absorbs]
+    starts = [r for r in starts if not any(s == "n" and i in absorbs for s, i, _lo, _hi in r)]
+    assert len(starts) == lay.lanes == len({r[0][1] for r in starts})
+    assert all(len(r) == 1 and r[0][0] == "n" and r[0][2:] == (0, H.KEY_BITS) and blocks.get(r[0][1]) == sigma_r
+               for r in starts), starts
 
 
 def test_u129_on_bits_is_the_word():
@@ -151,8 +174,9 @@ def test_reference_follows_the_seed():
 @pytest.mark.slow
 def test_h1_tile_is_its_reference():
     """A 4 × 16 grid at K = 64 compiles to one H1 tile unit of two lanes; on random rows its served outputs are the served
-    Program's, and its receipt is `reference`'s (E2E-120's `call_words` and fx1 fold, then the lanes' XOR a set). Slow: the
-    seed's and 22 noise blocks' SHA-512 in gates and 64 exact s8 dots on bits; it is the only test of the unit's gates."""
+    Program's, and its receipt is `reference`'s (E2E-120's `call_words` and fx1 fold from σ_R's keys, then the lanes' XOR a
+    set). Slow: the two seeds' and 22 noise blocks' SHA-512 in gates and 64 exact s8 dots on bits; it is the only test of
+    the unit's gates."""
     served = Program(bind(GRID, R=4, C=16, K=64))
     c = C.compile(served, H.SCHEME)
     (u,) = c.units

@@ -315,21 +315,32 @@ pub struct Masking<C: Challenger> {
     pub at_open: Option<Box<dyn FnMut(&[F128]) -> Result<(), String> + Send>>,
     /// the zerocheck's outer coins: `coins[K_SKIP..K_SKIP + n_outer]` ([`points_from_coins`]' `r_outer`)
     n_outer: usize,
+    /// Under the outer firewall the Lean frame decides the refusals (`Flock.Firewall.Frame`): this challenger's are kept in
+    /// `stopped` instead of stopping the proof, the firewall's cross-check of the frame's.
+    pub defer: bool,
+    pub stopped: Option<String>,
 }
 
 impl<C: Challenger> Masking<C> {
     pub fn new(inner: C, lay: &Layout, pads: &Pads, root: [u8; 64]) -> Self {
         Masking { inner, order: lay.absorbed(), n_piop: lay.piop_absorbed(), lig: lay.ligerito(), h: pads.h.clone(), at: 0, on: false, done: false,
-                  done_l0: false, root, coins: Vec::new(), coins_l0: Vec::new(), l0: false, at_open: None, n_outer: lay.n_mlv - N_INNER }
+                  done_l0: false, root, coins: Vec::new(), coins_l0: Vec::new(), l0: false, at_open: None, n_outer: lay.n_mlv - N_INNER,
+                  defer: false, stopped: None }
+    }
+    fn refuse(&mut self, why: String) {
+        if !self.defer {
+            panic!("{why}");
+        }
+        self.stopped.get_or_insert(why);
     }
     /// The prover stops at a zerocheck outer coin `r_j = 1` among `coins[from..]`, as the coin opens and before it sends
     /// anything that depends on it, reading the coin alone. At `r_j = 1` the replay's round `j` divides by zero, and the
     /// honest pads miss the inner proof's constraint by a witness-dependent amount that the view would show. Under uniform
     /// coins this refuses with probability at most `n_outer · 2^-128` per rep.
-    fn refuse_outer(&self, from: usize) {
+    fn refuse_outer(&mut self, from: usize) {
         let outer = K_SKIP..K_SKIP + self.n_outer;
         if let Some(i) = (from..self.coins.len()).find(|i| outer.contains(i) && self.coins[*i] == F128::ONE) {
-            panic!("PROVER-STOPPED: degenerate coin: zerocheck outer coin r_{} = 1", i - K_SKIP);
+            self.refuse(format!("PROVER-STOPPED: degenerate coin: zerocheck outer coin r_{} = 1", i - K_SKIP));
         }
     }
     pub fn finish(self) -> (C, Vec<F128>, Vec<F128>) {
@@ -353,7 +364,7 @@ impl<C: Challenger> Challenger for Masking<C> {
             if let Some(f) = self.at_open.as_mut()
                 && let Err(e) = f(&self.coins)
             {
-                panic!("PROVER-STOPPED: {e}");
+                self.refuse(format!("PROVER-STOPPED: {e}"));
             }
         }
         if label == L0_CLOSE && self.l0 {
@@ -414,7 +425,8 @@ impl<C: Challenger> Challenger for Masking<C> {
     fn fork_from_seed(&self, seed: [F128; 2], label: &'static [u8]) -> Self {
         assert!(!self.on, "masking: a fork inside the masked phase");
         Masking { inner: self.inner.fork_from_seed(seed, label), order: Vec::new(), n_piop: 0, lig: false, h: Vec::new(), at: 0, on: false,
-                  done: true, done_l0: true, root: self.root, coins: Vec::new(), coins_l0: Vec::new(), l0: false, at_open: None, n_outer: 0 }
+                  done: true, done_l0: true, root: self.root, coins: Vec::new(), coins_l0: Vec::new(), l0: false, at_open: None, n_outer: 0,
+                  defer: self.defer, stopped: None }
     }
 }
 

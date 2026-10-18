@@ -2,6 +2,7 @@
 goes to the lander once.  On `test_queue`'s throwaway origin, with the launch, the runs' states and the merge-thread post injected."""
 from __future__ import annotations
 
+import itertools
 import os
 import pytest
 
@@ -38,10 +39,13 @@ class Harness:
         return self.d.tick(**kw)
 
 
+_checks = itertools.count()
+
+
 def _check(world: World, monkeypatch, commit: str, command=CHECKED) -> None:
-    """A recorded `check` attempt of `commit` that runs `command` (CHECKED passes)."""
+    """A recorded `check` attempt of `commit` that runs `command` (CHECKED passes), as often as `commit` is checked."""
     monkeypatch.setenv("RESEARCH_STORE", str(world.tmp / "store"))
-    tree = world.tmp / f"check-{commit[:12]}"
+    tree = world.tmp / f"check-{commit[:12]}-{next(_checks)}"
     _git(world.dev, "fetch", "-q", "origin")
     _git(world.dev, "worktree", "add", "-q", "--detach", str(tree), commit)
     monkeypatch.chdir(tree)
@@ -299,20 +303,6 @@ def test_a_lean_audit_failure_ejects_the_pr_that_changed_the_failing_file(world,
     assert [m.pr for m in h.q.chain()] == [1]
 
 
-def test_a_suite_failure_whose_files_no_pr_touches_ejects_the_pr_that_changed_the_suites_inputs(world, monkeypatch, tmp_path):
-    """16 Oct: #2164's train failed in benchmarks/pouw's suite (its test in tests/), and the cause was its own change to that
-    suite's pyproject.toml inputs."""
-    h = Harness(world, monkeypatch)
-    h.d.train_size = 2
-    world.gh.put(1, world.change({"a.txt": "1\n"}))
-    world.gh.put(2, world.change({"pkg/pyproject.toml": "[tool.verity.tests]\ninputs = ['data/x.json']\n"}))
-    h.tick()
-    _check(world, monkeypatch, _tip(world), ("false",))
-    h.evidence = [_failed_run(tmp_path, "tests/test_x.py::test_y", "tests/test_x.py:2")]
-    h.tick()
-    assert len(h.posts) == 1 and "Ejected #2" in h.posts[0] and "suite pkg's inputs" in h.posts[0], h.posts
-
-
 def test_a_failure_nothing_in_the_train_reaches_is_resent_as_a_machines_fault(world, monkeypatch, tmp_path):
     h = Harness(world, monkeypatch)
     h.d.train_size = 2
@@ -324,6 +314,32 @@ def test_a_failure_nothing_in_the_train_reaches_is_resent_as_a_machines_fault(wo
     h.evidence = [_failed_run(tmp_path, "tests/test_x.py::test_y", "tests/test_x.py:2")]
     h.tick()
     assert not h.posts and len(h.launched) == launched + 1 and any("resent" in x for x in world.logs)
+
+
+def test_a_resent_check_cancels_its_failed_attempt_and_keeps_its_touched_suites(world, monkeypatch, tmp_path):
+    """18 Oct: 37cda23's check failed under `--keep-going` at 16:07Z and was resent; the failed attempt kept slot b on cpu-1
+    for 4 h, until the OOM killer took it, and the resend's record lost the train's touched-suites run, the gate a deferred
+    pytest lands on.  The resend runs the touched suites again beside its check, and the run it replaces is cancelled."""
+    h = Harness(world, monkeypatch)
+    h.d.defer, h.d.train_size = frozenset({"pytest"}), 2
+    touched = itertools.count(1)
+
+    def launch_touched(repo, commit, machine, base):
+        h.run_state[rid := f"r-touched-{next(touched)}"] = ("running", None, None)
+        return [rid], ""
+
+    h.d.launch_touched = launch_touched
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    world.gh.put(2, world.change({"b.txt": "2\n"}))
+    h.tick()
+    tip = _tip(world)
+    (rid,) = [r for r in h.run_state if not r.startswith("r-touched")]
+    h.run_state[rid] = ("running", None, None, "suite pkg (tests/test_x.py::test_y)")
+    h.evidence = [_failed_run(tmp_path, "tests/test_x.py::test_y", "tests/test_x.py:2")]
+    h.tick()
+    assert not h.posts and any("resent" in x for x in world.logs) and h.cancelled == [rid, "r-touched-1"]
+    rec = h.d.q.load_state()["drive"]["launched"][tip]
+    assert rid not in rec["ids"] and rec["touched"] == ["r-touched-2"]
 
 
 def _killed_run(tmp_path, name: str):
@@ -782,27 +798,6 @@ def _steps_run(tmp_path, name: str, steps: dict[str, str]):
     return d
 
 
-def test_defer_lands_a_train_whose_other_steps_passed_and_reverts_it_when_a_deferred_step_fails(world, monkeypatch, tmp_path):
-    """17 Oct (CI-30's interim, Daniel through top): a train lands on the Lean check and the fast steps, with circuit-check
-    running on after landing; a deferred step that fails reverts the landing."""
-    from research.drive import CHECK_STEPS
-
-    h = Harness(world, monkeypatch)
-    h.d.defer = frozenset({"circuit-check"})
-    base = _git(world.origin, "rev-parse", "main")
-    world.gh.put(1, world.change({"a.txt": "1\n"}))
-    h.tick()
-    tip = _tip(world)
-    (rid,) = h.run_state
-    h.evidence = [_steps_run(tmp_path, rid, {x: "passed" for x in CHECK_STEPS if x != "circuit-check"})]
-    h.tick()
-    assert _git(world.origin, "rev-parse", "main") == tip and h.cancelled == []      # landed; its check runs on
-    h.run_state[rid] = ("done", 1, None)
-    h.evidence = [_steps_run(tmp_path, rid + "-end", {"circuit-check": "failed"})]
-    h.tick()
-    assert _git(world.origin, "diff", "--stat", base, "main") == "" and any("reverted on `main`" in x for x in h.posts), h.posts
-
-
 def test_the_lean_check_is_never_deferred(world, monkeypatch):
     h = Harness(world, monkeypatch)
     from research.drive import Driver
@@ -918,26 +913,6 @@ def test_drive_sweeps_the_repositorys_branches_once_a_day(world, monkeypatch):
     assert len(calls) == 2
 
 
-def test_a_failure_ejects_no_pr_that_a_running_train_below_it_still_checks(world, monkeypatch, tmp_path):
-    """18 Oct 01:55Z: 2671bd's test_dc failure fell back to the suite's inputs and ejected 13 PRs, #2348 and others among them
-    from the 15-PR train below it, which was 11 steps in and lands only if none of its PRs leaves: its check was cancelled.  A
-    PR the lower train covers is left to that train's own check."""
-    h = Harness(world, monkeypatch)
-    h.d.train_size, h.d.max_running = 1, 2
-    world.gh.put(1, world.change({"pkg/data.json": "1\n"}))
-    world.gh.put(2, world.change({"pkg/other.py": "2\n"}))
-    h.tick()
-    low, tip = h.q.chain()[0].commit, _tip(world)
-    assert [c for c, *_ in h.launched] == [low, tip]
-    _check(world, monkeypatch, tip, ("false",))
-    h.evidence = [_failed_run(tmp_path, "tests/test_x.py::test_y", "tests/test_x.py:2")]
-    h.tick()
-    assert len(h.posts) == 1 and "Ejected #2" in h.posts[0] and "#1" not in h.posts[0].split("Ejected")[1], h.posts
-    h.tick()
-    (kept,) = h.d.q.load_state()["drive"]["launched"][low]["ids"]
-    assert [m.pr for m in h.q.chain()] == [1] and h.q.chain()[0].commit == low and kept not in h.cancelled
-
-
 def test_pre_warms_run_one_at_a_time_and_count_against_the_running_checks(world, monkeypatch):
     """18 Oct 00:43Z: with circuit-check back in the gate, drive launched four pre-warms in one tick (16 runs) beside four train
     checks, against six check slots, and no new train could start."""
@@ -950,22 +925,6 @@ def test_pre_warms_run_one_at_a_time_and_count_against_the_running_checks(world,
         world.gh.put(n, world.change({f"verity/ml/circuits/x{n}.py": f"{n}\n"}))
     h.tick()
     assert len(h.launched) == 2 and sum("pre-warming #" in x for x in world.logs) == 1, world.logs
-
-
-def test_a_lean_audit_record_failure_ejects_only_the_prs_that_touch_the_failing_package(world, monkeypatch, tmp_path):
-    """18 Oct 03:30Z: two trains failed lean-audit on verity/core/primitives/requirement's stale record (#2386's); no error line
-    names a file, and the fallback on every Lean source ejected #2341, #2370 and #2371 too, whose changes are in other packages."""
-    h = Harness(world, monkeypatch)
-    h.d.train_size = 2
-    world.gh.put(1, world.change({"pkgA/A.lean": "theorem a : True := trivial\n"}))
-    world.gh.put(2, world.change({"pkgB/B.lean": "theorem b : True := trivial\n"}))
-    h.tick()
-    _check(world, monkeypatch, _tip(world), ("false",))
-    h.evidence = [_lean_run(tmp_path, "AUDIT /w/lean-audit-scratch-1-x/pkgA: FAIL\n  dependencies: the .olean files of the "
-                                      "modules the package imports from toolchain differ from the record\n"
-                                      "AUDIT /w/lean-audit-scratch-1-x/pkgB: PASS\n")]
-    h.tick()
-    assert len(h.posts) == 1 and "Ejected #1:" in h.posts[0] and "Lean package pkgA" in h.posts[0], h.posts
 
 
 def test_a_train_that_passed_by_regenerating_locks_lands_with_them_committed_on_top(world, monkeypatch, tmp_path):
@@ -1076,6 +1035,13 @@ def test_of_several_failed_trains_drive_acts_on_the_lowest_only(world, monkeypat
     upper = [_lean_run(tmp_path / "up", "AUDIT /w/lean-audit-scratch-1-x/pkgA: FAIL\nAUDIT /w/lean-audit-scratch-1-x/pkgB: FAIL\n")]
     ids = {c: v["ids"] for c, v in h.d.q.load_state()["drive"]["launched"].items()}
     h.d.evidence = lambda repo, rids: lower if rids == ids[low] else upper
+    h.tick()
+    assert not h.posts and h.launched[-1][0] == low                      # bisection alone names #1: its check runs again
+    _check(world, monkeypatch, low, ("false",))
+    h.tick()
+    main = _git(world.origin, "rev-parse", "main")
+    assert not h.posts and h.launched[-1][0] == main                     # then `main` itself, before the bottom PR's ejection
+    _check(world, monkeypatch, main)
     h.tick()
     assert len(h.posts) == 1 and "Ejected #1:" in h.posts[0], h.posts
     assert [m.pr for m in h.q.chain()] == [2]

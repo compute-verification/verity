@@ -20,9 +20,14 @@ order they were admitted; `main` fast-forwards to the newest commit on `next` th
                                                    --stale`, tests/test_module_strings.py, test_pins.py, test_doc_paths.py,
                                                    tools/research/tests/test_pythonpath.py, or `pytest --collect-only` in a suite
                                                    whose inputs its change touches; --no-preflight skips it (the lander's)
-    research queue drive --on MACHINE [--max-running N] [--train-size N] [--marked-after TS] [--first N,...] [--defer STEPS] [--regenerate-locks] [--dry-run]
+    research queue drive (--on MACHINE | --config PATH [--config-from-tree]) [--max-running N] [--train-size N] [--marked-after TS]
+                         [--first N,...] [--defer STEPS] [--[no-]regenerate-locks] [--dry-run]
                                                    one tick of the landing automation (`research.drive`): land what passed, sync,
-                                                   check `next` in trains with train.sh, eject what one PR broke, tell @ci the rest
+                                                   check `next` in trains with train.sh, eject what one PR broke, tell @ci the rest.
+                                                   --config reads the flags (`DriveFlags`) from PATH at `main` in the queue's clone,
+                                                   fresh each tick, so a change to them is a reviewed commit (drive's of record:
+                                                   tools/verity/check/drive.toml); a flag given here overrides the file's, the
+                                                   effective flags print once a tick, and --config-from-tree reads this file system's
     research queue report --on MACHINE [--max-running N] [--dry-run]
                                                    one tick of the reporter for GitHub's merge queue (`research.mergequeue`): check
                                                    each merge group's head, post its `verity/check` status
@@ -91,6 +96,8 @@ from __future__ import annotations
 import argparse
 import concurrent.futures
 import contextlib
+import dataclasses
+import difflib
 import fcntl
 import hashlib
 import importlib.util
@@ -117,6 +124,9 @@ BRANCH, SHADOW_BRANCH = "next", "queue-shadow"
 RULES = "ci/queue.toml"
 #: where the rules are until the repository move puts `tools/verity/check/` at `ci/`
 RULES_BEFORE_MOVE = "tools/verity/check/queue.toml"
+#: drive's flags of record (`DriveFlags`, `--config`)
+DRIVE_FLAGS = "tools/verity/check/drive.toml"
+MARK_TIME_RE = re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ")
 IDENTITY = {"GIT_AUTHOR_NAME": "research queue", "GIT_AUTHOR_EMAIL": "queue@research.invalid",
             "GIT_COMMITTER_NAME": "research queue", "GIT_COMMITTER_EMAIL": "queue@research.invalid"}
 DATES = ("GIT_AUTHOR_DATE", "GIT_COMMITTER_DATE")
@@ -245,6 +255,99 @@ class Rules:
         if cut is not None and not (isinstance(cut, str) and re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", cut)):
             raise QueueError(f"{source}: marked_after {cut!r}: a UTC time as YYYY-MM-DDTHH:MM:SSZ, as labels record it")
         return cls(doc.get("hold_label", "hold"), source, cut)
+
+
+@dataclass(frozen=True)
+class DriveFlags:
+    """`research queue drive`'s flags: the defaults, then what `--config` reads (`DRIVE_FLAGS` on `main`, so a change to them is
+    a reviewed commit and the next tick takes it), then each flag the command line gives (`override`)."""
+    on: str | None = None
+    max_running: int = 2
+    train_size: int = 4
+    marked_after: str | None = None
+    defer: tuple[str, ...] = ()
+    regenerate_locks: bool = False
+    first: tuple[int, ...] = ()
+
+    @classmethod
+    def parse(cls, text: str, source: str = "drive.toml") -> "DriveFlags":
+        try:
+            doc = tomllib.loads(text)
+        except tomllib.TOMLDecodeError as e:
+            raise QueueError(f"{source}: not TOML: {e}") from None
+        keys = [f.name for f in dataclasses.fields(cls)]
+        for k in doc:
+            if k not in keys:
+                near = difflib.get_close_matches(k, keys, n=1)
+                raise QueueError(f"{source}: unknown key {k!r}{f' (did you mean {near[0]!r}?)' if near else ''}: drive reads "
+                                 f"only {', '.join(keys)}; rename or remove it")
+
+        def bad(k: str, want: str) -> QueueError:
+            return QueueError(f"{source}: {k} = {doc[k]!r}: {want}")
+
+        def names(k: str) -> tuple[str, ...]:
+            v = doc[k]
+            if not (isinstance(v, list) and all(isinstance(x, str) and re.fullmatch(r"[\w.-]+", x) for x in v)):
+                raise bad(k, "a list of names, as [\"a\", \"b\"]")
+            return tuple(v)
+
+        got: dict = {}
+        if "on" in doc:
+            if not (on := names("on")):
+                raise bad("on", "at least one machine (train.sh's: a machine, or `auto`)")
+            got["on"] = ",".join(on)
+        for k in ("max_running", "train_size"):
+            if k in doc:
+                if type(doc[k]) is not int or doc[k] < 1:
+                    raise bad(k, "a whole number, 1 or more")
+                got[k] = doc[k]
+        if "marked_after" in doc:
+            if not (isinstance(doc["marked_after"], str) and MARK_TIME_RE.fullmatch(doc["marked_after"])):
+                raise bad("marked_after", "a UTC time as YYYY-MM-DDTHH:MM:SSZ, as labels record it")
+            got["marked_after"] = doc["marked_after"]
+        if "defer" in doc:
+            got["defer"] = names("defer")
+        if "regenerate_locks" in doc:
+            if not isinstance(doc["regenerate_locks"], bool):
+                raise bad("regenerate_locks", "true or false")
+            got["regenerate_locks"] = doc["regenerate_locks"]
+        if "first" in doc:
+            if not (isinstance(doc["first"], list) and all(type(n) is int and n > 0 for n in doc["first"])):
+                raise bad("first", "a list of PR numbers, as [1858, 1860]")
+            got["first"] = tuple(doc["first"])
+        return cls(**got)
+
+    def override(self, a: argparse.Namespace) -> "DriveFlags":
+        """These flags with each one ``a`` (the command line) gives explicitly in its place."""
+        given = {k: getattr(a, k) for k in ("on", "max_running", "train_size", "marked_after", "regenerate_locks")
+                 if getattr(a, k) is not None}
+        if a.defer is not None:
+            given["defer"] = tuple(x for x in a.defer.split(",") if x)
+        if a.first is not None:
+            given["first"] = tuple(int(n) for n in a.first.split(",") if n)
+        return dataclasses.replace(self, **given)
+
+    def line(self) -> str:
+        return " ".join(f"{k}={','.join(map(str, v)) if isinstance(v, tuple) else v}"
+                        for k, v in dataclasses.asdict(self).items())
+
+
+def drive_flags(path: str, clone: Path | None) -> tuple[DriveFlags, str]:
+    """The flags in ``path`` at `main` in the queue's ``clone`` (fetched), or in the file itself when ``clone`` is None
+    (`--config-from-tree`); with where they came from."""
+    if clone is None:
+        try:
+            return DriveFlags.parse(Path(path).read_text(), path), path
+        except OSError as e:
+            raise QueueError(f"--config {path}: {e.strerror}") from None
+    if Path(path).is_absolute() or path.startswith(".."):
+        raise QueueError(f"--config {path}: a path from the repository's root, read at `main` (or --config-from-tree for this file)")
+    sha = _out(clone, "rev-parse", "refs/remotes/origin/main")
+    r = _git(clone, "show", f"{sha}:{path}", check=False)
+    if r.returncode:
+        raise QueueError(f"--config {path}: `main` ({sha[:12]}) has no such file: land it first, or pass --config-from-tree")
+    where = f"{path} at main {sha[:12]}"
+    return DriveFlags.parse(r.stdout, where), where
 
 
 def label_target(pr: int, head: str) -> str:
@@ -1705,19 +1808,25 @@ def main(argv: list[str]) -> int:
                          "no open PR that isn't admitted, and pass `pins.py --stale`, the invariant tests (module strings, pins, "
                          "doc paths, pythonpath) and `pytest --collect-only` of the suites its change touches, in a temporary "
                          f"worktree, in about {PREFLIGHT_BUDGET_S:g} s")
-    ap.add_argument("--max-running", type=int, default=2, help="drive: the most checks of `next` its launches keep running at once; "
-                                                                      "report: of merge groups")
-    ap.add_argument("--train-size", type=int, default=4, help="drive: PRs per checked train on `next`")
-    ap.add_argument("--regenerate-locks", action="store_true",
+    ap.add_argument("--max-running", type=int, help="drive: the most checks of `next` its launches keep running at once (default 2); "
+                                                    "report: of merge groups")
+    ap.add_argument("--train-size", type=int, help="drive: PRs per checked train on `next` (default 4)")
+    ap.add_argument("--regenerate-locks", action=argparse.BooleanOptionalAction,
                     help="drive: land a train whose Lean check passed by regenerating lock records with those locks committed on "
                          "top (`Regenerated:`), which `research merge`'s gate accepts on the train's check (CI-64)")
-    ap.add_argument("--defer", default="", metavar="STEP[,STEP...]",
-                    help="drive: land a train once every other step passed, these still running; one that then fails reverts it")
+    ap.add_argument("--defer", metavar="STEP[,STEP...]",
+                    help="drive: land a train once every other step passed; one post-landing run at a time checks these on "
+                         "`main`'s tip, and a failure reverts the PR it implicates, else every landing since the last verified tip, "
+                         "or nothing when no landing since touches what failed")
     ap.add_argument("--marked-after", metavar="YYYY-MM-DDTHH:MM:SSZ", help="status/sync/land/drive: admit only ready marks written at "
                                                                            "or after this time (default: `marked_after` in the rules file)")
-    ap.add_argument("--first", metavar="N[,N...]", default="", help="sync/drive: put these ready PRs at the bottom of `next`, in this "
-                                                                    "order, ahead of members that keep their place (a fix the next "
-                                                                    "train needs)")
+    ap.add_argument("--first", metavar="N[,N...]", help="sync/drive: put these ready PRs at the bottom of `next`, in this "
+                                                        "order, ahead of members that keep their place (a fix the next "
+                                                        "train needs)")
+    ap.add_argument("--config", metavar="PATH",
+                    help=f"drive: read its flags from PATH (`DriveFlags`, e.g. {DRIVE_FLAGS}) at `main` in the queue's clone, "
+                         "fresh each tick; a flag given here overrides the file's")
+    ap.add_argument("--config-from-tree", action="store_true", help="drive: read --config's PATH from this file system instead")
     ap.add_argument("--head", help="open: the pushed branch to open a PR for")
     ap.add_argument("--sha", help="open: refuse unless origin's branch is at this commit (the owner's pinned head)")
     ap.add_argument("--title", help="open: the PR's title")
@@ -1745,8 +1854,12 @@ def main(argv: list[str]) -> int:
             return 1
     if a.first and not re.fullmatch(r"\d+(,\d+)*", a.first):
         ap.error(f"--first {a.first!r}: PR numbers separated by commas")
-    if a.marked_after and not re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", a.marked_after):
+    if a.marked_after and not MARK_TIME_RE.fullmatch(a.marked_after):
         ap.error(f"--marked-after {a.marked_after!r}: a UTC time as YYYY-MM-DDTHH:MM:SSZ, as labels record it")
+    if (a.config or a.config_from_tree) and a.command != "drive":
+        ap.error("--config and --config-from-tree are for drive only")
+    if a.config_from_tree and not a.config:
+        ap.error("--config-from-tree needs --config PATH")
     if a.dry_run and a.command not in ("sync", "land", "drive", "report"):
         ap.error(f"--dry-run is for sync, land, drive and report only: `{a.command}` would act for real")
     if a.command == "ready" and bool(a.on) + a.local + a.mark != 1:
@@ -1755,7 +1868,7 @@ def main(argv: list[str]) -> int:
         ap.error("--no-preflight is for ready only")
     if a.command == "judge" and not a.pr:
         ap.error("judge needs the quick tier's run id")
-    if a.command in ("drive", "report") and not a.on:
+    if a.command in ("drive", "report") and not a.on and not a.config:
         ap.error(f"{a.command} needs --on MACHINE (train.sh's: a machine, or `auto`) for the checks it launches")
     if a.command in ("ready", "judge") and not a.by:
         ap.error(f"{a.command} writes the owner's ready mark: pass --by <lane> (or set $RESEARCH_LANE)")
@@ -1783,10 +1896,22 @@ def main(argv: list[str]) -> int:
         labels = StoreLabels(store, log=lambda s: print(s, file=sys.stderr), since=a.marked_after)
         q = Queue(a.workdir, remote=remote, github=GitHub(repo), ready=labels.ready, store=store, shadow=a.shadow,
                   rules=Rules.parse(a.rules.read_text(), str(a.rules)) if a.rules else None,
-                  auth=credential_args(Path.cwd(), remote), first=tuple(int(n) for n in a.first.split(",") if n),
+                  auth=credential_args(Path.cwd(), remote), first=tuple(int(n) for n in (a.first or "").split(",") if n),
                   before_cutoff=labels.before_cutoff, marked_by=labels.marked_by, marked_at=labels.marked_at,
                   prefetch=labels.prefetch)
         lock = _lock(a.workdir)  # noqa: F841
+        flags = DriveFlags().override(a)
+        if a.config:
+            if not a.config_from_tree:
+                q._clone()
+                q.fetch()
+            base, where = drive_flags(a.config, None if a.config_from_tree else q.workdir)
+            flags = base.override(a)
+            if not flags.on:
+                raise QueueError(f"drive needs a machine for the checks it launches: set `on` in {where}, or pass --on MACHINE")
+            q.first, a.marked_after = flags.first, flags.marked_after
+            labels.since = a.marked_after
+            q.log(f"research queue drive: flags from {where}: {flags.line()}")
         if not a.marked_after:
             if a.rules is None:
                 q._clone()
@@ -1809,13 +1934,13 @@ def main(argv: list[str]) -> int:
         if a.command == "drive":
             from .drive import Driver
 
-            Driver(q, on=a.on, max_running=a.max_running, train_size=a.train_size,
-                   defer=frozenset(x for x in a.defer.split(",") if x), regenerate_locks=a.regenerate_locks).tick(dry_run=a.dry_run)
+            Driver(q, on=flags.on, max_running=flags.max_running, train_size=flags.train_size, defer=frozenset(flags.defer),
+                   regenerate_locks=flags.regenerate_locks).tick(dry_run=a.dry_run)
             return 0
         if a.command == "report":
             from .mergequeue import Reporter, Statuses
 
-            Reporter(q, on=a.on, statuses=Statuses(repo), max_running=a.max_running).tick(dry_run=a.dry_run)
+            Reporter(q, on=a.on, statuses=Statuses(repo), max_running=flags.max_running).tick(dry_run=a.dry_run)
             return 0
         if a.pr is None or not a.reason:
             ap.error("eject needs a PR number and --reason")

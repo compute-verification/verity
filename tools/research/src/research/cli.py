@@ -79,9 +79,11 @@
   research mem [--ramlock DIR] [--json]           # machine side: cgroup limit, in use, live reservations, available (research.mem)
   research msg send|close|read|names|traffic|ask-daniel|... [--dry-run]
                                                  # messages between agents, on Slack (research/slack.py; skill using-slack)
-  research digest --as LANE [--watch N TODO | --unwatch N | --thread NAME TS [--channel KEY] | --show]
+  research digest --as LANE [--roster FILE] [--watch N TODO | --unwatch N | --thread NAME TS [--channel KEY] | --show]
                                                  # a coordinator's sync on one screen: doorbells, watched threads, landings, the
-                                                 # lane's queue changes, its notes, and TRIGGERs for watched PRs (research/digest.py)
+                                                 # lane's queue changes, its notes with their results so far, TRIGGERs for watched
+                                                 # PRs, and Health: the VM, /workspace, the roster's workers and inboxes, PRs off the
+                                                 # queue, finished worktrees' .lake, live runs (research/digest.py)
 
 `run` allocates a run id, writes the v0.2 job record, gives the workload RESEARCH_RUN_ID / RESEARCH_RUN_DIR, and hands execution
 to the telemetry harness (timeout, sampler, cancel evidence, classifier, tee'd logs).  The workload's cwd is its run dir, locally and
@@ -302,6 +304,12 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
         except ValueError as e:
             print(f"research run: --pool: {e}", file=sys.stderr)
             return 2
+        if ns.mem_gb is not None:
+            # the slot's mem= admits and reserves the run; a launch-time reservation too was held through the wait for a slot,
+            # beside the slot's once it ran (INF-61, cpu-3 18 Oct: two waiting runs held 128 GB, admission sat at -89 GB)
+            print(f"research run: --pool {ns.pool}: --mem-gb {ns.mem_gb:g} is dropped; the slot's own mem= admits and reserves the run",
+                  file=sys.stderr)
+            ns.mem_gb = None
         if cwd is None:
             harness_opts = [*harness_opts, "--cwd", "source"]
     if ns.queue:
@@ -932,8 +940,10 @@ AUTO_NODE, AUTO_KIND, AUTO_PROJECT = "vy-nebius-2", "agent-test", "verity"
 
 
 def _auto_placement(ns: argparse.Namespace, harness_opts: list[str]) -> str | None:
-    """`--on auto` is `--queue --on AUTO_NODE --kind AUTO_KIND` from this checkout (its --source) as project AUTO_PROJECT: the kind
-    gives what the run doesn't declare (4 CPUs, 16 GiB, 60 min). Fills `ns` in place; a reason when it can't."""
+    """`--on auto` is `--queue --on AUTO_NODE --kind AUTO_KIND --cwd source` from this checkout (its --source) as project
+    AUTO_PROJECT: the kind gives what the run doesn't declare (4 CPUs, 16 GiB, 60 min), and the workload runs in the shipped tree
+    unless --cwd says otherwise (its environment is the workload's to sync, as suites.py does). Fills `ns` and `harness_opts` in
+    place; a reason when it can't."""
     if ns.queue or ns.pool:
         return "it takes no --queue or --pool: it is the queue itself"
     if not ns.source:
@@ -943,6 +953,8 @@ def _auto_placement(ns: argparse.Namespace, harness_opts: list[str]) -> str | No
         ns.source = top.stdout.strip()
     ns.queue, ns.on, ns.preemptible = True, AUTO_NODE, True      # a guest on node 2 is preemptible; a test reruns from the start
     ns.project = ns.project or AUTO_PROJECT
+    if remote.flag_value(harness_opts, "--cwd") is None:
+        harness_opts += ["--cwd", "source"]                      # a suite or build runs in the tree it tests (INF-65), not its run dir
     if ns.queue_kind == "adhoc":
         ns.queue_kind = AUTO_KIND
     print(f"research run --on auto: queued onto {AUTO_NODE} as {ns.queue_kind}, from {ns.source}", file=sys.stderr)
