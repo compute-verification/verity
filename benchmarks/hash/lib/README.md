@@ -112,6 +112,8 @@ parameters; the head of `vc.cu` names what came from where:
   data split with commit_gpu's tree schedule, the data kernel that folds its subtree and climbs (`FOLD`) and its compact
   node body, and the one-launch commit whose blocks pair row and salt threads (`SPEC`) with the rolled shared-memory mask;
 - `benchmarks/pouw/pearl_c_sm120/hash_fast.cuh`: row-seg's segments a thread from their header's state, then a fold a unit.
+  Rows (up to 768 segments) take one launch with their segment digests in shared memory, as `s512_rows` in
+  `benchmarks/pouw/pearl_c/hash_h3.cuh` does; tiles, and rows past 768 segments, keep the two launches.
 
 hm96lat.cu (`4369ae62:benchmarks/hash/intpipe/`, on cursor/verity-hash-15ad) was read for its arity levers; only their node
 format is here.
@@ -147,5 +149,44 @@ uv run tools/verity/check/suites.py benchmarks/hash/lib      # the CPU suite
 
 ## Measured
 
-Conformance at `9124d0148`, 225 of 225 cases bit for bit (open included): H200 `r20261018-201431-26c8`, B200
-`r20261018-201438-290b`.
+Built with nvcc 13.0.88 as one `libvc.so` for sm_90a, sm_100a and sm_120a, each run passed the conformance, 431 of 431 cases
+bit for bit, before its bench timed anything; the SM clock was read each rep, never set. B200 and RTX PRO 6000 ran
+`4688ee1a6`. H200's run at `4688ee1a6` waits on the node's GPU lease, so its column is from `65c243574`, which differs only in
+row-seg's fold (`eab344814`, `bc08369f0`).
+
+| GPU | run | conformance | SM clock |
+|---|---|---|---|
+| H200 | `r20261018-225811-bf09` (`65c243574`) | 431 / 431 | 1980 MHz |
+| B200 | `r20261018-233514-4e70` | 431 / 431 | 1965 MHz |
+| RTX PRO 6000 | `r20261018-233435-fee4` | 431 / 431 | 2092 MHz |
+
+A commit of a step of 4 KiB rows (`sha512/row/v2` digests, hm96-sha512 leaves, the frame-v3-sha512 tree), the median of
+interleaved reps in ms: `AUTO` and the form it picked, the best arm it replaces among commit_gpu, native_rows and sharaw's
+forms, and their ratio.
+
+| rows | H200 | B200 | RTX PRO 6000 |
+|---|---|---|---|
+| 34,737 (142 MB) | 0.824 `SPEC` / 0.845 sharaw `v4_128`, 0.975 | 0.557 `FOLD` / 0.553 sharaw `v1n`, 1.007 | 0.516 `FOLD` / 0.504 sharaw `v1`, 1.024 |
+| 65,536 | 0.918 `SPLIT` / 0.957 sharaw `lf0_cg`, 0.960 | 0.890 `SPLIT` / 0.941 sharaw `lf0_cg`, 0.946 | 0.754 `SPEC` / 0.840 commit_gpu, 0.898 |
+| 131,072 | 1.607 `SPLIT` / 1.637 sharaw `v3s_cg`, 0.982 | 1.570 `SPLIT` / 1.589 sharaw `v3s_cg`, 0.988 | 1.358 `SPEC` / 1.464 sharaw `v1`, 0.927 |
+| 262,144 (1 GiB) | 2.941 `SPLIT` / 2.985 sharaw `v3s_cg`, 0.985 | 2.623 `SPLIT` / 2.674 sharaw `v3s_cg`, 0.981 | 2.440 `SPLIT` / 2.539 native_rows, 0.961 |
+
+Pearl-C -h3 at Llama-3.1-8B's decode shapes (m 32 and 128): libvc's range in µs, and its ratio to the better of hash_fast and
+hash_h3 at each shape.
+
+| piece | H200 | B200 | RTX PRO 6000 |
+|---|---|---|---|
+| row digests (`sha512/row-seg/v1`, k 4096, 14336) | 77.3–149.9 µs, 0.78–0.84× | 75.8–149.5 µs, 0.66–0.70× | 75.8–145.4 µs, 0.88–0.93× |
+| tile leaves (n 4096, 6144, 28672) | 77.5–143.3 µs, 0.79–0.87× | 81.9–147.5 µs, 0.70–0.78× | 82.0–151.5 µs, 0.93–1.00× |
+
+What is not better:
+
+- RTX PRO 6000 at 142 MB: `FOLD` is 0.514–0.516 ms against sharaw's `v1` at 0.502–0.506 across three runs, 1.6–2.5% behind,
+  beyond the noise (the event timer's quantum there is about 2 µs). The cause isn't found. A nibble-table salt on sm_120
+  (`c483ad965`) was slower still and is reverted.
+- B200 at 142 MB is level with sharaw's `v1n` (the reps' ranges overlap).
+
+On sm_120, `k_rows_seg`'s fold compressing an even segment count's last block (all padding, every word a constant) in the
+kernel came out wrong for some rows, depending on the data, while the same source is right on sm_90 and sm_100 (probes
+`r20261018-231943-4034`, `r20261018-232746-4eed`). That block's schedule now comes from the host (`kw_fold`). Only the
+same-run conformance on each GPU caught it, so a new kernel or a compiler bump reruns the conformance on all three.
