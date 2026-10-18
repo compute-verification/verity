@@ -798,9 +798,9 @@ CO, LANE, OLD, NEW = (f"bc-{c * 8}-{c * 4}-{c * 4}-{c * 4}-{c * 12}" for c in "c
 FINISHED = {"status": "FINISHED", "createdAt": "2026-10-18T19:10:00Z", "updatedAt": "2026-10-18T19:20:00Z"}
 
 
-def coordinators(tmp_path, agents, runs, wake=False, bells=None):
+def coordinators(tmp_path, agents, runs, wake=False, bells=None, older=None):
     """The registry: CO holds @circuits (its lane LANE posts as it), and @vllm still names OLD, though NEW holds vllm's inbox
-    (routes.d), as on 18 Oct. The watch over `agents`."""
+    (routes.d), as on 18 Oct. The watch over `agents` (`older` as in FakeApi)."""
     reg, routes = tmp_path / "registry.json", tmp_path / "routes.d"
     reg.write_text(json.dumps({"handles": [
         {"handle": "circuits", "holder": f"the circuits coordinator ({CO}); its lane ({LANE}) posts as it too"},
@@ -812,7 +812,7 @@ def coordinators(tmp_path, agents, runs, wake=False, bells=None):
     (routes / "kernels.json").write_text(json.dumps({"name": "kernels", "holder": LANE, "closed": None}))
     if bells is not None:
         (tmp_path / "doorbells.json").write_text(json.dumps(bells))
-    api, clock = FakeApi(agents, runs), Clock(T0)
+    api, clock = FakeApi(agents, runs, older), Clock(T0)
     return api, clock, W.Watch(api, tmp_path / "events.jsonl", clock, registry=reg, routes=routes, wake=wake)
 
 
@@ -935,19 +935,11 @@ def test_a_doorbell_before_the_run_or_a_stale_file_marks_nothing(tmp_path):
     assert records(tmp_path) == [] and w.doorbells == "stale"
 
 
-def test_wake_starts_one_run_an_hour_and_a_busy_agent_is_not_counted(tmp_path):
+def test_wake_starts_one_run_an_hour(tmp_path):
     api, clock, w = coordinators(tmp_path, [{"id": CO, "status": "IDLE", "latestRunId": "run-f"}], {"run-f": dict(FINISHED)},
                                  wake=True)
-    real_post = api.post
-
-    def busy(path, body=None):
-        raise W.urllib.error.HTTPError(path, 409, "Conflict", {}, None)
-    api.post = busy
     w.sweep(lambda r: None)
-    assert records(tmp_path) == [] and CO not in w.woken, "409 agent_busy: a run of its own started; not counted"
-    api.post = real_post
     clock.t += 60
-    w.sweep(lambda r: None)
     w.sweep(lambda r: None)
     ((path, body),) = api.posts
     assert path == f"/v1/agents/{CO}/runs" and "duty timer" in body["prompt"]["text"]
@@ -957,6 +949,80 @@ def test_wake_starts_one_run_an_hour_and_a_busy_agent_is_not_counted(tmp_path):
     clock.t += W.RECANCEL_S
     w.sweep(lambda r: None)
     assert len(api.posts) == 2, "still idle an hour later: woken again"
+
+
+def test_a_coordinator_whose_latest_run_was_cancelled_on_arrival_is_judged_by_the_run_behind_it(tmp_path):
+    """W1-1. vllm, 20:23Z 18 Oct: its run FINISHED, then a doorbell mid-turn made a run cancelled within 0.5 s, and that is its
+    latestRunId (7 of 21 live agents read so). Judged by latestRunId, a coordinator whose timer then fails is never woken."""
+    on_arrival = {"status": "CANCELLED", "createdAt": "2026-10-18T19:19:59.500Z", "updatedAt": "2026-10-18T19:20:00.000Z"}
+    agents = [{"id": NEW, "status": "ACTIVE", "latestRunId": "run-x"},
+              {"id": CO, "status": "IDLE", "latestRunId": "run-y"}]                 # IDLE for long: the sweep reads only latest
+    runs = {"run-x": dict(on_arrival), "run-f": dict(FINISHED), "run-y": dict(on_arrival), "run-g": dict(FINISHED)}
+    api, clock, w = coordinators(tmp_path, agents, runs, older={NEW: ["run-f"], CO: ["run-g"]})
+    w.sweep(lambda r: None)
+    assert sorted((r["handle"], r["run"]) for r in records(tmp_path)) == [("circuits", "run-g"), ("vllm", "run-f")], \
+        "40 min since each one's last run finished"
+    assert {k: status(tmp_path)[NEW][k] for k in ("run_id", "run_status", "watch_state")} == {
+        "run_id": "run-f", "run_status": "FINISHED", "watch_state": "ready_to_wake"}
+    runs["run-x"]["durationMs"] = 60_000
+    runs["run-x"].update(status="CANCELLED", updatedAt=W.iso(clock.t))
+    clock.t += W.RECANCEL_S
+    w.sweep(lambda r: None)
+    assert [r["handle"] for r in records(tmp_path)].count("vllm") == 1, "a person stopped a run that ran: not a missed timer"
+
+
+def test_a_wake_refused_with_409_is_recorded_once_and_tried_again_in_an_hour(tmp_path):
+    """W1-2. memory-accounting, 18 Oct: zombie CREATING runs from 19:50Z, so the API called it busy for hours. A wake whose 409
+    dropped the hour's memory was posted every sweep, and nothing was recorded."""
+    api, clock, w = coordinators(tmp_path, [{"id": CO, "status": "IDLE", "latestRunId": "run-f"}], {"run-f": dict(FINISHED)},
+                                 wake=True)
+    tries = []
+
+    def busy(path, body=None):
+        tries.append(path)
+        raise W.urllib.error.HTTPError(path, 409, "Conflict", {}, None)
+    api.post = busy
+    for _ in range(30):
+        w.sweep(lambda r: None)
+        clock.t += 60
+    assert len(tries) == 1, f"{len(tries)} wake POSTs in 30 min"
+    (rec,) = records(tmp_path)
+    assert (rec["kind"], rec["action"]) == ("ready_to_wake", "wake refused: HTTP 409 (agent busy); tried again in an hour")
+    clock.t += W.RECANCEL_S
+    w.sweep(lambda r: None)
+    assert len(tries) == 2 and len(records(tmp_path)) == 2
+
+
+def test_a_restarted_watch_remembers_the_hours_wakes(tmp_path):
+    """W1-3. The watch restarts on every deploy; the hour's memory of wakes lived only in memory."""
+    api, clock, w = coordinators(tmp_path, [{"id": CO, "status": "IDLE", "latestRunId": "run-f"}], {"run-f": dict(FINISHED)},
+                                 wake=True)
+    w.sweep(lambda r: None)
+    clock.t += 10 * 60
+    again = W.Watch(api, tmp_path / "events.jsonl", clock, registry=tmp_path / "registry.json", routes=tmp_path / "routes.d",
+                    wake=True)
+    again.sweep(lambda r: None)
+    assert len(api.posts) == 1, "woken again 10 min later by the restarted watch"
+    clock.t += W.RECANCEL_S
+    again.sweep(lambda r: None)
+    assert len(api.posts) == 2
+
+
+def test_the_terminal_run_cache_and_the_runs_already_judged_are_kept_apart(tmp_path):
+    """W1-6. W1's watch cached terminal run records in `done`, which here is the runs judged once (state.json: run -> when). One
+    dict for both: an ERROR run read is never restarted, state.json fills with records, and a cached record that dropped
+    `updatedAt` reads as never active."""
+    agents = [{"id": CO, "status": "IDLE", "latestRunId": "run-f", "updatedAt": W.iso(T0)},
+              {"id": "bc-e", "status": "IDLE", "latestRunId": "run-e", "updatedAt": W.iso(T0)}]
+    api, clock, w = coordinators(tmp_path, agents, {"run-f": dict(FINISHED), "run-e": {"status": "ERROR"}}, wake=True)
+    w.sweep(lambda r: None)
+    clock.t += W.RECANCEL_S
+    w.sweep(lambda r: None)
+    assert [r["kind"] for r in records(tmp_path)] == ["crashed", "ready_to_wake", "ready_to_wake"]
+    assert len({r["reason"] for r in records(tmp_path) if r["kind"] == "ready_to_wake"}) == 2, "read from the cached record"
+    state = json.loads((tmp_path / "state.json").read_text())
+    assert state["done"] == {"run-e": T0} and state["woken"] == {CO: T0 + W.RECANCEL_S}
+    assert W.Watch(api, tmp_path / "events.jsonl", clock).done == {"run-e": T0}
 
 
 def test_a_terminal_run_is_read_once(tmp_path):

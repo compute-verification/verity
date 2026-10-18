@@ -38,21 +38,24 @@ agent whose latest run the API won't read is recorded once as unreadable.
 
 A coordinator holds a handle of `--registry` (the Slack registry): the holder of the handle's open inbox in `--routes` (the notes'
 `routes.d`, which a handover moves first; on 18 Oct the registry still named vllm's predecessor), else the first agent id in the
-handle's `holder`. It runs a 15-minute duty timer, and its inbox thread rings it for each doorbell. One whose latest run's turn is
+handle's `holder`. It runs a 15-minute duty timer, and its inbox thread rings it for each doorbell. It is judged by the run the
+sweep judges it by (the run followed, else its newest that started: a doorbell mid-turn leaves a run cancelled on arrival as its
+`latestRunId`, vllm at 20:23Z 18 Oct). One whose run's turn is
 over (FINISHED, EXPIRED, or WAITING_FOR_BACKGROUND_WORK, where coordinators mostly sit between wakes) is **ready to wake** when
 nothing has run for `WAKE_S` since its last activity (its timer didn't fire), or when a doorbell for its handle rang after that
 and `DOORBELL_S` has passed with nothing run (its subscription didn't). Its last activity is the later of the run's `updatedAt`
 (read each sweep) and its last stream event: whether a wake starts a new run or resumes a background-waiting one, it moves. The
 doorbells come from `doorbells.json` beside `--log` (`{"t", "inboxes": {handle: {"agent", "last"}}}`, each inbox's latest
 doorbell as a Slack ts), which infra's relay writes, since only it reads Slack; one older than `BELLS_STALE_S` is not read. The
-watch records it at most once per agent an hour, and with `--wake` starts a run that says so (a 409 agent_busy isn't counted: a
-run of its own just started). `--wake` stays off until a red team has attacked the rule.
+watch records it at most once per agent an hour, kept in `state.json`, and with `--wake` starts a run that says so; a wake
+refused with 409 agent_busy is recorded and counts as the hour's (zombie CREATING runs kept memory-accounting busy for hours).
+`--wake` stays off by default.
 
 Each finding is a line of JSON in `--log`; each sweep ends by replacing `status.json` beside it atomically, in the schema
 `verity/agent-watch-status/v1` (`snapshot`: its time `t`, `poll_s`, and per agent read its id, the run the watch judges,
 statuses, watch state, since and restart count, in categories only), so a reader can tell a quiet watch from a dead one; a
 sweep that fails leaves the last one. `state.json` beside it keeps what must outlive a restart (the watch restarts on every
-deploy): when it last cancelled, restarted or woke each agent, the restart counts, the continue runs still to start and the runs
+deploy): when it last cancelled or restarted each agent, and recorded it ready to wake, the restart counts, the continue runs still to start and the runs
 already recorded. `watch.lock` beside it keeps a second watch from running. The control pod holds no Slack credential, so
 infra's relay reads the findings over ssh and posts each in #agent-alerts. Cancelling and restarting don't wait for it.
 `--once --dry-run` runs one sweep that follows no stream and sends no POST (each is printed).
@@ -272,7 +275,6 @@ class Watch:
                  routes: Path | None = None, wake: bool = False):
         self.api, self.log, self.clock, self.wake = api, log, clock, wake
         self.registry, self.routes = registry, routes
-        self.woken: dict[str, float] = {}           # agent -> when the watch last recorded it ready to wake
         self.doorbells = ""                         # whether doorbells.json was fresh, stale or missing at the last sweep
         self.runs: dict[str, Run] = {}
         self.states: dict[str, tuple[str, str, str]] = {}   # agent -> (run, its last finding's kind, since), for status.json
@@ -288,14 +290,16 @@ class Watch:
         self.left: set[str] = set(s.get("left", []))              # agents past MAX_RESTARTS, recorded once
         self.pending: dict[str, dict] = s.get("pending", {})      # agent -> a continue run the API refused, tried again
         self.done: dict[str, float] = s.get("done", {})           # runs judged once (ERROR, stuck, unreadable) -> when
-        self.final: dict[str, dict] = {}                          # run -> its terminal record, never read again
+        self.woken: dict[str, float] = s.get("woken", {})         # agent -> when the watch last recorded it ready to wake
+        self.final: dict[str, dict] = {}                          # run -> its terminal record, never read again (not saved)
 
     def save(self) -> None:
-        cutoff = self.clock() - 2 * 86400
-        self.done = {k: v for k, v in self.done.items() if v >= cutoff}
+        t = self.clock()
+        self.done = {k: v for k, v in self.done.items() if v >= t - 2 * 86400}
+        self.woken = {k: v for k, v in self.woken.items() if v >= t - RECANCEL_S}
         tmp = self.state_path.with_suffix(".tmp")
         tmp.write_text(json.dumps({"freed": self.freed, "errors": self.errors, "left": sorted(self.left),
-                                   "pending": self.pending, "done": self.done}) + "\n")
+                                   "pending": self.pending, "done": self.done, "woken": self.woken}) + "\n")
         tmp.replace(self.state_path)
 
     def record(self, kind: str, r: Run, **detail) -> None:
@@ -361,16 +365,15 @@ class Watch:
         if t - self.woken.get(a["id"], -RECANCEL_S) < RECANCEL_S:
             return
         self.woken[a["id"]], new, action = t, None, "recorded (--wake is off)"
+        self.save()
         if self.wake:
             try:
                 new = ((self.api.post(f"/v1/agents/{a['id']}/runs", {"prompt": {"text": WAKE.format(why=why, handle=handle)}})
                         or {}).get("run") or {}).get("id")
                 action = "started a run"
-            except urllib.error.HTTPError as e:
-                if e.code == 409:                   # agent_busy: a run of its own has just started; nothing missed
-                    self.woken.pop(a["id"], None)
-                    return
-                action = f"wake failed: HTTP {e.code}"
+            except urllib.error.HTTPError as e:     # 409 agent_busy counts too: zombie CREATING runs keep an agent busy for hours
+                action = ("wake refused: HTTP 409 (agent busy); tried again in an hour" if e.code == 409 else
+                          f"wake failed: HTTP {e.code}")
             except (urllib.error.URLError, OSError, ValueError) as e:
                 action = f"wake failed: {type(e).__name__}: {e}"
         self.record("ready_to_wake", Run(a["id"], run, a.get("name") or ""), handle=handle, reason=why, action=action,
@@ -513,6 +516,30 @@ class Watch:
             self.final[run] = info
         return info
 
+    def runs_of(self, a: dict, t: float) -> list[dict] | None:
+        """The agent's newest runs, newest first, back to the newest that started: an ACTIVE agent's paged from the list, else
+        its latest, paged behind only when that was cancelled on arrival. None when the list fails."""
+        latest = a["latestRunId"]
+        runs: list[dict] = []
+        if a.get("status") != "ACTIVE":
+            if not (info := self.read(a, latest)) or started(info):
+                return [info] if info else []
+            runs = [info]
+        try:
+            listed, cursor = [], None
+            for _ in range(RUNS_PAGES):
+                page = self.api.get(f"/v1/agents/{a['id']}/runs", limit=RUNS_PAGE, cursor=cursor)
+                listed += page.get("items") or []
+                cursor = page.get("nextCursor")
+                if not cursor or any(started(x) for x in listed):
+                    break
+        except (urllib.error.URLError, OSError, ValueError) as e:
+            print(f"{iso(t)} runs of {a['id']}: {type(e).__name__}: {e}", file=sys.stderr, flush=True)
+            return runs or None
+        if not runs and latest not in {x.get("id") for x in listed} and (info := self.read(a, latest)):
+            runs = [info]
+        return runs + [x for x in listed if x.get("id") not in {y["id"] for y in runs}]
+
     def sweep(self, start_stream: Callable[[Run], None]) -> None:
         """One pass: find each live agent's current run and follow it, record runs stuck in CREATING, restart an ERROR one,
         start refused continue runs, then judge every followed run."""
@@ -524,26 +551,11 @@ class Watch:
                 live[a["id"]] = a
         current: dict[str, tuple[dict, dict]] = {}      # run -> (agent, run record)
         judged: dict[str, dict] = {}                    # run -> agent: the run each agent read is judged by
+        judges: dict[str, dict] = {}                    # agent -> the record of the run it is judged by
         for a in live.values():
             latest = a["latestRunId"]
-            if a.get("status") == "ACTIVE":
-                try:
-                    runs, cursor = [], None
-                    for _ in range(RUNS_PAGES):
-                        page = self.api.get(f"/v1/agents/{a['id']}/runs", limit=RUNS_PAGE, cursor=cursor)
-                        runs += page.get("items") or []
-                        cursor = page.get("nextCursor")
-                        if not cursor or any(started(x) for x in runs):
-                            break
-                except (urllib.error.URLError, OSError, ValueError) as e:
-                    print(f"{iso(t)} runs of {a['id']}: {type(e).__name__}: {e}", file=sys.stderr, flush=True)
-                    continue
-                if latest not in {x.get("id") for x in runs}:
-                    info = self.read(a, latest)
-                    runs = ([info] if info else []) + runs
-            else:
-                info = self.read(a, latest)
-                runs = [info] if info else []
+            if (runs := self.runs_of(a, t)) is None:
+                continue
             follow = next((x for x in runs if x.get("status") in FOLLOW and not str(x.get("id")).startswith(GOAL)), None)
             newer_started = False                       # a CREATING run with a newer one started after it blocks nothing,
             for x in runs if follow is None else ():    # and one behind a followed run waits for it, judged in its place
@@ -559,6 +571,7 @@ class Watch:
             judge = follow or next((x for x in runs if started(x) or x.get("status") == "CREATING"), None) or last
             judged[judge["id"] if judge else latest] = a
             if judge:
+                judges[a["id"]] = judge
                 self.status_of[a["id"]] = (judge["id"], str(judge.get("status")))
             if last and last.get("status") == "FINISHED":   # not a run going: a restart runs a minute before it errors
                 if self.errors.pop(a["id"], None) is not None or a["id"] in self.left:
@@ -572,11 +585,14 @@ class Watch:
             print(f"{iso(t)} doorbells.json: {fresh}; {len(coords)} coordinators", file=sys.stderr, flush=True)
         self.doorbells = fresh
         for a in agents:
-            run, handle = a.get("latestRunId"), coords.get(a["id"])
-            if not handle or not run or a.get("status") == "ARCHIVED":
+            handle = coords.get(a["id"])
+            if not handle or not a.get("latestRunId") or a.get("status") == "ARCHIVED":
                 continue
-            if not (info := self.read(a, run)):
-                continue
+            if (info := judges.get(a["id"])) is None:
+                runs = [] if a["id"] in live else self.runs_of(a, t) or []
+                if not (info := next((x for x in runs if started(x)), runs[0] if runs else None)):
+                    continue
+            run = info["id"]
             with self.lock:
                 r = self.runs.get(run)
                 heard = r.last_t if r and r.last_kind != "start" else None
