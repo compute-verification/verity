@@ -559,6 +559,22 @@ def test_dc_li_binds_honest_on_the_lane_facet():
     assert E.honest("dc100-li-l32", DEVICES / "sm_100").base() == {"UTCIMMA_M128_N256": 1, "LDTM_32X32B_X128": 8}
 
 
+def test_sm90_ffma_filler_has_no_uniform_form():
+    """sm_90's uniform datapath is integer only (model.toml's `uniform_forms`), so a filler with FFMA in its mix stays on
+    lanes even on DC-90-ri, where a uniform instruction is nearly free on JI90_0; an IMAD filler may move there, and a
+    device that names no forms lets every filler."""
+    d = DEVICES / "sm_90"
+    pi = E.machine("DC-90-ri", d)
+    assert pi.uniform_forms == ("IMAD", "ALU") and E.machine("", DEVICES / "sm_100").uniform_forms is None
+    assert not pi.uniform_form(E.Filler(per_word=0.07, mix={"FFMA": 2, "IMAD": 1}))
+    assert pi.uniform_form(E.Filler(per_word=0.07, mix={"IMAD": 1}))
+    ds = E.design("dither-2s-licpw-redux-l32", d)
+    for q in (1.22, 0.5):
+        assert E.eps(ds, pi, q, d, operands="free", credit="floor").cheat.filler_uniform == (0.0,)
+    imad = replace(ds, filler=(replace(ds.filler[0], mix={"IMAD": 1.0}),))
+    assert E.eps(imad, pi, 0.5, d, operands="free", credit="floor").cheat.filler_uniform[0] > 0.0
+
+
 HEADLINE_Q = 1.22   # decision 89's reading: the 1.22-slot issue floor (Theorem C, unproved in Lean; CALC r10, #2325)
 HEADLINE = [("sm_80", "dither-2s-l16"), ("sm_89", "dither-2s-l16"),   # A100, L40S
             ("sm_90", "dither-2s-li-l32"), ("sm_100", "dither-2s-li-fill-l32")]   # H200, B200

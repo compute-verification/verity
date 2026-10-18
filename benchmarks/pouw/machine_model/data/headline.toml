@@ -29,7 +29,7 @@ measured = { vector = "VF3r-16" }
 gpu = "H200"
 design = "dither-2s-licpw-redux-l32"
 p1 = "dither-2s-licpw-redux-p1-l32"
-conditions = ["FFMA filler check pending: its p = 0 rests on a bit-exact FFMA check not yet on main (decision 99; DC r12's ffill)",
+conditions = ["ffill's p = 0 rests on its bit-exact check, ffill_ref.receipt (benchmarks/pouw/dc; decision 99, DC r12): ffill.cu's conformance to it on the H200 (ffill.sh) has not run",
               "LI-CP-W's receipt luck 0 needs every absorbed word pinned (PIN, decision 97)"]
 sheet = { vector = "DS-90" }
 measured = { vector = "DC-90-ri" }
