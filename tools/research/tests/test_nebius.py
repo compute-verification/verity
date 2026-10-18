@@ -2706,7 +2706,8 @@ def test_gpu_stray_allows_device_plugin_and_leased_gpus_and_blocks_the_pool_of_a
 
 def test_gpu_adopt_holds_the_lease_of_a_gpu_used_outside_it_until_the_process_exits(monkeypatch, tmp_path):
     """INF-55: on a GPU VM a process whose GPU no lease of its ancestors covers gets that GPU's lease in its run's name (so gpu-lease
-    hands it to nobody else) until it exits; a GPU another lease holds is a collision; each is logged once."""
+    hands it to nobody else) until it exits; a GPU another lease holds is a collision, unless that lease names the process's own run
+    (a holder that handed its locks over a socket); each is logged once."""
     spec = importlib.util.spec_from_file_location("gpu_adopt_under_test", NEBIUS / "gpu_adopt.py")
     m = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(m)
@@ -2723,12 +2724,20 @@ def test_gpu_adopt_holds_the_lease_of_a_gpu_used_outside_it_until_the_process_ex
         fcntl.flock(fd, fcntl.LOCK_EX)
         (leases / f"{i}.owner").write_text(f"pid={owner} run=r-x who=t uuid=GPU-{i} since=2026-10-18T00:00:00Z cmd=x\n")
         held.append(fd)
-    block = [sys.executable, "-c", "import sys; sys.stdin.read()"]            # lives until killed
-    leased, stray, other = (subprocess.Popen(block + extra, stdin=subprocess.PIPE)
-                            for extra in ([], ["research", "run", "--id", "r20261018-000000-abcd"], []))
+    block = [sys.executable, "-c", "import sys; print(flush=True); sys.stdin.read()"]       # lives until killed
+    fd = os.open(leases / "3.lock", os.O_WRONLY | os.O_CREAT, 0o666)          # GPU 3 leased by pid 1 in run r20261018-000000-beef
+    fcntl.flock(fd, fcntl.LOCK_EX)
+    (leases / "3.owner").write_text("pid=1 run=r20261018-000000-beef who=t uuid=GPU-3 since=2026-10-18T00:00:00Z cmd=x\n")
+    held.append(fd)
+    leased, stray, other, handed = (subprocess.Popen(block + extra, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+                                    for extra in ([], ["research", "run", "--id", "r20261018-000000-abcd"], [],
+                                                  ["research", "run", "--id", "r20261018-000000-beef"]))
+    for p in (leased, stray, other, handed):
+        p.stdout.readline()                                  # it has exec'd: /proc/PID/cmdline is its own, not empty
     try:
-        monkeypatch.setattr(m, "compute_apps", lambda: [(leased.pid, "GPU-a"), (stray.pid, "GPU-b"), (other.pid, "GPU-c")])
-        monkeypatch.setattr(m, "gpu_index", lambda: {"GPU-a": 0, "GPU-b": 1, "GPU-c": 2})
+        monkeypatch.setattr(m, "compute_apps", lambda: [(leased.pid, "GPU-a"), (stray.pid, "GPU-b"), (other.pid, "GPU-c"),
+                                                        (handed.pid, "GPU-d")])
+        monkeypatch.setattr(m, "gpu_index", lambda: {"GPU-a": 0, "GPU-b": 1, "GPU-c": 2, "GPU-d": 3})
         a = m.Adopter()
         monkeypatch.setattr(m, "SPLIT", tmp_path / "direct-gpus")
         (tmp_path / "direct-gpus").write_text("none\n")
@@ -2747,7 +2756,7 @@ def test_gpu_adopt_holds_the_lease_of_a_gpu_used_outside_it_until_the_process_ex
         monkeypatch.setattr(m, "compute_apps", lambda: [(leased.pid, "GPU-a")])
         assert a.check(1_800_000_060.0) == [] and m.lease_owner(1) is None
     finally:
-        for p in (leased, stray, other):
+        for p in (leased, stray, other, handed):
             p.kill()
             p.wait()
         for fd in held:
@@ -3377,3 +3386,41 @@ def test_backup_packs_nothing_while_a_timed_window_runs_or_waits(tmp_path):
         r = subprocess.run(["bash", str(NEBIUS / "backup.sh")], env={**env, "RESEARCH_RUN_DIR": str(run)}, capture_output=True, text=True)
         assert r.returncode == rc, (line, r.stderr)
         assert (run / "backup" / "tars").is_dir() and bool(list((run / "backup" / "tars").iterdir())) == (rc == 0)
+
+
+def test_a_run_on_a_stopped_nebius_vm_starts_it_and_waits_for_its_ssh(monkeypatch):
+    """INF-58: the H200s stop after 2 h idle with their disks kept, and `research run --on` brings one back: a machine whose registry
+    entry names its nebius_instance_id and whose ssh doesn't answer is started through the API, then waited for."""
+    answers = iter([1, 1, 1, 0])
+    monkeypatch.setattr(remote, "ssh_run", lambda ssh, argv, timeout=120: subprocess.CompletedProcess(argv, next(answers)))
+    calls, t = [], [0.0]
+
+    def nebius(*args):
+        calls.append(args[2])
+        return {"status": {"state": "STOPPED"}} if args[2] == "get" else {}
+
+    def sleep(s):
+        t[0] += s
+
+    m = {"name": "vy-glm53-eu", "nebius_instance_id": "computeinstance-x"}
+    assert remote.wake(m, ["ssh"], nebius=nebius, sleep=sleep, clock=lambda: t[0]) == "started from STOPPED"
+    assert calls == ["get", "start"] and t[0] == 3 * remote.WAKE_POLL_S
+    assert remote.wake({"name": "vy-nebius-2"}, ["ssh"], nebius=nebius) is None, "no instance id: nothing to wake"
+    monkeypatch.setattr(remote, "ssh_run", lambda ssh, argv, timeout=120: subprocess.CompletedProcess(argv, 1))
+    with pytest.raises(remote.Refused, match="didn't answer in 15 min"):
+        remote.wake(m, ["ssh"], nebius=nebius, sleep=sleep, clock=lambda: t[0])
+
+    def no_creds(*args):
+        raise RuntimeError("no NEBIUS_SA_ID")
+
+    with pytest.raises(remote.Refused, match="ask @infra to start computeinstance-x"):
+        remote.wake(m, ["ssh"], nebius=no_creds)
+
+
+def test_a_run_names_the_agent_that_sent_it_a_worker_its_own_conversation():
+    """INF-50: OOM and lost-check alerts name a run's sender from its request; workers never set RESEARCH_AGENT_URL, and a worker
+    that inherits its coordinator's would be reported as the coordinator. Every agent's shell carries its own conversation id."""
+    assert remote.sender({"CURSOR_CONVERSATION_ID": "bc-worker", "RESEARCH_AGENT_URL": "https://cursor.com/agents/bc-coord"}) == \
+        "https://cursor.com/agents/bc-worker"
+    assert remote.sender({"RESEARCH_AGENT_URL": "https://cursor.com/agents/bc-coord"}) == "https://cursor.com/agents/bc-coord"
+    assert remote.sender({}) is None

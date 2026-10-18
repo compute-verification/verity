@@ -2,7 +2,8 @@
 """`inbox.py`: tell a running agent on this VM something. The shell hook (`shell_hook.py`) hands it over.
 
     python3 tools/agent-guard/inbox.py send AGENT_ID --text 'TEXT'   (or --file PATH; `--file -` reads stdin)
-    python3 tools/agent-guard/inbox.py list                          each agent's pending and delivered messages
+    python3 tools/agent-guard/inbox.py list                          each agent's pending and delivered messages (a
+                                                                     pending one with `since` its oldest message's stamp)
 
 A message waits in `$AGENT_INBOX` (default `/tmp/agent-inbox`) as `AGENT_ID.md`, and messages sent before delivery queue up
 in it. The agent's next shell command is refused once with them as the refusal's text, and the agent re-runs the command.
@@ -14,11 +15,13 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import sys
 import time
 from pathlib import Path
 
 INBOX = Path(os.environ.get("AGENT_INBOX", "/tmp/agent-inbox"))
+STAMP = re.compile(r"^\[(\d{4}-\d\d-\d\dT\d\d:\d\dZ)\]$", re.M)
 
 
 def send(agent: str, text: str, inbox: Path = INBOX) -> Path:
@@ -53,7 +56,10 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     for p in sorted(INBOX.iterdir()):
         if p.suffix in (".md", ".delivered"):
-            print(f"{'pending  ' if p.suffix == '.md' else 'delivered'} {p.stem}  {p.stat().st_size} bytes")
+            line = f"{'pending  ' if p.suffix == '.md' else 'delivered'} {p.stem}  {p.stat().st_size} bytes"
+            if p.suffix == ".md" and (m := STAMP.search(p.read_text(errors="replace"))):
+                line += f"  since {m[1]}"
+            print(line)
     return 0
 
 
