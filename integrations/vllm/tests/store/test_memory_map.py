@@ -235,6 +235,25 @@ def test_a_dirty_block_is_in_no_step_until_a_write_completes_it():
     assert all(m.replay.holds(x) == x for x in (4, 6, 8, 10, 20, 22, 24, 26))
 
 
+def test_on_write_sees_each_registered_block_a_write_reaches_before_its_bytes_change():
+    """`Store.on_write`: a step's `kv_append` hands it the pool blocks the step's write reaches while they are
+    registered (a pass's plan may still hold them), before the forward writes them; a block already reached and not
+    complete (dirty) is not handed again."""
+    s, _ = store()
+    seen = []
+    slot = lambda k: s.region("kv/0").first + int(s.pool.ids[k // s.pool.per_page, k % s.pool.per_page])
+    s.on_write = lambda step, keys: seen.append((step, keys.tolist(), [s.payload(slot(k)) for k in keys]))
+    s.record_memory_map(registration=registration(s).digest)
+    s.kv_alloc([0])
+    s.kv_append([Append(0, 0, 3)], 0)
+    s.kv_append([Append(0, 3, 3)], 1)
+    s.kv_append([Append(0, 6, 2)], 2)
+    p = s.pool
+    k0, k1 = [c for c in range(p.per_page) if p.lo[c] == 0], [c for c in range(p.per_page) if p.lo[c] == 4]
+    assert [(st, keys) for st, keys, _ in seen] == [(0, k0), (1, k1), (2, [])]
+    assert all(b == bytes(BLOCK) for b in seen[0][2])
+
+
 def test_digests_are_taken_once_the_steps_bytes_are_in_place():
     """`kv_append` before the bytes land (a device codec writes them in the step's forward): the step is recorded, and
     its digests are those of the bytes at the next `kv_append` or `flush`."""
@@ -376,7 +395,7 @@ def deferred(s: Store, lifetime: int = audit.LIFETIME):
     says (`MemoryMap.encoded`)."""
     sent: list = []
     m = s.record_memory_map(registration=registration(s).digest, lifetime=lifetime,
-                            on_append=lambda first, digests, payloads: sent.append((first, digests, payloads)))
+                            on_append=lambda first, slots, digests, payloads: sent.append((first, digests, payloads)))
     return m, sent
 
 

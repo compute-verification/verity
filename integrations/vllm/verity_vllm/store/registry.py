@@ -307,22 +307,19 @@ class Store:
         self._salt_key = secrets.token_bytes(32) if salt_key is None else salt_key
         self._regions: list[_Region] = []
         self._by_name: dict[str, _Region] = {}
-        self._blocks = 0
-        self._words = 0
-        self._log_count = 0
+        self._blocks = self._words = self._log_count = 0
         self._log_root = hashlib.sha512(REGISTRATION_DOMAIN).digest()
         self._pool: _Pool | None = None
         self._challenge: bytes | None = None
         self._last_root: bytes | None = None
         self._passes: list[PassCommitment] = []
-        self._window = -1
-        self._pass_step = -1
+        self._window = self._pass_step = -1
         self._retained: dict[tuple[int, int], _Pass] = {}
         self._open_pass: _Pass | None = None
-        self.filler_plan = filler_plan
-        self.chaining = chaining
+        self.filler_plan, self.chaining = filler_plan, chaining
         self.counters = Counters()
         self.memory_map: mm.MemoryMap | None = None
+        self.on_write: Callable[[int, np.ndarray], None] | None = None
 
     # --- registration -----------------------------------------------------------------------------------------------
 
@@ -434,6 +431,9 @@ class Store:
     def region(self, name: str) -> RegionInfo:
         return self._by_name[name].info
 
+    def backing(self, name: str) -> Backing:
+        return self._by_name[name].backing
+
     def payload(self, slot: int) -> bytes:
         """Store block ``slot``'s payload now: its region codec's decoding of the bytes it holds."""
         r = self._regions[bisect.bisect_right([x.info.first for x in self._regions], slot) - 1]
@@ -489,8 +489,8 @@ class Store:
 
     def kv_append(self, appends: Sequence[Append], step: int) -> None:
         """The step's KV writes: each block a write reaches turns dirty, and each it completes is registered again
-        (epoch + 1, under ``step``).  One registration record for the step.  A memory map closes the last step's line and
-        opens this one's: its completed blocks to append, its reached live ones freed (`memory_map`)."""
+        (epoch + 1, under ``step``).  Those it reaches while registered (a plan may still hold them) go first to
+        ``on_write(step, pool blocks)``, if set, before the forward writes them.  One registration record for the step.  A memory map closes the last step's line, opens this one's (`memory_map`)."""
         t = time.perf_counter()
         p, m = self.pool, self.memory_map
         if m is not None:
@@ -504,9 +504,10 @@ class Store:
             if not p.allocated[pg].all() or (end > p.layout.slots).any() or (first < 0).any():
                 raise RuntimeError("an append outside an allocated page's slots")
             touched = (p.lo[None, :] < end[:, None]) & (p.hi[None, :] > first[:, None])
-            if m is not None:
-                reached = np.unique((pg[:, None] * p.per_page + np.arange(p.per_page))[touched & ~p.dirty[pg]])
+            reached = np.unique((pg[:, None] * p.per_page + np.arange(p.per_page))[touched & ~p.dirty[pg]])
             np.maximum.at(p.fill, pg, end)
+            if self.on_write is not None:
+                self.on_write(step, reached)
             p.dirty[pg] |= touched
             done = p.dirty[pg] & (p.hi[None, :] <= p.fill[pg][:, None])
             rows, cols = np.nonzero(done)

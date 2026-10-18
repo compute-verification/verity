@@ -76,7 +76,7 @@ from verity.core.protocols.remote_bandwidth.memory_map import Change, Header, Me
 
 def record(store: Any, path: str | Path | None = None, registration: bytes | None = None,
            lifetime: int = audit.LIFETIME, on_line: Callable[[Change], None] | None = None,
-           on_append: Callable[[int, tuple[bytes, ...], list[bytes]], None] | None = None) -> MemoryMap:
+           on_append: Callable[[int, tuple[int, ...], tuple[bytes, ...], list[bytes]], None] | None = None) -> MemoryMap:
     """Start ``store``'s memory map (`Store.record_memory_map`; ``store`` a `verity_vllm.store.registry.Store`)."""
     if registration is None:
         raise ValueError("a memory map names the store's registration: pass the remote audit's Registration.digest, "
@@ -115,14 +115,14 @@ class Appended:
 class MemoryMap:
     """memory-map/v1 of ``store``'s KV pool beside ``header``'s store, its lines in ``path`` (appended as each closes)
     or, without one, kept (`text`).  ``replay`` is the map as the audit replays it, which refuses a line that breaks
-    memory-map/v1 before it is written.  ``on_append(first, digests, payloads)`` gets each append as it is made (the
+    memory-map/v1 before it is written.  ``on_append(first, slots, digests, payloads)`` gets each append as it is made (the
     remote session's, `verity_vllm.store.remote`, which sends it and calls `encoded` once the device has encoded it
     under its coin); without it, each append's encode lands at once, as when the coin is back before the next step's
     reads.  ``on_line(change)``, if given, gets each line's `Change` as it closes."""
 
     def __init__(self, store: Any, header: Header, path: str | Path | None = None, lifetime: int = audit.LIFETIME,
                  on_line: Callable[[Change], None] | None = None,
-                 on_append: Callable[[int, tuple[bytes, ...], list[bytes]], None] | None = None) -> None:
+                 on_append: Callable[[int, tuple[int, ...], tuple[bytes, ...], list[bytes]], None] | None = None) -> None:
         if type(lifetime) is not int or lifetime < 1:
             raise ValueError("the lifetime cap is a positive number of windows")
         self.store, self.header, self.path = store, header, None if path is None else Path(path)
@@ -219,7 +219,7 @@ class MemoryMap:
         if self.on_append is None:
             self.encoded(a.first)
         else:
-            self.on_append(a.first, a.digests, [self.store.payload(x) for x in a.slots])
+            self.on_append(a.first, a.slots, a.digests, [self.store.payload(x) for x in a.slots])
 
     def encoded(self, first: int) -> None:
         """The device has encoded the append from ``first`` under its coin: the open line writes its blocks (they are

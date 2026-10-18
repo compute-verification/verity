@@ -110,6 +110,20 @@ def test_registration_from_a_runner(shared, interleaved):
     assert s.pool.ids.shape == (PAGES, 4) and s.pool.ids[1].tolist() == [4, 5, 6, 7]
 
 
+def test_a_registered_tensor_moved_or_reshaped_since_registration_is_named():
+    """`Binder.moved`: an in-place reader holds each registered tensor's device address, so a parameter whose data
+    is reallocated, or a KV cache the runner rebinds, is named; one left where it was is not."""
+    s, r = Store(), runner()
+    b = Binder(s, block_bytes=1024)
+    b.on_load(r)
+    b.on_kv(r, SimpleNamespace(num_blocks=PAGES))
+    assert b.moved() == []
+    w = r.model[0].weight
+    w.data = w.data.clone()
+    r.kv_caches[2] = r.kv_caches[2].clone()
+    assert b.moved() == ["0.weight", "kv[2]"]
+
+
 @pytest.mark.parametrize("budget, registered", [(8, 64 * 32 * 4), (7, 0)])
 def test_a_weight_block_budget_registers_the_tensors_that_fit_and_counts_the_rest(budget, registered):
     s = Store()

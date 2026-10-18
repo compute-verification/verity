@@ -158,6 +158,8 @@ class WeightRegion:
     codec: Codec = IDENTITY
     receipt: Receipt | None = None
     encode: bool = False
+    live: Any = None
+    """The object the model holds (its parameter), whose storage the binder checks stays put (`Binder.moved`)."""
 
 
 def model_weights(runner: Any) -> list[WeightRegion]:
@@ -167,8 +169,12 @@ def model_weights(runner: Any) -> list[WeightRegion]:
         if p.numel() == 0 or p.data_ptr() in seen:
             continue
         seen.add(p.data_ptr())
-        out.append(WeightRegion(name, p.data, f"param:{name}"))
+        out.append(WeightRegion(name, p.data, f"param:{name}", live=p))
     return out
+
+
+def _where(t: Any) -> tuple:
+    return t.data_ptr(), tuple(t.shape), tuple(t.stride())
 
 
 def _check_disjoint(starts: list[tuple[int, np.ndarray]], plane_bytes: int) -> None:
@@ -257,6 +263,7 @@ class Binder:
         self._segments: Sequence[Segment] = ()
         self.unregistered: dict[str, int] = {}
         self.slots = 0
+        self.tensors: list[tuple[str, Callable[[], Any], tuple]] = []
 
     # --- registration -----------------------------------------------------------------------------------------------
 
@@ -274,6 +281,7 @@ class Binder:
                 self.unregistered[f"{w.name}[tail]"] = nbytes - b.nbytes
             self.store.register(w.name, "hbm", "weights", b, block_bytes=self.block_bytes, codec=w.codec,
                                 receipt=w.receipt or self.receipt, source=w.source, encode=w.encode)
+            self._held(w.name, lambda t=w.tensor if w.live is None else w.live: t)
 
     def on_kv(self, runner: Any, kv_cache_config: Any) -> None:
         """Register the KV pool: each attention layer's pages a region (`PagedBacking`, so layers that share one
@@ -288,7 +296,8 @@ class Binder:
         pages = int(kv_cache_config.num_blocks)
         flats: dict[int, Any] = {}
         backings, starts, layout = [], [], None
-        for t in caches:
+        for i, t in enumerate(caches):
+            self._held(f"kv[{i}]", lambda i=i: runner.kv_caches[i])
             phys = page_layout(t, pages, slots)
             key = t.untyped_storage().data_ptr()
             flat = flats.setdefault(key, storage_bytes(t))
@@ -307,6 +316,14 @@ class Binder:
         self.slots = slots
         self.store.register_kv_pool("kv", backings, layout, block_bytes=self.block_bytes, codec=self.kv_codec,
                                     receipt=self.receipt, encode=False)
+
+    def _held(self, name: str, live: Callable[[], Any]) -> None:
+        self.tensors.append((name, live, _where(live())))
+
+    def moved(self) -> list[str]:
+        """The registered tensors whose storage, size or strides are no longer those at registration: a reader that
+        holds their device addresses (`benchmarks/remote_session/inplace.py`) would read memory the store left."""
+        return [name for name, live, was in self.tensors if _where(live()) != was]
 
     # --- the scheduler's steps --------------------------------------------------------------------------------------
 
