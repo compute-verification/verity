@@ -21,6 +21,8 @@ from verity_vllm.program.kernels.derived_rows import add_rn, f2fp_bf16, mul_rn
 from verity_vllm.program.kernels.kernel_registry import Declined, prim_static
 from verity_vllm.program.registry import marlin_moe as MM
 
+__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
+
 E2M1_BF16 = np.array([MM.e2m1_to_bf16(q) for q in range(16)], dtype=np.uint16)
 
 #: ops.cu's `small_batch_thread_configs` and `large_batch_thread_configs` (thread_k, thread_n, num_threads), by priority

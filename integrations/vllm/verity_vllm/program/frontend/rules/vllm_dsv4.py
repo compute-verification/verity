@@ -36,6 +36,8 @@ from verity_vllm.program.registry import dsv4_indexer as I
 from verity_vllm.program.registry import dsv4_qnorm_insert as Q
 from verity_vllm.program.registry.flashmla import FLASHMLA_DSV4
 
+__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
+
 BF16, F32, E4M3, U8 = torch.bfloat16, torch.float32, torch.float8_e4m3fn, torch.uint8
 M32 = 0xFFFFFFFF
 

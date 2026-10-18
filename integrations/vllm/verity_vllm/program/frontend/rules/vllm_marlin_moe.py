@@ -34,6 +34,8 @@ from verity_vllm.program.kernels import marlin_moe_rows as MR
 from verity_vllm.program.registry import marlin_moe as MM
 from verity_vllm.program.registry.prims import F32 as F32_WORD, I32 as I32_WORD
 
+__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
+
 BF16, F32, I32, U8 = torch.bfloat16, torch.float32, torch.int32, torch.uint8
 
 #: the roles the vocabulary may lack, and which kernel each states
