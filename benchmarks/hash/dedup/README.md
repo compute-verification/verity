@@ -27,5 +27,5 @@ directory reads, builds and imports their code (`benchmarks/pouw/pearl_c_sm120`,
 - `table.py`: the upper-bound table from a run's `dedup.json`: each arm's median step against today's -h3, and the saving
   as a share of the step and of -h3's hashing.
 - `time_branch.sh`: times another branch's -h3 arm (compute accounting's A-from-Commit) against today's on the PoUW workload,
-  with STEP-SPLIT's windows (`served_profile.sh`'s GPU part, Llama-3.1-8B). It runs from that branch's tree, both arms in
-  ABBA order on one node.
+  with STEP-SPLIT's windows (`served_profile.sh`'s GPU part, Llama-3.1-8B). It runs from that branch's tree, both arms of
+  a window back to back in one lease, in ABBA order across windows.
