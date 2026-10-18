@@ -68,6 +68,10 @@
       "build_request_LP256_T31": "85e8013e61f5449acddcfa1d648b16547ee8efdef5c15292b7bb554a27f6cd1a060449ba62646ac29ec7a8d07b778611b19c38a9b159e9ef5cda6f020934b1d8"
      }
     }
+   },
+   "aot": {
+    "comparison": "r20261018-000914-54dc",
+    "trace": "art:5c0cdf4e86811b0e60c42b9056d88b46b3b348c4e2bfee74618d5994e9547f28"
    }
   },
   "qwen3-06b__bf16__rtxpro6000__tp1__b1__i256__o32__mixed__greedy__bi-eager": {
