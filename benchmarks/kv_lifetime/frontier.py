@@ -14,8 +14,8 @@ R_cap is a step model's units (a JSON of `token`, `sample`, attention `coefficie
 (`trace`), or a node peak given outright (`--r-cap-node`). The encode cost is bytes a second over one GPU's rate:
 every written block's append (`write`) and the append of only the blocks older than tau (`delayed`, with the credit it
 loses) at `--encode-Bps`, the re-keys (`rekey`) at the in-place re-key's `--rekey-Bps`. `--clock origin` reads the frontier with caps from each block's
-content origin (`lifetimes.policy`), where a re-key is a recompute: the re-prefill at the run's own prefill rate, then
-the encode. A model the run didn't serve (70B TP8 from an 8B run) is modeled on the run's schedule with
+content origin (`lifetimes.policy`), where a re-key is a recompute: the re-prefill at the run's own prefill rate (or
+`--prefill-rows-per-s` for a run too light to batch a big prefill), then the encode. A model the run didn't serve (70B TP8 from an 8B run) is modeled on the run's schedule with
 `--kv-scale` (its KV bytes a token over the run's), `--gpus-per-engine` and `--m-dyn-engine`, `--engines 1`.
 
     python frontier.py RUN/out/analysis.json --models step_models.json --model-name llama31-8b \
@@ -126,6 +126,8 @@ def main() -> int:
                     help="a modeled model's KV bytes a token over the run's (its engine on the run's schedule)")
     ap.add_argument("--gpus-per-engine", type=int, default=1, help="GPUs an engine's KV and encodes spread over")
     ap.add_argument("--m-dyn-engine", type=float, default=None, help="the law's pool an engine (default the run's)")
+    ap.add_argument("--prefill-rows-per-s", type=float, default=None,
+                    help="the engine's re-prefill rate, for a run none of whose steps batched a big prefill")
     ap.add_argument("--json", type=Path, default=None)
     a = ap.parse_args()
     an = json.loads(a.analysis.read_text())
@@ -137,10 +139,11 @@ def main() -> int:
     # the engine's KV bytes re-prefilled a second, a GPU's share of them (the engine re-prefills on all its GPUs); a
     # phase too light to batch a big prefill reads the engine's rate from the run's other phases
     prefill = ph.get("prefill_rows_per_s") or max((p.get("prefill_rows_per_s") or 0.0 for p in an["phases"]),
-                                                  default=0.0)
+                                                  default=0.0) or a.prefill_rows_per_s
     recompute = prefill * an["serve"]["kv_bytes_per_token"] * a.kv_scale / a.gpus_per_engine
     if a.clock == "origin" and not (ph.get("frontier_origin") and recompute):
-        raise SystemExit(f"{a.analysis} has no origin-clock frontier or prefill rate: rerun serve.py and analyze.py")
+        raise SystemExit(f"{a.analysis} has no origin-clock frontier or prefill rate: rerun serve.py and analyze.py, "
+                         "or give the engine's rate (--prefill-rows-per-s, from a heavier run's analysis)")
     rows = table(ph, pool, r_engine, a.r_in_node / a.engines, a.encode_Bps, a.clock, recompute or None, a.tau,
                  a.kv_scale, a.gpus_per_engine, a.m_dyn_engine, a.rekey_Bps)
     write = ph["written_bytes_per_s"] * a.kv_scale / a.gpus_per_engine / a.encode_Bps
