@@ -1,5 +1,6 @@
 import Definitions.Accounting.Gates.Declared
 import Definitions.Accounting.Gates.Registry
+import Std.Data.String.ToNat
 
 /-!
 # The circuit model against the running Python, row by row
@@ -18,6 +19,9 @@ Rows the kernel evaluates the model on, each set recomputed from the Python by
   with its gathers' kinds and its s8 family's formats, and circuits' input ids.
 * `unitsRows`, `tableUnitsRows`: `units` by class on small circuits of primitive ids (`dagOf`: each gate an operation of
   its id's `classOf` class), against property/v1's units of the same Program.
+
+The kernel doesn't unfold `String.Slice.takeWhile` or `String.toNat?`, so the table-read rows read `classOf` through
+`classOf_eq`: `tableReadBits` is `tableReadDigits`, the same function on the id's characters.
 -/
 
 namespace Accounting.SecurityProofs.Gates.Rows
@@ -217,6 +221,75 @@ theorem censusOf_censusRows :
       censusOf matmul N K L acc u8 tu8 tail regB limbs == out) := by
   decide +kernel
 
+/-! ## `tableReadBits` on the id's characters -/
+
+/-- The digits right after an id's `TableRead`. -/
+def digitsAfter (id : String) : List Char := (id.toList.drop 9).takeWhile Char.isDigit
+
+/-- `tableReadBits` on the id's characters: the value of the digits after `TableRead`, when there are some and it is
+positive. -/
+def tableReadDigits (id : String) : Option ℕ :=
+  if id.startsWith "TableRead" then
+    (if (digitsAfter id).isEmpty then none else some (Nat.ofDigitChars 10 (digitsAfter id) 0)).filter (0 < ·)
+  else none
+
+theorem toList_copy_takeWhile (s : String.Slice) (p : Char → Bool) :
+    (s.takeWhile p).copy.toList = s.copy.toList.takeWhile p := by
+  have hall : ∀ c ∈ (s.takeWhile p).copy.toList, p c = true := by
+    have h := String.Slice.all_takeWhile (s := s) (pat := p)
+    rwa [String.Slice.all_bool_eq, List.all_eq_true] at h
+  have hstop := String.Slice.startsWith_dropWhile (s := s) (pat := p)
+  rw [String.Slice.startsWith_bool_eq_head?] at hstop
+  rw [← String.Slice.takeWhile_append_dropWhile (s := s) (pat := p), String.toList_append,
+    List.takeWhile_append_of_pos hall]
+  cases hd : (s.dropWhile p).copy.toList with
+  | nil => simp
+  | cons c cs =>
+    simp [hd] at hstop
+    simp [hstop]
+
+theorem toNat?_of_digits (t : String) (h : ∀ c ∈ t.toList, c.isDigit = true) :
+    t.toNat? = if t.toList.isEmpty then none else some (Nat.ofDigitChars 10 t.toList 0) := by
+  cases he : t.toList.isEmpty
+  · have hne : t ≠ "" := fun h0 => by simp [h0] at he
+    have hf : t.toList.filter (· != '_') = t.toList := List.filter_eq_self.2 fun c hc => by
+      have hd := h c hc
+      simp only [bne_iff_ne, ne_eq]
+      rintro rfl
+      revert hd
+      decide
+    rw [ite_eq_right (show ¬(false = true) by decide),
+      String.toNat?_eq_some_ofDigitChars (String.isNat_of_isDigit hne h), hf]
+  · rw [ite_eq_left rfl]
+    apply String.toNat?_eq_none
+    cases hn : t.isNat
+    · rfl
+    · exact absurd (String.toList_eq_nil_iff.1 (List.isEmpty_iff.1 he)) (String.isNat_iff.1 hn).1
+
+theorem tableReadBits_eq : tableReadBits = tableReadDigits := by
+  funext id
+  unfold tableReadBits tableReadDigits digitsAfter
+  by_cases hs : id.startsWith "TableRead" = true
+  · rw [ite_eq_left hs, ite_eq_left hs]
+    have hl : ((id.drop 9).takeWhile Char.isDigit).copy.toList = (id.toList.drop 9).takeWhile Char.isDigit := by
+      rw [toList_copy_takeWhile, String.toList_copy_drop]
+    have hdig : ∀ c ∈ ((id.drop 9).takeWhile Char.isDigit).copy.toList, c.isDigit = true := by
+      rw [hl]
+      exact List.all_eq_true.1 List.all_takeWhile
+    show (((id.drop 9).takeWhile Char.isDigit).copy.toNat?).filter (0 < ·) = _
+    rw [toNat?_of_digits _ hdig, hl]
+  · rw [ite_eq_right hs, ite_eq_right hs]
+
+/-- `classOf` with `tableReadDigits` for `tableReadBits`. -/
+def classOfDigits (id : String) : Option Class :=
+  (registry.lookup id).orElse fun _ => ((tableReadDigits id).map fun n => .gather (some n) 0).orElse fun _ =>
+    (families.find? fun e => id.startsWith e.1).map Prod.snd
+
+theorem classOf_eq : classOf = classOfDigits := by
+  funext id
+  unfold classOf classOfDigits
+  rw [tableReadBits_eq]
+
 /-! ## `classOf` against property/v1's table -/
 
 /-- A class as property/v1 names it: an input's binding, `const`, `affine`, an s8-family step's formats with its `k`,
@@ -309,14 +382,15 @@ theorem classOf_familyRows : familyRows.all (fun (id, tag, k) => classTag (class
 
 /-- `classOf` on every table-read row. -/
 theorem classOf_tableReadRows : tableReadRows.all (fun (id, tag, k) => classTag (classOf id) == (tag, k)) := by
+  rw [classOf_eq]
   decide +kernel
 
 /-! ## `units` against property/v1 -/
 
-/-- The operation of `classOf id`'s class at gate `i` (an input reads slot `i`): `units` reads only the class, a gather's
+/-- The operation of `cl id`'s class at gate `i` (an input reads slot `i`): `units` reads only the class, a gather's
 index-bit kind and its operands, so an affine map is the empty sum and a budgeted primitive the constant 0. -/
-def opOf (id : String) (i : ℕ) : Option (Op ℕ) :=
-  (classOf id).map fun
+def opOf (cl : String → Option Class) (id : String) (i : ℕ) : Option (Op ℕ) :=
+  (cl id).map fun
     | .input b => .input b i
     | .const => .const 0
     | .affine => .affine 0 []
@@ -324,13 +398,13 @@ def opOf (id : String) (i : ℕ) : Option (Op ℕ) :=
     | .gather low fill => .gather low fill
     | .budgeted cls => .budgeted cls fun _ => 0
 
-/-- The circuit of gates `(id, operands)`, each the operation `opOf` gives it; none when an id is unlisted. -/
-def dagOf (gs : List (String × List ℕ)) : Option (Dag ℕ) :=
-  gs.zipIdx.mapM fun e => (opOf e.1.1 e.2).map fun op => ⟨op, e.1.2, s32Min, s32Max, 0, e.1.1, .other, false⟩
+/-- The circuit of gates `(id, operands)`, each the operation `opOf cl` gives it; none when an id is unlisted. -/
+def dagOf (cl : String → Option Class) (gs : List (String × List ℕ)) : Option (Dag ℕ) :=
+  gs.zipIdx.mapM fun e => (opOf cl e.1.1 e.2).map fun op => ⟨op, e.1.2, s32Min, s32Max, 0, e.1.1, .other, false⟩
 
-/-- A circuit's units by budgeted class: roundings, compare-selects, gathers and folds. -/
-def unitsOf (gs : List (String × List ℕ)) : Option (ℕ × ℕ × ℕ × ℕ) :=
-  (dagOf gs).map fun C => let c := census C fun _ => True; (c.rounding, c.compareSelect, c.gather, c.fold)
+/-- A circuit's units by budgeted class, its ids classed by `cl`: roundings, compare-selects, gathers and folds. -/
+def unitsOf (cl : String → Option Class) (gs : List (String × List ℕ)) : Option (ℕ × ℕ × ℕ × ℕ) :=
+  (dagOf cl gs).map fun C => let c := census C fun _ => True; (c.rounding, c.compareSelect, c.gather, c.fold)
 
 /-- Rows `(gates, units)`: `unitsOf` is property/v1's units of the same Program (`test_lean_gates.units_program`), or
 none where it refuses an unlisted primitive. They take budgeted gates of run, registered and constant operands; gathers
@@ -400,11 +474,12 @@ def tableUnitsRows : List (List (String × List ℕ) × Option (ℕ × ℕ × �
     some (0, 0, 9, 0))]
 
 /-- `units` is property/v1's on every row. -/
-theorem unitsOf_unitsRows : unitsRows.all (fun (gs, out) => unitsOf gs == out) := by
+theorem unitsOf_unitsRows : unitsRows.all (fun (gs, out) => unitsOf classOf gs == out) := by
   decide +kernel
 
 /-- `units` is property/v1's on every table-read row. -/
-theorem unitsOf_tableUnitsRows : tableUnitsRows.all (fun (gs, out) => unitsOf gs == out) := by
+theorem unitsOf_tableUnitsRows : tableUnitsRows.all (fun (gs, out) => unitsOf classOf gs == out) := by
+  rw [classOf_eq]
   decide +kernel
 
 end Accounting.SecurityProofs.Gates.Rows
