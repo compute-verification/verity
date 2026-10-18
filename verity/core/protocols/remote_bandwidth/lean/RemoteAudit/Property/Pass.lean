@@ -207,11 +207,14 @@ def readSegs (ret : Seq) (prng : Array Rng) (segs : Array Segs) : Except String 
 
 /-- `_span`: whether leaves `[pos, pos + n)` of `t` and `[base, base + n)` of `ct` have one width, halving where neither
 run has one. -/
-partial def span (t : Ty) (pos : Nat) (ct : Ty) (base n : Nat) : Bool :=
+def span (t : Ty) (pos : Nat) (ct : Ty) (base n : Nat) : Bool :=
   let a := widthOf t pos (pos + n)
   let b := widthOf ct base (base + n)
-  if a.isSome || b.isSome || n ≤ 1 then a == b
+  if _hn : n ≤ 1 then a == b
+  else if a.isSome || b.isSome then a == b
   else let h := n / 2; span t pos ct base h && span t (pos + h) ct (base + h) (n - h)
+termination_by n
+decreasing_by all_goals omega
 
 /-- `_at_width`: whether each reference names a leaf of the width `t` declares at its position. -/
 def atWidth (t : Ty) (seq : Seq) (types : Bool → Nat → Ty) : Except String Bool := do
@@ -334,18 +337,25 @@ def note (ps : Array Part) (bits : Nat) (kind : GKind) (t : Tally) (fresh : Std.
     let had := fresh.getD key 0
     if bits > had then (t.unit .gathers (bits - had), fresh.insert key bits, up) else (t, fresh, up)
 
+/-- What a pass's `fuel` runs out on: a callee's index is below its caller's, so a decoded Program never reaches it. -/
+def DEEP : String := "the Program's calls nest deeper than its Definitions"
+
+/-- The `fuel` a pass from Definition `fi` starts with: each call, walk and scan spends one. -/
+def fuelOf (fi : Nat) : Nat := 3 * fi + 3
+
 mutual
 
 /-- One call of Definition `fi`: its return's segments, its run dependence and its tally (`_Pass.call`), memoized. -/
-partial def call (P : Prog) (fi : Nat) (dyn : Array Bool) (rng : Array Rng) (where_ : String × Nat) :
+def call (P : Prog) (fi : Nat) (dyn : Array Bool) (rng : Array Rng) (where_ : String × Nat) (fuel : Nat) :
     PM (Segs × Bool × Tally) := do
+  let fuel + 1 := fuel | throw DEEP
   let d := P.defs[fi]!
   if d.prim then
     let (r, t) ← prim d dyn rng where_
     return (#[(0, 1, r)], dyn.any id, t)
   let key := (fi, dyn, rng)
   if let some hit := (← get).memo[key]? then return hit
-  let (segs, dyns, ts, up) ← walk P fi dyn rng d.key
+  let (segs, dyns, ts, up) ← walk P fi dyn rng d.key fuel
   let out : Tally := { (ts.foldl (fun acc (_, t) => acc.add t) ({} : Tally)) with index := up }
   let ret ← readSegs d.body.ret rng segs
   let hit := (ret, dynOf d.body.ret.parts dyn dyns, out)
@@ -354,8 +364,9 @@ partial def call (P : Prog) (fi : Nat) (dyn : Array Bool) (rng : Array Rng) (whe
 
 /-- Each node of Definition `fi`'s body with the tally of its gates (a batch's and a scan's whole), its output's segments
 and run dependence, and the index bits read from the parameters (`_Pass.walk`). -/
-partial def walk (P : Prog) (fi : Nat) (pdyn : Array Bool) (prng : Array Rng) (defId : String) :
+def walk (P : Prog) (fi : Nat) (pdyn : Array Bool) (prng : Array Rng) (defId : String) (fuel : Nat) :
     PM (Array Segs × Array Bool × Array (Nat × Tally) × Std.HashMap IKey (Array Part × Nat × GKind)) := do
+  let fuel + 1 := fuel | throw DEEP
   let body := P.defs[fi]!.body
   let bad ← reinterps P fi
   let mut fresh : Std.HashMap IKey Nat := {}
@@ -378,9 +389,9 @@ partial def walk (P : Prog) (fi : Nat) (pdyn : Array Bool) (prng : Array Rng) (d
     let mut s : Segs := #[]
     let mut od := false
     if nd.form == .scan then
-      (s, od, t) ← scan P nd ad ar defId k
+      (s, od, t) ← scan P nd ad ar defId k fuel
     else
-      let (s0, od0, t0) ← call P nd.fn ad ar (defId, k)
+      let (s0, od0, t0) ← call P nd.fn ad ar (defId, k) fuel
       let batch := nd.form == .batch
       s := if batch then #[(0, nd.out.leaves, segUnion s0)] else s0
       od := od0
@@ -414,8 +425,9 @@ partial def walk (P : Prog) (fi : Nat) (pdyn : Array Bool) (prng : Array Rng) (d
 
 /-- A `scan`: its step called with the carry's range until it is a fixpoint, each iteration's tally counted for the
 iterations it stands for (`_Pass.scan`). -/
-partial def scan (P : Prog) (nd : Node) (ad : Array Bool) (ar : Array Rng) (defId : String) (k : Nat) :
+def scan (P : Prog) (nd : Node) (ad : Array Bool) (ar : Array Rng) (defId : String) (k : Nat) (fuel : Nat) :
     PM (Segs × Bool × Tally) := do
+  let fuel + 1 := fuel | throw DEEP
   let .tuple fs := nd.out | throw s!"definition '{defId}' node {k}: a scan returns (carry, ys)"
   let cl := (fs.getD 0 (.value 1)).leaves
   let d := #[ad.any id] ++ ad.extract 1 ad.size
@@ -425,7 +437,7 @@ partial def scan (P : Prog) (nd : Node) (ad : Array Bool) (ar : Array Rng) (defI
   let mut out : Tally := {}
   for i in [0:nd.n] do
     if i == EXACT_ITERATIONS then carry := none
-    let (s, _, t) ← call P nd.fn d (#[carry] ++ rest) (defId, k)
+    let (s, _, t) ← call P nd.fn d (#[carry] ++ rest) (defId, k) fuel
     let nxt := union carry (segUnion s 0 (some cl))
     ys := union ys (segUnion s cl none)
     let reps := if nxt == carry then nd.n - i else 1

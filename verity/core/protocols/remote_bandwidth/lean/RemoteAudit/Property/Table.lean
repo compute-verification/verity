@@ -1,4 +1,3 @@
-import Lean.Data.Json
 import Flock.Canon
 import Flock.Hash
 import Flock.Bytes
@@ -310,8 +309,12 @@ def constOf? (fid : String) : Option (Nat × Nat) := do
   let v := hex.foldl (fun n c => 16 * n + (if isDigit c then c.toNat - '0'.toNat else c.toNat - 'a'.toNat + 10)) 0
   some (digitsNat ds, v)
 
-/-- `_unlift`: the primitive a lift wraps, innermost, and whether `fid` is one. -/
-partial def unlift (fid : String) (lifted : Bool := false) : String × Bool :=
+/-- `_unlift`: the primitive a lift wraps, innermost, and whether `fid` is one. Each unwrapping drops at least four
+characters, so `fid.length + 1` is fuel enough. -/
+def unlift (fid : String) (lifted : Bool := false) (fuel : Nat := fid.length + 1) : String × Bool :=
+  match fuel with
+  | 0 => (fid, lifted)
+  | fuel + 1 =>
   let cs := fid.toList
   let inner? : Option (List Char) :=
     match lit "Lifted[" cs with
@@ -328,7 +331,7 @@ partial def unlift (fid : String) (lifted : Bool := false) : String × Bool :=
     if ds.isEmpty || pre.length < 6 || pre.drop (pre.length - 5) != "{ORD=".toList then none
     else some (pre.take (pre.length - 5))
   match inner? with
-  | some inner => if inner.isEmpty then (fid, lifted) else unlift (String.ofList inner) true
+  | some inner => if inner.isEmpty then (fid, lifted) else unlift (String.ofList inner) true fuel
   | none => (fid, lifted)
 
 private def gatherBase? (cs : List Char) : Option (Nat × GKind) :=

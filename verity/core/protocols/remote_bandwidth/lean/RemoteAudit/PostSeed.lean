@@ -1,4 +1,3 @@
-import Lean.Data.Json
 import Flock.Canon
 import Flock.Program
 import RemoteAudit.Property.Judge

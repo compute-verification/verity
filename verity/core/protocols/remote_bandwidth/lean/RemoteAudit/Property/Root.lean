@@ -90,32 +90,38 @@ def markNode (nd : Node) (r : Array Ivs) (space : Bool) (into : Marks) : Except 
 
 abbrev RM := StateT (Std.HashMap Nat (Array Ivs)) (Except String)
 
-/-- `_Analysis.reads`: what one activation of Definition `fi` reads of each parameter (a primitive all of them). -/
-partial def reads (P : Prog) (fi : Nat) : RM (Array Ivs) := do
+/-- `_Analysis.reads`: what one activation of Definition `fi` reads of each parameter (a primitive all of them). A
+callee's index is below its caller's, so `fi + 1` is fuel enough. -/
+def reads (P : Prog) (fi : Nat) (fuel : Nat := fi + 1) : RM (Array Ivs) := do
+  let fuel + 1 := fuel | throw DEEP
   if let some hit := (← get)[fi]? then return hit
   let d := P.defs[fi]!
   let r ← if d.prim then pure (d.params.map fun (_, t) => full t.leaves) else do
     let mut into : Marks := {}
     for nd in d.body.nodes do
-      let sub ← reads P nd.fn
+      let sub ← reads P nd.fn fuel
       into ← markNode nd sub true into
     pure ((Array.range d.body.params.size).map fun i => norm (into.getD i #[]))
   modify (·.insert fi r)
   return r
 
-/-- Whether Definition `fi` may return one of its parameters' leaves, passed through its nodes (refused at the root). -/
-partial def mayPass (P : Prog) (fi : Nat) : Bool :=
-  let d := P.defs[fi]!
-  !d.prim && d.body.ret.parts.any fun q => match q with
-    | .explicit it => it.any fun r => r.p || (match d.body.nodes[r.i]? with
-      | some nd => mayPass P nd.fn
-      | none => false)
-    | q => match partSpace? q with
-      | some (true, _) => true
-      | some (false, i) => match d.body.nodes[i]? with
-        | some nd => mayPass P nd.fn
+/-- Whether Definition `fi` may return one of its parameters' leaves, passed through its nodes (refused at the root);
+out of fuel, it may. -/
+def mayPass (P : Prog) (fi : Nat) (fuel : Nat := fi + 1) : Bool :=
+  match fuel with
+  | 0 => true
+  | fuel + 1 =>
+    let d := P.defs[fi]!
+    !d.prim && d.body.ret.parts.any fun q => match q with
+      | .explicit it => it.any fun r => r.p || (match d.body.nodes[r.i]? with
+        | some nd => mayPass P nd.fn fuel
+        | none => false)
+      | q => match partSpace? q with
+        | some (true, _) => true
+        | some (false, i) => match d.body.nodes[i]? with
+          | some nd => mayPass P nd.fn fuel
+          | none => false
         | none => false
-      | none => false
 
 /-- The number of input nodes, refused unless they come first, and the steps' ends, refused unless they increase past
 them to the last node (`census.census`). -/
@@ -161,7 +167,7 @@ def analyze (P : Prog) (ends : Array Nat) (ported : Array String) : Except Strin
   for j in [I:nodes.size] do
     if mayPass P nodes[j]!.fn then
       throw s!"root node {j} ({P.defs[nodes[j]!.fn]!.key}) may pass an argument through: not covered by this verdict"
-  let ((_, _, ts, _), st) ← (walk P P.root #[] #[] rootKey).run {}
+  let ((_, _, ts, _), st) ← (walk P P.root #[] #[] rootKey (fuelOf P.root)).run {}
   let mut units : Array (Array Nat) := Array.replicate S #[0, 0, 0, 0]
   let mut whole : Tally := {}
   for (k, t) in ts do

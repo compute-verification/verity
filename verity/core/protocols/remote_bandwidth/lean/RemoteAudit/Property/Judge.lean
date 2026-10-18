@@ -1,4 +1,3 @@
-import Lean.Data.Json
 import RemoteAudit.Property.Root
 
 /-!

@@ -163,40 +163,50 @@ def partsGet (ps : Array Part) (k : Nat) : Option Ref := Id.run do
 
 /-! ### Widths -/
 
-partial def widthSet : Ty → List Nat
+private theorem sizeOf_snd_lt_of_mem {fs : Array (String × Ty)} {f : String × Ty} (h : f ∈ fs) :
+    sizeOf f.2 < 1 + sizeOf fs := by
+  have := Array.sizeOf_lt_of_mem h
+  obtain ⟨k, t⟩ := f
+  simp only [Prod.mk.sizeOf_spec] at this ⊢
+  omega
+
+def widthSet : Ty → List Nat
   | .value w => [w]
   | .array n e => if n == 0 then [] else widthSet e
   | .tuple fs => fs.foldl (fun acc f => acc ++ (widthSet f).filter (!acc.contains ·)) []
   | .record fs => fs.foldl (fun acc f => acc ++ (widthSet f.2).filter (!acc.contains ·)) []
+decreasing_by all_goals first | decreasing_tactic | (simp only [Ty.record.sizeOf_spec]; exact sizeOf_snd_lt_of_mem ‹_›)
 
 def homogeneous (t : Ty) : Option Nat := match (widthSet t).eraseDups with
   | [w] => some w
   | _ => none
 
 /-- `_bits`: the widths of `t`'s leaves, summed. -/
-partial def bitsAll : Ty → Nat
+def bitsAll : Ty → Nat
   | .value w => w
   | .array n e => n * bitsAll e
   | .tuple fs => fs.foldl (· + bitsAll ·) 0
   | .record fs => fs.foldl (· + bitsAll ·.2) 0
+decreasing_by all_goals first | decreasing_tactic | (simp only [Ty.record.sizeOf_spec]; exact sizeOf_snd_lt_of_mem ‹_›)
 
 private def one (xs : List (Option Nat)) : Option Nat := match xs.eraseDups with
   | [w] => w
   | _ => none
 
+/-- The widths of the fields (each its leaf count and its `widthOf`) that leaves `[lo, hi)` meet, each over its own. -/
+private def fieldWidths (fs : Array (Nat × (Nat → Nat → Option Nat))) (lo hi : Nat) : Option Nat := Id.run do
+  let mut ws : List (Option Nat) := []
+  let mut pos := 0
+  for (n, w) in fs do
+    if pos < hi && pos + n > lo then ws := ws ++ [w (max lo pos - pos) (min hi (pos + n) - pos)]
+    pos := pos + n
+  return one ws
+
 /-- `stacking._width`: the one width of `t`'s leaves `[lo, hi)`, or none when they have two (structurally). -/
-partial def widthOf (t : Ty) (lo hi : Nat) : Option Nat :=
+def widthOf (t : Ty) (lo hi : Nat) : Option Nat :=
   match homogeneous t with
   | some w => some w
   | none =>
-    let fields := fun (fs : Array Ty) => Id.run do
-      let mut ws : List (Option Nat) := []
-      let mut pos := 0
-      for f in fs do
-        let n := f.leaves
-        if pos < hi && pos + n > lo then ws := ws ++ [widthOf f (max lo pos - pos) (min hi (pos + n) - pos)]
-        pos := pos + n
-      return one ws
     match t with
     | .array _ e =>
       let L := e.leaves
@@ -205,8 +215,14 @@ partial def widthOf (t : Ty) (lo hi : Nat) : Option Nat :=
       let b := (hi - 1) / L
       if a == b then widthOf e (lo - a * L) (hi - a * L)
       else one ([widthOf e (lo - a * L) L, widthOf e 0 (hi - b * L)] ++ (if b - a > 1 then [none] else []))
-    | .tuple fs => fields fs
-    | .record fs => fields (fs.map (·.2))
+    | .tuple fs => fieldWidths (fs.attach.map fun ⟨f, _⟩ => (f.leaves, widthOf f)) lo hi
+    | .record fs => fieldWidths (fs.attach.map fun ⟨f, _⟩ => (f.2.leaves, widthOf f.2)) lo hi
     | .value w => some w
+termination_by t
+decreasing_by
+  all_goals first
+    | decreasing_tactic
+    | (simp only [Ty.tuple.sizeOf_spec]; have := Array.sizeOf_lt_of_mem ‹_›; omega)
+    | (simp only [Ty.record.sizeOf_spec]; exact sizeOf_snd_lt_of_mem ‹_›)
 
 end RemoteAudit.Property
