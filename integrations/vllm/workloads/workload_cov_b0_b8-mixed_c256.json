@@ -1,8 +1,14 @@
 {
- "schema": "verity-vllm/workload/v1",
+ "schema": "verity-vllm/workload/v2",
  "model": "HuggingFaceTB/SmolLM2-135M",
  "case": "B0",
- "tokenizer_revision": "93efa2f097d58c2a74874c7e644dbc9b0cee75a2",
+ "engine": {
+  "revision": "93efa2f097d58c2a74874c7e644dbc9b0cee75a2",
+  "vllm": "d9105ea80",
+  "args": {
+   "max_num_batched_tokens": 2112
+  }
+ },
  "seed": 0,
  "variants": {
   "greedy": {
@@ -34,9 +40,6 @@
   "peak_concurrent": 6,
   "membership_changes": 10,
   "steps_with_mixed_prefill_decode": 5
- },
- "engine_args_required": {
-  "max_num_batched_tokens": 2112
  },
  "tokenizer_note": "prompt_token_ids from tokenizer.json sha256 9ca9acddb6525a19 (tokenizers, add_special_tokens=False), natural text from corpus_coverage.json, truncated to prompt_len; prompt_text is the decode of the ids (informational)",
  "prompt_lengths": [

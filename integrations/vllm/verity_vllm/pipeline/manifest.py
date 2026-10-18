@@ -78,14 +78,16 @@ class _Committed:
 
 
 def word_check(P: Any, corr: Correspondence, required: Any, word: str, *, strict: bool = True, acquired: dict[str, int] | None = None,
-               max_gates: str | None = None, log=None) -> dict[str, Any]:
+               max_gates: str | None = None, unreturned: frozenset[int] = frozenset(), log=None) -> dict[str, Any]:
     """`Q_word_v1{X,W}` (`word`: "16/32[+extras]") over `P`, committed = the manifest's required values and the interior words a tap
     acquires (`acquired`, `word.check_calls`; `max_gates`, the run's gate limits: `word.gate_limits`); `strict` raises
-    `word.QueryRuleViolation` naming every violation.  The manifest is not touched."""
+    `word.QueryRuleViolation` naming every violation.  The `unreturned` Calls (`Population.unreturned`: no Call reads their Values and
+    the Program does not return them, e.g. GLM-5.3's indexer logits and top-k while every key is selected) are skipped like literals:
+    nothing depends on them, so no unit has to end at their outputs.  The manifest is not touched."""
     from verity_vllm.query.module_body import literal_calls
     X, W, extras = word_query.parse(word)
-    r = word_query.check_query(P, _Committed(required, literal_calls(P), corr.module_of), X, W, extras, strict=strict, acquired=acquired,
-                                max_gates=max_gates)
+    r = word_query.check_query(P, _Committed(required, literal_calls(P) | unreturned, corr.module_of), X, W, extras, strict=strict,
+                                acquired=acquired, max_gates=max_gates)
     if log:
         log(f"  {r['query']}: {r['calls']} calls -> {r['units']} units over {r['gates']} gates, {r['committed_interior_words']} committed interior words"
             + (f" ({r['acquired_interior_words']} acquired by a tap)" if acquired is not None else ""))
@@ -142,7 +144,8 @@ def build(program_dir: str, *, workload: dict[str, Any] | None = None, request_i
     if word and word != "off":
         sp = SP.policy_of(r.manifest)
         acquired = {**(NS.TAP_WORDS if norm_scales else {}), **{f: w for t in taps for f, w in TAPS[t].tap_words.items()}, **(SP.TAP_WORDS if sp else {})}
-        wc = word_check(P, corr, r.required, word, acquired=acquired if (norm_scales or taps or sp) else None, max_gates=word_max_gates, log=log)
+        wc = word_check(P, corr, r.required, word, acquired=acquired if (norm_scales or taps or sp) else None, max_gates=word_max_gates,
+                        unreturned=r.unreturned, log=log)
         r.manifest["query"]["word_check"] = word_record(wc, strict=True, max_gates=word_max_gates)
     if guarded_max:
         r.manifest["query"] = GM.header(r.manifest["query"], GM.attention_words(P), GM.max_scaled_words(P))
