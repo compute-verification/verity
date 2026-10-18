@@ -239,7 +239,8 @@ lean_verdict() { "$PY" -c "import json, sys; v = [json.loads(l[8:]) for l in ope
 print(('ACCEPT' if v[0]['accepted'] else 'REJECT') if v else 'NONE')" "$1" 2>/dev/null || echo NONE; }
 
 unit_work() {    # unit_work TAG SIDE UNIT: one unit's stage -> open -> (controls on FIRST) -> --zk session -> Lean, its
-  local tag=$1 p=$2 t=$3 v vf=$OUT/$tag/verdicts.tsv      # open-TAG and lean-TAG verdicts to its own file for the reduce below
+  local tag=$1 p=$2 t=$3 v vf                             # open-TAG and lean-TAG verdicts to its own file for the reduce below
+  vf=$OUT/$tag/verdicts.tsv                               # a separate assignment: set -u expands a single local's words before any take effect
   mkdir -p "$OUT/$tag"; : > "$vf"
   stage_unit "$tag" "$p" "$t" || { printf 'open-%s\tACCEPT\tERROR\nlean-%s\tACCEPT\tNONE\n' "$tag" "$tag" > "$vf"; return 0; }
   v=$("$PY" "$SC" check "$OUT/$p/params.json" "$OUT/$p/registration.json" "$OUT/draw.json" "$t" "$OUT/$tag/pub.bin" "$OUT/$tag/opening.json" \
