@@ -10,6 +10,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 from circuit_check import entries as E
 
 REPO = Path(__file__).resolve().parents[4]
@@ -1066,6 +1068,7 @@ CHECKER = (HARNESS.replace("sys.path.insert(0, str(root))", "sys.path.insert(0, 
            .replace('"hits": hits}', '"hits": hits, "checker": cli.__file__}'))
 
 
+@pytest.mark.slow
 def test_the_scheduler_s_peaks_are_in_no_key(tmp_path):
     """`heavy.json` (`cli.HEAVY`) says only which targets may run beside which (`cli.run`'s scheduler), never what a check
     computes: an edit to it reuses every target and the task list (17 Oct: `PousSha512Head_v1`'s 161.8 GiB peak was left out
