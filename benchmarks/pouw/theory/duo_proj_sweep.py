@@ -140,7 +140,9 @@ def plan(name: str) -> list[dict]:
     x = ("xor",)
     if name == "full-served":
         return (served(6, 4, x, full=True) + served(8, 4, x, full=True) + served(10, 3, x, full=True)
-                + served(16, 2, x, full=True) + served(12, 3, x, full=True))
+                + plan("full-served-wide"))
+    if name == "full-served-wide":
+        return served(16, 2, x, full=True) + served(12, 3, x, full=True)
     if name == "full-generic":
         jobs = served_any_keys(6, 3, x, full=True) + served_any_keys(8, 2, x, full=True)
         jobs += generic(4, 1, x, full=True) + generic(4, 2, x, full=True) + generic(4, 3, x, full=True)
