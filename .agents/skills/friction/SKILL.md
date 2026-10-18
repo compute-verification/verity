@@ -288,7 +288,7 @@ Newest first. Each is Daniel's unless it names the coordinator.
   statement and each open piece's statement go on the branch before a worker starts, workers prove against them, and
   integration runs continuously; what the deadline leaves open is a gap list of exact lemma names
   (`.agents/skills/lean-proofs/SKILL.md`). The same night: say "private circuit" or "the circuit's description", never
-  "netlist" (the README's Glossary).
+  "netlist" (DESIGN.md's Glossary).
 - 2026-10-08 (7:13 PM PDT, relayed by top): a protocol's verifier of record switches from Python to Lean only on
   evidence. Its gap list shows nothing the Python checks that the Lean doesn't, for the record versions in use, and every
   recorded run in the store, replayed through the Lean, gets the verdict the Python gave, negative controls included. The
