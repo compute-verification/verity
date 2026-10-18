@@ -10,12 +10,12 @@ something else. Each committed kind has its openings by position:
 
 * the level-0 oracle at the witness cap, its rows `width₀` lanes wide (`op₀Z`, `opOfW`), and each level's table at its
   cap (`opRZ`, `Exec.opOfL` on `slotOpensZ`);
-* rep `r`'s pads oracle at its root (`opPadsZ`): at each pads position, the pair of the first query whose opening
-  verifies there;
+* rep `r`'s pads oracle at its root (`opPadsAtZ`): at each pads position, the pair of the first query that drew that
+  position and whose opening verifies there;
 * rep `r`'s `τ` oracle at its commitment (`opTauZ`): `τ`, if it opens the commitment.
 
 Every clash, and every pair of runs opening one position of one cap, root or commitment two ways, is a collision of `H`
-(`SelfClashZ.collision`, `opOfW_conflict_collision`, `opPadsZ_conflict_collision`, `opTauZ_conflict_collision`).
+(`SelfClashZ.collision`, `opOfW_conflict_collision`, `opPadsAtZ_conflict_collision`, `opTauZ_conflict_collision`).
 -/
 
 namespace FlockSoundness.Discharge.ZkLink
@@ -192,12 +192,13 @@ theorem opRZ_conflict_collision {H : List UInt8 → D} {E : Merkle.Enc (List F) 
 /-! ## The pads roots -/
 
 open Classical in
-/-- **Rep `r`'s pads openings, by position**: at `p`, the pair of the first query whose opening verifies at `p` from its
-leaf under its salt to the root `c 0`. -/
-noncomputable def opPadsZ (Hs : Hashes F D Sl) (N q r : ℕ) (c : Cap D) (out : OutZC F D Sl) (p : Fin N) :
+/-- **Rep `r`'s pads openings, by position**: at `p`, the pair of the first query that drew `p` (rep `r`'s
+`PendZ.qpos`) and whose opening verifies at `p` from its leaf under its salt to the root `c 0`. -/
+noncomputable def opPadsAtZ (Hs : Hashes F D Sl) (N q r : ℕ) (c : Cap D) (out : OutZC F D Sl) (p : Fin N) :
     Option (F × F) :=
-  (((List.range q).filter fun jj => decide (Merkle.VerifiesL Hs.H Hs.Ep Hs.Lp (fun _ => c 0) (Nat.log 2 N) p.val
-      ((out.opens.inner r).pads jj).1 ((out.opens.inner r).pads jj).2.1 ((out.opens.inner r).pads jj).2.2)).head?).map
+  (((List.range q).filter fun jj => decide ((if r = 0 then out.pend.1 else out.pend.2).qpos jj = p.val ∧
+      Merkle.VerifiesL Hs.H Hs.Ep Hs.Lp (fun _ => c 0) (Nat.log 2 N) p.val ((out.opens.inner r).pads jj).1
+        ((out.opens.inner r).pads jj).2.1 ((out.opens.inner r).pads jj).2.2)).head?).map
     fun jj => ((out.opens.inner r).pads jj).1
 
 /-- A pads oracle's pairs, lanes `0` and `1` at each position. -/
@@ -212,72 +213,75 @@ theorem rowPads_padsTab (N : ℕ) (v : Fin N → F × F) : rowPads N (padsTab N 
   funext p
   simp [rowPads, padsTab, p.isLt]
 
-/-- **A pads clash**: within one run, two of a rep's pads openings verify at one position to one root with different
-pairs, under any salts. -/
-def PadsClashZ (Hs : Hashes F D Sl) (N q : ℕ) (out : OutZC F D Sl) : Prop :=
+/-- **A pads clash**: within one run, two of a rep's pads openings, both drawn at one position (rep `r`'s
+`PendZ.qpos`), verify there to one root with different pairs, under any salts. -/
+def PadsClashAtZ (Hs : Hashes F D Sl) (N q : ℕ) (out : OutZC F D Sl) : Prop :=
   ∃ r < 2, ∃ root : D, ∃ jj < q, ∃ jj' < q, ∃ p : Fin N,
-    Merkle.VerifiesL Hs.H Hs.Ep Hs.Lp (fun _ => root) (Nat.log 2 N) p.val ((out.opens.inner r).pads jj).1
+    (if r = 0 then out.pend.1 else out.pend.2).qpos jj = p.val ∧
+      (if r = 0 then out.pend.1 else out.pend.2).qpos jj' = p.val ∧
+      Merkle.VerifiesL Hs.H Hs.Ep Hs.Lp (fun _ => root) (Nat.log 2 N) p.val ((out.opens.inner r).pads jj).1
         ((out.opens.inner r).pads jj).2.1 ((out.opens.inner r).pads jj).2.2 ∧
       Merkle.VerifiesL Hs.H Hs.Ep Hs.Lp (fun _ => root) (Nat.log 2 N) p.val ((out.opens.inner r).pads jj').1
         ((out.opens.inner r).pads jj').2.1 ((out.opens.inner r).pads jj').2.2 ∧
       ((out.opens.inner r).pads jj).1 ≠ ((out.opens.inner r).pads jj').1
 
 omit [Field F] [Fintype F] [DecidableEq F] in
-theorem PadsClashZ.collision {Hs : Hashes F D Sl} {N q : ℕ} {out : OutZC F D Sl} (h : PadsClashZ Hs N q out) :
+theorem PadsClashAtZ.collision {Hs : Hashes F D Sl} {N q : ℕ} {out : OutZC F D Sl} (h : PadsClashAtZ Hs N q out) :
     Merkle.Collision Hs.H := by
-  obtain ⟨_, _, root, jj, _, jj', _, p, h1, h2, hne⟩ := h
+  obtain ⟨_, _, root, jj, _, jj', _, p, -, -, h1, h2, hne⟩ := h
   exact Merkle.opening_bindingL Hs.H Hs.Ep Hs.Lp (fun _ => root) (Nat.log 2 N) p.val _ _ _ _ _ _ hne h1 h2
 
 omit [Field F] [Fintype F] [DecidableEq F] in
 open Classical in
-theorem opPadsZ_some {Hs : Hashes F D Sl} {N q r : ℕ} {c : Cap D} {out : OutZC F D Sl} {p : Fin N}
-    (h : (opPadsZ Hs N q r c out p).isSome) :
-    ∃ jj < q, Merkle.VerifiesL Hs.H Hs.Ep Hs.Lp (fun _ => c 0) (Nat.log 2 N) p.val ((out.opens.inner r).pads jj).1
+theorem opPadsAtZ_some {Hs : Hashes F D Sl} {N q r : ℕ} {c : Cap D} {out : OutZC F D Sl} {p : Fin N}
+    (h : (opPadsAtZ Hs N q r c out p).isSome) :
+    ∃ jj < q, (if r = 0 then out.pend.1 else out.pend.2).qpos jj = p.val ∧
+      Merkle.VerifiesL Hs.H Hs.Ep Hs.Lp (fun _ => c 0) (Nat.log 2 N) p.val ((out.opens.inner r).pads jj).1
         ((out.opens.inner r).pads jj).2.1 ((out.opens.inner r).pads jj).2.2 ∧
-      opPadsZ Hs N q r c out p = some ((out.opens.inner r).pads jj).1 := by
-  unfold opPadsZ at h ⊢
+      opPadsAtZ Hs N q r c out p = some ((out.opens.inner r).pads jj).1 := by
+  unfold opPadsAtZ at h ⊢
   rw [Option.isSome_map] at h
   obtain ⟨x, hx⟩ := Option.isSome_iff_exists.1 h
   have hmem := List.mem_of_mem_head? hx
   rw [List.mem_filter, decide_eq_true_eq, List.mem_range] at hmem
-  exact ⟨x, hmem.1, hmem.2, by rw [hx]; rfl⟩
+  exact ⟨x, hmem.1, hmem.2.1, hmem.2.2, by rw [hx]; rfl⟩
 
 omit [Field F] [Fintype F] [DecidableEq F] in
 open Classical in
-theorem opPadsZ_isSome {Hs : Hashes F D Sl} {N q r : ℕ} {c : Cap D} {out : OutZC F D Sl} {p : Fin N} {jj : ℕ}
-    (hjj : jj < q)
+theorem opPadsAtZ_isSome {Hs : Hashes F D Sl} {N q r : ℕ} {c : Cap D} {out : OutZC F D Sl} {p : Fin N} {jj : ℕ}
+    (hjj : jj < q) (hq : (if r = 0 then out.pend.1 else out.pend.2).qpos jj = p.val)
     (hv : Merkle.VerifiesL Hs.H Hs.Ep Hs.Lp (fun _ => c 0) (Nat.log 2 N) p.val ((out.opens.inner r).pads jj).1
       ((out.opens.inner r).pads jj).2.1 ((out.opens.inner r).pads jj).2.2) :
-    (opPadsZ Hs N q r c out p).isSome := by
-  unfold opPadsZ
+    (opPadsAtZ Hs N q r c out p).isSome := by
+  unfold opPadsAtZ
   rw [Option.isSome_map, List.isSome_head?]
-  exact List.ne_nil_of_mem (List.mem_filter.2 ⟨List.mem_range.2 hjj, decide_eq_true hv⟩)
+  exact List.ne_nil_of_mem (List.mem_filter.2 ⟨List.mem_range.2 hjj, decide_eq_true ⟨hq, hv⟩⟩)
 
 omit [Field F] [Fintype F] [DecidableEq F] in
 /-- **Every pair a pads root's collision finder counts is a collision.** -/
-theorem opPadsZ_conflict_collision {Hs : Hashes F D Sl} {N q r : ℕ} {c : Cap D}
-    {x : OutZC F D Sl × OutZC F D Sl} {p : Fin N} (h : Rewinding.ConflictAt (opPadsZ Hs N q r c) x p) :
+theorem opPadsAtZ_conflict_collision {Hs : Hashes F D Sl} {N q r : ℕ} {c : Cap D}
+    {x : OutZC F D Sl × OutZC F D Sl} {p : Fin N} (h : Rewinding.ConflictAt (opPadsAtZ Hs N q r c) x p) :
     Merkle.Collision Hs.H := by
-  obtain ⟨jj, -, h1, e1⟩ := opPadsZ_some h.1
-  obtain ⟨jj', -, h2, e2⟩ := opPadsZ_some h.2.1
+  obtain ⟨jj, -, -, h1, e1⟩ := opPadsAtZ_some h.1
+  obtain ⟨jj', -, -, h2, e2⟩ := opPadsAtZ_some h.2.1
   refine Merkle.opening_bindingL Hs.H Hs.Ep Hs.Lp (fun _ => c 0) (Nat.log 2 N) p.val _ _ _ _ _ _
     (fun e => h.2.2 ?_) h1 h2
   rw [e1, e2, e]
 
 omit [Field F] [Fintype F] [DecidableEq F] in
-/-- **A rep's disagreeing pads opening**: a pads clash within the run, or the run opens a pads position of the fixed
-pads oracle to another pair. -/
-theorem pads_badZ (Hs : Hashes F D Sl) (N q r : ℕ) (hr : r < 2) (j : IZ F D) (out : OutZC F D Sl)
-    (hnot : ¬ PadsAgree Hs N q j (out.opens.inner r)) :
-    PadsClashZ Hs N q out ∨
-      ∃ t d, j.pads = some (t, d) ∧ ∃ p, Rewinding.Off (opPadsZ Hs N q r d) (rowPads N t) out p := by
-  unfold PadsAgree at hnot
+/-- **A rep's disagreeing pads opening**, at a position its query drew: a pads clash within the run, or the run opens
+a pads position of the fixed pads oracle to another pair. -/
+theorem pads_badAtZ (Hs : Hashes F D Sl) (N q r : ℕ) (hr : r < 2) (j : IZ F D) (out : OutZC F D Sl)
+    (hnot : ¬ PadsAgreeAt Hs N q (if r = 0 then out.pend.1 else out.pend.2).qpos j (out.opens.inner r)) :
+    PadsClashAtZ Hs N q out ∨
+      ∃ t d, j.pads = some (t, d) ∧ ∃ p, Rewinding.Off (opPadsAtZ Hs N q r d) (rowPads N t) out p := by
+  unfold PadsAgreeAt at hnot
   push Not at hnot
-  obtain ⟨O, c, hpads, jj, hjj, p, hver, hne⟩ := hnot
-  obtain ⟨h, hh, hhv, hop⟩ := opPadsZ_some (opPadsZ_isSome (r := r) (out := out) hjj hver)
+  obtain ⟨O, c, hpads, jj, hjj, p, hpq, hver, hne⟩ := hnot
+  obtain ⟨h, hh, hhq, hhv, hop⟩ := opPadsAtZ_some (opPadsAtZ_isSome (r := r) (out := out) hjj hpq.symm hver)
   by_cases heq : ((out.opens.inner r).pads h).1 = rowPads N O p
-  · exact Or.inl ⟨r, hr, c 0, h, hh, jj, hjj, p, hhv, hver, fun e => hne (e.symm.trans heq)⟩
-  · have hoff : (opPadsZ Hs N q r c out p).isSome ∧ opPadsZ Hs N q r c out p ≠ some (rowPads N O p) :=
+  · exact Or.inl ⟨r, hr, c 0, h, hh, jj, hjj, p, hhq, hpq.symm, hhv, hver, fun e => hne (e.symm.trans heq)⟩
+  · have hoff : (opPadsAtZ Hs N q r c out p).isSome ∧ opPadsAtZ Hs N q r c out p ≠ some (rowPads N O p) :=
       ⟨by rw [hop]; rfl, by rw [hop]; exact fun e => heq (Option.some.inj e)⟩
     exact Or.inr ⟨O, c, hpads, p, hoff⟩
 
@@ -335,7 +339,7 @@ def SelfClashZ (Hs : Hashes F D Sl) (T : TabZK F mPts) (out : OutZC F D Sl) : Pr
     (∃ r < 2, ∃ ℓ, 1 ≤ ℓ ∧ ∃ cap, (if r = 0 then out.pend.1 else out.pend.2).lig.caps[ℓ - 1]? = some cap ∧
       Exec.ClashL Hs.H Hs.E Hs.Lf cap (lvOf T.sch ℓ).lanes (pathLen (lvOf T.sch ℓ))
         (slotOpensZ out r ℓ (lvOf T.sch ℓ).queries)) ∨
-    PadsClashZ Hs T.N T.q out
+    PadsClashAtZ Hs T.N T.q out
 
 /-- **A self-clash is a collision.** -/
 theorem SelfClashZ.collision {Hs : Hashes F D Sl} {T : TabZK F mPts} {out : OutZC F D Sl}
@@ -476,13 +480,14 @@ theorem getPairZ_tau (r : ℕ) (hr : r < 2) (i : IZ F D × IZ F D) :
     rw [show getZ 0 i.1 (2 + 1) = none by simp [getZ], show getZ 1 i.2 (2 + 1) = i.2.tau by simp [getZ]]
     rfl
 
-/-- **The openings agree with every fixed table**: both reps' rows (`AgreeZ`), pads pairs (`PadsAgree`) and `τ`
-(`TauAgree`). -/
+/-- **The openings agree with every fixed table**: both reps' rows (`AgreeZ`), pads pairs at the positions their queries
+drew (`PadsAgreeAt`) and `τ` (`TauAgree`). -/
 def AgreeAllZ (Hs : Hashes F D Sl) (T : TabZK F mPts) (C₀ : Oracle F) (i : IZ F D × IZ F D) (out : OutZC F D Sl) :
     Prop :=
   AgreeZ 0 C₀ (width₀ T) i.1.lev out.pend.1.lig.reqs out.opens.rows ∧
     AgreeZ 1 C₀ (width₀ T) i.2.lev out.pend.2.lig.reqs out.opens.rows ∧
-    PadsAgree Hs T.N T.q i.1 (out.opens.inner 0) ∧ PadsAgree Hs T.N T.q i.2 (out.opens.inner 1) ∧
+    PadsAgreeAt Hs T.N T.q out.pend.1.qpos i.1 (out.opens.inner 0) ∧
+    PadsAgreeAt Hs T.N T.q out.pend.2.qpos i.2 (out.opens.inner 1) ∧
     TauAgree Hs i.1 (out.opens.inner 0) ∧ TauAgree Hs i.2 (out.opens.inner 1)
 
 /-- **Where a bad run goes wrong.** An accepted run that disagrees with the fixed tables either clashes within the run,
@@ -496,7 +501,7 @@ theorem bad_splitZ (Hs : Hashes F D Sl) (T : TabZK F mPts) (C₀ : Oracle F) (ca
         Lock.getPair (getZ 0) (getZ 1) i (slotOf r ℓ + 4) = some (t, d) ∧
           ∃ p, Rewinding.Off (opRZ Hs.H Hs.E Hs.Lf T.sch r ℓ d) (rowT _ _ t) out p) ∨
       (∃ r ∈ Finset.range 2, ∃ t d, Lock.getPair (getZ 0) (getZ 1) i r = some (t, d) ∧
-        ∃ p, Rewinding.Off (opPadsZ Hs T.N T.q r d) (rowPads T.N t) out p) ∨
+        ∃ p, Rewinding.Off (opPadsAtZ Hs T.N T.q r d) (rowPads T.N t) out p) ∨
       ∃ r ∈ Finset.range 2, ∃ t d, Lock.getPair (getZ 0) (getZ 1) i (2 + r) = some (t, d) ∧
         ∃ p, Rewinding.Off (opTauZ Hs r d) (rowTau t) out p := by
   obtain ⟨-, hcap, -, hok, hs₀, hs₁⟩ := hR
@@ -507,13 +512,14 @@ theorem bad_splitZ (Hs : Hashes F D Sl) (T : TabZK F mPts) (C₀ : Oracle F) (ca
         out.opens.salts ∧
       ¬ AgreeZ r C₀ (width₀ T) (if r = 0 then i.1 else i.2).lev (if r = 0 then out.pend.1 else out.pend.2).lig.reqs
         out.opens.rows) ∨
-      (∃ r < 2, ¬ PadsAgree Hs T.N T.q (if r = 0 then i.1 else i.2) (out.opens.inner r)) ∨
+      (∃ r < 2, ¬ PadsAgreeAt Hs T.N T.q (if r = 0 then out.pend.1 else out.pend.2).qpos (if r = 0 then i.1 else i.2)
+        (out.opens.inner r)) ∨
       ∃ r < 2, ¬ TauAgree Hs (if r = 0 then i.1 else i.2) (out.opens.inner r) := by
     unfold AgreeAllZ at hbad
     by_cases h0 : AgreeZ 0 C₀ (width₀ T) i.1.lev out.pend.1.lig.reqs out.opens.rows
     · by_cases h1 : AgreeZ 1 C₀ (width₀ T) i.2.lev out.pend.2.lig.reqs out.opens.rows
-      · by_cases p0 : PadsAgree Hs T.N T.q i.1 (out.opens.inner 0)
-        · by_cases p1 : PadsAgree Hs T.N T.q i.2 (out.opens.inner 1)
+      · by_cases p0 : PadsAgreeAt Hs T.N T.q out.pend.1.qpos i.1 (out.opens.inner 0)
+        · by_cases p1 : PadsAgreeAt Hs T.N T.q out.pend.2.qpos i.2 (out.opens.inner 1)
           · by_cases t0 : TauAgree Hs i.1 (out.opens.inner 0)
             · have t1 : ¬ TauAgree Hs i.2 (out.opens.inner 1) := fun t1 => hbad ⟨h0, h1, p0, p1, t0, t1⟩
               exact Or.inr (Or.inr ⟨1, by norm_num, by simpa using t1⟩)
@@ -530,7 +536,7 @@ theorem bad_splitZ (Hs : Hashes F D Sl) (T : TabZK F mPts) (C₀ : Oracle F) (ca
       · exact Or.inr (Or.inr (Or.inl ⟨r, Finset.mem_range.2 hr, ℓ, hℓ, t, d,
           by rw [getPairZ_lev r hr i ℓ (Finset.mem_Icc.1 hℓ).1, hi], hoff⟩))
       · exact Or.inl (Or.inr (Or.inl ⟨r, hr, ℓ, (Finset.mem_Icc.1 hℓ).1, d, hc, hcl⟩))
-  · rcases pads_badZ Hs T.N T.q r hr _ out hnot with hcl | ⟨t, d, hp, h⟩
+  · rcases pads_badAtZ Hs T.N T.q r hr _ out hnot with hcl | ⟨t, d, hp, h⟩
     · exact Or.inl (Or.inr (Or.inr hcl))
     · exact Or.inr (Or.inr (Or.inr (Or.inl ⟨r, Finset.mem_range.2 hr, t, d, by rw [getPairZ_pads r hr i, hp], h⟩)))
   · obtain ⟨t, d, hp, h⟩ := tau_badZ Hs r _ out hnot
