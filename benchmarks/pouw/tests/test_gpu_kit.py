@@ -241,6 +241,38 @@ blkred:
 """
 
 
+TMEM_LISTING = """\t.section\t.text.tm,"ax",@progbits
+        .global         tm
+        .type           tm,@function
+tm:
+.text.tm:
+        /*0000*/                   CS2R R2, SR_CLOCKLO ;
+.L_x_1:
+        /*0010*/                   LDTM.x128 R4, tmem[UR6] ;
+        /*0020*/                   STG.E [R8], R4 ;
+        /*0030*/                   UIADD3 UR6, UPT, UPT, UR6, 0x1, URZ ;
+        /*0040*/                   UISETP.NE.AND UP0, UPT, UR6, URZ, UPT ;
+        /*0050*/                   BRA.U UP0, `(.L_x_1) ;
+        /*0060*/                   CS2R R3, SR_CLOCKLO ;
+        /*0070*/                   EXIT ;
+.L_x_9:
+"""
+
+
+def test_a_tmem_read_must_be_an_ldtm():
+    """Every read out of tensor memory is an LDTM (tcgen05.ld), the one TMEM→register move; a tmem operand on any other
+    opcode is a new, unproven path and is refused."""
+    fn = {f["name"]: H.Function(f) for f in H.parse_nvdisasm(TMEM_LISTING)}["tm"]
+    rec = G.judge_kernel(fn, [{"LDTM.x128": 1, "STG.E": 1}])
+    assert rec["ok"], rec["reasons"]
+    assert rec["tmem"] == ["0x0010 LDTM.x128"] and "tmem" not in checks(rec)
+    sneaky = TMEM_LISTING.replace("LDTM.x128 R4, tmem[UR6]", "LD.E.128 R4, tmem[UR6]")
+    fn2 = {f["name"]: H.Function(f) for f in H.parse_nvdisasm(sneaky)}["tm"]
+    rec2 = G.judge_kernel(fn2, [{"LD.E.128": 1, "STG.E": 1}])
+    assert "tmem" in checks(rec2) and not rec2["ok"]
+    assert any("LD" in r and "LDTM" in r for r in rec2["reasons"])
+
+
 def test_an_elect_loop_is_one_trip_and_listed():
     """ptxas wraps UBLKRED (sm_120, r20261017-033329-80d9) in an ELECT loop that runs once per active lane."""
     fn = {f["name"]: H.Function(f) for f in H.parse_nvdisasm(ELECT_LISTING)}["blkred"]

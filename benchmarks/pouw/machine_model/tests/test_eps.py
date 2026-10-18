@@ -135,7 +135,7 @@ def test_lane_filler_dilutes_the_operand_floor():
     two = provisional("dither-2s")
     fill = provisional("dither-2s-fill")
     f = fill.filler[0]
-    assert (f.per_word, f.mix, f.route) == (4.5, E.lane_fill(4.5).mix, "lanes")
+    assert (f.per_word, f.mix, f.route, f.p) == (4.5, E.lane_fill(4.5).mix, "lanes", E.lane_fill(4.5).p)
     assert two.with_fill(4.5).filler == (E.lane_fill(4.5),)
     e0, e = E.eps(two, PIU, 8), E.eps(fill, PIU, 8)
     assert e.as_built.T * 128 == pytest.approx(JI + 12.375 + 4 * 4.5, rel=1e-12)
@@ -218,7 +218,7 @@ def test_luck_and_the_total():
     assert e.cheat.binding == ("JI3e_0",)
     assert e.luck == pytest.approx(E.deficit(DUO) * (JI + 0.375) / (JI + 12.375), rel=1e-6)
     e = E.eps(DUO, PI, 8)
-    assert e.sched is None and e.mand == 0 and e.skip == 0.164
+    assert e.sched is None and e.mand == 0 and e.skip == 0.123
     assert e.total() == pytest.approx(1 - (1 - e.skip - e.machine_eps - e.luck) * (1 - e.clock))
 
 
@@ -267,17 +267,26 @@ def test_core_and_sample_are_two_layers():
 
 
 def test_luck_spends_one_budget_on_words_and_filler():
-    """Theorem S's budget ln(1/δ)/S weights each deficient block by 1 − p (¾ a word, 0.854 a filler block): a lane
-    filler is cheaper to skip than a word, so the lucky cheater leaves filler undone and saves more than d̄ of words."""
+    """Theorem S's budget ln(1/δ)/S weights each deficient block by 1 − p: ¾ a word, and 0 a lane filler block, whose
+    receipt the check recomputes (PinnedFillBlocksDeficit), so the lucky cheater skips words alone. At pfill's 0.854 a
+    filler block is cheaper to skip than a word and the cheater leaves filler undone; with no luck credit (p = 1) it
+    leaves the whole filler undone, even with every block checked."""
     d = E.design("dither-2s-fill")
-    assert all(f.p == 0.854 for f in d.filler)
+    assert [(f.p, f.luck.split(":")[0]) for f in d.filler] == [(0.0, E.PINNED.split(" ")[0])]
     e = E.eps(d, PIU, 8, operands="floor", credit="floor")
-    s = e.lucky.short
-    assert s["filler 1"] > 0 and (1 - d.p) * s["words"] + sum(
-        (1 - f.p) * s[f"filler {j + 1}"] for j, f in enumerate(d.filler)) == pytest.approx(E.budget(d), rel=1e-6)
-    words_only = E.eps(replace(d, filler=tuple(replace(f, p=0.0) for f in d.filler)), PI, 8, operands="floor",
-                       credit="floor")
-    assert e.luck > words_only.luck and words_only.lucky.short["filler 1"] == 0
+    assert e.lucky.short["filler 1"] == 0
+    assert (1 - d.p) * e.lucky.short["words"] == pytest.approx(E.budget(d), rel=1e-6)
+
+    def at(p: float, operands: str = "floor") -> E.Eps:
+        return E.eps(replace(d, filler=tuple(replace(f, p=p) for f in d.filler)), PIU, 8, operands=operands,
+                     credit="floor")
+
+    s = at(0.854).lucky.short
+    assert s["filler 1"] > 0 and (1 - d.p) * s["words"] + (1 - 0.854) * s["filler 1"] == pytest.approx(
+        E.budget(d), rel=1e-6)
+    assert at(0.854).luck > e.luck
+    assert at(1.0).lucky.short["filler 1"] == pytest.approx(1)
+    assert at(1.0, "free").core() > at(0.0, "free").core() > at(0.0).core()
 
 
 def test_the_table_route_is_bound_by_L2():
@@ -327,7 +336,8 @@ def test_a_design_reads_its_base_and_the_defaults(tmp_path):
     """A variant states what it changes: the rest comes from its base and data/designs.toml, but never its name, title,
     summary or aliases, which would collide."""
     two, fill = E.design("dither-2s"), E.design("dither-2s-fill")
-    assert fill.base == "dither-2s" and fill.skip == two.skip and fill.floor == two.floor and fill.ppl == two.ppl
+    assert fill.base == "dither-2s" and fill.noise == two.noise and fill.floor == two.floor and fill.ppl == two.ppl
+    assert E.design("co-dither-l16").sums == E.design("dither-c-peel").sums == "vfold" != E.design("dither-c").sums
     assert fill.aliases == ("dither-two-sided-fill",) and fill.title != two.title and fill.filler and not two.filler
     assert E.design("dither-2s-pv").ppl == "adopted-bd-lm-pv" and E.design("dither-c-peel").noise["pv"] == "peel"
     assert E.design("A") == two and E.design("dither-duo").name == "dither-1s" and E.aliases()["Bc"] == "dither-c-peel"
@@ -347,10 +357,22 @@ def test_a_design_reads_its_base_and_the_defaults(tmp_path):
     bad.write_text('base = "dither-2s"\nname = "x"\ntitle = "Dither-X"\nsummary = "x"\n[noise]\nlinears = "ncp"\n')
     with pytest.raises(SystemExit, match=r"\[noise\] names a leaf"):
         E.design("x", data)
+    bad.write_text('base = "dither-2s"\nname = "x"\ntitle = "Dither-X"\nsummary = "x"\nsums = "vsum"\n')
+    assert E.design("x", data).sums == "vsum" and two.sums == "vfold"
+    bad.write_text('base = "dither-2s"\nname = "x"\ntitle = "Dither-X"\nsummary = "x"\nsums = "vscan"\n')
+    with pytest.raises(SystemExit, match="not a peel sums kernel"):
+        E.design("x", data)
     bad.write_text('base = "dither-2s"\nname = "x"\ntitle = "Dither-X"\nsummary = "x"\n'
                    '[filler]\nper_word = 4\nmix = { ALU = 1 }\nroute = "uniform"\n')
     with pytest.raises(SystemExit, match="decision 73"):
         E.design("x", data)
+    head = 'base = "dither-2s"\nname = "x"\ntitle = "Dither-X"\nsummary = "x"\n[filler]\nper_word = 4\nmix = { ALU = 1 }\n'
+    for luck in ("", "p = 0.854\n", "p = 1.5\nluck = \"x\"\n"):
+        bad.write_text(head + luck)
+        with pytest.raises(SystemExit, match="theorem that proves it"):
+            E.design("x", data)
+    bad.write_text(head + "p = 1.0\n")
+    assert [(f.p, f.luck) for f in E.design("x", data).filler] == [(1.0, "")]
     bad.write_text('base = "dither-2s"\nname = "x"\ntitle = "Dither-X"\nsummary = "x"\n[coins]\nbits = 2\nsource = "x"\n')
     assert E.design("x", data).index_bits == 2 and two.index_bits == 1
     bad.write_text(bad.read_text() + "[table]\nbits = 1\n")
@@ -490,7 +512,7 @@ def test_dc_the_tensor_couples_with_lanes_on_sm90_not_sm100():
     H200 JI90_0 charges a uniform instruction 0.96, which closes it. At L = 256 the B200 is tensor-bound (JPA100_1) and a word on lanes at q* replaces 8 MMAs: the commit
     spacing's cost."""
     sm90, sm100 = DEVICES / "sm_90", DEVICES / "sm_100"
-    duo = [n for n in E.designs(sm90) if "-li-" not in n]
+    duo = [n for n in E.designs(sm90) if "-li" not in n]
     assert duo == [f"dither-{n}-l{L}" for n in ("1s", "2s", "c") for L in (32, 64, 128, 256)]
     p90 = E.machine("", sm90)
     s = E.setup(E.design("dither-2s-l32", sm90), p90, sm90, "floor", "floor")
@@ -528,7 +550,7 @@ def test_dc_li_binds_honest_on_the_lane_facet():
             assert s.machine_eps(0.5) == pytest.approx(0, abs=1e-9), dev
             e = E.eps(ds, pi, 0.5, d, operands="floor", credit="floor")
             assert e.T_honest * h.words == pytest.approx(t, rel=1e-4) and e.core() == pytest.approx(e.skip), dev
-    assert [f.mix for f in E.design("dither-2s-li-l32", DEVICES / "sm_90").filler] == [{"FFMA": 1}]
+    assert [(f.mix, f.p) for f in E.design("dither-2s-li-l32", DEVICES / "sm_90").filler] == [({"FFMA": 1}, 0.0)]
     assert E.honest("dc100-li-l32", DEVICES / "sm_100").base() == {"UTCIMMA_M128_N256": 1, "LDTM_32X32B_X128": 8}
 
 
@@ -644,3 +666,42 @@ def test_cli_names_the_forms(capsys):
                  "--json"]) == 0
     d = json.loads(capsys.readouterr().out)
     assert d["honest_form"] == "IMMA16832" and d["cheat"]["forms"] == {"IMMA16832": pytest.approx(0.7194, abs=1e-4)}
+
+
+RPI = E.machine("VF3r-16")   # FACET-BREAK r4 (#2286), the fx numbers below were read on it
+
+
+@pytest.mark.parametrize("x, row, q0", [(1.0, "JI3s_0", 1.1261), (0.5, "JI3s_2", 1.3760)])
+def test_mandatory_lane_work_closes_the_lane_route(x, row, q0):
+    """One IMAD a word in front of duo (SAT-120's fx1) puts honest's floor program on JI3s_0, where a lane word costs
+    more than the IMMA16832 share it replaces from q* = 1.13, under the generic table route's 1.22 slots, so ε_machine
+    is 0 at every q* from there, by lanes or lookups. Half of it leaves honest on JI3s_2 (q*₀ 1.38)."""
+    d = E.design("dither-c-peel")
+    f = d.with_fill(x, {"IMAD": 1.0})
+    s = E.setup(f, RPI, operands="floor", credit="floor")
+    t = E.setup(f, RPI, operands="floor", credit="floor", table=E.table())
+    assert E.setup(d, RPI, operands="floor", credit="floor").machine_eps(2) > 0.04
+    assert s.baseline.binding == (row,) and E.threshold(s) == pytest.approx(q0, abs=1e-4)
+    zero = [s.machine_eps(q) + t.machine_eps(q) < 1e-12 for q in (1.22, 2, 3.47, 4)]
+    assert zero == [x == 1.0] * 4 and (t.floor() < 1e-12) == (x == 1.0)
+
+
+def test_a_filler_mix():
+    """The filler's class mix decides honest's row: one LOP3 a word binds row A (ALU at half rate), one IMAD JI3s_0, and
+    two IMADs row I."""
+    assert E.lane_fill(1.0, {"IMAD": 1.0}).mix == {"IMAD": 1.0} and E.lane_fill(1.0).mix == {"ALU": 1.0, "IMAD": 1.0}
+    d = E.design("dither-c-peel")
+    bind = lambda x, mix: E.setup(d.with_fill(x, mix), RPI, operands="floor", credit="floor").baseline.binding
+    assert bind(1.0, {"ALU": 1.0}) == ("A",) and bind(1.0, {"IMAD": 1.0}) == ("JI3s_0",)
+    assert bind(2.0, {"IMAD": 1.0}) == ("I",) and bind(2.0, {"IMAD": 2.0, "ALU": 1.0}) == ("JI3s_0",)
+
+
+def test_cli_fill_mix(capsys):
+    assert main(["eps", "--vector", "VF3r-16", "dither-c-peel", "--credit", "floor", "--operands", "floor", "--q",
+                 "1.22", "--fill", "1", "--fill-mix", "IMAD=1", "--lookups", "--json"]) == 0
+    d = json.loads(capsys.readouterr().out)
+    assert d["terms"]["machine"] == 0 and d["fillers"][0]["mix"] == {"IMAD": 1.0}
+    assert d["baseline"]["binding"] == ["JI3s_0"] and d["honest_form"] == "IMMA16832"
+    for bad in (["--fill-mix", "IMAD=1"], ["--fill", "1", "--fill-mix", "IMAD"], ["--fill", "1", "--fill-mix", "IMAD=0"]):
+        with pytest.raises(SystemExit, match="--fill-mix"):
+            main(["eps", "--vector", "VF3r-16", *bad])

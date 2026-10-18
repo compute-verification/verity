@@ -23,7 +23,10 @@ then carries two more events on its coins:
 * `LiUnits`: case (a)'s committed units for li (LI-CP-W): a warp's window of segments from a start the proof pins, one
   checkpoint a segment (each lane's XOR of its chains' states, XORed across the warp by `redux.sync.xor`), and the
   run's words honest but for one position a segment. `LiUnits.sameWindow` is the window's last checkpoint alone.
-  `ReceiptGame.CaseA`: every round's split is that of duo, fx1 or li units.
+* `DuoCPUnits`, `Fx1CPUnits`: case (a)'s committed units for duo and fx1 a checkpoint a segment (DUO-CP-W): a warp's
+  window of segments from a start the proof pins, one checkpoint a segment (the XOR of every chain's full state `(y, z)`
+  across the warp), and the run's words honest but for one position a segment.
+  `ReceiptGame.CaseA`: every round's split is that of duo, fx1, li or duo and fx1 checkpoint units.
 * `ReceiptGame.CubeOperands R`: every round draws uniform cube bits after fixing its share and a degree-2 operand
   error, nonzero when the round is deficient (`luck_quad`'s rounds).
 * `ReceiptGame.WrongWords`: every round's share lies in `[0, 1]` and is positive only where a deficient word is wrong
@@ -137,6 +140,85 @@ def sameWindow (D : LiUnits Ω U n S W C H) (ω : Ω) : Prop :=
 
 end LiUnits
 
+/-- The XOR of `m` words. -/
+def xorAll {n m : ℕ} (f : Fin m → BitVec n) : BitVec n := (List.ofFn f).foldl (· ^^^ ·) 0
+
+/-- A word's place in a segment of duo checkpoint units: its lane, its chain in the lane and its position in the
+chain's run. -/
+abbrev CPPlace (W C H : ℕ) : Type := Fin W × Fin C × Fin H
+
+/-- **Case (a)'s committed units for duo, a full-state checkpoint a segment** (DUO-CP-W,
+note:20261018T0203Z-draft-proj): unit `u` is a warp's window. Each of its `W` lanes runs `C` duo chains. In segment
+`s`, chain `c` of lane `ℓ` absorbs `H` words, word `j` with XOR key `k ω u s (ℓ, c, j)`, odd multiplier
+`a ω u s (ℓ, c, j)` and rotation `r ω u s (ℓ, c, j)`, from the state it ended segment `s − 1` in; segment 0 starts from
+`start ω u`, which the proof pins. At the end of each segment every lane XORs its chains' states `(y, z)` and the warp
+XORs its lanes' pairs (two `redux.sync.xor`): that pair is the segment's checkpoint, and the unit commits one a segment
+for its `S` segments. On the coins `ω` the run absorbs the honest words `honest ω u s`, but at the one place
+`pos ω u s` of each segment, where it absorbs `value ω u s`. The served GEMM's layout (`W = 32`, `C = 8`, `H = 4`, one
+segment a k32 step) has this form for a skip that lands on one word of a segment; `W = 1` is a lane's checkpoint
+without the warp's reduction. The served receipt, `y ⊕ rotl(z, 16)` a thread a window, is not such a unit. -/
+structure DuoCPUnits (Ω U : Type) (n S W C H : ℕ) where
+  k : Ω → U → ℕ → CPPlace W C H → BitVec n
+  a : Ω → U → ℕ → CPPlace W C H → OddKey n
+  r : Ω → U → ℕ → CPPlace W C H → ℕ
+  start : Ω → U → Fin W → Fin C → BitVec n × BitVec n
+  honest : Ω → U → ℕ → CPPlace W C H → BitVec n
+  pos : Ω → U → ℕ → CPPlace W C H
+  value : Ω → U → ℕ → BitVec n
+
+namespace DuoCPUnits
+
+variable {Ω U : Type} {n S W C H : ℕ}
+
+/-- The run's words in segment `s` of unit `u`: the honest words, with `value ω u s` at `pos ω u s`. -/
+def word (D : DuoCPUnits Ω U n S W C H) (ω : Ω) (u : U) (s : ℕ) : CPPlace W C H → BitVec n :=
+  Function.update (D.honest ω u s) (D.pos ω u s) (D.value ω u s)
+
+/-- Every chain's state at the start of segment `s` of unit `u` when segment `t` absorbs the words `w t`: the pinned
+start, then each earlier segment's duo run. -/
+def state (D : DuoCPUnits Ω U n S W C H) (ω : Ω) (u : U) (w : ℕ → CPPlace W C H → BitVec n) :
+    ℕ → Fin W → Fin C → BitVec n × BitVec n
+  | 0 => D.start ω u
+  | s + 1 => fun ℓ c =>
+      duoRun (fun j => D.k ω u s (ℓ, c, j)) (fun j => (D.a ω u s (ℓ, c, j)).1) (fun j => D.r ω u s (ℓ, c, j))
+        (fun j => w s (ℓ, c, j)) (D.state ω u w s ℓ c)
+
+/-- Segment `s`'s checkpoint when segment `t` absorbs the words `w t`: the XOR of every chain's `y` and of every chain's
+`z` at the segment's end, over the lane's chains and then the warp's lanes. -/
+def checkpoint (D : DuoCPUnits Ω U n S W C H) (ω : Ω) (u : U) (w : ℕ → CPPlace W C H → BitVec n) (s : ℕ) :
+    BitVec n × BitVec n :=
+  (xorAll fun ℓ => xorAll fun c => (D.state ω u w (s + 1) ℓ c).1,
+    xorAll fun ℓ => xorAll fun c => (D.state ω u w (s + 1) ℓ c).2)
+
+/-- Every segment's deficient word is right. -/
+def right (D : DuoCPUnits Ω U n S W C H) (ω : Ω) : Prop := ∀ u, ∀ s < S, D.value ω u s = D.honest ω u s (D.pos ω u s)
+
+/-- Every segment's committed checkpoint is the honest words' checkpoint. -/
+def same (D : DuoCPUnits Ω U n S W C H) (ω : Ω) : Prop :=
+  ∀ u, ∀ s < S, D.checkpoint ω u (D.word ω u) s = D.checkpoint ω u (D.honest ω u) s
+
+end DuoCPUnits
+
+/-- **Case (a)'s committed units for fx1, a full-state checkpoint a segment**: `DuoCPUnits` whose chains fold with fx1,
+the word at each place multiplied by the odd IMAD multiplier `m ω u s p` before duo's step (`fx1Word`). -/
+structure Fx1CPUnits (Ω U : Type) (n S W C H : ℕ) extends DuoCPUnits Ω U n S W C H where
+  m : Ω → U → ℕ → CPPlace W C H → OddKey n
+
+namespace Fx1CPUnits
+
+variable {Ω U : Type} {n S W C H : ℕ}
+
+/-- The words duo absorbs when fx1 folds the words `w`: each times its IMAD multiplier. -/
+def imad (D : Fx1CPUnits Ω U n S W C H) (ω : Ω) (u : U) (w : ℕ → CPPlace W C H → BitVec n) :
+    ℕ → CPPlace W C H → BitVec n :=
+  fun s p => w s p * (D.m ω u s p).1
+
+/-- Every segment's committed fx1 checkpoint is the honest words' checkpoint. -/
+def same (D : Fx1CPUnits Ω U n S W C H) (ω : Ω) : Prop :=
+  ∀ u, ∀ s < S, D.checkpoint ω u (D.imad ω u (D.word ω u)) s = D.checkpoint ω u (D.imad ω u (D.honest ω u)) s
+
+end Fx1CPUnits
+
 /-- **The ideal game split at the receipt** over `n` rounds of coins on `Ω`: per round, its share `d`, its check
 `pass`, and the events `right` (every deficient word's value is right) and `same` (the committed value is the honest
 one), then the rest of the play, which may depend on the round's coins. -/
@@ -179,14 +261,20 @@ def ReceiptLuck [Fintype Ω] (pr : ℝ) : {n : ℕ} → ReceiptGame Ω n → Pro
 
 /-- **Case (a)** (LEDGER §1.3): at every round, whatever the past, the round's `right` and `same` are those of
 committed duo or fx1 units (`DuoUnits`, `Fx1Units`: each unit's full final state from a pinned start, the run's words
-honest but for one position a unit) or of committed li units (`LiUnits`: each segment's warp checkpoint from a window
-start the proof pins, the run's words honest but for one position a segment). -/
+honest but for one position a unit), of committed li units (`LiUnits`: each segment's warp checkpoint from a window
+start the proof pins, the run's words honest but for one position a segment) or of committed duo or fx1 checkpoint
+units (`DuoCPUnits`, `Fx1CPUnits`: each segment's warp checkpoint of the chains' full states from a window start the
+proof pins, the run's words honest but for one position a segment). -/
 def CaseA : {n : ℕ} → ReceiptGame Ω n → Prop
   | _, .done => True
   | _, .round _ _ right same next =>
       ((∃ (U : Type) (w L : ℕ) (D : DuoUnits Ω U w L), ∀ ω, (right ω ↔ D.right ω) ∧ (same ω ↔ D.same ω)) ∨
         (∃ (U : Type) (w L : ℕ) (D : Fx1Units Ω U w L), ∀ ω, (right ω ↔ D.right ω) ∧ (same ω ↔ D.same ω)) ∨
-        ∃ (U : Type) (w S W C H : ℕ) (D : LiUnits Ω U w S W C H),
+        (∃ (U : Type) (w S W C H : ℕ) (D : LiUnits Ω U w S W C H),
+          ∀ ω, (right ω ↔ D.right ω) ∧ (same ω ↔ D.same ω)) ∨
+        (∃ (U : Type) (w S W C H : ℕ) (D : DuoCPUnits Ω U w S W C H),
+          ∀ ω, (right ω ↔ D.right ω) ∧ (same ω ↔ D.same ω)) ∨
+        ∃ (U : Type) (w S W C H : ℕ) (D : Fx1CPUnits Ω U w S W C H),
           ∀ ω, (right ω ↔ D.right ω) ∧ (same ω ↔ D.same ω)) ∧
         ∀ ω, (next ω).CaseA
 
