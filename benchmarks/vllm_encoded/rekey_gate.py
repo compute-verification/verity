@@ -16,7 +16,7 @@ about a quarter of them plaintext (deferred residency's flag), each check bit fo
     twice       re-keyed again (other new offsets): the cache equals `pg_append`'s under them, and the gather of every
                 page and decode attention under them and the flags equal the plain cache's
     back        re-keyed to the first offsets: the cache and offsets equal the first ones
-    ctas        grids of 1 and of 7 CTAs give the default grid's cache
+    ctas        grids of 1 CTA, of 7 and of every SM's resident CTAs give the default grid's cache
     pinned      (a library at the remote audit's codec, at its rounds) `vectors.json`'s `codec.coin` blocks, each
                 appended at a slot that is not its index's under another index's and coin's offset folded to the slot,
                 then re-keyed to its own b_j(c_a) folded likewise: the token-layer is the pinned block (SHA-512, first word)
@@ -25,9 +25,9 @@ about a quarter of them plaintext (deferred residency's flag), each check bit fo
 Timing (`--rekey-slots` random slots of each of `--layers` layers of `--pages` pages, vLLM's layout, random words, every
 slot under its own offset), for each k of `--ks`: the re-key's rate in blocks (4 KiB token-layers) a second and in
 squarings a second (a block's TLW words, each k rounds of the root's chain and the decode's one squaring), at grids of
-every SM's resident CTAs, one CTA an SM and one every other SM; alone, and beside a bf16 GEMM (`--gemm` M,K,N, torch on a
-high-priority stream, the re-key on the low-priority one): the re-key's rate under a GEMM loop that outlasts it, and the
-GEMM's time under a re-key that outlasts it. Writes OUT/rekey-gate.json.
+a word a thread (the default), every SM's resident CTAs, one CTA an SM and one every other SM; alone, and beside a bf16
+GEMM loop (`--gemm` M,K,N, torch on a high-priority stream, the re-key on the low-priority one) queued to outlast it: the
+re-key's time, and the GEMM's time a call over the GEMMs done while the re-key ran. Writes OUT/rekey-gate.json.
 
     python rekey_gate.py --lib p1024=paged.so --out OUT [--ks 2,3 --pages 1024 --layers 32 --rekey-slots 2048]
 """
@@ -245,7 +245,7 @@ def gate_k(lib, torch, k: int, rng: random.Random, log) -> dict:
                        and all(torch.equal(bjs[l], P.offsets(torch, case.offs[l], case.f)) for l in range(LAYERS)))
 
     grids = {}
-    for ctas in (1, 7):
+    for ctas in (1, 7, lib.so.pg_rekey_ctas()):
         cc = [x.clone() for x in first]
         bb = [P.offsets(torch, o, case.f) for o in case.offs]
         t, held_g = table(torch, case, cc, bb, slots, n1)
@@ -366,7 +366,7 @@ def timing(lib, torch, a, log) -> dict:
     gc = torch.empty(M, N, device="cuda", dtype=torch.bfloat16)
     blocks = L * n
     resident = lib.so.pg_rekey_ctas()
-    grids = {"resident": resident, "one_an_sm": sms, "every_other_sm": sms // 2}
+    grids = {"a_word_a_thread": 0, "resident": resident, "one_an_sm": sms, "every_other_sm": sms // 2}
     res = {"pages": pages, "layers": L, "slots_a_layer": n, "blocks": blocks, "sms": sms, "grids": grids,
            "priorities": {"rekey": lo, "gemm": hi}, "gemm": {"m": M, "k": Kd, "n": N}, "ks": {}}
     log(f"timing: {blocks} blocks ({L} layers x {n} slots of {nslots}), grids {grids}, GEMM {M}x{Kd}x{N} bf16, "
@@ -396,16 +396,40 @@ def timing(lib, torch, a, log) -> dict:
         return statistics.median(out[1:])
 
     def together(rk, cnt):
+        """The re-key's time beside cnt GEMMs queued with it, and each GEMM's end, from when both may start."""
         torch.cuda.synchronize()
         lib.call("kv_spin", SPIN_CYCLES, P.stream(torch))
-        ev = torch.cuda.Event()
+        ev = torch.cuda.Event(enable_timing=True)
         ev.record()
         s_lo.wait_event(ev)
         s_hi.wait_event(ev)
-        r = on(s_lo, rk)
-        g = on(s_hi, gemms(cnt))
+        r1 = torch.cuda.Event(enable_timing=True)
+        rk()
+        r1.record(s_lo)
+        ends = []
+        with torch.cuda.stream(s_hi):
+            for _ in range(cnt):
+                torch.matmul(ga, gb, out=gc)
+                ends.append(torch.cuda.Event(enable_timing=True))
+                ends[-1].record(s_hi)
         torch.cuda.synchronize()
-        return r[0].elapsed_time(r[1]) / 1e3, g[0].elapsed_time(g[1]) / 1e3
+        return ev.elapsed_time(r1) / 1e3, [ev.elapsed_time(e) / 1e3 for e in ends]
+
+    def beside(rk, t):
+        """The re-key beside a GEMM loop queued to outlast it (doubled up to 3 times if it doesn't), and the GEMM's time
+        a call while the re-key runs, over the GEMMs done before it ends (None if a run had none)."""
+        cnt = max(4, math.ceil(1.5 * t / g1))
+        for _ in range(3):
+            tr, ends = together(rk, cnt)
+            if ends[-1] >= tr:
+                break
+            cnt *= 2
+        runs = [(tr, ends)] + [together(rk, cnt) for _ in range(a.reps - 1)]
+        done = [sum(e <= tr for e in ends) for tr, ends in runs]
+        gm = [ends[d - 1] / d for (_, ends), d in zip(runs, done) if d]
+        return {"s": statistics.median(tr for tr, _ in runs),
+                "gemm_s": statistics.median(gm) if len(gm) == len(runs) else None, "gemms_queued": cnt,
+                "gemms_done_during": done, "gemm_loop_ended_first": sum(ends[-1] < tr for tr, ends in runs)}
 
     g1 = alone(s_hi, gemms(10), a.reps) / 10
     res["gemm"]["alone_ms"] = round(g1 * 1e3, 4)
@@ -420,20 +444,21 @@ def timing(lib, torch, a, log) -> dict:
                 P.rekey(lib, torch, tab, L, n, lay, k, ctas=ctas, s=s_lo.cuda_stream)
 
             t = alone(s_lo, rk, a.reps)
-            outlast = max(4, math.ceil(1.5 * t / g1))
-            under = max(1, math.floor(0.5 * t / g1))
-            beside = [together(rk, outlast) for _ in range(a.reps)]
-            gem = [together(rk, under) for _ in range(a.reps)]
-            tb = statistics.median(x[0] for x in beside)
-            gm = statistics.median(x[1] for x in gem) / under
-            g = {"ctas": ctas, "alone_s": round(t, 5), "blocks_s": round(blocks / t), "squarings_s": blocks / t * sq,
-                 "beside_s": round(tb, 5), "beside_blocks_s": round(blocks / tb), "beside_squarings_s": blocks / tb * sq,
-                 "beside_over_alone": round(tb / t, 3), "gemm_beside_ms": round(gm * 1e3, 4),
-                 "gemm_slowdown": round(gm / g1, 3), "gemms": {"outlasting": outlast, "under": under}}
+            b = beside(rk, t)
+            tb, gm = b["s"], b["gemm_s"]
+            g = {"ctas": ctas or -(-L * n * G * lib.shape["hw"] // 128), "alone_s": round(t, 5),
+                 "blocks_s": round(blocks / t), "squarings_s": blocks / t * sq, "beside_s": round(tb, 5),
+                 "beside_blocks_s": round(blocks / tb), "beside_squarings_s": blocks / tb * sq,
+                 "beside_over_alone": round(tb / t, 3), "gemm_beside_ms": gm and round(gm * 1e3, 4),
+                 "gemm_slowdown": gm and round(gm / g1, 3), **{x: b[x] for x in b if x.startswith("gemms")},
+                 "gemm_loop_ended_first": b["gemm_loop_ended_first"]}
             cell["grids"][name] = g
-            log(f"k={k} {name} ({ctas} CTAs): alone {g['blocks_s']:.4g} blocks/s ({g['squarings_s']:.4g} sq/s); beside "
-                f"the GEMM {g['beside_blocks_s']:.4g} blocks/s ({g['beside_over_alone']}x the time), the GEMM "
-                f"{g['gemm_beside_ms']} ms ({g['gemm_slowdown']}x)")
+            gemm = f"{g['gemm_beside_ms']} ms a call ({g['gemm_slowdown']}x)" if gm else "starved (a run had none done)"
+            first = b["gemm_loop_ended_first"]
+            log(f"k={k} {name} ({g['ctas']} CTAs): alone {g['blocks_s']:.4g} blocks/s ({g['squarings_s']:.4g} sq/s); "
+                f"beside the GEMM {g['beside_blocks_s']:.4g} blocks/s ({g['beside_over_alone']}x the time), the GEMM "
+                f"while it runs {gemm}, GEMMs done in it {b['gemms_done_during']} of {b['gemms_queued']} queued"
+                + (f", the GEMM loop ended first in {first} runs" if first else ""))
         res["ks"][k] = cell
     return res
 

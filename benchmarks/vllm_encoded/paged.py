@@ -192,7 +192,8 @@ def rekey(lib: PagedLib, torch, tab, layers: int, rows: int, lay: Layout, k: int
     """The lifetime cap's re-key on stream s (default current): every layer's listed slots of tab (a device int64
     tensor of `rekey_table`'s) decoded under their offsets and encoded under their new ones in place, a flagged
     (plaintext) slot left as it is, then the new offsets written into the layer's. Nothing may read the listed slots
-    meanwhile. ctas: the grid (0: every SM's resident CTAs; fewer leave room on each SM for serving)."""
+    meanwhile. ctas: the grid (0: a word a thread, so on a low-priority stream serving's CTAs take each SM as it frees;
+    a count: that many CTAs striding over the words, holding their SMs until the re-key ends)."""
     lib.call("pg_rekey", tab.data_ptr(), layers, rows, lay.bs, lay.sb, lay.sh, lay.ss, k, ctas,
              stream(torch) if s is None else s)
 

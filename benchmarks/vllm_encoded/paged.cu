@@ -746,7 +746,7 @@ int pg_encode(const unsigned long long *tab, int layers, int rows, int bs, int s
   return launched();
 }
 
-// pg_rekey's default grid: every SM's resident CTAs.
+// Every SM's resident CTAs of pg_rekey_kernel.
 int pg_rekey_ctas() {
   int dev = 0, sms = 0, per = 0;
   cudaGetDevice(&dev);
@@ -761,20 +761,19 @@ int pg_rekey_ctas() {
 // words and flag are left as they are, its offset moved too. tab (device) holds each layer's PG_REKEY words
 // (pg_rekey_kernel), rows its most rows; every layer's cache in one layout. A layer's listed slots are distinct, and
 // nothing reads them until it is done: the caller orders it after their last read under the old offsets and before
-// their first under the new. It reads and writes nothing else, so on a low-priority stream with ctas below
-// pg_rekey_ctas() it runs beside serving. ctas: the grid (0: pg_rekey_ctas()).
+// their first under the new. It reads and writes nothing else. ctas is the grid: 0 a word a thread, CTAs that end after
+// one word each, so on a low-priority stream beside serving each SM goes to the serving kernels' CTAs as it frees; a
+// count is a grid of that many CTAs striding over the words, which hold their SMs until the re-key ends (at
+// pg_rekey_ctas(), every SM's resident CTAs, an SM holds no other kernel's CTAs).
 int pg_rekey(const unsigned long long *tab, int layers, int rows, int bs, int sb, int sh, int ss, int k, int ctas,
              cudaStream_t s) {
   if (layers < 0 || rows < 0 || bs < 1 || k < 1 || k > kv::KMAX || ctas < 0 || !kv::MMA_OK || (layers && rows && !tab))
     return -1;
   if (!layers || !rows) return 0;
-  static int resident = 0;
-  if (!ctas) {
-    if (!resident) resident = pg_rekey_ctas();
-    ctas = resident;
-  }
   const auto *t = reinterpret_cast<const kv::u64 *>(tab);
-  kv::pg_rekey_kernel<<<ctas, 128, 0, s>>>(t, layers, rows, bs, sb, sh, ss, k);
+  const unsigned long long words = (unsigned long long)layers * rows * kv::KV_HEADS * kv::HW;
+  const unsigned grid = ctas ? (unsigned)ctas : (unsigned)((words + 127) / 128);
+  kv::pg_rekey_kernel<<<grid, 128, 0, s>>>(t, layers, rows, bs, sb, sh, ss, k);
   const unsigned long long limbs = (unsigned long long)layers * rows * (kv::NL / 4);
   kv::pg_rekey_settle_kernel<<<(unsigned)((limbs + 127) / 128), 128, 0, s>>>(t, layers, rows);
   return launched();
