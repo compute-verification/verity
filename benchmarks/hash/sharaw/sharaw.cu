@@ -1162,6 +1162,26 @@ static int bench(int argc, char** argv, bool nsys_mode) {
       for (size_t j = 0; j < nm.size(); ++j) printf("%s\"%s\": %.4f", j ? ", " : "", nm[j].c_str(), median(seg[j]));
       printf("}}\n");
     }
+    {   // v3s_cg: its salt kernel, its data kernel, commit_gpu's tree schedule
+      for (auto& x : seg) x.clear();
+      for (int r = 0; r < reps; ++r) {
+        spin<<<1, 1, 0, st>>>(SPIN);
+        CK(cudaEventRecord(e0, st));
+        sr::sr_salt3<<<(unsigned)((width + 127) / 128), 128, 0, st>>>(me.Tn, n, width, me.S, me.F, me.levels, 0, width);
+        CK(cudaEventRecord(ev[0], st));
+        sr::sr_data3<false><<<(unsigned)((width + 255) / 256), 256, 0, st>>>(src, n, width, depth, me.S, me.F, me.levels, me.ctr,
+                                                                              nullptr, 0, width);
+        CK(cudaEventRecord(ev[1], st));
+        me.nodes_cg(st);
+        CK(cudaEventRecord(ev[2], st));
+        CK(cudaEventSynchronize(ev[2]));
+        seg[0].push_back(ms(e0, ev[0]));
+        seg[1].push_back(ms(ev[0], ev[1]));
+        seg[2].push_back(ms(ev[1], ev[2]));
+      }
+      printf("{\"split\": \"v3s_cg\", \"parts\": {\"sr_salt3\": %.4f, \"sr_data3\": %.4f, \"tree\": %.4f}}\n", median(seg[0]),
+             median(seg[1]), median(seg[2]));
+    }
     std::vector<Arm> sp = diags;
     sp.insert(sp.begin(), arms[0]);
     for (auto& a : arms) if (a.name == "sharaw_v1") sp.push_back(a);
