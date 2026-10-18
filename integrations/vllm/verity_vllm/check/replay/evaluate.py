@@ -204,15 +204,28 @@ def _evaluate_row(pi: ProgramIndex, store: CommittedStore, weights: Callable[[st
                         raise _Unresolved(why)
                     words.append(w)
                     inputs_rec.append({"kind": "committed", "identity": [rid, arrive + step, SAMPLER_OP, pname, [0, 1]]})
+                elif pi.kv_prefix and a == pi.kv_prefix["input"]:                # a warm request's cached rows: what its producers committed
+                    src = pi.cached_prefix.get(rid)
+                    if src is None:
+                        raise _Unresolved(f"{pname} slice [{lo}, {hi}): no producing requests of record for {rid}'s cached rows")
+                    for q, qstep, qop, qmem, qlo, qhi in src.identities(lo, hi):
+                        w, why = store.words(q, qstep, qop, qmem, qlo, qhi)
+                        if w is None:
+                            raise _Unresolved(why)
+                        words.append(w)
+                        inputs_rec.append({"kind": "cached", "identity": [q, qstep, qop, qmem, [qlo, qhi]]})
                 else:                                                             # the declared prompt: committed input_token_ids of the arrival step
                     eop = pi.embed_op_path()
                     if eop is None:
                         raise _Unresolved("Program has no Embedding row: prompt ids have no committed identity")
-                    w, why = store.words(rid, arrive + 0, eop, IDS_MEMBER, lo, hi)
+                    c = int(pi.kv_prefix["C"]) if pi.kv_prefix else 0          # a warm request's arrival step embeds prompt[C:]
+                    if lo < c:
+                        raise _Unresolved(f"prompt slice [{lo}, {hi}) reads a row the prefix cache served (C = {c}): no committed input id")
+                    w, why = store.words(rid, arrive + 0, eop, IDS_MEMBER, lo - c, hi - c)
                     if w is None:
                         raise _Unresolved(why)
                     words.append(w)
-                    inputs_rec.append({"kind": "prompt", "identity": [rid, arrive, eop, IDS_MEMBER, [lo, hi]]})
+                    inputs_rec.append({"kind": "prompt", "identity": [rid, arrive, eop, IDS_MEMBER, [lo - c, hi - c]]})
             elif kind == "n":
                 m = pi.member_at(a, lo, hi)
                 if m is None:

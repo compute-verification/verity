@@ -52,7 +52,7 @@ def load_workload(path: str | Path, max_tokens: int | None = None) -> dict:
     reqs = []
     accepted: dict[str, list[int]] = {}
     per_request: list[dict] = []
-    cached = PP.cached_of(doc)
+    plan = PP.plan(doc)
     for i, r in enumerate(doc["requests"]):
         rs = r.get("seed", seed)
         req = {"request_id": r["request_id"], "prompt_token_ids": [int(t) for t in r["prompt_token_ids"]],
@@ -62,8 +62,9 @@ def load_workload(path: str | Path, max_tokens: int | None = None) -> dict:
                # step, the historical behaviour).  Step-indexed, not wall-clock, so the observer and control runs see the same
                # batch membership at every step.
                "arrive_step": int(r.get("arrive_step") or 0),
-               # the prompt rows the prefix cache serves it (prefix_plan): its Program's shape is (LP, T, C), the Commit's lookup reads it
-               "cached": cached[i]}
+               # the prompt rows the prefix cache serves it and the request that computed each cached block (prefix_plan): its Program's
+               # shape is (LP, T, C), and the Commit's replay reads those rows from what the producers committed
+               "cached": plan[i]["cached"], "cached_from": [str(doc["requests"][q]["request_id"]) for q in plan[i]["producers"]]}
         if r.get("variant") is not None:
             # [ov-sampling] a request may pin ANOTHER variant (mixed batch: one greedy row next to a sampled row); the
             # request record then carries its own temperature / top_p / top_k and the manifest lists them per request

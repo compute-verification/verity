@@ -2073,7 +2073,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                     _order = {str(q.get("request_id")): f"r{i}" for i, q in enumerate(reqs)}
                     _toks = {_order.get(str(k), str(k)): v for k, v in r["tokens"].items()}
                     _arr = {f"r{i}": int(q.get("arrive_step") or 0) for i, q in enumerate(reqs)}
-                    _prompts = {f"r{i}": list(q.get("prompt_token_ids") or []) for i, q in enumerate(reqs)}
+                    _prompts = {f"r{i}": list(q.get("prompt_token_ids") or [])[int(q.get("cached") or 0):] for i, q in enumerate(reqs)}   # the prefill's rows
                     _rows = {int(st): [(_rid_of(_order, rid), lo, hi) for rid, lo, hi in rows] for st, rows in (getattr(com, "step_rows", None) or {}).items()} or None
                     _caps = {f"r{i}": int(q.get("max_tokens") or sampling.get("max_tokens") or 1) for i, q in enumerate(reqs)}
                     _sched = engine_schedule(_rows, _arr, _caps)                  # the linkage's k = s - arrival counts on the committed-step axis too
