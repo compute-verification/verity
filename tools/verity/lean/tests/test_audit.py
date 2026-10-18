@@ -1817,7 +1817,7 @@ def test_the_closure_replay_checks_each_imported_module_once_and_then_reuses_it(
     rep = audit()
     c = rep["replay"]["closure"]
     assert rep["failures"] == [] and counts(rep) == (4, 0) and c["checked"] == c["modules"] > 100 and c["reused"] == 0, rep
-    print(f"closure cold: {c}, {rep['seconds']['replay']} s, peak {rep['replay']['peak_gib']} GiB")
+    print(f"closure cold: {c}, {rep['seconds']['replay']} s {rep['replay']['phases']}, peak {rep['replay']['peak_gib']} GiB")
     rep = audit()
     assert rep["failures"] == [] and counts(rep) == (0, 4)
     assert rep["replay"]["closure"] == c | {"checked": 0, "reused": c["modules"]}

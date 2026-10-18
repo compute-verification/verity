@@ -2139,7 +2139,8 @@ def replay_step(pkg: Path, policy: dict, facts: dict, toolchain: str, work: Path
                 tmp = replay_cache / f".{keys[m]}.{os.getpid()}.tmp"
                 tmp.write_text(json.dumps({"schema": REPLAY_SCHEMA, "module": m, "key": keys[m]}))
                 os.replace(tmp, replay_cache / f"{keys[m]}.json")
-    stats = {"checked": len(checked), "reused": len(reused), "peak_gib": round(_peak.bytes / 2**30, 1)}
+    stats = {"checked": len(checked), "reused": len(reused), "peak_gib": round(_peak.bytes / 2**30, 1),
+             "phases": doc.get("seconds", {})}
     if closure:
         stats["closure"] = {"modules": len(facts["graph"]) - len(facts["modules"]), "checked": len(deps_checked),
                             "reused": len(facts["graph"]) - len(facts["modules"]) - len(deps_checked),
@@ -2722,7 +2723,8 @@ def main(argv: list[str]) -> int:
                 print(f"  closure: {c['checked']} modules checked, {c['reused']} reused, of the {c['modules']} the package "
                       f"imports ({c['loaded_unchecked']} of those reused loaded beside them, the rest imported); its own: "
                       f"{rep['replay']['checked']} checked, {rep['replay']['reused']} reused; replay "
-                      f"{rep['seconds'].get('replay')} s, peak {rep['replay']['peak_gib']} GiB", flush=True)
+                      f"{rep['seconds'].get('replay')} s ({rep['replay']['phases']}), peak {rep['replay']['peak_gib']} GiB",
+                      flush=True)
             for f in rep["failures"]:
                 print("  " + f.replace("\n", "\n    "), flush=True)
             for n in rep.get("notes", []):

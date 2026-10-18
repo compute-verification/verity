@@ -145,6 +145,7 @@ def sections (args : List String) : Std.HashMap String (Array Name) := Id.run do
 
 unsafe def main (args : List String) : IO UInt32 := do
   initSearchPath (← findSysroot)
+  let t0 ← IO.monoMsNow
   let some out := args.head? |
     throw <| IO.userError "usage: Replay.lean OUT MODULE... [--reused MODULE...] [--closure MODULE...] [--closure-reused MODULE...]"
   let parts := sections args.tail
@@ -187,6 +188,7 @@ unsafe def main (args : List String) : IO UInt32 := do
       if !modSet.contains i.module && !imports.any (·.module == i.module) then
         imports := imports.push i
   let env ← if imports.isEmpty then mkEmptyEnvironment else importModules imports {}
+  let tLoaded ← IO.monoMsNow
   for h : i in [0:env.header.moduleNames.size] do
     importsOf := importsOf.insert env.header.moduleNames[i] (env.header.moduleData[i]!.imports.map (·.module))
   let declaredIn (n : Name) : Array Name :=
@@ -265,6 +267,7 @@ unsafe def main (args : List String) : IO UInt32 := do
         let e := declOf constants c
         guard (e != d && members.contains e)
         return e
+  let tPlanned ← IO.monoMsNow
   let order ← match declOrder (members.keys.toArray.qsort Name.lt) deps with
     | .ok order => pure order
     | .error d =>
@@ -322,6 +325,7 @@ unsafe def main (args : List String) : IO UInt32 := do
     -- every other module's declarations passed with its imports present, which is what a module's cache entry says
     IO.FS.writeFile out <| (Json.mkObj [("rejected", toJson (rejected.toArray.qsort Name.lt |>.map toString))]).compress
     return 1
+  let tChecked ← IO.monoMsNow
   let ownConstants := (constants.toArray.filter fun (n, _) => ownSet.contains moduleOf[n]!).map (·.1)
   let names := axiomsIn kenv ownConstants |>.map toString
   let sent := members.fold (fun a _ cs => a + cs.size) 0
@@ -330,11 +334,15 @@ unsafe def main (args : List String) : IO UInt32 := do
   IO.FS.writeFile out <| (Json.mkObj [("replayed", toJson sent), ("skipped", toJson skipped), ("reused", toJson kept),
     ("second_copies", toJson renamed.size), ("closure_checked", toJson closureChecked),
     ("closure_reused", toJson closureReused), ("imported", toJson env.header.moduleNames.size),
-    ("axioms", toJson names)]).compress
+    ("axioms", toJson names), ("seconds", Json.mkObj [("load", toJson ((tLoaded - t0) / 1000)),
+      ("plan", toJson ((tPlanned - tLoaded) / 1000)), ("check", toJson ((tChecked - tPlanned) / 1000)),
+      ("axioms", toJson (((← IO.monoMsNow) - tChecked) / 1000))])]).compress
   let slowest := took.qsort (fun a b => a.1 > b.1) |>.extract 0 3 |>.map fun (ms, d) => s!"{d} {ms / 1000}.{ms % 1000 / 100} s"
   IO.println s!"replay: {sent} constants of {checkedModules.size} modules accepted by the kernel ({renamed.size} of them \
     a theorem another module declares too, checked under a fresh name; {skipped} more are unsafe or partial: compiled code, \
     which the kernel does not check; {kept} more, of {reusedSet.size} modules that passed before, added unchecked; \
     {env.header.moduleNames.size} modules imported unchecked), as {tasks.size} declarations side by side \
-    (slowest: {", ".intercalate slowest.toList}); axioms of the own modules' bodies: {", ".intercalate names.toList}"
+    (slowest: {", ".intercalate slowest.toList}); axioms of the own modules' bodies: {", ".intercalate names.toList}; \
+    seconds: load {(tLoaded - t0) / 1000}, plan {(tPlanned - tLoaded) / 1000}, check {(tChecked - tPlanned) / 1000}, \
+    axioms {((← IO.monoMsNow) - tChecked) / 1000}"
   return 0
