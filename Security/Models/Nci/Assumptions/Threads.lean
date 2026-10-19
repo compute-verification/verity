@@ -40,11 +40,10 @@ gates, the slot map sending each to the parameter it is a version of, so a subci
 parameter uses `k` of its weight gates. It reads the parameter once, in the first version it uses, at most its width
 (16 bits at BF16), and computes the later versions itself from that value and gradients, which it pays for as thread
 values it reads. `WeightsIncompressible` charges it `k b_w` for that parameter, more than the width once
-`k > 16 / 2.5 = 6.4` at `b_w = 2.5`, so it then holds only while the subcircuit's thread reads carry the difference
-beyond their `b_a` each; this charges `b_w`, which is at most the width whatever `k` is. With one version per slot
-(`σ.slot` one-to-one on the weight gates) it is `WeightsIncompressible`. A coarser map charges less, and is a
-`Threading.Slots` only when each thread's counted multiplications on all versions of a slot number at most `T.reuse`
-(`σ.reuse_le`), the reuse the bounds read.
+`k > 16 / 2.5 = 6.4` at `b_w = 2.5`, a difference only the subcircuit's other reads can pay; this charges `b_w`, which
+is at most the width whatever `k` is. With one version per slot (`σ.slot` one-to-one on the weight gates) it is
+`WeightsIncompressible`. A coarser map charges less, and is a `Threading.Slots` only when each thread's counted
+multiplications on all versions of a slot number at most `T.reuse` (`σ.reuse_le`), the reuse the bounds read.
 
 It fails when a small subcircuit rebuilds the first version it uses of a parameter from fewer than `b_w` bits: in the
 first steps after a committed checkpoint, whose weights are in `θ` and read for free, until the updates since it depend
