@@ -41,7 +41,9 @@ i puts on its segments' rows (`N3Frame`, `assemble`). (4) The salt frame, when S
 The head's bytes and N2's frames root of the N frames (`certificate.frames_root`, depth D = bitlen(T r - 1)) are a
 head whose status byte is 0 (complete), and that head opens at leaf 2 + direction of N2's commitment (`N3HidingRead`,
 depth 2), the leaf N2 commits beside each certified record (`service.HEADS`). The head's other fields are N2's to
-check: N2's accepted outcome on the same root says that leaf holds the certified head of (link, direction, window).
+check: N2's accepted outcome on the same root says that leaf holds the certified head of (link, direction, window),
+and, where the link declares its occupancy profile, that the head's counts are the profile's (`LinkWindows.declares`).
+The frames root holds N to the head's Σ n_t (leaf k is frame k for k < Σ n_t and E_0 after), so to the profile's total.
 
 **A descriptor** (`Descriptor`, LW bits, `encode`): a mode (RAW 1, BASE64 2; 0 and 3 are invalid, and `NONE` pads the
 tree), the text's byte offset p, its data length r, the suffix offset s, the prefix (P bytes) and suffix (Q bytes), and

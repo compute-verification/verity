@@ -440,11 +440,14 @@ Open items:
   rows is the committer's opening, not a proof (`verity/core/protocols/sampled_proofs/README.md`). N3 on served traffic
   needs the crossings bound to the commitment the compute proofs read: serving's record in hm96 itself, or a unit that
   opens the vllm-v1 leaves.
-- **Trailing frames.** A port that stops short of its declared frames passes. Each window it recorded matches its
-  descriptors, and the windows after it record nothing, which passes from public data. In the late run, b2's responses
-  are refused only because their record's status says coverage was never established. The declared count is private,
-  so the closing check needs a unit: one per port that opens the layout at the position after the port's last recorded
-  frame and shows that the descriptor there is the invalid one.
+- **Trailing frames.** Here a port that stops short of its declared frames passes. Each window it recorded matches
+  its descriptors, and the windows after it record nothing, which passes from public data. In the late run, b2's
+  responses are refused only because their record's status says coverage was never established. N2 closes it where
+  the link declares its occupancy profile (`LinkWindows.occupancy`, public, as the occupancy above is): N2 checks every
+  link-window, and holds each head's counts to the profile's, so a window with a frame fewer or more than the profile is
+  rejected, and N3's frames root holds the unit's N to those counts' sum. These windows don't build N2's outcome yet
+  (`Certifier` only commits). Without a profile the closing check needs a unit: one per port that opens the layout at
+  the position after the port's last recorded frame and shows that the descriptor there is the invalid one.
 - **What the size class discloses.** FMT gives the run's widest prefix and suffix, the most segments any frame reads,
   and each unit's outbox depth; G gives the most segments of the port's frames. A port's occupancy already bounds the
   bytes it carried, but a depth is per unit, which is new where one port carries several units' traffic. Padding every

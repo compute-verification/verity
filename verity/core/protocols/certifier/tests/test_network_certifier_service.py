@@ -1,6 +1,6 @@
 """One link-window's network certificates through the proof service (N2): the round trip to an accepted, exhaustive
-outcome, the public-items rule on the registration, and each way a link-window fails closed, on injected coins and an
-injected clock."""
+outcome, the public-items rule on the registration, the count check against the occupancy profile, and each way a
+link-window fails closed, on injected coins and an injected clock."""
 
 import json
 from dataclasses import replace
@@ -10,7 +10,7 @@ import pytest
 from verity.ml.circuits.program import Program
 from verity.core.protocols.certifier.certificate import (CertifiedRecord, Direction, Issuer, LmsSigner,
                                                                           RecordHead, parameters_digest)
-from verity.core.protocols.certifier.grid import Certifier, Record
+from verity.core.protocols.certifier.grid import Certifier, Record, occupancy
 from verity.core.protocols.certifier.schedule import SyncSet, run_shaper
 from verity.ml.commitments import hm96
 from verity.ml.commitments.gates.frame_v3 import root_ref
@@ -42,18 +42,23 @@ def egress_records():
     return run_shaper(FRAMES, honest_ready(), SYNCS, Certifier(LINK, PARAMS))
 
 
-def ingress_records():
-    return [replace(r, link=LINK) for r in ingress_run([[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0]])]
+def ingress_records(arrivals=([1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0])):
+    return [replace(r, link=LINK) for r in ingress_run([list(a) for a in arrivals])]
+
+
+def honest_occupancy():
+    """Each end's counts in each window of the honest run: the profile the placement declares."""
+    return tuple(tuple(occupancy(r.grid) for r in records) for records in (egress_records(), ingress_records()))
 
 
 class Run:
     """A link with its network certifier (an LMS signer on a small tree), the protocol's parameters, and the challenger's stream."""
 
-    def __init__(self, tmp_path, *, proof_deadline=60.0, coins=b"\x07") -> None:
+    def __init__(self, tmp_path, *, proof_deadline=60.0, coins=b"\x07", occupancy=(None, None)) -> None:
         self.signer = signers.signer(tmp_path)
         self.issuer = Issuer(self.signer, signers.SESSION)
         self.lw = LinkWindows(LINK, PARAMS, SYNC_SET, self.signer.public_key(), "r-network-test", signers.SESSION,
-                              proof_deadline=proof_deadline)
+                              proof_deadline=proof_deadline, occupancy=occupancy)
         self.clock = Clock()
         self.stream = self.lw.stream(budget=8, delta=DELTA, challenger="challenger-test", coins=lambda n: coins * n,
                                      clock=self.clock)
@@ -112,13 +117,55 @@ def test_the_spec_declares_each_public_item_with_its_reason(tmp_path):
     assert {p.item: p.kind for p in lw.spec.public} == {
         "population": "structure", "window": "structure", f"leaves:{VALUE}": "structure",
         f"domain:{VALUE}": "structure", VALUE: "commitment", "parameters": "structure", "charge": "structure",
-        "verdict": "output", "deadline": "output"}
+        "occupancy": "structure", "verdict": "output", "deadline": "output"}
     assert lw.spec.public == PUBLIC and lw.spec.check.public_outputs == OUTPUTS and isinstance(lw.spec.selection, S.All)
     assert lw.spec.check.program == P.program_sha512(Program(UNIT))
     assert replace(lw, sync_set=SyncSet(tuple(range(16)), tuple(range(1, 9)))).charge == 7.0
     assert lw.spec.digest() != replace(lw, sync_set=SyncSet((0, 1), (1, 2))).spec.digest()
     assert lw.spec.digest() != replace(lw, run="another").spec.digest()
     assert lw.spec.digest() != replace(lw, certifier_session=signers.OTHER_SESSION).spec.digest()
+    declared = replace(lw, occupancy=honest_occupancy())
+    assert lw.spec.digest() != declared.spec.digest() != replace(lw, occupancy=(None, honest_occupancy()[1])).spec.digest()
+
+
+def test_each_heads_counts_are_the_declared_occupancy(tmp_path):
+    """Under the honest run's profile every window is accepted. An ingress window holding a frame fewer than the profile
+    (a port that stopped short) or a frame more is rejected, though its certificate verifies and the audit compares no
+    ingress grid; with no profile the same records are accepted."""
+    (tmp_path / "declared").mkdir()
+    (tmp_path / "bare").mkdir()
+    declared, bare = Run(tmp_path / "declared", occupancy=honest_occupancy()), Run(tmp_path / "bare")
+    short = ingress_records(([1, 0, 0, 0], [0, 0, 0, 0], [0, 0, 1, 0]))[1]
+    extra = ingress_records(([1, 0, 0, 0], [0, 1, 0, 0], [0, 1, 1, 0]))[2]
+    for run in (declared, bare):
+        assert run.round(run.honest(0)).accepted
+        for w, ingress in ((1, short), (2, extra)):
+            assert occupancy(ingress.grid) != honest_occupancy()[1][w]
+            out = run.round(run.lw.commit(w, run.egress(egress_records()[w]), run.ingress(ingress), SALTS[w]))
+            assert reject(out) if run is declared else out.accepted
+    assert declared.stream.symbols == ("accept", "reject", "reject") and bare.stream.symbols == ("accept",) * 3
+
+
+def test_the_profile_binds_egress_too_and_ends_where_it_ends(tmp_path):
+    """An egress profile other than the Program's grid rejects the honest records the audit accepts, and a window past
+    the profile is rejected."""
+    eg, ig = honest_occupancy()
+    row = eg[1]
+    moved = ((row[0] + 1) % (PARAMS.allocation + 1),) + row[1:]
+    run = Run(tmp_path, occupancy=((eg[0], moved), ig))
+    assert [run.round(run.honest(w)).accepted for w in range(3)] == [True, False, False]
+    assert run.lw.declares(0, 0, eg[0]) and not run.lw.declares(0, 1, row) and not run.lw.declares(0, 2, eg[2])
+    assert run.lw.declares(1, 2, ig[2]) and not run.lw.declares(1, 3, ig[2])
+
+
+def test_an_occupancy_row_is_t_counts_within_the_allocation(tmp_path):
+    lw = Run(tmp_path).lw
+    four = (0,) * PARAMS.buckets
+    for bad in ((None,), (((0,) * (PARAMS.buckets - 1),), None), (None, (four, (PARAMS.allocation + 1,) + four[1:])),
+                ((four, (True,) + four[1:]), None)):
+        with pytest.raises(ValueError, match="occupancy"):
+            replace(lw, occupancy=bad)
+    assert replace(lw, occupancy=((four,), (four, four))).declares(1, 1, four)
 
 
 def test_the_domain_is_one_stages_served_domain(tmp_path):
