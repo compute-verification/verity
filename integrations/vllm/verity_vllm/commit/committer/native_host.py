@@ -2082,7 +2082,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
             return n[:-len("/bot")].rsplit("/", 1)[0] if n.endswith("/bot") and "/" in n[:-len("/bot")] else n
 
         # no padding, step-reading source or attention declarations: a step's verdict reads its names, step 0's and the manifest only
-        step_free, verdicts = not padded_run and rt_src is None and cb_src is None and not (decls and man["fa2_hidden_per_layer"]), {}
+        step_free, verdicts = not padded_run and rt_src is None and not cb_srcs and not (decls and man["fa2_hidden_per_layer"]), {}
         for step in sorted(self._layouts):
             metas_all = self._layouts[step]
             cols = metas_all.names if hasattr(metas_all, "scan") else None   # a cached plan's record (plan_cache): its names, no TensorMeta built
