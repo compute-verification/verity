@@ -21,7 +21,7 @@ note:compute-accounting/20261019T1054Z-finding-j10-redteam).
   leaves each unit's `E[φ^{n/r}]`, which is the condition. `TileLuck` has `n` where this has `n/r`, because it lets
   dead events of different rows correlate; h1tile's dead events read one row's dither, so they don't. Both hypotheses
   are load-bearing: with every row's dead event on one coin, or a row's lucky events made one event, h1tile's decode
-  grid has log-moment 233.8 at the rate below (`benchmarks/rate_redteam/j10_redteam.py`).
+  grid has log-moment 233.8 at the rate below (note:compute-accounting/20261019T1054Z-finding-j10-redteam).
 * `GridTemplateCondition` and `GridTemplateMoment`: `GridLuck` at h1tile's template (`q = 2^{-w}`, `p = ½`, `κ = 4`,
   `w ≤ 32`) at `r·θ = 1/(4·max(64, n/r))`: `θ = 1/(4·max(64·r, n))` a product. The column streams carry the row
   block, so a call's grid splits into independent blocks of one row block by one band: `r = 32` rows and `n = 32·g`
