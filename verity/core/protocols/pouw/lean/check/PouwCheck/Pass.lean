@@ -1,5 +1,6 @@
 import Flock.Draw
 import PouwCommit.Draws
+import PouwWindow.Rounds
 import PouwCheck.Inputs
 
 /-!
@@ -29,6 +30,7 @@ namespace PouwCheck
 
 open Lean (Json)
 open PouwCommit (CoinOpening pyFromHex pyRepr tagged leafValue Domain)
+open SampledProofs.Challenger (LiveCommitment LiveOpening)
 
 def MANIFEST_SCHEMA : String := "verity-vllm/pouw-pearl-c-run/v2"
 def MANIFEST_RECORDED : String := "verity-vllm/pouw-pearl-c-run/v1"
@@ -289,10 +291,20 @@ def receiptDigest (kvs : List (String × String)) : String :=
   let body := "{" ++ ",".intercalate (sorted.map fun (k, v) => s!"\"{k}\":\"{v}\"") ++ "}"
   Flock.hexOf (Flock.Sha512.hash body.toUTF8)
 
-/-- `core_check.draw`: none when `units` are the window's draw, else the refusal. -/
+/-- `core_check.draw`: none when `units` are the window's draw, else the refusal. Seeded coins (`coinsOf`) have their
+`draw` coin; live ones (`PouwWindow.LIVE_SCHEME`, a certified window's, read from the challenger's signed record) their
+`pouw/draw` coin 0 (`SampledProofs.Challenger.liveReason`). -/
 def drawCheck (coins : Json) (recorded : Bool) (opening stream registration receipt k population units : Json) :
     R Unit := do
-  let c ← (coinsOf coins recorded).mapError fun e => ("coin", s!"the verifier's coins are malformed: {e}")
+  let live := match PouwWindow.field? coins "scheme" with
+    | some (.str s) => s == PouwWindow.LIVE_SCHEME
+    | _ => false
+  let malformed := fun (e : String) => ("coin", s!"the verifier's coins are malformed: {e}")
+  let c : Coins ⊕ LiveCommitment ← if live then do
+      let c ← (LiveCommitment.ofJson coins).mapError malformed
+      if let some why := PouwWindow.liveEpochReason c then coin why
+      pure (.inr c)
+    else .inl <$> (coinsOf coins recorded).mapError malformed
   let (.str reg, .str st) := (registration, stream)
     | throw ("draw", "the registration is not a SHA-512 digest, or the stream's digest not a string")
   if !isHexDigest reg then throw ("draw", "the registration is not a SHA-512 digest, or the stream's digest not a string")
@@ -305,15 +317,22 @@ def drawCheck (coins : Json) (recorded : Bool) (opening stream registration rece
   let (some k, some n) := (PouwWindow.natOf? k, PouwWindow.natOf? population)
     | throw ("draw", "the law is not subset:k over N with k <= N and N >= 1")
   if !(1 ≤ n && k ≤ n) then throw ("draw", "the law is not subset:k over N with k <= N and N >= 1")
-  let o ← (openingOf opening).mapError fun e => ("coin", s!"the draw's {e}")
+  let opened := fun (e : String) => ("coin", s!"the draw's {e}")
   let after ← port (pyFromHex reg)
-  let (why, old) ← port (coinVersionAt c o "draw" after recorded)
+  let (why, old, drawn) ← match c with
+    | .inl c => do
+        let o ← (openingOf opening).mapError opened
+        let (why, old) ← port (coinVersionAt c o "draw" after recorded)
+        pure (why, old, o.coin)
+    | .inr c => do
+        let o ← (LiveOpening.ofJson opening).mapError opened
+        pure ((← port (SampledProofs.Challenger.liveReason c o PouwWindow.DRAW 0 after)), false, o.coin)
   if let some why := why then coin s!"the draw's {why}"
   let ctx := [("stream", FlockSoundness.Randomness.Part.str st), ("registration", FlockSoundness.Randomness.Part.str reg),
     ("receipt", FlockSoundness.Randomness.Part.str (receiptDigest kvs))]
   let bytes := 2 * k * Flock.Draw.width n + 64
-  let src ← if old then pure (streamV1 (deriveV1 o.coin DRAW_DOMAIN ctx) [.str "draw"] bytes)
-    else do pure (FlockSoundness.Randomness.stream (← port (PouwCommit.key? o.coin DRAW_DOMAIN ctx)) [.str "draw"] bytes)
+  let src ← if old then pure (streamV1 (deriveV1 drawn DRAW_DOMAIN ctx) [.str "draw"] bytes)
+    else do pure (FlockSoundness.Randomness.stream (← port (PouwCommit.key? drawn DRAW_DOMAIN ctx)) [.str "draw"] bytes)
   let some got := Flock.Draw.subset k n src
     | throw ("sampler", "the draw's stream ran out")
   let same := match units with

@@ -48,8 +48,11 @@ the record the certifier made before it drew that salt (`pouwRecord` of the weig
 manifest; no other verifier passes a v3 manifest. The difftest's pass cases (below) hold honest certified
 windows and a mutation per certified refusal too. `drawCheck` holds the window's drawn units to the epoch's draw coin,
 opened after the registration: `Flock.Draw.subset` of the key it derives under the stream, the registration and its
-receipt. Both read the current coin version and, only in a replay of a recorded pass, the e2e-service passes'
-(`epoch-coins/v2`, whose binding and weights' root keep the first 32 bytes of `tagged`).
+receipt. The coin is a seeded epoch's `draw` coin, or a live epoch's `pouw/draw` coin 0 (`PouwWindow.LIVE_SCHEME`, a
+certified window's, whose verifier reads the commitment from the challenger's signed record,
+`challenger.trusted_commitment`; `SampledProofs.Challenger.liveReason`). Both read the current coin version and, only
+in a replay of a recorded pass, the e2e-service passes' (`epoch-coins/v2`, whose binding and weights' root keep the
+first 32 bytes of `tagged`).
 
 The properties are stated in `Security/Properties/Pouw/Check.lean` and proved in
 `Security/Properties/Proofs/Pouw/Check.lean`.

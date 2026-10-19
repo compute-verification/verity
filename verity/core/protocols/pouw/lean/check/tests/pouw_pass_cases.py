@@ -7,8 +7,9 @@ A pass case is an honest pass (a small workload, its weights' roots, an epoch's 
 certified pass under a stream and a prover, salted by the network certifier's reveal for the PoUW window its context
 names, over the weights' root the certifier recorded with the stream and the prover before it drew that salt), then one
 mutation
-(`PASS_MUTATIONS`) aimed at one refusal of `pass_epoch`.  A draw case is an honest draw (the draw coin opened
-after a registration's digest, the units `stream_subset` of its key's stream), then one mutation (`DRAW_MUTATIONS`).
+(`PASS_MUTATIONS`) aimed at one refusal of `pass_epoch`.  A draw case is an honest draw (the draw coin of seeded coins,
+or of a live epoch's as a certified window's, opened after a registration's digest, the units `stream_subset` of its
+key's stream), then one mutation (`DRAW_NAMES`).
 `tests/test_difftest.py` draws them for the harness, and `verity/core/protocols/pouw/tests/test_pouw_core_check.py`
 holds each mutation to the refusal it aims at.
 """
@@ -21,8 +22,10 @@ import random
 from verity.core.protocols.pouw import coins as Co
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import salt as PS
+from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.audit import EPOCH_SALT_DOMAIN, SALT_DOMAIN
 from verity.core.protocols.pouw.protocol import tagged
+from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.ml.commitments import CommitmentDomain, MerkleTree, RangeIndexedDomain
 from verity.ml.randomness import derive
 
@@ -393,12 +396,68 @@ def _mutate_draw(d: dict, ch: Coins, name: str, rng: random.Random) -> None:
             raise ValueError(name)
 
 
+def honest_live_draw(rng: random.Random, many: bool = False) -> tuple[dict, Ch.LiveChallenger]:
+    """An honest draw under a live epoch's coins (`window.live_challenger`, a certified window's): its ``pouw/draw`` coin
+    0 opened after the registration's digest."""
+    ch = Wd.live_challenger(rng.randrange(4), rng.choice([1, 2, 3]), rng.randbytes)
+    reg, stream = rng.randbytes(64).hex(), rng.randbytes(64).hex()
+    receipt = _receipt(rng, reg)
+    n = rng.choice([50, rng.randint(50, 5000), rng.randint(50, 1 << 40)] + ([] if many else [1, 2, 7]))
+    k = rng.randint(1 if many else 0, min(n, 12))
+    o = ch.open(Wd.DRAW, 0, bytes.fromhex(reg))
+    ctx, size = CC.draw_key_context(stream, reg, receipt), 2 * k * CC.width(n) + 64
+    units = CC.stream_subset(k, n, derive(o.coin, CC.DRAW_DOMAIN, ctx).stream("draw", size))
+    return {"coins": ch.commitment.to_json(), "recorded": rng.random() < 0.3, "opening": o.to_json(), "stream": stream,
+            "registration": reg, "receipt": receipt, "k": k, "population": n, "units": units}, ch
+
+
+def _mutate_live_draw(d: dict, ch: Ch.LiveChallenger, name: str, rng: random.Random) -> None:
+    o, c = d["opening"], ch.commitment
+    match name:
+        case "live-coins":
+            d["coins"] = rng.choice([{**d["coins"], "root": "00"}, {**d["coins"], "families": "x"},
+                                     {**d["coins"], "epoch": -1}, {**d["coins"], "extra": 1}])
+        case "live-not-epoch":
+            layout = rng.choice([((Wd.DRAW, 1), (Wd.SALT, 1), (Wd.ROUND, 1)), ((Wd.SALT, 1), (Wd.ROUND, 2)),
+                                 ((Wd.SALT, 1), (Wd.DRAW, 2), (Wd.ROUND, 1))])
+            d["coins"] = Ch.LiveChallenger(Wd.LIVE_SCHEME, c.epoch, layout, rng.randbytes).commitment.to_json()
+        case "live-opening-form":
+            k = rng.choice(["coin", "path", "index", "epoch", "label"])
+            bad = {"coin": ["zz", None], "path": [None, 4], "index": ["0", None, True], "epoch": [str(c.epoch), None],
+                   "label": [5, None]}[k]
+            d["opening"] = rng.choice([{**o, k: rng.choice(bad)}, {x: v for x, v in o.items() if x != "index"}])
+        case "live-label":
+            d["opening"] = ch.open(Wd.SALT, 0, bytes.fromhex(d["registration"])).to_json()
+        case "live-epoch":
+            d["opening"] = {**o, "epoch": o["epoch"] + 1}
+        case "live-foreign":
+            other = Wd.live_challenger(c.epoch, c.family(Wd.ROUND), rng.randbytes)
+            d["opening"] = other.open(Wd.DRAW, 0, bytes.fromhex(d["registration"])).to_json()
+        case "live-tampered":
+            d["opening"] = {**o, "salt": _flip(o["salt"])}
+        case "live-early":
+            d["opening"] = {**o, "after": rng.randbytes(64).hex()}
+        case "live-units":
+            u = d["units"]
+            d["units"] = rng.choice([u[:-1], u + [0], [x + 1 for x in u], None])
+        case _:
+            raise ValueError(name)
+
+
+LIVE_DRAW_NAMES = ["live-coins", "live-not-epoch", "live-opening-form", "live-label", "live-epoch", "live-foreign",
+                   "live-tampered", "live-early", "live-units"]
 DRAW_NAMES = ["verifier-coins", "recorded-scheme", "registration", "stream", "receipt", "law", "opening-form", "label",
-              "epoch", "foreign", "tampered", "early", "units", "other-key", "early-coins-live"]
+              "epoch", "foreign", "tampered", "early", "units", "other-key", "early-coins-live", *LIVE_DRAW_NAMES]
 
 
 def draw_instance(rng: random.Random, name: str = "honest") -> dict:
-    """One `draw` case: an honest draw, then mutation `name`."""
+    """One `draw` case: an honest draw (under seeded coins, or live ones a third of the time), then mutation `name` (a
+    live one's on a live draw)."""
+    if name in LIVE_DRAW_NAMES or (name == "honest" and rng.random() < 1 / 3):
+        d, live = honest_live_draw(rng, name == "live-units")
+        if name != "honest":
+            _mutate_live_draw(d, live, name, rng)
+        return d
     d, ch = honest_draw(rng, CC.COINS_RECORDED if name == "recorded-scheme" else Co.SCHEME if name == "early-coins-live" else None,
                         name in ("units", "other-key"), True if name == "early-coins-live" else None)
     if name != "honest":

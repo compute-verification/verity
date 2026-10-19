@@ -75,7 +75,9 @@ the served window proves its drawn tiles in zero knowledge, and its verifier of 
    `late-registration`. That ends the epoch, and the window earns no credit (`served_zk`'s challenger,
    `registration_deadline` in its parameters).
 5. **Selection.** A served window's draw is one uniform subset of K′ of its N tiles, without replacement, drawn after
-   its registration's receipt (`benchmarks/pouw/served_zk/served_commit.py`, `Challenger.select`).
+   its registration's receipt (`benchmarks/pouw/served_zk/served_commit.py`, `Challenger.select`). A certified window's
+   draw coin is a live epoch's `pouw/draw` coin 0 (`window.live_challenger`), under the commitment its verifier reads
+   from the challenger's signed record (`challenger.trusted_commitment`): one trusted root per coin (`core_check.draw`).
    - **N and K′.** A window of N_real real tiles registers the level `window.bucket(N_real)`: it is credited g_ℓ tiles,
      the largest grid point at most N_real, and pads with filler tiles to N = g_(ℓ+1) = `window.pad(N_real + 1)`, at
      least one filler. Every tile is the one template's and does w_max = `tile_work`, and filler tiles are drawn like

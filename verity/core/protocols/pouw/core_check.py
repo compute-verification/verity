@@ -982,11 +982,17 @@ def draw(coins: Any, recorded: bool, opening: Any, stream: Any, registration: An
     """None when `units` are the window's draw: the epoch's draw coin `opening` opens against `coins` (the challenger's
     commitment, its JSON) after the registration `registration` (its digest's hex), and `units` are ``Draw.subset`` of
     `k` over `population` on the stream ``"draw"`` of the key the coin derives under the stream's digest `stream`, the
-    registration and its `receipt`; else the refusal (``coin``, ``draw`` or ``sampler``, and why)."""
+    registration and its `receipt`; else the refusal (``coin``, ``draw`` or ``sampler``, and why). A seeded commitment
+    (`coins_of`) has its ``draw`` coin; a live one (`window.LIVE_SCHEME`, a certified window's, whose verifier reads it
+    from the challenger's signed record, `challenger.trusted_commitment`) has its ``pouw/draw`` coin 0
+    (`challenger.live_reason`)."""
+    live = isinstance(coins, dict) and coins.get("scheme") == Wd.LIVE_SCHEME
     try:
-        c = coins_of(coins, recorded)
-    except Refused as e:
+        c = Ch.LiveCommitment.from_json(coins) if live else coins_of(coins, recorded)
+    except (Refused, Ch.CoinError) as e:
         return "coin", f"the verifier's coins are malformed: {e}"
+    if live and (why := Wd.live_epoch_reason(c)) is not None:
+        return "coin", why
     if not (_str(registration) and _DIGEST.fullmatch(registration)) or not _str(stream):
         return "draw", "the registration is not a SHA-512 digest, or the stream's digest not a string"
     if not (isinstance(receipt, dict) and all(_plain(x) and _plain(v) for x, v in receipt.items())):
@@ -994,10 +1000,13 @@ def draw(coins: Any, recorded: bool, opening: Any, stream: Any, registration: An
     if not (_nat(k) and _nat(population) and 1 <= population and k <= population):
         return "draw", "the law is not subset:k over N with k <= N and N >= 1"
     try:
-        o = opening_of(opening)
-    except Refused as e:
+        o = Ch.LiveOpening.from_json(opening) if live else opening_of(opening)
+    except (Refused, Ch.CoinError) as e:
         return "coin", f"the draw's {e}"
-    why, old = coin_version(c, o, "draw", bytes.fromhex(registration), early=recorded)
+    if live:
+        why, old = Ch.live_reason(c, o, Wd.DRAW, 0, bytes.fromhex(registration)), False
+    else:
+        why, old = coin_version(c, o, "draw", bytes.fromhex(registration), early=recorded)
     if why is not None:
         return "coin", f"the draw's {why}"
     ctx, n = draw_key_context(stream, registration, receipt), 2 * k * width(population) + 64

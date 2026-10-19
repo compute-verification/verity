@@ -15,6 +15,7 @@ from pathlib import Path
 
 import pytest
 
+from verity.core.protocols.pouw import coins as Co
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.sampled_proofs import service as S
@@ -349,6 +350,15 @@ DRAW_EXPECT = {
     "early": ("coin", "the draw's coin was not opened after what the verifier recorded"),
     "units": ("draw", "the units are not the draw coin's subset:"), "other-key": ("draw", "the units are not the draw coin's"),
     "early-coins-live": ("coin", "the draw's coin does not open"),
+    "live-coins": ("coin", "the verifier's coins are malformed: "),
+    "live-not-epoch": ("coin", "the coin commitment's coins are not a live epoch's"),
+    "live-opening-form": ("coin", "the draw's a live coin opening is"),
+    "live-label": ("coin", "the draw's coin is the epoch's pouw/salt coin 0, not its pouw/draw coin 0"),
+    "live-epoch": ("coin", "the draw's coin is epoch "),
+    "live-foreign": ("coin", "the draw's coin does not open against"),
+    "live-tampered": ("coin", "the draw's coin does not open against"),
+    "live-early": ("coin", "the draw's coin was not opened after what the verifier recorded"),
+    "live-units": ("draw", "the units are not the draw coin's subset:"),
 }
 
 
@@ -378,12 +388,23 @@ def test_each_honest_pass_is_had_as_it_was_salted():
 
 
 def test_every_draw_mutation_hits_its_refusal():
+    """`core_check.draw` accepts an honest draw under seeded coins or a live epoch's (a certified window's, whose
+    commitment its verifier reads through `challenger.trusted_commitment`) and refuses each mutation with the refusal
+    it aims at. A live draw's coin is ``pouw/draw`` 0, so a seeded opening under live coins is refused, and so is a
+    live opening under seeded coins."""
     assert set(DRAW_EXPECT) == set(passes.DRAW_NAMES) | {"honest"}
     for name, want in DRAW_EXPECT.items():
         for seed in range(6):
             got = CC.draw(*passes.draw_args(passes.draw_instance(random.Random(f"{name}/{seed}"), name)))
             assert (got is None) if want is None else (got is not None and got[0] == want[0] and got[1].startswith(want[1])), \
                 (name, seed, got)
+    for seed in range(6):
+        live, _ = passes.honest_live_draw(random.Random(f"live/{seed}"))
+        seeded, _ = passes.honest_draw(random.Random(f"seeded/{seed}"), Co.SCHEME, early=False)
+        assert CC.draw(*passes.draw_args(live)) is None and CC.draw(*passes.draw_args(seeded)) is None
+        assert CC.draw(*passes.draw_args({**live, "opening": seeded["opening"]}))[1].startswith(
+            "the draw's a live coin opening is")
+        assert CC.draw(*passes.draw_args({**seeded, "opening": live["opening"]}))[0] == "coin"
 
 
 #: the refusal each rounds mutation aims at: its code and a part of its reason
