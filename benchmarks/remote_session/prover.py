@@ -8,7 +8,9 @@ from an earlier pass's ticket) before the one ahead of it is awaited (`wait`), s
 passes. A boundary message (the next window's coin, or the close) is taken at the first root that reaches the host
 after it: that root is sent as its window's last if its pass started (the root before it reached the host) before the
 message arrived, and dropped otherwise, and the pass queued behind it is dropped too; the next window's first pass
-chains from the last root sent. Each session runs under a mode of the prover's plan, which the verifier never sees:
+chains from the last root sent. In a paced session (the session message's `pace`, k: `audit.Pace`) the prover runs at
+most k passes under a coin, then waits for the next, and a window's first pass starts at its coin's arrival. Each
+session runs under a mode of the prover's plan, which the verifier never sees:
 
 ~~~text
 honest          every block held and read
@@ -73,6 +75,7 @@ import argparse
 import gc
 import hashlib
 import json
+import math
 import os
 import queue
 import random
@@ -663,7 +666,7 @@ class ProverSide:
         return out
 
     def session(self, head: dict, mode: str, fraction: float) -> dict:
-        k, W = head["k"], head["windows"]
+        k, W, cap = head["k"], head["windows"], head.get("pace") or math.inf
         commitment = wire.commitment_of(head["commitment"])
         if commitment.registration != self.registration.digest or commitment.count != 2 * W:
             raise ValueError("the session's coins are not for this registration")
@@ -705,7 +708,7 @@ class ProverSide:
         # the first window's clock starts at pass 0's appends and read: the step is not a read, as a moved pass's.
         getattr(trace, "ready", lambda: None)()
         self.conn.send({"type": "armed", "k": k})
-        head, _, _ = self.expect("coin")
+        head, _, first = self.expect("coin")
         t = 0
 
         def take(coin) -> bytes:
@@ -815,9 +818,22 @@ class ProverSide:
         if serving is not None:
             serving.start()
         try:
-            inflight = deque([launch(0, 0, None, clock())])
-            while inflight:
-                if not stopping and len(inflight) < depth:
+            inflight = deque([launch(0, 0, None, first if cap < math.inf else clock())])
+            while inflight or (cap < math.inf and not stopping):
+                if not inflight:
+                    # Paced: this window's k passes are done, and the next pass waits on the next coin.
+                    msg, _, stamp = pending.popleft() if pending else self._boundary()
+                    if msg["type"] != "coin":
+                        ended, stopping = (msg, True) if msg["type"] == "end" else (ended, True)
+                        break
+                    t += 1
+                    backend.begin_window(take(wire.coin_of(msg["coin"])), None)
+                    # From its coin's arrival: the next coin can come before this process reads its clock, and a pass
+                    # under this coin stays this window's whatever comes after the coin.
+                    inflight.append(launch(t, 0, last.ticket if last else None, stamp))
+                    nxt = 1
+                    continue
+                if not stopping and len(inflight) < depth and nxt < cap:
                     inflight.append(launch(t, nxt, inflight[-1].ticket, None))
                     nxt += 1
                 x = inflight.popleft()
@@ -847,7 +863,7 @@ class ProverSide:
                 if not pending:
                     send(x, root, handle, seen)
                     last = x
-                    if depth == 1 and not stopping:
+                    if depth == 1 and not stopping and nxt < cap:
                         inflight.append(launch(t, nxt, x.ticket, None))
                         nxt = inflight[-1].i + 1
                     continue
@@ -868,7 +884,8 @@ class ProverSide:
                     continue
                 t += 1
                 backend.begin_window(take(wire.coin_of(msg["coin"])), None)
-                inflight.append(launch(t, 0, last.ticket if last else None, None if inflight else clock()))
+                inflight.append(launch(t, 0, last.ticket if last else None,
+                                       stamp if cap < math.inf else None if inflight else clock()))
                 nxt = inflight[-1].i + 1
         finally:
             if ahead is not None:
@@ -931,6 +948,15 @@ class ProverSide:
                 pending.append(item)
                 if kind == "end":
                     return item[0]
+
+    def _boundary(self):
+        """The next boundary message, waited for."""
+        while True:
+            item = self.inbox.get()
+            if item[0]["type"] in ("lost", "bye"):
+                raise wire.Closed(item[0].get("why", "bye"))
+            if item[0]["type"] in BOUNDARIES:
+                return item
 
     def _drain(self, pending: deque) -> None:
         """Move the boundary messages that have arrived into `pending`, in order."""

@@ -19,7 +19,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(HERE.parents[2]))
 
-from verity.core.protocols.remote_bandwidth import audit, receipts as rb, timing  # noqa: E402
+from verity.core.protocols.remote_bandwidth import audit, ledger, receipts as rb, timing  # noqa: E402
 from verity.core.protocols.remote_bandwidth import codec as rcodec  # noqa: E402
 
 import prover  # noqa: E402
@@ -148,7 +148,8 @@ class TickingBackend(prover.CpuBackend):
 
 def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sessions: int = 1, checks=None,
         read_bytes_per_s: float = 1e20, tiers: dict | None = None, lifetime: int = audit.LIFETIME,
-        layout: list | None = None, host_bytes: int = 0, **kv):
+        registry: audit.Registry | None = None, layout: list | None = None, host_bytes: int = 0,
+        pace: audit.Pace | None = None, **kv):
     clock = PassClock()
     vconn, pconn = clock.conns()
     backend = TickingBackend(clock, blocks, random.Random(7), read_bytes_per_s=read_bytes_per_s, tiers=tiers,
@@ -166,7 +167,7 @@ def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sess
     th.start()
     v = verifier.Verifier(vconn, source=os.urandom(32), windows=windows, window_ns=20, samples=samples,
                           delta=2.0 ** -40, jitter_ns=10 ** 9, clock=clock, log=lambda m: None,
-                          checks=checks, lifetime=lifetime, host_bytes=host_bytes)
+                          checks=checks, lifetime=lifetime, registry=registry, host_bytes=host_bytes, pace=pace)
     v.register()
     allowance = v.allowance(v.ping(4))
     out, not_before = [], None
@@ -263,6 +264,48 @@ def test_a_sessions_ledgers_carry_the_timing_parts_when_its_calibration_reads_ea
     for short in ({"hbm": {"bytes": 15 * block, "ms": 1e-6}}, None):
         (r,), _ = run("honest", read_bytes_per_s=1.0, tiers=short)
         assert "timing_parts" not in r["ledger"]["measured"] and "timing_parts" not in r["ledger"]["inputs"]
+
+
+def test_an_unpaced_session_declares_its_snapshot_line_and_no_time_held_line(monkeypatch):
+    """The declared outputs are the protocol's (`ledger.declared`): γ at both R, as the readings beside them, and the
+    snapshot line; an unpaced session's coins come a stated window apart, so it has no time-held line."""
+    monkeypatch.setattr(prover, "OPENINGS_PART", 4)
+    (r,), _ = run("honest")
+    lg = r["ledger"]
+    d = lg["declared"]
+    assert d["accepted"] and d["windows"] == 3
+    assert d["gamma"]["spec"]["gamma"] == lg["spec"]["gamma"] and d["gamma"]["measured"]["gamma"] == lg["measured"]["gamma"]
+    assert [w["window"] for w in d["gamma"]["spec"]["windows"]] == [0, 1, 2]
+    assert 0 <= d["memory"][ledger.SNAPSHOT]["epsilon"] <= 1 and d["memory"][ledger.SNAPSHOT]["delta"] > 0
+    assert "unpaced" in d["memory"][ledger.TIME_HELD]["refused"]
+
+
+@pytest.mark.parametrize("k, schedule", [
+    (1, [(0, 1, [1]), (1, 2, [2]), (2, 3, [3]), (3, 4, [4]), (4, 5, [5])]),
+    (3, [(0, 2, [1, 2, 3]), (2, 5, [4, 5, 6]), (5, 8, [7, 8, 9]), (8, 11, [10, 11, 12]), (11, 14, [13, 14, 15])]),
+])
+def test_a_paced_session_runs_k_passes_a_coin_and_declares_its_time_held_line(monkeypatch, k, schedule):
+    """Paced (`audit.Pace(k, 2)`, two stretches of two windows and the closing window), the prover runs k passes under
+    each coin and waits for the next, and the verifier sends each boundary as the window's (k − 1)-th root arrives
+    (`Session.next_boundary_ns`; k = 1: as the window before's root does), so on the pass clock window t holds k
+    passes, none discarded; γ is declared over the stretches, and the session declares all three memory forms."""
+    monkeypatch.setattr(prover, "OPENINGS_PART", 4)
+    (r,), (pr,) = run("honest", windows=2, samples=12, pace=audit.Pace(k, 2))
+    assert r["accepted"] and pr["accepted"] and r["windows"] == 5 and r["pace"] == {"groups": 2, "k": k}
+    assert pr["passes"] == [k] * 5 and pr["discarded"] == 0
+    assert [(w["released_ns"], w["boundary_ns"], w["arrivals_ns"]) for w in r["windows_seen"]] == [
+        (s, b, list(a)) for s, b, a in schedule]
+    d = r["ledger"]["declared"]
+    assert [w["window"] for w in d["gamma"]["spec"]["windows"]] == [0, 1, 2]
+    assert [w["span_ns"] for w in d["gamma"]["spec"]["windows"]][:2] == [
+        r["windows_seen"][1]["deadline_ns"] - schedule[0][0], r["windows_seen"][3]["deadline_ns"] - schedule[2][0]]
+    for form in ledger.FORMS:
+        assert 0 <= d["memory"][form]["epsilon"] <= 1 and d["memory"][form]["delta"] > 0, form
+
+
+def test_a_paced_prover_that_dropped_blocks_is_rejected():
+    (r,), (pr,) = run("skip:0.5", windows=2, samples=12, pace=audit.Pace(2, 2))
+    assert not r["accepted"] and not pr["accepted"] and "declared" not in r.get("ledger", {})
 
 
 def test_a_second_session_waits_out_the_first_and_is_accepted():
