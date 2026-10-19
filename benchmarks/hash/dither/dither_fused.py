@@ -8,7 +8,7 @@ fx1 receipts; z committed per step before the step's coin, like root(A).
     DF.hook(llm)                                       # the step hook below
 
 Per engine step s (parity p = s mod 2), around the runner's `execute_model`:
-    before   the step struct (p, m, receipts on, dump) written to the device, m the step's scheduled tokens; the forward's
+    before   the step struct (p, m, receipts on, flags) written to the device, m the step's scheduled tokens; the forward's
              128 `h1f` launches read it: z_s, y_s, A_s's slots; step s - 1's receipts
     after    on the device: step s's A tables (`commit.s8_table`'s format, labels a/<s>/<w>), admit tables (the T / 16 words of
              the slots < m, s/<s>/<w>), z tables (each slot row's N int32 LE, z/<s>/<w>, domain 'z-table'), the a-step,
@@ -48,6 +48,8 @@ from h1r import H1R, Call  # noqa: E402
 SITES = ("self_attn.qkv_proj", "self_attn.o_proj", "mlp.gate_up_proj", "mlp.down_proj")
 MODEL = {"repo": "verity-int8/Llama-3.1-8B-INT8"}
 ROUNDS = 1 << 14
+F_DUMP, F_NW_TILES, F_NW_UNITS = 1, 2, 4    # h1f.cu's H1FStep.flags
+POISON = 0xA5
 LIB = "dither"
 REG: dict[int, tuple[str, torch.nn.Module]] = {}
 CFG: dict = {}
@@ -131,16 +133,39 @@ class Window:
         self.salt = torch.zeros(8, dtype=torch.int64, device=dev)
         self.step_base = torch.zeros(1, dtype=torch.int64, device=dev)
         self.stepv = torch.zeros(2, dtype=torch.int32, device=dev)
-        self.s, self.parity, self.rc_on, self.dump, self.m = 0, 0, 0, 0, 0
+        self.s, self.parity, self.rc_on, self.flags, self.m = 0, 0, 0, 0, 0
         self.calls = 0
         self.steps = 0
-        self.gate_armed: int | None = None
-        self.gate: dict = {}
+        self.arms: list[str] = []
+        self.arm_m: int | None = None
+        self.caps: dict[str, dict] = {}
+        self.cap_step: str | None = None
+        self.cap_rc: str | None = None
+        self._next_rc: str | None = None
+        self.price_y = False
+        self.yset = None
+        if gate:
+            self.yset = self.c.set([Tab(Dom("y-table", {"window": self.window, "step": 0, "linear": w, "module": self.names[w],
+                                                        "slots": t, "n": n, "schema": CM.SCHEMA}, t, {"step": (1, 0)}), t,
+                                        data=self.ydump[w].view(torch.uint8), stride=2 * n, body=2 * n, length=2 * n,
+                                        lab=("y/", f"/{w}")) for w, (n, k) in enumerate(self.nk)])
         self.round_log: list[dict] = []
         self.phases: list[dict] = []
         self.t_before = 0.0
-        self.ev = [torch.cuda.Event(enable_timing=True) for _ in range(7)]
+        self.ev = [torch.cuda.Event(enable_timing=True) for _ in range(9)]
         self._coins()
+
+    def arm(self, m: int, names: tuple = ("gate", "control")) -> None:
+        """Capture `names` in turn, each at the next step of m tokens once the one before has its receipts: its parity's
+        A, scale and z slots and the y dump poisoned with 0xA5 before its forward, the receipts and seeds before they are
+        written; "control" also with the no-write flags (`F_NW_TILES` on its step, `F_NW_UNITS` on the next), so the
+        transcript buffers keep the poison and `check` must refuse it."""
+        self.arms, self.arm_m = list(names), m
+        self.caps = {n: {} for n in names}
+
+    def _poison(self, ts) -> None:
+        for x in ts:
+            x.view(torch.uint8).fill_(POISON)
 
     def _coins(self) -> None:
         from verity.core.protocols.pouw import window as Wd
@@ -191,11 +216,22 @@ class Window:
         if m > self.t:
             raise RuntimeError(f"a step of {m} tokens in a window of T = {self.t} slots")
         self.m = m
-        self.dump = 0
-        if self.gate_armed is not None and m == self.gate_armed:
-            self.dump, self.gate_armed = 1, None
-            self.gate = {"s": self.s, "m": m}
-        self.S.copy_(torch.tensor([self.parity, m, self.rc_on, self.dump], dtype=torch.int32))
+        self.flags = 0
+        self.cap_step = self.cap_rc = None
+        if self._next_rc is not None:
+            self.cap_rc, self._next_rc = self._next_rc, None
+            self._poison([self.plans[0].out])
+            if self.cap_rc == "control":
+                self.flags |= F_NW_UNITS
+        elif self.arms and m == self.arm_m:
+            self.cap_step = name = self.arms.pop(0)
+            p = self.parity
+            self._poison([x[p] for x in self.slot] + [x[p] for x in self.scale] + [x[p] for x in self.z] + list(self.ydump or []))
+            self.flags |= F_DUMP | (F_NW_TILES if name == "control" else 0)
+            self.caps[name] = {"s": self.s, "m": m}
+        self.S.copy_(torch.tensor([self.parity, m, self.rc_on, self.flags], dtype=torch.int32))
+        if self.cap_step or self.cap_rc:
+            torch.cuda.synchronize()
         self.t_before = time.perf_counter()
 
     def after(self) -> None:
@@ -219,9 +255,9 @@ class Window:
         if self.rc_on:
             self.c.build(self.rset, self.stepv[1:2])
         ev[4].record()
-        if self.gate.get("s") == s - 1 and "receipts" not in self.gate:
-            self.gate["receipts"] = self.plans[0].out.clone()
-            self.gate["r_roots"] = self.rset.roots.clone()
+        if self.cap_rc is not None:
+            self.caps[self.cap_rc]["receipts"] = self.plans[0].out.clone()
+            self.caps[self.cap_rc]["r_roots"] = self.rset.roots.clone()
         root = unwords(pre["round"].root(0))
         t_root = time.perf_counter()
         opening = self.rounds.record(root)
@@ -229,24 +265,34 @@ class Window:
         t_coin = time.perf_counter()
         self.salt.copy_(torch.from_numpy(words(salt)))
         self.step_base.fill_(s * self.u_step)
+        if self.cap_step is not None:
+            self._poison([self.plans[0].seeds])
         ev[5].record()
         self.r.launch(self.plans[p], self.salt, version=0, step_base=self.step_base)
         ev[6].record()
         ev[6].synchronize()
         t_end = time.perf_counter()
-        self.phases.append({"m": m, "forward_ms": 1e3 * (t_fwd - self.t_before), "a_admit_tables_ms": ev[0].elapsed_time(ev[1]),
-                            "z_tables_ms": ev[1].elapsed_time(ev[2]), "step_trees_ms": ev[2].elapsed_time(ev[3]),
-                            "receipt_trees_ms": ev[3].elapsed_time(ev[4]), "coin_host_ms": 1e3 * (t_coin - t_root),
-                            "seeds_ms": ev[5].elapsed_time(ev[6]), "between_ms": 1e3 * (t_end - t_fwd)})
-        if self.gate.get("s") == s and "a" not in self.gate:
-            self.gate.update(p=p, root=root, salt=salt, a=[x[p].clone() for x in self.slot],
-                             sa=[x[p].clone() for x in self.scale], z=[x[p].clone() for x in self.z],
-                             y=[x[:m].clone() for x in self.ydump] if self.ydump else None,
-                             a_roots=[unwords(pre["mid"].leaf(0, w)) for w in range(self.L)],
-                             z_roots=[unwords(pre["mid"].leaf(2, w)) for w in range(self.L)],
-                             admit_roots=[unwords(pre["mid"].leaf(1, w)) for w in range(self.L)],
-                             leaves=[unwords(pre["round"].leaf(0, i)) for i in range(3)],
-                             b_roots=[unwords(self.bset.root(w)) for w in range(self.L)])
+        ph = {"m": m, "forward_ms": 1e3 * (t_fwd - self.t_before), "a_admit_tables_ms": ev[0].elapsed_time(ev[1]),
+              "z_tables_ms": ev[1].elapsed_time(ev[2]), "step_trees_ms": ev[2].elapsed_time(ev[3]),
+              "receipt_trees_ms": ev[3].elapsed_time(ev[4]), "coin_host_ms": 1e3 * (t_coin - t_root),
+              "seeds_ms": ev[5].elapsed_time(ev[6]), "between_ms": 1e3 * (t_end - t_fwd)}
+        if self.price_y and self.yset is not None:
+            ev[7].record()
+            self.c.build(self.yset, self.stepv[0:1])
+            ev[8].record()
+            ev[8].synchronize()
+            ph["y_tables_ms"] = ev[7].elapsed_time(ev[8])
+        self.phases.append(ph)
+        if self.cap_step is not None:
+            nm, self._next_rc = self.cap_step, self.cap_step
+            self.caps[nm].update(p=p, root=root, salt=salt, a=[x[p].clone() for x in self.slot],
+                                 sa=[x[p].clone() for x in self.scale], z=[x[p].clone() for x in self.z],
+                                 y=[x[:m].clone() for x in self.ydump] if self.ydump else None,
+                                 a_roots=[unwords(pre["mid"].leaf(0, w)) for w in range(self.L)],
+                                 z_roots=[unwords(pre["mid"].leaf(2, w)) for w in range(self.L)],
+                                 admit_roots=[unwords(pre["mid"].leaf(1, w)) for w in range(self.L)],
+                                 leaves=[unwords(pre["round"].leaf(0, i)) for i in range(3)],
+                                 b_roots=[unwords(self.bset.root(w)) for w in range(self.L)])
         self.round_log.append({"s": s, "m": m, "root": root.hex()[:32]})
         self.rc_on = 1
         self.parity ^= 1
@@ -261,7 +307,8 @@ class Window:
         by: dict = {}
         for x in ph:
             by.setdefault(x["m"], []).append(x)
-        med = {str(m): {"steps": len(xs), **{k: round(float(np.median([x[k] for x in xs])), 4) for k in xs[0] if k != "m"}}
+        med = {str(m): {"steps": len(xs), **{k: round(float(np.median([x[k] for x in xs if k in x])), 4)
+                                             for k in dict.fromkeys(k for x in xs for k in x) if k != "m"}}
                for m, xs in sorted(by.items(), key=lambda kv: -len(kv[1]))[:4]}
         return {"steps": self.steps, "fused_calls_eager": self.calls, "t": self.t, "s": self.s, "phases_by_m": med}
 
@@ -354,18 +401,20 @@ def int8_checkpoint(pin: str, scratch: Path) -> Path:
 
 # -- the gate ----------------------------------------------------------------------------------------------------------------
 
-def check(win: Window, lib_h1r: str, n_ref_units: int = 3, cpu_calls: tuple = (0, 1, 2, 3, 126, 127)) -> dict:
-    """The gate step's checks, after the step after it ran (its receipts): per call z = torch._int_mm (cuBLASLt) on the
-    slots' rows < m and zero above, y (dumped) = int8_ops.scaled_mm on the same rows (today's served y), every receipt
-    = h1r (gated against receipts.py) on the saved slots, a few units = h1tile.reference (z and receipt), the A, admit, z
-    and receipt roots of CPU_CALLS and the step's round = commit.py's."""
+def check(win: Window, lib_h1r: str, which: str = "gate", n_ref_units: int = 3,
+          cpu_calls: tuple = (0, 1, 2, 3, 126, 127)) -> dict:
+    """Capture `which`'s checks (`Window.arm`), after the step after it ran (its receipts): per call z = torch._int_mm
+    (cuBLASLt) on the slots' rows < m and zero above, y (dumped) = int8_ops.scaled_mm on the same rows (today's served y),
+    every receipt = h1r (gated against receipts.py) on the saved slots, a few units = h1tile.reference (z and receipt),
+    every call's A, admit and z roots, the receipt roots of CPU_CALLS and the step's round = commit.py's.  Every buffer
+    read was 0xA5 before the kernels wrote it; the control capture's kernels wrote none of them, so it must fail."""
     from verity_vllm.engine import int8_exact as E
     from verity_vllm.engine import int8_ops
-    g = win.gate
+    g = win.caps.get(which, {})
     if "receipts" not in g or "a" not in g:
-        return {"ok": False, "why": f"gate step incomplete: {sorted(g)}"}
+        return {"ok": False, "complete": False, "why": f"{which} step incomplete: {sorted(g)}"}
     m, s, t, L = g["m"], g["s"], win.t, win.L
-    doc: dict = {"s": s, "m": m, "t": t}
+    doc: dict = {"which": which, "complete": True, "s": s, "m": m, "t": t, "poison": f"{POISON:#04x}"}
     z_bad, y_bad, zero_bad = [], [], []
     for w in range(L):
         a, sa, z = g["a"][w], g["sa"][w], g["z"][w]
@@ -425,11 +474,11 @@ def check(win: Window, lib_h1r: str, n_ref_units: int = 3, cpu_calls: tuple = (0
         fs = {"window": W, "step": s, "linear": w, "module": win.names[w], "slots": t, "schema": CM.SCHEMA}
         sd = CM.domain(fs, len(wrows), "admit")
         s_cpu[w] = CM.levels(sd, [CM.leaf(sd, key, f"s/{s}/{w}", i, x)[0] for i, x in enumerate(wrows)])[-1][0]
+        fz = {"window": W, "step": s, "linear": w, "module": win.names[w], "slots": t, "n": n, "schema": CM.SCHEMA}
+        zd = CM.domain(fz, t, "z-table")
+        zrows = g["z"][w].cpu().numpy().astype("<i4").view(np.uint8)
+        z_cpu[w] = CM.levels(zd, [CM.leaf(zd, key, f"z/{s}/{w}", i, bytes(zrows[i]))[0] for i in range(t)])[-1][0]
         if w in cpu_calls:
-            fz = {"window": W, "step": s, "linear": w, "module": win.names[w], "slots": t, "n": n, "schema": CM.SCHEMA}
-            zd = CM.domain(fz, t, "z-table")
-            zrows = g["z"][w].cpu().numpy().astype("<i4").view(np.uint8)
-            z_cpu[w] = CM.levels(zd, [CM.leaf(zd, key, f"z/{s}/{w}", i, bytes(zrows[i]))[0] for i in range(t)])[-1][0]
             o, units, nw = win.plans[0].offs[w]
             fr = {"window": W, "step": s, "linear": w, "module": win.names[w], "base": s * win.u_step + win.offs[w],
                   "units": units, "words": nw, "schema": CM.SCHEMA}
@@ -441,10 +490,11 @@ def check(win: Window, lib_h1r: str, n_ref_units: int = 3, cpu_calls: tuple = (0
     doc["commitments"] = cm
     doc["a_roots_bad"] = [w for w in range(L) if a_cpu[w] != g["a_roots"][w]]
     doc["admit_roots_bad"] = [w for w in range(L) if s_cpu[w] != g["admit_roots"][w]]
+    doc["z_roots_bad"] = [w for w in range(L) if z_cpu[w] != g["z_roots"][w]]
     f_step = {"window": W, "step": s, "linears": L}
     a_step = CM.step_root(CM.domain(f_step, L, "a-step"), [a_cpu[w] for w in range(L)])
     admit_step = CM.step_root(CM.domain(f_step, L, "admit-step"), [s_cpu[w] for w in range(L)])
-    z_step = CM.step_root(CM.domain(f_step, L, "z-step"), g["z_roots"])
+    z_step = CM.step_root(CM.domain(f_step, L, "z-step"), [z_cpu[w] for w in range(L)])
     r_fields = {"window": W, "step": s, "leaves": "a-step root, admit-step root, z-step root"}
     rnd = CM.step_root(CM.domain(r_fields, 3, "round"), [a_step, admit_step, z_step])
     doc["round"] = {"a_step": a_step == g["leaves"][0], "admit_step": admit_step == g["leaves"][1],
@@ -452,5 +502,15 @@ def check(win: Window, lib_h1r: str, n_ref_units: int = 3, cpu_calls: tuple = (0
     doc["ok"] = (not z_bad and not zero_bad and (g["y"] is None or not y_bad) and not rc_bad
                  and all(x["z_equal"] and x["receipt_equal"] for x in refs)
                  and all(all(v for k_, v in x.items() if k_ != "call") for x in cm)
-                 and not doc["a_roots_bad"] and not doc["admit_roots_bad"] and all(doc["round"].values()))
+                 and not doc["a_roots_bad"] and not doc["admit_roots_bad"] and not doc["z_roots_bad"]
+                 and all(doc["round"].values()))
     return doc
+
+
+def gate_verdict(gate: dict, control: dict) -> dict:
+    """The poisoned gate passes and its no-write control, complete, is refused on z and on the receipts."""
+    refused = (control.get("complete") and not control.get("ok") and bool(control.get("z_vs_int_mm_bad"))
+               and bool(control.get("receipts_vs_h1r_bad")))
+    return {"ok": bool(gate.get("ok")) and bool(refused), "gate_ok": bool(gate.get("ok")), "control_refused": bool(refused),
+            "control_bad": {k: len(control.get(k) or []) for k in ("z_vs_int_mm_bad", "y_vs_scaled_mm_bad", "empty_rows_bad",
+                                                                    "receipts_vs_h1r_bad", "z_roots_bad")}}

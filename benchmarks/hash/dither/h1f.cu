@@ -19,12 +19,16 @@ struct H1F {
   float* scale[2];      // s_a slots [T]
   int* z[2];            // z slots [T, N] s32
   const H1Call* rc[2];  // the receipts' call reading parity p's slots
-  __nv_bfloat16* ydump; // [T, N] or null: y rows < m copied here when H1FStep.dump (the gate's view of the served y)
+  __nv_bfloat16* ydump; // [T, N] or null: y rows < m copied here under F_DUMP (the gate's view of the served y)
   int t, n, k, pad;
 };
 
+// flags: F_DUMP copies y rows < m to ydump; F_NW_TILES and F_NW_UNITS are the gate's no-write control (no z, A slot or
+// scale write and no slot clear; no receipt write), y still written, so serving goes on while the transcript is not
+enum { F_DUMP = 1, F_NW_TILES = 2, F_NW_UNITS = 4 };
+
 struct H1FStep {
-  int parity, m, rc_on, dump;
+  int parity, m, rc_on, flags;
 };
 
 template <int NW>
@@ -40,6 +44,7 @@ __global__ void __launch_bounds__(32 * NW, 3) h1f_k(const H1F* __restrict__ F, c
   const int v = blockIdx.x * NW + wid;
   const H1FStep st = *S;
   const int p = st.parity, m = st.m;
+  const bool nwt = st.flags & F_NW_TILES;
   const int T = F->t, N = F->n, K = F->k, ncb = N >> 5, KS = K >> 5;
   const int Mz = (M + 31) & ~31;
   const int nrz = Mz >> 5, nzt = nrz * ncb, ncl = T - Mz;
@@ -73,7 +78,7 @@ __global__ void __launch_bounds__(32 * NW, 3) h1f_k(const H1F* __restrict__ F, c
         pb0 = *reinterpret_cast<const uint4*>(brow + 32 * (s + 1));
         pb1 = *reinterpret_cast<const uint4*>(brow + 32 * (s + 1) + 16);
       }
-      if (s % ncb == cj) {
+      if (!nwt && s % ncb == cj) {
         *reinterpret_cast<uint4*>(srow + 32 * s) = alive ? a0 : zero4;
         *reinterpret_cast<uint4*>(srow + 32 * s + 16) = alive ? a1 : zero4;
       }
@@ -101,7 +106,7 @@ __global__ void __launch_bounds__(32 * NW, 3) h1f_k(const H1F* __restrict__ F, c
 #pragma unroll
         for (int ni = 0; ni < 4; ++ni) mma(acc[mi][ni], af[mi], bf[ni][0], bf[ni][1]);
     }
-    if (cj == 0) F->scale[p][ar] = alive ? sa[ar] : 0.0f;
+    if (cj == 0 && !nwt) F->scale[p][ar] = alive ? sa[ar] : 0.0f;
     int* zs = F->z[p];
 #pragma unroll
     for (int mi = 0; mi < 2; ++mi)
@@ -114,13 +119,14 @@ __global__ void __launch_bounds__(32 * NW, 3) h1f_k(const H1F* __restrict__ F, c
         for (int ni = 0; ni < 4; ++ni) {
           const int col = 32 * cj + 8 * ni + 2 * q;
           const int z0 = acc[mi][ni][2 * eh], z1 = acc[mi][ni][2 * eh + 1];
-          *reinterpret_cast<int2*>(zs + (long long)row * N + col) = rlive ? make_int2(z0, z1) : make_int2(0, 0);
+          if (!nwt)
+            *reinterpret_cast<int2*>(zs + (long long)row * N + col) = rlive ? make_int2(z0, z1) : make_int2(0, 0);
           if (rok) {
             __nv_bfloat162 yv;
             yv.x = __float2bfloat16_rn(__fmul_rn(__fmul_rn(__int2float_rn(z0), s_a), sw[col]));
             yv.y = __float2bfloat16_rn(__fmul_rn(__fmul_rn(__int2float_rn(z1), s_a), sw[col + 1]));
             *reinterpret_cast<__nv_bfloat162*>(y + (long long)row * N + col) = yv;
-            if (st.dump && rlive && F->ydump)
+            if ((st.flags & F_DUMP) && rlive && F->ydump)
               *reinterpret_cast<__nv_bfloat162*>(F->ydump + (long long)row * N + col) = yv;
           }
         }
@@ -128,6 +134,7 @@ __global__ void __launch_bounds__(32 * NW, 3) h1f_k(const H1F* __restrict__ F, c
     return;
   }
   if (v < nzt + ncl) {
+    if (nwt) return;
     const int row = Mz + (v - nzt);
     uint4* zr = reinterpret_cast<uint4*>(F->z[p] + (long long)row * N);
     for (int i = lane; i < N / 4; i += 32) zr[i] = make_uint4(0, 0, 0, 0);
@@ -140,7 +147,7 @@ __global__ void __launch_bounds__(32 * NW, 3) h1f_k(const H1F* __restrict__ F, c
   const H1Call C = *F->rc[p ^ 1];
   const int u = v - nzt - ncl;
   if (u >= C.units) return;
-  h1r_unit<2>(C, u, lane, Xs, Ws, sd[wid], nzs[wid][0], seeds, nt0, nt1, nt2, out, 0);
+  h1r_unit<2>(C, u, lane, Xs, Ws, sd[wid], nzs[wid][0], seeds, nt0, nt1, nt2, out, (st.flags & F_NW_UNITS) ? 1 : 0);
 }
 
 // one served linear call: xq [M, K] s8 and sa [M] f32 (row_quant's), w [N, K] s8 and sw [N] f32 (the layer's), y [M, N]

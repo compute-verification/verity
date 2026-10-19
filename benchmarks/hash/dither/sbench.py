@@ -26,9 +26,10 @@ Arms:
                  coin and the seeds between steps)
 
 `gate` (--gate, before the reps): exact and dither each generate GATE_TOKENS tokens for the 32 requests; dither's window
-checks one B32 decode step (`dither_fused.check`) and its tokens must equal exact's, under a CUDA profiler range (nsys
---capture-range=cudaProfilerApi reads the kernels that ran).  The decode gate compares each arm's tokens with its
-reference arm's (dither: exact; any other: the first arm).
+checks one B32 decode step (`dither_fused.check`, its transcript buffers 0xA5 before the kernels wrote them) and refuses
+its no-write control (a later B32 step whose kernels write none of them), and its tokens must equal exact's, under a CUDA
+profiler range (nsys --capture-range=cudaProfilerApi reads the kernels that ran).  The decode gate compares each arm's
+tokens with its reference arm's (dither: exact; any other: the first arm).  A failed gate times nothing (exit 4).
 
     python sbench.py --out OUT [--arms stock,exact,dither] [--reps 3] [--t 64] [--ops decode] [--gate]
 """
@@ -145,7 +146,7 @@ def build(arm: str, scratch: Path, gpu_mem: float):
 
 
 REF_OF = {"dither": "exact"}
-GATE_TOKENS = 8
+GATE_TOKENS = 16    # enough B32 decode steps for the gate's capture, its receipts, the control's and its receipts
 
 
 def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
@@ -188,7 +189,8 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
         elif cmd["op"] == "gate":
             win = getattr(llm, "dither_win", None)
             if win is not None:
-                win.gate_armed = B
+                win.arm(B)
+                win.price_y = True
             prof = os.environ.get("DITHER_NSYS") == "1" and win is not None
             if prof:
                 torch.cuda.synchronize()
@@ -199,9 +201,12 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
                 torch.cuda.profiler.stop()
             res = {"gate_s": round(t, 3), "tokens": [list(o.outputs[0].token_ids) for o in outs]}
             if win is not None:
+                win.price_y = False
                 t0 = time.perf_counter()
                 with torch.inference_mode():
-                    res["check"] = DF.check(win, os.environ["DITHER_H1F"])
+                    res["check"] = DF.check(win, os.environ["DITHER_H1F"], "gate")
+                    res["control"] = DF.check(win, os.environ["DITHER_H1F"], "control")
+                res["verdict"] = DF.gate_verdict(res["check"], res["control"])
                 res["check_s"] = round(time.perf_counter() - t0, 1)
             conn.send(res)
         elif cmd["op"] == "sat":
@@ -263,6 +268,13 @@ def main() -> int:
         for arm in arms:
             print(json.dumps({"gate": arm, **{k: v for k, v in gate_doc[arm].items() if k != "tokens"}}), flush=True)
         (out / "gate.json").write_text(json.dumps(gate_doc, indent=1) + "\n")
+        failed = [arm for arm in arms if "verdict" in gate_doc[arm] and not (
+            gate_doc[arm]["verdict"]["ok"] and gate_doc[arm].get("tokens_equal_" + REF_OF.get(arm, arms[0])))]
+        if failed:
+            print(json.dumps({"gate_failed": failed, "timed": False}), flush=True)
+            for arm in arms:
+                conns[arm].send({"op": "stop"})
+            return 4
     for r in range(a.reps):
         for op in a.ops.split(","):
             for j in range(len(arms)):
