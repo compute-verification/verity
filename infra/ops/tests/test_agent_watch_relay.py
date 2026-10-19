@@ -14,13 +14,17 @@ TOP_INBOX = {"name": "top", "holder": "bc-af075d78-d5b9-590b-acbb-eb47d6f88f39",
 
 PROOFS_INBOX = {"name": "proofs", "holder": "bc-11111111-1111-1111-1111-111111111111", "inbox_ts": "1760000000.000200",
                 "closed": None}
+INFRA_INBOX = {"name": "infra", "holder": "bc-44444444-4444-4444-4444-444444444444", "inbox_ts": "1760000000.000300",
+               "closed": None}
+KERNELS_INBOX = {"name": "kernels", "holder": "bc-55555555-5555-5555-5555-555555555555", "inbox_ts": "1760000000.000400",
+                 "closed": None}
 
 
 class Routes:
     route = dict(TOP_INBOX)
 
     def resolve(self, name):
-        return name, {"top": self.route, "proofs": PROOFS_INBOX}.get(name)
+        return name, {"top": self.route, "proofs": PROOFS_INBOX, "infra": INFRA_INBOX, "kernels": KERNELS_INBOX}.get(name)
 
 
 class Api:
@@ -146,12 +150,31 @@ def test_a_stopped_worker_leads_with_its_lanes_handle_and_rings_that_inbox(relay
     assert relay.slack.DOORBELL_RE.match(ring[0]["text"])[1] == "infra" and "ZKS10" in ring[0]["text"]
 
 
-def test_a_worker_with_no_handle_is_posted_in_the_channel_only(relay):
-    relay.log_text["text"] = json.dumps({"kind": "worker_idle", "agent": "bc-x", "name": "H1", "run": "", "lane": "hash",
-                                         "at": "2026-10-18T20:06:00Z"}) + "\n"
+def test_a_worker_whose_lane_no_handle_owns_rings_infra_and_says_so_never_posted_unrung(relay):
+    """#agent-alerts 1792438328.270299 (19 Oct): G2-1, learned from a Task call of proofs' generation 3 after generation 4 took
+    the inbox, was posted with lane '' and no handle, and rang nobody."""
+    infra, kernels = (relay.slack.tag(relay.slack.entry(relay.REG, h)) for h in ("infra", "kernels"))
+    g2, h1, p = ("bc-a8b63bc4-8d5b-53be-aaf8-35339162d81a", "bc-33333333-3333-3333-3333-333333333333",
+                 "bc-8f4b652b-17bc-5055-a120-b56940b7c7a9")
+    relay.log_text["text"] = "\n".join(json.dumps(r) for r in [
+        {"kind": "worker_idle", "agent": g2, "name": "G2-1 → LiveEnd for FinExe", "run": "", "lane": "", "handle": None,
+         "parent": p, "at": "2026-10-19T19:22:00Z", "wake": "I'll check back in 30 min.", "wake_due": "2026-10-19T19:52:00Z"},
+        {"kind": "worker_idle", "agent": h1, "name": "H1", "run": "", "lane": "hash", "at": "2026-10-18T20:06:00Z"},
+        {"kind": "workers_failed", "agent": p, "name": "", "run": "", "lane": "", "handle": None, "minutes": 4,
+         "members": [{"kind": "worker_idle", "agent": g2, "name": "G2-1", "at": "2026-10-19T19:22:00Z"},
+                     {"kind": "worker_idle", "agent": h1, "name": "G2-2", "at": "2026-10-19T19:25:00Z"}]}]) + "\n"
     relay.once()
-    assert relay.posts == ["*Agent watch:* worker H1 (<https://cursor.com/agents/bc-x|bc-x>) of lane hash went idle at "
-                           "2026-10-18T20:06:00Z; if it didn't report back, resume it with Task."] and rings(relay) == []
+    assert relay.posts[0] == (
+        f"{infra} *Agent watch:* worker G2-1 → LiveEnd for FinExe (<https://cursor.com/agents/{g2}|{g2}>) went idle at "
+        "2026-10-19T19:22:00Z; if it didn't report back, resume it with Task. Before it stopped, it set its own wake-up "
+        "(\u201cI'll check back in 30 min.\u201d, due about 19:52Z). Its lane is unknown (no handle owns it or its parent), "
+        "so @infra is rung to find its coordinator.")
+    assert relay.posts[1] == (f"{kernels} *Agent watch:* worker H1 (<https://cursor.com/agents/{h1}|{h1}>) of lane hash went "
+                              "idle at 2026-10-18T20:06:00Z; if it didn't report back, resume it with Task."), \
+        "a lane's old name is its renamed handle"
+    assert relay.posts[2].startswith(f"{infra} *Agent watch:* 2 workers of the coordinator") and \
+        relay.posts[2].endswith("Its lane is unknown (no handle owns it or its parent), so @infra is rung to find its coordinator.")
+    assert [r["thread_ts"] for r in rings(relay)] == [INFRA_INBOX["inbox_ts"], KERNELS_INBOX["inbox_ts"], INFRA_INBOX["inbox_ts"]]
 
 
 def test_a_wake_cursor_refuses_with_409_posts_nothing(relay):

@@ -2,6 +2,7 @@
 15 minutes. It cancels the run, starts a 'continue' run on the agent, and records it; it never cancels a long tool call."""
 import json
 import re
+import uuid
 
 import pytest
 
@@ -2019,3 +2020,30 @@ def test_a_burst_held_when_the_watch_restarts_is_still_posted_once(tmp_path):
         clock.t += W.BURST_QUIET_S
         again.sweep(lambda r: None)
     assert [(r["kind"], r["count"]) for r in records(tmp_path)] == [("workers_failed", 2)]
+
+
+def test_a_worker_learned_from_a_former_coordinators_task_call_inherits_that_coordinators_handle(tmp_path):
+    """#agent-alerts 1792438328.270299 (19 Oct): G2-1 was learned from a Task call of proofs' generation 3 after generation 4
+    took the inbox (routes.d), so `holders` no longer named its parent, and it was recorded with lane '' and no handle. Its
+    parent's handle is the registry holder's, or the handle `launch_coordinator.py` made the parent a generation of."""
+    reg, routes = tmp_path / "registry.json", tmp_path / "routes.d"
+    api, clock, w = coordinators(tmp_path, [{"id": OLD, "name": "verity: vllm", "status": "ACTIVE", "latestRunId": "run-old",
+                                             "updatedAt": W.iso(T0)}], {"run-old": {"status": "RUNNING"}}, timers=None)
+    coords = W.holders(reg, routes)
+    gen3 = f"bc-{uuid.uuid5(W.COORDINATORS, 'circuits/3')}"
+    assert OLD not in coords and W.lineage(reg, coords, OLD) == "vllm" and W.lineage(reg, coords, NEW) == "vllm"
+    assert W.lineage(reg, coords, gen3) == "circuits" and W.lineage(reg, coords, KIDS["REC1"]) is None
+    w.sweep(lambda r: None)
+    g2 = KIDS["G2-1"]
+    task_call(w, "run-old", "t1", g2, "G2-1 → LiveEnd for FinExe")
+    api.workers[g2] = worker("ACTIVE", W.iso(T0), "G2-1 → LiveEnd for FinExe")
+    w.workers[g2] = {"heard": 0.0, "parent": OLD, "lane": "", "handle": None}    # what the deployed watch had learned
+    clock.t += 60
+    w.sweep(lambda r: None)
+    assert (w.workers[g2]["lane"], w.workers[g2]["handle"]) == ("vllm", "vllm")
+    api.workers[g2] = worker("IDLE", W.iso(clock.t), "G2-1 → LiveEnd for FinExe")
+    for _ in range(3):
+        clock.t += W.BURST_QUIET_S
+        w.sweep(lambda r: None)
+    (rec,) = records(tmp_path)
+    assert (rec["kind"], rec["agent"], rec["lane"], rec["handle"]) == ("worker_idle", g2, "vllm", "vllm")

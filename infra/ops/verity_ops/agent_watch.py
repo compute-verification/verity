@@ -269,6 +269,17 @@ def holders(registry: Path | None, routes: Path | None) -> dict[str, str]:
     return out
 
 
+def lineage(registry: Path | None, coords: dict[str, str], agent: str) -> str | None:
+    """The handle `agent` coordinates, or coordinated before a handover moved its inbox: the watch's coordinators (`holders`),
+    else the first agent id in a registry handle's `holder` (proofs' generation 3 after generation 4 took the inbox, 19 Oct),
+    else a generation `launch_coordinator.py` made of a registry handle."""
+    if agent in coords:
+        return coords[agent]
+    handles = [h for h in read_json(registry).get("handles") or [] if h.get("handle")]
+    return next((h["handle"] for h in handles if (m := AGENT_RE.search(str(h.get("holder", "")))) and m[0] == agent),
+                None) or next((h["handle"] for h in handles if generation(h["handle"], agent)), None)
+
+
 def timers(path: Path | None) -> dict[str, float]:
     """handle -> its recurring duty timer's interval in seconds, from `--timers` (`{"infra": 900}`), read each sweep; a
     handle absent, or a value that isn't a positive number, declares none. A missing file declares none for anyone."""
@@ -325,8 +336,8 @@ def workers(notes: Path | None, workers_d: Path, registry: Path | None, coords: 
         d = read_json(p)
         if (m := AGENT_RE.fullmatch(str(d.get("agent_id") or ""))) and m[0] not in coords:
             lane, by = str(d.get("lane") or ""), AGENT_RE.search(str(d.get("launched_by") or ""))
-            add(m[0], lane, (coords.get(by[0]) if by else None) or (lane if lane in names else None), p.stat().st_mtime,
-                (str(d["branch"]),) if d.get("branch") else (), by[0] if by else None)
+            handle = (lineage(registry, coords, by[0]) if by else None) or (lane if lane in names else None)
+            add(m[0], lane, handle, p.stat().st_mtime, (str(d["branch"]),) if d.get("branch") else (), by[0] if by else None)
     for p, heard, fm in recent_notes(notes, t):
         ids, lane = AGENT_RE.findall(fm.get("origin", "")), fm.get("lane") or p.parent.name
         launcher = next((i for i in ids if i in coords), None)
@@ -1081,11 +1092,15 @@ class Watch:
                 w["parent"] = d["parent"]
         with self.kids_lock:
             kids = dict(self.children)
+        parents: dict[str, str | None] = {}         # parent -> its handle, read once a sweep
         for agent, c in kids.items():
             if agent in coords:
                 continue
             p = c["parent"]
-            handle = coords.get(p) or self.owners.get(p) or (self.workers.get(p) or {}).get("handle")
+            if p not in parents:
+                parents[p] = (lineage(self.registry, coords, p) or self.owners.get(p)
+                              or (self.workers.get(p) or {}).get("handle"))
+            handle = parents[p]
             if agent in listed and handle:
                 self.owners[agent] = handle
             w = self.workers.setdefault(agent, {"heard": 0.0})

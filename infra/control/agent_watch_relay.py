@@ -6,7 +6,8 @@ cancel, held again within the hour, and a run unreadable for an hour; the first 
 @top, and rings @top's inbox thread as `ring_decision` does for a decided card (the inbox is in the front door, so the post's
 own route can't ring it). A cloud worker (a Task subagent) that went idle, or has been ACTIVE for hours, leads with its lane's
 handle and rings that inbox the same way, for its coordinator to resume it with Task (the watch can't start a worker's run;
-the doorbell also counts toward the coordinator's own ready-to-wake rule). A silent agent (ACTIVE 90 min with no note and no push)
+the doorbell also counts toward the coordinator's own ready-to-wake rule). A worker alert is never posted unrung: one whose
+lane no handle owns (nor its parent's) leads with @infra and says its lane is unknown. A silent agent (ACTIVE 90 min with no note and no push)
 and a `research run` that ended on a node lead with the record's handle and ring it the same way: a coordinator's own, a worker's
 launcher's, for a run whose sender is a lane, the lane's. A failure the watch acted on (`FAIL`: held, stalled, crashed, idle after
 its run ended, relaunched) leads with the record's `owner` and rings its inbox: @top for a coordinator, the launcher's handle for a
@@ -69,6 +70,7 @@ TOP = {"erroring", "stuck", "cancel_refused", "held_again", "unreadable"}
 WORKER = {"worker_idle", "worker_long"}         # rung to the lane's handle: only its coordinator can resume a worker
 HANDLE = WORKER | {"silent", "run_ended", "workers_failed"}       # rung to the record's handle
 FAIL = {"held", "stalled", "crashed", "idle_after_run", "relaunch"}   # rung to the record's owner: whoever must follow it up
+UNROUTED = "infra"      # rung for a worker whose lane no handle owns: a worker alert is never posted unrung
 #: a renamed handle's old name -> its new one, from the registry's "renamed from @OLD" (hash -> kernels, 18 Oct): lanes' notes
 #: and workers.d still carry the old name
 RENAMED = {old: h["handle"] for h in REG.get("handles") or []
@@ -79,8 +81,20 @@ def log(msg: str) -> None:
     print(f"{time.strftime('%H:%M:%SZ', time.gmtime())} {msg}", flush=True)
 
 
+def is_worker(rec: dict) -> bool:
+    return rec.get("kind") in WORKER or rec.get("kind") == "workers_failed" or rec.get("role") == "worker"
+
+
+def lane_of(rec: dict) -> str | None:
+    """A worker record's handle: its owner, its handle, else its lane when that is a handle; None when none is."""
+    handles = {h["handle"] for h in REG.get("handles") or []}
+    return next((h for h in (RENAMED.get(x, x) for x in (rec.get("owner"), rec.get("handle"), rec.get("lane"))) if h in handles),
+                None)
+
+
 def rung(rec: dict) -> str | None:
-    """The handle whose inbox the alert rings, if any."""
+    """The handle whose inbox the alert rings, if any. A worker's is always someone's: only its coordinator can resume it, and
+    one whose lane is unknown goes to @infra (`UNROUTED`), who finds that coordinator."""
     if rec.get("kind") in TOP:
         return "top"
     handles = {h["handle"] for h in REG.get("handles") or []}
@@ -90,7 +104,15 @@ def rung(rec: dict) -> str | None:
     handle = RENAMED.get(rec.get("handle"), rec.get("handle"))
     if rec.get("kind") in HANDLE and handle in handles:
         return handle
+    if is_worker(rec):
+        return lane_of(rec) or UNROUTED
     return None
+
+
+def unknown(rec: dict) -> str:
+    """What a worker alert says when no handle owns the worker or its parent, so @infra knows why it was rung."""
+    return (f" Its lane is unknown (no handle owns it or its parent), so @{UNROUTED} is rung to find its coordinator."
+            if is_worker(rec) and lane_of(rec) is None else "")
 
 
 def woke(rec: dict) -> str:
@@ -123,7 +145,7 @@ def text(rec: dict) -> str:
     if rec.get("kind") == "run_ended":
         run = f"run {rec.get('run')} ({rec.get('what') or '?'})"
         if rec.get("role") == "worker":
-            return f"{lead}*Agent watch:* {run} of worker {name} ({link}) {line}; resume {name} with Task."
+            return f"{lead}*Agent watch:* {run} of worker {name} ({link}) {line}; resume {name} with Task.{unknown(rec)}"
         if rec.get("role") == "coordinator":
             return f"{lead}*Agent watch:* your {run} ({link}) {line}; resume."
         return f"{lead}*Agent watch:* {run} of lane {rec.get('handle')} {line}."
@@ -136,12 +158,12 @@ def text(rec: dict) -> str:
         else:
             parent = f"lane {rec.get('lane') or '?'}"
         return (f"{lead}*Agent watch:* {len(members)} workers of {parent} {line}: "
-                + "; ".join(member(m) for m in members) + ". Resume each that didn't report back with Task.")
+                + "; ".join(member(m) for m in members) + f". Resume each that didn't report back with Task.{unknown(rec)}")
     if rec.get("kind") in WORKER or rec.get("role") == "worker":
-        lane = f" of lane {rec['lane']}" if rec.get("lane") else ""
+        lane = f" of lane {x}" if (x := rec.get("lane") or lane_of(rec)) else ""
         new = f" New agent {rec['new_agent']}." if rec.get("new_agent") else ""
         wake = f" Before it stopped, {woke(rec)}." if rec.get("wake") else ""
-        return f"{lead}*Agent watch:* worker {name} ({link}){lane} {line}.{new}{wake}"
+        return f"{lead}*Agent watch:* worker {name} ({link}){lane} {line}.{new}{wake}{unknown(rec)}"
     handle = rec.get("handle") or HOLDERS.get(rec.get("agent"))
     who = f"@{handle}'s coordinator" if handle else (rec.get("name") or "an agent")
     return (f"{lead}*Agent watch:* {who} ({link}, run {rec.get('run')}) {line}."
