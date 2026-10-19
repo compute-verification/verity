@@ -463,6 +463,9 @@ class Proxy:
     """The active certifier on one link: `run(reader, writer)` serves the link connection from `origin`, the clock's time
     of bucket 0, for the windows of `syncs`, or `windows` of them declared by an online `prover`, then closes it.
 
+    - `ingress_link`, the ingress link's name, has no default: with `origin` it names this certifier's run in a
+      certified PoUW window's stream (`served_commit.certifier_run`), so two proxies never share a run by a default
+      name;
     - the prover's choices (`LaggedChoices`) run on `executor`, by default a `worker()` process, which the proxy shuts
       down when `run` ends; on a `VirtualClock`, pass `InlineExecutor()`;
     - `publish(record, params)` receives every window's record, egress and ingress, as it closes (by default they are
@@ -487,7 +490,7 @@ class Proxy:
                  clock: Callable[[], float] = time.monotonic,
                  sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
                  publish: Callable[[Record, GridParams], None] | None = None,
-                 egress_link: str = "responses", ingress_link: str = "requests",
+                 egress_link: str = "responses", ingress_link: str,
                  prover: Prover | None = None, windows: int | None = None, executor: Executor | None = None,
                  salt: Callable[[int, int], bytes] | None = None, salt_bits: int = SALT_BITS, pouw_window: int = 1,
                  registered: Callable[[Registration], int | None] = served_window, start: int = 0,

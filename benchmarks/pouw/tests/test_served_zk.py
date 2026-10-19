@@ -595,7 +595,8 @@ def test_past_the_salt_rule_a_certified_window_is_recorded_revealed_drawn_under_
     """What a certified window of salted units runs through after `salt.unit_reason`, which no served-zk window passes
     today (the two tests above): this test lifts that one rule (monkeypatched to accept) and holds the rest end to end
     against the network certifier.  The prover records its pass's weights, the window's stream (`stream_id`, naming the
-    certifier's link and origin) and its prover id (`salt.prover_id`) with the certifier for PoUW window 0 before its
+    certifier's link and origin, so a `Proxy` names its ingress link) and its prover id (`salt.prover_id`) with the
+    certifier for PoUW window 0 before its
     salt is drawn, signed, and salts its pass from the salt it receives in-band.  `register` reads that record on the
     window's registration and only then has the certifier reveal window 0's salt, so a challenger whose stream or prover
     isn't the recorded one is refused (``coin``) and takes no reveal: the honest one after it passes (``certifier``),
@@ -619,6 +620,8 @@ def test_past_the_salt_rule_a_certified_window_is_recorded_revealed_drawn_under_
     t = [0.0]
     c, salts = _certifier(sid, key, sign, record, clock=lambda: t[0])
     assert SC.certifier_run(c) == {"link": "requests", "origin": (0.0).hex()}
+    with pytest.raises(TypeError, match="ingress_link"):
+        Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SyncSet((0, 1), (1, 2)), [ClockSync(0, 1)] * 4, origin=0.0)
     params, raw, rec = _certified_window(words, run, salts[0], sid, prover)
     ledger = PS.Registrations()
 

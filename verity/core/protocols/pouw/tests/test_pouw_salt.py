@@ -86,7 +86,7 @@ def certifier(windows: int, records: dict[int, bytes] | None = None, clock=lambd
         drawn[p] = hashlib.shake_256(b"certifier salt %d" % p).digest(n)
         return drawn[p]
 
-    c = Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0, clock=clock,
+    c = Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0, ingress_link="requests", clock=clock,
               **{"salt": source, "registered": PS.registered, "prover_key": KEY, "prover_context": STREAM, **kwargs})
     for p, record in (records or {}).items():
         c.commit_weights(p, record, signed(c, p, record))
