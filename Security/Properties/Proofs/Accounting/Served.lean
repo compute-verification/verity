@@ -328,8 +328,6 @@ theorem witEpoch_ownStart : ¬ EpochTie witLayout .beside 2 (fun _ => witCircuit
     (fun w => witRunAt (if w = 0 then 0 else 1)) := by
   intro E
   have h := E.salted 1 (by decide)
-  first
-    | exact one_ne_zero h
-    | simp [witRunAt] at h
+  exact one_ne_zero h
 
 end Properties.Served
