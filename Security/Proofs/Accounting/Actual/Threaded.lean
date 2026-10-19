@@ -57,15 +57,21 @@ theorem windows_small {L E : Type*} [Fintype E] [DecidableEq L] (A : Placed L) (
   refine ⟨P, fun u => ?_⟩
   obtain ⟨⟨i, k⟩, rfl⟩ := finProdFinEquiv.surjective u
   obtain ⟨-, hsize, hreads⟩ := hP i k
-  rw [uniformCuts_castSucc, uniformCuts_succ] at hsize hreads
+  have hk : (k : ℕ) * ω < t := mul_lt_of_lt_ceil hω k.2
+  have e : min ((k : ℕ) * ω) t = k * ω := min_eq_left hk.le
   have h1 : (A.stateIn (X i) (k * ω) G : ℝ) ≤ R :=
-    (Nat.cast_le.2 (stateIn_le_state A _ _ G)).trans (hR i k (mul_lt_of_lt_ceil hω k.2))
-  have h2 : ((linkCapacity ends β (X i) * (min ((k + 1) * ω) t - k * ω) : ℕ) : ℝ) ≤ r * ω := by
+    (Nat.cast_le.2 (stateIn_le_state A _ _ G)).trans (hR i k hk)
+  have h2 : ((linkCapacity ends β (X i) * (min (((k : ℕ) + 1) * ω) t - k * ω) : ℕ) : ℝ) ≤ r * ω := by
     rw [Nat.cast_mul]
     exact mul_le_mul (hr i) (Nat.cast_le.2 window_le) (Nat.cast_nonneg _) ((Nat.cast_nonneg _).trans (hr i))
-  refine ⟨hsize.trans ((Nat.mul_le_mul_left _ window_le).trans (hΓ i)), (Nat.cast_le.2 hreads).trans ?_⟩
-  rw [Nat.cast_add]
-  exact add_le_add h1 h2
+  refine ⟨hsize.trans ?_, (Nat.cast_le.2 hreads).trans ?_⟩
+  · show Φ (X i) * (min (((k : ℕ) + 1) * ω) t - min ((k : ℕ) * ω) t) ≤ Γ
+    rw [e]
+    exact (Nat.mul_le_mul_left _ window_le).trans (hΓ i)
+  · show ((A.stateIn (X i) (min ((k : ℕ) * ω) t) G +
+        linkCapacity ends β (X i) * (min (((k : ℕ) + 1) * ω) t - min ((k : ℕ) * ω) t) : ℕ) : ℝ) ≤ R + r * ω
+    rw [e, Nat.cast_add]
+    exact add_le_add h1 h2
 
 /-- The runtime from the count: `b_a x ≤ n ⌈t/ω⌉ · KΛ` gives `t ≥ ω (b_a x / (n KΛ) − 1)`, since `⌈t/ω⌉ ω ≤ t + ω`. -/
 theorem runtime_of_count {n t ω : ℕ} {b_a x KΛ : ℝ} (hx : 0 ≤ b_a * x)

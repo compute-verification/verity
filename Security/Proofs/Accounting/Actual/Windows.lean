@@ -139,7 +139,7 @@ theorem WindowsAt : Guarantees.Actual.WindowsAt := by
         · have hc : g ∈ S ∧ (∃ i, A.x g ∈ X i) ∧
               ∃ j : Fin κ.J, A.t g ∈ Set.Ico (κ.τ j.castSucc) (κ.τ j.succ) :=
             ⟨hg, hSX g hg, cuts_exists_mem κ (hSt g hg)⟩
-          rw [cut_isInput_of_mem A hg, ((mem_region A).1 hg).1, dif_pos hc]
+          rw [cut_isInput_of_mem A hg, ((mem_region A).1 hg).1, dite_eq_left hc]
           simp
         · rw [cut_isInput_of_not_mem A hg]
           simp [hg] }
@@ -198,12 +198,19 @@ theorem Windows : Guarantees.Actual.Windows := by
   obtain ⟨P, hP⟩ := WindowsAt A ℓ Φ ends β link n X θ hθ t (uniformCuts t ω hω) univ hX hC hΦ hL
   refine ⟨P, fun i k => ?_⟩
   obtain ⟨hgates, hsize, hreads⟩ := hP i k
-  rw [uniformCuts_castSucc, uniformCuts_succ] at hgates hsize hreads
+  have e : min ((k : ℕ) * ω) t = k * ω := min_eq_left (mul_lt_of_lt_ceil hω k.2).le
   have hst : A.stateIn (X i) (k * ω) univ ≤ M (X i) :=
     stateIn_le_of_memoryAt A (memoryAt_of_memory A hM Set.univ) ⟨i, rfl⟩ (Set.mem_univ _) _
-  exact ⟨hgates.trans (congrArg (A.region (X i)) Set.Ico_inter_Iio).symm,
-    hsize.trans (Nat.mul_le_mul_left _ window_le),
-    (Nci.SecurityProofs.novelReads_le_readsIn _ _).trans
-      (hreads.trans (Nat.add_le_add hst (Nat.mul_le_mul_left _ window_le)))⟩
+  refine ⟨hgates.trans ?_, hsize.trans ?_, (Nci.SecurityProofs.novelReads_le_readsIn _ _).trans (hreads.trans ?_)⟩
+  · show A.region (X i) (Set.Ico (min ((k : ℕ) * ω) t) (min (((k : ℕ) + 1) * ω) t)) = _
+    rw [e]
+    exact (congrArg (A.region (X i)) Set.Ico_inter_Iio).symm
+  · show Φ (X i) * (min (((k : ℕ) + 1) * ω) t - min ((k : ℕ) * ω) t) ≤ _
+    rw [e]
+    exact Nat.mul_le_mul_left _ window_le
+  · show A.stateIn (X i) (min ((k : ℕ) * ω) t) univ +
+        linkCapacity ends β (X i) * (min (((k : ℕ) + 1) * ω) t - min ((k : ℕ) * ω) t) ≤ _
+    rw [e]
+    exact Nat.add_le_add hst (Nat.mul_le_mul_left _ window_le)
 
 end Accounting.SecurityProofs.Actual
