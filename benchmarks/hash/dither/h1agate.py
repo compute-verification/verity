@@ -12,7 +12,8 @@
              way
 
 Each h1c_a_form value --forms names (0 h1c_a_call_k, 2 h1c_a_call2_k, its compressions paired) is gated in turn, and
-only if every one passes is each timed, in the same process on the same operands.
+only if every one passes is each timed, in the same process on the same operands; form 2's phases then come from its
+%globaltimer stamps (`stamps`) on a qkv, a gate_up and a down call alone.
 
     python h1agate.py --lib libh1c.so --out OUT [--t 64] [--forms 0,2]
 """
@@ -74,9 +75,11 @@ class Calls:
         if rc:
             raise RuntimeError(f"h1c_a_step returned {rc}")
 
-    def run_calls(self) -> None:
+    def run_calls(self, ws=None) -> None:
         st, cs = self.st, torch.cuda.current_stream().cuda_stream
         for w, (_, _, k) in enumerate(st.lin):
+            if ws is not None and w not in ws:
+                continue
             rc = self.lib.lib.h1c_a_call(C.addressof(st.calls.host) + self.tb * w, st.calls.dev.data_ptr() + self.tb * w,
                                          self.pre.data_ptr() + 8 * self.words * w, self.S.data_ptr(), self.xq[w].data_ptr(),
                                          self.sa[w].data_ptr(), st.slots[w].data_ptr(), st.scales[w].data_ptr(), k, cs)
@@ -207,6 +210,46 @@ def timing(c: Calls, reps: int) -> list[dict]:
     return rows
 
 
+def stamps(c: Calls, m: int, ws=(0, 2, 3), reps: int = 5) -> dict:
+    """h1c_a_call2_k's phases (h1c_a_stamps) for calls ws alone at m live rows, in us from the first block's start: each
+    block's segments, x, leaves and arrival, the last block's levels; the call's CUDA-event time beside them."""
+    blocks = c.st.t // 4
+    buf = torch.zeros(32 + 8 * blocks, dtype=torch.int64, device=c.pre.device)
+    c.lib.lib.h1c_a_stamps.argtypes = [C.c_void_p]
+    out = {}
+    c.set(13, m)
+    c.run_step()
+    for w in ws:
+        e0, e1 = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+        rows = []
+        for _ in range(reps):
+            c.lib.lib.h1c_a_stamps(buf.data_ptr())
+            buf.zero_()
+            torch.cuda.synchronize()
+            e0.record()
+            c.run_calls([w])
+            e1.record()
+            e1.synchronize()
+            b = buf.cpu().numpy().astype(np.int64)
+            ph = b[32:].reshape(blocks, 8)[:, :5]
+            lb = ph[:(m + 3) // 4]   # the blocks with a live row
+            t0 = int(ph[:, 0].min())
+            last = int(b[0])
+            lv = [int(x) for x in b[1:1 + 16] if x]
+            rows.append({"event_us": round(1e3 * e0.elapsed_time(e1), 2),
+                         "start_spread_us": round((int(ph[:, 0].max()) - t0) / 1e3, 2),
+                         "segments_us": round(float(np.median(lb[:, 1] - lb[:, 0])) / 1e3, 2),
+                         "x_us": round(float(np.median(lb[:, 2] - lb[:, 1])) / 1e3, 2),
+                         "leaf_us": round(float(np.median(lb[:, 3] - lb[:, 2])) / 1e3, 2),
+                         "last_block": last, "last_arrival_us": round((int(ph[last, 4]) - t0) / 1e3, 2),
+                         "levels_us": [round((y - x) / 1e3, 2) for x, y in zip([int(ph[last, 4])] + lv, lv)],
+                         "end_us": round(((lv[-1] if lv else int(ph[last, 4])) - t0) / 1e3, 2)})
+        c.lib.lib.h1c_a_stamps(None)
+        out[f"call{w}_k{c.st.lin[w][2]}"] = rows[-1] | {"event_us_all": [r["event_us"] for r in rows]}
+        print(json.dumps({"stamps": {"m": m, "w": w, **out[f"call{w}_k{c.st.lin[w][2]}"]}}), flush=True)
+    return out
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--lib", default=os.environ.get("DITHER_H1C"))
@@ -242,6 +285,8 @@ def main() -> int:
             lib.form(f)
             print(json.dumps({"t": t, "form": f}), flush=True)
             d["forms"][f]["timing"] = timing(c, a.reps)
+            if f == 2:
+                d["forms"][f]["stamps"] = {m: stamps(c, m) for m in sorted({32, t})}
         (out / "h1a-gate.json").write_text(json.dumps(doc, indent=1) + "\n")
         del st, c
         torch.cuda.empty_cache()

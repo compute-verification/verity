@@ -877,6 +877,17 @@ __device__ __forceinline__ void a_seg_words(u64 w[16], const uint8_t* row, const
   if (q == nb - 1) w[15] = 8ull * (128 + L);
 }
 
+// h1agate's phase stamps (h1c_a_stamps; null on the served path): the last block's index at 0, %globaltimer at 1 + lv after
+// each level, and block b's at 32 + 8 b + i: i = 0 its start, 1 its segments, 2 its x, 3 its leaves, 4 its arrival
+__device__ u64* ap_stamps = nullptr;
+__device__ __forceinline__ void ap_stamp(int i) {
+  if (threadIdx.x == 0 && ap_stamps) {
+    u64 t;
+    asm volatile("mov.u64 %0, %%globaltimer;" : "=l"(t));
+    ap_stamps[i] = t;
+  }
+}
+
 // one call, paired (h1c_a_form(2)): h1c_a_call_k's table.  Block x is rows AP_ROWS x .. + 3 on two pairs (warps 0 and 2,
 // 1 and 3): consumer warp p's half-warp h is row AP_ROWS x + 2 p + h, its lane j segment j (the block steps every lane
 // through as many compressions as its longest segment, a lane past its own dropping a dummy's); then each half's x, h and
@@ -895,20 +906,11 @@ extern "C" __global__ void __launch_bounds__(128) h1c_a_call2_k(const H1Tab* __r
   const long long r0 = (long long)blockIdx.x * AP_ROWS;
   const long long m = S[1];
   const bool nw = (S[3] & 2) != 0;
-  if (!nw) {
-    for (int rr = 0; rr < AP_ROWS; ++rr) {
-      const long long r = r0 + rr;
-      const bool alive = r < m;
-      uint4* dst = reinterpret_cast<uint4*>(slot + r * k);
-      const uint4* src = reinterpret_cast<const uint4*>(xq + (alive ? r : 0) * k);
-      for (int i = tid; i < k / 16; i += 128) dst[i] = alive ? src[i] : make_uint4(0, 0, 0, 0);
-      if (tid == 0) scale[r] = alive ? sa[r] : 0.0f;
-    }
-  }
   if (wid >= 2) {
     ap_serve(wid - 2);
     return;
   }
+  ap_stamp(32 + 8 * blockIdx.x);
   const int half = lane >> 4, j = lane & 15, rb = 2 * wid + half;
   const long long r = r0 + rb;
   const bool alive = r < m;
@@ -917,13 +919,16 @@ extern "C" __global__ void __launch_bounds__(128) h1c_a_call2_k(const H1Tab* __r
   const uint8_t* tl = reinterpret_cast<const uint8_t*>(sa + (alive ? r : 0));
   uint8_t* b = bf + tid * HB;
   {
+    // the slot row: a live row's from the blocks its segment lanes load, a dead row's zero
     const bool real = alive && j < ns;
     const int p0 = 1024 * j, L = real ? min(T.len, p0 + 1024) - p0 : 0, nb = real ? (L + 17 + 127) / 128 : 0;
+    const int nf = real ? max(0, min(L, k - p0)) / 128 : 0;
+    uint4* dst = reinterpret_cast<uint4*>(slot + r * k + p0);
     const int nq = __reduce_max_sync(0xffffffffu, (unsigned)nb);
     u64 hs[8];
 #pragma unroll
     for (int i = 0; i < 8; ++i) hs[i] = real ? P[A_SS + SNAP * j + i] : 0;
-    const auto fast = [&](int q) { return q < nb && 128 * q + 128 <= L && p0 + 128 * q + 128 <= k; };
+    const auto fast = [&](int q) { return q < nf; };
     uint4 nx[8];
     if (fast(0)) {
       const uint4* g = reinterpret_cast<const uint4*>(row + p0);
@@ -939,6 +944,9 @@ extern "C" __global__ void __launch_bounds__(128) h1c_a_call2_k(const H1Tab* __r
           w[2 * i] = (u64)bswap32(nx[i].x) << 32 | bswap32(nx[i].y);
           w[2 * i + 1] = (u64)bswap32(nx[i].z) << 32 | bswap32(nx[i].w);
         }
+        if (!nw)
+#pragma unroll
+          for (int i = 0; i < 8; ++i) dst[8 * q + i] = nx[i];
       } else if (q < nb) {
         a_seg_words(w, row, tl, k, p0, L, nb, q);
       } else {
@@ -961,7 +969,18 @@ extern "C" __global__ void __launch_bounds__(128) h1c_a_call2_k(const H1Tab* __r
     if (real)
 #pragma unroll
       for (int i = 0; i < 8; ++i) dg[rb][j][i] = hs[i];
+    if (!nw) {
+      const int body = max(0, min(1024, k - p0)) / 16;  // the segment's body bytes, in uint4s
+      if (alive) {
+        const uint4* g = reinterpret_cast<const uint4*>(row + p0);
+        for (int i = 8 * nf; i < body; ++i) dst[i] = g[i];
+      } else {
+        for (int i = 0; i < body; ++i) dst[i] = make_uint4(0, 0, 0, 0);
+      }
+      if (j == 0) scale[r] = alive ? sa[r] : 0.0f;
+    }
   }
+  ap_stamp(32 + 8 * blockIdx.x + 1);
   __syncwarp();
   if (__any_sync(0xffffffffu, alive)) {
     Hb s;
@@ -969,16 +988,20 @@ extern "C" __global__ void __launch_bounds__(128) h1c_a_call2_k(const H1Tab* __r
     hb_load(s, P + A_QS, b);
     hb_words<1>(s, &dg[rb][0][0], 8 * ns);
     hb_final<1>(s, x);
+    ap_stamp(32 + 8 * blockIdx.x + 2);
     a_leaf<1>(s, b, P, r, x, out);
     if (alive && j == 0)
 #pragma unroll
       for (int i = 0; i < 8; ++i) T.level[8 * r + i] = out[i];
   }
+  ap_stamp(32 + 8 * blockIdx.x + 3);
   __threadfence();
   ap_sync(AP_CONSUMERS, 64);
   if (tid == 0) last = atomicAdd(reinterpret_cast<unsigned*>(P + A_CNT), 1u) == gridDim.x - 1;
   ap_sync(AP_CONSUMERS, 64);
+  ap_stamp(32 + 8 * blockIdx.x + 4);
   if (last) {
+    if (tid == 0 && ap_stamps) ap_stamps[0] = blockIdx.x;
     __threadfence();
     const long long width = 1LL << T.depth;
     long long off = 0;
@@ -992,6 +1015,7 @@ extern "C" __global__ void __launch_bounds__(128) h1c_a_call2_k(const H1Tab* __r
       off += width >> lv;
       __threadfence_block();
       ap_sync(AP_CONSUMERS, 64);
+      ap_stamp(1 + lv);
     }
     if (tid == 0) *reinterpret_cast<unsigned*>(P + A_CNT) = 0;
   }
@@ -1032,6 +1056,8 @@ extern "C" int h1c_a_form(int f) {
   a_form = f;
   return 0;
 }
+// h1c_a_call2_k's phase stamps into p (32 + 8 T / AP_ROWS words), or none (null)
+extern "C" int h1c_a_stamps(u64* p) { return (int)cudaMemcpyToSymbol(ap_stamps, &p, sizeof(p)); }
 
 // one call's A table (tab: its host copy, tab_dev the device's; pre: its words); xq [M >= m, k] s8 and sa [M] f32 the
 // call's operands, slot [T, k] and scale [T] the table's rows
