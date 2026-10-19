@@ -2947,10 +2947,10 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p = cmd("deliver", "ring the doorbells for a post no client delivered (a person's typed post); --channel ask-the-team: "
                        "a post there, whose doorbells name the channel")
     p.add_argument("--ts", default=None, help="the post's ts (default: the event's)")
-    p.add_argument("--thread", default=None, metavar="TS", help="its thread's root ts, when it is a reply")
     p.add_argument("--event", default=None, metavar="JSON|@PATH|-",
                    help="the Slack message event, as a watcher gets it: the post's channel, ts and thread, and its text where "
                         "the bot can't read the channel")
+    p.add_argument("--thread", default=None, metavar="TS", help="its thread's root ts, when it is a reply")
     p = cmd("verify-author", "exit 0 only when the post's author is in the registry")
     p.add_argument("--event", required=True, help="the message event as JSON, @PATH or - (stdin)")
     p.add_argument("--why", action="store_true", help="print the verdict on stderr")
