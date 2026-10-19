@@ -445,7 +445,8 @@ class InPlaceBackend(StoreBackend):
         passes over the whole store chained as a session's (the first ``calibration_warm`` untimed): each root's
         interval from the one before (the allowance's pass) and each root's gap to its send, at the percentiles the
         verifier's allowance reads (`device.percentiles`).  An engine step in lockstep, the appends' round trips and
-        their encodes are not in it: the session's record times them (`phases_ms`)."""
+        their encodes are not in it (a paced pass's step is: `with_step`); the session's record times them
+        (`phases_ms`)."""
         torch, N = self.torch, self.blocks
         addrs, _ = self.ip.map(rb.Plan.whole(N))
         xr = torch.zeros(1, dtype=torch.int64, device=self.cuda)
@@ -464,14 +465,14 @@ class InPlaceBackend(StoreBackend):
         intervals, gaps = sorted(b - a for a, b in zip(at, at[1:])), sorted(gaps[1:])
         pct = self.dev.percentiles
         bps = N * BLOCK / (read_ms / 1e3)
-        return {"pass_ns_max": intervals[-1], "pass_ns_median": intervals[len(intervals) // 2],
+        return self.with_step({"pass_ns_max": intervals[-1], "pass_ns_median": intervals[len(intervals) // 2],
                 "pass_ns": pct(intervals), "gap_ns_max": gaps[-1], "gap_ns_median": gaps[len(gaps) // 2],
                 "gap_ns": pct(gaps), "passes": len(intervals), "warm_passes": self.calibration_warm,
                 "read_ms": read_ms, "read_bytes_per_s": bps,
                 "read_tiers": {"hbm": {"bytes": N * BLOCK, "ms": read_ms, "bytes_per_s": bps}},
                 "tau": intervals[len(intervals) // 2] / 1e6 / read_ms,
                 "max_over_median": intervals[-1] / intervals[len(intervals) // 2],
-                "in_place": True, "device": torch.cuda.get_device_name(self.cuda)}
+                "in_place": True, "device": torch.cuda.get_device_name(self.cuda)})
 
     # --- passes and openings ----------------------------------------------------------------------------------------
 

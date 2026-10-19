@@ -263,6 +263,7 @@ class StoreBackend:
         self.trace: Serving | None = None
         self.previous: bytes | None = None
         self.phases = Phases()
+        self.step_ns = 0
 
     def layout(self) -> list[dict]:
         """The hello's public layout: each registered region's kind, tier and blocks, in store order."""
@@ -310,7 +311,20 @@ class StoreBackend:
         return rcodec.digest(self.store.payload(slot)) == digest
 
     def calibrate(self) -> dict:
-        return {"pass_ns_max": 0, "gap_ns_max": 0, "read_bytes_per_s": self.read_bytes_per_s}
+        return self.with_step({"pass_ns_max": 0, "gap_ns_max": 0, "read_bytes_per_s": self.read_bytes_per_s})
+
+    def with_step(self, cal: dict) -> dict:
+        """``cal`` with the engine step a paced pass waits on (``step_ns``) added to each of its pass times, so the
+        verifier's allowance covers the step and the read: a paced pass's step runs inside its coin's window."""
+        if not self.step_ns:
+            return cal
+        out = {**cal, "step_ns": self.step_ns}
+        for k in ("pass_ns_max", "pass_ns_median"):
+            if k in cal:
+                out[k] = cal[k] + self.step_ns
+        if "pass_ns" in cal:
+            out["pass_ns"] = {q: v + self.step_ns for q, v in cal["pass_ns"].items()}
+        return out
 
     def arm(self, dropped) -> None:
         self.dropped = {int(j) for j in dropped}
@@ -605,19 +619,24 @@ class CommitSession:
                  steps from its first, and its KV payloads the run's K and V; the steps after the session unaudited
     end          after the run: the session done (failed if it still asked for a step), its record
                  ``remote_session.json`` with the map's agreement with the store (`agreement`), taken before the run
-                 went on, and the map stopped there (`store.memory_map.end`)
+                 went on, each pass's ``[window, pass, step]`` as the verifier's record has its steps
+                 (``pass_steps``, each a step of the map), and the map stopped there (`store.memory_map.end`)
     ~~~
 
     A store serves one session, so ``plan`` is one mode (``serve``, or ``servedrop:K``, the negative that withholds the
     first K blocks appended) and the session audits one run: with more than one pair, the later instrumented runs are
-    committed and unaudited.  The control arm is never audited."""
+    committed and unaudited.  The control arm is never audited.  A verifier that paces the session (``--pace 1``: a
+    live coin a pass) has each pass's engine step run inside its coin's window, so ``step_ms``, the step's time, goes
+    into the calibration's pass times (`StoreBackend.with_step`) and the allowance covers it."""
 
     def __init__(self, verifier: str, *, plan: str = "serve", kv_pages: int | None = 32,
                  weight_blocks: int | None = None, kv_lib: str | None = None,
                  backend_of: Callable[[CommitSession, Path | None], StoreBackend] | None = None,
                  out: str | Path | None = None, node: str | None = None, codec: rcodec.Codec = rcodec.DEFAULT,
-                 log: Callable[[str], None] = print) -> None:
+                 step_ms: float = 0.0, log: Callable[[str], None] = print) -> None:
         address(verifier)
+        if not step_ms >= 0:
+            raise ValueError("the engine step a paced pass waits on is a nonnegative time")
         node = f"verity-vllm/{socket.gethostname()}" if node is None else node
         if not 1 <= len(node.encode()) <= audit.NODE_BYTES:
             raise ValueError(f"the session's node id {node!r} is not 1 to {audit.NODE_BYTES} bytes")
@@ -632,7 +651,7 @@ class CommitSession:
             raise ValueError("a host mirror copies every block of the store: give it a KV pool of kv_pages pages, or "
                              "read the store in place (backend_of)")
         self.verifier, self.plan, self.kv_pages, self.weight_blocks = verifier, plan, kv_pages, weight_blocks
-        self.kv_lib, self.backend_of = kv_lib, backend_of
+        self.kv_lib, self.backend_of, self.step_ms = kv_lib, backend_of, step_ms
         self.out, self.node, self.codec, self.log = None if out is None else Path(out), node, codec, log
         self.store, self.binder = Store(), None
         self.lockstep: Lockstep | None = None
@@ -697,6 +716,7 @@ class CommitSession:
         else:
             device = None if self.kv_lib is None else KvDevice(self.kv_lib, self.codec)
             self.backend = StoreBackend(self.store, self.lockstep, path=path, device=device)
+        self.backend.step_ns = round(self.step_ms * 1e6)
         self._thread = threading.Thread(target=self._session, name="remote-session", daemon=True)
         self._thread.start()
         self.lockstep.begun()
@@ -713,17 +733,21 @@ class CommitSession:
         try:
             getattr(backend, "close", lambda: None)()
             trace = backend.trace
+            steps = result.get("pass_steps") or []
             self.record = {
                 "schema": "verity-vllm/remote-session/v0", "verifier": self.verifier, "plan": self.plan,
                 "accepted": error is None and bool(result.get("accepted")), "error": error, "prover": result,
                 "store": self.binder.stats() if self.binder is not None else None, "layout": backend.layout(),
-                "kv_pages": self.kv_pages, "weight_blocks": self.weight_blocks,
+                "kv_pages": self.kv_pages, "weight_blocks": self.weight_blocks, "step_ms": self.step_ms,
                 "encode": ("kv.cu in place" if self.backend_of else "kv.cu") if backend.device is not None else "cpu",
                 "gates": backend.gates, "device": getattr(backend, "session_stats", dict)(),
                 "memory_map": None if trace is None else {
                     "path": None if backend.path is None else str(backend.path),
                     "registration": backend.registration.digest.hex(), "first_step": trace.first, "steps": trace.steps,
-                    "rekeyed": trace.rekeyed, "deferral": trace.deferral(), **agree}}
+                    "rekeyed": trace.rekeyed, "deferral": trace.deferral(), "pass_steps": steps,
+                    "pass_steps_mapped": trace.first is not None and all(
+                        trace.first <= x <= trace.step for *_, x in steps),
+                    **agree}}
             store_map.end(self.store)
         finally:
             self.lockstep.close()

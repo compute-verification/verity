@@ -348,14 +348,15 @@ class Stats:
 
 
 def lockstep(tmp_path, monkeypatch, run_steps: int, windows: int = 2, setup: Callable[[], None] | None = None,
-             each: Callable[[int], None] | None = None):
-    """The Commit's session (`CommitSession.begin` … `end`) over a CPU store, its verifier on a thread at L = 2 windows,
-    the run ``run_steps`` steps of the scripted engine, each through the session's `Lockstep` and after ``each(k)``,
-    after ``setup()``, the run's work between `begin` and its first step."""
+             each: Callable[[int], None] | None = None, pace: audit.Pace | None = None, step_ms: float = 0.0):
+    """The Commit's session (`CommitSession.begin` … `end`) over a CPU store, its verifier on a thread at L = 2
+    windows (paced at ``pace``), the run ``run_steps`` steps of the scripted engine, each through the session's `Lockstep` and
+    after ``each(k)``, after ``setup()``, the run's work between `begin` and its first step."""
     clock = PassClock()
     monkeypatch.setattr(remote, "StoreBackend", lambda *a, **kw: TickingBackend(clock, *a, **kw))
     lsock = wire.listen("127.0.0.1", 0)
-    cs = remote.CommitSession(f"127.0.0.1:{lsock.getsockname()[1]}", out=tmp_path, codec=P512, log=lambda m: None)
+    cs = remote.CommitSession(f"127.0.0.1:{lsock.getsockname()[1]}", out=tmp_path, codec=P512, log=lambda m: None,
+                              step_ms=step_ms)
     cs.store, cs.binder = store(), Stats()
     seen: list = []
 
@@ -363,7 +364,8 @@ def lockstep(tmp_path, monkeypatch, run_steps: int, windows: int = 2, setup: Cal
         sock, _ = lsock.accept()
         lsock.close()
         v = verifier.Verifier(wire.Conn(sock, clock=clock.now), source=os.urandom(32), windows=windows, window_ns=5,
-                              samples=4096, delta=2.0 ** -40, jitter_ns=10 ** 9, clock=clock, log=lambda m: None, lifetime=2)
+                              samples=4096, delta=2.0 ** -40, jitter_ns=10 ** 9, clock=clock, log=lambda m: None,
+                              lifetime=2, pace=pace)
         v.register()
         try:
             seen.append(v.session(0, v.allowance(v.ping(4)), None))
@@ -421,6 +423,24 @@ def test_the_commits_session_arms_its_first_window_once_its_runs_first_step_has_
     assert "root" in at[1] and sent.index("armed") < sent.index("coin") < sent.index("append") < sent.index("root")
     steps = [x for w in r["record"]["profile"]["windows"] for x in w["steps"]]
     assert steps[0] == rec["memory_map"]["first_step"] == 0
+
+
+def test_a_paced_commits_session_runs_a_step_a_coin_and_tags_each_pass_with_its_step(tmp_path, monkeypatch):
+    """At ``--pace 1`` each window is one pass under a coin of its own, its engine step inside it (no pass moves into
+    the next window); the session's record tags each pass with the step the verifier's record has for it, a step of
+    the map; the calibration's pass times carry ``step_ms``, so the allowance covers the step.  The served KV writes
+    release registered blocks, so the time-held line, which needs every pass to read every registered block, is
+    refused, and the snapshot line is declared."""
+    rec, r, cs, _ = lockstep(tmp_path, monkeypatch, 40, windows=2, pace=audit.Pace(1, 3), step_ms=2.5)
+    assert r["accepted"] and rec["accepted"] and r["record"]["public"]["pace"] == {"groups": 3, "k": 1}
+    wins = r["record"]["profile"]["windows"]
+    assert len(wins) == 7 and all(len(w["steps"]) == 1 for w in wins) and rec["prover"]["discarded"] == 0
+    mm = rec["memory_map"]
+    assert mm["pass_steps"] == [[w["window"], 0, w["steps"][0]] for w in wins] and mm["pass_steps_mapped"]
+    assert rec["step_ms"] == 2.5 and cs.backend.calibrate()["step_ns"] == 2_500_000
+    memory = r["ledger"]["declared"]["memory"]
+    assert 0 <= memory["snapshot"]["epsilon"] <= 1
+    assert "every pass to read every registered block" in memory["time-held"]["refused"]
 
 
 def test_a_run_that_ends_before_its_session_fails_the_session(tmp_path, monkeypatch):
