@@ -1,5 +1,6 @@
 import Proofs.Flock.Claims.ZK.OneTape
 import Proofs.Flock.Claims.Complete.ZkTables.Round0
+import Proofs.Flock.Claims.Complete.ZkTables.Scope
 
 /-!
 # Round `0` of the masked session: the level-0 columns by tree position
@@ -24,6 +25,12 @@ position `p` commits `row0 (col0At w b p)`. Here, at every coin vector of a `--z
 * `Claims.ZKMal.Masked.enc0_causal`: round `0` reads no coin. A cut's leaf at tree position `q` is the leaf at `q`
   whatever the coins' tree (`leafAt_cutAt`), and a level-0 leaf's digest is the same at every coin vector
   (`digOf_inl`, from `coinedOf_col0At` and `coinedOf_lanes`).
+* `Claims.ZKMal.Masked.honest_round0`: **round `0`'s honest message is `enc0`'s** at a live statement, at every coin
+  vector, where `hOf H` is SHA-512 and the layout agrees with the executable's tape at round `0` (`Agrees0`: the lanes'
+  paddings, the extra lanes and their paddings at `2^lanes + e`, level 0's salts). Each table's cap is `layerOf` of the
+  same leaves (`exeOf_inl`: the model's level-0 leaf is `hm96Sha512.leaf` of `encodeRowsZk`'s row, its lanes the
+  executable's packed table, `lanes_tabC`), at each table's `ZkTab` schedule (`schedsPZk_live`). Where the statement sets
+  up no session, both are empty.
 -/
 
 namespace FlockSoundness.Discharge.Composed
@@ -534,5 +541,130 @@ theorem lanes_tabC (P : Composed.LigProver) (L : TapeLayout P)
     simp [FlockDeploy.tabsOf, _root_.Flock.Setup.ofCircuit]
     rfl
   rw [e, Nat.add_comm, Nat.mul_comm]
+
+/-- **Table `j`'s level-0 leaf at tree position `p` is the masked prover's**: at a layout agreeing at round `0`, the
+executable's leaf of the cut's view (`exeOf`) is `hm96-sha512/v1`'s leaf of `encodeRowsZk`'s row `p` under the tape's
+level-0 salt `p`, at every coin vector. -/
+theorem exeOf_inl (P : Composed.LigProver) (L : TapeLayout P)
+    (z : (Fin Claims.Flock.zkTableCap → L.Cell) → FlockComplete.TapeZk) (hA : Agrees0 P L z) {x : Msg}
+    (w : Claims.Flock.Wit) (t : Fin Claims.Flock.zkTableCap → L.Cell) (cz : ∀ j, Composed.CoinsZK (tabC P x j).Rest)
+    (j : Fin (jOf x)) (p : Fin ((tabC P x j).z.nS + (tabC P x j).z.nU)) :
+    exeOf (tabC P x) cz (wtOf P x w) ((TapePlan.ofLayout L z).tape x t).1 ((TapePlan.ofLayout L z).tape x t).2.1
+        ⟨j, .inl p⟩ =
+      _root_.Flock.MerkleScheme.hm96Sha512.leaf
+        (FlockComplete.encodeRowsZk (lv0 x j) (zkTab x j).tPad
+          ((FlockComplete.tablesP (FlockDeploy.tabsOf (stsOf x)) (FlockComplete.ZkTables.traces (stsOf x)
+            (FlockComplete.ZkTables.maskWOf x w ((TapePlan.ofLayout L z).tapeZk t).mask)))[j.val]!)
+          ((z t).extra j.val) ((z t).lanePad j.val))[p.val]!
+        (FlockComplete.fitBytes 192 ((z t).toTape.salt j.val 0 0 p.val)) := by
+  obtain ⟨hnL, hL, htp, ht, hd, -⟩ := tabC_z P x j
+  show _root_.Flock.MerkleScheme.hm96Sha512.leaf (ZkView.row0 (((tabC P x j).T (cz j)).col0At (wtOf P x w j)
+      (((TapePlan.ofLayout L z).tape x t).1 j) p)) (ZkView.saltBytes (((TapePlan.ofLayout L z).tape x t).2.1 ⟨j, .inl p⟩)) = _
+  rw [col0At_tabC, hA.salt x t j p]
+  congr 1
+  refine FlockComplete.row0_eq_encodeRowsZk (lv0 x j) _ _ _ _ (by rw [← hd]; exact p.isLt) hnL hL htp ht _
+    (fun l => ?_) (fun r i => ?_)
+  · show ∑ c, ((tabC P x j).T (cz j)).lanes (wtOf P x w j) (((TapePlan.ofLayout L z).tape x t).1 j).1 l c *
+        Composed.eAt (lv0 x j).cols p.val c +
+      ∑ k, (((TapePlan.ofLayout L z).tape x t).1 j).2.1.1 l k * Composed.gAt (lv0 x j).cols p.val k = _
+    simp only [lanes_tabC]
+    exact congrArg (_ + ·) (Finset.sum_congr rfl fun k _ => congrArg (· * _) (hA.pad x t j l k))
+  · show ∑ c, (((TapePlan.ofLayout L z).tape x t).1 j).2.1.2.1 r i c * Composed.eAt (lv0 x j).cols p.val c +
+      ∑ k, (((TapePlan.ofLayout L z).tape x t).1 j).2.1.2.2 r i k * Composed.gAt (lv0 x j).cols p.val k = _
+    exact congrArg₂ (· + ·) (Finset.sum_congr rfl fun c _ => congrArg (· * _) (hA.ext x t j r i c))
+      (Finset.sum_congr rfl fun k _ => congrArg (· * _) (hA.extPad x t j r i k))
+
+/-- **Every `--zk` table's schedule at a live statement**: `schedsPZk` returns, table `j`'s the `ZkTab`'s. -/
+theorem schedsPZk_live {x : Msg} (hx : Live x) :
+    ∃ schs, (FlockComplete.schedsPZk (FlockDeploy.tabsOf (stsOf x)) : _root_.Flock.V _) = .ok schs ∧
+      ∀ j : Fin (jOf x), schs[j.val]! = ((zkTab x j).sch, (zkTab x j).tPad) := by
+  let g : _root_.Flock.Setup → _root_.Flock.Schedule × ℕ := fun st =>
+    match _root_.Flock.Zk.schedule st.m with
+    | .ok v => v
+    | .error _ => default
+  have hsch : ∀ i (hi : i < (stsOf x).size),
+      _root_.Flock.Zk.schedule (stsOf x)[i].m = Except.ok (g (_root_.Flock.Setup.ofCircuit (stsOf x)[i])) := by
+    intro i hi
+    obtain ⟨y⟩ := hx.2 i hi
+    show _ = Except.ok (match _root_.Flock.Zk.schedule (stsOf x)[i].m with
+      | .ok v => v
+      | .error _ => default)
+    rw [y.hz]
+  refine ⟨(FlockDeploy.tabsOf (stsOf x)).map g, ?_, fun j => ?_⟩
+  · unfold FlockComplete.schedsPZk
+    refine FlockComplete.mapM_ok_mem g _ fun st hst => ?_
+    obtain ⟨i, hi, rfl⟩ := Array.mem_iff_getElem.1 hst
+    have hi' : i < (stsOf x).size := by simpa [FlockDeploy.tabsOf] using hi
+    simp only [FlockDeploy.tabsOf, Array.getElem_map]
+    exact hsch i hi'
+  · have hj := lt_of_jOf j
+    rw [getElem!_pos ((FlockDeploy.tabsOf (stsOf x)).map g) j.val (by simpa [FlockDeploy.tabsOf] using hj)]
+    simp only [FlockDeploy.tabsOf, Array.getElem_map]
+    show (match _root_.Flock.Zk.schedule (stAt x j).m with
+      | .ok v => v
+      | .error _ => default) = _
+    rw [(zkTab x j).hz]
+
+open Classical in
+/-- **Round `0`'s honest message is `enc0`'s** (`HonestPreOn` before any opening), at a layout agreeing with the
+executable at round `0` and where `hOf H` is SHA-512: at a live statement, `honestPR`'s first message, the link message
+of the tables' level-0 caps (`FlockComplete.honestPR_first`, `FlockComplete.commitsPZk_caps`), is round `0`'s encoding
+of the cut view at the tape, at every coin vector. -/
+theorem honest_round0 (H : Msg → Msg) (hH : Claims.hOf H = _root_.Flock.Sha512.hash) (P : Composed.LigProver)
+    (L : TapeLayout P) (z : (Fin Claims.Flock.zkTableCap → L.Cell) → FlockComplete.TapeZk) (hA : Agrees0 P L z)
+    {x : Msg} (hx : Live x) (w : Claims.Flock.Wit) (t : Fin Claims.Flock.zkTableCap → L.Cell)
+    (cz : ∀ j, Composed.CoinsZK (tabC P x j).Rest) :
+    enc0 P x cz (cutAt (tabC P x) cz (wtOf P x w) ((TapePlan.ofLayout L z).tape x t).1
+        (exeOf (tabC P x) cz (wtOf P x w) ((TapePlan.ofLayout L z).tape x t).1
+          ((TapePlan.ofLayout L z).tape x t).2.1)) =
+      (((FlockComplete.ZkTables.honestPR w).next x [] ((TapePlan.ofLayout L z).tapeZk t)).eval H).1 := by
+  cases hs0 : FlockDeploy.setupOf true x with
+  | none =>
+    rw [FlockComplete.ZkTables.honestPR_next (by simp [FlockComplete.ZkTables.outerHit])]
+    change _ = ((FlockComplete.feed (FlockComplete.ZkTables.prog x (FlockComplete.ZkTables.maskWOf x w
+      ((TapePlan.ofLayout L z).tapeZk t).mask) ((TapePlan.ofLayout L z).tapeZk t)) []).eval H).1
+    unfold enc0
+    simp only [hs0, Option.isNone_none, ↓reduceIte, FlockComplete.ZkTables.prog]
+    rfl
+  | some v =>
+    obtain ⟨s, spec, sts⟩ := v
+    have hsts : stsOf x = sts := by unfold stsOf; rw [hs0]
+    subst hsts
+    obtain ⟨-, -, -, hall⟩ := FlockComplete.ZkTables.tables_of_setup hx.1 hs0
+    have hJ : jOf x = (stsOf x).size := by unfold jOf; exact ite_eq_left_of_eq_true _ _ (eq_true hx)
+    obtain ⟨schs, hs, hschs⟩ := schedsPZk_live hx
+    have hms : ∀ i < (FlockDeploy.tabsOf (stsOf x)).size,
+        (FlockDeploy.tabsOf (stsOf x))[i]!.merkle = _root_.Flock.MerkleScheme.hm96Sha512 := by
+      intro i hi
+      have hi' : i < (stsOf x).size := by simpa [FlockDeploy.tabsOf] using hi
+      rw [getElem!_pos (FlockDeploy.tabsOf (stsOf x)) i hi]
+      simp only [FlockDeploy.tabsOf, Array.getElem_map]
+      exact (hall i hi').2.2
+    obtain ⟨cms, hcm, hsize, hcaps⟩ := FlockComplete.commitsPZk_caps (FlockDeploy.tabsOf (stsOf x)) schs
+      (FlockComplete.tablesP (FlockDeploy.tabsOf (stsOf x)) (FlockComplete.ZkTables.traces (stsOf x)
+        (FlockComplete.ZkTables.maskWOf x w ((TapePlan.ofLayout L z).tapeZk t).mask)))
+      ((TapePlan.ofLayout L z).tapeZk t) hms
+    have hc : (FlockComplete.commitsPZk (_root_.Flock.Hashes.ofSha512 (Claims.hOf H)) (FlockDeploy.tabsOf (stsOf x))
+        schs (FlockComplete.tablesP (FlockDeploy.tabsOf (stsOf x)) (FlockComplete.ZkTables.traces (stsOf x)
+          (FlockComplete.ZkTables.maskWOf x w ((TapePlan.ofLayout L z).tapeZk t).mask)))
+        ((TapePlan.ofLayout L z).tapeZk t) : _root_.Flock.V _) = .ok cms := by
+      rw [hH]
+      exact hcm
+    rw [FlockComplete.honestPR_first H w x _ hs0 hs hc]
+    have hts : (FlockDeploy.tabsOf (stsOf x)).size = jOf x := by rw [hJ]; simp [FlockDeploy.tabsOf]
+    unfold enc0
+    simp only [hs0, Option.isNone_some, Bool.false_eq_true, ↓reduceIte]
+    refine congrArg (0 :: ·) (congrArg₂ FlockDeploy.linkBody ?_ ?_)
+    · refine List.ext_getElem (by simp [hsize, hts]) fun n h1 h2 => ?_
+      have hn : n < jOf x := by simpa using h1
+      have hn' : n < cms.size := by rw [hsize, hts]; exact hn
+      simp only [List.getElem_ofFn, Array.toList_map, List.getElem_map, Array.getElem_toList]
+      rw [← getElem!_pos cms n hn', hcaps n (by rw [hts]; exact hn), hschs ⟨n, hn⟩]
+      refine congrArg FlockComplete.flat (FlockComplete.layerOf_congr _ _ (fun q hq => ?_) _)
+      obtain ⟨-, -, -, -, hd, -⟩ := tabC_z P x ⟨n, hn⟩
+      have hq' : q < (tabC P x ⟨n, hn⟩).z.nS + (tabC P x ⟨n, hn⟩).z.nU := by rw [hd]; exact hq
+      rw [leafAt_cutAt P x cz _ _ _ ⟨n, hn⟩ hq', exeOf_inl P L z hA w t cz ⟨n, hn⟩ ⟨q, hq'⟩]
+      rfl
+    · simp [hts]
 
 end Claims.ZKMal.Masked
