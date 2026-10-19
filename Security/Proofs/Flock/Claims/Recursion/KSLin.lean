@@ -28,7 +28,6 @@ section Coupling
 
 variable {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-omit [Nonempty Coin] in
 /-- **`B_I` as its own finder is `B_I`.** -/
 theorem PrBinner_eq (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (decO : List (ℕ × Col) → List T) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (x : Msg) :

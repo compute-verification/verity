@@ -73,7 +73,6 @@ theorem binner_expectedCR_noCalls (H : Msg → Msg) (D : Recursion.Deploy Coin) 
   rw [binner_pr_noCalls H D hc I DO decO P x hk]
   exact div_nonneg (Ex_nonneg fun _ => Nat.cast_nonneg _) (by positivity)
 
-omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 /-- `Fdev`'s tail at `M = ⌈2β⌉` is below `1/2`. -/
 theorem tail_lt_half (β : ℝ) : β * (1 / (((⌈2 * β⌉₊ : ℕ) : ℝ) + 1)) < 1 / 2 := by
   have hM : 2 * β ≤ ((⌈2 * β⌉₊ : ℕ) : ℝ) := Nat.le_ceil _
@@ -137,7 +136,8 @@ theorem KSBoundLin_fails (H : Msg → Msg) : ¬ KSBoundLin H (ksRAt Coin) (ksB C
   have h' : Recursion.KSLin H (ksRV Coin (ksB Coin).IVStar) (Inner.ofFlock (ksB Coin).deploy fun _ => [()])
       (Flock.ksD Coin) :=
     h (fun _ => [()]) (Flock.listWithin_unit _ _ _)
-  refine not_KSLin (fun _ => [()]) (Flock.listWithin_unit _ _ _) [] (ksRV_prBad H _ _ _ [] (ksRV_noR _ _ []))
+  refine not_KSLin (D := ksRV Coin (ksB Coin).IVStar) (I := Inner.ofFlock (ksB Coin).deploy fun _ => [()])
+    (fun _ => [()]) (Flock.listWithin_unit _ _ _) [] (ksRV_prBad H _ _ _ [] (ksRV_noR _ _ []))
     (ksRV_prB H _ []) (fun _ _ => rfl) ?_ h'
   rw [ksRV_κ]
   exact Flock.ksD_κ (Coin := Coin) []
