@@ -28,6 +28,12 @@ terms off in the epilogue). E4M3's integers to 120 and E2M1x2 at integer block s
 int8, so on int8 units g1 is its device's Dither-2S design: on B200 and H200 the record itself, on sm_120 Dither-2S
 with fx1's keyed IMAD a word (`fpx-g1s-fx1`).
 
+FP-NATIVE's FP8-A1 (`fpx-a1-*`: weights the level below plus a coin at its gap, activations the nearest level plus
+its gap times b + b' - 1, note:20261019T0525Z-draft-fp-native) is 2SP with its twin and served GEMM one: each k32
+word restarts from +0 and is exact in FP32 (32 * 448^2 < 2^23), so it pays 2SP's extraction a word and no second GEMM.
+Its operands don't fit s8, its floor reads Lemma R2 (a paper proof), and no red team has looked for a cheaper route to
+its words, so its ε is printed at its own floor. H200 can't run it (the 14-bit window).
+
 An FP4 word at L = 64 (one kind::mxf4nvf4 k64 firing) costs what an FP8 word at L = 32 costs at B200 rates and
 carries twice the MACs, so its ε and its γ against a plain FP4 GEMM are the FP8 row's; on int8 units an FP4 design's
 γ against plain FP4 is twice its row's (int8 runs at half FP4's rate). The skip term is the base's, at the base's ♭: a
@@ -57,6 +63,11 @@ VARIANTS = [
          fold_add={"ALU": 1.0, "IMAD": 1.0}, noise=TWO_SIDED,
          title="FP8 peel (2SP) on e4m3i to 352: the twin dithered on the grid's gaps, in FP8",
          summary="served RN e4m3i352; the twin's word one add, the served sum one add a word"),
+    dict(device="sm_120", name="fpx-a1-e4m3i-fp", base="dither-c-peel-fx1", plain=0.0,
+         fold_add={"ALU": 1.0, "IMAD": 1.0}, noise=TWO_SIDED,
+         title="FP-NATIVE's FP8-A1 on e4m3i: one dithered FP8 GEMM, served and credited",
+         summary="each k32 word from +0, converted (one instruction), the served sum one add a word: 2SP's extraction, "
+                 "with no second GEMM"),
     dict(device="sm_120", name="fpx-g1s-fx1", base="dither-2s", plain=0.0, fold_add={"IMAD": 1.0},
          title="g1 on int8 units (RTX PRO 6000): Dither-2S on R + b with fx1's keyed IMAD a word",
          summary="E4M3 integers to 120 (FP8) or E2M1x2 at integer block scales to 10 (FP4), nearest levels moved by a "
@@ -104,6 +115,11 @@ VARIANTS = [
          fold_add={"ALU": 1.5, "IMAD": 1.5}, noise=TWO_SIDED,
          title="FP8 peel (2SP) on e4m3i to 352: the twin dithered on the grid's gaps, in FP8",
          summary="served RN e4m3i352; the twin's word one add, the served sum an add and a rebase a word"),
+    dict(device="sm_100", name="fpx-a1-e4m3i-fp", base="dither-2s-licpw-redux-heavy-l32", plain=0.0,
+         fold_add={"ALU": 1.5, "IMAD": 1.5}, noise=TWO_SIDED,
+         title="FP-NATIVE's FP8-A1 on e4m3i: one dithered FP8 GEMM, served and credited",
+         summary="each k32 word from +0, 2SP's extraction a word on B200 (the word one add, the served sum an add and a "
+                 "rebase a word), with no second GEMM"),
 ]
 
 
