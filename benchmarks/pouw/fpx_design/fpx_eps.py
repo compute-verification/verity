@@ -1,4 +1,4 @@
-"""FPX-DESIGN's candidate FP designs on the machine model: each a device's int8 record design with what an FP route adds.
+"""FPX-DESIGN's candidate FP designs on the machine model: each a device's int8 record with what an FP route adds.
 
     uv run --project benchmarks/pouw/machine_model python benchmarks/pouw/fpx_design/fpx_eps.py OUT
 
@@ -6,15 +6,18 @@ For each device it copies the machine model's data directory to OUT/data/<device
 files on their int8 bases (`base`, so the skip, luck, clock and baseline are the base's), and writes OUT/<device>.txt:
 `machine-model eps --table` at the floor credit with operands at the floor and free, on each vector. An FP route adds:
 
-- `plain`: MMAs a useful MMA beside the folded one, unfolded, so they enter γ only: C1's extra limb products
-  (k4 and k4t: 3; k3h: 2; k9: 3.5 FP8-slot equivalents), or the peel designs' served GEMM (1).
-- the extraction (`fold_add`): lane instructions a word that turn an FP32 word into the receipt's integer (k4s and
-  k4t one IADD3 or IMAD; k3h three FFMA and an IADD3, priced on IMAD and ALU, the classes these vectors have).
+- `plain`: MMAs (FP8-slot equivalents) beside the folded one, unfolded, so they enter γ only: the served GEMM (1), the
+  FP16 twin's second slot (1), C1's extra limb products (k4 and k4t: 3; k3h: 2; k9: 3.5).
+- the extraction (`fold_add`): lane instructions a word that turn FP32 accumulators into integers. The folded word's
+  (one add, from a running sum or a reset at a magic base) and the served GEMM's exact sum, read every RB words, RB the
+  words the binade at 1.5 * 2^23 holds: e4m3i120 (k32 words <= 2^18.8) RB 9, e4m3i352 (<= 2^21.9) RB 1, so its served
+  sum costs an add a word and a rebase. On int8 units (g1-i8: E4M3's integers to 120, E2M1x2 at integer block scales to
+  10, each moved by one, stay in int8) both GEMMs accumulate exactly in s32 and nothing is added.
 
-An FP4 peel word at L = 64 (one kind::mxf4nvf4 k64 firing) costs what an FP8 word at L = 32 costs at B200 rates and
-carries twice the MACs, so its ε and its γ against a plain FP4 GEMM are the FP8 row's; B300's 3x FP4 rate scales that
-γ by 1.5 while the fold binds. The skip term is the base's, at the base's ♭: a larger fold raises ♭, so this
-overstates ε_skip.
+An FP4 word at L = 64 (one kind::mxf4nvf4 k64 firing) costs what an FP8 word at L = 32 costs at B200 rates and
+carries twice the MACs, so its ε and its γ against a plain FP4 GEMM are the FP8 row's; on int8 units an FP4 design's
+γ against plain FP4 is twice its row's (int8 runs at half FP4's rate). The skip term is the base's, at the base's ♭: a
+larger fold raises ♭, so this overstates ε_skip.
 """
 import shutil
 import subprocess
@@ -34,84 +37,83 @@ DEVICES = {
 TWO_SIDED = {"linears": "two-sided", "lm_head": "two-sided", "qk": "two-sided", "pv": "peel"}
 
 VARIANTS = [
-    # sm_120 (RTX PRO 6000): H1 + fx1 is the record; int8 runs at the FP8 rate (QMMA 0.985 IMMA)
-    dict(device="sm_120", name="fpx-c1-k4-h1", base="dither-c-peel-fx1", plain=3.0, fold_add={"ALU": 1.0},
-         title="C1 k4 on H1: int8 Dither's transcript from four E4M3 limb products a word",
-         summary="H1 + fx1's transcript bit for bit, each k32 word from 4 QMMA limb products and one IADD3"),
-    dict(device="sm_120", name="fpx-2sp-e4m3i-fx1", base="dither-c-peel-fx1", plain=1.0, fold_add={"IMAD": 1.0},
-         noise=TWO_SIDED,
-         title="FP8 peel (2SP) on e4m3i to ±352, fx1 fold",
-         summary="served: round-to-nearest e4m3i ±352 X·W; committed: the twin with both operands dithered by fresh "
-                 "bits, every word folded; served = twin − peel checked in the proof"),
-    dict(device="sm_120", name="fpx-2sp-e4m3i-duo", base="dither-2s", plain=1.0, fold_add={"IMAD": 1.0},
-         title="FP8 peel (2SP) on e4m3i to ±352, duo fold",
-         summary="as fpx-2sp-e4m3i-fx1 on Dither-2S's duo fold"),
-    # sm_90 (H200): wgmma E4M3 has a 14-bit adder window, so only k3h and the ±16 grid (e4r) are exact
+    # sm_120 (RTX PRO 6000): H1 + fx1 is the record; int8 runs at the FP8 rate (QMMA 0.985 IMMA). mma.sync's C operand
+    # resets a word at the magic base for free
+    dict(device="sm_120", name="fpx-g1-i8", base="dither-c-peel-fx1", plain=1.0, fold_add={}, noise=TWO_SIDED,
+         title="g1 on int8 units: served E4M3 integers to 120 (or E2M1x2 at integer block scales to 10) RN, twin R + b",
+         summary="the twin (R + b)(R + u), b and u fair live coins, is int8 Dither-2S on IMMA, every word folded; the "
+                 "served RN GEMM a second IMMA; served = twin - peel checked in the proof"),
+    dict(device="sm_120", name="fpx-g1-e4m3i120-fp", base="dither-c-peel-fx1", plain=2.0,
+         fold_add={"ALU": 0.6, "IMAD": 0.6}, noise=TWO_SIDED,
+         title="FP8 g1 on FP units: the twin in FP16, served e4m3i120 in FP8",
+         summary="the twin's word one add, the served sum read every 9 words"),
+    dict(device="sm_120", name="fpx-g1-e4m3i352-fp", base="dither-c-peel-fx1", plain=2.0,
+         fold_add={"ALU": 1.0, "IMAD": 1.0}, noise=TWO_SIDED,
+         title="FP8 g1 on FP units: the twin in FP16, served e4m3i352 in FP8",
+         summary="the twin's word one add, the served sum one add a word"),
+    dict(device="sm_120", name="fpx-c1-k4-h1-split", base="dither-c-peel-fx1", plain=3.0,
+         fold_add={"ALU": 0.5, "IMAD": 0.5},
+         title="C1 k4 on H1: int8 Dither's transcript from four E4M3 limb products a word, the extraction split",
+         summary="H1 + fx1's transcript bit for bit, each k32 word from 4 QMMA limb products and one add"),
+    dict(device="sm_120", name="fpx-2sp-e4m3i352-fp", base="dither-c-peel-fx1", plain=1.0,
+         fold_add={"ALU": 1.0, "IMAD": 1.0}, noise=TWO_SIDED,
+         title="FP8 peel (2SP) on e4m3i to 352: the twin dithered on the grid's gaps, in FP8",
+         summary="served RN e4m3i352; the twin's word one add, the served sum one add a word"),
+    dict(device="sm_120", name="fpx-g1-fp4-fp", base="dither-c-peel-fx1", plain=4.0,
+         fold_add={"ALU": 0.75, "IMAD": 0.75}, noise=TWO_SIDED,
+         title="FP4 g1 on FP4 units: twin R·R + R·u + b·R + b·u, served R·R, any integer block scale",
+         summary="five block-scaled k64 FP4 products a word, u and b at unit scale; the twin's word one add, the "
+                 "served sum (<= 2^21) read every other word"),
+    # sm_90 (H200): wgmma E4M3 keeps a 14-bit adder window, so E4M3 integers past ±16 are exact only in FP16
+    dict(device="sm_90", name="fpx-g1-i8", base="dither-2s-licpw-redux-imad-l32", plain=1.0, fold_add={},
+         title="g1 on int8 units (H200)", summary="as sm_120's fpx-g1-i8"),
+    dict(device="sm_90", name="fpx-g1-e4m3i120-f16", base="dither-2s-licpw-redux-imad-l32", plain=3.0,
+         fold_add={"IMAD": 0.6, "ALU": 0.6},
+         title="FP8 g1 on H200's FP units: served and twin both FP16",
+         summary="the e4m3i products leave the FP8 14-bit window, so both GEMMs run in FP16 at half the FP8 rate"),
     dict(device="sm_90", name="fpx-c1-k3h", base="dither-2s-licpw-redux-imad-l32", plain=2.0,
          fold_add={"IMAD": 3.0, "ALU": 1.0},
          title="C1 k3h on the H200 record: int8 Dither's transcript from three E4M3 Karatsuba limb products",
-         summary="the H200 LI-CP-W record's transcript bit for bit, each k32 word from 3 wgmma E4M3 into 3 accumulators "
-                 "from +0 and 3 FFMA + IADD3"),
+         summary="the H200 LI-CP-W record's transcript bit for bit, each k32 word from 3 wgmma E4M3 into 3 "
+                 "accumulators from +0 and 3 FFMA + IADD3"),
     dict(device="sm_90", name="fpx-2sp-int5-e4r", base="dither-2s-licpw-redux-imad-l32", plain=1.0,
-         fold_add={"IMAD": 1.0, "ALU": 1.0}, noise=TWO_SIDED,
+         fold_add={"IMAD": 1.0, "ALU": 2.0}, noise=TWO_SIDED,
          title="peel (2SP) on the ±16 integer grid (e4r), H200",
          summary="the only native grid exact under the 14-bit window: int5 served round-to-nearest, twin dithered, "
-                 "restart from +0 each k32 word, FFMA + IADD"),
-    # sm_100 (B200): the LI-CP-W redux record and the duo fold
-    dict(device="sm_100", name="fpx-c1-k4t", base="dither-2s-licpw-redux-heavy-l32", plain=3.0,
-         fold_add={"IMAD": 1.0},
+                 "restart from +0 each k32 word, FFMA + IADD, the served sum one add a word"),
+    # sm_100 (B200): the LI-CP-W redux record; TMEM accumulators, rebased by tcgen05.st
+    dict(device="sm_100", name="fpx-g1-i8", base="dither-2s-licpw-redux-heavy-l32", plain=1.0, fold_add={},
+         title="g1 on int8 units (B200)", summary="as sm_120's fpx-g1-i8"),
+    dict(device="sm_100", name="fpx-g1-i8-duo", base="dither-2s-l32", plain=1.0, fold_add={},
+         title="g1 on int8 units (B200), Dither-2S's duo fold", summary="as fpx-g1-i8 on the duo fold"),
+    dict(device="sm_100", name="fpx-g1-i8-l64", base="dither-2s-l64", plain=1.0, fold_add={},
+         title="g1 on int8 units (B200), duo fold at L = 64", summary="as fpx-g1-i8 on k64 words"),
+    dict(device="sm_100", name="fpx-g1-e4m3i120-fp", base="dither-2s-licpw-redux-heavy-l32", plain=2.0,
+         fold_add={"ALU": 0.625, "IMAD": 0.625},
+         title="FP8 g1 on B200's FP units: the twin in FP16, served e4m3i120 in FP8",
+         summary="the twin's word one add, each accumulator rebased every 9 words"),
+    dict(device="sm_100", name="fpx-g1-e4m3i352-fp", base="dither-2s-licpw-redux-heavy-l32", plain=2.0,
+         fold_add={"ALU": 1.5, "IMAD": 1.5},
+         title="FP8 g1 on B200's FP units: the twin in FP16, served e4m3i352 in FP8",
+         summary="the twin's word one add, the served sum an add and a rebase a word"),
+    dict(device="sm_100", name="fpx-c1-k4t-split", base="dither-2s-licpw-redux-heavy-l32", plain=3.0,
+         fold_add={"ALU": 0.6, "IMAD": 0.6},
          title="C1 k4t on the B200 record: int8 Dither's transcript from four E4M3 limb products",
-         summary="the B200 LI-CP-W redux record's transcript bit for bit, each k32 word from 4 kind::f8f6f4 MMAs, the "
-                 "running sum in TMEM, one IMAD-pipe add a word"),
-    dict(device="sm_100", name="fpx-c1-k4t-duo", base="dither-2s-l32", plain=3.0, fold_add={"IMAD": 1.0},
-         title="C1 k4t on Dither-2S's duo fold (LOWBIT-DC's measured kernel)",
-         summary="as fpx-c1-k4t on the duo fold"),
-    dict(device="sm_100", name="fpx-c1-k9", base="dither-2s-licpw-redux-heavy-l32", plain=3.5, fold_add={"IMAD": 1.0},
+         summary="the B200 record's transcript bit for bit, the running sum in TMEM, one add a word and a rebase every "
+                 "7 words (LOWBIT-DC's k4t)"),
+    dict(device="sm_100", name="fpx-c1-k9", base="dither-2s-licpw-redux-heavy-l32", plain=3.5,
+         fold_add={"ALU": 0.6, "IMAD": 0.6},
          title="C1 k9: int8 Dither's transcript from nine E2M1 digit products (kind::mxf4)",
          summary="the B200 record's transcript bit for bit, 9 unit-scale E2M1 products a k32 word at FP4's 2x rate"),
-    dict(device="sm_100", name="fpx-2sp-e4m3i", base="dither-2s-licpw-redux-heavy-l32", plain=1.0,
-         fold_add={"IMAD": 1.0},
-         title="FP8 peel (2SP) on e4m3i to ±352, LI-CP-W redux fold",
-         summary="served: round-to-nearest e4m3i ±352 X·W; committed: the twin with both operands dithered by fresh "
-                 "bits, every word folded; served = twin − peel checked in the proof. Also the FP4 peel's row at L = 64"),
-    dict(device="sm_100", name="fpx-2sp-e4m3i-duo", base="dither-2s-l32", plain=1.0, fold_add={"IMAD": 1.0},
-         title="FP8 peel (2SP) on e4m3i to ±352, duo fold",
-         summary="as fpx-2sp-e4m3i on the duo fold"),
-    # the extraction is one integer add, which issues as IADD3 (ALU) or IMAD (FMA pipe): half on each
-    dict(device="sm_120", name="fpx-c1-k4-h1-split", base="dither-c-peel-fx1", plain=3.0,
-         fold_add={"ALU": 0.5, "IMAD": 0.5},
-         title="C1 k4 on H1, the extraction split across ALU and IMAD", summary="as fpx-c1-k4-h1"),
-    dict(device="sm_120", name="fpx-2sp-e4m3i-fx1-split", base="dither-c-peel-fx1", plain=1.0,
-         fold_add={"ALU": 0.5, "IMAD": 0.5}, noise=TWO_SIDED,
-         title="FP8 peel (2SP), fx1 fold, the extraction split across ALU and IMAD", summary="as fpx-2sp-e4m3i-fx1"),
-    dict(device="sm_100", name="fpx-c1-k4t-split", base="dither-2s-licpw-redux-heavy-l32", plain=3.0,
-         fold_add={"ALU": 0.5, "IMAD": 0.5},
-         title="C1 k4t on the B200 record, the extraction split across ALU and IMAD", summary="as fpx-c1-k4t"),
-    dict(device="sm_100", name="fpx-2sp-e4m3i-split", base="dither-2s-licpw-redux-heavy-l32", plain=1.0,
-         fold_add={"ALU": 0.5, "IMAD": 0.5},
-         title="FP8 peel (2SP), LI-CP-W redux fold, the extraction split across ALU and IMAD",
-         summary="as fpx-2sp-e4m3i"),
-    dict(device="sm_100", name="fpx-2sp-e4m3i-alu", base="dither-2s-licpw-redux-heavy-l32", plain=1.0,
-         fold_add={"ALU": 1.0},
-         title="FP8 peel (2SP), LI-CP-W redux fold, the extraction on ALU", summary="as fpx-2sp-e4m3i"),
-    # gap-one twin (g1): the twin's coins move each operand by 1, not by the grid's gap, so every coin product has an
-    # odd coefficient as in int8 Dither; R + b (|R| <= 352) is exact in FP16, so the twin is one FP16 GEMM (2 FP8
-    # slots), served beside it in FP8 (H200: in FP16 too, outside the 14-bit window)
-    dict(device="sm_120", name="fpx-g1-e4m3i-f16", base="dither-c-peel-fx1", plain=2.0,
-         fold_add={"ALU": 0.5, "IMAD": 0.5},
-         title="FP8 g1: served e4m3i ±352 round-to-nearest, the gap-one twin in FP16, fx1 fold",
-         summary="int8 Dither's coin structure on R + b, R the served e4m3i operand, one FP16 twin and one FP8 served "
-                 "GEMM a word"),
-    dict(device="sm_100", name="fpx-g1-e4m3i-f16", base="dither-2s-licpw-redux-heavy-l32", plain=2.0,
-         fold_add={"ALU": 0.5, "IMAD": 0.5},
-         title="FP8 g1 on the B200 record's fold: the gap-one twin in FP16, served in FP8",
-         summary="as sm_120's fpx-g1-e4m3i-f16"),
-    dict(device="sm_100", name="fpx-g1-e4m3i-f16-duo", base="dither-2s-l32", plain=2.0, fold_add={"IMAD": 1.0},
-         title="FP8 g1 on the duo fold", summary="as fpx-g1-e4m3i-f16 on the duo fold"),
-    dict(device="sm_90", name="fpx-g1-e4m3i-f16", base="dither-2s-licpw-redux-imad-l32", plain=3.0,
-         fold_add={"IMAD": 0.5, "ALU": 0.5},
-         title="FP8 g1 on H200: served and twin both FP16 (exact), the H200 record's fold",
-         summary="the e4m3i products leave the FP8 14-bit window, so both GEMMs run in FP16 at half the FP8 rate"),
+    dict(device="sm_100", name="fpx-2sp-e4m3i352-fp", base="dither-2s-licpw-redux-heavy-l32", plain=1.0,
+         fold_add={"ALU": 1.5, "IMAD": 1.5}, noise=TWO_SIDED,
+         title="FP8 peel (2SP) on e4m3i to 352: the twin dithered on the grid's gaps, in FP8",
+         summary="served RN e4m3i352; the twin's word one add, the served sum an add and a rebase a word"),
+    dict(device="sm_100", name="fpx-g1-fp4-fp", base="dither-2s-licpw-redux-heavy-l32", plain=4.0,
+         fold_add={"ALU": 1.0, "IMAD": 1.0},
+         title="FP4 g1 on FP4 units: twin R·R + R·u + b·R + b·u, served R·R, any integer block scale",
+         summary="five block-scaled k64 FP4 products a word, u and b at unit scale; the twin's word one add, the "
+                 "served sum (<= 2^21) an add and a rebase every other word"),
 ]
 
 
@@ -142,10 +144,10 @@ def write_variant(v: dict, data: Path) -> None:
     name = fold.pop("name")
     for k, x in v["fold_add"].items():
         fold[k] = fold.get(k, 0.0) + x
+    added = "".join(f"+{k}{x:g}" for k, x in v["fold_add"].items())
     lines = [f"base = {toml_value(v['base'])}", f"name = {toml_value(v['name'])}",
              f"title = {toml_value(v['title'])}", f"summary = {toml_value(v['summary'])}",
-             f"plain = {v['plain']!r}", "", "[fold]",
-             f"name = {toml_value(name + '+x' + '+'.join(f'{k}{x:g}' for k, x in v['fold_add'].items()))}"]
+             f"plain = {v['plain']!r}", "", "[fold]", f"name = {toml_value(name + ('+x' + added if added else ''))}"]
     lines += [f"{k} = {x!r}" for k, x in fold.items()]
     if "noise" in v:
         lines += ["", "[noise]"] + [f"{k} = {toml_value(x)}" for k, x in v["noise"].items()]
