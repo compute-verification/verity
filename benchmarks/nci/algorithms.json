@@ -2595,7 +2595,8 @@
   "sources": [
    "datologyai-2025-beyondweb",
    "gunasekar-2023-phi1",
-   "maini-2024-wrap"
+   "maini-2024-wrap",
+   "kang-2025-synthetic-scaling"
   ],
   "traits": {
    "theorem_applies": true,
@@ -2748,6 +2749,21 @@
     "trend": "unknown",
     "exponent_change": null,
     "note": "Generator compute must be counted, or m is bounded only by the generator; under the policy a registered generator is free."
+   },
+   {
+    "evidence": [
+     "kang-2025-synthetic-scaling/1",
+     "kang-2025-synthetic-scaling/3"
+    ],
+    "metric": "tokens to equal held-out loss at a fixed 1B model, 1B-200B tokens, vs CommonCrawl",
+    "compute_range_flop": [
+     6e+18,
+     1.2e+21
+    ],
+    "multiplier": null,
+    "trend": "grows-with-scale",
+    "exponent_change": null,
+    "note": "5-10x at larger data budgets; fixed model size, so mostly over-trained and not against a compute-optimal reference. An 8B generator does as well as a 70B one; generation compute excluded."
    }
   ],
   "multiplier": {
