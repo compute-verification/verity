@@ -24,6 +24,7 @@ from verity_vllm.pipeline.tp import c2 as C2
 from verity_vllm.pipeline.tp import commit as TC
 from verity_vllm.pipeline.tp import commit_replay as TPR
 from verity_vllm.pipeline.tp import rank_replay as RR
+from verity_vllm.program.frontend import collective_kinds as CK
 
 WORLD = 2
 SEED = 7
@@ -31,6 +32,7 @@ REPLAY_CFG = {"programs": {"0": "/b/rank0", "1": "/b/rank1"}, "of_record": {"0":
               "per_stratum": 2, "max_evaluate": 2000, "seed": SEED, "workers": None, "challenge": None, "targets": [], "ring_slots": None}
 VERSIONS = {"sampled_replay": {"of_record": REPLAY_CFG["of_record"], "seed": SEED}}
 XRANK = {"result": True, "by_family": {}}
+XF = CK.cross_rank_families(WORLD)
 
 
 def _sr(result=True, grade="complete", *, rank=0, qp_ok=True, mismatch=0):
@@ -140,14 +142,14 @@ def test_a_deferred_ranks_verdict_after_its_fold_is_the_in_process_verdict(pre, 
     result, grade, mismatch = replay
     sr, lk = _sr(result, grade, rank=rank, qp_ok=qp_ok, mismatch=mismatch), _lk(linked, rank)
     here, there = {}, {}
-    ok_here, why_here = C2.c2_and_pin_gates(here, _fin(rank, copy.deepcopy(sr), copy.deepcopy(lk), pin), *pre, rank=rank, replay_on=True, required=True, bundle="b")
-    ok, why = C2.c2_and_pin_gates(there, _deferred_fin(rank, pin=pin), *pre, rank=rank, replay_on=True, required=True, bundle="b")
+    ok_here, why_here = C2.c2_and_pin_gates(here, _fin(rank, copy.deepcopy(sr), copy.deepcopy(lk), pin), *pre, rank=rank, replay_on=True, required=True, bundle="b", xrank_families=XF)
+    ok, why = C2.c2_and_pin_gates(there, _deferred_fin(rank, pin=pin), *pre, rank=rank, replay_on=True, required=True, bundle="b", xrank_families=XF)
     if ok is not None:
         assert ok is False and ok_here is False, "a rank decided before its replay fails in place too"
         assert pre[0] is False or pin is not True
         return
     assert (why, there["replay_deferred"]) == (RB.PENDING, {"pre": list(pre), "bundle": "b"}) and pre[0] and pin is True
-    got = C2.replay_gates(there, copy.deepcopy(sr), copy.deepcopy(lk), *there["replay_deferred"]["pre"], rank=rank, replay_on=True, required=True)
+    got = C2.replay_gates(there, copy.deepcopy(sr), copy.deepcopy(lk), *there["replay_deferred"]["pre"], rank=rank, replay_on=True, required=True, xrank_families=XF)
     assert got == (ok_here, why_here)
     for k in ("sampled_replay", "boundary_linkage", "query_population", "weights_pin"):
         assert there[k] == here[k], k
@@ -155,7 +157,7 @@ def test_a_deferred_ranks_verdict_after_its_fold_is_the_in_process_verdict(pre, 
 
 def test_without_a_replay_of_record_the_gates_are_the_pin_alone():
     cb = {}
-    ok, why = C2.c2_and_pin_gates(cb, _fin(0, {}, {}, True), True, None, rank=0, replay_on=False, required=True, bundle="b")
+    ok, why = C2.c2_and_pin_gates(cb, _fin(0, {}, {}, True), True, None, rank=0, replay_on=False, required=True, bundle="b", xrank_families=XF)
     assert (ok, why) == (True, None) and "query_population" not in cb and "replay_deferred" not in cb
 
 
@@ -175,10 +177,10 @@ def _cblock(rank, root, bmap):
 def _in_process(fins):
     """The Commit's rows, components and summary fields as the in-process path derives them from the ranks' finalize records."""
     per_rank, reasons = {}, []
-    C2.annotate_unreplayable([(f.get("sampled_replay") or {}).get("sampled_replay") or {} for f in fins], XRANK, 0, [])
+    C2.annotate_unreplayable([(f.get("sampled_replay") or {}).get("sampled_replay") or {} for f in fins], XRANK, 0, XF)
     for f in fins:
         cb = _cblock(f["rank"], "r", {"digest": "d"})
-        ok, why = C2.c2_and_pin_gates(cb, f, True, None, rank=f["rank"], replay_on=True, required=True, bundle="b")
+        ok, why = C2.c2_and_pin_gates(cb, f, True, None, rank=f["rank"], replay_on=True, required=True, bundle="b", xrank_families=XF)
         cb["commit_pass"], cb["commit_fail_reason"] = ok, why
         per_rank[f["rank"]] = cb
         if ok is False:
@@ -214,7 +216,7 @@ def deferred(tmp_path):
         (part / "binding_map.json").write_text(json.dumps(bmap))
         f = _deferred_fin(r, out)
         cb = _cblock(r, root, bmap)
-        ok, why = C2.c2_and_pin_gates(cb, f, True, None, rank=r, replay_on=True, required=True, bundle=RB.path(out, 0, rank=r).name)
+        ok, why = C2.c2_and_pin_gates(cb, f, True, None, rank=r, replay_on=True, required=True, bundle=RB.path(out, 0, rank=r).name, xrank_families=XF)
         cb["commit_pass"], cb["commit_fail_reason"] = ok, why
         per_rank[r], bundles_of[0][r] = cb, {"partial": str(part), "hashed": {}, "engine_of_record": {"vllm": "test"}, "programs": {}}
         fins.append({k: v for k, v in f.items()})
@@ -231,7 +233,7 @@ def deferred(tmp_path):
             "boundary_linkage": lk_comp, "query_population": qp_comp, "pass": True, "only_arm": "instrumented", "runs": 1}
     summ.update(commit_pass=False)          # `only_arm_summary` over a None row
     C2.seal(out, summ, rows, bundles_of, replay_cfg=REPLAY_CFG, required_manifest=str(man), world=WORLD, versions={"git_head": "c0de"},
-             all_pass=True, vc_base=None, comps=comps, xrank_pairs=[XRANK], xrank_families=[], label="t")
+             all_pass=True, vc_base=None, comps=comps, xrank_pairs=[XRANK], xrank_families=sorted(XF), label="t")
     assert summ["pass"] is None and summ["commit_pass"] is None and len(summ["replay_deferred"]["bundles"]) == WORLD
     (out / "runs.jsonl").write_text("".join(json.dumps(r, default=str) + "\n" for r in rows))
     (out / "summary.json").write_text(json.dumps(summ, default=str))
@@ -298,6 +300,22 @@ def test_the_fold_decides_the_commit_as_the_ranks_processes_would_have(deferred,
     dd = json.loads((d.out / C2.DEFERRED).read_text())
     assert dd["decided"]["pass"] is (bad_rank is None) and dd["pending_pairs"] == [] and len(dd["replayed"]) == WORLD
     assert TPR.main(TPR.Options(commit_out=str(d.out), checkpoint_dir="/ck")) == (0 if bad_rank is None else 3), "a decided record is never replayed again"
+
+
+def test_the_fold_waives_no_collective_when_the_cross_rank_pass_did_not_run(deferred):
+    """The ranks' replay counts AllReduce2_v1 with no evaluator; only the cross-rank pass evaluates it, and this Commit's did not run."""
+    d = deferred
+    dd = json.loads((d.out / C2.DEFERRED).read_text())
+    dd["xrank"]["0"]["result"] = None
+    (d.out / C2.DEFERRED).write_text(json.dumps(dd))
+    for r in range(WORLD):
+        _replayed(d, r, _sr(rank=r), _lk(True, r))
+    assert TPR.main(TPR.Options(commit_out=str(d.out), checkpoint_dir="/ck", fold_only=True)) == 3
+    per_rank = json.loads((d.out / "runs.jsonl").read_text().splitlines()[0])["commit"]["per_rank"]
+    for r in range(WORLD):
+        c = per_rank[str(r)]
+        assert c["commit_pass"] is False and c["commit_fail_reason"].startswith(f"no-evaluator families (rank {r}):") and "AllReduce2_v1" in c["commit_fail_reason"]
+        assert c["no_evaluator_gap"]["cross_rank_pass"] is False and c["no_evaluator_gap"]["waived_cross_rank"] == []
 
 
 def test_a_replay_of_another_bundle_is_refused(deferred):
@@ -443,7 +461,7 @@ def test_a_rank_whose_program_is_not_of_record_fails_in_place_and_leaves_no_bund
     r = _worker(tmp_path, _program(tmp_path, "d" * 64), {"entries": [], "digest": "m"})._deferred_replay(types.SimpleNamespace(run_root=b"\x01" * 32), {"out": str(out), "pair": 0})
     assert r["bundle"] is None and r["sampled_replay"]["grade"] == "not-evaluated" and "REFUSED (not the Program of record)" in r["sampled_replay"]["why"]
     assert not RB.partial(out, 0, rank=1).exists()
-    ok, why = C2.c2_and_pin_gates({}, {"sampled_replay": r, "weights_pin": {"result": True}}, True, None, rank=1, replay_on=True, required=True, bundle="b")
+    ok, why = C2.c2_and_pin_gates({}, {"sampled_replay": r, "weights_pin": {"result": True}}, True, None, rank=1, replay_on=True, required=True, bundle="b", xrank_families=XF)
     assert ok is False and "not-evaluated" in why
 
 

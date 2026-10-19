@@ -460,8 +460,9 @@ class TP2CaptureWorkerExtension:
         belongs to — the logits all-gather runs after the forward, before the next), `k` (index within the step), kind, the calling
         module (path + class), the partial's shape/dtype and sha256, the received output's sha256; the partial and the output
         tensors of steps < `store_steps` are saved (`coll.rank<r>.step<S>.pt`) for the offline cross-rank provenance check
-        (`pipeline/tp/match.py`: received == AllReduce2(part_rank0, part_rank1) / AllGather2, bit-exact).  Same wrapping seam as
-        `tp2_sem_install` (module-global collective names); the run's computation is unchanged."""
+        (`pipeline/tp/match.py`: received == AllReduce2(part_rank0, part_rank1) / AllGather2, bit-exact); each Marlin MoE align call's
+        schedule witness, at its position among the step's collectives, goes to `align.rank<r>.jsonl` (`moe_align_source.CaptureWitness`).
+        Same wrapping seam as `tp2_sem_install` (module-global collective names); the run's computation is unchanged."""
         import hashlib
 
         import torch
@@ -493,6 +494,8 @@ class TP2CaptureWorkerExtension:
             flush_step()
             st["step"] += 1
             st["k"] = 0
+            if st["witness"] is not None:
+                st["witness"].step(st["step"])
 
         def observer_rec() -> Any:
             """[R17 tp D90] the aten observer of `tp2_install`, when this rank runs BOTH (one engine run = one fold + one recorder): the
@@ -541,6 +544,9 @@ class TP2CaptureWorkerExtension:
                 st["hooks"].wrap(mod, attr, lambda orig, kind=kind: coll_wrap(orig, kind))
         for mod, attr in FN.targets(model):      # [VLLM-12] DeepSeek-V3.2's layers reduce in the norm after them (collectives.fused_norm)
             st["hooks"].wrap(mod, attr, lambda orig: FN.recording(orig, model, st, coll_wrap, lambda: FN.silenced(observer_rec())))
+        # each MoE layer's align members, which the match oracle pairs with the committed ones (`moe_align_source.CaptureWitness`)
+        from verity_vllm.acquire.sources.moe_align_source import capture_witness
+        st["witness"] = capture_witness(model, rank, lambda: st["k"], lambda: FN.silenced(observer_rec()))
 
         # [R15 rev-cb T6-1, mirrored on the Match side] `cur` is a stack: a collective issued by an outer module after a nested hooked module
         # returned is attributed to the OUTER module; a fused-MoE runner nested under a hooked fused-MoE wrapper is NOT hooked, so the
@@ -590,13 +596,15 @@ class TP2CaptureWorkerExtension:
         for h in st["handles"]:
             h.remove()
         st["hooks"].uninstall()
+        witness = st["witness"].close(st["out"]) if st["witness"] is not None else None
         with (st["out"] / f"coll.rank{st['rank']}.jsonl").open("w") as f:
             for r in st["records"]:
                 f.write(json.dumps(r) + "\n")
         by_kind: dict[str, int] = {}
         for r in st["records"]:
             by_kind[r["kind"]] = by_kind.get(r["kind"], 0) + 1
-        return _jsonable({"rank": st["rank"], "n_steps": st["step"] + 1, "n_collectives": len(st["records"]), "by_kind": by_kind, "n_stored_steps": st["n_stored"]})
+        return _jsonable({"rank": st["rank"], "n_steps": st["step"] + 1, "n_collectives": len(st["records"]), "by_kind": by_kind, "n_stored_steps": st["n_stored"],
+                          "witness": witness})
 
     # ------------------------------------------------------------------ R13 P4 step 4: rank-aware commitment (the collector in every rank)
 
