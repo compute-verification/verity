@@ -1355,6 +1355,15 @@ A bf16 linear on `DotBf16` carries QKᵀ's form under a scheme that keeps it for
 one after another (`span`): a seed binds its calls' operand roots, and layer ℓ + 1's operands exist only after layer ℓ has
 run.
 
+**The floor** (`Compiled.floor`). Per unit, by slot, the work its noise forces: its cells' dots where its kind's form
+(`Scheme.form`: `Scheme.rows`, or `Scheme.noise` for a kind the grind term doesn't read) puts noise on both its rows at
+its k, and k multiply-adds each; a kind with a clean side, or with no form, none. H1's s8 kinds carry `h1tile.H1_ROWS`:
+an X row its k dither bits, a W column its k coin bits and U's 256. It is read off the plan, with no gate walked, with
+each unit's batch node in the compiled Program's root for placement. It is the floor
+`Accounting.Guarantees.PouwBlockCredit` (cursor/attrib-ea24) attributes to the block a unit is placed at, `Wb · Nmin`
+with `Wb` the least of the block's units' and `Nmin` the right units the draw established, and not every gate the salt
+reaches: the seed's and the noise's SHA-512 and the receipt fold read it too, and are outside the floor.
+
 **Check** (`CompileError.code`):
 
 - `coin-read`: the served Program reads a coin (a coin parameter, a seed of its own, or it is already compiled);

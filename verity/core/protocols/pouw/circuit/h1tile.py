@@ -61,6 +61,9 @@ I8, U32 = Array(8, BIT), Array(32, BIT)
 M32 = (1 << 32) - 1
 #: noise bits a column takes past its coin bits: U's 32 bytes
 U_BITS = 256
+#: the products' noise on a row of X (its dither bits b, an entry each; the digit coins are the receipt's) and on a column
+#: of W (its coin bits c, an entry each, and U): the s8 kinds' form for the work floor (`compile.Scheme.noise`)
+H1_ROWS = C.RowNoise(a=(0, 1), b=(U_BITS, 1))
 #: a lane's fold keys: duo's y_0..7, z_0..7, one block
 KEY_BITS = 512
 
@@ -332,11 +335,11 @@ class _Unit:
 def scheme(tile: tuple[int, int] = (32, 32), name: str = SCHEME) -> C.Scheme:
     """H1 + fx1 as a compile-pass scheme at `tile` (register it with `compile.register`)."""
     f = _Unit(name)
-    return C.Scheme(name, tile, {kind: f for kind in KINDS})
+    return C.Scheme(name, tile, {kind: f for kind in KINDS}, noise={kind: H1_ROWS for kind in KINDS})
 
 
 if SG is not None:
     C.register(scheme())
 
-__all__ = ["FOLD", "KINDS", "Layout", "PouwH1Tile", "PouwU129", "PouwU129Word", "SCHEME", "fold_keys", "noise", "reference",
-           "scheme", "u129"]
+__all__ = ["FOLD", "H1_ROWS", "KINDS", "Layout", "PouwH1Tile", "PouwU129", "PouwU129Word", "SCHEME", "fold_keys", "noise",
+           "reference", "scheme", "u129"]

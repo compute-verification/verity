@@ -40,7 +40,8 @@
   computed in two units), the separator and the width rule by reachability, for a Program small enough to flatten.
 
 The Program is the verifier's, rebuilt from (served Program, scheme, groups): `rebuild`, `Compiled.check_descriptor`
-(`traced_as` at Program level).
+(`traced_as` at Program level). Each unit's noise-forced work, the floor compute attribution credits to the block it is
+placed at, is `Compiled.floor`.
 """
 from __future__ import annotations
 
@@ -229,7 +230,9 @@ class Scheme:
     distinct A rows and B rows, each row's noise bits from the form and its readers the group's dots that read it, over
     those dots, at `grind.T_BITS`; over `grind.FLAG` (0.1%) the group is refused (decision 122). At decode that is every
     (query head, request) pair a call holds, whatever KV heads they share (8B: batch ≥ 13 for QKᵀ); at prefill, the
-    (KV head, request) components, fewer the longer the prompt.
+    (KV head, request) components, fewer the longer the prompt. `noise`, per kind outside `rows`, its `RowNoise` too, which
+    the grind term doesn't read and only the work floor does (`Compiled.floor`; H1's s8 kinds, `h1tile.H1_ROWS`): a kind's
+    dots are in the floor where its form (`form`) puts noise on both its rows at its k.
 
     A unit, ``units[kind](dot, tile)``, is ``(a: Array(tile.r, dot.a), b: Array(tile.c, dot.b), salt, position, roots:
     Array(2, digest)) -> Record(z: Array(len(tile.pairs), dot.z), receipt: R)``, the digest and position types
@@ -244,6 +247,11 @@ class Scheme:
     units: Mapping[str, Callable[[Dot, Tile], Any]]
     cover: int = 1
     rows: Mapping[str, RowNoise] = field(default_factory=lambda: dict(ROWS))
+    noise: Mapping[str, RowNoise] = field(default_factory=dict)
+
+    def form(self, kind: str) -> RowNoise | None:
+        """kind's noise form, `rows`' or `noise`'s; None where the scheme declares none."""
+        return self.rows.get(kind, self.noise.get(kind))
 
     def unit(self, dot: Dot, tile: Tile) -> Any:
         f = self.units.get(dot.family, self.units.get(ANY))
@@ -256,7 +264,7 @@ class Scheme:
         """This scheme with `unit` as kind's factory (its noise form), under its own name (register it); `rows`, the form's
         `RowNoise` (`PV_ROWS` for P·V), where a matched row is visible."""
         return Scheme(name, self.tile, {**self.units, kind: unit}, self.cover,
-                      {**self.rows, **({kind: rows} if rows is not None else {})})
+                      {**self.rows, **({kind: rows} if rows is not None else {})}, self.noise)
 
 
 #: the schemes the pass compiles to, by name (protocol structure, keyed by silicon target in the registration). Separate from
@@ -291,6 +299,10 @@ def register(scheme: Scheme) -> Scheme:
         if min(*form.a, *form.b) < 0 or min(form.bits(1)) < 1:
             raise ValueError(f"{scheme.name}: {kind}'s rows carry noise on both sides (at least a bit each, {form}): a form "
                              f"with one side clean has no grind bound")
+    for kind, form in scheme.noise.items():
+        if kind in scheme.rows or min(*form.a, *form.b) < 0:
+            raise ValueError(f"{scheme.name}: {kind}'s noise form is in `rows` or in `noise`, not both, and no side carries "
+                             f"negative bits ({form})")
     SCHEMES[scheme.name] = scheme
     return scheme
 
@@ -853,6 +865,19 @@ class Unit:
 
 
 @dataclass(frozen=True)
+class Floor:
+    """One unit's noise-forced work (`Compiled.floor`): its batch's node in the compiled Program's root (`program.root`,
+    where a placement puts it), its dots' kind, the dots its noise forces (all its cells where the kind's form,
+    `Scheme.form`, puts noise on both rows at its k; none where it has a clean side or no form) and their multiply-adds,
+    k each."""
+
+    node: int
+    kind: str
+    dots: int
+    macs: int
+
+
+@dataclass(frozen=True)
 class GateCheck:
     """`Compiled.check_gates`: the gate-level cut (`cut.check_cut`, no width rule: every gate certified once, reads across units
     only of committed values, no value computed in two units), the separator (no unit's gate reached backward from a served
@@ -1004,6 +1029,25 @@ class Compiled:
             sp = self.plan.sites[g.site]
             out += [Unit(g.site, g.first + m, sp.units[u].rows, sp.units[u].cols, g.tile, g.unit, g.receipt)
                     for m, u in enumerate(g.members)]
+        return tuple(out)
+
+    @cached_property
+    def floor(self) -> tuple[Floor, ...]:
+        """Every unit's noise-forced work, by slot: W_b, the floor `Accounting.Guarantees.PouwBlockCredit`
+        (cursor/attrib-ea24) attributes to the block the unit is placed at, as `Wb · Nmin` with `Wb` the least of the
+        block's units' `macs` and `Nmin` the right units PoUW's draw established. Read off the plan and the scheme's forms,
+        as the cover and grind checks are, with no gate walked. It is the attributed floor, not every gate the salt
+        reaches: the seed's and the noise's SHA-512 and the receipt fold read the salt too, and the floor counts none of
+        them (`Accounting.Assumptions.PouwFloorAdvice`'s scope, the committed words' coin × coin products)."""
+        units = {id(g.unit) for g in self.plan.groups}
+        nodes = [k for k, nd in enumerate(self.program.root.body.nodes) if id(nd.fn) in units]
+        assert len(nodes) == len(self.plan.groups)
+        out = []
+        for k, g in zip(nodes, self.plan.groups):
+            dot = self.plan.sites[g.site].dot
+            form = self.scheme.form(dot.family)
+            n = len(g.tile.pairs) if form is not None and min(form.bits(dot.k)) > 0 else 0
+            out += [Floor(k, dot.family, n, n * dot.k)] * len(g.members)
         return tuple(out)
 
     @property
@@ -1333,6 +1377,6 @@ def rebuild(served: Program, scheme: str, descriptor: dict,
     return c
 
 
-__all__ = ["ANY", "BUILTIN", "CompileError", "Compiled", "Dot", "GateCheck", "MATMULS", "Matmul", "POSITIONS", "PV_ROWS",
-           "PouwCall", "PouwCompiled", "PouwRest", "QK_ROWS", "ROOTS", "ROWS", "RowNoise", "SALT", "SCHEMES", "STEP", "Scheme",
-           "Site", "Tile", "Unit", "Z", "compile", "rebuild", "register", "seed"]
+__all__ = ["ANY", "BUILTIN", "CompileError", "Compiled", "Dot", "Floor", "GateCheck", "MATMULS", "Matmul", "POSITIONS",
+           "PV_ROWS", "PouwCall", "PouwCompiled", "PouwRest", "QK_ROWS", "ROOTS", "ROWS", "RowNoise", "SALT", "SCHEMES", "STEP",
+           "Scheme", "Site", "Tile", "Unit", "Z", "compile", "rebuild", "register", "seed"]
