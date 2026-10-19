@@ -12,16 +12,7 @@
 //
 //   kn_ca(seeds, S, nb, out, sink, stream)            kn_mid(seeds, S, nb, J, out, sink, stream)
 //   kn_mid_items(S, nb, J)                            items (warps) of a mid launch (sink words = 32 x items)
-#include <cstdint>
-typedef unsigned long long u64;
-typedef unsigned int u32;
-namespace sh {
-typedef unsigned long long u64;
-#include "../../codec_tensor/sha512.cuh"
-}  // namespace sh
-
-// NOISE_TAG = b"verity/pouw/noise/v1".ljust(24, b"\0") as three big-endian words
-constexpr u64 TAG0 = 0x7665726974792f70ULL, TAG1 = 0x6f75772f6e6f6973ULL, TAG2 = 0x652f763100000000ULL;
+#include "h1sha.cuh"
 
 // ---- ca: served_h1/noise.cu's kernel, verbatim ----------------------------------------------------------------------
 extern "C" __global__ void h1_noise(const u64* __restrict__ seeds, u64 n, u32 nb, u64 tag0, u64 tag1, u64 tag2,
@@ -60,48 +51,7 @@ extern "C" __global__ void h1_noise(const u64* __restrict__ seeds, u64 n, u32 nb
   }
 }
 
-// ---- mid --------------------------------------------------------------------------------------------------------------
-__device__ constexpr u64 KC[80] = WT_SHA512_K;
-__device__ constexpr u64 IVC[8] = WT_SHA512_IV;
-
-__device__ __forceinline__ u64 rotr(u64 x, int n) { return (x >> n) | (x << (64 - n)); }
-__device__ __forceinline__ u64 S0(u64 a) { return rotr(a, 28) ^ rotr(a, 34) ^ rotr(a, 39); }
-__device__ __forceinline__ u64 S1(u64 e) { return rotr(e, 14) ^ rotr(e, 18) ^ rotr(e, 41); }
-__device__ __forceinline__ u64 s0(u64 w) { return rotr(w, 1) ^ rotr(w, 8) ^ (w >> 7); }
-__device__ __forceinline__ u64 s1(u64 w) { return rotr(w, 19) ^ rotr(w, 61) ^ (w >> 6); }
-__device__ __forceinline__ u64 chf(u64 e, u64 f, u64 g) { return g ^ (e & (f ^ g)); }
-__device__ __forceinline__ u64 maj(u64 a, u64 b, u64 c) { return (a & b) | (c & (a | b)); }
-
-// DEP.d[i]: whether schedule word i depends on word 11 (the block counter); words 12..15 are the padding's constants
-struct DepT {
-  bool d[80];
-  constexpr DepT() : d() {
-    for (int i = 0; i < 80; ++i) d[i] = i == 11 || (i >= 16 && (d[i - 2] || d[i - 7] || d[i - 15] || d[i - 16]));
-  }
-};
-__device__ constexpr DepT DEP{};
-#define dep(i) DEP.d[i]
-// from word NC on, every schedule term depends on t (so c[] stops there)
-constexpr int NC = 40;
-constexpr bool nc_ok() {
-  DepT t;
-  for (int i = NC; i < 80; ++i)
-    if (!(t.d[i - 2] && t.d[i - 7] && t.d[i - 15] && t.d[i - 16])) return false;
-  return true;
-}
-static_assert(nc_ok(), "a schedule word past NC has a term free of the block counter");
-
-// state rotation by naming: round r's (a..h) are v[(8 - r) & 7 ..]
-#define RND(r, wv)                                                                                    \
-  {                                                                                                   \
-    u64& a = v[(8 - (r)) & 7]; u64& b = v[(9 - (r)) & 7]; u64& c = v[(10 - (r)) & 7];                 \
-    u64& d = v[(11 - (r)) & 7]; u64& e = v[(12 - (r)) & 7]; u64& f = v[(13 - (r)) & 7];               \
-    u64& g = v[(14 - (r)) & 7]; u64& h = v[(15 - (r)) & 7];                                           \
-    const u64 t1 = h + S1(e) + chf(e, f, g) + KC[r] + (wv);                                           \
-    d += t1;                                                                                          \
-    h = t1 + S0(a) + maj(a, b, c);                                                                    \
-  }
-
+// ---- mid ----------------------------------------------------------------------------------------------------------
 template <bool SINK>
 __global__ void __launch_bounds__(256) h1_noise_mid(const u64* __restrict__ seeds, u32 S, u32 nb, u32 J,
                                                     u32* __restrict__ out) {
