@@ -1,19 +1,25 @@
-// RT-HOPPER-1 on the H200 (sm_90a), the honest form's s8-exact siblings: the census prices IGMMA_S8_N128, IGMMA_S8_N64
-// and IMMA16832_S8 (mma.sync m16n8k32) on DC-90's joint rows at the lane default, as it does RS, and offering any one
-// beside the honest form takes DC-90-ri from 0.615% to 13-29% (`forms_gap.py --menu`). Each runs sm90_rs.cu's four
-// loops at one N256 group's MACs a step (8 N128 or 16 N64 wgmma a commit group, 128 mma.sync a warp): alone, beside the
-// LI fold, and at the IMAD and LOP3 points, with the SS N256 references, so its joint coefficients can be fitted as
-// RS's were. rs.sh builds it with RS_SRC=sm90_forms.cu; rs.py reads it.
+// RT-HOPPER-1 on the H200 (sm_90a), the census's s8-rate forms besides the honest one: IGMMA_S8_N8 to N192,
+// IMMA16832_S8 and IMMA16816_S8 (mma.sync m16n8k32, m16n8k16) and BMMA168256_B1 (mma.sync m16n8k256 b1). The census
+// prices each on DC-90's joint rows at the lane default, as it does RS, and offering any one but IMMA16816 beside the
+// honest form takes DC-90-ri from 0.615% to 3-29% (`forms_gap.py --menu`). Each runs sm90_rs.cu's four loops at one
+// N256 group's MACs a step (N192 at three quarters of them; 128 mma.sync a warp, 256 at k16): alone, beside the LI
+// fold, and at the IMAD and LOP3 points, with the SS N256 references, so its joint coefficients can be fitted as RS's
+// were. rs.sh builds it with RS_SRC=sm90_forms.cu; rs.py reads it.
 #define RS_NO_MAIN
 #include "sm90_rs.cu"
 
+// NACC accumulator registers a thread: N = 2 * NACC
 template <int NACC, int G>
 DC_DEV void group_n(int (&d)[NACC], const Tiles& t) {
   wgmma_fence();
 #pragma unroll
   for (int g = 0; g < G; g++) {
+    if constexpr (NACC == 96) wgmma_s8_n192(d, t.da, t.db, g ? 1 : 0);
     if constexpr (NACC == 64) wgmma_s8_n128(d, t.da, t.db, g ? 1 : 0);
-    else wgmma_s8_n64(d, t.da, t.db, g ? 1 : 0);
+    if constexpr (NACC == 32) wgmma_s8_n64(d, t.da, t.db, g ? 1 : 0);
+    if constexpr (NACC == 16) wgmma_s8_n32(d, t.da, t.db, g ? 1 : 0);
+    if constexpr (NACC == 8) wgmma_s8_n16(d, t.da, t.db, g ? 1 : 0);
+    if constexpr (NACC == 4) wgmma_s8_n8(d, t.da, t.db, g ? 1 : 0);
   }
   wgmma_commit();
 }
@@ -54,14 +60,26 @@ DC_DEV void wn(const OpArgs& a) {
   OP_SINK(fold_acc(d) ^ l.fold() ^ threadIdx.x)
 }
 
-// mma.sync m16n8k32 s8: 128 a warp a step on 8 accumulator tiles (4 N256 warp shares), operands loop-invariant
-DC_DEV void imma16832(uint32_t (&c)[4], const uint32_t (&x)[4], const uint32_t (&y)[2]) {
-  asm volatile("mma.sync.aligned.m16n8k32.row.col.s32.s8.s8.s32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, {%0,%1,%2,%3};"
-               : "+r"(c[0]), "+r"(c[1]), "+r"(c[2]), "+r"(c[3])
-               : "r"(x[0]), "r"(x[1]), "r"(x[2]), "r"(x[3]), "r"(y[0]), "r"(y[1]));
+// mma.sync, operands loop-invariant, on 8 accumulator tiles, one N256 group's warp share a step: S 0 m16n8k32 s8 (128
+// a step), 1 m16n8k16 s8 (256), 2 m16n8k256 b1 and.popc (128, at BGMMA's convention: a 32nd of its warp share)
+template <int S>
+DC_DEV void mma_sync(uint32_t (&c)[4], const uint32_t (&x)[4], const uint32_t (&y)[2]) {
+  if constexpr (S == 0)
+    asm volatile("mma.sync.aligned.m16n8k32.row.col.s32.s8.s8.s32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, {%0,%1,%2,%3};"
+                 : "+r"(c[0]), "+r"(c[1]), "+r"(c[2]), "+r"(c[3])
+                 : "r"(x[0]), "r"(x[1]), "r"(x[2]), "r"(x[3]), "r"(y[0]), "r"(y[1]));
+  if constexpr (S == 1)
+    asm volatile("mma.sync.aligned.m16n8k16.row.col.s32.s8.s8.s32 {%0,%1,%2,%3}, {%4,%5}, {%6}, {%0,%1,%2,%3};"
+                 : "+r"(c[0]), "+r"(c[1]), "+r"(c[2]), "+r"(c[3])
+                 : "r"(x[0]), "r"(x[1]), "r"(y[0]));
+  if constexpr (S == 2)
+    asm volatile(
+        "mma.sync.aligned.m16n8k256.row.col.s32.b1.b1.s32.and.popc {%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, {%0,%1,%2,%3};"
+        : "+r"(c[0]), "+r"(c[1]), "+r"(c[2]), "+r"(c[3])
+        : "r"(x[0]), "r"(x[1]), "r"(x[2]), "r"(x[3]), "r"(y[0]), "r"(y[1]));
 }
 
-template <int L>
+template <int L, int S = 0>
 DC_DEV void im(const OpArgs& a) {
   uint32_t c[8][4] = {}, x[4], y[2];
 #pragma unroll
@@ -72,7 +90,7 @@ DC_DEV void im(const OpArgs& a) {
   OP_BEGIN
   OP_LOOP(it) {
 #pragma unroll
-    for (int i = 0; i < 128; i++) imma16832(c[i & 7], x, y);
+    for (int i = 0; i < (S == 1 ? 256 : 128); i++) mma_sync<S>(c[i & 7], x, y);
     if constexpr (L == 1) {
 #pragma unroll
       for (int q = 0; q < 256; q++) {
@@ -110,9 +128,40 @@ OP_KERNEL(imma_s8_a1, 256) { im<0>(a); }
 OP_KERNEL(wgli_redux_im, 256) { im<1>(a); }
 OP_KERNEL(wgmix_imad_r256_im, 256) { im<2>(a); }
 OP_KERNEL(wgmix_lop3_r256_im, 256) { im<3>(a); }
+// the rest of the census's s8-rate forms; N192 runs 4 a step, three quarters of a N256 group's MACs
+OP_KERNEL(wg_s8_n192_a1, 256) { wn<96, 4, 0>(a); }
+OP_KERNEL(wgli_redux_n192, 256) { wn<96, 4, 1>(a); }
+OP_KERNEL(wgmix_imad_r256_n192, 256) { wn<96, 4, 2>(a); }
+OP_KERNEL(wgmix_lop3_r256_n192, 256) { wn<96, 4, 3>(a); }
+OP_KERNEL(wg_s8_n32_a1, 256) { wn<16, 32, 0>(a); }
+OP_KERNEL(wgli_redux_n32, 256) { wn<16, 32, 1>(a); }
+OP_KERNEL(wgmix_imad_r256_n32, 256) { wn<16, 32, 2>(a); }
+OP_KERNEL(wgmix_lop3_r256_n32, 256) { wn<16, 32, 3>(a); }
+OP_KERNEL(wg_s8_n16_a1, 256) { wn<8, 64, 0>(a); }
+OP_KERNEL(wgli_redux_n16, 256) { wn<8, 64, 1>(a); }
+OP_KERNEL(wgmix_imad_r256_n16, 256) { wn<8, 64, 2>(a); }
+OP_KERNEL(wgmix_lop3_r256_n16, 256) { wn<8, 64, 3>(a); }
+OP_KERNEL(wg_s8_n8_a1, 256) { wn<4, 128, 0>(a); }
+OP_KERNEL(wgli_redux_n8, 256) { wn<4, 128, 1>(a); }
+OP_KERNEL(wgmix_imad_r256_n8, 256) { wn<4, 128, 2>(a); }
+OP_KERNEL(wgmix_lop3_r256_n8, 256) { wn<4, 128, 3>(a); }
+OP_KERNEL(imma16816_a1, 256) { im<0, 1>(a); }
+OP_KERNEL(wgli_redux_im16, 256) { im<1, 1>(a); }
+OP_KERNEL(wgmix_imad_r256_im16, 256) { im<2, 1>(a); }
+OP_KERNEL(wgmix_lop3_r256_im16, 256) { im<3, 1>(a); }
+OP_KERNEL(bmma_a1, 256) { im<0, 2>(a); }
+OP_KERNEL(wgli_redux_bm, 256) { im<1, 2>(a); }
+OP_KERNEL(wgmix_imad_r256_bm, 256) { im<2, 2>(a); }
+OP_KERNEL(wgmix_lop3_r256_bm, 256) { im<3, 2>(a); }
 
 #define S8Q "IGMMA.64x64x32.S8.S8*=16"
 #define IM "IMMA.16832.S8.S8=128"
+#define S8_192 "IGMMA.64x192x32.S8.S8*=4"
+#define S8_32 "IGMMA.64x32x32.S8.S8*=32"
+#define S8_16 "IGMMA.64x16x32.S8.S8*=64"
+#define S8_8 "IGMMA.64x8x32.S8.S8*=128"
+#define IM16 "IMMA.16816.S8.S8*=256"
+#define BM "BMMA.168256*=128"
 static const OpProbe PROBES[] = {
     P(wg_s8_n256_a1, S8),
     P(wgli_redux, S8 LI),
@@ -130,6 +179,30 @@ static const OpProbe PROBES[] = {
     P(wgli_redux_im, IM LI),
     P(wgmix_imad_r256_im, IM ",IMAD=256"),
     P(wgmix_lop3_r256_im, IM ",LOP3.LUT=256"),
+    P(wg_s8_n192_a1, S8_192),
+    P(wgli_redux_n192, S8_192 LI),
+    P(wgmix_imad_r256_n192, S8_192 ",IMAD=256"),
+    P(wgmix_lop3_r256_n192, S8_192 ",LOP3.LUT=256"),
+    P(wg_s8_n32_a1, S8_32),
+    P(wgli_redux_n32, S8_32 LI),
+    P(wgmix_imad_r256_n32, S8_32 ",IMAD=256"),
+    P(wgmix_lop3_r256_n32, S8_32 ",LOP3.LUT=256"),
+    P(wg_s8_n16_a1, S8_16),
+    P(wgli_redux_n16, S8_16 LI),
+    P(wgmix_imad_r256_n16, S8_16 ",IMAD=256"),
+    P(wgmix_lop3_r256_n16, S8_16 ",LOP3.LUT=256"),
+    P(wg_s8_n8_a1, S8_8),
+    P(wgli_redux_n8, S8_8 LI),
+    P(wgmix_imad_r256_n8, S8_8 ",IMAD=256"),
+    P(wgmix_lop3_r256_n8, S8_8 ",LOP3.LUT=256"),
+    P(imma16816_a1, IM16),
+    P(wgli_redux_im16, IM16 LI),
+    P(wgmix_imad_r256_im16, IM16 ",IMAD=256"),
+    P(wgmix_lop3_r256_im16, IM16 ",LOP3.LUT=256"),
+    P(bmma_a1, BM),
+    P(wgli_redux_bm, BM LI),
+    P(wgmix_imad_r256_bm, BM ",IMAD=256"),
+    P(wgmix_lop3_r256_bm, BM ",LOP3.LUT=256"),
 };
 
 int main(int argc, char** argv) { return op_main(argc, argv, PROBES); }
