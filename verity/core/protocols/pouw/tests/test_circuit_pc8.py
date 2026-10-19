@@ -399,13 +399,14 @@ def test_the_window_tile_reads_its_side_rows_index_fields():
     ac, bc = ([[rng.getrandbits(8) & 0x77 for _ in range(K)] for _ in range(r)] for r in (tm, tn))
     pa, pb = ([[rng.getrandbits(16) & 0x3FFF for _ in range(64)] for _ in range(r)] for r in (tm, tn))
     want = list(evaluate(hidden, _flat(ac), _flat(bc), _flat(pa), _flat(pb)))
-    for ii, jj in (([0, 8191], [0, 1, 131071]), ([5, 64], [70000, 3, 4])):
-        ia, jb = [L.words_index(i) for i in ii], [L.words_index(j) for j in jj]
+    for ii, jj in (([(0, 0, 0), (8191, 1, 1)], [(0, 1, 1), (1, 0, 1), (131071, 0, 0)]),
+                   ([(5, 1, 0), (64, 0, 1)], [(70000, 1, 1), (3, 1, 1), (4, 0, 1)])):
+        ia, jb = [L.words_index(*i) for i in ii], [L.words_index(*j) for j in jj]
         assert list(evaluate(fn, _flat(ac), _flat(bc), _flat(pa), _flat(pb), _flat(ia), _flat(jb))) == want
         for codes, p, idx, i in [*zip(ac, pa, ia, ii), *zip(bc, pb, jb, jj)]:
             bits = sum(c << (8 * t) for t, c in enumerate(codes)) | sum(w << (8 * K + 16 * t) for t, w in enumerate(p + idx))
             words = [(bits >> (16 * w)) & 0xFFFF for w in range(L.ROW_WORDS["fp8-pi"](K))]
-            assert words == Wd.side_row(L.words_fp8_p(codes, p), i) == L.words_fp8_pi(codes, p, i)
+            assert words == Wd.side_row(L.words_fp8_p(codes, p), *i) == L.words_fp8_pi(codes, p, *i)
     reads = {p: tm for p in ("ac", "pa", "ia")} | {p: tn for p in ("bc", "pb", "jb")}
     bits = 16 * (K // 2 + 72)
     assert L.statement_rows(pc8.SIDE_PORTS, K, reads) == {"row_schemas": [[SCHEMA_HM96_SHA512_ROW_SEG, bits]] * tm

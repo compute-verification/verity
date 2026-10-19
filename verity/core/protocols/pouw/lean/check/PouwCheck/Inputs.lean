@@ -2,12 +2,16 @@ import CoreProtocol.Protocol
 import CoreProtocol.Profile
 import Flock.Hash
 import PouwCheck.Json
+import PouwCheck.Tile
+import PouwWindow.Shape
 
 /-!
 # The check's three inputs (`core_check.py`, "the three inputs")
 
 * `Params`: the verifier's own parameters of the window: the check item, ε and δ, the grid's bits, the declared range
-  of tile counts, the window's context and the check query's SHA-512.
+  of tile counts, the window's context, the check query's SHA-512 and the window's shape (`PouwWindow.shapeOf?`, a
+  shape within the entry bound whose N is within the range); its template one the verifier pins (`tiles`), with that
+  template's tile work and query. Parameters with no shape are the superseded window's (`windowFormParams`).
 * `Registration`: one-stage's record of the window (`registration.record`), canonical JSON, with what PoUW's rule reads;
   its digest is the record's own, `registration.digest`.
 * `Evidence`: the proof service's answer for a registration, read by `Core.Answer.ofJson`: the protocol, the
@@ -24,19 +28,31 @@ open Flock (V)
 
 def scheme : String := "frame-v3-sha512/hm96-sha512"
 def formats : List String := ["verity/registration/v1", "verity/registration/v2"]
-def paramsKeys : List String := ["check", "context", "delta", "eps", "grid_bits", "query", "range"]
+def paramsKeys : List String := ["check", "context", "delta", "eps", "grid_bits", "query", "range", "shape"]
+/-- `WINDOW_FORM_PARAMS`: the superseded window's parameters, which have no shape (decision 129: refuse and label). -/
+def windowFormParams : String :=
+  "window-form: the parameters have no shape: they are the superseded window's, whose tiles and N followed its real tiles"
 def checkKeys : List String := ["entries", "scheme", "template", "tile_work"]
+/-- `window.COINS` and `window.MODES`: the check item's optional key and the coin modes it may name. -/
+def coinsKey : String := "coins"
+def coinModes : List String := ["live", "seeded"]
 
-/-- The `check` item: the tile template, its work per tile, the commitment scheme and the public bound on entries. -/
+/-- The `check` item: the tile template, its work per tile, the commitment scheme, the public bound on entries, and the
+window's coin mode when the item names one (`window.mode`: seeded when it names none). -/
 structure CheckItem where
   entries : Nat
   scheme : String
   template : String
   tileWork : Nat
+  coins : Option String := none
   deriving DecidableEq, Repr
 
 def CheckItem.toJson (c : CheckItem) : Json :=
-  Json.mkObj [("entries", c.entries), ("scheme", c.scheme), ("template", c.template), ("tile_work", c.tileWork)]
+  let item : List (String × Json) :=
+    [("entries", c.entries), ("scheme", c.scheme), ("template", c.template), ("tile_work", c.tileWork)]
+  Json.mkObj (match c.coins with
+    | some m => (coinsKey, Json.str m) :: item
+    | none => item)
 
 structure Params where
   check : CheckItem
@@ -48,6 +64,8 @@ structure Params where
   query : String
   lo : Nat
   hi : Nat
+  /-- The window's shape (`window.shape_of`): its calls, which fix its N, entries and the tile each index is. -/
+  shape : List PouwWindow.Call
   deriving DecidableEq, Repr
 
 def isHexDigest (s : String) : Bool := s.length = 128 && s.all fun c => c.isDigit || ('a' ≤ c && c ≤ 'f')
@@ -60,9 +78,15 @@ def ratioField (j : Json) (k : String) (ok : Core.Ratio → Bool) (what : String
   pure r
 
 def paramsOf (j : Json) : V Params := do
+  if keys j == some (paramsKeys.filter (· != "shape")) then throw windowFormParams
   unless keys j == some paramsKeys do throw s!"keys are not {", ".intercalate paramsKeys}"
   let c := get j "check"
-  unless keys c == some checkKeys do throw s!"check's keys are not {", ".intercalate checkKeys}"
+  unless (keys c).map (·.filter (· != coinsKey)) == some checkKeys do
+    throw s!"check's keys are not {", ".intercalate checkKeys}, and optionally {coinsKey}"
+  let coins : Option String ← match PouwWindow.field? c coinsKey with
+    | none => pure none
+    | some (.str s) => if coinModes.contains s then pure (some s) else throw s!"check.{coinsKey} is not live or seeded"
+    | some _ => throw s!"check.{coinsKey} is not live or seeded"
   let some entries := (nat? (get c "entries")).filter (2 ≤ ·)
     | throw "check.entries is not a natural number of at least 2"
   unless get c "scheme" == .str scheme do throw s!"check.scheme is not {scheme}"
@@ -81,7 +105,15 @@ def paramsOf (j : Json) : V Params := do
       if 1 ≤ lo ∧ lo ≤ hi then some (lo, hi) else none
     | _ => none
   let some (lo, hi) := range | throw "range is not [lo, hi] with 1 <= lo <= hi"
-  pure { check := ⟨entries, scheme, template, tileWork⟩, context, delta, eps, gridBits, query, lo, hi }
+  let some tile := tile? template | throw "check.template is not a tile template the verifier pins"
+  unless tile.tileWork == tileWork do throw "check.tile_work is not its pinned template's tile work"
+  unless tile.query == query do throw "query is not its pinned template's query digest"
+  let some shape := PouwWindow.shapeOf? (get j "shape")
+    | throw "shape is not a non-empty list of calls {m, n, tile0} of natural numbers"
+  if let some why := PouwWindow.shapeProblem shape entries then throw s!"shape: {why}"
+  let n := PouwWindow.shapeTiles shape
+  if n > hi then throw s!"shape: its {n} tiles are more than the range's {hi}"
+  pure { check := { entries, scheme, template, tileWork, coins }, context, delta, eps, gridBits, query, lo, hi, shape }
 
 /-- One of the record's roots. -/
 structure Root where

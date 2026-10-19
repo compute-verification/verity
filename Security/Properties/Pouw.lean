@@ -44,33 +44,35 @@ def PointEnumerates : Prop :=
   ∀ bits, point bits 0 = 1 ∧ (∀ ℓ, point bits ℓ < point bits (ℓ + 1)) ∧ (∀ ℓ, IsPoint bits (point bits ℓ)) ∧
     (∀ ℓ, level bits (point bits ℓ) = ℓ) ∧ ∀ g, IsPoint bits g → point bits (level bits g) = g
 
-/-- The window `bucket(real)` answers registers the level of the largest point at most `real`: it is credited that point
-and pads to the least point above `real`. -/
-def BucketCredits : Prop :=
-  ∀ bits (real : Int) w, bucket? bits real = .ok w →
-    w = Work.at bits w.level ∧ w.credited = floorPoint bits real.toNat ∧ w.credited ≤ real.toNat ∧ real.toNat < w.n ∧
-      w.n = pad bits (real.toNat + 1)
+/-- The work `credit(real, n)` answers, for a window of `n` tiles (its shape's) whose masked sum is `real` credited tiles,
+registers the level of the largest point at most `real`: it is credited that point of its `n` tiles, never the filler's,
+so fewer than `n`. -/
+def CreditCredits : Prop :=
+  ∀ bits (real n : Int) w, credit? bits real n = .ok w →
+    w = Work.at bits w.level n.toNat ∧ w.credited = floorPoint bits real.toNat ∧ w.credited ≤ real.toNat ∧
+      w.credited < w.n
 
-/-- The grid's cost for a window `w` of `real` real tiles: from `2^bits` real tiles up, the credit drops less than a share
-`2^-bits` of the real tiles, and the padded count is at most `1 + 2^-bits` times the credit. -/
+/-- The grid's cost for a window `w` whose masked sum is `real` credited tiles: from `2^bits` up, the credit drops less
+than a share `2^-bits` of them. The padding (empty slots, refused rows and the filler) is the shape's, and costs K′ but
+no credit. -/
 def CostBounded (bits real : Nat) (w : Work) : Prop :=
-  2 ^ bits ≤ real → real * (2 ^ bits - 1) < w.credited * 2 ^ bits ∧ w.n * 2 ^ bits ≤ w.credited * (2 ^ bits + 1)
+  2 ^ bits ≤ real → real * (2 ^ bits - 1) < w.credited * 2 ^ bits
 
-/-- The window `bucket(real)` answers costs what `CostBounded` says. -/
-def BucketCost : Prop := ∀ bits (real : Int) w, bucket? bits real = .ok w → CostBounded bits real.toNat w
+/-- The work `credit(real, n)` answers costs what `CostBounded` says. -/
+def CreditCost : Prop := ∀ bits (real n : Int) w, credit? bits real n = .ok w → CostBounded bits real.toNat w
 
-/-- The served grid's cost for a window `w` of `real` real tiles: from 8 real tiles up, the credit is more than 7/8 of
-them and the padded count at most 9/8 of the credit. -/
-def CostBounded3 (real : Nat) (w : Work) : Prop := 8 ≤ real → 7 * real < 8 * w.credited ∧ 8 * w.n ≤ 9 * w.credited
+/-- The served grid's cost for a window `w` whose masked sum is `real`: from 8 credited tiles up, the credit is more
+than 7/8 of them. -/
+def CostBounded3 (real : Nat) (w : Work) : Prop := 8 ≤ real → 7 * real < 8 * w.credited
 
-/-- On the served grid, the window `bucket(real)` answers costs what `CostBounded3` says. -/
-def BucketCost3 : Prop := ∀ (real : Int) w, bucket? gridBits real = .ok w → CostBounded3 real.toNat w
+/-- On the served grid, the work `credit(real, n)` answers costs what `CostBounded3` says. -/
+def CreditCost3 : Prop := ∀ (real n : Int) w, credit? gridBits real n = .ok w → CostBounded3 real.toNat w
 
-/-- `k` counts the levels a tile count in `[lo, hi]` registers, which are consecutive from `lo`'s, when `lo ≤ hi`. -/
+/-- `k` counts the levels a masked sum in `[lo, hi]` registers, which are consecutive from `lo`'s, when `lo ≤ hi`. -/
 def LevelsCounted (bits lo hi : Nat) (k : Int) : Prop :=
   lo ≤ hi → 0 < k ∧
-    ∀ ℓ, (∃ r, lo ≤ r ∧ r ≤ hi ∧ (bucket bits r).level = ℓ) ↔
-      (bucket bits lo).level ≤ ℓ ∧ (ℓ : Int) < (bucket bits lo).level + k
+    ∀ ℓ, (∃ r, lo ≤ r ∧ r ≤ hi ∧ level bits (floorPoint bits r) = ℓ) ↔
+      level bits (floorPoint bits lo) ≤ ℓ ∧ (ℓ : Int) < level bits (floorPoint bits lo) + k
 
 /-- What `levels(lo, hi)` answers counts what `LevelsCounted` says. -/
 def LevelsCount : Prop :=
@@ -81,8 +83,8 @@ level, so takes at most 9 bits, within a proof unit's 16. -/
 def LevelsServed : Prop :=
   levels gridBits 1 (2 ^ 40) = 304 ∧ levels gridBits (2 ^ 10) (2 ^ 30) = 161 ∧ levels gridBits 1 (2 ^ 40) ≤ 2 ^ 9
 
-/-- A window of 8192 real tiles registers level 87: credited 8192, padded to 9216. -/
-def Bucket8192 : Prop := bucket gridBits 8192 = ⟨87, 8192, 9216⟩
+/-- A full window of 8192 tiles, every one credited, and its filler registers level 87: credited 8192 of its 8193. -/
+def Credit8192 : Prop := credit gridBits 8192 8193 = ⟨87, 8192, 8193⟩
 
 /-! Python's grid functions on any integer answer only on their domain, and what they answer is the function on
 naturals. -/
@@ -93,8 +95,9 @@ def FloorPointRefuses : Prop := ∀ bits (n : Int) g, floorPoint? bits n = .ok g
 /-- `pad(n)` answers only for a tile count `n ≥ 1`, and answers `pad` of it. -/
 def PadRefuses : Prop := ∀ bits (n : Int) g, pad? bits n = .ok g → 1 ≤ n ∧ g = pad bits n.toNat
 
-/-- `bucket(n)` answers only for a tile count `n ≥ 1`, and answers `bucket` of it. -/
-def BucketRefuses : Prop := ∀ bits (n : Int) w, bucket? bits n = .ok w → 1 ≤ n ∧ w = bucket bits n.toNat
+/-- `credit(real, n)` answers only for a masked sum `1 ≤ real < n`, and answers `credit` of it. -/
+def CreditRefuses : Prop :=
+  ∀ bits (real n : Int) w, credit? bits real n = .ok w → 1 ≤ real ∧ real < n ∧ w = credit bits real.toNat n.toNat
 
 /-- `level(n)` answers only for a grid point `n`, and answers `level` of it. -/
 def LevelRefuses : Prop :=
@@ -103,8 +106,9 @@ def LevelRefuses : Prop :=
 /-- `point(ℓ)` answers only for a level `ℓ ≥ 0`, and answers `point` of it. -/
 def PointRefuses : Prop := ∀ bits (ℓ : Int) g, point? bits ℓ = .ok g → 0 ≤ ℓ ∧ g = point bits ℓ.toNat
 
-/-- `Work.at(ℓ)` answers only for a level `ℓ ≥ 0`, and answers `Work.at` of it. -/
-def WorkAtRefuses : Prop := ∀ bits (ℓ : Int) w, Work.at? bits ℓ = .ok w → 0 ≤ ℓ ∧ w = Work.at bits ℓ.toNat
+/-- `Work.at(ℓ, n)` answers only for a level `ℓ ≥ 0`, and answers `Work.at` of it. -/
+def WorkAtRefuses : Prop :=
+  ∀ bits (ℓ : Int) (n : Nat) w, Work.at? bits ℓ n = .ok w → 0 ≤ ℓ ∧ w = Work.at bits ℓ.toNat n
 
 /-- `levels(lo, hi)` answers only for tile counts `lo, hi ≥ 1`, and answers `levels` of them. -/
 def LevelsRefuses : Prop :=
@@ -136,13 +140,15 @@ def MissBounded (eps δ : Rat) (credited n w : Int) (B k : Nat) : Prop :=
 def DrawMisses : Prop :=
   ∀ eps δ (credited n w : Int) (B k : Nat), kPrime eps δ credited n w = .ok k → MissBounded eps δ credited n w B k
 
-/-- K′ at level ℓ of the served grid, at ε = 1/2, for FP8 tiles of 4096 (`sampling`'s law; 0 if refused). -/
+/-- K′ at level ℓ of the served grid, at ε = 1/2, for FP8 tiles of 4096 (`sampling`'s law; 0 if refused), for the
+largest full window registering ℓ: `point (ℓ + 1) − 1` tiles, every one credited, and the filler, so `N = point (ℓ + 1)`.
+K′ grows with N at a fixed credit, so this is the most a full window at ℓ draws; a window with more padding draws more. -/
 def servedK (δ : Rat) (ℓ : Nat) : Nat :=
-  let w := Work.at gridBits ℓ
+  let w := Work.at gridBits ℓ (point gridBits (ℓ + 1))
   ((kPrime (1 / 2) δ (w.credited * 4096) w.n 4096).toOption).getD 0
 
-/-- The served draw's sizes: 4 tiles for the 8192-tile window at δ = 1/10, and over every level for 1 to 2⁴⁰ tiles
-(0 to 303) at most 5 at δ = 1/10 and 48 at δ = 2⁻⁴⁰. -/
+/-- The served draw's sizes for full windows: 4 tiles for 9215 tiles and the filler (credited 8192 of 9216) at
+δ = 1/10, and over every level for 1 to 2⁴⁰ tiles (0 to 303) at most 5 at δ = 1/10 and 48 at δ = 2⁻⁴⁰. -/
 def KPrimeServed : Prop :=
   (kPrime (1 / 2) (1 / 10) (8192 * 4096) 9216 4096).toOption = some 4 ∧
     ((List.range 304).map (servedK (1 / 10))).foldl max 0 = 5 ∧
@@ -154,10 +160,10 @@ def KPrimeExactAtEquality : Prop := (kPrime 1 (1 / 512) 7 8 1).toOption = some 3
 
 /-! ## What is public -/
 
-/-- `PUBLIC` is the draft's six items, each of one of the four kinds a protocol may make public, and a registration
-carries the ones that do not come from the outcome. -/
+/-- `PUBLIC` is the draft's six items and the window's shape, each of one of the four kinds a protocol may make public,
+and a registration carries the ones that do not come from the outcome. -/
 def PublicItems : Prop :=
-  publicItems.map (·.item) = ["verdict", "work", "check", "sampling", "drawn", "root_W"] ∧
+  publicItems.map (·.item) = ["verdict", "work", "check", "sampling", "shape", "drawn", "root_W"] ∧
     publicItems.all (fun x => ["output", "structure", "coins", "commitment"].contains x.kind) = true ∧
     registered = (publicItems.filter (·.source != "outcome")).map (·.item)
 

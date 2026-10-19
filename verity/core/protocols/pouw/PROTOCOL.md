@@ -75,8 +75,12 @@ and `frame-b3s` that -h1, -h2 and BLAKE3 -h3 named are in `archive/pouw-blake3/`
 in `.agents/skills/friction/SKILL.md`.
 
 **Randomness.** The protocol owns the outer coins, the salt and the draw, and both are the challenger's epoch coins, never
-a public beacon and never Fiat-Shamir over the prover's roots. A scheme's noise is its own derivation from the salt and the
-prover's roots, Fiat-Shamir inside the scheme, whose grinding is inside the conjecture's error term.
+a public beacon and never Fiat-Shamir over the prover's roots. A window's check item says its coin mode, its optional
+`coins`, `live` or `seeded` (`window.mode`, Compose's `CoinMode`; an item that names none is seeded). In a seeded window
+(`coins.SCHEME`, Pearl-C's served path) a scheme's noise is its own derivation from the salt and the prover's roots,
+Fiat-Shamir inside the scheme, whose grinding is inside the conjecture's error term. In a live window
+(`window.LIVE_SCHEME`, "Live epochs" below) round r's noise is keyed by round r's coin, opened only after the verifier
+recorded round r's root (decision 36).
 
 ## Epoch coins (`coins`)
 
@@ -102,6 +106,34 @@ asked for, that is malformed, that does not open against the epoch's root, or wh
 (`coin_reason`). A second request for an opened coin is refused, so a retry never redraws. The coins are the designated
 verifier's: an outcome convinces the auditor, who trusts its own challenger, and no third party (claim `live-verifier`).
 Vectors: `tests/vectors/epoch_coins_v1.json`.
+
+**Live coins** come from the proof service's one challenger (`verity.core.protocols.sampled_proofs.challenger`, Lean of
+record `SampledProofs.Challenger`), whose coins are indexed by label and index and named by no protocol, so every client
+uses the same form: a layout is a scheme, an epoch and its families `(label, count)` in order, coin `(label, i)` at its
+family's offset plus i, at most 2^20 coins. Before the epoch the challenger draws every coin and publishes
+
+~~~text
+x_p     = SHA-512(scheme || 0x00 || coin_p)
+value_p = hm96-sha512 tree_leaf(key, commit_string(key, x_p, salt_p))     salt_p: 192 fresh bytes, key the pinned default
+root    = frame-v3-sha512 tree over value_0 … value_(K−1) at positions 0 … K−1, leaf schema the scheme, domain binding
+          identity_digest_sha512("verity/challenger/coins/v1", {epoch, families, scheme}), owner -1
+~~~
+
+and opens coin `(label, i)` once, after the root the verifier recorded for it. `live_reason` checks one opening (its epoch,
+label and index, its form, the path against the root, and `after`); `order_reason` checks a family's openings against the
+roots the verifier recorded, in order: coin i opened after root i, none twice ("a retry never redraws"), none before its
+root is recorded, and every recorded root's coin opened. `LiveRecord` is the verifier's side: it records a root and only
+then asks the challenger for that root's coin.
+
+**Live epochs** (`window.live_challenger`, `rounds_reason`, `round_key`; Lean `PouwWindow.Rounds`). A live PoUW epoch's
+coins are the layout `live_families(R)` under `LIVE_SCHEME` (`"verity/pouw/epoch-coins/live/v1"`): its salt coin
+(`"pouw/salt"`), its draw coin (`"pouw/draw"`) and R round coins (`"pouw/round"`, rounds numbered from 0 as Compose's
+`Declared.round` numbers them), R the most rounds a window of the epoch takes, fixed when the challenger commits. Round
+r's coin opens after the verifier recorded round r's root, the root of the values round r commits, and round r's noise
+key is `derive(coin_r, "verity/pouw/round-noise/v1", {coins: root, epoch: e, root: root_r, round: r})`: the deferred
+noised products, keyed by a coin the prover could not see when it committed. `core_check.rounds` (Lean
+`PouwCheck.roundsCheck`) is the rule on a window's round coins. A seeded epoch's commitment is unchanged (`SCHEME`, salt
+and draw only).
 
 ## Registered weights (`registration`)
 
@@ -164,6 +196,14 @@ level and K′ are in `window`'s docstring). This section is the window's layout
 that a drawn tile's reads are a function of public inputs alone. `benchmarks/pouw/served_zk/served_commit.py` commits a
 window this way.
 
+**The window is static** (Daniel, 18 Oct): its structure is a function of its public **shape** alone (the registration's
+item `shape`, `window.Call`, `shape_of`): each call's batch slots m (every slot, whether a request filled it or not), its
+weight rows n and its first tile tile0 in its pass. The window has N = Σ m_c·n_c + 1 tiles, the last the filler's
+(`shape_tiles`); every entry's kind, range, row counts and place in the pass are the shape's (`shape_entries`), and so are
+drawn index t's entry and rows (`tile_at`), so no read between units depends on a value. A registration with no shape is
+the old form, whose structure followed the real tokens; the check refuses it as `window-form` (`core_check.registered`,
+Lean `PouwCheck.registered`).
+
 **The window root** (port `entries`) is a frame-v3-sha512 tree of P entries (the public bound, 16 for served windows),
 registered before the draw. The calls come first, then exactly one filler, then empty entries up to P. Entry e is an
 `hm96-sha512/row/v2` row at index e: the leaf is hm96-sha512's tree leaf of `commit_string(key, x, salt_e)`, where x is
@@ -191,31 +231,44 @@ bytes     0..8    kind      0 none, 1 call, 2 filler
         272..336  record    a call's record: SHA-512 of its RFC 8785 canonical JSON; zero for the filler and for none
 ~~~
 
-An empty entry is the zero row. A call's record is the committer's own description of the call: its `shape` [m, k, n],
-its `tile0`, and `keep`, for each side the places in the call of the rows the side tree holds, strictly increasing. The
-entry binds the record only by its SHA-512, so no tile reads it; tile0, cols and m are the record's, in the row, so a tile
-reads them.
+An empty entry is the zero row. A call's record is the committer's own description of the call: its `shape` [m, k, n]
+and its `tile0`, m and n the shape's. The entry binds the record only by its SHA-512, so no tile reads it; tile0, cols and
+m are the shape's, in the row, so a tile reads them.
 
-**A side tree** is dense: it holds only the rows its call keeps (a row the scheme refused is no tile's), in order. So the
-call's n_a·n_b tiles are the products of A's rows and B's, row-major, and index u of the range [lo, hi) is A row
-u div n_b and B row u mod n_b (`tile_in`). The filler's sides are zero rows (index field included): n_b = min(2^D_B, max(⌈√fill⌉, ⌈fill/2^D_A⌉))
-and n_a = ⌈fill/n_b⌉. Its range covers N − N_real ≤ n_a·n_b tiles. Every side tree has 2^D leaves, with D_A = 13 (the
-served batch is at most 8,192 tokens) and D_B = 17. Leaf i < n is row i's frame-v3 leaf under the row's own schema. Every
-leaf from n on is frame-v3's pad leaf of the side domain at its rank: frame-v3 pads any tree to a power of two this way,
-so a side root is `tree_levels` over the n row leaves followed by 2^D − n pad leaves (`side_levels`, `side_path`).
+**A side tree** holds every row of its call in place: side A's leaf i is slot i's row (i < m), side B's leaf j weight row
+j (j < n). So the call's m·n tiles are the products of A's rows and B's, row-major, and index u of the range [lo, hi) is
+A row u div n and B row u mod n (`tile_at`). An empty slot is the canonical empty row, and a row its forming refused
+stays at its leaf with ok 0 (its operand words the forming's, or zero when the forming raised), so neither moves a tile.
+The filler's sides are one canonical empty row each, and its range is the one tile N − 1. Every side tree has 2^D leaves,
+with D_A = 13 (the served batch is at most 8,192 slots) and D_B = 17. Leaf i < n is row i's frame-v3 leaf under the
+row's own schema. Every leaf from n on is frame-v3's pad leaf of the side domain at its rank: frame-v3 pads any tree to a
+power of two this way, so a side root is `tree_levels` over the n row leaves followed by 2^D − n pad leaves
+(`side_levels`, `side_path`).
 
-**A side row** is the call's operand row, then its place in the call (`side_row`): I for an A row (< 2^13), J for a B row
-(< 2^17), a u32 in one 128-bit word. The operand words keep their offsets, and the row's schema is its role's, as before:
+**A side row** is the call's operand row, then its index field (`side_row`, `side_field`), one 128-bit word: its place
+in the call, I for an A row (< 2^13) or J for a B row (< 2^17), a u32; its `ok`, its forming's verdict (`Pc8RowA`'s or
+`Pc8RowB`'s ``ok``: 1 when the noise floor ρ·α >= 1 holds and the row is live); and its `admit`, whether it holds
+admitted work (a slot's request from the batch's queue, and every weight row; 0 for an empty slot and the filler). The
+operand words keep their offsets, and the row's schema is its role's, as before:
 
 ~~~text
 words     0..k/2          the k E4M3 codes, two a word, low first
           k/2..k/2+64     P's 64 BF16 words
           k/2+64..+66     the index I or J, a u32, low word first
-          k/2+66..+72     zero
+          k/2+66          ok, 0 or 1
+          k/2+67          admit, 0 or 1
+          k/2+68..+72     zero
 ~~~
 
 That is k/2 + 72 words, 2,120 at k = 4,096 (33,920 bits). A's rows are `hm96-sha512/row-seg/v1` (role X), B's
-`hm96-sha512/row/v2` (role W).
+`hm96-sha512/row/v2` (role W). The canonical empty row is zero operand words with ok 0 and admit 0, its index its leaf.
+
+**The credit is the masked sum.** Tile (i, j) of a call is credited iff s = admit_i ∧ ok_i ∧ admit_j ∧ ok_j, and the
+window is credited Σ_c (Σ_i ok_i·admit_i)·(Σ_j ok_j·admit_j) tiles (`selected`), rounded down to the grid (`credit`),
+of the shape's N. An empty slot, a refused row and the filler are drawn like every tile and never credited. The draw is
+uniform over the N tiles, never weighted by an annotation. Until the units that set ok and admit (the rows' formings,
+the queue's admission, the tally) are always proved, a row with both words set wrongly is credited
+(`note:compute-accounting/20261018T2200Z-draft-padded-credit-rule`, §8).
 
 **The side domains** are one per window and side, with no entry index and no row count:
 
@@ -249,9 +302,9 @@ call's root_h3 to the root the pass published.
 **The verdict asserts the served result.** A drawn tile's unit (TileRead, not yet a Program) reads three committed
 rows: its A row and its B row through its entry's side roots, and its pass's -h3 leaf through root_h3. It compares, in
 gates, the leaf's x with the -h3 leaf its own tile's words give, so the tile it proves is the tile the pass served. The
-read is not at position t. Window tile t is one word, (I, J) = (keep_a[i], keep_b[j]) of its call for
-(i, j) = `tile_in(entry, t)`. The unit reads I from its A row's index field and J from its B row's, and tile0, cols and m
-from its entry row, and the pass's leaf holding the word is (`tile_read`)
+read is not at position t. Window tile t is one word, (I, J) = (i, j) of its call c for (c, i, j) =
+`tile_at(shape, t)`, since every row sits at its place. The unit reads I from its A row's index field and J from its B
+row's, and tile0, cols and m from its entry row, and the pass's leaf holding the word is (`tile_read`)
 
 ~~~text
 p     tile0 + (I div 64)·cols + (J div 64)
@@ -267,24 +320,26 @@ advice), not `Pc8TileHidden`'s 1 x 1 digest. Until TileRead is a Program, a draw
 rows, which it reads whole, index field included (`pc8.SIDE_PORTS`, row `fp8-pi`), so its committed inputs are the side
 trees' leaves. It reads I and J as values and uses neither yet, and it reads no -h3 leaf.
 
-The side rows' indices are bound to the record in the window's reference only: the window statement in gates reads the P
-entry rows, not the up to 2^13 + 2^17 side rows under each entry or the record's preimage. `window_problem`, given the
-records and the side rows' indices, holds each call's indices to its record's keep, strictly increasing, and its tile0,
-cols and m to its shape, so i -> I and j -> J are injective and no two window tiles read one word.
+The side rows' fields are held in the window's reference only: the window statement in gates reads the P entry rows, not
+the up to 2^13 + 2^17 side rows under each entry or the record's preimage. `window_problem`, given the side rows' fields,
+holds each row's index to its leaf, so i -> I and j -> J are the identity and no two window tiles read one word; given
+the records, it holds each call's tile0, cols and m to its record.
 
-**The window statement** (L4, `window_problem`) holds on the P entry rows and the pass's published tile root when all of
-the following hold:
+**The window statement** (L4, `window_problem`) holds on the P entry rows, the pass's published tile root and the public
+shape when all of the following hold:
 
+- the shape is one (`shape_problem`): 1 to P − 1 calls, each m a multiple of 16 from 16 to 2^D_A and each n 1 to 2^D_B,
+  their pass tiles [tile0, tile0 + ⌈m/64⌉·⌈n/64⌉) in order, disjoint and 40-bit, and N below 2^40;
 - each row is an entry row: 336 bytes, a known kind, and zero words at 40..48 and 264..272;
 - each entry satisfies the layout (`layout_problem`): its range is 40-bit, an empty entry is the zero row, a call's or
   the filler's sides hold 1..2^D rows, the filler's root_h3, record, tile0, cols and m are zero, and a call's m, cols
   and pass tiles are in the table's bounds;
-- the kinds are the calls (at least one), then one filler, then empty entries;
-- the calls' and the filler's ranges are nonempty and contiguous from 0;
-- a call's range is exactly its n_a·n_b tiles, and the filler's is at most its n_a·n_b;
+- each entry's kind, range, row counts, tile0, cols and m are the shape's (`shape_entries`): the calls, then the filler
+  at N − 1, then empty entries;
 - every call's root_h3 is the pass's tile root;
-- the calls' pass tiles [tile0, tile0 + ⌈m/64⌉·cols) are in order and disjoint;
-- the ranges end at N, and the registered level is `bucket` of the calls' tiles N_real.
+- in the side rows' fields, each row's index is its leaf, ok, admit and blank are bits, every row not admitted is the
+  canonical empty row (the emptiness check, so an empty slot's ok can't be set), and the filler's rows are not admitted;
+- the masked sum is at least 1, and the registered work is its `credit` of the shape's N.
 
 **The tile instances' public inputs.** The K′ drawn tiles are proved in S = ⌈K′/cap⌉ sessions of `cap` instances each
 (`sessions`). Session σ's instance s takes the tile t = drawn[σ·cap + s] while σ·cap + s < K′, and otherwise t = N − 1,

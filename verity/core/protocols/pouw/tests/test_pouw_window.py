@@ -43,21 +43,35 @@ def test_q_over_the_declared_ranges():
     assert round(math.log2(304), 2) == 8.25
 
 
-def test_bucket_credits_the_floor_point_and_pads_past_the_real_count():
+def _bucket(real: int) -> Wd.Work:
+    """The work of a window of N = pad(real + 1) tiles of which `real` are credited."""
+    return Wd.credit(real, Wd.pad(real + 1))
+
+
+def _at(ell: int) -> Wd.Work:
+    """Level ell's work in a window of the next grid point's tiles."""
+    return Wd.Work.at(ell, Wd.point(ell + 1))
+
+
+def test_credit_is_the_floor_point_of_the_masked_sum_of_the_shapes_tiles():
+    """The window keeps its N, the shape's, and is credited floor_point(real) of them; real is 1 to N − 1 (the filler is
+    never credited)."""
     for real in (1, 7, 16, 17, 24, 25, 1000, 10**7, 2**33 + 1):
-        w = Wd.bucket(real)
-        assert w.credited <= real < w.n and w.n == Wd.point(w.level + 1) and Wd.Work.at(w.level) == w
-        if real > 16:
-            assert Fraction(w.credited, real) > Fraction(8, 9) and Fraction(w.n, w.credited) <= Fraction(9, 8)
-    assert Wd.bucket(24).to_json(4096) == {"level": 19, "n": 26, "credited_tiles": 24, "credited": 24 * 4096}
+        for n in (real + 1, 2 * real + 3):
+            w = Wd.credit(real, n)
+            assert w.credited == Wd.floor_point(real) <= real < w.n == n and Wd.Work.at(w.level, n) == w
+            if real > 16:
+                assert Fraction(w.credited, real) > Fraction(8, 9)
+    assert Wd.credit(24, 129).to_json(4096) == {"level": 19, "n": 129, "credited_tiles": 24, "credited": 24 * 4096}
+    for real, n in ((0, 5), (5, 5), (6, 5), (True, 5), (3, 2.0)):
+        with pytest.raises(ValueError):
+            Wd.credit(real, n)
 
 
-def test_the_padded_count_is_the_unit_count_bucket_of_the_real_tiles_and_one_filler():
-    """N is the least grid point at or above N_real + 1, the private partition's n_b on the same grid."""
+def test_pad_is_the_least_grid_point_at_or_above_n():
     for n in range(1, 3000):
         g = Wd.pad(n)
         assert Wd.on_grid(g) and g >= n and (g == n or Wd.floor_point(n) < n < g)
-        assert Wd.bucket(n).n == Wd.pad(n + 1)
     assert [Wd.pad(n) for n in (16, 17, 18, 19, 8192, 8193)] == [16, 18, 18, 20, 8192, 9216]
 
 
@@ -65,16 +79,16 @@ def test_k_prime_is_the_smallest_k_whose_miss_probability_is_at_most_delta():
     eps, delta = Fraction(1, 1000), Fraction(1, 2**40)
     full = Wd.k_prime(eps, delta, 10**7, 10**7, 1)
     assert full == 27713
-    w = Wd.bucket(10**7)
+    w = _bucket(10**7)
     k = Wd.k_prime(eps, delta, w.credited, w.n, 1)
     p = float(eps * w.credited / w.n)
     assert (1 - p) ** k <= float(delta) < (1 - p) ** (k - 1) and full <= k <= math.ceil(full * 9 / 8)
-    assert Wd.k_prime(Fraction(1, 2), Fraction(1, 10), Wd.bucket(8192).credited, Wd.bucket(8192).n, 1) == 4
+    assert Wd.k_prime(Fraction(1, 2), Fraction(1, 10), _bucket(8192).credited, _bucket(8192).n, 1) == 4
     assert Wd.k_prime(Fraction(1), Fraction(1, 10), 5, 5, 1) == 1
     assert Wd.k_prime(Fraction(1, 2), Fraction(1, 2**40), 2, 3, 1) == 3
     with pytest.raises(ValueError):
         Wd.k_prime(Fraction(0), Fraction(1, 2), 1, 1, 1)
-    s = Wd.sampling(Fraction(1, 2), Fraction(1, 10), Wd.bucket(8192), 4096)
+    s = Wd.sampling(Fraction(1, 2), Fraction(1, 10), _bucket(8192), 4096)
     assert s == {"eps": "1/2", "delta": "1/10", "grid_bits": 3, "law": {"law": "subset", "k": 4}}
 
 
@@ -89,7 +103,7 @@ def _k_naive(eps, delta, credited, n, w):
 def test_k_prime_is_exact_in_rationals():
     """(1 − p)^K = δ exactly takes the K that reaches it: at level 6 (7 tiles credited, 8 padded) with ε = 1, (1/8)^3 = 2^-9,
     where binary64 logarithms gave 4."""
-    w = Wd.Work.at(6)
+    w = _at(6)
     assert (w.credited, w.n) == (7, 8)
     assert Wd.k_prime(Fraction(1), Fraction(1, 512), w.credited * 4096, w.n, 4096) == 3
     assert Wd.k_prime(Fraction(1, 2), Fraction(1, 8), 1, 1, 1) == 1 and Wd.k_prime(Fraction(1, 2), Fraction(1, 8), 1, 4, 1) == 4
@@ -127,6 +141,9 @@ def test_k_prime_at_the_cap_and_at_2_to_the_60():
         assert 1 <= k <= n and not (k > 1 and Wd.miss_at_most(q, k - 1, delta))
         assert k == n or Wd.miss_at_most(q, k, delta)
     assert Wd.k_prime(eps, delta, 1, 1 << 60, 1) == 1 << 60
+    # p = 2^54/(2^54 + 1) < 1 rounds to 1.0 in binary64: the start is K = 1, not log1p(−1)'s domain error
+    assert Wd.k_prime(Fraction(1), Fraction(1, 10), 1 << 54, (1 << 54) + 1, 1) == 1
+    assert Wd.k_prime(Fraction(1), Fraction(1, 2 ** 60), 1 << 54, (1 << 54) + 1, 1) == 2
 
 
 def _d(n: int) -> bytes:
@@ -137,15 +154,30 @@ def _d(n: int) -> bytes:
 H3 = _d(60)
 
 
-def _entries(work, real_a=(3, 2), rows_b=4, filler=(1, 2), bound=5):
-    """Calls of 16 x k x 64 at pass tiles 0, 1, ..., then the filler."""
-    out, at = [], 0
-    for c, a in enumerate(real_a):
-        out.append(Wd.Entry("call", at, at + a * rows_b, a, rows_b, _d(2 * c + 1), _d(2 * c + 2), H3, _d(100 + c),
-                            tile0=c, cols=1, m=16))
-        at += a * rows_b
-    out.append(Wd.Entry("filler", at, work.n, *filler, _d(50), _d(51)))
-    return out + [Wd.Entry("none")] * (bound - len(out))
+#: two calls of 16 slots and 4 weight rows, at pass tiles 0 and 1: N = 129
+SHAPE = (Wd.Call(16, 4, 0), Wd.Call(16, 4, 1))
+
+
+def _entries(shape=SHAPE, bound=5):
+    """The shape's entries with their roots: each call's sides, the pass's -h3 root and a record digest; the filler's."""
+    out = []
+    for c, e in enumerate(Wd.shape_entries(shape, bound)):
+        if e.kind == "call":
+            e = replace(e, root_a=_d(2 * c + 1), root_b=_d(2 * c + 2), root_h3=H3, record=_d(100 + c))
+        elif e.kind == "filler":
+            e = replace(e, root_a=_d(50), root_b=_d(51))
+        out.append(e)
+    return out
+
+
+def _fields(shape=SHAPE, real=(3, 2), refused=((), ())):
+    """Each call's side rows' (index, ok, admit, blank): its first real[c] slots admitted, those in refused[c] with ok 0,
+    the rest canonical empty rows; every weight row admitted and formed; the filler's one empty row each side."""
+    out = []
+    for c, call in enumerate(shape):
+        a = [[i, int(i not in refused[c]), 1, 0] if i < real[c] else [i, 0, 0, 1] for i in range(call.m)]
+        out.append({"a": a, "b": [[j, 1, 1, 0] for j in range(call.n)]})
+    return out + [{"a": [[0, 0, 0, 1]], "b": [[0, 0, 0, 1]]}]
 
 
 def _rows(entries):
@@ -200,19 +232,24 @@ def test_the_layout_bounds_each_entry():
         assert re.search(why, Wd.layout_problem(bad)), (bad, why)
 
 
-def test_a_side_row_is_its_operand_row_then_its_index():
-    """A side row is the operand row's words, then one 128-bit word: its index as a u32 (two u16 words, low first) and
-    six zero words; fp8-p at k = 4096 gives 2,120 words."""
-    words = list(range(16))
-    row = Wd.side_row(words, 0x1_2345)
-    assert row == words + [0x2345, 1, 0, 0, 0, 0, 0, 0] and Wd.side_index(row) == 0x1_2345
-    assert len(Wd.side_row([0] * (4096 // 2 + 64), 8191)) == 2120
-    for bad in ((words[:-1], 0), (words, -1), (words, 1 << 32), (words, True)):
+def test_a_side_row_is_its_operand_row_then_its_index_and_annotations():
+    """A side row is the operand row's words, then one 128-bit word: its index as a u32 (two u16 words, low first), its ok
+    and admit words and four zero words; fp8-p at k = 4096 gives 2,120 words.  `side_field` reads the field and whether
+    the operand words are blank."""
+    words = list(range(1, 17))
+    row = Wd.side_row(words, 0x1_2345, 1, 1)
+    assert row == words + [0x2345, 1, 1, 1, 0, 0, 0, 0] and Wd.side_field(row) == (0x1_2345, 1, 1, 0)
+    assert Wd.side_field(Wd.side_row([0] * 16, 7, 0, 0)) == (7, 0, 0, 1)
+    assert Wd.side_field(Wd.side_row(words, 3, 0, 1)) == (3, 0, 1, 0)
+    assert len(Wd.side_row([0] * (4096 // 2 + 64), 8191, 0, 1)) == 2120
+    for bad in ((words[:-1], 0, 1, 1), (words, -1, 1, 1), (words, 1 << 32, 1, 1), (words, True, 1, 1), (words, 0, 2, 1),
+                (words, 0, 1, -1), (words, 0, True, 1)):
         with pytest.raises(ValueError):
             Wd.side_row(*bad)
-    for bad in (row[:-1] + [1], row[:8], words[:8] + [1 << 16] + [0] * 7):
+    for bad in (row[:-1] + [1], row[:8], words[:8] + [1 << 16] + [0] * 7, row[:-6] + [2, 0, 0, 0, 0, 0],
+                row[:-5] + [3, 0, 0, 0, 0]):
         with pytest.raises(ValueError):
-            Wd.side_index(bad)
+            Wd.side_field(bad)
 
 
 def test_tile_read_finds_the_pass_leaf_from_the_rows_a_unit_reads():
@@ -239,52 +276,131 @@ def test_tile_read_finds_the_pass_leaf_from_the_rows_a_unit_reads():
         Wd.tile_read(Wd.Entry("filler"), 0, 0)
 
 
-def test_tile_at_maps_a_drawn_index_to_its_entry_and_dense_rows():
-    """A side tree holds its call's kept rows only, so index u of a range is (u div n_b, u mod n_b)."""
-    w = Wd.bucket(20)
-    es = _entries(w)
-    assert (w.credited, w.n) == (20, 22)
-    assert Wd.tile_at(es, 0) == (0, 0, 0) and Wd.tile_at(es, 11) == (0, 2, 3) and Wd.tile_at(es, 12) == (1, 0, 0)
-    assert Wd.tile_at(es, 20) == (2, 0, 0) and Wd.tile_at(es, 21) == (2, 0, 1)
-    with pytest.raises(ValueError):
-        Wd.tile_at(es, 22)
-    with pytest.raises(ValueError):
-        Wd.tile_in(es[4], 0)
+def test_tile_at_is_a_function_of_the_shape():
+    """Every slot and weight row is in place, so index u of call c's range is (u div n_c, u mod n_c), and N − 1 is the
+    filler's (C, 0, 0), whatever the window's real tokens."""
+    assert Wd.shape_tiles(SHAPE) == 129
+    assert Wd.tile_at(SHAPE, 0) == (0, 0, 0) and Wd.tile_at(SHAPE, 11) == (0, 2, 3) and Wd.tile_at(SHAPE, 63) == (0, 15, 3)
+    assert Wd.tile_at(SHAPE, 64) == (1, 0, 0) and Wd.tile_at(SHAPE, 127) == (1, 15, 3) and Wd.tile_at(SHAPE, 128) == (2, 0, 0)
+    for bad in (129, -1, True, 1.0):
+        with pytest.raises(ValueError):
+            Wd.tile_at(SHAPE, bad)
+    for t in range(129):
+        e, i, j = Wd.tile_at(SHAPE, t)
+        entry = Wd.shape_entries(SHAPE, 5)[e]
+        assert entry.lo <= t < entry.hi and t - entry.lo == i * entry.n_b + j and i < entry.n_a
+
+
+def test_the_shape_is_a_windows_or_refused():
+    assert Wd.shape_problem(SHAPE, 3) is None and Wd.shape_of(Wd.shape_json(SHAPE)) == SHAPE
+    big = (Wd.Call(1 << 13, 1 << 17, 0),)
+    assert Wd.shape_problem(big, 2) is None and Wd.shape_tiles(big) == (1 << 30) + 1
+    cases = {"2 calls, not 1 to the bound 2": (SHAPE, 2), "call 0: its m 24": ((Wd.Call(24, 4, 0),), 3),
+             "call 0: its m 0": ((Wd.Call(0, 4, 0),), 3), "call 0: its n 0": ((Wd.Call(16, 0, 0),), 3),
+             "its n 131073": ((Wd.Call(16, (1 << 17) + 1, 0),), 3),
+             "call 1: its pass tiles start at 0, before the last call's end 1": ((SHAPE[0], Wd.Call(16, 4, 0)), 3),
+             "beyond 2^40": ((Wd.Call(16, 4, 1 << 40),), 3), "0 calls": ((), 3)}
+    for want, (shape, bound) in cases.items():
+        got = Wd.shape_problem(shape, bound)
+        assert got and want in got, (want, got)
+    for bad in ([], [{"m": 16, "n": 4}], [{"m": 16, "n": 4, "tile0": -1}], [{"m": True, "n": 4, "tile0": 0}], {"m": 16},
+                [{"m": 16, "n": 4, "tile0": 0, "k": 1}]):
+        with pytest.raises(ValueError):
+            Wd.shape_of(bad)
 
 
 def test_the_window_statement_refuses_each_departure_from_the_layout():
-    w = Wd.bucket(20)
-    es = _entries(w)
-    assert Wd.window_problem(_rows(es), w, 5, H3) is None
+    w, es, fs = Wd.credit(20, 129), _entries(), _fields()
+    assert Wd.window_problem(_rows(es), w, 5, H3, SHAPE, fs) is None
+
+    def at(e, side, i, field):
+        out = json.loads(json.dumps(fs))
+        out[e][side][i] = field
+        return out
+
+    swapped = json.loads(json.dumps(fs))
+    swapped[0]["a"][:2] = swapped[0]["a"][1::-1]
     cases = {
-        "entry 1: its -h3 root is not the pass's": (es[:1] + [replace(es[1], root_h3=_d(61))] + es[2:], 5),
-        "not the layout: the filler's -h3 root": (es[:2] + [replace(es[2], root_h3=H3)] + es[3:], 5),
-        "bound 6": (es, 6),
-        "padded count": (es, 5, Wd.bucket(30)),
-        "registered level": (_entries(w, real_a=(2, 2), filler=(2, 3)), 5),
-        "does not start": (es[:1] + [replace(es[1], lo=13)] + es[2:], 5),
-        "or is empty": ([replace(es[0], hi=0)] + es[1:], 5),
-        "not its 12 tiles": ([replace(es[0], hi=11)] + es[1:], 5),
-        "beyond its 1": (_entries(w, filler=(1, 1)), 5),
-        "calls, then one filler": (es[:2] + [es[2], es[2]] + es[4:], 5),
-        "calls, then one filler, then": (es[:3] + [es[0]] + es[4:], 5),
-        "then one filler": ([replace(es[2], lo=0)] + [Wd.Entry("none")] * 4, 5),
-        "not the layout: side b holds 0": (es[:1] + [replace(es[1], n_b=0)] + es[2:], 5),
-        "not the layout: an empty entry": (es[:4] + [Wd.Entry("none", n_a=1)], 5),
-        "entry 1: its pass tiles start at 0, before the last call's end 1": (es[:1] + [replace(es[1], tile0=0)] + es[2:], 5),
+        "entry 1: its -h3 root is not the pass's": (es[:1] + [replace(es[1], root_h3=_d(61))] + es[2:], 5, w, fs),
+        "not the layout: the filler's -h3 root": (es[:2] + [replace(es[2], root_h3=H3)] + es[3:], 5, w, fs),
+        "5 entries, not the bound 6": (es, 6, w, fs),
+        "not the registered level 22 of 129": (es, 5, Wd.credit(30, 129), fs),
+        "not the registered level 17 of 130": (es, 5, Wd.Work.at(w.level, 130), fs),
+        "entry 0: its kind, range, rows, tile0, cols and m are not the shape's":
+            ([replace(es[0], hi=63)] + es[1:], 5, w, fs),
+        "entry 1: its kind, range, rows, tile0, cols and m": (es[:1] + [replace(es[1], tile0=2)] + es[2:], 5, w, fs),
+        "entry 2: its kind, range": (es[:2] + [replace(es[2], n_a=2)] + es[3:], 5, w, fs),
+        "entry 3: its kind": (es[:3] + [es[0]] + es[4:], 5, w, fs),
+        "not the layout: side b holds 0": (es[:1] + [replace(es[1], n_b=0)] + es[2:], 5, w, fs),
+        "not the layout: an empty entry": (es[:4] + [Wd.Entry("none", n_a=1)], 5, w, fs),
+        "entry 0: its side-a rows' indices are not their leaves 0 to 15": (es, 5, w, swapped),
+        "entry 1: its side-b rows' indices": (es, 5, w, at(1, "b", 3, [4, 1, 1, 0])),
+        "entry 0: a side-a row's ok, admit or blank is not 0 or 1": (es, 5, w, at(0, "a", 0, [0, 2, 1, 0])),
+        "entry 1: a side-b row's ok, admit or blank": (es, 5, w, at(1, "b", 0, [0, 1, 1, 7])),
+        "entry 2: the filler's side-a row is admitted": (es, 5, w, at(2, "a", 0, [0, 0, 1, 1])),
+        "entry 2: side-b row 0 is not admitted and not the canonical empty row": (es, 5, w, at(2, "b", 0, [0, 1, 0, 1])),
+        "entry 0: side-a row 9 is not admitted and not the canonical empty row": (es, 5, w, at(0, "a", 9, [9, 0, 0, 0])),
+        "no tile is credited": (es, 5, w, _fields(real=(0, 0))),
     }
-    for want, (entries, bound, *work) in cases.items():
-        got = Wd.window_problem(_rows(entries), work[0] if work else w, bound, H3)
+    for want, (entries, bound, work, fields) in cases.items():
+        got = Wd.window_problem(_rows(entries), work, bound, H3, SHAPE, fields)
         assert got and want in got, (want, got)
     for bad, why in ((es[0].row()[:-2], "entry 0: not an entry row: an entry row is 336 bytes"),
                      (b"\7" + es[0].row()[1:], "entry 0: not an entry row: kind 7")):
-        assert Wd.window_problem([bad] + _rows(es[1:]), w, 5, H3).startswith(why)
-    assert "entry 0: its -h3 root" in Wd.window_problem(_rows(es), w, 5, _d(61))
-    assert Wd.window_problem(_rows([es[0], replace(es[1], tile0=9)] + es[2:]), w, 5, H3) is None
+        assert Wd.window_problem([bad] + _rows(es[1:]), w, 5, H3, SHAPE, fs).startswith(why)
+    assert "entry 0: its -h3 root" in Wd.window_problem(_rows(es), w, 5, _d(61), SHAPE, fs)
     with pytest.raises(ValueError, match="64 bytes"):
-        Wd.window_problem(_rows(es), w, 5, H3[:32])
-    assert {p[0] for p in Wd.PUBLIC} == {"verdict", "work", "check", "sampling", "drawn", "root_W"}
+        Wd.window_problem(_rows(es), w, 5, H3[:32], SHAPE, fs)
+    with pytest.raises(ValueError, match="the shape is not a window's"):
+        Wd.window_problem(_rows(es), w, 5, H3, (Wd.Call(24, 4, 0),), fs)
+    for bad in (fs[:2], [*fs[:2], {"a": [[0, 0, 0]], "b": [[0, 0, 0, 1]]}], [*fs[:2], {"a": [[0, 0, 0, 1]]}]):
+        with pytest.raises(ValueError, match="fields"):
+            Wd.window_problem(_rows(es), w, 5, H3, SHAPE, bad)
+    assert {p[0] for p in Wd.PUBLIC} == {"verdict", "work", "check", "sampling", "shape", "drawn", "root_W"}
     assert set(Wd.REGISTERED) == {p[0] for p in Wd.PUBLIC if p[2] != "outcome"}
+
+
+def test_windows_of_one_shape_have_one_structure_whatever_their_real_tokens():
+    """Two windows of the same public parameters, 3 and 9 real tokens a call: the same N, entries' public fields, side
+    rows (count and index), tile map and draw size, so nothing but the one registered level depends on the values."""
+    few, many = _fields(real=(3, 3)), _fields(real=(9, 9))
+    w_few, w_many = Wd.credit(24, 129), Wd.credit(72, 129)
+    es = _entries()
+    assert Wd.window_problem(_rows(es), w_few, 5, H3, SHAPE, few) is None
+    assert Wd.window_problem(_rows(es), w_many, 5, H3, SHAPE, many) is None
+    assert w_few.n == w_many.n == Wd.shape_tiles(SHAPE) and w_few.level != w_many.level
+    assert [[[p[0] for p in f[s]] for s in "ab"] for f in few] == [[[p[0] for p in f[s]] for s in "ab"] for f in many]
+    assert [Wd.public_fields(e) for e in es] == [Wd.public_fields(e) for e in Wd.shape_entries(SHAPE, 5)]
+    eps, delta = Fraction(1, 2), Fraction(1, 2**20)
+    assert Wd.k_prime(eps, delta, w_few.credited, w_few.n, 1) > Wd.k_prime(eps, delta, w_many.credited, w_many.n, 1)
+
+
+def test_a_refused_row_stays_in_place_and_is_not_credited():
+    """Slot 1 of call 0 is admitted and its forming refused: its row stays leaf 1 with ok 0, every later row keeps its
+    leaf, and the window credits its 2 other slots' tiles only (16, not 20)."""
+    fs = _fields(refused=((1,), ()))
+    assert [p[0] for p in fs[0]["a"]] == list(range(16)) and fs[0]["a"][1] == [1, 0, 1, 0]
+    assert Wd.window_problem(_rows(_entries()), Wd.credit(16, 129), 5, H3, SHAPE, fs) is None
+    got = Wd.window_problem(_rows(_entries()), Wd.credit(20, 129), 5, H3, SHAPE, fs)
+    assert "16 credited tiles of 129 are level" in got and "not the registered level" in got
+
+
+def test_a_forged_annotation_on_an_empty_slot_credits_nothing():
+    """FMT-R45's attack: slot 5 of call 0 is empty (no request: the canonical empty row).  Setting its ok to 1 fails the
+    emptiness check; setting its admit to 1 leaves an admitted zero row whose ok is 0, credited nothing, so the window's
+    credit stays 20 and 24 (its 4 tiles) is refused."""
+    honest, es = _fields(), _entries()
+    assert honest[0]["a"][5] == [5, 0, 0, 1]
+    ok = json.loads(json.dumps(honest))
+    ok[0]["a"][5] = [5, 1, 0, 1]
+    for work in (Wd.credit(20, 129), Wd.credit(24, 129)):
+        got = Wd.window_problem(_rows(es), work, 5, H3, SHAPE, ok)
+        assert "entry 0: side-a row 5 is not admitted and not the canonical empty row" in got
+    admit = json.loads(json.dumps(honest))
+    admit[0]["a"][5] = [5, 0, 1, 1]
+    assert Wd.selected(admit[0]) == Wd.selected(honest[0]) == {"a": 3, "b": 4}
+    assert Wd.window_problem(_rows(es), Wd.credit(20, 129), 5, H3, SHAPE, admit) is None
+    assert "not the registered level" in Wd.window_problem(_rows(es), Wd.credit(24, 129), 5, H3, SHAPE, admit)
 
 
 def test_a_side_tree_is_its_rows_then_frame_v3_pads_to_two_to_the_d():
@@ -363,19 +479,19 @@ def test_sessions_hold_the_largest_served_draw_at_both_points():
     δ = 2^-40 (27,713 unpadded, times up to g_(ℓ+1)/g_ℓ = 9/8), and at most 9,937 at ε = 1%, δ = 2^-128, both at level 143.
     A session of the tile unit at k_log 24 (`Pc8TileLeafH3`'s) holds at most 2,048 instances (m <= 35), so S is 16 and 5;
     at k_log 25, 31 and 10.  F_σ at the largest draw is every session's `cap` instances, the last padded with N − 1."""
-    assert (Wd.point(87), Wd.Work.at(87).n, Wd.point(143), Wd.Work.at(143).n) == (8192, 9216, 1 << 20, 1179648)
+    assert (Wd.point(87), _at(87).n, Wd.point(143), _at(143).n) == (8192, 9216, 1 << 20, 1179648)
     assert [Wd.session_cap(k) for k in (24, 25)] == [2048, 1024] and Wd.session_cap(24, 4) == 8192
     for bad in (0, 33):
         with pytest.raises(ValueError):
             Wd.session_cap(bad)
     largest = []
     for (eps, delta), (k_max, s24, s25) in zip(POINTS, ((31178, 16, 31), (9937, 5, 10))):
-        ks = {ell: Wd.k_prime(eps, delta, Wd.Work.at(ell).credited, Wd.Work.at(ell).n, 1) for ell in LEVELS}
-        assert max(ks.values()) == ks[143] == k_max and ks[87] == Wd.Work.at(87).n
-        assert all(k <= Wd.Work.at(ell).n for ell, k in ks.items())
+        ks = {ell: Wd.k_prime(eps, delta, _at(ell).credited, _at(ell).n, 1) for ell in LEVELS}
+        assert max(ks.values()) == ks[143] == k_max and ks[87] == _at(87).n
+        assert all(k <= _at(ell).n for ell, k in ks.items())
         assert (Wd.sessions(k_max, Wd.session_cap(24)), Wd.sessions(k_max, Wd.session_cap(25))) == (s24, s25)
         largest.append(k_max)
-    n, k, cap = Wd.Work.at(143).n, largest[0], Wd.session_cap(24)
+    n, k, cap = _at(143).n, largest[0], Wd.session_cap(24)
     drawn = sorted(random.Random(0).sample(range(n - 1), k))
     reg = _registration(n=n, k=k)
     s = Wd.sessions(k, cap)
@@ -387,44 +503,43 @@ def test_sessions_hold_the_largest_served_draw_at_both_points():
 
 
 def test_the_pinned_vectors_are_the_layout():
-    """``vectors/window.json`` is `window_vectors.vectors()`: the toy window's entry rows, its records and side rows'
-    indices, each real tile's (p, at), a side tree, the root and F_σ.  The rows are dense (call 0 keeps A rows 0, 1 and 70
-    of 80), and the vectors agree with the window statement, records and indices included."""
+    """``vectors/window.json`` is `window_vectors.vectors()`: the toy window's shape, entry rows, records and side rows'
+    fields, (p, at) at the pinned indices, a side tree, the root and F_σ.  Every slot is in place (call 0's 80, of which
+    71 admitted, slot 2 refused), and the vectors agree with the window statement, records included."""
     pinned = json.loads(V.OUT.read_text())
     assert pinned == json.loads(json.dumps(V.vectors()))
     rows = [bytes.fromhex(e["row"]) for e in pinned["entries"]]
-    work = Wd.Work.at(pinned["window"]["work"]["level"])
+    shape = Wd.shape_of(pinned["shape"])
+    work = Wd.Work.at(pinned["window"]["work"]["level"], pinned["window"]["work"]["n"])
     root_h3, domain_h3 = (bytes.fromhex(pinned["window"][k]) for k in ("root_h3", "domain_h3"))
-    records, indices = pinned["records"], pinned["indices"]
-    assert Wd.window_problem(rows, work, V.P, root_h3, records=records, indices=indices) is None and work.n == 9
+    records, fields = pinned["records"], pinned["fields"]
+    assert Wd.window_problem(rows, work, V.P, root_h3, shape, fields, records=records) is None
+    assert (work.n, pinned["window"]["real"], work.credited) == (5345, 4562, 4096)
     call = Wd.Entry.from_row(rows[0])
-    assert (call.n_a, call.n_b, call.hi, call.root_h3, call.tile0, call.cols, call.m) == (3, 2, 6, root_h3, 3, 2, 80)
-    assert Wd.Entry.from_row(rows[2]).root_h3 == bytes(64)
-    assert pinned["side"]["rows"] == 3 and len(pinned["side"]["path_of_1"]) == 13 and Wd.side_index(pinned["side"]["row_1"]) == 1
-    assert [(r["p"], r["at"] >> 12) for r in pinned["tile_reads"]][4:6] == [(5, 0), (6, 0)]
+    assert (call.n_a, call.n_b, call.hi, call.root_h3, call.tile0, call.cols, call.m) == (80, 66, 5280, root_h3, 3, 2, 80)
+    assert Wd.Entry.from_row(rows[2]).root_h3 == bytes(64) and Wd.Entry.from_row(rows[2]).lo == 5344
+    side = pinned["side"]
+    assert side["rows"] == 16 and len(side["path_of_1"]) == 13
+    assert Wd.side_field(side["row_1"]) == (1, 1, 1, 0) and Wd.side_field(side["row_15"]) == (15, 0, 0, 1)
+    assert [(r["p"], r["at"] >> 12) for r in pinned["tile_reads"] if "p" in r][2:4] == [(6, 0), (5, 0)]
     moved = [{**records[0], "tile0": 4}] + records[1:]
-    assert "not the one the entry binds" in Wd.window_problem(rows, work, V.P, root_h3, records=moved)
-    swapped = [{"a": [1, 0, 70], "b": [5, 64]}] + indices[1:]
-    assert "side-a rows' indices are not its record's keep" in Wd.window_problem(rows, work, V.P, root_h3, records=records,
-                                                                                 indices=swapped)
-    assert "side-b rows' indices are not zero" in Wd.window_problem(rows, work, V.P, root_h3, records=records,
-                                                                    indices=indices[:2] + [{"a": [0], "b": [3]}])
+    assert "not the one the entry binds" in Wd.window_problem(rows, work, V.P, root_h3, shape, fields, records=moved)
+    swapped = json.loads(json.dumps(fields))
+    swapped[0]["b"][3:5] = swapped[0]["b"][4:2:-1]
+    assert "entry 0: its side-b rows' indices are not their leaves 0 to 65" in Wd.window_problem(
+        rows, work, V.P, root_h3, shape, swapped, records=records)
     reg = pinned["public_inputs"]["registration"]
+    assert reg["population"] == 5345
     for sigma, f in enumerate(pinned["public_inputs"]["sessions"]):
         assert Wd.public_inputs(reg, pinned["public_inputs"]["drawn"], sigma, V.CAP, domain_h3) == bytes.fromhex(f)
 
 
 def test_a_record_is_held_to_its_entry():
-    """A call's record gives its entry's tile0, cols = ⌈n/64⌉ and m, and its keep is n_a and n_b strictly increasing
-    indices of [0, m) and [0, n): with the side rows' indices held to it, i -> I and j -> J are injective."""
-    rec = {"shape": [80, 32, 100], "tile0": 3, "keep": {"a": [0, 1, 79], "b": [5, 99]}}
-    entry = Wd.Entry("call", 0, 6, 3, 2, record=Wd.record_digest(rec), tile0=3, cols=2, m=80)
+    """A call's record gives its entry's tile0, cols = ⌈n/64⌉ and m, and its entry binds its SHA-512."""
+    rec = {"shape": [80, 32, 100], "tile0": 3}
+    entry = Wd.Entry("call", 0, 8000, 80, 100, record=Wd.record_digest(rec), tile0=3, cols=2, m=80)
     assert Wd.record_problem(entry, rec) is None
-    for bad, why in (({**rec, "tile0": 4}, "tile0, cols and m"),
-                     ({**rec, "keep": {"a": [0, 0, 79], "b": [5, 99]}}, "side-a keep"),
-                     ({**rec, "keep": {"a": [0, 1, 80], "b": [5, 99]}}, "side-a keep"),
-                     ({**rec, "keep": {"a": [0, 1, 79], "b": [99, 5]}}, "side-b keep"),
-                     ({**rec, "keep": {"a": [0, 1], "b": [5, 99]}}, "side-a keep"),
-                     ({**rec, "shape": [80, 32, 129]}, "cols and m"), ({"tile0": 3}, "no shape")):
+    for bad, why in (({**rec, "tile0": 4}, "tile0, cols and m"), ({**rec, "shape": [80, 32, 129]}, "cols and m"),
+                     ({**rec, "shape": [96, 32, 100]}, "cols and m"), ({"tile0": 3}, "no shape")):
         assert why in Wd.record_problem(replace(entry, record=Wd.record_digest(bad)), bad), (bad, why)
     assert "binds" in Wd.record_problem(entry, {**rec, "tile0": 4})

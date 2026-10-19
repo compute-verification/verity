@@ -6,8 +6,8 @@ import Properties.Proofs.Pouw.Grid
 # Proofs of PoUW's check properties (`Properties.Pouw.Check`)
 
 By unfolding the check: `registered_ok` and `outcome_accept` say what each of its two rules accepts, and `acceptMeans`
-composes them; the rest follow. `acceptedInRange_of_grid` proves `AcceptedInRange` from the window's grid properties
-`PointEnumerates` and `floorPoint_greatest`, which `Properties.Proofs.Pouw.Grid` proves. `acceptMeans_complete` is the
+composes them; the rest follow. `acceptedInRange` uses that a grid point is positive, which `Properties.Proofs.Pouw.Grid`
+proves. `acceptMeans_complete` is the
 converse of `AcceptMeans`, and `serviceReject_rejects` what `AcceptedIsTheService's` and `UndecidedOnlyFromService`
 leave: the service's reject is the check's.
 -/
@@ -60,6 +60,9 @@ theorem registered_ok (p : Params) (c : Registration) (f : Fixed) :
     by_cases h1 : c.window.kind = "served" ∧ c.window.context = p.context
     case neg => rw [ite_eq_left h1] at h; cases h
     rw [ite_eq_right (Classical.not_not.mpr h1)] at h
+    by_cases hsh : "shape" ∈ (keys c.window.items).getD []
+    case neg => rw [ite_eq_left hsh] at h; cases h
+    rw [ite_eq_right (Classical.not_not.mpr hsh)] at h
     by_cases h2 : (keys c.window.items).getD [] = registeredSorted
     case neg => rw [ite_eq_left h2] at h; cases h
     rw [ite_eq_right (Classical.not_not.mpr h2)] at h
@@ -67,20 +70,22 @@ theorem registered_ok (p : Params) (c : Registration) (f : Fixed) :
     | none => simp only [hl] at h; cases h
     | some ell =>
       simp only [hl] at h
-      by_cases h3 : PouwWindow.level p.gridBits (PouwWindow.floorPoint p.gridBits p.hi) < ell + 1 ∨
+      by_cases h3 : PouwWindow.level p.gridBits (PouwWindow.floorPoint p.gridBits (PouwWindow.shapeTiles p.shape - 1))
+          < ell ∨ PouwWindow.shapeTiles p.shape - 1 < PouwWindow.point p.gridBits ell ∨
           PouwWindow.point p.gridBits ell < p.lo
       · rw [ite_eq_left h3] at h; cases h
       rw [ite_eq_right h3] at h
-      cases hs : PouwWindow.sampling (toRat p.eps) (toRat p.delta) (PouwWindow.Work.at p.gridBits ell)
-          p.check.tileWork p.gridBits with
+      cases hs : PouwWindow.sampling (toRat p.eps) (toRat p.delta)
+          (PouwWindow.Work.at p.gridBits ell (PouwWindow.shapeTiles p.shape)) p.check.tileWork p.gridBits with
       | error e => simp only [hs] at h; cases h
       | ok s =>
         simp only [hs] at h
         by_cases h4 : wrongItems p c.window.items
-            ⟨PouwWindow.Work.at p.gridBits ell, s, (c.roots.find? (·.port = "W")).map (·.root)⟩ = []
+            ⟨PouwWindow.Work.at p.gridBits ell (PouwWindow.shapeTiles p.shape), s,
+              (c.roots.find? (·.port = "W")).map (·.root)⟩ = []
         case neg => rw [ite_eq_left h4] at h; cases h
         rw [ite_eq_right (Classical.not_not.mpr h4)] at h
-        by_cases h5 : c.population = (PouwWindow.Work.at p.gridBits ell).n
+        by_cases h5 : c.population = (PouwWindow.Work.at p.gridBits ell (PouwWindow.shapeTiles p.shape)).n
         case neg => rw [ite_eq_left h5] at h; cases h
         rw [ite_eq_right (Classical.not_not.mpr h5)] at h
         by_cases h6 : cs c.law = cs (subsetLaw s.k)
@@ -93,17 +98,18 @@ theorem registered_ok (p : Params) (c : Registration) (f : Fixed) :
         case neg => rw [ite_eq_left h8] at h; cases h
         rw [ite_eq_right (Classical.not_not.mpr h8)] at h
         cases h
-        exact ⟨h1, h2, hl, by simp only [PouwWindow.Work.at]; omega, by simp only [PouwWindow.Work.at]; omega, rfl,
-          hs, rfl, (wrongItems_nil _ _ _).mp h4, h5, h6, h7, h8⟩
-  · rintro ⟨h1, h2, hl, h3, h4, hw, hs, hr, hi, hp, hlaw, hq, hsch⟩
+        exact ⟨h1, hsh, h2, hl, by simp only [PouwWindow.Work.at]; omega, by simp only [PouwWindow.Work.at]; omega,
+          by simp only [PouwWindow.Work.at]; omega, rfl, hs, rfl, (wrongItems_nil _ _ _).mp h4, h5, h6, h7, h8⟩
+  · rintro ⟨h1, hsh, h2, hl, h3, h3', h4, hw, hs, hr, hi, hp, hlaw, hq, hsch⟩
     obtain ⟨work, samp, rootW⟩ := f
-    simp only at hl h3 h4 hw hs hr hi hp hlaw
-    generalize hell : work.level = ell at hl h3 h4 hw
+    simp only at hl h3 h3' h4 hw hs hr hi hp hlaw
+    generalize hell : work.level = ell at hl h3 h3' h4 hw
     subst hw hr
     have hwi := (wrongItems_nil p c.window.items ⟨_, samp, _⟩).mpr hi
     unfold registered
     dsimp only
-    rw [ite_eq_right (Classical.not_not.mpr h1), ite_eq_right (Classical.not_not.mpr h2)]
+    rw [ite_eq_right (Classical.not_not.mpr h1), ite_eq_right (Classical.not_not.mpr hsh),
+      ite_eq_right (Classical.not_not.mpr h2)]
     simp only [hl]
     rw [ite_eq_right (by omega)]
     simp only [hs]
@@ -114,7 +120,7 @@ theorem registered_ok (p : Params) (c : Registration) (f : Fixed) :
 theorem outcome_accept (p : Params) (c : Registration) (f : Fixed) (e : Evidence) (pub : Public)
     (prof : Core.Integrity) :
     outcome p c f e = .accept pub prof ↔
-      ∃ draw, ServiceAccepted p c f e prof draw ∧ pub = ⟨p.check, f.work, f.sampling, f.rootW, draw.units⟩ := by
+      ∃ draw, ServiceAccepted p c f e prof draw ∧ pub = ⟨p.check, f.work, f.sampling, p.shape, f.rootW, draw.units⟩ := by
   unfold outcome ServiceAccepted
   dsimp only
   by_cases h1 : e.protocol = oneStage
@@ -171,7 +177,7 @@ theorem outcome_accept (p : Params) (c : Registration) (f : Fixed) (e : Evidence
 theorem acceptMeans_iff (p : Params) (c : Registration) (e : Evidence) (pub : Public) (prof : Core.Integrity) :
     protocol.check p c e = .accept pub prof ↔
       ∃ f draw, RegistrationKeeps p c f ∧ ServiceAccepted p c f e prof draw ∧
-        pub = ⟨p.check, f.work, f.sampling, f.rootW, draw.units⟩ := by
+        pub = ⟨p.check, f.work, f.sampling, p.shape, f.rootW, draw.units⟩ := by
   rw [check_eq]
   unfold PouwCheck.check
   constructor
@@ -191,7 +197,7 @@ theorem acceptMeans : AcceptMeans := fun p c e pub prof => (acceptMeans_iff p c 
 accepted, publishing the rule's items and the service's draw. -/
 theorem acceptMeans_complete (p : Params) (c : Registration) (e : Evidence) (f : Fixed) (prof : Core.Integrity)
     (draw : UnitDraw) (hk : RegistrationKeeps p c f) (hs : ServiceAccepted p c f e prof draw) :
-    protocol.check p c e = .accept ⟨p.check, f.work, f.sampling, f.rootW, draw.units⟩ prof :=
+    protocol.check p c e = .accept ⟨p.check, f.work, f.sampling, p.shape, f.rootW, draw.units⟩ prof :=
   (acceptMeans_iff p c e _ prof).2 ⟨f, draw, hk, hs, rfl⟩
 
 theorem acceptedIsTheService's : AcceptedIsTheService's := by
@@ -201,7 +207,7 @@ theorem acceptedIsTheService's : AcceptedIsTheService's := by
 
 theorem acceptedDraw : AcceptedDraw := by
   intro p c e pub prof h
-  obtain ⟨f, draw, ⟨-, -, -, -, -, hw, hs, -, -, hpop, hlaw, -⟩,
+  obtain ⟨f, draw, ⟨-, -, -, -, -, -, -, hw, hs, -, -, hpop, hlaw, -⟩,
     ⟨-, -, -, -, -, -, -, -, -, hsz, hasc, hall⟩, rfl⟩ := acceptMeans p c e pub prof h
   refine ⟨hw, ?_, hpop, hlaw, hsz, hasc, hall⟩
   unfold PouwWindow.sampling at hs
@@ -245,37 +251,15 @@ theorem undecidedOnlyFromService : UndecidedOnlyFromService := by
   | reject r₀ => simp only [hs] at h; cases h
   | undecided r₀ => simp only [hs] at h; cases h; exact ⟨r₀, rfl, rfl⟩
 
-/-- `AcceptedInRange` from the window's grid: the credited tiles are at least `lo` by the level's rule, and the padded
-count `point (level + 1)` is at most the floor point of `hi`, since `point` increases and inverts `level` on the grid. -/
-theorem acceptedInRange_of_grid (hp : Window.PointEnumerates) : AcceptedInRange := by
+/-- `AcceptedInRange`: the credited tiles `point level` are at least `lo` and at most `N − 1` by the level's rule, and a
+point is positive (`Window.isPoint_point`), so `N − 1` does not truncate. -/
+theorem acceptedInRange : AcceptedInRange := by
   intro p c e pub prof h
-  obtain ⟨f, draw, ⟨-, -, -, h3, h4, hw, -⟩, -, rfl⟩ := acceptMeans p c e pub prof h
-  dsimp only
-  rw [hw]
-  refine ⟨h4, ?_⟩
-  simp only [PouwWindow.Work.at]
-  obtain ⟨-, hlt, -, -, hinv⟩ := hp p.gridBits
-  have mono : ∀ a b, a ≤ b → PouwWindow.point p.gridBits a ≤ PouwWindow.point p.gridBits b := by
-    intro a b hab
-    induction b with
-    | zero => rw [Nat.le_zero.mp hab]; exact Nat.le_refl _
-    | succ b ih =>
-      rcases Nat.lt_or_eq_of_le hab with hab | hab
-      · exact Nat.le_trans (ih (Nat.le_of_lt_succ hab)) (Nat.le_of_lt (hlt b))
-      · rw [hab]; exact Nat.le_refl _
-  by_cases hhi : 1 ≤ p.hi
-  · obtain ⟨hpt, hle, -⟩ := Window.floorPoint_greatest p.gridBits p.hi hhi
-    have := mono _ _ h3
-    rw [hinv _ hpt] at this
-    omega
-  · have h0 : p.hi = 0 := by omega
-    rw [h0] at h3
-    simp only [PouwWindow.floorPoint, PouwWindow.level, Nat.zero_div, Nat.zero_mul] at h3
-    rw [ite_eq_left (Nat.two_pow_pos _)] at h3
-    omega
-
-theorem acceptedInRange : AcceptedInRange :=
-  acceptedInRange_of_grid Window.pointEnumerates
+  obtain ⟨f, draw, ⟨-, -, -, -, -, h3, h4, hw, -⟩, -, rfl⟩ := acceptMeans p c e pub prof h
+  have hpos := ((Window.isPoint_iff _ _).1 (Window.isPoint_point p.gridBits f.work.level)).1
+  have hc : f.work.credited = PouwWindow.point p.gridBits f.work.level := congrArg PouwWindow.Work.credited hw
+  have hn : f.work.n = PouwWindow.shapeTiles p.shape := congrArg PouwWindow.Work.n hw
+  exact ⟨Nat.le_trans h4 (Nat.le_of_eq hc.symm), show f.work.credited < f.work.n by omega, rfl, hn⟩
 
 theorem commitmentKeepsBytes : CommitmentKeepsBytes := by
   intro b c h

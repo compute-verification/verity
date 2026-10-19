@@ -6,9 +6,12 @@ The proof service registers the window, draws, proves and verifies; PoUW states 
 must show, and publishes `window.PUBLIC` from it.  This is that composition in one function, the parts of
 `benchmarks/pouw/served_zk/served_commit.py` (`public_problem`, `register` and `Challenger.outcome`) that are PoUW's.
 
-* **Params**, canonical JSON: the check item (`check`: the tile template, its work per tile w, the commitment scheme and
-  the public bound on entries), ε and δ as ratio strings, the grid's bits, the declared range of tile counts, the
-  window's context and the check query's SHA-512 (one-stage's `query_digest` of the tile template's instance query).
+* **Params**, canonical JSON: the check item (`check`: the tile template, its work per tile w, the commitment scheme,
+  the public bound on entries and optionally its coin mode, ``coins``, live or seeded: `window.mode`), ε and δ as ratio
+  strings, the grid's bits, the declared range of tile counts, the window's context, the check query's SHA-512
+  (one-stage's `query_digest` of the tile template's instance query) and the window's shape (`window.shape_of`, its
+  calls; `window.shape_problem` within the entry bound, its N within the range).  The template is one the verifier pins
+  (`TILES`, Lean's `PouwCheck.tiles`), with that template's tile work and query.
 * **Commitment**: the window's registration, one-stage's record (`registration.record`) as canonical JSON, its window
   ``{"kind": "served", "context", "public"}`` holding exactly `window.REGISTERED`.  Its digest is the record's own,
   `registration.digest`, the one the service's receipt, draw and outcome cite.
@@ -17,19 +20,24 @@ must show, and publishes `window.PUBLIC` from it.  This is that composition in o
   and on acceptance the integrity profile and the public outputs ``{"draw": d}``, `d` the verifier's draw as one-stage's
   `draw.py` writes it (any of its laws; PoUW's rule then holds it to subset:K′).
 * **The check** accepts when the registration is PoUW's (`window.REGISTERED`, each item the verifier's own at the
-  registered level, N = point(level + 1) in the declared range, the law subset:K′ with K′ = `window.k_prime`, the check's
-  query and scheme), the service accepted this registration, and its profile and draw are of the registered partition's N
-  units drawn subset:K′ at the window's δ.  It publishes exactly `window.PUBLIC` and the service's profile.  The service's
-  reject is a reject and its undecided (the verifier of record hasn't run) is undecided.
+  registered level, N the shape's tile count, the level's credited tiles from the range's low end to N − 1, the law
+  subset:K′ with K′ = `window.k_prime`, the check's query and scheme), the service accepted this registration, and its
+  profile and draw are of the registered partition's N units drawn subset:K′ at the window's δ.  It publishes exactly
+  `window.PUBLIC` and the service's profile.  The service's reject is a reject and its undecided (the verifier of record
+  hasn't run) is undecided.  Parameters with no ``shape``, and a registration with no ``shape`` item, are the superseded
+  window's, whose tiles and N followed its real tiles: each is refused as ``window-form`` (refuse and label).
 
 `opening` is the rule on one unit's opening beside it (`served_commit.check`'s, which calls it): the tile proof's public
-file opens the unit's rows under the registered window root, through its entry and the entry's side trees.
+file opens the unit's rows under the registered window root, through the entry and the rows the shape puts the unit at
+(`window.tile_at`).
 
 `pass_epoch` is the rule on the pass a window is received from (`served_commit.Challenger.pass_epoch`, which calls it):
 its manifest re-starts its epoch under the challenger's own coin commitment, and the window's context names it.
 `draw` is the rule on the window's draw (`Challenger.select`'s): the epoch's draw coin opens after the registration,
 and the drawn units are Lean's ``Draw.subset`` of the key it derives.  Both read the coin versions in `COIN_VERSIONS`,
-and a replay of a recorded draw `COIN_EARLY` too.
+and a replay of a recorded draw `COIN_EARLY` too.  `rounds` is the rule on a live window's round coins
+(`window.rounds_reason`, over the proof service's challenger `sampled_proofs.challenger`): under the challenger's live
+coin commitment, round r's coin opened once, after the r-th round root the verifier recorded.
 
 Every refusal has one reason, the first rule it breaks in the order below; the Lean port writes the same strings.
 """
@@ -40,10 +48,11 @@ import json
 import math
 import re
 from fractions import Fraction
-from typing import Any
+from typing import Any, NamedTuple
 
 from verity.core.protocols.pouw import coins as Co
 from verity.core.protocols.pouw import window as Wd
+from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.pouw.audit import EPOCH_SALT_DOMAIN, SALT_DOMAIN
 from verity.core.protocols.pouw.protocol import U64, tagged
 from verity.ml.commitments import Commitment, Opening, VerificationLimits, verify_opening
@@ -58,7 +67,13 @@ ONE_STAGE = "verity/sampled-proofs/one-stage/v1"
 SCHEME = "frame-v3-sha512/hm96-sha512"
 FORMATS = ("verity/registration/v1", "verity/registration/v2")
 LEVEL = "unit"
-PARAMS_KEYS = ("check", "context", "delta", "eps", "grid_bits", "query", "range")
+PARAMS_KEYS = ("check", "context", "delta", "eps", "grid_bits", "query", "range", "shape")
+#: the refusals of the superseded window, whose tiles and N followed its real tiles (decision 129: refuse and label): its
+#: parameters, and its registration, have no shape
+WINDOW_FORM_PARAMS = ("window-form: the parameters have no shape: they are the superseded window's, whose tiles and N "
+                      "followed its real tiles")
+WINDOW_FORM = ("window-form: the registration has no shape item: it is the superseded window, whose tiles and N followed "
+               "its real tiles, not the static window of its shape")
 CHECK_KEYS = ("entries", "scheme", "template", "tile_work")
 ANSWER_KEYS = ("commitment", "profile", "protocol", "public", "reason", "verdict")
 VERDICTS = ("accept", "reject", "undecided")
@@ -70,6 +85,34 @@ SERVED_DOMAIN = "verity/one-stage/served-domain/v1"
 OPENED = (("a", "hm96-sha512/row-seg/v1"), ("b", "hm96-sha512/row/v2"))
 SALT_BYTES = 192
 BC_BYTES = 128
+
+
+class Tile(NamedTuple):
+    tile_work: int
+    query: str
+    circuit: str
+
+
+#: the tile templates the verifier pins (Lean's `PouwCheck.tiles`, of record): each one's work per tile, its check query's
+#: SHA-512, and the SHA-512 of the one circuit a unit's tile proof of it is over (its public file's ``circuit_sha512``)
+TILES = {
+    "Pc8TileSide_v1{K=4096,TM=1,TN=1,DEV='sm120'}": Tile(
+        4096,
+        "491c9160f3c0d0c95ef14575e0966bfa9958de58886c3cc46e8008c767118926582acc2199a49dae85a32656cd2b11f90bffc1105aa9d660e98f66f75ccac4af",
+        "39d540c10ed1148526fcdf9d01561fcf68e33427f28f55d2dc2f453c09f68696978a530b2c14054f4720af1710afee8c74331f45b4c9a7c0511bfc1e02017c12"),
+    "Pc8TileSide_v1{K=128,TM=1,TN=1,DEV='sm120'}": Tile(
+        128,
+        "63cd98cb86598a2d67169d1a5ea949957c941b3e11aad61aeb14e99fc1a2d7c7f5b7b19e7349bcae68d0ee7400cfbe89b8a6dd20f14319666eb7a7d81a0a6343",
+        "84315c5940d5c61a4938182d41330c2f4febbf049ca9cdadd58ec9f1f9dd92a13d9e43501b37e9e0f32914e698667907d768ce49c2ba8be026454bdff78baf24"),
+    "Pc8TileHidden_v1{K=4096,TM=1,TN=1,DEV='sm120'}": Tile(
+        4096,
+        "f48d5a1f247cb17063bcea693733db3d26e91be34967645486ea20df1336b4d9ae14aaf242ba4437f0d2a0123aff81f7ab31d18d437f4abe73363a1ac7bf65fb",
+        "5ec6002f654337db2051fd6a98b7ec122a9f33e2d06180012177195674233d7c811c2ffd8ef49bc9a586dcf8e61ee1b16914b9f36e1bd378f9e53d0d40f4926d"),
+    "Pc8TileLeafH3_v1{K=4096,DEV='sm120'}": Tile(
+        4096,
+        "0f93d0dce725a5269061b91a1eb39ad294a1369c6f47814880acc74cef30aad734b0067d1cc7f5347bf9db4279a6519eb0abfa000c581759b14fd0ed5a7f9647",
+        "c4fb8b6c5ce91ad0bc750f315700491911f678ad219cd370baf4359dc751954c9955590eb50304a166e1cc103ffd0d431de31f03c29ad5b6d119a33502b004af"),
+}
 
 
 class Refused(ValueError):
@@ -142,11 +185,15 @@ def _str(x: Any) -> bool:
 
 def params(j: Any) -> dict:
     """The verifier's own parameters of the window."""
+    if isinstance(j, dict) and sorted(j) == [k for k in PARAMS_KEYS if k != "shape"]:
+        raise Refused(WINDOW_FORM_PARAMS)
     if not isinstance(j, dict) or sorted(j) != list(PARAMS_KEYS):
         raise Refused(f"keys are not {', '.join(PARAMS_KEYS)}")
     c = j["check"]
-    if not isinstance(c, dict) or sorted(c) != list(CHECK_KEYS):
-        raise Refused(f"check's keys are not {', '.join(CHECK_KEYS)}")
+    if not isinstance(c, dict) or sorted(set(c) - {Wd.COINS}) != list(CHECK_KEYS):
+        raise Refused(f"check's keys are not {', '.join(CHECK_KEYS)}, and optionally {Wd.COINS}")
+    if Wd.COINS in c and c[Wd.COINS] not in Wd.MODES:
+        raise Refused(f"check.{Wd.COINS} is not {' or '.join(Wd.MODES)}")
     if not (_nat(c["entries"]) and c["entries"] >= 2):
         raise Refused("check.entries is not a natural number of at least 2")
     if c["scheme"] != SCHEME:
@@ -172,7 +219,23 @@ def params(j: Any) -> dict:
     rg = j["range"]
     if not (isinstance(rg, list) and len(rg) == 2 and all(_nat(x) for x in rg) and 1 <= rg[0] <= rg[1]):
         raise Refused("range is not [lo, hi] with 1 <= lo <= hi")
-    return {**out, "grid_bits": j["grid_bits"], "query": j["query"], "range": tuple(rg)}
+    t = TILES.get(c["template"])
+    if t is None:
+        raise Refused("check.template is not a tile template the verifier pins")
+    if c["tile_work"] != t.tile_work:
+        raise Refused("check.tile_work is not its pinned template's tile work")
+    if j["query"] != t.query:
+        raise Refused("query is not its pinned template's query digest")
+    try:
+        shape = Wd.shape_of(j["shape"])
+    except ValueError:
+        raise Refused("shape is not a non-empty list of calls {m, n, tile0} of natural numbers") from None
+    why = Wd.shape_problem(shape, c["entries"])
+    if why:
+        raise Refused(f"shape: {why}")
+    if Wd.shape_tiles(shape) > rg[1]:
+        raise Refused(f"shape: its {Wd.shape_tiles(shape)} tiles are more than the range's {rg[1]}")
+    return {**out, "grid_bits": j["grid_bits"], "query": j["query"], "range": tuple(rg), "shape": shape}
 
 
 def _root(r: Any) -> dict | None:
@@ -425,7 +488,7 @@ def check_item(p: dict) -> dict:
 def expected_items(p: dict, ell: int, w: Wd.Work, k: int, root_w: Any) -> dict:
     """The registered items as the verifier computes them at level `ell` (`served_commit.items_of`)."""
     tw = p["check"]["tile_work"]
-    return {"check": check_item(p), "root_W": root_w, "work": w.to_json(tw),
+    return {"check": check_item(p), "root_W": root_w, "work": w.to_json(tw), "shape": Wd.shape_json(p["shape"]),
             "sampling": {"delta": str(p["delta"]), "eps": str(p["eps"]), "grid_bits": p["grid_bits"],
                          "law": {"k": k, "law": "subset"}}}
 
@@ -433,19 +496,22 @@ def expected_items(p: dict, ell: int, w: Wd.Work, k: int, root_w: Any) -> dict:
 def _registered(p: dict, c: dict) -> tuple[str | None, Any]:
     rec = c["record"]
     win, items = rec["window"], rec["window"]["public"]
-    bits, (lo, hi) = p["grid_bits"], p["range"]
+    bits, lo = p["grid_bits"], p["range"][0]
     if win["kind"] != "served" or win["context"] != p["context"]:
         return (f"window: registered kind {win['kind']} in context {win['context']}, the verifier's served in "
                 f"{p['context']}"), None
+    if "shape" not in items:
+        return WINDOW_FORM, None
     if sorted(items) != sorted(Wd.REGISTERED):
         return f"public-items: registered {', '.join(sorted(items))}, declared {', '.join(sorted(Wd.REGISTERED))}", None
     work = items["work"]
     ell = work.get("level") if isinstance(work, dict) else None
     if not _nat(ell):
         return "level: the registration names no work level", None
-    if ell + 1 > Wd.level(Wd.floor_point(hi, bits), bits) or Wd.point(ell, bits) < lo:
-        return f"level: level {ell} is outside the window's range {lo}..{hi}", None
-    w = Wd.Work.at(ell, bits)
+    n = Wd.shape_tiles(p["shape"])
+    if ell > Wd.level(Wd.floor_point(n - 1, bits), bits) or Wd.point(ell, bits) > n - 1 or Wd.point(ell, bits) < lo:
+        return f"level: level {ell} is outside the window's credit range {lo}..{n - 1}", None
+    w = Wd.Work.at(ell, n, bits)
     tw = p["check"]["tile_work"]
     k = Wd.k_prime(p["eps"], p["delta"], w.credited * tw, w.n, tw)
     root_w = next((r["root"] for r in rec["roots"] if r["port"] == "W"), None)
@@ -454,7 +520,7 @@ def _registered(p: dict, c: dict) -> tuple[str | None, Any]:
     if wrong:
         return f"public-value: {', '.join(wrong)}", None
     if rec["population"] != w.n:
-        return f"population: registered {rec['population']}, the level's {w.n}", None
+        return f"population: registered {rec['population']}, the shape's {w.n}", None
     law = {"k": k, "law": "subset"}
     if _canon(rec["law"]) != _canon(law):
         return f"law: registered {_canon(rec['law'])}, the window's {_canon(law)}", None
@@ -583,9 +649,12 @@ def opening(p: dict, c: dict, units: list[int] | None, unit: int, pub: bytes, op
     if not (0 <= e < dom.count and verify_path(dom, root, e, Wd.entry_leaf(dom, e, Wd.entry_bc(entry, salt)), sibs)):
         return f"entry {e} is not the registered window's entry"
     try:
-        at = dict(zip(("a", "b"), Wd.tile_in(entry, unit)))
+        want, i, j = Wd.tile_at(p["shape"], unit)
     except ValueError as x:
-        return f"entry {e}: {x}"
+        return f"unit {unit}: {x}"
+    if e != want or Wd.public_fields(entry) != Wd.public_fields(Wd.shape_entries(p["shape"], dom.count)[want]):
+        return f"entry {e}: it is not the shape's entry {want}, which unit {unit} is in"
+    at = {"a": i, "b": j}
     head, nl, body = pub.partition(b"\n")
     try:
         h = json.loads(head.decode(), parse_constant=_no_constant) if nl else None
@@ -598,6 +667,9 @@ def opening(p: dict, c: dict, units: list[int] | None, unit: int, pub: bytes, op
         return "the proof's header has no instance count"
     if n != 1:
         return f"the proof has {n} instances, not one tile"
+    t = TILES.get(p["check"]["template"])
+    if t is None or h.get("circuit_sha512") != t.circuit:
+        return "the proof's circuit is not the one the verifier pins for the check's template"
     f = h.get("frame_v3")
     s = f.get("schemas") if isinstance(f, dict) else None
     if not isinstance(s, dict) or [s[k] for k in sorted(s)[:2]] != [schema for _, schema in OPENED]:
@@ -911,6 +983,31 @@ def draw(coins: Any, recorded: bool, opening: Any, stream: Any, registration: An
     return None
 
 
+# ---- a live window's round coins ---------------------------------------------------------------------------------------
+
+def rounds(coins: Any, roots: Any, openings: Any) -> tuple[str, str] | None:
+    """None when `openings` are a live window's round coins (`window.rounds_reason`): under `coins`, the challenger's live
+    coin commitment (its JSON, `challenger.LiveCommitment`), round r's coin opened once, after `roots[r]`, the r-th round
+    root the verifier recorded (hex), and every recorded round's coin opened; else the refusal (``coin`` or ``rounds``,
+    and why)."""
+    try:
+        c = Ch.LiveCommitment.from_json(coins)
+    except Ch.CoinError as e:
+        return "coin", f"the verifier's coins are malformed: {e}"
+    if not (isinstance(roots, list) and all(_str(r) and _DIGEST.fullmatch(r) for r in roots)):
+        return "rounds", "the round roots are not a list of SHA-512 digests"
+    if not isinstance(openings, list):
+        return "rounds", "the round coins are not a list"
+    os_ = []
+    for i, o in enumerate(openings):
+        try:
+            os_.append(Ch.LiveOpening.from_json(o))
+        except Ch.CoinError as e:
+            return "coin", f"round coin {i}: {e}"
+    why = Wd.rounds_reason(c, [bytes.fromhex(r) for r in roots], os_)
+    return None if why is None else ("coin", why)
+
+
 def answer(params_b: bytes, commitment_b: bytes, evidence_b: bytes) -> dict:
     """`Core.Protocol.answer`: every input gets a verdict, a decoding failure being a rejection naming its input."""
     def out(verdict: str, reason: str | None, d: bytes | None, pub: Any = None, prof: Any = None) -> dict:
@@ -952,6 +1049,7 @@ def line(a: dict) -> str:
     return _canon(a)
 
 
-__all__ = ["ANSWER_KEYS", "FORMATS", "ID", "LEVEL", "ONE_STAGE", "Refused", "SCHEME", "answer", "answer_of", "canonical",
+__all__ = ["ANSWER_KEYS", "FORMATS", "ID", "LEVEL", "ONE_STAGE", "Refused", "SCHEME", "WINDOW_FORM", "WINDOW_FORM_PARAMS",
+           "answer", "answer_of", "canonical",
            "case", "check", "commitment", "digest", "draw", "evidence", "integrity", "integrity_json", "law_name", "line",
-           "opening", "params", "pass_epoch", "ratio", "registered", "unit_draw", "verify_path", "window_domain"]
+           "opening", "params", "pass_epoch", "ratio", "registered", "rounds", "unit_draw", "verify_path", "window_domain"]

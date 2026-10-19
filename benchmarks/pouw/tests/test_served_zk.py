@@ -73,9 +73,16 @@ def _raw(man: dict) -> bytes:
     return json.dumps(man, sort_keys=True).encode()
 
 
+#: the window's shape: two calls of 16 slots and N weight rows, at pass tiles 5 and 9
+SHAPE = [{"m": 16, "n": N, "tile0": 5}, {"m": 16, "n": N, "tile0": 9}]
+#: the shape's tiles, its N; the last is the filler
+TILES = Wd.shape_tiles(Wd.shape_of(SHAPE))
+
+
 def _params(run: str, raw: bytes) -> dict:
     return {"context": f"served-zk/{run}/{hashlib.sha512(raw).hexdigest()}", "deployment": f"served-zk/{run}",
-            "k": K, "eps": "1/2", "delta": "1/10", "grid_bits": Wd.GRID_BITS, "range": [1, 1 << 40], "entries": 4, "w_rows": N}
+            "k": K, "eps": "1/2", "delta": "1/10", "grid_bits": Wd.GRID_BITS, "range": [1, 1 << 40], "entries": 4, "w_rows": N,
+            "calls": [5, 9], "shape": SHAPE}
 
 
 #: each window's pass by its parameters' context: (the epoch's coins, the manifest's bytes, the manifest)
@@ -94,10 +101,16 @@ def served():
     return scheme, ctx, noise, words
 
 
+#: an empty slot: the canonical empty row
+EMPTY = ([0] * L.ROW_WORDS["fp8-p"](K), 0, 0)
+
+
 def _calls(words) -> list[dict]:
-    """Two calls of the same rows: 2·M·N = 24 real tiles, grid level 23, padded to 26 with a filler entry of 1 x 2 zero rows."""
-    return [{"record": {"matmul": m, "shape": [16, K, N], "tile0": m, "weight": 2, "real_rows": M + 1}, "words": words}
-            for m in (5, 9)]
+    """Two calls of the same rows, each its 16 slots (M + 1 real rows admitted, the last refused by its forming, then empty
+    slots) and its N weight rows: 2·M·N = 24 credited tiles, grid level 23, of the shape's 2·16·N + 1 = 129."""
+    a = [(w, ok, 1) for w, ok in words["a"]] + [EMPTY] * (16 - M - 1)
+    return [{"record": {"matmul": m, "shape": [16, K, N], "tile0": m, "weight": 2},
+             "words": {"a": a, "b": [(w, ok, 1) for w, ok in words["b"]]}} for m in (5, 9)]
 
 
 def _weights() -> list[bytes]:
@@ -125,62 +138,69 @@ def _codes(e: pytest.ExceptionInfo) -> set[str]:
 
 
 def _pub(bca: bytes, bcb: bytes) -> bytes:
-    """A tile proof's public file as `verity_flock.circuit.write` lays it out: its header, then instance 0's b || c in port
-    order (the A row, the B row, the tile digest's row)."""
+    """A tile proof's public file as `verity_flock.circuit.write` lays it out: its header (over the circuit the verifier
+    pins for the window's template), then instance 0's b || c in port order (the A row, the B row, the tile digest's
+    row)."""
     schemas = {"a0": L.ROW_SCHEMA["fp8-pi", SC.SIDES["a"]], "b0": L.ROW_SCHEMA["fp8-pi", SC.SIDES["b"]],
                "o0": L.ROW_SCHEMA["tile", SC.SIDES["a"]]}
-    return json.dumps({"instances": 1, "frame_v3": {"schemas": schemas}}).encode() + b"\n" + bca + bcb + bytes(128)
+    head = {"circuit_sha512": CC.TILES[SC.template(K).id].circuit, "instances": 1, "frame_v3": {"schemas": schemas}}
+    return json.dumps(head).encode() + b"\n" + bca + bcb + bytes(128)
 
 
 def _unit_pub(advice, priv, t: int) -> bytes:
-    e, i, j = Wd.tile_at(SC.entries_of(advice), t)
+    e, i, j = Wd.tile_at(Wd.shape_of(SHAPE), t)
     return _pub(priv[e]["a"]["bcs"][i], priv[e]["b"]["bcs"][j])
 
 
 def test_rows_are_the_schemes_operands(served):
-    """Each formed row is the fp8-p row of the operands `PearlC.encode` forms for a tile holding it, and the refused row is
-    none of the call's kept rows."""
+    """Each formed row is the fp8-p row of the operands `PearlC.encode` forms for a tile holding it, ok 1, and the zero row
+    is refused in place: ok 0."""
     scheme, ctx, noise, words = served
-    assert words["a"][M] is None and all(w is not None for w in words["a"][:M] + words["b"])
+    assert words["a"][M][1] == 0 and all(ok == 1 for _, ok in words["a"][:M] + words["b"])
     from verity.core.protocols.pouw.protocol import Tile
     ops = scheme.encode(ctx, noise, _rows(1, M)[1:2], _rows(2, N)[3:4], Tile((1,), (3,)))
-    assert words["a"][1] == L.words_fp8_p(ops.a.codes[0], ops.pa[0])
-    assert words["b"][3] == L.words_fp8_p(ops.b.codes[0], ops.pb[0])
+    assert words["a"][1][0] == L.words_fp8_p(ops.a.codes[0], ops.pa[0])
+    assert words["b"][3][0] == L.words_fp8_p(ops.b.codes[0], ops.pb[0])
 
 
-def test_the_window_is_padded_to_a_grid_level_with_filler(served):
-    """The calls' kept tiles, then a filler entry of zero rows up to the padded count, then empty entries to the bound, each
-    an entry row; the window statement holds on the rows, each side tree holds its kept rows only under the window's side
-    domain (from the window root's one-stage served domain), the record keeps the rows' places in the call, and replaying
-    the salts gives the same commitment."""
+def test_the_window_is_its_shape_with_every_slot_in_place(served):
+    """The shape's entries: each call's 16 slots and N weight rows in place, then the filler's canonical empty row each
+    side, then empty entries to the bound, each an entry row; the window statement holds on the rows and the side rows'
+    fields, each side tree holds every row of its side under the window's side domain (from the window root's one-stage
+    served domain), and replaying the salts gives the same commitment."""
     *_, words = served
     params, public, advice, priv = _window(words)
-    work = Wd.bucket(2 * M * N)
-    assert (advice["real"], public["level"], work.credited, work.n) == (2 * M * N, work.level, 24, 26)
+    work = Wd.credit(2 * M * N, 129)
+    assert (advice["real"], public["level"], work.credited, work.n) == (2 * M * N, work.level, 24, 129)
     entries = SC.entries_of(advice)
     assert [e.kind for e in entries] == ["call", "call", "filler", "none"]
     call, filler = entries[0], entries[2]
-    assert (call.n_a, call.n_b, call.lo, call.hi) == (M, N, 0, M * N) and (filler.lo, filler.hi) == (24, 26)
-    assert (filler.n_a, filler.n_b) == (1, 2) and filler.record == filler.root_h3 == bytes(64) and entries[3] == Wd.Entry("none")
+    assert (call.n_a, call.n_b, call.lo, call.hi) == (16, N, 0, 16 * N) and (filler.lo, filler.hi) == (128, 129)
+    assert (filler.n_a, filler.n_b) == (1, 1) and filler.record == filler.root_h3 == bytes(64) and entries[3] == Wd.Entry("none")
+    assert [Wd.public_fields(e) for e in entries] == [Wd.public_fields(e) for e in Wd.shape_entries(Wd.shape_of(SHAPE), 4)]
     root_h3 = SC.root_h3_of(PASSES[params["context"]][2])
     assert entries[0].root_h3 == entries[1].root_h3 == root_h3 and advice["root_h3"] == root_h3.hex()
-    assert advice["records"][0]["keep"] == {"a": list(range(M)), "b": list(range(N))} and advice["records"][2:] == [None, None]
-    assert call.record == Wd.record_digest(advice["records"][0]) and len(priv[0]["a"]["bcs"]) == M
+    assert advice["records"][2:] == [None, None] and "real_rows" not in advice["records"][0]
+    assert call.record == Wd.record_digest(advice["records"][0]) and len(priv[0]["a"]["bcs"]) == 16
     assert not priv[2]["a"]["words"].any() and not priv[2]["b"]["words"].any()
-    assert Wd.window_problem([e.row() for e in entries], work, params["entries"], root_h3) is None
+    fields = [{s: [list(Wd.side_field(r)) for r in priv[e][s]["words"].tolist()] for s in "ab"} for e in range(3)]
+    assert [f[0] for f in fields[0]["a"]] == list(range(16)) and fields[0]["a"][M] == [M, 0, 1, 0]
+    assert fields[0]["a"][M + 1:] == [[i, 0, 0, 1] for i in range(M + 1, 16)]
+    assert Wd.window_problem([e.row() for e in entries], work, params["entries"], root_h3, Wd.shape_of(SHAPE), fields,
+                             records=advice["records"]) is None
     _, _, part = SC.population(K, work.n)
     (wroot,) = [r for r in public["roots"] if r["port"] == SC.PORT]
     assert wroot["domain"] == R.served_domain(part["program"], SC.PT.digest(part), SC.PORT, SC.ENTRY_SCHEMA, params["entries"],
                                               params["context"])
     for e in (0, 2):
         for side in "ab":
-            dom, schema = SC.side_domain(params, public["level"], side)
+            dom, schema = SC.side_domain(params, side)
             assert dom == Wd.side_domain(bytes.fromhex(wroot["domain"]), side) and dom.count == 1 << Wd.DEPTHS[side]
             leaves = SC.side_leaves(dom, schema, priv[e][side]["bcs"])
             root = tree_levels(dom, leaves + [dom.pad(r) for r in range(len(leaves), dom.count)])[-1][0]
             assert root == (entries[e].root_a if side == "a" else entries[e].root_b)
-    assert priv[0]["b"]["bcs"][2] == L.commit("fp8-pi", SC.SIDES["b"], Wd.side_row(words["b"][2], 2), priv[0]["b"]["salts"][2])
-    assert [Wd.side_index(r) for r in priv[0]["a"]["words"]] == advice["records"][0]["keep"]["a"]
+    assert priv[0]["b"]["bcs"][2] == L.commit("fp8-pi", SC.SIDES["b"], Wd.side_row(words["b"][2][0], 2, 1, 1),
+                                              priv[0]["b"]["salts"][2])
     assert (call.tile0, call.cols, call.m, entries[1].tile0) == (5, 1, 16, 9) and filler.m == filler.tile0 == 0
     salts = {e: {s: priv[e][s]["salts"] for s in "ab"} for e in range(3)}
     again, advice2, _ = SC.commit_window(params, _calls(words), public["items"]["root_W"], root_h3,
@@ -191,20 +211,38 @@ def test_the_window_is_padded_to_a_grid_level_with_filler(served):
             SC.root_h3_of(bad)
 
 
+def test_windows_of_one_shape_differ_only_in_their_level(served):
+    """A window with one real row a call has the same N, entries' public fields, population and side trees' sizes as the
+    one with three: the registration differs in its work level and what that level fixes (K′), never in its structure."""
+    *_, words = served
+    params, public, advice, _ = _window(words)
+    one = {"a": words["a"][:1] + [(w, 0) for w, _ in words["a"][1:]], "b": words["b"]}
+    man = PASSES[params["context"]][2]
+    root_w, _ = SC.commit_weights(params, _weights())
+    public1, advice1, _ = SC.commit_window(params, _calls(one), root_w, SC.root_h3_of(man))
+    assert (advice["real"], advice1["real"]) == (2 * M * N, 2 * N)
+    keep = lambda es: [Wd.public_fields(Wd.Entry.from_json(e)) for e in es]  # noqa: E731
+    assert keep(advice["entries"]) == keep(advice1["entries"])
+    rec, rec1 = _register(params, public), _register(params, public1)
+    assert rec["population"] == rec1["population"] == 129 and rec["window"]["public"]["shape"] == SHAPE
+    assert rec["window"]["public"]["shape"] == rec1["window"]["public"]["shape"]
+    assert public["level"] != public1["level"]
+
+
 def test_register_makes_exactly_the_public_items_public(served):
-    """The record's window holds exactly the registered public items (work, check, sampling, root_W) and nothing of the
-    calls: no shape, no call index, no row count.  One more item, a root_W that is no registered root, or a commitment
-    whose level the range refuses, is refused."""
+    """The record's window holds exactly the registered public items (work, check, sampling, shape, root_W) and nothing of
+    the calls' values: no call index, no record, no row count.  One more item, a root_W that is no registered root, or a
+    commitment whose level the range refuses, is refused."""
     *_, words = served
     params, public, _, _ = _window(words)
     rec = _register(params, public)
     assert rec["window"] == {"kind": "served", "context": params["context"], "public": public["items"]}
-    assert set(rec["window"]["public"]) == set(Wd.REGISTERED) and rec["population"] == 26 and rec["scheme"] == S.SCHEME
+    assert set(rec["window"]["public"]) == set(Wd.REGISTERED) and rec["population"] == 129 and rec["scheme"] == S.SCHEME
     assert rec["law"] == {"law": "subset", "k": rec["window"]["public"]["sampling"]["law"]["k"]}
     assert [r["port"] for r in rec["roots"]] == [SC.PORT, "W"]
     assert S.check_public(SC.spec_of(params, public["level"]), rec).ok and SC.public_problem(params, rec).ok
     text = json.dumps(rec)
-    for leak in ('"matmul"', '"shape"', '"real_rows"', '"rows"', '"keep"'):
+    for leak in ('"matmul"', '"real_rows"', '"rows"', '"keep"', '"record"'):
         assert leak not in text
     with pytest.raises(S.Refused) as e:
         _register(params, public, shapes=[[16, K, N]])
@@ -303,12 +341,13 @@ def test_select_draws_once_over_the_draw_coin_opened_after_the_registration(serv
     reg = _held(ch, "honest", rec)
     assert ch.passes == {"honest": "coin"} and "draw" not in ch.openings
     d = ch.select("honest")
-    assert len(d.units) == k and d.draw["population"] == 26 and d.units == sorted(d.units) and all(0 <= u < 26 for u in d.units)
+    n = TILES
+    assert len(d.units) == k and d.draw["population"] == n and d.units == sorted(d.units) and all(0 <= u < n for u in d.units)
     o = ch.openings["draw"]
     assert o.after == bytes.fromhex(reg.digest) and coin_reason(ch.coins.commitment, o, "draw", o.after) is None
     st = ch.regs["honest"][0]
-    src = SC.draw_bytes(SC.draw_key(o.coin, st, reg), d.law, 26)
-    assert len(src) == 2 * k * CC.width(26) + 64 and d.units == CC.stream_subset(k, 26, src)
+    src = SC.draw_bytes(SC.draw_key(o.coin, st, reg), d.law, n)
+    assert len(src) == 2 * k * CC.width(n) + 64 and d.units == CC.stream_subset(k, n, src)
     assert ch.coins_of("honest") == {"commitment": ch.coins.commitment.to_json(), "pass": "coin", "draw": o.to_json()}
     with pytest.raises(S.Refused) as e:
         ch.select("honest")
@@ -455,10 +494,10 @@ def test_check_opens_the_drawn_units_rows_only(served, tmp_path):
     rec = _register(params, public)
     SC.save(tmp_path / "p.npz", priv)
     priv = SC.load(tmp_path / "p.npz")
-    draw = {"law": "subset", "population": 26, "k": 3, "units": [5, 13, 25]}
+    draw = {"law": "subset", "population": TILES, "k": 3, "units": [5, 13, TILES - 1]}
     for t in draw["units"]:
         assert SC.check(params, rec, draw, t, _unit_pub(advice, priv, t), SC.opening(advice, priv, params, t)) is None
-    assert SC.opening(advice, priv, params, 25)["entry_value"]["kind"] == "filler"
+    assert SC.opening(advice, priv, params, TILES - 1)["entry_value"]["kind"] == "filler"
     op = SC.opening(advice, priv, params, 5)
     assert "not entry 0's row" in SC.check(params, rec, draw, 5, _unit_pub(advice, priv, 6), op)
     assert "not drawn" in SC.check(params, rec, draw, 6, _unit_pub(advice, priv, 6), SC.opening(advice, priv, params, 6))
@@ -529,7 +568,7 @@ def test_the_outcome_publishes_exactly_the_public_items(served):
         with pytest.raises(S.Refused) as e:
             _held(ch, f"{name}-retry", rec, stream=name)
         assert _codes(e) == {"stopped"}
-    assert body["audit"]["verdicts"]["opening"]["units"] == [False] * 4
+    assert body["audit"]["verdicts"]["opening"]["units"] == [False] * len(d.units)
 
 
 def _through(ch, rec, name="honest"):
@@ -577,7 +616,7 @@ def test_r1_r6_of_a_window_are_leans(served):
     rec = _register(params, public)
     ell, n = SC.level_of(rec), rec["population"]
     prog, q = SC.PT.population_program(SC.template(K), n), SC.PT.template_instance_query(SC.template(K))
-    law, ports = SC.law_of(params, ell), SC.ports(params, ell)
+    law, ports = SC.law_of(params, ell), SC.ports(params)
     p = OR.registration_params(prog, q, law, S.SCHEME, ports, [], params["delta"])
     record = OR.Record()
 
@@ -597,20 +636,32 @@ def test_r1_r6_of_a_window_are_leans(served):
     record.close()
 
 
+def test_the_record_follows_the_switch(monkeypatch):
+    """`Record()` takes its side of record from `pouw.verifier.RECORD_VERDICT`, and an explicit `lean` overrides it."""
+    assert OR.Record().lean is (OR.V.RECORD_VERDICT == "lean")
+    monkeypatch.setattr(OR.V, "RECORD_VERDICT", "python")
+    assert OR.Record().lean is False and OR.Record(lean=True).lean is True
+    monkeypatch.setattr(OR.V, "RECORD_VERDICT", "lean")
+    assert OR.Record().lean is True and OR.Record(lean=False).lean is False
+
+
 @LEAN
-def test_the_public_items_rule_refuses_only_what_r1_r6_refuse(served):
-    """`service.check_public` has no Lean form: R1-R6 decide what it reads of a PoUW registration, so on generated
-    registrations (keys added and dropped, roots renamed, repeated, dropped or given fields, the scheme, query, leaf layer,
-    anchors and registered values changed, several at once) it refuses only what Lean's R1-R6 refuse, and refuses some."""
+def test_the_public_items_rule_of_a_window_is_leans(served):
+    """The service's public-items rule over a window's Spec is Lean's (`Service.checkPublic`): on generated registrations
+    (keys added and dropped, roots renamed, repeated, dropped or given fields, the scheme, query, leaf layer, anchors and
+    registered values changed, several at once) `service.check_public` gives exactly its verdict, codes and detail, none
+    for the honest record and some for many of the changed ones."""
     *_, words = served
     params, public, _, _ = _window(words)
     rec = _register(params, public)
     ell, n = SC.level_of(rec), rec["population"]
     spec = SC.spec_of(params, ell)
-    prog, q = SC.PT.population_program(SC.template(K), n), SC.PT.template_instance_query(SC.template(K))
-    law, ports = SC.law_of(params, ell), SC.ports(params, ell)
-    p = OR.registration_params(prog, q, law, S.SCHEME, ports, [], params["delta"])
-    record = OR.Record()
+    record = OR.Record(lean=True)
+
+    def verdict(r: dict) -> dict:
+        return record.public(OR.public_params(spec, r, S.SCHEME), lambda: S.check_public(spec, r).to_json())
+
+    assert verdict(rec) == {"ok": True, "codes": [], "detail": {}}
 
     def mutate(rng: random.Random, r: dict) -> None:
         roots = r.get("roots")
@@ -641,19 +692,17 @@ def test_the_public_items_rule_refuses_only_what_r1_r6_refuse(served):
             case _:
                 r["population"] = rng.choice((n, n + 1, 0))
 
-    refused = both = 0
+    refused = 0
     for seed in range(300):
         rng = random.Random(seed)
         r = json.loads(json.dumps(rec))
         for _ in range(rng.choice((1, 1, 2, 3))):
             mutate(rng, r)
-        py = list(S.check_public(spec, r).codes)
-        lean = record.registration(p, r, lambda r=r: R.check(r, prog, q, law, S.SCHEME, ports, None, (), [], None, None,
-                                                             None).codes)
-        assert record.public(py, lean) == lean, (seed, py, lean)
-        refused += bool(py)
-        both += bool(lean)
-    assert refused >= 100 and both >= refused, (refused, both)
+        try:
+            refused += not verdict(r).get("ok")
+        except OR.Disagree as e:
+            raise AssertionError(f"seed {seed}: Python {e.python} where the Lean, of record, gives {e.lean}") from None
+    assert refused >= 100, refused
     assert all(e["same"] for e in record.witness)
     record.close()
 
@@ -704,7 +753,7 @@ def test_a_disagreement_rejects_the_session(served, monkeypatch):
     record.close()
     monkeypatch.undo()
     op, served_domain = SC.opening(advice, priv, params, t), SC.window_domain
-    monkeypatch.setattr(SC, "window_domain", lambda params, ell: served_domain({**params, "context": "other"}, ell))
+    monkeypatch.setattr(SC, "window_domain", lambda params: served_domain({**params, "context": "other"}))
     record = OR.Record()
     assert SC.check(params, rec, ch.draws["honest"].draw, t, _unit_pub(advice, priv, t), op, record=record) == \
         f"{OR.DISAGREE}: prelude"
@@ -874,9 +923,11 @@ def test_shape_compares_what_the_prover_sends(tmp_path):
 @pytest.mark.slow
 def test_a_staged_unit_opens_under_the_window_root(served, tmp_path):
     """stage_tile.py stages a call's tile and a filler tile of a committed window as `Pc8TileSide` units, each in its own
-    process, on the committer's side rows and salts: each public file's rows are the side trees' leaves, so the opening
+    process, on the committer's side rows and salts: each is over the circuit the verifier pins for the template
+    (`core_check.TILES`, Lean's `PouwCheck.tiles`), and each public file's rows are the side trees' leaves, so the opening
     accepts.  Nothing cheaper catches a unit whose committed rows are not the side rows (the index field dropped or moved),
-    which only the staged public file shows; about a minute at K = 128."""
+    or a change to the template or to C-Flock's lowering that moves the circuit off its pin, which only staging shows;
+    about a minute at K = 128."""
     *_, words = served
     params, public, advice, priv = _window(words)
     rec = _register(params, public)
@@ -884,7 +935,7 @@ def test_a_staged_unit_opens_under_the_window_root(served, tmp_path):
     (tmp_path / "params.json").write_text(json.dumps(params))
     SC.save(tmp_path / "prover.npz", priv)
     stage = Path(__file__).resolve().parents[1] / "served_zk" / "stage_tile.py"
-    draw = {"law": "subset", "population": 26, "k": 2, "units": [7, 25]}
+    draw = {"law": "subset", "population": TILES, "k": 2, "units": [7, TILES - 1]}
     runs = {t: subprocess.Popen([sys.executable, str(stage), str(tmp_path), str(tmp_path / "params.json"), str(t),
                                  str(tmp_path / f"u{t}")], text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             for t in draw["units"]}
@@ -895,9 +946,12 @@ def test_a_staged_unit_opens_under_the_window_root(served, tmp_path):
         st = json.loads((out / "stage.json").read_text())
         assert st["definition"] == SC.template(K).id and st["row_schemas"][:2] == [
             [L.ROW_SCHEMA["fp8-pi", SC.SIDES[s]], 16 * L.ROW_WORDS["fp8-pi"](K)] for s in "ab"]
+        assert st["circuit_sha512"] == CC.TILES[st["definition"]].circuit, (
+            f"unit {t}: {st['definition']} builds circuit {st['circuit_sha512']}, not the one the verifier pins: a change "
+            "to the template or to C-Flock's lowering lands its new digest in PouwCheck/Tile.lean and core_check.TILES")
         op = json.loads((out / "opening.json").read_text())
         assert SC.check(params, rec, draw, t, (out / "pub.bin").read_bytes(), op) is None, t
-    assert json.loads((tmp_path / "u25" / "stage.json").read_text())["kind"] == "filler"
+    assert json.loads((tmp_path / f"u{TILES - 1}" / "stage.json").read_text())["kind"] == "filler"
 
 
 #: a per-unit check of a drawn tile: open-u<t> or lean-u<t> for a unit index t

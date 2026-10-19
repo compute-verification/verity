@@ -1,7 +1,8 @@
 """The difftest's cases: generated windows, each a `serve` case ``{"commitment": hex, "evidence": hex, "params": JSON}``.
 
-A case is an honest window (random grid bits, tile work, ε, δ, range and level; the registration one-stage's record of
-it, the service's answer an acceptance of that registration with its profile and draw), then one mutation (`MUTATIONS`)
+A case is an honest window (random grid bits, pinned tile template (`core_check.TILES`), ε, δ, range and level; the
+registration one-stage's record of it, the service's answer an acceptance of that registration with its profile and
+draw), then one mutation (`MUTATIONS`)
 aimed at one refusal of `core_check`: of the parameters, the record, the answer, or a rule of the check.  Every string it
 writes is ASCII and every number an integer, where Lean's canonical JSON and Python's agree.  `tests/test_difftest.py`
 draws them for the harness, and `verity/core/protocols/pouw/tests/test_pouw_core_check.py` holds each mutation to
@@ -19,31 +20,45 @@ from verity.core.protocols.pouw import window as Wd
 
 EPS = ["1", "1/2", "1/3", "2/3", "1/10", "1/20", "3/4"]
 DELTA = ["1/2", "1/10", "1/100", "1/1000", "1/65536", "1/1048576", "3/7"]
-TILE_WORK = [1, 7, 64, 4096]
+TEMPLATES = sorted(CC.TILES)
 
 
 def _hex(rng: random.Random, n: int = 64) -> str:
     return rng.randbytes(n).hex()
 
 
+def shape(rng: random.Random, entries: int) -> list[dict]:
+    """A window's shape within `entries`: 1 to 3 calls (fewer than the entries), each m whole 16s and n weight rows, at
+    increasing tiles of the pass; small or up to the largest call."""
+    out, at = [], 0
+    for _ in range(rng.randint(1, min(3, entries - 1))):
+        m = 16 * rng.randint(1, rng.choice([1, 4, 512]))
+        n = rng.randint(1, rng.choice([4, 64, 1 << 17]))
+        tile0 = at + rng.randrange(3)
+        out.append({"m": m, "n": n, "tile0": tile0})
+        at = tile0 + -(-m // Wd.TILE) * -(-n // Wd.TILE)
+    return out
+
+
 def honest(rng: random.Random) -> dict:
     """An honest window: the verifier's parameters, the registration, and the service's accepting answer."""
     bits = rng.randrange(5)
-    tw = rng.choice(TILE_WORK)
-    params = {"check": {"entries": rng.randint(2, 32), "scheme": CC.SCHEME, "template": f"Pc8TileHidden{{{tw},1,1,sm120}}",
-                        "tile_work": tw},
+    template = rng.choice(TEMPLATES)
+    tile = CC.TILES[template]
+    tw = tile.tile_work
+    params = {"check": {"entries": rng.randint(2, 32), "scheme": CC.SCHEME, "template": template, "tile_work": tw},
               "context": f"served-zk/run-{rng.randrange(1000)}/{_hex(rng, 8)}", "delta": rng.choice(DELTA),
-              "eps": rng.choice(EPS), "grid_bits": bits, "query": _hex(rng)}
-    top = rng.choice([4, 12, 24, 40])
-    hi = rng.randint(2, 1 << top)
-    ell_hi = Wd.level(Wd.floor_point(hi, bits), bits) - 1
-    ell = rng.randint(0, ell_hi) if ell_hi >= 0 else 0
+              "eps": rng.choice(EPS), "grid_bits": bits, "query": tile.query}
+    params["shape"] = shape(rng, params["check"]["entries"])
+    n = Wd.shape_tiles(Wd.shape_of(params["shape"]))
+    ell_hi = Wd.level(Wd.floor_point(n - 1, bits), bits)
+    ell = ell_hi - rng.randrange(min(4, ell_hi + 1))
     lo = rng.randint(1, Wd.point(ell, bits))
-    params["range"] = [lo, max(hi, Wd.point(ell + 1, bits))]
-    w = Wd.Work.at(ell, bits)
+    params["range"] = [lo, n + rng.choice([0, 0, 1, rng.randrange(1 << 20)])]
+    w = Wd.Work.at(ell, n, bits)
     k = Wd.k_prime(Fraction(params["eps"]), Fraction(params["delta"]), w.credited * tw, w.n, tw)
     root_w = _hex(rng)
-    items = {"check": dict(params["check"]), "root_W": root_w, "work": w.to_json(tw),
+    items = {"check": dict(params["check"]), "root_W": root_w, "work": w.to_json(tw), "shape": params["shape"],
              "sampling": Wd.sampling(Fraction(params["eps"]), Fraction(params["delta"]), w, tw, bits)}
     program, partition = _hex(rng), _hex(rng)
     rec = {"format": CC.FORMATS[0] if rng.random() < 0.9 else CC.FORMATS[1], "protocol": CC.ONE_STAGE,
@@ -62,6 +77,8 @@ def honest(rng: random.Random) -> dict:
                           "prescribed": sorted(rng.sample(["prompt", "weights", "noise"], rng.randrange(3))),
                           "programs": [program]},
               "public": {"draw": {"k": k, "law": "subset", "population": w.n, "units": units}}}
+    if rng.random() < 0.4:
+        params["check"][Wd.COINS] = items["check"][Wd.COINS] = rng.choice(Wd.MODES)
     return {"params": params, "record": rec, "answer": answer}
 
 
@@ -98,8 +115,11 @@ MUTATIONS = [
     ("params-range", "params", "range", [3, 2]), ("params-range-zero", "params", "range", [0, 5]),
     ("params-eps-other", "params", "eps", "1/7"), ("params-delta-other", "params", "delta", "1/9"),
     ("params-grid-other", "params", "grid_bits", 7), ("params-tile-other", "params", "check.tile_work", 3),
-    ("params-template-other", "params", "check.template", "Other{1}"), ("params-query-other", "params", "query", None),
+    ("params-template-other", "params", "check", None), ("params-template-unpinned", "params", "check.template", "Other{1}"),
+    ("params-query-other", "params", "query", None), ("params-coins", "params", "check.coins", "fiat-shamir"),
     ("params-range-low", "params", "range", None), ("params-range-high", "params", "range", None),
+    ("params-window-form", "params", "shape", _DROP), ("params-shape", "params", "shape", []),
+    ("params-shape-m", "params", "shape.0.m", 24), ("params-shape-pass", "params", "shape", [{"m": 16, "n": 4, "tile0": 1 << 40}]),
     ("record-format", "record", "format", "verity/registration/v0"), ("record-program", "record", "program", 7),
     ("record-partition", "record", "partition", _DROP), ("record-population-type", "record", "population", "8"),
     ("record-law-missing", "record", "law", _DROP), ("record-roots", "record", "roots", [{"port": "W"}]),
@@ -110,6 +130,8 @@ MUTATIONS = [
     ("record-level-type", "record", "window.public.work.level", "3"), ("record-level-high", "record", "window.public.work.level", None),
     ("record-level-huge", "record", "window.public.work.level", 10 ** 30), ("record-level-step", "record", "window.public.work.level", None),
     ("record-work", "record", "window.public.work.credited", None), ("record-check", "record", "window.public.check.entries", None),
+    ("record-coins", "record", "window.public.check.coins", None),
+    ("record-window-form", "record", "window.public.shape", _DROP), ("record-shape", "record", "window.public.shape", None),
     ("record-sampling", "record", "window.public.sampling.law.k", None), ("record-root-w", "record", "window.public.root_W", None),
     ("record-no-w-root", "record", "roots", None), ("record-population", "record", "population", None),
     ("record-law", "record", "law.k", None), ("record-law-kind", "record", "law", {"law": "bernoulli", "p": "1/2"}),
@@ -180,18 +202,26 @@ def _derived(name: str, case: dict, rng: random.Random):
     ell = items["work"]["level"]
     if name in ("params-query-other", "answer-other"):
         return _hex(rng)
+    if name == "params-template-other":
+        other = rng.choice([t for t in TEMPLATES if t != p["check"]["template"]])
+        return {**p["check"], "template": other, "tile_work": CC.TILES[other].tile_work}
     if name == "params-range-low":
         return [Wd.point(ell, bits) + 1, max(p["range"][1], Wd.point(ell, bits) + 1)]
+    n = Wd.shape_tiles(Wd.shape_of(p["shape"]))
     if name == "params-range-high":
-        return [1, max(1, Wd.point(ell + 1, bits) - 1)]
+        return [1, n - 1]
+    if name == "record-shape":
+        return [{**c, "tile0": c["tile0"] + 1} for c in p["shape"]]
     if name == "record-level-high":
-        return Wd.level(Wd.floor_point(p["range"][1], bits), bits) + rng.randrange(3)
+        return Wd.level(Wd.floor_point(n - 1, bits), bits) + 1 + rng.randrange(3)
     if name == "record-level-step":
-        return ell + 1 if Wd.point(ell + 2, bits) <= p["range"][1] else ell - 1 if ell >= 1 and Wd.point(ell - 1, bits) >= p["range"][0] else ell + 7
+        return ell - 1 if ell >= 1 and Wd.point(ell - 1, bits) >= p["range"][0] else ell + 7
     if name == "record-work":
         return items["work"]["credited"] + 1
     if name == "record-check":
         return items["check"]["entries"] + 1
+    if name == "record-coins":
+        return "seeded" if Wd.mode(p["check"]) == "live" else "live"
     if name == "record-sampling":
         return items["sampling"]["law"]["k"] + 1
     if name == "record-root-w":
@@ -284,6 +314,8 @@ def instance(rng: random.Random, name: str = "honest") -> dict:
         _set(case[part], path, value)
 
     mutate("params")
+    if name == "params-template-other":
+        case["params"]["query"] = CC.TILES[case["params"]["check"]["template"]].query
     mutate("record")
     params, rec, ans = case["params"], case["record"], case["answer"]
     rec_b = _canon(rec).encode()

@@ -29,7 +29,10 @@ Without ``--runs`` it selects every `job.sh` attempt in the evidence store and f
 * the other checks (coins, the stream's state, the firewall, Lean's tile verifier, replays, shapes) are not core_check's.
 
 A run of an older record version (no registration, or another scheme) and the v2 registrations run through both sides
-for agreement only.  Python and Lean must give the same outcome on every input, reason included.
+for agreement only.  A window of the superseded form (its parameters have no ``shape``: its tiles and N followed its real
+tiles) is refused by PoUW's check as ``window-form``, so each of its core cases must be that refusal, whatever it recorded
+(decision 129: refuse and label; the runs carry ``replay_expect = refused: window-form``).  Python and Lean must give the
+same outcome on every input, reason included.
 """
 from __future__ import annotations
 
@@ -57,6 +60,7 @@ import of_record as OR  # noqa: E402
 REPO = Path(__file__).resolve().parents[3]
 LEAN = REPO / "verity/core/protocols/pouw/lean/check"
 V2_ART = "art:08afd6b23db47295569411eb024868fb39e6dbae6a11a3835657be263321621d"
+V2_TILE = "Pc8TileSide_v1{K=4096,TM=1,TN=1,DEV='sm120'}"
 REGISTRATION_RULES = ("window", "public-items", "level", "public-value", "population", "law", "query", "scheme")
 V1_PASS = "verity-vllm/pouw-pearl-c-run/v1"
 #: The evidence a registration control is paired with in a window stopped before its outcome: a registration rule
@@ -75,13 +79,19 @@ def research(*args: str) -> str:
 
 
 def store_runs(into: Path) -> list[Path]:
-    """Every served_zk `job.sh` attempt's run record ``out/``, fetched under `into`."""
+    """Every served_zk `job.sh` attempt's run record ``out/``, fetched under `into` (empty for a record without one, a job
+    that failed before writing it)."""
     rows = research("data", "sql", "select a.id, o.artifact from attempts a join attempt_outputs o on o.attempt = a.id "
                     "where a.manifest_json like '%served_zk/job.sh%' and o.name = 'run_record' order by a.start_utc")
     runs = []
     for line in rows.splitlines()[1:]:
         run, art = line.split("\t")
-        research("data", "fetch", art, "--to", str(into / run), "--path", "out/*")
+        try:
+            research("data", "fetch", art, "--to", str(into / run), "--path", "out/*")
+        except SystemExit as e:
+            if "no file matches" not in str(e):
+                raise
+            (into / run).mkdir(parents=True, exist_ok=True)
         runs.append(into / run)
     return runs
 
@@ -111,7 +121,13 @@ def answer_of(outcome_dir: Path, delta: str) -> dict:
 def params_of(out: Path, reg: dict) -> dict:
     p = load(out / "request/params.json")
     return {"check": reg["window"]["public"]["check"], "context": p["context"], "delta": p["delta"], "eps": p["eps"],
-            "grid_bits": p["grid_bits"], "query": reg["query"], "range": p["range"]}
+            "grid_bits": p["grid_bits"], "query": reg["query"], "range": p["range"],
+            **({"shape": p["shape"]} if "shape" in p else {})}
+
+
+def superseded(out: Path) -> bool:
+    """A window of the superseded form: its parameters have no shape, so PoUW's check refuses it as ``window-form``."""
+    return "shape" not in load(out / "request/params.json")
 
 
 def current(reg: Any) -> bool:
@@ -161,7 +177,8 @@ def opening_inputs(out: Path, checks: dict, summary: dict) -> list[tuple[str, di
         reg = regs[side]
         got.append((name, {"params": {"check": {**reg["window"]["public"]["check"], "entries": p["entries"]},
                                       "context": p["context"], "delta": p["delta"], "eps": p["eps"],
-                                      "grid_bits": p["grid_bits"], "query": reg["query"], "range": p["range"]},
+                                      "grid_bits": p["grid_bits"], "query": reg["query"], "range": p["range"],
+                                      **({"shape": p["shape"]} if "shape" in p else {})},
                            "commitment": hexed(reg), "units": drawn if is_drawn else None, "unit": unit,
                            "pub": (out / pub / "pub.bin").read_bytes().hex(), "opening": load(out / op / "opening.json")}))
     return got
@@ -298,8 +315,15 @@ def registration_stage(reason: str | None) -> bool:
     return reason is not None and reason.split(":")[0] in REGISTRATION_RULES
 
 
-def judged(recorded: str, a: dict, public: Any) -> bool:
-    """Whether core_check's outcome `a` is the recorded verdict."""
+def window_form(reason: str | None) -> bool:
+    return reason is not None and "window-form:" in reason
+
+
+def judged(recorded: str, a: dict, public: Any, form: bool = False) -> bool:
+    """Whether core_check's outcome `a` is the recorded verdict; a case of the superseded window (`form`) must be refused
+    as ``window-form``, whatever it recorded (decision 129: refuse and label)."""
+    if form:
+        return a["verdict"] == "reject" and window_form(a["reason"])
     if recorded in ("REGISTERED", "ACCEPT"):
         return a["verdict"] == "accept" and (public is None or D.canonical(a["public"]) == D.canonical(public))
     if recorded == "REFUSED":
@@ -326,12 +350,13 @@ def replay_run(sides: Sides, out: Path, passes: dict[str, Path]) -> dict:
                                  "lean_same": same})
         return row
     row["version"] = CC.SCHEME
+    row["window_form"] = form = superseded(out)
     mapped = set()
     for name, case, recorded, public in core_cases(out, checks):
         a, same = sides.case(case)
         mapped.add(name)
         row["cases"].append({"check": name, "recorded": recorded, "verdict": a["verdict"], "reason": a["reason"],
-                             "lean_same": same, "same_verdict": judged(recorded, a, public)})
+                             "lean_same": same, "same_verdict": judged(recorded, a, public, form)})
     for name, x in opening_inputs(out, checks, summary):
         py, same = sides.open(x)
         mapped.add(name)
@@ -346,13 +371,14 @@ def replay_run(sides: Sides, out: Path, passes: dict[str, Path]) -> dict:
 
 
 def replay_v2(sides: Sides, root: Path) -> list[dict]:
-    """A4's v2 registrations, each through both sides: none is a PoUW window (no served window), and its
-    `registered` values wait on R7."""
+    """A4's v2 registrations, each through both sides under the served path's pinned check item (`V2_TILE`), so each
+    reaches the registration rules: none is a PoUW window (no served window), and its `registered` values wait on R7."""
+    tile = CC.TILES[V2_TILE]
     rows = []
     for p in sorted(root.rglob("registration.json")):
         reg = load(p)
-        case = {"params": {"check": {"entries": 2, "scheme": CC.SCHEME, "template": "v2", "tile_work": 1},
-                           "context": "v2", "delta": "1/10", "eps": "1/2", "grid_bits": 3, "query": reg["query"],
+        case = {"params": {"check": {"entries": 2, "scheme": CC.SCHEME, "template": V2_TILE, "tile_work": tile.tile_work},
+                           "context": "v2", "delta": "1/10", "eps": "1/2", "grid_bits": 3, "query": tile.query,
                            "range": [1, 1 << 40]},
                 "commitment": hexed(reg), "evidence": hexed({"protocol": CC.ONE_STAGE, "verdict": "reject",
                                                             "reason": "v2", "commitment": None, "public": None,
@@ -404,6 +430,7 @@ def main(argv: list[str] | None = None) -> int:
     judged_ = cases + coins
     negative = ("REFUSED", "REJECT", "CONTROL")
     t = {"runs": len(report["runs"]), "current": len(cur), "cases": len(judged_),
+         "window_form_runs": sum(bool(v.get("window_form")) for v in cur.values()),
          "same_verdict": sum(c["same_verdict"] for c in judged_),
          "controls": sum(c["recorded"] in negative for c in judged_),
          "controls_same": sum(c["same_verdict"] for c in judged_ if c["recorded"] in negative),
@@ -415,7 +442,8 @@ def main(argv: list[str] | None = None) -> int:
          "v2": len(report["v2"]["registrations"]),
          "apart": dict(sorted(Counter(n.split("-")[0] for v in cur.values() for n in v["apart"]).items()))}
     report["totals"] = t
-    t["line"] = (f"{t['current']} runs, {t['same_verdict']}/{t['cases']} same verdict, {t['controls']} negative controls "
+    t["line"] = (f"{t['current']} runs ({t['window_form_runs']} of the superseded window, each case expected refused as "
+                 f"window-form), {t['same_verdict']}/{t['cases']} same verdict, {t['controls']} negative controls "
                  f"({t['controls_same']} same; {t['controls_by_rule']} refused by a registration rule, "
                  f"{t['controls'] - t['controls_by_rule'] - t['generated_controls']} by the service or the coin rule, "
                  f"{t['generated_controls']} generated draw controls; {t['coin_cases']} coin cases); Lean = Python on "

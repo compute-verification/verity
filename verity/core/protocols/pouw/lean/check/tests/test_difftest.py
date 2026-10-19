@@ -1,7 +1,7 @@
-"""`pouw-check serve` against `verity.core.protocols.pouw.core_check`, on the shared harness (`verity_difftest`):
-one `ProtocolPort`, over the cases `pouw_check_cases` generates from a Hypothesis-controlled `random.Random` (honest
-windows, and one mutation each aimed at every refusal, the case's framing included), so a run is deterministic and
-shrinks.
+"""`verity.core.protocols.pouw.core_check` held to `pouw-check serve`, PoUW's verifier of record (`pouw.verifier`), on
+the shared harness (`verity_difftest`, `of_record="lean"`): one `ProtocolPort`, over the cases `pouw_check_cases`
+generates from a Hypothesis-controlled `random.Random` (honest windows, and one mutation each aimed at every refusal, the
+case's framing included), so a run is deterministic and shrinks. Every port here holds the Python to the Lean.
 
 The harness compares an outcome's verdict, commitment, public outputs and profile. The reference writes the port's
 reasons too, `Core.Protocol.case`'s framing included, so this port compares the whole outcome: the reason names the rule
@@ -14,6 +14,10 @@ both sides share), compared output for output: null, or the same reason.
 Its `pass` and `draw` against `core_check.pass_epoch` and `core_check.draw`: one `Port` each, over the cases
 `pouw_pass_cases` generates (honest passes of each coin version and a recorded beacon's, and honest draws, then one
 mutation each aimed at every refusal), compared output for output: how the salt was had, or the same refusal.
+
+Its `rounds` against `core_check.rounds`: one `Port`, over the live windows `pouw_rounds_cases` generates (a live epoch's
+round coins, each opened after its recorded round root, then one mutation each aimed at every refusal), compared output
+for output: null, or the same refusal.
 """
 from __future__ import annotations
 
@@ -31,7 +35,9 @@ from hypothesis import strategies as st
 import pouw_check_cases as cases
 import pouw_opening_cases as openings
 import pouw_pass_cases as passes
+import pouw_rounds_cases as rounds_cases
 from verity.core.protocols.pouw import core_check as CC
+from verity.core.protocols.pouw import verifier as V
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
@@ -58,7 +64,7 @@ def reference(case) -> dict:
     return a
 
 
-PORT = ExactPort("pouw-check", reference, inputs=INPUTS, package=LEAN)
+PORT = ExactPort("pouw-check", reference, inputs=INPUTS, package=LEAN, of_record=V.RECORD_VERDICT)
 server = D.server_fixture(PORT)
 
 
@@ -80,9 +86,11 @@ REASONS = {_template(r) for r in (
     "unit # is not drawn", "the registered window domain is not the window's served domain",
     "the registered window root is not a SHA-512 digest", "the opening names no entry",
     "the opening's salt is not # bytes, or a path or a side's index is not one (paths of SHA-512 digests)",
-    "entry # is not the registered window's entry", "entry #: index # is not in the entry's range",
+    "entry # is not the registered window's entry", "unit #: index # is not one of the window's # tiles",
+    "entry #: it is not the shape's entry #, which unit # is in",
     "the proof's public file has no JSON header", "the proof's header has no instance count",
     "the proof has # instances, not one tile",
+    "the proof's circuit is not the one the verifier pins for the check's template",
     "the proof's first rows are not an A row and a B row of the registered schemas",
     "the proof's body holds no A row and B row",
     *(f"side {s}: the opening is of row #, not the unit's row #" for s in "ab"),
@@ -100,6 +108,7 @@ def opening(case: dict) -> str | None:
 
 OPENING_NAMES = ["honest"] * (len(openings.NAMES) // 6) + openings.NAMES
 OPENING = D.Port("pouw-check-difftest", "opening", opening, package=LEAN, rejects=(CC.Refused,),
+                 of_record=V.RECORD_VERDICT,
                  inputs=st.builds(openings.instance, st.randoms(use_true_random=False), st.sampled_from(OPENING_NAMES)))
 opening_server = D.server_fixture(OPENING)
 
@@ -132,6 +141,7 @@ def registered(x: dict) -> dict:
 
 
 REGISTERED = D.Port("pouw-check-difftest", "registered", registered, package=LEAN, rejects=(ValueError,),
+                    of_record=V.RECORD_VERDICT,
                     inputs=st.builds(lambda r, n: registered_input(cases.instance(r, n)), st.randoms(use_true_random=False),
                                      st.sampled_from([n for n in NAMES if not n.startswith("answer")])))
 registered_server = D.server_fixture(REGISTERED)
@@ -165,10 +175,10 @@ def draw(case: dict) -> dict | None:
     return None if refused is None else {"refused": list(refused)}
 
 
-PASS = D.Port("pouw-check-difftest", "pass", pass_epoch, package=LEAN, need_rejects=False,
+PASS = D.Port("pouw-check-difftest", "pass", pass_epoch, package=LEAN, need_rejects=False, of_record=V.RECORD_VERDICT,
               inputs=st.builds(passes.pass_instance, st.randoms(use_true_random=False),
                                st.sampled_from(["honest"] * (len(passes.PASS_NAMES) // 6) + passes.PASS_NAMES)))
-DRAW = D.Port("pouw-check-difftest", "draw", draw, package=LEAN, need_rejects=False,
+DRAW = D.Port("pouw-check-difftest", "draw", draw, package=LEAN, need_rejects=False, of_record=V.RECORD_VERDICT,
               inputs=st.builds(passes.draw_instance, st.randoms(use_true_random=False),
                                st.sampled_from(["honest"] * (len(passes.DRAW_NAMES) // 4) + passes.DRAW_NAMES)))
 pass_server = D.server_fixture(PASS)
@@ -192,3 +202,35 @@ def test_pass_and_draw(pass_server):
         live = {**early, "recorded": False}
         assert (draw(early), draw(live)["refused"][0]) == (None, "coin")
         D.replay(DRAW, early, pass_server), D.replay(DRAW, live, pass_server)
+
+
+ROUNDED: Counter[str] = Counter()
+
+
+def rounds(case: dict) -> dict | None:
+    refused = CC.rounds(*rounds_cases.rounds_args(case))
+    ROUNDED[f"{refused[0]}: {_template(refused[1])}" if refused else "accept"] += 1
+    return None if refused is None else {"refused": list(refused)}
+
+
+ROUNDS = D.Port("pouw-check-difftest", "rounds", rounds, package=LEAN, need_rejects=False, of_record=V.RECORD_VERDICT,
+                inputs=st.builds(rounds_cases.rounds_instance, st.randoms(use_true_random=False),
+                                 st.sampled_from(["honest"] * (len(rounds_cases.ROUNDS_NAMES) // 4)
+                                                 + rounds_cases.ROUNDS_NAMES)))
+
+
+def test_rounds(pass_server):
+    """Generated live windows' round coins, then each mutation over a few seeds (`replay`): a coin opened twice, one opened
+    before its round's root was recorded, a foreign epoch's, and every other refusal of `core_check.rounds`."""
+    ROUNDED.clear()
+    stats = D.run(ROUNDS, examples=600, server=pass_server)
+    swept = Counter(D.replay(ROUNDS, rounds_cases.rounds_instance(random.Random(f"{name}/{seed}"), name), pass_server)[0]
+                    for name in ["honest", *rounds_cases.ROUNDS_NAMES] for seed in range(3))
+    print(f"pouw-check-difftest rounds: {stats}; and {sum(swept.values())} swept ({dict(swept)}); by outcome: "
+          f"{dict(sorted(ROUNDED.items()))}")
+    assert "accept" in ROUNDED
+    for part in ("is opened twice", "was opened before its root was recorded", "was never opened", ": coin is epoch #",
+                 ": coin does not open", ": coin was not opened after", "the verifier's coins are malformed",
+                 "the round roots are not", "the round coins are not a list", ": a live coin opening is",
+                 "the coin commitment's "):
+        assert any(part in k for k in ROUNDED), part

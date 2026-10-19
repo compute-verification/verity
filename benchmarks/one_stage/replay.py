@@ -1588,7 +1588,8 @@ SERVED_OUTSIDE = (
 
 def served_window(run: Run) -> Iterator[Case]:
     """served_zk's window through the proof service (`benchmarks/pouw/served_zk`): the request's registration of PoUW's
-    tiles (`population_program` of the tile template over the registered level's N, `Q_template_instance`), received
+    tiles (`population_program` of the tile template over the window's N: its shape's, or for a window of the superseded
+    form, which has no shape, the grid point after its registered level; `Q_template_instance`), received
     under the verifier's own copies (its `params.json`: the program at the record's level, the law of `pouw.window.sampling`,
     the window's served domain and W's domain, no leaf layer, no anchors, the stream's empty log), then one outcome per case
     (`outcome-<case>/`: honest, the selftest build's cases, the other request's proof), each its own audit record of the
@@ -1610,12 +1611,16 @@ def served_window(run: Run) -> Iterator[Case]:
     levels = [rec["window"]["public"]["work"]["level"]] + ([raised["window"]["public"]["work"]["level"]] if raised else [])
     tile_work = pv["k"]
 
+    def work_at(ell: int) -> Wd.Work:
+        if "shape" in pv:
+            return Wd.Work.at(ell, Wd.shape_tiles(Wd.shape_of(pv["shape"])), pv["grid_bits"])
+        return Wd.Work.at(ell, Wd.point(ell + 1, pv["grid_bits"]), pv["grid_bits"])
+
     def law_at(ell: int) -> dict:
-        return Wd.sampling(Fraction(pv["eps"]), Fraction(pv["delta"]), Wd.Work.at(ell, pv["grid_bits"]), tile_work,
-                           pv["grid_bits"])["law"]
+        return Wd.sampling(Fraction(pv["eps"]), Fraction(pv["delta"]), work_at(ell), tile_work, pv["grid_bits"])["law"]
     t = pc8.templates(pv["k"], (1, 1), "sm120", hidden=True)["tile"]
     era = None
-    if PO.program_sha512(P.population_program(t, Wd.Work.at(levels[0], pv["grid_bits"]).n)) != rec["program"]:
+    if PO.program_sha512(P.population_program(t, work_at(levels[0]).n)) != rec["program"]:
         if commit is None:
             raise Gap("today's tile template does not give the record's program, and the run names no commit")
         era = era_python(era_tree(run, commit), SERVED_ZK_ERA, json.dumps(pv), json.dumps(levels))
@@ -1626,7 +1631,7 @@ def served_window(run: Run) -> Iterator[Case]:
 
     def program_at(ell: int):
         if era is None:
-            return P.population_program(t, Wd.Work.at(ell, pv["grid_bits"]).n)
+            return P.population_program(t, work_at(ell).n)
         prog, ids = decode_opaque(era["levels"][str(ell)]["program"])
         stubs.extend(x for x in ids if x not in stubs)
         return prog

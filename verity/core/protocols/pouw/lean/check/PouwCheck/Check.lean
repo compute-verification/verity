@@ -2,16 +2,19 @@ import CoreProtocol.Protocol
 import PouwWindow.Grid
 import PouwWindow.Draw
 import PouwWindow.Public
+import PouwWindow.Shape
 import PouwCheck.Inputs
 
 /-!
 # PoUW's rule (`core_check.py`, "the check")
 
 `registered` holds the registration to PoUW's rule: a served window in the verifier's context registering exactly
-`window.REGISTERED`, a work level whose tiles lie in the declared range, each item the verifier's own at that level, the
-population N = point(level + 1), the law subset:K′ with K′ the window's exact `k_prime`, and the check's query and
-scheme. `outcome` then holds the service's answer to it: one-stage's, for this registration's digest, and on acceptance
-a profile and draw of the registered partition's N units drawn subset:K′ at the window's δ. Every refusal is the first
+`window.REGISTERED`, a work level whose credited tiles lie from the declared range's low end to N − 1, N the shape's tile
+count (`shapeTiles`), each item the verifier's own at that level, the population N, the law subset:K′ with K′ the
+window's exact `k_prime`, and the check's query and scheme. A registration with no `shape` item is the superseded
+window's, whose tiles and N followed its real tiles, and is refused as `window-form` (decision 129: refuse and label).
+`outcome` then holds the service's answer to it: one-stage's, for this registration's digest, and on acceptance a
+profile and draw of the registered partition's N units drawn subset:K′ at the window's δ. Every refusal is the first
 rule it breaks, in this order, with `core_check.py`'s reason.
 
 The service's reject is a reject and its undecided is undecided. On acceptance PoUW publishes `window.PUBLIC` and the
@@ -44,10 +47,15 @@ def rootWJson : Option String → Json
   | some r => .str r
   | none => .null
 
+/-- `WINDOW_FORM`: a registration with no shape item, the superseded window's. -/
+def windowForm : String :=
+  "window-form: the registration has no shape item: it is the superseded window, whose tiles and N followed its real " ++
+    "tiles, not the static window of its shape"
+
 /-- The registered items as the verifier computes them at its level (`expected_items`), in sorted order. -/
 def expected (p : Params) (f : Fixed) : List (String × Json) :=
   [("check", p.check.toJson), ("root_W", rootWJson f.rootW), ("sampling", f.sampling.toJson),
-   ("work", f.work.itemJson p.check.tileWork)]
+   ("shape", PouwWindow.shapeJson p.shape), ("work", f.work.itemJson p.check.tileWork)]
 
 def subsetLaw (k : Nat) : Json := Json.mkObj [("k", k), ("law", "subset")]
 
@@ -63,24 +71,27 @@ def registered (p : Params) (c : Registration) : Except String Fixed :=
   let win := c.window
   let ks := (keys win.items).getD []
   let bits := p.gridBits
+  let n := PouwWindow.shapeTiles p.shape
   if ¬ (win.kind = "served" ∧ win.context = p.context) then
     .error s!"window: registered kind {win.kind} in context {win.context}, the verifier's served in {p.context}"
+  else if "shape" ∉ ks then .error windowForm
   else if ks ≠ registeredSorted then
     .error s!"public-items: registered {", ".intercalate ks}, declared {", ".intercalate registeredSorted}"
   else match levelOf win.items with
   | none => .error "level: the registration names no work level"
   | some ell =>
-    if PouwWindow.level bits (PouwWindow.floorPoint bits p.hi) < ell + 1 ∨ PouwWindow.point bits ell < p.lo then
-      .error s!"level: level {ell} is outside the window's range {p.lo}..{p.hi}"
+    if PouwWindow.level bits (PouwWindow.floorPoint bits (n - 1)) < ell ∨ n - 1 < PouwWindow.point bits ell ∨
+        PouwWindow.point bits ell < p.lo then
+      .error s!"level: level {ell} is outside the window's credit range {p.lo}..{n - 1}"
     else
-      let work := Work.at bits ell
+      let work := Work.at bits ell n
       match PouwWindow.sampling (toRat p.eps) (toRat p.delta) work p.check.tileWork bits with
       | .error e => .error e
       | .ok s =>
         let f : Fixed := ⟨work, s, (c.roots.find? (·.port = "W")).map (·.root)⟩
         let wrong := wrongItems p win.items f
         if wrong ≠ [] then .error s!"public-value: {", ".intercalate wrong}"
-        else if c.population ≠ work.n then .error s!"population: registered {c.population}, the level's {work.n}"
+        else if c.population ≠ work.n then .error s!"population: registered {c.population}, the shape's {work.n}"
         else if cs c.law ≠ cs (subsetLaw s.k) then
           .error s!"law: registered {cs c.law}, the window's {cs (subsetLaw s.k)}"
         else if c.query ≠ p.query then .error s!"query: registered {c.query}, the check's {p.query}"
@@ -92,6 +103,7 @@ structure Public where
   check : CheckItem
   work : Work
   sampling : Sampling
+  shape : List PouwWindow.Call
   rootW : Option String
   drawn : Array Nat
   deriving DecidableEq, Repr
@@ -99,8 +111,8 @@ structure Public where
 /-- The published items in `window.PUBLIC`'s order. -/
 def Public.entries (pub : Public) : List (String × Json) :=
   [("verdict", true), ("work", pub.work.itemJson pub.check.tileWork), ("check", pub.check.toJson),
-   ("sampling", pub.sampling.toJson), ("drawn", Json.arr (pub.drawn.map fun (u : Nat) => Json.num u)),
-   ("root_W", rootWJson pub.rootW)]
+   ("sampling", pub.sampling.toJson), ("shape", PouwWindow.shapeJson pub.shape),
+   ("drawn", Json.arr (pub.drawn.map fun (u : Nat) => Json.num u)), ("root_W", rootWJson pub.rootW)]
 
 def Public.toJson (pub : Public) : Json := Json.mkObj pub.entries
 
@@ -152,7 +164,7 @@ def outcome (p : Params) (c : Registration) (f : Fixed) (e : Evidence) : Core.Ou
       .reject s!"draw: {draw.law.name} over {draw.population}, not subset:{k} over {n}"
     else if ¬ UnitsOk draw.units k n then
       .reject s!"draw: its {draw.units.size} units are not {k} ascending distinct units below {n}"
-    else .accept ⟨p.check, f.work, f.sampling, f.rootW, draw.units⟩ prof
+    else .accept ⟨p.check, f.work, f.sampling, p.shape, f.rootW, draw.units⟩ prof
 
 def check (p : Params) (c : Registration) (e : Evidence) : Core.Outcome Public Core.Integrity :=
   match registered p c with

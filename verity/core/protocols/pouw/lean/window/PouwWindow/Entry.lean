@@ -11,9 +11,9 @@ One entry of the window root as its committed 336-byte row holds it (PoUW's PROT
 six u64s little-endian (kind, lo, hi, n_a, n_b, a zero pad), the side roots A and B and the pass's -h3 root (64 bytes
 each), tile0, cols, m and a zero u64, then the call's record's SHA-512. An `Entry` here holds what a row can hold: u64s
 and 64-byte digests (`Entry.fromRow?`); Python's dataclass holds any values, and `Entry.row` refuses the rest, so the
-functions of an entry agree on the entries that encode. `layoutProblem` holds an entry to the layout; `tileIn?`, `tileAt?`
-and `tileRead?` map a drawn index to its rows and its word in the pass's -h3 leaf; `entryDigest`, `entryBc` and `entryLeaf`
-commit the row as an `hm96-sha512/row/v2` row.
+functions of an entry agree on the entries that encode. `layoutProblem` holds an entry to the layout; `tileRead?` maps a
+call's tile to its word in the pass's -h3 leaf; `entryDigest`, `entryBc` and `entryLeaf` commit the row as an
+`hm96-sha512/row/v2` row. Which entry and rows a drawn index is follows from the window's shape alone (`PouwWindow.Shape`).
 -/
 
 namespace PouwWindow
@@ -23,7 +23,7 @@ open Flock
 /-- `T_BITS`: a tile index's bits. -/
 def tBits : Nat := 40
 
-/-- A side of an entry: A holds a call's kept activation rows, B its kept weight rows. -/
+/-- A side of an entry: A holds a call's batch slots' rows, every slot in place; B its weight rows. -/
 inductive Side where
   | a
   | b
@@ -160,9 +160,6 @@ def fromWords? (ws : List Int) : Except String Entry := do
 /-- `pass_tiles`: a call's tiles in its pass, ⌈m/64⌉ tile rows of `cols` tiles. -/
 def passTiles (e : Entry) : Nat := (e.m + tile - 1) / tile * e.cols
 
-/-- `tiles`: an entry's tiles, its sides' rows' products. -/
-def tiles (e : Entry) : Nat := if e.kind == .none then 0 else e.nA * e.nB
-
 private def anyNonzero (b : ByteArray) : Bool := b.toList.any (· != 0)
 
 /-- `layout_problem`: why an entry's values are not the layout's, or `none`. -/
@@ -184,13 +181,6 @@ def layoutProblem (e : Entry) : Option String :=
     else if e.tile0 + e.passTiles > 2 ^ tBits then
       some s!"its pass tiles [{e.tile0}, {e.tile0 + e.passTiles}) are not of {tBits}-bit indices"
     else none
-
-/-- `tile_in`: (A row, B row) of index `t` in the entry's range, row-major. -/
-def tileIn? (e : Entry) (t : Int) : Except String (Nat × Nat) :=
-  if e.kind == .none || !(e.lo ≤ t && t < e.hi) || e.nB < 1 then .error s!"index {t} is not in the entry's range"
-  else
-    let u := (t - e.lo).toNat
-    .ok (u / e.nB, u % e.nB)
 
 /-- `tile_read`: (p, at), the -h3 leaf a call's tile (I, J) reads and its word's place in it. `at` is Python's
 `(I mod 64) | (J mod 64) << 6 | (rows/16 − 1) << 12`: the low part is below 2^12, so the or is a sum, and it is negative
@@ -214,14 +204,6 @@ def bc? (e : Entry) (salt : ByteArray) : Except String ByteArray :=
   else .ok (Hm96.Default512.commitString e.digest salt)
 
 end Entry
-
-/-- `tile_at`: (entry, A row, B row) of drawn index `t`: the first entry, not empty, whose range holds it. -/
-def tileAt? (entries : List Entry) (t : Int) : Except String (Nat × Nat × Nat) :=
-  match entries.zipIdx.find? (fun (x, _) => x.kind != .none && x.lo ≤ t && t < x.hi) with
-  | some (x, e) => do
-    let (i, j) ← x.tileIn? t
-    pure (e, i, j)
-  | none => .error s!"index {t} is in no entry's range"
 
 /-- `entry_leaf`: entry `e`'s frame-v3-sha512 leaf in the window root over its b ‖ c (128 bytes, as hm96's `tree_leaf`
 refuses any other). -/

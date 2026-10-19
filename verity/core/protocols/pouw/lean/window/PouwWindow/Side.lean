@@ -5,11 +5,13 @@ import PouwCommit.Py
 /-!
 # The side trees (`window.py`, "The side trees")
 
-Each side of an entry is one frame-v3-sha512 tree of 2^D leaves over the rows its tiles keep, in order, the rest
-frame-v3's pad leaves, under the window's side domain: `binding = identity_digest_sha512(SIDE_DOMAIN, {window, side,
-depth})`, owner −1, positions `0 … 2^D − 1`. A side row is its operand row's u16 words, then its place in the call as a u32
-in one 128-bit word (`sideRow?`, `sideIndex?`). `sideLevels?` builds a tree's levels over its first leaves and `sidePath`
-reads a leaf's siblings from them, each node past them a node over pad leaves only (`padNode`).
+Each side of an entry is one frame-v3-sha512 tree of 2^D leaves over every one of its rows, in place (a call's every
+batch slot on side A, every weight row on side B), the rest frame-v3's pad leaves, under the window's side domain:
+`binding = identity_digest_sha512(SIDE_DOMAIN, {window, side, depth})`, owner −1, positions `0 … 2^D − 1`. A side row is
+its operand row's u16 words, then its index field, one 128-bit word: its place in the call as a u32, its ok word (its
+forming's verdict) and its admit word (whether it holds admitted work), then zeros (`sideRow?`, `sideField?`).
+`sideLevels?` builds a tree's levels over its first leaves and `sidePath` reads a leaf's siblings from them, each node past
+them a node over pad leaves only (`padNode`).
 -/
 
 namespace PouwWindow
@@ -23,19 +25,35 @@ def owner : Int := -1
 /-- `SIDE_INDEX_WORDS`: a side row's index field, one 128-bit word. -/
 def sideIndexWords : Nat := 8
 
-/-- `side_row`: the operand row's words, then the index field: the u32 index as two u16 words, low first, and six zeros. -/
-def sideRow? (words : List Int) (index : Int) : Except String (List Int) := do
+/-- A bit: 0 or 1. -/
+def isBit (x : Int) : Bool := x == 0 || x == 1
+
+/-- `side_row`: the operand row's words, then the index field: the u32 index as two u16 words, low first, the ok word,
+the admit word and four zeros. -/
+def sideRow? (words : List Int) (index ok admit : Int) : Except String (List Int) := do
   if words.length % sideIndexWords != 0 then
     throw s!"a side row's operand words are whole 128-bit words, not {words.length} u16 words"
   if !(0 ≤ index && index < 2 ^ 32) then throw s!"a side row's index is a u32, not {index}"
-  pure (words ++ [index % 2 ^ 16, index / 2 ^ 16] ++ List.replicate (sideIndexWords - 2) 0)
+  if !(isBit ok && isBit admit) then throw s!"a side row's ok and admit are 0 or 1, not {ok} and {admit}"
+  pure (words ++ [index % 2 ^ 16, index / 2 ^ 16, ok, admit] ++ List.replicate (sideIndexWords - 4) 0)
 
-/-- `side_index`: the index a side row holds, refused unless its index field is a u32 and zeros. -/
-def sideIndex? (row : List Int) : Except String Nat := do
+/-- A side row's index field, as the window statement reads it: its index, ok, admit, and blank (1 when its operand
+words are all zero). -/
+structure SideField where
+  index : Int
+  ok : Int
+  admit : Int
+  blank : Int
+  deriving DecidableEq, Repr
+
+/-- `side_field`: a side row's field, refused unless its index field is a u32 index, two bits and zeros. -/
+def sideField? (row : List Int) : Except String SideField := do
   let field := row.drop (row.length - sideIndexWords)
-  if row.length ≤ sideIndexWords || (field.drop 2).any (· != 0) || (field.take 2).any (fun w => w < 0 || w ≥ 2 ^ 16) then
-    throw "the row's last 128-bit word is not a u32 index and zeros"
-  pure ((field[0]!).toNat + (field[1]!).toNat * 2 ^ 16)
+  if row.length ≤ sideIndexWords || (field.drop 4).any (· != 0) || !isBit field[2]! || !isBit field[3]! ||
+      (field.take 2).any (fun w => w < 0 || w ≥ 2 ^ 16) then
+    throw "the row's last 128-bit word is not a u32 index, an ok bit, an admit bit and zeros"
+  pure ⟨field[0]! + field[1]! * 2 ^ 16, field[2]!, field[3]!,
+    if (row.take (row.length - sideIndexWords)).any (· != 0) then 0 else 1⟩
 
 /-- `side_domain`: the domain of every side-`side` tree of the window whose root's domain id is `window`. -/
 def sideDomain? (window : ByteArray) (side : String) : Except String Domain := do
