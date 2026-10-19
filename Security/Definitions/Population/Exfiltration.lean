@@ -33,7 +33,8 @@ The named assumptions:
 
 `indepDraw a` is the draw that catches unit `u` independently with probability `a u`, and `escapes B` its coins that
 miss the wrong set `B`. A deployment's egress is its honest egress with a deviation (`Dev`, `Dev.apply`) applied: the
-slots that differ, and their values.
+slots that differ, and their values. `changedThrough` collects the slots each window changes, through the first
+detection.
 
 When a guarantee states these, they move to a `Models/Population/Assumptions` module with their records.
 -/
@@ -110,6 +111,16 @@ def indepDraw {U : Type} [Fintype U] (a : U → ℝ) (c : U → Bool) : ℝ := �
 /-- The coins of the independent draw on which the wrong set `B` escapes: none of its units is caught. -/
 def escapes {U : Type} [Fintype U] [DecidableEq U] (B : Finset U) : Finset (U → Bool) :=
   univ.filter fun c => ∀ u ∈ B, c u = false
+
+/-- **The slots changed through the first detection**: window `i` of `n` changes its egress slots `chg h ⊆ O`, which
+the deployment's slot `(i, o)` carries, for each window up to and including the first that is caught. -/
+noncomputable def changedThrough [DecidableEq Ω] {O : Type} [DecidableEq O] (A : Strategy Ω) (chg : List Ω → Finset O) :
+    (n : ℕ) → List Ω → (Fin n → Ω) → Finset (Fin n × O)
+  | 0, _, _ => ∅
+  | n + 1, h, cs => (chg h).map ⟨fun o => (0, o), fun _ _ e => (Prod.mk.inj e).2⟩ ∪
+      if cs 0 ∈ A.esc h then (changedThrough A chg n (cs 0 :: h) (Fin.tail cs)).map
+        ⟨fun p => (p.1.succ, p.2), fun _ _ e => Prod.ext (Fin.succ_injective _ (Prod.mk.inj e).1) (Prod.mk.inj e).2⟩
+      else ∅
 
 /-- **A deviation of a deployment's egress**: the slots it changes and what it writes there. -/
 abbrev Dev (Slot V : Type) : Type := Σ C : Finset Slot, (C → V)

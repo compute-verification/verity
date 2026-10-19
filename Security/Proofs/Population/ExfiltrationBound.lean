@@ -18,6 +18,10 @@ import Proofs.Population.Leakage
   `cum + Δ` slots changed, `cum` what leaves through the first detection under an adaptive strategy with detection
   pressure `κ` and per-window leak `ℓ`, then any decoder of the egress and the side channel `Y` outputs the target
   with probability at most `exp (-κ (K - Δ - ℓ)) + Σ_{j ≤ K} C(m, j) · |V| ^ K · |Y| · g`, for every `K`.
+* `card_changedThrough_le`, `exfiltration_bound_windows`: **over a deployment's windows.** The slots the windows change
+  through the first detection number at most `cum`, so the deviation-size premise holds whenever each window's egress
+  differs from honest only on the slots it changes (`Dataflow.card_changed_le` bounds those by its wrong units' cone
+  egress), plus at most `Δ` slots after the detection. The count is over the deployment's `n · |O|` slots.
 -/
 
 namespace Population.Exfil
@@ -189,6 +193,57 @@ theorem exfiltration_bound {Ω W T Slot V Y : Type} [Fintype Ω] [DecidableEq Ω
     _ ≤ ∑ w, ρ w * Real.exp (-(κ * ((K : ℝ) - Δ - ℓ))) :=
         sum_le_sum fun w _ => mul_le_mul_of_nonneg_left (tail_cum hμ hκ (hP w) (hL w) n [] ((K : ℝ) - Δ)) (hρ.1 w)
     _ = _ := by rw [← sum_mul, hρ.2, one_mul]
+
+/-! ## A deployment's windows -/
+
+/-- **The windows' changed slots add up to `cum`**: when each window leaks at least the number of egress slots it
+changes, the slots changed through the first detection number at most what leaves through it. -/
+theorem card_changedThrough_le {Ω O : Type} [DecidableEq Ω] [DecidableEq O] (A : Strategy Ω) (chg : List Ω → Finset O)
+    (hchg : ∀ h, ((chg h).card : ℝ) ≤ A.leak h) :
+    ∀ (n : ℕ) (h : List Ω) (cs : Fin n → Ω), ((changedThrough A chg n h cs).card : ℝ) ≤ A.cum n h cs
+  | 0, _, _ => by simp [changedThrough, Strategy.cum]
+  | n + 1, h, cs => by
+    rw [changedThrough, Strategy.cum]
+    refine (Nat.cast_le.2 (card_union_le _ _)).trans ?_
+    rw [Nat.cast_add, card_map]
+    refine add_le_add (hchg h) ?_
+    split_ifs
+    · rw [card_map]
+      exact card_changedThrough_le A chg hchg n (cs 0 :: h) (Fin.tail cs)
+    · simp
+
+open Classical in
+/-- **The end-to-end bound over a deployment's windows.** Window `i` of `n` has egress slots `O`, so the deployment
+has `n · |O|`. The window after history `h` changes the slots `chg w h`, and its leak is their number. The egress
+deviates from honest only on the slots changed through the first detection and on at most `Δ` slots after it, before
+the halt. Then any decoder of the egress and the side channel outputs the target with probability at most
+`exp (-κ (K - Δ - ℓ)) + Σ_{j ≤ K} C(n |O|, j) · |V| ^ K · |Y| · g`. -/
+theorem exfiltration_bound_windows {Ω W T O V Y : Type} [Fintype Ω] [DecidableEq Ω] [Fintype W] [Fintype O]
+    [DecidableEq O] [Fintype V] [Nonempty V] [Fintype Y] {μ : Ω → ℝ} (hμ : IsDist μ) {ρ : W → ℝ}
+    (hρ : IsDist ρ) {κ ℓ g : ℝ} (hκ : 0 ≤ κ) (hg : 0 ≤ g) (n K Δ : ℕ) (A : W → Strategy Ω)
+    (chg : W → List Ω → Finset O) (hchg : ∀ w h, (A w).leak h = (chg w h).card)
+    (hP : ∀ w, DetectionPressure μ κ (A w)) (hL : ∀ w, LeakBounded ℓ (A w)) (S : W → T)
+    (hon : Dev (Fin n × O) V × Y → W × (Fin n → Ω) → Fin n × O → V)
+    (dv : W × (Fin n → Ω) → Dev (Fin n × O) V) (side : W × (Fin n → Ω) → Y)
+    (lag : W × (Fin n → Ω) → Finset (Fin n × O)) (hlag : ∀ z, (lag z).card ≤ Δ)
+    (hdv : ∀ w cs, (dv (w, cs)).1 ⊆ changedThrough (A w) (chg w) n [] cs ∪ lag (w, cs))
+    (hT : ∀ d, TrustedModel (fun z : W × (Fin n → Ω) => ρ z.1 * pathWeight μ z.2) (fun z => S z.1) (hon d) g)
+    (dec : (Fin n × O → V) × Y → T) :
+    ∑ w, ∑ cs, ρ w * pathWeight μ cs *
+        (if dec ((dv (w, cs)).apply (hon (dv (w, cs), side (w, cs)) (w, cs)), side (w, cs)) = S w then 1 else 0) ≤
+      Real.exp (-(κ * (K - Δ - ℓ))) +
+        (∑ j ∈ range (K + 1), (n * Fintype.card O).choose j) * Fintype.card V ^ K * Fintype.card Y * g := by
+  have hdv' : ∀ w cs, ((dv (w, cs)).1.card : ℝ) ≤ (A w).cum n [] cs + Δ := by
+    intro w cs
+    have h1 := card_le_card (hdv w cs)
+    have h2 := card_union_le (changedThrough (A w) (chg w) n [] cs) (lag (w, cs))
+    have h3 := card_changedThrough_le (A w) (chg w) (fun h => (hchg w h).ge) n [] cs
+    have h4 : ((lag (w, cs)).card : ℝ) ≤ Δ := by exact_mod_cast hlag (w, cs)
+    have h5 : ((dv (w, cs)).1.card : ℝ) ≤ (changedThrough (A w) (chg w) n [] cs).card + (lag (w, cs)).card := by
+      exact_mod_cast h1.trans h2
+    linarith
+  have := exfiltration_bound hμ hρ hκ hg n K A hP hL S hon dv side hdv' hT dec
+  rwa [Fintype.card_prod, Fintype.card_fin] at this
 
 end Population.Exfil
 
