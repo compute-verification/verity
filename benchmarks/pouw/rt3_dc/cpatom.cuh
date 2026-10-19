@@ -12,6 +12,7 @@
 //   CP_ATS8  8 ATOMS, no LOP3.
 //   CP_RED   4 LOP3, then each lane's red.global.xor into the segment's one global word (REDG; RT2-HOPPER's CP_RED).
 //   CP_RED2, CP_RED8 as ATS2 and ATS8 on REDG.
+//   CP_XT    no atomic and no REDUX: the warp's XOR by a transpose through shared memory, 32 units a batch (xt_tail).
 // ptxas turns an atomic to an address it can prove warp-uniform into REDUX and one lane's atomic, so every address is
 // base + (lane & zm), zm 0 at run time (the kernel's argument, or OpArgs::mode).
 #pragma once
@@ -78,8 +79,41 @@ __device__ __forceinline__ uint32_t xor8x(const uint32_t (&y)[8]) {
   return x;
 }
 
-enum { CP_SEG4, CP_ATS, CP_ATS2, CP_ATS8, CP_RED, CP_RED2, CP_RED8, CP_N };
-static const char* const CP_NAMES[CP_N] = {"seg4", "ats", "ats2", "ats8", "red", "red2", "red8"};
+// ---- CP_XT: the warp's XOR by a transpose through shared memory --------------------------------------------------------
+// Each unit, every lane's 4-LOP3 word goes by one STS into row u of the warp's 32 x XT_ROW-word buffer (lane l at word l,
+// one wavefront). After 32 units each lane reads its own row (8 LDS.128: the 36-word stride puts a quarter-warp's 8 rows
+// on 8 distinct bank quads), XORs its 32 words in 16 LOP3 into unit l's checkpoint, and the warp stores the batch's 32
+// checkpoints in one STG (lane l at word l). One __syncwarp orders the batch's STS before the reads, one the reads
+// before the next batch's STS. A unit: 4.5 LOP3, an STS, a quarter LDS.128 and a 32nd of an STG; CP_SEG4's: 4 LOP3,
+// REDUX, the uniform-to-vector IMAD.U32 (REDUX writes a UR) and a quarter STG.128.
+constexpr int XT_ROW = 36;
+constexpr int XT_WORDS = 32 * XT_ROW;
+__device__ __forceinline__ void sts32(uint32_t saddr, uint32_t v) {
+  asm volatile("st.shared.b32 [%0], %1;" ::"r"(saddr), "r"(v) : "memory");
+}
+__device__ __forceinline__ void stg32(void* p, uint32_t v) {
+  asm volatile("st.global.b32 [%0], %1;" ::"l"(p), "r"(v) : "memory");
+}
+// The batch's tail: the lane's row (xrow: the buffer + 4 XT_ROW lane bytes) into unit lane's checkpoint, stored at dst.
+__device__ __forceinline__ uint32_t xt_tail(uint32_t xrow, uint32_t* dst) {
+  __syncwarp();
+  uint32_t w[32];
+#pragma unroll
+  for (int q = 0; q < 8; q++) {
+    const uint4 v = lds128(xrow + 16u * q);
+    w[4 * q] = v.x, w[4 * q + 1] = v.y, w[4 * q + 2] = v.z, w[4 * q + 3] = v.w;
+  }
+  __syncwarp();
+  uint32_t x = lop3x(w[0], w[1], w[2]);
+#pragma unroll
+  for (int i = 3; i < 31; i += 2) x = lop3x(x, w[i], w[i + 1]);
+  asm volatile("xor.b32 %0,%0,%1;" : "+r"(x) : "r"(w[31]));
+  stg32(dst, x);
+  return x;
+}
+
+enum { CP_SEG4, CP_ATS, CP_ATS2, CP_ATS8, CP_RED, CP_RED2, CP_RED8, CP_XT, CP_N };
+static const char* const CP_NAMES[CP_N] = {"seg4", "ats", "ats2", "ats8", "red", "red2", "red8", "xt"};
 __host__ __device__ constexpr bool cp_shared(int cp) { return cp == CP_ATS || cp == CP_ATS2 || cp == CP_ATS8; }
 __host__ __device__ constexpr bool cp_global(int cp) { return cp == CP_RED || cp == CP_RED2 || cp == CP_RED8; }
 constexpr int CK_NONE = CP_N;  // the timed loops' no-checkpoint form: the chains alone
@@ -137,12 +171,39 @@ __device__ __forceinline__ uint32_t cp_tail(const uint32_t (&keep)[4], uint32_t 
 
 // ---- exact: li bit for bit, each form against the host's reference ---------------------------------------------------
 // One warp a block. words: U units x 32 lanes x 128 words (lane-major in a unit), st: 32 lanes x 8 starting states. out
-// (zeroed): U checkpoints (one a 128-word segment), then each lane's final 8 states.
+// (zeroed): U checkpoints (one a 128-word segment), then each lane's final 8 states. CP_XT stores a batch's 32
+// checkpoints after its 32nd unit, the others theirs a trip at a time.
 template <int CP>
 __global__ void __launch_bounds__(32, 1) li_exact(const uint4* __restrict__ words, const uint32_t* st, uint32_t* out,
                                                  int U, uint32_t zm) {
-  __shared__ __align__(16) uint32_t sh[8];
   const int lane = threadIdx.x;
+  if constexpr (CP == CP_XT) {  // U a multiple of 32
+    __shared__ __align__(16) uint32_t xb[XT_WORDS];
+    const uint32_t xs = smem_u32(xb) + 4u * lane, xr = smem_u32(xb) + 4u * XT_ROW * lane;
+    uint32_t y[8];
+#pragma unroll
+    for (int c = 0; c < 8; c++) y[c] = st[8 * lane + c];
+#pragma unroll 1
+    for (int u = 0; u < U; u++) {
+      const uint4* src = words + ((size_t)u * 32 + lane) * 32;
+#pragma unroll
+      for (int s = 0; s < 4; s++) {
+        uint32_t p[32];
+#pragma unroll
+        for (int q = 0; q < 8; q++) {
+          const uint4 v = src[8 * s + q];
+          p[4 * q] = v.x, p[4 * q + 1] = v.y, p[4 * q + 2] = v.z, p[4 * q + 3] = v.w;
+        }
+        li_set(y, p);
+      }
+      sts32(xs + 4u * XT_ROW * (u & 31), xor8x(y));
+      if ((u & 31) == 31) xt_tail(xr, out + (u - 31) + lane);
+    }
+#pragma unroll
+    for (int c = 0; c < 8; c++) out[U + 8 * lane + c] = y[c];
+    return;
+  }
+  __shared__ __align__(16) uint32_t sh[8];
   if (lane < 8) sh[lane] = 0;
   __syncwarp();
   const uint32_t s0 = smem_u32(sh) + 4u * (lane & zm);
@@ -229,6 +290,7 @@ static int run_exact(int U) {
       case CP_RED: launch_exact<CP_RED>(dw, dst, dout, U); break;
       case CP_RED2: launch_exact<CP_RED2>(dw, dst, dout, U); break;
       case CP_RED8: launch_exact<CP_RED8>(dw, dst, dout, U); break;
+      case CP_XT: launch_exact<CP_XT>(dw, dst, dout, U); break;
     }
     const cudaError_t e = cudaDeviceSynchronize();
     std::vector<uint32_t> got(U + 256);
@@ -272,6 +334,28 @@ __device__ __forceinline__ uint32_t* cp_words(const OpArgs& a, int warps_a_block
          (lane & (uint32_t)a.mode);
 }
 
+// The 32-unit loops (lr8w_*, and the arch files' tcW_* and wgw_*): one batch an iteration, so CP_XT's tail is static,
+// and CP_SEG4 the same 32 units (8 trips) in a loop of the same size, the baseline at the same instruction footprint. A
+// warp's words: 64 a loop iteration (32 a batch, twice for an until loop); lane l's at word l for CP_XT, every lane's the
+// same 16 bytes a trip for CP_SEG4.
+__device__ __forceinline__ uint32_t* cp_wide(const OpArgs& a, int warps_a_block, int warp) {
+  return reinterpret_cast<uint32_t*>(a.g) + ((size_t)blockIdx.x * warps_a_block + warp) * (64ull * a.iters);
+}
+// Units u0..u0+3 of a batch: CP_XT's words into rows u0..u0+3 (xs: the lane's column), the other forms' trip into
+// wo[u0..u0+3] (a: the trip's shared buffer).
+template <int CP, class Fold>
+__device__ __forceinline__ void cp_quad(Lane& l, Fold&& fold, uint32_t xs, uint32_t a, uint32_t* wo, int u0) {
+  if constexpr (CP == CP_XT) {
+#pragma unroll
+    for (int j = 0; j < 4; j++) {
+      fold();
+      sts32(xs + 4u * XT_ROW * (u0 + j), xor8x(l.r));
+    }
+  } else {
+    cp_trip<CP>(l, fold, a, wo + u0);
+  }
+}
+
 // ---- lane alone: the fold with each checkpoint form, every SM, as opcode probes ---------------------------------------
 // W warps a block, one block an SM (W/4 a SMSP), li_fold's lane ops on the 8 chains. The block's cycles over iters x 8
 // units x W/4 warps a SMSP is a unit's SMSP-cycles a warp-slot: max(issue, ALU) a unit on a loop bound by either; an
@@ -298,6 +382,33 @@ DC_DEV void lr_body(const OpArgs& a) {
     cp_trip<CP>(l, fold, a0, wi);
     cp_trip<CP>(l, fold, a0 + 16u, wi + 4);
     wi += 8;
+  }
+  OP_END
+  OP_SINK(l.fold() ^ threadIdx.x)
+}
+
+// lr_body's fold, 32 units an iteration (cp_wide): CP_XT and its CP_SEG4 baseline.
+template <int CP, int W>
+DC_DEV void lrw_body(const OpArgs& a) {
+  __shared__ __align__(16) uint32_t xb[W][CP == CP_XT ? XT_WORDS : 4];
+  Lane l(threadIdx.x);
+  const int lane = threadIdx.x & 31, wp = threadIdx.x >> 5;
+  const uint32_t zm = (uint32_t)a.mode;
+  const uint32_t xs = smem_u32(&xb[wp][0]) + 4u * lane, xr = smem_u32(&xb[wp][0]) + 4u * XT_ROW * lane;
+  uint32_t* wo = cp_wide(a, W, wp) + (CP == CP_XT ? (uint32_t)lane : (lane & zm));
+  auto fold = [&] {
+#pragma unroll
+    for (int c = 0; c < 64; c++) {
+      l.op<L_LOP3>(c);
+      l.op<L_IMAD>(c);
+    }
+  };
+  OP_BEGIN
+  OP_LOOP(it) {
+#pragma unroll
+    for (int q = 0; q < 8; q++) cp_quad<CP>(l, fold, xs, 0u, wo, 4 * q);
+    if constexpr (CP == CP_XT) xt_tail(xr, wo);
+    wo += 32;
   }
   OP_END
   OP_SINK(l.fold() ^ threadIdx.x)
@@ -351,6 +462,8 @@ CPA_AT(at_g1, false, true, 16, 16)
 CPA_AT(at_g32, false, false, 16, 16)
 CPA_AT(at4_s1, true, true, 16, 4)
 CPA_AT(at4_g1, false, true, 16, 4)
+OP_KERNEL(lr8w_seg4, 256) { lrw_body<CP_SEG4, 8>(a); }
+OP_KERNEL(lr8w_xt, 256) { lrw_body<CP_XT, 8>(a); }
 
 // A timed loop's opcode counts an iteration (8 units). The chains are 512 LOP3 + 512 IMAD; a checkpoint adds 4 LOP3 (3
 // for the 2-atomic forms, 0 for the 8-atomic ones) and its atomics, and each trip's tail its stores. CPA_CK(form) is the
@@ -363,7 +476,13 @@ CPA_AT(at4_g1, false, true, 16, 4)
 #define CPA_CK_red "LOP3.LUT=544,IMAD=512,REDG*=8"
 #define CPA_CK_red2 "LOP3.LUT=536,IMAD=512,REDG*=16"
 #define CPA_CK_red8 "LOP3.LUT=512,IMAD=512,REDG*=64"
+// The 32-unit loops' (an iteration: 32 units, 8 trips' stores or CP_XT's one tail).
+#define CPA_CKW_seg4 "LOP3.LUT=2176,IMAD=2048,REDUX*=32,STG.E.128*=8"
+#define CPA_CKW_xt "LOP3.LUT=2192,IMAD=2048,STS=32,LDS.128=8,STG.E=1"
 #define CPA_P(NAME, W, PAT) {.name = #NAME, .kernel = (const void*)NAME, .tpb = W * 32, .expect = PAT, .iters = 2048}
+#define CPA_LRW_PROBES                                                                                             \
+  {.name = "lr8w_seg4", .kernel = (const void*)lr8w_seg4, .tpb = 256, .expect = CPA_CKW_seg4, .iters = 512},       \
+  {.name = "lr8w_xt", .kernel = (const void*)lr8w_xt, .tpb = 256, .expect = CPA_CKW_xt, .iters = 512}
 #define CPA_LR_PROBES                                                                                              \
   CPA_P(lr_none, 16, CPA_CK_none), CPA_P(lr_seg4, 16, CPA_CK_seg4), CPA_P(lr_ats, 16, CPA_CK_ats),                  \
   CPA_P(lr_ats2, 16, CPA_CK_ats2), CPA_P(lr_ats8, 16, CPA_CK_ats8), CPA_P(lr_red, 16, CPA_CK_red),                  \

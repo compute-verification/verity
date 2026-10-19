@@ -9,7 +9,9 @@
 // a SMSP, folding only while it runs: OP_UNTIL), the words in registers (♭ credits no tcgen05.ld), two trips an
 // iteration with the checkpoint in each form (cpatom.cuh's cp_trip). tcU_floor is tcliU_floor itself (♭'s 4 LOP3 +
 // REDUX + 2 SHFL a segment, no store), 4 segments a trip. A loop's issue a SMSP-cycle beside the tensor is its
-// instructions times trips over the stop's cycles, over 4.
+// instructions times trips over the stop's cycles, over 4. tcW_<form>: the same shape with 32 units an iteration, so
+// CP_XT's batch is whole: tcW_xt against tcW_seg4 is the transpose's cost against ♭'s checkpoint beside the tensor
+// (CP_XT's 12 lane warps hold their transposes in dynamic shared memory).
 #define main sm100_tcgen05_main
 #include "../dc/probes/sm100_tcgen05.cu"
 #undef main
@@ -81,6 +83,55 @@ DC_DEV void tc_cp(const OpArgs& a) {
   OP_SINK(x ^ threadIdx.x)
 }
 
+// tc_cp at 32 units an iteration (cpatom.cuh's cp_wide): CP_XT and its CP_SEG4 baseline, the lane warps' CP_XT buffers
+// dynamic (12 x XT_WORDS words beside Smem's tiles).
+template <int CP>
+DC_DEV void tc_cpw(const OpArgs& a) {
+  __shared__ __align__(1024) Smem s;
+  extern __shared__ __align__(16) uint32_t xdyn[];
+  const uint32_t tmem = setup<0>(s, a.mode);
+  const uint64_t da = desc_a(s), db = desc_b(s);
+  const uint32_t w = warp_u();
+  const int lane = threadIdx.x & 31;
+  const uint32_t zm = (uint32_t)a.mode;
+  Lane l(threadIdx.x);
+  uint32_t r0[16], r1[16];
+  tc_words(r0, r1);
+  const uint32_t xb = smem_u32(xdyn) + 4u * XT_WORDS * (w >= 4 ? w - 4 : 0);
+  const uint32_t xs = xb + 4u * lane, xr = xb + 4u * XT_ROW * lane;
+  uint32_t* wo = cp_wide(a, 16, (int)w) + (CP == CP_XT ? (uint32_t)lane : (lane & zm));
+  auto fold = [&] {
+#pragma unroll
+    for (int c = 0; c < 64; c++) {
+      asm volatile("lop3.b32 %0,%0,%1,%2,0x96;" : "+r"(l.r[c & 7]) : "r"(r0[c & 15]), "r"(0x85EBCA6Bu));
+      asm volatile("mad.lo.u32 %0,%0,%1,%2;" : "+r"(l.r[c & 7]) : "r"(0x9E3779B9u), "r"(r1[c & 15]));
+    }
+  };
+  OP_BEGIN_STOP
+  if (w == 0) {
+    OP_LOOP(it) { tc_mma4(s, tmem, da, db); }
+    OP_DONE
+  } else if (w >= 4) {
+    OP_UNTIL(n) {
+#pragma unroll
+      for (int q = 0; q < 8; q++) cp_quad<CP>(l, fold, xs, 0u, wo, 4 * q);
+      if constexpr (CP == CP_XT) xt_tail(xr, wo);
+      wo += 32;
+    }
+    OP_TRIPS(n)
+  }
+  OP_END_STOP
+  if (w == 0) {
+    if (elect_one()) umma_commit(&s.bar);
+    __syncwarp();
+  }
+  mbar_wait(&s.bar, 0);
+  tc_after_sync();
+  const uint32_t x = sink_ld(tmem, 0) ^ l.fold();
+  teardown(tmem);
+  OP_SINK(x ^ threadIdx.x)
+}
+
 // RT2-BLACKWELL's tcfloor_until_mma<4> (#2771), as it is there: ♭'s segment, 68 LOP3, 64 IMAD and REDUX + 2 SHFL.
 DC_DEV void tc_floor(const OpArgs& a) {
   __shared__ __align__(1024) Smem s;
@@ -130,6 +181,8 @@ OP_KERNEL(tcU_ats2, 512) { tc_cp<CP_ATS2>(a); }
 OP_KERNEL(tcU_ats8, 512) { tc_cp<CP_ATS8>(a); }
 OP_KERNEL(tcU_red, 512) { tc_cp<CP_RED>(a); }
 OP_KERNEL(tcU_red2, 512) { tc_cp<CP_RED2>(a); }
+OP_KERNEL(tcW_seg4, 512) { tc_cpw<CP_SEG4>(a); }
+OP_KERNEL(tcW_xt, 512) { tc_cpw<CP_XT>(a); }
 
 #define P_TCU(F) {.name = "tcU_" #F, .kernel = (const void*)tcU_##F, .tpb = 512, .expect = UI ";" CPA_CK_##F, \
                   .warps = "1;12", .iters = 2048, .until = 2}
@@ -139,7 +192,11 @@ static const OpProbe RT3[] = {
     {.name = "tcU_floor", .kernel = (const void*)tcU_floor, .tpb = 512,
      .expect = UI ";LOP3.LUT=272,IMAD=256,REDUX*=4,SHFL.BFLY=8", .warps = "1;12", .iters = 2048, .until = 2},
     P_TCU(none), P_TCU(seg4), P_TCU(ats), P_TCU(ats2), P_TCU(ats8), P_TCU(red), P_TCU(red2),
-    CPA_LR_PROBES,
+    {.name = "tcW_seg4", .kernel = (const void*)tcW_seg4, .tpb = 512, .expect = UI ";" CPA_CKW_seg4, .warps = "1;12",
+     .iters = 512, .until = 2},
+    {.name = "tcW_xt", .kernel = (const void*)tcW_xt, .tpb = 512, .expect = UI ";" CPA_CKW_xt, .warps = "1;12",
+     .dyn_smem = 12 * XT_WORDS * 4, .iters = 512, .until = 2},
+    CPA_LR_PROBES, CPA_LRW_PROBES,
 };
 
 // ---- clock ---------------------------------------------------------------------------------------------------------

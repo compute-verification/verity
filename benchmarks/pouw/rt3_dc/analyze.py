@@ -2,9 +2,10 @@
 
 Reads a `run.sh time` output directory (probe.py's `probe/rows.jsonl` and `probe/times.jsonl`) and prints, a probe a line:
 
-- fold probes (lr_*, wgcp_*, wgli_redux, tcU_*): a unit's SMSP-cycles (4096 words a warp; 64 IMAD a lane), 256 over the
-  loop's IMAD a SM-cycle, so an issue-bound loop of N slots a unit reads N at one issue a cycle; and its excess over the
-  same loop with no checkpoint (lr_none, wgcp_none, tcU_none): what the checkpoint form costs a unit;
+- fold probes (lr_*, lr8w_*, wgcp_*, wgw_*, wgli_redux, tcU_*, tcW_*): a unit's SMSP-cycles (4096 words a warp; 64 IMAD
+  a lane), 256 over the loop's IMAD a SM-cycle, so an issue-bound loop of N slots a unit reads N at one issue a cycle; its
+  excess over the same loop with no checkpoint (lr_none, wgcp_none, tcU_none): what the checkpoint form costs a unit; and,
+  for the 32-unit loops (lr8w_*, wgw_*, tcW_*), CP_XT's excess over CP_SEG4 in the same loop;
 - beside-tensor probes: the tensor's rate over its rate alone (wg_s8_n256_a1, tc_i8_m128_n256), the B200's from the MMA
   warp's own stop (4 tcgen05.mma an iteration over the stop's cycles, block by block);
 - atomic probes (at_*): warp atomics and lane atomics a SM-cycle.
@@ -20,7 +21,9 @@ import sys
 from pathlib import Path
 
 BASE = {"lr": "lr_none", "lr8": "lr_none", "wgcp": "wgcp_none", "tcU": "tcU_none"}
-ALONE = {"wgcp": "wg_s8_n256_a1", "wgli": "wg_s8_n256_a1", "tcU": "tc_i8_m128_n256"}
+ALONE = {"wgcp": "wg_s8_n256_a1", "wgli": "wg_s8_n256_a1", "wgw": "wg_s8_n256_a1", "tcU": "tc_i8_m128_n256",
+         "tcW": "tc_i8_m128_n256"}
+SEG4 = {"lr8w": "lr8w_seg4", "wgw": "wgw_seg4", "tcW": "tcW_seg4"}
 
 
 def imad_rate(row: dict) -> float | None:
@@ -73,12 +76,16 @@ def main(argv: list[str] | None = None) -> int:
         b = out.get(BASE.get(fam, ""))
         if b and "smsp_cycles_a_unit" in rec and b is not rec:
             rec["over_none"] = rec["smsp_cycles_a_unit"] - b["smsp_cycles_a_unit"]
+        s4 = out.get(SEG4.get(fam, ""))
+        if s4 and "smsp_cycles_a_unit" in rec and s4 is not rec:
+            rec["over_seg4"] = rec["smsp_cycles_a_unit"] - s4["smsp_cycles_a_unit"]
         al = out.get(ALONE.get(fam, ""))
         if al and "tensor_a_sm_cycle" in rec and "tensor_a_sm_cycle" in al:
             rec["tensor_fraction"] = rec["tensor_a_sm_cycle"] / al["tensor_a_sm_cycle"]
     for rec in out.values():
         cells = [f"{rec['probe']:<16}"]
         for k, f in (("smsp_cycles_a_unit", "{:8.2f} cyc/unit"), ("over_none", "{:+7.2f} over none"),
+                     ("over_seg4", "{:+7.2f} over seg4"),
                      ("tensor_fraction", "tensor {:.4f}"), ("lane_atomics_a_sm_cycle", "{:.3f} lane-atomics/SM-cyc"),
                      ("sm_cycles_a_warp_atomic", "{:.2f} SM-cyc/warp-atomic"), ("spread", "spread {:.4f}"),
                      ("sm_mhz", "{} MHz"), ("stop_gap", "stop_gap {:.4f}")):
