@@ -294,8 +294,9 @@ def fit(a) -> int:
 
     def put(name, rows, names):
         # a single K makes "one" and "ands" one column, and --draws c makes c and k one: such a fit has no solution
-        if len(rows) > len(names) and np.linalg.matrix_rank(np.array([r[0] for r in rows], float) /
-                                                            np.abs([r[0] for r in rows]).max(axis=0)) == len(names):
+        x = np.array([r[0] for r in rows], dtype=float)
+        scale = np.abs(x).max(axis=0) if len(rows) else None
+        if len(rows) > len(names) and np.linalg.matrix_rank(x / np.where(scale == 0, 1.0, scale)) == len(names):
             result["fits"][name] = wls(rows, names)
 
     for K in ks:
