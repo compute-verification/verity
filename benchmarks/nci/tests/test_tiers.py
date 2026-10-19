@@ -90,7 +90,7 @@ def test_memory_caps_the_residual_below_the_state_threshold():
 def test_proof_of_space_rounds_set_the_slack():
     """rho^k <= delta: today's 1/19 certificate takes 86 rounds at delta = 1/100, and about 12,000 rounds leave under 1 GB
     of a 2.64 TB fill (memory-accounting, 19 Oct)."""
-    no_floor = T.DEFAULTS | {"pous_floor": 0.0}
+    no_floor = T.DEFAULTS | {"pous_floor": 0.0, "pous_rounds": 86.0}
     assert T.slack(no_floor) == pytest.approx(1 / 19, rel=0.02)
     mem_gb = T.DEFAULTS["hbm_gb"] + T.DEFAULTS["host_gb"]
     assert T.slack(no_floor | {"pous_rounds": 12000}) * mem_gb < 1.03

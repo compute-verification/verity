@@ -22,8 +22,8 @@ def test_every_parameter_has_a_range_around_its_default_inside_its_slider():
 
 def test_the_defaults_give_the_statements_numbers():
     t = X.terms(T.DEFAULTS)
-    assert t["R_wipe_gb"] == pytest.approx(203, rel=0.01)
-    assert t["mu"] == pytest.approx(0.151, rel=0.01)
+    assert t["R_wipe_gb"] == pytest.approx(179, rel=0.01)
+    assert t["mu"] == pytest.approx(0.133, rel=0.01)
     assert t["nu"] == pytest.approx(9.5e-6, rel=0.01)
     assert t["chi"] == pytest.approx(2.7e-4, rel=0.01)
     assert t["eta_T4"] == pytest.approx(0.06, rel=0.01)

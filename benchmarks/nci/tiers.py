@@ -63,14 +63,14 @@ BLOCK_NAME_BITS = 25
 #: defaults: the Kimi K2 calibration and forward chain; the GPUs' residual at compute-accounting's modelled design (floor
 #: credit with verified filler, about 1% of device time; served windows today credit 10.3% of padded MACs) and the host
 #: CPUs at their AMX datasheet peak (two Xeon 6776Ps, about 5% of the GPUs' FP8 rate); 100,000 servers of 8 RTX PRO 6000s (vy-nebius-2's 2.668 TB) for a year;
-#: today's proof-of-space certificate (rho_PoS = 18/19, which k = 86 rounds certify at delta = 1/100, plus the floor at the
-#: deployed D = 2) and the memory the fill doesn't reach (3.05 GB on-chip, 18.4 GB GPU reserve, 29.5 GB host gap); disks
+#: the deployed proof-of-space audit (k = 111 rounds at delta = 1/100, plus the floor at the deployed D = 2) and the memory
+#: the fill doesn't reach (3.05 GB on-chip, 18.4 GB GPU reserve, 29.5 GB host gap, about 7 GB of DPU, BMC and flash); disks
 #: unplugged; today's uncharged export; the declared computation's novel intake at alpha F (once NET-35's count check is in
 #: the ZK flow; line rate until then); sampled proofs at 1% on top of serve-time commitments, at today's sparse-draw cost
 #: (about 35 GPU-s a draw), delta = 2^-40 and luck A = 8
 DEFAULTS = {
     "unmonitored": 0.0, "residual": 0.01, "host_share": 0.05,
-    "pous_rounds": 86.0, "unfilled_gb": 51.0, "sigma": 1e3, "b_w": 2.5, "b_a": 4.0,
+    "pous_rounds": 111.0, "unfilled_gb": 58.0, "sigma": 1e3, "b_w": 2.5, "b_a": 4.0,
     "f": 0.95, "pous_delta": 0.01, "pous_floor": 0.0047, "t_read": 1e-3, "wipe_s": 3600.0, "hbm_gb": 768.0,
     "host_gb": 1900.0, "disk_gb": 0.0,
     "tau": 400.0, "export": 4.4e9, "nic": 3.2e12,
@@ -89,8 +89,8 @@ SPEC = [
     {"key": "g", "main": True, "label": "Compute amplifier g: the developer's algorithmic advantage over the reference recipe (1 against the best known recipe)", "unit": "x", "min": 1, "max": 100, "log": True},
     {"key": "residual", "main": True, "label": "Monitored compute residual r on the GPUs (floor credit with filler: about 1%, modelled; served windows today: about 0.9)", "unit": "", "min": 1e-12, "max": 1, "log": True, "zero": True},
     {"key": "host_share", "main": True, "label": "Host CPUs at datasheet peak, as a share of server compute (about 5%; 0 once a CPU filler or a physical cap bounds them)", "unit": "", "min": 1e-6, "max": 0.5, "log": True, "zero": True},
-    {"key": "pous_rounds", "main": True, "label": "Proof-of-space rounds per audit (today's 1/19 certificate: 86; under 1 GB: about 12,000)", "unit": "", "min": 10, "max": 1e6, "log": True},
-    {"key": "unfilled_gb", "main": True, "label": "Memory the fill doesn't reach, per server (measured gaps 51; on-chip alone 3.05)", "unit": "GB", "min": 0.01, "max": 1000, "log": True},
+    {"key": "pous_rounds", "main": True, "label": "Proof-of-space rounds per audit (deployed 111; 1/19 needs 86; streamed labels make 74,000 cheap)", "unit": "", "min": 10, "max": 1e6, "log": True},
+    {"key": "unfilled_gb", "main": True, "label": "Memory the fill doesn't reach, per server (measured gaps 51 plus about 7 of DPU, BMC and flash; on-chip alone 3.05)", "unit": "GB", "min": 0.01, "max": 1000, "log": True},
     {"key": "sigma", "main": True, "label": "Side channels per server", "unit": "bit/s", "min": 1, "max": 1e10, "log": True, "zero": True},
     {"key": "b_w", "main": True, "label": "Compression: bits per updated weight", "unit": "bit", "min": 0.1, "max": 16, "log": True},
     {"key": "b_a", "main": True, "label": "Compression: bits per activation", "unit": "bit", "min": 0.1, "max": 16, "log": True},
