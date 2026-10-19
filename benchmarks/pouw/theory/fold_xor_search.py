@@ -305,9 +305,12 @@ def sequences(k: int, fp: bool) -> list[tuple]:
     return out
 
 
-def search(k: int, fp: bool = True, tname: str = "xor", jobs: int = 1, timeout_ms: int = 0, stream=None) -> dict:
-    """Every sequence of k opcodes; each result is also written to `stream` (JSON lines) as it finishes."""
-    seqs = sequences(k, fp)
+def search(k: int, fp: bool = True, tname: str = "xor", jobs: int = 1, timeout_ms: int = 0, stream=None,
+           part: str = "all") -> dict:
+    """Every sequence of k opcodes (`part` int: those without an FP form, fp: those with one); each result is also
+    written to `stream` (JSON lines) as it finishes."""
+    seqs = [s for s in sequences(k, fp)
+            if part == "all" or (part == "fp") == any(op_name(op) in FP_OPS for op in s)]
     res = []
 
     def done(r):
@@ -324,7 +327,7 @@ def search(k: int, fp: bool = True, tname: str = "xor", jobs: int = 1, timeout_m
         for s in seqs:
             done(cegis(s, tname, timeout_ms))
     tally = {r: sum(1 for x in res if x["result"] == r) for r in ("unsat", "FOUND", "unknown")}
-    return {"k": k, "fp": fp, "target": tname, "sequences": len(seqs), "tally": tally,
+    return {"k": k, "fp": fp, "part": part, "target": tname, "sequences": len(seqs), "tally": tally,
             "proved": tally["unsat"] == len(seqs), "results": res}
 
 
@@ -338,11 +341,13 @@ def main() -> int:
     ap.add_argument("--target", default="xor", choices=("xor", "add", "mulhi"))
     ap.add_argument("--json")
     ap.add_argument("--stream", help="append each sequence's result to this file as a JSON line")
+    ap.add_argument("--part", default="all", choices=("all", "int", "fp"),
+                    help="only the sequences without (int) or with (fp) an FP form, to split a run across machines")
     a = ap.parse_args()
     out, rc = [], 0
     stream = open(a.stream, "a", encoding="utf-8") if a.stream else None
     for k in range(a.from_k, a.k + 1):
-        r = search(k, not a.no_fp, a.target, a.jobs, a.timeout_ms, stream)
+        r = search(k, not a.no_fp, a.target, a.jobs, a.timeout_ms, stream, a.part)
         out.append(r)
         print(f"k = {k}: {r['sequences']} sequences, {r['tally']}" + ("  -- proved" if r["proved"] else ""),
               flush=True)
