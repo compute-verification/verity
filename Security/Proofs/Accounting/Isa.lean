@@ -13,6 +13,8 @@ import Models.Accounting.Guarantees.Isa
 * `sheetWords_of_table`: A6 from the rows' words: a writer kind's class at most `ω`, a vector class at most 64.
 * `Sm120Sheet`, `Sm90Sheet`, `Sm100Sheet`: each device's discipline decided row by row, over the shared classes
   (`sync_ok`, `base_ok`) and its own; its absent families are vacuous.
+* `dmma_exact`, `utcomma_decompose`: RT-ISA-1's and RT-ISA-4's routes, their verdicts decided; `gmma_twin`,
+  `tc05_twin`: the census form that prices a form writes its words on its pipe.
 -/
 
 namespace Accounting.SecurityProofs.Isa
@@ -175,6 +177,24 @@ theorem base_fam (c : Base) :
 theorem ne_of_fam {r : Row} {f g : Family} (h : r.fam = f) (hfg : f ≠ g) : r.fam ≠ g := by
   rw [h]
   exact hfg
+
+/-- RT-ISA-1: DMMA (mma.sync .f64), on every device's table, forms exact int8 products into an exact word. -/
+theorem dmma_exact : Sync.DMMA.row.verdict = .exact := by decide +kernel
+
+/-- RT-ISA-4: sm_100a's block-scaled FP4 forms (kind::mxf4, kind::mxf4nvf4), one CTA or a pair, decompose. -/
+theorem utcomma_decompose :
+    Tc05.UTCOMMA_SF.row.verdict = .decompose ∧ Tc05.UTCOMMA_2CTA.row.verdict = .decompose := by
+  decide +kernel
+
+/-- A wgmma form's twin is its own twin and writes its words on its pipe. -/
+theorem gmma_twin (g : Gmma) :
+    g.twin.twin = g.twin ∧ g.twin.row.words = g.row.words ∧ g.twin.row.pipe = g.row.pipe := by
+  cases g <;> decide +kernel
+
+/-- A tcgen05.mma form's twin is its own twin and writes its words on its pipe. -/
+theorem tc05_twin (t : Tc05) :
+    t.twin.twin = t.twin ∧ t.twin.row.words = t.row.words ∧ t.twin.row.pipe = t.row.pipe := by
+  cases t <;> decide +kernel
 
 end Classes
 

@@ -13,6 +13,10 @@ note:20261019T0520Z-draft-mm-isa), each `def G : Prop`, proved as `Accounting.Se
 * `Sm120Sheet`: the same on sm_120's table (`Accounting.Isa.Sm120.row`), whose discipline is decided and whose
   absent families (wgmma, tcgen05, tensor memory) need no premise.
 * `Sm90Sheet`, `Sm100Sheet`: the same on sm_90a's table (no tcgen05 or tensor memory) and sm_100a's (no wgmma).
+
+A6's two words a lane (`SheetWords`' vector and table bound) is the table's discipline on its vector classes; a wider
+destination (LDS.128, LDG.128, LDSM.x4, a four-word TEX, a tcgen05.ld) is a side unit at its real width, so A6 is not
+read for it.
 -/
 
 namespace Accounting.Guarantees.Isa

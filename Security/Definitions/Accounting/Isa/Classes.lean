@@ -18,20 +18,24 @@ stores and atomics (`SUST`, `SUATOM`) and vote and match (`VOTE`); and the bulk 
 copy, its box into up to 16 CTAs).
 
 **An opcode's class.** `class_of` places the census's forms. Every other opcode that writes a 32-bit word (the
-instruction-set lists of the CUDA Binary Utilities, §4.3 Hopper and §4.4 Blackwell, which
+instruction-set lists of the CUDA Binary Utilities, §4.3 Hopper and §4.4 Blackwell, and the opcodes RT-ISA's SASS
+census found in 88 binaries, CUDA 13.0, art:042de47057dc27a3ed3bf603c26d48d60fd210a08f9ac6fe77795262f7b65a3d, which
 `benchmarks/pouw/theory/isa_table.py` places one by one) is in the class of its unit at the next width up (a class's
 `words` bounds every form in it):
 
 * memory: LD and LDL in the LDG class of their width; ST, STL and USTGR in the STG class; STS.32 and STS.64 in
   STS128; STAS in DSMST4P; RED.E and UREDGR in RED32 or RED64; REDS in ATOMS32; LDGMC (a reducing load, four words a
-  lane at most) in ATOMG64; the mbarrier operations (SYNCS, SYNCSU, USYNCS) in ATOMS64.
+  lane at most) in ATOMG64; the mbarrier operations (SYNCS, SYNCSU, USYNCS, and ARRIVES, which no list names) in
+  ATOMS64.
 * bulk, the U-prefixed opcodes `class_of`'s uniform rule puts in UNI: UBLKRED and UTMAREDG in TMAred512, any larger in
   BULKRED; UTMALDG and UTMASTG in the UTMA class of their box; UBLKCP in UBLKCP4K, any larger in BULKMAX, a multicast
   one in UTMAMC; UMEMSETS in BULKMAX.
-* tensor: UTC*MMA in `Tc05`; LDT, LDTM, STT, STTM, UTCCP and UTCSHIFT in `Tmem`; BMMA, which `class_of` puts in XU, in
+* tensor: UTC*MMA in `Tc05` (UTCOMMA's cta_group::2 forms in UTCOMMA_2CTA, the other kinds' in UTCMMA_2CTA); LDT,
+  LDTM, STT, STTM, UTCCP and UTCSHIFT in `Tmem`; BMMA, which `class_of` puts in XU, in
   BMMA168256; DMMA in DMMA; IMMA.1688, which `class_of` puts in IMMA8816, in IMMA16816 (no document gives its shape,
   and an m16n8 one writes 128 words).
 * texture: SULD in SULD1 or SULD4, TXQ in TEX1, TMML in TEX2, TXD in TEX4.
+* conversion: F2FP, which no list names, in F2FS (`class_of`'s).
 * warp and uniform: MATCH in VOTE; CREDUX in REDUX; UTCATOMSWS and every other U-prefixed opcode in UNI or UNI64
   (`class_of`).
 * lane: FFMA2, FADD2, FMUL2, FSWZADD and the FH forms in FFMA; FSET, HSET2, FMNMX3, VHMNMX, VIADDMNMX and VIMNMX3 in
@@ -41,10 +45,11 @@ instruction-set lists of the CUDA Binary Utilities, §4.3 Hopper and §4.4 Black
 
 A placement bounds an opcode's words only: its rate is the data sheet's, which the census measured on the forms it
 probed. An instruction that writes no 32-bit word (a SETP's or R2P's predicate, a branch, a barrier, a fence, a
-prefetch or cache control) heads no word and is in no class. Blackwell's DECOMPRESS and SPARSIFY, whose widths no document gives, are in
-no class yet: a head of either falsifies `Accounting.Assumptions.Isa.IsaComplete`.
+prefetch or cache control) heads no word and is in no class. Blackwell's DECOMPRESS and SPARSIFY, whose widths no
+document gives, are in no class yet: a head of either falsifies `Accounting.Assumptions.Isa.IsaComplete`.
 
-A row's `words` is its class's widest form's: a lane class two words a lane (`Row.lane`), an atomic that returns its
+A row's `words` is its class's widest form's destination: a lane class one or two words a lane (`Row.lane`, at
+most two), a wider load or a tcgen05.ld a side unit at its own words, an atomic that returns its
 old value its memory and register words together (CAS.128: four of each a lane, 256 a warp instruction), a load or
 store its bytes over four, a TMA box or bulk copy its largest box. Where `floors.csv` prices a side class at fewer words
 an instruction than the row (the atomics), a model reading `floors.csv` doesn't read this table
@@ -60,7 +65,14 @@ inductive Sync
   | HMMA16816 | HMMASP16832 | HMMA16816F16 | HMMA1688T | HMMA1684T
   | QMMA16832 | QMMASF16832 | QMMASP16864 | OMMASF16864
   | BMMA168256 | IMMAS4 | DMMA
-  deriving DecidableEq, Fintype, Repr
+  deriving DecidableEq, Repr
+
+-- Mathlib's `deriving Fintype` fails on an enumeration at this revision (its `Finset.mem_mk` rewrite misses).
+instance : Fintype Sync :=
+  Fintype.ofList (α := Sync) [.IMMA16832, .IMMA16816, .IMMA8816, .IMMASP16864, .IMMASP16832, .MMA, .HMMA16816,
+    .HMMASP16832, .HMMA16816F16, .HMMA1688T, .HMMA1684T, .QMMA16832, .QMMASF16832, .QMMASP16864, .OMMASF16864,
+    .BMMA168256, .IMMAS4, .DMMA] fun x => by
+    cases x <;> decide +kernel
 
 /-- **The mma.sync rows** (§9.7.16.5.14, block scale §9.7.16.3, sparse §9.7.16.6): each m16n8 form writes its 32-bit
 accumulator, 128 words a warp instruction; m8n8k16 (IMMA.8816) 64; HMMA.16816.F16's f16 accumulator, two to a register,
@@ -111,16 +123,33 @@ inductive Base
   | TEX1 | TEX2 | TEX4 | TEXBIL
   | TLD1 | TLD2 | TLD2D1 | TLD2D4 | TLD4G | TLD4w
   | SULD1 | SULD4 | SUST | SURED | SUATOM
-  deriving DecidableEq, Fintype, Repr
+  deriving DecidableEq, Repr
+
+instance : Fintype Base :=
+  Fintype.ofList (α := Base) [.UNI, .UNI64, .LDCU128, .ALU, .IMAD, .FFMA, .HFMA2, .VIMNMX, .F2FS, .XU, .SEL, .NOROW,
+    .VSIMD, .IMADW, .ALU64, .W2, .DMUL, .CVT64, .MOV64, .SHFL, .REDUX, .VOTE, .LDS32, .LDS64, .LDS128, .LDG32, .LDG64,
+    .LDG128, .LDG128CG, .LDG128NA, .LDG256, .LDG256CG, .LDC64, .LDCDIV, .LDCUNI, .LDGSTS16, .LDSM_X1, .LDSM_X2,
+    .LDSM_X4, .LDSM_X1T, .LDSM_X2T, .LDSM_X4T, .LDSM4_X1, .LDSM4_X2, .LDSM4_X4, .LDSM4T_X1, .LDSM4T_X2, .LDSM6_X1,
+    .LDSM6_X2, .LDSM6_X4, .LDSM6T_X1, .LDSM6T_X2, .LDSM8T_X1, .LDSM8T_X2, .STS128, .DSMST4P, .STG32, .STG64, .STG128,
+    .STG256, .STSM_X1, .STSM_X2, .STSM_X4, .STSM_X1T, .STSM_X2T, .STSM_X4T, .STSM8T_X1, .STSM8T_X2, .STSM8T_X4,
+    .ATOMG32, .ATOMG64, .ATOMS32, .ATOMS64, .ATOME32, .ATOME32P, .ATOME64, .RED32, .RED64, .REDV, .REDG32, .REDG64,
+    .REDAS32, .REDAS64, .TMA512, .TMAred512, .UBLKCP4K, .UTMA, .UTMA8, .UTMA512, .UTMA1K, .UTMA2K, .UTMA4K, .UTMA8K,
+    .UTMA16K, .UTMA32K, .UTMA48K, .UTMA64K, .UTMABIG, .BULKMAX, .BULKRED, .UTMAMC, .G4_16, .G4_32, .G4_256, .G4_1K,
+    .TEX1, .TEX2, .TEX4, .TEXBIL, .TLD1, .TLD2, .TLD2D1, .TLD2D4, .TLD4G, .TLD4w, .SULD1, .SULD4, .SUST, .SURED,
+    .SUATOM] fun x => by
+    cases x <;> decide +kernel
 
 /-- **The rows outside the tensor cores**, family by family (`Family` cites each family's PTX sections):
 
 * `uniform`: a uniform instruction writes one uniform register (UNI), or a pair (UNI64); UIMAD multiplies. LDCU.128
   loads four from a constant bank at a uniform address the program computes (a gather).
-* `lane` (§9.7.1–§9.7.9, §9.7.20): at most two words a lane. IMAD.WIDE, IADD.64, DADD/DFMA, DMUL and the 64-bit
-  conversions are side units at their two words a lane; MOV.64 copies.
+* `lane` (§9.7.1–§9.7.9, §9.7.20): its widest form's destination, one word a lane (ALU, HFMA2 with HADD2.F32, XU,
+  VSIMD) or a pair: FFMA for FFMA2, FADD2 and FMUL2 (.f32x2), VIMNMX for IMNMX.S64 and IMNMX.U64, F2FS for the .F64
+  and .S64 forms `class_of` puts there, SEL for SEL.64, NOROW for CS2R, and IMAD, where `class_of` puts every IMUL
+  form (RT-ISA's corpus, art:042de47057dc27a3ed3bf603c26d48d60fd210a08f9ac6fe77795262f7b65a3d, has each). IMAD.WIDE,
+  IADD.64, DADD/DFMA, DMUL and the 64-bit conversions are side units at their two words a lane; MOV.64 copies.
 * `warp`: SHFL selects a lane's word (§9.7.10.6), one word a lane; VOTE writes a ballot or match mask, one word a
-  lane (§9.7.15.10, §9.7.15.11); REDUX writes one uniform word (§9.7.15.13).
+  lane (§9.7.15.10, §9.7.15.11; MATCH.ANY.U64's mask too); REDUX writes one uniform word (§9.7.15.13).
 * `memory` (ld §9.7.10.8, st §9.7.10.11, cp.async §9.7.10.28, ldmatrix §9.7.16.5.15, stmatrix §9.7.16.5.16, atom
   §9.7.15.5, red §9.7.15.6, red.async §9.7.15.7): its bytes over four, every lane.
 * `bulk` (§9.7.10.28.4–§9.7.10.28.5): its box's or copy's bytes over four, at most the shared memory's (99 KB on
@@ -136,25 +165,25 @@ def Base.row : Base → Row
     { fam := .uniform, exec := .uniform, arith := .mul, dataAddr := true, a := .s32, b := .s32, acc := .s64,
       words := 2, pipe := .issue, route := .writer }
   | .LDCU128 => Row.side .uniform .uniform .move true 4
-  | .ALU => Row.lane .lane .add false .alu
-  | .IMAD => Row.lane .lane .mul false .imad .s32 .s32 .s32
-  | .FFMA => Row.lane .lane .mul false .issue .f32 .f32 .f32
-  | .HFMA2 => Row.lane .lane .mul false .issue .f16 .f16 .f16
-  | .VIMNMX => Row.lane .lane .add false .issue
-  | .F2FS => Row.lane .lane .convert false .issue
-  | .XU => Row.lane .lane .unary false .xu
-  | .SEL => Row.lane .lane .move true .issue
-  | .NOROW => Row.lane .lane .logic false .issue
-  | .VSIMD => Row.lane .lane .add false .issue
+  | .ALU => Row.lane .lane .add false .alu 32
+  | .IMAD => Row.lane .lane .mul false .imad 64 .s32 .s32 .s32
+  | .FFMA => Row.lane .lane .mul false .issue 64 .f32 .f32 .f32
+  | .HFMA2 => Row.lane .lane .mul false .issue 32 .f16 .f16 .f16
+  | .VIMNMX => Row.lane .lane .add false .issue 64
+  | .F2FS => Row.lane .lane .convert false .issue 64
+  | .XU => Row.lane .lane .unary false .xu 32
+  | .SEL => Row.lane .lane .move true .issue 64
+  | .NOROW => Row.lane .lane .logic false .issue 64
+  | .VSIMD => Row.lane .lane .add false .issue 32
   | .IMADW => Row.side .lane .lane .mul false 64 (a := .s32) (b := .s32) (acc := .s64)
   | .ALU64 => Row.side .lane .lane .add false 64
   | .W2 => Row.side .lane .lane .mul false 64 (a := .f64) (b := .f64) (acc := .f64)
   | .DMUL => Row.side .lane .lane .mul false 64 (a := .f64) (b := .f64) (acc := .f64)
   | .CVT64 => Row.side .lane .lane .convert false 64
   | .MOV64 => Row.copy .lane 64
-  | .SHFL => Row.lane .warp .move true .shfl
+  | .SHFL => Row.lane .warp .move true .shfl 32
   | .REDUX => Row.side .warp .warp .add false 1
-  | .VOTE => Row.lane .warp .logic true .issue
+  | .VOTE => Row.lane .warp .logic true .issue 32
   | .LDS32 => Row.side .memory .lane .move true 32 .smem
   | .LDS64 => Row.side .memory .lane .move true 64 .smem
   | .LDS128 => Row.side .memory .lane .move true 128 .smem

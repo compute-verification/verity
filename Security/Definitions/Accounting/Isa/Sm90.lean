@@ -11,16 +11,27 @@ HMMA1688_TF32 is `HMMA1688T`, BMMA168256_B1 is `BMMA168256`. sm_90a has no tcgen
 
 namespace Accounting.Isa
 
-/-- **sm_90a's wgmma forms** (PTX ISA 9.4 §9.7.17): the census's (`machine_model/data/devices/sm_90/census.csv`), and
-`GMMASP` (every sparse form, §9.7.17.5.3) and `HGMMA_F16ACC` (an f16 accumulator). -/
+/-- **sm_90a's wgmma forms** (PTX ISA 9.4 §9.7.17): the census's (`machine_model/data/devices/sm_90/census.csv`),
+`HGMMA_F16ACC` (an f16 accumulator), and the 2:4 sparse forms of each kind (wgmma.mma_async.sp, §9.7.17.5.3; IGMMA.SP,
+HGMMA.SP, QGMMA.SP), which the census never probed (RT-H200-EMP-2): `IGMMA_SP_S8` (.s8 and .u8), `HGMMA_SP_F16`,
+`HGMMA_SP_BF16`, `HGMMA_SP_TF32`, `QGMMA_SP_E4M3` and `QGMMA_SP_E5M2` (B's type any of its kind's). -/
 inductive Gmma
   | IGMMA_S8_N8 | IGMMA_S8_N16 | IGMMA_S8_N32 | IGMMA_S8_N64 | IGMMA_S8_N128 | IGMMA_S8_N192 | IGMMA_S8_N256
   | IGMMA_S8_N256_RS | IGMMA_U8S8_N256
   | HGMMA_BF16_N128 | HGMMA_BF16_N256 | HGMMA_F16_N256 | HGMMA_TF32_N256
   | QGMMA_E4M3_N128 | QGMMA_E4M3_N256 | QGMMA_E5M2_N256
   | BGMMA_B1_N256
-  | GMMASP | HGMMA_F16ACC
-  deriving DecidableEq, Fintype, Repr
+  | HGMMA_F16ACC
+  | IGMMA_SP_S8 | HGMMA_SP_F16 | HGMMA_SP_BF16 | HGMMA_SP_TF32 | QGMMA_SP_E4M3 | QGMMA_SP_E5M2
+  deriving DecidableEq, Repr
+
+-- Mathlib's `deriving Fintype` fails on an enumeration at this revision (its `Finset.mem_mk` rewrite misses).
+instance : Fintype Gmma :=
+  Fintype.ofList (α := Gmma) [.IGMMA_S8_N8, .IGMMA_S8_N16, .IGMMA_S8_N32, .IGMMA_S8_N64, .IGMMA_S8_N128, .IGMMA_S8_N192,
+    .IGMMA_S8_N256, .IGMMA_S8_N256_RS, .IGMMA_U8S8_N256, .HGMMA_BF16_N128, .HGMMA_BF16_N256, .HGMMA_F16_N256,
+    .HGMMA_TF32_N256, .QGMMA_E4M3_N128, .QGMMA_E4M3_N256, .QGMMA_E5M2_N256, .BGMMA_B1_N256, .HGMMA_F16ACC, .IGMMA_SP_S8,
+    .HGMMA_SP_F16, .HGMMA_SP_BF16, .HGMMA_SP_TF32, .QGMMA_SP_E4M3, .QGMMA_SP_E5M2] fun x => by
+    cases x <;> decide +kernel
 
 /-- **The wgmma rows**: a warp's wgmma m64nNk writes its quarter of the warpgroup's m64 × N accumulator, 16·N 32-bit
 words (4096 at N = 256), or 8·N with an f16 accumulator. -/
@@ -42,8 +53,26 @@ def Gmma.row : Gmma → Row
   | .QGMMA_E4M3_N256 => Row.mma .wgmma .e4m3 .e4m3 .f32 4096
   | .QGMMA_E5M2_N256 => Row.mma .wgmma .e5m2 .e5m2 .f32 4096
   | .BGMMA_B1_N256 => Row.mma .wgmma .b1 .b1 .s32 4096
-  | .GMMASP => Row.mma .wgmma .s8 .s8 .s32 4096
   | .HGMMA_F16ACC => Row.mma .wgmma .f16 .f16 .f16 2048
+  | .IGMMA_SP_S8 => Row.mma .wgmma .s8 .s8 .s32 4096
+  | .HGMMA_SP_F16 => Row.mma .wgmma .f16 .f16 .f32 4096
+  | .HGMMA_SP_BF16 => Row.mma .wgmma .bf16 .bf16 .f32 4096
+  | .HGMMA_SP_TF32 => Row.mma .wgmma .tf32 .tf32 .f32 4096
+  | .QGMMA_SP_E4M3 => Row.mma .wgmma .e4m3 .e4m3 .f32 4096
+  | .QGMMA_SP_E5M2 => Row.mma .wgmma .e5m2 .e5m2 .f32 4096
+
+/-- **The census form that prices a wgmma form** (RT-H200-EMP-2): a sparse form its kind's dense N = 256 form, whose
+words it writes and whose instruction rate bounds its own (the dense line with A in registers, 0.889 of it with A in
+shared memory: r20261019-063344-f650, r20261019-062628-43df; B is always in shared memory, whose port caps a 2:4 form
+at the dense line), so the dense form's demand vector never overprices it; every other form its own. -/
+def Gmma.twin : Gmma → Gmma
+  | .IGMMA_SP_S8 => .IGMMA_S8_N256
+  | .HGMMA_SP_F16 => .HGMMA_F16_N256
+  | .HGMMA_SP_BF16 => .HGMMA_BF16_N256
+  | .HGMMA_SP_TF32 => .HGMMA_TF32_N256
+  | .QGMMA_SP_E4M3 => .QGMMA_E4M3_N256
+  | .QGMMA_SP_E5M2 => .QGMMA_E5M2_N256
+  | g => g
 
 /-- **sm_90a's instruction classes**: an mma.sync form, a wgmma form, or a class outside the tensor cores. -/
 inductive Sm90

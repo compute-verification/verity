@@ -11,8 +11,10 @@ passes, computed from its fields.
   `Fmt.holdsWord` computed from each float's significand bits and largest exponent (isa_escape.py's `exact_in_float`).
 * `Row`: a class's family (which PTX section, and which named premise, covers it), where it executes, what it
   computes (`Arith`), whether it can take a data-dependent address, lane or selector, its operand and accumulator
-  formats, the 32-bit words one instruction writes at most, its rate class (the data-sheet row it loads beside issue)
-  and its route on the TS menu (`Route`).
+  formats, the 32-bit words one instruction writes at most (its destination's real width: a 128-bit load 128 a warp
+  instruction, a tcgen05.ld up to 4096), its rate class (the data-sheet row it loads beside issue) and its route on
+  the TS menu (`Route`). A6's two words a lane bound only the vector classes (`Row.ok`); a wider destination is a
+  side unit's, priced at its own words.
 * `Row.verdict`: isa_escape.py's classes, computed. `Row.ok`: the table's discipline, decided per row.
 * `Heads`: a cheater's labelled run split by the class of each head (EPS1 §1.3's Definition 2), which the premises of
   `Models.Accounting.Assumptions.Isa` are stated over; `Fits`, `ReadsTable` and `RowsOf` relate a table, a model and
@@ -157,9 +159,11 @@ def Row.copy (fam : Family) (words : ℕ) : Row :=
   { fam, exec := .lane, arith := .move, dataAddr := false, a := .none, b := .none, acc := .none, words,
     pipe := .issue, route := .traced }
 
-/-- A vector class's row: a lane instruction writing at most two words a lane (64 a warp instruction). -/
-def Row.lane (fam : Family) (arith : Arith) (dataAddr : Bool) (pipe : Pipe) (a b acc : Fmt := .none) : Row :=
-  { fam, exec := .lane, arith, dataAddr, a, b, acc, words := 64, pipe, route := .lane }
+/-- A vector class's row: a lane instruction writing `words` a warp instruction, its widest form's destination (32
+for one register a lane, 64 for a pair); the discipline admits a vector class at two words a lane at most. -/
+def Row.lane (fam : Family) (arith : Arith) (dataAddr : Bool) (pipe : Pipe) (words : ℕ) (a b acc : Fmt := .none) :
+    Row :=
+  { fam, exec := .lane, arith, dataAddr, a, b, acc, words, pipe, route := .lane }
 
 /-- A side unit's row: a class priced as its own route, at `words` a instruction. -/
 def Row.side (fam : Family) (exec : Exec) (arith : Arith) (dataAddr : Bool) (words : ℕ) (pipe : Pipe := .issue)
