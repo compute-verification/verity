@@ -1,12 +1,12 @@
-"""Render run A8's per-kind table and its gap lines (Markdown) from `a8_kinds.py`'s table and `a8.py`'s summaries.
+"""Render run A11's per-kind table and its gap lines (Markdown) from `a11_kinds.py`'s table and `a11.py`'s summaries.
 
-    python benchmarks/one_stage/a8_table.py --kinds kinds.json [--summary RUN_ID=<run>/out ...]
+    python benchmarks/one_stage/a11_table.py --kinds kinds.json [--summary RUN_ID=<run>/out ...]
 
 A row per computing kind (Const32 families, one gate each, left out): its root Calls, gates and share of the step's
 computing gates, the unit M0 was given, its ANDs and k_log, the lowering outcome, and from the audits whether its units were
 staged from the step's values, proved and held by Lean, and in which run. A kind audited in several runs is shown from the
 one that got furthest (Lean's verdict over a staging over nothing), the later on a tie. A kind the probe left undecided
-that an audit staged (`a8.py --try`) lowers: the stager composed its circuit. A gap line names what keeps a kind from Lean
+that an audit staged (`a11.py --try`) lowers: the stager composed its circuit. A gap line names what keeps a kind from Lean
 acceptance.
 """
 from __future__ import annotations
@@ -18,20 +18,22 @@ import re
 from pathlib import Path
 
 
-STAGED = re.compile(r"^A8 staged (\S+): (\d+) units of .+? \(cap \d+\), (\d+) ANDs, k_log (\d+), unit twin \w+, "
+STAGED = re.compile(r"^A(?:11|8) staged (\S+): (\d+) units of .+? \(cap \d+\), (\d+) ANDs, k_log (\d+), unit twin \w+, "
                     r"Call twin (\{.*\}), (\{'build'.*\})$")
 
 
 def load_run(path: Path) -> dict:
-    """An audit's summary.json (the file, or a run's ``out`` directory holding ``a8/summary.json``), else, for a run that
-    stopped after its audit record, one rebuilt from ``a8/audit.json`` and ``a8.log``'s staging lines, its negatives not run."""
+    """An audit's summary.json (the file, or a run's ``out`` directory holding ``a11/summary.json``), else, for a run that
+    stopped after its audit record, one rebuilt from ``a11/audit.json`` and ``a11.log``'s staging lines, its negatives not run.
+    A run recorded while this run was named A8 holds ``a8/`` and ``a8.log`` instead."""
     if path.is_file():
         return json.loads(path.read_text())
-    if (path / "a8" / "summary.json").exists():
-        return json.loads((path / "a8" / "summary.json").read_text())
-    a = json.loads((path / "a8" / "audit.json").read_text())
+    name = "a11" if (path / "a11").is_dir() else "a8"
+    if (path / name / "summary.json").exists():
+        return json.loads((path / name / "summary.json").read_text())
+    a = json.loads((path / name / "audit.json").read_text())
     values, members = {}, []
-    for line in (path / "a8.log").read_text().splitlines():
+    for line in (path / f"{name}.log").read_text().splitlines():
         m = STAGED.match(line)
         if m:
             f, n = m[1], int(m[2])
@@ -113,7 +115,7 @@ def gap(f: str, r: dict, s: dict | None) -> str | None:
     a = last(r)
     size = size_of(r)
     if world(r) > 1:
-        size += f"; it reads {world(r)} ranks' values and A8's slice holds rank 0's only"
+        size += f"; it reads {world(r)} ranks' values and A11's slice holds rank 0's only"
     share = f"{100 * r['share']:.3f}% of the step"
     o = outcome(f, r, s)
     if o == "no-piece":

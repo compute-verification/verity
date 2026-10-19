@@ -19,15 +19,15 @@ negatives.
   law, their witness rows bound to canonical commitments, then wired to the remote bandwidth audit's ledger as its
   requirement link (`audit.RequirementLink`), its ε the most share of the linked credit the units its draw leaves
   unproved can carry and its δ the draw's.
-- `a8.sh`: run A8's entry point, on the same builds. A8 is GLM-5.3 TP8 B1's served step, rank 0: `a8_kinds.py` censuses
-  the request Program's root Calls by Definition kind and tries one unit of each through M0; `a8_slice.py` cuts the
-  capture's values and the checkpoint's tensors for a few layers off the serving node; `a8.py` stages each lowering kind's
+- `a11.sh`: run A11's entry point, on the same builds. A11 is GLM-5.3 TP8 B1's served step, rank 0: `a11_kinds.py` censuses
+  the request Program's root Calls by Definition kind and tries one unit of each through M0; `a11_slice.py` cuts the
+  capture's values and the checkpoint's tensors for a few layers off the serving node; `a11.py` stages each lowering kind's
   units from those values, one template each, under the stratified law, proved under `--zk` and held by the Lean verifier;
-  `a8_table.py` renders the per-kind table and its gap lines from the audits' summaries.
+  `a11_table.py` renders the per-kind table and its gap lines from the audits' summaries.
 - `a9.sh`: run A9's entry point, on the same builds. A9 is GLM-5.3's routed-expert FP8 GEMMs in the registry's Boolean
   static pair form (`boolean_fp8_moe`): `a9.py` holds one coordinate of each launch's first routed pair to the capture in
   its word and Boolean forms, cuts an up/gate coordinate whose rows overflow M0's block into its gather and
-  block-coordinate units, and saves the units for `a8.py --load-values`, whose audit proves them. `A9_SAVED` audits a
+  block-coordinate units, and saves the units for `a11.py --load-values`, whose audit proves them. `A9_SAVED` audits a
   saved directory without the values stage.
 - `zk_cost.sh`: C-Flock's zero-knowledge session cost on sm_120, for the sampling planner's cost model (`zk_cost.py`, a GPU
   host job on vy-nebius-1, or a `--preemptible` one on vy-nebius-2). A6's W8A8 coordinates at K = 4096 and 14336 are

@@ -1,5 +1,5 @@
-"""Run A8's census and lowering probe: a served Program's root Calls by Definition kind (family), and for each kind one unit
-lowered through C-Flock's circuit prover (M0's `UnitStager`, the path `a8.py` stages on), its outcome one of
+"""Run A11's census and lowering probe: a served Program's root Calls by Definition kind (family), and for each kind one unit
+lowered through C-Flock's circuit prover (M0's `UnitStager`, the path `a11.py` stages on), its outcome one of
 
 * ``lowers``: the unit's circuit composed; its ANDs, k_log, and how many instances a statement holds (`a6.chunk_cap`);
 * ``no-piece``: M0's lowering has no piece for a primitive the unit reads (`ir_lower.NoPiece`, the piece named), with the
@@ -7,7 +7,7 @@ lowered through C-Flock's circuit prover (M0's `UnitStager`, the path `a8.py` st
 * ``too-big``: an instance needs a block past `circuit.K_MAX` (or a statement past the spec's m <= 35).
 
     PYTHONPATH=<tree>:<tree>/verity/ml/flock/python:<tree>/integrations/vllm \\
-      python benchmarks/one_stage/a8_kinds.py --descriptor descriptor.json.gz --out kinds.json [--jobs 8] [--mem-gb 96]
+      python benchmarks/one_stage/a11_kinds.py --descriptor descriptor.json.gz --out kinds.json [--jobs 8] [--mem-gb 96]
 
 The unit of a kind is the Call's coordinate: from the Call, the callee carrying at least half its gates while the
 Definition has more than `--unit-gates` word gates. A unit M0 cannot compose for its shape (no input row past one SHA-512
@@ -167,7 +167,7 @@ def try_lower(fn) -> dict:
     t = time.time()
     try:
         with no_cyclic_gc():
-            st = CS.UnitStager(fn, f"a8-probe/{family(fn.id)}", rows, out_rows(n_out))
+            st = CS.UnitStager(fn, f"a11-probe/{family(fn.id)}", rows, out_rows(n_out))
     except IL.NoPiece as e:
         return {"outcome": "no-piece", "piece": str(e)[:300], "seconds": round(time.time() - t, 1)}
     except ValueError as e:
@@ -259,7 +259,7 @@ def main() -> int:
     t0 = time.time()
     prog, digest = load_program(a.descriptor)
     kinds, comp = census(prog)
-    print(f"A8 census: {len(kinds)} kinds, {comp} computing gates of {prog.gates}, decoded in {time.time() - t0:.0f} s", flush=True)
+    print(f"A11 census: {len(kinds)} kinds, {comp} computing gates of {prog.gates}, decoded in {time.time() - t0:.0f} s", flush=True)
     by_id = {}
     for nd in prog.root.body.nodes:
         by_id.setdefault(nd.fn.id, nd.fn)
@@ -280,7 +280,7 @@ def main() -> int:
             f = tmp / f"{fam}.json"
             results[fam] = json.loads(f.read_text()) if f.exists() else {
                 "kind": fam, "outcome": "crashed", "why": f"child exit status {status} after {time.time() - started:.0f} s"}
-            print(f"A8 kind {fam}: {results[fam]['outcome']} {json.dumps(results[fam].get('attempts', [])[-1:], default=str)[:600]}",
+            print(f"A11 kind {fam}: {results[fam]['outcome']} {json.dumps(results[fam].get('attempts', [])[-1:], default=str)[:600]}",
                   flush=True)
             if block:
                 break
@@ -318,7 +318,7 @@ def main() -> int:
            "seconds": round(time.time() - t0, 1)}
     out.write_text(json.dumps(doc, indent=1, default=str))
     tally = Counter(r.get("outcome") for r in doc["kinds"].values() if r["gates"] > 0)
-    print(f"A8 kinds: {dict(tally)} in {doc['seconds']} s", flush=True)
+    print(f"A11 kinds: {dict(tally)} in {doc['seconds']} s", flush=True)
     return 0
 
 

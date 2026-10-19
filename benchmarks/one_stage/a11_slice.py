@@ -1,14 +1,14 @@
-"""Run A8's value slice: the files of a vLLM capture (`verity-capture/snapshots/v1`) that a few layers' events read at a few
-steps, copied into one tar with the rank's log and a snapshot index of exactly those files, for `a8.py` on a CPU machine. It
+"""Run A11's value slice: the files of a vLLM capture (`verity-capture/snapshots/v1`) that a few layers' events read at a few
+steps, copied into one tar with the rank's log and a snapshot index of exactly those files, for `a11.py` on a CPU machine. It
 selects and copies files and computes nothing, so it runs where the capture is (a GPU node's shared disk).
 
-    python benchmarks/one_stage/a8_slice.py --capture DIR --rank 0 --steps 0,1 --layers 0,3 --out a8-values.tar
+    python benchmarks/one_stage/a11_slice.py --capture DIR --rank 0 --steps 0,1 --layers 0,3 --out a11-values.tar
 
 Kept: ``log.rank<R>.jsonl.gz``; ``rank<R>/snapshots.json`` holding the entries of the chosen steps whose event is a chosen
 layer's (``model.layers.<L>.``), the first layer with a DSA indexer at the last chosen step, or no layer's (embedding, final
 norm, lm_head, sampler); their ``values/`` files; ``rank<R>/cos_sin_cache.npy`` (the rotary table the capture keeps beside
 the snapshots, its tensor past the snapshot cap); ``slice.json``, what was chosen. With ``--checkpoint``, also
-``ckpt/a8-subset.safetensors``, the checkpoint of record's tensors of the chosen layers but their routed experts, byte for byte,
+``ckpt/a11-subset.safetensors``, the checkpoint of record's tensors of the chosen layers but their routed experts, byte for byte,
 with its ``config.json``: the capture snapshots activations only, and the weights are composed from these on the CPU machine.
 """
 from __future__ import annotations
@@ -80,9 +80,9 @@ def main() -> int:
             p.unlink()
         if a.checkpoint:
             ck = ckpt_subset(Path(a.checkpoint), {int(x) for x in a.ckpt_layers.split(",")} if a.ckpt_layers else layers,
-                             out.parent / ".a8-subset.safetensors")
-            t.add(out.parent / ".a8-subset.safetensors", arcname="ckpt/a8-subset.safetensors")
-            (out.parent / ".a8-subset.safetensors").unlink()
+                             out.parent / ".a11-subset.safetensors")
+            t.add(out.parent / ".a11-subset.safetensors", arcname="ckpt/a11-subset.safetensors")
+            (out.parent / ".a11-subset.safetensors").unlink()
             for name in ("config.json", "model.safetensors.index.json"):
                 if (Path(a.checkpoint) / name).exists():
                     t.add(Path(a.checkpoint) / name, arcname=f"ckpt/{name}")

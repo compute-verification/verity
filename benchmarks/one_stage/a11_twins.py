@@ -1,13 +1,13 @@
-"""Run A8's twin over every Call of some kinds: each Call of the chosen kinds (families) in the slice's steps and layers evaluated
-whole on the capture's operands and held to the capture's output snapshots, return component by return component. `a8.py` holds
+"""Run A11's twin over every Call of some kinds: each Call of the chosen kinds (families) in the slice's steps and layers evaluated
+whole on the capture's operands and held to the capture's output snapshots, return component by return component. `a11.py` holds
 a kind's first ``--per-kind`` Calls and moves on at a disagreement; this names every Call and component that departs. It also
 digests the fold's wiring (each node's Definition and argument refs), so that two folds of one log can be compared.
 
     PYTHONPATH=<tree>:<tree>/verity/ml/flock/python:<tree>/integrations/vllm \\
-      python benchmarks/one_stage/a8_twins.py --values DIR --roles derive-report.json --kinds DsaIndexerKRow_v1,DsaMqaLogits_v3 \\
+      python benchmarks/one_stage/a11_twins.py --values DIR --roles derive-report.json --kinds DsaIndexerKRow_v1,DsaMqaLogits_v3 \\
       --out twins.json [--steps 0,1] [--layers 0,3]
 
-Operands as `a8.kind_values` takes them: each operand view's snapshot first, else the producer's output snapshot (provenance),
+Operands as `a11.kind_values` takes them: each operand view's snapshot first, else the producer's output snapshot (provenance),
 and provenance again for a Call that disagrees on the first. A component that disagrees with the snapshot at its Call's event
 is held to its allocation's last snapshot before the next Call writes that allocation (``late``, its event): what a reader saw.
 A kernel the capture doesn't see writes after its Call's event: DeepGEMM's MQA logits, folded at their `torch.empty`
@@ -29,8 +29,8 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.setrecursionlimit(100000)
 
-import a8  # noqa: E402
-import a8_kinds as K  # noqa: E402
+import a11  # noqa: E402
+import a11_kinds as K  # noqa: E402
 
 
 def write_events(res) -> dict[int, list[int]]:
@@ -81,7 +81,7 @@ def wiring(res) -> str:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--values", required=True, help="a8_slice.py's tar (and the checkpoint subset's), extracted")
+    ap.add_argument("--values", required=True, help="a11_slice.py's tar (and the checkpoint subset's), extracted")
     ap.add_argument("--roles", default=None, help="the Build's derive-report.json")
     ap.add_argument("--profile", default="derived_GLM53_tp8")
     ap.add_argument("--kinds", required=True, help="comma-separated families (DsaIndexerKRow_v1,...)")
@@ -91,9 +91,9 @@ def main() -> int:
     a = ap.parse_args()
     kinds = a.kinds.split(",")
     steps, layers = [int(s) for s in a.steps.split(",")], {int(x) for x in a.layers.split(",")}
-    res, store, _weights, vals, fold_s = a8.fold_values(Path(a.values), a.profile, Path(a.roles) if a.roles else None,
+    res, store, _weights, vals, fold_s = a11.fold_values(Path(a.values), a.profile, Path(a.roles) if a.roles else None,
                                                         last_step=max(steps))
-    print(f"A8 twins fold: {len(res.instances)} Calls to step {max(steps)}, {fold_s} s", flush=True)
+    print(f"A11 twins fold: {len(res.instances)} Calls to step {max(steps)}, {fold_s} s", flush=True)
     doc: dict = {"values": a.values, "steps": steps, "layers": sorted(layers), "fold_s": fold_s,
                  "unsupported": res.report.unsupported, "kinds": {}}
     writes = write_events(res)
@@ -102,26 +102,26 @@ def main() -> int:
         for m in res.instances:
             if K.family(m["spec"]) != kind or m["step"] not in steps:
                 continue
-            lm = a8.LAYER.search(m["name"])
+            lm = a11.LAYER.search(m["name"])
             if lm and int(lm[1]) not in layers:
                 continue
             spec = res.body.nodes[m["node"]].fn
             entry = {"name": m["name"], "spec": m["spec"], "step": m["step"], "event": m["event"], "row": m.get("row"),
                      "out_offsets": [None if v is None else v.offset for v in m["output_views"]]}
             try:
-                args = a8.operands(res, store, vals, m)
+                args = a11.operands(res, store, vals, m)
             except LookupError as e:
                 calls.append({**entry, "error": str(e)[:300]})
                 continue
-            comp = components(store, m, a8.evaluate_units(spec, spec, args, 1, 0)["call_out"], writes)
+            comp = components(store, m, a11.evaluate_units(spec, spec, args, 1, 0)["call_out"], writes)
             entry["operands"] = "snapshot"
             if any(c["differ"] for c in comp.values()):
                 try:
-                    alt = a8.operands(res, store, vals, m, first="provenance")
+                    alt = a11.operands(res, store, vals, m, first="provenance")
                 except LookupError:
                     alt = args
                 if any(not np.array_equal(x, y) for x, y in zip(alt, args)):
-                    comp2 = components(store, m, a8.evaluate_units(spec, spec, alt, 1, 0)["call_out"], writes)
+                    comp2 = components(store, m, a11.evaluate_units(spec, spec, alt, 1, 0)["call_out"], writes)
                     if not any(c["differ"] for c in comp2.values()):
                         comp, entry["operands"] = comp2, "provenance"
             calls.append({**entry, "components": comp})
@@ -131,10 +131,10 @@ def main() -> int:
         doc["kinds"][kind] = {"calls": len(calls), "agree": pattern.get("agree", 0), "late": late,
                               "differing_components": dict(sorted(pattern.items())), "seconds": round(time.time() - t0, 1),
                               "each": calls}
-        print(f"A8 twins {kind}: {len(calls)} Calls, " + json.dumps(dict(sorted(pattern.items()))) + f", {late} held late",
+        print(f"A11 twins {kind}: {len(calls)} Calls, " + json.dumps(dict(sorted(pattern.items()))) + f", {late} held late",
               flush=True)
     doc["wiring_sha256"] = wiring(res)
-    print(f"A8 twins wiring: {doc['wiring_sha256']} over {len(res.body.nodes)} nodes", flush=True)
+    print(f"A11 twins wiring: {doc['wiring_sha256']} over {len(res.body.nodes)} nodes", flush=True)
     Path(a.out).write_text(json.dumps(doc, indent=1, sort_keys=True, default=str))
     return 0 if all(k["calls"] and k["agree"] == k["calls"] for k in doc["kinds"].values()) else 1
 

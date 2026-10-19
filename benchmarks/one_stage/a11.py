@@ -1,16 +1,16 @@
-"""One-stage audit, run A8: GLM-5.3 TP8 B1 (row ``glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager``), rank 0, through
-the one-stage audit A6 ran on stand-in coordinates: each Definition kind (family) whose unit M0 lowers (`a8_kinds.py`'s table)
+"""One-stage audit, run A11: GLM-5.3 TP8 B1 (row ``glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager``), rank 0, through
+the one-stage audit A6 ran on stand-in coordinates: each Definition kind (family) whose unit M0 lowers (`a11_kinds.py`'s table)
 is a template, its units staged from the step's own values, sampled by the stratified law in one audit, proved by M0 under
 ``--zk`` and held by the Lean verifier of record.
 
     PYTHONPATH=<tree>:<tree>/verity/ml/flock/python:<tree>/integrations/vllm \\
-      python benchmarks/one_stage/a8.py --values DIR --kinds kinds.json --roles derive-report.json --bin flock-circuit \\
+      python benchmarks/one_stage/a11.py --values DIR --kinds kinds.json --roles derive-report.json --bin flock-circuit \\
       --lean flock-verify --out DIR [--per-kind 8] [--steps 1,0] [--layers 0,3] [--k K]
 
 ``--save-values DIR`` stops after the values, writing each kind's rows and its unit Definitions (a few MB); ``--load-values
 DIR`` stages from them without the fold, which is most of a run's time on a shared CPU node.
 
-* **Values.** ``--values`` is `a8_slice.py`'s tar extracted: rank 0's observation log, the capture's snapshots of a few
+* **Values.** ``--values`` is `a11_slice.py`'s tar extracted: rank 0's observation log, the capture's snapshots of a few
   layers' events (activations, copied right after each call) and ``ckpt/``, the checkpoint of record's tensors of those
   layers. The log is folded into the request Program's root Calls (`observe.fold`, the integration's derived profile). A
   Call's operand is the snapshot of its view taken before the Call ran, else (an operand produced outside the slice's
@@ -21,9 +21,9 @@ DIR`` stages from them without the fold, which is most of a run's time on a shar
   capture's ``cos_sin_cache.npy``. A Call reading another rank's values (``peers``) has none here and is not staged.
 * **Units.** The Call is evaluated gate by gate (`circuits.evaluate`) on those operands and held to the capture's output
   snapshot (the twin; for a kernel whose write lands after its own event's snapshot, the first later one before another
-  writer that holds it, `call_twin`); its first ``--per-kind`` unit calls (the kind's unit, `a8_kinds.chain`) give each
-  unit's arguments and returns. Each is packed into the unit's rows (`a8_kinds.rows_of`, an output row per output port,
-  `a8_kinds.out_rows`) and staged by C-Flock's `UnitStager` bound to the partition, whose IR reference check and the
+  writer that holds it, `call_twin`); its first ``--per-kind`` unit calls (the kind's unit, `a11_kinds.chain`) give each
+  unit's arguments and returns. Each is packed into the unit's rows (`a11_kinds.rows_of`, an output row per output port,
+  `a11_kinds.out_rows`) and staged by C-Flock's `UnitStager` bound to the partition, whose IR reference check and the
   transcript's returns must agree.
 * **Audit.** As `a6.py`: kinds sharing a unit Definition share its template, one member each; one registration before the
   draw; the verifier's Lean stratified draw over its own program and partition; each member serves its share
@@ -56,7 +56,7 @@ sys.setrecursionlimit(100000)
 
 import a0  # noqa: E402
 import a6  # noqa: E402
-import a8_kinds as K  # noqa: E402
+import a11_kinds as K  # noqa: E402
 from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.ml.circuits.defs import PrimitiveDefinition  # noqa: E402
 from verity.ml.circuits.evaluate import evaluate_region  # noqa: E402
@@ -202,7 +202,7 @@ def fold_values(vdir: Path, profile_name: str, roles: Path | None, last_step: in
     store = SnapshotStore(vdir / "rank0")
     weights = (weights_cls or Weights)(res.params[-1][1], profile, vdir / "ckpt", roles, vdir / "rank0" / "cos_sin_cache.npy")
 
-    class A8Values(Values):
+    class A11Values(Values):
         def of_run(self, space, idx, lo, hi):
             if space == "p":
                 if idx == self.W:
@@ -216,7 +216,7 @@ def fold_values(vdir: Path, profile_name: str, roles: Path | None, last_step: in
                 return producer_words(self.by_node.get(idx), store, lo, hi, idx, write_events(self.r))
             return super().of_run(space, idx, lo, hi)
 
-    return res, store, weights, A8Values(res, store, None), round(time.time() - t0, 1)
+    return res, store, weights, A11Values(res, store, None), round(time.time() - t0, 1)
 
 
 _CONSTANTS: dict[str, np.ndarray] = {}
@@ -296,14 +296,14 @@ def operands(res, store, vals, m: dict, first: str = "snapshot") -> list[np.ndar
 
 def write_events(res) -> dict[int, list[int]]:
     """Each allocation's writing Calls' events (an output view's), ascending."""
-    if not hasattr(res, "_a8_writes"):
+    if not hasattr(res, "_a11_writes"):
         w: dict[int, set[int]] = {}
         for m in res.instances:
             for v in m["output_views"]:
                 if v is not None:
                     w.setdefault(v.alloc, set()).add(m["event"])
-        res._a8_writes = {a: sorted(e) for a, e in w.items()}
-    return res._a8_writes
+        res._a11_writes = {a: sorted(e) for a, e in w.items()}
+    return res._a11_writes
 
 
 def later_snapshots(store, view, event: int, writes: dict[int, list[int]]) -> list:
@@ -638,10 +638,10 @@ def load_values(d: Path, lowers: list[str]) -> tuple[dict, dict, dict]:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--values", default=None, help="a8_slice.py's tar, extracted")
+    ap.add_argument("--values", default=None, help="a11_slice.py's tar, extracted")
     ap.add_argument("--save-values", default=None, help="write each kind's staged rows and its unit's Definition here and stop")
     ap.add_argument("--load-values", default=None, help="a --save-values directory: stage from it instead of folding --values")
-    ap.add_argument("--kinds", required=True, help="a8_kinds.py's table")
+    ap.add_argument("--kinds", required=True, help="a11_kinds.py's table")
     ap.add_argument("--roles", default=None, help="the Build's derive-report.json (weight_roles: the ue8m0 rewrite)")
     ap.add_argument("--profile", default="derived_GLM53_tp8")
     ap.add_argument("--bin", required=True)
@@ -666,7 +666,7 @@ def main() -> int:
     out.mkdir(parents=True, exist_ok=True)
     summary: dict = {"row": ROW, "rank": 0, "steps": a.steps, "layers": a.layers, "per_kind": a.per_kind}
     # M0 lowers a word primitive by the Boolean Definition registered for it (`ir_lower._boolean_build`), some of which only
-    # the integration's registry modules register (U32And_v1's); a8_kinds' decode loads them all the same way
+    # the integration's registry modules register (U32And_v1's); a11_kinds' decode loads them all the same way
     from verity_vllm.program.registry.catalog import load as load_registry
     summary["registry_errors"] = load_registry()[1]
 
@@ -679,12 +679,12 @@ def main() -> int:
         staged, rows_of_kind, notes = load_values(Path(a.load_values), lowers)
         summary["values_from"] = {"dir": a.load_values, **notes["from"]}
         weights_notes = notes["weights"]
-        print(f"A8 values loaded: {sorted(rows_of_kind)}", flush=True)
+        print(f"A11 values loaded: {sorted(rows_of_kind)}", flush=True)
     else:
         if not a.values:
-            raise SystemExit("--values (a8_slice.py's tar, extracted) or --load-values")
+            raise SystemExit("--values (a11_slice.py's tar, extracted) or --load-values")
         res, store, weights, vals, fold_s = fold_values(Path(a.values), a.profile, Path(a.roles) if a.roles else None)
-        print(f"A8 fold: {len(res.instances)} Calls, {len(store.entries)} snapshots, {len(weights.served)} weight fields mapped, "
+        print(f"A11 fold: {len(res.instances)} Calls, {len(store.entries)} snapshots, {len(weights.served)} weight fields mapped, "
               f"{fold_s} s", flush=True)
         staged, rows_of_kind = {}, {}
         for f in lowers:
@@ -697,11 +697,11 @@ def main() -> int:
             staged[f] = {x: (y.id if x == "unit" else y) for x, y in kv.items() if x not in ("rows", "outs", "rows_spec")}
             if kv["staged"]:
                 rows_of_kind[f] = kv
-            print(f"A8 values {f}: " + json.dumps(staged[f], default=str)[:700], flush=True)
+            print(f"A11 values {f}: " + json.dumps(staged[f], default=str)[:700], flush=True)
         weights_notes = weights.notes
         if a.save_values:
             save_values(Path(a.save_values), staged, rows_of_kind, weights_notes, a)
-            print(f"A8 values saved to {a.save_values}: {sorted(rows_of_kind)}", flush=True)
+            print(f"A11 values saved to {a.save_values}: {sorted(rows_of_kind)}", flush=True)
             return 0 if rows_of_kind else 1
     summary["values"] = staged
     summary["weights"] = weights_notes
@@ -738,11 +738,11 @@ def main() -> int:
         sdir = out / f"stage-{tag}"
         kv0 = rows_of_kind[tpl["kinds"][0]]
         with K.no_cyclic_gc():
-            st = CS.UnitStager(tpl["defn"], f"unit/a8-{tag}", kv0["rows_spec"], K.out_rows(len(kv0["outs"])),
+            st = CS.UnitStager(tpl["defn"], f"unit/a11-{tag}", kv0["rows_spec"], K.out_rows(len(kv0["outs"])),
                                circuit=sdir / "circuit.txt", bind=bound)
         tpl["stager"], t_build = st, round(time.time() - t0, 1)
         cap = a6.chunk_cap(st.meta)
-        salt_key = hashlib.sha256(f"verity/one-stage/a8/salts\0{uid}".encode()).digest()
+        salt_key = hashlib.sha256(f"verity/one-stage/a11/salts\0{uid}".encode()).digest()
         lo = 0
         for f in tpl["kinds"]:
             kv, t1 = rows_of_kind[f], time.time()
@@ -764,7 +764,7 @@ def main() -> int:
                   "partition_file": out / "partition.json", "program_file": out / "program.json"}
             members.append({"name": f, "kind": f, "n": n, "base": base + lo, "defn": tpl["defn"], "st": ms,
                             "header": a0.public_header(d, n), "salt_key": salt_key, "stager": st, "rows": kv["rows"]})
-            print(f"A8 staged {f}: {n} units of {uid} from {base + lo} (cap {cap}), {got['ands']} ANDs, k_log {st.meta.get('k_log')}, "
+            print(f"A11 staged {f}: {n} units of {uid} from {base + lo} (cap {cap}), {got['ands']} ANDs, k_log {st.meta.get('k_log')}, "
                   f"unit twin {agree}, Call twin {kv['twin']}, {ms['seconds']}", flush=True)
             lo += n
     summary["members"] = [{"name": m["name"], "template": P.template_id(m["defn"]), "n": m["n"], "base": m["base"], "set": m["st"]["set"],
@@ -791,14 +791,14 @@ def main() -> int:
         checks[f"statement/{m['name']}"] = a6.statement_checks(m, rec, want)
         ok = m["st"]["twin"]["agrees"] and m["st"]["twin"]["call"].get("agree") is not False
         checks[f"twin/{m['name']}"] = {"ok": ok, "codes": [] if ok else ["twin"], "detail": m["st"]["twin"]}
-    receipt = R.receipt(rec, "one-stage-e2e verifier (a8.py)")
+    receipt = R.receipt(rec, "one-stage-e2e verifier (a11.py)")
     (out / "receipt.json").write_text(json.dumps(receipt, indent=1, sort_keys=True))
     summary.update(population=n_all, partition=pd, registration=R.digest(rec), law=rec["law"],
                    checks_before_draw={c: v["ok"] for c, v in checks.items()})
     if not all(v["ok"] for v in checks.values()):
         summary["checks"] = checks
         (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
-        print("A8 " + json.dumps({"refused_before_draw": summary["checks_before_draw"]}, default=str))
+        print("A11 " + json.dumps({"refused_before_draw": summary["checks_before_draw"]}, default=str))
         return 1
 
     # the verifier's stratified draw, by its own Lean over its own program and partition object; each member serves its share
@@ -839,7 +839,7 @@ def main() -> int:
                                 "lean_partition": verdicts[f"lean-verify/{m['name']}"].get("partition")}
         sessions += [a0.sha512_file(f) for f in sorted((sdir / "sessions").glob("*/session.json"))]
         lv, mv = verdicts[f"lean-verify/{m['name']}"], verdicts[f"m0-verifier/{m['name']}"]
-        print(f"A8 session {m['name']}: {len(local)} units, M0 {mv['accepted']}, Lean {lv['accepted']} {lv.get('why') or ''}, "
+        print(f"A11 session {m['name']}: {len(local)} units, M0 {mv['accepted']}, Lean {lv['accepted']} {lv.get('why') or ''}, "
               f"{session_s} s", flush=True)
     result = V.audit_record(rec, receipt, lean_draw, rec["law"], sorted(proved), instances, statement, verdicts, a.delta,
                             sessions=sessions, served=sorted(served), session_roots=session_roots)
@@ -894,7 +894,7 @@ def main() -> int:
         (tdir / "partition.json").write_text(json.dumps(tpart, sort_keys=True))
         (tdir / "program.json").write_bytes(canonical_json(encode_program(tprog)))
         with K.no_cyclic_gc():
-            tst = CS.UnitStager(tdef, f"unit/a8-tampered-{tm['kind']}", rows_of_kind[tm["kind"]]["rows_spec"],
+            tst = CS.UnitStager(tdef, f"unit/a11-tampered-{tm['kind']}", rows_of_kind[tm["kind"]]["rows_spec"],
                                 K.out_rows(len(rows_of_kind[tm["kind"]]["outs"])), circuit=tdir / "circuit.txt",
                                 bind={"partition": P.digest(tpart), "program": tpart["program"]})
         d, set_name = tdir / "set", f"{tst.iset.name}-tampered"
@@ -928,7 +928,7 @@ def main() -> int:
                    timing=statement, negatives={x: y["refused"] for x, y in neg.items()})
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
     ok = bool(result.get("accepted")) and all(summary["negatives"].values())
-    print("A8 " + json.dumps({x: summary[x] for x in ("population", "draw_counts", "audit", "negatives")}, sort_keys=True, default=str))
+    print("A11 " + json.dumps({x: summary[x] for x in ("population", "draw_counts", "audit", "negatives")}, sort_keys=True, default=str))
     return 0 if ok else 1
 
 
