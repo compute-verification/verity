@@ -260,11 +260,13 @@ def lse_scale_bits(scale: float) -> int:
     return P.bits_of(f(c[0] * c[1]))
 
 
-def split_end(st: M.Steps, S, INV, m, l, o):
-    """`SparseMlaSplitEnd`'s body: (o * INV(sum), lse)."""
+def split_end(st: M.Steps, S, INV, m, l, o, scale_bits: int | None = None):
+    """`SparseMlaSplitEnd`'s body: (o * INV(sum), lse), the running max's multiplier ``scale_bits`` (default FA3's
+    `lse_scale_bits(SCALE)`)."""
     tot = st.add(st.add(l[0], l[2]), st.add(l[1], l[3]))
     part = st.B.batch(st._defs["mul"], o, st.B.call(INV, tot), axes=(0, None))
-    lse = st.sel(st.nez(tot), st.fma(m, st.word(lse_scale_bits(S.SCALE)), st.mul(st.lg2(tot), st.word(LN2))), st.word(NEG_INF))
+    c = st.word(lse_scale_bits(S.SCALE) if scale_bits is None else scale_bits)
+    lse = st.sel(st.nez(tot), st.fma(m, c, st.mul(st.lg2(tot), st.word(LN2))), st.word(NEG_INF))
     return tuple_of(part, lse)
 
 

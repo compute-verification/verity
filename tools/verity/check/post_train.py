@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""`tools/verity/check/post_train.py [COMMIT] [--on MACHINE] [--cores LIST] [--workers N] [--force]`: the vLLM reference regression's
-manifest rebuilds on a landing of main.
+"""`tools/verity/check/post_train.py [COMMIT] [--attempt RID] [--on MACHINE] [--cores LIST] [--workers N] [--force]`: the vLLM
+reference regression's manifest rebuilds on a landing of main.
 
 `check` blocks on the regression's cheap T0 tier; the checks that recompute from a row's Programs (marked `rebuild`: the manifest
 rebuilds, `manifest_digest` on every row it applies to and the #57 refusal, and `step_segmentation`'s decode of every component;
@@ -8,7 +8,9 @@ about an hour of CPU in one process) run here instead, once per landing (Daniel,
 this, detached, after each push it lands (`after_land` in `tool.py`); run it by hand for a landing pushed another way, or to redo one.
 
 COMMIT (default origin/main) must be a landing: its `Check: <attempt>` trailer names the check that let it in, or, for a train
-`research queue drive` fast-forwarded main to, the store's passing check of that commit does.  Its tree is checked
+`research queue drive` fast-forwarded main to, the store's passing check of that commit does.  Drive passes the check it landed
+on as `--attempt RID`, taken when RID ran on COMMIT or on the train COMMIT merges onto a moved main (its second parent): a landing
+with deferred steps has no passing check in the store when this starts.  Its tree is checked
 out in a worktree of its own and the rebuilds run there through `research run --on MACHINE`, pinned to --cores, under
 VERITY_REGRESSION_REBUILD=1 and VERITY_STORE_REQUIRED=1, at nice 19.  `research run --on` returns at launch, so this fetches the
 run's records until they show its end (each POLL_S); then that check attempt is labelled `note=regression pass` or
@@ -91,18 +93,54 @@ def git(*args: str, cwd: Path = ROOT, check: bool = True) -> str:
     return subprocess.run(["git", *args], cwd=cwd, check=check, capture_output=True, text=True).stdout.strip()
 
 
-def check_attempt(commit: str, cwd: Path = ROOT) -> str | None:
+def check_attempt(commit: str, cwd: Path = ROOT, attempt: str | None = None) -> str | None:
     """The attempt a landing of main was admitted on: its `Check:` line (`research merge`; a paragraph of its own, which git's
     `%(trailers)` doesn't read), else, for a commit on origin/main, the newest check that passed on its clean tree (`passed`): a
-    train `research queue drive` fast-forwards main to was checked as it is, so it has no trailer.  None for any other commit."""
-    m = CHECK_RE.search(git("log", "-1", "--format=%B", commit, cwd=cwd))
-    if m:
+    train `research queue drive` fast-forwards main to was checked as it is, so it has no trailer.  None for any other commit.
+
+    With ``attempt`` (`--attempt`, the check drive landed on), that attempt, when it ran on the commit (a fast-forward) or on the
+    commit's second parent, the train drive merged onto a moved main, whose body records it (`Checked: RID (full check of ...`;
+    a train commit's own second parent is a PR's head, which no check of the train ran on): a landing made with `--defer` lands
+    while its check runs, or cancels it then (#2544), so no passed attempt is in the store to find (CI-81)."""
+    body = git("log", "-1", "--format=%B", commit, cwd=cwd)
+    m = CHECK_RE.search(body)
+    if m and attempt in (None, m.group(1)):
         return m.group(1)
     sha = git("rev-parse", "--verify", f"{commit}^{{commit}}", cwd=cwd, check=False)
     if not sha or subprocess.run(["git", "merge-base", "--is-ancestor", sha, "origin/main"], cwd=cwd,
                                  capture_output=True).returncode:
         return None
-    return passed(sha)
+    if attempt is None:
+        return passed(sha)
+    src = source_of(attempt)
+    merged = re.search(rf"^Checked: {re.escape(attempt)} ", body, re.M) and git("rev-parse", "--verify", "-q", f"{sha}^2", cwd=cwd,
+                                                                                 check=False)
+    if src and src in (sha, merged):
+        return attempt
+    print(f"post-train: {attempt} ran on {src[:12] if src else 'no commit its attempt or run record names'}, which is neither "
+          f"{sha[:12]} nor the train it merged (its second parent, with `Checked: {attempt}`), so it is no check of this landing",
+          file=sys.stderr)
+    return None
+
+
+def source_of(rid: str) -> str | None:
+    """The commit run ``rid`` checked: its attempt's clean source in the store, else its run record's (`research status RID
+    --json`'s `tree_sha`), for a check still running or one whose attempt hasn't reached the store."""
+    try:
+        from research.store.local import LocalStore
+
+        store = LocalStore()
+        if store.remote is not None:
+            store.refresh(attempts_only=True)
+        rows = store.index.sql("SELECT source_commit FROM attempts WHERE id = ? AND source_dirty = 0", (rid,))
+        if rows and rows[0][0]:
+            return rows[0][0]
+    except Exception as e:  # noqa: BLE001  (the run record is read instead)
+        print(f"post-train: the store can't be read for {rid}'s source ({type(e).__name__}: {e})", file=sys.stderr)
+    try:
+        return json.loads(research("status", rid, "--json").stdout)["runs"][0].get("tree_sha") or None
+    except (ValueError, KeyError, IndexError, TypeError, AttributeError):
+        return None
 
 
 def passed(sha: str) -> str | None:
@@ -216,13 +254,16 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--dry-run", action="store_true", help="run, and print the label instead of writing it (any commit: a branch's too)")
     ap.add_argument("--run", metavar="RID", help="a run this job launched for the commit before (its caller ended first): wait for "
                                                   "it and label from it instead of launching another")
+    ap.add_argument("--attempt", metavar="RID", help="the check the landing was admitted on (drive's `landed ... (check RID)`): "
+                                                     "labelled when it ran on COMMIT or on the train COMMIT merged onto main")
     a = ap.parse_args(argv)
     git("fetch", "-q", "origin", "main")
     sha = git("rev-parse", "--verify", f"{a.commit}^{{commit}}")
-    attempt = check_attempt(sha)
+    attempt = check_attempt(sha, attempt=a.attempt)
     if not attempt and not a.dry_run:
-        print(f"post-train: {sha[:12]} has no `Check:` trailer and is no checked commit of origin/main, so it is no landing of main",
-              file=sys.stderr)
+        why = (f"is no landing of main on {a.attempt}; nothing labelled" if a.attempt else
+               "has no `Check:` trailer and is no checked commit of origin/main, so it is no landing of main")
+        print(f"post-train: {sha[:12]} {why}", file=sys.stderr)
         return 2
     with open(LOCK, "a") as lock:
         try:

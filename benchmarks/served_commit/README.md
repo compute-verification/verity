@@ -14,7 +14,8 @@ and batch, under continuous batching with staggered arrivals, greedy and seeded 
   staging ring at 32 windows of 256 or 64 MiB; `-cap` arms hash in launches of at most `PROF_ROWS_CAP` blocks while the
   ring has room; `-4k` arms hash 4 KiB rows, and `-layer` arms acquire only each layer's residual stream, K and V; no
   scheme's roots), optionally under nsys,
-  summarized by `nsys_summary.py`; `gather_bench.py` times the
+  summarized by `nsys_summary.py`, and with `PIN_BUILD` under a Build of record's compile artifact (`served-pin` seeds one
+  fresh Inductor dir for every arm and checks it after); `gather_bench.py` times the
   gather kernel alone; `gpu_tests.sh` runs the committer's GPU byte-identity tests on a node; `granularity.py` lists, from
   a Build's request Programs, the Call boundaries a per-block or per-layer proof unit would keep, with their bytes and
   hashing time (an estimate; no scheme).

@@ -100,7 +100,7 @@ def _descriptor_digest(fn) -> str:
 
 
 SPLIT = Path(__file__).parent / "fixtures" / "split"
-#: split fixtures another test reads, in that split script's own format
+#: split fixtures another test reads, in that test's own format
 SPLIT_READERS = {"prims_serve": "test_split_prims_serve.py"}
 
 
@@ -113,8 +113,8 @@ def test_every_split_fixture_another_test_reads_is_read():
 @pytest.mark.parametrize("pinned", sorted(p for p in SPLIT.glob("*.json") if p.stem not in SPLIT_READERS), ids=lambda p: p.stem)
 def test_a_split_family_keeps_its_targets_and_digests(pinned):
     """`fixtures/split/<family>.json` was written before that family's registry modules were split into Definitions, twins and
-    vocabulary (`integrations/vllm/tools/migrate/split_<family>.py pin`). Every target it lists is still checked, at the same
-    canonical descriptor digest, and every Definition family it lists is still registered. A new binding may add targets."""
+    vocabulary. Every target it lists is still checked, at the same canonical descriptor digest, and every Definition family it
+    lists is still registered. A new binding may add targets."""
     pin = json.loads(pinned.read_text())
     missing = sorted(set(pin["definitions"]) - set(SUITE))
     assert not missing, f"{pin['family']}: targets no longer checked: {missing}"
