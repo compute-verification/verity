@@ -177,8 +177,9 @@ class Weights:
         return w
 
 
-def fold_values(vdir: Path, profile_name: str, roles: Path | None):
-    """The rank's log folded into the request Program's root Calls, its snapshots, and the weights."""
+def fold_values(vdir: Path, profile_name: str, roles: Path | None, weights_cls=None):
+    """The rank's log folded into the request Program's root Calls, its snapshots, and the weights (`Weights`, or
+    ``weights_cls``)."""
     from verity_vllm.check import fold_compare
     from verity_vllm.check.fold_compare import SnapshotStore, Values, _attach_specs, load_profile
     from verity_vllm.observe.events import RunHeader
@@ -194,7 +195,7 @@ def fold_values(vdir: Path, profile_name: str, roles: Path | None):
     res = fold(events, with_protocols(profile, header), strict=None, with_program=False)
     _attach_specs(res)
     store = SnapshotStore(vdir / "rank0")
-    weights = Weights(res.params[-1][1], profile, vdir / "ckpt", roles, vdir / "rank0" / "cos_sin_cache.npy")
+    weights = (weights_cls or Weights)(res.params[-1][1], profile, vdir / "ckpt", roles, vdir / "rank0" / "cos_sin_cache.npy")
 
     class A8Values(Values):
         def of_run(self, space, idx, lo, hi):
@@ -742,11 +743,14 @@ def main() -> int:
     law = D.parse_law(f"stratified:{k}")
     bound = {"partition": pd, "program": part["program"]}
 
-    members = []
+    members, tags = [], {}
     for (uid, tpl), (tid, base, cnt) in zip(templates.items(), ranges):
         assert tid == P.template_id(tpl["defn"])
         t0 = time.time()
+        # one stage directory (and circuit) per template, though two specializations share a family
         tag = K.family(uid)
+        tags[tag] = tags.get(tag, 0) + 1
+        tag = tag if tags[tag] == 1 else f"{tag}-{tags[tag]}"
         sdir = out / f"stage-{tag}"
         kv0 = rows_of_kind[tpl["kinds"][0]]
         st = CS.UnitStager(tpl["defn"], f"unit/a8-{tag}", kv0["rows_spec"], K.out_rows(len(kv0["outs"])),
