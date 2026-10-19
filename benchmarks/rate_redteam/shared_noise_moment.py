@@ -2,12 +2,15 @@
 20261019T0825Z-draft-j10-shared-noise §2, §4).
 
 Three checks at h1tile's template (a word of w <= 32 skipped products, dead with probability 2^-w over its row's
-coins, otherwise lucky at most 1/2 over its column's, kappa = 4), on a call grid of m_c x n_c tiles of 32 x 32
-(r = 32 m_c rows read a column's coins, n = 32 n_c columns a row's):
+coins, otherwise lucky at most 1/2 over its column's, kappa = 4), on a grid of m_c x n_c tiles of 32 x 32 whose rows
+share their noise along the grid's row and whose columns share theirs along its column (r = 32 m_c rows read a column's
+coins, n = 32 n_c columns a row's). Banded J10 is the grid m_c = 1, n_c = g <= 64: its column streams carry the row
+block, so each row block is a grid of its own and the call's number of row blocks never enters the rate. The rows with
+m_c > 1 price the full grid (column streams shared across row blocks), which J10 leaves out.
 
 * `tileluck`: `TileLuck`'s condition (proved; dead events may correlate across rows) on the call, its largest r.theta
   against the one-tile point 1/256: the rate falls as 1/n_c.
-* `gridluck`: `GridLuck`'s condition (stated; dead events independent across rows), exponent n/r in place of n, at the
+* `gridluck`: `GridLuck`'s condition (proved; dead events independent across rows), exponent n/r in place of n, at the
   point r.theta = 1/(4 max(64, n/r)) (`GridTemplateCondition`), and the rate as a factor on today's theta_0 = 1/8192.
 * `worst`: the exact moment of the most correlated instance the premises allow (a row's dead event shared by all its
   columns, a column's lucky event by all its rows), at `GridLuck`'s point, and how far past it the instance breaks.
