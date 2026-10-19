@@ -161,8 +161,8 @@ theorem tail_eval (H : Claims.Msg → Claims.Msg) (SO' : Claims.Msg → ℕ → 
     (Claims.SP.eval H ask (if (𝔇).halted H (kPre IV x) x τ then
         Claims.Recursion.simRounds (fun _ => .ret []) ((𝔇).V.k x - kPre IV x) τ
       else Claims.Recursion.simOuter SO' x ((𝔇).vstar x τ) cs (List.finRange ((𝔇).nS x)) τ)).1 =
-      (List.finRange (nS x)).foldl (fun τ' (j : Fin (nS x)) => stepS IV b H ask SO' (sR IV ivScope b) x τ' j (cs j))
-        τ := by
+      (List.finRange ((𝔇).nS x)).foldl
+        (fun τ' (j : Fin ((𝔇).nS x)) => stepS IV b H ask SO' (sR IV ivScope b) x τ' j (cs j)) τ := by
   by_cases hg : Claims.Recursion.goesOn τ = true
   · obtain ⟨hl, hm⟩ := hτ hg
     have hh : (𝔇).halted H (kPre IV x) x τ =
@@ -173,9 +173,9 @@ theorem tail_eval (H : Claims.Msg → Claims.Msg) (SO' : Claims.Msg → ℕ → 
     have hl' : (Claims.ZKMal.histOf τ).length = kPre IV x := by rw [Claims.ZKMal.histOf_length, hl]
     by_cases hf : Claims.ZKMal.fired (sR IV ivScope b x) (kPre IV x) (Claims.ZKMal.histOf τ) = true
     · rw [if_pos hf, simRounds_interact H ask _ _ τ hm]
-      have hfold : (List.finRange (nS x)).foldl
-          (fun τ' (j : Fin (nS x)) => stepS IV b H ask SO' (sR IV ivScope b) x τ' j (cs j)) τ =
-          (List.finRange (nS x)).foldl (fun τ' (j : Fin (nS x)) => if Claims.Recursion.goesOn τ' then
+      have hfold : (List.finRange ((𝔇).nS x)).foldl
+          (fun τ' (j : Fin ((𝔇).nS x)) => stepS IV b H ask SO' (sR IV ivScope b) x τ' j (cs j)) τ =
+          (List.finRange ((𝔇).nS x)).foldl (fun τ' (j : Fin ((𝔇).nS x)) => if Claims.Recursion.goesOn τ' then
             τ' ++ Claims.ZKMal.interact ask (fun _ => []) ((nums b.st x j).rounds + 1) (Claims.ZKMal.histOf τ')
             else τ') τ := by
         refine Claims.ZKMal.foldl_congr_inv (fun τ' => ∃ r, τ' = τ ++ r) _ _ (fun τ' j hP => ?_) _ τ
@@ -192,15 +192,15 @@ theorem tail_eval (H : Claims.Msg → Claims.Msg) (SO' : Claims.Msg → ℕ → 
           exact ⟨rfl, _, List.append_assoc _ _ _⟩
         · rw [if_neg hg', if_neg hg']
           exact ⟨rfl, r, rfl⟩
-      have hcount : ((List.finRange (nS x)).map fun j : Fin (nS x) => (nums b.st x j).rounds + 1).sum =
+      have hcount : ((List.finRange ((𝔇).nS x)).map fun j : Fin ((𝔇).nS x) => (nums b.st x j).rounds + 1).sum =
           (𝔇).V.k x - kPre IV x := by
-        refine (Claims.ZKMal.sum_finRange_map (fun j => (nums b.st x j).rounds + 1) (nS x)).trans ?_
-        show _ = VM.k x - kPre IV x
+        refine (Claims.ZKMal.sum_finRange_map (fun j => (nums b.st x j).rounds + 1) ((𝔇).nS x)).trans ?_
+        show ((List.range (nS x)).map fun j => (nums b.st x j).rounds + 1).sum = VM.k x - kPre IV x
         rw [hk]
         unfold kM
         omega
       refine Eq.trans ?_ (hfold.trans (Claims.ZKMal.foldl_silent ask
-        (fun j : Fin (nS x) => (nums b.st x j).rounds + 1) (List.finRange (nS x)) τ hm)).symm
+        (fun j : Fin ((𝔇).nS x) => (nums b.st x j).rounds + 1) (List.finRange ((𝔇).nS x)) τ hm)).symm
       exact congrArg (fun n => τ ++ Claims.ZKMal.interact ask (fun _ => []) n (Claims.ZKMal.histOf τ)) hcount.symm
     · rw [if_neg hf, Claims.ZKMal.simOuter_eval]
       refine Claims.ZKMal.foldl_congr_inv (fun τ' => ∃ r, τ' = τ ++ r) _ _ (fun τ' j hP => ?_) _ τ
@@ -218,8 +218,8 @@ theorem tail_eval (H : Claims.Msg → Claims.Msg) (SO' : Claims.Msg → ℕ → 
       · rw [if_neg hg', if_neg hg']
         exact ⟨rfl, r, rfl⟩
   · have hg0 : Claims.Recursion.goesOn τ = false := Bool.eq_false_iff.2 hg
-    have hR : (List.finRange (nS x)).foldl
-        (fun τ' (j : Fin (nS x)) => stepS IV b H ask SO' (sR IV ivScope b) x τ' j (cs j)) τ = τ :=
+    have hR : (List.finRange ((𝔇).nS x)).foldl
+        (fun τ' (j : Fin ((𝔇).nS x)) => stepS IV b H ask SO' (sR IV ivScope b) x τ' j (cs j)) τ = τ :=
       Claims.ZKMal.foldl_stuck _ (fun τ' i h => by simp [stepS, h]) _ τ hg0
     rw [hR]
     split
