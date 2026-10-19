@@ -1429,6 +1429,9 @@ namespace Claims.ZKMal.Masked
 open Claims FlockSoundness.ZK FlockSoundness.Discharge CoinLayer
 open FlockComplete.CutEq
 
+local notation "𝔽" => FlockLevel3.GF128
+local notation "𝕂" => FlockLevel3.GF256
+
 /-- **The cut at the coins `c`** on the simulator's leaves `H(dig ⊕ b, c)` (`RoundPlan.Causal`'s). -/
 noncomputable abbrev cutC (x : Msg) (wt : ∀ j, FlockSoundness.Model.Witness (tabC PE x j).S.m)
     (ω : ∀ j, ZkView.Base (tabC PE x j).z (tabC PE x j).Hi)
@@ -1653,5 +1656,53 @@ theorem srcAgree_of (h : RepOk) : SrcAgree := by
     rwa [show 2 * (⟨k / 2, hj⟩ : Fin (jOf x)).val + (⟨k % 2, hr⟩ : Fin 2).val = k by simp only; omega] at this
 
 theorem causalExe_of_rep (h : RepOk) : CausalExe := causalExe_of (srcAgree_of h)
+
+/-! ## The cut's fields -/
+
+section CutFields
+
+variable {J : ℕ} (C : Fin J → Composed.CoinedSetup) (cz : ∀ j, Composed.CoinsZK (C j).Rest)
+  (wt : ∀ j, FlockSoundness.Model.Witness (C j).S.m) (ω : ∀ j, ZkView.Base (C j).z (C j).Hi)
+  (lv : ZkView.Leaves (fun j => (C j).z) → ByteArray) (j : Fin J) (r : Fin 2)
+
+theorem cutAt_masked (i) : (cutAt C cz wt ω lv j).masked r i =
+    ((C j).T (cz j)).tab.vals r (wt j) (ω j).1 (ω j).2.1.2.1 i + ((ω j).2.2.1 r).1 i := rfl
+
+end CutFields
+
+section Masked
+
+variable (x : Msg) (cz cz' : ∀ j, Composed.CoinsZK (tabC PE x j).Rest)
+  (wt : ∀ j, FlockSoundness.Model.Witness (tabC PE x j).S.m) (ω : ∀ j, ZkView.Base (tabC PE x j).z (tabC PE x j).Hi)
+  (lv lv' : ZkView.Leaves (fun j => (tabC PE x j).z) → ByteArray) (j : Fin (jOf x)) (r : Fin 2)
+
+theorem repSrcCut_masked (cut : ∀ j, ((tabC PE x j).T (cz j)).tab.Cut) (k : ℕ) :
+    (repSrcCut PE x cz cut j r).masked k =
+      if h : k < (tabC PE x j).z.nE then FlockLevel3.GF128.val ((cut j).masked r ⟨k, h⟩) else 0 := by
+  simp only [repSrcCut]
+  rfl
+
+theorem tabC_vals (c : Composed.CoinsZK (tabC PE x j).Rest) (w u R i) :
+    ((tabC PE x j).T c).tab.vals r w u R i =
+      Composed.honestAt (zkTab x j).table (stAt x j) c r (Composed.zWith (stAt x j) w u) (R r) i.val := rfl
+
+theorem cutTab_masked (i) : (cutAt (tabC PE x) cz wt ω lv j).masked r i =
+    Composed.honestAt (zkTab x j).table (stAt x j) (cz j) r (Composed.zWith (stAt x j) (wt j) (ω j).1)
+      ((ω j).2.1.2.1 r) i.val + ((ω j).2.2.1 r).1 i :=
+  (cutAt_masked _ _ _ _ _ _ _ _).trans (congrArg (· + _) (tabC_vals x j r _ _ _ _ _))
+
+theorem masked_congr (k : ℕ)
+    (h : ∀ (zw : FlockSoundness.Model.Witness (zkTab x j).table.S.m) (R : Fin 2 → Fin (tabC PE x j).z.L → 𝔽),
+      Composed.honestAt (zkTab x j).table (stAt x j) (cz j) r zw R k =
+        Composed.honestAt (zkTab x j).table (stAt x j) (cz' j) r zw R k) :
+    (repSrcCut PE x cz (cutAt (tabC PE x) cz wt ω lv) j r).masked k =
+      (repSrcCut PE x cz' (cutAt (tabC PE x) cz' wt ω lv') j r).masked k := by
+  rw [repSrcCut_masked, repSrcCut_masked]
+  by_cases hk : k < (tabC PE x j).z.nE
+  · rw [dite_eq_left hk, dite_eq_left hk, cutTab_masked, cutTab_masked, h]
+    rfl
+  · rw [dite_eq_right hk, dite_eq_right hk]
+
+end Masked
 
 end Claims.ZKMal.Masked
