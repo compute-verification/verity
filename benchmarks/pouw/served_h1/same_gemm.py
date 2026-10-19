@@ -16,11 +16,14 @@ The gate reads three kinds of evidence, each catching what the others miss:
   trace  the hook's launch ledger (`Recorder`, in process, `trace_refusals`).  The profiler records every op and kernel
          in each call's range.  The call must have exactly one GEMM, its declared fused launch, a raw launch in whose range
          only its declared kernels, views and allocations run, each one of the window's pinned fused kernels (none pinned
-         refuses every fused launch).  That launch wrote the returned y (same storage, version
-         and rows), and the committed receipts and z are its buffers.  Only views may run after it.  A GEMM of a linear's
-         (K, N) outside every call refuses the window (`window_refusals`).  It misses what the fused kernel itself
-         computes (a GEMM inside it, or a y copied from an input it was handed: the kernel's SASS gate), a GEMM written
-         as elementwise ops and a reduction, which reaches y only through such a kernel, and a GEMM in another process.
+         refuses every fused launch) and, on a CUDA trace, each seen there.  That launch wrote the returned y (same
+         storage, version and rows), and the committed receipts and z are its buffers.  Only views may run after it.  The
+         window is refused (`window_refusals`) by a host-only trace, by device work the trace places at no host call (a
+         kernel torch attached to no op goes to the launch call with its CUPTI correlation id, `LAUNCH_CALLS`), and by a
+         GEMM of a linear's (K, N) outside every call.  It misses a kernel named like a pinned one (CUPTI gives names, not
+         code), what the fused kernel itself computes (a GEMM inside it, or a y copied from an input it was handed: the
+         kernel's SASS gate), a GEMM written as elementwise ops and a reduction, which reaches y only through such a
+         kernel, and a GEMM in another process.
          The prover writes the ledger, so it stops a silent beside path, not a forged ledger.
   tie    drawn units (`tie_refusal`).  The unit's 32 z rows open against the call's committed z table, its cells are the
          unit's reference z, and each served y row is dequant(z) bit for bit (`dequant`, `engine.int8_exact.dequantize`'s
@@ -36,6 +39,7 @@ import hashlib
 import json
 import re
 import sys
+from collections import Counter
 from pathlib import Path
 from typing import Any, Iterator, Mapping, Sequence
 
@@ -61,6 +65,12 @@ GEMM_OPS = re.compile(r"^aten::(_int_mm|mm|matmul|bmm|addmm|addmv|mv|dot|vdot|ba
                       r"linalg_multi_dot|_weight_int\d+pack_mm\w*)$")
 #: device kernels that are GEMMs (cuBLAS, cuBLASLt, CUTLASS and their tensor-core tilings), wherever they were launched from
 GEMM_KERNELS = re.compile(r"(?i)(gemm|gemv|imma|hmma|wgmma|cutlass|cublas|xmma|nvjet|splitk|tensorop)")
+#: the runtime and driver calls that put work on a device (cudaLaunchKernel, cuLaunchKernelEx, cudaGraphLaunch,
+#: cudaMemcpyAsync, cuMemsetD32, ..): device work torch attached to no op is placed at the one whose CUPTI correlation id
+#: it carries
+LAUNCH_CALLS = re.compile(r"^cu(da)?(\w*Launch|Memcpy|Memset)\w*$")
+#: the device activities the ledger places (kineto's names; None where the trace names none)
+DEVICE_WORK = (None, "kernel", "gpu_memcpy", "gpu_memset")
 #: ops that make views or fresh allocations, so write no existing buffer: the only ops that may run in a call after its
 #: fused launch.  A write is a childless dispatcher op (``ns::name``; `aten::to` with no `_to_copy` under it returned its
 #: input) not in this set, or an op with one under it; the runtime's own events (``cudaLaunchKernel``, autograd's
@@ -195,6 +205,7 @@ def ledger_of(events: Sequence[Any], meta: Mapping[int, Mapping[str, Any]], devi
     (inside its fused launch's range) or ``after_fused`` (after that range closed); of the recorder's reads (`READ_RANGE`)
     only GEMM launches."""
     evs = sorted(filter(_on_host, events), key=lambda e: (e.time_range.start, -e.time_range.end))
+    extra, unattributed = _orphans(events, evs)
 
     def gemm_op(e) -> bool:
         return bool(GEMM_OPS.match(e.name)) and not any(GEMM_OPS.match(d.name) for d in _descendants(e))
@@ -204,18 +215,18 @@ def ledger_of(events: Sequence[Any], meta: Mapping[int, Mapping[str, Any]], devi
         if gemm_op(e):
             under_gemm.update(id(d) for d in _descendants(e))
             under_gemm.add(id(e))
+    def kernels_of(e) -> list[str]:
+        return [k.name for k in (getattr(e, "kernels", ()) or ()) if not k.name.startswith("verity/")] + extra.get(id(e), [])
+
     launches: list[tuple[Any, str, str | None]] = []
     for e in evs:
         if gemm_op(e):
             launches.append((e, "op", None))
         if id(e) not in under_gemm:
-            for k in getattr(e, "kernels", ()) or ():
-                if GEMM_KERNELS.search(k.name) and not k.name.startswith("verity/"):
-                    launches.append((e, "kernel", k.name))
+            for k in kernels_of(e):
+                if GEMM_KERNELS.search(k):
+                    launches.append((e, "kernel", k))
     seq = {(id(e), kind, k): n for n, (e, kind, k) in enumerate(launches)}
-
-    def kernels_of(e) -> list[str]:
-        return [k.name for k in (getattr(e, "kernels", ()) or ()) if not k.name.startswith("verity/")]
 
     def writes(e) -> bool:
         if e.cpu_children:
@@ -264,8 +275,37 @@ def ledger_of(events: Sequence[Any], meta: Mapping[int, Mapping[str, Any]], devi
             d["kn"] = _kn(e.name, e.input_shapes or [])
         outside.append(d)
     return {"schema": LEDGER, "device": device, "gemm_launches": len(launches), "calls": calls, "outside": outside,
+            "unattributed": [{"name": k, "count": n, "gemm": bool(GEMM_KERNELS.search(k))}
+                             for k, n in sorted(Counter(unattributed).items())],
             "trace": "torch.profiler: dispatcher ops" + (" and CUDA kernels (CUPTI)" if device == "cuda" else ""),
             "gemm_rule": {"ops": GEMM_OPS.pattern, "kernels": GEMM_KERNELS.pattern}}
+
+
+def _orphans(events: Sequence[Any], host: Sequence[Any]) -> tuple[dict[int, list[str]], list[str]]:
+    """Device kernels torch attached to no op.  Its `kernels` link a kernel only to the synchronous host op whose id is the
+    kernel's ``linked_correlation_id``, and a raw driver-API launch (`receipts.Cubin`) in a bare range carries none.  Each
+    such kernel, copy or set (`DEVICE_WORK`) goes to the host call (`LAUNCH_CALLS`) with its CUPTI correlation id, or else
+    its flow id: ({id(host call): [names]}, names of the device work no host call put there)."""
+    ops = {e.id for e in host if not getattr(e, "linked_correlation_id", 0) and not getattr(e, "is_async", False)
+           and getattr(e, "activity_type", None) != "overhead"}
+    calls: dict[tuple[str, int], Any] = {}
+    for e in host:
+        if LAUNCH_CALLS.match(e.name):
+            calls.setdefault(("id", e.id), e)
+            if getattr(e, "flow_id", 0):
+                calls.setdefault(("flow", e.flow_id), e)
+    extra: dict[int, list[str]] = {}
+    lost: list[str] = []
+    for d in events:
+        if (_on_host(d) or getattr(d, "is_user_annotation", False) or getattr(d, "activity_type", None) not in DEVICE_WORK
+                or d.name.startswith("verity/") or (getattr(d, "linked_correlation_id", 0) or None) in ops):
+            continue
+        h = calls.get(("id", d.id)) or (calls.get(("flow", d.flow_id)) if getattr(d, "flow_id", 0) else None)
+        if h is None:
+            lost.append(d.name)
+        else:
+            extra.setdefault(id(h), []).append(d.name)
+    return extra, lost
 
 
 # -- the checks ---------------------------------------------------------------------------------------------------------
@@ -284,9 +324,11 @@ def _same_buffer(a: Mapping[str, Any] | None, b: Mapping[str, Any] | None) -> bo
             and (a["storage"], a["ptr"], a["nbytes"], a["version"]) == (b["storage"], b["ptr"], b["nbytes"], b["version"]))
 
 
-def call_refusal(c: Mapping[str, Any], e: Mapping[str, Any] | None, pinned: Sequence[str] = ()) -> str | None:
+def call_refusal(c: Mapping[str, Any], e: Mapping[str, Any] | None, pinned: Sequence[str] = (),
+                 device: str = "cuda") -> str | None:
     """Why call `c`'s ledger entry `e` doesn't show its served y as its receipt kernel's own output; None when it does.
-    `pinned`: the window's fused kernels, the only ones a fused launch may declare."""
+    `pinned`: the window's fused kernels, the only ones a fused launch may declare.  On a `device` trace ("cuda") each
+    declared kernel must be seen in the fused range; a host trace sees no kernel."""
     if e is None:
         return _why(c, f"the record has no launch ledger entry ({LEDGER}): what produced the served y is not recorded")
     evs = e["events"]
@@ -312,6 +354,10 @@ def call_refusal(c: Mapping[str, Any], e: Mapping[str, Any] | None, pinned: Sequ
     alien = [k for k in seen if k not in f["kernels"]]
     if alien:
         return _why(c, f"kernel {alien[0]} inside the fused launch is not one it declares ({', '.join(f['kernels']) or 'none'})")
+    unseen = [k for k in f["kernels"] if k not in seen] if device == "cuda" else []
+    if unseen:
+        return _why(c, f"the fused launch's kernel {unseen[0]} never ran in its range: the device trace has no such kernel "
+                       "there")
     busy = [x for x in evs if x["fused"] and x["kind"] == "op" and x.get("writes")]
     if busy:
         return _why(c, f"{busy[0]['name']} ran inside the fused launch: it is one raw launch, in which only its declared "
@@ -345,21 +391,29 @@ def trace_refusals(calls: Sequence[Mapping[str, Any]], ledger: Mapping[str, Any]
                    pinned: Sequence[str] = ()) -> dict[int, str]:
     """Each call's refusal from the ledger (`call_refusal`); call i's entry is the one whose key is ``keys[i]``."""
     by_key = {json.dumps(e.get("key")): e for e in (ledger or {}).get("calls", [])}
+    device = (ledger or {}).get("device", "cuda")
     out = {}
     for i, c in enumerate(calls):
-        why = call_refusal(c, by_key.get(json.dumps(keys[i])) if ledger else None, pinned)
+        why = call_refusal(c, by_key.get(json.dumps(keys[i])) if ledger else None, pinned, device)
         if why:
             out[i] = why
     return out
 
 
-def window_refusals(ledger: Mapping[str, Any] | None, shapes: Sequence[tuple[int, int]]) -> list[str]:
-    """GEMM launches outside every call whose (K, N) is a credited linear's: a linear's GEMM the calls don't show."""
+def window_refusals(ledger: Mapping[str, Any] | None, shapes: Sequence[tuple[int, int]], host_ok: bool = False) -> list[str]:
+    """The ledger's own refusals: a host-only trace (unless `host_ok`, a window served on the host), device work the trace
+    can't place in or out of a call, and GEMM launches outside every call whose (K, N) is a credited linear's."""
     if not ledger:
         return []
+    out = []
+    if ledger.get("device") != "cuda" and not host_ok:
+        out.append(f"{TAG}: window: the launch ledger is a {ledger.get('device')} trace, which sees no device kernel, so a "
+                   "raw-launched GEMM is invisible to it; credit needs a CUDA trace")
+    out += [f"{TAG}: window: {x['name']} ({x['count']} launches{', a GEMM' if x['gemm'] else ''}) ran with no host call "
+            "the trace places in or out of a call" for x in ledger.get("unattributed", [])]
     kn = {tuple(x) for x in shapes}
-    return [f"{TAG}: window: {x['name']} call #{x['seq']} with a linear's (K, N) = {tuple(x['kn'])} ran outside every call's "
-            "range" for x in ledger.get("outside", []) if x.get("kn") and tuple(x["kn"]) in kn]
+    return out + [f"{TAG}: window: {x['name']} call #{x['seq']} with a linear's (K, N) = {tuple(x['kn'])} ran outside every "
+                  "call's range" for x in ledger.get("outside", []) if x.get("kn") and tuple(x["kn"]) in kn]
 
 
 # -- order: the challenger's log ----------------------------------------------------------------------------------------
@@ -529,14 +583,15 @@ def tie_refusal(c: Mapping[str, Any], u: int, opening, z_rows_: Mapping[int, byt
 
 def verdict(window: str, calls: Sequence[Mapping[str, Any]], counts: Sequence[int], coins: Mapping[str, Any] | None,
             ledger: Mapping[str, Any] | None, keys: Sequence[Any] | None = None, tie: Sequence[str] = (),
-            pinned: Sequence[str] = ()) -> dict[str, Any]:
-    """The gate over a window: per call, the order and trace refusals; the window's own (order, unattributed GEMMs, and
-    `tie`, the drawn units' tie refusals).  `pinned` names the window's fused kernels.  A refused call credits nothing; a
-    window refusal refuses every call.  Only calls with admitted rows are reported."""
+            pinned: Sequence[str] = (), host_ok: bool = False) -> dict[str, Any]:
+    """The gate over a window: per call, the order and trace refusals; the window's own (order, the ledger's
+    `window_refusals`, and `tie`, the drawn units' tie refusals).  `pinned` names the window's fused kernels; `host_ok`
+    takes a host-only ledger (a window served on the host).  A refused call credits nothing; a window refusal refuses
+    every call.  Only calls with admitted rows are reported."""
     order, w_order = order_refusals(window, calls, coins)
     trace = trace_refusals(calls, ledger, list(keys) if keys is not None else [None] * len(calls), pinned)
     shapes = sorted({(int(c["k"]), int(c["n"])) for c in calls})
-    win = [*w_order, *window_refusals(ledger, shapes), *tie]
+    win = [*w_order, *window_refusals(ledger, shapes, host_ok), *tie]
     credited = [i for i, k in enumerate(counts) if k]
     refused = {i: [x for x in (order.get(i), trace.get(i)) if x] for i in credited}
     refused = {i: r for i, r in refused.items() if r or win}
@@ -573,7 +628,8 @@ def main(argv: list[str] | None = None) -> int:
     return 0 if v["ok"] else 1
 
 
-__all__ = ["CALL_RANGE", "FUSED_RANGE", "GEMM_KERNELS", "GEMM_OPS", "LEDGER", "READ_RANGE", "ROUND_FORM_CALL", "ROUND_FORM_STEP", "Recorder",
+__all__ = ["CALL_RANGE", "DEVICE_WORK", "FUSED_RANGE", "GEMM_KERNELS", "GEMM_OPS", "LAUNCH_CALLS", "LEDGER", "READ_RANGE",
+           "ROUND_FORM_CALL", "ROUND_FORM_STEP", "Recorder",
            "TAG", "VERDICT", "call_refusal", "dequant", "ledger_of", "order_refusals", "row_digests", "step_trees",
            "successors", "tensor_facts", "tie_refusal", "trace_refusals", "tree_leaves", "tree_root", "verdict",
            "window_refusals", "z_rows", "z_table"]

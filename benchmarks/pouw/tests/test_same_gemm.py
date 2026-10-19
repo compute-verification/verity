@@ -9,9 +9,12 @@ beside path under a round per call keeps the order, so only the trace refuses it
 writes y, z and the H1 receipts, which are `receipts.gated_receipts`' bit for bit; a round per call, z committed after its
 coin) is accepted.  A fused window that runs a second GEMM in the call, inside the fused launch, or outside every call, a
 GEMM as elementwise ops inside the launch, a write after it, a returned y that isn't the launch's buffer, receipts from
-a separate pass, or a kernel the window doesn't pin is refused, each with its reason.  Seeded coins, a non-live commitment, a release log out of order and a
-round tree that doesn't recompute refuse the window.  A drawn unit's z rows open against its z table, its cells are the
-unit's reference z, and its served rows are dequant(z); a moved served row or z cell is refused."""
+a separate pass, or a kernel the window doesn't pin is refused, each with its reason.  Seeded coins, a non-live
+commitment, a release log out of order and a round tree that doesn't recompute refuse the window, and so does a host-only
+trace of a window served on a device.  On a CUDA-shaped trace (stub events, as torch reports a raw driver launch), the
+fused kernel is placed at its `cuLaunchKernel` by correlation or flow id; one placed nowhere refuses its call and the
+window, and a raw GEMM launch beside it refuses the call.  A drawn unit's z rows open against its z table, its cells are
+the unit's reference z, and its served rows are dequant(z); a moved served row or z cell is refused."""
 from __future__ import annotations
 
 import hashlib
@@ -229,9 +232,10 @@ class _Window:
         self.prev = (table.root.hex(), root_r.hex())
         return out
 
-    def verdict(self, coins: dict | None = None, ledger: dict | None | str = "own", pinned=(KERNEL,)) -> dict:
+    def verdict(self, coins: dict | None = None, ledger: dict | None | str = "own", pinned=(KERNEL,), host_ok=True) -> dict:
         return SG.verdict(WINDOW, self.calls, [c["selected"] for c in self.calls], self.coins if coins is None else coins,
-                          self.ledger if ledger == "own" else ledger, keys=list(range(len(self.calls))), pinned=pinned)
+                          self.ledger if ledger == "own" else ledger, keys=list(range(len(self.calls))), pinned=pinned,
+                          host_ok=host_ok)
 
 
 @pytest.fixture(scope="module")
@@ -270,6 +274,65 @@ def test_a_device_copy_of_a_range_is_not_the_range(fused):
     ghosts = [SimpleNamespace(name=e.name, device_type=torch.autograd.DeviceType.CUDA, cpu_children=[], kernels=[],
                               time_range=e.time_range, input_shapes=[]) for e in evs if e.name.startswith("verity/")]
     assert ghosts and SG.ledger_of(evs + ghosts, fused.rec.meta, "cpu") == fused.ledger
+
+
+def test_a_host_trace_refuses_a_window_served_on_a_device(fused):
+    v = fused.verdict(host_ok=False)
+    assert not v["ok"] and v["refused"] == [] and v["gated_counts"] == [0] * STEPS * LINEARS
+    assert v["window"] == ["credit.same_gemm: window: the launch ledger is a cpu trace, which sees no device kernel, so a "
+                           "raw-launched GEMM is invisible to it; credit needs a CUDA trace"]
+
+
+def _ev(name: str, start: float, end: float, *children, device: str = "CPU", id: int = 0, flow: int = 0,
+        activity: str | None = None, kernels: tuple[str, ...] = ()):
+    return SimpleNamespace(name=name, time_range=SimpleNamespace(start=start, end=end), cpu_children=list(children),
+                           device_type=getattr(torch.autograd.DeviceType, device), id=id, linked_correlation_id=0,
+                           flow_id=flow, is_async=False, is_user_annotation=activity == "gpu_user_annotation",
+                           activity_type=activity, kernels=[SimpleNamespace(name=k) for k in kernels], input_shapes=[])
+
+
+_GEMM = "cutlass_80_tensorop_s8i8gemm_128x128"
+
+
+def _cuda_trace(link: str) -> list:
+    """One call on a CUDA trace as torch reports a raw driver launch (r20261019-061906-6735): the fused range holds the host
+    `cuLaunchKernel`, and the kernel, attached to no op, carries its correlation id (`link` 'id'), only its flow id
+    ('flow') or neither ('lost'); 'second' adds a raw GEMM launch in the call before the fused range."""
+    launch = _ev("cuLaunchKernel", 3, 4, id=501, flow=77, activity="cuda_driver")
+    fused = _ev(f"{SG.FUSED_RANGE}0", 2, 5, launch, id=11, activity="user_annotation")
+    pre = [_ev("cuLaunchKernel", 1, 1.5, id=502, activity="cuda_driver")] if link == "second" else []
+    call = _ev(f"{SG.CALL_RANGE}0", 0, 6, *pre, fused, id=10, activity="user_annotation")
+    kid = {"id": 501, "second": 501, "flow": 900, "lost": 901}[link]
+    dev = [_ev(KERNEL, 10, 11, device="CUDA", id=kid, flow=77 if link == "flow" else 0, activity="kernel")]
+    if link == "second":
+        dev.append(_ev(_GEMM, 8, 9, device="CUDA", id=502, activity="kernel"))
+    ghosts = [_ev(e.name, 7, 12, device="CUDA", activity="gpu_user_annotation") for e in (call, fused)]
+    return [call, *pre, fused, launch, *dev, *ghosts]
+
+
+_Y = {"storage": 1, "ptr": 1, "nbytes": 2 * M * N, "version": 1, "rows": ["00"] * M}
+_R = {"storage": 2, "ptr": 2, "nbytes": 4 * UNITS * WORDS, "version": 1}
+_META = {0: {"key": 0, "fused": {"kernels": [KERNEL], "outs": {"y": _Y, "receipts": _R}}, "served": _Y,
+             "committed": {"receipts": _R}}}
+
+
+@pytest.mark.parametrize("link,why,window", [
+    ("id", None, []),
+    ("flow", None, []),
+    ("lost", f"the fused launch's kernel {KERNEL} never ran in its range: the device trace has no such kernel there",
+     [f"credit.same_gemm: window: {KERNEL} (1 launches) ran with no host call the trace places in or out of a call"]),
+    ("second", f"a second GEMM in the call: {_GEMM} call #0 beside the fused launch", []),
+])
+def test_a_raw_launch_on_a_cuda_trace_is_placed_at_its_launch_call(link, why, window):
+    """torch attaches a kernel only to the op whose id is its linked correlation id, so a raw launch's kernel is attached to
+    nothing; the ledger places it at the `cuLaunchKernel` it carries the correlation (or flow) id of, or refuses."""
+    ledger = SG.ledger_of(_cuda_trace(link), _META, "cuda")
+    got = SG.call_refusal({"linear": 0, "step": 0, "module": "l0"}, ledger["calls"][0], [KERNEL], ledger["device"])
+    assert (got and got.removeprefix("credit.same_gemm: linear 0 (l0) step 0: ")) == why
+    assert SG.window_refusals(ledger, [(K, N)]) == window
+    if link in ("id", "flow"):
+        assert [(x["name"], x["kernel_of"], x["fused"]) for x in ledger["calls"][0]["events"] if x["kind"] == "kernel"] \
+            == [(KERNEL, "cuLaunchKernel", True)]
 
 
 def test_record_without_a_ledger_is_refused(fused):
