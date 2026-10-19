@@ -3,10 +3,11 @@ it, `inplace_gate.llama8b`): the bare read over a contiguous copy (`rb_read`), t
 (`rs_mapped_read`), the receipts alone over the copy (`rs_sketch16_receipts`) and through the map (`rs_mapped_receipts`),
 the tree hashed after them by reader.cu's kernels (`InPlace.tree`) and the fused pass (`InPlace.fused`), each `reps`
 times. The receipts alone against the read say how much of the sketch is the read; mapped against contiguous, how much
-is the store's layout. Then one launch of each between cudaProfilerStart and Stop, for `ncu --profile-from-start off`.
-Writes OUT/profile_pass.json.
+is the store's layout. Then one launch of each of --profiled (default every part) between cudaProfilerStart and Stop,
+for `ncu --profile-from-start off`: ncu serializes the fused pass's two kernels, so it times the receipts' producer
+alone and then the consumer alone, the leaves and tree over finished receipts. Writes OUT/profile_pass.json.
 
-    python profile_pass.py --lib session.so --out OUT [--reps 10] [--no-timing]
+    python profile_pass.py --lib session.so --out OUT [--reps 10] [--no-timing] [--profiled read_mapped,tree]
 """
 from __future__ import annotations
 
@@ -36,6 +37,7 @@ def main() -> int:
     ap.add_argument("--reps", type=int, default=10)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--no-timing", action="store_true")
+    ap.add_argument("--profiled", default="read_contiguous,read_mapped,receipts_contiguous,receipts_mapped,tree,kernels")
     a = ap.parse_args()
     a.out.mkdir(parents=True, exist_ok=True)
     rng = np.random.default_rng(a.seed)
@@ -80,11 +82,12 @@ def main() -> int:
                                                                     "kernels")}
         out["over_read_contiguous"] = {k: med[k] / med["read_contiguous"] for k in med}
         print(json.dumps({k: out[k] for k in ("median_ms", "GBps", "over_read_contiguous")}), flush=True)
-    for f in parts.values():
+    profiled = [parts[k] for k in a.profiled.split(",")]
+    for f in profiled:
         f()
     torch.cuda.synchronize()
     torch.cuda.profiler.start()
-    for f in parts.values():
+    for f in profiled:
         f()
     torch.cuda.synchronize()
     torch.cuda.profiler.stop()

@@ -6,12 +6,13 @@
 # kept level and opening against the driver's reference), the in-place pass of both interleaved at 8B (`ab_pass.py`), and
 # the served pass (`pass_bench.py`: rs_pass and the chained passes, each root against reader.cu's unfused tree) after,
 # before, after. A gate that fails ends the lease before anything is timed. STEPS=prof: `profile_pass.py`'s timings of
-# both builds, then one launch of each kernel under ncu (application replay, clocks as they run). Results go to $OUT.
+# both builds, then one launch of each kernel under ncu (kernel replay, clocks as they run). Results go to $OUT.
 #
 #   git show origin/main:benchmarks/remote_session/session.cu > /tmp/session_base.cu
 #   research run --on vy-dc-h200 --project verity --campaign hash-loop --source . --cwd source --timeout 60m \
 #     --send /tmp/session_base.cu --env GPU_LEASE_WHO=kernels-bwkernels -- bash benchmarks/hash/bwkernels/ab.sh
-# LEASE_ARGS (--preemptible on vy-nebius-2), MAXMIN (the lease, default 40), STEPS (default "gate ab pb"), ROUNDS, REPS.
+# LEASE_ARGS (--preemptible on vy-nebius-2), MAXMIN (the lease, default 40), STEPS (default "conf gate ab pb"), ROUNDS,
+# REPS.
 set -uo pipefail
 export O=${OUT:?}
 mkdir -p "$O"
@@ -73,10 +74,11 @@ gpu-lease 1 --wait --max-min "${MAXMIN:-40}" ${LEASE_ARGS:-} -- bash -c '
             done
             NCU=$(command -v ncu || echo "$CUDA_HOME/bin/ncu")
             for k in after before; do
-              "$NCU" --profile-from-start off --replay-mode application --clock-control none \
-                -k "regex:^(read_kernel|mapped_read_kernel|sketch16_receipts_kernel|mapped16_receipts_kernel|mapped16_pass_kernel|mapped_consumer_kernel|leaves_kernel)" \
+              # its own session: on an error ncu signals the process group of its target, which would end this lease
+              setsid -w "$NCU" --profile-from-start off --clock-control none \
+                -k "regex:^(read_kernel|mapped_read_kernel|sketch16_receipts_kernel|mapped16_receipts_kernel|mapped16_pass_kernel|mapped_consumer_kernel|leaves_kernel|pads_kernel|level_kernel)" \
                 --section SpeedOfLight --section MemoryWorkloadAnalysis --section Occupancy --section WarpStateStats \
-                --section LaunchStats --section ComputeWorkloadAnalysis -o "$O/ncu_$k" \
+                --section LaunchStats --section ComputeWorkloadAnalysis --section SchedulerStats -o "$O/ncu_$k" \
                 "$PY" benchmarks/hash/bwkernels/profile_pass.py --lib "$B/$k.so" --out "$O/ncu_$k.d" --no-timing \
                 > "$O/ncu_$k.log" 2>&1
               echo "ncu $k rc $?" >> "$O/rc.txt"
