@@ -110,6 +110,7 @@ theorem trial_rows_leZC {t' : ℝ} (ht : 0 ≤ t') (k Rw : ℕ) (c : vb.Pos) [No
         (trialGZC A Hs P planZ tab vb R τ c k Rw) (trialStratZC A Hs P planZ tab vb R τ c k Rw) := by
     refine prob_mono (fun e he => ?_) _ _
     obtain ⟨-, hex⟩ := he
+    show ∃ x y, rowsOutZC A Hs P planZ tab vb R τ wo c e = some (x, y) ∧ x ≠ y ∧ Hc x = Hc y
     unfold rowsOutZC
     rw [dite_eq_left_of_eq_true (eq_true hex)]
     obtain ⟨h1, hne⟩ := Classical.choose_spec hex
