@@ -1,7 +1,7 @@
-"""A7's check 3 under zero knowledge: each receipt the remote session draws goes through the remote bandwidth audit's
-opening unit (`verity.ml.commitments.gates.block_check`, PROTOCOL.md §8's checks 1-3 and 5 as one unit) in place of its
-opening, so the verifier holds the drawn block, its payload, its receipt leaf, the step's plan row and every salt and path
-only inside the unit, and reads the unit's verdict.
+"""Check 3 under zero knowledge: each receipt the remote session draws goes through the remote bandwidth audit's opening
+unit (`verity.ml.commitments.gates.block_check`, PROTOCOL.md §8's checks 1-3 and 5 as one unit) in place of its opening,
+so the verifier holds the drawn block, its payload, its receipt leaf, the step's plan row and every salt and path only
+inside the unit, and reads the unit's verdict.
 
 For a draw (pass i of window t at step s, position p, block j = plan_i[p]) the prover stages one `BlockOpeningCheck`:
 the receipt leaf on its path to the pass's receipt root and the plan row holding j at p, the block decoding to its
@@ -14,25 +14,23 @@ and depths), and its verdict row; it holds the one witness row it doesn't open, 
 of step s by ``b || c`` (`plan_link`). No block, payload, receipt leaf or plan is opened.
 
 `Session` is `audit.Session` with check 3's outcome in place of `verify`'s openings (`drawn`, `decide`), and `Store` is
-`audit.Store` keeping the payloads it appends (the prover's witness). `reference` decides a session by the unit's
-reference on the prover's witness and the same plan link: the stand-in for its proofs in the sessions of A7's negatives.
-A7's run proves them (`a7.check3_audit`)."""
+`audit.Store` keeping the payloads it appends (the prover's witness, `witness`). `check` decides one draw by the unit's
+reference on the prover's arguments and the plan link, and `reference` a session's windows by it: the stand-in for the
+units' proofs where a session isn't proved."""
 from __future__ import annotations
 
 import bisect
+from collections.abc import Sequence
 from dataclasses import dataclass
 from types import SimpleNamespace
-from typing import Sequence
 
-import numpy as np
-
-from verity.core.protocols.remote_bandwidth import audit, codec, receipts
-from verity.core.protocols.remote_bandwidth.receipts import PER_LEAF, Plan
-from verity.ml.commitments import Commitment, CommitmentDomain
+from verity.ml.commitments import Commitment, CommitmentDomain, hm96
 from verity.ml.commitments.gates import block_check as BC
 from verity.ml.commitments.merkle import merkle_depth, tree_levels
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2, row_leaf
-from verity_flock import circuit as FC
+from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2, row_leaf, sha512_row_v2_digest
+
+from . import audit, codec, receipts
+from .receipts import PER_LEAF, Plan
 
 ROWS = receipts.SKETCH_ROWS
 
@@ -42,6 +40,11 @@ def statics(c: codec.Codec, leaf: int, P: int, DR: int, DP: int, DV: int) -> Sim
     most depths DR (receipts), DP (payloads) and DV (values)."""
     return SimpleNamespace(N=c.field.n, C=c.field.c, K=c.rounds, MASKED=int(c.masked), BYTES=codec.BLOCK_BYTES, ROWS=ROWS,
                            LEAF=leaf, P=P, DR=DR, DP=DP, DV=DV)
+
+
+def depth(n: int) -> int:
+    """A unit's D for trees of at most n leaves: their depth, at least 1."""
+    return max(1, merkle_depth(n))
 
 
 @dataclass(frozen=True)
@@ -167,10 +170,13 @@ def witness(d: Draw, ps: audit.Pass, store: Store, plan_row: Sequence[int], S, v
                            list(plan_row), ps.salts[c], pay_salt, tuple(ps.tree.open(c).path), tuple(pay_path), vpath)
 
 
-def commit(name: str, bits: int, words: Sequence[int], salt: bytes) -> bytes:
-    """A row's ``b || c`` under ``salt`` (C-Flock's hm96-sha512/row/v2 commit string)."""
-    port = FC._port(name, -(-bits // 16), bits, False)
-    return FC._commit_strings([port], {name: np.asarray([list(words)], dtype=np.uint16)}, {name: [salt]})[name][0]
+def commit(bits: int, words: Sequence[int], salt: bytes) -> bytes:
+    """A bit row's ``b || c`` under ``salt``: hm96-sha512 over its sha512/row/v2 digest, the row of ``bits`` bits held in
+    ``words`` (u16, low bit first), as the proof service commits a unit's witness row."""
+    if len(words) != -(-bits // 16):
+        raise ValueError(f"a row of {bits} bits is {-(-bits // 16)} u16 words, not {len(words)}")
+    row = b"".join(int(w).to_bytes(2, "little") for w in words)[:-(-bits // 8)]
+    return hm96.SHA512.commit_string(hm96.SHA512.default_key, sha512_row_v2_digest(row, bits), salt)
 
 
 def plan_link(plan_bc: bytes, certified_bc: bytes) -> str | None:
@@ -188,13 +194,14 @@ def check(d: Draw, args: dict, codec_seed: bytes, S, values: Values, plan_salt: 
     v = BC.verdict(BC.opening_check(S, args))
     if v is not None:
         return v
-    return plan_link(commit("plan", 16 * S.P, args["plan"], plan_salt), certified_bc)
+    return plan_link(commit(16 * S.P, args["plan"], plan_salt), certified_bc)
 
 
 def reference(session: Session, store: Store, passes: dict, c3) -> list[audit.Verdict]:
     """Every window of a session whose draws are drawn, decided by `check` on the honest prover's witness: the stand-in
-    for the unit's proofs. Stops at the first rejected window. ``c3`` is `a7.check3_inputs`' (the plan rows, their salts
-    and ``b || c``, the value commitment and the depths)."""
+    for the units' proofs. Stops at the first rejected window. ``c3`` holds the codec, the plan row's P and the depths DR,
+    DP and DV, each step's plan row (``plan_rows``), its salt (``plan_salts``) and certified ``b || c`` (``plan_bcs``), and
+    the value commitment (``values``)."""
     out = []
     for t in range(len(session.windows)):
         fails = []
@@ -206,9 +213,3 @@ def reference(session: Session, store: Store, passes: dict, c3) -> list[audit.Ve
         if not out[-1].accepted:
             break
     return out
-
-
-def depth(n: int) -> int:
-    """A unit's D for trees of at most n leaves: their depth, at least 1."""
-    return max(1, merkle_depth(n))
-
