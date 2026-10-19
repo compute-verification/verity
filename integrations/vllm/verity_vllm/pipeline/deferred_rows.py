@@ -65,6 +65,25 @@ def window_of_record(bundle: str | os.PathLike, row_dir: str, partition_file: st
     return window
 
 
+#: the bytes of the only run root a ``served`` window is taken over: the SHA-512 record's (``frame-v3-sha512`` / ``hm96-sha512``)
+SERVED_ROOT = 64
+
+
+def source(window: dict[str, Any], run_root: str, bundle_manifest_sha256: str) -> dict[str, bool]:
+    """A registration's ``window`` held to the verifier's run root of record ``run_root`` (hex), each check by name; the one-stage
+    audit's (A5's) source check.  A ``stand-in``'s run, ``of`` and ``link`` are `stand_in`'s over the run root and the digest of the
+    bundle's manifest.  A ``served`` window (the in-Commit hook's, `serving_rows.readers`: serving's own commitment, made before any
+    draw) has the run root as its run, which is a SHA-512 root (``sha512``: a ``vllm-v1`` root's is refused), names the commitment
+    that root names (`stand_in`'s ``of``) and carries no stand-in link."""
+    link = stand_in(run_root, bundle_manifest_sha256)
+    if window.get("kind") == "served":
+        return {"kind": True, "run": window.get("run") == run_root, "sha512": len(run_root) == 2 * SERVED_ROOT,
+                "commitment": window.get("commitment") == link["of"]["commitment"],
+                "link": "of" not in window and "link" not in window}
+    return {"kind": window.get("kind") == "stand-in", "run": window.get("run") == run_root, "of": window.get("of") == link["of"],
+            "link": window.get("link") == link["link"]}
+
+
 def opened_weights(r: SimpleNamespace, checkpoint: Any = None, threads: int = 8) -> Callable:
     """The replay's weights provider over the bundle's tensors (and ``checkpoint``'s), opened against the committed weights root."""
     k0 = next(iter(r.programs))
