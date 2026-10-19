@@ -342,7 +342,10 @@ def wake(machine: dict[str, Any], ssh: list[str], *, nebius=None, sleep=time.sle
     try:
         state = (nebius("compute", "instance", "get", "--id", iid).get("status") or {}).get("state")
         if state in ("STOPPED", "STOPPING"):
-            nebius("compute", "instance", "start", "--id", iid, "--async")
+            try:
+                nebius("compute", "instance", "start", "--id", iid, "--async")
+            except ValueError:   # `--async` prints the operation's id, not JSON: the CLI exited 0, so the start was accepted
+                pass
     except (RuntimeError, OSError, ValueError) as e:
         raise Refused(f"{machine['name']} doesn't answer on ssh and couldn't be started through the Nebius API ({e}); with no Nebius "
                       f"credentials here, ask @infra to start {iid}") from None
