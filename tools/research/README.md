@@ -20,6 +20,7 @@ src/research/
 ├── remote.py       --on: machines file, tool/source snapshots, request, claim-by-run-id, exclusive lock, fetch, preservation manifest
 ├── disk.py         --disk-gb admission (--queue): held on the machine while the disk would pass 80%, released at 75%
 ├── mem.py          --mem-gb admission: cgroup limit - in use - live /workspace/ramlock reservations; MemoryNotAvailable
+├── auto.py         --on auto's placement: node 2's Verity share (the queue) or cpu-1's research pool, wherever it starts sooner
 ├── jobuser.py      --job-user: the workload as an unprivileged user in a sandboxed system unit
 ├── env.py          conditions(): the one baseline of an attempt's conditions (source, runtime, hardware, execution); ONE SKU->family map
 ├── store/          the evidence store (`research data`; README.md there is the contract): tool, tools_registry, derivation, attempt,
@@ -291,7 +292,9 @@ share one memory cgroup, and `free` describes the host (vyv-v2cpu3: 946 GB
 host, 256 GB cgroup). The machine admits the run only if the cgroup limit, minus
 what is in use (page cache excluded), minus the not-yet-used part of every live
 reservation in the fleet's `/workspace/ramlock/*.json` (machines.toml
-`ramlock = DIR` overrides it), is at least N. A reservation is live unless its
+`ramlock = DIR` overrides it), is at least N. The reservations count against the
+machine's cgroup (the outermost limited one, a Nebius node's user slice), not the
+run's own session scope, which holds none of them. A reservation is live unless its
 pid is gone or its run is terminal. The run then writes
 `research-<run id>.json` there, and the runner removes it at exit. Otherwise the
 run is refused with `MemoryNotAvailable`, and `refused.json` gives every number.

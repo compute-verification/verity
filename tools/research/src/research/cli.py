@@ -9,7 +9,8 @@
   research run --on auto [--cpus N] [--mem-gb G] [--max-min M | --timeout T] [--wait] -- CMD...   # an agent's suite or build: queued
                                                  # onto vy-nebius-2 from this checkout (kind agent-test: 4 CPUs, 16 GB, 60 min unless given;
                                                  # a suites.py run of named suites: their [tool.verity.tests] worker_gb and timeout_s),
-                                                 # on whole cores of its own, waiting on the node while none are free
+                                                 # on whole cores of its own, waiting on the node while none are free; or, when it starts
+                                                 # sooner there, a slot of vy-nebius-cpu-1's research pool (research/auto.py)
   research run --on MACHINE --project P [--source GITDIR] [--send FILE ...] [--env K=V ...] [--exclusive] [--mem-gb N [--mem-wait S]]
                [--gpus N] [--custody-ttl 6h | --no-custody-r2] [--preflight TOOL] [...] -- CMD...   # run custody on the store's remote is the default
                                                  # where gpu-lease hands out the GPUs, only --gpus N (a FCFS wait for N) shows the run any
@@ -187,7 +188,8 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     ap.add_argument("--runs-dir", default=None, help="registry root (default $RESEARCH_RUNS or ~/.research/runs)")
     ap.add_argument("--on", default=None, metavar="MACHINE",
                     help="run on an existing authorized machine listed in the machines file; `auto`: an agent's suite or build, "
-                         "queued onto vy-nebius-2 from this checkout, 4 CPUs, 16 GB and 60 min unless the run says otherwise")
+                         "queued onto vy-nebius-2 from this checkout, 4 CPUs, 16 GB and 60 min unless the run says otherwise, or "
+                         "a slot of vy-nebius-cpu-1's research pool when it starts sooner there (research/auto.py)")
     ap.add_argument("--project", default=None, help="ownership/resource boundary; required with --on (also recorded by the harness)")
     ap.add_argument("--source", default=None, metavar="GITDIR", help="with --on: ship `git archive HEAD` of this clean checkout; it becomes the source root "
                                                                        "and tree_sha (the workload still runs in its run dir unless --cwd source)")
@@ -215,7 +217,7 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
                          "a clean environment; the runner keeps its records as itself (research.jobuser)")
     ap.add_argument("--pool", default=None, metavar="NAME",
                     help="with --on --source: run in the machine's NAME pool (`research`: any lane's research runs on vy-nebius-cpu-1, "
-                         "at nice 19 beside the merge checks; `proofs`): the run takes a slot there and its cwd is its source, or "
+                         "on cores no check slot holds; `proofs`): the run takes a slot there and its cwd is its source, or "
                          "with --cwd clone a private clone of it, for a job that writes into the tree (a Lean check that rewrites a lock); "
                          "its --timeout counts from taking the slot, after a wait of up to an hour for one")
     ap.add_argument("--as", dest="lane", default=os.environ.get("RESEARCH_LANE"), metavar="LANE",
@@ -290,6 +292,7 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
         return 2
     if getattr(ns, "auto", False):
         _auto_size(ns, harness_opts, command)
+        harness_opts = _auto_spill(ns, harness_opts)
     if ns.claimed:
         _survive_stray_signals()
     mem_reservation = os.environ.pop("RESEARCH_MEM_RESERVATION", None) if ns.claimed else None    # research.mem: this runner's, not the workload's
@@ -962,10 +965,13 @@ THREAD_POOL_VARS = ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"
 
 #: `--on auto`: an agent's suite, build or probe belongs on a node, not its VM (every handle, at Daniel's request, 18 Oct). It is
 #: queued onto vy-nebius-2's Verity share (infra/cluster/descriptions/nebius.toml: whole cores of its own inside its check slots,
-#: never a slot a train waits for; it waits on the node while none are free) as kind AUTO_KIND (infra/cluster/kinds/infra.toml).
-#: Not node 1, whose CPUs trains and lanes' direct runs already oversubscribe (top, 02:53Z), nor cpu-1, whose memory a train and
-#: proofs' Lean slots have reserved (03:01Z).
-AUTO_NODE, AUTO_KIND, AUTO_PROJECT = "vy-nebius-2", "agent-test", "verity"
+#: never a slot a train waits for; it waits on the node while none are free) as kind AUTO_KIND (infra/cluster/kinds/infra.toml),
+#: or spills to a CPU node's pool where it starts sooner (research.auto). Not node 1, whose CPUs trains and lanes' direct runs
+#: already oversubscribe (top, 02:53Z).
+AUTO_KIND = "agent-test"
+#: AUTO_KIND's shape and time where the run gives none (cluster.kinds' cpu-test phase, kinds/infra.toml's max_wall_min): what a
+#: pool slot must give for the run to spill there
+AUTO_CPUS, AUTO_MEM_GB, AUTO_MAX_MIN = 4, 16, 60
 
 
 def _auto_placement(ns: argparse.Namespace, harness_opts: list[str]) -> str | None:
@@ -975,6 +981,8 @@ def _auto_placement(ns: argparse.Namespace, harness_opts: list[str]) -> str | No
     sync, as suites.py does). Fills `ns` and `harness_opts` in place; a reason when it can't."""
     if ns.queue or ns.pool:
         return "it takes no --queue or --pool: it is the queue itself"
+    from .auto import AUTO_NODE, AUTO_PROJECT
+
     if not ns.source:
         top = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True)
         if top.returncode != 0:
@@ -987,8 +995,32 @@ def _auto_placement(ns: argparse.Namespace, harness_opts: list[str]) -> str | No
         harness_opts += ["--cwd", "source"]                      # a suite or build runs in the tree it tests (INF-65), not its run dir
     if ns.queue_kind == "adhoc":
         ns.queue_kind = AUTO_KIND
-    print(f"research run --on auto: queued onto {AUTO_NODE} as {ns.queue_kind}, from {ns.source}", file=sys.stderr)
     return None
+
+
+def _auto_spill(ns: argparse.Namespace, harness_opts: list[str]) -> list[str]:
+    """`--on auto` once sized: queued onto AUTO_NODE as `_auto_placement` set it, or, where research.auto finds it starts sooner,
+    a CPU-phase run of AUTO_KIND sent to a pool instead (`--on MACHINE --pool POOL`, under `--as`, else `auto`), with the
+    kind's time as its --timeout. The harness options it runs with."""
+    from . import auto
+
+    cpus = ns.cpus or AUTO_CPUS
+    mem = ns.mem_gb if ns.mem_gb is not None else AUTO_MEM_GB
+    gpu = ns.gpus or ns.gpu_model or ns.gpu_ids or ns.gpu_host or ns.quiet or ns.queue_phase == "gpu"
+    target, why = None, "a GPU or quiet job, which only the queue books" if gpu else None
+    if why is None:
+        target, why = auto.choose(auto.read(Path(ns.source), cpus), cpus, mem)
+    if target is None:
+        print(f"research run --on auto: queued onto {auto.AUTO_NODE} as {ns.queue_kind}, from {ns.source} ({why})", file=sys.stderr)
+        return harness_opts
+    machine, pool = target
+    if remote.flag_value(harness_opts, "--timeout") is None:
+        harness_opts = [*harness_opts, "--timeout", f"{(ns.max_min or AUTO_MAX_MIN) * 60}"]
+    ns.queue, ns.on, ns.pool, ns.lane = False, machine, pool, ns.lane or "auto"
+    ns.cpus = ns.max_min = ns.mem_gb = ns.question = ns.disk_gb = None     # the slot's cores and mem= are the run's
+    ns.queue_kind, ns.queue_class, ns.queue_phase, ns.preemptible = "adhoc", "work", None, False
+    print(f"research run --on auto: spilled to {machine}'s {pool} pool, from {ns.source} ({why})", file=sys.stderr)
+    return harness_opts
 
 
 def _auto_size(ns: argparse.Namespace, harness_opts: list[str], command: list[str]) -> None:
