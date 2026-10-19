@@ -7,17 +7,30 @@ The accounting layer has two layers. The **logical layer** is where the cryptogr
 `verity.ml.circuits` Program, the one circuit format the sampled proofs, PoUW's compiler and the census all read, at the
 census's grain: its root nodes, the census values they pass each other and each Call's work by kind; its evaluation, a
 Call at a time through `verity.ml.circuits.evaluation`'s kernels; and the hm96-sha512 commitments to its registered
-inputs and to a run's census values, a row per element, so that inputs and rows are words in the word view whether the
-Program is Boolean or not) and `claims` (`audit`: what the trusted
-devices' records and the commitments establish about the prover system, with no device premise). The **physical layer**
-interprets those claims with declared hardware, named assumptions and trusted devices: `physical` (devices, blocks,
-links, certifier ports, the certifiers' cadence and trusted clock, datacenters and fleets, every number an
+inputs, with the occupancy profiles the developer may choose from, and to a run's census values, a row per element, so
+that inputs and rows are words in the word view whether the Program is Boolean or not) and `claims` (`audit`: what the
+trusted devices' records and the commitments establish about the prover system, with no device premise). The **physical
+layer** interprets those claims with declared hardware, named assumptions and trusted devices: `physical` (devices,
+blocks, links, certifier ports, the certifiers' cadence and trusted clock, datacenters and fleets, every number an
 `Assumption`), `memory` (registered stores, challenges, read audits, wipes and the times to serve them) and `account`
-(credit, attribution, where each store was, what could be carried in, the covert budget, the `Ledger` across epochs, and
-`double_credit`, the joint rule for credit from several audits). `binding` places a Program's root nodes on a datacenter
-(where an input enters says where its bits come from), derives its crossings and publishes its `Profile`, the only part
-of the placement the physical layer reads. `plan` is the verifier's public plan for an epoch, and `observe.run` is the
-world: it executes a placement and records what the trusted devices see.
+(credit, attribution, where each store was, what could be carried in, the covert budget, the export, the `Ledger` across
+epochs with its custody check, and `double_credit`, the joint rule for credit from several audits). `binding` places a
+Program's root nodes on a datacenter (where an input enters says where its bits come from), derives its crossings and
+publishes its `Profile`, the only part of the placement the physical layer reads. `plan` is the verifier's public plan
+for an epoch, and `observe.run` is the world: it executes a placement and records what the trusted devices see.
+
+The covert budget is only what goes beyond the committed computation. Beside it, the account reports the export, λ_out
+(`Account.export_bits`): the committed bits that crossed a certified boundary out of a block, by egress port, from the
+declared crossings (`Profile.exported`). It counts as novel information read by its receivers once the declaration's
+certifiers cover every link, so that `Datacenter.uncovered_links()`, the links no trusted device ends (a
+switch-to-switch link, an outside host's link to a switch), is empty; until then it is reported as not applicable, with
+those links named. The registration commits the occupancy profiles the developer may choose from
+(`register(..., profiles=...)`), the plan reads their number from it (`Plan(..., profiles=registration)`), so the
+choice is public advice of log2 of that number, and the audit refuses a declared occupancy that isn't one of them; with
+none registered the one profile is the placement's own. `Ledger.custody(registered_bits)` is the share of the
+registered weights that the ledger's epochs could have carried out: their covert budgets, their exports where charged,
+and a side channel of σ a server over each epoch (`DEDICATED_RACKS`, 1 kbit/s, Daniel's premise that no untrusted
+machine shares a block's rack). Weight custody over a horizon needs that share well below 1.
 
 `examples` is the one place hardware is declared, every number with its source: `rtx_node` (one of our measured
 nodes), `with_dpu` (a BlueField-3 between its NIC and its certifier, with its BMC behind it), `leaf_spine` (nodes behind
