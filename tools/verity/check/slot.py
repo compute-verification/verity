@@ -383,11 +383,6 @@ def held_text(h: dict | None) -> str:
     return f"held by pid {h['pid']}{since}" + (f" ({describe(h)})" if describe(h) else "") + f": {h['cmd']}"
 
 
-def held_by(lock: Path, who_file: Path, now: datetime, proc: Path = Path("/proc")) -> str:
-    """`free`, or who holds ``lock`` (`holding`), as one line."""
-    return held_text(holding(lock, who_file, now, proc))
-
-
 def waiters(line: Path, now: datetime, before: str | None = None) -> list[str]:
     """One line per live waiter in ``line`` (`waiting`)."""
     return [waiter_text(w) for w in waiting(line, now, before)]
