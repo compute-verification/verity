@@ -19,12 +19,18 @@ from pathlib import Path
 
 import pytest
 
-from verity_vllm.config import UsageError
+from verity_vllm.config import MANIFESTS, WORKLOADS, RowEngine, UsageError
+from verity_vllm.engine.profiles.dense_generic import HF_CONFIG_DIR
 from verity_vllm.predict import score as S
 from verity_vllm.predict.build import Unexpressible, build_program, weight_leaves, model_shape
 from verity_vllm.predict.phi import Phi
 
 FIX = Path(__file__).parent / "fixtures"
+GLM53 = "glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager"
+GLM53_B8 = "glm53__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__greedy__eager"
+GLM53_S1 = "glm53__fp8__h200__tp8__b1__i256__o32__mixed__stoch-t0.8-p0.95__eager"
+GLM53_S8 = "glm53__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__stoch-t0.8-p0.95__eager"
+DSV4 = "dsv4-pro__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager"
 RTXPRO6000 = {"compute_capability": [12, 0], "num_sms": 188}
 TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 64, "intermediate_size": 128, "num_attention_heads": 4,
         "num_key_value_heads": 2, "num_hidden_layers": 2, "vocab_size": 256, "rms_norm_eps": 1e-5, "tie_word_embeddings": True,
@@ -33,7 +39,18 @@ STOCH = {"kind": "stochastic", "temperature": 0.8, "top_p": 0.95, "top_k": 0, "s
 
 
 def _phi(cfg: dict, requests: list[dict] | None = None, **kw) -> Phi:
-    return Phi(model={"repo": "org/m", "revision": "r", "hf_config": cfg}, target=dict(RTXPRO6000), workload={"requests": requests or []}, **kw)
+    return Phi(model={"repo": "org/m", "revision": "r", "hf_config": cfg}, workload={"requests": requests or []}, **{"target": dict(RTXPRO6000), **kw})
+
+
+def _row_phi(row: str, case: str, hf_home: Path, rank: int = 0) -> Phi:
+    """A row of record's φ at `rank` as `score.phi_of` makes it, the checkpoint's config.json the package's byte copy of it
+    (`hf_configs/<case>.config.json`)."""
+    w = json.loads((WORKLOADS / f"{row}.json").read_text())
+    cp = Path(S.hf_config_path(str(hf_home), w["model"], RowEngine.of(w).revision))
+    cp.parent.mkdir(parents=True, exist_ok=True)
+    cp.write_bytes((HF_CONFIG_DIR / f"{case}.config.json").read_bytes())
+    phi = S.phi_of({"row": row, "workload": w}, hf_home=str(hf_home))
+    return Phi.from_json({**phi.to_json(), "tp": {**phi.tp, "rank": rank}})
 
 
 @pytest.mark.parametrize("model,digest", [
@@ -97,6 +114,93 @@ def test_tensor_parallel_rank_workload_equals_the_traced_build():
     assert S.predict_workload(phi)["digest"] == "4cd839563c959eee6f1abaf647bd7d771a842cb8940ed5a92443e85e2ca48cd7f5aecfa1f80d8084c276d3c32a59b1dbf36770a18cb8015ec6ebc8c62cb9c1da"
 
 
+@pytest.mark.parametrize("rank", range(8))
+def test_dsa_rank_step_equals_the_record(rank, tmp_path):
+    """GLM-5.3 at TP8 on H200 (block FP8, cc 9.0): each rank's step through the DeepSeek sparse-attention decoder (`predict.dsa`)
+    is the rank's step Program `records.json` pins for the row (its FlashInfer fused all-reduce + RMSNorm, the decode-path sparse
+    MLA, the indexer on its layers, the tuned fused-MoE tile at M = 1)."""
+    r = build_program(_row_phi(GLM53, "GLM53", tmp_path, rank), "step", M=1, pos0=8)
+    assert r.function.startswith("Derived[vLLMStep[DeepseekV32ForCausalLM]]_v1")
+    assert r.digest == json.loads((MANIFESTS / "records.json").read_text())["rows"][GLM53]["programs"][str(rank)]["step"]
+
+
+@pytest.mark.parametrize("wrapper,shape,digest", [
+    ("step", {"M": 8, "pos0": 8}, "6a8ea56b8f7c3f2a4c557d20dd45b86b9eda749f653f4559ee21327ca3bed830254af606c6aee98b123ccc4cb6172fb2283a96be63867331687fa0f5100e4bd2"),
+    ("request", {"LP": 11, "T": 12}, "f22d03019ee5c9324134c394b8628cf3bda5fa89d3e9e04b3fe56faf92e856bc5e05eb057ed2adb327e513dc39fa5c93597bfec0011deab079629e3c974c5bcd"),
+])
+def test_dsa_launch_batch_equals_the_traced_build(wrapper, shape, digest, tmp_path):
+    """GLM-5.3's B8 mixed-arrivals row (no batch invariance) at rank 0, as the Build traced it in r20261017-194958-148e: the step of 8
+    rows, and the first request's Program under its launch batch (its prefill alone, then decodes beside the second request's
+    prefill and decodes), every token-count-dependent selection at the launch's tokens."""
+    r = build_program(_row_phi(GLM53_B8, "GLM53", tmp_path), wrapper, **shape)
+    assert r.digest == digest
+
+
+@pytest.mark.parametrize("row,wrapper,shape,digest", [
+    (GLM53_S1, "step", {"M": 1, "pos0": 8},
+     "24fae34c8de54a0808878316398bcb7228e39fb073c2df31ba00cda2e17da379c8b66a147e5faa6cc1f44ce9fd3fbabe17567af138a97f3e01c361e72df05821"),
+    (GLM53_S8, "step", {"M": 8, "pos0": 8},
+     "a26c43faa02a1efcdfdbf6ed346afaf2d6552bea975592369da898827fe34399d1c4a4e2ea87cf3806f292204d8c805c0481c4ef948d1d7aad5cadf51df96e01"),
+    (GLM53_S8, "request", {"LP": 25, "T": 6},
+     "187d76b491f1dcc9ecdeb87d1e807721ab910d353c2875d2b467a2f43be0af9fd977ab42313d13e1568b115ad1ed7e6fca1b4c66175e70c1bc4afee5e956c35c"),
+])
+def test_dsa_stochastic_equals_the_traced_build(row, wrapper, shape, digest, tmp_path):
+    """GLM-5.3's seeded top-p rows (t0.8 p0.95) at rank 0, as the Build traced them in r20261017-224230-de2d: the B1 step at the single
+    request's constant split count, and the B8 step and second request (under its launch batch) over the derived `splits` Input,
+    the select after the vocabulary's all-gather."""
+    r = build_program(_row_phi(row, "GLM53", tmp_path), wrapper, **shape)
+    assert r.digest == digest
+
+
+def test_dsa_refuses_outside_its_domain(tmp_path):
+    phi = _row_phi(GLM53, "GLM53", tmp_path)
+    with pytest.raises(Unexpressible, match=re.escape("tensor parallel world 2 (TP8, the worlds a Build has traced)")):
+        build_program(Phi.from_json({**phi.to_json(), "tp": {"world": 2, "rank": 0}}), "step")
+    with pytest.raises(Unexpressible, match=re.escape("a target without a device name")):
+        build_program(Phi.from_json({**phi.to_json(), "target": {k: v for k, v in phi.target.items() if k != "device_name"}}), "step")
+    with pytest.raises(Unexpressible, match=re.escape("a call of 257 query rows, a prefill (decode threshold 256 at 8 query heads")):
+        build_program(phi, "step", M=257)
+
+
+def test_the_execution_label_names_the_batch_invariance(tmp_path):
+    """An `eager` row's Programs are of vLLM's default kernels and a `bi-*` row's of the batch-invariant ones, whatever TargetProfile's
+    own default: a target block that leaves `batch_invariant` out takes the label's, and a target or env that says otherwise is
+    refused, never predicted under the label."""
+    assert _phi(TINY).target_profile().batch_invariant and not _phi(TINY, execution="eager").target_profile().batch_invariant
+    phi = _row_phi(GLM53, "GLM53", tmp_path)
+    assert not phi.target_profile().batch_invariant
+    with pytest.raises(Unexpressible, match=re.escape("a target labelled 'bi-eager' (batch invariant True) for the 'eager' row")):
+        build_program(Phi.from_json({**phi.to_json(), "target": {**phi.target, "batch_invariant": True}}), "step")
+    with pytest.raises(Unexpressible, match=re.escape("env VLLM_BATCH_INVARIANT=1 under a target that sets '0'")):
+        build_program(Phi.from_json({**phi.to_json(), "engine": {**phi.engine, "env": {"VLLM_BATCH_INVARIANT": "1"}}}), "step")
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("rank,digest", [
+    (0, "84c39fac2fc2018712751846d53b12b077c6ba8f22b53e95ca24f4c9f541d4724264893b6a8f8b29aa917a46305c740a330f6a9779fa25938c542cc9d2027beb"),
+    (7, "f7b56f581431ed6ff565dd7be13f7cf24d3d12156fbb1b7011188d194be552f82bc3c536cb694b4103e1b9f41a831946d460fe89a00163152e1bfd6cf2765dff"),
+])
+def test_mhc_rank_step_equals_the_traced_build(rank, digest, tmp_path):
+    """DeepSeek-V4-Pro at TP8 on H200 (block FP8, MXFP4 experts, cc 9.0): the first and last rank's step through the hyper-connected
+    decoder (`predict.dsv4`) is the Program the Build traced at 98c10539e (`records.json` has no row for it yet): the mHC pre and
+    post-pre between sublayers, the compressed-attention decode over each layer's opened window, the table and sqrtsoftplus routers,
+    the Marlin experts over the schedule's align keys.  About 25 s a rank, nearly all of it encoding the mHC Definitions' bodies for
+    the digest; no cheaper test reaches this decoder, and the ranks between differ only in the peer order GLM-5.3's ranks pin."""
+    r = build_program(_row_phi(DSV4, "DSV4_PRO", tmp_path, rank), "step", M=1, pos0=8)
+    assert r.function.startswith("Derived[vLLMStep[DeepseekV4ForCausalLM]]_v1")
+    assert r.digest == digest
+
+
+def test_mhc_refuses_outside_its_domain(tmp_path):
+    phi = _row_phi(DSV4, "DSV4_PRO", tmp_path)
+    short = {**phi.hf_config, "compress_ratios": [4] + phi.hf_config["compress_ratios"][1:], "index_topk": 1}
+    with pytest.raises(Unexpressible, match=re.escape("position 7 has 2 compressed rows, more than the indexer's top-1")):
+        build_program(Phi.from_json({**phi.to_json(), "model": {**phi.model, "hf_config": short}}), "step", M=8, pos0=0)
+    cfg = {**phi.hf_config, "compress_ratios": [1] + phi.hf_config["compress_ratios"][1:]}
+    with pytest.raises(Unexpressible, match=re.escape("compress ratios [1] (the compressors: [4, 128]")):
+        build_program(Phi.from_json({**phi.to_json(), "model": {**phi.model, "hf_config": cfg}}), "step")
+
+
 @pytest.mark.parametrize("sampling,M,digest", [
     ({**STOCH}, 8, "740d7f22434aa56824d598e4b66f8223c45546ca6e1428639951e5299b7f1968f209b61903452be424a6f407d6d2197658d39073b97bcdf7539c0a923c38ccda"),
     ({**STOCH, "top_p": 1.0, "splits": 32}, 1, "6529c4fbcbfeecf09393c9e137e3272da8ef54bad1b116c8c0f3f1bb078ef6747e6bc99265b1f3bcfd39d4b5123914a04881ad345361c890bfb387de20a14f49"),
@@ -121,22 +225,22 @@ def test_sampling_follows_the_builds_policy():
 def test_weights_record_follows_the_module_order():
     C = model_shape(TINY)
     names = [n for n, _ in weight_leaves(C)]
-    assert names[:3] == ["model.model.embed_tokens.weight", "model.model.layers.0.self_attn.qkv_proj.weight",
-                         "model.model.layers.0.self_attn.o_proj.weight"]
-    assert "model.lm_head.weight" not in names  # tied: the embedding's leaf
+    assert names[:3] == ["model.embed_tokens.weight", "model.layers.0.self_attn.qkv_proj.weight",
+                         "model.layers.0.self_attn.o_proj.weight"]
+    assert "lm_head.weight" not in names  # tied: the embedding's leaf
     assert len(names) == 1 + 6 * 2 + 1 + 1 + 4 * 2
     shards = [(n.split("layers.0.")[-1], t) for n, t in weight_leaves(C, 2)[:7]]
     assert [(n, t.leaves) for n, t in shards] == [
-        ("model.model.embed_tokens.weight", 128 * 64), ("self_attn.qkv_proj.weight", (2 + 2 * 1) * 16 * 64), ("self_attn.o_proj.weight", 64 * 32),
+        ("model.embed_tokens.weight", 128 * 64), ("self_attn.qkv_proj.weight", (2 + 2 * 1) * 16 * 64), ("self_attn.o_proj.weight", 64 * 32),
         ("mlp.gate_up_proj.weight", 128 * 64), ("mlp.down_proj.weight", 64 * 64), ("input_layernorm.weight", 64), ("post_attention_layernorm.weight", 64)]
     untied = [n for n, _ in weight_leaves(model_shape({**TINY, "tie_word_embeddings": False}))]
-    assert untied.index("model.lm_head.weight") == untied.index("model.model.norm.weight") + 1
+    assert untied.index("lm_head.weight") == untied.index("model.norm.weight") + 1
     biased = [n for n, _ in weight_leaves(model_shape({**TINY, "model_type": "qwen2", "use_sliding_window": False, "sliding_window": 32}))]
-    assert biased[1:4] == ["model.model.layers.0.self_attn.qkv_proj.weight", "model.model.layers.0.self_attn.qkv_proj.bias",
-                           "model.model.layers.0.self_attn.o_proj.weight"]
+    assert biased[1:4] == ["model.layers.0.self_attn.qkv_proj.weight", "model.layers.0.self_attn.qkv_proj.bias",
+                           "model.layers.0.self_attn.o_proj.weight"]
     normed = [n for n, _ in weight_leaves(model_shape({**TINY, "model_type": "qwen3"}))]
-    assert normed[2:5] == ["model.model.layers.0.self_attn.o_proj.weight", "model.model.layers.0.self_attn.q_norm.weight",
-                           "model.model.layers.0.self_attn.k_norm.weight"]
+    assert normed[2:5] == ["model.layers.0.self_attn.o_proj.weight", "model.layers.0.self_attn.q_norm.weight",
+                           "model.layers.0.self_attn.k_norm.weight"]
     moe = weight_leaves(model_shape(json.loads((FIX / "olmoe-1b-7b.config.json").read_text())))
     assert [n.split("layers.0.")[-1] for n, _ in moe[1:10]] == [
         "self_attn.qkv_proj.weight", "self_attn.q_norm.weight", "self_attn.k_norm.weight", "self_attn.o_proj.weight", "mlp.gate.weight",
@@ -145,8 +249,8 @@ def test_weights_record_follows_the_module_order():
     assert [n.split("layers.0.")[-1] for n in gemma[1:9]] == [
         "self_attn.qkv_proj.weight", "self_attn.o_proj.weight", "mlp.gate_up_proj.weight", "mlp.down_proj.weight", "input_layernorm.weight",
         "post_attention_layernorm.weight", "pre_feedforward_layernorm.weight", "post_feedforward_layernorm.weight"]
-    assert gemma.index("model.model.normalizer") == gemma.index("model.model.norm.weight") + 1 == \
-        gemma.index("model.model.layers.0.self_attn.rotary_emb.cos_sin_cache") - 1
+    assert gemma.index("model.normalizer") == gemma.index("model.norm.weight") + 1 == \
+        gemma.index("model.layers.0.self_attn.rotary_emb.cos_sin_cache") - 1
 
 
 @pytest.mark.parametrize("target,kind", [({"compute_capability": [8, 0], "num_sms": 108}, "GemmBias_v1"), (RTXPRO6000, "GemmBias_v2")])
@@ -178,7 +282,11 @@ def test_the_biased_linear_follows_the_targets_rule(target, kind):
     ({**TINY, "hidden_size": 96, "num_attention_heads": 6, "num_key_value_heads": 3}, {"tp": {"world": 2, "rank": 0}},
      "6 query and 3 key/value heads over 2 ranks"),
     ({**TINY, "vocab_size": 250}, {"tp": {"world": 2, "rank": 1}}, "a vocabulary of 250 over 2 ranks"),
-    (TINY, {"tp": {"world": 2, "rank": 0}, "sampling": dict(STOCH)}, "stochastic sampling under tensor parallelism"),
+    (TINY, {"target": {**RTXPRO6000, "batch_invariant": False}}, "a target labelled 'eager' (batch invariant False) for the 'bi-eager' row"),
+    (TINY, {"engine": {"env": {"VLLM_BATCH_INVARIANT": "0"}}}, "env VLLM_BATCH_INVARIANT=0 under a target that sets '1'"),
+    (TINY, {"engine": {"env": {"VLLM_USE_DEEP_GEMM": "0"}}}, "env VLLM_USE_DEEP_GEMM=0 (the switches modelled"),
+    (TINY, {"engine": {"enforce_eager": False}}, "engine arg enforce_eager=False where the 'bi-eager' target applies True"),
+    (TINY, {"engine": {"kv_cache_dtype": "fp8"}}, "engine arg kv_cache_dtype='fp8' (not modelled)"),
 ])
 def test_unexpressible_names_the_fact(cfg, phi_kw, fact):
     with pytest.raises(Unexpressible, match=re.escape(fact)):
@@ -198,14 +306,18 @@ def test_score_never_writes_into_a_rows_root(tmp_path):
     S._refuse_inside(str(tmp_path / "out" / "score.json"), [str(rows)])
 
 
-def test_no_record_path_module_reads_the_predictor():
-    """The Build, Match and Commit never import `verity_vllm.predict`; the CLI's command table names it as a string only, and the
-    Build's input trace lists the package as a forbidden input."""
+def test_the_record_path_reaches_the_predictor_only_through_a_switched_rows_aot_build():
+    """No module outside `verity_vllm.predict` imports it: the record path runs it only as `predict emit`, the derive of a switched
+    row's AOT Build (`row_tp.TpRow.derive`, under `config_record.aot_of`; `tests/pipeline/test_tp_build_width.py`), and the trace
+    that checks it lists the package as a forbidden input."""
     from verity_vllm.program.frontend import inputs_trace
     pkg = Path(S.__file__).resolve().parents[1]
     pat = re.compile(r"^\s*(from|import)\s+(verity_vllm\.predict|\.+predict)\b|import_module\([^)]*predict", re.M)
     hits = [str(p.relative_to(pkg)) for p in pkg.rglob("*.py") if "predict" not in p.relative_to(pkg).parts[:1] and pat.search(p.read_text())]
     assert hits == []
+    runs = [str(p.relative_to(pkg)) for p in pkg.rglob("*.py") if "predict" not in p.relative_to(pkg).parts[:1]
+            and re.search(r"""cli\(\s*["']predict["']""", p.read_text())]
+    assert runs == ["pipeline/row_tp.py"]
     assert any(m in str(Path(S.__file__).resolve()) for m in inputs_trace._FORBIDDEN_MARKERS)
 
 

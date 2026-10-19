@@ -8,7 +8,7 @@ from collections.abc import Iterator
 
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns.geometry import is_int, is_row_major, sub_rows
-from verity_vllm.observe.fold.patterns.ops import base_op, op_name, triton_name
+from verity_vllm.observe.fold.patterns.ops import base_op, bound_args, op_name, triton_name
 from verity_vllm.observe.fold.patterns.resolutions import hint_of, unsupported
 from verity_vllm.observe.fold.resolver import PerRow, Resolution, Shared, StepContext, Transparent, Unsupported
 from verity_vllm.observe.fold.tree import TreeNode
@@ -43,6 +43,7 @@ COPY_KERNELS = ("Memcpy", "elementwise_kernel", "vectorized_elementwise_kernel",
 FILL_KERNELS = ("FillFunctor", "Memset", "fill_kernel", "vectorized_elementwise_kernel")
 
 SCRATCH_INT_COPIES = "int_copies"   # ctx.scratch key: dst alloc -> (src view, dst view) of integer copies seen this step
+SCRATCH_INT_FILLS = "int_fills"     # ctx.scratch key: alloc -> [(view, value)] of the integer `fill_`s seen this step, in order
 SCRATCH_F32_UPCASTS = "f32_upcasts"  # ctx.scratch key: dst alloc -> (src view, dst view) of exact float widenings (bf16 -> f32)
 
 
@@ -101,6 +102,8 @@ def classify_transparent(node: TreeNode, ctx: StepContext) -> Transparent | Unsu
         return Transparent("alias", (node.id,), hint=hint)
     if b in ALLOC_OPS:
         if outs and all(is_int(o) for o in outs):
+            if b == "aten.fill_":
+                ctx.scratch.setdefault(SCRATCH_INT_FILLS, {}).setdefault(outs[0].alloc, []).append((outs[0], bound_args(node).get("value")))
             return Transparent("noop", (node.id,), hint=f"{hint}: integer metadata allocation")
         if outs and all(o.numel == 0 for o in outs):
             return Transparent("noop", (node.id,), hint=f"{hint}: zero-element allocation")

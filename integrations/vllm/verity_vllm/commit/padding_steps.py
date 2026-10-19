@@ -879,16 +879,3 @@ def _served_tokens_of_record(rd: Path, wp: dict[str, Any]) -> dict[str, list[int
         rid = back.get(r.get("request_id"), f"r{i}")
         out[rid] = [int(x) for x in (r.get("generated_token_ids") or [])]
     return out or None
-
-
-def write_padded_record(res: dict[str, Any], out_dir: str | Path) -> None:
-    od = Path(out_dir)
-    od.mkdir(parents=True, exist_ok=True)
-    with gzip.open(od / "padded_binding_map_p0.json.gz", "wt") as f:
-        json.dump(res["padded_map"], f)
-    (od / "padded_report.json").write_text(json.dumps(res["report"], indent=1, default=str))
-    (od / "padding_step_roots.json").write_text(json.dumps({"schema": "verity/padding-steps/v1", "rules_version": PADDING_RULES_VERSION,
-                                                              "steps": [{"step": ps.step, "root": ps.root.hex(), "merkle_root": ps.merkle_root.hex(),
-                                                                         "n_leaves": ps.n_leaves, "n_bytes": ps.n_bytes, "tensors": len(ps.metas),
-                                                                         "layout_digest": layout_digest(ps.metas).hex()} for ps in res["padding"]]},
-                                                             indent=1))

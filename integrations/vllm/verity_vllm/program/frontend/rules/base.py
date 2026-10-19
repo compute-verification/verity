@@ -139,16 +139,6 @@ class RuleSet:
                 out.append(r)
         return out
 
-    def known_targets(self, mode: str) -> set:
-        s: set = set()
-        for r in self.rules:
-            if r.modes is not None and mode not in r.modes:
-                continue
-            ts = r.targets()
-            if ts is not ANY:
-                s.update(ts)
-        return s
-
     def extended(self, name: str, rules: Iterable[Rule] = (), families: Iterable[Any] = ()) -> "RuleSet":
         return RuleSet(name, list(self.rules) + list(rules), list(self.families) + list(families))
 

@@ -9,6 +9,8 @@ or `indexer-scored`) and the attention's rows (`decode-tokens`, `prefill-tokens`
 are distinct for every combination, and every committer name is unique over all of them."""
 from __future__ import annotations
 
+__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
+
 import copy
 import hashlib
 import itertools
@@ -84,7 +86,7 @@ STEPS = {
 EVERY_STEP = [(hc, ix) + rows for hc, ix, rows in itertools.product(
     ("hc-fused", "hc-split"), ("indexer-short", "indexer-scored"),
     (("decode-tokens",), ("prefill-tokens",), ("decode-tokens", "prefill-tokens")))]
-TARGET_ONLY = {"attn.out.decode", "attn.out.prefill", "attn.o_einsum", "indexer.q_fp8", "indexer.weights", "indexer.logits",
+TARGET_ONLY = {"attn.out.decode", "attn.out.prefill", "attn.gather", "attn.o_einsum", "indexer.q_fp8", "indexer.weights", "indexer.logits",
                "indexer.topk"} | {f"hc_{side}.split.{v}" for side in ("attn", "ffn") for v in ("residual", "post_mix", "comb_mix", "x")}
 
 
@@ -199,13 +201,15 @@ def test_the_row_counts_read_the_positions_tap_and_every_counted_layer_s_config_
     rc = CMAP["row_counts"]
     assert rc["ratios"] == {"NC4": "CSA_R", "NC128": "HCA_R"} and rc["positions"] == "attn.positions"
     counted = {t["id"]: CM.row_count_of(CMAP, t) for t in CMAP["taps"] if CM.row_count_of(CMAP, t)}
-    assert counted == {"attn.compressed_rows.csa": "NC4", "attn.compressed_rows.hca": "NC128", "indexer.k_cache": "NC4"}
+    assert counted == {f"attn.compressed_rows.{p}.{s}": n for p in ("nope", "rope", "scale") for s, n in (("csa", "NC4"), ("hca", "NC128"))
+                       } | {"indexer.k_cache": "NC4"}
     assert CM.row_counts(CMAP, ENV, range(124, 128)) == {"NC4": 1, "NC128": 1}
     assert CM.row_counts(CMAP, ENV, range(0, 3)) == {"NC4": 0, "NC128": 0} and CM.row_counts(CMAP, ENV, range(0, 512)) == {"NC4": 128, "NC128": 4}
     config = copy.deepcopy(CONFIG)
     config["compress_ratios"][3] = 4
     assert [p for p in check(CMAP, RANK0, config, TP) if "row count" in p] == [
-        "tap attn.compressed_rows.hca: layer 3's compress_ratios.3 is 4, not its row count NC128's ratio HCA_R = 128"]
+        f"tap attn.compressed_rows.{p}.hca: layer 3's compress_ratios.3 is 4, not its row count NC128's ratio HCA_R = 128"
+        for p in ("nope", "rope", "scale")]
     cmap = copy.deepcopy(CMAP)
     next(t for t in cmap["taps"] if t["id"] == "attn.positions")["dtype"] = "bfloat16"
     assert "row_counts: positions 'attn.positions' is no tap of one integer per token" in _check(cmap)
@@ -218,8 +222,8 @@ def test_a_commit_read_against_the_map_is_held_to_its_positions_row_counts():
     row extra of its count is in `rows_differ` with its layer, and a step with row-counted names read without its positions, or
     one that commits them read without their leading dimensions, is refused."""
     names = CM.committer_names(CMAP, ENV, phase="decode", routes=DECODE, rank=0)
-    hca = {f"model.layers.{i}.attn/compressed_rows" for i in CM.layer_set(CMAP, "hca", ENV)}
-    csa = "model.layers.2.attn/compressed_rows"
+    hca = {f"model.layers.{i}.attn/compress.{k}" for i in CM.layer_set(CMAP, "hca", ENV) for k in range(3)}
+    csa = "model.layers.2.attn/compress.0"
     assert CM.empty_names(CMAP, ENV, (0, 1, 2, 3), names) == hca and CM.empty_names(CMAP, ENV, range(124, 128), names) == set()
     counted = {n: CM.row_count_of(CMAP, tap) for n, (tap, _layer) in names.items() if CM.row_count_of(CMAP, tap)}
 
@@ -238,9 +242,9 @@ def test_a_commit_read_against_the_map_is_held_to_its_positions_row_counts():
     assert bind(without, range(124, 128))["missing"] == sorted(hca) and bind(list(names), range(124, 128))["empty"] == []
     prefill = range(108, 128)
     assert rows_at(prefill)[csa] == 5 and bind(list(names), prefill)["rows_differ"] == {}
-    short, extra = {**rows_at(prefill), csa: 4}, {**rows_at(prefill), "model.layers.3.attn/compressed_rows": 2}
+    short, extra = {**rows_at(prefill), csa: 4}, {**rows_at(prefill), "model.layers.3.attn/compress.0": 2}
     assert bind(list(names), prefill, short)["rows_differ"] == {csa: (2, 4, 5)}, "one row short of NC4 = 5"
-    assert bind(list(names), prefill, extra)["rows_differ"] == {"model.layers.3.attn/compressed_rows": (3, 2, 1)}, "one extra"
+    assert bind(list(names), prefill, extra)["rows_differ"] == {"model.layers.3.attn/compress.0": (3, 2, 1)}, "one extra"
     assert bind(list(names), prefill, {})["rows_differ"] == {n: (int(n.split(".")[2]), -1, 5 if s == "NC4" else 1) for n, s in counted.items()}
     with pytest.raises(CM.MapError, match="needs its positions"):
         bind(list(names), None)
@@ -415,7 +419,7 @@ def test_every_committer_name_is_unique_over_all_routes():
     list every name the map binds without knowing the step's routes."""
     every = CM.counts(CMAP, ENV)["bound_taps_per_step"]
     for rank in range(TP):
-        assert len(CM.committer_names(CMAP, ENV, rank=rank)) == every == 3204
+        assert len(CM.committer_names(CMAP, ENV, rank=rank)) == every == 3512
 
 
 def test_the_runbook_counts():
@@ -424,28 +428,29 @@ def test_the_runbook_counts():
 
     every = CM.counts(CMAP, ENV)
     assert (every["module_entries"], every["module_types"], every["tap_templates_by_status"]) == (
-        42, 28, {"exists": 5, "tonight": 11, "port": 61, "copy": 2, "committed-only": 0})
+        42, 28, {"exists": 5, "tonight": 11, "port": 69, "copy": 2, "committed-only": 0})
     assert brief(CM.counts(CMAP, ENV, STEPS["decode"])) == (
-        65, 2539, {"exists": 125, "tonight": 518, "port": 1894, "copy": 2, "committed-only": 0}, 122)
+        72, 2786, {"exists": 125, "tonight": 518, "port": 2141, "copy": 2, "committed-only": 0}, 122)
     assert brief(CM.counts(CMAP, ENV, STEPS["decode-scored"])) == (
-        69, 2659, {"exists": 125, "tonight": 548, "port": 1984, "copy": 2, "committed-only": 0}, 242)
+        76, 2906, {"exists": 125, "tonight": 548, "port": 2231, "copy": 2, "committed-only": 0}, 242)
     assert brief(CM.counts(CMAP, ENV, STEPS["prefill"])) == (
-        63, 2415, {"exists": 125, "tonight": 548, "port": 1740, "copy": 2, "committed-only": 0}, 726)
+        71, 2723, {"exists": 125, "tonight": 548, "port": 2048, "copy": 2, "committed-only": 0}, 787)
     assert brief(CM.counts(CMAP, ENV, STEPS["mixed"])) == (
-        70, 2720, {"exists": 125, "tonight": 548, "port": 2045, "copy": 2, "committed-only": 0}, 787)
+        78, 3028, {"exists": 125, "tonight": 548, "port": 2353, "copy": 2, "committed-only": 0}, 848)
 
 
 def test_the_bound_tap_counts():
     """The taps the committer would bind by name on one rank per step, by binder: the four mHC returns of 122 calls plus the final
-    post and head, six MoE planes on every layer, and the rank-tagged partials (embedding, lm_head, wo_b and the MoE runner's)."""
+    post and head, six MoE values on every layer and a hash layer's token ids, and the rank-tagged partials (embedding, lm_head, wo_b
+    and the MoE runner's)."""
     def bound(routes):
         c = CM.counts(CMAP, ENV, routes)
         return c["bound_taps_per_step"], c["bound_taps_per_step_by_binder"]
 
-    common = {"mhc": 490, "moe": 366, "sampler": 1, "tp_partial": 185}
-    assert bound(STEPS["decode"]) == (2539, {**common, "dsv4_attention": 1036, "module_hook": 461})
-    assert bound(STEPS["decode-scored"]) == (2629, {**common, "dsv4_attention": 1096, "module_hook": 491})
-    assert bound(STEPS["prefill"]) == (2385, {**common, "dsv4_attention": 852, "module_hook": 491})
+    common = {"mhc": 490, "moe": 369, "sampler": 1, "tp_partial": 185}
+    assert bound(STEPS["decode"]) == (2786, {**common, "dsv4_attention": 1280, "module_hook": 461})
+    assert bound(STEPS["decode-scored"]) == (2876, {**common, "dsv4_attention": 1340, "module_hook": 491})
+    assert bound(STEPS["prefill"]) == (2693, {**common, "dsv4_attention": 1157, "module_hook": 491})
 
 
 def test_target_only_taps_are_named_on_the_target_only():
@@ -499,13 +504,18 @@ def test_every_module_hook_tap_is_on_a_module_the_committer_acquires():
     assert types["model.layers.{i}.ffn.shared_experts.act_fn"] == "SiluAndMulWithClamp"
 
 
-def test_moe_source_binds_six_planes_on_every_layer():
-    sourced = [t for t in CMAP["taps"] if t.get("source", "").startswith("moe/")]
-    planes = {t["source"].rsplit("/", 1)[1] for t in sourced}
-    assert planes == {"router_w", "router_ids", "up", "act", "down", "sum"} and len(planes) == moe_source.TENSORS_PER_LAYER
-    assert all(t["commit"] == {"name": t["source"], "binder": "moe"} for t in sourced)
-    per_layer = {p: sorted(i for t in sourced if t["source"].endswith("/" + p) for i in CM.tap_layers(CMAP, t, ENV)) for p in planes}
-    assert all(layers == list(range(ENV["L"])) for layers in per_layer.values())
+def test_moe_source_binds_six_values_on_every_layer_and_a_hash_layers_token_ids():
+    """The manifest of record names no `moe_block_stream` plane, so the source binds at calls under the MoE module (`moe_source`:
+    `at_calls`): six values on every layer, a hash layer's router as router_w.hash and ids, and its token ids as in."""
+    sourced = [t for t in CMAP["taps"] if (t.get("commit") or {}).get("binder") == "moe"]
+    assert all(t["commit"]["name"] == t["source"] and t["source"].startswith("model.layers.{i}.ffn.experts/") for t in sourced)
+    labels = {t["source"].rsplit("/", 1)[1] for t in sourced}
+    assert labels == {*moe_source.LABELS} - {"in_q", "in_scale", "act_q", "act_scale"} and len(sourced) == len(labels)
+    per_layer = {x: sorted(i for t in sourced if t["source"].endswith("/" + x) for i in CM.tap_layers(CMAP, t, ENV)) for x in labels}
+    hashed, scored = list(range(ENV["HASH"])), list(range(ENV["HASH"], ENV["L"]))
+    assert per_layer == {**{x: list(range(ENV["L"])) for x in ("up", "act", "down", "sum")}, "router_w": scored, "router_ids": scored,
+                         **{x: hashed for x in ("router_w.hash", "ids", "in")}}
+    assert {*moe_source.PORTS} <= labels
     runner = _group("model.layers.{i}.ffn.experts")
     assert runner["type"] in moe_source.MOE_MODULE_CLASSES and sorted(runner["layers"]) == list(range(ENV["L"]))
 

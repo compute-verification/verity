@@ -7,35 +7,35 @@ import struct
 from dataclasses import replace
 
 import pytest
-from verity.core.protocols.sampled_proofs.one_stage import partition as sampled_partition
+from verity.core.protocols.sampled_proofs.one_stage import registration as one_stage
 from verity.ml.circuits import partition_object
 from verity.ml.circuits.census import census
 from verity.ml.circuits.codec import program_digest
 from verity.ml.circuits.defs import bind
-from verity.ml.circuits.ops.gemm import GEMM_SM120_E4M3, GemmCoordinateE4m3
+from verity.ml.circuits.ops.boolean.gemm import GEMM_SM120_E4M3, GemmCoordinateE4m3
 from verity.ml.circuits.refs import tuple_of
-from verity.ml.circuits.types import Array, Tuple, Value as Word
+from verity.ml.circuits.types import Array, Tuple
 
-from datacenter import (FLEET_CLOSED, SALT_CUSTODY, Assumption, Block, Cadence, Carried, Challenge, Computed, Credit,
+from datacenter import (FLEET_CLOSED, SALT_CUSTODY, SERVED_PARTITION, Assumption, Block, Cadence, Carried, Challenge, Computed, Credit,
                         Datacenter, Deviation, Device, Entered, Fleet, Held, Interval, Ledger, Link, Maintenance, On,
                         Plan, Port, Record, Refused, Store, Wipe, account, audit, check_records, crossings,
-                        double_credit, evaluate, names, place, register, run, traffic, values, work)
+                        double_credit, evaluate, names, place, read, register, run, traffic, values, work)
 from datacenter.binding import hops
-from datacenter.logical import census_of, gate_work, gates
-from datacenter.models import DOT, LINEAR, MAT, VEC, WEIGHTS, X, program, two_stage, words
+from datacenter.logical import census_of, committed
+from datacenter.models import DOT, LINEAR, MAT, VEC, WEIGHTS, X, program, two_stage, word, words
 from datacenter.observe import digest as frames_digest
 
 EPOCH = Interval(0, 16)
 PROGRAM = two_stage()
 REG = register(PROGRAM, WEIGHTS)
 INPUTS = {"x": X}
-STAGE = {"mac:bf16": 1024, "cuda:op": 32}           # one linear: 32 × 32 multiply-adds, 32 roundings to BF16
+STAGE = {"mac:bf16": 1024, "cuda:gate": 5728}       # one linear: 32 × 32 multiply-adds, 32 roundings to BF16 of 179 gates
 HBM, RESIDUAL = 6.4e10, 8e6
 
 
 def node(n: str) -> Block:
     gpu = Device(f"{n}.gpu", "gpu", rate={"mac:bf16": Assumption(f"{n}.gpu.bf16", 1e6, "MAC/s"),
-                                          "cuda:op": Assumption(f"{n}.gpu.ops", 1e5, "op/s")},
+                                          "cuda:gate": Assumption(f"{n}.gpu.gates", 1e7, "gate/s")},
                  memory=Assumption(f"{n}.gpu.hbm", HBM, "bits"), residual=Assumption(f"{n}.gpu.residual", RESIDUAL, "bits"))
     return Block(n, [gpu])
 
@@ -83,30 +83,42 @@ def test_a_program_of_registered_definitions_has_census_values_work_and_its_eval
         ("x", 512, (3,), False), ("w1", 16384, (3,), False), ("w2", 16384, (4,), False), ("h", 512, (4,), False),
         ("y", 512, (), True)]
     assert work(PROGRAM) == {3: STAGE, 4: STAGE}
+    assert len(committed(PROGRAM)) == 32 + 2 * 1024 + 2 * 32          # a run commits its census values, not a Call's wires
     doc = census_of(PROGRAM)                                         # the multiply-adds are the census's served MACs
     nodes = doc["nodes"]
     assert {k: doc["classes"][doc["callees"][nodes["callee"][k]]]["served_macs"] * nodes["n"][k] for k in (3, 4)} == {
         k: w["mac:bf16"] for k, w in work(PROGRAM).items()}
-    c = PROGRAM.circuit
-    assert sum(gate_work(c, g).get("mac:bf16", 0) for g in range(c.size)) == 2048
     t = evaluate(PROGRAM, INPUTS | WEIGHTS)
-    y = [_float(t[g]) for g in gates(PROGRAM, values(PROGRAM)[4])]
+    y = [_float(w) for w in read(PROGRAM, t, values(PROGRAM)[4])]
     w1, w2, x = ([_float(w) for w in ws] for ws in (WEIGHTS["w1"], WEIGHTS["w2"], X))
     h = [sum(x[i] * w1[32 * j + i] for i in range(32)) for j in range(32)]
     ref = [sum(h[i] * w2[32 * j + i] for i in range(32)) for j in range(32)]
     assert y == pytest.approx(ref, abs=0.05)
 
 
-def test_each_blocks_computed_claim_rests_on_its_proof_units_under_the_programs_partition(setup):
-    """The sampled proofs draw proof units from the Program's partition (`verity/partition/v1`), the same Program the
-    placement places: under the served query (Q_word v1 at X = 16) each linear is 32 units, one a coordinate, so each
-    stage's block rests its `Computed` claim on its own 32 of the protocol's 64."""
+@pytest.mark.slow
+def test_each_blocks_computed_claim_rests_on_its_proof_units_under_the_registered_partition(setup):
+    """The sampled proofs draw proof units from the Program's partition, which one-stage registers with the Program (the
+    record names the query's digest, the partition's and the population). A block's proof units are that partition's
+    whose gates run there, read with the verifier's copy of the query and held to the record (proofs, review 4): under
+    Q_word v1 at X = 16 each linear is 32 units, one a coordinate, so each stage's block rests its `Computed` claim on its
+    own 32 of the 64. Without a record they are the served query's, and the account says it assumed it. Slow: core checks
+    Q_word's cut on the Boolean linear's 1.6 million gates, once for the record and once for the verifier (about 45 s),
+    and no other test reads a registered partition."""
     dc, p = setup
     query = partition_object.query()
-    profile = p.public(Plan(EPOCH), partition=query)
-    assert profile.units == {"a": 32, "b": 32} and sampled_partition.units(PROGRAM, query) == 64
+    rec = one_stage.record(PROGRAM, query, {"law": "subset", "k": 8}, "hm96-sha512", [], {"kind": "stand-in"})
+    profile = p.public(Plan(EPOCH), record=rec, query=query)
+    assert profile.units == {"a": 32, "b": 32} and profile.partition == "registered" and rec["population"] == 64
     claims = audit(run(p, INPUTS, Plan(EPOCH)), profile)
-    assert Computed("a", 1056, EPOCH, units=32) in claims and Computed("b", 1056, EPOCH, units=32) in claims
+    assert Computed("a", 6752, EPOCH, units=32) in claims and Computed("b", 6752, EPOCH, units=32) in claims
+    assumed = p.public(Plan(EPOCH))
+    assert assumed.units == profile.units and assumed.partition == "assumed"
+    assert [SERVED_PARTITION.name in account(claims, x).blocks[0].assumptions for x in (assumed, profile)] == [True, False]
+    with pytest.raises(ValueError, match="copy of its query"):
+        p.public(Plan(EPOCH), record=rec, query=partition_object.call_query(8))
+    with pytest.raises(ValueError, match="isn't this Program's"):
+        p.public(Plan(EPOCH), record=rec | {"population": 63}, query=query)
 
 
 @pytest.mark.slow
@@ -160,28 +172,28 @@ def test_work_counts_by_kind_is_credited_at_its_weight_and_takes_time_at_its_rat
     them at their weights, and the account times each kind at the block's declared rate for it. Kinds on one facet (the
     tensor cores' `mac:*`) add up; the roundings on the CUDA cores run beside them (compute's review 3), so the block's
     busy share is the busiest facet's, and the ledger credits and caps each facet."""
-    row8 = Array(32, Word(8))
+    row8 = Array(32, word(8))
     qk = bind(GemmCoordinateE4m3, K=32, **GEMM_SM120_E4M3)
-    attend = program("Attend", {"x": VEC, "w1": MAT, "q": row8, "k": row8}, Tuple(VEC, Word(16)),
+    attend = program("Attend", {"x": VEC, "w1": MAT, "q": row8, "k": row8}, Tuple(VEC, word(16)),
                      lambda B, x, w1, q, k: tuple_of(B.call(LINEAR, x, w1, name="h"), B.call(qk, q, k, name="qk")),
                      registered=("w1", "k"))
-    assert work(attend) == {4: STAGE, 5: {"mac:fp8": 32, "cuda:op": 1}}
+    assert work(attend) == {4: STAGE, 5: {"mac:fp8": 32, "cuda:gate": 179}}
     dc = datacenter()
     rates = {"mac:bf16": Assumption("a.gpu.bf16", 1e6, "MAC/s"), "mac:fp8": Assumption("a.gpu.fp8", 5e5, "MAC/s"),
-             "cuda:op": Assumption("a.gpu.ops", 1e5, "op/s")}
+             "cuda:gate": Assumption("a.gpu.gates", 1e7, "gate/s")}
     dc.blocks[0] = Block("a", [replace(dc.blocks[0].devices[0], rate=rates)])
     k = [0x30 + i % 8 for i in range(32)]                            # E4M3 codes 0.5 to 0.94
     p = place(attend, dc, "a.gpu", registration=register(attend, {"w1": WEIGHTS["w1"], "k": k}), deliver="world",
               x="world", q="world")
     profile = p.public(Plan(EPOCH), weights={"mac:fp8": 1.25})
-    assert profile.work == {"a": {"mac:bf16": 1024, "mac:fp8": 32, "cuda:op": 33}, "b": {}}
+    assert profile.work == {"a": {"mac:bf16": 1024, "mac:fp8": 32, "cuda:gate": 5728 + 179}, "b": {}}
     acc = account(audit(run(p, {"x": X, "q": [0x38] * 32}, Plan(EPOCH)), profile), profile)
     a = acc.blocks[0]
     mac = (1024 / 1e6 + 32 / 5e5) / 16e-3
-    assert a.credited == 1024 + 1.25 * 32 + 33 and a.loads == pytest.approx({"mac": mac, "cuda": 33 / 1e5 / 16e-3})
+    assert a.credited == 1024 + 1.25 * 32 + 5907 and a.loads == pytest.approx({"mac": mac, "cuda": 5907 / 1e7 / 16e-3})
     assert a.busy == pytest.approx(max(a.loads.values())) and a.busy < sum(a.loads.values())
     assert acc.sound and {x.resource for x in acc.credits} == {"compute:mac", "compute:cuda"}
-    assert {"a.gpu.bf16", "a.gpu.fp8", "a.gpu.ops"} <= set(a.assumptions)
+    assert {"a.gpu.bf16", "a.gpu.fp8", "a.gpu.gates"} <= set(a.assumptions)
 
 
 def test_a_boundary_link_without_a_certifier_breaks_coverage():
@@ -217,10 +229,30 @@ def test_crossings_are_derived_from_the_placement_including_inputs_and_delivery(
     assert set(traffic(p)) == {Port(c, d) for c in ("a.cert", "b.cert") for d in ("ingress", "egress")}
 
 
+def test_a_registered_value_has_a_copy_in_every_block_that_reads_it_unless_held_in_one():
+    """Memory accounting, review 4: registration puts a copy of a registered value in every block that reads it, as
+    serving holds its weights and the remote audit registers each copy, so a weight both stages read never crosses. Held
+    in one copy instead (named in `place`), it is moved to the other block before it is read, and that crossing is
+    bandwidth like any other: 512 more frames on a's uplink, which the profile declares and the run shows."""
+    def shared(B, x, w):
+        h = B.call(LINEAR, x, w, name="h")
+        return B.call(LINEAR, h, w, name="y")
+
+    c = program("Shared", {"x": VEC, "w": MAT}, VEC, shared, registered=("w",))
+    reg, dc, plan = register(c, {"w": WEIGHTS["w1"]}), datacenter(), Plan(EPOCH)
+    kw = dict(registration=reg, deliver="world", x="world", h="a.gpu", y="b.gpu")
+    copies, held = place(c, dc, "a.gpu", **kw), place(c, dc, "a.gpu", **kw, w="a.gpu")
+    assert {x.value.name for x in crossings(copies)} == {"x", "h", "y"}
+    assert {(x.value.name, x.src, x.dst) for x in crossings(held)} >= {("w", "a.gpu", "b.gpu")}
+    out = Port("a.cert", "egress")
+    assert [sum(q.public(plan).occupancy[out].values()) for q in (copies, held)] == [16, 16 + 512]
+    assert not refusals(audit(run(held, INPUTS, plan), held.public(plan)))
+
+
 def test_the_profile_is_what_audit_and_account_read_of_the_placement(setup):
     dc, p = setup
     profile = p.public(Plan(EPOCH))
-    assert profile.work == {"a": STAGE, "b": STAGE} and profile.credit("a") == 1056
+    assert profile.work == {"a": STAGE, "b": STAGE} and profile.credit("a") == 6752
     assert profile.occupancy[Port("b.cert", "egress")] == {7: 16}     # y's 32 words, at the world's read tick
     assert list(profile.windows) == [0, 1, 2, 3] and profile.registered == REG.root
     assert profile.census == census(PROGRAM, digest=program_digest(PROGRAM))["digest"]
@@ -232,14 +264,14 @@ def test_an_honest_run_is_credited_and_its_only_freedom_is_timing_advice(setup):
     profile = p.public(plan)
     claims = audit(run(p, INPUTS, plan), profile)
     assert not refusals(claims)
-    assert Computed("a", 1056, EPOCH) in claims and Computed("b", 1056, EPOCH) in claims
+    assert Computed("a", 6752, EPOCH, units=32) in claims and Computed("b", 6752, EPOCH, units=32) in claims
     assert Held("labels@b.gpu", HBM - RESIDUAL, Interval(0, 2)) in claims
     assert [x for x in claims if isinstance(x, Entered)] == [Entered("x", 512, "outside")]
     carried = [x for x in claims if isinstance(x, Carried)]
     assert len(carried) == len(dc.ports) * 4 and all(x.bits == 7 for x in carried)
     acc = account(claims, profile)
     a, b = acc.blocks
-    assert acc.sound and a.credited == b.credited == 1056
+    assert acc.sound and a.credited == b.credited == 6752
     assert b.carried == RESIDUAL and a.carried == HBM                # b was wiped down to its residual
     assert acc.input_bits == {"x": 512} and acc.located == {"labels@b.gpu": ["b.gpu"]}
 
@@ -370,8 +402,9 @@ def test_a_salt_in_its_certifiers_custody_pins_the_work_that_depends_on_it():
 
     profile, acc = custody()
     a = acc.blocks[0]
-    assert profile.salt == {"a": 512, "b": 0} and profile.pinned["a"] == 33 and profile.salt_out["a"] == 0
-    assert a.custody == 4 * 7 and a.local_at_least == 33 and "salt-custody" in a.assumptions
+    dot = 32 + 179                                                   # p's multiply-adds and its rounding's gates
+    assert profile.salt == {"a": 512, "b": 0} and profile.pinned["a"] == dot and profile.salt_out["a"] == 0
+    assert a.custody == 4 * 7 and a.local_at_least == dot and "salt-custody" in a.assumptions
     assert acc.blocks[1].custody is None and acc.blocks[1].local_at_least == 0
     leaky, acc = custody(t="a.gpu")
     assert leaky.salt_out["a"] == 512 and acc.blocks[0].custody == 4 * 7 + 512 and acc.blocks[0].local_at_least == 0
@@ -433,7 +466,7 @@ def monitored(B, x, w1, w2, temperature):
 
 
 def test_telemetry_is_an_inside_input_delivered_out_and_charged_in_full():
-    c = program("Monitored", {"x": VEC, "w1": MAT, "w2": MAT, "temperature": Word(16)}, Tuple(VEC, Word(16)), monitored,
+    c = program("Monitored", {"x": VEC, "w1": MAT, "w2": MAT, "temperature": word(16)}, Tuple(VEC, word(16)), monitored,
                 registered=("w1", "w2"))
     dc = datacenter()
     p = place(c, dc, "a.gpu", registration=register(c, WEIGHTS), deliver="world", x="world", h="a.gpu", y="b.gpu",

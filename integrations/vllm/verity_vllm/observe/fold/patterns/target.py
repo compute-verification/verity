@@ -25,6 +25,16 @@ def target_of(ctx: StepContext) -> tuple[TargetProfile, bool]:
     return target_of_header(getattr(ctx, "header", None))
 
 
+def vocab_kind(ctx: StepContext, role: str, **statics):
+    """The Definition the record target's vocabulary binds the Build's `role` to at `statics`: the Build's `ctx.kind`, so a Compute
+    over it is the Build's Call."""
+    from verity_vllm.program.frontend.rules.vocab import vocabulary_for
+    spec = vocabulary_for("profile", target_of(ctx)[0].numerics_profile).kind(role, **statics)
+    if spec is None:
+        raise ValueError(f"the record target's vocabulary binds no {role!r}")
+    return spec
+
+
 def target_of_header(header) -> tuple[TargetProfile, bool]:
     """`target_of` for a run header."""
     try:

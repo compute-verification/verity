@@ -220,6 +220,12 @@ def test_the_workers_hold_the_largest_picks_side_by_side(cgroup, monkeypatch):
     assert SR.fit_pool(300, picked, GiB)[0] == 234                      # no stated peaks: the baseline alone, idle workers included
 
 
+def test_a_tp_rank_forks_its_share_of_the_default_pool(monkeypatch):
+    """The world's ranks replay at once on one node (`rank_replay.in_process`), each forking the default pool over the world."""
+    monkeypatch.setattr(os, "cpu_count", lambda: 128)
+    assert (SR.default_workers(), SR.default_workers(8), SR.default_workers(128)) == (32, 8, 1)
+
+
 # ------------------------------------------------------------------------------------------ (a) the RETAIN-windowed pool by family
 def test_retain_exclude_alias_names_both_tap_families():
     assert NC.retain_exclude_families("hidden_m1") == {"fa2_hidden_m1", "fa3_hidden_m1"}

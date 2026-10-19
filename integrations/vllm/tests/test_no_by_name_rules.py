@@ -8,8 +8,9 @@ found 98 such decision points, ~68 structural; v2 retires them phase by phase.  
 can only shrink.
 
 What is scanned: every ``*.py`` under ``integrations/vllm/verity_vllm`` except ``tests/`` directories and
-``test_*.py`` files (test fixtures may name models).  Docstrings, comments, f-strings, ``raise``/``assert`` messages and
-message-like keyword/dict positions (``hint=``, ``why=``, ``help=``, …) are not rule positions and are ignored.
+``test_*.py`` files (test fixtures may name models).  Docstrings, comments, f-strings, ``raise``/``assert`` messages,
+message-like keyword/dict positions (``hint=``, ``why=``, ``help=``, …) and a module's ``__models__`` marker (the models it
+exists for, ``verity_vllm.glue``) are not rule positions and are ignored.
 
 Three kinds of offender (``kind`` in the allowlist):
 
@@ -216,6 +217,8 @@ class _Finder(ast.NodeVisitor):
             self._emit("table", node, name, symbol=name)
 
     def visit_Assign(self, node: ast.Assign) -> None:
+        if not self.scope and any(isinstance(t, ast.Name) and t.id == "__models__" for t in node.targets):
+            return
         if not self.scope or self.scope[-1].startswith("class "):
             for t in node.targets:
                 self._table(t, node.value, node)
@@ -324,6 +327,13 @@ def test_allowlist_only_shrinks() -> None:
     assert not stale, (
         f"{len(stale)} allowlist entr(y/ies) match nothing any more -- the by-name rule is gone, delete the entry:\n"
         + "\n".join(f"  {e['file']} [{e['kind']}] {e['symbol']}: /{e['pattern']}/" for e in stale))
+
+
+def test_a_models_marker_is_not_a_rule_position() -> None:
+    src = "__models__ = ('deepseek-ai/DeepSeek-V4-Pro',)\nFAMILIES = ('deepseek',)\n"
+    f = _Finder(src, "verity_vllm/x.py")
+    f.visit(ast.parse(src))
+    assert f.out and {o.line for o in f.out} == {2}, f.out
 
 
 def test_allowlist_entries_are_unique() -> None:

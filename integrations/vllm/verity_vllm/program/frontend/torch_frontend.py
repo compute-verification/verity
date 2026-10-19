@@ -89,9 +89,9 @@ class FrontendError(Exception):
 WIDTH_OF_DTYPE = {torch.bool: 1, torch.uint8: 8, torch.int8: 8, torch.int16: 16, torch.uint16: 16, torch.bfloat16: 16,
                   torch.float16: 16, torch.int32: 32, torch.uint32: 32, torch.float32: 32, torch.int64: 64,
                   torch.uint64: 64, torch.float64: 64,
-                  # [R15 fp8] the OCP FP8 words vLLM's FP8 linears carry (e4m3 weights/activations of a block-scaled checkpoint):
-                  # 8-bit VALUES, carried as uint8 (`CARRIER[8]`); their arithmetic is the registered FP8 Definitions' (registry.fp8)
-                  torch.float8_e4m3fn: 8, torch.float8_e5m2: 8}
+                  # [R15 fp8] the OCP FP8 words of a block-scaled checkpoint (e4m3 weights/activations, UE8M0 scale bytes): 8-bit
+                  # VALUES, carried as uint8 (`CARRIER[8]`); their arithmetic is the registered Definitions' (registry.fp8, .marlin_moe)
+                  torch.float8_e4m3fn: 8, torch.float8_e5m2: 8, torch.float8_e8m0fnu: 8}
 CARRIER = {1: torch.bool, 8: torch.uint8, 16: torch.bfloat16, 32: torch.float32, 64: torch.int64}
 
 
@@ -382,17 +382,13 @@ def _tracing() -> bool:
     return _DEPTH.get() > 0
 
 
-def _hex16(key: bytes) -> str:
-    return hashlib.sha256(key).hexdigest()[:16]
-
-
 def _no_semantics(*_a, **_k):
     raise NotImplementedError("Verity ops have no torch execution semantics; export them to a Program")
 
 
 def _mint(kind: str, fn, arg_types: Sequence[Type], axes: tuple, n: int, n_xs: int, out_type: Type) -> str:
     key = canonical_json([kind, _spec_id(fn), [t.to_json() for t in arg_types], list(axes), n, n_xs])
-    opname = f"{kind}_{_hex16(key)}"
+    opname = f"{kind}_{hashlib.sha256(key).hexdigest()[:16]}"
     info = _OPINFO.get(opname)
     if info is not None and info.fn is not fn:
         # another definition object already claims this fully qualified specialisation: it must be the same body
@@ -999,7 +995,12 @@ def _permute(x: Coll, dims: Sequence[int], where: str) -> Coll:
     dims = tuple(d + len(shape) if d < 0 else d for d in dims)
     if dims == tuple(range(len(shape))):
         return x
-    strides = _row_major(shape)
+    strides, k = _row_major(shape), max(i + 1 for i, d in enumerate(dims) if d != i)  # axes k.. stay in place
+    # whole rows of axes k.., reordered; past the Explicit limit only, so the Programs that derive today keep their bytes
+    if (x.type.leaves > _EXPLICIT_LIMIT and k < len(shape) and (lead := math.prod(shape[:k])) <= _VIEW_PARTS_LIMIT
+            and _constant_run(x.refs) is None and not isinstance(x.refs, Affine)):
+        L, rows = x.type.leaves // lead, torch.arange(lead, device="cpu").reshape(shape[:k]).permute(dims[:k]).reshape(-1).tolist()
+        return Coll(_tensor_type([shape[d] for d in dims], w), concat([x.refs.slice(r * L, (r + 1) * L) for r in rows]))
     return _view(x, [shape[d] for d in dims], [strides[d] for d in dims], 0, where, f"permute {dims}")
 
 
@@ -1315,7 +1316,7 @@ def export_report(fn: Function | Bound | Callable | torch.nn.Module, example_inp
                f"{unreachable.total} with no path to a protected output); first ids {dead.ids[:8]}. Dead gates are legal and "
                f"are not boundary values; pass dead_gates='ignore' to suppress or 'error' to forbid")
         if dead_gates == "error":
-            raise FrontendError("E_DEAD_GATES", msg, target_id(sd))
+            raise FrontendError("E_DEAD_GATES", msg, _spec_id(sd))
         if dead_gates == "warn":
             warnings.warn(DeadGateWarning(msg), stacklevel=3)
     for r in rules:
@@ -1323,10 +1324,6 @@ def export_report(fn: Function | Bound | Callable | torch.nn.Module, example_inp
     prov = {"frontend": FRONTEND_VERSION, "torch": torch.__version__, "mode": mode, "registry": registry_version(),
             "rules": [r.to_json() for r in rules]}
     return ExportReport(program, digest, _spec_id(sd), program.gates, program.input_gates, dead, unreachable, prov, dead_gates)
-
-
-def target_id(sd: SpecializedDefinition) -> str:
-    return _spec_id(sd)
 
 
 def definition_digest(sd: SpecializedDefinition) -> str:

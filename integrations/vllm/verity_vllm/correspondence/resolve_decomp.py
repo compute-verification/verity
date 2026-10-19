@@ -7,7 +7,7 @@ WHAT IS v2 HERE: the attribution of every value to a request (`resolve.attribute
 -- the files of record hashed as read), the request projection (`batch_decomp.Projection` over the resolved value ids; weight-only values
 joined by `batch_decomp.shared_legs`), the component comparison and the canonical hash (`compare.compare_steps`: `canonical_sha256.a` =
 the derived component, `.b` = the record's projection), the shape rule (LP from the header, T = sampling events - prefill chunks) and the
-weights / seed / peers input layout (`batch_decomp.weights_input_nodes`, `Prog.seed_index` / `peer_index`).  Nothing here writes into the
+weights / seed / peers / witness input layout (`batch_decomp.request_inputs`).  Nothing here writes into the
 record; the result is returned (a caller may dump it beside its own outputs).
 
 Cost = v1's: the fold is decoded once (`load_oracle`, multi-GB at B>=8: a pod), each request's projection is compared with its component.
@@ -26,22 +26,6 @@ from verity_vllm.observe import contract as OB
 from verity_vllm.correspondence import resolve as RS
 
 SCHEMA = "verity-vllm/resolve-decomp/v1"
-
-
-def _owned_layout(B: "C.Prog", reqs: list[dict]) -> tuple[dict[str, int], dict[str, int], set[int]]:
-    """(seed node of request, peers node of request, weights input nodes) -- BD.decompose's reading of the fold's parameter layout."""
-    seed_node_of: dict[str, int] = {}
-    for k, i in sorted(getattr(B, "seed_index", {}).items()):
-        if i >= len(reqs):
-            raise ValueError(f"program has {len(B.seed_index)} seed input nodes but the header has {len(reqs)} requests")
-        seed_node_of[reqs[i]["request_id"]] = k
-    peer_node_of: dict[str, int] = {}
-    for k, i in sorted(getattr(B, "peer_index", {}).items()):
-        if i >= len(reqs):
-            raise ValueError(f"program has a peers input node for request index {i} but the header has {len(reqs)} requests")
-        peer_node_of[reqs[i]["request_id"]] = k
-    weights = BD.weights_input_nodes(B, len(reqs), len(seed_node_of), len(peer_node_of))
-    return seed_node_of, peer_node_of, weights
 
 
 def decompose(match_dir: str, derived_dirs: list[str], *, oracle: "C.Prog | None" = None, log_path: str | None = None,
@@ -78,7 +62,7 @@ def decompose(match_dir: str, derived_dirs: list[str], *, oracle: "C.Prog | None
     n_in = B.n_input_nodes
     if att.n_input_nodes != n_in:
         raise ValueError(f"{match_dir}: instances header / program.json disagree on n_input_nodes ({att.n_input_nodes} vs {n_in})")
-    seed_node_of, peer_node_of, weights_nodes = _owned_layout(B, reqs)
+    seed_node_of, peer_node_of, _witnesses, weights_nodes = BD.request_inputs(B, reqs)
     k2i = {r["k"]: i for i, r in enumerate(B.inst)}
     meta_of = {o["node"] + n_in: o for o in B.oracle_rows}
 
@@ -189,47 +173,3 @@ def decompose(match_dir: str, derived_dirs: list[str], *, oracle: "C.Prog | None
     res["seconds"] = round(time.time() - t0, 1)
     res["timing"] = {"attribution_s": round(t_attr, 1), "fold_load_s": round(t_load, 1)}
     return res
-
-
-def compare_with_record(v2: dict[str, Any], record: dict[str, Any]) -> dict[str, Any]:
-    """v2's document against the record's `match_decomp.json`, per request: n_instances, canonical_sha256 a / b, derived_digest, xreq;
-    plus the attribution table.  Differences NAMED (request id + field), never a count alone."""
-    by_v1 = {e["request_id"]: e for e in record.get("requests") or [] if isinstance(e, dict)}
-    by_v2 = {e["request_id"]: e for e in v2.get("requests") or []}
-    out: dict[str, Any] = {"equal": True, "requests": {}, "only_record": sorted(set(by_v1) - set(by_v2)), "only_v2": sorted(set(by_v2) - set(by_v1)),
-                           "differences": []}
-    if out["only_record"] or out["only_v2"]:
-        out["equal"] = False
-        out["differences"].append(f"request sets differ: only in record {out['only_record'][:4]}, only in v2 {out['only_v2'][:4]}")
-    for rid in sorted(set(by_v1) & set(by_v2)):
-        a, b = by_v1[rid], by_v2[rid]
-        ent: dict[str, Any] = {}
-        for fld in ("n_instances", "derived_digest", "LP", "T", "token_selects", "steps", "prefill_chunks"):
-            ent[fld] = {"record": a.get(fld), "v2": b.get(fld), "equal": a.get(fld) == b.get(fld)}
-            if a.get(fld) != b.get(fld):
-                out["equal"] = False
-                out["differences"].append(f"{rid}: {fld} record {a.get(fld)!r} != v2 {b.get(fld)!r}")
-        ca, cb = a.get("canonical_sha256") or {}, b.get("canonical_sha256") or {}
-        for side in ("a", "b"):
-            eq = ca.get(side) == cb.get(side) and ca.get(side) is not None
-            ent[f"canonical_sha256_{side}"] = {"record": ca.get(side), "v2": cb.get(side), "equal": eq}
-            if not eq:
-                out["equal"] = False
-                out["differences"].append(f"{rid}: canonical_sha256.{side} record {str(ca.get(side))[:16]} != v2 {str(cb.get(side))[:16]}")
-        xa, xb = (a.get("xreq") or {}).get("counts") or {}, (b.get("xreq") or {}).get("counts") or {}
-        ent["xreq_counts"] = {"record": xa, "v2": xb, "equal": xa == xb}
-        if xa != xb:
-            out["equal"] = False
-            out["differences"].append(f"{rid}: xreq counts record {xa} != v2 {xb}")
-        out["requests"][rid] = ent
-    ra, rb = record.get("attribution") or {}, v2.get("attribution") or {}
-    out["attribution"] = {k: {"record": ra.get(k), "v2": rb.get(k), "equal": ra.get(k) == rb.get(k)} for k in ("how", "unattributed", "attributed", "row_rule_disagreements")}
-    for k, v in out["attribution"].items():
-        if not v["equal"]:
-            out["equal"] = False
-            out["differences"].append(f"attribution.{k} record {v['record']!r} != v2 {v['v2']!r}")
-    out["verdict"] = {"record": record.get("verdict"), "v2": v2.get("verdict"), "equal": record.get("verdict") == v2.get("verdict")}
-    if not out["verdict"]["equal"]:
-        out["equal"] = False
-        out["differences"].append(f"verdict record {record.get('verdict')!r} != v2 {v2.get('verdict')!r}")
-    return out
