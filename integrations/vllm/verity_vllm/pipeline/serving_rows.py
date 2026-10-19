@@ -21,9 +21,16 @@ Programs, and a ``partition_digest`` in the file that is not that program's part
 window is the derived file, digest and members included.  ``scope.op_path_prefix`` restricts the population to one module
 (``model.layers.0.``).
 
-A Program row holds instances of a template when the template is its own Definition (its spec is the descriptor id), or when its
-Definition is cut into them (``CUT``: its body batches the template, read off the bound Definition, so a template id that is not what
-the row computes is no match).  Each member's ports:
+A template is read through its word link (:func:`template`): a Boolean Definition (the definition) names the word Definition it
+computes (`verity.ml.circuits.boolean.trace.word_of`, held equal to it by circuit-check's word check), and a word Definition is its
+own word.  A Program row holds instances of a template when the template's word is the row's own Definition (its spec), or when the
+row's Definition is cut into them (``CUT``: its body batches the template's word, read off the bound Definition, so a template that
+does not compute what the row computes is no match).  A Boolean Program's rows are its word view (`pipeline.build_instances`: each
+row the word Definition its Call's Boolean Definition computes, that Boolean Definition its ``bits``), so a template matches the
+same rows under either IR, and the members, their rows and every committed word are the same; the population program is over the
+template as the partition names it.  The rows commit u16 words: a template's every port is 16-bit elements in its word view (a
+Boolean element's bit j is bit j of its word, `boolean.elements`), refused otherwise.  Each member's ports, by the family of the
+template's word (``LAYOUTS``):
 
   ``RoPEHead_v1{D=..}``            every head of every ``RoPE_v1`` row: ``x``, ``cs`` -> ``out`` (D words each)
   ``GemmCoordinate_v1{K=..}``      every coordinate of the ``Gemm_v1`` rows of that K, as shared rows (M0's shared-row files): the
@@ -32,6 +39,8 @@ the row computes is no match).  Each member's ports:
                                    are fixed by the layout, never by the values, so repeated rows stay separate table rows
   any row's own Definition         every row of it, the row itself: ``in<g>`` per argument group -> ``out.<member>`` per
                                    committed member (``vu_export._decompose_row``'s port rule)
+
+so ``RoPEHead_v2{D=..}`` and ``GemmCoordinate_v4{K=..}``, the Boolean versions, are a RoPE head's and a GEMM coordinate's.
 
 Units go in request order, then Program row index, then head (``commit.serving_rows.ORDER``).  In a prefill step the Program lists
 a layer's q rows for every token before its k rows, so RoPE's heads are q heads for every prefill token, then k heads.
@@ -44,6 +53,7 @@ import re
 import time
 import traceback
 from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -54,9 +64,10 @@ from verity_vllm.check.replay.index import ProgramIndex
 from verity_vllm.check.replay.opening import CommittedStore
 from verity_vllm.commit import serving_rows as CS
 
-ROPE, GEMM = "RoPEHead_v1", "GemmCoordinate"
 #: the row Definitions whose Calls are cut into template instances (their bodies batch the template), the rest being the row itself
 CUT = ("RoPE_v1", "Gemm_v1")
+#: a member's layout by the family of its template's word; any other template is the row itself
+LAYOUTS = {"RoPEHead_v1": "rope", "GemmCoordinate_v1": "gemm"}
 PARTITION_FORMAT = "verity-vllm/serving-rows/partition/v1"
 _LAYER = re.compile(r"\.layers\.(\d+)\.")
 
@@ -83,13 +94,70 @@ def readers(request: str | None, com: Any, rc: Any, weights: Callable, programs:
     return weights, OpenedReader(com, rc)
 
 
-_UNITS: dict[str, tuple[tuple[str, Any, int], ...]] = {}
+@dataclass(frozen=True)
+class Template:
+    """A partition's template as the rows are read for it: its descriptor id and Definition (the population program's), the id of
+    the word Definition it computes (its own for a word Definition), and its member layout (``LAYOUTS``, else ``"row"``)."""
+    id: str
+    fn: Any
+    word: str
+    layout: str
 
 
-def unit_templates(spec: str) -> tuple[tuple[str, Any, int], ...]:
-    """The template instances a Program row's Definition holds, ``(descriptor id, Definition, instances)``: the row itself, then, for a
-    ``CUT`` family, each template its body batches (a batch's members; Input batches are its parameters).  None when the spec does
-    not bind to exactly its own descriptor id."""
+_TEMPLATES: dict[str, Template] = {}
+
+
+def template(t: str) -> Template:
+    """Template ``t`` through its word link: the registered Definition it names, bound to exactly ``t``; the word Definition it computes
+    (`trace.word_of` for a Boolean Definition), whose signature is the template's word view; refused by name when ``t`` names no
+    Definition or a port of its word view is not 16-bit words."""
+    hit = _TEMPLATES.get(t)
+    if hit is not None:
+        return hit
+    from verity.ml.circuits import boolean as BL
+    from verity.ml.circuits.boolean.trace import word_of
+    from verity.ml.circuits.codec import descriptor_id
+    from verity.ml.circuits.defs import CompositeDefinition, bind
+    from verity_vllm.program import boolean as BB
+    from verity_vllm.query.call_scope import specialization
+    from verity_vllm.query.program_view import spec_base, spec_statics
+
+    errors = BB.load()
+    try:
+        fn = specialization(spec_base(t), spec_statics(t))
+    except (KeyError, TypeError, ValueError) as e:
+        raise LookupError(f"template {t} names no registered Definition: {type(e).__name__}: {e}"
+                          + (f" (registry modules that failed to import: {errors})" if errors else "")) from e
+    fn = bind(fn) if isinstance(fn, CompositeDefinition) else fn
+    if descriptor_id(fn) != t:
+        raise LookupError(f"template {t} binds to {descriptor_id(fn)}, not to itself")
+    params, ret = fn.signature()
+    types = [ty for _, ty in params] + [ret]
+    if getattr(getattr(fn, "defn", fn), "word", None) is not None:
+        w = word_of(fn)
+        w = bind(w) if isinstance(w, CompositeDefinition) else w
+        wparams, wret = w.signature()
+        if [BL.word_type(ty) for ty in types] != [ty for _, ty in wparams] + [wret]:
+            raise ValueError(f"template {t}'s word view is not the signature of {descriptor_id(w)}, the word Definition it names")
+        widths = {e for ty in types for e in BL.elements(ty)}
+    else:
+        w = fn
+        widths = {x for ty in types for x in ty.width_set()}
+    if widths != {16}:
+        raise ValueError(f"template {t}: the serving rows commit u16 words, and its ports' {'elements' if w is not fn else 'words'} "
+                         f"are {sorted(widths)} bits")
+    word = descriptor_id(w)
+    hit = _TEMPLATES[t] = Template(t, fn, word, LAYOUTS.get(spec_base(word), "row"))
+    return hit
+
+
+_UNITS: dict[str, tuple[tuple[str, int], ...]] = {}
+
+
+def unit_templates(spec: str) -> tuple[tuple[str, int], ...]:
+    """The word Definitions a Program row's Definition (its word view's ``spec``) holds instances of, ``(descriptor id, instances)``:
+    the row itself, then, for a ``CUT`` family, each Definition its body batches (a batch's members; Input batches are its
+    parameters).  None when the spec does not bind to exactly its own descriptor id."""
     hit = _UNITS.get(spec)
     if hit is not None:
         return hit
@@ -104,9 +172,9 @@ def unit_templates(spec: str) -> tuple[tuple[str, Any, int], ...]:
     except (TypeError, ValueError, KeyError):
         sp = None
     if sp is not None and sp.complete and descriptor_id(sp) == spec:
-        hit = ((spec, sp, 1),)
+        hit = ((spec, 1),)
         if spec_base(spec) in CUT:
-            hit += tuple((descriptor_id(n.fn), n.fn, int(n.n) if n.form == "batch" else 1) for n in sp.body.nodes
+            hit += tuple((descriptor_id(n.fn), int(n.n) if n.form == "batch" else 1) for n in sp.body.nodes
                          if n.form in ("call", "batch") and not is_input(n.fn))
     _UNITS[spec] = hit
     return hit
@@ -119,31 +187,35 @@ def member_rows(programs: dict[str, dict[str, Any]], tmpls: Sequence[str], scope
                 program_dirs: dict[str, str] | None = None,
                 index: Mapping[str, Any] | None = None) -> tuple[list[list[Row]], list[Any], list[int]]:
     """Per template, its rows in order (request, its ProgramIndex, the row, its description), restricted to ``scope`` (an op_path
-    prefix); each template's Definition; and its instance count.  Fixed by the Build's Programs before serving.  ``index``: the
+    prefix); each template's Definition; and its instance count.  Rows are matched by the template's word (:func:`template`), so two
+    templates that compute one word Definition are refused.  Fixed by the Build's Programs before serving.  ``index``: the
     ProgramIndex's ``attention_paths`` and ``tp`` for a rank Program (`pipeline.tp.serving_rows`)."""
-    want = {t: k for k, t in enumerate(tmpls)}
+    ts = [template(t) for t in tmpls]
+    want: dict[str, int] = {}
+    for k, t in enumerate(ts):
+        if want.setdefault(t.word, k) != k:
+            raise ValueError(f"{tmpls[want[t.word]]} and {t.id} both compute {t.word}: one member reads a row")
     out: list[list[Row]] = [[] for _ in tmpls]
-    defs: list[Any] = [None] * len(tmpls)
     counts = [0] * len(tmpls)
     for rid, inst in programs.items():
         pi = ProgramIndex(inst, program_dir=(program_dirs or {}).get(str(rid)), **(index or {}))
         for i in sorted(pi.by_i):
             r = pi.by_i[i]
-            hits = [(want[t], fn, n) for t, fn, n in unit_templates(r["spec"]) if t in want]
+            hits = [(want[w], n) for w, n in unit_templates(r["spec"]) if w in want]
             if not hits:
                 continue
             d = pi.describe(r)
             if d is None or (scope and not d["op_path"].startswith(scope)):
                 continue
             if len(hits) > 1:
-                raise ValueError(f"row {i} ({r['spec']}) holds instances of {[tmpls[k] for k, _, _ in hits]}: one member reads a row")
-            (k, fn, n), = hits
+                raise ValueError(f"row {i} ({r['spec']}) holds instances of {[tmpls[k] for k, _ in hits]}: one member reads a row")
+            (k, n), = hits
             out[k].append((str(rid), pi, r, d))
-            defs[k], counts[k] = fn, counts[k] + n
+            counts[k] += n
     for t, rows in zip(tmpls, out, strict=True):
         if not rows:
             raise LookupError(f"no rows of {t} in the run's Programs" + (f" under {scope}" if scope else ""))
-    return out, defs, counts
+    return out, [t.fn for t in ts], counts
 
 
 def members(tmpls: Sequence[str], rows: Sequence[list[Row]], counts: Sequence[int] | None = None) -> list[CS.Member]:
@@ -151,11 +223,12 @@ def members(tmpls: Sequence[str], rows: Sequence[list[Row]], counts: Sequence[in
     out, base = [], 0
     for k, (t, rs) in enumerate(zip(tmpls, rows, strict=True)):
         _rid, _pi, r, d = rs[0]
-        if t.startswith(ROPE):
+        layout = template(t).layout
+        if layout == "rope":
             D = int(d["statics"]["D"])
             n = sum(int(x[3]["statics"]["NHEADS"]) for x in rs)
             m = CS.Member(t, (("x", D), ("cs", D)), (("out", D),), n, base)
-        elif t.startswith(GEMM):
+        elif layout == "gemm":
             K, groups = int(d["statics"]["K"]), grid(rs)
             rx, rw = sum(g["tokens"] for g in groups), sum(g["columns"] for g in groups)
             m = CS.Member(t, (("x", K), ("w", K)), (("y", 1),), sum(g["tokens"] * g["columns"] for g in groups), base,
@@ -201,7 +274,8 @@ def read(m: CS.Member, rows: list[Row], store: Any, weights: Callable,
          arrivals: dict[str, int] | None = None) -> tuple[dict[str, dict[str, np.ndarray]], list[list[Any]]]:
     """Member ``m``'s words, read from the committed store and the registered weights exactly as the replay reads them, and its
     index entries."""
-    if m.template.startswith(GEMM):
+    layout = template(m.template).layout
+    if layout == "gemm":
         return _read_gemm(m, rows, store, weights, arrivals)
     cols: dict[str, list[np.ndarray]] = {p: [] for p, _ in m.rows + m.outs}
     D = dict(m.rows).get("x", 0)
@@ -216,7 +290,7 @@ def read(m: CS.Member, rows: list[Row], store: Any, weights: Callable,
             if w is None:
                 raise LookupError(f"row {r['i']} output {member}: {why}")
             outs[member] = np.asarray(w, dtype=np.uint16)
-        if m.template.startswith(ROPE):
+        if layout == "rope":
             nh = int(d["statics"]["NHEADS"])
             cols["x"].append(np.asarray(ops[0], dtype=np.uint16).reshape(nh, D))
             cols["cs"].append(np.broadcast_to(np.asarray(ops[1], dtype=np.uint16).reshape(1, D), (nh, D)))

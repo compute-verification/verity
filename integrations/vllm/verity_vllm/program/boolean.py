@@ -103,6 +103,12 @@ def _load() -> tuple[dict[str, list], dict[str, list], list[str]]:
     return _TABLE[0]
 
 
+def load() -> list[str]:
+    """Every module that registers a Boolean Definition imported (`verity.ml.circuits.ops.boolean`'s and the integration's registry),
+    so a Boolean Definition's id resolves in `REGISTRY`; the modules that failed to import."""
+    return list(_load()[2])
+
+
 _VERSIONS: dict[str, Any] = {}
 
 
