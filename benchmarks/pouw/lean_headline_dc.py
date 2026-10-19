@@ -10,9 +10,11 @@ one, `1 − Y·(1 − 41/S)`, where `Y = (N_w w* + N_w φ* + χ*)/B_♭`. Three 
 - the H200's design runs a verified filler, ffill at p = 0 with pinned receipts. FILL-OPT prices it at χ*, the
   filler's load on π*, and the pinned check (`PinnedFillLuckAt`, (I7) at 0 under full checking) leaves it no luck
   term, so χ* enters Y whole. The B200's has none, and χ* is 0;
-- π* is one facet that ♭'s bound sits on. The machine model's LP certificate may be mixed (the B200 base design on
-  DS-100: DS_issue and DS_alu). Any one facet is a certificate, so where the LP's is mixed π* is ♭'s binding facet
-  and the bound is at least the LP's: `1 − Y` is then at least ε_machine and ε_skip over ♭, not equal to them;
+- π* is the machine model's LP certificate made exact (`certificate`: weights `λ ≥ 0` summing to 1, `IsCert`),
+  which may be mixed (the H200 on DC-90-ri), and every price is π*'s: `w*`, `φ*` and `χ*` are the cheapest writer's,
+  fold's and filler's prices at π*, and `B_♭` is ♭'s bound, the facet it sits on. Any certificate gives a valid
+  bound; at a mixed one `1 − Y` holds ε_cert, π*'s gap at ♭. `1 − Y` is at least the LP's ε_machine and ε_skip over
+  ♭, and more where the Lean menu (every census MMA class) has a writer the machine model doesn't price;
 - neither device has a forms.toml, so a tensor class's shape is read from its census name: sm_90's wgmma as a warp's
   m16 slice of the m64 warpgroup instruction, sm_100's tcgen05 whole, and the mma.sync forms as m16n8. ω is the
   destination's 32-bit words (A6's count), and each class's MACs must give one of the sheet's peaks.
@@ -111,18 +113,21 @@ class Reading:
     design: str
     sheet: bool
     lp_certificate: dict[str, float]
-    pistar: str
+    lam: dict[str, str]                  # π*: the certificate, exact
+    flat_facet: str                      # the facet ♭'s bound sits on
     wstar: str
     Nw: int
     checks: int
     eps_skip: float
     skip_class: str
-    B: float                             # ♭'s bound a unit, its skip included, on π*
+    B: float                             # ♭'s bound a unit, its skip included
+    eps_cert: float                      # 1 − π*·n(♭)/B: 0 when π* is ♭'s facet
     w: float
     phi: float
     chi: float
     kappa: float
     one_minus_Y: float
+    lp: float                            # the machine model's ε_machine and ε_skip over ♭, which 1 − Y is at least
     folded: float
     unfolded: float
     bound: float
@@ -189,47 +194,53 @@ def reading(fam: Family, vector: str) -> Reading:
                          f"{s.baseline.T})")
     e = E.eps(d, pi, float(Q), fam.data, operands="free", credit="floor")
     cert = {r: w for r, w in e.cheat.pi.items() if w > 1e-9}
+    lam = certificate(cert)
     B0 = max(load(r, n0) for r in pi.rows)
-    binds = [r for r in pi.rows if load(r, n0) == B0]
-    if len(cert) == 1 and abs(next(iter(cert.values())) - 1) < 1e-9 and next(iter(cert)) in binds:
-        pistar = next(iter(cert))
-    else:
-        pistar = binds[0]
+    flat = next(r for r in pi.rows if load(r, n0) == B0)
     eps_skip = exact(B_.design_skip(d, data=fam.data, vector=vector).eps_time)
-    lanes = [k for k in pi.cuda if c[k].get(pistar)]
-    skip = min(lanes, key=lambda k: max(c[k].get(r, Fraction(0)) / c[k][pistar] for r in pi.rows))
-    ns = {skip: eps_skip / (1 - eps_skip) * B0 / c[skip][pistar]}
+    lanes = [k for k in pi.cuda if c[k].get(flat)]
+    skip = min(lanes, key=lambda k: max(c[k].get(r, Fraction(0)) / c[k][flat] for r in pi.rows))
+    ns = {skip: eps_skip / (1 - eps_skip) * B0 / c[skip][flat]}
     n = {k: n0.get(k, 0) + ns.get(k, 0) for k in {*n0, *ns}}
-    B = load(pistar, n)
+    B = load(flat, n)
     if max(load(r, n) for r in pi.rows) != B:
-        raise SystemExit(f"{fam.design} on {vector}: ♭'s bound with its skip ({skip}) is not on {pistar}")
+        raise SystemExit(f"{fam.design} on {vector}: ♭'s bound with its skip ({skip}) is not on {flat}")
+    price = lambda m: sum((x * load(r, m) for r, x in lam.items()), Fraction(0))
     writers = [(k, shape(k, h)[1]) for k in classes if shape(k, h)]
     writers += [(k, om) for k, om in fam.uniform.items() if k in pi.c]
-    demand = {k: c[k].get(pistar, Fraction(0)) / om for k, om in writers}
-    vmin = min(c[k].get(pistar, Fraction(0)) for k in pi.cuda)
-    vec = Q / E.LANES * vmin
+    demand = {k: price({k: Fraction(1)}) / om for k, om in writers}
+    vec = Q / E.LANES * min(price({k: Fraction(1)}) for k in pi.cuda)
     wk = min(demand, key=demand.get)
     w = min(demand[wk], vec)
     folds = [{k: exact(v) / E.LANES for k, v in d.fold.items()}]
-    phi = min(load(pistar, f) for f in folds)
-    chi = load(pistar, nx)
+    if d.uniform and E.UNI in pi.c:
+        folds.append({E.UNI: exact(d.fold_cost())})
+    phi = min(price(f) for f in folds)
+    chi = price(nx)
     Y = (Nw * w + Nw * phi + chi) / B
     lp = e.machine_eps * (1 - float(eps_skip)) + float(eps_skip)
-    if float(1 - Y) < lp - 1e-9 or (pistar in cert and len(cert) == 1 and abs(float(1 - Y) - lp) > 1e-9):
-        raise SystemExit(f"{fam.design} on {vector}: 1 − Y {float(1 - Y):.6%} at {pistar} is not ε_machine and ε_skip "
-                         f"over ♭ ({lp:.6%}) or above them")
+    if float(1 - Y) < lp - 1e-6:
+        raise SystemExit(f"{fam.design} on {vector}: 1 − Y {float(1 - Y):.6%} at {lam} is below ε_machine and ε_skip "
+                         f"over ♭ ({lp:.6%}): the menu here misses a route the machine model prices")
     folded = 1 - Y + Nw * w / B * 41 * LH.LN2 / (LH.LN_P * d.checks)
     unfolded = 1 - Y * (1 - Fraction(41, d.checks))
     bound = max(folded, unfolded)
     target = fam.eps if sheet else fam.eps_m
-    if bound > target:
-        raise SystemExit(f"{fam.design} on {vector}: the Lean bound {float(bound):.6%} is above {float(target):.4%}")
     fr = lambda x: f"{x.numerator}/{x.denominator}"
-    return Reading(fam.ns, vector, fam.design, sheet, cert, pistar, wk if demand[wk] <= vec else "vector", Nw,
-                   int(d.checks), float(eps_skip), skip, float(B), float(w), float(phi), float(chi),
-                   float(Nw * w / B), float(1 - Y), float(folded), float(unfolded), float(bound), float(target),
-                   e.core(), e.machine_eps, e.luck,
+    return Reading(fam.ns, vector, fam.design, sheet, cert, {r: fr(x) for r, x in lam.items()}, flat,
+                   wk if demand[wk] <= vec else "vector", Nw, int(d.checks), float(eps_skip), skip, float(B),
+                   float(1 - price(n) / B), float(w), float(phi), float(chi), float(Nw * w / B), float(1 - Y), lp,
+                   float(folded), float(unfolded), float(bound), float(target), e.core(), e.machine_eps, e.luck,
                    {"B": fr(B), "w": fr(w), "phi": fr(phi), "chi": fr(chi), "bound": fr(bound)})
+
+
+def certificate(cert: dict[str, float], digits: int = 9) -> dict[str, Fraction]:
+    """The LP's certificate as exact weights `λ ≥ 0` with `Σ λ = 1` (`IsCert`): each rounded to `digits`, the largest
+    taking the rest. Any certificate gives a valid bound, so rounding only moves it by about 10^-digits."""
+    lam = {r: Fraction(round(w * 10 ** digits), 10 ** digits) for r, w in cert.items()}
+    top = max(lam, key=lam.get)
+    lam[top] += 1 - sum(lam.values())
+    return {r: x for r, x in lam.items() if x}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -241,15 +252,16 @@ def main(argv: list[str] | None = None) -> int:
         for v in (fam.sheet, fam.measured):
             r = reading(fam, v)
             out.append(r)
-            cert = " + ".join(f"{k} {x:.3f}" for k, x in r.lp_certificate.items())
-            print(f"{r.design} on {v}: π* {r.pistar} (LP: {cert}), w* {r.wstar}, ♭'s bound {r.B:.4f} a unit, ε_skip "
-                  f"{r.eps_skip:.4%} (skip as {r.skip_class}), κ {r.kappa:.6f}, χ* {r.chi:.4f}; 1 − Y "
-                  f"{r.one_minus_Y:.4%}; folded {r.folded:.4%}, unfolded {r.unfolded:.4%}: the Lean bound "
-                  f"{r.bound:.4%} ≤ {r.target:.2%} (machine model: core {r.machine_core:.4%}, ε_machine "
-                  f"{r.machine_eps:.4%}, ε_luck {r.luck:.4%})")
+            cert = " + ".join(f"{k} {x:.4f}" for k, x in r.lp_certificate.items())
+            print(f"{r.design} on {v}: π* {cert}, ♭ on {r.flat_facet} at {r.B:.4f} a unit (ε_cert {r.eps_cert:.4%}), "
+                  f"w* {r.wstar}, ε_skip {r.eps_skip:.4%} (skip as {r.skip_class}), κ {r.kappa:.6f}, χ* {r.chi:.4f}; "
+                  f"1 − Y {r.one_minus_Y:.4%} (the LP's {r.lp:.4%}); folded {r.folded:.4%}, unfolded "
+                  f"{r.unfolded:.4%}: the Lean bound {r.bound:.4%} {'≤' if r.bound <= r.target else 'ABOVE'} "
+                  f"{r.target:.2%} (machine model: core {r.machine_core:.4%}, ε_machine {r.machine_eps:.4%}, ε_luck "
+                  f"{r.luck:.4%})")
     if a.json:
         Path(a.json).write_text(json.dumps([asdict(r) for r in out], indent=1) + "\n")
-    return 0
+    return 1 if any(r.bound > r.target for r in out) else 0
 
 
 if __name__ == "__main__":
