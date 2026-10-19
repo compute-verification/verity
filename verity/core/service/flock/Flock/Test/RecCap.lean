@@ -18,7 +18,7 @@ open Lean Flock Flock.RecVStar
 #guard VStar.capParams "rec-open/l16-h4" == none
 #guard isVStar "rec-cap/n128"
 
-/-- `2^cap₀` at the fixture shapes: 128 nodes of `root_B` at m 22 through 35. -/
+-- `2^cap₀` at the fixture shapes: 128 nodes of `root_B` at m 22 through 35.
 #guard (List.range 14).all fun d => ((fast100 (22 + d)).bind (·.levels[0]?)).map (2 ^ ·.cap) == some 128
 #guard match VStar.capStatement { m := 25, kLog := 22, claims := 8 } with
   | .ok (.cap 128) => true
@@ -54,7 +54,7 @@ def shared (s : VStar.Stmt) (registered : Array Registered.Port) (rows : Option 
   | .error e => some e
   | .ok () => none
 
-/-- Level 0's `out` and RecCap's `top` pass at the shared rows' one registration of `rec-top-L0`, each at its own reads. -/
+-- Level 0's `out` and RecCap's `top` pass at the shared rows' one registration of `rec-top-L0`, each at its own reads.
 #guard shared level0 #[port "out" "rec-top-L0" (reads := #[some 5, some 9])] (some rows) == none
 #guard shared (.cap 128) #[port "top" "rec-top-L0" (reads := all)] (some rows) == none
 #guard shared (.cap 128) #[port "top" "rec-top-L0" (root := 2) (reads := all)] (some rows) ==
@@ -65,10 +65,10 @@ def shared (s : VStar.Stmt) (registered : Array Registered.Port) (rows : Option 
   some "rec-open/l64-h8: its port out reads the table's level-0 cap rec-top-L0, which RecCap holds; pass the verifier's shared rows (--rec-rows F), which register it"
 #guard shared (.cap 128) #[port "top" "rec-top-L0" (reads := all)] none ==
   some "rec-cap/n128: its port top reads the table's level-0 cap rec-top-L0, which RecCap holds; pass the verifier's shared rows (--rec-rows F), which register it"
-/-- A later level's tops need no shared entry: only level 0's cap is RecCap's. -/
+-- A later level's tops need no shared entry: only level 0's cap is RecCap's.
 #guard shared (.recOpen 1 16 7 212) #[port "out" "rec-top-L1"] (some #[port "acc0" "rec-acc"]) == none
 
-def circuit : Circuit := { (default : Circuit) with unit := { (default : Circuit).unit with name := "rec-cap/n128" } }
+def circuit : Circuit := { (default : Circuit) with nets := #[("rec-cap/n128", { (default : Net) with name := "rec-cap/n128" })] }
 
 def cap (own : Array Registered.Port) (N : Nat := 128) : Option String :=
   match RecCoins.checkCap circuit default own N with
@@ -83,22 +83,22 @@ def cap (own : Array Registered.Port) (N : Nat := 128) : Option String :=
   some "rec-coins: rec-cap/n128: rec-top-L0: 64 rows of 64 words registered, the cap's 128 of 64"
 #guard cap #[{ port "top" "rec-top-L0" (reads := all) with words := some 32 }] ==
   some "rec-coins: rec-cap/n128: rec-top-L0: 128 rows of 32 words registered, the cap's 128 of 64"
-/-- Reads that follow a coin (node 3 twice, node 2 never) are refused: every node is held at its own row. -/
+-- Reads that follow a coin (node 3 twice, node 2 never) are refused: every node is held at its own row.
 #guard cap #[port "top" "rec-top-L0" (reads := all.set! 2 (some 3))] ==
   some "rec-coins: rec-cap/n128: rec-top-L0: the reads file does not read node i of the cap in instance i"
 #guard cap #[port "top" "rec-top-L0" (reads := all.pop)] ==
   some "rec-coins: rec-cap/n128: rec-top-L0: the reads file does not read node i of the cap in instance i"
-/-- Past the reads, `out` must be V*'s zero rows `rec-cap-zero`. -/
+-- Past the reads, `out` must be V*'s zero rows `rec-cap-zero`.
 #guard cap #[port "top" "rec-top-L0" (reads := all), port "out" "rec-residuals-zero" (reads := all)] ==
   some "rec-coins: rec-cap/n128: port out reads rec-residuals-zero, not the verifier's rec-cap-zero"
 #guard cap #[port "top" "rec-top-L0" (reads := all)] ==
   some "rec-coins: rec-cap/n128: the verifier's registered reads hold no port out: its rec-cap-zero would be the prover's"
 
-/-- The unit: `out` is `top`'s words 32 … 63, then 32 zero words; no AND. -/
+-- The unit: `out` is `top`'s words 32 … 63, then 32 zero words; no AND.
 #guard (VStar.capUnit 128).st.rows.isEmpty
 #guard (VStar.capUnit 128).inPorts == [64] && (VStar.capUnit 128).outPorts == [64]
 #guard (VStar.capUnit 128).outs.size == 16 * 64
-#guard ((VStar.capUnit 128).outs.toList.take (16 * 32)).map (·.s.toList) == (List.range (16 * 32)).map fun v => [16 * 32 + v]
+#guard ((VStar.capUnit 128).outs.toList.take (16 * 32)).map (·.s) == (List.range (16 * 32)).map fun v => [16 * 32 + v]
 #guard ((VStar.capUnit 128).outs.toList.drop (16 * 32)).all fun f => f.s.isEmpty && !f.c
 
 def hex128 : String := "".pushn 'a' 128
