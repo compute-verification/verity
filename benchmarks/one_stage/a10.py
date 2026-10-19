@@ -16,9 +16,11 @@ committed, in place of the Match capture's stand-ins, with every value where the
   and layer 3's routed experts from `a11_slice.ckpt_experts`' share at world 1. The Commit's verdict is PENDING until its
   deferred replay decides it, and these are rank 0's values only.
 * **Calls to rows.** A11's fold of the Match capture (``--values``, as `a9.py` folds it) gives the Calls the kinds are
-  picked from. Each step's Calls are aligned with the Program's rows of that step by Definition family, as the Match
-  aligns them (`program_compare`: the spec sequence per step). A Call is read only through an aligned row whose spec is
-  its own.
+  picked from. Each step's Calls of a Definition family are paired in order with that step's rows of the family: the fold
+  and the Program order a step's families differently (the fold emits a layer's MqaLogits before its TopKs, the Program
+  interleaves them per token), but each family's Calls alike. A pair aligns only on the same layer, spec and
+  request-local row (the token, for a row named by token), and a family whose counts differ at a step aligns nothing. A
+  Call is read only through its aligned row.
 * **Values.** A Call's operands are its row's, resolved as the replay resolves them (`evaluate._evaluate_row`): the
   committed member words, the opened weights, the prompt, and any interior (uncommitted) producer evaluated from its own
   committed inputs, which ``compare.json`` names by operand. Its returns are held to the members the row commits
@@ -33,7 +35,6 @@ from __future__ import annotations
 
 import argparse
 import copy
-import difflib
 import hashlib
 import json
 import re
@@ -61,6 +62,9 @@ LINK = ("provenance, not proof: every value was opened from the Commit's bundle 
         "(each weight tensor against its committed tensor root) before staging, but the units' roots are a fresh commitment to "
         "those values, so their link to the served root is that opening, not a proof inside the audit; " + PENDING)
 EXPERTS = re.compile(r"\.mlp\.experts\.")
+F64 = re.compile(r'\{\s*"f64"\s*:\s*"(0x[^"]+)"\s*\}')
+LAYER = re.compile(r"layers\.(\d+)")
+TOKEN = re.compile(r"\[t=(\d+)")
 
 A11_FOLD, A11_OPERANDS, A11_SAVE, A9_CAPTURE = a11.fold_values, a11.operands, a11.save_values, a9.capture_words
 
@@ -74,8 +78,19 @@ def unsigned(w) -> np.ndarray:
 
 
 def norm_spec(s) -> str:
-    """A spec label and a Definition id alike (``DOT={"fn":"X"}`` vs ``DOT=X``, ``true`` vs ``True``)."""
-    return re.sub(r'[{}"\s]|fn:', "", str(s)).lower()
+    """A spec label and a Definition id alike (``DOT={"fn":"X"}`` vs ``DOT=X``, ``{"f64":"0x1.4p+1"}`` vs ``2.5``, ``'`` vs
+    ``"``, ``[]`` vs ``()``, ``true`` vs ``True``)."""
+    s = F64.sub(lambda m: repr(float.fromhex(m[1])), str(s))
+    s = re.sub(r"""[{}"'\s]""", "", s).replace("fn:", "")
+    return s.replace("[", "(").replace("]", ")").lower()
+
+
+def layer_of(*names) -> int | None:
+    for s in names:
+        m = LAYER.search(str(s or ""))
+        if m:
+            return int(m[1])
+    return None
 
 
 def diff(a: np.ndarray | None, b: np.ndarray | None) -> dict:
@@ -149,36 +164,51 @@ class Committed:
     def align(self, res) -> None:
         if self.res is res:
             return
+        t0 = time.time()
         self.res, self.rows = res, {}
-        rows_by_step, calls_by_step = defaultdict(list), defaultdict(list)
+        rows, calls, nrows = defaultdict(list), defaultdict(list), Counter()
         for r in self.pi.rows:
-            rows_by_step[self.arrive + self.pi.step_of(int(r["i"]))].append(r)
+            s = self.arrive + self.pi.step_of(int(r["i"]))
+            rows[(s, K.family(r["spec"]))].append(r)
+            nrows[s] += 1
         for m in res.instances:
-            calls_by_step[m["step"]].append(m)
-        stats = {}
-        for s, ms in sorted(calls_by_step.items()):
-            rs = rows_by_step.get(s, [])
-            fa, fb = [K.family(m["spec"]) for m in ms], [K.family(r["spec"]) for r in rs]
-            blocks = [(0, 0, len(ms))] if fa == fb else difflib.SequenceMatcher(None, fa, fb, autojunk=False).get_matching_blocks()
-            n, same, node = 0, 0, 0
-            for i, j, k in blocks:
-                for t in range(k):
-                    m, r = ms[i + t], rs[j + t]
-                    self.rows[id(m)] = r
-                    n += 1
-                    same += norm_spec(m["spec"]) == norm_spec(r["spec"])
-                    node += int(m["node"]) == int(r["i"])
-            stats[str(s)] = {"calls": len(ms), "rows": len(rs), "families_equal": fa == fb, "aligned": n, "spec_equal": same,
-                             "node_is_row": node}
-        self.record["alignment"] = stats
-        print("A10 alignment: " + json.dumps(stats), flush=True)
+            calls[(m["step"], K.family(m["spec"]))].append(m)
+        stats: dict[str, dict] = {}
+        for (s, f), ms in sorted(calls.items()):
+            rs = rows.get((s, f), [])
+            st = stats.setdefault(str(s), {"calls": 0, "rows": nrows[s], "aligned": 0, "refused": Counter(), "first": {}})
+            st["calls"] += len(ms)
+            if len(ms) != len(rs):
+                st["refused"]["count"] += len(ms)
+                st["first"].setdefault(f"count {f}", [len(ms), len(rs)])
+                continue
+            for m, r in zip(ms, rs):
+                why = self.mismatch(m, r)
+                if why:
+                    st["refused"][why] += 1
+                    st["first"].setdefault(f"{why} {f}", [m["name"], str(m["spec"])[:200], r.get("name"), str(r["spec"])[:200]])
+                    continue
+                self.rows[id(m)] = r
+                st["aligned"] += 1
+        self.record["alignment"] = {"steps": stats, "s": round(time.time() - t0, 1)}
+        print("A10 alignment: " + json.dumps(self.record["alignment"], default=str)[:4000], flush=True)
+
+    def mismatch(self, m: dict, r: dict) -> str | None:
+        """Why the Call ``m`` is not row ``r``'s, if it is not: its layer, its spec, or its request-local row."""
+        d = self.pi.describe(r) or {}
+        if layer_of(m.get("hint"), m["name"]) != layer_of(d.get("module"), r.get("name")):
+            return "layer"
+        if norm_spec(m["spec"]) != norm_spec(r["spec"]):
+            return "spec"
+        t = TOKEN.search(str(r.get("name") or ""))
+        if m.get("row") != d.get("row") and (t is None or int(t[1]) != m.get("position")):
+            return "row"
+        return None
 
     def row_of(self, m: dict) -> dict:
         r = self.rows.get(id(m))
         if r is None:
-            raise LookupError(f"{m['name']}: no Program row of record aligned with this Call")
-        if norm_spec(m["spec"]) != norm_spec(r["spec"]):
-            raise LookupError(f"{m['name']}: aligned with row {r['i']} ({str(r['spec'])[:160]}), not the Call's {str(m['spec'])[:160]}")
+            raise LookupError(f"{m['name']}: no Program row of record aligned with this Call (compare.json's record.alignment)")
         return r
 
     def entry(self, m: dict) -> dict:
