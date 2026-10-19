@@ -5,15 +5,22 @@ import Definitions.Pouw.Basic.QTree
 /-!
 # Relative security under Fiat–Shamir draws: the vocabulary its statements read (trusted)
 
-Decision 102's seeds: matmul `j`'s draw comes from `SHA-512(tag ‖ s ‖ forward ‖ position ‖ root(A_j) ‖ root(B_j))`,
-a hash of commitments the prover has already made, at the epoch's live salt `s` (`Epoch.start`: every window of an
-epoch reads one salt). A prover can re-roll a root through its hiding salts and try again, so every try is a fresh
-draw. The hash is evaluated inside the prover's own proof (decision 105): the drawn unit's zero-knowledge proof derives
-its seed from the roots and position it witnesses, and the verifier never evaluates it. The statements over this
-vocabulary (`Models.Pouw.Guarantees.FiatShamir`, `Models.Pouw.Assumptions.FiatShamir`) read SHA-512 as a random
-oracle, gap (4)'s `H` (`Pouw.WindowWork.StraightLineExtraction`) at the seed's domain: a uniform function `H : Q → N`
-from the seed's inputs to a stage's draws, which the prover reaches only through counted queries (`QTree`, as PoUW's
-game does). The named premise `Pouw.Assumptions.SeedExtraction` ties it to the seeds the proofs derive. Every other
+Decision 102's seeds, as Daniel's ruling of 17 Oct (8:20 PM PDT, `.agents/skills/friction/SKILL.md`) allows them: PoUW's
+per-matmul noise seeds may be derived by Fiat–Shamir from the epoch's live salt, every other coin stays live, and the
+guarantee carries a grinding term `T·μ^m`. Matmul `j`'s draw comes from
+`SHA-512(tag ‖ s ‖ forward ‖ position ‖ root(A_j) ‖ root(B_j))`, a hash of commitments the prover has already made, at
+the epoch's live salt `s` (`Epoch.start`: every window of an epoch reads one salt). The compiled Program's seeds
+(`verity/core/protocols/pouw/circuit/seeds.py`) hash `tag ‖ s ‖ position ‖ root(A_j) ‖ root(B_j)`, with each run under
+one salt on its own range of positions; the statements read only the input a commitment names for each stage (`pre`),
+so either form is an instance where distinct stages name distinct inputs. The served circuit also derives a receipt
+seed from the same inputs under its own tag (decision 121, `eps1_reference.receipt_seed`); an instance whose check reads
+it carries it in the stage's draw `N`. A prover can re-roll a root through its hiding salts and try again, so every try
+is a fresh draw. The hash is evaluated inside the prover's own proof (decision 105): the drawn unit's zero-knowledge
+proof derives its seed from the roots and position it witnesses, and the verifier never evaluates it. The statements
+over this vocabulary (`Models.Pouw.Guarantees.FiatShamir`, `Models.Pouw.Assumptions.FiatShamir`) read SHA-512 as a
+random oracle, gap (4)'s `H` (`Pouw.WindowWork.StraightLineExtraction`, #2592, not on main) at the seed's domain: a
+uniform function `H : Q → N` from the seed's inputs to a stage's draws, which the prover reaches only through counted
+queries (`QTree`, as PoUW's game does). The named premise `Pouw.Assumptions.SeedExtraction` ties it to the seeds the proofs derive. Every other
 coin stays live. The breaks of the commitments read SHA-512 as the live floors per prover do, as a function `sha` on
 messages whose collisions the analysis's finders look for, through `ecr/sha-512` (`Claims.ecrBound`): `H` is the seed
 oracle only.

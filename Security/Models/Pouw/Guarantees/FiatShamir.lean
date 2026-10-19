@@ -9,7 +9,8 @@ the epoch's live salt), in place of `ServiceSoundStaged`'s live per-stage coins,
 `Accounting.Assumptions.TS.StageLuck`, which `Accounting.Guarantees.TS.StageBudget` and `StageIdeal` rest on, no longer
 holds: the prover can re-roll a root
 and try again. The statement here is its replacement. The grind is priced into the floor, as a premium `π` a seed group
-in `F`; the tries reaching it go into the probability, `T·τ`. With GRIND's per-query moment (`SteerBoundOfMoment`) and
+in `F`; the tries reaching it go into the probability, `T·τ`, the grinding term `T·μ^m` of Daniel's ruling of 17 Oct
+(8:20 PM PDT) with `τ` the per-try `μ^m` (`SteerBound`). With GRIND's per-query moment (`SteerBoundOfMoment`) and
 `π* = ln(T·M/δ)/θ`, that is `δ`. Their proofs are to be `Pouw.SecurityProofs.FiatShamir.FiatShamirFloor :
 Pouw.Guarantees.FiatShamir.FiatShamirFloor` and `Pouw.SecurityProofs.FiatShamir.SteerBoundOfMoment`.
 
@@ -18,14 +19,17 @@ Pouw.Guarantees.FiatShamir.FiatShamirFloor` and `Pouw.SecurityProofs.FiatShamir.
   bound each adversary's error by `breakBound`: constants plus weights times its collision finders, read through
   `ecr/sha-512` (`Claims.ecrBound`) at budgets computed from the adversary's time. The fixed-oracle premises here
   (`LiveFloorUnsteered`, `ServiceSoundStagedFS`) have that form at each oracle (`FindersFS`), and the floor reads them
-  through the same `Claims.ecrBound` at the same budgets (`breakBoundFS`): one break term, two statements. Gap (6)'s `Pouw.Guarantees.Window.WindowEps` (branch
-  `cursor/pouw-window-eps-stmt-c7a9`) bounds the window audit's failure by `κ + coll(R, τ)` at the window's state; its
-  `coll` is to be read the same way. The Fiat–Shamir terms compose after it.
-* Gap (4)'s `Pouw.Guarantees.EndToEndWindow` (branch `cursor/pouw-work-bound-stmt-c7a9`) reads one oracle `H`, SHA-512
-  domain-separated for the commitments and the noise. `SeedExtraction` is its `StraightLineExtraction` at the seed's
-  domain, on the same random-oracle card, and its `T` is gap (4)'s `q`. The premium enters gap (4) through the work
-  step: `TileWork(γ_u)`'s EPS1 instance is gap (3)'s bridge from compute accounting's tensor–scalar model
-  (`CircuitCredit`, not on main), whose sampled proofs rest on `StageLuck`. Under these draws
+  through the same `Claims.ecrBound` at the same budgets (`breakBoundFS`): one break term, two statements. Gap (6)'s
+  `Pouw.Guarantees.Window.WindowEps` (`Models.Pouw.Guarantees.Window`, statement only) bounds the window audit's
+  failure by the largest escape plus `η`, the largest `κ_c`, `coll(R, τ)` and `Σ_c δlink_c` at the window's state,
+  and leaves the seeds' grinding to this gap; its `coll` is to be read the same way. The Fiat–Shamir terms compose
+  after it.
+* Gap (4)'s `Pouw.Guarantees.EndToEndWindow` (#2592, not on main) reads one oracle `H`, SHA-512 domain-separated for
+  the commitments and the noise. `SeedExtraction` is its `StraightLineExtraction` at the seed's domain, on the same
+  random-oracle card, and its `T` is gap (4)'s `q`. The premium enters gap (4) through the work step:
+  `TileWork(γ_u)`'s EPS1 instance is gap (3)'s bridge from compute accounting's tensor–scalar model (`CircuitCredit`,
+  #2638, whose `CircuitCreditSeeded` is its counterpart at these seeds, its seeds read through this
+  `SeedExtraction` and GRIND's premium), whose sampled proofs rest on `StageLuck`. Under these draws
   `ε_FS = ε_live + (κₓ − 3)/4·ε_luck + π*/(units a group)` (`κₓ` GRIND's exchange rate) replaces the live `ε` in
   `γ_u`, and the break term (`breakBoundFS`) plus `ε_id + δ` goes into `TileWork`'s `η(q, N)`. Neither bridge is
   stated: from this `Machine`/`QTree` game to `Pouw.Game`'s `CostModel` (RT4's change 4), and from the staged service
