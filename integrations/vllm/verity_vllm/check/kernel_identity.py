@@ -80,20 +80,6 @@ def normalize_wrapper(src: str) -> str:
     return _WRAPPER_PATH_LINE.sub("", src)
 
 
-_KNAME = re.compile(r"\btriton_(?:red|per|poi|tem|for|unk|foreach)_[A-Za-z0-9_]+")
-_META_NAME = re.compile(r"'kernel_name':\s*'[^']*'")
-_BACKEND_HASH = re.compile(r"'backend_hash':\s*'[^']*'")
-
-
-def normalise_kernel(src: str) -> str:
-    """A Triton kernel source with its name (the trailing index depends on the order within a wrapper), its ``kernel_name``
-    inductor_meta and its ``backend_hash`` replaced by placeholders; everything else is kept byte for byte."""
-    s = _KNAME.sub("KERNEL", src)
-    s = _META_NAME.sub("'kernel_name': 'KERNEL'", s)
-    s = _BACKEND_HASH.sub("'backend_hash': 'BACKEND'", s)
-    return s.strip()
-
-
 def ptx_code(ptx: str) -> str:
     """PTX minus debug line info (``.file``/``.loc``, ``.debug_*`` sections) and the ``assertFile_*``
     source-path strings of ``tl.device_assert``: what ptxas compiles into instructions."""
@@ -234,77 +220,6 @@ def autotune_configs(root: Path) -> list[dict[str, Any]]:
             "configs_hash": cfg.get("configs_hash"), "found_by_coordesc": cfg.get("found_by_coordesc"),
         })
     return out
-
-
-_PTX_TARGET = re.compile(r"^\.target\s+(\S+)", re.M)
-
-
-def export_ptx(triton_dir: str | Path | None, dest: Path, *, gpu: dict[str, Any] | None = None) -> dict[str, Any]:
-    """W1cF F10: write the *normalised* PTX (:func:`ptx_code`) of every compiled kernel variant in a Triton
-    cache dir to ``dest/<ptx_code_sha256>.ptx`` plus ``dest/index.json`` (per variant: kernel function
-    name, normalised-code sha256, raw cubin sha256, ``.target``, Triton cache key, compile metadata when
-    the sibling ``<name>.json`` has it). ``ptx_code_set_sha256`` = sha256 of the JSON of the sorted set of
-    ``(name, ptx_code_sha256)`` pairs binds the shipped set into the manifest. Returns the index."""
-    dest = Path(dest)
-    dest.mkdir(parents=True, exist_ok=True)
-    entries: list[dict[str, Any]] = []
-    root = Path(triton_dir) if triton_dir else None
-    if root is not None and root.is_dir():
-        for p in sorted(root.rglob("*.ptx")):
-            try:
-                text = p.read_text()
-            except Exception:  # noqa: BLE001
-                continue
-            code = ptx_code(text)
-            sha = sha256_bytes(code.encode())
-            (dest / f"{sha}.ptx").write_text(code)
-            m = _PTX_TARGET.search(text)
-            entry: dict[str, Any] = {"name": p.stem, "ptx_code_sha256": sha, "target": m.group(1) if m else None,
-                                     "cache_key": p.parent.name, "cubin_sha256": None, "meta": None}
-            cubin = p.with_suffix(".cubin")
-            if cubin.exists():
-                entry["cubin_sha256"] = sha256_file(cubin)
-            meta = p.with_suffix(".json")
-            if meta.exists():
-                try:
-                    md = json.loads(meta.read_text())
-                    entry["meta"] = {k: md[k] for k in ("num_warps", "num_stages", "num_ctas", "shared", "hash") if k in md}
-                except Exception:  # noqa: BLE001
-                    pass
-            entries.append(entry)
-    pairs = sorted({(e["name"], e["ptx_code_sha256"]) for e in entries})
-    index = {
-        "schema": "verity-vllm/ptx/v1",
-        "normalisation": "kernel_identity.ptx_code: .file/.loc directives, .debug_* sections and assertFile_* globals removed",
-        "triton_cache_dir": str(root) if root else None,
-        "gpu": gpu,
-        "entries": entries,
-        "ptx_code_set_sha256": sha256_bytes(json.dumps(pairs).encode()) if pairs else None,
-        "variants": len(entries),
-        "kernels": len({e["name"] for e in entries}),
-    }
-    (dest / "index.json").write_text(json.dumps(index, indent=1) + "\n")
-    return index
-
-
-def ship_ptx(production_ptx_dir: Path, kernels_dir: Path) -> dict[str, Any]:
-    """W1cF F10: copy production's exported PTX (``production/ptx/``) into a bundle's ``verity/ml/kernels/`` as
-    ``verity/ml/kernels/<ptx_code_sha256>.ptx`` + ``kernels/ptx-index.json`` so identity is checkable from the archive."""
-    src = Path(production_ptx_dir)
-    idx_path = src / "index.json"
-    if not idx_path.is_file():
-        return {"shipped": 0, "reason": f"production exported no PTX ({idx_path} absent; recorder before W1cF)"}
-    index = json.loads(idx_path.read_text())
-    kernels_dir = Path(kernels_dir)
-    kernels_dir.mkdir(parents=True, exist_ok=True)
-    n = 0
-    for e in index.get("entries", []):
-        f = src / f"{e['ptx_code_sha256']}.ptx"
-        if f.is_file():
-            (kernels_dir / f.name).write_bytes(f.read_bytes())
-            n += 1
-    (kernels_dir / "ptx-index.json").write_text(json.dumps(index, indent=1) + "\n")
-    return {"shipped": n, "variants": index.get("variants"), "kernels": index.get("kernels"), "ptx_code_set_sha256": index.get("ptx_code_set_sha256")}
 
 
 def compare_autotune(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:

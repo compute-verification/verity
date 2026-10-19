@@ -30,7 +30,8 @@ else
       {"command": "python3 $dest/shell_hook.py", "timeout": 10, "failClosed": true}
     ],
     "preToolUse": [
-      {"command": "python3 $dest/task_hook.py", "matcher": "Task", "timeout": 10}
+      {"command": "python3 $dest/task_hook.py", "matcher": "Task", "timeout": 10},
+      {"command": "python3 $dest/task_hook.py", "matcher": "CallDynamicTool", "timeout": 10}
     ]
   }
 }

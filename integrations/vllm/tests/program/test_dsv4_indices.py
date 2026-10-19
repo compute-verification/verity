@@ -3,6 +3,8 @@ the kernel's stores at every boundary of a position sweep and at the int32 ends,
 prefill row as `Dsv4ShortContextTopK_v1`, the statics, and the Boolean Definition against its word."""
 from __future__ import annotations
 
+__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
+
 import numpy as np
 import pytest
 

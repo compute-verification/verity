@@ -3,9 +3,9 @@
 * **W_cert, compute.**  `Pouw.Guarantees.EndToEnd` (``Security/Models/Pouw/Guarantees/Game.lean``) bounds the chance that an
   audit of t draws accepts a transcript whose prover spent T < (1 − γ)(1 − ε_s)·ΣW_ref by (1 − ε_s)^t + ε_TT(q, N).  So
   W_cert = (1 − γ)(1 − ε_s)·ΣW_ref, in W1 units (one dense FP8 MAC on the device), with ΣW_ref the drawn statement's
-  reference work over the credited cells (`pearl_c_work.ticket_cell`; about 1.09 to 1.11 per MAC at the sweep's shapes).
+  reference work over the credited cells (`clear_work.ticket_cell`; about 1.09 to 1.11 per MAC at the sweep's shapes).
   γ is looked up from the Lean-pinned price twins (`price_twins.lookup`) of the statement on the priced path the scheme's
-  draw cites (`pearl_c_work.draw_wref`), at both FP32 prices, the larger published; it is never typed.  Twins are stated
+  draw cites (`clear_work.draw_wref`), at both FP32 prices, the larger published; it is never typed.  Twins are stated
   at the cubes 8,192³ and 16,384³ and at each of Llama-3.1-8B's linears (n, k) and its layout (#1809, `GAMMA_PIN`), so
   every shape the sweep names is priced; a shape no twin states has W_cert unproved.  ε_s = 0.1% at t = K = 27,713 draws
   (`plan.RECORD_K`, (1 − ε_s)^K ≤ 2⁻⁴⁰).  A chain's credited rows are its screened rows less those the screen failed or
@@ -44,6 +44,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 TWINS = ROOT / "benchmarks" / "pouw" / "harness" / "price_twins.py"
+CLEAR = ROOT / "benchmarks" / "pouw" / "clear"
 #: the panel line and version Pearl-C's arms run (`price_twins.statement` drops the hashing format)
 SCHEME, LINE, VERSION = "pearl-c-sm120-v1-h3", "pearl-c-sm120", "v1-h3"
 EPS_S = Fraction(1, 1000)
@@ -119,6 +120,14 @@ def price_twins():
     return sys.modules["price_twins"]
 
 
+def clear_work():
+    """PoUW's work law, the clear audit's (`clear_work`; benchmarks/pouw/clear is not a package)."""
+    if str(CLEAR) not in sys.path:
+        sys.path.append(str(CLEAR))
+    import clear_work
+    return clear_work
+
+
 def scheme():
     from verity.core.protocols.pouw.schemes import pearl_c as C
     from verity.core.protocols.pouw.schemes.pearl_c_device import DEVICES
@@ -132,8 +141,7 @@ def scheme():
 
 def priced_path(s) -> str:
     """The priced path the scheme's draw cites, from its statement's name (``...Cast8p72...`` is ``cast-8.72``)."""
-    from verity.core.protocols.pouw.schemes import pearl_c_work as PW
-    at = PW.draw_wref(s)
+    at = clear_work().draw_wref(s)
     if at is None:
         raise ValueError(f"{s.name}: its draw cites no statement")
     m = re.search(r"Cast(8p72|32p06|16|32|8)", at.statement)
@@ -146,10 +154,9 @@ def gamma(n: int | None, k: int | None, layout: str | None = None) -> dict:
     """γ for Pearl-C at (n, k), or of a served `layout` (`LAYOUT`): `price_twins.lookup`'s record (both prices, the larger
     published, what's missing), with the statement's cap held to the scheme's and K to ε_s and δ."""
     from verity.core.protocols.pouw.circuit import plan
-    from verity.core.protocols.pouw.schemes import pearl_c_work as PW
     P, s = price_twins(), scheme()
     stmt = P.statement(LINE, VERSION)
-    if P.CAPS[stmt] != s.cap or PW.draw_wref(s).cap != s.cap:
+    if P.CAPS[stmt] != s.cap or clear_work().draw_wref(s).cap != s.cap:
         raise ValueError(f"{stmt}: the twins' cap {P.CAPS[stmt]} is not the scheme's {s.cap}")
     if plan.record_k(EPS_S, DELTA) != plan.RECORD_K:
         raise ValueError(f"K at ε_s = {EPS_S}, δ = {DELTA} is not plan.RECORD_K")
@@ -162,7 +169,7 @@ def wref_cell(n: int, k: int) -> Fraction:
     """One credited cell's reference work at (n, k), every channel kept: the drawn statement's (`ticket_cell`)."""
     from verity.core.protocols.pouw.protocol import Matmul, Shape
     from verity.core.protocols.pouw.schemes import pearl_c_work as PW
-    return PW.ticket_cell(scheme(), PW.UnitRecord(Matmul(0, Shape(16, k, n), 0), 1, k))
+    return clear_work().ticket_cell(scheme(), PW.UnitRecord(Matmul(0, Shape(16, k, n), 0), 1, k))
 
 
 def compute(n: int, k: int, credited_rows: int, seconds: float, native_rate: float | None, g: dict | None = None) -> dict:

@@ -41,6 +41,7 @@ class Node:
                   "/bin/systemctl": f'#!/bin/sh\necho "$*" >> {root}/systemctl.log\n'
                                     f'[ "$1" = show ] && cat {root}/allowed\nexit 0\n',
                   "/bin/date": f'#!/bin/sh\n[ "$*" = +%s ] && {{ echo {T}; exit 0; }}\nexec {shutil.which("date")} "$@"\n',
+                  "/bin/pgrep": "#!/bin/sh\nexit 1\n",
                   "/allowed": "0-119\n", f"{policy.FILL}/status.txt": status + "\n"})
         for f in bin_.iterdir():
             f.chmod(0o755)
@@ -69,7 +70,7 @@ class Node:
             return LEASE
         if cmd == policy.COMMANDS["kueue"]:
             return self.kueue
-        for top in ("/workspace/", "/etc/", "/var/", "/proc/"):
+        for top in ("/workspace/", "/etc/", "/var/", "/proc/", "/run/"):
             cmd = cmd.replace(top, f"{self.root}{top}")
         env = {**os.environ, "PATH": f"{self.root}/bin:{os.environ['PATH']}", "TMPDIR": str(self.root / "tmp")}
         r = subprocess.run(["sh", "-c", cmd], capture_output=True, text=True, env=env)
@@ -173,7 +174,8 @@ def test_node_2_writes_its_slot_and_cpu_set_lines_behind_its_gate_and_leaves_the
     assert node.text(DROPIN) == files[DROPIN] and not (tmp_path / "n2/systemctl.log").exists()
     assert "64-119 windows=/workspace/pouw/fill/windows lead=90 mem=560  # cluster policy apply" in node.text(SLOTS)
     assert node.text(CPUSETS).splitlines()[-1].startswith("bc-e6a46970-b6ef-5738-af64-182b143075d4 0-47 4 40  # ")
-    assert all(c.startswith(policy._N2_GATE) for c in node.ran), "every command on node 2 starts with its gate"
+    assert [c.startswith(policy.N2_GATE) for c in node.ran] == [True, True, False, True], "reads, the write, the read back"
+    assert node.ran[2].startswith(policy.N2_WRITE_GATE), "the write starts with the gate that needs a fresh quiet status"
     assert [r["key"].split(".")[-1] for r in ledger.read(tmp_path / "n2" / LOG.lstrip("/"))] == [
         "b", "bc-e6a46970-b6ef-5738-af64-182b143075d4"]
     after = node.snapshot()
@@ -194,7 +196,7 @@ def test_unknown_keys_are_never_applied(tmp_path, capsys):
 
 @pytest.mark.parametrize("status, why", [
     (STATUS.replace("timed False", "timed True"), "a timed window is on or waiting"),
-    (STATUS.replace("19:39:59Z", "17:00:00Z"), "status.txt is 9630 s old: is the fill runner running?")])
+    (STATUS.replace("19:39:59Z", "19:30:00Z"), "status.txt is 630 s old: is the fill runner running?")])
 def test_node_2_is_never_written_while_its_gate_refuses(tmp_path, capsys, status, why):
     node = Node(tmp_path / "n2", {**N2_FILES, SLOTS: "a 0-63\n"}, status=status)
     before = node.snapshot()
@@ -202,6 +204,23 @@ def test_node_2_is_never_written_while_its_gate_refuses(tmp_path, capsys, status
     assert rc == 3 and node.snapshot() == before and len(node.ran) == 1
     [s] = [s for s in reps[N2]["steps"] if s["key"] == f"{N2}.check-slots.a"]
     assert s["action"] == "unknown" and why in s["why"]
+
+
+def test_node_2_with_no_fill_runner_is_planned_as_quiet_saying_so_and_never_written(tmp_path, capsys):
+    stale = STATUS.replace("19:39:59Z", "17:00:00Z")
+    node = Node(tmp_path / "n2", {**N2_FILES, SLOTS: "a 0-63\n" + N2_FILES[SLOTS].split("\n", 1)[1]}, status=stale)
+    before = node.snapshot()
+    rc, reps = apply(capsys, node, "nebius-2")
+    assert rc == 1 and steps(reps[N2])[f"{N2}.check-slots.a"] == ("change", SLOTS) and node.snapshot() == before
+    assert reps[N2]["quiet"].startswith("no fill runner runs (status.txt is 9630 s old), and gpu-lease shows no timed lease")
+    policy_apply.main_apply(NEBIUS, "nebius-2", None, False, None, None, False, runner=lambda n: node.run)
+    lines = capsys.readouterr().out.splitlines()
+    assert lines[1] == f"  read as quiet: {reps[N2]['quiet']}"
+    assert lines[2] == "  (--apply writes nothing here until the fill runner's status.txt is fresh and quiet again)"
+    rc, reps = apply(capsys, node, "nebius-2", "--apply", "--as", "infra", "--reason", "r")
+    assert rc == policy_apply.FAILED and node.snapshot() == before
+    assert reps[N2]["result"]["why"] == ("nothing written: refused status.txt is 9630 s old: is the fill runner running? "
+                                         f"(a write needs its fresh quiet status): {stale}")
 
 
 def test_a_window_that_starts_after_the_read_refuses_the_write(tmp_path, capsys):

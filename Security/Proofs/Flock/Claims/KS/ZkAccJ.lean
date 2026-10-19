@@ -137,7 +137,7 @@ theorem width₀_pos {mPts : ℕ} (T : TabZK 𝔽 mPts) : 0 < width₀ T := by
 width or at a level's `2^lanes`, and its pads pairs are all `(0, 0)`. -/
 theorem not_selfClashZ_nul {D Sl : Type} [Inhabited D] [Inhabited Sl] {mPts : ℕ} (Hs : Hashes 𝔽 D Sl)
     (T : TabZK 𝔽 mPts) {out : OutZC 𝔽 D Sl} (h : out.opens = nulOpZ) : ¬ SelfClashZ Hs T out := by
-  rintro (⟨x, hx, -, -, -, hv, -⟩ | ⟨r, -, ℓ, -, cap, -, hc⟩ | ⟨r, -, root, jj, -, jj', -, p, -, -, hne⟩)
+  rintro (⟨x, hx, -, -, -, hv, -⟩ | ⟨r, -, ℓ, -, cap, -, hc⟩ | ⟨r, -, root, jj, -, jj', -, p, -, -, -, -, hne⟩)
   · refine not_verifiedZ_nil Hs.H Hs.E Hs.Lf out.cap₀ (width₀_pos T) _ ?_ hv
     unfold opens₀Z at hx
     rcases List.mem_append.1 hx with hx | hx

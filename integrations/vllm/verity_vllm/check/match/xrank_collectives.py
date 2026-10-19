@@ -16,12 +16,13 @@ rank dumps its picks (partial rows + received rows, from the committed bytes) to
 received member is not committed on a rank, or whose partial is not committed, is a named FAIL (the population of record requires both).
 Negative: `--flip-partial <rank>:<site suffix>` makes that rank commit a partial that is not the collective's input -> this pass fails by name.
 
-A world-8 all-reduce is evaluated with the routed Definition the rank Program binds at the call (`registry.tp_allreduce`): the rank
-names it per pick (`spec`, `statics`, `pipeline.tp.xrank_dump.route_of`) and the driver evaluates it with `tp_allreduce_check`'s models,
-which tests/program/test_tp_allreduce.py holds to the Definitions:
+An all-reduce on a captured route is evaluated with the routed Definition the rank Program binds at the call (`registry.tp_allreduce`):
+the rank names it per pick (`spec`, `statics`, `pipeline.tp.xrank_dump.route_of`) and the driver evaluates it with
+`tp_allreduce_check`'s models, which tests/program/test_tp_allreduce.py holds to the Definitions:
 
     AllReduceMultimem_v1 / AllReduceCustom_v1 : the received rows == each flat element's owner sum (row * N + col of the M * N words)
     AllReduceMnnvl_v1                         : the received rows == the elementwise FTZ sum, ranks ascending
+    AllReduceNcclTree_v1                      : the received rows == the elementwise bf16 sum down CHAIN from its leaf
     AllReduceRmsNormMnnvl_v1                  : committed <norm>/0 == normed and <norm>/1 == bf16(a + res), from the committed partials,
                                                 the committed residual (`res`) and the norm's weight (`w`), each rank its own
 """
@@ -49,14 +50,6 @@ RECV_MEMBERS = ("out", "0", "")       # the received collective output as the co
 MAX_ROWS = 16
 
 
-def strip_rank(name: str) -> str:
-    """`<site>/part_rank1` -> `<site>/part_rank*` (the stratum key shared by every rank)."""
-    head, _, mem = name.rpartition("/")
-    if mem.startswith(("part_rank", "shard_rank")):
-        mem = mem.split("_rank")[0] + "_rank*"
-    return f"{head}/{mem}"
-
-
 def family_of(site: str, kind: str, world: int = 2) -> str:
     """The received-output family of a site (the all-reduce at the embedding site is an AllReduce2 output too; the EmbeddingShard_v1 leg --
     the rank's PARTIAL == masked gather from its pinned vocab shard -- is evaluated on the rank and carried in the pick as `emb`)."""
@@ -68,7 +61,8 @@ def is_embedding_site(site: str) -> bool:
 
 
 FUSED_FAMILY = "AllReduceRmsNormMnnvl_v1"
-ROUTED_FAMILIES = ("AllReduceMnnvl_v1", "AllReduceMultimem_v1", "AllReduceCustom_v1", FUSED_FAMILY)
+NCCL_TREE_FAMILY = "AllReduceNcclTree_v1"
+ROUTED_FAMILIES = ("AllReduceMnnvl_v1", "AllReduceMultimem_v1", "AllReduceCustom_v1", NCCL_TREE_FAMILY, FUSED_FAMILY)
 
 
 def _canon(v: Any) -> Any:
@@ -130,6 +124,8 @@ def routed_expected(family: str, statics: dict[str, Any], parts: np.ndarray, row
     W, R, N = parts.shape
     if family == "AllReduceMnnvl_v1":
         return (TC.mnnvl_rows(parts, int(statics["SHOT"])),)
+    if family == NCCL_TREE_FAMILY:
+        return (TC.nccl_tree_rows(parts, T.nccl_chain(statics["CHAIN"], W)),)
     if family == FUSED_FAMILY:
         if res is None or w is None:
             raise ValueError("the fused all-reduce norm reads the residual and the weight")

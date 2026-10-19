@@ -7,7 +7,9 @@ from __future__ import annotations
 
 import dataclasses
 import struct
+import sys
 from fractions import Fraction
+from pathlib import Path
 
 import pytest
 
@@ -15,12 +17,17 @@ import epoch_coins as E
 
 import pearl_c_vectors as CV
 from test_pouw_pearl_c_debit import spiked_rows
-from verity.core.protocols.pouw.audit import Epoch, Prover, Workload
+from verity.core.protocols.pouw.audit import Epoch, Workload
 from verity.core.protocols.pouw.protocol import Context, DomainError, Matmul, Shape, Tile
 from verity.core.protocols.pouw.schemes import pearl_c as C
 from verity.core.protocols.pouw.schemes import pearl_c_work as W
 from verity.core.protocols.pouw.schemes import pearl_kw as P
 from verity.core.protocols.pouw.schemes.pearl_c_device import SM120
+
+# the clear audit is a reference tool (benchmarks/pouw/clear), imported by name
+sys.path.insert(0, str(Path(__file__).resolve().parents[5] / "benchmarks" / "pouw" / "clear"))
+from clear_audit import Prover  # noqa: E402
+import clear_work as CW  # noqa: E402
 
 S = C.PearlC(k_min=32, tile=(16, 16), forming="v1")
 K = 128
@@ -51,17 +58,17 @@ def test_split_is_bounded_and_canonical():
 
 def test_credit_is_per_row_on_kept_cells_at_leans_accounting():
     tiles = {(t.rows[0], t.cols[0]): t for t in S.tiles(Shape(32, K, 32))}
-    cell = W.cell_wref(S, record())
-    assert cell == Fraction(S.wref(Shape(1, K, 32)), 32) and W.cell_credit(S, record()) == Fraction(S.credit_of(Shape(1, K, 32)), 32)
+    cell = CW.cell_wref(S, record())
+    assert cell == Fraction(S.wref(Shape(1, K, 32)), 32) and CW.cell_credit(S, record()) == Fraction(S.credit_of(Shape(1, K, 32)), 32)
     r = record(excluded_a=(3,), excluded_b=(20,))
-    assert W.tile_weight(S, r, tiles[(0, 0)]) == cell * 15 * 16 and W.tile_weight(S, r, tiles[(0, 16)]) == cell * 15 * 15
-    assert W.tile_weight(S, r, tiles[(16, 16)]) == cell * 4 * 15 and W.tile_weight(S, record(real=16), tiles[(16, 0)]) == 0
-    wref, credit = W.work(S, [r])
-    assert wref == cell * 19 * 31 and credit == (1 - S.cap) * W.cell_credit(S, r) * 19 * 31
-    assert W.work(S, [record(kept=64)])[0] == Fraction(S.wref(Shape(20, 64, 32)))
-    picks = W.draw(S, [r], W.draw_key(b"a coin", bytes(32), bytes(32), bytes(32)), 200)
+    assert CW.tile_weight(S, r, tiles[(0, 0)]) == cell * 15 * 16 and CW.tile_weight(S, r, tiles[(0, 16)]) == cell * 15 * 15
+    assert CW.tile_weight(S, r, tiles[(16, 16)]) == cell * 4 * 15 and CW.tile_weight(S, record(real=16), tiles[(16, 0)]) == 0
+    wref, credit = CW.work(S, [r])
+    assert wref == cell * 19 * 31 and credit == (1 - S.cap) * CW.cell_credit(S, r) * 19 * 31
+    assert CW.work(S, [record(kept=64)])[0] == Fraction(S.wref(Shape(20, 64, 32)))
+    picks = CW.draw(S, [r], CW.draw_key(b"a coin", bytes(32), bytes(32), bytes(32)), 200)
     assert {(t.rows[0], t.cols[0]) for _, t in picks} == set(tiles) and all(r.credited(t)[0] for _, t in picks)
-    assert W.draw(S, [r], W.draw_key(b"another coin", bytes(32), bytes(32), bytes(32)), 200) != picks
+    assert CW.draw(S, [r], CW.draw_key(b"another coin", bytes(32), bytes(32), bytes(32)), 200) != picks
 
 
 def test_the_served_draw_weighs_mixed_linears_by_the_cited_statements_wref():
@@ -75,19 +82,19 @@ def test_the_served_draw_weighs_mixed_linears_by_the_cited_statements_wref():
         return credit + qa * m * k + c * m * k
 
     s = C.PearlC(forming="v1", device=SM120)
-    assert W.draw_wref(s) is W.SM120_LOOP_CAST_8P72 and W.draw_wref(S) is None
+    assert CW.draw_wref(s) is CW.SM120_LOOP_CAST_8P72 and CW.draw_wref(S) is None
     linears = {"llama": [(6144, 4096), (4096, 4096), (28672, 4096), (4096, 14336)],
                "qwen": [(6144, 4096), (4096, 4096), (24576, 4096), (4096, 12288)]}
     for nks in linears.values():
         records = [W.UnitRecord(Matmul(i, Shape(32, k, n), i), 32, k) for i, (n, k) in enumerate(nks)]
-        assert [W.ticket_cell(s, rec) for rec in records] == [lean(1, n, k) / n for n, k in nks]
-        own = {W.cell_wref(s, rec) * n / lean(1, n, k) for rec, (n, k) in zip(records, nks)}
-        assert len(own) == len(nks) and min(own) == W.cell_wref(s, records[3]) * nks[3][0] / lean(1, *nks[3])
+        assert [CW.ticket_cell(s, rec) for rec in records] == [lean(1, n, k) / n for n, k in nks]
+        own = {CW.cell_wref(s, rec) * n / lean(1, n, k) for rec, (n, k) in zip(records, nks)}
+        assert len(own) == len(nks) and min(own) == CW.cell_wref(s, records[3]) * nks[3][0] / lean(1, *nks[3])
     h = record(excluded_a=(3,), excluded_b=(20,))
-    assert all(W.tile_weight(S, h, t) == W.cell_wref(S, h) * len(h.credited(t)[0]) * len(h.credited(t)[1])
+    assert all(CW.tile_weight(S, h, t) == CW.cell_wref(S, h) * len(h.credited(t)[0]) * len(h.credited(t)[1])
                for t in S.tiles(h.matmul.shape))
     mixed = [W.UnitRecord(Matmul(0, Shape(64, 4096, 128), 0), 64, 4096), W.UnitRecord(Matmul(1, Shape(64, 14336, 64), 1), 40, 14336)]
-    tk = W.tickets(s, mixed)
+    tk = CW.tickets(s, mixed)
     weight = {(p, t.rows[0], t.cols[0]): w for p, t, w in tk}
     assert Fraction(weight[(1, 0, 0)], weight[(0, 0, 0)]) == Fraction(40 * 64, 64 * 64) * lean(1, 64, 14336) / 64 / (lean(1, 128, 4096) / 128)
 
@@ -104,7 +111,7 @@ def test_tile_cap_is_the_cells_share_of_the_units_credit():
         total = Fraction(0)
         for t in scheme.tiles(s):
             rows, cols = r.credited(t)
-            _, cap = W.tile_cap(scheme, r, [[0] * s.k] * len(rows), [[0] * s.k] * len(cols))
+            _, cap = CW.tile_cap(scheme, r, [[0] * s.k] * len(rows), [[0] * s.k] * len(cols))
             assert cap == scheme.cap * scheme.credit_of(Shape(s.m, kept, s.n)) * Fraction(len(rows) * len(cols), s.m * s.n)
             assert cap < scheme.cap * scheme.credit_of(Shape(len(rows), kept, len(cols)))
             total += cap
@@ -114,7 +121,7 @@ def test_tile_cap_is_the_cells_share_of_the_units_credit():
     tile = next(t for t in S.tiles(r.matmul.shape) if (t.rows[0], t.cols[0]) == (0, 16))
     rows, cols = r.credited(tile)
     assert (len(rows), len(cols)) == (15, 15)
-    assert W.tile_cap(S, r, [[0] * K] * 15, [[0] * K] * 15)[1] == S.cap * W.cell_credit(S, r) * 15 * 15
+    assert CW.tile_cap(S, r, [[0] * K] * 15, [[0] * K] * 15)[1] == S.cap * CW.cell_credit(S, r) * 15 * 15
 
 
 def test_records_bind_every_field_and_the_splits():
@@ -132,8 +139,8 @@ def test_records_bind_every_field_and_the_splits():
 def test_weight_side_is_charged_once_per_weight():
     """F2: two units on one weight carry one weight side, outside W and the credit."""
     a, b = W.UnitRecord(Matmul(0, Shape(32, K, 32), 7), 32, K), W.UnitRecord(Matmul(1, Shape(16, K, 32), 7), 16, K)
-    assert W.job_costs(S, [a, b]) == W.job_costs(S, [a]) == S.job_cost(32, K)
-    assert W.work(S, [a, b])[0] == S.wref(Shape(48, K, 32))
+    assert CW.job_costs(S, [a, b]) == CW.job_costs(S, [a]) == S.job_cost(32, K)
+    assert CW.work(S, [a, b])[0] == S.wref(Shape(48, K, 32))
 
 
 def ops_for(rows_a, rows_b, k=K):
@@ -145,7 +152,7 @@ def test_tile_rule_reports_and_never_raises():
     rows_a, rows_b = CV.rows_f32("work", "A", 16, K), CV.rows_f32("work", "B", 16, K)
     tile = Tile(tuple(range(16)), tuple(range(16)))
     unit = lambda real=16, kept=K, ea=(), eb=(): W.UnitRecord(Matmul(0, Shape(16, K, 16), 0), real, kept, ea, eb)  # noqa: E731
-    check = lambda rec, a, b: W.check_opened(S, rec, tile, a, b, ops_for(a, b))  # noqa: E731
+    check = lambda rec, a, b: CW.check_opened(S, rec, tile, a, b, ops_for(a, b))  # noqa: E731
     assert check(unit(), rows_a, rows_b) is None
     bad_a = rows_a[:5] + [spiked(rows_a[5])] + rows_a[6:]
     assert "A row 5 is credited but fails" in check(unit(), bad_a, rows_b)
@@ -157,7 +164,7 @@ def test_tile_rule_reports_and_never_raises():
     assert check(unit(real=12), rows_a[:12] + [zero] * 4, rows_b) is None
     assert "filler row 13 is not zero" in check(unit(real=12), rows_a[:12] + [zero, rows_a[13], zero, zero], rows_b)
     assert "A row 12 is credited but fails" in check(unit(), rows_a[:12] + [zero] * 4, rows_b)
-    assert "malformed" in W.check_opened(S, unit(), tile, rows_a[:15] + [b"\0" * 8], rows_b, ops_for(rows_a, rows_b))
+    assert "malformed" in CW.check_opened(S, unit(), tile, rows_a[:15] + [b"\0" * 8], rows_b, ops_for(rows_a, rows_b))
 
 
 def test_padding_stuffing_is_rejected():
@@ -170,11 +177,11 @@ def test_padding_stuffing_is_rejected():
     stuffed = list(base[0])
     for p in range(kept, k, 8):
         stuffed[p] = P.f32_bits(3e4)
-    assert not W.row_passes(base[0]) and W.row_passes(stuffed)
+    assert not CW.row_passes(base[0]) and CW.row_passes(stuffed)
     rows_a = [C.f32_row(stuffed)] + [C.f32_row(r) for r in base[1:]]
     unit = W.UnitRecord(Matmul(0, Shape(16, k, 16), 0), 16, kept)
     tile = Tile(tuple(range(16)), tuple(range(16)))
-    assert "A row 0 is not zero past the kept width" in W.check_opened(S, unit, tile, rows_a, rows_b, ops_for(rows_a, rows_b, k))
+    assert "A row 0 is not zero past the kept width" in CW.check_opened(S, unit, tile, rows_a, rows_b, ops_for(rows_a, rows_b, k))
 
 
 def lifecycle(rows_a=None, real=20, scheme=S, salt_key=None):
@@ -194,12 +201,12 @@ SPLITS = {9: W.Split(K)}
 
 def test_audit_credits_real_rows_and_checks_the_excluded_ones():
     epoch, prover, tr, rows_a, rows_b = lifecycle()
-    records = W.declare(S, epoch, {3: rows_a}, {9: rows_b}, SPLITS, real_rows={3: 20})
+    records = CW.declare(S, epoch, {3: rows_a}, {9: rows_b}, SPLITS, real_rows={3: 20})
     assert records == [W.UnitRecord(epoch.workload.matmuls[0], 20, K, (3,), ())]
-    out = W.audit(S, epoch, prover, tr, SPLITS, records, E.challenger(), 8)
+    out = CW.audit(S, epoch, prover, tr, SPLITS, records, E.challenger(), 8)
     assert out.audit.accepted and len(out.audit.verdicts) == 9 and out.audit.selected[-1] == 0
-    assert out.wref == W.cell_wref(S, records[0]) * 19 * 16 and out.audit.profile.work == int(out.wref)
-    assert out.credit == (1 - S.cap) * W.cell_credit(S, records[0]) * 19 * 16 and out.job == S.job_cost(16, K)
+    assert out.wref == CW.cell_wref(S, records[0]) * 19 * 16 and out.audit.profile.work == int(out.wref)
+    assert out.credit == (1 - S.cap) * CW.cell_credit(S, records[0]) * 19 * 16 and out.job == S.job_cost(16, K)
 
 
 def test_an_excluded_weight_row_earns_nothing_and_its_tiles_are_accepted():
@@ -216,14 +223,14 @@ def test_an_excluded_weight_row_earns_nothing_and_its_tiles_are_accepted():
     prover = Prover(S, {9: rows_b})
     epoch = Epoch.unverified(work, prover.weight_roots, b"beacon", E.COINS)
     tr = prover.prove(epoch, {3: rows_a})
-    records = W.declare(S, epoch, {3: rows_a}, {9: rows_b}, SPLITS, real_rows={3: 20})
+    records = CW.declare(S, epoch, {3: rows_a}, {9: rows_b}, SPLITS, real_rows={3: 20})
     assert records == [W.UnitRecord(epoch.workload.matmuls[0], 20, K, (3,), (5,))]
-    out = W.audit(S, epoch, prover, tr, SPLITS, records, E.challenger(), 8)
+    out = CW.audit(S, epoch, prover, tr, SPLITS, records, E.challenger(), 8)
     assert all(5 in t.cols for t in S.tiles(work.matmuls[0].shape))
     assert out.audit.accepted and len(out.audit.verdicts) == 9
-    assert out.wref == W.cell_wref(S, records[0]) * 19 * 15 and out.credit == (1 - S.cap) * W.cell_credit(S, records[0]) * 19 * 15
+    assert out.wref == CW.cell_wref(S, records[0]) * 19 * 15 and out.credit == (1 - S.cap) * CW.cell_credit(S, records[0]) * 19 * 15
     credited_b = W.UnitRecord(epoch.workload.matmuls[0], 20, K, (3,), ())
-    rejected = W.audit(S, epoch, prover, tr, SPLITS, [credited_b], E.challenger(), 8)
+    rejected = CW.audit(S, epoch, prover, tr, SPLITS, [credited_b], E.challenger(), 8)
     assert not rejected.audit.accepted and any(v.reason == "B row 5 is credited but fails the per-row rules"
                                                for v in rejected.audit.verdicts)
 
@@ -234,12 +241,12 @@ def test_r1_is_a_no_op_on_pearl_c():
     with the transcript gives the same records as without."""
     epoch, prover, tr, rows_a, rows_b = lifecycle()
     assert not hasattr(S, "row_over_debit") and not hasattr(S, "r1_rows")
-    plain = W.declare(S, epoch, {3: rows_a}, {9: rows_b}, SPLITS, real_rows={3: 20})
-    assert W.declare(S, epoch, {3: rows_a}, {9: rows_b}, SPLITS, real_rows={3: 20}, transcript=tr) == plain
+    plain = CW.declare(S, epoch, {3: rows_a}, {9: rows_b}, SPLITS, real_rows={3: 20})
+    assert CW.declare(S, epoch, {3: rows_a}, {9: rows_b}, SPLITS, real_rows={3: 20}, transcript=tr) == plain
     u = epoch.workload.matmuls[0]
     tile = S.tiles(u.shape)[0]
     rec = W.UnitRecord(u, 20, K, (0, 3), ())
-    reason = W.check_opened(S, rec, tile, [rows_a[i] for i in tile.rows], [rows_b[j] for j in tile.cols], None)
+    reason = CW.check_opened(S, rec, tile, [rows_a[i] for i in tile.rows], [rows_b[j] for j in tile.cols], None)
     assert reason == "A row 0 is excluded but passes the per-row rules"
 
 
@@ -255,21 +262,21 @@ def test_pearl_c4s_per_element_term_3_is_a_no_op_on_pearl_c(monkeypatch):
     monkeypatch.setattr(pearl_c4, "salt_dead", unreachable)
     epoch, prover, tr, rows_a, rows_b = lifecycle()
     assert not hasattr(S, "tile_cap")
-    records = W.declare(S, epoch, {3: rows_a}, {9: rows_b}, SPLITS, real_rows={3: 20})
-    assert W.audit(S, epoch, prover, tr, SPLITS, records, E.challenger(), 4).audit.accepted
+    records = CW.declare(S, epoch, {3: rows_a}, {9: rows_b}, SPLITS, real_rows={3: 20})
+    assert CW.audit(S, epoch, prover, tr, SPLITS, records, E.challenger(), 4).audit.accepted
 
 
 def test_v_ex_is_a_no_op_on_pearl_c():
     """V-EX adds nothing to a declaration without voluntary rows: Pearl-C's records declare none, each encodes byte for
     byte in the v2 layout (so `records_root` is unchanged), and the audit accepts as before."""
     epoch, prover, tr, rows_a, rows_b = lifecycle()
-    records = W.declare(S, epoch, {3: rows_a}, {9: rows_b}, SPLITS, real_rows={3: 20})
+    records = CW.declare(S, epoch, {3: rows_a}, {9: rows_b}, SPLITS, real_rows={3: 20})
     for r in records:
         u, s, a, b = r.matmul, r.matmul.shape, r.excluded_a, r.excluded_b
         assert r.voluntary_a == r.voluntary_b == ()
         assert r.encode() == struct.pack(f"<QQIIIIIII{len(a)}I{len(b)}I", u.index, u.weight, s.m, s.k, s.n, r.real_rows,
                                          r.k_kept, len(a), len(b), *a, *b)
-    assert W.audit(S, epoch, prover, tr, SPLITS, records, E.challenger(), 4).audit.accepted
+    assert CW.audit(S, epoch, prover, tr, SPLITS, records, E.challenger(), 4).audit.accepted
 
 
 def test_audit_under_hashing_h3():
@@ -279,20 +286,20 @@ def test_audit_under_hashing_h3():
     it fails until it is given up."""
     h3 = C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h3")
     epoch, prover, tr, rows_a, rows_b = lifecycle(scheme=h3, salt_key=bytes([10]) * 32)
-    declared = W.declare(h3, epoch, {3: rows_a}, {9: rows_b}, SPLITS, real_rows={3: 20})
-    out = W.audit(h3, epoch, prover, tr, SPLITS, declared, E.challenger(), 4).audit
+    declared = CW.declare(h3, epoch, {3: rows_a}, {9: rows_b}, SPLITS, real_rows={3: 20})
+    out = CW.audit(h3, epoch, prover, tr, SPLITS, declared, E.challenger(), 4).audit
     assert not out.accepted and any(v.reason.startswith("A row 4's replayed debit") for v in out.verdicts)
-    va, vb = W.volunteer(h3, epoch, tr, declared, {3: rows_a}, {9: rows_b})
+    va, vb = CW.volunteer(h3, epoch, tr, declared, {3: rows_a}, {9: rows_b})
     assert (va, vb) == ({3: [4]}, {})
-    records = W.declare(h3, epoch, {3: rows_a}, {9: rows_b}, SPLITS, real_rows={3: 20}, voluntary_a=va)
-    assert W.audit(h3, epoch, prover, tr, SPLITS, records, E.challenger(), 4).audit.accepted
-    assert not W.audit(S, epoch, prover, tr, SPLITS, records, E.challenger(), 4).audit.accepted
+    records = CW.declare(h3, epoch, {3: rows_a}, {9: rows_b}, SPLITS, real_rows={3: 20}, voluntary_a=va)
+    assert CW.audit(h3, epoch, prover, tr, SPLITS, records, E.challenger(), 4).audit.accepted
+    assert not CW.audit(S, epoch, prover, tr, SPLITS, records, E.challenger(), 4).audit.accepted
 
 
 def test_audit_rejects_what_the_red_team_found():
     epoch, prover, tr, rows_a, rows_b = lifecycle()
     u = epoch.workload.matmuls[0]
-    audit = lambda records, splits=SPLITS, **kw: W.audit(S, epoch, prover, tr, splits, records,  # noqa: E731
+    audit = lambda records, splits=SPLITS, **kw: CW.audit(S, epoch, prover, tr, splits, records,  # noqa: E731
                                                          kw.pop("challenger", None) or E.challenger(), 8, **kw)
     reasons = lambda out: " | ".join(v.reason for v in out.audit.verdicts if not v.ok)  # noqa: E731
     hides = audit([W.UnitRecord(u, 20, K)])
@@ -316,7 +323,7 @@ def test_split_check_gates_an_honest_split():
     split = {9: W.Split(K + 1, (7,), b"calib")}
     records = [W.UnitRecord(u, 20, K, (3,))]
     seen = []
-    out = W.audit(S, epoch, prover, tr, split, records, E.challenger(), 4, split_check=lambda w, sp: seen.append((w, sp)) or True)
+    out = CW.audit(S, epoch, prover, tr, split, records, E.challenger(), 4, split_check=lambda w, sp: seen.append((w, sp)) or True)
     assert out.audit.accepted and seen == [(9, split[9])]
 
 
@@ -332,9 +339,9 @@ def test_aligned_spike_unit_is_rejected_by_the_cap():
         epoch = Epoch.unverified(work, prover.weight_roots, b"beacon", E.COINS)
         tr = prover.prove(epoch, {0: rows_a})
         splits = {1: W.Split(k)}
-        records = W.declare(s, epoch, {0: rows_a}, {1: rows_b}, splits)
+        records = CW.declare(s, epoch, {0: rows_a}, {1: rows_b}, splits)
         assert records == [W.UnitRecord(work.matmuls[0], t, k)]
-        out = W.audit(s, epoch, prover, tr, splits, records, E.challenger(), 1)
+        out = CW.audit(s, epoch, prover, tr, splits, records, E.challenger(), 1)
         assert out.audit.accepted == accepted
         if not accepted:
             assert "exceeds the cap" in out.audit.verdicts[0].reason
@@ -347,7 +354,7 @@ def test_h3_caps_each_credited_row_as_well_as_the_tile():
     accepts on the other 31 rows."""
     k, m, n = 1024, 32, 4
     h3, h0 = (C.PearlC(k_min=128, tile=(m, n), forming="v1", hashing=h) for h in ("h3", "h0"))
-    assert W.row_cap(h3) and not W.row_cap(h0) and not W.row_cap(S)
+    assert CW.row_cap(h3) and not CW.row_cap(h0) and not CW.row_cap(S)
     rows_a = spiked_rows(k, 1, 100, 300.0) + spiked_rows(k, m - 1, 200, None)
     rows_b = spiked_rows(k, n, 900, 300.0)
     work = Workload((Matmul(0, Shape(m, k, n), 1),))
@@ -355,24 +362,24 @@ def test_h3_caps_each_credited_row_as_well_as_the_tile():
     prover = Prover(h3, {1: rows_b}, salt_key=bytes(32))
     epoch = Epoch.unverified(work, prover.weight_roots, b"beacon", E.COINS)
     tr = prover.prove(epoch, {0: rows_a})
-    records = W.declare(h3, epoch, {0: rows_a}, {1: rows_b}, splits)
+    records = CW.declare(h3, epoch, {0: rows_a}, {1: rows_b}, splits)
     assert records == [W.UnitRecord(work.matmuls[0], m, k)]
     tile = h3.tiles(work.matmuls[0].shape)[0]
     ctx = Context(epoch.salt, work.matmuls[0], tr.activation_roots[0], epoch.weight_roots[1])
     for s in (h3, h0):
         ops = s.encode(ctx, s.noise(ctx), rows_a, rows_b, tile)
-        debit, cap = W._debit_cap(s, records[0], tile, ops, list(range(m)), list(range(n)))
-        row = W._debit_cap(s, records[0], tile, ops, [0], list(range(n)))
+        debit, cap = CW._debit_cap(s, records[0], tile, ops, list(range(m)), list(range(n)))
+        row = CW._debit_cap(s, records[0], tile, ops, [0], list(range(n)))
         assert debit < cap * 3 / 4 and row[0] > 10 * row[1] and row[1] == cap / m
-    assert W.check_opened(h0, records[0], tile, rows_a, rows_b, ops) is None
-    out = W.audit(h3, epoch, prover, tr, splits, records, E.challenger(), 1)
+    assert CW.check_opened(h0, records[0], tile, rows_a, rows_b, ops) is None
+    out = CW.audit(h3, epoch, prover, tr, splits, records, E.challenger(), 1)
     assert not out.audit.accepted
     assert out.audit.verdicts[0].reason.startswith("A row 0's replayed debit") and "the row cap" in out.audit.verdicts[0].reason
-    va, vb = W.volunteer(h3, epoch, tr, records, {0: rows_a}, {1: rows_b})
+    va, vb = CW.volunteer(h3, epoch, tr, records, {0: rows_a}, {1: rows_b})
     assert (va, vb) == ({0: [0]}, {})
-    given = W.declare(h3, epoch, {0: rows_a}, {1: rows_b}, splits, voluntary_a=va)
-    again = W.audit(h3, epoch, prover, tr, splits, given, E.challenger(), 1)
-    assert again.audit.accepted and again.credit == (1 - h3.cap) * W.cell_credit(h3, given[0]) * (m - 1) * n
+    given = CW.declare(h3, epoch, {0: rows_a}, {1: rows_b}, splits, voluntary_a=va)
+    again = CW.audit(h3, epoch, prover, tr, splits, given, E.challenger(), 1)
+    assert again.audit.accepted and again.credit == (1 - h3.cap) * CW.cell_credit(h3, given[0]) * (m - 1) * n
 
 
 def test_the_draw_coin_must_open_against_the_epochs_commitment_after_the_commitment():
@@ -381,14 +388,14 @@ def test_the_draw_coin_must_open_against_the_epochs_commitment_after_the_commitm
     before the commitment, another epoch's coin and an epoch with no coin commitment are each refused before any tile
     is opened; the honest challenger's coin draws the tiles `draw_key` gives."""
     epoch, prover, tr, rows_a, rows_b = lifecycle()
-    records = W.declare(S, epoch, {3: rows_a}, {9: rows_b}, SPLITS, real_rows={3: 20})
+    records = CW.declare(S, epoch, {3: rows_a}, {9: rows_b}, SPLITS, real_rows={3: 20})
     digest = W.records_root(epoch.salt, epoch.weights_root, SPLITS, records)
-    after = W.draw_after(tr.commitment.root, digest)
+    after = CW.draw_after(tr.commitment.root, digest)
     honest = E.challenger().open("draw", after)
-    out = W.audit(S, epoch, prover, tr, SPLITS, records, E.challenger(), 8)
-    want = W.draw(S, records, W.draw_key(honest.coin, tr.commitment.root, digest, epoch.salt), 8)
+    out = CW.audit(S, epoch, prover, tr, SPLITS, records, E.challenger(), 8)
+    want = CW.draw(S, records, CW.draw_key(honest.coin, tr.commitment.root, digest, epoch.salt), 8)
     assert out.audit.accepted and out.audit.selected[:8] == tuple(
-        next(r.id for r in W.Verifier(S, epoch).refs if (r.matmul, r.tile) == (p, t)) for p, t in want)
+        next(r.id for r in CW.Verifier(S, epoch).refs if (r.matmul, r.tile) == (p, t)) for p, t in want)
     refused = (
         ("coin does not open against the epoch's coin commitment", E.challenger(b"a foreign challenger")),
         ("coin does not open against the epoch's coin commitment", E.Answering(dataclasses.replace(honest, coin=bytes(32)))),
@@ -397,10 +404,10 @@ def test_the_draw_coin_must_open_against_the_epochs_commitment_after_the_commitm
         ("coin is epoch 8's, not epoch 7's", E.challenger(epoch=8)),
     )
     for reason, challenger in refused:
-        out = W.audit(S, epoch, prover, tr, SPLITS, records, challenger, 8)
-        assert not out.audit.accepted and out.audit.verdicts == (W.Verdict(-1, False, "the draw's " + reason),)
+        out = CW.audit(S, epoch, prover, tr, SPLITS, records, challenger, 8)
+        assert not out.audit.accepted and out.audit.verdicts == (CW.Verdict(-1, False, "the draw's " + reason),)
     bare = Epoch.unverified(epoch.workload, epoch.weight_roots, b"beacon")
-    out = W.audit(S, bare, prover, tr, SPLITS, records, E.challenger(), 8)
+    out = CW.audit(S, bare, prover, tr, SPLITS, records, E.challenger(), 8)
     assert not out.audit.accepted and "no coin commitment" in out.audit.verdicts[0].reason
 
 

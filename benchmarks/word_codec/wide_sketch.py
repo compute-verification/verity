@@ -1,6 +1,6 @@
 """ro-sketch-blake3/v0 over the wide store, byte-exact: ra-sketch-tag's sketch-then-hash tag (the sign matrix, the
-sketch, the tag, the leaves and the root as `benchmarks/sketch_tag/sketch.py` states them) on `wide`'s records, so the
-fused GEMM sketches the encoded words it already holds.
+sketch, the tag, the leaves and the root as `benchmarks/sketch_tag/sketch.py` at 1b21bc8f7 states them) on `wide`'s
+records, so the fused GEMM sketches the encoded words it already holds.
 
 ~~~text
 lane bytes  lane l's record of task q (`wide`'s store: its L·N u32 limbs in (word, limb) order), little-endian, zero-
