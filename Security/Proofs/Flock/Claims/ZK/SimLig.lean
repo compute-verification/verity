@@ -1556,10 +1556,90 @@ theorem ligY1E : LigY1E := by
 
 end Y1
 
-/-- **`SimLig` from the three remaining value statements**: `ligOodE`, `ligYbarE` and `ligY1E` discharge the
-out-of-domain value, the restart's `ȳ` and its `y₁'`. -/
-theorem simLig_of_rest (hmsg : LigMsgE) (hsum : LigSumsE) (hsalt : LigSaltE) : SimLig :=
-  simLig_of_fields ligOodE hmsg hsum ligY1E ligYbarE hsalt
+/-! ### Levels ≥ 1's salts
+
+Where the restart is sent its levels ≥ 1 value is sent too, `PE`'s salts as one string (`saltBlob` of `hiSalt` at the
+tape's levels ≥ 1 salts, `srcE_hiSalt_L`), so the source's salt at a level `≥ 1` and position of the schedule is
+`hiSalt`'s fitted to 192 bytes (`blobSalt_saltBlob`), the tape's by HiSalts' `hiSalt_exe` (`HiSaltE`), and the deployed
+scheme's salts are 192 bytes (`ligSaltE`). -/
+
+section Salt
+
+/-- **Levels ≥ 1's salts at the executable's layout** (HiSalts' `hiSalt_exe` at `PE`, whose closure this file doesn't
+import): rep `r`'s levels ≥ 1 salt that `hiSalt` reads at a level `l ≥ 1` and position `p` of the schedule is the masked
+prover's tape's. -/
+def HiSaltE : Prop :=
+  ∀ (x : Msg) (t : UE.Tape) (j : Fin (jOf x)) (r : Fin 2) (l p : ℕ), HiAt (zkTab x j).table.sch.levels l p →
+    hiSalt (zkTab x j).table.sch.levels (((UE.tape x t).1 j).2.2.2.2.2.2.2.2.2 r) l p = (exeTape t).salt j.val r.val l p
+
+private theorem fitBytes_fit192 (b : ByteArray) :
+    FlockComplete.fitBytes 192 (fit192 b) = FlockComplete.fitBytes 192 b := by
+  rw [fitBytes_of_size (LigPf.fit192_size b)]
+  unfold fit192 FlockComplete.fitBytes
+  rw [show 192 - min 192 b.size = 192 - b.size by omega]
+
+/-- **The deployed source's levels ≥ 1 salts** where the rep's restart is sent: read back from `PE`'s string of the
+tape's levels ≥ 1 salts. -/
+private theorem srcE_hiSalt_L (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit) (τ : UE.Tape)
+    (j : Fin (jOf x)) (r : Fin 2)
+    (hS : famPasses (fun j => ((tabC PE x j).T (czExe PE x c j)).tab) (fun j => ((tabC PE x j).T (czExe PE x c j)).rep)
+      j r .restart) :
+    ((srcE x c w τ j.val).rep r.val).hiSalt = blobSalt (zkTab x j).table.sch.levels
+      (saltBlob (zkTab x j).table.sch.levels
+        (hiSalt (zkTab x j).table.sch.levels (((UE.tape x τ).1 j).2.2.2.2.2.2.2.2.2 r))) := by
+  unfold srcE tabSrcCut
+  rw [dite_eq_left j.isLt]
+  show (if hr : r.val < 2 then repSrcCut PE x (czExe PE x c) (cutE x c w τ) j ⟨r.val, hr⟩ else default).hiSalt = _
+  rw [dite_eq_left r.isLt]
+  have e : (cutE x c w τ j).lig r = some (((tabC PE x j).T (czExe PE x c j)).tab.lig r
+      (((tabC PE x j).T (czExe PE x c j)).tab.y1' (wtOf PE x w j) ((UE.tape x τ).1 j).1 ((UE.tape x τ).1 j).2.1.2.1 r)
+      (((UE.tape x τ).1 j).2.2.2.2.2.2.2.2.2 r)) := ite_eq_left hS
+  unfold repSrcCut
+  dsimp only
+  rw [e]
+  rfl
+
+theorem ligSaltE (hhi : HiSaltE) : LigSaltE := by
+  intro x hx w hw τ c n hn s spec hs j r extras he
+  dsimp only
+  intro hlt _ i hi1 hi2 q hq
+  have hS := famPasses_of (pointReads_czExe PE) (coinReads_czExe PE) hx hn hs j r .restart (by
+    show rhoSlot x j.val r.val + 2 ≤ n
+    unfold rhoSlot
+    rw [repSlot_p0 hs j r]
+    omega)
+  obtain ⟨-, -, -, -, -, -, hseam, -, -⟩ :=
+    FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ (zkTab x j).hz
+  have hat : HiAt (zkTab x j).table.sch.levels i q := by
+    have e : (zkTab x j).table.sch.levels.getD i default =
+        FlockSoundness.Refine.levelOf ((zkTab x j).sch.levels.getD i default) := by
+      show ((zkTab x j).sch.levels.toList.map FlockSoundness.Refine.levelOf).getD i default = _
+      simp [List.getD_eq_getElem?_getD, Array.getD_eq_getD_getElem?, hi2]
+    refine ⟨hi1, ?_, ?_⟩
+    · show i < ((zkTab x j).sch.levels.toList.map FlockSoundness.Refine.levelOf).length
+      simpa using hi2
+    · rw [e, ← (hseam i hi2).2.2.2.2]
+      exact hq
+  have hms : (ligSt x j).merkle.saltBytes = 192 := by
+    obtain ⟨-, -, -, hall⟩ := FlockComplete.ZkTables.tables_of_setup hx.1 hs
+    have hj : j.val < (stsOf x).size := lt_of_jOf j
+    have hm : (ligSt x j).merkle = _root_.Flock.MerkleScheme.hm96Sha512 := by
+      unfold ligSt
+      rw [getElem!_pos (FlockDeploy.tabsOf (stsOf x)) j.val (by simpa [FlockDeploy.tabsOf] using hj)]
+      simp only [FlockDeploy.tabsOf, Array.getElem_map]
+      exact (hall j.val hj).2.2
+    rw [hm]
+    rfl
+  unfold ligSrc
+  rw [srcE_hiSalt_L x c w τ j r hS, LigPf.blobSalt_saltBlob hat, hhi x τ j r i q hat, hms]
+  exact fitBytes_fit192 _
+
+end Salt
+
+/-- **`SimLig` from the two remaining value statements and HiSalts' salts**: `ligOodE`, `ligYbarE`, `ligY1E` and
+`ligSaltE` discharge the out-of-domain value, the restart's `ȳ`, its `y₁'` and levels ≥ 1's salts. -/
+theorem simLig_of_rest (hmsg : LigMsgE) (hsum : LigSumsE) (hhi : HiSaltE) : SimLig :=
+  simLig_of_fields ligOodE hmsg hsum ligY1E ligYbarE (ligSaltE hhi)
 
 end Masked
 
