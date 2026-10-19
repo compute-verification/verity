@@ -50,8 +50,8 @@ def frame (ws : Nat) (b : List UInt8) : List UInt8 := 2 :: ((u32be ws).reverse +
 /-- The path's length: the round's subtree, then the streams' tree (`Spec::opening_words`). -/
 def depth (s : CoinTree.Spec) : Nat := s.roundsLog + (Nat.nextPowerOfTwo s.streams.size).log2
 
-/-- An opening of `n` coins in words: the coins, `T_n` (4), the salt (12), the path (4 a node). -/
-def openingWords (s : CoinTree.Spec) (n : Nat) : Nat := n + 4 + 12 + 4 * depth s
+/-- An opening of `n` coins in words: the coins, `T_n` and the salt (16), the path (4 a node). -/
+def openingWords (s : CoinTree.Spec) (n : Nat) : Nat := n + 16 + 4 * depth s
 
 /-- `T_0`: the chain from `T_n` up through the coins, `T_i = H_ν(CHAIN ‖ c_i ‖ T_{i+1})`. -/
 def chain (ν : List UInt8) : List (List UInt8) → List UInt8 → List UInt8
@@ -88,19 +88,26 @@ def parts (n d : Nat) (b : List UInt8) : Parts where
 /-- The parts' bytes, in order. -/
 def Parts.join (p : Parts) : List UInt8 := p.cs.flatten ++ p.tn ++ p.y ++ p.sibs.flatten
 
+/-- Whether `m` is an opening of `n` coins of stream `s`'s round `r`: the round in the schedule, `n` in the block, the
+stream in the tree, and `m` exactly `Resp::Coins` of the opening's words. -/
+def parses (spec : CoinTree.Spec) (s r n : Nat) (m : List UInt8) : Bool :=
+  decide (r < 2 ^ spec.roundsLog ∧ n ≤ spec.block ∧ s < spec.streams.size) &&
+    decide (m = frame (openingWords spec n) (parts n (depth spec) (m.drop 5)).join)
+
+/-- The node the opening `m` of `n` coins of stream `s`'s round `r` walks to: its leaf, then its path. -/
+def reach (spec : CoinTree.Spec) (ν : List UInt8) (key : ByteArray) (s r n : Nat) (m : List UInt8) : List UInt8 :=
+  let p := parts n (depth spec) (m.drop 5)
+  walk ν (s * 2 ^ spec.roundsLog + r) (leaf ν key (u32be s ++ u32be r) (chain ν p.cs p.tn) p.y) p.sibs
+
 /-- **The opening check** (`coin_tree::check`): `m` opens `n` coins of stream `s`'s round `r` under the nonce `ν` and the
-answer's `key` and `root`; the coins' bytes. Refused, with Rust's reason, when the round is past the schedule, `n` past
-the block, the stream outside the tree, or `m` not exactly `Resp::Coins` of an opening of `n` coins; or when its walk
-does not reach the root. -/
+answer's `key` and `root`; the coins' bytes. Refused, with Rust's reason, when it does not parse (`parses`) or its walk
+does not reach the root (`reach`). -/
 def check (spec : CoinTree.Spec) (ν : List UInt8) (key : ByteArray) (root : List UInt8) (s r n : Nat) (m : List UInt8) :
     Except String (List UInt8) :=
   let name := spec.streams[s]?.getD "?"
-  let w := openingWords spec n
-  let p := parts n (depth spec) (m.drop 5)
-  if !(decide (r < 2 ^ spec.roundsLog ∧ n ≤ spec.block ∧ s < spec.streams.size) && decide (m = frame w p.join)) then
-    .error s!"coin opening of {name} round {r}: {(m.length - 5) / 16} words, want {w}"
-  else if walk ν (s * 2 ^ spec.roundsLog + r) (leaf ν key (u32be s ++ u32be r) (chain ν p.cs p.tn) p.y) p.sibs = root then
-    .ok p.cs.flatten
+  if !parses spec s r n m then
+    .error s!"coin opening of {name} round {r}: {(m.length - 5) / 16} words, want {openingWords spec n}"
+  else if reach spec ν key s r n m = root then .ok (parts n (depth spec) (m.drop 5)).cs.flatten
   else .error s!"the verifier's coins for {name} round {r} do not open its step-0 commitment"
 
 /-- **`Hello`'s answer** `a` (`Resp::Coins`' frame): the coin tree's root and the session's hm96 key, 20 words, the key's
@@ -130,28 +137,39 @@ def Hello.parse (h : String) : Except String Hello := do
   let nonce ← (unhex n).mapError (s!"{STOP}Hello's coin-tree nonce: {·}")
   return { spec, links := link "points" * link "m", nonce := nonce.data.toList }
 
-/-- A session past `Hello`'s answer: its `Hello`, the answer's key and root, and each stream's rounds opened so far. -/
+/-- A session past `Hello`'s answer: its `Hello`, the answer's key and root, and the streams of the rounds opened so far,
+in order (a stream's next round is how often it appears). -/
 structure Session where
   hello : Hello
   key : ByteArray
   root : List UInt8
-  rounds : Array Nat
+  opened : List Nat
 
 /-- The session once `Hello`'s answer `a` checks. -/
-def Session.start (h : Hello) (a : List UInt8) : Except String Session := do
-  let (key, root) ← answer a
-  return { hello := h, key, root, rounds := Array.replicate h.spec.streams.size 0 }
+def Session.start (h : Hello) (a : List UInt8) : Except String Session :=
+  match answer a with
+  | .ok (key, root) => .ok { hello := h, key, root, opened := [] }
+  | .error e => .error e
 
 /-- **The next opening** `m`, of `n` coins of `stream`: the stream's next round must open (`check`). The session stream's
 count is `Hello`'s link points, whatever the request says. The coins, and the session with the round counted. -/
-def Session.open (S : Session) (stream : String) (n : Nat) (m : List UInt8) : Except String (Session × List UInt8) := do
+def Session.open (S : Session) (stream : String) (n : Nat) (m : List UInt8) : Except String (Session × List UInt8) :=
   let s := S.hello.spec.streams.toList.idxOf stream
-  if s ≥ S.hello.spec.streams.size then throw s!"{STOP}{stream} is outside the committed schedule"
-  let n := if stream == SESSION then S.hello.links else n
-  let r := S.rounds.getD s 0
-  match check S.hello.spec S.hello.nonce S.key S.root s r n m with
-  | .ok c => return ({ S with rounds := S.rounds.set! s (r + 1) }, c)
-  | .error e => throw s!"{STOP}{e}"
+  if s < S.hello.spec.streams.size then
+    match check S.hello.spec S.hello.nonce S.key S.root s (S.opened.count s)
+        (if stream == SESSION then S.hello.links else n) m with
+    | .ok c => .ok ({ S with opened := S.opened ++ [s] }, c)
+    | .error e => .error s!"{STOP}{e}"
+  else .error s!"{STOP}{stream} is outside the committed schedule"
+
+/-- **A session's openings** `os`, each `(stream, n, m)` as `open` takes it, in order: the session after them all, or the
+first refusal. `cmd` answers them one at a time, so it hands on a round's coins only when this passes up to it. -/
+def Session.openAll (S : Session) : List (String × Nat × List UInt8) → Except String Session
+  | [] => .ok S
+  | (stream, n, m) :: os =>
+    match S.open stream n m with
+    | .ok (S', _) => S'.openAll os
+    | .error e => .error e
 
 /-- `n` bytes of `h`, for `what`'s messages. Each read that returns nothing ends the input, so `n` reads that each return
 a byte or more suffice. -/
