@@ -99,16 +99,17 @@ def test_the_fit_bound_is_void_once_a_window_holds_n_star_weights():
     assert F.fit_rate(p, R, 1e10, F.BOUNDARY["central"]) == (math.inf, 0)
     assert F.fit_rate(p, 0.99 * R, 1e10, F.BOUNDARY["central"])[0] < math.inf
     assert F.window_mults(1e10 * p["b_w"], 1e10, F.BOUNDARY["central"], p["b_w"]) == math.inf
-    assert F.dampener(p, math.inf, 0.0) == pytest.approx(p["mfu"] / F.residual_with_lag(p))
+    q = F.params(6.0, residual=0.1)
+    assert 1 < F.dampener(q, math.inf, 0.0) == pytest.approx(q["mfu"] / F.residual_with_lag(q))
 
 
 def test_the_table_against_the_red_teams_closed_form():
-    """At the structural d = 1 the closed form caps nothing at any of the table's residuals, leaving the residual's
-    D = 1.25; at central boundary bits the fit bound is stronger there, and void from 50 GB, where a server holds N*
-    weights at b_w."""
+    """At the structural d = 1 the closed form caps nothing at any of the table's residuals, leaving D = 1 at the
+    ladder's r-hat (PoUW's floor credit, 0.508), as the ladder's memory rungs have it; at central boundary bits the fit
+    bound is stronger there, and void from 50 GB, where a server holds N* weights at b_w."""
     rows = {r["wipe_gb"]: r for r in F.summary()["rows"]}
-    assert rows[1.0]["D_closed"] == pytest.approx(1.25, rel=0.01)
-    assert rows[6.0]["D_closed"] == rows[13.0]["D_closed"] == pytest.approx(1.25, rel=0.01)
+    assert T.audited_residual(F.params(1.0)) == pytest.approx(0.508)
+    assert rows[1.0]["D_closed"] == rows[6.0]["D_closed"] == rows[13.0]["D_closed"] == 1.0
     assert rows[6.0]["D_fit"] > rows[6.0]["D_closed"] and rows[13.0]["D_fit"] > rows[13.0]["D_closed"]
     assert rows[50.0]["periods"] == 0 and rows[166.0]["periods"] == 0
     assert rows[50.0]["visits"] < 1 and rows[50.0]["visits_train"] > 1

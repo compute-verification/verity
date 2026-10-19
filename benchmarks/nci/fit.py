@@ -33,7 +33,7 @@ When a one-period window holds N* weights (S >= N* b_w) the bound is void, and w
 (``replica``): a server-sized model synced through intake, which reaches L* only if it holds N* weights at its training
 precision.
 
-    python benchmarks/nci/fit.py            # the table at r = 0.255 and mfu 0.4
+    python benchmarks/nci/fit.py            # the table at the ladder's r-hat (PoUW's floor credit) and mfu 0.4
     python benchmarks/nci/fit.py --json     # the same rows, for other renderers
 """
 
@@ -78,7 +78,6 @@ PATH_MULTIPLIER = {"none": 1.0, "smalltalk": 0.9, "dipaco": 0.05}
 #: DiLoCo's multiplier at M = 4 replicas, 2.4B-10B (charles-2025-diloco-scaling/2, /4); nothing tests M above 8
 DILOCO = 0.94
 
-R_SHARE = 0.255
 WIPES_GB = (1.0, 4.0, 6.0, 13.0, 50.0, 166.0)
 #: wipe residuals past the table's, where a replica first holds N* weights at 16 bits
 REPLICA_GB = (203.0, 230.0, 300.0, 350.0)
@@ -123,10 +122,9 @@ def undersizing(fit: str, N: float, L: float) -> float:
 
 
 def params(wipe_gb: float, **over: float) -> dict:
-    """``tiers``' defaults with a wipe residual of ``wipe_gb`` (memory the fill doesn't reach, no proof-of-space slack) and
-    the monitored residual at ``R_SHARE``."""
-    p = T.DEFAULTS | {"unfilled_gb": wipe_gb, "pous_rounds": 1e9, "pous_floor": 0.0}
-    return p | {"residual": R_SHARE - p["host_share"]} | over
+    """``tiers``' defaults with a wipe residual of ``wipe_gb`` (memory the fill doesn't reach, no proof-of-space slack):
+    the monitored residual is the ladder's, PoUW's floor credit at the locked clock."""
+    return T.DEFAULTS | {"unfilled_gb": wipe_gb, "pous_rounds": 1e9, "pous_floor": 0.0} | over
 
 
 def intake(p: dict) -> float:
@@ -268,7 +266,7 @@ def main(argv: list[str] | None = None) -> int:
           f"{N['405b']['1e15'] / 1e9:.0f}B at 1e15 tokens, {N['405b']['1e14'] / 1e9:.0f}B at 1e14; "
           f"Hoffmann's fit {s['n_star_hoffmann']['405b'] / 1e9:.1f}B")
     print(f"K2-class target L* = {L['k2']:.4f}: N* at most {N['k2']['inf'] / 1e9:.0f}B")
-    print(f"r = {R_SHARE}, mfu = {T.DEFAULTS['mfu']}, lambda_in = {s['intake']:.4g} bit/s, T_wipe = "
+    print(f"r-hat = {T.audited_residual(T.DEFAULTS):.3g}, mfu = {T.DEFAULTS['mfu']}, lambda_in = {s['intake']:.4g} bit/s, T_wipe = "
           f"{T.DEFAULTS['wipe_s']:.0f} s, b_w = {T.DEFAULTS['b_w']}, w_e = "
           + " / ".join(f"{w:.0f}" for w in BOUNDARY.values()) + " bits (low / central / high)\n")
     print("S and k' = N* b_w / S at one wipe period; L, the window in wipe periods at which the fit bound is least\n")
