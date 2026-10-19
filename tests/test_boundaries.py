@@ -351,13 +351,13 @@ def _docstrings(tree: ast.AST) -> set[int]:
     return out
 
 
-CENSUS_PATH = re.compile(r"census[/\\]|\b(hardware|networks|workloads|instance_sets)(\.schema)?\.json\b")
+CENSUS_PATH = re.compile(r"(?<!verity/)census[/\\]|\b(hardware|networks|workloads|instance_sets)(\.schema)?\.json\b")
 
 
 def test_core_never_reads_the_census() -> None:
     """The census (``benchmarks/census/``, data only) is read by the renderer, benchmarks, tools and the website, never by
     ``verity``: it takes such numbers as parameters.  No string in its code (docstrings aside) names the directory or one of
-    its files."""
+    its files; a Program's census schema (``verity/census/v1``, ``ml.circuits.census``) is not the directory."""
     offenders = []
     for path in _sources():
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))

@@ -109,6 +109,9 @@ Only a repeat whose fix needs money, keys or a claim becomes a question for Dani
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-18 (8:47 AM PDT): every ask is a short Notion page in the Asks for Daniel database (the problem explained, LaTeX
+  for the math), where he comments and decides by its Status; the card only notifies him and links it. Template and
+  commands: `.agents/skills/asking-daniel/SKILL.md`.
 - 2026-10-17 (8:20 PM PDT, in proofs' chat; compute accounting's card ba874f45): PoUW's per-matmul noise seeds may be
   derived by Fiat–Shamir, seed_j = SHA-512(tag ‖ salt ‖ forward ‖ position ‖ root(A_j) ‖ root(B_j)) from the epoch's
   live salt: "I'm happy to do Fiat-Shamir for this for now because it's going to happen at such a high-frequency that
