@@ -1829,6 +1829,117 @@ theorem cutAt_masked (i) : (cutAt C cz wt ω lv j).masked r i =
 
 theorem cutAt_sReg : (cutAt C cz wt ω lv j).sReg = ((C j).T (cz j)).tab.sReg (wt j) := rfl
 
+open Classical in
+theorem cutAt_Y1 : (cutAt C cz wt ω lv j).Y1 r =
+    if (famSent (fun j => ((C j).T (cz j)).tab) (fun j => ((C j).T (cz j)).rep) j).fin r then
+      some (fun i => ((C j).T (cz j)).tab.hFull ((ω j).2.2.1 r) i + ((C j).T (cz j)).β r * (ω j).2.2.2.2.2.1 r i)
+    else none := rfl
+
+theorem cutAt_Y2 : (cutAt C cz wt ω lv j).Y2 r =
+    fun i => (ω j).2.2.2.1 r i + ((C j).T (cz j)).β r * (ω j).2.2.2.2.1 r i := rfl
+
+open Classical in
+theorem cutAt_y1 : (cutAt C cz wt ω lv j).y1 r =
+    if (famSent (fun j => ((C j).T (cz j)).tab) (fun j => ((C j).T (cz j)).rep) j).y1 r then
+      some (((C j).T (cz j)).tab.y1' (wt j) (ω j).1 (ω j).2.1.2.1 r)
+    else none := rfl
+
+theorem cutAt_ybar : (cutAt C cz wt ω lv j).ybar r = ((C j).T (cz j)).tab.ybar (ω j).2.1.1 (ω j).2.1.2.2 r := rfl
+
+open Classical in
+theorem cutAt_lig : (cutAt C cz wt ω lv j).lig r =
+    if (famSent (fun j => ((C j).T (cz j)).tab) (fun j => ((C j).T (cz j)).rep) j).y1 r then
+      some (((C j).T (cz j)).tab.lig r (((C j).T (cz j)).tab.y1' (wt j) (ω j).1 (ω j).2.1.2.1 r)
+        ((ω j).2.2.2.2.2.2.2.2.2 r))
+    else none := rfl
+
+variable (cz' : ∀ j, Composed.CoinsZK (C j).Rest) (lv' : ZkView.Leaves (fun j => (C j).z) → ByteArray)
+
+theorem cutAt_inner_congr (hζ : ((C j).T (cz j)).ζ r = ((C j).T (cz' j)).ζ r)
+    (ha : ((C j).T (cz j)).ia = ((C j).T (cz' j)).ia) (hb : ((C j).T (cz j)).ib = ((C j).T (cz' j)).ib) :
+    (cutAt C cz wt ω lv j).inner r = (cutAt C cz' wt ω lv' j).inner r := by
+  show (((C j).T (cz j)).ζ r * ((ω j).2.2.1 r).1 ((C j).T (cz j)).ia + ((ω j).2.2.1 r).2.1,
+      ((ω j).2.2.1 r).1 ((C j).T (cz j)).ib + ((ω j).2.2.1 r).2.2) =
+    (((C j).T (cz' j)).ζ r * ((ω j).2.2.1 r).1 ((C j).T (cz' j)).ia + ((ω j).2.2.1 r).2.1,
+      ((ω j).2.2.1 r).1 ((C j).T (cz' j)).ib + ((ω j).2.2.1 r).2.2)
+  rw [hζ, ha, hb]
+
+theorem hFull_congr (ha : ((C j).T (cz j)).ia = ((C j).T (cz' j)).ia)
+    (hb : ((C j).T (cz j)).ib = ((C j).T (cz' j)).ib) (h : (Fin (C j).z.nE → 𝔽) × 𝔽 × 𝔽) :
+    ((C j).T (cz j)).tab.hFull h = ((C j).T (cz' j)).tab.hFull h := by
+  funext i
+  rcases i with i | i
+  · rfl
+  · show ![h.2.1, h.2.2, h.1 ((C j).T (cz j)).ia * h.1 ((C j).T (cz j)).ib, h.2.1 * h.2.2] i =
+      ![h.2.1, h.2.2, h.1 ((C j).T (cz' j)).ia * h.1 ((C j).T (cz' j)).ib, h.2.1 * h.2.2] i
+    rw [ha, hb]
+
+theorem cutAt_y_congr
+    (hfin : (famSent (fun j => ((C j).T (cz j)).tab) (fun j => ((C j).T (cz j)).rep) j).fin r ↔
+      (famSent (fun j => ((C j).T (cz' j)).tab) (fun j => ((C j).T (cz' j)).rep) j).fin r)
+    (hβ : ((C j).T (cz j)).β r = ((C j).T (cz' j)).β r)
+    (ha : ((C j).T (cz j)).ia = ((C j).T (cz' j)).ia) (hb : ((C j).T (cz j)).ib = ((C j).T (cz' j)).ib) :
+    (match (cutAt C cz wt ω lv j).Y1 r with
+      | some Y1 => Array.ofFn (yAt Y1 ((cutAt C cz wt ω lv j).Y2 r))
+      | none => #[]) =
+    (match (cutAt C cz' wt ω lv' j).Y1 r with
+      | some Y1 => Array.ofFn (yAt Y1 ((cutAt C cz' wt ω lv' j).Y2 r))
+      | none => #[]) := by
+  rw [cutAt_Y1, cutAt_Y1, cutAt_Y2, cutAt_Y2]
+  split_ifs with h1 h2 h2
+  · simp only [hβ]
+    rw [hFull_congr (C := C) (cz := cz) (cz' := cz') (j := j) ha hb]
+    rfl
+  · exact absurd (hfin.1 h1) h2
+  · exact absurd (hfin.2 h2) h1
+  · rfl
+
+theorem y1'_congr (hrbar : ((C j).T (cz j)).rbar r = ((C j).T (cz' j)).rbar r)
+    (hρ : ((C j).T (cz j)).ρ r = ((C j).T (cz' j)).ρ r) (he : ((C j).T (cz j)).embed = ((C j).T (cz' j)).embed)
+    (hl : ((C j).T (cz j)).lanes = ((C j).T (cz' j)).lanes) :
+    ((C j).T (cz j)).tab.y1' (wt j) (ω j).1 (ω j).2.1.2.1 r = ((C j).T (cz' j)).tab.y1' (wt j) (ω j).1 (ω j).2.1.2.1 r := by
+  funext col
+  show (∑ l, ((C j).T (cz j)).rbar r l * ((C j).T (cz j)).embed (((C j).T (cz j)).lanes (wt j) (ω j).1 l col)) +
+      (((C j).T (cz j)).ρ r 0 * ((C j).T (cz j)).embed ((ω j).2.1.2.1 r 0 col) +
+        ((C j).T (cz j)).ρ r 1 * ((C j).T (cz j)).embed ((ω j).2.1.2.1 r 1 col)) =
+    (∑ l, ((C j).T (cz' j)).rbar r l * ((C j).T (cz' j)).embed (((C j).T (cz' j)).lanes (wt j) (ω j).1 l col)) +
+      (((C j).T (cz' j)).ρ r 0 * ((C j).T (cz' j)).embed ((ω j).2.1.2.1 r 0 col) +
+        ((C j).T (cz' j)).ρ r 1 * ((C j).T (cz' j)).embed ((ω j).2.1.2.1 r 1 col))
+  rw [hrbar, hρ, he, hl]
+
+theorem cutAt_y1_congr
+    (hy : (famSent (fun j => ((C j).T (cz j)).tab) (fun j => ((C j).T (cz j)).rep) j).y1 r ↔
+      (famSent (fun j => ((C j).T (cz' j)).tab) (fun j => ((C j).T (cz' j)).rep) j).y1 r)
+    (hrbar : ((C j).T (cz j)).rbar r = ((C j).T (cz' j)).rbar r)
+    (hρ : ((C j).T (cz j)).ρ r = ((C j).T (cz' j)).ρ r) (he : ((C j).T (cz j)).embed = ((C j).T (cz' j)).embed)
+    (hl : ((C j).T (cz j)).lanes = ((C j).T (cz' j)).lanes) :
+    (match (cutAt C cz wt ω lv j).y1 r with
+      | some f => Array.ofFn fun c => kVal (f c)
+      | none => #[]) =
+    (match (cutAt C cz' wt ω lv' j).y1 r with
+      | some f => Array.ofFn fun c => kVal (f c)
+      | none => #[]) := by
+  rw [cutAt_y1, cutAt_y1]
+  split_ifs with h1 h2 h2
+  · rw [y1'_congr C cz wt ω j r cz' hrbar hρ he hl]
+    exact rfl
+  · exact absurd (hy.1 h1) h2
+  · exact absurd (hy.2 h2) h1
+  · rfl
+
+theorem cutAt_ybar_congr (hrbar : ((C j).T (cz j)).rbar r = ((C j).T (cz' j)).rbar r)
+    (hρ : ((C j).T (cz j)).ρ r = ((C j).T (cz' j)).ρ r) (he : ((C j).T (cz j)).embed = ((C j).T (cz' j)).embed) :
+    (Array.ofFn fun i => kVal ((cutAt C cz wt ω lv j).ybar r i)) =
+      Array.ofFn fun i => kVal ((cutAt C cz' wt ω lv' j).ybar r i) := by
+  rw [cutAt_ybar, cutAt_ybar]
+  show (Array.ofFn fun i => kVal ((∑ l, ((C j).T (cz j)).rbar r l * ((C j).T (cz j)).embed ((ω j).2.1.1 l i)) +
+      (((C j).T (cz j)).ρ r 0 * ((C j).T (cz j)).embed ((ω j).2.1.2.2 r 0 i) +
+        ((C j).T (cz j)).ρ r 1 * ((C j).T (cz j)).embed ((ω j).2.1.2.2 r 1 i)))) =
+    Array.ofFn fun i => kVal ((∑ l, ((C j).T (cz' j)).rbar r l * ((C j).T (cz' j)).embed ((ω j).2.1.1 l i)) +
+      (((C j).T (cz' j)).ρ r 0 * ((C j).T (cz' j)).embed ((ω j).2.1.2.2 r 0 i) +
+        ((C j).T (cz' j)).ρ r 1 * ((C j).T (cz' j)).embed ((ω j).2.1.2.2 r 1 i)))
+  rw [hrbar, hρ, he]
+
 end CutFields
 
 section Masked
