@@ -26,6 +26,9 @@
    ],
    "num_sms": 188,
    "async_scheduling": false
+  },
+  "reasons": {
+   "attention_backend": "the exact-int8 attention (TargetProfile.int8_exact, engine.int8_attention_vllm's Int8AttentionImpl, the LUT softmax) is registered in vLLM's CUSTOM backend slot; the row's target declares it (TargetProfile.engine_args) and every layer's int8 arm is read back (kernel_readback.int8_exact_of)"
   }
  },
  "seed": 0,
