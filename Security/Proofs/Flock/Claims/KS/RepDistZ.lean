@@ -18,7 +18,9 @@ opening rejects goes to the inner proof and meets no cap.
   through the recursion, the masked level 0 (`ligPadSlotDist`), the opening and the whole masked phase
   (`maskedSlotDist`);
 * `noSlot_reindex`, `dist_reindex`: moving a lockstep's slots by an injective map moves its distances;
-* `dist_lockRepZ`: so a whole masked rep's.
+* `dist_lockRepZ`: so a whole masked rep's;
+* `noSlot_lockRecZ_ge`, `noSlot_lockLigTailZ_ge`, `noSlot_lockLigPadZ_ge`, `noSlot_lockRestZ_ge`,
+  `noSlot_lockMaskedZ_ge`, `noSlot_lockRepZ_ge`: past the last level there is no cap.
 -/
 
 namespace FlockSoundness.Discharge.ZkLink
@@ -331,5 +333,165 @@ theorem dist_lockRepZ (A : Arith F K) (Hs : Hashes F D Sl) (T : TabZK F mPts) (r
     exact .ret _
   · exact Lock.Dist.mono _ (dist_reindex _ (· + 4) _ _ (add_left_injective 4)
       (dist_lockMaskedZ A r hr T.pads T.padsA T.tr T.S T.sch T.hm T.t T.c₀ C₀ extra ℓ))
+
+/-! ## Past the last cap -/
+
+/-- **No cap past the masked recursion's last level.** -/
+theorem noSlot_lockRecZ_ge (A : Arith F K) (r : ℕ) (hr : r < 2) (n : ℕ) (b : ℕ → F) (initial : List K) (ext : ℕ)
+    (C₀ : Oracle F) (w₀ : ℕ) (sch : Schedule) :
+    ∀ (levs : List Level) (i : IRep F D) (st : LigState F K) (stC : LigStateC F K D)
+      (h : RecInvZ r C₀ w₀ sch levs i st stC) (p : ℕ), levs.length ≤ p + 1 →
+      Lock.NoSlot (slotOf r (stC.level + 1 + p)) (lockRecZ A r hr n b initial ext C₀ w₀ sch levs i st stC h)
+  | [], _, _, _, _, _, _ => .ret _
+  | [lv], i, st, stC, h, _, _ => noSlot_lockRecZ_single A r hr n b initial ext C₀ w₀ sch _ lv i st stC h
+  | lv :: lv' :: rest, i, st, stC, h, 0, hp => by
+      simp only [List.length_cons] at hp; omega
+  | lv :: lv' :: rest, i, st, stC, h, p + 1, hp => by
+      refine Lock.NoSlot.bind ?_ (noSlot_lockFold A r _ i _ lv.lanes _ _ _ _ _)
+      intro i' x y hxy
+      rcases x with ⟨ch, x₂⟩
+      rcases x₂ with ⟨s, q⟩
+      rcases y with ⟨ch', y₂⟩
+      rcases y₂ with ⟨sF, qF⟩
+      obtain ⟨hi, hch, hlen, hsq⟩ := hxy
+      simp only at hch hlen hsq
+      subst i' hch
+      refine .table _ (by unfold slotOf; omega) fun C' cap => ?_
+      refine Lock.NoSlot.bind ?_ (noSlot_lockTwoOod A r _ _ _ _ _ _ _ _ _ _ _ _)
+      intro i₂ x y hxy
+      rcases x with ⟨s2, x₂⟩
+      rcases x₂ with ⟨q2, oods2⟩
+      rcases y with ⟨sF2, y₂⟩
+      rcases y₂ with ⟨qF2, oodsC2⟩
+      obtain ⟨hi2, hoods, hsq2⟩ := hxy
+      simp only at hoods hsq2
+      subst i₂ hoods
+      refine Lock.NoSlot.bind ?_ (noSlot_lockQueryZ A r _ _ _ _ _ _ _ _ _ _ _ _ _ true)
+      intro i₃ st3 stC3 hq
+      obtain ⟨hi3, hrel3, hlev, hq'⟩ := hq
+      subst i₃
+      have hlev' : stC3.level = stC.level := hlev
+      refine Lock.NoSlot.slot_eq ?_
+        (noSlot_lockRecZ_ge A r hr n b initial ext C₀ w₀ sch (lv' :: rest) _ _ _ _ p ?_)
+      · show slotOf r (stC3.level + 1 + 1 + p) = slotOf r (stC.level + 1 + (p + 1))
+        unfold slotOf
+        omega
+      · simp only [List.length_cons] at hp ⊢; omega
+
+/-- **No cap past the masked level 0's last level**, from the code-switch message. -/
+theorem noSlot_lockLigTailZ_ge (A : Arith F K) (r : ℕ) (hr : r < 2) (sch : Schedule) (t : ℕ) (c₀ : F) (e : ℕ)
+    (b : ℕ → F) (C₀ : Oracle F) (lv₀ : Level) (z₀ : Fin (sch.m - 7) → F) (β₀ : F) (initial : List K)
+    (hinit : initial.length = sch.k0) (ρ : Fin e → K) (ybar : Fin t → K) (s : K) (ℓ : ℕ) :
+    ∀ (rest : List Level) (hlevs : sch.levels = lv₀ :: rest), rest.length ≤ ℓ →
+      Lock.NoSlot (slotOf r (ℓ + 1))
+        (lockLigTailZ (D := D) A r hr sch t c₀ e b C₀ lv₀ z₀ β₀ initial hinit ρ ybar s rest hlevs)
+  | [], _, _ => .send _ fun _ => .ret _
+  | lv₁ :: rest, hlevs, hℓ => by
+      simp only [List.length_cons] at hℓ
+      obtain ⟨p, rfl⟩ : ∃ p, ℓ = p + 1 := ⟨ℓ - 1, by omega⟩
+      refine .send _ fun msg' => ?_
+      refine .table _ (by unfold slotOf; omega) fun C₁ cap₁ => ?_
+      refine Lock.NoSlot.bind ?_ (noSlot_lockTwoOod A r _ _ _ _ _ _ _ _ _ _ _ _)
+      intro i₂ x y hxy
+      rcases x with ⟨s2, x₂⟩
+      rcases x₂ with ⟨q2, oods⟩
+      rcases y with ⟨sF2, y₂⟩
+      rcases y₂ with ⟨qF2, oodsC⟩
+      obtain ⟨hi2, hoods, hsq2⟩ := hxy
+      simp only at hoods hsq2
+      subst i₂ hoods
+      refine Lock.NoSlot.bind ?_ (noSlot_lockQuery0Z A r _ _ _ _ _ _ _ _ _ _ _ _)
+      intro i₃ st3 stC3 hq
+      obtain ⟨hi3, hq'⟩ := hq
+      subst i₃
+      refine Lock.NoSlot.slot_eq ?_
+        (noSlot_lockRecZ_ge A r hr _ b initial sch.ext C₀ _ sch (lv₁ :: rest) _ _ _ _ p ?_)
+      · show slotOf r (1 + 1 + p) = slotOf r (p + 1 + 1)
+        unfold slotOf
+        omega
+      · simp only [List.length_cons]; omega
+
+/-- **No cap past the masked level 0's last level.** -/
+theorem noSlot_lockLigPadZ_ge (A : Arith F K) (r : ℕ) (hr : r < 2) {np e : ℕ} (P : Pads0 np e) (t : ℕ) (c₀ : F)
+    (T : F) (b : ℕ → F) (C₀ : Oracle F) (ℓ : ℕ) :
+    ∀ sch : Schedule, sch.levels.length ≤ ℓ + 1 → Lock.NoSlot (slotOf r (ℓ + 1))
+      (lockLigPadZ (D := D) A r hr P t c₀ T b C₀ sch)
+  | ⟨_, _, [], _⟩, _ => .ret _
+  | ⟨m, k0, lv₀ :: rest, ext⟩, hℓ => by
+      simp only [List.length_cons] at hℓ
+      refine .coin _ fun z₀ => .send _ fun y₀ => .coin _ fun β₀ => .send _ fun msg => ?_
+      refine Lock.NoSlot.bind ?_ (noSlot_lockFoldZK A P r _ _ k0 0 _ _)
+      intro i' x y hxy
+      obtain ⟨rfl, rfl, hlen⟩ := hxy
+      rcases x with ⟨initial, s⟩
+      refine .send _ fun ev => ?_
+      refine Lock.NoSlot.bind ?_ (Lock.noSlot_same _)
+      intro i'' ρ ρ' hρ
+      obtain ⟨rfl, rfl⟩ := hρ
+      refine .send _ fun T' => .send _ fun ybar => ?_
+      refine Lock.NoSlot.bind ?_ (noSlot_lockLigTailZ_ge A r hr ⟨m, k0, lv₀ :: rest, ext⟩ t c₀ e b C₀ lv₀ z₀ β₀
+        initial hlen _ ybar T' ℓ rest rfl (by omega))
+      intro _ _ _ _
+      exact .ret _
+
+/-- **No cap past the last level in the rest of a masked rep.** -/
+theorem noSlot_lockRestZ_ge (A : Arith F K) (r : ℕ) (hr : r < 2) {np e : ℕ} (P₀ : Pads0 np e) (PA : PadsA np)
+    (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (t : ℕ) (c₀ : F) (C₀ : Oracle F) (extra : List (Claim F S.m))
+    (zc : ZcZK F np S.m) (ab : ClaimZK F np S.m) (ℓ : ℕ) (hℓ : sch.levels.length ≤ ℓ + 1) :
+    Lock.NoSlot (slotOf r (ℓ + 1)) (lockRestZ (D := D) A r hr P₀ PA S sch hm t c₀ C₀ extra zc ab) := by
+  refine Lock.NoSlot.bind ?_ (Lock.noSlot_same _)
+  intro i' o o' h
+  obtain ⟨rfl, rfl⟩ := h
+  rcases o with ⟨oo, x⟩
+  cases oo with
+  | none => exact .ret _
+  | some op =>
+    refine Lock.NoSlot.bind ?_ (noSlot_lockLigPadZ_ge A r hr P₀ t c₀ op.T op.b C₀ ℓ sch hℓ)
+    intro _ _ _ _
+    exact .send _ fun _ => .ret _
+
+/-- **No cap past the last level in the masked phase.** -/
+theorem noSlot_lockMaskedZ_ge (A : Arith F K) (r : ℕ) (hr : r < 2) {np e : ℕ} (P₀ : Pads0 np e) (PA : PadsA np)
+    (tr : Triple np) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (t : ℕ) (c₀ : F) (C₀ : Oracle F)
+    (extra : List (Claim F S.m)) (ℓ : ℕ) (hℓ : sch.levels.length ≤ ℓ + 1) :
+    Lock.NoSlot (slotOf r (ℓ + 1)) (lockMaskedZ (D := D) A r hr P₀ PA tr S sch hm t c₀ C₀ extra) := by
+  refine Lock.NoSlot.bind ?_ ?_
+  · intro _ _ _ _
+    exact .ret _
+  refine Lock.NoSlot.bind ?_ (Lock.noSlot_same _)
+  intro i₁ o o' h
+  obtain ⟨rfl, rfl⟩ := h
+  refine Lock.NoSlot.bind ?_ ?_
+  · intro _ _ _ _
+    exact .ret _
+  refine Lock.NoSlot.bind ?_ (Lock.noSlot_same _)
+  intro i₂ o₂ o₂' h₂
+  obtain ⟨rfl, rfl⟩ := h₂
+  refine Lock.NoSlot.bind ?_ ?_
+  · intro _ _ _ _
+    exact .ret _
+  exact noSlot_lockRestZ_ge A r hr P₀ PA S sch hm t c₀ C₀ extra o.1 o₂.1 ℓ hℓ
+
+/-- **No cap past a masked rep's last level.** -/
+theorem noSlot_lockRepZ_ge (A : Arith F K) (Hs : Hashes F D Sl) (T : TabZK F mPts) (r : ℕ) (hr : r < 2)
+    (C₀ : Oracle F) (extra : List (Claim F T.S.m)) (ℓ : ℕ) (hℓ : T.sch.levels.length ≤ ℓ + 1) :
+    Lock.NoSlot (slotOf r (ℓ + 1) + 4) (lockRepZ A Hs T r hr C₀ extra) := by
+  refine .table r (by unfold slotOf; omega) fun O c => ?_
+  refine Lock.NoSlot.bind ?_ ?_
+  · intro j o o' h
+    rcases j with ⟨lev, pads, tau⟩
+    obtain ⟨hp, ht, h⟩ := h
+    simp only at hp ht h
+    subst hp ht
+    obtain ⟨hrows, hrec⟩ := h
+    rcases o with ⟨rows, v⟩
+    rcases o' with ⟨rows', p⟩
+    simp only at hrows hrec
+    subst hrows
+    refine Lock.NoSlot.bind ?_ (noSlot_lockInnerZ Hs r hr _ _ _ _ _ _ _ _ _ _ _ (by omega))
+    intro _ _ _ _
+    exact .ret _
+  · exact Lock.NoSlot.mono _ (noSlot_reindex _ (· + 4) _ _ (add_left_injective 4)
+      (noSlot_lockMaskedZ_ge A r hr T.pads T.padsA T.tr T.S T.sch T.hm T.t T.c₀ C₀ extra ℓ hℓ))
 
 end FlockSoundness.Discharge.ZkLink
