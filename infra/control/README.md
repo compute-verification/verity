@@ -32,13 +32,13 @@ editing on the pod.
 | Router (INF-123): comms' `research msg router`, one process that reads every #chat-* channel and rings the lanes that own each post (the design is comms' "Per-person chats: the router" page in Notion), restarted 30 s after it exits; extra arguments from `/data/router/args` | `router.sh`, deployed as `/data/infra/router.sh`; waits for `/data/router/src/COMMIT` and `/data/state/secrets/router.env` (root, 0600: `SLACK_BOT_TOKEN`, and `ROUTER_ANTHROPIC_API_KEY` once Daniel adds it) | `/data/router/src` (a `tools/research` tree; its `COMMIT` file names it); the registry from `/data/infra/fixtures-export-repo`, inbox routes from the steward's notes clone | `/data/router/router.log`; state in `/data/router` (`$RESEARCH_ROUTER_STATE`); the router touches `/data/router/heartbeat` (`$RESEARCH_ROUTER_HEARTBEAT`) every pass, and the control disk relay alerts when it is 5 min old |
 | Control disk relay, every 5 min: the root disk, the steward's notes sync and the router's heartbeat | `control_disk.sh`, deployed as `/data/infra/control-disk/run.sh`; sources `relay.env` | `/data/infra/control-disk/control_disk_alert.py` (a copy of this directory's), `research-src` (a `tools/research` tree) and `registry.json` beside it | `/data/infra/control-disk/relay.log`; state in `seen.json` |
 
-The control disk relay, `control_disk_alert.py`, ran on infra's VM until 13 Oct, when the pod got `relay.env` (`SLACK_BOT_TOKEN`,
-`GH_TOKEN`); since 19 Oct `post_start.sh` starts it, and the cloud watch alerts when its `seen.json` goes stale. It reads `df`
-every 5 minutes and posts in #agent-alerts at 90% and 95%, again under 85%, and when the pod has been unreadable for 30 minutes.
-The same pass alerts when the steward's notes sync stalls (HEAD detached, an `index.lock` older than 10 minutes, or a change
-unpushed for an hour, on two reads in a row) and notes when it flows again, and alerts when the router's heartbeat is more than 5
-minutes old (or missing 5 minutes after `/data/router/src/COMMIT` was written; before that the router isn't deployed and it says
-nothing), with a note when it is fresh again. The agent watch's findings reach Slack from infra's VM: `agent_watch_relay.py`
+The disk alert, `control_disk_alert.py`, ran on infra's VM (tmux `control-disk-alert`) while the pod held no Slack credential.
+Since 13 Oct the pod has `relay.env` (`SLACK_BOT_TOKEN`, `GH_TOKEN`), and a copy runs on the pod from
+`/data/infra/control-disk/run.sh`, which `post_start.sh` starts, and also alerts on the router's heartbeat (the cloud watch
+alerts when its `seen.json` goes stale). It reads `df` every 5 minutes and posts in #agent-alerts at 90% and 95%, again under
+85%, and when the pod has been unreadable for 30 minutes. The same pass alerts when the steward's notes sync stalls (HEAD
+detached, an `index.lock` older than 10 minutes, or a change unpushed for an hour, on two reads in a row) and notes when it
+flows again. The agent watch's findings reach Slack from infra's VM: `agent_watch_relay.py`
 (tmux `agent-watch-relay` on infra's VM) posts each new line of `events.jsonl` in #agent-alerts, leading with @top and ringing @top's inbox for what the watch leaves for a person (erroring, stuck, a refused cancel, held again, a run unreadable for an hour); a worker's alert, a silent agent and an ended run lead with the record's handle and ring that inbox; the watch frees runs without it.
 
 A coordinator whose duty timer recurs opts in to the watch's idle rule by adding its handle and the timer's interval in seconds
