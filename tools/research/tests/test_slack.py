@@ -30,6 +30,8 @@ COORD, ALERTS = "CCOORD", "CALERTS"
 HANDLES = ["infra", "proofs", "circuits", "compute-accounting", "memory-accounting", "network-accounting", "console",
            "ci", "lean", "comms", "top", "vllm", "benchmarks", "hash"]
 
+HANDLES = [*HANDLES, "training"]
+
 
 class FakeSlack:
     def __init__(self):
