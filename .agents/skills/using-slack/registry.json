@@ -121,6 +121,7 @@
         "integrations/",
         "benchmarks/served_units/",
         "benchmarks/served_commit/",
+        "benchmarks/g2/",
         "tools/verity/circuit_check/",
         "benchmarks/native_peak/",
         "benchmarks/tc_probe/",
