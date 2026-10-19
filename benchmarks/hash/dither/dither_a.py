@@ -344,10 +344,13 @@ class Side:
                 if self.unit == "h1r" else None, "gemm_cfgs": {f"{n}x{k}@M{m}": c for (n, k, m), c in self.cfgs.items()}}
 
 
-def zu_fields(win: DO.Window, w: int, s: int) -> dict:
-    n = win.nk[w][0]
-    return {"window": win.window, "step": s, "linear": w, "module": win.names[w], "slots": win.t, "n": n,
+def zu_fields_of(window: str, s: int, w: int, module: str, t: int, n: int) -> dict:
+    return {"window": window, "step": s, "linear": w, "module": module, "slots": t, "n": n,
             "unit": "32x32 int32 LE row-major, units row block then column block", "schema": CM.SCHEMA}
+
+
+def zu_fields(win: DO.Window, w: int, s: int) -> dict:
+    return zu_fields_of(win.window, s, w, win.names[w], win.t, win.nk[w][0])
 
 
 def zu_count(win: DO.Window, w: int) -> int:
