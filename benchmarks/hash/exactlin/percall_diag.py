@@ -5,8 +5,8 @@ compared, as sbench's decode reps compare them).  A scenario brings its engines 
 together, as sbench does, then serves them in order; its engines share one Inductor, Triton and vLLM cache directory
 (`shared`, as served.sh gives sbench's arms) or each have their own (`own`).
 
-Every engine logs each Inductor kernel's autotune: its name, its source hash, how many configs it had, the config it ran
-and the timings it was chosen by (`CachingAutotuner.benchmark_all_configs`, which picks the fastest).  An engine's PICK
+Every engine logs each Inductor kernel's autotune: its name, its source hash, the config it ran and, where it had more than
+one, the timings it was chosen by (`CachingAutotuner.benchmark_all_configs`, which picks the fastest).  An engine's PICK
 replaces that choice: `first` or `last` takes the first or last config untimed (`own` caches, so no `.best_config` of
 another engine's is read), `det` sets TORCHINDUCTOR_DETERMINISTIC=1 (Inductor's mode that times no config that moves
 numerics).  With graphs `none` (`cudagraph_mode` NONE, still compiled) every int8 GEMM call of the N2 generation is
@@ -133,36 +133,50 @@ class Recorder:
 
 
 def install_tuning_log(pick: str | None) -> list[dict]:
-    """Each Inductor kernel's autotune, in order of first launch; with PICK first|last its choice made untimed."""
+    """Each Inductor kernel's autotune, in order of first launch; with PICK first|last its choice made untimed.  A kernel
+    with one config (or one read from the autotune cache) is never timed: its entry has no `timings_ms`.  The log never
+    raises into Inductor: an entry it can't read records the error."""
     from torch._inductor.runtime import triton_heuristics as th
     log: list[dict] = []
-    seen: dict[int, dict] = {}
+    seen: dict[int, tuple] = {}   # id -> (autotuner, entry): the autotuner kept, so its id is never reused
     orig_run, orig_bench = th.CachingAutotuner.run, th.CachingAutotuner.benchmark_all_configs
 
     def entry(self_) -> dict:
-        e = seen.get(id(self_))
-        if e is None:
-            src = getattr(self_.fn, "src", "") or ""
-            e = seen[id(self_)] = {"kernel": (self_.inductor_meta or {}).get("kernel_name") or self_.fn.__name__,
-                                   "src": hashlib.sha1(src.encode()).hexdigest()[:10], "configs": len(self_.configs)}
+        got = seen.get(id(self_))
+        if got is None:
+            try:
+                fn = getattr(self_, "fn", None)
+                src = getattr(fn, "src", "") or ""
+                e = {"kernel": (getattr(self_, "inductor_meta", None) or {}).get("kernel_name") or getattr(fn, "__name__", "?"),
+                     "src": hashlib.sha1(src.encode()).hexdigest()[:10]}
+            except Exception as x:  # noqa: BLE001
+                e = {"kernel": "?", "error": repr(x)}
+            got = seen[id(self_)] = (self_, e)
             log.append(e)
-        return e
+        return got[1]
 
     def bench(self_, *args, **kw):
-        e = entry(self_)
-        if pick in ("first", "last"):
-            n = len(self_.launchers)
-            t = {ln: float(i if pick == "first" else n - i) for i, ln in enumerate(self_.launchers)}
+        launchers = list(getattr(self_, "launchers", None) or ())
+        if pick in ("first", "last") and launchers:
+            n = len(launchers)
+            t = {ln: float(i if pick == "first" else n - i) for i, ln in enumerate(launchers)}
         else:
             t = orig_bench(self_, *args, **kw)
-        e["timings_ms"] = [[str(ln.config), round(float(v), 5)] for ln, v in t.items()]
+        try:
+            entry(self_)["timings_ms"] = [[str(ln.config), round(float(v), 5)] for ln, v in t.items()]
+        except Exception as x:  # noqa: BLE001
+            entry(self_)["error"] = repr(x)
         return t
 
     def run(self_, *args, **kw):
         out = orig_run(self_, *args, **kw)
-        e = entry(self_)
-        if "ran" not in e and len(self_.launchers) == 1:
-            e["ran"] = str(self_.launchers[0].config)
+        try:
+            e = entry(self_)
+            launchers = getattr(self_, "launchers", None) or ()
+            if "ran" not in e and len(launchers) == 1:
+                e["ran"] = str(launchers[0].config)
+        except Exception as x:  # noqa: BLE001
+            entry(self_)["error"] = repr(x)
         return out
 
     th.CachingAutotuner.benchmark_all_configs = bench
@@ -246,7 +260,7 @@ def tuning_diff(a: list[dict], b: list[dict]) -> dict:
     for e in b:
         rb.setdefault(e["kernel"], []).append(e.get("ran"))
     differ = {k: [ra[k], rb[k]] for k in ra if k in rb and ra[k] != rb[k]}
-    timed = sorted({e["kernel"] for e in a + b if e["configs"] > 1})
+    timed = sorted({e["kernel"] for e in a + b if len(e.get("timings_ms", ())) > 1})
     return {"kernels_ran_other_config": differ, "kernels_with_configs": timed,
             "shared_source": sorted({e["kernel"] for e in a} & {e["kernel"] for e in b}
                                     & {e["kernel"] for e in a if any(e["src"] == f["src"] for f in b)})}
