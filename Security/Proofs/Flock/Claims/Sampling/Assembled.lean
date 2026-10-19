@@ -58,13 +58,24 @@ import Proofs.Flock.SamplingBoundary
   port of `verity.ml.private_circuits.universal`'s `build`); the code side's binding of the compiled unit. That those
   gates compute `Netlist.eval` is proved (`universal_correct`); the deployed record's unit is the Definition's
   (`SamplingDeploy.universalIs_deploy`).
-* `hComplete : Complete H D P δc`: waits on the reference prover (ruling 4), so `P` and `δc` are any.
-* `hZK : ZK H D Pz S εzk γzk`: the masked sessions' zero knowledge with the leaf layer's simulator, its binding term
-  `γzk` times `Fork`'s collisions among the honest prover's calls in two real runs on one nonce (#2201); no branch
-  proves it yet, so `Pz`, `S`, `εzk` and `γzk` are any.
+* `hComplete : Complete H D`: completeness of the record's prover `D.P` at its error `D.δc`, which waits on the
+  reference prover (ruling 4).
+* `hZK : ZK H (D.withZk Pz S) εzk γzk`: the masked sessions' zero knowledge at `D` with the reference prover `Pz` and
+  the leaf layer's simulator `S` (`Deploy.withZk`), its binding term `γzk` times `Fork`'s collisions among the honest
+  prover's calls in two real runs on one nonce (#2201); no branch proves it yet, so `Pz`, `S`, `εzk` and `γzk` are any.
 -/
 
 namespace Claims.Sampling
+
+/-- **The masked deployment of `D` at the reference prover `P` and the simulator `S`**: `D` with `P` on the tape
+`N × Ω`, read as itself. -/
+def Deploy.withZk {Coin Col T N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] (D : Deploy Coin Col T)
+    (P : Wit → Prover (N × Ω)) (S : SimLeak) : ZkDeploy Coin Col T :=
+  { toDeploy := { D with Tape := N × Ω, tapeNonempty := inferInstance, P := P }
+    Nonce := N
+    Rest := Ω
+    tapeOf := id
+    S := S }
 
 set_option synthInstance.maxSize 1024 in
 /-- **The sampling claims at a deployment whose sessions are Flock's masked verifier**, at every hash: the readable
@@ -83,11 +94,11 @@ theorem sampling_assembled (rel : _root_.Flock.Readable.Parsed → _root_.Flock.
     (iroots : Msg → Seen → ℕ → List Msg) (hopens : SessionOpens H D iroots) (hfix : InteriorFixed H D iroots)
     (hprog : ProgramScope D) (hchecks : ChecksScope H D)
     (hopen : OpenCallsLe H D) (huniv : UniversalIs D)
-    {Ω : Type} (P : Wit → Prover Ω) (δc : Msg → ℝ) (hComplete : Complete H D P δc)
+    (hComplete : Complete H D)
     {Nz Ωz : Type} [Fintype Nz] [Nonempty Nz] [Fintype Ωz] [Nonempty Ωz] (Pz : Wit → Prover (Nz × Ωz)) (S : SimLeak)
-    (εzk γzk : Msg → ℝ) (hZK : ZK H D Pz S εzk γzk) :
+    (εzk γzk : Msg → ℝ) (hZK : ZK H (D.withZk Pz S) εzk γzk) :
     ScopeMatches D ∧ Binding D ∧ Universal D ∧ FaultyBoundary ∧ KS H D ∧ KSCount H D ∧ Bits H D ∧
-      Efficient H D FlockDeploy.zkStepPoly ∧ Complete H D P δc ∧ ZK H D Pz S εzk γzk := by
+      Efficient H D FlockDeploy.zkStepPoly ∧ Complete H D ∧ ZK H (D.withZk Pz S) εzk γzk := by
   have hbind : Binding D := Binding_of_hm96 D own at_ row salt π layer hcommit hrow
   have hscope : ScopeMatches D := scopeMatches_of D hslots hprog
   have hrefuse : Refuses H D := refuses_of H D hscope hchecks

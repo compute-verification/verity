@@ -146,7 +146,7 @@ theorem zk_sampled (H : Msg → Msg) (S : Sampled c) (hR : HelloRounds c) (t : �
     (hL : ∀ lx, (S.leaky.proto lx).MsgLink H (RAt H (deploy rel c) lx) My cs (Mp lx) (Mc lx))
     (hS : ∀ lx, (S.leaky.proto lx).SimLink H (Mc lx)) (hN : ∀ lx, (S.leaky.proto lx).NonDegenerate (Mc lx))
     (hI : ∀ lx, (S.leaky.proto lx).InnerHolds (RAt H (deploy rel c) lx) (Mc lx)) :
-    ZK H (deploy rel c) S.leaky.G.prover (S.leaky.simLeakE t (t * 3 ^ t))
+    ZK H ((deploy rel c).withZk S.leaky.G.prover (S.leaky.simLeakE t (t * 3 ^ t)))
       (fun x => 8 * nL x * (ENNReal.ofReal (FlockSoundness.CROnly.hidingGap My cs)).toReal +
         8 * t * nB x * (ENNReal.ofReal (FlockSoundness.CROnly.hidingGap My cs)).toReal + 2 * (1 / 3) ^ t)
       fun _ => 4 * t * 3 ^ t :=
@@ -160,7 +160,7 @@ theorem sampling_deployed_sampled (H : Msg → Msg) (hKS : Claims.Flock.KS H (Fl
     (hslots : DrawSlots (deploy rel c)) (iroots : Msg → Seen → ℕ → List Msg)
     (hopens : SessionOpens H (deploy rel c) iroots) (hfix : InteriorFixed H (deploy rel c) iroots)
     (hprog : ProgramScope (deploy rel c)) (hchecks : ChecksScope H (deploy rel c)) (hreveals : RevealsLe c)
-    {Ω : Type} (P : Wit → Prover Ω) (δc : Msg → ℝ) (hComplete : Complete H (deploy rel c) P δc)
+    (hComplete : Complete H (deploy rel c))
     (S : Sampled c) (hR : HelloRounds c) (t : ℕ) (ht : 0 < t) {Salt B Cc : Type} [AddCommGroup Salt]
     [AddCommGroup B] [Fintype Salt] [DecidableEq Salt] [Fintype B] [DecidableEq B] [DecidableEq Cc] (My : Salt → B)
     (cs : Salt → Cc) (Mp : ∀ lx x, S.leaky.G.Nonce → (S.leaky.proto lx).PreModel x Salt B Cc)
@@ -172,12 +172,12 @@ theorem sampling_deployed_sampled (H : Msg → Msg) (hKS : Claims.Flock.KS H (Fl
     (hI : ∀ lx, (S.leaky.proto lx).InnerHolds (RAt H (deploy rel c) lx) (Mc lx)) :
     ScopeMatches (deploy rel c) ∧ Binding (deploy rel c) ∧ Universal (deploy rel c) ∧ FaultyBoundary ∧
       KS H (deploy rel c) ∧ KSCount H (deploy rel c) ∧ Bits H (deploy rel c) ∧
-      Efficient H (deploy rel c) FlockDeploy.zkStepPoly ∧ Complete H (deploy rel c) P δc ∧
-      ZK H (deploy rel c) S.leaky.G.prover (S.leaky.simLeakE t (t * 3 ^ t))
+      Efficient H (deploy rel c) FlockDeploy.zkStepPoly ∧ Complete H (deploy rel c) ∧
+      ZK H ((deploy rel c).withZk S.leaky.G.prover (S.leaky.simLeakE t (t * 3 ^ t)))
         (fun x => 8 * nL x * (ENNReal.ofReal (FlockSoundness.CROnly.hidingGap My cs)).toReal +
           8 * t * nB x * (ENNReal.ofReal (FlockSoundness.CROnly.hidingGap My cs)).toReal + 2 * (1 / 3) ^ t)
         fun _ => 4 * t * 3 ^ t :=
-  sampling_deployed_models rel c H hKS hfixed hsessions hnum hslots iroots hopens hfix hprog hchecks hreveals P δc
-    hComplete S.leaky t ht (S.rounds hR) My cs Mp Mc nL nB hnL hnB hL hS hN hI S.coinCheck
+  sampling_deployed_models rel c H hKS hfixed hsessions hnum hslots iroots hopens hfix hprog hchecks hreveals hComplete
+    S.leaky t ht (S.rounds hR) My cs Mp Mc nL nB hnL hnB hL hS hN hI S.coinCheck
 
 end SamplingDeploy

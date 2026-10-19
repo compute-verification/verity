@@ -21,7 +21,8 @@ fixes set, and the sampled verifier's code (`SamplingDeploy.Code`) as its parame
   `4 + depth own` (`opens_calls_le`): the leaf's three, the leaf's frame, and one node per level of the deepest
   registered port.
 * The rest is the code's: the verifier in public-coin form, its parser, scope check and partition evaluation, its draw
-  layout, the checked units' sessions and what their witnesses reveal, and the sessions' `N₀`.
+  layout, the checked units' sessions and what their witnesses reveal, the sessions' `N₀`, and the deployed prover
+  with the completeness error the deployment states for it (`Tape`, `P`, `δc`).
 
 What is then a fact about the record: its sessions are `deployZk`'s (`deploy_flock`, `rfl`), its `ε_table` is
 nonnegative (`deploy_εtable_nonneg`), its commitment is hm96 leaves under the registered path check (`deploy_commit`,
@@ -40,8 +41,9 @@ check and partition evaluation; its draw layout (`stage2`, `checked`, `rounds`);
 its Flock witness reveals (`session`, `reveal`); the trace commitment's registered ports (`own`), the root and leaf
 index of each position under a run's roots (`at_`) and its published leaf layer (`layer`); where each committed bit
 sits, its row's width and its place there (`place`), and how the reveal encodes an opening's data: the row's other bits,
-the salt and the path (`bits`, `salt`, `π`); and its numbers: the sessions' `N₀`, the most tables a session at a
-statement sets up (`tables`) and the most openings one session reveals (`reveals`). -/
+the salt and the path (`bits`, `salt`, `π`); its numbers: the sessions' `N₀`, the most tables a session at a
+statement sets up (`tables`) and the most openings one session reveals (`reveals`); and the deployed prover on its tape
+(`Tape`, `P`) and the completeness error the deployment states for it (`δc`). -/
 structure Code where
   V : Verifier FlockDeploy.Coin
   parse : Msg → Option Stmt
@@ -62,6 +64,10 @@ structure Code where
   innerN₀ : Msg → ℝ
   tables : Msg → ℕ
   reveals : Msg → ℕ
+  Tape : Type
+  [tapeNonempty : Nonempty Tape]
+  P : Wit → Prover Tape
+  δc : (Msg → Msg) → Msg → ℝ
 
 /-! ## The trace commitment -/
 
@@ -169,6 +175,10 @@ noncomputable def deploy (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Re
   εtable x := c.tables x * 2 ^ (-(205 : ℝ))
   weight x := c.tables x * 2 ^ 33
   openCalls x := c.reveals x * (4 + depth c.own)
+  Tape := c.Tape
+  tapeNonempty := c.tapeNonempty
+  P := c.P
+  δc := c.δc
 
 variable (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (c : Code)
 
@@ -229,16 +239,16 @@ theorem sampling_deployed (H : Msg → Msg) (hKS : Claims.Flock.KS H (FlockDeplo
     (hslots : DrawSlots (deploy rel c)) (iroots : Msg → Seen → ℕ → List Msg)
     (hopens : SessionOpens H (deploy rel c) iroots) (hfix : InteriorFixed H (deploy rel c) iroots)
     (hprog : ProgramScope (deploy rel c)) (hchecks : ChecksScope H (deploy rel c)) (hreveals : RevealsLe c)
-    {Ω : Type} (P : Wit → Prover Ω) (δc : Msg → ℝ) (hComplete : Complete H (deploy rel c) P δc)
+    (hComplete : Complete H (deploy rel c))
     {Nz Ωz : Type} [Fintype Nz] [Nonempty Nz] [Fintype Ωz] [Nonempty Ωz] (Pz : Wit → Prover (Nz × Ωz)) (S : SimLeak)
-    (εzk γzk : Msg → ℝ) (hZK : ZK H (deploy rel c) Pz S εzk γzk) :
+    (εzk γzk : Msg → ℝ) (hZK : ZK H ((deploy rel c).withZk Pz S) εzk γzk) :
     ScopeMatches (deploy rel c) ∧ Binding (deploy rel c) ∧ Universal (deploy rel c) ∧ FaultyBoundary ∧
       KS H (deploy rel c) ∧ KSCount H (deploy rel c) ∧ Bits H (deploy rel c) ∧
-      Efficient H (deploy rel c) FlockDeploy.zkStepPoly ∧ Complete H (deploy rel c) P δc ∧
-      ZK H (deploy rel c) Pz S εzk γzk :=
+      Efficient H (deploy rel c) FlockDeploy.zkStepPoly ∧ Complete H (deploy rel c) ∧
+      ZK H ((deploy rel c).withZk Pz S) εzk γzk :=
   sampling_assembled rel (deploy rel c) H (deploy_flock rel c) hKS (deploy_εtable_nonneg rel c) c.own c.at_
     (row c.place c.bits) c.salt c.π c.layer (deploy_commit rel c) (row_places c.place c.bits) hfixed hsessions
     (innerNumbers_deploy rel c hnum) hslots iroots hopens hfix hprog hchecks (openCallsLe_deploy rel c H hreveals)
-    (universalIs_deploy rel c) P δc hComplete Pz S εzk γzk hZK
+    (universalIs_deploy rel c) hComplete Pz S εzk γzk hZK
 
 end SamplingDeploy
