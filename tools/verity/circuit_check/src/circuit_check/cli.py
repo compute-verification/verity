@@ -24,6 +24,7 @@ from . import cache as CC
 from . import checks as CK
 from . import sidecars as SC
 from . import targets as TG
+from . import units as UN
 
 REPO = Path(__file__).resolve().parents[5]
 
@@ -78,11 +79,12 @@ def _work(i: int) -> tuple[int, dict, dict | None, list[str], dict | None]:
     return i, r, *_observe(r, got)
 
 
-def target_key(kind: str, label: str, opts: CK.Options, as_call: bool | None, roots: tuple = ()) -> dict:
-    """A target's key: its request, and for a Definition the digest of what it reaches as descriptors (`cache.descriptor`)."""
+def target_key(kind: str, label: str, opts: CK.Options, as_call: bool | None, roots: tuple = (), desc: str | None = None) -> dict:
+    """A target's key: its request, and for a Definition the digest of what it reaches as descriptors (`cache.descriptor`), or
+    ``desc``, that digest as its binding's record holds it (`circuit_check.units`)."""
     request = {"target": [kind, label], "as_call": as_call, "options": {k: getattr(opts, k) for k in opts.__dataclass_fields__}}
-    if roots:
-        request["descriptor"] = CC.descriptor(roots[0])
+    if roots or desc is not None:
+        request["descriptor"] = desc if desc is not None else CC.descriptor(roots[0])
     return CC.key(request)
 
 
@@ -119,6 +121,66 @@ def _tasks(specs: list[str], opts: CK.Options, everything: bool, as_call: bool |
         else:
             tasks.append(("definition", s, lambda s=s: CK.check_definition(TG.definition(s), opts, memo=memo(), pins=pins, as_call=as_call)))
     return tasks
+
+
+def _planned(plan: UN.Plan, opts: CK.Options, cache: Path) -> tuple[list[tuple], list[dict], dict[int, tuple[dict, str]]]:
+    """`_tasks` of ``--all`` from the bindings' records (`units.plan`), each target's key and the entries reused: a target that
+    misses is made from a binding that reaches it (`units._materialize`), and `units.Stale` when its descriptor is not its
+    record's."""
+    d = plan.derived
+    memo = lambda: {}  # noqa: E731
+    pins = CC.recorded_pins(CK.load_pins())
+    tasks: list[tuple] = []
+    keys: list[dict] = []
+    hits: dict[int, tuple[dict, str]] = {}
+    for fid in d.ids:
+        node = d.nodes[fid]
+        call = node["f"] in plan.calls
+        k = target_key("definition", fid, opts, call, desc=node["d"])
+        fn = None
+        if (hit := CC.lookup(cache, k, REPO)) is not None and not _errored(hit[0]):
+            hits[len(tasks)] = hit
+        else:
+            fn = UN._materialize(plan.entries, plan.objects, fid)
+            if CC.descriptor(fn) != node["d"]:
+                raise UN.Stale(f"{fid}: its descriptor is not the one its binding's record holds")
+        units = d.units.get(fid, set())
+        TG.BINDINGS.setdefault(fid, set()).update(units)
+        tasks.append(("definition", fid, lambda fn=fn, call=call: CK.check_definition(fn, opts, memo=memo(), pins=pins, as_call=call),
+                      {"as_call": call, "units": sorted(units), "roots": [fn] if fn is not None else []}))
+        keys.append(k)
+    for label, sub, sts in TG.templates():
+        k = target_key("template", label, opts, None)
+        if (hit := CC.lookup(cache, k, REPO)) is not None and not _errored(hit[0]):
+            hits[len(tasks)] = hit
+        tasks.append(("template", label, lambda sub=sub, sts=sts: CK.check_subcircuit(sub, opts, instance_statics=sts, memo=memo(), pins=pins),
+                      {"units": sorted(TG.BINDINGS.get(label, ()))}))
+        keys.append(k)
+    return tasks, keys, hits
+
+
+def _record_units(cache: Path, opts: CK.Options, tasks: list[tuple], keys: list[dict]) -> dict:
+    """After a full build: every binding's record (`units.store`), once the suite its records give (`units.derive`) is this
+    run's, target for target, with each one's units, whether it is a Call and its key; else why none was stored."""
+    entries = UN.built_entries()
+    if entries is None:
+        return {"stored": 0, "why": "the registry grew while the catalog was built"}
+    try:
+        d = UN.derive(entries)
+        roots = {fn.id: fn for e in entries for fn in e.roots if UN._kind(fn) is not None}
+        calls = UN.call_families(entries, d, roots, in_unit=False)
+    except UN.Stale as e:
+        return {"stored": 0, "why": str(e)}
+    want = [(t[1], _info(t)["as_call"], _info(t)["units"], k) for t, k in zip(tasks, keys) if t[0] == "definition"]
+    got = [(fid, c, sorted(d.units.get(fid, ())), target_key("definition", fid, opts, c, desc=d.nodes[fid]["d"]))
+           for fid in d.ids for c in [d.nodes[fid]["f"] in calls]]
+    if got != want:
+        i = next(i for i in range(max(len(got), len(want))) if i >= min(len(got), len(want)) or got[i] != want[i])
+        g, w = (got[i] if i < len(got) else None), (want[i] if i < len(want) else None)
+        what = "target" if g is None or w is None or g[0] != w[0] else \
+            next(n for n, a, b in zip(("target", "as_call", "units", "key"), g, w) if a != b)
+        return {"stored": 0, "why": f"the records give another task list: its {what} at {(g or w)[0]} differs"}
+    return {"stored": UN.store(cache, REPO, entries, only_rebuilt=False)}
 
 
 def _calls(specs: list[str]) -> None:
@@ -359,7 +421,7 @@ def parallel(fn: Callable, items: list, jobs: int, initializer: Callable | None 
 
 def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call: bool | None = None, log=print, jobs: int = 1,
         cache: Path | None = None, mem_gb: int | None = None, progress: Path | None = None, isolate: bool | None = None,
-        fork: bool = False, mem_file: Path | None = None) -> dict:
+        fork: bool = False, mem_file: Path | None = None, units: bool = False) -> dict:
     """Every target's checks, in target order.  Isolated (``isolate``; by default when ``jobs`` > 1), each target is checked in a
     process of its own, up to ``jobs`` at once (`parallel`): forked from one process that holds the task list, each check with
     its own memo, so a target's check never reuses what another's computed: the results are the same as checking them here, in
@@ -392,8 +454,10 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
 
     The task list (each target and its key) is a cache entry too, under the catalog's own key: while everything its build
     could depend on is unchanged (`cache.task_list_reads`), a run whose every target is reused as it was recorded builds no
-    Definition. Any other run builds the list."""
+    Definition. Any other run builds the list; with ``units``, from the catalog bindings' records (`circuit_check.units`),
+    building only the bindings whose record misses, and a full build stores them."""
     tracing = cache is not None and CC.tracing()
+    isolated = jobs > 1 if isolate is None else isolate
     listed = None
     if tracing and everything and not specs:
         TG.load_registries()
@@ -406,8 +470,21 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
                 rep["peaks"] = []
                 rep["cache"] = {"hits": len(got), "stored": 0, "untraced": [], "errors": [], "changed": [], "task_list": hit[1]}
                 return rep
-    tasks = _tasks(specs, opts, everything, as_call)
-    isolated = jobs > 1 if isolate is None else isolate
+    units = units and listed is not None and (fork or not isolated)
+    plan, planned, why = None, None, None
+    if units:
+        try:
+            plan = UN.plan(cache, REPO, log)
+            planned = _planned(plan, opts, cache) if plan is not None else None
+        except UN.Stale as e:
+            why = str(e)
+            plan, planned = None, None
+            TG.BINDINGS.clear()
+    if planned is not None:
+        tasks, keys, hits = planned
+        listed = None                                     # its reads are every binding's: a full build stores it
+    else:
+        tasks, keys, hits = _tasks(specs, opts, everything, as_call), None, None
     zygote = None
     if isolated and fork:
         _TASKS[:] = tasks
@@ -415,20 +492,28 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
             _calls(specs)
         zygote = Zygote(_work, _forked, fork=True)          # before the keys: it holds what `_init` would have built
     try:
-        return _checked_all(tasks, specs, opts, everything, as_call, log, jobs, cache, mem_gb, progress, isolated, tracing,
-                            listed, zygote, mem_file)
+        if keys is None and tracing:
+            keys = [target_key(t[0], t[1], opts, _info(t).get("as_call", as_call), tuple(_info(t).get("roots", ()))) for t in tasks]
+        rep = _checked_all(tasks, specs, opts, everything, as_call, log, jobs, cache, mem_gb, progress, isolated, tracing,
+                           listed, zygote, mem_file, keys, hits)
     finally:
         if zygote is not None:
             zygote.close()
+    if units and not CC.untraced():
+        if planned is not None:
+            rep["cache"]["units"] = {**plan.stats(), "stored": UN.store(cache, REPO, plan.entries, only_rebuilt=True)}
+        else:
+            rep["cache"]["units"] = {**_record_units(cache, opts, tasks, keys), **({"stale": why} if why else {})}
+    return rep
 
 
 def _checked_all(tasks: list[tuple], specs: list[str], opts: CK.Options, everything: bool, as_call: bool | None, log, jobs: int,
                  cache: Path | None, mem_gb: int | None, progress: Path | None, isolated: bool, tracing: bool,
-                 listed: dict | None, zygote: Zygote | None, mem_file: Path | None = None) -> dict:
-    """`run`'s report over the task list it built."""
+                 listed: dict | None, zygote: Zygote | None, mem_file: Path | None = None, keys: list[dict] | None = None,
+                 hits: dict[int, tuple[dict, str]] | None = None) -> dict:
+    """`run`'s report over the task list it built (with ``keys`` and ``hits``, the keys and the entries reused already)."""
     out: list[dict | None] = [None] * len(tasks)
-    keys = [target_key(t[0], t[1], opts, _info(t).get("as_call", as_call), tuple(_info(t).get("roots", ()))) for t in tasks] \
-        if tracing else []
+    keys = keys if keys is not None else []
     if listed is not None and not CC.untraced():
         reads = CC.task_list_reads([*TG.REACHED.values(), *(r for t in tasks for r in _info(t).get("roots", ()))])
         CC.store(cache, listed, REPO, reads, {"targets": [list(t[:2]) for t in tasks], "keys": keys}, CC.seen(REPO, reads))
@@ -461,7 +546,7 @@ def _checked_all(tasks: list[tuple], specs: list[str], opts: CK.Options, everyth
     if tracing:
         todo = []
         for i, k in enumerate(keys):
-            if (hit := CC.lookup(cache, k, REPO)) is not None and not _errored(hit[0]):
+            if (hit := hits.get(i) if hits is not None else CC.lookup(cache, k, REPO)) is not None and not _errored(hit[0]):
                 out[i] = {**hit[0], "cache": {"hit": hit[1]}}
                 stats["hits"] += 1
             else:
@@ -617,6 +702,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--update-pins", action="store_true", help="pin the lowering counts measured now (review the diff)")
     ap.add_argument("--cache", type=Path, default=None, metavar="DIR",
                     help="reuse a report whose every input is unchanged (circuit_check.cache), else run and record one")
+    ap.add_argument("--catalog-units", action="store_true",
+                    help="with --all --cache: build only the catalog bindings whose record misses (circuit_check.units)")
     ap.add_argument("-q", "--quiet", action="store_true")
     a = ap.parse_args(argv)
     if a.cache and not a.update_pins:
@@ -632,7 +719,13 @@ def main(argv: list[str] | None = None) -> int:
     opts = _options(a)
     rep = run(a.targets, opts, everything=a.all, as_call=True if a.as_call else None,
               log=None if a.quiet else lambda s: print(s, flush=True), jobs=jobs, cache=a.cache if a.cache and not a.update_pins else None,
-              mem_gb=a.mem_gb, mem_file=a.mem_gb_file, isolate=True, fork=True, progress=a.out.with_name(a.out.name + ".progress.jsonl") if a.out else None)
+              mem_gb=a.mem_gb, mem_file=a.mem_gb_file, isolate=True, fork=True, progress=a.out.with_name(a.out.name + ".progress.jsonl") if a.out else None,
+              units=a.catalog_units)
+    if u := (rep.get("cache") or {}).get("units"):
+        print("circuit-check: catalog bindings: " + (f"{u['reused']} reused, {len(u['rebuilt'])} built ({', '.join(u['rebuilt'][:8])}"
+              f"{', ...' if len(u['rebuilt']) > 8 else ''}), " if "reused" in u else "whole catalog built, ")
+              + f"{u['stored']} records stored" + (f" ({u['why']})" if u.get("why") else "")
+              + (f"; records stale ({u['stale']})" if u.get("stale") else ""))
     if c := rep.get("cache"):
         print(f"circuit-check: {c['hits']} of {len(rep['targets'])} targets reused (every file, listing, probe, catalog unit and pin their checks read or resolved is "
               f"unchanged), {c['stored']} stored, {len(c['untraced'])} not cacheable (the tracer could not see what they read), "
