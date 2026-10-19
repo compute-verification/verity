@@ -69,4 +69,8 @@ gets the target with probability at most `exp (-κ (K - Δ - ℓ)) + Σ_{j ≤ K
 deployment's windows.
 `ExfiltrationExamples`: the stopping-time bound is attained, and without detection pressure, a halt, bound inputs or a
 trusted model the leak is unbounded.
+`JointPressure`: one draw for several claims. The max rule `max_i κ_i harm_i(u)` is the least inclusion that gives
+every claim its detection pressure, the union bound holds every claim's bound through the first detection at once
+except with probability `Σ_i δ_i` (a claim whose count waits for the verdict without the per-window term), and a
+uniform `k`-subset of `N` units escapes `b` wrong ones with probability at most `(1 - k/N)^b`.
 -/
