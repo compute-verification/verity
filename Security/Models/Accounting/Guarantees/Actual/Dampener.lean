@@ -41,4 +41,24 @@ def DampenerWindowsCap : Prop :=
     Mr + Md ≤ T.M.card →
       b_a * ((Mr : ℝ) + Md) ≤ n * ⌈(t : ℝ) / ω⌉₊ * ((R + α * F * ω) * Lambda T.reuse e d b_w (R + α * F * ω))
 
+/-- **The compute dampener's windows from the memory cap over threads, per parameter slot.** `DampenerWindowsCap` from
+`ThreadedRuntimeSlots`, with the reference circuit's weights incompressible per parameter slot of a slot map `σ`
+(`Nci.Assumptions.WeightsIncompressibleSlots`): `b_a (M_r + M_d) ≤ n ⌈t/ω⌉₊ K Λ(K)`.
+
+Reads are counted by width, as in `ThreadedRuntime`. -/
+def DampenerWindowsCapSlots : Prop :=
+  ∀ {L E : Type*} [Fintype E] [DecidableEq L] (A : Placed L) (ℓ : L → L → ℕ) (Φ : Finset L → ℕ)
+    (ends : E → L × L) (β : E → ℕ) (link : Fin A.N → Fin A.N → E) (n : ℕ) (X : Fin n → Finset L)
+    (θ : Finset (Fin A.N)) (hθ : ∀ a ∈ θ, A.isInput a = true) (t ω Γ : ℕ) (R F α b_w b_a : ℝ)
+    (c : Declaration) (T : Threading c) (σ : T.Slots) (d e Mr Md : ℕ),
+    0 < ω → (∀ i j, i ≠ j → Disjoint (X i) (X j)) →
+    A.Causal ℓ → A.ComputeRate (Set.range X) (fun _ => 1) Φ → A.Links ends β link →
+    0 < b_w → 0 < b_a → 0 < d →
+    (∀ i, Φ (X i) * ω ≤ Γ) → (∀ i, (linkCapacity ends β (X i) : ℝ) ≤ α * F) →
+    (∀ i (k : ℕ), k * ω < t → (A.state (X i) (k * ω) : ℝ) ≤ R) →
+    c.Contains (A.declaration (univ.biUnion X) t θ hθ) →
+    T.Threaded Γ (R + α * F * ω) d e → Nci.Assumptions.WeightsIncompressibleSlots c T σ Γ (R + α * F * ω) b_w b_a →
+    Mr + Md ≤ T.M.card →
+      b_a * ((Mr : ℝ) + Md) ≤ n * ⌈(t : ℝ) / ω⌉₊ * ((R + α * F * ω) * Lambda T.reuse e d b_w (R + α * F * ω))
+
 end Accounting.Guarantees.Actual

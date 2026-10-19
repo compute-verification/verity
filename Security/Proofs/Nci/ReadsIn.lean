@@ -13,8 +13,8 @@ import Proofs.Nci.Threads
   image of `S` and of the gates `S` reads in place of `M`'s image.
 * `threaded_reads_by`: Theorem 1 (`threaded_reads`) with reads counted by any measure `ρ`. Its proof reads the count
   twice, through `ρ R ≤ S` and through `ρ R` paying for the weights used and the thread values read, so it goes through
-  for any `ρ`; `threaded_count_by` is the counting, with the weights' charge `q` any number that caps each thread's
-  multiplications at `reuse · q`. Theorem 1 is the instance `ρ = novelReads`.
+  for any `ρ`; `threaded_count_by` (`Proofs.Nci.Threads`) is the counting, with the weights' charge `q` any number that
+  caps each thread's multiplications at `reuse · q`. Theorem 1 is the instance `ρ = novelReads`.
 -/
 
 namespace Nci.SecurityProofs
@@ -71,47 +71,6 @@ theorem novelReads_piece_le_readsIn {c d : Declaration} (M : PartialContainment 
         exact sum_congr rfl fun a ha => (M.emb_w a (hA a ha)).symm
     _ ≤ ∑ b ∈ d.D.into (P.gates u) ∩ (M.S ∪ c.D.into M.S).image M.emb, d.D.w b :=
         sum_le_sum_of_subset (image_subset_iff.2 hmaps)
-
-/-- Theorem 1's counting, for any `Rn ≤ S` that pays `b_w` for each of `q` weights and `b_a` for each thread value `R`
-reads, when each thread's counted multiplications in `R` number at most `reuse · q`. -/
-theorem threaded_count_by {c : Declaration} (T : Threading c) (R : Finset (Fin c.D.N)) {S b_w b_a Rn : ℝ} {d e q : ℕ}
-    (hbw : 0 < b_w) (hba : 0 < b_a) (hd : 0 < d)
-    (hT : ∀ t, (T.threadReads R t).card < d → (T.threadMults R t).card ≤ e * (T.threadReads R t).card)
-    (hq : ∀ t, (T.threadMults R t).card ≤ T.reuse * q)
-    (hinc : b_w * q + b_a * ∑ t, (T.threadReads R t).card ≤ Rn) (hRS : Rn ≤ S) :
-    b_a * (T.mults R).card ≤ Rn * T.bound S b_w d e := by
-  classical
-  set L := univ.filter fun t => (T.threadReads R t).card < d with hL_def
-  set H := univ.filter fun t => ¬ (T.threadReads R t).card < d with hH_def
-  have hsplit : ((T.mults R).card : ℝ) =
-      ∑ t ∈ L, ((T.threadMults R t).card : ℝ) + ∑ t ∈ H, ((T.threadMults R t).card : ℝ) := by
-    rw [card_mults_eq_sum, Nat.cast_sum, sum_filter_add_sum_filter_not]
-  have hL : ∑ t ∈ L, ((T.threadMults R t).card : ℝ) ≤ e * ∑ t ∈ L, ((T.threadReads R t).card : ℝ) := by
-    rw [mul_sum]
-    refine sum_le_sum fun t ht => ?_
-    exact_mod_cast hT t (mem_filter.1 ht).2
-  have hH : ∑ t ∈ H, ((T.threadMults R t).card : ℝ) ≤ T.reuse * q * H.card := by
-    have := sum_le_card_nsmul H (fun t => ((T.threadMults R t).card : ℝ)) (T.reuse * q)
-      fun t _ => by exact_mod_cast hq t
-    rwa [nsmul_eq_mul, mul_comm] at this
-  have hHc : (d : ℝ) * H.card ≤ ∑ t ∈ H, ((T.threadReads R t).card : ℝ) := by
-    have := card_nsmul_le_sum H (fun t => ((T.threadReads R t).card : ℝ)) (d : ℝ)
-      fun t ht => by exact_mod_cast not_lt.1 (mem_filter.1 ht).2
-    rwa [nsmul_eq_mul, mul_comm] at this
-  push_cast at hinc
-  rw [← sum_filter_add_sum_filter_not univ (fun t => (T.threadReads R t).card < d)] at hinc
-  have hdr : (0 : ℝ) < d := by exact_mod_cast hd
-  refine threaded_ineq (Hb := b_a * H.card) (Y := b_a * ∑ t ∈ H, ((T.threadReads R t).card : ℝ))
-    (X := b_a * ∑ t ∈ L, ((T.threadReads R t).card : ℝ)) (q := q) hbw hdr
-    (Nat.cast_nonneg _) (mul_nonneg hba.le (sum_nonneg fun _ _ => Nat.cast_nonneg _))
-    (mul_nonneg hba.le (sum_nonneg fun _ _ => Nat.cast_nonneg _)) (Nat.cast_nonneg _) (by linarith)
-    hRS ?_ ?_
-  · calc (d : ℝ) * (b_a * H.card) = b_a * (d * H.card) := by ring
-      _ ≤ _ := mul_le_mul_of_nonneg_left hHc hba.le
-  · rw [hsplit, mul_add]
-    have h1 := mul_le_mul_of_nonneg_left hL hba.le
-    have h2 := mul_le_mul_of_nonneg_left hH hba.le
-    nlinarith
 
 /-- **Theorem 1 over a read measure** `ρ`: for a `(d, e)`-threaded `c` whose small subcircuits pay for the weights they
 use and the thread values they read, both read by `ρ` (small: at most `Γ` computed gates and `ρ R ≤ S`), a small
