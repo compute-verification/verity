@@ -32,7 +32,8 @@ coefficient, a lower bound on its issue cost, and no certificate prices them abo
 and the uniform class, the machine model's, and NoSum carries the rest; the full menu's bound is printed for the
 record. The checks are `lean_headline.instance()`'s: the sheet reproduces every DS coefficient, ♭ is `setup`'s floor
 program, and the bound is at most the family's target. A uniform writer heads 2 words (`UIMAD.WIDE.U32` writes a UR
-pair, RT-HOPPER-7). The fold menu is the design's fold and its `fold_routes` (CP_SEG4 and CP_SEG4U, RT2-HOPPER-9, -11) on
+pair, RT-HOPPER-7). The fold menu is the design's fold and its `fold_routes`, every bit-exact checkpoint loop
+(CP_SEG4 and CP_SEG4U, RT2-HOPPER-9, -11; CP_ATS, CP_ATS2, CP_ATS8, CP_RED, CP_RED2, CP_RED8 and CP_XT, RT3-DC-1, -4) on
 lanes, and alone on the uniform datapath at the least of their counts. ♭ folds by `setup`'s mix of them on each vector
 and writes by its split of the words between the tensor route and the design's baseline program (`_flat_shares`), so
 a measured file states its own `flatFold` or `flatWords` where that mix or split is not the sheet's.
@@ -100,8 +101,8 @@ class Family:
 # lower bound on their issue cost"), and no certificate prices them otherwise (M gives a GMMA 32 SMSP-cycles to
 # IGMMA's 62.7 on JI90_0), so its measured menu is the machine model's: honest's form, the rest off it (NoSum).
 # The H200's design credits ffill at p = 1, since no check reads its chains (RT-LOGIC-12, decision 99). With ♭'s
-# checkpoint by CP_SEG4U, `setup`'s floor on DC-90-ri heads 0.079% of its words on the design's lane baseline (dp4a)
-# beside the IGMMA, and `_flat_shares` makes that share exact.
+# checkpoint on the MIO routes (CP_ATS8, CP_RED2) beside CP_SEG4U, `setup`'s floor on DC-90-ri writes every word on
+# the IGMMA, as on DS-90; where a floor heads a share on the design's lane baseline, `_flat_shares` makes it exact.
 # A uniform instruction heads up to 2 words (UIMAD.WIDE.U32 writes a UR pair, RT-HOPPER-7), so UNI's ω is 2.
 SM90 = Family("Sm90", "H200", "sm_90", "dither-2s-licpw-redux-p1-l32", "DS-90", "DC-90-ri",
               {"DS_alu": ("alu", 64), "DS_imad": ("imad", 64), "DS_shfl": ("shfl", 32)},
@@ -344,7 +345,9 @@ def reading(fam: Family, vector: str, full: bool = False) -> Reading:
                          f"{s.baseline.T})")
     e = E.eps(d, pi, float(Q), fam.data, operands="free", credit="floor")
     B0 = max(load(r, n0) for r in pi.rows)
-    flat = next(r for r in pi.rows if load(r, n0) == B0)
+    # The skip is lane work, so it sits on the lane facet ♭ loads most; where ♭'s facets tie with one no lane class
+    # loads (DC-90-ri's AT90), the exact shares can leave that one above by 1e-10, and the skip lifts the lane facet over.
+    flat = max((r for r in pi.rows if any(c[k].get(r) for k in pi.cuda)), key=lambda r: load(r, n0))
     # design_skip's float sums run in string-hash order, so its last bits vary with PYTHONHASHSEED: read it at 1e-12,
     # rounded up (a larger ε_skip only raises the bound), so every run writes the same data.
     eps_skip = Fraction(math.ceil(B_.design_skip(d, data=fam.data, vector=vector).eps_time * 10 ** 12), 10 ** 12)
@@ -513,7 +516,8 @@ def render_sheet(fam: Family, r: Reading) -> str:
         f"(ω = m·n, its destination's 32-bit words a warp)" + _uniform_words(fam)
         + "; the vector classes CUDA's lane classes; the fold routes the design's fold"
         + (f" and its {len(x.fold_names)} other bit-exact programs ({', '.join(x.fold_names)}: the checkpoint's "
-           "routes, RT2-HOPPER-9 and -11) on lanes, and alone on the uniform datapath at the least of their counts; "
+           "bit-exact loops, RT2-HOPPER-9, -11 and RT3-DC-1, -4) on lanes, and alone on the uniform datapath at the least "
+           "of their counts; "
            if x.fold_names else " on lanes and alone on the uniform datapath; ")
         + f"the table level's bytes counted in {fam.bytes}, which `b_T = 0` prices at nothing (the census has no load "
         f"class); A6's floors `q = q_T = ½`, `b_T = 0`; {x.Nw} committed words a unit of honest work ({honest})"
