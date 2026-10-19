@@ -1125,13 +1125,29 @@ class _Fold:
     def _token_select_output(self, step: int, row: int, view: ViewDesc | None = None) -> Refs | None:
         """Fallback when the sampler view is absent/unresolved: the step's instance whose output view IS the sampled row's
         element (`view`, family-agnostic: any token-selection definition), else the step's sampling-event instance
-        (`sampling_event.is_sampling_event`: greedy or Gumbel token selection) for logits row `row`."""
+        (`sampling_event.is_sampling_event`: greedy or Gumbel token selection) for logits row `row`: the one whose attribution
+        is that row's (request, position), or, unattributed, row `row` of a select spanning every logits row.  An instance's
+        `row` is its Compute's: the greedy select is one Compute over the logits rows, a Gumbel select one Compute per logits
+        row (each its own row 0), so the output element is matched over the whole step before any row is."""
+        step_instances = []
         for m in reversed(self.instances):
             if m["step"] != step:
                 break
-            if view is not None and any(ov is not None and _same_element(ov, view) for ov in m.get("output_views", ())):
-                return Affine("n", m["node"], 0, 1)
-            if SE.is_sampling_event(m["spec"]) and m["row"] == row:    # the ONE sampling-event vocabulary (verity_vllm.program.sampling_event)
+            step_instances.append(m)
+        if view is not None:
+            for m in step_instances:
+                if any(ov is not None and _same_element(ov, view) for ov in m.get("output_views", ())):
+                    return Affine("n", m["node"], 0, 1)
+        start = self.cur_start
+        logits_rows = list(start.logits_rows) if start is not None else []
+        want = (str(logits_rows[row][0]), int(logits_rows[row][1])) if row < len(logits_rows) else None
+        for m in step_instances:
+            if not SE.is_sampling_event(m["spec"]):    # the ONE sampling-event vocabulary (verity_vllm.program.sampling_event)
+                continue
+            if m.get("request") is not None:
+                if want is not None and (m["request"], m["position"]) == want:
+                    return Affine("n", m["node"], 0, 1)
+            elif m["row"] == row and m.get("rows") == len(logits_rows):
                 return Affine("n", m["node"], 0, 1)
         return None
 
