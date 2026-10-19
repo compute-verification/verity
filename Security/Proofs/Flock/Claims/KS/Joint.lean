@@ -509,6 +509,17 @@ theorem V_k_pos (zk : Bool) (x : Claims.Msg) : 0 < (V zk).k x := by
   simp only [V]
   split <;> omega
 
+
+namespace Gen
+
+variable [S : ZkSetup]
+
+theorem V_k_pos (zk : Bool) (x : Claims.Msg) : 0 < (V zk).k x := by
+  simp only [V]
+  split <;> omega
+
+end Gen
+
 theorem k_one_plain (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) :
     1 ≤ (deployPlain rel).k x ∨ Claims.Flock.NoAcc sha512 (deployPlain rel).V x :=
   (k_range_plain rel x).imp_left fun h => by omega
@@ -516,6 +527,17 @@ theorem k_one_plain (rel : Readable.Parsed → Readable.Relation) (x : Claims.Ms
 theorem k_one_zk (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) :
     1 ≤ (deployZk rel).k x ∨ Claims.Flock.NoAcc sha512 (deployZk rel).V x :=
   (k_range_zk rel x).imp_left fun h => by omega
+
+
+namespace Gen
+
+variable [S : ZkSetup]
+
+theorem k_one_zk (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) :
+    1 ≤ (deployZk rel).k x ∨ Claims.Flock.NoAcc sha512 (deployZk rel).V x :=
+  (k_range_zk rel x).imp_left fun h => by omega
+
+end Gen
 
 /-- **A column of the code's width**: as long as the zero column, table 0's level-0 lanes (under `--zk` with the extra
 lanes). -/

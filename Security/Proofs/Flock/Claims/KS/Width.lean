@@ -156,6 +156,22 @@ theorem runOf_m {zk : Bool} {s : Claims.Seen} {j : ℕ} {r : Claims.Flock.ZkRun}
   obtain ⟨f, hf, ⟨s', spec, sts⟩, hs, st, hst, _, _, _, _, rfl⟩ := h
   exact ⟨f, s', spec, sts, st, hf, hs, hst, rfl⟩
 
+
+namespace Gen
+
+variable [S : ZkSetup]
+
+/-- **The run's reader sits at its last message's table `j`**: its `m` is that table's. -/
+theorem runOf_m {zk : Bool} {s : Claims.Seen} {j : ℕ} {r : Claims.Flock.ZkRun} (h : runOf zk s j = some r) :
+    ∃ f s' spec sts st, lastFinal s = some f ∧ setupOf zk f.stmt = some (s', spec, sts) ∧ sts[j]? = some st ∧
+      r.m = st.m := by
+  unfold runOf at h
+  simp only [Option.bind_eq_bind, Option.bind_eq_some_iff, Option.pure_def, Option.some.injEq] at h
+  obtain ⟨f, hf, ⟨s', spec, sts⟩, hs, st, hst, _, _, _, _, rfl⟩ := h
+  exact ⟨f, s', spec, sts, st, hf, hs, hst, rfl⟩
+
+end Gen
+
 /-! ## An accepted run decides on its last message -/
 
 /-- **A run accepts at its own messages**: where the rounds accept, the verifier's step accepts the prover's messages
@@ -197,6 +213,24 @@ theorem act_decide_final {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs
   · repeat' split at h
     all_goals first | (cases h; done) | (cases h; simp_all)
 
+
+namespace Gen
+
+variable [S : ZkSetup]
+
+/-- **A decision is on the last message.** -/
+theorem act_decide_final {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins}
+    {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
+    {mids : List (Claims.Msg × Coin)} {f : Final} (h : act zk x as cs = .decide s spec sts link c₁ mids f) :
+    as.getLast?.bind finalOf = some f := by
+  unfold act at h
+  split at h
+  · cases h
+  · repeat' split at h
+    all_goals first | (cases h; done) | (cases h; simp_all)
+
+end Gen
+
 /-- **An accepted run's last message is a final message on the statement**, at a statement that sets up. -/
 theorem acc_last {zk : Bool} {H : Claims.Msg → Claims.Msg} {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
     {r : Fin ((V zk).k x) → Coin} (h : (Claims.run H P (V zk) x ω r).out = .acc) :
@@ -214,6 +248,31 @@ theorem acc_last {zk : Bool} {H : Claims.Msg → Claims.Msg} {Ω : Type} {P : Cl
     have hl := act_decide_final hact
     rw [List.getLast?_map, Option.bind_map] at hl
     exact hl
+
+
+namespace Gen
+
+variable [S : ZkSetup]
+
+/-- **An accepted run's last message is a final message on the statement**, at a statement that sets up. -/
+theorem acc_last {zk : Bool} {H : Claims.Msg → Claims.Msg} {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+    {r : Fin ((V zk).k x) → Coin} (h : (Claims.run H P (V zk) x ω r).out = .acc) :
+    ∃ s spec sts f, setupOf zk x = some (s, spec, sts) ∧ lastFinal (Claims.run H P (V zk) x ω r).seen = some f ∧
+      f.stmt = x := by
+  have ha := run_acc_next H P (V zk) x ω r h
+  generalize hcs : (List.range _).map (Claims.coinSeq r) = cs at ha
+  replace ha : ((next zk x ((Claims.run H P (V zk) x ω r).msgs.map Prod.fst) cs).eval H).1 = .acc := ha
+  cases hact : act zk x ((Claims.run H P (V zk) x ω r).msgs.map Prod.fst) cs with
+  | rej => rw [next_rej H hact] at ha; cases ha
+  | coin c => rw [next_coin H hact] at ha; cases ha
+  | decide s spec sts link c₁ mids f =>
+    obtain ⟨_, _, -, -, hc⟩ := (next_decide H hact).1 ha
+    refine ⟨s, spec, sts, f, act_decide hact, ?_, (Claims.Bridge.Custody.checks_ok hc).1⟩
+    have hl := act_decide_final hact
+    rw [List.getLast?_map, Option.bind_map] at hl
+    exact hl
+
+end Gen
 
 /-! ## `ColsOk` at both records -/
 

@@ -46,6 +46,24 @@ theorem next_acc_sha512 {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs 
   | decide s spec sts link c₁ mids f =>
     exact ⟨s, spec, sts, f.record, f.proofs, act_decide ha, ((next_decide_sha512 ha).1 h).1⟩
 
+
+namespace Gen
+
+variable [S : ZkSetup]
+
+/-- **An accepting step at SHA-512 is an accepting verdict** at the statement's setup. -/
+theorem next_acc_sha512 {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+    (h : ((next zk x as cs).eval sha512).1 = .acc) :
+    ∃ s spec sts record proofs, setupOf zk x = some (s, spec, sts) ∧
+      (if zk then Zk.verify spec (tabsOf sts) record proofs else verify spec (tabsOf sts) record proofs) = .ok () := by
+  cases ha : act zk x as cs with
+  | rej => simp [next_rej sha512 ha] at h
+  | coin c => simp [next_coin sha512 ha] at h
+  | decide s spec sts link c₁ mids f =>
+    exact ⟨s, spec, sts, f.record, f.proofs, act_decide ha, ((next_decide_sha512 ha).1 h).1⟩
+
+end Gen
+
 theorem fast100_range {m : ℕ} {s : Flock.Schedule} (h : Flock.fast100 m = some s) : 22 ≤ m ∧ m ≤ 35 :=
   ⟨FlockSoundness.Refine.exec_fast100_ge h, by
     by_contra hm
@@ -108,6 +126,30 @@ theorem N₀_ge_of_setup {zk : Bool} {x : Claims.Msg} {s : Ins} {spec : SessionS
         positivity
     linarith
 
+
+namespace Gen
+
+variable [S : ZkSetup]
+
+/-- `N₀` at a statement that sets up a table is at least table 0's level-0 codeword length. -/
+theorem N₀_ge_of_setup {zk : Bool} {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
+    (h : setupOf zk x = some (s, spec, sts)) (h0 : 0 < sts.size) :
+    (2 : ℝ) ^ (if zk then Claims.Flock.zkLevel0 sts[0].m else Claims.Flock.plainLevel0 sts[0].m).d ≤ N₀ zk x := by
+  unfold N₀ tables
+  rw [h]
+  rcases sts with ⟨_ | ⟨a, l⟩⟩
+  · simp at h0
+  · show tableLen zk a ≤ (((a :: l).map fun st => (spec, st)).map fun p => tableLen zk p.2).sum
+    simp only [List.map_cons, List.sum_cons]
+    have : 0 ≤ ((l.map fun st => (spec, st)).map fun p => tableLen zk p.2).sum :=
+      List.sum_nonneg fun b hb => by
+        obtain ⟨p, -, rfl⟩ := List.mem_map.1 hb
+        unfold tableLen
+        positivity
+    linarith
+
+end Gen
+
 /-- `k ≥ 8` once `N₀ ≥ 2^10`. -/
 theorem eight_le_k {Col T : Type} {D : Claims.Flock.Deploy Coin Col T} {x : Claims.Msg} (hN : 2 ^ 10 ≤ D.N₀ x) :
     8 ≤ D.k x := by
@@ -126,6 +168,23 @@ theorem acc_verdict {zk : Bool} {x : Claims.Msg} (hacc : ¬ Claims.Flock.NoAcc s
   obtain ⟨Ω, P, ω, r, hr⟩ := hacc
   obtain ⟨as, has⟩ := stepWith_acc _ _ _ _ _ _ _ _ _ hr
   exact next_acc_sha512 has
+
+
+namespace Gen
+
+variable [S : ZkSetup]
+
+/-- An accepting run at SHA-512 of the deployed verifier, as an accepting verdict at the statement's setup. -/
+theorem acc_verdict {zk : Bool} {x : Claims.Msg} (hacc : ¬ Claims.Flock.NoAcc sha512 (V zk) x) :
+    ∃ s spec sts record proofs, setupOf zk x = some (s, spec, sts) ∧
+      (if zk then Zk.verify spec (tabsOf sts) record proofs else verify spec (tabsOf sts) record proofs) = .ok () := by
+  unfold Claims.Flock.NoAcc at hacc
+  push Not at hacc
+  obtain ⟨Ω, P, ω, r, hr⟩ := hacc
+  obtain ⟨as, has⟩ := stepWith_acc _ _ _ _ _ _ _ _ _ hr
+  exact next_acc_sha512 has
+
+end Gen
 
 /-- **The plain verifier's `k` range**: at every statement, `k ≥ 8` or the verifier accepts no run at SHA-512. -/
 theorem k_range_plain (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) :
@@ -167,6 +226,33 @@ theorem k_range_zk (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg
   show 2 ^ 10 ≤ N₀ true x
   exact le_trans (two_pow_le hlen) (N₀_ge_of_setup hs h0)
 
+
+namespace Gen
+
+variable [S : ZkSetup]
+
+/-- **The masked verifier's `k` range**: at every statement, `k ≥ 8` or the verifier accepts no run at SHA-512. -/
+theorem k_range_zk (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) :
+    8 ≤ (deployZk rel).k x ∨ Claims.Flock.NoAcc sha512 (deployZk rel).V x := by
+  by_cases hacc : Claims.Flock.NoAcc sha512 (deployZk rel).V x
+  · exact .inr hacc
+  obtain ⟨s, spec, sts, record, proofs, hs, hv⟩ := acc_verdict (zk := true) hacc
+  obtain ⟨h0, hm⟩ := served_zk (by simpa using hv)
+  obtain ⟨h25, h35⟩ := hm 0 h0
+  have hd := zkLen_ge ⟨sts[0].m - 25, by omega⟩
+  have hi : Claims.Flock.ZkIdx.m ⟨sts[0].m - 25, by omega⟩ = sts[0].m := by
+    simp only [Claims.Flock.ZkIdx.m]
+    omega
+  have hlen : 10 ≤ (Claims.Flock.zkLevel0 sts[0].m).d := by
+    unfold Claims.Flock.zkLen at hd
+    rw [hi] at hd
+    exact hd
+  refine .inl (eight_le_k ?_)
+  show 2 ^ 10 ≤ N₀ true x
+  exact le_trans (two_pow_le hlen) (N₀_ge_of_setup hs h0)
+
+end Gen
+
 /-- **The deployed plain verifier at SHA-512: KS from one wait's bound**, with the `k` range discharged, where the
 relation splits by table wherever the verifier accepts some run. -/
 theorem plain_of_oneWait_sha512 (rel : Readable.Parsed → Readable.Relation)
@@ -180,5 +266,19 @@ theorem zk_of_oneWait_sha512 (rel : Readable.Parsed → Readable.Relation)
     (hsp : ∀ x, Claims.Flock.Splits (deployZk rel) x ∨ Claims.Flock.NoAcc sha512 (deployZk rel).V x)
     (h : Claims.Flock.OneWait sha512 (deployZk rel)) : Claims.Flock.KS sha512 (deployZk rel) :=
   zk_of_oneWait sha512 rel (fun x => (k_range_zk rel x).elim (fun hk => (hsp x).imp (fun h => ⟨hk, h⟩) id) .inr) h
+
+
+namespace Gen
+
+variable [S : ZkSetup]
+
+/-- **The deployed masked (`--zk`) verifier at SHA-512: KS from one wait's bound**, with the `k` range discharged,
+where the relation splits by table wherever the verifier accepts some run. -/
+theorem zk_of_oneWait_sha512 (rel : Readable.Parsed → Readable.Relation)
+    (hsp : ∀ x, Claims.Flock.Splits (deployZk rel) x ∨ Claims.Flock.NoAcc sha512 (deployZk rel).V x)
+    (h : Claims.Flock.OneWait sha512 (deployZk rel)) : Claims.Flock.KS sha512 (deployZk rel) :=
+  zk_of_oneWait sha512 rel (fun x => (k_range_zk rel x).elim (fun hk => (hsp x).imp (fun h => ⟨hk, h⟩) id) .inr) h
+
+end Gen
 
 end FlockDeploy.KS
