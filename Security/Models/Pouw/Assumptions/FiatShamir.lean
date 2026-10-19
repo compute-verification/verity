@@ -8,9 +8,10 @@ The premises of the Fiat–Shamir statements in `Models.Pouw.Guarantees.FiatSham
 drawn unit's own proof (decision 105). The live coins are each round's check.
 
 * `SeedExtraction`: the random-oracle premise (the card 9cd57182: PoUW only, each use a named premise), gap (4)'s
-  `Pouw.WindowWork.StraightLineExtraction` at the seed's domain: the seeds the accepted proofs derive are the oracle's
+  `Pouw.WindowWork.StraightLineExtraction` (#2592, not on main) at the seed's domain: the seeds the accepted proofs derive are the oracle's
   answers at the committed inputs, except with probability `ε_id(T, |J|)`.
-* `SteerBound`: a try reaches the premium `π` with probability at most `τ` (decision 101's per-try `μ^m`).
+* `SteerBound`: a try reaches the premium `π` with probability at most `τ` (decision 101's per-try `μ^m`, whose `T`
+  tries are the grinding term `T·μ^m` of Daniel's ruling of 17 Oct, 8:20 PM PDT).
   `FiatShamirFloor` takes it.
 * `SteerMoment`: a try's gain has moment at most `M` at rate `θ`, GRIND's per-query hypothesis
   (`Accounting.Guarantees.TS.GrindPremium`), which gives `SteerBound` at `τ = M·e^{−θπ}` (`SteerBoundOfMoment`).
@@ -113,7 +114,9 @@ finders' declared costs. So a machine that hard-codes a collision gets 1, a find
 `ecr/sha-512` exceeds the budget, and every other adversary keeps the budgets over `2^256` at its weights. The
 instances are `ServiceSoundStagedPerProver`'s, round by round:
 - binding: the fork finder, two runs of `M` and the verifier's checks (`cb` about twice the calls a unit of time buys),
-  its square root folded in by AM–GM, `δ' + |L|² x/(4δ')`;
+  its square root folded in by AM–GM, `δ' + |L|² x/(4δ')`; its two runs share the oracle and the commitment, and it
+  compares their openings of one committed cell of the drawn layer, never the runs' whole openings, whose relation
+  reads the round's live check (RT3-LOGIC-1);
 - zero knowledge: C-Flock's knowledge bound, whose finder extracts the openings first (its link finders, about
   `2(1 + k)` runs, `linkBoundZC`). -/
 def ServiceSoundStagedFS (Mc : Machine) (S : StagedFS R St n L np B n') (T : ℕ) (run : RunMapFS Mc S Ar)
