@@ -8,14 +8,13 @@ import Proofs.Accounting.HeadlineDc.Sm100
 row (`sm100m_lamStar`), `p = 7/8`, `p₀ = ½` and `Λ = max(κ/ln(8/7), (κ + f)/ln 2)`:
 
 * the data, by `decide`: issue is ♭'s largest facet of DC-100-ri's 12 (`sm100m_max`), so `B_♭` is its issue load
-  `≈ 1089.745` (`sm100m_bnd`); every writer kind's word costs at least `1/32768` there (`sm100m_writers`), and so do the
-  vector and table words at `½` (`sm100m_vec`), so `w* ≥ 1/32768` (`sm100m_wStar`); each fold route costs at least the
-  lane fold's `135/4096` there (`sm100m_fold`, `sm100m_phiStar`);
+  (`sm100m_bnd`); every writer kind's word costs at least `1/32768` there (`sm100m_writers`), and so do the vector
+  and table words at `½` (`sm100m_vec`), so `w* ≥ 1/32768` (`sm100m_wStar`); each of the four fold routes costs at
+  least the cheapest one's load there (`sm100m_fold`, `sm100m_phiStar`);
 * A6 (`SheetWords`) gives (I2)/(I4) `WordsWritten` and, at `q = q_T = ½` and `b_T = 0`, (I3) `ScalarRoute`
   (`scalarRoute_half`); (I5) `SideUnits` and FILL-OPT hold at any run, since the model has no side unit and no filler;
-* the folded branch from those bounds (`folded_of_lower`): below `888/100000` by `decide` (`sm100m_folded_q`);
-* the unfolded branch (`unfolded_of_lower`): below `888/100000` by `decide` (`sm100m_unfolded_q`), and it binds
-  (0.88723%);
+* the folded branch from those bounds (`folded_of_lower`): below `999/100000` by `decide` (`sm100m_folded_q`);
+* the unfolded branch (`unfolded_of_lower`): below `999/100000` by `decide` (`sm100m_unfolded_q`);
 * (I7) at `7/8` is the receipt split's (`luck_of_receipt_half`).
 -/
 
@@ -31,13 +30,16 @@ def vfCoef100 (r i : ℕ) : ℚ := Sparse.coeff (Sm100Measured.dc100ri.getD r []
 def vfRow100 (r : Fin 12) (i : ℕ) : ℚ := vfCoef100 r.val i
 
 /-- ♭'s counts on DC-100-ri, its four lists in `labelled`'s order. -/
-def flat100M : Sparse := Sm100.flatWords ++ Sm100.flatFold ++ Sm100.flatFill ++ Sm100Measured.flatSkip
+def flat100M : Sparse := Sm100.flatWords ++ Sm100Measured.flatFold ++ Sm100.flatFill ++ Sm100Measured.flatSkip
 
 /-- `B_♭` on DC-100-ri as a rational: ♭'s load on issue. -/
 def B100M : ℚ := dot (vfCoef100 0) 26 flat100M
 
-/-- The lane fold's load on issue as a rational. -/
-def phi100M : ℚ := dot (vfCoef100 0) 26 (Sm100Measured.d2s.folds.getD 0 [])
+/-- Fold route `i`'s load on issue as a rational. -/
+def load100M (i : ℕ) : ℚ := dot (vfCoef100 0) 26 (Sm100Measured.d2s.folds.getD i [])
+
+/-- The cheapest fold route's load on issue. -/
+def phi100M : ℚ := min (min (load100M 0) (load100M 1)) (min (load100M 2) (load100M 3))
 
 theorem sm100m_max : ∀ i < 12, dot (vfCoef100 i) 26 flat100M ≤ B100M := by decide +kernel
 
@@ -51,16 +53,16 @@ theorem sm100m_writers : ∀ i < 13, 0 < (Sm100Measured.d2s.writers.getD i (0, 0
 theorem sm100m_vec : ∀ j ∈ Sm100Measured.d2s.vec, 1 ≤ vfCoef100 0 (j % 26) := by decide +kernel
 
 theorem sm100m_fold :
-    ∀ i < 2, phi100M ≤ dot (vfCoef100 0) 26 (Sm100Measured.d2s.folds.getD i []) := by
+    ∀ i < 4, phi100M ≤ dot (vfCoef100 0) 26 (Sm100Measured.d2s.folds.getD i []) := by
   decide +kernel
 
 theorem sm100m_folded_q :
-    (1 - 888 / 100000 : ℚ) * B100M ≤ 32768 * (1 / 32768) * (1 - 41 * (6931471808 / 10000000000) / 6000) +
+    (1 - 999 / 100000 : ℚ) * B100M ≤ 32768 * (1 / 32768) * (1 - 41 * (6931471808 / 10000000000) / 6000) +
       32768 * phi100M := by
   decide +kernel
 
 theorem sm100m_unfolded_q :
-    (1 - 888 / 100000 : ℚ) * B100M ≤ (32768 * (1 / 32768) + 32768 * phi100M) * (1 - 41 / 48000) := by
+    (1 - 999 / 100000 : ℚ) * B100M ≤ (32768 * (1 / 32768) + 32768 * phi100M) * (1 - 41 / 48000) := by
   decide +kernel
 
 theorem sm100m_one : Sparse.coeff [(0, 1, 1)] 0 = 1 := by decide +kernel
@@ -74,7 +76,7 @@ theorem sm100m_a_nonneg : ∀ r k, 0 ≤ Sm100Measured.model.G.a r k := fun r k 
 theorem sm100m_bnd : Sm100Measured.model.bnd Sm100Measured.flat = (B100M : ℝ) := by
   unfold Model.bnd
   rw [show Sm100Measured.flat.n = Sparse.counts flat100M from
-    labelled_n 26 Sm100.flatWords Sm100.flatFold Sm100.flatFill Sm100Measured.flatSkip]
+    labelled_n 26 Sm100.flatWords Sm100Measured.flatFold Sm100.flatFill Sm100Measured.flatSkip]
   exact bound_eq _ vfRow100 sm100m_hG flat100M 0 fun r => sm100m_max r.val r.isLt
 
 theorem sm100m_Nw : Sm100Measured.model.Nw = 32768 := by
@@ -176,7 +178,7 @@ theorem sm100m_wStar : (1 : ℝ) / 32768 ≤ Sm100Measured.model.wStar Sm100Meas
     sm100m_demand_issue
   rwa [sm100m_lam0, one_mul] at h
 
-/-- `φ* ≥` the lane fold's load on issue. -/
+/-- `φ* ≥` the cheapest fold route's load on issue. -/
 theorem sm100m_phiStar : (phi100M : ℝ) ≤ Sm100Measured.model.phiStar Sm100Measured.lamStar := by
   refine phiStar_ge_facet Sm100Measured.model Sm100Measured.flat Sm100Measured.lamStar sm100m_isCert sm100m_wf 0 _
     fun φ => ?_
@@ -190,9 +192,9 @@ theorem sm100m_fillOpt {Ω : Type} [Fintype Ω] (Pl : Play Ω Sm100.checks (Fin 
     (hSplit : ∀ x, (Pl.run x).Split) : ∀ x, FillOpt Sm100Measured.model (Pl.run x) := fun x =>
   fillOpt_of_zero Sm100Measured.model sm100m_a_nonneg (fun _ _ => rfl) rfl (Pl.run x) (hSplit x)
 
-/-- The folded branch at π*, `p = 7/8` and `δ′ ≥ 2^-41` is at least `1 − 888/100000`. -/
+/-- The folded branch at π*, `p = 7/8` and `δ′ ≥ 2^-41` is at least `1 − 999/100000`. -/
 theorem sm100m_folded (δ' : ℝ) (hδ' : (1 / 2 : ℝ) ^ 41 ≤ δ') :
-    1 - 888 / 100000 ≤ 1 - Sm100Measured.model.epsSkip Sm100Measured.flat Sm100Measured.lamStar -
+    1 - 999 / 100000 ≤ 1 - Sm100Measured.model.epsSkip Sm100Measured.flat Sm100Measured.lamStar -
       Sm100Measured.model.epsCert Sm100Measured.flat Sm100Measured.lamStar -
       Sm100Measured.model.epsRoute Sm100Measured.flat Sm100Measured.lamStar -
       Sm100Measured.model.epsMand Sm100Measured.flat Sm100Measured.lamStar -
@@ -205,9 +207,9 @@ theorem sm100m_folded (δ' : ℝ) (hδ' : (1 / 2 : ℝ) ^ 41 ≤ δ') :
   rw [sm100m_Nw, sm100m_bnd, le_div_iff₀ hB]
   linarith
 
-/-- The unfolded branch's floor at π* is at least `1 − 888/100000`. -/
+/-- The unfolded branch's floor at π* is at least `1 − 999/100000`. -/
 theorem sm100m_unfolded :
-    1 - 888 / 100000 ≤ (Sm100Measured.model.Nw * Sm100Measured.model.wStar Sm100Measured.lamStar +
+    1 - 999 / 100000 ≤ (Sm100Measured.model.Nw * Sm100Measured.model.wStar Sm100Measured.lamStar +
       (1 - Sm100Measured.model.muF) * Sm100Measured.model.Nw *
         Sm100Measured.model.phiStar Sm100Measured.lamStar) /
         Sm100Measured.model.bnd Sm100Measured.flat * (1 - 41 / 48000) := by
