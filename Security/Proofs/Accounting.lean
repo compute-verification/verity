@@ -33,5 +33,6 @@ import Proofs.Accounting.Responder.Latency
 import Proofs.Accounting.HMu
 import Proofs.Accounting.CoinFlow
 import Proofs.Accounting.Compose
+import Proofs.Accounting.Served
 
 /-! `Proofs.Accounting`: the proofs of resource accounting's guarantees. -/
