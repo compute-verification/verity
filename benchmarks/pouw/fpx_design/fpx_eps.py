@@ -38,8 +38,9 @@ FP-NATIVE's FP8-A1 (`fpx-a1-*`: weights the level below plus a coin at its gap, 
 its gap times b + b' - 1, note:20261019T0525Z-draft-fp-native) is 2SP with its twin and served GEMM one: each k32
 word restarts from +0 and is exact in FP32 (32 * 448^2 < 2^23), so it pays 2SP's extraction a word and no second GEMM.
 Its operands don't fit s8, its floor reads Lemma R2 (a paper proof), and no red team has looked for a cheaper route to
-its words; like every extraction, its own is credited to no one (`fpx-a1-*-x0`). H200 can't run it (the 14-bit
-window).
+its words; like every extraction, its own is credited to no one (`fpx-a1-*-x0`). On B200 it is also priced at
+L = 64 (`fpx-a1-e4m3i-fp-l64`: two k32 MMAs a word from +0, exact since 64 * 448^2 < 2^24), which halves the
+extraction a MAC. H200 can't run it (the 14-bit window).
 
 An FP4 word at L = 64 (one kind::mxf4nvf4 k64 firing) costs what an FP8 word at L = 32 costs at B200 rates and
 carries twice the MACs, so its ε and its γ against a plain FP4 GEMM are the FP8 row's; on int8 units an FP4 design's
@@ -128,6 +129,10 @@ VARIANTS = [
          title="FP-NATIVE's FP8-A1 on e4m3i: one dithered FP8 GEMM, served and credited",
          summary="each k32 word from +0, 2SP's extraction a word on B200 (the word one add, the served sum an add and a "
                  "rebase a word), with no second GEMM"),
+    dict(device="sm_100", name="fpx-a1-e4m3i-fp-l64", base="dither-2s-licpw-redux-heavy-l32", L=64, plain=0.0,
+         fold_add={"ALU": 1.5, "IMAD": 1.5}, noise=TWO_SIDED, caveat="A1",
+         title="FP-NATIVE's FP8-A1 at L = 64 on B200: each k64 word from +0 (64 * 448^2 < 2^24, exact in FP32)",
+         summary="two k32 MMAs a word into one TMEM accumulator from +0, then the L = 32 row's extraction a word"),
 ]
 
 
@@ -161,7 +166,8 @@ def write_variant(v: dict, data: Path) -> None:
     added = "".join(f"+{k}{x:g}" for k, x in v["fold_add"].items())
     lines = [f"base = {toml_value(v['base'])}", f"name = {toml_value(v['name'])}",
              f"title = {toml_value(v['title'])}", f"summary = {toml_value(v['summary'])}",
-             f"plain = {v['plain']!r}", "", "[fold]", f"name = {toml_value(name + ('+x' + added if added else ''))}"]
+             f"plain = {v['plain']!r}", *([f"L = {v['L']}"] if "L" in v else []), "", "[fold]",
+             f"name = {toml_value(name + ('+x' + added if added else ''))}"]
     lines += [f"{k} = {x!r}" for k, x in fold.items()]
     if "noise" in v:
         lines += ["", "[noise]"] + [f"{k} = {toml_value(x)}" for k, x in v["noise"].items()]
