@@ -1,8 +1,9 @@
 """`AllReduceMultimem` (torch's symmetric-memory all-reduce past FlashInfer's 0.5 MiB at TP 8, the NVSwitch's f32 adds in a tree
 the 8-GPU capture reads off the switch): the word Definitions agree with `tp_allreduce_check.multimem_rows`, written from torch's
 kernel, at chains, balanced and random trees, IEEE and FTZ; the owners are torch's 16-byte-aligned slices; a tree is recovered
-from the clusters its adds absorb; the Boolean versions agree with their word Definitions, are pinned by gate count and program
-digest, and pass `Q_word_v1{X=16, W=32}`'s cut check."""
+from the clusters its adds absorb; the Call is a batch of 16-byte vectors per run of one tree, which the cut separates; the
+Boolean versions agree with their word Definitions, are pinned by gate count and program digest, and pass
+`Q_word_v1{X=16, W=32}`'s cut check."""
 from __future__ import annotations
 
 import itertools
@@ -13,6 +14,7 @@ import pytest
 
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits import codec
+from verity.ml.circuits import cut as CUT
 from verity.ml.circuits import evaluation as E
 from verity.ml.circuits import partition_object as PO
 from verity.ml.circuits.boolean import trace as TR
@@ -38,6 +40,11 @@ def _rows(rng, n: int, world: int) -> np.ndarray:
     sub = rng.integers(0, 0x100, (n, world), dtype=np.int64) | rng.integers(0, 2, (n, world)) << 15
     return np.concatenate([rng.integers(0, 1 << 16, (n, world), dtype=np.int64), SPECIALS[rng.integers(0, len(SPECIALS), (n, world))],
                            canc, sub]).astype(np.uint16)
+
+
+def _vectors(rows: np.ndarray) -> np.ndarray:
+    """(n, world) partials as (n / 8, world, 8) vectors: each vector's 8 elements are 8 consecutive rows."""
+    return np.ascontiguousarray(rows.reshape(-1, 8, rows.shape[1]).transpose(0, 2, 1))
 
 
 def _out(out, n: int) -> np.ndarray:
@@ -143,6 +150,26 @@ def test_multimem_rows_are_the_kernels_sums() -> None:
         assert (got == np.stack([K.multimem_rows(p, trees, ftz) for p in parts])).all(), size
 
 
+def test_the_call_is_a_batch_of_vectors_per_tree() -> None:
+    """Each run of one tree is a batch of `AllReduceMultimemVector_v1`, a member per 16-byte vector reading only the ranks'
+    partials, so the cut gives every element its own unit and the vector is the Call's one callee at GLM-5.3's trees."""
+    vec = lambda tree, ftz: bind(TA.AllReduceMultimemVector, WORLD=8, TREE=tree, FTZ=ftz)  # noqa: E731
+    d = bind(TA.AllReduceMultimem, WORLD=8, SIZE=6144, TREES=(TA.GLM53_H200_TREE,) * 8, FTZ=False)
+    assert [(n.form, n.fn.id, n.n) for n in d.body.nodes] == [("batch", vec(TA.GLM53_H200_TREE, False).id, 768)]
+    assert CUT.separable(d) is not None and CUT.evaluate_definition(d, 16).units == 6144
+    trees = (BALANCED8,) * 3 + (CHAIN8,) * 2 + (BALANCED8,) * 3
+    d = bind(TA.AllReduceMultimem, WORLD=8, SIZE=128, TREES=trees, FTZ=True)
+    assert [(n.fn.id, n.n) for n in d.body.nodes] == [(vec(t, True).id, k) for t, k in ((BALANCED8, 6), (CHAIN8, 4), (BALANCED8, 6))]
+    assert CUT.evaluate_definition(d, 16).units == 128
+
+
+@pytest.mark.parametrize("tree,ftz", [(TA.GLM53_H200_TREE, False), (SKEWED8, True)], ids=str)
+def test_a_vector_is_its_elements_coordinates(tree, ftz: bool) -> None:
+    x = _vectors(_rows(np.random.default_rng(11), 1600, 8))
+    got = _out(E.evaluate_batch(bind(TA.AllReduceMultimemVector, WORLD=8, TREE=tree, FTZ=ftz), x), len(x))
+    assert (got == np.stack([K.multimem_rows(v, (tree,) * 8, ftz) for v in x])).all()
+
+
 def test_tree_and_ftz_are_not_vacuous() -> None:
     """2^30 - 2^30 cancels before or after a 1 is added, as the tree has it; a subnormal survives IEEE adds and not FTZ ones."""
     big, neg, one, tiny = 0x4E80, 0xCE80, 0x3F80, 0x0001
@@ -186,18 +213,27 @@ def test_rows_on_bits() -> None:
     _agree(bind(BA.AllReduceMultimem, WORLD=4, SIZE=64, TREES=trees, FTZ=True), rng.integers(0, 1 << 16, (40, 4, 64)).astype(np.uint16))
 
 
+@pytest.mark.parametrize("tree,ftz", [(TA.GLM53_H200_TREE, False), (BALANCED8, True)], ids=str)
+def test_vector_on_bits(tree, ftz: bool) -> None:
+    _agree(bind(BA.AllReduceMultimemVector, WORLD=8, TREE=tree, FTZ=ftz), _vectors(_rows(np.random.default_rng(13), 256, 8)))
+
+
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {
     "AllReduceMultimemCoordinate_v2{WORLD=8,TREE=(((((((0,1),2),3),4),5),6),7),FTZ=False}": (5211, 8375, 918, "54c7f060720f9feec924eccbc9e485f6e03cf6e75b8fdfa7c137b6b6509f133840c50ba5c76f69e8bc1671058824e9ec891a257a800b5b56327fff4ee595a045"),
     "AllReduceMultimemCoordinate_v2{WORLD=8,TREE=(((0,1),(2,3)),((4,5),(6,7))),FTZ=False}": (5013, 7943, 966, "285abf9afb624373a4f2765f7105261a9c66fdbeabc2aa2040d912a99cdbd100324580ace6af3e273ade36042b27b197ab2afc0aece0c7d9668430916fa47df0"),
     "AllReduceMultimemCoordinate_v2{WORLD=8,TREE=(((0,1),(2,3)),((4,5),(6,7))),FTZ=True}": (5233, 7957, 966, "55430db2b0ccb84ab69e7ba4118127c02dcd59703a709407f1c01fa1ad0c7cc96ba4973936db742ee9bf37cccf03424f3433d63a7faa6e086f8e9777a56d5aa2"),
-    "AllReduceMultimem_v2{WORLD=4,SIZE=64,TREES=((((0,1),2),3),((0,1),(2,3)),((0,3),(1,2)),(((0,1),2),3)),FTZ=False}": (139648, 219328, 26240, "82b4a698e08faab77555bbaa60de3909d18f50d3709cf78d5a39775f701ab376b9d4f25f06e0078a6fa951b040e7f0be4c7e0e89920863bb0710dda94509b5f5"),
+    "AllReduceMultimem_v2{WORLD=4,SIZE=64,TREES=((((0,1),2),3),((0,1),(2,3)),((0,3),(1,2)),(((0,1),2),3)),FTZ=False}": (139648, 219328, 26240, "0933468cc49b8d33246ac16540ff62d89050909ed7c781d1766e7ccb47637bbb5024fea90804788aa33e51d90f0102a8297511c7f4758b9fa76715b339583a6a"),
+    "AllReduceMultimemVector_v2{WORLD=8,TREE=((((((0,(1,2)),3),5),6),4),7),FTZ=False}": (41808, 67256, 7456, "1c742d1e4011baa6b030b89c7474d01d5de428900da3af7c1395ff9ac464eb732f854fcc39c87a0ab99748daa6df72e51dd8b064ad4ff6846be0084b5a36fbea"),
+    "AllReduceMultimemVector_v2{WORLD=8,TREE=(((0,1),(2,3)),((4,5),(6,7))),FTZ=True}": (41864, 63656, 7728, "1caeeeb4b5b9e1d7db2286df850ce5da9ad2f25093612c6cce14a4e36cbc34381ce57b3c4a4d4886d7e8091a7e0319e75049c41b98a3b95ef2d6d094735f5466"),
 }
 TARGETS = [bind(BA.AllReduceMultimemCoordinate, WORLD=8, TREE=CHAIN8, FTZ=False),
            bind(BA.AllReduceMultimemCoordinate, WORLD=8, TREE=BALANCED8, FTZ=False),
            bind(BA.AllReduceMultimemCoordinate, WORLD=8, TREE=BALANCED8, FTZ=True),
            bind(BA.AllReduceMultimem, WORLD=4, SIZE=64, TREES=(TA.chain(4), ((0, 1), (2, 3)), ((0, 3), (1, 2)), TA.chain(4)),
-                FTZ=False)]
+                FTZ=False),
+           bind(BA.AllReduceMultimemVector, WORLD=8, TREE=TA.GLM53_H200_TREE, FTZ=False),
+           bind(BA.AllReduceMultimemVector, WORLD=8, TREE=BALANCED8, FTZ=True)]
 
 
 @pytest.mark.parametrize("target", TARGETS, ids=lambda t: t.id)
@@ -212,7 +248,9 @@ def test_pinned_counts_and_digests(target) -> None:
     assert back.gates == prog.gates and codec.program_digest(codec.encode_program(back)) == digest
 
 
-def test_rows_pass_the_word_querys_cut_check() -> None:
-    target = bind(BA.AllReduceMultimem, WORLD=4, SIZE=32, TREES=(((0, 1), (2, 3)),) * 2 + (TA.chain(4),) * 2, FTZ=True)
+@pytest.mark.parametrize("target", [
+    bind(BA.AllReduceMultimem, WORLD=4, SIZE=32, TREES=(((0, 1), (2, 3)),) * 2 + (TA.chain(4),) * 2, FTZ=True),
+    bind(BA.AllReduceMultimemVector, WORLD=8, TREE=TA.GLM53_H200_TREE, FTZ=False)], ids=lambda t: t.id)
+def test_rows_pass_the_word_querys_cut_check(target) -> None:
     prog, _ = standalone_call(target)
     assert PO.verify(PO.build(prog, PO.query(16, 32)), prog).ok
