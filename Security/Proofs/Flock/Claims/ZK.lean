@@ -79,6 +79,7 @@ import Proofs.Flock.Claims.ZK.Server
 import Proofs.Flock.Claims.ZK.Blind
 import Proofs.Flock.Claims.ZK.Release
 import Proofs.Flock.Claims.ZK.Refine
+import Proofs.Flock.Claims.ZK.CoinPass
 import Proofs.Flock.Claims.ZK.Os
 import Proofs.Flock.Claims.ZK.FrameTape
 import Proofs.Flock.Claims.ZK.FrameParse
@@ -176,7 +177,8 @@ import Proofs.Flock.Claims.ZK.Stop
 * `CoinOpen`: the Lean coin check (`flock-firewall coins`, `Flock.Firewall.Coins`), whose verdict `coin_tree::Checked`
   takes, is that coin layer's at SHA-512: one opening (`CoinOpen.treeChk_sha`, `CoinOpen.check_isOk`), and a session's
   openings when its requests follow the committed schedule (`CoinOpen.coinLayer_verdict`), so it refuses the openings
-  ZKS10's `LeanRelease.OpeningsRefused` (`Claims/ZK/Refine.lean`) names (`CoinOpen.coinLayer_refuses`).
+  ZKS10's `LeanRelease.OpeningsRefused` (`Claims/ZK/Refine.lean`) names (`CoinOpen.coinLayer_refuses`). The release
+  reads it (`LeanRelease.opens`), and at that coin layer it is the session's check (`LeanRelease.checkIs_coinLayer`).
 * `Tape`: `TapeOK` makes the tape onto the leaves' salts (`RefSession.eP_surjective`), so a session has fewer tables than
   tapes at every statement (`RefSession.J_lt_card_of_tapeOK`), and none with statements of every table count meets it
   (`RefSession.not_tapeOK`): the masked scope bounds no table count.
@@ -401,25 +403,39 @@ import Proofs.Flock.Claims.ZK.Stop
   scheduled round in its place; Rust's own checks only fail a round more (`LeanRelease.cross`). Any other stop comes at its
   `Finish`, with its scheduled rounds in a failed device's place
   (`LeanRelease.fillOf`), and every way a worker fails is a failed round (`LeanRelease.pass_of_none`, `nextD_of_fail`).
-  Its `RefD` is the item-stream refinement `LeanRelease.ItemsRefine` alone, with no assumption on what the firewall
-  computes (`LiveRefine` at the worker's passed rounds and `FillRefine` at the scheduled rounds, read at the values the
-  firewall's transcript reports, where the frame takes the coins, and `StopRefine`, the stop where it refuses them;
-  `LeanRelease.refD`), so
+  Its rounds are the deployed session's (`LeanRelease.kindAt`): the server's own `Hello` at the tape's nonce, the
+  firewall's own link (its recheck's level-0 roots) and `Finish` (`Final.encode` of the record and proof files it
+  builds, `LeanRelease.ownMsg`), and frame rounds released tagged `0`. Its `RefD` is the item-stream refinement
+  `LeanRelease.ItemsRefine` alone, with no assumption on what the firewall computes (`HelloRefine` at the `Hello`,
+  `OwnRefine` at the link and the `Finish`, `LiveRefine` at the worker's passed frame rounds and `FillRefine` at the
+  scheduled ones, read at the values the firewall's transcript reports, where the frame takes the coins, and
+  `StopRefine`, the stop where it refuses them; `LeanRelease.refD`), so
   **`Flock.zk_server_lean`** is `ZkServer.zk_deferred` at it, at any worker: one bit a session.
 * `Refine`: toward `ItemsRefine` at the reference session's prover (`strat`). Its `StopRefine` holds wherever the
   session sends the stop where the frame refuses the coins (`LeanRelease.stopRefine_of_sessionStops`), and so wherever
   the session's message is the frame's release (`SessionFrames`, `stopRefine_of_sessionFrames`) and its abort is the
   stop. The frame checks no opening, so `LiveRefine` makes the release the abort after any opening the session refuses
-  (`LeanRelease.release_eq_abort_of_liveRefine`). The frame's coin refusal reads no tape (`LeanRelease.refusesCoins_tape`),
-  and `RefSession.withStops` is a session with the stop where a rule of the coins says, keeping the session's six Props;
-  where that rule is the frame's refusals up to the protocol's last coin wherever the openings pass
-  (`LeanRelease.StopsAt`), its `StopRefine` is proved (`LeanRelease.stopRefine_withStops`), and its `LiveRefine` and
-  `FillRefine` follow from the transport's refusal of a failed opening, the frame's end past the last coin
-  (`LeanRelease.EndsAt`) and the per-round byte equality at the worker's and the stand-in rounds
-  (`LeanRelease.liveRefine_withStops`, `fillRefine_withStops`), so `Flock.zk_server_lean_stops` assumes no part of
-  `ItemsRefine`; `Flock.zk_server_lean_coinLayer` is it at the deployed coin layer (`CoinLayer.session`). A transport
-  that reads the history only through the decoded coins (`LeanRelease.ReadsCoins`) gives the rule and `StopsAt`
-  (`LeanRelease.stopsAt_of_readsCoins`).
+  (`LeanRelease.release_eq_abort_of_liveRefine`); the release reads the transport's coin check at the tape's nonce
+  (`LeanRelease.opens`) and is the stop where it refuses, so that holds where the check is the session's
+  (`LeanRelease.CheckIs`, `openingsRefused_of_checkIs`). On the histories the check passes, the frame's coin refusal
+  reads no tape (`LeanRelease.refusesCoins_tape`), and `RefSession.withStops` is a session with the stop where a rule
+  of the coins says, and its frame rounds without a rep's leading domain frame (`dropDom`), keeping the session's six
+  Props; where that rule is the frame's refusals up to the protocol's last coin wherever the openings pass
+  (`LeanRelease.StopsAt`),
+  its `StopRefine` is proved (`LeanRelease.stopRefine_withStops`), and its `LiveRefine` and `FillRefine` follow from the
+  check being the session's, the frame's end past the last coin (`LeanRelease.EndsAt`) and the per-round
+  byte equality at the worker's and the stand-in rounds (`LeanRelease.liveRefine_withStops`, `fillRefine_withStops`),
+  its `HelloRefine` and `OwnRefine` from the server's `Hello`, the firewall's link and its `Finish` being the session's
+  (`HelloEq`, `LinkRoundEq`, `FinalRoundEq`: `helloRefine_withStops`, `ownRefine_withStops`), so
+  `Flock.zk_server_lean_stops` assumes no part of `ItemsRefine`; `Flock.zk_server_lean_coinLayer` is it at the deployed
+  coin layer (`CoinLayer.session`) at SHA-512, with `CheckIs` proved from two transport trusts, `flock-firewall coins`
+  reading the server's `Hello` with the tape's nonce (`LeanRelease.HelloParses`) and the requests following the
+  schedule (`LeanRelease.ReqsFollow`). A transport that reads the history only through the decoded coins on the
+  histories its check passes (`LeanRelease.ReadsCoins`) gives the rule and `StopsAt` (`LeanRelease.stopsAt_of_readsCoins`).
+* `CoinPass`: those premises leave a history to be live at. At every tape, past `Hello` and the link, the check passes
+  `Hello`'s answer whose root the first opening walks to under the tape's nonce, and that opening, at every key with bit
+  2047 clear and every opening that reads back (`LeanRelease.opens_coinPass`; the all-zero one,
+  `opens_coinPass_zeros`), so the coins the frame takes there are its own.
 * `Os`: the server's tape as the operating system's bytes (`OsTape`: a stream of exactly `drawBytes` bytes for each rep's
   frame and the tap's streams, one for one), the frame's read proved to be the release's draws (`frame_draws`, with a read
   of any other length refused, `drawsWith_refuses`), and the step to a uniform tape beside independent randomness under
@@ -447,7 +463,11 @@ import Proofs.Flock.Claims.ZK.Stop
   a round's coins (`answer_alg`), and the Lean frame's release (`LeanRelease.release`) of those rounds is the frame's
   round (`release_zcBind`, `release_zcOuter`, `release_zcR1`, `release_zcMl`). The lincheck's bodies are the same way
   (`lincheckCut_bodies`, `lcBodies_frame`, its values at their absorbed positions `absPos`), released by
-  `LeanRelease.release_on`.
+  `LeanRelease.release_on`. A frame round's release is the session's message without its leading domain frame
+  (`dropDom_dom`, `dropDom_noDom`) wherever the device's frames through the frame's masks are the session's
+  (`LeanRelease.RoundFrames`, `release_of_roundFrames`), so wherever the device sends the session's frames with each
+  pad added back (`RoundHonest`, `roundFrames_of_honest`); that gives `LiveRoundEq` and `FillRoundEq`
+  (`LeanRelease.liveRoundEq_of_frames`, `liveRoundEq_of_honest`, `fillRoundEq_of_frames`).
 * `PadsRoot`: the frame's pads root (`padsRoot`, `treeRoot` of its leaves) is `layerOf`'s (`treeRoot_layerOf`), so at a
   frame rep's draws of `drawBytes` bytes it is the root `innerCommitP` commits the masked prover's pads under on
   `tapeOfDraws` (`padsRoot_tapeOfDraws`).
