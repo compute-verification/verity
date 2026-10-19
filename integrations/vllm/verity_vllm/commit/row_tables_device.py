@@ -1,18 +1,18 @@
 """`row_tables.step_roots` on the GPU: a step's row tables hashed by `protocol_options/pouw_cuda/row_table.cu` on a side stream,
 behind an event on the serving stream, so the serving loop records the step's root when it is ready, without a host sync.
 
-`launch` takes what `step_roots` takes, with ``codes`` and ``scales`` CUDA tensors that hold until the result is ready (a step's
-quantize outputs, in buffers the next step does not write), and returns a `Pending`: ``ready()`` asks the side stream's event,
-``result()`` is the `row_tables.StepRoots` the CPU path gives.  `record_ready` hands every leading ready step of a queue to the
-loop's recorder (``LiveRecord.record``), in step order.  The step's root is what the challenger's coin for that step waits on;
-the next step's compute does not wait on it.
+`step_roots` takes what `row_tables.step_roots` takes, with ``codes`` and ``scales`` CUDA tensors that hold until the result is
+ready (a step's quantize outputs, in buffers the next step does not write), and returns a `Pending`: ``ready()`` asks the side
+stream's event, ``result()`` is the `row_tables.StepRoots` the CPU path gives.  `record_ready` hands every leading ready step of
+a queue to the loop's recorder (``LiveRecord.record``), in step order.  The step's root is what the challenger's coin for that
+step waits on; the next step's compute does not wait on it.
 
 The kernels compute each row's ``sha512/row-seg/v1`` digest, its salt from the step's ChaCha20 stream (`serving_rows.step_salts`),
 its ``hm96-sha512`` string and tree leaf and its ``frame-v3-sha512`` leaf, then each table's tree and the step's tree over their
 roots (`row_table.step_tree`), with `ncp2.cuh`'s SHA-512.  The host computes the domain ids, the rows' rank order and the tables'
 layout (`plan`).  `host_step` runs the same functions on the CPU (`row_table_host.cpp`, built with the system C++ compiler), the
-twin the CPU tests hold to `step_roots` on machines without a GPU.  Builds are keyed by what they compile (sources, flags and the
-compiler's version) under ``~/.cache/verity/row_table``.
+twin the CPU tests hold to `row_tables.step_roots` on machines without a GPU.  Builds are keyed by what they compile (sources,
+flags and the compiler's version) under ``~/.cache/verity/row_table``; nvcc is the one on the path.
 """
 from __future__ import annotations
 
@@ -33,12 +33,12 @@ import numpy as np
 from verity.ml.commitments import row_table as RT
 from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
-from verity.ml.commitments.merkle import _digest, domain_message
+from verity.ml.commitments.merkle import domain_message
 
 from . import row_tables as RTB
 from . import serving_rows as CS
 
-__all__ = ["Pending", "Plan", "device_lib", "host_lib", "host_step", "launch", "plan", "record_ready", "side_stream",
+__all__ = ["Pending", "Plan", "device_lib", "host_lib", "host_step", "plan", "record_ready", "side_stream", "step_roots",
            "table_domain_id"]
 
 CUDA_DIR = Path(__file__).resolve().parents[1] / "protocol_options" / "pouw_cuda"
@@ -88,9 +88,8 @@ def host_lib() -> ctypes.CDLL:
 
 
 def nvcc() -> str | None:
-    """nvcc on the path, else ``$CUDA_HOME/bin/nvcc`` (default ``/usr/local/cuda``)."""
-    alt = Path(os.environ.get("CUDA_HOME", "/usr/local/cuda")) / "bin" / "nvcc"
-    return shutil.which("nvcc") or (str(alt) if alt.exists() else None)
+    """nvcc on the path."""
+    return shutil.which("nvcc")
 
 
 @cache
@@ -98,7 +97,7 @@ def device_lib(arch: str) -> ctypes.CDLL:
     """`row_table.cu` built with nvcc for ``sm_<arch>`` (``"120"``: the RTX PRO 6000)."""
     tool = nvcc()
     if tool is None:
-        raise RuntimeError("no nvcc (on the path or under $CUDA_HOME)")
+        raise RuntimeError("no nvcc on the path")
     dll = _build(tool, DEVICE_SOURCES, (*NVCC_FLAGS, f"-gencode=arch=compute_{arch},code=sm_{arch}"), "librow_table_cuda.so")
     dll.rt_midstates.argtypes = [_vp, _vp, _vp]
     dll.rt_step.argtypes = [_vp, _vp, _vp, ctypes.c_uint64, ctypes.c_uint32, _vp, _vp, ctypes.POINTER(Args)] + [_vp] * 5
@@ -117,7 +116,7 @@ def table_domain_id(context: bytes, step: int, index: int, leaves: int) -> bytes
     """``row_table.table_domain(context, step, index, leaves).domain_id``, with the positions' identity cached by count."""
     binding = identity_digest_sha512(RT.TABLE_DOMAIN, {"context": context.hex(), "step": step, "table": index, "leaves": leaves,
                                                        "schema": RT.SCHEMA})
-    return _digest(domain_message(binding, -1, _positions(leaves), leaves, "sha512"), "sha512")
+    return hashlib.sha512(domain_message(binding, -1, _positions(leaves), leaves, "sha512")).digest()
 
 
 def _width(n: int) -> int:
@@ -276,11 +275,11 @@ class Pending:
         return float(self.marks[0].elapsed_time(self.marks[1]))
 
 
-def launch(context: bytes, engine_step: int, outputs: Mapping[str, tuple[Sequence[tuple[str, int]], Any, Any]], key: bytes, *,
+def step_roots(context: bytes, engine_step: int, outputs: Mapping[str, tuple[Sequence[tuple[str, int]], Any, Any]], key: bytes, *,
            stream: Any = None, timing: bool = False) -> Pending:
-    """Hash engine step ``engine_step``'s tables (``outputs[op_path] = (rows, codes, scales)``, ``codes`` (B, K) int8 and ``scales``
-    (B,) float32 CUDA tensors on one device) on ``stream`` (default: the device's side stream), after everything the current
-    stream has enqueued so far; nothing waits on the host."""
+    """`row_tables.step_roots` of engine step ``engine_step``, hashed on ``stream`` (default: the device's side stream) after
+    everything the current stream has enqueued so far, nothing waiting on the host: ``outputs[op_path] = (rows, codes, scales)``
+    with ``codes`` (B, K) int8 and ``scales`` (B,) float32 CUDA tensors on one device."""
     import torch
 
     first = next(iter(outputs.values()))[1]

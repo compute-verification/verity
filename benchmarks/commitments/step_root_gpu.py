@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Serving's per-step row-table hashing on the GPU, overlapped: what ``row_tables.step_roots(..., device=True)`` adds to a graphed
-int8 decode step of Llama-3.1-8B at batch ``--batch``, on one GPU.
+"""Serving's per-step row-table hashing on the GPU, overlapped: what ``row_tables_device.step_roots`` adds to a graphed int8
+decode step of Llama-3.1-8B at batch ``--batch``, on one GPU.
 
-    research run --on auto --gpus 1 --cpus 8 --mem-gb 32 --cwd source -- bash -lc "cd integrations/vllm && \\
+    research run --on auto --gpus 1 --cpus 8 --mem-gb 32 --cwd source -- bash -lc "cd integrations/vllm && PATH=/usr/local/cuda/bin:\$PATH \\
         PYTHONPATH=.:../..:../../tools/research/src /workspace/jobs/venv312/bin/python3 ../../benchmarks/commitments/step_root_gpu.py"
 
 The step is a proxy of the ``int8_exact`` profile's decode linears: per layer qkv, o, gate_up and down (K = 4096, 4096, 4096,
@@ -13,13 +13,13 @@ on the hashing's share of a served step).  Arms, interleaved rep by rep:
   plain       the graph alone;
   arena       the graph with each quantize output also copied into a step arena (two, by step parity): the buffers the hash
               reads while the next step runs;
-  overlapped  the arena graph, then ``row_tables_device.launch`` of the step's tables on the side stream; before writing an
+  overlapped  the arena graph, then ``row_tables_device.step_roots`` of the step's tables on the side stream; before writing an
               arena again the serving stream waits, on the device, for the hash of the step that last wrote it.
 
 Each step ends with a host sync on the serving stream (a served step's sampled tokens), and the overlapped loop then hands every
 ready step root to its recorder (``record_ready``).  ``step_ms``: per arm, the median over reps of a rep's median step.  Apart,
 on an otherwise idle GPU: ``kernel_ms`` (``rt_step``'s four kernels, CUDA events), ``launch_ms`` (the layout's H2D, the kernels
-and the roots' D2H, CUDA events) and ``host_ms`` (``launch``'s host time, of which ``plan_ms`` is the layout: domains and rank
+and the roots' D2H, CUDA events) and ``host_ms`` (``step_roots``' host time, of which ``plan_ms`` is the layout: domains and rank
 order).  In the overlapped arm, ``latency_ms``: from the end of a step's graph to its root on the host side (CUDA events).
 Validation: the device's roots of a random step (and of the last overlapped step, read back from its arena) are
 ``row_tables.step_roots``' on the CPU, and the CPU twin's are too.
@@ -147,7 +147,7 @@ def run(arm: str, model: Model, graphs: dict, ctx: bytes, key: bytes, first: int
             if arm == "overlapped":
                 end = torch.cuda.Event(enable_timing=True)
                 end.record(serving)
-                p = D.launch(ctx, s, model.outputs(model.arenas[s % 2]), key)
+                p = D.step_roots(ctx, s, model.outputs(model.arenas[s % 2]), key)
                 root = torch.cuda.Event(enable_timing=True)
                 root.record(D.side_stream())
                 marks.append((end, root))
@@ -166,7 +166,7 @@ def run(arm: str, model: Model, graphs: dict, ctx: bytes, key: bytes, first: int
 
 
 def alone(model: Model, ctx: bytes, key: bytes, reps: int) -> dict[str, float]:
-    """``launch`` of arena 0's step on an idle GPU: kernel, launch (events) and host times, and the plan's host time."""
+    """``step_roots`` of arena 0's step on an idle GPU: kernel, launch (events) and host times, and the plan's host time."""
     side = D.side_stream()
     kernel, total, host, plan = [], [], [], []
     shapes = {op: (model.ids, int(c.shape[0]), int(c.shape[1])) for op, (c, _s) in model.arenas[0].items()}
@@ -178,7 +178,7 @@ def alone(model: Model, ctx: bytes, key: bytes, reps: int) -> dict[str, float]:
         a = torch.cuda.Event(enable_timing=True)
         a.record(side)
         t2 = time.perf_counter()
-        p = D.launch(ctx, 1000 + i, model.outputs(model.arenas[0]), key, timing=True)
+        p = D.step_roots(ctx, 1000 + i, model.outputs(model.arenas[0]), key, timing=True)
         t3 = time.perf_counter()
         b = torch.cuda.Event(enable_timing=True)
         b.record(side)
@@ -206,7 +206,7 @@ def main(argv: list[str] | None = None) -> int:
         s.copy_(torch.rand(s.shape, device="cuda", generator=g))
     host = model.host_outputs(model.arenas[0])
     want = RTB.step_roots(ctx, 7, host, key)
-    gate = {"device": D.launch(ctx, 7, model.outputs(model.arenas[0]), key).result() == want,
+    gate = {"device": D.step_roots(ctx, 7, model.outputs(model.arenas[0]), key).result() == want,
             "twin": D.host_step(ctx, 7, host, key) == want}
     cold = alone(model, ctx, key, 3)
     del cold

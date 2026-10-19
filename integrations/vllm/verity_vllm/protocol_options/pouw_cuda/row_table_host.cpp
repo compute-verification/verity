@@ -41,7 +41,7 @@ extern "C" int rt_step_host(const Tab* tabs, const uint32_t* perm, uint64_t S, u
   for (uint32_t g = 0; g < N; ++g) step_row(tabs, *a, g, dig.data(), hm, ms, &leaves[8 * (size_t)g]);
   for (uint32_t i = 0; i < a->T; ++i) {
     tree(tabs[i].did, tabs[i].n, &leaves[8 * (size_t)tabs[i].row0], out + 8 * (1 + (size_t)i));
-    frame_leaf(a->did, i, ROOTS_SCHEMA, out + 8 * (1 + (size_t)i), &roots[8 * (size_t)i]);
+    frame_leaf(a->did, i, ROWTAB_ROOTS_SCHEMA, out + 8 * (1 + (size_t)i), &roots[8 * (size_t)i]);
   }
   tree(a->did, a->T, roots.data(), out);
   return 0;

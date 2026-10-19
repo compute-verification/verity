@@ -46,17 +46,12 @@ class StepRoots:
 
 
 def step_roots(context: bytes, engine_step: int, outputs: Mapping[str, tuple[Sequence[tuple[str, int]], Any, Any]], key: bytes, *,
-               workers: int = 1, device: bool = False) -> Any:
+               workers: int = 1) -> StepRoots:
     """Engine step ``engine_step``'s root, from its int8 quantize outputs once all are written: ``outputs[op_path] = (rows, codes,
     scales)``, ``rows[b]`` batch row ``b``'s ``(request, token row)``, ``codes`` the (B, K) s8 codes and ``scales`` the (B,) f32
     scales (host copies).  Its tables go in ``serving_rows.table_key`` order, each table's rows by (request, token row), under
     ``context`` (64 bytes: the live coin commitment's root) and salted by ``serving_rows.step_salts`` under ``key``, the run's row
-    key (32 bytes), which the window's commit takes again as ``row_salt_key``.  With ``device``, ``codes`` and ``scales`` are CUDA
-    tensors and the step hashes on the GPU behind the current stream (``row_tables_device.launch``): this returns its
-    ``Pending``, whose ``result()`` is this ``StepRoots``."""
-    if device:
-        from . import row_tables_device
-        return row_tables_device.launch(context, engine_step, outputs, key)
+    key (32 bytes), which the window's commit takes again as ``row_salt_key``."""
     order = sorted(outputs, key=CS.table_key)
     rows, ys, domains = {}, {}, {}
     ss = CS.step_salts(key, engine_step, sum(len(outputs[op][0]) for op in order))

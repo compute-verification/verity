@@ -68,7 +68,7 @@ __global__ void k_trees(const Tab* tabs, const uint64_t* leaves, uint64_t* tree,
 
 // ``sc``: the step's leaves (T) then its tree's levels (W - 1).
 __global__ void k_step(Args a, uint64_t* sc, uint64_t* out) {
-  for (uint32_t i = threadIdx.x; i < a.T; i += blockDim.x) frame_leaf(a.did, i, ROOTS_SCHEMA, out + 8 * (1 + (size_t)i), sc + 8 * (size_t)i);
+  for (uint32_t i = threadIdx.x; i < a.T; i += blockDim.x) frame_leaf(a.did, i, ROWTAB_ROOTS_SCHEMA, out + 8 * (1 + (size_t)i), sc + 8 * (size_t)i);
   __syncthreads();
   block_tree(a.did, a.T, sc, sc + 8 * (size_t)a.T, out);
 }
