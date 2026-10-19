@@ -86,6 +86,26 @@ at P2's deployed point, the session under the id the auditor designated and sign
 verifier's own list of memory-challenger keys, which never comes from the run's record. `pous-run TRUSTED.json SETUP.json
 DIGESTS.bin SESSION.json SESSION_ID` (`check/`) is the same check in Lean.
 
+**The streamed-label wipe** (`streamed_wipe`, experimental) is a proof of secure erasure for a memory wipe: the memory
+challenger fills every memory tier of one server with labels it derives itself (SHA-512 under a key fresh for the server
+and the wipe), then reveals `k` indices drawn on live coins once the fill is complete and checks each answer against its
+own label, under a deadline per batch. `Pous.SecurityProofs.StreamedWipe` bounds what an accepted wipe leaves of the
+prior content, with no named assumption, for the sequential reveal; at 2.6 TB and `k = 74,000`, the egress plus 1.075
+GB at `2^-40` (`StreamedWipeMeets2600GB`). `PROTOCOL.md` ("The streamed-label wipe") has the messages, the bound, the
+measured fill and round trips, and the holes.
+
+~~~python
+from verity.core.protocols.pous import streamed_wipe as sw
+
+p = sw.WipeParams(labels=n, k=sw.DEPLOYED_K, batch=1, limit_ns=limit, tiers=(("hbm", a), ("dram", b), ("nvme", c)))
+c = sw.Challenger(secret, server_id, session_id, p, signer, log=log)          # the id claimed; the commitment published
+for start, data in c.fill(chunk=1 << 20):                                     # the labels, streamed to the server
+    send(start, data)
+c.run(lambda indices: ask(indices))                                           # one batch at a time; no retry
+signed = c.close(egress_bits=certified)                                        # the network certifier's count
+print(sw.verdict(signed, c.commitment, trusted={signer.public_key}).public())  # {"accepted": ..., "egress_mib": ...}
+~~~
+
 Tests: `uv run pytest verity/core/protocols/pous` (about 8 s). P3's 64 KB-label segment vector runs with `VERITY_POUS_SLOW=1`.
 Regenerate the vectors with `python verity/core/protocols/pous/tests/pous_vectors.py`, and the Lean vectors with
 `tests/lean/generate.sh`.

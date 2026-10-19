@@ -15,6 +15,7 @@ import Proofs.Pous.Chain.Family
 import Proofs.Pous.Chain.FamilyRounds
 import Proofs.Pous.Continuous
 import Proofs.Pous.SecureErasure
+import Proofs.Pous.StreamedWipe
 import Proofs.Pous.Graded.Band
 import Proofs.Pous.P2.Margin
 import Proofs.Pous.P2.Bridge
@@ -53,7 +54,8 @@ import Proofs.Pous.EndToEnd
 # The proved guarantees
 
 `Pous.SecurityProofs.X : Pous.Guarantees.X` for every statement of `Security/Models/Pous/Guarantees.lean`,
-`Security/Models/Pous/Guarantees/P2.lean`, `Security/Models/Pous/Guarantees/SecureErasure.lean` (the frozen statements)
+`Security/Models/Pous/Guarantees/P2.lean`, `Security/Models/Pous/Guarantees/SecureErasure.lean`,
+`Security/Models/Pous/Guarantees/StreamedWipe.lean` (the frozen statements)
 and `Security/Proofs/Pous/Statements.lean` (the lemmas) that has a proof. `lean-audit.json` pins these theorems, so a
 change to a guarantee, or to a definition it reads, changes their records. The open statements (`A2LemmaAM1`,
 `A5RabinGcd`, `A7Params`, `M1Meets`) have no entry here.
@@ -174,6 +176,9 @@ theorem DigestAU : Pous.Guarantees.DigestAU := PousDigest.digestAU
 theorem SecureErasureMeets : Pous.Guarantees.SecureErasureMeets := PousErase.secure_erasure_meets
 theorem SecureErasureMeetsFamily : Pous.Guarantees.SecureErasureMeetsFamily := PousErase.secure_erasure_meets_family
 theorem SecureErasureMeets96GiB : Pous.Guarantees.SecureErasureMeets96GiB := PousErase.secure_erasure_meets_96GiB
+theorem StreamedWipe : Pous.Guarantees.StreamedWipe := PousStreamedWipe.streamed_wipe
+theorem StreamedWipeMeets2600GB : Pous.Guarantees.StreamedWipeMeets2600GB :=
+  PousStreamedWipe.streamed_wipe_meets_2600GB
 
 theorem P2MeetsM1pB19Uncond : Pous.Guarantees.P2MeetsM1pB19Uncond := PousP2p.p2_meets_m1p_b19
 theorem P2MeetsM1pFamilyUncond : Pous.Guarantees.P2MeetsM1pFamilyUncond := PousP2p.family
