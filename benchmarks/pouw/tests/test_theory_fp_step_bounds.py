@@ -38,7 +38,7 @@ def test_fp_step_bounds(tmp_path):
 
 
 def test_transcription_matches_emu8():
-    """k3's and k4's planes and starts are emu8's."""
+    """k3's and k4's planes, starts, MMA order and reads are emu8's: the host's emu8.py and sm_120's emu8.cu."""
     fs = _load("fp_step_bounds", SCRIPT)
     emu = _load("emu8_emu8", POUW / "emu8" / "emu8.py")
     assert (fs.C0_BITS, fs.C1_BITS, fs.C2_BITS) == (emu.C0_BITS, emu.C1_BITS, emu.C2_BITS)
@@ -49,6 +49,15 @@ def test_transcription_matches_emu8():
     k3, k4 = fs.ROUTES["k3"], fs.ROUTES["k4"]
     assert [a.start for a in k3.accs] == [emu.C1_BITS, emu.C2_BITS] and k4.accs[0].start == emu.C0_BITS
     assert k3.accs[0].mmas == ((0, 0), (2, 2)) and k3.accs[1].mmas == ((1, 1),) and k3.read == ("bits", (15, 2), 0)
+    assert k4.accs[0].mmas == ((0, 0), (0, 1), (1, 0), (1, 1)) and k4.read == ("bits", (1,), emu.C0_BITS)
+    cu = (POUW / "emu8" / "emu8.cu").read_text()
+    assert "constexpr uint32_t C0_BITS = 0x4B400000u, C1_BITS = 0x4B7BAB6Cu, C2_BITS = 0x49E07A56u;" in cu
+    assert ("qmma(f1, af[0][i], bf[0][j], c1);\n            qmma(f1, af[2][i], bf[2][j], f1);\n"
+            "            qmma(f2, af[1][i], bf[1][j], c2);") in cu  # k3 on sm_120: acc1 (0,0) then (2,2); acc2 (1,1)
+    assert ("qmma(f, af[0][i], bf[0][j], c0);\n            qmma(f, af[0][i], bf[1][j], f);\n"
+            "            qmma(f, af[1][i], bf[0][j], f);\n            qmma(f, af[1][i], bf[1][j], f);") in cu  # k4
+    assert '"r"(__float_as_uint(f1[e])), "r"(__float_as_uint(f2[e]))' in cu and "mad.lo.u32 %0, %1, 15, %0;" in cu
+    assert "acc[i][j][e] += (int32_t)(__float_as_uint(f[e]) - C0_BITS);" in cu
 
 
 def test_transcription_matches_kernels():
