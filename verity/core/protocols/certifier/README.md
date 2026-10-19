@@ -13,6 +13,11 @@ A spec-level reference for network accounting's timing channel:
 - the online prover (`online`): each window's clock sync declared at its first bucket from what it had seen `lag`
   buckets before;
 - the active certifier (`active`): an asyncio TCP proxy that runs the certifiers on a live link and publishes their records.
+  With its salt on (`Proxy(salt=active.fresh_salt)`, off by default), each window's ingress carries one salt frame
+  into the block only, the window's record holds the salt's SHA-512 commitment, and the verifier gets the salt from
+  `Proxy.reveal` after registration and checks it with `active.check_salts`. A proxy back from maintenance
+  (`Proxy(start=k, position=p)`, off by default) serves from window k on, its first egress frame the Program's at
+  position p, and carries nothing from before: a window it was down for has no record.
 
 It is pure Python. It imports only the standard library and `verity`: for the record digests' `tagged_sha256` and
 `tagged_sha512` and `canonical_json_bytes`, and in `service` the proof service, the hm96 leaves and the check's

@@ -1,11 +1,13 @@
-// R11 collector v2 (native worker step): VERBATIM copy of the R9 cmt-hidden kernels (out/gen/r9/cmt-hidden/src/hidden_gpu_tree.cu,
-// namespace block lines 13-154) with extern "C" launchers instead of the torch wrappers + PYBIND11_MODULE, so native_collect.cpp can run the
-// whole per-step commitment with the GIL released.  Same kernels, same header/prefix rules, same leaf and node bytes -> same roots.
+// R11 collector v2 (native worker step): copy of the R9 cmt-hidden kernels (out/gen/r9/cmt-hidden/src/hidden_gpu_tree.cu, namespace
+// block lines 13-154) with extern "C" launchers instead of the torch wrappers + PYBIND11_MODULE, so native_collect.cpp can run the whole
+// per-step commitment with the GIL released.  Same header/prefix rules, same leaf and node bytes -> same roots; the parent's hash is
+// tree_parent, which tree_levels_kernel shares to build up to ten levels in one launch, a block an aligned slice.
 // R9 cmt-hidden: GPU-resident commitment over the M1 hidden-value stream / the H1 thread digests.
 //   chunk_leaves : one thread per 64-word chunk -> SHA-256(16-word header(chunk index, tag, geometry) || 64 stream words)
 //                  (bit-identical to hidden_stream.commit_stream's leaves)
 //   tree_level   : one thread per parent -> production node rule  h(NODE_PREFIX || left || u64be(32) || right)
 //                  and lift rule h(LIFT_PREFIX || child) for the odd trailing node (verity_vllm.commit.scheme)
+//   tree_levels  : several levels in one launch, each block folding its own aligned slice, the same parent rule
 // Plain SHA-256 (FIPS 180-4), one message per thread, register-resident blocks; correctness is checked against hashlib
 // on the host (hidden_gpu.py --check) before any timing is reported.
 #include <cuda_runtime.h>
@@ -110,11 +112,8 @@ __global__ void chunk_leaves_kernel(const uint32_t *__restrict__ stream, uint32_
     o4[1] = make_uint4(bswap(s.h[4]), bswap(s.h[5]), bswap(s.h[6]), bswap(s.h[7]));
 }
 
-// one level: parent i = node(child 2i, child 2i+1) or lift(child 2i) when 2i is the odd trailing node
-__global__ void tree_level_kernel(const uint32_t *__restrict__ in, uint32_t *__restrict__ out, long n_in) {
-    const long pi = (long)blockIdx.x * blockDim.x + threadIdx.x;
-    const long n_out = (n_in + 1) / 2;
-    if (pi >= n_out) return;
+// parent pi of a level of n_in nodes = node(child 2pi, child 2pi+1) or lift(child 2pi) when 2pi is the odd trailing node
+__device__ __forceinline__ void tree_parent(const uint32_t *in, uint32_t *out, long n_in, long pi) {
     const uint32_t *L = in + 2 * pi * 8;
     const bool lift = (2 * pi + 1 >= n_in);
     Sha s; s.init();
@@ -153,6 +152,33 @@ __global__ void tree_level_kernel(const uint32_t *__restrict__ in, uint32_t *__r
     o4[1] = make_uint4(bswap(s.h[4]), bswap(s.h[5]), bswap(s.h[6]), bswap(s.h[7]));
 }
 
+// one level, a thread a parent
+__global__ void tree_level_kernel(const uint32_t *__restrict__ in, uint32_t *__restrict__ out, long n_in) {
+    const long pi = (long)blockIdx.x * blockDim.x + threadIdx.x;
+    if (pi >= (n_in + 1) / 2) return;
+    tree_parent(in, out, n_in, pi);
+}
+
+// n_levels successive levels above `in` (n_in nodes), each level's nodes right after the previous level's in `out`.  Block b folds its
+// own slice, nodes [b 2^n_levels, (b+1) 2^n_levels) (the last may be shorter): pairs never cross an aligned slice, and a level's odd
+// trailing node is in the last slice, so the lift falls where the whole level's does.  A level reads the one this block wrote before the
+// barrier, so no pointer here is __restrict__ (no non-coherent loads).
+__global__ void tree_levels_kernel(const uint32_t *in, uint32_t *out, long n_in, int n_levels) {
+    const long first = (long)blockIdx.x << n_levels;
+    long len = n_in - first < (1L << n_levels) ? n_in - first : (1L << n_levels);
+    in += first * 8;
+    for (int k = 0; k < n_levels; ++k) {
+        const long n_out = (n_in + 1) / 2, len_out = (len + 1) / 2;
+        uint32_t *dst = out + (first >> (k + 1)) * 8;
+        for (long pi = threadIdx.x; pi < len_out; pi += blockDim.x) tree_parent(in, dst, len, pi);
+        __syncthreads();
+        in = dst;
+        out += n_out * 8;
+        n_in = n_out;
+        len = len_out;
+    }
+}
+
 }  // namespace
 
 extern "C" int verity_chunk_leaves_launch_base(const uint32_t* stream, uint32_t* out, long n_chunks, int chunk_words, uint32_t launch_tag,
@@ -177,5 +203,15 @@ extern "C" int verity_tree_level_launch(const uint32_t* in, uint32_t* out, long 
   const int threads = 128;
   const long blocks = (n_out + threads - 1) / threads;
   tree_level_kernel<<<blocks, threads, 0, st>>>(in, out, n_in);
+  return static_cast<int>(cudaGetLastError());
+}
+
+// n_levels (at most 10: a block's slice is 2^n_levels nodes) levels above n_in nodes in one launch (tree_levels_kernel); out holds all of
+// them, level after level
+extern "C" int verity_tree_levels_launch(const uint32_t* in, uint32_t* out, long n_in, int n_levels, cudaStream_t st) {
+  if (n_levels <= 0 || n_in <= 0) return 0;
+  if (n_levels > 10) return static_cast<int>(cudaErrorInvalidValue);
+  const long blocks = (n_in + (1L << n_levels) - 1) >> n_levels;
+  tree_levels_kernel<<<blocks, 256, 0, st>>>(in, out, n_in, n_levels);
   return static_cast<int>(cudaGetLastError());
 }

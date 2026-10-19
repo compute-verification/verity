@@ -129,6 +129,69 @@ def test_the_partition_applies_to_the_calls_of_served_programs():
     assert not {"AttnBlock_v3", "DotBf16_v1", "Serve_v1", "TopPMask_v1"} & calls
 
 
+def _without_the_catalog(monkeypatch, fallback=None) -> None:
+    """`is_call` from scratch, failing a test that builds the catalog; with ``fallback``, `call_families` answers from it."""
+    monkeypatch.setattr(TG, "_CALLS", set())
+    monkeypatch.setattr(TG, "_SHORT", {})
+    monkeypatch.setattr(TG, "suite", lambda: pytest.fail("the catalog was built"))
+    monkeypatch.setattr(TG, "call_families", (lambda: pytest.fail("call_families was asked")) if fallback is None else fallback)
+
+
+def test_is_call_holds_a_family_exactly_when_call_families_does(monkeypatch):
+    """`is_call` decides without the catalog by a superset of the Boolean Calls (`boolean_call_candidates`, the Boolean table's
+    links) and a subset of them (`certified_boolean_calls`, the vocabulary and template bindings), and asks `call_families` for
+    the rest: on every family the suite checks, every registered one and every Call it answers as `call_families` does."""
+    calls = TG.call_families()
+    words = TG.word_call_families()
+    assert calls - words <= TG.boolean_call_candidates(words)
+    assert TG.certified_boolean_calls(words) <= calls
+    asked: list[int] = []
+    _without_the_catalog(monkeypatch, lambda: asked.append(1) or calls)
+    fams = set(TG.REGISTERED) | {TG.family(fn) for fn in SUITE.values()} | calls
+    assert {f for f in fams if TG.is_call(f)} == fams & calls
+    assert len(asked) < len(fams) // 10, "most families need no catalog"
+
+
+#: one Definition target for each way `is_call` decides: a vocabulary kind's family, a template's, a Boolean version one of their
+#: bindings certifies, a word composite and a Boolean one outside the Boolean table's bound, and a primitive
+DECIDED = {"TokenSelect_v1{V=16}": "words", "RoPEHead_v1{D=8}": "words", "RoPEHead_v2{D=8}": "certified",
+           "DotBf16_v1{K=16}": "not a candidate", "DotBf16_v3{K=16,DOT=AmpereBF16TcDot16_v3}": "not a candidate",
+           "F32Add_v1": "not a candidate"}
+
+
+@pytest.mark.slow
+def test_a_targeted_run_without_the_catalog_reports_what_one_with_it_does(monkeypatch):
+    """CIR-30: a targeted run built the whole catalog (`call_families`) before checking a target, 75 minutes at #2397.  The same
+    targets checked with each `as_call` read off `call_families` and with it decided by `is_call` without the catalog get the
+    same report."""
+    from circuit_check import cli
+
+    TG.call_families()
+    full = cli.run(list(DECIDED), OPTS, log=None, isolate=False)
+    _without_the_catalog(monkeypatch)
+    fast = cli.run(list(DECIDED), OPTS, log=None, isolate=False)
+    short = TG._SHORT
+    assert {t: "words" if TG.family(TG.definition(t)) in short["words"] else
+            "certified" if TG.family(TG.definition(t)) in short["certified"] else
+            "not a candidate" if TG.family(TG.definition(t)) not in short["candidates"] else "?" for t in DECIDED} == DECIDED
+
+    def strip(rep):
+        return {**rep, "targets": [{k: v for k, v in t.items() if k != "seconds"} for t in rep["targets"]]}
+
+    assert strip(fast) == strip(full)
+    assert [t["partition"]["applies"] for t in full["targets"]] == [v != "not a candidate" for v in DECIDED.values()]
+
+
+def test_the_cli_resolves_each_targets_call_without_the_catalog(monkeypatch):
+    """The process the targets' processes fork from resolves each Definition target's `is_call` (`cli._calls`), without the
+    catalog for any target `is_call` decides alone; one that doesn't resolve is left to its check."""
+    from circuit_check import cli
+
+    _without_the_catalog(monkeypatch)
+    cli._calls(["TokenSelect_v1{V=16}", "RoPEHead_v2{D=8}", "F32Add_v1", "rope-head", "RoPEHead_v1{Q=8}"])
+    assert {"TokenSelect_v1", "RoPEHead_v1"} <= TG._SHORT["words"] and "RoPEHead_v2" in TG._SHORT["certified"]
+
+
 def test_an_id_only_the_catalog_registers_resolves_through_the_suite(monkeypatch):
     """`circuit-check <id>` finds a suite target that the registries hold only once the catalog's roots are traced (the gathers
     `boolean_gather.gather_bf16(n)` builds) or whose id writes a dict static as its digest (`gf2k.GfResiduals`'s schema), and
@@ -480,7 +543,8 @@ def test_the_boolean_versions_of_the_served_calls_are_calls():
 
 def test_every_call_the_suite_checks_is_partitioned():
     """No Call passes with its partition unchecked: each is within `Options.partition_max_gates` (the Boolean attention Calls
-    at T = 17 are about 1.9M gates, 2.1M with Gemma-2's softcap) and `Options.partition_max_leaves`."""
+    at T = 17 are about 1.9M gates, 2.1M with Gemma-2's softcap; DeepSeek-V4's Boolean FlashMLA prefill and mHC Calls at their
+    smallest whole blocks 4.1M to 4.6M) and `Options.partition_max_leaves`."""
     from verity.ml.circuits.evaluation.reference import signature_of
 
     calls = TG.call_families()
@@ -540,6 +604,57 @@ def test_a_partial_reference_is_named():
     assert f["name"].startswith("correspondence/reference-not-total CircuitCheckPartial_v1 raised on")
 
 
+def test_a_declared_interval_the_reference_leaves_is_named():
+    """A primitive's declared return interval is a fact the Build takes (`verity.ml.circuits.ports`): checked on operands within
+    its declared bounds, so a product of two s8 operands holds in [-16256, 16384] and one off by a unit is named."""
+    from verity.ml.circuits.defs import PrimitiveDefinition
+    from verity.ml.circuits.ports import In, Out, Ports
+    from verity.ml.circuits.types import Value
+
+    def mul(a, b):
+        return ((a - (1 << 16) if a >> 15 else a) * (b - (1 << 16) if b >> 15 else b)) & 0xFFFFFFFF
+
+    s8 = {"a": In(bound=(-128, 127)), "b": In(bound=(-128, 127))}
+    good = PrimitiveDefinition("CircuitCheckS8Mul", 1, (("a", Value(16)), ("b", Value(16))), Value(32), mul, register=False,
+                               ports=Ports(params=s8, ret=Out(interval=(-16256, 16384))))
+    e = CK.check_definition(good, OPTS, as_call=False)
+    assert e["ports"] == {"vectors": e["correspondence"]["vectors"], "intervals": [[0, 1, [-16256, 16384]]], "outside": 0}
+    assert not e["failures"]
+    bad = PrimitiveDefinition("CircuitCheckS8MulTight", 1, (("a", Value(16)), ("b", Value(16))), Value(32), mul, register=False,
+                              ports=Ports(params=s8, ret=Out(interval=(-16256, 16383))))
+    (f,) = CK.check_definition(bad, OPTS, as_call=False)["failures"]
+    assert f["name"].startswith("ports/interval CircuitCheckS8MulTight_v1") and f["examples"][0]["value"] == 16384
+    assert "ports" not in CK.check_definition(PrimitiveDefinition("CircuitCheckS8MulUntyped", 1, (("a", Value(16)), ("b", Value(16))),
+                                                                  Value(32), mul, register=False), OPTS, as_call=False)
+
+
+def test_a_transfer_the_reference_leaves_is_named():
+    """A primitive's transfer (its return's interval from its operands') is a fact the Build takes: checked on drawn operand
+    intervals, so an exact sum of two s8 operands holds in [a0 + b0, a1 + b1] and a transfer one short of it is named."""
+    from verity.ml.circuits.defs import PrimitiveDefinition
+    from verity.ml.circuits.ports import Ports, as_reading
+    from verity.ml.circuits.types import Value
+
+    def add(a, b):
+        return (((a ^ 0x80) - 0x80) + ((b ^ 0x80) - 0x80)) & 0xFFFF
+
+    def transfer(short):
+        def f(a, b):
+            a, b = as_reading(a, 8), as_reading(b, 8)
+            return None if a is None or b is None else (a[0] + b[0], a[1] + b[1] - short)
+        return f
+
+    def prim(name, short):
+        return PrimitiveDefinition(name, 1, (("a", Value(8)), ("b", Value(8))), Value(16), add, register=False,
+                                   ports=Ports(transfer=transfer(short)))
+
+    e = CK.check_definition(prim("CircuitCheckS8Add", 0), OPTS, as_call=False)
+    t = e["ports"]["transfer"]
+    assert t["draws"] == CK.TRANSFER_DRAWS and t["intervals"] > 0 and t["outside"] == 0 and not e["failures"]
+    fails = CK.check_definition(prim("CircuitCheckS8AddShort", 1), OPTS, as_call=False)["failures"]
+    assert fails and all(f["name"].startswith("ports/transfer CircuitCheckS8AddShort_v1") for f in fails)
+
+
 def test_a_kernel_wrong_only_on_edge_words_is_caught():
     """A kernel that returns 0 for a NaN operand: uniform random words rarely hold a NaN, the edge vectors always do."""
     from verity.ml.circuits.evaluation import register_kernel
@@ -592,9 +707,8 @@ def test_redundant_ands_are_counted():
 def test_the_cli_writes_a_report_and_fails_by_name(tmp_path, capsys):
     from circuit_check import cli
 
-    # Every target here is a Call of a served Program (`targets.call_families`), so `--as-call` is the default it would resolve;
-    # passing it skips building the whole catalog in each run's worker (~10 min each).
-    call = ["--as-call", "-q"]
+    # Every target here is a Call of a served Program, which `targets.is_call` decides without the catalog.
+    call = ["-q"]
     out = tmp_path / "r.json"
     assert cli.main(["RoPEHead_v1{D=8}", BOOL_RECOMPUTE, "--out", str(out), *call]) == 0
     r = json.loads(out.read_text())

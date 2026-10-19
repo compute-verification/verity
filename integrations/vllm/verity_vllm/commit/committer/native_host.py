@@ -37,6 +37,7 @@ import json
 import re
 import queue
 import ctypes
+import gc
 import os
 import threading
 import time
@@ -227,6 +228,26 @@ TP_PARTIAL_RE = re.compile(r"/(part|shard)_rank\d+$")   # [R14 TP-03] <module pa
 CALL_DEPENDENT_RE = re.compile(r"/(all_reduce|x_q|x_s)$")   # bound only on the calls whose token count takes that path; the manifest requires them
 
 
+def tp_partials_bad(man: dict[str, Any], names: "Counter[str]") -> dict[str, int]:
+    """[R14 TP-03] rank-local collective inputs: exactly one `tp/<site>/{part,shard}_rank<r>` per expected site, none from elsewhere
+    (`NativeHostCommitter.identity_check`'s per-step TP rule over the step's tensor names)."""
+    from collections import Counter
+
+    tp_bad: dict[str, int] = {}
+    tp_sites = man.get("tp_sites") or []
+    tp_counts = Counter(n.rsplit("/", 1)[0] for n in names.elements() if TP_PARTIAL_RE.search(n))
+    if tp_sites:
+        tp_want = man.get("tp_site_counts") or {}                     # [R19 moe] a mid-module site binds its static call count per step
+        tp_bad = {s: tp_counts.get(s, 0) for s in tp_sites if tp_counts.get(s, 0) != int(tp_want.get(s, 1))}
+        tp_bad.update({s: c for s, c in tp_counts.items() if s not in tp_sites})
+        rk = man.get("tp_rank")
+        if rk is not None and any(not n.endswith(f"_rank{rk}") for n in names if TP_PARTIAL_RE.search(n)):
+            tp_bad["<foreign rank tag>"] = sum(c for n, c in names.items() if TP_PARTIAL_RE.search(n) and not n.endswith(f"_rank{rk}"))
+    elif tp_counts:
+        tp_bad = {"<undeclared tp source>": sum(tp_counts.values())}
+    return tp_bad
+
+
 def hazard_of_record(name: str, HAZARD_LEAVES: "tuple[str, ...] | frozenset[str] | set[str]") -> bool:
     """v1's in-place HAZARD decision for one acquired tensor name (`<module path>/<slot>`, a tap plane or a TP partial): snapshot at the hook
     (True) or batch at step end (False).  Encodes vLLM's aliasing by leaf name (`NativeHostCommitter.HAZARD_LEAVES` + the two name rules) --
@@ -257,6 +278,43 @@ def value_family(name: str) -> str:
         if sub in name:
             return fam
     return "other"
+
+
+class GcPauses:
+    """`gc.callbacks` while a run is installed: each collection of at least `min_s`, as (generation, start, seconds, thread), the start on
+    `time.perf_counter` like the steps' `t_step_end`, so a pause lands on its step.
+
+    `install` first collects and freezes the heap, as vLLM does once its warm-up is done (`gc_utils.freeze_gc_heap`): the committer, its
+    sources and the manifests they hold are built after that freeze, and a full collection over them took 720-960 ms on every rank's
+    serving thread of GLM-5.3 TP8, stalling all ranks behind the next all-reduce (r20261017-193316-4d59).  Collections never touch a value."""
+
+    def __init__(self, min_s: float = 1e-3) -> None:
+        self.min_s = min_s
+        self.pauses: list[tuple[int, float, float, str]] = []
+        self.freeze_s: list[float] = []
+        self._t0 = 0.0
+
+    def __call__(self, phase: str, info: dict) -> None:
+        if phase == "start":
+            self._t0 = time.perf_counter()
+        elif (dt := time.perf_counter() - self._t0) >= self.min_s:
+            self.pauses.append((int(info["generation"]), self._t0, dt, threading.current_thread().name))
+
+    def install(self) -> None:
+        if self in gc.callbacks:
+            return
+        t0 = time.perf_counter()
+        gc.collect()
+        gc.freeze()
+        self.freeze_s.append(time.perf_counter() - t0)
+        gc.callbacks.append(self)
+
+    def uninstall(self) -> None:
+        if self in gc.callbacks:
+            gc.callbacks.remove(self)
+
+    def record(self) -> dict[str, Any]:
+        return {"min_s": self.min_s, "pauses": list(self.pauses), "total_s": sum(p[2] for p in self.pauses), "freeze_s": list(self.freeze_s)}
 
 
 class _Footprint:
@@ -687,6 +745,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         self.program_digest = program_digest or hashlib.sha256(b"cmt-integ/no-program-digest/" + run_id.encode()).digest()
         self.acquire_classes = acquire_classes or ACQUIRE_CLASSES
         self.spans = Spans(scheme.NAME)
+        self.gc_pauses = GcPauses()
         self.x03_expected = 0
         self.x03_committed = 0
         # [X-03 F-r19-int-22] the Program's per-layer attention Call statics (fa2_plane_classes.AttnLayerDecl, set by the driver from the
@@ -805,13 +864,14 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         rec = step_bound_bytes(self.model, self._modules, envelope, hidden_m1=bool(hidden_m1), attn_backend=backend,
                                moe_layers=(len(moe_src.layers) if moe_src is not None else 0))
         # [R14 TP-03] sources that bind extra tensors per step (TP partial source) widen the bound: per token / per sequence / chunk padding
-        extra_pt = extra_ps = extra_n = 0
+        extra_pt = extra_ps = extra_step = extra_n = 0
         for s in getattr(self, "sources", []):
             f = getattr(s, "extra_step_bytes", None)
             if f is None:
                 continue
             e = f(envelope, self.model)
             extra_pt += int(e.get("per_token_bytes", 0)); extra_ps += int(e.get("per_seq_bytes", 0)); extra_n += int(e.get("tensors_per_step", 0))
+            extra_step += int(e.get("per_step_bytes", 0))
         if self.acquire_inputs:
             # [R19 int-20] the manifest-driven `<consumer>/in` acquisitions: one per-token tensor per consumer per step (its width from the
             # promoted member's registry signature), minus the embedding-class inputs the module table already counts
@@ -821,11 +881,12 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                     continue
                 extra_pt += int(bpt); extra_n += 1
             rec["promoted_inputs"] = {"consumers": sorted(self.acquire_inputs), "per_token_bytes": sum(int(v) for v in self.acquire_inputs.values())}
-        if extra_pt or extra_ps or extra_n:
+        if extra_pt or extra_ps or extra_step or extra_n:
             B = max(1, int(envelope.get("batch") or 1))
-            add_prefill = int(rec["prefill_tokens"]) * extra_pt + B * extra_ps + extra_n * GPU_CHUNK_BYTES
-            add_decode = B * extra_pt + B * extra_ps + extra_n * GPU_CHUNK_BYTES
-            rec["extra_sources"] = {"per_token_bytes": extra_pt, "per_seq_bytes": extra_ps, "tensors_per_step": extra_n, "prefill_add": add_prefill, "decode_add": add_decode}
+            add_prefill = int(rec["prefill_tokens"]) * extra_pt + B * extra_ps + extra_step + extra_n * GPU_CHUNK_BYTES
+            add_decode = B * extra_pt + B * extra_ps + extra_step + extra_n * GPU_CHUNK_BYTES
+            rec["extra_sources"] = {"per_token_bytes": extra_pt, "per_seq_bytes": extra_ps, "per_step_bytes": extra_step, "tensors_per_step": extra_n,
+                                    "prefill_add": add_prefill, "decode_add": add_decode}
             rec["prefill_step_bytes"] = int(rec["prefill_step_bytes"]) + add_prefill
             rec["decode_step_bytes"] = int(rec["decode_step_bytes"]) + add_decode
             rec["step_bound_bytes"] = max(int(rec["prefill_step_bytes"]), int(rec["decode_step_bytes"]))
@@ -1074,6 +1135,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
             return
         self._check_skip()
         self._start_worker()
+        self.gc_pauses.install()
         for src in self.sources:
             src.install()
         for name, m in self._modules:
@@ -1126,6 +1188,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         if not self.installed:
             return
         self._end_step()
+        self.gc_pauses.uninstall()
         for src in self.sources:
             src.uninstall()
         for h in self._handles:
@@ -1150,6 +1213,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         self.padding_stats = None
         self._step_index = 0
         self.spans = Spans(scheme.NAME)
+        self.gc_pauses.pauses, self.gc_pauses.freeze_s = [], []
         self.pool.reset()
         self.errors = []
 
@@ -1385,14 +1449,14 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         if self.footprint is None:
             return
         self.footprint.event("absorbed", step=job.step, used=int(job.cursor), padded=int(padded),
-                             levels_bytes=sum(int(lv.numel()) * 4 for lv in levels), levels_device=bool(levels and levels[0].is_cuda),
+                             levels_bytes=sum(int(lv.nbytes) for lv in levels), levels_device=bool(levels and levels[0].is_cuda),
                              keep_bytes=int(keep.numel()) if keep is not None else 0, keep_device=(keep.is_cuda if keep is not None else None),
                              retain=self.retain, arena_block_bytes=int(job.arena.numel()) if job.arena is not None else None,
                              retained_device_total=self._retained_device_bytes(), families=_Footprint.families(job.metas),
                              t_step_end=round(job.t_step_end - self.footprint.t0, 6) if job.t_step_end else None, backlog=job.backlog)
 
     def _retained_device_bytes(self) -> int:
-        n = sum(int(lv.numel()) * 4 for lvls in self._gpu_levels.values() for lv in lvls if lv.is_cuda)
+        n = sum(int(lv.nbytes) for lvls in self._gpu_levels.values() for lv in lvls if lv.is_cuda)
         n += sum(int(b.numel()) for b, _u in self._gpu_blocks.values() if b is not None and b.is_cuda)
         return n
 
@@ -1407,7 +1471,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         if levels_to_host:
             for step, lvls in list(self._gpu_levels.items()):
                 if lvls and lvls[0].is_cuda:
-                    freed["levels_device_bytes"] += sum(int(lv.numel()) * 4 for lv in lvls)
+                    freed["levels_device_bytes"] += sum(int(lv.nbytes) for lv in lvls)
                     self._gpu_levels[step] = [lv.cpu() for lv in lvls]
         if torch is not None and torch.cuda.is_available():
             torch.cuda.synchronize()
@@ -1799,6 +1863,8 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         if step in self._gpu_levels:
             lv0 = self._gpu_levels[step][0]
             return [lv0[i].cpu().numpy().astype("uint32").tobytes() for i in range(int(lv0.shape[0]))]
+        if step not in self._levels and not getattr(self, "retain_levels", True):
+            raise RuntimeError(f"step {step}: this run kept no tree levels (retain_levels=False), so its leaves cannot be refolded with padding")
         return list(self._levels[step][0])
 
     def _apply_padding(self, steps: list[StepCommitment]) -> list[StepCommitment]:
@@ -1881,7 +1947,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                 "hook_wall_s": t_hook - t1, "apply_wall_s": time.perf_counter() - t_hook,
                 "padding_bytes_over_executed": (sum(ps.n_bytes for ps in pads) / ex_bytes) if ex_bytes else None}
         step_roots = [s.root for s in steps]    # b"": a placeholder step (a learn-only warm-up pass, or a failed step whose error is recorded)
-        run_root = scheme.run_root(self.program_digest, self._geo_digest, step_roots) if all(len(r) == 32 for r in step_roots) else b""
+        run_root = self._fold_run_root(step_roots) or b""
         t2 = time.perf_counter()
         self.spans.add("root_finalisation", t2 - t1)
         last_end = max((s.t_step_end for s in steps), default=t0)
@@ -1896,14 +1962,14 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                                     "pinned_register_s": self.pool.times.get("register_s", 0.0), "pinned_populate_threads": self.pool.populate_threads,
                                     "pinned_reserved_bytes": self.pool.reserved_bytes, "pinned_reserve_unused": self.pool.reserve_unused,
                                     "pinned_pool_blocks": len(self.pool.all), "errors": self.errors[:10],
-                                    "errors_n": len(self.errors),
+                                    "errors_n": len(self.errors), "gc": self.gc_pauses.record(),
                                     # X-03 reference integrity (Python acquisition path; the native collector overrides these in its finalize)
                                     "expected_tensors": self.x03_expected, "committed_tensors": self.x03_committed,
                                     "identity_check": self.identity_check() if self._layouts else None,
                                     "hash_threads": self.hash_threads, "chunk": self.chunk, "modules_hooked": len(self._modules), **self._leaf_record(steps),
                                     "staging": self.staging, "fast_copy": self.cudart_path, "gpu_tree": self.gpu_tree, "gpu_tree_ms": dict(self._gpu_t),
                                     "gpu_tree_retained_bytes": self._retained_device_bytes(),
-                                    "host_retained_bytes": sum(int(lv.numel()) * 4 for lvls in self._gpu_levels.values() for lv in lvls if not lv.is_cuda)
+                                    "host_retained_bytes": sum(int(lv.nbytes) for lvls in self._gpu_levels.values() for lv in lvls if not lv.is_cuda)
                                     + sum(int(getattr(b, "retained_bytes", None) if getattr(b, "retained_bytes", None) is not None else b.numel())
                                           for b, _u in self._gpu_blocks.values() if b is not None and not b.is_cuda),
                                     "retain": self.retain, "released_device_bytes": self.released_bytes,
@@ -2001,13 +2067,20 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         # per-step names held to the source's own rule, not rule (4): the call-boundary targets; the capture map's names on the step's routes
         rt_src = next((s for s in self.sources if hasattr(s, "step_modules")), None)
         cb_src = next((s for s in self.sources if hasattr(s, "split_step_names") and s is not rt_src), None)
+        own = frozenset().union(*(getattr(s, "own_names", ()) for s in self.sources))   # what a source commits that no module produced (KV slots)
 
         def _identity_of_padding(n: str) -> str:                     # "<executed name>/<rid>/bot" -> "<executed name>"
             return n[:-len("/bot")].rsplit("/", 1)[0] if n.endswith("/bot") and "/" in n[:-len("/bot")] else n
 
+        # no padding, step-reading source or attention declarations: a step's verdict reads its names, step 0's and the manifest only
+        step_free, verdicts = not padded_run and rt_src is None and cb_src is None and not (decls and man["fa2_hidden_per_layer"]), {}
         for step in sorted(self._layouts):
             metas_all = self._layouts[step]
             cols = metas_all.names if hasattr(metas_all, "scan") else None   # a cached plan's record (plan_cache): its names, no TensorMeta built
+            if step_free and cols in verdicts:                         # a plan-name tuple already judged (None is never a key)
+                fa2_rules_used.update({"uniform": 1} if man["fa2_hidden_per_layer"] else {})
+                violations.extend([{**verdicts[cols], "step": step}] if verdicts[cols] else [])
+                continue
             ps = self._padding.get(step) if padded_run else None
             # a padding meta: the step has a PaddingStep, the meta sits in the padding block of the step stream (`stream_off >= stream_base`;
             # an executed arena meta reads -1, an executed packed meta < stream_base) and carries the padding name (fix (c))
@@ -2020,24 +2093,12 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                 padding_only_steps.append(int(step))
             names_all = Counter(m.name for m in metas_all) if cols is None else Counter(cols)   # fa2 per-layer uniformity reads every plane of the step (rule (a) planes included)
             names = Counter(m.name for m in metas) if cols is None else names_all
-            mod_names = Counter({n: c for n, c in names.items() if not n.startswith(HIDDEN_M1_PREFIXES) and not n.startswith("moe/") and not TP_PARTIAL_RE.search(n) and not CALL_DEPENDENT_RE.search(n)})
+            mod_names = Counter({n: c for n, c in names.items() if not n.startswith(HIDDEN_M1_PREFIXES) and not n.startswith("moe/") and not TP_PARTIAL_RE.search(n) and not CALL_DEPENDENT_RE.search(n) and n not in own})
             pad_ident = Counter(_identity_of_padding(m.name) for m in pad_metas)
-            pad_mod_names = Counter({n: 1 for n in pad_ident if not n.startswith(HIDDEN_M1_PREFIXES) and not n.startswith("moe/") and not TP_PARTIAL_RE.search(n) and not CALL_DEPENDENT_RE.search(n)})
+            pad_mod_names = Counter({n: 1 for n in pad_ident if not n.startswith(HIDDEN_M1_PREFIXES) and not n.startswith("moe/") and not TP_PARTIAL_RE.search(n) and not CALL_DEPENDENT_RE.search(n) and n not in own})
             if padding_only:
                 mod_names = pad_mod_names                                # the identities materialized as ⊥, one each (set semantics below)
-            # [R14 TP-03] rank-local collective inputs: exactly one `tp/<site>/{part,shard}_rank<r>` per expected site, none from elsewhere
-            tp_bad: dict[str, int] = {}
-            tp_sites = man.get("tp_sites") or []
-            tp_counts = Counter(n.rsplit("/", 1)[0] for n in names.elements() if TP_PARTIAL_RE.search(n))
-            if tp_sites:
-                tp_want = man.get("tp_site_counts") or {}                     # [R19 moe] a mid-module site binds its static call count per step
-                tp_bad = {s: tp_counts.get(s, 0) for s in tp_sites if tp_counts.get(s, 0) != int(tp_want.get(s, 1))}
-                tp_bad.update({s: c for s, c in tp_counts.items() if s not in tp_sites})
-                rk = man.get("tp_rank")
-                if rk is not None and any(not n.endswith(f"_rank{rk}") for n in names if TP_PARTIAL_RE.search(n)):
-                    tp_bad["<foreign rank tag>"] = sum(c for n, c in names.items() if TP_PARTIAL_RE.search(n) and not n.endswith(f"_rank{rk}"))
-            elif tp_counts:
-                tp_bad = {"<undeclared tp source>": sum(tp_counts.values())}
+            tp_bad = tp_partials_bad(man, names)
             mod_names, rt_bad = rt_src.split_step_names(mod_names, step, padding_only, metas) if rt_src is not None else (mod_names, {})
             by_module = Counter()
             for n, c in mod_names.items():
@@ -2093,6 +2154,8 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                                    **{k: v for sn, bad in split_bad.items() for k, v in ((f"{sn}_bad", dict(sorted(bad.items())[:8])), (f"{sn}_bad_n", len(bad)))},
                                    **({"fa2_detail": fa2_detail} if fa2_detail else {}),
                                    **({"padding_only": padding_only, "padding_tensors": len(pad_metas)} if pad_metas else {})})
+            if step_free and cols is not None:
+                verdicts[cols] = violations[-1] if violations and violations[-1]["step"] == step else None
         return {"ok": not violations, "steps_checked": len(self._layouts),
                 **({"padding": {"steps_with_padding": len(self._padding), "padding_only_steps": padding_only_steps, "padding_tensors": padding_tensors_n,
                                 "rule": "padding tensors (<name>/<rid>/bot, host-only) are counted apart: a mixed step's executed metas are checked as an unpadded step's; "
@@ -2227,7 +2290,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                 if step in self._gpu_blocks:
                     blk, used = self._gpu_blocks[step]           # lazy D2H of the 256 B chunk (zero-padded past `used`) + level sibling path
                     lo = index * self.chunk
-                    levels = self._gpu_levels[step]
+                    levels = self._gpu_levels.get(step)
                     if not self._block_holds(blk, lo, lo + self.chunk) or (paths_from_replay and values_from is not None):
                         if values_from is None or step not in values_from._gpu_blocks:
                             raise RuntimeError(f"open({step}, {index}): raw bytes released / not retained (retain={self.retain}) and no replay source holds step {step}")
@@ -2241,9 +2304,11 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                             if step not in values_from._gpu_levels:
                                 raise RuntimeError(f"open({step}, {index}): the replay source has no tree levels for step {step}")
                             levels = values_from._gpu_levels[step]
+                    if levels is None:
+                        raise RuntimeError(f"open({step}, {index}): this run kept no tree levels (retain_levels=False): open with a replay "
+                                           "source and paths_from_replay=True")
                     value = bytes(blk[lo:lo + self.chunk].cpu().numpy().tobytes())
-                    path = self._HG.gpu_open(levels, index) if self._HG is not None else open_levels(levels, index)
-                    out.append(Opening(step, index, value, tuple(path), ident))
+                    out.append(Opening(step, index, value, tuple(self._level_path(levels, index)), ident, self._gpu_salt(step, index)))
                     continue
                 if ident.get("packed"):
                     value = bytes(self._streams[step][ident["byte_lo"]:ident["byte_hi"]])
@@ -2253,6 +2318,14 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                 path = scheme.path_in_levels(self._levels[step], index)
                 out.append(Opening(step, index, value, path, ident, self._salts_of(step, index, index + 1)))
         return out
+
+    def _level_path(self, levels: list, index: int) -> tuple:
+        """Leaf `index`'s sibling path in a GPU-tree step's levels."""
+        return tuple(self._HG.gpu_open(levels, index) if self._HG is not None else open_levels(levels, index))
+
+    def _gpu_salt(self, step: int, index: int) -> bytes:
+        """The salt a GPU-tree step's opening carries (none under vllm-v1 chunk leaves)."""
+        return b""
 
     def verify(self, run: RunCommitment, opening: Opening) -> bool:
         """Production verifier core: shape rule + fold to the bare root, then the context binding to the ORIGINAL step root, then the

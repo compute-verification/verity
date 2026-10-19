@@ -152,6 +152,19 @@ def test_positive_two_requests_engine_order_differs(tmp_path):
     assert res["oracle"]["requests"] == {U0: "r0", U1: "r1"} and res["oracle"]["snapshot_steps"] == [0]
 
 
+def test_a_kv_layers_slots_are_no_match_value(tmp_path):
+    d, vals = make_match(str(tmp_path))
+    bmap, committed = make_bmap(vals)
+    bmap["entries"].append({"identity": {"program_digest": "p" * 64, "request_id": "r0", "step": 0, "invocation": 0, "op_path": "model.layers.0.self_attn.qkv_proj",
+                                         "output_member": "slot_mapping", "element_range": [0, ROWS[U0]], "rank": 0}, "kind": "leaf",
+                            "name": "model.layers.0.self_attn.qkv_proj/slot_mapping", "element_offset": 0, "encoding": {"dtype": "int64", "shape": [ROWS[U0]]}})
+    committed[(0, "model.layers.0.self_attn.qkv_proj/slot_mapping")] = np.arange(ROWS[U0], dtype="<i8").tobytes()
+    assert OC.oracle_compare(OC.MatchOracle(d), bmap, reader(committed))["mismatch_n"] == 1
+    res = OC.oracle_compare(OC.MatchOracle(d), bmap, reader(committed), own=frozenset({"model.layers.0.self_attn.qkv_proj/slot_mapping"}))
+    assert res["mismatch_n"] == 0 and res["result"] is True and res["complete"], res
+    assert res["not_compared_by_family"] == {"hidden_stream": 2, "weights": 1}
+
+
 def test_relabel_across_op_paths_fails_named(tmp_path):
     """F-cb-02: qkv_proj never acquired, post_attention_layernorm/0's bytes emitted under qkv_proj's name."""
     d, vals = make_match(str(tmp_path))
@@ -620,17 +633,17 @@ def _shared_rotary_match(tmp: str, n_layers: int = 3):
 
 
 def _shared_rotary_bmap(vals: dict, *, tensor_bytes: dict | None = None):
-    """The collector's shape: every invocation is a meta NAMED `<ROT>/0` (ordinal 10+k), bound under the canonical path at invocation k;
+    """The collector's shape: every invocation is a meta NAMED `<ROT>/query` (ordinal 10+k), bound under the canonical path at invocation k;
     the reader is the PRODUCTION OpenedReader over those metas, committed on the per-tensor host path (ordinals 0-9: other tensors)."""
     from tests.check.opened import commit_host_steps
     n = ROWS[U0]
     entries = []
     tensors = [(f"model.other.{i}", b"\0" * 4) for i in range(10)]
     for k in vals:
-        entries.append({"identity": {"program_digest": "p" * 64, "request_id": "r0", "step": 0, "invocation": k, "op_path": ROT, "output_member": "0",
-                                     "element_range": [0, n * H], "rank": 0, "family": "instance_outputs"}, "kind": "leaf", "name": f"{ROT}/0", "tensor_ordinal": 10 + k,
+        entries.append({"identity": {"program_digest": "p" * 64, "request_id": "r0", "step": 0, "invocation": k, "op_path": ROT, "output_member": "query",
+                                     "element_range": [0, n * H], "rank": 0, "family": "instance_outputs"}, "kind": "leaf", "name": f"{ROT}/query", "tensor_ordinal": 10 + k,
                         "element_offset": 0, "encoding": {"dtype": "bfloat16", "shape": [n, H]}})
-        tensors.append((f"{ROT}/0", (tensor_bytes or vals)[k], 10 + k))
+        tensors.append((f"{ROT}/query", (tensor_bytes or vals)[k], 10 + k))
     rd = OC.OpenedReader(*commit_host_steps({0: tensors}))
     aliases = {f"model.layers.{k}.self_attn.rotary_emb": [ROT, k] for k in vals if k > 0}
     return {"entries": entries}, rd, aliases

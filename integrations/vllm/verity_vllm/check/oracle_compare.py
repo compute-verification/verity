@@ -44,7 +44,7 @@ METHOD = "oracle-compare (Match capture of the same attempt: snapshots at the fo
 NO_ORACLE_FAMILY_PREFIXES = ("fa2.m1/", "fa3.m1/", "moe/")          # kernel-interior streams: no dispatcher-level value in the Match record
 _ITEMSIZE = {"bfloat16": 2, "float16": 2, "float32": 4, "float64": 8, "int32": 4, "int64": 8, "int16": 2, "int8": 1, "uint8": 1, "bool": 1,
              "float8_e4m3fn": 1, "float8_e5m2": 1}
-_ROPE_MEMBER = {"0": "rope.q", "1": "rope.k"}
+_ROPE_MEMBER = {"query": "rope.q", "key": "rope.k"}                # RoPE's members (the Build's hints) -> the Match fold's hint suffixes
 
 
 def _prod(xs) -> int:
@@ -716,10 +716,11 @@ def _ambiguous_steps(pairs_seen: set[tuple[int, str]], attrib: dict[tuple[int, s
 def oracle_compare(oracle: MatchOracle, bmap: dict[str, Any], committed: Callable[[int, str, int, int], bytes | None], *,
                    max_report: int = 12, producers: dict[tuple[str, str], dict[str, Any]] | None = None,
                    workload: dict[str, Any] | None = None, aliases: dict[str, Any] | None = None,
-                   query_families: dict[str, int] | None = None) -> dict[str, Any]:
+                   query_families: dict[str, int] | None = None, own: frozenset[str] = frozenset()) -> dict[str, Any]:
     """Compare every binding-map entry's committed bytes with the Match oracle.  `committed(step, name, byte_lo, byte_hi)` returns the
     bytes of member `name` at `step` in [byte_lo, byte_hi) (None if not retained) -- in the Commit an `OpenedReader`, whose
-    `OpeningNotVerified` makes the entry a mismatch.  `producers` (producers_of(manifest))
+    `OpeningNotVerified` makes the entry a mismatch.  `own` names what the run's sources committed that no module produced (their
+    `own_names`: the KV slots of commit --memory-map), so no Match value: not compared, counted as hidden_stream.  `producers` (producers_of(manifest))
     names each member's producing Program op so exploded-module folds are read at the producer's instances.  `workload` (the run's declared
     requests) is checked against the oracle's request table BY NAME first: a foreign Match record is result False 'foreign oracle' with
     nothing compared [rev-cb M-0301 R3].
@@ -766,7 +767,7 @@ def oracle_compare(oracle: MatchOracle, bmap: dict[str, Any], committed: Callabl
             padding_not_cmp[str(e.get("family") or _query_family_of(e))] += 1   # a padding entry carries its Q(P) family (padding_entries)
             padding_pairs.add((step, str(ident.get("request_id", "r0"))))
             continue
-        fam = _family_of(e)
+        fam = "hidden_stream" if e.get("name") in own else _family_of(e)
         steps_seen.add(step)
         if fam in ("weights", "hidden_stream"):
             not_cmp["no oracle family: " + fam] += 1

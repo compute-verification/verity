@@ -43,6 +43,17 @@ extern "C" int verity_chunk_leaves_launch(const uint32_t* stream, uint32_t* out,
 extern "C" int verity_chunk_leaves_launch_base(const uint32_t* stream, uint32_t* out, long n_chunks, int chunk_words, uint32_t launch_tag,
                                                uint32_t src_mask, uint32_t HB, uint32_t M, uint32_t NB, long ci_base, cudaStream_t st);
 extern "C" int verity_tree_level_launch(const uint32_t* in, uint32_t* out, long n_in, cudaStream_t st);                // native_tree.cu
+extern "C" int verity_tree_levels_launch(const uint32_t* in, uint32_t* out, long n_in, int n_levels, cudaStream_t st);  // native_tree.cu
+extern "C" int verity_rows_params_bytes();                                                                              // native_rows.cu
+extern "C" int verity_rows_build(const uint8_t* domain_id, const uint8_t* ks, const uint8_t* row_prefix, const uint8_t* salt_prefix,
+                                 const uint8_t* leaf_prefix, const char* schema, int schema_len, uint32_t lb, void* out);
+extern "C" int verity_rows_leaves_launch(const void* params, const uint8_t* rows, uint64_t stride, uint64_t n_rows, const uint8_t* salts,
+                                         const uint8_t* tn, uint64_t first, uint64_t m, uint64_t n_total, uint8_t* out, uint8_t* bc,
+                                         uint8_t* hs, uint64_t max_blocks, cudaStream_t st);
+extern "C" int verity_rows_level_launch(const void* params, const uint8_t* in, uint8_t* out, uint64_t n_out, int level, uint64_t first_index,
+                                        uint64_t max_blocks, cudaStream_t st);
+extern "C" int verity_rows_levels_launch(const void* params, const uint8_t* in, uint8_t* out, uint64_t n_in, int level, uint64_t base,
+                                         int n_levels, cudaStream_t st);
 
 namespace {
 
@@ -51,6 +62,100 @@ using native_plans::Plan;
 
 inline double now_s() {
   return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+}
+
+// A level of more than kWideLevel nodes is built by one launch of a thread a parent (verity_tree_level_launch, verity_rows_level_launch;
+// rows-sha512 capped: launches of at most RowStep::max_blocks blocks);
+// the narrower ones kFusedLevels at a time, one launch each (verity_tree_levels_launch, verity_rows_levels_launch: a block folds its own
+// aligned slice of 2^kFusedLevels nodes).  A block's threads idle as its slice narrows, which on a wide level costs more than the
+// launches saved (a 2^22-leaf tree a third slower on H200 folded from its leaves), while below kWideLevel a level's launch is its cost.
+constexpr int64_t kWideLevel = int64_t{1} << 16;
+constexpr int64_t kFusedLevels = 10;
+
+int64_t levels_to_root(int64_t n) {
+  int64_t k = 0;
+  for (; n > 1; n = (n + 1) / 2) ++k;
+  return k;
+}
+
+// vllm-v1: the n_up levels above `base` (int32 [n, 8] on the current stream `side`), lowest first; each launch's levels are views of
+// one tensor.
+std::vector<at::Tensor> tree_levels_above(const at::Tensor& base, int64_t n_up, cudaStream_t side) {
+  std::vector<at::Tensor> up;
+  at::Tensor cur = base;
+  while (n_up > 0) {
+    if (cur.size(0) > kWideLevel) {
+      at::Tensor out = at::empty({(cur.size(0) + 1) / 2, 8}, base.options());
+      int lrc = verity_tree_level_launch(reinterpret_cast<const uint32_t*>(cur.data_ptr()), reinterpret_cast<uint32_t*>(out.data_ptr()),
+                                         cur.size(0), side);
+      if (lrc != 0) throw std::runtime_error(std::string("tree_level: ") + cudaGetErrorString(static_cast<cudaError_t>(lrc)));
+      up.push_back(out);
+      cur = out;
+      --n_up;
+      continue;
+    }
+    const int64_t k = std::min(n_up, kFusedLevels);
+    std::vector<int64_t> widths;
+    int64_t total = 0;
+    for (int64_t i = 0, n = cur.size(0); i < k; ++i) {
+      n = (n + 1) / 2;
+      widths.push_back(n);
+      total += n;
+    }
+    at::Tensor buf = at::empty({total, 8}, base.options());
+    int lrc = verity_tree_levels_launch(reinterpret_cast<const uint32_t*>(cur.data_ptr()), reinterpret_cast<uint32_t*>(buf.data_ptr()),
+                                        cur.size(0), static_cast<int>(k), side);
+    if (lrc != 0) throw std::runtime_error(std::string("tree_levels: ") + cudaGetErrorString(static_cast<cudaError_t>(lrc)));
+    int64_t off = 0;
+    for (int64_t w : widths) {
+      up.push_back(buf.narrow(0, off, w));
+      off += w;
+    }
+    cur = up.back();
+    n_up -= k;
+  }
+  return up;
+}
+
+// rows-sha512: the n_up levels above `base` (uint8 [n, 64], n a nonzero multiple of 2^n_up, of level `level`, the first node at index
+// `first_index`) on `side`, lowest first; each launch's levels are views of one tensor.  A wide level in launches of at most max_blocks
+// blocks when max_blocks > 0 (the narrow ones are at most kWideLevel >> kFusedLevels blocks a launch).
+std::vector<at::Tensor> rows_levels_above(const void* params, const at::Tensor& base, int64_t level, int64_t first_index, int64_t n_up,
+                                          cudaStream_t side, int64_t max_blocks = 0) {
+  std::vector<at::Tensor> up;
+  at::Tensor cur = base;
+  while (n_up > 0) {
+    if (cur.size(0) > kWideLevel) {
+      const int64_t n_out = cur.size(0) / 2;
+      at::Tensor out = at::empty({n_out, 64}, base.options());
+      int lrc = verity_rows_level_launch(params, reinterpret_cast<const uint8_t*>(cur.data_ptr()), reinterpret_cast<uint8_t*>(out.data_ptr()),
+                                         static_cast<uint64_t>(n_out), static_cast<int>(level), static_cast<uint64_t>(first_index >> 1),
+                                         static_cast<uint64_t>(max_blocks), side);
+      if (lrc != 0) throw std::runtime_error(std::string("rows_level: ") + cudaGetErrorString(static_cast<cudaError_t>(lrc)));
+      up.push_back(out);
+      cur = out;
+      --n_up;
+      ++level;
+      first_index >>= 1;
+      continue;
+    }
+    const int64_t k = std::min(n_up, kFusedLevels), n_in = cur.size(0);
+    at::Tensor buf = at::empty({n_in - (n_in >> k), 64}, base.options());
+    int lrc = verity_rows_levels_launch(params, reinterpret_cast<const uint8_t*>(cur.data_ptr()), reinterpret_cast<uint8_t*>(buf.data_ptr()),
+                                        static_cast<uint64_t>(n_in), static_cast<int>(level), static_cast<uint64_t>(first_index),
+                                        static_cast<int>(k), side);
+    if (lrc != 0) throw std::runtime_error(std::string("rows_levels: ") + cudaGetErrorString(static_cast<cudaError_t>(lrc)));
+    int64_t off = 0;
+    for (int64_t i = 0, n = n_in / 2; i < k; ++i, n /= 2) {
+      up.push_back(buf.narrow(0, off, n));
+      off += n;
+    }
+    cur = up.back();
+    n_up -= k;
+    level += k;
+    first_index >>= k;
+  }
+  return up;
 }
 
 struct Collector {
@@ -99,8 +204,8 @@ struct Collector {
   std::vector<cudaEvent_t> ev_pool;            // recycled window-complete events
   std::mutex win_mu;
   std::condition_variable win_cv;
-  int64_t win_waits = 0, win_blocked_steps = 0;
-  double win_wait_s = 0.0, win_wait_timeout_s = 600.0;
+  int64_t win_waits = 0, win_blocked_steps = 0, step_win_waits = 0;
+  double win_wait_s = 0.0, win_wait_timeout_s = 600.0, step_win_wait_s = 0.0;
   bool win_dead = false;                        // a slot wait timed out: every later stage() fails immediately (no silent 600 s re-waits)
   // [R16 sys, stoch F-stoch-03 M-0646] fail-fast after "collector dead": the named throw below is the fail-closed path, but it needs the GIL
   // back and a Python frame willing to fail the run; when a worker holds the GIL inside a CUDA wait (or vLLM swallows the hook's exception)
@@ -212,7 +317,7 @@ struct Collector {
         if (ring) flush();                                          // let the worker absorb what is already staged (earlier copies are always legal)
         mark_windows(pushed_end);
         const double t0 = now_s();
-        ++win_waits;
+        ++win_waits; ++step_win_waits;
         {
           // LOCK ORDER: the GIL is dropped BEFORE win_mu is taken and win_mu is dropped BEFORE the GIL is re-taken (reverse destruction),
           // otherwise the worker (GIL held, wants win_mu in release_slot) and this thread (win_mu held, wants the GIL) deadlock
@@ -233,6 +338,7 @@ struct Collector {
           slot = win_free.back(); win_free.pop_back();
         }
         win_wait_s += now_s() - t0;
+        step_win_wait_s += now_s() - t0;
       }
       if (win_ready[slot]) {                                        // the worker's reads of the previous occupant precede our writes
         cudaError_t rc = cudaStreamWaitEvent(c10::cuda::getCurrentCUDAStream().stream(), win_ready[slot], 0);
@@ -352,6 +458,12 @@ struct Collector {
     const Plan* p = plans.find(key);
     return p ? p->version : -1;
   }
+  // the ring's free slots now (the worker's: under win_mu with the GIL held, as release_slot)
+  int64_t free_slots() {
+    std::lock_guard<std::mutex> g(win_mu);
+    return static_cast<int64_t>(win_free.size());
+  }
+
   py::dict window_stats() const {
     py::dict d;
     d["windowed"] = windowed; d["slots"] = static_cast<int64_t>(win_ptrs.size()); d["window_bytes"] = win_bytes;
@@ -384,6 +496,7 @@ struct Collector {
     step_copies = step_bytes = step_memsets = step_misses = step_strided = step_fallback = 0;
     step_issue_s = 0.0;
     step_flushes = 0;
+    step_win_waits = 0; step_win_wait_s = 0.0;
   }
 
   // A non-contiguous tensor whose memory is a set of equally spaced contiguous rows (e.g. RoPE's q/k views into the qkv buffer:
@@ -545,6 +658,16 @@ struct Collector {
     return py::make_tuple(byte_cursor, static_cast<int64_t>(cursor), changed, plan->version);
   }
 
+  // The serving thread's step end in one call: flush (gather), end_step, the dead-watchdog's progress, the hook errors (native hooks) and
+  // the step stats the committer records -> (used_bytes, n_entries, changed, version, bytes, issue_s, window_waits, window_wait_s, errors)
+  py::tuple end_step_full(bool do_flush, bool drain) {
+    if (do_flush) flush();
+    py::tuple r = end_step();
+    if (win_dead) progress();
+    py::list errs = drain && !errors.empty() ? drain_errors() : py::list();
+    return py::make_tuple(r[0], r[1], r[2], r[3], step_bytes, step_issue_s, step_win_waits, step_win_wait_s, errs);
+  }
+
   // Snapshot of the plan for `key`: list of (name_id, dtype, sizes, nbytes, off, gap) -- called by the serving thread only when `changed`.
   py::list export_plan(int64_t key) {
     py::list out;
@@ -562,6 +685,7 @@ struct Collector {
     py::dict d;
     d["copies"] = step_copies; d["bytes"] = step_bytes; d["memsets"] = step_memsets; d["misses"] = step_misses;
     d["issue_s"] = step_issue_s; d["learning"] = learning; d["strided"] = step_strided; d["fallback"] = step_fallback; d["flushes"] = step_flushes;
+    d["window_waits"] = step_win_waits; d["window_wait_s"] = step_win_wait_s;
     return d;
   }
 
@@ -644,7 +768,7 @@ struct Collector {
     }
   }
 
-  // R11: size-adaptive gather geometry.  `blocks_per_desc` is the CAP (32 = R10's Llama geometry, needed for the 2-5 MB prefill tensors);
+  // R11: size-adaptive gather geometry.  `blocks_per_desc` is the CAP (the committer's default 1024; 32 was R10's Llama geometry);
   // a decode window whose largest descriptor is a few KB gets ceil(max_nbytes / auto_bytes_per_block) blocks instead (1-2), so the 49
   // launches per decode step stop occupying thousands of mostly idle thread blocks on the serving stream (SM time the worker's SHA
   // kernels and the model's own kernels then compete for).  Same descriptors, same bytes, same destination offsets.
@@ -664,16 +788,29 @@ struct Collector {
     if (!t.is_cuda()) return -1;
     const int64_t nb = static_cast<int64_t>(t.nbytes());
     if (nb == 0) return -1;
-    const int32_t dt = static_cast<int32_t>(t.scalar_type());
+    int64_t off;
+    if (t.is_contiguous()) {
+      off = stage_bytes(name_id, reinterpret_cast<const char*>(t.data_ptr()), nb, static_cast<int32_t>(t.scalar_type()), t.sizes(), nb, nb);
+    } else {
+      int64_t rows, width_b, pitch_b;
+      if (!pitched_2d(t, rows, width_b, pitch_b)) throw std::runtime_error("native_collect.stage: layout is not 2-D pitched");
+      off = stage_bytes(name_id, reinterpret_cast<const char*>(t.data_ptr()), nb, static_cast<int32_t>(t.scalar_type()), t.sizes(), width_b, pitch_b);
+      ++step_strided;
+    }
+    held.push_back(t);                  // keep the storage alive until the flush has been ENQUEUED (stream order then protects the read)
+    return off;
+  }
+
+  // stage()'s plan logic and descriptors for `nb` bytes at `src` (contiguous when width_b == pitch_b == nb), whose owner keeps them alive
+  int64_t stage_bytes(int64_t name_id, const char* src, int64_t nb, int32_t dt, c10::IntArrayRef sizes, int64_t width_b, int64_t pitch_b) {
     int64_t off, gap;
     if (!learning) {
       if (cursor < plan->entries.size()) {
         const Entry& e = plan->entries[cursor];
         bool hit = (e.name_id == name_id && e.nbytes == nb && e.dtype == dt);
         if (hit && check_sizes) {
-          auto sz = t.sizes();
-          hit = (static_cast<size_t>(sz.size()) == e.sizes.size());
-          for (size_t i = 0; hit && i < e.sizes.size(); ++i) hit = (sz[i] == e.sizes[i]);
+          hit = (sizes.size() == e.sizes.size());
+          for (size_t i = 0; hit && i < e.sizes.size(); ++i) hit = (sizes[i] == e.sizes[i]);
         }
         if (hit) { off = e.off; gap = e.gap; goto record; }
       }
@@ -690,22 +827,13 @@ struct Collector {
     {
       Entry e;
       e.name_id = name_id; e.nbytes = nb; e.off = off; e.gap = gap; e.dtype = dt;
-      auto sz = t.sizes();
-      e.sizes.assign(sz.begin(), sz.end());
+      e.sizes.assign(sizes.begin(), sizes.end());
       plan->entries.push_back(std::move(e));
       changed = true;
     }
   record:
     if (gap > 0) { push_desc(nullptr, off - gap, gap, gap, gap); ++step_memsets; }
-    if (t.is_contiguous()) {
-      push_desc(reinterpret_cast<const char*>(t.data_ptr()), off, nb, nb, nb);
-    } else {
-      int64_t rows, width_b, pitch_b;
-      if (!pitched_2d(t, rows, width_b, pitch_b)) throw std::runtime_error("native_collect.stage: layout is not 2-D pitched");
-      push_desc(reinterpret_cast<const char*>(t.data_ptr()), off, nb, width_b, pitch_b);
-      ++step_strided;
-    }
-    held.push_back(t);                  // keep the storage alive until the flush has been ENQUEUED (stream order then protects the read)
+    push_desc(src, off, nb, width_b, pitch_b);
     ++step_copies; step_bytes += nb; ++tot_staged;
     byte_cursor = off + nb;
     ++cursor;
@@ -742,6 +870,61 @@ struct Collector {
   bool use_gather = false;                 // HookFwd / Fa2Wrap route through stage() (gather) or collect() (one memcpy per tensor)
   std::vector<std::string> errors;         // hook-body exceptions (never propagated into the model's forward; drained by the committer)
   inline int64_t put(int64_t name_id, const at::Tensor& t) { const int64_t r = use_gather ? stage(name_id, t) : collect(name_id, t); ++tot_committed; return r; }
+
+  // A replayed CUDA graph's slots (the persistent buffers its captured copies write), registered once: `stage_slot_plan` then puts them
+  // in this order in one call, each whole (kind 0), its first n rows (1) or its first pad rows (2) -- per slot the same expected count,
+  // put and plan entry as one Python acquisition of that view, without a Python frame and a slice per slot
+  // A contiguous CUDA slot under gather (`slot_fast`) is staged from its pointer, bytes per row and sizes, read once here: the same plan
+  // entry and descriptors as staging the view, without a tensor per slot per step (the plan holds the slot, so nothing is `held`).
+  struct SlotPlan {
+    std::vector<int64_t> ids; std::vector<at::Tensor> slots; std::vector<int64_t> kinds;
+    std::vector<char> fast; std::vector<const char*> ptrs; std::vector<int64_t> row_bytes; std::vector<int32_t> dtypes;
+    std::vector<std::vector<int64_t>> sizes;
+  };
+  std::vector<SlotPlan> slot_plans;
+  bool slot_fast = true;
+  int64_t add_slot_plan(std::vector<int64_t> ids, std::vector<at::Tensor> slots, std::vector<int64_t> kinds) {
+    if (ids.size() != slots.size() || kinds.size() != slots.size()) throw std::runtime_error("add_slot_plan: one name id and one kind per slot");
+    SlotPlan p;
+    for (size_t i = 0; i < slots.size(); ++i) {
+      const at::Tensor& s = slots[i];
+      if (kinds[i] < 0 || kinds[i] > 2) throw std::runtime_error("add_slot_plan: kind must be 0 (whole), 1 (first n rows) or 2 (first pad rows)");
+      if (kinds[i] != 0 && s.dim() == 0) throw std::runtime_error("add_slot_plan: a row-sliced slot needs a leading dimension");
+      const bool fast = s.is_cuda() && s.is_contiguous();
+      p.fast.push_back(fast);
+      p.ptrs.push_back(fast ? reinterpret_cast<const char*>(s.data_ptr()) : nullptr);
+      p.row_bytes.push_back(fast && s.dim() > 0 && s.size(0) > 0 ? static_cast<int64_t>(s.nbytes()) / s.size(0) : 0);
+      p.dtypes.push_back(static_cast<int32_t>(s.scalar_type()));
+      p.sizes.emplace_back(s.sizes().begin(), s.sizes().end());
+    }
+    p.ids = std::move(ids); p.slots = std::move(slots); p.kinds = std::move(kinds);
+    slot_plans.push_back(std::move(p));
+    return static_cast<int64_t>(slot_plans.size()) - 1;
+  }
+  int64_t stage_slot_plan(int64_t handle, int64_t n, int64_t pad) {
+    if (handle < 0 || handle >= static_cast<int64_t>(slot_plans.size())) throw std::runtime_error("stage_slot_plan: unknown handle " + std::to_string(handle));
+    SlotPlan& p = slot_plans[static_cast<size_t>(handle)];
+    const bool fast = slot_fast && use_gather && active;
+    for (size_t i = 0; i < p.slots.size(); ++i) {
+      const at::Tensor& s = p.slots[i];
+      note_expected(1);
+      const int64_t rows = p.kinds[i] == 0 ? 0 : std::max<int64_t>(0, std::min<int64_t>(p.kinds[i] == 1 ? n : pad, s.size(0)));
+      if (fast && p.fast[i]) {
+        std::vector<int64_t>& sz = p.sizes[i];
+        int64_t nb = static_cast<int64_t>(s.nbytes());
+        if (p.kinds[i] != 0) { sz[0] = rows; nb = rows * p.row_bytes[i]; }
+        if (nb > 0) stage_bytes(p.ids[i], p.ptrs[i], nb, p.dtypes[i], sz, nb, nb);
+        ++tot_committed;
+      } else if (p.kinds[i] == 0) {
+        put(p.ids[i], s);
+      } else {
+        put(p.ids[i], s.narrow(0, 0, rows));                                      // as slot[:rows]
+      }
+    }
+    return static_cast<int64_t>(p.slots.size());
+  }
+  void clear_slot_plans() { slot_plans.clear(); }
+
   py::list drain_errors() {
     py::list out;
     for (auto& e : errors) out.append(e);
@@ -1297,17 +1480,41 @@ struct Fa3Wrap {
 // (chunk_words 64, launch_tag = step, src_mask, HB = step, M = padded/4, NB = 0), same zero padding to 256 B, same retained copy, same
 // "root D2H + done event synchronised before the block is released" ordering).  The Python worker then only binds the root
 // (hashlib, ~50 us) and files the StepCommitment; nothing Python-side runs concurrently with the serving thread's hook path.
+// rows-sha512 (verity_vllm.commit.step_rows): one step's kernel parameters -- its frame domain's templates and midstates and its salt
+// key -- built once on the host (native_rows.cu) and passed by value to every launch of the step.
+struct RowStep {
+  std::vector<uint8_t> params;
+  int64_t row_bytes = 0;
+  int64_t max_blocks = 0;                        // > 0: leaves and wide levels in launches of at most this many blocks (the same bytes)
+  RowStep(const py::bytes& domain_id, const py::bytes& ks, const py::bytes& row_prefix, const py::bytes& salt_prefix, const py::bytes& leaf_prefix,
+          const std::string& schema, int64_t row_bytes_)
+      : row_bytes(row_bytes_) {
+    const std::string did = domain_id, k = ks, p = row_prefix, sp = salt_prefix, lp = leaf_prefix;
+    if (did.size() != 64 || k.size() != 64 || p.size() != 128 || sp.size() != 128 || lp.size() != 128)
+      throw std::runtime_error("RowStep: the domain id and the salt key are 64 bytes, the row, salt and leaf prefixes 128");
+    if (row_bytes <= 0 || row_bytes > (1 << 20)) throw std::runtime_error("RowStep: a row is 1 byte to 1 MiB");
+    params.resize(static_cast<size_t>(verity_rows_params_bytes()));
+    if (verity_rows_build(reinterpret_cast<const uint8_t*>(did.data()), reinterpret_cast<const uint8_t*>(k.data()), reinterpret_cast<const uint8_t*>(p.data()),
+                          reinterpret_cast<const uint8_t*>(sp.data()), reinterpret_cast<const uint8_t*>(lp.data()), schema.data(), static_cast<int>(schema.size()),
+                          static_cast<uint32_t>(row_bytes), params.data()) != 0)
+      throw std::runtime_error("RowStep: the frame leaf template does not fit the schema " + schema);
+  }
+};
+
 struct StepHasher {
   cudaEvent_t ev0 = nullptr, ev1 = nullptr, ev2 = nullptr, done = nullptr;
   uint32_t* root_host = nullptr;                 // pinned, 32 B
+  uint8_t* root64_host = nullptr;                // pinned, 64 B (rows-sha512)
   StepHasher() {
     cudaEventCreateWithFlags(&ev0, cudaEventDefault); cudaEventCreateWithFlags(&ev1, cudaEventDefault); cudaEventCreateWithFlags(&ev2, cudaEventDefault);
     cudaEventCreateWithFlags(&done, cudaEventDisableTiming);
     cudaHostAlloc(reinterpret_cast<void**>(&root_host), 32, cudaHostAllocDefault);
+    cudaHostAlloc(reinterpret_cast<void**>(&root64_host), 64, cudaHostAllocDefault);
   }
   ~StepHasher() {
     if (ev0) cudaEventDestroy(ev0); if (ev1) cudaEventDestroy(ev1); if (ev2) cudaEventDestroy(ev2); if (done) cudaEventDestroy(done);
     if (root_host) cudaFreeHost(root_host);
+    if (root64_host) cudaFreeHost(root64_host);
   }
 
   // P0 windowed: leaves of ONE window of a step's packed stream.  `slot` holds the window's bytes (nbytes, a multiple of 256; the caller
@@ -1348,13 +1555,7 @@ struct StepHasher {
       c10::cuda::CUDAStreamGuard g(cs);
       cudaEventRecord(ev1, side);
       levels.push_back(leaves);
-      while (levels.back().size(0) > 1) {
-        const long n_in = levels.back().size(0);
-        at::Tensor out = at::empty({(n_in + 1) / 2, 8}, leaves.options());
-        int lrc = verity_tree_level_launch(reinterpret_cast<const uint32_t*>(levels.back().data_ptr()), reinterpret_cast<uint32_t*>(out.data_ptr()), n_in, side);
-        if (lrc != 0) throw std::runtime_error(std::string("tree_level: ") + cudaGetErrorString(static_cast<cudaError_t>(lrc)));
-        levels.push_back(out);
-      }
+      for (auto& lv : tree_levels_above(leaves, levels_to_root(leaves.size(0)), side)) levels.push_back(lv);
       cudaEventRecord(ev2, side);
       cudaError_t rc = cudaMemcpyAsync(root_host, levels.back().data_ptr(), 32, cudaMemcpyDeviceToHost, side);
       if (rc != cudaSuccess) throw std::runtime_error(std::string("cudaMemcpyAsync(root): ") + cudaGetErrorString(rc));
@@ -1398,29 +1599,42 @@ struct StepHasher {
   at::Tensor tree_window(at::Tensor leaves, int64_t n_levels, int64_t stream_ptr, std::vector<at::Tensor> host_dsts) {
     if (!leaves.is_cuda() || leaves.scalar_type() != at::kInt || !leaves.is_contiguous() || leaves.dim() != 2 || leaves.size(1) != 8) throw std::runtime_error("tree_window: leaves must be a contiguous CUDA int32 [n, 8]");
     if (static_cast<int64_t>(host_dsts.size()) != n_levels) throw std::runtime_error("tree_window: one host destination per level");
-    at::Tensor cur = leaves;
+    if (n_levels < 1) throw std::runtime_error("tree_window: n_levels must be positive");
     py::gil_scoped_release nogil;
     c10::InferenceMode inf;
     cudaStream_t side = reinterpret_cast<cudaStream_t>(stream_ptr);
     c10::cuda::CUDAStream cs = c10::cuda::getStreamFromExternal(side, leaves.device().index());
     c10::cuda::CUDAStreamGuard g(cs);
+    std::vector<at::Tensor> levels{leaves};                          // a level of one node climbs by lifts (the collapsed last window to the window level)
+    for (auto& lv : tree_levels_above(leaves, n_levels - 1, side)) levels.push_back(lv);
     for (int64_t L = 0; L < n_levels; ++L) {
       const at::Tensor& h = host_dsts[static_cast<size_t>(L)];
+      const at::Tensor& cur = levels[static_cast<size_t>(L)];
       if (h.numel() != cur.numel()) throw std::runtime_error("tree_window: level " + std::to_string(L) + " host slice has " + std::to_string(h.numel() / 8)
                                                              + " nodes, computed " + std::to_string(cur.size(0)));
       cudaError_t rc = cudaMemcpyAsync(h.data_ptr(), cur.data_ptr(), static_cast<size_t>(cur.numel()) * 4, cudaMemcpyDeviceToHost, side);
       if (rc != cudaSuccess) throw std::runtime_error(std::string("cudaMemcpyAsync(window level->host): ") + cudaGetErrorString(rc));
-      if (L + 1 == n_levels) break;
-      const long n_in = cur.size(0);                                 // n_in == 1 -> one lift (the collapsed last window climbs to the window level)
-      at::Tensor out = at::empty({(n_in + 1) / 2, 8}, leaves.options());
-      int lrc = verity_tree_level_launch(reinterpret_cast<const uint32_t*>(cur.data_ptr()), reinterpret_cast<uint32_t*>(out.data_ptr()), n_in, side);
-      if (lrc != 0) throw std::runtime_error(std::string("tree_level: ") + cudaGetErrorString(static_cast<cudaError_t>(lrc)));
-      cur = out;
     }
+    at::Tensor cur = levels.back();
     cudaEventRecord(done, side);                                     // the host slices are complete (and `leaves` may be freed) once this fires
     cudaError_t rc = cudaEventSynchronize(done);
     if (rc != cudaSuccess) throw std::runtime_error(std::string("cudaEventSynchronize: ") + cudaGetErrorString(rc));
     return cur;
+  }
+
+  // tree_window without the host copies (a run that keeps no tree levels: its openings take their paths from a replay): the same levels on
+  // the device and the same top node, and no host sync -- every tensor here is allocated on `stream_ptr`, and the caller releases the
+  // window's slot with an event recorded on that stream after these kernels.
+  at::Tensor tree_window_top(at::Tensor leaves, int64_t n_levels, int64_t stream_ptr) {
+    if (!leaves.is_cuda() || leaves.scalar_type() != at::kInt || !leaves.is_contiguous() || leaves.dim() != 2 || leaves.size(1) != 8) throw std::runtime_error("tree_window_top: leaves must be a contiguous CUDA int32 [n, 8]");
+    if (n_levels < 1) throw std::runtime_error("tree_window_top: n_levels must be positive");
+    py::gil_scoped_release nogil;
+    c10::InferenceMode inf;
+    cudaStream_t side = reinterpret_cast<cudaStream_t>(stream_ptr);
+    c10::cuda::CUDAStream cs = c10::cuda::getStreamFromExternal(side, leaves.device().index());
+    c10::cuda::CUDAStreamGuard g(cs);
+    std::vector<at::Tensor> up = tree_levels_above(leaves, n_levels - 1, side);
+    return up.empty() ? leaves : up.back();
   }
 
   // -> (levels: list[Tensor int32 [n,8]] leaves first, keep: Tensor uint8 [padded] (device | host | empty), root: bytes(32), padded, leaf_ms, tree_ms)
@@ -1457,13 +1671,7 @@ struct StepHasher {
       if (lrc != 0) throw std::runtime_error(std::string("chunk_leaves: ") + cudaGetErrorString(static_cast<cudaError_t>(lrc)));
       cudaEventRecord(ev1, side);
       levels.push_back(leaves);
-      while (levels.back().size(0) > 1) {
-        const long n_in = levels.back().size(0);
-        at::Tensor out = at::empty({(n_in + 1) / 2, 8}, leaves.options());
-        lrc = verity_tree_level_launch(reinterpret_cast<const uint32_t*>(levels.back().data_ptr()), reinterpret_cast<uint32_t*>(out.data_ptr()), n_in, side);
-        if (lrc != 0) throw std::runtime_error(std::string("tree_level: ") + cudaGetErrorString(static_cast<cudaError_t>(lrc)));
-        levels.push_back(out);
-      }
+      for (auto& lv : tree_levels_above(leaves, levels_to_root(n), side)) levels.push_back(lv);
       cudaEventRecord(ev2, side);
       if (keep_mode == 0) {
         keep = at::empty({padded}, arena.options());                     // compact retained copy (lazy openings); arena block recycled by the caller
@@ -1525,6 +1733,132 @@ struct StepHasher {
     for (auto& t : levels) lv.append(t);
     return py::make_tuple(lv, keep, py::bytes(reinterpret_cast<const char*>(root_host), 32), padded, static_cast<double>(leaf_ms), static_cast<double>(tree_ms));
   }
+
+  // rows-sha512: the leaves of positions first .. first + m - 1 of a step of n_total leaves (a pad at every position >= n_total), row i
+  // at rows + i * stride for i < nbytes / stride (stride 0: the step's row bytes).  Salts are derived from the step's key, or given (192 B
+  // per row: a test's).  Runs on `stream_ptr`.  -> (leaves [m, 64] uint8, b || c [m, 128] when want_bc, h [m, 64] when want_h; the last
+  // two hold the data positions' values, and are empty when not asked for)
+  py::tuple rows_leaves(const RowStep& rs, at::Tensor rows, int64_t nbytes, int64_t first, int64_t m, int64_t n_total, at::Tensor tn, int64_t stream_ptr,
+                        int64_t stride = 0, std::optional<at::Tensor> salts_given = std::nullopt, bool want_bc = false, bool want_h = false) {
+    const at::Tensor salts = salts_given.has_value() ? *salts_given : at::Tensor();
+    if (stride == 0) stride = rs.row_bytes;
+    if (!rows.is_cuda() || rows.scalar_type() != at::kByte || !rows.is_contiguous()) throw std::runtime_error("rows_leaves: rows must be a contiguous CUDA uint8 tensor");
+    if (stride % 16 || stride < (rs.row_bytes + 15) / 16 * 16 || reinterpret_cast<uintptr_t>(rows.data_ptr()) % 16)
+      throw std::runtime_error("rows_leaves: rows 16-byte aligned at a stride of whole 16-byte loads covering the row");
+    if (nbytes < 0 || nbytes > rows.numel() || nbytes % stride) throw std::runtime_error("rows_leaves: nbytes must be a stride multiple within rows");
+    if (!tn.is_cuda() || tn.scalar_type() != at::kByte || !tn.is_contiguous() || tn.numel() != 8192) throw std::runtime_error("rows_leaves: tn must be the 8 KB CUDA mask table");
+    if (first < 0 || m < 0 || n_total < 0 || first + m > (int64_t(1) << 32)) throw std::runtime_error("rows_leaves: positions below 2^32");
+    const int64_t n_rows = nbytes / stride;
+    if (salts.defined() && (!salts.is_cuda() || salts.scalar_type() != at::kByte || !salts.is_contiguous() || salts.numel() < n_rows * 192))
+      throw std::runtime_error("rows_leaves: salts must be a contiguous CUDA uint8 tensor of 192 bytes per row");
+    at::Tensor leaves, bc, hs;
+    {
+      py::gil_scoped_release nogil;
+      c10::InferenceMode inf;
+      cudaStream_t st = reinterpret_cast<cudaStream_t>(stream_ptr);
+      c10::cuda::CUDAStream cs = c10::cuda::getStreamFromExternal(st, rows.device().index());
+      c10::cuda::CUDAStreamGuard g(cs);
+      const auto opt = at::TensorOptions().dtype(at::kByte).device(rows.device());
+      leaves = at::empty({m, 64}, opt);
+      bc = want_bc ? at::empty({m, 128}, opt) : at::empty({0}, opt);
+      hs = want_h ? at::empty({m, 64}, opt) : at::empty({0}, opt);
+      int lrc = verity_rows_leaves_launch(rs.params.data(), reinterpret_cast<const uint8_t*>(rows.data_ptr()), static_cast<uint64_t>(stride),
+                                          static_cast<uint64_t>(n_rows), salts.defined() ? reinterpret_cast<const uint8_t*>(salts.data_ptr()) : nullptr,
+                                          reinterpret_cast<const uint8_t*>(tn.data_ptr()), static_cast<uint64_t>(first), static_cast<uint64_t>(m),
+                                          static_cast<uint64_t>(n_total), reinterpret_cast<uint8_t*>(leaves.data_ptr()),
+                                          want_bc ? reinterpret_cast<uint8_t*>(bc.data_ptr()) : nullptr, want_h ? reinterpret_cast<uint8_t*>(hs.data_ptr()) : nullptr,
+                                          static_cast<uint64_t>(rs.max_blocks), st);
+      if (lrc != 0) throw std::runtime_error(std::string("rows_leaves: ") + cudaGetErrorString(static_cast<cudaError_t>(lrc)));
+    }
+    return py::make_tuple(leaves, bc, hs);
+  }
+
+  // rows-sha512 absorb: levels 0 .. n_levels-1 of one window's subtree from its leaves (positions first .. first + m - 1, m a power of two
+  // and first a multiple of m, so every pair is inside the window), each level copied D2H into host_dsts[L] when they are given (one event
+  // sync at the end); with none, the levels stay on the device and nothing syncs.  -> the top level (device)
+  at::Tensor rows_tree_window(const RowStep& rs, at::Tensor leaves, int64_t n_levels, int64_t first, int64_t stream_ptr, std::vector<at::Tensor> host_dsts) {
+    if (!leaves.is_cuda() || leaves.scalar_type() != at::kByte || !leaves.is_contiguous() || leaves.dim() != 2 || leaves.size(1) != 64)
+      throw std::runtime_error("rows_tree_window: leaves must be a contiguous CUDA uint8 [m, 64]");
+    if (n_levels < 1 || (!host_dsts.empty() && static_cast<int64_t>(host_dsts.size()) != n_levels))
+      throw std::runtime_error("rows_tree_window: n_levels must be positive, with one host destination per level or none");
+    for (int64_t L = 0, n = leaves.size(0); L + 1 < n_levels; ++L, n /= 2)
+      if (n % 2) throw std::runtime_error("rows_tree_window: level " + std::to_string(L) + " has an odd " + std::to_string(n) + " nodes");
+    py::gil_scoped_release nogil;
+    c10::InferenceMode inf;
+    cudaStream_t side = reinterpret_cast<cudaStream_t>(stream_ptr);
+    c10::cuda::CUDAStream cs = c10::cuda::getStreamFromExternal(side, leaves.device().index());
+    c10::cuda::CUDAStreamGuard g(cs);
+    std::vector<at::Tensor> levels{leaves};
+    for (auto& lv : rows_levels_above(rs.params.data(), leaves, 0, first, n_levels - 1, side, rs.max_blocks)) levels.push_back(lv);
+    if (!host_dsts.empty()) {
+      for (int64_t L = 0; L < n_levels; ++L) {
+        const at::Tensor& h = host_dsts[static_cast<size_t>(L)];
+        const at::Tensor& cur = levels[static_cast<size_t>(L)];
+        if (h.is_cuda() || h.scalar_type() != at::kByte || !h.is_contiguous() || h.numel() != cur.numel())
+          throw std::runtime_error("rows_tree_window: level " + std::to_string(L) + " host slice must be contiguous host uint8 of " + std::to_string(cur.size(0)) + " nodes");
+        cudaError_t rc = cudaMemcpyAsync(h.data_ptr(), cur.data_ptr(), static_cast<size_t>(cur.numel()), cudaMemcpyDeviceToHost, side);
+        if (rc != cudaSuccess) throw std::runtime_error(std::string("cudaMemcpyAsync(window level->host): ") + cudaGetErrorString(rc));
+      }
+      cudaEventRecord(done, side);
+      cudaError_t rc = cudaEventSynchronize(done);
+      if (rc != cudaSuccess) throw std::runtime_error(std::string("cudaEventSynchronize: ") + cudaGetErrorString(rc));
+    }
+    return levels.back();
+  }
+
+  // rows-sha512: the tree above `nodes` (level level0, positions 0 .. n-1, n a power of two) to its root; root D2H (64 B), the levels to
+  // pinned host when asked (into levels_dst when it holds them); one event sync.  -> (levels [nodes .. root], root: bytes(64), tree_ms)
+  py::tuple rows_tree(const RowStep& rs, at::Tensor nodes, int64_t level0, int64_t stream_ptr, bool levels_host = false,
+                      std::optional<at::Tensor> levels_into = std::nullopt) {
+    const at::Tensor levels_dst = levels_into.has_value() ? *levels_into : at::Tensor();
+    if (!nodes.is_cuda() || nodes.scalar_type() != at::kByte || !nodes.is_contiguous() || nodes.dim() != 2 || nodes.size(1) != 64)
+      throw std::runtime_error("rows_tree: nodes must be a contiguous CUDA uint8 [n, 64]");
+    const int64_t n0 = nodes.size(0);
+    if (n0 < 1 || (n0 & (n0 - 1)) || level0 < 0) throw std::runtime_error("rows_tree: a power of two of nodes at a level >= 0");
+    std::vector<at::Tensor> levels;
+    float tree_ms = 0.f;
+    {
+      py::gil_scoped_release nogil;
+      c10::InferenceMode inf;
+      cudaStream_t side = reinterpret_cast<cudaStream_t>(stream_ptr);
+      c10::cuda::CUDAStream cs = c10::cuda::getStreamFromExternal(side, nodes.device().index());
+      c10::cuda::CUDAStreamGuard g(cs);
+      cudaEventRecord(ev1, side);
+      levels.push_back(nodes);
+      for (auto& lv : rows_levels_above(rs.params.data(), nodes, level0, 0, levels_to_root(n0), side, rs.max_blocks)) levels.push_back(lv);
+      cudaEventRecord(ev2, side);
+      cudaError_t rc = cudaMemcpyAsync(root64_host, levels.back().data_ptr(), 64, cudaMemcpyDeviceToHost, side);
+      if (rc != cudaSuccess) throw std::runtime_error(std::string("cudaMemcpyAsync(root): ") + cudaGetErrorString(rc));
+      if (levels_host) {
+        int64_t total = 0;
+        for (auto& lv : levels) total += lv.numel();
+        at::Tensor hbuf;
+        if (levels_dst.defined() && levels_dst.numel() >= total) {
+          if (levels_dst.is_cuda() || levels_dst.scalar_type() != at::kByte || !levels_dst.is_contiguous()) throw std::runtime_error("rows_tree: levels_dst must be a contiguous host uint8 tensor");
+          hbuf = levels_dst.narrow(0, 0, total);
+        } else {
+          hbuf = at::empty({total}, at::TensorOptions().dtype(at::kByte).device(at::kCPU).pinned_memory(true));
+        }
+        std::vector<at::Tensor> hl;
+        int64_t hoff = 0;
+        for (auto& lv : levels) {
+          at::Tensor h = hbuf.narrow(0, hoff, lv.numel()).view({lv.size(0), 64});
+          hoff += lv.numel();
+          rc = cudaMemcpyAsync(h.data_ptr(), lv.data_ptr(), static_cast<size_t>(lv.numel()), cudaMemcpyDeviceToHost, side);
+          if (rc != cudaSuccess) throw std::runtime_error(std::string("cudaMemcpyAsync(level->host): ") + cudaGetErrorString(rc));
+          hl.push_back(h);
+        }
+        levels.swap(hl);
+      }
+      cudaEventRecord(done, side);
+      rc = cudaEventSynchronize(done);
+      if (rc != cudaSuccess) throw std::runtime_error(std::string("cudaEventSynchronize: ") + cudaGetErrorString(rc));
+      cudaEventElapsedTime(&tree_ms, ev1, ev2);
+    }
+    py::list lv;
+    for (auto& t : levels) lv.append(t);
+    return py::make_tuple(lv, py::bytes(reinterpret_cast<const char*>(root64_host), 64), static_cast<double>(tree_ms));
+  }
 };
 
 }  // namespace
@@ -1536,8 +1870,20 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
            py::arg("chunk_bytes"), py::arg("m_words"), py::arg("stream_ptr"))
       .def("tree", &StepHasher::tree, py::arg("leaves"), py::arg("stream_ptr"), py::arg("levels_host") = false, py::arg("levels_dst") = at::Tensor())
       .def("tree_window", &StepHasher::tree_window, py::arg("leaves"), py::arg("n_levels"), py::arg("stream_ptr"), py::arg("host_dsts"))
+      .def("tree_window_top", &StepHasher::tree_window_top, py::arg("leaves"), py::arg("n_levels"), py::arg("stream_ptr"))
       .def("commit", &StepHasher::commit, py::arg("arena"), py::arg("used"), py::arg("step"), py::arg("src_mask"), py::arg("chunk_bytes"),
-           py::arg("side_stream_ptr"), py::arg("step_event_ptr"), py::arg("keep_mode") = 0, py::arg("keep_dst") = at::Tensor(), py::arg("levels_host") = false, py::arg("levels_dst") = at::Tensor());
+           py::arg("side_stream_ptr"), py::arg("step_event_ptr"), py::arg("keep_mode") = 0, py::arg("keep_dst") = at::Tensor(), py::arg("levels_host") = false, py::arg("levels_dst") = at::Tensor())
+      .def("rows_leaves", &StepHasher::rows_leaves, py::arg("rs"), py::arg("rows"), py::arg("nbytes"), py::arg("first"), py::arg("m"), py::arg("n_total"),
+           py::arg("tn"), py::arg("stream_ptr"), py::arg("stride") = 0, py::arg("salts") = py::none(), py::arg("want_bc") = false, py::arg("want_h") = false)
+      .def("rows_tree_window", &StepHasher::rows_tree_window, py::arg("rs"), py::arg("leaves"), py::arg("n_levels"), py::arg("first"), py::arg("stream_ptr"),
+           py::arg("host_dsts"))
+      .def("rows_tree", &StepHasher::rows_tree, py::arg("rs"), py::arg("nodes"), py::arg("level0"), py::arg("stream_ptr"), py::arg("levels_host") = false,
+           py::arg("levels_dst") = py::none());
+  py::class_<RowStep>(m, "RowStep")
+      .def(py::init<const py::bytes&, const py::bytes&, const py::bytes&, const py::bytes&, const py::bytes&, const std::string&, int64_t>(), py::arg("domain_id"),
+           py::arg("ks"), py::arg("row_prefix"), py::arg("salt_prefix"), py::arg("leaf_prefix"), py::arg("schema"), py::arg("row_bytes"))
+      .def_readonly("row_bytes", &RowStep::row_bytes)
+      .def_readwrite("max_blocks", &RowStep::max_blocks);
   py::class_<Collector>(m, "Collector")
       .def(py::init<>())
       .def("begin_step", &Collector::begin_step, py::arg("plan_key"), py::arg("arena_ptr"), py::arg("arena_bytes"), py::arg("use_plan") = true, py::arg("step_id") = -1)
@@ -1549,6 +1895,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
       .def("step_windows", &Collector::step_windows, py::arg("step_id"))
       .def("finish_step", &Collector::finish_step, py::arg("step_id"))
       .def("window_stats", &Collector::window_stats)
+      .def("free_slots", &Collector::free_slots)
       .def("plan_used", &Collector::plan_used, py::arg("plan_key"))
       .def("plan_version", &Collector::plan_version, py::arg("plan_key"))
       .def_readwrite("win_wait_timeout_s", &Collector::win_wait_timeout_s)
@@ -1562,6 +1909,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
       .def("wait_slot_reused", &Collector::wait_slot_reused, py::arg("slot"), py::arg("gen"), py::arg("timeout_s"), py::arg("stream_ptr"))
       .def("collect", &Collector::collect, py::arg("name_id"), py::arg("tensor"))
       .def("end_step", &Collector::end_step)
+      .def("end_step_full", &Collector::end_step_full, py::arg("flush"), py::arg("drain"))
       .def("export_plan", &Collector::export_plan)
       .def("step_stats", &Collector::step_stats)
       .def("note_expected", &Collector::note_expected, py::arg("n") = 1)
@@ -1572,10 +1920,14 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
       .def("enable_gather", &Collector::enable_gather, py::arg("capacity") = 65536)
       .def("stage", &Collector::stage, py::arg("name_id"), py::arg("tensor"))
       .def("flush", &Collector::flush)
+      .def("add_slot_plan", &Collector::add_slot_plan, py::arg("name_ids"), py::arg("slots"), py::arg("kinds"))
+      .def("stage_slot_plan", &Collector::stage_slot_plan, py::arg("handle"), py::arg("n"), py::arg("pad"))
+      .def("clear_slot_plans", &Collector::clear_slot_plans)
       .def_readwrite("blocks_per_desc", &Collector::blocks_per_desc)
       .def_readwrite("check_sizes", &Collector::check_sizes)
       .def_readwrite("fault_skip_copy_at", &Collector::fault_skip_copy_at)
       .def_readwrite("use_gather", &Collector::use_gather)
+      .def_readwrite("slot_fast", &Collector::slot_fast)
       .def_readwrite("auto_blocks", &Collector::auto_blocks)
       .def_readwrite("auto_bytes_per_block", &Collector::auto_bytes_per_block)
       .def("drain_errors", &Collector::drain_errors)
