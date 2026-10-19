@@ -145,7 +145,8 @@ issue-loaded one. Repeats agree within 0.002 SMSP-cycles a uniform instruction.
   read) reaches 0.974; FFMA streams stop at 0.92–0.93, where the chains slow them by −0.13 to 0.85. Beside `ux_` each
   uniform instruction costs 1.00 to 1.12 (least 1.003, `ux_128x`). Every count is the loop's full SASS, not the table's
   eight opcodes. The joint issue rows scale the price as they scale the ALU's slot (JI100_0 0.906, JI90_0 0.965).
-- **Beside a saturated async tensor op a co-located chain is essentially free** (RT-ISA round 2 WATCH,
+- **Beside a saturated async tensor op a co-located chain fills idle issue slots; with the port saturated it takes one**
+  (RT-ISA round 2 WATCH,
   note:20261017T1834Z-draft-rt-isa). The placement is pinned (`probes/sm90_async.cu`, `sm100_async.cu`,
   `UNI_TABLES=async`): ptxas 13.0 keeps a uniform chain on the uniform datapath beside a saturated **tcgen05.mma** (the
   honest kernel issues the whole 128×256 tile from one warp, a uniform context, so even the bare `utc` is uniform beside
@@ -154,13 +155,18 @@ issue-loaded one. Repeats agree within 0.002 SMSP-cycles a uniform instruction.
   silicon (H200 `r20261017-204843-4803`, B200 `r20261017-205856-aae0`), the bare chain's K-sweep is flat: the async
   group's cycles a iteration don't grow with the chain (H200 `uwg` 0.0002, B200 `utc` 0.0009 SMSP-cycles a instruction),
   because the chain fills the async op's idle issue slots (the 4 wgmma / 4 tcgen05 hold the SMSP ~1024 / ~512 cycles,
-  far more than the K ≤ 128 the sweep adds; a realistic word adds only a handful). So the dual-issue the WATCH feared is
-  real: the true uniform-beside-async price is near zero, and the census joint rows (JI90_0 0.965, JI100_0 0.906) are
-  *optimistic* — the conservative treatment prices the uniform-beside-async route free. That treatment moves no headline
-  (`eps`, `credit floor`, `operands free`, q* 1.22, `dither-2s-li-l32`): H200 rises 0.131% → 0.198%, and the B200 stays
-  0.905% (its headline binds the issue row, which sits above the async joint row, so the async price can't move it); the
-  B200 breaches 1% only if the issue ceiling *itself* is discounted below ~0.012 of a slot, an >80× discount decision 84
-  precludes.
+  far more than the K ≤ 128 the sweep adds; a realistic word adds only a handful). That flat slope is idle slots filled,
+  not dual-issue: one warp's 4 tensor ops leave its SMSP issuing ≤ 0.27 a cycle. With every SMSP's issue saturated by
+  lanes beside the chain and a saturated tcgen05.mma (`probes/sm100_a2u.cu`, `UNI_TABLES=a2u`, `a2u.py`), the B200 shows
+  none. The block issues at most one warp instruction an SMSP-cycle at every K (0.9996 at K = 32 to 135; the lanes alone
+  1.00004), and each added uniform instruction costs the lanes 0.95 to 1.10 of a slot. The tensor starves as K grows
+  (1.00 to 0.34) because the chain takes SMSP 0's slots (B200 `r20261019-055605-6cc2`). So A2u holds beside async on
+  the B200, and its joint row JI100_0 0.906 is below the measured ≈ 1, the conservative side. The H200 beside wgmma,
+  where ptxas lowers the chain to lanes, isn't measured at saturation. Pricing its uniform-beside-async route free, the
+  conservative treatment there, moves no headline (`eps`, `credit floor`, `operands free`, q* 1.22,
+  `dither-2s-li-l32`): the H200 rises 0.131% → 0.198%. The B200 stays 0.905% either way (its headline binds the issue
+  row, which sits above the async joint row). It breaches 1% only if the issue ceiling *itself* is discounted below
+  ~0.012 of a slot, an >80× discount that decision 84 precludes and `a2u` measures absent.
 - **The IMAD form of duo's LEA.HI is slower on both.** IMAD.HI.U32 costs 4.19 (B200) and 4.18 (H200) SMSP-cycles,
   twice an IMAD, so rotl(u, r) + y′ as IMAD.HI + IMAD costs about 6 cycles of the IMAD pipe against LEA.HI's 2 of
   the ALU's. Duo with 29% (B200) and 33% (H200) of its LEA.HI in that form takes 17% and 21% longer a word than duo.
