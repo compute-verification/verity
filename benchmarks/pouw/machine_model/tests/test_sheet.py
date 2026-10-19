@@ -9,7 +9,7 @@ import pytest
 from verity_machine_model import eps as E
 from verity_machine_model.cli import main
 from verity_machine_model.model import DEVICES
-from verity_machine_model.sheet import ROOT, differences, figures, lean, moves, reading, sheet
+from verity_machine_model.sheet import ROOT, differences, figures, lean, moves, reading, sheet, uni
 
 SHEETS = ["sm_90", "sm_100"]
 
@@ -56,6 +56,16 @@ def test_uni_issue_leaves_a_ds_vector(name):
     d = DEVICES / name
     pi = E.machine(sheet(d).vector, d)
     assert E.uniform_issue_charged(pi) and E.uniform_on_issue(pi, 0.5) is pi
+
+
+@pytest.mark.parametrize("name", SHEETS)
+def test_uni_prices_a2u_on_the_sheet(name):
+    """`sheet --eps --uni` changes the uniform instruction's line, where `eps --uni-issue` leaves a DS vector as it is:
+    at the sheet's own cost it is the headline, and with the uniform datapath free the cheater takes it."""
+    s, d = sheet(DEVICES / name), DEVICES / name
+    r = reading(s, d)
+    assert uni(s, d, 1.0) == r.sheet
+    assert uni(s, d, 0.0) > 10 * r.sheet, f"{name}: a free uniform datapath leaves ε at {uni(s, d, 0.0):.4%}"
 
 
 @pytest.mark.parametrize("name", SHEETS)

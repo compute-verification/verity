@@ -7,8 +7,8 @@ a quarter of its type's peak (A3), 128 over its pipe's width (A4). `differences`
 epoch, `figures` holds each per-clock peak to the figure the document prints at the clock it names, and `lean` prints the
 Lean module that states it all (`lean` in sheet.toml), with `machine_eq_census`, the machine is the census line for line,
 and a lemma for each figure. `reading` prices the headline design (headline.toml) on the sheet's lines, beside
-headline.py's ε and with A3 read per second at f_max, and `moves` finds how much slower the tensor pipe can be before
-that ε moves.
+headline.py's ε and with A3 read per second at f_max, `moves` finds how much slower the tensor pipe can be before
+that ε moves, and `uni` prices it with a uniform instruction at a given share of an issue slot (A2u).
 """
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ from fractions import Fraction
 from pathlib import Path
 
 from verity_machine_model import headline as H
-from verity_machine_model.eps import design, eps, machine
+from verity_machine_model.eps import UNI, design, eps, machine
 from verity_machine_model.model import model, vector
 
 ROOT = Path(__file__).resolve().parents[4]
@@ -244,6 +244,18 @@ def moves(s: Sheet, data: Path, top: float = 4.0, steps: int = 30) -> float | No
         mid = (lo + hi) / 2
         lo, hi = (mid, hi) if abs(at(mid) - base) <= 1e-12 else (lo, mid)
     return hi
+
+
+def uni(s: Sheet, data: Path, cost: float) -> float:
+    """The headline design's core ε at its sheet reading with a uniform instruction at `cost` of an issue slot (A2u
+    read at `cost`; the sheet's is 1). `eps --uni-issue` leaves a DS vector as it is, since its census charges the slot
+    already, so this is the way to sweep A2u on a sheet."""
+    _, d, pi, q = _setting(s, data)
+    if UNI not in s.kinds:
+        raise SystemExit(f"{s.vector}: the sheet has no {UNI} class, so no uniform route to price")
+    c = {k: dict(v) for k, v in pi.c.items()}
+    c[UNI][row("issue")] = cost
+    return _core(d, replace(pi, c=c), q, data)
 
 
 # --- Lean -----------------------------------------------------------------------------------------------------------

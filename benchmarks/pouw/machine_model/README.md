@@ -40,6 +40,7 @@ uv run machine-model eps --device sm100 --table --credit floor --operands floor 
 uv run machine-model headline             # each family's design of record at the data-sheet and measured readings
 uv run machine-model --device sm_100 sheet   # the data sheet: its DS lines against the census, each peak at its clock
 uv run machine-model --device sm_90 sheet --eps   # the headline's sheet reading on the sheet's lines, A3 at f_max
+uv run machine-model --device sm_100 sheet --eps --uni 0.1 0.02   # ... with a uniform instruction at 0.1, 0.02 a slot
 uv run machine-model capacity 0.745/duo:0.6+lane:0.3 0.255/served:0.15   # the certified share σ of a window's capacity
 ~~~
 
@@ -429,7 +430,8 @@ at the clock it's quoted at. `sheet --lean` prints the Lean module `sheet.toml` 
 (`Security/Definitions/Accounting/Sheets/`), which the tests hold to that output and whose `machine_eq_census` proves
 the machine is the census. `sheet --eps` prices the headline design's sheet reading on the sheet's own lines (the
 headline's ε, exactly), with A3 read per second at f_max instead (each peak its figure over SMs and f_max), and finds
-how much slower every tensor line can be before that ε moves.
+how much slower every tensor line can be before that ε moves. `sheet --eps --uni C …` prices it with a uniform
+instruction at each C of an issue slot, A2u's sweep, which `eps --uni-issue` doesn't do on a DS vector.
 
 The L40S (`data/devices/sm_89/`, note:20261017T0605Z-draft-eps1-ada) prices Dither-1S, Dither-2S and Dither-C at L = 16
 (IMMA.16816, where T1 is tight) and at L = 32 (IMMA.16832, half the tensor pipe's words), on ADA's measured honest step:
