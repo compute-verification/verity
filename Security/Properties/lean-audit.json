@@ -4212,15 +4212,16 @@
    ]
   },
   "Flock.Partition": {
-   "digest": "818d0971905ff1f90f52af0ea77b235a700c4daff24f1663b16c4d943b702e81",
+   "digest": "c5e0cb80cd95410be459f81f6d11708a3c132d8a4a3f35c853088dc48ce8daa7",
    "definitions": {
     "Flock.Partition.CallGraph": "f7b23e122c53d9b69ffe007d80305082609928815d60263fb24249a8876886c3",
     "Flock.Partition.CallGraph.n": "b35ab5f2103153af671db323f7033561efe2fa255d8ef11fc40aa681e7f6200e",
     "Flock.Partition.CallGraph.outputs": "0c0bf087ad58c11bac31411751d2a6bfe92f00b0eb75ca60032af4e2f4d50b01",
     "Flock.Partition.CallGraph.reads": "4a42c783f3f197d05776bc8eae5e6361a6950ae45260d162e62392f1c6b8a3f6",
     "Flock.Partition.CallGraph.width": "f6f621106217bc63dc7a0100717b46915f67fa4e8502e7754a4ff8f1ff0ef7f2",
-    "Flock.Partition.Cut.ofJson.match_3": "6c2d2162b8b0eb768a63be42a154c6dfe2e245ddafcb016ddfcfbf7c1f444904",
-    "Flock.Partition.boundaryWidths": "da48071c4988b388d5f42ba063a4d40b5e89d72c7c9ad4a2338357d5ddcf1d0c"
+    "Flock.Partition.boundaryWidths": "9d83730ba862b26f14b20aa104b1bba6b55a6a8c12189130c1ac244ddd798bfc",
+    "Flock.Partition.unitCycle": "504102337d125daf2732cb87c73d0e464696604c3acab0b623b00c6c1e014c1f",
+    "Flock.Partition.unitCycle._sparseCasesOn_3": "557fbba91a901ce02eaab16a12575a8772bf4aab5cc4902e7627fcc596c9f1b8"
    },
    "guarantees": [
     "Properties.SampledProofs.SecurityProofs.designWellFormed",
@@ -4507,7 +4508,7 @@
    ]
   },
   "Flock.Qword": {
-   "digest": "072e36a144a1e0c3b9010b6c823d397b05ee52744106567a3614b99a4a11eaa7",
+   "digest": "9e060298fabe7f6c74b3f48cb14c34575dfd575706b82c7a5803069c4a58aea9",
    "definitions": {
     "Flock.Qword.DCut": "1db2b9473332fe731a337849162aebc405b4589f8709e6f9c9e06588d621fa93",
     "Flock.Qword.DCut._sizeOf_1": "6526fa5e0468933fa9bf224b7b31d4628577b015733d8834a44e465727eb4747",
@@ -4520,7 +4521,8 @@
     "Flock.Qword.DCut.rec": "88e1ba0565014dc4f2bcbc27e0e199f11e65dd933e8e651692a1f78dd643a974",
     "Flock.Qword.DCut.units": "25aca0109b8cebb18eceba64477333ee41af55540b15a5b2dbedf5f44d79cfb1",
     "Flock.Qword.cutWord": "8a8bf0fcda53cfd9ad4b6b4dcbb526129f6e0963ed0ff1354f8ef68fb966b307",
-    "Flock.Qword.owners": "98ed1e0d1f870c175d884430f7ec8b98a257ec757acfc9af51acb046a883eab0",
+    "Flock.Qword.owners": "bd96dd09d5b8c6afff1af5eba3d2c9f14d652436276bd0aec4fc3c1e346ad472",
+    "Flock.Qword.owners._sparseCasesOn_3": "c075cc9a42a03270824c99a4d26003e21e6caafb3dd56cee8fe6b246d17ec7e8",
     "Flock.Qword.targets": "85c67728bf5e951528d74c58f3267561acde452e7a95447a6eb0f8e5431f9715"
    },
    "guarantees": [
