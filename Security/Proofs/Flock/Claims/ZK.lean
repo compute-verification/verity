@@ -120,8 +120,8 @@ import Proofs.Flock.Claims.ZK.Stop
   layer and `ZK_coins_fails` that the degenerate one (every opening passes, the coin is the opening) is not it.
 * `CoinOpen`: the Lean coin check (`flock-firewall coins`, `Flock.Firewall.Coins`), whose verdict `coin_tree::Checked`
   takes, is that coin layer's at SHA-512: one opening (`CoinOpen.treeChk_sha`, `CoinOpen.check_isOk`), and a session's
-  openings when its requests follow the committed schedule (`CoinOpen.coinLayer_verdict`), so it refuses what
-  `LeanRelease.OpeningsRefused` names (`CoinOpen.coinLayer_refuses`).
+  openings when its requests follow the committed schedule (`CoinOpen.coinLayer_verdict`), so it refuses the openings
+  ZKS10's `LeanRelease.OpeningsRefused` (`Claims/ZK/Refine.lean`) names (`CoinOpen.coinLayer_refuses`).
 * `Tape`: `TapeOK` makes the tape onto the leaves' salts (`RefSession.eP_surjective`), so a session has fewer tables than
   tapes at every statement (`RefSession.J_lt_card_of_tapeOK`), and none with statements of every table count meets it
   (`RefSession.not_tapeOK`): the masked scope bounds no table count.
