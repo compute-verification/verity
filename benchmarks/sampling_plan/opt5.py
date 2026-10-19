@@ -126,8 +126,8 @@ TOTAL = {"work": "work", "control": "egress", "integrity": "outputs"}
 
 
 def plan_row(v: dict, model_name: str, which: str, eps: float, *, luck: float, step: int | None = None, grid: int = 31,
-             cut_grid: int = 21, rounds: float = WINDOWS["week"]) -> dict:
-    """The least plan holding policies `which` at `eps` over `rounds` rounds of one GPU's serving (a pooled
+             cut_grid: int = 21, rounds: float = WINDOWS["week"], delta: float = DELTA) -> dict:
+    """The least plan holding policies `which` at `eps` and `delta` over `rounds` rounds of one GPU's serving (a pooled
     certificate over G GPUs for T seconds is G T / round rounds: every cost is per GPU-second)."""
     vv = dict(v)
     if step is not None:
@@ -137,13 +137,13 @@ def plan_row(v: dict, model_name: str, which: str, eps: float, *, luck: float, s
     w = workload(vv, rounds, MODELS[model_name])
     costs = model(vv, fit_, w["replay_units"])
     t = totals(vv, model_name, w)
-    objective = Objective(DELTA, policies=policies(vv, t, eps, which, luck))
+    objective = Objective(delta, policies=policies(vv, t, eps, which, luck))
     cands, alts, _ = candidates(w, costs, objective, cut_grid)
     p = for_target(cands, costs, objective, 1.0, grid=grid, exact=False)
     extra = zero_work_cost(costs, vv)
     gpu_s = w["window_gpu_s"]
     chosen = [c for c in cands if c.template in p.sizes]
-    levels = certify(p.sizes, cands, Objective(DELTA, policies=policies(vv, t, 1.0, "WCI", luck)), exact=False)
+    levels = certify(p.sizes, cands, Objective(delta, policies=policies(vv, t, 1.0, "WCI", luck)), exact=False)
     cert = p.certificate.policies
     binding = max(objective.policies, key=lambda q: cert[q.name] / q.target).name
     drawn_by = {}
@@ -154,9 +154,11 @@ def plan_row(v: dict, model_name: str, which: str, eps: float, *, luck: float, s
         + replay_cost({c.template: c.units for c in chosen}, chosen, costs)
     dominant = max(chosen, key=lambda c: p.sizes[c.template])
     a0, a1 = costs.statement(dominant)
-    return {"which": which, "eps": eps, "luck": luck, "step": vv["step_tokens"], "replay_s": vv["replay_layer_step"],
-            "B_proving": (p.cost["total"] + extra) / gpu_s, "cost": {k: c / gpu_s for k, c in p.cost.items()},
-            "draws": sum(p.sizes.values()), "binding": binding,
+    draws = sum(p.sizes.values())
+    return {"which": which, "eps": eps, "luck": luck, "delta": delta, "step": vv["step_tokens"],
+            "replay_s": vv["replay_layer_step"], "B_proving": (p.cost["total"] + extra) / gpu_s,
+            "cost": {k: c / gpu_s for k, c in p.cost.items()}, "draws": draws, "units": sum(c.units for c in chosen),
+            "a0_per_draw": sum(p.sizes[c.template] * costs.statement(c)[0] for c in chosen) / draws, "binding": binding,
             "use": {q.name: cert[q.name] / q.target for q in objective.policies},
             "levels": {q: levels.policies[q] / t[TOTAL[q]] for q in levels.policies},
             "drawn_by": drawn_by, "cut": cut_of(p, alts), "full": sorted(p.full), "floor_only": sorted(p.floor_only),
@@ -164,7 +166,7 @@ def plan_row(v: dict, model_name: str, which: str, eps: float, *, luck: float, s
             "replay_units_met": p.cost["replay"] / vv["replay_layer_step"],
             "dominant": {"template": dominant.template, "a0": a0, "a1": a1,
                          "b": costs.unit(dominant) + costs.of(dominant).replay,
-                         "per_replay": dominant.per_replay},
+                         "per_replay": dominant.per_replay, "units": dominant.units, "k": p.sizes[dominant.template]},
             "units_per_replay": sum(c.per_replay for c in chosen if not c.op.startswith("attention PV"))}
 
 

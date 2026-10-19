@@ -36,8 +36,9 @@ outputs, replay of the layer-steps the draw meets (to build their witnesses), an
   plan with the policy that binds, every policy's level at it, the optimum per PoUW scheme, and TS1's two-stage table
   with every value committed (`opt5-MODEL.json`, `.md`).
 - `opt5_eps.py`: the work policy's ε at a budget, and the total B for ε = 1e-5 and 1e-8, over a horizon (one GPU-week,
-  and 1 hour, 1 day and 30 days of G GPUs, one certificate pooling the horizon's draws), with each scheme's serve-time
-  commitments and what one draw's statement costs (`opt5-eps.json`, `.md`).
+  and 1 hour, 1 day, 30 days and a year of G GPUs, one certificate pooling the horizon's draws), with each scheme's
+  serve-time commitments, what one draw's statement costs, and the lifetime pool ε G T with q, a unit's draw
+  probability, at δ = 2^-40 and at δ = 1% with A = 1 (`opt5-eps.json`, `.md`).
 
 ```text
 uv run python benchmarks/sampling_plan/int8_llama.py --out DIR [--model qwen3-8b] [--scheme pearl-c] [--weights]

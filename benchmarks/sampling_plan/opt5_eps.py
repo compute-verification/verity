@@ -11,6 +11,11 @@ per GPU-second, and ε at a fixed spend, fall as 1 / (G T).
 - (2) the total B for each ε in `TARGETS`.
 - (3) both at each horizon in `HORIZONS`, G = `--gpus` at the inputs' tokens a second.
 - (4) the 1% plan's parts, and what one statement of the dominant template costs (its fixed and per-AND parts).
+- (5) the lifetime pool beside ε (`pool`): WX-THM's `Population.Exfil.tail_cum` bounds the declared work accepted
+  undetected through the first detection whatever the horizon, so at a sampling spend B_s the skipped work is one pool,
+  ε G T = A ln(1/δ) c / B_s GPU-s at c the spend per draw, and ε over G GPUs for T is pool / (G T); with q, a unit's draw
+  probability, each at δ = 2^-40 with the luck's A and at δ = 1% with A = 1 (`POOLS`), one drawn unit a statement and
+  `GATHER`.
 
     uv run python benchmarks/sampling_plan/opt5_eps.py --out DIR [--gpus 100000] [--budget 0.01]
 """
@@ -30,9 +35,11 @@ from opt5 import P_INPUTS, plan_row  # noqa: E402
 
 TARGETS = (1e-5, 1e-8)
 HORIZONS = {"1 GPU-week": (1, 7 * 86400), "1 hour": (None, 3600), "1 day": (None, 86400),
-            "30 days": (None, 30 * 86400)}
+            "30 days": (None, 30 * 86400), "1 year": (None, 365.25 * 86400)}
 #: statements of this many drawn units, the largest the refit measured (zk_cost's 512 / 512)
 GATHER = 512
+#: the pool's (δ, p): the certificate's δ at the spec sheet's luck (None: the run's), and δ = 1% with no luck (A = 1)
+POOLS = ((DELTA, None), (0.01, 0.0))
 
 
 def serve_b(v: dict, model_name: str) -> dict[str, float]:
@@ -42,9 +49,10 @@ def serve_b(v: dict, model_name: str) -> dict[str, float]:
             for s in SCHEMES}
 
 
-def eps_at(v: dict, model_name: str, spend: float, rounds: float, luck: float, rel: float = 2e-3) -> dict | None:
+def eps_at(v: dict, model_name: str, spend: float, rounds: float, luck: float, rel: float = 2e-3,
+           delta: float = DELTA) -> dict | None:
     """The least ε whose plan's proving B fits `spend` (bisection in log ε; B falls as ε grows)."""
-    row = lambda e: plan_row(v, model_name, "W", e, luck=luck, rounds=rounds)
+    row = lambda e: plan_row(v, model_name, "W", e, luck=luck, rounds=rounds, delta=delta)
     hi = row(1.0)
     if hi["B_proving"] > spend:
         return None
@@ -70,6 +78,24 @@ def statement_split(v: dict, row: dict) -> dict:
             "gather_factor": draw / gathered}
 
 
+def pool(v: dict, row: dict, budget: float) -> dict:
+    """The plan at the spend in its lifetime form: the pool ε G T beside A ln(1/δ) c / B_s at c the spend per draw; q the
+    draws over the units (and the dominant template's); and both with `GATHER` drawn units a statement sharing its fixed
+    part: the draws' own cost (statements, units, replay) falls by a0 (1 - 1/GATHER) a draw, so the same spend draws more
+    by that ratio and the pool shrinks by it."""
+    a, gpu_s, d = v["late_cone"] / (1 - row["luck"]), row["gpu_s"], row["dominant"]
+    per_draw = row["B_proving"] * gpu_s / row["draws"]
+    own = (row["cost"]["statements"] + row["cost"]["units"] + row["cost"]["replay"]) * gpu_s / row["draws"]
+    gathered = own - row["a0_per_draw"] * (1 - 1 / GATHER)
+    q, size = row["draws"] / row["units"], row["eps"] * gpu_s
+    return {"delta": row["delta"], "A": a, "eps": row["eps"], "pool_gpu_s": size,
+            "pool_closed_form": a * log(1 / row["delta"]) * per_draw / budget, "per_draw": per_draw,
+            "per_draw_own": own, "a0_per_draw": row["a0_per_draw"], "units_per_gpu_s": row["units"] / gpu_s, "q": q,
+            "q_dominant": {"template": d["template"], "q": d["k"] / d["units"],
+                           "q_gathered": d["k"] / d["units"] * own / gathered},
+            "per_draw_gathered": gathered, "q_gathered": q * own / gathered, "pool_gathered": size * gathered / own}
+
+
 def run(v: dict, model_name: str, gpus: int, budget: float, luck: float) -> dict:
     sb = serve_b(v, model_name)
     out = {"model": model_name, "gpus": gpus, "budget": budget, "luck": luck, "delta": DELTA,
@@ -80,6 +106,11 @@ def run(v: dict, model_name: str, gpus: int, budget: float, luck: float) -> dict
         rounds = g * seconds / v["round"]
         at = eps_at(v, model_name, budget, rounds, luck)
         need = {f"{e:g}": plan_row(v, model_name, "W", e, luck=luck, rounds=rounds) for e in TARGETS}
+        pools = []
+        for delta, p in POOLS:
+            p = luck if p is None else p
+            row = at if (delta, p) == (DELTA, luck) else eps_at(v, model_name, budget, rounds, p, delta=delta)
+            pools.append(None if row is None else pool(v, row, budget))
         out["horizons"][name] = {
             "gpus": g, "seconds": seconds, "gpu_s": g * seconds, "tokens": v["tokens_per_s"] * g * seconds,
             "eps_at_spend": None if at is None else at["eps"],
@@ -87,7 +118,8 @@ def run(v: dict, model_name: str, gpus: int, budget: float, luck: float) -> dict
                                                       "B_proving": at["B_proving"]},
             "split_at_spend": None if at is None else statement_split(v, at),
             "B_proving_for": {e: r["B_proving"] for e, r in need.items()},
-            "B_total_for": {e: {s: b + r["B_proving"] for s, b in sb.items()} for e, r in need.items()}}
+            "B_total_for": {e: {s: b + r["B_proving"] for s, b in sb.items()} for e, r in need.items()},
+            "pools": pools}
     return out
 
 
@@ -127,6 +159,33 @@ def render(outs: list[dict]) -> str:
                          f"{c['commit']:.3g} | {c['replay']:.3g} | {sp['template']} | {sp['statement_fixed']:.2f} | "
                          f"{sp['statement_per_and']:.2f} | {sp['staged']:.4f} | {sp['proved']:.4f} | "
                          f"{sp['per_draw']:.2f} | {sp['per_draw_gathered']:.3f} | {sp['gather_factor']:.0f} |")
+    year = hz[-1]
+    lines += ["", f"The lifetime pool at a sampling spend of {o0['budget']:g}: ε G T, the declared work accepted "
+              "undetected through the first detection (WX-THM's tail_cum), in GPU-s at each horizon, and A ln(1/δ) c / "
+              "B_s at c the plan's spend per draw:", "",
+              "| model | δ | A | " + " | ".join(f"pool, {h}" for h in hz) + " | closed form |",
+              "|---|---|---|" + "---|" * (len(hz) + 1)]
+    for o in outs:
+        for i in range(len(o["horizons"][year]["pools"])):
+            ps = [o["horizons"][h]["pools"][i] for h in hz]
+            ref = o["horizons"][year]["pools"][i]
+            lines.append(f"| {o['model']} | {ref['delta']:.3g} | {ref['A']:g} | "
+                         + " | ".join(_e(None if p is None else p["pool_gpu_s"]) for p in ps)
+                         + f" | {ref['pool_closed_form']:.2e} |")
+    lines += ["", f"At {year} of G GPUs (G T = {o0['horizons'][year]['gpu_s']:.3g} GPU-s): ε = pool / (G T); c the spend "
+              f"per draw (its statement's fixed part a0) and q = draws / units, one drawn unit a statement and "
+              f"{GATHER}:", "",
+              "| model | δ | A | ε | c, GPU-s | a0 | units / GPU-s | q | q, dominant | c, " + f"{GATHER} | q, {GATHER} "
+              f"| q, dominant, {GATHER} | pool, {GATHER} | ε, {GATHER} |",
+              "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
+    for o in outs:
+        gt = o["horizons"][year]["gpu_s"]
+        for p in o["horizons"][year]["pools"]:
+            lines.append(f"| {o['model']} | {p['delta']:.3g} | {p['A']:g} | {p['eps']:.2e} | {p['per_draw']:.2f} | "
+                         f"{p['a0_per_draw']:.2f} | {p['units_per_gpu_s']:.3g} | {p['q']:.2e} | "
+                         f"{p['q_dominant']['q']:.2e} | {p['per_draw_gathered']:.3f} | {p['q_gathered']:.2e} | "
+                         f"{p['q_dominant']['q_gathered']:.2e} | {p['pool_gathered']:.2e} | "
+                         f"{p['pool_gathered'] / gt:.2e} |")
     return "\n".join(lines) + "\n"
 
 
