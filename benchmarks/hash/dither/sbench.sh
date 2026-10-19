@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Dither's served standard number on node 2 (sbench.py), on one leased GPU for at most SBENCH_MAX_MIN (40) minutes: libh1c.so, libh1f.so
 # and libh1o.so built for sm_120a first (the dither arms').  Extra arguments go to sbench.py (e.g. --arms exact,dither --gate --ops decode
-# --t 64).  DITHER_NSYS=1 runs it under nsys, recording the kernels inside the gate's CUDA profiler range (each graph's
+# --t 64); SBENCH_SCRIPT runs another script with the same libraries and environment (h1ogate.py: the units kernels at
+# kernel level).  DITHER_NSYS=1 runs it under nsys, recording the kernels inside the gate's CUDA profiler range (each graph's
 # kernels as nodes), then the dither worker's kernels inside the gate's NVTX range (kernels.py over the SQLite export).
 #   research run --on vy-nebius-2 --project verity --campaign dither-loop --source . --cwd source \
 #     --env GPU_LEASE_WHO=kernels-dither-rtx -- bash benchmarks/hash/dither/sbench.sh
@@ -19,7 +20,7 @@ for lib in h1c h1f h1o; do
     || { echo "sbench: NVCC_FAIL $lib"; grep -v "^ptxas info" "$OUT/build-$lib.log" | tail -30; exit 11; }
 done
 grep -B1 -A2 "h1f_k\|h1r_units" "$OUT/build-h1f.log" | grep -i "registers\|spill" | head -6
-grep -B1 -A2 "h1o_units" "$OUT/build-h1o.log" | grep -i "registers\|spill" | head -4
+grep -B1 -A2 "h1o_units" "$OUT/build-h1o.log" | grep -i "registers\|spill" | head -8
 grep -B1 -A2 "h1c_a_" "$OUT/build-h1c.log" | grep -i "registers\|spill" | head -6
 [ -n "${BUILD_ONLY:-}" ] && { echo "sbench: built (BUILD_ONLY)"; exit 0; }
 export DITHER_H1C=$S/libh1c.so DITHER_H1F=$S/libh1f.so DITHER_H1O=$S/libh1o.so VLLM_DISABLE_COMPILE_CACHE=1
@@ -48,7 +49,8 @@ echo "sbench: asking for one GPU at $(date -u +%H:%M:%SZ)"
 nvidia-smi --query-gpu=index,clocks.sm,clocks.mem,power.draw,temperature.gpu,utilization.gpu --format=csv -l 2 > "$OUT/smi.csv" 2>/dev/null &
 SMI=$!
 MAX_MIN=${SBENCH_MAX_MIN:-40}
-gpu-lease 1 --wait --max-min "$MAX_MIN" -- timeout $((60 * MAX_MIN - 50)) "${NSYS[@]}" "$PY" "$ROOT/benchmarks/hash/dither/sbench.py" --out "$OUT" --scratch "$S" "$@"
+gpu-lease 1 --wait --max-min "$MAX_MIN" -- timeout $((60 * MAX_MIN - 50)) "${NSYS[@]}" "$PY" \
+  "$ROOT/benchmarks/hash/dither/${SBENCH_SCRIPT:-sbench.py}" --out "$OUT" --scratch "$S" "$@"
 rc=$?
 kill "$SMI" 2>/dev/null
 echo "sbench: exited $rc at $(date -u +%H:%M:%SZ)"

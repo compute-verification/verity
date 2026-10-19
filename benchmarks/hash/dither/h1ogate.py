@@ -1,0 +1,161 @@
+"""`h1o.cu`'s two forms of a served call's units at kernel level, on a synthetic Llama-3.1-8B window: `h1o_unitsb` (a unit
+a block, `h1b_unit`) and `h1o_units` (a unit a warp, `h1r_unit<2>`), each gated through `dither_one.check`, then timed
+against each other.
+
+    gate  per form, a `dither_one.Window` (T = 64) over NL layers' four linears with the served shapes, random full-range
+          int8 weights and positive scales; four decode steps of m = 32 random rows captured (gate, control, fault,
+          fault_wb; every buffer 0xA5 first) and `dither_one.check` on each: the A, admit and z roots and the round =
+          commit.py's, every receipt = h1r v1's, every z = h1o_ref's, y = dequant(z), 3 units = CA's H1V3 on the CPU (and
+          H1V3's own code where DITHER_H1V3_TREE names its tree); the control refused and both faults conforming
+          (`gate_verdict`); wb's density as the run reads it
+    time  per form, at m = 32: the window's 4 NL calls in model order (A table and units) as one CUDA graph, their units
+          launches alone as another, and each site's units alone, replayed between CUDA events with the forms interleaved
+
+    python h1ogate.py --out OUT [--nl 8] [--reps 15]     (DITHER_H1C, DITHER_H1O: the libraries; sbench.sh's
+                                                          SBENCH_SCRIPT=h1ogate.py builds them and sets the environment)
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import statistics
+import sys
+from pathlib import Path
+from types import SimpleNamespace
+
+import torch
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+
+import dither_fused as DF  # noqa: E402
+import dither_one as DO  # noqa: E402
+
+SHAPES = {"self_attn.qkv_proj": (6144, 4096), "self_attn.o_proj": (4096, 4096), "mlp.gate_up_proj": (28672, 4096),
+          "mlp.down_proj": (4096, 14336)}
+T, M = 64, 32
+FORMS = ("block", "warp")
+
+
+def model(nl: int, dev) -> None:
+    g = torch.Generator(device=dev).manual_seed(1)
+    DF.REG.clear()
+    for i in range(nl):
+        for site in DF.SITES:
+            n, k = SHAPES[site]
+            name = f"model.layers.{i}.{site}"
+            w = torch.randint(-128, 128, (n, k), dtype=torch.int8, device=dev, generator=g)
+            s = torch.rand(n, 1, device=dev, generator=g) * 0.01 + 1e-4
+            DF.REG[DF.index_of(name)] = (name, SimpleNamespace(weight=w, weight_scale=s))
+
+
+def operands(win: DO.Window, seed: int) -> list:
+    g = torch.Generator(device=win.dev).manual_seed(seed)
+    return [(torch.randint(-128, 128, (M, k), dtype=torch.int8, device=win.dev, generator=g),
+             torch.rand(M, device=win.dev, generator=g) * 0.05 + 1e-4) for _, k in win.nk]
+
+
+def step(win: DO.Window, xs: list, outs: list) -> None:
+    win.before(M)
+    for w, (xq, sa) in enumerate(xs):
+        win.launch(w, xq, sa, win.sw[w], *outs[w])
+    win.after()
+
+
+def gate(form: str, dev) -> tuple:
+    os.environ[DO.UNITS_ENV] = form
+    win = DO.Window(T, os.urandom(64), os.environ["DITHER_H1C"], os.environ[DO.LIB_ENV], True, dev)
+    outs = [(torch.empty(M, n, dtype=torch.bfloat16, device=dev), torch.empty(M, n, dtype=torch.int32, device=dev))
+            for n, _ in win.nk]
+    step(win, operands(win, 7), outs)
+    win.arm(M, DO.CAPTURES)
+    for i in range(len(DO.CAPTURES)):
+        step(win, operands(win, 100 + i), outs)
+    caps = {n: DO.check(win, os.environ[DO.LIB_ENV], n) for n in DO.CAPTURES}
+    return win, outs, caps, DO.gate_verdict(caps["gate"], caps["control"], caps["fault"], caps["fault_wb"])
+
+
+def graphs(win: DO.Window, outs: list) -> dict:
+    xs = operands(win, 9)
+    win.before(M)
+    torch.cuda.synchronize()
+    out = {}
+
+    def cap(name, fn):
+        g = torch.cuda.CUDAGraph()
+        with torch.cuda.graph(g):
+            st = torch.cuda.current_stream().cuda_stream
+            for w in range(win.L):
+                rc = fn(w, st)
+                if rc:
+                    raise RuntimeError(f"{name}: call {w} returned {rc}")
+        out[name] = g
+
+    cap("calls", lambda w, st: win.a_call(w, xs[w][0], xs[w][1], st)
+        or win.units_call(w, xs[w][0], xs[w][1], win.sw[w], *outs[w], st))
+    cap("units", lambda w, st: win.units_call(w, xs[w][0], xs[w][1], win.sw[w], *outs[w], st))
+    for i, site in enumerate(DF.SITES):
+        cap(f"units/{site}", lambda w, st, i=i: 0 if w % 4 != i else
+            win.units_call(w, xs[w][0], xs[w][1], win.sw[w], *outs[w], st))
+    torch.cuda.synchronize()
+    return out
+
+
+def replay_ms(g: torch.cuda.CUDAGraph) -> float:
+    a, b = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+    a.record()
+    g.replay()
+    b.record()
+    b.synchronize()
+    return a.elapsed_time(b)
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--out", required=True)
+    ap.add_argument("--scratch", default=None)
+    ap.add_argument("--nl", type=int, default=8)
+    ap.add_argument("--reps", type=int, default=15)
+    a = ap.parse_args()
+    out = Path(a.out)
+    out.mkdir(parents=True, exist_ok=True)
+    dev = torch.device("cuda")
+    model(a.nl, dev)
+    doc: dict = {"gpu": torch.cuda.get_device_name(dev), "t": T, "m": M, "nl": a.nl, "shapes": SHAPES, "forms": {}}
+    wins = {}
+    for form in FORMS:
+        win, outs, caps, verdict = gate(form, dev)
+        wins[form] = (win, outs)
+        doc["forms"][form] = {"verdict": verdict, "wb": caps["gate"].get("wb"), "checks": caps}
+        print(json.dumps({"form": form, "verdict": verdict, "wb": caps["gate"].get("wb"),
+                          "vs_h1v3_cpu": caps["gate"].get("vs_h1v3_cpu"), "h1v3": caps["gate"].get("h1v3")},
+                         default=str), flush=True)
+    ok = all(doc["forms"][f]["verdict"]["ok"] for f in FORMS)
+    doc["gate_ok"] = ok
+    if ok:
+        gs = {f: graphs(*wins[f]) for f in FORMS}
+        for f in FORMS:
+            for g in gs[f].values():
+                g.replay()
+        torch.cuda.synchronize()
+        ms: dict = {f: {n: [] for n in gs[f]} for f in FORMS}
+        for _ in range(a.reps):
+            for f in FORMS:
+                for n, g in gs[f].items():
+                    ms[f][n].append(replay_ms(g))
+        per = {"calls": 4 * a.nl, "units": 4 * a.nl, **{f"units/{s}": a.nl for s in DF.SITES}}
+        doc["timing"] = {f: {n: {"ms_median": statistics.median(v), "us_per_call": 1e3 * statistics.median(v) / per[n],
+                                 "ms_all": [round(x, 4) for x in v]} for n, v in ms[f].items()} for f in FORMS}
+        doc["speedup_warp_over_block"] = {n: doc["timing"]["warp"][n]["ms_median"] / doc["timing"]["block"][n]["ms_median"]
+                                          for n in ms["block"]}
+        for f in FORMS:
+            print(json.dumps({"time": f, **{n: round(v["us_per_call"], 2) for n, v in doc["timing"][f].items()}}), flush=True)
+        print(json.dumps({"speedup_warp_over_block": {n: round(v, 3) for n, v in doc["speedup_warp_over_block"].items()}}),
+              flush=True)
+    (out / "h1o-gate.json").write_text(json.dumps(doc, indent=1, default=str) + "\n")
+    return 0 if ok else 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())

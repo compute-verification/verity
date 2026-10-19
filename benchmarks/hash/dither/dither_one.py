@@ -13,7 +13,8 @@ The window: its B tables at install, then one live round whose coin gives the ep
 round over the B roots).  Before step s's forward, the A tables' parts that read the step but no row (`h1c_a_step`:
 domains, salts, prefixes, and the leaves and nodes over rows >= m alone).  A linear call (`dither1::one_mm`), on the
 forward's stream, is two launches: its A slot and table (`h1c_a_call`, the root where its seeds read it), then its units
-(`h1o_units`: each unit's seeds, receipt, z and y).  After step s's forward: its admit and z tables, the a-step,
+(each unit's seeds, receipt, z and y; DITHER_UNITS picks the form, `block` (`h1o_unitsb`, a unit a block, the default) or
+`warp` (`h1o_units`, a unit a warp)).  After step s's forward: its admit and z tables, the a-step,
 admit-step and z-step trees, the round over them, and the receipt trees, then the round root recorded
 (`sampled_proofs.challenger.LiveRecord`; its coin is not read: no seed waits on it).
 
@@ -41,6 +42,8 @@ import h1c as H1CM
 F_DUMP, F_NW_TILES, F_NW_UNITS, F_FAULT, F_FAULT_WB = 1, 2, 4, 8, 16     # h1o.cu's H1OStep.flags
 CAPTURES = ("gate", "control", "fault", "fault_wb")
 LIB_ENV = "DITHER_H1O"
+UNITS_ENV = "DITHER_UNITS"
+UNITS_FORMS = {"block": "h1o_unitsb_launch", "warp": "h1o_units_launch"}   # h1o.cu's two forms of the same units
 LIB = "dither1"
 REG = DF.REG
 CFG: dict = {}
@@ -104,9 +107,12 @@ class Window:
                           lab=("r/", f"/{w}")))
         self.rset = self.c.set(rt)
         self.o = C.CDLL(h1o_path)
-        self.o.h1o_units_launch.argtypes = [C.c_void_p, C.c_void_p, C.c_int, C.c_int, C.c_int, C.c_void_p, C.c_void_p,
-                                            C.c_int, C.c_void_p, C.c_void_p, C.c_void_p, C.c_void_p, C.c_void_p,
-                                            C.c_void_p]
+        self.units_form = os.environ.get(UNITS_ENV, "block")
+        if self.units_form not in UNITS_FORMS:
+            raise RuntimeError(f"{UNITS_ENV}={self.units_form}: one of {sorted(UNITS_FORMS)}")
+        self.units_fn = getattr(self.o, UNITS_FORMS[self.units_form])
+        self.units_fn.argtypes = [C.c_void_p, C.c_void_p, C.c_int, C.c_int, C.c_int, C.c_void_p, C.c_void_p, C.c_int,
+                                  C.c_void_p, C.c_void_p, C.c_void_p, C.c_void_p, C.c_void_p, C.c_void_p]
         if self.o.h1o_struct_bytes(0) != C.sizeof(_O) or self.o.h1o_struct_bytes(1) != 16:
             raise RuntimeError("h1o.cu's structs differ from dither_one's")
         self.call_bytes = self.r.lib.h1r_call_bytes()
@@ -186,19 +192,24 @@ class Window:
 
     def launch(self, w: int, xq: torch.Tensor, s_a: torch.Tensor, s_w: torch.Tensor, y: torch.Tensor,
                z: torch.Tensor) -> None:
-        n, k = self.nk[w]
         st = torch.cuda.current_stream().cuda_stream
-        fw = self.F.data_ptr() + self.fsize * w
-        a, tb = self.pre["a"], self.tab_bytes * w
-        rc = self.c.lib.h1c_a_call(C.addressof(a.host) + tb, a.dev.data_ptr() + tb, self.apre.data_ptr() + 8 * self.awords * w,
-                                   self.S.data_ptr(), xq.data_ptr(), s_a.data_ptr(), self.slot[w].data_ptr(),
-                                   self.scale[w].data_ptr(), k, st)
-        rc = rc or self.o.h1o_units_launch(fw, self.S.data_ptr(), self.units[w], n, k, xq.data_ptr(), s_a.data_ptr(),
-                                           int(xq.shape[0]), s_w.data_ptr(), y.data_ptr(), z.data_ptr(), self.salt.data_ptr(),
-                                           self.step_base.data_ptr(), st)
+        rc = self.a_call(w, xq, s_a, st) or self.units_call(w, xq, s_a, s_w, y, z, st)
         if rc:
             raise RuntimeError(f"dither1 call {w} (M={xq.shape[0]}): a launch returned {rc}")
         self.calls += 1
+
+    def a_call(self, w: int, xq: torch.Tensor, s_a: torch.Tensor, st: int) -> int:
+        a, tb = self.pre["a"], self.tab_bytes * w
+        return self.c.lib.h1c_a_call(C.addressof(a.host) + tb, a.dev.data_ptr() + tb,
+                                     self.apre.data_ptr() + 8 * self.awords * w, self.S.data_ptr(), xq.data_ptr(),
+                                     s_a.data_ptr(), self.slot[w].data_ptr(), self.scale[w].data_ptr(), self.nk[w][1], st)
+
+    def units_call(self, w: int, xq: torch.Tensor, s_a: torch.Tensor, s_w: torch.Tensor, y: torch.Tensor,
+                   z: torch.Tensor, st: int) -> int:
+        n, k = self.nk[w]
+        return self.units_fn(self.F.data_ptr() + self.fsize * w, self.S.data_ptr(), self.units[w], n, k, xq.data_ptr(),
+                             s_a.data_ptr(), int(xq.shape[0]), s_w.data_ptr(), y.data_ptr(), z.data_ptr(),
+                             self.salt.data_ptr(), self.step_base.data_ptr(), st)
 
     # -- the step hook ---------------------------------------------------------------------------------------------------
 
@@ -279,7 +290,7 @@ class Window:
                                              for k in dict.fromkeys(k for x in xs for k in x) if k != "m"}}
                for m, xs in sorted(by.items(), key=lambda kv: -len(kv[1]))[:4]}
         return {"steps": self.steps, "one_calls_eager": self.calls, "t": self.t, "s": self.s, "epsilon": "seeded",
-                "phases_by_m": med}
+                "units_form": self.units_form, "phases_by_m": med}
 
 
 # -- the op and the patch --------------------------------------------------------------------------------------------------

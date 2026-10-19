@@ -3,7 +3,7 @@ stream into buffers the plan owns (allocated once, at `plan`), so a CUDA graph c
 
     lib = H1R("libh1r.so")
     plan = lib.plan([Call(a, b, base, roots, live), ...])   # a [T, K], b [N, K] s8 on the device; roots (16,) int64 words
-    lib.launch(plan, salt)                                  # salt (8,) int64 big-endian words on the device; version=1|2
+    lib.launch(plan, salt)                                  # salt (8,) int64 big-endian words on the device; version=1|2|3 (3: a unit a block)
     lib.launch(plan, salt, step_base=sb)                    # sb (1,) int64 on the device, added to every call's base
     plan.receipts(i)                                        # call i's (units, 2 sets) int32 view
 """

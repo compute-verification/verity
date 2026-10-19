@@ -12,6 +12,8 @@
 //               against the identity, the residue sums Y.  After the last segment: the digits A_d from Y and the row's
 //               digit coins, O' = T_last - A_0 U^T and D_d = A_d U^T (U as the B operand), folded in order.  After set s,
 //               receipt word 2 s is the XOR over lanes and chains of y, 2 s + 1 of z (CP-W).
+//               Version 3 (`h1b_unit`) runs the same unit on a block of five warps: four hash the noise and build the
+//               operands, one folds.
 //
 // A step is a table of calls (`H1Call`): A [T, K] and B [N, K] s8 row-major (16-byte aligned rows), the unit positions
 // base (plus the step's, read from the device) + u, the call's roots and its row blocks' live bits (a unit is live iff its
@@ -555,6 +557,370 @@ __device__ __forceinline__ void h1r_unit(const H1Call& C, int v, int lane, uint8
   }
 }
 
+__device__ __forceinline__ void nbar_sync(int id, int n) { asm volatile("bar.sync %0, %1;\n" ::"r"(id), "r"(n) : "memory"); }
+__device__ __forceinline__ void nbar_arrive(int id, int n) { asm volatile("bar.arrive %0, %1;\n" ::"r"(id), "r"(n) : "memory"); }
+
+// The block form, for calls whose units leave most of the GPU idle (decode): one unit a block of BOW + 1 warps, the same
+// values as `h1r_unit<2, E>` (so the same receipt, z and y).  The operand warps 0 .. BOW - 1 hash the noise a group of
+// chunks at a time, one compression a thread (group 0: chunk 0, with U's and σ_R's blocks; then the chunks in pairs,
+// double-buffered), and build segment s's X, W' and wb rows in warp s % BOW's slot; each also runs its segments' residue
+// and wrap MMAs (Y and X wbᵀ, read only after the last segment), summed over the operand warps through shared memory at
+// the end.  The fold warp (BOW) runs T_s's MMAs, E's fault and the absorb in segment order, then the tail and E's output.
+// A slot is handed over by named barriers: FULL after the operand warp's stores, EMPTY after the fold warp's loads.
+constexpr int BOW = 4;
+constexpr int BTH = 32 * (BOW + 1);
+enum : int { NB_FULL = 1, NB_EMPTY = NB_FULL + BOW, NB_OPS = NB_EMPTY + BOW, NB_RED = NB_OPS + 1 };
+constexpr int RS = 33;  // the reduction's lane stride in words
+
+struct __align__(16) H1BShared {
+  uint8_t op[BOW][3][32 * XS];  // operand warp w's slot: X (row l at l XS), W' (column l), wb (column l)
+  union {
+    u32 nz[2][2][2][32 * NZ];  // [buffer][chunk of the group][row, column][l NZ + s16]
+    int red[2][32 * RS];       // after the last segment: Y and X wbᵀ summed over the operand warps, [lane RS + entry]
+  };
+  uint8_t us[32 * XS];  // U: column l's 32 residues at l XS
+  uint8_t xs[32 * XS];  // the fold warp's digit rows
+  u32 sts[32 * NZ];     // σ_R's block l at l NZ, lane l's fold state
+  u64 sd[16];           // seed_j, σ_R
+};
+
+template <class E = NoEpi>
+__device__ __forceinline__ void h1b_unit(const H1Call& C, int v, H1BShared& sh, const u64* __restrict__ seeds, u64 nt0,
+                                         u64 nt1, u64 nt2, u32* __restrict__ out, int nowrite, const E& ep = E()) {
+  const int tid = threadIdx.x, lane = tid & 31, wid = tid >> 5;
+  const bool fold = wid == BOW;
+  const int nrb = C.units / C.ncb, ri = v % nrb, cj = v / nrb, u = ri * C.ncb + cj;
+  const int KS = C.k >> 5, m = n_digits(KS), sets = KS + m;
+  u32* o = out + C.out0 + (long long)u * 2 * sets;
+  if (!C.live[ri]) {
+    if (fold) {
+      if (!nowrite)
+        for (int i = lane; i < 2 * sets; i += 32) o[i] = 0;
+      if constexpr (E::ON) ep.dead(ri, cj, lane);
+    }
+    return;
+  }
+  const int g = lane >> 2, q = lane & 3;
+  const int nb = KS / 16, RB = nb + 1;
+  const u64 rowb = (u64)lane * RB, colb = (u64)32 * RB + (u64)lane * RB;
+  const int8_t* arow = C.a + (32LL * ri + lane) * C.lda;
+  const int8_t* brow = C.b + (32LL * cj + lane) * C.ldb;
+  const bool aok = ep.a_ok(32 * ri + lane);
+  if (wid == 0 && aok) prefetch_l2(arow, 512);
+  if (wid == 1) prefetch_l2(brow, 512);
+  if constexpr (E::SEEDS) {
+    if (lane == 0 && wid < 2) ep.seed(C, u, wid, sh.sd + 8 * wid);
+  } else if (tid < 16) {
+    sh.sd[tid] = seeds[(long long)(C.seed0 + u) * 16 + tid];
+  }
+  __syncthreads();
+  const u64* sj = sh.sd;
+  u64 mid[8];
+  noise_mid(sj, nt0, nt1, nt2, mid);
+  auto noise = [&](u64 t, u32 h[16]) { nblock_mid(mid, sj, t, nt0, nt1, nt2, h); };
+
+  // round 0, a compression a thread: chunk 0's row (warp 0) and column (warp 1) blocks, U (warp 2), σ_R's blocks (warp
+  // 3), the digit coins (the fold warp)
+  u32 zc[3] = {0, 0, 0};
+  {
+    u32 h[16];
+    if (fold) {
+      noise(rowb + nb, h);
+#pragma unroll
+      for (int d = 0; d < 3; ++d) zc[d] = h[d];
+    } else if (wid < 2) {
+      noise(wid ? colb : rowb, h);
+      u32* d = sh.nz[0][0][wid] + lane * NZ;
+#pragma unroll
+      for (int j = 0; j < 16; ++j) d[j] = h[j];
+    } else if (wid == 2) {
+      noise(colb + nb, h);
+#pragma unroll
+      for (int w = 0; w < 8; ++w) {
+        u32 x = 0;
+#pragma unroll
+        for (int i = 0; i < 4; ++i) {
+          const u32 by = (h[w] >> (8 * i)) & 0xFFu;
+          x |= ((by + (by >= 129u ? 63u : 192u)) & 0xFFu) << (8 * i);  // -64 + by mod 129, mod 2^8
+        }
+        *reinterpret_cast<u32*>(sh.us + lane * XS + 4 * w) = x;
+      }
+    } else {
+      nblock(sh.sd + 8, lane, nt0, nt1, nt2, h);
+#pragma unroll
+      for (int j = 0; j < 16; ++j) sh.sts[lane * NZ + j] = h[j];
+    }
+  }
+  __syncthreads();
+
+  if (!fold) {
+    const int w = wid;
+    const uint4 zero4 = make_uint4(0, 0, 0, 0);
+    u32 Uw[8], IB[4][2];
+#pragma unroll
+    for (int i = 0; i < 8; ++i) Uw[i] = *reinterpret_cast<const u32*>(sh.us + lane * XS + 4 * i);
+#pragma unroll
+    for (int ni = 0; ni < 4; ++ni)
+#pragma unroll
+      for (int hh = 0; hh < 2; ++hh) {
+        u32 x = 0;
+#pragma unroll
+        for (int i = 0; i < 4; ++i) x |= (u32)(16 * hh + 4 * q + i == 8 * ni + g) << (8 * i);
+        IB[ni][hh] = x;
+      }
+    int Y[2][4][4], cr[2][4][4];
+#pragma unroll
+    for (int mi = 0; mi < 2; ++mi)
+#pragma unroll
+      for (int ni = 0; ni < 4; ++ni)
+#pragma unroll
+        for (int e = 0; e < 4; ++e) Y[mi][ni][e] = cr[mi][ni][e] = 0;
+    uint8_t* Xs = sh.op[w][0];
+    uint8_t* Ws = sh.op[w][1];
+    uint8_t* Bs = sh.op[w][2];
+    const int ng = 1 + nb / 2;  // group 0 is chunk 0, group gi >= 1 chunks 2 gi - 1 and 2 gi (< nb)
+    for (int gi = 0; gi < ng; ++gi) {
+      const int c0 = gi == 0 ? 0 : 2 * gi - 1, nch = gi == 0 ? 1 : min(2, nb - c0), buf = gi & 1;
+      if (gi > 0) {
+        if ((w >> 1) < nch) {
+          u32 h[16];
+          noise(((w & 1) ? colb : rowb) + c0 + (w >> 1), h);
+          u32* d = sh.nz[buf][w >> 1][w & 1] + lane * NZ;
+#pragma unroll
+          for (int j = 0; j < 16; ++j) d[j] = h[j];
+        }
+        nbar_sync(NB_OPS, 32 * BOW);
+      }
+      if (gi + 1 < ng) {
+        const int cn = 2 * gi + 1 + (w >> 1);
+        if (cn < nb) {
+          if (w & 1)
+            prefetch_l2(brow + 512 * cn, 512);
+          else if (aok)
+            prefetch_l2(arow + 512 * cn, 512);
+        }
+      }
+      const int s1 = 16 * (c0 + nch);
+      int s = 16 * c0 + w;
+      uint4 pa0 = aok ? *reinterpret_cast<const uint4*>(arow + 32 * s) : zero4;
+      uint4 pa1 = aok ? *reinterpret_cast<const uint4*>(arow + 32 * s + 16) : zero4;
+      uint4 pb0 = *reinterpret_cast<const uint4*>(brow + 32 * s);
+      uint4 pb1 = *reinterpret_cast<const uint4*>(brow + 32 * s + 16);
+      for (; s < s1; s += BOW) {
+        const uint4 a0 = pa0, a1 = pa1, b0 = pb0, b1 = pb1;
+        if (s + BOW < s1) {
+          pa0 = aok ? *reinterpret_cast<const uint4*>(arow + 32 * (s + BOW)) : zero4;
+          pa1 = aok ? *reinterpret_cast<const uint4*>(arow + 32 * (s + BOW) + 16) : zero4;
+          pb0 = *reinterpret_cast<const uint4*>(brow + 32 * (s + BOW));
+          pb1 = *reinterpret_cast<const uint4*>(brow + 32 * (s + BOW) + 16);
+        }
+        const int ci = (s >> 4) - c0, s16 = s & 15;
+        const u32 nr = sh.nz[buf][ci][0][lane * NZ + s16], nc = sh.nz[buf][ci][1][lane * NZ + s16];
+        const u32 av[8] = {a0.x, a0.y, a0.z, a0.w, a1.x, a1.y, a1.z, a1.w};
+        const u32 bv[8] = {b0.x, b0.y, b0.z, b0.w, b1.x, b1.y, b1.z, b1.w};
+        u32 xw[8], ww[8], wq[8];
+#pragma unroll
+        for (int i = 0; i < 8; ++i) {
+          xw[i] = badd(av[i], spread4(nr >> (4 * i)));
+          ww[i] = badd(badd(bv[i], Uw[i]), spread4(nc >> (4 * i)));
+        }
+        if constexpr (E::ON) {
+          u32 P[8], N[8];
+#pragma unroll
+          for (int i = 0; i < 8; ++i) wrap_masks(bv[i], Uw[i], ww[i], P[i], N[i]);
+          ep.wb_fault(u, lane, s, P);
+#pragma unroll
+          for (int i = 0; i < 8; ++i) wq[i] = wrap_s8(P[i], N[i]);
+        }
+        if (s >= BOW) nbar_sync(NB_EMPTY + w, 64);
+        *reinterpret_cast<uint4*>(Xs + lane * XS) = make_uint4(xw[0], xw[1], xw[2], xw[3]);
+        *reinterpret_cast<uint4*>(Xs + lane * XS + 16) = make_uint4(xw[4], xw[5], xw[6], xw[7]);
+        *reinterpret_cast<uint4*>(Ws + lane * XS) = make_uint4(ww[0], ww[1], ww[2], ww[3]);
+        *reinterpret_cast<uint4*>(Ws + lane * XS + 16) = make_uint4(ww[4], ww[5], ww[6], ww[7]);
+        if constexpr (E::ON) {
+          *reinterpret_cast<uint4*>(Bs + lane * XS) = make_uint4(wq[0], wq[1], wq[2], wq[3]);
+          *reinterpret_cast<uint4*>(Bs + lane * XS + 16) = make_uint4(wq[4], wq[5], wq[6], wq[7]);
+        }
+        nbar_arrive(NB_FULL + w, 64);
+        __syncwarp();
+        u32 af[2][4], wf[4][2];
+#pragma unroll
+        for (int mi = 0; mi < 2; ++mi) {
+          af[mi][0] = *reinterpret_cast<const u32*>(Xs + (16 * mi + g) * XS + 4 * q);
+          af[mi][1] = *reinterpret_cast<const u32*>(Xs + (16 * mi + g + 8) * XS + 4 * q);
+          af[mi][2] = *reinterpret_cast<const u32*>(Xs + (16 * mi + g) * XS + 16 + 4 * q);
+          af[mi][3] = *reinterpret_cast<const u32*>(Xs + (16 * mi + g + 8) * XS + 16 + 4 * q);
+        }
+        if constexpr (E::ON) {
+#pragma unroll
+          for (int ni = 0; ni < 4; ++ni) {
+            wf[ni][0] = *reinterpret_cast<const u32*>(Bs + (8 * ni + g) * XS + 4 * q);
+            wf[ni][1] = *reinterpret_cast<const u32*>(Bs + (8 * ni + g) * XS + 16 + 4 * q);
+          }
+        }
+#pragma unroll
+        for (int mi = 0; mi < 2; ++mi)
+#pragma unroll
+          for (int ni = 0; ni < 4; ++ni) {
+            mma(Y[mi][ni], af[mi], IB[ni][0], IB[ni][1]);
+            if constexpr (E::ON) mma(cr[mi][ni], af[mi], wf[ni][0], wf[ni][1]);
+          }
+      }
+    }
+    // the noise buffers are free once every operand warp is past its last segment
+    nbar_sync(NB_OPS, 32 * BOW);
+    for (int i = tid; i < 2 * 32 * RS; i += 32 * BOW) (&sh.red[0][0])[i] = 0;
+    nbar_sync(NB_OPS, 32 * BOW);
+#pragma unroll
+    for (int mi = 0; mi < 2; ++mi)
+#pragma unroll
+      for (int ni = 0; ni < 4; ++ni)
+#pragma unroll
+        for (int e = 0; e < 4; ++e) {
+          atomicAdd(&sh.red[0][lane * RS + 16 * mi + 4 * ni + e], Y[mi][ni][e]);
+          if constexpr (E::ON) atomicAdd(&sh.red[1][lane * RS + 16 * mi + 4 * ni + e], cr[mi][ni][e]);
+        }
+    nbar_arrive(NB_RED, BTH);
+    return;
+  }
+
+  // the fold warp
+  u32 st[16], UB[4][2];
+#pragma unroll
+  for (int j = 0; j < 16; ++j) st[j] = sh.sts[lane * NZ + j];
+#pragma unroll
+  for (int ni = 0; ni < 4; ++ni) {
+    UB[ni][0] = *reinterpret_cast<const u32*>(sh.us + (8 * ni + g) * XS + 4 * q);
+    UB[ni][1] = *reinterpret_cast<const u32*>(sh.us + (8 * ni + g) * XS + 16 + 4 * q);
+  }
+  int acc[2][4][4];
+#pragma unroll
+  for (int mi = 0; mi < 2; ++mi)
+#pragma unroll
+    for (int ni = 0; ni < 4; ++ni)
+#pragma unroll
+      for (int e = 0; e < 4; ++e) acc[mi][ni][e] = 0;
+  for (int s0 = 0; s0 < KS; s0 += BOW) {
+#pragma unroll
+    for (int w = 0; w < BOW; ++w) {
+      const int s = s0 + w;
+      const uint8_t* Xs = sh.op[w][0];
+      const uint8_t* Ws = sh.op[w][1];
+      nbar_sync(NB_FULL + w, 64);
+      u32 af[2][4], bf[4][2];
+#pragma unroll
+      for (int mi = 0; mi < 2; ++mi) {
+        af[mi][0] = *reinterpret_cast<const u32*>(Xs + (16 * mi + g) * XS + 4 * q);
+        af[mi][1] = *reinterpret_cast<const u32*>(Xs + (16 * mi + g + 8) * XS + 4 * q);
+        af[mi][2] = *reinterpret_cast<const u32*>(Xs + (16 * mi + g) * XS + 16 + 4 * q);
+        af[mi][3] = *reinterpret_cast<const u32*>(Xs + (16 * mi + g + 8) * XS + 16 + 4 * q);
+      }
+#pragma unroll
+      for (int ni = 0; ni < 4; ++ni) {
+        bf[ni][0] = *reinterpret_cast<const u32*>(Ws + (8 * ni + g) * XS + 4 * q);
+        bf[ni][1] = *reinterpret_cast<const u32*>(Ws + (8 * ni + g) * XS + 16 + 4 * q);
+      }
+      if (s + BOW < KS) nbar_arrive(NB_EMPTY + w, 64);
+#pragma unroll
+      for (int mi = 0; mi < 2; ++mi)
+#pragma unroll
+        for (int ni = 0; ni < 4; ++ni) mma(acc[mi][ni], af[mi], bf[ni][0], bf[ni][1]);
+      if constexpr (E::ON) ep.fault(u, lane, s, acc);
+      absorb(st, acc, o, s, lane, nowrite);
+    }
+  }
+  int Y[2][4][4], cr[2][4][4];
+  nbar_sync(NB_RED, BTH);
+#pragma unroll
+  for (int mi = 0; mi < 2; ++mi)
+#pragma unroll
+    for (int ni = 0; ni < 4; ++ni)
+#pragma unroll
+      for (int e = 0; e < 4; ++e) {
+        Y[mi][ni][e] = sh.red[0][lane * RS + 16 * mi + 4 * ni + e];
+        cr[mi][ni][e] = E::ON ? sh.red[1][lane * RS + 16 * mi + 4 * ni + e] : 0;
+      }
+
+  // the tail, as h1r_unit's
+  uint8_t* Xs = sh.xs;
+  u32 zr[4][3];
+#pragma unroll
+  for (int rs = 0; rs < 4; ++rs)
+#pragma unroll
+    for (int d = 0; d < 3; ++d) zr[rs][d] = __shfl_sync(0xFFFFFFFFu, zc[d], g + 8 * rs);
+  for (int d = 0; d < m; ++d) {
+    u32 zd4[4];
+#pragma unroll
+    for (int rs = 0; rs < 4; ++rs) zd4[rs] = d == 0 ? zr[rs][0] : d == 1 ? zr[rs][1] : zr[rs][2];
+#pragma unroll
+    for (int mi = 0; mi < 2; ++mi)
+#pragma unroll
+      for (int ni = 0; ni < 4; ++ni)
+#pragma unroll
+        for (int e = 0; e < 4; ++e) {
+          const int row = 16 * mi + g + 8 * (e >> 1), rho = 8 * ni + 2 * q + (e & 1);
+          const int R = Y[mi][ni][e];
+          int dig;
+          if (d < m - 1) {
+            const int qq = R >> 7;
+            u32 zd = (zd4[2 * mi + (e >> 1)] >> rho) & 1u;
+            if (d == m - 2 && qq == 127) zd = 0;
+            dig = (R & 127) | (int)(zd << 7);
+            Y[mi][ni][e] = qq + (int)zd;
+          } else {
+            dig = R & 0xFF;
+          }
+          Xs[row * XS + rho] = (uint8_t)dig;
+        }
+    __syncwarp();
+    u32 af[2][4];
+#pragma unroll
+    for (int mi = 0; mi < 2; ++mi) {
+      af[mi][0] = *reinterpret_cast<const u32*>(Xs + (16 * mi + g) * XS + 4 * q);
+      af[mi][1] = *reinterpret_cast<const u32*>(Xs + (16 * mi + g + 8) * XS + 4 * q);
+      af[mi][2] = *reinterpret_cast<const u32*>(Xs + (16 * mi + g) * XS + 16 + 4 * q);
+      af[mi][3] = *reinterpret_cast<const u32*>(Xs + (16 * mi + g + 8) * XS + 16 + 4 * q);
+    }
+    __syncwarp();
+    int P[2][4][4];
+#pragma unroll
+    for (int mi = 0; mi < 2; ++mi)
+#pragma unroll
+      for (int ni = 0; ni < 4; ++ni) {
+#pragma unroll
+        for (int e = 0; e < 4; ++e) P[mi][ni][e] = 0;
+        mma(P[mi][ni], af[mi], UB[ni][0], UB[ni][1]);
+      }
+    if (d == 0) {
+#pragma unroll
+      for (int mi = 0; mi < 2; ++mi)
+#pragma unroll
+        for (int ni = 0; ni < 4; ++ni)
+#pragma unroll
+          for (int e = 0; e < 4; ++e) P[mi][ni][e] = (int)((u32)acc[mi][ni][e] - (u32)P[mi][ni][e]);
+    }
+    absorb(st, P, o, KS + d, lane, nowrite);
+    if constexpr (E::ON) {
+#pragma unroll
+      for (int mi = 0; mi < 2; ++mi)
+#pragma unroll
+        for (int ni = 0; ni < 4; ++ni)
+#pragma unroll
+          for (int e = 0; e < 4; ++e)
+            acc[mi][ni][e] = d == 0 ? P[mi][ni][e] : (int)((u32)acc[mi][ni][e] - ((u32)P[mi][ni][e] << (7 * d)));
+    }
+  }
+  if constexpr (E::ON) {
+#pragma unroll
+    for (int mi = 0; mi < 2; ++mi)
+#pragma unroll
+      for (int ni = 0; ni < 4; ++ni)
+#pragma unroll
+        for (int e = 0; e < 4; ++e) acc[mi][ni][e] = (int)((u32)acc[mi][ni][e] + ((u32)cr[mi][ni][e] << 8));
+    ep.out(ri, cj, lane, acc);
+  }
+}
+
 template <int NW, int V>
 __global__ void __launch_bounds__(32 * NW, V >= 2 ? 3 : 1) h1r_units_k(const H1Call* __restrict__ calls, int ncalls,
                                                                        const u64* __restrict__ seeds, u64 nt0, u64 nt1,
@@ -569,6 +935,17 @@ __global__ void __launch_bounds__(32 * NW, V >= 2 ? 3 : 1) h1r_units_k(const H1C
   const int v = blockIdx.x * NW + wid;
   if (v >= C.units) return;
   h1r_unit<V>(C, v, lane, smem[wid][0], smem[wid][1], sd[wid], nzs[V >= 2 ? wid : 0][0], seeds, nt0, nt1, nt2, out, nowrite);
+}
+
+__global__ void __launch_bounds__(BTH, 2) h1r_unitsb_k(const H1Call* __restrict__ calls, int ncalls,
+                                                       const u64* __restrict__ seeds, u64 nt0, u64 nt1, u64 nt2,
+                                                       u32* __restrict__ out, int nowrite) {
+  __shared__ H1BShared sh;
+  const int c = blockIdx.y;
+  if (c >= ncalls) return;
+  const H1Call C = calls[c];
+  if ((int)blockIdx.x >= C.units) return;
+  h1b_unit(C, blockIdx.x, sh, seeds, nt0, nt1, nt2, out, nowrite);
 }
 
 static u64 be64(const char* s, int at) {
@@ -601,6 +978,9 @@ extern "C" int h1r_launch(const H1Call* calls_dev, int ncalls, int max_units, co
   if (version == 0) return (int)cudaGetLastError();  // the seeds alone (h1f computes the units)
   if (version == 1)
     h1r_units_k<NW, 1><<<grid, 32 * NW, 0, stream>>>(calls_dev, ncalls, seeds_dev, nt[0], nt[1], nt[2], out_dev, nowrite);
+  else if (version == 3)  // the block form
+    h1r_unitsb_k<<<dim3(max_units, ncalls), BTH, 0, stream>>>(calls_dev, ncalls, seeds_dev, nt[0], nt[1], nt[2], out_dev,
+                                                              nowrite);
   else
     h1r_units_k<NW, 2><<<grid, 32 * NW, 0, stream>>>(calls_dev, ncalls, seeds_dev, nt[0], nt[1], nt[2], out_dev, nowrite);
   return (int)cudaGetLastError();

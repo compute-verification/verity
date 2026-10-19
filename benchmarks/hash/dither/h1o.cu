@@ -11,7 +11,8 @@
 //                table, its root where the units' seeds read it (h1c.cu; its row-independent parts once a step)
 //   h1o_units    a warp a unit (`h1r_unit<2, OutEpi>`): its seed_j and σ_R, the receipt, then z and y of the unit's cells;
 //                A rows >= m read as the canonical empty row (zero); a dead unit (its row block holds no admitted row)
-//                writes zero receipts and zero z and y
+//                writes zero receipts and zero z and y.  `h1o_unitsb` is the same in the block form (`h1b_unit<OutEpi>`,
+//                a unit a block of five warps), for decode, where a call's units would leave most SMs idle
 // `h1o_ref` is the gate's reference for z, another computation of the same definition: one warp a unit, its noise from
 // full compressions (`nblock`, not the served kernel's midstate), T_last and the residue sums Y by scalar dp4a (no MMA),
 // and z = T_last - U Y (the digits' recombination is exact: sum_d 128^d A_d = Y) + 256 sum over the entries whose integer
@@ -137,6 +138,25 @@ __global__ void __launch_bounds__(32 * NW, 2) h1o_units_k(const H1O* __restrict_
                       (st.flags & F_NW_UNITS) ? 1 : 0, ep);
 }
 
+// the block form: a unit a block (`h1b_unit<OutEpi>`), the same values as h1o_units_k's
+__global__ void __launch_bounds__(BTH, 2) h1o_unitsb_k(const H1O* __restrict__ F, const H1OStep* __restrict__ S,
+                                                       const int8_t* __restrict__ xq, const float* __restrict__ sa, int M,
+                                                       const float* __restrict__ sw, __nv_bfloat16* __restrict__ y,
+                                                       int* __restrict__ zo, const u64* __restrict__ salt,
+                                                       const u64* __restrict__ step_base, u64 nt0, u64 nt1, u64 nt2,
+                                                       u64 st0, u64 st1, u64 st2, u64 rt0, u64 rt1, u64 rt2) {
+  __shared__ H1BShared sh;
+  const H1OStep st = *S;
+  const int p = st.parity;
+  H1Call C = *F->rc[p];
+  if ((int)blockIdx.x >= C.units) return;
+  C.a = xq;
+  C.lda = F->k;
+  const OutEpi ep{F->z[p], zo, y, F->ydump, sa, sw, F->n, M, st.m, st.flags, nullptr, salt, step_base,
+                  st0, st1, st2, rt0, rt1, rt2};
+  h1b_unit<OutEpi>(C, blockIdx.x, sh, F->seeds, nt0, nt1, nt2, F->out[p], (st.flags & F_NW_UNITS) ? 1 : 0, ep);
+}
+
 // the reference: unit u = ri * ncb + cj of call C (A rows from C.a, rows >= the slot's m already zero), z_ref [T, N]
 // wbc (or null): [wb⁺ count, wb⁻ count] added over the call's live units
 __global__ void __launch_bounds__(32) h1o_ref_k(const H1Call* __restrict__ call, const u64* __restrict__ seeds, u64 nt0,
@@ -232,6 +252,20 @@ extern "C" int h1o_units_launch(const H1O* F, const H1OStep* S, int units, int n
   h1o_units_k<NWO><<<(unsigned)((units + NWO - 1) / NWO), 32 * NWO, 0, stream>>>(
       F, S, xq, sa, M, sw, (__nv_bfloat16*)y, zo, salt, step_base, nt[0], nt[1], nt[2], st[0], st[1], st[2], rt[0], rt[1],
       rt[2]);
+  return (int)cudaGetLastError();
+}
+
+// h1o_units_launch's call in the block form
+extern "C" int h1o_unitsb_launch(const H1O* F, const H1OStep* S, int units, int n, int k, const int8_t* xq, const float* sa,
+                                 int M, const float* sw, void* y, int* zo, const u64* salt, const u64* step_base,
+                                 cudaStream_t stream) {
+  if (M <= 0 || n % 32 || k % 512 || k < 512 || units <= 0 || !salt || !step_base) return 1;
+  u64 nt[3], st[3], rt[3];
+  tag3("verity/pouw/noise/v1", nt);
+  tag3("verity/pouw/seed/v2", st);
+  tag3("verity/pouw/receipt/v1", rt);
+  h1o_unitsb_k<<<(unsigned)units, BTH, 0, stream>>>(F, S, xq, sa, M, sw, (__nv_bfloat16*)y, zo, salt, step_base, nt[0],
+                                                    nt[1], nt[2], st[0], st[1], st[2], rt[0], rt[1], rt[2]);
   return (int)cudaGetLastError();
 }
 
