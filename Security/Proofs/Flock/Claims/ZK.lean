@@ -66,6 +66,7 @@ import Proofs.Flock.Claims.ZK.SimLig
 import Proofs.Flock.Claims.ZK.FinExe
 import Proofs.Flock.Claims.ZK.FinPads
 import Proofs.Flock.Claims.ZK.LiveEnd
+import Proofs.Flock.Claims.ZK.FinTau
 import Proofs.Flock.Claims.ZK.Worker
 import Proofs.Flock.Claims.ZK.Switched
 import Proofs.Flock.Claims.ZK.Server
@@ -328,6 +329,8 @@ import Proofs.Flock.Claims.ZK.Stop
 * `FinPads`: `Masked.repOpenRest_pads`, `FinalRest`'s pads half: the pads' opened columns and salts read from the views
   are the session's.
 * `LiveEnd`: `Masked.liveEnd`, the session answered by the openings ends as the one answered by the opened coins.
+* `FinTau`: `Masked.repTau_of`, `FinExe`'s `RepTau` from `InnerTauVal`: the session's rep's `τ` is `innerP`'s after the
+  shared phases, at the rep's `ε` slot's coins.
 * `Assemble`: `Flock.zk_deployZk_masked_exe_split`, Flock's zero knowledge at the deployed masked session from
   `SplitInner`'s `InnerTauVal`, `CausalExe`, and `FinExe`'s `RepOpenFinal`, `RepExact` and `RepPoints`: `hstep` from
   `Masked.prefixLive` and `SimSession` (`Masked.hstep_exe`), `SimSession` from `Masked.simCommit`, `Masked.simPiop`,
