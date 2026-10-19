@@ -7,7 +7,9 @@ Toward `DescAgree.GatesLocated`: what `Desc.walkable` gives a walk of `Flock.Ste
 potential finishes within any fuel above the potential it starts at (`run_of_potential`), and `Desc.activations` and
 `Desc.depths`, folded callees first, are their recurrences (`activations_get`, `depths_get`). A reference of a sequence
 is its part's element, found by bisection over the parts' starts (`seq_get`, `bisect_spec`), and a strided part's
-elements lie between the corners `Flock.Program.parsePartsIn` checks (`strided_corners`).
+elements lie between the corners `Flock.Program.parsePartsIn` checks (`strided_corners`). A composite's nodes' members
+hold fewer activations than it and nest less deep (`activations_child`, `depths_child`), which is what the walk's
+potential lowers.
 -/
 
 namespace NciCheck.Properties.SecurityProofs.Walk
@@ -387,5 +389,51 @@ theorem strided_corners (b os is : ℤ) {inner c t : ℕ} (hin : 0 < inner) (ht 
       · exact ⟨u4, hu4, le_trans (by rw [eY]; rw [h] at hy1; exact hy1.2) hu4'⟩
   obtain ⟨⟨u, hu, hu'⟩, ⟨u', hu2, hu2'⟩⟩ := key
   exact ⟨le_trans (foldl_min_le _ _ _ (Or.inl hu)) hu', le_trans hu2' (le_foldl_max _ _ _ (Or.inl hu2))⟩
+
+
+theorem foldl_add_ge {α : Type} (f : α → ℕ) : ∀ (l : List α) (s : ℕ), s ≤ l.foldl (fun s n => s + f n) s
+  | [], _ => le_refl _
+  | x :: xs, s => le_trans (Nat.le_add_right s (f x)) (foldl_add_ge f xs (s + f x))
+
+theorem le_foldl_add {α : Type} (f : α → ℕ) :
+    ∀ (l : List α) (s : ℕ) (x : α), x ∈ l → f x ≤ l.foldl (fun s n => s + f n) s
+  | [], _, _, h => by simp at h
+  | y :: ys, s, x, h => by
+    rcases List.mem_cons.1 h with h | h
+    · subst h; exact le_trans (Nat.le_add_left _ _) (foldl_add_ge f ys (s + f x))
+    · exact le_foldl_add f ys _ x h
+
+theorem foldl_max_ge {α : Type} (f : α → ℕ) : ∀ (l : List α) (s : ℕ), s ≤ l.foldl (fun s n => max s (f n)) s
+  | [], _ => le_refl _
+  | x :: xs, s => le_trans (le_max_left s (f x)) (foldl_max_ge f xs _)
+
+theorem le_foldl_max_of_mem {α : Type} (f : α → ℕ) :
+    ∀ (l : List α) (s : ℕ) (x : α), x ∈ l → f x ≤ l.foldl (fun s n => max s (f n)) s
+  | [], _, _, h => by simp at h
+  | y :: ys, s, x, h => by
+    rcases List.mem_cons.1 h with h | h
+    · subst h; exact le_trans (le_max_right s (f x)) (foldl_max_ge f ys _)
+    · exact le_foldl_max_of_mem f ys _ x h
+
+/-- **A composite's node's members are fewer activations than the composite's own**: `Desc.activations` counts one for
+the activation itself, so a node's `members` copies of its callee's activations stay strictly below. -/
+theorem activations_child (P : Prog) (hc : Desc.calleesFirst P = true) {d : ℕ} (hd : d < P.defs.size)
+    (hp : (P.defs[d]!).prim = false) {n : Flock.Program.Node} (hn : n ∈ (P.defs[d]!).body.nodes) :
+    n.members * (Desc.activations P)[n.fn]! < (Desc.activations P)[d]! := by
+  rw [activations_get P hc hd, hp, if_neg (by simp)]
+  have := le_foldl_add (fun n : Flock.Program.Node => n.members * (Desc.activations P)[n.fn]!)
+    (P.defs[d]!).body.nodes.toList 0 n (Array.mem_toList_iff.2 hn)
+  rw [Array.foldl_toList] at this
+  omega
+
+/-- **A composite's callees nest less deep than it**. -/
+theorem depths_child (P : Prog) (hc : Desc.calleesFirst P = true) {d : ℕ} (hd : d < P.defs.size)
+    (hp : (P.defs[d]!).prim = false) {n : Flock.Program.Node} (hn : n ∈ (P.defs[d]!).body.nodes) :
+    (Desc.depths P)[n.fn]! < (Desc.depths P)[d]! := by
+  rw [depths_get P hc hd, hp, if_neg (by simp)]
+  have := le_foldl_max_of_mem (fun n : Flock.Program.Node => (Desc.depths P)[n.fn]!)
+    (P.defs[d]!).body.nodes.toList 0 n (Array.mem_toList_iff.2 hn)
+  rw [Array.foldl_toList] at this
+  omega
 
 end NciCheck.Properties.SecurityProofs.Walk
