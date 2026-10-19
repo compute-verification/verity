@@ -33,8 +33,6 @@ from .models import (
     ADA_E4M3_M16N8K32,
     ADA_E5M2_M16N8K32,
     AMPERE_BF16_M16N8K16,
-    BLACKWELL_SM100_E4M3,
-    BLACKWELL_SM100_E5M2,
     BLACKWELL_SM100_MXF4,
     BLACKWELL_SM100_NVF4,
     BLACKWELL_SM120_E4M3_M16N8K32,
@@ -499,31 +497,12 @@ INSTRUCTIONS: dict[str, Instruction] = {
             evidence=("tcgen05.mma kind::f16 with bf16 operands on B200 -- no measurement",),
         ),
         _i(
-            # Measured with 0 mismatches over 31.3M words (lane B200-FP8, 2026-10-19); "hypothesis" until trust.py computes
-            # PINNED from tc-evidence/v1 records of the run, which f8_sm100.py does not yet publish.
             id="sm100.tcgen05.mma.e4m3",
             sm="sm_100",
-            ptx="tcgen05.mma.cta_group::1.kind::f8f6f4 [d_tmem], a_desc, b_desc, idesc(e4m3 x e4m3 -> f32, M128 N32 K32, "
-                "K-major), enable_input_d",
-            shape=(128, 32, 32),
+            ptx=None, shape=None,
             a_dtype="e4m3", b_dtype="e4m3", acc_dtype="f32", scale=None,
-            model=BLACKWELL_SM100_E4M3,
-            status="hypothesis",
-            evidence=(BLACKWELL_SM100_E4M3.validated,
-                      "model = sm120.mma.m16n8k32.e4m3's pipeline (groups (32,), width 26, floor -133); the floor is "
-                      "unobservable for this kind and measured on kind::mxf8f6f4"),
-        ),
-        _i(
-            id="sm100.tcgen05.mma.e5m2",
-            sm="sm_100",
-            ptx="tcgen05.mma.cta_group::1.kind::f8f6f4 [d_tmem], a_desc, b_desc, idesc(e5m2 x e5m2 -> f32, M128 N32 K32, "
-                "K-major), enable_input_d",
-            shape=(128, 32, 32),
-            a_dtype="e5m2", b_dtype="e5m2", acc_dtype="f32", scale=None,
-            model=BLACKWELL_SM100_E5M2,
-            status="hypothesis",
-            evidence=(BLACKWELL_SM100_E5M2.validated,
-                      "model = sm120.mma.m16n8k32.e5m2's pipeline (groups (32,), width 26, floor -133) with e5m2 products"),
+            model=None, status="unprobed",
+            evidence=("tcgen05.mma kind::f8f6f4 with e4m3 operands on B200 -- no measurement",),
         ),
     )
 }

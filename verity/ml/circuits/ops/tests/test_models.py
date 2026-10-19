@@ -24,6 +24,8 @@ from verity.ml.circuits.silicon.models import (
     BLACKWELL_SM100_E4M3,
     BLACKWELL_SM100_E5M2,
     BLACKWELL_SM120_E2M1_M16N8K32,
+    BLACKWELL_SM120_E4M3_M16N8K32,
+    BLACKWELL_SM120_E5M2_M16N8K32,
     BLACKWELL_SM120_MXF4,
     BLACKWELL_SM120_MXF4_UNDERFLOW_SIGNED,
     BLACKWELL_SM120_NVF4,
@@ -272,6 +274,21 @@ def test_sm100_tcgen05_fp8_is_sm120s_group_sum_on_the_b200(kind: str, model: Gro
         for name, alt in alternatives.items():
             misses[name] += tc_dot_chain(alt, c, a, b) != d
     assert len(records) >= 30 and all(misses.values()), misses
+
+
+def test_sm100_fp8_models_are_the_sm120_parameters_under_their_own_name() -> None:
+    """Lane B200-FP8's finding: the B200's tcgen05.mma kind::f8f6f4 computes the RTX PRO 6000's FP8 words.  The B200's model
+    objects are kept separate (named for the architecture they were measured on); this pins that their numerics are sm_120's
+    field by field."""
+    from dataclasses import fields
+
+    for sm100, sm120 in ((BLACKWELL_SM100_E4M3, BLACKWELL_SM120_E4M3_M16N8K32), (BLACKWELL_SM100_E5M2, BLACKWELL_SM120_E5M2_M16N8K32)):
+        assert type(sm100) is type(sm120)
+        for f in fields(sm100):
+            if f.name in ("name", "arch", "validated"):
+                continue
+            assert getattr(sm100, f.name) == getattr(sm120, f.name), f.name
+        assert sm100.arch == "sm_100" and sm120.arch == "sm_120"
 
 
 def test_single_window_w26_hypothesis_is_refuted_by_the_fixture(vectors: dict) -> None:

@@ -9,8 +9,6 @@ from verity.ml.circuits.silicon.models import (
     ADA_BF16_M16N8K16,
     ADA_E4M3_M16N8K32,
     AMPERE_BF16_M16N8K16,
-    BLACKWELL_SM100_E4M3,
-    BLACKWELL_SM100_E5M2,
     BLACKWELL_SM100_MXF4,
     BLACKWELL_SM100_NVF4,
     BLACKWELL_SM120_E4M3_M16N8K32,
@@ -48,7 +46,6 @@ EXPECTED_IDS = {
     "sm100.tcgen05.mma.e2m1.mxf4",
     "sm100.tcgen05.mma.bf16",
     "sm100.tcgen05.mma.e4m3",
-    "sm100.tcgen05.mma.e5m2",
 }
 
 
@@ -123,12 +120,9 @@ def test_mnemonics_come_from_the_source_repos_or_are_none() -> None:
     # descriptor fields the probe kernel set (benchmarks/tc_probe_fp4/tcgen05_fp4.cu)
     assert INSTRUCTIONS["sm100.tcgen05.mma.e2m1.nvf4"].ptx.startswith("tcgen05.mma.cta_group::1.kind::mxf4nvf4.block_scale.scale_vec::4X")
     assert INSTRUCTIONS["sm100.tcgen05.mma.e2m1.mxf4"].ptx.startswith("tcgen05.mma.cta_group::1.kind::mxf4.block_scale.scale_vec::2X")
-    bf16 = INSTRUCTIONS["sm100.tcgen05.mma.bf16"]
-    assert bf16.status == "unprobed" and bf16.model is None and bf16.ptx is None and bf16.shape is None
-    for ins_id, model in (("sm100.tcgen05.mma.e4m3", BLACKWELL_SM100_E4M3), ("sm100.tcgen05.mma.e5m2", BLACKWELL_SM100_E5M2)):
+    for ins_id in ("sm100.tcgen05.mma.bf16", "sm100.tcgen05.mma.e4m3"):
         ins = INSTRUCTIONS[ins_id]
-        assert ins.ptx.startswith("tcgen05.mma.cta_group::1.kind::f8f6f4 ") and ins.shape == (128, 32, 32)
-        assert ins.status == "hypothesis" and ins.model is model
+        assert ins.status == "unprobed" and ins.model is None and ins.ptx is None and ins.shape is None
 
 
 def test_block_scaled_ids_carry_their_scale_format() -> None:
@@ -143,12 +137,11 @@ def test_block_scaled_ids_carry_their_scale_format() -> None:
 
 
 def test_sm100_models_are_the_sm120_parameters_under_their_own_name() -> None:
-    """Lanes tcgen05's and B200-FP8's finding: the B200's tcgen05.mma computes the RTX 5090's FP4 and the RTX PRO 6000's FP8 words.  The registry keeps separate model objects
+    """Lane tcgen05's finding: the B200's tcgen05.mma computes the RTX 5090's words.  The registry keeps separate model objects
     (named for the architecture they were measured on); this pins that their numerics are identical field by field."""
     from dataclasses import fields
 
-    for sm100, sm120 in ((BLACKWELL_SM100_NVF4, BLACKWELL_SM120_NVF4), (BLACKWELL_SM100_MXF4, BLACKWELL_SM120_MXF4),
-                         (BLACKWELL_SM100_E4M3, BLACKWELL_SM120_E4M3_M16N8K32), (BLACKWELL_SM100_E5M2, BLACKWELL_SM120_E5M2_M16N8K32)):
+    for sm100, sm120 in ((BLACKWELL_SM100_NVF4, BLACKWELL_SM120_NVF4), (BLACKWELL_SM100_MXF4, BLACKWELL_SM120_MXF4)):
         assert type(sm100) is type(sm120)
         for f in fields(sm100):
             if f.name in ("name", "arch", "validated"):
