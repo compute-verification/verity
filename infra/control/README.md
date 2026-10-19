@@ -39,6 +39,15 @@ detached, an `index.lock` older than 10 minutes, or a change unpushed for an hou
 flows again. The agent watch's findings reach Slack from infra's VM: `agent_watch_relay.py`
 (tmux `agent-watch-relay` on infra's VM) posts each new line of `events.jsonl` in #agent-alerts, leading with @top and ringing @top's inbox for what the watch leaves for a person (erroring, stuck, a refused cancel, held again, a run unreadable for an hour); a worker's alert, a silent agent and an ended run lead with the record's handle and ring that inbox; the watch frees runs without it.
 
+The pod also starts a stopped Nebius VM for a lane, whose VM holds no Nebius key: `research run --on NODE` on a node that
+doesn't answer, with no Nebius key where it runs, asks the pod over `ssh_base("vy-control-verity")` (`remote.wake_on_control`)
+to run `tools/research/src/research/pods/nebius/wake.py` from `/data/infra/store-index-src`. It starts only an instance that
+exactly one entry of the steward's `machines.d` names as its `nebius_instance_id`, before that entry's `deadline` (fleet.py
+copies it from the VM's /etc/research/deadline), under a live line in the guard's state. Its key is
+`/root/.config/verity/nebius-wake.env` (`NEBIUS_SA_ID`, `NEBIUS_SA_PUBLIC_KEY_ID`, `NEBIUS_SA_PRIVATE_KEY_B64`, `NEBIUS_BIN`),
+whose account must be allowed to start instances. `monitor.env`'s account is in the tenant's viewers group and can't, and
+until the file exists every wake through the pod is refused with "ask @infra".
+
 A coordinator whose duty timer recurs opts in to the watch's idle rule by adding its handle and the timer's interval in seconds
 to `agent_watch_timers.json` (`{"infra": 900}`) in a PR; infra copies the file to `/data/agent-watch/timers.json`, which the
 watch reads each sweep, so no restart is needed. It is then woken (or, with `--wake` off, recorded) once nothing has run for
@@ -55,7 +64,7 @@ read-only deploy key; if `watch.log` shows `FETCH-FAILED`, remove `--reap` until
 | `/data/boot` | `/post_start.sh` | `post_start.sh` |
 | `/data/state/root-research` | `/root/.research` | the guard's and the steward's state |
 | `/data/state/runpod` | `/root/.runpod` | the RunPod CLI config and its ssh key |
-| `/data/state/config-verity` | `/root/.config/verity` | `r2.env` (R2 credentials), `relay.env` (`SLACK_BOT_TOKEN`, `GH_TOKEN`), `store-index.env` (`STORE_INDEXER_DATABASE_URL`), `store-export.env` (`RESEARCH_EXPORT_BUCKET` and the export bucket's read-only `RESEARCH_EXPORT_ACCESS_KEY_ID` / `RESEARCH_EXPORT_SECRET_ACCESS_KEY`, optionally `RESEARCH_EXPORT_ENDPOINT`) and `panels.key` |
+| `/data/state/config-verity` | `/root/.config/verity` | `r2.env` (R2 credentials), `relay.env` (`SLACK_BOT_TOKEN`, `GH_TOKEN`), `store-index.env` (`STORE_INDEXER_DATABASE_URL`), `store-export.env` (`RESEARCH_EXPORT_BUCKET` and the export bucket's read-only `RESEARCH_EXPORT_ACCESS_KEY_ID` / `RESEARCH_EXPORT_SECRET_ACCESS_KEY`, optionally `RESEARCH_EXPORT_ENDPOINT`) and `panels.key`; `monitor.env` (read-only monitoring keys) and, once granted, `nebius-wake.env` (the wake's start key) |
 | `/data/state/secrets` | | `notes-git-credentials`, `verity-deploy` (read-only deploy key), `panels-key-push`, `known_hosts` |
 | `/data/uv` | `/root/.local/bin/uv`, `/root/.local/share/uv/python`, `/usr/local/bin/python3.12` | uv and CPython 3.12 |
 | `/data/steward` | `/workspace/steward` | the verity clone, the research-notes clone, the steward's store, `run.sh`, `render-src` |
