@@ -69,6 +69,7 @@ import Proofs.Flock.Claims.DeployPlainCode
 import Proofs.Flock.Claims.DeployCode
 import Proofs.Flock.Claims.DeployTables
 import Proofs.Flock.Claims.KS
+import Proofs.Flock.Claims.KS.ZkForkClash
 import Proofs.Flock.Claims.RootFindGF128
 import Proofs.Flock.Claims.GS
 import Proofs.Flock.Claims.DeployRounds
