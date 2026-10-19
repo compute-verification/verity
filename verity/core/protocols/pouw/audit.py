@@ -46,7 +46,6 @@ from verity.ml.randomness import derive
 
 from .coins import Challenger, CoinCommitment, CoinOpening, coin_reason
 from .protocol import Certificate, Context, DomainError, Matmul, PoUWScheme, Tile, tagged
-from .serving import HASH_FORMATS
 
 SALT_DOMAIN = "verity/pouw/salt/v1"
 EPOCH_SALT_DOMAIN = "verity/pouw/epoch-salt/v1"
@@ -147,10 +146,9 @@ def tap_binding(salt: bytes, index: int) -> bytes:
 
 
 def a_binding(scheme: PoUWScheme, salt: bytes, index: int) -> bytes:
-    """The binding of call `index`'s A rows under `scheme`: the Commit tap's (`tap_binding`) when its hashing format reads A
-    from the tap, else A's own tree's (`activation_binding`)."""
-    fmt = HASH_FORMATS.get(getattr(scheme, "hashing", None))
-    return (tap_binding if fmt is not None and fmt.a_rows == "tap" else activation_binding)(salt, index)
+    """The binding of call `index`'s A rows under `scheme`: the Commit tap's (`tap_binding`) when the scheme reads A from
+    the tap (``a_tap``, its hashing format's ``a_rows``), else A's own tree's (`activation_binding`)."""
+    return (tap_binding if getattr(scheme, "a_tap", False) else activation_binding)(salt, index)
 
 
 def commit_rows(binding: bytes, owner: int, rows: Sequence[bytes], hash: str = "sha256", salt_key: bytes | None = None,
