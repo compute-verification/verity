@@ -23,7 +23,16 @@ agree on a subcircuit whose novel reads are novel input gates. It is stronger wh
 redundant: a thread value and a copy of it, two thread values one of which determines the other, or a computed value
 that takes fewer than `2^b_a` values over the runs. Each is charged `b_a`, and their information is less. It fails where
 `WeightsIncompressible` does (weights committed in `θ`, a low-rank update, updates rebuilt from fewer bits), and where
-thread values are redundant at rate above `b_a`. -/
+thread values are redundant at rate above `b_a`.
+
+**Falsified** (19 Oct 2026, Linear CMP-56, note:compute-accounting/20261019T0725Z-finding-nci-falsify,
+art:32d42058ab76d8012ef741449665e9e1c2a444fa7158bcb03cbf2457b97944dd) at FP4 at `b_a = 4`, under the standard threading.
+If each FP4 thread value is a gate holding its E2M1 value (15 values), one weight-gradient product `δ_t[i] · x_t[j]`
+reads two thread values and no weight, is charged 8 bits, and its reads take at most 225 < 2⁸ values. If the gates hold
+E2M1 codes (16 with `-0`) and each block's scale sits in its own gate, an NVFP4 or MXFP4 block's codes always include
+one of magnitude at least 3, so 16 weight-gradient products over one 16-token block are charged 128 bits against fewer
+than 2^127.998 values. It holds against these at FP8 (E4M3, 7.98 bits per entry), and when each FP4 gate holds its
+scaled value. -/
 def WeightsSupport (c : Declaration) (θv : c.D.Transcript) (T : Threading c) (Γ : ℕ) (S b_w b_a : ℝ) : Prop :=
   ∀ R, SmallInfo c θv Γ S R →
     (2 : ℝ) ^ (b_w * (T.weightsUsed R).card + b_a * ∑ t, (T.threadReads R t).card) ≤
