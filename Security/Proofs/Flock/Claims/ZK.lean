@@ -33,6 +33,7 @@ import Proofs.Flock.Claims.ZK.Refusals
 import Proofs.Flock.Claims.ZK.FirstRefusal
 import Proofs.Flock.Claims.ZK.Stopped
 import Proofs.Flock.Claims.ZK.Sent
+import Proofs.Flock.Claims.ZK.Round1
 import Proofs.Flock.Claims.ZK.Worker
 import Proofs.Flock.Claims.ZK.Switched
 import Proofs.Flock.Claims.ZK.Server
@@ -196,8 +197,13 @@ import Proofs.Flock.Claims.ZK.SamplingNonVacuous
   at the rounds after the first where no refusal is seen, the plan's `Causal`, its round `0` and the last round.
 * `Sent`: at a round after the first where no refusal is seen, `honestPR` sends the masked session's next body at the
   openings' answers, tagged `0` (`Masked.honestPR_live`, from `FlockComplete.ZkTables.honestPR_sent`), so
-  `Flock.zk_deployZk_masked_exe_sent_gap` asks the encoding there against that run: that the session sends past the
-  openings (`hsend`) and that the encoding is its next body (`hbody`).
+  `Flock.zk_deployZk_masked_exe_sent_gap` asks the encoding there against that run (`hstep`): that the session sends
+  past the openings and the encoding is its next body, or that it stops within them and the encoding is `[]`
+  (`Masked.honestPR_stopped`), as where table `0`'s extra claims throw right after the link message.
+* `Round1`: round `1` of that run at a live statement (`Masked.liveRun_round1`): where table `0`'s extra claims at the
+  link points throw, the session stops after the link message; else its second body is table `0` rep `0`'s first
+  zerocheck squeeze, of the domain's transcript with the digest, the level-0 cap and the pads' root absorbed
+  (`FlockComplete.sessionPZk_go_round1`).
 * `Worker`: Lemma B at any clear values a worker supplies, which never read the pads: the switched prover (`p`'s view
   where its rows hold, else the honest prover's on the pads Lemma A moves) has `S_shvzk`'s distribution on the honest
   `InnerHolds` alone (`sw_shvzk`, `worker_shvzk`), and differs from `p`'s view only in `Y₁`, `C_h` and the pads tree

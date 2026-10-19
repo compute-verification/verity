@@ -12,10 +12,11 @@ session sends, it sends the session's body at their count, tagged `0` (`FlockCom
   converse of `outerHit_of_lt`.
 * `liveRun`: the masked session on the mask witness at the tape, answered by the openings.
 * `honestPR_live`: where the openings show no refusal and `liveRun` sends past them, `honestPR`'s message is
-  `liveRun`'s next body.
+  `liveRun`'s next body; `honestPR_stopped`: where `liveRun` stops within them, it is `[]`.
 * `Flock.zk_deployZk_masked_exe_sent_gap`: `Flock.zk_deployZk_masked_exe_live_gap` with the encoding asked against the
-  session's bodies: where no refusal is seen, `liveRun` sends past the openings (`hsend`, at every tape) and the
-  encoding is its next body, tagged `0` (`hbody`).
+  session's run: where no refusal is seen, either `liveRun` sends past the openings and the encoding is its next body,
+  tagged `0`, or it stops within them and the encoding is `[]` (`hstep`). The session can stop with no refusal the
+  coins show: table `0`'s extra claims throw at a statement whose regions do not fit, right after the link message.
 -/
 
 namespace Claims.ZKMal
@@ -106,24 +107,42 @@ theorem honestPR_live (H : Msg → Msg) (hH : Claims.hOf H = _root_.Flock.Sha512
   rw [List.length_map] at e
   exact e
 
-/-- **`hlive` from the session's bodies**: where no refusal is seen after the first round, `liveRun` sends past the
-openings (`hsend`) and the encoding of the cut view is its next body, tagged `0` (`hbody`). -/
+/-- **A session that stops within the openings sends `[]`**: where `liveRun` throws having sent at most the openings'
+count, `honestPR`'s message is `[]` (`honestPR_stops`). -/
+theorem honestPR_stopped (H : Msg → Msg) (hH : Claims.hOf H = _root_.Flock.Sha512.hash) {x : Msg}
+    (w : Claims.Flock.Wit) (ω : FlockComplete.TapeZk) (ops : List (Msg × Msg)) {s spec}
+    (hsx : FlockDeploy.setupOf true x = some (s, spec, stsOf x)) (he : ∃ e, (liveRun x w ω ops spec).1 = .error e)
+    (hn : (liveRun x w ω ops spec).2.size ≤ ops.length) :
+    (((FlockComplete.ZkTables.honestPR w).next x (ops.map fun p => (p.1, coinOfD p.2)) ω).eval H).1 = [] := by
+  have hh : (ops.map fun p => (p.1, coinOfD p.2)).map Prod.snd = ops.map fun p => coinOfD p.2 := by
+    rw [List.map_map]
+    rfl
+  refine FlockComplete.ZkTables.honestPR_stops H x w ω hsx _ _ hh fun R L hY => ?_
+  have hrun : liveRun x w ω ops spec = (R, L) := by
+    rw [← hY, hH]
+    rfl
+  rw [hrun] at he hn
+  exact ⟨he, by rw [List.length_map]; exact hn⟩
+
+/-- **`hlive` from the session's run**: where no refusal is seen after the first round, either `liveRun` sends past the
+openings and the encoding of the cut view is its next body, tagged `0`, or it stops within them and the encoding is
+`[]` (`hstep`). -/
 theorem hlive_of_sent {P : Composed.LigProver}
     {cz : (x : Msg) → (Fin (refK x) → FlockDeploy.Coin) → ∀ j, Composed.CoinsZK (tabC P x j).Rest}
     {enc : (x : Msg) → (c : Fin (refK x) → FlockDeploy.Coin) → ℕ → (∀ j, ((tabC P x j).T (cz x c j)).tab.Cut) → Msg}
     {fin : (x : Msg) → (c : Fin (refK x) → FlockDeploy.Coin) → (∀ j, ((tabC P x j).T (cz x c j)).tab.View) → Msg}
     (U : TapePlan (tabC P)) (nr : Msg → ℕ → ℕ) (H : Msg → Msg) (hH : Claims.hOf H = _root_.Flock.Sha512.hash)
-    (hsend : ∀ x, Live x → ∀ w, RZk x w → ∀ (ω : FlockComplete.TapeZk) (ops : List (Msg × Msg)), 0 < ops.length →
+    (hstep : ∀ x, Live x → ∀ w, RZk x w → ∀ (τ : U.Tape) (ops : List (Msg × Msg)), 0 < ops.length →
       ops.length < refK x → ¬ Refused x (padOps ops) ops.length →
       ∀ s spec, FlockDeploy.setupOf true x = some (s, spec, stsOf x) →
-        ops.length < (liveRun x w ω ops spec).2.size)
-    (hbody : ∀ x, Live x → ∀ w, RZk x w → ∀ (τ : U.Tape) (ops : List (Msg × Msg)), 0 < ops.length →
-      ops.length < refK x → ¬ Refused x (padOps ops) ops.length →
-      ∀ s spec, FlockDeploy.setupOf true x = some (s, spec, stsOf x) →
-        ops.length < (liveRun x w (U.tapeZk τ) ops spec).2.size →
-        enc x (padOps ops) ops.length
-            ((session nr (tableData P (RoundPlan.stop cz enc fin) U)).cutOf x (padOps ops) (wtOf P x w) τ) =
-          0 :: (liveRun x w (U.tapeZk τ) ops spec).2[ops.length]!) :
+        (ops.length < (liveRun x w (U.tapeZk τ) ops spec).2.size ∧
+          enc x (padOps ops) ops.length
+              ((session nr (tableData P (RoundPlan.stop cz enc fin) U)).cutOf x (padOps ops) (wtOf P x w) τ) =
+            0 :: (liveRun x w (U.tapeZk τ) ops spec).2[ops.length]!) ∨
+        ((∃ e, (liveRun x w (U.tapeZk τ) ops spec).1 = .error e) ∧
+          (liveRun x w (U.tapeZk τ) ops spec).2.size ≤ ops.length ∧
+          enc x (padOps ops) ops.length
+              ((session nr (tableData P (RoundPlan.stop cz enc fin) U)).cutOf x (padOps ops) (wtOf P x w) τ) = [])) :
     ∀ x, Live x → ∀ w, RZk x w → ∀ (τ : U.Tape) (ops : List (Msg × Msg)), 0 < ops.length →
       ops.length < refK x → ¬ Refused x (padOps ops) ops.length →
       enc x (padOps ops) ops.length
@@ -131,9 +150,11 @@ theorem hlive_of_sent {P : Composed.LigProver}
         (((FlockComplete.ZkTables.honestPR w).next x (ops.map fun p => (p.1, coinOfD p.2)) (U.tapeZk τ)).eval H).1 := by
   intro x hx w hR τ ops h0 hl hs
   obtain ⟨s, spec, hsx⟩ := setupOf_of_refK (lt_of_le_of_lt (Nat.zero_le _) hl)
-  have hn := hsend x hx w hR (U.tapeZk τ) ops h0 hl hs s spec hsx
-  rw [honestPR_live H hH hx w (U.tapeZk τ) ops hl hs hsx hn]
-  exact hbody x hx w hR τ ops h0 hl hs s spec hsx hn
+  rcases hstep x hx w hR τ ops h0 hl hs s spec hsx with ⟨hn, hb⟩ | ⟨he, hn, hb⟩
+  · rw [honestPR_live H hH hx w (U.tapeZk τ) ops hl hs hsx hn]
+    exact hb
+  · rw [honestPR_stopped H hH w (U.tapeZk τ) ops hsx he hn]
+    exact hb
 
 end Masked
 
@@ -141,10 +162,10 @@ open Masked
 
 open Classical in
 /-- **Flock's zero knowledge at the deployed masked session, at the executable's layout and a plan that stops where a
-refusal is seen, against the session's bodies**: `Flock.zk_deployZk_masked_exe_live_gap` with its encoding asked at the
-masked session's run where no refusal is seen (`hlive_of_sent`). Left: that the session sends past the openings there
-(`hsend`, at every tape), that the encoding is its next body (`hbody`), the plan's `Causal`, its round `0` and the
-last round where every table admits. -/
+refusal is seen, against the session's run**: `Flock.zk_deployZk_masked_exe_live_gap` with its encoding asked at the
+masked session's run where no refusal is seen (`hlive_of_sent`). Left: that there the encoding is the session's next
+body past the openings, or `[]` where the session stops within them (`hstep`), the plan's `Causal`, its round `0` and
+the last round where every table admits. -/
 theorem Flock.zk_deployZk_masked_exe_sent_gap (H : Msg → Msg) (hH : Claims.hOf H = _root_.Flock.Sha512.hash)
     (nr : Msg → ℕ → ℕ) (P : Composed.LigProver)
     {cz : (x : Msg) → (Fin (refK x) → FlockDeploy.Coin) → ∀ j, Composed.CoinsZK (tabC P x j).Rest}
@@ -152,17 +173,17 @@ theorem Flock.zk_deployZk_masked_exe_sent_gap (H : Msg → Msg) (hH : Claims.hOf
     {fin : (x : Msg) → (c : Fin (refK x) → FlockDeploy.Coin) → (∀ j, ((tabC P x j).T (cz x c j)).tab.View) → Msg}
     (h0 : ∀ x c cut, enc x c 0 cut = enc0 P x (cz x c) cut) (t : ℕ) (ht : 0 < t)
     (hc : (RoundPlan.stop cz enc fin).Causal) (ho : OuterReads cz) (hr : CoinReads cz) (hp : PointReads cz)
-    (hsend : ∀ x, Live x → ∀ w, RZk x w → ∀ (ω : FlockComplete.TapeZk) (ops : List (Msg × Msg)), 0 < ops.length →
+    (hstep : ∀ x, Live x → ∀ w, RZk x w → ∀ τ (ops : List (Msg × Msg)), 0 < ops.length →
       ops.length < refK x → ¬ Refused x (padOps ops) ops.length →
       ∀ s spec, FlockDeploy.setupOf true x = some (s, spec, stsOf x) →
-        ops.length < (liveRun x w ω ops spec).2.size)
-    (hbody : ∀ x, Live x → ∀ w, RZk x w → ∀ τ (ops : List (Msg × Msg)), 0 < ops.length →
-      ops.length < refK x → ¬ Refused x (padOps ops) ops.length →
-      ∀ s spec, FlockDeploy.setupOf true x = some (s, spec, stsOf x) →
-        ops.length < (liveRun x w ((TapePlan.ofLayout (TapeLayout.exe P) exeTape).tapeZk τ) ops spec).2.size →
-        enc x (padOps ops) ops.length ((session nr (tableData P (RoundPlan.stop cz enc fin)
-            (TapePlan.ofLayout (TapeLayout.exe P) exeTape))).cutOf x (padOps ops) (wtOf P x w) τ) =
-          0 :: (liveRun x w ((TapePlan.ofLayout (TapeLayout.exe P) exeTape).tapeZk τ) ops spec).2[ops.length]!)
+        (ops.length < (liveRun x w ((TapePlan.ofLayout (TapeLayout.exe P) exeTape).tapeZk τ) ops spec).2.size ∧
+          enc x (padOps ops) ops.length ((session nr (tableData P (RoundPlan.stop cz enc fin)
+              (TapePlan.ofLayout (TapeLayout.exe P) exeTape))).cutOf x (padOps ops) (wtOf P x w) τ) =
+            0 :: (liveRun x w ((TapePlan.ofLayout (TapeLayout.exe P) exeTape).tapeZk τ) ops spec).2[ops.length]!) ∨
+        ((∃ e, (liveRun x w ((TapePlan.ofLayout (TapeLayout.exe P) exeTape).tapeZk τ) ops spec).1 = .error e) ∧
+          (liveRun x w ((TapePlan.ofLayout (TapeLayout.exe P) exeTape).tapeZk τ) ops spec).2.size ≤ ops.length ∧
+          enc x (padOps ops) ops.length ((session nr (tableData P (RoundPlan.stop cz enc fin)
+              (TapePlan.ofLayout (TapeLayout.exe P) exeTape))).cutOf x (padOps ops) (wtOf P x w) τ) = []))
     (hfin : (session nr (tableData P (RoundPlan.stop cz (encStop enc) fin)
       (TapePlan.ofLayout (TapeLayout.exe P) exeTape))).HonestFinOn Live RZk H coinOfD
         fun ω => (TapePlan.ofLayout (TapeLayout.exe P) exeTape).tapeZk ω.2) :
@@ -173,6 +194,6 @@ theorem Flock.zk_deployZk_masked_exe_sent_gap (H : Msg → Msg) (hH : Claims.hOf
           8 * t * nL P x * FlockSoundness.CROnly.hidingGap ZkView.My ZkView.saltHash + 2 * (1 / 3) ^ t else 1)
       fun _ => 4 * t * 3 ^ t :=
   Flock.zk_deployZk_masked_exe_live_gap H hH nr P h0 t ht hc ho hr hp
-    (hlive_of_sent _ nr H hH hsend hbody) hfin
+    (hlive_of_sent _ nr H hH hstep) hfin
 
 end Claims.ZKMal
