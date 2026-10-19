@@ -133,6 +133,8 @@ Caches (``$CHECK_CACHE``, default ``~/.cache/verity-check``; ``--no-cache`` for 
     flock-rust-tests  likewise (`rust_tests_key`: the script, which pins the Flock commit and the Rust toolchain, the patches,
                     the live crate, that toolchain's `rustc -vV`, the environment), so only a change to those pays for the Rust
                     tests
+    preflight-lints likewise (`lints_key`: the commit's tree, which they read whole, the interpreter, the environment); a tree
+                    with uncommitted changes has no key, and runs them
 
 Inside a recorded run it writes `$RESEARCH_RUN_DIR/result.json` (kind `check/v1`): each step's status, seconds and cache use,
 with each step's log beside it, and `verdicts.tar.gz`: the passes this run stored, which another machine imports with
@@ -1259,8 +1261,19 @@ def rust_tests_key(e: dict[str, str]) -> str | None:
     return h.hexdigest()
 
 
+def lints_key(e: dict[str, str]) -> str | None:
+    """What preflight-lints reads: the whole tree (`LINTS` read every file the repository holds), so the commit's tree, with the
+    interpreter, the platform and the environment.  None when the tree differs from its commit (untracked files included), or
+    git can't say."""
+    st = subprocess.run(["git", "status", "--porcelain", "--untracked-files=normal"], cwd=ROOT, capture_output=True, text=True)
+    tree = subprocess.run(["git", "rev-parse", "HEAD^{tree}"], cwd=ROOT, capture_output=True, text=True)
+    if st.returncode or st.stdout.strip() or tree.returncode:
+        return None
+    return hashlib.sha256(json.dumps([tree.stdout.strip(), list(LINTS), sys.version, platform.platform(), _env_key(e)]).encode()).hexdigest()
+
+
 #: the steps whose pass is kept under a key of everything they read, and reused while it holds
-STEP_KEYS = {"lean-agreement": agreement_key, "flock-rust-tests": rust_tests_key}
+STEP_KEYS = {"lean-agreement": agreement_key, "flock-rust-tests": rust_tests_key, "preflight-lints": lints_key}
 
 
 def agreement_closure(files: list[str]) -> list[str]:

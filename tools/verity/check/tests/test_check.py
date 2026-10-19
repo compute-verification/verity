@@ -1490,3 +1490,27 @@ def test_the_lean_audit_step_regenerates_records_only_where_the_lean_job_takes_i
     assert not CHECK.lean_regenerates()
     (tmp_path / "lean_audit.py").write_text('ap.add_argument("--regenerate", action="store_true")\n')
     assert CHECK.lean_regenerates()
+
+
+def test_the_lints_are_keyed_by_the_committed_tree_and_unkeyed_on_any_change(tmp_path, monkeypatch):
+    """preflight-lints read every file (`LINTS`), so their pass is kept under the commit's tree, and a tree with a change git
+    hasn't committed, an untracked file too, has no key: the lints run."""
+    import subprocess
+
+    def git(*a):
+        subprocess.run(["git", "-c", "user.email=t@t", "-c", "user.name=t", "-c", "commit.gpgsign=false", *a], cwd=tmp_path,
+                       check=True, capture_output=True)
+
+    (tmp_path / "a.md").write_text("a\n")
+    git("init", "-q")
+    git("add", "-A")
+    git("commit", "-q", "-m", "a")
+    monkeypatch.setattr(CHECK, "ROOT", tmp_path)
+    e = {"PATH": "/usr/bin"}
+    one = CHECK.lints_key(e)
+    assert one and CHECK.lints_key(e) == one and CHECK.lints_key({"PATH": "/bin"}) != one
+    (tmp_path / "b.md").write_text("b\n")
+    assert CHECK.lints_key(e) is None
+    git("add", "-A")
+    git("commit", "-q", "-m", "b")
+    assert CHECK.lints_key(e) not in (None, one)
