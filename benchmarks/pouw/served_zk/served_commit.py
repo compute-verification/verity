@@ -2,7 +2,7 @@
 judged through the proof service (`sampled_proofs.service`, P1: a `Stream`'s `register`, `select`, `deliver` and
 `outcome`), and the check that a hidden tile proof's committed rows are the drawn tile's.
 
-  python served_commit.py params PASS_DIR OUT [--eps E --delta D --entries P] [--calls N | --call I ...]
+  python served_commit.py params PASS_DIR OUT [--eps E --delta D --entries P] [--calls N | --call I ...] [--max-tokens L]
                                                                               the verifier's own parameters of the window
   python served_commit.py commit PASS_DIR PARAMS OUT                          the committer: the window, salted and committed
   python served_commit.py register COMMIT_DIR PARAMS OUT [--extra ITEM=JSON]  the committer: the record, the public items only
@@ -17,7 +17,9 @@ judged through the proof service (`sampled_proofs.service`, P1: a `Stream`'s `re
 
 - **The window** is the parameters' calls: SZ_CALLS of the pass's ``o_proj``-shaped calls (k = n = `K`), which ``params``
   picks from ``os.urandom`` unless ``--call`` names them, and whose public shape (`pouw.window.Call`: each call's batch
-  slots m, weight rows n and first tile in the pass) is the parameters' ``shape``.  Each call's m A slots (the pass's
+  slots m, weight rows n and first tile in the pass) is the parameters' ``shape``, and whose fixed length
+  (`pouw.window.Length`: the served requests ran ignoring end-of-sequence at ``max_tokens`` `MAX_TOKENS`, CMP-43) is
+  their ``length``.  Each call's m A slots (the pass's
   retained activations, BF16 widened to FP32, for its real rows, and a zero row for each slot past them) and its weight's
   n B rows are formed on the CPU as `pearl_c` forms them under the pass's epoch (`PearlC.noise`, forming v1, the peel
   factors), and become the statement's fp8-pi rows: fp8-p rows (A′_i ‖ P_A,i of role X, ``hm96-sha512/row-seg/v1``;
@@ -141,6 +143,8 @@ W_DOMAIN = "verity/pouw/served-zk/weights-domain/v0"
 #: the public bound on a window's entries (its calls and the filler), and the tile counts a window may register
 ENTRIES = 16
 RANGE = (1, 1 << 40)
+#: each call's fixed length: the served requests' max_tokens under ignore_eos (`pearl_c_vllm/e2e.py`'s SERVED_TOKENS)
+MAX_TOKENS = 4
 EPS, DELTA = "1/2", "1/10"
 
 
@@ -192,14 +196,15 @@ def items_of(params: dict, ell: int, root_w: str | None) -> dict:
     w = work_at(params, ell)
     return {"work": w.to_json(tile_work(params)), "check": check_item(params),
             "sampling": Wd.sampling(Fraction(params["eps"]), Fraction(params["delta"]), w, tile_work(params), params["grid_bits"]),
-            "shape": Wd.shape_json(window_shape(params)), "root_W": root_w}
+            "shape": Wd.shape_json(window_shape(params)), "length": Wd.length_of(params["length"]).to_json(),
+            "root_W": root_w}
 
 
 #: what one-stage's record shows besides the two salted roots, each declared to the service's rule with its reason
 LAYOUT = (
     ("population", "structure", "N, the shape's tile count: the draw's range, a function of the public shape"),
-    ("window", "output", "PoUW's registered items, exactly `pouw.window.REGISTERED` (work, check, sampling, shape, root_W), "
-                         "each the verifier's own recomputation at the registered level (`public_problem`)"),
+    ("window", "output", "PoUW's registered items, exactly `pouw.window.REGISTERED` (work, check, sampling, shape, length, "
+                         "root_W), each the verifier's own recomputation at the registered level (`public_problem`)"),
     (f"leaves:{PORT}", "structure", "P, the public bound on a window's entries"),
     (f"domain:{PORT}", "structure", "the entries' served domain: the window's program, partition and context"),
     ("leaves:W", "structure", "|W|, the deployment's weight rows at k = n = K"),
@@ -966,7 +971,8 @@ def pass_tiles(man: dict) -> dict[int, int]:
 def cmd_params(a) -> int:
     """The verifier's own parameters, from the served request it audits: its run and manifest name the window, the
     model's k = n = K weights give |W|, and the window's calls, picked from ``os.urandom`` unless ``--call`` names them,
-    give its public shape (each call's batch slots m, weight rows n and first tile in the pass, in pass order)."""
+    give its public shape (each call's batch slots m, weight rows n and first tile in the pass, in pass order) and its
+    fixed length (each call's max_tokens under ignore_eos: ``--max-tokens``, the served requests')."""
     _, man, sha, calls = _pass(Path(a.pass_dir))
     rows = sum(next(u["n"] for u in calls if int(u["weight"]) == w) for w in _weights(man, calls))
     by = {u["index"]: u for u in calls}
@@ -987,7 +993,11 @@ def cmd_params(a) -> int:
     deployment = f"served-zk/{man.get('run')}"
     params = {"context": f"{deployment}/{sha}", "deployment": deployment, "k": K, "eps": a.eps, "delta": a.delta,
               "grid_bits": Wd.GRID_BITS, "range": list(RANGE), "entries": a.entries, "w_rows": rows,
-              "calls": [u["index"] for u in chosen], "shape": shape, "call_draw": draw}
+              "calls": [u["index"] for u in chosen], "shape": shape, "call_draw": draw,
+              "length": {"ignore_eos": True, "max_tokens": [a.max_tokens] * len(shape)}}
+    why = Wd.length_problem(Wd.length_of(params["length"]), Wd.shape_of(shape))
+    if why:
+        raise SystemExit(f"the window's fixed length: {why}")
     Path(a.out).write_text(json.dumps(params, sort_keys=True))
     print(json.dumps(params), flush=True)
     return 0
@@ -1299,6 +1309,7 @@ def main(argv=None) -> int:
     p.add_argument("--entries", type=int, default=ENTRIES)
     p.add_argument("--calls", type=int, default=2)
     p.add_argument("--call", type=int, action="append")
+    p.add_argument("--max-tokens", type=int, default=MAX_TOKENS)
     p = sub.add_parser("commit")
     for x in ("pass_dir", "params", "out"):
         p.add_argument(x)

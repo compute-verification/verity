@@ -72,11 +72,12 @@ def _value(o: D.Outcome) -> Any:
 # ---- the inputs, as the challenger holds them -----------------------------------------------------------------------
 
 def core_params(params: Mapping[str, Any], check: Mapping[str, Any], query: str) -> dict:
-    """`core_check`'s parameters of a served window: the check item and query digest, and the window's own numbers and
-    shape."""
+    """`core_check`'s parameters of a served window: the check item and query digest, and the window's own numbers,
+    shape and fixed length (parameters with none are an EOS-keyed window's, which the check refuses)."""
     return {"check": dict(check), "context": params["context"], "delta": params["delta"], "eps": params["eps"],
             "grid_bits": params["grid_bits"], "query": query, "range": list(params["range"]),
-            "shape": [dict(c) for c in params["shape"]]}
+            "shape": [dict(c) for c in params["shape"]],
+            **({"length": copy.deepcopy(params["length"])} if "length" in params else {})}
 
 
 def registration_params(program: Any, query: Mapping[str, Any], law: Mapping[str, Any], scheme: str,

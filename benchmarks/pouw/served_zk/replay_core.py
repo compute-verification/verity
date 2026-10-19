@@ -30,9 +30,10 @@ Without ``--runs`` it selects every `job.sh` attempt in the evidence store and f
 
 A run of an older record version (no registration, or another scheme) and the v2 registrations run through both sides
 for agreement only.  A window of the superseded form (its parameters have no ``shape``: its tiles and N followed its real
-tiles) is refused by PoUW's check as ``window-form``, so each of its core cases must be that refusal, whatever it recorded
-(decision 129: refuse and label; the runs carry ``replay_expect = refused: window-form``).  Python and Lean must give the
-same outcome on every input, reason included.
+tiles) is refused by PoUW's check as ``window-form``, and one with a shape but no fixed ``length`` (its rows stopped at
+end-of-sequence, CMP-43) as ``window-form: eos-keyed``, so each of its core cases must be that refusal, whatever it
+recorded (decision 129: refuse and label; the runs carry ``replay_expect = refused: window-form``).  Python and Lean must
+give the same outcome on every input, reason included.
 """
 from __future__ import annotations
 
@@ -53,6 +54,7 @@ import verity_difftest as D
 
 from verity.core.protocols.pouw import coins as Co
 from verity.core.protocols.pouw import core_check as CC
+from verity.core.protocols.pouw import window as Wd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import of_record as OR  # noqa: E402
@@ -122,12 +124,14 @@ def params_of(out: Path, reg: dict) -> dict:
     p = load(out / "request/params.json")
     return {"check": reg["window"]["public"]["check"], "context": p["context"], "delta": p["delta"], "eps": p["eps"],
             "grid_bits": p["grid_bits"], "query": reg["query"], "range": p["range"],
-            **({"shape": p["shape"]} if "shape" in p else {})}
+            **{k: p[k] for k in ("shape", "length") if k in p}}
 
 
 def superseded(out: Path) -> bool:
-    """A window of the superseded form: its parameters have no shape, so PoUW's check refuses it as ``window-form``."""
-    return "shape" not in load(out / "request/params.json")
+    """A window of a superseded form: its parameters have no shape, or no fixed length (EOS-keyed), so PoUW's check refuses
+    it as ``window-form``."""
+    p = load(out / "request/params.json")
+    return "shape" not in p or not Wd.fixed_length(p.get("length"))
 
 
 def current(reg: Any) -> bool:
@@ -178,7 +182,7 @@ def opening_inputs(out: Path, checks: dict, summary: dict) -> list[tuple[str, di
         got.append((name, {"params": {"check": {**reg["window"]["public"]["check"], "entries": p["entries"]},
                                       "context": p["context"], "delta": p["delta"], "eps": p["eps"],
                                       "grid_bits": p["grid_bits"], "query": reg["query"], "range": p["range"],
-                                      **({"shape": p["shape"]} if "shape" in p else {})},
+                                      **{k: p[k] for k in ("shape", "length") if k in p}},
                            "commitment": hexed(reg), "units": drawn if is_drawn else None, "unit": unit,
                            "pub": (out / pub / "pub.bin").read_bytes().hex(), "opening": load(out / op / "opening.json")}))
     return got
