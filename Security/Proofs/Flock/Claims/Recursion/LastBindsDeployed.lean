@@ -325,13 +325,24 @@ theorem lastStepBinds_of_V {T : Type} (H : Msg → Msg) (Bd : Bound Coin (List F
   rw [hview, hview] at hne
   exact h x ms l l' cs hk hc hearly hacc hacc' (hne.imp_left fun hc0 heq => hc0 (hcols _ _ heq))
 
+/-- The deployed bound record's `DE` reads a view's columns as `colsE`. Stated at a variable `colsE`, so that it is
+read off the record without unfolding `colsE`'s own record. -/
+theorem bdDeployed_cols (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
+    (nextE : Msg → List Msg → List Coin → OC Out) (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128))
+    (wE : Msg → ℝ) (join : List Msg → Msg) (rowIn : Msg → Msg)
+    (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) :
+    (bdDeployed rel nextE colsE wE join rowIn final w).DE.cols = colsE :=
+  rfl
+
 /-- **`LastStepBinds` at the deployed bound record**, from `PlainLastBinds`, whatever the code side's other choices. -/
 theorem lastStepBinds_deployed (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (wE : Msg → ℝ) (join : List Msg → Msg) (rowIn : Msg → Msg)
     (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) (H : Msg → Msg) (h : PlainLastBinds H) :
     (bdDeployed rel (FlockDeploy.V false).next (FlockDeploy.deployPlainTrim rel).cols wE join rowIn final
-      w).LastStepBinds H :=
-  lastStepBinds_of_V H _ rfl (fun _ => rfl) (fun _ _ heq => plainTrim_cols_congr rel heq) h
+      w).LastStepBinds H := by
+  refine lastStepBinds_of_V H _ rfl (fun _ => rfl) (fun _ _ heq => ?_) h
+  rw [bdDeployed_cols]
+  exact plainTrim_cols_congr rel heq
 
 /-- **(P4) modulo what `E*` reads, at the deployed bound record** (`Bound.LastBindsEC`), from the deployed plain
 verifier's binding of its last message (`PlainLastBinds`): at the deployed plain verifier's steps and columns and the
