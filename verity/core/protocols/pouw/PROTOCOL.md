@@ -124,7 +124,10 @@ and opens coin `(label, i)` once, after the root the verifier recorded for it. `
 label and index, its form, the path against the root, and `after`); `order_reason` checks a family's openings against the
 roots the verifier recorded, in order: coin i opened after root i, none twice ("a retry never redraws"), none before its
 root is recorded, and every recorded root's coin opened. `LiveRecord` is the verifier's side: it records a root and only
-then asks the challenger for that root's coin.
+then asks the challenger for that root's coin. The commitment those checks read is the challenger's own: before any coin
+opens, the challenger signs it with its LMS key on its host (`LiveChallenger.sign_record`, `write_record`; Lean
+`SampledProofs.ChallengerRecord`), and the verifier reads that record from the challenger's file under its own key
+(`trusted_commitment`), never from the prover's bundle, and fails closed on a missing, malformed or unsigned record.
 
 Timing is a trust assumption, not a check. `after` binds an opening to the root the verifier recorded, but can't show the
 coin was released after it: that rests on the challenger releasing coin i only once it has received root i. The
