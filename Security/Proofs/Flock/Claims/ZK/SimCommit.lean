@@ -12,9 +12,8 @@ commitment from the cut's pads leaves (`padsTreeCut`) is the masked prover's (`i
   prover's, since under SHA-512 every leaf is a pure value of `PS` and the two build the same levels above them.
 * Level 0's leaves: `leafAt_cutAt` and `exeOf_inl` (Round0) at the executable's layout (`agrees0_exe`).
 * The pads' leaves: `padLeafCut_cutAt` and `exeOf_pads`. `exeOf_pads` and what it reads (`colPAt_tabC`, `sum_padCode`
-  and their lemmas) are ZKR1's (`Claims/ZK/Round1Pads.lean`, `Claims/ZK/Round1Root.lean` on
-  `cursor/claims-zk-prover-faithful-c7a9` @ 8d237ba110), whose closure is not this branch's; they are copied here as
-  private declarations, so that the two files can share one import closure.
+  and their lemmas) are private copies of the Round1 pads modules' (`Round1Pads`, `Round1Root`), which `Split`'s
+  closure doesn't hold; once it does, import them and delete the copies.
 -/
 
 namespace FlockComplete
@@ -482,33 +481,35 @@ private theorem exeOf_pads (P : Composed.LigProver) {x : Msg} (w : Claims.Flock.
 but its rows and salts, and each rep's pads commitment from the cut's pads leaves is the masked prover's but its
 columns and salts, as `PS` runs them from any bodies. -/
 theorem simCommit : SimCommit := by
-  intro x hx w τ c j l
+  intro x hx w _ τ c j l
   have hj := lt_of_jOf j
   obtain ⟨s, spec, hs⟩ := setupOf_of_pos (x := x) (by omega)
   obtain ⟨-, -, -, hall⟩ := FlockComplete.ZkTables.tables_of_setup hx.1 hs
   have hjt : j.val < (FlockDeploy.tabsOf (stsOf x)).size := by simpa [FlockDeploy.tabsOf] using hj
   have hget : (FlockDeploy.tabsOf (stsOf x))[j.val]! = _root_.Flock.Setup.ofCircuit (stAt x j) := by
-    rw [getElem!_pos _ _ hjt]
+    rw [getElem!_pos (FlockDeploy.tabsOf (stsOf x)) j.val hjt]
     simp only [FlockDeploy.tabsOf, Array.getElem_map]
     rfl
   have hms : (FlockDeploy.tabsOf (stsOf x))[j.val]!.merkle = _root_.Flock.MerkleScheme.hm96Sha512 := by
     rw [hget]
     exact (hall j.val hj).2.2
-  have hsrc : srcE x c w τ j.val = ({ leaf0 := leafAt PE x (czExe PE x c) (cutE x c w τ) j, row0 := fun _ => #[],
-      salt0 := fun _ => ByteArray.empty,
-      rep := fun r => if hr : r < 2 then repSrcCut PE x (czExe PE x c) (cutE x c w τ) j ⟨r, hr⟩ else default } :
-        FlockComplete.TabSrc) := by
+  have hleaf0 : ∀ q, (srcE x c w τ j.val).leaf0 q = leafAt PE x (czExe PE x c) (cutE x c w τ) j q := fun q => by
     unfold srcE tabSrcCut
-    exact dif_pos j.isLt
+    rw [dite_eq_left j.isLt]
+  have hrow0 : ∀ q, (srcE x c w τ j.val).row0 q = #[] := fun q => by
+    unfold srcE tabSrcCut
+    rw [dite_eq_left j.isLt]
+  have hsalt0 : ∀ q, (srcE x c w τ j.val).salt0 q = ByteArray.empty := fun q => by
+    unfold srcE tabSrcCut
+    rw [dite_eq_left j.isLt]
   refine ⟨?_, fun r => ?_⟩
   · congr 1
     rw [hms]
     unfold FlockComplete.commitPZk
     obtain ⟨-, -, -, -, hd, -⟩ := tabC_z PE x j
-    refine FlockComplete.commit0Cut_eq _ _ _ _ (by simp [FlockComplete.encodeRowsZk]) (fun q hq => ?_)
-      (fun q => by rw [hsrc] <;> rfl) (fun q => by rw [hsrc] <;> rfl)
+    refine FlockComplete.commit0Cut_eq _ _ _ _ (by simp [FlockComplete.encodeRowsZk]) (fun q hq => ?_) hrow0 hsalt0
     have hq' : q < (tabC PE x j).z.nS + (tabC PE x j).z.nU := by rw [hd]; exact hq
-    rw [hsrc]
+    rw [hleaf0]
     refine ((leafAt_cutAt PE x (czExe PE x c) (wtOf PE x w) (UE.tape x τ).1
         (exeOf (tabC PE x) (czExe PE x c) (wtOf PE x w) (UE.tape x τ).1 (UE.tape x τ).2.1) j hq').trans
       (exeOf_inl PE (TapeLayout.exe PE) exeTape (agrees0_exe PE) w τ (czExe PE x c) j ⟨q, hq'⟩)).trans ?_
@@ -516,8 +517,9 @@ theorem simCommit : SimCommit := by
     rfl
   · congr 1
     have hrep : (srcE x c w τ j.val).rep r.val = repSrcCut PE x (czExe PE x c) (cutE x c w τ) j r := by
-      rw [hsrc]
-      exact dif_pos r.isLt
+      unfold srcE tabSrcCut
+      rw [dite_eq_left j.isLt]
+      exact dite_eq_left r.isLt
     have hm : (FlockDeploy.tabsOf (stsOf x))[j.val]!.m = (stAt x j).m := by rw [hget]; rfl
     have hk : (FlockDeploy.tabsOf (stsOf x))[j.val]!.kLog = (stAt x j).c.kLog := by rw [hget]; rfl
     rw [hrep, hm, hk]
@@ -533,8 +535,12 @@ theorem simCommit : SimCommit := by
     refine FlockComplete.padsTreeCut_eq _ _ _ (by rw [Array.size_append, FlockComplete.padsOf_size, hpH])
       (fun q hq => ?_) (fun _ => rfl) (fun _ => rfl) (fun _ => rfl)
     have hq' : q < (tabC PE x j).z.nQ + (tabC PE x j).z.nPU := by rw [hNq]; exact hq
-    exact (padLeafCut_cutAt PE x (czExe PE x c) (wtOf PE x w) (UE.tape x τ).1
-      (exeOf (tabC PE x) (czExe PE x c) (wtOf PE x w) (UE.tape x τ).1 (UE.tape x τ).2.1) j r hq').trans
-      (exeOf_pads PE w τ (czExe PE x c) j r ⟨q, hq'⟩)
+    have h1 := padLeafCut_cutAt PE x (czExe PE x c) (wtOf PE x w) (UE.tape x τ).1
+      (exeOf (tabC PE x) (czExe PE x c) (wtOf PE x w) (UE.tape x τ).1 (UE.tape x τ).2.1) j r hq'
+    have h2 := exeOf_pads PE w τ (czExe PE x c) j r ⟨q, hq'⟩
+    simp only [repSrcCut]
+    unfold cutE
+    rw [h1]
+    exact h2
 
 end Claims.ZKMal.Masked
