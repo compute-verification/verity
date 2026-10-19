@@ -94,6 +94,7 @@ from verity.ml.circuits.codec import encode_program, program_digest
 from verity.ml.circuits.defs import Builder, CompositeDefinition, bind
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Affine, Coll, Refs, concat, runs, tuple_of
+from verity_vllm.program import sampling_event as SE
 from verity_vllm.program.registry import b1
 from verity_vllm.program.replay import replayer
 from verity.ml.circuits.types import Array, Record, Type, Value
