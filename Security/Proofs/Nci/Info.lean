@@ -335,3 +335,20 @@ theorem support_le_of_feeds (d : Declaration) (θv : d.D.Transcript) {F P : Fins
 end Feeds
 
 end Nci.SecurityProofs
+
+#print axioms Nci.SecurityProofs.ThreadedReadsInfo
+#print axioms Nci.SecurityProofs.ThreadedContainedInfo
+#print axioms Nci.SecurityProofs.ThreadedOfState
+#print axioms Nci.SecurityProofs.InfoOfState
+#print axioms Nci.SecurityProofs.threaded_reads_info
+#print axioms Nci.SecurityProofs.threaded_count
+#print axioms Nci.SecurityProofs.ThreadedReads
+#print axioms Nci.SecurityProofs.novelInfo_le_novelReads
+#print axioms Nci.SecurityProofs.novelInfo_eq_novelReads_of_inputs
+#print axioms Nci.SecurityProofs.weightsIncompressible_of_support
+#print axioms Nci.SecurityProofs.weightsSupport_iff_of_inputs
+#print axioms Nci.SecurityProofs.smallInfo_of_small
+#print axioms Nci.SecurityProofs.threadedInfo_of_threaded
+#print axioms Nci.SecurityProofs.threadedInfo_one_zero
+#print axioms Nci.SecurityProofs.novelInfo_le_of_containment
+#print axioms Nci.SecurityProofs.support_le_of_feeds
