@@ -5,7 +5,7 @@
 # `ssh -R PORT` to PEER (a name in /etc/vy/peers), as benchmarks/remote_session/run.sh's verifier does, so the prover's
 # client (`remote.RemoteChallenger.connect("127.0.0.1:PORT")`) connects to PEER's own 127.0.0.1:PORT.
 #
-#   research run --on vy-nebius-1 --phase cpu --project verity --source . --cwd source --declared-output 'out/*' \
+#   research run --on vy-nebius-1 --project verity --source . --cwd source --timeout 2h --declared-output 'out/*' \
 #     --env PEER=vy-nebius-2 --env PORT=7811 --env SCHEME=vllm/commit \
 #     --env FAMILIES='[["opening-positions",8],["opening-identities",8],["replay",8],["kernel-check",8]]' \
 #     -- bash benchmarks/live_challenger/run.sh
@@ -14,12 +14,18 @@
 # run that holds no check slot (slot_only.py). FAMILIES is the session's coin layout, [[label, count], ...] (the vLLM
 # Commit's is `challenge.layout(runs)`); EPOCH its epoch (default 0); KEY the challenger's LMS key directory on this
 # machine (default ~/.local/state/live-challenger/key, made on first use over KEYGEN_WORKERS cores, never under out/);
-# PARAMS=W,H an LMS width and height other than lms.DEPLOYED's; PY the Python (default python3: the challenger reads
-# only the standard library and this tree). The verifier reads out/record.json, out/key.json and out/releases.jsonl
-# from this run (`research fetch RUN`, then `remote.trusted_session`), never from the prover's.
+# PARAMS=W,H an LMS width and height other than lms.DEPLOYED's; HOST_NAME the host the record names (default this
+# machine's name in /etc/vy/peers, by its address); PY the Python (default python3: the challenger reads only the
+# standard library and this tree). The verifier reads out/record.json, out/key.json and out/releases.jsonl from this run
+# (`research fetch RUN`, then `remote.trusted_session`), never from the prover's.
+#   research fetch RUN --all   # the run's out/ lands in ~/.research/runs/RUN/out
 set -euo pipefail
 O=${RESEARCH_RUN_DIR:?}/out
 mkdir -p "$O"
+for ip in $(hostname -I); do
+  HOST_NAME=${HOST_NAME:-$(awk -v ip="$ip" '{n = split($NF, a, "@")} a[n] == ip {print $1; exit}' /etc/vy/peers || true)}
+done
 exec "${PY:-python3}" benchmarks/live_challenger/serve.py --out "$O" --port "${PORT:?}" --scheme "${SCHEME:?}" \
-  --families "${FAMILIES:?}" --epoch "${EPOCH:-0}" --peer "${PEER:?}" ${KEY:+--key "$KEY"} \
-  ${KEYGEN_WORKERS:+--keygen-workers "$KEYGEN_WORKERS"} ${PARAMS:+--params "$PARAMS"} 2> >(tee "$O/serve.log" >&2)
+  --families "${FAMILIES:?}" --epoch "${EPOCH:-0}" --peer "${PEER:?}" --host "${HOST_NAME:-$(hostname)}" \
+  ${KEY:+--key "$KEY"} ${KEYGEN_WORKERS:+--keygen-workers "$KEYGEN_WORKERS"} ${PARAMS:+--params "$PARAMS"} \
+  2> >(tee "$O/serve.log" >&2)
