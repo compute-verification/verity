@@ -42,7 +42,7 @@ design = "dither-2s-licpw-redux-ldtm0-l32"
 conditions = ["the fold credited is the one the checks read, plain LI-CP-W redux (PouwLiAbsorb_v2: no extra keyed round; RT-LOGIC-12)",
               "LI-CP-W redux at its lane instructions a word is the cheapest fold (FOLD-OPT, decision 94): on DS-100 ε_machine first rises at 0.496 a word, 53% under li's 1.055 (RT-HB-HEAD-2)",
               "LI-CP-W's receipt luck 0 needs every absorbed word pinned (PIN, decision 97)"]
-sheet = { vector = "DS-100" }
+sheet = { vector = "DS-100", conditions = ["FOLD-OPT at DS-100's π* (a LOP3 1.979, an IMAD 0.021): li's XOR of two words has no IMAD- or FP-pipe program under 93 instructions (the bit-serial one is 193; FOLD-MIN's 1 + 2|B| IMAD round is a keyed round's, which plain li has none of, #2751). With the fold at its instruction count alone, no pipe premise, this row is 1.328%"] }
 measured = { vector = "DC-100-ri" }
 
 [family.sm_89]
