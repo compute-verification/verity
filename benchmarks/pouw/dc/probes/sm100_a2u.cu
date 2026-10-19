@@ -10,10 +10,10 @@
 // instructions x trips) / (4 x the stop's cycles) > 1, and A2u is false. If they cost a slot each, it stays <= 1
 // (a2u.py reads every loop's full SASS and the per-block trips and stop cycles).
 //
-//   a2_mix        control: warp 0 runs L_MIX for a fixed count, warps 1-15 run it until warp 0 stops; the lane
+//   a2_mix        control: warp 0 runs L_MIX for a fixed count, warps 1-31 run it until warp 0 stops; the lane
 //                 stream's own issue (scalar.cu's s_mix reaches 4.000 a SM clock)
 //   a2_tc_<S><K>  warp 0: 4 tcgen05.mma i8 128x256x32 a commit group (as sm100_async's utc_) + K chain instructions of
-//                 uchain.cuh's form S (i: UIMAD/ULOP3, x: ULOP3) an iteration; warps 1-15: L_MIX until it stops
+//                 uchain.cuh's form S (i: UIMAD/ULOP3, x: ULOP3) an iteration; warps 1-31: L_MIX until it stops
 #include "../../opcode_probe/probe.cuh"
 #include "../dc.cuh"
 #include "lanes.cuh"
@@ -21,7 +21,7 @@
 
 // The TMEM setup, descriptors and the i8 128x256 commit group mirror sm100_async.cu's (whose gate pins the same 4
 // UTCIMMA a group); kept here rather than shared so that file's gate-pinned SASS is untouched.
-constexpr int WTPB = 512, WITERS = 2048, R = 128, KB = 32, AROWS = 128, BROWS = 256, TMEM_COLS = 512;
+constexpr int WTPB = 1024, WITERS = 2048, R = 128, KB = 32, AROWS = 128, BROWS = 256, TMEM_COLS = 512;
 
 struct Smem {
   unsigned char tile[(AROWS + BROWS) * KB];
@@ -120,10 +120,10 @@ A2TC(S_I, i, 64)
 A2TC(S_I, i, 96)
 A2TC(S_X, x, 96)
 
-// Two loops a probe: the fixed role (warp 0, `iters` trips) then the OP_UNTIL role (warps 1-15). Each loop's expect is
+// Two loops a probe: the fixed role (warp 0, `iters` trips) then the OP_UNTIL role (warps 1-31). Each loop's expect is
 // its opcode histogram as ptxas 13.0 emits it (the branch aside); a2u.py counts both loops in full from the SASS.
 #define P_A(nm, EX, CNT) \
-  {.name = #nm, .kernel = (const void*)nm, .tpb = WTPB, .expect = EX, .counted = CNT, .warps = "1;15", \
+  {.name = #nm, .kernel = (const void*)nm, .tpb = WTPB, .expect = EX, .counted = CNT, .warps = "1;31", \
    .iters = WITERS, .until = 2}
 
 // The OP_UNTIL loop's LDS is its stop poll, which a2u.py tells the two loops apart by.

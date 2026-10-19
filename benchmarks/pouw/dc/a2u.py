@@ -3,7 +3,7 @@ cycle, with the uniform datapath and a saturated tcgen05.mma beside saturated la
 
     python3 a2u.py OUT [--json F]
 
-Each probe has two timed loops: warp 0's fixed one (`iters` trips) and the OP_UNTIL one warps 1-15 run until warp 0
+Each probe has two timed loops: warp 0's fixed one (`iters` trips) and the OP_UNTIL one warps 1-31 run until warp 0
 stops (the one that polls the stop flag, an LDS). Both are counted in full from the run's SASS between the loop bounds
 the gate recorded (gate-build.json), so a block's warp instructions are fixed x iters + until x trips, and its issue a
 SMSP-cycle is that over 4 x the stop's cycles. An until warp may finish the trip it was in when the stop rose, so
@@ -22,7 +22,7 @@ from pathlib import Path
 
 SASS_LINE = re.compile(r"/\*([0-9a-f]{4,})\*/\s+(?:@!?U?P\w+\s+)?([A-Z][A-Z0-9_.]*)")
 UTC_CYCLES = 128  # SM clocks one UTCIMMA 128x256x32 holds the tensor pipe at the sheet's 8192 MACs an SM clock
-UNTIL_WARPS = 15  # sm100_a2u.cu: warps 1-15 of a 512-thread block
+UNTIL_WARPS = 31  # sm100_a2u.cu: warps 1-31 of a 1024-thread block
 BASE = "a2_tc_i0"
 
 
