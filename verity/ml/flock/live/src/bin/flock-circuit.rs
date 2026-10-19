@@ -4990,7 +4990,8 @@ fn selftest(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) {
 /// With `fw` (`--firewall-state`), each session is an outer session of `fw`'s recursive session at its part, run through
 /// `flock_live::release::outer_session`: it takes the firewall's outer slot, is admitted or refused on the firewall's record
 /// before it connects, leaves its proofs at their release time if the recursive session has a schedule, and every stop
-/// reaches the challenger as a cut, never as `Finish`.
+/// reaches the challenger as a cut, never as `Finish`. The Lean decision (`core-firewall decide`) is the decision of record:
+/// a session it doesn't decide as Rust did is a stop, and nothing leaves that it doesn't release.
 #[allow(clippy::too_many_arguments)]
 fn prove_sessions(st: &Arc<Stmt>, inst: &Arc<Instances>, base: &Plan, seeds: &[ProverSeed], warm: usize, addr: &str, verify_ahead: usize,
                   fw: Option<&ReleaseArgs>, emit: &mut dyn FnMut(usize, Value, Vec<Vec<u8>>)) {
@@ -5058,7 +5059,8 @@ fn prove_sessions(st: &Arc<Stmt>, inst: &Arc<Instances>, base: &Plan, seeds: &[P
                 |p| {
                     let (v, proofs) = session_finish(p);
                     (v["accepted"] == true, (v, proofs))
-                })
+                },
+                Some(&flock_live::release::lean_judge(&fw.lean)))
                 .unwrap_or_else(|e| refuse(format!("--firewall-state {}: {e}", fw.rec.state.display())));
             let (mut v, proofs) = out.sent.unwrap_or_else(|| (json!({"accepted": false, "why": out.why}), Vec::new()));
             v["firewall"] = json!({"session": fw.session, "part": fw.part, "outcome": out.outcome, "why": out.why});
@@ -5090,11 +5092,13 @@ fn prove_sessions(st: &Arc<Stmt>, inst: &Arc<Instances>, base: &Plan, seeds: &[P
 /// `prove --firewall-state DIR --session ID --part NAME`: the firewall's release side (PROTOCOL.md §10.5) on the state
 /// directory `verity_flock.firewall` shares. It runs behind the send check only, proves one session (the firewall serves
 /// each statement of a recursive session once), and refuses `FC_VERIFY_AHEAD`: the outer slot is held until each
-/// session's verdict, so no session's verdict can wait while the next one proves.
+/// session's verdict, so no session's verdict can wait while the next one proves. The release decision is Lean's
+/// (`core-firewall decide`): `FC_CORE_FIREWALL`, else the build in this checkout's verity/core/service/firewall.
 struct ReleaseArgs {
     rec: flock_live::release::Record,
     session: String,
     part: String,
+    lean: std::path::PathBuf,
 }
 
 fn release_args(st: &Stmt, sessions: usize) -> Option<ReleaseArgs> {
@@ -5116,7 +5120,9 @@ fn release_args(st: &Stmt, sessions: usize) -> Option<ReleaseArgs> {
         refuse("--firewall-state takes --session ID (the recursive session: rec_live's firewall.json) and --part NAME".into());
     }
     let rec = flock_live::release::Record::new(&state).unwrap_or_else(|e| refuse(format!("--firewall-state {state}: {e}")));
-    Some(ReleaseArgs { rec, session, part })
+    let lean = std::env::var_os("FC_CORE_FIREWALL").map(Into::into)
+        .unwrap_or_else(|| std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../core/service/firewall/.lake/build/bin/core-firewall"));
+    Some(ReleaseArgs { rec, session, part, lean })
 }
 
 fn serve_loop(make: impl Fn() -> Server) {

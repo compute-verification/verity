@@ -905,12 +905,20 @@ verdict the relay cuts the challenger's connection without forwarding `Finish`, 
 A refused or stopped session's worker is answered after the session has left the slot, so a worker that keeps talking
 holds up no other session.
 
-**The release side is Rust's** (`flock_live::release`). `flock-circuit prove --zk --firewall-state DIR --session ID --part
+**The release decision is Lean's** (`Core.Firewall.decide`, `core-firewall decide`), and Rust runs it
+(`flock_live::release`). `flock-circuit prove --zk --firewall-state DIR --session ID --part
 NAME`, behind its send check (`FC_FIREWALL=1`, §10.4), runs each outer session straight to `serve` under the rules of this
 section, and keeps `verity_flock.firewall`'s record byte for byte: `live/src/firewall_record_vectors.json`, which
 `release::tests::the_shared_vectors_hold` and `test_the_record_is_the_rust_firewalls_byte_for_byte` both run. It takes the
-slot, admits the session (`Record::admit`: the statements' order is enforced there, before the prover connects), runs its
-rounds, holds its proofs and `Finish` until the session's release time, and sends them, every proof before `Finish`.
+slot and admits the session in one read of the record (`Record::slot_admit`: the statements' order is enforced there,
+before the prover connects), runs its rounds, holds its proofs and `Finish` until the session's release time, and sends
+them, every proof before `Finish`. Rust's decision is the reference: once the session is refused, or once its rounds and
+the send check returned, `core-firewall decide` (`FC_CORE_FIREWALL`, else this checkout's build in
+`verity/core/service/firewall`) decides on the record as it was when the slot was taken, and a session it doesn't decide
+as Rust did (refused, stopped or sent, the why, the release time, and the record after the slot and the admission) is a
+stop, its why naming the difference; a refusal stays one. Nothing leaves that the Lean decision doesn't send, and a Lean
+that can't be run is a stop. `verity/core/service/firewall/tests/test_firewall_release_agreement.py` holds Rust's
+sessions with that judge to Lean's `outerSession`.
 Every stop (the send check's refusal, a fault, a panic, a missed time) drops the connection before `Finish`, and a
 prover killed while it holds the slot is recorded as its session's stop by the next one to take it. Since admission comes
 before the connection, a session cut before its first request is its statement's stop here; through the relay it records
@@ -919,8 +927,9 @@ session (`--warm 0 --runs 1`: each statement is served once) and refuses `FC_VER
 until each session's verdict). `verity_flock.firewall` stays as the inner side
 (`rec_live`'s opens, finishes and inner stops) and as the tests' relay. These decisions across sessions (whether a
 recursive session's next outer session goes on, and when its proofs leave) are outside `FirewallComputes`, in either
-language: that assumption covers the values one session's transcript reports the firewall fixed, and no contract checks
-the record yet.
+language: that assumption covers the values one session's transcript reports the firewall fixed. The Lean decision
+checks them on the record, session by session, before anything leaves; the tests' Python relay decides its own unchecked,
+and refuses a schedule.
 
 **Outer proofs one at a time.** The firewall has one slot across streams and protocols (`slot.lock` in its state directory,
 which every relay process of the firewall shares). An outer session takes it at its first request other than `Ping` and holds
