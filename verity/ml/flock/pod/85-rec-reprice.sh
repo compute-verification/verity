@@ -5,7 +5,7 @@
 #   STEP=build   (CPU) the GPU prover (60-circuit.sh's build, keyed by its sources as 70-class-sweep.sh keys it), Lean's
 #                flock-verify (rec-env.sh's, keyed by its sources), and the inner statement staged (class_statement
 #                --program-module rec_reprice.py:program --partition q-template-instance --stage-only, BATCH=fixed N,
-#                untiled) twice: with plain SHA-512 leaves (FLOCK_PLAIN_LEAVES=1, the
+#                untiled, every instance's own rows: FLOCK_OWN_ROWS=1) twice: with plain SHA-512 leaves (FLOCK_PLAIN_LEAVES=1, the
 #                recursive session's) into data/$TAG/stage, and with hm96 leaves (today's --zk) into data/$TAG/stage-zk
 #                (STAGE_FROM=DIR: another job's data/$TAG, both stagings)
 #   STEP=inner   (GPU leases) the plain inner statement proved with ZK off (M0, FC_COINS=os) against the rec proxy
@@ -380,11 +380,13 @@ lean_build() {
 # under Q_template_instance, rec_reprice.py: the partition's every unit, so the full draw over it proves every unit of the
 # statement, which check 5 requires) staged into $DD/NAME from its cache $DD/NAME-cache, its trees' leaves plain SHA-512 when
 # PLAIN is 1; its records in $O/NAME. Never tiled (FLOCK_GEMM_TILE): a tile's circuit names its unit class as its template,
-# which no template query lists, and at K = 4096 a 4x4 tile does not fit a block anyway
+# which no template query lists, and at K = 4096 a 4x4 tile does not fit a block anyway. Every instance's own rows
+# (FLOCK_OWN_ROWS): Lean covers a shared-row public file only in a registered --zk session (ProvedScope.sharedRowsOk), and
+# the population program's instances share no row, so the rows committed are the same
 stage_inner() {
   local o=$O/$1 c=$DD/$1-cache
   mkdir -p $o
-  K=$K N=$N FLOCK_STAGE_CACHE=$c FLOCK_PLAIN_LEAVES=$2 FLOCK_GEMM_TILE= /usr/bin/time -v -o $o/time-stage.txt \
+  K=$K N=$N FLOCK_STAGE_CACHE=$c FLOCK_PLAIN_LEAVES=$2 FLOCK_GEMM_TILE= FLOCK_OWN_ROWS=1 /usr/bin/time -v -o $o/time-stage.txt \
     python3 -m verity_flock.class_statement --program-module $REPO/verity/ml/flock/pod/rec_reprice.py:program \
     --partition q-template-instance --out $o --stage-only --batch fixed --n $N \
     --max-statement-bits $((1 << 35)) --batch-ands $((1 << 35)) --selftest 0 > $o/stage.log 2>&1
