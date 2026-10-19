@@ -15,7 +15,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from cpw_sass_count import CC_ARCH, parse  # noqa: E402
 
-KERNEL = re.compile(r"^([slu])_(\d+)_(\d+)(?:_(\d+))?$")
+KERNEL = re.compile(r"^([slu]|o\d|tu?)_(\d+)_(\d+)(?:_(\d+))?$")
 
 
 def count(path: str) -> dict[str, dict[str, dict]]:
@@ -30,6 +30,7 @@ def count(path: str) -> dict[str, dict[str, dict]]:
         uni = [op for op in body if op.startswith("U")]
         res[arch][k] = {"nf": int(m.group(2)), "k": int(m.group(3)), "body": len(body), "uniform": len(uni),
                         "vector": len(body) - len(uni), "ffma": sum(op.split(".")[0] == "FFMA" for op in body),
+                        "imma": sum(op.split(".")[0] == "IMMA" for op in body),
                         "spill": sum(op.split(".")[0] in ("LDL", "STL") for op in body),
                         "opcodes": dict(collections.Counter(body).most_common())}
     return dict(res)
