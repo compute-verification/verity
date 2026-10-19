@@ -8,10 +8,11 @@ Run from a tree's root: it reads that tree's benchmarks/pouw, so a copy of this 
 
 H1 (co32c-u16-cohalf, `dither-c-peel-fx1`) receipts T_1..T_last, O' and D_1..D_{m-1} on its linears and lm_head
 (`cgemm_ref.py`'s co32c gate, `h1tile`'s CP-W receipt); its served output O = O' - sum 128^d D_d is no word and no check
-reads it. `eps_budget.TS_EPS` prices co32c's recombination "with O committed" (`checked_strip`'s
-ts_co32c_recombination: O one more folded word, recombined or at A = B = 0 one IMMA O = T_last - U.Y), within 1e-5 of
-"charged". As the receipts stand, O is free: the cheater skips the recombination's 4(m - 1) IMADs a tile as well as the
-residue sums. This prices co32c both ways on Llama-3.1 8B and 70B (linears at TS_SHAPES, lm_head at (h, 128256)), fails
+reads it. `eps_budget.TS_EPS` takes co32c at `checked_strip`'s ts_co32c_recombination case "O committed" (O one more
+folded word, recombined or at A = B = 0 one IMMA O = T_last - U.Y), within 1e-5 of "charged". As the receipts stand,
+O is free: the cheater skips the recombination's 4(m - 1) IMADs a tile as well as the residue sums. So TS_EPS leaves
+the recombination out of ♭'s credit, which is sound: pricing it as skippable (O free) raises the credit and ε_skip
+together, and the floor (1 - bound) B_♭ the Lean builders give is the same either way. This prices co32c both ways on Llama-3.1 8B and 70B (linears at TS_SHAPES, lm_head at (h, 128256)), fails
 unless the committed case reproduces TS_EPS, and gives sm_120's ε_skip (`design_skip`) and ε (`verity_machine_model`'s
 eps of the design, floor credit, operands free, its skip moved by ε_skip's change, so `core` is exact) at the sheet
 (DS-120, q 1/2), the measured reading (VF3r-16, 1.22), the measured vector at 1/2, and the Lean measured instance's
