@@ -1,0 +1,4 @@
+order = 343
+path = "`rt4_sheet/`"
+runs_on = "CPU"
+what = "RT4-SHEET's red team of the three data-sheet headlines (sm_120's `Sm120SheetHeadline`, H200's DS-90, B200's DS-100): each sheet's Lean instance against `machine-model headline` on the same tree, π*, ε_skip, ♭'s bound and the binding branch against the literal (`sheet_check.py`)"
