@@ -13,10 +13,11 @@ scale's serve-time commitments under the PoUW scheme (`--scheme`: `floor`, the m
 plan pays; then proving and the verifier's CPU (at its price ratio) for the drawn units, the commitment of every unit's
 outputs, replay of the layer-steps the draw meets (to build their witnesses), and the zero-work templates at their floor.
 
-- `inputs.py`: the row's inputs (price ratio, rounds, throughput, replay and commitment speeds, the zk factor, the
-  receipt and decode-latency terms), each with a low and a high; the models (Llama-3.1-8B, Qwen3-8B); each scheme's
-  serve-time rows and their leaf chains; the pieces' AND counts (#2391's pins, hm96's rows); and the observations the cost
-  model is fitted from, with the builds and hardware they key.
+- `inputs.py`: the row's inputs (price ratio, rounds, throughput, replay and commitment speeds, the receipt and
+  decode-latency terms), each with a low and a high; the models (Llama-3.1-8B, Qwen3-8B); each scheme's serve-time rows
+  and their leaf chains; the pieces' AND counts (#2391's pins, hm96's rows); and the observations the cost model is fitted
+  from, C-Flock's zero-knowledge sessions on sm_120 (`benchmarks/one_stage/zk_cost.py`), with the builds and hardware they
+  key.
 - `int8_llama.py`: the int8 row (vLLM's `cursor/vllm-int8-build-8350`), Llama-3.1-8B or Qwen3-8B (`--model`). Its units
   are compute accounting's decision 106: every s8 dot checks its seed, derives its own noise and opens its rows in
   circuit. A linear's coordinate may be cut into K-chunks that commit their running sums, and r × c tiles are offered so
