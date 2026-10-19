@@ -8,10 +8,10 @@ checked against it by `benchmarks/pouw/tests/test_lean_headline.py`: edit the da
 file. `Accounting.Guarantees.TS.Sm120SheetHeadline` reads it.
 
 * `classes`: the 122 instruction classes of the DS-120 census, in the order `Fin 122` indexes them.
-* `ds120`, `sheet`: the RTX PRO 6000's data sheet (DS-120): f_max 2430 MHz (SPEC's P1); each tensor class's dense MACs a
-  warp instruction (`m·n·k`, a 2:4 sparse form's dense equivalent) and its operand type's dense MACs an SM clock; the
-  Nsight Compute pipes IMAD, LOP, XU and SHFL with their Programming Guide widths; 128 B for every shared-memory class.
-  Its machine reproduces every DS-120 coefficient.
+* `ds120`, `sheet`: the RTX PRO 6000's data sheet (DS-120): f_max 2430 MHz (the driver's reported maximum, SPEC's P1: no
+  data sheet states it); each tensor class's dense MACs a warp instruction (`m·n·k`, a 2:4 sparse form's dense
+  equivalent) and its operand type's dense MACs an SM clock; the Nsight Compute pipes IMAD, LOP, XU and SHFL with their
+  Programming Guide widths; 128 B for every shared-memory class. Its machine reproduces every DS-120 coefficient.
 * `h1fx1`, `model`: H1 + fx1 (`dither-c-peel-fx1`) as a TS model on the sheet's machine: writer kinds the census's MMA
   classes (ω = m·n), the generic MMA (128) and the uniform `UNI` (1) and `UNI64` (2); the vector classes CUDA's lane
   classes and the 64-bit ones (ALU64, CVT64, DMUL, IMADW, MOV64); fx1's fold on lanes (ALU 2 + IMAD 2 lane instructions

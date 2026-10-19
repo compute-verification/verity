@@ -25,9 +25,13 @@ section Run
 
 variable {K P : Type} [Fintype K] [DecidableEq P]
 
-/-- `accounting-sheet-clock` (data sheet). **A1 CLOCK**: the run's SM clock is positive and at most `fmax`, the data
-sheet's maximum boost clock (the B200's sheet gives none: its driver's reported maximum). A clock offset applied at run
-time is a configuration, checked at run time, and outside this statement. -/
+/-- `accounting-sheet-clock` (assumed; `fmax` from each device's source). **A1 CLOCK**: the run's SM clock is positive
+and at most `fmax`. sm_120's 2430 MHz is the maximum SM clock its driver reports (nvidia-smi on the RTX PRO 6000
+Server Edition, SPEC's P1), not a data sheet's, and the same die boosts to 2617 MHz as the Workstation Edition; the
+B200's sheet gives none either, so its `fmax` is its driver's reported maximum too. A driver's report is the device's
+own, which decision 96 doesn't take as a source, so A1 is assumed there. So is the absence of a clock offset: nothing
+checks it at run time, and the clock is the prover's configuration. Our nodes' driver allows none (NVML's allowed
+offset range `[0, 0]`, r20261019-121222-faa3), but a prover picks its own VBIOS and driver (RT2-LOGIC-7). -/
 def SheetClock (S : Sheet K P) (Q : Run K) : Prop := 0 < Q.clock ∧ Q.clock ≤ S.fmax
 
 /-- `accounting-sheet-dispatch` (architecture whitepapers; A2u in no vendor document). **A2 DISPATCH**: an SMSP issues

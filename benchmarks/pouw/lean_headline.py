@@ -91,7 +91,8 @@ class Family:
 SM120 = Family(
     "Sm120", "RTX PRO 6000", device("sm_120"), "DS-120", "dither-c-peel-fx1", "h1fx1", "H1 + fx1",
     {"DS_imad": ("imad", 64), "DS_lop": ("lop", 64), "DS_xu": ("xu", 16), "DS_shfl": ("shfl", 32)},
-    (256, 512, 1024, 2048), 2430, "SPEC's P1", {"UNI": 1, "UNI64": 2}, "LDG32", "NOROW", Fraction(656, 100000),
+    (256, 512, 1024, 2048), 2430, "the driver's reported maximum, SPEC's P1: no data sheet states it",
+    {"UNI": 1, "UNI64": 2}, "LDG32", "NOROW", Fraction(656, 100000),
     "an IMMA.16832 at L = 32",
     "fx1's fold on lanes (ALU 2 + IMAD 2 lane instructions a word) and alone on the uniform datapath (4 a word)")
 FAMILIES = (SM120,)
