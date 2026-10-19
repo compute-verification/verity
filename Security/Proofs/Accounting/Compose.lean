@@ -2,6 +2,7 @@ import Models.Accounting.Guarantees.Compose
 import Proofs.Accounting.TS
 import Proofs.Accounting.Compose.ServiceBudget
 import Proofs.Accounting.Compose.SplitRateMerged
+import Proofs.Accounting.Compose.BindingOfECR
 import Proofs.Pouw.RelativeSecurity
 
 /-!
