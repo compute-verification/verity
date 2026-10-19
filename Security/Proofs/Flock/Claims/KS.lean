@@ -135,6 +135,7 @@ import Proofs.Flock.Claims.KS.ZkLiveSched
 import Proofs.Flock.Claims.KS.ZkBatchSim
 import Proofs.Flock.Claims.KS.ZkForkClash
 import Proofs.Flock.Claims.KS.ZkPadsSlot
+import Proofs.Flock.Claims.KS.ZkKSAlign
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -603,7 +604,8 @@ hold at every message (`ZkPadsPair`: `FlockDeploy.KS.PadsForkEvZ`, `FlockDeploy.
 `ZkTauPair`: `FlockDeploy.KS.zkTauClash`, `FlockDeploy.KS.zkSimForkLeTau_of_align`). A rep's pads root is its first
 table node, so the pads' fork round is the caps' schedule at distance `0`, and their alignment holds at every message
 (`ZkPadsSlot`: `FlockDeploy.KS.slotPadsZ_of_batch`, `FlockDeploy.KS.zkPadsAlign`,
-`FlockDeploy.KS.zkSimForkLePads`). KS at an untrimmed instance gives it at its trimmed record
+`FlockDeploy.KS.zkSimForkLePads`). So masked KS rests on `τ`'s alignment alone (`ZkKSAlign`:
+`FlockDeploy.KS.zk_KS_of_tauAlign`). KS at an untrimmed instance gives it at its trimmed record
 (`Flock.TrimBridge.KS_mapCols_of_KS`), but not conversely: an unopened position reads `[]`, the trim of every zero
 column and equal to no full-width one (`Flock.TrimBridge.hole_agree`). Both follow from the one full-width table bound,
 the untrimmed with `ExtendJ` (`Flock.TrimBridge.KS_both_of_tableBoundJR`), so from `zk_KS_of_kinds`'s premises
