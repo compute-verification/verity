@@ -21,7 +21,8 @@
 # order is the int8-exact path's: sbench disables vLLM's first choice, CutlassInt8ScaledMMLinearKernel, which refuses int8
 # on sm_100a ("Int8 not supported on SM100") and sm_120. On sm_90a hb_sbench.py's stock-cutlass arm keeps it (vLLM's
 # default there). Every arm samples without FlashInfer's JIT sampler, as served_h1 and native.sh do.
-# Env: DITHER_NSYS=1 (sbench's nsys capture of the gate's kernels), LEASE (default "--max-min 14"), RUN_TIMEOUT (seconds
+# Env: DITHER_NSYS=1 (sbench's nsys capture of the gate's kernels; kernels.py counts each dither arm's inside its NVTX
+# range, so the source must be dither-rtx's f2c0071c7c or later), LEASE (default "--max-min 14"), RUN_TIMEOUT (seconds
 # inside the lease, default 820), VERITY_BENCH_VENV (default /workspace/cp/venv312), NVCC (default CUDA 13.0's).
 # Exit: sbench's (3 an engine failed to build, 4 the gate failed), 2 a build failed or a shipped library is missing or
 # another source's.
@@ -98,7 +99,7 @@ export PATH=$(dirname "$PY"):$CUDA/bin:$PATH FLASHINFER_CUDA_ARCH_LIST=$FI HF_HO
 export PYTHONPATH=.:$ROOT:$ROOT/tools/research/src:$ROOT/benchmarks/pouw/served_h1:$ROOT/$DITHER HB_DITHER_DIR=$ROOT/$DITHER
 NSYS=()
 if [ "${DITHER_NSYS:-}" = 1 ]; then
-  NSYS=("$CUDA/bin/nsys" profile -t cuda --cuda-graph-trace=node --sample=none --cpuctxsw=none
+  NSYS=("$CUDA/bin/nsys" profile -t cuda,nvtx --cuda-graph-trace=node --sample=none --cpuctxsw=none
         --capture-range=cudaProfilerApi --capture-range-end=stop -o "$S/gate" --force-overwrite true)
 fi
 cd integrations/vllm
@@ -121,6 +122,6 @@ echo "hb_served: exited $rc at $(date -u +%H:%M:%SZ)"
 if [ -f "$S/gate.nsys-rep" ]; then
   "$CUDA/bin/nsys" stats --report cuda_gpu_kern_sum --format csv -o "$OUT/gate" "$S/gate.nsys-rep" > "$OUT/nsys-stats.log" 2>&1 \
     || echo "hb_served: nsys stats rc $?"
-  "$PY" "$ROOT/$DITHER/kernels.py" "$OUT"/gate_cuda_gpu_kern_sum.csv | tee "$OUT/kernels.json"
+  "$PY" "$ROOT/$DITHER/kernels.py" "$S/gate.sqlite" | tee "$OUT/kernels.json"
 fi
 exit "$rc"
