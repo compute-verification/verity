@@ -1,6 +1,7 @@
 import Proofs.Flock.Claims.Bits
 import Proofs.Flock.Claims.ERepCost
 import Proofs.Flock.Claims.KS.PlainAcc
+import Proofs.Flock.Claims.KS.ZkTauSlot
 import Proofs.Flock.Claims.DeployEfficient
 import Proofs.Flock.Claims.Complete.WalkPacked
 import Proofs.Flock.Claims.Complete.ZkTables.StmtOne
@@ -59,7 +60,8 @@ prover: as an argument, or from the record. `Claims.Complete` stays folded: with
 `flock_zk_assembled`:
 * `hKS : Flock.KS H (deployZkTrim rel)`. At SHA-512 it follows from the fixed-table bound at the untrimmed instance at
   statements of one table (`FlockDeploy.KS.zk_KS_trim`); at the untrimmed record, from one wait's bound
-  (`FlockDeploy.KS.zk_of_oneWait`, as at the plain record).
+  (`FlockDeploy.KS.zk_of_oneWait`, as at the plain record). At SHA-512 and the deployed relation it holds with no
+  premise (`FlockDeploy.KS.zk_KS`), so `flock_zk_assembled_trim` drops it.
 * `hComplete`: `Flock.Complete` at the masked record, unfolded, of `ZkTables.honestPR` at `ZkTables.δc H`, at any
   number of tables, the untrimmed record's (`Flock.complete_mapCols`). At the deployed relation it follows from the
   record's JSON and three premises on the honest masked run, each at every good case or run and every table of it
@@ -289,5 +291,40 @@ theorem flock_zk_assembled_relation (H : Claims.Msg → Claims.Msg)
     ((Claims.Flock.complete_mapCols H (deployZk Readable.relation) trimCol).2
       (FlockComplete.ZkTables.complete_json H S hPR hR hLI hMR))
     G t ht hK My cs hT1 hδ₁ Mp Mc nL nB hnL hnB hL hS hN hI hC coinOf tapeOf hG
+
+/-- **Flock's claims at the deployed masked verifier at the deployed relation, at SHA-512**:
+`flock_zk_assembled_relation` with KS, which holds with no premise (`FlockDeploy.KS.zk_KS`). The record's JSON
+(`JsonSpec`), the honest masked run's premises, the mask slots' rank bound and `Flock.zk_deployZk_of_models`'
+hypotheses, `hT1` its named assumption, are what remain. -/
+theorem flock_zk_assembled_trim (S : Claims.JsonSpec FlockComplete.printJ Flock.canon)
+    (hPR : ∀ c : FlockComplete.ZkTables.Case sha512 Readable.relation, FlockComplete.ZkTables.ProverRunsAt c)
+    (hR : ∀ c : FlockComplete.ZkTables.Case sha512 Readable.relation, FlockComplete.ZkTables.RepShapedAt c)
+    (hLI : ∀ o : FlockComplete.ZkTables.Run sha512 Readable.relation,
+      FlockComplete.ZkTables.LgInnerAt sha512 Readable.relation o)
+    (hMR : FlockComplete.MaskRank.MaskRankBound)
+    (G : Claims.ZKMal.Proto Claims.Flock.Wit) (t : ℕ) (ht : 0 < t) (hK : ∀ x, G.K x = (V true).k x - 1)
+    {Salt B Cc : Type} [AddCommGroup Salt] [AddCommGroup B] [Fintype Salt] [DecidableEq Salt] [Fintype B]
+    [DecidableEq B] (My : Salt → B) (cs : Salt → Cc) {δ₁ : ENNReal} (hT1 : Claims.Hm96Hiding My cs δ₁) (hδ₁ : δ₁ ≠ ⊤)
+    (Mp : ∀ x, G.Nonce → G.PreModel x Salt B Cc) (Mc : ∀ x, G.Nonce → (Fin (G.K x) → G.Coin) → G.CoinModel x Salt B Cc)
+    (nL nB : Claims.Msg → ℕ) (hnL : ∀ x ν, Fintype.card (Mp x ν).L ≤ nL x) (hnB : ∀ x ν c, (Mc x ν c).size ≤ nB x)
+    (hL : G.MsgLink sha512 (Claims.Flock.R (deployZkTrim Readable.relation).parse) My cs Mp Mc)
+    (hS : G.SimLink sha512 Mc) (hN : G.NonDegenerate Mc)
+    (hI : G.InnerHolds (Claims.Flock.R (deployZkTrim Readable.relation).parse) Mc)
+    (hC : G.CoinCheck) (coinOf : Claims.Msg → Claims.Msg) (tapeOf : G.Nonce × G.Rand → FlockComplete.TapeZk)
+    (hG : G.Honest sha512 FlockComplete.ZkTables.honestPR coinOf tapeOf) :
+    Claims.Flock.ScopeMatches (deployZkTrim Readable.relation) ∧
+      Claims.Flock.KS sha512 (deployZkTrim Readable.relation) ∧
+      Claims.Flock.Bits sha512 (deployZkTrim Readable.relation) ∧
+      (∀ a b : Claims.Msg → ℝ, (∀ x, Claims.Flock.κ (deployZkTrim Readable.relation) x ≤ 2 ^ (-a x)) →
+        (∀ x, Claims.Flock.γ (deployZkTrim Readable.relation) x ≤ 2 ^ b x) →
+        Claims.Bits sha512 (deployZkTrim Readable.relation).V (Claims.Flock.R (deployZkTrim Readable.relation).parse)
+          (Claims.Flock.E (deployZkTrim Readable.relation) (deployZkTrim Readable.relation).decode)
+          fun x => min (a x) (255.5 - b x / 2) - 1) ∧
+      Claims.Flock.ZK sha512 (Claims.ZKMal.zkOf Readable.relation G coinOf tapeOf (G.simulatorE t (t * 3 ^ t)))
+        (fun x => 8 * nL x * δ₁.toReal + 8 * t * nB x * δ₁.toReal + 2 * (1 / 3) ^ t) (fun _ => 4 * t * 3 ^ t) ∧
+      Claims.Flock.Efficient sha512 (deployZkTrim Readable.relation) zkStepPoly ∧
+      Claims.Flock.Complete sha512 (deployZkTrim Readable.relation) :=
+  flock_zk_assembled_relation sha512 FlockDeploy.KS.zk_KS S hPR hR hLI hMR G t ht hK My cs hT1 hδ₁ Mp Mc nL nB hnL hnB
+    hL hS hN hI hC coinOf tapeOf hG
 
 end FlockDeploy.Assembled
