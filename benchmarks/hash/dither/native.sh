@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# The native baseline on one dc node: native.py's arms, each in its own process under its own gpu-lease (an engine build
+# plus its measures fit well inside one).
+#
+#   research run --on vy-dc-b200 --project verity --campaign dither-loop --source . --cwd source --timeout 90m \
+#     -- bash benchmarks/hash/dither/native.sh [ARM ...]
+#
+# Default arms: served-row, vllm-int8, and vllm-int8-triton on a B200. Env: NATIVE_ARGS (extra native.py flags), LEASE
+# (gpu-lease flags, default "--max-min 14"), VERITY_BENCH_VENV.
+set -uo pipefail
+HERE=$(cd "$(dirname "$0")" && pwd)
+export OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}
+PY=${VERITY_BENCH_VENV:-/workspace/cp/venv312}/bin/python
+mkdir -p "$OUT"
+export PYTHONPATH=$PWD/integrations/vllm:$PWD${PYTHONPATH:+:$PYTHONPATH} VLLM_ENABLE_V1_MULTIPROCESSING=0 HF_HOME=${HF_HOME:-/workspace/hf}
+export VLLM_CACHE_ROOT=$(mktemp -d) TORCHINDUCTOR_CACHE_DIR=$(mktemp -d)
+if [ $# -gt 0 ]; then arms=("$@"); else
+  arms=(served-row vllm-int8)
+  nvidia-smi --query-gpu=name --format=csv,noheader | head -1 | grep -q B200 && arms+=(vllm-int8-triton)
+fi
+read -r -a lease <<< "${LEASE:---max-min 14}"
+rc=0
+for arm in "${arms[@]}"; do
+  env_arm=()
+  [ "$arm" = vllm-int8-triton ] && env_arm=(VLLM_DISABLED_KERNELS=CutlassInt8ScaledMMLinearKernel)
+  GPU_LEASE_WHO=kernels-dither-hb gpu-lease 1 --wait "${lease[@]}" -- env "${env_arm[@]}" bash -c '
+    q=clocks.sm,clocks.max.sm,clocks.mem,temperature.gpu,power.draw,name,uuid
+    nvidia-smi -i "$GPU_LEASE_UUID" --query-gpu=$q --format=csv > "$OUT/clocks.'"$arm"'.before.csv"
+    "$0" "$1" --arm "$2" --out "$OUT" ${NATIVE_ARGS:-} > "$OUT/native-$2.log" 2>&1
+    r=$?
+    nvidia-smi -i "$GPU_LEASE_UUID" --query-gpu=$q --format=csv > "$OUT/clocks.'"$arm"'.after.csv"
+    exit $r' "$PY" "$HERE/native.py" "$arm"
+  r=$?
+  echo "arm $arm rc $r"
+  grep -h "Selected .* for \|Int8 not supported\|No compiled cutlass" "$OUT/native-$arm.log" | sort -u | head -5
+  tail -2 "$OUT/native-$arm.log"
+  [ $r -ne 0 ] && [ $r -ne 3 ] && rc=$r
+done
+rm -rf "$VLLM_CACHE_ROOT" "$TORCHINDUCTOR_CACHE_DIR"
+exit $rc
