@@ -16,9 +16,9 @@ this file. `Accounting.Guarantees.TS.Sm90SheetHeadline` reads it.
 * `d2s`, `model`: `dither-2s-licpw-redux-p1-l32` as a TS model on the sheet's machine: writer kinds every census MMA
   class (ω = m·n, its destination's 32-bit words a warp) and the uniform `UNI` (2, a UR pair: RT-HOPPER-7); the vector
   classes CUDA's lane classes; the fold routes the design's fold and its 2 other bit-exact programs (cp-seg4, cp-seg4u:
-  RT2-HOPPER-1's REDG checkpoints) on lanes, and alone on the uniform datapath at the least of their counts; the table
-  level's bytes counted in ALU, which `b_T = 0` prices at nothing (the census has no load class); A6's floors `q = q_T =
-  ½`, `b_T = 0`; 4096 committed words a unit of honest work (an IGMMA_S8_N256 at L = 32).
+  the checkpoint's routes, RT2-HOPPER-9 and -11) on lanes, and alone on the uniform datapath at the least of their
+  counts; the table level's bytes counted in ALU, which `b_T = 0` prices at nothing (the census has no load class); A6's
+  floors `q = q_T = ½`, `b_T = 0`; 4096 committed words a unit of honest work (an IGMMA_S8_N256 at L = 32).
 * `flat`: the floor program ♭ a unit: the MMA and the design's operand floor (word production), the fold (the fold
   routes' cheapest mix, by share of the words: cp-seg4 13/16, cp-seg4u 3/16), no filler, and ε_skip's skippable work at
   FFMA's price, 0.848135% of ♭'s bound (`eps_budget.design_skip` on DS-90).

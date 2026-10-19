@@ -100,7 +100,8 @@ class Family:
 # lower bound on their issue cost"), and no certificate prices them otherwise (M gives a GMMA 32 SMSP-cycles to
 # IGMMA's 62.7 on JI90_0), so its measured menu is the machine model's: honest's form, the rest off it (NoSum).
 # The H200's design credits ffill at p = 1, since no check reads its chains (RT-LOGIC-12, decision 99). With ♭'s
-# checkpoint on the REDG routes, `setup`'s floor on DC-90-ri heads every word on the IGMMA, as honest does.
+# checkpoint by CP_SEG4U, `setup`'s floor on DC-90-ri heads 0.079% of its words on the design's lane baseline (dp4a)
+# beside the IGMMA, and `_flat_shares` makes that share exact.
 # A uniform instruction heads up to 2 words (UIMAD.WIDE.U32 writes a UR pair, RT-HOPPER-7), so UNI's ω is 2.
 SM90 = Family("Sm90", "H200", "sm_90", "dither-2s-licpw-redux-p1-l32", "DS-90", "DC-90-ri",
               {"DS_alu": ("alu", 64), "DS_imad": ("imad", 64), "DS_shfl": ("shfl", 32)},
@@ -511,8 +512,8 @@ def render_sheet(fam: Family, r: Reading) -> str:
         f"`d2s`, `model`: `{fam.design}` as a TS model on the sheet's machine: writer kinds every census MMA class "
         f"(ω = m·n, its destination's 32-bit words a warp)" + _uniform_words(fam)
         + "; the vector classes CUDA's lane classes; the fold routes the design's fold"
-        + (f" and its {len(x.fold_names)} other bit-exact programs ({', '.join(x.fold_names)}: RT2-HOPPER-1's REDG "
-           "checkpoints) on lanes, and alone on the uniform datapath at the least of their counts; "
+        + (f" and its {len(x.fold_names)} other bit-exact programs ({', '.join(x.fold_names)}: the checkpoint's "
+           "routes, RT2-HOPPER-9 and -11) on lanes, and alone on the uniform datapath at the least of their counts; "
            if x.fold_names else " on lanes and alone on the uniform datapath; ")
         + f"the table level's bytes counted in {fam.bytes}, which `b_T = 0` prices at nothing (the census has no load "
         f"class); A6's floors `q = q_T = ½`, `b_T = 0`; {x.Nw} committed words a unit of honest work ({honest})"
