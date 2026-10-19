@@ -1,4 +1,5 @@
 import Definitions.Accounting.TS.ProofLayer
+import Proofs.Accounting.TS.Fork
 
 /-!
 RT3-LOGIC-1 witness (red team, not for landing): binding's fork form (`ProofLayer.Forked`) resamples round `w`'s coin
@@ -6,7 +7,12 @@ and compares round `w`'s openings, so an honest proof layer whose round-`w` open
 with probability `1 − 1/|Ω|` (`½` on `Bool`). `coinLayer n` is such a layer over `n + 1` rounds: every proof accepted,
 proof `0` of round `w` opening `coinAt x w`, the coin `x` drew at round `w`, as a real round's proof carries the
 receipt's keys and the draw (`LiUnits.k ω`, `window.instance_ts`). It has every round's relation `True`, so it is
-sound and pinned at any `δ_ZK`. Builds on main.
+sound and pinned at any `δ_ZK`. Its advantage form (`ProofLayer.Moved`, the premise of #2699's four statements) is
+`½` too (`coinLayer_moved_half`): the committed value is one fixed coin, the opening the drawn one.
+
+`game_accepts_last`: whatever the layer, the committed values of the last round are a function of the coins before
+it, so on a path the play accepts whose committed values satisfy every relation, `Of` makes the ideal game accept
+every last-round coin. Builds on main.
 -/
 
 namespace Accounting.SecurityProofs.TS.RtLogic3
@@ -96,5 +102,130 @@ theorem coinLayer_not_fork_le (n : ℕ) (δ : ℝ) (hδ : δ < 1 / 2) :
   have := h 0
   rw [coinLayer_forked_half] at this
   linarith
+
+/-! ## The advantage form (`Moved`), #2699's premise -/
+
+/-- Flipping a path's round-0 coin. -/
+def flip0 (n : ℕ) : Paths Bool (n + 1) ≃ Paths Bool (n + 1) where
+  toFun x := (!x.1, x.2)
+  invFun x := (!x.1, x.2)
+  left_inv x := by simp
+  right_inv x := by simp
+
+theorem card_first_ne_twice (n : ℕ) (b : Bool) :
+    (univ.filter fun x : Paths Bool (n + 1) => x.1 ≠ b).card * 2 = Fintype.card (Paths Bool (n + 1)) := by
+  have hsw : (univ.filter fun x : Paths Bool (n + 1) => x.1 ≠ b).card =
+      (univ.filter fun x : Paths Bool (n + 1) => ¬ x.1 ≠ b).card := by
+    refine Finset.card_bij (fun p _ => flip0 n p) ?_ ?_ ?_
+    · intro p hp
+      simp only [Finset.mem_filter, Finset.mem_univ, true_and, flip0, Equiv.coe_fn_mk] at hp ⊢
+      cases h1 : p.1 <;> cases b <;> simp_all
+    · intro a _ c _ h
+      exact (flip0 n).injective h
+    · intro c hc
+      refine ⟨flip0 n c, ?_, ?_⟩
+      · simp only [Finset.mem_filter, Finset.mem_univ, true_and, flip0, Equiv.coe_fn_mk] at hc ⊢
+        cases h1 : c.1 <;> cases b <;> simp_all
+      · simp [flip0]
+  have hsum := Finset.card_filter_add_card_filter_not
+    (s := (univ : Finset (Paths Bool (n + 1)))) (fun x : Paths Bool (n + 1) => x.1 ≠ b)
+  rw [Finset.card_univ] at hsum
+  omega
+
+/-- A path's round-0 coin differs from a fixed one with probability `½`. -/
+theorem prob_first_ne_half (n : ℕ) (b : Bool) : prob (fun x : Paths Bool (n + 1) => x.1 ≠ b) = 1 / 2 := by
+  classical
+  have hpos : (0 : ℝ) < Fintype.card (Paths Bool (n + 1)) := by
+    exact_mod_cast Fintype.card_pos_iff.mpr ⟨falsePath (n + 1)⟩
+  have hN : ((univ.filter fun x : Paths Bool (n + 1) => x.1 ≠ b).card : ℝ) =
+      1 / 2 * Fintype.card (Paths Bool (n + 1)) := by
+    have h := card_first_ne_twice n b
+    have h' : ((univ.filter fun x : Paths Bool (n + 1) => x.1 ≠ b).card : ℝ) * 2 =
+        Fintype.card (Paths Bool (n + 1)) := by exact_mod_cast h
+    linarith
+  unfold prob
+  rw [div_eq_iff hpos.ne']
+  convert hN
+
+theorem coinLayer_provedAt_zero (n : ℕ) (x : Paths Bool (n + 1)) : ((coinLayer n).provedAt x 0).Nonempty :=
+  ⟨x, by simp [ProofLayer.provedAt, ProofLayer.Proved, coinLayer]⟩
+
+/-- Round 0's reference continuation is the same for every path: its continuations are every path. -/
+theorem coinLayer_ref_zero (n : ℕ) (x : Paths Bool (n + 1)) :
+    (coinLayer n).ref x 0 = (coinLayer n).ref (falsePath (n + 1)) 0 := by
+  have h := Accounting.SecurityProofs.TS.ProofLayer.ref_splice (coinLayer n) 0 (falsePath (n + 1)) x
+    (coinLayer_provedAt_zero n _)
+  have hs : splice ((0 : Fin (n + 1)) : ℕ) (falsePath (n + 1)) x = x := by simp [splice]
+  rwa [hs] at h
+
+theorem coinLayer_moved_zero (n : ℕ) (x : Paths Bool (n + 1)) :
+    (coinLayer n).Moved x 0 ↔ x.1 ≠ ((coinLayer n).ref (falsePath (n + 1)) 0).1 := by
+  have hc : ∀ (y : Paths Bool (n + 1)) i, (coinLayer n).opened y 0 i = y.1 := fun y i => by
+    simp [coinLayer, coinAt]
+  simp only [ProofLayer.Moved, ProofLayer.committed, coinLayer_ref_zero n x, hc]
+  exact ⟨fun h => h.2.elim fun _ hi => hi, fun h => ⟨fun _ => trivial, 0, h⟩⟩
+
+/-- **The honest coin layer moves at round 0 with probability `½`.** -/
+theorem coinLayer_moved_half (n : ℕ) :
+    prob (fun x : Paths Bool (n + 1) => (coinLayer n).Moved x 0) = 1 / 2 := by
+  rw [← prob_first_ne_half n ((coinLayer n).ref (falsePath (n + 1)) 0).1]
+  congr 1
+  funext x
+  exact propext (coinLayer_moved_zero n x)
+
+theorem coinLayer_not_moved_le (n : ℕ) (δ : ℝ) (hδ : δ < 1 / 2) :
+    ¬ ∀ w, prob (fun x : Paths Bool (n + 1) => (coinLayer n).Moved x w) ≤ δ := by
+  intro h
+  have := h 0
+  rw [coinLayer_moved_half] at this
+  linarith
+
+/-- #2699's budget `48,000·(δ_bind + n_π·δ_ZK) ≤ 2^-41` and its binding premise fail together for the coin layer. -/
+theorem coinLayer_moved_budget_unsat (δbind δzk : ℝ) (hzk : 0 ≤ δzk)
+    (hB : ∀ w, prob (fun x => (coinLayer 47999).Moved x w) ≤ δbind) :
+    ¬ (48000 : ℝ) * (δbind + ((1 : ℕ) : ℝ) * δzk) ≤ (1 / 2) ^ 41 := by
+  intro hb
+  have hδ : 1 / 2 ≤ δbind := by
+    by_contra h
+    exact coinLayer_not_moved_le 47999 δbind (not_le.mp h) hB
+  norm_num at hb
+  linarith
+
+/-! ## `Of` and the last round -/
+
+theorem splice_self {Ω : Type} : ∀ {n : ℕ} (w : ℕ) (x : Paths Ω n), splice w x x = x
+  | 0, _, _ => rfl
+  | _ + 1, 0, _ => rfl
+  | _ + 1, w + 1, x => by simp only [splice, splice_self w x.2, Prod.mk.eta]
+
+theorem splice_absorb {Ω : Type} : ∀ {n : ℕ} (w v : ℕ), w ≤ v → ∀ (x z : Paths Ω n),
+    splice w x (splice v x z) = splice v x z
+  | 0, _, _, _, _, _ => rfl
+  | _ + 1, 0, _, _, _, _ => rfl
+  | _ + 1, w + 1, 0, h, _, _ => absurd h (by omega)
+  | _ + 1, w + 1, v + 1, h, x, z => by simp only [splice, splice_absorb w v (by omega) x.2 z.2]
+
+/-- Round `w`'s committed values are those of every continuation of `x` from a round `v ≥ w`. -/
+theorem committed_splice_of_le {Ω : Type} [Fintype Ω] {S nπ : ℕ} {V : Type} (pf : ProofLayer Ω S nπ V) (w : Fin S)
+    (v : ℕ) (hwv : (w : ℕ) ≤ v) (x z : Paths Ω S) (h : (pf.provedAt x w).Nonempty) (i : Fin nπ) :
+    pf.committed (splice v x z) w i = pf.committed x w i := by
+  have hr : pf.ref (splice v x z) w = pf.ref x w := by
+    have := Accounting.SecurityProofs.TS.ProofLayer.ref_splice pf w x (splice v x z) h
+    rwa [splice_absorb (w : ℕ) v hwv x z] at this
+  simp only [ProofLayer.committed, hr]
+
+/-- **`Of` accepts every last coin**: on a path the play accepts whose committed values satisfy every relation, the
+ideal game accepts every continuation from the last round (round `S − 1`'s coin resampled), whatever the layer. -/
+theorem game_accepts_last {Ω : Type} [Fintype Ω] {S nπ : ℕ} {V K T L U : Type} (pf : ProofLayer Ω S nπ V)
+    (P : Play Ω S K T L U) (hOf : pf.Of P) (x : Paths Ω S) (hx : P.accepts x)
+    (hrel : ∀ w i, pf.rel w i (pf.committed x w i)) (z : Paths Ω S) : P.game.accepts (splice (S - 1) x z) := by
+  apply hOf.2
+  intro w i
+  have hne : (pf.provedAt x w).Nonempty := ⟨x, by
+    simp only [ProofLayer.provedAt, Finset.mem_filter, Finset.mem_univ, true_and, splice_self]
+    exact hOf.1 x hx w⟩
+  have hw : (w : ℕ) ≤ S - 1 := by have := w.isLt; omega
+  rw [committed_splice_of_le pf w (S - 1) hw x z hne i]
+  exact hrel w i
 
 end Accounting.SecurityProofs.TS.RtLogic3
