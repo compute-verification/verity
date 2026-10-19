@@ -50,6 +50,17 @@ def test_without_dark_compute_the_declared_side_is_the_chain_bound():
     assert 1 / r["efficiency"] == pytest.approx(chain, rel=1e-3)
 
 
+def test_the_adversary_relays_partial_sums_only_when_it_pays():
+    """With width-1 blocks the partial-sum law never reaches the thread bound, and relaying the whole residual into the
+    declared blocks' sums would buy far less than the residual trains directly: the adversary relays only the few
+    partial sums that pay, and the residual still trains at full efficiency."""
+    p = T.DEFAULTS | {"d": 1.0, "e": 1e6}
+    r = T.evaluate(p, T.TIERS["T4"])
+    assert r["largest"] == "residual" and 0 < r["declared"] < r["residual"]
+    assert r["residual"] == pytest.approx(p["residual"], rel=1e-6)
+    assert r["crossing_bits"] / (2 * p["b_p"]) < 1e-6 * p["residual"] * p["nodes"] * p["node_flops"] * T.YEAR
+
+
 def test_absorbed_partial_sums_weaken_the_law_as_ps_prime_says():
     """PS' on Kimi K2's forward chain: G_D b_a / R at zeta = b_a Z / R of 0, 1 and 10 (Tier 1's table)."""
     rates = T.chain_rates(T.DEFAULTS, 2000)
