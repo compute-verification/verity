@@ -46,8 +46,8 @@ BLOCK_BITS = 524288
 BLOCK_NAME_BITS = 25
 
 #: defaults: 100,000 eight-GPU servers for a year, the kimi-k2-1m-raw calibration with Kimi K2's forward chain, today's
-#: proved wipe slack (1/19) and main's declared unwipeable memory, today's uncharged declared egress, and the 1e8-overhead
-#: prover at a 1% budget
+#: proved wipe slack (1/19) and main's declared unwipeable memory, today's uncharged declared egress, and the C-Flock CUDA
+#: prover's measured overhead at a 1% budget
 DEFAULTS = {
     "nodes": 1e5, "node_flops": 1.58e16, "years": 1.0, "target_flop": 1e26,
     "K": 2e7, "Gamma": 6.4e16, "b_w": 2.5, "b_a": 4.0, "d": 2048.0, "e": 4e4, "kappa": 0.667,
@@ -56,7 +56,7 @@ DEFAULTS = {
     "sigma": 1e3, "tau": 400.0, "egress_decl": 4.4e9, "nic": 3.2e12,
     "hbm_gb": 640.0, "host_gb": 2000.0, "unwipeable_gb": 16.0, "slack": 1 / 19, "t_read": 1e-3, "wipe_s": 3600.0,
     "f": 0.95,
-    "share": 0.01, "overhead": 1e8, "replay": 1.1e5, "step_flop": 1.43e4, "p_evade": 0.01, "identities": 1.0,
+    "share": 0.01, "overhead": 1.64e8, "replay": 1.1e5, "step_flop": 1.43e4, "p_evade": 0.01, "identities": 1.0,
     "floor_steps": 1.0,
 }
 
@@ -80,7 +80,7 @@ SPEC = [
     {"key": "host_gb", "group": "Memory wipes", "label": "Host memory per server (filled with proof of space)", "unit": "GB", "min": 1, "max": 10000, "log": True, "zero": True},
     {"key": "f", "group": "Memory exhaustion", "label": "Declared share of HBM, f", "unit": "", "min": 0, "max": 0.999, "log": False},
     {"key": "share", "group": "Sampled proofs", "label": "Compute share for replays and proofs", "unit": "", "min": 1e-4, "max": 0.5, "log": True},
-    {"key": "overhead", "group": "Sampled proofs", "label": "Proof overhead per step (CUDA prover 1.6e8; ZK about 1e10)", "unit": "x", "min": 1, "max": 1e11, "log": True},
+    {"key": "overhead", "group": "Sampled proofs", "label": "Proof overhead per step (CUDA prover 1.64e8; ZK about 1e10)", "unit": "x", "min": 1, "max": 1e11, "log": True},
     {"key": "replay", "group": "Sampled proofs", "label": "Replay cost per drawn step (layer-token / step)", "unit": "x", "min": 1, "max": 1e7, "log": True},
     {"key": "step_flop", "group": "Sampled proofs", "label": "Work per proof step (one 7168-long dot product)", "unit": "FLOP", "min": 1e3, "max": 1e15, "log": True},
     {"key": "p_evade", "group": "Sampled proofs", "label": "Escape probability the adversary accepts", "unit": "", "min": 1e-4, "max": 0.99, "log": True},
