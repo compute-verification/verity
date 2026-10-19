@@ -63,6 +63,12 @@ theorem registered_ok (p : Params) (c : Registration) (f : Fixed) :
     by_cases hsh : "shape" ∈ (keys c.window.items).getD []
     case neg => rw [ite_eq_left hsh] at h; cases h
     rw [ite_eq_right (Classical.not_not.mpr hsh)] at h
+    by_cases hfl : PouwWindow.fixedLength (get c.window.items "length") = true
+    case neg =>
+      have hfl' : (!PouwWindow.fixedLength (get c.window.items "length")) = true := by simpa using hfl
+      rw [ite_eq_left hfl'] at h; cases h
+    have hfl' : ¬ (!PouwWindow.fixedLength (get c.window.items "length")) = true := by simp [hfl]
+    rw [ite_eq_right hfl'] at h
     by_cases h2 : (keys c.window.items).getD [] = registeredSorted
     case neg => rw [ite_eq_left h2] at h; cases h
     rw [ite_eq_right (Classical.not_not.mpr h2)] at h
@@ -98,9 +104,9 @@ theorem registered_ok (p : Params) (c : Registration) (f : Fixed) :
         case neg => rw [ite_eq_left h8] at h; cases h
         rw [ite_eq_right (Classical.not_not.mpr h8)] at h
         cases h
-        exact ⟨h1, hsh, h2, hl, by simp only [PouwWindow.Work.at]; omega, by simp only [PouwWindow.Work.at]; omega,
+        exact ⟨h1, hsh, hfl, h2, hl, by simp only [PouwWindow.Work.at]; omega, by simp only [PouwWindow.Work.at]; omega,
           by simp only [PouwWindow.Work.at]; omega, rfl, hs, rfl, (wrongItems_nil _ _ _).mp h4, h5, h6, h7, h8⟩
-  · rintro ⟨h1, hsh, h2, hl, h3, h3', h4, hw, hs, hr, hi, hp, hlaw, hq, hsch⟩
+  · rintro ⟨h1, hsh, hfl, h2, hl, h3, h3', h4, hw, hs, hr, hi, hp, hlaw, hq, hsch⟩
     obtain ⟨work, samp, rootW⟩ := f
     simp only at hl h3 h3' h4 hw hs hr hi hp hlaw
     generalize hell : work.level = ell at hl h3 h3' h4 hw
@@ -108,7 +114,8 @@ theorem registered_ok (p : Params) (c : Registration) (f : Fixed) :
     have hwi := (wrongItems_nil p c.window.items ⟨_, samp, _⟩).mpr hi
     unfold registered
     dsimp only
-    rw [ite_eq_right (Classical.not_not.mpr h1), ite_eq_right (Classical.not_not.mpr hsh),
+    have hfl' : ¬ (!PouwWindow.fixedLength (get c.window.items "length")) = true := by simp [hfl]
+    rw [ite_eq_right (Classical.not_not.mpr h1), ite_eq_right (Classical.not_not.mpr hsh), ite_eq_right hfl',
       ite_eq_right (Classical.not_not.mpr h2)]
     simp only [hl]
     rw [ite_eq_right (by omega)]
@@ -120,7 +127,8 @@ theorem registered_ok (p : Params) (c : Registration) (f : Fixed) :
 theorem outcome_accept (p : Params) (c : Registration) (f : Fixed) (e : Evidence) (pub : Public)
     (prof : Core.Integrity) :
     outcome p c f e = .accept pub prof ↔
-      ∃ draw, ServiceAccepted p c f e prof draw ∧ pub = ⟨p.check, f.work, f.sampling, p.shape, f.rootW, draw.units⟩ := by
+      ∃ draw, ServiceAccepted p c f e prof draw ∧
+        pub = ⟨p.check, f.work, f.sampling, p.shape, p.length, f.rootW, draw.units⟩ := by
   unfold outcome ServiceAccepted
   dsimp only
   by_cases h1 : e.protocol = oneStage
@@ -177,7 +185,7 @@ theorem outcome_accept (p : Params) (c : Registration) (f : Fixed) (e : Evidence
 theorem acceptMeans_iff (p : Params) (c : Registration) (e : Evidence) (pub : Public) (prof : Core.Integrity) :
     protocol.check p c e = .accept pub prof ↔
       ∃ f draw, RegistrationKeeps p c f ∧ ServiceAccepted p c f e prof draw ∧
-        pub = ⟨p.check, f.work, f.sampling, p.shape, f.rootW, draw.units⟩ := by
+        pub = ⟨p.check, f.work, f.sampling, p.shape, p.length, f.rootW, draw.units⟩ := by
   rw [check_eq]
   unfold PouwCheck.check
   constructor
@@ -197,7 +205,7 @@ theorem acceptMeans : AcceptMeans := fun p c e pub prof => (acceptMeans_iff p c 
 accepted, publishing the rule's items and the service's draw. -/
 theorem acceptMeans_complete (p : Params) (c : Registration) (e : Evidence) (f : Fixed) (prof : Core.Integrity)
     (draw : UnitDraw) (hk : RegistrationKeeps p c f) (hs : ServiceAccepted p c f e prof draw) :
-    protocol.check p c e = .accept ⟨p.check, f.work, f.sampling, p.shape, f.rootW, draw.units⟩ prof :=
+    protocol.check p c e = .accept ⟨p.check, f.work, f.sampling, p.shape, p.length, f.rootW, draw.units⟩ prof :=
   (acceptMeans_iff p c e _ prof).2 ⟨f, draw, hk, hs, rfl⟩
 
 theorem acceptedIsTheService's : AcceptedIsTheService's := by
@@ -207,7 +215,7 @@ theorem acceptedIsTheService's : AcceptedIsTheService's := by
 
 theorem acceptedDraw : AcceptedDraw := by
   intro p c e pub prof h
-  obtain ⟨f, draw, ⟨-, -, -, -, -, -, -, hw, hs, -, -, hpop, hlaw, -⟩,
+  obtain ⟨f, draw, ⟨-, -, -, -, -, -, -, -, hw, hs, -, -, hpop, hlaw, -⟩,
     ⟨-, -, -, -, -, -, -, -, -, hsz, hasc, hall⟩, rfl⟩ := acceptMeans p c e pub prof h
   refine ⟨hw, ?_, hpop, hlaw, hsz, hasc, hall⟩
   unfold PouwWindow.sampling at hs
@@ -255,7 +263,7 @@ theorem undecidedOnlyFromService : UndecidedOnlyFromService := by
 point is positive (`Window.isPoint_point`), so `N − 1` does not truncate. -/
 theorem acceptedInRange : AcceptedInRange := by
   intro p c e pub prof h
-  obtain ⟨f, draw, ⟨-, -, -, -, -, h3, h4, hw, -⟩, -, rfl⟩ := acceptMeans p c e pub prof h
+  obtain ⟨f, draw, ⟨-, -, -, -, -, -, h3, h4, hw, -⟩, -, rfl⟩ := acceptMeans p c e pub prof h
   have hpos := ((Window.isPoint_iff _ _).1 (Window.isPoint_point p.gridBits f.work.level)).1
   have hc : f.work.credited = PouwWindow.point p.gridBits f.work.level := congrArg PouwWindow.Work.credited hw
   have hn : f.work.n = PouwWindow.shapeTiles p.shape := congrArg PouwWindow.Work.n hw

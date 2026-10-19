@@ -12,7 +12,9 @@ import PouwCheck.Inputs
 `window.REGISTERED`, a work level whose credited tiles lie from the declared range's low end to N − 1, N the shape's tile
 count (`shapeTiles`), each item the verifier's own at that level, the population N, the law subset:K′ with K′ the
 window's exact `k_prime`, and the check's query and scheme. A registration with no `shape` item is the superseded
-window's, whose tiles and N followed its real tiles, and is refused as `window-form` (decision 129: refuse and label).
+window's, whose tiles and N followed its real tiles, and is refused as `window-form` (decision 129: refuse and label);
+one with a shape but no `length` that ran ignoring end-of-sequence is an EOS-keyed window's, and is refused as
+`window-form: eos-keyed` (CMP-43).
 `outcome` then holds the service's answer to it: one-stage's, for this registration's digest, and on acceptance a
 profile and draw of the registered partition's N units drawn subset:K′ at the window's δ. Every refusal is the first
 rule it breaks, in this order, with `core_check.py`'s reason.
@@ -52,10 +54,15 @@ def windowForm : String :=
   "window-form: the registration has no shape item: it is the superseded window, whose tiles and N followed its real " ++
     "tiles, not the static window of its shape"
 
+/-- `EOS_KEYED`: a registration with a shape but no fixed length item, an EOS-keyed window's (CMP-43). -/
+def eosKeyed : String :=
+  "window-form: eos-keyed: the registration has no fixed length item (ignore_eos and max_tokens per call): its rows " ++
+    "stopped at end-of-sequence, so its useful work is not public"
+
 /-- The registered items as the verifier computes them at its level (`expected_items`), in sorted order. -/
 def expected (p : Params) (f : Fixed) : List (String × Json) :=
-  [("check", p.check.toJson), ("root_W", rootWJson f.rootW), ("sampling", f.sampling.toJson),
-   ("shape", PouwWindow.shapeJson p.shape), ("work", f.work.itemJson p.check.tileWork)]
+  [("check", p.check.toJson), ("length", p.length.toJson), ("root_W", rootWJson f.rootW),
+   ("sampling", f.sampling.toJson), ("shape", PouwWindow.shapeJson p.shape), ("work", f.work.itemJson p.check.tileWork)]
 
 def subsetLaw (k : Nat) : Json := Json.mkObj [("k", k), ("law", "subset")]
 
@@ -75,6 +82,7 @@ def registered (p : Params) (c : Registration) : Except String Fixed :=
   if ¬ (win.kind = "served" ∧ win.context = p.context) then
     .error s!"window: registered kind {win.kind} in context {win.context}, the verifier's served in {p.context}"
   else if "shape" ∉ ks then .error windowForm
+  else if !PouwWindow.fixedLength (get win.items "length") then .error eosKeyed
   else if ks ≠ registeredSorted then
     .error s!"public-items: registered {", ".intercalate ks}, declared {", ".intercalate registeredSorted}"
   else match levelOf win.items with
@@ -104,6 +112,7 @@ structure Public where
   work : Work
   sampling : Sampling
   shape : List PouwWindow.Call
+  length : PouwWindow.Length
   rootW : Option String
   drawn : Array Nat
   deriving DecidableEq, Repr
@@ -111,7 +120,7 @@ structure Public where
 /-- The published items in `window.PUBLIC`'s order. -/
 def Public.entries (pub : Public) : List (String × Json) :=
   [("verdict", true), ("work", pub.work.itemJson pub.check.tileWork), ("check", pub.check.toJson),
-   ("sampling", pub.sampling.toJson), ("shape", PouwWindow.shapeJson pub.shape),
+   ("sampling", pub.sampling.toJson), ("shape", PouwWindow.shapeJson pub.shape), ("length", pub.length.toJson),
    ("drawn", Json.arr (pub.drawn.map fun (u : Nat) => Json.num u)), ("root_W", rootWJson pub.rootW)]
 
 def Public.toJson (pub : Public) : Json := Json.mkObj pub.entries
@@ -164,7 +173,7 @@ def outcome (p : Params) (c : Registration) (f : Fixed) (e : Evidence) : Core.Ou
       .reject s!"draw: {draw.law.name} over {draw.population}, not subset:{k} over {n}"
     else if ¬ UnitsOk draw.units k n then
       .reject s!"draw: its {draw.units.size} units are not {k} ascending distinct units below {n}"
-    else .accept ⟨p.check, f.work, f.sampling, p.shape, f.rootW, draw.units⟩ prof
+    else .accept ⟨p.check, f.work, f.sampling, p.shape, p.length, f.rootW, draw.units⟩ prof
 
 def check (p : Params) (c : Registration) (e : Evidence) : Core.Outcome Public Core.Integrity :=
   match registered p c with

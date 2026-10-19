@@ -9,9 +9,10 @@ must show, and publishes `window.PUBLIC` from it.  This is that composition in o
 * **Params**, canonical JSON: the check item (`check`: the tile template, its work per tile w, the commitment scheme,
   the public bound on entries and optionally its coin mode, ``coins``, live or seeded: `window.mode`), ε and δ as ratio
   strings, the grid's bits, the declared range of tile counts, the window's context, the check query's SHA-512
-  (one-stage's `query_digest` of the tile template's instance query) and the window's shape (`window.shape_of`, its
-  calls; `window.shape_problem` within the entry bound, its N within the range).  The template is one the verifier pins
-  (`TILES`, Lean's `PouwCheck.tiles`), with that template's tile work and query.
+  (one-stage's `query_digest` of the tile template's instance query), the window's shape (`window.shape_of`, its
+  calls; `window.shape_problem` within the entry bound, its N within the range) and its fixed length (`window.length_of`:
+  ignore_eos and one max_tokens per call, `window.length_problem`).  The template is one the verifier pins (`TILES`,
+  Lean's `PouwCheck.tiles`), with that template's tile work and query.
 * **Commitment**: the window's registration, one-stage's record (`registration.record`) as canonical JSON, its window
   ``{"kind": "served", "context", "public"}`` holding exactly `window.REGISTERED`.  Its digest is the record's own,
   `registration.digest`, the one the service's receipt, draw and outcome cite.
@@ -25,7 +26,9 @@ must show, and publishes `window.PUBLIC` from it.  This is that composition in o
   profile and draw are of the registered partition's N units drawn subset:K′ at the window's δ.  It publishes exactly
   `window.PUBLIC` and the service's profile.  The service's reject is a reject and its undecided (the verifier of record
   hasn't run) is undecided.  Parameters with no ``shape``, and a registration with no ``shape`` item, are the superseded
-  window's, whose tiles and N followed its real tiles: each is refused as ``window-form`` (refuse and label).
+  window's, whose tiles and N followed its real tiles: each is refused as ``window-form`` (refuse and label).  Ones
+  with a shape but no ``length`` that ran ignoring end-of-sequence (`window.fixed_length`) are an EOS-keyed window's,
+  whose rows stopped at end-of-sequence: each is refused as ``window-form: eos-keyed`` (CMP-43).
 
 `opening` is the rule on one unit's opening beside it (`served_commit.check`'s, which calls it): the tile proof's public
 file opens the unit's rows under the registered window root, through the entry and the rows the shape puts the unit at
@@ -67,13 +70,19 @@ ONE_STAGE = "verity/sampled-proofs/one-stage/v1"
 SCHEME = "frame-v3-sha512/hm96-sha512"
 FORMATS = ("verity/registration/v1", "verity/registration/v2")
 LEVEL = "unit"
-PARAMS_KEYS = ("check", "context", "delta", "eps", "grid_bits", "query", "range", "shape")
+PARAMS_KEYS = ("check", "context", "delta", "eps", "grid_bits", "length", "query", "range", "shape")
 #: the refusals of the superseded window, whose tiles and N followed its real tiles (decision 129: refuse and label): its
 #: parameters, and its registration, have no shape
 WINDOW_FORM_PARAMS = ("window-form: the parameters have no shape: they are the superseded window's, whose tiles and N "
                       "followed its real tiles")
 WINDOW_FORM = ("window-form: the registration has no shape item: it is the superseded window, whose tiles and N followed "
                "its real tiles, not the static window of its shape")
+#: the refusals of an EOS-keyed window, whose rows stopped at end-of-sequence (CMP-43; refuse and label): its parameters,
+#: and its registration, have no length item that ran ignoring end-of-sequence (`window.fixed_length`)
+EOS_KEYED_PARAMS = ("window-form: eos-keyed: the parameters have no fixed length (ignore_eos and max_tokens per call): "
+                    "the window's rows stopped at end-of-sequence")
+EOS_KEYED = ("window-form: eos-keyed: the registration has no fixed length item (ignore_eos and max_tokens per call): "
+             "its rows stopped at end-of-sequence, so its useful work is not public")
 CHECK_KEYS = ("entries", "scheme", "template", "tile_work")
 ANSWER_KEYS = ("commitment", "profile", "protocol", "public", "reason", "verdict")
 VERDICTS = ("accept", "reject", "undecided")
@@ -185,8 +194,11 @@ def _str(x: Any) -> bool:
 
 def params(j: Any) -> dict:
     """The verifier's own parameters of the window."""
-    if isinstance(j, dict) and sorted(j) == [k for k in PARAMS_KEYS if k != "shape"]:
+    if isinstance(j, dict) and sorted(set(j) - {"length"}) == [k for k in PARAMS_KEYS if k not in ("length", "shape")]:
         raise Refused(WINDOW_FORM_PARAMS)
+    if isinstance(j, dict) and sorted(set(j) - {"length"}) == [k for k in PARAMS_KEYS if k != "length"] \
+            and not Wd.fixed_length(j.get("length")):
+        raise Refused(EOS_KEYED_PARAMS)
     if not isinstance(j, dict) or sorted(j) != list(PARAMS_KEYS):
         raise Refused(f"keys are not {', '.join(PARAMS_KEYS)}")
     c = j["check"]
@@ -235,7 +247,15 @@ def params(j: Any) -> dict:
         raise Refused(f"shape: {why}")
     if Wd.shape_tiles(shape) > rg[1]:
         raise Refused(f"shape: its {Wd.shape_tiles(shape)} tiles are more than the range's {rg[1]}")
-    return {**out, "grid_bits": j["grid_bits"], "query": j["query"], "range": tuple(rg), "shape": shape}
+    try:
+        length = Wd.length_of(j["length"])
+    except ValueError:
+        raise Refused("length is not {ignore_eos, max_tokens}: a boolean and a non-empty list of natural numbers") from None
+    why = Wd.length_problem(length, shape)
+    if why:
+        raise Refused(f"length: {why}")
+    return {**out, "grid_bits": j["grid_bits"], "length": length, "query": j["query"], "range": tuple(rg),
+            "shape": shape}
 
 
 def _root(r: Any) -> dict | None:
@@ -489,7 +509,7 @@ def expected_items(p: dict, ell: int, w: Wd.Work, k: int, root_w: Any) -> dict:
     """The registered items as the verifier computes them at level `ell` (`served_commit.items_of`)."""
     tw = p["check"]["tile_work"]
     return {"check": check_item(p), "root_W": root_w, "work": w.to_json(tw), "shape": Wd.shape_json(p["shape"]),
-            "sampling": {"delta": str(p["delta"]), "eps": str(p["eps"]), "grid_bits": p["grid_bits"],
+            "length": p["length"].to_json(), "sampling": {"delta": str(p["delta"]), "eps": str(p["eps"]), "grid_bits": p["grid_bits"],
                          "law": {"k": k, "law": "subset"}}}
 
 
@@ -502,6 +522,8 @@ def _registered(p: dict, c: dict) -> tuple[str | None, Any]:
                 f"{p['context']}"), None
     if "shape" not in items:
         return WINDOW_FORM, None
+    if not Wd.fixed_length(items.get("length")):
+        return EOS_KEYED, None
     if sorted(items) != sorted(Wd.REGISTERED):
         return f"public-items: registered {', '.join(sorted(items))}, declared {', '.join(sorted(Wd.REGISTERED))}", None
     work = items["work"]
@@ -1049,7 +1071,7 @@ def line(a: dict) -> str:
     return _canon(a)
 
 
-__all__ = ["ANSWER_KEYS", "FORMATS", "ID", "LEVEL", "ONE_STAGE", "Refused", "SCHEME", "WINDOW_FORM", "WINDOW_FORM_PARAMS",
-           "answer", "answer_of", "canonical",
+__all__ = ["ANSWER_KEYS", "EOS_KEYED", "EOS_KEYED_PARAMS", "FORMATS", "ID", "LEVEL", "ONE_STAGE", "Refused", "SCHEME",
+           "WINDOW_FORM", "WINDOW_FORM_PARAMS", "answer", "answer_of", "canonical",
            "case", "check", "commitment", "digest", "draw", "evidence", "integrity", "integrity_json", "law_name", "line",
            "opening", "params", "pass_epoch", "ratio", "registered", "rounds", "unit_draw", "verify_path", "window_domain"]

@@ -79,6 +79,8 @@ def honest(rng: random.Random) -> dict:
               "public": {"draw": {"k": k, "law": "subset", "population": w.n, "units": units}}}
     if rng.random() < 0.4:
         params["check"][Wd.COINS] = items["check"][Wd.COINS] = rng.choice(Wd.MODES)
+    params["length"] = {"ignore_eos": True, "max_tokens": [rng.choice([1, 4, 16, 4096]) for _ in params["shape"]]}
+    items["length"] = json.loads(json.dumps(params["length"]))
     return {"params": params, "record": rec, "answer": answer}
 
 
@@ -120,6 +122,9 @@ MUTATIONS = [
     ("params-range-low", "params", "range", None), ("params-range-high", "params", "range", None),
     ("params-window-form", "params", "shape", _DROP), ("params-shape", "params", "shape", []),
     ("params-shape-m", "params", "shape.0.m", 24), ("params-shape-pass", "params", "shape", [{"m": 16, "n": 4, "tile0": 1 << 40}]),
+    ("params-window-form-bare", None, None, None), ("params-eos-keyed", "params", "length", _DROP),
+    ("params-eos-flag", "params", "length.ignore_eos", False), ("params-length", "params", "length.max_tokens", []),
+    ("params-length-count", "params", "length.max_tokens", None), ("params-length-zero", "params", "length.max_tokens.0", 0),
     ("record-format", "record", "format", "verity/registration/v0"), ("record-program", "record", "program", 7),
     ("record-partition", "record", "partition", _DROP), ("record-population-type", "record", "population", "8"),
     ("record-law-missing", "record", "law", _DROP), ("record-roots", "record", "roots", [{"port": "W"}]),
@@ -132,6 +137,9 @@ MUTATIONS = [
     ("record-work", "record", "window.public.work.credited", None), ("record-check", "record", "window.public.check.entries", None),
     ("record-coins", "record", "window.public.check.coins", None),
     ("record-window-form", "record", "window.public.shape", _DROP), ("record-shape", "record", "window.public.shape", None),
+    ("record-eos-keyed", "record", "window.public.length", _DROP),
+    ("record-eos-flag", "record", "window.public.length.ignore_eos", False),
+    ("record-length", "record", "window.public.length.max_tokens", None),
     ("record-sampling", "record", "window.public.sampling.law.k", None), ("record-root-w", "record", "window.public.root_W", None),
     ("record-no-w-root", "record", "roots", None), ("record-population", "record", "population", None),
     ("record-law", "record", "law.k", None), ("record-law-kind", "record", "law", {"law": "bernoulli", "p": "1/2"}),
@@ -212,6 +220,10 @@ def _derived(name: str, case: dict, rng: random.Random):
         return [1, n - 1]
     if name == "record-shape":
         return [{**c, "tile0": c["tile0"] + 1} for c in p["shape"]]
+    if name == "params-length-count":
+        return p["length"]["max_tokens"] + [4]
+    if name == "record-length":
+        return [t + 1 for t in p["length"]["max_tokens"]]
     if name == "record-level-high":
         return Wd.level(Wd.floor_point(n - 1, bits), bits) + 1 + rng.randrange(3)
     if name == "record-level-step":
@@ -316,6 +328,8 @@ def instance(rng: random.Random, name: str = "honest") -> dict:
     mutate("params")
     if name == "params-template-other":
         case["params"]["query"] = CC.TILES[case["params"]["check"]["template"]].query
+    elif name == "params-window-form-bare":
+        del case["params"]["shape"], case["params"]["length"]
     mutate("record")
     params, rec, ans = case["params"], case["record"], case["answer"]
     rec_b = _canon(rec).encode()

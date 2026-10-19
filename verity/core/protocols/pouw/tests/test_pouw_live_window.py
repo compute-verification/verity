@@ -98,7 +98,7 @@ def _params(check: dict) -> dict:
     template, tile = next(iter(CC.TILES.items()))
     return {"check": {"entries": 4, "scheme": CC.SCHEME, "template": template, "tile_work": tile.tile_work, **check},
             "context": "served-zk/run-1/ab", "delta": "1/100", "eps": "1/10", "grid_bits": 2, "query": tile.query,
-            "range": [1, 64], "shape": [{"m": 16, "n": 1, "tile0": 0}]}
+            "range": [1, 64], "shape": [{"m": 16, "n": 1, "tile0": 0}], "length": {"ignore_eos": True, "max_tokens": [4]}}
 
 
 def test_the_check_item_names_the_windows_coin_mode():
