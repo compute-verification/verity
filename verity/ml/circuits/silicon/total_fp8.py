@@ -199,4 +199,5 @@ HOPPER_E4M3_MMAV2_K32 = Pipeline(
     validated="hypothesis: Triton 3.7.1's MMAv2 e4m3 dot on sm_90 (two chained f16 HMMA.16816.F32 per k32, the operands in "
               "MMAV2_E4M3_K_ORDER); HMMA.16816.F32 from +0 measured on the H100 (r20260922-184111-671e, r20260922-184835-4b95), "
               "with a nonzero f16 accumulator not measured",
+    executes="f16",
 )
