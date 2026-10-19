@@ -42,6 +42,10 @@ private theorem padIdx_yAt {nE : ℕ} (k : Fin 4) :
     Composed.padIdx (nE := nE) (.inr ((![2, 0, 1, 3] : Fin 4 → Fin 4) k)) = nE + k.val := by
   fin_cases k <;> rfl
 
+private theorem padIdx_yAt_mk {nE : ℕ} (m : ℕ) (hm : m < 4) :
+    Composed.padIdx (nE := nE) (.inr ((![2, 0, 1, 3] : Fin 4 → Fin 4) ⟨m, hm⟩)) = nE + m :=
+  padIdx_yAt ⟨m, hm⟩
+
 /-- **`yAt` is an array's `a + β·m`** where pad `i` is entry `padIdx i` of `a + β·m` and padding symbol `k` entry
 `n_E + 4 + k`. -/
 private theorem yAt_eq {nE nPad : ℕ} (Y1 : ZK.PadIdx nE → 𝔽) (Y2 : Fin nPad → 𝔽) (a m : Array _root_.Flock.F128)
@@ -52,14 +56,15 @@ private theorem yAt_eq {nE nPad : ℕ} (Y1 : ZK.PadIdx nE → 𝔽) (Y2 : Fin nP
   refine Array.ext (by simp [ha]) fun i hi _ => ?_
   rw [Array.getElem_ofFn, Array.getElem_map, Array.getElem_range]
   unfold yAt
+  dsimp only
   split_ifs with h h'
   · rw [h1]
     show FlockLevel3.GF128.val (fOf a[i]! + fOf β * fOf m[i]!) = _
     rw [← fOf_mul, ← fOf_add]
     rfl
-  · rw [h1, padIdx_yAt, show nE + (i - nE) = i by omega, ← fOf_mul, ← fOf_add]
+  · rw [h1, padIdx_yAt_mk, Nat.add_sub_cancel' (by omega), ← fOf_mul, ← fOf_add]
     rfl
-  · rw [h2, show nE + 4 + (i - (nE + 4)) = i by simp at hi; omega, ← fOf_mul, ← fOf_add]
+  · rw [h2, Fin.val_mk, Nat.add_sub_cancel' (by omega), ← fOf_mul, ← fOf_add]
     rfl
 
 /-! ## The tape's pads at the cell's base -/
@@ -86,6 +91,7 @@ private theorem pads_exe (P : Composed.LigProver) {x : Msg} (t : Fin Claims.Floc
   set L := _root_.Flock.Zk.PadLayout.new (stAt x j).m (stAt x j).c.kLog (zkTab x j).sch.k0 with hLy
   set B := ((TapePlan.ofLayout (TapeLayout.exe P) exeTape).tape x t).1 j with hB
   have hz := fits_zkTab P (zkTab x j)
+  have hE64 : (tabC P x j).z.nE ≤ 2 ^ 64 := hz.nE
   have hc : j.val < Claims.Flock.zkTableCap := lt_of_lt_of_le j.isLt (jOf_le_cap x)
   have hE : (tabC P x j).z.nE = L.hab := by
     show L.len - 4 = L.hab
@@ -193,7 +199,7 @@ private theorem cutE_Y1 {x : Msg} (hx : Live x) {c : Fin (refK x) → FlockDeplo
         fOf (betaAt c j.val r.val) * ((UE.tape x τ).1 j).2.2.2.2.2.1 r i := by
   have hpass := famPasses_of (pointReads_czExe PE) (coinReads_czExe PE) hx hn hs j r .inner h
   rw [← ((coinReads_czExe PE) x c j r).1]
-  exact if_pos hpass
+  exact ite_eq_left hpass
 
 /-- **The cut's `Y₂`**: `pad_h + β·pad_μ` at the cell's base. -/
 private theorem cutE_Y2 {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit) (τ : UE.Tape)
@@ -244,6 +250,8 @@ theorem innerY : InnerY := by
   dsimp only
   rw [cutE_Y1 hx hn hs w τ j r (by omega), cutE_Y2 c w τ j r, hβ]
   dsimp only
-  exact yAt_eq _ _ _ _ _ hsz (fun i => by rw [hf, hfm]) (fun k => by rw [hg, hgm])
+  exact yAt_eq _ _ _ _ _ hsz
+    (fun i => (congrArg₂ (· + fOf ((innerCoinsE c j r).cb 0) * ·) (hf i) (hfm i)).symm)
+    (fun k => (congrArg₂ (· + fOf ((innerCoinsE c j r).cb 0) * ·) (hg k) (hgm k)).symm)
 
 end Claims.ZKMal.Masked
