@@ -4,6 +4,8 @@ stopped whenever a VM was suspended (Daniel, 18:04Z 19 Oct: suspending any agent
 
     watchers.py run [--config PATH]      supervise every loop (watchers.sh runs it; one at a time: it holds the config's `lock`)
     watchers.py check [--config PATH]    each loop resolved: its argv, the environment names it gets, what it waits for
+    watchers.py exec NAME [-- CMD...]    CMD (else the loop's argv) once, in loop NAME's environment and directory: a seed or a
+                                         dry run sees what the loop sees
 
 The config (watchers.toml, deployed as /data/watchers/watchers.toml) lists the loops. Each [[loop]] runs as its own process group
 with the config's [env], its own `env`, and the KEY=VALUE lines of its `env_files`, so a credential reaches only the loops that
@@ -99,6 +101,13 @@ class Loop:
                 **({"waiting_for": self.missing()} if self.state == "waiting" else {})}
 
 
+def loop_env(lp: Loop) -> dict[str, str]:
+    env = {**lp.env}
+    for f in lp.env_files:
+        env.update(env_file(Path(f)))
+    return env
+
+
 def expand(s: str, dirs: dict[str, str]) -> str:
     for k, v in dirs.items():
         s = s.replace("{" + k + "}", v)
@@ -160,11 +169,8 @@ class Supervisor:
         print(f"{iso(self.clock())} {msg}", flush=True)
 
     def _spawn(self, lp: Loop, logf: Path) -> subprocess.Popen:
-        env = {**lp.env}
-        for f in lp.env_files:
-            env.update(env_file(Path(f)))
         with open(logf, "ab") as out:
-            return subprocess.Popen(lp.argv, env=env, stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT,
+            return subprocess.Popen(lp.argv, env=loop_env(lp), stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT,
                                     cwd=str(self.dir), preexec_fn=_die_with_parent)
 
     def step(self) -> None:
@@ -328,14 +334,31 @@ def cmd_check(ns: argparse.Namespace) -> int:
     return bad
 
 
+def cmd_exec(ns: argparse.Namespace) -> int:
+    cfg, loops = load(ns.config)
+    lp = next((lp for lp in loops if lp.name == ns.loop), None)
+    if lp is None:
+        print(f"no loop {ns.loop!r} in {ns.config}: {', '.join(lp.name for lp in loops)}")
+        return 2
+    if miss := [f for f in lp.env_files if not Path(f).exists()]:
+        print(f"{lp.name} has no {', '.join(miss)} yet")
+        return 2
+    return subprocess.run(ns.argv or lp.argv, env=loop_env(lp), cwd=cfg["dir"]).returncode
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="watchers.py", description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
-    for name in ("run", "check"):
+    for name in ("run", "check", "exec"):
         p = sub.add_parser(name)
         p.add_argument("--config", type=Path, default=Path("/data/watchers/watchers.toml"))
+        if name == "exec":
+            p.add_argument("loop")
+            p.add_argument("argv", nargs=argparse.REMAINDER)
     ns = ap.parse_args(argv)
-    return {"run": cmd_run, "check": cmd_check}[ns.cmd](ns)
+    if ns.cmd == "exec" and ns.argv[:1] == ["--"]:
+        ns.argv = ns.argv[1:]
+    return {"run": cmd_run, "check": cmd_check, "exec": cmd_exec}[ns.cmd](ns)
 
 
 if __name__ == "__main__":

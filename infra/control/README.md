@@ -115,7 +115,13 @@ $CP 'kill "$(cat /data/watchers/supervisor.pid)"'
 A loop that takes over from a copy elsewhere starts where that copy is, never posting everything again: the relay with `research
 monitors relay ... --seed` (its loop's arguments), the agent-watch relay once `/data/watchers/agent-watch-offset` holds the
 count of complete lines in `/data/agent-watch/events.jsonl` (`grep -c '' events.jsonl`, less one for a last line without its
-newline), and top's loops with `top_watch.py asks --seed` and `sweep --seed`, whose state files they wait for.
+newline), and top's loops with `top_watch.py asks --seed` and `sweep --seed`, whose state files they wait for. A seed runs in its
+loop's environment and directory with `watchers.py exec`:
+
+~~~sh
+W="PYTHONPATH=/data/watchers/src/tools/research/src python3.12 /data/watchers/src/infra/control/watchers.py exec"
+$CP "$W top-asks -- python3.12 -s /data/watchers/src/infra/control/top_watch.py asks --state /data/watchers/top-asks.json --seed"
+~~~
 
 A change to `post_start.sh` takes effect at the next reset. To apply a new link or service now, run the new line by hand,
 or the whole script: each link is `ln -sfn`, so a rerun only repeats them. It does start a second copy of every loop,

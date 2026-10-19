@@ -101,6 +101,19 @@ def test_a_loop_whose_credential_file_is_missing_waits_and_starts_once_it_is_pla
     assert W.env_file(key) == {"A": "b"}
 
 
+def test_exec_runs_a_command_in_one_loops_environment_and_refuses_before_its_credential_is_placed(tmp_path, capfd):
+    key = tmp_path / "key.env"
+    cfg = tmp_path / "w.toml"
+    cfg.write_text(f'dir = "{tmp_path}"\nsrc = "{tmp_path}/src"\n[env]\nPATH = "/usr/bin:/bin"\n'
+                   f'[[loop]]\nname = "a"\nargv = ["true"]\nenv_files = ["{key}"]\nenv = {{ WHERE = "{{dir}}/x" }}\n')
+    assert W.main(["exec", "--config", str(cfg), "a", "--", "sh", "-c", "echo $WHERE"]) == 2
+    key.write_text("A=b\n")
+    assert W.main(["exec", "--config", str(cfg), "a", "--", "sh", "-c", 'echo "$WHERE $A $(pwd)"']) == 0
+    assert W.main(["exec", "--config", str(cfg), "nope"]) == 2
+    out = capfd.readouterr().out.splitlines()
+    assert out[0] == f"a has no {key} yet" and out[1] == f"{tmp_path}/x b {tmp_path}" and out[2].startswith("no loop 'nope'")
+
+
 def test_an_extra_job_that_exits_0_is_done_and_one_that_fails_starts_again(tmp_path):
     extra = tmp_path / "extra.d"
     extra.mkdir()
