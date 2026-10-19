@@ -142,12 +142,13 @@ def test_dsa_launch_batch_equals_the_traced_build(wrapper, shape, digest, tmp_pa
     (GLM53_S8, "step", {"M": 8, "pos0": 8},
      "a26c43faa02a1efcdfdbf6ed346afaf2d6552bea975592369da898827fe34399d1c4a4e2ea87cf3806f292204d8c805c0481c4ef948d1d7aad5cadf51df96e01"),
     (GLM53_S8, "request", {"LP": 25, "T": 6},
-     "187d76b491f1dcc9ecdeb87d1e807721ab910d353c2875d2b467a2f43be0af9fd977ab42313d13e1568b115ad1ed7e6fca1b4c66175e70c1bc4afee5e956c35c"),
+     "b2c6fd777a06c0260b433a58fe518c8e0650db6e4627c645584a7eab355dbd54cc0f63e5586946d5d8f75caf1932c202fac503ca9e4d751fdb75a6b97ae6c6ba"),
 ])
 def test_dsa_stochastic_equals_the_traced_build(row, wrapper, shape, digest, tmp_path):
     """GLM-5.3's seeded top-p rows (t0.8 p0.95) at rank 0, as the Build traced them in r20261017-224230-de2d: the B1 step at the single
     request's constant split count, and the B8 step and second request (under its launch batch) over the derived `splits` Input,
-    the select after the vocabulary's all-gather."""
+    the select after the vocabulary's all-gather.  The request's multimem all-reduces are `AllReduceMultimem_v1`'s batch of 16-byte
+    vectors, which moved its digest from the trace's (187d76b4…) until the row is traced again."""
     r = build_program(_row_phi(row, "GLM53", tmp_path), wrapper, **shape)
     assert r.digest == digest
 
