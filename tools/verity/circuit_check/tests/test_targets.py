@@ -1,6 +1,7 @@
 """`targets._authored`: a Definition is this tree's by the file of the module that defines it, so a package that moves to a new
 directory and import name stays in `REGISTERED`, and one whose module can't be judged fails by name.  `targets.root_functions`:
-every root function a binding file defines runs, the listed ones first."""
+every root function a binding file defines runs, the listed ones first.  `targets.word_call_families`: a vocabulary kind that
+doesn't bind is refused by name."""
 from __future__ import annotations
 
 import sys
@@ -74,3 +75,14 @@ def test_a_sidecars_bindings_without_their_root_function_is_refused(monkeypatch)
     _binding_files(monkeypatch, a={"_lone_bindings": lambda: []})
     with pytest.raises(ValueError, match="_lone_bindings is no binding circuit-check runs"):
         TG.binding_files()
+
+
+def test_a_vocabulary_kind_that_does_not_bind_leaves_the_call_families_refused_by_name(monkeypatch):
+    """A kind left out of `word_call_families` would make every check of its family judge the partition as no Call's, and
+    `test_every_call_the_suite_checks_is_partitioned` pass without it (#2765's `dsv4_indexer_compress` before its statics)."""
+    monkeypatch.setattr(TG, "_SHORT", {})
+    monkeypatch.setattr(TG, "load_registries", lambda: None)
+    monkeypatch.setattr(TG, "_vocabulary_bindings", lambda: [("b1-eager-v3/dsv4_indexer_compress", "KeyError: 'ROPE'")])
+    with pytest.raises(RuntimeError, match=r"b1-eager-v3/dsv4_indexer_compress: KeyError: 'ROPE'"):
+        TG.word_call_families()
+    assert "words" not in TG._SHORT

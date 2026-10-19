@@ -358,7 +358,6 @@ def _served_kind_statics() -> dict[str, dict[str, Any]]:
             "mhc_post": {"HC": 4, "N": 7168}, "hc_head": {**mhc, "H": 7168, "TH": 128},
             "dsv4_qnorm_rope_kv_insert": DQ.DSV4_INSERT, "dsv4_compress_c4": DC.DSV4_COMPRESSOR,
             "dsv4_compress_c128": DC.DSV4_COMPRESSOR, "dsv4_inv_rope_quant_head": {"CHUNKS": 4, "QG": 128, "ROPE": 64},
-            "dsv4_indexer_compress": {"D": 128, "ROPE": 64, "EPS": 1e-6},
             "flashmla_decode": {**FM.FLASHMLA_DSV4, "NH": 1, "SPLITS": (0, 1), "NW": 64},
             "flashmla_gather_row": FP.FLASHMLA_GATHER_DSV4, "flashmla_prefill": {**FP.FLASHMLA_PREFILL_DSV4, "NH": 1, "NP": 1},
             "silu_mul_clamp": {"I": 4, "LIMIT": 10.0}, "moe_router_hash": router, "moe_router_sqrtsoftplus": router,
@@ -439,13 +438,17 @@ _SHORT: dict[str, set[str]] = {}
 
 def word_call_families() -> set[str]:
     """The word Call families of a served Program: the replay's row families (`verity_vllm.program.kernels.rows.ROWS`), every
-    frontend vocabulary kind's Definition and every template's.  Their bindings build in seconds, without the catalog."""
+    frontend vocabulary kind's Definition and every template's.  Their bindings build in seconds, without the catalog.  A kind that
+    doesn't bind is refused by name: left out, its family's partition would be judged as no Call's."""
     if "words" not in _SHORT:
         load_registries()
         from verity_vllm.program.kernels import rows
 
         words = set(rows.ROWS)
-        words.update(family(fn) for _label, fn in _vocabulary_bindings() if not isinstance(fn, str))
+        bound = _vocabulary_bindings()
+        if unbound := [f"{label}: {fn}" for label, fn in bound if isinstance(fn, str)]:
+            raise RuntimeError(f"the Call families are unknown while a vocabulary kind doesn't bind: {unbound}")
+        words.update(family(fn) for _label, fn in bound)
         for _label, sub, sts in templates():
             words.update(family(sub.definition(**st)) for st in sts)
         _SHORT["words"] = words
