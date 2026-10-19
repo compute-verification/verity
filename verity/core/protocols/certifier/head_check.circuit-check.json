@@ -1,0 +1,13 @@
+{
+ "definitions": {
+  "NetworkHeadCounts_v1{T=4}": {
+   "and": 127
+  },
+  "NetworkHeadCounts_v1{T=600}": {
+   "and": 19199
+  },
+  "NetworkHeadFields_v1{L=9}": {
+   "and": 807
+  }
+ }
+}
