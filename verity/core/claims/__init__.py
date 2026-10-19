@@ -270,11 +270,16 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     # The data-sheet axioms A1–A7 (Security/Models/Accounting/Assumptions/Sheet.lean, note:20261017T1818Z-draft-axioms):
     # vendor statements that build the data-sheet machine and give (I1)–(I5) at the ½ floor
     Entry("accounting-sheet-clock", "assumption",
-          "A1 CLOCK: the SM clock never exceeds the data sheet's maximum boost clock", "A1 clock (data sheet)",
-          "measured"),
+          "A1 CLOCK: the SM clock never exceeds the device's f_max, from the device's own source. Assumed: sm_120's "
+          "2430 MHz, like the B200's f_max, is the maximum SM clock its driver reports (nvidia-smi), not a data "
+          "sheet's, and nothing checks a clock offset at run time; our nodes' driver allows none (NVML's offset range "
+          "[0, 0], r20261019-121222-faa3)", "A1 clock (assumed)", "measured"),
     Entry("accounting-sheet-dispatch", "assumption",
           "A2 DISPATCH: each SMSP issues at most one warp instruction a cycle, whatever its pipe, uniform-datapath "
-          "instructions included (A2u, which no vendor document states)", "A2 dispatch (whitepapers)", "measured"),
+          "instructions included (A2u, which no vendor document states), and every warp instruction takes at least one "
+          "issue slot whether or not its class is listed: one no other class names counts in the device's catch-all "
+          "class at its issue slot alone (sm_120's NOROW); a device whose classes have none leaves it free",
+          "A2 dispatch (whitepapers)", "measured"),
     Entry("accounting-sheet-tensor", "assumption",
           "A3 TENSOR: the tensor cores do at most the data sheet's dense MACs per SM clock for each operand type",
           "A3 tensor (data sheet)", "measured"),
@@ -293,8 +298,11 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "outside the route menu heads a fresh committed word and a side unit's words cost its per-word vector",
           "A7 semantics (PTX ISA)", "measured"),
     Entry("accounting-ts-fold-opt", "assumption",
-          "FOLD-OPT: no program folds N committed words at a certificate's price below (1 − μ_f)·N·φ*(π), for every "
-          "certificate π", "FOLD-OPT", "conjectured"),
+          "FOLD-OPT: no program folds N committed words at a certificate's price below (1 − μ_f)·N·φ*(π). The TS "
+          "statements ask it at every certificate π (FoldOpt), where a bit-exact fold falsifies it on DS-120 "
+          "(RT2-LOGIC-1's IMAD rotate); the sm_120 headlines ask it only at their own certificate π*, N the words the "
+          "run folds (FoldOptFoldedAt), an open conjecture that test_lean_headline.py tests on bit-exact folds",
+          "FOLD-OPT", "conjectured"),
     Entry("accounting-ts-fill-opt", "assumption",
           "FILL-OPT: no program runs the verified filler at a certificate's price below (1 − μ_x)·χ*(π), for every "
           "certificate π", "FILL-OPT", "conjectured"),
@@ -326,7 +334,11 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     Entry("accounting-ts-proofs-sound", "assumption",
           "Outside binding and proof-soundness failures (S·(δ_bind + n_π·δ_ZK)), an accepted window's committed values "
           "are right for their derivations from what was committed before σ, and every word that isn't fixed is in its "
-          "round's share", "TS proofs sound", "standard"),
+          "round's share. The sm_120 headlines take its parts as named premises: binding in its fork form at δ_fork "
+          "(BindingForkAt: at every round, two runs off one commitment, the second on fresh coins from that round, are "
+          "both accepted and open its leaves differently with probability at most δ_fork), read at δ_bind = √δ_fork "
+          "through BindingOfFork; each proof's soundness at δ_ZK (ProofSoundAt); and the relations pinning every "
+          "committed value (ProofsPin)", "TS proofs sound", "standard"),
     Entry("accounting-ts-lin-steer", "assumption",
           "LIN-STEER, false for a segmented consumer whose noise-active segments carry unequal counts: zeroing a "
           "fraction φ of a row's noise-active coordinates saves at most φ of the consumer's work",
