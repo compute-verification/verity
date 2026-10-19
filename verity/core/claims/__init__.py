@@ -300,8 +300,10 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     Entry("accounting-ts-fold-opt", "assumption",
           "FOLD-OPT: no program folds N committed words at a certificate's price below (1 − μ_f)·N·φ*(π). The TS "
           "statements ask it at every certificate π (FoldOpt), where a bit-exact fold falsifies it on DS-120 "
-          "(RT2-LOGIC-1's IMAD rotate); the sm_120 headlines ask it only at their own certificate π*, N the words the "
-          "run folds (FoldOptFoldedAt), an open conjecture that test_lean_headline.py tests on bit-exact folds",
+          "(RT2-LOGIC-1's IMAD rotate) and an ALU fold of ♭'s IMADs on the H200's and B200's readings (RT3-LOGIC-6); "
+          "the headlines (sm_120's, the H200's and the B200's) ask it only at their own certificate π*, N the words "
+          "the run folds (FoldOptFoldedAt), an open conjecture that test_lean_headline.py and test_lean_headline_dc.py "
+          "test on bit-exact folds",
           "FOLD-OPT", "conjectured"),
     Entry("accounting-ts-fill-opt", "assumption",
           "FILL-OPT: no program runs the verified filler at a certificate's price below (1 − μ_x)·χ*(π), for every "
@@ -334,7 +336,8 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     Entry("accounting-ts-proofs-sound", "assumption",
           "Outside binding and proof-soundness failures (S·(δ_bind + n_π·δ_ZK)), an accepted window's committed values "
           "are right for their derivations from what was committed before σ, and every word that isn't fixed is in its "
-          "round's share. The sm_120 headlines take its parts as named premises: binding in its fork form at δ_fork "
+          "round's share. The headlines (sm_120's, the H200's and the B200's) take its parts as named premises: binding "
+          "in its fork form at δ_fork "
           "(BindingForkAt: at every round, two runs off one commitment, the second on fresh coins from that round, are "
           "both accepted and open its leaves differently with probability at most δ_fork), read at δ_bind = √δ_fork "
           "through BindingOfFork; each proof's soundness at δ_ZK (ProofSoundAt); and the relations pinning every "
