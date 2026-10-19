@@ -78,6 +78,26 @@ forms+=(
  redux.sync.add.u32 d, a, 0xffffffff;
  st.global.u32 [rp], d;"
 )
+# Two words in one lane instruction: a 64-bit XOR, add or shift that one SASS instruction did would fold two words for
+# one slot (RT-MACHINE-8's two-word premise); mad.wide.u32 is the IMAD.WIDE that does write two words.
+forms+=(
+  xor_b64 "
+ .reg .b64 a, b, c, t, d; ld.global.b64 a, [rp]; ld.global.b64 b, [rp+8]; ld.global.b64 c, [rp+16];
+ xor.b64 t, a, b; xor.b64 d, t, c;
+ st.global.b64 [rp], d;"
+  add_u64 "
+ .reg .b64 a, b, d; ld.global.b64 a, [rp]; ld.global.b64 b, [rp+8];
+ add.u64 d, a, b;
+ st.global.b64 [rp], d;"
+  shl_b64 "
+ .reg .b64 a, d; ld.global.b64 a, [rp];
+ shl.b64 d, a, 7;
+ st.global.b64 [rp], d;"
+  mad_wide_u32 "
+ .reg .b32 a, b; .reg .b64 c, d; ld.global.u32 a, [rp]; ld.global.u32 b, [rp+4]; ld.global.b64 c, [rp+8];
+ mad.wide.u32 d, a, b, c;
+ st.global.b64 [rp], d;"
+)
 
 for t in "${targets[@]}"; do
   for ((i = 0; i < ${#forms[@]}; i += 2)); do
