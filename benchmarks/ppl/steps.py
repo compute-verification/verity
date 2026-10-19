@@ -1006,13 +1006,35 @@ NATIVE_SCALES = FP_SCALES + ("nvi", "nv9", "nvi10", "nvi5")
 INT_BLOCKS = {"nv": "odd", "nvi": "int", "nv9": "odd9", "nvi10": "int10", "nvi5": "int5"}
 
 
-def native_parts(x: torch.Tensor, grid: str, scale: str, coined: bool, amax: torch.Tensor | None = None):
+#: the row scale's clip ratios `clip = n` searches: 1, 0.95, ..., 1 - 0.05 n
+CLIP_STEP = 0.05
+
+
+def native_parts(x: torch.Tensor, grid: str, scale: str, coined: bool, amax: torch.Tensor | None = None,
+                 clip: int = 0):
     """v = x / (s m) within the grid's range, s one scale per tensor or row and m one per block of k: `tensor` and
     `channel` s = amax / top (m = 1); `nv` s = row amax / (top 15) and m the smallest odd UE4M3 integer that holds the
     block (`on_blocks`'), `nvi` the same with any integer to 15, `nv9` with the odd ones to 9 (s = row amax / (top 9)),
     `nvi10` with any integer to 10, `nvi5` to 5; `mx` s = 1 and m the smallest power of two with |v| <= top (E8M0). A
-    coined operand's scale is wider by 2^-20, so |v| < top. Returns v, s (broadcast over rows) and m (rows x blocks, or
-    None). `amax`: the whole tensor's, when x is a slice of it."""
+    coined operand's scale is wider by 2^-20, so |v| < top. `clip = n` (per-row scales): each row's s the one of
+    s, 0.95 s, ..., (1 - 0.05 n) s whose rounded levels are nearest x (squared error), what it clips held at the top.
+    Returns v, s (broadcast over rows) and m (rows x blocks, or None). `amax`: the whole tensor's, when x is a slice of
+    it."""
+    if clip and scale not in ("tensor", "mx"):
+        v, s, m = native_parts(x, grid, scale, coined, amax)
+
+        def err(v, s, m):
+            return ((with_blocks(to_grid(v, grid, "round", None), m) * s - x) ** 2).sum(-1, keepdim=True)
+
+        e, s0 = err(v, s, m), s
+        for i in range(1, clip + 1):
+            vi, si, mi = _clipped(x, grid, scale, coined, s0 * (1 - CLIP_STEP * i))
+            ei = err(vi, si, mi)
+            better = ei < e
+            e, v = torch.where(better, ei, e), torch.where(better, vi, v)
+            m = None if m is None else torch.where(better, mi, m)
+            s = torch.where(better, si, s)
+        return v, s, m
     top = LEVELS[grid][-1]
     pad = 1 + 2 ** -20 if coined else 1.0
     if scale in ("tensor", "channel"):
@@ -1032,6 +1054,20 @@ def native_parts(x: torch.Tensor, grid: str, scale: str, coined: bool, amax: tor
     return (xb / m[..., None]).reshape(x.shape), torch.ones((), device=x.device), m
 
 
+def _clipped(x: torch.Tensor, grid: str, scale: str, coined: bool, s: torch.Tensor):
+    """`native_parts` at a given per-row scale s, which may clip: v held within the grid's range (below top if
+    coined), the block multipliers chosen as there."""
+    top = LEVELS[grid][-1]
+    lim = top * (1 - 2 ** -20) if coined else top
+    if scale == "channel":
+        return (x / s).clamp(-lim, lim), s, None
+    *lead, k = x.shape
+    xb = x.reshape(*lead, k // BLOCKS[scale], BLOCKS[scale])
+    table = torch.tensor(SCALES[INT_BLOCKS[scale]], dtype=x.dtype, device=x.device)
+    m = table[torch.searchsorted(table, (xb.abs().amax(-1) / (s * top)).contiguous()).clamp(max=len(table) - 1)]
+    return (xb / (s[..., None] * m[..., None])).reshape(x.shape).clamp(-lim, lim), s, m
+
+
 def with_blocks(q: torch.Tensor, m: torch.Tensor | None) -> torch.Tensor:
     """q times its block multiplier m (rows x blocks)."""
     if m is None:
@@ -1039,10 +1075,12 @@ def with_blocks(q: torch.Tensor, m: torch.Tensor | None) -> torch.Tensor:
     return (q.reshape(*q.shape[:-1], m.shape[-1], -1) * m[..., None]).reshape(q.shape)
 
 
-def native_gptq(w: torch.Tensor, h: torch.Tensor, grid: str, scale: str, amax: torch.Tensor | None = None):
-    """GPTQ on a native grid: w's scale and block multipliers fixed by `native_parts` (uncoined), then GPTQ's column
-    loop rounding each column to the grid's nearest level in its unit s m. Returns the levels, s and m."""
-    _, s, m = native_parts(w, grid, scale, False, amax)
+def native_gptq(w: torch.Tensor, h: torch.Tensor, grid: str, scale: str, amax: torch.Tensor | None = None,
+                clip: int = 0):
+    """GPTQ on a native grid: w's scale and block multipliers fixed by `native_parts` (uncoined, `clip` its search),
+    then GPTQ's column loop rounding each column to the grid's nearest level in its unit s m. Returns the levels, s and
+    m."""
+    _, s, m = native_parts(w, grid, scale, False, amax, clip)
     rs = s.reshape(-1) if s.dim() else s
 
     def column(col, i):
@@ -1078,12 +1116,14 @@ def _check_native(p):
         raise ValueError("native: activations on their own native grid take tensor or channel scales")
     if p["gptq"] and p["weight"] == "dither":
         raise ValueError("native: gptq rounds the weights (weight = round or g1)")
+    if p["clip"] < 0 or (p["clip"] and p["scale"] in ("tensor", "mx")):
+        raise ValueError("native.clip is a count >= 0 of clip ratios, for per-row scales (not tensor or mx)")
 
 
 @linear_step("native", phase="quantize", seeded=lambda p: {p["act"], p["weight"]} != {"round"}, check=_check_native,
              calib=lambda p: p["gptq"], source="PPL-COMPILE, FPX-DESIGN")
 def native_linear(mm, nxt, *, grid: str, scale: str = "channel", act: str = "dither", weight: str = "dither",
-                  act_grid: str = "", gptq: bool = False):
+                  act_grid: str = "", gptq: bool = False, clip: int = 0):
     """Dither's coins on a format's exact integer grid (`NATIVE`: e4m3i, e4m3i352, e4m3i120, int5 on E4M3; e2m1i,
     e2m1x2 on E2M1), both operands scaled by `scale` along k (`native_parts`) and `round`ed or `dither`ed (the level
     below or above by a fresh bit), the activations' coins first, then the weights', fresh every call (Dither-2S's
@@ -1095,7 +1135,8 @@ def native_linear(mm, nxt, *, grid: str, scale: str = "channel", act: str = "dit
     inputs) on the grid, each row's scale and block multipliers fixed by `native_parts` first. `g1`: the nearest level
     in row units, m q, plus a fair coin b, served centred as m q + b - 1/2: the product is the exact one of the
     integers m q + b (in int8 for e4m3i120 and nvi10; in H1's 7-bit weights for e4m3i60 and nvi5), less its rank-one
-    terms."""
+    terms. `clip = n`: every per-row scale (each token's, each weight row's) searched over n clip ratios
+    (`native_parts`); the honest prover's choice of levels, which no check reads."""
     hkey = (mm.name, tuple(s.key for s in mm.prefix[:-1]))
     if mm.run.hessian is not None:
         if gptq:
@@ -1106,7 +1147,7 @@ def native_linear(mm, nxt, *, grid: str, scale: str = "channel", act: str = "dit
         raise ValueError(f"{mm.where}: k = {k} is not a multiple of {BLOCKS[scale]}")
 
     def rows(w, amax):
-        v, s, m = native_parts(w, grid, scale, weight == "dither", amax)
+        v, s, m = native_parts(w, grid, scale, weight == "dither", amax, clip)
         lo, hi = bracket(v, grid)
         if weight != "dither":
             return torch.where(v - lo <= hi - v, lo, hi).to(torch.int16), None, s, m
@@ -1116,7 +1157,7 @@ def native_linear(mm, nxt, *, grid: str, scale: str = "channel", act: str = "dit
         w = mm.weight()
         amax = w.abs().amax()
         if gptq:
-            q, s, m = native_gptq(w, mm.run.calib["H"][hkey], grid, scale, amax)
+            q, s, m = native_gptq(w, mm.run.calib["H"][hkey], grid, scale, amax, clip)
             return q.to(torch.int16), None, s, m
         parts = by_rows(lambda r: rows(r, amax), w)
         return tuple(p[0] if p[0] is None or p[0].dim() == 0 else torch.cat(p) for p in zip(*parts))
@@ -1127,7 +1168,7 @@ def native_linear(mm, nxt, *, grid: str, scale: str = "channel", act: str = "dit
         sa, ma, xtop = sa[:, None], None, 127
     else:
         agrid = act_grid or grid
-        v, sa, ma = native_parts(mm.x, agrid, scale, act == "dither")
+        v, sa, ma = native_parts(mm.x, agrid, scale, act == "dither", clip=clip)
         xq = to_grid(v, agrid, "round" if act == "g1" else act, mm.coins(mm.x.shape) if act == "dither" else None)
         xtop = LEVELS[agrid][-1] * (SCALES[INT_BLOCKS[scale]][-1] if scale in INT_BLOCKS else 1)
     bx = mm.coins(mm.x.shape) if act == "g1" else 0

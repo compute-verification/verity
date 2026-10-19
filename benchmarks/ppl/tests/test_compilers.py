@@ -19,7 +19,8 @@ OTHERS = ["pc-int8", "pc-fp8-tensor", "pc-fp8-channel", "pc-mxfp8", "pc-nvfp4", 
           "fpx-g1s-e4m3i120", "fpx-g1s-nvfp4x2-nvi10", "fpx-g1s-nvfp4x2-nvi10-gptq",
           "fpx-g1s-nvfp4x2-nvi10-lm8", "fpx-g1s-w4a8-nvi10", "fpx-g1s-w4a8-nvi10-gptq", "fpx-g1s-h1-e4m3i120-w60",
           "fpx-g1s-w4a8-nvi10-lm8", "fpx-g1s-w4a8-nvi10-gptq-lm8", "fpx-g1s-h1-w4a8-nvi5-lm8",
-          "fpx-g1s-h1-w4a8-nvi5-gptq-lm8",
+          "fpx-g1s-h1-w4a8-nvi5-gptq-lm8", "fpx-g1s-e4m3i120-c6", "fpx-g1s-nvfp4x2-nvi10-lm8-c6",
+          "fpx-g1s-w4a8-nvi10-gptq-lm8-c6",
           *(f"{f}-lin" for f in ("pc-fp8-tensor", "pc-fp8-channel", "pc-mxfp8", "pc-nvfp4", "pc-mxfp4"))]
 
 
@@ -99,6 +100,24 @@ def test_native_parts_stay_on_the_grid(grid, scale):
     q = steps.to_grid(v, grid, "dither", torch.randint(0, 2, v.shape, generator=g).float())
     assert set(q.unique().tolist()) <= set(steps.LEVELS[grid])
     assert torch.allclose(steps.with_blocks(v, m) * s, x, rtol=1e-5)
+
+
+@pytest.mark.parametrize("grid,scale", [("e4m3i120", "channel"), ("e2m1x2", "nvi10")])
+@pytest.mark.parametrize("coined", [False, True])
+def test_a_clip_search_stays_on_the_grid_and_never_rounds_worse(grid, scale, coined):
+    g = torch.Generator().manual_seed(7)
+    x = torch.randn(16, 64, generator=g) * torch.logspace(-1, 1, 64)
+    x[:, 5] *= 30
+
+    def err(v, s, m):
+        return ((steps.with_blocks(steps.to_grid(v, grid, "round", None), m) * s - x) ** 2).sum(-1)
+
+    base, clipped = steps.native_parts(x, grid, scale, coined), steps.native_parts(x, grid, scale, coined, clip=6)
+    top = steps.LEVELS[grid][-1]
+    assert float(clipped[0].abs().max()) < (top if coined else top * (1 + 1e-6))
+    assert bool((err(*clipped) <= err(*base)).all()) and bool((err(*clipped) < err(*base)).any())
+    assert all(torch.equal(a, b) for a, b in zip(steps.native_parts(x, grid, scale, coined, clip=0), base)
+               if a is not None)
 
 
 @pytest.mark.parametrize("grid,scale", [("e2m1x2", "nv"), ("e4m3i352", "channel"), ("e2m1x2", "nv9")])
@@ -215,6 +234,8 @@ def test_native_checks():
         spec.parse({"linear": [{"step": "native", "grid": "e2m1x2", "scale": "mx", "act": "g1"}]}, "x")
     with pytest.raises(ValueError, match="int8 activations"):
         spec.parse({"linear": [{"step": "native", "grid": "e4m3i", "scale": "mx", "act_grid": "int8"}]}, "x")
+    with pytest.raises(ValueError, match="clip"):
+        spec.parse({"linear": [{"step": "native", "grid": "e4m3i", "scale": "tensor", "clip": 4}]}, "x")
     with pytest.raises(ValueError, match="own native grid"):
         spec.parse({"linear": [{"step": "native", "grid": "e2m1x2", "scale": "nvi10", "act_grid": "e2m1i"}]}, "x")
     with pytest.raises(ValueError, match="route"):
