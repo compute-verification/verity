@@ -11,8 +11,10 @@ thread gives at most `c · p` multiplications for the `p` weights used, and ther
 With `p b_w + A_L + A_H ≤ R` (incompressibility) and AM–GM, `p · A_H ≤ (R − A_L)² / (4 b_w)`, and the total is linear in
 `A_L`.
 
-Theorem 2 (`ThreadedThrottled`) follows Appendix B: pull a compliant division of the containing declaration back to `c`
-(`pull`); each piece is small, reads no more than its IU, and Theorem 1 bounds its counted multiplications.
+Theorem 2 follows Appendix B, through a partial containment (`ThreadedThrottledOn`): pull a compliant division of the
+containing declaration back to the gates `S` of `c` it computes (`piece`); each piece is small, reads no more than its IU,
+and Theorem 1 bounds its counted multiplications. The pieces divide `S`, and a total containment is the case `S =
+computed` (`ThreadedThrottled`).
 -/
 
 namespace Nci.SecurityProofs
@@ -129,47 +131,46 @@ theorem threaded_reads (c : Declaration) (T : Threading c) (Γ : ℕ) (S b_w b_a
 /-- **Theorem 1** (the thread draft, Appendix A). -/
 theorem ThreadedReads : Guarantees.ThreadedReads := threaded_reads
 
-/-- **Theorem 2** (the thread draft, Appendix B). -/
-theorem ThreadedThrottled : Guarantees.ThreadedThrottled := by
-  intro Γ α b_w b_a c d T dd e hα hbw hba hdd ⟨M, hθ⟩ ⟨n, P, hP⟩ hT hW
-  classical
+/-- **Theorem 2 with dark gates** (the thread draft, Appendix B, through a partial containment). -/
+theorem ThreadedThrottledOn : Guarantees.ThreadedThrottledOn := by
+  intro Γ α b_w b_a c d T dd e M hα hbw hba hdd ⟨n, P, hP⟩ hT hW
   set Λ := T.bound (α * Γ) b_w dd e
   have hΛ : 0 ≤ Λ := le_max_of_le_left (Nat.cast_nonneg _)
-  have hpiece : ∀ u, Small c Γ (α * Γ) ((pull M P).gates u) := fun u =>
-    ⟨Partition.gates_subset_computed _ u, (card_pull_gates_le u).trans (hP u).1,
-      (Nat.cast_le.2 (novelReads_pull M hθ P u)).trans ((hP u).2.trans
-        (mul_le_mul_of_nonneg_left (by exact_mod_cast (hP u).1) hα))⟩
-  have hM : T.M.card = ∑ u, (T.mults ((pull M P).gates u)).card := by
-    have hcomp := Partition.sum_card_gates (pull M P)
-    rw [← card_biUnion fun u _ v _ huv => disjoint_left.2 fun g hu hv => huv (by
-      rw [Partition.mem_gates] at hu hv
-      exact Option.some_injective _ (hu.symm.trans hv))] at hcomp
-    have hU : (univ.biUnion fun u => (pull M P).gates u) = c.D.computed :=
-      eq_of_subset_of_card_le (biUnion_subset.2 fun u _ => Partition.gates_subset_computed _ u) hcomp.ge
-    rw [← card_biUnion fun u _ v _ huv => disjoint_left.2 fun g hu hv => huv (by
-      rw [Threading.mults, mem_inter, Partition.mem_gates] at hu hv
-      exact Option.some_injective _ (hu.2.symm.trans hv.2))]
-    congr 1
-    ext g
-    simp only [mem_biUnion, mem_univ, true_and, Threading.mults, mem_inter]
-    constructor
-    · intro hg
-      have hgc := T.M_computed hg
-      rw [← hU, mem_biUnion] at hgc
-      obtain ⟨u, _, hu⟩ := hgc
-      exact ⟨u, hg, hu⟩
-    · rintro ⟨_, hg, _⟩
-      exact hg
-  calc b_a * (T.M.card : ℝ) = ∑ u, b_a * ((T.mults ((pull M P).gates u)).card : ℝ) := by
+  have hreads : ∀ u, (novelReads c (piece M P u) : ℝ) ≤ α * d.D.size (P.gates u) := fun u =>
+    (Nat.cast_le.2 (novelReads_piece u)).trans (hP u).2
+  have hpiece : ∀ u, Small c Γ (α * Γ) (piece M P u) := fun u =>
+    ⟨piece_subset_computed u, (card_piece_le u).trans (hP u).1,
+      (hreads u).trans (mul_le_mul_of_nonneg_left (by exact_mod_cast (hP u).1) hα)⟩
+  have hM : (T.M ∩ M.S).card = ∑ u, (T.mults (piece M P u)).card := by
+    have h := sum_card_filter_piece (M := M) (P := P) T.M fun g => g
+    simp only [filter_mem_eq_inter] at h
+    exact h.symm
+  calc b_a * ((T.M ∩ M.S).card : ℝ) = ∑ u, b_a * ((T.mults (piece M P u)).card : ℝ) := by
         rw [hM, Nat.cast_sum, mul_sum]
-    _ ≤ ∑ u, (novelReads c ((pull M P).gates u) : ℝ) * Λ :=
+    _ ≤ ∑ u, (novelReads c (piece M P u) : ℝ) * Λ :=
         sum_le_sum fun u _ => threaded_reads c T Γ (α * Γ) b_w b_a dd e hbw hba hdd hT hW _ (hpiece u)
-    _ ≤ ∑ u, α * (d.D.size (P.gates u) : ℝ) * Λ := sum_le_sum fun u _ =>
-        mul_le_mul_of_nonneg_right ((Nat.cast_le.2 (novelReads_pull M hθ P u)).trans (hP u).2) hΛ
+    _ ≤ ∑ u, α * (d.D.size (P.gates u) : ℝ) * Λ := sum_le_sum fun u _ => mul_le_mul_of_nonneg_right (hreads u) hΛ
     _ = α * Λ * d.D.size d.D.computed := by
         rw [← sum_mul, ← mul_sum, show (d.D.size d.D.computed : ℝ) = ∑ u, (d.D.size (P.gates u) : ℝ) by
           exact_mod_cast (Partition.sum_card_gates P).symm]
         ring
+
+/-- **Theorem 2** (the thread draft, Appendix B): a total containment is a partial one with no dark gates. -/
+theorem ThreadedThrottled : Guarantees.ThreadedThrottled := by
+  intro Γ α b_w b_a c d T dd e hα hbw hba hdd ⟨M, hθ⟩ hd hT hW
+  have h := ThreadedThrottledOn Γ α b_w b_a c d T dd e (ofContainment M hθ) hα hbw hba hdd hd hT hW
+  rwa [ofContainment_S, Finset.inter_eq_left.2 T.M_computed] at h
+
+/-- **Counted multiplications off the books are dark gates.** -/
+theorem ThreadedThrottledDark : Guarantees.ThreadedThrottledDark := by
+  intro Γ α b_w b_a c d T dd e M hα hbw hba hdd hd hT hW
+  have h := ThreadedThrottledOn Γ α b_w b_a c d T dd e M hα hbw hba hdd hd hT hW
+  have hS : ((T.M ∩ M.S).card : ℝ) ≤ α * T.bound (α * Γ) b_w dd e * d.D.size d.D.computed / b_a := by
+    rw [le_div_iff₀ hba]
+    linarith
+  have hs : (T.M.card : ℝ) ≤ M.dark.card + (T.M ∩ M.S).card := by
+    exact_mod_cast card_le_dark_add_inter M T.M_computed
+  linarith
 
 /-- Weights are incompressible when each weight is a novel input gate at least `b_w` bits wide and every thread value
 is at least `b_a` bits wide: a subcircuit reads every weight it uses, and those reads are disjoint from its thread reads. -/
@@ -280,6 +281,16 @@ theorem threaded_reads_of_structure {c : Declaration} (T : Threading c) (Γ : �
 theorem ThreadedTraining : Guarantees.ThreadedTraining := by
   intro Γ α b_w b_a κ c d T dd e hα hbw hba hdd hc hd hT hW hκ
   have h := ThreadedThrottled Γ α b_w b_a c d T dd e hα hbw hba hdd hc hd hT hW
+  nlinarith
+
+/-- **Training is slowed, with dark gates.** -/
+theorem ThreadedTrainingOn : Guarantees.ThreadedTrainingOn := by
+  intro Γ α b_w b_a κ c d T dd e M hα hbw hba hdd hd hT hW hκ
+  have h := ThreadedThrottledOn Γ α b_w b_a c d T dd e M hα hbw hba hdd hd hT hW
+  have hs : (T.M.card : ℝ) ≤ M.dark.card + (T.M ∩ M.S).card := by
+    exact_mod_cast card_le_dark_add_inter M T.M_computed
+  have h1 := mul_le_mul_of_nonneg_left hκ hba.le
+  have h2 := mul_le_mul_of_nonneg_left hs hba.le
   nlinarith
 
 end Nci.SecurityProofs
