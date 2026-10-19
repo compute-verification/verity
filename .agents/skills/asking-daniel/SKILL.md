@@ -111,6 +111,7 @@ once you've read the page as Daniel will), Asked by (your agent's URL), Card ID,
 
 ~~~bash
 research msg ask-daniel status <id> [--wait]                  # the card: "status choice source decided_at"; exit 0 once decided
+                                                              # --wait polls 20 min at most: still pending, it exits 79; end your turn
 research msg ask-daniel pages [--as HANDLE] [--hours H] [--json]
 research msg ask-daniel resolve <id> --choice <value> --note '<page url or his reply>'
 ~~~

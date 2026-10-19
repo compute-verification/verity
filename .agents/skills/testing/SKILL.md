@@ -20,7 +20,9 @@ runs the same runner as its pytest step.
 
 Suites run remotely, never on an agent VM (AGENTS.md "Tests"): `research run --on auto` queues an `agent-test` job
 (4 CPUs, 16 GiB, 60 min) outside the check slots. Give it `--cwd source`, so the job runs in the shipped tree rather than
-its run directory, and `uv sync` that tree first: `suites.py` refuses another checkout's environment.
+its run directory, and `uv sync` that tree first: `suites.py` refuses another checkout's environment. `--wait` waits 20
+minutes at most (no tool call blocks longer, Daniel, 19 Oct): a run still going then exits 79 naming `research status RUN`,
+and you end your turn.
 
 ~~~sh
 R="research run --on auto --cwd source --wait -- bash -lc"

@@ -170,6 +170,10 @@ remotely through `research run --on auto --cwd source [--wait] -- CMD` (the ship
 and every GPU job (the writing-runs skill). The shell hook refuses those commands locally and names the remote one;
 `AGENT_GUARD_LOCAL_OK=1` in the command is the explicit opt-in.
 
+No tool call blocks more than 20 minutes (Daniel, 19 Oct): `research run --wait`, `ask-daniel --wait` and `queue ready --on`
+stop there, cancel nothing, exit 79 naming the command to check back with (`research status RUN`), and you end your turn;
+the shell hook refuses a longer `sleep`.
+
 No test depends on wall-clock time: no sleeps, clock readings or timeouts. Wait on the event itself or inject the clock.
 `tests/test_no_wall_clock.py` enforces it, and its `ALLOWED` list, one reason per entry, holds the exceptions.
 
