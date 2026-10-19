@@ -11,15 +11,15 @@ deploys them), so that the verifier receives no block bytes; and the prover's co
   openings coin draws ``--samples`` (`audit.Session.close`). Every salt of the prover's (the payloads', the receipt
   leaves', every row's) comes from its own secret, drawn per run from the OS.
 * **Each opening a unit.** Draw (pass i, position p, block j) is one `BlockOpeningCheck_v1` (`block_check`) at P, DR (the
-  pass's receipt tree), DP (the payload tree of N) and DV 1 (no appended block), its witness `a7_check3.witness`: the
+  pass's receipt tree), DP (the payload tree of N) and DV 1 (no appended block), its witness `opening.witness`: the
   block, its payload, the receipt leaf, the pass's plan row, both salts and paths. The window's units are one statement of
   the one-stage audit (`one_stage.registration`, the template-instance partition, the stratified law, every unit drawn by
   the verifier's Lean), proved by `flock-circuit prove --zk` and held by Lean `verify --zk --partition --program`.
 * **What the verifier opens.** Of each unit its public rows (``pub`` and ``signs``, which it derives itself:
-  `a7_check3.public`) and its verdict row ``o0``, under the salts the prover sends for those three rows. It holds the
+  `opening.public`) and its verdict row ``o0``, under the salts the prover sends for those three rows. It holds the
   unit's plan row by ``b || c`` to its own copy of the pass's plan: v0's plans are in the clear (§8, "What the plan
   shows"), so the prover sends the plan row's salt with the plan. It decides the window on the verdicts
-  (`a7_check3.Session.decide`).
+  (`opening.Session.decide`).
 * **Rounds.** ``honest``, and ``tampered``: the same session (the same coins, so the same draws), the store's block at the
   first draw replaced by other bytes before the passes (a prover that lost the block and receipts what it holds in its
   place). Its unit's verdict is codec, its proof is accepted, and the window is rejected. Both rounds are staged on one
@@ -59,8 +59,7 @@ sys.path.insert(0, str(HERE))
 
 import a0  # noqa: E402
 import a7  # noqa: E402
-import a7_check3 as C3  # noqa: E402
-from verity.core.protocols.remote_bandwidth import audit, codec, coins, receipts  # noqa: E402
+from verity.core.protocols.remote_bandwidth import audit, codec, coins, opening as C3, receipts  # noqa: E402
 from verity.core.protocols.remote_bandwidth.receipts import Plan  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
 from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E402
@@ -136,7 +135,7 @@ def inputs(rs: SimpleNamespace, L: int, secret: bytes) -> SimpleNamespace:
     rows = {i: list(range(L * i, L * (i + 1))) for i in range(N // L)}
     salts = {i: salt(receipts.SALT_BYTES) for i in rows}
     S = C3.statics(P512, receipts.PER_LEAF, L, C3.depth(receipts.leaves(L)), C3.depth(N), 1)
-    return SimpleNamespace(plan_rows=rows, plan_salts=salts, plan_bcs={i: C3.commit("plan", 16 * L, rows[i], salts[i]) for i in rows},
+    return SimpleNamespace(plan_rows=rows, plan_salts=salts, plan_bcs={i: C3.commit(16 * L, rows[i], salts[i]) for i in rows},
                            values=C3.Values(bytes(64), None, N, ()), S=S)
 
 
@@ -253,7 +252,7 @@ def audit_round(a, sg, m: dict, rs, c3, draws, out: Path, port: int) -> dict:
     win = {"kind": "stand-in", "of": "the openings of one window of a remote bandwidth session (a8.py), on a "
                                       f"{rs.store.registration.blocks}-block registered store",
            "members": {name: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + n]}},
-           "link": "a7_check3.plan_link: the plan row by its b || c to the verifier's own copy of the pass's plan"}
+           "link": "opening.plan_link: the plan row by its b || c to the verifier's own copy of the pass's plan"}
     rec = R.record(sg.program, sg.query, law, a0.SCHEME, roots, win, leaf_layer=leaf_layer)
     (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
     checks = {"registration": V.check(rec, sg.program, sg.query, law, a0.SCHEME, want, leaf_layer=leaf_layer).to_json(),
@@ -296,7 +295,7 @@ def audit_round(a, sg, m: dict, rs, c3, draws, out: Path, port: int) -> dict:
         opened = ((m["base"] + i) in held and a7.opens(port_["pub"], a7.public_words(mine, m["rows"]), m["salts"]["pub"][i], bcs[i]["pub"])
                   and a7.opens(port_["signs"], mine["signs"], m["salts"]["signs"][i], bcs[i]["signs"])
                   and a7.opens(port_["o0"], [word], m["salts"]["o0"][i], bcs[i]["o0"]))
-        mine_bc = C3.commit("plan", 16 * m["S"].P, c3.plan_rows[d.step], c3.plan_salts[d.step])
+        mine_bc = C3.commit(16 * m["S"].P, c3.plan_rows[d.step], c3.plan_salts[d.step])
         failures.append("malformed" if not opened else BC.verdict(word) or C3.plan_link(bcs[i]["plan"], mine_bc))
         sent.append({"unit": m["base"] + i, "verdict": word, "plan_salt": c3.plan_salts[d.step].hex(),
                      **{f"salt/{r}": m["salts"][r][i].hex() for r in OPENED}})
