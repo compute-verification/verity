@@ -436,16 +436,17 @@ struct Collector {
     if (rc != cudaSuccess) throw std::runtime_error(std::string("cudaStreamWaitEvent(window): ") + cudaGetErrorString(rc));
     return py::make_tuple(true, used, static_cast<int64_t>(slot));
   }
-  // the worker gave up on `step_id` (exception): the run fails by name (`why`), and every slot the step still holds goes back to the ring,
-  // once, after the worker's reads queued on `stream_ptr` (0: none), so the serving thread stops waiting for a release that would never
-  // come.  A slot the worker already released, or that a later step has taken since, stays where it is; one the serving thread took off
-  // the free list and has not recorded yet goes back here if its last occupant was one of this step's windows (ensure_windows then
-  // leaves it).
+  // the worker gave up on `step_id` (exception): the run fails by name (`why`; the first stands, printed once), and every slot the step
+  // still holds goes back to the ring, once, after the worker's reads queued on `stream_ptr` (0: none), so the serving thread stops waiting
+  // for a release that would never come.  A slot the worker already released, or that a later step has taken since, stays where it is;
+  // one the serving thread took off the free list and has not recorded yet goes back here if its last occupant was one of this step's
+  // windows (ensure_windows then leaves it).
   void abandon_step(int64_t step_id, const std::string& why, int64_t stream_ptr) {
     std::lock_guard<std::mutex> g(win_mu);
     if (!failed) {
       fail_reason = why.empty() ? "the worker abandoned step " + std::to_string(step_id) : why;
       failed = true;
+      std::fprintf(stderr, "[collector] %s\n", fail_reason.c_str());
     }
     auto it = step_wins.find(step_id);
     if (it != step_wins.end()) {
