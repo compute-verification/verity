@@ -59,10 +59,10 @@ bot token and allows only BROKER_METHODS; RESEARCH_SLACK_VIA=direct insists on t
 
 The sender rings the doorbells right after posting. A person's typed post in #ask-the-team or a chat channel is rung by the
 Slack events service (`integrations/slack-events/`, COMM-32), which imports this file and calls `deliver`; until it is
-deployed, @top's watcher hands each post to `deliver --channel KEY --event -`. It routes by origin/main's registry (`routing_registry`) and the published routes (`Routes.refresh`), so an old
-checkout or notes clone still rings a name added, reopened or closed since. Who holds a handle, who else posts as it and
-which branch suffixes its PRs carry is its route's (`names open`), never the registry's. `match` is the older,
-handle-only test of whether a post is addressed to HANDLE."""
+deployed, @top's watcher hands each post to `deliver --channel KEY --event -`. It routes by origin/main's registry
+(`routing_registry`) and the published routes (`Routes.refresh`), so an old checkout or notes clone still rings a name added,
+reopened or closed since. Who holds a handle, who else posts as it and which branch suffixes its PRs carry is its route's
+(`names open`), never the registry's. `match` is the older, handle-only test of whether a post is addressed to HANDLE."""
 from __future__ import annotations
 
 import argparse
