@@ -14,6 +14,9 @@ gate's addresses) runs at its count times that. Each facet's occupancy is its SM
 
 The sheet holds a loop iff every facet is at most 1. Any facet above 1 is a measured rate above the sheet's ceiling.
 Also printed: the SM clock each probe ran at (A1: fmax 1980 MHz) and the tensor slots a SM-clock (wgmma s8 n256 = 128).
+The clock is read two ways: NVML's sample during the item, and the event clock, the longest block's cycles over the
+item's event time a call (times.jsonl), a lower bound on the clock the loop ran at. Under a saturated wgmma the two
+disagree (NVML reads up to 28% high), so a rate a second is the MAC/clk times the event clock, not NVML's.
 """
 from __future__ import annotations
 
@@ -106,11 +109,23 @@ def loops_of(rec: dict, rates: dict) -> list[tuple[int, dict]]:
     return out
 
 
+def event_mhz(times: Path) -> dict[str, float]:
+    """Each probe's event clock: the median over its items of the longest block's cycles over the event time a call."""
+    per: dict[str, list[float]] = {}
+    if times.exists():
+        for ln in times.read_text().splitlines():
+            t = json.loads(ln) if ln.strip() else {}
+            if t.get("op") == "time" and t.get("cyc") and t.get("ms"):
+                per.setdefault(t["probe"], []).append(max(t["cyc"]) / (t["ms"] / t["calls"]) / 1e3)
+    return {p: statistics.median(v) for p, v in per.items()}
+
+
 def analyze(run: Path, sass: dict) -> list[dict]:
     res = []
     for rows in sorted(run.rglob("rows.jsonl")):
         gate = json.loads((rows.parent / "gate.json").read_text())["verdicts"]
         recs = {v["probe"]: v["verdict"] for v in gate}
+        ev = event_mhz(rows.parent / "times.jsonl")
         for ln in rows.read_text().splitlines():
             if not ln.strip():
                 continue
@@ -138,7 +153,7 @@ def analyze(run: Path, sass: dict) -> list[dict]:
                 macs += tensor_cycles(op, r["probe"])[1] * rate
             uni = sum(v for op, v in per_op.items() if op.startswith("U")) / 4
             res.append({"binary": r["binary"], "probe": r["probe"], "run": r["run"], "sm_mhz": r["sm_mhz"],
-                        "spread": r["spread"], "tags": r["tags"], "counted": r["counted"], "rate": r["rate"],
+                        "event_mhz": ev.get(r["probe"]), "spread": r["spread"], "tags": r["tags"], "counted": r["counted"], "rate": r["rate"],
                         "occupancy": occ, "uniform_issue": uni, "macs_sm_clk": macs,
                         "worst": max(occ, key=occ.get) if occ else None,
                         "worst_occ": max(occ.values()) if occ else 0.0})
@@ -153,11 +168,12 @@ def main(argv: list[str]) -> int:
     a = ap.parse_args(argv)
     res = analyze(a.run, read_sass(a.sass))
     over = [x for x in res if x["worst_occ"] > 1.0]
-    print(f"{'probe':<28} {'MHz':>5} {'issue':>6} {'uni':>6} {'tensor':>6} {'alu':>6} {'imad':>6} {'shfl':>6} "
-          f"{'MAC/clk':>8}  worst")
+    print(f"{'probe':<28} {'MHz':>5} {'evMHz':>6} {'issue':>6} {'uni':>6} {'tensor':>6} {'alu':>6} {'imad':>6} "
+          f"{'shfl':>6} {'MAC/clk':>8}  worst")
     for x in sorted(res, key=lambda x: -x["worst_occ"]):
         o = x["occupancy"]
-        print(f"{x['probe']:<28} {x['sm_mhz'] or 0:>5.0f} {o.get('issue', 0):>6.3f} {x['uniform_issue']:>6.3f} "
+        print(f"{x['probe']:<28} {x['sm_mhz'] or 0:>5.0f} {x['event_mhz'] or 0:>6.1f} {o.get('issue', 0):>6.3f} "
+              f"{x['uniform_issue']:>6.3f} "
               f"{o.get('tensor', 0):>6.3f} {o.get('alu', 0):>6.3f} {o.get('imad', 0):>6.3f} {o.get('shfl', 0):>6.3f} "
               f"{x['macs_sm_clk']:>8.1f}  {x['worst']} {x['worst_occ']:.4f}{' OVER' if x['worst_occ'] > 1 else ''}"
               f"{' [' + ','.join(x['tags']) + ']' if x['tags'] else ''}")
@@ -165,6 +181,9 @@ def main(argv: list[str]) -> int:
     if mhz:
         print(f"A1: SM clock during the probes median {statistics.median(mhz):.0f} MHz, max {max(mhz):.0f} "
               f"(fmax {FMAX_MHZ}); {'OVER' if max(mhz) > FMAX_MHZ else 'held'}")
+    ev = [x["event_mhz"] for x in res if x["event_mhz"]]
+    if ev:
+        print(f"   event clock median {statistics.median(ev):.1f} MHz, max {max(ev):.1f}")
     print(f"{len(res)} loops priced, {len(over)} above a DS-90 facet")
     if a.json:
         a.json.write_text(json.dumps({"rows": res, "over": [x["probe"] for x in over]}, indent=1))
