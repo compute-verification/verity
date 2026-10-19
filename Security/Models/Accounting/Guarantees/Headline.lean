@@ -97,9 +97,8 @@ probability at most `δ_bind` a round, every proof is sound up to `δ_ZK` (`Soun
 value (`Pins`) and E1(c) holds (`RightFixed`), then outside an event of probability at most `2^-40` every accepted
 window's time is at least `1 − 656/100000` (`1 − 0.656%`) of the credit `T_cred = B_♭/f_max`. FILL-OPT is not a
 hypothesis: H1 + fx1 has no filler, so it holds at any run. `ε_sample` and the Fiat–Shamir premium are separate lines.
-
-Per node (ASK-65 = A): an accepted window's node, its GPUs, host CPU and peer GPUs together, performed at least
-`1 − 0.656%` of the credited work. Which device did it is the attribution layer's: read per GPU, it needs LOC's
+The bound is per node (ASK-65 = A): an accepted window's node, its GPUs, host CPU and peer GPUs together, performed at
+least `1 − 0.656%` of the credited work. Which device did it is the attribution layer's: read per GPU, it needs LOC's
 host deduction and every billable GPU on the node credited each window (RT-SCOPE, #2681).
 
 The window's shape is the statement's: 48,000 equal live rounds, one check a round. With `S` rounds in place of
@@ -143,9 +142,8 @@ FILL-OPT are not hypotheses: the model has no side unit and no filler, so they h
 at `9/8` is what `ClassPSlots` gives (`1 + (32 − w)/130` slots a word, FLOORS, note:20261018T0230Z-draft-floors) once
 writers create at most `w = 15` incidences, a cap nothing proves yet; on the table route it is SCALAR-ROUTE's, outside
 `ClassPSlots`. `ε_sample` and the Fiat–Shamir premium are separate lines.
-
-Per node (ASK-65 = A): an accepted window's node, its GPUs, host CPU and peer GPUs together, performed at least
-`1 − 0.591%` of the credited work. Which device did it is the attribution layer's: read per GPU, it needs LOC's
+The bound is per node (ASK-65 = A): an accepted window's node, its GPUs, host CPU and peer GPUs together, performed at
+least `1 − 0.591%` of the credited work. Which device did it is the attribution layer's: read per GPU, it needs LOC's
 host deduction and every billable GPU on the node credited each window (RT-SCOPE, #2681).
 
 The window's shape is the statement's: 48,000 equal live rounds, one check a round. With `S` rounds in place of
