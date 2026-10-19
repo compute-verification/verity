@@ -25,7 +25,20 @@ The planted negatives, each checked by Lean against the verifier's own file:
 * ``other-window``: the first drawn unit's tile, opened from a second window (other tokens, its own epoch and salt) and
   proved as a statement of its own: its opening fails window 1's roots, and Lean must reject its proof against the
   verifier's file of window 1's unit. ``other-window-own`` (its own window's file) must accept: the proof is sound for
-  the window it came from.
+  the   window it came from.
+
+Those three fail at binding (the proof's statement is not the verifier's). The in-proof negatives (`IN_PROOF`) pass it and
+carry a wrong witness instead:
+
+* ``in-receipt``: a window registered with the first drawn unit's receipt word 0 plus one (`window.py tamper
+  --receipt-word`), opened and checked like the honest one, and a statement of it (`h1unit.forge_statement`): the honest
+  prover file with that unit's receipt row the window's, under the verifier's own file of the window. The prover's
+  pub.bin is the verifier's, every committed row is the window's, and the receipt row is not what the circuit computes on
+  the unit's inputs, salt, position and roots.
+* ``in-z``: the same with its z cell 0 plus one (``--z-cell``).
+
+Each is proved like the honest statement and checked by Lean; ``summarize`` records which layer refused it (the prover,
+the in-session verifier, Lean) and with what message.
 
 ``summarize`` reads the job's proving and Lean records into OUT/summary.json: the unit and statement counts, proving
 time and Lean verify time, and every check's verdict against its expectation.
@@ -41,6 +54,8 @@ import sys
 import time
 from pathlib import Path
 
+import numpy as np
+
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
@@ -51,6 +66,8 @@ from verity.core.protocols.pouw.coins import Challenger, coin_reason  # noqa: E4
 
 DRAW_DOMAIN = "verity/pouw/h1-prove-draw/v0"
 R, C = 4, 8
+#: the in-proof negatives: the tampered window's flag, and the output row whose committed words its statement carries
+IN_PROOF = {"in-receipt": ("--receipt-word", "o1"), "in-z": ("--z-cell", "o0")}
 
 
 def log(msg: str) -> None:
@@ -188,9 +205,9 @@ def cmd_prepare(a) -> int:
 
     # the honest openings, and the two tampered windows' (every salt kept, the first drawn unit's z or receipt changed)
     opened = {}
-    for tag, priv in (("honest", w1), ("flipped-z", f"{w1}-z"), ("wrong-receipt", f"{w1}-r")):
-        if tag != "honest":
-            flag = "--z" if tag == "flipped-z" else "--receipt"
+    for tag, priv, flag in (("honest", w1, None), ("flipped-z", f"{w1}-z", "--z"), ("wrong-receipt", f"{w1}-r", "--receipt"),
+                            *((t, f"{w1}-{t}", f) for t, (f, _p) in IN_PROOF.items())):
+        if flag:
             served_t = prover("tamper", str(work / w1), str(work / priv), str(work / f"{priv}-served.json"), flag, str(u0))
         else:
             served_t = served1
@@ -231,7 +248,8 @@ def cmd_prepare(a) -> int:
     vp.mkdir(exist_ok=True)
     files = {"honest": (set_h, opened["honest"]), "flipped-z": (set_h, opened["flipped-z"]),
              "wrong-receipt": (set_h, opened["wrong-receipt"]), "other-window": (set_o, [opened["honest"][0]]),
-             "other-window-own": (set_o, [unit_bcs(shape, com2, salt2, op2)])}
+             "other-window-own": (set_o, [unit_bcs(shape, com2, salt2, op2)]),
+             **{t: (set_h, opened[t]) for t in IN_PROOF}}
     for tag, (set_name, bcs) in files.items():
         (vp / f"{tag}.pub.bin").write_bytes(U.verifier_pub(head, set_name, head["subcircuit"], bcs))
     for name, req in stmts.items():
@@ -246,15 +264,24 @@ def cmd_prepare(a) -> int:
     log(f"the prover's pub.bin is the verifier's own: {eq}")
     if not eq["honest"]:
         raise SystemExit("the honest statement's pub.bin is not the verifier's own file")
+    # the in-proof negatives: the honest statement with the first drawn unit's (instance 0's) output row the tampered
+    # window's, under the verifier's own file of that window, so binding holds and the witness is wrong
+    for t, (_f, port) in IN_PROOF.items():
+        words = np.load(work / f"open-{t}" / "rows.npz")[f"w_{port}"][0]
+        record.setdefault("forged", {})[t] = U.forge_statement(sw / "st-honest", sw / f"st-{t}", (vp / f"{t}.pub.bin").read_bytes(),
+                                                               0, port, words, sw / "circuit.txt")
+        log(f"forged {t}: {record['forged'][t]}")
     st = record["staged"]
     plan = {"statements": [{"tag": "honest", "dir": stmts["honest"]["out"], "n": len(units)},
-                           {"tag": "other", "dir": stmts["other"]["out"], "n": 1}],
+                           {"tag": "other", "dir": stmts["other"]["out"], "n": 1},
+                           *({"tag": t, "dir": str(sw / f"st-{t}"), "n": len(units)} for t in IN_PROOF)],
             "checks": [{"tag": "honest", "statement": "honest", "pub": str(vp / "honest.pub.bin"), "expect": "ACCEPT"},
                        {"tag": "flipped-z", "statement": "honest", "pub": str(vp / "flipped-z.pub.bin"), "expect": "REJECT"},
                        {"tag": "wrong-receipt", "statement": "honest", "pub": str(vp / "wrong-receipt.pub.bin"), "expect": "REJECT"},
                        {"tag": "other-window", "statement": "other", "pub": str(vp / "other-window.pub.bin"), "expect": "REJECT"},
                        {"tag": "other-window-own", "statement": "other", "pub": str(vp / "other-window-own.pub.bin"),
-                        "expect": "ACCEPT"}]}
+                        "expect": "ACCEPT"},
+                       *({"tag": t, "statement": t, "pub": str(vp / f"{t}.pub.bin"), "expect": "REFUSED"} for t in IN_PROOF)]}
     (work / "plan.json").write_text(json.dumps(plan, indent=1))
     (work / "record.json").write_text(json.dumps(record, indent=1))
     with open(work / "plan.tsv", "w") as f:
@@ -287,6 +314,45 @@ def _verdict_word(v: dict | None, err: Path) -> str:
     return "ACCEPT" if v.get("accepted") else "REJECT"
 
 
+def _last_json(p: Path) -> dict | None:
+    if not p.exists():
+        return None
+    for line in reversed(p.read_text(errors="replace").splitlines()):
+        try:
+            v = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(v, dict):
+            return v
+    return None
+
+
+def layers(out: Path, tag: str) -> dict:
+    """Where a statement's proof stopped: the prover's exit and its own reason, the in-session verifier's (the serve
+    side's) last SESSION verdict, and the tail of the prover's stderr."""
+    t, po, log_ = _time(out / tag / "prove.time"), _last_json(out / tag / "prove.out"), out / tag / "serve.log"
+    sess = [json.loads(x.split("\t", 1)[1]) for x in log_.read_text(errors="replace").splitlines()
+            if x.startswith("SESSION\t")] if log_.exists() else []
+    err = out / tag / "prove.err"
+    return {"prover_exit": t and t["exit"], "prover_stopped": (po or {}).get("prover_stopped"), "prover_why": (po or {}).get("why"),
+            "session": {k: sess[-1].get(k) for k in ("accepted", "aborted", "why")} if sess else None,
+            "prove_err": err.read_text(errors="replace").strip().splitlines()[-3:] if err.exists() else None}
+
+
+def refused_by(lay: dict, lean: str, why: str) -> list[str]:
+    """Each layer that refused an in-proof negative, with its message."""
+    out = []
+    if lay["prover_exit"] not in (0, None) or lay["prover_stopped"]:
+        out.append(f"prover: exit {lay['prover_exit']} {lay['prover_stopped'] or ''} {lay['prover_why'] or ''} "
+                   f"{' | '.join(lay['prove_err'] or [])}".strip())
+    s = lay["session"]
+    if s and (s["accepted"] is False or s["aborted"]):
+        out.append(f"in-session verifier: accepted={s['accepted']} aborted={s['aborted']} why={s['why']}")
+    if lean == "REJECT":
+        out.append(f"Lean: {why}")
+    return out
+
+
 def cmd_summarize(a) -> int:
     work, out = Path(a.work), Path(a.out)
     plan = json.loads((work / "plan.json").read_text())
@@ -303,11 +369,20 @@ def cmd_summarize(a) -> int:
         v = _verdict(out / "lean" / f"{c['tag']}.out")
         word = _verdict_word(v, out / "lean" / f"{c['tag']}.err")
         t = _time(out / "lean" / f"{c['tag']}.time")
-        good = word == c["expect"]
+        extra = {}
+        if c["expect"] == "REFUSED":
+            lay = layers(out, c["statement"])
+            by = refused_by(lay, word, (v or {}).get("why", ""))
+            good = word != "ACCEPT" and bool(by)
+            extra = {"layers": lay, "refused_by": by,
+                     "lean_err": (out / "lean" / f"{c['tag']}.err").read_text(errors="replace").strip().splitlines()[-2:]
+                     if (out / "lean" / f"{c['tag']}.err").exists() else None}
+        else:
+            good = word == c["expect"]
         ok &= good
         checks.append({"tag": c["tag"], "expect": c["expect"], "verdict": word, "pass": good,
                        "why": (v or {}).get("why", "")[:300], "lean_seconds": t and t["wall_s"],
-                       "lean_maxrss_gb": t and round(t["maxrss_kb"] / 2**20, 1)})
+                       "lean_maxrss_gb": t and round(t["maxrss_kb"] / 2**20, 1), **extra})
     honest = next(c for c in checks if c["tag"] == "honest")
     summary = {"schema": "verity/pouw/h1-prove/summary/v0", "pass": ok,
                "unit": record["circuit"]["definition"], "k": record["circuit"]["k"], "tile": [R, C],
@@ -329,6 +404,8 @@ def cmd_summarize(a) -> int:
     for c in checks:
         print(f"  {c['tag']:<20} expect {c['expect']:<7} got {c['verdict']:<8} {'ok' if c['pass'] else 'FAIL'}  "
               f"{c['lean_seconds']} s  {c['why'][:120]}")
+        for r in c.get("refused_by", []):
+            print(f"      refused by {r[:300]}")
     return 0 if ok else 1
 
 

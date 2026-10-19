@@ -7,9 +7,10 @@
         once the salt coin is open: every tile's z (its cells' exact products) and CP-W receipt (`h1tile.reference`, the
         word reference the served kernel's receipts equal), each an output row under a fresh salt in the window's z tree
         and receipt tree
-    python window.py tamper PRIV TAMPERED_PRIV OUT.json (--z U | --receipt U)
-        a negative's window: PRIV's, every salt kept, with unit U's z committed with one word flipped, or its receipt
-        from another salt; the rows a prover of it holds are PRIV's, so its proof is PRIV's
+    python window.py tamper PRIV TAMPERED_PRIV OUT.json (--z U | --receipt U | --z-cell U | --receipt-word U)
+        a negative's window: PRIV's, every salt kept, with unit U's z committed with one word flipped, its receipt from
+        another salt, its z cell 0 plus one, or its receipt word 0 plus one (both 32-bit, mod 2^32); the input rows a
+        prover of it holds are PRIV's
     python window.py open PRIV SALT_HEX UNIT,... OUT_DIR
         the drawn units' rows (their public row's too) and salts for staging (OUT_DIR/rows.npz, the prover's), and their
         opening (OUT_DIR/opening.json: each committed row's b || c and its path to the window's registered root)
@@ -151,6 +152,12 @@ def cmd_serve(a) -> int:
     return 0
 
 
+def plus_one(words: np.ndarray) -> np.ndarray:
+    """A 32-bit value's two u16 words (little-endian) plus one, mod 2^32."""
+    v = (int(words[0]) | int(words[1]) << 16) + 1 & 0xFFFFFFFF
+    return np.array([v & 0xFFFF, v >> 16], np.uint16)
+
+
 def cmd_tamper(a) -> int:
     import shutil
     src, dst = Path(a.priv), Path(a.tampered)
@@ -161,12 +168,16 @@ def cmd_tamper(a) -> int:
     priv = dict(np.load(src / "rows.npz"))
     shape = U.Shape(com["unit"]["k"], R, C)
     ports = shape.ports()
-    if a.z is not None:
-        u = a.z
-        priv["zw"] = priv["zw"].copy()
-        priv["zw"][u, 0] ^= 1
-        priv["bcz"] = priv["bcz"].copy()
-        priv["bcz"][u] = np.frombuffer(U.commit_strings(ports[-2], priv["zw"][u:u + 1], [bytes(priv["sz"][u])])[0], np.uint8)
+    if a.z is not None or a.z_cell is not None or a.receipt_word is not None:
+        u, out, w = (a.z, "z", None) if a.z is not None else (a.z_cell, "z", 0) if a.z_cell is not None else (a.receipt_word, "r", 0)
+        rows, bcs, salts, port = f"{out}w", f"bc{out}", f"s{out}", ports[-2] if out == "z" else ports[-1]
+        priv[rows] = priv[rows].copy()
+        if w is None:
+            priv[rows][u, 0] ^= 1
+        else:
+            priv[rows][u, 2 * w:2 * w + 2] = plus_one(priv[rows][u, 2 * w:2 * w + 2])
+        priv[bcs] = priv[bcs].copy()
+        priv[bcs][u] = np.frombuffer(U.commit_strings(port, priv[rows][u:u + 1], [bytes(priv[salts][u])])[0], np.uint8)
     else:
         u = a.receipt
         _init(str(src), hashlib.sha512(b"verity/pouw/h1-prove/another-salt\0" + salt).digest())
@@ -177,7 +188,8 @@ def cmd_tamper(a) -> int:
     T, w = com["tiles"], com["window"]
     served = {"z_root": U.levels(U.domain(w, "z", T), _bl(priv["bcz"]))[-1][0].hex(),
               "receipt_root": U.levels(U.domain(w, "receipt", T), _bl(priv["bcr"]))[-1][0].hex(), "tiles": T, "salt": salt.hex(),
-              "tampered": {"unit": u, "what": "z" if a.z is not None else "receipt"}}
+              "tampered": {"unit": u, "what": next(k for k in ("z", "z_cell", "receipt_word", "receipt")
+                                                  if getattr(a, k) is not None)}}
     np.savez(dst / "rows.npz", **priv)
     (dst / "served.json").write_text(json.dumps(served))
     Path(a.out).write_text(json.dumps(served, indent=1))
@@ -264,6 +276,8 @@ def main(argv=None) -> int:
     g = p.add_mutually_exclusive_group(required=True)
     g.add_argument("--z", type=int)
     g.add_argument("--receipt", type=int)
+    g.add_argument("--z-cell", type=int)
+    g.add_argument("--receipt-word", type=int)
     p = sub.add_parser("open")
     p.add_argument("priv")
     p.add_argument("salt")

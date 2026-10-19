@@ -27,6 +27,7 @@ import hashlib
 import json
 from dataclasses import dataclass
 from functools import cached_property
+from pathlib import Path
 
 import numpy as np
 
@@ -183,6 +184,51 @@ def _frame(ports: list, set_name: str, n: int, bcs: dict[str, list[bytes]]) -> d
     return {"frame": "frame-v3-sha512", "roots": roots, "domain_ids": {k: d.domain_id.hex() for k, d in doms.items()},
             "bindings": {k: b.hex() for k, b in bind.items()}, "owner": FC.OWNER, "schemas": {p.name: p.schema for p in ports},
             "row_key_sha512": hashlib.sha512(HM96.default_key).hexdigest()}
+
+
+def circuit_meta(circuit: Path) -> dict:
+    """A circuit file's META (its second line), without reading the gates."""
+    with open(circuit) as f:
+        f.readline()
+        return json.loads(f.readline()[5:])
+
+
+def forge_statement(honest: Path, out: Path, pub: bytes, instance: int, port: str, words: np.ndarray, circuit: Path) -> dict:
+    """A consistent statement with a wrong witness: ``honest``'s prover file (`circuit.write`'s, one row per instance, of
+    ``circuit``) with instance ``instance``'s row of output ``port`` replaced by ``words``, and ``pub`` (the verifier's own
+    file of a window that committed those words under the same salt) as its header and ``b || c``. Every committed row is
+    then the opened window's, so binding holds, and the replaced row is not what the circuit computes on the instance's
+    inputs. Writes ``out``/inst.bin and pub.bin (``pub`` itself)."""
+    from verity_flock import circuit as FC
+    data = (honest / "inst.bin").read_bytes()
+    nl = data.index(b"\n") + 1
+    head = json.loads(data[:nl])
+    ports = FC._meta_ports(circuit_meta(circuit))
+    n, np_, W = head["instances"], len(ports), sum(p.words for p in ports)
+    rows = bytearray(data[nl:nl + 2 * n * W])
+    salts = data[nl + 2 * n * W:nl + 2 * n * W + SALT_BYTES * n * np_]
+    if "shared_rows" in head or len(data) != nl + 2 * n * W + (SALT_BYTES + 128) * n * np_:
+        raise ValueError(f"{honest}/inst.bin: not one row per instance without public words")
+    k = [p.name for p in ports].index(port)
+    at = 2 * (instance * W + sum(p.words for p in ports[:k]))
+    words = np.asarray(words, "<u2").reshape(-1)
+    if len(words) != ports[k].words:
+        raise ValueError(f"{port}: {len(words)} words, not {ports[k].words}")
+    rows[at:at + 2 * len(words)] = words.tobytes()
+    pnl = pub.index(b"\n") + 1
+    phead, bcs = json.loads(pub[:pnl]), pub[pnl:]
+    if len(bcs) != 128 * n * np_ or {x: phead[x] for x in phead if x != "frame_v3"} != dict(
+            {x: head[x] for x in head if x != "frame_v3"}, rows=False):
+        raise ValueError("the verifier's file is not this statement's but for its frame roots")
+    salt = salts[SALT_BYTES * (instance * np_ + k):SALT_BYTES * (instance * np_ + k + 1)]
+    bc = bcs[128 * (instance * np_ + k):128 * (instance * np_ + k + 1)]
+    if commit_strings(ports[k], words[None, :], [salt])[0] != bc:
+        raise ValueError(f"{port}: the verifier's b || c of instance {instance} is not these words under the prover's salt")
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "inst.bin").write_bytes(json.dumps(dict(phead, rows=True), sort_keys=True).encode() + b"\n" + bytes(rows) + salts + bcs)
+    (out / "pub.bin").write_bytes(pub)
+    return {"instance": instance, "port": port, "row_words_changed": int(np.count_nonzero(
+        np.frombuffer(data[nl + at:nl + at + 2 * len(words)], "<u2") != words))}
 
 
 def verifier_pub(circuit_head: dict, set_name: str, subcircuit: str, bcs: list[dict[str, bytes]]) -> bytes:
