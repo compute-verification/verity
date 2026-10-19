@@ -24,7 +24,7 @@ from __future__ import annotations
 from verity.ml.circuits import boolean as BL
 from collections.abc import Callable
 
-from verity.ml.circuits.defs import CompositeDefinition, bind
+from verity.ml.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
 from verity.ml.circuits.refs import Coll, Explicit, array_of, broadcast, concat, strided_view, tuple_of
 from verity.ml.circuits.types import Array, Tuple
 from verity.ml.circuits.ops.boolean import attention as BA
@@ -85,10 +85,11 @@ def _dot_step(S):
     if not 1 <= S.NV <= 16:
         raise ValueError(f"AttnDotStep: NV={S.NV} outside 1..16")
     pad, zero = [const_bits(0, 16)] * (16 - S.NV), const_bits(0, 32)
+    dot = S.DOT.defn.build if isinstance(S.DOT, SpecializedDefinition) else S.DOT.build  # `boolean_version` binds it
 
     def build(C, *els):
         a, b = els[:S.NV], els[S.NV:S.NV + 16]
-        return S.DOT.build(C, zero if S.FROM_ZERO else els[S.NV + 16], *a, *pad, *b)
+        return dot(C, zero if S.FROM_ZERO else els[S.NV + 16], *a, *pad, *b)
     return build
 
 

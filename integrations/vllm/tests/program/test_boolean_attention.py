@@ -202,8 +202,11 @@ def test_fa3_inv_sum_agrees_with_fa3_inv_sum_v1() -> None:
 @pytest.mark.parametrize("target", PINNED, ids=lambda t: t.id)
 def test_the_switch_maps_its_word_view_to_it(target) -> None:
     """`boolean_version` of each word chain is the Boolean chain whose word view it is: `Attention_v4` (FA3's per-iteration
-    `Check_inf`) to v9, `Attention_v5` (FA2's) to v8, v2 and v3 to v7 and v6."""
-    assert SW.boolean_version(TR.word_of(target)).id == target.id
+    `Check_inf`) to v9, `Attention_v5` (FA2's) to v8, v2 and v3 to v7 and v6. Its bindings bind `DOT` and `INV`, as a served
+    Program's do, and its body is the same circuit."""
+    v = SW.boolean_version(TR.word_of(target))
+    assert v.id == target.id
+    assert v.gates == target.gates
 
 
 @pytest.mark.parametrize("target", AGREEMENT, ids=lambda t: t.id)
