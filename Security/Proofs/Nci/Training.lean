@@ -1,6 +1,7 @@
 import Models.Nci.Guarantees.Training
 import Proofs.Nci.Threads
 import Proofs.Nci.Contained
+import Proofs.Nci.Packed
 
 /-!
 # Proofs of NCI's guarantees under training's incompressibility
@@ -13,7 +14,7 @@ thread and partial-sum proofs, which read only those three.
 
 Through a partial containment each dark gate is an IU of its own (`withDark`), so the law bounds the partial sums it
 absorbs by its reads (`IncompressibleContainedMatMulOn`). At `μ = 1` that budget has no weight, and the activations' half
-alone bounds the products the declaration computes (`ContainedFanOutOn`).
+alone bounds the products the declaration computes (`ContainedFanOutOn`, the case `k = 1` of `PackedContainedFanOutOn`).
 -/
 
 namespace Nci.SecurityProofs
@@ -204,25 +205,9 @@ theorem IncompressibleContainedTrainingOn : Guarantees.IncompressibleContainedTr
     (IncompressibleContainedMatMulOn Γ α K b_w b_a μ c d ch T dd emax M hα hK hw ha hdd hΓ hαK hμ₀ hμ₁ hd he hP hX h)
     hκ (by exact_mod_cast card_products_le_dark M ch)
 
-open Classical in
-/-- **Products done in the declaration are bounded by their fan-out**: at `μ = 1` the dark gates' budget has weight
-`1 − μ = 0`, so any budget does, and the partial sums are not needed. -/
-theorem ContainedFanOutOn : Guarantees.ContainedFanOutOn := by
-  intro Γ α K b_w b_a c d ch dd emax M hα hK hw ha hdd hαK hd he ⟨n, P, hP⟩ hA
-  have h₂ : ∑ u, (b_w * ((ch.weightsUsed (piece M P u)).card : ℝ) + b_a / 2 * (outputsOther ch (piece M P u)).card) ≤
-      ∑ u, (novelReads d (P.gates u) : ℝ) +
-        ∑ u, (b_w * ((ch.weightsUsed (piece M P u)).card : ℝ) + b_a / 2 * (outputsOther ch (piece M P u)).card) :=
-    le_add_of_nonneg_left (sum_nonneg fun u _ => Nat.cast_nonneg _)
-  have h := matMulOn_of_counts (μ := 1) hα hK hw ha hdd hαK zero_le_one le_rfl hd he hP hA h₂
-  have hm : b_a / max (emax : ℝ) (K / (4 * b_w * dd)) ≤
-      max (min ((1 + √1) ^ 2 * (b_w * b_a * dd / K)) (√2 * (1 + √1) * √(1 - 1) * (b_a * √(b_w / K))))
-        (1 * b_a / max (emax : ℝ) (K / (4 * b_w * dd))) :=
-    le_max_of_le_right (le_of_eq (by ring))
-  calc b_a / max (emax : ℝ) (K / (4 * b_w * dd)) *
-        ((univ.filter fun p : (ℓ : Fin ch.L) × Fin ch.N × Fin (ch.e ℓ) × Fin (ch.d ℓ) =>
-          ch.prod p.1 p.2.1 p.2.2.1 p.2.2.2 ∈ M.S).card : ℝ)
-      ≤ _ := mul_le_mul_of_nonneg_right hm (Nat.cast_nonneg _)
-    _ ≤ _ := h
-    _ = α * d.D.size d.D.computed := by ring
+/-- **Products done in the declaration are bounded by their fan-out**: the case `k = 1` of the packed bound, at `μ = 1`,
+where the dark gates' budget has weight `1 − μ = 0` and the partial sums are not needed. -/
+theorem ContainedFanOutOn : Guarantees.ContainedFanOutOn :=
+  containedFanOutOn_of_packed PackedContainedFanOutOn
 
 end Nci.SecurityProofs

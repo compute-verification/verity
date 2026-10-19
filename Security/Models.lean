@@ -12,6 +12,7 @@ import Models.Nci.Guarantees.Dampener
 import Models.Nci.Guarantees.Info
 import Models.Nci.Guarantees.Fmt
 import Models.Nci.Guarantees.Training
+import Models.Nci.Guarantees.Packed
 import Models.Pous.Assumptions
 import Models.Pous.Guarantees
 import Models.Pouw.Assumptions

@@ -18,6 +18,7 @@ import Proofs.Nci.Dampener
 import Proofs.Nci.Info
 import Proofs.Nci.Fmt
 import Proofs.Nci.Training
+import Proofs.Nci.Packed
 
 /-!
 # Proofs of NCI's guarantees
