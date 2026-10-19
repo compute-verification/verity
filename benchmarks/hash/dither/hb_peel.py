@@ -13,7 +13,7 @@ h1o_ref's v3 z:
     receipt = CA's definition's (`dither_one.h1v3_unit`) and CA's own code's (`h1v3_itself`, H1V3's h1tile.reference),
     and CA's z peeled on the CPU from its own noise (`peel_cpu`) = A B^T, where the literal peel z - b B^T - A c^T - b c^T
     is reported (it misses the wrap term 256 xa (B + c)^T); and, where hb_served.sh extracted H1V3 with the peel
-    (HB_H1V3_PEEL_TREE, 4733b9ab0c: z = A B^T is v3's definition), the kernel's z and receipt equal that tree's
+    (HB_H1V3_PEEL_TREE, f56cbc3a04: z = A B^T is v3's definition), the kernel's z and receipt equal that tree's
     h1tile.reference(stream=True) itself, with no CPU peel;
   * fault: z off A B^T by 2^FAULT_SHIFT at unit 0's cell (0, 0) of every call and nowhere else, that unit's receipt off
     h1r's and no other, y = dequant of that z and moved there;
@@ -227,8 +227,11 @@ def check(win: DO.Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 
     doc["wb"] = {"plus": int(cnt[:, 0].sum()), "minus": int(cnt[:, 1].sum()), "entries": int(ent.sum()),
                  "density": float(cnt.sum() / ent.sum()),
                  "by_site": {site: float(cnt[i::4].sum() / ent[i::4].sum()) for i, site in enumerate(DF.SITES)}}
-    doc["xa"] = {"entries": int(sum(int(((g["a"][w][:m] == 127)).sum()) for w in range(L))),
-                 "note": "A = 127 entries of the live rows (xa needs b = 1 too: about half of them)"}
+    a127 = [int((g["a"][w][:m] == 127).sum()) for w in range(L)]
+    doc["xa"] = {"entries": sum(a127), "by_call": a127,
+                 "by_site": {site: sum(a127[i::4]) for i, site in enumerate(DF.SITES)},
+                 "note": "A = 127 entries of each call's live rows (xa needs b = 1 too: about half of them; vs_cpu's "
+                         "xa_entries counts both on the units checked on the CPU)"}
     if which in ("fault", "fault_wb", "fault_xa"):
         doc["fault_shift"] = shift
         doc["fault_bad"] = fault_bad

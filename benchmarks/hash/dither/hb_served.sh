@@ -28,7 +28,7 @@
 # HB_H1U_PEEL names if it's set (the fastest peeled build need not be the fastest unpeeled one); and dither-1s-hbk,
 # dither-1s-hbp on the unit's K split (an H1U_KSPLIT build, the .so HB_H1U_KSPLIT names). The
 # dither-1s arms' gate also runs CA's H1V3 h1tile.reference at H1V3_SHA (default bd702a2c46), and dither-1s-hbp's at
-# H1V3_PEEL_SHA too (default 4733b9ab0c, v3 with the peel), each from a sent h1v3-SHA.tar.gz (`git archive SHA verity |
+# H1V3_PEEL_SHA too (default f56cbc3a04, v3 with the peel as PR #2776), each from a sent h1v3-SHA.tar.gz (`git archive SHA verity |
 # gzip`; a --cwd source tree has no history), else the source's git.
 # Env: HB_WHO (the lease owner, default kernels-dither-hb), DITHER_NSYS=1 (sbench's nsys capture of the gate's kernels; kernels.py counts each dither arm's inside its NVTX
 # range, so the source must be dither-rtx's f2c0071c7c or later), LEASE (default "--max-min 14"), RUN_TIMEOUT (seconds
@@ -144,9 +144,10 @@ fi
 [ -f "$S/h1v3/verity/core/protocols/pouw/circuit/h1tile.py" ] \
   && export DITHER_H1V3_TREE=$S/h1v3 DITHER_H1V3_SHA=$H1V3_SHA || echo "hb_served: no H1V3 tree at $H1V3_SHA"
 echo "h1v3 ${DITHER_H1V3_SHA:-none}" >> "$OUT/env/wrapper.txt"
-# H1V3 with the peel (z = A B^T, CA 12:03Z) at H1V3_PEEL_SHA: dither-1s-hbp's gate holds its z and receipts to that tree's
-# h1tile.reference itself; dither-1s-hb, which serves the dithered product, stays on H1V3_SHA's
-H1V3_PEEL_SHA=${H1V3_PEEL_SHA:-4733b9ab0c}
+# H1V3 with the peel (z = A B^T, CA 12:03Z; #2776 at f56cbc3a04, CA 13:31Z, its reference 4733b9ab0c's) at H1V3_PEEL_SHA:
+# dither-1s-hbp's and dither-1s-hbk's gate holds z and receipts to that tree's h1tile.reference itself; dither-1s-hb, which
+# serves the dithered product, stays on H1V3_SHA's
+H1V3_PEEL_SHA=${H1V3_PEEL_SHA:-f56cbc3a04}
 mkdir -p "$S/h1v3p"
 if [ -f "$INPUTS/h1v3-$H1V3_PEEL_SHA.tar.gz" ]; then
   tar -xzf "$INPUTS/h1v3-$H1V3_PEEL_SHA.tar.gz" -C "$S/h1v3p"
