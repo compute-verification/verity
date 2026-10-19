@@ -4,10 +4,12 @@ EVERY rank through the `worker_extension_cls` seam (`tp2_worker.tp2_commit_*`).
     ... tp2_commit --workload <manifest> --case LLAMA32_1B --tp 2 --committer native_collect_v2b --hidden-so <so> --openings 64 --pairs 3 \
         --max-num-seqs B --engine-arg gpu_memory_utilization=0.3 --label <row> --out <row>/commit
 
-Run commitment over the ranks (layout version of every rank's tree stays `chunk-leaf-v1`; nothing inside a rank's tree changes):
-    tp_run_root = SHA-256("verity/tp-run-root/v1" || u32 world || (u32 rank_r || root_r) for r in 0..world-1)
+Run commitment over the ranks: every rank commits under ``--commit-scheme`` (default rows-sha512, `commit.step_rows`: hm96-sha512
+hiding leaves over the rank's `chunk-leaf-v1` step stream, frame-v3-sha512 trees, 64-byte roots), and (`tp.run_root`)
+    tp_run_root = SHA-512("verity/tp-run-root/v2" || u32 world || (u32 rank_r || root_r) for r in 0..world-1)
 i.e. per-rank run roots combined deterministically, rank-tagged, in rank order — the option "per-rank roots combined into the run
-root" of the charter.  Every rank's root is fixed (finalize on every rank returns) BEFORE the challenge is sampled; the challenge of
+root" of the charter.  ``--commit-scheme vllm-v1`` (by name: tests, an old record's configuration) commits vllm-v1's 32-byte roots
+under the SHA-256 form ``verity/tp-run-root/v1``.  Every rank's root is fixed (finalize on every rank returns) BEFORE the challenge is sampled; the challenge of
 rank r is `challenge_positions(tp_run_root, leaves_per_step_r, k, salt=pair/rank r)` — positions of every rank derive from the
 combined root, so no rank's values can be recomputed after the challenge.  FAIL-CLOSED: a rank that does not return a root (fewer
 results than `world` from the collective RPC, or an exception) fails the run; REL-02 required classes are checked PER RANK; the
@@ -44,7 +46,8 @@ from verity_vllm.pipeline.tp import serving_rows as SRT
 from verity_vllm.pipeline.tp import warmup as WU
 from verity_vllm.pipeline.tp.import_path import write_import_path_runtime
 from verity_vllm.pipeline.tp.negatives import negatives_applied, parse_serve_shard_from
-from verity_vllm.pipeline.tp.run_root import TP_ROOT_TAG, tp_run_root
+from verity_vllm.commit import step_rows
+from verity_vllm.pipeline.tp import run_root as RT
 
 SCHEMA = "verity/commit-integ/delta-tp/v1"
 
@@ -125,6 +128,10 @@ class Options:
     case: str | None = option("--case", default=None)
     tp: int = option("--tp", type=int, default=2, help="communicator size")
     committer: str = option("--committer", default="native_collect_v2b")
+    commit_scheme: str = option("--commit-scheme", default=step_rows.NAME, choices=(step_rows.NAME, "vllm-v1"),
+                                help="every rank's commitment scheme: rows-sha512 (default; the windowed worker, native_collect_v2b with "
+                                     "--window-mb > 0) under the SHA-512 TP run root, or vllm-v1 by name (tests, an old record's "
+                                     "configuration) under the SHA-256 tp-run-root/v1")
     hidden_so: str | None = option("--hidden-so", default=None)
     hidden_ns: str | None = option("--hidden-ns", default=None)
     openings: int = option("--openings", type=int, default=64)
@@ -238,11 +245,15 @@ def main(args: Options) -> int:
     served = SV.require(llm, wl, target, out, args.rpc_timeout)
     eng = va.Engine(llm=llm, runner=None, model=None, cp=cp, kwargs=kw, env_flags=env_flags, build_s=build_s, case=case, target=target)
     world = len(topo)
+    rows = args.commit_scheme == step_rows.NAME
+    root_tag = RT.TP_ROOT_TAG if rows else RT.TP_ROOT_TAG_V1
     versions = {"schema": SCHEMA, "git_head": git_head(), "tree": tree_of_record(), "argv": sys.argv, "tp": args.tp, "build_s": round(build_s, 1),
                 "engine_kwargs": {k: v for k, v in kw.items() if k not in ("model", "tokenizer")}, "target": TT.as_json(target), "served": served,
                 "env": {k: v for k, v in os.environ.items() if k.startswith(("NCCL_", "VLLM_", "CUBLAS", "NATIVE_COLLECT", "HIDDEN_GPU"))},
-                "env_required": {k: v for k, v in engine_env.snapshot().items() if k == "NCCL_P2P_DISABLE"}, "ranks": topo, "root_combination": "tp_run_root = SHA-256(tag || u32 world || (u32 rank || root_rank)...)",
-                "root_tag": TP_ROOT_TAG.decode(), "layout_version_per_rank": "chunk-leaf-v1 (unchanged)", "required_classes": list(required_classes),
+                "env_required": {k: v for k, v in engine_env.snapshot().items() if k == "NCCL_P2P_DISABLE"}, "ranks": topo,
+                "root_combination": f"tp_run_root = {'SHA-512' if rows else 'SHA-256'}(tag || u32 world || (u32 rank || root_rank)...)",
+                "root_tag": root_tag.decode(), "commit_scheme": args.commit_scheme,
+                "layout_version_per_rank": f"chunk-leaf-v1 step streams under {args.commit_scheme}", "required_classes": list(required_classes),
                 "required_classes_source": "cli" if args.required_classes is not None else "default (REL-02) + tp_rank_partials (R14 TP-03), checked per rank",
                 "negatives": {"omit_rank": args.omit_rank, "no_tp_partials": bool(args.no_tp_partials), "relabel_rank": args.relabel_rank, "swap_requests": args.swap_requests,
                               "wrong_root_rank": args.wrong_root_rank, "omit_rank_partials": args.omit_rank_partials, "omit_partial_site": args.omit_partial_site,
@@ -349,7 +360,7 @@ def main(args: Options) -> int:
     (out / "versions.json").write_text(json.dumps(versions, indent=1, default=str) + "\n")
     with PH.TL.span("prep.committer_setup", kind=args.committer):
         made = llm.collective_rpc("tp2_commit_make", timeout=args.rpc_timeout,
-                                  kwargs={"kind": args.committer, "run_id": Path(args.workload).stem, "cp": cp, "case": case, "hidden_so": args.hidden_so,
+                                  kwargs={"kind": args.committer, "commit_scheme": args.commit_scheme, "run_id": Path(args.workload).stem, "cp": cp, "case": case, "hidden_so": args.hidden_so,
                                           "hidden_ns": args.hidden_ns, "envelope": envelope, "arena_mb": args.arena_mb, "tp_partials": not args.no_tp_partials,
                                           "program_digest": {str(k): v for k, v in pds.items()}, "n_requests": len(reqs),
                                           "required_manifest": args.required_manifest, "request_order": request_order, "request_ids": request_ids, "arrivals": arrivals, "caps": caps,
@@ -480,9 +491,9 @@ def main(args: Options) -> int:
                                 f["run_root_actual"] = f["run_root"]
                                 f["run_root"] = bytes(rb).hex()
                     roots = {int(f["rank"]): bytes.fromhex(f["run_root"]) for f in fin}
-                    root = tp_run_root(world, roots)
+                    root = RT.combine(root_tag, world, roots)
                     claimed = {str(int(f["rank"])): f["run_root"] for f in fin}
-                    served = SRT.commit(llm, args, root, claimed, world, TP_ROOT_TAG) if args.serving_rows and pair == 0 else None
+                    served = SRT.commit(llm, args, root, claimed, world, root_tag) if args.serving_rows and pair == 0 else None
                     per_rank = {}
                     reasons = []
                     # every rank's root is fixed; the challenge of every rank derives from the COMBINED root (one RPC: each rank opens its own)
@@ -652,7 +663,7 @@ def main(args: Options) -> int:
                         (out / ("coverage.json" if pair == 0 else f"coverage_pair{pair}.json")).write_text(json.dumps(cov, indent=1, default=str) + "\n")
                     row["commit"] = {"tp_run_root": root.hex(), "world": world, "per_rank": per_rank, "root_combination": versions["root_combination"],
                                      "commitment_vector": [{"rank": int(f["rank"]), "run_root": f["run_root"], "leaves": f["leaves"], "steps": f["steps"]} for f in sorted(fin, key=lambda f: f["rank"])],
-                                     "root_form": "tp-run-root/v1 (PROVISIONAL tagged SHA-256 over the per-rank roots; canonical form per R13 12:25Z ruling = the per-rank entries of `commitment_vector` in the challenge-v1 commitment vector)",
+                                     "root_form": f"{root_tag.decode().removeprefix('verity/')} (PROVISIONAL tagged {'SHA-512' if rows else 'SHA-256'} over the per-rank roots; canonical form per R13 12:25Z ruling = the per-rank entries of `commitment_vector` in the challenge-v1 commitment vector)",
                                      "leaves": sum(c["leaves"] for c in per_rank.values()), "bytes_bound": sum(c["bytes_bound"] for c in per_rank.values()),
                                      "tensors": sum(c["tensors"] for c in per_rank.values()),
                                      "openings": {"n": sum(c["openings"]["n"] for c in per_rank.values()), "verified": sum(c["openings"]["verified"] for c in per_rank.values())},
