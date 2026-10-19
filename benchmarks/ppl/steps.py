@@ -128,13 +128,24 @@ def act_quant(x: torch.Tensor, mode: str, bits: torch.Tensor | None, top: int,
 def gptq_round(w: torch.Tensor, h: torch.Tensor, top: int, block: int = 128, damp: float = 0.01) -> tuple[torch.Tensor, torch.Tensor]:
     """GPTQ (Frantar et al.) of w (n x k, FP32) against the input second moment h (k x k), each row's scale fixed at
     absmax / top: integers in [-top, top] and the scales. Damping 1%, retried at 10x and 100x."""
+    s = w.abs().amax(dim=1).clamp(min=1e-30) / top
+
+    def column(col, i):
+        qi = torch.round(col / s).clamp(-top, top)
+        return qi, qi * s
+
+    return gptq(w, h, column, block, damp), s
+
+
+def gptq(w: torch.Tensor, h: torch.Tensor, column, block: int = 128, damp: float = 0.01) -> torch.Tensor:
+    """GPTQ's column loop with the quantizer `column(col, i)` -> (column i's levels, their dequantized values), the
+    scales fixed beforehand: the levels, n x k."""
     w = w.clone()
     n, k = w.shape
     h = h.clone()
     dead = torch.diag(h) == 0
     h[dead, dead] = 1
     w[:, dead] = 0
-    s = w.abs().amax(dim=1).clamp(min=1e-30) / top
     h = (h + h.T) / 2
     mean_diag = torch.mean(torch.diag(h))
     for d in (damp, 10 * damp, 100 * damp):
@@ -152,13 +163,13 @@ def gptq_round(w: torch.Tensor, h: torch.Tensor, top: int, block: int = 128, dam
         w1, err1, hb = w[:, i1:i2].clone(), torch.zeros(n, i2 - i1, device=w.device), hinv[i1:i2, i1:i2]
         for i in range(i2 - i1):
             col = w1[:, i]
-            qi = torch.round(col / s).clamp(-top, top)
+            qi, dq = column(col, i1 + i)
             q[:, i1 + i] = qi
-            e = (col - qi * s) / hb[i, i]
+            e = (col - dq) / hb[i, i]
             w1[:, i:] -= e[:, None] * hb[i, i:][None, :]
             err1[:, i] = e
         w[:, i2:] -= err1 @ hinv[i1:i2, i2:]
-    return q, s
+    return q
 
 
 def smooth_factors(mm, alpha: float, kv_shared: bool) -> torch.Tensor:
@@ -1018,6 +1029,20 @@ def with_blocks(q: torch.Tensor, m: torch.Tensor | None) -> torch.Tensor:
     return (q.reshape(*q.shape[:-1], m.shape[-1], -1) * m[..., None]).reshape(q.shape)
 
 
+def native_gptq(w: torch.Tensor, h: torch.Tensor, grid: str, scale: str, amax: torch.Tensor | None = None):
+    """GPTQ on a native grid: w's scale and block multipliers fixed by `native_parts` (uncoined), then GPTQ's column
+    loop rounding each column to the grid's nearest level in its unit s m. Returns the levels, s and m."""
+    _, s, m = native_parts(w, grid, scale, False, amax)
+    rs = s.reshape(-1) if s.dim() else s
+
+    def column(col, i):
+        u = rs if m is None else rs * m[:, i // BLOCKS[scale]]
+        qi = to_grid(col / u, grid, "round", None)
+        return qi, qi * u
+
+    return gptq(w.float(), h, column), s, m
+
+
 def _check_native(p):
     if p["grid"] not in NATIVE:
         raise ValueError(f"native.grid is one of {sorted(NATIVE)}")
@@ -1032,19 +1057,27 @@ def _check_native(p):
         raise ValueError("native.act_grid is '' (the weights' grid and scale) or int8 (Dither's activations)")
     if p["act_grid"] == "int8" and (p["act"] != "dither" or p["scale"] == "mx"):
         raise ValueError("native: int8 activations are Dither's, dithered, beside integer weights (not mx)")
+    if p["gptq"] and p["weight"] != "round":
+        raise ValueError("native: gptq rounds the weights (weight = round)")
 
 
 @linear_step("native", phase="quantize", seeded=lambda p: {p["act"], p["weight"]} != {"round"}, check=_check_native,
-             source="PPL-COMPILE")
+             calib=lambda p: p["gptq"], source="PPL-COMPILE, FPX-DESIGN")
 def native_linear(mm, nxt, *, grid: str, scale: str = "channel", act: str = "dither", weight: str = "dither",
-                  act_grid: str = ""):
+                  act_grid: str = "", gptq: bool = False):
     """Dither's coins on a format's exact integer grid (`NATIVE`: e4m3i, e4m3i352, int5 on E4M3; e2m1i, e2m1x2 on
     E2M1), both operands scaled by `scale` along k (`native_parts`) and `round`ed or `dither`ed (the level below or
     above by a fresh bit), the activations' coins first, then the weights', fresh every call (Dither-2S's order).
     `act_grid = int8`: the activations Dither's own (`act_quant` at top 127, the int8 design's draws), the weights
     native: the hybrid that serves int8 activations as limbs. tensor, channel, nv and nvi scales give integers, so the
     product is the gated exact one; mx's power-of-two blocks give dyadic operands, multiplied dequantized in FP32 (the
-    MX MMA)."""
+    MX MMA). `gptq`: rounded weights by GPTQ (blocks of 128, on the calibration windows' inputs) on the grid, each
+    row's scale and block multipliers fixed by `native_parts` first."""
+    hkey = (mm.name, tuple(s.key for s in mm.prefix[:-1]))
+    if mm.run.hessian is not None:
+        if gptq:
+            mm.run.hessian(hkey, mm.x)
+        return None
     k = mm.x.shape[1]
     if scale in BLOCKS and k % BLOCKS[scale]:
         raise ValueError(f"{mm.where}: k = {k} is not a multiple of {BLOCKS[scale]}")
@@ -1059,6 +1092,9 @@ def native_linear(mm, nxt, *, grid: str, scale: str = "channel", act: str = "dit
     def weights():
         w = mm.weight()
         amax = w.abs().amax()
+        if gptq:
+            q, s, m = native_gptq(w, mm.run.calib["H"][hkey], grid, scale, amax)
+            return q.to(torch.int16), None, s, m
         parts = by_rows(lambda r: rows(r, amax), w)
         return tuple(p[0] if p[0] is None or p[0].dim() == 0 else torch.cat(p) for p in zip(*parts))
 

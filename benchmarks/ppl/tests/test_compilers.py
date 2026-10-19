@@ -14,7 +14,7 @@ OTHERS = ["pc-int8", "pc-fp8-tensor", "pc-fp8-channel", "pc-mxfp8", "pc-nvfp4", 
           "pc-c2-int5-1s", "pc-c2-e4m3i-2s", "pc-c2-e4m3i-t-2s", "pc-c2-e4m3i-1s", "pc-c2-mx8-2s", "pc-c2-mx8-1s",
           "pc-c2-nvfp4-2s", "pc-c2-nvfp4-1s", "pc-c2-mxfp4-2s", "pc-c2-mxfp4-1s", "pc-c3-fp8", "pc-c3-fp4",
           "pc-c2-nvfp4x2-2s", "pc-c2-nvfp4x2-1s", "pc-c2-mxfp4x2-2s", "pc-c3-fp4x2", "fpx-2sp-e4m3i",
-          "fpx-2sp-nvfp4x2", "fpx-2sp-nvfp4x2i", *(f"{f}-lin" for f in ("pc-fp8-tensor", "pc-fp8-channel", "pc-mxfp8", "pc-nvfp4", "pc-mxfp4"))]
+          "fpx-2sp-nvfp4x2", "fpx-2sp-nvfp4x2i", "fpx-2sp-nvfp4x2-gptq", *(f"{f}-lin" for f in ("pc-fp8-tensor", "pc-fp8-channel", "pc-mxfp8", "pc-nvfp4", "pc-mxfp4"))]
 
 
 def test_e4m3_integers_are_every_integer_e4m3_holds():
@@ -84,6 +84,23 @@ def test_native_parts_stay_on_the_grid(grid, scale):
     assert torch.allclose(steps.with_blocks(v, m) * s, x, rtol=1e-5)
 
 
+@pytest.mark.parametrize("grid,scale", [("e2m1x2", "nv"), ("e4m3i352", "channel")])
+def test_native_gptq_stays_on_the_grid_and_beats_rounding(grid, scale):
+    g = torch.Generator().manual_seed(4)
+    x = torch.randn(512, 64, generator=g) @ torch.randn(64, 64, generator=g)
+    w = torch.randn(8, 64, generator=g)
+    v, _, _ = steps.native_parts(w, grid, scale, coined=False)
+    rounded = steps.to_grid(v, grid, "round", None)
+    q, s, m = steps.native_gptq(w, x.T @ x, grid, scale)
+    assert set(q.unique().tolist()) <= set(steps.LEVELS[grid])
+
+    def err(levels):
+        return (x @ (w - steps.with_blocks(levels, m) * s).T).norm()
+
+    assert err(q) < err(rounded)
+    assert torch.equal(steps.native_gptq(w, torch.diag(torch.rand(64, generator=g) + 1), grid, scale)[0], rounded)
+
+
 def test_c1_emulation_is_dither_2s_bit_for_bit(llama, ids, calib):
     r = evaluate(llama, ids[:4], ["adopted-bd-lm", *C1], seeds=(0, 1), calib=calib)
     assert passed(r), r["gates"]
@@ -130,6 +147,8 @@ def test_native_checks():
         spec.parse({"linear": [{"step": "native", "grid": "e4m3i", "scale": "nv"}]}, "x")
     with pytest.raises(ValueError, match="nv blocks"):
         spec.parse({"linear": [{"step": "native", "grid": "e4m3i352", "scale": "nvi"}]}, "x")
+    with pytest.raises(ValueError, match="gptq"):
+        spec.parse({"linear": [{"step": "native", "grid": "e2m1x2", "scale": "nv", "gptq": True}]}, "x")
     with pytest.raises(ValueError, match="int8 activations"):
         spec.parse({"linear": [{"step": "native", "grid": "e4m3i", "scale": "mx", "act_grid": "int8"}]}, "x")
     with pytest.raises(ValueError, match="route"):
