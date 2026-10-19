@@ -316,7 +316,8 @@ theorem life_harm_budget (A : (m : ℕ) → Analysis (L m) (Reg m) (session m)) 
     (H : ℝ) (N : ℕ) (s : Strategy (life L Reg session N)) :
     (lifePlay A N s).prEv h (fun acc x => acc = true ∧ H ≤ x) 0 ≤
       ENNReal.ofReal (Real.exp (-(lam * H))) + ∑ m ∈ range N, (εks m + δlink m) :=
-  harm_budget hlam0 hlam H (lifePlay A N s) (laws_lifePlay A hL N s) (drawn_lifePlay A hks hlink N s)
+  harm_budget hlam0 hlam H (lifePlay A N s) (laws_lifePlay (S := fun L' => L'.Design π) A hL N s)
+    (drawn_lifePlay A hks hlink N s)
 
 end Life
 
