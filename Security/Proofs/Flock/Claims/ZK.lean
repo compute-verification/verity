@@ -42,6 +42,7 @@ import Proofs.Flock.Claims.ZK.PrefixLive
 import Proofs.Flock.Claims.ZK.SimSession
 import Proofs.Flock.Claims.ZK.SimInner
 import Proofs.Flock.Claims.ZK.SplitInner
+import Proofs.Flock.Claims.ZK.InnerLeaf
 import Proofs.Flock.Claims.ZK.Assemble
 import Proofs.Flock.Claims.ZK.Sent
 import Proofs.Flock.Claims.ZK.Round1
@@ -307,6 +308,8 @@ import Proofs.Flock.Claims.ZK.Stop
   the batched constraint, `τ`'s value and leaf, and `Y` (`Masked.InnerSlot`, `Masked.InnerTriple`,
   `Masked.InnerBatched`, `Masked.InnerTauVal`, `Masked.InnerTauLeaf`, `Masked.InnerY`), and `SimInner` from them
   (`Masked.simInner_of_split`).
+* `InnerLeaf`: `Masked.innerTriple` and `Masked.innerTauLeaf`, the cut's triple openings and `τ` commitment read off
+  the tape, and `y_τ`'s bytes as the honest pads' `τ` salt (`Masked.ytau_saltBytes`).
 * `Assemble`: `Flock.zk_deployZk_masked_exe_split`, Flock's zero knowledge at the deployed masked session from the
   hybrid `SimLig`, `SplitInner`'s statements, `CausalExe` and `FinExe`: `hstep` from `Masked.prefixLive` and
   `SimSession` (`Masked.hstep_exe`), `SimSession` from `Masked.simCommit`, `Masked.simPiop` and the other hybrids
