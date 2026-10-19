@@ -621,6 +621,8 @@ class CommitSession:
                  ``remote_session.json`` with the map's agreement with the store (`agreement`), taken before the run
                  went on, each pass's ``[window, pass, step]`` as the verifier's record has its steps
                  (``pass_steps``, each a step of the map), and the map stopped there (`store.memory_map.end`)
+    map_request  after it, with ``commit --memory-map``: the store's runtime layout into the map's request, for the map
+                 built from the circuit (`pipeline.memory_map`)
     ~~~
 
     A store serves one session, so ``plan`` is one mode (``serve``, or ``servedrop:K``, the negative that withholds the
@@ -751,6 +753,21 @@ class CommitSession:
             store_map.end(self.store)
         finally:
             self.lockstep.close()
+
+    def map_request(self, path: str | Path) -> dict[str, Any]:
+        """The runtime layout into the Commit's memory-map request at ``path`` (``commit --memory-map``,
+        `pipeline.memory_map`): the registration the session's map is recorded against, each KV layer region's first
+        block in layer order (``firsts``) and the registered store's blocks (``blocks``), so the map built from the
+        circuit numbers its blocks as this store does.  Returns the request as written."""
+        reg = getattr(self.backend, "registration", None)
+        if reg is None:
+            raise RuntimeError("the session registered no store: there is no layout to send")
+        layout = self.store.layout()
+        kv = sorted((r for r in layout.regions if r.kind == "kv"), key=lambda r: int(r.name.rpartition("/")[2]))
+        req = {**json.loads(Path(path).read_text()), "registration": reg.digest.hex(),
+               "firsts": [r.first for r in kv], "blocks": layout.blocks}
+        Path(path).write_text(json.dumps(req) + "\n")
+        return req
 
     def end(self) -> dict[str, Any]:
         self.lockstep.finish()

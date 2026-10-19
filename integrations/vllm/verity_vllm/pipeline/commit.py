@@ -1864,6 +1864,10 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 r["remote_session"] = {"audited_steps": _lock.audited, "unaudited_steps": _lock.unaudited, "accepted": _rs_rec["accepted"]}
                 print(f"[delta] remote session over pair {pair}'s {arm} run: {_lock.audited} of its {_lock.audited + _lock.unaudited} engine steps "
                       f"a pass each, {'ACCEPTED' if _rs_rec['accepted'] else 'REJECTED'}" + (f" ({_rs_rec['error']})" if _rs_rec["error"] else ""), flush=True)
+                if args.memory_map and getattr(_rs.backend, "registration", None) is not None:
+                    _mreq = _rs.map_request(args.memory_map)
+                    print(f"[delta] memory-map request takes the session's layout: registration {_mreq['registration'][:16]}…, "
+                          f"{len(_mreq['firsts'])} KV layers, {_mreq['blocks']} registered blocks", flush=True)
             if arm != "control":
                 if getattr(args, "padded_finalize", False):
                     # [B9.1] the padding hook runs INSIDE finalize (after the worker drained: every executed step's leaf count / layout is

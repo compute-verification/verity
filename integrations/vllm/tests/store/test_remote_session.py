@@ -441,6 +441,12 @@ def test_a_paced_commits_session_runs_a_step_a_coin_and_tags_each_pass_with_its_
     memory = r["ledger"]["declared"]["memory"]
     assert 0 <= memory["snapshot"]["epsilon"] <= 1
     assert "every pass to read every registered block" in memory["time-held"]["refused"]
+    # the Commit's memory-map request takes the session's runtime layout, so the circuit's map numbers blocks as it does
+    req = tmp_path / "map_request.json"
+    req.write_text(json.dumps({"path": str(tmp_path / "oracle.jsonl"), "registration": "00" * 64}))
+    got = cs.map_request(req)
+    assert got == json.loads(req.read_text()) and got["path"] == str(tmp_path / "oracle.jsonl")
+    assert got["registration"] == mm["registration"] and got["firsts"] == [1] and got["blocks"] == 18
 
 
 def test_a_run_that_ends_before_its_session_fails_the_session(tmp_path, monkeypatch):
