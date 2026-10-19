@@ -151,9 +151,10 @@ def test_call_keys_are_the_fixtures_keys_of(scheme):
 # ---- the run on a recording stand-in for the device ---------------------------------------------------------------
 
 class RecordingDev:
-    """What `run.Pipeline` and the run touch of `run.Dev`, recording each launch (name, stream, pointers, ints)."""
+    """What `run.Pipeline` and the run touch of `run.Dev`, recording each launch (name, stream, pointers, ints).  Its attribute
+    reads (`run.pd_setup`'s) get the RTX PRO 6000's opt-in shared memory and no static shared memory."""
 
-    sms = 188
+    sms, dev = 188, 0
 
     def __init__(self):
         self.stream, self.log, self.n = None, [], 0
@@ -163,6 +164,9 @@ class RecordingDev:
 
     def ck(self, *_):
         pass
+
+    def get(self, f, *_):
+        return {"cuDeviceGetAttribute": 101376, "cuFuncGetAttribute": 0}[f]
 
     def fn(self, name):
         return name
@@ -201,8 +205,8 @@ def device_run():
     return make, kernel, weights, roots, salt
 
 
-PER_CALL = ["s512_row_segs", "s512_folds", "hm_leaves", "s512_frame_leaves", "s512_tree_small", "s512_seeds", "s512_seeds", "lines",
-            "stats_s5", "eprime", "form_s5", "words", "pa", "gemm_pearlc_d", "s512_tile_segs", "s512_folds"]
+#: a decode call's launches (m₁₆ = 32 of 64 rows: run.pd_variant's 851): A's commitment and E_A's lines in one, the tile leaves
+PER_CALL = ["pd_commit_851", "stats_s5", "eprime", "form_s5", "words", "pa", "gemm_pearlc_d", "pd_tiles_851"]
 
 
 def test_each_call_runs_the_pipelines_call_steps_at_its_offset_and_keys(device_run):
@@ -218,9 +222,10 @@ def test_each_call_runs_the_pipelines_call_steps_at_its_offset_and_keys(device_r
         names = [n for n, *_ in dev.log if not n.endswith("_smem")]
         assert names == PER_CALL, names
         by = {n: (p, i) for n, _, p, i in dev.log}
-        assert by["s512_folds"][0][1] == run.leaves.data_ptr() + 64 * before        # the tile leaves' fold, the call's last
+        assert by["pd_tiles_851"][0][2] == run.leaves.data_ptr() + 64 * before      # the tile leaves, the call's last
         assert by["gemm_pearlc_d"][0][4] == y.data_ptr()
         sh = run.shapes[(32, weights[w].shape[0], 1024)]
+        assert by["pd_commit_851"][0][9] == sh.count.data_ptr() and by["pd_commit_851"][1] == (32, 1024, 0, sh.mp)
         index = len(run.cur.matmuls) - 1
         assert PPD._bytes(sh.keys[:168]) == PPD.call_keys(F, salt, roots[w], index, 32, run.tree_hash)
         assert bool((sh.xa[m:] == 0).all()) and torch.equal(sh.xa[:m], x.float())
@@ -251,8 +256,8 @@ def test_under_h4_a_calls_row_digests_read_the_commit_taps_bf16_rows():
     sh = run.shapes[(32, 128, 1024)]
     tap = sh.b["xa16"][:2 * sh.mp * 1024].view(torch.bfloat16).view(sh.mp, 1024)
     assert torch.equal(tap[:20], x) and bool((tap[20:32] == 0).all()) and torch.equal(sh.xa[:32], tap[:32].float())
-    (segs,) = [(p, i) for n, _, p, i in kernel.dev.log if n == "s512_row_segs"]
-    assert segs[0][0] == sh.b["xa16"].data_ptr() and segs[1] == (32, 512)
+    (commit,) = [(p, i) for n, _, p, i in kernel.dev.log if n == "pd_commit_851"]
+    assert commit[0][0] == sh.b["xa16"].data_ptr() and commit[1] == (32, 512, 0, sh.mp)
     salt = run.salt
     assert PPD._bytes(sh.keys[:168]) == PPD.call_keys(F, salt, roots[0], 0, 32, run.tree_hash, tap_binding)
     assert PPD.call_keys(F, salt, roots[0], 0, 32, run.tree_hash, tap_binding) != PPD.call_keys(F, salt, roots[0], 0, 32, run.tree_hash)
@@ -268,8 +273,8 @@ def test_a_call_over_whole_128_row_tiles_runs_the_128_tile_chain(device_run):
     names = [n for n, *_ in kernel.dev.log if not n.endswith("_smem")]
     assert run.pipes[(0, 128, frozenset(), True, "serial", False)][0].bm == 128
     by = {n: p for n, _, p, _ in kernel.dev.log}
-    assert names[-3:] == ["gemm_pearlc", "s512_tile_segs", "s512_folds"] and by["gemm_pearlc"][4] == y.data_ptr()
-    assert by["s512_tile_segs"][:2] == tuple(by["gemm_pearlc"][2:4])
+    assert names[-2:] == ["gemm_pearlc", "pd_tiles_979"] and by["gemm_pearlc"][4] == y.data_ptr()
+    assert by["pd_tiles_979"][:2] == tuple(by["gemm_pearlc"][2:4])
 
 
 def test_nohash_forms_and_multiplies_without_hashing(device_run):
@@ -323,7 +328,7 @@ def test_a_retained_pass_starts_from_poisoned_outputs_and_omit_drops_a_step(devi
     run.omit = frozenset({"hash_leaf"})
     kernel.dev.log.clear()
     run.gemm(0, torch.randn(32, 1024).to(torch.bfloat16), weights[0], None)
-    assert "s512_tile_segs" not in [n for n, *_ in kernel.dev.log] and "gemm_pearlc_d" in [n for n, *_ in kernel.dev.log]
+    assert "pd_tiles_851" not in [n for n, *_ in kernel.dev.log] and "gemm_pearlc_d" in [n for n, *_ in kernel.dev.log]
 
 
 def test_the_e2e_gate_fails_a_device_that_writes_nothing(device_run):
@@ -342,11 +347,17 @@ def test_the_e2e_gate_fails_a_device_that_writes_nothing(device_run):
 # ---- the trees, their hash kernels run on the host ----------------------------------------------------------------
 
 TWIN = load("simt_twin", KERNEL.parent / "pearl_c" / "simt_twin.py")
+HD = load("pearl_c_hash_decode_test", Path(__file__).with_name("test_pearl_c_hash_decode.py"))
 
 
 class TwinDev(RecordingDev):
-    """`RecordingDev` that also runs each hash kernel `simt_twin` builds, thread for thread, at the addresses the pipeline
-    passes: the run's buffers are CPU tensors, so the trees are really computed.  The GEMMs, forming and seed_line_a don't run."""
+    """`RecordingDev` that also runs each hash kernel `simt_twin` builds, thread for thread, and hash_decode.cuh's (`pd`, its
+    host build, with the header tables hash_fast.cuh's s512_heads writes there too), at the addresses the pipeline passes: the
+    run's buffers are CPU tensors, so the trees are really computed.  The GEMMs, forming and seed_line_a don't run."""
+
+    def __init__(self, pd):
+        super().__init__()
+        self.pd = pd
 
     def launch(self, name, grid, block, smem=0, p=(), i=(), stream=None):
         super().launch(name, grid, block, smem, p, i, stream)
@@ -357,6 +368,13 @@ class TwinDev(RecordingDev):
             for j, v in enumerate(i):
                 a.i[j] = v
             getattr(TWIN.build(), f"run_{name}")(ctypes.byref(a), grid, block, smem)
+        if name.startswith("pd_") or name == "s512_heads":
+            a = R.Args()
+            for j, v in enumerate(p):
+                a.p[j] = v
+            for j, v in enumerate(i):
+                a.i[j] = v
+            assert self.pd.pd_run(name.encode(), grid, block, ctypes.byref(a)) == 0, name
 
 
 @pytest.mark.parametrize("scheme", sorted(PPD.SCHEMES))
@@ -381,19 +399,20 @@ def test_the_device_paths_keys_and_tree_hash_are_the_schemes(scheme):
 @pytest.mark.slow
 @pytest.mark.skipif(not (shutil.which("g++") or shutil.which("c++")), reason="simt_twin needs a C++ compiler")
 @pytest.mark.parametrize("scheme", sorted(PPD.SCHEMES))
-def test_every_tree_the_device_path_commits_is_its_hashing_formats(scheme):
+def test_every_tree_the_device_path_commits_is_its_hashing_formats(scheme, tmp_path):
     """B's roots, each call's A root over its m₁₆ rows (filler zero), and the pass's tile tree over the leaves the calls wrote,
-    their kernels run by `simt_twin`: each is `MerkleTree`'s root in hm96-sha512 (frame-v3-sha512 over values salted by the
-    prover's key).  Each call's row digests are hash_fast.cuh's (s512_row_segs, then s512_folds), each `pearl_c.row_digest`
-    of its row; its row seeds are s512_seeds' over them, the scheme's `row_seeds`, with their line keys, which E_A's lines
-    read for the m₁₆ committed rows; and seed_A is the scheme's."""
+    their kernels run by `simt_twin` and hash_decode.cuh's host build: each is `MerkleTree`'s root in hm96-sha512
+    (frame-v3-sha512 over values salted by the prover's key).  A decode call's commitment is pd_commit's: each row digest
+    `pearl_c.row_digest` of its row, the row seeds the scheme's `row_seeds` with their line keys, seed_A the scheme's, and E_A's
+    lines the m₁₆ committed rows' under their own keys and the filler rows' under line_a; its tile leaves (pd_tiles') over
+    the zero C~ and U are `pearl_c.leaf`'s."""
     s = PPD.scheme_of(scheme)
     h, nb, key = s.commitment_hash, 64, SALT_KEY
     rng = np.random.default_rng(5)
     weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16) for w, n in ((0, 256), (1, 128))}
     rows = lambda x: [r.tobytes() for r in x.float().numpy()]  # noqa: E731
     a_rows = (lambda x: [r.tobytes() for r in x.to(torch.bfloat16).view(torch.int16).numpy()]) if s.a_tap else rows  # noqa: E731
-    kernel = PPD.Kernel(R, F, TwinDev(), "0" * 64)
+    kernel = PPD.Kernel(R, F, TwinDev(HD.build(tmp_path)), "0" * 64)
     roots = PPD.weight_roots(kernel, weights, scheme, salt_key=key)
     assert roots == {w: commit_rows(weight_binding(w), -2, rows(t), h, key, HM96_WEIGHTS + w).commitment.root
                      for w, t in weights.items()}
@@ -407,22 +426,23 @@ def test_every_tree_the_device_path_commits_is_its_hashing_formats(scheme):
         kernel.dev.log.clear()
         run.gemm(w, x, weights[w], None)
         names = [n for n, *_ in kernel.dev.log if not n.endswith("_smem")]
-        tree = ["s512_row_segs", "s512_folds", "hm_leaves", "s512_frame_leaves", "s512_tree_small", "s512_seeds", "s512_seeds", "lines"]
-        assert names[:len(tree)] == tree, names
+        assert names[0] == "pd_commit_851" and names[-1] == "pd_tiles_851", names
         sh, index = run.shapes[(32, weights[w].shape[0], 1024)], len(run.cur.matmuls) - 1
         a = torch.zeros((32, 1024), dtype=torch.float32)
         a[:x.shape[0]] = x.float()
         mm = Matmul(index, Shape(32, 1024, weights[w].shape[0]), w)
         ctx = Context(salt, mm, PPD._bytes(run.roots_buf[nb * index:nb * index + nb]), roots[w])
-        want = s.row_seeds(ctx, a_rows(a), range(32))
+        want, seed_a = s.row_seeds(ctx, a_rows(a), range(32)), s.noise(ctx).seed_a
         assert PPD._bytes(sh.b["rowdig_a"][:64 * 32]) == b"".join(C.row_digest(r) for r in a_rows(a))
         assert PPD._bytes(sh.b["seeds_a"][:32 * 32]) == b"".join(want)
         assert PPD._bytes(sh.b["lkeys_a"][:32 * 32]) == b"".join(C.line_key(z) for z in want)
-        assert PPD._bytes(sh.b["seed_a"][:32]) == s.noise(ctx).seed_a
-        (lines_ea,) = [(p, i) for n, _, p, i in kernel.dev.log if n == "lines"]
-        assert lines_ea[0][4] == sh.b["lkeys_a"].data_ptr() and lines_ea[1][2:5] == (sh.mp, R.NORM_256, 32)
-        (_, row_seeds) = [(p, i) for n, _, p, i in kernel.dev.log if n == "s512_seeds"]
-        assert row_seeds[0][0] == sh.b["rowdig_a"].data_ptr() and row_seeds[1][2] == 1
+        assert PPD._bytes(sh.b["seed_a"][:32]) == seed_a
+        assert PPD._bytes(sh.b["ea_codes"][:32 * sh.mp]) == b"".join(
+            bytes(C.sample_line(C.S512Seed(want[t]), 0, 0, 0) if t < 32 else C.sample_line(C.S512Seed(seed_a), 0, 0, t))
+            for t in range(sh.mp))
+        (commit,) = [(p, i) for n, _, p, i in kernel.dev.log if n == "pd_commit_851"]
+        assert commit[0][4] == sh.b["lkeys_a"].data_ptr() and commit[0][12] == sh.b["ea_codes"].data_ptr()
+        assert commit[1] == (32, 512 if s.a_tap else 1024, 0, sh.mp)
     for index, (w, x) in enumerate(calls):
         a = torch.zeros((32, 1024), dtype=torch.float32)
         a[:x.shape[0]] = x.float()
@@ -430,6 +450,8 @@ def test_every_tree_the_device_path_commits_is_its_hashing_formats(scheme):
         assert PPD._bytes(run.roots_buf[nb * index:nb * index + nb]) == want, index
     count = run.cur.tiles
     assert count == 4 + 2
+    zero = C.leaf(C.Checked([[0] * 64] * 32, [[0] * 64] * 32), "h3")
+    assert PPD._bytes(run.leaves[:nb * count]) == zero * count
     leaves = rng.integers(0, 256, nb * count, dtype=np.uint8).tobytes()      # no GEMM ran: every tile's leaf is the same
     run.leaves[:nb * count] = torch.frombuffer(bytearray(leaves), dtype=torch.uint8)
     kernel.dev.log.clear()
@@ -1343,8 +1365,8 @@ def test_the_smoke_starts_both_engines_and_records_a_failure_to_stay_resident(tm
 def test_the_profile_maps_gpu_1s_kernels_to_their_categories(tmp_path):
     PF = load("pearl_c_vllm_profile", KERNEL.parent / "pearl_c_vllm" / "profile_decode.py")
     assert [PF.kernel_category(k) for k in ("gemm_pearlc", "gemm_pearlc_d", "form_s5", "stats_s5", "gemm_words", "s512_rows",
-                                            "hm_leaves", "flash_fwd_kernel", "paged_attention")] == [
-        "gemm", "gemm", "forming", "forming", "forming", "hashing", "hashing", "other", "other"]
+                                            "hm_leaves", "pd_commit_851", "pd_tiles_979", "flash_fwd_kernel", "paged_attention")] == [
+        "gemm", "gemm", "forming", "forming", "forming", "hashing", "hashing", "hashing", "hashing", "other", "other"]
     csvf = tmp_path / "k.csv"
     csvf.write_text('"Time (%)","Total Time (ns)","Instances","Avg (ns)","Name"\n'
                     '50,2000000,10,200000,"gemm_pearlc"\n30,1200000,40,30000,"s512_tile_leaves"\n20,800000,5,160000,"flash_fwd"\n')
@@ -1562,15 +1584,15 @@ def test_the_deferred_schedule_hashes_tiles_on_the_side_stream_from_rotating_set
     for _ in range(3):
         run.gemm(0, torch.randn(32, 1024).to(torch.bfloat16), weights[0], None)
     log = [(n, st, p) for n, st, p, _ in kernel.dev.log if not n.endswith("_smem")]
-    assert [n for n, st, _ in log if st == run.side.raw] == ["s512_tile_segs", "s512_folds"] * 3 and run.side.raw == 1
+    assert [n for n, st, _ in log if st == run.side.raw] == ["pd_tiles_851"] * 3 and run.side.raw == 1
     assert {st for n, st, _ in log if st != run.side.raw} == {main}
     sets = run.shapes[(32, 256, 1024)].sets
     ptr = lambda j: (sets[j]["c"].data_ptr(), sets[j]["u"].data_ptr())
     gemms = [p[2:4] for n, _, p in log if n == "gemm_pearlc_d"]
-    leaves = [p[:2] for n, _, p in log if n == "s512_tile_segs"]
+    leaves = [p[:2] for n, _, p in log if n == "pd_tiles_851"]
     assert gemms == leaves == [ptr(0), ptr(1), ptr(0)] and ptr(0) != ptr(1)
-    scratch = [p[2] for n, _, p in log if n == "s512_tile_segs"]       # each set's own segment scratch (SIDE_IO's writes)
-    assert scratch == [sets[j]["segdig_t"].data_ptr() for j in (0, 1, 0)]
+    out = [p[2] for n, _, p in log if n == "pd_tiles_851"]             # into the pass's leaves, 4 tiles a call
+    assert out == [run.leaves.data_ptr() + 64 * 4 * j for j in range(3)]
     run.begin()
     run.poison()
     assert all(bool((t == 0xA5).all()) for st in sets for t in st.values())
@@ -1649,7 +1671,7 @@ def test_the_schedule_changes_between_passes_and_the_ring_grows_poisoned(device_
     run.gemm(0, torch.randn(32, 1024).to(torch.bfloat16), weights[0], None)
     assert len(sh.sets) == 2 and all(bool((t == 0xA5).all()) for t in sh.sets[1].values())
     assert run.details["schedule"] == {"name": "deferred", "side": ["tile_hash"], "ring": 2, "main": -(1 << 10), "side_lane": 0}
-    assert {st for n, st, _, _ in kernel.dev.log if n == "s512_tile_segs"} == {1} and run.end()["schedule"] == "deferred"
+    assert {st for n, st, _, _ in kernel.dev.log if n == "pd_tiles_851"} == {1} and run.end()["schedule"] == "deferred"
 
 
 def test_the_gates_schedule_check_compares_with_serial_and_keeps_the_runs_schedule(device_run):
@@ -1801,5 +1823,6 @@ def test_the_modes_are_arms_and_the_negative_control_is_a_pass_control(device_ru
         assert run.omit == E2E.CONTROL_OMITS
         stack.apply(sites[0], _Layer(weights[0]), torch.randn(32, 1024).to(torch.bfloat16), None, None)
     names = {n for n, *_ in kernel.dev.log}
-    assert not names & {"s512_tile_segs", "s512_row_segs", "s512_tile_leaves", "s512_rows"} and run.omit == frozenset()
+    assert not names & {"s512_tile_segs", "s512_row_segs", "s512_tile_leaves", "s512_rows", "pd_commit_851", "pd_tiles_851"}
+    assert run.omit == frozenset()
     assert all(c <= set(PPD.CALL_STEPS) for c in E2E.CONTROLS.values())
