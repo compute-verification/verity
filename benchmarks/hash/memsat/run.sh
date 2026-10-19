@@ -33,11 +33,13 @@ fi
 export MODEL
 [ "${SERVE:-}" != node ] || [ -d "$MODEL" ] || { echo "no checkpoint at $MODEL"; exit 3; }
 S=$(mktemp -d /tmp/memsat.XXXXXX); trap 'rm -rf "$S"' EXIT
-sed -e "s#\$RS/engine.py#$M/engine_int8.py#" -e "s#\$RS/node.py#$M/node_paced.py#" benchmarks/remote_session/node.sh \
-  > "$S/node.sh"
+A=${ARCH:-120a}
+sed -e "s#\$RS/engine.py#$M/engine_int8.py#" -e "s#\$RS/node.py#$M/node_paced.py#" \
+  -e "s#compute_120a,code=sm_120a#compute_$A,code=sm_$A#" benchmarks/remote_session/node.sh > "$S/node.sh"
 sed "s#bash \$RS/node.sh#bash $S/node.sh#" benchmarks/remote_session/run.sh > "$S/run.sh"
 grep -q "$M/engine_int8.py" "$S/node.sh" && grep -q "$M/node_paced.py" "$S/node.sh" && grep -q "bash $S/node.sh" "$S/run.sh" \
-  || { echo "run.sh or node.sh no longer runs \$RS/node.sh, \$RS/engine.py or \$RS/node.py: update $M/run.sh"; exit 3; }
+  && grep -q "compute_$A,code=sm_$A" "$S/node.sh" \
+  || { echo "run.sh or node.sh no longer runs \$RS/node.sh, \$RS/engine.py or \$RS/node.py, or builds sm_120a: update $M/run.sh"; exit 3; }
 bash "$S/run.sh"; P=$?
 if [ "${ROLE:-both}" != verifier ] && [ -f "${RESEARCH_RUN_DIR:?}/out/prover.json" ]; then
   python3 $M/summarize.py "$RESEARCH_RUN_DIR/out" --result "$RESEARCH_RUN_DIR/result.json" || { [ $P = 0 ] && P=6; }
