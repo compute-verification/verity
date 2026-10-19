@@ -42,6 +42,7 @@ import Proofs.Flock.Claims.ZK.PrefixLive
 import Proofs.Flock.Claims.ZK.SimSession
 import Proofs.Flock.Claims.ZK.SimInner
 import Proofs.Flock.Claims.ZK.SplitInner
+import Proofs.Flock.Claims.ZK.InnerBatched
 import Proofs.Flock.Claims.ZK.Assemble
 import Proofs.Flock.Claims.ZK.Sent
 import Proofs.Flock.Claims.ZK.Round1

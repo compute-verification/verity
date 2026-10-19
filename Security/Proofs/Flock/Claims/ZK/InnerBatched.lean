@@ -216,9 +216,9 @@ theorem replay_holdsM {st : Flock.Stmt} {tr : Trace} (hT : TableM st tr) (lay : 
     exact hsw _ (cClaim_mem _ _ _ _ _)
 
 /-- **The shared phases' constraints vanish at the honest pads**: at a table and its honest trace (`TableM`) and its
-`--zk` schedule `v`, wherever the shared phases (`innerPre`), answered by `asksS resp` from the empty transcript, return,
-at outer coins that are not `1` and extra claims at points of the table's `m_pts`, every constraint they hand the inner
-proof (the replay's, the two ring-switch rows and the lanes') vanishes at the rep's pads (`replay_holdsM`,
+`--zk` schedule `v`, wherever the shared phases (`innerPre`), answered by `asksS resp` from the empty transcript,
+return, at outer coins that are not `1` and extra claims at points of the table's `m_pts`, every constraint they hand
+the inner proof (the replay's, the two ring-switch rows and the lanes') vanishes at the rep's pads (`replay_holdsM`,
 `lanes_hold`). -/
 theorem innerPre_holds (resp : ℕ → Claims.Msg) (hsh : ByteArray → ByteArray) {st : Flock.Stmt} {tr : Trace}
     (hT : TableM st tr) {v : Schedule × ℕ} (hv : Zk.schedule st.m = .ok v) (rep : ℕ) (dom : ByteArray)
