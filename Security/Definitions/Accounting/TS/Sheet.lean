@@ -22,10 +22,11 @@ The machine model's `DS-NN` vectors are these rows at each device's vendor value
 namespace Accounting.TS
 
 /-- **A device's data sheet** over classes `K` and pipes `P`: its maximum boost clock `fmax`; per class, the dense
-tensor MACs `macs k` one warp instruction does (`0` off the tensor pipe; a sparse form at its dense equivalent), the
-sheet's dense MACs an SM clock `peak k` for its operand type, the Nsight Compute pipe `pipe k` it issues to (`none`:
-issue only) and the shared-memory bank bytes `smem k` it holds at least (`0` off shared memory); per pipe, the Programming Guide's results an SM clock
-`width p`. -/
+tensor MACs `macs k` one warp instruction does (`0` off the tensor pipe; a sparse form at its dense equivalent; a
+tensor form whose operand type the sheet doesn't rate has `macs = 0`, so it costs issue only), the sheet's dense MACs
+an SM clock `peak k` for its operand type, the Nsight Compute pipe `pipe k` it issues to (`none`: issue only) and the
+shared-memory bank bytes `smem k` it holds at least (`0` off shared memory); per pipe, the Programming Guide's results
+an SM clock `width p`. -/
 structure Sheet (K P : Type) where
   fmax : ℝ
   macs : K → ℝ
