@@ -38,6 +38,10 @@ the larger of two branches':
 * the folded branch's `ε_jl` at `p = 7/8`;
 * the unfolded branch's `(N_w w* + N_w φ*)/B_♭ · ln(1/δ′)/(ln 2 · S)`.
 
+The `2^-40` event is split in two: binding and soundness cost at most `2^-41` over the window, and the luck's tail is
+`δ′ = 2^-41`, so both branches' logarithm is `ln(1/δ′) = 41 ln 2`. Compose (#2638) puts its logarithm at its
+`δ_s = 2^-40` instead; at this convention its 0.744% is 0.748% (RT-INT's N3, note:20261019T0528Z-draft-rt-int).
+
 The unfolded branch binds on sm_120's sheet (`0.656%`); on sm_120's measured vector the folded branch binds
 (`0.591%`). `ProofLayer.Pins` is met by main's circuit Definitions since PIN (#2417).
 
