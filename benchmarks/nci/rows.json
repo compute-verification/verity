@@ -26,7 +26,7 @@
    "d": 1536,
    "path": "per layer q_a (7168 to 1536), q_b (1536 to 12288), o (8192 to 7168), shared-expert up (7168 to 2048) and down (2048 to 7168), forward only: 118M of the layer's 500M updated products, 7.2e9 per token over 61 layers. The routed experts and the backward pass are outside it: a chain names one weight per layer, so a backward layer would charge the forward's weights twice. kappa = 2 x 7.2e9 / 1.92e11."
   },
-  "notes": "kappa = 4 of 6 flops per parameter per token multiply a weight by an activation. U = 1.04e12 x 2.5 bits; U_token = active 3.2e10 x 2.5. d = 2048 (routed-expert width, the smallest inner dimension); e = 4e4 (the thread draft's MoE estimate). w_cut = 7168 x 4 bits.",
+  "notes": "kappa = 4 of 6 flops per parameter per token multiply a weight by an activation. U = 1.04e12 x 2.5 bits; U_token = active 3.2e10 x 2.5. d = 2048 (routed-expert width; MLA's kv latent, 512, is narrower); e = 4e4 (the thread draft's MoE estimate, above an MoE input value's 37,248 but below the LM head's 163,840, whose forward products kappa still counts). w_cut = 7168 x 4 bits.",
   "sources": [
    "tseng-2024-qtip"
   ],

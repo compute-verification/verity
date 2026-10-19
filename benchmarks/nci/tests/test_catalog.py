@@ -1,4 +1,5 @@
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -38,6 +39,26 @@ def test_problems_catches_a_missing_quote_and_a_dangling_citation(tmp_path):
 def test_every_row_has_a_calibration_of_its_model():
     models = {c["model"] for c in catalog.load("calibrations")}
     assert {r["model"] for r in catalog.load("rows")} <= models
+
+
+def test_a_calibration_quotes_its_models_fanout():
+    models = {m["id"]: m for m in json.loads((NCI / "models.json").read_text())}
+    for c in catalog.load("calibrations"):
+        for e in re.findall(r"\be = ([0-9][0-9.e+]*)", c["description"]):
+            assert float(e) == models[c["model"]]["fanout"], c["id"]
+
+
+def test_kimi_k2_fanout_covers_every_activation_but_the_lm_head():
+    """From Kimi K2's config.json: an MoE input value multiplies the router's 384 rows and gate and up (2048 each) of
+    the shared expert and 8 routed experts; layer 0's dense MLP input multiplies gate and up (18432 each); a kv latent
+    value multiplies 64 heads of k_nope and v (128 each). One final hidden value multiplies all 163840 LM-head rows,
+    which ``fanout`` does not cover."""
+    kimi = {m["id"]: m for m in json.loads((NCI / "models.json").read_text())}["kimi-k2"]
+    moe_input = 384 + 2 * 2048 * (1 + 8)
+    dense_mlp_input = 2 * 18432
+    kv_latent = 64 * (128 + 128)
+    assert max(moe_input, dense_mlp_input, kv_latent) <= kimi["fanout"] < 163840
+    assert "LM head" in kimi["note"]
 
 
 def test_cited_theorems_are_guarantees_in_the_lock():
