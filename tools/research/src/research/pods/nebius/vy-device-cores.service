@@ -1,0 +1,11 @@
+[Unit]
+Description=keep everything but vy-device's scopes off vy-nebius-2's device cores 120-127 from boot (pods/nebius/device_cores.sh; its settings are runtime only)
+After=systemd-sysctl.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/vy-device-cores
+
+[Install]
+WantedBy=multi-user.target
