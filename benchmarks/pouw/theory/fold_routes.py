@@ -25,9 +25,10 @@ The decisive structural fact. A certificate that binds **issue** prices every in
    LEA.HI, the funnel shifts SHF.L/R, PRMT) shows each fold step is no single instruction of its inputs: li's half step
    and the keyed round each need 2, so li is at least 1 a word and a keyed round at least 2 (fx1's 4 is
    `fold_opt_fx.py`'s, run beside this).
-3. The B200's pipe question, settled directly: li's ALU work is XOR only, and an XOR of two words (or of a word and a
-   key) is no single instruction of the IMAD pipe or the FP pipe, so none of it can leave the ALU pipe. duo's rotate-add
-   can (it is IMAD + IMAD.HI), which is why sm_80 breaks and the B200 doesn't.
+3. The B200's pipe question, one instruction deep: li's ALU work is XOR only, and an XOR of two words (or of a word and
+   a key) is no single instruction of the IMAD pipe or the FP pipe. duo's rotate-add is (IMAD + IMAD.HI), which is why
+   sm_80 breaks. Deeper, a keyed round's XOR with its constant key IS an IMAD-pipe program (1 + 2 instructions a bit
+   change of the key), which the B200 sheet's π* prices under its LOP3: `fold_min.py` has it and the re-solve.
 
 Run: `python fold_routes.py [--mutations] [--verdict PATH]`. Stdlib, exact_kit and `segment` (the reference folds).
 """
@@ -398,11 +399,12 @@ def main() -> int:
     ck.check("sm_80's ALU certificate prices the IMAD route under duo's own (RT-LOGIC-10 reproduced at the price level)",
              price({"ALU": 1, "IMAD": 3}, alu_only) < price({"ALU": 2, "IMAD": 1}, alu_only),
              f"{price({'ALU': 1, 'IMAD': 3}, alu_only)} vs {price({'ALU': 2, 'IMAD': 1}, alu_only)}")
-    # the B200: at π* (ALU 0.975) only a move of ALU work could undercut, and section 3 shows li's ALU work is XOR,
-    # which has no other pipe; the cheapest bit-exact li is the honest one
+    # the B200: at π* (ALU 0.975) only a move of ALU work could undercut. li's ALU work is XOR; the keyed rounds' XOR is
+    # with a constant, which has a multi-instruction IMAD-pipe program that undercuts there (fold_min.py)
     b = DEVICES["sm_100"]
     ck.check("B200 (π* ALU 0.975): honest li heavy's ALU work is all XOR (0.90625 a word: li 0.5, checkpoint 0.03125, "
-             "keyed rounds 0.375), so no route lowers its ALU price", abs(b["honest"]["ALU"] - (0.5 + 0.03125 + 0.375)) < 1e-12)
+             "keyed rounds 0.375); no single IMAD-pipe instruction writes one (section 3), and the keyed rounds' 0.375 "
+             "XOR a constant, which fold_min.py moves to the IMAD pipe in 25 or more", abs(b["honest"]["ALU"] - (0.5 + 0.03125 + 0.375)) < 1e-12)
     # the H200: issue-bound, li at 1 a word is the least (section 2); the cliff is 0.922 a word (RT-HOPPER-2)
     ck.check("H200 (π* issue): li's least is 1 instruction a word at the core, above the 0.922 cliff by 8.5%",
              1.0 > 0.922, "the model's 1.0547 adds the checkpoint's 4 LOP3 and one redux a 128 words")
