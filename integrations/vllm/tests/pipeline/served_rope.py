@@ -29,8 +29,9 @@ CHUNK = 64
 HEADS = 2 * 4 * (3 + 1)       # 2 requests x 4 tokens (2 prefill + 2 decode) x (3 query + 1 key heads)
 
 
-def commit(root: Path) -> dict:
-    """The deferred Commit's output dir, its row dir and the verifier's partition file under ``root``, and the world that served it."""
+def commit(root: Path, *, of_record: bool = True) -> dict:
+    """The deferred Commit's output dir, its row dir and the verifier's partition file under ``root``, and the world that served it.
+    ``of_record=False`` commits under the committer's ``vllm-v1`` root, as a TP rank still does."""
     import tests.check.test_sampled_replay as T
     from tests.check.opened import commit_members
     from verity_vllm.commit import store_dump as SD
@@ -48,7 +49,7 @@ def commit(root: Path) -> dict:
         prompts = {"r0": [1, 2], "r1": [5, 3]}
         world = T.Honest(inst, woff, w, prompts)
         bmap, _ = world.bmap_and_reader()
-        com, rc = commit_members(dict(sorted(world.store.items())), of_record=True)
+        com, rc = commit_members(dict(sorted(world.store.items())), of_record=of_record)
         CH.draw_live(rc)
     finally:
         T.DH = dh
@@ -78,7 +79,7 @@ def commit(root: Path) -> dict:
     sr, lk = RB.deferred_records(RB.path(out, 1))
     row = {"pair": 1, "arm": "instrumented", "commit": {"run_root": rc.run_root.hex(), "commit_pass": None, "sampled_replay": sr,
                                                         "boundary_linkage": lk, "weight_registration": {"root": wroot},
-                                                        "extra": {k: rc.extra[k] for k in ("challenge", "committer_root", "record")}}}
+                                                        "extra": {k: rc.extra[k] for k in ("challenge", "committer_root", "record") if k in rc.extra}}}
     reqs = [{"request_id": rid, "index": k, "prompt_token_ids": pr, "max_tokens": 3, "arrive_step": 0} for k, (rid, pr) in enumerate(prompts.items())]
     ctx = {"pair": 1, "run_root": rc.run_root.hex(), "requests": reqs, "sampling": {"max_tokens": 3}, "code": "test",
            "args": {"program_dir": "/served/build_request", "programs_root": None, "program_digest": inst["digest"],
