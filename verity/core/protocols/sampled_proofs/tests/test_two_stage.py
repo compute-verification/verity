@@ -11,7 +11,7 @@ import pytest
 
 from verity.ml.circuits.partition import Level
 from verity.core.protocols.profile import Bernoulli, IntegrityProfile, Stratified, Stratum, Subset
-from verity.core.protocols.sampled_proofs.one_stage import audit, draw as D
+from verity.core.protocols.sampled_proofs.one_stage import audit, draw as D, verifier as V
 from verity.core.protocols.sampled_proofs.two_stage import (REPLAY, OwnRandomness, ReplayUnit, Stage, TwoStageLaw,
                                                                     check_probability, closure_of, draw_first,
                                                                     select_proof_units, select_replay_units)
@@ -373,11 +373,11 @@ def test_draw_first_refuses_what_lean_refuses():
             draw_first(_seeded(0), law, n)
 
 
-def test_the_stages_draw_from_the_verifiers_own_randomness():
+def test_the_stages_draw_from_the_lean_verifiers_coins():
     units = _units(8000)
-    picked = select_replay_units(OwnRandomness(), LAW, units)
+    picked = select_replay_units(OwnRandomness(V.coins), LAW, units)
     assert abs(len(picked) - 2000) < 5 * (8000 * 3 / 16) ** 0.5
-    picks = select_proof_units(OwnRandomness(), LAW, [ReplayUnit(0, "decode", 6), ReplayUnit(1, "prefill", 5)])
+    picks = select_proof_units(OwnRandomness(V.coins), LAW, [ReplayUnit(0, "decode", 6), ReplayUnit(1, "prefill", 5)])
     assert len(picks[0]) == 2 and len(set(picks[0])) == 2 and picks[1] == (0, 1, 2, 3, 4)
-    d = draw_first(OwnRandomness(), _work(), 10)
+    d = draw_first(OwnRandomness(V.coins), _work(), 10)
     assert D.check_draw(d, {"population": 10}, _work()).ok
