@@ -290,6 +290,17 @@ theorem zOf_traces (sts : Array Stmt) (w : Claims.Flock.Wit) {j : ℕ} (hj : j <
     ← List.getD_eq_getElem?_getD, Flock.Readable.tableWit_getD hj]
   rfl
 
+/-- `layerOf` reads its leaves below `2^d` only. -/
+theorem layerOf_congr (nd : ByteArray → ByteArray → ByteArray) (d : ℕ) {f g : ℕ → ByteArray}
+    (h : ∀ q < 2 ^ d, f q = g q) : ∀ k, layerOf nd d f k = layerOf nd d g k
+  | 0 => by
+    show (Array.range (2 ^ d)).map f = (Array.range (2 ^ d)).map g
+    refine Array.ext (by simp) fun i h1 _ => ?_
+    simp only [Array.getElem_map, Array.getElem_range]
+    exact h i (by simpa using h1)
+  | k + 1 => by
+    simp only [layerOf, layerOf_congr nd d h k]
+
 end FlockComplete
 
 /-! ## The `--zk` schedule's level 0 -/
@@ -469,5 +480,59 @@ theorem enc0_causal (P : Composed.LigProver) (x : Msg) (cz cz' : ∀ j, Composed
     · simp only [leafAt, hq, ↓reduceDIte]
   unfold enc0
   simp only [h]
+
+/-! ## Round `0`'s honest message -/
+
+/-- **A layout agrees with the executable at round `0`**: at every statement's table `j`, the masked prover's tape
+(`TapePlan.ofLayout`'s `tapeZk`, here `z`'s) holds the lanes' paddings, the extra lanes and their paddings at the
+executable's indices (`encodeRowsZk`: extra lane `e`'s padding at `2^lanes + e`), and level 0's salts, that the model's
+base and leaves' salts hold. -/
+structure Agrees0 (P : Composed.LigProver) (L : TapeLayout P)
+    (z : (Fin Claims.Flock.zkTableCap → L.Cell) → FlockComplete.TapeZk) : Prop where
+  pad : ∀ x t (j : Fin (jOf x)) (l : Fin (tabC P x j).z.nL) (k : Fin (tabC P x j).z.tpad),
+    (((TapePlan.ofLayout L z).tape x t).1 j).2.1.1 l k = fOf ((z t).lanePad j.val l.val k.val)
+  ext : ∀ x t (j : Fin (jOf x)) (r i : Fin 2) (c : Fin (tabC P x j).z.L),
+    (((TapePlan.ofLayout L z).tape x t).1 j).2.1.2.1 r i c = fOf ((z t).extra j.val (2 * r.val + i.val) c.val)
+  extPad : ∀ x t (j : Fin (jOf x)) (r i : Fin 2) (k : Fin (tabC P x j).z.tpad),
+    (((TapePlan.ofLayout L z).tape x t).1 j).2.1.2.2 r i k =
+      fOf ((z t).lanePad j.val (2 ^ (lv0 x j).lanes + (2 * r.val + i.val)) k.val)
+  salt : ∀ x t (j : Fin (jOf x)) (p : Fin ((tabC P x j).z.nS + (tabC P x j).z.nU)),
+    ZkView.saltBytes (((TapePlan.ofLayout L z).tape x t).2.1 ⟨j, .inl p⟩) =
+      FlockComplete.fitBytes 192 ((z t).toTape.salt j.val 0 0 p.val)
+
+/-- **Table `j`'s lanes at a layout's tape are the executable's packed table**: lane `l`'s column `c` is word
+`c·2^lanes + l` of `tablesP` at the traces of the witness with its mask slots the tape's (`zOf_ofLayout`). -/
+theorem lanes_tabC (P : Composed.LigProver) (L : TapeLayout P)
+    (z : (Fin Claims.Flock.zkTableCap → L.Cell) → FlockComplete.TapeZk) {x : Msg} (w : Claims.Flock.Wit)
+    (t : Fin Claims.Flock.zkTableCap → L.Cell) (j : Fin (jOf x)) (c : Composed.CoinsZK (tabC P x j).Rest)
+    (l : Fin (tabC P x j).z.nL) (col : Fin (tabC P x j).z.L) :
+    ((tabC P x j).T c).lanes (wtOf P x w j) (((TapePlan.ofLayout L z).tape x t).1 j).1 l col =
+      fOf ((FlockComplete.tablesP (FlockDeploy.tabsOf (stsOf x)) (FlockComplete.ZkTables.traces (stsOf x)
+        (FlockComplete.ZkTables.maskWOf x w ((TapePlan.ofLayout L z).tapeZk t).mask)))[j.val]!)[col.val *
+          2 ^ (lv0 x j).lanes + l.val]! := by
+  obtain ⟨hnL, hL, -, -, -, hm⟩ := tabC_z P x j
+  have hj := lt_of_jOf j
+  rw [show ((tabC P x j).T c).lanes = fun w u l col =>
+      Composed.wordOf (Composed.zWith (stAt x j) w u) (l.val + (tabC P x j).z.nL * col.val) from
+    Composed.coinedOf_lanes P (zkTab x j).table (stAt x j) c]
+  show Composed.wordOf (Composed.zWith (stAt x j) (wtOf P x w j) (((TapePlan.ofLayout L z).tape x t).1 j).1)
+    (l.val + (tabC P x j).z.nL * col.val) = _
+  rw [← zOf_ofLayout L z x t w j,
+    show (tabC P x j).z.nL * col.val = 2 ^ (lv0 x j).lanes * col.val by rw [hnL]]
+  have hy : l.val + 2 ^ (lv0 x j).lanes * col.val < 2 ^ ((tabC P x j).S.m - 7) := by
+    have h1 : l.val < 2 ^ (lv0 x j).lanes := lt_of_lt_of_eq l.isLt hnL
+    have h2 : col.val < 2 ^ (lv0 x j).cols := lt_of_lt_of_eq col.isLt hL
+    rw [← hm, show (lv0 x j).lanes + (lv0 x j).cols + 7 - 7 = (lv0 x j).lanes + (lv0 x j).cols by omega, pow_add]
+    calc l.val + 2 ^ (lv0 x j).lanes * col.val < 2 ^ (lv0 x j).lanes * (col.val + 1) := by rw [mul_add]; omega
+      _ ≤ 2 ^ (lv0 x j).lanes * 2 ^ (lv0 x j).cols := Nat.mul_le_mul_left _ h2
+  rw [FlockComplete.wordOf_packed (M := (tabC P x j).S.m) _ (Flock.Readable.zOf (stsOf x).size
+    (FlockComplete.ZkTables.maskWOf x w ((TapePlan.ofLayout L z).tapeZk t).mask) j.val (tabC P x j).S.m)
+    (fun a => FlockComplete.zOf_traces (stsOf x) _ hj a) hy (by omega)]
+  rw [FlockComplete.tablesP, FlockSoundness.Refine.getElem!_range_map _ (by simpa [FlockDeploy.tabsOf] using hj)]
+  have e : (FlockDeploy.tabsOf (stsOf x))[j.val]!.m = (tabC P x j).S.m := by
+    rw [getElem!_pos _ _ (by simpa [FlockDeploy.tabsOf] using hj)]
+    simp [FlockDeploy.tabsOf, _root_.Flock.Setup.ofCircuit]
+    rfl
+  rw [e, Nat.add_comm, Nat.mul_comm]
 
 end Claims.ZKMal.Masked
