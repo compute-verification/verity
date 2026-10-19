@@ -109,3 +109,10 @@ def test_a_row_counts_its_cyclic_calls_and_their_share(tmp_path):
     assert again["totals"] == t and again["source"] == {"cached": 3}
     md = AC.render([r])
     assert "| toy | 3 | 1 | 33.33% / 33.33% / " in md and "AcyclicToyXZY_v0 (1)" in md
+
+    part = AC.analyze_descriptor(path, AC.Cycles(gates_below=2), "toy")
+    pt = part["totals"]
+    assert (pt["calls"], pt["units"], pt["cyclic_calls"], pt["pending_definitions"], pt["pending_calls"]) == (3, 1, 0, 2, 2)
+    assert "(2 Definitions, 2 Calls pending)" in AC.render([part])
+    merged = AC.merge(json.loads(json.dumps(part)), [log])
+    assert {k: merged["totals"][k] for k in t} == t and merged["cyclic_families"] == r["cyclic_families"]

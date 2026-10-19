@@ -237,21 +237,23 @@ class Cycles:
     `jobs` forked processes as POPREAD's `Units` cuts them: Definitions of `PR.BIG_GATES` or more one at a time, their graph
     resolved by all the jobs, the rest one per job.  Each result is appended to `log` as it lands."""
 
-    def __init__(self, rules: Iterable[str | Path] = (), log: str | Path | None = None, jobs: int = 1) -> None:
-        self.cache: dict[str, dict[str, Any]] = {}
-        for p in rules:
-            for line in Path(p).read_text().splitlines():
-                if line.strip():
-                    d = json.loads(line)
-                    self.cache.setdefault(d["digest"], d)
-        self.log, self.jobs = log, jobs
+    def __init__(self, rules: Iterable[str | Path] = (), log: str | Path | None = None, jobs: int = 1,
+                 gates_below: int | None = None) -> None:
+        self.cache = load_logs(rules)
+        self.log, self.jobs, self.gates_below = log, jobs, gates_below
         self.counts = Counter()
 
-    def of(self, fns: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    def of(self, fns: dict[str, Any]) -> dict[str, str]:
+        """name -> the `definition_digest` of `fns[name]`, each digest's result in `cache` unless its Definition has `gates_below`
+        gates or more (pending)."""
         from verity_vllm.query.word import definition_digest
         digest = {fn.id: definition_digest(fn) for fn in fns.values()}
         todo = {fn.id: fn for fn in fns.values() if digest[fn.id] not in self.cache}
         self.counts["cached"] += len({fn.id for fn in fns.values()}) - len(todo)
+        if self.gates_below is not None:
+            held = {i for i, fn in todo.items() if fn.gates >= self.gates_below}
+            self.counts["pending"] += len(held)
+            todo = {i: fn for i, fn in todo.items() if i not in held}
         for r in self._run(sorted(todo.values(), key=lambda fn: -fn.gates)):
             r["digest"] = digest[r["definition"]]
             self.cache[r["digest"]] = r
@@ -261,7 +263,7 @@ class Cycles:
                     f.write(json.dumps(r) + "\n")
             print(f"acyclic: {r['units']:>10,} units {r['sccs']:>8,} cyclic components {r['gates']:>12,} gates {r['seconds']:>8}s "
                   f"{r['definition'][:110]}", file=sys.stderr, flush=True)
-        return {name: self.cache[digest[fn.id]] for name, fn in fns.items()}
+        return {name: digest[fn.id] for name, fn in fns.items()}
 
     def _run(self, todo: list[Any]) -> Iterator[dict[str, Any]]:
         import multiprocessing
@@ -286,44 +288,71 @@ class Cycles:
             gc.unfreeze()
 
 
-def summarize(name: str, apps: Counter, defs: dict[str, Any], per: dict[str, dict[str, Any]], extra: dict[str, Any]) -> dict:
-    """A row's report from `apps` (Calls per Definition name), the Definitions and their `cycles`."""
+def load_logs(paths: Iterable[str | Path]) -> dict[str, dict[str, Any]]:
+    """digest -> `cycles` result, from `--log` JSONL files (the first result per digest)."""
+    out: dict[str, dict[str, Any]] = {}
+    for p in paths:
+        for line in Path(p).read_text().splitlines():
+            if line.strip():
+                d = json.loads(line)
+                out.setdefault(d["digest"], d)
+    return out
+
+
+def entries(apps: Counter, defs: dict[str, Any], digest: dict[str, str]) -> list[dict[str, Any]]:
+    """Per distinct Definition of a row: its id, digest, Calls and gates per activation."""
+    return [{"definition": defs[s].id[:240], "digest": digest[s], "calls": n, "gates": defs[s].gates} for s, n in apps.items()]
+
+
+def summarize(name: str, defs: list[dict[str, Any]], per: dict[str, dict[str, Any]], extra: dict[str, Any]) -> dict:
+    """A row's report from its `entries` and the `cycles` result per digest; a Definition without one is pending (its units
+    unknown, its Calls and gates counted under `pending`)."""
     fams: dict[str, dict[str, Any]] = {}
     T = Counter()
-    for spec, n in apps.items():
-        fn, r = defs[spec], per[spec]
-        f = fams.setdefault(PR.base(fn.id), {"family": PR.base(fn.id), "calls": 0, "gates": 0, "units": 0, "cyclic_calls": 0,
-                                             "cyclic_gates": 0, "cyclic_units": 0, "sccs": 0, "scc_units": 0, "max_scc": 0,
-                                             "sizes": Counter(), "definitions": 0, "cyclic_definitions": 0, "example": None})
+    for e in defs:
+        n, gates, r = e["calls"], e["gates"], per.get(e["digest"])
+        fam = PR.base(e["definition"])
+        f = fams.setdefault(fam, {"family": fam, "calls": 0, "gates": 0, "units": 0, "cyclic_calls": 0, "cyclic_gates": 0,
+                                  "cyclic_units": 0, "sccs": 0, "scc_units": 0, "max_scc": 0, "sizes": Counter(), "definitions": 0,
+                                  "cyclic_definitions": 0, "pending_definitions": 0, "pending_calls": 0, "example": None})
         f["calls"] += n
-        f["gates"] += n * fn.gates
-        f["units"] += n * r["units"]
+        f["gates"] += n * gates
         f["definitions"] += 1
-        T.update(calls=n, gates=n * fn.gates, units=n * r["units"])
+        T.update(calls=n, gates=n * gates)
+        if r is None:
+            f["pending_definitions"] += 1
+            f["pending_calls"] += n
+            T.update(pending_definitions=1, pending_calls=n, pending_gates=n * gates)
+            continue
+        f["units"] += n * r["units"]
+        T.update(units=n * r["units"])
         if r["sccs"]:
             f["cyclic_definitions"] += 1
             f["cyclic_calls"] += n
-            f["cyclic_gates"] += n * fn.gates
+            f["cyclic_gates"] += n * gates
             f["cyclic_units"] += n * r["units"]
             f["sccs"] += n * r["sccs"]
             f["scc_units"] += n * r["scc_units"]
             f["max_scc"] = max(f["max_scc"], r["max_scc"])
             for s, c in r["sizes"].items():
                 f["sizes"][s] += n * c
-            T.update(cyclic_calls=n, cyclic_gates=n * fn.gates, cyclic_units=n * r["units"], sccs=n * r["sccs"],
+            T.update(cyclic_calls=n, cyclic_gates=n * gates, cyclic_units=n * r["units"], sccs=n * r["sccs"],
                      scc_units=n * r["scc_units"])
-            if f["example"] is None or fn.gates < f["example"]["gates"]:
-                f["example"] = {"definition": fn.id[:240], "gates": fn.gates, "units": r["units"], **r["example"]}
+            if f["example"] is None or gates < f["example"]["gates"]:
+                f["example"] = {"definition": e["definition"], "gates": gates, "units": r["units"], **r["example"]}
     rows = sorted(fams.values(), key=lambda f: (-f["cyclic_units"], -f["units"]))
     for f in rows:
         f["sizes"] = dict(sorted(f["sizes"].items(), key=lambda kv: int(kv[0])))
-    tot = {k: T[k] for k in ("calls", "gates", "units", "cyclic_calls", "cyclic_gates", "cyclic_units", "sccs", "scc_units")}
+    tot = {k: T[k] for k in ("calls", "gates", "units", "cyclic_calls", "cyclic_gates", "cyclic_units", "sccs", "scc_units",
+                             "pending_definitions", "pending_calls", "pending_gates")}
     tot.update(share_calls=T["cyclic_calls"] / T["calls"] if T["calls"] else 0.0,
                share_units=T["cyclic_units"] / T["units"] if T["units"] else 0.0,
                share_gates=T["cyclic_gates"] / T["gates"] if T["gates"] else 0.0,
                share_scc_units=T["scc_units"] / T["units"] if T["units"] else 0.0)
+    keep = ("units", "sccs", "scc_units", "max_scc", "sizes", "example")
+    out_defs = [dict(e, result=None if (r := per.get(e["digest"])) is None else {k: r[k] for k in keep}) for e in defs]
     return {"schema": SCHEMA, "name": name, **extra, "totals": tot, "families": rows,
-            "cyclic_families": [f["family"] for f in rows if f["cyclic_calls"]]}
+            "cyclic_families": [f["family"] for f in rows if f["cyclic_calls"]], "definitions": out_defs}
 
 
 def analyze_descriptor(path: str | Path, helper: Cycles, name: str) -> dict[str, Any]:
@@ -338,7 +367,7 @@ def analyze_descriptor(path: str | Path, helper: Cycles, name: str) -> dict[str,
             raise QueryInapplicable(f"root node {k} is not a call or primitive node", {"call": k, "definition": fn.id})
     defs = {fn.id: fn for _k, fn in calls}
     per = helper.of(defs)
-    return summarize(name, Counter(fn.id for _k, fn in calls), defs, per,
+    return summarize(name, entries(Counter(fn.id for _k, fn in calls), defs, per), helper.cache,
                      {"adapter": "descriptor/v1", "topological": order is None, "order_violation": order,
                       "source": dict(helper.counts)})
 
@@ -374,8 +403,19 @@ def analyze_served(path: str | Path, helper: Cycles, name: str) -> dict[str, Any
     build = json.loads(Path(path).read_text())
     apps, defs = served_apps(build)
     per = helper.of(defs)
-    return summarize(name, apps, defs, per, {"adapter": "P_served", "program_digest": build.get("program_digest"),
-                                             "topological": None, "source": dict(helper.counts)})
+    return summarize(name, entries(apps, defs, per), helper.cache, {"adapter": "P_served", "program_digest": build.get("program_digest"),
+                                                                     "topological": None, "source": dict(helper.counts)})
+
+
+def merge(report: dict[str, Any], logs: Iterable[str | Path]) -> dict[str, Any]:
+    """`report` resummarized with the results of `logs` (other runs' `--log`s) for its pending Definitions."""
+    per = {e["digest"]: e["result"] for e in report["definitions"] if e["result"] is not None}
+    for d, r in load_logs(logs).items():
+        per.setdefault(d, r)
+    extra = {k: v for k, v in report.items() if k not in ("schema", "name", "totals", "families", "cyclic_families", "definitions")}
+    extra["merged_logs"] = [str(p) for p in logs]
+    return summarize(report["name"], [{k: e[k] for k in ("definition", "digest", "calls", "gates")} for e in report["definitions"]],
+                     per, extra)
 
 
 def _pct(x: float) -> str:
@@ -388,8 +428,10 @@ def render(reports: Iterable[dict[str, Any]]) -> str:
     for r in reports:
         t = r["totals"]
         fams = ", ".join(f"{f['family']} ({f['cyclic_calls']:,})" for f in r["families"] if f["cyclic_calls"]) or "-"
-        out.append(f"| {r['name']} | {t['calls']:,} | {t['cyclic_calls']:,} | {_pct(t['share_calls'])} / {_pct(t['share_units'])} / "
-                   f"{_pct(t['share_gates'])} | {t['sccs']:,} ({t['scc_units']:,}) | {fams} |")
+        pend = (f" ({t['pending_definitions']:,} Definitions, {t['pending_calls']:,} Calls pending)"
+                if t.get("pending_definitions") else "")
+        out.append(f"| {r['name']} | {t['calls']:,} | {t['cyclic_calls']:,}{pend} | {_pct(t['share_calls'])} / "
+                   f"{_pct(t['share_units'])} / {_pct(t['share_gates'])} | {t['sccs']:,} ({t['scc_units']:,}) | {fams} |")
     out.append("")
     for r in reports:
         for f in r["families"]:
@@ -417,6 +459,12 @@ def main(argv: list[str] | None = None) -> int:
         x.add_argument("--jobs", type=int, default=1)
         x.add_argument("--log", default=None, help="append each Definition's result here (JSONL) as it lands")
         x.add_argument("--rules", action="append", default=[], help="an earlier --log to reuse results from (repeatable)")
+        x.add_argument("--gates-below", type=int, default=None, metavar="G",
+                       help="compute only Definitions of fewer than G gates; the rest stay pending (see `merge`)")
+    m = sub.add_parser("merge", help="fill a report's pending Definitions from other runs' --logs, without loading the Program")
+    m.add_argument("report")
+    m.add_argument("--rules", action="append", default=[], required=True)
+    m.add_argument("--out", required=True)
     t = sub.add_parser("table")
     t.add_argument("reports", nargs="+")
     t.add_argument("--md", default=None)
@@ -427,7 +475,10 @@ def main(argv: list[str] | None = None) -> int:
             Path(a.md).write_text(md + "\n")
         print(md)
         return 0
-    helper = Cycles(a.rules, a.log, a.jobs)
+    if a.cmd == "merge":
+        Path(a.out).write_text(json.dumps(merge(json.loads(Path(a.report).read_text()), a.rules), indent=1))
+        return 0
+    helper = Cycles(a.rules, a.log, a.jobs, a.gates_below)
     r = (analyze_descriptor if a.cmd == "descriptor" else analyze_served)(a.path, helper, a.name)
     Path(a.out).write_text(json.dumps(r, indent=1))
     t = r["totals"]
