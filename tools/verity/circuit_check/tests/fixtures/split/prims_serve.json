@@ -2201,6 +2201,5 @@
    "definition",
    "VerifyBranch_v1{C={31c87bbeabe0},LP=3,K=2}"
   ]
- ],
- "tool": "integrations/vllm/tools/migrate/split_prims_serve.py"
+ ]
 }

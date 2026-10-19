@@ -1,6 +1,5 @@
 {
  "family": "dense",
- "tool": "integrations/vllm/tools/migrate/split_dense.py",
  "definitions": {
   "AddScalarBf16Element_v1{K=1065353216}": "fbca55f114e6e997ffbdd8902d7936240221aca79fb3068b6cac555d258301ef4eda8e440ebe32276a7d1caf3e9063a1ad43374f5735f35c66e859eb65406581",
   "AddScalarBf16_v1{N=16,C=0.5}": "5d5e38012e3fee24afa1e8d819aab9603f3cb1851ed47377befa16564fd91c827bc28282defdd302648a6fab95585a29d030c7e2244f85e4f3e21f864192880a",
