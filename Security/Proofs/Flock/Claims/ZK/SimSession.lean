@@ -53,20 +53,20 @@ theorem asksCut_link_go (coin : ℕ → ℕ → _root_.Flock.F128) (n : ℕ) (a 
     ((asksCut coin n).link a b).go l =
       (if n ≤ l.size then .error "past the openings" else .ok (coin l.size),
         l.push (FlockDeploy.linkBody a.toList b.toList)) := by
-  by_cases hn : n ≤ l.size
-  · simp only [hn, ↓reduceIte]
-    rfl
-  · simp only [hn, ↓reduceIte]
-    rfl
+  have e : ((asksCut coin n).link a b).go l =
+      ((if n ≤ l.size then throw "past the openings" else pure (coin l.size) : FlockComplete.PS _)).go
+        (l.push (FlockDeploy.linkBody a.toList b.toList)) := rfl
+  rw [e]
+  split_ifs <;> rfl
 
 theorem asksCut_round_go (coin : ℕ → ℕ → _root_.Flock.F128) (n : ℕ) (c : ByteArray) (l : Array Msg) :
     ((asksCut coin n).round c).go l =
       (if n ≤ l.size then .error "past the openings" else .ok (coin l.size), l.push (Claims.toMsg c)) := by
-  by_cases hn : n ≤ l.size
-  · simp only [hn, ↓reduceIte]
-    rfl
-  · simp only [hn, ↓reduceIte]
-    rfl
+  have e : ((asksCut coin n).round c).go l =
+      ((if n ≤ l.size then throw "past the openings" else pure (coin l.size) : FlockComplete.PS _)).go
+        (l.push (Claims.toMsg c)) := rfl
+  rw [e]
+  split_ifs <;> rfl
 
 theorem cutS_link {coin : ℕ → ℕ → _root_.Flock.F128} {n : ℕ} {resp : ℕ → Msg} (hr : ∀ k, coinOf (resp k) = coin k)
     (a b : Array ByteArray) : cutS.R ((asksCut coin n).link a b) ((asksS resp).link a b) := by
@@ -114,20 +114,20 @@ theorem liftT_cut {α : Type} {x y : _root_.Flock.TMW FlockComplete.PS α} (h : 
   Sim.lift_st _ h
 
 theorem zerocheckPZk_cut (hr : ∀ k, coinOf (resp k) = coin k) (m : ℕ) (digest cap root : ByteArray)
-    (lay : _root_.Flock.Zk.PadLayout) (h : Array _root_.Flock.F128) (tr : Trace) :
+    (lay : _root_.Flock.Zk.PadLayout) (h : Array _root_.Flock.F128) (tr : FlockComplete.Trace) :
     (cutS.st _root_.Flock.Transcript).R (zerocheckPZk (asksCut coin n) m digest cap root lay h tr)
       (zerocheckPZk (asksS resp) m digest cap root lay h tr) := by
   unfold zerocheckPZk sampleVecP
   sim_walk [squeezeP_cut hr, sampleP_cut hr]
 
 theorem lincheckPZk_cut (hr : ∀ k, coinOf (resp k) = coin k) (c : _root_.Flock.CircuitFold) (m : ℕ)
-    (lay : _root_.Flock.Zk.PadLayout) (h : Array _root_.Flock.F128) (tr : Trace) (zc : ZcOut) :
+    (lay : _root_.Flock.Zk.PadLayout) (h : Array _root_.Flock.F128) (tr : FlockComplete.Trace) (zc : _root_.Flock.ZcOut) :
     (cutS.st _root_.Flock.Transcript).R (lincheckPZk (asksCut coin n) c m lay h tr zc)
       (lincheckPZk (asksS resp) c m lay h tr zc) := by
   unfold lincheckPZk
   sim_walk [sampleP_cut hr]
 
-theorem ringSwitchP_cut (hr : ∀ k, coinOf (resp k) = coin k) (tr : Trace) (claims : Array _root_.Flock.Claim) :
+theorem ringSwitchP_cut (hr : ∀ k, coinOf (resp k) = coin k) (tr : FlockComplete.Trace) (claims : Array _root_.Flock.Claim) :
     (cutS.st _root_.Flock.Transcript).R (ringSwitchP (asksCut coin n) tr claims) (ringSwitchP (asksS resp) tr claims) := by
   unfold ringSwitchP sampleVecP
   sim_walk [squeezeP_cut hr]
@@ -172,8 +172,8 @@ theorem innerP_cut (hr : ∀ k, coinOf (resp k) = coin k) (hs : _root_.Flock.Has
   sim_walk [sampleP_cut hr, squeezeP_cut hr, cutS_reflT, cutS_refl]
 
 /-- **A masked rep answered by `asksCut` that returns** is the rep answered by `asksS` at the same coins. -/
-theorem repPZk_cut (hr : ∀ k, coinOf (resp k) = coin k) (hs : _root_.Flock.Hashes FlockComplete.PS) (st : Setup)
-    (sch : _root_.Flock.Schedule) (tPad rep : ℕ) (dom : ByteArray) (tr : Trace) (t : Array _root_.Flock.F128)
+theorem repPZk_cut (hr : ∀ k, coinOf (resp k) = coin k) (hs : _root_.Flock.Hashes FlockComplete.PS) (st : _root_.Flock.Setup)
+    (sch : _root_.Flock.Schedule) (tPad rep : ℕ) (dom : ByteArray) (tr : FlockComplete.Trace) (t : Array _root_.Flock.F128)
     (cm0 : Commit) (extras : Array _root_.Flock.Claim) (pads : PadsZk) (ic : InnerCommit)
     (extra lanePad : ℕ → ℕ → _root_.Flock.F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
     (prior : Array (List _root_.Flock.F128)) (words : List ℕ) :
@@ -213,6 +213,12 @@ def Both {α β : Type} (P : α → β → Array Msg → Prop) (x : Except Strin
 
 theorem Both.sends {α β : Type} {P : α → β → Array Msg → Prop} {x : Except String α × Array Msg}
     {y : Except String β × Array Msg} (h : Both P x y) : x.2 = y.2 := h.1
+
+theorem go_map {α β : Type} (f : α → β) (y : FlockComplete.PS α) (l : Array Msg) :
+    (f <$> y).go l = (Except.map f (y.go l).1, (y.go l).2) := by
+  rw [map_eq_pure_bind, go_bind]
+  rcases y.go l with ⟨r, l'⟩
+  cases r <;> rfl
 
 theorem both_bind {α β γ δ : Type} {P : α → β → Array Msg → Prop} {Q : γ → δ → Array Msg → Prop}
     {x : FlockComplete.PS α} {y : FlockComplete.PS β} {f : α → FlockComplete.PS γ} {g : β → FlockComplete.PS δ}
@@ -266,6 +272,71 @@ theorem both_of_eq {α : Type} {x y : Except String α × Array Msg} (h : x = y)
   cases r
   · trivial
   · exact ⟨rfl, rfl⟩
+
+/-- Two runs in step, the right one's run recorded. -/
+theorem both_right {α β : Type} {P : α → β → Array Msg → Prop} {x : Except String α × Array Msg}
+    {y : Except String β × Array Msg} (h : Both P x y) : Both (fun a b l' => P a b l' ∧ y = (.ok b, l')) x y := by
+  obtain ⟨hl, hr⟩ := h
+  rcases x with ⟨rx, lx⟩
+  rcases y with ⟨ry, ly⟩
+  dsimp only at hl hr ⊢
+  refine ⟨hl, ?_⟩
+  cases rx <;> cases ry
+  · trivial
+  · exact hr.elim
+  · exact hr.elim
+  · exact ⟨hr, by rw [hl]⟩
+
+/-- A run that ends as another's mapped by `e` is in step with it. -/
+theorem both_of_map_eq {α β : Type} {x : FlockComplete.PS α} {y : FlockComplete.PS β} {e : β → α} {l : Array Msg}
+    (h : x.go l = (e <$> y).go l) : Both (fun a b _ => a = e b) (x.go l) (y.go l) := by
+  rw [h, go_map]
+  rcases y.go l with ⟨r, l'⟩
+  cases r
+  · exact ⟨rfl, trivial⟩
+  · exact ⟨rfl, rfl⟩
+
+theorem both_map {α β γ δ : Type} {P : α → β → Array Msg → Prop} {Q : γ → δ → Array Msg → Prop}
+    {x : FlockComplete.PS α} {y : FlockComplete.PS β} (F : α → γ) (G : β → δ) {l : Array Msg}
+    (h : Both P (x.go l) (y.go l)) (hPQ : ∀ a b l', P a b l' → Q (F a) (G b) l') :
+    Both Q ((F <$> x).go l) ((G <$> y).go l) := by
+  rw [go_map, go_map]
+  rcases ex : x.go l with ⟨rx, lx⟩
+  rcases ey : y.go l with ⟨ry, ly⟩
+  rw [ex, ey] at h
+  obtain ⟨hl, hr⟩ := h
+  dsimp only at hl hr ⊢
+  refine ⟨hl, ?_⟩
+  cases rx <;> cases ry
+  · trivial
+  · exact hr.elim
+  · exact hr.elim
+  · exact hPQ _ _ _ hr
+
+/-- **Two `mapM`s in step**, each element's run on the left the right one's mapped by `e`. -/
+theorem both_mapM_list {α β γ : Type} (f : α → FlockComplete.PS β) (g : α → FlockComplete.PS γ) (e : γ → β) :
+    ∀ (xs : List α), (∀ a ∈ xs, ∀ l, (f a).go l = (e <$> g a).go l) → ∀ l : Array Msg,
+      Both (fun bs cs _ => bs = cs.map e) ((xs.mapM f).go l) ((xs.mapM g).go l)
+  | [], _, l => by
+    simp only [List.mapM_nil, JsonRT.go_pure]
+    exact ⟨rfl, rfl⟩
+  | a :: xs, h, l => by
+    rw [List.mapM_cons, List.mapM_cons]
+    refine both_bind (both_of_map_eq (h a List.mem_cons_self l)) fun b c l' hb => ?_
+    refine both_bind (both_mapM_list f g e xs (fun a' ha' => h a' (List.mem_cons_of_mem _ ha')) l')
+      fun bs cs l'' hbs => ?_
+    simp only [JsonRT.go_pure]
+    refine ⟨rfl, ?_⟩
+    show b :: bs = (c :: cs).map e
+    rw [hb, hbs, List.map_cons]
+
+theorem both_mapM_array {α β γ : Type} (f : α → FlockComplete.PS β) (g : α → FlockComplete.PS γ) (e : γ → β)
+    (xs : Array α) (h : ∀ a ∈ xs, ∀ l, (f a).go l = (e <$> g a).go l) (l : Array Msg) :
+    Both (fun bs cs _ => bs = cs.map e) ((xs.mapM f).go l) ((xs.mapM g).go l) := by
+  rw [Array.mapM_eq_mapM_toList, Array.mapM_eq_mapM_toList]
+  refine both_map _ _ (both_mapM_list f g e xs.toList (fun a ha => h a (Array.mem_toList_iff.1 ha)) l) ?_
+  rintro bs cs _ rfl
+  simp
 
 theorem both_mono {α β : Type} {P Q : α → β → Array Msg → Prop} {x : Except String α × Array Msg}
     {y : Except String β × Array Msg} (h : Both P x y) (hPQ : ∀ a b l', P a b l' → Q a b l') : Both Q x y := by
@@ -328,18 +399,12 @@ def nf (z : Except String (_root_.Flock.Zk.ZkProof × _root_.Flock.Transcript) �
     Except String _root_.Flock.Transcript × Array Msg :=
   (Except.map Prod.snd z.1, z.2)
 
-theorem go_map {α β : Type} (f : α → β) (y : FlockComplete.PS α) (l : Array Msg) :
-    (f <$> y).go l = (Except.map f (y.go l).1, (y.go l).2) := by
-  rw [map_eq_pure_bind, go_bind]
-  rcases y.go l with ⟨r, l'⟩
-  cases r <;> rfl
-
 theorem nf_map (f : _root_.Flock.Zk.ZkProof → _root_.Flock.Zk.ZkProof)
-    (X : _root_.Flock.TMW FlockComplete.PS _root_.Flock.Zk.ZkProof) (t : _root_.Flock.Transcript) (l : Array Msg) :
-    nf (((f <$> X).run t).go l) = nf ((X.run t).go l) := by
+    (prog : _root_.Flock.TMW FlockComplete.PS _root_.Flock.Zk.ZkProof) (t : _root_.Flock.Transcript) (l : Array Msg) :
+    nf (((f <$> prog).run t).go l) = nf ((prog.run t).go l) := by
   rw [StateT.run_map, go_map]
   unfold nf
-  rcases (X.run t).go l with ⟨r, l'⟩
+  rcases (prog.run t).go l with ⟨r, l'⟩
   cases r <;> rfl
 
 /-- Runs alike but their proofs are in step, the right one's run recorded. -/
@@ -357,6 +422,102 @@ theorem both_of_nf {x y : Except String (_root_.Flock.Zk.ZkProof × _root_.Flock
   · cases h1
   · dsimp only
     exact ⟨by simpa [Except.map] using h1, rfl⟩
+
+/-! ## The rep from the cut is the first hybrid -/
+
+theorem eraseC_cap (cm : Commit) : (eraseC cm).cap = cm.cap := rfl
+
+theorem eraseIC_root (ic : InnerCommit) : (eraseIC ic).root = ic.root := rfl
+
+/-- **The inner proof from the source reads the pads commitment's columns and salts only where the final message
+does.** -/
+theorem innerCut_eraseIC (io : Asks FlockComplete.PS) (lay : _root_.Flock.Zk.PadLayout) (ic : InnerCommit)
+    (finalC : _root_.Flock.F128) (src : RepSrc) (cons : Array (String × _root_.Flock.Zk.Lin)) :
+    eraseIP <$> innerCut io lay (eraseIC ic) finalC src cons = eraseIP <$> innerCut io lay ic finalC src cons := by
+  unfold innerCut
+  simp only [map_bind, map_pure, apply_ite (Functor.map (f := _root_.Flock.TMW FlockComplete.PS) eraseIP),
+    eraseIP, eraseIC, Array.size_map, Array.map_map, Function.comp_def]
+
+/-- A rep's proof forgotten reads its inner proof forgotten. -/
+theorem bind_eraseZ {xa xb : _root_.Flock.TMW FlockComplete.PS _root_.Flock.Zk.InnerProof}
+    (h : eraseIP <$> xa = eraseIP <$> xb) (p : _root_.Flock.Proof) (zl : _root_.Flock.Zk.Level0Msgs) :
+    (xa >>= fun inner => pure (eraseZ { proof := p, level0 := zl, inner })) =
+      (xb >>= fun inner => pure (eraseZ { proof := p, level0 := zl, inner })) := by
+  have e : ∀ xc : _root_.Flock.TMW FlockComplete.PS _root_.Flock.Zk.InnerProof,
+      (xc >>= fun inner => pure (eraseZ { proof := p, level0 := zl, inner })) =
+        (fun ip => ({ proof := { p with ligerito := eraseL p.ligerito }, level0 := zl, inner := ip } :
+          _root_.Flock.Zk.ZkProof)) <$> (eraseIP <$> xc) := fun xc => by
+    rw [← comp_map, ← bind_pure_comp]
+    rfl
+  rw [e, e, h]
+
+/-- **The rep from the cut at the erased commitments is the first hybrid** but what only the final message reads. -/
+theorem repCut_mix0 (io : Asks FlockComplete.PS) (hs : _root_.Flock.Hashes FlockComplete.PS) (st : _root_.Flock.Setup)
+    (sch : _root_.Flock.Schedule) (tPad rep : ℕ) (dom : ByteArray) (tr : FlockComplete.Trace) (t : Array _root_.Flock.F128)
+    (cm0 : Commit) (extras : Array _root_.Flock.Claim) (pads : PadsZk) (ic : InnerCommit)
+    (extra lanePad : ℕ → ℕ → _root_.Flock.F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
+    (prior : Array (List _root_.Flock.F128)) (words : List ℕ) (src : RepSrc) :
+    repMix 0 io hs st sch tPad rep dom tr t cm0 extras pads ic extra lanePad salt nonce prior words src =
+      eraseZ <$> repCut io hs st sch rep dom (eraseC cm0) extras (eraseIC ic) src prior words := by
+  unfold repMix repCut
+  simp only [↓reduceIte, Nat.zero_le, eraseC_cap, eraseIC_root]
+  rw [map_bind]; refine bind_congr fun ⟨zp, lp, ss, T, sws⟩ => ?_; dsimp only
+  rw [map_bind]; refine bind_congr fun ⟨lg, zl, rec⟩ => ?_; dsimp only
+  rw [map_bind]; refine bind_congr fun tr' => ?_
+  rw [map_bind]; refine bind_congr fun ⟨rp, _⟩ => ?_; dsimp only
+  rw [map_bind]; refine bind_congr fun lgc => ?_
+  rw [map_bind]
+  simp only [map_pure]
+  exact bind_eraseZ (innerCut_eraseIC _ _ _ _ _ _).symm _ _
+
+/-! ## The last hybrid is the session's rep -/
+
+/-- The replay reads the proof's cap, zerocheck and lincheck only. -/
+theorem replay_eraseL (st : _root_.Flock.Setup) (lay : _root_.Flock.Zk.PadLayout) (cap : Array ByteArray)
+    (params : _root_.Flock.PcsParams) (zp : _root_.Flock.ZerocheckProof) (lp : _root_.Flock.LincheckProof)
+    (ss : Array (Array _root_.Flock.F128)) (lg : _root_.Flock.LigeritoProof) (root : ByteArray) :
+    _root_.Flock.Zk.replay st lay
+        { cap, params, zerocheck := zp, lincheck := lp, ringSwitches := ss, ligerito := eraseL lg } root =
+      _root_.Flock.Zk.replay st lay
+        { cap, params, zerocheck := zp, lincheck := lp, ringSwitches := ss, ligerito := lg } root := by
+  unfold _root_.Flock.Zk.replay
+  dsimp only
+
+/-- Level 0's constraints read the opening's messages and out-of-domain values only. -/
+theorem ligeritoConstraints_eraseL (lay : _root_.Flock.Zk.PadLayout) (rec : _root_.Flock.Zk.L0Rec)
+    (lg : _root_.Flock.LigeritoProof) (zl : _root_.Flock.Zk.Level0Msgs) :
+    _root_.Flock.Zk.ligeritoConstraints lay rec (eraseL lg) zl = _root_.Flock.Zk.ligeritoConstraints lay rec lg zl := by
+  unfold _root_.Flock.Zk.ligeritoConstraints eraseL
+  dsimp only
+
+theorem eraseL_eraseL (lg : _root_.Flock.LigeritoProof) : eraseL (eraseL lg) = eraseL lg := by
+  simp only [eraseL, eraseLP, Array.map_map, Function.comp_def]
+
+/-- **The last hybrid is the session's rep** but what only the final message reads. -/
+theorem repMix3_eq (io : Asks FlockComplete.PS) (hs : _root_.Flock.Hashes FlockComplete.PS) (st : _root_.Flock.Setup)
+    (sch : _root_.Flock.Schedule) (tPad rep : ℕ) (dom : ByteArray) (tr : FlockComplete.Trace) (t : Array _root_.Flock.F128)
+    (cm0 : Commit) (extras : Array _root_.Flock.Claim) (pads : PadsZk) (ic : InnerCommit)
+    (extra lanePad : ℕ → ℕ → _root_.Flock.F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
+    (prior : Array (List _root_.Flock.F128)) (words : List ℕ) (src : RepSrc) :
+    repMix 3 io hs st sch tPad rep dom tr t cm0 extras pads ic extra lanePad salt nonce prior words src =
+      eraseZ <$> repPZk io hs st sch tPad rep dom tr t cm0 extras pads ic extra lanePad salt nonce prior words := by
+  unfold repMix repPZk piopPZk
+  simp only [show ¬((3 : ℕ) = 0) by decide, show ¬((3 : ℕ) ≤ 1) by decide, show ¬((3 : ℕ) ≤ 2) by decide,
+    ↓reduceIte]
+  rw [bind_assoc, map_bind]; refine bind_congr fun ⟨zp, zc⟩ => ?_; dsimp only
+  rw [bind_assoc, map_bind]; refine bind_congr fun ⟨lp, lc⟩ => ?_; dsimp only
+  rw [bind_assoc, map_bind]; refine bind_congr fun _ => ?_
+  rw [bind_assoc, map_bind]; refine bind_congr fun ⟨ss, T, sws⟩ => ?_; dsimp only
+  rw [pure_bind]; dsimp only
+  rw [map_bind]; refine bind_congr fun ⟨lg, zl, rec⟩ => ?_; dsimp only
+  rw [pure_bind]; dsimp only
+  simp only [replay_eraseL, ligeritoConstraints_eraseL]
+  rw [map_bind]; refine bind_congr fun tr' => ?_
+  rw [map_bind]; refine bind_congr fun ⟨rp, _⟩ => ?_; dsimp only
+  rw [map_bind]; refine bind_congr fun lgc => ?_
+  rw [map_bind]; refine bind_congr fun inner => ?_
+  rw [map_pure]
+  simp only [eraseZ, eraseL_eraseL]
 
 end Masked
 
