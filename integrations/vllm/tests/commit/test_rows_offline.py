@@ -18,8 +18,9 @@ from verity_vllm.commit.committer.native_host import NativeHostCommitter  # noqa
 from verity_vllm.commit.opened import OpenedReader, OpeningNotVerified  # noqa: E402
 
 RNG = random.Random(63)
+K = R.ROW_BYTES // 256                   # sizes in 256-byte units, so every step but the first spans several rows
 STEPS = {s: [(f"m{s}.{i}", RNG.randbytes(n)) for i, n in enumerate(sizes)]
-         for s, sizes in enumerate([(100,), (700, 3, 513), (2048, 1000)])}
+         for s, sizes in enumerate([(100 * K,), (700 * K, 3, 513 * K), (2048 * K, 1000 * K)])}
 
 
 def committed():
