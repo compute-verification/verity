@@ -3,7 +3,8 @@
 // FFMA and FMUL, and DMMA (mma.sync m8n8k4 f64, which no DS_tensor row lists) beside IMMA (mma.sync m16n8k32 s8) and
 // beside a saturated tcgen05.mma kind::i8 (dmmaU_tc, tcU_dmma).
 // Built and gated by ../opcode_probe/probe.py build --arch sm_100a (f32x2 is sm_100+); rates.sh is the job.
-//   s_<op>   1024 threads (8 warps a SMSP), 8 independent chains a thread; lane ops 64 an iteration, MMAs 8
+//   s_<op>     1024 threads (8 warps a SMSP), 8 independent chains a thread; lane ops 64 an iteration, MMAs 8
+//   p_<x>_<y>  the same with x and y alternating (32 each): FFMA2's issue slots beside LOP3 and IMAD
 // A rate is warp instructions a SM a clock (probe.py); FP32 results a SM-clock are 32 x it (FFMA, FMUL) or 64 x it
 // (FFMA2, FMUL2), MACs a SM-clock 256 x it (DMMA) or 4096 x it (IMMA).
 #include "../opcode_probe/probe.cuh"
@@ -11,9 +12,10 @@
 
 #define UP_DEV __device__ __forceinline__
 
-enum { U_FFMA, U_FFMA2, U_FFMA2C, U_FMUL, U_FMUL2, U_DMMA, U_IMMA };
+enum { U_FFMA, U_FFMA2, U_FFMA2C, U_FMUL, U_FMUL2, U_DMMA, U_IMMA, U_LOP3, U_IMAD };
 
 struct Chains {
+  uint32_t l[8];             // LOP3, IMAD: the integer lanes the pairs interleave
   float f[8];
   unsigned long long p[8];   // f32x2: two FP32 values a register pair
   double d[8][2];            // DMMA m8n8k4: a thread's two f64 accumulators a chain
@@ -25,6 +27,7 @@ struct Chains {
 #pragma unroll
     for (int i = 0; i < 8; i++) {
       const uint32_t h = (tid * 0x9e3779b9u + i * 0x85ebca6bu) | 1u;
+      l[i] = h;
       f[i] = 1.0f + (float)(h & 0xffu) * 0x1p-12f;
       const float g = 1.0f + (float)((h >> 8) & 0xffu) * 0x1p-12f;
       asm("mov.b64 %0, {%1, %2};" : "=l"(p[i]) : "f"(f[i]), "f"(g));
@@ -57,6 +60,8 @@ struct Chains {
       asm volatile("mma.sync.aligned.m16n8k32.row.col.s32.s8.s8.s32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, {%0,%1,%2,%3};"
                    : "+r"(r[s][0]), "+r"(r[s][1]), "+r"(r[s][2]), "+r"(r[s][3])
                    : "r"(ia[0]), "r"(ia[1]), "r"(ia[2]), "r"(ia[3]), "r"(ib[0]), "r"(ib[1]));
+    if constexpr (X == U_LOP3) asm volatile("lop3.b32 %0,%0,%1,%2,0x96;" : "+r"(l[s]) : "r"(l[t]), "r"(0x85EBCA6Bu));
+    if constexpr (X == U_IMAD) asm volatile("mad.lo.u32 %0,%0,%1,%2;" : "+r"(l[s]) : "r"(l[t]), "r"(0x9E3779B9u));
   }
   // Only the timed op's chains, so the others are dead and the kernel fits 64 registers a thread.
   template <int X>
@@ -68,6 +73,7 @@ struct Chains {
       if constexpr (X == U_FFMA2 || X == U_FFMA2C || X == U_FMUL2) x += (uint32_t)p[i] ^ (uint32_t)(p[i] >> 32);
       if constexpr (X == U_DMMA) x += (uint32_t)__double_as_longlong(d[i][0]) ^ (uint32_t)__double_as_longlong(d[i][1]);
       if constexpr (X == U_IMMA) x += r[i][0] ^ r[i][1] ^ r[i][2] ^ r[i][3];
+      if constexpr (X == U_LOP3 || X == U_IMAD) x += l[i];
     }
     return x;
   }
@@ -83,6 +89,23 @@ UP_DEV void s_alone(const OpArgs& a) {
   }
   OP_END
   OP_SINK(c.template fold<X>() ^ threadIdx.x)
+}
+// N ops alternating X and Y on independent chains (lanes.cuh's lane_pair): with FFMA2 beside LOP3 or IMAD, a sum of the
+// two issue rates near 4 a SM-clock means FFMA2 takes one issue slot (and its rate alone is its FP32 pipe's), near 8/3
+// that it takes two.
+template <int X, int Y, int N>
+UP_DEV void s_pair(const OpArgs& a) {
+  Chains c(threadIdx.x ^ (uint32_t)a.mode);
+  OP_BEGIN
+  OP_LOOP(it) {
+#pragma unroll
+    for (int q = 0; q < N; q += 2) {
+      c.op<X>(q >> 1);
+      c.op<Y>((q >> 1) + 4);
+    }
+  }
+  OP_END
+  OP_SINK((c.template fold<X>() + c.template fold<Y>()) ^ threadIdx.x)
 }
 
 // ---- DMMA beside a saturated tcgen05.mma: does it share the tensor pipe, as mma.sync IMMA does (row M)? -------------
@@ -189,6 +212,12 @@ OP_KERNEL(s_fmul2, 1024) { s_alone<U_FMUL2, 64>(a); }
 OP_KERNEL(s_dmma, 1024) { s_alone<U_DMMA, 8>(a); }
 OP_KERNEL(s_imma, 1024) { s_alone<U_IMMA, 8>(a); }
 OP_KERNEL(s_dmma_w8, 256) { s_alone<U_DMMA, 8>(a); }
+OP_KERNEL(s_lop3, 1024) { s_alone<U_LOP3, 64>(a); }
+OP_KERNEL(s_imad, 1024) { s_alone<U_IMAD, 64>(a); }
+OP_KERNEL(p_ffma_lop3, 1024) { s_pair<U_FFMA, U_LOP3, 64>(a); }
+OP_KERNEL(p_ffma2_lop3, 1024) { s_pair<U_FFMA2C, U_LOP3, 64>(a); }
+OP_KERNEL(p_ffma_imad, 1024) { s_pair<U_FFMA, U_IMAD, 64>(a); }
+OP_KERNEL(p_ffma2_imad, 1024) { s_pair<U_FFMA2C, U_IMAD, 64>(a); }
 OP_KERNEL(tc_i8, 512) { dmma_tc<0>(a); }
 OP_KERNEL(dmmaU_tc, 512) { dmma_tc<1>(a); }
 OP_KERNEL(tcU_dmma, 512) { dmma_tc<2>(a); }
@@ -203,14 +232,20 @@ static const OpProbe PROBES[] = {
     P(s_fmul2, "FMUL2*=64", 4096, "FP32 results = 64 x rate; class_of prices it as one FFMA"),
     P(s_dmma, "DMMA*=8", 256, "f64 MACs = 256 x rate; exact for int8 x int8 sums"),
     P(s_imma, "IMMA*=8", 1024, "s8 MACs = 4096 x rate: the unit DMMA is read against"),
-    {.name = "s_dmma_w8", .kernel = (const void*)s_dmma_w8, .tpb = 256, .expect = "DMMA*=8", .iters = 256,
+    P(s_lop3, "LOP3.LUT=64", 4096, "the pairs' integer lane alone"),
+    P(s_imad, "IMAD=64", 4096, "the pairs' integer lane alone"),
+    P(p_ffma_lop3, "FFMA=32,LOP3.LUT=32", 4096, "the control: FFMA takes one issue slot"),
+    P(p_ffma2_lop3, "FFMA2*=32,LOP3.LUT=32", 4096, "FFMA2's issue slots: the two rates' sum"),
+    P(p_ffma_imad, "FFMA=32,IMAD=32", 4096, "the control beside IMAD"),
+    P(p_ffma2_imad, "FFMA2*=32,IMAD=32", 4096, "FFMA2 beside IMAD (does IMAD share its pipe?)"),
+    {.name = "s_dmma_w8", .kernel = (const void*)s_dmma_w8, .tpb = 256, .expect = "DMMA*=8", .iters = 1024,
      .note = "DMMA alone at the joint's 8 warps: s's unit"},
     {.name = "tc_i8", .kernel = (const void*)tc_i8, .tpb = 512, .expect = UI, .warps = "1", .iters = 2048,
      .note = "tcgen05 i8 128x256x32 alone in the joint's block: t's unit"},
     {.name = "dmmaU_tc", .kernel = (const void*)dmmaU_tc, .tpb = 512, .expect = UI ";DMMA*=8", .warps = "1;8",
-     .iters = 2048, .until = 2, .note = "tcgen05 fixed, DMMA until"},
+     .iters = 2048, .note = "tcgen05 fixed, DMMA until", .until = 2},
     {.name = "tcU_dmma", .kernel = (const void*)tcU_dmma, .tpb = 512, .expect = "DMMA*=8;" UI, .warps = "8;1",
-     .iters = 2048, .until = 2, .note = "DMMA fixed, tcgen05 until"},
+     .iters = 2048, .note = "DMMA fixed, tcgen05 until", .until = 2},
 };
 #undef P
 #undef UI

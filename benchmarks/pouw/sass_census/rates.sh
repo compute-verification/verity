@@ -8,7 +8,8 @@
 # GPU). Under one lease: probe.py run (rows.jsonl, gate.json, times.jsonl), then rates.json, each probe's warp
 # instructions and results (FP32 results or MACs) a SM-clock, and the ratios the census needs: FFMA2 / FFMA and
 # FMUL2 / FMUL in FP32 results, DMMA / IMMA and DMMA / tcgen05 i8 in MACs, and DMMA beside a saturated tcgen05 (t + s
-# at both joint points: above 1, DMMA's words add to the tensor pipe's). BUILD_ONLY=1 stops after the gate (no GPU).
+# at both joint points: above 1, DMMA's words add to the tensor pipe's), and FFMA2's issue slots (the pairs' summed
+# issue rate beside LOP3 and IMAD: near 4 a SM-clock, one slot). BUILD_ONLY=1 stops after the gate (no GPU).
 set -uo pipefail
 OUT=${OUT:?run under research run}
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -67,9 +68,17 @@ for name in ("dmmaU_tc", "tcU_dmma"):
         t, s = rt / per["tc_i8"]["warp_instr_a_sm_clk"], rd / per["s_dmma_w8"]["warp_instr_a_sm_clk"]
         joints[name] = {"t": t, "s": s, "t_plus_s": t + s, "tc_macs_a_sm_clk": rt * TC, "dmma_macs_a_sm_clk": rd * 256,
                         "dmma_macs_over_tc_alone": rd * 256 / res("tc_i8")}
+# the pairs: both loops' warp instructions a SM-clock, their sum (the issue port's 4 is the ceiling) and FP32 results
+FP32 = {"FFMA": 32, "FFMA2*": 64}
+pairs = {}
+for name, p in per.items():
+    if name.startswith("p_"):
+        by = {k.split(":", 1)[1]: v for k, v in p["rates"].items()}
+        pairs[name] = {"rates": by, "issue_sum": sum(by.values()),
+                       "fp32_results_a_sm_clk": sum(v * FP32.get(k, 0) for k, v in by.items())}
 summary = {"probes": per, "ffma2_over_ffma": ratio(best2, "s_ffma") if best2 else None, "ffma2_form": best2,
            "fmul2_over_fmul": ratio("s_fmul2", "s_fmul"), "dmma_over_imma_macs": ratio("s_dmma", "s_imma"),
-           "dmma_over_tc_i8_macs": ratio("s_dmma", "tc_i8"), "dmma_beside_tc": joints}
+           "dmma_over_tc_i8_macs": ratio("s_dmma", "tc_i8"), "dmma_beside_tc": joints, "pairs": pairs}
 (out / "rates.json").write_text(json.dumps(summary, indent=1) + "\n")
-print(json.dumps({k: v for k, v in summary.items() if k != "probes"}))
+print(json.dumps({k: v for k, v in summary.items() if k != "probes"}, indent=1))
 EOF
