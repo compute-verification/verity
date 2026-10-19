@@ -36,6 +36,9 @@ case " $* " in *dither-a-kh*)
 esac
 [ -n "${BUILD_ONLY:-}" ] && { echo "sbench: built (BUILD_ONLY)"; exit 0; }
 export DITHER_H1C=$S/libh1c.so DITHER_H1F=$S/libh1f.so DITHER_H1O=$S/libh1o.so VLLM_DISABLE_COMPILE_CACHE=1
+# SBENCH_PICK pins Inductor's autotune picks (picks.py); the node's shared Inductor cache would hand back another run's
+# timed .best_config, so a pinned run compiles into its own
+[ -n "${SBENCH_PICK:-}" ] && export TORCHINDUCTOR_CACHE_DIR=$S/inductor-cache
 # CA's credit gate (#2684) at its pinned head, for the dither-1s-credit arm
 CREDIT_GATE_SHA=${CREDIT_GATE_SHA:-b25b34d96e}
 git show "$CREDIT_GATE_SHA:integrations/vllm/verity_vllm/protocol_options/credit_gate.py" > "$S/credit_gate.py" 2>/dev/null \

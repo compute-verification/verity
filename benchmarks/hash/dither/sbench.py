@@ -350,6 +350,9 @@ PROF_RANGE = "verity/exactlin/prof"
 # an arm that serves another value: its tokens are compared, not required equal (an arm not listed: required)
 TOKENS_GATED = {"dither-1s": False, "dither-1s-credit": False, "dither-1s-warp": False, "dither-1s-split": False,
                 "dither-1s-percall0": False, "dither-1s-percall-rtt": False}
+# SBENCH_PICK=first|last: every engine's Inductor autotune choices made untimed (`picks.py`); each arm's picks are
+# logged either way (gate.json's full log, each rep's digest)
+PICK_ENV = "SBENCH_PICK"
 GATE_TOKENS = 16    # enough B32 decode steps for the gate's capture, its receipts, the control's and its receipts
 GATE_RANGE = "verity/dither/gate"   # GATE_RANGE/<arm>: kernels.py reads each dither worker's kernels inside its own
 
@@ -361,6 +364,9 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
     if arm.startswith("dither"):
         sys.path.insert(0, str(HERE))
         import dither_fused as DF
+    sys.path.insert(0, str(HERE))
+    import picks as PK
+    plog = PK.install(os.environ.get(PICK_ENV))
     t0 = time.perf_counter()
     try:
         llm = build(arm, Path(scratch), gpu_mem)
@@ -406,7 +412,7 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
                 torch.cuda.synchronize()
                 torch.cuda.nvtx.range_pop()
                 torch.cuda.profiler.stop()
-            res = {"gate_s": round(t, 3), "tokens": [list(o.outputs[0].token_ids) for o in outs]}
+            res = {"gate_s": round(t, 3), "tokens": [list(o.outputs[0].token_ids) for o in outs], "picks": plog}
             if win is not None:
                 t0 = time.perf_counter()
                 if mod is DF:
@@ -455,10 +461,7 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
             t, outs = gen(prompts(SAT_REQS), SAT_TOKENS)
             n = sum(len(o.outputs[0].token_ids) for o in outs)
             conn.send({"tokens_per_s": round(n / t, 2), "sat_s": round(t, 3), "sat_tokens": n})
-        if hasattr(llm, "dither_stats"):
-            conn.send({"stats": llm.dither_stats()})
-        else:
-            conn.send({"stats": None})
+        conn.send({"stats": llm.dither_stats() if hasattr(llm, "dither_stats") else None, "picks": PK.summary(plog)})
 
     while True:
         cmd = conn.recv()
@@ -541,7 +544,8 @@ def main() -> int:
         for arm in arms:
             conns[arm].send({"op": "gate"})
             res = recv(arm, conns[arm], "gate")
-            res["stats"] = recv(arm, conns[arm], "gate")["stats"]
+            msg = recv(arm, conns[arm], "gate")
+            res["stats"], res["picks_summary"] = msg["stats"], msg.get("picks")
             gate_doc[arm] = res
             (out / "gate.json").write_text(json.dumps(gate_doc, indent=1) + "\n")
         for arm in arms:
@@ -557,7 +561,7 @@ def main() -> int:
                     x == y for x, y in zip(gate_doc[arm]["tokens"], gate_doc["stock"]["tokens"]))
         for arm in arms:
             print(json.dumps({"gate": arm, **{k: v for k, v in gate_doc[arm].items()
-                                               if k not in ("tokens", "tokens_capture")}}), flush=True)
+                                               if k not in ("tokens", "tokens_capture", "picks")}}), flush=True)
         (out / "gate.json").write_text(json.dumps(gate_doc, indent=1) + "\n")
         failed = [arm for arm in arms if "verdict" in gate_doc[arm] and not (
             gate_doc[arm]["verdict"]["ok"] and (gate_doc[arm].get("tokens_equal_" + REF_OF.get(arm, arms[0]))
@@ -577,11 +581,11 @@ def main() -> int:
                 arm = arms[(j + r) % len(arms)]
                 conns[arm].send({"op": op})
                 res = recv(arm, conns[arm], op)
-                stats = recv(arm, conns[arm], op)["stats"]
+                msg = recv(arm, conns[arm], op)
                 toks = res.pop("tokens", None)
                 if toks is not None:
                     ref_tokens.setdefault((r, arm), toks)
-                row = {"rep": r, "op": op, "arm": arm, **res, "stats": stats}
+                row = {"rep": r, "op": op, "arm": arm, **res, "stats": msg["stats"], "picks": msg.get("picks")}
                 reps.append(row)
                 print(json.dumps(row), flush=True)
                 with open(out / "reps.jsonl", "a") as f:
@@ -598,7 +602,8 @@ def main() -> int:
         conns[arm].send({"op": "stop"})
     summary = {"arms": arms, "info": info, "gate_tokens_equal_ref_arm": gate, "decode_tokens_vs_ref": vs_ref,
                "decode_tokens_vs_rep0": vs_rep0, "ref_of": REF_OF, "n1": N1, "n2": N2, "b": B,
-               "gate": {arm: {k: v for k, v in d.items() if k != "tokens"} for arm, d in gate_doc.items()},
+               "gate": {arm: {k: v for k, v in d.items() if k not in ("tokens", "picks")} for arm, d in gate_doc.items()},
+               "pick": os.environ.get(PICK_ENV) or "timed",
                "saturation": {"requests": SAT_REQS, "tokens": SAT_TOKENS, "max_num_seqs": min(MAX_SEQS, a.t),
                               "max_num_batched_tokens": a.t, "stock_own_batch": a.stock_own_batch,
                               "scheduler_by_arm": {arm: info[arm].get("scheduler") for arm in arms}}, "per_arm": {}}
