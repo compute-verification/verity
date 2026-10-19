@@ -65,7 +65,9 @@ __host__ __device__ inline uint32_t xor8(const uint32_t (&y)[8]) {
 // address is out + (lane & zmask), zmask 0 at run time. CP_RED2 and CP_RED8 move more of the lane's XOR to memory: 3
 // LOP3 and 2 REDG (y0..y6's XOR, then y7), and 8 REDG with no LOP3 (each chain's state), so a checkpoint's lane XOR
 // trades ALU for issue: 4 LOP3 + 1 REDG, 3 + 2, 0 + 8. CP_SEG4U is CP_SEG4 with the same trade and no atomics: 3 LOP3,
-// a REDUX of y0..y6's XOR and one of y7, their XOR on the uniform datapath (ULOP3), so 2 ALU cycles fewer for 1 issue.
+// a REDUX of y0..y6's XOR and one of y7, and their XOR, which on the uniform datapath (ULOP3) would be 2 ALU cycles
+// fewer for 1 issue. ptxas 13.0 doesn't emit that: it moves both REDUX results to lanes (IMAD.U32) and XORs them with a
+// LOP3, so as compiled a checkpoint is 4 LOP3 + 2 REDUX + 2 moves, the same function at no saving.
 enum { CP_SEG, CP_SEG4, CP_SET, CP_RED, CP_RED2, CP_RED8, CP_SEG4U };
 __device__ __forceinline__ void red_xor(uint32_t* p, uint32_t v) {
   asm volatile("red.relaxed.gpu.global.xor.b32 [%0], %1;" ::"l"(p), "r"(v) : "memory");
@@ -390,9 +392,9 @@ static int run_all_roles(int iters, int reps) {
 // LOP3, REDUX, the uniform-to-vector move, lane 0's STG); CK_RED, CK_RED2 and CK_RED8 are li_exact's CP_RED, CP_RED2 and
 // CP_RED8 (4 LOP3 + 1 REDG, 3 + 2, 0 + 8), all 32 lanes into the warp's one word (zm 0 at run time); CK_SEG4 is
 // li_exact's CP_SEG4, CK_SEG with the trip's four words kept and lane 0 storing them in one STG.128; CK_SEG4U is
-// CP_SEG4U (3 LOP3, two REDUX, their XOR on the uniform datapath), and CK_SEG4M three CK_SEG4 units and one CK_SEG4U a
-// trip, the mix at which issue and the ALU pipe balance (134.5 and 135.5 a unit against CK_SEG4's 134.25 and 136,
-// with every REDUX and ULOP3 an issue slot off the ALU pipe). A unit a warp-slot
+// CP_SEG4U (3 LOP3, two REDUX, their XOR), and CK_SEG4M three CK_SEG4 units and one CK_SEG4U a trip, the mix at which
+// issue and the ALU pipe would balance with the XOR on the uniform datapath (134.5 and 135.5 a unit against CK_SEG4's
+// 134.25 and 136). ptxas puts that XOR on lanes (CP_SEG4U above), so both time the compiled form. A unit a warp-slot
 // is the block's cycles over iters x 4 units x W/4 warps a SMSP: on a loop bound by issue or the ALU pipe (LOP3 at half
 // rate), max(issue, 2 x LOP3) a unit. A REDG that costs more than its issue slot (the L2's atomic unit taking a warp's 32
 // lanes into one word) shows as CK_RED8 above that.

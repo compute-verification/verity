@@ -7,7 +7,7 @@ has one (ALU, IMAD, SHFL and so on), else the opcode's first word.
 The gate (`--gate`): no local-memory access (LDL, STL) in any kernel; each `clk<...>` kernel's loop holds the IGMMA its
 load issues (4 a trip for the three wgmma loads, none for li_alone); each `li_exact<...>` loop holds li's 64 LOP3 and 64
 IMAD a unit (256 and 256 a trip of four units), the checkpoint's REDUX (4 a trip a segment, 16 a set, 8 for CP_SEG4U's
-two a segment, with its 3 LOP3; for CP_RED,
+two a segment, with at least its 3 LOP3, and ptxas 13.0 emits a fourth, the two REDUX results' XOR on lanes; for CP_RED,
 CP_RED2 and CP_RED8, 1, 2 and 8 RED a checkpoint and no REDUX) and its per-lane XOR (4 LOP3 a checkpoint; 3 for CP_RED2,
 none for CP_RED8); each `roles<X,R>` kernel's MMA loop holds its 4 IGMMA and the
 poll's LDS, and its lane loop exactly R of the lane's op (IMAD for X = 1, LOP3 for X = 2); each `lirate<K,W>` loop holds
