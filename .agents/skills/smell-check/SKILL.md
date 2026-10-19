@@ -84,6 +84,18 @@ Under each question, newest first; the lane that found or reported it is in brac
 
 ### 1. Credited or proved isn't what was served
 
+- **Two products in one launch, called fused** (19 Oct) [kernels]. kernels-dither-rtx2's h1f gate passed: one kernel
+  a linear, everything bit-exact. But that kernel computed step s's plain z and step s−1's noised receipts, so the
+  credited work was still beside the served product; #2684 credited it, since it checks ops, not kernels. The lag came
+  from kernels' own brief ("z committed before each step's coin"). Fix: the one-stream form, where the served output is
+  O = O' − Σ_d 128^d D_d of the noised mainloop (cgemm.cu), with per-call seeds under the 17 Oct exception; #2684
+  refuses "two products in one launch".
+- **The proved tile itself credited work beside the served product** (19 Oct) [compute-accounting]. PouwH1Tile_v2
+  computes z by a separate EXACT call, "which no noise reaches", while its receipts fold the noised sets. Fix:
+  PouwH1Tile_v3 derives z from the receipted words (H1V3).
+- **A Commit measured without the values its openings need** (19 Oct) [kernels-maxtput]. The max-throughput arms
+  keep no values (retain none), and openings are answered by replay, which nobody has run on a 1,014-wide batch. Fix:
+  open one unit per arm at max throughput and check its replay (circuits, not started).
 - **Dither credited a side computation, not the served GEMM** (19 Oct) [compute-accounting's W2 from the code, CMP-50,
   after kernels' question J11]. SERVE-H1 (#2639, draft) served through vLLM's int8 GEMM (`torch._int_mm`), ran a second
   `_int_mm` for z beside it, and computed the H1 receipts in a torch pass (457 s a window) that credit counted. Quotes:
@@ -122,6 +134,11 @@ Under each question, newest first; the lane that found or reported it is in brac
 
 ### 2. "Served", "end to end" or "measured" means a harness, a model or a label
 
+- **"Native compiled vLLM" never cross-checked against vLLM's own entry point** (19 Oct) [kernels-maxtput]. The
+  baseline is verity_vllm's offline wrapper; if it costs anything, every loss is against a slower baseline. Fix: one
+  `vllm bench throughput` per card at the same settings.
+- **A "realistic mixed" load that is two lengths with ignore_eos** (19 Oct) [kernels-maxtput]. Both native
+  throughput and the hash's share depend on the mix. Fix: a trace-length run beside it.
 - **"Served Boolean-first, Commit PASS" meant Python checks the Boolean lift** (19 Oct) [circuits]. "Llama-3.2-1B served
   Boolean-first has Match PASS and Commit PASS", but the replay ran the word accelerators and the Lean verifier doesn't
   check the word-to-Boolean lift yet. Fix: `sigma_check` ported to Lean (proofs); until then "lift checked in Python".
@@ -147,13 +164,21 @@ Under each question, newest first; the lane that found or reported it is in brac
 
 ### 3. The rule-following path is opt-in, or the record bends a rule
 
+- **"Live coins" that Python's os.urandom drew, under no claim** [proofs]. A3, "The verifier draws the units it
+  audits from IO.getRandomBytes", while the served draw's Stream defaulted to os.urandom. Fix: the Lean verifier of
+  record answers the coins (#2666), and LiveChallenger's entropy is required (#2654).
+- **A "public" draw whose rate the prover sets** [training's red team, proofs]. "a uniform kd-subset of the n
+  units", with n read from the prover's own record field. Fix: a rate law, k = ⌈q·N⌉ with q public (SIGMA1).
+- **NciCheck took run-time inputs as the registered baseline** [training's red team, proofs]. "The registered
+  baseline is fixed before training and reused across declarations", yet recommitting it gave efficiency 0.3–1. Fix:
+  refuse it as theta-not-registered, with a difftest vector (VC1).
 - **Opening positions by Fiat–Shamir from the prover's own root** [vllm's red team]. c2_rules accepted the prover's
   command-line "verifier challenge" as "post-commitment by construction"; a cheat on 10% of leaves hides from the 64
   openings in about 1,000 tries (0.1 s). Bends: live coins only. Fix: VLLM-17 draws from the service challenger after the
   root is recorded.
 - **A seeded-coin window passing the same gate as a live one** (18 Oct) [compute-accounting]. "The static windows,
-  r20261018-215110-6e4a (live) and r20261018-214320-80a8 (seeded), both passed (SERVED-H1 OK)". Fix: the record is live
-  coins only, and SERVE-GATE refuses seeded windows.
+  r20261018-215110-6e4a (live) and r20261018-214320-80a8 (seeded), both passed (SERVED-H1 OK)". Fix: the record's live line
+  stays live; a device-seeded window is credited only labeled seeded, with GRIND's premium (p_eff ≤ G·p).
 - **The Commit of record wasn't the design's hash** (18 Oct) [kernels, vllm]. The GLM-5.3 Commit of record used vllm-v1,
   SHA-256 position leaves with no hiding salt, and "the SHA-512 serving rows commit beside it" as an opt-in arm. Every
   overhead number on the record path understated the real one about 4x (262 vs 1,090 ms a Qwen3-8B run). Fix: SHA-512
@@ -191,13 +216,25 @@ Under each question, newest first; the lane that found or reported it is in brac
 
 ### 5. Numbers that don't compare
 
+- **"Negligible at a 1% budget", at a draw cost about 10⁴ times too low** (19 Oct) [proofs]. "q = s/(r + rho/w)
+  = 6.1e-11" priced batched throughput against one-unit statements and left out serve-time commitments, which are 6–159
+  times the budget. Fix: the register corrected (q about 1e-14), and training reissued.
+- **Slot time reported as time to land** (19 Oct) [ci]. "The long pole is circuit-check ... 158 min per train",
+  but circuit-check is deferred and never gated landing. Fix: report time to land separately from slot time.
+- **Losses quoted against a baseline that isn't native** (19 Oct) [kernels-maxtput]. The pinned B200 stock runs
+  the build's FLASH_ATTN, 13.4% under native FlashInfer (per-layer −7.0% reads −19.5% against native), and the RTX
+  stock ran on the Commit's shrunk 58 GB KV pool. Fix: relabeled, and the table quotes true native.
+- **TTFT read as latency when it is queue wait** (19 Oct) [kernels-maxtput]. Under an all-at-once burst, TTFT
+  (47–131 s) scales with the request count. Fix: labeled; latency needs paced arrivals.
+- **A plot that takes pin state per row and GPU, not per line** (19 Oct) [kernels-maxtput]. Fix: per line.
 - **A decode metric that measured the whole run, "verified" against itself** (16 Oct) [benchmarks; caught by
   compute-accounting's W4]. "#2136: decode-only ratios match time per output token", but vLLM renames request ids, so
   every prompt token counted as decode, and the "match" compared one quantity with itself; the same renaming made
   "3.34x eager" and "11.55x eager" disagree. Fix: the harness refuses the metric when decode tokens exceed generated
   ones (VLLM-32).
 - **ε read as a share of capacity** [compute-accounting]. "PoUW leaves at most ε of monitored compute unattested", but
-  ε_W is a share of credited work; r is about 0.18–0.26, not 0.0074. Fix: ε_W and ε_s named apart in the Glossary.
+  ε_W is a share of credited work; r is about 0.18–0.26, not 0.0074. Training quoted the same, "At today's values every tier gives an efficiency of 0.74%, set by the
+  residual", so the dampener read about 135 where it is 1–1.8. Fix: ε_W and ε_s named apart; r = 1 − W_cert/C.
 - **A PR title quoting numbers the Lean no longer states, "as Lean guarantees"** (19 Oct) [compute-accounting]. #2482's
   title read as proved while resting on a conjectured premise (OperandHMu) and one granted on a card. Fix: retitled with
   the Lean's numbers and premises.
@@ -207,8 +244,9 @@ Under each question, newest first; the lane that found or reported it is in brac
   BLAKE3 -h2, and three overhead metrics disagreed. Fix: the scheme in every label; one metric against pinned stock.
 - **Published overheads no spec reproduces** [benchmarks]. "All five quoted overheads reproduced inside the rerun's 95%
   intervals" came from hand-written wrappers. Fix: a spec per published table (BENCH-8).
-- **A wipe's slack counted twice** [memory-accounting, training]. "certificate floor" beside the Lean's "1/19". Fix:
-  count it once.
+- **A wipe's slack counted twice, at two confidence levels** [memory-accounting, training]. "slack = 1 −
+  delta^(1/k) + floor", with a per-wipe δ of 1/100 beside 2^-40 elsewhere: at 2^-40, 86 rounds leave 27.6%, not 5.2%.
+  Fix: counted once; one δ for the lifetime pool is open.
 
 ### 6. Done or kept twice
 
@@ -219,6 +257,16 @@ Under each question, newest first; the lane that found or reported it is in brac
 
 ### 7. Checks that pass for the wrong reason, or can't fail
 
+- **A gate killed at its cap read as "never ran", and the train landed** (18 Oct) [ci]. "touched suites passed;
+  it lands" after a gate run exited 143 at its 90-min cap. Fix: a capped gate reruns once, then holds the train
+  (#2583).
+- **"4 checks of next running" while runs nobody followed held the slots** (18–19 Oct) [ci]. Three leaks kept
+  runs in slots for 3–21 h, and a cancel left a job's workers alive (570 GB). Fix: #2553, #2565, CI-85, INF-93.
+- **"L5 kernel census passes" never ran on any row of record** (19 Oct) [circuits]. No row of record has a
+  per-step census, and L5 never gated on launch counts (an untraced in-place overwrite passed). Fix: CENSUSL5 refuses
+  a kernel whose launch count differs from its declaring events; per-step census in every record run (CIR-45).
+- **A custody wait that could never pass from another VM** (19 Oct) [kernels-maxtput]. Fix: fetch first
+  (4123afff05).
 - **A guard announced as enforcing that never ran** (19 Oct) [infra]. "task_hook.py (a coordinator's foreground local
   Task refused; proofs' rule 1)", but Task reached hooks as CallDynamicTool, so the matcher never fired and nothing was
   logged. Fix: #2678, verified only once a live log shows a record.
@@ -255,6 +303,33 @@ Under each question, newest first; the lane that found or reported it is in brac
 
 ### 8. Theorems and bounds that say less than they read
 
+- **A recursion soundness statement only a SHA-512 collision could prove** (19 Oct) [proofs]. "Claim it, (d).
+  Every change RT5 and RT9 named is applied", on `RecDeploy.KSBoundRoute` (#2546). Fix: REC1 restates it with staging
+  and holder-agreement facts, then proves it.
+- **"RecursiveSound is proved", with an event that is nearly empty** [proofs]. The lock lists it as proved. Fix:
+  the knowledge form (PRF-40).
+- **A lifetime pool missing its per-window and lag terms** (19 Oct) [proofs; training's red team]. "ε_total =
+  Pool/C falls as 1/C", while an hour of lag is about 40% of χ. Fix: Pool = (1 + Δ)·ℓ + ln(1/δ)/κ (PRF-45).
+- **ρ₂ cited as Lean-proved where, with dark compute, it's on paper** (19 Oct) [proofs; training's red team].
+  "ρ₂ is the thread theorem's slowdown (`ThreadedThrottled`)". Fix: the note says T1′ is on paper.
+- **A premise false as instantiated, behind a proved theorem** (19 Oct) [training]. "ThreadedThrottled is
+  proved in Lean", but κ counted the LM head's forward products, so the threading premise was false at the deployment.
+  Fix: κ 0.655, and a conjecture entry for the deployed circuit (PRF-82).
+- **A theorem with no instance in any declaration we produce** (19 Oct) [training]. "ContainedTraining is proved
+  in Lean ... Covers one forward chain.", but Programs compute matmuls as Dot16/Dot64 chunks, so no Chain exists. Fix:
+  STATUS says so; a Chain over chunk gates is open (proofs).
+- **A modelled residual used as the default** (19 Oct) [training]. "the machine model gives r about 1%", while
+  honest kernels run 1.72 times the floor; host CPUs at INT8 AMX (11.8% of the server's FP8 rate) were neither
+  credited nor bounded. Fix: residual 0.326 + clock 0.064 + host 0.118.
+- **A sampling plan that holds zero-work templates at one draw** [proofs; training's red team]. "every step that
+  can change a value is drawn with probability at least share / (overhead + replay)", with bits = 0 by default. Fix:
+  harm is the downstream credited work, and value-changing templates at the floor are refused (OPT5).
+- **A tier called necessary that isn't** (18 Oct) [proofs; Daniel's find]. Daniel: "why is this the case? this
+  doesn't seem necessary, remember? … I'm really looking for clarity on what the necessary and sufficient objects are".
+  Fix: re-tiered; NEC1 proved static structure is never necessary (#2647).
+- **"Actual versus declared" stated position by position** (18 Oct) [proofs; Daniel's find]. Daniel: "actual
+  versus declared doesn't require talking about position versus position … this would also be true if I replaced the
+  term circuit with program". Fix: restated format-neutrally.
 - **A bound "for every adversary" that one hard-coded collision falsifies** (18 Oct) [compute-accounting]. "for every
   adversary within T, every r and every oracle H, it requires prob (Bind w) <= δb" is false at any δb < 1, and was about
   to land with Compose. Fix: the Fiat–Shamir files dropped; binding is a per-prover term.
@@ -262,7 +337,9 @@ Under each question, newest first; the lane that found or reported it is in brac
   Held guarantee is proved", but its rate premises held only for a node that never rebuilds, reads disks or uses links.
   Fix: token-bucket premises and `w2_meets` (#2633).
 - **"Proved" on a premise falsified two weeks earlier** [memory-accounting]. PoUS retention "proved in the
-  ideal-permutation model", a permutation falsified on 4 Oct. Fix: a streamed-label wipe resting on the PRF (MEM-51).
+  ideal-permutation model", a permutation falsified on 4 Oct. Training's tiers.py quoted "The slack of 1/19 is
+  proved (SecureErasureMeetsFamily ...)", and the reference Feistel-SHAKE256 lets a developer keep 1.53%. Fix: a
+  streamed-label wipe resting on SHA-512 as a PRF (MEM-51).
 - **Committed bits leaving a spatial unit were free in the covert budget** [network-accounting]. Fix: NET-34.
 - **A rebuild-time bound using our measured rate, not the verifier's ceiling** [network-accounting]. Fix: NET-30.
 - **"NCI changes by 0" stated as proved** (18 Oct) [network-accounting's red team]. Fix: revised with a proved bound.
@@ -275,6 +352,9 @@ Under each question, newest first; the lane that found or reported it is in brac
 
 ### 9. Deferred, or only marked, but stated as done
 
+- **A post-landing regression that refused every deferred landing, silently** (17–19 Oct) [ci]. "research merge:
+  after the landing, started post_train.py" read as if it ran; about a day of landings had no regression verdict. Fix:
+  pass drive's landed attempt to post_train (CI-81).
 - **"The certifier enforces" a check no proved step makes** [network-accounting]. "The certifier enforces it: a constant
   number of frames per bucket", but no gate compared a window's counts to the profile. Fix: #2652, NET-35.
 - **"The served Program never pulls weights on a TP row" before the switch shipped** (19 Oct) [circuits]. Fix: say "after
@@ -289,9 +369,14 @@ Under each question, newest first; the lane that found or reported it is in brac
 
 ### 10. Relayed unread
 
+- **A grep relayed as "can't reproduce"** (19 Oct) [ci]. "I can't reproduce either on next's current tip"; vllm
+  then found a real NameError. Fix: "reproduced" only from a test run, otherwise "not seen in the code".
+- **"main is stuck", read from a commit time** (17 Oct) [proofs]. "origin/main tip c1e1c28838 (committer 18 Oct
+  12:37 PM PDT)" raised a false alarm. Fix: read mergedAt or ci's tick before flagging.
 - **A rule relayed into two briefs, the opposite of the verifier's** (19 Oct) [circuits]. "Split them to <=64 bits; no
-  wider row form is planned", while M0, C-Flock and the Lean refuse a unit whose rows all fit one SHA-512 block. Fix: the
-  rule is at least one row over 888 bits; the worker is redirected.
+  wider row form is planned", while M0, C-Flock and the Lean refuse a unit whose rows all fit one SHA-512 block. Proofs had
+  written "wide rows → circuits split to ≤64 bits (no new verifier form)". Fix: at least one row over 888 bits
+  (HmRow.lean:560); the worker is redirected.
 - **A hypothesis relayed as the likely cause** (19 Oct) [infra]. A worker's first hour went to ruling it out. Fix: leads
   go out marked unverified.
 - **"A-BIND is building" when nobody had launched it** (18 Oct) [compute-accounting]. Kernels waited three hours on
@@ -312,5 +397,5 @@ Under each question, newest first; the lane that found or reported it is in brac
 ### 12. Code on the soundness path that nothing runs
 
 - **Dead legacy kernels** (18 Oct) [kernels]. `verity/ml/kernels/hash_gpu` holds Poseidon2, BLAKE3 and SHA-256 Merkle
-  kernels from archived B-Ligero, imported by nothing live but inside a unit core may import. Fix: proofs to archive them
-  (not done on 19 Oct).
+  kernels from archived B-Ligero, imported by nothing live but inside a unit core may import. Fix: proofs' ARCH1 retires
+  the one caller and moves them to archive/ in three PRs (started 19 Oct).
