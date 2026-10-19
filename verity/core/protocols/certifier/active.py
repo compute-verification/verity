@@ -36,16 +36,19 @@ on a server connection of its own, which it never reads: nothing the server writ
 side never sees the salt.
 
 The certifier's record cells are its grids and two sealed slots per PoUW window: `_salts[p]`, which holds the salt and
-is opened only by `reveal`, and `_weights[p]`, the 64-byte root of the weights PoUW's noise seed reads, which the
-prover hands once (`commit_weights(p, root)`) while p's first ingress tick, the salt's draw, is still ahead, and which
-`committed(p, registration)` opens on `reveal`'s conditions. So the certifier's word orders the weights before the
-salt. The record's open cells (`Accounting.Attribution.openCells`) are the grids, a function of the traffic, and what
-the certifier sends into the block is a function of its record. `reveal(p, registration)`
-takes the PoUW window's registration as the proof service returned it (`sampled_proofs.service.Registration`) and fails
-closed without it: it refuses unless the receipt is that registration's (`one_stage.registration.receipt`) and
-`registered` reads p off the registration, while p's last ingress record is unpublished (t_d), and for a window whose
-salt was never drawn. `check_salts` is the audit's read of it: p's first raw ingress record holds exactly one salt
-frame of p, the placeholder's, and the revealed salt has `salt_bits` bits.
+is opened only by `reveal`, and `_weights[p]`, the 64-byte root of the weights PoUW's noise seed reads. The prover
+hands that root once (`commit_weights(p, root, signature)`), signed under the prover key registered with the
+certifier (`prover_key`, over `weights_message`), while p's first ingress tick, the salt's draw, is still ahead;
+`committed(p, registration)` opens it on `reveal`'s conditions. So the certifier's word orders the prover's weights
+before the salt, and no one else can fix them. The record's open cells (`Accounting.Attribution.openCells`) are the
+grids, a function of the traffic, and what the certifier sends into the block is a function of its record.
+`reveal(p, registration)` takes the PoUW window's registration as the proof service returned it
+(`sampled_proofs.service.Registration`) and fails closed without it: it refuses unless the receipt is that
+registration's (`one_stage.registration.receipt`) and `registered` reads p off the registration, while p's last
+ingress record is unpublished (t_d), once the certifier's clock is more than `reveal_deadline` past p's end (one PoUW
+window by default), for a window whose salt was never drawn, and for one it has revealed already. So the salt reaches
+one registration of p, made within the deadline after p's work. `check_salts` is the audit's read of it: p's first raw
+ingress record holds exactly one salt frame of p, the placeholder's, and the revealed salt has `salt_bits` bits.
 
 **Back from maintenance** (`Proxy(start=k, position=p)`, off by default): a certifier that was down serves from window k
 of the trusted clock on. Its first tick of each grid is the window's first bucket, its first records are window k's, and
@@ -107,7 +110,9 @@ from collections.abc import Awaitable, Callable, Mapping, Sequence
 from concurrent.futures import Executor, Future, ProcessPoolExecutor
 from dataclasses import dataclass, field
 
+from verity.ml.commitments.identity import tagged_sha512
 from verity.core.protocols.certifier.audit import Audit, Verdict
+from verity.core.protocols.certifier.certificate import PublicKey
 from verity.core.protocols.certifier.grid import (
     GridParams,
     Reason,
@@ -130,6 +135,16 @@ SALT_BYTES = SALT_BITS // 8
 PLACEHOLDER = bytes(64)
 SALT_FRAME_BYTES = HEADER.size + 8 + len(PLACEHOLDER)
 WEIGHTS_ROOT_BYTES = 64  # a frame-v3-sha512 root
+WEIGHTS_TAG = "verity-network-certifier/weights/v1"
+
+
+def weights_message(link: str, window: int, root: bytes, context: bytes = b"") -> bytes:
+    """What the prover signs to hand the certifier of ingress link `link` PoUW window `window`'s weights' root. `context`
+    is the deployment's binding of the run (an epoch's stream, say), so a message signed for one run is never taken
+    in another."""
+    name = link.encode()
+    return tagged_sha512(WEIGHTS_TAG, struct.pack(">H", len(name)) + name + struct.pack(">Q", window) + root +
+                         struct.pack(">I", len(context)) + context)
 
 
 def encode_frame(kind: int, stream: int, payload: bytes, frame_bytes: int) -> bytes:
@@ -458,10 +473,11 @@ class Proxy:
     - with `salt`, a source of one salt of `salt_bits` bits per PoUW window of `pouw_window` certifier windows, such as
       `fresh_salt`, the ingress grid carries each PoUW window's salt frame at its first bucket, the server receives
       the salt on its own connection (`salts_released` and `salts_delivered` count them), and `reveal(p,
-      registration)` gives the verifier PoUW window p's salt once p is registered (`registered` reads the window off
-      a registration, by default `served_window`) and its last ingress record is published; `commit_weights(p, root)`
-      records the weights' root before p's salt is drawn, and `committed(p, registration)` gives it on `reveal`'s
-      conditions;
+      registration)` gives the verifier PoUW window p's salt, once, when p is registered (`registered` reads the window
+      off a registration, by default `served_window`), its last ingress record is published, and the certifier's clock
+      is no more than `reveal_deadline` past p's end (one PoUW window by default); with `prover_key`,
+      `commit_weights(p, root, signature)` records the weights' root the prover signed (`weights_message`, under
+      `prover_context`) before p's salt is drawn, and `committed(p, registration)` gives it on `reveal`'s conditions;
     - with `start` and `position`, it is back from maintenance: it serves windows `start` … `windows` − 1, its first
       egress frame the Program's at `position`;
     - `until(predicate)` waits until the proxy's state satisfies it, for a caller that drives a `VirtualClock`."""
@@ -475,7 +491,8 @@ class Proxy:
                  prover: Prover | None = None, windows: int | None = None, executor: Executor | None = None,
                  salt: Callable[[int, int], bytes] | None = None, salt_bits: int = SALT_BITS, pouw_window: int = 1,
                  registered: Callable[[Registration], int | None] = served_window, start: int = 0,
-                 position: int = 0) -> None:
+                 position: int = 0, reveal_deadline: float | None = None, prover_key: PublicKey | None = None,
+                 prover_context: bytes = b"") -> None:
         if (egress.buckets * egress.bucket_ms) != (ingress.buckets * ingress.bucket_ms):
             raise ValueError("the egress and ingress grids have windows of the same length")
         if prover is not None and syncs:
@@ -499,7 +516,15 @@ class Proxy:
         self.shaper = Shaper(Certifier(egress_link, egress), syncs, sync_set, self.choices, self.windows, start,
                              position)
         self.salt, self.salt_bits, self.pouw_window, self.registered = salt, salt_bits, pouw_window, registered
+        pouw_s = pouw_window * ingress.buckets * ingress.bucket_ms / 1000
+        self.reveal_deadline = pouw_s if reveal_deadline is None else reveal_deadline
+        if not (isinstance(self.reveal_deadline, (int, float)) and self.reveal_deadline > 0):
+            raise ValueError(f"a reveal deadline is a positive number of seconds, not {reveal_deadline!r}")
+        if not isinstance(prover_context, bytes):
+            raise ValueError("the prover's context is bytes")
+        self.prover_key, self.prover_context = prover_key, prover_context
         self._salts: dict[int, bytes] = {}
+        self._revealed: set[int] = set()
         self._weights: dict[int, bytes] = {}
         self._seal = threading.Lock()  # `commit_weights` may run off the loop: the draw and the commit never interleave
         self._salt_out: asyncio.Queue | None = None
@@ -661,31 +686,53 @@ class Proxy:
 
     def reveal(self, window: int, registration: Registration | None) -> bytes:
         """PoUW window `window`'s salt, for the verifier, given the window's registration as the proof service returned
-        it. It fails closed (`RuntimeError`): without a registration whose receipt is its own and off which `registered`
-        reads `window`, while the window's last ingress record is unpublished (t_d), and for a window whose salt wasn't
-        drawn (one this proxy was down for at its start). The receipt isn't signed, so this holds only while `reveal` is
-        called on the auditor's hosts; beyond them it needs an authenticated caller or an LMS-signed receipt."""
+        it, once. It fails closed (`RuntimeError`): without a registration whose receipt is its own and off which
+        `registered` reads `window`, while the window's last ingress record is unpublished (t_d), once the certifier's
+        clock is more than `reveal_deadline` past the window's end, for a window whose salt wasn't drawn (one this proxy
+        was down for at its start), and for a window whose salt it has revealed already. So a registration made after
+        the window's work, or a second one naming the same window, gets no salt. The receipt isn't signed, so this holds
+        only while `reveal` is called on the auditor's hosts; beyond them it needs an authenticated caller or an
+        LMS-signed receipt."""
+        self._opens(window, registration, "salt")
+        if window not in self._salts:
+            raise RuntimeError(f"window {window}'s salt wasn't drawn")
+        with self._seal:
+            if window in self._revealed:
+                raise RuntimeError(f"window {window}'s salt is revealed already")
+            self._revealed.add(window)
+        return self._salts[window]
+
+    def _opens(self, window: int, registration: Registration | None, what: str) -> None:
+        """Refuse unless PoUW window `window` may be opened now on `registration` (`reveal`'s conditions but the once)."""
         if self.salt is None:
             raise ValueError("the salt is off")
         if not self._registers(window, registration):
-            raise RuntimeError(f"no registration of window {window} with its receipt, so its salt isn't revealed")
+            raise RuntimeError(f"no registration of window {window} with its receipt, so its {what} isn't revealed")
         if (window + 1) * self.pouw_window > self.bucketer.certifier.window:
-            raise RuntimeError(f"window {window}'s ingress records aren't all published, so its salt isn't revealed")
-        if window not in self._salts:
-            raise RuntimeError(f"window {window}'s salt wasn't drawn")
-        return self._salts[window]
+            raise RuntimeError(f"window {window}'s ingress records aren't all published, so its {what} isn't revealed")
+        end = self.origin + (window + 1) * self.pouw_window * self.ingress.buckets * self.ingress.bucket_ms / 1000
+        if self.clock() > end + self.reveal_deadline:
+            raise RuntimeError(f"window {window} ended more than {self.reveal_deadline:g} s ago on the certifier's "
+                               f"clock, so its {what} isn't revealed")
 
-    def commit_weights(self, window: int, root: bytes) -> None:
+    def commit_weights(self, window: int, root: bytes, signature: bytes) -> None:
         """Record PoUW window `window`'s weights' root, `WEIGHTS_ROOT_BYTES` bytes, in its sealed slot, so that the
-        certifier's word orders it before the window's salt. It refuses (`RuntimeError`) once the window's first ingress
-        tick, the salt's draw, has run or was missed (a proxy back from maintenance after it), and a second root for
-        the window."""
+        certifier's word orders it before the window's salt. Only the registered prover's root is taken: `signature`
+        verifies under `prover_key` over `weights_message(ingress link, window, root, prover_context)`. It refuses
+        (`RuntimeError`) without a prover key, on a signature that doesn't verify, once the window's first ingress tick,
+        the salt's draw, has run or was missed (a proxy back from maintenance after it), and a second root for the
+        window."""
         if self.salt is None:
             raise ValueError("the salt is off")
         if not isinstance(root, bytes) or len(root) != WEIGHTS_ROOT_BYTES:
             raise ValueError(f"a weights' root is {WEIGHTS_ROOT_BYTES} bytes")
         if not (type(window) is int and 0 <= window and window * self.pouw_window < self.windows):
             raise ValueError(f"PoUW window {window!r} isn't one this proxy serves")
+        if self.prover_key is None:
+            raise RuntimeError("no prover key is registered with this certifier, so it records no weights")
+        message = weights_message(self.bucketer.certifier.link, window, root, self.prover_context)
+        if not isinstance(signature, bytes) or not self.prover_key.verify(message, signature):
+            raise RuntimeError(f"PoUW window {window}'s weights' root isn't signed by the registered prover")
         with self._seal:
             if window in self._salts or self.bucketer.t > window * self.pouw_window * self.ingress.buckets:
                 raise RuntimeError(f"PoUW window {window}'s salt is drawn or its draw has passed, so its weights "
@@ -695,9 +742,10 @@ class Proxy:
             self._weights[window] = root
 
     def committed(self, window: int, registration: Registration | None) -> bytes:
-        """PoUW window `window`'s weights' root, recorded before its salt, on `reveal`'s conditions; it fails closed
-        (`RuntimeError`) for a window whose weights weren't recorded."""
-        self.reveal(window, registration)
+        """PoUW window `window`'s weights' root, recorded before its salt, on `reveal`'s conditions but the once (it is a
+        hiding commitment, and taking it doesn't reveal the salt); it fails closed (`RuntimeError`) for a window whose
+        weights weren't recorded."""
+        self._opens(window, registration, "weights' root")
         if window not in self._weights:
             raise RuntimeError(f"no weights were recorded before PoUW window {window}'s salt")
         return self._weights[window]
