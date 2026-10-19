@@ -32,14 +32,14 @@ declare -A ENVS=(
 declare -A LAUNCH=(
   [vy-dc-h200]="--mem-gb 64"
   [vy-dc-b200]="--mem-gb 64"
-  [vy-nebius-2]="--queue --gpus 1 --gpu-model rtx-pro-6000 --cpus 16 --mem-gb 64 --max-min 75 --preemptible"
+  [vy-nebius-2]="--queue --gpus 1 --gpu-model rtx-pro-6000 --cpus 16 --mem-gb 64 --max-min 120 --preemptible"
 )
 # the Builds of record each GPU runs pinned under (served_commit prof.sh PIN_BUILD), each run's out/build.json: the H200's (PIN_ART)
 # Qwen3-8B's compiled Build r20261018-062957-da83 (artifact digest 3bd5dcb1); the RTX PRO 6000's (PIN_ART_RTX, cc 12.0) circuits'
-# Qwen3-8B Build from cursor/compiled-devices-21f3. The B200 (cc 10.0) is on the compiled Builds' refusal list, so its rows are
-# unpinned. An empty one runs that GPU unpinned.
+# Qwen3-8B Build r20261018-211943-d337 from cursor/compiled-devices-21f3 (artifact digest 533721fc). The B200 (cc 10.0) is on the
+# compiled Builds' refusal list, so its rows are unpinned. An empty one runs that GPU unpinned.
 PIN_ART=${PIN_ART-art:25a1a1e2b13beec1f5bf76334932fb89a5460cfb2f5f0c29ce3a456922f9fcb7}
-PIN_ART_RTX=${PIN_ART_RTX-}
+PIN_ART_RTX=${PIN_ART_RTX-art:6f6bce9b8153587587cfe0b3d30ce5b7240ccb513926893b7f98fffc38e44c74}
 declare -A PIN=([vy-dc-h200]=$PIN_ART [vy-nebius-2]=$PIN_ART_RTX)
 QUESTION="hash-loop: what each committer change does to served commit overhead (TPOT, throughput) per GPU and hash"
 LOGS=$(mktemp -d)

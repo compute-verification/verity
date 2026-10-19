@@ -28,7 +28,8 @@ bench arm's own id. Measures (stock's step times are stock-prof's, the same engi
   serve_lost_per_corun_ms  (serve_run_arm - serve_run_stock) / hash_corun_arm: model-kernel GPU time lost per ms of co-running hash
                            (circuits' interference measure, note:circuits-commit-serve-interference)
 The result's workload_fingerprint.pin is PIN_BUILD's served-pin check (pinned: the arms ran under the Build of record's compile
-artifact and its check found the same winners; unpinned: no PIN_BUILD, as on B200 and RTX PRO 6000 today).
+artifact and its check found the same winners; unpinned: no PIN_BUILD, as on the B200). workload_fingerprint.retain is each arm's
+retention mode, the `retain=` of its definition (the arm sets VERITY_RETAIN in its own process, so the node's default never applies).
 The step measures need a one-point sweep: nsys_summary's runs carry no sweep point, so a wider sweep reports the ratios only.
 """
 from __future__ import annotations
@@ -36,6 +37,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import statistics
 import sys
 from pathlib import Path
@@ -96,6 +98,20 @@ def step_means(summary: list[dict], reps: int) -> dict[str, float]:
         out["first_run_ms"] = round(first["run_wall_ms"], 3)
         cat = first.get("gpu_ms_by_category", {})
         out["first_run_copy_gb"] = round(sum(cat.get(k, (0.0,))[0] for k in ("memcpy.DtoH.GB", "memcpy.HtoD.GB")), 3)
+    return out
+
+
+def retain_modes(arms: list[dict]) -> dict[str, str | None]:
+    """Each arm's `retain=` in its definition (module_spec `pkg.mod:NAME` under benchmarks/); None for an arm without one (stock)."""
+    out: dict[str, str | None] = {}
+    for arm in arms:
+        spec, mode = arm.get("module_spec") or "", None
+        if ":" in spec:
+            mod, name = spec.split(":", 1)
+            src = Path(__file__).resolve().parents[2].joinpath(*mod.split(".")).with_suffix(".py")
+            hit = re.search(rf'^{re.escape(name)} = \w+\([^)]*retain="(\w+)"', src.read_text(), re.M) if src.is_file() else None
+            mode = hit.group(1) if hit else None
+        out[arm.get("id", "?")] = mode
     return out
 
 
@@ -164,7 +180,8 @@ def main() -> int:
         "workload_fingerprint": {"bench": "served_commit/prof.sh", "spec": ident.get("preset", {}).get("id"), "sweep": ident.get("sweep"),
                                  "git_commit": ident.get("git_commit"), "vllm_version": ident.get("vllm_version"),
                                  "arms": [x["id"] for x in ident.get("arms", [])], "reps": a.reps, "row": a.row,
-                                 "hypothesis": a.hypothesis, "clocks": clocks, "pin": pin},
+                                 "hypothesis": a.hypothesis, "clocks": clocks, "pin": pin,
+                                 "retain": retain_modes(ident.get("arms", []))},
         "validation": {"status": status, "checker": "verity-bench gates (token-for-token vs stock, commit-arm gate)",
                        "detail": "; ".join(errors) or f"bench rc {a.bench_rc}, gates {'passed' if gates_ok else 'failed'}", "evidence": []},
         "measurements": meas,
