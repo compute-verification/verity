@@ -15,5 +15,6 @@ ruling, because the commitment's hash is a design rule ("One hash", AGENTS.md).
 | `sharaw/` | hm96-sha512 at 4 KiB leaves near the raw SHA-512 rate |
 | `structure/` | leaf size, tree arity, salts off the step, and SHA-512 fused into the GEMM |
 | `lattice/` | SIS (Ajtai) hashes on the INT8 tensor cores: parameters and throughput |
+| `dither/` | PoUW's H1 + fx1 receipts served in compiled vLLM on the RTX PRO 6000 (sm_120): the one-stream linear (`h1o.cu`) whose noised MMAs serve y, with the credited peel z = A Bᵀ; the A tables (`h1c.cu`); each kernel gated against CA's H1V3 (`h1ogate.py`), and the served overhead against stock vLLM int8, paired rep by rep (`sbench.py`) |
 
 The campaign's findings and the recommendation to Daniel are in the notes, `lanes/hash/`.
