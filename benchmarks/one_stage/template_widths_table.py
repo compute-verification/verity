@@ -5,7 +5,9 @@
 
 One line per (Definition family, route) over 16 bits, its specs folded (the statics that vary across them
 shown as ranges, e.g. an attention head's T): the committed bits (the held rule's count), the rows that offer it, its
-units per rank (every part of a rank summed: request, step, workload; every spec of the line summed), the 16-bit re-cut per
+units per rank (the instances in the rank's request Programs, every request of the row and every spec of the line summed;
+the step Program is one decode step of a request and the workload Program wraps the requests, so neither is added, and a
+line no request reaches shows its step Program's count, marked), the 16-bit re-cut per
 instance (``units16``: measured where `template_widths.recut` ran, else the lower bound from its returned widths, marked
 ``≥``) and the AND cost of the cheaper re-cut against today's, the class it needs under ASK-61's option A (16, 1,024, or the
 next power of two), and its owner. The route is how a row offers the template: ``row`` (the serving-rows window's "any
@@ -140,7 +142,8 @@ def main() -> int:
     a = ap.parse_args()
     recs: dict[str, dict] = {}
     rows_of: dict[str, set] = defaultdict(set)
-    per_rank: dict[str, dict[str, dict[int, int]]] = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
+    per_part: dict[str, dict[str, dict[str, dict[int, int]]]] = defaultdict(
+        lambda: defaultdict(lambda: defaultdict(lambda: defaultdict(int))))
     progs: dict[str, list] = defaultdict(list)
     for p in a.rows:
         d = json.loads(p.read_text())
@@ -152,7 +155,9 @@ def main() -> int:
             recs[tid]["hows"] = sorted(set(old.get("hows", [])) | set(rec.get("hows", [])))
         for tid, by in d["units"].items():
             for key, n in by.items():
-                per_rank[tid][row][int(key.split("/")[0][1:])] += n
+                rank, part = key.split("/", 1)
+                kind = "request" if part.startswith("request") else part
+                per_part[kind][tid][row][int(rank[1:])] += n
                 rows_of[tid].add(row)
     lines_by: dict[tuple, list[str]] = defaultdict(list)
     for tid, r in recs.items():
@@ -169,14 +174,17 @@ def main() -> int:
         rs = [recs[t] for t in ids]
         rep = pick(rs)
         rws = sorted(set().union(*(rows_of[t] for t in ids)))
-        ranks = []
+        ranks, upr = [], {}
         for row in rws:
+            kind = next(k for k in ("request", "step", "workload") if any(per_part[k][t][row] for t in ids))
+            src, mark = per_part[kind], "" if kind == "request" else f" ({kind} Program only)"
             tot: dict[int, int] = defaultdict(int)
             for t in ids:
-                for rk, n in per_rank[t][row].items():
+                for rk, n in src[t][row].items():
                     tot[rk] += n
+            upr[row] = dict(sorted(tot.items()))
             lo, hi = min(tot.values()), max(tot.values())
-            ranks.append(f"{row} {lo:,}" if lo == hi else f"{row} {lo:,}–{hi:,} over {len(tot)} ranks")
+            ranks.append(f"{row} {lo:,}{mark}" if lo == hi else f"{row} {lo:,}–{hi:,} over {len(tot)} ranks{mark}")
         u, measured = units16(rep)
         ruled = [r for r in rs if "verdict" in r]
         ref = sum(r["verdict"].startswith("refused") for r in ruled)
@@ -187,9 +195,7 @@ def main() -> int:
         lines.append(f"| `{fold(sorted(ids))}` | {bits}{rule} | {key[1]} | {', '.join(rws)} | {'; '.join(ranks)} | "
                      f"{'' if measured else '≥'}{u:,}{at} | {ands(rep)} | {klass(hi_b)} | @circuits |")
         jl.append({"definition": fold(sorted(ids)), "specs": sorted(ids), "bits": [lo_b, hi_b], "route": key[1], "rows": rws,
-                   "units_per_rank": {row: dict(sorted({rk: sum(per_rank[t][row].get(rk, 0) for t in ids)
-                                                        for rk in set().union(*(per_rank[t][row] for t in ids))}.items()))
-                                      for row in rws},
+                   "units_per_rank": upr,
                    "units16_per_instance": u, "units16_measured": measured, "recut": rep.get("recut"),
                    "representative": rep["id"], "rule_runs": len(ruled), "rule_refused": ref, "class_A": klass(hi_b),
                    "owner": "@circuits"})
@@ -202,7 +208,7 @@ def main() -> int:
            f"under 16 ({', '.join(sorted({recs[t]['family'] for t in under}))}); {len(unmeasured)} not measured; "
            f"{len(dis)} disagreements between the rule's walk and the descriptor count; {len(dropped)} root constants and workload "
            f"roots left out (not templates).", "",
-           "Programs read: " + "; ".join(f"{row}: {len(ps)} ({sum(1 for p in ps if p['digest_ok'])} digests match records.json)"
+           "Programs read: " + "; ".join(f"{row}: {len(ps)} ({sum(1 for p in ps if p['digest_ok'])} digests match the row's pins)"
                                          for row, ps in sorted(progs.items())), ""]
     kj = []
     if a.known:
