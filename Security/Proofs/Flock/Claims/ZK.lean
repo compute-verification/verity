@@ -38,6 +38,18 @@ import Proofs.Flock.Claims.ZK.SaltProver
 import Proofs.Flock.Claims.ZK.CutSession
 import Proofs.Flock.Claims.ZK.ExePlan
 import Proofs.Flock.Claims.ZK.Split
+import Proofs.Flock.Claims.ZK.SimCommit
+import Proofs.Flock.Claims.ZK.PrefixLive
+import Proofs.Flock.Claims.ZK.SimSession
+import Proofs.Flock.Claims.ZK.SimInner
+import Proofs.Flock.Claims.ZK.SplitInner
+import Proofs.Flock.Claims.ZK.InnerSlotTriple
+import Proofs.Flock.Claims.ZK.InnerLeaf
+import Proofs.Flock.Claims.ZK.InnerY
+import Proofs.Flock.Claims.ZK.InnerBatched
+import Proofs.Flock.Claims.ZK.InnerTauVal
+import Proofs.Flock.Claims.ZK.InnerTauRep
+import Proofs.Flock.Claims.ZK.InnerTauLig
 import Proofs.Flock.Claims.ZK.Assemble
 import Proofs.Flock.Claims.ZK.Sent
 import Proofs.Flock.Claims.ZK.Round1
@@ -48,9 +60,19 @@ import Proofs.Flock.Claims.ZK.Round2
 import Proofs.Flock.Claims.ZK.Round3Vals
 import Proofs.Flock.Claims.ZK.SimZerocheck
 import Proofs.Flock.Claims.ZK.SimPiopGo
-import Proofs.Flock.Claims.ZK.SimPiop
+import Proofs.Flock.Claims.ZK.SimPiopOf
 import Proofs.Flock.Claims.ZK.PiopSrcVals
 import Proofs.Flock.Claims.ZK.PiopSrcLc
+import Proofs.Flock.Claims.ZK.SentE
+import Proofs.Flock.Claims.ZK.PiopSrcSv
+import Proofs.Flock.Claims.ZK.SimPiop
+import Proofs.Flock.Claims.ZK.SimLig
+import Proofs.Flock.Claims.ZK.FinExe
+import Proofs.Flock.Claims.ZK.FinPads
+import Proofs.Flock.Claims.ZK.CausalExe
+import Proofs.Flock.Claims.ZK.LiveEnd
+import Proofs.Flock.Claims.ZK.FinTau
+import Proofs.Flock.Claims.ZK.FinInner
 import Proofs.Flock.Claims.ZK.Worker
 import Proofs.Flock.Claims.ZK.Switched
 import Proofs.Flock.Claims.ZK.Server
@@ -265,7 +287,7 @@ import Proofs.Flock.Claims.ZK.Stop
 * `SimPiopGo`: the rest of `SimPiop`'s PIOP in lockstep: the cut's lincheck against the session's
   (`FlockComplete.lincheckCut_alike`), its ring switch (`FlockComplete.ringSwitchCut_alike`), and the cut's PIOP
   returning the session's from a source at the cut's coins (`FlockComplete.PiopSrc`, `FlockComplete.piopCut_alike`).
-* `SimPiop`: `Masked.SimPiop` from the deployed source at the opened coins (`Masked.PiopSrcE`, `Masked.simPiop_of`):
+* `SimPiopOf`: `Masked.SimPiop` from the deployed source at the opened coins (`Masked.PiopSrcE`, `Masked.simPiop_of`):
   `repMix 0` and `repMix 1` differ only in the PIOP (`FlockComplete.repMix_zero_one`).
 * `PiopSrcVals`: `Masked.PiopSrcE`'s zerocheck fields: the deployed source masks at the zerocheck's layout indices
   the plain prover's messages at the opened coins plus the session's pads (`Masked.src_r1ab`, `Masked.src_r1c`,
@@ -276,6 +298,14 @@ import Proofs.Flock.Claims.ZK.Stop
   plain prover's round messages and `z_partial` at `lcCoins` plus the session's pads (`Masked.src_lc0`,
   `Masked.src_lc1`, `Masked.src_zp`), since the prover's halved columns are the model's `lcU`, `lcV` folded at the round
   coins (`Replay.Lc.msg_lcMsg`) and the draw's coins are the executable's (`Masked.lcH_exe`).
+* `SentE`: every check of the deployed cut up to a seen slot passes where no refusal is seen (`Masked.famPasses_of`):
+  each check's round (`Masked.guardSlot`) follows the session's order (`Masked.guardSlot_mono`), and the rank check is
+  full rank at the plan's points, the executable's (`Masked.rankOn_of`).
+* `PiopSrcSv`: `Masked.PiopSrcE`'s ring-switch field (`Masked.src_sv`): where the rep sends masked claim `2r + k`'s
+  `ŝ` (`Masked.famPasses_of`) it is `shat` at `z = (w, u)` at the opened coins (`Masked.sv_masked`), and region claim
+  `k − 2`'s is the witness's off the mask slot at the link points of round `0`'s coin (`Masked.sv_region`,
+  `Masked.extras_x`), each the prover's switched vector (`Replay.Rs.switchVec_shat`).
+* `SimPiop`: `Masked.simPiop`, from `Masked.simPiop_of` at `Masked.piopSrcE`.
 * `HiSalts`: levels ≥ 1's salts by level and position (`Masked.hiSalt`, at `Masked.hiIdx`): at the executable's
   layout, the salts the model hands table `j`'s rep `r` are the masked prover's tape's `salt j r l p` on the schedule's
   levels `l ≥ 1` and their positions (`Masked.hiSalt_exe`), so a Ligerito prover of levels ≥ 1 built from one reading
@@ -293,9 +323,47 @@ import Proofs.Flock.Claims.ZK.Stop
 * `Split`: the open premises of `Flock.zk_deployZk_masked_exe_sent_gap` at the deployed plan, as eight statements
   (`Masked.PrefixLive`, `Masked.SimPiop`, `Masked.SimLig`, `Masked.SimInner`, `Masked.SimCommit`, `Masked.SimSession`,
   `Masked.CausalExe`, `Masked.FinExe`).
-* `Assemble`: `Flock.zk_deployZk_masked_exe_split`, Flock's zero knowledge at the deployed masked session from those eight
-  statements: `hstep` from `PrefixLive` and `SimSession` (`Masked.hstep_exe`), `SimSession` from `SimCommit` and the
-  hybrids.
+* `SimCommit`: `Masked.simCommit`, the commitments from the cut's leaves (`Masked.SimCommit`).
+* `PrefixLive`: `Masked.prefixLive`, the session answered by the openings against the one stopped after the round.
+* `SimSession`: `Masked.simSession_of`, `SimSession` from `SimCommit` and the three hybrids.
+* `SimInner`: `Masked.simInner_of`, `SimInner` from what the cut's source carries for the inner proof
+  (`Masked.InnerSrcE`).
+* `SplitInner`: `InnerSrcE` as statements at its hypotheses (`Masked.InnerAt`): the slot count, the triple's openings,
+  the batched constraint, `τ`'s value and leaf, and `Y` (`Masked.InnerSlot`, `Masked.InnerTriple`,
+  `Masked.InnerBatched`, `Masked.InnerTauVal`, `Masked.InnerTauLeaf`, `Masked.InnerY`), and `SimInner` from them
+  (`Masked.simInner_of_split`).
+* `InnerSlotTriple`: `Masked.innerSlot_holds` and `Masked.innerTriple_holds`, `InnerSlot` and `InnerTriple` from
+  `SimInner`'s `innerPre_slot` and `innerTripleE`.
+* `InnerLeaf`: `Masked.innerTriple` and `Masked.innerTauLeaf`, the cut's triple openings and `τ` commitment read off
+  the tape, and `y_τ`'s bytes as the honest pads' `τ` salt (`Masked.ytau_saltBytes`).
+* `InnerY`: `Masked.innerY`, the cut's `Y` is the session's at the honest pads once `β`'s round is answered.
+* `InnerBatched`: `Masked.innerBatched`, the batched constraint over the shared phases' constraints holds at the honest
+  pads.
+* `InnerTauVal`: `Masked.innerTauVal_of`, `InnerTauVal` from the inner proof's seven rows before the triple
+  (`Masked.TauRows`), split as the replay's five (`Masked.TauRep`) and level 0's two (`Masked.TauLig`).
+* `InnerTauRep`: `Masked.tauRep`, the replay's three rows and the two ring-switch rows are `rowsOf`'s on the view and
+  `czExe`'s coins (the run being the session's, `Masked.innerPre_cutE`); `Masked.innerTauVal_of_tauLig : TauLig →
+  InnerTauVal`.
+* `InnerTauLig`: `Masked.tauLig`, level 0's two lane rows are `limbRows` of the model's `laneRow` at `czExe`'s coins
+  (`Masked.lanesA`), so **`Masked.innerTauVal`**: `InnerTauVal`.
+* `SimLig`: `Masked.simLig`, hybrid 1 against hybrid 2: Ligerito from the cut's source is the session's.
+* `FinExe`: `FinExe` from `LiveEnd`, `SimCommit`, the three hybrids, `RepTau` and the opened positions' fields
+  `RepOpenRest` (`Masked.finExe_of_rest`); the rep count and rep 0's claim points (`Masked.repExact`,
+  `Masked.repPoints`); and `FinalRest`'s level-0 half: level 0's opened rows and salts read from the views are the
+  session's (`Masked.repOpenRest_l0`).
+* `FinPads`: `Masked.repOpenRest_pads`, `FinalRest`'s pads half: the pads' opened columns and salts read from the views
+  are the session's.
+* `LiveEnd`: `Masked.liveEnd`, the session answered by the openings ends as the one answered by the opened coins.
+* `FinTau`: `Masked.repTau_of`, `FinExe`'s `RepTau` from `InnerTauVal`: the session's rep's `τ` is `innerP`'s after the
+  shared phases, at the rep's `ε` slot's coins.
+* `FinInner`: `Masked.repOpenRest` (both halves of `FinalRest`) and `Masked.finExe_of_inner`, `FinExe` from `LiveEnd`,
+  `SimCommit`, the three hybrids and `InnerTauVal`.
+* `CausalExe`: `Masked.causalExe`, `CausalExe`: every executable send reads only coins drawn before it.
+* `Assemble`: **`Flock.zk_deployZk_masked_exe_split`**, Flock's zero knowledge at the deployed masked session given
+  only that `H` is SHA-512 and `0 < t`: `hstep` from `Masked.prefixLive` and `SimSession` (`Masked.hstep_exe`),
+  `SimSession` from `Masked.simCommit`, `Masked.simPiop`, `Masked.simLig` and `SimInner` (`Masked.simSession_of`),
+  `SimInner` from `SplitInner` (`Masked.simInner_of_split`, `τ`'s value `Masked.innerTauVal`), `Causal` by
+  `Masked.causalExe`, and the last message from `Masked.liveEnd` and `Masked.innerTauVal` (`Masked.finExe_of_inner`).
 * `Worker`: Lemma B at any clear values a worker supplies, which never read the pads: the switched prover (`p`'s view
   where its rows hold, else the honest prover's on the pads Lemma A moves) has `S_shvzk`'s distribution on the honest
   `InnerHolds` alone (`sw_shvzk`, `worker_shvzk`), and differs from `p`'s view only in `Y₁`, `C_h` and the pads tree
