@@ -16,7 +16,7 @@ import bisect
 import hashlib
 import json
 from dataclasses import dataclass, field
-from functools import lru_cache, partial, reduce
+from functools import cached_property, lru_cache, partial, reduce
 from typing import Callable, Collection, Sequence
 
 import numpy as np
@@ -865,11 +865,14 @@ def netlist(lay: Layout, name: str, cut: dict | None = None, leaves: dict | None
     lines = [" ".join(map(str, head))]
     for a, b in zip(lay.rows_a, lay.rows_b):
         lines.append(" ".join(map(str, [len(a), *_cols_of(a), len(b), *_cols_of(b)])))
-    if leaves is not None:
-        lines.append("LEAVES " + json.dumps(leaves, sort_keys=True, separators=(",", ":")))
-    if cut is not None:
-        lines.append("CUT " + json.dumps(cut, sort_keys=True, separators=(",", ":")))
-    return "\n".join(lines) + "\n"
+    return "\n".join(lines) + "\n" + netlist_pins(cut, leaves)
+
+
+def netlist_pins(cut: dict | None, leaves: dict | None) -> str:
+    """The ``LEAVES`` and ``CUT`` lines :func:`netlist` ends with: ``netlist(lay, name, cut, leaves)`` is
+    ``netlist(lay, name) + netlist_pins(cut, leaves)``."""
+    pins = "" if leaves is None else "LEAVES " + json.dumps(leaves, sort_keys=True, separators=(",", ":")) + "\n"
+    return pins + ("" if cut is None else "CUT " + json.dumps(cut, sort_keys=True, separators=(",", ":")) + "\n")
 
 
 def _cols_of(r) -> list:
@@ -997,9 +1000,17 @@ class Lowering:
     def text(self) -> str:
         return netlist(self.layout, self.name, self.cut, self.leaves)
 
-    @property
+    @cached_property
     def sha256(self) -> str:
-        return digest(self.text)
+        """:func:`digest` of :attr:`text`, rendered on first read only: nothing changes a lowering once it is built."""
+        return self.sha256_of(netlist(self.layout, self.name))
+
+    def sha256_of(self, expanded: str) -> str:
+        """:attr:`sha256` from ``expanded``, the unit's ``netlist(layout, name)`` (:attr:`text` without its LEAVES and CUT
+        lines), for a caller that renders it anyway (`circuit.compose`'s unit section): the netlist is rendered once."""
+        h = hashlib.sha256(expanded.encode())
+        h.update(netlist_pins(self.cut, self.leaves).encode())
+        return h.hexdigest()
 
     def _index(self, src: list[list[tuple]], n_leaf: int) -> np.ndarray:
         """``(U, ports)`` column indices into ``[leaves | cut words | 0]`` (a zero leaf reads the last, all-zero column)."""
