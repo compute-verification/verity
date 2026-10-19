@@ -43,7 +43,7 @@ variable {T}
 def Links.Whole (L : T.Links) (R : Finset (Fin c.D.N)) (a : Fin c.D.N) : Prop :=
   (L.src a).Nonempty ∧ L.src a ⊆ R
 
-instance (L : T.Links) (R : Finset (Fin c.D.N)) : DecidablePred (L.Whole R) :=
+instance instDecidablePredFinNDWhole (L : T.Links) (R : Finset (Fin c.D.N)) : DecidablePred (L.Whole R) :=
   fun a => inferInstanceAs (Decidable ((L.src a).Nonempty ∧ L.src a ⊆ R))
 
 end Threading
