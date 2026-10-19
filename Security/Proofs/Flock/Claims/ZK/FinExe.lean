@@ -28,7 +28,9 @@ gap: `finExe_of`.
 * **The rep count and claim points** (`repExact`, `repPoints`): the run answered by `asksCut` is the run answered by
   `asksS` at the coins' bytes (`FinRep.repPZk_cut`), whose rounds `repPZk_exact` and `repPZk_points` count.
 
-`finExe_of_final` is `FinExe` from `LiveEnd`, `SimCommit`, the hybrids and `RepOpenFinal`.
+`finExe_of_final` is `FinExe` from `LiveEnd`, `SimCommit`, the hybrids and `RepOpenFinal`. The rep from the views sends
+its source's `τ`, the view's (`srcV_tau`), so `RepOpenFinal` is the session's `τ` the view's (`RepTau`, `InnerTauVal`'s
+reading at the last message) and the four fields at opened positions (`RepOpenRest`): `finExe_of_rest`.
 -/
 
 namespace FlockComplete.ZkTables
@@ -1179,7 +1181,31 @@ theorem repCut_map_tauSalt (io : Asks M) (hs : _root_.Flock.Hashes M) (st : _roo
   unfold repCut
   simp only [map_bind, bind_pure_comp, Functor.map_map, innerCut_map_tauSalt]
 
+theorem innerCut_map_tau (io : Asks M) (lay : _root_.Flock.Zk.PadLayout) (ic : InnerCommit)
+    (finalC : _root_.Flock.F128) (src : RepSrc) (cons : Array (String × _root_.Flock.Zk.Lin)) :
+    (fun z => z.tau) <$> innerCut io lay ic finalC src cons = (fun _ => src.tau) <$> innerCut io lay ic finalC src cons := by
+  unfold innerCut
+  simp only [map_bind, map_pure, map_ite']
+
+/-- **The cut's rep sends its source's `τ`**, whatever it returns. -/
+theorem repCut_map_tau (io : Asks M) (hs : _root_.Flock.Hashes M) (st : _root_.Flock.Setup)
+    (sch : _root_.Flock.Schedule) (rep : ℕ) (dom : ByteArray) (cm : Commit) (extras : Array _root_.Flock.Claim)
+    (ic : InnerCommit) (src : RepSrc) (prior : Array (List _root_.Flock.F128)) (words : List ℕ) :
+    (fun z => z.inner.tau) <$> repCut io hs st sch rep dom cm extras ic src prior words =
+      (fun _ => src.tau) <$> repCut io hs st sch rep dom cm extras ic src prior words := by
+  unfold repCut
+  simp only [map_bind, bind_pure_comp, Functor.map_map, innerCut_map_tau]
+
 end TauSalt
+
+/-- A rep run that returns has the value of a field its every run has. -/
+theorem field_of_map {β : Type} {m : _root_.Flock.TMW FlockComplete.PS _root_.Flock.Zk.ZkProof}
+    (F : _root_.Flock.Zk.ZkProof → β) {b : β} (hm : F <$> m = (fun _ => b) <$> m) {s : _root_.Flock.Transcript}
+    {l l' : Array Msg} {p : _root_.Flock.Zk.ZkProof} {t : _root_.Flock.Transcript}
+    (h : (m.run s).go l = (.ok (p, t), l')) : F p = b := by
+  have e := congrArg (fun z => (z.run s).go l) hm
+  simp only [StateT.run_map, FlockComplete.go_map', h, Except.map, Prod.mk.injEq, Except.ok.injEq] at e
+  exact e.1.1
 
 /-- A rep run that returns proves under the salt its every run proves under. -/
 theorem tauSalt_of_map {m : _root_.Flock.TMW FlockComplete.PS _root_.Flock.Zk.ZkProof} {b : ByteArray}
@@ -1361,6 +1387,50 @@ theorem repFinal_of (h : RepOpenFinal) : RepFinal := by
   rw [FinRep.tauSalt_of_map (FinRep.repCut_map_tauSalt _ _ _ _ _ _ _ _ _ _ _ _) hp,
     FinRep.tauSalt_of_map (FinRep.repPZk_map_tauSalt _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) hq]
   exact srcV_tauSalt x c w τ hi hC.2.2.2.2.1 _
+
+/-- **The views' `τ` is table `i`'s view's** (`View.tau`, `InnerTauVal`'s right side). -/
+theorem srcV_tau (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit) (τ : UE.Tape) {i r : ℕ}
+    (hi : i < jOf x) (hr : r < 2) :
+    ((srcV x c w τ i).rep r).tau = FlockLevel3.GF128.val ((viewsE x c w τ ⟨i, hi⟩).tau ⟨r, hr⟩) := by
+  show ((tabSrcView PE x (czExe PE x c) (viewsE x c w τ) i).rep r).tau = _
+  unfold tabSrcView
+  rw [dite_eq_left hi]
+  dsimp only
+  rw [dite_eq_left hr]
+
+/-- **`τ` in the session's rep is its view's**: in a rep's context, where the session's rep returns, its `τ` is table
+`i`'s view's (`InnerTauVal`'s reading at the last message). -/
+def RepTau : Prop :=
+  ∀ x w τ c spec i hi r cm0 extras ic l, RepCtx x w τ c spec i hi r cm0 extras ic l →
+    ∀ q t l', (repHE x w τ c spec i hi r cm0 extras ic).go l = (.ok (q, t), l') → ∀ hr : r < 2,
+      q.inner.tau = FlockLevel3.GF128.val ((viewsE x c w τ ⟨i, hi⟩).tau ⟨r, hr⟩)
+
+/-- **Two rep proofs agree on the final-only data at opened positions**: level 0's opened rows and salts, and the
+pads' opened columns and salts. -/
+def FinalRest (p q : _root_.Flock.Zk.ZkProof) : Prop :=
+  p.proof.ligerito.initialProof.rows = q.proof.ligerito.initialProof.rows ∧
+    p.proof.ligerito.initialProof.salts = q.proof.ligerito.initialProof.salts ∧
+    p.inner.opened = q.inner.opened ∧ p.inner.salts = q.inner.salts
+
+/-- **`RepOpenFinal` at the opened positions**: in a rep's context, where the rep read from the views and the session's
+rep both return, at one transcript and history and with proofs equal up to `eraseZ`, level 0's opened rows and salts and
+the pads' opened columns and salts agree. -/
+def RepOpenRest : Prop :=
+  ∀ x w τ c spec i hi r cm0 extras ic l, RepCtx x w τ c spec i hi r cm0 extras ic l →
+    ∀ p q t l', (repVE x w τ c spec i hi r cm0 extras ic).go l = (.ok (p, t), l') →
+      (repHE x w τ c spec i hi r cm0 extras ic).go l = (.ok (q, t), l') →
+      FlockComplete.eraseZ p = FlockComplete.eraseZ q → FinalRest p q
+
+/-- **`RepOpenFinal` from `τ` and the opened positions**: the rep read from the views sends its source's `τ`
+(`FinRep.repCut_map_tau`), the view's (`srcV_tau`), which is the session's (`RepTau`). -/
+theorem repOpenFinal_of (hT : RepTau) (hR : RepOpenRest) : RepOpenFinal := by
+  intro x w τ c spec i hi r cm0 extras ic l hC p q t l' hp hq hz
+  obtain ⟨h1, h2, h3, h4⟩ := hR x w τ c spec i hi r cm0 extras ic l hC p q t l' hp hq hz
+  refine ⟨h1, h2, ?_, h3, h4⟩
+  have hr := hC.2.2.2.2.1
+  rw [FinRep.field_of_map (fun z => z.inner.tau) (FinRep.repCut_map_tau _ _ _ _ _ _ _ _ _ _ _ _) hp,
+    hT x w τ c spec i hi r cm0 extras ic l hC q t l' hq hr]
+  exact srcV_tau x c w τ hi hr
 
 /-! ## The opened coins as replies
 
@@ -1629,6 +1699,12 @@ count and rep `0`'s claim points proved (`repExact`, `repPoints`). -/
 theorem finExe_of_final (hL : LiveEnd) (hSC : SimCommit) (h0 : SimPiop) (h1 : SimLig) (h2 : SimInner)
     (hO : RepOpenFinal) : FinExe :=
   finExe_of_open hL hSC h0 h1 h2 hO repExact repPoints
+
+/-- **`FinExe` from the hybrids, the live end, the session's `τ` and the opened positions** (`finExe_of_final` with
+`RepOpenFinal` from `RepTau` and `RepOpenRest`, `repOpenFinal_of`). -/
+theorem finExe_of_rest (hL : LiveEnd) (hSC : SimCommit) (h0 : SimPiop) (h1 : SimLig) (h2 : SimInner) (hT : RepTau)
+    (hR : RepOpenRest) : FinExe :=
+  finExe_of_final hL hSC h0 h1 h2 (repOpenFinal_of hT hR)
 
 end Masked
 
