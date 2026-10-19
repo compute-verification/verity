@@ -65,9 +65,10 @@
     exclusive       --exclusive takes <root>/runs/.exclusive.lock (O_EXCL) naming the run; a live holder refuses the launch with the reason.
                     A dead holder (terminal status or vanished pid) is reclaimed.  The runner releases its own lock at exit.
     memory          --mem-gb N: the machine side admits the run only if its memory cgroup's limit - in use - live reservations
-                    (the fleet's /workspace/ramlock/*.json, machines.toml `ramlock`) >= N, and writes the run's reservation there;
-                    else MemoryNotAvailable (refused.json).  --mem-wait S polls up to S seconds instead.  The runner removes the
-                    reservation at exit; job.json run.remote.mem records the reading it was admitted on (research.mem).
+                    (the fleet's /workspace/ramlock/*.json, machines.toml `ramlock`) >= N and no older --mem-wait run is waiting in
+                    line, and writes the run's reservation there; else MemoryNotAvailable (refused.json).  --mem-wait S waits in line
+                    up to S seconds instead, first come first served.  The runner removes the reservation at exit; job.json
+                    run.remote.mem records the reading it was admitted on (research.mem).
     GPUs            on a machine whose GPUs gpu-lease hands out (GPU_LEASE_HOST_FILE), a run sees no GPU (CUDA_VISIBLE_DEVICES='')
                     unless it declares `--gpus N`: its workload then runs under `gpu-lease N --wait`, which queues it first come first
                     served for N of them (the wait counts against --timeout) and names them in CUDA_VISIBLE_DEVICES.  A workload that

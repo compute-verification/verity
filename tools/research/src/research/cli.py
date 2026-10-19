@@ -201,7 +201,9 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
                     help="with --on: admit only if the machine's memory cgroup has N GB free after live reservations (/workspace/ramlock), "
                          "and reserve them for the run; else MemoryNotAvailable (research.mem). With --queue: the job's memory cap "
                          "(its scope's MemoryMax=), required unless --kind names a registered kind, whose shape gives it")
-    ap.add_argument("--mem-wait", type=float, default=0.0, metavar="S", help="with --mem-gb: wait up to S seconds for the memory instead of refusing")
+    ap.add_argument("--mem-wait", type=float, default=0.0, metavar="S",
+                    help="with --mem-gb: wait up to S seconds for the memory instead of refusing, in line behind older waiters "
+                         "(first come first served, research.mem)")
     ap.add_argument("--preflight", default=None, metavar="TOOL",
                     help="with --on --source: run TOOL's declared preflight (Tool.preflight) on the machine before this run, as a --tool TOOL "
                          "run does, and refuse the run when it fails")
