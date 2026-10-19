@@ -155,32 +155,34 @@ TIERS = {
 
 #: what each step of the model rests on
 STATUS = [
-    ("Declared computation, thread bound", "ThreadedThrottled is proved in Lean when the declared circuit contains the "
-     "whole reference circuit; the extension to dark gates (T1') is being proved. Rests on WeightsIncompressible and the "
-     "Threaded (d, e) premise, which a worker is proving for a defined reference circuit."),
-    ("Declared computation, partial-sum law", "ContainedTraining is proved in Lean with no dark compute; the absorption "
-     "budget (PS') is being proved. Needs a reference circuit with bounded-fan-in additions. Covers one forward chain."),
-    ("Monitored compute residual", "PoUW's deficit epsilon_W = 0.74% is proved (CircuitWork and CircuitCredit, draft "
-     "#2638) under named premises, for live coins, but it is a share of credited work. r is about 1% of device time only "
-     "under the floor credit with verified filler (Decisions 89/90, Corollary D3; modelled, not served): today's served "
-     "windows credit 10.3% of padded MACs. Host CPUs are neither credited nor bounded and count at their datasheet peak "
-     "until a CPU filler or a physical cap exists (CMP-49)."),
-    ("Memory cap", "Actual.Windows and ThreadedReads are proved; the composition and reads counted by information are "
-     "being proved. Needs the declared computation's novel intake held to alpha F, which holds only once the per-window "
-     "count check is a gated unit in the ZK flow (NET-35); until then intake is line rate (intake_x about 1.3e6) and memory "
-     "caps nothing."),
-    ("Wipe residual", "The slack is proved only in the ideal-permutation model, and the reference permutation is refuted "
-     "(a developer passes from 1.53% of the store), so tier 3 rests on a falsified assumption today. The certificate's "
-     "floor (0.47% at D = 2) can be freed at any k. Memory outside the fill is measured as gaps (on-chip 3.05 GB, GPU "
-     "reserve 18.4 GB, host 29.5 GB). No theorem bounds help during a wipe; the helper term is an attack."),
+    ("Declared computation, thread bound", "ThreadedThrottled is proved in Lean (draft #2343) when the declaration "
+     "contains the reference circuit gate for gate, and with dark gates (T1', ThreadedThrottledOn) on a branch. It rests "
+     "on WeightsIncompressible and Threaded (d, e). (505, 37248) is ThreadedOfLayered's for a reference circuit with one "
+     "wide sum per entry, under the open conjecture ReferenceLayered; no Dot16 declaration contains that circuit, so the "
+     "deployment's (d, e) is a Dot16 reference circuit's, being derived (at d = 10 the floor is 1,260; at d = 1, 320)."),
+    ("Declared computation, partial-sum law", "Off by default (kappa_chain = 0): ContainedTraining and PS' rest on "
+     "PartialSumsSupport and ActivationsSupport, which NCI-FALSIFY reproduced as false."),
+    ("Monitored compute residual", "r = r-hat + eps'. PoUW's deficit epsilon_W = 0.74% (CircuitCredit, draft #2638) is "
+     "a share of credited work, evaluated with its premises granted. Under the floor credit r-hat = 0.508: GPU floor "
+     "time 0.326 (honest kernels at 1.72 times the floor; run r20261017-123922-e558 has no published outputs), the "
+     "unchecked clock 0.064 and host CPUs at INT8 AMX peak 0.118. eps' = 1e-4 is what the theorem's delta of 2.7e-8 "
+     "costs (Markov over the windows)."),
+    ("Memory cap", "ThreadedRuntime and ThreadedRate (draft #2343) give the closed form's shape; its value needs Threaded "
+     "at window scale, which fails. The fit bound (FitBound under Reach and Fits, on a branch) replaces it, conditional "
+     "on F1 per parameter slot (being restated), F3, F4, NET-35 (intake held to alpha F), WipeFullUse (not yet stated) "
+     "and an information form. For a token-routed MoE, Lean's per-token Reach gives 55 at 6 GB; 217 rests on the fit "
+     "page's MoE argument."),
+    ("Wipe residual", "Streamed labels (MEM-51) replace the reference permutation, which is refuted (a developer passes "
+     "from 1.53% of the store); the slack is proved only for an ideal permutation. Memory outside the fill is measured as "
+     "gaps (on-chip 3.05 GB, the GPUs' own about 1.6 GB; GPU reserve 18.4 GB; host 29.5 GB). No theorem bounds help "
+     "during a wipe; the helper term is an attack."),
     ("Exhaustion", "Lemma M is proved and locked per audit, and Held for snapshots; nothing bounds memory at every "
      "instant, which the memory cap needs."),
-    ("Cheating share", "The count of injecting blocks is proved (Population.Exfil.tail_cumPrev and the deployed draw's "
-     "drawPressure, on branches); a draw rate fixed against a public N is not. Each injected bit is valued at the chord "
-     "of one inference block's thread bound, with (1, 0)-threading above thread_bits (threaded_one_zero, proved); that "
-     "rests on T1' and WeightsIncompressible out to the block's full reads, about 1.1e9 bits. At a 1% total budget "
-     "today's serve-time commitments alone exceed it, so share is sampling on top of them. The served planner draws "
-     "zero-work templates at a floor of one per window (floor_steps)."),
+    ("Cheating share", "The bound on accepted faulty proof blocks over the deployment is proved "
+     "(Population.Exfil.tail_cumPrev, open #2687; the cumulative harm budget over adaptive rounds on a branch, PRF-86). "
+     "Each injected bit is worth at most the chord of one inference block's thread bound, 5.76e7 counted "
+     "multiplications, with (1, 0)-threading above thread_bits. chi grows with the identities a detection doesn't end and "
+     "shrinks with the fleet, so detection must be terminal (J = 1)."),
     ("Unmonitored compute", "No bound: it trains at full efficiency."),
 ]
 
