@@ -266,12 +266,17 @@ only inside a proof (`one_stage.registered`).
   of P), `{"value": V}` (a registered entry's root, never a supplied value's), `{"bytes": hex}`, `{"position": "K"}` (K
   below the record's population, after the log's earlier records' populations, `log_base`, as a big-endian u64, so no
   two records of one log share a position) and `{"window": coin}` (`window_salt`: SHA-512 of the coin bound to the
-  record's window, a salt per window since R6 takes one record a window). The rows are committed under public salts
+  verifier's binding, its stream and its prover, and to the record's window; a salt per prover, stream and window since
+  R6 takes one record a window, and refused without a binding). The rows are committed under public salts
   (`supplied_salts`), and R7 refuses an entry whose root is not the one it recomputes (`R7-supplied`). PoUW's seed
   inputs (`pouw.roots`, `pouw.salt`, `pouw.positions`) are supplied values
   (`verity/core/protocols/pouw/tests/test_pouw_supplied_inputs.py`).
 - Pinned roots (`check(..., pinned={value: root})`): roots of registered values the verifier doesn't fill, held before
   the record (a model's weights recorded before the salt). R7 holds such a value to its pin as to a root the log holds.
+- Binding (`check(..., binding={"stream", "prover"})`, lowercase hex: the verifier's stream digest and the identity it
+  registered the prover under): R6 refuses a record whose window doesn't name both (`R6-stream`, `R6-prover`), and the
+  window salt binds them, so each (prover, stream, window, position) gets its own seed and a tile proved for one stream
+  is refused in another, in the same window or not.
 - Reads at a public position: the verifier derives every unit's reads from its own program (`reads`). A unit's template
   parameter whose leaves are exactly row `r` of a registered value reads row `r`; a parameter that holds part of a row,
   or reads the value in one unit and not in another of its template, is refused. Data-dependent reads are not public
@@ -478,7 +483,9 @@ Pinned by `verity/core/protocols/sampled_proofs/tests/test_consumers.py` and
   a record whose window holds a float or a tuple is read by every check, and one whose own window does gets the whole
   log.
 - **The records.** The stream's digest is the SHA-512 of `{"format": "verity/proof-service/stream/v0", "spec": <the
-  Spec's digest>, "budget", "delta", "challenger"}`. An outcome's record is `{"format":
+  Spec's digest>, "budget", "delta", "challenger"}`, plus `"rounds"` above 1 and `"prover"`, the identity the challenger
+  registered the stream's prover under, when the stream has one (`Stream(prover=)`); such a stream binds each
+  registration to itself and the prover (`registration.check`'s `binding`). An outcome's record is `{"format":
   "verity/proof-service/outcome/v0", "stream", "order", "registration", "receipt", "draw", "sessions", "symbol",
   "public", "audit", "interior"}`, with the receipt and the draw as the SHA-512 of their canonical JSON, `audit`
   one-stage's audit record (null for `late`), and `interior` null, or under `TwoStage` `{"registration", "receipt",

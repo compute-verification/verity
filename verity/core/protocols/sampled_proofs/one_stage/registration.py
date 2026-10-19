@@ -26,6 +26,9 @@
   salts). R7 recomputes its root and refuses a record that names another (`R7-supplied`); it is the record's own, so no
   earlier record holds it. The window is otherwise provenance: R6 takes one record a window, so a salt bound to it is
   one salt a window.
+* **Binding** (`binding`: `{"stream", "prover"}`, the verifier's stream digest and the identity it registered the prover
+  under): R6 also holds the record's window to name both (`R6-stream`, `R6-prover`), and a window salt is bound to them,
+  so a tile seeded for one prover's stream is refused in any other's, in the same window or not.
 """
 from __future__ import annotations
 
@@ -110,13 +113,15 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
           ports: Mapping[str, Mapping[str, Any]], leaf_layer: str | None = None, anchors: Sequence[Any] = (),
           log: Iterable[Mapping[str, Any]] = (), partition: Mapping[str, Any] | None = None,
           work_table: Mapping[str, Any] | None = None, registered: Mapping[str, int] | None = None,
-          supplied: Mapping[str, Any] | None = None, pinned: Mapping[str, str] | None = None) -> Verdict:
+          supplied: Mapping[str, Any] | None = None, pinned: Mapping[str, str] | None = None,
+          binding: Mapping[str, str] | None = None) -> Verdict:
     """R1-R7 against the verifier's own copies: its program and query, its law and scheme, the ports its layout derives
     (`{port: {"leaves", "domain"}}`), the digest of its copy of the leaf layer, its anchors, its log of this prover's
     earlier records, the parameters it expects registered (`registered`: `{parameter: words}`), of those the ones it
     fills itself (`supplied`: `{parameter: [[source, ...], ...]}`, `registered.sources`) and the roots it held before the
     record for others (`pinned`: `{parameter: root}`, the weights' root recorded before the salt, say); ValueError without
-    `registered`, or in another form.  `partition`: the
+    `registered`, or in another form.  `binding`: the stream and prover the verifier registers this record for
+    (`{"stream", "prover"}`, `_binding`), which R6 holds the window to name and a window salt binds.  `partition`: the
     verifier's own partition object when it isn't the canonical one (a record made before the canonical envelope); its
     program must still be `program`'s, and the population is `query`'s.  R1 holds the registered law to the verifier's own
     law expanded over its program and query (`draw.derive`): for `stratified`, the strata by template descriptor id and
@@ -131,6 +136,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     if supplied is not None and not v2:
         raise ValueError("supplied values are registered values: the verifier expects none registered")
     pins = _pins(pinned, registered or {}, sup)
+    bound = _binding(binding)
     keys = _KEYS | {"registered"} if v2 else _KEYS
     if not isinstance(rec, Mapping) or set(rec) != keys:
         c.fail("keys", sorted(set(rec) ^ keys) if isinstance(rec, Mapping) else rec)
@@ -198,9 +204,15 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
         c.fail("R6-previous", rec["previous"])
     if any(e.get("window") == rec["window"] for e in earlier):
         c.fail("R6-window", rec["window"])
+    if bound is not None:
+        w = rec["window"] if isinstance(rec["window"], Mapping) else {}
+        for k in ("stream", "prover"):
+            if w.get(k) != bound[k]:
+                c.fail(f"R6-{k}", {"registered": w.get(k), "verifier": bound[k]})
     # R7
     if v2:
-        _check_registered(c, rec["registered"], program, registered, {**held_roots(earlier), **pins}, rec, sup, earlier)
+        _check_registered(c, rec["registered"], program, registered, {**held_roots(earlier), **pins}, rec, sup, earlier,
+                          bound)
     return c.verdict()
 
 
@@ -217,8 +229,25 @@ def _pins(pinned: Mapping[str, str] | None, registered: Mapping[str, int], suppl
     return dict(pinned)
 
 
+def _binding(binding: Mapping[str, str] | None) -> dict[str, str] | None:
+    """The verifier's binding: exactly `stream`, its stream's digest (lowercase hex of 64 bytes), and `prover`, the identity
+    it registered the prover under (lowercase hex of whole bytes); ValueError otherwise, which the Lean verifier refuses
+    too (`OneStage.paramsOfJson`)."""
+    if binding is None:
+        return None
+    if not (isinstance(binding, Mapping) and set(binding) == {"stream", "prover"}):
+        raise ValueError(f"a binding is exactly a stream and a prover: {binding!r}")
+    s, p = binding["stream"], binding["prover"]
+    if not (isinstance(s, str) and len(s) == 128 and _HEX.fullmatch(s)):
+        raise ValueError(f"the binding's stream is not lowercase hex of 64 bytes: {s!r}")
+    if not (isinstance(p, str) and _HEX.fullmatch(p) and len(p) % 2 == 0):
+        raise ValueError(f"the binding's prover is not lowercase hex bytes: {p!r}")
+    return {"stream": s, "prover": p}
+
+
 def _check_registered(c: _Collect, got: Any, program: Program, values: Mapping[str, int], held: Mapping[str, str],
-                      rec: Mapping[str, Any], supplied: Mapping[str, Any], log: Sequence[Mapping[str, Any]]) -> None:
+                      rec: Mapping[str, Any], supplied: Mapping[str, Any], log: Sequence[Mapping[str, Any]],
+                      binding: Mapping[str, str] | None = None) -> None:
     try:
         mine = G.registered_entries(program, values)
     except ValueError as e:
@@ -256,7 +285,7 @@ def _check_registered(c: _Collect, got: Any, program: Program, values: Mapping[s
         if e is None:
             continue
         try:
-            root = G.supplied_root(program, v, supplied[v], rec, want, sorted(supplied), log, prog)
+            root = G.supplied_root(program, v, supplied[v], rec, want, sorted(supplied), log, prog, binding)
         except ValueError as err:
             c.fail("R7-supplied", {"value": v, "verifier": str(err)})
             continue
