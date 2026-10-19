@@ -1,4 +1,4 @@
-import Proofs.Flock.Claims.Complete.ZkTables.Honest
+import Proofs.Flock.Claims.Complete.ZkTables.Faithful
 import Proofs.Flock.Claims.Sampling.Path
 
 /-!

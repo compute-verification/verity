@@ -155,7 +155,7 @@ theorem ofFn_take_congr {α : Type} {K : ℕ} (c c' : Fin K → α) (i : ℕ) (h
   · simp
   · intro k h1 _
     simp only [List.length_take, List.length_ofFn] at h1
-    simpa using h ⟨k, by omega⟩ (by omega)
+    simpa using h ⟨k, by omega⟩ (show k < i by omega)
 
 end Claims.ZKMal.RefSession
 
