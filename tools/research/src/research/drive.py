@@ -7,11 +7,13 @@ agent acts unless the automation refuses).  A loop runs it every few minutes; ea
    no check tooling (`CHECK_TOOLING`), which would have checked it differently.  Then
    `merge.caught_up` (the spec DM, node 1's mirror, the post-train regression, the landing post) and the sweep.
 2. Sync `next` (`Queue.sync`): admit and drop PRs, rebuild on a moved `main`; but while a check of `next` runs and `main` moved
-   by files its train doesn't change (and no check tooling), `next` stays on its base so the check isn't wasted (`held`).
+   by files its train doesn't change (and no check tooling), `next` stays on its base so the check isn't wasted (`held`, the
+   rule `queue.hold` keeps for every sync: `eject`'s and a hand one read drive's launches from the state file).
 3. Check `next` in trains of `train_size` PRs, each stacked on the one below (every `train_size`-th member's commit, and the
    tip): `train.sh COMMIT MACHINE`, with `--agreement` when the train changes a `lean-audit.json` (the lander's rule; train.sh
    itself sends the build for C-Flock's paths), the lowest unchecked first, while fewer than `max_running` checks run, and
-   none above a member whose failure drive is still settling, which it would hold.
+   none above a member whose failure drive is still settling, which it would hold.  A former tip a re-cut left inside a train
+   runs on as a hedge outside the count, until a train above it passes its check (`drop_hedges`).
 
 What it refuses goes to `@ci` in the merge thread, once per commit or head, with the owner of the PR it concerns: a failed
 check, a conflict, a check that ran and passed but lacks a step the gate needs, a launch that registered no run.  A failed
@@ -51,7 +53,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from .queue import IDENTITY, TOUCHED_LOGS, TOUCHED_REPORT, Member, Queue, QueueError, RemoteSuites, _git, _out, touched_suites
+from .queue import (CHECK_TOOLING, IDENTITY, TOUCHED_LOGS, TOUCHED_REPORT, Member, Queue, QueueError, RemoteSuites, _git, _out, built_on,
+                    changed, hold, touched_suites)
 
 #: who hears what drive can't settle (13 Oct: the other Project's lander, its addressee before, acts on none of it)
 CI = "@ci"
@@ -100,8 +103,6 @@ SIGTERM_RC = 143
 #: pre-warms running at once: each is a whole check in a slot, and a train waits behind every one (18 Oct 00:43Z: four took the
 #: room drive counts, and no train started)
 PREWARM_MAX = 1
-#: what decides how a check runs and what it passes: a `main` that changed any of it re-checks the queue rather than land on it
-CHECK_TOOLING = ("tools/verity/check/", "tools/verity/lean/", "tools/verity/circuit_check/")
 RUN_RE = re.compile(r"^RUN ((?:r20\d{6}-\d{6}-[0-9a-f]{4} ?)+)$", re.M)
 #: what `git revert` writes of the commit it undoes
 REVERTS_RE = re.compile(r"^This reverts commit ([0-9a-f]{40})", re.M)
@@ -112,10 +113,6 @@ class Verdict:
     state: str                    # passed | running | failed | none
     attempt: str = ""
     why: str = ""
-
-
-def changed(repo: Path, base: str, commit: str) -> set[str]:
-    return set(_out(repo, "diff", "--name-only", "--no-renames", base, commit).split())
 
 
 def needs_agreement(repo: Path, base: str, commit: str) -> bool:
@@ -460,7 +457,12 @@ class Driver:
         self.launch, self.states, self.post, self.now, self.cancel, self.evidence = launch, states, post, now, cancel, evidence
         self.repo, self.dry_run, self._seen, self._prs, self._ev, self._relaunched = q.workdir, False, {}, None, {}, set()
         self._drive: dict | None = None
+        #: the commits of `next` that `trains` checks, and each member's place on it, once this tick's sync has rebuilt it (None,
+        #: {} before)
+        self._tips: set[str] | None = None
+        self._pos: dict[str, int] = {}
         q.warming = self.warming
+        q.holding = lambda state: None          # `tick` asks `held`, with its verdicts, before it syncs
 
     # -- what the store says of a commit
 
@@ -894,45 +896,11 @@ class Driver:
 
     def _chain(self) -> tuple[str, list[Member]]:
         """(the base `next` was built on, its members oldest first), whether or not `main` has moved since."""
-        ref = f"refs/remotes/origin/{self.q.branch}"
-        if _git(self.repo, "rev-parse", "--verify", "-q", ref, check=False).returncode:
-            return "", []
-        # not `merge-base`: a member stacked on a PR that has since landed on `main` gives a second, wrong common ancestor
-        # (12 Oct 10:53Z: #1847 on #1793, after the e2e train's merge commit, emptied the chain and cancelled a disjoint check)
-        base = next((c for c in _out(self.repo, "rev-list", "--first-parent", ref).split()
-                     if not _git(self.repo, "merge-base", "--is-ancestor", c, "origin/main", check=False).returncode), "")
-        if not base:
-            return "", []
-        from .queue import TRAILER_RE
-
-        out = []
-        for rec in filter(None, (x.strip() for x in _out(self.repo, "log", "--first-parent", "--reverse",
-                                                          "--format=%H%x00%B%x1e", f"{base}..{ref}").split("\x1e"))):
-            commit, body = rec.split("\x00", 1)
-            t = dict(TRAILER_RE.findall(body))
-            if not {"PR", "Head", "Owner"} <= set(t):
-                return base, []
-            out.append(Member(int(t["PR"].lstrip("#")), t["Head"], t["Owner"], commit))
-        return base, out
+        return built_on(self.repo, f"refs/remotes/origin/{self.q.branch}")
 
     def held(self, drive: dict) -> str | None:
-        """Why `next` stays on its base this tick, or None: a check of it is running and `main` moved by files none of the running
-        train's members change, and by no check tooling.  A sync would rebuild `next` on the new `main` and waste that check;
-        `land` merges the train onto the moved `main` once it passes."""
-        base, chain = self._chain()
-        main = _out(self.repo, "rev-parse", "origin/main")
-        if not chain or main == base:
-            return None
-        moved = changed(self.repo, base, main)
-        if any(p.startswith(CHECK_TOOLING) for p in moved):
-            return None
-        for m in reversed(chain):
-            if self.verdict(m.commit, base, drive).state == "running":
-                if moved & changed(self.repo, base, m.commit):
-                    return None
-                return (f"`main` moved to {main[:12]} by files `{self.q.branch}` doesn't change while {m.commit[:12]}'s check runs: "
-                        f"`{self.q.branch}` stays on {base[:12]} until it ends")
-        return None
+        """Why `next` stays on its base this tick (`queue.hold`), a member's check running by its verdict."""
+        return hold(self.repo, self.q.branch, lambda c, base: self.verdict(c, base, drive).state == "running")
 
     def land(self, drive: dict, dry_run: bool) -> Member | None:
         """Land the newest member of `next` with a passing check (see the module's step 1): a fast-forward when `main` is still
@@ -1357,10 +1325,67 @@ class Driver:
             r.get("check") == m.commit and set(r.get("fails", ())) & set(fails) for r in drive.get("bisect", {}).values())
 
     def _running(self, drive: dict, main: str) -> int:
-        """The checks counted against `max_running`: drive's launches still running, and its pre-warms."""
+        """The checks counted against `max_running`: drive's launches still running (`_counted`), and its pre-warms."""
         warm = sum(1 for r in drive.get("prewarm", {}).values() if not r.get("done") and r.get("ids")
                    and any(st in ACTIVE for st, *_ in self._states(r["ids"]).values()))
-        return warm + sum(self.verdict(c, main, drive).state == "running" for c in [*drive["launched"], *drive.get("base", {})])
+        return warm + sum(self.verdict(c, main, drive).state == "running" for c in self._counted(drive, main))
+
+    def _counted(self, drive: dict, main: str) -> list[str]:
+        """The launches `max_running` counts: those of the commits `trains` checks now (every launch, before this tick's sync), the
+        prefixes bisection checks, `main`'s own checks, and a former tip a re-cut left inside a train until a train above it, which
+        contains it, runs its own check.  From then it runs on as a hedge (`land` lands it should that train fail) and takes no
+        train's slot (CI-85)."""
+        bisecting = {r.get("check") for r in drive.get("bisect", {}).values()}
+        if self._tips is None:
+            return [*drive["launched"], *drive.get("base", {})]
+        pos, tips = self._pos, self._tips
+
+        def above(c: str) -> bool:
+            return any(pos[t] > pos[c] and t in drive["launched"] and self.verdict(t, main, drive).state == "running" for t in tips)
+
+        return [*(c for c in drive["launched"] if c in self._tips or c in bisecting or c not in pos or not above(c)),
+                *drive.get("base", {})]
+
+    def _cleared(self, commit: str, main: str, drive: dict) -> bool:
+        """Whether ``commit``'s train has passed its check: its verdict passed, or its check passed every step but the deferred
+        ones and only its touched-suites gate is still pending."""
+        v = self.verdict(commit, main, drive)
+        if v.state == "passed":
+            return True
+        launch = drive["launched"].get(commit)
+        return (v.state == "running" and "pytest" in self.defer and launch is not None
+                and any(st in ACTIVE for st, *_ in self._states(launch["ids"]).values())
+                and self._passed_but_deferred(launch["ids"]) is not None)
+
+    def drop_hedges(self, drive: dict, members: list[Member], trains: list[int], main: str) -> None:
+        """Cancel the live runs (its check's and its touched suites') of each launched commit `trains` no longer checks, a former tip
+        a re-cut of `next` left inside a train, once a train above it, which contains it, has passed its check (`_cleared`), and
+        drop its launch record, so its cancel (143) never reads as a kill to resend.  Until then it is a hedge: `land` lands the
+        newest member with a passing check, tip or not.  Bisection's checks and the post-landing run's are kept (CI-85: a
+        stale former tip held a check slot through the train above it)."""
+        pos = {m.commit: k for k, m in enumerate(members)}
+        tips = [members[i].commit for i in trains]
+        run = (drive.get("postland") or {}).get("run") or {}
+        keep = {r.get("check") for r in drive.get("bisect", {}).values()} | {run.get("tip")}
+        busy = set(run.get("ids") or ()) | {rid for rec in drive.get("deferred", {}).values() for rid in rec["ids"]}
+        for c, rec in list(drive["launched"].items()):
+            if c in tips or c not in pos or c in keep or set(rec["ids"]) & busy:
+                continue
+            if (over := next((t for t in tips if pos[t] > pos[c] and self._cleared(t, main, drive)), None)) is None:
+                continue
+            live = [rid for rid, (st, *_) in self._states([*rec["ids"], *(rec.get("touched") or [])]).items()
+                    if st in ACTIVE and st != "unknown"]
+            if not live:
+                continue
+            why = f"{c[:12]} is no longer a train's tip on `{self.q.branch}`, and {over[:12]}'s train above it has passed its check"
+            if self.dry_run or self.q.shadow:
+                self.q.log(f"research queue drive: would cancel {' '.join(live)}: {why}")
+                continue
+            self.cancel(self.repo, live, f"drive: {why}")
+            self._seen.update({rid: ("cancelled", SIGTERM_RC, None, None) for rid in live})
+            del drive["launched"][c]
+            drive.get("resent", {}).pop(c, None)
+            self.q.log(f"research queue drive: cancelled {' '.join(live)}: {why}")
 
     def _launch(self, drive: dict, m: Member, main: str) -> tuple[list[str], str]:
         """Check ``m``'s commit (`train.sh`), with the suites its change reaches beside it when pytest is deferred, and record
@@ -1467,7 +1492,7 @@ class Driver:
 
     def tick(self, dry_run: bool = False) -> str:
         q = self.q
-        self.dry_run, self._seen, self._prs, self._ev, self._relaunched = dry_run, {}, None, {}, set()
+        self.dry_run, self._seen, self._prs, self._ev, self._relaunched, self._tips, self._pos = dry_run, {}, None, {}, set(), None, {}
         q._clone()
         q.fetch()
         if q.store is not None and q.store.remote is not None:
@@ -1543,7 +1568,10 @@ class Driver:
         drive["base"] = {c: v for c, v in drive.get("base", {}).items() if c == main and v["for"] in on_chain}
         what = [f"landed #{landed.pr}"] if landed else []
         main = _out(self.repo, "rev-parse", "origin/main")
-        running = sum(self.verdict(c, main, drive).state == "running" for c in [*drive["launched"], *drive["base"]])
+        trains = self.trains(len(members), self._cold(members))
+        self._tips, self._pos = {members[i].commit for i in trains}, {m.commit: k for k, m in enumerate(members)}
+        self.drop_hedges(drive, members, trains, main)
+        running = sum(self.verdict(c, main, drive).state == "running" for c in self._counted(drive, main))
         running += self.prewarm(drive, running)
         self.start_postland(drive)                          # a slot of its own: `max_running` counts the trains' checks
         # a landing below a failed member shifts the trains' indices off it, and a check above it holds the failure drive is
@@ -1551,7 +1579,7 @@ class Driver:
         settling = {chain[i].commit for i in failed_at if f"failed:{chain[i].commit}" not in drive["told"]} | {
             c for c in drive["resent"] if self.verdict(c, main, drive).state != "passed"}
         stop = next((k for k, x in enumerate(members) if x.commit in settling), len(members))
-        for i in self.trains(len(members), self._cold(members)):
+        for i in trains:
             m, prs = members[i], " ".join(f"#{x.pr}" for x in members[: i + 1])
             v = self.verdict(m.commit, main, drive)
             if v.state == "failed":

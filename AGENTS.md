@@ -95,8 +95,9 @@ requires, `verity check tests|lean|circuits` runs only those parts, and `verity 
 
 ~~~text
 uv sync --all-packages --extra torch-cpu  # the whole workspace, editable, with CPU-only torch (GPU work: a member's `torch` extra)
-research run --on auto --cwd source --wait -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py'  # suites whose inputs changed; --quick: no slow tests
-research run --on auto --cwd source --wait -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run --extra torch-cpu verity check'  # the merge check; --record: an Attempt
+research run --on auto --cwd source -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py'  # suites whose inputs changed; --quick: no slow tests
+research run --on auto --cwd source -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run --extra torch-cpu verity check'  # the merge check; --record: an Attempt
+research status RUN  # check back on a run (`research run` returns once it starts); --wait: only a run under 20 min
 ~~~
 
 ## Design rules
@@ -139,6 +140,12 @@ Daniel's, current. `.agents/skills/friction/SKILL.md` has the dated rulings behi
 
   There are no retries: a failed proof is a visible failure, and a retry never redraws. Outer proofs go through the
   firewall one at a time.
+- **Verifier cost: O(circuit description), never O(unrolled circuit)** (Daniel, 18 Oct). A verifier of record may do
+  work proportional to the descriptor it reads (its Definitions, nodes and references), never to the circuit it unrolls
+  to: no walk over every gate, batch member or scan iteration. Summarize once per specialized Definition and multiply
+  through batches and scans (`NciCheck.Desc`). An unrolled walk stays only as the reference a difftest holds the
+  verifier to. `tests/test_verifier_cost.py` refuses one in `verity/core/`'s Lean, with the walks still open in its
+  `ALLOWED`; `benchmarks/verifier_cost/` measures the cost.
 - **Auditor-trusted devices.** The network certifiers and the memory challenger sign what they see. What they sign is
   witness and never reaches the auditor in the clear. They are the auditor's hardware: each runs on a machine the prover
   doesn't control, never as a process on the prover's node, and trust in the device and its host provider is a named
@@ -370,11 +377,17 @@ Coordinators are launched, handed over and archived from Daniel's laptop with `i
 - **Keep chatter low** (contract §3a). Every message, and every background shell you start, reaches the coordinator and
   the human. So run long jobs detached on the pod, write one-line checkpoints, and message someone only to unblock them
   or to change their plan.
-- **An agent's turn waits on nothing long.** Spawn workers as cloud agents (`Task` with `environment: cloud`) where your
-  Task tool offers it, else with `run_in_background: true`, never in the foreground. Local workers share the agent's one
-  VM, and an out-of-memory kill there stops all of them and the coordinator silently, so heavy work goes through
-  `research run`. No step blocks longer than about 20 minutes: launch detached and check back with
-  `research status RUN`. A worker resumed twice is relaunched fresh from its last checkpoint note.
+- **Workers run where they can't take you down.** Launch each worker as a cloud subagent (`Task` with
+  `environment: "cloud"`; Daniel's ruling, 18 Oct 10:20 AM PDT) or as a detached `research run`. A local subagent is only
+  for a short read-only lookup. A coordinator's foreground local Task is refused (#2510), and heavy work never runs on an
+  agent VM (the shell hook refuses it).
+- **No step waits long.** No tool call blocks for more than about 20 minutes: launch detached, end the step, and check
+  back on the run.
+- **Workers restart from notes.** Each brief asks for a checkpoint note before long work and every 3 to 4 hours, and
+  words red-team work neutrally. A worker resumed twice, or whose base branch was deleted, is relaunched fresh from its
+  last note.
+- **Outages are caught outside you.** The control pod's agent watch (INF-69) flags a run stopped mid-turn, a stalled or
+  ERROR agent and an out-of-memory kill, and frees what it can. Agents keep no heartbeat of their own.
 - **Reach a running subagent through its next shell command:** `python3 tools/agent-guard/inbox.py send AGENT_ID --text
   '…'`, where AGENT_ID is the `bc-…` id its Task call returned. A subagent never rereads a file mid-run, so don't put
   ownership changes or new requirements in a shared file and hope. The shell hook refuses the agent's next command once,
