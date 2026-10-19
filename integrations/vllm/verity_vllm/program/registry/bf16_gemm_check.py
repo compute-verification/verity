@@ -16,7 +16,14 @@ vLLM d9105ea80's choice of kernel for the MoE gate (`GateLinear.forward`, `LLBf1
   (`glm53_bf16_gemm_capture_gpu.scan_routes`), in which `fit_cublas_split_k` names the split counts whose route computes a
   launch's observed words exactly, so the split count is read out of the words (Kineto reports grid.z = 1 for these launches,
   so no profile field carries it).  Any other model's bf16-output routes are the cc 9.0 device pin's (`pinned_routes`,
-  `verity_vllm/pins/`), measured by `served routes`' probe, which the predicted served Program reads too;
+  `verity_vllm/pins/`), measured by `served routes`' probe, which the predicted served Program reads too.  The routes hold
+  under the scan's conditions only (`ROUTE_CONDITIONS`): `route_departures` names how a serving process's facts differ, which a
+  Commit's verdict, TP1's and each TP rank's, refuses for a Program that binds one of the `ROUTE_DEFINITIONS`
+  (`check.cublas_route_pin`).  So a torch or cuBLAS upgrade in the serving venv refuses every such Program until the scan
+  reruns under it, on an H200 with the serving venv's python, as `CUBLAS_ROUTES["run"]` ran:
+  `tests/properties/glm53_bf16_gemm_capture_gpu.py --scan-run --served-default --models glm53,dsv4-pro --scratch DIR --out OUT` with
+  `--only linear,bmm,f32out --scan-m 1:2048`, then `--only router --scan-m 17:2048`; its cases' `routes`, its `switch` facts and the
+  device's are then copied into `cublas_routes.json` (no tool writes it);
 * the cc 12.0 routes beside it: `cublas_splitk_rows(partial="bf16")` (a bf16 workspace), `cublas_serial_splitk_rows` (slices
   meeting through the bf16 output) and `cublas_gemv_rows` (M = 1 gemvx lanes); `cublas_route_rows` is a device pin route's
   twin, and `cublas_routes_at` with `route_probe_rows` what the probe tells apart.
@@ -37,6 +44,7 @@ from typing import Any
 import numpy as np
 
 from verity_vllm.program.kernels import derived_rows as DR
+from verity_vllm.program.registry import cublas_bf16 as CB
 from verity_vllm.program.registry import mla_check as MK
 
 U32 = np.uint32
@@ -55,6 +63,34 @@ DEFAULT_LL_BF16_FMA = 1
 #: chain), as the capture's decode-batch scan (run `run`) mapped them
 CUBLAS_ROUTES = json.loads(Path(__file__).with_name("cublas_routes.json").read_text())
 _ROUTES = {(p, int(k), int(n)): runs for (p, k, n), runs in ((key.split(), v) for key, v in CUBLAS_ROUTES["routes"].items())}
+#: what the scan's process ran on and under, as `glm53_bf16_gemm_capture_gpu.switch` read it (its device beside): the device, torch,
+#: the cuBLAS it mapped, its reduced-precision flags, preferred backend and workspace variables.  cuBLAS picks a route from these
+#: and the launch's shape, so the routes are a serving process's own only when its facts of record (`cublas` in
+#: `check.replay.driver.engine_facts_of_record`) are these
+ROUTE_CONDITIONS: dict[str, Any] = CUBLAS_ROUTES["conditions"]
+#: the Definitions a Program binds only at a route of the pin (the vocabulary's `cublas_*` roles, which `vllm_bindings.bf16_gemm`, the
+#: fold and the predictor bind at `default_cublas_route`); `Gemm_v2` is bound at the pin's non-split linear routes too, but also by
+#: every other rule, so its presence does not say the pin was read
+ROUTE_DEFINITIONS = (CB.CublasSplitKGemmWord, CB.CublasSplitKGemmF32OutWord, CB.GemmF32OutWord)
+
+
+def route_bound(by_family: dict[str, int]) -> dict[str, int]:
+    """The entries of `by_family` (a Program's row counts by Definition id) whose Definition is one of `ROUTE_DEFINITIONS`."""
+    ids = {d.id for d in ROUTE_DEFINITIONS}
+    return {f: n for f, n in sorted(by_family.items()) if f in ids}
+
+
+def route_departures(engine: dict[str, Any] | None) -> list[str]:
+    """Each way a serving process's facts of record (`engine_facts_of_record`) are not `ROUTE_CONDITIONS`, by name: a fact recorded
+    otherwise, or not recorded (a fact the process could not read is recorded as 'unavailable: <why>', which no condition is);
+    [] when it ran under them."""
+    seen = (engine or {}).get("cublas")
+    if not isinstance(seen, dict):
+        return [f"no cuBLAS facts recorded (engine_of_record.cublas; the pin's: {ROUTE_CONDITIONS})"]
+    env = seen.get("env") if isinstance(seen.get("env"), dict) else {}
+    pairs = [(k, seen.get(k, KeyError), w) for k, w in ROUTE_CONDITIONS.items() if k != "env"]
+    pairs += [(v, env.get(v, KeyError), w) for v, w in ROUTE_CONDITIONS["env"].items()]
+    return [f"{k} not recorded (pin: {w!r})" if got is KeyError else f"{k} {got!r} (pin: {w!r})" for k, got, w in pairs if got != w]
 
 
 def _route_run(phase: str, M: int, K: int, N: int) -> list | None:

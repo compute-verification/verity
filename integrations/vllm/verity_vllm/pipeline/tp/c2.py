@@ -1,6 +1,6 @@
 """A TP Commit's C2 of record per rank, and the Commit's side of a deferred replay: the gates that put a rank's sampled replay, boundary
-linkage, population reconciliation, families with no evaluator and weights pin into its verdict (`replay_gates`, `no_evaluator_gate`,
-`pin_gate`, `c2_and_pin_gates`), the components
+linkage, population reconciliation, families with no evaluator, cuBLAS route pin and weights pin into its verdict (`replay_gates`,
+`no_evaluator_gate`, `pin_gate`, `c2_and_pin_gates`; the route pin is `check.cublas_route_pin.route_pin_gate`, a TP1 run's too), the components
 folded over the ranks (`sampled_replay_components`, `query_population_component`, `annotate_value_correspondence`), and `seal`, which
 seals every rank's replay bundle of a deferred Commit (`tp-commit --replay-deferred`) and writes `replay_deferred.json`.  `pipeline.tp.commit`
 decides in place with them, `pipeline.tp.commit_replay` from the ranks' replays on CPU.  A Commit defers only at a world where deferral
@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm.acquire.sources.oracle_witness import SUMMARY_KEYS as TPS_SUMMARY_KEYS
+from verity_vllm.check.cublas_route_pin import route_pin_gate
 from verity_vllm.pipeline import replay_bundle as RB
 
 DEFERRED = "replay_deferred.json"
@@ -159,7 +160,8 @@ def replay_gates(cblock: dict, sr_: dict, lk_: dict, ok: bool, why: str | None, 
     on this rank; absence, a partial (a stratum not evaluated, an input not retained), population 0 or a mismatch = FAIL named.
     Per rank, the replay's POPULATION reconciled against Q(P) (`query_population_gate`) and its families with no evaluator
     (`no_evaluator_gate`) go INTO the verdict, fail closed, by the dense committer's rules -- not behind the gates above: a PASS-graded
-    replay over a population that does not reconcile, or with a family nothing evaluates, is named."""
+    replay over a population that does not reconcile, or with a family nothing evaluates, is named.  So does the cuBLAS route pin
+    (`route_pin_gate`): a rank that binds the pin's routes and served under other conditions is named."""
     cblock["sampled_replay"] = ({k: v for k, v in sr_.items() if k not in ("strata", "trace")} | {"strata_n": len(sr_.get("strata") or {})}) if sr_ else None
     cblock["boundary_linkage"] = lk_ or None
     if replay_on and ok:
@@ -172,7 +174,9 @@ def replay_gates(cblock: dict, sr_: dict, lk_: dict, ok: bool, why: str | None, 
         cblock["query_population"] = qp_block
         ne_block, ne_fail = no_evaluator_gate(cblock, sr_, rank=rank, xrank_families=xrank_families)
         cblock["no_evaluator_gap"] = ne_block
-        for fail in (qp_fail, ne_fail):
+        rp_block, rp_fail = route_pin_gate(sr_, rank=rank)
+        cblock["cublas_route_pin"] = rp_block
+        for fail in (qp_fail, ne_fail, rp_fail):
             if fail is not None:
                 ok, why = False, (f"{why}; also: {fail}" if not ok and why else fail)
     return ok, why

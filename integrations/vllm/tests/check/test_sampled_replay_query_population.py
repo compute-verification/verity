@@ -24,6 +24,7 @@ from verity_vllm.check.verdict import commit_verdict
 from verity_vllm.check.replay import coverage as COV, driver as SR, index as IX, population as POP
 from verity_vllm.check.replay import replay_codes as RC
 from verity_vllm.program.kernels import rows as RK
+from verity_vllm.program.registry import bf16_gemm_check as BC
 from tests.check import test_sampled_replay as T
 from tests.check.test_sampled_replay import moe_world, world  # noqa: F401  -- fixtures
 
@@ -104,10 +105,30 @@ def test_the_record_carries_the_engine_configuration_the_evaluators_were_conditi
     assert isinstance(v, str) and v and (v.startswith("unavailable: ") or v[0].isupper()), ("torch_preferred_blas_library", v)
     assert "VLLM_BATCH_INVARIANT=1" in eng["rule"] and "never declared" in eng["rule"]
     assert set(eng) == {"VLLM_BATCH_INVARIANT", "CUBLAS_WORKSPACE_CONFIG", "CUBLASLT_WORKSPACE_SIZE", "vllm_batch_invariant_mode",
-                        "torch_allow_bf16_reduced_precision_reduction", "torch_preferred_blas_library", "compute_capability", "rule"}
+                        "torch_allow_bf16_reduced_precision_reduction", "torch_preferred_blas_library", "compute_capability", "cublas", "rule"}
+    # what decides cuBLAS's routes, each fact the route pin's conditions name, measured or named-unavailable, the workspace variables the record's
+    cub = eng["cublas"]
+    assert set(cub) == set(BC.ROUTE_CONDITIONS) | {"cublaslt_version", "cublas_library"}
+    assert cub["env"] == {"CUBLAS_WORKSPACE_CONFIG": ":16:8", "CUBLASLT_WORKSPACE_SIZE": None}
+    assert all(isinstance(v, (int, list)) or (isinstance(v, str) and v) for k, v in cub.items() if k != "env"), cub
     # not set -> None by name, never "1" by default
     monkeypatch.delenv("VLLM_BATCH_INVARIANT")
     assert SR.engine_facts_of_record()["VLLM_BATCH_INVARIANT"] is None
+
+
+def test_the_cublas_version_is_the_mapped_librarys_or_unavailable_by_name(tmp_path):
+    """The version is read from the one libcublas the process maps (never the linker's search order): none mapped, two mapped or one
+    that does not load is 'unavailable: <why>'."""
+    line = "7f0000000000-7f0000001000 r-xp 00000000 08:01 42 {}\n"
+    for files, why in (([], "0 libcublas.so* mapped []"),
+                       (["/a/libcublas.so.12", "/b/libcublas.so.13", "/a/libcublasLt.so.12"], "2 libcublas.so* mapped ['/a/libcublas.so.12', '/b/libcublas.so.13']")):
+        maps = tmp_path / "maps"
+        maps.write_text("7f0000002000-7f0000003000 rw-p 00000000 00:00 0\n" + "".join(line.format(f) for f in files))
+        got = SR.cublas_versions(str(maps))
+        assert got["cublas_version"] == got["cublas_library"] == f"unavailable: LookupError: {why}"
+        assert got["cublaslt_version"].startswith("unavailable: ")
+    maps.write_text(line.format(tmp_path / "libcublas.so.12"))
+    assert SR.cublas_versions(str(maps))["cublas_version"].startswith("unavailable: OSError: ")
 
 
 def test_a_required_identity_no_row_produces_is_named_and_fails_the_reconciliation_and_the_verdict(world):  # noqa: F811

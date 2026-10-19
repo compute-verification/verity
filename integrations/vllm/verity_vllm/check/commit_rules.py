@@ -109,7 +109,7 @@ REJECT: dict[str, VC] = {name: code for code, names in (
     (VC.COVERAGE_MISMATCH, ("runtime_match/reference_integrity", "local_replay/population_gaps", "local_replay/population_scope", "local_replay/attribution",
                             "execution_extent/rows_past_the_stop", "required_value_coverage/identity_coverage", "required_value_coverage/manifest_coverage",
                             "required_value_coverage/required_classes")),
-    (VC.EXPECTATION_MISMATCH, ("checkpoint_binding/weights_of_record", "execution_extent/executed_prefix_of_record", "execution_extent/match_account_link",
+    (VC.EXPECTATION_MISMATCH, ("checkpoint_binding/weights_of_record", "local_replay/cublas_route_pin", "execution_extent/executed_prefix_of_record", "execution_extent/match_account_link",
                                "required_value_coverage/manifest_of_record_verified", "program_source_identity/identity_layout")),
 ) for name in names}
 
