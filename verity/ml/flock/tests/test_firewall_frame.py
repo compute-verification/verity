@@ -4,9 +4,12 @@ triple's `w = x y`), `μ`, the rows' padding, `τ`'s salt and the pads tree's sa
 them is refused. Each value absorbed in a masked phase leaves as `v + h_i` under the next pad of `zk_veil::Layout::absorbed`'s
 order (written out here from the layout's index formulas), the pads' label and root follow the zerocheck's label, the domain
 frame stays home, everything outside the masked phases leaves as the device framed it, and a round that breaks the masking
-challenger's phases or the transcript's framing is refused, releasing nothing. A rep stops only at its end: after a round
-marked `fail` or refused, every value of the algebraic phase leaves as its pad alone, whatever the round carries, and the
-rep's `finish` is `stop`. So what a stopped rep releases under pads `h` is byte for byte what the honest rep releases under
+challenger's phases or the transcript's framing is refused, releasing nothing. The frame makes the pass decision: each
+device round comes with the statement's scheduled round in its place, and passes when it is that round byte for byte but
+for the algebraic phase's values (`live/src/pass_vectors.json`, which Rust's `Checker` and `ShadowLink::check` are held to
+too); one that fails stops the rep, the scheduled round leaving in its place. A rep stops only at its end: after a round
+that fails, is marked `fail` or is refused, every value of the algebraic phase leaves as its pad alone, whatever the round
+carries, and the rep's `finish` is `stop`. So what a stopped rep releases under pads `h` is byte for byte what the honest rep releases under
 pads `h + v`, and the rounds, their lengths and their order are the same: before `Finish`, nothing depends on whether a check
 failed. The frame decides the rep's refusals from the coins the stream answered each round it released (`coins`): a
 zerocheck outer coin `r_j = 1`; at the opening's label, a mask slot short of full rank on the claim points of the table's
@@ -31,6 +34,7 @@ import pytest
 LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-firewall"
 VECTORS = Path(__file__).resolve().parents[1] / "live" / "src" / "coin_stop_vectors.json"
+PASS = Path(__file__).resolve().parents[1] / "live" / "src" / "pass_vectors.json"
 SKIP = 64
 K_PAD = 192
 LAY = {"n_mlv": 2, "n_lc": 1, "n_ood0": 1, "k0": 1}
@@ -115,15 +119,20 @@ class Frame:
         except BrokenPipeError:
             return None
         r = self.p.stdout.readline().decode().rstrip("\n")
-        return (r, self.p.stdout.read(int(r[3:]))) if r.startswith("ok ") else r
+        return (r, self.p.stdout.read(int(r.split(" ")[1]))) if r.startswith("ok ") else r
 
     def coins(self, coins: list[int]):
         return self.ask(f"coins {len(coins)}", wire(coins))
 
-    def round(self, content: bytes, n: int, fail: bool = False, coins: list[int] | None = None):
+    def round(self, content: bytes, n: int, fail: bool = False, coins: list[int] | None = None, sched: bytes | None = None):
         """The round's answer; a released round's coins (seeded, never 0 or 1, unless `coins`) are answered back, as the
-        firewall does."""
-        r = self.ask(f"round {n} {len(content)}" + (" fail" if fail else ""), content)
+        firewall does. A device round comes with the scheduled round in its place (`sched`, else the round itself, which
+        then passes); the inner proof's rounds, the firewall's own, and a `fail` round come alone."""
+        if fail or any(content == r for r, _ in INNER):
+            r = self.ask(f"round {n} {len(content)}" + (" fail" if fail else ""), content)
+        else:
+            ref = content if sched is None else sched
+            r = self.ask(f"round {n} {len(content)} {len(ref)}", content + ref)
         if isinstance(r, tuple):
             assert self.coins([self.rng.getrandbits(128) | 2 for _ in range(n)] if coins is None else coins) == "ok"
         return r
@@ -274,6 +283,57 @@ def test_a_refused_round_releases_nothing_and_stops_the_rep_which_goes_on_with_t
     assert f.ask("finish") == "stop" and f.close() == 0
 
 
+def test_an_honest_device_round_passes_against_the_scheduled_one_and_leaves_with_its_own_values_masked():
+    """The scheduled round in the algebraic phase is the skeleton's, every value zero: the device's round passes with any
+    values there, and those values leave masked."""
+    f = Frame()
+    rounds, sched = rep_rounds(ALG), rep_rounds([0] * len(ALG))
+    out = [f.round(r, n, sched=s) for (r, n), (s, _) in zip(rounds, sched)]
+    assert all(o[0].endswith(" pass") for o, (r, _) in zip(out, rounds) if (r, _) not in INNER)
+    assert [o[1] for o in out] == release(f.h, f.root, ALG) and f.ask("finish") == "ok" and f.close() == 0
+
+
+def test_the_frames_pass_decision_is_rusts_on_the_shared_vectors_and_a_failed_round_leaves_as_the_scheduled_one():
+    """`pass_vectors.json`, which firewall.rs's test holds Rust's `Checker` and `ShadowLink::check` to: in the algebraic
+    phase the device round must be the scheduled one's frames, labels, bytes, headers, padding, kinds, lengths and coin
+    count, with any values; after it, the scheduled round byte for byte. A round that fails stops the rep, and the scheduled
+    round leaves in its place."""
+    v = json.loads(PASS.read_text())
+    rep = [(bytes.fromhex(r), n) for r, n in zip(v["rep"], v["coins"])]
+    zero = [0] * len(ALG)
+    for c in v["cases"]:
+        f = Frame()
+        for r, n in rep[:c["at"]]:
+            assert f.round(r, n)[0].endswith(" pass"), c["case"]
+        sched, n = rep[c["at"]]
+        device = bytes.fromhex(c["device"])
+        got = f.round(device, n, sched=sched)
+        word = got[0].split(" ")
+        assert word[2] == ("pass" if c["pass"] else "fail"), c["case"]
+        if not c["pass"]:
+            assert " ".join(word[3:]).startswith("the device's round "), c["case"]
+        assert got[1] == release(f.h, f.root, ALG if c["pass"] and device != sched else zero)[c["at"]], c["case"]
+        assert f.close() == 0
+
+
+def test_a_round_with_no_scheduled_round_in_its_place_is_refused_outside_the_inner_proof():
+    f = Frame()
+    r, n = rep_rounds(ALG)[0]
+    assert f.ask(f"round {n} {len(r)}", r) == "err a round with no scheduled round in its place, outside the inner proof"
+    out = released(f, rep_rounds(ALG))
+    assert [o[1] for o in out[:-1]] == release(f.h, f.root, [0] * len(ALG)) and out[-1] == "stop" and f.close() == 0
+
+
+def test_a_stopped_rep_releases_the_scheduled_round_whatever_device_round_comes_with_it():
+    f = Frame()
+    rounds, sched = rep_rounds(ALG), rep_rounds([0] * len(ALG))
+    first = f.round(*sched[0], fail=True)
+    rest = [f.round(r, n, sched=s) for (r, n), (s, _) in zip(rounds[1:], sched[1:])]
+    assert all(o[0].endswith(" fail the rep is stopped") for o, x in zip(rest, rounds[1:]) if x not in INNER)
+    assert [first[1]] + [o[1] for o in rest] == release(f.h, f.root, [0] * len(ALG))
+    assert f.ask("finish") == "stop" and f.close() == 0
+
+
 @pytest.mark.parametrize("rounds, why", [
     ([label("flock-zerocheck-v0") + label("flock-pcs-open-batch-v0") + squeeze(1, 1)],
      "err the opening began after 0 of the algebraic phase's 200 masked values"),
@@ -296,7 +356,7 @@ def test_a_round_off_the_masking_phases_or_the_framing_is_refused_and_releases_n
 
 def test_a_request_the_frame_cannot_read_ends_the_rep():
     f = Frame()
-    assert f.round(squeeze(1, 1), 1)[0] == "ok 16"
+    assert f.round(squeeze(1, 1), 1)[0] == "ok 16 pass"
     assert f.ask("round 1 16 later", squeeze(1, 1)) == "err a request `round 1 16 later`"
     assert f.round(squeeze(1, 1), 1) in (None, ""), "nothing leaves after it"
     assert f.close() == 1
@@ -314,7 +374,7 @@ def test_each_released_rounds_coins_come_back_before_the_next_round_and_the_reps
                       (lambda f: f.ask("finish"), "err the rep ended before the 1 coins of its last round"),
                       (lambda f: f.coins([0, 0]), "err 2 coins for a round that squeezed 1")]:
         f = Frame()
-        assert f.ask("round 1 16", squeeze(1, 1))[0] == "ok 16"
+        assert f.ask("round 1 16 16", squeeze(1, 1) * 2)[0] == "ok 16 pass"
         assert then(f) == why
         assert f.close() == 1
     f = Frame()
@@ -327,14 +387,14 @@ R0 = label("flock-r1cs-v0") + msg(b"\1" * 64) + label("flock-zerocheck-v0") + sq
 def test_a_zerocheck_outer_coin_of_one_stops_the_rep_at_once_and_no_other_coin_of_one_does():
     lay = {"n_mlv": 8, "n_lc": 1, "n_ood0": 1, "k0": 1}
     f = Frame(lay)
-    assert f.round(squeeze(1, 1), 1, coins=[1])[0] == "ok 16", "a coin before the algebraic phase"
+    assert f.round(squeeze(1, 1), 1, coins=[1])[0] == "ok 16 pass", "a coin before the algebraic phase"
     assert f.round(R0, 6, coins=[1] * 6)[0].startswith("ok "), "the skip's coins"
-    assert f.ask("round 1 16", squeeze(1, 1))[0] == "ok 16"
+    assert f.ask("round 1 16 16", squeeze(1, 1) * 2)[0] == "ok 16 pass"
     assert f.coins([1]) == "stop PROVER-STOPPED: degenerate coin: zerocheck outer coin r_0 = 1"
     assert f.close() == 0
     f = Frame()
     assert f.round(R0, 6)[0].startswith("ok ")
-    assert f.round(squeeze(1, 1), 1, coins=[1])[0] == "ok 16", "with seven multilinear rounds or fewer there is no outer coin"
+    assert f.round(squeeze(1, 1), 1, coins=[1])[0] == "ok 16 pass", "with seven multilinear rounds or fewer there is no outer coin"
     assert f.close() == 0
 
 
@@ -348,7 +408,7 @@ def test_level_0s_rho_dependent_over_f128_stops_the_rep_at_once_and_no_other_lev
         for r, n in rounds[:3]:
             assert f.round(r, n)[0].startswith("ok ")
         assert f.round(*rounds[3], coins=rho[:2])[0].startswith("ok "), v["case"]
-        assert f.ask("round 2 16", squeeze(2, 2))[0] == "ok 16"
+        assert f.ask("round 2 16 16", squeeze(2, 2) * 2)[0] == "ok 16 pass"
         if v["independent"]:
             assert f.coins(rho[2:]) == "ok", v["case"]
             assert all(isinstance(f.round(r, n), tuple) for r, n in rounds[5:]) and f.ask("finish") == "ok" and f.close() == 0
@@ -428,13 +488,14 @@ def opening(f: Frame, phase) -> object:
     """The opening's label after the algebraic phase `phase`: its answer."""
     for r, c in phase:
         assert f.round(r, len(c), coins=c)[0].startswith("ok ")
-    return f.ask(f"round 1 {len(label('flock-pcs-open-batch-v0') + squeeze(1, 1))}", label("flock-pcs-open-batch-v0") + squeeze(1, 1))
+    r = label("flock-pcs-open-batch-v0") + squeeze(1, 1)
+    return f.ask(f"round 1 {len(r)} {len(r)}", r + r)
 
 
 def test_a_mask_slot_short_of_full_rank_on_the_tables_claim_points_stops_the_rep_at_the_openings_label():
     phase = algebraic(RANK, 7)
     f = Frame(RANK, mask={"w0": 0, "n": 1, "blocks": 512})
-    assert opening(f, phase)[0] == "ok 64"
+    assert opening(f, phase)[0] == "ok 64 pass"
     assert f.close() == 0
     assert 'FRAMERANK\t{"points": 2, "mask_words": 512, "rank": 256}' in f.err
     f = Frame(RANK, mask={"w0": 0, "n": 1, "blocks": 1})
