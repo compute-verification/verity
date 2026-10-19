@@ -67,17 +67,20 @@ theorem nearest_nonempty {G : Finset ℤ} (hG : G.Nonempty) (v : ℚ) : (nearest
   obtain ⟨g, hg, hmin⟩ := G.exists_min_image (fun g : ℤ => |v - g|) hG
   exact ⟨g, Finset.mem_filter.2 ⟨hg, hmin⟩⟩
 
-/-- The RN encoder lands on its grid. -/
-theorem rn_mem {G : Finset ℤ} (hG : G.Nonempty) (v : ℚ) : rn G v ∈ G := by
+theorem rn_spec {G : Finset ℤ} (hG : G.Nonempty) (v : ℚ) : rn G v ∈ nearest G v := by
   have hn := nearest_nonempty hG v
-  rw [rn, dif_pos hn]
-  exact (Finset.mem_filter.1 ((nearest G v).min'_mem hn)).1
+  unfold rn
+  split
+  · exact Finset.min'_mem _ _
+  · contradiction
+
+/-- The RN encoder lands on its grid. -/
+theorem rn_mem {G : Finset ℤ} (hG : G.Nonempty) (v : ℚ) : rn G v ∈ G :=
+  (Finset.mem_filter.1 (rn_spec hG v)).1
 
 /-- The RN encoder's level is a nearest one. -/
-theorem rn_nearest {G : Finset ℤ} (hG : G.Nonempty) (v : ℚ) : ∀ g ∈ G, |v - rn G v| ≤ |v - g| := by
-  have hn := nearest_nonempty hG v
-  rw [rn, dif_pos hn]
-  exact (Finset.mem_filter.1 ((nearest G v).min'_mem hn)).2
+theorem rn_nearest {G : Finset ℤ} (hG : G.Nonempty) (v : ℚ) : ∀ g ∈ G, |v - rn G v| ≤ |v - g| :=
+  (Finset.mem_filter.1 (rn_spec hG v)).2
 
 /-- FP8-g1's RN encoder gives an entry on E4M3's integers to `B`. -/
 theorem fp8_on {B : ℕ} (s x : ℚ) : rn (e4m3Grid B) (x / s) ∈ e4m3Grid B :=
