@@ -46,8 +46,8 @@ from verity.core.protocols.profile import Bernoulli, Stratified, Stratum
 from verity.core.protocols.sampled_proofs import service
 from verity.core.protocols.sampled_proofs.one_stage import (audit, draw as DR, hello as H, partition as P, registered as G,
                                                             registration as R)
-from verity.core.protocols.sampled_proofs.two_stage import (OwnRandomness, ReplayUnit, Stage, TwoStageLaw, draw_first,
-                                                            select_proof_units, select_replay_units)
+from verity.core.protocols.sampled_proofs.two_stage import (OwnRandomness, ReplayUnit, Stage, TwoStageLaw, check_probability,
+                                                            draw_first, select_proof_units, select_replay_units)
 from verity.ml.circuits import codec, partition_object as PO
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.program import Program, input_id, is_input
@@ -1084,6 +1084,42 @@ def proof_units(j):
     """`select_proof_units`: each selected RU's index and the positions checked in it, in order, and the bytes read."""
     out, read = _two_stage_draw(j, "selected", select_proof_units)
     return {"read": read, "units": [[i, list(ps)] for i, ps in out.items()]}
+
+
+def two_stage_profile(j):
+    """`TwoStageLaw.profile` (`TwoStage.profile`) on `{"law", "class", "units", "n_r", "n_v", "delta", "facts"}`: its
+    `to_json` with δ the exact ratio, refused where it raises."""
+    j = _json(j)
+    _exactly(j, {"class", "delta", "facts", "law", "n_r", "n_v", "units"}, "the input")
+    law = _two_stage_law(j["law"])
+    if not isinstance(j["class"], str):
+        raise D.Reject("class is a string")
+    units = None if j["units"] is None else _rus(j["units"])
+    if not all(j[k] is None or _nat(j[k]) for k in ("n_r", "n_v")):
+        raise D.Reject("n_r and n_v are null or natural numbers")
+    delta, f = ratio(j["delta"]), j["facts"]
+    _exactly(f, {"covered", "drawn", "linked", "prescribed", "programs"}, "the facts")
+    if not (all(isinstance(f[k], list) and all(isinstance(x, str) for x in f[k]) for k in ("programs", "prescribed", "covered"))
+            and isinstance(f["linked"], bool) and isinstance(f["drawn"], dict) and all(_int(v) for v in f["drawn"].values())):
+        raise D.Reject("the facts are lists of strings, a boolean and an object of integers")
+    try:
+        p = law.profile(j["class"], units, n_r=j["n_r"], n_v=j["n_v"], delta=delta, **f)
+    except (ValueError, KeyError) as e:
+        raise D.Reject(str(e)) from None
+    return {**p.to_json(), "delta": str(delta)}
+
+
+def check_probability_of(j):
+    """`check_probability` (`TwoStage.checkProbability`) on `{"law", "class", "n_v"}`: `{"p"}`, refused where it raises."""
+    j = _json(j)
+    _exactly(j, {"class", "law", "n_v"}, "the input")
+    law = _two_stage_law(j["law"])
+    if not isinstance(j["class"], str) or not _nat(j["n_v"]):
+        raise D.Reject("class is a string and n_v a natural number")
+    try:
+        return {"p": str(check_probability(law, j["class"], j["n_v"]))}
+    except (ValueError, KeyError) as e:
+        raise D.Reject(str(e)) from None
 
 
 def hello(j):
@@ -2158,6 +2194,42 @@ PROOF_UNITS = D.Port(PIECES, "proof_units", proof_units, st.one_of(*[two_stage_c
                      package=PACKAGE)
 
 
+@st.composite
+def two_stage_profile_cases(draw) -> dict:
+    """`two_stage_cases`' law and RUs, mostly for a class that has RUs: with them and no counts or the class's own, or
+    without them and its counts, or with them and a count one off; then δ and the facts. Sometimes one change: `drawn`
+    keyed by another level, negative or not an integer, the facts out of form, or δ not in (0, 1) or not a ratio."""
+    case = draw(two_stage_cases("units"))
+    rus = case["units"] if isinstance(case["units"], list) else []
+    present = sorted({u[1] for u in rus if isinstance(u, list) and len(u) == 3 and isinstance(u[1], str)})
+    cls = draw(st.sampled_from(present if present and draw(st.integers(0, 7)) else RU_CLASSES))
+    mine = [u for u in rus if isinstance(u, list) and len(u) == 3 and u[1] == cls]
+    n_r, n_v = len(mine), max((u[2] for u in mine if _nat(u[2])), default=0)
+    mode = draw(st.integers(0, 9))
+    counts = ((draw(st.sampled_from([None, n_r])), draw(st.sampled_from([None, n_v, n_v + 1]))) if mode < 6 else
+              (n_r, n_v) if mode < 8 else (n_r + 1, None) if mode == 8 else (None, max(n_v - 1, 0)))
+    change = draw(st.integers(0, 15))
+    facts = {"programs": draw(st.lists(st.sampled_from(["p0", "p1"]), max_size=2)),
+             "prescribed": draw(st.lists(st.sampled_from(["prompt", "weights"]), max_size=3)),
+             "linked": draw(st.booleans()), "covered": draw(st.lists(st.sampled_from(["c", "d"]), max_size=3)),
+             "drawn": draw(st.sampled_from([{}, {"replay": draw(st.integers(0, 5))}]))}
+    if change == 1:
+        facts["drawn"] = draw(st.sampled_from([{"unit": 1}, {"replay": -1}, {"replay": True}, {"replay": "1"}, []]))
+    if change == 2:
+        facts = draw(st.sampled_from([{}, {**facts, "x": 1}, {**facts, "linked": 1}, {**facts, "programs": [1]}, None]))
+    return {"law": case["law"], "class": cls, "units": case["units"] if mode < 6 or mode > 7 else None,
+            "n_r": counts[0], "n_v": counts[1], "facts": facts,
+            "delta": draw(st.sampled_from(["0", "1", "3/2", "2/4", 1, None]) if change == 3 else DELTA)}
+
+
+TWO_STAGE_PROFILE = D.Port(PIECES, "two_stage_profile", two_stage_profile,
+                           st.one_of(*[two_stage_profile_cases() for _ in range(5)], JSON), package=PACKAGE)
+CHECK_PROBABILITY = D.Port(PIECES, "check_probability", check_probability_of, st.one_of(*[st.builds(
+    lambda case, cls, n_v: {"law": case["law"], "class": cls, "n_v": n_v}, two_stage_cases("units"),
+    st.sampled_from(RU_CLASSES), st.sampled_from([*range(10)] * 3 + [-1, True, "2", None])) for _ in range(5)], JSON),
+    package=PACKAGE)
+
+
 def _key(tag: bytes) -> str:
     """A 256-byte key with bit 2047 zero."""
     h = hashlib.shake_256(tag).hexdigest(256)
@@ -2227,7 +2299,8 @@ PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (REGISTRATION, 700), (REGISTERED_
               (CHECK_DRAW, 500), (DRAW, 500), (SELECT, 600), (SLOTS, 400), (CHECK_PROVED, 300), (BOUND, 500),
               (BERNOULLI_BOUND, 500), (VERDICT, 300),
               (MATCHES_PUBLIC, 400), (SESSION_REGISTERED, 400), (RECORD_PORT, 600), (CHECK_PUBLIC, 500), (CHECK_VERDICTS, 400),
-              (RUN, 500), (REPLAY_UNITS, 500), (PROOF_UNITS, 400), (HELLO, 500)]
+              (RUN, 500), (REPLAY_UNITS, 500), (PROOF_UNITS, 400), (TWO_STAGE_PROFILE, 500), (CHECK_PROBABILITY, 400),
+              (HELLO, 500)]
 
 
 @pytest.mark.parametrize("port, examples", PIECE_RUNS, ids=[p.fn for p, _ in PIECE_RUNS])
