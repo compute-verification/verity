@@ -143,7 +143,15 @@ FIT = {
     "IGMMA_S8_N128": ([16, 128, 32], 1, 1 / 2, "r20261019-075655-d5c2", None),
     "IGMMA_S8_N64": ([16, 64, 32], 1, 1 / 4, "r20261019-075655-d5c2", None),
     "IMMA16832_S8": ([16, 8, 32], 1, 1 / 32, "r20261019-075655-d5c2", None),
+    "IGMMA_S8_N8": ([16, 8, 32], 1, 1 / 32, None, None),
+    "IGMMA_S8_N16": ([16, 16, 32], 1, 1 / 16, None, None),
+    "IGMMA_S8_N32": ([16, 32, 32], 1, 1 / 8, None, None),
+    "IGMMA_S8_N192": ([16, 192, 32], 1, 3 / 4, None, None),
+    "IMMA16816_S8": ([16, 8, 16], 1, 1 / 64, None, None),
+    "BMMA168256_B1": ([16, 8, 256], 8, 1 / 32, None, None),
 }
+SIBLINGS = ("IGMMA_S8_N128", "IGMMA_S8_N64", "IMMA16832_S8", "IGMMA_S8_N192", "IGMMA_S8_N32", "IGMMA_S8_N16",
+            "IGMMA_S8_N8", "IMMA16816_S8", "BMMA168256_B1")
 
 
 set_line = set_census
@@ -175,10 +183,10 @@ def rs_fit() -> None:
 
 
 def menu() -> None:
-    """RT-HOPPER-1 beyond RS: each s8-exact sibling offered beside the honest form at the census's lane default, at
-    IGMMA's joint lines by its MACs, and at its fit once read; then every fitted form at once."""
+    """RT-HOPPER-1 beyond RS: each form the census prices at s8's rate offered beside the honest form at the census's
+    lane default, at IGMMA's joint lines by its MACs, and at its fit once read; then every fitted form at once."""
     with tempfile.TemporaryDirectory() as t:
-        for kind in ("IGMMA_S8_N128", "IGMMA_S8_N64", "IMMA16832_S8"):
+        for kind in SIBLINGS:
             for scale in (None, 1.0, "fit"):
                 if scale == "fit" and FIT[kind][4] is None:
                     continue
