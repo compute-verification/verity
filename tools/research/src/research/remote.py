@@ -517,9 +517,30 @@ QUEUE_WRAP = "wrap"                       # the runner's, custody included: the 
 QUEUE_WORKLOAD_WRAP = "workload_wrap"     # the workload's alone: a GPU phase's lease
 
 
-def queue_placement(source: Path | None, run_id: str, spec: dict[str, Any]) -> dict[str, Any]:
+NODE_DEADLINE = "/etc/research/deadline"
+
+
+def live_stop(machine: str, project: str) -> tuple[int | None, str]:
+    """A node's stop as the node itself has it: the epoch in its NODE_DEADLINE (`EPOCH ISO BY`, which infra rewrites on each
+    renewal), read over ssh, and 0 when the file doesn't parse (as the VM's own deadline check reads it). (None, why) when it
+    can't be read, so the description's stops_at stands."""
+    try:
+        m = resolve_machine(machine, project)
+        tgt = pod_target(m)
+        r = ssh_run(ssh_argv(tgt["host"], tgt["port"], user=tgt.get("user", "root"), connect_timeout=10), ["cat", NODE_DEADLINE],
+                    timeout=30)
+    except (Refused, OSError, subprocess.TimeoutExpired) as e:
+        return None, f"{type(e).__name__}: {e}"
+    if r.returncode:
+        return None, f"`cat {NODE_DEADLINE}` exited {r.returncode}: {r.stderr.decode(errors='replace').strip()[-200:]}"
+    words = r.stdout.decode(errors="replace").split()
+    return (int(words[0]) if words and words[0].isdigit() else 0), NODE_DEADLINE
+
+
+def queue_placement(source: Path | None, run_id: str, spec: dict[str, Any], *, now: float | None = None) -> dict[str, Any]:
     """`research run --queue`: the queue's placement for this job, `{node, machine, why, job, wrap}`, from `cluster submit` and the
-    description in the --source tree (infra/cluster). Refused when the queue refuses the job."""
+    description in the --source tree (infra/cluster), with each candidate node's stop as the node reports it (`live_stop`, passed
+    as `--stop`), so a renewal places without a new description. Refused when the queue refuses the job."""
     from .store import tools_registry
 
     src = (Path(source) / (tools_registry.resolve("infra/cluster", lambda p: (Path(source) / p).is_dir()) or "infra/cluster")
@@ -528,8 +549,19 @@ def queue_placement(source: Path | None, run_id: str, spec: dict[str, Any]) -> d
         raise Refused("--queue: the --source tree has no infra/cluster with `cluster submit` (the queue's description and client)")
     env = dict(os.environ)
     env["PYTHONPATH"] = str(src / "src") + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
-    argv = [sys.executable, "-m", "cluster", "submit", str(src / "descriptions" / "nebius.toml"), "--run-id", run_id,
-            "--now", str(int(time.time()))]
+    description = src / "descriptions" / "nebius.toml"
+    argv = [sys.executable, "-m", "cluster", "submit", str(description), "--run-id", run_id,
+            "--now", str(int(time.time() if now is None else now))]
+    model = src / "src" / "cluster" / "model.py"
+    if model.is_file() and "def with_stop" in model.read_text():
+        nodes = [spec["node"]] if spec.get("node") else sorted(tomllib.loads(description.read_text()).get("nodes", {}))
+        for name in nodes:
+            stop, why = live_stop(name, spec.get("project") or "")
+            if stop is None:
+                print(f"research run --queue: {name}'s live deadline is unread ({why}): placing there with the description's "
+                      f"stops_at", file=sys.stderr)
+            else:
+                argv += ["--stop", f"{name}={stop}"]
     for k, v in spec.items():
         if v is True:
             argv.append(f"--{k}")
