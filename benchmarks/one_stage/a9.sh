@@ -21,7 +21,7 @@ setup
 (cd verity/core/service/sampled_proofs && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
   || { tail -40 "$OUT/build-sampled-proofs.log"; exit 7; }
 V=$W/values && mkdir -p "$V"
-for t in "$IN"/a8-values*.tar "$IN"/a9-experts*.tar; do tar -xf "$t" -C "$V"; done
+for t in "$IN"/a8-values*.tar "$IN"/a9-experts*.tar; do tar -xf "$t" -C "$V" || { log "a9: can't extract $t"; exit 2; }; done
 log "a9: values $(du -sh "$V" | cut -f1)"
 mkdir -p "$OUT/a9"
 # shellcheck disable=SC2086
