@@ -1057,7 +1057,7 @@ def _run_queued(ns: argparse.Namespace, harness_opts: list[str], command: list[s
     if placed.get("pool"):               # a check-slot pool outside the queue: `--on MACHINE --pool POOL`, its slot line and mem= admit it
         from .pods.nebius import slot_only  # noqa: PLC0415
 
-        ns.queue, ns.pool = False, placed["pool"]
+        ns.queue, ns.pool, ns.mem_gb = False, placed["pool"], None   # the slot's mem= reserves it, not the launch too (INF-61)
         print(f"research: run {run_id} runs in {placed['machine']}'s {ns.pool} pool, through slot.py (research run --pool)",
               file=sys.stderr)
         return _run_remote(ns, run_id, root / run_id, harness_opts, slot_only.in_pool(ns.pool, ns.lane, command))

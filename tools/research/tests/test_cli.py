@@ -339,9 +339,9 @@ def test_on_auto_placed_in_a_check_slot_pool_runs_there_through_slot_py(tmp_path
     repo.mkdir()
     subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
     monkeypatch.chdir(repo)
-    assert main(["run", "--runs-dir", str(tmp_path / "runs"), "--on", "auto", "--as", "ci", "--", "pytest", "-q"]) == 0
+    assert main(["run", "--runs-dir", str(tmp_path / "runs"), "--on", "auto", "--as", "ci", "--mem-gb", "20", "--", "pytest", "-q"]) == 0
     ns, opts, cmd, queue = seen[0]
-    assert (ns.on, ns.pool, ns.queue, queue) == ("vy-nebius-cpu-1", "research", False, None)
+    assert (ns.on, ns.pool, ns.queue, queue, ns.mem_gb) == ("vy-nebius-cpu-1", "research", False, None, None)
     assert cmd == ["env", "CHECK_SLOTS=/workspace/research/locks/research/slots", "python3", "tools/verity/check/slot.py", "--by", "ci",
                    "--", "nice", "-n", "19", "pytest", "-q"]
     assert remote.flag_value(opts, "--timeout") == "3600" and remote.flag_value(opts, "--cwd") == "source"
