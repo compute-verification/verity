@@ -1203,7 +1203,8 @@ def cmd_fetch(argv: list[str]) -> int:
 
 def cmd_cancel(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="research cancel", description="stop a remote run the one way that keeps its custody: SIGTERM to its "
-                                                                     "workload's process group, recorded as a manual cancel (remote.cancel)")
+                                                                     "workload's process group, recorded as a manual cancel (remote.cancel); a run "
+                                                                     "still held for disk or cores is withdrawn (research.withdraw)")
     ap.add_argument("ref", help="a run id or prefix under the runs root; a full run id another VM launched is found on its machine")
     ap.add_argument("--reason", required=True)
     ap.add_argument("--by", default=os.environ.get("RESEARCH_LANE") or os.environ.get("USER") or "-")
@@ -1216,6 +1217,10 @@ def cmd_cancel(argv: list[str]) -> int:
     except (FileNotFoundError, LookupError, remote.Refused) as e:
         print(f"research cancel: {e}", file=sys.stderr)
         return 1
+    if out.get("withdrawn"):
+        print(f"research cancel: {run_dir.name}: withdrawn from its {out['hold']} before its runner started (SIGTERM to pid {out['pid']}); "
+              f"refused.json records fault Withdrawn; {out['released']}")
+        return 0
     if not out["delivered"]:
         print(f"research cancel: {run_dir.name}: SIGTERM to process group {out['pgid']} not delivered ({out['why']})", file=sys.stderr)
         return 1

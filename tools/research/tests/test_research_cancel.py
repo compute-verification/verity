@@ -12,6 +12,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 from research import cli, remote
 
 TOOL = Path(remote.__file__).resolve().parents[1]
@@ -170,6 +172,103 @@ def test_a_run_that_is_not_running_is_refused_and_nothing_is_signalled(tmp_path,
         assert (d / "events.jsonl").read_text() == "" and workload.poll() is None
     finally:
         _end(workload, runner)
+
+
+def _held(tmp_path: Path, monkeypatch):
+    """A run its machine holds for disk ahead of its runner, as remote._launch_request starts one: launch.json names the hold's pid
+    and argv, `research disk-hold --gb <more than any disk> --ack <root>/requests/r-x/.launch-ack -- <runner argv>`, and no
+    status.json.  The test returns once the hold acknowledged the launch on the FIFO, so it is holding."""
+    local, d, workload, runner = _run(tmp_path, monkeypatch)
+    _end(workload, runner)
+    (d / "status.json").unlink()
+    root, req = tmp_path / "machine", tmp_path / "machine" / "requests" / "r-x"
+    (req / "custody").mkdir(parents=True)
+    (req / "custody" / "cred.json").write_text("{}")
+    (tmp_path / "ramlock").mkdir()
+    (mem := tmp_path / "ramlock" / "r-x.json").write_text(json.dumps({"run_id": "r-x", "gb": 40}))
+    (req / "request.json").write_text(json.dumps({"run_id": "r-x", "runs_root": str(root / "runs"), "custody": True}))
+    ack = req / ".launch-ack"
+    os.mkfifo(ack)
+    fd = os.open(ack, os.O_RDONLY | os.O_NONBLOCK)
+    keep = os.open(ack, os.O_WRONLY)                 # a writer held open, so the read below waits for the hold's line, not EOF
+    argv = [sys.executable, "-m", "research", "disk-hold", "--gb", "1e12", "--path", str(root), "--ack", str(ack), "--",
+            sys.executable, "-m", "research", "run", "--id", "r-x", "--remote-json", json.dumps({"mem": {"reservation": str(mem)}}), "--", "true"]
+    hold = subprocess.Popen(argv, env={**os.environ, "PYTHONPATH": str(TOOL)}, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                            start_new_session=True)
+    os.set_blocking(fd, True)
+    assert os.read(fd, 64) == b"disk-hold\n"
+    os.close(fd)
+    os.close(keep)
+    (d / "launch.json").write_text(json.dumps({"run_id": "r-x", "runner_pid": hold.pid, "argv": argv}))
+    return local, d, req, mem, hold
+
+
+def test_cancel_of_a_run_held_for_disk_ends_the_hold_and_records_it_withdrawn(tmp_path, monkeypatch, capsys):
+    """INF-101: `research cancel` of a run in `research disk-hold` said "not running yet", so a held run could only wait."""
+    local, d, req, mem, hold = _held(tmp_path, monkeypatch)
+    try:
+        assert cli.main(["cancel", str(local), "--reason", "superseded", "--by", "ci", "--runs-dir", str(local.parent)]) == 0
+        assert hold.wait() == -signal.SIGTERM
+        refused = json.loads((d / "refused.json").read_text())
+        assert (refused["fault"], refused["reason"]) == ("Withdrawn", "superseded (research cancel by ci)")
+        assert refused["withdrawn"] == {"hold": "disk-hold", "pid": hold.pid}
+        assert not mem.exists() and not (req / "custody" / "cred.json").exists(), "what the launch took goes"
+        assert json.loads((local / "refused.json").read_text())["fault"] == "Withdrawn", "fetched back"
+        assert cli.R.summarize(local)["state"] == "refused"
+        out = capsys.readouterr().out
+        assert f"withdrawn from its disk-hold before its runner started (SIGTERM to pid {hold.pid})" in out and "released" in out
+        assert "research cancel: withdrawn from its disk-hold" in (d / "launcher.log").read_text()
+
+        assert cli.main(["cancel", str(local), "--reason", "again", "--runs-dir", str(local.parent)]) == 1
+        assert "r-x was refused (Withdrawn: superseded (research cancel by ci)), so there is nothing to cancel" in capsys.readouterr().err
+    finally:
+        if hold.poll() is None:
+            hold.kill()
+            hold.wait()
+
+
+def test_a_held_runs_pid_that_is_no_longer_its_hold_is_not_signalled(tmp_path, monkeypatch, capsys):
+    """The hold execs the runner in place, so its pid is the runner's once it releases; and a pid may be reused after it exits."""
+    local, d, _req, mem, hold = _held(tmp_path, monkeypatch)
+    other = subprocess.Popen(["cat"], stdin=subprocess.PIPE, start_new_session=True)
+    try:
+        launch = json.loads((d / "launch.json").read_text())
+        (d / "launch.json").write_text(json.dumps({**launch, "runner_pid": other.pid}))
+        assert cli.main(["cancel", str(local), "--reason", "x", "--runs-dir", str(local.parent)]) == 1
+        assert f"pid {other.pid} is no longer r-x's disk-hold (it released, or exited): nothing was signalled" in capsys.readouterr().err
+        assert other.poll() is None and hold.poll() is None and not (d / "refused.json").exists() and mem.exists()
+    finally:
+        _end(other)
+        hold.kill()
+        hold.wait()
+
+
+def test_a_hold_that_releases_as_the_cancel_stops_it_is_resumed_not_terminated(tmp_path):
+    """The second look comes after SIGSTOP: a hold that exec'd its runner in between is continued, never sent SIGTERM."""
+    from research import withdraw as W
+
+    run, req, proc = tmp_path / "runs" / "r-x", tmp_path / "requests" / "r-x", tmp_path / "proc"
+    run.mkdir(parents=True)
+    (proc / "41").mkdir(parents=True)
+    argv = ["py", "-m", "research", "cpu-hold", "--cpus", "8", "--ack", str(req / ".launch-ack"), "--", "py", "-m", "research", "run"]
+    (run / "launch.json").write_text(json.dumps({"runner_pid": 41, "argv": argv}))
+    (proc / "41" / "cmdline").write_bytes(b"\0".join(a.encode() for a in argv) + b"\0")
+    (proc / "41" / "stat").write_text("41 (python3) S 1")
+    sent = []
+
+    def kill(pid, sig):
+        sent.append(sig)
+        if sig == signal.SIGSTOP:
+            (proc / "41" / "cmdline").write_bytes(b"py\0-m\0research\0run\0")
+            (proc / "41" / "stat").write_text("41 (python3) T 1")
+
+    with pytest.raises(W.NotHeld, match=r"r-x's cpu-hold \(pid 41\) released as the cancel came: nothing was signalled"):
+        W.withdraw(run, req, "x", proc=proc, kill=kill, sleep=lambda s: None)
+    assert sent == [signal.SIGSTOP, signal.SIGCONT] and not (run / "refused.json").exists()
+    assert W.hold_of(argv, str(req / ".launch-ack")) == "cpu-hold"
+    assert W.hold_of(argv, "/elsewhere/.launch-ack") is None
+    assert W.hold_of(["py", "-m", "research", "run", "--ack", str(req / ".launch-ack")], str(req / ".launch-ack")) is None
+    assert W.hold_of([*argv[:5], "--", "--ack", str(req / ".launch-ack")], str(req / ".launch-ack")) is None, "--ack of the command"
 
 
 def test_a_stale_running_status_whose_pgid_is_another_jobs_group_is_refused(tmp_path, monkeypatch, capsys):
