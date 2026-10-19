@@ -32,6 +32,7 @@ import Proofs.Flock.Claims.ZK.ExeLayout
 import Proofs.Flock.Claims.ZK.Refusals
 import Proofs.Flock.Claims.ZK.FirstRefusal
 import Proofs.Flock.Claims.ZK.Stopped
+import Proofs.Flock.Claims.ZK.HiSalts
 import Proofs.Flock.Claims.ZK.Worker
 import Proofs.Flock.Claims.ZK.Switched
 import Proofs.Flock.Claims.ZK.Server
@@ -190,6 +191,11 @@ import Proofs.Flock.Claims.ZK.SamplingNonVacuous
   `HonestPreOnPos` is its encoding's at the rounds where no refusal is seen, given that a seen throw stops `honestPR`
   (`Masked.honestPreOnPos_stop`; a seen outer coin `1` is `Masked.outerHit_of_lt`'s).
   `Flock.zk_deployZk_masked_exe_stopped_gap` is `Flock.zk_deployZk_masked_exe_refusals_gap` at such a plan.
+* `HiSalts`: levels ≥ 1's salts by level and position (`Masked.hiSalt`, at `Masked.hiIdx`): at the executable's
+  layout, the salts the model hands table `j`'s rep `r` are the masked prover's tape's `salt j r l p` on the schedule's
+  levels `l ≥ 1` and their positions (`Masked.hiSalt_exe`), so a Ligerito prover of levels ≥ 1 built from one reading
+  salts by level and position (`Masked.ofSalts`) sends, there, what it sends on the tape's salts
+  (`Masked.ofSalts_exe`, given `Masked.SaltsOn`).
 * `Worker`: Lemma B at any clear values a worker supplies, which never read the pads: the switched prover (`p`'s view
   where its rows hold, else the honest prover's on the pads Lemma A moves) has `S_shvzk`'s distribution on the honest
   `InnerHolds` alone (`sw_shvzk`, `worker_shvzk`), and differs from `p`'s view only in `Y₁`, `C_h` and the pads tree
