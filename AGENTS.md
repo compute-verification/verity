@@ -393,6 +393,23 @@ Coordinators are launched, handed over and archived from Daniel's laptop with `i
   ownership changes or new requirements in a shared file and hope. The shell hook refuses the agent's next command once,
   with your message as the refusal's text, and the agent re-runs it. Agents on other VMs: through their coordinator on
   Slack.
+- **Use cloud workers freely** (Daniel, 18 Oct, 9:59 PM PDT: "It is totally fine to use cloud workers"). This is the
+  standing explicit request that Cursor's Task tool wants before `environment: "cloud"`, for every agent in this repo, so
+  nobody asks Daniel or a coordinator first; spend is the lead's call. Use one when the work is long or heavy, or your VM
+  is full. How a cloud worker differs from a local subagent:
+  - It boots its own VM from the environment's snapshot, with the environment's secrets. It does not reliably get its
+    own branch: with any `cloud_base_branch`, workers have committed onto the launcher's branch and onto each other's
+    commits. So its brief says: "create a new branch `cursor/<lane>-<topic>-<hex>` from `origin/main` and push only to
+    it, never to the launcher's branch, a PR head or `main`."
+  - Its brief is complete: the task, the done-condition, the deadline, and "reread `git show origin/main:AGENTS.md`",
+    since its snapshot can be older than `main`. Nothing reaches it mid-turn, so the brief names an inbox branch it reads
+    at each hourly checkpoint (`git fetch -q origin B && git show origin/B:inbox/<agent-id>.md`), which gets changes to
+    it within the hour. Larger changes go in when you resume it (Task's `resume`, with the `bc-…` id the launch
+    returned) after its turn ends.
+  - It stays reachable as below: when it would wait on a run, it ends its turn naming the run id and ETA, and its
+    launcher resumes it. A running turn holds one of the team's concurrent cloud-agent slots.
+  - It opens its own PR from its VM (`research queue open`), and syncs its notes like any worker. Where that fails, it
+    reports its branch and SHA and the launcher opens the PR for it. Its final message goes to whoever launched it.
 - **Check what's being tried.** Before starting work another agent could plausibly be doing, read the notes'
   `kb/onboarding.md`, check `research notes approaches`, and claim yours at your first checkpoint
   (`research notes claim`).
