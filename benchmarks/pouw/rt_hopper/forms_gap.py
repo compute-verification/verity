@@ -155,6 +155,12 @@ FIT = {
     "HGMMA_BF16_N256": ([16, 256, 16], 1, 1 / 2, "r20261019-090330-b1db", {"JI90_0": 1.4604, "JI90_1": 1.4472, "JI90_2": 1.321}),
     "HGMMA_TF32_N256": ([16, 256, 8], 1, 1 / 4, "r20261019-090330-b1db", {"JI90_0": 3.3947, "JI90_1": 3.326, "JI90_2": 2.6695}),
     "QGMMA_E4M3_N256": ([16, 256, 32], 3, 1, "r20261019-090330-b1db", {"JI90_0": 1.0, "JI90_1": 1.0, "JI90_2": 1.0}),
+    "HGMMA_BF16_N128": ([16, 128, 16], 1, 1 / 4, "r20261019-092853-a64d", {"JI90_0": 1.6522, "JI90_1": 1.6334, "JI90_2": 1.4546}),
+    "QGMMA_E4M3_N128": ([16, 128, 32], 3, 1 / 2, "r20261019-092853-a64d", {"JI90_0": 0.9767, "JI90_1": 0.9774, "JI90_2": 0.9838}),
+    "QGMMA_E5M2_N256": ([16, 256, 32], 3, 1, "r20261019-092853-a64d", {"JI90_0": 1.0, "JI90_1": 1.0, "JI90_2": 1.0}),
+    "HMMA16816_F16": ([16, 8, 16], 1, 1 / 64, "r20261019-092853-a64d", {"JI90_0": 2.6749, "JI90_1": 2.6269, "JI90_2": 2.1677}),
+    "HMMA16816_BF16": ([16, 8, 16], 1, 1 / 64, "r20261019-092853-a64d", {"JI90_0": 2.6749, "JI90_1": 2.6269, "JI90_2": 2.1677}),
+    "HMMA1688_TF32": ([16, 8, 8], 1, 1 / 128, "r20261019-092853-a64d", {"JI90_0": 5.5764, "JI90_1": 5.4452, "JI90_2": 4.1667}),
 }
 SIBLINGS = ("IGMMA_S8_N128", "IGMMA_S8_N64", "IMMA16832_S8", "IGMMA_S8_N192", "IGMMA_S8_N32", "IGMMA_S8_N16",
             "IGMMA_S8_N8", "IMMA16816_S8", "BMMA168256_B1")
@@ -238,11 +244,11 @@ def menu_fp() -> None:
                 d = offer(Path(t) / f"{kind}-{i}", {kind: scale})
                 print(line(f"DC-90-ri q*=1.22 +{kind} at {label}", eps(d, "DC-90-ri", 1.22)))
         untimed = [k for k in FP if k not in fitted]
-        for label, f in (("by tensor time", 1.0), ("at 0.8 of tensor time", 0.8)):
+        for label, f in (("by tensor time", 1.0), ("at 0.8 of tensor time", 0.8)) if untimed else (("", 1.0),):
             d = offer(Path(t) / f"all-{f}", {**fitted, **{k: f * FP[k][3] / FP[k][2] for k in untimed}})
             for vector, q in (("DC-90", 1.22), ("DC-90-ri", 1.22), ("DC-90-ri", 0.5)):
-                print(line(f"{vector} q*={q} {len(fitted)} fitted forms and {len(untimed)} untimed FP {label}",
-                           eps(d, vector, q)))
+                print(line(f"{vector} q*={q} {len(fitted)} fitted forms"
+                           + (f" and {len(untimed)} untimed FP {label}" if untimed else ""), eps(d, vector, q)))
         base = eps(scratch(Path(t) / "base", rs=False), "DC-90-ri", 1.22)["core"]
         for kind, (_, _, n256, tt) in FP.items():
             lo, hi = 0.0, 1.0
