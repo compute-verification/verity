@@ -6,11 +6,15 @@
 //      16 IMAD reading them (ALU and IMAD pipes: 32 each), about 100 warp instructions;
 //   b: 2 IMMA, 16 FFMA, 40 LOP3, 40 IMAD (ALU and IMAD pipes: 80 each), about 100 warp instructions.
 // uniform.cu's chains run beside it (UIMAD + ULOP3), NP chain pairs, K instructions a loop, seeded from a parameter and
-// carried around the loop. ptxas places a chain pair on the uniform datapath or on lanes on its own; each probe's expect
-// pins what it placed, so the loop's V and U are exact.
-//   <s><W>_<K>[p<NP>]  stream s, W warps a SMSP (4: 512 threads, 8: 1024), K, NP (default 4).
-// With A2u each uniform instruction adds an SMSP-cycle a warp-iteration; without it the loop's time is its vector
-// stream's until the uniform datapath's own cap (0.68-0.77 a SMSP-cycle, uniform.cu's uz_*) binds.
+// carried around the loop. ptxas places each chain pair on the uniform datapath or on lanes on its own; each probe's
+// expect pins what it placed, so the loop's V and U are exact. At 1024 threads (64 registers) with 4 pairs it moves one
+// pair to the uniform datapath and keeps three on lanes; with fewer pairs, or at 512 threads, it keeps every pair on
+// lanes (r20261019-052718-24a9). So each 4-pair probe has a 3-pair control at 3K/4 with the same lane instructions and
+// no uniform ones:
+//   <s>8_<K>     4 pairs: K/4 uniform instructions and 3K/4 chain instructions on lanes;
+//   <s>8_<J>p3   3 pairs, J = 3K/4: the same 3K/4 on lanes, no uniform instruction.
+// With A2u the pair's time differs by K/4 SMSP-cycles a warp-iteration over the stream's issue efficiency; without it
+// by about 0, the uniform datapath's own cap (0.68-0.77 a SMSP-cycle, uniform.cu's uz_*) far from binding.
 // Joint points: rows.jsonl only, no census line.
 #include "../probe.cuh"
 
@@ -93,27 +97,25 @@ __device__ __forceinline__ void ai(const OpArgs& a) {
   OP_KERNEL(nm, TPB) { ai<K, NP, S>(a); }
 AI(ai8_0, 1024, 0, 4, SA)
 AI(ai8_64, 1024, 64, 4, SA)
-AI(ai8_64p1, 1024, 64, 1, SA)
-AI(ai8_64p2, 1024, 64, 2, SA)
-AI(ai4_64p1, 512, 64, 1, SA)
-AI(bi4_0, 512, 0, 4, SB)
-AI(bi4_64, 512, 64, 4, SB)
-AI(bi4_64p1, 512, 64, 1, SB)
+AI(ai8_128, 1024, 128, 4, SA)
+AI(ai8_48p3, 1024, 48, 3, SA)
+AI(ai8_96p3, 1024, 96, 3, SA)
 AI(bi8_0, 1024, 0, 4, SB)
 AI(bi8_64, 1024, 64, 4, SB)
-AI(bi8_64p1, 1024, 64, 1, SB)
+AI(bi8_128, 1024, 128, 4, SB)
+AI(bi8_48p3, 1024, 48, 3, SB)
+AI(bi8_96p3, 1024, 96, 3, SB)
 
-#define P_AI(nm, TPB, EX)                                                                                              \
-  {.name = #nm, .kernel = (const void*)nm, .tpb = TPB, .expect = "IMMA.16832.S8.S8=2," EX,                             \
+#define P_AI(nm, EX)                                                                                                   \
+  {.name = #nm, .kernel = (const void*)nm, .tpb = 1024, .expect = "IMMA.16832.S8.S8=2," EX,                            \
    .counted = "IMMA.16832.S8.S8", .iters = ITERS, .note = "an issue-bound vector stream beside uniform chains"}
+#define U(n) ",UIMAD*=" #n ",ULOP3*=" #n
 
 static const OpProbe PROBES[] = {
-    P_AI(ai8_0, 1024, "FFMA*=64,UIMAD*=0,ULOP3*=0"),     P_AI(ai8_64, 1024, "FFMA*=64,UIMAD*=8,ULOP3*=8"),
-    P_AI(ai8_64p1, 1024, "FFMA*=64,UIMAD*=32,ULOP3*=32"), P_AI(ai8_64p2, 1024, "FFMA*=64,UIMAD*=32,ULOP3*=32"),
-    P_AI(ai4_64p1, 512, "FFMA*=64,UIMAD*=32,ULOP3*=32"),  P_AI(bi4_0, 512, "FFMA*=16,UIMAD*=0,ULOP3*=0"),
-    P_AI(bi4_64, 512, "FFMA*=16,UIMAD*=32,ULOP3*=32"),    P_AI(bi4_64p1, 512, "FFMA*=16,UIMAD*=32,ULOP3*=32"),
-    P_AI(bi8_0, 1024, "FFMA*=16,UIMAD*=0,ULOP3*=0"),      P_AI(bi8_64, 1024, "FFMA*=16,UIMAD*=32,ULOP3*=32"),
-    P_AI(bi8_64p1, 1024, "FFMA*=16,UIMAD*=32,ULOP3*=32"),
+    P_AI(ai8_0, "FFMA*=64" U(0)),     P_AI(ai8_64, "FFMA*=64" U(8)),    P_AI(ai8_128, "FFMA*=64" U(16)),
+    P_AI(ai8_48p3, "FFMA*=64" U(0)),  P_AI(ai8_96p3, "FFMA*=64" U(0)),  P_AI(bi8_0, "FFMA*=16" U(0)),
+    P_AI(bi8_64, "FFMA*=16" U(8)),    P_AI(bi8_128, "FFMA*=16" U(16)),  P_AI(bi8_48p3, "FFMA*=16" U(0)),
+    P_AI(bi8_96p3, "FFMA*=16" U(0)),
 };
 
 int main(int argc, char** argv) { return op_main(argc, argv, PROBES); }
