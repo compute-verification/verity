@@ -1874,9 +1874,40 @@ def open_pr(top: Path, repo: str, head: str, title: str, body: str, *, base: str
     return out.strip().splitlines()[-1]
 
 
+def _stats(a: argparse.Namespace) -> int:
+    """`research queue stats` (`queue_stats`): each landed PR's head from `main`'s merges onto `next`, its ready mark from the
+    store, the landing check's records fetched with `research status --also`."""
+    from . import queue_stats
+    from .drive import _fetch
+    from .store.local import LocalStore
+
+    top = Path(_out(Path.cwd(), "rev-parse", "--show-toplevel"))
+    _git(top, *STALL, "fetch", "-q", "origin", "main", check=False)
+    heads = {}
+    for body in _out(top, "log", "--first-parent", "--format=%B%x1e", "-n", "5000", "origin/main").split("\x1e"):
+        t = dict(TRAILER_RE.findall(body))
+        if "PR" in t and "Head" in t:
+            heads.setdefault(int(t["PR"].lstrip("#")), t["Head"])
+    labels = StoreLabels(LocalStore(a.store), log=lambda s: None)
+
+    def marked(pr: int):
+        head = heads.get(pr)
+        if head is None:
+            return None
+        labels.ready(pr, head)
+        at = labels.marked_at(pr, head)
+        return queue_stats.ts(at) if at else None
+
+    def run_dir(rid: str) -> Path:
+        return _fetch(top, rid, ["slot.json", "steps.jsonl"]) or Path("/nonexistent")
+
+    return queue_stats.main(a.log, a.hours, a.until, marked, run_dir, a.json)
+
+
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="research queue", description=__doc__.split("\n\n")[0])
-    ap.add_argument("command", choices=["status", "sync", "land", "eject", "ready", "judge", "drive", "report", "open"])
+    ap.add_argument("command", choices=["status", "sync", "land", "eject", "ready", "judge", "drive", "report", "open",
+                                            "stats"])
     ap.add_argument("pr", nargs="?", help="eject, ready: the PR number; judge: the quick tier's run id")
     ap.add_argument("--reason", help="eject: why, for the owner's notice")
     ap.add_argument("--by", default=os.environ.get("RESEARCH_LANE"),
@@ -1927,7 +1958,14 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--body-file", type=Path, help="open: the PR's body, verbatim (its first line `Lane NAME` names the owner)")
     ap.add_argument("--base", default="main", help="open: the base branch (default main)")
     ap.add_argument("--draft", action="store_true", help="open: as a draft (default: ready for review)")
+    ap.add_argument("--log", type=Path, help="stats: drive's log (its stdout, every tick's)")
+    ap.add_argument("--hours", type=float, default=24.0, help="stats: the window's length (default 24)")
+    ap.add_argument("--until", metavar="YYYY-MM-DDTHH:MM:SSZ", help="stats: the window's end (default now)")
     a = ap.parse_args(argv)
+    if a.command == "stats":
+        if a.log is None:
+            ap.error("stats needs --log FILE (drive's log)")
+        return _stats(a)
     if a.command == "open":
         if not (a.head and a.title and a.body_file):
             ap.error("open needs --head BRANCH, --title T and --body-file F")
