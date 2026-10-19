@@ -1,13 +1,15 @@
 """PoUW's read of the network certifier's salt (`verity.core.protocols.pouw.salt`) against the certifier itself
 (`certifier.active.Proxy`, driven tick by tick): the salt's form is pinned; a context names its PoUW window; `revealed`
 gives PoUW window p's salt on p's registration once p is published, and fails closed when it is unregistered, early or
-missing; `pouw_window` takes one whole PoUW window aligned at 0 and nothing else; and `Epoch.certified` applies
-`pouw_salt` of the reveal, 64 bytes, which the seeds and the identifier take and a whole lifecycle runs under."""
+missing; `pouw_window` takes one whole PoUW window aligned at 0 and nothing else; `Epoch.certified` applies
+`pouw_salt` of the reveal, 64 bytes, which the seeds and the identifier take and a whole lifecycle runs under; and
+`core_check.pass_epoch` passes a certified window's pass only when its salt is that of the certifier's reveal."""
 
 from __future__ import annotations
 
 import dataclasses
 import hashlib
+import json
 import random
 
 import pytest
@@ -17,6 +19,7 @@ from verity.core.protocols.certifier import active
 from verity.core.protocols.certifier.active import Proxy
 from verity.core.protocols.certifier.grid import GridParams
 from verity.core.protocols.certifier.schedule import ClockSync, SyncSet
+from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import identifier as I
 from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw.audit import Epoch, Prover, Sampled, Verifier, Workload
@@ -214,3 +217,32 @@ def test_a_certified_epoch_applies_its_pouw_windows_salt():
         Epoch.certified(work, roots, [2, 3], 2, reveal[:32])
     with pytest.raises(DomainError, match="every weight"):
         Epoch.certified(work, {**roots, 8: root}, [2, 3], 2, reveal)
+
+
+def test_a_certified_window_passes_only_a_pass_salted_by_its_certifiers_reveal():
+    """`core_check.pass_epoch` in a certified window, its context naming PoUW window 1 and the pass, with the reveal
+    `revealed` read from the certifier on that registration: the pass salted by `Epoch.certified` of windows 2 and 3
+    passes (``certifier``). Salted by window 0's epoch, by the raw reveal, or checked against window 0's reveal, it
+    doesn't, nor does it pass at a verifier without the reveal."""
+    _, work, _, _, roots = setup()
+    c, _ = certifier(4, pouw_window=2)
+
+    def manifest(salt: bytes) -> tuple[bytes, str]:
+        man = {"schema": CC.MANIFEST_CERTIFIED, "salt": salt.hex(), "run": "r",
+               "matmuls": [{"index": u.index, "m": u.shape.m, "k": u.shape.k, "n": u.shape.n, "weight": u.weight}
+                           for u in work.matmuls],
+               "weights": {str(w): {"root": r.hex()} for w, r in roots.items()}}
+        raw = json.dumps(man).encode()
+        return raw, PS.context("served-zk/r", 1, hashlib.sha512(raw).hexdigest())
+
+    reveal = PS.revealed(c, 1, registration(1))
+    raw, ctx = manifest(Epoch.certified(work, roots, [2, 3], 2, reveal).salt)
+    assert PS.revealed(c, 1, registration(1, ctx=ctx)) == reveal
+    assert CC.pass_epoch(None, raw, ctx, reveal=reveal) == ("certifier", None)
+
+    mismatch = ("coin", "the pass's salt is not the certifier's for its window")
+    for salt in (Epoch.certified(work, roots, [0, 1], 2, reveal).salt, reveal):
+        assert CC.pass_epoch(None, *manifest(salt), reveal=reveal) == (None, mismatch)
+    assert CC.pass_epoch(None, raw, ctx, reveal=PS.revealed(c, 0, registration(0))) == (None, mismatch)
+    how, refused = CC.pass_epoch(None, raw, ctx)
+    assert how is None and refused[0] == "coin" and refused[1].startswith(f"the pass's manifest is {CC.MANIFEST_CERTIFIED}")
