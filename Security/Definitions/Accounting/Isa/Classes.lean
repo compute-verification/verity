@@ -35,11 +35,11 @@ instruction-set lists of the CUDA Binary Utilities, §4.3 Hopper and §4.4 Black
   (`class_of`).
 * lane: FFMA2, FADD2, FMUL2, FSWZADD and the FH forms in FFMA; FSET, HSET2, FMNMX3, VHMNMX, VIADDMNMX and VIMNMX3 in
   VIMNMX; VIADD, IADD32I, ISCADD, SHL and SHR in ALU; IDP, IDP4A and IMUL in IMAD; VISET in VSIMD; MOV64IUR in MOV64;
-  and every other lane instruction that writes at most two words a lane and multiplies nothing (P2R, R2P, IABS, SGXT,
-  BMSK, S2R, CS2R, MOVM, ELECT, B2R, BMOV, RPCMOV, GETLMEMBASE, LEPC) in NOROW.
+  and every other lane instruction that writes at most two words a lane and multiplies nothing (MOV, MOV32I, P2R, IABS,
+  SGXT, BMSK, S2R, CS2R, MOVM, ELECT, B2R, BMOV, RPCMOV, GETLMEMBASE, LEPC) in NOROW.
 
-An instruction that writes no 32-bit word (a SETP's predicate, a branch, a barrier, a fence, a prefetch or cache
-control) heads no word and is in no class. Blackwell's DECOMPRESS and SPARSIFY, whose widths no document gives, are in
+An instruction that writes no 32-bit word (a SETP's or R2P's predicate, a branch, a barrier, a fence, a prefetch or
+cache control) heads no word and is in no class. Blackwell's DECOMPRESS and SPARSIFY, whose widths no document gives, are in
 no class yet: a head of either falsifies `Accounting.Assumptions.Isa.IsaComplete`.
 
 A row's `words` is its class's widest form's: a lane class two words a lane (`Row.lane`), an atomic that returns its

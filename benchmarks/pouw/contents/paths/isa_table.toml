@@ -1,0 +1,4 @@
+order = 335
+path = "`theory/isa_table.py`"
+runs_on = "CPU"
+what = "the Lean instruction table (A7 as data) against DS-120's, sm_90's and sm_100's censuses, floors.csv and `isa_escape.py`'s candidates, and every opcode of the CUDA Binary Utilities' Hopper and Blackwell lists placed in a class, read as writing no word, or named unplaced (IsaComplete's evidence)"
