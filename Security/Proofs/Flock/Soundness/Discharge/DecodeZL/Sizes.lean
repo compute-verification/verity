@@ -196,7 +196,7 @@ theorem post_bind_switches {β : Type} {want : ℕ} {w : String} {f : Array (Arr
 theorem decodeProof_sizes : DecodeSizes := by
   intro sh bytes p h
   unfold decodeProof at h
-  obtain ⟨r', hrun, -⟩ := Flock.Reader.runAll_ok h
+  obtain ⟨r', hrun, -⟩ := Flock.Reader.runPlain_ok h
   refine (?_ : Post _ (ProofSizes sh)) p ⟨_, _, hrun⟩
   dsimp only
   refine post_bind_vecBytes fun cap hcap hcapE => ?_

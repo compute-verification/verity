@@ -9,8 +9,8 @@ import Proofs.Flock.Soundness.Discharge.ZkView.Decode
 `encodeProof sh p` is the file the prover writes for the proof `p` at shape `sh`: `bincode 1.3` of the commitment and
 `R1csProofLigerito` (PROTOCOL.md §8), each `Vec` as its `u64` length then its elements, each `F128` as
 `le64(lo) ‖ le64(hi)`, the vectors the verifier requires empty (`matrix_evals`, the grinding nonces but the query, claim
-and consistency nonces, `sumcheck_transcript`) empty, each ring switch's grinding nonce `0`, and nothing after the pair
-(`Reader.runAll`). It is `--zk`'s `wProof` (ZkView/Wire.lean), the pair that file's proof starts with.
+and consistency nonces, `sumcheck_transcript`) empty, each ring switch's grinding nonce `0`, and nothing after the pair,
+upstream's form of it (`Reader.runPlain`). It is `--zk`'s `wProof` (ZkView/Wire.lean), the pair that file's proof starts with.
 
 * `decodeProof_encodeProof`: `decodeProof sh (encodeProof sh p) = .ok p` for every `p` of the shape (`ProofShaped`):
   every length `decodeProof` checks (Proof.lean:81-158) at its value, a schedule of at least two levels (at one level
@@ -61,10 +61,10 @@ def ProofShaped (sh : Shape) (p : Proof) : Prop :=
   0 < sh.hashLen ∧ 1 ≤ sh.sched.levels.size - 1 ∧ (encodeProof sh p).size < 2 ^ 64 ∧ Lengths sh p
 
 theorem ok_of_reads {m : Reader.M Proof} {b : ByteArray} {x : Proof} {what : String} (h : ZkView.Reads m b x)
-    (hb : b.size < 2 ^ 64) : Reader.runAll m b what = .ok x := by
+    (hb : b.size < 2 ^ 64) : Reader.runPlain m b what = .ok x := by
   have e := h ByteArray.empty ByteArray.empty (by rw [ByteArray.empty_append, ByteArray.append_empty]; exact hb)
   rw [ByteArray.empty_append, ByteArray.append_empty] at e
-  exact Reader.runAll_of_run e (Nat.zero_add b.size)
+  exact Reader.runPlain_of_run e (Nat.zero_add b.size)
 
 /-- **`decodeProof` inverts `encodeProof`** at every proof of the shape. -/
 theorem decodeProof_encodeProof (sh : Shape) (p : Proof) (hp : ProofShaped sh p) :

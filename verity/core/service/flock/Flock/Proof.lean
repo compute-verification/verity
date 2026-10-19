@@ -153,6 +153,6 @@ def decodeProof (sh : Shape) (bytes : ByteArray) : V Proof := do
     let con ← vecExact (R + 1) u64 "consistency_batch_grinding_nonces"
     return { cap, params, zerocheck := ⟨r1ab, r1c, rounds, fa, fb, fc⟩, lincheck := ⟨lr, zp⟩, ringSwitches := rs,
              ligerito := ⟨icap, iproof, rcaps, rproofs, fproof, msgs, qn, ood, cbn, con⟩ }
-  runAll prog bytes "proof"
+  runPlain prog bytes "proof"
 
 end Flock

@@ -179,7 +179,7 @@ class _Reader:
 
 
 def decode(sh: Shape, data: bytes) -> Proof:
-    """The proof container (`decodeProof`), on the prover's side: bytes after it, which the verifier refuses (§8.1), aren't
+    """The proof container (`decodeProof`), on the prover's side: bytes after it (the zk patch's `zk_level0` tag, §8.1) aren't
     read here. An opening-only shape's is a rep's with an empty zerocheck and lincheck (``flock-circuit stacked``)."""
     s = sh.sched
     R = len(s.levels) - 1

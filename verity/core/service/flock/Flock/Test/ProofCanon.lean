@@ -1,7 +1,8 @@
 /-
 A proof file is the one encoding of what it decodes to (§8.1, D17 and D18 of §17.1): `decodeProof` and `Zk.decode` accept a
-file written field by field at a small shape (two levels, one query each, one-byte digests, no salts), and refuse the same
-file with one byte after its end, and a plain file whose `matrix_evals` holds one pair, each with its reason.
+file written field by field at a small shape (two levels, one query each, one-byte digests, no salts), the plain one also with
+the zk patch's `zk_level0 = None` after it, and refuse every other byte after the end, and a plain file whose `matrix_evals`
+holds one pair, each with its reason.
 -/
 import Flock.ZkProof
 
@@ -57,10 +58,15 @@ def why {α} : V α → String
 def canon : ByteArray := pair sh 2 0
 
 #guard why (decodeProof sh canon) == "accepted"
-#guard why (decodeProof sh (canon ++ zeros 1)) ==
-  s!"proof: the file has {canon.size + 1} bytes and its encoding ends at byte {canon.size}"
+#guard why (decodeProof sh (canon ++ zeros 1)) == "accepted"
+#guard why (decodeProof sh (canon ++ ByteArray.mk #[1])) ==
+  "zk_level0: tag 1, want 0: a plain proof carries no hiding messages"
+#guard why (decodeProof sh (canon ++ ByteArray.mk #[1] ++ zeros 99)) ==
+  "zk_level0: tag 1, want 0: a plain proof carries no hiding messages"
+#guard why (decodeProof sh (canon ++ zeros 2)) ==
+  s!"proof: the file has {canon.size + 2} bytes and its encoding ends at byte {canon.size + 1}"
 #guard why (decodeProof sh (canon ++ zeros 64)) ==
-  s!"proof: the file has {canon.size + 64} bytes and its encoding ends at byte {canon.size}"
+  s!"proof: the file has {canon.size + 64} bytes and its encoding ends at byte {canon.size + 1}"
 #guard why (decodeProof sh (pair sh 2 1)) == "matrix_evals: length 1, want 0"
 
 #guard why (Zk.decode sh (zkFile sh)) == "accepted"
