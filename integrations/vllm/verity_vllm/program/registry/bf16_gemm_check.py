@@ -15,15 +15,21 @@ vLLM d9105ea80's choice of kernel for the MoE gate (`GateLinear.forward`, `LLBf1
   every decode batch to `CUBLAS_ROUTES["m_max"]` tokens out of `cublas_routes.json`, the capture's decode-batch scan
   (`glm53_bf16_gemm_capture_gpu.scan_routes`), in which `fit_cublas_split_k` names the split counts whose route computes a
   launch's observed words exactly, so the split count is read out of the words (Kineto reports grid.z = 1 for these launches,
-  so no profile field carries it).
+  so no profile field carries it).  Any other model's bf16-output routes are the cc 9.0 device pin's (`pinned_routes`,
+  `verity_vllm/pins/`), measured by `served routes`' probe, which the predicted served Program reads too.
 
 NaN payloads are not part of any comparison (`mla_check._words_equal`): the GPU's FFMA and FADD write 0x7FFFFFFF, numpy keeps
 an operand's.
 """
 from __future__ import annotations
 
+__models__ = ("zai-org/GLM-5.3", "deepseek-ai/DeepSeek-V4-Pro")
+
 import json
+from functools import cache
+from importlib import resources
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 
@@ -58,12 +64,45 @@ def default_cublas_split_k(phase: str, M: int, K: int, N: int) -> int | None:
     return run[2] if run else None
 
 
+#: each pinned device's measured facts, `<its name in vLLM's file-name form>.json`: its compute capability, multiprocessor count,
+#: library versions and cuBLAS routes
+PINS = resources.files("verity_vllm") / "pins"
+
+
+@cache
+def device_pin(device: str) -> dict[str, Any]:
+    """The pin of the device that reports `device` (`torch.cuda.get_device_name`)."""
+    path = PINS / f"{device.replace(' ', '_')}.json"
+    if not path.is_file():
+        raise KeyError(f"no device pin {path.name} in verity_vllm/pins")
+    return json.loads(path.read_text())
+
+
+@cache
+def capability_pin(cc: tuple[int, int]) -> dict[str, Any]:
+    """The one pinned device of compute capability `cc`."""
+    pins = [json.loads(p.read_text()) for p in PINS.iterdir() if p.name.endswith(".json")]
+    got = [p for p in pins if tuple(p["compute_capability"]) == tuple(cc)]
+    if len(got) != 1:
+        raise KeyError(f"{len(got)} device pins of compute capability {cc} in verity_vllm/pins; one is required")
+    return got[0]
+
+
+def pinned_routes() -> dict[str, dict[str, Any]]:
+    """The cc 9.0 device's bf16-output cuBLAS route at each probed (M, K, N), "M,K,N" -> {"kernel": "nosplit"} or {"kernel": "splitk",
+    "SPLIT_K": s}: `torch.mm(x, w.t())`, which an unbiased `aten.linear` and the served wrapper's extern mm both run."""
+    return capability_pin((9, 0))["cublas"]
+
+
 def default_cublas_route(phase: str, M: int, K: int, N: int) -> tuple[str, dict[str, int]] | None:
-    """The captured default cuBLAS route, distinguishing a known non-split launch from a shape/M with no record."""
+    """The captured default cuBLAS route, else (a linear) the cc 9.0 device pin's, distinguishing a known non-split launch from a
+    shape/M with no record."""
     run = _route_run(phase, M, K, N)
-    if run is None:
-        return None
-    return ("splitk", {"SPLIT_K": run[2]}) if run[2] is not None else ("non_split", {})
+    if run is not None:
+        return ("splitk", {"SPLIT_K": run[2]}) if run[2] is not None else ("non_split", {})
+    if phase == "linear" and (r := pinned_routes().get(f"{M},{K},{N}")) is not None:
+        return ("splitk", {"SPLIT_K": r["SPLIT_K"]}) if r["kernel"] == "splitk" else ("non_split", {})
+    return None
 
 
 SPLITK_CANDIDATES = range(2, 17)

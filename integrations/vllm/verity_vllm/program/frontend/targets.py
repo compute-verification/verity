@@ -73,7 +73,19 @@ TARGETS: dict[str, dict[str, Any]] = {
                # a biased linear binds GemmBias_v2{K,N,DOT} with this family's step (`gemm_bias_dot`): serving has no source for the
                # pre-bias word of Gemm_v2 + BiasAdd_v1
                "gemm_bias_dot": True,
+               # the bf16 fused-MoE expert GEMMs bind MoeExpertGemm_v2 / MoeExpertGemmW_v2{DOT} with this family's step (`moe_expert_dot`),
+               # at any tuned tile at served defaults (`moe_tuned_tile_refusal`); the runs are Qwen3-30B-A3B's on one H200
+               "moe_expert_dot": True,
                "evidence": {"attention_fa2": "R13 hopper: forced-FA2 row `…__h100__…__bi-eager-fa2` Match replay (D=64, BN=128, DOT=Hopper, INV=Fa2InvSum)",
+                            "moe_expert": "Triton lowers the bf16 fused_moe_kernel's tl.dot to wgmma k16 or to MMA v2's mma.sync m16n8k16, whose "
+                                          "HMMA.16816 on cc 9.0 is silicon.HOPPER_BF16_M16N8K16, the wgmma step's parameters and not the Ampere "
+                                          "step (silicon.instructions, r20260922-185339-e337); cc 9.0, 132 SMs, vLLM d9105ea80, served defaults: "
+                                          "the compiled Match r20261018-084657-c7f6 equals MoeExpertGemm_v2 / MoeExpertGemmW_v2{DOT=HopperBF16WgmmaDot16_v1} "
+                                          "on 672 of 672 rows each at the tuned tiles of 1 to 303 rows, where the _v1 binding matched 27 of 1,344 "
+                                          "(r20261018-062333-f1a7); eager under batch invariance, whose launches take the same tuned tiles: the "
+                                          "Match r20261018-101214-aa8f folds every expert row of 32 steps to these Definitions, and tier A on its "
+                                          "rerun's capture (r20261018-103507-288c, replayed by r20261018-122240-8e2d) evaluates 1,536 of 1,536 rows "
+                                          "exactly at the gates, each launch's 384 rows of decode step 1 and 384 of the prefill",
                             "attention_fa3": "lane HP CONF-b1-hopper (D=128, BN=128, 39 leaves exact, positions 0..526); R13 hopper: D=64 (BN 128 prefill / "
                                              "192 decode) — the native FA3 row's Match replay"}},
     "blackwell_consumer": {"dot_id": "HopperBF16WgmmaDot16_v1",
@@ -130,8 +142,8 @@ def tensor_core_dot(profile):
 def moe_expert_dot(profile):
     """The k16 step of the fused-MoE expert GEMMs' Definition on the declared target: None for the `_v1` Definitions, else the
     target's registered step for the `_v2{E,K,N,DOT}` ones.  A family binds them when its record says `moe_expert_dot` (its
-    fused_moe_kernel correspondence ran on a step other than the Ampere/Ada one); every other family keeps the `_v1` records' binding
-    (cc 9.0 too: its fused_moe_kernel lowering has no correspondence run yet).  An unregistered target raises `UnregisteredTarget`."""
+    fused_moe_kernel correspondence ran on a step other than the Ampere/Ada one: cc 9.0 and 12.0); the Ampere/Ada family keeps the
+    `_v1` records' binding.  An unregistered target raises `UnregisteredTarget`."""
     return tensor_core_dot(profile) if TARGETS[target_family(profile)].get("moe_expert_dot") else None
 
 
@@ -161,6 +173,18 @@ def moe_expert_gemm_spec(profile, E: int, K: int, N: int, *, routed: bool):
     if dot is None:
         return bind(M.MoeExpertGemmW if routed else M.MoeExpertGemm, E=int(E), K=int(K), N=int(N))
     return bind(M.MoeExpertGemmWV2 if routed else M.MoeExpertGemmV2, E=int(E), K=int(K), N=int(N), DOT=dot)
+
+
+def moe_tuned_tile_refusal(profile, kb: Any) -> str | None:
+    """None when a tuned bf16 `fused_moe_kernel` tile (vLLM's per-device table, which batch invariance does not override) is one the
+    Definitions model on the declared target: cc 9.0, where every tile's `tl.dot` is the k16 step `moe_expert_dot` names (wgmma or MMA
+    v2, both Hopper's) and a row's chain does not depend on the tile, and BLOCK_SIZE_K a multiple of that step; else why not.  The
+    Build's rule and the fold's are this one."""
+    if tuple(profile.compute_capability) != (9, 0):
+        return (f"numerics_unregistered: a tuned bf16 expert launch is modelled on cc 9.0 only, not on cc {profile.capability_str}")
+    if not isinstance(kb, int) or isinstance(kb, bool) or kb <= 0 or kb % 16:
+        return f"numerics_unregistered: BLOCK_SIZE_K={kb!r} is not a multiple of the k16 step"
+    return None
 
 
 def moe_expert_fp8_dot(profile):
@@ -325,8 +349,12 @@ def parse_launch_context(spec: str | int | list | dict | None) -> dict[str, Any]
         int N                -> {0: N}                    the prefill step's launch has a sequence of N query rows (co-arrival, no later arrivals)
         list [n0, n1, ...]   -> {s: n_s}                  per request step s: the launch's max_seqlen_q at that engine step (1 = decode-only step)
         dict {"s": n}        -> same, string or int keys
+        dict {"batch": [[[rows, start], ...], ...]}
+                             -> per request step s: every sequence the engine step schedules, its query rows and the position of its
+                                first row (`batch_by_step`); max_seqlen_q follows from it.  Without batch invariance every
+                                token-count-dependent kernel choice reads it (`launch_tokens`, `launch_keys`)
         "conflict"           -> {"conflict": True}        requests of this shape have DIFFERENT contexts: refused where the tile rule reads it
-    Returns {"max_seqlen_q_by_step": {int: int}, "conflict": bool, "declared": True}."""
+    Returns {"max_seqlen_q_by_step": {int: int}, "conflict": bool, "declared": True} (+ "batch_by_step": {int: [(rows, start), ...]})."""
     if spec is None or spec == "":
         return None
     if isinstance(spec, str):
@@ -349,6 +377,8 @@ def parse_launch_context(spec: str | int | list | dict | None) -> dict[str, Any]
     elif isinstance(spec, dict):
         if spec.get("conflict"):
             return {"max_seqlen_q_by_step": {}, "conflict": True, "declared": True}
+        if "batch" in spec:
+            return _launch_batch(spec["batch"])
         src = spec.get("max_seqlen_q_by_step", spec)
         by = {int(k): int(v) for k, v in src.items()}
     else:
@@ -356,6 +386,19 @@ def parse_launch_context(spec: str | int | list | dict | None) -> dict[str, Any]
     if any(v < 1 for v in by.values()) or any(k < 0 for k in by):
         raise ValueError(f"launch context: steps and max_seqlen_q must be >= 0 / >= 1: {by}")
     return {"max_seqlen_q_by_step": by, "conflict": False, "declared": True}
+
+
+def _launch_batch(steps) -> dict[str, Any]:
+    if not isinstance(steps, list) or not steps:
+        raise ValueError(f"launch context: batch must be a non-empty list of steps, got {steps!r}")
+    batch: dict[int, list[tuple[int, int]]] = {}
+    for s, seqs in enumerate(steps):
+        seqs = [(int(n), int(p)) for n, p in seqs]
+        if not seqs or any(n < 1 or p < 0 for n, p in seqs):
+            raise ValueError(f"launch context: step {s} schedules {seqs}: every step holds sequences of >= 1 rows at positions >= 0")
+        batch[s] = seqs
+    return {"max_seqlen_q_by_step": {s: max(n for n, _ in seqs) for s, seqs in batch.items()}, "batch_by_step": batch, "conflict": False,
+            "declared": True}
 
 
 class LaunchContextInvalid(ValueError):
@@ -387,6 +430,41 @@ def launch_seqlen_q(own_rows: int, step: int, launch: dict[str, Any] | None) -> 
         raise LaunchContextInvalid(f"the declared launch context says max_seqlen_q {int(v)} at step {int(step)} but this request alone has {own} "
                                    f"query rows there: the launch contains the request, so the declaration is another shape's context")
     return int(v), "declared launch context"
+
+
+def _launch_step(step: int, launch: dict[str, Any] | None) -> list[tuple[int, int]] | None:
+    """The sequences the declared batch schedules at a request step, or None without a declared batch (a batch of one)."""
+    if launch and launch.get("conflict"):
+        raise LaunchContextConflict("the launch context of this request shape is not one value ('conflict'): requests of the same (LP, T) are "
+                                    "co-scheduled with different batches; give each request its own shape")
+    batch = (launch or {}).get("batch_by_step")
+    if not batch:
+        return None
+    seqs = batch.get(int(step))
+    if seqs is None:
+        raise LaunchContextInvalid(f"the declared launch batch names steps 0..{max(batch)} but the request runs step {int(step)}")
+    return seqs
+
+
+def launch_tokens(own_rows: int, step: int, launch: dict[str, Any] | None, *, sampled: bool = False) -> int:
+    """The rows of the batched launch that a request's `own_rows` run in at its request `step`: the step's token count (every scheduled
+    sequence's query rows), or, for the rows after the logits selection (`sampled`), its sequence count (one logits row per scheduled
+    sequence: without chunked prefill every one samples).  Without a declared batch, `own_rows` (a batch of one).  A count below
+    `own_rows` is refused: the launch contains the request."""
+    own, seqs = int(own_rows), _launch_step(step, launch)
+    if seqs is None:
+        return own
+    n = len(seqs) if sampled else sum(r for r, _ in seqs)
+    if n < own:
+        raise LaunchContextInvalid(f"the declared launch batch has {n} {'sequences' if sampled else 'rows'} at step {int(step)} but this request "
+                                   f"alone has {own} there: the declaration is another request's context")
+    return n
+
+
+def launch_keys(step: int, launch: dict[str, Any] | None) -> list[int] | None:
+    """Every query row's key count in the declared batch's step (a row at position p sees p + 1 keys), or None without a declared batch."""
+    seqs = _launch_step(step, launch)
+    return None if seqs is None else [p + i + 1 for n, p in seqs for i in range(n)]
 
 
 def attention_geometry(profile, D: int, seqlen_q: int, NH: int, KVH: int) -> dict[str, Any]:
@@ -572,8 +650,8 @@ def describe(profile) -> dict[str, Any]:
 
 
 __all__ = ["TARGETS", "DOTS", "FP8_DOTS", "FP4_DOTS", "UnregisteredTarget", "target_family", "gemm_target", "tensor_core_dot",
-           "moe_expert_dot", "moe_expert_gemm_spec", "moe_expert_fp8_dot", "moe_expert_fp8_launch_dot",
+           "moe_expert_dot", "moe_expert_gemm_spec", "moe_tuned_tile_refusal", "moe_expert_fp8_dot", "moe_expert_fp8_launch_dot",
            "moe_expert_fp8_gemm_spec", "gemm_bias_dot", "gemm_bias_spec", "tuned_gemm_table",
            "check_flash_attn_registered", "fa3_kblock_n", "fa3_tile_m", "fa3_check_inf", "fa3_masked_from", "fa2_check_inf", "fa2_masked_from", "attention_geometry", "uses_accepted_kinds", "gemm_spec",
            "scaled_mm_fp8_spec", "fp8_block_dot", "scaled_mm_fp8_block_spec", "nvfp4_quant_spec", "nvfp4_gemm_spec", "rmsnorm_spec", "rmsnorm_value_spec", "rmsnorm_fused_spec", "attention_spec", "describe",
-           "LaunchContextConflict", "parse_launch_context", "launch_seqlen_q"]
+           "LaunchContextConflict", "LaunchContextInvalid", "parse_launch_context", "launch_seqlen_q", "launch_tokens", "launch_keys"]

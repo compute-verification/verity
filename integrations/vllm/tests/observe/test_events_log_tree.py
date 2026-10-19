@@ -6,7 +6,7 @@ import io
 
 import pytest
 
-from verity_vllm.observe.events import (DispatchEnter, DispatchExit, Root, RunHeader, SampleEnd, StepEnd, StepLink, StepStart,
+from verity_vllm.observe.events import (DTYPE_BYTES, DispatchEnter, DispatchExit, Root, RunHeader, SampleEnd, StepEnd, StepLink, StepStart,
                                    StorageAlloc, TritonLaunch, ViewDesc, from_json, to_json, views_in)
 from verity_vllm.observe.log import LogWriter, dumps, read_log, read_log_lines, split_steps
 from verity_vllm.observe.fold.tree import build_trees, op_histogram, step_events
@@ -55,6 +55,14 @@ def test_viewdesc_helpers():
     with pytest.raises(ValueError):
         ViewDesc(1, 0, (2,), (1,), "weird", "cuda:0")
     assert list(views_in([v, {"x": [None, v]}, 3])) == [v, v]
+
+
+def test_dtype_bytes_are_torchs():
+    """Every served parameter is a capture root, so a dtype missing here fails the install (DSV4's Marlin `b_scales` are UE8M0)."""
+    torch = pytest.importorskip("torch")
+    assert "float8_e8m0fnu" in DTYPE_BYTES
+    for name, n in DTYPE_BYTES.items():
+        assert getattr(torch, name).itemsize == n, name
 
 
 def test_log_roundtrip_file(tmp_path):

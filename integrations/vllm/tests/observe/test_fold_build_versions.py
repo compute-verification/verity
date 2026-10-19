@@ -45,7 +45,8 @@ CURRENT = sorted(n for n, v in PROFILES.items() if n and v.kinds == PROFILES[DEF
 STATICS = dict(K=64, N=64, I=8, H=64, E=8, TOPK=2, VPT=8, T=4, NH=2, KVH=1, D=64, BN=128, EPS=1e-6, V=16, C=1.0, G=128, S=1, WORLD=4,
                VS=8, START=0, NHEADS=2, W=32, BITS=0, CAP=50.0, MASKED_FROM=1, FA2_MASKED_FROM=1, RSF=2.5, KERNEL="block",
                ROPE=32, DR=16, DV=16, SM_SCALE=0.0625, SHOT=1, SIZE=64, TREES=2, FTZ=False, STAGE=1, CLUSTER=2, FMA=True,
-               SPLIT_K=2, B=2, BS=32, VEC=8, TILE_K=32, WARPS=4, NS=2, BLOCK=8)
+               SPLIT_K=2, B=2, BS=32, VEC=8, TILE_K=32, WARPS=4, NS=2, BLOCK=8, HC=4, TN=8, TH=64, REPEAT=2, HC_EPS=1e-6, NHP=2,
+               DN=64, QB=64, ROWS=8, R=4, CHUNKS=2, QG=64, SPLITS=2, NW=2, QT=64, NP=64, LIMIT=10.0, P=6, BM=8, TK=64, GRID=4)
 #: the statics that select among Definitions, at every registered value
 SELECTING = {"DOT": tuple(TG.DOTS.values()), "INV": (P.Fa2InvSum, Fa3InvSum), "SCALE": TargetProfile.FP8_SCALE_CONSTRUCTIONS,
              "CONSTRUCTION": TargetProfile.SAMPLER_CONSTRUCTIONS,

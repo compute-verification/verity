@@ -15,6 +15,13 @@ checkpoint and world) names for the Programs the Build uses (`captures` of each 
 manifest's `spec_histogram` holds), the record's `conformance.due`.  The record cites each one's capture of record under
 `evidence.conformance` (a `property-record/v1`: one run's `<property>.json`, validated and holding, referring to the run's record;
 `capture` preserves them) or names it a gap with its reason under `evidence.gaps`; `publish` refuses a record that leaves one silent.
+With `newest`, each one the caller leaves out cites its newest holding capture in the store (`newest_capture`): what the row pipeline
+publishes with (`pipeline.research.chain`, once a row's Build, Match and Commit pass).  A record published from another tree (a
+pod's job tree) reaches this tree's index with `pull`: the entry is rebuilt from the record alone (`entry`).
+
+A checkpoint's staging is the label `staged` on `ckpt:<repo>@<revision>`: when a host finished staging its weights and checking every
+shard's sha256, its ref the evidence (`staged`).  The step that stages weights writes it (`ops/pod_bootstrap.sh`, through its run's
+custody key); `glue` reads it as the start of a model's hours to record.
 
 A `research run` job has no store (its custody key stays with the runner): the launcher writes the row's record and the descriptors
 the job reads into one file (`bundle`), ships it (`research run --send FILE`), and the job decodes them from it (`programs(row,
@@ -31,28 +38,33 @@ bundle=...)`), each digest checked against the record as from the store.
 
     verity-vllm records publish <row dir> <row> --build art:… --tree REF@SHA --by LANE [--tier fast|heavy] [--manifest art:…]
                                 [--match art:…] [--match-run R] [--commit art:…] [--commit-run R] [--summary FILE]
-                                [--conformance PROPERTY=art:…] [--gap PROPERTY=REASON]
+                                [--conformance PROPERTY=art:…] [--gap PROPERTY=REASON] [--newest-captures]
+    verity-vllm records pull <art:…> [--tier fast|heavy]   # index a record published elsewhere (a pod's `row chain`) in records.json
     verity-vllm records capture <run> [--property P]  # preserve a capture run's property records; prints PROPERTY=art:…
     verity-vllm records show [<row>]                  # the rows and their records, or a row's record
     verity-vllm records programs <row> [--rank R] [--part P] [--bundle FILE]   # fetch, decode and check a row's Programs
     verity-vllm records fetch <row> --to FILE [--rank R] [--part P]   # a job's bundle: research run --send FILE
+    verity-vllm records staged <repo> <revision> --at UTC --ref EVIDENCE --by LANE   # a checkpoint's staging event
+    verity-vllm records switch <row> --comparison comparison.json --run R --trace art:… [--tier T]   # the row's Build becomes AOT
+
+A switched row (`switch`: its `aot` in the index, `config_record.aot_of`) has the AOT Build on its record path
+(`verity_vllm.predict.aot`): its pins are the predicted Programs, equal on every rank to the traced Build its comparison checked.
 """
 from __future__ import annotations
 
 import io
 import json
 import re
-import subprocess
-import sys
 import tarfile
 import tempfile
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.config import UsageError, option
+from verity_vllm.config import RowId, UsageError, option
 from verity_vllm.pipeline import config_record as CR
-from verity_vllm.pipeline import epoch
+from verity_vllm.pipeline.store_data import data, fetch, listing
 
 INDEX = CR.INDEX
 ART = re.compile(r"art:[0-9a-f]{64}")
@@ -61,34 +73,6 @@ TREE = re.compile(r"\S+@[0-9a-f]{7,40}")
 REFS = ("build", "manifest", "match", "commit")
 PROPERTY_KIND = "property-record/v1"
 CONSTRUCTION = "construction_manifest.json"
-
-
-def data(*args: str) -> str:
-    """`research data ARGS`'s stdout (this interpreter's research, in this process's environment); a refusal raises with what the CLI
-    said."""
-    p = subprocess.run([sys.executable, "-m", "research", "data", *args], capture_output=True, text=True)
-    if p.returncode != 0:
-        raise RuntimeError(f"research data {' '.join(args[:2])}: rc={p.returncode}: {p.stderr.strip()[-1500:]}")
-    return p.stdout
-
-
-def fetch(art: str, to: Path | None = None, paths: list[str] = ()) -> Path:
-    """Materialise `art`'s payload (only `paths` of a tree, when given) and return its path.  A store with no remote (a `research
-    run` job's) that lacks it names the bundle that serves a job instead."""
-    try:
-        out = data("fetch", art, *(["--to", str(to)] if to else []), *(f"--path={p}" for p in paths))
-    except RuntimeError as e:
-        if "no remote configured" not in str(e):
-            raise
-        raise RuntimeError(f"{e}: a research run job has no store; the launcher writes the row's bundle (`verity-vllm records fetch "
-                           f"ROW --to FILE`), sends it (`research run --send FILE`) and the job reads it (`records programs ROW --bundle "
-                           f"$RESEARCH_RUN_DIR/inputs/FILE`, `programs(row, bundle=...)`)") from None
-    return Path(out.strip().splitlines()[-1])
-
-
-def listing(art: str) -> list[str]:
-    """The paths of a tree artifact's files."""
-    return [f["path"] for f in json.loads(data("fetch", art, "--list", "--json"))]
 
 
 def index() -> dict[str, dict[str, Any]]:
@@ -244,6 +228,17 @@ def check_capture(prop: str, art: str) -> None:
                          f"(`verity-vllm records capture RUN` preserves one)")
 
 
+def newest_capture(prop: str) -> str | None:
+    """`prop`'s newest holding capture of record at its registered schema in the store (the latest capture run's), None when none."""
+    from verity_vllm.properties.record import REGISTRY
+    if (want := REGISTRY.get(prop)) is None:
+        return None
+    held = [((r["manifest"].get("meta") or {}).get("run_id") or "", r["id"])
+            for r in json.loads(data("select", "--kind", PROPERTY_KIND, "--where", f"meta.property={prop}", "--json") or "[]")
+            if (r["manifest"].get("meta") or {}).get("ok") is True and r["manifest"]["meta"].get("schema") == want.schema]
+    return max(held)[1] if held else None
+
+
 def due(build: str, listed: list[str]) -> dict[str, Any]:
     """The record's `conformance`: the capture map (`map`, its id) of the Build's checkpoint and world (its construction manifests'
     `model.pin.model` and `tp.world`) and `due`, each property its `captures` name for a map Program the Build uses (one of whose
@@ -284,18 +279,37 @@ def evidence_of(build: str, *, manifest: str | None = None, match: str | None = 
     return ev
 
 
-def publish(d: str | Path, row: str, *, evidence: dict[str, Any], tree: str, by: str, summary: dict[str, Any] | None = None,
-            tier: str | None = None) -> str:
-    """Write the row's config record from its row dir `d` (the stages' files, or a copy of them) and its Commit of record's
-    `summary`, refuse it unless it is PASS, the Commit committed against the Build's manifest and Programs, its Build artifact
-    holds every Program it names, and every conformance property its Programs need (`due`) is cited by a holding capture of
-    record or named a gap, then label it `row=<id>`, preserve it with its label and index it with its Programs as the row's pins
-    (`tier`: its neutrality rebuild's, by default the index's).  Returns its art: id."""
-    if not TREE.fullmatch(tree):
-        raise UsageError(f"--tree {tree!r}: REF@SHA, the code the row was built and served from")
+def entry(rec: dict[str, Any], art: str, tier: str) -> dict[str, Any]:
+    """A published record's index entry: its art: id, the tier of its rebuild, what it was pinned from and its circuit's pins, the
+    Build's manifest digest and every rank's Program digests as `epoch.build_programs` reads them from the Build."""
+    b = rec["build"]
+    per = b.get("per_rank") or {"0": {"programs": b.get("programs") or {}, "workload_digest": b.get("workload_digest")}}
+    programs = {r: {"step": p["programs"].get("step") or p["programs"].get("build_step"), "workload": p.get("workload_digest"),
+                    "requests": {k: v for k, v in sorted(p["programs"].items()) if k == "request" or k.startswith("build_request")}}
+                for r, p in sorted(per.items(), key=lambda kv: int(kv[0]))}
+    return {"record": art, "tier": tier, "pinned_from": {"record": art, "build": rec["evidence"]["build"], "tree": rec["tree"]},
+            "manifest_digest": b.get("manifest_digest"), "programs": programs}
+
+
+def _tier(row: str, tier: str | None) -> str:
     if (tier := tier or (index().get(row) or {}).get("tier")) not in CR.TIERS:
         raise UsageError(f"{row}: a row new to {INDEX.name} needs --tier {'|'.join(CR.TIERS)}, the tier of its rebuild "
                          f"(`verity-vllm neutrality`)")
+    return tier
+
+
+def publish(d: str | Path, row: str, *, evidence: dict[str, Any], tree: str, by: str, summary: dict[str, Any] | None = None,
+            tier: str | None = None, newest: bool = False) -> str:
+    """Write the row's config record from its row dir `d` (the stages' files, or a copy of them) and its Commit of record's
+    `summary`, refuse it unless it is PASS, the Commit committed against the Build's manifest and Programs, its Build artifact
+    holds every Program it names, and every conformance property its Programs need (`due`) is cited by a holding capture of
+    record (with `newest`, one `evidence` leaves out cites `newest_capture`) or named a gap, then label it `row=<id>`, preserve it
+    with its label and index it with its Programs as the row's pins (`tier`: its neutrality rebuild's, by default the index's).
+    A switched row's (`config_record.aot_of`) are its AOT Build's predicted Programs: a Build that traced one is refused, and the
+    row keeps its `aot`.  Returns its art: id."""
+    if not TREE.fullmatch(tree):
+        raise UsageError(f"--tree {tree!r}: REF@SHA, the code the row was built and served from")
+    tier = _tier(row, tier)
     rec = CR.record(d, row, tree=tree, summary=summary, evidence=evidence)
     if rec["outcome"] != "PASS":
         raise UsageError(f"{row}: the record is {rec['outcome']} ({rec['why']}): the database keeps rows whose circuit is faithful")
@@ -308,15 +322,23 @@ def publish(d: str | Path, row: str, *, evidence: dict[str, Any], tree: str, by:
     listed = listing(evidence["build"])
     if missing := [p for r, ps in parts(rec).items() for p in (descriptor(rec, r, q) for q in ps) if p not in listed]:
         raise UsageError(f"{row}: the Build {evidence['build']} lacks {len(missing)} Program descriptor(s): {', '.join(missing[:4])}")
+    traced = sorted(f"rank{r} {p}" for r, ps in constructions(Path(d)).items() for p, c in ps.items() if c != "aot")
+    if (aot := CR.aot_of(row, INDEX)) and traced:
+        raise UsageError(f"{row}: a switched row's pins are its AOT Build's Programs (`aot` in {INDEX.name}), and this Build traced "
+                         f"{len(traced)} of them ({', '.join(traced[:4])}): run its Build with --build-construction record")
     rec["conformance"] = due(evidence["build"], listed)
     cited, gaps = evidence.get("conformance") or {}, evidence.get("gaps") or {}
+    if newest:
+        cited = dict(sorted({**{p: a for p in rec["conformance"]["due"] if p not in cited and p not in gaps and (a := newest_capture(p))},
+                             **cited}.items()))
+        rec["evidence"] = {**evidence, "conformance": cited}
     if silent := sorted(set(rec["conformance"]["due"]) - set(cited) - set(gaps)):
         raise UsageError(f"{row}: its Programs need {', '.join(silent)} ({rec['conformance']['map']}), which the record neither cites nor "
                          f"names a gap: --conformance PROPERTY=art:… (`verity-vllm records capture RUN`) or --gap PROPERTY=REASON")
     for prop, art in cited.items():
         check_capture(prop, art)
     refs = {**{k: evidence[k] for k in REFS if evidence.get(k)}, **cited}
-    meta = {"row": row, "outcome": rec["outcome"], "world": rec["config"].get("tp"), "tree": tree}
+    meta = {"row": row, "outcome": rec["outcome"], "world": rec["config"].get("tp"), "tree": tree, "tier": tier}
     with tempfile.TemporaryDirectory(prefix="config-record-") as tmp:
         p = Path(tmp) / CR.NAME
         p.write_text(json.dumps(rec, indent=1, sort_keys=True, default=str) + "\n")
@@ -325,10 +347,89 @@ def publish(d: str | Path, row: str, *, evidence: dict[str, Any], tree: str, by:
     data("label", art, "row", row, "--by", by)
     data("push", art)
     doc = CR.load_index(INDEX)
-    doc["rows"][row] = {"record": art, "tier": tier, "pinned_from": {"record": art, "build": evidence["build"], "tree": tree},
-                        "manifest_digest": rec["build"].get("manifest_digest"), "programs": epoch.build_programs(Path(d))}
+    doc["rows"][row] = {**entry(rec, art, tier), **({"aot": aot} if aot else {})}
     CR.write_index(doc, INDEX)
     return art
+
+
+def pull(art: str, tier: str | None = None) -> str:
+    """Index `art`, a record `publish` preserved from another tree (a pod's `row chain`), in this tree's records.json, with the tier
+    it was published with (`tier` overrides it), a switched row keeping its `aot`; returns its row."""
+    m = json.loads(data("show", art, "--json"))["manifest"]
+    meta = m.get("meta") or {}
+    if m.get("kind") != CR.KIND or meta.get("outcome") != "PASS":
+        raise UsageError(f"{art}: a {m.get('kind')} ({meta.get('outcome')}), not a PASS {CR.KIND}")
+    rec = json.loads(fetch(art).read_text())
+    row = rec["config"]["row"]
+    doc = CR.load_index(INDEX)
+    aot = (doc["rows"].get(row) or {}).get("aot")
+    doc["rows"][row] = {**entry(rec, art, _tier(row, tier or meta.get("tier"))), **({"aot": aot} if aot else {})}
+    CR.write_index(doc, INDEX)
+    return row
+
+
+STAGED = "staged"
+UTC = "%Y-%m-%dT%H:%M:%SZ"
+
+
+def checkpoint(repo: str, revision: str) -> str:
+    """A checkpoint's label target in the store."""
+    return f"ckpt:{repo}@{revision}"
+
+
+def staged(repo: str, revision: str, *, at: str, ref: str, by: str) -> str:
+    """Label `repo`@`revision` staged at `at` (UTC, `UTC`'s form), `ref` the evidence."""
+    try:
+        datetime.strptime(at, UTC)
+    except ValueError:
+        raise UsageError(f"--at {at!r}: a UTC time, YYYY-MM-DDTHH:MM:SSZ") from None
+    return data("label", checkpoint(repo, revision), STAGED, at, "--by", by, "--ref", ref)
+
+
+def constructions(d: Path) -> dict[str, dict[str, str]]:
+    """Per rank of a row dir's Build (`build_summary.json`), each derived Program's construction: `aot` or `trace`."""
+    s = json.loads((d / "build_summary.json").read_text()) if (d / "build_summary.json").is_file() else {}
+    return {k.removeprefix("rank"): {p: v.get("construction", "trace") for p, v in rk.items() if p.startswith("build_")}
+            for k, rk in (s.get("ranks") or {}).items()}
+
+
+def switch(row: str, comparison: dict[str, Any], *, run: str, trace: str, tier: str | None = None) -> dict[str, Any]:
+    """Switch `row` to the AOT Build: its index entry's `aot` names the comparison `run` (`verity-vllm predict compare`, its
+    `comparison.json`) and the traced Build `trace` it compared, and its pins are the comparison's Programs.  Refused unless the
+    comparison is of `row` and equal on every rank, or where a row already pinned would move: re-pinning is `verity-vllm neutrality
+    --update`'s.  A row new to the index is pinned with no record, at `tier`."""
+    if not RUN.fullmatch(run) or not ART.fullmatch(trace):
+        raise UsageError(f"--run {run!r} --trace {trace!r}: the comparison's run id and the traced Build's art: id")
+    if RowId.parse(row).world < 2:
+        raise UsageError(f"{row}: the AOT Build is a TP row's (`row_tp.TpRow.build`); a single-GPU row's Build traces")
+    if comparison.get("row") != row or comparison.get("equal") is not True:
+        raise UsageError(f"{row}: the comparison is of {comparison.get('row')} and {'equal' if comparison.get('equal') else 'NOT equal'}: "
+                         f"a row is switched only where its predicted Programs equal its traced Build's on every rank")
+    parts = lambda p: {n: v["predicted"] for n, v in p.items() if isinstance(v, dict) and "predicted" in v}   # noqa: E731
+    programs = {r: {"step": ps.pop("step"), "workload": ps.pop("workload"), "requests": ps}
+                for r, ps in ((r, parts(p)) for r, p in sorted(comparison["ranks"].items(), key=lambda kv: int(kv[0])))}
+    doc = CR.load_index(INDEX)
+    entry = doc["rows"].get(row)
+    if entry is not None and entry.get("programs") != programs:
+        raise UsageError(f"{row}: its pins are not the comparison's Programs: re-pin it first (`verity-vllm neutrality {row} --update`)")
+    if entry is None and tier not in CR.TIERS:
+        raise UsageError(f"{row}: a row new to {INDEX.name} needs --tier {'|'.join(CR.TIERS)}, the tier of its rebuild")
+    doc["rows"][row] = {**(entry or {"record": None, "tier": tier, "pinned_from": {"build": trace, "run": run}, "manifest_digest": None,
+                                     "programs": programs}), "aot": {"comparison": run, "trace": trace}}
+    CR.write_index(doc, INDEX)
+    return doc["rows"][row]
+
+
+@dataclass(frozen=True, kw_only=True)
+class SwitchOptions:
+    """Switch a row to the AOT Build from a comparison equal on every rank (`verity-vllm predict compare`'s comparison.json)."""
+
+    row: str = option("row")
+    comparison: str = option("--comparison", help="the comparison run's comparison.json")
+    run: str = option("--run", help="the comparison's run id")
+    trace: str = option("--trace", help="the traced Build it compared, a vllm-build/v1 art: id holding every rank's derive dirs")
+    tier: str | None = option("--tier", choices=CR.TIERS, default=None, help="a row new to the index: the tier of its rebuild")
+    cmd: str = field(default="switch", init=False)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -352,7 +453,19 @@ class PublishOptions:
                                     help="a property's capture of record (`records capture`)")
     gap: list[str] = option("--gap", action="append", default=[], metavar="PROPERTY=REASON",
                             help="a property the Programs need with no capture of record for the tree, and why")
+    newest_captures: bool = option("--newest-captures", action="store_true", default=False,
+                                   help="cite, for each property the Programs need that --conformance and --gap leave out, its newest "
+                                        "holding capture of record in the store")
     cmd: str = field(default="publish", init=False)
+
+
+@dataclass(frozen=True, kw_only=True)
+class PullOptions:
+    """Index records published from another tree (a pod's `row chain`) in this tree's manifests/records.json."""
+
+    art: list[str] = option("art", nargs="+", help="the records' art: ids")
+    tier: str | None = option("--tier", choices=CR.TIERS, default=None, help="the tier of the rows' rebuild (default the record's)")
+    cmd: str = field(default="pull", init=False)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -394,7 +507,20 @@ class FetchOptions:
     cmd: str = field(default="fetch", init=False)
 
 
-COMMANDS = {"publish": PublishOptions, "capture": CaptureOptions, "show": ShowOptions, "programs": ProgramsOptions, "fetch": FetchOptions}
+@dataclass(frozen=True, kw_only=True)
+class StagedOptions:
+    """Record that a host finished staging a checkpoint's weights, every shard's sha256 checked: the label staged on ckpt:<repo>@<revision>."""
+
+    repo: str = option("repo", help="the checkpoint's HF repo id")
+    revision: str = option("revision")
+    at: str = option("--at", help="when the shards' check passed, UTC (YYYY-MM-DDTHH:MM:SSZ)")
+    ref: str = option("--ref", help="the evidence: the staging run, or host:path of its verify record")
+    by: str = option("--by", help="the label's author (a lane)")
+    cmd: str = field(default="staged", init=False)
+
+
+COMMANDS = {"publish": PublishOptions, "pull": PullOptions, "capture": CaptureOptions, "show": ShowOptions, "programs": ProgramsOptions, "fetch": FetchOptions,
+            "staged": StagedOptions, "switch": SwitchOptions}
 
 
 def _pairs(flag: str, items: list[str], form: str) -> dict[str, str]:
@@ -404,13 +530,21 @@ def _pairs(flag: str, items: list[str], form: str) -> dict[str, str]:
     return out
 
 
-def main(a: PublishOptions | CaptureOptions | ShowOptions | ProgramsOptions | FetchOptions) -> int:
+def main(a: PublishOptions | PullOptions | CaptureOptions | ShowOptions | ProgramsOptions | FetchOptions | StagedOptions
+         | SwitchOptions) -> int:
+    if a.cmd == "switch":
+        print(json.dumps(switch(a.row, json.loads(Path(a.comparison).read_text()), run=a.run, trace=a.trace, tier=a.tier)["aot"]))
+        return 0
     if a.cmd == "publish":
         ev = evidence_of(a.build, manifest=a.manifest, match=a.match, match_run=a.match_run, commit=a.commit, commit_run=a.commit_run,
                          conformance=_pairs("--conformance", a.conformance, "PROPERTY=art:..."),
                          gaps=_pairs("--gap", a.gap, "PROPERTY=REASON"))
         summary = json.loads(Path(a.summary).read_text()) if a.summary else None
-        print(publish(a.row_dir, a.row, evidence=ev, tree=a.tree, by=a.by, summary=summary, tier=a.tier))
+        print(publish(a.row_dir, a.row, evidence=ev, tree=a.tree, by=a.by, summary=summary, tier=a.tier, newest=a.newest_captures))
+        return 0
+    if a.cmd == "pull":
+        for art in a.art:
+            print(f"{pull(art, a.tier)} {art}")
         return 0
     if a.cmd == "capture":
         for prop, art in capture(a.run, a.property or None).items():
@@ -421,6 +555,9 @@ def main(a: PublishOptions | CaptureOptions | ShowOptions | ProgramsOptions | Fe
         return 0
     if a.cmd == "fetch":
         print(bundle(a.row, Path(a.to), a.rank or None, part=a.part or None))
+        return 0
+    if a.cmd == "staged":
+        print(staged(a.repo, a.revision, at=a.at, ref=a.ref, by=a.by), end="")
         return 0
     src = Path(a.bundle) if a.bundle else None
     named = parts(record(a.row, src))
