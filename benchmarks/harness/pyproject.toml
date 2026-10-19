@@ -30,7 +30,8 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # `build_bound` reads the protocol options' `requires_build` to refuse CUDA
 # graphs for arms whose served kernels are bound to a row Build. Dispatch names
 # a queue kind from benchmarks' kinds file, which a test checks every spec has. The README is the
-# harness's contract, and a test pins it to the code. served_commit's arm gates on the run phases
+# harness's contract, and a test pins it to the code. The bandwidth spec's setup must export every library variable
+# memory accounting's arms read and build from sources that exist. served_commit's arm gates on the run phases
 # the runner names, which a test checks with a fake committer.
 inputs = [
     "benchmarks/harness/README.md",
@@ -39,4 +40,9 @@ inputs = [
     "infra/cluster/kinds/benchmarks.toml",
     "integrations/vllm/verity_vllm/engine/hooks.py",
     "integrations/vllm/verity_vllm/protocol_options",
+    "benchmarks/vllm_encoded/bench_arm.py",
+    "benchmarks/vllm_encoded/paged.cu",
+    "benchmarks/codec_tensor/wt.cu",
+    "benchmarks/codec_tensor/reader.cu",
+    "benchmarks/kv_filler/topup.cu",
 ]
