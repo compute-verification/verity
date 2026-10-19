@@ -47,10 +47,11 @@ the served window proves its drawn tiles in zero knowledge, and its verifier of 
    64 bytes, from the certifier's 512-bit salt for p. The verifier reads that salt with `salt.revealed`: the certifier's
    `reveal(p, registration)`, which fails closed unless the proof service registered p (PoUW's reader, `salt.registered`,
    reads p off the served window's context, `<prefix>/pouw-window/<p>/<manifest SHA-512>`) and p's last ingress record is
-   published. The form of `pouw_salt`, SHA-512(reveal ‖ u64be(p)), isn't settled. That salt binds no weights, so a
-   certified window passes only a pass over the weights' root the certifier recorded before it drew p's salt, which the
-   verifier reads with `salt.committed`, on `reveal`'s conditions. Today's certifier records no weights, so every
-   certified window is refused until it does.
+   published. `pouw_salt` is SHA-512(b"verity/pouw-salt/v1" ‖ reveal ‖ u64be(p)), the tag keeping its input apart
+   from `window_salt`'s. That salt binds no weights, so a certified window passes only a pass over the weights' root
+   the certifier recorded before it drew p's salt: the certifier takes one 64-byte root for p, only while p's first
+   ingress tick (the draw) is ahead (`Proxy.commit_weights`), and the verifier reads it with `salt.committed`
+   (`Proxy.committed`, on `reveal`'s conditions). A window with no root recorded before its draw is refused.
 3. **Units.** For each matmul (a 64-bit index, a shape, a weight id), the activation rows are committed bound to the salt
    and the index. The scheme derives its noise from (salt, matmul, roots); every tile yields checked values and a digest.
    The useful output is assembled from the tiles.

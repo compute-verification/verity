@@ -4,8 +4,7 @@ gives PoUW window p's salt on p's registration once p is published, and fails cl
 missing; `pouw_window` takes one whole PoUW window aligned at 0 and nothing else; `Epoch.certified` applies
 `pouw_salt` of the reveal, 64 bytes, which the seeds and the identifier take, with the challenger's draw coin; and
 `core_check.pass_epoch` passes a certified window's pass only when its salt is that of the certifier's reveal and its
-weights those the certifier recorded before it drew that salt (`committed`, which today's certifier refuses, being
-unable to show the order; `Recording` is the record it would need)."""
+weights those the certifier recorded before it drew that salt (`Proxy.commit_weights`, read back by `committed`)."""
 
 from __future__ import annotations
 
@@ -47,32 +46,8 @@ def registration(p: int, ctx: str | None = None, window: dict | None = None) -> 
     return Registration(record, R.receipt(record, "test", received=str(p)), R.digest(record), p)
 
 
-class Recording(Proxy):
-    """The record network would have to add, which today's certifier doesn't keep: PoUW window p's weights' root,
-    handed (`commit_weights`) once and only while p's salt is undrawn, before p's first ingress tick (t_s), and given to
-    the verifier (`committed`) on `reveal`'s conditions."""
-
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-        self.weights: dict[int, bytes] = {}
-
-    def commit_weights(self, p: int, root: bytes) -> None:
-        if p in self._salts:
-            raise RuntimeError(f"PoUW window {p}'s salt is drawn")
-        if p in self.weights:
-            raise RuntimeError(f"PoUW window {p}'s weights are recorded")
-        self.weights[p] = root
-
-    def committed(self, p: int, registration: Registration | None) -> bytes:
-        self.reveal(p, registration)
-        if p not in self.weights:
-            raise RuntimeError(f"no weights recorded before PoUW window {p}'s salt")
-        return self.weights[p]
-
-
-def certifier(windows: int, cls: type[Proxy] = Proxy, weights: dict[int, bytes] | None = None,
-              **kwargs) -> tuple[Proxy, dict[int, bytes]]:
-    """The certifier (`cls`) with PoUW's reader, handed `weights` by PoUW window before its first tick (a `Recording`),
+def certifier(windows: int, weights: dict[int, bytes] | None = None, **kwargs) -> tuple[Proxy, dict[int, bytes]]:
+    """The certifier with PoUW's reader, handed `weights` by PoUW window before its first tick (`commit_weights`),
     after `windows` certifier windows of ingress ticks, and the salts it drew by PoUW window."""
     drawn: dict[int, bytes] = {}
 
@@ -80,8 +55,8 @@ def certifier(windows: int, cls: type[Proxy] = Proxy, weights: dict[int, bytes] 
         drawn[p] = hashlib.shake_256(b"certifier salt %d" % p).digest(n)
         return drawn[p]
 
-    c = cls(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0,
-            **{"salt": source, "registered": PS.registered, **kwargs})
+    c = Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0,
+              **{"salt": source, "registered": PS.registered, **kwargs})
     for p, root in (weights or {}).items():
         c.commit_weights(p, root)
     for _ in range(windows * INGRESS.buckets):
@@ -261,7 +236,7 @@ def test_a_certified_window_passes_only_a_pass_salted_by_its_certifiers_reveal()
     `Epoch.certified` of windows 2 and 3 passes (``certifier``). Salted by window 0's epoch, by the raw reveal, or
     checked against window 0's reveal, it doesn't, nor does it pass at a verifier without the reveal."""
     work, roots = setup()
-    c, _ = certifier(4, Recording, {1: weights_root(roots)}, pouw_window=2)
+    c, _ = certifier(4, {1: weights_root(roots)}, pouw_window=2)
 
     reveal = PS.revealed(c, 1, registration(1))
     raw, ctx = manifest(work, roots, 1, Epoch.certified(work, roots, [2, 3], 2, reveal).salt)
@@ -278,39 +253,51 @@ def test_a_certified_window_passes_only_a_pass_salted_by_its_certifiers_reveal()
 
 
 def test_a_certified_window_passes_only_weights_recorded_before_its_salt():
-    """The certifier's salt binds no weights, so a certified window passes only the weights the certifier recorded
-    before it drew the window's salt (`committed`). Today's certifier records none, so `committed` refuses every window.
-    Against `Recording`, the record network would add: PoUW window 0's weights, handed before its first tick, are
-    read back and its pass passes; window 1's, handed after its salt was drawn, are refused there, so `committed`
-    refuses window 1; and a pass over other weights, salted the same since the salt doesn't read them, is refused, as is
-    a pass at a verifier that holds no recorded weights."""
+    """The certifier's salt binds no weights, so a certified window passes only the weights' root the certifier recorded
+    before it drew the window's salt (`Proxy.commit_weights`), which `committed` reads on `reveal`'s conditions. End to
+    end against the certifier, PoUW windows of two certifier windows: window 0's root, committed before its draw, is
+    read back and its pass passes, and a second root for it is refused; window 1's, committed after its draw, is
+    refused, so `committed` refuses window 1 and its pass, salted by its own reveal, is refused. A pass over other
+    weights, salted the same since the salt doesn't read them, is refused, as are a registration that isn't the
+    window's and a certifier that gives anything but a 64-byte root."""
     work, roots = setup()
     root = weights_root(roots)
-    c, _ = certifier(4, pouw_window=2)
-    with pytest.raises(PS.Unrevealed, match="uncommitted: the certifier records no weights before it draws PoUW window 1"):
-        PS.committed(c, 1, registration(1))
-
-    c, _ = certifier(0, Recording, {0: root}, pouw_window=2)
+    c, _ = certifier(0, {0: root}, pouw_window=2)
+    with pytest.raises(RuntimeError, match="PoUW window 0's weights are already recorded"):
+        c.commit_weights(0, hashlib.sha512(root).digest())
     for _ in range(2 * INGRESS.buckets + 1):   # windows 0 and 1, then window 2's first tick: PoUW window 1's salt
         c.bucketer.tick()
     with pytest.raises(RuntimeError, match="PoUW window 1's salt is drawn"):
         c.commit_weights(1, root)
     for _ in range(2 * INGRESS.buckets - 1):
         c.bucketer.tick()
-    with pytest.raises(PS.Unrevealed, match="uncommitted: the certifier recorded no weights before PoUW window 1's salt"):
-        PS.committed(c, 1, registration(1))
-    with pytest.raises(PS.Unrevealed, match="unregistered"):
-        PS.committed(c, 0, registration(1))
-    for bad in (root[:32], root.hex(), None):
-        c.weights[0] = bad
-        with pytest.raises(PS.Unrevealed, match="is not 64 bytes"):
-            PS.committed(c, 0, registration(0))
-    c.weights[0] = root
 
     reveal = PS.revealed(c, 0, registration(0))
     raw, ctx = manifest(work, roots, 0, Epoch.certified(work, roots, [0, 1], 2, reveal).salt)
     weights = PS.committed(c, 0, registration(0, ctx=ctx))
     assert weights == root and CC.pass_epoch(None, raw, ctx, reveal=reveal, weights=weights) == ("certifier", None)
+
+    late = PS.revealed(c, 1, registration(1))
+    raw1, ctx1 = manifest(work, roots, 1, Epoch.certified(work, roots, [2, 3], 2, late).salt)
+    with pytest.raises(PS.Unrevealed, match="no weights were recorded before PoUW window 1's salt"):
+        PS.committed(c, 1, registration(1, ctx=ctx1))
+    assert CC.pass_epoch(None, raw1, ctx1, reveal=late, weights=None) == \
+        (None, ("coin", "the verifier holds no weights' root the certifier recorded before it drew the window's salt"))
+    with pytest.raises(PS.Unrevealed, match="unregistered"):
+        PS.committed(c, 0, registration(1))
+
+    @dataclasses.dataclass
+    class Gives:
+        root: object
+
+        def committed(self, window, registration):
+            return self.root
+
+    for bad in (root[:32], root.hex(), bytearray(root), None):
+        with pytest.raises(PS.Unrevealed, match="is not 64 bytes"):
+            PS.committed(Gives(bad), 0, registration(0))
+    assert PS.committed(Gives(root), 0, registration(0)) == root
+
     later = {w: hashlib.sha512(r).digest() for w, r in roots.items()}
     assert Epoch.certified(work, later, [0, 1], 2, reveal).salt == Epoch.certified(work, roots, [0, 1], 2, reveal).salt
     assert CC.pass_epoch(None, *manifest(work, later, 0, Epoch.certified(work, later, [0, 1], 2, reveal).salt),

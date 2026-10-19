@@ -11,9 +11,9 @@ published. PoUW doesn't import the certifier: `revealed` reads any object with t
 * `revealed(certifier, p, registration)` is p's certifier salt, or `Unrevealed`: it fails closed when the registration
   isn't p's (unregistered), when the certifier refuses (a receipt that isn't the registration's: unregistered; before
   t_d: early; a salt never drawn, or the salt off: missing), and when what it gives isn't 64 bytes (missing).
-* `committed(certifier, p, registration)` is the weights' root the certifier recorded for p before it drew p's salt, or
-  `Unrevealed` (uncommitted): the salt binds no weights, so a certified window passes only weights recorded before
-  its salt (`core_check.pass_epoch`). Today's certifier records none, so every certified window is refused.
+* `committed(certifier, p, registration)` is the weights' root the certifier recorded for p before it drew p's salt
+  (`Proxy.commit_weights`), given on `reveal`'s conditions (`Proxy.committed`), or `Unrevealed` (uncommitted): the salt
+  binds no weights, so a certified window passes only weights recorded before its salt (`core_check.pass_epoch`).
 * `pouw_salt(reveal, p)` is the salt PoUW applies in window p, the one function that states its form.
 * `pouw_window(windows, k)` is the PoUW window certifier windows make up, refusing any that aren't one whole, aligned
   PoUW window.
@@ -106,19 +106,16 @@ def revealed(certifier: Any, window: int, registration: Registration | None) -> 
 
 def committed(certifier: Any, window: int, registration: Registration | None) -> bytes:
     """The weights' root (`audit.weights_root`, 64 bytes) the certifier recorded for PoUW window `window` before it drew
-    the window's salt, `certifier.committed(window, registration)`, given the window's registration. It fails closed
-    (`Unrevealed`): unregistered, as `revealed`; uncommitted, when the certifier records no weights (today's
-    `certifier.active.Proxy` doesn't), refuses (none recorded before the draw), or gives anything but 64 bytes."""
+    the window's salt, `certifier.committed(window, registration)` (`Proxy.commit_weights` records it), given the
+    window's registration. It fails closed (`Unrevealed`): unregistered, as `revealed`; refused by the certifier (on
+    `reveal`'s conditions, or uncommitted: no root recorded before the draw); or uncommitted, when what the certifier
+    gives isn't 64 bytes."""
     if registered(registration) != _window(window):
         raise Unrevealed(f"unregistered: no registration of PoUW window {window}")
-    record = getattr(certifier, "committed", None)
-    if not callable(record):
-        raise Unrevealed(f"uncommitted: the certifier records no weights before it draws PoUW window {window}'s salt")
     try:
-        root = record(window, registration)
+        root = certifier.committed(window, registration)
     except (RuntimeError, ValueError) as e:
-        raise Unrevealed(f"uncommitted: the certifier recorded no weights before PoUW window {window}'s salt: {e}") \
-            from None
+        raise Unrevealed(f"the certifier doesn't give PoUW window {window}'s weights' root: {e}") from None
     if type(root) is not bytes or len(root) != WEIGHTS_ROOT_BYTES:
         raise Unrevealed(f"uncommitted: the certifier's weights' root for PoUW window {window} is not "
                          f"{WEIGHTS_ROOT_BYTES} bytes")
