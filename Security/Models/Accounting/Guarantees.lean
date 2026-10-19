@@ -42,6 +42,7 @@ import Models.Accounting.Guarantees.TS.Stages
 import Models.Accounting.Guarantees.TS.Steer
 import Models.Accounting.Guarantees.TS.FoldFanIn
 import Models.Accounting.Guarantees.TS.LowBit
+import Models.Accounting.Guarantees.TS.SlotStep
 
 /-! Resource accounting's guarantee statements: the joint guarantee and its covert residual, PoUW's and the bandwidth
 audit's guarantees as a joint run's compute and bandwidth guarantees, each family's headline `ε` on its exact data,
