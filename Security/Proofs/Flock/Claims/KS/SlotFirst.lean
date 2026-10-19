@@ -177,7 +177,8 @@ theorem SlotAt.batchLock_first (d : ζ) {i : I} {g g' : Game ζ} (L : Lock T D g
           exact key
       have key := SlotAt.map
         (R₂ := fun i (a b : List ζ) => R i (a.getD (h :: pre).length d) (b.getD (h :: pre).length d))
-        (plur := plur) (Φ := Φ) (fun x : ζ × List ζ => x.1 :: x.2) (fun x : ζ × List ζ => x.1 :: x.2) (fun _ _ _ h' => h'.2) hs
+        (plur := plur) (Φ := Φ) (fun x : ζ × List ζ => x.1 :: x.2) (fun x : ζ × List ζ => x.1 :: x.2)
+        (fun _ _ _ h' => h'.2) hs
       rw [Strategy.map_ofMap (fun x : ζ × List ζ => x.1 :: x.2) (h.interleave (batch (pre ++ g' :: post))) σ,
         ← Nat.add_assoc] at key
       exact key
