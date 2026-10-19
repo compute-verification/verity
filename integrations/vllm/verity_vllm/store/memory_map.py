@@ -71,7 +71,7 @@ from typing import Any
 import numpy as np
 
 from verity.core.protocols.remote_bandwidth import audit, codec
-from verity.core.protocols.remote_bandwidth.memory_map import Change, Header, MemoryMapError, Replay, Step, Written, dumps
+from verity.core.protocols.remote_bandwidth.memory_map import Change, Header, MemoryMapError, Replay, Step, Written, dumps, parse
 
 
 def record(store: Any, path: str | Path | None = None, registration: bytes | None = None,
@@ -283,3 +283,40 @@ class MemoryMap:
     def text(self) -> str:
         """The map's lines so far, header first (`memory_map.parse` reads them)."""
         return self.path.read_text() if self.path is not None else self._head + "".join(self._kept)
+
+
+def agreement(backend: Any) -> dict[str, Any]:
+    """The memory map against the session and the store (``backend``, a `remote.StoreBackend`), once the session is done:
+    replayed from its header, its live indices are the session's last plan's and its blocks the audit's appends, in order,
+    up to those whose writes wait for their encodes (deferred residency); then, its open line closed, every slot it holds
+    at an appended index holds bytes of that index's digest in the store."""
+    trace, store = backend.trace, backend.store
+
+    def replay() -> tuple[Replay, dict[int, bytes]]:
+        head, steps = parse(store.memory_map.text().splitlines(keepends=True))
+        r, digests = Replay(head), {}
+        for st in steps:
+            r.apply(st)
+            digests.update((w.index, w.digest) for w in st.written)
+        return r, digests
+
+    def resident(r: Replay) -> np.ndarray:
+        out = np.zeros(max(r.extent, len(trace.live)), bool)
+        out[:r.header.blocks] = True
+        out[[x for x in r.moved if x < r.header.blocks]] = False
+        out[[j for j in r.moved.values() if j is not None]] = True
+        return out
+
+    r, digests = replay()
+    n = r.header.blocks
+    mine = np.zeros(max(r.extent, len(trace.live)), bool)
+    mine[:len(trace.live)] = trace.live
+    live = bool(np.array_equal(resident(r), mine))
+    appends = sorted(digests) == list(range(n, r.extent)) and trace.digests[:r.extent - n] == [digests[j] for j in sorted(digests)]
+    store.memory_map.flush()
+    r, digests = replay()
+    held = sorted(x for x, j in r.moved.items() if j is not None and j >= n)
+    wrong = [x for x in held if not backend.holds(x, r.holds(x), digests[r.holds(x)])]
+    return {"live_agrees": live, "appends_agree": appends, "recorded": r.extent - n,
+            "unrecorded": len(trace.digests) - (r.extent - n), "held_appended": len(held), "held_wrong": wrong[:16],
+            "agrees": live and appends and not wrong}

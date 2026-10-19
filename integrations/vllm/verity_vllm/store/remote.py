@@ -59,7 +59,7 @@ from typing import Any
 
 import numpy as np
 
-from verity.core.protocols.remote_bandwidth import audit, codec as rcodec, memory_map, receipts as rb
+from verity.core.protocols.remote_bandwidth import audit, codec as rcodec, receipts as rb
 from verity_vllm import config
 from verity_vllm.store import memory_map as store_map
 from verity_vllm.store.registry import Store
@@ -307,7 +307,7 @@ class StoreBackend:
             self.trace.encoded(first)
 
     def holds(self, slot: int, j: int, digest: bytes) -> bool:
-        """Whether ``slot`` holds bytes of the payload of digest d_j (`agreement`'s check of an appended block)."""
+        """Whether ``slot`` holds bytes of the payload of digest d_j (`store_map.agreement`'s check of an appended block)."""
         return rcodec.digest(self.store.payload(slot)) == digest
 
     def calibrate(self) -> dict:
@@ -618,7 +618,7 @@ class CommitSession:
                  memory map, recorded against the registration's digest beside the Commit (``out``), is of the run's
                  steps from its first, and its KV payloads the run's K and V; the steps after the session unaudited
     end          after the run: the session done (failed if it still asked for a step), its record
-                 ``remote_session.json`` with the map's agreement with the store (`agreement`), taken before the run
+                 ``remote_session.json`` with the map's agreement with the store (`store_map.agreement`), taken before the run
                  went on, each pass's ``[window, pass, step]`` as the verifier's record has its steps
                  (``pass_steps``, each a step of the map), and the map stopped there (`store.memory_map.end`)
     map_request  after it, with ``commit --memory-map``: the store's runtime layout into the map's request, for the map
@@ -729,7 +729,7 @@ class CommitSession:
         try:
             (result,) = prove(backend, self.verifier, self.plan, node=self.node.encode(), codec=self.codec, log=self.log,
                               warmup_ns=round(getattr(backend, "warmup_ms", 0.0) * 1e6))
-            agree = agreement(backend)
+            agree = store_map.agreement(backend)
         except Exception as e:  # noqa: BLE001  -- recorded: a session that fails is rejected, and the Commit's verdict still written
             error = f"{type(e).__name__}: {e}"
         try:
@@ -782,39 +782,3 @@ class CommitSession:
             (self.out / "remote_session.json").write_text(json.dumps(rec, indent=1, default=str) + "\n")
         return rec
 
-
-def agreement(backend: StoreBackend) -> dict[str, Any]:
-    """The memory map against the session and the store, once the session is done: replayed from its header, its
-    live indices are the session's last plan's and its blocks the audit's appends, in order, up to those whose writes
-    wait for their encodes (deferred residency); then, its open line closed, every slot it holds at an appended index
-    holds bytes of that index's digest in the store."""
-    trace, store = backend.trace, backend.store
-
-    def replay() -> tuple[memory_map.Replay, dict[int, bytes]]:
-        head, steps = memory_map.parse(store.memory_map.text().splitlines(keepends=True))
-        r, digests = memory_map.Replay(head), {}
-        for st in steps:
-            r.apply(st)
-            digests.update((w.index, w.digest) for w in st.written)
-        return r, digests
-
-    def resident(r: memory_map.Replay) -> np.ndarray:
-        out = np.zeros(max(r.extent, len(trace.live)), bool)
-        out[:r.header.blocks] = True
-        out[[x for x in r.moved if x < r.header.blocks]] = False
-        out[[j for j in r.moved.values() if j is not None]] = True
-        return out
-
-    r, digests = replay()
-    n = r.header.blocks
-    mine = np.zeros(max(r.extent, len(trace.live)), bool)
-    mine[:len(trace.live)] = trace.live
-    live = bool(np.array_equal(resident(r), mine))
-    appends = sorted(digests) == list(range(n, r.extent)) and trace.digests[:r.extent - n] == [digests[j] for j in sorted(digests)]
-    store.memory_map.flush()
-    r, digests = replay()
-    held = sorted(x for x, j in r.moved.items() if j is not None and j >= n)
-    wrong = [x for x in held if not backend.holds(x, r.holds(x), digests[r.holds(x)])]
-    return {"live_agrees": live, "appends_agree": appends, "recorded": r.extent - n,
-            "unrecorded": len(trace.digests) - (r.extent - n), "held_appended": len(held), "held_wrong": wrong[:16],
-            "agrees": live and appends and not wrong}

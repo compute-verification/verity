@@ -21,7 +21,7 @@ import numpy as np
 import pytest
 
 from verity.core.protocols.remote_bandwidth import audit, codec as rcodec, memory_map, receipts as rb
-from verity_vllm.store import remote
+from verity_vllm.store import memory_map as store_map, remote
 from verity_vllm.store.interface import Append, PageLayout
 from verity_vllm.store.registry import ArrayBacking, Store
 
@@ -231,7 +231,7 @@ def test_an_honest_store_session_is_accepted_with_its_frees_re_keys_and_steps():
     assert rekeys and min(rekeys) > 1 and kv["rekeyed"] >= 4 * len(rekeys)
     assert next(x.step for x in lines if {13, 14, 15, 16} <= set(x.freed)) < min(rekeys)
     # the map, replayed, holds the session's live blocks, its writes are the appends' digests, and the store holds them
-    agree = remote.agreement(backend)
+    agree = store_map.agreement(backend)
     assert agree["agrees"] and agree["held_appended"] > 0 and agree["held_wrong"] == []
 
 
@@ -244,7 +244,7 @@ def test_a_completed_block_is_uncredited_until_its_encode_lands_and_resident_fro
     r, p, s, backend = run("serve")
     assert r["accepted"] and p["accepted"]
     trace, plans = backend.trace, dict(backend.plans)
-    agree = remote.agreement(backend)
+    agree = store_map.agreement(backend)
     _, lines = memory_map.parse(s.memory_map.text().splitlines())
     wrote = {w.index: x.step for x in lines for w in x.written}
     late = trace.deferral()["steps_late"]
