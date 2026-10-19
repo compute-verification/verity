@@ -215,10 +215,14 @@ def skeleton(ops: tuple, fix: tuple = ()):
         slots = [(z3.BitVec(f"{tag}_s{j}", 4), z3.BitVec(f"{tag}_c{j}", 32)) for j in range(SLOTS[name])]
         if not isinstance(op, str):
             slots[0], slots[1] = (op[1][0], slots[0][1]), (op[1][1], slots[1][1])
+        m = modifiers(name, tag)
         for j, s in (fix[i] if i < len(fix) else {}).items():
-            slots[j] = (s, slots[j][1])
+            if isinstance(j, str):
+                m[j] = z3.BoolVal(s)
+            else:
+                slots[j] = (s, slots[j][1])
         cons += [z3.ULE(s, pool) for s, _ in slots if not isinstance(s, int)]
-        prog.append((name, slots, modifiers(name, tag)))
+        prog.append((name, slots, m))
         pool += OUTS[name]
     return prog, cons
 
@@ -268,8 +272,25 @@ def splits(ops: tuple) -> list[tuple]:
     return [(dict(zip(free, srcs)),) for srcs in itertools.product(range(3), repeat=len(free))]
 
 
-def fix_label(fix: tuple) -> str:
-    return ";".join(",".join(f"s{j}={'xyC'[s] if i == 0 else s}" for j, s in sorted(f.items()))
+def mod_splits(ops: tuple, fix: tuple) -> list[tuple]:
+    """`fix` (one of `splits`) with the first instruction's modifiers set to each assignment in turn, inv and cx both
+    set left out (c − 1 + 1 is c, as with neither): with x, y and its addends' sources fixed, its results are concrete
+    at each input, so the next instruction's products are by concrete words."""
+    names = sorted(modifiers(ops[0][0], "m"))
+    out = []
+    for vals in itertools.product((False, True), repeat=len(names)):
+        m = dict(zip(names, vals))
+        if not (m.get("inv") and m.get("cx")):
+            out.append(({**fix[0], **m},))
+    return out
+
+
+def fix_label(fix: tuple, mods: bool = True) -> str:
+    """Slots first (s2=x), then modifiers (np=1); `mods` False leaves the modifiers out (the `splits` case's label)."""
+    def part(i, j, s):
+        return f"{j}={int(s)}" if isinstance(j, str) else f"s{j}={'xyC'[s] if i == 0 else s}"
+    order = lambda t: (isinstance(t[0], str), str(t[0]))
+    return ";".join(",".join(part(i, j, s) for j, s in sorted(f.items(), key=order) if mods or not isinstance(j, str))
                     for i, f in enumerate(fix))
 
 
@@ -291,12 +312,17 @@ def shared_inputs(rng: random.Random, axis: int) -> list[tuple[int, int]]:
     return [(a, b) if axis == 0 else (b, a) for a in few for b in many]
 
 
+CHEAP = (0, M32, *(1 << i for i in range(32)), *(M32 ^ (1 << i) for i in range(32)))
+
+
 def cegis(ops: tuple[str, ...], tname: str = "xor", timeout_ms: int = 0, seed: int = SEED,
-          edge_only: bool = False, domain: str = "all", fix: tuple = ()) -> dict:
+          edge_only: bool = False, domain: str = "all", fix: tuple = (), cheap: bool = False) -> dict:
     """One sequence of opcodes: unsat (no program of it computes the target), FOUND (one does, with its wiring), or
     unknown (a timeout). On the nan domain both inputs range over the NaN patterns only (`reduce_nan`). With `fix`
     (one of `splits`), only the programs whose addend sources it names; when the first instruction then reads only x
-    (or only y), CEGIS starts from `shared_inputs` and looks for counterexamples at those words first."""
+    (or only y), CEGIS starts from `shared_inputs` and looks for counterexamples at those words first. With `cheap`,
+    it starts from the edge pairs and looks for counterexamples among the words with at most one bit set or clear
+    (`CHEAP`) before any other: their products by an earlier result are few distinct terms."""
     name = label(ops) + (f" /{fix_label(fix)}" if fix else "")
     rng = random.Random(f"{seed}:{name}:{tname}")
     prog, cons = skeleton(ops, fix)
@@ -313,14 +339,15 @@ def cegis(ops: tuple[str, ...], tname: str = "xor", timeout_ms: int = 0, seed: i
 
     reads = first_reads(ops, fix) if fix and domain == "all" else None
     axis = 0 if reads == {0} else 1 if reads == {1} else None
-    for x, y in (shared_inputs(rng, axis) if axis is not None else initial_inputs(rng, edge_only, domain)):
+    for x, y in (shared_inputs(rng, axis) if axis is not None else initial_inputs(rng, edge_only or cheap, domain)):
         add(x, y)
     X, Y = z3.BitVec("X", 32), z3.BitVec("Y", 32)
     general = evaluate(prog, X, Y) != target(tname, X, Y, K)
     if domain == "nan":
         general = z3.And(general, nan_bits(X), nan_bits(Y))
     free = [v for _, slots, m in prog for s, c in slots for v in (s, c) if not isinstance(v, int)]
-    free += [v for _, _, m in prog for v in m.values()]
+    free += [v for _, _, m in prog for v in m.values() if not (z3.is_true(v) or z3.is_false(v))]
+    small = [z3.And(*(z3.Or([V == bv(w) for w in CHEAP]) for V in (X, Y)))] if cheap and domain == "all" else []
     while True:
         r = syn.check()
         if r == z3.unsat:
@@ -330,7 +357,8 @@ def cegis(ops: tuple[str, ...], tname: str = "xor", timeout_ms: int = 0, seed: i
         mdl = syn.model()
         sol = [(v, mdl.eval(v, model_completion=True)) for v in free + [K]]
         cx = None
-        for near in ([z3.Or([(X, Y)[axis] == bv(p[axis]) for p in inputs])] if axis is not None else []) + [None]:
+        shared = [z3.Or([(X, Y)[axis] == bv(p[axis]) for p in inputs])] if axis is not None else []
+        for near in small + shared + [None]:
             ver = z3.Solver()
             if timeout_ms:
                 ver.set("timeout", timeout_ms)
@@ -401,17 +429,27 @@ def reduce_nan(ops: tuple):
 
 def search(k: int, fp: bool = True, tname: str = "xor", jobs: int = 1, timeout_ms: int = 0, stream=None,
            part: str = "all", shard: tuple[int, int] = (0, 1), labels: set | None = None,
-           edge_only: bool = False, via_nan: bool = False, split: bool = False) -> dict:
+           edge_only: bool = False, via_nan: bool = False, split: bool = False, cheap: bool = False,
+           cases: set | None = None, split_mods: bool = False) -> dict:
     """Every sequence of k opcodes (`part` int: those without an FP form, fp: those with one); each result is also
     written to `stream` (JSON lines) as it finishes. With `via_nan`, each sequence is settled by its `reduce_nan`
     suffix on the nan domain (each distinct suffix searched once); one that doesn't reduce is unknown. With `split`,
     each sequence is searched as its `splits`, each case streamed, and it is unsat when every case is, FOUND when
-    one is."""
+    one is; `cases` (labels "SEQUENCE /CASE") keeps only those, and a sequence's verdict is then over them alone.
+    `split_mods` searches each case as its `mod_splits`."""
     seqs = [s for s in sequences(k, fp)
             if part == "all" or (part == "fp") == any(op_name(op) in FP_OPS for op in s)][shard[0]::shard[1]]
+    if cases is not None:
+        labels = {c.split(" /")[0] for c in cases} & (labels if labels is not None else {label(s) for s in seqs})
     if labels is not None:
         seqs = [s for s in seqs if label(s) in labels]
     res = []
+
+    def parts(c):
+        if not split:
+            return [()]
+        fs = [f for f in splits(c) if cases is None or f"{label(c)} /{fix_label(f)}" in cases]
+        return [g for f in fs for g in (mod_splits(c, f) if split_mods and f else [f])]
 
     def done(r):
         res.append(r)
@@ -421,8 +459,7 @@ def search(k: int, fp: bool = True, tname: str = "xor", jobs: int = 1, timeout_m
 
     domain = "nan" if via_nan else "all"
     cover = {label(s): reduce_nan(s) if via_nan else s for s in seqs}
-    todo = [(c, f) for c in dict.fromkeys(c for c in cover.values() if c is not None)
-            for f in (splits(c) if split else [()])]
+    todo = [(c, f) for c in dict.fromkeys(c for c in cover.values() if c is not None) for f in parts(c)]
     found = {}
 
     def got(c, f, r):
@@ -435,18 +472,19 @@ def search(k: int, fp: bool = True, tname: str = "xor", jobs: int = 1, timeout_m
 
     if jobs > 1:
         with ProcessPoolExecutor(jobs) as ex:
-            futs = {ex.submit(cegis, c, tname, timeout_ms, SEED, edge_only, domain, f): (c, f) for c, f in todo}
+            futs = {ex.submit(cegis, c, tname, timeout_ms, SEED, edge_only, domain, f, cheap): (c, f)
+                    for c, f in todo}
             for fut in as_completed(futs):
                 got(*futs[fut], fut.result())
     else:
         for c, f in todo:
-            got(c, f, cegis(c, tname, timeout_ms, SEED, edge_only, domain, f))
+            got(c, f, cegis(c, tname, timeout_ms, SEED, edge_only, domain, f, cheap))
     if split:
         for name, c in cover.items():
-            cases = [found[c, fix_label(f)] for f in splits(c)]
-            worst = next((r for want in ("FOUND", "unknown") for r in cases if r["result"] == want), cases[0])
-            done({"ops": name, "result": worst["result"], "cases": len(cases),
-                  "open": [r["ops"] for r in cases if r["result"] != "unsat"]})
+            rs = [found[c, fix_label(f)] for f in parts(c)]
+            worst = next((r for want in ("FOUND", "unknown") for r in rs if r["result"] == want), rs[0])
+            done({"ops": name, "result": worst["result"], "cases": len(rs),
+                  "open": [r["ops"] for r in rs if r["result"] != "unsat"]})
     elif via_nan:
         for name, c in cover.items():
             done({"ops": name, "result": "unknown", "stage": "no nan reduction"} if c is None
@@ -474,13 +512,20 @@ def main() -> int:
     ap.add_argument("--via-nan", action="store_true",
                     help="settle each sequence by its integer suffix on NaN-pattern inputs (reduce_nan)")
     ap.add_argument("--split", action="store_true", help="search each sequence as its first instruction's addend cases")
+    ap.add_argument("--cases", help="with --split, only the cases whose labels ('SEQUENCE /CASE') are this file's lines")
+    ap.add_argument("--cheap", action="store_true",
+                    help="start from the edge pairs and look for counterexamples among CHEAP's words first")
+    ap.add_argument("--split-mods", action="store_true",
+                    help="with --split, search each case as its first instruction's modifier assignments")
     a = ap.parse_args()
     out, rc = [], 0
     stream = open(a.stream, "a", encoding="utf-8") if a.stream else None
     for k in range(a.from_k, a.k + 1):
         labels = set(open(a.labels, encoding="utf-8").read().splitlines()) if a.labels else None
+        cases = set(open(a.cases, encoding="utf-8").read().splitlines()) - {""} if a.cases else None
         r = search(k, not a.no_fp, a.target, a.jobs, a.timeout_ms, stream, a.part,
-                   tuple(int(v) for v in a.shard.split("/")), labels, a.edge_only, a.via_nan, a.split)
+                   tuple(int(v) for v in a.shard.split("/")), labels, a.edge_only, a.via_nan, a.split, a.cheap, cases,
+                   a.split_mods)
         out.append(r)
         print(f"k = {k}: {r['sequences']} sequences, {r['tally']}" + ("  -- proved" if r["proved"] else ""),
               flush=True)
