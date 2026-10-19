@@ -1556,6 +1556,7 @@ FRAMING = [
 ]
 CASES = st.one_of(
     changed_audits(most=0).map(_case), changed_audits([VERDICTS_OF], most=1, least=1).map(_case),
+    changed_audits([VERDICTS_OF], most=1, least=1).map(_case),
     changed_audits(most=1, least=1).map(_case), changed_audits(most=1, least=1).map(_case),
     changed_audits(most=2, least=2).map(_case),
     st.builds(lambda a, i, x: FRAMING[i](_case(a), x), changed_audits(most=0), st.integers(0, len(FRAMING) - 1),
