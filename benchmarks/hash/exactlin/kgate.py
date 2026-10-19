@@ -34,7 +34,7 @@ import torch
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-import exactlin as X  # noqa: E402
+import exactlin as X
 
 MODELS = {
     "llama-3.1-8b": {"layers": 32, "linears": {"qkv": (6144, 4096), "o": (4096, 4096), "gate_up": (28672, 4096),
@@ -125,7 +125,9 @@ def stock_quant_emulated(x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
 
 def stock_doc(x, w, s_w, xq_ref, s_ref, y_ref) -> dict:
     from vllm import _custom_ops as ops
-    from vllm.model_executor.layers.quantization.compressed_tensors.triton_scaled_mm import triton_scaled_mm
+    from vllm.model_executor.layers.quantization.compressed_tensors.triton_scaled_mm import (
+        triton_scaled_mm,
+    )
     e = E()
     xq_st, s_st, _ = ops.scaled_int8_quant(x.contiguous())
     s_st = s_st.reshape(-1)
@@ -165,7 +167,7 @@ def stock_doc(x, w, s_w, xq_ref, s_ref, y_ref) -> dict:
 _WORK: list = []
 
 
-def work() -> "X.Workspace":
+def work() -> X.Workspace:
     if not _WORK:
         _WORK.append(X.Workspace("cuda"))
     return _WORK[0]

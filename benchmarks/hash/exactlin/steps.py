@@ -21,10 +21,10 @@ CATEGORIES = [
     ("stock quant (scaled_int8_quant)", re.compile(r"vllm::dynamic_scaled_int8_quant")),
     ("stock GEMM (triton_scaled_mm)", re.compile(r"^scaled_mm_kernel")),
     ("Inductor/Triton fused (norms, rope, act)", re.compile(r"^triton_(poi|red|per)_")),
-    ("attention", re.compile(r"flash|attn|attention|paged|reshape_and_cache", re.I)),
+    ("attention", re.compile(r"flash|attn|attention|paged|reshape_and_cache", re.IGNORECASE)),
     ("int8 GEMM (torch._int_mm, cuBLASLt)", re.compile(r"(gemm|xmma|nvjet|cutlass|cublas).*(i8|s8|int8|imma)|"
-                                                      r"(i8|s8|int8|imma).*(gemm|xmma|nvjet)", re.I)),
-    ("other GEMM (lm_head)", re.compile(r"gemm|xmma|nvjet|cutlass|cublas|splitK", re.I)),
+                                                      r"(i8|s8|int8|imma).*(gemm|xmma|nvjet)", re.IGNORECASE)),
+    ("other GEMM (lm_head)", re.compile(r"gemm|xmma|nvjet|cutlass|cublas|splitK", re.IGNORECASE)),
     ("torch cat/copy (padding, casts)", re.compile(r"CatArrayBatchedCopy|direct_copy_kernel|copy_kernel")),
     ("torch reduce (amax)", re.compile(r"at::native::.*reduce_kernel")),
     ("torch elementwise", re.compile(r"at::native::")),
@@ -129,7 +129,8 @@ def compare(paths: list[str]) -> dict:
     """Categories are recomputed from the kernels' names, so a capture read under an older CATEGORIES compares too."""
     arms = {}
     for p in paths:
-        arms.update(json.load(open(p))["arms"])
+        with open(p) as f:
+            arms.update(json.load(f)["arms"])
     for a in arms.values():
         a["categories"] = {}
         for r in a["kernels"]:

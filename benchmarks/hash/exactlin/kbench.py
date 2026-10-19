@@ -29,8 +29,8 @@ import torch
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-import exactlin as X  # noqa: E402
-import kgate  # noqa: E402
+import exactlin as X
+import kgate
 
 ITEM_MS = 10.0
 ARMS = ("exact", "stock", "fused")
@@ -61,7 +61,9 @@ def arm_fn(arm: str, x, ws, xq, s, y):
                 E.dequantize(E.int_mm(q, w), sa, sw)
     elif arm == "stock":
         from vllm import _custom_ops as ops
-        from vllm.model_executor.layers.quantization.compressed_tensors.triton_scaled_mm import triton_scaled_mm
+        from vllm.model_executor.layers.quantization.compressed_tensors.triton_scaled_mm import (
+            triton_scaled_mm,
+        )
 
         def f():
             for w, sw in ws:
@@ -84,7 +86,9 @@ def arm_fn(arm: str, x, ws, xq, s, y):
                 X.scaled_mm(xq, s, w, sw, y, cfg, WORK)
     elif arm.startswith("stock_"):
         from vllm import _custom_ops as ops
-        from vllm.model_executor.layers.quantization.compressed_tensors.triton_scaled_mm import triton_scaled_mm
+        from vllm.model_executor.layers.quantization.compressed_tensors.triton_scaled_mm import (
+            triton_scaled_mm,
+        )
         q0, s0, _ = ops.scaled_int8_quant(x)
         td = {"stock_mm": None, "stock_mm_notd": False, "stock_mm_td": True}.get(arm)
 
@@ -217,7 +221,8 @@ def main() -> int:
             step[model][arm] = {"us_per_layer_m32": per_layer, "ms_per_step_m32": spec["layers"] * per_layer / 1e3}
     from vllm.triton_utils import use_tensor_descriptor
     summary = {"device": torch.cuda.get_device_name(), "reps": a.reps, "arms": arms, "models": models,
-               "special_rows": a.special_rows, "configs": {f"{n}x{k}": v for (n, k), v in X.CONFIGS.items()},
+               "special_rows": a.special_rows, "arch": X.arch(),
+               "configs": {f"{n}x{k}": v for (n, k), v in X.CONFIGS.get(X.arch(), {}).items()},
                "vllm_use_tensor_descriptor_default": bool(use_tensor_descriptor(None)), "item_ms": ITEM_MS, "decode_step_b32": step,
                "rows": [{k: v for k, v in r.items() if k not in ("us_all", "sm_clock_mhz")} for r in rows]}
     (out / "summary.json").write_text(json.dumps(summary, indent=1) + "\n")

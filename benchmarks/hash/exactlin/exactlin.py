@@ -13,12 +13,16 @@ For x [M, K] bf16, W [N, K] int8 and s_w [N] float32 (`engine.int8_exact`'s stat
 
 Triton's `/` on float32 is div.full.f32 (approximate) and its libdevice calls are flush-to-zero by default, so the kernels
 use tl.div_rn, an inline cvt.rni, enable_reflect_ftz=False and enable_fp_fusion=False; `ptx_check` reads the compiled PTX
-for exactly these instructions.  The GEMM's tiles are vLLM's `triton_scaled_mm` heuristic (the stock arm's kernel), on the
-pointer path, without bias; its epilogue order is the same as vLLM's (activation scale first).  The product needs no row
+for exactly these instructions.  The GEMM is vLLM's `triton_scaled_mm` (the stock arm's kernel) on the pointer path, without
+bias, with the same epilogue order (activation scale first); its config per architecture, shape and M is `CONFIGS`
+(ksweep.py's gated winners), else vLLM's tiles.  A split-K config adds int32 partials (exact in any order) into a
+self-zeroing `Workspace`, and the last split applies the epilogue.  The product needs no row
 padding: a row of X W^T reads only that row, so M < 17 is just a masked tile (int8_exact pads only because torch._int_mm
 refuses M <= 16).  Non-finite activations are outside the statement and not gated.
 """
 from __future__ import annotations
+
+import functools
 
 import torch
 import triton
@@ -116,8 +120,7 @@ def exactlin_scaled_mm(a_ptr, b_ptr, sa_ptr, sb_ptr, c_ptr, ws_ptr, cnt_ptr, M, 
 
 
 def quant_warps(k: int) -> int:
-    b = triton.next_power_of_2(k)
-    return 4 if b <= 4096 else 8 if b <= 8192 else 16
+    return 16
 
 
 def tiles(m: int, n: int) -> tuple[int, int, int]:
@@ -139,7 +142,7 @@ class Cfg(tuple):
         return super().__new__(cls, (bm, bn, bk, warps, stages, split))
 
     @classmethod
-    def parse(cls, text: str) -> "Cfg":
+    def parse(cls, text: str) -> Cfg:
         dims, *rest = text.split(":")
         kw = {"w": 4, "s": 3, "k": 1}
         for r in rest:
@@ -155,12 +158,35 @@ def default_cfg(m: int, n: int, k: int) -> Cfg:
     return Cfg(*tiles(m, n))
 
 
-CONFIGS: dict[tuple[int, int], list[tuple[int, str]]] = {}
+# Per architecture and (N, K): (m_max, config) rows, ksweep.py's winners where they beat vLLM's tiles (best.json).
+CONFIGS: dict[str, dict[tuple[int, int], list[tuple[int, str]]]] = {
+    "sm_120": {  # r20261019-173505-e13b, RTX PRO 6000
+        (6144, 4096): [(1, "16x64x128:w4:s5:k1"), (16, "16x32x128:w4:s4:k1"), (32, "32x32x128:w4:s4:k1"),
+                       (64, "32x64x128:w4:s4:k1"), (256, "64x64x128:w4:s3:k1")],
+        (4096, 4096): [(1, "16x32x256:w4:s5:k1"), (16, "16x16x256:w4:s3:k1"), (32, "32x32x256:w4:s4:k1"),
+                       (64, "32x64x256:w8:s4:k1"), (256, "128x64x128:w4:s4:k1")],
+        (28672, 4096): [(1, "16x32x128:w4:s4:k1"), (16, "16x32x128:w4:s4:k1"), (32, "32x32x256:w4:s2:k1"),
+                        (64, "64x64x128:w4:s3:k1"), (256, "128x128x128:w4:s2:k1")],
+        (4096, 14336): [(1, "16x32x512:w4:s4:k1"), (16, "16x32x512:w4:s4:k1"), (32, "32x32x512:w8:s4:k1"),
+                        (64, "32x64x512:w8:s3:k1"), (256, "128x64x128:w4:s4:k1")],
+        (24576, 4096): [(1, "16x32x128:w4:s4:k1"), (16, "16x32x128:w4:s3:k1"), (32, "32x32x256:w4:s2:k1"),
+                        (64, "32x64x128:w8:s2:k1"), (256, "128x128x128:w4:s2:k1")],
+        (4096, 12288): [(1, "16x32x512:w4:s5:k1"), (16, "16x32x512:w4:s4:k1"), (32, "32x32x512:w4:s4:k1"),
+                        (64, "32x64x512:w8:s3:k1"), (256, "128x64x128:w4:s5:k1")],
+    },
+}
 
 
-def pick(m: int, n: int, k: int) -> Cfg:
-    """The GEMM config for one call: CONFIGS' first (m_max, cfg) for (n, k) with m <= m_max, else vLLM's tiles."""
-    for m_max, text in CONFIGS.get((n, k), ()):
+@functools.cache
+def arch(index: int | None = None) -> str:
+    major, minor = torch.cuda.get_device_capability(index)
+    return f"sm_{major}{minor}"
+
+
+def pick(m: int, n: int, k: int, sm: str | None = None) -> Cfg:
+    """The GEMM config for one call on `sm` (default: the current device's): CONFIGS' first (m_max, cfg) for (n, k)
+    with m <= m_max, else vLLM's tiles."""
+    for m_max, text in CONFIGS.get(sm or arch(torch.cuda.current_device()), {}).get((n, k), ()):
         if m <= m_max:
             return Cfg.parse(text)
     return default_cfg(m, n, k)
@@ -260,7 +286,7 @@ def install() -> None:
         m, n, k = xq.shape[0], w.shape[0], w.shape[1]
         y = torch.empty((m, n), dtype=torch.bfloat16, device=xq.device)
         if m:
-            cfg = pick(m, n, k)
+            cfg = pick(m, n, k, arch(xq.device.index))
             work = None
             if cfg[5] > 1:
                 work = works.get(xq.device) or works.setdefault(xq.device, Workspace(xq.device))
