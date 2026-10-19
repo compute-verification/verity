@@ -72,6 +72,7 @@ def test_pinned_instructions_and_their_models() -> None:
         "sm120.mma.m16n8k32.e5m2": BLACKWELL_SM120_E5M2_M16N8K32,  # the same lane's sweeps on two PRO 6000 dies: 25.0M + 6.4M, 0 mismatches
         "sm100.tcgen05.mma.e2m1.nvf4": BLACKWELL_SM100_NVF4,       # lane tcgen05 2026-09-23: B200, 16.5M, 0 mismatches, any FP32 acc
         "sm100.tcgen05.mma.e2m1.mxf4": BLACKWELL_SM100_MXF4,       # lane tcgen05 2026-09-23: B200, 12.9M, 0 mismatches (both kinds)
+        "sm100.tcgen05.mma.bf16": HOPPER_BF16_WGMMA_K16,           # lane circuits 2026-10-18: B200, 42.4M + 17.8M + chains, 0 mismatches
         "sm120.mma.m16n8k64.e2m1.nvf4": BLACKWELL_SM120_NVF4,      # lane fp4-proof 2026-09-22: 5090, 17.3M (fp4-re + fresh seed), 0 mismatches
         "sm120.mma.m16n8k64.e2m1.mxf4": BLACKWELL_SM120_MXF4,      # lane fp4-proof 2026-09-22: 5090, 14.4M, 0 mismatches
         "sm120.mma.m16n8k32.s8": BLACKWELL_SM120_S8_M16N8K32,      # lane compute-accounting 2026-10-15: RTX PRO 6000, 10.2M, 0 mismatches
@@ -79,7 +80,7 @@ def test_pinned_instructions_and_their_models() -> None:
     # registry <= computed level (lane pin-bf16): the sm120 FP4 pair flipped to "pinned" only once benchmarks/tc_probe/trust.py
     # computed PINNED (P2 closed by fp4-proof's fresh-seed sweeps), and each points at its published dossier
     for iid in ("sm120.mma.m16n8k64.e2m1.nvf4", "sm120.mma.m16n8k64.e2m1.mxf4", "sm120.mma.m16n8k32.e4m3", "sm120.mma.m16n8k32.e5m2",
-                "sm120.mma.m16n8k32.s8"):
+                "sm120.mma.m16n8k32.s8", "sm100.tcgen05.mma.bf16"):
         ins = INSTRUCTIONS[iid]
         assert ins.status == "pinned" and ins.dossier is not None and ins.dossier.startswith("art:")
     # measured on the PRO 6000 only: its entry names that anchor, as the e4m3 target does
@@ -120,9 +121,9 @@ def test_mnemonics_come_from_the_source_repos_or_are_none() -> None:
     # descriptor fields the probe kernel set (benchmarks/tc_probe_fp4/tcgen05_fp4.cu)
     assert INSTRUCTIONS["sm100.tcgen05.mma.e2m1.nvf4"].ptx.startswith("tcgen05.mma.cta_group::1.kind::mxf4nvf4.block_scale.scale_vec::4X")
     assert INSTRUCTIONS["sm100.tcgen05.mma.e2m1.mxf4"].ptx.startswith("tcgen05.mma.cta_group::1.kind::mxf4.block_scale.scale_vec::2X")
-    for ins_id in ("sm100.tcgen05.mma.bf16", "sm100.tcgen05.mma.e4m3"):
-        ins = INSTRUCTIONS[ins_id]
-        assert ins.status == "unprobed" and ins.model is None and ins.ptx is None and ins.shape is None
+    assert INSTRUCTIONS["sm100.tcgen05.mma.bf16"].ptx.startswith("tcgen05.mma.cta_group::1.kind::f16 ")
+    ins = INSTRUCTIONS["sm100.tcgen05.mma.e4m3"]
+    assert ins.status == "unprobed" and ins.model is None and ins.ptx is None and ins.shape is None
 
 
 def test_block_scaled_ids_carry_their_scale_format() -> None:
@@ -152,7 +153,7 @@ def test_sm100_models_are_the_sm120_parameters_under_their_own_name() -> None:
 
 def test_instructions_for_filters_by_model() -> None:
     assert [i.id for i in instructions_for(HOPPER_E4M3_K32)] == ["sm90.wgmma.m64n8k32.e4m3"]
-    assert [i.id for i in instructions_for(HOPPER_BF16_WGMMA_K16)] == ["sm90.wgmma.m64n8k16.bf16"]
+    assert [i.id for i in instructions_for(HOPPER_BF16_WGMMA_K16)] == ["sm90.wgmma.m64n8k16.bf16", "sm100.tcgen05.mma.bf16"]
     assert instructions_for(BLACKWELL_SM120_NVF4)[0].id == "sm120.mma.m16n8k64.e2m1.nvf4"
 
 

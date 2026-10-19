@@ -186,6 +186,20 @@ _B200_STAGE0 = (
     "cta_group::2 itself is not probed"
 )
 
+_B200_BF16 = (
+    "lane circuits 2026-10-18, benchmarks/tc_probe run r20261018-234914-864e on vy-dc-b200 (NVIDIA B200, cc 10.0, "
+    "GPU-2e39ef52-bf0d-0527-f3f1-5a27025bb6ff, driver 580.173.02, nvcc 13.0 V13.0.88, -gencode arch=compute_100a,code=sm_100a)"
+)
+_B200_TCGEN05_BF16 = (
+    _B200_BF16 + ": one tcgen05.mma.cta_group::1.kind::f16 per tile from one thread (A and B through K-major no-swizzle descriptors, "
+    "LBO 128 / SBO 256, the layout check passed; the accumulator in tensor memory, columns 8..15 a replica of 0..7), SASS 1x UTCHMMA. "
+    "42,418,176 swept elements in 14 families (specials asserted under the total semantics) and 5,688,320 of four back-to-back MMAs "
+    "on one accumulator (K = 64), 0 mismatches against HOPPER_BF16_WGMMA_K16 (tc-evidence art:c0ce3a0abdc5866d9cc77ab8c5470ab19217946412f9b3029c286a954707f8f2); "
+    "with enable_input_d = 0 on the first MMA (a mainloop's first k step, the accumulator not read) 17,842,176 + 3,703,808, 0 mismatches "
+    "(art:f5719a55353078221c982e34d08906e3a3eb5595a72dd0613490cef5da7781e4); Ampere's pipeline misses 5,045,809 / 986,377 / "
+    "1,365,596 / 512,378 of them"
+)
+
 _PIN_FP4 = (
     "lane fp4-proof (2026-09-22): fresh-seed tc_probe_fp4 sweeps on a second RTX 5090 die (GPU-1257f022-5d0f-1ea9-7922-bc7bc7959672, "
     "driver 570.195.03, -arch=sm_120a; label device=), all 20 probe families plus fp4-re's D16/D17 tiles and specials: nvf4 "
@@ -489,12 +503,18 @@ INSTRUCTIONS: dict[str, Instruction] = {
                       "14,734 / 5,535 (D13 holds on sm_100)"),
         ),
         _i(
+            # The k16 step of cuBLAS's BF16 GEMMs on the B200 (vLLM's served routes there).  Hopper's wgmma pipeline: one group of
+            # 16, a 26-bit adder, floor -133, and the total semantics' special values.  benchmarks/tc_probe/trust.py computed
+            # PINNED (P1-P5) from the store on 2026-10-19 before this flip.
             id="sm100.tcgen05.mma.bf16",
             sm="sm_100",
-            ptx=None, shape=None,
+            ptx="tcgen05.mma.cta_group::1.kind::f16 [d_tmem], a_desc, b_desc, idesc(bf16 x bf16 -> f32, M128 N16 K16, K-major), enable_input_d",
+            shape=(128, 16, 16),
             a_dtype="bf16", b_dtype="bf16", acc_dtype="f32", scale=None,
-            model=None, status="unprobed",
-            evidence=("tcgen05.mma kind::f16 with bf16 operands on B200 -- no measurement",),
+            model=HOPPER_BF16_WGMMA_K16,
+            status="pinned",
+            dossier="art:8a14058ec2dc4f080af1523d55326e11484123feaf0726200473644de51f4765",
+            evidence=(_B200_TCGEN05_BF16,),
         ),
         _i(
             id="sm100.tcgen05.mma.e4m3",
