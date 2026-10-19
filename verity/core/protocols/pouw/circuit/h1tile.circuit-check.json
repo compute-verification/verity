@@ -17,8 +17,20 @@
   }
  },
  "pieces": {
+  "PouwOneStream2_v1": {
+   "and": 24
+  },
+  "PouwOneStream3_v1": {
+   "and": 41
+  },
   "PouwU129_v1": {
    "and": 14
+  },
+  "PouwWrapBits_v1": {
+   "and": 9
+  },
+  "PouwWrapSeg_v1": {
+   "and": 626
   }
  }
 }
