@@ -11,7 +11,8 @@ instances there.
 The classes are DS-120's census classes (`benchmarks/pouw/facet_break/loads.py`'s `class_of`, the names of
 `machine_model/data/census/DS-120.csv` and `floors.csv`), with four that `isa_escape.py` attacks and `class_of` puts in
 no class: `BMMA168256` (mma.sync .b1), `IMMAS4` (mma.sync and mma.sp .s4), `REDUX` (redux.sync) and `VSIMD` (the SIMD
-video instructions, §9.7.20.2).
+video instructions, §9.7.20.2); and `LDCU128`, LDCU.128, which `class_of` puts in UNI though it writes four uniform
+registers.
 
 A row's `words` is its class's widest form's: a lane class two words a lane (`Row.lane`), an atomic that returns its
 old value its memory and register words together (CAS.128: four of each a lane, 256 a warp instruction), a load or
@@ -52,9 +53,9 @@ def Sync.row : Sync → Row
   | .BMMA168256 => Row.mma .mma .b1 .b1 .s32 128
   | .IMMAS4 => Row.mma .mma .s4 .s4 .s32 128
 
-/-- **The classes outside the tensor cores**: DS-120's other classes, `REDUX` and `VSIMD`. -/
+/-- **The classes outside the tensor cores**: DS-120's other classes, `REDUX`, `VSIMD` and `LDCU128`. -/
 inductive Base
-  | UNI | UNI64
+  | UNI | UNI64 | LDCU128
   | ALU | IMAD | FFMA | HFMA2 | VIMNMX | F2FS | XU | SEL | NOROW | VSIMD
   | IMADW | ALU64 | W2 | DMUL | CVT64 | MOV64
   | SHFL | REDUX
@@ -80,7 +81,8 @@ inductive Base
 
 /-- **The rows outside the tensor cores**, family by family (`Family` cites each family's PTX sections):
 
-* `uniform`: a uniform instruction writes one uniform register (UNI), or a pair (UNI64); UIMAD multiplies.
+* `uniform`: a uniform instruction writes one uniform register (UNI), or a pair (UNI64); UIMAD multiplies. LDCU.128
+  loads four from a constant bank at a uniform address the program computes (a gather).
 * `lane` (§9.7.1–§9.7.9, §9.7.20): at most two words a lane. IMAD.WIDE, IADD.64, DADD/DFMA, DMUL and the 64-bit
   conversions are side units at their two words a lane; MOV.64 copies.
 * `warp`: SHFL selects a lane's word (§9.7.10.6), one word a lane; REDUX writes one uniform word (§9.7.15.13).
@@ -95,6 +97,7 @@ def Base.row : Base → Row
   | .UNI64 =>
     { fam := .uniform, exec := .uniform, arith := .mul, dataAddr := true, a := .s32, b := .s32, acc := .s64,
       words := 2, pipe := .issue, route := .writer }
+  | .LDCU128 => Row.side .uniform .uniform .move true 4
   | .ALU => Row.lane .lane .add false .alu
   | .IMAD => Row.lane .lane .mul false .imad .s32 .s32 .s32
   | .FFMA => Row.lane .lane .mul false .issue .f32 .f32 .f32
