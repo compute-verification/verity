@@ -1027,3 +1027,21 @@ def test_the_readme_states_the_contract_the_code_keeps():
     [subparsers] = [a for a in _parser()._actions if isinstance(a, argparse._SubParsersAction)]
     public = {name for name in subparsers.choices if not name.startswith("_")}
     assert public == set(re.findall(r"^verity-bench ([a-z]+) ", readme, re.M))
+
+
+def test_a_stopped_bandwidth_setup_removes_its_partial_build_even_when_its_builds_already_exited(tmp_path):
+    """The setup's TERM trap runs under `set -e`: a `kill` of an nvcc that already exited returns nonzero, and without a
+    guard the trap stopped there, exiting 1 and leaving its partial build in the shared cache (memory accounting, 19 Oct)."""
+
+    root = Path(__file__).resolve().parents[3]
+    script = (root / "benchmarks/harness/setup/vllm_encoded.sh").read_text()
+    [body] = re.findall(r"trap '([^']*)' TERM INT", script)
+    partial = tmp_path / "partial"
+    partial.mkdir()
+    run = subprocess.run(
+        ["bash", "-c", f'set -euo pipefail; declare -A VE_PIDS=(); true & VE_PIDS[x]=$!; wait "${{VE_PIDS[x]}}"; '
+                       f'VE_TMP={partial}; {body}'],
+        capture_output=True, text=True,
+    )
+    assert run.returncode == 143, run.stderr
+    assert not partial.exists()
