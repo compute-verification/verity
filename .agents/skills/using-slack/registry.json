@@ -59,6 +59,9 @@
       "remit": "Machines and task infra: utilization, the scheduler, buying compute, alerts, and one API for agents' jobs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-infra",
       "usergroup": "S0CA15YVA0P",
+      "retired_usergroups": [
+        "S0C5APDSYF9"
+      ],
       "linear": "INF",
       "owns": [
         "infra/",
@@ -71,9 +74,6 @@
         "558b",
         "9e59",
         "98f5"
-      ],
-      "retired_usergroups": [
-        "S0C5APDSYF9"
       ]
     },
     {
@@ -82,6 +82,9 @@
       "remit": "Proofs: Lean, red team, C-Flock, backend sweeps, consolidation and the merge trains.",
       "charter": "/cursor/stores/bc-36415049-30db-4fff-a34b-81f0afc0124d/docs/restructure/ (proof)",
       "usergroup": "S0CAGBJTJF4",
+      "retired_usergroups": [
+        "S0C5Q6KJZTQ"
+      ],
       "linear": "PRF",
       "owns": [
         "fixtures/typed-obligation-v0/",
@@ -111,9 +114,6 @@
         "95d4",
         "9b2a",
         "f39a"
-      ],
-      "retired_usergroups": [
-        "S0C5Q6KJZTQ"
       ]
     },
     {
@@ -122,6 +122,9 @@
       "remit": "Circuits of real workloads: the vLLM integration, the epoch run, sm_120 GEMM, TP2.",
       "charter": "/cursor/stores/bc-36415049-30db-4fff-a34b-81f0afc0124d/docs/restructure/ (circuit)",
       "usergroup": "S0CA15ZF6CX",
+      "retired_usergroups": [
+        "S0C5U3LHMFT"
+      ],
       "linear": "CIR",
       "owns": [
         "integrations/",
@@ -160,9 +163,6 @@
         "8c79",
         "c491",
         "6f04"
-      ],
-      "retired_usergroups": [
-        "S0C5U3LHMFT"
       ]
     },
     {
@@ -171,6 +171,9 @@
       "remit": "Proof of useful work: verity/core/protocols/pouw, its schemes and their runs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
       "usergroup": "S0CAB8FRE6R",
+      "retired_usergroups": [
+        "S0C5U3Q04JD"
+      ],
       "linear": "CMP",
       "owns": [
         "verity/core/protocols/pouw/",
@@ -237,9 +240,6 @@
         "e9ac",
         "ea24",
         "1de3"
-      ],
-      "retired_usergroups": [
-        "S0C5U3Q04JD"
       ]
     },
     {
@@ -248,6 +248,9 @@
       "remit": "Proof of useful space: verity/core/protocols/pous, its Lean package and its runs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
       "usergroup": "S0CAJE0SREV",
+      "retired_usergroups": [
+        "S0C5VRGBZFE"
+      ],
       "linear": "MEM",
       "owns": [
         "Security/Definitions/Pous/",
@@ -340,9 +343,6 @@
         "3cf5",
         "b0c1",
         "93c1"
-      ],
-      "retired_usergroups": [
-        "S0C5VRGBZFE"
       ]
     },
     {
@@ -351,6 +351,9 @@
       "remit": "Network accounting: the network certifier (verity/core/protocols/certifier) and its timing-channel proofs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
       "usergroup": "S0CAGBGSPCJ",
+      "retired_usergroups": [
+        "S0C6LGGSY6L"
+      ],
       "linear": "NET",
       "owns": [
         "verity/core/protocols/certifier/",
@@ -366,9 +369,6 @@
         "728f",
         "a190",
         "061a"
-      ],
-      "retired_usergroups": [
-        "S0C6LGGSY6L"
       ]
     },
     {
