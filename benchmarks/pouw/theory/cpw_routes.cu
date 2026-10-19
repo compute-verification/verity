@@ -13,7 +13,9 @@
 //   3 redg32: the lane's 16 words XORed to two (LOP3), two 32-bit red.global.xor into the zeroed receipt words;
 //   4 atoms32: the same into shared memory (red.shared.xor.b32), flushed after the last set;
 //   5 redg16: no lane merge, each of the 16 words its own 32-bit red.global.xor into its receipt word;
-//   6 atoms16: the same into shared memory, flushed after the last set.
+//   6 atoms16: the same into shared memory, flushed after the last set;
+//   7 redux2: the lane's 16 words XORed to two (LOP3), then one REDUX.XOR of each, lane 0 stores both (LI-CP-W's
+//     honest route in dc/probes, at fx1's two words).
 // `main` runs on the device it finds: bitexact (one warp, 64 sets, every final state and every checkpoint against the
 // host), then tp at 1, 2, 4 warps a SMSP and at full occupancy: SMSP-cycles a warp-set (clock64 a block, max over
 // blocks), 8 units a warp-set.
@@ -117,7 +119,7 @@ __global__ void __launch_bounds__(NT) cpw(const uint32_t *st, const uint32_t *W,
         rz ^= __reduce_xor_sync(0xffffffffu, z[j]);
       }
       if (ln == 0) *(uint2 *)&cp[2 * k] = make_uint2(ry, rz);
-    } else if (MODE == 3 || MODE == 4) {
+    } else if (MODE == 3 || MODE == 4 || MODE == 7) {
       uint32_t xy = y[0], xz = z[0];
 #pragma unroll
       for (int j = 1; j < NCH; ++j) {
@@ -127,9 +129,12 @@ __global__ void __launch_bounds__(NT) cpw(const uint32_t *st, const uint32_t *W,
       if (MODE == 3) {
         redg_xor(&cp[2 * k], xy);
         redg_xor(&cp[2 * k + 1], xz);
-      } else {
+      } else if (MODE == 4) {
         reds_xor(sb + 8u * c, xy);
         reds_xor(sb + 8u * c + 4u, xz);
+      } else {
+        const uint32_t ry = __reduce_xor_sync(0xffffffffu, xy), rz = __reduce_xor_sync(0xffffffffu, xz);
+        if (ln == 0) *(uint2 *)&cp[2 * k] = make_uint2(ry, rz);
       }
     } else if (MODE == 5) {
 #pragma unroll
@@ -169,6 +174,7 @@ CPW_INST(3)
 CPW_INST(4)
 CPW_INST(5)
 CPW_INST(6)
+CPW_INST(7)
 
 #ifndef __CUDA_ARCH__
 #include <cstdlib>
@@ -226,7 +232,7 @@ int main() {
 
   struct { const char *name; Kern k; int mode; } ks[] = {
       {"cpw_none", cpw<0>, 0},    {"cpw_st128", cpw<1>, 1},   {"cpw_redux16", cpw<2>, 2}, {"cpw_redg32", cpw<3>, 3},
-      {"cpw_atoms32", cpw<4>, 4}, {"cpw_redg16", cpw<5>, 5}, {"cpw_atoms16", cpw<6>, 6},
+      {"cpw_atoms32", cpw<4>, 4}, {"cpw_redg16", cpw<5>, 5}, {"cpw_atoms16", cpw<6>, 6}, {"cpw_redux2", cpw<7>, 7},
   };
   const int maxblocks = sms * 32;
   const size_t nthr = (size_t)maxblocks * NT, ncp = (nthr / 32) * CPS * 2;
