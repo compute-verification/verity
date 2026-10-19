@@ -89,16 +89,16 @@ theorem card_threadWeights_le_split {c : Declaration} (T : Threading c) {k : ℕ
       (if j = start t then ((T.threadWeights (P.gates j) t).card : ℝ) else 0) +
         (if t ∈ T.entered P start j then ((T.threadWeights (P.gates j) t).card : ℝ) else 0) := by
   by_cases hj : j = start t
-  · rw [if_pos hj]
+  · rw [ite_eq_left hj]
     have h0 : (0 : ℝ) ≤ (if t ∈ T.entered P start j then ((T.threadWeights (P.gates j) t).card : ℝ) else 0) := by
       split_ifs <;> positivity
     linarith
-  · rw [if_neg hj, zero_add]
+  · rw [ite_eq_right hj, zero_add]
     by_cases hv : (T.threadMults (P.gates j) t).Nonempty
     · have hmem : t ∈ T.entered P start j := by
         simp only [Threading.entered, Threading.visits, mem_filter, mem_univ, true_and]
         exact ⟨hv, fun h => hj h.symm⟩
-      exact le_of_eq (if_pos hmem).symm
+      exact le_of_eq (ite_eq_left hmem).symm
     · have hz : T.threadWeights (P.gates j) t = ∅ := by
         rw [Threading.threadWeights, not_nonempty_iff_eq_empty.1 hv, image_empty]
       simp [hz]
@@ -139,7 +139,7 @@ theorem token_bound {c : Declaration} (T : Threading c) {k : ℕ} (P : Partition
           ≤ ∑ j, ((if j = start t then ((T.threadWeights (P.gates j) t).card : ℝ) else 0) +
               (if t ∈ T.entered P start j then ((T.threadWeights (P.gates j) t).card : ℝ) else 0)) :=
             sum_le_sum fun j _ => card_threadWeights_le_split T P start t j
-        _ = _ := by rw [sum_add_distrib, sum_ite_eq', if_pos (mem_univ _)]
+        _ = _ := by rw [sum_add_distrib, sum_ite_eq', ite_eq_left (mem_univ _)]
     have hN : (Nstar : ℝ) ≤ ∑ j, ((T.threadWeights (P.gates j) t).card : ℝ) := by
       exact_mod_cast (hR t hwork).trans (card_threadWeights_univ_le T P t)
     have hA : ((T.threadWeights (P.gates (start t)) t).card : ℝ) * b_w ≤ S := by
@@ -207,8 +207,7 @@ theorem FitBound : Guarantees.FitBound := by
   have hS0 : 0 ≤ S := (Nat.cast_nonneg _).trans (hS j₀)
   have hbw : 0 < b_w := by
     by_contra h
-    push_neg at h
-    nlinarith [mul_nonneg hN0 (neg_nonneg.2 h)]
+    nlinarith [mul_nonneg hN0 (neg_nonneg.2 (not_lt.1 h))]
   have hgap0 : 0 ≤ (Nstar : ℝ) * b_w - S := by linarith
   rcases le_or_gt w_e 0 with hwe | hwe
   · have h1 : 0 ≤ ((Nstar : ℝ) * b_w - S) * T.M.card := mul_nonneg hgap0 (Nat.cast_nonneg _)

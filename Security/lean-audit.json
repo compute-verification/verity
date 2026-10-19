@@ -381,6 +381,14 @@
   "Pouw.PearlC.pearlCTilesDevChainCap": {
    "owner": "@compute-accounting",
    "digest": "2170dd5823cfd9a6272b9ce11cf29f7de11dce337c0926e307ab60d0f8dd34b6"
+  },
+  "Nci.Assumptions.Fits": {
+   "owner": "@lean",
+   "digest": "a01008a9dfd298221a497fc46bddfc00be4ca6c55915429dccc9bcd2bdef6864"
+  },
+  "Nci.Assumptions.Reach": {
+   "owner": "@lean",
+   "digest": "b3c25b0f62c270144816c888bbb3fce4fecde3554892478b3d83a6aa22baf7a5"
   }
  },
  "meaning": [
@@ -3483,7 +3491,10 @@
    "type_hash": "cc57888b57675154812ec32f76c474386b3fc204b01538efbfbb34c10c54c1e7"
   },
   "Nci.SecurityProofs.FitBound": {
-   "owner": "@lean"
+   "owner": "@lean",
+   "signature": ["Nci.SecurityProofs.FitBound : Nci.Guarantees.FitBound"],
+   "assumptions": [],
+   "type_hash": "51bd3f7e82387c8acf4e636b2b68f2a2a4688846c86ce302c18139bddb9cdcd0"
   },
   "Nci.SecurityProofs.FullPositions": {
    "owner": "@lean",
@@ -7480,6 +7491,7 @@
     "Bandwidth.SecurityProofs.MbwCapacity",
     "Nci.SecurityProofs.ContainedMatMul",
     "Nci.SecurityProofs.ContainedTraining",
+    "Nci.SecurityProofs.FitBound",
     "Nci.SecurityProofs.FullPositions",
     "Nci.SecurityProofs.Inference",
     "Nci.SecurityProofs.IuReads",
@@ -7511,6 +7523,7 @@
     "Accounting.SecurityProofs.Actual.Windows",
     "Nci.SecurityProofs.ContainedMatMul",
     "Nci.SecurityProofs.ContainedTraining",
+    "Nci.SecurityProofs.FitBound",
     "Nci.SecurityProofs.Inference",
     "Nci.SecurityProofs.IuReads",
     "Nci.SecurityProofs.ReadBound",
@@ -7600,6 +7613,7 @@
     "Accounting.SecurityProofs.Actual.Windows",
     "Nci.SecurityProofs.ContainedMatMul",
     "Nci.SecurityProofs.ContainedTraining",
+    "Nci.SecurityProofs.FitBound",
     "Nci.SecurityProofs.Inference",
     "Nci.SecurityProofs.OtherPositions",
     "Nci.SecurityProofs.ReadBound",
@@ -7701,6 +7715,7 @@
     "Accounting.SecurityProofs.Actual.Windows",
     "Nci.SecurityProofs.ContainedMatMul",
     "Nci.SecurityProofs.ContainedTraining",
+    "Nci.SecurityProofs.FitBound",
     "Nci.SecurityProofs.FullPositions",
     "Nci.SecurityProofs.Inference",
     "Nci.SecurityProofs.IuReads",
@@ -7713,6 +7728,15 @@
     "Nci.SecurityProofs.UpdatedMatMul",
     "Nci.SecurityProofs.UpdatedMatMulReads"
    ]
+  },
+  "Definitions.Nci.Fit": {
+   "digest": "8ffbf58c1c7939a8457980abca63aee69243a3d821d109419b7fb0ba1820aff9",
+   "definitions": {
+    "Nci.Threading.entered": "43d16564a07afa5f83564464b9eef70f25fe27fd6ac0b415efbb83d0bd533301",
+    "Nci.Threading.threadWeights": "54c0d1f8eac0ec96f58180c349bf11a5453623c6f55a0ebcfd596336e4f238b0",
+    "Nci.Threading.visits": "ed525037dccc0f61881cb547cf45d9e86c54c7caa257882af522168199aebb13"
+   },
+   "guarantees": ["Nci.SecurityProofs.FitBound"]
   },
   "Definitions.Nci.Reads": {
    "digest": "c3c240e59ed9edb472fbe4005f08c7f4b68d4fb7cea86dfa5d35e989587fb439",
@@ -7756,6 +7780,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Actual.ThreadedRate",
     "Accounting.SecurityProofs.Actual.ThreadedRuntime",
+    "Nci.SecurityProofs.FitBound",
     "Nci.SecurityProofs.ThreadedReads",
     "Nci.SecurityProofs.ThreadedThrottled",
     "Nci.SecurityProofs.ThreadedTraining"
@@ -17340,6 +17365,14 @@
     "Nci.SecurityProofs.UpdatedMatMulReads"
    ]
   },
+  "Models.Nci.Assumptions.Fit": {
+   "digest": "2295c39543e2983aa540f65bf6927e7c85d6f59a7513eb4831b1aaff7d9f3b47",
+   "definitions": {
+    "Nci.Assumptions.Fits": "a01008a9dfd298221a497fc46bddfc00be4ca6c55915429dccc9bcd2bdef6864",
+    "Nci.Assumptions.Reach": "b3c25b0f62c270144816c888bbb3fce4fecde3554892478b3d83a6aa22baf7a5"
+   },
+   "guarantees": ["Nci.SecurityProofs.FitBound"]
+  },
   "Models.Nci.Assumptions.Threads": {
    "digest": "e97519a8245dbe34eb8f42c2febf3910370ac44e740cd319415594e0bed0b43f",
    "definitions": {
@@ -17383,6 +17416,13 @@
     "Nci.Guarantees.ContainedTraining": "d11a30af07ea918204d1d57e4f22237b0ffbca149c9bff292dab777d562c2a1f"
    },
    "guarantees": ["Nci.SecurityProofs.ContainedMatMul", "Nci.SecurityProofs.ContainedTraining"]
+  },
+  "Models.Nci.Guarantees.Fit": {
+   "digest": "3d92b64776e296c500c51f41702c1c64a88e05c0b951aab58c8607f6f7e04304",
+   "definitions": {
+    "Nci.Guarantees.FitBound": "ec54acc63f9765c03cf44dfcd919608d77f980b4210b08e04ef29edc38547f69"
+   },
+   "guarantees": ["Nci.SecurityProofs.FitBound"]
   },
   "Models.Nci.Guarantees.Reads": {
    "digest": "016cca93308e9ac6c0ad97c73b18da826f0fc8fbd33eb77535c28f63f61b3f72",
