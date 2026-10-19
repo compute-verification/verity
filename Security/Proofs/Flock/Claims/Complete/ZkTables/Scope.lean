@@ -120,7 +120,7 @@ theorem Case.tables (c : Case H rel) :
     unfold Readable.Read.check at this
     rw [hpi] at this
     exact this
-  have hl := (FailClosed.check_ok hc').1.2.2.2.1
+  have hl := (FailClosed.check_ok hc').1.2.2.2.1.resolve_right fun h => absurd (hzk.symm.trans h.1) (by decide)
   obtain ⟨spec', hset'⟩ := Readable.setup_of_tablesOf htab
   have hset := Ins.setup_read (setupOf_some c.setup).2
   rw [ht] at hset'

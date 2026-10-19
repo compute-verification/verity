@@ -264,7 +264,7 @@ theorem parsed_zk {rel : Parsed → Relation} {x : Claims.Msg} {w : Claims.Flock
     rw [ht]
     exact FlockDeploy.readOf_zk h1
   obtain ⟨hc, -⟩ := (scope_ok_iff p).1 hsc'
-  obtain ⟨hRu, c, pub, hcirc, -, -, hok⟩ := (check_ok_iff _ _ _ _ _ _ _ _).1 hc
+  obtain ⟨hRu, c, pub, hcirc, -, -, -, hok⟩ := (check_ok_iff _ _ _ _ _ _ _ _).1 hc
   have hpi : p.publicInputs = none := Option.not_isSome_iff_eq_none.1 (by simp [hRu.2.2.2.2.2])
   obtain ⟨spec', hset'⟩ := setup_of_tablesOf (tablesOf_of_parses hps)
   rw [ht] at hset'
