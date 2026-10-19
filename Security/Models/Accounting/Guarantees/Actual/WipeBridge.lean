@@ -60,23 +60,25 @@ def WipeReadPool : Prop :=
     ((univ.filter fun r => (∀ j, acc r j) ∧ H ≤ ∑ j, Actual.unanswered acc j r).card : ℝ) ≤
       Real.exp (-H) * Fintype.card (Ω₀ × (Fin n → B))
 
-/-- **What an answered block costs** (frozen, not proved). A strategy `S` causal from every tick (`CausalFrom`), whose
-reads are live (`Assumptions.LiveReads`) and quiet for the deadline `D` when accepted, up to the devices' own coins
-`ζ` (`Assumptions.QuietReads`), with a verdict that accepts each answer from `X` for one label
-(`Assumptions.VerdictBinds`) and `b`-bit labels uniform given `ζ` (`Assumptions.UniformLabels`): for any read `j`, set
-`T` of ticks, set `C` of contents and count `a`, the share of the coins on which read `j` arrives at a tick of `T`,
-`X`'s content there is in `C`, and at least `a` blocks are answered (`Actual.answered`) is at most
-`|T| |C| C(|B|, a) 2^{-a b}`. Given the tick, the content and `ζ`, an index the challenger would accept had its
-window's crossing fixed, so what `X` sent then, so its label: `a` answered blocks are `a` labels equal to values the
-tick, the content and `ζ` fix, and given `ζ` the labels are still uniform. -/
+/-- **What an answered block costs** (frozen, not proved). A causal strategy `S` (`CausalStrategy`: causal from every
+tick, and each run at the latencies `ℓ`) with a latency ceiling of `ℓ⁺` from `X` to the leaves `Y` where the challenger
+reads its answers (`Placed.LatencyAtMost`), whose reads are live (`Assumptions.LiveReads`) and quiet for the deadline
+`D` when accepted, up to the devices' own coins `ζ` (`Assumptions.QuietReads`), with a verdict that accepts only late
+answers that are the label (`Assumptions.LateAnswers`) and `b`-bit labels uniform given `ζ`
+(`Assumptions.UniformLabels`): for any read `j`, set `T` of ticks, set `C` of contents and count `a`, the share of the
+coins on which read `j` arrives at a tick of `T`, `X`'s content there is in `C`, and at least `a` blocks are answered
+(`Actual.answered`) is at most `|T| |C| C(|B|, a) 2^{-a b}`. Given the tick, the content and `ζ`, an index the
+challenger would accept had its window's crossing fixed, so what `X` sent then, so its label: `a` answered blocks are
+`a` labels equal to values the tick, the content and `ζ` fix, and given `ζ` the labels are still uniform. -/
 def AnsweredOfQuiet : Prop :=
   ∀ {Ω₀ B L Z : Type*} [Fintype Ω₀] [Fintype B] [LinearOrder L] {n : ℕ}
-    (S : Ω₀ × (Fin n → B) → Actual.Run L) (X : Finset L) (lab : Ω₀ → Fin n → B → ℕ) (b D a : ℕ)
-    (arrive : Ω₀ × (Fin n → B) → Fin n → ℕ) (acc : Ω₀ × (Fin n → B) → Fin n → Prop) (ζ : Ω₀ → Z)
+    (S : Ω₀ × (Fin n → B) → Actual.Run L) (ℓ : L → L → ℕ) (X Y : Finset L) (lab : Ω₀ → Fin n → B → ℕ)
+    (b D ℓmax a : ℕ) (arrive : Ω₀ × (Fin n → B) → Fin n → ℕ) (acc : Ω₀ × (Fin n → B) → Fin n → Prop) (ζ : Ω₀ → Z)
     (quiet : Fin n → ℕ → B → Z → Set (ℕ × L × ℕ × L × ℕ × ℕ × ℕ)) (T : Finset ℕ) (C : Finset (List Bool))
     (j : Fin n),
-    CausalFrom S → Assumptions.LiveReads S X arrive → Assumptions.QuietReads S X arrive D acc ζ quiet →
-    Assumptions.VerdictBinds S X lab arrive D acc → Assumptions.UniformLabels lab b ζ →
+    CausalStrategy S ℓ → (∀ r, (S r).A.LatencyAtMost X Y ℓmax) → Assumptions.LiveReads S X arrive →
+    Assumptions.QuietReads S X arrive D acc ζ quiet → Assumptions.LateAnswers S X Y lab arrive ℓmax D acc →
+    Assumptions.UniformLabels lab b ζ →
     ((univ.filter fun r => arrive r j ∈ T ∧ (S r).content X (arrive r j) ∈ C ∧
         a ≤ (Actual.answered acc j r).card).card : ℝ) ≤
       T.card * C.card * ((Fintype.card B).choose a : ℝ) / 2 ^ (a * b) * Fintype.card (Ω₀ × (Fin n → B))
@@ -109,13 +111,15 @@ the store's bits at all but 286 of the reads and half of them at all but 57; `K 
 only that it held the store less 1.02 GB at one read (note:20261019T2210Z-report-timed-round-redteam-3). -/
 def WipeReadHeld : Prop :=
   ∀ {Ω₀ B L Z : Type*} [Fintype Ω₀] [Fintype B] [LinearOrder L] {n : ℕ}
-    (S : Ω₀ × (Fin n → B) → Actual.Run L) (X V : Finset L) (Ch : Fin n → Set (ℕ × L × ℕ × ℕ × ℕ) → Prop)
-    (lab : Ω₀ → Fin n → B → ℕ) (b D a m K : ℕ) (arrive : Ω₀ × (Fin n → B) → Fin n → ℕ) (ζ : Ω₀ → Z)
+    (S : Ω₀ × (Fin n → B) → Actual.Run L) (ℓ : L → L → ℕ) (X Y V : Finset L)
+    (Ch : Fin n → Set (ℕ × L × ℕ × ℕ × ℕ) → Prop) (lab : Ω₀ → Fin n → B → ℕ) (b D ℓmax a m K : ℕ)
+    (arrive : Ω₀ × (Fin n → B) → Fin n → ℕ) (ζ : Ω₀ → Z)
     (quiet : Fin n → ℕ → B → Z → Set (ℕ × L × ℕ × L × ℕ × ℕ × ℕ)) (T : Finset ℕ),
-    CausalFrom S → Assumptions.LiveReads S X arrive →
+    CausalStrategy S ℓ → (∀ r, (S r).A.LatencyAtMost X Y ℓmax) → Assumptions.LiveReads S X arrive →
     Assumptions.LiveVerdicts (fun r j => Ch j ((S r).view V)) →
     Assumptions.QuietReads S X arrive D (fun r j => Ch j ((S r).view V)) ζ quiet →
-    Assumptions.VerdictBinds S X lab arrive D (fun r j => Ch j ((S r).view V)) → Assumptions.UniformLabels lab b ζ →
+    Assumptions.LateAnswers S X Y lab arrive ℓmax D (fun r j => Ch j ((S r).view V)) →
+    Assumptions.UniformLabels lab b ζ →
     ((univ.filter fun r => (∀ j, Ch j ((S r).view V) ∧ arrive r j ∈ T) ∧
         K ≤ (univ.filter fun j => (S r).mem X (arrive r j) < m).card).card : ℝ) ≤
       (Real.exp (-((K : ℝ) * (1 - ((a : ℝ) - 1) / Fintype.card B))) +
