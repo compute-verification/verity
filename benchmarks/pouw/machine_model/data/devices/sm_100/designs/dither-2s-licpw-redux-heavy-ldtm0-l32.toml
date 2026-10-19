@@ -1,7 +1,7 @@
 # dither-2s-licpw-redux-heavy-l32 with the floor program crediting no tcgen05.ld: the same honest kernel, its 8
 # LDTM.32x32b.x128 a MMA still run, but ♭ (credit floor) no longer counts them. The operands-free cheater (decision 89)
 # never pays them, so on DC-100-ri they were all of ε_machine (8 of ♭'s 1857 issue cycles a UTCIMMA, 0.431%); credited
-# at 0 they leave ε_machine at 0 (core 0.900% → 0.471% on DC-100-ri, 0.472% → 0.420% on DS-100, where ♭ now binds
+# at 0 they leave ε_machine at 0 (core 0.900% → 0.471% on DC-100-ri, 0.472% → 0.418% on DS-100, where ♭ now binds
 # DS_alu) and raise honest's time over the credit by 8/1849 (1.115 → 1.120); γ, honest over the plain GEMM, is
 # unchanged. A lower credit is sound for any program.
 base = "dither-2s-licpw-redux-heavy-l32"
