@@ -7,19 +7,29 @@ On the node (job.sh), after the driver:
 writes RESULT (research/result/v0.1, every arm's measures, each with its ``arm``) and OUT/arms/<arm>.json, the same measures per arm
 (no ``arm`` field). On the VM, after the run:
 
-    python3 benchmarks/hash/maxtput/row.py --publish RUN... --row 11 --hypothesis TEXT [--workload maxtput] [--branch B]
+    python3 benchmarks/hash/maxtput/row.py --publish RUN... --row 11 [--native RUN] [--hypothesis TEXT] [--workload maxtput] [--branch B]
 
 waits (up to 30 min) for the run's custody on the store's remote, then rebuilds each arm's result from it (out/maxtput.json, and its
-result's pin state and bench rc), puts it into the
-store (``--kind bench-result/v1``, the result as its meta, as a run's own result) and labels it campaign=hash-loop, sweep=iteration, row, arm=
-<workload>:<arm> (plot.py draws it as workload <workload>, line <arm>), label, source, hardware; the run is labeled the same, with
-arm=<workload>. ``row.py --table [--row 11]`` prints every published maxtput* arm of the row from the store, one line per run and arm.
+result's pin state and bench rc), adds its loss against the native reference run (--native, default the run's own stock), puts it
+into the store (``--kind bench-result/v1``, the result as its meta, as a run's own result) and labels it campaign=hash-loop,
+sweep=iteration, row, arm=<workload>:<arm> (plot.py draws it as workload <workload>, line <arm>), label, source, hardware; the run is
+labeled the same, with arm=<workload>; workload and label default to the run's own labels. An earlier result of the same run and
+arm in this store's catalog is labeled superseded_by the new one (so refresh the catalog first on a fresh VM:
+`research data refresh`). ``row.py --table [--row 11]`` prints every published maxtput* arm of the row from the store, one line
+per run and arm, superseded ones left out.
 
 Measures, over the timed runs (phase ``measure``); a commit arm's ratios are against the stock engine of the same cycle (each
 cycle's arms run back to back on one card), averaged over cycles, each cycle's in ``runs``:
 
   throughput_overhead_pct  100 (1 - out tok/s_arm / out tok/s_stock) in the steady window (queue never empty): the share lost
   tpot_overhead_pct        100 (TPOT p50_arm / TPOT p50_stock - 1)
+  native_loss_pct          100 (1 - out tok/s_arm / out tok/s of the native reference's stock), both steady-window means over
+                           cycles, with native_output_tokens_per_s (each names the reference run in ``ref``; the result's
+                           workload_fingerprint.native_ref has its card, model, pin, KV pool and attention). Published results
+                           only, on every arm but the reference's own stock. The native reference is stock at vLLM's own KV
+                           sizing and attention backend: the run's own stock when it is that, else a stock-only run on the
+                           same card and model (the RTX PRO 6000's at 0.9 of its memory, beside rows whose pool the Commit
+                           shrinks; FlashInfer's beside a B200 row pinned to FLASH_ATTN)
   whole_throughput_overhead_pct, requests_overhead_pct, ttft_p50_overhead_pct   the same over the whole run (finalize included),
                            requests/s, TTFT p50
   output_tokens_per_s, requests_per_s, scheduled_tokens_per_s, whole_output_tokens_per_s, ttft_{p50,p99}_ms, tpot_{p50,p99,mean}_ms,
@@ -47,6 +57,7 @@ from typing import Any
 
 HARDWARE = {"vy-dc-h200": "H200", "vy-dc-b200": "B200", "vy-nebius-2": "RTX PRO 6000"}
 BRANCH = "cursor/kernels-maxtput-15ad"
+HYPOTHESIS = "max throughput: native compiled vLLM at saturation against the Commit's arms"
 ABS = (("output_tokens_per_s", "output_tokens_per_s", 1, "tok/s"), ("requests_per_s", "requests_per_s", 1, "req/s"),
        ("scheduled_tokens_per_s", "scheduled_tokens_per_s", 1, "tok/s"),
        ("whole_output_tokens_per_s", "whole_output_tokens_per_s", 1, "tok/s"),
@@ -215,55 +226,118 @@ def preserved(run: str, tries: int = 30) -> bool:
     return False
 
 
+def stored(run: str) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+    """A run's attempt, its result's meta and its out/maxtput.json, from the store."""
+    att = json.loads(research("data", "show", run, "--json"))
+    outs = att.get("outputs") or {}
+    files, res = outs.get("run_files"), outs.get("result")
+    if not files or not res:
+        raise LookupError(f"{run}: run_files {files!r}, result {res!r}")
+    man = json.loads(research("data", "show", res, "--json"))
+    with tempfile.TemporaryDirectory() as d:
+        research("data", "fetch", files, "--path", "out/maxtput.json", "--to", d)
+        doc = json.loads((Path(d) / "out" / "maxtput.json").read_text())
+    return att, (man.get("manifest") or man).get("meta") or {}, doc
+
+
+def reference(run: str, att: dict[str, Any], whole: dict[str, Any], doc: dict[str, Any]) -> dict[str, Any]:
+    """A run's stock engine as a native reference: its steady-window out tok/s (mean over cycles), card, model, pin, KV and attention."""
+    wf = whole.get("workload_fingerprint") or {}
+    eng = wf.get("engine") or {}
+    head = {m["name"]: m["value"] for m in arm_measures(timed(doc), "stock")}
+    return {"run": run, "machine": (att.get("execution") or {}).get("machine"), "model": doc.get("model"),
+            "output_tokens_per_s": head.get("output_tokens_per_s"), "pin": (wf.get("pin") or {}).get("state", "unpinned"),
+            "kv_bytes": eng.get("kv_bytes"), "attention_impls": eng.get("attention_impls")}
+
+
+def latest(target: str) -> dict[str, str]:
+    got = sorted(json.loads(research("data", "labels", target, "--json")), key=lambda e: e.get("ts", ""))
+    return {e["key"]: str(e["value"]) for e in got}
+
+
+def supersede(run: str, arm_label: str, art: str, by: str) -> list[str]:
+    """Label every earlier result of ``run``'s ``arm_label`` in this store's catalog superseded_by ``art``."""
+    old = []
+    for x in research("data", "select", "--kind", "bench-result/v1", "--label", "campaign=hash-loop",
+                      "--label", f"arm={arm_label}", "--where", f"meta.run_id={run}", "--ids").split():
+        if x != art and not latest(x).get("superseded_by"):
+            research("data", "label", x, "superseded_by", art, "--by", by, "--ref", run)
+            old.append(x)
+    return old
+
+
 def publish(a: argparse.Namespace) -> int:
     rc = 0
+    ref = None
+    if a.native:
+        ref = reference(a.native, *stored(a.native))
     for run in a.publish:
         if not preserved(run):
             print(f"{run}: no custody on the store's remote yet (`research data custody {run}`): nothing published", file=sys.stderr)
             rc = 1
             continue
-        att = json.loads(research("data", "show", run, "--json"))
-        machine = (att.get("execution") or {}).get("machine")
-        commit = (att.get("source") or {}).get("commit")
-        outs = att.get("outputs") or {}
-        files, res = outs.get("run_files"), outs.get("result")
-        if machine not in HARDWARE or not commit or not files or not res:
-            print(f"{run}: machine {machine!r}, commit {commit!r}, run_files {files!r}, result {res!r}: nothing to publish", file=sys.stderr)
+        try:
+            att, whole, doc = stored(run)
+        except LookupError as e:
+            print(f"{e}: nothing to publish", file=sys.stderr)
             rc = 1
             continue
-        common = [("campaign", "hash-loop"), ("sweep", a.sweep), ("row", str(a.row)), ("label", a.hypothesis),
+        machine = (att.get("execution") or {}).get("machine")
+        commit = (att.get("source") or {}).get("commit")
+        if machine not in HARDWARE or not commit:
+            print(f"{run}: machine {machine!r}, commit {commit!r}: nothing to publish", file=sys.stderr)
+            rc = 1
+            continue
+        native = ref or reference(run, att, whole, doc)
+        if (native["machine"], native["model"]) != (machine, doc.get("model")) or not native["output_tokens_per_s"]:
+            print(f"{run}: native reference {native['run']} is {native['model']} on {native['machine']} with stock "
+                  f"{native['output_tokens_per_s']} out tok/s; this run is {doc.get('model')} on {machine}: nothing published",
+                  file=sys.stderr)
+            rc = 1
+            continue
+        had = latest(run)
+        workload = a.workload or had.get("arm") or "maxtput"
+        common = [("campaign", "hash-loop"), ("sweep", a.sweep), ("row", str(a.row)),
+                  ("label", a.hypothesis or had.get("label") or HYPOTHESIS),
                   ("source", f"{a.branch}@{commit}"), ("hardware", HARDWARE[machine])]
-        man = json.loads(research("data", "show", res, "--json"))
-        whole = (man.get("manifest") or man).get("meta") or {}
         wf = whole.get("workload_fingerprint") or {}
         bench_rc = wf.get("bench_rc")
         if bench_rc is None:
             got = re.search(r"bench rc (\d+)", (whole.get("validation") or {}).get("detail", ""))
             bench_rc = int(got.group(1)) if got else 0
+        _, per = results(doc, wf.get("pin") or {"state": "unpinned"}, bench_rc, run, wf.get("clocks") or {},
+                         whole.get("measurement_files") or [])
         with tempfile.TemporaryDirectory() as d:
-            research("data", "fetch", files, "--path", "out/maxtput.json", "--to", d)
-            doc = json.loads((Path(d) / "out" / "maxtput.json").read_text())
-            _, per = results(doc, wf.get("pin") or {"state": "unpinned"}, bench_rc, run, wf.get("clocks") or {},
-                             whole.get("measurement_files") or [])
             for arm, one in per.items():
+                head = {m["name"]: m["value"] for m in one["measurements"]}
+                out = head.get("output_tokens_per_s")
+                if out and not (native["run"] == run and arm == "stock"):
+                    one["measurements"] += [
+                        {"name": "native_output_tokens_per_s", "value": native["output_tokens_per_s"], "unit": "tok/s",
+                         "ref": native["run"]},
+                        {"name": "native_loss_pct", "value": round(100 * (1 - out / native["output_tokens_per_s"]), 3),
+                         "unit": "%", "ref": native["run"]}]
+                    head["native_loss_pct"] = one["measurements"][-1]["value"]
+                one["workload_fingerprint"] = {**one["workload_fingerprint"], "native_ref": native}
                 p = Path(d) / f"{arm}.json"
                 p.write_text(json.dumps(one) + "\n")
                 put = json.loads(research("data", "put", "--kind", "bench-result/v1", "--meta", f"@{p}", "--preserve", "--json"))
                 art = put["id"]
-                for k, v in [*common, ("arm", f"{a.workload}:{one['arm']}")]:
+                for k, v in [*common, ("arm", f"{workload}:{one['arm']}")]:
                     research("data", "label", art, k, v, "--by", a.by, "--ref", run)
-                head = {m["name"]: m["value"] for m in one["measurements"]}
-                print(f"{run} {HARDWARE[machine]:<13} {a.workload}:{one['arm']:<14} {art} {one['validation']['status']} "
-                      f"out tok/s {head.get('output_tokens_per_s')} tput ovh {head.get('throughput_overhead_pct')} % "
-                      f"TPOT ovh {head.get('tpot_overhead_pct')} %")
-        for k, v in [*common, ("arm", a.workload)]:
+                old = supersede(run, f"{workload}:{one['arm']}", art, a.by)
+                print(f"{run} {HARDWARE[machine]:<13} {workload}:{one['arm']:<14} {art} {one['validation']['status']} "
+                      f"out tok/s {out} tput ovh {head.get('throughput_overhead_pct')} % "
+                      f"lost vs native {head.get('native_loss_pct')} % ({native['run']}) TPOT ovh {head.get('tpot_overhead_pct')} %"
+                      + (f"; supersedes {', '.join(old)}" if old else ""))
+        for k, v in [*common, ("arm", workload)]:
             research("data", "label", run, k, v, "--by", a.by, "--ref", run)
     return rc
 
 
 ARM_ORDER = ("stock", "sha512", "sha512-layer", "blake3")
-COLUMNS = (("out tok/s", "output_tokens_per_s", "{:,.0f}"), ("lost %", "throughput_overhead_pct", "{:.1f}"),
-           ("req/s", "requests_per_s", "{:.1f}"), ("queue wait + TTFT p50 s", "ttft_p50_ms", "{:.1f}", 1e-3),
+COLUMNS = (("out tok/s", "output_tokens_per_s", "{:,.0f}"), ("lost % (same cycle)", "throughput_overhead_pct", "{:.1f}"),
+           ("lost % vs native", "native_loss_pct", "{:.1f}"), ("req/s", "requests_per_s", "{:.1f}"), ("queue wait + TTFT p50 s", "ttft_p50_ms", "{:.1f}", 1e-3),
            ("queue wait + TTFT p99 s", "ttft_p99_ms", "{:.1f}", 1e-3), ("TPOT p50 ms", "tpot_p50_ms", "{:.1f}"),
            ("TPOT p99 ms", "tpot_p99_ms", "{:.1f}"), ("TPOT rise %", "tpot_overhead_pct", "{:.1f}"),
            ("waiting min", "waiting_min", "{:.0f}"), ("running mean", "running_mean", "{:.0f}"), ("KV use", "kv_usage_mean", "{:.3f}"),
@@ -278,20 +352,24 @@ def table(a: argparse.Namespace) -> int:
         got = sorted(json.loads(research("data", "labels", x["id"], "--json")), key=lambda e: e.get("ts", ""))
         labels = {e["key"]: e["value"] for e in got}
         workload, _, arm = labels.get("arm", "").partition(":")
-        if not workload.startswith("maxtput") or labels.get("kernel_outcome") == "voided":
+        if not workload.startswith("maxtput") or labels.get("kernel_outcome") == "voided" or labels.get("superseded_by"):
             continue
         meta = x["manifest"]["meta"]
         fp = meta.get("workload_fingerprint") or {}
         eng = fp.get("engine") or {}
         head = {m["name"]: m["value"] for m in meta["measurements"]}
+        nat = fp.get("native_ref") or {}
         cells = [labels.get("hardware", "?"), eng.get("model", fp.get("model", "?")), f"{workload}:{arm}", meta["run_id"],
                  (fp.get("pin") or {}).get("state", "?"), ",".join(eng.get("attention_impls") or []),
-                 f"{eng.get('kv_bytes', 0) / 1e9:.1f}", meta["validation"]["status"]]
+                 f"{eng.get('kv_bytes', 0) / 1e9:.1f}", meta["validation"]["status"],
+                 "" if not nat else "itself" if nat.get("run") == meta["run_id"] else f"{nat.get('run')} ({nat.get('pin')}, "
+                 f"{(nat.get('kv_bytes') or 0) / 1e9:.1f} GB, {','.join(nat.get('attention_impls') or [])})"]
         for _, key, form, *scale in COLUMNS:
             v = head.get(key)
             cells.append("" if v is None else form.format(v * (scale[0] if scale else 1)))
         lines.append((labels.get("hardware", ""), workload, ARM_ORDER.index(arm) if arm in ARM_ORDER else 9, meta["run_id"], cells))
-    heads = ["GPU", "model", "workload:arm", "run", "pin", "attention", "KV GB", "validation", *(c[0] for c in COLUMNS)]
+    heads = ["GPU", "model", "workload:arm", "run", "pin", "attention", "KV GB", "validation", "native reference",
+             *(c[0] for c in COLUMNS)]
     print("| " + " | ".join(heads) + " |\n|" + "---|" * len(heads))
     for *_, cells in sorted(lines):
         print("| " + " | ".join(cells) + " |")
@@ -307,8 +385,12 @@ def main() -> int:
     ap.add_argument("--publish", nargs="+", metavar="RUN")
     ap.add_argument("--table", action="store_true", help="print row ROW's published maxtput* arms as a markdown table")
     ap.add_argument("--row", default="11")
-    ap.add_argument("--hypothesis", default="max throughput: native compiled vLLM at saturation against the Commit's arms")
-    ap.add_argument("--workload", default="maxtput", help="the `arm` label's workload: maxtput (Qwen3-8B), maxtput-llama31-8b")
+    ap.add_argument("--hypothesis", default=None, help=f"the `label` (default: the run's own, else {HYPOTHESIS!r})")
+    ap.add_argument("--workload", default=None,
+                    help="the `arm` label's workload: maxtput (Qwen3-8B), maxtput-llama31-8b (default: the run's own, else maxtput)")
+    ap.add_argument("--native", metavar="RUN", default=None,
+                    help="the native reference run (stock at vLLM's own KV sizing and attention backend, on the same card and "
+                         "model; pinned when the run is, where a Build of that backend exists): default each run's own stock")
     ap.add_argument("--sweep", default="iteration")
     ap.add_argument("--branch", default=BRANCH)
     ap.add_argument("--by", default="hash")
