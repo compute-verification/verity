@@ -104,7 +104,7 @@ class Loop:
 def loop_env(lp: Loop) -> dict[str, str]:
     env = {**lp.env}
     for f in lp.env_files:
-        env.update(env_file(Path(f)))
+        env.update({k: v for k, v in env_file(Path(f)).items() if k != "PYTHONPATH"})   # load() checked lp.env's
     return env
 
 
@@ -128,6 +128,11 @@ def load(path: Path) -> tuple[dict, list[Loop]]:
     names = [lp.name for lp in loops]
     if len(set(names)) != len(names):
         raise ValueError(f"a loop name repeats: {names}")
+    src = cfg["src"].rstrip("/") + "/"
+    for lp in loops:
+        if bad := [p for p in lp.env.get("PYTHONPATH", "").split(":") if p and not p.startswith(src)]:
+            raise ValueError(f"loop {lp.name}: PYTHONPATH {':'.join(bad)} is outside {cfg['src']}: a watcher imports only the deployed "
+                             "tree; to run newer code, merge it into the branch and deploy that commit (README.md's deploy)")
     cfg["_base_env"] = base
     return cfg, loops
 

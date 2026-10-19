@@ -8,6 +8,8 @@ import sys
 import tomllib
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[3]
 CONTROL = ROOT / "infra" / "control"
 
@@ -99,6 +101,21 @@ def test_a_loop_whose_credential_file_is_missing_waits_and_starts_once_it_is_pla
     sup.step()
     assert started == ["needy"]
     assert W.env_file(key) == {"A": "b"}
+
+
+def test_a_watcher_imports_only_the_deployed_tree(tmp_path):
+    """On 19 Oct a hand edit pointed agent-watch-relay's PYTHONPATH at another checkout (/data/infra/fixtures-export-repo), so
+    the loop ran code no deploy named."""
+    cfg = tmp_path / "w.toml"
+    head = f'dir = "{tmp_path}"\nsrc = "{tmp_path}/src"\n[env]\nPYTHONPATH = "{{src}}/tools/research/src"\n'
+    cfg.write_text(head + '[[loop]]\nname = "a"\nargv = ["true"]\nenv = { PYTHONPATH = "/data/infra/fixtures-export-repo/tools/research/src:{src}/x" }\n')
+    with pytest.raises(ValueError, match="loop a: PYTHONPATH /data/infra/fixtures-export-repo/tools/research/src is outside"):
+        W.load(cfg)
+    key = tmp_path / "k.env"
+    key.write_text("A=b\nPYTHONPATH=/elsewhere\n")
+    cfg.write_text(head + f'[[loop]]\nname = "a"\nargv = ["true"]\nenv_files = ["{key}"]\n')
+    _, (lp,) = W.load(cfg)
+    assert W.loop_env(lp)["PYTHONPATH"] == f"{tmp_path}/src/tools/research/src" and W.loop_env(lp)["A"] == "b"
 
 
 def test_exec_runs_a_command_in_one_loops_environment_and_refuses_before_its_credential_is_placed(tmp_path, capfd):
