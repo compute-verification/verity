@@ -24,10 +24,17 @@ proved.
   reads them through the export (line rate, or side channels plus readable export under network accounting). A relay op
   reads 2 b_p bits, and the developer relays only as many partial sums as buy more declared work than the relay's gates
   would train directly.
+* The verdict lag: from its first faulty proof block until the halt (a window plus the verdict delay), a developer can skip
+  all declared work, once per identity, in every tier; that capacity joins the residual. Detection must end the
+  identity and take its hardware out of use, or the capacity after the halt is unmonitored.
 * chi, the cheating share: with sampled proofs at a budget, the faulty proof blocks the sampling design accepts number
   A ln(1/delta) / q per identity over the whole deployment, q = share / (overhead + replay) (``Population.Exfil.tail_cum``),
   where A, the luck factor, turns faulty outputs into skipped work. Each faulty proof block skips its work and injects its output
   bits plus the choice of where, worth at most the chord slope of the per-inference-block thread bound per bit.
+
+The four terms bound counted multiplications relative to the reference recipe. A private recipe g times better in counted
+multiplications per unit of loss is a compute amplifier, multiplying eta by g; the compute dampener is D = g / eta's
+four-term sum, so g = 1 is the claim against the best known recipe.
 
 The canvas "Compute efficiency under the verification stack" renders this model.
 
@@ -64,7 +71,7 @@ DEFAULTS = {
     "host_gb": 1900.0, "disk_gb": 0.0,
     "tau": 400.0, "export": 4.4e9, "nic": 3.2e12,
     "share": 0.01, "overhead": 4.8e12, "replay": 1.1e5, "step_flop": 1.43e4, "p_evade": 2.0 ** -40, "identities": 1.0,
-    "luck": 8.0, "step_bits": 16.0, "intake_x": 1.0,
+    "luck": 8.0, "step_bits": 16.0, "intake_x": 1.0, "lag_s": 3600.0, "g": 1.0,
     "floor_steps": 1.0,
     "K": 2e7, "Gamma": 6.4e16, "d": 2048.0, "e": 4e4, "kappa": 0.655,
     "kappa_chain": 0.075, "d_chain": 1536.0, "e_chain": 12288.0, "b_p": 32.0,
@@ -75,6 +82,7 @@ DEFAULTS = {
 #: it is one of the few shown up front
 SPEC = [
     {"key": "unmonitored", "main": True, "label": "Unmonitored compute share", "unit": "", "min": 1e-12, "max": 0.5, "log": True, "zero": True},
+    {"key": "g", "main": True, "label": "Compute amplifier g: the developer's algorithmic advantage over the reference recipe (1 against the best known recipe)", "unit": "x", "min": 1, "max": 100, "log": True},
     {"key": "residual", "main": True, "label": "Monitored compute residual r on the GPUs (floor credit with filler: about 1%, modelled; served windows today: about 0.9)", "unit": "", "min": 1e-12, "max": 1, "log": True, "zero": True},
     {"key": "host_share", "main": True, "label": "Host CPUs at datasheet peak, as a share of server compute (about 5%; 0 once a CPU filler or a physical cap bounds them)", "unit": "", "min": 1e-6, "max": 0.5, "log": True, "zero": True},
     {"key": "pous_rounds", "main": True, "label": "Proof-of-space rounds per audit (today's 1/19 certificate: 86; under 1 GB: about 12,000)", "unit": "", "min": 10, "max": 1e6, "log": True},
@@ -101,6 +109,7 @@ SPEC = [
     {"key": "luck", "label": "Sampled proofs: luck factor F/(1-p) (spec sheet 8)", "unit": "x", "min": 1, "max": 100, "log": True},
     {"key": "step_bits", "label": "Sampled proofs: output bits per step (16, or one 32-bit gate)", "unit": "bit", "min": 1, "max": 64, "log": True},
     {"key": "intake_x", "label": "Declared novel intake, as a multiple of alpha F (1 once the count check is in the ZK flow; line rate is about 1.3e6)", "unit": "x", "min": 1, "max": 1e7, "log": True},
+    {"key": "lag_s", "label": "Verdict lag: from a first faulty proof block to the halt, a window plus the verdict delay (1 hour assumed)", "unit": "s", "min": 1, "max": 1e7, "log": True, "zero": True},
     {"key": "identities", "label": "Sampled proofs: identities a detection doesn't end", "unit": "", "min": 1, "max": 1e6, "log": True},
     {"key": "floor_steps", "label": "Sampled proofs: steps in a class drawn at a floor of one", "unit": "", "min": 1, "max": 1e17, "log": True},
     {"key": "K", "label": "NCI: novel bits per inference block", "unit": "bit", "min": 1e5, "max": 1e10, "log": True},
@@ -240,12 +249,13 @@ def evaluate(p: dict, mech: dict) -> dict:
     rho_T = p["b_a"] / (alpha * lam(p, p["K"]))
     cap_T = C / rho_T
 
-    k = skipped = bits = cheat = 0.0
+    k = bits = cheat = 0.0
+    skipped = min(C, p["identities"] * p["lag_s"] * p["nodes"] * p["node_flops"])
     if mech["sampled"]:
         L = math.log(1 / p["p_evade"])
         q = p["share"] / (p["overhead"] + p["replay"])
         k = p["luck"] * p["identities"] * L / q
-        skipped = k * p["step_flop"]
+        skipped += k * p["step_flop"]
         k_all = k + p["luck"] * p["identities"] * L * p["floor_steps"]
         S_full = full_block_bits(p)
         per_block = max(1.0, min(k_all, S_full / 28))
@@ -311,8 +321,8 @@ def evaluate(p: dict, mech: dict) -> dict:
     declared_part = min(declared, monitored)
     res_part = monitored - declared_part
     spent = C + U
-    terms = {"unmonitored": gpm * unmon / spent, "residual": gpm * res_part / spent,
-             "declared": gpm * declared_part / spent, "cheat": gpm * cheat / spent}
+    amp = p["g"] * gpm / spent
+    terms = {"unmonitored": amp * unmon, "residual": amp * res_part, "declared": amp * declared_part, "cheat": amp * cheat}
     capped = region < declared + res_mults
     largest = max(terms, key=lambda t: terms[t])
     if largest == "declared":

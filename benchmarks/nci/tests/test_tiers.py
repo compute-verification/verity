@@ -23,9 +23,10 @@ def test_every_parameter_has_a_slider_and_its_default_is_in_range():
 
 
 def test_without_memory_mechanisms_the_residual_trains_at_full_efficiency():
-    r = T.evaluate(T.DEFAULTS, T.TIERS["T1"])
+    p = T.DEFAULTS | {"lag_s": 0.0}
+    r = T.evaluate(p, T.TIERS["T1"])
     assert r["largest"] == "residual" and not r["memory_caps_residual"]
-    assert r["residual"] == pytest.approx(T.residual_share(T.DEFAULTS), rel=1e-3)
+    assert r["residual"] == pytest.approx(T.residual_share(p), rel=1e-3)
 
 
 def test_unmonitored_compute_trains_at_full_efficiency():
@@ -42,7 +43,7 @@ def test_the_residual_voids_the_partial_sum_law():
 def test_without_dark_compute_the_declared_side_is_the_chain_bound():
     """At zero residual and zero unmonitored compute nothing absorbs partial sums, so efficiency is the inverse of the
     calculator's chain bound for pretrain-full."""
-    p = T.DEFAULTS | {"residual": 0.0, "host_share": 0.0, "unmonitored": 0.0}
+    p = T.DEFAULTS | {"residual": 0.0, "host_share": 0.0, "unmonitored": 0.0, "lag_s": 0.0}
     r = T.evaluate(p, T.TIERS["T4"])
     alpha = p["K"] / p["Gamma"]
     chain = p["kappa_chain"] * S.read_factor(p["K"], p["b_w"], p["b_a"], p["d_chain"]) / (2 * alpha)
@@ -54,7 +55,7 @@ def test_the_adversary_relays_partial_sums_only_when_it_pays():
     """With width-1 blocks the partial-sum law never reaches the thread bound, and relaying the whole residual into the
     declared blocks' sums would buy far less than the residual trains directly: the adversary relays only the few
     partial sums that pay, and the residual still trains at full efficiency."""
-    p = T.DEFAULTS | {"d": 1.0, "e": 1e6}
+    p = T.DEFAULTS | {"d": 1.0, "e": 1e6, "lag_s": 0.0}
     r = T.evaluate(p, T.TIERS["T4"])
     assert r["largest"] == "residual" and 0 < r["declared"] < r["residual"]
     assert r["residual"] == pytest.approx(T.residual_share(p), rel=1e-6)
@@ -125,3 +126,21 @@ def test_the_cheating_pool_does_not_grow_with_the_fleet():
     assert small["cheat"] == pytest.approx(100 * large["cheat"])
     q = T.DEFAULTS["share"] / (T.DEFAULTS["overhead"] + T.DEFAULTS["replay"])
     assert large["cheat_steps"] == pytest.approx(T.DEFAULTS["luck"] * math.log(1 / T.DEFAULTS["p_evade"]) / q)
+
+
+def test_the_amplifier_multiplies_every_term():
+    """A recipe g times better in counted multiplications per unit of loss multiplies efficiency by g (paper red team)."""
+    for tier in ("T1", "T5"):
+        base = T.evaluate(T.DEFAULTS, T.TIERS[tier])
+        amped = T.evaluate(T.DEFAULTS | {"g": 10.0}, T.TIERS[tier])
+        for term in ("efficiency", "unmonitored", "residual", "declared", "cheat"):
+            assert amped[term] == pytest.approx(10 * base[term], rel=1e-9)
+
+
+def test_the_verdict_lag_adds_a_lag_of_skipped_work_per_identity():
+    """Until the halt a developer can skip all declared work, once per identity (paper red team: 1 hour is 1.1e-4)."""
+    p = T.DEFAULTS | {"host_share": 0.0}
+    no_lag = T.evaluate(p | {"lag_s": 0.0}, T.TIERS["T1"])
+    lag = T.evaluate(p | {"identities": 3.0}, T.TIERS["T1"])
+    extra = 3 * p["lag_s"] / (p["years"] * T.YEAR)
+    assert lag["residual"] - no_lag["residual"] == pytest.approx(extra, rel=1e-6)
