@@ -422,15 +422,15 @@ def gather(C, d: Path, a, notes: list[str]) -> list[tuple[str | None, Path]]:
 
 
 def _clean_env(tree: Path) -> dict[str, str]:
-    """This process's environment for a planning process in ``tree``: without this checkout's virtualenv (the tree's `uv run`
-    puts its own first) and with PYTHONPATH's entries inside this checkout rebased onto ``tree``, as a check there gets them."""
+    """This process's environment for a planning process in ``tree``, as a check run there would have it: without this
+    checkout's virtualenv and `uv run`'s depth (the tree's own `uv run` sets both), and with this checkout's path written as
+    ``tree``'s wherever it appears (`check._env_key` writes either as `<tree>`)."""
     e = {k: v for k, v in os.environ.items() if k not in ("VIRTUAL_ENV", "UV_RUN_RECURSION_DEPTH")}
-    venv = str(ROOT / ".venv")
-    e["PATH"] = os.pathsep.join(p for p in e.get("PATH", "").split(os.pathsep) if p and not p.startswith(venv))
-    if pp := [p for p in e.get("PYTHONPATH", "").split(os.pathsep) if p]:
-        e["PYTHONPATH"] = os.pathsep.join(str(tree / Path(p).resolve().relative_to(ROOT)) if Path(p).resolve().is_relative_to(ROOT)
-                                          else p for p in pp)
-    return e
+    path = e.get("PATH", "").split(os.pathsep)
+    if os.environ.get("VIRTUAL_ENV") and str(Path(os.environ["VIRTUAL_ENV"]) / "bin") in path:
+        path.remove(str(Path(os.environ["VIRTUAL_ENV"]) / "bin"))       # the one `uv run` put first
+    e["PATH"] = os.pathsep.join(path)
+    return {k: v.replace(str(ROOT), str(tree)) for k, v in e.items()}
 
 
 def parser() -> argparse.ArgumentParser:
@@ -502,7 +502,7 @@ def main(argv: list[str], host=None) -> int:
             _git("worktree", "add", "-q", "--detach", str(tree), commit)
             try:
                 uv = os.environ.get("UV") or shutil.which("uv") or "uv"
-                r = subprocess.run([uv, *DECLARED, str(HERE / "plan.py"), "--tree", str(tree), "--out", str(out), *args],
+                r = subprocess.run([uv, "--quiet", *DECLARED, str(HERE / "plan.py"), "--tree", str(tree), "--out", str(out), *args],
                                    cwd=tree, env=_clean_env(tree)).returncode
             finally:
                 subprocess.run(["git", "worktree", "remove", "--force", str(tree)], cwd=ROOT, capture_output=True)
