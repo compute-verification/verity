@@ -24,6 +24,7 @@ import Proofs.Flock.Claims.Complete.ZkTables.RingSwitch
 import Proofs.Flock.Claims.Complete.ZkTables.StmtOne
 import Proofs.Flock.Claims.Complete.ZkTables.Table
 import Proofs.Flock.Claims.Complete.ZkTables.Round0
+import Proofs.Flock.Claims.Complete.ZkTables.Pass
 
 /-! Flock's completeness at the deployed masked verifier at any number of tables. The honest masked prover runs each
 table on its share of the witness (`Honest`: `traces`, `honestP`, which is `honestPZk` at one table); the record's
@@ -79,4 +80,5 @@ from the JSON specification and those four (`complete_jsonT`); at table `0` of a
 (`CaseZk.toCase`, `RunZk.toRun`) they give `complete_zk`'s `RepShapedZk`, `ProverRunsZk`, `LigeritoZk` and `Inner`
 (`repShapedZk_of`, `proverRunsZk_of`, `lgInnerZk_of`). For zero knowledge, `honestPR`'s first message is the link of
 the tables' level-0 caps, each cap a function of its level's leaves, over `encodeRowsZk`'s rows (`Round0`:
-`honestPR_first`, `commitsPZk_caps`, `encodeRowsZk_entry`). -/
+`honestPR_first`, `commitsPZk_caps`, `encodeRowsZk_entry`), and a session that returns passed every rep's `β` and
+pair-coin refusals at their slots (`Pass`: `sessionPZk_pass`, each rep sending exactly its rounds, `repPZk_exact`). -/
