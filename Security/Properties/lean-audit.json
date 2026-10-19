@@ -1513,6 +1513,21 @@
    "signature": ["Properties.SampledProofs.digestIsRecord's : Properties.SampledProofs.DigestIsRecord's"],
    "assumptions": [],
    "type_hash": "abc4bf9e307d0d767e4b2403ff93ed0054962649127800445a602b2468868d70"
+  },
+  "Properties.SampledProofs.haltIsFinal": {
+   "owner": "@proofs"
+  },
+  "Properties.SampledProofs.haltEndsOpen": {
+   "owner": "@proofs"
+  },
+  "Properties.SampledProofs.noAcceptAfterHalt": {
+   "owner": "@proofs"
+  },
+  "Properties.SampledProofs.fleetHaltIsFinal": {
+   "owner": "@proofs"
+  },
+  "Properties.SampledProofs.haltCoversOperator": {
+   "owner": "@proofs"
   }
  },
  "shape": {
@@ -2195,6 +2210,26 @@
    },
    "Properties.SampledProofs.digestIsRecord's": {
     "function": "SampledProofs.OneStage.commitmentOf",
+    "outcome": "accept"
+   },
+   "Properties.SampledProofs.haltIsFinal": {
+    "function": "SampledProofs.Stream.run",
+    "outcome": "accept"
+   },
+   "Properties.SampledProofs.haltEndsOpen": {
+    "function": "SampledProofs.Stream.run",
+    "outcome": "accept"
+   },
+   "Properties.SampledProofs.noAcceptAfterHalt": {
+    "function": ["SampledProofs.Stream.run", "Properties.SampledProofs.runs"],
+    "outcome": "accept"
+   },
+   "Properties.SampledProofs.fleetHaltIsFinal": {
+    "function": "SampledProofs.Fleet.run",
+    "outcome": "accept"
+   },
+   "Properties.SampledProofs.haltCoversOperator": {
+    "function": "SampledProofs.Fleet.run",
     "outcome": "accept"
    },
    "MemoryChallenger.Properties.SecurityProofs.judgeSigned": {
