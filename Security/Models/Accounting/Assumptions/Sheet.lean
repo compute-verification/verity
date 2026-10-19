@@ -61,9 +61,11 @@ variable {K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype T] [Fintype L] 
 
 /-- `accounting-sheet-words` (PTX ISA). **A6 WORDS**: an instruction writes at most its destination registers' 32-bit
 words. Writer kind `t`'s `ω_t` is its fragment's words (mma.sync m16n8k32 s32: 128 a warp instruction, m8n8k16: 64;
-wgmma m64n256k32: 4096 a warp; tcgen05.mma 128 × 256: 32768; a uniform instruction: 1), and a lane instruction's
-destination is at most 64 bits, so the vector- and table-headed words are at most two a lane of the vector
-instructions the labelling gives them. -/
+wgmma m64n256k32: 4096 a warp; tcgen05.mma 128 × 256: 32768; a uniform instruction: 1), and each vector class
+(`vec`) is a lane class whose destination is at most 64 bits, so the vector- and table-headed words are at most two a
+lane of the vector instructions the labelling gives them. A table word's head is the vector instruction that reads
+the table, not the load that brings it, which is operand delivery (priced by `b_T`) and may write more: a 128-bit load
+writes four words a lane (RT2-120-6). -/
 def SheetWords (Z : Model K R T L U F X) (A : Anatomy K T L U) : Prop :=
   (∀ t, A.words (.writer t) ≤ Z.omega t * A.nword (.writer t) (Z.cls t)) ∧
     A.words .vector ≤ 2 * (32 * ∑ k ∈ Z.vec, A.nword .vector k) ∧
