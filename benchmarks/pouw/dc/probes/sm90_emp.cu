@@ -19,7 +19,8 @@
 //                           IMAD/LOP3/LEA), and a K-instruction warp-uniform chain (uchain.cuh), then waits. The gate
 //                           pins UIMAD/ULOP3 (the chain's uniform half), FFMA = R (the filler), IMMA = 8 and IGMMA = 4.
 //                           counted is the chain op (K > 0) or the IGMMA (K = 0); analyze sums every class's rate a
-//                           SMSP-cycle (total issue) and reads the K-slope at each R.
+//                           SMSP-cycle (total issue) and reads the K-slope at each R. R <= 256 leaves issue under 0.6
+//                           (the trip waits on its wgmma); R = 1024 is issue-bound, the regime A2u is about.
 //
 // A3 says a 2:4 sparse form does at most twice the dense peak on its logical k: the same instruction rate as the dense
 // form of half its logical k. wgmma.mma_async.sp was never measured in the tree.
@@ -28,6 +29,8 @@
 //                 (indices 0 and 1 of every group of 4: a valid 2:4 pattern; the values don't move a peak).
 //   wgd_<form>    its dense twin in the same kernel shape and binary (k32 s8/e4m3, k16 f16): the ratio wgsp/wgd is the
 //                 sparse speedup at equal instruction count, A3's bound is 1 (twice the MACs on a logical k twice as deep).
+//   wgsprs_s8, wgdrs_s8  the s8 pair with A from registers: B alone (16 KB a sparse instruction) is then the
+//                 shared-memory traffic, 128 B a SM-clock at the dense instruction rate.
 //
 // A5 says shared memory serves 128 B an SM clock, loads and stores together. A saturated SS-mode wgmma reads its A and
 // B tiles from shared memory (6 KB a wgmma s8 m64n128k32, 96 B a SM-clock at the tensor peak) through no
@@ -120,6 +123,9 @@ PACK(S_I, i, 128, 128)
 PACK(S_I, i, 256, 0)
 PACK(S_I, i, 256, 64)
 PACK(S_I, i, 256, 128)
+PACK(S_I, i, 1024, 0)
+PACK(S_I, i, 1024, 64)
+PACK(S_I, i, 1024, 128)
 #undef PACK
 
 // ---- sparse wgmma beside its dense twin ---------------------------------------------------------------------------
@@ -144,6 +150,13 @@ DC_DEV Tiles sp_tiles(unsigned char* sm, int mode) {
   const uint32_t base = smem_u32(sm);
   return {wgmma_desc(base, kmaj_lbo(), kmaj_sbo(KB)), wgmma_desc(base + AROWS * KB, kmaj_lbo(), kmaj_sbo(BK))};
 }
+// A's fragment from registers (sm90_wgmma.cu's F_s8_n256_rs): 4 words a thread, the dense k32 and the sparse k64 alike.
+DC_DEV void rs_frag(uint32_t (&a)[4], const Tiles& t) {
+  a[0] = (uint32_t)t.da ^ threadIdx.x;
+  a[1] = (uint32_t)(t.da >> 32);
+  a[2] = (uint32_t)t.db;
+  a[3] = 0x01020304u;
+}
 #define SPF(NAME, ACC, TY, BK, CALL)                                                       \
   struct G_##NAME {                                                                       \
     using Acc = ACC;                                                                      \
@@ -156,6 +169,8 @@ SPF(f16_sp, float, 4, SKB, wgmma_f16_n256_sp(d, t.da, t.db, e, sd))
 SPF(s8_d, int, 0, KB, wgmma_s8_n256(d, t.da, t.db, sd))
 SPF(e4m3_d, float, 1, KB, wgmma_e4m3_n256(d, t.da, t.db, sd))
 SPF(f16_d, float, 4, KB, wgmma_f16_n256(d, t.da, t.db, sd))
+SPF(s8_rs_sp, int, 0, SKB, uint32_t ra[4]; rs_frag(ra, t); wgmma_s8_n256_rs_sp(d, ra, t.db, e, sd))
+SPF(s8_rs_d, int, 0, KB, uint32_t ra[4]; rs_frag(ra, t); wgmma_s8_n256_rs(d, ra, t.db, sd))
 #undef SPF
 template <class G>
 DC_DEV void wg_sp(const OpArgs& a) {
@@ -187,6 +202,8 @@ OP_KERNEL(wgsp_f16, ATPB) { wg_sp<G_f16_sp>(a); }
 OP_KERNEL(wgd_s8, ATPB) { wg_sp<G_s8_d>(a); }
 OP_KERNEL(wgd_e4m3, ATPB) { wg_sp<G_e4m3_d>(a); }
 OP_KERNEL(wgd_f16, ATPB) { wg_sp<G_f16_d>(a); }
+OP_KERNEL(wgsprs_s8, ATPB) { wg_sp<G_s8_rs_sp>(a); }
+OP_KERNEL(wgdrs_s8, ATPB) { wg_sp<G_s8_rs_d>(a); }
 
 // ---- shared memory beside the wgmma's own shared-memory reads, and setmaxnreg ---------------------------------------
 constexpr int LU = 8, RING = 2048;
@@ -296,8 +313,12 @@ static const OpProbe PROBES[] = {
     P(i, 256, 0, HON ",FFMA=256", "IGMMA.64x256x32.S8.S8"),
     P(i, 256, 64, K64 ",FFMA=256", "UIMAD"),
     P(i, 256, 128, K128 ",FFMA=256", "UIMAD"),
+    P(i, 1024, 0, HON ",FFMA=1024", "IGMMA.64x256x32.S8.S8"),
+    P(i, 1024, 64, K64 ",FFMA=1024", "UIMAD"),
+    P(i, 1024, 128, K128 ",FFMA=1024", "UIMAD"),
 #define P_SP(NM) {.name = #NM, .kernel = (const void*)NM, .tpb = ATPB, .expect = "*GMMA*=4", .iters = AITERS}
-    P_SP(wgsp_s8), P_SP(wgsp_e4m3), P_SP(wgsp_f16), P_SP(wgd_s8), P_SP(wgd_e4m3), P_SP(wgd_f16),
+    P_SP(wgsp_s8), P_SP(wgsp_e4m3), P_SP(wgsp_f16), P_SP(wgd_s8), P_SP(wgd_e4m3), P_SP(wgd_f16), P_SP(wgsprs_s8),
+    P_SP(wgdrs_s8),
 #undef P_SP
     // No bank check here (the OP_UNTIL loop's stop poll is one more LDS): its ring is emp_lds_solo's, which has one.
     {.name = "emp_smem", .kernel = (const void*)emp_smem, .tpb = 512, .expect = "IGMMA.64x128x32.S8.S8=4;LDS.128=8",

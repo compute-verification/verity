@@ -26,6 +26,7 @@ FORMS = [
     ("s8_n256_sp", "m64n256k64", "s32.s8.s8", "int", "r", "", False, True),
     ("e4m3_n256_sp", "m64n256k64", "f32.e4m3.e4m3", "float", "f", ", 1, 1", False, True),
     ("f16_n256_sp", "m64n256k32", "f32.f16.f16", "float", "f", ", 1, 1, 0, 0", False, True),
+    ("s8_n256_rs_sp", "m64n256k64", "s32.s8.s8", "int", "r", "", True, True),
 ]
 
 
@@ -37,22 +38,19 @@ def form(name, shape, types, ctype, con, extra, rs, sp=False) -> str:
     nacc = 64 * n_of(shape) // 128
     regs = ", ".join(f"%{i}" for i in range(nacc))
     outs = ", ".join(f'"+{con}"(d[{i}])' for i in range(nacc))
-    meta = ""
-    if sp:
-        a_op, b_op, sd = f"%{nacc}", f"%{nacc + 1}", f"%{nacc + 3}"
-        meta = f"%{nacc + 2}, 0, "
-        ins = '"l"(da), "l"(db), "r"(e), "r"(scale_d)'
-        sig = f"{ctype} (&d)[{nacc}], uint64_t da, uint64_t db, uint32_t e, int scale_d"
-    elif rs:
-        a_op = "{" + ", ".join(f"%{nacc + i}" for i in range(4)) + "}"
-        ins = ", ".join(f'"r"(a[{i}])' for i in range(4)) + f', "l"(db), "r"(scale_d)'
-        b_op, sd = f"%{nacc + 4}", f"%{nacc + 5}"
-        sig = f"{ctype} (&d)[{nacc}], const uint32_t (&a)[4], uint64_t db, int scale_d"
+    if rs:
+        na = 4
+        a_op = "{" + ", ".join(f"%{nacc + i}" for i in range(na)) + "}"
+        a_in, a_sig = ", ".join(f'"r"(a[{i}])' for i in range(na)), "const uint32_t (&a)[4]"
     else:
-        a_op, b_op, sd = f"%{nacc}", f"%{nacc + 1}", f"%{nacc + 2}"
-        ins = '"l"(da), "l"(db), "r"(scale_d)'
-        sig = f"{ctype} (&d)[{nacc}], uint64_t da, uint64_t db, int scale_d"
-    note = " (A from registers)" if rs else " (2:4 sparse A, metadata e, selector 0)" if sp else ""
+        na, a_op, a_in, a_sig = 1, f"%{nacc}", '"l"(da)', "uint64_t da"
+    b_op = f"%{nacc + na}"
+    meta, e_in, e_sig = (f"%{nacc + na + 1}, 0, ", ', "r"(e)', ", uint32_t e") if sp else ("", "", "")
+    sd = f"%{nacc + na + 1 + sp}"
+    ins = f'{a_in}, "l"(db){e_in}, "r"(scale_d)'
+    sig = f"{ctype} (&d)[{nacc}], {a_sig}, uint64_t db{e_sig}, int scale_d"
+    note = {(True, False): " (A from registers)", (False, True): " (2:4 sparse A, metadata e, selector 0)",
+            (True, True): " (2:4 sparse A from registers, metadata e, selector 0)"}.get((rs, sp), "")
     return (f"// {shape}.{types}{note}: {nacc} accumulator registers a thread\n"
             f"__device__ __forceinline__ void wgmma_{name}({sig}) {{\n"
             f'  asm volatile(\n'
