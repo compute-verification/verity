@@ -27,6 +27,12 @@ answered its sample by the deadline, and none when the prover could rebuild the 
 advice, timing advice, inputs, every refused port-window charged at its link's full capacity, so it fails closed, and
 everything a block out for maintenance held), and the failure probability (the sum of the claims' deltas).
 
+`sound` is false on any refused port-window: the AND over the run's port records, with no ε or share credit. Those
+refusals are this model's own record check (`claims.check_records`). The model builds no proof-service streams or
+`LinkWindows` outcomes, so it doesn't read the network verdict of record, the certifier's
+`LinkWindows.network_verdict` (`verity/core/protocols/certifier/service.py`), which is the same AND over a link's
+outcomes of record.
+
 Every claim's credit is also a `Credit` on a unit: compute in block-ticks, PoUW's proved bound (`Profile.ticks`, the
 least time over every route) as `compute` on the whole block where the scheme gives one, else the honest routing's
 time on each facet (kinds on one facet add up, kinds on different facets run at once) as `compute:<facet>`, on the block as far as attribution places it there and graded by its anchor,

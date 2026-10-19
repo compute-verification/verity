@@ -14,8 +14,10 @@ A spec-level reference for network accounting's timing channel:
   is at the profile. Holding the frames, the rest of the egress grid, is N3's, which is a design and the simulator's
   behaviour (`benchmarks/network_sim`), not a protocol: a prototype in the clear, in no proof-service Spec, so the claim
   stays counts only until N3 is a proof-service unit with Selection `All`. It covers no lab or served link yet: an
-  egress end without an occupancy profile gets no verdict (`ValueError`, failing closed). A run's network verdict is
-  the AND over its link-windows, with no ε or share credit;
+  egress end without an occupancy profile gets no verdict (`ValueError`, failing closed). The network verdict of
+  record is `LinkWindows.network_verdict`, the AND over the link's link-windows with no ε or share credit: every window
+  of the egress profile registered in order with an accepted outcome, and a rejected, late, missing or out-of-order
+  window rejects the link;
 - the capacity counts;
 - the calibration of honest runs;
 - the online prover (`online`): each window's clock sync declared at its first bucket from what it had seen `lag`

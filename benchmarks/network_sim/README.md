@@ -369,11 +369,10 @@ frames root, filled in by those counts (`grid.fill`), and N3's design holds thos
 once N3 is a proof-service unit with Selection All, the two would hold the grid N2 used to compare in the clear. Until
 then the claim is counts only: timing at the profile. N2 needs the egress end's profile: without one nothing holds the
 egress timing, and `LinkWindows.verify` has no verdict (`ValueError`, failing closed), so N2 covers no lab or served
-link yet. A run's network verdict is the AND over its link-windows, with no ε or share credit for N2. The datacenter
-model's account (a Python model, not a verifier of record) reads it so: `Account.sound`
-(`benchmarks/datacenter/datacenter/account.py`) is false on any refused port-window, and a refused window is charged at
-its link's line rate (`refused_bits`). `link_checks` records both bits on every link-window of the
-simulator, whose ports each declare φ's counts as their profile.
+link yet. The network verdict of record is `LinkWindows.network_verdict`, the AND over a link's link-windows with no ε
+or share credit: every window of the egress profile registered in order with an accepted outcome of record. The
+simulator runs no proof-service stream, so it doesn't call it. `link_checks` records both bits on every link-window of
+the simulator, whose ports each declare φ's counts as their profile.
 
 Sizes in ANDs, v2 against v3 on the same windows. Row reads are the outbox rows' openings (v2: the pool of value rows).
 Frames are the segments' shifts and each frame's placement (v2: the gather and the compaction). The record is N2's

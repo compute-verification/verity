@@ -13,10 +13,13 @@ challenger sees the root, never a certificate or a head.
 
 **Selection** is `All`: every link-window is checked, so an accepted outcome is the exhaustive fact. A registration is
 one link-window, one proof unit. Its `window` provenance is `{"kind": "served", "window": w}`, and the challenger holds w
-to the registration's order in the stream (`LinkWindows.register`), so the receipt's order is the link-window. A run's
-network verdict is the AND over its link-windows, with no ε or share credit. The datacenter model's account (a Python
-model, not a verifier of record) reads it so: `Account.sound` (`benchmarks/datacenter/datacenter/account.py`) is false
-on any refused port-window, and a refused window is charged at its link's line rate (`refused_bits`).
+to the registration's order in the stream (`LinkWindows.register`), so the receipt's order is the link-window. The
+network verdict of record is `LinkWindows.network_verdict`, the AND over the link's link-windows with no ε or share
+credit: it accepts only when every window of the egress profile is registered in order and its outcome of record
+accepted, so a rejected or late window, one with no outcome, and a gap in the registrations each reject the link. A
+run's is the AND over its links'. The datacenter model (`benchmarks/datacenter`, a Python model) builds no
+`LinkWindows` outcomes, so its account doesn't read it, though `Account.sound` is the same AND over its own port
+records.
 
 **Public items**, each with its reason (`PUBLIC`): the population (one), the window (its index, the order), the
 committed value's leaf count and domain, its salted root, the parameters digests, the charge and the occupancy profile
@@ -123,6 +126,7 @@ SPEC = "verity-network-certifier/service-spec/v0"
 SESSION = "verity-network-certifier/session/v0"
 STATEMENT = "verity-network-certifier/statement/v0"
 VERDICT = "verity-network-certifier/verdict/v0"
+NETWORK_VERDICT = "verity-network-certifier/network-verdict/v0"
 VALUE = "certificates"
 SCHEMA = SCHEMA_HM96_SHA512_ROW_V2
 VERIFIER = "network-audit"
@@ -203,6 +207,10 @@ def rows(records: Sequence[CertifiedRecord]) -> list[bytes]:
 
 def _sha512(obj: Any) -> str:
     return hashlib.sha512(canonical_json(obj)).hexdigest()
+
+
+_NO_PROFILE = ("N2 compares no egress grid, so a link whose egress end has no occupancy profile has no verdict: "
+               "nothing would hold its egress counts (declare LinkWindows.occupancy)")
 
 
 def _accepts(egress: Sequence[Any], ingress: Sequence[Any], window: int) -> bool:
@@ -410,8 +418,7 @@ class LinkWindows:
         docstring). `syncs` are the declared clock syncs of windows 0 … w. The verdict reports the public outputs and
         never the violation's kind. Raises `ValueError` on a link with no egress occupancy profile."""
         if self.occupancy[0] is None:
-            raise ValueError("N2 compares no egress grid, so a link whose egress end has no occupancy profile has no "
-                             "verdict: nothing would hold its egress counts (declare LinkWindows.occupancy)")
+            raise ValueError(_NO_PROFILE)
         root = self._registered(opening, draw)
         w, (egress, ingress) = opening.window, opening.records
         sealed = self.root(opening) == root
@@ -450,6 +457,36 @@ class LinkWindows:
         which one-stage's audit holds to the registered root."""
         return stream.outcome(draw, {VERIFIER: self.verify(opening, draw, syncs)}, self.statement(opening),
                               session_roots={VALUE: self.root(opening)})
+
+    def network_verdict(self, stream: S.Stream, windows: int | None = None) -> dict[str, Any]:
+        """The link's network verdict of record: the AND over its link-windows 0 … `windows` − 1 (by default the egress
+        profile's windows, fixed before the run), with no ε and no share credit. It accepts only when, for every w,
+        the stream's w-th registration is window w and its outcome of record accepted. A window registered out of
+        order or not at all (a gap, or a run that stops short), a registration past the last window, a registration
+        with no outcome yet, and a rejected or late outcome each reject the link; `refused` lists their windows.
+        `records` is each window's outcome record SHA-512 (`S.Outcome.record`, None without one), and `digest` binds
+        the verdict to the stream and those records. Raises `ValueError` on a link with no egress occupancy profile, as
+        `verify` does, and on a stream that isn't this link's."""
+        if self.occupancy[0] is None:
+            raise ValueError(_NO_PROFILE)
+        if stream.spec.digest() != self.spec.digest():
+            raise ValueError("the stream is not this link's: its spec isn't LinkWindows.spec")
+        n = len(self.occupancy[0]) if windows is None else windows
+        if not (type(n) is int and n >= 1):
+            raise ValueError(f"a link has one or more link-windows, not {n!r}")
+        outcomes = {r["registration"]: r for r in stream.records}
+        records: list[str | None] = []
+        refused: list[int] = []
+        for w in range(max(n, len(stream.log))):
+            reg = stream.log[w] if w < len(stream.log) else None
+            body = outcomes.get(R.digest(reg)) if reg is not None and reg.get("window") == self.provenance(w) else None
+            records.append(None if body is None else _sha512(body))
+            if w >= n or body is None or body["symbol"] != S.ACCEPT:
+                refused.append(w)
+        accepted = not refused
+        digest = _sha512({"format": NETWORK_VERDICT, "stream": stream.digest, "windows": n, "records": records,
+                          "accepted": accepted})
+        return {"accepted": accepted, "windows": n, "refused": refused, "records": records, "digest": digest}
 
 
 __all__ = ["HEADS", "LEAVES", "LinkWindows", "OUTPUTS", "Opening", "PUBLIC", "SCHEMA", "VALUE", "encode", "rows",

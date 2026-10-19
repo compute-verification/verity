@@ -143,10 +143,16 @@ as a `Spec` of its own (`service.LinkWindows`, one per link):
   salts (`Opening`). The challenger receives one salted root and never a certificate or a head.
 - **Selection:** `All`. A registration is one link-window, one proof unit, so an accepted outcome is the exhaustive fact.
   The record's `window` provenance is exactly `{"kind": "served", "window": w}`, and the challenger holds w to the
-  registration's order (`LinkWindows.register`): the receipt keeps the order, and the order is the link-window. A run's
-  network verdict is the AND over its link-windows, with no ε or share credit. The datacenter model's account (a Python
-  model, not a verifier of record) reads it so: `Account.sound` (`benchmarks/datacenter/datacenter/account.py`) is
-  false on any refused port-window, and a refused window is charged at its link's line rate (`refused_bits`).
+  registration's order (`LinkWindows.register`): the receipt keeps the order, and the order is the link-window.
+- **The network verdict of record** is `LinkWindows.network_verdict`, the AND over the link's link-windows with no ε
+  or share credit. Over the stream's registrations and outcome records, it accepts only when, for every window w of
+  the egress profile, the w-th registration is window w and its outcome of record accepted. A rejected or late window,
+  a registered window with no outcome yet, a gap in the registrations (a window registered out of order or never, or a
+  run that stops short of the profile) and a registration past the profile each reject the link, and `refused` lists
+  their windows. A run's network verdict is the AND over its links'. The datacenter model (`benchmarks/datacenter`, a
+  Python model, not a verifier of record) builds no `LinkWindows` outcomes, so its account doesn't read this
+  aggregate. Its `Account.sound` is the same AND over its own port records: false on any refused port-window, each
+  charged at its link's line rate (`refused_bits`).
 - **Public:** the population, the window, the value's leaf count, domain and salted root, the parameters digests, the
   charge (log2 #Σ_sync per window, 7 bits at 16 × 8) and the occupancy profile (`LinkWindows.occupancy`: for each end,
   each window's T counts as the Program and the placement fix them, or none for an end the Program reads rather than

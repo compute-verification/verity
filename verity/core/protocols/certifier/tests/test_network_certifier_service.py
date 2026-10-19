@@ -123,6 +123,71 @@ def test_every_window_of_the_link_in_order(tmp_path):
     assert [r["order"] for r in run.stream.records] == [0, 1, 2]
 
 
+def test_the_network_verdict_accepts_a_link_whose_every_window_accepted(tmp_path):
+    """`network_verdict` over the profile's three windows: each outcome of record is read in window order, and a run
+    that stops short of the profile's last window is a reject until that window's outcome is in."""
+    run = Run(tmp_path)
+    for w in range(2):
+        run.round(run.honest(w))
+    short = run.lw.network_verdict(run.stream)
+    assert not short["accepted"] and short["refused"] == [2] and short["records"][2] is None
+    run.round(run.honest(2))
+    verdict = run.lw.network_verdict(run.stream)
+    assert verdict["accepted"] and verdict["windows"] == 3 and verdict["refused"] == []
+    assert verdict["records"] == [S._sha512(r) for r in run.stream.records] and verdict["digest"] != short["digest"]
+    assert set(verdict) == {"accepted", "windows", "refused", "records", "digest"}
+
+
+def test_one_rejected_window_rejects_the_link(tmp_path):
+    run = Run(tmp_path)
+    eg, ig = run.honest(1).records
+    forged = CertifiedRecord(eg.head, replace(eg.certificate, signature=bytes(len(eg.certificate.signature))))
+    outs = [run.round(run.honest(0)), run.round(run.lw.commit(1, forged, ig, SALTS[1])), run.round(run.honest(2))]
+    assert [o.accepted for o in outs] == [True, False, True]
+    verdict = run.lw.network_verdict(run.stream)
+    assert not verdict["accepted"] and verdict["refused"] == [1] and None not in verdict["records"]
+
+
+def test_a_registered_window_with_no_outcome_rejects_the_link(tmp_path):
+    run = Run(tmp_path)
+    for w in range(2):
+        run.round(run.honest(w))
+    opening = run.honest(2)
+    draw = run.stream.select(run.register(opening))
+    assert run.stream.deliver(draw, [run.lw.session(opening, draw)]) is None
+    verdict = run.lw.network_verdict(run.stream)
+    assert len(run.stream.log) == 3 and len(run.stream.records) == 2
+    assert not verdict["accepted"] and verdict["refused"] == [2] and verdict["records"][2] is None
+
+
+def test_a_gap_in_the_registration_order_rejects_the_link(tmp_path):
+    """Window 2 registered second, past `LinkWindows.register`'s order check, and accepted on its own: window 1 is never
+    registered, so the link is a reject, as it is with a registration past the windows asked for."""
+    run = Run(tmp_path)
+    run.round(run.honest(0))
+    skipped = run.honest(2)
+    reg = run.stream.register(run.lw.registration(skipped, run.previous), run.lw.ports(2))
+    draw = run.stream.select(reg)
+    assert run.stream.deliver(draw, [run.lw.session(skipped, draw)]) is None
+    assert run.lw.outcome(run.stream, draw, skipped, SYNCS).accepted
+    verdict = run.lw.network_verdict(run.stream)
+    assert run.stream.symbols == ("accept", "accept")
+    assert not verdict["accepted"] and verdict["refused"] == [1, 2] and verdict["records"][1:] == [None, None]
+    assert run.lw.network_verdict(run.stream, windows=1)["refused"] == [1]
+
+
+def test_the_network_verdict_is_only_of_its_own_links_stream(tmp_path):
+    run = Run(tmp_path)
+    run.round(run.honest(0))
+    other = replace(run.lw, link="tokens")
+    with pytest.raises(ValueError, match="not this link's"):
+        other.network_verdict(run.stream)
+    with pytest.raises(ValueError, match="one or more link-windows"):
+        run.lw.network_verdict(run.stream, windows=0)
+    with pytest.raises(ValueError, match="egress end has no occupancy profile"):
+        replace(run.lw, occupancy=(None, None)).network_verdict(run.stream)
+
+
 def test_the_spec_declares_each_public_item_with_its_reason(tmp_path):
     lw = Run(tmp_path).lw
     assert {p.item: p.kind for p in lw.spec.public} == {
