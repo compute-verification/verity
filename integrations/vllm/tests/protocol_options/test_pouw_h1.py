@@ -152,14 +152,18 @@ def test_a_call_past_the_window_or_its_rows_is_refused_and_the_window_is_not_sta
 
 
 def test_credit_is_the_served_rows_and_the_padding_is_shown_beside_it():
+    """Calls recorded outside a traced apply are refused by the credit gate (test_credit_gate has the credited case): their
+    served rows are shown as refused, and the padding beside them."""
     rng = np.random.default_rng(7)
     run = _run(steps=2)
     run.record(0, *_tap(rng, 3, 32))
     run.record(1, *_tap(rng, 2, 40))
     run.close()
     c = run.credit()
-    assert c["credited"] == {"rows": 5, "macs": (3 * 32 + 2 * 40) * K}
-    assert c["padded"]["rows"] == 4 * 32 - 5 and c["padded"]["macs"] == (2 * 32 * 32 + 2 * 32 * 64) * K - c["credited"]["macs"]
+    served = (3 * 32 + 2 * 40) * K
+    assert c["credited"] == {"rows": 0, "macs": 0}
+    assert (c["refused"]["calls"], c["refused"]["rows"], c["refused"]["macs"]) == (2, 5, served)
+    assert c["padded"]["rows"] == 4 * 32 - 5 and c["padded"]["macs"] == (2 * 32 * 32 + 2 * 32 * 64) * K - served
     assert c["units"] == 6 == run.commits["units"]
 
 
