@@ -139,7 +139,8 @@
    "digest": "a01008a9dfd298221a497fc46bddfc00be4ca6c55915429dccc9bcd2bdef6864"
   },
   "Nci.Assumptions.FitsSlots": {
-   "owner": "@lean"
+   "owner": "@lean",
+   "digest": "8ff9d95492497a7732b03f0c2ef82661695925df0aa3b84b6e7dddbb1c351941"
   },
   "Nci.Assumptions.PartialSumsIncompressible": {
    "owner": "@lean",
@@ -154,7 +155,8 @@
    "digest": "b3c25b0f62c270144816c888bbb3fce4fecde3554892478b3d83a6aa22baf7a5"
   },
   "Nci.Assumptions.ReachSlots": {
-   "owner": "@lean"
+   "owner": "@lean",
+   "digest": "4436244a4f03e9402ffa3017bdc51c0b9e8970eba16359509eab7ba56a5061c3"
   },
   "Nci.Assumptions.WeightsIncompressible": {
    "owner": "@lean",
@@ -3503,7 +3505,10 @@
    "type_hash": "51bd3f7e82387c8acf4e636b2b68f2a2a4688846c86ce302c18139bddb9cdcd0"
   },
   "Nci.SecurityProofs.FitBoundSlots": {
-   "owner": "@lean"
+   "owner": "@lean",
+   "signature": ["Nci.SecurityProofs.FitBoundSlots : Nci.Guarantees.FitBoundSlots"],
+   "assumptions": [],
+   "type_hash": "3c31f9877b2753b9bd067ce2f820b64cf846a13f3cb0d77a894bbde938f2e2bd"
   },
   "Nci.SecurityProofs.FullPositions": {
    "owner": "@lean",
@@ -7502,6 +7507,7 @@
     "Nci.SecurityProofs.ContainedMatMul",
     "Nci.SecurityProofs.ContainedTraining",
     "Nci.SecurityProofs.FitBound",
+    "Nci.SecurityProofs.FitBoundSlots",
     "Nci.SecurityProofs.FullPositions",
     "Nci.SecurityProofs.Inference",
     "Nci.SecurityProofs.IuReads",
@@ -7534,6 +7540,7 @@
     "Nci.SecurityProofs.ContainedMatMul",
     "Nci.SecurityProofs.ContainedTraining",
     "Nci.SecurityProofs.FitBound",
+    "Nci.SecurityProofs.FitBoundSlots",
     "Nci.SecurityProofs.Inference",
     "Nci.SecurityProofs.IuReads",
     "Nci.SecurityProofs.ReadBound",
@@ -7624,6 +7631,7 @@
     "Nci.SecurityProofs.ContainedMatMul",
     "Nci.SecurityProofs.ContainedTraining",
     "Nci.SecurityProofs.FitBound",
+    "Nci.SecurityProofs.FitBoundSlots",
     "Nci.SecurityProofs.Inference",
     "Nci.SecurityProofs.OtherPositions",
     "Nci.SecurityProofs.ReadBound",
@@ -7726,6 +7734,7 @@
     "Nci.SecurityProofs.ContainedMatMul",
     "Nci.SecurityProofs.ContainedTraining",
     "Nci.SecurityProofs.FitBound",
+    "Nci.SecurityProofs.FitBoundSlots",
     "Nci.SecurityProofs.FullPositions",
     "Nci.SecurityProofs.Inference",
     "Nci.SecurityProofs.IuReads",
@@ -7740,13 +7749,18 @@
    ]
   },
   "Definitions.Nci.Fit": {
-   "digest": "8ffbf58c1c7939a8457980abca63aee69243a3d821d109419b7fb0ba1820aff9",
+   "digest": "6c87e9452fdac4330733e7b802d55477fce203d9c7f5391b170669ff39f87e72",
    "definitions": {
+    "Nci.Threading.Slots": "6eabc019831672cafbb50c4951c94169fff002d8a72b4d0961ddb37ba513679f",
+    "Nci.Threading.Slots.p": "bbdd6323abae5f843ac69a99c807be8d9ad4821fc87d9b4ff413dc065fb7d2a4",
+    "Nci.Threading.Slots.slot": "a68a39962a85ef9e14c1e99ca2a4c5c9442d6465b6ed3fae1ae52af244d4317b",
+    "Nci.Threading.Slots.slotsUsed": "4eddbdd7df4eb71f8dbeebd953eb93dc16415ea0c41b1fdab103e3b9552ffda6",
+    "Nci.Threading.Slots.threadSlots": "fd1ce6d3512f9397d660e7261a0446e3216c5fb29cadec052d98eb129543f78d",
     "Nci.Threading.entered": "43d16564a07afa5f83564464b9eef70f25fe27fd6ac0b415efbb83d0bd533301",
     "Nci.Threading.threadWeights": "54c0d1f8eac0ec96f58180c349bf11a5453623c6f55a0ebcfd596336e4f238b0",
     "Nci.Threading.visits": "ed525037dccc0f61881cb547cf45d9e86c54c7caa257882af522168199aebb13"
    },
-   "guarantees": ["Nci.SecurityProofs.FitBound"]
+   "guarantees": ["Nci.SecurityProofs.FitBound", "Nci.SecurityProofs.FitBoundSlots"]
   },
   "Definitions.Nci.Reads": {
    "digest": "c3c240e59ed9edb472fbe4005f08c7f4b68d4fb7cea86dfa5d35e989587fb439",
@@ -7791,6 +7805,7 @@
     "Accounting.SecurityProofs.Actual.ThreadedRate",
     "Accounting.SecurityProofs.Actual.ThreadedRuntime",
     "Nci.SecurityProofs.FitBound",
+    "Nci.SecurityProofs.FitBoundSlots",
     "Nci.SecurityProofs.ThreadedReads",
     "Nci.SecurityProofs.ThreadedThrottled",
     "Nci.SecurityProofs.ThreadedTraining"
@@ -17376,12 +17391,14 @@
    ]
   },
   "Models.Nci.Assumptions.Fit": {
-   "digest": "2295c39543e2983aa540f65bf6927e7c85d6f59a7513eb4831b1aaff7d9f3b47",
+   "digest": "ae61196a0d5e168b94fb5aebf54519f2cec0fb925e5ce7e396f1f02a82637eaa",
    "definitions": {
     "Nci.Assumptions.Fits": "a01008a9dfd298221a497fc46bddfc00be4ca6c55915429dccc9bcd2bdef6864",
-    "Nci.Assumptions.Reach": "b3c25b0f62c270144816c888bbb3fce4fecde3554892478b3d83a6aa22baf7a5"
+    "Nci.Assumptions.FitsSlots": "8ff9d95492497a7732b03f0c2ef82661695925df0aa3b84b6e7dddbb1c351941",
+    "Nci.Assumptions.Reach": "b3c25b0f62c270144816c888bbb3fce4fecde3554892478b3d83a6aa22baf7a5",
+    "Nci.Assumptions.ReachSlots": "4436244a4f03e9402ffa3017bdc51c0b9e8970eba16359509eab7ba56a5061c3"
    },
-   "guarantees": ["Nci.SecurityProofs.FitBound"]
+   "guarantees": ["Nci.SecurityProofs.FitBound", "Nci.SecurityProofs.FitBoundSlots"]
   },
   "Models.Nci.Assumptions.Threads": {
    "digest": "e97519a8245dbe34eb8f42c2febf3910370ac44e740cd319415594e0bed0b43f",
@@ -17428,11 +17445,12 @@
    "guarantees": ["Nci.SecurityProofs.ContainedMatMul", "Nci.SecurityProofs.ContainedTraining"]
   },
   "Models.Nci.Guarantees.Fit": {
-   "digest": "3d92b64776e296c500c51f41702c1c64a88e05c0b951aab58c8607f6f7e04304",
+   "digest": "a46dfe2c21230f4d607f38fc72d6f0b91836a35ad245b574853f6474ee085941",
    "definitions": {
-    "Nci.Guarantees.FitBound": "ec54acc63f9765c03cf44dfcd919608d77f980b4210b08e04ef29edc38547f69"
+    "Nci.Guarantees.FitBound": "ec54acc63f9765c03cf44dfcd919608d77f980b4210b08e04ef29edc38547f69",
+    "Nci.Guarantees.FitBoundSlots": "e1e73559ecf1454b2951214fa2c0d1494084262c5396fa161c1deca2085105a8"
    },
-   "guarantees": ["Nci.SecurityProofs.FitBound"]
+   "guarantees": ["Nci.SecurityProofs.FitBound", "Nci.SecurityProofs.FitBoundSlots"]
   },
   "Models.Nci.Guarantees.Reads": {
    "digest": "016cca93308e9ac6c0ad97c73b18da826f0fc8fbd33eb77535c28f63f61b3f72",
