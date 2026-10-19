@@ -1,6 +1,7 @@
 import Proofs.Flock.Claims.Witnesses.Recursion
 import Proofs.Flock.Claims.DeployEfficient
 import Proofs.Flock.Claims.Recursion.DeployComplete
+import Proofs.Flock.Claims.Recursion.DeployStop
 import Proofs.Flock.Claims.Recursion.BoundDeploy
 
 /-!
@@ -26,6 +27,12 @@ read:
   (`FlockDeploy.deployPlainTrim`, `FlockDeploy.deployZkTrim`, `FlockDeploy.listWithin_plainTrim`,
   `FlockDeploy.listWithin_zkTrim`), where the recursion's KS theorems sit;
 * `ZK_meets`, `ZKPriv_meets`: the deployed outer record is masked;
+* `ZKStop_meets`: the deployed outer record is masked, and the compiled verifier's record with its stop
+  (`RecDeploy.deployRecStop`) is one whose prover `ZKStop` reads is `refPStop` on the tape each statement draws
+  (`RecDeploy.prover_deployRecStop`), which sends the empty message wherever its stop has fired
+  (`RecDeploy.refPStop_halted`), and whose stop fires at the first round on every statement out of scope or whose
+  inner statement the inner verifier can't accept (`RecDeploy.halted_of_statement`), and nowhere before the staging
+  round at an inner-ready statement in scope off a bad inner coin (`RecDeploy.halted_live`);
 * `ScopeMatches_meets`: the deployed inner Flock's readable scope is its scope check (`FlockDeploy.scopeMatches_plain`),
   which `Flock.RecScope.scopeMatches_deployed` reads;
 * `Complete_meets`, `Nontrivial_meets`: the readable scope holds a statement of each kind the compiled verifier accepts,
@@ -177,6 +184,37 @@ theorem ZK_meets (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.R
 theorem ZKPriv_meets (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) :
     (FlockDeploy.deployZk rel).zk = true :=
   rfl
+
+/-- `ZKStop`'s checkable antecedents at the deployment: the deployed outer record is masked; the prover `ZKStop` reads
+at the compiled verifier's record with its stop is `refPStop` on the tape `tapeOf x` draws, and `refPStop` sends the
+empty message wherever the stop has fired; the stop fires at the first round on every statement out of scope or whose
+inner statement the inner verifier can't accept, and, at an inner-ready statement in scope, nowhere before the staging
+round where no prefix of the transcript holds a bad inner coin. -/
+theorem ZKStop_meets {N Ω : Msg → Type} [∀ x, Fintype (N x)] [∀ x, Nonempty (N x)] [∀ x, Fintype (Ω x)]
+    [∀ x, Nonempty (Ω x)] (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
+    (IV : Claims.Verifier FlockDeploy.Coin) (ivScope : Msg → Bool) (b : RecDeploy.Brings)
+    (tapeOf : (x : Msg) → N x × Ω x → RecDeploy.Tape b) (SO : ℕ → Msg → ℕ → Recursion.OSim) (nAt : Msg → ℕ → ℕ)
+    (innerMsg : Msg → List (Msg × Out) → List Msg → Claims.OC Msg) :
+    (FlockDeploy.deployZk rel).zk = true ∧
+      (∀ (w : Claims.Flock.Wit) (x : Msg),
+        (RecDeploy.deployRecStop IV ivScope b tapeOf SO nAt innerMsg).prover w x =
+          ⟨fun x' hist ω => (RecDeploy.refPStop IV ivScope b w).next x' hist (tapeOf x ω)⟩) ∧
+      (∀ (H : Msg → Msg) (w : Claims.Flock.Wit) (x : Msg) (hist : List (Msg × Msg)) (ω : RecDeploy.Tape b),
+        (RecDeploy.deployRecStop IV ivScope b tapeOf SO nAt innerMsg).halted H (RecDeploy.stopRounds IV x) x
+            (RecDeploy.asRounds hist) = true → (RecDeploy.refPStop IV ivScope b w).next x hist ω = .ret []) ∧
+      (∀ (H : Msg → Msg) (n : ℕ) (x : Msg) (ms : List (Msg × Out)),
+        (RecDeploy.scopeCheck ivScope x = false ∨
+            FlockComplete.ready FlockDeploy.sha512 (RecDeploy.xIOf x) = false) →
+          (RecDeploy.deployRecStop IV ivScope b tapeOf SO nAt innerMsg).halted H n x ms = true) ∧
+      ∀ (H : Msg → Msg) (x : Msg) (ms : List (Msg × Out)), RecDeploy.scopeCheck ivScope x = true →
+        FlockComplete.ready FlockDeploy.sha512 (RecDeploy.xIOf x) = true → ms.length < RecDeploy.stopRounds IV x →
+          (∀ i ≤ ms.length, ¬ RecDeploy.badAt x (ms.take i)) →
+            (RecDeploy.deployRecStop IV ivScope b tapeOf SO nAt innerMsg).halted H (RecDeploy.stopRounds IV x) x ms =
+              false :=
+  ⟨rfl, RecDeploy.prover_deployRecStop IV ivScope b tapeOf SO nAt innerMsg,
+    RecDeploy.refPStop_halted IV ivScope b tapeOf SO nAt innerMsg,
+    RecDeploy.halted_of_statement IV ivScope b tapeOf SO nAt innerMsg,
+    RecDeploy.halted_live IV ivScope b tapeOf SO nAt innerMsg⟩
 
 /-- `ScopeMatches`' antecedent at the deployment: the deployed inner Flock's readable scope is its scope check, which
 the compiled verifier's scope check reads (`Flock.RecScope.scopeMatches_deployed`). -/
