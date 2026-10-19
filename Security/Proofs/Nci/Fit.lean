@@ -85,7 +85,7 @@ theorem card_M_le {c : Declaration} (T : Threading c) {k : ℕ} (P : Partition c
     exact ⟨t, j, hgj⟩
   calc T.M.card ≤ (univ.biUnion fun t => univ.biUnion fun j => T.threadMults (P.gates j) t).card :=
         card_le_card hsub
-    _ ≤ ∑ t, (univ.biUnion fun t => univ.biUnion fun j => T.threadMults (P.gates j) t).card := card_biUnion_le
+    _ ≤ ∑ t, (univ.biUnion fun j => T.threadMults (P.gates j) t).card := card_biUnion_le
     _ ≤ ∑ t, ∑ j, (T.threadMults (P.gates j) t).card := sum_le_sum fun t _ => card_biUnion_le
 
 /-- The weights a thread uses anywhere are used in some window. -/
