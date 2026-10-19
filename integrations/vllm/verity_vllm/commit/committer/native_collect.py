@@ -934,82 +934,14 @@ class NativeCollectCommitter(NativeHostCommitter):
             return [width >> L for L in range(min(j, width.bit_length() - 1) + 1)], step_rows.ROOT_BYTES
         return level_sizes(n, j), 32
 
-    def _row_key(self, step: int) -> bytes:
-        """Step `step`'s salt key: fresh from the OS generator, or the replayed run's."""
-        if self.replay_row_keys is None:
-            ks = os.urandom(step_rows.KEY_BYTES)
-        elif step in self.replay_row_keys:
-            ks = self.replay_row_keys[step]
-        else:
-            raise RuntimeError(f"{step_rows.NAME} replay: the replayed run has no salt key for step {step}")
-        self.row_keys[step] = ks
-        return ks
-
     def _row_table(self) -> Any:
         if self._row_tn is None:
             self._row_tn = torch.frombuffer(bytearray(step_rows.t_nibbles()), dtype=torch.uint8).cuda()
         return self._row_tn
 
-    def _row_domain(self, step: int, n: int) -> Any:
-        return step_rows.domain(self.program_digest, self._ctx_digest(step), self._geo_digest, n)
-
     def _row_step(self, step: int, n: int, ks: bytes) -> Any:
         row_prefix, salt_prefix, leaf_prefix = self._row_consts
         return ext().RowStep(self._row_domain(step, n).domain_id, ks, row_prefix, salt_prefix, leaf_prefix, step_rows.SCHEMA, step_rows.ROW_BYTES)
-
-    def _level_path(self, levels: list, index: int) -> tuple:
-        if not self.rows:
-            return super()._level_path(levels, index)
-        return tuple(bytes(levels[d][(index >> d) ^ 1].cpu().numpy().tobytes()) for d in range(len(levels) - 1))
-
-    def _gpu_salt(self, step: int, index: int) -> bytes:
-        return step_rows.salt(self.row_keys[step], index) if self.rows else b""
-
-    def _fold_run_root(self, roots: list[bytes]) -> bytes | None:
-        if not self.rows:
-            return super()._fold_run_root(roots)
-        return step_rows.run_root(self.program_digest, self._geo_digest, roots) if all(len(r) == step_rows.ROOT_BYTES for r in roots) else None
-
-    def verify(self, run: Any, opening: Any) -> bool:
-        """rows-sha512: the row and its salt give the hiding leaf, the frame path folds it to the tree root, which binds into the step
-        root, which is in the run root."""
-        if not self.rows:
-            return super().verify(run, opening)
-        try:
-            sc = run.steps[opening.step]
-            ident = self.identity_of(opening.step, opening.index)
-        except (IndexError, KeyError):
-            return False
-        if opening.step not in self._gpu_blocks or ident != opening.identity or len(opening.value) != step_rows.ROW_BYTES:
-            return False
-        if len(opening.salt) != step_rows.SALT_BYTES or any(not isinstance(p, bytes) for p in opening.path):
-            return False
-        h = step_rows.hiding_leaf(opening.value, opening.salt, 8 * step_rows.ROW_BYTES)[1]
-        merkle = step_rows.fold_path(self._row_domain(opening.step, sc.n_leaves), opening.index, h, opening.path)
-        if merkle is None:
-            return False
-        root = step_rows.step_root(self.program_digest, self._ctx_digest(opening.step), self._geo_digest,
-                                   self.layout_digest(self._layouts[opening.step]), sc.n_leaves, merkle)
-        return root == sc.root and len(run.run_root) == step_rows.ROOT_BYTES and self._run_root(run) == run.run_root
-
-    def _refuse_padding(self, padding: list) -> None:
-        if padding and self.rows:
-            raise ValueError(f"padding steps are vllm-v1 position-leaf blocks: not implemented under {step_rows.NAME}")
-        super()._refuse_padding(padding)
-
-    def open_range(self, step: int, lo: int, hi: int) -> Any:
-        if self.rows:
-            raise NotImplementedError(f"open_range: range openings are vllm-v1's; not implemented under {step_rows.NAME}")
-        return super().open_range(step, lo, hi)
-
-    def verify_range(self, run: Any, ro: Any, roots: dict[int, bytes] | None = None) -> bool:
-        if self.rows:
-            raise NotImplementedError(f"verify_range: range openings are vllm-v1's; not implemented under {step_rows.NAME}")
-        return super().verify_range(run, ro, roots)
-
-    def _leaf_record(self, steps: list) -> dict:
-        rec = super()._leaf_record(steps)
-        return {**rec, "commit_scheme": self.commit_scheme} if self.rows else rec
 
     def _window_root(self, step: int, state: dict[str, Any], padded: int, side: Any) -> tuple[list[Any], bytes, float]:
         """The step's tree levels, Merkle root and tree ms from its absorbed windows (`state`, cleared): the upper tree over the per-window
