@@ -32,10 +32,12 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # a queue kind from benchmarks' kinds file, which a test checks every spec has. The README is the
 # harness's contract, and a test pins it to the code. The bandwidth spec's setup must export every library variable
 # memory accounting's arms read and build from sources that exist. served_commit's arm gates on the run phases
-# the runner names, which a test checks with a fake committer.
+# the runner names, which a test checks with a fake committer, and its TP decode driver's phases,
+# batches and gate are tested on recorded shapes.
 inputs = [
     "benchmarks/harness/README.md",
     "benchmarks/served_commit/arm.py",
+    "benchmarks/served_commit/tp_decode.py",
     "benchmarks/specs",
     "infra/cluster/kinds/benchmarks.toml",
     "integrations/vllm/verity_vllm/engine/hooks.py",
