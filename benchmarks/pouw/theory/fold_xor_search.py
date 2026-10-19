@@ -238,16 +238,27 @@ def target(name: str, x, y, K):
     raise SystemExit(f"unknown target {name}")
 
 
-def initial_inputs(rng: random.Random, edge_only: bool = False) -> list[tuple[int, int]]:
-    """The edge pairs, whose products with any value are shifts, negations or alternating masks, then 4 random."""
+def nan_bits(v):
+    """v is a binary32 NaN pattern: exponent all ones, mantissa nonzero, either sign."""
+    return z3.And(z3.Extract(30, 23, v) == 0xFF, z3.Extract(22, 0, v) != 0)
+
+
+def as_nan(v: int) -> int:
+    return (v | 0x7F800000) if v & 0x7FFFFF else (v | 0x7F800001)
+
+
+def initial_inputs(rng: random.Random, edge_only: bool = False, domain: str = "all") -> list[tuple[int, int]]:
+    """The edge pairs, whose products with any value are shifts, negations or alternating masks, then 4 random; on the
+    nan domain each word is made a NaN pattern (exponent bits set, a zero mantissa made 1)."""
     edge = [(0, 0), (M32, M32), (0, M32), (M32, 0), (1, 0), (0, 1), (0x55555555, 0xAAAAAAAA), (1 << 31, 0)]
-    return edge + ([] if edge_only else [(rng.getrandbits(32), rng.getrandbits(32)) for _ in range(4)])
+    out = edge + ([] if edge_only else [(rng.getrandbits(32), rng.getrandbits(32)) for _ in range(4)])
+    return [(as_nan(x), as_nan(y)) for x, y in out] if domain == "nan" else out
 
 
 def cegis(ops: tuple[str, ...], tname: str = "xor", timeout_ms: int = 0, seed: int = SEED,
-          edge_only: bool = False) -> dict:
+          edge_only: bool = False, domain: str = "all") -> dict:
     """One sequence of opcodes: unsat (no program of it computes the target), FOUND (one does, with its wiring), or
-    unknown (a timeout)."""
+    unknown (a timeout). On the nan domain both inputs range over the NaN patterns only (`reduce_nan`)."""
     rng = random.Random(f"{seed}:{label(ops)}:{tname}")
     prog, cons = skeleton(ops)
     K = z3.BitVec("K", 32)
@@ -261,10 +272,12 @@ def cegis(ops: tuple[str, ...], tname: str = "xor", timeout_ms: int = 0, seed: i
         inputs.append((x, y))
         syn.add(evaluate(prog, bv(x), bv(y)) == target(tname, bv(x), bv(y), K))
 
-    for x, y in initial_inputs(rng, edge_only):
+    for x, y in initial_inputs(rng, edge_only, domain):
         add(x, y)
     X, Y = z3.BitVec("X", 32), z3.BitVec("Y", 32)
     general = evaluate(prog, X, Y) != target(tname, X, Y, K)
+    if domain == "nan":
+        general = z3.And(general, nan_bits(X), nan_bits(Y))
     free = [v for _, slots, m in prog for s, c in slots for v in (s, c) if not isinstance(v, int)]
     free += [v for _, _, m in prog for v in m.values()]
     while True:
@@ -307,11 +320,44 @@ def sequences(k: int, fp: bool) -> list[tuple]:
     return out
 
 
+def reduce_nan(ops: tuple):
+    """The integer sequence that covers `ops` on the nan domain, or None when an FP form follows an integer one.
+
+    When x and y are both NaN patterns, an FP lane whose operands are x, y, constants or FP results is a function of
+    its constants and modifiers alone: a NaN operand makes the lane's result the canonical NaN (or +0 under .SAT),
+    except that .FMZ with a zero multiplicand makes it c ± 0, and c is then a NaN or such a function itself. So a
+    sequence whose FP forms all precede its first integer form computes there what its integer suffix computes with
+    every FP result replaced by a constant, and the constant slot (free) covers it. The suffix is re-indexed: x and y
+    stay, an FP result becomes the instruction's own constant, and an integer result moves down past the FP results.
+    No program of the suffix on the nan domain means no program of `ops` on all inputs."""
+    names = [op_name(op) for op in ops]
+    nfp = next((i for i, n in enumerate(names) if n not in FP_OPS), len(ops))
+    if any(n in FP_OPS for n in names[nfp:]):
+        return None
+    drop = sum(OUTS[n] for n in names[:nfp])
+    out, pool = [], 2 + drop
+    for op in ops[nfp:]:
+        n, ab = op
+
+        def move(i: int) -> int:
+            if i < 2:
+                return i
+            if i < 2 + drop or i == pool:
+                return pool - drop
+            return i - drop
+
+        a, b = (move(i) for i in ab)
+        out.append((n, (a, b) if n == "IDP.2A" else tuple(sorted((a, b)))))
+        pool += OUTS[n]
+    return tuple(out)
+
+
 def search(k: int, fp: bool = True, tname: str = "xor", jobs: int = 1, timeout_ms: int = 0, stream=None,
            part: str = "all", shard: tuple[int, int] = (0, 1), labels: set | None = None,
-           edge_only: bool = False) -> dict:
+           edge_only: bool = False, via_nan: bool = False) -> dict:
     """Every sequence of k opcodes (`part` int: those without an FP form, fp: those with one); each result is also
-    written to `stream` (JSON lines) as it finishes."""
+    written to `stream` (JSON lines) as it finishes. With `via_nan`, each sequence is settled by its `reduce_nan`
+    suffix on the nan domain (each distinct suffix searched once); one that doesn't reduce is unknown."""
     seqs = [s for s in sequences(k, fp)
             if part == "all" or (part == "fp") == any(op_name(op) in FP_OPS for op in s)][shard[0]::shard[1]]
     if labels is not None:
@@ -324,13 +370,26 @@ def search(k: int, fp: bool = True, tname: str = "xor", jobs: int = 1, timeout_m
             stream.write(json.dumps({"k": k, "fp": fp, **r}) + "\n")
             stream.flush()
 
+    domain = "nan" if via_nan else "all"
+    cover = {label(s): reduce_nan(s) if via_nan else s for s in seqs}
+    todo = list(dict.fromkeys(c for c in cover.values() if c is not None))
+    found = {}
     if jobs > 1:
         with ProcessPoolExecutor(jobs) as ex:
-            for f in as_completed([ex.submit(cegis, s, tname, timeout_ms, SEED, edge_only) for s in seqs]):
-                done(f.result())
+            futs = {ex.submit(cegis, s, tname, timeout_ms, SEED, edge_only, domain): s for s in todo}
+            for f in as_completed(futs):
+                found[futs[f]] = f.result()
+                if not via_nan:
+                    done(found[futs[f]])
     else:
-        for s in seqs:
-            done(cegis(s, tname, timeout_ms, SEED, edge_only))
+        for s in todo:
+            found[s] = cegis(s, tname, timeout_ms, SEED, edge_only, domain)
+            if not via_nan:
+                done(found[s])
+    if via_nan:
+        for name, c in cover.items():
+            done({"ops": name, "result": "unknown", "stage": "no nan reduction"} if c is None
+                 else {**found[c], "ops": name, "via": label(c), "domain": "nan"})
     tally = {r: sum(1 for x in res if x["result"] == r) for r in ("unsat", "FOUND", "unknown")}
     return {"k": k, "fp": fp, "part": part, "shard": list(shard), "target": tname, "sequences": len(seqs),
             "tally": tally, "proved": tally["unsat"] == len(seqs), "results": res}
@@ -351,13 +410,15 @@ def main() -> int:
     ap.add_argument("--shard", default="0/1", help="i/n: every n-th sequence from the i-th")
     ap.add_argument("--labels", help="only the sequences whose labels are this file's lines")
     ap.add_argument("--edge-only", action="store_true", help="start CEGIS from the edge pairs alone")
+    ap.add_argument("--via-nan", action="store_true",
+                    help="settle each sequence by its integer suffix on NaN-pattern inputs (reduce_nan)")
     a = ap.parse_args()
     out, rc = [], 0
     stream = open(a.stream, "a", encoding="utf-8") if a.stream else None
     for k in range(a.from_k, a.k + 1):
         labels = set(open(a.labels, encoding="utf-8").read().splitlines()) if a.labels else None
         r = search(k, not a.no_fp, a.target, a.jobs, a.timeout_ms, stream, a.part,
-                   tuple(int(v) for v in a.shard.split("/")), labels, a.edge_only)
+                   tuple(int(v) for v in a.shard.split("/")), labels, a.edge_only, a.via_nan)
         out.append(r)
         print(f"k = {k}: {r['sequences']} sequences, {r['tally']}" + ("  -- proved" if r["proved"] else ""),
               flush=True)
