@@ -129,7 +129,7 @@ def build(a: argparse.Namespace) -> int:
           "load": doc.get("load"), "clocks": clocks, "pin": pin,
           "engine": {k: ident.get(k) for k in ("vllm_version", "gpu", "model", "revision", "max_num_seqs", "max_num_batched_tokens",
                                                "max_model_len", "enable_prefix_caching", "async_scheduling", "gpu_memory_utilization",
-                                               "kv_cache_tokens", "kv_bytes", "block_size")}}
+                                               "kv_cache_tokens", "kv_bytes", "block_size", "attention_backend", "attention_impls")}}
 
     def result(meas: list[dict], arms_failed: list[dict]) -> dict[str, Any]:
         errs = errors if not arms_failed else errors + [f"{g['arm']}/{g['cycle']} {g['kind']}" for g in arms_failed]

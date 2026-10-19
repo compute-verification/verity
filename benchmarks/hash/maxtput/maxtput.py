@@ -147,7 +147,8 @@ def gpu_util(log: Path | None, start_epoch: float, end_epoch: float) -> dict[str
 class Engine:
     """One arm's engine in this process, as verity_bench's `_VllmEngine` builds it, with vLLM's scheduler defaults."""
 
-    def __init__(self, arm_name: str, model: str, kv_bytes: int | None, gpu_util_frac: float, max_model_len: int) -> None:
+    def __init__(self, arm_name: str, model: str, kv_bytes: int | None, gpu_util_frac: float, max_model_len: int,
+                 attention_backend: str | None = None) -> None:
         from verity_vllm.engine import env as engine_env
 
         engine_env.apply_compile_fresh()
@@ -155,8 +156,18 @@ class Engine:
         import torch
         import vllm  # noqa: F401
         from verity_bench.vllm.arms import Arm, Target, experimental_arm, plugin
+        from verity_vllm.engine import vllm_adapter as va
         from verity_vllm.engine.hooks import Hooks, live
         from verity_vllm.pipeline.llm import LLM
+
+        if attention_backend:
+            # `verity_vllm.LLM` takes no attention backend; build_engine's explicit engine args override last
+            build = va.build_engine
+
+            def build_with(*args: Any, engine_args: dict | None = None, **kw: Any) -> Any:
+                return build(*args, engine_args={**(engine_args or {}), "attention_backend": attention_backend}, **kw)
+
+            va.build_engine = build_with
 
         spec = ARMS[arm_name]
         self.arm = experimental_arm(spec) if spec else Arm("stock", precision="bfloat16")
@@ -197,6 +208,8 @@ class Engine:
             "max_num_seqs": int(sc.max_num_seqs), "max_num_batched_tokens": int(sc.max_num_batched_tokens),
             "max_model_len": int(mc.max_model_len), "enable_prefix_caching": bool(cc.enable_prefix_caching),
             "async_scheduling": getattr(sc, "async_scheduling", None), "gpu_memory_utilization": gpu_util_frac,
+            "attention_backend": str(getattr(getattr(vc, "attention_config", None), "backend", None)),
+            "attention_impls": sorted({type(m.impl).__name__ for _, m in self.llm.model.named_modules() if hasattr(m, "impl")}),
             "kv_cache_memory_bytes_pinned": kv_bytes, "num_gpu_blocks": int(cc.num_gpu_blocks), "block_size": int(cc.block_size),
             "kv_cache_tokens": int(cc.num_gpu_blocks) * int(cc.block_size),
             "kv_bytes": int(cc.num_gpu_blocks) * int(cc.block_size) * per_token,
@@ -302,7 +315,7 @@ def _child(conn: Any, arm: str, model: str, kv_bytes: int | None, a: dict[str, A
     out: dict[str, Any] = {"arm": arm, "runs": []}
     eng = None
     try:
-        eng = Engine(arm, model, kv_bytes, a["gpu_util"], a["max_model_len"])
+        eng = Engine(arm, model, kv_bytes, a["gpu_util"], a["max_model_len"], a.get("attention_backend"))
         out["identity"] = eng.identity
         reqs = requests(a["requests"], a["prompt"], a["output"], eng.vocab)
         for phase in phases:
@@ -372,6 +385,8 @@ def main() -> int:
     ap.add_argument("--gpu-util", type=float, default=0.9)
     ap.add_argument("--max-model-len", type=int, default=4096)
     ap.add_argument("--kv-bytes", type=int, default=None, help="pin every engine's KV pool (default: the first stock engine's)")
+    ap.add_argument("--attention-backend", default=None,
+                    help="vLLM's attention_backend (default: vLLM's choice for the card); a pinned run takes its Build's")
     ap.add_argument("--gpu-log", type=Path, default=None)
     ap.add_argument("--out", type=Path, required=True)
     a = ap.parse_args()
@@ -380,7 +395,7 @@ def main() -> int:
         ap.error(f"--arms must start with stock and name arms of {sorted(ARMS)}")
     a.out.mkdir(parents=True, exist_ok=True)
     opts = {"requests": a.requests, "prompt": a.prompt, "output": a.output, "gpu_util": a.gpu_util,
-            "max_model_len": a.max_model_len}
+            "max_model_len": a.max_model_len, "attention_backend": a.attention_backend}
     doc: dict[str, Any] = {"schema": "kernels-maxtput/v1", "model": a.model, "arms": arms, "options": {**opts, "reps": a.reps,
                            "cycles": a.cycles, "max_num_seqs": MAX_NUM_SEQS},
                            "load": "served_commit mixed rule (prompts P, P/4 alternating; outputs O, O/2 every third) at P, O; "

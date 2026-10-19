@@ -7,9 +7,11 @@
 #
 # ARMS, MODEL, REQUESTS, CYCLES, REPS, MAXTPUT_ARGS and CHECK_TESTS pass through to job.sh; EXTRA_ENV="K=V ..." to every engine;
 # TIMEOUT (s, default 7000: node 2's queue caps a run at 120 min); WORKLOAD (the `arm` label's workload, default maxtput, or
-# maxtput-<model> for another model); PUBLISH=0 skips publishing. Qwen3-8B runs pinned on the H200 and the RTX PRO 6000 under the
-# loop's Builds of record (PIN_ART, PIN_ART_RTX, as iterate.sh); another model runs unpinned unless PIN_ART / PIN_ART_RTX name its
-# Builds. The B200 is unpinned (cc 10.0 is on the compiled Builds' refusal list).
+# maxtput-<model> for another model); PUBLISH=0 skips publishing. Qwen3-8B runs pinned under each card's Build of record: the
+# loop's on the H200 and the RTX PRO 6000 (PIN_ART, PIN_ART_RTX, as iterate.sh), and on the B200 (PIN_ART_B200) circuits'
+# r20261019-000518-c3cc, whose engine served FLASH_ATTN (FA2) where vLLM's default on the card is FlashInfer, so a pinned B200
+# run takes --attention-backend FLASH_ATTN. Another model runs unpinned unless PIN_ART* name its Builds; an empty one runs that
+# card unpinned (vLLM's default backend).
 set -uo pipefail
 main() {
 ROW=${1:-11}
@@ -32,8 +34,10 @@ declare -A LAUNCH=(
 if [ "$MODEL" = qwen3-8b ]; then
   PIN_ART=${PIN_ART-art:25a1a1e2b13beec1f5bf76334932fb89a5460cfb2f5f0c29ce3a456922f9fcb7}
   PIN_ART_RTX=${PIN_ART_RTX-art:6f6bce9b8153587587cfe0b3d30ce5b7240ccb513926893b7f98fffc38e44c74}
+  PIN_ART_B200=${PIN_ART_B200-art:286ed2368d1f93bd6ac8ef85816ffa0592c183c472d628bf7db0e8a7bcc62cdc}
 fi
-declare -A PIN=([vy-dc-h200]=${PIN_ART:-} [vy-nebius-2]=${PIN_ART_RTX:-})
+declare -A PIN=([vy-dc-h200]=${PIN_ART:-} [vy-nebius-2]=${PIN_ART_RTX:-} [vy-dc-b200]=${PIN_ART_B200:-})
+declare -A PIN_ARGS=([vy-dc-b200]="--attention-backend FLASH_ATTN")
 WORKLOAD=${WORKLOAD:-$([ "$MODEL" = qwen3-8b ] && echo maxtput || echo "maxtput-$MODEL")}
 QUESTION="kernels-maxtput: served vLLM's maximum throughput, native compiled against the Commit's arms on the same saturated load"
 LOGS=$(mktemp -d)
@@ -47,7 +51,9 @@ done
 for m in ${MACHINES:-vy-dc-h200 vy-dc-b200 vy-nebius-2}; do
   envs=(--env "MODEL=$MODEL")
   for kv in ${ENVS[$m]}; do envs+=(--env "$kv"); done
-  for k in ARMS REQUESTS CYCLES REPS MAXTPUT_ARGS; do [ -n "${!k:-}" ] && envs+=(--env "$k=${!k}"); done
+  for k in ARMS REQUESTS CYCLES REPS; do [ -n "${!k:-}" ] && envs+=(--env "$k=${!k}"); done
+  args="${MAXTPUT_ARGS:-}${PIN[$m]:+ ${PIN_ARGS[$m]:-}}"
+  [ -n "${args// /}" ] && envs+=(--env "MAXTPUT_ARGS=${args# }")
   [ -n "${CHECK_TESTS+x}" ] && envs+=(--env "CHECK_TESTS=$CHECK_TESTS")
   for kv in ${EXTRA_ENV:-}; do envs+=(--env "$kv"); done
   [ -n "${PIN[$m]:-}" ] && envs+=(--send "$LOGS/pin-$m/build.json" --env PIN_BUILD_NAME=build.json \
