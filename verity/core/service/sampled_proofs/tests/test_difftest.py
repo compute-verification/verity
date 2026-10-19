@@ -935,7 +935,8 @@ def _receipt(rec, challenger: str, received: str) -> dict:
 def run(j):
     """`Run.run`: a `Stream`'s run of one registration from its public check through its verdict, the pieces above in its
     order. `register`: `check_public` on the values and declared items, the population, R1-R7 under
-    `service.selection_law` over it, a law whose drawn count varies (`service.count_varies`: `shapes`), and the
+    `service.selection_law` over it (a rate law's count of none or more than N: `rate`), a law whose drawn count varies
+    (`service.count_varies`: `shapes`), and the
     receipt; `select`: the draw from the source's bytes (`select`); `deliver`: one or more sessions, each matching
     `service._DIGEST`; `outcome`: `check_verdicts`, then the audit record (`record`) over the draw's proved units unless
     given, its acceptance the symbol and the first verdict of record's public outputs shown on an accept. A step that refuses gives `{"step",
@@ -971,6 +972,8 @@ def run(j):
         return {"codes": ["population"], "step": "register"}
     try:
         law = service.selection_law(rule, n)
+    except service.Refused as e:
+        return {"codes": list(e.verdict.codes), "step": "register"}
     except ValueError as e:
         raise D.Reject(str(e)) from None
     codes = _registration({**p, "law": law}, rec)
@@ -1591,17 +1594,22 @@ DRAW = D.Port(PIECES, "draw", draw, st.one_of(
               st.integers(0, 40), SHORT_SOURCE),
     st.builds(lambda law, n, src: {"law": law, "population": n, "source": src}, JSON, st.integers(0, 6) | JSON,
               SHORT_SOURCE | st.sampled_from(["", "0", "zz", "AB", "ab cd"]) | JSON)), package=PACKAGE)
-#: Law texts `draw.parse_law` refuses or reads oddly: digits of other scripts, signs, spaces, a second separator,
-#: leading zeros, a missing or zero argument.
+#: Law texts `draw.parse_law` or `draw.parse_rate` refuses or reads oddly: digits of other scripts, signs, spaces, a
+#: second separator, leading zeros, a missing or zero argument.
 ODD_LAW_TEXTS = ["subset:", "subset", "", "subset:\u0663", "work:\u00b2", "stratified:\uff11", "bernoulli:1/\u0662",
                  "bernoulli:\u00b9/2", "bernoulli:01/04", "bernoulli:0/0", "bernoulli:3/2", "bernoulli:1", "bernoulli:1/2/3",
                  "subset:1:2", "subset:+1", "subset: 1", "subset:-1", "stratified:0", "subset:0", "subset:00", "work:007",
                  "subset:007", "nope:1",
-                 "Subset:1", "bernoulli:", "bernoulli:/2"]
+                 "Subset:1", "bernoulli:", "bernoulli:/2", "rate:", "rate", "rate:0/3", "rate:4/3", "rate:1/0",
+                 "rate:1/2:0", "rate:1/2:", "rate:1/2:3:4", "rate:1/2/3", "rate:\u0661/2", "rate:1/2:\u0663",
+                 "rate:01/02:003", "Rate:1/2", "rate:/2", "rate:1/2: 3", "rate:+1/2", "rate:1:2"]
+#: A rate law's text, `rate:NUM/DEN[:T]`, the tables written or not.
+RATE_TEXTS = st.builds(lambda num, den, t: f"rate:{num}/{den}" + ("" if t is None else f":{t}"),
+                       st.integers(0, 12), st.integers(0, 12), st.none() | st.integers(0, 6))
 LAW_TEXTS = st.one_of(
     st.builds(lambda kind, k: f"{kind}:{k}", st.sampled_from(["subset", "stratified", "work"]), st.integers(0, 30)),
     st.builds(lambda num, den: f"bernoulli:{num}/{den}", st.integers(0, 12), st.integers(0, 12)),
-    st.sampled_from(ODD_LAW_TEXTS))
+    RATE_TEXTS, st.sampled_from(ODD_LAW_TEXTS))
 #: Rules a stream doesn't run, or that aren't rules as `to_json` writes them.
 ODD_RULES = [{"check": "all", "replay": "subset:1", "rule": "two-stage"},
              {"check": 2, "replay": "subset:1", "rule": "two-stage"}, {"check": "some", "replay": "subset:1", "rule": "two-stage"},
@@ -1625,17 +1633,22 @@ def closure_maps(draw, n: int) -> list:
 
 @st.composite
 def selections(draw) -> dict:
-    """The select piece's input on a random partition: a rule of each kind the stream runs (its k within the population),
-    the work table naming every template for a work law (sometimes
-    with a template's work 0, or a bad entry), mostly a closure map for a work law, and the coins."""
+    """The select piece's input on a random partition: a rule of each kind the stream runs (its k within the population,
+    a rate's mostly, its tables sometimes more than its count fits), the work table naming every template for a work
+    law (sometimes with a template's work 0, or a bad entry), mostly a closure map for a work law, and the coins."""
     desc, query, n = draw(partitions())
-    kind = draw(st.sampled_from(["work", "stratified", "subset", "bernoulli", "work", "all"]))
+    kind = draw(st.sampled_from(["work", "stratified", "subset", "bernoulli", "rate", "work", "all"]))
     if kind == "all":
         rule = {"rule": "all"}
     else:
         den = draw(st.integers(1, 12))
-        text = (f"bernoulli:{draw(st.integers(0, den))}/{den}" if kind == "bernoulli"
-                else f"{kind}:{draw(st.integers(1, max(n, 1)))}")
+        if kind == "bernoulli":
+            text = f"bernoulli:{draw(st.integers(0, den))}/{den}"
+        elif kind == "rate":
+            tables = draw(st.none() | st.integers(1, 4))
+            text = f"rate:{draw(st.integers(1, den))}/{den}" + ("" if tables is None else f":{tables}")
+        else:
+            text = f"{kind}:{draw(st.integers(1, max(n, 1)))}"
         rule = {"law": text, "rule": "law"}
     table = None
     if kind == "work":
@@ -1924,12 +1937,31 @@ def _verdict_change(f):
     return apply
 
 
-#: One change each to the run's own inputs: the rule, the declared items and values, the challenger's name and place,
-#: the closure map, the coins, the sessions, a verdict, the outputs, the statement, δ, the proved units and instances,
-#: the served units, the session roots, or a field missing.
+def _as_rate(c: dict, x: int) -> dict:
+    """The run's `subset:K` rule as a rate law over the record's N: `rate:K/N` over one table or over a divisor of K,
+    which is `subset:K` again, over tables K doesn't divide, which rounds K up past the record's law (R1) or past N, or
+    over N + 1 tables, past N (`rate`). Any other rule is unchanged."""
+    rule, rec = c.get("rule"), c.get("record")
+    if not isinstance(rule, dict):
+        return c
+    m = re.fullmatch(r"subset:([0-9]+)", str(rule.get("law")))
+    n = rec.get("population") if isinstance(rec, dict) else None
+    if m is None or not (type(n) is int and 1 <= int(m[1]) <= n):
+        return c
+    k = int(m[1])
+    divisors = [t for t in range(1, k + 1) if k % t == 0]
+    tables = [None, 1, divisors[x % len(divisors)], n + 1, 2 + x % 5][x % 5]
+    return {**c, "rule": {**rule, "law": f"rate:{k}/{n}" + ("" if tables is None else f":{tables}")}}
+
+
+#: One change each to the run's own inputs: the rule (a law text of any form, its subset law as a rate law, a rule the
+#: stream doesn't run, or junk), the declared items and values, the challenger's name and place, the closure map, the
+#: coins, the sessions, a verdict, the outputs, the statement, δ, the proved units and instances, the served units, the
+#: session roots, or a field missing.
 RUN_CHANGES = [
     (_with("rule", None), st.one_of(LAW_TEXTS.map(lambda t: {"law": t, "rule": "law"}), st.just({"rule": "all"}),
                                     st.sampled_from(ODD_RULES) | JSON)),
+    (_as_rate, st.integers(0, 63)),
     *((lambda c, x, f=f: _public_change(f)(c, x), st.integers(0, 63)) for f in PUBLIC_ITEMS[1:7]),
     (_with("challenger", None), st.sampled_from([5, None, "other-verifier", ""])),
     (_with("received", None), st.sampled_from([5, None, "", RECEIVED + "Z"])),
@@ -1971,7 +2003,7 @@ def runs(draw, groups=(), most: int = 0, changes: int = 0) -> dict:
 
 
 RUN = D.Port(PIECES, "run", run, st.one_of(
-    runs(), runs(), runs(changes=1), runs(changes=1), runs(changes=2),
+    runs(), runs(), runs(changes=1), runs(changes=1), runs(changes=2), st.builds(_as_rate, runs(), st.integers(0, 63)),
     runs([RECORD], 1), runs([PARAMS], 1), runs([ENTRIES, REGISTERED_PARAMS], 1), runs([EVIDENCE, VERDICTS_OF], 1),
     JSON), package=PACKAGE)
 
@@ -2080,8 +2112,9 @@ def test_the_runs_hello_and_its_one_tree(pieces, name, change, code):
 def test_the_select_piece_draws_every_rule(pieces):
     """One draw under each rule the stream runs, on a partition whose `PAIR` stratum is two ranges apart, Lean's the
     Python's whole: `All` every unit, reading no coins, and each law's draw (a work law's with its closure) reading them,
-    each stratum's count its k, which the drawn runs reach only probably. Then the same with every non-ASCII digit
-    `str.isdigit` admits in place of an ASCII one, and the retired two-stage rule, which both refuse, saying it is retired
+    each stratum's count its k, which the drawn runs reach only probably, and a rate law's a subset's of its count over
+    the 10 units. Then the same with every non-ASCII digit `str.isdigit` admits in place of an ASCII one, and a rate
+    whose count passes the population, and the retired two-stage rule, which both refuse, the last saying it is retired
     (`service.RETIRED_TWO_STAGE`)."""
     desc = json.loads(_population(((0, 2), (1, 3), (0, 4), (2, 1))))
     query = _json(P.template_instances_query([t.id for t in TEMPLATES]))
@@ -2089,7 +2122,9 @@ def test_the_select_piece_draws_every_rule(pieces):
     closure = [[u, [(u + 1) % 10, (u + 5) % 10]] for u in range(10)]
     source = hashlib.shake_256(b"select").hexdigest(1500)
     rules = [({"rule": "all"}, None), ({"law": "subset:4", "rule": "law"}, None), ({"law": "bernoulli:1/3", "rule": "law"}, None),
-             ({"law": "stratified:5", "rule": "law"}, None), ({"law": "work:4", "rule": "law"}, closure)]
+             ({"law": "stratified:5", "rule": "law"}, None), ({"law": "work:4", "rule": "law"}, closure),
+             ({"law": "rate:1/3:2", "rule": "law"}, None)]
+    rates = {"rate:1/3:2": 4}                                        # 2·⌈10/6⌉
     for rule, cm in rules:
         case = {"closure": cm, "program": desc, "query": query, "rule": rule, "source": source,
                 "work_table": table if "work" in str(rule) else None}
@@ -2098,9 +2133,12 @@ def test_the_select_piece_draws_every_rule(pieces):
         assert (out["read"] == 0) == (rule["rule"] == "all") and bool(cm) == ("closure" in out["draw"]), (rule, out)
         for s in out["draw"].get("strata", []):
             assert sum(any(lo <= u < hi for lo, hi in s["units"]) for u in out["draw"]["units"]) == s["k"] >= 1
+        if (k := rates.get(rule.get("law"))) is not None:
+            assert (out["draw"]["law"], out["draw"]["k"], len(out["draw"]["units"])) == ("subset", k, k), (rule, out)
     retired = {"check": "all", "replay": "subset:4", "rule": "two-stage"}
     for rule in [*({"law": text, "rule": "law"} for text in ("subset:\u0663", "stratified:\u0665", "work:\u0664",
-                                                              "bernoulli:\u0661/3", "bernoulli:1/\u0663")), retired]:
+                                                              "bernoulli:\u0661/3", "bernoulli:1/\u0663", "rate:\u0661/3",
+                                                              "rate:1/3:\u0662", "rate:9/10:4")), retired]:
         case = {"closure": None, "program": desc, "query": query, "rule": rule, "source": source, "work_table": table}
         assert D.replay(SELECT, case, pieces)[0] == "reject", rule
         with pytest.raises(D.Reject):
