@@ -381,6 +381,10 @@
   "Pouw.PearlC.pearlCTilesDevChainCap": {
    "owner": "@compute-accounting",
    "digest": "2170dd5823cfd9a6272b9ce11cf29f7de11dce337c0926e307ab60d0f8dd34b6"
+  },
+  "Nci.Assumptions.TrainingIncompressible": {
+   "owner": "@compute-accounting",
+   "digest": "56a0698d9b227d57a5c2945972316c52628327b72b281a9a5443779df0957263"
   }
  },
  "meaning": [
@@ -3475,10 +3479,16 @@
    "type_hash": "55856778f974cf265b7c2df6fc78adbf826e9d78ff0e128bc585a20f62d9ff39"
   },
   "Nci.SecurityProofs.IncompressibleContainedTraining": {
-   "owner": "@compute-accounting"
+   "owner": "@compute-accounting",
+   "signature": ["Nci.SecurityProofs.IncompressibleContainedTraining : Nci.Guarantees.IncompressibleContainedTraining"],
+   "assumptions": [],
+   "type_hash": "4227f6d22e9148a31c0837137544b6cf10c3e13aa7c68a4d5d1cfd8f6641c67b"
   },
   "Nci.SecurityProofs.IncompressibleThreadedThrottled": {
-   "owner": "@compute-accounting"
+   "owner": "@compute-accounting",
+   "signature": ["Nci.SecurityProofs.IncompressibleThreadedThrottled : Nci.Guarantees.IncompressibleThreadedThrottled"],
+   "assumptions": [],
+   "type_hash": "3f0744ed7643bc3edea9b8bcf41a99c0a872164d55e92857ae748cac9d1ba7f6"
   },
   "Nci.SecurityProofs.Inference": {
    "owner": "@lean",
@@ -7462,6 +7472,8 @@
     "Nci.SecurityProofs.ContainedMatMul",
     "Nci.SecurityProofs.ContainedTraining",
     "Nci.SecurityProofs.FullPositions",
+    "Nci.SecurityProofs.IncompressibleContainedTraining",
+    "Nci.SecurityProofs.IncompressibleThreadedThrottled",
     "Nci.SecurityProofs.Inference",
     "Nci.SecurityProofs.IuReads",
     "Nci.SecurityProofs.OtherPositions",
@@ -7490,6 +7502,8 @@
     "Accounting.SecurityProofs.Actual.Windows",
     "Nci.SecurityProofs.ContainedMatMul",
     "Nci.SecurityProofs.ContainedTraining",
+    "Nci.SecurityProofs.IncompressibleContainedTraining",
+    "Nci.SecurityProofs.IncompressibleThreadedThrottled",
     "Nci.SecurityProofs.Inference",
     "Nci.SecurityProofs.IuReads",
     "Nci.SecurityProofs.ReadBound",
@@ -7579,6 +7593,8 @@
     "Accounting.SecurityProofs.Actual.Windows",
     "Nci.SecurityProofs.ContainedMatMul",
     "Nci.SecurityProofs.ContainedTraining",
+    "Nci.SecurityProofs.IncompressibleContainedTraining",
+    "Nci.SecurityProofs.IncompressibleThreadedThrottled",
     "Nci.SecurityProofs.Inference",
     "Nci.SecurityProofs.OtherPositions",
     "Nci.SecurityProofs.ReadBound",
@@ -7679,6 +7695,8 @@
     "Nci.SecurityProofs.ContainedMatMul",
     "Nci.SecurityProofs.ContainedTraining",
     "Nci.SecurityProofs.FullPositions",
+    "Nci.SecurityProofs.IncompressibleContainedTraining",
+    "Nci.SecurityProofs.IncompressibleThreadedThrottled",
     "Nci.SecurityProofs.Inference",
     "Nci.SecurityProofs.IuReads",
     "Nci.SecurityProofs.OtherPositions",
@@ -7731,6 +7749,8 @@
     "Nci.Threading.weightsUsed": "6b55dd915ad83320fed02e493fe4dfa6cdc7c037c83c6694d4d55f79ab9f54ec"
    },
    "guarantees": [
+    "Nci.SecurityProofs.IncompressibleContainedTraining",
+    "Nci.SecurityProofs.IncompressibleThreadedThrottled",
     "Nci.SecurityProofs.ThreadedReads",
     "Nci.SecurityProofs.ThreadedThrottled",
     "Nci.SecurityProofs.ThreadedTraining"
@@ -17318,6 +17338,16 @@
     "Nci.SecurityProofs.ThreadedTraining"
    ]
   },
+  "Models.Nci.Assumptions.Training": {
+   "digest": "81b1c83b60e596369f3f8979aff0884920ef367b630f404939cb4b5de245e9c3",
+   "definitions": {
+    "Nci.Assumptions.TrainingIncompressible": "56a0698d9b227d57a5c2945972316c52628327b72b281a9a5443779df0957263"
+   },
+   "guarantees": [
+    "Nci.SecurityProofs.IncompressibleContainedTraining",
+    "Nci.SecurityProofs.IncompressibleThreadedThrottled"
+   ]
+  },
   "Models.Nci.Guarantees": {
    "digest": "65c397da381dbf606b830646356e6ffdd535d023053cc4403786e09e9f8a84cc",
    "definitions": {
@@ -17367,6 +17397,17 @@
     "Nci.SecurityProofs.ThreadedReads",
     "Nci.SecurityProofs.ThreadedThrottled",
     "Nci.SecurityProofs.ThreadedTraining"
+   ]
+  },
+  "Models.Nci.Guarantees.Training": {
+   "digest": "09d84ac6f56d1a4acbae14d11372cb36662530656fe16b7c5a140ae659b1254a",
+   "definitions": {
+    "Nci.Guarantees.IncompressibleContainedTraining": "1aa30787eb8e58ffcb1074206389619df415b788d0f120b4272463940a0fed86",
+    "Nci.Guarantees.IncompressibleThreadedThrottled": "bd514e3b70ea71b37a3e6338134d81d331f7cf989f7b09081380d77d69ddd1fd"
+   },
+   "guarantees": [
+    "Nci.SecurityProofs.IncompressibleContainedTraining",
+    "Nci.SecurityProofs.IncompressibleThreadedThrottled"
    ]
   },
   "Models.NetworkCertifier.Assumptions": {
