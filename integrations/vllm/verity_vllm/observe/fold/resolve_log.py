@@ -26,10 +26,11 @@ from pathlib import Path
 from typing import Any, Iterator
 
 from verity_vllm.config import option
-from verity_vllm.observe.events import Event, Note, Root, RunHeader, StepLink
+from verity_vllm.observe.events import Event, Note, Root, RunHeader, StepLink, StorageAlloc, ViewDesc
 from verity_vllm.observe.log import read_log, split_steps
 from verity_vllm.observe.fold.patterns import GEMM_TARGET_SCRATCH_KEY, X01_SCRATCH_KEY, label, members
-from verity_vllm.observe.fold.resolver import Compute, Group, Profile, Resolution, ResolutionError, ResolutionReport, StepContext, Transparent, spec_module, Unsupported, resolve_step
+from verity_vllm.observe.fold.resolver import (Compute, Group, Profile, Resolution, ResolutionError, ResolutionReport, StepContext, Transparent,
+                                               external_buffers, spec_module, Unsupported, resolve_step)
 from verity_vllm.observe.fold.tree import StepEvents, TreeNode, step_events
 
 DEFAULT_PROFILE = "vllm_d9105ea80_sm89_eager"
@@ -95,10 +96,11 @@ def collect_roots(events: list[Event], into: dict[int, list[Root]]) -> None:
             into.setdefault(ev.view.alloc, []).append(ev)
 
 
-def make_context(header: RunHeader, se: StepEvents, roots: dict[int, list[Root]], profile: Profile) -> StepContext:
+def make_context(header: RunHeader, se: StepEvents, roots: dict[int, list[Root]], profile: Profile,
+                 buffers: dict[str, ViewDesc] | None = None) -> StepContext:
     step_roots: dict[int, list[Root]] = {k: list(v) for k, v in roots.items()}
     collect_roots(se.other, step_roots)
-    return StepContext(header, se.start, se.sample, list(se.links), step_roots, dict(profile.config), profile)
+    return StepContext(header, se.start, se.sample, list(se.links), step_roots, dict(profile.config), profile, buffers=buffers or {})
 
 
 def resolve_log(path: str | Path, profile: Profile, only_step: int | None = None,
@@ -107,12 +109,17 @@ def resolve_log(path: str | Path, profile: Profile, only_step: int | None = None
     roots: dict[int, list[Root]] = {}
     notes: list[Note] = []
     results: list[StepResult] = []
+    devices: dict[int, str] = {}
+    buffers: dict[str, ViewDesc] = {}
     for pre, step in split_steps(read_log(path)):
         for ev in pre:
             if isinstance(ev, RunHeader):
                 header = ev
+            elif isinstance(ev, StorageAlloc):
+                devices[ev.alloc] = ev.device
             elif isinstance(ev, Note):
                 notes.append(ev)
+                buffers.update(external_buffers(ev, lambda a: devices.get(a, "")))
         collect_roots(pre, roots)
         if not step:
             continue
@@ -121,7 +128,7 @@ def resolve_log(path: str | Path, profile: Profile, only_step: int | None = None
             continue
         if header is None:
             header = RunHeader("?", "", "", {}, {}, {})
-        ctx = make_context(header, se, roots, profile)
+        ctx = make_context(header, se, roots, profile, buffers)
         t0 = time.perf_counter()
         n_events = sum(len(r.ids()) for r in se.roots)
         try:

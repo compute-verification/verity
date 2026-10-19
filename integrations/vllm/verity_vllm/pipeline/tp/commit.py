@@ -35,6 +35,7 @@ from pathlib import Path
 from verity_vllm.acquire import as_loaded as AL
 from verity_vllm.acquire.sources import taps as TAPS
 from verity_vllm.check import weights_of_record as WR
+from verity_vllm.check.component_programs import post_load_tensors
 from verity_vllm.config import group, option
 from verity_vllm.engine import served as SV
 from verity_vllm.pipeline import replay_bundle as RB
@@ -398,7 +399,7 @@ def main(args: Options) -> int:
                                           "tp_relabel": relabel, "tp_partials_omit_rank": args.omit_rank_partials,
                                           "match_tokens": match_tokens, "tp_swap_requests": swap_requests, "match_capture_dir": match_capture_dir, "replay": replay_cfg,
                                           "weights_pin": weights_pin_cfg, "flip_weight": flip_weight, "serve_shard_from": serve_shard_from, "tap_sources": TAPS.for_ranks(args.tap_sources),
-                                          "weights_as_loaded": weights_as_loaded(weights_pin_cfg),
+                                          "weights_as_loaded": weights_as_loaded(weights_pin_cfg), "post_load_tensors": post_load_tensors(builds),
                                           "tp_partials_flip_site": ({args.flip_partial.split(":", 1)[0]: args.flip_partial.split(":", 1)[1]} if args.flip_partial else None),
                                           "tp_partials_omit_site": ({args.omit_partial_site.split(":", 1)[0]: args.omit_partial_site.split(":", 1)[1]} if args.omit_partial_site else None),
                                           "engine_kwargs": {k: v for k, v in kw.items() if k not in ("model", "tokenizer", "worker_extension_cls")}})

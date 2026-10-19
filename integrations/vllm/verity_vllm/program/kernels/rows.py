@@ -780,6 +780,8 @@ EVALUATOR_PROVENANCE[batched_gemm_rows.FAMILY] = batched_gemm_rows.PROVENANCE
 from verity_vllm.program.kernels import int8_rows  # noqa: E402
 EVALUATORS[int8_rows.FAMILY] = int8_rows.EVALUATOR
 _row(int8_rows.FAMILY, int8_rows.int8_row_quant, ("0", "1"), check_targets=int8_rows.check_targets)
+from verity_vllm.program.kernels import marlin_moe_rows  # noqa: E402
+marlin_moe_rows.register_rows(EVALUATORS, _row)
 deepgemm_rows.register_rows(EVALUATORS, _row)
 moe_align_rows.register_rows(EVALUATORS, _row)
 glm53_rows.register_rows(EVALUATORS, _row, _sample)

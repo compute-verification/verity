@@ -23,9 +23,10 @@ each step's events in four passes; the k-th event of a name in the step is occur
    `format.promoted_observation`); a promoted identity binds through nothing else, since its producer module's own output is by
    definition not the promoted Value;
 2. a label a source declares (`ports`: label -> `Port(Definitions, port, call_boundary)`) binds the row of its module (for a call
-   boundary, of `<module>/<fx node>`) that port `port` of one of those Definitions produces: DeepGEMM's quant branch `x_q` / `x_s` is its
-   ports 0 / 1, the attention taps the DSA indexer's ports and the sparse MLA and W_UK_T absorb boundaries.  The occurrences of the
-   label bind the candidates in (invocation, Program) order when there are as many of each, else none;
+   boundary, of `<module>/<fx node>` or of the module itself) that port `port` of one of those Definitions produces: DeepGEMM's quant
+   branch `x_q` / `x_s` is its ports 0 / 1, the attention taps the DSA indexer's ports and the sparse MLA and W_UK_T absorb boundaries.
+   The occurrences of every label declaring one Port at one module bind its candidates in (invocation, Program) order when there are as
+   many of each, else none: the mHC taps' attention and FFN post_pre are one Definition's port twice per layer, in commit order;
 3. any other label binds the member of its module that it equals, at invocation k (the call-boundary source, the partial, norm,
    sampler, token-id and plane taps, a capture map's taps whose label is the Call's hint);
 4. the tuple slots of occurrence k of a module bind the members of that module at invocation k that 1-3 left, in Program order: slots
@@ -52,8 +53,9 @@ HIDDEN_FAMILIES = ("fa2.m1/", "fa3.m1/", "moe/")
 
 @dataclass(frozen=True)
 class Port:
-    """What a source's label carries: port `port` of a Call of one of the Definitions `families`; `call_boundary`: the Value is one two
-    Calls of the module body exchange, spelt `<module>/<fx node>`."""
+    """What a source's label carries: port `port` of a Call of one of the Definitions `families`; `call_boundary`: the Call is one of
+    several in its module's body, so its Value is spelt `<module>/<fx node>` when two Calls exchange it or two fx nodes produce its member
+    at the step, else `<module>`."""
 
     families: frozenset[str]
     port: str
@@ -153,7 +155,7 @@ class Binder:
 
     def _candidates(self, step: int, op: str, port: Port) -> list[tuple[str, str, int]]:
         rows, ops = self.rows.get(step, {}), self._ops(step)
-        keys = [k for o, ks in ops.items() if o.rsplit("/", 1)[0] == op and "/" in o for k in ks] if port.call_boundary else ops.get(op, [])
+        keys = [k for o, ks in ops.items() if o == op or "/" in o and o.rsplit("/", 1)[0] == op for k in ks] if port.call_boundary else ops.get(op, [])
         return [k for k in keys if rows[k][0] in port.families and rows[k][1] == port.port]
 
     def bind(self, step: int, names: Sequence[str]) -> list[tuple[str, str, int, str]]:
@@ -164,7 +166,7 @@ class Binder:
         out: list[tuple[str, str, int, str] | None] = [None] * len(names)
         taken = set(self.promoted.get(step, ()))
         seen: Counter = Counter()
-        declared: dict[tuple[str, str], list[tuple[int, int]]] = defaultdict(list)
+        declared: dict[tuple[str, Port], list[tuple[int, int, str]]] = defaultdict(list)
         slots: dict[tuple[str, int], dict[int, int]] = defaultdict(dict)
         for i, name in enumerate(names):
             k = seen[name]
@@ -184,16 +186,16 @@ class Binder:
                 else:
                     slots[(op, k)][slot] = i
             elif label in self.ports:
-                declared[(op, label)].append((i, k))
+                declared[(op, self.ports[label])].append((i, k, label))
             elif (op, label, k) in rows and (op, label, k) not in taken:
                 out[i] = (op, label, k, "label")
                 taken.add((op, label, k))
             else:
                 out[i] = (op, label, k, "unbound")
-        for (op, label), events in declared.items():
-            cands = [c for c in self._candidates(step, op, self.ports[label]) if c not in taken]
+        for (op, port), events in declared.items():
+            cands = [c for c in self._candidates(step, op, port) if c not in taken]
             ok = len(cands) == len(events)
-            for (i, k), c in zip(events, cands if ok else [None] * len(events)):
+            for (i, k, label), c in zip(events, cands if ok else [None] * len(events)):
                 out[i] = (*c, "port") if c else (op, label, k, "unbound")
                 if c:
                     taken.add(c)

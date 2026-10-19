@@ -321,6 +321,13 @@ def moe_plane_kind(family: str, module: str) -> str | None:
     return None
 
 
+def moe_plane_modules(rows: Iterable[tuple[str, str]]) -> frozenset[str]:
+    """The MoE modules whose block rows are `moe_block_stream` planes, from each row's (family, module): those with router rows, which
+    give the planes their M tokens (`moe_geometry`).  Under any other module a `moe_plane_kind` row is a Call like the rest (DeepSeek-V4's
+    Marlin block, routed by a Definition no plane names)."""
+    return frozenset(m for f, m in rows if moe_plane_kind(f, m) == "router")
+
+
 def moe_identities(g: dict[str, Any]) -> list[tuple[str, int, str]]:
     """(plane, elements, dtype) of the block-stream tensors for one MoE layer in one step: `MOE_PLANES`, or under block-FP8 experts the
     `MOE_FP8_PLANES` the module's rows produce (a quant or SiluMul the Program has no rows for is no plane)."""

@@ -16,7 +16,6 @@ this module is imported):
 
 from __future__ import annotations
 
-import os
 import socket
 import sys
 from contextlib import contextmanager, nullcontext
@@ -28,10 +27,6 @@ engine_env.pin(engine_env.EXPORT)
 
 import torch  # noqa: E402
 from torch import nn  # noqa: E402
-
-from verity_vllm.program.frontend.loader_parity import (fp8_block_weights_as_the_loader_does,  # noqa: E402
-                                                       mla_absorbed_weights_as_the_loader_does,
-                                                       post_load_tensors_as_the_loader_does, retie_lm_head_as_the_loader_does)
 
 PIN = {"model": "HuggingFaceTB/SmolLM2-135M", "revision": "93efa2f097d58c2a74874c7e644dbc9b0cee75a2", "dtype": "bfloat16"}
 
@@ -610,8 +605,7 @@ def op_histogram(ep) -> dict[str, int]:
 
 __all__ = ["PIN", "make_vllm_config", "ensure_distributed", "instantiate_meta", "fake_forward_context", "EngineStep", "GreedyRequest",
            "CachedGreedyRequest", "CachedStochasticRequest", "cached_wrapper", "prefix_input", "PaddedGreedyRequest", "make_wrapper", "export_module", "export_step", "op_histogram", "consulted_facts",
-           "attention_impls", "export_facts", "BI_TRITON_KERNELS", "retie_lm_head_as_the_loader_does",
-           "mla_absorbed_weights_as_the_loader_does", "fp8_block_weights_as_the_loader_does", "post_load_tensors_as_the_loader_does"]
+           "attention_impls", "export_facts", "BI_TRITON_KERNELS"]
 
 
 def attention_impls(model: nn.Module) -> dict:
