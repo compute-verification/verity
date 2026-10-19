@@ -39,7 +39,7 @@ worker_gb = 24
 # In place of its dependencies' directories (`inputs_only`; `verity`'s brings the root's dev group, the whole workspace): the
 # packages that define Definitions and templates, with their sidecars (`sidecars.discover` searches every package root, so a
 # sidecar anywhere else is read outside these and fails the guard), and the modules they import. Test-only:
-# test_sampled_replay.py (test_split_prims_serve.py) and the vLLM migrations the split tests run.
+# test_sampled_replay.py (test_circuit_check.py's request Program).
 inputs_only = true
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py", "verity/ml/__init__.py",
           "verity/ml/circuits", "verity/ml/commitments", "verity/ml/crypto", "verity/ml/kernels", "verity/ml/private_circuits",
@@ -56,5 +56,4 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "integrations/vllm/verity_vllm/check", "integrations/vllm/verity_vllm/commit", "integrations/vllm/verity_vllm/correspondence",
           "integrations/vllm/verity_vllm/observe", "integrations/vllm/verity_vllm/query", "integrations/vllm/verity_vllm/engine/hooks.py",
           "integrations/vllm/verity_vllm/pipeline/llm.py", "integrations/vllm/verity_vllm/pipeline/program_graph.py",
-          "integrations/vllm/tests/check/test_sampled_replay.py", "integrations/vllm/tools/migrate/split_attention.py",
-          "integrations/vllm/tools/migrate/split_prims_serve.py", "benchmarks/numerical/python/verity_numerical"]
+          "integrations/vllm/tests/check/test_sampled_replay.py", "benchmarks/numerical/python/verity_numerical"]

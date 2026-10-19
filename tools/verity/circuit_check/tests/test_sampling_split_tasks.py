@@ -1,9 +1,9 @@
 """circuit-check's task list for the sampling family is the one found on the unsplit tree.
 
-`integrations/vllm/tools/migrate/split_sampling.py` splits the family's registry modules into Definitions, twins and vocabulary
-without changing a Definition, so every circuit-check target of the family keeps its kind, label, id, statics and pins.
-`data/sampling_split_tasks.json` holds them as `split_sampling.py snapshot` wrote them; a change to the family that adds, drops or
-rebinds a target, or repins one, rewrites it (`python tools/verity/circuit_check/tests/test_sampling_split_tasks.py --write`).
+The split of the family's registry modules into Definitions, twins and vocabulary changed no Definition, so every circuit-check
+target of the family keeps its kind, label, id, statics and pins. `data/sampling_split_tasks.json` holds them as they were
+before the split; a change to the family that adds, drops or rebinds a target, or repins one, rewrites it
+(`python tools/verity/circuit_check/tests/test_sampling_split_tasks.py --write`).
 """
 from __future__ import annotations
 
