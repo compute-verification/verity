@@ -6,8 +6,9 @@ import Models.Nci.Assumptions.Layered
 
 The premise of the thread draft's Theorems 1 and 2 (`Threading.Threaded`) holds for every keyed reference circuit
 (`Layered`), at every `Γ` and at every `S` below the width of `E + 1` lookup columns, with `(d, e)` read off the
-circuit's structure. At Kimi K2's shapes, under the named conjecture that the reference circuit is keyed there
-(`Assumptions.ReferenceLayered`), that is `(505, 37248)` for `S ≤ 2·10⁷` (`ReferenceThreaded`, `ReferenceTraining`).
+circuit's structure. At Kimi K2's shapes, written in `Dot16` steps, under the named conjecture that the reference
+circuit is keyed there (`Assumptions.ReferenceLayered`), that is `(10, 2328)` for `S ≤ 2·10⁷`, counting steps
+(`ReferenceThreaded`, `ReferenceTraining`).
 -/
 
 namespace Nci.Guarantees
@@ -34,18 +35,18 @@ def LayeredTraining : Prop :=
 
 /-- **The reference circuit is threaded, at Kimi K2's shapes**: `ThreadedOfLayered` at `ReferenceLayered`'s parameters.
 Every `S ≤ 2·10⁷` is below `7 + 1` bf16 embedding columns (`8 · 163840 · 16 = 20971520` bits), so a reference circuit
-keyed at `(d₀, e, e_lk) = (512, 37248, 0)` is `(512 − 7, 37248 + 7 · 0) = (505, 37248)`-threaded at every `Γ`. -/
+keyed at `(d₀, e, e_lk) = (17, 2328, 0)` is `(17 − 7, 2328 + 7 · 0) = (10, 2328)`-threaded at every `Γ`. -/
 def ReferenceThreaded : Prop :=
   ∀ (c : Declaration) (T : Threading c), Assumptions.ReferenceLayered c T →
-    ∀ (Γ : ℕ) (S : ℝ), S ≤ 2 * 10 ^ 7 → T.Threaded Γ S 505 37248
+    ∀ (Γ : ℕ) (S : ℝ), S ≤ 2 * 10 ^ 7 → T.Threaded Γ S 10 2328
 
 /-- **Training is slowed, at Kimi K2's shapes**: `LayeredTraining` at `ReferenceLayered`'s parameters, for a policy
-whose IUs read at most `αΓ ≤ 2·10⁷` bits, with `ReferenceThreaded`'s `(d, e) = (505, 37248)`. -/
+whose IUs read at most `αΓ ≤ 2·10⁷` bits, with `ReferenceThreaded`'s `(d, e) = (10, 2328)`. -/
 def ReferenceTraining : Prop :=
   ∀ (Γ : ℕ) (α b_w b_a κ : ℝ) (c dcl : Declaration) (T : Threading c),
     Assumptions.ReferenceLayered c T → 0 ≤ α → 0 < b_w → 0 < b_a → c.Contains dcl → Complies Γ α dcl →
     α * Γ ≤ 2 * 10 ^ 7 → Assumptions.WeightsIncompressible c T Γ (α * Γ) b_w b_a →
     κ * c.D.size c.D.computed ≤ 2 * T.M.card →
-      κ * b_a * c.D.size c.D.computed ≤ 2 * α * T.bound (α * Γ) b_w 505 37248 * dcl.D.size dcl.D.computed
+      κ * b_a * c.D.size c.D.computed ≤ 2 * α * T.bound (α * Γ) b_w 10 2328 * dcl.D.size dcl.D.computed
 
 end Nci.Guarantees
