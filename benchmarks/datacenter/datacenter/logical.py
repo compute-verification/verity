@@ -45,7 +45,7 @@ import numpy as np
 
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits import types as T
-from verity.ml.circuits.census import PRODUCTS, census, family
+from verity.ml.circuits.census import PRECISION, PRODUCTS, census, family
 from verity.ml.circuits.codec import program_digest
 from verity.ml.circuits.cut import WIRING
 from verity.ml.circuits.defs import PrimitiveDefinition
@@ -55,10 +55,6 @@ from verity.ml.circuits.evaluation.batch import type_dtype
 from verity.ml.circuits.layout import Circuit, FunctionCall, resolve
 from verity.ml.circuits.program import REGISTRATION, RUN, Program, input_id, is_input
 from verity.ml.commitments import advice
-
-#: a tensor-core step family's operand format, by the first of these its name contains
-PRECISION = (("BF16", "bf16"), ("Tf32", "tf32"), ("E4m3", "fp8"), ("E5m2", "fp8"), ("Nvf4", "fp4"), ("Mxf4", "fp4"),
-             ("S8", "int8"), ("I7", "int8"))
 
 
 @dataclass(frozen=True)
@@ -190,7 +186,8 @@ def read(program: Program, transcript: dict[int, int], v: Value) -> list[int]:
 
 
 def precision(fam: str) -> str:
-    return next(p for key, p in PRECISION if key in fam)
+    """A tensor-core step family's operand format, the census's (`PRECISION`)."""
+    return PRECISION[fam]
 
 
 def _own(fn) -> dict[str, int] | None:
@@ -391,6 +388,6 @@ def commit(program: Program, transcript: dict[int, int], salts: Sequence[bytes] 
                            width, _binding(b"datacenter/values/v1", program), salts)
 
 
-__all__ = ["PRECISION", "REGISTRATION", "RUN", "Registration", "Value", "bind_inputs", "binding", "calls", "census_of",
+__all__ = ["REGISTRATION", "RUN", "Registration", "Value", "bind_inputs", "binding", "calls", "census_of",
            "commit", "committed", "evaluate", "gate_work", "gates", "layout", "names", "nodes", "parameters", "precision", "reach",
            "read", "register", "rows", "values", "work"]
