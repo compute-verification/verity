@@ -2042,8 +2042,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         # covered, the sampler-ids identity present -- a step that drops one identity's ⊥ still FAILS by name.  Never a relabel: the
         # padding's words are checked == bot by `padding_steps.padded_population`, its placement by the composition check.
         padded_run = bool(getattr(self, "_padding", None))
-        padding_only_steps: list[int] = []
-        padding_tensors_n = 0
+        padding_only_steps, padding_tensors_n = [], 0
         # per-step names held to the source's own rule, not rule (4): the call-boundary targets; the capture map's names on the step's routes
         rt_src = next((s for s in self.sources if hasattr(s, "step_modules")), None)
         cb_src = next((s for s in self.sources if hasattr(s, "split_step_names") and s is not rt_src), None)
