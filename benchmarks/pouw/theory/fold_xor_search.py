@@ -703,14 +703,112 @@ def anchored_cegis(ops: tuple, fix: tuple = (), c_star: int = SLICES[0], timeout
             return end("unknown", stage="anchor", at=nxt)
 
 
+def window_check(ops: tuple, fix: tuple, c_star: int = SLICES[0], tname: str = "xor", timeout_ms: int = 0,
+                 count: bool = True) -> dict:
+    """One two-instruction `splits` case on its x-slice at c*, on a window y = 4m, 4m + 1, 4m + 2 where the last
+    product is affine: unsat, window-sat (settles nothing) or unknown.
+
+    The family it takes (else ValueError): both instructions IMAD or IMAD.HI, the first's product not reading y nor its
+    high addend word, and at most one of the last's multiplicands varying with y (y, or the first's low result when its
+    low addend word is y). At x0 = c* ⊕ K the first's sum is A ± y with A fixed, so its low result is (A_lo ± y) mod
+    2^32 and its high result changes at one step of y; each of the last's multiplicands, negated or not and extended, is
+    then constant or steps by ±1, except at at most 3 steps of y in all (the wrap and, sign-extended, the sign boundary
+    of the varying one; the high result's change). The 2^30 windows have disjoint steps, so every program has a window
+    where they step by τ_a and τ_b, one of them 0, and there its product is a_0·b_0 + i·(τ_a·b_0 + τ_b·a_0) (a ring
+    identity mod 2^w): the last sum is affine on the window, and its result steps by q or q + 1 (hi32 of an affine map)
+    or by a constant (IMAD). y ⊕ c* steps by 1 − 2c_0, then by 2c_0 − 1 + 2(1 − 2c_1), 4 apart when c_0 ≠ c_1
+    (0x55555555: −1, then 3), so no program has the slice.
+
+    z3 checks both halves over every source, modifier and constant, with the first product one free word. The count:
+    no program has 2 steps where a constant multiplicand changes, nor 3 where the varying one doesn't step by +1 and 3
+    where it doesn't step by −1 (else the result is unknown). The window, exactly over every m, with a_0·b_0 a free
+    word too, the premises (each multiplicand's two steps equal, in {0, ±1}, one of them 0) asserted on the forms' own
+    multiplicands: each program at its window is a model, so unsat is the proof. With `tname` add, the slice is
+    y + c*, which programs have (the check isn't vacuous); `count` False checks the window alone, a probe that
+    settles nothing."""
+    name = label(ops) + (f" /{fix_label(fix)}" if fix else "")
+    t0 = time.monotonic()
+    names = [op_name(op) for op in ops]
+    first = fix[0] if fix else {}
+    if len(ops) != 2 or set(names) - {"IMAD", "IMAD.HI"}:
+        raise ValueError(f"{name}: a window check takes two instructions, each IMAD or IMAD.HI")
+    if 1 in ops[0][1] or not all(isinstance(first.get(j), int) for j in range(2, SLOTS[names[0]])):
+        raise ValueError(f"{name}: a window check needs a first product not reading y and its addends' sources fixed")
+    if names[0] == "IMAD.HI" and first[3] == 1:
+        raise ValueError(f"{name}: the first's high addend word is y, so its high result varies with y")
+    varying = {1} | ({2} if first[2] == 1 else set())
+    if sum(s in varying for s in ops[1][1]) > 1:
+        raise ValueError(f"{name}: both of the last's multiplicands vary with y")
+    if tname not in ("xor", "add"):
+        raise ValueError(f"{name}: an x-slice of {tname} isn't y combined with a constant")
+    prog, cons = skeleton(ops, fix)
+    (n1, s1, m1), (n2, s2, m2) = prog
+    X0, M = z3.BitVec("X0", 32), z3.BitVec("M", 32)
+    P1 = z3.BitVec("P1", 64 if n1 == "IMAD.HI" else 32)
+
+    def operands(y):
+        pool = [X0, y] + FORMS[n1]([mux(s, [X0, y, c]) for s, c in s1], m1, P1)
+        return [mux(s, pool + [c]) for s, c in s2]
+
+    def factors(v):
+        return hi_factors(v, m2) if n2 == "IMAD.HI" else (v[0], v[1])
+
+    def solver(*fs):
+        s = z3.Solver()
+        if timeout_ms:
+            s.set("timeout", timeout_ms)
+        s.add(*cons, *fs)
+        return s
+
+    def off_steps(j: int, n: int, tau: int) -> list:
+        """n distinct steps y → y + 1 where multiplicand j doesn't step by tau."""
+        ys = [z3.BitVec(f"Y{j}_{tau}_{i}", 32) for i in range(n)]
+        out = [z3.ULT(a, b) for a, b in itertools.pairwise(ys)] + [z3.ULE(ys[-1], M32 - 1)]
+        for y in ys:
+            f0, f1 = factors(operands(y))[j], factors(operands(y + 1))[j]
+            out.append(f1 - f0 != z3.BitVecVal(tau, f0.size()))
+        return out
+
+    for j, src in enumerate(ops[1][1] if count else ()):
+        off = off_steps(j, 3, 1) + off_steps(j, 3, -1) if src in varying else off_steps(j, 2, 0)
+        r = solver(*off).check()
+        if r != z3.unsat:
+            return {"ops": name, "result": "unknown", "method": "window", "stage": f"count of multiplicand {j}: {r}",
+                    "seconds": round(time.monotonic() - t0, 1)}
+    sol = solver(z3.ULE(M, (1 << 30) - 1))
+    ys = [M * 4 + i for i in range(3)]
+    vals = [operands(y) for y in ys]
+    A, B = zip(*(factors(v) for v in vals))
+    w = A[0].size()
+    one, zero = z3.BitVecVal(1, w), z3.BitVecVal(0, w)
+    ta, tb = A[1] - A[0], B[1] - B[0]
+    sol.add(A[2] - A[1] == ta, B[2] - B[1] == tb, z3.Or(ta == 0, tb == 0),
+            *(z3.Or(t == zero, t == one, t == -one) for t in (ta, tb)))
+    step = (z3.If(ta == one, B[0], z3.If(ta == -one, -B[0], zero)) +
+            z3.If(tb == one, A[0], z3.If(tb == -one, -A[0], zero)))
+    P2 = z3.BitVec("P2", w)
+    for i, (v, y) in enumerate(zip(vals, ys)):
+        sol.add(FORMS[n2](v, m2, P2 + _small(i, step))[-1] == (y ^ bv(c_star) if tname == "xor" else y + bv(c_star)))
+    r = sol.check()
+    result = "window-sat" if r == z3.sat else "unknown" if r != z3.unsat else "unsat" if count else "window-unsat"
+    return {"ops": name, "result": result, "method": "window", "c_star": f"{c_star:#010x}",
+            "seconds": round(time.monotonic() - t0, 1)}
+
+
 def settle(ops: tuple, tname: str, timeout_ms: int, seed: int, edge_only: bool, domain: str, fix: tuple,
            by_mult: bool, collide: bool, pow2: bool, slices: tuple = (), free_anchor: bool = False,
-           axes: bool = False) -> dict:
+           axes: bool = False, window: bool = False) -> dict:
     """One case by `cegis`, or with `slices` by `anchored_cegis` at each x-slice in turn until one is unsat (its
-    record names it), else the last one's record. A case `anchored_cegis` doesn't take is unknown."""
+    record names it), else the last one's record, or with `window` by `window_check` at the first x-slice. A case
+    `anchored_cegis` or `window_check` doesn't take is unknown."""
+    name = label(ops) + (f" /{fix_label(fix)}" if fix else "")
+    if window:
+        try:
+            return window_check(ops, fix, SLICES[0], tname, timeout_ms)
+        except ValueError as e:
+            return {"ops": name, "result": "unknown", "stage": str(e), "seconds": 0.0}
     if not slices:
         return cegis(ops, tname, timeout_ms, seed, edge_only, domain, fix, by_mult, collide, pow2, axes)
-    name = label(ops) + (f" /{fix_label(fix)}" if fix else "")
     tried = []
     for c in slices:
         try:
@@ -778,14 +876,14 @@ def search(k: int, fp: bool = True, tname: str = "xor", jobs: int = 1, timeout_m
            edge_only: bool = False, via_nan: bool = False, split: bool = False,
            cases: set | None = None, split_mods: bool = False, by_mult: bool = False,
            collide: bool = False, pow2: bool = False, slices: tuple = (), free_anchor: bool = False,
-           axes: bool = False) -> dict:
+           axes: bool = False, window: bool = False) -> dict:
     """Every sequence of k opcodes (`part` int: those without an FP form, fp: those with one); each result is also
     written to `stream` (JSON lines) as it finishes. With `via_nan`, each sequence is settled by its `reduce_nan`
     suffix on the nan domain (each distinct suffix searched once); one that doesn't reduce is unknown. With `split`,
     each sequence is searched as its `splits`, each case streamed, and it is unsat when every case is, FOUND when
     one is; `cases` (labels "SEQUENCE /CASE") keeps only those, and a sequence's verdict is then over them alone.
     `split_mods` searches each case as its `mod_splits`, and `cases` may then name single sub-cases too. With
-    `slices`, each case is searched by `anchored_cegis` instead (`settle`)."""
+    `slices`, each case is searched by `anchored_cegis` instead, and with `window` by `window_check` (`settle`)."""
     seqs = [s for s in sequences(k, fp)
             if part == "all" or (part == "fp") == any(op_name(op) in FP_OPS for op in s)][shard[0]::shard[1]]
     if cases is not None:
@@ -826,17 +924,18 @@ def search(k: int, fp: bool = True, tname: str = "xor", jobs: int = 1, timeout_m
     if jobs > 1:
         with ProcessPoolExecutor(jobs) as ex:
             futs = {ex.submit(settle, c, tname, timeout_ms, SEED, edge_only, domain, f, by_mult, collide, pow2, slices,
-                              free_anchor, axes): (c, f) for c, f in todo}
+                              free_anchor, axes, window): (c, f) for c, f in todo}
             for fut in as_completed(futs):
                 got(*futs[fut], fut.result())
     else:
         for c, f in todo:
             got(c, f, settle(c, tname, timeout_ms, SEED, edge_only, domain, f, by_mult, collide, pow2, slices,
-                             free_anchor, axes))
+                             free_anchor, axes, window))
     if split:
         for name, c in cover.items():
             rs = [found[c, fix_label(f)] for f in parts(c)]
-            worst = next((r for want in ("FOUND", "unknown", "slice-sat") for r in rs if r["result"] == want), rs[0])
+            worst = next((r for want in ("FOUND", "unknown", "slice-sat", "window-sat") for r in rs
+                          if r["result"] == want), rs[0])
             done({"ops": name, "result": worst["result"], "cases": len(rs),
                   "open": [r["ops"] for r in rs if r["result"] != "unsat"]})
     elif via_nan:
@@ -881,6 +980,9 @@ def main() -> int:
                     help="settle each case by its x-slices (`anchored_cegis`, `SLICES`): two instructions, the first "
                          "product not reading y")
     ap.add_argument("--free-anchor", action="store_true", help="with --slice, the anchor product a free word")
+    ap.add_argument("--window", action="store_true",
+                    help="settle each case on a window of its x-slice where the last product is affine "
+                         "(`window_check`): two IMAD or IMAD.HI, y in at most one last multiplicand")
     ap.add_argument("--merge", nargs="+", metavar="JSONL",
                     help="search nothing: k's verdict from these runs' records, through x <-> y (`merge`)")
     a = ap.parse_args()
@@ -903,7 +1005,8 @@ def main() -> int:
         cases = set(open(a.cases, encoding="utf-8").read().splitlines()) - {""} if a.cases else None
         r = search(k, not a.no_fp, a.target, a.jobs, a.timeout_ms, stream, a.part,
                    tuple(int(v) for v in a.shard.split("/")), labels, a.edge_only, a.via_nan, a.split, cases,
-                   a.split_mods, a.by_mult, a.collide, a.pow2, SLICES if a.slice else (), a.free_anchor, a.axes)
+                   a.split_mods, a.by_mult, a.collide, a.pow2, SLICES if a.slice else (), a.free_anchor, a.axes,
+                   a.window)
         out.append(r)
         print(f"k = {k}: {r['sequences']} sequences, {r['tally']}" + ("  -- proved" if r["proved"] else ""),
               flush=True)
