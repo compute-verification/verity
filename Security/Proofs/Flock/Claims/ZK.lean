@@ -60,6 +60,9 @@ import Proofs.Flock.Claims.ZK.Release
 import Proofs.Flock.Claims.ZK.Refine
 import Proofs.Flock.Claims.ZK.Os
 import Proofs.Flock.Claims.ZK.FrameTape
+import Proofs.Flock.Claims.ZK.FrameParse
+import Proofs.Flock.Claims.ZK.FrameMask
+import Proofs.Flock.Claims.ZK.PadsRoot
 import Proofs.Flock.Claims.ZK.NonVacuous
 import Proofs.Flock.Claims.ZK.SamplingNonVacuous
 import Proofs.Flock.Claims.ZK.Compose
@@ -360,6 +363,18 @@ import Proofs.Flock.Claims.ZK.Stop
   (`padsOf_tapeOfDraws`, `padsOf_drawsAt`, with `h_ab` and `w`), whose leaf salts are the frame's (`innerSalt_fit`), and
   which the release's configuration carries at the rep's rounds (`cfg_tapeOfDraws`), at the operating system's bytes
   too (`padsOf_os`).
+* `FrameParse`: the frame's round (`roundFree`) at the bytes of a round's frames (`encs fs` then the squeeze) is the fold
+  of the frame's step over them (`stepAt`: labels through `Masker.label`, bytes copied, each observed value absorbed and
+  free while the algebraic phase masks), then the inner proof's own round and the squeeze (`roundFree_encs`).
+* `FrameMask`: what the frame releases of such a round. The frames come out with domains dropped and each value of a
+  masked phase as `v + h_i` (`maskFrames`, `maskVal`; `roundFree_on`, `roundFree_off`), the pads' label and root
+  following the zerocheck's label (`roundFree_zc`). The pads are taken in the absorbed order: every pad below `h_ab` but
+  `final_c`'s, ascending (`absorbed_toList`), the indices the masked prover pads its sends under. A device that sends
+  the masked prover's round with each pad added back, its plain values, has that round released but its domain frames
+  (`roundFree_honest`, `dropDoms`), under the masked prover's pads (`padAt_ofDraws_absPos`).
+* `PadsRoot`: the frame's pads root (`padsRoot`, `treeRoot` of its leaves) is `layerOf`'s (`treeRoot_layerOf`), so at a
+  frame rep's draws of `drawBytes` bytes it is the root `innerCommitP` commits the masked prover's pads under on
+  `tapeOfDraws` (`padsRoot_tapeOfDraws`).
 * `NonVacuous`: the claim is not vacuous. A prover that makes no calls has `Fork.Pr = 0`, so the simulator that hashes a
   collision and outputs the empty transcript fails `ZKmalR` at every `ε_zk < 1` and every `γ` (`not_zkmalR_collSim`),
   a prover that sends its witness has no simulator at `ε_zk < 1/2` (`not_zkmalR_leak`), and both fail `ZKAt` at
