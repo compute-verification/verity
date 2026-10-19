@@ -9,8 +9,9 @@ process tree it runs:
    between their spines, the outside host on the west site, run twice with the strategies swapped between the sites,
    so that each of the first four is played across the WAN once (`DIR/fleet/`, `DIR/fleet-swapped/`);
 4. the lab back in its default four blocks, and the workload's three runs of `python -m workload.lab_run run`: honest,
-   `--tamper b1:flip-bit` and `--tamper b2:late` (`DIR/workload/<run>/`). They need a Python with torch: `--python`,
-   else this one if it has torch, else one that `uv` builds in a scratch directory, as the workload's recorded run does.
+   `--tamper b1:flip-bit` and `--tamper b2:late` (`DIR/workload/<run>/`), each at a first-frame latency D of
+   `DELTA_BUCKETS`. They need a Python with torch: `--python`, else this one if it has torch, else one that `uv` builds
+   in a scratch directory, as the workload's recorded run does.
 
 Each step's output is printed and kept in `DIR/<step>.txt`. It refuses to start while a process runs in a lab namespace,
 as lab_run does, and however it ends it leaves the lab up in its default shape with nothing running in it.
@@ -57,6 +58,10 @@ DOWN = "no record: the certifier was down or its record was withheld"
 SALT = {"accepted": True, "violations": [], "ingress_salt_frames": [1, 1, 1], "egress_salt_frames": 0,
         "egress_holds_salt": False, "block_received": True}
 STARVED = ["missing", "values"]
+# lab_run's D, which it otherwise calibrates from the host's timing of the sessions: `late` holds b2's first response
+# past D, so the window its refusal lands in moves with D, and these verdicts are D = 12's (1.2 s, over four times the
+# slowest session the lab host has timed, 263 ms).
+DELTA_BUCKETS = 12
 # lab_run's runs: its arguments, the blocks of b0 … b3 that either audit refuses, each as the certifier's refused rows
 # and N3's violation codes (every other block is accepted by both), and the answers.
 WORKLOAD = {
@@ -350,7 +355,8 @@ def night(out: Path, python: str | None, exits: dict[str, int]) -> None:
         if py is not None and not exits["lab default"]:
             for name, (args, _, _) in WORKLOAD.items():
                 run = f"workload/{name}"
-                exits[run] = step(run, [py, "-B", "-m", "workload.lab_run", "run", "--out", str(out / run), *args], out)
+                exits[run] = step(run, [py, "-B", "-m", "workload.lab_run", "run", "--out", str(out / run),
+                                        "--delta-buckets", str(DELTA_BUCKETS), *args], out)
 
 
 def main(argv: list[str] | None = None) -> int:
