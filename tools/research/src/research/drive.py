@@ -7,7 +7,8 @@ agent acts unless the automation refuses).  A loop runs it every few minutes; ea
    no check tooling (`CHECK_TOOLING`), which would have checked it differently.  Then
    `merge.caught_up` (the spec DM, node 1's mirror, the post-train regression, the landing post) and the sweep.
 2. Sync `next` (`Queue.sync`): admit and drop PRs, rebuild on a moved `main`; but while a check of `next` runs and `main` moved
-   by files its train doesn't change (and no check tooling), `next` stays on its base so the check isn't wasted (`held`).
+   by files its train doesn't change (and no check tooling), `next` stays on its base so the check isn't wasted (`held`, the
+   rule `queue.hold` keeps for every sync: `eject`'s and a hand one read drive's launches from the state file).
 3. Check `next` in trains of `train_size` PRs, each stacked on the one below (every `train_size`-th member's commit, and the
    tip): `train.sh COMMIT MACHINE`, with `--agreement` when the train changes a `lean-audit.json` (the lander's rule; train.sh
    itself sends the build for C-Flock's paths), the lowest unchecked first, while fewer than `max_running` checks run, and
@@ -51,7 +52,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from .queue import IDENTITY, TOUCHED_LOGS, TOUCHED_REPORT, Member, Queue, QueueError, RemoteSuites, _git, _out, touched_suites
+from .queue import (CHECK_TOOLING, IDENTITY, TOUCHED_LOGS, TOUCHED_REPORT, Member, Queue, QueueError, RemoteSuites, _git, _out, built_on,
+                    changed, hold, touched_suites)
 
 #: who hears what drive can't settle (13 Oct: the other Project's lander, its addressee before, acts on none of it)
 CI = "@ci"
@@ -100,8 +102,6 @@ SIGTERM_RC = 143
 #: pre-warms running at once: each is a whole check in a slot, and a train waits behind every one (18 Oct 00:43Z: four took the
 #: room drive counts, and no train started)
 PREWARM_MAX = 1
-#: what decides how a check runs and what it passes: a `main` that changed any of it re-checks the queue rather than land on it
-CHECK_TOOLING = ("tools/verity/check/", "tools/verity/lean/", "tools/verity/circuit_check/")
 RUN_RE = re.compile(r"^RUN ((?:r20\d{6}-\d{6}-[0-9a-f]{4} ?)+)$", re.M)
 #: what `git revert` writes of the commit it undoes
 REVERTS_RE = re.compile(r"^This reverts commit ([0-9a-f]{40})", re.M)
@@ -112,10 +112,6 @@ class Verdict:
     state: str                    # passed | running | failed | none
     attempt: str = ""
     why: str = ""
-
-
-def changed(repo: Path, base: str, commit: str) -> set[str]:
-    return set(_out(repo, "diff", "--name-only", "--no-renames", base, commit).split())
 
 
 def needs_agreement(repo: Path, base: str, commit: str) -> bool:
@@ -461,6 +457,7 @@ class Driver:
         self.repo, self.dry_run, self._seen, self._prs, self._ev, self._relaunched = q.workdir, False, {}, None, {}, set()
         self._drive: dict | None = None
         q.warming = self.warming
+        q.holding = lambda state: None          # `tick` asks `held`, with its verdicts, before it syncs
 
     # -- what the store says of a commit
 
@@ -890,45 +887,11 @@ class Driver:
 
     def _chain(self) -> tuple[str, list[Member]]:
         """(the base `next` was built on, its members oldest first), whether or not `main` has moved since."""
-        ref = f"refs/remotes/origin/{self.q.branch}"
-        if _git(self.repo, "rev-parse", "--verify", "-q", ref, check=False).returncode:
-            return "", []
-        # not `merge-base`: a member stacked on a PR that has since landed on `main` gives a second, wrong common ancestor
-        # (12 Oct 10:53Z: #1847 on #1793, after the e2e train's merge commit, emptied the chain and cancelled a disjoint check)
-        base = next((c for c in _out(self.repo, "rev-list", "--first-parent", ref).split()
-                     if not _git(self.repo, "merge-base", "--is-ancestor", c, "origin/main", check=False).returncode), "")
-        if not base:
-            return "", []
-        from .queue import TRAILER_RE
-
-        out = []
-        for rec in filter(None, (x.strip() for x in _out(self.repo, "log", "--first-parent", "--reverse",
-                                                          "--format=%H%x00%B%x1e", f"{base}..{ref}").split("\x1e"))):
-            commit, body = rec.split("\x00", 1)
-            t = dict(TRAILER_RE.findall(body))
-            if not {"PR", "Head", "Owner"} <= set(t):
-                return base, []
-            out.append(Member(int(t["PR"].lstrip("#")), t["Head"], t["Owner"], commit))
-        return base, out
+        return built_on(self.repo, f"refs/remotes/origin/{self.q.branch}")
 
     def held(self, drive: dict) -> str | None:
-        """Why `next` stays on its base this tick, or None: a check of it is running and `main` moved by files none of the running
-        train's members change, and by no check tooling.  A sync would rebuild `next` on the new `main` and waste that check;
-        `land` merges the train onto the moved `main` once it passes."""
-        base, chain = self._chain()
-        main = _out(self.repo, "rev-parse", "origin/main")
-        if not chain or main == base:
-            return None
-        moved = changed(self.repo, base, main)
-        if any(p.startswith(CHECK_TOOLING) for p in moved):
-            return None
-        for m in reversed(chain):
-            if self.verdict(m.commit, base, drive).state == "running":
-                if moved & changed(self.repo, base, m.commit):
-                    return None
-                return (f"`main` moved to {main[:12]} by files `{self.q.branch}` doesn't change while {m.commit[:12]}'s check runs: "
-                        f"`{self.q.branch}` stays on {base[:12]} until it ends")
-        return None
+        """Why `next` stays on its base this tick (`queue.hold`), a member's check running by its verdict."""
+        return hold(self.repo, self.q.branch, lambda c, base: self.verdict(c, base, drive).state == "running")
 
     def land(self, drive: dict, dry_run: bool) -> Member | None:
         """Land the newest member of `next` with a passing check (see the module's step 1): a fast-forward when `main` is still
