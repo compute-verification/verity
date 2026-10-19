@@ -76,6 +76,32 @@ def _pid(_: int) -> int:
     return os.getpid()
 
 
+def test_a_budget_granted_mid_run_admits_what_now_fits(monkeypatch, tmp_path):
+    """b103 (r20261019-015150-b103): pytest ended 83 minutes into circuit-check's 125, and the four SHA-512 targets still ran
+    one at a time under the share it left beside pytest.  `parallel` asks a callable budget again at each admission, so once
+    check.py grants the slot (`granted_gb`, ``--mem-gb-file``) the targets still queued start together."""
+    asked, picked, admit = [], [], cli.admit
+
+    def budget() -> float:
+        asked.append(len(asked))
+        return 4 if cli.granted_gb(grant) is None else 9
+
+    def recorded(queued, running, jobs, budget):
+        picked.append((budget, len(admit(queued, running, jobs, budget))))
+        if len(picked) == 1:
+            grant.write_text("9\n")
+        return admit(queued, running, jobs, budget)
+
+    grant = tmp_path / "circuit-check.mem-gb"
+    assert cli.granted_gb(grant) is None and cli.granted_gb(None) is None
+    monkeypatch.setattr(cli, "admit", recorded)
+    got = list(cli.parallel(_pid, [1, 2, 3], jobs=3, weight=lambda _: 3, budget=budget))
+    assert sorted(x for x, *_ in got) == [1, 2, 3]
+    assert picked[:2] == [(4, 1), (9, 2)] and len(asked) == len(picked)
+    grant.write_text("not yet")
+    assert cli.granted_gb(grant) is None
+
+
 def test_jobs_0_takes_one_worker_per_160_gb_the_tightest_cgroup_leaves(tmp_path, monkeypatch):
     monkeypatch.delenv(cli.SLOT_MEM_ENV, raising=False)
     (tmp_path / "proc").mkdir()

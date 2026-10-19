@@ -82,7 +82,8 @@ doesn't name:
                     `circuit-check --all --jobs` the other half, whose workers start only while their measured peaks
                     (`circuit_check/heavy.json`) fit the memory the run has, at most its check slot's mem= (`--mem-gb`, from
                     slot.py's CHECK_SLOT_MEM_GB) less `SIBLINGS_GB` when pytest or Lean runs beside it, less pytest's share
-                    alone when no Lean step does (`cc_mem_gb`): every registered Definition and template
+                    alone when no Lean step does (`cc_mem_gb`), and all of it once every step beside it has ended
+                    (`grant_when_alone`): every registered Definition and template
                     (`tools/verity/circuit_check`),
                     its report beside the run's result; then flock-rust-tests, `check_build.sh test` on that checkout:
                     `cargo test --release` of flock-live's unit tests and of the five upstream crates the patches change
@@ -993,6 +994,24 @@ def cc_mem_gb(slot_gb: int, beside: bool, lean: bool = True) -> int:
     return shared if lean else slot_gb - (slot_gb - shared) // 2
 
 
+#: where circuit-check finds the memory it is granted once it runs alone in the slot (its ``--mem-gb-file``, `grant_when_alone`)
+CC_GRANT = "circuit-check.mem-gb"
+
+
+def slot_mem_gb() -> int | None:
+    return int(m) if (m := os.environ.get(SLOT.SLOT_MEM_ENV, "")).isdigit() else None
+
+
+def grant_when_alone(path: Path, beside: list[threading.Event], gb: int) -> None:
+    """Write ``gb`` (the slot's mem=) to ``path`` once every step beside circuit-check has ended: from then on it runs alone in
+    the slot, and the targets it has not started may take all of it (b103: pytest ended 83 minutes into its 125)."""
+    for e in beside:
+        e.wait()
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(f"{gb}\n")
+    os.replace(tmp, path)
+
+
 def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
            only: list[str] | None = None) -> list[list[tuple[str, list[str] | str, Path]]]:
     """The independent groups, each a sequence of (name, argv or the reason it is skipped / cannot run, cwd); with ``only``, a
@@ -1007,7 +1026,7 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
     with_lean = only is None or any(x.startswith("lean") for x in names)
     beside = with_lean or "pytest" in names
     suites = [py, str(ROOT / "tools" / "verity" / "check" / "suites.py")]
-    slot_gb = int(m) if (m := os.environ.get(SLOT.SLOT_MEM_ENV, "")).isdigit() else None
+    slot_gb = slot_mem_gb()
     with_cc = only is None or "circuit-check" in names
     # pytest and lean-suites run at once, each with this share: what circuit-check beside them both leaves, halved
     tests_gb = None if slot_gb is None else (slot_gb - cc_mem_gb(slot_gb, beside) if with_cc else slot_gb) // 2
@@ -1022,7 +1041,8 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
     pytest = [*suites, "--json", str(out / "suites.json"), "--logs", str(out / "suites"), *after_lean, *tail]
     cc = [py, "-m", "circuit_check", "--all", "-q", "--jobs", str(b), "--out", str(out / "circuit-check.json"),
           *(["--cache", str(cache_dir() / "circuit-check")] if cache else []),
-          *(["--mem-gb", str(cc_mem_gb(slot_gb, beside, with_lean))] if slot_gb is not None else [])]
+          *(["--mem-gb", str(cc_mem_gb(slot_gb, beside, with_lean))] if slot_gb is not None else []),
+          *(["--mem-gb-file", str(out / CC_GRANT)] if slot_gb is not None and beside else [])]
     build = ["bash", str(ROOT / "verity" / "ml" / "flock" / "check_build.sh")]
     rust = ["env", f"CARGO_BUILD_JOBS={b}", f"RUST_TEST_THREADS={b}", *build, "test"]
     built = {"pytest": ("pytest", pytest, ROOT), "flock-circuit-build": ("flock-circuit-build", build, ROOT),
@@ -1533,8 +1553,16 @@ def run(out: Path, n: int | None = None, cache: bool = True, keep_going: bool = 
             subprocess.run([sys.executable, "-c", PREBUILD], cwd=ROOT, env=env(), capture_output=True)
             gs = groups(out, n, cache, urls) if only is None else groups(out, n, cache, urls, only)
             ended.update({name: threading.Event() for g in gs for name, _, _ in g})
+            beside = [ended[name] for g in gs if all(s[0] != "circuit-check" for s in g) for name, _, _ in g]
+            grant = None
+            (out / CC_GRANT).unlink(missing_ok=True)
+            if (gb := slot_mem_gb()) is not None and beside and len(beside) < len(ended):
+                grant = threading.Thread(target=grant_when_alone, args=(out / CC_GRANT, beside, gb), daemon=True)
+                grant.start()
             with ThreadPoolExecutor(max_workers=max(1, len(gs))) as ex:
                 results += [r for rs in ex.map(group, gs) for r in rs]
+            if grant is not None:
+                grant.join()
     finally:
         if urls and urls.name.startswith("lean-deps-urls-"):
             urls.unlink(missing_ok=True)
