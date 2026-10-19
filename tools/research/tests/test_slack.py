@@ -609,6 +609,15 @@ METHOD_SCOPES = {
 }
 
 
+def test_the_app_manifest_keeps_the_live_request_urls_and_events():
+    """apply replaces the whole manifest, so one without the interactivity URL (the #ask-daniel card buttons) or the event
+    subscriptions (the events service) would switch them off (infra caught it on 19 Oct and merged the live blocks in)."""
+    m = json.loads(REAL_MANIFEST.read_text())
+    assert m["settings"]["interactivity"]["is_enabled"] and m["settings"]["interactivity"]["request_url"].startswith("https://")
+    ev = m["settings"]["event_subscriptions"]
+    assert ev["request_url"].startswith("https://") and ev["request_url"].endswith("/api/slack/events")
+    assert {"message.channels", "message.groups", "team_join"} <= set(ev["bot_events"])
+
 def test_the_app_manifest_s_bot_scopes_cover_every_method_this_module_calls():
     """A silent scope swap (19 Oct: channels:history replaced by groups:history) fails here, naming the scope."""
     called = set(re.findall(r"\.(?:call|paged)\(\s*\"([a-z]+(?:\.[A-Za-z]+)+)\"", Path(slack.__file__).read_text())) - set(slack.APP_METHODS)
@@ -619,7 +628,7 @@ def test_the_app_manifest_s_bot_scopes_cover_every_method_this_module_calls():
     assert not missing, "the manifest's bot scopes lack " + ", ".join(f"{s} (for {m})" for s, m in missing)
     assert manifest["display_information"]["name"] == manifest["features"]["bot_user"]["display_name"] == "Agents"
     assert len(manifest["display_information"]["description"]) <= slack.DESCRIPTION_MAX
-    assert not any(manifest["settings"].values())
+    assert not any(manifest["settings"][k] for k in ("org_deploy_enabled", "socket_mode_enabled", "token_rotation_enabled"))
 
 
 APP = "A0VERITY"
