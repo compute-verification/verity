@@ -16,7 +16,17 @@ vLLM d9105ea80's choice of kernel for the MoE gate (`GateLinear.forward`, `LLBf1
   (`glm53_bf16_gemm_capture_gpu.scan_routes`), in which `fit_cublas_split_k` names the split counts whose route computes a
   launch's observed words exactly, so the split count is read out of the words (Kineto reports grid.z = 1 for these launches,
   so no profile field carries it).  Any other model's bf16-output routes are the cc 9.0 device pin's (`pinned_routes`,
-  `verity_vllm/pins/`), measured by `served routes`' probe, which the predicted served Program reads too.
+  `verity_vllm/pins/`), measured by `served routes`' probe, which the predicted served Program reads too.  The routes hold
+  under the scan's conditions only (`ROUTE_CONDITIONS`): `route_departures` names how a serving process's facts differ, which a
+  Commit's verdict, TP1's and each TP rank's, refuses for a Program that binds one of the `ROUTE_DEFINITIONS`
+  (`check.cublas_route_pin`).  So a torch or cuBLAS upgrade in the serving venv refuses every such Program until the scan
+  reruns under it, on an H200 with the serving venv's python, as `CUBLAS_ROUTES["run"]` ran:
+  `tests/properties/glm53_bf16_gemm_capture_gpu.py --scan-run --served-default --models glm53,dsv4-pro --scratch DIR --out OUT` with
+  `--only linear,bmm,f32out --scan-m 1:2048`, then `--only router --scan-m 17:2048`; its cases' `routes`, its `switch` facts and the
+  device's are then copied into `cublas_routes.json` (no tool writes it);
+* the cc 12.0 routes beside it: `cublas_splitk_rows(partial="bf16")` (a bf16 workspace), `cublas_serial_splitk_rows` (slices
+  meeting through the bf16 output) and `cublas_gemv_rows` (M = 1 gemvx lanes); `cublas_route_rows` is a device pin route's
+  twin, and `cublas_routes_at` with `route_probe_rows` what the probe tells apart.
 
 NaN payloads are not part of any comparison (`mla_check._words_equal`): the GPU's FFMA and FADD write 0x7FFFFFFF, numpy keeps
 an operand's.
@@ -34,6 +44,7 @@ from typing import Any
 import numpy as np
 
 from verity_vllm.program.kernels import derived_rows as DR
+from verity_vllm.program.registry import cublas_bf16 as CB
 from verity_vllm.program.registry import mla_check as MK
 
 U32 = np.uint32
@@ -52,6 +63,34 @@ DEFAULT_LL_BF16_FMA = 1
 #: chain), as the capture's decode-batch scan (run `run`) mapped them
 CUBLAS_ROUTES = json.loads(Path(__file__).with_name("cublas_routes.json").read_text())
 _ROUTES = {(p, int(k), int(n)): runs for (p, k, n), runs in ((key.split(), v) for key, v in CUBLAS_ROUTES["routes"].items())}
+#: what the scan's process ran on and under, as `glm53_bf16_gemm_capture_gpu.switch` read it (its device beside): the device, torch,
+#: the cuBLAS it mapped, its reduced-precision flags, preferred backend and workspace variables.  cuBLAS picks a route from these
+#: and the launch's shape, so the routes are a serving process's own only when its facts of record (`cublas` in
+#: `check.replay.driver.engine_facts_of_record`) are these
+ROUTE_CONDITIONS: dict[str, Any] = CUBLAS_ROUTES["conditions"]
+#: the Definitions a Program binds only at a route of the pin (the vocabulary's `cublas_*` roles, which `vllm_bindings.bf16_gemm`, the
+#: fold and the predictor bind at `default_cublas_route`); `Gemm_v2` is bound at the pin's non-split linear routes too, but also by
+#: every other rule, so its presence does not say the pin was read
+ROUTE_DEFINITIONS = (CB.CublasSplitKGemmWord, CB.CublasSplitKGemmF32OutWord, CB.GemmF32OutWord)
+
+
+def route_bound(by_family: dict[str, int]) -> dict[str, int]:
+    """The entries of `by_family` (a Program's row counts by Definition id) whose Definition is one of `ROUTE_DEFINITIONS`."""
+    ids = {d.id for d in ROUTE_DEFINITIONS}
+    return {f: n for f, n in sorted(by_family.items()) if f in ids}
+
+
+def route_departures(engine: dict[str, Any] | None) -> list[str]:
+    """Each way a serving process's facts of record (`engine_facts_of_record`) are not `ROUTE_CONDITIONS`, by name: a fact recorded
+    otherwise, or not recorded (a fact the process could not read is recorded as 'unavailable: <why>', which no condition is);
+    [] when it ran under them."""
+    seen = (engine or {}).get("cublas")
+    if not isinstance(seen, dict):
+        return [f"no cuBLAS facts recorded (engine_of_record.cublas; the pin's: {ROUTE_CONDITIONS})"]
+    env = seen.get("env") if isinstance(seen.get("env"), dict) else {}
+    pairs = [(k, seen.get(k, KeyError), w) for k, w in ROUTE_CONDITIONS.items() if k != "env"]
+    pairs += [(v, env.get(v, KeyError), w) for v, w in ROUTE_CONDITIONS["env"].items()]
+    return [f"{k} not recorded (pin: {w!r})" if got is KeyError else f"{k} {got!r} (pin: {w!r})" for k, got, w in pairs if got != w]
 
 
 def _route_run(phase: str, M: int, K: int, N: int) -> list | None:
@@ -264,6 +303,75 @@ def cublas_splitk_hypotheses(x: np.ndarray, w: np.ndarray, SPLIT_K: int, *, out:
             continue
         ans[name] = cublas_splitk_rows(x, w, SPLIT_K, partition=partition, partial=partial, reduction=reduction, out=out)
     return ans
+
+
+def cublas_serial_splitk_rows(x: np.ndarray, w: np.ndarray, SPLIT_K: int) -> np.ndarray:
+    """`CublasSerialSplitKGemm_v1{K, N, SPLIT_K, HopperBF16WgmmaDot16_v1}` of every row of x (M, K) against w (N, K): the contiguous
+    chunks in order, each chunk's k16 chain from +0 added in f32 to the previous chunk's bf16 output and rounded to bf16 again
+    (the first rounded alone): bf16 words (M, N)."""
+    x, w = np.asarray(x, np.uint16), np.asarray(w, np.uint16)
+    out = None
+    for cols in _split_cols(x.shape[1], SPLIT_K, "contiguous"):
+        p = MK.dot_chain(x[:, cols], w[:, cols])
+        out = MK.bf16_of(p if out is None else MK.add(p, DR.bf16_to_f32_words(out)))
+    return out
+
+
+def cublas_gemv_rows(x: np.ndarray, w: np.ndarray, LANES: int, FMA: int = 1) -> np.ndarray:
+    """`CublasGemv_v1{K, N, LANES, FMA}` of every row of x (M, K) against w (N, K): lane t of LANES runs one f32 chain from +0 over
+    k = t, t + LANES, ... (FFMA when FMA, else FMUL then FADD), the lanes meet in a butterfly (offsets LANES/2, ..., 1: lane i
+    adds lane i + o), and lane 0's sum, added to +0 (so a -0 sum leaves as +0), is rounded to bf16: bf16 words (M, N)."""
+    x, w = np.asarray(x, np.uint16), np.asarray(w, np.uint16)
+    (M, K), N = x.shape, w.shape[0]
+    xf, wf = DR.bf16_to_f32_words(x), DR.bf16_to_f32_words(w)
+    acc = np.zeros((M, N, LANES), U32)
+    for k0 in range(0, K, LANES):
+        n = min(LANES, K - k0)
+        a, b, c = xf[:, None, k0:k0 + n], wf[None, :, k0:k0 + n], acc[..., :n]
+        acc[..., :n] = MK.fma(a, b, c) if FMA else MK.add(c, MK.mul(a, b))
+    o = LANES // 2
+    while o:
+        acc = MK.add(acc[..., :o], acc[..., o:2 * o])
+        o //= 2
+    return MK.bf16_of(MK.add(np.zeros((M, N), U32), acc[..., 0]))
+
+
+def cublas_route_rows(route: dict[str, Any], x: np.ndarray, w: np.ndarray) -> np.ndarray:
+    """The bf16 words of `torch.mm(x, w.t())` (x (M, K), w (N, K)) along a probed cuBLAS route, a device pin's ``cublas`` entry."""
+    kind = route["kernel"]
+    if kind == "nosplit":
+        return linear_rows(x, w)
+    if kind == "splitk":
+        return cublas_splitk_rows(x, w, int(route["SPLIT_K"]), partial=route.get("partial", "f32"), out="bf16")
+    if kind == "serialk":
+        return cublas_serial_splitk_rows(x, w, int(route["SPLIT_K"]))
+    if kind == "gemv":
+        return cublas_gemv_rows(x, w, int(route["LANES"]))
+    raise ValueError(f"unknown cuBLAS route {route}")
+
+
+def cublas_routes_at(fits: list[int]) -> list[dict[str, Any]]:
+    """The routes `splitk_count_probe`'s words leave: the unsplit ones (the k16 chain, the gemvx lanes at 16 and 32, whose
+    count-probe words need not be the chain's) and, at each fitting split count, the f32- and bf16-workspace split-K and the serial
+    split-K."""
+    return ([{"kernel": "nosplit"}, {"kernel": "gemv", "LANES": 16}, {"kernel": "gemv", "LANES": 32}]
+            + [r for s in fits for r in ({"kernel": "splitk", "SPLIT_K": s}, {"kernel": "splitk", "SPLIT_K": s, "partial": "bf16"},
+                                         {"kernel": "serialk", "SPLIT_K": s})])
+
+
+def route_probe_rows(M: int, K: int, C: int, rng: np.random.Generator) -> list[tuple[np.ndarray, np.ndarray]]:
+    """Two probes of a route at (M, K), each (x (M, K), w (C, K)) bf16 words drawn from `rng`: spread rows (x of exponents -6 to 6,
+    w of -10 to 2), and cancelling rows (x all ones; each W row small words and one +-2^8..2^13 pair, so which chain each product
+    lands in decides what the chains absorb, and the small sum shows it through the bf16 rounding)."""
+    def words(shape, lo, hi):
+        f = rng.standard_normal(shape, dtype=np.float32) * np.exp2(rng.integers(lo, hi, shape)).astype(np.float32)
+        return (f.view(U32) >> 16).astype(np.uint16)
+    wc = DR.bf16_to_f32_words(words((C, K), -12, -5)).view(np.float32)
+    k1 = rng.integers(0, K, C)
+    k2 = (k1 + rng.integers(1, K, C)) % K
+    big = np.exp2(rng.integers(8, 14, C)).astype(np.float32)
+    wc[np.arange(C), k1], wc[np.arange(C), k2] = big, -big
+    return [(words((M, K), -6, 7), words((C, K), -10, 3)), (np.full((M, K), 0x3F80, np.uint16), (wc.view(U32) >> 16).astype(np.uint16))]
 
 
 def dotprod_rounds(K: int, BS: int, VEC: int) -> list[np.ndarray]:

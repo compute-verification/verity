@@ -12,8 +12,10 @@ over the three leaves `export_compat.dsa_leaves` exports in place of its kernels
         -> attention rows [T, NH, L]
         the layer's caches as history keyed by `layer_name` (rows [kv_c | k_pe], index-K slots and scales); per query row of n = P + 1
         keys, on an indexer layer `DsaMqaLogits_v3{N=n,H,D}` and `DsaTopKShortRow_v1{TOPK}` (n <= TOPK: the kernels' short-row
-        shortcut, slot i = i), on an IndexShare layer the top-k the last indexer layer wrote for the same positions; then
-        explicitly pinned `SparseMla_v1{T=n,...}` or default `SparseMlaSplit_v1{T=n,NS,...}` over the history's first n rows
+        shortcut, slot i = i), or past TOPK the run's order (a field of the `run` input) and `DsaTopKOrder_v1{N=n,TOPK}`'s check
+        that it is a permutation of the logits' top-TOPK set; on an IndexShare layer the top-k the last indexer layer wrote for the
+        same positions; then explicitly pinned `SparseMla_v1{T,...}` or default `SparseMlaSplit_v1{T,NS,...}` over the history's
+        first n rows (T = n), or past TOPK over `DsaGatherRows_v1{N=n,TOPK,W}`'s rows at the order (T = TOPK)
 
 and two ops around them: the latent absorptions `bmm(q_nope^T, W_UK_T)` and `bmm(attn^T, W_UV)` (`batched_gemm{B,K,N,DOT}` per token)
 and `output.copy_(rows)` (an allocation written whole).  A role the vocabulary lacks refuses by name.  The leaf the shim exports in
@@ -58,9 +60,12 @@ ROLE_KERNELS = {"dsa_rmsnorm": "q_a_layernorm / kv_a_layernorm in _fused_norm_ro
                 "dsa_indexer_q": "the index query of _fused_q_kernel (DsaIndexerQ_v1)",
                 "dsa_mqa_logits": "DeepGEMM's fp8 MQA logits (DsaMqaLogits_v3)",
                 "dsa_topk_short_row": "the top-k of a row of at most TOPK keys (DsaTopKShortRow_v1)",
+                "dsa_topk_order": "the check of a row past TOPK keys that the run's top-k order is the logits' top-TOPK set (DsaTopKOrder_v1)",
+                "dsa_gather_rows": "the history rows sparse MLA reads at a row's top-k order past TOPK keys (DsaGatherRows_v1)",
                 "sparse_mla": "FA3's sparse MLA (SparseMla_v1)",
                 "sparse_mla_split": "FA3's sparse MLA at vLLM's default split count (SparseMlaSplit_v1)",
-                "attention_dot": "FA3's dense causal prefill attention, FlashAttnPrefillBackend's (Attention_v4)",
+                "attention_dot": "FA3's dense causal prefill attention, FlashAttnPrefillBackend's (Attention_v4; AttentionSplit_v1 "
+                                 "where FA3 splits it)",
                 "batched_gemm": "the latent absorption bmm, cuBLAS's batched bf16 GEMM (BatchedGemm_v1{B,K,N,DOT})",
                 "const": "a constant word"}
 
@@ -350,6 +355,7 @@ class DsaQRule(OpRule):
 
 
 _ATTN = ("positions", "ql_nope", "q_pe", "kv_c", "k_pe", "index_q", "index_weights", "index_k", "index_k_scale", "layer_name", "topk", "scale")
+_DENSE = ("positions", "q_nope", "q_pe", "k_nope", "v", "kv_c", "k_pe", "index_k", "index_k_scale", "layer_name", "topk", "scale")
 
 
 def _observed_sparse_mla(layer_name: str) -> str | None:
@@ -426,13 +432,32 @@ def _append_rows(ctx, hist: dict, a: dict, has: bool) -> None:
             hist["iks"].append(iks[i])
 
 
+def _history_rows(ep, layer_kinds) -> dict[str, list[tuple[int, int, bool]]]:
+    """Per layer, each DSA leaf call's (rows before it, its rows, whether it is an indexer `dsa_indexer_attn`) in graph order: what
+    `_open_history` will find, read from the export's fake-tensor shapes before the translation."""
+    out: dict[str, list[tuple[int, int, bool]]] = {}
+    for node in ep.graph.nodes:
+        names = layer_kinds.get(node.target) if node.op == "call_function" else None
+        if names is None:
+            continue
+        a = _args(node, _DENSE if names == "dense" else _ATTN)
+        val = getattr(a.get("positions"), "meta", {}).get("val")
+        if not isinstance(a.get("layer_name"), str) or val is None or len(val.shape) != 1:
+            continue
+        calls = out.setdefault(a["layer_name"], [])
+        calls.append((sum(T for _, T, _ in calls), int(val.shape[0]), names == "attn" and a.get("index_q") is not None))
+    return out
+
+
 class DsaIndexerAttnRule(StateRule):
     """`vllm_iface.dsa_indexer_attn` (the sparse indexer and FA3's sparse MLA of one layer): the layer's MLA and index-K caches are
     implicit state keyed by `layer_name`, made explicit as histories.  A layer's history opens at its first call, at whatever position
     (the step wrapper's `pos0`, as the dense attention rule's `kv_history` opens), and every later call continues it; row i of a call
     that finds P0 rows reads the first n = P0 + i + 1 rows.  An indexer layer emits the row's logits and its top-k, an IndexShare layer takes the top-k the last indexer layer selected for
     the same positions, and both the pinned one-split or default split sparse MLA over the selected rows: with n <= TOPK the
-    selection is rows 0..n-1 in order."""
+    selection is rows 0..n-1 in order.  Past TOPK the order is the served kernel's, a value: the field `<layer>/topk[t=P]` of the
+    `run` input, which `DsaTopKOrder_v1{N=n,TOPK}` checks against the row's logits (one of the Program's checks), and sparse MLA
+    reads the TOPK rows it selects through `DsaGatherRows_v1`'s mux over the n history rows, so the wiring is static."""
     modes = frozenset({"profile"})
     info = RuleInfo("DsaIndexerAttn[vllm-dsa]", 1, "state", applies_to="vllm_iface.dsa_indexer_attn(...) (" + ", ".join(_ATTN) + ")",
                     preconditions=("the layer's OBSERVED implementation is FlashAttnMLASparseImpl on a bf16 cache, without context parallelism; "
@@ -444,12 +469,27 @@ class DsaIndexerAttnRule(StateRule):
                                    "positions are T consecutive rows continuing the layer's history; ql_nope [T, NH, L], q_pe [T, NH, R], kv_c [T, L], k_pe [T, R] bf16",
                                    "the index operands all given (index_q [T, H, D] e4m3, index_weights [T, H] f32, index_k [T, D] e4m3, "
                                    "index_k_scale [T] f32) or all None, then the last indexer layer selected for these positions",
-                                   "every row has at most TOPK keys (the top-k kernels' short-row shortcut)",
+                                   "a row of at most TOPK keys takes the top-k kernels' short-row shortcut; a longer one reads the run's "
+                                   "order, checked by DsaTopKOrder_v1 and read through DsaGatherRows_v1 (an IndexShare layer's rows "
+                                   "have the indexer layer's key counts)",
                                    "layer_name static and written from one module; not under registered_values"),
-                    evidence_domain="structural; numerics: DsaMqaLogits_v3, DsaTopKShortRow_v1, SparseMla_v1 or SparseMlaSplit_v1")
+                    evidence_domain="structural; numerics: DsaMqaLogits_v3, DsaTopKShortRow_v1, DsaTopKOrder_v1, DsaGatherRows_v1, "
+                                    "SparseMla_v1 or SparseMlaSplit_v1")
 
     def targets(self):
         return {iface.dsa_indexer_attn.default}
+
+    def run_inputs(self, ep, mode):
+        """An indexer layer's row past its TOPK keys reads the run's top-k order."""
+        kinds = {iface.dsa_indexer_attn.default: "attn", iface.dsa_dense_mha.default: "dense"}
+        topk = {}
+        for node in ep.graph.nodes:
+            if node.op == "call_function" and node.target is iface.dsa_indexer_attn.default:
+                a = _args(node, _ATTN)
+                if isinstance(a.get("topk"), int):
+                    topk.setdefault(a.get("layer_name"), a["topk"])
+        return any(indexer and P0 + T > topk.get(layer, P0 + T) for layer, calls in _history_rows(ep, kinds).items()
+                   for P0, T, indexer in calls)
 
     def applies(self, node, ctx):
         a = _args(node, _ATTN)
@@ -473,6 +513,9 @@ class DsaIndexerAttnRule(StateRule):
             return pos
         T = len(pos)
         if (r := _prefill_by_dense_mha(layer, T)):
+            return r
+        hist = (ctx.state.get("dsa_history") or {}).get(layer)
+        if (len(hist["latent"]) if hist else 0) + T > topk and (r := _missing(ctx, ["dsa_gather_rows"] + (["dsa_topk_order"] if has else []))):
             return r
         L = (shape(ctx, a["kv_c"]) or (0, 0))[-1]
         R = (shape(ctx, a["k_pe"]) or (0, 0))[-1]
@@ -512,10 +555,6 @@ class DsaIndexerAttnRule(StateRule):
         keys = [P0 + i + 1 for i in range(T)]
         _append_rows(ctx, hist, a, has)
         latent = _log(ctx, (layer, "latent"), hist["latent"])
-        too_long = [(P, n) for P, n in zip(pos, keys) if n > TOPK]
-        if too_long:
-            refuse("numerics_unregistered", node, mp, f"{layer!r}: position {too_long[0][0]} has {too_long[0][1]} keys > TOPK {TOPK}: the top-k "
-                                                     f"kernels' radix selection has no Definition (DsaTopKShortRow_v1 states rows of at most TOPK)")
         G = FA3_SPARSE_GEOMETRY[(R, L)]
         obs = (_OBSERVED["attention_impls"] or {}).get(layer) or {}
         pinned_one = obs.get("num_splits") == 1
@@ -526,7 +565,8 @@ class DsaIndexerAttnRule(StateRule):
             # that count given the launch
             batch = [min(n, TOPK) for n in launch_keys_of(node, keys)]
             by_keys = dict(zip(batch, launch_num_splits(batch, int(active_target_profile().num_sms), TOPK, int(obs.get("num_splits") or 0))))
-            splits = [by_keys[n] for n in keys]
+            splits = [by_keys[min(n, TOPK)] for n in keys]
+        past = [P for P, n in zip(pos, keys) if n > TOPK]
         if has:
             H, D = shape(ctx, a["index_q"])[1:3]
             iq, iw = _rows(ctx, a["index_q"], 8), _rows(ctx, a["index_weights"], 32)
@@ -535,35 +575,53 @@ class DsaIndexerAttnRule(StateRule):
             selected = {}
             for i, (P, n) in enumerate(zip(pos, keys)):
                 lg = ctx.kind("dsa_mqa_logits", node, N=n, H=H, D=D)
-                ctx.call(lg, iq[i], iw[i], Coll(Array(n, Array(D, Value(8))), klog.cut(n)), Coll(Array(n, Value(32)), slog.cut(n)),
-                         node=node, rule=self, name=f"{h}/logits[t={P}]")
-                ln = ctx.call(ctx.kind("const", node, W=32, BITS=n), node=node, rule=self, name=f"{h}/len[t={P}]")
-                selected[P] = ctx.call(sel_fn, ln, node=node, rule=self, name=f"{h}/topk[t={P}]")
-            ctx.state["dsa_topk"] = {"layer": layer, "rows": selected}
+                logits = ctx.call(lg, iq[i], iw[i], Coll(Array(n, Array(D, Value(8))), klog.cut(n)), Coll(Array(n, Value(32)), slog.cut(n)),
+                                  node=node, rule=self, name=f"{h}/logits[t={P}]")
+                if n <= TOPK:
+                    ln = ctx.call(ctx.kind("const", node, W=32, BITS=n), node=node, rule=self, name=f"{h}/len[t={P}]")
+                    selected[P] = ctx.call(sel_fn, ln, node=node, rule=self, name=f"{h}/topk[t={P}]")
+                    continue
+                order = ctx.run_value(f"{layer}/topk[t={P}]", Array(TOPK, Value(32)), node)
+                ok = ctx.call(ctx.kind("dsa_topk_order", node, N=n, TOPK=TOPK), logits, order, node=node, rule=self,
+                              name=f"{h}/topk_order[t={P}]")
+                ctx.check(ok, f"{layer} t={P}: the run's top-{TOPK} order is a permutation of the top-{TOPK} set of {n} logits "
+                              f"(DsaTopKOrder_v1)")
+                selected[P] = order
+            ctx.state["dsa_topk"] = {"layer": layer, "rows": selected, "keys": dict(zip(pos, keys))}
             source = layer
         else:
             last = ctx.state.get("dsa_topk")
             if last is None or any(P not in last["rows"] for P in pos):
                 refuse("side_input", node, mp, f"IndexShare layer {layer!r} reads a top-k no indexer layer selected for positions "
                                                f"{pos[0]}..{pos[-1]}")
-            source = last["layer"]
+            odd = [(P, n) for P, n in zip(pos, keys) if n > TOPK and last["keys"][P] != n]
+            if odd:
+                refuse("side_input", node, mp, f"IndexShare layer {layer!r} has {odd[0][1]} keys at position {odd[0][0]}, but "
+                                               f"{last['layer']!r} selected its top-{TOPK} among {last['keys'][odd[0][0]]}")
+            selected, source = last["rows"], last["layer"]
         ql, qr = _rows(ctx, a["ql_nope"], 16), _rows(ctx, a["q_pe"], 16)
+        row = Array(L + R, Value(16))
         outs = []
         for i, (P, n, ns) in enumerate(zip(pos, keys, splits)):
             role = "sparse_mla" if pinned_one else "sparse_mla_split"
-            statics = {"T": n, "NH": NH, "DR": R, "DV": L, "BN": G["BN"], "DOT": G["DOT"], "INV": G["INV"], "SM_SCALE": scale}
+            statics = {"T": min(n, TOPK), "NH": NH, "DR": R, "DV": L, "BN": G["BN"], "DOT": G["DOT"], "INV": G["INV"], "SM_SCALE": scale}
             if not pinned_one:
                 statics["NS"] = ns
             attn = ctx.kind(role, node, **statics)
-            outs.append(ctx.call(attn, ql[i], qr[i], Coll(Array(n, Array(L + R, Value(16))), latent.cut(n)), node=node, rule=self,
-                                 name=f"{h}[t={P}]"))
+            kv = Coll(Array(n, row), latent.cut(n))
+            if n > TOPK:
+                kv = ctx.call(ctx.kind("dsa_gather_rows", node, N=n, TOPK=TOPK, W=L + R), selected[P], kv, node=node, rule=self,
+                              name=f"{h}/rows[t={P}]")
+            outs.append(ctx.call(attn, ql[i], qr[i], kv, node=node, rule=self, name=f"{h}[t={P}]"))
         ctx.define(node, array_of(outs))
         ctx.record(self, node, {"layer_name": layer, "positions": [pos[0], pos[-1]], "history_rows_after": P0 + T, "NH": NH, "DR": R, "DV": L,
                                 "BN": G["BN"], "DOT": G["DOT"].name, "INV": G["INV"].name, "scale": scale, "TOPK": TOPK, "indexer": has,
-                                "top_k_from": source, "selection": "rows 0..n-1 in order (n <= TOPK: DsaTopKShortRow_v1's slots)",
-                                "attention_impl_observed": (_OBSERVED["attention_impls"] or {}).get(layer)},
+                                "top_k_from": source, "selection": "rows 0..n-1 in order (n <= TOPK: DsaTopKShortRow_v1's slots); past "
+                                "TOPK the run's order (`run` field <layer>/topk[t=P]), checked by DsaTopKOrder_v1, its rows by DsaGatherRows_v1",
+                                "past_topk": past, "attention_impl_observed": (_OBSERVED["attention_impls"] or {}).get(layer)},
                    emitted=f"{attn.id} x{T} (splits {splits})" +
-                           (f" + DsaMqaLogits_v3, DsaTopKShortRow_v1 x{T}" if has else f" (top-k of {source})"))
+                           (f" + DsaMqaLogits_v3, DsaTopKShortRow_v1 x{T - len(past)}" if has else f" (top-k of {source})") +
+                           (f" + {'DsaTopKOrder_v1, ' if has else ''}DsaGatherRows_v1 x{len(past)}" if past else ""))
 
 
 class MlaAbsorbBmmRule(OpRule):

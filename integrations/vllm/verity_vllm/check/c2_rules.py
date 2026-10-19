@@ -1,6 +1,7 @@
 """The C2 rules of one instrumented run's Commit record (local replay, boundary linkage, weights of record) and its execution
 extent, each a `CheckResult`, with the helpers the decision (`verdict.commit_verdict`) shares: form (B) coverage of the replay's named
-gaps, the seed of record, the population scope against Q(P).
+gaps, the seed of record, the population scope against Q(P).  The cuBLAS route pin's rule reads the block `check.cublas_route_pin`
+stamps on the record.
 
 The rules decide from the structured codes the sampled replay stamps on its record (`replay_codes`: the class / family / domain of
 every not-evaluable reason, the classes of every unevaluated stratum, the seed form), never from its message texts."""
@@ -28,13 +29,15 @@ def _form_b_complete_over_values(oc: dict | None) -> str | None:
     """[COORD M-0721 (1); rev-cb M-0740 G3] None when form (B) -- the Match-oracle compare -- is COMPLETE over the values: result True, 0
     mismatch, complete (every step snapshotted), compared > 0, attribution complete, and the module outputs (`instance_outputs`, the family
     the gap strata produce) compared > 0 with none left not-compared (weights / hidden_stream have no oracle family and never stand in).
-    Else the named reason it is not."""
+    Else the named reason it is not; a form (B) that is never complete says why in its `scope` (a TP Commit's, `pipeline.tp.c2.tp_form_b`)."""
     if not isinstance(oc, dict):
         return "form (B) absent (no --match-dir oracle compare on the record)"
     if oc.get("result") is not True:
         return f"form (B) result {oc.get('result')} ({oc.get('grade') or 'no grade'})" + (f": {str(oc.get('why'))[:120]}" if oc.get("why") else "")
     if int(oc.get("mismatch_n") or 0) != 0:
         return f"form (B) {oc.get('mismatch_n')} mismatch"
+    if oc.get("complete") is not True and oc.get("scope"):
+        return f"form (B) not complete over the values ({oc['scope']})"
     if oc.get("complete") is not True:
         return f"form (B) not complete ({oc.get('grade') or 'partial'}: steps not snapshotted {oc.get('steps_not_snapshotted') or '?'} -- Match with MATCH_SNAP_STEPS=all)"
     if int(oc.get("compared") or 0) <= 0:
@@ -409,7 +412,7 @@ def _replay_inputs(sr: dict | None, ctx: dict) -> dict[str, Any]:
 def c2_rules(commit: dict, ctx: dict) -> list[CheckResult]:
     """The C2-of-record block of commit_verdict (DECISIONS-2 §4; lines `sr = commit.get("sampled_replay")` .. `_scope`), evaluated rule by rule with
     the SAME nesting (a branch v1 never took is not taken here), emitting: local_replay/sampled_replay, /seed_of_record, /population_gaps,
-    /population_scope, /attribution; boundary_linkage/ordered_linkage; checkpoint_binding/weights_of_record."""
+    /population_scope, /attribution, /cublas_route_pin; boundary_linkage/ordered_linkage; checkpoint_binding/weights_of_record."""
     sr, lk, wp = _replay_of(commit), _linkage_of(commit), commit.get("weights_pin")
     row_proc = _is_row_procedure(commit)
     bnd = _d(commit.get("binding"))
@@ -564,7 +567,25 @@ def c2_rules(commit: dict, ctx: dict) -> list[CheckResult]:
         if spec[0] not in out:
             put(spec, NOT_RUN)
     order = [C_SR[0], C_SEED[0], C_GAP[0], C_SCOPE[0], C_ATT[0], C_LK[0], C_WP[0]]
-    return [out[n] for n in order]
+    return [out[n] for n in order] + [rule_route_pin(commit, ctx)]
+
+
+C_ROUTE = ("local_replay/cublas_route_pin", "note:20261018T1929Z-finding-redteam-circuits (claim 1)",
+           "A Program that binds a Definition only the cuBLAS route pin binds was served under the pin's scan's conditions, each measured in the serving process.",
+           ["cublas_route_pin.ok", "cublas_route_pin.why", "cublas_route_pin.departures", "cublas_route_pin.families", "cublas_route_pin.pin"])
+
+
+def rule_route_pin(commit: dict, ctx: dict) -> CheckResult:
+    """v1: `cublas_route_pin.ok is False` -> FAIL by its `why`, on any record (`check.cublas_route_pin.stamp`); NOT_RUN when no block is
+    stamped (the Program binds none of the pin's Definitions)."""
+    rp = commit.get("cublas_route_pin")
+    if not isinstance(rp, dict):
+        return _mk(*C_ROUTE, commit, ctx, outcome=NOT_RUN)
+    scope = {k: rp.get(k) for k in ("families", "pin")}
+    if rp.get("ok") is not False:
+        return _mk(*C_ROUTE, commit, ctx, outcome=PASS, scope=scope)
+    return _mk(*C_ROUTE, commit, ctx, outcome=FAIL, reason=rp.get("why") or "cuBLAS route pin: served off the pin's scan's conditions", scope=scope,
+               differences=[{"name": "served_off_route_pin", "departures": rp.get("departures") or []}])
 
 
 def execution_extent_rules(commit: dict, ctx: dict) -> list[CheckResult]:

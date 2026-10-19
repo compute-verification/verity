@@ -1,6 +1,7 @@
 """A `registered_values` derivation's registered inputs: the `values` record, whose fields are allocated as the Definitions read
 them, and the tables the rules declare (`Rule.registered_tables`).  They follow the user inputs and precede `weights`, which the
-Build's consumers read as the last parameter."""
+Build's consumers read as the last parameter.  `RunInputs` is the `run` record a rule declares (`Rule.run_inputs`): values the
+served run binds, after the user inputs and before the registered inputs, as the fold lays out its `run` parameters."""
 
 from __future__ import annotations
 
@@ -64,3 +65,35 @@ class Registration:
                                  "fields": [{"name": f["name"], "width": f["width"], "bits": f"0x{f['bits']:0{f['width'] // 4}x}",
                                              "offset": f["offset"]} for f in self.fields]},
                 "run": [], **({"tables": [{"param": i, "name": n} for n, i in self.tables.items()]} if self.tables else {})}
+
+
+class RunInputs:
+    """The `run` parameter: values the served run decides that the Program checks in gates rather than computes (the top-k order of
+    a DSA row past TOPK), one field per read, in first-read order.  Its Record is finalised after the translation, as `values` is."""
+
+    def __init__(self, param: int) -> None:
+        self.param = param
+        self.fields: list[dict] = []   # {name, type, offset}, offset in leaves
+
+    @classmethod
+    def declare(cls, params: list[tuple[str, Type]]) -> RunInputs:
+        params.append(("run", Record()))
+        return cls(len(params) - 1)
+
+    def value(self, name: str, t: Type) -> Coll:
+        if any(f["name"] == name for f in self.fields):
+            raise ValueError(f"run value {name!r} is read twice")
+        offset = sum(f["type"].leaves for f in self.fields)
+        self.fields.append({"name": name, "type": t, "offset": offset})
+        return Coll(t, Affine("p", self.param, offset, t.leaves))
+
+    def finish(self, params: list[tuple[str, Type]]) -> None:
+        if not self.fields:
+            raise ValueError("a rule declared run inputs (`Rule.run_inputs`) but read none; the `run` parameter would be empty")
+        params[self.param] = ("run", Record(*[(f["name"], f["type"]) for f in self.fields]))
+
+    def layout(self) -> dict:
+        """The parameter index and each field's name, type, leaf offset and leaves: what a run binds."""
+        return {"param": self.param, "name": "run",
+                "fields": [{"name": f["name"], "type": repr(f["type"]), "offset": f["offset"], "leaves": f["type"].leaves}
+                           for f in self.fields]}

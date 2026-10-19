@@ -348,12 +348,16 @@
     "AttnBlock_v4",
     "Attention_v9",
     "AttentionHead_v9",
-    "AttnBlock_v9"
+    "AttnBlock_v9",
+    "AttentionSplit_v1",
+    "AttentionHeadSplit_v1",
+    "AttentionSplit_v2",
+    "AttentionHeadSplit_v2"
    ],
    "captures": [
     "glm53_fa3_prefill_capture"
    ],
-   "note": "FA3 dense causal prefill (FlashAttnPrefillBackend.run_prefill_new_tokens -> flash_attn_varlen_func, fa_version 3) at qk head 256 / v head 256: vllm-flash-attn 506341a1 runs TileShape 128x80x256 (tile_size_fwd_sm90, hdim > 192, not local), 16 QK and 5 P.V wgmma k16 steps a block. RescaleOBeforeGemm (true above head 128) moves O's rescale before the next P.V gemm, the same per-element recurrence, so a row is Attention_v4{T,NH=8,KVH=8,D=256,BN=80,DOT=HopperBF16WgmmaDot16_v1,INV=Fa3InvSum_v1,MASKED_FROM} (targets.attention_spec; Attention_v9 on bits). vLLM passes num_splits=0: per rank (8 heads, 132 SMs) a launch whose longest sequence has 321..1664 tokens splits KV (fa3_model.num_splits) and runs FlashAttnFwdCombine, which no Program models. The H200 capture (tests/properties/glm53_fa3_prefill_capture_gpu.py) pins the tile and the backend's words, and the Build binds the prefill by DsaDenseMha[vllm-dsa] (rules/vllm_dsa_dense.py) one head a call (Attention_v4{NH=1,KVH=1}: the row's head h, at the tile every head shares) where FA3 runs it as one split; port until a committed step's attn.mha is checked against that Program"
+   "note": "FA3 dense causal prefill (FlashAttnPrefillBackend.run_prefill_new_tokens -> flash_attn_varlen_func, fa_version 3) at qk head 256 / v head 256: vllm-flash-attn 506341a1 runs TileShape 128x80x256 (tile_size_fwd_sm90, hdim > 192, not local), 16 QK and 5 P.V wgmma k16 steps a block. RescaleOBeforeGemm (true above head 128) moves O's rescale before the next P.V gemm, the same per-element recurrence, so a row is Attention_v4{T,NH=8,KVH=8,D=256,BN=80,DOT=HopperBF16WgmmaDot16_v1,INV=Fa3InvSum_v1,MASKED_FROM} (targets.attention_spec; Attention_v9 on bits). vLLM passes num_splits=0: per rank (8 heads, 132 SMs) a launch whose longest sequence has 321..1664 tokens splits KV (fa3_model.num_splits) and runs FlashAttnFwdCombine: a row of such a sequence is AttentionSplit_v1{...,PER} (registry/fa3_split.py: each split's Attention_v4 blocks, its SparseMlaSplitEnd_v1 and the row's SparseMlaCombine_v1, the combine instantiation at kLogMaxSplits 5; AttentionSplit_v2 on bits). The H200 capture (tests/properties/glm53_fa3_prefill_capture_gpu.py) pins the tile and the backend's words, and the Build binds the prefill by DsaDenseMha[vllm-dsa] (rules/vllm_dsa_dense.py) one head a call (Attention_v4{NH=1,KVH=1}: the row's head h, at the tile every head shares), AttentionSplit_v1{NH=1,KVH=1,PER} where FA3 splits it; port until a committed step's attn.mha is checked against that Program"
   },
   "mla-sparse-attention": {
    "status": "port",

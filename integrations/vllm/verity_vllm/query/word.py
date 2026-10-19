@@ -17,8 +17,8 @@ The rule (no recomputes):
     max, sum and inverse sum).  No dtype is read.
   * It is the query of record (`required.QUERY_OF_RECORD`): a Call's inputs and outputs are the bridge's required values.
 
-The cut of one Call (`partition`), on its computing gates (`Graph`, core's `verity.ml.circuits.cut.CallGraph`: wiring and constants removed,
-reads through them re-pointed):
+The cut of one Call (`partition`), on its computing gates (`Graph`, the graph of core's `verity.ml.circuits.cut.CallGraph` in flat arrays:
+wiring and constants removed, reads through them re-pointed):
 
   1. The returned gates, in return order, packed into outputs of at most X bits (a wider value is an output alone).
   2. Backward over the gates (the layout is topological): a gate joins its consumers' unit when they all belong to one; a gate
@@ -26,7 +26,8 @@ reads through them re-pointed):
   3. A gate no returned value depends on (dead) joins the one unit it reads, else heads a dead unit; any value such a gate reads
      across units is committed too.
 
-`verity.ml.circuits.partition.validate_unit_cut` checks every Call's cut; the committed interior values are what serving must acquire (a tap
+`verity.ml.circuits.partition.validate_unit_cut` checks every Call's cut (`cut_verdict`, its verdict in numpy passes over the reads); the
+committed interior values are what serving must acquire (a tap
 where it does not today).  `unit_rule` summarises one specialization; `check_query` checks a Program and fails by name.
 
 A specialization's unit rule is a function of the Definition, the query and the gate limits alone.  Attention has one specialization
@@ -38,6 +39,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+from array import array
 from collections import Counter
 from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping
@@ -45,8 +47,10 @@ from typing import Any, Callable, Iterable, Mapping
 import numpy as np
 
 from verity.ml.circuits.codec import canonical_json, definition_entry
-from verity.ml.circuits.cut import WIRING, CallGraph, cut_word, fits, separable
+from verity.ml.circuits.cut import WIDE_FAN_IN, WIRING, QueryInapplicable, call_scope, cut_word, fits, separable, wide_operands
 from verity.ml.circuits.defs import PrimitiveDefinition
+from verity.ml.circuits.layout import resolve
+from verity.ml.circuits.partition import MAX_LISTED, CutVerdict
 
 from verity_vllm.query.call_scope import QueryRuleViolation, specialization
 
@@ -59,7 +63,8 @@ RULE = "no-recompute"
 _KINDS = ("output", "committed", "dead")
 
 #: Calls with more gates than this are not partitioned explicitly (`check_calls` names them).  A run raises it (`gate_limits`) with a
-#: subcommand's `--word-max-gates` (or `VERITY_QWORD_MAX_GATES`): a memory budget (about 0.6 KB per gate), not part of `query_id`
+#: subcommand's `--word-max-gates` (or `VERITY_QWORD_MAX_GATES`): a memory budget (about 0.5 KB per gate and 20 bytes per operand it
+#: reads: a MoE expert gather reads every expert's word), not part of `query_id`
 MAX_GATES = 24_000_000
 MAX_GATES_ENV = "VERITY_QWORD_MAX_GATES"
 
@@ -101,19 +106,149 @@ def parse(spec: str) -> tuple[int, int, int]:
     return int(x), int(w) if w else max(int(x), 32), int(e or 0)
 
 
-def _np(a: Any, dtype: Any = np.int64) -> np.ndarray:
-    return np.frombuffer(a, dtype).astype(np.int64) if len(a) else np.zeros(0, np.int64)
+def _view(a: array) -> np.ndarray:
+    """`a`'s items as a numpy array over its buffer (no copy)."""
+    return np.frombuffer(a, np.dtype(a.typecode)) if len(a) else np.zeros(0, np.dtype(a.typecode))
 
 
-class Graph(CallGraph):
-    """`verity.ml.circuits.cut.CallGraph` (the core reference: the computing gates of one activation, structure removed) with numpy views of
-    the per-gate arrays the cut computes on: `keep`, `width`, `prim`, `scope`, `external` and the reads `src` -> `dst`."""
+class Graph:
+    """The computing gates of one activation of `fn`: the graph of core's `verity.ml.circuits.cut.CallGraph` (the reference, whose step 3
+    this follows; `tests/query/test_word.py` holds the two equal field by field), built in one pass over the gates into flat arrays.  The
+    reference keeps Python objects per operand read (an interned token per input, a tuple per input read, the full key of every computing
+    gate), hundreds of bytes each: GLM-5.3's MoE expert FP8 GEMMs read 257 operands per gate, 468 GB for one Definition.  Here a read
+    costs a few bytes, and a computing gate's key is matched by its hash, then compared in full, so the recomputed pairs are the
+    reference's.
 
-    def __init__(self, fn: Any) -> None:
-        super().__init__(fn)
-        self.keep, self.width, self.prim, self.scope = _np(self.keep), _np(self.width), _np(self.prim), _np(self.scope)
-        self.external = np.frombuffer(self.external, np.uint8).astype(bool) if len(self.external) else np.zeros(0, bool)
-        self.src, self.dst = _np(self.src), _np(self.dst)
+    Numpy arrays: `keep`, `width`, `prim`, `scope`, `external`, the reads `src` -> `dst`, `input_ids` (root gate id of each Call
+    parameter leaf read, first-read order) and the input reads `input_read` (input index) -> `input_reader` (gate), which `input_reads`
+    lists as the reference's pairs.  Lists: `outputs`, `returned_inputs`, `recomputed`."""
+
+    def __init__(self, fn: Any, wiring: frozenset[str] = WIRING) -> None:
+        c, call = call_scope(fn)
+        lo, n = call.offset, fn.gates
+        tc = "i" if c.size < 1 << 31 else "q"
+        width, prim, scope, tok = (array("q", bytes(8 * n)) for _ in range(4))
+        idx = array("q", [-1]) * n                                   # computing gate -> its compact index
+        external, free, const = bytearray(n), bytearray(n), bytearray(n)
+        self.prims: dict[str, int] = {}
+        self.scopes: dict[str, int] = {}
+        roots = array(tc)                                            # input index -> the root gate it reads
+        seen = memoryview(np.zeros(lo, np.dtype(tc)))                # a Call parameter gate's input index + 1 (0: unread)
+        far: dict[int, int] = {}
+        keep, src, dst = array("q"), array("q"), array("q")
+        rin, rgate = array(tc), array(tc)
+        structure: dict[tuple, int] = {}                             # a structure key -> the first structure gate with it
+        first: dict[int, Any] = {}                                   # hash of a computing key -> the first gate (or gates) with it
+        srcs: dict[int, tuple[int, ...]] = {}
+        dup: list[tuple[int, int]] = []
+
+        def operands(g: Any, j: int, wide: bool) -> tuple[list[int], bool]:
+            """The gate's operands as the reference lists them (a gate of the Call by its local index, an input as -1 - its index;
+            a wide gate's inputs not listed), and whether it reads outside the Call."""
+            mine, ext = [], wide
+            for o in g.operands if not wide else wide_operands(g, call):
+                q = o - lo
+                if 0 <= q < n:
+                    if q >= j:
+                        raise QueryInapplicable(f"{fn.id}: gate {j} reads gate {q}, not before it (the layout is not topological)",
+                                                {"definition": fn.id, "gate": j, "reads": q, "why": "not topological"})
+                    mine.append(q)
+                    continue
+                ext = True
+                if wide:
+                    continue
+                if 0 <= o < lo:
+                    x = seen[o]
+                    if not x:
+                        roots.append(o)
+                        x = seen[o] = len(roots)
+                else:
+                    x = far.get(o)
+                    if x is None:
+                        roots.append(o)
+                        x = far[o] = len(roots)
+                mine.append(-x)
+            return mine, ext
+
+        def key(j: int, mine: list[int]) -> tuple:
+            # an input's token is its operand (< 0), a gate's the first gate with its value (a structure gate: with its key)
+            return (prim[j], *[o if o < 0 else tok[o] for o in mine])
+
+        for j in range(n):
+            g = c.gate(lo + j)
+            p = g.prim
+            width[j] = p.ret.w
+            prim[j] = self.prims.setdefault(p.id, len(self.prims))
+            scope[j] = self.scopes.setdefault(g.scope.spec.id, len(self.scopes))
+            wide = len(g.operands) > WIDE_FAN_IN
+            mine, ext = operands(g, j, wide)
+            external[j] = ext
+            cj = not p.params
+            fj = cj or p.id in wiring
+            if not fj and not ext and mine and all(o >= 0 and const[o] for o in mine):   # a value of constants alone is a constant
+                cj = fj = True
+            const[j], free[j] = cj, fj
+            if fj:
+                tok[j] = structure.setdefault(key(j, mine), j)
+                s: set[int] = set()
+                for o in mine:
+                    s.update(srcs[o] if o >= 0 and free[o] else (o,))
+                srcs[j] = tuple(sorted(s))
+                continue
+            tok[j] = j
+            if not wide:                                             # a wide gate's operands were not all listed: it matches nothing
+                k = key(j, mine)
+                h = hash(k)
+                got = first.get(h)
+                cands = () if got is None else got if isinstance(got, list) else (got,)
+                f = next((f for f in cands if key(f, operands(c.gate(lo + f), f, False)[0]) == k), None)
+                if f is not None:
+                    dup.append((j, f))
+                    tok[j] = tok[f]
+                elif got is None:
+                    first[h] = j
+                else:
+                    first[h] = [*cands, j]
+            i = idx[j] = len(keep)
+            keep.append(j)
+            reads = mine if not any(o >= 0 and free[o] for o in mine) else \
+                [u for o in mine for u in (srcs[o] if o >= 0 and free[o] else (o,))]
+            for u in dict.fromkeys(reads):                           # each distinct source once, in operand order
+                if u < 0:
+                    rin.append(-1 - u)
+                    rgate.append(i)
+                else:
+                    src.append(idx[u])
+                    dst.append(i)
+        self.total, self.free = n, sum(free)
+        self.n = len(keep)
+        self.keep = _view(keep)
+        self.width, self.prim, self.scope = _view(width)[self.keep], _view(prim)[self.keep], _view(scope)[self.keep]
+        self.external = np.frombuffer(bytes(external), np.uint8)[self.keep].astype(bool) if n else np.zeros(0, bool)
+        self.src, self.dst = _view(src), _view(dst)
+        self.input_ids = _view(roots)
+        self.input_read, self.input_reader = _view(rin), _view(rgate)
+        self.recomputed = [(idx[a], idx[b]) for a, b in dup]
+        outs: list[int] = []
+        returned_inputs: set[int] = set()
+        for g in ([0] if not hasattr(fn, "body") else (resolve(call, r) - lo for r in fn.body.ret)):
+            if 0 <= g < n:
+                for u in (srcs[g] if free[g] else (g,)):
+                    if u >= 0:
+                        outs.append(idx[u])
+                    else:
+                        returned_inputs.add(-1 - u)
+        self.outputs = outs
+        self.returned_inputs = sorted(returned_inputs)
+        self.prim_names = {v: k for k, v in self.prims.items()}
+        self.scope_names = {v: k for k, v in self.scopes.items()}
+        counts = Counter(prim[j] for j in range(n) if free[j])
+        self.free_by_prim = Counter({self.prim_names[k]: counts[k] for k in sorted(counts)})
+
+    @property
+    def input_reads(self) -> list[tuple[int, int]]:
+        """The input reads as the reference's (input index, gate) pairs."""
+        return list(zip(self.input_read.tolist(), self.input_reader.tolist()))
 
 
 def partition(G: Graph, X: int) -> tuple[np.ndarray, list[str], np.ndarray]:
@@ -124,10 +259,52 @@ def partition(G: Graph, X: int) -> tuple[np.ndarray, list[str], np.ndarray]:
     return np.asarray(own, np.int64), kinds, np.asarray(head, np.int64)
 
 
+def cut_verdict(G: Graph, owner: np.ndarray, head: np.ndarray) -> CutVerdict:
+    """`verity.ml.circuits.partition.validate_unit_cut` of the cut `owner` committing the gates `head >= 0`, the Call's parameters standing
+    for the input unit (`verity.ml.circuits.cut.check_cut`'s arguments), in numpy passes over `G`'s reads: the reference's verdict, detail
+    for detail (`tests/query/test_word.py`), with no Python object per read.  A parameter's read crosses from the input unit into a
+    computing unit and reads a committed value, so it fails nothing: it counts in `cross_unit_reads`, and a parameter no unit reads and
+    the Call does not return is `committed-unread`."""
+    n, k = G.n, len(G.input_ids)
+    own = np.asarray(owner, np.int64)
+    uncertified = np.flatnonzero(own < 0)
+    certified = n - len(uncertified)
+    x = own[G.src] != own[G.dst]
+    cs, cd = G.src[x], G.dst[x]
+    o = np.lexsort((cd, cs))
+    cs, cd = cs[o], cd[o]
+    committed = np.asarray(head) >= 0
+    uncommitted = ~committed[cs]
+    outs = np.unique(np.asarray(G.outputs, np.int64))
+    boundary = np.zeros(n, bool)
+    boundary[cs] = True
+    boundary[outs] = True
+    read = np.zeros(k, bool)
+    for s in range(0, len(G.input_read), _READS_PER_STEP):                # numpy indexes through an int64 copy of its index
+        read[G.input_read[s:s + _READS_PER_STEP]] = True
+    read[G.returned_inputs] = True
+    across = sorted((int(a), int(b)) for a, b in G.recomputed if own[a] != own[b])
+    pairs = np.stack([cs[uncommitted][:MAX_LISTED], cd[uncommitted][:MAX_LISTED]], 1).tolist()
+    unread = np.concatenate([np.flatnonzero(committed & ~boundary), n + np.flatnonzero(~read)])
+    problems = {"input-outside-input-unit": (0, []), "gate-not-certified-once": (len(uncertified), uncertified[:MAX_LISTED].tolist()),
+                "gate-recomputed": (len(across), [list(p) for p in across[:MAX_LISTED]]),
+                "gate-count": (0, []) if certified + G.free == G.total else (1, [certified]),
+                "read-uncommitted": (int(uncommitted.sum()), pairs),
+                "output-uncommitted": (int((~committed[outs]).sum()), outs[~committed[outs]][:MAX_LISTED].tolist()),
+                "committed-unread": (len(unread), unread[:MAX_LISTED].tolist())}
+    detail: dict = {"input_gates": k, "computed_gates": n, "certified": certified, "structure_gates": int(G.free), "total_gates": int(G.total) + k,
+                    "committed": int(committed.sum()) + k, "cross_unit_reads": len(cs) + len(G.input_read),
+                    "computing_units": len(np.unique(own[own >= 0])), "redundant_gates": len(G.recomputed) - len(across)}
+    codes = tuple(c for c, (m, _g) in problems.items() if m)
+    for c in codes:
+        detail[c] = {"n": problems[c][0], "gates": problems[c][1]}
+    return CutVerdict(not codes, codes, detail)
+
+
 def units(G: Graph, X: int, W: int, extras: int = 0) -> dict[str, Any]:
     """The partition of `G` with, per unit: gates, |out(S)| in bits over its boundary gates (read by another unit, or returned), and
-    the partition invariant's check (`verity.ml.circuits.partition.validate_unit_cut` over the gates the cut commits; violations by gate id)."""
-    from verity.ml.circuits.partition import INPUT_UNIT, validate_unit_cut
+    the partition invariant's check (`cut_verdict`, `verity.ml.circuits.partition.validate_unit_cut` over the gates the cut commits;
+    violations by gate id)."""
     owner, kinds, head = partition(G, X)
     U = len(kinds)
     gates = np.bincount(owner, minlength=U)
@@ -144,16 +321,13 @@ def units(G: Graph, X: int, W: int, extras: int = 0) -> dict[str, Any]:
     first[uu] = bidx[pos]
     # the Call's parameters stand in for the input unit: values committed outside the Call (the Program's inputs under their roots, or
     # another Call's committed outputs; `check_calls` requires each to be a required value)
-    k = len(G.input_ids)
-    reads = list(zip(G.src.tolist(), G.dst.tolist())) + [(G.n + i, q) for i, q in G.input_reads]
-    committed = np.flatnonzero(head >= 0).tolist() + list(range(G.n, G.n + k))
-    cut = validate_unit_cut(G.total + k, G.free, owner.tolist() + [INPUT_UNIT] * k, reads, G.outputs + [G.n + i for i in G.returned_inputs],
-                            committed, range(G.n, G.n + k), G.recomputed)
+    cut = cut_verdict(G, owner, head)
     if not cut.ok:                                                 # the Call's gate ids (its canonical layout), not the compacted ones
-        ids = G.keep.tolist() + [f"input:{g}" for g in G.input_ids]
+        def gid(a: int) -> int | str:
+            return int(G.keep[a]) if a < G.n else f"input:{int(G.input_ids[a - G.n])}"
         for k in cut.codes:
             if k != "gate-count":
-                cut.detail[k]["gates"] = [[ids[a] for a in x] if isinstance(x, list) else ids[x] for x in cut.detail[k]["gates"]]
+                cut.detail[k]["gates"] = [[gid(a) for a in x] if isinstance(x, list) else gid(x) for x in cut.detail[k]["gates"]]
     ok = fits(out_bits, out_gates, X, W, extras)
     return {"owner": owner, "kinds": kinds, "gates": gates, "out_bits": out_bits, "out_gates": out_gates, "ok": ok, "cut": cut,
             "head_prim": np.where(first >= 0, G.prim[np.maximum(first, 0)], -1),
@@ -408,6 +582,12 @@ def _depth(fn: Any, limits: dict[str, int], depth: dict[str, int], fns: dict[str
 #: the prefetch's work, set before its workers fork (a Definition need not pickle)
 _PENDING: list[tuple[Any, int, int, int, dict[str, int]]] = []
 
+#: what `prefetch` budgets a rule's cut at: a body cut as a whole up to 4 KiB a gate (GLM-5.3's MoE expert FP8 GEMMs, whose gathers
+#: read every expert's word, peak at 3.8-4.5 KB a gate, 12.8 GB for w13's 3.3M gates; most bodies at about 0.5 KB), over the
+#: process's 256 MiB; a separable body's rule combines its members' memoed rules, so the 256 MiB alone
+RULE_PEAK_PER_GATE = 4 << 10
+RULE_PEAK_BASE = 256 << 20
+
 
 def _rule_of_pending(i: int) -> dict[str, Any] | str:
     """The unit rule of pending Definition `i`, or what it raised (`repr`): left to `check_calls`, which reports or raises it."""
@@ -419,14 +599,17 @@ def _rule_of_pending(i: int) -> dict[str, Any] | str:
 
 
 def prefetch(specs: Iterable[str], X: int = 16, W: int = 32, extras: int = 0, *, max_gates: Limits = None, jobs: int = 1,
-             specialize: Callable[[str, dict], Any] = specialization) -> int:
+             budget: int | None = None, specialize: Callable[[str, dict], Any] = specialization) -> int:
     """Memo, `jobs` forked processes at a time, the unit rules `check_calls` would compute one after another for Calls of the
     Definition ids `specs` (`spec_histogram` keys; a `batch:` / `scan:` prefix is dropped): every Definition under them that the
     process has not ruled on yet, the bodies cut as a whole first, then each separable body once its members are memoed.  A rule
     is a function of its Definition, so a check reads what it would have computed; a spec that does not resolve, or a rule that
-    raises, is left to `check_calls`.  Nothing is done for `jobs` <= 1 or without `fork`.  Returns how many rules were memoed."""
+    raises, is left to `check_calls`.  Nothing is done for `jobs` <= 1 or without `fork`.  Returns how many rules were memoed.
+
+    `budget` (bytes): the cuts in flight together are those whose estimated peaks (`RULE_PEAK_PER_GATE`, `RULE_PEAK_BASE`) fit it,
+    the largest that fits first; a cut over it runs alone.  None: `jobs` at a time, whatever they take."""
     import multiprocessing
-    from concurrent.futures import ProcessPoolExecutor
+    from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
     from verity_vllm.query.program_view import spec_base, spec_statics
     if jobs <= 1 or "fork" not in multiprocessing.get_all_start_methods():
         return 0
@@ -449,14 +632,30 @@ def prefetch(specs: Iterable[str], X: int = 16, W: int = 32, extras: int = 0, *,
         if not todo:
             continue
         _PENDING[:] = [(fn, X, W, extras, limits) for fn in todo]
+        need = [RULE_PEAK_BASE + (RULE_PEAK_PER_GATE * fn.gates if d == 0 else 0) for fn in todo]
+        workers, rules = min(jobs, len(todo)), {}
         try:
-            with ProcessPoolExecutor(min(jobs, len(todo)), mp_context=multiprocessing.get_context("fork")) as ex:
-                for fn, rule in zip(todo, ex.map(_rule_of_pending, range(len(todo)))):
-                    if isinstance(rule, dict):
-                        memo[(fn.id, X, W, extras)] = rule
-                        done += 1
+            with ProcessPoolExecutor(workers, mp_context=multiprocessing.get_context("fork")) as ex:
+                pending, running, used = list(range(len(todo))), {}, 0
+                while pending or running:
+                    while pending and len(running) < workers:
+                        i = next((i for i in pending if budget is None or used + need[i] <= budget), None if running else pending[0])
+                        if i is None:
+                            break
+                        pending.remove(i)
+                        running[ex.submit(_rule_of_pending, i)] = i
+                        used += need[i]
+                    finished, _ = wait(running, return_when=FIRST_COMPLETED)
+                    for f in finished:
+                        i = running.pop(f)
+                        used -= need[i]
+                        rules[i] = f.result()
         finally:
             _PENDING.clear()
+        for i, fn in enumerate(todo):
+            if isinstance(rules[i], dict):
+                memo[(fn.id, X, W, extras)] = rules[i]
+                done += 1
     return done
 
 
@@ -525,7 +724,7 @@ def _name(x: dict[str, Any]) -> str:
     return f"{x['definition']}: {x['class']}{what}, {x['calls']} Call(s){where}"
 
 
-#: the reads `_inputs_committed` takes per numpy step
+#: the reads `_inputs_committed` and `cut_verdict` take per numpy step
 _READS_PER_STEP = 1 << 24
 
 
@@ -591,4 +790,4 @@ def check_query(P: Any, Q: Any, X: int = 16, W: int = 32, extras: int = 0, *, st
 
 __all__ = ["QUERY_ID", "WIRING", "RULE", "MAX_GATES", "MAX_GATES_ENV", "RULE_CACHE_ENV", "committed_today", "tap_kernel", "QueryRuleViolation",
            "query_id", "parse", "gate_limits", "gate_limit", "specialization", "Graph", "partition", "units", "definition_digest", "use_rule_cache", "unit_rule",
-           "prefetch", "check_calls", "call_groups", "check_query"]
+           "RULE_PEAK_PER_GATE", "RULE_PEAK_BASE", "prefetch", "check_calls", "call_groups", "check_query"]

@@ -1,0 +1,10 @@
+{
+ "definitions": {
+  "DsaGatherRows_v2{N=5,TOPK=4,W=3}": {
+   "and": 6720
+  },
+  "DsaTopKOrder_v2{N=20,TOPK=16}": {
+   "and": 3288
+  }
+ }
+}
