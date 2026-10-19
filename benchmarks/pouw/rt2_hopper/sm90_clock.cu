@@ -383,26 +383,29 @@ static int run_all_roles(int iters, int reps) {
 // (W/4 a SMSP), fold 4 units an iteration (64 LOP3 + 64 IMAD a unit on the Lane's 8 chains, li_fold's ops) and
 // checkpoint each unit into a ring of 1024 words a warp. CK_NONE has none (the chains' floor); CK_SEG is LI-CP-W's (4
 // LOP3, REDUX, the uniform-to-vector move, lane 0's STG); CK_RED, CK_RED2 and CK_RED8 are li_exact's CP_RED, CP_RED2 and
-// CP_RED8 (4 LOP3 + 1 REDG, 3 + 2, 0 + 8), all 32 lanes into the warp's one word (zm 0 at run time). A unit a warp-slot
+// CP_RED8 (4 LOP3 + 1 REDG, 3 + 2, 0 + 8), all 32 lanes into the warp's one word (zm 0 at run time); CK_SEG4 is
+// li_exact's CP_SEG4, CK_SEG with the trip's four words kept and lane 0 storing them in one STG.128. A unit a warp-slot
 // is the block's cycles over iters x 4 units x W/4 warps a SMSP: on a loop bound by issue or the ALU pipe (LOP3 at half
 // rate), max(issue, 2 x LOP3) a unit. A REDG that costs more than its issue slot (the L2's atomic unit taking a warp's 32
 // lanes into one word) shows as CK_RED8 above that.
-enum { CK_NONE, CK_SEG, CK_RED, CK_RED2, CK_RED8 };
+enum { CK_NONE, CK_SEG, CK_RED, CK_RED2, CK_RED8, CK_SEG4 };
 __device__ __forceinline__ uint32_t lop3x(uint32_t a, uint32_t b, uint32_t c) {
   uint32_t r;
   asm volatile("lop3.b32 %0,%1,%2,%3,0x96;" : "=r"(r) : "r"(a), "r"(b), "r"(c));
   return r;
 }
+// CK_SEG4's word, which its caller stores; 0 for the others
 template <int K>
-DC_DEV void li_ck(const uint32_t (&r)[8], uint32_t* w, int lane) {
-  if constexpr (K == CK_SEG || K == CK_RED) {
+DC_DEV uint32_t li_ck(const uint32_t (&r)[8], uint32_t* w, int lane) {
+  if constexpr (K == CK_SEG || K == CK_RED || K == CK_SEG4) {
     uint32_t x = lop3x(lop3x(lop3x(r[0], r[1], r[2]), r[3], r[4]), r[5], r[6]);
     asm volatile("xor.b32 %0,%0,%1;" : "+r"(x) : "r"(r[7]));
-    if constexpr (K == CK_SEG) {
-      asm volatile("redux.sync.xor.b32 %0,%0,0xffffffff;" : "+r"(x));
-      if (lane == 0) asm volatile("st.global.b32 [%0], %1;" ::"l"(w), "r"(x) : "memory");
-    } else {
+    if constexpr (K == CK_RED) {
       red_xor(w, x);
+    } else {
+      asm volatile("redux.sync.xor.b32 %0,%0,0xffffffff;" : "+r"(x));
+      if constexpr (K == CK_SEG4) return x;
+      if (lane == 0) asm volatile("st.global.b32 [%0], %1;" ::"l"(w), "r"(x) : "memory");
     }
   }
   if constexpr (K == CK_RED2) {
@@ -412,6 +415,7 @@ DC_DEV void li_ck(const uint32_t (&r)[8], uint32_t* w, int lane) {
   if constexpr (K == CK_RED8)
 #pragma unroll
     for (int c = 0; c < 8; c++) red_xor(w, r[c]);
+  return 0;
 }
 template <int K, int W>
 __global__ void __launch_bounds__(W * 32, 1) lirate(OpArgs a, uint32_t* cp, uint32_t zm) {
@@ -421,6 +425,7 @@ __global__ void __launch_bounds__(W * 32, 1) lirate(OpArgs a, uint32_t* cp, uint
   OP_BEGIN
   OP_LOOP(it) {
     uint32_t* const wi = w + ((it & 255) << 2);
+    uint32_t keep[4];
 #pragma unroll
     for (int u = 0; u < 4; u++) {
 #pragma unroll
@@ -428,8 +433,13 @@ __global__ void __launch_bounds__(W * 32, 1) lirate(OpArgs a, uint32_t* cp, uint
         l.op<L_LOP3>(c);
         l.op<L_IMAD>(c);
       }
-      li_ck<K>(l.r, wi + u, lane);
+      keep[u] = li_ck<K>(l.r, wi + u, lane);
     }
+    if constexpr (K == CK_SEG4)
+      if (lane == 0)
+        asm volatile("st.global.v4.b32 [%0], {%1,%2,%3,%4};" ::"l"(wi), "r"(keep[0]), "r"(keep[1]), "r"(keep[2]),
+                     "r"(keep[3])
+                     : "memory");
   }
   OP_END
   OP_SINK(l.fold() ^ threadIdx.x)
@@ -533,6 +543,7 @@ static int run_lirate_w(int iters, int reps) {
   bad += run_lirate<CK_RED, W>("ck_red", iters, reps);
   bad += run_lirate<CK_RED2, W>("ck_red2", iters, reps);
   bad += run_lirate<CK_RED8, W>("ck_red8", iters, reps);
+  bad += run_lirate<CK_SEG4, W>("ck_seg4", iters, reps);
   return bad;
 }
 

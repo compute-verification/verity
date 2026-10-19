@@ -6,7 +6,8 @@ instruction for LOP3, IADD3, ISETP, SEL, LEA, SHF and PRMT). A loop bound by iss
 of the two, so `measured / max(issue, alu)` near 1 says each instruction costs what the sheet charges it and nothing
 else; a REDG with a hidden cost (the L2's atomic unit) shows as CK_RED8 above it. The variants' differences are the
 chip's price of moving the checkpoint's lane XOR to memory: CK_RED2 against CK_SEG is RT2-HOPPER-1's (134, 134) route
-against LI-CP-W's (136, 136). Each REDG kernel's atomic lane-ops a SM-cycle (128 x REDG a unit over its cycles) is the
+against LI-CP-W's (136, 136), and CK_SEG4 against CK_SEG is LI-CP-W's checkpoints four to a STG.128 (issue 135.25,
+ALU 136). Each REDG kernel's atomic lane-ops a SM-cycle (128 x REDG a unit over its cycles) is the
 rate the memory side sustained. With `lirmix.jsonl`, each mix of NR in 8 units checkpointed by CK_RED2 against NR = 0
 in the same loop: the cheater's saving within the atomic unit's spare capacity.
 
@@ -18,7 +19,7 @@ import argparse
 import json
 from pathlib import Path
 
-NAMES = ["ck_none", "ck_seg", "ck_red", "ck_red2", "ck_red8"]
+NAMES = ["ck_none", "ck_seg", "ck_red", "ck_red2", "ck_red8", "ck_seg4"]
 ALU = ("LOP3", "IADD3", "ISETP", "SEL", "LEA", "SHF", "PRMT")
 
 
@@ -28,7 +29,8 @@ def main() -> int:
     ap.add_argument("--sass", type=Path)
     args = ap.parse_args()
     rows = []
-    for line in (args.out / "lirate.jsonl").read_text().splitlines():
+    lirate = args.out / "lirate.jsonl"
+    for line in lirate.read_text().splitlines() if lirate.exists() else []:
         try:
             rows.append(json.loads(line))
         except json.JSONDecodeError:

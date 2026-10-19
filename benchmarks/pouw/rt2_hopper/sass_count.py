@@ -11,7 +11,7 @@ CP_RED2 and CP_RED8, 1, 2 and 8 RED a checkpoint and no REDUX) and its per-lane 
 none for CP_RED8); each `roles<X,R>` kernel's MMA loop holds its 4 IGMMA and the
 poll's LDS, and its lane loop exactly R of the lane's op (IMAD for X = 1, LOP3 for X = 2); each `lirate<K,W>` loop holds
 at least 256 IMAD a trip and 256 LOP3 plus its checkpoint's lane XOR, and exactly its checkpoint's REDUX, RED and STG (4
-checkpoints a trip); each `lirate_mix<NR,W>` loop (8 units a trip) holds 8 − NR REDUX and STG, 2·NR RED, at least 512
+checkpoints a trip; CK_SEG4's 4 in one STG.E.128); each `lirate_mix<NR,W>` loop (8 units a trip) holds 8 − NR REDUX and STG, 2·NR RED, at least 512
 IMAD and 512 + 4(8 − NR) + 3·NR LOP3. Exit 1 when a check fails.
 
 Run: `python sass_count.py SASS [--json OUT] [--gate]`.
@@ -122,13 +122,17 @@ def main() -> int:
                 fails.append(f"{tag}: {imad} IMAD a trip, want at least 256")
         if tag.startswith("lirate<"):
             k = int(tag[len("lirate<"):-1].split(",")[0])
-            # CK_NONE, CK_SEG, CK_RED, CK_RED2, CK_RED8: a unit's lane-XOR LOP3, REDUX, RED and STG
-            xl, redux, red, stg = [(0, 0, 0, 0), (4, 1, 0, 1), (4, 0, 1, 0), (3, 0, 2, 0), (0, 0, 8, 0)][k]
+            # CK_NONE, CK_SEG, CK_RED, CK_RED2, CK_RED8, CK_SEG4: a trip's lane-XOR LOP3, REDUX, RED and STG
+            xl, redux, red, stg = [(0, 0, 0, 0), (16, 4, 0, 4), (16, 0, 4, 0), (12, 0, 8, 0), (0, 0, 32, 0),
+                                   (16, 4, 0, 1)][k]
             got = (base["REDUX"], base["RED"] + base["REDG"], base["STG"])
-            if got != (4 * redux, 4 * red, 4 * stg):
-                fails.append(f"{tag}: {got} REDUX, RED, STG a trip, want {(4 * redux, 4 * red, 4 * stg)}")
-            if base["LOP3"] < 256 + 4 * xl:
-                fails.append(f"{tag}: {base['LOP3']} LOP3 a trip, want at least {256 + 4 * xl}")
+            if got != (redux, red, stg):
+                fails.append(f"{tag}: {got} REDUX, RED, STG a trip, want {(redux, red, stg)}")
+            wide = sum(n for op, n in ops.items() if op.startswith("STG.E.128"))
+            if k == 5 and wide != 1:
+                fails.append(f"{tag}: {wide} STG.E.128 a trip, want 1")
+            if base["LOP3"] < 256 + xl:
+                fails.append(f"{tag}: {base['LOP3']} LOP3 a trip, want at least {256 + xl}")
             imad = sum(n for op, n in ops.items() if op == "IMAD")
             if imad < 256:
                 fails.append(f"{tag}: {imad} IMAD a trip, want at least 256")
