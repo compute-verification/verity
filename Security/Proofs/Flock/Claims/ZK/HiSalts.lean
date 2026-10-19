@@ -106,11 +106,13 @@ theorem hiSalt_exe (P : Composed.LigProver) (x : Msg) (t : Fin Claims.Flock.zkTa
   have hR : saltAt (cellAt t j.val) r.val l p =
       ZkView.saltBytes (((t (Fin.castLE (jOf_le_cap x) j)).1.2.2.2.2.2.2.2.2.2 r).1 (⟨l, hl'⟩, ⟨p, hp'⟩)) := by
     rw [cellAt_lt t hc]
-    simp only [saltAt, fAt, hl0, r.isLt, hl', hp', ↓reduceIte, ↓reduceDIte] <;> rfl
+    simp only [saltAt, fAt, hl0, r.isLt, hl', hp', ↓reduceIte, ↓reduceDIte]
+    rfl
   unfold hiSalt
   rw [ite_eq_left h, fAt_lt _ _ hk]
   show ZkView.saltBytes (hiTape P x t j r ⟨hiIdx (zkTab x j).table.sch.levels (⟨l, hl'⟩, ⟨p, hp'⟩), hk⟩) = _
-  rw [hiTape_eq, Function.comp_apply, he, Sum.elim_inl, hR]
+  rw [hiTape_eq, Function.comp_apply, he, Sum.elim_inl]
+  exact hR.symm
 
 /-- `hiSalt_exe` as functions: the tape's salts on the schedule's levels ≥ 1 and their positions, empty off them. -/
 theorem hiSalt_exe_eq (P : Composed.LigProver) (x : Msg) (t : Fin Claims.Flock.zkTableCap → ExeCell)
