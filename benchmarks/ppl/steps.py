@@ -728,6 +728,19 @@ def to_grid(v: torch.Tensor, grid: str, mode: str, bits: torch.Tensor | None,
     return out if coined is None else torch.where(coined, out, nearest)
 
 
+def dither3(v: torch.Tensor, grid: str, b: torch.Tensor, b2: torch.Tensor) -> torch.Tensor:
+    """FP-NATIVE's design A activations (note:20261019T0525Z-draft-fp-native): the nearest level n moved by d (b + b2 - 1),
+    two fair bits, d the larger of n's two gaps so that n - d and n + d are levels (14, 16, 18 at a binade, not 15, 16,
+    17); at the grid's ends, where n has one neighbour, the three levels step inward (448, 416, 384: RT-FP-7)."""
+    table = torch.tensor(LEVELS[grid], dtype=v.dtype, device=v.device)
+    lo, hi = bracket(v, grid)
+    n = torch.where(v - lo <= hi - v, lo, hi)
+    i, last = torch.searchsorted(table, n.contiguous()), len(table) - 1
+    d = torch.maximum(n - table[(i - 1).clamp(min=0)], table[(i + 1).clamp(max=last)] - n)
+    inward = torch.where(i == last, -1.0, torch.where(i == 0, 1.0, 0.0)).to(v.dtype)
+    return n + d * (b + b2 - 1 + inward)
+
+
 def on_grid(x: torch.Tensor, grid: str, mode: str, bits: torch.Tensor | None, dims,
             coined: torch.Tensor | None = None) -> tuple[torch.Tensor, torch.Tensor]:
     """Integers on the grid and scales s (one per slice over `dims`, kept) with x ~ q s: `round` the nearest level,
@@ -1091,8 +1104,9 @@ def native_gptq(w: torch.Tensor, h: torch.Tensor, grid: str, scale: str, amax: t
     return gptq(w.float(), h, column), s, m
 
 
-#: a native operand's modes: GRID_MODES and `g1`, the nearest level moved by a fair coin of 1 in its row's unit, centred
-NATIVE_MODES = GRID_MODES + ("g1",)
+#: a native operand's modes: GRID_MODES, `g1`, the nearest level moved by a fair coin of 1 in its row's unit, centred,
+#: and (activations only) `dither3`, design A's two coins (`dither3`)
+NATIVE_MODES = GRID_MODES + ("g1", "dither3")
 
 
 def _check_native(p):
@@ -1107,6 +1121,10 @@ def _check_native(p):
             raise ValueError(f"native.{o} is one of {NATIVE_MODES}")
     if "g1" in (p["act"], p["weight"]) and p["scale"] == "mx":
         raise ValueError("native: g1's coin is one in the row's unit, which mx's power-of-two blocks don't have")
+    if p["weight"] == "dither3" or (p["act"] == "dither3" and (p["act_grid"] == "int8"
+                                                               or p["scale"] not in ("tensor", "channel"))):
+        raise ValueError("native: dither3 is design A's activations, on a native grid under tensor or channel scales "
+                         "(its weights: dither)")
     if p["act_grid"] not in ("", "int8", *NATIVE):
         raise ValueError("native.act_grid is '' (the weights' grid and scale), int8 (Dither's activations) or a native "
                          "grid")
@@ -1136,7 +1154,9 @@ def native_linear(mm, nxt, *, grid: str, scale: str = "channel", act: str = "dit
     in row units, m q, plus a fair coin b, served centred as m q + b - 1/2: the product is the exact one of the
     integers m q + b (in int8 for e4m3i120 and nvi10; in H1's 7-bit weights for e4m3i60 and nvi5), less its rank-one
     terms. `clip = n`: every per-row scale (each token's, each weight row's) searched over n clip ratios
-    (`native_parts`); the honest prover's choice of levels, which no check reads."""
+    (`native_parts`); the honest prover's choice of levels, which no check reads. `act = dither3`: FP-NATIVE's design A,
+    each activation its nearest level moved by its gap times b + b' - 1 (`dither3`), beside dithered weights: the
+    dithered product is the one served."""
     hkey = (mm.name, tuple(s.key for s in mm.prefix[:-1]))
     if mm.run.hessian is not None:
         if gptq:
@@ -1169,7 +1189,10 @@ def native_linear(mm, nxt, *, grid: str, scale: str = "channel", act: str = "dit
     else:
         agrid = act_grid or grid
         v, sa, ma = native_parts(mm.x, agrid, scale, act == "dither", clip=clip)
-        xq = to_grid(v, agrid, "round" if act == "g1" else act, mm.coins(mm.x.shape) if act == "dither" else None)
+        if act == "dither3":
+            xq = dither3(v, agrid, mm.coins(mm.x.shape), mm.coins(mm.x.shape))
+        else:
+            xq = to_grid(v, agrid, "round" if act == "g1" else act, mm.coins(mm.x.shape) if act == "dither" else None)
         xtop = LEVELS[agrid][-1] * (SCALES[INT_BLOCKS[scale]][-1] if scale in INT_BLOCKS else 1)
     bx = mm.coins(mm.x.shape) if act == "g1" else 0
     wq = wl.float() if wg is None else wl.float() + mm.coins(wl.shape) * wg.float()

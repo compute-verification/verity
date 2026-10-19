@@ -20,7 +20,7 @@ OTHERS = ["pc-int8", "pc-fp8-tensor", "pc-fp8-channel", "pc-mxfp8", "pc-nvfp4", 
           "fpx-g1s-nvfp4x2-nvi10-lm8", "fpx-g1s-w4a8-nvi10", "fpx-g1s-w4a8-nvi10-gptq", "fpx-g1s-h1-e4m3i120-w60",
           "fpx-g1s-w4a8-nvi10-lm8", "fpx-g1s-w4a8-nvi10-gptq-lm8", "fpx-g1s-h1-w4a8-nvi5-lm8",
           "fpx-g1s-h1-w4a8-nvi5-gptq-lm8", "fpx-g1s-e4m3i120-c6", "fpx-g1s-nvfp4x2-nvi10-lm8-c6",
-          "fpx-g1s-w4a8-nvi10-gptq-lm8-c6", "fpx-g1s-h1-w4a8-nvi5-gptq-lm8-c6",
+          "fpx-g1s-w4a8-nvi10-gptq-lm8-c6", "fpx-g1s-h1-w4a8-nvi5-gptq-lm8-c6", "fpx-a1-e4m3i",
           *(f"{f}-lin" for f in ("pc-fp8-tensor", "pc-fp8-channel", "pc-mxfp8", "pc-nvfp4", "pc-mxfp4"))]
 
 
@@ -162,6 +162,46 @@ def test_g1_serves_the_centred_product_of_the_nearest_levels(grid, scale, act_gr
     assert gates.passed
 
 
+@pytest.mark.parametrize("grid", sorted(steps.NATIVE))
+def test_dither3_moves_the_nearest_level_by_its_gap_onto_three_levels(grid):
+    levels = steps.LEVELS[grid]
+    n = torch.tensor(levels, dtype=torch.float32)
+    v = torch.cat([n, (n[:-1] + n[1:]) / 2 - 1e-3])
+    near = steps.to_grid(v, grid, "round", None)
+    outs = {(b, b2): steps.dither3(v, grid, torch.full_like(v, b), torch.full_like(v, b2))
+            for b in (0.0, 1.0) for b2 in (0.0, 1.0)}
+    assert all(set(o.unique().tolist()) <= set(levels) for o in outs.values())
+    assert torch.equal(outs[0.0, 1.0], outs[1.0, 0.0])
+    lo, mid, hi = outs[0.0, 0.0], outs[0.0, 1.0], outs[1.0, 1.0]
+    assert bool((lo < mid).all()) and torch.equal(mid - lo, hi - mid)
+    inner = (near != levels[0]) & (near != levels[-1])
+    assert torch.equal(mid[inner], near[inner])
+    assert float(hi[near == levels[-1]].max()) == levels[-1] and float(lo[near == levels[0]].min()) == levels[0]
+
+
+def test_dither3_activations_beside_dithered_weights_serve_the_dithered_product(monkeypatch):
+    import types
+    import gates as G
+    g = torch.Generator().manual_seed(8)
+    x, w = torch.randn(3, 64, generator=g), torch.randn(5, 64, generator=g)
+    step = spec.parse({"linear": [{"step": "native", "grid": "e4m3i", "scale": "channel", "act": "dither3"}]},
+                      "x").linear[0]
+    gates = G.Gates()
+    run = matmul.Run(types.SimpleNamespace(name="t"), 0, 0, types.SimpleNamespace(li=0), gates, {}, {}, None)
+    mm = matmul.MM("linear", "mlp.up_proj", run, x, w).enter(step)
+    drawn = [torch.randint(0, 2, x.shape, generator=g).float(), torch.randint(0, 2, x.shape, generator=g).float(),
+             torch.randint(0, 2, w.shape, generator=g).float()]
+    calls = iter(drawn)
+    monkeypatch.setattr(matmul.MM, "coins", lambda self, shape, levels=2: next(calls))
+    y = step.defn.fn(mm, matmul.terminal, **step.kw)
+    v, sa, _ = steps.native_parts(x, "e4m3i", "channel", coined=False)
+    u, sw, _ = steps.native_parts(w, "e4m3i", "channel", coined=True)
+    xq = steps.dither3(v, "e4m3i", drawn[0], drawn[1]) * sa
+    wq = steps.to_grid(u, "e4m3i", "dither", drawn[2]) * sw
+    assert torch.allclose(y.double(), xq.double() @ wq.double().T, rtol=1e-6, atol=1e-5)
+    assert gates.passed
+
+
 @pytest.mark.parametrize("coin", [0.0, 1.0])
 def test_g1_weights_beside_int8_activations_centre_only_the_weights(coin, monkeypatch):
     import types
@@ -236,6 +276,10 @@ def test_native_checks():
         spec.parse({"linear": [{"step": "native", "grid": "e4m3i", "scale": "mx", "act_grid": "int8"}]}, "x")
     with pytest.raises(ValueError, match="clip"):
         spec.parse({"linear": [{"step": "native", "grid": "e4m3i", "scale": "tensor", "clip": 4}]}, "x")
+    with pytest.raises(ValueError, match="dither3"):
+        spec.parse({"linear": [{"step": "native", "grid": "e4m3i", "weight": "dither3"}]}, "x")
+    with pytest.raises(ValueError, match="dither3"):
+        spec.parse({"linear": [{"step": "native", "grid": "e2m1x2", "scale": "nvi10", "act": "dither3"}]}, "x")
     with pytest.raises(ValueError, match="own native grid"):
         spec.parse({"linear": [{"step": "native", "grid": "e2m1x2", "scale": "nvi10", "act_grid": "e2m1i"}]}, "x")
     with pytest.raises(ValueError, match="route"):
