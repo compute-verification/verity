@@ -16,7 +16,8 @@ from verity.ml.circuits.types import Array, Value
 from verity_vllm.program.frontend.derive import Alloc, StaticIndex, refuse
 from verity_vllm.program.frontend.torch_frontend import _tensor_type, shape_of
 from verity_vllm.program.frontend.rules.base import InPlaceRule, OpRule, RuleInfo, StateRule
-from verity_vllm.program.frontend.rules.common import attention_scale, dtype_is, from_rows, kv_logs, norm_kind, rows_of, shape
+from verity_vllm.program.frontend.rules.common import (attention_scale, dtype_is, from_rows, kv_logs, norm_kind, refuse_cached_prefix, rows_of,
+                                                      shape)
 from verity_vllm.program.frontend.rules.reference import LinearRule
 from verity_vllm.program.frontend.rules.vllm_iface import targets_for
 from verity_vllm.program.frontend.targets import UnregisteredTarget
@@ -472,6 +473,7 @@ class UnifiedAttentionRule(StateRule):
         return True
 
     def emit(self, node, ctx):
+        refuse_cached_prefix(ctx, node, self.rule_id)
         q, k, v, layer_name = node.args[:4]
         qc, kc, vc = ctx.coll(q), ctx.coll(k), ctx.coll(v)
         D = ctx.config.get("D") or ctx.allowed_dims.get("D")

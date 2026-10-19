@@ -153,7 +153,7 @@ class Member(Fake):
     def commit_prepare(self):
         if self.stop == "commit":
             raise Stop(12)
-        return 600, self.cmd or ["py", "-m", "verity_vllm.pipeline.cli", "commit", "--label", self.row]
+        return 600, self.cmd or ["py", "-m", "verity_vllm.pipeline.cli", "commit", "--label", self.row], ""
 
 
 def test_a_member_whose_preparation_stops_or_whose_environment_differs_is_refused_by_name(tmp_path):

@@ -51,6 +51,8 @@ are never NaN.  A slot's score is the XOR of the scores under the one-hot decode
 """
 from __future__ import annotations
 
+__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
+
 from functools import cache
 
 from verity.ml.circuits import boolean as BL

@@ -288,6 +288,6 @@ theorem zk_rep_plays : ZkRepPlays := by
   refine exQ_recv (toDig zp.inner.root) ?_
   refine pq_bindQ hM (fun o ho => ?_) hmsgs hcoins
   obtain ⟨v, hv⟩ := hIP Hs T.dom T.np T.nP T.pos o.1 T.tr (toDig zp.inner.root)
-  exact ⟨⟨o.2, v⟩, Plays.bind' hv (Plays.pure _) (List.append_nil _).symm (List.append_nil _).symm, ho⟩
+  exact ⟨⟨o.2, v.1, v.2⟩, Plays.bind' hv (Plays.pure _) (List.append_nil _).symm (List.append_nil _).symm, ho⟩
 
 end FlockSoundness.Discharge.ZkExec

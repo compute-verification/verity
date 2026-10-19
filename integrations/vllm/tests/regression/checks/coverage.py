@@ -1,4 +1,4 @@
-"""(e) Identity coverage reproduces: `manifest_format.coverage_check(manifest, layouts)` with the CURRENT code over the recorded
+"""(e) Identity coverage reproduces: `manifest.bind.coverage_check(manifest, layouts)` with the CURRENT code over the recorded
 manifest of record and the instrumented run's recorded layouts (`commit/layouts_pair<k>_instrumented.json.gz`: {step: [{name, numel|
 shape}]}) must state what the Commit's binding recorded (`commit/runs.jsonl`, treatment entries: `commit.binding.coverage` --
 ok / checked / missing_n / committed_extras_n / duplicate_names_n / manifest_digest).
@@ -75,7 +75,7 @@ def expected(row: resolver.Row) -> dict:
 
 
 def actual(row: resolver.Row) -> dict:
-    from verity_vllm.query.manifest.format import coverage_check
+    from verity_vllm.query.manifest.bind import coverage_check
     cand = row.candidate_root() is not None
     man_path, lay_path = _side(row, "manifest.json"), _side(row, LAYOUTS)
     if man_path is None or lay_path is None:

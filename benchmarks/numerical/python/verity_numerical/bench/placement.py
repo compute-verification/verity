@@ -52,7 +52,6 @@ import sys
 from pathlib import Path
 from typing import Any, Mapping
 
-SHARED_KEYS = ("machine_id", "product_uuid", "boot_id", "public_ip")
 #: What a pair sharing a public IP (a datacenter's egress NAT) must record, on both pods and all different.
 NAT_IDS = ("machine_id", "product_uuid", "boot_id")
 #: The measured prover-verifier round trip a shared-IP pair must reach: well above the 0.03 ms of two containers on one host.

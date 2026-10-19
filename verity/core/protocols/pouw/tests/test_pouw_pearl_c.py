@@ -9,6 +9,7 @@ import json
 import math
 import random
 import struct
+import sys
 from fractions import Fraction
 from pathlib import Path
 
@@ -25,6 +26,9 @@ from verity.core.protocols.pouw.schemes import get
 from verity.core.protocols.pouw.schemes import pearl_c as C
 from verity.core.protocols.pouw.schemes import pearl_c_debit as D
 from verity.core.protocols.pouw.schemes import pearl_kw as P
+
+# the clear audit is a reference tool (benchmarks/pouw/clear), imported by name
+sys.path.insert(0, str(Path(__file__).resolve().parents[5] / "benchmarks" / "pouw" / "clear"))
 
 PINNED = json.loads((Path(__file__).with_name("vectors") / "pearl_c.json").read_text())
 RUST = json.loads(PV.PINNED.read_text())["outputs"]
@@ -256,7 +260,8 @@ def test_vectors_are_pinned(case):
 
 
 def test_lifecycle_on_a_test_instance():
-    from verity.core.protocols.pouw.audit import Epoch, Prover, Sampled, Verifier, Workload
+    from verity.core.protocols.pouw.audit import Epoch, Workload
+    from clear_audit import Prover, Sampled, Verifier
 
     s, k = C.PearlC(k_min=32, tile=(16, 16)), 128
     rows_a, rows_b = CV.rows("life", "A", 32, k), CV.rows("life", "B", 16, k)
@@ -548,7 +553,8 @@ def test_wref_is_leans_wref_of(m, k, n):
 
 def test_lifecycle_work_has_no_weight_side():
     """Red team F2: two calls on one weight give W = the two units' `wrefOfRev1`; the weight side is `job_cost`, apart."""
-    from verity.core.protocols.pouw.audit import Epoch, Prover, Verifier, Workload
+    from verity.core.protocols.pouw.audit import Epoch, Workload
+    from clear_audit import Prover, Verifier
 
     s, k = C.PearlC(k_min=32, tile=(16, 16), forming="v1"), 128
     work = Workload((Matmul(0, Shape(32, k, 16), 9), Matmul(1, Shape(16, k, 16), 9)))
@@ -558,7 +564,8 @@ def test_lifecycle_work_has_no_weight_side():
 
 
 def test_v1_lifecycle_on_a_test_instance():
-    from verity.core.protocols.pouw.audit import Epoch, Prover, Sampled, Verifier, Workload
+    from verity.core.protocols.pouw.audit import Epoch, Workload
+    from clear_audit import Prover, Sampled, Verifier
 
     s, k = C.PearlC(k_min=32, tile=(16, 16), forming="v1"), 128
     rows_a, rows_b = CV.rows_f32("life", "A", 32, k), CV.rows_f32("life", "B", 16, k)
@@ -652,9 +659,9 @@ def test_h3_lifecycle_commits_hm96_sha512_trees():
     from verity.ml.commitments import CommitmentDomain, hm96
     from verity.ml.commitments.merkle import tree_levels
     from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, row_leaf
-    from verity.core.protocols.pouw.audit import (HM96_TRANSCRIPT, HM96_WEIGHTS, Epoch, Prover, Sampled, Verifier,
-                                                              Workload, activation_binding, hm96_salt, rows_domain,
-                                                              transcript_domain, weight_binding)
+    from verity.core.protocols.pouw.audit import (HM96_TRANSCRIPT, HM96_WEIGHTS, Epoch, Workload, activation_binding, hm96_salt,
+                                                  rows_domain, transcript_domain, weight_binding)
+    from clear_audit import Prover, Sampled, Verifier
 
     s, k = C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h3"), 128
     rows_a, rows_b = CV.rows_f32("life", "A", 32, k), CV.rows_f32("life", "B", 16, k)
@@ -749,7 +756,8 @@ def test_check_tile_refuses_a_weight_row_outside_the_rules(clause):
     non-finite word (Lean's `rowOK8_nonFinite`), three of 128 words `8.0` among `1.0`s (`rowOK8_notLive`), and every 8th
     word `2¹²⁶`, so ρ is not finite and the floor is 0 (`pc8Sem_squaresOverflow`). The tile beside it, whose weight rows
     pass, is accepted, and so are both on the honest weight."""
-    from verity.core.protocols.pouw.audit import Epoch, Prover, Verifier, Workload
+    from verity.core.protocols.pouw.audit import Epoch, Workload
+    from clear_audit import Prover, Verifier
 
     s, k = C.PearlC(k_min=32, tile=(16, 16), forming="v1"), 128
     rows_a, rows_b = CV.rows_f32("weight-rule", "A", 16, k), CV.rows_f32("weight-rule", "B", 32, k)

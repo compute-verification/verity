@@ -225,6 +225,36 @@ theorem OutN.of_posOf {P OutT Cp Op : Type} {J : ℕ} (out : Fin J → Cp → P 
   rw [List.getD_eq_getElem _ _ (hl ▸ j.isLt)]
   exact OutN.of_KgJ out hk
 
+theorem OutN.out {Op β : Type} {nul : Op} {g : Game β} {b : β} (h : OutN nul g b) : Out g b := by
+  induction h with
+  | ret b => exact .ret b
+  | send m _ _ ih => exact .send m ih
+  | coin c _ ih => exact .coin c ih
+
+/-- `OutN.of_posOf`, with each table's reps' outcomes `pend` outcomes of their games at the positions. -/
+theorem OutN.of_posOf_out {P OutT Cp Op : Type} {J : ℕ} (out : Fin J → Cp → P × P → Op → OutT) (nul : Op)
+    (caps : Fin J → Cp) (gs : Fin J → Fin 2 → Game P) (dflt : OutT) {outs : List OutT}
+    (h : OutN nul (posOf out caps gs) outs) (j : Fin J) :
+    ∃ pend : P × P, Out (gs j 0) pend.1 ∧ Out (gs j 1) pend.2 ∧ outs.getD j dflt = out j (caps j) pend nul := by
+  have hb := OutN.of_batch h
+  have hl : J = outs.length := by simpa using hb.length_eq
+  have hj := hb.get (i := j.val) (by simp) (hl ▸ j.isLt)
+  simp only [List.get_eq_getElem, List.getElem_ofFn] at hj
+  obtain ⟨pend, hp, hk⟩ := OutN.of_bind hj
+  refine ⟨pend, (OutN.of_interleave hp).1.out, (OutN.of_interleave hp).2.out, ?_⟩
+  rw [List.getD_eq_getElem _ _ (hl ▸ j.isLt)]
+  exact OutN.of_KgJ out hk
+
+/-- `prob_posOf_answerWith` for an event no outcome satisfies whose reps' outcomes are outcomes of their games at the
+positions. -/
+theorem prob_posOf_answerWith_out {P OutT Cp Op : Type} [Nonempty Op] {J : ℕ}
+    (out : Fin J → Cp → P × P → Op → OutT) (nul : Op) (caps : Fin J → Cp) {gs : Fin J → Fin 2 → Game P}
+    (hg : ∀ j r, AllInh (gs j r)) (dflt : OutT) {Q : List OutT → Prop}
+    (hQ : ∀ outs, (∀ j : Fin J, ∃ pend : P × P, Out (gs j 0) pend.1 ∧ Out (gs j 1) pend.2 ∧
+      outs.getD j dflt = out j (caps j) pend nul) → ¬ Q outs)
+    (σ : Strategy (posOf out caps gs)) : prob Q (posOf out caps gs) (answerWith nul _ σ) = 0 :=
+  prob_answerWith nul (allInh_posOf out caps hg) (fun outs h => hQ outs (OutN.of_posOf_out out nul caps gs dflt h)) σ
+
 /-- **No dead branch at the tables' positions reaches `Q`** when it answers the openings with `nul`, for an event `Q`
 no outcome with every table's openings `nul` satisfies. -/
 theorem prob_posOf_answerWith {P OutT Cp Op : Type} [Nonempty Op] {J : ℕ} (out : Fin J → Cp → P × P → Op → OutT)

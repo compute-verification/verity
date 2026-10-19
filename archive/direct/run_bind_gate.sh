@@ -4,7 +4,7 @@
 # check   : cargo check --release --all-targets (direct + redteam battery crate)
 # test    : cargo test --release --tests (unit negatives, chain, statement suite, lookup, lookup statement suite)
 # gate    : vu-neg (52) both fields, limb and --lookup; vu-bench 64 VUs bound (limb + lookup), --bind-operands
-# battery : fixtures/redteam/vu-battery/v1/run_battery.sh exit 0 (limb) and the battery adapter in --lookup mode
+# battery : the limb vu-battery, retired with its fixtures (art:9188754f…, red team, 18 Oct): refuses
 # timing  : 4096-VU BabyBear^4 and ^5 LogUp at 2^-128 (166 queries), bound vs --unbound, back to back, twice
 # Everything lands in $RESEARCH_RUN_DIR.  Instances: /workspace/bench-instances/v1 (sha256 checked against the manifest).
 set -euo pipefail
@@ -87,15 +87,16 @@ if [ "$WHAT" = gate ] || [ "$WHAT" = all ] || [ "$WHAT" = full ]; then
 fi
 
 if [ "$WHAT" = battery ] || [ "$WHAT" = all ] || [ "$WHAT" = full ]; then
-    echo "== red-team battery (limb realisation; exit 0 required)"
-    mkdir -p "$RUN_DIR/battery"
-    INSTANCES_ROOT="$INST" bash fixtures/redteam/vu-battery/v1/run_battery.sh "$RUN_DIR/battery" 2>&1 | tail -5
     echo "== babybear rules battery, --lookup (AIR constraints, check-rows)"
     UV_CACHE_DIR=${UV_CACHE_DIR:-/workspace/uv-cache} uv run --frozen --package verity-numerical \
         python archive/direct/tools/battery_adapter.py --bin "$BIN" --extras --lookup --out "$RUN_DIR/battery_babybear_lookup.json" 2>&1 | grep -v "^  rejected" | tail -5
     echo "== babybear rules battery, --v2 (checker-v2 AIR, check-rows --v2)"
     UV_CACHE_DIR=${UV_CACHE_DIR:-/workspace/uv-cache} uv run --frozen --package verity-numerical \
         python archive/direct/tools/battery_adapter.py --bin "$BIN" --extras --v2 --out "$RUN_DIR/battery_babybear_v2.json" 2>&1 | grep -v "^  rejected" | tail -5
+    echo "== red-team battery (limb realisation; exit 0 required)"
+    echo "the vu-battery left the tree (red team ruling, 18 Oct): its cases, runner and verdicts are" \
+         "art:9188754fa61e0ea2523ec5bcd2ac883fdba6e85105158146382dcbc71fe0eca9 (research data fetch ART --to DIR)" >&2
+    exit 2
 fi
 
 if [ "$WHAT" = timing ] || [ "$WHAT" = full ]; then

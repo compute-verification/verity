@@ -3,7 +3,7 @@ name: using-slack
 description: >
   The coordination API: how Verity's coordinators and service agents talk on Slack (computeverification.slack.com). Handles
   (user groups @infra, @proofs, @circuits, @compute-accounting, @memory-accounting, @network-accounting, @lean, @ci, @comms,
-  @vllm, @benchmarks, @hash, @console and @top) are roles; everything between them happens in #agent-coordination,
+  @vllm, @benchmarks, @kernels, @console and @top) are roles; everything between them happens in #agent-coordination,
   #agent-alerts is machines to @infra, and #ask-daniel holds the cards for everything that needs Daniel, each linking its page
   in the Asks for Daniel Notion database (the asking-daniel skill). Covers the three interactions (ask one handle, announce
   to some, announce to all), the
@@ -20,21 +20,23 @@ The coordination API has one place, three interactions and one lifecycle.
 
 - **Handles** are roles, one per coordinator: `@infra`, `@proofs`, `@circuits`, `@compute-accounting` (proof of useful work),
   `@memory-accounting` (proof of useful space), `@network-accounting` (the network certifier), `@lean`, `@ci`, `@comms`,
-  `@vllm`, `@benchmarks`, `@hash` (the commitment hash), `@console` and `@top` (the admin, Daniel's coordinator). The old advisors' handles
-  (`@old-accounting`, `@old-circuits-and-proofs`) and `@pr-captain` retired on 17 Oct (COMM-14). Since
+  `@vllm`, `@benchmarks`, `@kernels` (fast commitment kernels; `@hash` until 18 Oct, and its tags forward), `@console` and `@top` (the admin, Daniel's coordinator). Since
   14 Oct each coordinator but `@console` is a plain cloud agent that owns a vertical slice and runs its own subagents.
   `@console` is Daniel's desktop agent on his laptop, beside the console's dev server. Nothing wakes it: its inbox holds
   your ask until Daniel opens it, and then it reads every unread doorbell (`names read --as console`) and answers in your
   thread. So put the whole brief in the ask, since it can't open Linear, and card `#ask-daniel` when it can't wait for
-  him to open console. A handle's current holder is its
-  inbox's holder: `names open --succeeds` records the successor's agent id and its working branch's suffix in the route,
-  and routing reads them (`--as`, the owners of PRs and runs). Run `names open --as HANDLE` again on a new branch: it
-  adds that branch's suffix. A second agent working under a handle (a lane that posts as it) subscribes to that handle's
-  inbox thread itself: the holder has no channel to relay to it. So a handover edits nothing in the repo; the registry's `holder` is a description. One agent may hold several handles, and posts as whichever
+  him to open console. A handle's holder is its
+  inbox route's holder, and routing reads it from the route: `names open --succeeds` records the successor's agent id
+  and its working branch's suffix in the route, and routing reads them (`--as`, the owners of PRs and runs; `research msg
+  handles` shows each handle's). Run `names open --as HANDLE` again on a new branch: it adds that branch's suffix. A
+  second agent working under a handle (a lane that posts as it) is one its holder adds with `names open --as HANDLE
+  --poster BC_ID`; it subscribes to that handle's inbox thread itself: the holder has no channel to relay to it. So a
+  handover needs no repo change; the registry's `holder` and `branch_suffixes` are a fallback for readers without the
+  routes (drive's PR owners), updated when convenient. One agent may hold several handles, and posts as whichever
   it acts for (`--as`). Handles with a user group are Slack user groups, so a human's composer autocompletes them, and
   Daniel is a member of each, so a tag notifies him too.
 - **Only handle holders and the named humans are on Slack.** Workers never post, read or subscribe; a worker asks its own
-  coordinator, and the   coordinator asks on Slack and relays the answer. So a coordinator decides which of its workers hears
+  coordinator, and the coordinator asks on Slack and relays the answer. So a coordinator decides which of its workers hears
   what.
 - **Three channels.** `#agent-coordination` holds everything between handles. `#agent-alerts` holds machine alerts, and each
   top-level post there is addressed to `@infra`. `#ask-daniel` (`C0C5UCA0S0Z`, formerly `#approvals`) holds the cards for
@@ -61,8 +63,8 @@ with, and everyone else reads it in the thread when they look.
 A reply under an announcement that names someone rings only the names it starts with, whatever PRs and runs its body
 mentions; so a landing or a prep post names each owner it needs at its start. One that names no one (quiet or not, a status
 line aside) also rings the owner of each PR it names, by number (`#1585`, or the numbers in a `train-prep-...` branch) or by
-its `cursor/` branch: the owner is the handle whose holder's agent id ends in the branch's last 4 characters (or that lists
-them in `branch_suffixes`). It also rings a handle that, earlier in the thread, named a run id (`dd21`) beside one of its own
+its `cursor/` branch: the owner is the handle whose holder's (or poster's) agent id ends in the branch's last 4 characters
+(or whose route lists them in `branch_suffixes`). It also rings a handle that, earlier in the thread, named a run id (`dd21`) beside one of its own
 PRs, when the post names that run. A PR whose owner can't be found rings the handle that named it in the thread. Everything
 else there stays in `research msg read`.
 
@@ -70,13 +72,13 @@ Only the names a post starts with ring anyone. So `send`, `reply` and `ask` refu
 its start, or writes `handle:` after its leading names, at the start of a later line or of a sentence (`@top ci: rebuild`).
 Move the name to the start (or `--to`) to ring it, or drop the `@` to mention it without a doorbell.
 
-`registry.json` (beside this file) names every handle (holder, remit, charter, user-group id, the paths it `owns`), the
-channels and the named humans; `research msg handles` prints it. `research msg owners PATH...` names who owns each path (the
+`registry.json` (beside this file) names every handle (remit, charter, user-group id, the paths it `owns`, and a fallback holder), the
+channels and the named humans; `research msg handles` prints it, with each handle's holder from its route. `research msg owners PATH...` names who owns each path (the
 longest `owns` prefix wins), so a question about a file goes to its owner; a PR that moves files updates its owners' entries. The tool is `research msg` (`tools/research/src/research/slack.py`); every
 subcommand takes `--dry-run`, which sends nothing and prints each request it would make.
 
 `--as NAME` on anything that posts or changes NAME's route takes only a name you hold: your agent id (`$RESEARCH_AGENT_URL`,
-else your Cursor identity) is in its registry `holder`, or holds its open inbox (a successor's `names open --succeeds`).
+else your Cursor identity) holds its open inbox (a successor's `names open --succeeds`) or is one of the route's posters.
 A post sent by mistake comes back with `research msg retract --as NAME --ts TS [--thread ROOT] [--why W]`, which blanks
 your own post and needs `SLACK_BOT_TOKEN`; the doorbells it rang keep their copy.
 
@@ -97,7 +99,9 @@ research msg subscriptions --as <your handle>    # prints the subscribe calls to
 ~~~
 
 - **A holder subscribes to its own inbox thread, not to `#agent-coordination`'s top level.** The sender rings the inbox of
-  each handle a post addresses (`routes.d`); no agent forwards, and no holder takes the channel's top level. A doorbell for a
+  each handle a post addresses (`routes.d`); no agent forwards, and no holder takes the channel's top level. It routes by
+  origin/main's registry and the published routes, so a sender on an old checkout or notes clone still rings a handle
+  added, or an inbox reopened or closed, since. A doorbell for a
   post that turns out not to be for you ends the turn silently. **Timers are for schedules and absence checks** (a
   deadline, a renewal), **never for polling** your inbox, the channel or Linear: what's addressed to you rings your
   inbox, a Linear comment included. comms' daily review replays every post against the doorbells rung and chases what
@@ -110,9 +114,8 @@ research msg subscriptions --as <your handle>    # prints the subscribe calls to
   Anything another handle must read about your issue comes on Slack, naming you, and rings your inbox.
 - `@infra` subscribes to `#agent-alerts` and `#ask-daniel`. Every channel subscription is `topLevelOnly: true`.
 - **Subscribe to a thread (`subscribe_slack_thread`) only where a human may answer**: your own `#ask-daniel` card, a
-  thread a named human posted in, or Codex's thread when you've asked it something (its replies ring no inbox). A task
-  for Daniel's console, laptop or browser goes to `#ask-daniel` as a card with the exact steps, not to Codex: Codex is
-  a session on his laptop that Slack doesn't wake, so ask in its thread only when Daniel says it's on. Between handles your inbox already carries every reply addressed to you: one that names
+  or a thread a named human posted in. A task for Daniel's console, laptop or browser goes to `#ask-daniel` as a card
+  with the exact steps. Between handles your inbox already carries every reply addressed to you: one that names
   no one rings the root's poster, or the root's addressees when the poster replies, and a third party is named at the
   start. The sender never rings its own inbox, so the inbox carries no echo of your own posts. A thread subscription
   does: every handle posts through one bot, so it wakes you for each of your own replies too. Unsubscribe from any thread
@@ -252,7 +255,8 @@ recording his decision.
 
 ## Changing the registry
 
-Add or change a handle in `registry.json` (the tests check it loads). Then, with a token that has `usergroups:write`:
+Add or change a handle in `registry.json` (the tests check it loads; its holder's `names open --as HANDLE` records who
+holds it in the route). Then, with a token that has `usergroups:write`:
 
 ~~~bash
 research msg groups sync            # the plan: which user groups it would create, update, re-enable, or disable (a retired name's)
