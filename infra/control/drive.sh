@@ -4,7 +4,7 @@
 # checkout, as lane ci (RESEARCH_LANE), with its flags from tools/verity/check/drive.toml at main (`--config`, read fresh each
 # tick) plus whatever /data/drive/args holds (flags that override the file's, `#` lines skipped), then sleeps 120 s.
 # The queue's clone and its state are root's ~/.research/queue/ (verity, verity.state.json), on the volume.
-# GitHub: the checkout's origin is https and its local credential helper reads $GH_TOKEN (relay.env, which can push) when git
+# GitHub: the checkout's origin is https and its local credential helper reads $GH_TOKEN (relay.env's) when git
 # asks, so the token is never in git's config or arguments; drive gives its own clone the same helper (`credential_args`), and
 # gh (/data/drive/bin/gh) reads GH_TOKEN itself. r2.env (the store's parent key, which train.sh needs) and relay.env
 # (SLACK_BOT_TOKEN for drive's posts) are sourced. The nodes are reached as `research run --on` reaches them: the notes clone's
@@ -12,8 +12,8 @@
 # container disk (/root/drive-store, as the store index keeps its own): its SQLite catalog on the volume took minutes a pull.
 # While /data/drive/stopped exists no tick starts (a running one finishes): `drive.sh stop` writes it and waits for the tick in
 # progress to end, `drive.sh start` removes it once a dry-run push of next shows the token can push, `drive.sh status` says
-# which and shows the log's tail, and
-# `drive.sh once [FLAGS]` runs one tick here in the foreground, after the one in progress, with FLAGS added (`--dry-run`).
+# which and shows the log's tail, and `drive.sh once [FLAGS]` runs one tick here in the foreground, after the one in progress,
+# with FLAGS added (`--dry-run`).
 # Log: /data/drive/drive.log
 DIR=/data/drive
 LOG=$DIR/drive.log
