@@ -1,21 +1,25 @@
 """The sampling planner (`optimize`): its statement count, replay count and closed-form bound against brute force and core's
 bound, `Achievability`'s rates at zero statement cost, the frontier under C-Flock's statement-batched cost, the choice
-between a partition and a covering, serving's commitment, and the sensitivity queries."""
+between a partition and a covering, serving's commitment (per unit, and the fixed serve-time total with its overlaps), the
+block kinds' weights, the sensitivity queries, and the floor no template that changes values sits at."""
 
 from __future__ import annotations
 
 import random
+from dataclasses import replace
 from itertools import combinations, product
-from math import ceil, exp, fsum, log, log1p, ulp
+from math import ceil, exp, fsum, inf, log, log1p, ulp
 
 import pytest
 
 from verity.core.protocols.profile import Stratified, Stratum
 from verity.core.protocols.sampled_proofs.one_stage.draw import work_k, work_table
-from verity.core.protocols.sampled_proofs.optimize import (Candidate, CostModel, Objective, ReplayDomain, TemplateCost,
-                                                           _hit, _miss, certify, density_bound, for_budget, for_target, frontier,
-                                                           needs_benchmark, perturb, replay_cost, row_ands,
-                                                           sensitivity, template_cost, touched, work_law)
+from verity.core.protocols.sampled_proofs.optimize import (Candidate, Commitment, CostModel, Objective, Policy,
+                                                           ReplayDomain, TemplateCost, _hit, _log_miss, _miss, certify,
+                                                           density_bound, for_budget, for_target, frontier,
+                                                           needs_benchmark, overlaps, perturb, refuse_floor, replay_cost,
+                                                           row_ands, sensitivity, template_cost, touched, weigh,
+                                                           work_law)
 
 SLACK = 1 + 2.0 ** -18
 
@@ -57,17 +61,17 @@ def test_certificate_of_a_full_law_is_zero_and_the_leak_adds_location():
 
 
 def test_a_population_without_harm_has_no_frontier():
-    cands = [Candidate("a", "A", 50, 0, 16)]
+    cands = [Candidate("a", "A", 50, 0, 0)]
     with pytest.raises(ValueError, match="nothing to sample"):
         frontier(cands, CostModel({"A": TemplateCost(unit=1.0)}), Objective(0.01))
 
 
 @pytest.fixture(scope="module")
 def achievability():
-    """Three templates of work 1, 8 and 200 at delta = 2^-10 and C = 400, each unit costing its work."""
+    """Three templates of work 1, 8 and 200 at delta = 2^-10 and C = 400, each unit costing its work, harm the work."""
     cands = [Candidate("a", "A", 4000, 1, 16), Candidate("b", "B", 500, 8, 16), Candidate("c", "C", 20, 200, 16)]
     costs = CostModel({c.template: TemplateCost(unit=float(c.work)) for c in cands})
-    objective = Objective(2.0 ** -10)
+    objective = Objective(2.0 ** -10, bits=0.0)
     return cands, objective, for_target(cands, costs, objective, 400.0, by="density", grid=41)
 
 
@@ -79,6 +83,50 @@ def test_zero_statement_cost_gives_achievability_rates(achievability):
     assert dict(plan.sizes) == {"A": 70, "B": 70, "C": 20}
     assert not plan.floor_only
     assert plan.certificate.harm <= plan.certificate.density <= 400.0
+
+
+def test_policies_draw_the_envelope_of_their_rates():
+    """With policies, `Achievability` per policy, q_s = min(1, ln(1/delta) max_P A_P c_P(s) / T_P), certifies all of them
+    at harm 1: the planner draws exactly those rates, and each unit's binding policy is the one setting its rate."""
+    cands = [Candidate("a", "A", 4000, 1, 16), Candidate("b", "B", 500, 8, 2), Candidate("c", "C", 20, 200, 16)]
+    work = Policy("work", 3200.0, amplification=8.0, work=1.0)
+    control = Policy("control", 4000.0, bits=1.0, unit=log(4521, 2))
+    objective = Objective(2.0 ** -10, policies=(work, control))
+    costs = CostModel({c.template: TemplateCost(unit=float(c.work)) for c in cands})
+    plan = for_target(cands, costs, objective, 1.0, by="density", grid=41)
+    rate = {c.template: log(1 / objective.delta) * max(p.amplification * p.cost(c) / p.target for p in (work, control))
+            for c in cands}
+    assert dict(plan.sizes) == {c.template: min(c.units, ceil(min(1.0, rate[c.template]) * c.units)) for c in cands}
+    assert {c.template: objective.binding(c) for c in cands} == {"A": "control", "B": "work", "C": "work"}
+    cert = plan.certificate
+    assert cert.density <= 1.0 and set(cert.policies) == {"work", "control"}
+    assert cert.policies["work"] <= work.target and cert.policies["control"] <= control.target
+    assert Objective(2.0 ** -10).harm(cands[2]) == 216 and Objective(2.0 ** -10).binding(cands[2]) == ""
+
+
+def test_the_joint_plan_meets_every_policy_and_one_binds(batched):
+    """Under C-Flock's batched cost and core's exact bound, the cheapest plan at harm 1 keeps every policy's damage within
+    its target, one of them close to it, and costs at least each policy's own cheapest plan; a policy that dominates
+    every unit's share gives its own plan."""
+    cands, costs, _, _ = batched
+    work = Policy("work", 4e5, amplification=8.0, work=1.0)
+    control = Policy("control", 4e4, bits=1.0, unit=15.0)
+    joint = for_target(cands, costs, Objective(2.0 ** -20, policies=(work, control)), 1.0, grid=41)
+    cert = joint.certificate
+    assert cert.exact and cert.harm <= 1.0
+    shares = {p.name: cert.policies[p.name] / p.target for p in (work, control)}
+    assert max(shares.values()) <= 1.0 and max(shares.values()) > 0.5
+    for p in (work, control):
+        alone = for_target(cands, costs, Objective(2.0 ** -20, policies=(p,)), 1.0, grid=41)
+        assert alone.cost["total"] <= joint.cost["total"] * SLACK
+    loose = Policy("control", 1e9, bits=1.0, unit=15.0)
+    both = for_target(cands, costs, Objective(2.0 ** -20, policies=(work, loose)), 1.0, grid=41)
+    alone = for_target(cands, costs, Objective(2.0 ** -20, policies=(work,)), 1.0, grid=41)
+    assert dict(both.sizes) == dict(alone.sizes)
+    with pytest.raises(ValueError, match="distinct names"):
+        Objective(0.01, policies=(work, work))
+    with pytest.raises(ValueError, match="target > 0"):
+        Policy("x", 0.0, work=1.0)
 
 
 def _registered(plan, cands) -> dict[str, int]:
@@ -101,13 +149,13 @@ def test_work_law_draws_the_plan_sizes(achievability, batched):
 def batched():
     """C-Flock's shape at small scale: G, many cheap units behind a per-statement cost (a0 = 2, a1 = 0.016 per staged
     unit, at most 4096 units a statement); N, units costing 10 per unit of work and no statement cost; M, 64 heavy units
-    that fit one statement."""
+    that fit one statement.  Harm is the work."""
     cands = [Candidate("gemm", "G", 20000, 100, 16, cap=4096),
              Candidate("norm", "N", 1000, 100, 16),
              Candidate("mix", "M", 64, 50000, 16, cap=64)]
     costs = CostModel({"G": TemplateCost(2.0, 0.016, 0.07), "N": TemplateCost(unit=1000.0),
                        "M": TemplateCost(6.2, 0.0, 0.0125)})
-    objective = Objective(2.0 ** -20)
+    objective = Objective(2.0 ** -20, bits=0.0)
     return cands, costs, objective, frontier(cands, costs, objective, grid=41)
 
 
@@ -126,7 +174,7 @@ def test_frontier_is_monotone_and_certified(batched):
 def test_statement_size_moves_to_the_cap_as_the_draw_densifies(batched):
     cands, costs, objective, plans = batched
     sparse = for_target(cands, costs, objective, 4e5, plans=plans)
-    dense = for_target(cands, costs, objective, 2e5, plans=plans)
+    dense = for_target(cands, costs, objective, 1e5, plans=plans)
     assert sparse.statement_size["G"] == 1 and dense.statement_size["G"] == 4096
 
 
@@ -144,13 +192,40 @@ def _uniform_cost(cands, costs, objective, target) -> float:
 
 
 def test_target_plan_skips_the_costly_template_and_beats_a_uniform_rate(batched):
+    """N's units cost 10 per unit of work.  When N returns nothing (no output bits), the plan at 4e5 concedes all of its
+    harm at the floor; when it changes values it is drawn at the density instead, which costs more."""
     cands, costs, objective, plans = batched
     target = 4e5
-    plan = for_target(cands, costs, objective, target, plans=plans)
+    checks = [replace(c, out_bits=0) if c.template == "N" else c for c in cands]
+    skipping = frontier(checks, costs, objective, grid=41)
+    plan = for_target(checks, costs, objective, target, plans=skipping)
     assert plan.certificate.harm <= target
     assert "N" in plan.floor_only and plan.sizes["N"] == 1 and plan.sizes["M"] == 64
-    assert plan.cost["total"] <= min(p.cost["total"] for p in plans if p.certificate.harm <= target)
-    assert plan.cost["total"] < _uniform_cost(cands, costs, objective, target) / 2
+    assert plan.cost["total"] <= min(p.cost["total"] for p in skipping if p.certificate.harm <= target)
+    assert plan.cost["total"] < _uniform_cost(checks, costs, objective, target) / 2
+    drawn = for_target(cands, costs, objective, target, plans=plans)
+    assert drawn.certificate.harm <= target and not drawn.floor_only and drawn.sizes["N"] > 1
+    assert drawn.cost["total"] > plan.cost["total"]
+    assert not any(p.floor_only for p in plans)
+
+
+def test_a_template_that_changes_values_is_refused_at_its_floor(batched):
+    """Register row P5: a template with output bits held at its floor is drawn once however many units it has, so a wrong
+    unit escapes with 1 - 1/n.  A zero-harm one (an elementwise op that credits no work, under the work alone or a work
+    policy alone) and a floor-only one are refused, the fix named; one proved whole is not at its floor."""
+    cands, costs, objective, plans = batched
+    act = Candidate("act", "Act", 1000, 0, 16)
+    with_act = replace(costs, templates={**costs.templates, "Act": TemplateCost(unit=1.0)})
+    fix = r"draw it at its harm's density, its output bits weighed .* or fold its ops into the dot-product unit"
+    with pytest.raises(ValueError, match=r"'Act' changes values \(16 output bits\) but does no harm .*" + fix):
+        frontier(cands + [act], with_act, objective, grid=41)
+    work = Objective(2.0 ** -20, policies=(Policy("work", 4e5, amplification=8.0, work=1.0),))
+    with pytest.raises(ValueError, match="'Act' changes values"):
+        for_target(cands + [act], with_act, work, 1.0, grid=41)
+    held = replace(plans[len(plans) // 2], floor_only=frozenset({"N"}))
+    with pytest.raises(ValueError, match="'N' changes values .* is held at its floor, so 1 of its 1000 units"):
+        for_budget([held], held.cost["total"], candidates=cands, costs=costs, objective=objective)
+    refuse_floor([act], objective, full=frozenset({"Act"}))
 
 
 def test_for_budget_takes_the_least_harm_affordable_plan(batched):
@@ -272,10 +347,20 @@ def test_covering_wins_sparse_and_partition_wins_once_its_form_units_saturate():
     assert all(p.sizes["Form"] == R for p in plans if p.choice["dot"] == "form")
 
 
-def test_without_influence_the_form_unit_looks_free():
-    plans = frontier(_noised(influence=0), _noised_costs(), Objective(2.0 ** -20), grid=61)
-    assert _crossing(plans)[1] <= 4
-    assert all(p.sizes["Form"] == 1 for p in plans if p.choice["dot"] == "form")
+def test_by_default_a_form_unit_without_influence_does_its_output_bits_of_harm():
+    """Without influence the form unit credits no work, so the work alone would hold it at one draw however many rows
+    there are, and is refused.  The default objective weighs its 16 output bits: it is drawn at the density, never at the
+    floor alone, the certificate counts it and reports its leak."""
+    cands, objective = _noised(influence=0), Objective(2.0 ** -20)
+    with pytest.raises(ValueError, match="'Form' changes values"):
+        frontier(cands, _noised_costs(), Objective(2.0 ** -20, bits=0.0), grid=61)
+    assert objective.harm(cands[0]) == 16 and objective.harm(cands[1]) == W + 16
+    plans = frontier(cands, _noised_costs(), objective, grid=61)
+    form = [p for p in plans if p.choice["dot"] == "form"]
+    assert form and not any(p.floor_only for p in plans)
+    assert all(p.sizes["Form"] == min(R, ceil(min(1.0, p.lam * 16) * R)) for p in form if "Form" not in p.full)
+    assert max(p.sizes["Form"] for p in form) == R > min(p.sizes["Form"] for p in form)
+    assert all(p.certificate.leak is not None and at_most(p.certificate.free_compute, p.certificate.harm) for p in plans)
 
 
 def test_commitment_is_paid_on_every_unit_and_moves_the_switch():
@@ -284,6 +369,86 @@ def test_commitment_is_paid_on_every_unit_and_moves_the_switch():
     rec, form = _crossing(plans)
     assert rec <= 8 * R <= form
     assert {p.cost["commit"] for p in plans} == {0.0, 4.0 * R}
+
+
+SERVE = (Commitment("commit", "x", 1000.0, decode_bytes=100.0, chain=10.0),
+         Commitment("pouw-a", "x", 2000.0, decode_bytes=200.0, chain=30.0, gates=True),
+         Commitment("commit", "y", 500.0),
+         Commitment("commit", "kv", 400.0, chain=4.0),
+         Commitment("kv-append", "kv", 400.0, cost=1.0, chain=6.0),
+         Commitment("remote", "receipts", 0.0, cost=7.0))
+
+
+def test_serve_time_commitments_are_in_every_plan_and_the_budget_is_the_total(batched):
+    """Every plan pays the fixed serve-time commitments, each tensor once per scale that commits it, so the frontier only
+    moves up by them: a total budget buys what the budget less them bought without them, and less than them buys
+    nothing."""
+    cands, costs, objective, plans = batched
+    served = replace(costs, commit_per_bit=1e-3, serve=SERVE)
+    fixed = 8e-3 * (1000 + 2000 + 500 + 400) + 1.0 + 7.0
+    assert served.serve_cost() == pytest.approx(fixed)
+    moved = frontier(cands, served, objective, grid=41)
+    assert [dict(p.sizes) for p in moved] == [dict(p.sizes) for p in plans]
+    for p, q in zip(moved, plans):
+        assert p.cost["serve"] == pytest.approx(fixed) and p.cost["total"] == pytest.approx(q.cost["total"] + fixed)
+    budget = (plans[3].cost["total"] + plans[4].cost["total"]) / 2
+    got = for_budget(moved, budget + fixed, candidates=cands, costs=served, objective=objective)
+    ref = for_budget(plans, budget, candidates=cands, costs=costs, objective=objective)
+    assert dict(got.sizes) == dict(ref.sizes) and got.cost["total"] <= budget + fixed
+    assert for_budget(moved, fixed * 0.999, candidates=cands, costs=served, objective=objective) is None
+    assert perturb(served, "commit", 2.0).serve_cost() == pytest.approx(2 * fixed)
+    with pytest.raises(ValueError, match="non-negative"):
+        Commitment("commit", "x", -1.0)
+
+
+def test_overlaps_count_each_scale_and_price_committing_once():
+    """x is committed by the Commit and by PoUW's A rows, whose roots gate the step; kv by the Commit and the KV append
+    (measured); y once.  The total counts every copy; committed once, the cheapest copy stays, saving the others' bytes and
+    prefill cost and, at decode, the gating chain less the kept copy's, which now gates in its place."""
+    costs = CostModel(commit_per_bit=1e-3, serve=SERVE)
+    assert costs.serve_cost() == pytest.approx(8e-3 * 3900 + 8.0)
+    x, kv = overlaps(costs, latency=0.5)
+    assert x["tensor"] == "x" and x["kept"] == "commit" and [c["scale"] for c in x["copies"]] == ["commit", "pouw-a"]
+    assert [c["prefill"] for c in x["copies"]] == pytest.approx([8.0, 16.0])
+    assert [c["decode"] for c in x["copies"]] == [0.0, 15.0]
+    assert x["saving"] == pytest.approx({"bytes": 2000.0, "prefill": 16.0, "decode_bytes": 200.0, "decode": 10.0})
+    assert kv["tensor"] == "kv" and kv["kept"] == "kv-append"
+    assert kv["saving"] == pytest.approx({"bytes": 400.0, "prefill": 3.2, "decode_bytes": 0.0, "decode": 0.0})
+
+
+def test_weighing_block_kinds_pays_where_core_counts_a_small_kind_exactly():
+    """512 served units of work 1 and 16 PoUW tiles of 32, a tile's statement three times a unit's.  At equal weights the
+    density draws every tile, but core's bound (a draw without replacement) certifies the target with 15: the tiles'
+    weight halves and the plan is cheaper, certified by the same stratified bound and registered by its sizes."""
+    cands = [Candidate("lin", "S", 512, 1, 16, kind="served"), Candidate("pouw", "P", 16, 32, 1, kind="pouw-tile")]
+    costs = CostModel({"S": TemplateCost(1.0, 0.0, 0.0), "P": TemplateCost(3.0, 0.0, 0.0)})
+    objective, target = Objective(2.0 ** -20, bits=0.0), 192.0
+    flat = for_target(cands, costs, objective, target, grid=21)
+    plan = weigh(cands, costs, objective, target, grid=21, factors=(0.5, 2.0), rounds=2)
+    assert dict(flat.sizes) == {"S": 29, "P": 16} and not flat.weights
+    assert dict(plan.weights) == {"pouw-tile": 0.5} and dict(plan.sizes) == {"S": 29, "P": 15}
+    assert plan.cost["total"] < flat.cost["total"] and plan.certificate.harm <= target
+    assert plan.certificate == certify(plan.sizes, cands, objective)
+    assert _registered(plan, cands) == dict(plan.sizes)
+
+
+def test_under_the_density_bound_kinds_keep_equal_weights(batched):
+    """The density bound charges the strata's largest harm per unit of risk, so a draw in proportion to harm, with a
+    stratum conceded at its floor where that pays, is already the cheapest: no weight moves.  When N changes values its
+    concession is refused, and at 1e6 a quarter weight on N buys the same draw: one unit at this size, but one that grows
+    with N's units at the same density."""
+    cands, costs, objective, _ = batched
+    checks = [replace(c, out_bits=0) if c.template == "N" else c for c in cands]
+    for target in (1e6, 5e4):
+        flat = for_target(checks, costs, objective, target, grid=21, exact=False)
+        plan = weigh(checks, costs, objective, target, grid=21, exact=False)
+        assert not plan.weights and plan.cost["total"] == flat.cost["total"]
+    conceded = for_target(checks, costs, objective, 1e6, grid=21, exact=False)
+    weighed = weigh(cands, costs, objective, 1e6, grid=21, exact=False)
+    assert "N" in conceded.floor_only and not weighed.floor_only and dict(weighed.weights) == {"N": 0.25}
+    assert dict(weighed.sizes) == dict(conceded.sizes) and weighed.certificate.harm <= 1e6
+    with pytest.raises(ValueError, match="weight is positive"):
+        frontier(cands, costs, objective, weights={"G": 0.0})
 
 
 def test_sensitivity_and_benchmarks_flag_what_moves_the_plan():
@@ -299,11 +464,24 @@ def test_sensitivity_and_benchmarks_flag_what_moves_the_plan():
 
 
 def test_miss_holds_its_digits_on_huge_populations():
-    """A week of served units is about 10^16: the miss probability against the product it denotes, summed exactly."""
-    for n in (2 ** 25 - 3, 2 ** 25 + 3, 10 ** 12, 10 ** 16):
+    """A week of served units is about 10^16, and a year of 10^5 GPUs about 10^23: the miss probability and its log, whose
+    digits a sparse draw's hit is, against the product it denotes, summed exactly."""
+    for n in (2 ** 25 - 3, 2 ** 25 + 3, 10 ** 12, 10 ** 16, 10 ** 20, 10 ** 23):
         for m, k in ((1, 1), (4096, 27_713), (10 ** 6, 100), (64, 10 ** 6)):
             t, s = min(m, k), max(m, k)
-            assert _miss(n, m, k) == pytest.approx(exp(fsum(log1p(-s / (n - i)) for i in range(t))), rel=1e-6)
+            exact = fsum(log1p(-s / (n - i)) for i in range(t))
+            assert _log_miss(n, m, k) == pytest.approx(exact, rel=1e-6, abs=0)
+            assert _miss(n, m, k) == pytest.approx(exp(exact), rel=1e-6)
+
+
+def test_near_full_draws_past_two_to_the_53_keep_their_digits():
+    """Past 2^53 units a near-full draw's s / (n - i) rounds to 1: missing 3 given units with all but 3 drawn is
+    3! / (n (n - 1) (n - 2)), and with a dense draw over 100 the midpoint stays finite and below a sparse one."""
+    n = 2 ** 60
+    assert _log_miss(n, 3, n - 3) == pytest.approx(log(6) - log(n) - log(n - 1) - log(n - 2), rel=1e-12)
+    assert _log_miss(n, 1, n - 1) == pytest.approx(-log(n), rel=1e-12)
+    assert -inf < _log_miss(n, 100, n - 100) < _log_miss(n, 100, n // 2) < 0
+    assert touched(n, 1024, n - 1) == pytest.approx(n / 1024, rel=1e-12)
 
 
 def test_sparse_draws_on_huge_populations_still_touch_statements_and_replay_units():

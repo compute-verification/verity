@@ -13,7 +13,7 @@ CHUNK = Shape("Dot{K=256}", 8 * 4190, 256, 32, rows=(256, 256, 4, 4), commit_bit
 DOT = Shape("Dot{K=1024}", 32 * 4190, 1024, 16, rows=(1024, 1024, 2), commit_bits=16, cap=4096, parts=((STEP, 32),),
             ways=(("K=256", ((CHUNK, 4),)),))
 N = 10 ** 6
-OBJECTIVE = Objective(2.0 ** -40)
+OBJECTIVE = Objective(2.0 ** -40, bits=0.0)
 
 
 def test_program_takes_the_cheapest_pure_cut_at_every_density():
