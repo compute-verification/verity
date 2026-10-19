@@ -69,7 +69,8 @@ if [ "$BENCH" = build ]; then
     # h1u.cu's knobs: H1U_MINB (CTAs an SM the registers leave room for), H1U_PF (the fused form prefetches too), H1U_PD
     # (segments of A and B in flight), H1U_L2PF (L2 prefetch 16 segments ahead and of the next chunk's workspace), H1U_WARPS,
     # H1U_SPLIT (h1p: a pair of warps a unit), H1U_KSPLIT (h1k: the one-stream unit's K split, 2 or 4 producer warps, for
-    # calls of at most H1K_MAXU live units)
+    # calls of at most H1K_MAXU live units), H1K_AUTO (with H1U_KSPLIT = 4: 4 producers where one wave holds the call's
+    # units, else 2)
     for v in ${VARIANTS:-b3=-DH1U_MINB=3 pf=-DH1U_PF=1 pd2=-DH1U_PF=1,-DH1U_PD=2 pd4=-DH1U_PF=1,-DH1U_PD=4 \
              pd8=-DH1U_PF=1,-DH1U_PD=8 l2=-DH1U_PF=1,-DH1U_L2PF=1 pd2l2=-DH1U_PF=1,-DH1U_PD=2,-DH1U_L2PF=1 \
              pd4l2=-DH1U_PF=1,-DH1U_PD=4,-DH1U_L2PF=1 pd2b3=-DH1U_PF=1,-DH1U_PD=2,-DH1U_MINB=3 \

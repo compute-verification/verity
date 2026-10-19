@@ -80,6 +80,12 @@ constexpr int WARPS = H1U_WARPS;
 #ifndef H1K_MAXU
 #define H1K_MAXU 320
 #endif
+// H1K_AUTO = 1 (with H1U_KSPLIT = 4): 4 producers where the live units fit in one wave of h1k<4> (decode's o and down),
+// else 2 up to H1K_MAXU (qkv's 192 units exceed an H200's or a B200's SMs, and h1k<4> runs one CTA an SM)
+#ifndef H1K_AUTO
+#define H1K_AUTO 0
+#endif
+static_assert(!H1K_AUTO || H1U_KSPLIT == 4, "H1K_AUTO picks between h1k<4> and h1k<2>: build it with H1U_KSPLIT = 4");
 static_assert(16 % H1U_PD == 0, "a chunk's 16 segments are whole rings of H1U_PD");
 static_assert(H1U_KSPLIT == 0 || H1U_KSPLIT == 2 || H1U_KSPLIT == 4, "h1k's producers: 2 or 4");
 static_assert(!H1U_SPLIT || (WARPS % 2 == 0 && WARPS <= 4), "a split unit is a pair of warps; 2 pairs fill 48 KiB");
@@ -659,8 +665,7 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1u(const int8_t* __rest
 }
 
 #if H1U_KSPLIT
-constexpr int KP = H1U_KSPLIT;
-constexpr int KNI = 8 / KP;  // a chunk's 64 blocks are 256 uint4, KNI a producer lane
+template <int KP>
 struct alignas(16) KSmem {
   int4 dt[2][KP][8][32];   // [round parity][producer][fragment t][lane]: a segment's dT; after the walk, Y, Cw and Pz
   u32 bits[2][2][32][17];  // [chunk parity][0 rows | 1 columns][i][half]
@@ -669,12 +674,13 @@ struct alignas(16) KSmem {
   u32 ring[32][33];
 };
 
-template <int MD, bool PL>
+template <int MD, bool PL, int KP>
 __global__ void __launch_bounds__(32 * (KP + 1), 1) h1k(const int8_t* __restrict__ A, const int8_t* __restrict__ B, u32 M,
                                                         u32 N, u32 K, const u64* __restrict__ seeds,
                                                         const uint8_t* __restrict__ live, u32* __restrict__ out,
                                                         const u32* __restrict__ ws, OneOut oo) {
-  __shared__ KSmem S;
+  constexpr int KNI = 8 / KP;  // a chunk's 64 blocks are 256 uint4, KNI a producer lane
+  __shared__ KSmem<KP> S;
   const u32 lane = threadIdx.x & 31, wp = threadIdx.x >> 5;
   const u32 g = lane >> 2, q = lane & 3;
   const u32 ncb = N / 32, u = blockIdx.x;
@@ -1439,17 +1445,50 @@ static void launch_unit(unsigned units, cudaStream_t s, const void* A, const voi
 #endif
 }
 
+#if H1U_KSPLIT
+template <int MD, bool PL, int KP>
+static void launch_k(unsigned units, cudaStream_t s, const void* A, const void* B, unsigned M, unsigned N, unsigned K,
+                     const void* seeds, const void* live, void* out, const void* ws, const OneOut& oo) {
+  h1k<MD, PL, KP><<<units, 32 * (KP + 1), 0, s>>>((const int8_t*)A, (const int8_t*)B, M, N, K, (const u64*)seeds,
+                                                  (const uint8_t*)live, (u32*)out, (const u32*)ws, oo);
+}
+
+// h1k<MD, PL, KP>'s CTAs resident at once (SMs x the occupancy calculator's CTAs an SM; 0 if either query fails), read
+// once a process, so on the device of its first call
+template <int MD, bool PL, int KP>
+static unsigned h1k_wave() {
+  static const unsigned w = [] {
+    int dev = 0, sms = 0, per = 0;
+    if (cudaGetDevice(&dev) != cudaSuccess || cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev) != cudaSuccess
+        || cudaOccupancyMaxActiveBlocksPerMultiprocessor(&per, h1k<MD, PL, KP>, 32 * (KP + 1), 0) != cudaSuccess)
+      return 0u;
+    return (unsigned)(sms * per);
+  }();
+  return w;
+}
+#endif
+
 template <int MD, bool WS, bool J10 = false, bool PL = false>
 static void launch_one(unsigned units, cudaStream_t s, const void* A, const void* B, unsigned M, unsigned N, unsigned K,
                        const void* seeds, const void* live, void* out, const void* ws, const OneOut& oo) {
 #if H1U_KSPLIT
   if constexpr (WS && !J10) {
-    const unsigned rows = oo.M < M ? oo.M : M;
-    if ((rows + 31) / 32 * (N / 32) <= H1K_MAXU) {
-      h1k<MD, PL><<<units, 32 * (KP + 1), 0, s>>>((const int8_t*)A, (const int8_t*)B, M, N, K, (const u64*)seeds,
-                                                  (const uint8_t*)live, (u32*)out, (const u32*)ws, oo);
+    const unsigned rows = oo.M < M ? oo.M : M, lu = (rows + 31) / 32 * (N / 32);
+#if H1K_AUTO
+    if (lu <= h1k_wave<MD, PL, 4>()) {
+      launch_k<MD, PL, 4>(units, s, A, B, M, N, K, seeds, live, out, ws, oo);
       return;
     }
+    if (lu <= H1K_MAXU) {
+      launch_k<MD, PL, 2>(units, s, A, B, M, N, K, seeds, live, out, ws, oo);
+      return;
+    }
+#else
+    if (lu <= H1K_MAXU) {
+      launch_k<MD, PL, H1U_KSPLIT>(units, s, A, B, M, N, K, seeds, live, out, ws, oo);
+      return;
+    }
+#endif
   }
 #endif
   h1u<MD, WS, true, J10, PL><<<(units + WARPS - 1) / WARPS, 32 * WARPS, 0, s>>>((const int8_t*)A, (const int8_t*)B, M, N,
