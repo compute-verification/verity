@@ -33,6 +33,8 @@ import Proofs.Flock.Claims.ZK.NonVacuous
 import Proofs.Flock.Claims.ZK.SamplingNonVacuous
 import Proofs.Flock.Claims.ZK.Compose
 import Proofs.Flock.Claims.ZK.Layout
+import Proofs.Flock.Claims.ZK.Cut
+import Proofs.Flock.Claims.ZK.Stop
 
 /-!
 # Flock's zero knowledge against a malicious verifier
@@ -195,4 +197,9 @@ import Proofs.Flock.Claims.ZK.Layout
 * `Layout`: a run in parts, a first part then sessions back to back, on a flat tape (the first part's and one session
   tape per slot) is `zkmalAt_iterG`'s nested run (`Layout.iterProver_flat`), so **`zkmalAt_layout`** charges it
   `ε₀ + Σ_{j < m} eB j` and `(c + m)·g`, each session's zero knowledge needed only at the histories that start it.
+* `Cut`: a run cut at a round (`cutT`), and the run of a prover stopped there is its own run cut (`interact_stopAt`).
+* `Stop`: a run in parts with a public stop, a test of the verifier-visible history read through the first part:
+  the run with the stop is the run cut where it fires (`interact_censor`), so a first part that rewinds nothing keeps
+  its error (`ZKmalAt.censor`), sessions where it fired are silent and simulated exactly, and **`zkmalAt_layout_stop`**
+  charges the parts in turn `ε₀ + Σ_{j < m} eB j` and `m·g` against the prover with the stop.
 -/
