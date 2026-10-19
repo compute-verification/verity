@@ -1,5 +1,6 @@
 import Models.Accounting.Guarantees.Actual
 import Models.Accounting.Guarantees.Actual.Threaded
+import Models.Accounting.Guarantees.Actual.Dampener
 import Models.Accounting.Guarantees.Bandwidth
 import Models.Accounting.Guarantees.Bandwidth.Causal
 import Models.Accounting.Guarantees.BandwidthAudit
@@ -48,7 +49,8 @@ charged as compute, with partial completion and with a sketch-then-hash tag, the
 tiers and chained passes, the causal horizon bound on its samples and its conservation with named words, the one
 composed guarantee for the remote bandwidth audit as deployed and its deployed instance, the remote
 bandwidth audit's conservation and node-level guarantees on the actual-circuit model, the actual circuit's capacity
-theorem, runtime corollary, memory cap over threads with its rate and dark gates, localization, composition and fit,
+theorem, runtime corollary, memory cap over threads with its rate, dark gates and the compute dampener's windows,
+localization, composition and fit,
 the obligations B1, B2 and B4, the tag and sketch guarantees, Lemma B with (H-μ⁺) derived from fresh coins and Lemma B′
 for a persistent pattern, the view independence the Build's coin rules give it, co-location and the link relay for
 receipts bound to the matmul, what a relay of the deployed bound receipt's sketch must exchange, the bandwidth audit's
