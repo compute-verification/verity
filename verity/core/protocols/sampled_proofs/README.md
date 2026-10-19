@@ -531,25 +531,11 @@ unchecked. Pinned by `tests/test_two_stage.py` (`test_detection_matches_the_per_
 
 The draw of record is `two_stage.OwnRandomness` read with the Lean verifier's samplers (`Flock.Draw`), with no hash, no
 derivation and no beacon, the RU draw after the boundary is registered and the proof-unit draw after the interiors are.
-Its bytes are the operating system's as the Lean verifier of record reads them (`one_stage.verifier.coins`, the
-`sampled-proofs-verifier`'s `coins` request: `IO.getRandomBytes`, assumption A3, `uniform/io-getrandombytes`), the
-default coins of `service.Stream`, salt included. The Python never reads its coins from the operating system itself:
-`OwnRandomness` has no default source.
-
-- Stage 1 under a one-stage sampling design (`draw_first`) reads the bytes as `Flock.Draw.drawWith` does: `subset` and
-  `bernoulli` on one stream (`bernoulli` at its `NUM/DEN` as written), `stratified` and `work` one stream per stratum,
-  each of `2 k_s · width(n_s) + 64` bytes, extended by as many again and rerun whenever it runs out. The result is the
-  one-stage draw object, which `draw.check_draw` holds to the registration and the sampling design; the verifier's
-  closure map widens a work draw only, as `flock-verify draw --closure` does (`closure_of` is Lean's `closureOf`).
-- `select_replay_units` (a rate stage's `uniform(den) < num` per RU, a sampling design's `draw_first` over the class's
-  RUs) and `select_proof_units` (`subset(k, n_v)` of each drawn RU with `k < n_v`) are the sampled verifier's
-  `TwoStage.selectReplayUnits` and `TwoStage.selectProofUnits`, read from the same bytes in the same order and held to
-  the Python by the difftest's `replay_units` and `proof_units` pieces.
-- Nothing here derives a draw, the proof service's included (`service.Stream.select` is `draw_first` on the
-  challenger's coins, by `select_draw`, and its draw of record is Lean's `Select.select` on the bytes it read, by
-  `verifier.select`).
-  vLLM's legacy replay challenge derives its own (`verity_vllm.commit.challenge.replay_key`,
-  under the domain `verity/sampled-proofs/vu-sample/v1`) until its re-baseline.
+Its bytes are the Lean verifier of record's (`one_stage.verifier.coins`: `IO.getRandomBytes`, A3), `service.Stream`'s
+default coins. Stage 1 (`draw_first`, with the byte layout), `select_replay_units` and `select_proof_units` read them as
+the Lean verifier does, held to it by the difftest. Nothing derives a draw, the proof service's included
+(`service.Stream.select`), except vLLM's legacy replay challenge (`verity_vllm.commit.challenge.replay_key`) until its
+re-baseline.
 
 Pinned by `tests/test_two_stage.py` (`test_own_randomness_is_the_lean_verifiers_samplers_on_raw_bytes`,
 `test_draw_first_is_the_lean_verifiers_draw_on_the_same_bytes`, `test_a_stream_that_runs_out_is_extended_as_lean_does`,
