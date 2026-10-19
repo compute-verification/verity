@@ -85,7 +85,7 @@ Which parts of a circuit are checked, how they are sampled and what must be comm
 
 The logical layer is the cryptography: PoUW, PoUS and the bandwidth audits prove lower bounds on what the prover system did, with no device premise. The physical layer reads them against declared hardware, named assumptions and trusted devices' measurements, in seven components: (1) the device graph, whose blocks (a node to start) are spatial units; (2) placement; (3) the timebase; (4) trusted observers; (5) boundary bounds; (6) attribution; (7) the joint ledger.
 
-- **Compute.** PoUW proves the noised products were computed, at least 1 − ε of them right. Traffic alone attributes nothing: a block is credited only through an anchor, fresh trusted data it must consume (bounded by its egress), or the named premise that the fleet is closed. On a node, the work is the node's, its GPUs, host CPU and peer GPUs together (ASK-65): a GPU's own share needs LOC's host deduction and every billable GPU on the node credited each window.
+- **Compute.** PoUW proves the noised products were computed, at least 1 − ε of them right. Traffic alone attributes nothing: a block is credited only through an anchor, fresh trusted data it must consume (bounded by its egress), or the named premise that the fleet is closed.
 - **Memory.** The bandwidth audits prove bits read, and PoUS bits held, at no location. Attribution places them in tiers, less what boundary links carry in.
 - **Network.** Certifiers prove ports carried only committed values, timing aside; gaps cost line rate.
 
