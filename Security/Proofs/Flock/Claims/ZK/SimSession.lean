@@ -637,12 +637,89 @@ theorem simSession_of (hc : SimCommit) (h0 : HybridStep 0) (h1 : HybridStep 1) (
     have hk' : k < 2 * (stsOf x).size := by rw [FlockDeploy.repStreams_size, hspec] at hk; exact hk
     have hi : k / 2 < jOf x := by omega
     have hr2 : k % 2 < 2 := Nat.mod_lt _ (by omega)
+    have hi' : k / 2 < (stsOf x).size := by omega
+    have hst : (stsOf x)[k / 2]! = stAt x ⟨k / 2, hi⟩ := by
+      unfold stAt
+      exact getElem!_pos _ _ _
+    have hv : _root_.Flock.Zk.schedule (stsOf x)[k / 2]!.m =
+        .ok ((zkTab x ⟨k / 2, hi⟩).sch, (zkTab x ⟨k / 2, hi⟩).tPad) := by
+      rw [hst]
+      exact (zkTab x ⟨k / 2, hi⟩).hz
+    have hk6 : 6 ≤ (stsOf x)[k / 2]!.c.kLog := by
+      rw [hst]
+      exact (zkTab x ⟨k / 2, hi⟩).wf.1.hk6
+    have hm : 14 ≤ (stsOf x)[k / 2]!.m := by
+      have := (hall (k / 2) hi').1
+      rw [hst]
+      unfold stAt
+      omega
     rw [FlockDeploy.repStreams_getElem _ hk]
     dsimp only
     rw [hsch (k / 2) hi]
     dsimp only
-    trace_state
-    sorry
+    refine both_bind (both_rfl _ _) ?_
+    rintro extras _ l1 ⟨rfl, e1⟩
+    rw [monadLift_go] at e1
+    obtain ⟨hex, rfl⟩ := Prod.mk.inj e1
+    refine both_bind (both_right (both_of_map_eq ((hc x hx w hw τ c ⟨k / 2, hi⟩ l).2 ⟨k % 2, hr2⟩))) ?_
+    rintro _ ic l2 ⟨rfl, e2⟩
+    have hl2 := Still.go (Still.of_pureS (innerCommitP_pureS _ _ _)) e2
+    subst hl2
+    have hcms : (cms.map eraseC)[k / 2]! = eraseC cms[k / 2]! := by
+      rw [getElem!_pos _ (k / 2) (by simp only [Array.size_map, hcsz, Array.size_range]; omega),
+        getElem!_pos cms (k / 2) (by simp only [hcsz, Array.size_range]; omega), Array.getElem_map]
+    have htb : ((Array.range (FlockDeploy.tabsOf (stsOf x)).size).map fun i =>
+        packed (trsE x w (UE.tapeZk τ))[i]! (FlockDeploy.tabsOf (stsOf x))[i]!.m)[k / 2]! =
+          packed (trsE x w (UE.tapeZk τ))[k / 2]! (FlockDeploy.tabsOf (stsOf x))[k / 2]!.m :=
+      getElem!_range_map _ (by omega)
+    have htab : (FlockDeploy.tabsOf (stsOf x))[k / 2]! = _root_.Flock.Setup.ofCircuit (stsOf x)[k / 2]! := by
+      rw [getElem!_pos (FlockDeploy.tabsOf (stsOf x)) (k / 2) (by omega), getElem!_pos (stsOf x) (k / 2) hi']
+      simp [FlockDeploy.tabsOf]
+    have hpr : priorOf (FlockDeploy.tabsOf (stsOf x))[k / 2]! sP (k % 2) = priorE c (k / 2) (k % 2) := by
+      unfold priorOf priorE
+      by_cases h1 : k % 2 = 1
+      · simp only [h1, ↓reduceIte]
+        rw [htab, show 2 * (k / 2) = k - 1 by omega]
+        exact hback h1
+      · simp only [h1, ↓reduceIte]
+    rw [hcms, htb, hpr]
+    refine both_bind (both_of_nf (repCut_nf h0 h1 h2 hx hw τ c n hn hsx ⟨k / 2, hi⟩ ⟨k % 2, hr2⟩ _ cms[k / 2]! ic
+      extras hex l (by rw [hl]; congr 1; show k = 2 * (k / 2) + k % 2; omega))) ?_
+    rintro ⟨pfC, tC⟩ ⟨pfP, tP⟩ l3 ⟨htr, e3⟩
+    dsimp only at htr
+    subst htr
+    have e3' := repPZk_cut (coin := fun k i => slotAt c k i) (n := n) (resp := respOf c)
+      (fun k => coinOf_respOf c k) hsE _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ (_root_.Flock.Transcript.init #[] _) l _ l3 e3
+    rw [htab] at e3' hex
+    obtain ⟨h25, -, hsm, hk0, -, hdim, hlv, -, -⟩ :=
+      FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ hv
+    obtain ⟨hn7, hL2, -, -, -, -, -⟩ := hdim
+    obtain ⟨hl3, -, -, -⟩ := repPZk_exact (hm := hm) (hn := by rw [hn7, hsm]; omega) (hk0 := hk0) (hL := hL2)
+      (hq := fun i hi => (hlv i hi).q_ne_zero) (h := e3')
+    have hx' : extras.size = spec.points * (stsOf x)[k / 2]!.regions.size := by
+      rw [JsonRT.extraClaims_size hex]
+      simp [Nat.mul_comm]
+    have e6 : (_root_.Flock.Setup.ofCircuit (stsOf x)[k / 2]!).fold.kLog = (stsOf x)[k / 2]!.c.kLog := rfl
+    have e7 : (_root_.Flock.Setup.ofCircuit (stsOf x)[k / 2]!).m = (stsOf x)[k / 2]!.m := rfl
+    have e8 : (_root_.Flock.Setup.ofCircuit (stsOf x)[k / 2]!).kLog = (stsOf x)[k / 2]!.c.kLog := rfl
+    refine ⟨rfl, ?_⟩
+    dsimp only
+    refine ⟨_, _, rfl, rfl, rfl, ?_, fun hk1 => ?_⟩
+    · rw [repBase_eq hsx, FlockComplete.ZkTables.repStart_succ, ← FlockComplete.ZkTables.repRoundsT_eq hv hx', hl3,
+        hl, repBase_eq hsx]
+      unfold FlockComplete.ZkTables.repRoundsT piopZk
+      rw [e6, e7, hx']
+      omega
+    · rw [show (k + 1) / 2 = k / 2 by omega, Array.back!_push, show k + 1 - 1 = k by omega]
+      have hpts := repPZk_points (hm := hm) (hk := hk6) (h := e3') (hsz := by
+        rw [hl3]
+        unfold piopZk
+        rw [e6, e7, e8]
+        omega)
+      simp only [coinOf_respOf] at hpts
+      unfold ptsOpen
+      rw [← hl]
+      exact hpts
   · refine ⟨rfl, ?_, fun h => absurd h (by decide)⟩
     rw [repBase_eq hsx]
     simp [FlockComplete.repStartZk]
