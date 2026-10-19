@@ -964,6 +964,14 @@
  },
  "four_names": ["Nci", "NetTiming", "Accounting", "Hash"],
  "guarantees": {
+  "Accounting.SecurityProofs.Actual.DampenerWindowsCap": {
+   "owner": "@lean",
+   "signature": [
+    "Accounting.SecurityProofs.Actual.DampenerWindowsCap.{u_1, u_2} : Accounting.Guarantees.Actual.DampenerWindowsCap"
+   ],
+   "assumptions": [],
+   "type_hash": "9bd6de3d2ef77225f5a766ea6dfac6be2546d75334591b671abb995e8fe2f248"
+  },
   "Accounting.SecurityProofs.Actual.Runtime": {
    "owner": "@lean",
    "signature": ["Accounting.SecurityProofs.Actual.Runtime.{u_1, u_2} : Accounting.Guarantees.Actual.Runtime"],
@@ -6780,9 +6788,6 @@
    "signature": ["Pouw.SecurityProofs.WorkWeightedSampling : Pouw.Guarantees.WorkWeightedSampling"],
    "assumptions": [],
    "type_hash": "2f6552a7668b089031af583e72b5e551727622dd8c12b1269790c9ad397ed88b"
-  },
-  "Accounting.SecurityProofs.Actual.DampenerWindowsCap": {
-   "owner": "@lean"
   }
  },
  "shape": {
@@ -7738,6 +7743,7 @@
     "Accounting.Placed.x": "994440becd8445d653a65b364659a7498c1ea20fa4c58dc13c6780b6bf12fef7"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Actual.DampenerWindowsCap",
     "Accounting.SecurityProofs.Actual.Runtime",
     "Accounting.SecurityProofs.Actual.ThreadedRate",
     "Accounting.SecurityProofs.Actual.ThreadedRuntime",
@@ -8672,6 +8678,7 @@
     "Accounting.uncertifiedCapacity": "50c8f9c62d90bc1ad68df65c869ad6c4257dd4b1dd3e44b9255753d6c33e503c"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Actual.DampenerWindowsCap",
     "Accounting.SecurityProofs.Actual.Runtime",
     "Accounting.SecurityProofs.Actual.ThreadedRate",
     "Accounting.SecurityProofs.Actual.ThreadedRuntime",
@@ -10586,6 +10593,7 @@
     "Verity.Implementation.inp": "997e0ba3c6cf816c20ad7aecf22ecb9aef93d68ebcf8cec1ed8c071b89d64202"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Actual.DampenerWindowsCap",
     "Accounting.SecurityProofs.Actual.Runtime",
     "Accounting.SecurityProofs.Actual.ThreadedRate",
     "Accounting.SecurityProofs.Actual.ThreadedRuntime",
@@ -10660,6 +10668,7 @@
     "Verity.Declaration.θ": "43a3241a0c3f2e225e2f4f79d255976bb8b070b83138bf76635d94cf0505393f"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Actual.DampenerWindowsCap",
     "Accounting.SecurityProofs.Actual.Runtime",
     "Accounting.SecurityProofs.Actual.ThreadedRate",
     "Accounting.SecurityProofs.Actual.ThreadedRuntime",
@@ -10970,6 +10979,7 @@
     "Nci.slowdown": "47f31dfc1e426587b79935cd908a1d4daa0c1a2bf91a9883a452c55b3de3d2b2"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Actual.DampenerWindowsCap",
     "Accounting.SecurityProofs.Actual.Runtime",
     "Accounting.SecurityProofs.Actual.ThreadedRate",
     "Accounting.SecurityProofs.Actual.ThreadedRuntime",
@@ -11015,6 +11025,7 @@
     "Nci.Dampener.unmonitoredShare": "44e99813f78fd4d8963b37d58aee437551d98e0581915d4f43a0e021509eceb0"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Actual.DampenerWindowsCap",
     "Nci.SecurityProofs.Dampener",
     "Nci.SecurityProofs.DampenerThreaded",
     "Nci.SecurityProofs.DampenerWindows"
@@ -11125,6 +11136,7 @@
     "Nci.Threading.weightsUsed": "6b55dd915ad83320fed02e493fe4dfa6cdc7c037c83c6694d4d55f79ab9f54ec"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Actual.DampenerWindowsCap",
     "Accounting.SecurityProofs.Actual.ThreadedRate",
     "Accounting.SecurityProofs.Actual.ThreadedRuntime",
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeDark",
@@ -20660,6 +20672,13 @@
     "Accounting.SecurityProofs.Actual.WindowsAt"
    ]
   },
+  "Models.Accounting.Guarantees.Actual.Dampener": {
+   "digest": "94151bb8b1a85a1741ce23740b75ebfd5969ac58160d161b699e6a5fb69aa2f6",
+   "definitions": {
+    "Accounting.Guarantees.Actual.DampenerWindowsCap": "194b89f680891692381f0810495bba5a86242eb8b87a6548f19e11772cb2d04b"
+   },
+   "guarantees": ["Accounting.SecurityProofs.Actual.DampenerWindowsCap"]
+  },
   "Models.Accounting.Guarantees.Actual.Threaded": {
    "digest": "89b9f4e4d04286c83dd88cb31e7625a4bd39c689fc4d9f7f38c17b2e3fc10f38",
    "definitions": {
@@ -21513,6 +21532,7 @@
     "Nci.Assumptions.WeightsIncompressible": "a9832cc41ed84cd3c55eccc606483e9c83d87fb29e05d1b1f92bb2680d32f8d8"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Actual.DampenerWindowsCap",
     "Accounting.SecurityProofs.Actual.ThreadedRate",
     "Accounting.SecurityProofs.Actual.ThreadedRuntime",
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeDark",
