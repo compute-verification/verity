@@ -6,6 +6,7 @@ import shutil
 
 import pytest
 
+from verity_machine_model import eps as E
 from verity_machine_model.cli import main
 from verity_machine_model.model import DEVICES
 from verity_machine_model.sheet import ROOT, differences, figures, lean, reading, sheet
@@ -33,6 +34,17 @@ def test_sheet_prices_the_headline(name):
     is headline.py's ε, exactly."""
     r = reading(sheet(DEVICES / name), DEVICES / name)
     assert r.sheet == r.headline
+    assert r.fmax == r.sheet, (f"{name}: the sheet's ε now depends on reading A3 per clock (the H200's tensor clock, "
+                               "the B200's measured peak: B200-PEAK-PER-CLOCK) rather than per second at f_max")
+
+
+@pytest.mark.parametrize("name", SHEETS)
+def test_uni_issue_leaves_a_ds_vector(name):
+    """A DS vector charges a uniform instruction its issue slot already (`UNI,DS_issue`, A2u), so `eps --uni-issue`
+    leaves it as it is, its name too: a renamed vector loses its ε_skip `at` entry (RT-HOPPER-4)."""
+    d = DEVICES / name
+    pi = E.machine(sheet(d).vector, d)
+    assert E.uniform_issue_charged(pi) and E.uniform_on_issue(pi, 0.5) is pi
 
 
 @pytest.mark.parametrize("name", SHEETS)
