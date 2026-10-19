@@ -7,8 +7,8 @@ import Models.Nci.Assumptions.Threads
 Tier 3's bound on the monitored servers (`benchmarks/nci/tiers.py`, "Memory cap on the residual"): a server's window
 reads its starting state plus what enters during it, `K = R + r ω`, and holds at most `K Λ(K) / b_a` counted
 multiplications of a threaded reference circuit `c`, where `Λ = Threading.bound` is NCI's Theorem 1 over threads
-(`Nci.Guarantees.ThreadedReads`). Every gate placed on the servers counts, declared or not: the windows divide the actual
-circuit's region, and `c` need only be contained in it.
+(`Nci.Guarantees.ThreadedReads`). Every gate placed on the servers counts, declared or not: the windows divide the
+actual circuit's region, and `c` need only be contained in it.
 
 The windows are `Windows`' `A[X i, [kω, (k + 1)ω) ∩ [0, t)]`, with its memory constraint replaced by a bound `R` on the
 state at each window's start, so that what a wipe or exhaustion leaves plugs in; `r` bounds each location's link
@@ -28,8 +28,8 @@ namespace Accounting.Guarantees.Actual
 open Verity Nci Finset
 
 /-- **The memory cap over threads** (tier 3's server-window bound). For an actual circuit `A` meeting causality,
-unit-priced compute rate and links at the developer's pairwise disjoint locations `X i`, a window `ω > 0`, a horizon `t`,
-and a reference circuit `c` that the developer's declaration over `[0, t)` contains, threaded by `T` with
+unit-priced compute rate and links at the developer's pairwise disjoint locations `X i`, a window `ω > 0`, a horizon
+`t`, and a reference circuit `c` that the developer's declaration over `[0, t)` contains, threaded by `T` with
 `T.Threaded Γ K d e` and `WeightsIncompressible` at `(Γ, K)`, `K = R + r ω`: when each location does at most `Γ` gates
 a window (`Φ_{X i} ω ≤ Γ`), its link capacity is at most `r`, and its state at the start of each window
 `[kω, (k + 1)ω)` that begins before `t` is at most `R`, the counted multiplications number at most `K Λ(K) / b_a` per
@@ -54,12 +54,13 @@ def ThreadedRuntime : Prop :=
       (ω : ℝ) * (b_a * T.M.card / (n * ((R + r * ω) * T.bound (R + r * ω) b_w d e)) - 1) ≤ t
 
 /-- **The memory cap's rate at the optimal window** (tier 3, the quadratic regime). In `ThreadedRuntime`'s setting, when
-the state at each wipe (every multiple of the period `p` before `t`) is at most `R`, the period divides the window and the
-window divides `t`, the window is the optimal `ω = R/r` (`r ω = R`, which minimizes `(R + r ω)² / ω`), so `K = 2R`, and
-`Λ(2R)` is in its quadratic regime (`e ≤ reuse · 2R / (4 d b_w)`): `b_a b_w d |T.M| ≤ reuse · n R r t`, at most
-`reuse · n R r / (d b_w b_a)` counted multiplications a tick, `2 R r / (d b_w b_a)` a server at reuse 2. When counted
-multiplications are a fraction `κ` of `c`'s gates, 2 gates each, `κ b_a b_w d size(c) ≤ 2 reuse · n R r t`: against the
-servers' `n Φ t` gates, an efficiency of at most `2 reuse · R r / (κ b_a b_w d Φ)`, `4 R r / (κ b_a b_w d Φ)` at reuse 2.
+the state at each wipe (every multiple of the period `p` before `t`) is at most `R`, the period divides the window and
+the window divides `t`, the window is the optimal `ω = R/r` (`r ω = R`, which minimizes `(R + r ω)² / ω`), so
+`K = 2R`, and `Λ(2R)` is in its quadratic regime (`e ≤ reuse · 2R / (4 d b_w)`): `b_a b_w d |T.M| ≤ reuse · n R r t`,
+at most `reuse · n R r / (d b_w b_a)` counted multiplications a tick, `2 R r / (d b_w b_a)` a server at reuse 2. When
+counted multiplications are a fraction `κ` of `c`'s gates, 2 gates each, `κ b_a b_w d size(c) ≤ 2 reuse · n R r t`:
+against the servers' `n Φ t` gates, an efficiency of at most `2 reuse · R r / (κ b_a b_w d Φ)`,
+`4 R r / (κ b_a b_w d Φ)` at reuse 2.
 
 Reads are counted by width, as in `ThreadedRuntime`. -/
 def ThreadedRate : Prop :=
