@@ -1,7 +1,7 @@
 """The primitives, composites and serving family's Definition modules import only `verity`, Definition modules, the standard
 library and numpy: every import in the module, a function's lazy one included.  Twins (numpy/torch/CUDA references,
-difftests, capture helpers) and vocabulary (which Definition a serving role binds) live outside the registry
-(`tools/migrate/split_prims_serve.py`), so a catalog can take these modules without the integration."""
+difftests, capture helpers) and vocabulary (which Definition a serving role binds) live outside the registry, so a
+catalog can take these modules without the integration."""
 
 from __future__ import annotations
 
@@ -72,7 +72,7 @@ def _allowed(mod: str) -> bool:
 def test_definition_module_imports_only_definitions(name):
     bad = [f"{name}.py:{line}: {mod}" for line, mod in _imports(name) if not _allowed(mod) and (name, mod) not in EXCEPTIONS]
     assert not bad, ("a Definition module imports what is not a Definition module (move the code that needs it out of the "
-                     "registry, as tools/migrate/split_prims_serve.py does):\n  " + "\n  ".join(bad))
+                     "registry, into the integration package):\n  " + "\n  ".join(bad))
 
 
 def test_every_exception_is_still_needed():
