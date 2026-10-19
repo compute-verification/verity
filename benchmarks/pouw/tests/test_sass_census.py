@@ -79,7 +79,7 @@ def test_classify_the_routes():
     # tensor: every MMA family heads products on A3's tensor route
     for base in ("DMMA", "IMMA", "HGMMA", "IGMMA", "UTCIMMA", "UTCQMMA"):
         assert cl(base)["mul"] is True and cl(base)["route"] == "tensor", base
-    # the honest lane MAC, and a dual-issue lane multiply flagged paired (UNDERPRICED)
+    # the honest lane MAC, and a paired lane multiply (two FMAs at two issue slots) flagged paired (UNDERPRICED)
     assert cl("IMAD")["mul"] is True and cl("IMAD")["route"] == "lane"
     assert cl("FFMA2")["mul"] is True and cl("FFMA2").get("paired") is True
     assert cl("FMUL2").get("paired") is True
@@ -119,8 +119,8 @@ def test_diff_sm90_gaps():
 
 
 def test_diff_sm100_gaps_and_underpricing():
-    """On the Blackwell side: DMMA is a tensor gap again; the dual-issue FFMA2/FMUL2 are native but the census prices them
-    as one FMA (UNDERPRICED); a packed SIMD add is a word with no product (GAP-WORD)."""
+    """On the Blackwell side: DMMA is a tensor gap again; the paired FFMA2/FMUL2 (two FMAs at two issue slots) are native
+    but the census counts each as one FMA (UNDERPRICED); a packed SIMD add is a word with no product (GAP-WORD)."""
     b = buckets("sm_100")
     assert "DMMA.8" in b["GAP-TENSOR"]
     assert {"FFMA2", "FMUL2"} <= b["UNDERPRICED"]

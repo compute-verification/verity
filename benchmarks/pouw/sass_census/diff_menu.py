@@ -17,7 +17,8 @@ NVIDIA's Instruction Set Reference table for the architecture (`data/sass_isa_ta
   GAP-TENSOR      an MMA form whose operand type has no `DS_tensor` peak and no census row: A3 has no rate for its MACs
                   (f64 `DMMA` everywhere; e2m1 fp4 `UTCOMMA` on sm_100, whose sheet lists no e2m1).
   GAP-MULTIPLY    a product unit on no menu route: a fresh product the model prices at 0.
-  UNDERPRICED     a native paired lane multiply (FFMA2/FMUL2) the census prices as one FMA: charged half its work.
+  UNDERPRICED     a native paired lane multiply (FFMA2/FMUL2) the census counts as one FMA, though it takes two issue
+                  slots (measured on the B200, unpriced.cu): half its cost, so it undercounts work and heads no cheaper word.
   GAP-WORD        writes a word but forms no product (a SIMD add / cross-lane fold) that the model prices at 0: NoSum
                   (a sum/select of words that already exist) or the FOLD argument must close it.
   HARMLESS        control / predicate / barrier / misc: no committed word.
@@ -60,12 +61,14 @@ MMA_KIND_TOKEN = {"IMMA": "IMMA", "HMMA": "HMMA", "QMMA": "QMMA", "OMMA": "OMMA"
 #: the cheapest int8/FP word an unpriced form could head, by base opcode (the red-team's "smallest escape")
 ESCAPE = {
     "DMMA": "an int8xint8 product is exact in f64 (|a*b|<2^24), so one DMMA.8 heads 8 exact int8 MACs a warp "
-            "instruction; with no f64 tensor peak the sheet prices it at 0 (rate: G2/G3 timing vs IMMA s8)",
+            "instruction; with no f64 tensor peak the sheet prices it at 0. On the B200 it runs 64 f64 MACs a SM-clock "
+            "(1/128 of tcgen05 i8) and shares the tensor pipe (t + s < 1 beside a saturated tcgen05; unpriced.cu)",
     "BMMA": "an int8 product is 64 AND-popc bit-planes (D=64); native b1 MMA with no sheet peak is priced at 0, but a "
             "generous 8x-TOPS b1 is only 0.125x int8 (isa_escape DECOMPOSE); emulated on sm_120 (killed)",
-    "FFMA2": "two FP32 FMAs an instruction; the census prices it as one FFMA, so an FFMA-bound FP word (filler/fold) is "
-             "charged 2x its cost on sm_100a (UNDERPRICED; int8 words head on IMAD/IDP, not FFMA)",
-    "FMUL2": "two FP32 multiplies an instruction, priced as one FMUL (UNDERPRICED on sm_100a)",
+    "FFMA2": "two FP32 FMAs an instruction at two issue slots and two FMA-pipe cycles (unpriced.cu on the B200: beside "
+             "LOP3 the issue sums to 8/3 a SM-clock); the census counts it as one FFMA, so it counts half a program's "
+             "FFMA2 slots: a conservative miscount that opens no route faster than FFMA",
+    "FMUL2": "two FP32 multiplies an instruction at two issue slots (as FFMA2), counted as one FMUL: conservative",
     "CREDUX": "a coupled cross-lane reduce into a uniform register; no multiply, so as a FOLD it heads 1 word a warp "
               "instruction = 32 lane instructions a word (>> duo's 3); NoSum holds, unpriced",
     "FSWZADD": "FP32 swizzle-add, a fixed cross-lane add; no multiply (a sum of existing words), FOLD argument as redux",
