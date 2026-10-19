@@ -11,10 +11,9 @@ opening that fails (`strat_cons_eval`).
 
 * **The coin stops** (`stopRefine_of_sessionStops`): `StopRefine` holds once the session's `abort` is the frame's stop and
   its message is the stop after every history whose openings pass and whose last coins the frame refuses
-  (`SessionStops`). A session whose
-  messages are the frame's releases (`SessionFrames`) has the second, by `LeanRelease.release_of_refusesCoins`
-  (`sessionStops_of_frames`). At the empty history the frame refuses no coins (`refusesCoins_nil`), and the prover's
-  message there is its `Hello`.
+  (`SessionStops`). A session whose messages are the frame's releases (`SessionFrames`) has the second, by
+  `LeanRelease.release_of_refusesCoins` (`sessionStops_of_frames`). At the empty history the frame refuses no coins
+  (`refusesCoins_nil`), and the prover's message there is its `Hello`.
 * **The openings** (`release_eq_abort_of_liveRefine`): after an opening the prover's coin-tree check refuses, the prover
   sends `abort` at every later round, so `LiveRefine` makes the frame's release of a live round there the `abort`
   message. The frame takes the coins the transport hands it (`LeanRelease.answered`, from the last answer alone) and
@@ -30,8 +29,10 @@ opening that fails (`strat_cons_eval`).
   `DummyReg` and `TapeOK` carry over as they are, and `Causal` and `SwCausal` where `Rf` reads the coins before its round
   only (`StopsCausal`). Where its stops are the frame's refusals (`StopsAt`: on every history whose openings pass, `Rf`
   at the coins they open is `refusesCoins`), `StopRefine` holds at its switched prover
-  (`LeanRelease.stopRefine_withStops`), and
-  `Flock.zk_server_lean` holds there from `LiveRefine` and `FillRefine` alone (`Flock.zk_server_lean_stops`).
+  (`LeanRelease.stopRefine_withStops`). `LiveRefine` holds there from two more (`LeanRelease.liveRefine_withStops`): the
+  transport makes the frame refuse after any opening that fails (`OpeningsRefused`, today Rust's), and the frame's
+  release of each live worker round is the session's message, `Hello` first (`LiveRoundEq`, the per-round byte
+  equality). So `Flock.zk_server_lean` holds at that session from those and `FillRefine` (`Flock.zk_server_lean_stops`).
 -/
 
 namespace Claims.ZKMal.RefSession
@@ -98,6 +99,31 @@ theorem swMsgAt_withStops_stop (S : RefSession) (Rf : (x : Msg) → (Fin (refK x
     by_cases hA : S.Admits x (S.pad cs)
     · rw [if_pos hA, if_pos hR]
     · rw [if_neg hA, if_pos hR]
+
+open Classical in
+/-- **Where the rule doesn't stop the coins, the session's switched message is `S`'s.** -/
+theorem swMsgAt_withStops_go (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) → S.Coin) → ℕ → Bool) (stop : Msg)
+    (x : Msg) (wt : ∀ j, FlockSoundness.Model.Witness (S.C x j).S.m)
+    (v : (c : Fin (refK x) → S.Coin) → ∀ j, ((S.C x j).T (S.cz x c j)).tab.Vals) (t : S.Tape) (cs : List S.Coin)
+    (hR : Rf x (S.pad cs) (min cs.length (refK x)) = false) :
+    (S.withStops Rf stop).swMsgAt x wt v t cs = S.swMsgAt x wt v t cs := by
+  by_cases h : cs.length < refK x
+  · rw [Nat.min_eq_left h.le] at hR
+    show (if cs.length < refK x then
+        (if Rf x (S.pad cs) cs.length = true then stop
+          else S.enc x (S.pad cs) cs.length (S.swCutOf x (S.pad cs) wt (v (S.pad cs)) t)) else _) =
+      (if cs.length < refK x then S.enc x (S.pad cs) cs.length (S.swCutOf x (S.pad cs) wt (v (S.pad cs)) t) else _)
+    rw [if_pos h, if_pos h, hR, if_neg Bool.false_ne_true]
+  · rw [Nat.min_eq_right (Nat.le_of_not_lt h)] at hR
+    show (if cs.length < refK x then _ else if S.Admits x (S.pad cs) then
+        (if Rf x (S.pad cs) (refK x) = true then stop
+          else S.fin x (S.pad cs) (S.swViewsAt x (S.pad cs) wt (v (S.pad cs)) t)) else
+        (if Rf x (S.pad cs) (refK x) = true then stop
+          else S.off x (S.pad cs) (S.swCutOf x (S.pad cs) wt (v (S.pad cs)) t))) =
+      (if cs.length < refK x then _ else if S.Admits x (S.pad cs) then
+        S.fin x (S.pad cs) (S.swViewsAt x (S.pad cs) wt (v (S.pad cs)) t)
+        else S.off x (S.pad cs) (S.swCutOf x (S.pad cs) wt (v (S.pad cs)) t))
+    rw [if_neg h, if_neg h, hR, if_neg Bool.false_ne_true, if_neg Bool.false_ne_true]
 
 end Claims.ZKMal.RefSession
 
@@ -237,6 +263,53 @@ theorem stopRefine_withStops (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) 
   stopRefine_of_sessionStops (S.withStops Rf L.stop) vs L H n wk x w rfl fun ν t m₀ ρ₀ ops hok hr =>
     S.swMsgAt_withStops_stop Rf L.stop x _ _ t _ ((hR ν t m₀ ρ₀ ops hok).symm.trans hr)
 
+/-- **The transport refuses a failed opening** at `x`: after every history past `Hello` some opening of which fails the
+coin-tree check, the frame refuses the last coins. The frame checks no opening itself; today it is Rust's
+`coin_tree::check` in `flock-circuit`'s checked transport that ends the session there. -/
+def OpeningsRefused (S : RefSession) (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand)) (H : Msg → Msg)
+    (x : Msg) : Prop :=
+  ∀ (ν : S.Nonce) (t : S.Tape) (m₀ ρ₀ : Msg) (ops : List (Msg × Msg)),
+    ((allOk (S.refP.chk x ν ρ₀) 0 (ops.map Prod.snd)).eval H).1 = false →
+    L.refusesCoins x (ν, t) ((m₀, ρ₀) :: ops) = true
+
+/-- **The live rounds' bytes**, the per-round byte equality at the worker's rounds: at `Hello`, the frame's release of
+the worker's live round is the session's `Hello`; after every history whose rounds all passed, whose openings pass and
+whose last coins the frame takes, it is the session's switched message at the coins the openings open. -/
+def LiveRoundEq (S : RefSession) (vs : S.SwVals) (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand))
+    (H : Msg → Msg) (wk : L.toSrv.Worker) (x : Msg) (w : Flock.Wit) : Prop :=
+  (∀ (ν : S.Nonce) (t : S.Tape) (κ : L.toSrv.Chk) (v : Msg), L.toSrv.live wk x w (ν, t) κ [] = true →
+    wk x w (ν, t) [] 0 = some (v, false) → L.release x (ν, t) [] false v = S.hello x ν) ∧
+  ∀ (ν : S.Nonce) (t : S.Tape) (κ : L.toSrv.Chk) (m₀ ρ₀ : Msg) (ops : List (Msg × Msg)) (v : Msg),
+    L.toSrv.live wk x w (ν, t) κ ((m₀, ρ₀) :: ops) = true →
+    ((allOk (S.refP.chk x ν ρ₀) 0 (ops.map Prod.snd)).eval H).1 = true →
+    L.refusesCoins x (ν, t) ((m₀, ρ₀) :: ops) = false →
+    wk x w (ν, t) ((m₀, ρ₀) :: ops) 0 = some (v, false) →
+    L.release x (ν, t) ((m₀, ρ₀) :: ops) false v = S.swMsgAt x (S.wt x w) (vs x w ν) t (ops.map fun p => S.decOf p.2)
+
+/-- **`LiveRefine` at the session with the frame's stops**, from the stop link, the transport's refusal of a failed
+opening and the live rounds' bytes. -/
+theorem liveRefine_withStops (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) → S.Coin) → ℕ → Bool) (vs : S.SwVals)
+    (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand)) (H : Msg → Msg) (wk : L.toSrv.Worker) (x : Msg)
+    (w : Flock.Wit) (hR : StopsAt S Rf L H x) (hO : OpeningsRefused S L H x) (hE : LiveRoundEq S vs L H wk x w) :
+    L.LiveRefine H ((S.withStops Rf L.stop).swP vs).prover wk x w := by
+  intro ρ κ h v hl hr hv
+  obtain ⟨ν, t⟩ := ρ
+  cases h with
+  | nil => exact (hE.1 ν t κ v hl hv).symm
+  | cons p ops =>
+    obtain ⟨m₀, ρ₀⟩ := p
+    show ((strat (((S.withStops Rf L.stop).swP vs).hello x ν) ((S.withStops Rf L.stop).swP vs).abort
+      ((S.withStops Rf L.stop).swP vs).dec (((S.withStops Rf L.stop).swP vs).chk x ν)
+      (((S.withStops Rf L.stop).swP vs).msg x w ν t) ((m₀, ρ₀) :: ops)).eval H).1 = _
+    rw [strat_cons_eval]
+    split
+    next hok =>
+      exact (S.swMsgAt_withStops_go Rf L.stop x _ _ t _ ((hR ν t m₀ ρ₀ ops hok).symm.trans hr)).trans
+        (hE.2 ν t κ m₀ ρ₀ ops v hl hok hr hv).symm
+    next hok =>
+      have h1 := hO ν t m₀ ρ₀ ops (by simpa using hok)
+      cases h1.symm.trans hr
+
 end LeanRelease
 
 open FlockSoundness.Discharge
@@ -245,9 +318,10 @@ set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000
 
 /-- **`Flock.zk_server_lean` at the session with the frame's stops**: at a session `S` and a stop rule `Rf` that reads
-the coins before its round only and is the frame's refusals at `x` (`LeanRelease.StopsAt`), the bound holds at
-`S.withStops Rf L.stop` from `S`'s six Props, `LiveRefine` and `FillRefine` alone: its `StopRefine` is proved
-(`LeanRelease.stopRefine_withStops`). -/
+the coins before its round only and is the frame's refusals at `x` wherever the openings pass (`LeanRelease.StopsAt`),
+the bound holds at `S.withStops Rf L.stop` from `S`'s six Props, the transport's refusal of a failed opening
+(`LeanRelease.OpeningsRefused`), the live rounds' bytes (`LeanRelease.LiveRoundEq`) and `FillRefine`: its `StopRefine`
+and `LiveRefine` are proved from them (`LeanRelease.stopRefine_withStops`, `LeanRelease.liveRefine_withStops`). -/
 theorem Flock.zk_server_lean_stops (H : Msg → Msg)
     (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (S : RefSession)
     (Rf : (x : Msg) → (Fin (refK x) → S.Coin) → ℕ → Bool) (hRf : S.StopsCausal Rf) (vs : S.SwVals) (t : ℕ)
@@ -255,8 +329,8 @@ theorem Flock.zk_server_lean_stops (H : Msg → Msg)
     (hS : S.Tables) (hV : S.Complete (Flock.R (FlockDeploy.deployZk rel).parse)) (hD : S.DummyReg) (hc : S.Causal)
     (hsc : S.SwCausal vs) (hT : S.TapeOK) (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand))
     (wk : L.toSrv.Worker) (x : Msg) (w : Flock.Wit) (hR : Flock.R (FlockDeploy.deployZk rel).parse x w)
-    (hst : LeanRelease.StopsAt S Rf L H x)
-    (hL : L.LiveRefine H ((S.withStops Rf L.stop).swP vs).prover wk x w)
+    (hst : LeanRelease.StopsAt S Rf L H x) (hO : LeanRelease.OpeningsRefused S L H x)
+    (hE : LeanRelease.LiveRoundEq S vs L H wk x w)
     (hF : L.FillRefine H ((S.withStops Rf L.stop).swP vs).prover (fun x => (FlockDeploy.deployZk rel).V.k x + 1)
       wk x w)
     {Θ : Type} (Vs : VStar Θ) (θ : Θ) (hk : Vs.k x = (FlockDeploy.deployZk rel).V.k x + 1)
@@ -275,6 +349,6 @@ theorem Flock.zk_server_lean_stops (H : Msg → Msg)
   Flock.zk_server_lean H rel (S.withStops Rf L.stop) vs t ht hT1 hδ₁ (S.withStops_tables Rf L.stop hS)
     (S.withStops_complete Rf L.stop hV) (S.withStops_dummyReg Rf L.stop hD) (S.withStops_causal Rf L.stop hRf hc)
     (S.withStops_swCausal Rf L.stop vs hRf hsc) (S.withStops_tapeOK Rf L.stop hT) L wk x w hR
-    ⟨hL, hF, L.stopRefine_withStops S Rf vs H _ wk x w hst⟩ Vs θ hk Ev
+    ⟨L.liveRefine_withStops S Rf vs H wk x w hst hO hE, hF, L.stopRefine_withStops S Rf vs H _ wk x w hst⟩ Vs θ hk Ev
 
 end Claims.ZKServer
