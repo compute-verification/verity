@@ -38,6 +38,10 @@ carry a wrong witness instead:
 * ``in-z``: the same with its z cell 0 plus one (``--z-cell``).
 * ``in-d``: the same with a kernel's D_1 word (lane 0, entry 0) one too large (``--d-word``): z and the receipt both
   computed from it, so both output rows are replaced; under ``H1_TILE=v3`` z is that word's recombination.
+* ``in-xa`` (``H1_TILE=v3`` only): the same with its z computed with one entry's X wrap bit xa = [A = 127] ∧ b flipped
+  (``--xa-flip``: the first set one, else the first clear one; the receipt the honest one), as a prover that skipped (or
+  invented) the activation-wrap correction would serve it. Its tampered window's served.json says whether the flipped
+  bit was set and how many z words moved.
 
 Each is proved like the honest statement, whose prover stops on the failing witness before it sends a proof, and again as
 ``<tag>-skip`` with ``FC_ZK_SELF_CHECK=skip`` (C-Flock's negative-control prover, which sends its proofs anyway), so the
@@ -71,7 +75,8 @@ from verity.core.protocols.pouw.coins import Challenger, coin_reason  # noqa: E4
 DRAW_DOMAIN = "verity/pouw/h1-prove-draw/v0"
 R, C = 4, 8
 #: the in-proof negatives: the tampered window's flag, and the output row whose committed words its statement carries
-IN_PROOF = {"in-receipt": ("--receipt-word", ("o1",)), "in-z": ("--z-cell", ("o0",)), "in-d": ("--d-word", ("o0", "o1"))}
+IN_PROOF = {"in-receipt": ("--receipt-word", ("o1",)), "in-z": ("--z-cell", ("o0",)), "in-d": ("--d-word", ("o0", "o1")),
+            **({"in-xa": ("--xa-flip", ("o0",))} if U.tile() == "v3" else {})}
 #: a statement tag's suffix whose prover runs with FC_ZK_SELF_CHECK=skip (job.sh), sending its proof though the witness fails
 SKIP = "-skip"
 
@@ -215,6 +220,8 @@ def cmd_prepare(a) -> int:
                             *((t, f"{w1}-{t}", f) for t, (f, _p) in IN_PROOF.items())):
         if flag:
             served_t = prover("tamper", str(work / w1), str(work / priv), str(work / f"{priv}-served.json"), flag, str(u0))
+            if flag == "--xa-flip":
+                record["xa_flip"] = served_t["tampered"]
         else:
             served_t = served1
         prover("open", str(work / priv), salt1.hex(), ",".join(map(str, units)), str(work / f"open-{tag}"))
@@ -407,6 +414,8 @@ def cmd_summarize(a) -> int:
                            for w, v in record["windows"].items()},
                "tile": U.tile(), "z_is_served_product": {w: v["served"].get("z_is_served_product")
                                                           for w, v in record["windows"].items()},
+               "xa": {w: v["served"].get("xa") for w, v in record["windows"].items()},
+               "xa_flip": record.get("xa_flip"),
                "staged": record["staged"]}
     (out / "summary.json").write_text(json.dumps(summary, indent=1))
     print(json.dumps({k: summary[k] for k in ("pass", "unit", "k", "ands", "window_tiles", "drawn_units", "statements",

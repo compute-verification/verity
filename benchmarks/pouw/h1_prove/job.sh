@@ -17,7 +17,8 @@
 #   5. run.py summarize: out/summary.json
 # env: H1_MEM_GB (the job's --mem-gb)  H1_K (4096; a smaller K truncates every row: a smoke)  H1_COLS (each call's first
 #      N weight rows; 0 all)  H1_DRAW (8)  H1_TOKENS (16)  H1_LAYER (0)  H1_HUB (/workspace/hf/hub)
-#      H1_CONTROLS ("honest output_row_committed_false" below K = 4096, else none)  H1_SERVE_PCT (36) and H1_PROVE_PCT (32):
+#      H1_QUANT (h1: H1's ±110/[-126, 125] quantizers; vllm: vLLM's per-row absmax → ±127, over the first H1_K entries
+#      below K = 4096, so a smoke's tiles hold A = 127)  H1_CONTROLS ("honest output_row_committed_false" below K = 4096, else none)  H1_SERVE_PCT (36) and H1_PROVE_PCT (32):
 #      a session's serve and prove caps, % of H1_MEM_GB (they run side by side, the stager gone; at K = 4096 with 8
 #      instances the serve passes 131 GB resident and the prover 100 GB, so H1_MEM_GB=500)  HZ_RUNS (1)  HZ_WARM (0)
 #      HZ_CACHE, HZ_STAGE: hidden_zk's
@@ -30,6 +31,7 @@ export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/benchmarks/pouw/hidden_z
 H=$SRC/benchmarks/pouw/h1_prove
 K=${H1_K:-4096} COLS=${H1_COLS:-0} DRAW=${H1_DRAW:-8} TOKENS=${H1_TOKENS:-16} LAYER=${H1_LAYER:-0}
 HUB=${H1_HUB:-/workspace/hf/hub}
+QUANT=(); [ "${H1_QUANT:-h1}" = vllm ] && QUANT=(--quant vllm --quant-k "$([ "$K" = 4096 ] && echo 0 || echo "$K")")
 if [ "$K" = 4096 ]; then CONTROLS=${H1_CONTROLS:-}; else CONTROLS=${H1_CONTROLS:-honest output_row_committed_false}; fi
 SERVE_GB=$(( MEM_GB * ${H1_SERVE_PCT:-36} / 100 )) PROVE_GB=$(( MEM_GB * ${H1_PROVE_PCT:-32} / 100 ))
 SW=$W/stage WK=$W/work
@@ -39,7 +41,7 @@ build_layer_venv() { local D=$1; rm -rf "$D" && uv venv -q --python 3.12 "$D" &&
 # the stager needs only the venv: it builds the circuit while setup builds flock-circuit and flock-verify
 [ -n "${HZ_PYTHON:-}" ] || HZ_PYTHON=$(cached venv numpy2.5.3-blake3-1.0.9 build_python)/bin/python
 PY=$HZ_PYTHON TIME="$HZ_PYTHON $J/timed.py"
-log "h1-prove: K=$K cols=${COLS:-all} draw=$DRAW tokens=$TOKENS layer=$LAYER controls: $CONTROLS"
+log "h1-prove: K=$K cols=${COLS:-all} draw=$DRAW tokens=$TOKENS layer=$LAYER quant=${H1_QUANT:-h1} controls: $CONTROLS"
 # detached (not a job of this shell), so setup's `wait` doesn't wait for it; run.py and the loop below watch its pid
 ( $TIME "$OUT/stage.time" bash -c "$(vlimit "$STAGE_GB") exec $PY $H/stage.py $K $SW" > "$OUT/stage.out" 2> "$OUT/stage.err" &
   echo $! > "$W/stager.pid" )
@@ -52,8 +54,8 @@ MODEL=$HUB FETCH=()
 if ! ls -d "$HUB"/models--*/snapshots/*/ 2>/dev/null | grep -q "Llama-3.1-8B"; then
   MODEL=${HZ_CACHE}/unsloth-Llama-3.1-8B FETCH=(--fetch unsloth/Llama-3.1-8B)   # a node without the checkpoint: layer L's shard
 fi
-"$LPY" "$H/layer.py" "$MODEL" "$W/L1.npz" --tokens "$TOKENS" --layer "$LAYER" "${FETCH[@]}" > "$OUT/layer1.json" 2> "$OUT/layer1.err" \
-  && "$LPY" "$H/layer.py" "$MODEL" "$W/L2.npz" --tokens "$TOKENS" --layer "$LAYER" --seed-tokens "$("$PY" -c 'import os; print(os.urandom(16).hex())')" \
+"$LPY" "$H/layer.py" "$MODEL" "$W/L1.npz" --tokens "$TOKENS" --layer "$LAYER" "${QUANT[@]}" "${FETCH[@]}" > "$OUT/layer1.json" 2> "$OUT/layer1.err" \
+  && "$LPY" "$H/layer.py" "$MODEL" "$W/L2.npz" --tokens "$TOKENS" --layer "$LAYER" --seed-tokens "$("$PY" -c 'import os; print(os.urandom(16).hex())')" "${QUANT[@]}" \
     > "$OUT/layer2.json" 2> "$OUT/layer2.err" || { log "layer.py FAILED: $(tail -2 "$OUT"/layer*.err)"; kill $STAGER; exit 1; }
 log "window: $(cut -c1-400 "$OUT/layer1.json")"
 args=(--work "$WK" --stage "$SW" --lean "$LEAN" --layer "$W/L1.npz" --layer2 "$W/L2.npz" --draw "$DRAW" --stager-pid "$STAGER"
