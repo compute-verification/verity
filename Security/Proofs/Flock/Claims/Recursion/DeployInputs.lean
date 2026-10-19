@@ -15,10 +15,12 @@ registration (`--rec-inner-registration`). `decodeRec` keeps only a reading whos
 `RecRaw.ins` runs the verifier's readers on those bytes as `Main.verifyCmd` runs them: Flock's (`Raw.ins`), then
 `RecVStar.Inner.ofJson`, `RecVStar.ownBindingsOfJson`, `RecCoins.filesInput`'s source, the inner circuit's META binding
 (`innerMetaRegistration`, from the header's first nine lines, `metaOf`), `recTranscriptInput`'s commits
-(`RecSetup.commits`) and `Registered.ofJson` on `--rec-rows`. `RecIns.setup` is `verifyCmd`'s `setupOf` at the statement's
-draw with those inputs and no `--identifier`, in its order: `RecSetup.checkInner`, the session's statement
-(`Stmt.setupTables`) with each table's registered reads and the identifier's absence, `Registered.checkFull`,
-`RecSetup.checks`, `Zk.shapeOk`, `RecCoins.check`, `RecVStar.checkPubRows`, `RecVStar.checkLabels` and the draw's law.
+(`RecSetup.commits`), `recLinkInput`'s tops and link points (`RecVStar.innerLink`, `linkInputOf`) and `Registered.ofJson`
+on `--rec-rows`. `RecIns.setup` is `verifyCmd`'s `setupOf` at the statement's draw with those inputs and no
+`--identifier`, in its order: `RecSetup.checkInner`, the session's statement (`Stmt.setupTables`) with each table's
+registered reads and the identifier's absence, `Registered.checkFull`, `RecSetup.checks`, `Zk.shapeOk`,
+`RecCoins.check`, `RecVStar.checkPubRows`, `RecVStar.checkLinkRounds`, `RecVStar.checkTopRows`, `RecCoins.checkLink`
+(through `checkOpenTops` and `checkLevelTopReads`), `RecVStar.checkLabels` and the draw's law.
 Like `FlockDeploy.Ins.setup` it refuses a statement without hm96-sha512 rows first, and its SHA-512 calls are the
 shipped ones, outside the oracle.
 -/
@@ -174,6 +176,17 @@ def commitsOf (w : RecRaw) (src : Option RecCoins.Source) (bound : Flock.V (Opti
         some <$> RecSetup.commits inner (textOf "rec inner transcript" t)
           (w.registration.mapM (textOf "rec inner registration")) bound record
 
+/-- **The circuit table's tops and the link points, as the coin server recorded them** (`recLinkInput`): with
+`--rec-inner-transcript` and the source's record, `RecVStar.innerLink` on the transcript, which holds the record's link
+points to the coin server's; none without either. -/
+def linkInputOf (w : RecRaw) (src : Option RecCoins.Source) : Except String (Option RecVStar.InnerLink) :=
+  match w.transcript, src.map (·.record) with
+  | some t, some record => do
+    match Json.parse (← textOf "rec inner transcript" t) with
+    | .ok j => some <$> RecVStar.innerLink j record
+    | .error e => .error s!"rec inner transcript: not JSON: {e}"
+  | _, _ => .ok none
+
 /-- What the recursive setup reads of a parsed statement: Flock's (`Ins`), and the recursive inputs as `verifyCmd`
 holds them. -/
 structure RecIns where
@@ -184,6 +197,7 @@ structure RecIns where
   src : Option RecCoins.Source
   bound : Flock.V (Option String × Option RecVStar.StackedShape)
   commits : Option RecVStar.InnerCommits
+  link : Option RecVStar.InnerLink
   rows : Option (Array Registered.Port)
 
 /-- **The verifier's readers on the statement's bytes**, as `verifyCmd` runs them. -/
@@ -194,9 +208,10 @@ def RecRaw.ins (w : RecRaw) : Except String RecIns := do
   let src ← sourceOf w
   let bound := boundOf w.innerCircuit
   let commits ← commitsOf w src bound inner
+  let link ← linkInputOf w src
   let rows ← w.recRows.mapM fun b => do
     (Registered.ofJson (← jsonOf "rec rows" b)).mapError fun e => s!"rec rows: {e}"
-  pure { base, inner, part := w.recPart, bindings, src, bound, commits, rows }
+  pure { base, inner, part := w.recPart, bindings, src, bound, commits, link, rows }
 
 /-- **`verifyCmd`'s setup with the recursive inputs** at the statement's draw, with no `--identifier`. -/
 def RecIns.setup (s : RecIns) : Flock.V (SessionSpec × Array Stmt) := do
@@ -215,6 +230,9 @@ def RecIns.setup (s : RecIns) : Flock.V (SessionSpec × Array Stmt) := do
   sts.forM (RecCoins.check · s.base.registered (RecCoins.Source.atC3 s.src s.inner s.commits)
     (RecSetup.c3 s.inner s.commits))
   sts.forM (RecVStar.checkPubRows · s.base.registered s.commits (s.inner.bind (·.sparse)))
+  if let (some i, some lk) := (s.inner, s.link) then RecVStar.checkLinkRounds i lk
+  sts.forM (RecVStar.checkTopRows · s.base.registered s.link)
+  sts.forM (RecCoins.checkLink · s.base.registered (RecCoins.Source.atC3 s.src s.inner s.commits) s.link)
   if s.inner.isSome then RecVStar.checkLabels r.draw r.I.count sts
   if r.draw.isSome then ProvedScope.drawLaw r.zk r.draw
   pure (spec, sts)

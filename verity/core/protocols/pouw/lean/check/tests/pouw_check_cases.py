@@ -1,7 +1,8 @@
 """The difftest's cases: generated windows, each a `serve` case ``{"commitment": hex, "evidence": hex, "params": JSON}``.
 
-A case is an honest window (random grid bits, tile work, ε, δ, range and level; the registration one-stage's record of
-it, the service's answer an acceptance of that registration with its profile and draw), then one mutation (`MUTATIONS`)
+A case is an honest window (random grid bits, pinned tile template (`core_check.TILES`), ε, δ, range and level; the
+registration one-stage's record of it, the service's answer an acceptance of that registration with its profile and
+draw), then one mutation (`MUTATIONS`)
 aimed at one refusal of `core_check`: of the parameters, the record, the answer, or a rule of the check.  Every string it
 writes is ASCII and every number an integer, where Lean's canonical JSON and Python's agree.  `tests/test_difftest.py`
 draws them for the harness, and `verity/core/protocols/pouw/tests/test_pouw_core_check.py` holds each mutation to
@@ -19,7 +20,7 @@ from verity.core.protocols.pouw import window as Wd
 
 EPS = ["1", "1/2", "1/3", "2/3", "1/10", "1/20", "3/4"]
 DELTA = ["1/2", "1/10", "1/100", "1/1000", "1/65536", "1/1048576", "3/7"]
-TILE_WORK = [1, 7, 64, 4096]
+TEMPLATES = sorted(CC.TILES)
 
 
 def _hex(rng: random.Random, n: int = 64) -> str:
@@ -29,11 +30,12 @@ def _hex(rng: random.Random, n: int = 64) -> str:
 def honest(rng: random.Random) -> dict:
     """An honest window: the verifier's parameters, the registration, and the service's accepting answer."""
     bits = rng.randrange(5)
-    tw = rng.choice(TILE_WORK)
-    params = {"check": {"entries": rng.randint(2, 32), "scheme": CC.SCHEME, "template": f"Pc8TileHidden{{{tw},1,1,sm120}}",
-                        "tile_work": tw},
+    template = rng.choice(TEMPLATES)
+    tile = CC.TILES[template]
+    tw = tile.tile_work
+    params = {"check": {"entries": rng.randint(2, 32), "scheme": CC.SCHEME, "template": template, "tile_work": tw},
               "context": f"served-zk/run-{rng.randrange(1000)}/{_hex(rng, 8)}", "delta": rng.choice(DELTA),
-              "eps": rng.choice(EPS), "grid_bits": bits, "query": _hex(rng)}
+              "eps": rng.choice(EPS), "grid_bits": bits, "query": tile.query}
     top = rng.choice([4, 12, 24, 40])
     hi = rng.randint(2, 1 << top)
     ell_hi = Wd.level(Wd.floor_point(hi, bits), bits) - 1
@@ -98,7 +100,8 @@ MUTATIONS = [
     ("params-range", "params", "range", [3, 2]), ("params-range-zero", "params", "range", [0, 5]),
     ("params-eps-other", "params", "eps", "1/7"), ("params-delta-other", "params", "delta", "1/9"),
     ("params-grid-other", "params", "grid_bits", 7), ("params-tile-other", "params", "check.tile_work", 3),
-    ("params-template-other", "params", "check.template", "Other{1}"), ("params-query-other", "params", "query", None),
+    ("params-template-other", "params", "check", None), ("params-template-unpinned", "params", "check.template", "Other{1}"),
+    ("params-query-other", "params", "query", None),
     ("params-range-low", "params", "range", None), ("params-range-high", "params", "range", None),
     ("record-format", "record", "format", "verity/registration/v0"), ("record-program", "record", "program", 7),
     ("record-partition", "record", "partition", _DROP), ("record-population-type", "record", "population", "8"),
@@ -180,6 +183,9 @@ def _derived(name: str, case: dict, rng: random.Random):
     ell = items["work"]["level"]
     if name in ("params-query-other", "answer-other"):
         return _hex(rng)
+    if name == "params-template-other":
+        other = rng.choice([t for t in TEMPLATES if t != p["check"]["template"]])
+        return {**p["check"], "template": other, "tile_work": CC.TILES[other].tile_work}
     if name == "params-range-low":
         return [Wd.point(ell, bits) + 1, max(p["range"][1], Wd.point(ell, bits) + 1)]
     if name == "params-range-high":
@@ -284,6 +290,8 @@ def instance(rng: random.Random, name: str = "honest") -> dict:
         _set(case[part], path, value)
 
     mutate("params")
+    if name == "params-template-other":
+        case["params"]["query"] = CC.TILES[case["params"]["check"]["template"]].query
     mutate("record")
     params, rec, ans = case["params"], case["record"], case["answer"]
     rec_b = _canon(rec).encode()

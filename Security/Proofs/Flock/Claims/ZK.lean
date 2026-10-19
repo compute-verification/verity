@@ -37,13 +37,32 @@ import Proofs.Flock.Claims.ZK.SaltProver
 import Proofs.Flock.Claims.ZK.CutSession
 import Proofs.Flock.Claims.ZK.ExePlan
 import Proofs.Flock.Claims.ZK.Split
+import Proofs.Flock.Claims.ZK.Sent
+import Proofs.Flock.Claims.ZK.Round1
+import Proofs.Flock.Claims.ZK.Round1Pads
+import Proofs.Flock.Claims.ZK.Round1Root
+import Proofs.Flock.Claims.ZK.Round1Enc
+import Proofs.Flock.Claims.ZK.Round2
+import Proofs.Flock.Claims.ZK.Round3Vals
+import Proofs.Flock.Claims.ZK.SimZerocheck
+import Proofs.Flock.Claims.ZK.SimPiopGo
+import Proofs.Flock.Claims.ZK.SimPiop
+import Proofs.Flock.Claims.ZK.PiopSrcVals
+import Proofs.Flock.Claims.ZK.PiopSrcLc
 import Proofs.Flock.Claims.ZK.Worker
 import Proofs.Flock.Claims.ZK.Switched
 import Proofs.Flock.Claims.ZK.Server
 import Proofs.Flock.Claims.ZK.Blind
 import Proofs.Flock.Claims.ZK.Release
+import Proofs.Flock.Claims.ZK.Refine
+import Proofs.Flock.Claims.ZK.Os
+import Proofs.Flock.Claims.ZK.FrameTape
 import Proofs.Flock.Claims.ZK.NonVacuous
 import Proofs.Flock.Claims.ZK.SamplingNonVacuous
+import Proofs.Flock.Claims.ZK.Compose
+import Proofs.Flock.Claims.ZK.Layout
+import Proofs.Flock.Claims.ZK.Cut
+import Proofs.Flock.Claims.ZK.Stop
 
 /-!
 # Flock's zero knowledge against a malicious verifier
@@ -194,7 +213,57 @@ import Proofs.Flock.Claims.ZK.SamplingNonVacuous
   whose encoding sends `[]` there (`Masked.encStop`) is causal where its encoding is (`Masked.causal_encStop`), and its
   `HonestPreOnPos` is its encoding's at the rounds where no refusal is seen, given that a seen throw stops `honestPR`
   (`Masked.honestPreOnPos_stop`; a seen outer coin `1` is `Masked.outerHit_of_lt`'s).
-  `Flock.zk_deployZk_masked_exe_stopped_gap` is `Flock.zk_deployZk_masked_exe_refusals_gap` at such a plan.
+  `Flock.zk_deployZk_masked_exe_stopped_gap` is `Flock.zk_deployZk_masked_exe_refusals_gap` at such a plan. A seen
+  throw does stop `honestPR` (`Masked.honestPR_thrown`: the session stops right after the send whose reply it refused,
+  within the openings' answers), so `Flock.zk_deployZk_masked_exe_live_gap` drops that premise: left are the encoding
+  at the rounds after the first where no refusal is seen, the plan's `Causal`, its round `0` and the last round.
+* `Sent`: at a round after the first where no refusal is seen, `honestPR` sends the masked session's next body at the
+  openings' answers, tagged `0` (`Masked.honestPR_live`, from `FlockComplete.ZkTables.honestPR_sent`), so
+  `Flock.zk_deployZk_masked_exe_sent_gap` asks the encoding there against that run (`hstep`): that the session sends
+  past the openings and the encoding is its next body, or that it stops within them and the encoding is `[]`
+  (`Masked.honestPR_stopped`), as where table `0`'s extra claims throw right after the link message.
+* `Round1`: round `1` of that run at a live statement (`Masked.liveRun_round1`): where table `0`'s extra claims at the
+  link points throw, the session stops after the link message; else its second body is table `0` rep `0`'s first
+  zerocheck squeeze, of the domain's transcript with the digest, the level-0 cap and the pads' root absorbed
+  (`FlockComplete.sessionPZk_go_round1`).
+* `Round1Pads`: toward that body on the model's side, a live table's rep `r` pads leaf at tree position `p` commits
+  `padColAt` at `X = p + 1`, each pad at its layout index and padding symbol `j` at `len + j`, at every coin vector
+  (`Masked.colPAt_tabC`), so its digest reads no coin (`Masked.digOf_pads`); a cut's pads leaf at tree position `q`
+  (`Masked.leafAtP_cutAt`).
+* `Round1Root`: and on the executable's side, `innerCommitP`'s root is `layerOf`'s of its leaves
+  (`FlockComplete.innerCommitP_root_layerOf`); at the executable's layout each is the executable's pads leaf of the cut's
+  view at that tree position (`Masked.exeOf_pads`), so table `j`'s rep `r` pads root is `layerOf`'s of the cut's pads
+  leaves by tree position (`Masked.innerRoot_exe`).
+* `Round1Enc`: round `1`'s encoding (`Masked.enc1`): that body of the cut's level-0 and pads leaves by tree position, at
+  the link points of round `0`'s coin, and `[]` where the extra claims there throw. It reads round `0`'s coin only
+  (`Masked.enc1_causal`), and at the executable's layout it is round `1`'s `hstep` (`Masked.honest_round1_exe`), so
+  `Flock.zk_deployZk_masked_exe_round1_gap` asks `hstep` after the second round only.
+* `Round2`: round `2` of that run (`Masked.liveRun_round2`): where table `0`'s extra claims return, its third body is
+  table `0` rep `0`'s outer zerocheck point squeeze, the header of `m − 13` coins of kind `2` alone, which reads no
+  value, commitment or coin; its encoding (`Masked.enc2`) reads round `0`'s coin only (`Masked.enc2_causal`) and is
+  round `2`'s `hstep` at every tape (`Masked.honest_round2_exe`), so `Flock.zk_deployZk_masked_exe_round2_gap` asks
+  `hstep` after the third round only.
+* `Round3Vals`: toward round `3` (`SimPiop`'s zerocheck), the clear values a cut masks at `round1_ab`'s and
+  `round1_c`'s layout indices are the executable's `round1_ab` and `round1_c` at the draw's zerocheck vector, on a trace
+  whose bits are the model's tables (`Composed.honestAt_r1ab_exe`, `Composed.honestAt_r1c_exe`, from
+  `Replay.Zc.r1ab_eq`); a rep's outer coin is read at the round after its first (`Masked.outerAt_eq`).
+* `SimZerocheck`: `SimPiop`'s zerocheck: two runs in lockstep (`FlockComplete.GoAlike`), `asksCut`'s squeezes, and the
+  cut's zerocheck against the session's where the cut's masked values are the plain prover's plus their pads
+  (`FlockComplete.zerocheckCut_alike`).
+* `SimPiopGo`: the rest of `SimPiop`'s PIOP in lockstep: the cut's lincheck against the session's
+  (`FlockComplete.lincheckCut_alike`), its ring switch (`FlockComplete.ringSwitchCut_alike`), and the cut's PIOP
+  returning the session's from a source at the cut's coins (`FlockComplete.PiopSrc`, `FlockComplete.piopCut_alike`).
+* `SimPiop`: `Masked.SimPiop` from the deployed source at the opened coins (`Masked.PiopSrcE`, `Masked.simPiop_of`):
+  `repMix 0` and `repMix 1` differ only in the PIOP (`FlockComplete.repMix_zero_one`).
+* `PiopSrcVals`: `Masked.PiopSrcE`'s zerocheck fields: the deployed source masks at the zerocheck's layout indices
+  the plain prover's messages at the opened coins plus the session's pads (`Masked.src_r1ab`, `Masked.src_r1c`,
+  `Masked.src_ml0`, `Masked.src_ml1`, `Masked.src_fa`, `Masked.src_fb`, `Masked.src_fc`), since the model's tables are
+  the session's trace's bits (`Masked.trsE_bits`) and the draw's honest zerocheck is the executable's
+  (`Masked.zcH_exe`).
+* `PiopSrcLc`: `Masked.PiopSrcE`'s lincheck fields: the deployed source masks at the lincheck's layout indices the
+  plain prover's round messages and `z_partial` at `lcCoins` plus the session's pads (`Masked.src_lc0`,
+  `Masked.src_lc1`, `Masked.src_zp`), since the prover's halved columns are the model's `lcU`, `lcV` folded at the round
+  coins (`Replay.Lc.msg_lcMsg`) and the draw's coins are the executable's (`Masked.lcH_exe`).
 * `HiSalts`: levels ≥ 1's salts by level and position (`Masked.hiSalt`, at `Masked.hiIdx`): at the executable's
   layout, the salts the model hands table `j`'s rep `r` are the masked prover's tape's `salt j r l p` on the schedule's
   levels `l ≥ 1` and their positions (`Masked.hiSalt_exe`), so a Ligerito prover of levels ≥ 1 built from one reading
@@ -228,19 +297,58 @@ import Proofs.Flock.Claims.ZK.SamplingNonVacuous
   the session's masked record), and over a stream with at most `b` stops the leak is at most `log₂ ∑_{i ≤ b} C(m, i)·r^i` bits
   (`stream_leak`). At the worker's own values the split is exact and the checks' errors drop out
   (`ZkServer.split_own`, `ZkServer.zk_server_own`), and a pad-blind worker (`ZkServer.BWorker`) is handed neither the
-  server's draws nor its messages (`ZkServer.lift`, `ZkServer.Blind`).
+  server's draws nor its messages (`ZkServer.lift`, `ZkServer.Blind`). The server that defers every stop to the last
+  round (`ZkServer.nextD`) releases the reference run or it with its last message the stop (`ZkServer.split_deferred`),
+  within a factor 2 of the simulator that guesses which (`ZkServer.zk_deferred`, `leaky1`).
 * `Blind`: the switched prover at the reference session (`RefSession.swP`, at values `RefSession.SwVals` indexed by what
   a pad-blind worker sees), with `refP`'s simulator, which never reads the prover's messages (`Proto.simulatorE_msg`):
   **`Flock.zk_deployZk_sw`**, `Claims.Flock.ZKAt` at the same `ε_zk`, `γ` and simulator as `Flock.zkAt_deployZk_ref`
   for any values whose round encoding is causal (`RefSession.SwCausal`), `Flock.zkAt_deployZk_ref` its case at the
-  tables' own values (`Flock.zkAt_deployZk_ref_of_sw`); and **`Flock.zk_server_blind`**, the server at
-  every pad-blind worker within `D.V.k x + 2` of the guessing simulator, with no term for the masked checks, and at a
+  tables' own values (`Flock.zkAt_deployZk_ref_of_sw`); and **`Flock.zk_server_blind`**, the server that defers every
+  stop to the session's last round (`ZkServer.zk_deferred`) at every pad-blind worker within a factor 2 of the
+  simulator that guesses whether it stops (one bit a session; over a stream, `log₂ ∑_{i ≤ b} C(m, i)` bits,
+  `stream_leak_deferred`), with no term for the masked checks, and at a
   statement of a class `A` with `TapeOK` on `A` only (`Flock.zk_server_blind_on`), at the deployed coin layer with the
   tables' tape read with fibers of one size on `A` (`Flock.zk_server_blind_deployed`).
-* `Release`: the deployed release (`LeanRelease`), the ZK server whose frame is the compiled `Flock.Firewall.Frame.round`
-  (`LeanRelease.refMsg_toSrv`, by definition). Its `Ref` is D8 (a)'s `FirewallComputes` plus the item-stream refinement
-  `LeanRelease.ItemsRefine` (`LeanRelease.ref`), so **`Flock.zk_server_lean`** is `Flock.zk_server_ref` at it with
-  those two in place of `hRef`.
+* `Release`: the deployed release (`LeanRelease`), the ZK server whose frame is the compiled Lean frame
+  (`Masker.answer`, then `Flock.Firewall.Frame.round`: `LeanRelease.release`, `refMsg_toSrv` by definition) at the
+  frame's own configuration from its draws on the server's tape (`LeanRelease.cfg`, `Cfg.ofDraws`: `cfg_pads`,
+  `cfg_root`). Its coin stops are the frame's, all four of them (a zerocheck outer coin `1`, a mask slot short of full
+  rank, level 0's `ρ` dependent, the inner proof's `β = 0`: `answer_rho_dependent`, `answer_beta_zero`), and where the
+  frame refuses the coins the release is the stop (`LeanRelease.release_of_refusesCoins`). Its pass decision is the
+  frame's too (`Flock.Firewall.Frame.check`: `LeanRelease.pass`, `check_release`), the device round against the
+  scheduled round in its place; Rust's own checks only fail a round more (`LeanRelease.cross`). Any other stop comes at its
+  `Finish`, with its scheduled rounds in a failed device's place
+  (`LeanRelease.fillOf`), and every way a worker fails is a failed round (`LeanRelease.pass_of_none`, `nextD_of_fail`).
+  Its `RefD` is the item-stream refinement `LeanRelease.ItemsRefine` alone, with no assumption on what the firewall
+  computes (`LiveRefine` at the worker's passed rounds and `FillRefine` at the scheduled rounds, read at the values the
+  firewall's transcript reports, where the frame takes the coins, and `StopRefine`, the stop where it refuses them;
+  `LeanRelease.refD`), so
+  **`Flock.zk_server_lean`** is `ZkServer.zk_deferred` at it, at any worker: one bit a session.
+* `Refine`: toward `ItemsRefine` at the reference session's prover (`strat`). Its `StopRefine` holds wherever the
+  session sends the stop where the frame refuses the coins (`LeanRelease.stopRefine_of_sessionStops`), and so wherever
+  the session's message is the frame's release (`SessionFrames`, `stopRefine_of_sessionFrames`) and its abort is the
+  stop. The frame checks no opening, so `LiveRefine` makes the release the abort after any opening the session refuses
+  (`LeanRelease.release_eq_abort_of_liveRefine`). The frame's coin refusal reads no tape (`LeanRelease.refusesCoins_tape`),
+  and `RefSession.withStops` is a session with the stop where a rule of the coins says, keeping the session's six Props;
+  where that rule is the frame's refusals up to the protocol's last coin wherever the openings pass
+  (`LeanRelease.StopsAt`), its `StopRefine` is proved (`LeanRelease.stopRefine_withStops`), and its `LiveRefine` and
+  `FillRefine` follow from the transport's refusal of a failed opening, the frame's end past the last coin
+  (`LeanRelease.EndsAt`) and the per-round byte equality at the worker's and the stand-in rounds
+  (`LeanRelease.liveRefine_withStops`, `fillRefine_withStops`), so `Flock.zk_server_lean_stops` assumes no part of
+  `ItemsRefine`; `Flock.zk_server_lean_coinLayer` is it at the deployed coin layer (`CoinLayer.session`). A transport
+  that reads the history only through the decoded coins (`LeanRelease.ReadsCoins`) gives the rule and `StopsAt`
+  (`LeanRelease.stopsAt_of_readsCoins`).
+* `Os`: the server's tape as the operating system's bytes (`OsTape`: a stream of exactly `drawBytes` bytes for each rep's
+  frame and the tap's streams, one for one), the frame's read proved to be the release's draws (`frame_draws`, with a read
+  of any other length refused, `drawsWith_refuses`), and the step to a uniform tape beside independent randomness under
+  A3 per test, up to its slack `η` (`Pr_os_prod`). `ZkDeferredOs`, `ZkServerBlindOs` and `ZkServerLeanOs` state the
+  three theorems at those bytes, the bound plus `η`, proved as `zkDeferredOs`, `zkServerBlindOs` and `zkServerLeanOs`.
+* `FrameTape`: the frames' draws read as the masked prover's tape (`tapeOfDraws`: table `i`'s rep `r` reads frame rep
+  `rep i r`'s bytes as its `h`, `μ`, their padding, `τ`'s salt and leaf salts), whose pads are the frame's
+  (`padsOf_tapeOfDraws`, `padsOf_drawsAt`, with `h_ab` and `w`), whose leaf salts are the frame's (`innerSalt_fit`), and
+  which the release's configuration carries at the rep's rounds (`cfg_tapeOfDraws`), at the operating system's bytes
+  too (`padsOf_os`).
 * `NonVacuous`: the claim is not vacuous. A prover that makes no calls has `Fork.Pr = 0`, so the simulator that hashes a
   collision and outputs the empty transcript fails `ZKmalR` at every `ε_zk < 1` and every `γ` (`not_zkmalR_collSim`),
   a prover that sends its witness has no simulator at `ε_zk < 1/2` (`not_zkmalR_leak`), and both fail `ZKAt` at
@@ -251,4 +359,21 @@ import Proofs.Flock.Claims.ZK.SamplingNonVacuous
   whose simulator is colliding given the leaf layer (`not_samplingZK_collSim`), at one whose reference prover sends its
   witness at two honest witnesses of one leaf layer (`not_samplingZK_leak`), and is not met at every masked deployment
   where one has an honest pair (`not_forall_samplingZK`).
+* `Compose`: sequential composition. Two protocols in turn, the second at a statement the first's history selects
+  (`Seq`), are `ZKmalR` under the simulator that runs the first's, then the second's at the unit its transcript selects
+  (**`zkmalR_seqU`**, with one coin type for the second at every unit, so units need not be finitely many;
+  **`zkmalR_seq`** for finitely many): `ε` and `γ` add up, the hybrid that changes the second keeping the first real
+  and giving `V*` its messages as tape, and the composed tape (`forkTape`) guesses which session's `Fork` to charge
+  (`Seq.fork_ge`). A first protocol with `γ₀ ≤ c·g`, then `n` sessions in turn (**`zkmalR_iter`**), cost
+  `ε₀ + Σ_{j < n} eB j` and `(c + n)·g`: `n·g` after a prefix that rewinds nothing. Both hold at one statement
+  (`zkmalAt_seqU`, `zkmalAt_iter`), so the tapes and the number of sessions may be chosen per statement: on the
+  spec's statement-indexed tapes (`ZKmalRx`), `m x` sessions in turn (`zkmalRx_iter`).
+* `Layout`: a run in parts, a first part then sessions back to back, on a flat tape (the first part's and one session
+  tape per slot) is `zkmalAt_iterG`'s nested run (`Layout.iterProver_flat`), so **`zkmalAt_layout`** charges it
+  `ε₀ + Σ_{j < m} eB j` and `(c + m)·g`, each session's zero knowledge needed only at the histories that start it.
+* `Cut`: a run cut at a round (`cutT`), and the run of a prover stopped there is its own run cut (`interact_stopAt`).
+* `Stop`: a run in parts with a public stop, a test of the verifier-visible history read through the first part:
+  the run with the stop is the run cut where it fires (`interact_censor`), so a first part that rewinds nothing keeps
+  its error (`ZKmalAt.censor`), sessions where it fired are silent and simulated exactly, and **`zkmalAt_layout_stop`**
+  charges the parts in turn `ε₀ + Σ_{j < m} eB j` and `m·g` against the prover with the stop.
 -/

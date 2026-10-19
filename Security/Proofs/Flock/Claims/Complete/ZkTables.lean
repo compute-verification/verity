@@ -23,9 +23,21 @@ import Proofs.Flock.Claims.Complete.ZkTables.Stmt
 import Proofs.Flock.Claims.Complete.ZkTables.RingSwitch
 import Proofs.Flock.Claims.Complete.ZkTables.StmtOne
 import Proofs.Flock.Claims.Complete.ZkTables.Table
+import Proofs.Flock.Claims.Complete.ZkTables.Level0
+import Proofs.Flock.Claims.Complete.ZkTables.RepSplit
+import Proofs.Flock.Claims.Complete.ZkTables.View
+import Proofs.Flock.Claims.Complete.ZkTables.RepRuns
+import Proofs.Flock.Claims.Complete.ZkTables.Parts
+import Proofs.Flock.Claims.Complete.ZkTables.LaneRows
+import Proofs.Flock.Claims.Complete.ZkTables.ReplayGo
+import Proofs.Flock.Claims.Complete.ZkTables.RunsGo
+import Proofs.Flock.Claims.Complete.ZkTables.ShapeGo
 import Proofs.Flock.Claims.Complete.ZkTables.Round0
 import Proofs.Flock.Claims.Complete.ZkTables.Pass
 import Proofs.Flock.Claims.Complete.ZkTables.Refuse
+import Proofs.Flock.Claims.Complete.ZkTables.Round1
+import Proofs.Flock.Claims.Complete.ZkTables.Round2
+import Proofs.Flock.Claims.Complete.ZkTables.Round3
 
 /-! Flock's completeness at the deployed masked verifier at any number of tables. The honest masked prover runs each
 table on its share of the witness (`Honest`: `traces`, `honestP`, which is `honestPZk` at one table); the record's
@@ -77,12 +89,33 @@ stated once at a table, its trace, its tape row, its domain and its coins from t
 `ProverRunsAt` and `LgInnerAt` at each table `i` of every good case, its rep `r` starting after the `2 i + r` earlier
 reps (`repStartZk`; `Case.coinsT`, `Run.start_eq`), its rank check passing by `¬ BadZk` (`Case.maskRankT`) at its rep
 `0`'s claim points read off rep `0`'s rounds (`repT_points`), so masked completeness at any number of tables follows
-from the JSON specification and those four (`complete_jsonT`); at table `0` of a good masked case or run
-(`CaseZk.toCase`, `RunZk.toRun`) they give `complete_zk`'s `RepShapedZk`, `ProverRunsZk`, `LigeritoZk` and `Inner`
-(`repShapedZk_of`, `proverRunsZk_of`, `lgInnerZk_of`). For zero knowledge, `honestPR`'s first message is the link of
+from the JSON specification, those four and the mask-rank bound (`complete_jsonT`); at table `0` of a good masked
+case or run (`CaseZk.toCase`, `RunZk.toRun`) they give `complete_zk`'s `RepShapedZk`, `ProverRunsZk`, `LigeritoZk` and `Inner`
+(`repShapedZk_of`, `proverRunsZk_of`, `lgInnerZk_of`). Each of the four splits into level 0's masked Ligerito,
+stated once (`Level0`: `ProverRuns`, `ProverShape`, `Lanes`, `Verifier`), and the rest (`Parts`); a returning rep runs
+stage by stage (`RepSplit`: `repPZk_split`), so given `Level0.Verifier` the verifier's view of it is the prover's
+(`View`: `view`), and `LigeritoT` and `InnerT` hold (`ligeritoRest`, `innerRest`; `complete_jsonT_of_parts`). A
+returning rep records `repRoundsT` rounds (`RepRuns`: `rep_rounds`), level 0's two lane rows vanish at the honest pads
+where its lane phase is in closed form (`LaneRows`: `lanes_hold`), and the verifier's masked replay returns on rounds
+carrying the prover's zerocheck and lincheck (`ReplayGo`: `replayWith_ok`). So a rep returns at good coins where its
+rank check passes, the rounds it reads giving its claim points at the coins (`lcRounds_points`), its replay's and
+lanes' rows vanishing at its pads, and `RunsRest` holds (`RunsGo`: `repT_go`, `runsRest`); a returning
+rep's proof has the masked PIOP's closed-form lengths, level 0's cap and Ligerito lengths, the inner proof's 192-byte
+salts and 64-byte path entries, and a file under `2^64` bytes at a good case's at most 2,048 extra claims
+(`Case.extras_le`), so `ShapeRest` holds (`ShapeGo`: `shapeRest`), leaving `complete_jsonT` to level 0's four and the
+mask-rank bound (`complete_jsonT_of_level0`); `Zk.Level0Premises` and `Zk.Level0Verifier` prove level 0's four
+(`L0.complete_jsonT_closed`), and `Zk.RankDeployed` the bound, so `complete_jsonT` rests on the JSON specification
+alone (`L0.complete_jsonT_of_spec`).
+For zero knowledge, `honestPR`'s first message is the link of
 the tables' level-0 caps, each cap a function of its level's leaves, over `encodeRowsZk`'s rows (`Round0`:
 `honestPR_first`, `commitsPZk_caps`, `encodeRowsZk_entry`), and a session that returns passed every rep's `β`,
 pair-coin and rank refusals at their slots (`Pass`: `sessionPZk_pass`, each rep sending exactly its rounds,
 `repPZk_exact`, its rank check at its claim points at its sends' coins, `repPZk_rank`),
 so one that does not return is sent as `[]` once its sends are answered (`Refuse`: `honestP_err`, `honestPR_err`,
-`feed_sim_ge`). -/
+`feed_sim_ge`). The session's second body is table `0` rep `0`'s first zerocheck squeeze, from the domain's transcript
+with the digest, the level-0 cap and the pads' root absorbed, or, where that table's extra claims throw, the session
+stops after the link message (`Round1`: `sessionPZk_go_round1`, `sessionPZk_go_round1_err`). Its third is that rep's
+outer zerocheck point squeeze, taken with nothing absorbed since the first: the header of `m − 13` coins of kind `2`
+alone (`Round2`: `sessionPZk_go_round2`). Its bodies from the second on are that rep's zerocheck's sends
+(`Round3`: `Replay.ZcZ.sends`, `sessionPZk_go_sends`), its fourth `z`'s squeeze frame after the padded `round1_ab` and
+`round1_c` (`sessionPZk_go_round3`). -/

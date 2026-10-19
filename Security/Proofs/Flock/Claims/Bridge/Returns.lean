@@ -5,9 +5,10 @@ import Proofs.Flock.Claims.Bridge.Dead
 
 The session's simulation (`simSession`) returns only where the live verdict holds, and there the model's outcome is
 every table's output on its reps' runs of their whole decoded tapes, at the cap the roots decode to and the openings
-the proof files decode to (`RetOK`). Its dead branches are at the tables' positions (`DeadAt`). Both hold of every
-node (`all_simSession`), by the rounds' recursion, carrying that each rep's position was reached by its tape's prefix
-(`Reach`).
+the proof files decode to (`RetOK`). Its dead branches are at the tables' positions, each rep's game there a position
+of its game at the session's link points (`DeadAt`, `Resid`), so each rep's outcome there is an outcome of its game
+(`Resid.out`). Both hold of every node (`all_simSession`), by the rounds' recursion, carrying that each rep's position
+was reached by its tape's prefix (`Reach`).
 
 So with the dead branches answering the openings with `nul`, a model event `Q` that no outcome at the openings `nul`
 satisfies is no likelier, against the simulated strategy, than a live outcome that passes the live verdict and whose
@@ -35,6 +36,58 @@ theorem plays_of_follow {α : Type} : ∀ {g : Game α} {ms : List Msg} {g' : Ga
       · simp [follow, hM] at h
   | .ret _, _ :: _, _, _, _, h, _ => by simp [follow] at h
   | @Game.coin _ _ _ _ _, _ :: _, _, _, _, h, _ => by simp [follow] at h
+
+/-- **`g'` is a position of `g`**: reached from it by messages and coins. -/
+inductive Resid {α : Type} (g : Game α) : Game α → Prop
+  | refl : Resid g g
+  | send {M : Type} {k : M → Game α} (m : M) : Resid g (.send M k) → Resid g (k m)
+  | coin {C : Type} {iF : Fintype C} {iN : Nonempty C} {k : C → Game α} (c : C) :
+      Resid g (@Game.coin α C iF iN k) → Resid g (k c)
+
+/-- An outcome at a position of `g` is an outcome of `g`. -/
+theorem Resid.out {α : Type} {g g' : Game α} {a : α} (h : Resid g g') (ha : Out g' a) : Out g a := by
+  induction h with
+  | refl => exact ha
+  | send m _ ih => exact ih (.send m ha)
+  | coin c _ ih => exact ih (.coin c ha)
+
+theorem resid_follow {α : Type} {g₀ : Game α} : ∀ {g : Game α} {ms : List Msg} {g' : Game α},
+    Resid g₀ g → follow g ms = some g' → Resid g₀ g'
+  | _, [], _, hr, h => by
+      simp only [follow, Option.some.injEq] at h
+      subst h
+      exact hr
+  | .send M k, ⟨M', m'⟩ :: ms, _, hr, h => by
+      by_cases hM : M' = M
+      · subst hM
+        simp only [follow, dite_true, cast_eq] at h
+        exact resid_follow (.send m' hr) h
+      · simp [follow, hM] at h
+  | .ret _, _ :: _, _, _, h => by simp [follow] at h
+  | @Game.coin _ _ _ _ _, _ :: _, _, _, h => by simp [follow] at h
+
+theorem resid_upd {P : Type} {J mPts : ℕ} {G : Fin J → (Fin 2 → Fin mPts → 𝔽) → Fin 2 → Game P}
+    {pts : Fin 2 → Fin mPts → 𝔽} {gs : Fin J → Fin 2 → Game P} {j : Fin J} {r : Fin 2} {g g' : Game P}
+    (h : ∀ j' r', Resid (G j' pts r') (upd gs j r g j' r')) (hg : Resid (G j pts r) g → Resid (G j pts r) g') :
+    ∀ j' r', Resid (G j' pts r') (upd gs j r g' j' r') := by
+  intro j' r'
+  by_cases hjr : j' = j ∧ r' = r
+  · obtain ⟨rfl, rfl⟩ := hjr
+    rw [upd_self]
+    exact hg (by simpa only [upd_self] using h j' r')
+  · rw [upd_ne _ _ hjr]
+    simpa only [upd_ne _ _ hjr] using h j' r'
+
+theorem resid_upd_of {P : Type} {J mPts : ℕ} {G : Fin J → (Fin 2 → Fin mPts → 𝔽) → Fin 2 → Game P}
+    {pts : Fin 2 → Fin mPts → 𝔽} {gs : Fin J → Fin 2 → Game P} (h : ∀ j r, Resid (G j pts r) (gs j r)) {j : Fin J}
+    {r : Fin 2} {g' : Game P} (hg : Resid (G j pts r) g') : ∀ j' r', Resid (G j' pts r') (upd gs j r g' j' r') :=
+  resid_upd (g := gs j r) (fun j' r' => by
+    by_cases hjr : j' = j ∧ r' = r
+    · obtain ⟨rfl, rfl⟩ := hjr
+      rw [upd_self]
+      exact h j' r'
+    · rw [upd_ne _ _ hjr]
+      exact h j' r') fun _ => hg
 
 /-- **The positions were reached by the tapes' prefixes**: on every outcome of the live subgame `L`, a run of rep
 `(j, r)`'s position `gs j r` on its remaining tape `ts j r` is a run of its initial game on its whole tape. -/
@@ -112,10 +165,12 @@ def RetOK {P OutT Cp Op : Type} {J mPts : ℕ} (out : Fin J → Cp → P × P �
   pL b ∧ ∃ pend : Fin J → P × P, (∀ j r, PlaysT (G j b.pts r) (repTapeJ dec one fin b j r) (sel (pend j) r)) ∧
     a = List.ofFn fun j => out j (capOf b.rootB j) (pend j) (opn b.proofs j)
 
-/-- **A dead branch at the tables' positions**, every rep's game there with its message types inhabited. -/
-def DeadAt {P OutT Cp Op : Type} {J : ℕ} (out : Fin J → Cp → P × P → Op → OutT) (g : Game (List OutT))
-    (_ : Strategy g) : Prop :=
-  ∃ (caps : Fin J → Cp) (gs : Fin J → Fin 2 → Game P), (∀ j r, AllInh (gs j r)) ∧ g = posOf out caps gs
+/-- **A dead branch at the tables' positions**, every rep's game there with its message types inhabited and a position
+of the rep's game `G j pts r` at the session's link points. -/
+def DeadAt {P OutT Cp Op : Type} {J mPts : ℕ} (out : Fin J → Cp → P × P → Op → OutT)
+    (G : Fin J → (Fin 2 → Fin mPts → 𝔽) → Fin 2 → Game P) (g : Game (List OutT)) (_ : Strategy g) : Prop :=
+  ∃ (caps : Fin J → Cp) (pts : Fin 2 → Fin mPts → 𝔽) (gs : Fin J → Fin 2 → Game P), (∀ j r, AllInh (gs j r)) ∧
+    (∀ j r, Resid (G j pts r) (gs j r)) ∧ g = posOf out caps gs
 
 theorem all_simEndJ {P OutT Cp Op : Type} [Nonempty Op] {J mPts : ℕ} (out : Fin J → Cp → P × P → Op → OutT)
     (ok : Fin J → OutT → Prop) (dflt : OutT) (pL : LiveOutJ J mPts → Prop) (opn : Array ByteArray → Fin J → Op)
@@ -124,8 +179,9 @@ theorem all_simEndJ {P OutT Cp Op : Type} [Nonempty Op] {J mPts : ℕ} (out : Fi
     (G : Fin J → (Fin 2 → Fin mPts → 𝔽) → Fin 2 → Game P) (rootB : Array ByteArray) (pts : Fin 2 → Fin mPts → 𝔽)
     (rs : Fin J → Fin 2 → List Flock.Round) (gs : Fin J → Fin 2 → Game P) (h : ∀ j r, AllInh (gs j r))
     (hI : InvJ out ok pL opn (capOf rootB) (KLJ rootB pts rs) gs (restJ dec one fin rs))
-    (hR : Reach dec one fin G pts (KLJ rootB pts rs) gs (restJ dec one fin rs)) :
-    Sim.All (RetOK out pL opn dec one fin capOf G) (DeadAt out)
+    (hR : Reach dec one fin G pts (KLJ rootB pts rs) gs (restJ dec one fin rs))
+    (hres : ∀ j r, Resid (G j pts r) (gs j r)) :
+    Sim.All (RetOK out pL opn dec one fin capOf G) (DeadAt out G)
       (simEndJ out ok dflt pL opn dec one fin (capOf rootB) rootB pts rs gs h hI) := by
   unfold simEndJ
   intro proofs
@@ -135,7 +191,7 @@ theorem all_simEndJ {P OutT Cp Op : Type} [Nonempty Op] {J mPts : ℕ} (out : Fi
     refine Sim.all_ofSteps _ _ ⟨hp, Classical.choose (inv_end dec one fin hI proofs hp), fun j r => ?_, rfl⟩
     refine hR _ (.send proofs (.ret _)) j r _ ?_
     simpa [restJ, tapeFrom] using (Classical.choose_spec (inv_end dec one fin hI proofs hp)).1 j r
-  · exact ⟨capOf rootB, gs, h, rfl⟩
+  · exact ⟨capOf rootB, pts, gs, h, hres, rfl⟩
 
 theorem all_coinJ {P OutT Cp Op : Type} [Nonempty Op] {J mPts : ℕ} (out : Fin J → Cp → P × P → Op → OutT)
     (ok : Fin J → OutT → Prop) (dflt : OutT) (pL : LiveOutJ J mPts → Prop) (opn : Array ByteArray → Fin J → Op)
@@ -149,29 +205,31 @@ theorem all_coinJ {P OutT Cp Op : Type} [Nonempty Op] {J mPts : ℕ} (out : Fin 
         (restJ dec one fin (addRoundJ rs j r (roundOf dg b k c))) →
       Sim pL (AllOk ok dflt) (roundL dg rootB pts n rs j r b k c) (posOf out (capOf rootB) gs'))
     (hnext : ∀ c gs' h' hI', Reach dec one fin G pts (roundL dg rootB pts n rs j r b k c) gs'
-        (restJ dec one fin (addRoundJ rs j r (roundOf dg b k c))) →
-      Sim.All (RetOK out pL opn dec one fin capOf G) (DeadAt out) (next c gs' h' hI')) :
+        (restJ dec one fin (addRoundJ rs j r (roundOf dg b k c))) → (∀ j r, Resid (G j pts r) (gs' j r)) →
+      Sim.All (RetOK out pL opn dec one fin capOf G) (DeadAt out G) (next c gs' h' hI')) :
     ∀ (g' : Game P) (hg : AllInh g')
       (hI : InvJ out ok pL opn (capOf rootB) (.coin (Fin k → 𝔽) (roundL dg rootB pts n rs j r b k)) (upd gs j r g')
         (upd (restJ dec one fin rs) j r (midJ dec one fin rs j r))),
       Reach dec one fin G pts (.coin (Fin k → 𝔽) (roundL dg rootB pts n rs j r b k)) (upd gs j r g')
         (upd (restJ dec one fin rs) j r (midJ dec one fin rs j r)) →
-      Sim.All (RetOK out pL opn dec one fin capOf G) (DeadAt out)
+      (∀ j' r', Resid (G j' pts r') (upd gs j r g' j' r')) →
+      Sim.All (RetOK out pL opn dec one fin capOf G) (DeadAt out G)
         (coinJ out ok dflt pL opn dg dec one fin (capOf rootB) rootB pts n rs j r b k gs h next g' hg hI)
-  | @Game.coin _ Cm iF iN kk, hg, hI, hR => by
+  | @Game.coin _ Cm iF iN kk, hg, hI, hR, hres => by
       have hgo : ∀ (e : Cm ≃ (Fin k → 𝔽))
           (he : (∃ (hs : one j (rs j r).length = true ∧ k = 1) (hC : Cm = 𝔽), e = eOne hC hs.2) ∨
             (¬ (one j (rs j r).length = true ∧ k = 1) ∧ ∃ hC : Cm = (Fin k → 𝔽), e = Equiv.cast hC)),
-          Sim.All (RetOK out pL opn dec one fin capOf G) (DeadAt out)
+          Sim.All (RetOK out pL opn dec one fin capOf G) (DeadAt out G)
             (Sim.ofSteps ((ctxAt out (capOf rootB) gs j r).coin kk).steps (Sim.coin e fun x =>
               Sim.castR (((ctxAt out (capOf rootB) gs j r).coin kk).eq x).symm
                 (next (e x) (upd gs j r (kk x)) (allInh_upd h j r (hg.coin_k x))
                   (inv_coin dg dec one fin e he hI x)))) := fun e he =>
         Sim.all_ofSteps _ _ (Sim.all_coin _ _ fun x =>
-          Sim.all_castR _ _ (hnext _ _ _ _ (reach_coin dg dec one fin G e he hR x)))
-      have hdead : DeadAt out (posOf out (capOf rootB) (upd gs j r (@Game.coin P Cm iF iN kk)))
+          Sim.all_castR _ _ (hnext _ _ _ _ (reach_coin dg dec one fin G e he hR x)
+            (resid_upd hres fun hc => .coin x hc)))
+      have hdead : DeadAt out G (posOf out (capOf rootB) (upd gs j r (@Game.coin P Cm iF iN kk)))
           (Classical.choice (allInh_posOf out (capOf rootB) (allInh_upd h j r hg)).strategy) :=
-        ⟨capOf rootB, _, allInh_upd h j r hg, rfl⟩
+        ⟨capOf rootB, pts, _, allInh_upd h j r hg, hres, rfl⟩
       unfold coinJ
       dsimp only
       split_ifs with hs hC hC
@@ -179,8 +237,8 @@ theorem all_coinJ {P OutT Cp Op : Type} [Nonempty Op] {J mPts : ℕ} (out : Fin 
       · exact hdead
       · exact hgo (Equiv.cast hC) (.inr ⟨hs, hC, rfl⟩)
       · exact hdead
-  | .ret _, hg, _, _ => ⟨capOf rootB, _, allInh_upd h j r hg, rfl⟩
-  | .send _ _, hg, _, _ => ⟨capOf rootB, _, allInh_upd h j r hg, rfl⟩
+  | .ret _, hg, _, _, hres => ⟨capOf rootB, pts, _, allInh_upd h j r hg, hres, rfl⟩
+  | .send _ _, hg, _, _, hres => ⟨capOf rootB, pts, _, allInh_upd h j r hg, hres, rfl⟩
 
 theorem all_roundJ {P OutT Cp Op : Type} [Nonempty Op] {J mPts : ℕ} (out : Fin J → Cp → P × P → Op → OutT)
     (ok : Fin J → OutT → Prop) (dflt : OutT) (pL : LiveOutJ J mPts → Prop) (opn : Array ByteArray → Fin J → Op)
@@ -196,17 +254,18 @@ theorem all_roundJ {P OutT Cp Op : Type} [Nonempty Op] {J mPts : ℕ} (out : Fin
         (restJ dec one fin (addRoundJ rs j r (roundOf dg b k c))) →
       Sim pL (AllOk ok dflt) (roundL dg rootB pts n rs j r b k c) (posOf out (capOf rootB) gs'))
     (hnext : ∀ c gs' h' hI', Reach dec one fin G pts (roundL dg rootB pts n rs j r b k c) gs'
-        (restJ dec one fin (addRoundJ rs j r (roundOf dg b k c))) →
-      Sim.All (RetOK out pL opn dec one fin capOf G) (DeadAt out) (next c gs' h' hI'))
-    (hR : Reach dec one fin G pts (.coin (Fin k → 𝔽) (roundL dg rootB pts n rs j r b k)) gs (restJ dec one fin rs)) :
-    Sim.All (RetOK out pL opn dec one fin capOf G) (DeadAt out)
+        (restJ dec one fin (addRoundJ rs j r (roundOf dg b k c))) → (∀ j r, Resid (G j pts r) (gs' j r)) →
+      Sim.All (RetOK out pL opn dec one fin capOf G) (DeadAt out G) (next c gs' h' hI'))
+    (hR : Reach dec one fin G pts (.coin (Fin k → 𝔽) (roundL dg rootB pts n rs j r b k)) gs (restJ dec one fin rs))
+    (hres : ∀ j r, Resid (G j pts r) (gs j r)) :
+    Sim.All (RetOK out pL opn dec one fin capOf G) (DeadAt out G)
       (roundJ out ok dflt pL opn dg dec one fin (capOf rootB) rootB pts n rs j r b k gs h hI next) := by
   unfold roundJ
   split
-  · exact ⟨capOf rootB, gs, h, rfl⟩
+  · exact ⟨capOf rootB, pts, gs, h, hres, rfl⟩
   · rename_i g' hf
     exact Sim.all_ofSteps _ _ (all_coinJ out ok dflt pL opn dg dec one fin capOf G rootB pts n rs j r b k gs h next
-      hnext g' _ _ (reach_follow dg dec one fin G hf hR))
+      hnext g' _ _ (reach_follow dg dec one fin G hf hR) (resid_upd_of hres (resid_follow (hres j r) hf)))
 
 theorem all_simRJ {P OutT Cp Op : Type} [Nonempty Op] {J mPts : ℕ} (out : Fin J → Cp → P × P → Op → OutT)
     (ok : Fin J → OutT → Prop) (dflt : OutT) (pL : LiveOutJ J mPts → Prop) (opn : Array ByteArray → Fin J → Op)
@@ -217,17 +276,19 @@ theorem all_simRJ {P OutT Cp Op : Type} [Nonempty Op] {J mPts : ℕ} (out : Fin 
       (hI : InvJ out ok pL opn (capOf rootB) ((liveRoundsJ dg J n rs).bind (KLJ rootB pts)) gs
         (restJ dec one fin rs)),
       Reach dec one fin G pts ((liveRoundsJ dg J n rs).bind (KLJ rootB pts)) gs (restJ dec one fin rs) →
-      Sim.All (RetOK out pL opn dec one fin capOf G) (DeadAt out)
+      (∀ j r, Resid (G j pts r) (gs j r)) →
+      Sim.All (RetOK out pL opn dec one fin capOf G) (DeadAt out G)
         (simRJ out ok dflt pL opn dg dec one fin (capOf rootB) rootB pts n rs gs h hI)
-  | 0, rs, gs, h, hI, hR => all_simEndJ out ok dflt pL opn dec one fin capOf G rootB pts rs gs h hI hR
-  | n + 1, rs, gs, h, hI, hR => by
+  | 0, rs, gs, h, hI, hR, hres => all_simEndJ out ok dflt pL opn dec one fin capOf G rootB pts rs gs h hI hR hres
+  | n + 1, rs, gs, h, hI, hR, hres => by
       intro m
       rcases m with _ | ⟨j, r, b, k⟩
       · exact all_simEndJ out ok dflt pL opn dec one fin capOf G rootB pts rs gs h _
-          (hR.mono fun _ h => .send none h)
+          (hR.mono fun _ h => .send none h) hres
       · exact all_roundJ out ok dflt pL opn dg dec one fin capOf G rootB pts n rs j r b k gs h _ _
-          (fun _ gs' h' hI' hR' => all_simRJ out ok dflt pL opn dg dec one fin capOf G rootB pts n _ gs' h' hI' hR')
-          (hR.mono fun _ h => .send (some (⟨j, r, b, k⟩ : SubmitJ J)) h)
+          (fun _ gs' h' hI' hR' hres' =>
+            all_simRJ out ok dflt pL opn dg dec one fin capOf G rootB pts n _ gs' h' hI' hR' hres')
+          (hR.mono fun _ h => .send (some (⟨j, r, b, k⟩ : SubmitJ J)) h) hres
 
 /-- **Every node of the session's simulation**: its returns are the decoded live outcomes the live verdict accepts,
 and its dead branches are at the tables' positions. -/
@@ -237,10 +298,10 @@ theorem all_simSession {P OutT Cp Op : Type} [Nonempty Op] {J mPts : ℕ} (out :
     (fin : Fin J → Fin 2 → Array ByteArray → List Msg) (capOf : Array ByteArray → Fin J → Cp) (N : ℕ)
     (G : Fin J → (Fin 2 → Fin mPts → 𝔽) → Fin 2 → Game P) (hinh : ∀ j pts r, AllInh (G j pts r))
     (hdec : ∀ j, DecodesTable out ok pL opn dec one fin capOf G j) :
-    Sim.All (RetOK out pL opn dec one fin capOf G) (DeadAt out)
+    Sim.All (RetOK out pL opn dec one fin capOf G) (DeadAt out G)
       (simSession out ok dflt pL opn dg dec one fin capOf N G hinh hdec) :=
   fun rootB pts => all_simRJ out ok dflt pL opn dg dec one fin capOf G rootB pts N _ _ _ _
-    (reach_init dec one fin G pts _)
+    (reach_init dec one fin G pts _) fun _ _ => .refl
 
 /-- **The model's escapes arise only on accepted live runs.** With the dead branches answering the openings with
 `nul`, a model event `Q` that no outcome with every table's openings `nul` satisfies is no likelier, against the
@@ -261,7 +322,7 @@ theorem prob_le_decoded {P OutT Cp Op : Type} [Nonempty Op] {J mPts : ℕ} (out 
     (Sim.All.mono (R' := fun b a => Q a → ∃ a, RetOK out pL opn dec one fin capOf G b a ∧ Q a)
       (fun _ a hr hq => ⟨a, hr, hq⟩) (fun _ _ h => h) _
       (Sim.all_mapDead (answerWith nul) (D' := fun g σ => prob Q g σ = 0)
-        (fun _ σ ⟨caps, _, hg, e⟩ => by
+        (fun _ σ ⟨caps, _, _, hg, _, e⟩ => by
           subst e
           exact prob_posOf_answerWith out nul caps hg dflt (hQ caps) σ)
         _ (all_simSession out ok dflt pL opn dg dec one fin capOf N G hinh hdec)))

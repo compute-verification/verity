@@ -20,6 +20,11 @@ reads is answered, so its encoding can send `[]` from there on.
   seen throw stopping `honestPR`.
 * `Flock.zk_deployZk_masked_exe_stopped_gap`: `Flock.zk_deployZk_masked_exe_refusals_gap` at `encStop enc`, its rounds
   after the first asked only where no refusal is seen, given that a seen throw stops `honestPR`.
+* `honestPR_thrown`: a seen throw does stop `honestPR`. The session on the mask witness stops right after the send whose
+  reply it refused (`sessionPZk_rho_stop`, `sessionPZk_beta_stop`, `sessionPZk_rank_stop`), within the openings'
+  answers, so the prover sends `[]` (`honestPR_stops`). `slotAt_padOps_lt` and `ptsAt_open` read the opened coins as
+  those answers. `Flock.zk_deployZk_masked_exe_live_gap`: `Flock.zk_deployZk_masked_exe_stopped_gap` without that
+  premise (`thrown_stops`).
 -/
 
 namespace Claims.ZKMal
@@ -201,6 +206,117 @@ theorem honestPreOnPos_stop {P : Composed.LigProver}
   · rw [ite_eq_right hs]
     exact hlive x hx w hR τ ops h0 hl hs
 
+/-- **An opened coin's element is its opening's**, at a round the openings answer. -/
+theorem slotAt_padOps_lt {x : Msg} (ops : List (Msg × Msg)) {k : ℕ} (hk : k < ops.length) (hK : k < refK x)
+    {i : ℕ} (hi : i < 65536) :
+    slotAt (padOps (x := x) ops) k i = FlockComplete.coinOf ((ops.map fun p => coinOfD p.2).getD k []) i := by
+  unfold slotAt padOps FlockDeploy.Coin.at
+  simp only [hK, hi, ↓reduceDIte]
+  rw [List.getD_eq_getElem _ _ (by simpa using hk), List.getD_eq_getElem _ _ (by simpa using hk)]
+  simp only [List.getElem_map, rd]
+
+/-- **A rep's claim points at the openings' answers are its points at the opened coins** (`ptsOpen`), where the
+openings answer its first `m + k_log − 6` rounds. -/
+theorem ptsAt_open {x : Msg} {s spec} (hsx : FlockDeploy.setupOf true x = some (s, spec, stsOf x))
+    (ops : List (Msg × Msg)) (hl : ops.length < refK x) {j n : ℕ} (hm : 14 ≤ (stsOf x)[j]!.m)
+    (hm35 : (stsOf x)[j]!.m ≤ 35) (hk : 6 ≤ (stsOf x)[j]!.c.kLog)
+    (hn : repBase x n + ((stsOf x)[j]!.m + (stsOf x)[j]!.c.kLog - 6) ≤ ops.length) :
+    FlockComplete.ZkTables.ptsAt (fun k => (ops.map fun p => coinOfD p.2).getD k []) spec (stsOf x) j n =
+      ptsOpen (padOps (x := x) ops) (stsOf x)[j]! n := by
+  unfold FlockComplete.ZkTables.ptsAt ptsOpen
+  rw [repBase_eq hsx] at hn ⊢
+  refine FlockComplete.ZkTables.claimPoints_congr_lt (by omega) hk (fun n' hn' => ?_) (fun e he => ?_)
+  · rw [slotAt_padOps_lt ops (by omega) (by omega) (by norm_num)]
+  · rw [slotAt_padOps_lt ops (by omega) (by omega) (by omega)]
+
+/-- **A throw the openings show stops the honest prover**: after openings `ops`, fewer than `refK x`, at which a
+throw is seen (`Thrown`), the masked session on the mask witness stops within the openings' answers, right after the
+send whose reply it refused (`sessionPZk_rho_stop`, `sessionPZk_beta_stop`, `sessionPZk_rank_stop`), so `honestPR`'s
+message is `[]` (`honestPR_stops`). -/
+theorem honestPR_thrown (H : Msg → Msg) {x : Msg} (hx : Live x) (w : Claims.Flock.Wit) (ω : FlockComplete.TapeZk)
+    (ops : List (Msg × Msg)) (hl : ops.length < refK x) (ht : Thrown x (padOps ops) ops.length) :
+    (((FlockComplete.ZkTables.honestPR w).next x (ops.map fun p => (p.1, coinOfD p.2)) ω).eval H).1 = [] := by
+  obtain ⟨j, hj, r, hr, hth⟩ := ht
+  obtain ⟨s, spec, hsx⟩ := setupOf_of_pos (lt_of_le_of_lt (Nat.zero_le _) hj)
+  obtain ⟨-, -, hspec, hall⟩ := FlockComplete.ZkTables.tables_of_setup hx.1 hsx
+  have hh : (ops.map fun p => (p.1, coinOfD p.2)).map Prod.snd = ops.map fun p => coinOfD p.2 := by
+    rw [List.map_map]
+    rfl
+  have hsts : ∀ i (hi : i < (stsOf x).size), 14 ≤ (stsOf x)[i].m ∧ 6 ≤ (stsOf x)[i].c.kLog :=
+    fun i hi => ⟨by have := (hall i hi).1; omega, (hx.2 i hi).some.wf.1.hk6⟩
+  have hbl : (ops.map fun p => coinOfD p.2).length = ops.length := List.length_map _
+  refine FlockComplete.ZkTables.honestPR_stops H x w ω hsx _ _ hh fun R L hY => ?_
+  rw [hbl]
+  have hq : 2 * j + r < 2 * (stsOf x).size := by omega
+  have hst : (stsOf x)[(2 * j + r) / 2]! = (stsOf x)[j] := by
+    rw [show (2 * j + r) / 2 = j by omega]
+    exact getElem!_pos (stsOf x) j hj
+  obtain ⟨y⟩ := hx.2 j hj
+  have hz : _root_.Flock.Zk.schedule (stsOf x)[(2 * j + r) / 2]!.m = .ok (y.sch, y.tPad) := by
+    rw [hst]
+    exact y.hz
+  rcases hth with ⟨hm, hk, h0, h1, hbad⟩ | ⟨hρ, hbad⟩ | ⟨hβ, hbad⟩
+  · have hjj : (stsOf x)[j]! = (stsOf x)[j] := getElem!_pos (stsOf x) j hj
+    have hm35 : (stsOf x)[j]!.m ≤ 35 := by rw [hjj]; exact (hall j hj).2.1
+    have e1 := ptsAt_open hsx ops hl (n := 2 * j + r) hm hm35 hk h1
+    have e0 := ptsAt_open hsx ops hl (n := 2 * j) hm hm35 hk (by unfold rankSlot at h0; rwa [Nat.add_zero] at h0)
+    have := FlockComplete.ZkTables.sessionPZk_rank_stop _ _ spec (stsOf x) _ _ ω hspec hsts hq ?hb hY
+    case hb =>
+      rw [show (2 * j + r) % 2 = r by omega, show (2 * j + r) / 2 = j by omega,
+        FlockComplete.MaskRank.masksOf_getElem! hj, e1]
+      unfold RankBad at hbad
+      by_cases hr1 : r = 1
+      · subst hr1
+        simp only [↓reduceIte] at hbad ⊢
+        rw [show 2 * j + 1 - 1 = 2 * j by omega, e0]
+        exact hbad
+      · simp only [hr1, ↓reduceIte] at hbad ⊢
+        exact hbad
+    refine ⟨this.1, ?_⟩
+    have h2 := this.2
+    unfold rankSlot at h1
+    rw [repBase_eq hsx] at h1
+    rw [show (2 * j + r) / 2 = j by omega] at h2
+    omega
+  · have hs : rhoSlot x j r = FlockComplete.repStartZk spec (stsOf x) (2 * j + r) +
+        FlockComplete.piopRoundsZk spec (stsOf x)[(2 * j + r) / 2]! + (y.sch.k0 + 2) := by
+      unfold rhoSlot
+      rw [repSlot_eq hsx hz]
+    unfold rhoAt at hbad
+    rw [hs] at hbad hρ
+    rw [slotAt_padOps_lt ops (by omega) (by omega) (by norm_num : 0 < 65536),
+      slotAt_padOps_lt ops (by omega) (by omega) (by norm_num : 1 < 65536),
+      slotAt_padOps_lt ops (by omega) (by omega) (by norm_num : 0 < 65536),
+      slotAt_padOps_lt ops (by omega) (by omega) (by norm_num : 1 < 65536)] at hbad
+    have := FlockComplete.ZkTables.sessionPZk_rho_stop _ _ spec (stsOf x) _ _ ω hspec hsts hq hz ?hb hY
+    case hb =>
+      unfold FlockComplete.coinKOf
+      exact hbad
+    have h2 := this.2
+    dsimp only at h2
+    exact ⟨this.1, by omega⟩
+  · have hs : betaSlot x j r = FlockComplete.repStartZk spec (stsOf x) (2 * j + r) +
+        FlockComplete.piopRoundsZk spec (stsOf x)[(2 * j + r) / 2]! +
+          (y.sch.k0 + 7 + 11 * (y.sch.levels.size - 1)) + 2 := by
+      unfold betaSlot
+      rw [repSlot_eq hsx hz]
+      omega
+    unfold betaAt at hbad
+    rw [hs] at hbad hβ
+    rw [slotAt_padOps_lt ops hβ (by omega) (by norm_num)] at hbad
+    have := FlockComplete.ZkTables.sessionPZk_beta_stop _ _ spec (stsOf x) _ _ ω hspec hsts hq hz ?hb hY
+    case hb => exact hbad
+    have h2 := this.2
+    dsimp only at h2
+    exact ⟨this.1, by omega⟩
+
+/-- **`hthrow` at any tape**: `honestPR_thrown`. -/
+theorem thrown_stops (H : Msg → Msg) {T : Type} (tz : T → FlockComplete.TapeZk) :
+    ∀ x, Live x → ∀ w, RZk x w → ∀ (τ : T) (ops : List (Msg × Msg)), ops.length < refK x →
+      Thrown x (padOps ops) ops.length →
+      (((FlockComplete.ZkTables.honestPR w).next x (ops.map fun p => (p.1, coinOfD p.2)) (tz τ)).eval H).1 = [] :=
+  fun _ hx w _ τ ops hl ht => honestPR_thrown H hx w (tz τ) ops hl ht
+
 end Masked
 
 open Masked
@@ -240,5 +356,34 @@ theorem Flock.zk_deployZk_masked_exe_stopped_gap (H : Msg → Msg) (hH : Claims.
   Flock.zk_deployZk_masked_exe_refusals_gap H hH nr P (enc := encStop enc)
     (fun x c cut => by dsimp only [encStop]; rw [ite_eq_right (refused_zero c)]; exact h0 x c cut) t ht
     (causal_encStop hc) ho hr hp (honestPreOnPos_stop _ nr H hlive hthrow) hfin
+
+open Classical in
+/-- **Flock's zero knowledge at the deployed masked session, at the executable's layout and a plan that stops where a
+refusal is seen**: `Flock.zk_deployZk_masked_exe_stopped_gap` with a seen throw stopping `honestPR`
+(`honestPR_thrown`: the session stops right after the round whose reply it refused). Left: `enc` at the rounds after
+the first where no refusal is seen, the plan's `Causal`, its round `0` and the last round where every table admits. -/
+theorem Flock.zk_deployZk_masked_exe_live_gap (H : Msg → Msg) (hH : Claims.hOf H = _root_.Flock.Sha512.hash)
+    (nr : Msg → ℕ → ℕ) (P : Composed.LigProver)
+    {cz : (x : Msg) → (Fin (refK x) → FlockDeploy.Coin) → ∀ j, Composed.CoinsZK (tabC P x j).Rest}
+    {enc : (x : Msg) → (c : Fin (refK x) → FlockDeploy.Coin) → ℕ → (∀ j, ((tabC P x j).T (cz x c j)).tab.Cut) → Msg}
+    {fin : (x : Msg) → (c : Fin (refK x) → FlockDeploy.Coin) → (∀ j, ((tabC P x j).T (cz x c j)).tab.View) → Msg}
+    (h0 : ∀ x c cut, enc x c 0 cut = enc0 P x (cz x c) cut) (t : ℕ) (ht : 0 < t)
+    (hc : (RoundPlan.stop cz enc fin).Causal) (ho : OuterReads cz) (hr : CoinReads cz) (hp : PointReads cz)
+    (hlive : ∀ x, Live x → ∀ w, RZk x w → ∀ τ (ops : List (Msg × Msg)), 0 < ops.length → ops.length < refK x →
+      ¬ Refused x (padOps ops) ops.length →
+      enc x (padOps ops) ops.length ((session nr (tableData P (RoundPlan.stop cz enc fin)
+          (TapePlan.ofLayout (TapeLayout.exe P) exeTape))).cutOf x (padOps ops) (wtOf P x w) τ) =
+        (((FlockComplete.ZkTables.honestPR w).next x (ops.map fun p => (p.1, coinOfD p.2))
+          ((TapePlan.ofLayout (TapeLayout.exe P) exeTape).tapeZk τ)).eval H).1)
+    (hfin : (session nr (tableData P (RoundPlan.stop cz (encStop enc) fin)
+      (TapePlan.ofLayout (TapeLayout.exe P) exeTape))).HonestFinOn Live RZk H coinOfD
+        fun ω => (TapePlan.ofLayout (TapeLayout.exe P) exeTape).tapeZk ω.2) :
+    Claims.Flock.ZK H (zkDeployed _root_.Flock.Readable.relation nr
+        (tableData P (RoundPlan.stop cz (encStop enc) fin) (TapePlan.ofLayout (TapeLayout.exe P) exeTape)) t)
+      (fun x => if Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x then
+        8 * nL P x * FlockSoundness.CROnly.hidingGap ZkView.My ZkView.saltHash +
+          8 * t * nL P x * FlockSoundness.CROnly.hidingGap ZkView.My ZkView.saltHash + 2 * (1 / 3) ^ t else 1)
+      fun _ => 4 * t * 3 ^ t :=
+  Flock.zk_deployZk_masked_exe_stopped_gap H hH nr P h0 t ht hc ho hr hp hlive (thrown_stops H _) hfin
 
 end Claims.ZKMal
