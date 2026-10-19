@@ -1,9 +1,11 @@
 """The same-GEMM gate's launch ledger on a CUDA device (`same_gemm.Recorder("cuda")`): where torch.profiler and CUPTI put
-each kernel, as the gate reads it.  Two calls of one linear: today's beside path (`torch._int_mm`, cuBLASLt, and its
-dequant in the call's range) and a fused stand-in (one raw driver-API launch, `receipts.Cubin`'s `h1_noise`, in the fused
-range, the call returning a view of its buffer).  It passes when the beside call's GEMM kernels attach to its `_int_mm`
-and the gate refuses it, and the raw launch's kernel is inside the fused range, nothing runs after it (the recorder's
-device-to-host reads included) and the gate accepts it.
+each kernel, as the gate reads it.  Three calls of one linear: today's beside path (`torch._int_mm`, cuBLASLt, and its
+dequant in the call's range), a fused stand-in (one raw driver-API launch, `receipts.Cubin`'s `h1_noise`, in the fused
+range, the call returning a view of its buffer), and a fused range that declares `h1_noise` and launches nothing.  It
+passes when the beside call's GEMM kernels attach to its `_int_mm` and the gate refuses it; the raw launch's kernel is
+placed at its `cuLaunchKernel` inside the fused range, nothing runs after it (the recorder's device-to-host reads
+included) and the gate accepts it; the empty fused range is refused; and the trace places all device work.  The output
+keeps each device event's and launch call's correlation fields.
 
     python ledger_cuda.py --cubin noise.cubin --out OUT
 """
@@ -35,6 +37,15 @@ def _walk(e, d):
     yield e, d
     for c in e.cpu_children:
         yield from _walk(c, d + 1)
+
+
+def _links(prof) -> list[dict]:
+    """The correlation fields of every device event and every host launch call: how a kernel is tied to its launch."""
+    keep = ("id", "linked_correlation_id", "flow_id", "flow_type", "flow_start", "external_id", "activity_type",
+            "is_user_annotation", "is_async")
+    return [{"name": e.name, "device": str(e.device_type), **{k: getattr(e, k, None) for k in keep},
+             "kernels": [k.name for k in (getattr(e, "kernels", ()) or ())]}
+            for e in prof.events() if not SG._on_host(e) or SG.LAUNCH_CALLS.match(e.name)]
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -74,12 +85,18 @@ def main(argv: list[str] | None = None) -> int:
             y1 = buf[:M]
             rec.served(1, y1, M)
         rec.committed(1, "receipts", buf)
+        with rec.call(2, key=2):
+            with rec.fused(2, ["h1_noise"]) as f:
+                f.outs(rows=M, y=buf, receipts=buf)
+            rec.served(2, buf[:M], M)
+        rec.committed(2, "receipts", buf)
         torch.cuda.synchronize()
     ledger = rec.ledger()
-    raw = {i: _raw(rec.prof, i) for i in (0, 1)}
-    e0, e1 = ledger["calls"]
-    c0, c1 = {"linear": 0, "step": 0, "module": "beside"}, {"linear": 0, "step": 1, "module": "fused"}
-    why0, why1 = SG.call_refusal(c0, e0, ["h1_noise"]), SG.call_refusal(c1, e1, ["h1_noise"])
+    raw = {i: _raw(rec.prof, i) for i in (0, 1, 2)}
+    e0, e1, e2 = ledger["calls"]
+    c = [{"linear": 0, "step": s, "module": m} for s, m in enumerate(("beside", "fused", "empty fused"))]
+    why0, why1, why2 = (SG.call_refusal(ci, ei, ["h1_noise"], ledger["device"]) for ci, ei in zip(c, (e0, e1, e2)))
+    window = SG.window_refusals(ledger, [(K, N)])
     gemm0 = [x for x in e0["events"] if x["gemm"]]
     noise1 = [x for x in e1["events"] if x["kind"] == "kernel" and x["name"] == "h1_noise"]
     checks = {
@@ -88,14 +105,19 @@ def main(argv: list[str] | None = None) -> int:
         "beside_refused": why0 is not None and "served y from aten::_int_mm call #" in why0,
         "raw_launch_seen": len(noise1) == 1,
         "raw_launch_in_fused_range": len(noise1) == 1 and noise1[0]["fused"],
+        "raw_launch_placed_at_its_launch_call": len(noise1) == 1 and SG.LAUNCH_CALLS.match(noise1[0]["kernel_of"]) is not None,
         "nothing_after_fused": not [x for x in e1["events"] if x["after_fused"] and (x["kind"] == "kernel" or x.get("writes"))],
         "fused_accepted": why1 is None,
-        "no_gemm_outside": ledger["outside"] == [],
+        "empty_fused_refused": why2 is not None and "never ran in its range" in why2,
+        "all_device_work_placed": ledger["unattributed"] == [],
+        "no_window_refusal": window == [],
     }
     summary = {"ok": all(checks.values()), "checks": checks, "beside_reason": why0, "fused_reason": why1,
+               "empty_fused_reason": why2, "window": window, "unattributed": ledger["unattributed"],
                "beside_gemm": gemm0[:1], "fused_kernel": noise1, "device": torch.cuda.get_device_name(),
                "torch": torch.__version__, "cuda": torch.version.cuda}
-    (out_dir / "ledger-cuda.json").write_text(json.dumps({**summary, "ledger": ledger, "raw": raw}, indent=1) + "\n")
+    (out_dir / "ledger-cuda.json").write_text(json.dumps({**summary, "ledger": ledger, "raw": raw,
+                                                          "links": _links(rec.prof)}, indent=1, default=str) + "\n")
     print(json.dumps(summary, indent=1))
     return 0 if summary["ok"] else 1
 
