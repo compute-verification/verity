@@ -1,20 +1,27 @@
 """The queue's consumer: one message is a Slack event (or an interactivity payload), routed by `research msg`'s own code.
 
-Each `event_id` goes through a leased state machine in Redis: `processing:<owner>` set with NX and a LEASE_S expiry, which
-a later delivery takes over once it has expired; `done`, kept DONE_S, written only after the doorbells and the thread line
-are posted.  `deliver`'s once-per-post check stays the last guard against a double ring."""
+It keeps no state of its own.  The queue's lease keeps a message invisible while it runs (the SDK renews it), the
+`event_id` idempotency key drops Slack's retries, and Slack is the record:
+
+- A person's post that names no one gets a routing line in its thread, posted by `router` before any doorbell, naming the
+  lanes picked and carrying the post's ts and those names in its metadata (ROUTING_LINE).  A redelivery reads the thread
+  first: finding the line, it rings the names the line gives, with no second pick; `deliver`'s once-per-post check skips
+  the lanes already rung.  Where the bot can't read the channel, a redelivery picks again and may post a second line.
+- A post routed by the names it starts with needs no line: its doorbells are its record.
+- A `team_join` of someone `chat expect` published opens their chat (`newcomer`)."""
 from __future__ import annotations
 
-import uuid
+import argparse
+import re
 from typing import Any
 
 from . import router
-from .deps import DEAD_COUNT, DEAD_TOPIC, LAST_SUCCESS, NS, PENDING, Deps, error
+from .deps import DEAD, DEAD_TOPIC, LAST_SUCCESS, Deps, error
 
-LEASE_S = 120                                                    # past the consumer function's maxDuration (vercel.json)
-DONE_S = 7 * 86400
 MAX_DELIVERIES = 5
 ASK_CHANNELS = ("ask-the-team", "resource-accounting")          # a registry channel by these keys routes as #ask-the-team
+ROUTING_LINE = "verity_routing_line"                             # the routing line's metadata event_type
+START_HERE = "https://app.notion.com/p/3fe399515d9e812bab1ee1a74d901d7d"   # the newcomers' onboarding page
 NO_MODEL = "sent to @top: no lane named; routing by model is off"
 MODEL_DOWN = "router: model unavailable, sent to @top"
 NO_VALID = "router: no valid name, sent to @top"
@@ -23,7 +30,7 @@ PERSON_SUBTYPES = (None, "thread_broadcast", "file_share")       # a person's po
 
 
 class Retry(Exception):
-    """Deliver the message again after `delay` seconds (api/queue.py raises Vercel's RetryAfter for it)."""
+    """Deliver the message again after `delay` seconds (`subscriber.py` raises Vercel's RetryAfter for it)."""
 
     def __init__(self, delay: float, why: str):
         super().__init__(why)
@@ -32,15 +39,6 @@ class Retry(Exception):
 
 def backoff(delivery_count: int) -> int:
     return min(300, 5 * 2 ** max(1, delivery_count))
-
-
-def event_key(event_id: str) -> str:
-    return f"{NS}event:{event_id}"
-
-
-def post_key(channel: str, ts: str) -> str:
-    """The record that a person's post was routed: reconciliation enqueues a post without one."""
-    return f"{NS}post:{channel}:{ts}"
 
 
 class Lines:
@@ -66,30 +64,15 @@ def consume(deps: Deps, payload: dict, delivery_count: int) -> str:
     if not eid:
         deps.log("dropped", why="no event_id")
         return "dropped"
-    key, store = event_key(eid), deps.store
-    state = store.get(key)
-    if state in ("done", "dead"):
-        store.zrem(PENDING, eid)
-        deps.log("duplicate", event_id=eid, state=state)
-        return "duplicate"
-    owner = f"processing:{uuid.uuid4().hex}"
-    if not store.claim(key, owner, LEASE_S):
-        deps.log("lease-held", event_id=eid, delivery=delivery_count)
-        raise Retry(LEASE_S, "another delivery holds the lease")       # never a failure: its holder may still finish
     try:
         decision = process(deps, payload)
     except Exception as e:  # noqa: BLE001 - every failure retries, then dead-letters
-        store.release(key, owner)
         deps.log("failed", event_id=eid, delivery=delivery_count, error=error(e))
         if delivery_count < MAX_DELIVERIES:
             raise Retry(backoff(delivery_count), error(e)) from e
         dead_letter(deps, payload, delivery_count, e)
-        store.set(key, "dead", DONE_S)
-        store.zrem(PENDING, eid)
         return "dead-lettered"
-    store.set(key, "done", DONE_S)
-    store.zrem(PENDING, eid)
-    store.set(LAST_SUCCESS, f"{deps.clock():.3f}")
+    deps.write(LAST_SUCCESS, deps.clock())
     deps.log("done", event_id=eid, decision=decision)
     return decision
 
@@ -97,12 +80,14 @@ def consume(deps: Deps, payload: dict, delivery_count: int) -> str:
 def process(deps: Deps, payload: dict) -> str:
     if payload.get("kind") == "interactivity":
         # TODO(comms): #ask-daniel's buttons. The decision is recorded by the website's /api/agent-approvals route, which
-        # only a card's asker can reach (Cursor OIDC); `ring_decision` needs that record. README "Not built yet".
+        # only a card's asker can reach (Cursor OIDC); `ring_decision` needs that record. README "Needs".
         deps.log("interactivity-unhandled", event_id=payload.get("event_id"), type=(payload.get("payload") or {}).get("type"))
         return "interactivity-unhandled"
     if payload.get("kind") != "event":
         return "ignored: unknown kind"
     ev = payload.get("event") or {}
+    if ev.get("type") == "team_join":
+        return newcomer(deps, ev)
     if ev.get("type") != "message" or ev.get("subtype") not in PERSON_SUBTYPES or not ev.get("channel") or not ev.get("ts"):
         return f"ignored: {ev.get('type')}/{ev.get('subtype')}"
     return route(deps, payload["event_id"], ev)
@@ -131,12 +116,47 @@ def message(ev: dict) -> dict:
     return {k: ev[k] for k in ("ts", "thread_ts", "text", "user", "bot_id", "username", "reactions") if ev.get(k)}
 
 
+def is_line_for(m: dict, ts: str, reg: dict, rs: Any) -> bool:
+    """Whether `m` is our routing line for the post `ts`: posted by `router` on Verity's bot, its metadata naming the post."""
+    meta = m.get("metadata") or {}
+    return m.get("username") == "router" and rs.ours(m, reg) and meta.get("event_type") == ROUTING_LINE \
+        and (meta.get("event_payload") or {}).get("post") == ts
+
+
+def line_names(m: dict, reg: dict) -> list[str]:
+    """The names a routing line gives: its metadata's, else the `@name`s in its text; the handles among them, else @top."""
+    handles = {h["handle"] for h in reg["handles"]}
+    got = ((m.get("metadata") or {}).get("event_payload") or {}).get("names")
+    if not isinstance(got, list):
+        got = re.findall(r"@([a-z0-9][a-z0-9._-]*)", m.get("text") or "")
+    return [n for n in dict.fromkeys(got) if isinstance(n, str) and n in handles] or ["top"]
+
+
+def routing_line(deps: Deps, ch: str, thread: str, ts: str, reg: dict) -> dict | None:
+    """The routing line already posted for the post `ts` (in the thread `thread`), or None, also where the bot can't read
+    the channel."""
+    rs = deps.rs
+    try:
+        msgs = deps.slack.paged("conversations.replies", "messages", channel=ch, ts=thread, include_all_metadata="true")
+    except rs.SlackError as e:
+        if not rs._unreadable(e):
+            raise
+        deps.log("routing-line-unreadable", channel=ch, error=error(e))
+        return None
+    return next((m for m in msgs if is_line_for(m, ts, reg, rs)), None)
+
+
+def post_line(deps: Deps, ch: str, thread: str, ts: str, text: str, names: list[str]) -> None:
+    deps.slack.call("chat.postMessage", channel=ch, thread_ts=thread, username="router", text=text,
+                    metadata={"event_type": ROUTING_LINE, "event_payload": {"post": ts, "names": names}},
+                    unfurl_links="false", unfurl_media="false")
+
+
 def route(deps: Deps, eid: str, ev: dict) -> str:
-    """A person's post in a chat or ask channel: `deliver`, as `research msg deliver --channel KEY --event` does; an
-    unaddressed one goes to the model's seam, which in no-model mode sends it to @top with a routing line in its thread."""
+    """A person's post in a chat or ask channel: `deliver`, as `research msg deliver --channel KEY --event` does.  An
+    unaddressed one rings the names of its routing line: the one already in its thread, else a new one naming the
+    model's picks, which in no-model mode is @top."""
     rs, api, ch = deps.rs, deps.slack, ev["channel"]
-    if deps.store.get(post_key(ch, ev["ts"])):
-        return "already routed"                                         # Slack's event and reconciliation's, both delivered
     reg = registry_for(deps, ch)
     key = rs.key_of(reg, ch)
     chat = key in rs.chat_channels(reg)
@@ -162,17 +182,21 @@ def route(deps: Deps, eid: str, ev: dict) -> str:
             root = None
         replies = [root] if root else []
         unaddressed = not rs.route_targets(msg, root, reg) and not rs.is_quiet(text)
-    names, line = pick(deps, msg, replies, reg) if unaddressed else (None, None)
+    names, how = None, "rule"
+    if unaddressed:
+        found = routing_line(deps, ch, thread or msg["ts"], msg["ts"], reg)
+        if found:
+            names, how = line_names(found, reg), "its routing line"
+        else:
+            names, line = pick(deps, msg, replies, reg)
+            post_line(deps, ch, thread or msg["ts"], msg["ts"], line, names)
+            how = "picked"
+        deps.log("unaddressed", event_id=eid, names=names, how=how)
     out = Lines(deps, eid)
     rs.deliver(api, reg, rs.Routes(), ch, msg, now=deps.clock(), log=out, names=names)
     if any("NOT RUNG" in s for s in out.lines):
         raise rs.SlackError("a doorbell didn't ring")                  # `deliver` again rings only the ones still missing
-    if line:
-        api.call("chat.postMessage", channel=ch, thread_ts=thread or msg["ts"], username="router", text=line,
-                 unfurl_links="false", unfurl_media="false")
-    decision = "unaddressed: " + " ".join("@" + n for n in names) if names else "rule"
-    deps.store.set(post_key(ch, msg["ts"]), decision, DONE_S)
-    return decision
+    return "unaddressed: " + " ".join("@" + n for n in names) if names else "rule"
 
 
 def pick(deps: Deps, msg: dict, thread: list[dict], reg: dict) -> tuple[list[str], str]:
@@ -192,24 +216,45 @@ def pick(deps: Deps, msg: dict, thread: list[dict], reg: dict) -> tuple[list[str
     return names, "routed to " + " ".join("@" + n for n in names)
 
 
+def newcomer(deps: Deps, ev: dict) -> str:
+    """A `team_join`: the new member's email (`users.info`, scope users:read.email) against the people `chat expect`
+    published.  One of them gets their chat, by `chat open`'s own path with START_HERE bookmarked; anyone else, nothing."""
+    rs, user = deps.rs, ev.get("user")
+    uid = user.get("id") if isinstance(user, dict) else user
+    if not isinstance(uid, str) or not rs.SLACK_USER_RE.match(uid):
+        return "ignored: team_join without a user"
+    info = deps.slack.call("users.info", user=uid).get("user") or {}
+    email = str((info.get("profile") or {}).get("email") or "").strip().lower()
+    if info.get("is_bot") or info.get("deleted") or not email:
+        return "team_join: not a person with an email"
+    r = next((r for r in rs.ChatPeople().expected() if r["email"].strip().lower() == email), None)
+    if not r:
+        return "team_join: not expected"
+    name = r["channel"]["key"][len(rs.CHAT_PREFIX):]
+    rs.cmd_chat(argparse.Namespace(verb="open", name=name, user=uid, email=None, start_here=START_HERE, note=None,
+                                   cursor_bot=None, dry_run=False, api=deps.slack), deps.registry)
+    return f"team_join: opened #{r['channel']['key']}"
+
+
 def dead_letter(deps: Deps, payload: dict, delivery_count: int, e: BaseException) -> None:
-    """Park the message on DEAD_TOPIC (health counts it), then, best effort, a failure line in its thread and @top rung."""
+    """Park the message on DEAD_TOPIC and count it (best effort, in the cache health reads), then, best effort too, a
+    failure line in its thread, which is its routing line from now on, and @top rung."""
     eid = str(payload["event_id"])
     deps.queue.send(DEAD_TOPIC, {"payload": payload, "error": type(e).__name__, "deliveries": delivery_count},
                     idempotency_key=eid)
-    deps.store.incr(DEAD_COUNT)
+    rec = deps.read(DEAD) or {"count": 0, "since": deps.clock()}
+    deps.write(DEAD, {"count": int(rec.get("count") or 0) + 1, "since": rec.get("since")})
     deps.log("dead-lettered", event_id=eid, delivery=delivery_count, error=error(e))
     ev: dict[str, Any] = payload.get("event") or {}
-    if payload.get("kind") != "event" or not ev.get("channel") or not ev.get("ts"):
+    if payload.get("kind") != "event" or ev.get("type") != "message" or not ev.get("channel") or not ev.get("ts"):
         return
-    rs, api, msg = deps.rs, deps.slack, message(ev)
+    rs, msg = deps.rs, message(ev)
     try:
-        api.call("chat.postMessage", channel=ev["channel"], thread_ts=msg.get("thread_ts") or msg["ts"], username="router",
-                 text=FAILED, unfurl_links="false")
+        post_line(deps, ev["channel"], msg.get("thread_ts") or msg["ts"], msg["ts"], FAILED, ["top"])
     except Exception as x:  # noqa: BLE001 - best effort: Slack may be what failed
         deps.log("dead-letter-line-failed", event_id=eid, error=error(x))
     try:
-        rs.deliver(api, registry_for(deps, ev["channel"]), rs.Routes(), ev["channel"], msg, now=deps.clock(),
+        rs.deliver(deps.slack, registry_for(deps, ev["channel"]), rs.Routes(), ev["channel"], msg, now=deps.clock(),
                    log=Lines(deps, eid), names=["top"])
     except Exception as x:  # noqa: BLE001
         deps.log("dead-letter-ring-failed", event_id=eid, error=error(x))

@@ -16,9 +16,11 @@ from fastapi.responses import JSONResponse, PlainTextResponse
 from starlette.concurrency import run_in_threadpool
 
 from . import crons
-from .deps import DEAD_COUNT, DEAD_TOPIC, LAST_SUCCESS, PENDING, TOPIC, Deps, error, production
+from .deps import DEAD, DEAD_TOPIC, LAST_SUCCESS, OLDEST, TOPIC, Deps, error, production
 
 MAX_SKEW_S = 300
+HEALTH_NOTE = ("from Vercel's Runtime Cache, best effort: null is unknown (a cold or evicted cache), not down; "
+               "oldest_unprocessed_age_s is reconcile's last finding, dead_letter_count counts since dead_letter_since")
 
 
 def signed(secret: str | None, ts: str | None, sig: str | None, body: bytes, now: float) -> str | None:
@@ -56,10 +58,6 @@ def create_app(deps: Callable[[], Deps] = production) -> FastAPI:
 
     async def enqueue(d: Deps, payload: dict) -> JSONResponse:
         eid = payload["event_id"]
-        try:
-            await run_in_threadpool(d.store.zadd, PENDING, eid, d.clock())
-        except Exception as e:  # noqa: BLE001 - health's age misses it; the event still goes through
-            d.log("pending-not-recorded", event_id=eid, error=error(e))
         try:
             await run_in_threadpool(d.queue.send, TOPIC, payload, idempotency_key=eid)
         except Exception as e:  # noqa: BLE001 - Slack retries a 5xx, keyed on the same id
@@ -113,12 +111,15 @@ def create_app(deps: Callable[[], Deps] = production) -> FastAPI:
             return JSONResponse({"error": "HEALTH_TOKEN is not set"}, status_code=503)
         if not bearer(request, token):
             return JSONResponse({"error": "unauthorized"}, status_code=401)
-        oldest = await run_in_threadpool(d.store.zmin, PENDING)
-        dead = await run_in_threadpool(d.store.get, DEAD_COUNT)
-        last = await run_in_threadpool(d.store.get, LAST_SUCCESS)
-        return JSONResponse({"oldest_unprocessed_age_s": round(max(0.0, d.clock() - oldest), 3) if oldest is not None else 0,
-                             "dead_letter_count": int(dead or 0), "last_success_at": float(last) if last else None,
-                             "queue": TOPIC, "dead_letter": DEAD_TOPIC})
+        oldest, dead, last = [await run_in_threadpool(d.read, k) for k in (OLDEST, DEAD, LAST_SUCCESS)]
+        age = None
+        if isinstance(oldest, dict) and "ts" in oldest:
+            age = round(max(0.0, d.clock() - float(oldest["ts"])), 3) if oldest["ts"] else 0.0
+        dead = dead if isinstance(dead, dict) else {}
+        return JSONResponse({"oldest_unprocessed_age_s": age, "dead_letter_count": dead.get("count"),
+                             "dead_letter_since": dead.get("since"),
+                             "last_success_at": float(last) if isinstance(last, (int, float)) else None,
+                             "queue": TOPIC, "dead_letter": DEAD_TOPIC, "note": HEALTH_NOTE})
 
     def cron(name: str, run: Callable[[Deps], dict]):
         async def route(request: Request):

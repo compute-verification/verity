@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 
 from conftest import BOT, CHAT, LUKE, SIGNING, T0
 from slack_events import app as app_mod
-from slack_events.deps import DEAD_COUNT, LAST_SUCCESS, PENDING, TOPIC
+from slack_events.deps import DEAD, LAST_SUCCESS, OLDEST, TOPIC
 
 
 def client(world) -> TestClient:
@@ -40,7 +40,6 @@ def test_a_signed_event_is_published_keyed_on_its_event_id_and_answered_200(worl
     assert r.status_code == 200 and r.json() == {"ok": True}
     [(topic, payload, key)] = world.deps.queue.sent
     assert (topic, key) == (TOPIC, "Ev1") and payload["kind"] == "event" and payload["event"]["channel"] == CHAT
-    assert world.deps.store.zmin(PENDING) == T0
 
 
 def test_url_verification_answers_the_challenge_and_publishes_nothing(world):
@@ -109,26 +108,40 @@ def test_an_interactivity_payload_is_published_keyed_on_its_action(world):
     assert bad.status_code == 401
 
 
-def test_health_reports_the_queue_with_its_bearer_and_refuses_without(world):
-    c, store = client(world), world.deps.store
-    store.zadd(PENDING, "Ev1", T0 - 30)
-    store.zadd(PENDING, "Ev2", T0 - 5)
-    store.incr(DEAD_COUNT)
-    store.set(LAST_SUCCESS, f"{T0 - 2:.3f}")
+def health(c: TestClient) -> dict:
     r = c.get("/api/slack/health", headers={"Authorization": "Bearer dummy-health"})
-    assert r.status_code == 200 and r.json() == {"oldest_unprocessed_age_s": 30.0, "dead_letter_count": 1,
-                                                 "last_success_at": T0 - 2, "queue": "slack-events",
-                                                 "dead_letter": "slack-events-dead"}
+    assert r.status_code == 200
+    body = r.json()
+    assert body.pop("note") == app_mod.HEALTH_NOTE
+    return body
+
+
+def test_health_reports_what_the_cache_holds_with_its_bearer_and_refuses_without(world):
+    c, cache = client(world), world.deps.cache
+    cache.set(OLDEST, {"ts": f"{T0 - 30:.6f}", "at": T0 - 5})
+    cache.set(DEAD, {"count": 1, "since": T0 - 86400})
+    cache.set(LAST_SUCCESS, T0 - 2)
+    assert health(c) == {"oldest_unprocessed_age_s": 30.0, "dead_letter_count": 1, "dead_letter_since": T0 - 86400,
+                         "last_success_at": T0 - 2, "queue": "slack-events", "dead_letter": "slack-events-dead"}
+    cache.set(OLDEST, {"ts": None, "at": T0})
+    assert health(c)["oldest_unprocessed_age_s"] == 0.0
     assert c.get("/api/slack/health").status_code == 401
     assert c.get("/api/slack/health", headers={"Authorization": "Bearer dummy-wrong"}).status_code == 401
     world.deps.env = {}
     assert c.get("/api/slack/health", headers={"Authorization": "Bearer dummy-health"}).status_code == 503
 
 
-def test_health_of_an_empty_queue(world):
-    r = client(world).get("/api/slack/health", headers={"Authorization": "Bearer dummy-health"})
-    assert r.json() == {"oldest_unprocessed_age_s": 0, "dead_letter_count": 0, "last_success_at": None,
-                        "queue": "slack-events", "dead_letter": "slack-events-dead"}
+def test_a_cold_or_unreachable_cache_reads_as_unknown_not_as_down(world):
+    unknown = {"oldest_unprocessed_age_s": None, "dead_letter_count": None, "dead_letter_since": None,
+               "last_success_at": None, "queue": "slack-events", "dead_letter": "slack-events-dead"}
+    assert health(client(world)) == unknown
+    world.deps.cache.set(LAST_SUCCESS, T0)
+    world.deps.cache.fail = True
+    assert health(client(world)) == unknown
+    world.deps.cache.fail = False
+    world.deps.cache.set(OLDEST, {"ts": f"{T0:.6f}", "at": T0}, {"ttl": 60})
+    world.clock.t += 61                                                    # reconcile's finding, not refreshed: unknown
+    assert health(client(world))["oldest_unprocessed_age_s"] is None
 
 
 @pytest.mark.parametrize("name", ["watchdog", "reconcile"])
@@ -136,4 +149,4 @@ def test_the_crons_run_only_with_vercels_cron_secret(world, name):
     c = client(world)
     assert c.get(f"/api/cron/{name}").status_code == 401
     r = c.get(f"/api/cron/{name}", headers={"Authorization": "Bearer dummy-cron"})
-    assert r.status_code == 200 and world.deps.store.get(LAST_SUCCESS) == f"{T0:.3f}"
+    assert r.status_code == 200 and world.deps.cache.get(LAST_SUCCESS) == T0

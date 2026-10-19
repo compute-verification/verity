@@ -5,9 +5,9 @@ from datetime import datetime, timezone
 
 from conftest import BOT, CHAT, DANIEL, LUKE, TEAM
 from slack_events import crons
-from slack_events.consumer import NO_MODEL, consume
+from slack_events.consumer import NO_MODEL, consume, post_line
 from slack_events.crons import DAILY_HEAD, ESCALATE_S, ESCALATED, ESCALATION, REMIND_S, REMINDER, SETTLE_S
-from slack_events.deps import LAST_SUCCESS, PENDING, TOPIC
+from slack_events.deps import DEAD, LAST_SUCCESS, OLDEST, TOPIC
 
 
 def private(ts: str, reminder: str | None = None) -> str:
@@ -30,7 +30,7 @@ def test_a_chat_post_with_no_eyes_and_no_lane_reply_rings_again_after_15_min_onc
     world.clock.t += 300
     crons.watchdog(world.deps)
     assert world.rung("circuits") == [private(post["ts"]), private(post["ts"], REMINDER)] and world.rung("top") == []
-    assert world.deps.store.get(LAST_SUCCESS) == f"{world.clock():.3f}"
+    assert world.deps.cache.get(LAST_SUCCESS) == world.clock()
 
 
 def test_eyes_or_a_lane_reply_stops_the_reminder(world):
@@ -92,27 +92,49 @@ def test_reconciliation_enqueues_a_missed_post_once_and_the_consumer_routes_it(w
     world.clock.t += SETTLE_S + 1
     young = world.slack.add(CHAT, text="still there?", user=LUKE)
     assert crons.reconcile(world.deps)["queued"] == 2
+    assert world.deps.cache.get(OLDEST) == {"ts": missed["ts"], "at": world.clock()}
     assert crons.reconcile(world.deps)["queued"] == 2                      # sent again, and the queue keeps the first
     sent = world.deps.queue.on(TOPIC)
     assert [p["event_id"] for p in sent] == [f"reconcile:{CHAT}:{missed['ts']}", f"reconcile:{TEAM}:{asked['ts']}"]
-    assert young["ts"] not in {p["event"]["ts"] for p in sent} and world.deps.store.zmin(PENDING) is not None
+    assert young["ts"] not in {p["event"]["ts"] for p in sent}
     for p in sent:
         consume(world.deps, p, 1)
-    assert [m["text"] for m in world.slack.thread(CHAT, missed["ts"]) if m.get("username") == "router"] == [NO_MODEL]
-    assert len(world.rung("top")) == 2 and world.deps.store.zmin(PENDING) is None
+    assert [m["text"] for m in world.lines(CHAT, missed["ts"])] == [NO_MODEL]
+    assert len(world.rung("top")) == 2
     world.clock.t += SETTLE_S + 1
     before = len(world.deps.queue.sent)
     assert crons.reconcile(world.deps)["queued"] == 1                      # only the young post, now settled
-    assert len(world.deps.queue.sent) == before + 1
+    assert len(world.deps.queue.sent) == before + 1 and world.deps.cache.get(OLDEST)["ts"] == young["ts"]
 
 
-def test_reconciliation_skips_a_post_with_a_routing_line_and_a_routed_one(world):
+def test_reconciliation_takes_a_routing_line_or_a_doorbell_as_the_record_and_skips_a_post_that_rings_no_one(world):
+    """Slack is the record: an unaddressed post's line, an addressed post's doorbell.  A quiet post naming no one, or one
+    naming only a lane with no inbox, leaves neither, and isn't enqueued for it."""
     routed(world, "how do I read a PoUW receipt?")
+    routed(world, "@circuits is the TP8 sweep done?")
+    lined = world.slack.add(CHAT, text="anyone?", user=LUKE)
+    post_line(world.deps, CHAT, lined["ts"], lined["ts"], NO_MODEL, ["top"])
+    world.slack.add(TEAM, text="thanks, no reply needed (quiet)", user=DANIEL)
+    world.slack.add(TEAM, text="@proofs is the bound tight?", user=DANIEL)          # a lane with no inbox
+    world.clock.t += SETTLE_S + 1
+    assert crons.reconcile(world.deps)["queued"] == 0
+    assert world.deps.cache.get(OLDEST) == {"ts": None, "at": world.clock()}
+    assert world.deps.cache.get(LAST_SUCCESS) == world.clock()
+
+
+def test_a_router_line_without_its_metadata_is_not_a_record(world):
     other = world.slack.add(CHAT, text="anyone?", user=LUKE)
     world.slack.add(CHAT, text=NO_MODEL, username="router", bot_id=BOT, thread_ts=other["ts"])
     world.clock.t += SETTLE_S + 1
-    assert crons.reconcile(world.deps)["queued"] == 0
-    assert world.deps.store.get(LAST_SUCCESS) == f"{world.clock():.3f}"
+    assert crons.reconcile(world.deps)["queued"] == 1
+
+
+def test_reconciliation_starts_the_dead_letter_count_where_the_cache_has_none(world):
+    crons.reconcile(world.deps)
+    assert world.deps.cache.get(DEAD) == {"count": 0, "since": world.clock()}
+    world.deps.cache.set(DEAD, {"count": 3, "since": 1.0})
+    crons.reconcile(world.deps)
+    assert world.deps.cache.get(DEAD) == {"count": 3, "since": 1.0}
 
 
 def test_reconciliation_outside_its_hour_leaves_old_posts(world):
