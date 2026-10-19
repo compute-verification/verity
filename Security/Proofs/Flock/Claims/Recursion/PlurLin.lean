@@ -50,6 +50,7 @@ noncomputable def firstPick (g : U → Prop) : (M : ℕ) → (Fin M → U) → O
   | 0, _ => none
   | M + 1, us => if g (us 0) then some (us 0) else firstPick g M (Fin.tail us)
 
+omit [Fintype U] in
 theorem firstPick_of_firstDiffers {g : U → Prop} {f : U → Msg} {a : Msg} :
     ∀ M (us : Fin M → U), firstDiffers g f a M us → ∃ v, firstPick g M us = some v ∧ g v ∧ f v ≠ a
   | 0, _, h => h.elim

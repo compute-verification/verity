@@ -115,7 +115,7 @@ theorem Pr_bad_le_lin {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO
         1 / ((M : ℝ) + 1) := fun j => by
     have hp := Pr_plur_fork_lin (j : ℕ) (fun ω d => (eoOut H D I DO decO P x ω d).isSome = true)
       (fun ω d => eoMsg H D I DO decO P x ω d j) M
-    refine (le_of_eq (Pr_congr fun t => ?_)).trans (hp.trans (add_le_add_right (Pr_mono fun t ht => ?_) _))
+    refine (le_of_eq (Pr_congr fun t => ?_)).trans (hp.trans (add_le_add (Pr_mono fun t ht => ?_) le_rfl))
     · simp only [opAt, fork_preCoins]
     · exact linkOut_coll hV hO hT decO x P j t.1 t.2.1 t.2.2.1 t.2.2.2 ht.1 ht.2
   have hF : (I.V.k (xI D x) : ℝ) * (linBe H D I DO decO P x M hk).Pr H =
@@ -191,7 +191,7 @@ theorem Ex_linBe_cost_le (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) 
     _ ≤ Ex fun _ : Fin (I.V.k (xI D x)) => 2 * Ex (fun t : Ω × (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x =>
           (drawCost H D I DO decO P x t.1 t.2 : ℝ)) := Ex_mono hj
     _ = _ := by
-        haveI : Nonempty (Fin (I.V.k (xI D x))) := ⟨⟨0, hk⟩⟩
+        have : Nonempty (Fin (I.V.k (xI D x))) := ⟨⟨0, hk⟩⟩
         exact Ex_const _
 
 /-- **A bad draw under `ExpectedCR` at the link finder**: at most `k_I·(2·E[c]/2^256 + 1/(M+1))`, at one draw's calls
