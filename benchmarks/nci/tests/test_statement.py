@@ -16,6 +16,7 @@ import tiers as T  # noqa: E402
 P = T.DEFAULTS
 H = P["years"] * T.YEAR
 LAG = P["lag_s"] / H
+EPS = P["eps_agg"]
 STREAMED = {"pous_rounds": 74000.0, "pous_floor": 0.0}
 #: the brief's rungs, as overrides on the defaults
 RUNGS = {
@@ -51,13 +52,14 @@ def test_d_is_the_hardware_multiple_of_the_binding_terms():
     rows = {r["rung"]: r for r in S.ladder()}
     best = T.residual_share(P | RUNGS["Best plausible PoUW design"])
     assert rows["Best plausible PoUW design"]["D"]["T1"] == pytest.approx(P["mfu"] / (best + X.nu(P) + LAG), rel=1e-4)
-    assert rows["Floor (r̂ = 0, 4 GB)"]["D"]["T1"] == pytest.approx(P["mfu"] / (X.nu(P) + LAG), rel=1e-4)
-    assert rows["Floor, one-minute verdict lag"]["D"]["T3"] == pytest.approx(P["mfu"] / (X.nu(P) + 60 / H), rel=1e-4)
+    assert rows["Floor (r̂ = 0, 4 GB)"]["D"]["T1"] == pytest.approx(P["mfu"] / (X.nu(P) + LAG + EPS), rel=1e-4)
+    assert rows["Floor, one-minute verdict lag"]["D"]["T3"] == pytest.approx(P["mfu"] / (X.nu(P) + 60 / H + EPS), rel=1e-4)
     six = P | S.streamed(6.0)
     assert rows["Streamed-label wipes, 6 GB"]["D"]["T3"] == pytest.approx(P["mfu"] / X.mu(six), rel=0.01)
     fl = quantities(S.floor())
-    assert fl["MFU_0 / ν, the floor's limit as the verdict lag goes to 0"] == P["mfu"] / X.nu(P)
-    assert fl["D at zero lag, r̂ = 0, T3 (the partial-sum law binds)"] > P["mfu"] / X.nu(P)
+    assert fl["MFU_0 / (ν + ε′), the floor's limit as the verdict lag goes to 0"] == P["mfu"] / (X.nu(P) + EPS)
+    assert fl["MFU_0 / ν, the same as ε′ goes to 0 too (δ_win / ε′ then needs δ_win → 0)"] == P["mfu"] / X.nu(P)
+    assert fl["D at zero lag and ε′, r̂ = 0, T3 (the partial-sum law binds)"] > P["mfu"] / X.nu(P)
 
 
 def test_fleet_wide_forgiveness_is_j_identities_of_verdict_lag():
@@ -149,12 +151,12 @@ def test_the_symbols_closed_forms_are_what_evaluate_uses():
 
 
 def test_the_thresholds_are_on_d_not_on_one_over_eta():
-    """At T1 with host CPUs and the clock at 0, D < X once r > MFU_0 / X - nu - Delta/H; on 1/eta the edge would be at
-    1/X, 2.5 times higher."""
+    """At T1 with host CPUs and the clock at 0, D < X once r > MFU_0 / X - nu - Delta/H - eps'; on 1/eta the edge would
+    be at 1/X, 2.5 times higher."""
     found = S.search(("defaults", "T1", 0))
     for level in S.LEVELS:
         (a, _), = found[level]
-        assert a == pytest.approx(P["mfu"] / level - X.nu(P) - LAG, rel=1e-3), level
+        assert a == pytest.approx(P["mfu"] / level - X.nu(P) - LAG - EPS, rel=1e-3), level
 
 
 def test_chi_is_the_chord_times_the_pool():

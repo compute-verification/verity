@@ -78,7 +78,7 @@ BLOCK_NAME_BITS = 25
 #: (about 35 GPU-s a draw), delta = 2^-40 and luck A = 8; injected bits valued with (d, e)-threading no further than
 #: ThreadedOfLayered certifies any for a reference circuit C1 allows, and every gate of a block countable
 DEFAULTS = {
-    "unmonitored": 0.0, "residual": 0.326, "host_share": 0.118, "clock_share": 0.064,
+    "unmonitored": 0.0, "residual": 0.326, "host_share": 0.118, "clock_share": 0.064, "eps_agg": 1e-4,
     "pous_rounds": 111.0, "unfilled_gb": 58.0, "sigma": 1e3, "b_w": 2.5, "b_a": 4.0,
     "f": 0.95, "pous_delta": 0.01, "pous_floor": 0.0, "t_read": 1e-3, "wipe_s": 3600.0, "hbm_gb": 768.0,
     "host_gb": 1900.0, "disk_gb": 0.0,
@@ -97,6 +97,7 @@ SPEC = [
     {"key": "unmonitored", "main": True, "label": "Unmonitored compute share", "unit": "", "min": 1e-12, "max": 0.5, "log": True, "zero": True},
     {"key": "g", "main": True, "label": "Compute amplifier g: the developer's algorithmic advantage over the reference recipe (1 against the best known recipe)", "unit": "x", "min": 1, "max": 100, "log": True},
     {"key": "residual", "main": True, "label": "Monitored compute residual r on the GPUs (floor credit at the locked clock 0.326, with an attested clock 0.217; best plausible design 0.01; nothing credited today: 1)", "unit": "", "min": 1e-12, "max": 1, "log": True, "zero": True},
+    {"key": "eps_agg", "label": "Aggregation slack eps': the share of capacity whose PoUW certificates may be wrong, which Markov's inequality over the windows charges to r (1e-4 with per-window failure 3 x 2^-40 gives the theorem's delta of 2.7e-8; each halving costs about 4e-5 of PoUW's deficit)", "unit": "", "min": 1e-8, "max": 1e-2, "log": True, "zero": True},
     {"key": "clock_share", "label": "GPU capacity above the clock PoUW credits (6.4%: 2,597 MHz against 2,430; 0 once credit uses the true maximum or auditor hardware reads the clock offset)", "unit": "", "min": 1e-4, "max": 0.3, "log": True, "zero": True},
     {"key": "host_share", "main": True, "label": "Host CPUs at datasheet peak, as a share of server compute (Xeon 6776P INT8 AMX 11.8%; hosts without matrix units, two EPYC 9015s, 0.21%)", "unit": "", "min": 1e-6, "max": 0.5, "log": True, "zero": True},
     {"key": "pous_rounds", "main": True, "label": "Proof-of-space rounds per audit (deployed 111; 1/19 needs 86; streamed labels make 74,000 cheap)", "unit": "", "min": 10, "max": 1e6, "log": True},
@@ -274,10 +275,15 @@ def ingress(p: dict, mech: dict) -> float:
     return p["sigma"] + p["tau"] + p["intake_x"] * p["K"] / p["Gamma"] * p["node_flops"] if mech["net"] else p["nic"]
 
 
-def residual_share(p: dict) -> float:
-    """r: the GPUs' uncredited share, their capacity above the credited clock, and the host CPUs, which count toward it
-    until something credits or bounds them."""
+def audited_residual(p: dict) -> float:
+    """r-hat: the GPUs' uncredited share, their capacity above the credited clock, and the host CPUs, which count toward
+    it until something credits or bounds them."""
     return min(1.0, p["residual"] + p["host_share"] + p["clock_share"])
+
+
+def residual_share(p: dict) -> float:
+    """r = r-hat + eps': the audited residual plus the share whose certificates may be wrong."""
+    return min(1.0, audited_residual(p) + p["eps_agg"])
 
 
 def state_threshold(p: dict, mech: dict) -> float:

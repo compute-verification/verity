@@ -48,7 +48,8 @@ def test_the_residual_voids_the_partial_sum_law():
 def test_without_dark_compute_the_declared_side_is_the_chain_bound():
     """At zero residual and zero unmonitored compute nothing absorbs partial sums, so efficiency is the inverse of the
     calculator's chain bound for pretrain-full."""
-    p = T.DEFAULTS | {"residual": 0.0, "host_share": 0.0, "clock_share": 0.0, "unmonitored": 0.0, "lag_s": 0.0}
+    p = T.DEFAULTS | {"residual": 0.0, "host_share": 0.0, "clock_share": 0.0, "eps_agg": 0.0, "unmonitored": 0.0,
+                      "lag_s": 0.0}
     r = T.evaluate(p, T.TIERS["T4"])
     alpha = p["K"] / p["Gamma"]
     chain = p["kappa_chain"] * S.read_factor(p["K"], p["b_w"], p["b_a"], p["d_chain"]) / (2 * alpha)
