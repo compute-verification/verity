@@ -25,7 +25,9 @@ negatives.
   host job on vy-nebius-1, or a `--preemptible` one on vy-nebius-2). A6's W8A8 coordinates at K = 4096 and 14336 are
   staged in statements of 1 to 512 units, and sessions of 1 to 512 drawn units are proved by `flock-circuit prove --zk
   --gpu`, with the firewall's send check on and off. The Lean verifier checks them, and the job fits the per-session,
-  per-statement and per-unit costs with their standard errors, writing `costfit` observations.
+  per-statement and per-unit costs with their standard errors, writing `costfit` observations. `ZK_DRAWS=c` proves every
+  staged unit: the cost of c drawn units in one statement, up to a table's 2^(35 − k_log) (2048 at K = 4096). Each point
+  takes its own GPU lease, and a node without CUDA 13.3 gets its packages unpacked under `FLOCK_WORK`.
 
 C-Flock's circuit prover (M0, `verity_flock.circuit`) is on `main`, but a run does not take it from its checkout:
 `pod.sh` takes `git archive`s of M0's tree and the Lean verifier's tree at pinned commits, and a captured input set, as
