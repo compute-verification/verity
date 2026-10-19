@@ -30,9 +30,9 @@
 //                 sparse speedup at equal instruction count, A3's bound is 1 (twice the MACs on a logical k twice as deep).
 //
 // A5 says shared memory serves 128 B an SM clock, loads and stores together. A saturated SS-mode wgmma reads its A and
-// B tiles from shared memory (10 KB a wgmma s8 m64n256k32, ~80 B a SM-clock at the tensor peak) through no
+// B tiles from shared memory (6 KB a wgmma s8 m64n128k32, 96 B a SM-clock at the tensor peak) through no
 // shared-memory class instruction, so the sheet's smem facet never sees it.
-//   emp_smem      warpgroups 0-1 wgmma s8 m64n256k32 flat out (OP_LOOP), warpgroups 2-3 8 conflict-free LDS.128 a trip
+//   emp_smem      warpgroups 0-1 wgmma s8 m64n128k32 flat out (OP_LOOP), warpgroups 2-3 8 conflict-free LDS.128 a trip
 //                 (lm.cu's ring) only while they run (OP_UNTIL): LDS bytes a SM-clock beside the wgmma's own reads.
 //   emp_lds_solo  the same LDS warpgroups alone (OP_LOOP), the LDS ceiling at this warp count.
 //   emp_reg       wg_until's split with setmaxnreg (the producer/consumer register handoff): the wgmma warpgroups raise
@@ -68,6 +68,16 @@ DC_DEV void emp_group4(int (&d)[128], const Tiles& t) {
   wgmma_s8_n256(d, t.da, t.db, 1);
   wgmma_s8_n256(d, t.da, t.db, 1);
   wgmma_s8_n256(d, t.da, t.db, 1);
+  wgmma_commit();
+}
+// The n128 form (4095.4 MAC/SM-clk in G1, as n256) for kernels over 256 threads: n256's 128 accumulators need 154
+// registers, over 512 threads' 128, and serialize at 384 threads' 168.
+DC_DEV void emp_group4n128(int (&d)[64], const Tiles& t) {
+  wgmma_fence();
+  wgmma_s8_n128(d, t.da, t.db, 0);
+  wgmma_s8_n128(d, t.da, t.db, 1);
+  wgmma_s8_n128(d, t.da, t.db, 1);
+  wgmma_s8_n128(d, t.da, t.db, 1);
   wgmma_commit();
 }
 template <int N>
@@ -206,13 +216,13 @@ DC_DEV void emp_smem_k(const OpArgs& a) {
   const unsigned rbase = smem_u32(ring);
   const int lane = threadIdx.x & 31, w = threadIdx.x >> 5;
   const bool mma_role = WG && threadIdx.x < 256;
-  int d[128] = {};
+  int d[64] = {};
   uint32_t acc = threadIdx.x + 1;
   if constexpr (WG) {
     OP_BEGIN_STOP
     if (mma_role) {
       OP_LOOP(it) {
-        emp_group4(d, t);
+        emp_group4n128(d, t);
         wgmma_wait<1>();
       }
       wgmma_wait<0>();
@@ -237,13 +247,13 @@ OP_KERNEL(emp_reg, 384) {
   __shared__ __align__(1024) unsigned char sm[(AROWS + BROWS) * KB];
   const Tiles t = emp_tiles(sm, a.mode);
   const bool mma_role = threadIdx.x < 256;
-  int d[128] = {};
+  int d[64] = {};
   Lane l((uint32_t)threadIdx.x);
   OP_BEGIN_STOP
   if (mma_role) {
     asm volatile("setmaxnreg.inc.sync.aligned.u32 232;" ::: "memory");
     OP_LOOP(it) {
-      emp_group4(d, t);
+      emp_group4n128(d, t);
       wgmma_wait<1>();
     }
     wgmma_wait<0>();
@@ -278,11 +288,11 @@ static const OpProbe PROBES[] = {
     P_SP(wgsp_s8), P_SP(wgsp_e4m3), P_SP(wgsp_f16), P_SP(wgd_s8), P_SP(wgd_e4m3), P_SP(wgd_f16),
 #undef P_SP
     // No bank check here (the OP_UNTIL loop's stop poll is one more LDS): its ring is emp_lds_solo's, which has one.
-    {.name = "emp_smem", .kernel = (const void*)emp_smem, .tpb = 512, .expect = "IGMMA.64x256x32.S8.S8=4;LDS.128=8",
+    {.name = "emp_smem", .kernel = (const void*)emp_smem, .tpb = 512, .expect = "IGMMA.64x128x32.S8.S8=4;LDS.128=8",
      .warps = "8;8", .iters = AITERS, .until = 2},
     {.name = "emp_lds_solo", .kernel = (const void*)emp_lds_solo, .tpb = 256, .expect = "LDS.128=8",
      .smem_ops = "LDS.128*8", .smem = ring_off, .iters = AITERS},
-    {.name = "emp_reg", .kernel = (const void*)emp_reg, .tpb = 384, .expect = "IGMMA.64x256x32.S8.S8=4;IMAD=64",
+    {.name = "emp_reg", .kernel = (const void*)emp_reg, .tpb = 384, .expect = "IGMMA.64x128x32.S8.S8=4;IMAD=64",
      .warps = "8;4", .iters = AITERS, .until = 2},
 };
 
