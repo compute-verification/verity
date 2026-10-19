@@ -10,8 +10,8 @@ archive, and every binary runs every mode on them: `rows` is the default path (`
 as `flock-rows TYPES --root D --name N` prints them), the others the archive's parts (`--archive FILE --part P`: the
 verifier's `DeriveAll.deriveChecked`). Each output is held to the Python mirror: `ir_lower.netlist` for `rows`, the SHA-512
 of `verity_flock.derive`'s unit rows, Δ and logical list for the parts, and `ok` for `check`. `flock_rows.json`
-(`verity/verifier-cost-flock-rows/v1`) has one row per unit, binary and mode: its ANDs, input ports and bits, wall seconds,
-peak RSS, exit code and whether the output equals the mirror's (null past `--cap`). `flock_rows.sh` builds the binaries
+(`verity/verifier-cost-flock-rows/v1`) has one row per unit, binary and mode: its ANDs, input ports and bits, wall and CPU
+seconds, peak RSS, exit code and whether the output equals the mirror's (null past `--cap`). `flock_rows.sh` builds the binaries
 before and after a change and runs this on a node.
 
 The MoE targets need circuits' static MoE forms (`verity.ml.circuits.ops.moe`) and C-Flock's MoE select pieces where their
@@ -161,13 +161,14 @@ def write_fanout(m: int, scratch: Path) -> dict:
             "mirror": _parts({callee.digest(): callee, unit.digest(): unit}, layouts, 2, {sha: ws})}
 
 
-WRAP = ("import resource, subprocess, sys; r = subprocess.run(sys.argv[1:]); "
-        "sys.stderr.write('\\n%d\\n' % resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss); sys.exit(r.returncode)")
+WRAP = ("import resource, subprocess, sys; r = subprocess.run(sys.argv[1:]); u = resource.getrusage(resource.RUSAGE_CHILDREN); "
+        "sys.stderr.write('\\n%.3f %d\\n' % (u.ru_utime + u.ru_stime, u.ru_maxrss)); sys.exit(r.returncode)")
 
 
-def timed(cmd: list[str], cap: float | None) -> tuple[float, int, int | None, bytes, bytes]:
-    """Wall seconds, peak RSS in KiB (of `cmd` alone: a fresh wrapper is its only parent), exit code (None past `cap`),
-    stdout and stderr."""
+def timed(cmd: list[str], cap: float | None) -> tuple[float, float | None, int, int | None, bytes, bytes]:
+    """Wall seconds, CPU seconds (user and system) and peak RSS in KiB (of `cmd` alone: a fresh wrapper is its only parent),
+    exit code (None past `cap`), stdout and stderr. CPU seconds are what a single-threaded run costs on a shared machine,
+    where wall seconds count the time it waited for a core."""
     t0 = time.monotonic()
     with open(os.devnull, "rb") as nul:
         p = subprocess.Popen([sys.executable, "-c", WRAP, *cmd], stdin=nul, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
@@ -181,7 +182,10 @@ def timed(cmd: list[str], cap: float | None) -> tuple[float, int, int | None, by
         rc = None
     dt = time.monotonic() - t0
     err, _, last = err.rstrip(b"\n").rpartition(b"\n")
-    return dt, int(last) if last.isdigit() else 0, rc, out, err
+    cpu, _, rss = last.decode(errors="replace").partition(" ")
+    if not rss.isdigit():
+        return dt, None, 0, rc, out, err + b"\n" + last
+    return dt, float(cpu), int(rss), rc, out, err
 
 
 def measure(u: dict, label: str, binp: str, mode: str, scratch: Path, cap: float | None) -> dict:
@@ -190,7 +194,7 @@ def measure(u: dict, label: str, binp: str, mode: str, scratch: Path, cap: float
         cmd = [binp, str(scratch / f"{stem}.types.json"), "--root", u["digest"], "--name", u["name"]]
     else:
         cmd = [binp, "--archive", str(scratch / f"{stem}.archive.json"), "--part", mode]
-    dt, rss, rc, out, err = timed(cmd, cap)
+    dt, cpu, rss, rc, out, err = timed(cmd, cap)
     if rc is None:
         equal = None
     elif mode == "rows":
@@ -200,7 +204,7 @@ def measure(u: dict, label: str, binp: str, mode: str, scratch: Path, cap: float
     else:
         equal = rc == 0 and _sha(out) == u["mirror"][mode]
     return {**{k: v for k, v in u.items() if k not in ("mirror", "digest", "name")}, "bin": label, "mode": mode,
-            "seconds": round(dt, 3), "peak_rss_mib": round(rss / 1024, 1), "rc": rc, "equal": equal,
+            "seconds": round(dt, 3), "cpu_seconds": cpu, "peak_rss_mib": round(rss / 1024, 1), "rc": rc, "equal": equal,
             "stderr": err.decode(errors="replace")[-300:]}
 
 
@@ -233,7 +237,8 @@ def main(argv: list[str] | None = None) -> int:
                     row = measure(u, label, binp, mode, scratch, caps.get(label, a.cap))
                     bad += row["equal"] is False
                     doc["rows"].append(row)
-                    print(json.dumps({k: row[k] for k in ("unit", "ands", "bin", "mode", "seconds", "peak_rss_mib", "equal")}),
+                    print(json.dumps({k: row[k] for k in ("unit", "ands", "bin", "mode", "seconds", "cpu_seconds",
+                                                          "peak_rss_mib", "equal")}),
                           flush=True)
                     path.write_text(json.dumps(doc, indent=1))
     doc["mismatches"] = bad
