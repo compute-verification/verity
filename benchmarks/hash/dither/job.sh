@@ -19,7 +19,7 @@
 #     --send BUILD_RUN/out/lib/sm_90a/h1u.so --send ... --send BUILD_RUN/out/lib/sm_90a/BUILD.txt \
 #     -- bash benchmarks/hash/dither/job.sh sm_90a h1u
 #
-# Env: BENCH_ARGS (extra flags for the bench, e.g. "--ms 1,32 --linears o"), LEASE (gpu-lease flags, default
+# Env: JOBS (builds at once, default 8), BENCH_ARGS (extra flags for the bench, e.g. "--ms 1,32 --linears o"), LEASE (gpu-lease flags, default
 # "--max-min 14"), LIBS (the shipped libraries, default $RESEARCH_RUN_DIR/inputs), VERITY_BENCH_VENV (default
 # /workspace/cp/venv312), NVCC (default CUDA 13.0's).
 # Exit: the bench's (4 a gate failed), 2 a build failed or the shipped libraries are missing or another commit's.
@@ -39,30 +39,42 @@ srchash() { (cd "$ROOT" && cat "$@" | sha256sum | cut -c1-16); }
 if [ "$BENCH" = build ]; then
   "$NVCC" --version > "$OUT/env/nvcc.txt" 2>&1
   LIB64=$(cd "$(dirname "$NVCC")/../lib64" && pwd -P)
+  # one library: NAME[:FILE:FLAG] (a variant is FILE.cu built with FLAG) for one arch; its BUILD.txt line to NAME.line
+  build_one() {
+    local arch=$1 dir=$2 src file def deps
+    IFS=: read -r src file def <<< "$3"
+    local flags=(-O3 -std=c++17 -shared -Xcompiler -fPIC --expt-relaxed-constexpr -gencode "arch=compute_${arch#sm_},code=$arch")
+    [ "$src" = kb ] && flags+=(-lcublasLt -Xlinker "-rpath=$LIB64")
+    file=${file:-$src}
+    [ -n "$def" ] && flags+=("$def")
+    "$NVCC" "${flags[@]}" "$HERE/$file.cu" -o "$dir/$src.so" 2> "$dir/build-$src.log" || { echo "build $arch $src failed:"; cat "$dir/build-$src.log"; return 2; }
+    "$(dirname "$NVCC")/cuobjdump" --dump-resource-usage "$dir/$src.so" > "$dir/$src.res.txt" 2>&1
+    "$(dirname "$NVCC")/cuobjdump" -sass "$dir/$src.so" | gzip > "$dir/$src.sass.gz"
+    "$NVCC" -M -std=c++17 "${flags[@]:6:2}" "$HERE/$file.cu" > "$dir/$src.deps" 2>&1 || { cat "$dir/$src.deps"; return 2; }
+    deps=$(tr ' \\' '\n\n' < "$dir/$src.deps" | grep -v ':$' | grep . | xargs -r realpath -m | while read -r f; do [ -f "$f" ] && echo "$f"; done | grep "^$ROOT/" | sed "s#^$ROOT/##" | sort -u)
+    echo "src $src $(srchash $deps) $(echo $deps)" > "$dir/$src.line"
+  }
+  brc=0
   for arch in ${ARCH//,/ }; do
     dir="$OUT/lib/$arch"
     mkdir -p "$dir"
-    # NAME[:FILE:FLAG]: a variant is FILE.cu built with FLAG
-    builds=(kb kb_pg h1noise h1u h1u_b3:h1u:-DH1U_MINB=3 h1u_pf:h1u:-DH1U_PF=1)
+    builds=(kb h1noise h1u h1u_b3:h1u:-DH1U_MINB=3 h1u_pf:h1u:-DH1U_PF=1)
+    [ "$arch" = sm_100a ] && builds+=(kb_pg)
     # H1_PIPE's bits (h1sha.cuh): 4 Sigma1, 8 Sigma0, 16 sigma0, 32 sigma1 and (h1u.cu) 64 the fold's rotations on IMAD
     for p in ${PIPES:-4 12 36 76 100}; do builds+=("h1u_p$p:h1u:-DH1_PIPE=$p"); done
     for p in ${NOISE_PIPES:-4 12 36}; do builds+=("h1noise_p$p:h1noise:-DH1_PIPE=$p"); done
     for b in "${builds[@]}"; do
-      IFS=: read -r src file def <<< "$b"
-      [ "$src" = kb_pg ] && [ "$arch" != sm_100a ] && continue
-      flags=(-O3 -std=c++17 -shared -Xcompiler -fPIC --expt-relaxed-constexpr -gencode "arch=compute_${arch#sm_},code=$arch")
-      [ "$src" = kb ] && flags+=(-lcublasLt -Xlinker "-rpath=$LIB64")
-      file=${file:-$src}
-      [ -n "$def" ] && flags+=("$def")
-      "$NVCC" "${flags[@]}" "$HERE/$file.cu" -o "$dir/$src.so" 2> "$dir/build-$src.log" || { cat "$dir/build-$src.log"; exit 2; }
-      "$(dirname "$NVCC")/cuobjdump" --dump-resource-usage "$dir/$src.so" > "$dir/$src.res.txt" 2>&1
-      "$(dirname "$NVCC")/cuobjdump" -sass "$dir/$src.so" | gzip > "$dir/$src.sass.gz"
-      "$NVCC" -M -std=c++17 "${flags[@]:6:2}" "$HERE/$file.cu" > "$dir/$src.deps" 2>&1 || { cat "$dir/$src.deps"; exit 2; }
-      deps=$(tr ' \\' '\n\n' < "$dir/$src.deps" | grep -v ':$' | grep . | xargs -r realpath -m | while read -r f; do [ -f "$f" ] && echo "$f"; done | grep "^$ROOT/" | sed "s#^$ROOT/##" | sort -u)
-      echo "src $src $(srchash $deps) $(echo $deps)" >> "$dir/BUILD.lines"
+      while [ "$(jobs -rp | wc -l)" -ge "${JOBS:-8}" ]; do wait -n || brc=2; done
+      build_one "$arch" "$dir" "$b" &
     done
-    { echo "$SHA $arch"; cat "$dir/BUILD.lines"; } > "$dir/BUILD.txt"
-    rm "$dir/BUILD.lines"
+  done
+  while [ "$(jobs -rp | wc -l)" -gt 0 ]; do wait -n || brc=2; done
+  wait || brc=2
+  [ $brc = 0 ] || exit 2
+  for arch in ${ARCH//,/ }; do
+    dir="$OUT/lib/$arch"
+    { echo "$SHA $arch"; cat "$dir"/*.line; } > "$dir/BUILD.txt"
+    rm "$dir"/*.line
     grep -h "Function\|REG" "$dir"/*.res.txt
   done
   exit 0
