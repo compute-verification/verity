@@ -79,8 +79,8 @@ from typing import Any, Callable, Iterable, Mapping, Sequence
 
 from . import partition_object as PO
 from .codec import canonical_json, program_digest
-from .cut import (RECOMPUTE, WIDE_FAN_IN, WIRING, CallGraph, QueryInapplicable, _wide_operands, boundary_widths, call_scope, check_cut,
-                  evaluate_definition, separable)
+from .cut import (RECOMPUTE, WIDE_FAN_IN, WIRING, CallGraph, QueryInapplicable, boundary_widths, call_scope, check_cut,
+                  evaluate_definition, separable, wide_operands)
 from .partition import RECOMPUTE_RULES, CutVerdict
 from .units import Activation, UnitCircuit
 
@@ -745,7 +745,7 @@ def _recomputed(fn: Any, wiring: frozenset[str] = WIRING) -> tuple[list[tuple[in
         key = array("q", [prims.setdefault(g.prim.id, len(prims))])
         operands = 0
         all_const = True
-        for o in (_wide_operands(g, call) if wide else g.operands):
+        for o in (wide_operands(g, call) if wide else g.operands):
             if 0 <= o - lo < n:
                 if o - lo >= j:
                     raise QueryInapplicable(f"{fn.id}: gate {j} reads gate {o - lo}, not before it (the layout is not topological)",

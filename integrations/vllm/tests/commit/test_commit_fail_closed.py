@@ -57,6 +57,20 @@ def test_windowed_slot_wait_timeout_is_fail_named():
     assert not ok and "collector dead after a slot-wait timeout" in why
 
 
+def test_abandoned_step_fails_by_its_name_first():
+    # WS-D (r20261018-190716-bc01): the worker abandoned a learning step past the transient host budget.  The collector names the run's
+    # failure (extra.collector_failure, also errors[0]); the verdict leads with that name, ahead of the lost acquisitions it caused.
+    why0 = ("worker failed on windowed step 0: RuntimeError('bounded staging: learning step 0 exceeds the transient host budget 4096 MiB at "
+            "window 16 (4352 MiB): its plan was not pre-learned (warm-up learn-only pass) -- step not committed')")
+    r = _rec(expected=6816, committed=4100, errors=[f"collector failed: {why0}", "worker step 0: RuntimeError(...)"])
+    r["extra"]["collector_failure"] = why0
+    ok, why = commit_verdict(r, True)
+    assert not ok and why.startswith("collector failed: worker failed on windowed step 0") and "transient host budget" in why
+    r["extra"].update(expected_tensors=6816, committed_tensors=6816, errors=[], errors_n=0)
+    ok, why = commit_verdict(r, True)
+    assert not ok and why.startswith("collector failed:"), "the named failure alone fails the run, even with equal counts and no error"
+
+
 def test_opening_after_release_failure_is_fail_named():
     # [R15 capacity] lifetime: a committed buffer whose device staging was released before the opening was verified must still open against
     # the ORIGINAL bytes; a retained copy that holds a later occupant's bytes (release-before-keep ordering fault) fails the openings-after-

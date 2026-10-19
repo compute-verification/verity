@@ -176,11 +176,6 @@ def ids(*, implemented: bool | None = None) -> list[str]:
     )
 
 
-def registry_json(registry: Mapping[str, Relation] | None = None) -> list[dict[str, Any]]:
-    registry = REGISTRY if registry is None else registry
-    return [registry[k].to_json() for k in sorted(registry)]
-
-
 # --- helpers for checkers ------------------------------------------------------------------------
 
 
@@ -210,16 +205,6 @@ def scalar_int(value: Value) -> int:
 
 def encode_scalar(dtype: str, number: int | float) -> bytes:
     return dtypes.array_to_bytes(np.array(number, dtype=dtypes.view_dtype(dtype)))
-
-
-def encode_like(inst: NodeInstance, array: np.ndarray) -> bytes:
-    """Encode a float32 array into the instance's output dtype (bf16 via RNE)."""
-    dtype = inst.dtype
-    if dtype == "bfloat16":
-        return dtypes.f32_to_bf16_bytes(array)
-    if dtype in ("float16", "float32", "float64"):
-        return dtypes.array_to_bytes(np.asarray(array).astype(dtypes.view_dtype(dtype)))
-    raise RelationError(f"cannot encode float results as {dtype}")
 
 
 # --- independent checkers ------------------------------------------------------------------------
@@ -1104,40 +1089,6 @@ def check_output_domains(
     return report
 
 
-# --- sample coverage (N07) -----------------------------------------------------------------------
-
-
-@dataclass(slots=True)
-class SampleCoverage:
-    ok: bool
-    missing: list[str]
-    duplicated: list[str]
-    extra: list[str]
-
-    def to_json(self) -> dict[str, Any]:
-        return {
-            "ok": self.ok,
-            "missing": self.missing,
-            "duplicated": self.duplicated,
-            "extra": self.extra,
-        }
-
-
-def verify_sample_coverage(sample: Sequence[str], report: CheckReport) -> SampleCoverage:
-    """Every requested VU appears exactly once in the report and nothing else does."""
-    requested = list(sample)
-    seen: dict[str, int] = {}
-    for r in report.results:
-        seen[r.canonical_id] = seen.get(r.canonical_id, 0) + 1
-    wanted = set(requested)
-    missing = sorted(cid for cid in wanted if cid not in seen)
-    duplicated = sorted(cid for cid, n in seen.items() if n > 1)
-    if len(requested) != len(wanted):
-        duplicated = sorted(set(duplicated) | {c for c in requested if requested.count(c) > 1})
-    extra = sorted(cid for cid in seen if cid not in wanted)
-    return SampleCoverage(not (missing or duplicated or extra), missing, duplicated, extra)
-
-
 # --- drawing a stratified sample -----------------------------------------------------------------
 
 
@@ -1320,25 +1271,3 @@ def ensure_adjacent_pair(
         if x not in sample:
             sample.append(x)
     return sample, [AdjacentPair(ref, cid, name)]
-
-
-def adjacent_check(pairs: Sequence[AdjacentPair], report: CheckReport) -> dict[str, Any]:
-    """15.1 invariant on a finished report: for at least one pair both VUs authenticated, the
-    consumer's relation ran on the shared value as an opened input and both came out exact."""
-    by_id = {r.canonical_id: r for r in report.results}
-    checked = []
-    ok = False
-    for pair in pairs:
-        p, c = by_id.get(pair.producer), by_id.get(pair.consumer)
-        row = {
-            **pair.to_json(),
-            "producer_status": p.status if p else "absent",
-            "consumer_status": c.status if c else "absent",
-            "consumer_inputs_opened": c.inputs_opened if c else 0,
-        }
-        row["ok"] = bool(
-            p and c and p.status == "exact" and c.status == "exact" and c.inputs_opened > 0
-        )
-        ok = ok or row["ok"]
-        checked.append(row)
-    return {"ok": ok, "pairs": checked}

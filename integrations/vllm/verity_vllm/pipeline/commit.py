@@ -427,7 +427,8 @@ def make_committer(kind: str, engine: va.Engine, args: Options, run_id: str):
                                       gather=(kind in ("native_collect_gather", "native_collect_v2", "native_collect_v2_auto", "native_collect_v2b")),
                                       native_hooks=v2, auto_blocks=(kind in ("native_collect_v2_auto", "native_collect_v2b")),
                                       native_worker=(kind == "native_collect_v2b"), layout=layout,
-                                      profile=bool(getattr(args, "profile_hooks", False)) and not v2, populate_threads=getattr(args, "pinned_populate_threads", None))
+                                      profile=bool(getattr(args, "profile_hooks", False)) and not v2, populate_threads=getattr(args, "pinned_populate_threads", None),
+                                      commit_scheme=getattr(args, "commit_scheme", None))
     if kind == "hooks_only":
         from verity_vllm.commit.committer.native_host import NativeHostCommitter
 
@@ -469,6 +470,7 @@ def bootstrap_ci(xs: list[float], n: int = 4000, seed: int = 0) -> tuple[float, 
 
 from verity_vllm.check.commit_rules import HIDDEN_CLASS_BY_FA, hidden_classes_required  # noqa: E402
 from verity_vllm.check.commit_rules import REQUIRED_CLASSES_DEFAULT, class_coverage, required_classes_default  # noqa: E402
+from verity_vllm.check.cublas_route_pin import stamp as route_pin_stamp  # noqa: E402
 from verity_vllm.check.verdict import commit_verdict  # noqa: E402  (X-03/REL-02 fail-closed verdict)
 
 
@@ -2379,6 +2381,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                     # R13 p0b diagnostic: per-tensor digests of the retained (host) bytes, compared across paired instrumented runs to say
                     # WHICH identities differ when run roots disagree (values vs permutation vs schedule)
                     row["commit"]["fa2_zero_rows"] = tensor_digests(com, out, pair, prev_digests)
+                route_pin_stamp(row["commit"])
                 row["commit"]["commit_pass"], row["commit"]["commit_fail_reason"] = (RB.pending_verdict if pair in deferred else commit_verdict)(
                     row["commit"], row["tokens_equal_ref"], min_openings=min(64, args.openings), declaration=d, required_classes=required_classes)
                 if compiled_kernels is not None and row["commit"]["commit_pass"]:

@@ -1,12 +1,14 @@
 """GLM-5.3's dense MHA prefill on an H200: the FA3 kernel `run_prefill_new_tokens` launches (vllm-flash-attn 506341a1, qk head 256 =
 192 nope + 64 rope, v head 256, 8 heads a TP8 rank, causal varlen self-attention) against `Attention_v4{T, NH=8, KVH=8, D=256, BN=80,
-DOT=HopperBF16WgmmaDot16_v1, INV=Fa3InvSum_v1, MASKED_FROM}`, the row the target binds (`targets.attention_spec`).
+DOT=HopperBF16WgmmaDot16_v1, INV=Fa3InvSum_v1, MASKED_FROM}`, the row the target binds (`targets.attention_spec`), and on a sequence the
+plan splits against `AttentionSplit_v1{..., MASKED_FROM, PER}` (`registry.fa3_split`: the Split mainloop and FlashAttnFwdCombine).
 
 One GPU process writes `<out>/glm53_fa3_prefill_capture.json`, the property record `glm53_fa3_prefill_capture` (`properties.record`).
 The device gate runs first and nothing else runs when it fails (exit 3):
 
   gate     `fa2_target_capture_gpu.gate`: driver, compute capability 9.0, 132 SMs.
-  select   vLLM's `get_flash_attn_version(head_size=256)` on this GPU is 3.
+  select   vLLM's `get_flash_attn_version(head_size=256, head_size_v=256)` on this GPU is 3, and vLLM's own `FlashAttnPrefillBackend`
+           at GLM-5.3's MLA dims runs FA3 with v unpadded at scale 256^-0.5 (what `DsaDenseMha[vllm-dsa]` reads from the layer).
   mufu     `fa2_target_capture_gpu.mufu`: the ex2 / rcp tables (FA3's `--use_fast_math` exp2f and 1/x) on all 2^32 inputs.
   launch   every launch's kernels (torch.profiler): one `FlashAttnFwdSm90` instantiation at TileShape 128x80x256, kHeadDimV 256,
            causal (not at max_seqlen_q 1, where FA3's `mha_fwd` drops it above head 128: the two agree there), varlen, not paged,
@@ -15,13 +17,18 @@ The device gate runs first and nothing else runs when it fails (exit 3):
   rows     each case (one sequence at each of `LENGTHS`, the `VARLEN` batches, a `wide` batch with every operand word scaled by
            2^U(-8, 8)) at `num_splits = 1` (pinned) and at the served `num_splits = 0`.  q and k are contiguous [tokens, 8, 256] (k =
            k_nope ++ k_pe broadcast over heads), v the strided view of kv_b_proj's [tokens, 8, 192 + 256] output, as vLLM passes them.
+           Each case also runs through the backend itself (`run_prefill_new_tokens`, the call `forward_mha` makes): its own launch
+           (`backend`), whose words equal the served launch's.
            Every output row against the C++ twin (`fa3_model.attention_call`, kBlockN 80); on `SAMPLE` rows also the vectorised twin
            (`derived_rows.attention_rows`), the reference evaluator on one head (`AttentionHead_v4`) and the target's binding; a head
-           the twin flags non-finite takes the reference evaluator's words.
+           the twin flags non-finite takes the reference evaluator's words.  A row of a served sequence the plan runs as NS > 1
+           splits (`classes.served_split`) against the split twin (`fa3_split_twins.head_split_rows` at its tile's PER,
+           `fa3_split.split_per`), on `SAMPLE` rows also the reference evaluator on one head (`AttentionHeadSplit_v1`) and the
+           vocabulary's binding at that PER, and for a one-sequence launch `DsaDenseMha[vllm-dsa]`'s split count (a varlen launch's
+           plan reads every sequence, which the rule refuses to assume).
 
-GO = the gate, the selection, MUFU, every launch, and every row of the pinned launches and of the served sequences the plan runs as
-one split equal to the twin, with every sampled check.  Served sequences the plan splits run `FlashAttnFwdCombine`, which no Program
-models: they are reported apart (`classes.served_split`) and do not count.
+GO = the gate, the selection, MUFU, every launch, every backend launch's words the served launch's, and every row of the pinned
+launches, of the served sequences the plan runs as one split and of those it splits equal to its twin, with every sampled check.
 
     cd integrations/vllm; PY=/workspace/venv312/bin/python     # PYTHONPATH as pod_bootstrap.sh sets it
     $PY tests/properties/glm53_fa3_prefill_capture_gpu.py --out DIR --scratch /tmp --want-cc 9.0 --want-sms 132 --min-driver 575
@@ -48,9 +55,9 @@ from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
 from verity_vllm.properties.record import seal as seal_record
 
-SCHEMA = "verity-vllm/glm53-fa3-prefill-capture/v1"
+SCHEMA = "verity-vllm/glm53-fa3-prefill-capture/v3"
 RECORD = "glm53_fa3_prefill_capture.json"
-NH, NOPE, ROPE, DV = 8, 192, 64, 256
+NH, NOPE, ROPE, DV, KV_LORA_RANK = 8, 192, 64, 256, 512
 D = NOPE + ROPE
 SCALE = D ** -0.5
 BM, BN, NUM_SMS = 128, 80, 132
@@ -115,12 +122,23 @@ def launch_geometry(names: list[str], static: int, max_seqlen_q: int) -> dict[st
 
 
 # ---------------------------------------------------------------------------------------------------------------------------- gpu
-def selection() -> dict[str, Any]:
+def backend():
+    """vLLM's `FlashAttnPrefillBackend` at GLM-5.3's MLA dims on a TP8 rank, as `SparseMLACommonImpl` builds it (no VllmConfig: on
+    this path the backend reads none)."""
+    from vllm.v1.attention.backends.mla.prefill.flash_attn import FlashAttnPrefillBackend
+
+    return FlashAttnPrefillBackend(num_heads=NH, scale=SCALE, kv_lora_rank=KV_LORA_RANK, qk_nope_head_dim=NOPE, qk_rope_head_dim=ROPE,
+                                   v_head_dim=DV, vllm_config=None)
+
+
+def selection(be) -> dict[str, Any]:
     from vllm.v1.attention.backends.fa_utils import get_flash_attn_version
     from vllm.vllm_flash_attn.flash_attn_interface import is_fa_version_supported
 
-    v = get_flash_attn_version(head_size=D)
-    return {"fa_version": v, "fa3_supported": bool(is_fa_version_supported(3)), "ok": v == 3}
+    v = get_flash_attn_version(head_size=D, head_size_v=DV)
+    got = {"fa_version": be.vllm_flash_attn_version, "requires_v_padding": be.requires_v_padding, "scale": be.scale}
+    return {"fa_version": v, "fa3_supported": bool(is_fa_version_supported(3)), "backend": got,
+            "ok": v == 3 and got == {"fa_version": 3, "requires_v_padding": False, "scale": SCALE}}
 
 
 def operands(c: dict[str, Any], seed: int) -> dict[str, Any]:
@@ -151,13 +169,25 @@ def fa3_call(t: dict[str, Any], seqlens: list[int], num_splits: int):
                                   softmax_scale=SCALE, causal=True, return_softmax_lse=False, num_splits=num_splits, fa_version=3)
 
 
+def backend_call(be, t: dict[str, Any], seqlens: list[int]):
+    """`forward_mha`'s call of a prefill without context: the step's query_start_loc and longest query, no lse, no `out`."""
+    import types
+
+    import torch
+
+    cu = torch.tensor([0, *np.cumsum(seqlens).tolist()], dtype=torch.int32, device="cuda")
+    be.prepare_metadata(types.SimpleNamespace(query_start_loc=cu, max_query_len=max(seqlens)))
+    return be.run_prefill_new_tokens(q=t["q"], k=t["k"], v=t["v"], return_softmax_lse=False)
+
+
 def gpu(work: Path, outdir: Path, quick: bool, only: list[str] | None, doc: dict[str, Any]) -> list[dict[str, Any]]:
     """Selection, MUFU and every launch (doc["selection"], doc["mufu"], doc["launches"]); the comparison jobs, their words saved
     under ``work``."""
     import torch
     from torch.profiler import ProfilerActivity, profile, record_function
 
-    doc["selection"] = selection()
+    be = backend()
+    doc["selection"] = selection(be)
     print(f"[glm53-fa3] selection {json.dumps(doc['selection'])}", flush=True)
     p = torch.cuda.get_device_properties(0)
     doc["mufu"] = C.mufu(work, f"sm_{p.major}{p.minor}")
@@ -189,7 +219,14 @@ def gpu(work: Path, outdir: Path, quick: bool, only: list[str] | None, doc: dict
                 out = str(d / f"out_{mode}.npy")
                 np.save(out, G._words(out1))
                 jobs += jobs_for(c, mode, pl, {**words, "out": out})
-            del t, out1, out2
+                served = out1
+            with record_function(f"{C.LABEL}{len(doc['launches'])}"):
+                b1 = backend_call(be, t, c["seqlens"])
+                b2 = backend_call(be, t, c["seqlens"])
+                torch.cuda.synchronize()
+            doc["launches"].append({"case": c["name"], "mode": "backend", "seqlens": c["seqlens"], "num_splits_arg": None,
+                                    "plan": plan(c["seqlens"], 0), "deterministic": G._same(b1, b2), "same_as_served": G._same(b1, served)})
+            del t, out1, out2, served, b1, b2
     names = C.kernels_by_launch(prof)
     for i, launch in enumerate(doc["launches"]):
         launch.update(launch_geometry(names.get(i, []), launch["plan"]["static"], max(launch["seqlens"])))
@@ -207,7 +244,7 @@ def jobs_for(c: dict[str, Any], mode: str, pl: dict[str, Any], paths: dict[str, 
     for s, L in enumerate(c["seqlens"]):
         for r0 in range(0, L, CHUNK):
             jobs.append({"case": c["name"], "mode": mode, "seq": s, "start": start, "L": L, "span": [r0, min(L, r0 + CHUNK)],
-                         "launch_max": max(c["seqlens"]), "split": pl["dynamic"][s], "paths": paths})
+                         "launch_max": max(c["seqlens"]), "launch_seqs": len(c["seqlens"]), "split": pl["dynamic"][s], "paths": paths})
         start += L
     return jobs
 
@@ -224,51 +261,82 @@ def compare(job: dict[str, Any]) -> dict[str, Any]:
         return {k: job[k] for k in ("case", "mode", "seq", "span")} | {"error": _error(e)}
 
 
+def split_twin(q, k, v, rows, L: int, ns: int) -> tuple[np.ndarray, np.ndarray]:
+    """``rows`` of a sequence of L rows the plan runs as ``ns`` splits through `fa3_split_twins.head_split_rows`, the 8 heads of a
+    row at once: (out [rows, NH, DV], nonfinite [rows, NH])."""
+    from verity_vllm.program.kernels import derived_rows as DR
+    from verity_vllm.program.kernels import fa3_split_twins as TW
+    from verity_vllm.program.registry import attention_vocab
+    from verity_vllm.program.registry import fa3_split as FS
+
+    twin = {"dot16": DR.TC_DOT16_BY_PRIM["HopperBF16WgmmaDot16_v1"], "inv": DR.INV_SUM_BY_PRIM["Fa3InvSum_v1"]}
+    out, nf = np.empty((len(rows), NH, DV), dtype=np.uint16), np.zeros((len(rows), NH), dtype=bool)
+    for i, r in enumerate(int(x) for x in rows):
+        T = r + 1
+        out[i], nf[i] = TW.head_split_rows(q[r], k[:T].transpose(1, 0, 2), v[:T].transpose(1, 0, 2), T=T, BN=BN,
+                                           PER=FS.split_per(L, r, BM, BN, ns),
+                                           masked_from=attention_vocab.fa3_masked_from(T, BN, r, BM, 1), **twin)
+    return out, nf
+
+
 def _compare(job: dict[str, Any]) -> dict[str, Any]:
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.evaluation.reference import evaluate
     from verity_vllm.program.frontend import targets as TG
+    from verity_vllm.program.frontend.rules import vllm_dsa_dense
+    from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3
     from verity_vllm.program.frontend.target_profile import TargetProfile
     from verity_vllm.program.kernels import derived_rows as DR
     from verity_vllm.program.kernels import fa2_relation, fa3_model as FM
     from verity_vllm.program.registry import attention_vocab, hopper
     from verity_vllm.program.registry import fa3_check_inf as F3
+    from verity_vllm.program.registry import fa3_split as FS
 
     fa3 = {"DOT": hopper.HopperBF16WgmmaDot16, "INV": hopper.Fa3InvSum}
     twin = {"dot_prim": "HopperBF16WgmmaDot16_v1", "inv_prim": "Fa3InvSum_v1"}
     profile = TargetProfile.from_json(json.loads(CMAP.read_text())["target"]["profile"])
-    a, L, (r0, r1) = job["start"], job["L"], job["span"]
+    a, L, (r0, r1), ns = job["start"], job["L"], job["span"], job["split"]
     P = job["paths"]
     q = np.load(P["q"], mmap_mode="r")[a:a + L]
     k = np.ascontiguousarray(np.load(P["k"], mmap_mode="r")[a:a + L])
     v = np.ascontiguousarray(np.load(P["v"], mmap_mode="r")[a:a + L])
     got = np.load(P["out"], mmap_mode="r")[a + r0:a + r1]
     rows = np.arange(r0, r1)
-    res = FM.attention_call(np.ascontiguousarray(q[r0:r1]), k, v, rows, L, L, SCALE, fa2_relation.tables(), kblock_n=BN)
-    want = res.out.copy()
+    if ns > 1:
+        want, flagged = split_twin(q, k, v, rows, L, ns)
+    else:
+        res = FM.attention_call(np.ascontiguousarray(q[r0:r1]), k, v, rows, L, L, SCALE, fa2_relation.tables(), kblock_n=BN)
+        want, flagged = res.out.copy(), res.nonfinite
     rec: dict[str, Any] = {k_: 0 for k_ in TOTALS} | {"first_mismatch": None}
     for i, r in enumerate(rows):
         T = int(r) + 1
         mf = attention_vocab.fa3_masked_from(T, BN, int(r), BM, 1)
-        head = bind(F3.AttentionHeadV4, T=T, D=D, BN=BN, MASKED_FROM=mf, **fa3)
+        split = {} if ns == 1 else {"PER": FS.split_per(L, int(r), BM, BN, ns)}
+        head = bind(FS.AttentionHeadSplit if split else F3.AttentionHeadV4, T=T, D=D, BN=BN, MASKED_FROM=mf, **split, **fa3)
+        row_fn = bind(FS.AttentionSplit if split else F3.AttentionV4, T=T, NH=NH, KVH=NH, D=D, BN=BN, MASKED_FROM=mf, **split, **fa3)
 
         def reference(h: int) -> list[int]:
             rec["reference"] += 1
             return [int(x) for x in evaluate(head, q[r, h].tolist(), k[:T, h].reshape(-1).tolist(), v[:T, h].reshape(-1).tolist())]
 
-        nonfinite = np.flatnonzero(res.nonfinite[i])
+        nonfinite = np.flatnonzero(flagged[i])
         for h in nonfinite:
             want[i, h] = reference(int(h))
         if int(r) in SAMPLE or int(r) == L - 1:
             rec["sampled_rows"] += 1
-            vec, vnf = DR.attention_rows(np.ascontiguousarray(q[r]), k[:T], v[:T], BN, masked_from=mf, **twin)
-            fin = ~(vnf | res.nonfinite[i])
-            rec["twin_mismatch"] += int((vec[fin] != want[i][fin]).any(axis=1).sum())
+            if split:
+                spec = PROFILE_B1_EAGER_V3.kind("attention_dot", T=T, NH=NH, KVH=NH, D=D, BN=BN, MASKED_FROM=mf, **split, **fa3)
+                if job["launch_seqs"] == 1:
+                    rec["binding_mismatch"] += vllm_dsa_dense._dense_splits(profile, L, NH, D) != ns
+            else:
+                vec, vnf = DR.attention_rows(np.ascontiguousarray(q[r]), k[:T], v[:T], BN, masked_from=mf, **twin)
+                fin = ~(vnf | flagged[i])
+                rec["twin_mismatch"] += int((vec[fin] != want[i][fin]).any(axis=1).sum())
+                spec = TG.attention_spec(profile, T, NH, NH, D, job["launch_max"], row=int(r))
             h = int(r) % NH
             if h not in nonfinite:
                 rec["twin_mismatch"] += int(reference(h) != [int(x) for x in want[i, h]])
-            spec = TG.attention_spec(profile, T, NH, NH, D, job["launch_max"], row=int(r))
-            rec["binding_mismatch"] += spec.id != bind(F3.AttentionV4, T=T, NH=NH, KVH=NH, D=D, BN=BN, MASKED_FROM=mf, **fa3).id
+            rec["binding_mismatch"] += spec is None or spec.id != row_fn.id
         bad = np.flatnonzero((want[i] != got[i]).any(axis=1))
         rec["rows"] += 1
         rec["heads"] += NH
@@ -300,10 +368,16 @@ def _class_ok(t: dict[str, Any]) -> bool:
 
 
 def _verdict(doc: dict[str, Any]) -> bool:
+    """The served split class counts where a served launch's plan splits a sequence, and must then be checked; elsewhere it is
+    empty."""
     cl = doc["classes"]
+    via_backend = [x for x in doc["launches"] if x.get("mode") == "backend"]
+    planned = any(d > 1 for x in doc["launches"] if x.get("mode") == "served" for d in x["plan"]["dynamic"])
+    split_ok = _class_ok(cl["served_split"]) and cl["served_split"]["reference"] > 0 if planned else cl["served_split"]["rows"] == 0
     return bool(doc["gate"]["ok"] and not doc["errors"] and doc["selection"].get("ok") is True and doc["mufu"].get("ok") is True
                 and doc["launches"] and all(x["ok"] and x["deterministic"] for x in doc["launches"])
-                and _class_ok(cl["pinned"]) and _class_ok(cl["served"]) and cl["pinned"]["reference"] > 0)
+                and via_backend and all(x["same_as_served"] is True for x in via_backend)
+                and _class_ok(cl["pinned"]) and _class_ok(cl["served"]) and cl["pinned"]["reference"] > 0 and split_ok)
 
 
 def run(out: str, scratch: str | None, min_driver: int, want_cc: str, want_sms: int, workers: int, quick: bool,
@@ -346,17 +420,20 @@ def run(out: str, scratch: str | None, min_driver: int, want_cc: str, want_sms: 
     tmp.cleanup()
     cl, ls = doc["classes"], doc["launches"]
     sp = cl["served_split"]
+    bk = [x for x in ls if x.get("mode") == "backend"]
     print(f"GLM53-FA3-PREFILL {'GO' if doc['ok'] else 'NO-GO'} {doc['digest']} pinned={json.dumps({k: cl['pinned'][k] for k in TOTALS})} "
-          f"served={json.dumps({k: cl['served'][k] for k in TOTALS})} launches_ok={sum(bool(x['ok']) for x in ls)}/{len(ls)} "
-          f"deterministic={sum(bool(x['deterministic']) for x in ls)}/{len(ls)} selection={doc['selection'].get('ok')} "
+          f"served={json.dumps({k: cl['served'][k] for k in TOTALS})} served_split={json.dumps({k: sp[k] for k in TOTALS})} "
+          f"launches_ok={sum(bool(x['ok']) for x in ls)}/{len(ls)} deterministic={sum(bool(x['deterministic']) for x in ls)}/{len(ls)} "
+          f"backend_same_as_served={sum(x.get('same_as_served') is True for x in bk)}/{len(bk)} selection={doc['selection'].get('ok')} "
           f"mufu={doc['mufu'].get('ok')} errors={sorted(doc['errors'])}", flush=True)
-    print(f"GLM53-FA3-PREFILL served-split (outside the Program) sequences={sp['sequences']} rows={sp['rows']} "
+    print(f"GLM53-FA3-PREFILL served-split (AttentionSplit_v1) sequences={sp['sequences']} rows={sp['rows']} "
           f"heads_differing={sp['mismatch']} of {sp['heads']}", flush=True)
     return doc
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description="GLM-5.3's FA3 dense MHA prefill (head 256) on this Hopper GPU against Attention_v4")
+    ap = argparse.ArgumentParser(description="GLM-5.3's FA3 dense MHA prefill (head 256) on this Hopper GPU against Attention_v4 "
+                                             "and, where FA3 splits it, AttentionSplit_v1")
     ap.add_argument("--out", required=True, help=f"directory for {RECORD}")
     ap.add_argument("--scratch", default=None, help="parent of the scratch directory (operand and output words)")
     ap.add_argument("--min-driver", type=int, default=575)

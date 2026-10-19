@@ -761,7 +761,9 @@ _row("MoeFfnFixed_v1", partial(moe_ffn_fixed, router_gemm=True), ("out",))
 _row("MoeSum_v1", moe_sum, ("sum",))
 
 from verity_vllm.program.kernels import dense_rows  # noqa: E402  -- the dense chain's kernels (registers them) and the float64 GEMM chain
-from verity_vllm.program.kernels import act_rows, batched_gemm_rows, deepgemm_rows, dsa_norm_rows, moe_align_rows, softcap_rows  # noqa: E402
+from verity_vllm.program.kernels import (  # noqa: E402
+    act_rows, batched_gemm_rows, cublas_gemm_rows, deepgemm_rows, dsa_norm_rows, glm53_rows, moe_align_rows, softcap_rows,
+)
 
 
 def attention_softcap(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[str, np.ndarray]:
@@ -780,6 +782,8 @@ EVALUATORS[int8_rows.FAMILY] = int8_rows.EVALUATOR
 _row(int8_rows.FAMILY, int8_rows.int8_row_quant, ("0", "1"), check_targets=int8_rows.check_targets)
 deepgemm_rows.register_rows(EVALUATORS, _row)
 moe_align_rows.register_rows(EVALUATORS, _row)
+glm53_rows.register_rows(EVALUATORS, _row, _sample)
+cublas_gemm_rows.register_rows(EVALUATORS, _row, EVALUATOR_PROVENANCE)
 from verity_vllm.program.kernels import ir_rows  # noqa: E402
 
 for _f in ir_rows.FAMILIES:

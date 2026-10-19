@@ -514,7 +514,7 @@ def ports_of_type(t) -> tuple[Port, ...]:
 
 
 def _registry():
-    """(REGISTRY, import errors) of the integration's registry, every module loaded (`verity_vllm.program.registry.load`); a module that
+    """(REGISTRY, import errors) of the integration's registry, every module loaded (`verity_vllm.program.registry.catalog.load`); a module that
     fails to import is reported with the lookup that needed it, never treated as "not registered"."""
     try:
         from verity.ml.circuits.defs import REGISTRY  # noqa: F401

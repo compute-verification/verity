@@ -14,7 +14,7 @@ from typing import Callable
 from verity.ml.circuits.defs import bind as ir_bind
 from verity_vllm.program.registry import act as _act
 from verity_vllm.program.registry import b1, gemm_bias as _gemm_bias
-from verity_vllm.program.registry import dsa as _dsa, dsa_norm as _dsa_norm
+from verity_vllm.program.registry import dsa as _dsa, dsa_norm as _dsa_norm, dsa_topk as _dsa_topk
 from verity_vllm.program.registry import dsv4_indexer as _dsv4_indexer, dsv4_qnorm_insert as _dsv4_qnorm
 from verity_vllm.program.registry import dsv4_compressor as _dsv4_compressor, dsv4_moe as _dsv4_moe
 from verity_vllm.program.registry.dsv4_decode_indices import gather_i32
@@ -351,6 +351,13 @@ def _attention_softcap_dot(T, NH, KVH, D, BN, DOT, INV, FA2_MASKED_FROM, CAP):
     from verity_vllm.program.registry import fa2_softcap as _f2s  # noqa: PLC0415
     return ir_bind(_f2s.AttentionSoftcapV2, T=T, NH=NH, KVH=KVH, D=D, BN=BN, CAP=CAP, DOT=DOT, INV=INV, MASKED_FROM=FA2_MASKED_FROM)
 
+
+def _attention_split_dot(T, NH, KVH, D, BN, DOT, INV, MASKED_FROM, PER):
+    if MASKED_FROM is None:
+        raise TypeError("FA3's split prefill is registered only under FA3's per-iteration Check_inf")
+    from verity_vllm.program.registry import fa3_split as _f3s  # noqa: PLC0415
+    return ir_bind(_f3s.AttentionSplit, T=T, NH=NH, KVH=KVH, D=D, BN=BN, DOT=DOT, INV=INV, MASKED_FROM=MASKED_FROM, PER=PER)
+
 # -- profile "b1-eager-v3" [CB-A 2026-09-18]: the admitted `vllm_d9105ea80_sm89_eager` profile as the accepted records bind it —
 # TA1's v1 kinds with the attention chain `Attention_v3{T,NH,KVH,D,BN}` (`b1.AttentionV3`, `BN = fa2_kblock_n(D)`: FA2's kBlockN at
 # this head dim, D54/D57). Used by the export-of-the-real-vLLM-class frontend (`rules/vllm_bindings.py`). ---------------------------
@@ -372,9 +379,12 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            # a `MASKED_FROM` binds FA3's per-iteration Check_inf chain instead (`Attention_v4`, `TargetProfile.fa3_construction`), an
            # `FA2_MASKED_FROM` FA2's (`Attention_v5`, `targets.fa2_check_inf`); optional statics, so the role and its note -- and with them
            # this vocabulary's version -- stay as they were; a `CAP` with an `FA2_MASKED_FROM` binds the softcapped chain
-           # (`AttentionSoftcap_v2`), and a `CAP` without one has no kind
-           "attention_dot": lambda T, NH, KVH, D, BN, DOT, INV, MASKED_FROM=None, FA2_MASKED_FROM=None, CAP=None:
+           # (`AttentionSoftcap_v2`), and a `CAP` without one has no kind; a `PER` with a `MASKED_FROM` binds FA3's split prefill
+           # (`AttentionSplit_v1`, `fa3_split`: PER blocks a split, the row's splits merged by FlashAttnFwdCombine), and without one
+           # has no kind
+           "attention_dot": lambda T, NH, KVH, D, BN, DOT, INV, MASKED_FROM=None, FA2_MASKED_FROM=None, CAP=None, PER=None:
                _attention_softcap_dot(T, NH, KVH, D, BN, DOT, INV, FA2_MASKED_FROM, CAP) if CAP is not None
+               else _attention_split_dot(T, NH, KVH, D, BN, DOT, INV, MASKED_FROM, PER) if PER is not None
                else ir_bind(_f2.AttentionV5, T=T, NH=NH, KVH=KVH, D=D, BN=BN, DOT=DOT, INV=INV, MASKED_FROM=FA2_MASKED_FROM)
                if FA2_MASKED_FROM is not None
                else ir_bind(b1.AttentionV2, T=T, NH=NH, KVH=KVH, D=D, BN=BN, DOT=DOT, INV=INV) if MASKED_FROM is None
@@ -463,6 +473,9 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "dsa_indexer_q": lambda H, D, ROPE: ir_bind(_dsa.DsaIndexerQ, H=H, D=D, ROPE=ROPE),
            "dsa_mqa_logits": lambda N, H, D: ir_bind(_dsa.DsaMqaLogitsV3, N=N, H=H, D=D),
            "dsa_topk_short_row": lambda TOPK: ir_bind(_dsa.DsaTopKShortRow, TOPK=TOPK),
+           # a row past TOPK keys (registry.dsa_topk): the run's order checked against the top-TOPK set, and the rows it selects
+           "dsa_topk_order": lambda N, TOPK: ir_bind(_dsa_topk.DsaTopKOrder, N=N, TOPK=TOPK),
+           "dsa_gather_rows": lambda N, TOPK, W: ir_bind(_dsa_topk.DsaGatherRows, N=N, TOPK=TOPK, W=W),
            "dsa_rmsnorm": lambda N, EPS: ir_bind(_dsa_norm.DsaRMSNorm, N=N, EPS=EPS),
            "triton_block_rmsnorm": lambda N, BLOCK, WARPS, EPS: ir_bind(_dsa_norm.TritonBlockRMSNorm, N=N, BLOCK=BLOCK, WARPS=WARPS, EPS=EPS),
            "dsa_kv_rope": lambda D: ir_bind(_rope.RoPEHeadGptJV2, D=D),
@@ -609,6 +622,11 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
                              "HopperE4m3QgmmaDot32 steps, relu x weight summed per quad lane (the first two heads contracted), x the slot's scale",
            "dsa_topk_short_row": "DsaTopKShortRow_v1{TOPK}: the top-k of a row of at most TOPK keys (top_k_per_row_prefill, cooperative_topk) "
                                  "-- slot i = i < len ? i : -1",
+           "dsa_topk_order": "DsaTopKOrder_v1{N,TOPK}: the selection relation of a row of N > TOPK keys (cooperative_topk's "
+                             "histogram_4096_topk) -- 1 when the run's TOPK-slot order is a permutation of the top-TOPK set of the "
+                             "logits by convert_to_uint32_v2 key descending, then index ascending",
+           "dsa_gather_rows": "DsaGatherRows_v1{N,TOPK,W}: the W-word rows at a row's TOPK selected indices, Embedding_v1{V=N,H=W} "
+                              "per slot (a mux over the N history rows)",
            "dsa_rmsnorm": "DsaRMSNorm_v1{N,EPS}: _fused_norm_rope_kernel's cc 9.0 PTX reduction",
            "triton_block_rmsnorm": "TritonBlockRMSNorm_v1{N,BLOCK,WARPS,EPS}: the same reduction over N live elements of a masked BLOCK "
                                    "on 32 WARPS threads (_fused_q_kv_rmsnorm_kernel)",

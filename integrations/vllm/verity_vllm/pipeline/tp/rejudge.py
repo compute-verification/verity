@@ -30,8 +30,8 @@ SCHEMA = "verity-vllm/tp-rejudge/v1"
 LIVE = {
     "openings": "each rank's challenge- and population-drawn openings against its run root read the committed bytes",
     "coverage": "identity coverage is computed in the rank against its expected population; binding_map_rank<r>.json keeps pair 0's maps only",
-    "match_oracle": "committed TP partials vs the Match capture: the values, and the (step, module) pairing over the committer's per-step "
-                    "layouts, which the Commit does not save",
+    "match_oracle": "committed TP partials and MoE align witnesses vs the Match capture: the values, and the (step, module) pairing over the "
+                    "committer's per-step layouts, which the Commit does not save",
     "attribution": "the committed sampled ids against the Match record",
     "value_check": "tap clones and re-execution of every module output and TP partial (value_check.json keeps their verdicts)",
     "t6_4": "the late-read detector reads the value-check run's clones",

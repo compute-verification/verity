@@ -1,25 +1,26 @@
 """The attention family's Definition modules import only `verity` and Definition modules: what the catalog move needs of them.
 
-A Definition module of the family (`split_attention.DEFINITION_MODULES`, and verity#1130's DSA and sparse-MLA modules when present)
-imports the standard library, numpy, `verity`, the family's other Definition modules, and from another family's registry module
-only the Definitions and the word constants of a Definition body that `OTHER_FAMILIES` names.  Its vocabulary (`split_attention.MOVES`)
-is `attention_vocab`'s, which no Definition module imports.  An import is any import statement, at module level or in a function.
+A Definition module of the family (`DEFINITION_MODULES`, verity#1130's DSA and sparse-MLA modules included) imports the standard
+library, numpy, `verity`, the family's other Definition modules, and from another family's registry module only the Definitions
+and the word constants of a Definition body that `OTHER_FAMILIES` names.  Its vocabulary (`MOVES`) is `attention_vocab`'s, which no
+Definition module imports.  An import is any import statement, at module level or in a function.
 """
 from __future__ import annotations
 
 import ast
-import importlib.util
 import sys
 from pathlib import Path
 
 import pytest
 
 VLLM = Path(__file__).resolve().parents[2]
-_spec = importlib.util.spec_from_file_location("split_attention", VLLM / "tools" / "migrate" / "split_attention.py")
-S = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(S)
 REGISTRY = VLLM / "verity_vllm" / "program" / "registry"
-PKG = S.PKG
+PKG = "verity_vllm.program.registry"
+DEFINITION_MODULES = ["fa2_check_inf", "fa3_check_inf", "fa2_softcap", "boolean_attention", "boolean_softcap", "mla", "dsa",
+                      "boolean_dsa", "sparse_mla", "boolean_sparse_mla"]
+VOCAB = "attention_vocab"
+#: Definition module -> the top-level names that left it for `VOCAB`: FlashAttention's launch rules for the `MASKED_FROM` static
+MOVES = {"fa2_check_inf": ("KBLOCK_M", "fa2_masked_from"), "fa3_check_inf": ("fa3_masked_from",)}
 
 #: another family's registry module -> the names a family Definition module may take from it (None: the whole module), and why
 OTHER_FAMILIES = {
@@ -58,11 +59,17 @@ def _catalog(name: str) -> bool:
     return name == CATALOG or name.startswith(CATALOG + ".")
 
 
-def _definition_modules() -> list[str]:
-    return [*S.DEFINITION_MODULES, *(m for m in S.OPTIONAL_DEFINITION_MODULES if (REGISTRY / f"{m}.py").exists())]
-
-
-DEFINITION_MODULES = _definition_modules()
+def _top_level(mod: str) -> set[str]:
+    """The top-level names a registry module binds by a def, a class or a plain assignment."""
+    out = set()
+    for node in ast.parse((REGISTRY / f"{mod}.py").read_text(encoding="utf-8")).body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            out.add(node.name)
+        elif isinstance(node, ast.Assign):
+            out |= {t.id for t in node.targets if isinstance(t, ast.Name)}
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            out.add(node.target.id)
+    return out
 
 
 def _violations(mod: str) -> list[str]:
@@ -115,10 +122,9 @@ def test_a_definition_module_imports_only_verity_and_definition_modules(mod):
 
 
 def test_the_vocabulary_is_out_of_the_definition_modules():
-    vocab = ast.parse((REGISTRY / f"{S.VOCAB}.py").read_text(encoding="utf-8"))
-    assert {n for names in S.MOVES.values() for n in names} <= set(S._top_level(vocab))
-    for mod, names in S.MOVES.items():
-        assert not set(names) & set(S._top_level(ast.parse((REGISTRY / f"{mod}.py").read_text(encoding="utf-8")))), mod
+    assert {n for names in MOVES.values() for n in names} <= _top_level(VOCAB)
+    for mod, names in MOVES.items():
+        assert not set(names) & _top_level(mod), mod
 
 
 def test_the_checker_catches_a_frontend_import(monkeypatch, tmp_path):

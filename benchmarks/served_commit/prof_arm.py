@@ -286,7 +286,7 @@ def _layer_source(**kw: Any) -> Any:
             self.firsts = set()
             super()._enter_piece(backend, args)
 
-        def _tap(self, sub: int, name: str, val: torch.Tensor) -> None:
+        def _tap(self, sub: int, name: str, val: torch.Tensor, defer: bool = True) -> None:
             op = name.split(".", 1)[1].split("/", 1)[0]
             if op in ("convert_element_type", "embedding"):
                 if op in self.firsts:
@@ -294,7 +294,7 @@ def _layer_source(**kw: Any) -> Any:
                 self.firsts.add(op)
             elif op not in ("input", "kv"):
                 return
-            super()._tap(sub, name, val)
+            super()._tap(sub, name, val, defer)
 
         def _attention_forward(self, orig: Any, layer: str) -> Any:
             src = self
