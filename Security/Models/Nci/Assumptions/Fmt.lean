@@ -29,12 +29,16 @@ values another determines, products of weights and an activation read by gates t
 Those are where `WeightsSupport` fails, at every format: under the standard threading the gates reading a 128 × 128 × 2
 tile of fprop products are charged `b_a · 32768` bits against at most 4096 bits of values at E4M3.
 
-It fails where `WeightsSupport`'s width form does (weights committed in `θ`); where counted multiplications read
-activations that take fewer than `2^(log₂ n − μ)` values (a one-hot embedding matmul); and where one activation, through
-its copies, feeds more than `e · log₂ n / (log₂ n − μ)` counted multiplications in a subcircuit with many threads (an MoE
-that runs every expert on masked copies of its input). The tightest case found at the deployed point (`d = 2048`,
-`e = 4·10⁴`, E4M3, `log₂ n − μ = 4`) is activation recompute at a dense layer: two copies of each input, each a GEMM
-operand of `2 · 18432` multiplications, charged 7.37 bits against the 7.98 one value carries. -/
+Where `R`'s counted multiplications read its novel reads directly, a value at its format's full support pays for its
+work when `e` is at least the most counted multiplications one activation feeds: under `benchmarks/nci/kappa.py` that
+is a dense layer's `2 · 18432` against `e = 4·10⁴`, with the LM head's forward products, `163840` per value, left out
+of the counted multiplications. It fails where `WeightsSupport`'s width form does (weights committed in `θ`); where
+counted multiplications read activations that take fewer than `2^(log₂ n − μ)` values (a one-hot embedding matmul); and
+where one activation, through its copies, feeds more than `e · log₂ n / (log₂ n − μ)` counted multiplications in a
+subcircuit with many threads (the LM head's forward products, were they counted; an MoE that runs every expert on
+masked copies of its input). At the deployed point (`d = 2048`, `e = 4·10⁴`, E4M3, `log₂ n − μ = 4`) such a value is
+charged at most `4 · 36864 / 4·10⁴ = 3.69` bits against the 7.98 it carries; a reference circuit that recomputed a dense
+layer's activations, which `kappa.py`'s minimal one does not, would be charged 7.37 bits for two copies of each. -/
 def WeightsSupportFmt (c : Declaration) (θv : c.D.Transcript) (T : Threading c) (Γ : ℕ) (S b_w : ℝ) (d e n : ℕ)
     (μ : ℝ) : Prop :=
   ∀ R, SmallInfo c θv Γ S R →
