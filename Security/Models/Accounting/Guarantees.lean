@@ -1,5 +1,6 @@
 import Models.Accounting.Guarantees.Actual
 import Models.Accounting.Guarantees.Actual.Threaded
+import Models.Accounting.Guarantees.Actual.WipePool
 import Models.Accounting.Guarantees.Bandwidth
 import Models.Accounting.Guarantees.Bandwidth.Causal
 import Models.Accounting.Guarantees.BandwidthAudit
@@ -34,7 +35,7 @@ charged as compute, with partial completion and with a sketch-then-hash tag, the
 tiers and chained passes, the causal horizon bound on its samples and its conservation with named words, the one
 composed guarantee for the remote bandwidth audit as deployed and its deployed instance, the remote
 bandwidth audit's conservation and node-level guarantees on the actual-circuit model, the actual circuit's capacity
-theorem, runtime corollary, memory cap over threads and its rate, localization, composition and fit, the obligations
-B1, B2 and B4, the tag and sketch guarantees, co-location and the link relay for receipts bound to the matmul, what a
-relay of the deployed bound receipt's sketch must exchange, the bandwidth audit's guarantee, their per-run forms, and
-PoUW's work lower bound on an isolated node. -/
+theorem, runtime corollary, memory cap over threads and its rate, the memory cap's lifetime pool over wipes,
+localization, composition and fit, the obligations B1, B2 and B4, the tag and sketch guarantees, co-location and the
+link relay for receipts bound to the matmul, what a relay of the deployed bound receipt's sketch must exchange, the
+bandwidth audit's guarantee, their per-run forms, and PoUW's work lower bound on an isolated node. -/

@@ -70,6 +70,9 @@
    "owner": "@compute-accounting",
    "digest": "f25002293156695a436d17dbd4ddccf594544b7187a569385947d7dc90dcecf7"
   },
+  "Accounting.Assumptions.TimedRoundSound": {
+   "owner": "@memory-accounting"
+  },
   "Accounting.Assumptions.WorkHardness": {
    "owner": "@memory-accounting",
    "digest": "9191da3bbab04e2c655d21d45cd15f7b317e9cc5cfe9b93627e1b050b7203aec"
@@ -703,6 +706,12 @@
    "signature": ["Accounting.SecurityProofs.Actual.WindowsAt.{u_2, u_3} : Accounting.Guarantees.Actual.WindowsAt"],
    "assumptions": [],
    "type_hash": "374296d8334aa13abbb145fd7f4dc2b4bd0879828f6d5863bb10306b610fadce"
+  },
+  "Accounting.SecurityProofs.Actual.WipePool": {
+   "owner": "@lean"
+  },
+  "Accounting.SecurityProofs.Actual.WipePoolDelta": {
+   "owner": "@lean"
   },
   "Accounting.SecurityProofs.B2": {
    "owner": "@memory-accounting",
@@ -5002,6 +5011,8 @@
    "Accounting.SecurityProofs.Actual.ThreadedRuntime": "frozen (no-function,world-unlisted): It is stated over an arbitrary actual circuit (Accounting.Placed) and a threaded reference circuit its developer's declaration contains, and takes the physical constraints Causal, ComputeRate and Links, a bound on the state at each window's start, and the named WeightsIncompressible on the reference circuit, per-run hypotheses rather than a function's acceptance.",
    "Accounting.SecurityProofs.Actual.Windows": "frozen (no-function,world-unlisted): It is stated over an arbitrary actual circuit (Accounting.Placed) and takes the physical constraints Causal, ComputeRate, Memory and Links about it, per-run hypotheses that are not on the premises list, rather than a function's acceptance.",
    "Accounting.SecurityProofs.Actual.WindowsAt": "frozen (no-function,world-unlisted): It is stated over an arbitrary actual circuit (Accounting.Placed) and arbitrary cuts of its run, and takes the physical constraints Causal, ComputeRate and Links about it, per-run hypotheses that are not on the premises list, rather than a function's acceptance.",
+   "Accounting.SecurityProofs.Actual.WipePool": "frozen (no-function): It states the lifetime pool over an abstract run tree of wipes (Accounting.WipePlay.prEv) under the named timed-round premise Accounting.Assumptions.TimedRoundSound, a bound on a probability over the prover's strategies rather than a property of a function's acceptance.",
+   "Accounting.SecurityProofs.Actual.WipePoolDelta": "frozen (no-function): It is the lifetime pool at H = ln(1/δ)/k, over the same abstract run tree of wipes (Accounting.WipePlay.prEv) under Accounting.Assumptions.TimedRoundSound, rather than a property of a function's acceptance.",
    "Accounting.SecurityProofs.B2": "frozen (no-function,world-unlisted): It is stated over arbitrary strategies (maps from PoUS's outcomes to Accounting.Actual.Run) causal from every tick (CausalFrom), and takes the challenge ticks read off the run and increasing in it, the location's state, first tick and help fixed by the setup, what reaches it during each window fixed by the help, that window's challenge and its tick, the next tick a function of those and of what the location does, and each challenge's tick taking at most 2^τ values on the runs on time, as hypotheses that are not on the premises list, rather than a function's acceptance.",
    "Accounting.SecurityProofs.B2Adds": "frozen (no-function,world-unlisted): It is stated over arbitrary families of strategies (maps from PoUS's outcomes to Accounting.Actual.Run) causal from every tick, takes B2's hypotheses on them, which are not on the premises list, and composes them with PoUS's AuditSecureOn over the ring model, taken as a hypothesis, through lemma M: about no function of the code.",
    "Accounting.SecurityProofs.B2AddsP2Ring": "frozen (no-function,world-unlisted): It is B2Adds at P2's deployed point: stated over arbitrary families of strategies causal from every tick, with B2's hypotheses on them, which are not on the premises list, and P2's named assumption P2RingAuditSecure taken as a hypothesis: about no function of the code.",
