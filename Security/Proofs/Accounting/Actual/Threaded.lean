@@ -8,10 +8,10 @@ import Proofs.Nci.Threads
 `ThreadedThrottled`'s proof with the declared division replaced by the windows. `Windows` divides the developer's
 region over `[0, t)` into `n ⌈t/ω⌉` windows of at most `Φ_X ω ≤ Γ` gates (its memory constraint holds at any circuit's
 total width, so the bound on each window's starting state takes its place); a window reads at most its starting state
-plus `β_X ω`, so at most `K = R + r ω`. Pulled back through the containment (`Nci.SecurityProofs.pull`), the windows
+plus `β_X ω`, so at most `K = R + r ω` (`windows_small`). Pulled back through the containment (`Nci.SecurityProofs.pull`), the windows
 divide the reference circuit into pieces no larger that read no more, each small at `(Γ, K)`, and Theorem 1
 (`Nci.SecurityProofs.ThreadedReads`) bounds each piece's counted multiplications by `K Λ(K) / b_a`; every counted
-multiplication lies in one piece (`card_M_eq_sum`). The runtime follows from `⌈t/ω⌉ ω ≤ t + ω`; the rate at `ω = R/r`
+multiplication lies in one piece (`card_M_eq_sum`). The runtime follows from `⌈t/ω⌉ ω ≤ t + ω` (`runtime_of_count`); the rate at `ω = R/r`
 from `(2R)² / ω = 4 R r`.
 -/
 
@@ -46,18 +46,24 @@ theorem mul_lt_of_lt_ceil {k t ω : ℕ} (hω : 0 < ω) (hk : k < (t + ω - 1) /
   rw [add_one_mul] at h
   omega
 
-theorem ThreadedRuntime : Guarantees.Actual.ThreadedRuntime := by
-  intro L E _ _ A ℓ Φ ends β link n X θ hθ t ω Γ R r b_w b_a c T d e hω hX hC hΦ hL hbw hba hd hΓ hr hR hcont hT hW
-  obtain ⟨M, hθM⟩ := hcont
+/-- **The windows are small**: `Windows`' division of the developer's declaration over `[0, t)` into `n ⌈t/ω⌉`
+windows, each of at most `Γ` gates and reading at most `R + r ω`, its starting state and what its links carry. -/
+theorem windows_small {L E : Type*} [Fintype E] [DecidableEq L] (A : Placed L) (ℓ : L → L → ℕ) (Φ : Finset L → ℕ)
+    (ends : E → L × L) (β : E → ℕ) (link : Fin A.N → Fin A.N → E) (n : ℕ) (X : Fin n → Finset L)
+    (θ : Finset (Fin A.N)) (hθ : ∀ a ∈ θ, A.isInput a = true) (t ω Γ : ℕ) (R r : ℝ) (hω : 0 < ω)
+    (hX : ∀ i j, i ≠ j → Disjoint (X i) (X j)) (hC : A.Causal ℓ) (hΦ : A.ComputeRate (Set.range X) (fun _ => 1) Φ)
+    (hL : A.Links ends β link) (hΓ : ∀ i, Φ (X i) * ω ≤ Γ) (hr : ∀ i, (linkCapacity ends β (X i) : ℝ) ≤ r)
+    (hR : ∀ i (k : ℕ), k * ω < t → (A.state (X i) (k * ω) : ℝ) ≤ R) :
+    ∃ P : Partition (A.declaration (univ.biUnion X) t θ hθ).D (n * ((t + ω - 1) / ω)), ∀ u,
+      (A.declaration (univ.biUnion X) t θ hθ).D.size (P.gates u) ≤ Γ ∧
+        (novelReads (A.declaration (univ.biUnion X) t θ hθ) (P.gates u) : ℝ) ≤ R + r * ω := by
   have hMem : A.Memory (Set.range X) (fun _ => A.width univ) := fun _ _ _ => width_mono A (subset_univ _)
   obtain ⟨P, hP⟩ := Windows A ℓ Φ (fun _ => A.width univ) ends β link n X θ hθ t ω hω hX hC hΦ hMem hL
-  set m := (t + ω - 1) / ω with hm_def
-  set K := R + r * ω with hK_def
-  set Λ := T.bound K b_w d e with hΛ_def
-  have hΛ : 0 ≤ Λ := le_max_of_le_left (Nat.cast_nonneg _)
-  have hreadsN : ∀ (i : Fin n) (k : Fin m), novelReads (A.declaration (univ.biUnion X) t θ hθ)
-      (P.gates (finProdFinEquiv (i, k))) ≤ A.state (X i) (k * ω) + linkCapacity ends β (X i) * ω := by
-    intro i k
+  refine ⟨P, fun u => ?_⟩
+  obtain ⟨⟨i, k⟩, rfl⟩ := finProdFinEquiv.surjective u
+  refine ⟨(hP i k).2.1.trans (hΓ i), ?_⟩
+  have hreads : novelReads (A.declaration (univ.biUnion X) t θ hθ) (P.gates (finProdFinEquiv (i, k))) ≤
+      A.state (X i) (k * ω) + linkCapacity ends β (X i) * ω := by
     rw [(hP i k).1, Set.Ico_inter_Iio]
     have hRS : A.region (X i) (Set.Ico (k * ω) (min ((k + 1) * ω) t)) ⊆
         A.region (univ.biUnion X) (Set.Iio t) :=
@@ -70,42 +76,44 @@ theorem ThreadedRuntime : Guarantees.Actual.ThreadedRuntime := by
     rw [cut_into A hRS]
     exact (width_mono A sdiff_subset).trans ((width_into_region_le A _ _ _ (forward_of_causal A hC _)).trans
       (Nat.add_le_add le_rfl ((ingress_le A hL _ _ _).trans (Nat.mul_le_mul_left _ window_le))))
-  have hreads : ∀ u, (novelReads (A.declaration (univ.biUnion X) t θ hθ) (P.gates u) : ℝ) ≤ K := by
-    intro u
-    obtain ⟨⟨i, k⟩, rfl⟩ := finProdFinEquiv.surjective u
-    refine (Nat.cast_le.2 (hreadsN i k)).trans ?_
-    push_cast
-    exact add_le_add (hR i k (mul_lt_of_lt_ceil (t := t) hω k.2))
-      (mul_le_mul_of_nonneg_right (hr i) (Nat.cast_nonneg _))
-  have hsize : ∀ u, (A.declaration (univ.biUnion X) t θ hθ).D.size (P.gates u) ≤ Γ := by
-    intro u
-    obtain ⟨⟨i, k⟩, rfl⟩ := finProdFinEquiv.surjective u
-    exact (hP i k).2.1.trans (hΓ i)
-  have hpiece : ∀ u, Small c Γ K ((Nci.SecurityProofs.pull M P).gates u) := fun u =>
-    ⟨Partition.gates_subset_computed _ u,
-      (Nci.SecurityProofs.card_pull_gates_le (M := M) (P := P) u).trans (hsize u),
-      (Nat.cast_le.2 (Nci.SecurityProofs.novelReads_pull M hθM P u)).trans (hreads u)⟩
-  have hcount : b_a * T.M.card ≤ ((n * m : ℕ) : ℝ) * (K * Λ) :=
-    calc b_a * (T.M.card : ℝ) = ∑ u, b_a * ((T.mults ((Nci.SecurityProofs.pull M P).gates u)).card : ℝ) := by
-          rw [card_M_eq_sum T (Nci.SecurityProofs.pull M P), Nat.cast_sum, mul_sum]
-      _ ≤ ∑ u, (novelReads c ((Nci.SecurityProofs.pull M P).gates u) : ℝ) * Λ :=
-          sum_le_sum fun u _ => Nci.SecurityProofs.ThreadedReads c T Γ K b_w b_a d e hbw hba hd hT hW _ (hpiece u)
-      _ ≤ ∑ _u : Fin (n * m), K * Λ := sum_le_sum fun u _ => mul_le_mul_of_nonneg_right (hpiece u).2.2 hΛ
-      _ = _ := by simp
-  refine ⟨hcount, ?_⟩
-  have hm : (m : ℝ) * ω ≤ t + ω := by
-    have := Nat.div_mul_le_self (t + ω - 1) ω
-    rw [← hm_def] at this
-    exact_mod_cast (show m * ω ≤ t + ω by omega)
-  have hdiv : b_a * T.M.card / (n * (K * Λ)) ≤ m := by
-    rcases le_or_gt ((n : ℝ) * (K * Λ)) 0 with h | h
-    · exact (div_nonpos_of_nonneg_of_nonpos (mul_nonneg hba.le (Nat.cast_nonneg _)) h).trans (Nat.cast_nonneg _)
-    · rw [div_le_iff₀ h]
-      calc b_a * (T.M.card : ℝ) ≤ ((n * m : ℕ) : ℝ) * (K * Λ) := hcount
-        _ = m * (n * (K * Λ)) := by push_cast; ring
-  calc (ω : ℝ) * (b_a * T.M.card / (n * (K * Λ)) - 1) ≤ ω * (m - 1) :=
+  refine (Nat.cast_le.2 hreads).trans ?_
+  push_cast
+  exact add_le_add (hR i k (mul_lt_of_lt_ceil hω k.2)) (mul_le_mul_of_nonneg_right (hr i) (Nat.cast_nonneg _))
+
+/-- The runtime from the count: `b_a x ≤ n ⌈t/ω⌉ · KΛ` gives `t ≥ ω (b_a x / (n KΛ) − 1)`, since `⌈t/ω⌉ ω ≤ t + ω`. -/
+theorem runtime_of_count {n t ω : ℕ} {b_a x KΛ : ℝ} (hx : 0 ≤ b_a * x)
+    (h : b_a * x ≤ ((n * ((t + ω - 1) / ω) : ℕ) : ℝ) * KΛ) : (ω : ℝ) * (b_a * x / (n * KΛ) - 1) ≤ t := by
+  have hm : (((t + ω - 1) / ω : ℕ) : ℝ) * ω ≤ t + ω := by
+    exact_mod_cast (Nat.div_mul_le_self (t + ω - 1) ω).trans (Nat.sub_le (t + ω) 1)
+  have hdiv : b_a * x / (n * KΛ) ≤ (((t + ω - 1) / ω : ℕ) : ℝ) := by
+    rcases le_or_gt ((n : ℝ) * KΛ) 0 with h' | h'
+    · exact (div_nonpos_of_nonneg_of_nonpos hx h').trans (Nat.cast_nonneg _)
+    · rw [div_le_iff₀ h']
+      calc b_a * x ≤ ((n * ((t + ω - 1) / ω) : ℕ) : ℝ) * KΛ := h
+        _ = (((t + ω - 1) / ω : ℕ) : ℝ) * (n * KΛ) := by push_cast; ring
+  calc (ω : ℝ) * (b_a * x / (n * KΛ) - 1) ≤ ω * ((((t + ω - 1) / ω : ℕ) : ℝ) - 1) :=
         mul_le_mul_of_nonneg_left (by linarith) (Nat.cast_nonneg _)
     _ ≤ t := by linarith
+
+theorem ThreadedRuntime : Guarantees.Actual.ThreadedRuntime := by
+  intro L E _ _ A ℓ Φ ends β link n X θ hθ t ω Γ R r b_w b_a c T d e hω hX hC hΦ hL hbw hba hd hΓ hr hR hcont hT hW
+  obtain ⟨M, hθM⟩ := hcont
+  obtain ⟨P, hP⟩ := windows_small A ℓ Φ ends β link n X θ hθ t ω Γ R r hω hX hC hΦ hL hΓ hr hR
+  have hΛ : 0 ≤ T.bound (R + r * ω) b_w d e := le_max_of_le_left (Nat.cast_nonneg _)
+  have hpiece : ∀ u, Small c Γ (R + r * ω) ((Nci.SecurityProofs.pull M P).gates u) := fun u =>
+    ⟨Partition.gates_subset_computed _ u, (Nci.SecurityProofs.card_pull_gates_le (M := M) (P := P) u).trans (hP u).1,
+      (Nat.cast_le.2 (Nci.SecurityProofs.novelReads_pull M hθM P u)).trans (hP u).2⟩
+  have hcount : b_a * T.M.card ≤
+      ((n * ((t + ω - 1) / ω) : ℕ) : ℝ) * ((R + r * ω) * T.bound (R + r * ω) b_w d e) :=
+    calc b_a * (T.M.card : ℝ) = ∑ u, b_a * ((T.mults ((Nci.SecurityProofs.pull M P).gates u)).card : ℝ) := by
+          rw [card_M_eq_sum T (Nci.SecurityProofs.pull M P), Nat.cast_sum, mul_sum]
+      _ ≤ ∑ u, (novelReads c ((Nci.SecurityProofs.pull M P).gates u) : ℝ) * T.bound (R + r * ω) b_w d e :=
+          sum_le_sum fun u _ =>
+            Nci.SecurityProofs.ThreadedReads c T Γ (R + r * ω) b_w b_a d e hbw hba hd hT hW _ (hpiece u)
+      _ ≤ ∑ _u : Fin (n * ((t + ω - 1) / ω)), (R + r * ω) * T.bound (R + r * ω) b_w d e :=
+          sum_le_sum fun u _ => mul_le_mul_of_nonneg_right (hpiece u).2.2 hΛ
+      _ = _ := by simp
+  exact ⟨hcount, runtime_of_count (mul_nonneg hba.le (Nat.cast_nonneg _)) hcount⟩
 
 theorem ThreadedRate : Guarantees.Actual.ThreadedRate := by
   intro L E _ _ A ℓ Φ ends β link n X θ hθ t ω p Γ R r b_w b_a c T d e hω hX hC hΦ hL hbw hba hd hΓ hr hwipe hpω hωt
