@@ -59,8 +59,11 @@ def fp8Terms (x y : Fin 32 → ℚ) : List ℚ := List.ofFn fun l => x l * y l
 def fp4Terms (a b : Fin 64 → Pouw.PearlC.Fp4.Nib) (u v : Fin 64 → ℚ) : List ℚ :=
   List.ofFn fun l => Pouw.PearlC.Fp4.decode (a l) * u l * (Pouw.PearlC.Fp4.decode (b l) * v l)
 
-/-- `accounting-fp-grid-exact` (measured only: FP-EXACT r20261016-200609-3d39 on sm_120; LOWBIT-DC
-r20261017-070305-1fe2 on H200 and r20261017-070314-2de1 on B200; no vendor document). **FP-GRID, FP8**: an E4M3 MMA
+/-- `accounting-fp-grid-exact` (measured only: FP-EXACT r20261016-200609-3d39 on sm_120; LOWBIT-DC's sweeps
+r20261017-070305-1fe2 on H200 and r20261017-070314-2de1 on B200, whose window tests are exact at every gap ≤ 13 (H200)
+and ≤ 23 (B200) and inexact at 14 and 24, the accumulator included, and whose one failure outside the controls, a
+27-bit gap on B200, lies outside the regime; both exit 4, recorded failed, because the broader "exact whenever
+FP32-representable" fails; no vendor document). **FP-GRID, FP8**: an E4M3 MMA
 step whose finite accumulator and products lie in the small-grid regime at `p` writes the exact sum. Claimed at
 `p = 24` for sm_120's QMMA and B200's `kind::f8f6f4`, and at `p = 14` for H200's `wgmma` (its adder is 14 bits wide,
 the accumulator included). Re-testable by auditor-run conformance vectors on a same-SKU device. -/
@@ -71,7 +74,8 @@ def Fp8GridExact (p : ℕ) (step : Fp8Step) : Prop :=
         wordQ (step acc a b) = some (c + (fp8Terms x y).sum)
 
 /-- `accounting-fp-grid-exact` (measured only: FP-EXACT-SCALES r20261016-214357-f15d on sm_120; LOWBIT-DC
-r20261017-070314-2de1 on B200; no vendor document). **FP-GRID, FP4**: a block-scaled E2M1 MMA step with scale format
+r20261017-070314-2de1 on B200, MXF4 and NVF4 windows exact at every gap ≤ 23 and inexact at 24; no vendor document).
+**FP-GRID, FP4**: a block-scaled E2M1 MMA step with scale format
 `f`, whose finite accumulator and scaled products lie in the small-grid regime at `p`, writes the exact sum. Claimed at
 `p = 24` for sm_120's OMMA and B200's `kind::mxf4nvf4`, for UE4M3 (NVFP4) and UE8M0 (MXFP4). H200 has no FP4 kind. -/
 def Fp4GridExact (f : Pouw.PearlC.Fp4.ScaleFmt) (p : ℕ) (step : Fp4Step) : Prop :=
@@ -82,8 +86,9 @@ def Fp4GridExact (f : Pouw.PearlC.Fp4.ScaleFmt) (p : ℕ) (step : Fp4Step) : Pro
       FpGridSmall p c (fp4Terms a b u v) →
         wordQ (step acc a b sa sb) = some (c + (fp4Terms a b u v).sum)
 
-/-- `accounting-fp-zero` (measured only: the registry's sm_120 models, "every zero result is +0" for FP4, and
-LOWBIT-DC on B200, "never −0"; not separately recorded on H200; no vendor document). **FP-ZERO**: a step's zero result
+/-- `accounting-fp-zero` (measured only: the registry's FP4 models on sm_120 and B200, `underflow_zero = "positive"`;
+no −0 word in any chain of LOWBIT-DC's sweeps on B200 and H200, which don't count their zero results; no vendor
+document). **FP-ZERO**: a step's zero result
 is the `+0` word. A design that reads the word's bits at zero, rather than its value, needs it. -/
 def FpZeroPositive {α : Type} (word : α → ℕ) : Prop := ∀ x, wordQ (word x) = some 0 → word x = 0
 
@@ -100,8 +105,9 @@ def Fp8Model (P : Pipeline) (step : Fp8Step) : Prop :=
 art:3e02931df28cccd398de4219f9d977371a58cdc6e8addfb7ff0a6269e5481b0e and
 art:d8d4d1b602c9fde61df218c315430535fe5181882ab6b26c2b95dd81dc1b5d92; no vendor document).
 **FP-MODEL, FP4**: wherever the atom `q`'s bit-exact step is defined, the step writes its word. Claimed for sm_120 at
-`Pouw.PearlC.Fp4.sm120Nvf4` and `sm120Mxf4` (Td is open for NVF4). B200's FP4 models are pinned in the Python registry
-only. -/
+`Pouw.PearlC.Fp4.sm120Nvf4` and `sm120Mxf4` (Td is open for NVF4). B200's FP4 models, pinned in the Python registry
+only (`BLACKWELL_SM100_NVF4`, `BLACKWELL_SM100_MXF4`: tcgen05, 0 mismatches over 16,461,824 and 12,898,304 elements),
+carry sm_120's parameters, so B200's claim is the same two instances at its k64 slice. -/
 def Fp4Model (q : Pouw.PearlC.Fp4.Fp4Atom) (step : Fp4Step) : Prop :=
   ∀ (acc : ℕ) (a b : Fin 64 → Pouw.PearlC.Fp4.Nib) (sa sb : ℕ → Fin 256) (w : ℕ),
     q.step acc (List.ofFn a) (List.ofFn b) (List.ofFn fun j : Fin q.scales => sa j.val)
