@@ -3,8 +3,8 @@
 # (cpw_sass_count.py), then on the device: every route bit-exact against the host's reference, and its rate at 1, 2,
 # 4 warps a SMSP and full occupancy. From a pushed commit:
 #
-#   research run --on <node> --project verity --campaign eps1 --source <tree> --cwd source --env GPU_LEASE_WHO=<id> \
-#     -- bash benchmarks/pouw/theory/cpw_sass.sh
+#   research run --queue --on <node> --gpus 1 --mem-gb 8 --max-min 25 --project verity --campaign eps1 --source <tree> \
+#     --cwd source --env QUEUED=1 -- bash benchmarks/pouw/theory/cpw_sass.sh
 #
 # It builds the binary (CUDA 13.0) into $OUT/bin and dumps its SASS into $OUT/sass; the device part runs under one
 # gpu-lease (device.txt, env/gpu.csv), and cpw_sass_count.py --device sets the rates beside the counts (cpw.json).
@@ -27,7 +27,9 @@ if [ "${CPW_LEASED:-}" != 1 ]; then
   python3 "$HERE/cpw_sass_count.py" "$OUT/sass/cpw_sass.sass" >"$OUT/sass/counts.json"
   lease=()
   command -v gpu-lease >/dev/null && lease=(gpu-lease 1 --wait --max-min 20 --)
-  [ ${#lease[@]} -eq 0 ] && echo "cpw_sass.sh: no gpu-lease on this node; running on its GPU directly" >&2
+  # under `research run --queue --gpus 1` (QUEUED=1) the queue leases the GPU around the whole job
+  [ "${QUEUED:-0}" = 1 ] && lease=()
+  [ ${#lease[@]} -eq 0 ] && echo "cpw_sass.sh: no gpu-lease (or queued); running on the GPU it was given" >&2
   "${lease[@]}" env CPW_LEASED=1 BIN="$BIN" bash "${BASH_SOURCE[0]}"
   rc=$?
   python3 "$HERE/cpw_sass_count.py" "$OUT/sass/cpw_sass.sass" --device "$OUT/device.txt" >"$OUT/cpw.json"
