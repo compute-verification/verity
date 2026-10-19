@@ -1,4 +1,4 @@
-import Properties.Proofs.Nci
+import Properties.Proofs.Nci.DescAgree
 
 /-!
 # `Prog.gate`'s walk, within `Desc.walkable`
@@ -9,7 +9,10 @@ potential finishes within any fuel above the potential it starts at (`run_of_pot
 is its part's element, found by bisection over the parts' starts (`seq_get`, `bisect_spec`), and a strided part's
 elements lie between the corners `Flock.Program.parsePartsIn` checks (`strided_corners`), so every reference a parsed
 sequence holds names a leaf (`parsePartsIn_valid`). A composite's nodes' members hold fewer activations than it and nest
-less deep (`activations_child`, `depths_child`), which is what the walk's potential lowers.
+less deep (`activations_child`, `depths_child`), which is what the walk's potential lowers. On bodies laid out as the
+decoder lays them (`LaidOut`), `Prog.gate`'s descent goes one level down a step to the activation holding a primitive
+(`gateStep_holds`), so it locates every gate of the root's within `Desc.walkable`'s fuel wherever the operands it reaches
+resolve (`gate_ok_of`, `depth_lt_fuel`).
 -/
 
 namespace NciCheck.Properties.SecurityProofs.Walk
@@ -708,6 +711,142 @@ theorem depths_child (P : Prog) (hc : Desc.calleesFirst P = true) {d : ℕ} (hd 
   have := le_foldl_max_of_mem (fun n : Flock.Program.Node => (Desc.depths P)[n.fn]!)
     (P.defs[d]!).body.nodes.toList 0 n (Array.mem_toList_iff.2 hn)
   rw [Array.foldl_toList] at this
+  omega
+
+/-- **A composite's body laid out as the decoder lays it** (`Flock.Program.getDef`): its offsets from 0 to its gates, each
+node's gates its members' callee's after the ones before (a primitive node's one: one member, of one gate). -/
+def LaidOut (P : Prog) (d : ℕ) : Prop :=
+  (P.defs[d]!).prim = false →
+    (P.defs[d]!).body.offsets[0]! = 0 ∧ (P.defs[d]!).body.offsets[(P.defs[d]!).body.nodes.size]! = (P.defs[d]!).gates ∧
+    ∀ k < (P.defs[d]!).body.nodes.size, (P.defs[d]!).body.offsets[k + 1]! =
+      (P.defs[d]!).body.offsets[k]! + ((P.defs[d]!).body.nodes[k]!).members * (P.defs[((P.defs[d]!).body.nodes[k]!).fn]!).gates
+
+/-- What `Prog.gate P g`'s walk keeps: an activation of a composite Definition, `g` within its gates. -/
+def Holds (P : Prog) (g : ℕ) (sc : Flock.Program.Scope) : Prop :=
+  sc.d < P.defs.size ∧ (P.defs[sc.d]!).prim = false ∧ sc.off ≤ g ∧ g - sc.off < (P.defs[sc.d]!).gates
+
+/-- **The member `gateStep` goes into**: `x` gates into a node, member `m` holds it, `x - m · gates` into that member. -/
+theorem member_of (nd : Flock.Program.Node) (cg x : ℕ) (hx : x < nd.members * cg) :
+    (if (nd.form == .prim || nd.form == .call) = true then 0 else x / cg) < nd.members ∧
+      (if (nd.form == .prim || nd.form == .call) = true then 0 else x / cg) * cg ≤ x ∧
+      x - (if (nd.form == .prim || nd.form == .call) = true then 0 else x / cg) * cg < cg := by
+  have hpos : 0 < cg := Nat.pos_of_ne_zero (by rintro rfl; simp at hx)
+  unfold Flock.Program.Node.members at *
+  rcases nd with ⟨f, fn, args, out, axes, n, nxs⟩
+  cases f
+  · change x < 1 * cg at hx
+    change 0 < 1 ∧ 0 * cg ≤ x ∧ x - 0 * cg < cg
+    omega
+  · change x < 1 * cg at hx
+    change 0 < 1 ∧ 0 * cg ≤ x ∧ x - 0 * cg < cg
+    omega
+  · change x < n * cg at hx
+    change x / cg < n ∧ x / cg * cg ≤ x ∧ x - x / cg * cg < cg
+    refine ⟨(Nat.div_lt_iff_lt_mul hpos).2 hx, Nat.div_mul_le_self x cg, ?_⟩
+    have h1 := Nat.div_add_mod x cg
+    rw [Nat.mul_comm] at h1
+    have h2 := Nat.mod_lt x hpos
+    omega
+  · change x < n * cg at hx
+    change x / cg < n ∧ x / cg * cg ≤ x ∧ x - x / cg * cg < cg
+    refine ⟨(Nat.div_lt_iff_lt_mul hpos).2 hx, Nat.div_mul_le_self x cg, ?_⟩
+    have h1 := Nat.div_add_mod x cg
+    rw [Nat.mul_comm] at h1
+    have h2 := Nat.mod_lt x hpos
+    omega
+
+/-- **One step of `Prog.gate`'s walk goes down**: from an activation that `Holds`, where the operands of a primitive node's
+member resolve, `gateStep` ends at a primitive or moves to an activation that `Holds`, of a Definition nesting less deep. -/
+theorem gateStep_holds (P : Prog) (hc : Desc.calleesFirst P = true) (hlo : ∀ d < P.defs.size, LaidOut P d) {g : ℕ}
+    {sc : Flock.Program.Scope} (hs : Holds P g sc)
+    (hops : ∀ k < (P.defs[sc.d]!).body.nodes.size, ∀ m < ((P.defs[sc.d]!).body.nodes[k]!).members, ∀ e,
+      Flock.Program.operands P sc ((P.defs[sc.d]!).body.nodes[k]!) m ≠ .error e) :
+    (∃ x, Flock.Program.gateStep P g sc = .ok (.inl x)) ∨
+      ∃ sc', Flock.Program.gateStep P g sc = .ok (.inr sc') ∧ Holds P g sc' ∧
+        (Desc.depths P)[sc'.d]! < (Desc.depths P)[sc.d]! := by
+  suffices H : ∀ r, Flock.Program.gateStep P g sc = r → (∀ e, r ≠ .error e) ∧ ∀ sc', r = .ok (.inr sc') →
+      Holds P g sc' ∧ (Desc.depths P)[sc'.d]! < (Desc.depths P)[sc.d]! by
+    rcases h : Flock.Program.gateStep P g sc with e | (x | sc')
+    · exact absurd rfl ((H _ h).1 e)
+    · exact Or.inl ⟨x, rfl⟩
+    · exact Or.inr ⟨sc', rfl, (H _ h).2 sc' rfl⟩
+  intro r h
+  obtain ⟨hd, hp, hoff, hlt⟩ := hs
+  obtain ⟨h0, hK, hnodes⟩ := hlo sc.d hd hp
+  obtain ⟨k0, hk0, hb0⟩ := DescAgree.node_exists _ (P.defs[sc.d]!).body.nodes.size h0 (g - sc.off)
+    (by rw [hK]; exact hlt)
+  unfold Flock.Program.gateStep at h
+  simp only [bind, Except.bind] at h
+  split at h
+  · rename_i k hk
+    obtain ⟨hkK, hpk⟩ := DescAgree.find?_range_some hk
+    simp only [Bool.and_eq_true, decide_eq_true_eq] at hpk
+    have hx : g - sc.off - (P.defs[sc.d]!).body.offsets[k]! <
+        ((P.defs[sc.d]!).body.nodes[k]!).members * (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).gates := by
+      have := hnodes k hkK
+      omega
+    obtain ⟨hm1, hm2, hm3⟩ := member_of ((P.defs[sc.d]!).body.nodes[k]!) _ _ hx
+    by_cases hpc : (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).prim = true
+    · simp only [hpc, ite_true] at h
+      split at h
+      · rename_i e he
+        exact absurd he (hops k hkK _ hm1 e)
+      · simp only [pure, Except.pure] at h
+        subst h
+        exact ⟨fun e he => by cases he, fun sc' he => by cases he⟩
+    · simp only [hpc, Bool.false_eq_true, ite_false, pure, Except.pure] at h
+      subst h
+      refine ⟨fun e he => by cases he, fun sc' he => ?_⟩
+      simp only [Except.ok.injEq, Sum.inr.injEq] at he
+      subst he
+      have hmem : (P.defs[sc.d]!).body.nodes[k]! ∈ (P.defs[sc.d]!).body.nodes := by
+        rw [getElem!_pos _ k hkK]
+        exact Array.getElem_mem hkK
+      have hfn := calleesFirst_spec P hc sc.d hd _ hmem
+      simp only [Holds, Flock.Program.Prog.child, Flock.Program.Scope.d, Flock.Program.Scope.off]
+      refine ⟨⟨by omega, by simpa using hpc, by omega, by omega⟩, depths_child P hc hd hp hmem⟩
+  · exfalso
+    first
+    | (rename_i hne
+       have hnone := Option.eq_none_iff_forall_ne_some.2 hne
+       rw [Array.find?_eq_none] at hnone
+       exact hnone k0 (Array.mem_range.2 hk0) (by simp only [Bool.and_eq_true, decide_eq_true_eq]; exact hb0))
+    | (rename_i hne _
+       have hnone := Option.eq_none_iff_forall_ne_some.2 hne
+       rw [Array.find?_eq_none] at hnone
+       exact hnone k0 (Array.mem_range.2 hk0) (by simp only [Bool.and_eq_true, decide_eq_true_eq]; exact hb0))
+
+/-- **`Prog.gate`'s walk goes down to a primitive**: on a Program its decoder laid out, every gate of the root's is located
+within the root's depth of steps, where the operands of each primitive node's member it reaches resolve. -/
+theorem gate_ok_of (P : Prog) (hc : Desc.calleesFirst P = true) (hlo : ∀ d < P.defs.size, LaidOut P d)
+    (hr : P.root < P.defs.size) (hrp : (P.defs[P.root]!).prim = false)
+    (hfuel : (Desc.depths P)[P.root]! < Flock.Steps.FUEL) {g : ℕ} (hg : g < (P.defs[P.root]!).gates)
+    (hops : ∀ sc, Holds P g sc → ∀ k < (P.defs[sc.d]!).body.nodes.size, ∀ m < ((P.defs[sc.d]!).body.nodes[k]!).members,
+      ∀ e, Flock.Program.operands P sc ((P.defs[sc.d]!).body.nodes[k]!) m ≠ .error e) :
+    ∃ x, P.gate g = .ok x := by
+  obtain ⟨b, hb, -⟩ := run_of_potential (what := "gate location") (step := Flock.Program.gateStep P g) (Holds P g)
+    (fun sc => (Desc.depths P)[sc.d]!)
+    (fun _ => True)
+    (fun sc hs => by
+      rcases gateStep_holds P hc hlo hs (hops sc hs) with ⟨x, hx⟩ | ⟨sc', h1, h2, h3⟩
+      · exact Or.inl ⟨x, hx, trivial⟩
+      · exact Or.inr ⟨sc', h1, h2, h3⟩)
+    Flock.Steps.FUEL P.rootScope ⟨hr, hrp, Nat.zero_le _, by show g - 0 < (P.defs[P.root]!).gates; omega⟩ hfuel
+  have hng : ¬ (g ≥ (P.defs[P.root]!).gates) := by omega
+  refine ⟨b, ?_⟩
+  simp only [Flock.Program.Prog.gate, hng, ite_false, bind, Except.bind, pure, Except.pure]
+  exact hb
+
+/-- **`Desc.walkable` leaves the descent its fuel.** -/
+theorem depth_lt_fuel (P : Prog) (h : Desc.walkable P = true) : (Desc.depths P)[P.root]! < Flock.Steps.FUEL := by
+  unfold Desc.walkable Desc.walkBound at h
+  simp only [Bool.and_eq_true, decide_eq_true_eq] at h
+  have h2 := h.2
+  have : (Desc.depths P)[P.root]! + 2 ≤
+      ((Desc.activations P)[P.root]! + 1) * ((Desc.depths P)[P.root]! + 2) := by
+    first
+    | exact Nat.le_mul_of_pos_left _ (by omega)
+    | nlinarith
   omega
 
 end NciCheck.Properties.SecurityProofs.Walk
