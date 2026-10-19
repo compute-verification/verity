@@ -122,6 +122,13 @@ def ands(rec: dict) -> str:
     return "re-cut not run"
 
 
+def overlap(progs: list[dict]) -> str:
+    r0 = [p for p in progs if p["rank"] == 0]
+    wl = sum(p["gates"] for p in r0 if p["part"] == "workload")
+    req = sum(p["gates"] for p in r0 if p["part"].startswith("request"))
+    return f"{req / wl:.2f}×" if wl else "no workload Program"
+
+
 def pick(recs: list[dict]) -> dict:
     """The line's representative: a spec whose re-cut has ANDs, else one with a re-cut, else the largest."""
     for test in (lambda r: (r.get("recut") or {}).get("ands_today_pinned"), lambda r: "units16" in (r.get("recut") or {}),
@@ -200,16 +207,23 @@ def main() -> int:
                    "representative": rep["id"], "rule_runs": len(ruled), "rule_refused": ref, "class_A": klass(hi_b),
                    "owner": "@circuits"})
     dropped = sorted(t for t, r in recs.items() if NOT_ROWS.match(r["family"]))
-    under = sorted(r["id"] for r in recs.values() if r.get("bits") is not None and r["bits"] <= 16 and not NOT_ROWS.match(r["family"]))
+    under = sorted(r["id"] for r in recs.values() if r.get("bits") is not None and r["bits"] <= 16 and not NOT_ROWS.match(r["family"])
+                   and r.get("gates"))
+    empty = sorted({r["family"] for r in recs.values() if r.get("gates") == 0 and not NOT_ROWS.match(r["family"])})
     unmeasured = sorted(r["id"] for r in recs.values() if r.get("bits") is None)
     dis = sorted(r["id"] for r in recs.values() if r.get("disagree"))
     out = ["## vLLM rows", "", *head, *lines, "",
            f"{sum(len(v) for v in lines_by.values())} template specs over 16 bits in {len(lines)} lines; {len(under)} at or "
-           f"under 16 ({', '.join(sorted({recs[t]['family'] for t in under}))}); {len(unmeasured)} not measured; "
+           f"under 16 ({', '.join(sorted({recs[t]['family'] for t in under}))}); {', '.join(empty) or 'none'} of no gate, which "
+           f"main's rule already refuses; {len(unmeasured)} not measured; "
            f"{len(dis)} disagreements between the rule's walk and the descriptor count; {len(dropped)} root constants and workload "
            f"roots left out (not templates).", "",
            "Programs read: " + "; ".join(f"{row}: {len(ps)} ({sum(1 for p in ps if p['digest_ok'])} digests match the row's pins)"
-                                         for row, ps in sorted(progs.items())), ""]
+                                         for row, ps in sorted(progs.items())), "",
+           "A row's request Programs against its workload Program, in gates (rank 0): " + "; ".join(
+               f"{row} {overlap(ps)}" for row, ps in sorted(progs.items())) + ". Over 1.00×, the request Programs hold "
+           "work the workload Program does once, so a row's units per rank overcount its workload's (by that factor in "
+           "gates overall; not split per Definition).", ""]
     kj = []
     if a.known:
         kl = ["| Definition | committed bits | rule | offered by | measured at | re-cut: 16-bit units per instance | "
