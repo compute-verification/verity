@@ -29,9 +29,7 @@ namespace Masked
 theorem hiOff_length (ls : List FlockSoundness.Accounting.Level) :
     hiOff ls ls.length = (ls.tail.map fun lv => 2 ^ lv.logLen).sum := by
   unfold hiOff
-  have e : ls.length - 1 = ls.tail.length := by rw [List.length_tail]
-  rw [e]
-  simp
+  rw [List.take_of_length_le (by simp)]
 
 theorem length_le_sum (ls : List FlockSoundness.Accounting.Level) :
     ls.length ≤ (ls.map fun lv => 2 ^ lv.logLen).sum := by
@@ -64,6 +62,27 @@ noncomputable abbrev hiTape (P : Composed.LigProver) (x : Msg) (t : Fin Claims.F
     (j : Fin (jOf x)) (r : Fin 2) : Fin (Composed.hiCount (zkTab x j).table) → ZkView.Salt :=
   (((TapePlan.ofLayout (TapeLayout.exe P) exeTape).tape x t).1 j).2.2.2.2.2.2.2.2.2 r
 
+/-- `TapePlan.ofLayout`'s base of table `j` is the layout's reading of cell `j`. -/
+theorem ofLayout_tape_base {P : Composed.LigProver} (L : TapeLayout P)
+    (z : (Fin Claims.Flock.zkTableCap → L.Cell) → FlockComplete.TapeZk) (x : Msg)
+    (t : Fin Claims.Flock.zkTableCap → L.Cell) (j : Fin (jOf x)) :
+    ((TapePlan.ofLayout L z).tape x t).1 j = (L.read x j (t (Fin.castLE (jOf_le_cap x) j))).1 :=
+  rfl
+
+/-- `exeRead`'s levels ≥ 1 salts: the cell's, by level and position or at a leftover place, at `ιH`. -/
+theorem exeRead_hi {z : ZkView.Sizes} (hz : Fits z zMax) {h : ℕ}
+    (ιH : Fin h ↪ (Fin (schMax + 1) × Fin schMax) ⊕ Fin schMax) (c : ExeCell) (r : Fin 2) :
+    (exeRead hz ιH c).1.2.2.2.2.2.2.2.2.2 r = Sum.elim (c.1.2.2.2.2.2.2.2.2.2 r).1 (c.1.2.2.2.2.2.2.2.2.2 r).2 ∘ ιH :=
+  rfl
+
+/-- **Table `j`'s rep `r` levels ≥ 1 salts at the executable's layout** are cell `j`'s at `hiEmb`. Each side unfolds to
+the other by the definitions alone, so the kernel never compares `schMax` with another size. -/
+theorem hiTape_eq (P : Composed.LigProver) (x : Msg) (t : Fin Claims.Flock.zkTableCap → ExeCell)
+    (j : Fin (jOf x)) (r : Fin 2) :
+    hiTape P x t j r = Sum.elim ((t (Fin.castLE (jOf_le_cap x) j)).1.2.2.2.2.2.2.2.2.2 r).1
+      ((t (Fin.castLE (jOf_le_cap x) j)).1.2.2.2.2.2.2.2.2.2 r).2 ∘ hiEmb x j :=
+  exeRead_hi (fits_zkTab P (zkTab x j)) (hiEmb x j) (t (Fin.castLE (jOf_le_cap x) j)) r
+
 /-- **The salts the model hands levels ≥ 1 are the executable's**: at the executable's layout, table `j`'s rep `r`
 salt at level `l ≥ 1` and position `p` of its tree, read at `hiIdx`, is the masked prover's tape's `salt j r l p`. -/
 theorem hiSalt_exe (P : Composed.LigProver) (x : Msg) (t : Fin Claims.Flock.zkTableCap → ExeCell)
@@ -71,27 +90,27 @@ theorem hiSalt_exe (P : Composed.LigProver) (x : Msg) (t : Fin Claims.Flock.zkTa
     hiSalt (zkTab x j).table.sch.levels (hiTape P x t j r) l p = (exeTape t).salt j.val r.val l p := by
   have hc : j.val < Claims.Flock.zkTableCap := lt_of_lt_of_le j.isLt (jOf_le_cap x)
   have hn : Composed.hiCount (zkTab x j).table ≤ schMax := hi_le (zkTab x j)
-  have hcount : Composed.hiCount (zkTab x j).table =
-      2 * (((zkTab x j).table.sch.levels).tail.map fun lv => 2 ^ lv.logLen).sum := rfl
   have hk : hiOff (zkTab x j).table.sch.levels l + p < Composed.hiCount (zkTab x j).table := by
     have := hiOff_add_lt h
+    unfold Composed.hiCount
     omega
   have hl' : l < schMax + 1 := by
     have := le_sum_tail h
+    unfold Composed.hiCount at hn
     omega
   have hp' : p < schMax := by omega
   have hq : HiV (zkTab x j).table.sch.levels (⟨l, hl'⟩, ⟨p, hp'⟩) := h
   have hl0 : l ≠ 0 := by have := h.1; omega
+  have he : hiEmb x j ⟨hiIdx (zkTab x j).table.sch.levels (⟨l, hl'⟩, ⟨p, hp'⟩), hk⟩ = .inl (⟨l, hl'⟩, ⟨p, hp'⟩) :=
+    hiEmbOf_hiIdx _ hn hq hk
   have hR : saltAt (cellAt t j.val) r.val l p =
-      ZkView.saltBytes (((t ⟨j.val, hc⟩).1.2.2.2.2.2.2.2.2.2 r).1 (⟨l, hl'⟩, ⟨p, hp'⟩)) := by
+      ZkView.saltBytes (((t (Fin.castLE (jOf_le_cap x) j)).1.2.2.2.2.2.2.2.2.2 r).1 (⟨l, hl'⟩, ⟨p, hp'⟩)) := by
     rw [cellAt_lt t hc]
     simp only [saltAt, fAt, hl0, r.isLt, hl', hp', ↓reduceIte, ↓reduceDIte] <;> rfl
   unfold hiSalt
   rw [ite_eq_left h, fAt_lt _ _ hk]
-  change ZkView.saltBytes (Sum.elim ((t ⟨j.val, hc⟩).1.2.2.2.2.2.2.2.2.2 r).1 ((t ⟨j.val, hc⟩).1.2.2.2.2.2.2.2.2.2 r).2
-      (hiEmbOf (zkTab x j).table.sch.levels hn ⟨hiIdx (zkTab x j).table.sch.levels (⟨l, hl'⟩, ⟨p, hp'⟩), hk⟩)) =
-    saltAt (cellAt t j.val) r.val l p
-  rw [hiEmbOf_hiIdx _ hn hq hk, hR] <;> rfl
+  show ZkView.saltBytes (hiTape P x t j r ⟨hiIdx (zkTab x j).table.sch.levels (⟨l, hl'⟩, ⟨p, hp'⟩), hk⟩) = _
+  rw [hiTape_eq, Function.comp_apply, he, Sum.elim_inl, hR]
 
 /-- `hiSalt_exe` as functions: the tape's salts on the schedule's levels ≥ 1 and their positions, empty off them. -/
 theorem hiSalt_exe_eq (P : Composed.LigProver) (x : Msg) (t : Fin Claims.Flock.zkTableCap → ExeCell)
