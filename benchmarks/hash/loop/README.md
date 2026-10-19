@@ -48,9 +48,12 @@ arm's measures, each measurement naming its `arm` (stock, sha512, blake3, sha512
   `summary.json` and `runs.jsonl` at B32), as the loop's result doc, put as `bench-result/v1` and labeled with `label.py
   --workload glm-5.3 --result-art`; iteration 0 is circuits' r20261018-194044-414f (rows-sha512) and -195722-b284 (rows-layer-4k).
 - `plot.py`: iteration against TPOT and throughput overhead (`--measures` for more), one row of panels per workload, one line per
-  (GPU, workload:arm), from the evidence store only (`research data select --label campaign=hash-loop --kind bench-result/v1`,
-  after `research data refresh`, since each run publishes its result from its node); a result labeled `kernel_outcome=voided` is
-  not plotted; `--table` prints the iteration table.
+  (GPU, workload:arm, served-pin state), pinned and unpinned never averaged together (pinned markers filled, unpinned hollow),
+  from the evidence store only (`research data select --label campaign=hash-loop --kind bench-result/v1`, after `research data
+  refresh`, since each run publishes its result from its node); a maxtput workload's throughput panel plots its loss against
+  its card's native reference run (`native_loss_pct`, which maxtput's `row.py` publishes); a result labeled
+  `kernel_outcome=voided` or `superseded_by` is not plotted; `--table` prints the iteration table, with the same-cycle
+  overhead and the loss against native side by side.
 
 ~~~sh
 OUT=/tmp/loop uv run --with matplotlib python3 benchmarks/hash/loop/plot.py --table
