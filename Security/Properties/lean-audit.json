@@ -7,6 +7,7 @@
   "Properties.Proofs.Pouw.Check",
   "Properties.Proofs.Pouw.Commit",
   "Properties.Nci",
+  "Properties.Nci.Threads",
   "Properties.Proofs.Nci",
   "Properties.CertifierDevice",
   "Properties.Proofs.CertifierDevice",
@@ -40,6 +41,14 @@
  ],
  "proved_in": ["../Proofs"],
  "assumptions": {
+  "Nci.Assumptions.WeightsIncompressible": {
+   "owner": "@lean",
+   "digest": "a9832cc41ed84cd3c55eccc606483e9c83d87fb29e05d1b1f92bb2680d32f8d8"
+  },
+  "Nci.Assumptions.WeightsIncompressibleSlots": {
+   "owner": "@lean",
+   "digest": "bc370825a2d24097f1a43037b354dac79b31c91c8e1c3fe00f7671516529c399"
+  },
   "Pous.P2.Assumptions.CoinCommitHides": {
    "owner": "@memory-accounting",
    "digest": "cd2e704557c1d6266ff3cb8dde135be3e5538a7c8748cc0f03d743dc30e958cb"
@@ -76,6 +85,7 @@
   "Properties.Nci",
   "Definitions.Core",
   "Definitions.Nci",
+  "Models.Nci.Assumptions.Threads",
   "NciCheck.Check",
   "Flock",
   "Properties.CertifierDevice",
@@ -130,7 +140,14 @@
    "why": "the commitments' properties are stated against the port's own functions, on Lean core: nothing of Mathlib or of `security`"
   },
   "Properties.Nci": {
-   "imports": ["Mathlib", "Definitions.Core", "Definitions.Nci", "NciCheck.Check", "Properties.Nci"],
+   "imports": [
+    "Mathlib",
+    "Definitions.Core",
+    "Definitions.Nci",
+    "Models.Nci.Assumptions.Threads",
+    "NciCheck.Check",
+    "Properties.Nci"
+   ],
    "except": [],
    "why": "a property is stated over the definitions and the code it is about, never over a proof"
   },
@@ -268,6 +285,30 @@
    "signature": ["NciCheck.Properties.SecurityProofs.Reports : NciCheck.Properties.Reports"],
    "assumptions": [],
    "type_hash": "59c48e97a1c228c05c3803b4a5d93007a3f072cd15f9674236c7127b2a6da7a8"
+  },
+  "NciCheck.Properties.SecurityProofs.Throttles": {
+   "owner": "@training",
+   "signature": ["NciCheck.Properties.SecurityProofs.Throttles : NciCheck.Properties.Throttles"],
+   "assumptions": [],
+   "type_hash": "0fe2f070c0b72cc35e27413beb30e96b15b67e4f02ed31ca681c0c23ee4b1d13"
+  },
+  "NciCheck.Properties.SecurityProofs.ThrottlesDark": {
+   "owner": "@training",
+   "signature": ["NciCheck.Properties.SecurityProofs.ThrottlesDark : NciCheck.Properties.ThrottlesDark"],
+   "assumptions": [],
+   "type_hash": "2946c7b3ecc774a6164a99681d6e74666b4ad97389d7bd9a99db307ea17f7b7d"
+  },
+  "NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots": {
+   "owner": "@training",
+   "signature": ["NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots : NciCheck.Properties.ThrottlesDarkSlots"],
+   "assumptions": [],
+   "type_hash": "2757fed674164c3abc47625625ec2f70fde5e2127f533a4797c7b9c2f38cfeb7"
+  },
+  "NciCheck.Properties.SecurityProofs.ThrottlesSlots": {
+   "owner": "@training",
+   "signature": ["NciCheck.Properties.SecurityProofs.ThrottlesSlots : NciCheck.Properties.ThrottlesSlots"],
+   "assumptions": [],
+   "type_hash": "91237b6c6a008d3e0335709e5b8ce6d37b069d00da473e97a96dc9b7c64d0263"
   },
   "NciCheck.Properties.SecurityProofs.Witnesses": {
    "owner": "@network-accounting",
@@ -1549,6 +1590,22 @@
     "outcome": "accept"
    },
    "NciCheck.Properties.SecurityProofs.Reports": {
+    "function": "NciCheck.evaluate",
+    "outcome": "accept"
+   },
+   "NciCheck.Properties.SecurityProofs.Throttles": {
+    "function": "NciCheck.evaluate",
+    "outcome": "accept"
+   },
+   "NciCheck.Properties.SecurityProofs.ThrottlesDark": {
+    "function": "NciCheck.evaluate",
+    "outcome": "accept"
+   },
+   "NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots": {
+    "function": "NciCheck.evaluate",
+    "outcome": "accept"
+   },
+   "NciCheck.Properties.SecurityProofs.ThrottlesSlots": {
     "function": "NciCheck.evaluate",
     "outcome": "accept"
    },
@@ -3130,31 +3187,49 @@
    ]
   },
   "Definitions.Core.Circuit": {
-   "digest": "f463bd9c6e109b58644bd7fd3bc72db1cd65b21a820a3486f99af9e44f920e86",
+   "digest": "8d30bf58102944f0e63cb23ba00eabc3c454089939445e8cddd542251c8e9c8e",
    "definitions": {
     "Verity.Circuit": "c86ddd734da68edae1a4e99343f0dfc3e717418d0f7bc8a55a8a33af0f471a17",
     "Verity.Circuit.N": "41024293e7ed9a8b1848ff13d93bc8ddd2e8afa1f9ef29855dca860b83bd8022",
+    "Verity.Circuit.Transcript": "143a8f7857fb47ed184789c9def351742e213359fb13b44d565fce324fbf8853",
+    "Verity.Circuit.computed": "bfe4079fbbb9d2e78b9758d517ec8e9f9df876d8bbfb7a0d9c71531da5ebc9ef",
     "Verity.Circuit.into": "3aa2233c88538a9df262b86079d2755e8d2aab73ede32959405d8df3937da797",
     "Verity.Circuit.isInput": "afd969b1411d8262286149c0c2b784a934deee04648709a0a08fd6c9dabe544c",
+    "Verity.Circuit.op": "52c6b3809c85fa1ecc4a24cdb391a9d07d94cf708e48cf598179a0b7b9631b03",
+    "Verity.Circuit.outputs": "7f749644690f06b37f98f3a6c086038be1ad082c6c849759ca0bf45813499e7f",
     "Verity.Circuit.reads": "ba5e38dc5aed7fbf8124167038ac7db763251a85f1b86a0162b1e9b922c77955",
     "Verity.Circuit.size": "72bd6646c19ce3e502a8b20391366dd1932d3a5e566282b3da6b0a4044d286f2",
     "Verity.Circuit.w": "71844378ec086d9fae9d11086d055d967b6904caee3f9eef3f104f31129a3bee",
-    "Verity.Circuit.width": "30102d0e543037d368612b6aa563e89d5c8da10a549ae05cec3d1243a99788d5"
+    "Verity.Circuit.width": "30102d0e543037d368612b6aa563e89d5c8da10a549ae05cec3d1243a99788d5",
+    "Verity.Containment": "ef91bd765157ac65679b56876479cacc4bf335c1b982c41789921ac3e44c93d5",
+    "Verity.Containment.emb": "0ff2bc5d87819c1b137faf92b3e7ce7511dfd198564701bec4b8f44351c82644"
    },
    "guarantees": [
     "NciCheck.Properties.SecurityProofs.Decodes",
     "NciCheck.Properties.SecurityProofs.Reports",
+    "NciCheck.Properties.SecurityProofs.Throttles",
+    "NciCheck.Properties.SecurityProofs.ThrottlesDark",
+    "NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots",
+    "NciCheck.Properties.SecurityProofs.ThrottlesSlots",
     "NciCheck.Properties.SecurityProofs.Witnesses"
    ]
   },
   "Definitions.Core.Declaration": {
-   "digest": "9f45e1cafa101fb3356541ed3a26ccbc43402b40081776d9f82ccd1141a132a7",
+   "digest": "a6a33e139ff95260abe4581be79c5830e2ae417d8df02fddb9575a9ab381e1fa",
    "definitions": {
     "Verity.Declaration": "38f50370a42a6c7f146e8c556c0a240cde4cc1f8e025e5357cd49a5ae354f56f",
+    "Verity.Declaration.Contains": "2e4651003538493bac63ae90c32a521e95d2e8596bea6b3c85b9cfd150c5647b",
     "Verity.Declaration.D": "4796f04f2ae9193027263ff5a3e82a079e0104c069845088e0b6666b007fc552",
     "Verity.Declaration.θ": "43a3241a0c3f2e225e2f4f79d255976bb8b070b83138bf76635d94cf0505393f"
    },
-   "guarantees": ["NciCheck.Properties.SecurityProofs.Reports", "NciCheck.Properties.SecurityProofs.Witnesses"]
+   "guarantees": [
+    "NciCheck.Properties.SecurityProofs.Reports",
+    "NciCheck.Properties.SecurityProofs.Throttles",
+    "NciCheck.Properties.SecurityProofs.ThrottlesDark",
+    "NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots",
+    "NciCheck.Properties.SecurityProofs.ThrottlesSlots",
+    "NciCheck.Properties.SecurityProofs.Witnesses"
+   ]
   },
   "Definitions.Core.Fp32": {
    "digest": "41c8061ea8f55a86ca47a2f556c3adae1584e166307523434642dbeb121699a0",
@@ -3422,7 +3497,64 @@
     "Nci.Policy": "a81cff6c812131f35e8b34e7d21b6fe0cdfc05c26075c9806d0b45ca908d872c",
     "Nci.novelReads": "f9a643aedf8a9ffa1542961e8c8a249e4e9954abe74c705a91d60d6565a6cf79"
    },
-   "guarantees": ["NciCheck.Properties.SecurityProofs.Reports", "NciCheck.Properties.SecurityProofs.Witnesses"]
+   "guarantees": [
+    "NciCheck.Properties.SecurityProofs.Reports",
+    "NciCheck.Properties.SecurityProofs.Throttles",
+    "NciCheck.Properties.SecurityProofs.ThrottlesDark",
+    "NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots",
+    "NciCheck.Properties.SecurityProofs.ThrottlesSlots",
+    "NciCheck.Properties.SecurityProofs.Witnesses"
+   ]
+  },
+  "Definitions.Nci.Dark": {
+   "digest": "907f39dd7ab6bdaad74d0e357c22ec4d9fdb7eccdaa2a0d571267775897c8b48",
+   "definitions": {
+    "Nci.PartialContainment": "859bb41aaf4d11fba3d7943767deed3d075d6d8ac73a0c85aae5b025ec470858",
+    "Nci.PartialContainment.S": "3f4fadbf8acd2a98dd31215bd90a71100035bc489d75168cb43b65a8d6876086",
+    "Nci.PartialContainment.dark": "b291a4876caed5c07228e2b04e2eed6425f410a83fa3063f9ab1c5fbe5f65b48"
+   },
+   "guarantees": [
+    "NciCheck.Properties.SecurityProofs.ThrottlesDark",
+    "NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots"
+   ]
+  },
+  "Definitions.Nci.Fit": {
+   "digest": "b76a1756c8116207f31ddefc5eeb39905542b968f63c6499378c7711dc5dd37a",
+   "definitions": {
+    "Nci.Threading.Slots": "6eabc019831672cafbb50c4951c94169fff002d8a72b4d0961ddb37ba513679f",
+    "Nci.Threading.Slots.p": "bbdd6323abae5f843ac69a99c807be8d9ad4821fc87d9b4ff413dc065fb7d2a4",
+    "Nci.Threading.Slots.slot": "a68a39962a85ef9e14c1e99ca2a4c5c9442d6465b6ed3fae1ae52af244d4317b",
+    "Nci.Threading.Slots.slotsUsed": "4eddbdd7df4eb71f8dbeebd953eb93dc16415ea0c41b1fdab103e3b9552ffda6"
+   },
+   "guarantees": [
+    "NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots",
+    "NciCheck.Properties.SecurityProofs.ThrottlesSlots"
+   ]
+  },
+  "Definitions.Nci.Threads": {
+   "digest": "1ec34c2518d850317e0f2a0a732676948484df147d41489c135f2dbdd2469501",
+   "definitions": {
+    "Nci.Small": "e26bc2309132d5947568f97a601841bafc0dbd669c72759ef80e422ae0f74fa7",
+    "Nci.Threading": "34f37e26faffd312e146844c60ffdccf707641975e901d594648f6bd21298db9",
+    "Nci.Threading.M": "70dadea92310fee12245706eea197f4be512cfa3f041972ffc1e149c1492326e",
+    "Nci.Threading.Threaded": "330e7d987d1e438395ab65211a1f71ecd87c2bebdc0bb612c064d787c6280311",
+    "Nci.Threading.act": "3739fcbe346c3e2a8731f9501b3c87d8693106a99bf24c85f5bd1800af61af5c",
+    "Nci.Threading.bound": "3fce815a72cf029bd20682bc08e32be869e71bb734027b2007f5f8bc180e1091",
+    "Nci.Threading.m": "c79e67aedb551e2d8742789aff80775cb1d22a9145817d019bb1129cb92b7e4c",
+    "Nci.Threading.mults": "3e361183ff1477459b0a10d602b21ef3e1b6c022fe405675dcf95a66265d3de0",
+    "Nci.Threading.reuse": "71e6dece036734756e7ab0b9b3e16c7f4ca5348d10abfc92704e18527e70ada7",
+    "Nci.Threading.thread": "d3d19ab3ac42459397ee5871fc772f3cc0bb918962267bc637b207256323e0fe",
+    "Nci.Threading.threadMults": "f39377be0a58dc03e64fa1449d1792aac5f638ad152db00bb0168dc865a8af84",
+    "Nci.Threading.threadReads": "e01e4179b95b3ccbb4462337ca56f9c818263b800a62f1648ac2f41f269b98ea",
+    "Nci.Threading.weight": "f7e9ec34d8d82457b521d0886a383c6a1c59a34a93f84ea60be69cbeab38e424",
+    "Nci.Threading.weightsUsed": "6b55dd915ad83320fed02e493fe4dfa6cdc7c037c83c6694d4d55f79ab9f54ec"
+   },
+   "guarantees": [
+    "NciCheck.Properties.SecurityProofs.Throttles",
+    "NciCheck.Properties.SecurityProofs.ThrottlesDark",
+    "NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots",
+    "NciCheck.Properties.SecurityProofs.ThrottlesSlots"
+   ]
   },
   "Definitions.NetworkCertifier.Grid": {
    "digest": "a9bbd04140a88b1d6496f3e4c99d4440950cc3373326ecd64ff8fbf80b8aebbf",
@@ -3993,6 +4125,10 @@
     "NciCheck.Properties.SecurityProofs.Decodes",
     "NciCheck.Properties.SecurityProofs.RejectsExactly",
     "NciCheck.Properties.SecurityProofs.Reports",
+    "NciCheck.Properties.SecurityProofs.Throttles",
+    "NciCheck.Properties.SecurityProofs.ThrottlesDark",
+    "NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots",
+    "NciCheck.Properties.SecurityProofs.ThrottlesSlots",
     "NciCheck.Properties.SecurityProofs.Witnesses",
     "Pous.EndToEnd.SecurityProofs.endToEndRing",
     "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed",
@@ -4076,6 +4212,10 @@
     "NciCheck.Properties.SecurityProofs.Decodes",
     "NciCheck.Properties.SecurityProofs.RejectsExactly",
     "NciCheck.Properties.SecurityProofs.Reports",
+    "NciCheck.Properties.SecurityProofs.Throttles",
+    "NciCheck.Properties.SecurityProofs.ThrottlesDark",
+    "NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots",
+    "NciCheck.Properties.SecurityProofs.ThrottlesSlots",
     "NciCheck.Properties.SecurityProofs.Witnesses",
     "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns",
     "Proofs.NetworkCertifier.encardAcceptedObservationsLe",
@@ -4219,6 +4359,10 @@
     "NciCheck.Properties.SecurityProofs.Decodes",
     "NciCheck.Properties.SecurityProofs.RejectsExactly",
     "NciCheck.Properties.SecurityProofs.Reports",
+    "NciCheck.Properties.SecurityProofs.Throttles",
+    "NciCheck.Properties.SecurityProofs.ThrottlesDark",
+    "NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots",
+    "NciCheck.Properties.SecurityProofs.ThrottlesSlots",
     "NciCheck.Properties.SecurityProofs.Witnesses",
     "Pous.EndToEnd.SecurityProofs.endToEndRing",
     "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed",
@@ -4584,6 +4728,10 @@
     "NciCheck.Properties.SecurityProofs.Decodes",
     "NciCheck.Properties.SecurityProofs.RejectsExactly",
     "NciCheck.Properties.SecurityProofs.Reports",
+    "NciCheck.Properties.SecurityProofs.Throttles",
+    "NciCheck.Properties.SecurityProofs.ThrottlesDark",
+    "NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots",
+    "NciCheck.Properties.SecurityProofs.ThrottlesSlots",
     "NciCheck.Properties.SecurityProofs.Witnesses",
     "Properties.SampledProofs.SecurityProofs.designWellFormed",
     "Properties.SampledProofs.SecurityProofs.drawMisses",
@@ -4703,6 +4851,10 @@
     "NciCheck.Properties.SecurityProofs.Decodes",
     "NciCheck.Properties.SecurityProofs.RejectsExactly",
     "NciCheck.Properties.SecurityProofs.Reports",
+    "NciCheck.Properties.SecurityProofs.Throttles",
+    "NciCheck.Properties.SecurityProofs.ThrottlesDark",
+    "NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots",
+    "NciCheck.Properties.SecurityProofs.ThrottlesSlots",
     "NciCheck.Properties.SecurityProofs.Witnesses",
     "Properties.SampledProofs.SecurityProofs.designWellFormed",
     "Properties.SampledProofs.SecurityProofs.drawMisses",
@@ -5102,6 +5254,19 @@
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts"
    ]
   },
+  "Models.Nci.Assumptions.Threads": {
+   "digest": "e9bcf22a82fceb17e374c1e6af08d94a3f0f2d662a9c92713dffe4504c37b210",
+   "definitions": {
+    "Nci.Assumptions.WeightsIncompressible": "a9832cc41ed84cd3c55eccc606483e9c83d87fb29e05d1b1f92bb2680d32f8d8",
+    "Nci.Assumptions.WeightsIncompressibleSlots": "bc370825a2d24097f1a43037b354dac79b31c91c8e1c3fe00f7671516529c399"
+   },
+   "guarantees": [
+    "NciCheck.Properties.SecurityProofs.Throttles",
+    "NciCheck.Properties.SecurityProofs.ThrottlesDark",
+    "NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots",
+    "NciCheck.Properties.SecurityProofs.ThrottlesSlots"
+   ]
+  },
   "Models.Pous.Assumptions.P2": {
    "digest": "8a18aecc7bb9cd368f2be5b9bc6adc7d410a46202405278812d9a33d566b8e95",
    "definitions": {
@@ -5161,6 +5326,10 @@
     "NciCheck.Properties.SecurityProofs.Decodes",
     "NciCheck.Properties.SecurityProofs.RejectsExactly",
     "NciCheck.Properties.SecurityProofs.Reports",
+    "NciCheck.Properties.SecurityProofs.Throttles",
+    "NciCheck.Properties.SecurityProofs.ThrottlesDark",
+    "NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots",
+    "NciCheck.Properties.SecurityProofs.ThrottlesSlots",
     "NciCheck.Properties.SecurityProofs.Witnesses"
    ]
   },
@@ -6609,7 +6778,30 @@
     "NciCheck.Properties.SecurityProofs.Decodes",
     "NciCheck.Properties.SecurityProofs.RejectsExactly",
     "NciCheck.Properties.SecurityProofs.Reports",
+    "NciCheck.Properties.SecurityProofs.Throttles",
+    "NciCheck.Properties.SecurityProofs.ThrottlesDark",
+    "NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots",
+    "NciCheck.Properties.SecurityProofs.ThrottlesSlots",
     "NciCheck.Properties.SecurityProofs.Witnesses"
+   ]
+  },
+  "Properties.Nci.Threads": {
+   "digest": "3cf5ee9e5f8c864ecd8f3e4d19d69be2123770936ea47c94ca59cbbb4009a99d",
+   "definitions": {
+    "NciCheck.Properties.Throttled": "b0da3d4a64ec5ec0e3e1376aff729da2a2b39ef79f371cac3655404217e37fa1",
+    "NciCheck.Properties.ThrottledDark": "87d15e9a6e48f70167c54ab9aedcac2a316845a6748e4d2d6d79d224a2d690ff",
+    "NciCheck.Properties.ThrottledDarkSlots": "9aa175084876a4b77d015613d4bea4b229dacfb0432487e158e5963068996e3a",
+    "NciCheck.Properties.ThrottledSlots": "2dc5bece717e7b843bdb9569ec767e44bcefbefa930cc43539cf310dec420896",
+    "NciCheck.Properties.Throttles": "941527d6f138cd24061409566b5de4f4f5369e1e379679af1c155144166626e9",
+    "NciCheck.Properties.ThrottlesDark": "84c35cdd2aee2d620a8702599f07d6985ad4d29fc7cb600f8ef973a0bccecbde",
+    "NciCheck.Properties.ThrottlesDarkSlots": "590e5e8a3d803ba6b9e368fe5d000aa606cec5e1dbd5db59177edf19b2483fef",
+    "NciCheck.Properties.ThrottlesSlots": "415217abac8a7a411210d6086d7a8b00b598c35210f4a251cf35f157a1db10a6"
+   },
+   "guarantees": [
+    "NciCheck.Properties.SecurityProofs.Throttles",
+    "NciCheck.Properties.SecurityProofs.ThrottlesDark",
+    "NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots",
+    "NciCheck.Properties.SecurityProofs.ThrottlesSlots"
    ]
   },
   "Properties.NetworkCertifier": {
