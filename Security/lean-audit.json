@@ -147,7 +147,8 @@
    "digest": "a9832cc41ed84cd3c55eccc606483e9c83d87fb29e05d1b1f92bb2680d32f8d8"
   },
   "Nci.Assumptions.WeightsSupport": {
-   "owner": "@compute-accounting"
+   "owner": "@compute-accounting",
+   "digest": "8d999550f4e64e7c8e339dc7bd9c4dc714395133afc90c62cee82aca2a19204b"
   },
   "NetTiming.Allocated": {
    "owner": "@network-accounting",
@@ -3486,7 +3487,8 @@
   "Nci.SecurityProofs.InfoOfState": {
    "owner": "@compute-accounting",
    "signature": ["Nci.SecurityProofs.InfoOfState : Nci.Guarantees.InfoOfState"],
-   "assumptions": []
+   "assumptions": [],
+   "type_hash": "9f1583451f17bdeb540e073a017a0ecc297b129c7158de888554305423a979f5"
   },
   "Nci.SecurityProofs.IuReads": {
    "owner": "@lean",
@@ -3515,12 +3517,14 @@
   "Nci.SecurityProofs.ThreadedContainedInfo": {
    "owner": "@compute-accounting",
    "signature": ["Nci.SecurityProofs.ThreadedContainedInfo : Nci.Guarantees.ThreadedContainedInfo"],
-   "assumptions": []
+   "assumptions": [],
+   "type_hash": "8381b224ed7e6895c5a477180f9e5b38f1557563376852e67628d1e84beb1006"
   },
   "Nci.SecurityProofs.ThreadedOfState": {
    "owner": "@compute-accounting",
    "signature": ["Nci.SecurityProofs.ThreadedOfState : Nci.Guarantees.ThreadedOfState"],
-   "assumptions": []
+   "assumptions": [],
+   "type_hash": "ba69e692dec99e4727f2e6376fffefd4a580e1a6d289e09b83aaf9a00047c2b7"
   },
   "Nci.SecurityProofs.ThreadedReads": {
    "owner": "@lean",
@@ -3531,7 +3535,8 @@
   "Nci.SecurityProofs.ThreadedReadsInfo": {
    "owner": "@compute-accounting",
    "signature": ["Nci.SecurityProofs.ThreadedReadsInfo : Nci.Guarantees.ThreadedReadsInfo"],
-   "assumptions": []
+   "assumptions": [],
+   "type_hash": "4d90082db7cce0fe88a068deb85c0d77bf55ac4572b744ea7bf03e84487b53b7"
   },
   "Nci.SecurityProofs.ThreadedThrottled": {
    "owner": "@lean",
@@ -7482,10 +7487,14 @@
     "Nci.SecurityProofs.ContainedTraining",
     "Nci.SecurityProofs.FullPositions",
     "Nci.SecurityProofs.Inference",
+    "Nci.SecurityProofs.InfoOfState",
     "Nci.SecurityProofs.IuReads",
     "Nci.SecurityProofs.OtherPositions",
     "Nci.SecurityProofs.ReadBound",
+    "Nci.SecurityProofs.ThreadedContainedInfo",
+    "Nci.SecurityProofs.ThreadedOfState",
     "Nci.SecurityProofs.ThreadedReads",
+    "Nci.SecurityProofs.ThreadedReadsInfo",
     "Nci.SecurityProofs.ThreadedThrottled",
     "Nci.SecurityProofs.ThreadedTraining",
     "Nci.SecurityProofs.Training",
@@ -7510,9 +7519,13 @@
     "Nci.SecurityProofs.ContainedMatMul",
     "Nci.SecurityProofs.ContainedTraining",
     "Nci.SecurityProofs.Inference",
+    "Nci.SecurityProofs.InfoOfState",
     "Nci.SecurityProofs.IuReads",
     "Nci.SecurityProofs.ReadBound",
+    "Nci.SecurityProofs.ThreadedContainedInfo",
+    "Nci.SecurityProofs.ThreadedOfState",
     "Nci.SecurityProofs.ThreadedReads",
+    "Nci.SecurityProofs.ThreadedReadsInfo",
     "Nci.SecurityProofs.ThreadedThrottled",
     "Nci.SecurityProofs.ThreadedTraining",
     "Nci.SecurityProofs.Training",
@@ -7710,6 +7723,20 @@
     "Nci.SecurityProofs.UpdatedMatMulReads"
    ]
   },
+  "Definitions.Nci.Info": {
+   "digest": "8fb3a35e7925ba55540307fa339b42bb6815b9a48b751456a64f404a260a9898",
+   "definitions": {
+    "Nci.SmallInfo": "689dc56b30c2f9189e985d5b7e7d9cd090a125b182a7a2e50b45efba7ea4e090",
+    "Nci.Threading.ThreadedInfo": "2ece3e35e0337bc7a3514c2b3a7f7fe63f0f531e067a91178f84509082f600b9",
+    "Nci.novelInfo": "977e17f83ec84c2c97c215ecbf6995041cc08040a92ec3cd9e71f6bebea07d4d"
+   },
+   "guarantees": [
+    "Nci.SecurityProofs.InfoOfState",
+    "Nci.SecurityProofs.ThreadedContainedInfo",
+    "Nci.SecurityProofs.ThreadedOfState",
+    "Nci.SecurityProofs.ThreadedReadsInfo"
+   ]
+  },
   "Definitions.Nci.Reads": {
    "digest": "c3c240e59ed9edb472fbe4005f08c7f4b68d4fb7cea86dfa5d35e989587fb439",
    "definitions": {
@@ -7728,7 +7755,11 @@
    "guarantees": [
     "Nci.SecurityProofs.ContainedMatMul",
     "Nci.SecurityProofs.ContainedTraining",
-    "Nci.SecurityProofs.IuReads"
+    "Nci.SecurityProofs.InfoOfState",
+    "Nci.SecurityProofs.IuReads",
+    "Nci.SecurityProofs.ThreadedContainedInfo",
+    "Nci.SecurityProofs.ThreadedOfState",
+    "Nci.SecurityProofs.ThreadedReadsInfo"
    ]
   },
   "Definitions.Nci.Threads": {
@@ -7750,7 +7781,10 @@
     "Nci.Threading.weightsUsed": "6b55dd915ad83320fed02e493fe4dfa6cdc7c037c83c6694d4d55f79ab9f54ec"
    },
    "guarantees": [
+    "Nci.SecurityProofs.ThreadedContainedInfo",
+    "Nci.SecurityProofs.ThreadedOfState",
     "Nci.SecurityProofs.ThreadedReads",
+    "Nci.SecurityProofs.ThreadedReadsInfo",
     "Nci.SecurityProofs.ThreadedThrottled",
     "Nci.SecurityProofs.ThreadedTraining"
    ]
@@ -17326,6 +17360,17 @@
     "Nci.SecurityProofs.UpdatedMatMulReads"
    ]
   },
+  "Models.Nci.Assumptions.Info": {
+   "digest": "00bdbe965111c5d8b58cba8d227486e05eb84da8d908fcde9586ce5ff5e4b421",
+   "definitions": {
+    "Nci.Assumptions.WeightsSupport": "8d999550f4e64e7c8e339dc7bd9c4dc714395133afc90c62cee82aca2a19204b"
+   },
+   "guarantees": [
+    "Nci.SecurityProofs.ThreadedContainedInfo",
+    "Nci.SecurityProofs.ThreadedOfState",
+    "Nci.SecurityProofs.ThreadedReadsInfo"
+   ]
+  },
   "Models.Nci.Assumptions.Threads": {
    "digest": "e97519a8245dbe34eb8f42c2febf3910370ac44e740cd319415594e0bed0b43f",
    "definitions": {
@@ -17367,6 +17412,21 @@
     "Nci.Guarantees.ContainedTraining": "d11a30af07ea918204d1d57e4f22237b0ffbca149c9bff292dab777d562c2a1f"
    },
    "guarantees": ["Nci.SecurityProofs.ContainedMatMul", "Nci.SecurityProofs.ContainedTraining"]
+  },
+  "Models.Nci.Guarantees.Info": {
+   "digest": "88194ec7e2fce7b6006af38386697feeaa1485ed6b2da82b548bbd01386e9f5a",
+   "definitions": {
+    "Nci.Guarantees.InfoOfState": "7975155530e86c1dfab277c048ab3862188ad80102b3130ab8b742ceafabd30f",
+    "Nci.Guarantees.ThreadedContainedInfo": "a41406940ebb9c8a897d200a8c96eeda55ece37b26804816d837cf42381a3f4a",
+    "Nci.Guarantees.ThreadedOfState": "8b7469d7ee244f84f31840d37d4e960594f33c621fcc343a8eece560020025b5",
+    "Nci.Guarantees.ThreadedReadsInfo": "46ab1906dec926af6cf55d3b142506448dc859c358c67fa2d04a4e045387c407"
+   },
+   "guarantees": [
+    "Nci.SecurityProofs.InfoOfState",
+    "Nci.SecurityProofs.ThreadedContainedInfo",
+    "Nci.SecurityProofs.ThreadedOfState",
+    "Nci.SecurityProofs.ThreadedReadsInfo"
+   ]
   },
   "Models.Nci.Guarantees.Reads": {
    "digest": "016cca93308e9ac6c0ad97c73b18da826f0fc8fbd33eb77535c28f63f61b3f72",
