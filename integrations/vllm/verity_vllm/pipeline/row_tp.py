@@ -210,6 +210,10 @@ class TpRow(Row):
     def rank(self, r: int) -> str:
         return f"{self.bdir}/rank{r}"
 
+    def build_ranks(self) -> list[str]:
+        """``--build-rank <rank dir>`` in rank order: the Build tp-capture and tp-commit read the post-load tensors from."""
+        return [a for r in range(self.W) for a in ("--build-rank", self.rank(r))]
+
     def derive(self, r: int, out: str, *args: str) -> None:
         """One CPU derive of rank ``r``, a switched row's ``predict emit``; the .rc beside its log carries the exit code."""
         if self.aot is not None:
@@ -369,7 +373,7 @@ class TpRow(Row):
                 raise Stop(11)
         br = [a for r in range(self.W) for a in ("--build-rank", f"{self.rank(r)}/build_step")]
         cap = self.cli("tp-capture", "--workload", self.wl, "--case", self.role, "--tp", str(self.W), "--max-num-seqs", str(self.B),
-                       "--engine-arg", f"gpu_memory_utilization={self.gpu_util}", *self.engine)
+                       "--engine-arg", f"gpu_memory_utilization={self.gpu_util}", *self.engine, *self.build_ranks())
         t0 = int(time.time())
         self.tl("stage.match", "start")
         if phase == "cpu":
@@ -512,14 +516,13 @@ class TpRow(Row):
     def commit_cmd(self, taps: list[str]) -> list[str]:
         """`tp-commit`'s command line; `taps`: the row's taps that apply to it (`row_records.applicable_taps`), whose sources the ranks attach."""
         ck, d = self.ck_, self.d
-        brk = [a for r in range(self.W) for a in ("--build-rank", self.rank(r))]
         if self.config_run:                       # one instrumented run, k units over the ranks; no Match to compare against
             match, arms = [], ["--pairs", "1", "--warmup", "1", "--only-arm", "instrumented", "--replay-k", str(ck.replay_k)]
         else:
             match, arms = ["--match-dir", self.M], ["--pairs", str(ck.pairs), "--warmup", "2", "--value-check"]
         cmd = self.cli("tp-commit", "--workload", self.wl, "--case", self.role, "--tp", str(self.W), "--committer", "native_collect_v2b",
                        "--hidden-so", self.hidden_so, "--openings", "64", "--max-num-seqs", str(self.B),
-                       "--engine-arg", f"gpu_memory_utilization={self.commit_util}", *self.engine, *brk,
+                       "--engine-arg", f"gpu_memory_utilization={self.commit_util}", *self.engine, *self.build_ranks(),
                        "--required-manifest", f"{d}/manifest.json", *match, "--checkpoint-dir", self.ck, "--checkpoint-model", self.repo,
                        *arms, "--replay-workers", str(ck.replay_workers), "--label", self.row, "--out", f"{d}/commit")
         if not self.config_run and self.fold_profile and os.path.isfile(f"{self.M}/fold_match/tp2_fold_match.json"):

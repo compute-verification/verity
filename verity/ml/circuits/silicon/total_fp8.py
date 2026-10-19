@@ -202,4 +202,5 @@ HOPPER_E4M3_MMAV2_K32 = Pipeline(
               "MMAV2_E4M3_K_ORDER); HMMA.16816.F32 from +0 measured on the H100 (r20260922-184111-671e, r20260922-184835-4b95), "
               "the chain with its nonzero f16 accumulator in fused_moe_kernel on the H200 (r20261017-125608-3071, 638,976 words, "
               "0 mismatches)",
+    executes="f16",
 )
