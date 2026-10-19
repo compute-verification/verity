@@ -18,10 +18,9 @@ uniform(n, j)       = the first width-byte big-endian word of stream(("u", j)) b
                       mod n; width = ⌈(bitlen(n) + 64) / 8⌉
 ~~~
 
-These are `FlockSoundness.Randomness`'s definitions (`Security/Proofs/Flock/Soundness/Randomness.lean`), which the
-program may not import (it is under `Security/`), with `uniform` reading the stream until a word is accepted as the
-Python's unbounded stream does. They stand alone, on `Flock.Hash` and `Flock.Draw` only, so that a shared primitives
-package can take them over.
+These copy the core primitives' `FlockSoundness.Randomness` (`verity/core/primitives/randomness/Randomness.lean`,
+which this package requires and `PousCheck.Keys` imports), except `uniform`, which reads the stream in doubling
+prefixes until a word is accepted, as the Python's unbounded stream does, where the primitive's reads a fixed length.
 -/
 
 namespace PousCheck.Randomness

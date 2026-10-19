@@ -22,7 +22,7 @@
 #include <cstdint>
 
 #ifdef WW_HOST
-// The field arithmetic and the codec built for the host (`tests/wide_host.sh`): the same source, CUDA's qualifiers
+// The field arithmetic and the codec built for the host (`tests/wide_host.py`): the same source, CUDA's qualifiers
 // emptied and its integer intrinsics written out.
 #define __device__
 #define __host__
