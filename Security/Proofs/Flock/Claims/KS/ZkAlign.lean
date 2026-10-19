@@ -1,4 +1,5 @@
 import Proofs.Flock.Claims.KS.ForkAlign
+import Proofs.Flock.Claims.KS.SlotFirst
 import Proofs.Flock.Claims.KS.ZkFork
 
 /-!
@@ -18,6 +19,9 @@ session's leaves record the cap of the entry they hold:
   one after any number of coins;
 * `SlotRSZ`, `advRSZ_le_forkC`: where the primed prover reaches the slot's node after `t` coins (`Lock.SlotAt` at
   `advRSZ`'s lockstep), `advRSZ` is at most the fork after `t` coins of `ForkEvZ`;
+* `ind_conflictAcc_dead`, `slotRSZ_of_first`: `advRSZ`'s event is `0` past a rejected table, so where at every link
+  point the primed prover plays the tables in front to their ends first after `n` coins (`Lock.PreFirst`) and then
+  meets the slot after `j` coins in the session's table beside the ones after it, `SlotRSZ` holds after `n + j + 1`;
 * `ZkSlotAlign`, `zkForkAlign_of_slot`, `zk_KS_of_slot`: so `ZkForkAlign`, and masked KS from the caps' clash, `τ`'s
   fork bound and the pads' premises, hold where the primed simulated strategy reaches each cap's slot after
   `zkRd j i` coins.
@@ -219,6 +223,51 @@ theorem advRSZ_le_forkC (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (T : Ta
       (ind_conflictAcc_le Hs.H Hs.E Hs.Lf T.sch pre.length r.val (ℓ + 1) d b₁ b₂).trans
         (sessForkZ_le A Hs T default cap₀ pre.length r ℓ t d i₁ a₁ b₁ i₂ a₂ b₂ h₁ h₂ hg₁ hg₂)) h).trans
     (le_of_eq (forkC_pushStrat A Hs T cap₀ pre post _ t σ))
+
+/-- **The filtered conflict is `0` at a run rejecting a table up to `n`.** -/
+theorem ind_conflictAcc_dead (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf (List 𝔽) Sl D H)
+    (sch : Accounting.Schedule) (n r ℓ : ℕ) (d : Model.Cap D) {b b' : List (OutZC 𝔽 D Sl)}
+    (h : ¬ AccUpTo n b ∨ ¬ AccUpTo n b') :
+    ind (fun x : List (OutZC 𝔽 D Sl) × List (OutZC 𝔽 D Sl) => ∃ p,
+      Rewinding.ConflictAt (opRAccZ H E Lf sch n r ℓ d) x p) (b, b') = 0 := by
+  unfold ind
+  split_ifs with hc
+  · obtain ⟨p, h₁, h₂, _⟩ := hc
+    rcases h with h | h
+    · exact absurd (acc_of_opRAccZ H E Lf sch n r ℓ d h₁) h
+    · exact absurd (acc_of_opRAccZ H E Lf sch n r ℓ d h₂) h
+  · rfl
+
+/-- **The slot past the tables in front**: where at every link point the primed prover plays the tables in front of
+table `pre.length` to their ends first, in order, after `n` coins, its dead runs rejecting a table up to `pre.length`
+(`Lock.PreFirst`), and then meets the slot after `j` coins in that table's lockstep beside the tables after it, at
+every chooser and every fork event that is `0` past such a rejection, it meets the slot after `n + j + 1` coins in the
+session (`SlotRSZ`): the link coin, the tables in front, then `j` (`Lock.SlotAt.batchLock_first`). -/
+theorem slotRSZ_of_first (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (T : TabZK 𝔽 mPts)
+    (pre post : List ((Fin 2 → Fin mPts → 𝔽) → Game (OutZC 𝔽 D Sl))) (cap₀ : Model.Cap D) (r ℓ n j : ℕ)
+    (σ : Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀)))
+    (Q : (pts : Fin 2 → Fin mPts → 𝔽) → List (OutZC 𝔽 D Sl) →
+      Strategy (batch (tabAfterZCP A Hs T cap₀ pts :: post.map (· pts))) → Prop)
+    (hF : ∀ pts, Lock.PreFirst (tabAfterZCP A Hs T cap₀ pts) (post.map (· pts)) (pre.map (· pts))
+      (fun outs => ¬ AccUpTo pre.length outs) (Q pts) n (pushStrat A Hs T cap₀ pre post σ pts))
+    (hQ : ∀ (pts : Fin 2 → Fin mPts → 𝔽) (cs : List (OutZC 𝔽 D Sl))
+      (σ' : Strategy (batch (tabAfterZCP A Hs T cap₀ pts :: post.map (· pts)))), Q pts cs σ' →
+      ∀ (plur' : Lock.Chooser (Model.Oracle 𝔽) (Model.Cap D) (List (OutZC 𝔽 D Sl)))
+        (Φ' : Model.Cap D → List (OutZC 𝔽 D Sl) → List (OutZC 𝔽 D Sl) → ℝ),
+        (∀ e b b', ¬ AccUpTo pre.length (cs ++ b) → ¬ AccUpTo pre.length (cs ++ b') → Φ' e b b' = 0) →
+          Lock.SlotAt plur' (slotOf r (ℓ + 1) + 4) Φ' j
+            (Lock.batchLock dfltOutZC
+              (Lock.mapL (R₂ := fun i o b => ∃ x, o = orcOutZ A T cap₀ x ∧ TopRelZ Hs T default cap₀ i x b)
+                (orcOutZ A T cap₀) (fun _ a _ hr => ⟨a, rfl, hr⟩) (lockAfterZ A Hs T default cap₀ pts))
+              (post.map fun g : (Fin 2 → Fin mPts → 𝔽) → Game (OutZC 𝔽 D Sl) => g pts) []) σ') :
+    SlotRSZ A Hs T pre post cap₀ r ℓ (n + j + 1) σ :=
+  Lock.SlotAt.coin _ fun pts => Lock.SlotAt.mono _ <|
+    Lock.SlotAt.batchLock_first dfltOutZC _ (post.map fun g => g pts) (pre.map fun g => g pts)
+      (plur := plurSZ Hs T pre.length)
+      (Φ := fun d b b' => ind (fun x : List (OutZC 𝔽 D Sl) × List (OutZC 𝔽 D Sl) => ∃ p,
+        Rewinding.ConflictAt (opRAccZ Hs.H Hs.E Hs.Lf T.sch pre.length r (ℓ + 1) d) x p) (b, b'))
+      (fun e b b' hb _ => ind_conflictAcc_dead Hs.H Hs.E Hs.Lf T.sch pre.length r (ℓ + 1) e (b := b) (b' := b')
+        (.inl hb)) (hF pts) (hQ pts)
 
 end Session
 
