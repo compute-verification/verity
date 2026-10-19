@@ -177,10 +177,10 @@ theorem drawn_term {next : Game Bool} {N : ℕ} {rest : Strategy next → Play n
         (Strategy.ofBind (afterAudit next) (g.map fun ok => (ok, D)) s) := by
   rw [prob_map]
   by_cases hd : Disjoint D B
-  · rw [if_pos hd]
+  · rw [ite_eq_left hd]
     exact le_antisymm zero_le
       ((prob_mono (q := fun _ => False) (fun _ ho => ho.2 hd.symm) _ _).trans (prob_false _ _).le)
-  · rw [if_neg hd, pass_ofBindPlay (afterAudit next) (fun o => contPlay rest o.1) (fun o => o.1 = true)
+  · rw [ite_eq_right hd, pass_ofBindPlay (afterAudit next) (fun o => contPlay rest o.1) (fun o => o.1 = true)
       (pass_contPlay hpass), prob_map]
     exact le_antisymm (prob_mono (fun _ ho => ⟨ho, fun h' => hd h'.symm⟩) _ _) (prob_mono (fun _ ho => ho.1) _ _)
 
