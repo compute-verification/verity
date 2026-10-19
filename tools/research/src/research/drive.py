@@ -1334,9 +1334,11 @@ class Driver:
         bisecting = {r.get("check") for r in drive.get("bisect", {}).values()}
         if self._tips is None:
             return [*drive["launched"], *drive.get("base", {})]
-        pos = self._pos
-        above = lambda c: any(pos[t] > pos[c] and t in drive["launched"]   # noqa: E731
-                              and self.verdict(t, main, drive).state == "running" for t in self._tips)
+        pos, tips = self._pos, self._tips
+
+        def above(c: str) -> bool:
+            return any(pos[t] > pos[c] and t in drive["launched"] and self.verdict(t, main, drive).state == "running" for t in tips)
+
         return [*(c for c in drive["launched"] if c in self._tips or c in bisecting or c not in pos or not above(c)),
                 *drive.get("base", {})]
 
