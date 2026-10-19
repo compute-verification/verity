@@ -59,9 +59,6 @@ KNOWN = {
     ("verity/ml/flock/tests/test_lean_typed_statement.py", "verity_vllm.program.registry.prims"),
     ("verity/ml/flock/tests/test_partition_units.py", "verity_vllm.program.registry"),
     ("verity/ml/flock/tests/test_stage_typed.py", "verity_vllm.program.registry.prims"),
-    # a registered-table read's word Definition, TableRead{IB}x{EW}_v1, is the registry's (registry.tables); core has only its
-    # Boolean form (verity.ml.circuits.boolean.table)
-    ("verity/ml/flock/tests/test_table_read_piece.py", "verity_vllm.program.registry.tables"),
     ("verity/ml/flock/tests/test_topp_word.py", "verity_vllm.program.registry"),
     ("verity/ml/flock/tests/test_typed_statement.py", "verity_vllm.program.registry.prims"),
 }
