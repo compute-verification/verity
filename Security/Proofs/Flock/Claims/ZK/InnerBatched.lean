@@ -6,6 +6,20 @@ import Proofs.Flock.Claims.Complete.Zk.Level0Premises
 
 /-!
 # `InnerBatched`: the batched constraint at the honest pads
+
+`innerBatched : InnerBatched`. Wherever the phases hybrids 2 and 3 share (`innerPreE`) reach a rep's inner proof
+(`InnerAt`), every constraint they hand it vanishes at the rep's honest pads (`innerAt_holds`), so the batch of them and
+the triple's vanishes there at every coin (`innerP_batched`).
+
+* `piopPZk_split`, `innerPre_split`: the shared phases answered by `asksS` that return, stage by stage, as
+  `repPZk_split` has the masked rep.
+* `TableM`, `replay_holdsM`: completeness's `TableT` and `replay_holds` without the readiness check's `RegionsFit`,
+  which the replay's algebra never reads.
+* `innerPre_holds`: the shared phases' constraints (the replay's, the two ring-switch rows and the lanes') vanish at the
+  honest pads, at a table and its trace, outer coins that are not `1` and extra claims at points of the table's `m_pts`.
+* `innerPre_cut`: answered by `asksCut`, the shared phases that return are answered by `asksS` at the same coins.
+* `tableM_mask`: each table and its trace at the mask witness have `TableM` (`maskFree_relation`, `relS_only`).
+* `outer_ne_one`: no refusal seen up to a stop past the rep's `ε` slot means its outer coins are not `1`.
 -/
 
 namespace FlockComplete.ZkTables
@@ -283,6 +297,102 @@ theorem innerPre_cut {coin : ℕ → ℕ → _root_.Flock.F128} {n : ℕ} {resp 
         prior words) := by
   unfold SimInner.innerPre piopPZk rankCheckP
   sim_walk [zerocheckPZk_cut hr, lincheckPZk_cut hr, ringSwitchP_cut hr, ligeritoPZk_cut hr, cutS_reflT, cutS_refl]
+
+theorem tabsOf_ofCircuit (x : Msg) (j : Fin (jOf x)) :
+    (FlockDeploy.tabsOf (stsOf x))[j.val]! = _root_.Flock.Setup.ofCircuit (stAt x j) := by
+  rw [getElem!_pos _ _ (by simpa [FlockDeploy.tabsOf] using lt_of_jOf j)]
+  simp [FlockDeploy.tabsOf, stAt]
+
+/-- **Each table and its trace at the mask witness** (`TableM`): the relation does not read the mask slots
+(`maskFree_relation`), so the mask witness is in it, and table `j`'s share satisfies table `j` alone (`relS_only`). -/
+theorem tableM_mask {x : Msg} {w : Claims.Flock.Wit} (hL : Live x) (hw : RZk x w) (ω : FlockComplete.TapeZk)
+    {s : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec}
+    (hsx : FlockDeploy.setupOf true x = some (s, spec, stsOf x)) (j : Fin (jOf x)) :
+    FlockComplete.ZkTables.TableM (stAt x j) (trsE x w ω)[j.val]! := by
+  have hj := lt_of_jOf j
+  have hw' := FlockComplete.ZkTables.maskFree_relation x w ω.mask hL.1 hw
+  obtain ⟨p, hps, -, hty, hpi, hpe, -, hR, -⟩ := _root_.Flock.Readable.parsed_zk hL.1 hw' hsx
+  obtain ⟨-, -, -, hall⟩ := FlockComplete.ZkTables.tables_of_setup hL.1 hsx
+  obtain ⟨h1, h2, h3⟩ := hall j.val hj
+  have hJ := (_root_.Flock.Readable.relS_only hps hty hpi _).1 hR j.val (by rw [hpe]; exact hj)
+  rw [hpe] at hJ
+  have hone : (p.only j.val).sts = #[stAt x j] := by
+    show #[p.sts[j.val]!] = _
+    rw [hpe, getElem!_pos (stsOf x) j.val hj]
+    rfl
+  have htab := _root_.Flock.Readable.tablesOf_of_parses hps
+  rw [hpe] at htab
+  unfold trsE
+  rw [FlockComplete.ZkTables.traces_getElem (stsOf x) _ hj]
+  exact ⟨h1, h2, h3, p.only j.val, _, hone, hJ, rfl, FlockComplete.ZkTables.stmtT_of htab hty hpi hj⟩
+
+/-- **The outer coins after the rep's first round are not `1`** where no refusal is seen up to a stop past the rep's
+`ε` slot: the outer coins' round is the rep's second, before its `ε` slot (`outerSlot_eq`, `repSlot_eq`). -/
+theorem outer_ne_one {x : Msg} {c : Fin (refK x) → FlockDeploy.Coin} {n : ℕ} (hnr : ¬ Refused x c n)
+    {s : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec}
+    (hsx : FlockDeploy.setupOf true x = some (s, spec, stsOf x)) (j : Fin (jOf x)) (r : Fin 2)
+    (hn : innerSlotE x j r + 1 < n) :
+    ∀ k < (stAt x j).m - 13, slotAt c (repBase x (2 * j.val + r.val) + 1) k ≠ 1 := by
+  have hj := lt_of_jOf j
+  have hhalf : (stsOf x)[(2 * j.val + r.val) / 2]! = stAt x j := by
+    rw [show (2 * j.val + r.val) / 2 = j.val by omega, getElem!_pos (stsOf x) j.val hj]
+    rfl
+  have hz : _root_.Flock.Zk.schedule (stsOf x)[(2 * j.val + r.val) / 2]!.m =
+      .ok ((zkTab x j).sch, (zkTab x j).tPad) := by
+    rw [hhalf]
+    exact (zkTab x j).hz
+  have hn' : repSlot x (2 * j.val + r.val) (innerOff 0) + 1 < n := hn
+  rw [repSlot_eq hsx hz, ← repBase_eq hsx] at hn'
+  unfold innerOff at hn'
+  have hlt : outerSlot x j.val r.val < n := by
+    rw [outerSlot_eq hsx]
+    omega
+  intro k hk h1
+  refine hnr (Or.inl ⟨j.val, hj, r.val, r.isLt, hlt, k, ?_, ?_⟩)
+  · rw [getElem!_pos (stsOf x) j.val hj]
+    exact hk
+  · have e : outerAt c j.val r.val k = slotAt c (outerSlot x j.val r.val) k := rfl
+    rw [e, outerSlot_eq hsx]
+    exact h1
+
+/-- **The shared phases' constraints vanish at the honest pads** wherever they reach a rep's inner proof
+(`InnerAt`) at a stop past its `ε` slot: answered by `asksCut` they are answered by `asksS` at the same coins
+(`innerPre_cut`), where `innerPre_holds` gives them at the mask witness's table and trace (`tableM_mask`), the outer
+coins not `1` (`outer_ne_one`). -/
+theorem innerAt_holds {x : Msg} {w : Claims.Flock.Wit} {τ : UE.Tape} {c : Fin (refK x) → FlockDeploy.Coin} {n : ℕ}
+    {j : Fin (jOf x)} {r : Fin 2} {cons : Array (String × _root_.Flock.Zk.Lin)} {L : ℕ}
+    (hA : InnerAt x w τ c n j r cons L) (hn : innerSlotE x j r + 1 < n) :
+    FlockComplete.ConsHold cons (innerPadsE x τ j r).h := by
+  obtain ⟨hL, hw, hnr, s, spec, hsx, dom, cm0, ic, extras, hex, l, hl, o, t', l', hrun, rfl, -⟩ := hA
+  have hj := lt_of_jOf j
+  unfold innerPreE ioE innerPadsE innerLayE at hrun
+  have hrun' := innerPre_cut (coinOf_respOf c) _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ l _ _ hrun
+  rw [tabsOf_ofCircuit x j] at hrun' hex
+  have hpts : ∀ a ∈ ptsE c spec, a.size = (stAt x j).mPts := by
+    obtain ⟨-, hmp⟩ := FlockSoundness.Discharge.HiddenExec.setupTables_pointsAny
+      (FlockComplete.ZkTables.setupTables_of hL.1 hsx)
+    intro a ha
+    obtain ⟨p, -, rfl⟩ := Array.mem_map.1 ha
+    rw [show (stAt x j).mPts = spec.mPts from hmp j.val hj]
+    simp
+  have hc1 : ∀ k < (stAt x j).m - 13, coinOf (respOf c (l.size + 1)) k ≠ 1 := by
+    rw [coinOf_respOf, hl]
+    exact outer_ne_one hnr hsx j r hn
+  have hcons := FlockComplete.ZkTables.innerPre_holds (respOf c) _root_.Flock.Sha512.hash (tableM_mask hL hw _ hsx j)
+    (v := ((zkTab x j).sch, (zkTab x j).tPad)) (zkTab x j).hz r.val dom cm0 (ptsE c spec) hpts extras hex
+    (UE.tapeZk τ) j.val ic _ _ l hc1 hrun'
+  show FlockComplete.ConsHold _ (FlockComplete.padsOf (UE.tapeZk τ) j.val r.val
+    (_root_.Flock.Zk.PadLayout.new (FlockDeploy.tabsOf (stsOf x))[j.val]!.m
+      (FlockDeploy.tabsOf (stsOf x))[j.val]!.kLog (zkTab x j).sch.k0)).h
+  rw [tabsOf_ofCircuit x j]
+  exact hcons
+
+/-- **`InnerBatched`**: the shared phases' constraints vanish at the honest pads (`innerAt_holds`), so the batch of
+them and the triple's vanishes there at every coin (`innerP_batched`). -/
+theorem innerBatched : InnerBatched := by
+  intro x w τ c n j r cons L hA hn
+  exact FlockComplete.innerP_batched (UE.tapeZk τ) j.val r.val (innerLayE x j) (innerAt_holds hA hn)
+    ((innerCoinsE c j r).ce 0) _
 
 end Masked
 
