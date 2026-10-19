@@ -18,7 +18,6 @@ from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import cpu_replay as CPU
 from verity_vllm.pipeline import replay_bundle as RB
 from verity_vllm.pipeline import deferred_rows as DRW
-from verity_vllm.pipeline import serving_rows as SRW
 from verity_vllm.program.registry import b1  # noqa: F401  (registers RoPEHead_v1)
 
 from tests.pipeline import served_rope as SR
@@ -76,13 +75,7 @@ def test_the_in_commit_hook_writes_the_window_as_served(tmp_path):
     """The in-Commit hook (`serving_rows.readers`, its request as the row stage writes it) over the same Commit's members: the same
     program, partition and domains, and the window ``served`` (serving's own commitment, before any draw) with no stand-in link."""
     c = _commit(tmp_path)
-    r = DRW.of_record(RB.path(c["out"], 1), str(c["row_dir"]))
-    bmap = json.loads((r.out / f"binding_map_p{r.pair}.json").read_text())
-    req = tmp_path / "request.json"
-    req.write_text(json.dumps({"dir": str(tmp_path / "hook"), "partition": str(c["partition"]), "run": "r-hook", "committer": {"source": "test"}}))
-    SRW.readers(str(req), r.store, r.run, DRW.opened_weights(r), r.programs, bmap, r.arrivals, r.loaded, r.manifest, "rope-d64-cpu", r.digests)
-    assert not (tmp_path / "hook" / "error.txt").exists()
-    hook = json.loads((tmp_path / "hook" / "registration.json").read_text())
+    hook = json.loads((SR.hook(c, tmp_path / "hook", run="r-hook") / "registration.json").read_text())
     DRW.from_bundle(RB.path(c["out"], 1), str(c["row_dir"]), str(c["partition"]), tmp_path / "deferred", workers=1)
     deferred = json.loads((tmp_path / "deferred" / "registration.json").read_text())
     assert (hook["window"]["kind"], hook["window"]["run"], hook["window"]["research_run"]) == ("served", c["run_root"], "r-hook")
@@ -90,6 +83,33 @@ def test_the_in_commit_hook_writes_the_window_as_served(tmp_path):
     same = ("format", "program", "query", "law", "partition", "population", "scheme")
     assert {k: hook[k] for k in same} == {k: deferred[k] for k in same}
     assert [(x["port"], x["domain"]) for x in hook["roots"]] == [(x["port"], x["domain"]) for x in deferred["roots"]]
+
+    # the audit's source check (A5's): the deferred window is a stand-in linked to the run root of record and the bundle, and the
+    # hook's is served exactly when that root is a SHA-512 root (a vllm-v1 run's is refused by name)
+    man, root = RB.open_bundle(RB.path(c["out"], 1))["manifest_sha256"], c["run_root"]
+    assert DRW.source(deferred["window"], root, man) == {"kind": True, "run": True, "of": True, "link": True}
+    sha512 = len(bytes.fromhex(root)) == DRW.SERVED_ROOT
+    assert DRW.source(hook["window"], root, man) == {"kind": True, "run": True, "sha512": sha512, "commitment": True, "link": True}
+
+
+def test_the_audits_source_check_takes_a_served_window_only_over_a_sha512_run_root_of_record():
+    """`deferred_rows.source` on a served window over a 64-byte run root of record, and each field altered refused by its name: the
+    run, the root's size, the commitment named, a stand-in link carried, and a kind that is neither form."""
+    man, root = "cd" * 32, "ab" * DRW.SERVED_ROOT
+    w = {"kind": "served", "run": root, "commitment": DRW.stand_in(root, man)["of"]["commitment"], "research_run": "r"}
+
+    def refused(window: dict, run_root: str = root) -> list[str]:
+        return [k for k, v in DRW.source(window, run_root, man).items() if not v]
+
+    assert refused(w) == []
+    short = "ab" * 32
+    assert refused(dict(w, run=short, commitment=DRW.stand_in(short, man)["of"]["commitment"]), short) == ["sha512"]
+    assert refused(dict(w, run="00" * DRW.SERVED_ROOT)) == ["run"]
+    assert refused(dict(w, commitment="sha256")) == ["commitment"]
+    assert refused(dict(w, **DRW.stand_in(root, man))) == ["link"]
+    assert refused(dict(w, kind="stand-in")) == ["of", "link"]
+    assert refused(dict(w, kind="replayed")) == ["kind", "of", "link"]
+    assert refused(dict(w, kind="stand-in", **DRW.stand_in(root, man))) == []
 
 
 def test_a_partition_or_binding_map_that_is_not_the_records_is_refused(tmp_path):
