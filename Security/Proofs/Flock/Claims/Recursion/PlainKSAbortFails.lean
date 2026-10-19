@@ -12,15 +12,17 @@ accept whatever they read (`acceptAllE`), (P1) fails at every false statement in
 * **Generic** (`Claims.Recursion.not_KSAbort_of_acc`): an inner protocol whose verifier accepts at its first round fails
   `Inner.KSAbort` at any statement with no witness and `κ < 1`. The prover that never aborts is accepted at every coin,
   `E^rep` finds no witness there, and the verifier calls `H` nowhere, so `B` finds no collision: `1 ≤ κ`.
-* **At `DE`** (`not_plainKSAbort_acceptAll`): `deE rel acceptAllE colsE wE` keeps `deployPlain rel`'s parser, code and
-  numbers, so its relation, decoders and `κ` are `deployPlain rel`'s, and its verifier takes `FlockDeploy.V false`'s
-  rounds, at least one at every statement. The deployed plain radius decoder meets the spec there.
+* **At `DE`** (`not_plainKSAbort_acceptAll`): `deE rel acceptAllE colsE wE` keeps `deployPlainTrim rel`'s parser, code
+  and numbers, so its relation and `κ` are `deployPlain rel`'s, its decoders `deployPlainTrim rel`'s, and its verifier
+  takes `FlockDeploy.V false`'s rounds, at least one at every statement. The deployed plain radius decoder meets the spec
+  at the trimmed code (`FlockDeploy.listWithin_plainTrim`).
 * **In scope** (`not_plainKSAbort_acceptAll_in`): at a plain session in scope (`FlockDeploy.PlainIn`, at most `200`
   tables), `κ ≤ 200 · 2^{−202.98} < 1` (`FlockDeploy.κ_plain_le`).
 
 So (P1) at every `nextE`, as `KSBoundRoute` quantifies it, is false wherever the deployed plain verifier has a false
 statement in scope: `deE` leaves the element-level verifier's steps free, while its `κ` is `deployPlain rel`'s, fixed by
-the deployed numbers.
+the deployed numbers. That is why (P1) stays a hypothesis of `KSBoundRoute`; at the deployed plain verifier's own steps
+it is `RecDeploy.plainKSAbort_bd`'s statement.
 -/
 
 namespace Claims.Recursion
@@ -113,7 +115,7 @@ theorem not_plainKSAbort_acceptAll (rel : _root_.Flock.Readable.Parsed → _root
     ¬ (bdDeployed rel acceptAllE colsE wE join rowIn final w).PlainKSAbort FlockDeploy.sha512 := fun h =>
   Claims.Recursion.not_KSAbort_of_acc FlockDeploy.sha512
     (Claims.Recursion.Inner.ofFlock (deE rel acceptAllE colsE wE) Claims.GS.plainDecodeRD) x (fun _ _ => rfl)
-    (V_k_pos_flock false x) hx hκ (h Claims.GS.plainDecodeRD (FlockDeploy.listWithin_plain rel))
+    (V_k_pos_flock false x) hx hκ (h Claims.GS.plainDecodeRD (FlockDeploy.listWithin_plainTrim rel))
 
 /-- **(P1) fails at `acceptAllE` at every false statement in the deployed plain verifier's scope**: a plain session
 that sets up with at most `200` tables at the deployed parameters (`FlockDeploy.PlainIn`) and has no witness. -/
