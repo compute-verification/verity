@@ -216,6 +216,15 @@ Under each question, newest first; the lane that found or reported it is in brac
 
 ### 5. Numbers that don't compare
 
+- **A run's GPU read from its preset, not from the device** (19 Oct) [circuits]. Runs r20261019-022648-e1f5 and
+  r20261018-083421-b6d4 served H200 presets on a B200, and their measures read as H200 because the GPU came from
+  `preset.gpu_id`. Fix: `benchmarks/g2/curve.py` takes the device the harness saw, else the attempt's hardware, and a
+  compiled preset for another GPU doesn't count.
+- **A "best achievable" minimum over dropped iterations and what-if rows** (19 Oct) [circuits]. Labeling the hash
+  loop's runs onto G2's curve put its what-if row (r20261018-231625-fccf, cap66, ITL 1.21x) and a dropped iteration
+  (r20261019-012032-de65, per-layer TTFT 1.04x) into the minimum: the winner's curse. Fix: only the loop's line counts
+  (its row from the job's ROW, its verdict from the loop's results); the SHA-256 column takes only pinned runs on their
+  own GPU (unpinned r20261017-234343-c4c4 read 1.14x where pinned r20261018-094733-983c reads 2.76x).
 - **"Negligible at a 1% budget", at a draw cost about 10⁴ times too low** (19 Oct) [proofs]. "q = s/(r + rho/w)
   = 6.1e-11" priced batched throughput against one-unit statements and left out serve-time commitments, which are 6–159
   times the budget. Fix: the register corrected (q about 1e-14), and training reissued.
