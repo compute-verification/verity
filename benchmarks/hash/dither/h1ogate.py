@@ -1,5 +1,6 @@
-"""`h1o.cu`'s two forms of a served call's units at kernel level, on a synthetic Llama-3.1-8B window: `h1o_unitsb` (a unit
-a block, `h1b_unit`) and `h1o_units` (a unit a warp, `h1r_unit<2>`), each gated through `dither_one.check`, then timed
+"""`h1o.cu`'s forms of a served call's units at kernel level, on a synthetic Llama-3.1-8B window: `h1o_unitss` (a unit
+a block of six warps, `h1s_unit`), `h1o_unitsb` (a unit a block of five, `h1b_unit`) and `h1o_units` (a unit a warp,
+`h1r_unit<2>`), each gated through `dither_one.check`, then timed
 against each other.
 
     gate  per form, a `dither_one.Window` (T = 64) over NL layers' four linears with the served shapes, random full-range
@@ -35,7 +36,7 @@ import dither_one as DO  # noqa: E402
 SHAPES = {"self_attn.qkv_proj": (6144, 4096), "self_attn.o_proj": (4096, 4096), "mlp.gate_up_proj": (28672, 4096),
           "mlp.down_proj": (4096, 14336)}
 T, M = 64, 32
-FORMS = ("block", "warp")
+FORMS = ("split", "block", "warp")
 
 
 def model(nl: int, dev) -> None:

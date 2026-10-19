@@ -34,6 +34,7 @@ Arms:
     dither-1s-credit  dither-1s on an eager engine with every linear's `apply` inside CA's credit gate (#2684's
                  `credit_gate.Trace`, the file DITHER_CREDIT_GATE names): the gate reports its verdicts (`credit_2684`)
     dither-1s-warp  dither-1s with its units a warp each (DITHER_UNITS=warp, `h1o_units`), not a block each
+    dither-1s-split  dither-1s with its units in the split form (DITHER_UNITS=split, `h1o_unitss`: six warps a unit)
     dither-1s-percall0  dither-1s with ASK-64's per-call round between each call's A table and its units (`h1o_percall`:
                  root(A) to the host, a host function, a coin back, all captured in the graphs) and no wait: its plumbing
     dither-1s-percall-rtt  the same with the host function holding each call one measured challenger round trip
@@ -159,12 +160,13 @@ def build(arm: str, scratch: Path, gpu_mem: float):
             llm.dither_stats = win.stats
             llm.dither_win = win
         return llm
-    if arm in ("dither-1s", "dither-1s-credit", "dither-1s-warp", "dither-1s-percall0", "dither-1s-percall-rtt"):
+    if arm in ("dither-1s", "dither-1s-credit", "dither-1s-warp", "dither-1s-split", "dither-1s-percall0",
+               "dither-1s-percall-rtt"):
         sys.path.insert(0, str(HERE))
         import dither_fused as DF
         import dither_one as DO
-        if arm == "dither-1s-warp":
-            os.environ[DO.UNITS_ENV] = "warp"
+        if arm in ("dither-1s-warp", "dither-1s-split"):
+            os.environ[DO.UNITS_ENV] = arm.rsplit("-", 1)[1]
         if arm == "dither-1s-percall0":
             os.environ[DO.PERCALL_ENV] = "0"
         if arm == "dither-1s-percall-rtt":
@@ -185,10 +187,11 @@ def build(arm: str, scratch: Path, gpu_mem: float):
 
 
 REF_OF = {"dither": "exact", "dither-side": "exact", "dither-1s": "exact", "dither-1s-credit": "exact",
-          "dither-1s-warp": "exact", "dither-1s-percall0": "exact", "dither-1s-percall-rtt": "exact"}
+          "dither-1s-warp": "exact", "dither-1s-split": "exact", "dither-1s-percall0": "exact",
+          "dither-1s-percall-rtt": "exact"}
 # an arm that serves another value: its tokens are compared, not required equal
-TOKENS_GATED = {"dither-1s": False, "dither-1s-credit": False, "dither-1s-warp": False, "dither-1s-percall0": False,
-                "dither-1s-percall-rtt": False}
+TOKENS_GATED = {"dither-1s": False, "dither-1s-credit": False, "dither-1s-warp": False, "dither-1s-split": False,
+                "dither-1s-percall0": False, "dither-1s-percall-rtt": False}
 GATE_TOKENS = 16    # enough B32 decode steps for the gate's capture, its receipts, the control's and its receipts
 GATE_RANGE = "verity/dither/gate"   # GATE_RANGE/<arm>: kernels.py reads each dither worker's kernels inside its own
 

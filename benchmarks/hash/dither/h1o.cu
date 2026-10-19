@@ -12,7 +12,9 @@
 //   h1o_units    a warp a unit (`h1r_unit<2, OutEpi>`): its seed_j and σ_R, the receipt, then z and y of the unit's cells;
 //                A rows >= m read as the canonical empty row (zero); a dead unit (its row block holds no admitted row)
 //                writes zero receipts and zero z and y.  `h1o_unitsb` is the same in the block form (`h1b_unit<OutEpi>`,
-//                a unit a block of five warps), for decode, where a call's units would leave most SMs idle
+//                a unit a block of five warps), for decode, where a call's units would leave most SMs idle, and
+//                `h1o_unitss` in the split form (`h1s_unit<OutEpi>`, six warps: the hashing a chunk ahead of the
+//                building, the fold in two halves)
 // `h1o_ref` is the gate's reference for z, another computation of the same definition: one warp a unit, its noise from
 // full compressions (`nblock`, not the served kernel's midstate), T_last and the residue sums Y by scalar dp4a (no MMA),
 // and z = T_last - U Y (the digits' recombination is exact: sum_d 128^d A_d = Y) + 256 sum over the entries whose integer
@@ -85,32 +87,43 @@ struct OutEpi {
       for (int i = 0; i < 8; ++i) zr[i] = make_uint4(0, 0, 0, 0);
     }
   }
-  __device__ void fault(int u, int lane, int s, int (&acc)[2][4][4]) const {
-    if ((flags & F_FAULT) && u == 0 && lane == 0 && s == 0) acc[0][0][0] = (int)((u32)acc[0][0][0] + (1u << FAULT_SHIFT));
+  __device__ void fault(int u, int lane, int s, int (&acc)[2][4][4]) const { fault_word(u, lane, s, acc[0][0][0]); }
+  __device__ void fault_word(int u, int lane, int s, int& a) const {
+    if ((flags & F_FAULT) && u == 0 && lane == 0 && s == 0) a = (int)((u32)a + (1u << FAULT_SHIFT));
+  }
+  // the lane's cells of fragment (mi, ni)
+  __device__ void out_frag(int ri, int cj, int lane, int mi, int ni, const int (&a)[4]) const {
+    const int g = lane >> 2, q = lane & 3;
+#pragma unroll
+    for (int eh = 0; eh < 2; ++eh) {
+      const int row = 32 * ri + 16 * mi + g + 8 * eh;
+      const float s_a = row < m ? sa[row] : 0.0f;
+      const int col = 32 * cj + 8 * ni + 2 * q;
+      const int z0 = a[2 * eh], z1 = a[2 * eh + 1];
+      if (!(flags & F_NW_TILES)) *reinterpret_cast<int2*>(z + (long long)row * n + col) = make_int2(z0, z1);
+      if (row < M) {
+        *reinterpret_cast<int2*>(zo + (long long)row * n + col) = make_int2(z0, z1);
+        __nv_bfloat162 yv;
+        yv.x = __float2bfloat16_rn(__fmul_rn(__fmul_rn(__int2float_rn(z0), s_a), sw[col]));
+        yv.y = __float2bfloat16_rn(__fmul_rn(__fmul_rn(__int2float_rn(z1), s_a), sw[col + 1]));
+        *reinterpret_cast<__nv_bfloat162*>(y + (long long)row * n + col) = yv;
+        if ((flags & F_DUMP) && row < m && ydump) *reinterpret_cast<__nv_bfloat162*>(ydump + (long long)row * n + col) = yv;
+      }
+    }
   }
   __device__ void out(int ri, int cj, int lane, const int (&acc)[2][4][4]) const {
-    const int g = lane >> 2, q = lane & 3;
 #pragma unroll
     for (int mi = 0; mi < 2; ++mi)
 #pragma unroll
-      for (int eh = 0; eh < 2; ++eh) {
-        const int row = 32 * ri + 16 * mi + g + 8 * eh;
-        const float s_a = row < m ? sa[row] : 0.0f;
+      for (int ni = 0; ni < 4; ++ni) out_frag(ri, cj, lane, mi, ni, acc[mi][ni]);
+  }
+  // the split form's half F: fragments ni = F + 2 k
+  template <int F>
+  __device__ void out_half(int ri, int cj, int lane, const int (&acc)[2][2][4]) const {
 #pragma unroll
-        for (int ni = 0; ni < 4; ++ni) {
-          const int col = 32 * cj + 8 * ni + 2 * q;
-          const int z0 = acc[mi][ni][2 * eh], z1 = acc[mi][ni][2 * eh + 1];
-          if (!(flags & F_NW_TILES)) *reinterpret_cast<int2*>(z + (long long)row * n + col) = make_int2(z0, z1);
-          if (row < M) {
-            *reinterpret_cast<int2*>(zo + (long long)row * n + col) = make_int2(z0, z1);
-            __nv_bfloat162 yv;
-            yv.x = __float2bfloat16_rn(__fmul_rn(__fmul_rn(__int2float_rn(z0), s_a), sw[col]));
-            yv.y = __float2bfloat16_rn(__fmul_rn(__fmul_rn(__int2float_rn(z1), s_a), sw[col + 1]));
-            *reinterpret_cast<__nv_bfloat162*>(y + (long long)row * n + col) = yv;
-            if ((flags & F_DUMP) && row < m && ydump) *reinterpret_cast<__nv_bfloat162*>(ydump + (long long)row * n + col) = yv;
-          }
-        }
-      }
+    for (int mi = 0; mi < 2; ++mi)
+#pragma unroll
+      for (int k = 0; k < 2; ++k) out_frag(ri, cj, lane, mi, F + 2 * k, acc[mi][k]);
   }
 };
 
@@ -156,6 +169,25 @@ __global__ void __launch_bounds__(BTH, 2) h1o_unitsb_k(const H1O* __restrict__ F
   const OutEpi ep{F->z[p], zo, y, F->ydump, sa, sw, F->n, M, st.m, st.flags, nullptr, salt, step_base,
                   st0, st1, st2, rt0, rt1, rt2};
   h1b_unit<OutEpi>(C, blockIdx.x, sh, F->seeds, nt0, nt1, nt2, F->out[p], (st.flags & F_NW_UNITS) ? 1 : 0, ep);
+}
+
+// the split form: a unit a block of six warps (`h1s_unit<OutEpi>`), the same values again
+__global__ void __launch_bounds__(STH, 2) h1o_unitss_k(const H1O* __restrict__ F, const H1OStep* __restrict__ S,
+                                                       const int8_t* __restrict__ xq, const float* __restrict__ sa, int M,
+                                                       const float* __restrict__ sw, __nv_bfloat16* __restrict__ y,
+                                                       int* __restrict__ zo, const u64* __restrict__ salt,
+                                                       const u64* __restrict__ step_base, u64 nt0, u64 nt1, u64 nt2,
+                                                       u64 st0, u64 st1, u64 st2, u64 rt0, u64 rt1, u64 rt2) {
+  __shared__ H1SShared sh;
+  const H1OStep st = *S;
+  const int p = st.parity;
+  H1Call C = *F->rc[p];
+  if ((int)blockIdx.x >= C.units) return;
+  C.a = xq;
+  C.lda = F->k;
+  const OutEpi ep{F->z[p], zo, y, F->ydump, sa, sw, F->n, M, st.m, st.flags, nullptr, salt, step_base,
+                  st0, st1, st2, rt0, rt1, rt2};
+  h1s_unit<OutEpi>(C, blockIdx.x, sh, F->seeds, nt0, nt1, nt2, F->out[p], (st.flags & F_NW_UNITS) ? 1 : 0, ep);
 }
 
 // the reference: unit u = ri * ncb + cj of call C (A rows from C.a, rows >= the slot's m already zero), z_ref [T, N]
@@ -266,6 +298,20 @@ extern "C" int h1o_unitsb_launch(const H1O* F, const H1OStep* S, int units, int 
   tag3("verity/pouw/seed/v2", st);
   tag3("verity/pouw/receipt/v1", rt);
   h1o_unitsb_k<<<(unsigned)units, BTH, 0, stream>>>(F, S, xq, sa, M, sw, (__nv_bfloat16*)y, zo, salt, step_base, nt[0],
+                                                    nt[1], nt[2], st[0], st[1], st[2], rt[0], rt[1], rt[2]);
+  return (int)cudaGetLastError();
+}
+
+// h1o_units_launch's call in the split form (K <= 16384)
+extern "C" int h1o_unitss_launch(const H1O* F, const H1OStep* S, int units, int n, int k, const int8_t* xq, const float* sa,
+                                 int M, const float* sw, void* y, int* zo, const u64* salt, const u64* step_base,
+                                 cudaStream_t stream) {
+  if (M <= 0 || n % 32 || k % 512 || k < 512 || k > 16384 || units <= 0 || !salt || !step_base) return 1;
+  u64 nt[3], st[3], rt[3];
+  tag3("verity/pouw/noise/v1", nt);
+  tag3("verity/pouw/seed/v2", st);
+  tag3("verity/pouw/receipt/v1", rt);
+  h1o_unitss_k<<<(unsigned)units, STH, 0, stream>>>(F, S, xq, sa, M, sw, (__nv_bfloat16*)y, zo, salt, step_base, nt[0],
                                                     nt[1], nt[2], st[0], st[1], st[2], rt[0], rt[1], rt[2]);
   return (int)cudaGetLastError();
 }

@@ -13,8 +13,9 @@ The window: its B tables at install, then one live round whose coin gives the ep
 round over the B roots).  Before step s's forward, the A tables' parts that read the step but no row (`h1c_a_step`:
 domains, salts, prefixes, and the leaves and nodes over rows >= m alone).  A linear call (`dither1::one_mm`), on the
 forward's stream, is two launches: its A slot and table (`h1c_a_call`, the root where its seeds read it), then its units
-(each unit's seeds, receipt, z and y; DITHER_UNITS picks the form, `block` (`h1o_unitsb`, a unit a block, the default) or
-`warp` (`h1o_units`, a unit a warp)).  After step s's forward: its admit and z tables, the a-step,
+(each unit's seeds, receipt, z and y; DITHER_UNITS picks the form, `block` (`h1o_unitsb`, a unit a block, the default),
+`split` (`h1o_unitss`, a unit a block of six warps) or `warp` (`h1o_units`, a unit a warp)).  After step s's forward: its
+admit and z tables, the a-step,
 admit-step and z-step trees, the round over them, and the receipt trees, then the round root recorded
 (`sampled_proofs.challenger.LiveRecord`; its coin is not read: no seed waits on it).
 
@@ -43,7 +44,7 @@ F_DUMP, F_NW_TILES, F_NW_UNITS, F_FAULT, F_FAULT_WB = 1, 2, 4, 8, 16     # h1o.c
 CAPTURES = ("gate", "control", "fault", "fault_wb")
 LIB_ENV = "DITHER_H1O"
 UNITS_ENV = "DITHER_UNITS"
-UNITS_FORMS = {"block": "h1o_unitsb_launch", "warp": "h1o_units_launch"}   # h1o.cu's two forms of the same units
+UNITS_FORMS = {"split": "h1o_unitss_launch", "block": "h1o_unitsb_launch", "warp": "h1o_units_launch"}   # h1o.cu's forms of the same units
 # ASK-64's perCall, measured only: a file of waits (ns, one a line; "0": no wait) that h1o_percall replays, a call each
 PERCALL_ENV = "DITHER_PERCALL"
 LIB = "dither1"
